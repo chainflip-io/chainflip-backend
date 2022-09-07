@@ -398,7 +398,8 @@ impl<C: CryptoScheme> CeremonyManager<C> {
                 )));
 
                 // Remove a possible unauthorised ceremony
-                let _result = self.keygen_states.cleanup_ceremony(&ceremony_id);
+                self.keygen_states
+                    .cleanup_unauthorised_ceremony(&ceremony_id);
                 return;
             }
         };
@@ -452,7 +453,8 @@ impl<C: CryptoScheme> CeremonyManager<C> {
                 )));
 
                 // Remove a possible unauthorised ceremony
-                let _result = self.signing_states.cleanup_ceremony(&ceremony_id);
+                self.signing_states
+                    .cleanup_unauthorised_ceremony(&ceremony_id);
                 return;
             }
         };
@@ -625,34 +627,36 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
         })
     }
 
-    /// Finish an authorised ceremony by sending the outcome and then cleaning up
+    /// Send the outcome of the ceremony and remove its state
     fn finalize_ceremony(
         &mut self,
         ceremony_id: CeremonyId,
         ceremony_outcome: CeremonyOutcome<Ceremony>,
     ) {
-        if let Some(handle) = self.ceremony_handles.get_mut(&ceremony_id) {
-            if let CeremonyRequestState::Authorised(result_sender) = std::mem::replace(
-                &mut handle.request_state,
-                CeremonyRequestState::Authorised(None),
-            ) {
-                let _result = result_sender
-                    .expect("Should have result sender")
-                    .send(ceremony_outcome);
-
-                self.cleanup_ceremony(&ceremony_id).unwrap();
-            } else {
-                panic!("Should not finalize unauthorised ceremony");
+        match self
+            .ceremony_handles
+            .remove(&ceremony_id)
+            .expect("Should have handle")
+            .request_state
+        {
+            CeremonyRequestState::Authorised(result_sender) => {
+                let _result = result_sender.send(ceremony_outcome);
+            }
+            CeremonyRequestState::Unauthorised(_) => {
+                panic!("Should not finalize an unauthorised ceremony");
             }
         }
     }
 
-    /// Removing any state associated with the ceremony
-    fn cleanup_ceremony(&mut self, ceremony_id: &CeremonyId) -> Result<()> {
-        self.ceremony_handles
-            .remove(ceremony_id)
-            .ok_or_else(|| anyhow::Error::msg("Cleanup failed: Ceremony handle does not exist"))?;
-        Ok(())
+    /// Removing any state associated with the unauthorized ceremony
+    fn cleanup_unauthorised_ceremony(&mut self, ceremony_id: &CeremonyId) {
+        if let Some(removed) = self.ceremony_handles.remove(ceremony_id) {
+            // Confirm that it was not an authorised ceremony
+            assert!(
+                matches!(removed.request_state, CeremonyRequestState::Unauthorised(_)),
+                "Should not cleanup an authorised ceremony without sending the outcome"
+            );
+        }
     }
 
     #[cfg(test)]
@@ -675,9 +679,8 @@ enum CeremonyRequestState<Ceremony: CeremonyTrait> {
     /// Contains the oneshot channel used to relay the request to the ceremony task.
     Unauthorised(oneshot::Sender<PreparedRequest<Ceremony>>),
     /// State after receiving the request from the SC.
-    /// Contains the optional result sender that is consumed when sending
-    /// the ceremony outcome right before being cleaned up.
-    Authorised(Option<CeremonyResultSender<Ceremony>>),
+    /// Contains the result sender that is used to send the ceremony outcome.
+    Authorised(CeremonyResultSender<Ceremony>),
 }
 
 impl<Ceremony: CeremonyTrait> CeremonyHandle<Ceremony> {
@@ -718,7 +721,7 @@ impl<Ceremony: CeremonyTrait> CeremonyHandle<Ceremony> {
                 // request sender and storing the result sender
                 if let CeremonyRequestState::Unauthorised(request_sender) = std::mem::replace(
                     &mut self.request_state,
-                    CeremonyRequestState::Authorised(Some(result_sender)),
+                    CeremonyRequestState::Authorised(result_sender),
                 ) {
                     let _res = request_sender.send(request);
                 }
