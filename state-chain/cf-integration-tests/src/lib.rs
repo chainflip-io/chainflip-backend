@@ -463,7 +463,7 @@ mod epoch {
 				pallet_cf_witnesser::CallHash(frame_support::Hashable::blake2_256(&*call));
 
 			// Call on_idle to purge stale storage
-			assert!(Witnesser::on_idle(0, 1_000_000_000_000) > 0);
+			Witnesser::on_idle(0, 1_000_000_000_000);
 
 			// Test that the storage has been purged.
 			assert!(pallet_cf_witnesser::Votes::<Runtime>::get(storage_epoch, &call_hash).is_none());
