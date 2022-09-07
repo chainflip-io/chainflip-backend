@@ -62,7 +62,7 @@ fn find_backups(temp_dir: &TempDir, db_path: PathBuf) -> Result<Vec<PathBuf>, st
 }
 
 fn get_single_key_data<P: ECPoint>() -> KeygenResultInfo<P> {
-    get_key_data_for_test::<P>(BTreeSet::from_iter(&[AccountId32::new([0; 32])]))
+    get_key_data_for_test::<P>(BTreeSet::from_iter([AccountId32::new([0; 32])]))
 }
 
 // Just a random key

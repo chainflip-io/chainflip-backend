@@ -129,9 +129,12 @@ fn gen_stage_1_signing_state(
 ) -> CeremonyRunner<SigningCeremony<EthSigning>> {
     let rng = Rng::from_seed(DEFAULT_SIGNING_SEED);
     let logger = new_test_logger();
-    let key: Arc<KeygenResult<Point>> = get_key_data_for_test(&ACCOUNT_IDS).key;
+    let key: Arc<KeygenResult<Point>> =
+        get_key_data_for_test(BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned())).key;
 
-    let validator_mapping = Arc::new(PartyIdxMapping::from_unsorted_signers(&ACCOUNT_IDS));
+    let validator_mapping = Arc::new(PartyIdxMapping::from_participants(BTreeSet::from_iter(
+        ACCOUNT_IDS.iter().cloned(),
+    )));
     let common = CeremonyCommon {
         ceremony_id: DEFAULT_SIGNING_CEREMONY_ID,
         own_idx,
