@@ -116,20 +116,18 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		/// Clear stale data from expired epochs
 		fn on_idle(_block_number: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
-			// Gets the next epoch to remove
 			let mut epochs_to_cull = EpochsToCull::<T>::get();
-			if epochs_to_cull.is_empty() {
-				return 0
-			}
+			let epoch = if let Some(epoch) = epochs_to_cull.pop() { epoch } else { return 0 };
+
 			let max_deletions_count_remaining = remaining_weight
-				.checked_div(T::WeightInfo::remove_one_storage_items())
+				.checked_div(T::WeightInfo::remove_one_storage_item())
 				.unwrap_or_default();
+
 			if max_deletions_count_remaining == 0 {
 				return 0
 			}
-			let mut deletions_count_remaining = max_deletions_count_remaining;
 
-			let epoch = epochs_to_cull.pop().expect("Checked for empty Epochs Vec.");
+			let mut deletions_count_remaining = max_deletions_count_remaining;
 			let (mut cleared_votes, mut cleared_extra_call_data, mut cleared_call_hash) =
 				(false, false, false);
 
@@ -174,7 +172,7 @@ pub mod pallet {
 
 			max_deletions_count_remaining
 				.saturating_sub(deletions_count_remaining)
-				.saturating_mul(T::WeightInfo::remove_one_storage_items())
+				.saturating_mul(T::WeightInfo::remove_one_storage_item())
 		}
 	}
 
@@ -395,9 +393,7 @@ impl<T: pallet::Config> cf_traits::EpochTransitionHandler for Pallet<T> {
 	/// Add the expired epoch to the queue to have its data culled. This is prevent the storage from
 	/// growing indefinitely.
 	fn on_expired_epoch(expired: EpochIndex) {
-		EpochsToCull::<T>::mutate(|expired_epochs| {
-			expired_epochs.push(expired);
-		});
+		EpochsToCull::<T>::append(expired);
 	}
 }
 

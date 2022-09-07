@@ -449,6 +449,10 @@ mod epoch {
 			assert_eq!(Validator::last_expired_epoch(), storage_epoch);
 		});
 
+		// Commit Overlay changeset into the backend DB, to fully test clear_prefix logic.
+		// See: /state-chain/TROUBLESHOOTING.md
+		// Section: ## Substrate storage: Separation of front overlay and backend. Feat
+		// clear_prefix()
 		let _res = ext.commit_all();
 
 		ext.execute_with(|| {

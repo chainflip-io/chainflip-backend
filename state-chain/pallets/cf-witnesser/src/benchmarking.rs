@@ -26,7 +26,7 @@ benchmarks! {
 		assert!(Votes::<T>::contains_key(&epoch, &call_hash));
 	}
 
-	remove_one_storage_items {
+	remove_one_storage_item {
 		let call: <T as Config>::Call = frame_system::Call::remark{ remark: vec![] }.into();
 		let call_hash = CallHash(Hashable::blake2_256(&call));
 		Votes::<T>::insert(0, call_hash, vec![0]);

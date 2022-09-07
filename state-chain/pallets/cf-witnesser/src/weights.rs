@@ -31,7 +31,7 @@ use sp_std::marker::PhantomData;
 /// Weight functions needed for pallet_cf_witnesser.
 pub trait WeightInfo {
 	fn witness() -> Weight;
-	fn remove_one_storage_items() -> Weight;
+	fn remove_one_storage_item() -> Weight;
 }
 
 /// Weights for pallet_cf_witnesser using the Substrate node and recommended hardware.
@@ -51,7 +51,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
 	// Storage: Witnesser Votes (r:0 w:1)
-	fn remove_one_storage_items() -> Weight {
+	fn remove_one_storage_item() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
 		(4_151_000 as Weight)
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
@@ -74,7 +74,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
 	// Storage: Witnesser Votes (r:0 w:1)
-	fn remove_one_storage_items() -> Weight {
+	fn remove_one_storage_item() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
 		(4_151_000 as Weight)
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
