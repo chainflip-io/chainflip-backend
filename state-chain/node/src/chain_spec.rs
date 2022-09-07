@@ -1,9 +1,8 @@
-use cf_primitives::{Asset, ForeignChainAddress};
 use sc_service::{ChainType, Properties};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{
 	crypto::{set_default_ss58_version, Ss58AddressFormat, UncheckedInto},
-	sr25519, Pair, Public, H160,
+	sr25519, Pair, Public,
 };
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::traits::{IdentifyAccount, Verify};
@@ -11,10 +10,10 @@ use state_chain_runtime::{
 	chainflip::Offence, constants::common::*, opaque::SessionKeys, AccountId, AuctionConfig,
 	AuraConfig, BlockNumber, CfeSettings, EmissionsConfig, EnvironmentConfig,
 	EthereumThresholdSignerConfig, EthereumVaultConfig, FlipBalance, FlipConfig, GenesisConfig,
-	GovernanceConfig, GrandpaConfig, IngressConfig, ReputationConfig, SessionConfig, Signature,
-	StakingConfig, SystemConfig, ValidatorConfig, WASM_BINARY,
+	GovernanceConfig, GrandpaConfig, ReputationConfig, SessionConfig, Signature, StakingConfig,
+	SystemConfig, ValidatorConfig, WASM_BINARY,
 };
-use std::{collections::BTreeSet, env, marker::PhantomData, str::FromStr};
+use std::{collections::BTreeSet, env, marker::PhantomData};
 use utilities::clean_eth_address;
 
 mod network_env;
@@ -633,14 +632,6 @@ fn testnet_genesis(
 			vault_key: eth_init_agg_key.to_vec(),
 			deployment_block: ethereum_deployment_block,
 			keygen_response_timeout: KEYGEN_CEREMONY_TIMEOUT_BLOCKS,
-		},
-		ingress: IngressConfig {
-			start_witnessing_address: ForeignChainAddress::Eth(
-				// Kyle's testnet address, send ETH to it at your own risk :)
-				H160::from_str("F29aB9EbDb481BE48b80699758e6e9a3DBD609C6").unwrap(),
-			),
-			ingress_asset: Asset::Eth,
-			_config: PhantomData,
 		},
 		ethereum_threshold_signer: EthereumThresholdSignerConfig {
 			threshold_signature_response_timeout: THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS,

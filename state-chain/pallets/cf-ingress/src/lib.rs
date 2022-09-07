@@ -81,34 +81,6 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 	}
 
-	#[pallet::genesis_config]
-	pub struct GenesisConfig<T: Config> {
-		pub start_witnessing_address: ForeignChainAddress,
-		pub ingress_asset: Asset,
-		pub _config: PhantomData<T>,
-	}
-
-	#[cfg(feature = "std")]
-	impl<T: Config> Default for GenesisConfig<T> {
-		fn default() -> Self {
-			Self {
-				// Kyle's testnet address
-				start_witnessing_address: ForeignChainAddress::Eth(
-					H160::from_str("F29aB9EbDb481BE48b80699758e6e9a3DBD609C6").unwrap(),
-				),
-				ingress_asset: Asset::Eth,
-				_config: PhantomData,
-			}
-		}
-	}
-
-	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
-		fn build(&self) {
-			DummyStartWitnessing::<T>::put((self.start_witnessing_address, self.ingress_asset));
-		}
-	}
-
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
