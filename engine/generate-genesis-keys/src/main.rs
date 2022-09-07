@@ -62,7 +62,7 @@ fn main() {
     );
 
     let (eth_key_id, key_shares) = generate_key_data_until_compatible::<eth::Point>(
-        &node_id_to_name_map.keys().cloned().collect::<Vec<_>>(),
+        BTreeSet::from_iter(node_id_to_name_map.keys().cloned()),
         20,
         Rng::from_entropy(),
     );

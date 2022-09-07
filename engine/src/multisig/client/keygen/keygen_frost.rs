@@ -526,7 +526,7 @@ pub mod genesis {
     /// Attempts to generate key data until we generate a key that is contract
     /// compatible. It will try `max_attempts` before failing.
     pub fn generate_key_data_until_compatible<P: ECPoint>(
-        account_ids: &[AccountId],
+        account_ids: BTreeSet<AccountId>,
         max_attempts: usize,
         mut rng: Rng,
     ) -> (KeyId, HashMap<AccountId, KeygenResultInfo<P>>) {
@@ -534,7 +534,7 @@ pub mod genesis {
 
         loop {
             attempt_counter += 1;
-            match generate_key_data::<P>(account_ids, &mut rng, false) {
+            match generate_key_data::<P>(account_ids.clone(), &mut rng, false) {
                 Ok(result) => break result,
                 Err(_) => {
                     // limit iteration so we don't loop forever
@@ -547,7 +547,7 @@ pub mod genesis {
     }
 
     pub fn generate_key_data<P: ECPoint>(
-        signers: &[AccountId],
+        signers: BTreeSet<AccountId>,
         rng: &mut Rng,
         allow_high_pubkey: bool,
     ) -> anyhow::Result<(KeyId, HashMap<AccountId, KeygenResultInfo<P>>)> {
@@ -564,7 +564,7 @@ pub mod genesis {
 
         let agg_pubkey = derive_aggregate_pubkey(&commitments, allow_high_pubkey)?;
 
-        let validator_map = PartyIdxMapping::from_unsorted_signers(signers);
+        let validator_map = PartyIdxMapping::from_participants(signers);
 
         let keygen_result_infos: HashMap<_, _> = (1..=n)
             .map(|idx| {

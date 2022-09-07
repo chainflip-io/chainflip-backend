@@ -1,5 +1,7 @@
 #![cfg(test)]
 
+use std::collections::BTreeSet;
+
 use rand_legacy::SeedableRng;
 
 use crate::multisig::{
@@ -109,9 +111,12 @@ async fn should_report_on_inconsistent_broadcast_local_sig3() {
 
 #[tokio::test]
 async fn should_sign_with_all_parties() {
-    let (key_id, key_data) =
-        generate_key_data(&ACCOUNT_IDS, &mut Rng::from_seed(DEFAULT_KEYGEN_SEED), true)
-            .expect("Should generate key for test");
+    let (key_id, key_data) = generate_key_data(
+        BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
+        &mut Rng::from_seed(DEFAULT_KEYGEN_SEED),
+        true,
+    )
+    .expect("Should generate key for test");
 
     let mut signing_ceremony = SigningCeremonyRunner::new_with_all_signers(
         new_nodes(ACCOUNT_IDS.clone()),

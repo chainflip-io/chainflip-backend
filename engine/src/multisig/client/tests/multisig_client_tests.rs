@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::BTreeSet, sync::Arc};
 
 use super::*;
 use crate::{
@@ -47,7 +47,7 @@ async fn should_ignore_rts_for_unknown_key() {
     let signing_request_fut = client.initiate_signing(
         DEFAULT_SIGNING_CEREMONY_ID,
         key_id,
-        ACCOUNT_IDS.to_vec(),
+        BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
         MessageHash([0; 32]),
     );
 
@@ -89,8 +89,10 @@ async fn should_save_key_after_keygen() {
         );
 
         // Send Keygen Request
-        let keygen_request_fut =
-            client.initiate_keygen(DEFAULT_KEYGEN_CEREMONY_ID, ACCOUNT_IDS.to_vec());
+        let keygen_request_fut = client.initiate_keygen(
+            DEFAULT_KEYGEN_CEREMONY_ID,
+            BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
+        );
 
         // Get the oneshot channel that is linked to the keygen request
         // and send a successful keygen result
