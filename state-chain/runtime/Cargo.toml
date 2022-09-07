@@ -45,6 +45,7 @@ pallet-cf-threshold-signature = { path = '../pallets/cf-threshold-signature', de
 pallet-cf-broadcast = { path = '../pallets/cf-broadcast', default-features = false }
 pallet-cf-environment = { path = '../pallets/cf-environment', default-features = false }
 pallet-cf-chain-tracking = { path = '../pallets/cf-chain-tracking', default-features = false }
+pallet-cf-ingress = { path = '../pallets/cf-ingress', default-features = false }
 
 # SCALE
 codec = { package = 'parity-scale-codec', version = '3.0.0', default-features = false, features = ['derive'] }
@@ -237,6 +238,7 @@ std = [
   'pallet-aura/std',
   'pallet-cf-auction/std',
   'pallet-cf-broadcast/std',
+  'pallet-cf-ingress/std',
   'pallet-cf-chain-tracking/std',
   'pallet-cf-emissions/std',
   'pallet-cf-environment/std',
