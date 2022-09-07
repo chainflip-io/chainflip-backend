@@ -289,7 +289,7 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// \[ceremony_id, key_id, signatories, payload\]
-		ThresholdSignatureRequest(CeremonyId, T::KeyId, Vec<T::ValidatorId>, PayloadFor<T, I>),
+		ThresholdSignatureRequest(CeremonyId, T::KeyId, BTreeSet<T::ValidatorId>, PayloadFor<T, I>),
 		/// \[ceremony_id, key_id, offenders\]
 		ThresholdSignatureFailed(RequestId, CeremonyId, T::KeyId, Vec<T::ValidatorId>),
 		/// The threshold signature posted back to the chain was verified.
@@ -553,7 +553,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn inner_request_signature(
 		payload: PayloadFor<T, I>,
 		key_id: Option<<T as Chainflip>::KeyId>,
-		participants: Option<Vec<T::ValidatorId>>,
+		participants: Option<BTreeSet<T::ValidatorId>>,
 		retry_policy: RetryPolicy,
 	) -> (RequestId, CeremonyId) {
 		// Get a new request id.
@@ -580,7 +580,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		payload: PayloadFor<T, I>,
 		attempt_count: AttemptCount,
 		requested_key_id: Option<<T as Chainflip>::KeyId>,
-		participants: Option<Vec<T::ValidatorId>>,
+		participants: Option<BTreeSet<T::ValidatorId>>,
 		retry_policy: RetryPolicy,
 	) -> CeremonyId {
 		let ceremony_id = T::CeremonyIdProvider::next_ceremony_id();
@@ -619,7 +619,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					request_id,
 					attempt_count
 				),
-				Vec::default(),
+				BTreeSet::default(),
 			)
 		};
 
@@ -738,7 +738,7 @@ where
 
 	fn request_signature_with(
 		key_id: Self::KeyId,
-		participants: Vec<Self::ValidatorId>,
+		participants: BTreeSet<Self::ValidatorId>,
 		payload: <T::TargetChain as ChainCrypto>::Payload,
 		retry_policy: RetryPolicy,
 	) -> (Self::RequestId, CeremonyId) {

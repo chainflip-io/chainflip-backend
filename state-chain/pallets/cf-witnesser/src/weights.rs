@@ -30,23 +30,23 @@ use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_cf_witnesser.
 pub trait WeightInfo {
-	fn witness() -> Weight;
+	fn witness_at_epoch() -> Weight;
 	fn remove_one_storage_item() -> Weight;
 }
 
 /// Weights for pallet_cf_witnesser using the Substrate node and recommended hardware.
 pub struct PalletWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
-	// Storage: Validator CurrentEpoch (r:1 w:0)
 	// Storage: Validator LastExpiredEpoch (r:1 w:0)
+	// Storage: Validator CurrentEpoch (r:1 w:0)
 	// Storage: Validator EpochAuthorityCount (r:1 w:0)
 	// Storage: Validator AuthorityIndex (r:1 w:0)
 	// Storage: Witnesser Votes (r:1 w:1)
 	// Storage: Witnesser CallHashExecuted (r:2 w:1)
 	// Storage: Witnesser ExtraCallData (r:1 w:0)
-	fn witness() -> Weight {
+	fn witness_at_epoch() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(38_404_000 as Weight)
+		(39_000_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(8 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
@@ -54,22 +54,21 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	fn remove_one_storage_item() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
 		(4_151_000 as Weight)
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 }
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
-	// Storage: Validator CurrentEpoch (r:1 w:0)
 	// Storage: Validator LastExpiredEpoch (r:1 w:0)
+	// Storage: Validator CurrentEpoch (r:1 w:0)
 	// Storage: Validator EpochAuthorityCount (r:1 w:0)
 	// Storage: Validator AuthorityIndex (r:1 w:0)
 	// Storage: Witnesser Votes (r:1 w:1)
 	// Storage: Witnesser CallHashExecuted (r:2 w:1)
 	// Storage: Witnesser ExtraCallData (r:1 w:0)
-	fn witness() -> Weight {
+	fn witness_at_epoch() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(38_404_000 as Weight)
+		(39_000_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(8 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
@@ -77,6 +76,5 @@ impl WeightInfo for () {
 	fn remove_one_storage_item() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
 		(4_151_000 as Weight)
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 }

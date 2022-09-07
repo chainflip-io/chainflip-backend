@@ -205,9 +205,25 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// Called as a witness of some external event.
 		///
-		/// The provided `call` will be dispatched when the configured threshold number of
+		/// Think of this a vote for some action (represented by a runtime `call`) to be taken. At a
+		/// high level:
+		///
+		/// 1. Ensure we are not submitting a witness for an expired epoch
+		/// 2. Look up the account id in the list of authorities.
+		/// 3. Get the list of votes for the epoch and call, or an empty list if this is the first
+		/// vote.
+		/// 4. Add the account's vote to the list.
+		/// 5. Check the number of votes against the required threshold.
+		/// 6. The provided `call` will be dispatched when the configured threshold number of
 		/// authorities have submitted an identical transaction. This can be thought of as a vote
 		/// for the encoded [Call](Config::Call) value.
+		///
+		/// This implementation uses a bitmask whereby each index to the bitmask represents an
+		/// authority account ID in the current Epoch.
+		///
+		/// **Note:**
+		/// This implementation currently allows voting to continue even after the vote threshold is
+		/// reached.
 		///
 		/// ## Events
 		///
@@ -220,44 +236,105 @@ pub mod pallet {
 		/// - [DuplicateWitness](Error::DuplicateWitness)
 		#[allow(clippy::boxed_local)]
 		#[pallet::weight(
-			T::WeightInfo::witness().saturating_add(call.get_dispatch_info().weight /
-				T::EpochInfo::authority_count_at_epoch(T::EpochInfo::epoch_index()).unwrap_or(1u32) as u64)
-		)]
-		pub fn witness(
-			origin: OriginFor<T>,
-			call: Box<<T as Config>::Call>,
-		) -> DispatchResultWithPostInfo {
-			let who = ensure_signed(origin)?;
-			Self::do_witness_at_epoch(who, *call, T::EpochInfo::epoch_index())
-		}
-
-		/// Called as a witness of some external event.
-		///
-		/// The provided `call` will be dispatched when the configured threshold number of
-		/// authorities have submitted an identical transaction. This can be thought of as a vote
-		/// for the encoded [Call](Config::Call) value.
-		///
-		/// ## Events
-		///
-		/// - [WitnessExecutionFailed](Event::WitnessExecutionFailed)
-		///
-		/// ## Errors
-		///
-		/// - [UnauthorisedWitness](Error::UnauthorisedWitness)
-		/// - [AuthorityIndexOutOfBounds](Error::AuthorityIndexOutOfBounds)
-		/// - [DuplicateWitness](Error::DuplicateWitness)
-		#[allow(clippy::boxed_local)]
-		#[pallet::weight(
-			T::WeightInfo::witness().saturating_add(call.get_dispatch_info().weight /
+			T::WeightInfo::witness_at_epoch().saturating_add(call.get_dispatch_info().weight /
 				T::EpochInfo::authority_count_at_epoch(*epoch_index).unwrap_or(1u32) as u64)
 		)]
 		pub fn witness_at_epoch(
 			origin: OriginFor<T>,
-			call: Box<<T as Config>::Call>,
+			mut call: Box<<T as Config>::Call>,
 			epoch_index: EpochIndex,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			Self::do_witness_at_epoch(who, *call, epoch_index)
+
+			let last_expired_epoch = T::EpochInfo::last_expired_epoch();
+			let current_epoch = T::EpochInfo::epoch_index();
+			// Ensure the epoch has not yet expired
+			ensure!(epoch_index > last_expired_epoch, Error::<T>::EpochExpired);
+
+			// The number of authorities for the epoch
+			// This value is updated alongside ValidatorIndex, so if we have a authority, we have an
+			// authority count.
+			let num_authorities = T::EpochInfo::authority_count_at_epoch(epoch_index)
+				.ok_or(Error::<T>::InvalidEpoch)?;
+
+			let index = T::EpochInfo::authority_index(epoch_index, &who.into())
+				.ok_or(Error::<T>::UnauthorisedWitness)? as usize;
+
+			// Register the vote
+			// `extract()` modifies the call, so we need to calculate the call hash *after* this.
+			let extra_data = call.extract();
+			let call_hash = CallHash(call.blake2_256());
+			let num_votes = Votes::<T>::try_mutate::<_, _, _, Error<T>, _>(
+				&epoch_index,
+				&call_hash,
+				|buffer| {
+					// If there is no storage item, create an empty one.
+					if buffer.is_none() {
+						let empty_mask =
+							BitVec::<Msb0, u8>::repeat(false, num_authorities as usize);
+						*buffer = Some(empty_mask.into_vec())
+					}
+
+					let bytes = buffer
+						.as_mut()
+						.expect("Checked for none condition above, this will never panic;");
+
+					// Convert to an addressable bitmask
+					let bits = VoteMask::from_slice_mut(bytes)
+					.expect("Only panics if the slice size exceeds the max; The number of authorities should never exceed this;");
+
+					let mut vote_count = bits.count_ones();
+
+					// Get a reference to the existing vote.
+					let mut vote =
+						bits.get_mut(index).ok_or(Error::<T>::AuthorityIndexOutOfBounds)?;
+
+					// Return an error if already voted, otherwise set the indexed bit to `true` to
+					// indicate a vote.
+					if *vote {
+						return Err(Error::<T>::DuplicateWitness)
+					}
+
+					vote_count += 1;
+					*vote = true;
+
+					if let Some(extra_data) = extra_data {
+						ExtraCallData::<T>::append(epoch_index, &call_hash, extra_data);
+					}
+
+					Ok(vote_count)
+				},
+			)?;
+
+			// Check if threshold is reached and, if so, apply the voted-on Call.
+			// At the epoch boundary, asynchronicity can cause validators to witness events at a
+			// earlier epoch than intended. We need to check that the same event has not already
+			// been witnessed in the past.
+			if num_votes == success_threshold_from_share_count(num_authorities) as usize &&
+				(last_expired_epoch..=current_epoch)
+					.all(|epoch| CallHashExecuted::<T>::get(epoch, &call_hash).is_none())
+			{
+				if let Some(mut extra_data) = ExtraCallData::<T>::get(epoch_index, &call_hash) {
+					call.combine_and_inject(&mut extra_data)
+				}
+				let _result = call
+					.dispatch_bypass_filter(
+						(if epoch_index == current_epoch {
+							RawOrigin::CurrentEpochWitnessThreshold
+						} else {
+							RawOrigin::HistoricalActiveEpochWitnessThreshold
+						})
+						.into(),
+					)
+					.map_err(|e| {
+						Self::deposit_event(Event::<T>::WitnessExecutionFailed {
+							call_hash,
+							error: e.error,
+						});
+					});
+				CallHashExecuted::<T>::insert(epoch_index, &call_hash, ());
+			}
+			Ok(().into())
 		}
 	}
 
@@ -270,120 +347,6 @@ pub mod pallet {
 	pub enum RawOrigin {
 		HistoricalActiveEpochWitnessThreshold,
 		CurrentEpochWitnessThreshold,
-	}
-}
-
-impl<T: Config> Pallet<T> {
-	/// Do the actual witnessing.
-	///
-	/// Think of this a vote for some action (represented by a runtime `call`) to be taken. At a
-	/// high level:
-	///
-	/// 1. Ensure we are not submitting a witness for an expired epoch
-	/// 2. Look up the account id in the list of authorities.
-	/// 3. Get the list of votes for the epoch and call, or an empty list if this is the first vote.
-	/// 4. Add the account's vote to the list.
-	/// 5. Check the number of votes against the required threshold.
-	/// 6. If the threshold is exceeded, execute the voted-on `call`.
-	///
-	/// This implementation uses a bitmask whereby each index to the bitmask represents an authority
-	/// account ID in the current Epoch.
-	///
-	/// **Note:**
-	/// This implementation currently allows voting to continue even after the vote threshold is
-	/// reached.
-	fn do_witness_at_epoch(
-		who: <T as frame_system::Config>::AccountId,
-		mut call: <T as Config>::Call,
-		epoch_index: EpochIndex,
-	) -> DispatchResultWithPostInfo {
-		let last_expired_epoch = T::EpochInfo::last_expired_epoch();
-		let current_epoch = T::EpochInfo::epoch_index();
-		// Ensure the epoch has not yet expired
-		ensure!(epoch_index > last_expired_epoch, Error::<T>::EpochExpired);
-
-		// The number of authorities for the epoch
-		// This value is updated alongside ValidatorIndex, so if we have a authority, we have an
-		// authority count.
-		let num_authorities =
-			T::EpochInfo::authority_count_at_epoch(epoch_index).ok_or(Error::<T>::InvalidEpoch)?;
-
-		let index = T::EpochInfo::authority_index(epoch_index, &who.into())
-			.ok_or(Error::<T>::UnauthorisedWitness)? as usize;
-
-		// Register the vote
-		// `extract()` modifies the call, so we need to calculate the call hash *after* this.
-		let extra_data = call.extract();
-		let call_hash = CallHash(call.blake2_256());
-		let num_votes = Votes::<T>::try_mutate::<_, _, _, Error<T>, _>(
-			&epoch_index,
-			&call_hash,
-			|buffer| {
-				// If there is no storage item, create an empty one.
-				if buffer.is_none() {
-					let empty_mask = BitVec::<Msb0, u8>::repeat(false, num_authorities as usize);
-					*buffer = Some(empty_mask.into_vec())
-				}
-
-				let bytes = buffer
-					.as_mut()
-					.expect("Checked for none condition above, this will never panic;");
-
-				// Convert to an addressable bitmask
-				let bits = VoteMask::from_slice_mut(bytes)
-				.expect("Only panics if the slice size exceeds the max; The number of authorities should never exceed this;");
-
-				let mut vote_count = bits.count_ones();
-
-				// Get a reference to the existing vote.
-				let mut vote = bits.get_mut(index).ok_or(Error::<T>::AuthorityIndexOutOfBounds)?;
-
-				// Return an error if already voted, otherwise set the indexed bit to `true` to
-				// indicate a vote.
-				if *vote {
-					return Err(Error::<T>::DuplicateWitness)
-				}
-
-				vote_count += 1;
-				*vote = true;
-
-				if let Some(extra_data) = extra_data {
-					ExtraCallData::<T>::append(epoch_index, &call_hash, extra_data);
-				}
-
-				Ok(vote_count)
-			},
-		)?;
-
-		// Check if threshold is reached and, if so, apply the voted-on Call.
-		// At the epoch boundary, asynchronicity can cause validators to witness events at a earlier
-		// epoch than intended. We need to check that the same event has not already been witnessed
-		// in the past.
-		if num_votes == success_threshold_from_share_count(num_authorities) as usize &&
-			(last_expired_epoch..=current_epoch)
-				.all(|epoch| CallHashExecuted::<T>::get(epoch, &call_hash).is_none())
-		{
-			if let Some(mut extra_data) = ExtraCallData::<T>::get(epoch_index, &call_hash) {
-				call.combine_and_inject(&mut extra_data)
-			}
-			let _result = call
-				.dispatch_bypass_filter(
-					(if epoch_index == current_epoch {
-						RawOrigin::CurrentEpochWitnessThreshold
-					} else {
-						RawOrigin::HistoricalActiveEpochWitnessThreshold
-					})
-					.into(),
-				)
-				.map_err(|e| {
-					Self::deposit_event(Event::<T>::WitnessExecutionFailed {
-						call_hash,
-						error: e.error,
-					});
-				});
-			CallHashExecuted::<T>::insert(epoch_index, &call_hash, ());
-		}
-		Ok(().into())
 	}
 }
 

@@ -526,7 +526,7 @@ pub mod genesis {
     /// Attempts to generate key data until we generate a key that is contract
     /// compatible. It will try `max_attempts` before failing.
     pub fn generate_key_data_until_compatible<P: ECPoint>(
-        account_ids: &[AccountId],
+        account_ids: BTreeSet<AccountId>,
         max_attempts: usize,
         mut rng: Rng,
     ) -> (KeyId, HashMap<AccountId, KeygenResultInfo<P>>) {
@@ -534,7 +534,7 @@ pub mod genesis {
 
         loop {
             attempt_counter += 1;
-            match generate_key_data::<P>(account_ids, &mut rng, false) {
+            match generate_key_data::<P>(account_ids.clone(), &mut rng, false) {
                 Ok(result) => break result,
                 Err(_) => {
                     // limit iteration so we don't loop forever
@@ -548,20 +548,24 @@ pub mod genesis {
 
     /// Generates key data using the DEFAULT_KEYGEN_SEED and returns the KeygenResultInfo for signers[0].
     #[cfg(test)]
-    pub fn get_key_data_for_test<P: ECPoint>(signers: &[AccountId]) -> KeygenResultInfo<P> {
+    pub fn get_key_data_for_test<P: ECPoint>(signers: BTreeSet<AccountId>) -> KeygenResultInfo<P> {
         use crate::multisig::client::tests::DEFAULT_KEYGEN_SEED;
         use rand_legacy::SeedableRng;
 
-        generate_key_data(signers, &mut Rng::from_seed(DEFAULT_KEYGEN_SEED), true)
-            .expect("Should not be able to fail generating key data")
-            .1
-            .get(&signers[0])
-            .expect("should get keygen for an account")
-            .to_owned()
+        generate_key_data(
+            signers.clone(),
+            &mut Rng::from_seed(DEFAULT_KEYGEN_SEED),
+            true,
+        )
+        .expect("Should not be able to fail generating key data")
+        .1
+        .get(signers.iter().next().unwrap())
+        .expect("should get keygen for an account")
+        .to_owned()
     }
 
     pub fn generate_key_data<P: ECPoint>(
-        signers: &[AccountId],
+        signers: BTreeSet<AccountId>,
         rng: &mut Rng,
         allow_high_pubkey: bool,
     ) -> anyhow::Result<(KeyId, HashMap<AccountId, KeygenResultInfo<P>>)> {
@@ -578,7 +582,7 @@ pub mod genesis {
 
         let agg_pubkey = derive_aggregate_pubkey(&commitments, allow_high_pubkey)?;
 
-        let validator_map = PartyIdxMapping::from_unsorted_signers(signers);
+        let validator_map = PartyIdxMapping::from_participants(signers);
 
         let keygen_result_infos: HashMap<_, _> = (1..=n)
             .map(|idx| {
