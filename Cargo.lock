@@ -726,6 +726,7 @@ dependencies = [
 name = "cf-chains"
 version = "0.1.0"
 dependencies = [
+ "cf-primitives",
  "cf-test-utilities",
  "ethabi",
  "ethereum",
@@ -799,7 +800,6 @@ dependencies = [
 name = "cf-primitives"
 version = "0.1.0"
 dependencies = [
- "cf-chains",
  "parity-scale-codec",
  "scale-info",
  "serde",
@@ -5363,10 +5363,14 @@ version = "0.1.0"
 dependencies = [
  "cf-primitives",
  "cf-traits",
+ "frame-benchmarking 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-05)",
  "frame-support 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-06)",
  "frame-system 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-06)",
  "parity-scale-codec",
  "scale-info",
+ "sp-core 6.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-05)",
+ "sp-io 6.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-05)",
+ "sp-std 4.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-05)",
 ]
 
 [[package]]
@@ -5374,6 +5378,7 @@ name = "pallet-cf-relayer"
 version = "0.1.0"
 dependencies = [
  "cf-chains",
+ "cf-primitives",
  "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking 4.0.0-dev (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-05)",

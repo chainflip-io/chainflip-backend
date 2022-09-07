@@ -6,10 +6,7 @@ pub mod benchmarking;
 
 pub mod ingress_address;
 
-use crate::{
-	assets::{AddressDerivation, Asset},
-	*,
-};
+use crate::*;
 use codec::{Decode, Encode, MaxEncodedLen};
 pub use ethabi::{
 	ethereum_types::{H256, U256},
@@ -717,20 +714,6 @@ impl core::fmt::Debug for TransactionHash {
 impl From<H256> for TransactionHash {
 	fn from(x: H256) -> Self {
 		Self(x)
-	}
-}
-
-pub struct EthAddressDerivation;
-
-impl AddressDerivation for EthAddressDerivation {
-	type AddressType = eth::Address;
-
-	fn generate_address(
-		asset: Asset,
-		vault_address: Self::AddressType,
-		intent_id: u32,
-	) -> Self::AddressType {
-		get_create_2_address(asset, vault_address.into(), intent_id).into()
 	}
 }
 

@@ -1,9 +1,6 @@
 use crate::{self as pallet_cf_relayer};
-use cf_chains::{
-	assets::AddressDerivation,
-	eth::{self, Address},
-};
-use cf_traits::VaultAddressProvider;
+use cf_primitives::{ForeignChainAddress, ForeignChainAsset, IntentId};
+use cf_traits::IngressApi;
 use frame_support::parameter_types;
 use frame_system as system;
 use sp_core::H256;
@@ -61,33 +58,31 @@ impl system::Config for Test {
 	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
-pub struct MockEthVaultAddressProvider;
-pub struct MockEthAddressDerivation;
+pub struct MockIngress;
 
-impl VaultAddressProvider for MockEthVaultAddressProvider {
-	type AddressType = eth::Address;
+impl IngressApi for MockIngress {
+	type AccountId = AccountId;
 
-	fn get_vault_address() -> Self::AddressType {
-		Address::default()
+	fn register_liquidity_ingress_intent(
+		_lp_account: Self::AccountId,
+		_ingress_asset: ForeignChainAsset,
+	) -> (IntentId, ForeignChainAddress) {
+		(0, ForeignChainAddress::Eth(Default::default()))
 	}
-}
 
-impl AddressDerivation for MockEthAddressDerivation {
-	type AddressType = eth::Address;
-
-	fn generate_address(
-		_asset: cf_chains::assets::Asset,
-		_vault_address: Self::AddressType,
-		_intent_id: u32,
-	) -> Self::AddressType {
-		Address::default()
+	fn register_swap_intent(
+		_ingress_asset: ForeignChainAsset,
+		_egress_asset: ForeignChainAsset,
+		_egress_address: ForeignChainAddress,
+		_relayer_commission_bps: u16,
+	) -> (IntentId, ForeignChainAddress) {
+		(0, ForeignChainAddress::Eth(Default::default()))
 	}
 }
 
 impl pallet_cf_relayer::Config for Test {
 	type Event = Event;
-	type EthVaultAddressProvider = MockEthVaultAddressProvider;
-	type EthAddressDerivation = MockEthAddressDerivation;
+	type Ingress = MockIngress;
 	type WeightInfo = ();
 }
 

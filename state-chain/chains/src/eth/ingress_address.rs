@@ -1,11 +1,29 @@
+use cf_primitives::{Asset, IntentId};
 use sp_runtime::traits::{Hash, Keccak256};
 use sp_std::{mem::size_of, vec, vec::Vec};
-
-use crate::assets::Asset;
 
 // From master branch of chainflip-eth-contracts
 // @FIXME store on and retrieve from the chain
 const DEPLOY_BYTECODE_ETH: [u8; 20] = hex_literal::hex!("6080604052348015600f57600080fd5b5033fffe");
+const DEPLOY_BYTECODE_TOKEN: [u8; 493] = hex_literal::hex!(
+	"
+    608060405234801561001057600080fd 5b506040516101ed3803806101ed8339
+    8101604081905261002f916101aa565b 6040516370a0823160e01b8152306004
+    8201526001600160a01b0382169063a9 059cbb90339083906370a08231906024
+    0160206040518083038186803b158015 61007857600080fd5b505afa15801561
+    008c573d6000803e3d6000fd5b505050 506040513d601f19601f820116820180
+    604052508101906100b091906101d356 5b6040516001600160e01b031960e085
+    901b1681526001600160a01b03909216 60048301526024820152604401602060
+    405180830381600087803b1580156100 f657600080fd5b505af115801561010a
+    573d6000803e3d6000fd5b5050505060 40513d601f19601f8201168201806040
+    525081019061012e9190610181565b61 017e5760405162461bcd60e51b815260
+    206004820152601d60248201527f4465 706f736974546f6b656e3a207472616e
+    73666572206661696c65640000006044 82015260640160405180910390fd5b33
+    ff5b6000602082840312156101935760 0080fd5b815180151581146101a35760
+    0080fd5b9392505050565b6000602082 840312156101bc57600080fd5b815160
+    01600160a01b03811681146101a35760 0080fd5b6000602082840312156101e5
+    57600080fd5b505191905056fe"
+);
 
 // Always the same, this is a CREATE2 constant.
 const PREFIX_BYTE: u8 = 0xff;
@@ -14,7 +32,11 @@ const PREFIX_BYTE: u8 = 0xff;
 /// @param asset_id The asset in "CHAIN:ASSET" form e.g. "ETH:ETH" or "ETH:USDC"
 /// @param vault_address The address of the Ethereum Vault
 /// @param intent_id The numerical intent id
-pub fn get_create_2_address(asset: Asset, vault_address: [u8; 20], intent_id: u32) -> [u8; 20] {
+pub fn get_create_2_address(
+	asset: Asset,
+	vault_address: [u8; 20],
+	intent_id: IntentId,
+) -> [u8; 20] {
 	let deploy_bytecode = get_deploy_bytecode(asset);
 	let constructor_argument_bytes = get_constructor_argument_bytes(asset);
 
@@ -43,7 +65,10 @@ pub fn get_create_2_address(asset: Asset, vault_address: [u8; 20], intent_id: u3
 /// bytecode is different.
 fn get_deploy_bytecode(asset: Asset) -> Vec<u8> {
 	match asset {
-		Asset::EthEth => DEPLOY_BYTECODE_ETH.to_vec(),
+		Asset::Eth => DEPLOY_BYTECODE_ETH.to_vec(),
+		Asset::Flip | Asset::Usdc => DEPLOY_BYTECODE_TOKEN.to_vec(),
+		// TODO: think about encoding the unreachableness of this in the type system.
+		Asset::Dot => unreachable!(),
 	}
 }
 
@@ -52,26 +77,29 @@ fn get_deploy_bytecode(asset: Asset) -> Vec<u8> {
 /// deposit contract, the constructor argument is the asset's address.
 fn get_constructor_argument_bytes(asset: Asset) -> Vec<u8> {
 	match asset {
-		Asset::EthEth => vec![],
+		Asset::Eth => vec![],
+		Asset::Flip => todo!(),
+		Asset::Usdc => todo!(),
+		Asset::Dot => unreachable!(),
 	}
 }
 
 /// Get the CREATE2 salt for a given intent_id, equivalent to the big-endian u32, left-padded to 32
 /// bytes.
-fn get_salt(intent_id: u32) -> [u8; 32] {
+fn get_salt(intent_id: IntentId) -> [u8; 32] {
 	let mut salt = [0u8; 32];
-	let offset = 32 - size_of::<u32>();
+	let offset = 32 - size_of::<IntentId>();
 	salt.get_mut(offset..).unwrap().copy_from_slice(&intent_id.to_be_bytes());
 	salt
 }
 
 #[test]
 fn test_eth_eth() {
-	// @FIXME grab this from chain's storage instead
+	// Based on previously verified values.
 	const VAULT_ADDRESS: [u8; 20] = hex_literal::hex!("e7f1725E7734CE288F8367e1Bb143E90bb3F0512");
 
 	assert_eq!(
-		get_create_2_address(Asset::EthEth, VAULT_ADDRESS, 420696969),
+		get_create_2_address(Asset::Eth, VAULT_ADDRESS, 420696969),
 		hex_literal::hex!("9AF943257C1dF03EA3EeD0dFa7B5328A2E4033bb")
 	);
 	println!("Derivation worked for ETH:ETH! 🚀");

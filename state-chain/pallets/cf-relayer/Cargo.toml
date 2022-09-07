@@ -14,8 +14,9 @@ targets = ['x86_64-unknown-linux-gnu']
 
 [dependencies]
 # Internal dependencies
-cf-traits = {path = '../../traits', default-features = false}
 cf-chains = {path = '../../chains', default-features = false}
+cf-traits = {path = '../../traits', default-features = false}
+cf-primitives = {path = '../../primitives', default-features = false}
 
 # Parity deps
 [dependencies.codec]
@@ -74,8 +75,9 @@ tag = 'chainflip-monthly-2022-05'
 [features]
 default = ['std']
 std = [
-  'cf-traits/std',
   'cf-chains/std',
+  'cf-traits/std',
+  'cf-primitives/std',
   'codec/std',
   'sp-runtime/std',
   'sp-core/std',

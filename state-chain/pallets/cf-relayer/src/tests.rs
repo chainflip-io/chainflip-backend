@@ -1,29 +1,17 @@
-use crate::{mock::*, IntentCounter, SwapIntents};
-use cf_chains::{
-	assets::{Asset, AssetAddress},
-	eth::Address,
-};
+use crate::mock::*;
+use cf_primitives::{Asset, ForeignChain, ForeignChainAddress, ForeignChainAsset};
 use cf_test_utilities::last_event;
 use frame_support::assert_ok;
 
 #[test]
 fn request_swap_intent() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Relayer::request_swap_intent(
+		assert_ok!(Relayer::register_swap_intent(
 			Origin::signed(ALICE),
-			(Asset::EthEth, Asset::EthEth),
-			AssetAddress::ETH(Address::default()),
-			0
+			ForeignChainAsset { chain: ForeignChain::Eth, asset: Asset::Eth },
+			ForeignChainAsset { chain: ForeignChain::Eth, asset: Asset::Usdc },
+			ForeignChainAddress::Eth((Default::default())),
+			0,
 		));
-		assert_eq!(IntentCounter::<Test>::get(), 1);
-		for swap_intent in SwapIntents::<Test>::iter_values() {
-			assert_eq!(
-				last_event::<Test>(),
-				crate::mock::Event::Relayer(crate::Event::NewIngressIntent(
-					swap_intent.ingress_address,
-					swap_intent.tx_hash
-				))
-			);
-		}
 	});
 }
