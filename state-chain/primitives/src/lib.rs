@@ -18,6 +18,8 @@ pub type EpochIndex = u32;
 
 pub type AuthorityCount = u32;
 
+pub type IntentId = u64;
+
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug, Copy)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum ChainflipAccountState {
@@ -79,18 +81,21 @@ impl Default for AccountRole {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum ForeignChain {
 	Eth,
 	Dot,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum ForeignChainAddress {
 	Eth(eth::Address),
 }
 
 /// An Asset is a token or currency that can be traded via the Chainflip AMM.
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum Asset {
 	Eth,
 	Flip,
@@ -99,7 +104,8 @@ pub enum Asset {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct ForeignChainAsset {
-	chain: ForeignChain,
-	asset: Asset,
+	pub chain: ForeignChain,
+	pub asset: Asset,
 }
