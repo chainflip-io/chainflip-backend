@@ -19,11 +19,11 @@ pub mod pallet {
 	use core::marker::PhantomData;
 
 	use super::*;
-	use cf_primitives::{Asset, ForeignChain};
+	use cf_primitives::Asset;
 	use frame_support::{
 		pallet_prelude::{DispatchResultWithPostInfo, OptionQuery, ValueQuery, *},
 		traits::{EnsureOrigin, IsType},
-		Blake2_128, Twox64Concat,
+		Blake2_128,
 	};
 
 	use frame_system::{ensure_signed, pallet_prelude::OriginFor};
@@ -62,10 +62,9 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
-	/// Stores the latest intent id returned for a particular foreign chain.
+	/// Stores the latest intent id used to generate an address.
 	#[pallet::storage]
-	pub type IntentIdCounter<T: Config> =
-		StorageMap<_, Twox64Concat, ForeignChain, IntentId, ValueQuery>;
+	pub type IntentIdCounter<T: Config> = StorageValue<_, IntentId, ValueQuery>;
 
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
@@ -172,8 +171,8 @@ impl<T: Config> IngressApi for Pallet<T> {
 
 impl<T: Config> AddressDerivationApi for Pallet<T> {
 	// TODO: Implement real implementation
-	fn generate_address(ingress_asset: ForeignChainAsset) -> (ForeignChainAddress, IntentId) {
-		let intent_id = IntentIdCounter::<T>::mutate(ingress_asset.chain, |id| {
+	fn generate_address(_ingress_asset: ForeignChainAsset) -> (ForeignChainAddress, IntentId) {
+		let intent_id = IntentIdCounter::<T>::mutate(|id| {
 			let new_id = *id + 1;
 			*id = new_id;
 			new_id
