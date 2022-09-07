@@ -1,9 +1,7 @@
 use super::*;
 use cf_chains::eth::{to_ethereum_address, AggKey, SchnorrVerificationComponents};
-use cf_traits::{
-	ChainflipAccount, ChainflipAccountState, ChainflipAccountStore, EpochIndex, EpochInfo,
-	FlipBalance,
-};
+use cf_primitives::{ChainflipAccountState, EpochIndex};
+use cf_traits::{ChainflipAccount, ChainflipAccountStore, EpochInfo, FlipBalance};
 use codec::Encode;
 use frame_support::traits::OnFinalize;
 use libsecp256k1::PublicKey;
@@ -257,13 +255,14 @@ impl Engine {
 						pallet_cf_threshold_signature::Event::ThresholdDispatchComplete(..)) => {
 							if let EngineState::Rotation = self.engine_state {
 								// If we rotating let's witness the keys being rotated on the contract
-								let _result = state_chain_runtime::Witnesser::witness(
+								let _result = state_chain_runtime::Witnesser::witness_at_epoch(
 									Origin::signed(self.node_id.clone()),
 									Box::new(pallet_cf_vaults::Call::vault_key_rotated {
 										new_public_key: self.threshold_signer.borrow_mut().proposed_public_key(),
 										block_number: 100,
 										tx_hash: [1u8; 32].into(),
 									}.into()),
+									Validator::epoch_index()
 								);
 							}
 					},

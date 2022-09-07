@@ -10,18 +10,31 @@ use frame_support::{assert_noop, assert_ok};
 fn call_on_threshold() {
 	new_test_ext().execute_with(|| {
 		let call = Box::new(Call::Dummy(pallet_dummy::Call::<Test>::increment_value {}));
+		let current_epoch = MockEpochInfo::epoch_index();
 
 		// Only one vote, nothing should happen yet.
-		assert_ok!(Witnesser::witness(Origin::signed(ALISSA), call.clone()));
+		assert_ok!(Witnesser::witness_at_epoch(
+			Origin::signed(ALISSA),
+			call.clone(),
+			current_epoch
+		));
 		assert_eq!(pallet_dummy::Something::<Test>::get(), None);
 
 		// Vote again, we should reach the threshold and dispatch the call.
-		assert_ok!(Witnesser::witness(Origin::signed(BOBSON), call.clone()));
+		assert_ok!(Witnesser::witness_at_epoch(
+			Origin::signed(BOBSON),
+			call.clone(),
+			current_epoch
+		));
 
 		assert_eq!(pallet_dummy::Something::<Test>::get(), Some(0u32));
 
 		// Vote again, should count the vote but the call should not be dispatched again.
-		assert_ok!(Witnesser::witness(Origin::signed(CHARLEMAGNE), call.clone()));
+		assert_ok!(Witnesser::witness_at_epoch(
+			Origin::signed(CHARLEMAGNE),
+			call.clone(),
+			current_epoch
+		));
 		assert_eq!(pallet_dummy::Something::<Test>::get(), Some(0u32));
 
 		// Check the deposited event to get the vote count.
@@ -65,14 +78,19 @@ fn no_double_call_on_epoch_boundary() {
 fn cannot_double_witness() {
 	new_test_ext().execute_with(|| {
 		let call = Box::new(Call::Dummy(pallet_dummy::Call::<Test>::increment_value {}));
+		let current_epoch = MockEpochInfo::epoch_index();
 
 		// Only one vote, nothing should happen yet.
-		assert_ok!(Witnesser::witness(Origin::signed(ALISSA), call.clone()));
+		assert_ok!(Witnesser::witness_at_epoch(
+			Origin::signed(ALISSA),
+			call.clone(),
+			current_epoch
+		));
 		assert_eq!(pallet_dummy::Something::<Test>::get(), None);
 
 		// Vote again with the same account, should error.
 		assert_noop!(
-			Witnesser::witness(Origin::signed(ALISSA), call),
+			Witnesser::witness_at_epoch(Origin::signed(ALISSA), call, current_epoch),
 			Error::<Test>::DuplicateWitness
 		);
 	});
@@ -82,15 +100,28 @@ fn cannot_double_witness() {
 fn only_authorities_can_witness() {
 	new_test_ext().execute_with(|| {
 		let call = Box::new(Call::Dummy(pallet_dummy::Call::<Test>::increment_value {}));
+		let current_epoch = MockEpochInfo::epoch_index();
 
 		// Validators can witness
-		assert_ok!(Witnesser::witness(Origin::signed(ALISSA), call.clone()));
-		assert_ok!(Witnesser::witness(Origin::signed(BOBSON), call.clone()));
-		assert_ok!(Witnesser::witness(Origin::signed(CHARLEMAGNE), call.clone()));
+		assert_ok!(Witnesser::witness_at_epoch(
+			Origin::signed(ALISSA),
+			call.clone(),
+			current_epoch
+		));
+		assert_ok!(Witnesser::witness_at_epoch(
+			Origin::signed(BOBSON),
+			call.clone(),
+			current_epoch
+		));
+		assert_ok!(Witnesser::witness_at_epoch(
+			Origin::signed(CHARLEMAGNE),
+			call.clone(),
+			current_epoch
+		));
 
 		// Other accounts can't witness
 		assert_noop!(
-			Witnesser::witness(Origin::signed(DEIRDRE), call),
+			Witnesser::witness_at_epoch(Origin::signed(DEIRDRE), call, current_epoch),
 			Error::<Test>::UnauthorisedWitness
 		);
 	});

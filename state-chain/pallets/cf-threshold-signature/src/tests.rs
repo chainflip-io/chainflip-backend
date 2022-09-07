@@ -359,7 +359,7 @@ mod unsigned_validation {
 		new_test_ext().execute_with(|| {
 			const PAYLOAD: <MockEthereum as ChainCrypto>::Payload = *b"OHAI";
 			const CUSTOM_AGG_KEY: <MockEthereum as ChainCrypto>::AggKey = *b"AKEY";
-			let participants: Vec<u64> = vec![1, 2, 3, 4, 5, 6];
+			let participants: BTreeSet<u64> = BTreeSet::from_iter([1, 2, 3, 4, 5, 6]);
 			let (request_id, ceremony_id_from_req) =
 				MockEthereumThresholdSigner::request_signature_with(
 					CUSTOM_AGG_KEY.into(),
@@ -375,7 +375,7 @@ mod unsigned_validation {
 				THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS_DEFAULT.into();
 			let retry_block = frame_system::Pallet::<Test>::current_block_number() + timeout_delay;
 			assert_eq!(ceremony.clone().unwrap().key_id, &CUSTOM_AGG_KEY);
-			assert_eq!(ceremony.unwrap().remaining_respondents, BTreeSet::from_iter(participants));
+			assert_eq!(ceremony.unwrap().remaining_respondents, participants);
 			assert_eq!(request.unwrap().retry_policy, RetryPolicy::Never);
 			// Process retries.
 			<MockEthereumThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(

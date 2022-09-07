@@ -1,4 +1,5 @@
 use std::{
+    collections::BTreeSet,
     fs,
     path::{Path, PathBuf},
 };
@@ -28,7 +29,8 @@ fn generate_key_share_for_test<C: CryptoScheme>() -> KeygenResultInfo<C::Point> 
     use rand_legacy::FromEntropy;
     let rng = Rng::from_entropy();
     let account_id = AccountId32::new([0; 32]);
-    let (_key_id, key_shares) = generate_key_data_until_compatible(&[account_id.clone()], 20, rng);
+    let (_key_id, key_shares) =
+        generate_key_data_until_compatible(BTreeSet::from_iter([account_id.clone()]), 20, rng);
     key_shares[&account_id].clone()
 }
 

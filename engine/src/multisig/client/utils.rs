@@ -1,6 +1,6 @@
 use std::collections::{BTreeSet, HashMap};
 
-use cf_traits::AuthorityCount;
+use cf_primitives::AuthorityCount;
 use state_chain_runtime::AccountId;
 
 use serde::{Deserialize, Serialize};
@@ -10,9 +10,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PartyIdxMapping {
     id_to_idx: HashMap<AccountId, AuthorityCount>,
-    // TODO: create SortedVec and use it here:
-    // Sorted Account Ids
-    account_ids: Vec<AccountId>,
+    account_ids: BTreeSet<AccountId>,
 }
 
 impl PartyIdxMapping {
@@ -24,12 +22,15 @@ impl PartyIdxMapping {
     /// Get party account id based on their index
     pub fn get_id(&self, idx: AuthorityCount) -> Option<&AccountId> {
         let idx = idx.checked_sub(1)?;
-        self.account_ids.get(idx as usize)
+        self.account_ids.iter().nth(idx as usize)
     }
 
     /// Map all signer ids to their corresponding signer idx
     #[allow(clippy::result_unit_err)]
-    pub fn get_all_idxs(&self, signer_ids: &[AccountId]) -> Result<BTreeSet<AuthorityCount>, ()> {
+    pub fn get_all_idxs(
+        &self,
+        signer_ids: &BTreeSet<AccountId>,
+    ) -> Result<BTreeSet<AuthorityCount>, ()> {
         signer_ids
             .iter()
             .map(|id| self.get_idx(id).ok_or(()))
@@ -48,20 +49,17 @@ impl PartyIdxMapping {
             .collect()
     }
 
-    pub fn from_unsorted_signers(signers: &[AccountId]) -> Self {
-        let mut signers = signers.to_owned();
-        signers.sort();
-
-        let mut id_to_idx = HashMap::new();
-
-        for (i, account_id) in signers.iter().enumerate() {
-            // indexes start with 1 for signing
-            id_to_idx.insert(account_id.clone(), i as AuthorityCount + 1);
-        }
+    pub fn from_participants(participants: BTreeSet<AccountId>) -> Self {
+        // The protocol requires that the indexes start at 1
+        let id_to_idx = participants
+            .iter()
+            .enumerate()
+            .map(|(i, account_id)| (account_id.clone(), i as AuthorityCount + 1))
+            .collect();
 
         PartyIdxMapping {
             id_to_idx,
-            account_ids: signers,
+            account_ids: participants,
         }
     }
 }
@@ -121,9 +119,9 @@ mod utils_tests {
         let b = AccountId::new([b'B'; 32]);
         let c = AccountId::new([b'C'; 32]);
 
-        let signers = [a, c.clone(), b];
+        let signers = BTreeSet::from_iter([a, c.clone(), b]);
 
-        let map = PartyIdxMapping::from_unsorted_signers(&signers);
+        let map = PartyIdxMapping::from_participants(signers);
 
         assert_eq!(map.get_idx(&c), Some(3));
         assert_eq!(map.get_id(3), Some(&c));

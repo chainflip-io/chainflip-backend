@@ -1,5 +1,7 @@
 #![cfg(test)]
 
+use std::collections::BTreeSet;
+
 use rand_legacy::SeedableRng;
 
 use crate::multisig::{
@@ -208,10 +210,10 @@ async fn should_ignore_unexpected_message_for_stage() {
         |stage_number, mut ceremony, (_, messages, _)| async move {
             let previous_stage = stage_number - 1;
 
-            let [test_node_id] = &ceremony.select_account_ids();
+            let [test_node_id, sender_id] = &ceremony.select_account_ids();
 
             let get_messages_for_stage = |stage_index: usize| {
-                split_messages_for(messages[stage_index].clone(), test_node_id, &ACCOUNT_IDS[1])
+                split_messages_for(messages[stage_index].clone(), test_node_id, sender_id)
             };
 
             // Get the messages from all but one client for the previous stage
@@ -299,9 +301,12 @@ async fn should_ignore_unexpected_message_for_stage() {
 
 #[tokio::test]
 async fn should_sign_with_all_parties() {
-    let (key_id, key_data) =
-        generate_key_data(&ACCOUNT_IDS, &mut Rng::from_seed(DEFAULT_KEYGEN_SEED), true)
-            .expect("Should generate key for test");
+    let (key_id, key_data) = generate_key_data(
+        BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
+        &mut Rng::from_seed(DEFAULT_KEYGEN_SEED),
+        true,
+    )
+    .expect("Should generate key for test");
 
     let mut signing_ceremony = SigningCeremonyRunner::new_with_all_signers(
         new_nodes(ACCOUNT_IDS.clone()),

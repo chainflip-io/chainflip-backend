@@ -13,7 +13,7 @@ use crate::multisig::client::CeremonyRequestDetails;
 use crate::multisig::crypto::ECScalar;
 use crate::multisig::crypto::{CryptoScheme, ECPoint, Rng};
 use crate::multisig_p2p::OutgoingMultisigStageMessages;
-use cf_traits::{AuthorityCount, CeremonyId};
+use cf_primitives::{AuthorityCount, CeremonyId};
 use state_chain_runtime::AccountId;
 
 use client::{
@@ -121,7 +121,7 @@ pub struct PreparedRequest<C: CeremonyTrait> {
 pub fn prepare_signing_request<C: CryptoScheme>(
     ceremony_id: CeremonyId,
     own_account_id: &AccountId,
-    signers: Vec<AccountId>,
+    signers: BTreeSet<AccountId>,
     key_info: KeygenResultInfo<C::Point>,
     data: MessageHash,
     outgoing_p2p_message_sender: &UnboundedSender<OutgoingMultisigStageMessages>,
@@ -193,7 +193,7 @@ pub fn prepare_signing_request<C: CryptoScheme>(
 pub fn prepare_keygen_request<C: CryptoScheme>(
     ceremony_id: CeremonyId,
     own_account_id: &AccountId,
-    participants: Vec<AccountId>,
+    participants: BTreeSet<AccountId>,
     outgoing_p2p_message_sender: &UnboundedSender<OutgoingMultisigStageMessages>,
     rng: Rng,
     allowing_high_pubkey: bool,
@@ -202,7 +202,7 @@ pub fn prepare_keygen_request<C: CryptoScheme>(
     PreparedRequest<KeygenCeremony<C>>,
     CeremonyFailureReason<<KeygenCeremony<C> as CeremonyTrait>::FailureReason>,
 > {
-    let validator_map = Arc::new(PartyIdxMapping::from_unsorted_signers(&participants));
+    let validator_map = Arc::new(PartyIdxMapping::from_participants(participants.clone()));
 
     let (our_idx, signer_idxs) =
         match map_ceremony_parties(own_account_id, &participants, &validator_map) {
@@ -248,7 +248,7 @@ pub fn prepare_keygen_request<C: CryptoScheme>(
 
 fn map_ceremony_parties(
     own_account_id: &AccountId,
-    participants: &[AccountId],
+    participants: &BTreeSet<AccountId>,
     validator_map: &PartyIdxMapping,
 ) -> Result<(AuthorityCount, BTreeSet<AuthorityCount>), &'static str> {
     assert!(
@@ -267,10 +267,6 @@ fn map_ceremony_parties(
     let signer_idxs = validator_map
         .get_all_idxs(participants)
         .map_err(|_| "invalid participants")?;
-
-    if signer_idxs.len() != participants.len() {
-        return Err("non unique participants");
-    }
 
     Ok((our_idx, signer_idxs))
 }
@@ -363,7 +359,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
     pub fn on_keygen_request(
         &mut self,
         ceremony_id: CeremonyId,
-        participants: Vec<AccountId>,
+        participants: BTreeSet<AccountId>,
         rng: Rng,
         result_sender: CeremonyResultSender<KeygenCeremony<C>>,
     ) {
@@ -418,7 +414,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
     pub fn on_request_to_sign(
         &mut self,
         ceremony_id: CeremonyId,
-        signers: Vec<AccountId>,
+        signers: BTreeSet<AccountId>,
         data: MessageHash,
         key_info: KeygenResultInfo<C::Point>,
         rng: Rng,
@@ -512,8 +508,11 @@ impl<C: CryptoScheme> CeremonyManager<C> {
     fn single_party_keygen(&self, rng: Rng) -> KeygenResultInfo<C::Point> {
         slog::info!(self.logger, "Performing solo keygen");
 
-        let (_key_id, key_data) =
-            generate_key_data_until_compatible(&[self.my_account_id.clone()], 30, rng);
+        let (_key_id, key_data) = generate_key_data_until_compatible(
+            BTreeSet::from_iter([self.my_account_id.clone()]),
+            30,
+            rng,
+        );
         key_data[&self.my_account_id].clone()
     }
 
@@ -553,12 +552,9 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 /// Create unique deterministic context used for generating a ZKP to prevent replay attacks
 pub fn generate_keygen_context(
     ceremony_id: CeremonyId,
-    mut signers: Vec<AccountId>,
+    signers: BTreeSet<AccountId>,
 ) -> HashContext {
     use sha2::{Digest, Sha256};
-
-    // We don't care if sorting is stable as all account ids are meant to be unique
-    signers.sort_unstable();
 
     let mut hasher = Sha256::new();
 

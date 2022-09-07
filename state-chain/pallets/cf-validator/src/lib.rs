@@ -16,12 +16,12 @@ pub use weights::WeightInfo;
 mod benchmarking;
 mod rotation_state;
 
+use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex};
 use cf_traits::{
-	offence_reporting::OffenceReporter, AsyncResult, Auctioneer, AuthorityCount, Bid,
-	BidderProvider, Bonding, CeremonyId, Chainflip, ChainflipAccount, EmergencyRotation,
-	EpochIndex, EpochInfo, EpochTransitionHandler, ExecutionCondition, HistoricalEpoch,
-	MissedAuthorshipSlots, QualifyNode, ReputationResetter, StakeHandler, SystemStateInfo,
-	VaultRotator,
+	offence_reporting::OffenceReporter, AsyncResult, Auctioneer, Bid, BidderProvider, Bonding,
+	Chainflip, ChainflipAccount, EmergencyRotation, EpochInfo, EpochTransitionHandler,
+	ExecutionCondition, HistoricalEpoch, MissedAuthorshipSlots, QualifyNode, ReputationResetter,
+	StakeHandler, SystemStateInfo, VaultRotator,
 };
 use cf_utilities::Port;
 use frame_support::{
@@ -1063,7 +1063,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn start_vault_rotation(rotation_state: RuntimeRotationState<T>) {
-		let candidates: Vec<_> = rotation_state.authority_candidates();
+		let candidates: BTreeSet<_> = rotation_state.authority_candidates();
 		if candidates.len() < AuthoritySetMinSize::<T>::get().into() {
 			log::warn!(
 				target: "cf-validator",

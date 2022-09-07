@@ -1,15 +1,19 @@
 use crate::{Runtime, Validator};
-use cf_traits::{Chainflip, EpochIndex, EpochInfo};
+use cf_primitives::EpochIndex;
+use cf_traits::{Chainflip, EpochInfo};
 use frame_support::Hashable;
 use nanorand::{Rng, WyRand};
 use pallet_cf_validator::HistoricalAuthorities;
 use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
 
-/// Tries to select `n` items randomly from the provided Vec.
+/// Tries to select `n` items randomly from the provided BTreeSet.
 ///
-/// If `n` is greater than the length of the Vec, returns `None`, otherwise
-/// `Some` Vec of length `n`.
-fn try_select_random_subset<T>(seed: u64, n: usize, mut things: Vec<T>) -> Option<Vec<T>> {
+/// If `n` is greater than the length of the BTreeSet, returns `None`, otherwise
+/// `Some` BTreeSet of length `n`.
+fn try_select_random_subset<T>(seed: u64, n: usize, things: BTreeSet<T>) -> Option<BTreeSet<T>>
+where
+	T: Ord,
+{
 	if things.is_empty() || n > things.len() {
 		return None
 	}
@@ -17,6 +21,7 @@ fn try_select_random_subset<T>(seed: u64, n: usize, mut things: Vec<T>) -> Optio
 		return Some(things)
 	}
 
+	let mut things: Vec<T> = things.into_iter().collect();
 	WyRand::new_seed(seed).shuffle(&mut things);
 	Some(things.into_iter().take(n).collect())
 }
@@ -24,7 +29,7 @@ fn try_select_random_subset<T>(seed: u64, n: usize, mut things: Vec<T>) -> Optio
 /// Select `Some` single item pseudo-randomly from the list using the given seed.
 ///
 /// Returns `None` if the list is empty.
-fn select_one<T>(seed: u64, things: Vec<T>) -> Option<T> {
+fn select_one<T>(seed: u64, things: BTreeSet<T>) -> Option<T> {
 	if things.is_empty() {
 		None
 	} else {
@@ -43,7 +48,7 @@ fn seed_from_hashable<H: Hashable>(value: H) -> u64 {
 fn eligible_authorities(
 	at_epoch: EpochIndex,
 	exclude_ids: &[<Runtime as Chainflip>::ValidatorId],
-) -> Vec<<Runtime as Chainflip>::ValidatorId> {
+) -> BTreeSet<<Runtime as Chainflip>::ValidatorId> {
 	HistoricalAuthorities::<Runtime>::get(at_epoch)
 		.into_iter()
 		.collect::<BTreeSet<_>>()
@@ -71,7 +76,7 @@ impl cf_traits::SignerNomination for RandomSignerNomination {
 	fn threshold_nomination_with_seed<H: Hashable>(
 		seed: H,
 		epoch_index: EpochIndex,
-	) -> Option<Vec<Self::SignerId>> {
+	) -> Option<BTreeSet<Self::SignerId>> {
 		try_select_random_subset(
 			seed_from_hashable(seed),
 			cf_utilities::success_threshold_from_share_count(
@@ -89,8 +94,8 @@ mod tests {
 	use std::collections::BTreeSet;
 
 	/// Generates a set of authorities with the SignerId = index + 1
-	fn authority_set(len: usize) -> Vec<u64> {
-		(0..len as u64).collect::<Vec<_>>()
+	fn authority_set(len: usize) -> BTreeSet<u64> {
+		(0..len as u64).collect::<BTreeSet<_>>()
 	}
 
 	#[test]
@@ -101,10 +106,15 @@ mod tests {
 		let b = select_one(seed_from_hashable(String::from("seedy")), authority_set(150)).unwrap();
 		assert_ne!(a, b);
 		// If an empty set is provided, the result is `None`
-		assert!(select_one::<u64>(seed_from_hashable(String::from("seed")), vec![],).is_none());
+		assert!(select_one::<u64>(seed_from_hashable(String::from("seed")), BTreeSet::default(),)
+			.is_none());
 	}
 
-	fn assert_selected_subset_is_valid<T: Clone + Ord>(seed: u64, threshold: usize, set: Vec<T>) {
+	fn assert_selected_subset_is_valid<T: Clone + Ord>(
+		seed: u64,
+		threshold: usize,
+		set: BTreeSet<T>,
+	) {
 		let source = BTreeSet::from_iter(set.clone());
 		let result = BTreeSet::from_iter(try_select_random_subset(seed, threshold, set).unwrap());
 		assert!(result.len() == threshold);
@@ -127,7 +137,7 @@ mod tests {
 	fn test_subset_selection_is_none() {
 		for seed in 0..100 {
 			// empty set is invalid
-			assert_eq!(None, try_select_random_subset::<u64>(seed, 0, vec![]));
+			assert_eq!(None, try_select_random_subset::<u64>(seed, 0, BTreeSet::default()));
 			// threshold can't be larger than the set size
 			assert_eq!(None, try_select_random_subset(seed, 6, (0..5).collect()));
 		}
@@ -135,7 +145,7 @@ mod tests {
 
 	#[test]
 	fn different_seed_different_set() {
-		let set = (0..150).collect::<Vec<_>>();
+		let set = (0..150).collect::<BTreeSet<_>>();
 		for seed in 0..100 {
 			// Note: strictly speaking these don't have to be different but the chances of a
 			// collision should be quite low.
@@ -150,7 +160,7 @@ mod tests {
 
 	#[test]
 	fn same_seed_same_set() {
-		let set = (0..150).collect::<Vec<_>>();
+		let set = (0..150).collect::<BTreeSet<_>>();
 		for seed in 0..100 {
 			assert_eq!(
 				BTreeSet::from_iter(try_select_random_subset(seed, 100, set.clone()).unwrap()),

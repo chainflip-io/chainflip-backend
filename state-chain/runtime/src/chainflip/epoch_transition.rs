@@ -1,4 +1,5 @@
-use cf_traits::{EpochIndex, EpochTransitionHandler};
+use cf_primitives::EpochIndex;
+use cf_traits::EpochTransitionHandler;
 
 use crate::{AccountId, Emissions, EthereumVault, Witnesser};
 

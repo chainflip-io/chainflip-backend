@@ -5,7 +5,7 @@ use crate::{
     state_chain_observer::client::StateChainRpcApi,
 };
 use cf_chains::eth::SchnorrVerificationComponents;
-use cf_traits::EpochIndex;
+use cf_primitives::EpochIndex;
 use std::sync::Arc;
 use web3::{
     contract::tokens::Tokenizable,
@@ -205,7 +205,7 @@ impl EthContractWitnesser for KeyManager {
 
     async fn handle_event<RpcClient, EthRpcClient>(
         &self,
-        _epoch_index: EpochIndex,
+        epoch_index: EpochIndex,
         block_number: u64,
         event: Event<Self::EventParameters>,
         state_chain_client: Arc<StateChainClient<RpcClient>>,
@@ -221,7 +221,7 @@ impl EthContractWitnesser for KeyManager {
             KeyManagerEvent::AggKeySetByAggKey { new_agg_key, .. } => {
                 let _result = state_chain_client
                     .submit_signed_extrinsic(
-                        pallet_cf_witnesser::Call::witness {
+                        pallet_cf_witnesser::Call::witness_at_epoch {
                             call: Box::new(
                                 pallet_cf_vaults::Call::vault_key_rotated {
                                     new_public_key: cf_chains::eth::AggKey::from_pubkey_compressed(
@@ -232,6 +232,7 @@ impl EthContractWitnesser for KeyManager {
                                 }
                                 .into(),
                             ),
+                            epoch_index,
                         },
                         logger,
                     )
@@ -240,7 +241,7 @@ impl EthContractWitnesser for KeyManager {
             KeyManagerEvent::AggKeySetByGovKey { new_agg_key, .. } => {
                 let _result = state_chain_client
                     .submit_signed_extrinsic(
-                        pallet_cf_witnesser::Call::witness {
+                        pallet_cf_witnesser::Call::witness_at_epoch {
                             call: Box::new(
                                 pallet_cf_vaults::Call::vault_key_rotated_externally {
                                     new_public_key: cf_chains::eth::AggKey::from_pubkey_compressed(
@@ -251,6 +252,7 @@ impl EthContractWitnesser for KeyManager {
                                 }
                                 .into(),
                             ),
+                            epoch_index,
                         },
                         logger,
                     )
@@ -270,7 +272,7 @@ impl EthContractWitnesser for KeyManager {
                 };
                 let _result = state_chain_client
                     .submit_signed_extrinsic(
-                        pallet_cf_witnesser::Call::witness {
+                        pallet_cf_witnesser::Call::witness_at_epoch {
                             call: Box::new(
                                 pallet_cf_broadcast::Call::signature_accepted {
                                     signature: SchnorrVerificationComponents {
@@ -285,6 +287,7 @@ impl EthContractWitnesser for KeyManager {
                                 }
                                 .into(),
                             ),
+                            epoch_index,
                         },
                         logger,
                     )
@@ -293,13 +296,14 @@ impl EthContractWitnesser for KeyManager {
             KeyManagerEvent::GovernanceAction { message } => {
                 let _result = state_chain_client
                     .submit_signed_extrinsic(
-                        pallet_cf_witnesser::Call::witness {
+                        pallet_cf_witnesser::Call::witness_at_epoch {
                             call: Box::new(
                                 pallet_cf_governance::Call::set_whitelisted_call_hash {
                                     call_hash: message,
                                 }
                                 .into(),
                             ),
+                            epoch_index,
                         },
                         logger,
                     )
