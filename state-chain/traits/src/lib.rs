@@ -12,7 +12,7 @@ use sp_std::collections::btree_set::BTreeSet;
 use cf_chains::{benchmarking_value::BenchmarkValue, ApiCall, ChainAbi, ChainCrypto};
 use cf_primitives::{
 	AuthorityCount, CeremonyId, ChainflipAccountData, ChainflipAccountState, EpochIndex,
-	ForeignChainAddress, ForeignChainAsset,
+	ForeignChainAddress, ForeignChainAsset, IntentId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -682,4 +682,8 @@ pub trait IngressApi {
 		egress_address: ForeignChainAddress,
 		relayer_commission_bps: u16,
 	);
+}
+
+pub trait AddressDerivationApi {
+	fn generate_address(ingress_asset: ForeignChainAsset) -> (ForeignChainAddress, IntentId);
 }

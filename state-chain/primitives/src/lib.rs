@@ -18,6 +18,8 @@ pub type EpochIndex = u32;
 
 pub type AuthorityCount = u32;
 
+pub type IntentId = u64;
+
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug, Copy)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum ChainflipAccountState {

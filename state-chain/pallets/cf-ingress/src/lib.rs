@@ -29,7 +29,6 @@ pub mod pallet {
 
 	use sp_std::str::FromStr;
 
-	type IntentId = u64;
 
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	pub struct IngressDetails {
