@@ -188,6 +188,7 @@ fn can_continue_to_witness_for_old_epochs() {
 #[test]
 fn can_purge_stale_storage() {
 	const BLOCK_WEIGHT: u64 = 1_000_000_000_000u64;
+	let delete_weight = <Test as Config>::WeightInfo::remove_storage_items(1);
 	let mut ext = new_test_ext();
 	ext.execute_with(|| {
 		let call1 = CallHash(frame_support::Hashable::blake2_256(&*Box::new(Call::Dummy(
@@ -219,7 +220,6 @@ fn can_purge_stale_storage() {
 		let call2 = CallHash(frame_support::Hashable::blake2_256(&*Box::new(Call::System(
 			frame_system::Call::<Test>::remark { remark: vec![0] },
 		))));
-		let delete_weight = <Test as Config>::WeightInfo::remove_one_storage_item();
 
 		Witnesser::on_expired_epoch(2);
 		Witnesser::on_expired_epoch(3);
@@ -262,7 +262,6 @@ fn can_purge_stale_storage() {
 		let call2 = CallHash(frame_support::Hashable::blake2_256(&*Box::new(Call::System(
 			frame_system::Call::<Test>::remark { remark: vec![0] },
 		))));
-		let delete_weight = <Test as Config>::WeightInfo::remove_one_storage_item();
 
 		// Clean the remaining storage
 		assert_eq!(Witnesser::on_idle(4, BLOCK_WEIGHT), delete_weight * 2);

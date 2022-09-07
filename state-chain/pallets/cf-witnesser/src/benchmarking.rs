@@ -26,10 +26,14 @@ benchmarks! {
 		assert!(Votes::<T>::contains_key(&epoch, &call_hash));
 	}
 
-	remove_one_storage_item {
-		let call: <T as Config>::Call = frame_system::Call::remark{ remark: vec![] }.into();
-		let call_hash = CallHash(Hashable::blake2_256(&call));
-		Votes::<T>::insert(0, call_hash, vec![0]);
+	remove_storage_items {
+		let n in 1u32 .. 255u32;
+
+		for i in 0..n {
+			let call: <T as Config>::Call = frame_system::Call::remark{ remark: vec![i as u8] }.into();
+			let call_hash = CallHash(Hashable::blake2_256(&call));
+			Votes::<T>::insert(0, call_hash, vec![0]);
+		}
 	} : { let _ = Votes::<T>::clear_prefix(0, u32::MAX, None); }
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);

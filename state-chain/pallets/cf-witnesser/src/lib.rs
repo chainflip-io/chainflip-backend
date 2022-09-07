@@ -120,7 +120,7 @@ pub mod pallet {
 			let epoch = if let Some(epoch) = epochs_to_cull.pop() { epoch } else { return 0 };
 
 			let max_deletions_count_remaining = remaining_weight
-				.checked_div(T::WeightInfo::remove_one_storage_item())
+				.checked_div(T::WeightInfo::remove_storage_items(1))
 				.unwrap_or_default();
 
 			if max_deletions_count_remaining == 0 {
@@ -128,6 +128,7 @@ pub mod pallet {
 			}
 
 			let mut deletions_count_remaining = max_deletions_count_remaining;
+			let mut used_weight: Weight = 0;
 			let (mut cleared_votes, mut cleared_extra_call_data, mut cleared_call_hash) =
 				(false, false, false);
 
@@ -135,7 +136,9 @@ pub mod pallet {
 			let remove_result =
 				Votes::<T>::clear_prefix(epoch, deletions_count_remaining as u32, None);
 			deletions_count_remaining =
-				deletions_count_remaining.saturating_sub(remove_result.unique as u64);
+				deletions_count_remaining.saturating_sub(remove_result.backend as u64);
+			used_weight = used_weight
+				.saturating_add(T::WeightInfo::remove_storage_items(remove_result.backend));
 			if remove_result.maybe_cursor.is_none() {
 				cleared_votes = true;
 			}
@@ -145,7 +148,9 @@ pub mod pallet {
 				let remove_result =
 					ExtraCallData::<T>::clear_prefix(epoch, deletions_count_remaining as u32, None);
 				deletions_count_remaining =
-					deletions_count_remaining.saturating_sub(remove_result.unique as u64);
+					deletions_count_remaining.saturating_sub(remove_result.backend as u64);
+				used_weight = used_weight
+					.saturating_add(T::WeightInfo::remove_storage_items(remove_result.backend));
 				if remove_result.maybe_cursor.is_none() {
 					cleared_extra_call_data = true;
 				}
@@ -158,8 +163,8 @@ pub mod pallet {
 					deletions_count_remaining as u32,
 					None,
 				);
-				deletions_count_remaining =
-					deletions_count_remaining.saturating_sub(remove_result.unique as u64);
+				used_weight = used_weight
+					.saturating_add(T::WeightInfo::remove_storage_items(remove_result.backend));
 				if remove_result.maybe_cursor.is_none() {
 					cleared_call_hash = true;
 				}
@@ -169,10 +174,7 @@ pub mod pallet {
 			if cleared_votes && cleared_extra_call_data && cleared_call_hash {
 				EpochsToCull::<T>::put(epochs_to_cull);
 			}
-
-			max_deletions_count_remaining
-				.saturating_sub(deletions_count_remaining)
-				.saturating_mul(T::WeightInfo::remove_one_storage_item())
+			used_weight
 		}
 	}
 
