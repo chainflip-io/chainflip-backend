@@ -5255,6 +5255,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-cf-ingress"
+version = "0.1.0"
+dependencies = [
+ "cf-primitives",
+ "cf-traits",
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "scale-info",
+]
+
+[[package]]
 name = "pallet-cf-reputation"
 version = "0.1.0"
 dependencies = [
@@ -8950,6 +8962,7 @@ dependencies = [
  "pallet-cf-environment",
  "pallet-cf-flip",
  "pallet-cf-governance",
+ "pallet-cf-ingress",
  "pallet-cf-reputation",
  "pallet-cf-staking",
  "pallet-cf-threshold-signature",

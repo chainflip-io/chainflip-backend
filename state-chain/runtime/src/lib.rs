@@ -205,6 +205,10 @@ impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 	type SystemStateManager = pallet_cf_environment::SystemStateProvider<Runtime>;
 }
 
+impl pallet_cf_ingress::Config for Runtime {
+	type Event = Event;
+}
+
 impl<LocalCall> SendTransactionTypes<LocalCall> for Runtime
 where
 	Call: From<LocalCall>,
@@ -533,6 +537,7 @@ construct_runtime!(
 		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>,
 		EthereumBroadcaster: pallet_cf_broadcast::<Instance1>,
 		EthereumChainTracking: pallet_cf_chain_tracking::<Instance1>,
+		Ingress: pallet_cf_ingress,
 	}
 );
 
