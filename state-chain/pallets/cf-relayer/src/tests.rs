@@ -1,6 +1,5 @@
 use crate::mock::*;
 use cf_primitives::{Asset, ForeignChain, ForeignChainAddress, ForeignChainAsset};
-use cf_test_utilities::last_event;
 use frame_support::assert_ok;
 
 #[test]
@@ -10,7 +9,7 @@ fn request_swap_intent() {
 			Origin::signed(ALICE),
 			ForeignChainAsset { chain: ForeignChain::Eth, asset: Asset::Eth },
 			ForeignChainAsset { chain: ForeignChain::Eth, asset: Asset::Usdc },
-			ForeignChainAddress::Eth((Default::default())),
+			ForeignChainAddress::Eth(Default::default()),
 			0,
 		));
 	});

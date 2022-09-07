@@ -20,8 +20,7 @@ rlp = {default-features = false, version = '0.5'}
 
 # Other
 hex = {default-features = false, version = '0.4'}
-hex-literal = {default-feature = false, version = '0.3.1'}
-# hex-literal = {default-features = false, version = '0.3', optional = true}
+hex-literal = {version = '0.3'}
 serde = {optional = true, version = '1.0.126', features = ['derive']}
 log = { version = '0.4.16', default-features = false }
 
@@ -60,7 +59,6 @@ tag = 'chainflip-monthly-2022-06'
 
 [dev-dependencies]
 cf-test-utilities = { path = '../test-utilities' }
-hex-literal = {version = '0.3'}
 rand = {version='0.8.4'}
 
 [features]

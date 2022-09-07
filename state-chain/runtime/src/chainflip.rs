@@ -25,7 +25,7 @@ use cf_chains::{
 };
 use cf_traits::{
 	Chainflip, EmergencyRotation, EpochInfo, Heartbeat, Issuance, NetworkState,
-	ReplayProtectionProvider, RewardsDistribution, RuntimeUpgrade, VaultAddressProvider,
+	ReplayProtectionProvider, RewardsDistribution, RuntimeUpgrade,
 };
 use frame_support::traits::Get;
 use pallet_cf_chain_tracking::ChainState;
@@ -182,15 +182,5 @@ impl ReplayProtectionProvider<Ethereum> for EthReplayProtectionProvider {
 			chain_id: Environment::ethereum_chain_id(),
 			nonce: Environment::next_global_signature_nonce(),
 		}
-	}
-}
-
-pub struct EthVaultAddressProvider;
-
-impl VaultAddressProvider for EthVaultAddressProvider {
-	type AddressType = eth::Address;
-
-	fn get_vault_address() -> Self::AddressType {
-		Environment::vault_contract_address().into()
 	}
 }

@@ -3,12 +3,18 @@
 
 use super::*;
 
-use cf_chains::eth::Address;
+use cf_primitives::*;
 use frame_benchmarking::{benchmarks, whitelisted_caller};
 use frame_system::RawOrigin;
 
 benchmarks! {
-	request_swap_intent {
+	register_swap_intent {
 		let caller: T::AccountId = whitelisted_caller();
-	}: _(RawOrigin::Signed(caller.clone()) ,(Asset::EthEth, Asset::EthEth), AssetAddress::ETH(Address::default()), 0)
+	}: _(
+		RawOrigin::Signed(caller.clone()),
+		ForeignChainAsset { chain: ForeignChain::Eth, asset: Asset::Eth },
+		ForeignChainAsset { chain: ForeignChain::Eth, asset: Asset::Usdc },
+		ForeignChainAddress::Eth(Default::default()),
+		0
+	)
 }

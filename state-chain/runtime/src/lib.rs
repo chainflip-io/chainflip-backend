@@ -9,9 +9,6 @@ pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
 use runtime_apis::BackupOrPassive;
 
-use cf_chains::eth::EthAddressDerivation;
-use chainflip::EthVaultAddressProvider;
-
 use crate::{
 	chainflip::Offence,
 	runtime_apis::{
@@ -191,8 +188,7 @@ impl pallet_cf_environment::Config for Runtime {
 
 impl pallet_cf_relayer::Config for Runtime {
 	type Event = Event;
-	type EthVaultAddressProvider = EthVaultAddressProvider;
-	type EthAddressDerivation = EthAddressDerivation;
+	type Ingress = Ingress;
 	type WeightInfo = pallet_cf_relayer::weights::PalletWeight<Runtime>;
 }
 
@@ -217,6 +213,7 @@ impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 
 impl pallet_cf_ingress::Config for Runtime {
 	type Event = Event;
+	type AddressDerivation = pallet_cf_ingress::KylesTestnetAddress;
 }
 
 impl<LocalCall> SendTransactionTypes<LocalCall> for Runtime

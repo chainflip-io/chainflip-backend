@@ -6,7 +6,7 @@
 // This way intents and intent ids align per chain, which makes sense given they act as an index to
 // the respective address generation function.
 
-use sp_std::{marker::PhantomData, str::FromStr};
+use sp_std::str::FromStr;
 
 use cf_primitives::{ForeignChainAddress, ForeignChainAsset, IntentId};
 use cf_traits::{AddressDerivationApi, IngressApi};
@@ -182,9 +182,9 @@ impl<T: Config> IngressApi for Pallet<T> {
 	}
 }
 
-pub struct KylesTestnetAddress<T>(PhantomData<T>);
+pub struct KylesTestnetAddress;
 
-impl<T: Config> AddressDerivationApi for KylesTestnetAddress<T> {
+impl AddressDerivationApi for KylesTestnetAddress {
 	fn generate_address(
 		_ingress_asset: ForeignChainAsset,
 		_intent_id: IntentId,
