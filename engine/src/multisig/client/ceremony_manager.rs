@@ -652,7 +652,6 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
     /// Removing any state associated with the unauthorized ceremony
     fn cleanup_unauthorised_ceremony(&mut self, ceremony_id: &CeremonyId) {
         if let Some(removed) = self.ceremony_handles.remove(ceremony_id) {
-            // This function should not be used for an authorised ceremony
             assert!(
                 matches!(removed.request_state, CeremonyRequestState::Unauthorised(_)),
                 "Expected an unauthorised ceremony"
