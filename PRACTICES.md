@@ -9,6 +9,7 @@ We choose to document our practices here inside this repository, so they are eas
 # Requirements
 
 Our practices must be:
+
 - As unambiguous as possible. It should be clear how and when the practice applies. If necessary they should include clarifying examples. Ideally these examples would be from our codebase, and include links to PRs and issues.
 - Well-reasoned. Otherwise we will likely alienate some developers. As such each practice should be justified using logic, principles, ideals, and other practices.
 
@@ -27,6 +28,14 @@ These practices should be used to help resolve disagreements. If that is not pos
 # Principles
 
 These are the foundation of our practices...
+
+## Correctness
+
+The Chainflip network will be securing significant amounts of funds for its users. The protocol has been designed with security and token-economic incenties in mind, but none of this matters if the code does not implement the design correctly. Therefore, before merging any code to `develop` we should be able convince ourselves that it is correct.
+
+Correctness in this instance means that we know what the code should do; that it indeed fulfils its stated purpose; that we have considered all edge cases. In the spirit of readability, correctness should be as easy as possible to reason about by anyone reading, reviewing or auditing the code.
+
+The strongest guarantee of correctness is enforced through the type system. Supporting this, we can use unit testing, property-based testing, or integration testing. Where unenforced assumptions are made, these should be clearly documented using (doc-)comments.
 
 # Ideals
 
