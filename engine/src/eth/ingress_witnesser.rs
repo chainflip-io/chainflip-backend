@@ -22,6 +22,7 @@ pub async fn start<StateChainRpc>(
     // TODO: Add HTTP client and merged stream functionality for redundancy
     eth_ws_rpc: EthWsRpcClient,
     epoch_starts_receiver: broadcast::Receiver<EpochStart>,
+    eth_monitor_ingress_receiver: tokio::sync::mpsc::UnboundedReceiver<H160>,
     state_chain_client: Arc<StateChainClient<StateChainRpc>>,
     monitored_addresses: Vec<H160>,
     logger: &slog::Logger,
@@ -33,8 +34,11 @@ where
         "ETH-Ingress-Witnesser",
         epoch_starts_receiver,
         |_epoch_start| true,
-        monitored_addresses,
-        move |end_witnessing_signal, epoch_start, monitored_addresses, logger| {
+        (monitored_addresses, eth_monitor_ingress_receiver),
+        move |end_witnessing_signal,
+              epoch_start,
+              (mut monitored_addresses, mut eth_monitor_ingress_receiver),
+              logger| {
             let eth_ws_rpc = eth_ws_rpc.clone();
             let state_chain_client = state_chain_client.clone();
             async move {
@@ -51,62 +55,70 @@ where
                     &logger,
                 );
 
-                // TODO: Use async channel to receive updates to the montiored addresses
-
-                // select! in a biased mode, we want to get the latest monitored addresses before continuing to see if we have received any
-                // witnesses for them
-
-                while let Some(number_bloom) = safe_ws_head_stream.next().await {
-                    // TODO: Factor out ending between contract witnesser and ingress witnesser
-                    if let Some(end_block) = *end_witnessing_signal.lock().unwrap() {
-                        if number_bloom.block_number.as_u64() >= end_block {
-                            slog::info!(
-                                logger,
-                                "Finished witnessing events at ETH block: {}",
-                                number_bloom.block_number
-                            );
-                            // we have reached the block height we wanted to witness up to
-                            // so can stop the witness process
-                            break;
-                        }
-                    }
-
-                    for (tx, to_addr) in eth_ws_rpc
-                        .block_with_txs(number_bloom.block_number)
-                        .await?
-                        .transactions
-                        .iter()
-                        .filter_map(|tx| {
-                            let to_addr = tx.to?;
-                            if monitored_addresses.contains(&to_addr) {
-                                Some((tx, to_addr))
-                            } else {
-                                None
+                loop {
+                    tokio::select! {
+                        // We want to bias the select so we check new addresses to monitor before we check the addresses
+                        // ensuring we don't potentially miss any ingress events that occur before we start to monitor the address
+                        biased;
+                        Some(to_monitor) = eth_monitor_ingress_receiver.recv() => {
+                            monitored_addresses.push(to_monitor);
+                        },
+                        Some(number_bloom) = safe_ws_head_stream.next() => {
+                            // TODO: Factor out ending between contract witnesser and ingress witnesser
+                            if let Some(end_block) = *end_witnessing_signal.lock().unwrap() {
+                                if number_bloom.block_number.as_u64() >= end_block {
+                                    slog::info!(
+                                        logger,
+                                        "Finished witnessing events at ETH block: {}",
+                                        number_bloom.block_number
+                                    );
+                                    // we have reached the block height we wanted to witness up to
+                                    // so can stop the witness process
+                                    break;
+                                }
                             }
-                        })
-                        .collect::<Vec<(&Transaction, H160)>>()
-                    {
-                        let _result = state_chain_client
-                            .submit_signed_extrinsic(
-                                pallet_cf_witnesser::Call::witness_at_epoch {
-                                    call: Box::new(
-                                        pallet_cf_ingress::Call::do_ingress {
-                                            address: ForeignChainAddress::Eth(to_addr),
-                                            asset: Asset::Eth,
-                                            amount: tx.value.as_u128(),
-                                            tx_hash: tx.hash,
-                                        }
-                                        .into(),
-                                    ),
-                                    epoch_index: epoch_start.index,
-                                },
-                                &logger,
-                            )
-                            .await;
-                    }
+
+                            for (tx, to_addr) in eth_ws_rpc
+                                .block_with_txs(number_bloom.block_number)
+                                .await?
+                                .transactions
+                                .iter()
+                                .filter_map(|tx| {
+                                    let to_addr = tx.to?;
+                                    if monitored_addresses.contains(&to_addr) {
+                                        Some((tx, to_addr))
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .collect::<Vec<(&Transaction, H160)>>()
+                            {
+                                let _result = state_chain_client
+                                    .submit_signed_extrinsic(
+                                        pallet_cf_witnesser::Call::witness_at_epoch {
+                                            call: Box::new(
+                                                pallet_cf_ingress::Call::do_ingress {
+                                                    ingress_address: ForeignChainAddress::Eth(
+                                                        to_addr.into(),
+                                                    ),
+                                                    asset: Asset::Eth,
+                                                    amount: tx.value.as_u128(),
+                                                    tx_hash: tx.hash,
+                                                }
+                                                .into(),
+                                            ),
+                                            epoch_index: epoch_start.index,
+                                        },
+                                        &logger,
+                                    )
+                                    .await;
+                            }
+                        },
+                        else => break,
+                    };
                 }
 
-                Ok(monitored_addresses)
+                Ok((monitored_addresses, eth_monitor_ingress_receiver))
             }
         },
         logger,
