@@ -31,7 +31,7 @@ These are the foundation of our practices...
 
 ## Correctness
 
-The Chainflip network will be securing significant amounts of funds for its users. The protocol has been designed with security and token-economic incenties in mind, but none of this matters if the code does not implement the design correctly. Therefore, before merging any code to `develop` we should be able convince ourselves that it is correct.
+The Chainflip network will be securing significant amounts of funds for its users. The protocol has been designed with security and token-economic incentives in mind, but none of this matters if the code does not implement the design correctly. Therefore, before merging any code to `develop` we should be able convince ourselves that it is correct.
 
 Correctness in this instance means that we know what the code should do; that it indeed fulfils its stated purpose; that we have considered all edge cases. In the spirit of readability, correctness should be as easy as possible to reason about by anyone reading, reviewing or auditing the code.
 
