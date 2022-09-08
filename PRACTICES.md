@@ -34,6 +34,8 @@ Code reviewing is an important part of the software development lifecycle. It is
 
 Why are small PRs important? [Google has a good explanation](https://google.github.io/eng-practices/review/developer/small-cls.html) and we agree.
 
+A rough guideline for the maximum of what constitutes "small" is around 400 lines of code. [Research](https://static1.smartbear.co/support/media/resources/cc/book/code-review-cisco-case-study.pdf) shows that once developers had reviewed more than 200 lines of code their ability to identify defects diminished. So ideally PRs kept under 200 lines are best. It's also important to make sure the PR makes sense on its own if merged. Develoeprs should think about how a large change can be broken up into smaller, self-contanied changes where relevant, to ensure PRs stay small.
+
 ### Organised and meaningful commits
 
 Each commit should be well named. While writing the occasional "ARGHHH" commit meessage may give us the stress relief we need, we should instead seek other stress reduction strategies, and have well named commits like "fix: authority rewards are now rewarded at each block" so as not to annoy and stress your fellow developers (which might result in "ARGGGH"s with more "G"s). This is important for two reasons: debugging, to find where bugs were introduced and providing reviewers a nice description of what to expect in a commit, also allowing them to navigate your PR more easily.
