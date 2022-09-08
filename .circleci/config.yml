@@ -237,10 +237,10 @@ jobs:
       - merge_target
       - run: sccache --show-stats
       - run: |
-          cargo cf-build-with-benchmarks --locked
+          cargo ci-build --locked
           sccache --show-stats
       - run: |
-          cargo cf-test-all --locked --release
+          cargo ci-test --locked
           sccache --show-stats
       - persist_to_workspace:
           root: ./
@@ -275,7 +275,7 @@ jobs:
           environment:
             RUSTFLAGS: -D warnings
           command: |
-            cargo cf-check-all-release
+            cargo ci-check --locked
             sccache --show-stats
 
   cargo-test:
@@ -285,7 +285,7 @@ jobs:
       - merge_target
       - run: sccache --show-stats
       - run: |
-          cargo cf-test --locked --release
+          cargo ci-test --locked
           sccache --show-stats
 
   cargo-clippy:
@@ -296,7 +296,7 @@ jobs:
       - run: sccache --show-stats
       # TODO: remove the global ignores (#1254)
       - run: |
-          cargo cf-clippy
+          cargo ci-clippy --locked
           sccache --show-stats
 
   cargo-doc:
