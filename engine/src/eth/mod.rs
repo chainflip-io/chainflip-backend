@@ -2,6 +2,7 @@ pub mod chain_data_witnesser;
 pub mod contract_witnesser;
 mod epoch_witnesser;
 mod http_safe_stream;
+pub mod ingress_witnesser;
 pub mod key_manager;
 pub mod stake_manager;
 
