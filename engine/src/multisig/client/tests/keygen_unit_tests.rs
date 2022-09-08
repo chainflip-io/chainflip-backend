@@ -12,9 +12,7 @@ use crate::multisig::{
             VerifyHashComm2,
         },
         tests::helpers::{
-            all_stages_with_single_invalid_share_keygen_coroutine, for_each_stage,
-            gen_invalid_keygen_comm1, get_invalid_hash_comm, get_keygen_stage_name_from_number,
-            new_nodes, run_keygen, run_stages, split_messages_for, standard_keygen,
+            gen_invalid_keygen_comm1, get_invalid_hash_comm, new_nodes, run_keygen, run_stages,
             KeygenCeremonyRunner,
         },
         utils::PartyIdxMapping,
@@ -36,94 +34,7 @@ type KeygenData = keygen::KeygenData<Point>;
 /// generate a key without entering a blaming stage
 #[tokio::test]
 async fn happy_path_results_in_valid_key() {
-    let (_, _, _, _) = run_keygen(new_nodes(ACCOUNT_IDS.clone()), DEFAULT_KEYGEN_CEREMONY_ID).await;
-}
-
-#[tokio::test]
-async fn should_delay_comm1_before_keygen_request() {
-    let (_, _, messages, _nodes) = standard_keygen(KeygenCeremonyRunner::new_with_default()).await;
-
-    let mut ceremony = KeygenCeremonyRunner::new_with_default();
-    let [test_id, late_id] = ceremony.select_account_ids();
-
-    let (late_msg, early_msgs) =
-        split_messages_for(messages.stage_1a_messages.clone(), &test_id, &late_id);
-
-    ceremony.distribute_messages(early_msgs).await;
-
-    assert_eq!(
-        ceremony.nodes[&test_id].ceremony_runner.get_stage_name(),
-        None
-    );
-
-    ceremony.request().await;
-
-    assert_eq!(
-        ceremony.nodes[&test_id].ceremony_runner.get_stage_name(),
-        Some(CeremonyStageName::HashCommitments1),
-    );
-
-    ceremony.distribute_messages(late_msg).await;
-
-    assert_eq!(
-        ceremony.nodes[&test_id].ceremony_runner.get_stage_name(),
-        Some(CeremonyStageName::VerifyHashCommitmentsBroadcast2),
-    );
-}
-
-// Data for any stage that arrives one stage too early should be properly delayed
-// and processed after the stage transition is made
-#[tokio::test]
-async fn should_delay_stage_data() {
-    for_each_stage(
-        1..KEYGEN_STAGES,
-        || Box::pin(async { KeygenCeremonyRunner::new_with_default() }),
-        all_stages_with_single_invalid_share_keygen_coroutine,
-        |stage_number, mut ceremony, (_key_id, messages, _type_messages)| async move {
-            let target_account_id = &ACCOUNT_IDS[0];
-            let late_account_id = ACCOUNT_IDS[3].clone();
-            let (late_messages, early_messages) = split_messages_for(
-                messages[stage_number - 1].clone(),
-                target_account_id,
-                &late_account_id,
-            );
-            ceremony.distribute_messages(early_messages).await;
-
-            let (late_messages_next, early_messages) = split_messages_for(
-                messages[stage_number].clone(),
-                target_account_id,
-                &late_account_id,
-            );
-            ceremony.distribute_messages(early_messages).await;
-
-            assert_eq!(
-                ceremony.nodes[target_account_id]
-                    .ceremony_runner
-                    .get_stage_name(),
-                get_keygen_stage_name_from_number(stage_number)
-            );
-
-            ceremony.distribute_messages(late_messages).await;
-
-            assert_eq!(
-                ceremony.nodes[target_account_id]
-                    .ceremony_runner
-                    .get_stage_name(),
-                get_keygen_stage_name_from_number(stage_number + 1)
-            );
-
-            ceremony.distribute_messages(late_messages_next).await;
-
-            // Check that the stage correctly advanced or finished
-            assert_eq!(
-                ceremony.nodes[target_account_id]
-                    .ceremony_runner
-                    .get_stage_name(),
-                get_keygen_stage_name_from_number(stage_number + 2)
-            );
-        },
-    )
-    .await;
+    let (_, _) = run_keygen(new_nodes(ACCOUNT_IDS.clone()), DEFAULT_KEYGEN_CEREMONY_ID).await;
 }
 
 /// If at least one party is blamed during the "Complaints" stage, we
@@ -326,86 +237,6 @@ async fn should_report_on_incomplete_blame_response() {
             CeremonyFailureReason::Other(KeygenFailureReason::InvalidBlameResponse),
         )
         .await;
-}
-
-// Ignore unexpected messages at all stages. This includes:
-// - Messages with stage data that is not the current stage or the next stage
-// - Duplicate messages from the same sender AccountId
-// - Messages from unknown AccountId (not in the keygen ceremony)
-#[tokio::test]
-async fn should_ignore_unexpected_message_for_stage() {
-    for_each_stage(
-        1..=KEYGEN_STAGES,
-        || Box::pin(async { KeygenCeremonyRunner::new_with_default() }),
-        all_stages_with_single_invalid_share_keygen_coroutine,
-        |stage_number, mut ceremony, (_key_id, messages, _type_messages)| async move {
-            let [target_account_id, unexpected_message_sender] = &ceremony.select_account_ids();
-            let (msg_from_1, other_msgs) = split_messages_for(
-                messages[stage_number - 1].clone(),
-                target_account_id,
-                unexpected_message_sender,
-            );
-
-            ceremony.distribute_messages(other_msgs.clone()).await;
-
-            for ignored_stage_index in (0..stage_number - 1).chain(stage_number + 1..KEYGEN_STAGES)
-            {
-                let (msg_from_1, _) = split_messages_for(
-                    messages[ignored_stage_index].clone(),
-                    target_account_id,
-                    unexpected_message_sender,
-                );
-                ceremony.distribute_messages(msg_from_1).await;
-            }
-
-            assert_eq!(
-                ceremony.nodes[target_account_id]
-                    .ceremony_runner
-                    .get_stage_name(),
-                get_keygen_stage_name_from_number(stage_number),
-                "Failed to ignore a message from an unexpected stage"
-            );
-
-            ceremony.distribute_messages(other_msgs).await;
-
-            assert_eq!(
-                ceremony.nodes[target_account_id]
-                    .ceremony_runner
-                    .get_stage_name(),
-                get_keygen_stage_name_from_number(stage_number),
-                "Failed to ignore duplicate messages"
-            );
-
-            let unknown_id = AccountId::new([0; 32]);
-            assert!(!ACCOUNT_IDS.contains(&unknown_id));
-            ceremony
-                .distribute_messages(
-                    msg_from_1
-                        .iter()
-                        .map(|(_, message)| (unknown_id.clone(), message.clone()))
-                        .collect(),
-                )
-                .await;
-            assert_eq!(
-                ceremony.nodes[target_account_id]
-                    .ceremony_runner
-                    .get_stage_name(),
-                get_keygen_stage_name_from_number(stage_number),
-                "Failed to ignore a message from an unknown account id"
-            );
-
-            ceremony.distribute_messages(msg_from_1).await;
-
-            assert_eq!(
-                ceremony.nodes[target_account_id]
-                    .ceremony_runner
-                    .get_stage_name(),
-                get_keygen_stage_name_from_number(stage_number + 1),
-                "Failed to proceed to next stage"
-            );
-        },
-    )
-    .await;
 }
 
 // If one of more parties (are thought to) broadcast data inconsistently,

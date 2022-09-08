@@ -1,16 +1,13 @@
 use std::collections::BTreeSet;
 
-use super::*;
+use super::{helpers::get_key_data_for_test, *};
 use crate::{
     constants::CEREMONY_ID_WINDOW,
     logging::test_utils::new_test_logger,
     multisig::{
         client::{
-            self,
-            ceremony_manager::CeremonyManager,
-            common::SigningFailureReason,
-            keygen::{get_key_data_for_test, KeygenData},
-            CeremonyFailureReason, MultisigData,
+            self, ceremony_manager::CeremonyManager, common::SigningFailureReason,
+            keygen::KeygenData, CeremonyFailureReason, MultisigData,
         },
         crypto::{CryptoScheme, Rng},
         eth::EthSigning,
