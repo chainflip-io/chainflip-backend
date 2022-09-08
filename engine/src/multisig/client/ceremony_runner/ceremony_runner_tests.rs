@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::{
     logging::test_utils::new_test_logger,
     multisig::{
@@ -13,7 +15,7 @@ use crate::{
                 DEFAULT_KEYGEN_CEREMONY_ID, DEFAULT_KEYGEN_SEED, DEFAULT_SIGNING_CEREMONY_ID,
                 DEFAULT_SIGNING_SEED,
             },
-            KeygenResult,
+            KeygenResult, PartyIdxMapping,
         },
         crypto::CryptoScheme,
         eth::{EthSigning, Point},
@@ -138,9 +140,9 @@ fn gen_stage_1_signing_state(
     let common = CeremonyCommon {
         ceremony_id: DEFAULT_SIGNING_CEREMONY_ID,
         own_idx,
-        all_idxs: signing_idxs.clone(),
+        all_idxs: signing_idxs,
         outgoing_p2p_message_sender: tokio::sync::mpsc::unbounded_channel().0,
-        validator_mapping: validator_mapping.clone(),
+        validator_mapping,
         rng,
         logger: logger.clone(),
     };
@@ -158,8 +160,6 @@ fn gen_stage_1_signing_state(
     CeremonyRunner::<SigningCeremony<EthSigning>>::new_authorised(
         DEFAULT_SIGNING_CEREMONY_ID,
         stage,
-        validator_mapping,
-        signing_idxs.len() as u32,
         logger,
     )
 }
