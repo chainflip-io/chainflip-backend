@@ -1,8 +1,6 @@
-use crate::{self as pallet_cf_environment, cfe};
-use cf_traits::mocks::{
-	ensure_origin_mock::NeverFailingOriginCheck,
-	eth_environment_provider::MockEthEnvironmentProvider,
-};
+use crate::{self as pallet_cf_relayer};
+use cf_primitives::{ForeignChainAddress, ForeignChainAsset, IntentId};
+use cf_traits::IngressApi;
 use frame_support::parameter_types;
 use frame_system as system;
 use sp_core::H256;
@@ -24,7 +22,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system,
-		Environment: pallet_cf_environment,
+		Relayer: pallet_cf_relayer,
 	}
 );
 
@@ -60,37 +58,39 @@ impl system::Config for Test {
 	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
-impl pallet_cf_environment::Config for Test {
-	type Event = Event;
-	type EnsureGovernance = NeverFailingOriginCheck<Self>;
-	type WeightInfo = ();
-	type EthEnvironmentProvider = MockEthEnvironmentProvider;
+pub struct MockIngress;
+
+impl IngressApi for MockIngress {
+	type AccountId = AccountId;
+
+	fn register_liquidity_ingress_intent(
+		_lp_account: Self::AccountId,
+		_ingress_asset: ForeignChainAsset,
+	) -> (IntentId, ForeignChainAddress) {
+		(0, ForeignChainAddress::Eth(Default::default()))
+	}
+
+	fn register_swap_intent(
+		_ingress_asset: ForeignChainAsset,
+		_egress_asset: ForeignChainAsset,
+		_egress_address: ForeignChainAddress,
+		_relayer_commission_bps: u16,
+	) -> (IntentId, ForeignChainAddress) {
+		(0, ForeignChainAddress::Eth(Default::default()))
+	}
 }
 
-pub const STAKE_MANAGER_ADDRESS: [u8; 20] = [0u8; 20];
-pub const KEY_MANAGER_ADDRESS: [u8; 20] = [1u8; 20];
-pub const VAULT_CONTRACT_ADDRESS: [u8; 20] = [2u8; 20];
-pub const ETH_CHAIN_ID: u64 = 1;
+impl pallet_cf_relayer::Config for Test {
+	type Event = Event;
+	type Ingress = MockIngress;
+	type WeightInfo = ();
+}
 
-pub const CFE_SETTINGS: cfe::CfeSettings = cfe::CfeSettings {
-	eth_block_safety_margin: 1,
-	max_ceremony_stage_duration: 1,
-	eth_priority_fee_percentile: 50,
-};
+pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let config = GenesisConfig {
-		system: Default::default(),
-		environment: EnvironmentConfig {
-			stake_manager_address: STAKE_MANAGER_ADDRESS,
-			key_manager_address: KEY_MANAGER_ADDRESS,
-			ethereum_chain_id: ETH_CHAIN_ID,
-			vault_contract_address: VAULT_CONTRACT_ADDRESS,
-			cfe_settings: CFE_SETTINGS,
-			flip_token_address: [0u8; 20],
-		},
-	};
+	let config = GenesisConfig { system: Default::default() };
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 

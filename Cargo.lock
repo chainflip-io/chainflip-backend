@@ -726,6 +726,7 @@ dependencies = [
 name = "cf-chains"
 version = "0.1.0"
 dependencies = [
+ "cf-primitives",
  "cf-test-utilities",
  "ethabi",
  "ethereum",
@@ -799,7 +800,6 @@ dependencies = [
 name = "cf-primitives"
 version = "0.1.0"
 dependencies = [
- "cf-chains",
  "parity-scale-codec",
  "scale-info",
  "serde",
@@ -5260,10 +5260,31 @@ version = "0.1.0"
 dependencies = [
  "cf-primitives",
  "cf-traits",
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
  "parity-scale-codec",
  "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-std",
+]
+
+[[package]]
+name = "pallet-cf-relayer"
+version = "0.1.0"
+dependencies = [
+ "cf-primitives",
+ "cf-traits",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
 ]
 
 [[package]]
@@ -8963,6 +8984,7 @@ dependencies = [
  "pallet-cf-flip",
  "pallet-cf-governance",
  "pallet-cf-ingress",
+ "pallet-cf-relayer",
  "pallet-cf-reputation",
  "pallet-cf-staking",
  "pallet-cf-threshold-signature",

@@ -4,7 +4,6 @@
 //!
 //! Primitive types to be used across Chainflip's various crates
 
-use cf_chains::eth;
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_runtime::RuntimeDebug;
@@ -63,7 +62,7 @@ pub enum ForeignChain {
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum ForeignChainAddress {
-	Eth(eth::Address),
+	Eth([u8; 20]),
 }
 
 /// An Asset is a token or currency that can be traded via the Chainflip AMM.

@@ -7,7 +7,6 @@ description = 'Common primitive types used across Chainflip'
 
 [dependencies]
 serde = { optional = true, version = '1.0.126', features = ['derive'] }
-cf-chains = { path ='../chains', default-features = false }
 
 [dependencies.sp-runtime]
 default-features = false
@@ -30,5 +29,6 @@ default = ['std']
 std = [
   'codec/std',
   'scale-info/std',
-  'serde'
+  'serde',
+  'sp-runtime/std',
 ]
