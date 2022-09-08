@@ -546,24 +546,6 @@ pub mod genesis {
         }
     }
 
-    /// Generates key data using the DEFAULT_KEYGEN_SEED and returns the KeygenResultInfo for signers[0].
-    #[cfg(test)]
-    pub fn get_key_data_for_test<P: ECPoint>(signers: BTreeSet<AccountId>) -> KeygenResultInfo<P> {
-        use crate::multisig::client::tests::DEFAULT_KEYGEN_SEED;
-        use rand_legacy::SeedableRng;
-
-        generate_key_data(
-            signers.clone(),
-            &mut Rng::from_seed(DEFAULT_KEYGEN_SEED),
-            true,
-        )
-        .expect("Should not be able to fail generating key data")
-        .1
-        .get(signers.iter().next().unwrap())
-        .expect("should get keygen for an account")
-        .to_owned()
-    }
-
     pub fn generate_key_data<P: ECPoint>(
         signers: BTreeSet<AccountId>,
         rng: &mut Rng,
@@ -582,7 +564,7 @@ pub mod genesis {
 
         let agg_pubkey = derive_aggregate_pubkey(&commitments, allow_high_pubkey)?;
 
-        let validator_map = PartyIdxMapping::from_participants(signers);
+        let validator_mapping = PartyIdxMapping::from_participants(signers);
 
         let keygen_result_infos: HashMap<_, _> = (1..=n)
             .map(|idx| {
@@ -593,7 +575,7 @@ pub mod genesis {
                     .collect();
 
                 (
-                    validator_map.get_id(idx).unwrap().clone(),
+                    validator_mapping.get_id(idx).unwrap().clone(),
                     KeygenResultInfo {
                         key: Arc::new(KeygenResult {
                             key_share: KeyShare {
@@ -605,7 +587,7 @@ pub mod genesis {
                                 &commitments,
                             ),
                         }),
-                        validator_map: Arc::new(validator_map.clone()),
+                        validator_mapping: Arc::new(validator_mapping.clone()),
                         params,
                     },
                 )

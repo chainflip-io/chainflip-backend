@@ -50,7 +50,7 @@ impl<P: ECPoint> KeygenResult<P> {
 pub struct KeygenResultInfo<P: ECPoint> {
     #[serde(bound = "")]
     pub key: Arc<KeygenResult<P>>,
-    pub validator_map: Arc<PartyIdxMapping>,
+    pub validator_mapping: Arc<PartyIdxMapping>,
     pub params: ThresholdParameters,
 }
 
@@ -101,7 +101,7 @@ pub enum BroadcastFailureReason {
     Inconsistency,
 }
 
-#[derive(Error, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Error, Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub enum CeremonyStageName {
     // Keygen
     #[error("Hash Commitments")]

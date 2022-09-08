@@ -1,11 +1,12 @@
 use anyhow::{bail, Context, Result};
 use futures::{stream::FuturesUnordered, StreamExt};
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{hash_map, BTreeSet, HashMap};
 use std::fmt::{Debug, Display};
 use std::marker::PhantomData;
 use std::sync::Arc;
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 
+use crate::constants::CEREMONY_ID_WINDOW;
 use crate::multisig::client;
 use crate::multisig::client::common::{KeygenFailureReason, SigningFailureReason};
 use crate::multisig::client::keygen::generate_key_data_until_compatible;
@@ -113,8 +114,6 @@ pub type DynStage<Ceremony> = Box<
 // A ceremony request that has passed initial checks and setup its initial stage
 pub struct PreparedRequest<C: CeremonyTrait> {
     pub initial_stage: DynStage<C>,
-    pub idx_mapping: Arc<PartyIdxMapping>,
-    pub participants_count: AuthorityCount,
 }
 
 // Initial checks and setup before sending the request to the `CeremonyRunner`
@@ -149,7 +148,7 @@ pub fn prepare_signing_request<C: CryptoScheme>(
 
     // Generate signer indexes
     let (own_idx, signer_idxs) =
-        match map_ceremony_parties(own_account_id, &signers, &key_info.validator_map) {
+        match map_ceremony_parties(own_account_id, &signers, &key_info.validator_mapping) {
             Ok(result) => result,
             Err(reason) => {
                 slog::debug!(logger, "Request to sign invalid: {}", reason);
@@ -164,7 +163,7 @@ pub fn prepare_signing_request<C: CryptoScheme>(
         let common = CeremonyCommon {
             ceremony_id,
             outgoing_p2p_message_sender: outgoing_p2p_message_sender.clone(),
-            validator_mapping: key_info.validator_map.clone(),
+            validator_mapping: key_info.validator_mapping,
             own_idx,
             all_idxs: signer_idxs,
             logger: logger.clone(),
@@ -175,18 +174,14 @@ pub fn prepare_signing_request<C: CryptoScheme>(
             common.clone(),
             SigningStateCommonInfo {
                 data,
-                key: key_info.key.clone(),
+                key: key_info.key,
             },
         );
 
         Box::new(BroadcastStage::new(processor, common))
     };
 
-    Ok(PreparedRequest {
-        initial_stage,
-        idx_mapping: key_info.validator_map,
-        participants_count: signers_len,
-    })
+    Ok(PreparedRequest { initial_stage })
 }
 
 // Initial checks and setup before sending the request to the `CeremonyRunner`
@@ -202,10 +197,10 @@ pub fn prepare_keygen_request<C: CryptoScheme>(
     PreparedRequest<KeygenCeremony<C>>,
     CeremonyFailureReason<<KeygenCeremony<C> as CeremonyTrait>::FailureReason>,
 > {
-    let validator_map = Arc::new(PartyIdxMapping::from_participants(participants.clone()));
+    let validator_mapping = Arc::new(PartyIdxMapping::from_participants(participants.clone()));
 
     let (our_idx, signer_idxs) =
-        match map_ceremony_parties(own_account_id, &participants, &validator_map) {
+        match map_ceremony_parties(own_account_id, &participants, &validator_mapping) {
             Ok(res) => res,
             Err(reason) => {
                 slog::debug!(logger, "Keygen request invalid: {}", reason);
@@ -214,16 +209,11 @@ pub fn prepare_keygen_request<C: CryptoScheme>(
             }
         };
 
-    let num_of_participants: AuthorityCount = participants
-        .len()
-        .try_into()
-        .expect("too many participants");
-
     let initial_stage = {
         let common = CeremonyCommon {
             ceremony_id,
             outgoing_p2p_message_sender: outgoing_p2p_message_sender.clone(),
-            validator_mapping: validator_map.clone(),
+            validator_mapping,
             own_idx: our_idx,
             all_idxs: signer_idxs,
             logger: logger.clone(),
@@ -239,17 +229,13 @@ pub fn prepare_keygen_request<C: CryptoScheme>(
         Box::new(BroadcastStage::new(processor, common))
     };
 
-    Ok(PreparedRequest {
-        initial_stage,
-        idx_mapping: validator_map,
-        participants_count: num_of_participants,
-    })
+    Ok(PreparedRequest { initial_stage })
 }
 
 fn map_ceremony_parties(
     own_account_id: &AccountId,
     participants: &BTreeSet<AccountId>,
-    validator_map: &PartyIdxMapping,
+    validator_mapping: &PartyIdxMapping,
 ) -> Result<(AuthorityCount, BTreeSet<AuthorityCount>), &'static str> {
     assert!(
         participants.contains(own_account_id),
@@ -259,12 +245,12 @@ fn map_ceremony_parties(
     // It should be impossible to fail here because of the check above,
     // but I don't like unwrapping (would be better if we
     // could combine this with the check above)
-    let our_idx = validator_map
+    let our_idx = validator_mapping
         .get_idx(own_account_id)
         .ok_or("could not derive our idx")?;
 
     // Check that signer ids are known for this key
-    let signer_idxs = validator_map
+    let signer_idxs = validator_mapping
         .get_all_idxs(participants)
         .map_err(|_| "invalid participants")?;
 
@@ -592,14 +578,32 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
         sender_id: AccountId,
         ceremony_id: CeremonyId,
         data: Ceremony::Data,
-        _latest_ceremony_id: CeremonyId,
+        latest_ceremony_id: CeremonyId,
         logger: &slog::Logger,
     ) {
         slog::debug!(logger, "Received data {}", &data);
 
-        // TODO: Check ceremony id here, See issue #1972
-
-        let ceremony_handle = self.get_state_or_create_unauthorized(ceremony_id, logger);
+        // Get the existing ceremony or create an unauthorised one (with ceremony id tracking check)
+        let ceremony_handle = match self.ceremony_handles.entry(ceremony_id) {
+            hash_map::Entry::Vacant(entry) => {
+                // Only a ceremony id that is within the ceremony id window can create unauthorised ceremonies
+                if ceremony_id > latest_ceremony_id
+                    && ceremony_id <= latest_ceremony_id + CEREMONY_ID_WINDOW
+                {
+                    let (ceremony_handle, task_handle) = CeremonyHandle::spawn(ceremony_id, logger);
+                    self.ceremony_futures.push(task_handle);
+                    entry.insert(ceremony_handle)
+                } else {
+                    slog::debug!(
+                        logger,
+                        "Ignoring data: unexpected ceremony id {}",
+                        ceremony_id
+                    );
+                    return;
+                }
+            }
+            hash_map::Entry::Occupied(entry) => entry.into_mut(),
+        };
 
         ceremony_handle
             .message_sender

@@ -177,7 +177,7 @@ However for testing and also for native execution, the runtime *can* make use 
 
 For example, if you have something like this:
 
-```
+``` toml
 [package]
 name = 'my-crate'
 
@@ -192,3 +192,100 @@ std = ['my-dep/std', 'my-optional-dep']
 It means that, by default, `my-crate` will pull in `my-dep` without any default features activated, and will *not* pull in `my-optional-dep` at all.
 
 However if you compile `my-crate` with feature `std`, then it will pull `my-dep` *and* `my-optional-dep` with `std` feature activated.
+
+## Substrate storage: Separation of front overlay and backend. Feat clear_prefix()
+
+### Overview
+
+Substrate storage has 4 layers that work together to facilitate storage read/write in a database manner. They are, from top to bottom
+
+**Runtime storage API**: StorageValue, StorageMap, StorageDoubleMap etc.
+
+**Overlay Change Set**: Changes to storage is stored in this overlay change set for the duration of the block, and is only committed to the backend database storage once per block
+
+**Merkle Trie**: A tree data structure for data hashes, helps with data retrieval
+
+**Key Value Database**: Bottom layer DB to store data
+
+### Use of clear_prefix() for cleaning double map storages
+
+``` rust
+/// Remove all values under the first key `k1` in the overlay and up to `maybe_limit` in the backend.
+/// All values in the client overlay will be deleted, if `maybe_limit` is `Some` then up to that number of values are deleted from the client backend, otherwise all values in the client backend are deleted.
+fn clear_prefix<KArg1>(
+	k1: KArg1,
+	limit: u32,
+	maybe_cursor: Option<&[u8]>,
+) -> sp_io::MultiRemovalResults
+```
+**prefix**: the first Key value in which you want all the data to be cleaned up
+
+**limit**: max number of data to be deleted from the *Backend*
+
+**maybe_cursor**: Optional cursor to be passed in. This needs to be passed in if multiple `clear_prefix` is called within the same block. Otherwise all calls will delete the same items (even after they are already deleted), due to async nature of Overlay and DB backend.
+
+``` rust
+pub struct MultiRemovalResults {
+	/// A continuation cursor which, if `Some` must be provided to the subsequent removal call.
+	/// If `None` then all removals are complete and no further calls are needed.
+	pub maybe_cursor: Option<Vec<u8>>,
+	/// The number of items removed from the backend database.
+	pub backend: u32,
+	/// The number of unique keys removed, taking into account both the backend and the overlay.
+	pub unique: u32,
+	/// The number of iterations (each requiring a storage seek/read) which were done.
+	pub loops: u32,
+}
+```
+Note: At the time of writing, backend, unique and loops all return the same thing.
+
+### Example Usage
+In a usual unit test, the whole test is done within the same block.
+Storage modified are stored on the Overlay Change Set. e.g.
+
+``` rust
+Data::<T>::insert(1, Alice, 100);
+Data::<T>::insert(1, BOB, 33);
+
+let res = Data::clear_prefix(1, 0, None);
+// res.maybe_cursor == None, res.unique = 0;
+assert!(Data::<T>::get(1, Alice), None);
+assert!(Data::<T>::get(1, BOB), None);
+```
+
+Even if `limit` is set as 0, both entries are still deleted. 
+To be able to test deletion in the backend database, the change overlay will have to be committed into the DB. This can be done with `ext.commit_all()`
+
+``` rust
+let mut ext = new_test_ext();
+ext.execute_with(|| {
+	// Data modification to the Overlay Change Set
+	Data::<T>::insert(1, Alice, 100);
+	Data::<T>::insert(1, BOB, 33);
+});
+
+// Commit the changeset to the DB backend
+let _ = ext.commit_all();
+
+ext.execute_with(|| {
+	// Test deletion of backend DB entries
+	let res = Data::clear_prefix(1, 1, None);
+	// res.maybe_cursor == ptr(1, BOB), res.unique = 1;
+	assert!(Data::<T>::get(1, Alice), None);
+	assert!(Data::<T>::get(1, BOB), Some(33));
+});
+```
+
+### Summary TL;DR
+* How clear_prefix works is a demonstrate on how Overlay Change Set interacts with the Backend DB.
+* If you need to test backend DB deletion you can use `ext.commit_all();` to manually push your changeset into the backend.
+
+### Reference
+clear_prefix docs:
+https://github.com/paritytech/substrate/blob/dc45cc29167ee6358b527f3a0bcc0617dc9e4c99/frame/support/src/storage/mod.rs#L534
+
+Storage PDF:
+https://www.shawntabrizi.com/assets/presentations/substrate-storage-deep-dive.pdf
+
+commit_all() doc and impl:
+https://github.com/paritytech/substrate/blob/a5f349ba9620979c3c95b65547ffd106d9660d9d/primitives/state-machine/src/testing.rs#L379

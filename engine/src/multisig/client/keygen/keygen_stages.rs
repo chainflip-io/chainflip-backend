@@ -87,10 +87,6 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
         DataToSend::Broadcast(HashComm1(self.hash_commitment))
     }
 
-    fn should_delay(&self, m: &KeygenData<P>) -> bool {
-        matches!(m, KeygenData::VerifyHashComm2(_))
-    }
-
     async fn process(
         self,
         messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
@@ -156,10 +152,6 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
         })
     }
 
-    fn should_delay(&self, m: &KeygenData<P>) -> bool {
-        matches!(m, KeygenData::CoeffComm3(_))
-    }
-
     async fn process(
         self,
         messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
@@ -220,10 +212,6 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
         DataToSend::Broadcast(self.own_commitment.clone())
     }
 
-    fn should_delay(&self, m: &KeygenData<P>) -> bool {
-        matches!(m, KeygenData::VerifyCoeffComm4(_))
-    }
-
     async fn process(
         self,
         messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
@@ -269,10 +257,6 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
         let data = self.commitments.clone();
 
         DataToSend::Broadcast(VerifyCoeffComm4 { data })
-    }
-
-    fn should_delay(&self, m: &KeygenData<P>) -> bool {
-        matches!(m, KeygenData::SecretShares5(_))
     }
 
     async fn process(
@@ -360,10 +344,6 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
         DataToSend::Private(self.shares.0.clone())
     }
 
-    fn should_delay(&self, m: &KeygenData<P>) -> bool {
-        matches!(m, KeygenData::Complaints6(_))
-    }
-
     async fn process(
         self,
         incoming_shares: BTreeMap<AuthorityCount, Option<Self::Message>>,
@@ -444,10 +424,6 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
         DataToSend::Broadcast(Complaints6(self.complaints.clone()))
     }
 
-    fn should_delay(&self, m: &KeygenData<P>) -> bool {
-        matches!(m, KeygenData::VerifyComplaints7(_))
-    }
-
     async fn process(
         self,
         messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
@@ -489,10 +465,6 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
         let data = self.received_complaints.clone();
 
         DataToSend::Broadcast(VerifyComplaints7 { data })
-    }
-
-    fn should_delay(&self, data: &KeygenData<P>) -> bool {
-        matches!(data, KeygenData::BlameResponse8(_))
     }
 
     async fn process(
@@ -584,7 +556,7 @@ async fn finalize_keygen<KeygenData, P: ECPoint>(
             },
             party_public_keys,
         }),
-        validator_map: common.validator_mapping,
+        validator_mapping: common.validator_mapping,
         params,
     };
 
@@ -645,10 +617,6 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
         drop(std::mem::take(&mut self.outgoing_shares));
 
         data
-    }
-
-    fn should_delay(&self, data: &KeygenData<P>) -> bool {
-        matches!(data, KeygenData::VerifyBlameResponses9(_))
     }
 
     async fn process(
@@ -767,10 +735,6 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
         let data = self.blame_responses.clone();
 
         DataToSend::Broadcast(VerifyBlameResponses9 { data })
-    }
-
-    fn should_delay(&self, _: &KeygenData<P>) -> bool {
-        false
     }
 
     async fn process(

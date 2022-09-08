@@ -50,6 +50,8 @@ impl PartyIdxMapping {
     }
 
     pub fn from_participants(participants: BTreeSet<AccountId>) -> Self {
+        assert!(participants.len() <= AuthorityCount::MAX as usize);
+
         // The protocol requires that the indexes start at 1
         let id_to_idx = participants
             .iter()
