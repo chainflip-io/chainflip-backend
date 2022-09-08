@@ -30,22 +30,22 @@ pub mod pallet {
 
 	use frame_system::{ensure_signed, pallet_prelude::OriginFor};
 
+	/// Details used to determine the ingress of funds.
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	pub struct IngressDetails {
 		pub intent_id: IntentId,
 		pub ingress_asset: ForeignChainAsset,
 	}
 
+	/// Contains information relevant to the action to commence once ingress succeeds.
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-	pub enum Intent<AccountId> {
+	pub enum IntentAction<AccountId> {
 		Swap {
-			ingress_details: IngressDetails,
 			egress_asset: ForeignChainAsset,
 			egress_address: ForeignChainAddress,
 			relayer_commission_bps: u16,
 		},
 		LiquidityProvision {
-			ingress_details: IngressDetails,
 			lp_account: AccountId,
 		},
 	}
@@ -56,11 +56,15 @@ pub mod pallet {
 	pub struct Pallet<T>(PhantomData<T>);
 
 	#[pallet::storage]
-	pub type OpenIntents<T: Config> = StorageMap<
+	pub type IntentIngressDetails<T: Config> =
+		StorageMap<_, Blake2_128, ForeignChainAddress, IngressDetails, OptionQuery>;
+
+	#[pallet::storage]
+	pub type IntentActions<T: Config> = StorageMap<
 		_,
 		Blake2_128,
 		ForeignChainAddress,
-		Intent<<T as frame_system::Config>::AccountId>,
+		IntentAction<<T as frame_system::Config>::AccountId>,
 		OptionQuery,
 	>;
 
@@ -157,12 +161,13 @@ impl<T: Config> IngressApi for Pallet<T> {
 	) -> (IntentId, ForeignChainAddress) {
 		let (intent_id, ingress_address) = Self::generate_new_address(ingress_asset);
 
-		OpenIntents::<T>::insert(
+		IntentIngressDetails::<T>::insert(
 			ingress_address,
-			Intent::LiquidityProvision {
-				lp_account,
-				ingress_details: IngressDetails { intent_id, ingress_asset },
-			},
+			IngressDetails { intent_id, ingress_asset },
+		);
+		IntentActions::<T>::insert(
+			ingress_address,
+			IntentAction::LiquidityProvision { lp_account },
 		);
 
 		Self::deposit_event(Event::StartWitnessing { ingress_address, ingress_asset });
@@ -179,14 +184,13 @@ impl<T: Config> IngressApi for Pallet<T> {
 	) -> (IntentId, ForeignChainAddress) {
 		let (intent_id, ingress_address) = Self::generate_new_address(ingress_asset);
 
-		OpenIntents::<T>::insert(
+		IntentIngressDetails::<T>::insert(
 			ingress_address,
-			Intent::Swap {
-				ingress_details: IngressDetails { intent_id, ingress_asset },
-				egress_address,
-				egress_asset,
-				relayer_commission_bps,
-			},
+			IngressDetails { intent_id, ingress_asset },
+		);
+		IntentActions::<T>::insert(
+			ingress_address,
+			IntentAction::Swap { egress_address, egress_asset, relayer_commission_bps },
 		);
 
 		Self::deposit_event(Event::StartWitnessing { ingress_address, ingress_asset });
