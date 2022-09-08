@@ -639,7 +639,8 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
                 let _result = result_sender.send(ceremony_outcome);
             }
             CeremonyRequestState::Unauthorised(_) => {
-                panic!("Should not finalize an unauthorised ceremony");
+                // Only caused by `CeremonyFailureReason::ExpiredBeforeBeingAuthorized`,
+                // We do not report timeout of unauthorised ceremonies
             }
         }
     }
@@ -647,10 +648,10 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
     /// Removing any state associated with the unauthorized ceremony
     fn cleanup_unauthorised_ceremony(&mut self, ceremony_id: &CeremonyId) {
         if let Some(removed) = self.ceremony_handles.remove(ceremony_id) {
-            // Confirm that it was not an authorised ceremony
+            // This function should not be used for an authorised ceremony
             assert!(
                 matches!(removed.request_state, CeremonyRequestState::Unauthorised(_)),
-                "Should not cleanup an authorised ceremony without sending the outcome"
+                "Expected an unauthorised ceremony"
             );
         }
     }
