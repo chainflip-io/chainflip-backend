@@ -145,6 +145,11 @@ pub struct TransferAssetParams<T: Chain> {
 	amount: T::ChainAmount,
 }
 
+pub trait IngressAddress {
+	type AddressType;
+	/// Returns an ingress address
+	fn derive_address(self, vault_address: Self::AddressType, intent_id: u32) -> Self::AddressType;
+}
 /// Constructs the `SetAggKeyWithAggKey` api call.
 pub trait SetAggKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(

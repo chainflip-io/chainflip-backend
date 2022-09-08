@@ -671,20 +671,25 @@ pub trait StakingInfo {
 pub trait IngressApi {
 	type AccountId;
 
+	/// Issues an intent id and ingress address for a new liquidity deposit.
 	fn register_liquidity_ingress_intent(
 		lp_account: Self::AccountId,
 		ingress_asset: ForeignChainAsset,
-	);
+	) -> (IntentId, ForeignChainAddress);
 
+	/// Issues an intent id and ingress address for a new swap.
 	fn register_swap_intent(
-		relayer_id: Self::AccountId,
 		ingress_asset: ForeignChainAsset,
 		egress_asset: ForeignChainAsset,
 		egress_address: ForeignChainAddress,
 		relayer_commission_bps: u16,
-	);
+	) -> (IntentId, ForeignChainAddress);
 }
 
+/// Generates a deterministic ingress address for some combination of asset, chain and intent id.
 pub trait AddressDerivationApi {
-	fn generate_address(ingress_asset: ForeignChainAsset) -> (ForeignChainAddress, IntentId);
+	fn generate_address(
+		ingress_asset: ForeignChainAsset,
+		intent_id: IntentId,
+	) -> ForeignChainAddress;
 }

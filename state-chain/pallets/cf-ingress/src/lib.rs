@@ -6,7 +6,7 @@
 // This way intents and intent ids align per chain, which makes sense given they act as an index to
 // the respective address generation function.
 
-use core::str::FromStr;
+use sp_std::str::FromStr;
 
 use cf_primitives::{ForeignChainAddress, ForeignChainAsset, IntentId};
 use cf_traits::{AddressDerivationApi, IngressApi};
@@ -71,15 +71,17 @@ pub mod pallet {
 	pub trait Config: cf_traits::Chainflip {
 		/// Standard Event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		/// Generates ingress addresses.
+		type AddressDerivation: AddressDerivationApi;
 	}
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		// We only want to witness for one asset on a particular chain
-		StartWitnessing { address: ForeignChainAddress, ingress_asset: Asset },
+		StartWitnessing { ingress_address: ForeignChainAddress, ingress_asset: ForeignChainAsset },
 
-		IngressCompleted { address: ForeignChainAddress, asset: Asset, amount: u128 },
+		IngressCompleted { ingress_address: ForeignChainAddress, asset: Asset, amount: u128 },
 	}
 
 	#[pallet::error]
@@ -92,7 +94,7 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn do_ingress(
 			origin: OriginFor<T>,
-			address: ForeignChainAddress,
+			ingress_address: ForeignChainAddress,
 			asset: Asset,
 			amount: u128,
 		) -> DispatchResultWithPostInfo {
@@ -101,8 +103,8 @@ pub mod pallet {
 			// NB: Don't take here. We should continue witnessing this address
 			// even after an ingress to it has occurred.
 			// https://github.com/chainflip-io/chainflip-eth-contracts/pull/226
-			OpenIntents::<T>::get(address).ok_or(Error::<T>::InvalidIntent)?;
-			Self::deposit_event(Event::IngressCompleted { address, asset, amount });
+			OpenIntents::<T>::get(ingress_address).ok_or(Error::<T>::InvalidIntent)?;
+			Self::deposit_event(Event::IngressCompleted { ingress_address, asset, amount });
 
 			// TODO: Route funds to either the LP pallet or the swap pallet
 
@@ -124,6 +126,17 @@ pub mod pallet {
 	}
 }
 
+impl<T: Config> Pallet<T> {
+	fn generate_new_address(ingress_asset: ForeignChainAsset) -> (IntentId, ForeignChainAddress) {
+		let intent_id = IntentIdCounter::<T>::mutate(|id| {
+			*id += 1;
+			*id
+		});
+		let ingress_address = T::AddressDerivation::generate_address(ingress_asset, intent_id);
+		(intent_id, ingress_address)
+	}
+}
+
 impl<T: Config> IngressApi for Pallet<T> {
 	type AccountId = <T as frame_system::Config>::AccountId;
 
@@ -131,32 +144,33 @@ impl<T: Config> IngressApi for Pallet<T> {
 	fn register_liquidity_ingress_intent(
 		lp_account: Self::AccountId,
 		ingress_asset: ForeignChainAsset,
-	) {
-		let (address, intent_id) = Self::generate_address(ingress_asset);
+	) -> (IntentId, ForeignChainAddress) {
+		let (intent_id, ingress_address) = Self::generate_new_address(ingress_asset);
 
 		OpenIntents::<T>::insert(
-			address,
+			ingress_address,
 			Intent::LiquidityProvision {
 				lp_account,
 				ingress_details: IngressDetails { intent_id, ingress_asset },
 			},
 		);
 
-		Self::deposit_event(Event::StartWitnessing { address, ingress_asset: ingress_asset.asset });
+		Self::deposit_event(Event::StartWitnessing { ingress_address, ingress_asset });
+
+		(intent_id, ingress_address)
 	}
 
 	// This should only be callable by the relayer.
 	fn register_swap_intent(
-		_relayer_id: Self::AccountId,
 		ingress_asset: ForeignChainAsset,
 		egress_asset: ForeignChainAsset,
 		egress_address: ForeignChainAddress,
 		relayer_commission_bps: u16,
-	) {
-		let (address, intent_id) = Self::generate_address(ingress_asset);
+	) -> (IntentId, ForeignChainAddress) {
+		let (intent_id, ingress_address) = Self::generate_new_address(ingress_asset);
 
 		OpenIntents::<T>::insert(
-			address,
+			ingress_address,
 			Intent::Swap {
 				ingress_details: IngressDetails { intent_id, ingress_asset },
 				egress_address,
@@ -165,25 +179,23 @@ impl<T: Config> IngressApi for Pallet<T> {
 			},
 		);
 
-		Self::deposit_event(Event::StartWitnessing { address, ingress_asset: ingress_asset.asset });
+		Self::deposit_event(Event::StartWitnessing { ingress_address, ingress_asset });
+
+		(intent_id, ingress_address)
 	}
 }
 
-impl<T: Config> AddressDerivationApi for Pallet<T> {
-	// TODO: Implement real implementation
-	fn generate_address(_ingress_asset: ForeignChainAsset) -> (ForeignChainAddress, IntentId) {
-		let intent_id = IntentIdCounter::<T>::mutate(|id| {
-			let new_id = *id + 1;
-			*id = new_id;
-			new_id
-		});
+pub struct KylesTestnetAddress;
 
-		(
-			// Kyle's testnet address
-			ForeignChainAddress::Eth(
-				H160::from_str("F29aB9EbDb481BE48b80699758e6e9a3DBD609C6").unwrap(),
-			),
-			intent_id,
+impl AddressDerivationApi for KylesTestnetAddress {
+	fn generate_address(
+		_ingress_asset: ForeignChainAsset,
+		_intent_id: IntentId,
+	) -> ForeignChainAddress {
+		ForeignChainAddress::Eth(
+			H160::from_str("F29aB9EbDb481BE48b80699758e6e9a3DBD609C6")
+				.unwrap()
+				.to_fixed_bytes(),
 		)
 	}
 }
