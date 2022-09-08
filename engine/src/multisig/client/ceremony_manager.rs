@@ -716,22 +716,18 @@ impl<Ceremony: CeremonyTrait> CeremonyHandle<Ceremony> {
         request: PreparedRequest<Ceremony>,
         result_sender: CeremonyResultSender<Ceremony>,
     ) -> Result<()> {
-        match &self.request_state {
-            CeremonyRequestState::Unauthorised(_) => {
-                // Transition to an authorized state by consuming the
-                // request sender and storing the result sender
-                if let CeremonyRequestState::Unauthorised(request_sender) = std::mem::replace(
-                    &mut self.request_state,
-                    CeremonyRequestState::Authorised(result_sender),
-                ) {
-                    let _res = request_sender.send(request);
-                }
-                Ok(())
-            }
-            CeremonyRequestState::Authorised(_) => {
-                // A request has already been sent to this ceremony
-                bail!("Duplicate ceremony id");
-            }
+        // Transition to an authorized state by consuming the
+        // request sender and storing the result sender
+        if let CeremonyRequestState::Unauthorised(request_sender) = std::mem::replace(
+            &mut self.request_state,
+            CeremonyRequestState::Authorised(result_sender),
+        ) {
+            let _res = request_sender.send(request);
+        } else {
+            // Already in an authorised state, a request has already been sent to a ceremony with this id
+            bail!("Duplicate ceremony id");
         }
+
+        Ok(())
     }
 }
