@@ -217,7 +217,7 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
                     None => {
                         slog::debug!(
                             self.logger,
-                            "Sender {} is not a valid participant",
+                            "Ignoring data: sender {} is not a valid participant",
                             sender_id
                         );
                         return None;
@@ -237,7 +237,7 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
                 }
 
                 // Check if we should delay this message for the next stage to use
-                if stage.should_delay(&data) {
+                if Ceremony::Data::should_delay(stage.get_stage_name(), &data) {
                     self.add_delayed(sender_id, data);
                     return None;
                 }
@@ -387,9 +387,5 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 
     pub async fn force_timeout(&mut self) -> OptionalCeremonyReturn<Ceremony> {
         self.on_timeout().await
-    }
-
-    pub fn get_stage_name(&self) -> Option<super::common::CeremonyStageName> {
-        self.stage.as_ref().map(|stage| stage.get_stage_name())
     }
 }

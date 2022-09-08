@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use utilities::threshold_from_share_count;
 
 use crate::multisig::{
-    client::common::{BroadcastVerificationMessage, PreProcessStageDataCheck},
+    client::common::{BroadcastVerificationMessage, CeremonyStageName, PreProcessStageDataCheck},
     crypto::ECPoint,
 };
 
@@ -108,6 +108,41 @@ impl<P: ECPoint> PreProcessStageDataCheck for KeygenData<P> {
 
     fn is_first_stage(&self) -> bool {
         matches!(self, KeygenData::HashComm1(_))
+    }
+
+    /// Returns true if this message should be delayed for the given stage
+    fn should_delay(stage_name: CeremonyStageName, message: &Self) -> bool {
+        match stage_name {
+            CeremonyStageName::HashCommitments1 => {
+                matches!(message, KeygenData::VerifyHashComm2(_))
+            }
+            CeremonyStageName::VerifyHashCommitmentsBroadcast2 => {
+                matches!(message, KeygenData::CoeffComm3(_))
+            }
+            CeremonyStageName::CoefficientCommitments3 => {
+                matches!(message, KeygenData::VerifyCoeffComm4(_))
+            }
+            CeremonyStageName::VerifyCommitmentsBroadcast4 => {
+                matches!(message, KeygenData::SecretShares5(_))
+            }
+            CeremonyStageName::SecretSharesStage5 => {
+                matches!(message, KeygenData::Complaints6(_))
+            }
+            CeremonyStageName::ComplaintsStage6 => {
+                matches!(message, KeygenData::VerifyComplaints7(_))
+            }
+            CeremonyStageName::VerifyComplaintsBroadcastStage7 => {
+                matches!(message, KeygenData::BlameResponse8(_))
+            }
+            CeremonyStageName::BlameResponsesStage8 => {
+                matches!(message, KeygenData::VerifyBlameResponses9(_))
+            }
+            CeremonyStageName::VerifyBlameResponsesBroadcastStage9 => {
+                // Last stage, nothing to delay
+                false
+            }
+            _ => false,
+        }
     }
 }
 

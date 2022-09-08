@@ -19,6 +19,9 @@ pub async fn start<ContractWitnesser, StateChainRpc>(
     eth_ws_rpc: EthWsRpcClient,
     eth_http_rpc: EthHttpRpcClient,
     epoch_starts_receiver: broadcast::Receiver<EpochStart>,
+    // In some cases there is no use witnessing older epochs since any actions that could be taken either have already
+    // been taken, or can no longer be taken.
+    witness_historical_epochs: bool,
     state_chain_client: Arc<StateChainClient<StateChainRpc>>,
     logger: &slog::Logger,
 ) -> anyhow::Result<()>
@@ -31,7 +34,7 @@ where
     super::epoch_witnesser::start(
         contract_witnesser.contract_name(),
         epoch_starts_receiver,
-        |_epoch_start| true,
+        move |epoch_start| witness_historical_epochs || epoch_start.current,
         (),
         move |end_witnessing_signal, epoch_start, (), logger| {
             let eth_ws_rpc = eth_ws_rpc.clone();

@@ -32,7 +32,7 @@ where
         None,
         move |
             end_witnessing_signal,
-            _epoch_start,
+            epoch_start,
             mut last_witnessed_block_hash,
             logger
         | {
@@ -56,7 +56,7 @@ where
                             .eth_priority_fee_percentile;
                         let _result = state_chain_client
                             .submit_signed_extrinsic(
-                                state_chain_runtime::Call::Witnesser(pallet_cf_witnesser::Call::witness {
+                                state_chain_runtime::Call::Witnesser(pallet_cf_witnesser::Call::witness_at_epoch {
                                     call: Box::new(state_chain_runtime::Call::EthereumChainTracking(
                                         pallet_cf_chain_tracking::Call::update_chain_state {
                                             state: get_tracked_data(
@@ -66,6 +66,7 @@ where
                                             ).await?,
                                         },
                                     )),
+                                    epoch_index: epoch_start.index
                                 }),
                                 &logger,
                             )

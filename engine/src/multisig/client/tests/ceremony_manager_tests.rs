@@ -1,16 +1,13 @@
 use std::collections::BTreeSet;
 
-use super::*;
+use super::{helpers::get_key_data_for_test, *};
 use crate::{
     constants::CEREMONY_ID_WINDOW,
     logging::test_utils::new_test_logger,
     multisig::{
         client::{
-            self,
-            ceremony_manager::CeremonyManager,
-            common::SigningFailureReason,
-            keygen::{get_key_data_for_test, KeygenData},
-            CeremonyFailureReason, MultisigData,
+            self, ceremony_manager::CeremonyManager, common::SigningFailureReason,
+            keygen::KeygenData, CeremonyFailureReason, MultisigData,
         },
         crypto::{CryptoScheme, Rng},
         eth::EthSigning,
@@ -152,9 +149,8 @@ async fn should_ignore_rts_with_unknown_signer_id() {
     );
 }
 
-#[test]
-#[ignore = "temporarily disabled - see issue #1972"]
-fn should_not_create_unauthorized_ceremony_with_invalid_ceremony_id() {
+#[tokio::test]
+async fn should_not_create_unauthorized_ceremony_with_invalid_ceremony_id() {
     let latest_ceremony_id = 1; // Invalid, because the CeremonyManager starts with this value as the latest
     let past_ceremony_id = latest_ceremony_id - 1; // Invalid, because it was used in the past
     let future_ceremony_id = latest_ceremony_id + CEREMONY_ID_WINDOW; // Valid, because its within the window
@@ -203,6 +199,6 @@ fn should_not_create_unauthorized_ceremony_with_invalid_ceremony_id() {
         },
     );
 
-    // Check that the message was not ignored and unauthorised ceremony was created
+    // Check that the message was not ignored and an unauthorised ceremony was created
     assert_eq!(ceremony_manager.get_keygen_states_len(), 1);
 }
