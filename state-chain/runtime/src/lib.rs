@@ -186,6 +186,12 @@ impl pallet_cf_environment::Config for Runtime {
 	type EthEnvironmentProvider = Environment;
 }
 
+impl pallet_cf_relayer::Config for Runtime {
+	type Event = Event;
+	type Ingress = Ingress;
+	type WeightInfo = pallet_cf_relayer::weights::PalletWeight<Runtime>;
+}
+
 impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 	type Event = Event;
 	type Call = Call;
@@ -207,6 +213,7 @@ impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 
 impl pallet_cf_ingress::Config for Runtime {
 	type Event = Event;
+	type AddressDerivation = pallet_cf_ingress::KylesTestnetAddress;
 }
 
 impl<LocalCall> SendTransactionTypes<LocalCall> for Runtime
@@ -539,6 +546,7 @@ construct_runtime!(
 		EthereumBroadcaster: pallet_cf_broadcast::<Instance1>,
 		EthereumChainTracking: pallet_cf_chain_tracking::<Instance1>,
 		Ingress: pallet_cf_ingress,
+		Relayer: pallet_cf_relayer,
 	}
 );
 
@@ -602,6 +610,7 @@ mod benches {
 		[pallet_cf_threshold_signature, EthereumThresholdSigner]
 		[pallet_cf_broadcast, EthereumBroadcaster]
 		[pallet_cf_chain_tracking, EthereumChainTracking]
+		[pallet_cf_relayer, Relayer]
 	);
 }
 

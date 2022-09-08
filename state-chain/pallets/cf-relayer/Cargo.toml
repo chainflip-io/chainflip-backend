@@ -1,20 +1,23 @@
 [package]
-name = 'pallet-cf-ingress'
+name = 'pallet-cf-relayer'
 version = '0.1.0'
-description = 'Chainflip ingress pallet'
 authors = ['Chainflip Team <https://github.com/chainflip-io>']
-homepage = 'https://chainflip.io'
+description = 'The relayer pallet.'
 edition = '2021'
+homepage = 'https://chainflip.io'
 license = '<TODO>'
 publish = false
 repository = 'https://github.com/chainflip-io/chainflip-backend'
 
+[package.metadata.docs.rs]
+targets = ['x86_64-unknown-linux-gnu']
 
 [dependencies]
+# Internal dependencies
 cf-traits = {path = '../../traits', default-features = false}
 cf-primitives = {path = '../../primitives', default-features = false}
 
-# ==== Parity deps ====
+# Parity deps
 [dependencies.codec]
 default-features = false
 features = ['derive']
@@ -34,7 +37,7 @@ tag = 'chainflip-monthly-2022-06'
 [dependencies.scale-info]
 default-features = false
 features = ['derive']
-version = '2.1.1'
+version = '2.0.1'
 
 [dependencies.sp-std]
 default-features = false
@@ -51,21 +54,24 @@ tag = 'chainflip-monthly-2022-06'
 git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'chainflip-monthly-2022-06'
 
+[dev-dependencies.sp-runtime]
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'chainflip-monthly-2022-06'
+
 [dev-dependencies.sp-io]
 git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'chainflip-monthly-2022-06'
 
-
 [features]
 default = ['std']
 std = [
-  'cf-primitives/std',
   'cf-traits/std',
+  'cf-primitives/std',
   'codec/std',
+  'scale-info/std',
   'frame-benchmarking/std',
   'frame-support/std',
   'frame-system/std',
-  'scale-info/std',
   'sp-std/std',
 ]
 runtime-benchmarks = [
