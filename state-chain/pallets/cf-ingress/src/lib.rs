@@ -126,6 +126,17 @@ pub mod pallet {
 	}
 }
 
+impl<T: Config> Pallet<T> {
+	fn generate_new_address(ingress_asset: ForeignChainAsset) -> (IntentId, ForeignChainAddress) {
+		let intent_id = IntentIdCounter::<T>::mutate(|id| {
+			*id += 1;
+			*id
+		});
+		let ingress_address = T::AddressDerivation::generate_address(ingress_asset, intent_id);
+		(intent_id, ingress_address)
+	}
+}
+
 impl<T: Config> IngressApi for Pallet<T> {
 	type AccountId = <T as frame_system::Config>::AccountId;
 
@@ -134,7 +145,7 @@ impl<T: Config> IngressApi for Pallet<T> {
 		lp_account: Self::AccountId,
 		ingress_asset: ForeignChainAsset,
 	) -> (IntentId, ForeignChainAddress) {
-		let (intent_id, ingress_address) = Self::generate_new_address::<T>(ingress_asset);
+		let (intent_id, ingress_address) = Self::generate_new_address(ingress_asset);
 
 		OpenIntents::<T>::insert(
 			ingress_address,
@@ -156,7 +167,7 @@ impl<T: Config> IngressApi for Pallet<T> {
 		egress_address: ForeignChainAddress,
 		relayer_commission_bps: u16,
 	) -> (IntentId, ForeignChainAddress) {
-		let (intent_id, ingress_address) = Self::generate_new_address::<T>(ingress_asset);
+		let (intent_id, ingress_address) = Self::generate_new_address(ingress_asset);
 
 		OpenIntents::<T>::insert(
 			ingress_address,
@@ -170,19 +181,6 @@ impl<T: Config> IngressApi for Pallet<T> {
 
 		Self::deposit_event(Event::StartWitnessing { ingress_address, ingress_asset });
 
-		(intent_id, ingress_address)
-	}
-}
-
-impl Pallet<T: Config> {
-	fn generate_new_address<T: Config>(
-		ingress_asset: ForeignChainAsset,
-	) -> (IntentId, ForeignChainAddress) {
-		let intent_id = IntentIdCounter::<T>::mutate(|id| {
-			*id += 1;
-			*id
-		});
-		let ingress_address = T::AddressDerivation::generate_address(ingress_asset, intent_id);
 		(intent_id, ingress_address)
 	}
 }

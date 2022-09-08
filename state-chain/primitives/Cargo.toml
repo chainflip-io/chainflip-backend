@@ -29,5 +29,6 @@ default = ['std']
 std = [
   'codec/std',
   'scale-info/std',
-  'serde'
+  'serde',
+  'sp-runtime/std',
 ]
