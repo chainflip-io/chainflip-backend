@@ -13,15 +13,17 @@ use crate::{
         eth::EthSigning,
         tests::fixtures::MESSAGE_HASH,
     },
+    task_scope::with_task_scope,
 };
 use client::MultisigMessage;
+use futures::FutureExt;
 use rand_legacy::SeedableRng;
 use sp_runtime::AccountId32;
 use tokio::sync::oneshot;
-use utilities::{assert_panics, threshold_from_share_count};
+use utilities::threshold_from_share_count;
 
 /// Run on_request_to_sign on a ceremony manager, using a junk key and default ceremony id and data.
-fn run_on_request_to_sign<C: CryptoScheme>(
+async fn run_on_request_to_sign<C: CryptoScheme>(
     ceremony_manager: &mut CeremonyManager<C>,
     participants: BTreeSet<sp_runtime::AccountId32>,
 ) -> oneshot::Receiver<
@@ -34,14 +36,23 @@ fn run_on_request_to_sign<C: CryptoScheme>(
     >,
 > {
     let (result_sender, result_receiver) = oneshot::channel();
-    ceremony_manager.on_request_to_sign(
-        DEFAULT_SIGNING_CEREMONY_ID,
-        participants,
-        MESSAGE_HASH.clone(),
-        get_key_data_for_test(BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned())),
-        Rng::from_seed(DEFAULT_SIGNING_SEED),
-        result_sender,
-    );
+    with_task_scope(|scope| {
+        async {
+            ceremony_manager.on_request_to_sign(
+                DEFAULT_SIGNING_CEREMONY_ID,
+                participants,
+                MESSAGE_HASH.clone(),
+                get_key_data_for_test(BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned())),
+                Rng::from_seed(DEFAULT_SIGNING_SEED),
+                result_sender,
+                scope,
+            );
+            Ok(())
+        }
+        .boxed()
+    })
+    .await
+    .unwrap();
     result_receiver
 }
 
@@ -56,6 +67,7 @@ fn new_ceremony_manager_for_test(our_account_id: AccountId) -> CeremonyManager<E
 }
 
 #[tokio::test]
+#[should_panic]
 async fn should_panic_keygen_request_if_not_participating() {
     let non_participating_id = AccountId::new([0; 32]);
     assert!(!ACCOUNT_IDS.contains(&non_participating_id));
@@ -65,15 +77,25 @@ async fn should_panic_keygen_request_if_not_participating() {
 
     // Send a keygen request where participants doesn't include non_participating_id
     let (result_sender, _result_receiver) = oneshot::channel();
-    assert_panics!(ceremony_manager.on_keygen_request(
-        DEFAULT_KEYGEN_CEREMONY_ID,
-        BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
-        Rng::from_seed(DEFAULT_KEYGEN_SEED),
-        result_sender,
-    ));
+    with_task_scope(|scope| {
+        async {
+            ceremony_manager.on_keygen_request(
+                DEFAULT_KEYGEN_CEREMONY_ID,
+                BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
+                Rng::from_seed(DEFAULT_KEYGEN_SEED),
+                result_sender,
+                scope,
+            );
+            Ok(())
+        }
+        .boxed()
+    })
+    .await
+    .unwrap();
 }
 
 #[tokio::test]
+#[should_panic]
 async fn should_panic_rts_if_not_participating() {
     let non_participating_id = AccountId::new([0; 32]);
     assert!(!ACCOUNT_IDS.contains(&non_participating_id));
@@ -82,10 +104,11 @@ async fn should_panic_rts_if_not_participating() {
     let mut ceremony_manager = new_ceremony_manager_for_test(non_participating_id);
 
     // Send a signing request where participants doesn't include non_participating_id
-    assert_panics!(run_on_request_to_sign(
+    run_on_request_to_sign(
         &mut ceremony_manager,
         BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
-    ));
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -98,7 +121,7 @@ async fn should_ignore_rts_with_insufficient_number_of_signers() {
 
     // Send a signing request with not enough participants
     let mut result_receiver =
-        run_on_request_to_sign(&mut ceremony_manager, not_enough_participants);
+        run_on_request_to_sign(&mut ceremony_manager, not_enough_participants).await;
 
     // Receive the NotEnoughSigners error result
     assert_eq!(
@@ -135,7 +158,8 @@ async fn should_ignore_rts_with_unknown_signer_id() {
     let mut result_receiver = run_on_request_to_sign(
         &mut ceremony_manager,
         BTreeSet::from_iter(participants.into_iter()),
-    );
+    )
+    .await;
 
     // Receive the InvalidParticipants error result
     assert_eq!(
@@ -169,36 +193,48 @@ async fn should_not_create_unauthorized_ceremony_with_invalid_ceremony_id() {
         &new_test_logger(),
     );
 
-    // Process a stage 1 message with a ceremony id that is in the past
-    ceremony_manager.process_p2p_message(
-        ACCOUNT_IDS[0].clone(),
-        MultisigMessage {
-            ceremony_id: past_ceremony_id,
-            data: stage_1_data.clone(),
-        },
-    );
+    with_task_scope(|scope| {
+        async {
+            // Process a stage 1 message with a ceremony id that is in the past
+            ceremony_manager.process_p2p_message(
+                ACCOUNT_IDS[0].clone(),
+                MultisigMessage {
+                    ceremony_id: past_ceremony_id,
+                    data: stage_1_data.clone(),
+                },
+                scope,
+            );
 
-    // Process a stage 1 message with a ceremony id that is too far in the future
-    ceremony_manager.process_p2p_message(
-        ACCOUNT_IDS[0].clone(),
-        MultisigMessage {
-            ceremony_id: future_ceremony_id_too_large,
-            data: stage_1_data.clone(),
-        },
-    );
+            // Process a stage 1 message with a ceremony id that is too far in the future
+            ceremony_manager.process_p2p_message(
+                ACCOUNT_IDS[0].clone(),
+                MultisigMessage {
+                    ceremony_id: future_ceremony_id_too_large,
+                    data: stage_1_data.clone(),
+                },
+                scope,
+            );
 
-    // Check that the messages were ignored and no unauthorised ceremonies were created
-    assert_eq!(ceremony_manager.get_keygen_states_len(), 0);
+            // Check that the messages were ignored and no unauthorised ceremonies were created
+            assert_eq!(ceremony_manager.get_keygen_states_len(), 0);
 
-    // Process a stage 1 message with a ceremony id that in the future but still within the window
-    ceremony_manager.process_p2p_message(
-        ACCOUNT_IDS[0].clone(),
-        MultisigMessage {
-            ceremony_id: future_ceremony_id,
-            data: stage_1_data,
-        },
-    );
+            // Process a stage 1 message with a ceremony id that in the future but still within the window
+            ceremony_manager.process_p2p_message(
+                ACCOUNT_IDS[0].clone(),
+                MultisigMessage {
+                    ceremony_id: future_ceremony_id,
+                    data: stage_1_data,
+                },
+                scope,
+            );
 
-    // Check that the message was not ignored and an unauthorised ceremony was created
-    assert_eq!(ceremony_manager.get_keygen_states_len(), 1);
+            // Check that the message was not ignored and an unauthorised ceremony was created
+            assert_eq!(ceremony_manager.get_keygen_states_len(), 1);
+
+            Ok(())
+        }
+        .boxed()
+    })
+    .await
+    .unwrap();
 }
