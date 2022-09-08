@@ -37,6 +37,7 @@ pallet-cf-witnesser = { path = '../pallets/cf-witnesser', default-features = fal
 pallet-cf-flip = { path = '../pallets/cf-flip', default-features = false }
 pallet-cf-auction = { path = '../pallets/cf-auction', default-features = false }
 pallet-cf-emissions = { path = '../pallets/cf-emissions', default-features = false }
+pallet-cf-relayer = { path = '../pallets/cf-relayer', default-features = false }
 pallet-cf-governance = { path = '../pallets/cf-governance', default-features = false }
 pallet-cf-tokenholder-governance = { path = '../pallets/cf-tokenholder-governance', default-features = false }
 pallet-cf-reputation = { path = '../pallets/cf-reputation', default-features = false }
@@ -210,15 +211,18 @@ runtime-benchmarks = [
   'pallet-cf-environment/runtime-benchmarks',
   'pallet-cf-flip/runtime-benchmarks',
   'pallet-cf-governance/runtime-benchmarks',
-  'pallet-cf-tokenholder-governance/runtime-benchmarks',
+  'pallet-cf-ingress/runtime-benchmarks',
+  'pallet-cf-relayer/runtime-benchmarks',
   'pallet-cf-reputation/runtime-benchmarks',
   'pallet-cf-staking/runtime-benchmarks',
   'pallet-cf-threshold-signature/runtime-benchmarks',
+  'pallet-cf-tokenholder-governance/runtime-benchmarks',
   'pallet-cf-validator/runtime-benchmarks',
   'pallet-cf-vaults/runtime-benchmarks',
   'pallet-cf-witnesser/runtime-benchmarks',
   'pallet-cf-witnesser/runtime-benchmarks',
   'pallet-timestamp/runtime-benchmarks',
+  'pallet-cf-relayer/runtime-benchmarks',
   'sp-runtime/runtime-benchmarks',
   'cf-session-benchmarking',
 ]
@@ -238,12 +242,13 @@ std = [
   'pallet-aura/std',
   'pallet-cf-auction/std',
   'pallet-cf-broadcast/std',
-  'pallet-cf-ingress/std',
   'pallet-cf-chain-tracking/std',
   'pallet-cf-emissions/std',
   'pallet-cf-environment/std',
   'pallet-cf-flip/std',
   'pallet-cf-governance/std',
+  'pallet-cf-ingress/std',
+  'pallet-cf-relayer/std',
   'pallet-cf-reputation/std',
   'pallet-cf-staking/std',
   'pallet-cf-threshold-signature/std',
@@ -282,7 +287,10 @@ try-runtime = [
   'pallet-cf-auction/try-runtime',
   'pallet-cf-validator/try-runtime',
   'pallet-cf-vaults/try-runtime',
+  'pallet-cf-ingress/try-runtime',
+  'pallet-cf-relayer/try-runtime',
   'pallet-cf-reputation/try-runtime',
   'pallet-cf-emissions/try-runtime',
   'pallet-cf-environment/try-runtime',
+  'pallet-cf-relayer/try-runtime',
 ]
