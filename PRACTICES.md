@@ -37,6 +37,14 @@ Correctness in this instance means that we know what the code should do; that it
 
 The strongest guarantee of correctness is enforced through the type system. Supporting this, we can use unit testing, property-based testing, or integration testing. Where unenforced assumptions are made, these should be clearly documented using (doc-)comments.
 
+## Maintainability
+
+According to Google:
+
+> Code maintainability is a capability that requires organization-wide coordination, since it relies on being able to search, reuse, and change other teams' code.
+
+Maintainability is one of the main drivers of a team's success and ability to move forward. Wherever possible we should actively resist accumulating technical debt, and reduce it when we have the opportunity. As long as we follow our other practices, we should be working towards this ideal.
+
 # Ideals
 
 # Practices
@@ -59,4 +67,4 @@ Improving the speed and effectiveness of code reviews directly improves the spee
 
 ## Better not perfect
 
-If a PR improves the overall quality of the code base, reviewers should tend towards approving over holding up the PR. Assuming there are no bugs introduced, this may mean approving with some comments, perhaps suggesting that some improvements be taken out into their own issue, or for even smaller items, allowing the developer to make a judgement call on whether to include it before merging. 
+If a PR improves the overall quality of the code base, reviewers should tend towards approving over holding up the PR. Assuming there are no bugs introduced, this may mean approving with some comments, perhaps suggesting that some improvements be taken out into their own issue, or for even smaller items, allowing the developer to make a judgement call on whether to include it before merging.
