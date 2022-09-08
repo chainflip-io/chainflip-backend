@@ -72,6 +72,8 @@ pub trait CeremonyStage {
     fn awaited_parties(&self) -> BTreeSet<AuthorityCount>;
 
     fn get_stage_name(&self) -> super::CeremonyStageName;
+
+    fn ceremony_common(&self) -> &CeremonyCommon;
 }
 
 /// Data useful during any stage of a ceremony

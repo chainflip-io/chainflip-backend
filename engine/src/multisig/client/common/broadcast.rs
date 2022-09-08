@@ -252,4 +252,8 @@ where
     fn get_stage_name(&self) -> CeremonyStageName {
         <Stage as BroadcastStageProcessor<Data, Result, FailureReason>>::NAME
     }
+
+    fn ceremony_common(&self) -> &CeremonyCommon {
+        &self.common
+    }
 }

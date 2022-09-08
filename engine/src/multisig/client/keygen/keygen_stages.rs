@@ -556,7 +556,7 @@ async fn finalize_keygen<KeygenData, P: ECPoint>(
             },
             party_public_keys,
         }),
-        validator_map: common.validator_mapping,
+        validator_mapping: common.validator_mapping,
         params,
     };
 

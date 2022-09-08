@@ -163,11 +163,7 @@ impl Node<SigningCeremonyEth> {
 
         if let Some(outcome) = self
             .ceremony_runner
-            .on_ceremony_request(
-                request.init_stage,
-                request.idx_mapping,
-                request.participants_count,
-            )
+            .on_ceremony_request(request.init_stage)
             .await
         {
             self.on_ceremony_outcome(outcome);
@@ -197,11 +193,7 @@ impl Node<KeygenCeremonyEth> {
 
         if let Some(outcome) = self
             .ceremony_runner
-            .on_ceremony_request(
-                request.init_stage,
-                request.idx_mapping,
-                request.participants_count,
-            )
+            .on_ceremony_request(request.init_stage)
             .await
         {
             self.on_ceremony_outcome(outcome)
@@ -932,7 +924,7 @@ pub fn gen_invalid_keygen_stage_2_state<P: ECPoint>(
         own_idx: 0,
         all_idxs: BTreeSet::from_iter((0..account_ids.len()).into_iter().map(|idx| idx as u32)),
         outgoing_p2p_message_sender: tokio::sync::mpsc::unbounded_channel().0,
-        validator_mapping: validator_mapping.clone(),
+        validator_mapping,
         rng: rng.clone(),
         logger: logger.clone(),
     };
@@ -949,13 +941,7 @@ pub fn gen_invalid_keygen_stage_2_state<P: ECPoint>(
 
     let stage = Box::new(BroadcastStage::new(processor, common));
 
-    CeremonyRunner::new_authorised(
-        ceremony_id,
-        stage,
-        validator_mapping,
-        account_ids.len() as u32,
-        logger,
-    )
+    CeremonyRunner::new_authorised(ceremony_id, stage, logger)
 }
 
 /// Generates key data using the DEFAULT_KEYGEN_SEED and returns the KeygenResultInfo for the first signer.
