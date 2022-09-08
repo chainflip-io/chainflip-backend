@@ -86,7 +86,7 @@ fn main() -> anyhow::Result<()> {
 
             let (
                 witnessing_instruction_sender,
-                [witnessing_instruction_receiver_1, witnessing_instruction_receiver_2, witnessing_instruction_receiver_3],
+                [witnessing_instruction_receiver_1, witnessing_instruction_receiver_2, witnessing_instruction_receiver_3, witnessing_instruction_receiver_4]
             ) = build_broadcast_channel(10);
 
             // validate chain ids
@@ -174,6 +174,8 @@ fn main() -> anyhow::Result<()> {
                 &root_logger,
             );
 
+            let (eth_monitor_ingress_sender, eth_monitor_ingress_receiver) = tokio::sync::mpsc::unbounded_channel();
+
             scope.spawn(async move {
                 muxer_future.await;
                 Ok(())
@@ -218,7 +220,7 @@ fn main() -> anyhow::Result<()> {
             scope.spawn(
                 eth::contract_witnesser::start(
                     key_manager_contract,
-                    eth_ws_rpc_client,
+                    eth_ws_rpc_client.clone(),
                     eth_http_rpc_client,
                     witnessing_instruction_receiver_2,
                     false,
@@ -235,6 +237,14 @@ fn main() -> anyhow::Result<()> {
                     &root_logger
                 )
             );
+            scope.spawn(eth::ingress_witnesser::start(
+                    eth_ws_rpc_client,
+                    witnessing_instruction_receiver_4,
+                    eth_monitor_ingress_receiver,
+                    state_chain_client.clone(),
+                    vec![],
+                    &root_logger
+            ));
 
             // Start state chain components
             scope.spawn(state_chain_observer::start(
@@ -244,6 +254,7 @@ fn main() -> anyhow::Result<()> {
                 eth_multisig_client,
                 account_peer_mapping_change_sender,
                 witnessing_instruction_sender,
+                eth_monitor_ingress_sender,
                 cfe_settings_update_sender,
                 latest_block_hash,
                 root_logger.clone()
