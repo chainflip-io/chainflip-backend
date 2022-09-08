@@ -28,6 +28,52 @@ These practices should be used to help resolve disagreements. If that is not pos
 
 These are the foundation of our practices...
 
+## Story
+
+When writing code you should aim to structure it in a manor that reflects how you would describe the solution.
+
+### Example 1
+
+In this [example](https://github.com/chainflip-io/chainflip-backend/pull/1505/commits/fa1f9099db2551ef2bf16d960a29ea624dd480fe) we introduced a `CallHashPrintable` type so we can print `CallHash`'s. But we still in some places used `CallHash`, which confuses the story by making it seem that there is a conceptually important difference between it and `CallHash`. So [instead](https://github.com/chainflip-io/chainflip-backend/pull/1505/files#diff-7fe0fe870a6f0bf616e2a8cd94d959e9cc9bc0c8a0461b45618b0d51518e262cR74) we can `impl` `Debug` directly on `CallHash`, instead of introducing a separate type.
+
+### Example 2
+
+In this code `!iter::zip(call_hashes.iter(), call_hashes.iter().skip(1)).all(|(a, b)| a == b),` it is not immediately clear what the intent is. That code is from [here](https://github.com/chainflip-io/chainflip-backend/pull/1957/files/f0d7b9834ef9d00bd579d4017249f2b5659dac35..9aaa8dbcf7025e88ec31f3a9fed2b9de15589ea6#diff-2cd089f1f6104ab7dc556c4e1414300f65a28c3ce7bad521a9fadf1a6cd1c7cfR102), and as the comment below states we want to assert all the witness call hashes are equal after `extraction`. This is because `extraction` resolves any differences in witnesses (In this case via taking a median), and updates the call structures to contain the median. Therefore the hashes of the call structures should now all be the same as they all contain the same values.
+
+Unfortunately there is not a `std::iter::Iterator::all_equal` utility, which would be the ideal way to express this check. But there are three uses of the same piece code in this function, each time being used to check if the elements in an iterator are all equal or not. We could therefore factor out a function:
+
+```rust
+fn all_equal<T: PartialEq, It: Iterator<Item = T>>(it: It) -> bool {
+	use itertools::Itertools;
+	it.windows(2).all(|(i, i_next)| i == i_next)
+}
+
+assert!(all_equal(call_hashes.iter()));
+```
+
+Which is dramatically clearer. And in fact a `all_same` function already existed in our codebase at this time.
+
+Looking at the same code just above [here](https://github.com/chainflip-io/chainflip-backend/pull/1957/files/f0d7b9834ef9d00bd579d4017249f2b5659dac35..9aaa8dbcf7025e88ec31f3a9fed2b9de15589ea6#diff-2cd089f1f6104ab7dc556c4e1414300f65a28c3ce7bad521a9fadf1a6cd1c7cfR92):
+
+```rust
+let call_hashes = calls.iter().map(|call| CallHash(call.blake2_256())).collect::<Vec<_>>();
+if !fees.iter().zip(fees.iter().skip(1)).all(|(a, b)| a == b) {
+	assert!(
+		!iter::zip(call_hashes.iter(), call_hashes.iter().skip(1)).all(|(a, b)| a == b),
+		"Call hashes should be different before extraction if fees differ."
+	)
+}
+```
+
+As you can see this check checks that if some of the witness call's fees are different, that some of the call hashes are different. This check seems very strange even with the assert message because it is not checking a conceptually meaningful condition. The correct story here is, we want to check that if the fees of two different witness call's are different then their call hashes should also be different. You could express that like this:
+
+```rust
+let zip = iter::zip(fees.iter(), call_hashes.iter());
+assert!(itertools::iproduct!(zip.clone(), zip).all(|((fee, call_hash), (other_fee, other_call_hash))| !((fee == other_fee) ^ (call_hash == other_call_hash))));
+```
+
+Although we could write this check in many different ways some possibly clearer than this, the important thing here is regardless of how it is written once I do understand what the check does, it will be much easier to understand why the check is done, as the check is meaningful.
+
 # Ideals
 
 # Practices
