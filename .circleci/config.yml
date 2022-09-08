@@ -296,7 +296,7 @@ jobs:
       - run: sccache --show-stats
       # TODO: remove the global ignores (#1254)
       - run: |
-          cargo ci-clippy --locked
+          cargo ci-clippy
           sccache --show-stats
 
   cargo-doc:
