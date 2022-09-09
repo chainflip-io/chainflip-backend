@@ -54,12 +54,16 @@ impl Default for ChainflipAccountData {
 /// Chainflip's network is permissioned and only accessible to owners of accounts with staked Flip.
 /// In addition to staking, the account owner is required to indicate the role they intend to play
 /// in the network. This will determine in which ways the account can interact with the chain.
+///
+/// Each account can only be associated with a single role, and the role can only be updated from
+/// the initial [AccountRole::None] state.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebug, Copy)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum AccountRole {
 	/// The default account type - indicates a bare account with no special role or permissions.
 	None,
-	/// Validators are responsible for the maintainance and operation of the Chainflip network.
+	/// Validators are responsible for the maintenance and operation of the Chainflip network. This
+	/// role is required for any node that wishes to participate in auctions.
 	Validator,
 	/// Liquidity providers can deposit assets and deploy them in trading pools.
 	LiquidityProvider,
