@@ -871,7 +871,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             .expect("should have a vault"))
     }
 
-    async fn get_ingress_details(
+    pub async fn get_ingress_details(
         &self,
         block_hash: state_chain_runtime::Hash,
     ) -> Result<Vec<(ForeignChainAddress, ForeignChainAsset)>> {
