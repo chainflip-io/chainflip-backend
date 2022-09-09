@@ -11,6 +11,7 @@ use cf_primitives::AccountRole;
 use cf_traits::Chainflip;
 use frame_support::{
 	error::BadOrigin,
+	pallet_prelude::DispatchResult,
 	traits::{EnsureOrigin, IsType, OnKilledAccount, OnNewAccount},
 };
 use frame_system::{ensure_signed, pallet_prelude::OriginFor, RawOrigin};
@@ -54,15 +55,15 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-	pub fn register_as_relayer(account_id: &T::AccountId) -> Result<(), Error<T>> {
+	pub fn register_as_relayer(account_id: &T::AccountId) -> DispatchResult {
 		Self::register_account_type(account_id, AccountRole::Relayer)
 	}
 
-	pub fn register_as_lp(account_id: &T::AccountId) -> Result<(), Error<T>> {
+	pub fn register_as_lp(account_id: &T::AccountId) -> DispatchResult {
 		Self::register_account_type(account_id, AccountRole::LiquidityProvider)
 	}
 
-	pub fn register_as_validator(account_id: &T::AccountId) -> Result<(), Error<T>> {
+	pub fn register_as_validator(account_id: &T::AccountId) -> DispatchResult {
 		Self::register_account_type(account_id, AccountRole::Validator)
 	}
 
@@ -72,7 +73,7 @@ impl<T: Config> Pallet<T> {
 	fn register_account_type(
 		account_id: &T::AccountId,
 		account_role: AccountRole,
-	) -> Result<(), Error<T>> {
+	) -> DispatchResult {
 		AccountRoles::<T>::try_mutate(account_id, |old_account_role| {
 			match old_account_role.replace(account_role) {
 				Some(AccountRole::Undefined) => {
@@ -82,10 +83,11 @@ impl<T: Config> Pallet<T> {
 					});
 					Ok(())
 				},
-				Some(_) => Err(Error::AccountRoleAlreadyRegistered),
-				None => Err(Error::UnknownAccount),
+				Some(_) => Err(Error::<T>::AccountRoleAlreadyRegistered),
+				None => Err(Error::<T>::UnknownAccount),
 			}
 		})
+		.map_err(Into::into)
 	}
 }
 
