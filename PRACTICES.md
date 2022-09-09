@@ -34,7 +34,7 @@ When writing code you should aim to structure it in a manner that reflects how y
 
 ### Example 1
 
-In this [example](https://github.com/chainflip-io/chainflip-backend/pull/1505/commits/fa1f9099db2551ef2bf16d960a29ea624dd480fe) we introduced a `CallHashPrintable` type so we can print `CallHash`'s. But we still in some places used `CallHash`, which confuses the story by making it seem that there is a conceptually important difference between it and `CallHash`. So [instead](https://github.com/chainflip-io/chainflip-backend/pull/1505/files#diff-7fe0fe870a6f0bf616e2a8cd94d959e9cc9bc0c8a0461b45618b0d51518e262cR74) we can `impl` `Debug` directly on `CallHash`, instead of introducing a separate type.
+In this [example](https://github.com/chainflip-io/chainflip-backend/pull/1505/commits/fa1f9099db2551ef2bf16d960a29ea624dd480fe) we introduced a `CallHashPrintable` type so we can print instances of `CallHash`. But in some places we still used `CallHash`, which confuses the story by making it seem that there is a conceptually important difference between the two structs. So [instead](https://github.com/chainflip-io/chainflip-backend/pull/1505/files#diff-7fe0fe870a6f0bf616e2a8cd94d959e9cc9bc0c8a0461b45618b0d51518e262cR74) we can `impl` `Debug` directly on `CallHash`, instead of introducing a separate type.
 
 ### Example 2
 
