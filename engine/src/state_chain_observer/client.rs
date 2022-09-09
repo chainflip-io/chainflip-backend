@@ -39,7 +39,9 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use crate::common::{read_clean_and_decode_hex_str_file, TryStreamCfExt};
+use crate::common::{
+    read_clean_and_decode_hex_str_file, AssertEndAfterError, EndAfterErrorStream, TryStreamCfExt,
+};
 use crate::constants::MAX_EXTRINSIC_RETRY_ATTEMPTS;
 use crate::logging::COMPONENT_KEY;
 use crate::settings;
@@ -921,7 +923,7 @@ pub async fn connect_to_state_chain(
     logger: &slog::Logger,
 ) -> Result<(
     H256,
-    impl Stream<Item = Result<state_chain_runtime::Header>>,
+    impl EndAfterErrorStream<Result<state_chain_runtime::Header>>,
     Arc<StateChainClient<StateChainRpcClient<impl ChainflipClient>>>,
 )> {
     inner_connect_to_state_chain(state_chain_settings, wait_for_staking, logger)
@@ -935,7 +937,7 @@ async fn inner_connect_to_state_chain(
     logger: &slog::Logger,
 ) -> Result<(
     H256,
-    impl Stream<Item = Result<state_chain_runtime::Header>>,
+    impl EndAfterErrorStream<Result<state_chain_runtime::Header>>,
     Arc<StateChainClient<StateChainRpcClient<impl ChainflipClient>>>,
 )> {
     let logger = logger.new(o!(COMPONENT_KEY => "StateChainConnector"));
@@ -977,7 +979,7 @@ async fn inner_connect_to_state_chain(
 
         (
             latest_finalized_header.clone(),
-            Box::pin(
+            Box::pin(AssertEndAfterError(
                 sparse_finalized_block_header_stream
                     .and_then(move |next_finalized_header| {
                         assert!(latest_finalized_header.number < next_finalized_header.number);
@@ -1034,7 +1036,7 @@ async fn inner_connect_to_state_chain(
                     })
                     .end_after_error()
                     .try_flatten(),
-            ),
+            )),
         )
     };
 

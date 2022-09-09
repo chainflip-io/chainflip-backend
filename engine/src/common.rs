@@ -2,10 +2,11 @@ use std::{
     fmt::Display,
     ops::{Deref, DerefMut},
     path::Path,
+    pin::Pin,
 };
 
 use anyhow::Context;
-use futures::TryStream;
+use futures::{Stream, TryStream};
 use itertools::Itertools;
 
 struct MutexStateAndPoisonFlag<T> {
@@ -207,18 +208,88 @@ fn test_split_at() {
     assert_eq!(&right[..], &[3, 4, 5]);
 }
 
-pub trait TryStreamCfExt: TryStream + Sized {
-    fn end_after_error(self) -> end_after_error::EndAfterError<Self> {
+pub trait TryStreamCfExt: TryStream {
+    fn end_after_error(self) -> end_after_error::EndAfterError<Self>
+    where
+        Self: Sized,
+    {
         end_after_error::EndAfterError::new(self)
     }
+
+    fn next_else_end(&mut self) -> end_after_error::NextElseEnd<'_, Self>
+    where
+        Self: Unpin + EndAfterErrorStream<Result<Self::Ok, Self::Error>>,
+    {
+        end_after_error::NextElseEnd::new(self)
+    }
 }
-impl<St: TryStream + Sized> TryStreamCfExt for St {}
+impl<St: TryStream + ?Sized> TryStreamCfExt for St {}
+
+pub trait EndAfterErrorStream<Item>: Stream<Item = Item> {}
+
+impl<St, I> EndAfterErrorStream<I> for Pin<Box<St>> where St: EndAfterErrorStream<I> + ?Sized {}
+
+pub struct AssertEndAfterError<St>(pub St);
+
+impl<St> Stream for AssertEndAfterError<St>
+where
+    St: Stream,
+{
+    type Item = St::Item;
+
+    fn poll_next(
+        self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<Self::Item>> {
+        // SAFETY: pin projection. AssertUnwindSafe follows structural pinning.
+        let pinned_field = unsafe { Pin::map_unchecked_mut(self, |x| &mut x.0) };
+        St::poll_next(pinned_field, cx)
+    }
+}
+
+impl<St, I> EndAfterErrorStream<I> for AssertEndAfterError<St> where St: Stream<Item = I> {}
 
 mod end_after_error {
-    use futures::{Stream, TryStream};
-    use futures_core::FusedStream;
+    use futures::{Future, Stream, TryStream, TryStreamExt};
+    use futures_core::{FusedFuture, FusedStream};
     use pin_project::pin_project;
     use std::{fmt, pin::Pin, task::Poll};
+
+    use super::{EndAfterErrorStream, TryStreamCfExt};
+
+    /// Future for the [`next`](super::StreamExt::next) method.
+    #[derive(Debug)]
+    #[must_use = "futures do nothing unless you `.await` or poll them"]
+    pub struct NextElseEnd<'a, St: ?Sized> {
+        stream: &'a mut St,
+    }
+
+    impl<St: ?Sized + Unpin> Unpin for NextElseEnd<'_, St> {}
+
+    impl<'a, St: ?Sized + TryStreamCfExt + Unpin> NextElseEnd<'a, St> {
+        pub(super) fn new(stream: &'a mut St) -> Self {
+            Self { stream }
+        }
+    }
+
+    impl<St: ?Sized + TryStreamCfExt + FusedStream + Unpin> FusedFuture for NextElseEnd<'_, St> {
+        fn is_terminated(&self) -> bool {
+            self.stream.is_terminated()
+        }
+    }
+
+    impl<St: ?Sized + TryStreamCfExt + Unpin> Future for NextElseEnd<'_, St> {
+        type Output = Result<St::Ok, St::Error>;
+
+        fn poll(
+            mut self: Pin<&mut Self>,
+            cx: &mut futures::task::Context<'_>,
+        ) -> Poll<Self::Output> {
+            self.stream
+                .try_poll_next_unpin(cx)
+                .map(|option_result| option_result.unwrap())
+        }
+    }
 
     /// Stream for the [`end_after_error`](super::TryStreamCfExt::end_after_error) method.
     #[must_use = "streams do nothing unless polled"]
@@ -227,6 +298,11 @@ mod end_after_error {
         #[pin]
         stream: St,
         done_taking: bool,
+    }
+
+    impl<St, T, E> EndAfterErrorStream<Result<T, E>> for EndAfterError<St> where
+        St: Stream<Item = Result<T, E>>
+    {
     }
 
     impl<St> fmt::Debug for EndAfterError<St>

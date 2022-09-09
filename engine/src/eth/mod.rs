@@ -22,7 +22,7 @@ use sp_runtime::traits::Keccak256;
 use utilities::make_periodic_tick;
 
 use crate::{
-    common::{read_clean_and_decode_hex_str_file, TryStreamCfExt},
+    common::{read_clean_and_decode_hex_str_file, EndAfterErrorStream, TryStreamCfExt},
     constants::{
         ETH_BLOCK_SAFETY_MARGIN, ETH_FALLING_BEHIND_MARGIN_BLOCKS,
         ETH_LOG_BEHIND_REPORT_BLOCK_INTERVAL, ETH_STILL_BEHIND_LOG_INTERVAL,
@@ -475,7 +475,11 @@ pub trait EthContractWitnesser {
         logger: &slog::Logger,
         // This stream must be Send, so it can be used by the spawn
     ) -> Result<
-        Pin<Box<dyn Stream<Item = Result<BlockWithEvents<Self::EventParameters>>> + Send + '_>>,
+        Pin<
+            Box<
+                dyn EndAfterErrorStream<Result<BlockWithEvents<Self::EventParameters>>> + Send + '_,
+            >,
+        >,
     > {
         let deployed_address = self.get_contract_address();
         slog::info!(
@@ -531,7 +535,14 @@ pub trait EthContractWitnesser {
         safe_http_block_events_stream: BlockEventsStreamHttp,
         logger: slog::Logger,
     ) -> Result<
-        Pin<Box<dyn Stream<Item = Result<BlockWithEvents<Self::EventParameters>>> + Send + 'a>>,
+        Pin<
+            Box<
+                dyn EndAfterErrorStream<
+                        Result<BlockWithEvents<Self::EventParameters>, anyhow::Error>,
+                    > + Send
+                    + 'a,
+            >,
+        >,
     >
     where
         BlockEventsStreamWs:

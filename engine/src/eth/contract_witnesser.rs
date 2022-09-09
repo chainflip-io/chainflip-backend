@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use futures::StreamExt;
+use crate::common::TryStreamCfExt;
 use tokio::sync::broadcast;
 
 use crate::{
@@ -55,7 +55,7 @@ where
 
                 // TOOD: Handle None on stream, and result event being an error
                 loop {
-                    let block = block_stream.next().await.unwrap()?;
+                    let block = block_stream.next_else_end().await?;
 
                     if let Some(end_block) = *end_witnessing_signal.lock().unwrap() {
                         if block.block_number >= end_block {

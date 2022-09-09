@@ -12,6 +12,7 @@ use mockall::predicate::{self, eq};
 use pallet_cf_broadcast::BroadcastAttemptId;
 use pallet_cf_vaults::{Vault, Vaults};
 
+use anyhow::anyhow;
 use sp_core::{
     storage::{StorageData, StorageKey},
     Hasher, H256, U256,
@@ -22,6 +23,7 @@ use tokio::sync::{broadcast, watch};
 use web3::types::{Bytes, SignedTransaction};
 
 use crate::{
+    common::AssertEndAfterError,
     eth::{
         rpc::{EthWsRpcClient, MockEthRpcApi},
         EpochStart, EthBroadcaster,
@@ -159,7 +161,7 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_current_authority_o
     let multisig_client = Arc::new(MockMultisigClientApi::new());
 
     // No blocks in the stream
-    let sc_block_stream = tokio_stream::iter(vec![]);
+    let sc_block_stream = AssertEndAfterError(tokio_stream::iter(vec![Err(anyhow!(""))]));
 
     let logger = new_test_logger();
 
@@ -210,7 +212,7 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_historic_on_startup
     ));
 
     // No blocks in the stream
-    let sc_block_stream = tokio_stream::iter(vec![]);
+    let sc_block_stream = AssertEndAfterError(tokio_stream::iter(vec![Err(anyhow!(""))]));
 
     let logger = new_test_logger();
 
@@ -257,7 +259,7 @@ async fn sends_initial_extrinsics_when_not_historic_on_startup() {
         mock_state_chain_rpc_client,
     ));
 
-    let sc_block_stream = tokio_stream::iter(vec![]);
+    let sc_block_stream = AssertEndAfterError(tokio_stream::iter(vec![Err(anyhow!(""))]));
 
     let logger = new_test_logger();
 
@@ -308,11 +310,12 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
     let new_epoch_block_header = test_header(21);
     let new_epoch_block_header_hash = new_epoch_block_header.hash();
 
-    let sc_block_stream = tokio_stream::iter(vec![
+    let sc_block_stream = AssertEndAfterError(tokio_stream::iter(vec![
         Ok(empty_block_header.clone()),
         // in the mock for the events, we return a new epoch event for the block with this header
         Ok(new_epoch_block_header.clone()),
-    ]);
+        Err(anyhow!("")),
+    ]));
 
     let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
@@ -437,11 +440,12 @@ async fn not_historical_to_authority_on_new_epoch() {
     let empty_block_header = test_header(20);
     let new_epoch_block_header = test_header(21);
 
-    let sc_block_stream = tokio_stream::iter(vec![
+    let sc_block_stream = AssertEndAfterError(tokio_stream::iter(vec![
         Ok(empty_block_header.clone()),
         // in the mock for the events, we return a new epoch event for the block with this header
         Ok(new_epoch_block_header.clone()),
-    ]);
+        Err(anyhow!("")),
+    ]));
 
     let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
         tokio::sync::mpsc::unbounded_channel();
@@ -558,14 +562,15 @@ async fn current_authority_to_historical_on_new_epoch_event() {
     let empty_block_header = test_header(20);
     let new_epoch_block_header = test_header(21);
 
-    let sc_block_stream = tokio_stream::iter([
+    let sc_block_stream = AssertEndAfterError(tokio_stream::iter([
         Ok(empty_block_header.clone()),
         // in the mock for the events, we return a new epoch event for the block with this header
         Ok(new_epoch_block_header.clone()),
         // after we become a historical authority, we should keep checking for our status as a node now
         Ok(test_header(22)),
         Ok(test_header(23)),
-    ]);
+        Err(anyhow!("")),
+    ]));
 
     let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
     let (initial_block_hash, expected_epoch_starts) =
@@ -689,7 +694,10 @@ async fn only_encodes_and_signs_when_specified() {
     // === FAKE BLOCKHEADERS ===
 
     let block_header = test_header(21);
-    let sc_block_stream = tokio_stream::iter([Ok(block_header.clone())]);
+    let sc_block_stream = AssertEndAfterError(tokio_stream::iter([
+        Ok(block_header.clone()),
+        Err(anyhow!("")),
+    ]));
 
     let mut eth_rpc_mock = MockEthRpcApi::new();
 
