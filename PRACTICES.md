@@ -30,7 +30,7 @@ These are the foundation of our practices...
 
 ## Story
 
-When writing code you should aim to structure it in a manor that reflects how you would describe the solution.
+When writing code you should aim to structure it in a manner that reflects how you would describe the solution.
 
 ### Example 1
 
