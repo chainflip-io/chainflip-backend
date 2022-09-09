@@ -156,14 +156,13 @@ impl Node<SigningCeremonyEth> {
             message_hash,
             &self.outgoing_p2p_message_sender,
             rng,
-            tokio::sync::oneshot::channel().0,
             &self.logger,
         )
         .expect("invalid request");
 
         if let Some(outcome) = self
             .ceremony_runner
-            .on_ceremony_request(request.init_stage)
+            .on_ceremony_request(request.initial_stage)
             .await
         {
             self.on_ceremony_outcome(outcome);
@@ -186,14 +185,13 @@ impl Node<KeygenCeremonyEth> {
             &self.outgoing_p2p_message_sender,
             rng,
             self.allowing_high_pubkey,
-            tokio::sync::oneshot::channel().0,
             &self.logger,
         )
         .expect("invalid request");
 
         if let Some(outcome) = self
             .ceremony_runner
-            .on_ceremony_request(request.init_stage)
+            .on_ceremony_request(request.initial_stage)
             .await
         {
             self.on_ceremony_outcome(outcome)
