@@ -84,9 +84,9 @@ pub mod pallet {
 		/// Transaction broadcaster for the host chain.
 		type Broadcaster: Broadcaster<Self::HostChain, ApiCall = Self::ApiCall>;
 
-		/// Blocks per day.
+		/// The number of blocks for the time frame we would test liveliness within
 		#[pallet::constant]
-		type BlocksPerDay: Get<Self::BlockNumber>;
+		type HeartbeatBlockInterval: Get<<Self as frame_system::Config>::BlockNumber>;
 
 		/// Something that can provide a nonce for the threshold signature.
 		type ReplayProtectionProvider: ReplayProtectionProvider<Self::HostChain>;
@@ -313,7 +313,7 @@ impl<T: Config> BlockEmissions for Pallet<T> {
 			calculate_inflation_to_block_reward(
 				T::Issuance::total_issuance(),
 				inflation_per_bill.into(),
-				T::FlipBalance::unique_saturated_from(T::BlocksPerDay::get()),
+				T::FlipBalance::unique_saturated_from(T::HeartbeatBlockInterval::get()),
 			)
 		}
 
