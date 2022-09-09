@@ -24,7 +24,7 @@ use cf_chains::{
 	ApiCall, ChainAbi, Ethereum, TransactionBuilder,
 };
 use cf_traits::{
-	Chainflip, EmergencyRotation, EpochInfo, Heartbeat, Issuance, NetworkState,
+	BlockEmissions, Chainflip, EmergencyRotation, EpochInfo, Heartbeat, Issuance, NetworkState,
 	ReplayProtectionProvider, RewardsDistribution, RuntimeUpgrade,
 };
 use frame_support::traits::Get;
@@ -87,6 +87,8 @@ impl Heartbeat for ChainflipHeartbeat {
 	type BlockNumber = BlockNumber;
 
 	fn on_heartbeat_interval(network_state: NetworkState<Self::ValidatorId>) {
+		<Emissions as BlockEmissions>::calculate_block_emissions();
+
 		// Reputation depends on heartbeats
 		Reputation::penalise_offline_authorities(network_state.offline.clone());
 
