@@ -65,7 +65,7 @@ if !fees.iter().zip(fees.iter().skip(1)).all(|(a, b)| a == b) {
 }
 ```
 
-As you can see this check checks that if some of the witness call's fees are different, that some of the call hashes are different. This check seems very strange even with the assert message because it is not checking a conceptually meaningful condition. The correct story here is, we want to check that if the fees of two different witness call's are different then their call hashes should also be different. You could express that like this:
+As you can see this checks that if some of the witness call's fees are different, that some of the call hashes are different. This check seems very strange even with the assert message because it is not checking a conceptually meaningful condition. The correct story here is, we want to check that if the fees of two different witness calls are different then their call hashes should also be different. You could express that like this:
 
 ```rust
 let zip = iter::zip(fees.iter(), call_hashes.iter());
