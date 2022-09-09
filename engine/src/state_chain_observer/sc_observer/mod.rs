@@ -164,7 +164,6 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
         sp_core::ed25519::Public,
         AccountPeerMappingChange,
     )>,
-
     epoch_start_sender: broadcast::Sender<EpochStart>,
     cfe_settings_update_sender: watch::Sender<CfeSettings>,
     initial_block_hash: H256,
