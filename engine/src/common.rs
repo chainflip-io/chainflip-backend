@@ -207,12 +207,12 @@ fn test_split_at() {
     assert_eq!(&right[..], &[3, 4, 5]);
 }
 
-pub trait EngineTryStreamExt: TryStream + Sized {
+pub trait TryStreamCfExt: TryStream + Sized {
     fn end_after_error(self) -> end_after_error::EndAfterError<Self> {
         end_after_error::EndAfterError::new(self)
     }
 }
-impl<St: TryStream + Sized> EngineTryStreamExt for St {}
+impl<St: TryStream + Sized> TryStreamCfExt for St {}
 
 mod end_after_error {
     use futures::{Stream, TryStream};
@@ -220,7 +220,7 @@ mod end_after_error {
     use pin_project::pin_project;
     use std::{fmt, pin::Pin, task::Poll};
 
-    /// Stream for the [`end_after_error`](super::EngineTryStreamExt::end_after_error) method.
+    /// Stream for the [`end_after_error`](super::TryStreamCfExt::end_after_error) method.
     #[must_use = "streams do nothing unless polled"]
     #[pin_project]
     pub struct EndAfterError<St: TryStream> {
@@ -301,7 +301,7 @@ mod end_after_error {
     mod tests {
         use futures::StreamExt;
 
-        use crate::common::EngineTryStreamExt;
+        use crate::common::TryStreamCfExt;
 
         #[tokio::test]
         async fn end_after_error_from_underlying_stream() {

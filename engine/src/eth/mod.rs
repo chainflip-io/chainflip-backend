@@ -22,7 +22,7 @@ use sp_runtime::traits::Keccak256;
 use utilities::make_periodic_tick;
 
 use crate::{
-    common::{read_clean_and_decode_hex_str_file, EngineTryStreamExt},
+    common::{read_clean_and_decode_hex_str_file, TryStreamCfExt},
     constants::{
         ETH_BLOCK_SAFETY_MARGIN, ETH_FALLING_BEHIND_MARGIN_BLOCKS,
         ETH_LOG_BEHIND_REPORT_BLOCK_INTERVAL, ETH_STILL_BEHIND_LOG_INTERVAL,
