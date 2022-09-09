@@ -116,6 +116,10 @@ parameter_types! {
 	pub const BlocksPerDay: u64 = 14400;
 }
 
+parameter_types! {
+	pub const HeartbeatBlockInterval: u64 = 150;
+}
+
 // Implement mock for RestrictionHandler
 impl_mock_waived_fees!(AccountId, Call);
 
@@ -233,7 +237,7 @@ impl pallet_cf_emissions::Config for Test {
 	type Surplus = pallet_cf_flip::Surplus<Test>;
 	type Issuance = pallet_cf_flip::FlipIssuance<Test>;
 	type RewardsDistribution = MockRewardsDistribution;
-	type BlocksPerDay = BlocksPerDay;
+	type HeartbeatBlockInterval = HeartbeatBlockInterval;
 	type ReplayProtectionProvider = Self;
 	type EthEnvironmentProvider = MockEthEnvironmentProvider;
 	type Broadcaster = MockBroadcast;
@@ -251,8 +255,8 @@ pub fn new_test_ext(validators: Vec<u64>, issuance: Option<u128>) -> sp_io::Test
 		flip: FlipConfig { total_issuance },
 		emissions: {
 			EmissionsConfig {
-				current_authority_emission_inflation: 1000, // 10%
-				backup_node_emission_inflation: 100,        // 1%
+				current_authority_emission_inflation: 2720,
+				backup_node_emission_inflation: 284,
 				supply_update_interval: SUPPLY_UPDATE_INTERVAL,
 			}
 		},
