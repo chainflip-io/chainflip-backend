@@ -66,7 +66,7 @@ impl<T: Config> Pallet<T> {
 		Self::register_account_role(account_id, AccountRole::Validator)
 	}
 
-	/// Register the account type for some account id.
+	/// Register the account role for some account id.
 	///
 	/// Fails if an account type has already been registered for this account id.
 	fn register_account_role(
