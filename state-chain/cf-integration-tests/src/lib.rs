@@ -123,13 +123,13 @@ mod genesis {
 
 			assert_eq!(
 				Emissions::current_authority_emission_inflation(),
-				CURRENT_AUTHORITY_EMISSION_INFLATION_BPS,
+				CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL,
 				"invalid emission inflation for authorities"
 			);
 
 			assert_eq!(
 				Emissions::backup_node_emission_inflation(),
-				BACKUP_NODE_EMISSION_INFLATION_BPS,
+				BACKUP_NODE_EMISSION_INFLATION_PERBILL,
 				"invalid emission inflation for backup authorities"
 			);
 

@@ -638,8 +638,8 @@ fn testnet_genesis(
 			_instance: PhantomData,
 		},
 		emissions: EmissionsConfig {
-			current_authority_emission_inflation: CURRENT_AUTHORITY_EMISSION_INFLATION_BPS,
-			backup_node_emission_inflation: BACKUP_NODE_EMISSION_INFLATION_BPS,
+			current_authority_emission_inflation: CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL,
+			backup_node_emission_inflation: BACKUP_NODE_EMISSION_INFLATION_PERBILL,
 			supply_update_interval: SUPPLY_UPDATE_INTERVAL_DEFAULT,
 		},
 		transaction_payment: Default::default(),

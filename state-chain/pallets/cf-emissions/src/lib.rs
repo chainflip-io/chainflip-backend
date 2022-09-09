@@ -17,7 +17,7 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-use cf_traits::{BlockEmissions, EpochTransitionHandler, Issuance, RewardsDistribution};
+use cf_traits::{BlockEmissions, Issuance, RewardsDistribution};
 use frame_support::traits::{Get, Imbalance};
 use sp_arithmetic::traits::UniqueSaturatedFrom;
 use sp_runtime::{
@@ -27,8 +27,6 @@ use sp_runtime::{
 
 pub mod weights;
 pub use weights::WeightInfo;
-
-type BasisPoints = u32;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -127,15 +125,13 @@ pub mod pallet {
 	#[pallet::getter(fn current_authority_emission_inflation)]
 	/// Annual inflation set aside for current authorities, expressed as basis points ie. hundredths
 	/// of a percent.
-	pub(super) type CurrentAuthorityEmissionInflation<T: Config> =
-		StorageValue<_, BasisPoints, ValueQuery>;
+	pub(super) type CurrentAuthorityEmissionInflation<T: Config> = StorageValue<_, u32, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn backup_node_emission_inflation)]
 	/// Annual inflation set aside for *backup* nodes, expressed as basis points ie. hundredths
 	/// of a percent.
-	pub(super) type BackupNodeEmissionInflation<T: Config> =
-		StorageValue<_, BasisPoints, ValueQuery>;
+	pub(super) type BackupNodeEmissionInflation<T: Config> = StorageValue<_, u32, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn supply_update_interval)]
@@ -149,9 +145,9 @@ pub mod pallet {
 		/// Supply Update has been Broadcasted [block_number]
 		SupplyUpdateBroadcastRequested(BlockNumberFor<T>),
 		/// Current authority inflation emission has been updated \[new\]
-		CurrentAuthorityInflationEmissionsUpdated(BasisPoints),
+		CurrentAuthorityInflationEmissionsUpdated(u32),
 		/// Backup node inflation emission has been updated \[new\]
-		BackupNodeInflationEmissionsUpdated(BasisPoints),
+		BackupNodeInflationEmissionsUpdated(u32),
 		/// SupplyUpdateInterval has been updated [block_number]
 		SupplyUpdateIntervalUpdated(BlockNumberFor<T>),
 	}
@@ -203,7 +199,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::update_current_authority_emission_inflation())]
 		pub fn update_current_authority_emission_inflation(
 			origin: OriginFor<T>,
-			inflation: BasisPoints,
+			inflation: u32,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			CurrentAuthorityEmissionInflation::<T>::set(inflation);
@@ -223,7 +219,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::update_backup_node_emission_inflation())]
 		pub fn update_backup_node_emission_inflation(
 			origin: OriginFor<T>,
-			inflation: BasisPoints,
+			inflation: u32,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			BackupNodeEmissionInflation::<T>::set(inflation);
@@ -255,8 +251,8 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	#[cfg_attr(feature = "std", derive(Default))]
 	pub struct GenesisConfig {
-		pub current_authority_emission_inflation: BasisPoints,
-		pub backup_node_emission_inflation: BasisPoints,
+		pub current_authority_emission_inflation: u32,
+		pub backup_node_emission_inflation: u32,
 		pub supply_update_interval: u32,
 	}
 
@@ -313,10 +309,10 @@ impl<T: Config> BlockEmissions for Pallet<T> {
 	}
 
 	fn calculate_block_emissions() {
-		fn inflation_to_block_reward<T: Config>(inflation: BasisPoints) -> T::FlipBalance {
+		fn inflation_to_block_reward<T: Config>(inflation_per_bill: u32) -> T::FlipBalance {
 			calculate_inflation_to_block_reward(
 				T::Issuance::total_issuance(),
-				inflation.into(),
+				inflation_per_bill.into(),
 				T::FlipBalance::unique_saturated_from(T::BlocksPerDay::get()),
 			)
 		}
@@ -331,33 +327,26 @@ impl<T: Config> BlockEmissions for Pallet<T> {
 	}
 }
 
-impl<T: Config> EpochTransitionHandler for Pallet<T> {
-	type ValidatorId = <T as frame_system::Config>::AccountId;
-
-	fn on_new_epoch(_epoch_authorities: &[Self::ValidatorId]) {
-		// Calculate block emissions on every epoch
-		Self::calculate_block_emissions();
-	}
-}
-
-fn calculate_inflation_to_block_reward<T>(issuance: T, inflation: T, blocks_per_day: T) -> T
+fn calculate_inflation_to_block_reward<T>(
+	issuance: T,
+	inflation_per_bill: T,
+	heartbeat_interval: T,
+) -> T
 where
 	T: Into<u128> + From<u128>,
 {
-	const DAYS_IN_YEAR: u128 = 365;
 	use sp_runtime::helpers_128bit::multiply_by_rational;
 
-	(multiply_by_rational(issuance.into(), inflation.into(), 10_000u32.into()).unwrap_or_else(
-		|_e| {
+	multiply_by_rational(issuance.into(), inflation_per_bill.into(), 1_000_000_000u128)
+		.unwrap_or_else(|_e| {
 			log::error!(
 				"Error calculating block rewards, Either Issuance or inflation value too big",
 			);
 			0_u128
-		},
-	) / DAYS_IN_YEAR)
-		.checked_div(blocks_per_day.into())
+		})
+		.checked_div(heartbeat_interval.into())
 		.unwrap_or_else(|| {
-			log::error!("blocks per day should be greater than zero");
+			log::error!("Heartbeat Interval should be greater than zero");
 			Zero::zero()
 		})
 		.into()
