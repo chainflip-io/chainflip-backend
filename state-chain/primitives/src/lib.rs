@@ -58,7 +58,7 @@ impl Default for ChainflipAccountData {
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum AccountRole {
 	/// The default account type - indicates a bare account with no special role or permissions.
-	Undefined,
+	None,
 	/// Validators are responsible for the maintainance and operation of the Chainflip network.
 	Validator,
 	/// Liquidity providers can deposit assets and deploy them in trading pools.
@@ -69,6 +69,6 @@ pub enum AccountRole {
 
 impl Default for AccountRole {
 	fn default() -> Self {
-		AccountRole::Undefined
+		AccountRole::None
 	}
 }
