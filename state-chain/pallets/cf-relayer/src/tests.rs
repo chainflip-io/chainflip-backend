@@ -7,8 +7,8 @@ fn request_swap_intent() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Relayer::register_swap_intent(
 			Origin::signed(ALICE),
-			ForeignChainAsset { chain: ForeignChain::Eth, asset: Asset::Eth },
-			ForeignChainAsset { chain: ForeignChain::Eth, asset: Asset::Usdc },
+			ForeignChainAsset { chain: ForeignChain::Ethereum, asset: Asset::Eth },
+			ForeignChainAsset { chain: ForeignChain::Ethereum, asset: Asset::Usdc },
 			ForeignChainAddress::Eth(Default::default()),
 			0,
 		));
