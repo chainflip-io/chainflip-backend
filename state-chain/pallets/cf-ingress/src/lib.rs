@@ -24,7 +24,6 @@ pub mod pallet {
 		pallet_prelude::{DispatchResultWithPostInfo, OptionQuery, ValueQuery, *},
 		sp_runtime::app_crypto::sp_core,
 		traits::{EnsureOrigin, IsType},
-		Blake2_128,
 	};
 	use sp_core::H256;
 
@@ -57,12 +56,12 @@ pub mod pallet {
 
 	#[pallet::storage]
 	pub type IntentIngressDetails<T: Config> =
-		StorageMap<_, Blake2_128, ForeignChainAddress, IngressDetails, OptionQuery>;
+		StorageMap<_, Blake2_128Concat, ForeignChainAddress, IngressDetails, OptionQuery>;
 
 	#[pallet::storage]
 	pub type IntentActions<T: Config> = StorageMap<
 		_,
-		Blake2_128,
+		Blake2_128Concat,
 		ForeignChainAddress,
 		IntentAction<<T as frame_system::Config>::AccountId>,
 		OptionQuery,
