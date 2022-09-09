@@ -65,7 +65,7 @@ Make sure to add `my-pallet/try-runtime` in the runtime's Cargo.toml, otherwise 
 ### Compile the node with benchmark features enabled
 
 ```bash
-cargo build --release --features runtime-benchmarks
+cargo cf-build-with-benchmarks
 ```
 
 ### Generating weight files
@@ -136,7 +136,7 @@ error[E0432]: unresolved import `sp_core::to_substrate_wasm_fn_return_value`
 To execute the benchmarks as tests run:
 
 ```bash
-cargo test --lib --all-features
+cargo cf-test-all
 ```
 
 > **_NOTE:_**  When you run your benchmark with the tests it's **NOT** running against the runtime but the mocks. If you make different assumptions in your mock it can be possible that the tests will fail.
