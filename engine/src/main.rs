@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use crate::multisig::eth::EthSigning;
 use anyhow::{bail, Context};
+use cf_primitives::{ForeignChain, ForeignChainAddress};
 use chainflip_engine::{
     common::format_iterator,
     eth::{
@@ -24,7 +25,7 @@ use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use clap::Parser;
 use futures::FutureExt;
 use pallet_cf_validator::SemVer;
-use sp_core::U256;
+use sp_core::{H160, U256};
 use utilities::print_chainflip_ascii_art;
 
 fn main() -> anyhow::Result<()> {
@@ -242,7 +243,11 @@ fn main() -> anyhow::Result<()> {
                     witnessing_instruction_receiver_4,
                     eth_monitor_ingress_receiver,
                     state_chain_client.clone(),
-                    vec![],
+                    state_chain_client.get_ingress_details(latest_block_hash).await.expect("Failed to get initial ingress details").into_iter().map(|(foreign_chain_address, foreign_chain_asset)| {
+                        let ForeignChainAddress::Eth(address) = foreign_chain_address;
+                        assert_eq!(foreign_chain_asset.chain, ForeignChain::Ethereum);
+                        H160::from(address)
+                    }).collect(),
                     &root_logger
             ));
 
