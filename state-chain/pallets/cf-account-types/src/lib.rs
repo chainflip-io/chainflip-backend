@@ -47,7 +47,6 @@ pub mod pallet {
 	#[pallet::error]
 	pub enum Error<T, I = ()> {
 		UnknownAccount,
-		InvalidAccountRole,
 		AccountNotInitialised,
 		/// Accounts can only be upgraded from the initial [AccountRole::Undefined] state.
 		AccountRoleAlreadyRegistered,
@@ -56,21 +55,21 @@ pub mod pallet {
 
 impl<T: Config> Pallet<T> {
 	pub fn register_as_relayer(account_id: &T::AccountId) -> DispatchResult {
-		Self::register_account_type(account_id, AccountRole::Relayer)
+		Self::register_account_role(account_id, AccountRole::Relayer)
 	}
 
-	pub fn register_as_lp(account_id: &T::AccountId) -> DispatchResult {
-		Self::register_account_type(account_id, AccountRole::LiquidityProvider)
+	pub fn register_as_liquidity_provider(account_id: &T::AccountId) -> DispatchResult {
+		Self::register_account_role(account_id, AccountRole::LiquidityProvider)
 	}
 
 	pub fn register_as_validator(account_id: &T::AccountId) -> DispatchResult {
-		Self::register_account_type(account_id, AccountRole::Validator)
+		Self::register_account_role(account_id, AccountRole::Validator)
 	}
 
 	/// Register the account type for some account id.
 	///
 	/// Fails if an account type has already been registered for this account id.
-	fn register_account_type(
+	fn register_account_role(
 		account_id: &T::AccountId,
 		account_role: AccountRole,
 	) -> DispatchResult {

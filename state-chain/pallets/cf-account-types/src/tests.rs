@@ -35,7 +35,7 @@ fn test_ensure_origin_struct() {
 		// Upgrade the accounts.
 		Pallet::<Test>::register_as_relayer(&ALICE).unwrap();
 		Pallet::<Test>::register_as_validator(&BOB).unwrap();
-		Pallet::<Test>::register_as_lp(&CHARLIE).unwrap();
+		Pallet::<Test>::register_as_liquidity_provider(&CHARLIE).unwrap();
 
 		// Each account should validate as the correct account type and fail otherwise.
 		EnsureRelayer::<Test>::ensure_origin(OriginFor::<Test>::signed(ALICE)).unwrap();
@@ -80,7 +80,7 @@ fn test_ensure_origin_fn() {
 		// Upgrade the accounts.
 		Pallet::<Test>::register_as_relayer(&ALICE).unwrap();
 		Pallet::<Test>::register_as_validator(&BOB).unwrap();
-		Pallet::<Test>::register_as_lp(&CHARLIE).unwrap();
+		Pallet::<Test>::register_as_liquidity_provider(&CHARLIE).unwrap();
 
 		// Each account should validate as the correct account type and fail otherwise.
 		ensure_relayer::<Test>(OriginFor::<Test>::signed(ALICE)).unwrap();
