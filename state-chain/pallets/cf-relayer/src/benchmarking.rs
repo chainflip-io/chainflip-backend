@@ -12,8 +12,8 @@ benchmarks! {
 		let caller: T::AccountId = whitelisted_caller();
 	}: _(
 		RawOrigin::Signed(caller.clone()),
-		ForeignChainAsset { chain: ForeignChain::Eth, asset: Asset::Eth },
-		ForeignChainAsset { chain: ForeignChain::Eth, asset: Asset::Usdc },
+		ForeignChainAsset { chain: ForeignChain::Ethereum, asset: Asset::Eth },
+		ForeignChainAsset { chain: ForeignChain::Ethereum, asset: Asset::Usdc },
 		ForeignChainAddress::Eth(Default::default()),
 		0
 	)
