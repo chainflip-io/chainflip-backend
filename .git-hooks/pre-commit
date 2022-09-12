@@ -1,4 +1,4 @@
-    cat <<\EOF
+cat <<\EOF
 Running: cargo fmt -- --check
 EOF
 
@@ -12,7 +12,10 @@ EOF
     exit 1
 fi
 
-sh clippy.sh
+cat <<\EOF
+Running: cargo ci-clippy
+EOF
+cargo ci-clippy
 result=$?
 
 if [ ${result} -ne 0 ] ; then
