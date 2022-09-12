@@ -156,6 +156,10 @@ pub trait StateChainRpcApi {
     async fn is_auction_phase(&self) -> Result<bool>;
 }
 
+// TODO: https://github.com/paritytech/substrate/issues/12236
+// Value from: https://github.com/chainflip-io/substrate/blob/c172d0f683fab3792b90d876fd6ca27056af9fe9/client/rpc/src/state/mod.rs#L54
+pub const STORAGE_KEYS_PAGED_MAX_COUNT: u32 = 1000;
+
 #[async_trait]
 impl<C> StateChainRpcApi for StateChainRpcClient<C>
 where
@@ -207,8 +211,12 @@ where
         block_hash: Option<state_chain_runtime::Hash>,
     ) -> Result<Vec<StorageKey>> {
         self.rpc_client
-            // 1000 is the maximum queryable number TODO: find out where this is set
-            .storage_keys_paged(prefix.into(), 1000, None, block_hash)
+            .storage_keys_paged(
+                prefix.into(),
+                STORAGE_KEYS_PAGED_MAX_COUNT,
+                None,
+                block_hash,
+            )
             .await
             .context("storage_keys_paged RPC API failed")
     }
