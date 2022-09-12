@@ -1,6 +1,6 @@
 use anyhow::{anyhow, bail, Context, Result};
 use cf_chains::ChainAbi;
-use cf_primitives::{ChainflipAccountData, EpochIndex};
+use cf_primitives::{ChainflipAccountData, EpochIndex, ForeignChainAddress, ForeignChainAsset};
 use codec::{Decode, Encode, FullCodec};
 use custom_rpc::CustomApiClient;
 use frame_metadata::RuntimeMetadata;
@@ -43,8 +43,8 @@ use crate::common::{read_clean_and_decode_hex_str_file, EngineTryStreamExt};
 use crate::constants::MAX_EXTRINSIC_RETRY_ATTEMPTS;
 use crate::logging::COMPONENT_KEY;
 use crate::settings;
+use frame_support::storage::generator::StorageMap;
 use utilities::{context, Port};
-
 mod signer;
 
 #[cfg(test)]
@@ -120,6 +120,13 @@ pub trait StateChainRpcApi {
         storage_key: StorageKey,
     ) -> Result<Option<StorageData>>;
 
+    // TODO: Introduce pagination
+    async fn storage_keys(
+        &self,
+        prefix: StorageKey,
+        block_hash: Option<state_chain_runtime::Hash>,
+    ) -> Result<Vec<StorageKey>>;
+
     async fn storage_events_at(
         &self,
         block_hash: Option<state_chain_runtime::Hash>,
@@ -192,6 +199,18 @@ where
             .storage(storage_key, Some(block_hash))
             .await
             .context("storage RPC API failed")
+    }
+
+    async fn storage_keys(
+        &self,
+        prefix: StorageKey,
+        block_hash: Option<state_chain_runtime::Hash>,
+    ) -> Result<Vec<StorageKey>> {
+        self.rpc_client
+            // 1000 is the maximum queryable number TODO: find out where this is set
+            .storage_keys_paged(prefix.into(), 1000, None, block_hash)
+            .await
+            .context("storage_keys_paged RPC API failed")
     }
 
     async fn storage_events_at(
@@ -306,10 +325,11 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
 
 mod storage_traits {
     use codec::FullCodec;
+    use frame_support::storage::generator::StorageMap as StorageMapTrait;
     use frame_support::{
         storage::types::{QueryKindTrait, StorageDoubleMap, StorageMap, StorageValue},
         traits::{Get, StorageInstance},
-        StorageHasher,
+        ReversibleStorageHasher, StorageHasher,
     };
     use sp_core::storage::StorageKey;
 
@@ -365,10 +385,12 @@ mod storage_traits {
         type OnEmpty;
 
         fn _hashed_key_for(key: &Self::Key) -> StorageKey;
+
+        fn key_from_storage_key(storage_key: &StorageKey) -> Self::Key;
     }
     impl<
             Prefix: StorageInstance,
-            Hasher: StorageHasher,
+            Hasher: ReversibleStorageHasher,
             Key: FullCodec,
             Value: FullCodec,
             QueryKind: QueryKindTrait<Value, OnEmpty>,
@@ -384,6 +406,14 @@ mod storage_traits {
 
         fn _hashed_key_for(key: &Self::Key) -> StorageKey {
             StorageKey(Self::hashed_key_for(key))
+        }
+
+        fn key_from_storage_key(storage_key: &StorageKey) -> Self::Key {
+            // This is effectively how the StorageMapPrefixIterator in substrate works
+            // TODO: PR to substrate
+            let raw_key_without_prefix = &storage_key.0[Self::prefix_hash().len()..];
+            let reversed_bytes = Hasher::reverse(raw_key_without_prefix);
+            Self::Key::decode(&mut &reversed_bytes[..]).unwrap()
         }
     }
 
@@ -411,6 +441,8 @@ mod storage_traits {
         }
     }
 }
+
+use crate::state_chain_observer::client::storage_traits::StorageMapAssociatedTypes;
 
 fn invalid_err_obj(invalid_reason: InvalidTransaction) -> ErrorObjectOwned {
     ErrorObject::owned(
@@ -837,6 +869,33 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             >>(block_hash, &epoch_index)
             .await?
             .expect("should have a vault"))
+    }
+
+    async fn get_ingress_details(
+        &self,
+        block_hash: state_chain_runtime::Hash,
+    ) -> Result<Vec<(ForeignChainAddress, ForeignChainAsset)>> {
+        let intent_ingress_details_keys = self
+            .state_chain_rpc_client
+            .storage_keys(
+                StorageKey(pallet_cf_ingress::IntentIngressDetails::<
+                    state_chain_runtime::Runtime,
+                >::prefix_hash()),
+                block_hash.into(),
+            )
+            .await?;
+
+        let mut ingresses: Vec<(ForeignChainAddress, ForeignChainAsset)> = Vec::new();
+        for storage_key in intent_ingress_details_keys {
+            let address = pallet_cf_ingress::IntentIngressDetails::<
+                state_chain_runtime::Runtime
+                >::key_from_storage_key(&storage_key);
+
+            let ingress_details = self.get_storage_map::<pallet_cf_ingress::IntentIngressDetails<state_chain_runtime::Runtime>>(block_hash, &address).await?.expect("The value must exist, we just queried the key");
+
+            ingresses.push((address, ingress_details.ingress_asset));
+        }
+        Ok(ingresses)
     }
 
     /// Get all the events from a particular block
@@ -1289,12 +1348,12 @@ mod tests {
                 block_number, block_hash
             );
             let my_state_for_this_block = state_chain_client
-                .get_account_data(block_hash)
+                .get_ingress_details(block_hash)
                 .await
                 .unwrap();
 
             println!(
-                "Returning AccountData for this block: {:?}",
+                "Returning IngressDetails for this block: {:?}",
                 my_state_for_this_block
             );
         }
