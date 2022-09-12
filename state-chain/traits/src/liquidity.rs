@@ -1,7 +1,8 @@
 use sp_runtime::DispatchResult;
 
 use cf_primitives::{
-	liquidity::TradingPosition, Asset, ExchangeRate, ForeignChainAsset, ForeignChainAddress, PoolId, PositionId, AccountId,
+	liquidity::TradingPosition, AccountId, Asset, ExchangeRate, ForeignChainAddress,
+	ForeignChainAsset, PoolId, PositionId,
 };
 
 use crate::FlipBalance;
