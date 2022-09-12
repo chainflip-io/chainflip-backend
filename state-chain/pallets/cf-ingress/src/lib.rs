@@ -8,8 +8,8 @@
 
 use sp_std::str::FromStr;
 
-use cf_primitives::{ForeignChainAddress, ForeignChainAsset, IntentId};
-use cf_traits::{AddressDerivationApi, IngressApi};
+use cf_primitives::{ForeignChainAddress, ForeignChainAsset, IntentId, };
+use cf_traits::{AddressDerivationApi, IngressApi, FlipBalance, liquidity::LpProvisioningApi};
 
 use frame_support::sp_runtime::app_crypto::sp_core::H160;
 pub use pallet::*;
@@ -73,9 +73,8 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 		/// Generates ingress addresses.
 		type AddressDerivation: AddressDerivationApi;
-		// /// Pallet responsible to manage Liquidity Providers
-		// type LpAccountHandler: LpProvisioningApi<AccountId = Self::AccountId, Amount =
-		// FlipBalance>;
+		/// Pallet responsible to manage Liquidity Providers
+		type LpAccountHandler: LpProvisioningApi<AccountId = Self::AccountId, Amount = FlipBalance>;
 	}
 
 	#[pallet::event]
@@ -118,7 +117,7 @@ pub mod pallet {
 			OpenIntents::<T>::get(ingress_address).ok_or(Error::<T>::InvalidIntent)?;
 
 			// Route funds to the LP pallet
-			// T::LpAccountHandler::provision_account(&account_id, asset, amount)?;
+			T::LpAccountHandler::provision_account(&account_id, asset, amount)?;
 
 			Self::deposit_event(Event::IngressCompleted {
 				ingress_address,
