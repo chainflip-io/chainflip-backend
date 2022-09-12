@@ -43,7 +43,6 @@ use crate::common::{read_clean_and_decode_hex_str_file, EngineTryStreamExt};
 use crate::constants::MAX_EXTRINSIC_RETRY_ATTEMPTS;
 use crate::logging::COMPONENT_KEY;
 use crate::settings;
-use frame_support::storage::generator::StorageMap;
 use utilities::{context, Port};
 mod signer;
 
@@ -393,6 +392,8 @@ mod storage_traits {
 
         fn _hashed_key_for(key: &Self::Key) -> StorageKey;
 
+        fn _prefix_hash() -> StorageKey;
+
         fn key_from_storage_key(storage_key: &StorageKey) -> Self::Key;
     }
     impl<
@@ -413,6 +414,10 @@ mod storage_traits {
 
         fn _hashed_key_for(key: &Self::Key) -> StorageKey {
             StorageKey(Self::hashed_key_for(key))
+        }
+
+        fn _prefix_hash() -> StorageKey {
+            StorageKey(Self::prefix_hash())
         }
 
         fn key_from_storage_key(storage_key: &StorageKey) -> Self::Key {
@@ -914,32 +919,40 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         Ok(keys)
     }
 
+    /// Fetches all the keys by paginating over them and then concurrently fetches the items for each key
+    pub async fn get_all_storage_map_items<StorageMap: storage_traits::StorageMapAssociatedTypes> (
+        &self,
+        block_hash: state_chain_runtime::Hash,
+    ) -> Result<
+        Vec<(
+            <StorageMap as StorageMapAssociatedTypes>::Key,
+            <StorageMap::QueryKind as QueryKindTrait<StorageMap::Value, StorageMap::OnEmpty>>::Query
+        )
+    >>{
+        let storage_keys = self
+            .get_all_storage_keys(block_hash, StorageMap::_prefix_hash())
+            .await?;
+
+        Ok(futures::stream::iter(storage_keys)
+            .map(|storage_key| StorageMap::key_from_storage_key(&storage_key))
+            .map(|key| async move {
+                (
+                    self.get_storage_map::<StorageMap>(block_hash, &key).await,
+                    key,
+                )
+            })
+            .buffered(10)
+            .take_while(|(result, _key)| future::ready(result.is_ok()))
+            .map(|(result, key)| (key, result.expect("Only taken successes")))
+            .collect::<Vec<_>>()
+            .await)
+    }
+
     pub async fn get_ingress_details(
         &self,
         block_hash: state_chain_runtime::Hash,
     ) -> Result<Vec<(ForeignChainAddress, ForeignChainAsset)>> {
-        let intent_ingress_details_keys = self
-            .get_all_storage_keys(
-                block_hash,
-                StorageKey(pallet_cf_ingress::IntentIngressDetails::<
-                    state_chain_runtime::Runtime,
-                >::prefix_hash()),
-            )
-            .await?;
-
-        Ok(futures::stream::iter(intent_ingress_details_keys)
-            .map(|storage_key| pallet_cf_ingress::IntentIngressDetails::<
-                state_chain_runtime::Runtime
-                >::key_from_storage_key(&storage_key))
-            .map(|address| async move {
-                (address, self.get_storage_map::<pallet_cf_ingress::IntentIngressDetails<state_chain_runtime::Runtime>>(block_hash, &address).await)
-            })
-            .buffered(10)
-            .take_while(|(_address, result)| future::ready(result.is_ok()))
-            .map(|(address, result)| (address, result.expect("Only taken successes")))
-            .map(|(address, ingress_details)| (address, ingress_details.expect("Just queried for key, item must exist").ingress_asset))
-            .collect()
-            .await)
+        Ok(self.get_all_storage_map_items::<pallet_cf_ingress::IntentIngressDetails<state_chain_runtime::Runtime>>(block_hash).await?.into_iter().map(|(address, opt_intent)| (address, opt_intent.expect("Must exist if the key did").ingress_asset)).collect())
     }
 
     /// Get all the events from a particular block
@@ -1392,12 +1405,7 @@ mod tests {
                 block_number, block_hash
             );
             let my_state_for_this_block = state_chain_client
-                .get_all_storage_keys(
-                    block_hash,
-                    StorageKey(pallet_cf_ingress::IntentIngressDetails::<
-                        state_chain_runtime::Runtime,
-                    >::prefix_hash()),
-                )
+                .get_ingress_details(block_hash)
                 .await
                 .unwrap();
 
