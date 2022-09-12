@@ -101,7 +101,7 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::getter(fn supported_eth_assets)]
-	/// Map of supported assets for eth
+	/// Map of supported assets for ETH
 	pub type SupportedEthAssets<T: Config> = StorageMap<_, Blake2_128Concat, Asset, Vec<u8>>;
 
 	#[pallet::storage]
@@ -170,7 +170,7 @@ pub mod pallet {
 			SystemStateProvider::<T>::set_system_state(state);
 			Ok(().into())
 		}
-		/// Adds or updates an asset address in the map of supported eth assets.
+		/// Adds or updates an asset address in the map of supported ETH assets.
 		/// ## Events
 		///
 		/// - [SupportedEthAssetsUpdated](Event::SupportedEthAssetsUpdated)
