@@ -8,8 +8,8 @@
 
 use sp_std::str::FromStr;
 
-use cf_primitives::{ForeignChainAddress, ForeignChainAsset, IntentId, };
-use cf_traits::{AddressDerivationApi, IngressApi, FlipBalance, liquidity::LpProvisioningApi};
+use cf_primitives::{ForeignChainAddress, ForeignChainAsset, IntentId};
+use cf_traits::{liquidity::LpProvisioningApi, AddressDerivationApi, FlipBalance, IngressApi};
 
 use frame_support::sp_runtime::app_crypto::sp_core::H160;
 pub use pallet::*;
