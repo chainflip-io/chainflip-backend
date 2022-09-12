@@ -137,21 +137,19 @@ impl PalletLpApi for () {}
 
 pub trait EgressHandler {
 	type Amount;
-	type EgressAddress;
 	fn add_to_egress_batch(
 		asset: &ForeignChainAsset,
 		amount: Self::Amount,
-		egress_address: &Self::EgressAddress,
+		egress_address: &ForeignChainAddress,
 	) -> DispatchResult;
 }
 
 impl EgressHandler for () {
 	type Amount = FlipBalance;
-	type EgressAddress = ForeignChainAddress;
 	fn add_to_egress_batch(
 		_asset: &ForeignChainAsset,
 		_amount: Self::Amount,
-		_egress_address: &Self::EgressAddress,
+		_egress_address: &ForeignChainAddress,
 	) -> DispatchResult {
 		Ok(())
 	}
