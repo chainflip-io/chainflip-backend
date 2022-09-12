@@ -123,13 +123,3 @@ pub struct ForeignChainAsset {
 	pub chain: ForeignChain,
 	pub asset: Asset,
 }
-
-/// Placeholder AccountRole enum. Will be replaced after #2138 is merged.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebug, Copy)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub enum AccountRole {
-	None,
-	Validator,
-	LiquidityProvider,
-	Relayer,
-}
