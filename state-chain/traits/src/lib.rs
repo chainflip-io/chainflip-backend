@@ -19,6 +19,7 @@ use cf_primitives::{
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable},
+	error::BadOrigin,
 	pallet_prelude::Member,
 	sp_runtime::traits::AtLeast32BitUnsigned,
 	traits::{EnsureOrigin, Get, Imbalance, IsType, StoredMap},
@@ -695,17 +696,33 @@ pub trait AddressDerivationApi {
 	) -> ForeignChainAddress;
 }
 
-pub trait AccountRoleRegister<AccountId> {
-	fn register_account(who: &AccountId, role: AccountRole) -> DispatchResult;
-	fn get_account_role(who: &AccountId) -> AccountRole;
-}
+pub trait AccountRoleRegistry<T: frame_system::Config> {
+	fn register_account_role(who: &T::AccountId, role: AccountRole) -> DispatchResult;
 
-impl<AccountId> AccountRoleRegister<AccountId> for () {
-	fn register_account(_who: &AccountId, _role: AccountRole) -> DispatchResult {
-		Ok(())
+	fn register_as_relayer(account_id: &T::AccountId) -> DispatchResult {
+		Self::register_account_role(account_id, AccountRole::Relayer)
 	}
 
-	fn get_account_role(_who: &AccountId) -> AccountRole {
-		AccountRole::None
+	fn register_as_liquidity_provider(account_id: &T::AccountId) -> DispatchResult {
+		Self::register_account_role(account_id, AccountRole::LiquidityProvider)
+	}
+
+	fn register_as_validator(account_id: &T::AccountId) -> DispatchResult {
+		Self::register_account_role(account_id, AccountRole::Validator)
+	}
+
+	fn ensure_account_role(origin: T::Origin, role: AccountRole)
+		-> Result<T::AccountId, BadOrigin>;
+
+	fn ensure_relayer(origin: T::Origin) -> Result<T::AccountId, BadOrigin> {
+		Self::ensure_account_role(origin, AccountRole::Relayer)
+	}
+
+	fn ensure_liquidity_provider(origin: T::Origin) -> Result<T::AccountId, BadOrigin> {
+		Self::ensure_account_role(origin, AccountRole::LiquidityProvider)
+	}
+
+	fn ensure_validator(origin: T::Origin) -> Result<T::AccountId, BadOrigin> {
+		Self::ensure_account_role(origin, AccountRole::Validator)
 	}
 }
