@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, pin::Pin};
 
 use super::{helpers::get_key_data_for_test, *};
 use crate::{
@@ -15,8 +15,9 @@ use crate::{
     },
     task_scope::with_task_scope,
 };
+use anyhow::Result;
 use client::MultisigMessage;
-use futures::FutureExt;
+use futures::{Future, FutureExt};
 use rand_legacy::SeedableRng;
 use sp_runtime::AccountId32;
 use tokio::sync::oneshot;
@@ -194,7 +195,7 @@ async fn should_not_create_unauthorized_ceremony_with_invalid_ceremony_id() {
     );
 
     with_task_scope(|scope| {
-        async {
+        let future: Pin<Box<dyn Future<Output = Result<()>> + Send>> = async {
             // Process a stage 1 message with a ceremony id that is in the past
             ceremony_manager.process_p2p_message(
                 ACCOUNT_IDS[0].clone(),
@@ -231,10 +232,11 @@ async fn should_not_create_unauthorized_ceremony_with_invalid_ceremony_id() {
             // Check that the message was not ignored and an unauthorised ceremony was created
             assert_eq!(ceremony_manager.get_keygen_states_len(), 1);
 
-            Ok(())
+            anyhow::bail!("End of test");
         }
-        .boxed()
+        .boxed();
+        future
     })
     .await
-    .unwrap();
+    .unwrap_err();
 }
