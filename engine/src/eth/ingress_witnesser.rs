@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
 use cf_primitives::{Asset, ForeignChainAddress};
+use pallet_cf_ingress::IngressWitness;
 use sp_core::H160;
 use tokio::sync::broadcast;
 use tokio_stream::StreamExt;
-use web3::types::Transaction;
 
 use crate::state_chain_observer::client::{StateChainClient, StateChainRpcApi};
 
@@ -78,7 +78,7 @@ where
                                 }
                             }
 
-                            for (tx, to_addr) in eth_ws_rpc
+                            let ingress_witnesses = eth_ws_rpc
                                 .block_with_txs(number_bloom.block_number)
                                 .await?
                                 .transactions
@@ -90,20 +90,24 @@ where
                                     } else {
                                         None
                                     }
+                                }).map(|(tx, to_addr)| {
+                                    IngressWitness {
+                                        ingress_address: ForeignChainAddress::Eth(
+                                            to_addr.into(),
+                                        ),
+                                        asset: Asset::Eth,
+                                        amount: tx.value.as_u128(),
+                                        tx_hash: tx.hash
+                                    }
                                 })
-                                .collect::<Vec<(&Transaction, H160)>>()
-                            {
+                                .collect::<Vec<IngressWitness>>();
+
                                 let _result = state_chain_client
                                     .submit_signed_extrinsic(
                                         pallet_cf_witnesser::Call::witness_at_epoch {
                                             call: Box::new(
                                                 pallet_cf_ingress::Call::do_ingress {
-                                                    ingress_address: ForeignChainAddress::Eth(
-                                                        to_addr.into(),
-                                                    ),
-                                                    asset: Asset::Eth,
-                                                    amount: tx.value.as_u128(),
-                                                    tx_hash: tx.hash,
+                                                    ingress_witnesses
                                                 }
                                                 .into(),
                                             ),
@@ -112,7 +116,6 @@ where
                                         &logger,
                                     )
                                     .await;
-                            }
                         },
                         else => break,
                     };
