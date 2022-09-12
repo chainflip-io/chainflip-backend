@@ -105,6 +105,7 @@ pub enum ForeignChain {
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum ForeignChainAddress {
 	Eth([u8; 20]),
+	Dot([u8; 32]),
 }
 
 /// An Asset is a token or currency that can be traded via the Chainflip AMM.

@@ -423,11 +423,11 @@ where
                                                     ingress_asset
                                                 }
                                             ) => {
-                                                match ingress_address {
-                                                    ForeignChainAddress::Eth(address) => {
-                                                        assert_eq!(ingress_asset.chain, ForeignChain::Ethereum);
-                                                        eth_monitor_ingress_sender.send(H160::from(address)).unwrap();
-                                                    }
+                                                if let ForeignChainAddress::Eth(address) = ingress_address {
+                                                    assert_eq!(ingress_asset.chain, ForeignChain::Ethereum);
+                                                    eth_monitor_ingress_sender.send(H160::from(address)).unwrap();
+                                                } else {
+                                                    slog::warn!(logger, "Unsupported addresss: {:?}", ingress_address);
                                                 }
                                             }
                                         }}

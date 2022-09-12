@@ -243,11 +243,13 @@ fn main() -> anyhow::Result<()> {
                     witnessing_instruction_receiver_4,
                     eth_monitor_ingress_receiver,
                     state_chain_client.clone(),
-                    state_chain_client.get_ingress_details(latest_block_hash).await.expect("Failed to get initial ingress details").into_iter().map(|(foreign_chain_address, foreign_chain_asset)| {
-                        let ForeignChainAddress::Eth(address) = foreign_chain_address;
-                        assert_eq!(foreign_chain_asset.chain, ForeignChain::Ethereum);
-                        H160::from(address)
-                    }).collect(),
+                    state_chain_client.get_ingress_details(latest_block_hash).await.expect("Failed to get initial ingress details").into_iter().filter_map(|(foreign_chain_address, foreign_chain_asset)| {
+                        if let ForeignChainAddress::Eth(address) = foreign_chain_address {
+                            assert_eq!(foreign_chain_asset.chain, ForeignChain::Ethereum);
+                            Some(H160::from(address))
+                        } else {
+                            None
+                        }}).collect(),
                     &root_logger
             ));
 
