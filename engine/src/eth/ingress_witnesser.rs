@@ -95,6 +95,7 @@ where
                                         ingress_address: ForeignChainAddress::Eth(
                                             to_addr.into(),
                                         ),
+                                        // TODO: Implement support for other assets
                                         asset: Asset::Eth,
                                         amount: tx.value.as_u128(),
                                         tx_hash: tx.hash
