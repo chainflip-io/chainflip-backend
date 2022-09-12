@@ -47,7 +47,6 @@ pallet-cf-broadcast = { path = '../pallets/cf-broadcast', default-features = fal
 pallet-cf-environment = { path = '../pallets/cf-environment', default-features = false }
 pallet-cf-chain-tracking = { path = '../pallets/cf-chain-tracking', default-features = false }
 pallet-cf-ingress = { path = '../pallets/cf-ingress', default-features = false }
-pallet-cf-lp = {path = '../pallets/cf-lp', default-features = false }
 
 # SCALE
 codec = { package = 'parity-scale-codec', version = '3.0.0', default-features = false, features = ['derive'] }
@@ -247,7 +246,6 @@ std = [
   'pallet-cf-flip/std',
   'pallet-cf-governance/std',
   'pallet-cf-ingress/std',
-  'pallet-cf-lp/std',
   'pallet-cf-relayer/std',
   'pallet-cf-reputation/std',
   'pallet-cf-staking/std',

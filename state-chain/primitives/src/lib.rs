@@ -6,7 +6,10 @@
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
-use sp_runtime::{FixedU128, RuntimeDebug};
+use sp_runtime::{
+	traits::{IdentifyAccount, Verify},
+	FixedU128, MultiSignature, RuntimeDebug,
+};
 
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
@@ -23,6 +26,13 @@ pub type AuthorityCount = u32;
 pub type IntentId = u64;
 
 pub type ExchangeRate = FixedU128;
+
+/// Alias to 512-bit hash when used in the context of a transaction signature on the chain.
+pub type Signature = MultiSignature;
+
+/// Some way of identifying an account on the chain. We intentionally make it equivalent
+/// to the public key of our transaction signing scheme.
+pub type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::AccountId;
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug, Copy)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]

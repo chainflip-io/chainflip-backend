@@ -13,7 +13,8 @@ use cf_primitives::{
 };
 use cf_traits::{
 	liquidity::{
-		AmmPoolApi, LpAccountHandler, LpPositionManagement, LpProvisioningApi, LpWithdrawalApi,
+		AmmPoolApi, EgressHandler, LpAccountHandler, LpPositionManagement, LpProvisioningApi,
+		LpWithdrawalApi,
 	},
 	AccountRoleRegister, FlipBalance,
 };
@@ -296,7 +297,7 @@ impl<T: Config> LpWithdrawalApi for Pallet<T> {
 		who: &Self::AccountId,
 		amount: Self::Amount,
 		foreign_asset: &ForeignChainAsset,
-		_egress_address: &Self::EgressAddress,
+		egress_address: &Self::EgressAddress,
 	) -> DispatchResult {
 		ensure!(
 			T::AccountRoleRegistry::get_account_role(who) == AccountRole::LiquidityProvider,

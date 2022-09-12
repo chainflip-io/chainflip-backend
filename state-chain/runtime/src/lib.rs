@@ -214,15 +214,6 @@ impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 impl pallet_cf_ingress::Config for Runtime {
 	type Event = Event;
 	type AddressDerivation = pallet_cf_ingress::KylesTestnetAddress;
-	type LpAccountHandler = LP;
-}
-
-impl pallet_cf_lp::Config for Runtime {
-	type Event = Event;
-	type EgressAddress = ForeignChainAddress;
-	type AccountRoleRegistry = ();
-	type EgressHandler = ();
-	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 }
 
 impl<LocalCall> SendTransactionTypes<LocalCall> for Runtime
@@ -555,7 +546,6 @@ construct_runtime!(
 		EthereumChainTracking: pallet_cf_chain_tracking::<Instance1>,
 		Ingress: pallet_cf_ingress,
 		Relayer: pallet_cf_relayer,
-		LP: pallet_cf_lp,
 	}
 );
 

@@ -9023,7 +9023,6 @@ dependencies = [
  "pallet-cf-flip",
  "pallet-cf-governance",
  "pallet-cf-ingress",
- "pallet-cf-lp",
  "pallet-cf-relayer",
  "pallet-cf-reputation",
  "pallet-cf-staking",
