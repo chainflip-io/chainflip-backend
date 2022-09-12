@@ -9,7 +9,7 @@ use frame_support::pallet_prelude::InvalidTransaction;
 use frame_support::storage::storage_prefix;
 use frame_support::storage::types::QueryKindTrait;
 use frame_system::Phase;
-use futures::{Stream, StreamExt, TryStreamExt};
+use futures::{future, Stream, StreamExt, TryStreamExt};
 use jsonrpsee::core::client::{ClientT, SubscriptionClientT};
 use jsonrpsee::core::{Error as RpcError, RpcResult};
 use jsonrpsee::types::error::CallError;
@@ -120,11 +120,12 @@ pub trait StateChainRpcApi {
         storage_key: StorageKey,
     ) -> Result<Option<StorageData>>;
 
-    // TODO: Introduce pagination
-    async fn storage_keys(
+    async fn storage_keys_paged(
         &self,
+        block_hash: state_chain_runtime::Hash,
         prefix: StorageKey,
-        block_hash: Option<state_chain_runtime::Hash>,
+        count: u32,
+        start_key: Option<StorageKey>,
     ) -> Result<Vec<StorageKey>>;
 
     async fn storage_events_at(
@@ -205,20 +206,18 @@ where
             .context("storage RPC API failed")
     }
 
-    async fn storage_keys(
+    /// Returns the keys with prefix with pagination support.
+    async fn storage_keys_paged(
         &self,
+        block_hash: state_chain_runtime::Hash,
         prefix: StorageKey,
-        block_hash: Option<state_chain_runtime::Hash>,
+        count: u32,
+        start_key: Option<StorageKey>,
     ) -> Result<Vec<StorageKey>> {
         self.rpc_client
-            .storage_keys_paged(
-                prefix.into(),
-                STORAGE_KEYS_PAGED_MAX_COUNT,
-                None,
-                block_hash,
-            )
+            .storage_keys_paged(Some(prefix), count, start_key, Some(block_hash))
             .await
-            .context("storage_keys_paged RPC API failed")
+            .context("storage RPC API failed")
     }
 
     async fn storage_events_at(
@@ -879,31 +878,68 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             .expect("should have a vault"))
     }
 
+    /// Paginate to get all the storage keys for a particular prefix
+    pub async fn get_all_storage_keys(
+        &self,
+        block_hash: state_chain_runtime::Hash,
+        prefix: StorageKey,
+    ) -> Result<Vec<StorageKey>> {
+        let mut start_key = None;
+        let mut keys = Vec::new();
+        loop {
+            let mut page = self
+                .state_chain_rpc_client
+                .storage_keys_paged(
+                    block_hash,
+                    prefix.clone(),
+                    STORAGE_KEYS_PAGED_MAX_COUNT,
+                    start_key,
+                )
+                .await?;
+
+            let page_len = page.len();
+            if let Some(last) = page.last() {
+                start_key = Some(last.clone());
+                keys.append(&mut page);
+
+                // If we couldn't fill the count, then we must be finished
+                if page_len < STORAGE_KEYS_PAGED_MAX_COUNT as usize {
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+
+        Ok(keys)
+    }
+
     pub async fn get_ingress_details(
         &self,
         block_hash: state_chain_runtime::Hash,
     ) -> Result<Vec<(ForeignChainAddress, ForeignChainAsset)>> {
         let intent_ingress_details_keys = self
-            .state_chain_rpc_client
-            .storage_keys(
+            .get_all_storage_keys(
+                block_hash,
                 StorageKey(pallet_cf_ingress::IntentIngressDetails::<
                     state_chain_runtime::Runtime,
                 >::prefix_hash()),
-                block_hash.into(),
             )
             .await?;
 
-        let mut ingresses: Vec<(ForeignChainAddress, ForeignChainAsset)> = Vec::new();
-        for storage_key in intent_ingress_details_keys {
-            let address = pallet_cf_ingress::IntentIngressDetails::<
+        Ok(futures::stream::iter(intent_ingress_details_keys)
+            .map(|storage_key| pallet_cf_ingress::IntentIngressDetails::<
                 state_chain_runtime::Runtime
-                >::key_from_storage_key(&storage_key);
-
-            let ingress_details = self.get_storage_map::<pallet_cf_ingress::IntentIngressDetails<state_chain_runtime::Runtime>>(block_hash, &address).await?.expect("The value must exist, we just queried the key");
-
-            ingresses.push((address, ingress_details.ingress_asset));
-        }
-        Ok(ingresses)
+                >::key_from_storage_key(&storage_key))
+            .map(|address| async move {
+                (address, self.get_storage_map::<pallet_cf_ingress::IntentIngressDetails<state_chain_runtime::Runtime>>(block_hash, &address).await)
+            })
+            .buffered(10)
+            .take_while(|(_address, result)| future::ready(result.is_ok()))
+            .map(|(address, result)| (address, result.expect("Only taken successes")))
+            .map(|(address, ingress_details)| (address, ingress_details.expect("Just queried for key, item must exist").ingress_asset))
+            .collect()
+            .await)
     }
 
     /// Get all the events from a particular block
@@ -1356,7 +1392,12 @@ mod tests {
                 block_number, block_hash
             );
             let my_state_for_this_block = state_chain_client
-                .get_ingress_details(block_hash)
+                .get_all_storage_keys(
+                    block_hash,
+                    StorageKey(pallet_cf_ingress::IntentIngressDetails::<
+                        state_chain_runtime::Runtime,
+                    >::prefix_hash()),
+                )
                 .await
                 .unwrap();
 

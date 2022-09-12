@@ -8,7 +8,7 @@
 
 use sp_std::str::FromStr;
 
-use cf_primitives::{ForeignChainAddress, ForeignChainAsset, IntentId};
+use cf_primitives::{ForeignChain, ForeignChainAddress, ForeignChainAsset, IntentId};
 use cf_traits::{liquidity::LpProvisioningApi, AddressDerivationApi, FlipBalance, IngressApi};
 
 use frame_support::sp_runtime::app_crypto::sp_core::H160;
@@ -202,13 +202,17 @@ pub struct KylesTestnetAddress;
 
 impl AddressDerivationApi for KylesTestnetAddress {
 	fn generate_address(
-		_ingress_asset: ForeignChainAsset,
+		ingress_asset: ForeignChainAsset,
 		_intent_id: IntentId,
 	) -> ForeignChainAddress {
-		ForeignChainAddress::Eth(
-			H160::from_str("F29aB9EbDb481BE48b80699758e6e9a3DBD609C6")
-				.unwrap()
-				.to_fixed_bytes(),
-		)
+		match ingress_asset.chain {
+			ForeignChain::Ethereum => ForeignChainAddress::Eth(
+				H160::from_str("F29aB9EbDb481BE48b80699758e6e9a3DBD609C6")
+					.unwrap()
+					.to_fixed_bytes(),
+			),
+			// Dummy address
+			ForeignChain::Polkadot => ForeignChainAddress::Dot([0x22; 32]),
+		}
 	}
 }
