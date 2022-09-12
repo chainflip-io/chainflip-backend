@@ -73,7 +73,7 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 		/// Generates ingress addresses.
 		type AddressDerivation: AddressDerivationApi;
-		/// Pallet responsible to manage Liquidity Providers
+		/// Pallet responsible for managing Liquidity Providers.
 		type LpAccountHandler: LpProvisioningApi<AccountId = Self::AccountId, Amount = FlipBalance>;
 	}
 
@@ -81,17 +81,9 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		// We only want to witness for one asset on a particular chain
-		StartWitnessing {
-			ingress_address: ForeignChainAddress,
-			ingress_asset: ForeignChainAsset,
-		},
+		StartWitnessing { ingress_address: ForeignChainAddress, ingress_asset: ForeignChainAsset },
 
-		IngressCompleted {
-			ingress_address: ForeignChainAddress,
-			account_id: T::AccountId,
-			asset: Asset,
-			amount: u128,
-		},
+		IngressCompleted { ingress_address: ForeignChainAddress, asset: Asset, amount: u128 },
 	}
 
 	#[pallet::error]
@@ -105,7 +97,6 @@ pub mod pallet {
 		pub fn do_ingress(
 			origin: OriginFor<T>,
 			ingress_address: ForeignChainAddress,
-			account_id: T::AccountId,
 			asset: Asset,
 			amount: u128,
 		) -> DispatchResultWithPostInfo {
@@ -114,17 +105,14 @@ pub mod pallet {
 			// NB: Don't take here. We should continue witnessing this address
 			// even after an ingress to it has occurred.
 			// https://github.com/chainflip-io/chainflip-eth-contracts/pull/226
-			OpenIntents::<T>::get(ingress_address).ok_or(Error::<T>::InvalidIntent)?;
+			match OpenIntents::<T>::get(ingress_address).ok_or(Error::<T>::InvalidIntent)? {
+				Intent::LiquidityProvision { lp_account, .. } => {
+					T::LpAccountHandler::provision_account(&lp_account, asset, amount)?;
+				},
+				Intent::Swap { .. } => todo!(),
+			}
 
-			// Route funds to the LP pallet
-			T::LpAccountHandler::provision_account(&account_id, asset, amount)?;
-
-			Self::deposit_event(Event::IngressCompleted {
-				ingress_address,
-				account_id,
-				asset,
-				amount,
-			});
+			Self::deposit_event(Event::IngressCompleted { ingress_address, asset, amount });
 
 			Ok(().into())
 		}
@@ -158,7 +146,7 @@ impl<T: Config> Pallet<T> {
 impl<T: Config> IngressApi for Pallet<T> {
 	type AccountId = <T as frame_system::Config>::AccountId;
 
-	// This should be callable by the LP pallet
+	// This should be callable by the LP pallet.
 	fn register_liquidity_ingress_intent(
 		lp_account: Self::AccountId,
 		ingress_asset: ForeignChainAsset,
