@@ -146,7 +146,7 @@ pub mod pallet {
 		/// The on-chain CFE settings have been updated
 		CfeSettingsUpdated { new_cfe_settings: cfe::CfeSettings },
 
-		/// TODO: write a nice comment
+		/// An supported address was added or updated
 		SupportedEthAssetsUpdated(Asset, Vec<u8>),
 	}
 
@@ -185,7 +185,7 @@ pub mod pallet {
 			address: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			SupportedEthAssets::<T>::insert(asset.clone(), address.clone());
+			SupportedEthAssets::<T>::insert(asset, address.clone());
 			Self::deposit_event(Event::SupportedEthAssetsUpdated(asset, address));
 			Ok(().into())
 		}
