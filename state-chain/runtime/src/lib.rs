@@ -213,7 +213,7 @@ impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 
 impl pallet_cf_ingress::Config for Runtime {
 	type Event = Event;
-	type AddressDerivation = pallet_cf_ingress::KylesTestnetAddress;
+	type AddressDerivation = chainflip::EthAddressDerivationApi;
 	type LpAccountHandler = LiquidityProvider;
 }
 
