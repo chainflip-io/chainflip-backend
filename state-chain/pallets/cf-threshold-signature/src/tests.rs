@@ -6,7 +6,7 @@ use crate::{
 	THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS_DEFAULT,
 };
 use cf_chains::mocks::MockEthereum;
-use cf_traits::{AsyncResult, Chainflip};
+use cf_traits::{mocks::signer_nomination::MockNominator, AsyncResult, Chainflip};
 use frame_support::{assert_noop, assert_ok, instances::Instance1, traits::Hooks};
 use frame_system::pallet_prelude::BlockNumberFor;
 use sp_runtime::traits::BlockNumberProvider;
@@ -359,21 +359,23 @@ mod unsigned_validation {
 		new_test_ext().execute_with(|| {
 			const PAYLOAD: <MockEthereum as ChainCrypto>::Payload = *b"OHAI";
 			const CUSTOM_AGG_KEY: <MockEthereum as ChainCrypto>::AggKey = *b"AKEY";
-			let participants: Vec<u64> = vec![1, 2, 3, 4, 5, 6];
-			let request_id = MockEthereumThresholdSigner::request_signature_with(
-				CUSTOM_AGG_KEY.into(),
-				participants.clone(),
-				PAYLOAD,
-				RetryPolicy::Never,
-			);
+			let participants: BTreeSet<u64> = BTreeSet::from_iter([1, 2, 3, 4, 5, 6]);
+			let (request_id, ceremony_id_from_req) =
+				MockEthereumThresholdSigner::request_signature_with(
+					CUSTOM_AGG_KEY.into(),
+					participants.clone(),
+					PAYLOAD,
+					RetryPolicy::Never,
+				);
 			let (ceremony_id, _) = LiveCeremonies::<Test, _>::get(request_id).unwrap();
+			assert_eq!(ceremony_id, ceremony_id_from_req);
 			let ceremony = PendingCeremonies::<Test, Instance1>::get(ceremony_id);
 			let request = OpenRequests::<Test, Instance1>::get(ceremony_id);
 			let timeout_delay: <Test as frame_system::Config>::BlockNumber =
 				THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS_DEFAULT.into();
 			let retry_block = frame_system::Pallet::<Test>::current_block_number() + timeout_delay;
 			assert_eq!(ceremony.clone().unwrap().key_id, &CUSTOM_AGG_KEY);
-			assert_eq!(ceremony.unwrap().remaining_respondents, BTreeSet::from_iter(participants));
+			assert_eq!(ceremony.unwrap().remaining_respondents, participants);
 			assert_eq!(request.unwrap().retry_policy, RetryPolicy::Never);
 			// Process retries.
 			<MockEthereumThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(

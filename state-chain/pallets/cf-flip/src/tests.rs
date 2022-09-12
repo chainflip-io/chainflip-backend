@@ -249,7 +249,7 @@ impl FlipOperation {
 
 				// Now try to claim
 				assert_noop!(
-					<Flip as StakeTransfer>::try_claim(account_id, 1),
+					<Flip as StakeTransfer>::try_initiate_claim(account_id, 1),
 					Error::<Test>::InsufficientLiquidity
 				);
 
@@ -262,12 +262,17 @@ impl FlipOperation {
 					return false
 				}
 				assert!(
-					<Flip as StakeTransfer>::try_claim(account_id, expected_claimable_balance)
-						.is_ok(),
+					<Flip as StakeTransfer>::try_initiate_claim(
+						account_id,
+						expected_claimable_balance
+					)
+					.is_ok(),
 					"expexted: {}, claimable: {}",
 					expected_claimable_balance,
 					<Flip as StakeTransfer>::claimable_balance(account_id)
 				);
+				<Flip as StakeTransfer>::finalize_claim(account_id)
+					.expect("Pending Claim should exist");
 				if !MockStakeHandler::has_stake_updated(account_id) {
 					return false
 				}
@@ -428,6 +433,24 @@ fn test_try_debit() {
 			assert_eq!(zero_surplus.peek(), 0);
 		}
 		assert!(Account::<Test>::contains_key(&CHARLIE));
+	});
+}
+
+#[test]
+fn test_try_debit_from_liquid_funds() {
+	new_test_ext().execute_with(|| {
+		// Ensure the initial balance of ALICE
+		assert_eq!(Flip::total_balance_of(&ALICE), 100);
+		// Bond the account
+		Bonder::<Test>::update_bond(&ALICE, 50);
+		// Try to debit more than liquid funds available in the account
+		assert!(Flip::try_debit_from_liquid_funds(&ALICE, 60).is_none());
+		// Try to debit less and burn the fee
+		Flip::try_debit_from_liquid_funds(&ALICE, 10)
+			.expect("Debit of funds failed!")
+			.offset(Flip::burn(10));
+		// Expect the account balance to be reduced
+		assert_eq!(Flip::total_balance_of(&ALICE), 90);
 	});
 }
 

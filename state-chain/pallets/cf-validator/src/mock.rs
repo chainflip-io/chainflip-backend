@@ -1,13 +1,13 @@
 use super::*;
 use crate as pallet_cf_validator;
+use cf_primitives::ChainflipAccountData;
 use cf_traits::{
 	mocks::{
 		ensure_origin_mock::NeverFailingOriginCheck, epoch_info::MockEpochInfo,
 		qualify_node::QualifyAll, reputation_resetter::MockReputationResetter,
 		system_state_info::MockSystemStateInfo, vault_rotation::MockVaultRotator,
 	},
-	Bid, Chainflip, ChainflipAccountData, ChainflipAccountStore, QualifyNode,
-	RuntimeAuctionOutcome,
+	Bid, Chainflip, ChainflipAccountStore, QualifyNode, RuntimeAuctionOutcome,
 };
 use frame_support::{
 	construct_runtime, parameter_types,
@@ -19,7 +19,7 @@ use sp_runtime::{
 	impl_opaque_keys,
 	testing::{Header, UintAuthorityId},
 	traits::{BlakeTwo256, ConvertInto, IdentityLookup},
-	BuildStorage, Perbill,
+	BuildStorage,
 };
 use std::cell::RefCell;
 
@@ -81,10 +81,6 @@ impl From<UintAuthorityId> for MockSessionKeys {
 	fn from(dummy: UintAuthorityId) -> Self {
 		Self { dummy }
 	}
-}
-
-parameter_types! {
-	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(33);
 }
 
 impl pallet_session::Config for Test {

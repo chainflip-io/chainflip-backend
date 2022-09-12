@@ -35,11 +35,8 @@ chrono = "0.4.19"
 rand_legacy = { package = "rand", version = "0.6" }
 ipc-channel = "0.16.0"
 
-# Same version of jsonrpc as substrate
-jsonrpc-core = {version = "18.0.0"}
-jsonrpc-core-client = {version = "18.0.0", default-features = false, features = ["http", "ws"]}
-jsonrpc-http-server = "18.0.0"
-jsonrpc-ws-server = "18.0.0"
+# Same version of jsonrpsee as substrate
+jsonrpsee = { version = "0.13.0", features = ["full"] }
 
 websocket = "0.24"
 ethbloom = "0.12.1"
@@ -64,12 +61,12 @@ num-traits = "0.2"
 num-derive = "0.3"
 web3 = {git = 'https://github.com/tomusdrw/rust-web3.git', rev = '8796c88', features = ['signing']}
 zeroize = "1.5.4"
-libp2p = "0.40"
-# Required so that we can create a web3-compatilble secret key.
+libp2p = "0.44"
+# Required so that we can create a web3-compatible secret key.
 web3-secp256k1 = {package = 'secp256k1', version = '0.21'}
 generic-array= "0.14"
 public-ip = "0.2.2"
-lazy_format = "1.10.0"
+lazy_format = "2.0"
 # We will update curve25519-dalek when we can update schnorrkel
 curve25519-dalek = {version = "2.1", features = ["serde"]}
 typenum = "1.15"
@@ -87,7 +84,7 @@ pin-project = "1.0.11"
 # Local deps
 cf-chains = {path = "../state-chain/chains"}
 multisig-p2p-transport = {path = "../state-chain/multisig-p2p-transport"}
-cf-traits = {path = "../state-chain/traits"}
+cf-primitives = {path = "../state-chain/primitives"}
 pallet-cf-auction = {path = "../state-chain/pallets/cf-auction"}
 pallet-cf-broadcast = {path = "../state-chain/pallets/cf-broadcast"}
 pallet-cf-chain-tracking = {path = "../state-chain/pallets/cf-chain-tracking"}
@@ -125,39 +122,39 @@ version = "15.0.0"
 
 [dependencies.frame-support]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 [dependencies.frame-system]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 [dependencies.sc-rpc-api]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 [dependencies.sp-core]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 [dependencies.sp-keyring]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 [dependencies.sp-rpc]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 [dependencies.sp-runtime]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 [dependencies.sp-version]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 [dev-dependencies]
 env_logger = "0.9.0"
-log = "0.4.14"
+log = "0.4.16"
 mockall = "0.11.0"
 rand = "0.8.4"
 csv = "1.1.6"

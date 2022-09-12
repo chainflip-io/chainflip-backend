@@ -8,7 +8,7 @@ use frame_system::RawOrigin;
 use sp_std::{boxed::Box, vec};
 
 benchmarks! {
-	witness {
+	witness_at_epoch {
 		let caller: T::AccountId = whitelisted_caller();
 		let validator_id: T::ValidatorId = caller.clone().into();
 		let call: <T as Config>::Call = frame_system::Call::remark{ remark: vec![] }.into();
@@ -20,11 +20,21 @@ benchmarks! {
 		// we need to set the threshold to 1 to do this.
 		// Unfortunately, this is blocked by the fact that we can't pass
 		// a witness call here - for now.
-	} : _(RawOrigin::Signed(caller.clone()), Box::new(call.clone()))
+	} : _(RawOrigin::Signed(caller.clone()), Box::new(call.clone()), epoch)
 	verify {
 		let call_hash = CallHash(Hashable::blake2_256(&call));
 		assert!(Votes::<T>::contains_key(&epoch, &call_hash));
 	}
+
+	remove_storage_items {
+		let n in 1u32 .. 255u32;
+
+		for i in 0..n {
+			let call: <T as Config>::Call = frame_system::Call::remark{ remark: vec![i as u8] }.into();
+			let call_hash = CallHash(Hashable::blake2_256(&call));
+			Votes::<T>::insert(0, call_hash, vec![0]);
+		}
+	} : { let _ = Votes::<T>::clear_prefix(0, u32::MAX, None); }
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
 }

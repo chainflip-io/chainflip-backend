@@ -20,13 +20,11 @@ use crate::{
 };
 
 use async_trait::async_trait;
-use cf_traits::AuthorityCount;
+use cf_primitives::{AuthorityCount, CeremonyId};
 use futures::Future;
 use state_chain_runtime::AccountId;
 
 use serde::{Deserialize, Serialize};
-
-use pallet_cf_vaults::CeremonyId;
 
 use tokio::sync::mpsc::UnboundedSender;
 use utilities::threshold_from_share_count;
@@ -39,8 +37,16 @@ pub use utils::PartyIdxMapping;
 #[cfg(test)]
 pub use utils::ensure_unsorted;
 
+#[cfg(test)]
+pub use tests::get_key_data_for_test;
+
+#[cfg(test)]
+pub use signing::frost::{gen_signing_data_stage1, gen_signing_data_stage4};
+
 use self::{
-    ceremony_manager::CeremonyResultSender, key_store::KeyStore, signing::frost::SigningData,
+    ceremony_manager::{CeremonyResultSender, KeygenCeremony, SigningCeremony},
+    key_store::KeyStore,
+    signing::frost::SigningData,
 };
 
 pub use self::common::{CeremonyFailureReason, KeygenFailureReason};
@@ -103,7 +109,7 @@ pub trait MultisigClientApi<C: CryptoScheme> {
     async fn keygen(
         &self,
         ceremony_id: CeremonyId,
-        participants: Vec<AccountId>,
+        participants: BTreeSet<AccountId>,
     ) -> Result<
         C::Point,
         (
@@ -116,7 +122,7 @@ pub trait MultisigClientApi<C: CryptoScheme> {
         &self,
         ceremony_id: CeremonyId,
         key_id: KeyId,
-        signers: Vec<AccountId>,
+        signers: BTreeSet<AccountId>,
         data: MessageHash,
     ) -> Result<
         C::Signature,
@@ -152,13 +158,13 @@ pub mod mocks {
             async fn keygen(
                 &self,
                 _ceremony_id: CeremonyId,
-                _participants: Vec<AccountId>,
+                _participants: BTreeSet<AccountId>,
             ) -> Result<C::Point, (BTreeSet<AccountId>, CeremonyFailureReason<KeygenFailureReason>)>;
             async fn sign(
                 &self,
                 _ceremony_id: CeremonyId,
                 _key_id: KeyId,
-                _signers: Vec<AccountId>,
+                _signers: BTreeSet<AccountId>,
                 _data: MessageHash,
             ) -> Result<<C as CryptoScheme>::Signature, (BTreeSet<AccountId>, CeremonyFailureReason<SigningFailureReason>)>;
             fn update_latest_ceremony_id(&self, ceremony_id: CeremonyId);
@@ -176,25 +182,25 @@ pub enum CeremonyRequestDetails<C>
 where
     C: CryptoScheme,
 {
-    Keygen(KeygenRequestDetails<<C as CryptoScheme>::Point>),
+    Keygen(KeygenRequestDetails<C>),
     Sign(SigningRequestDetails<C>),
 }
 
-pub struct KeygenRequestDetails<P: ECPoint> {
-    pub participants: Vec<AccountId>,
+pub struct KeygenRequestDetails<C: CryptoScheme> {
+    pub participants: BTreeSet<AccountId>,
     pub rng: Rng,
-    pub result_sender: CeremonyResultSender<KeygenResultInfo<P>, KeygenFailureReason>,
+    pub result_sender: CeremonyResultSender<KeygenCeremony<C>>,
 }
 
 pub struct SigningRequestDetails<C>
 where
     C: CryptoScheme,
 {
-    pub participants: Vec<AccountId>,
+    pub participants: BTreeSet<AccountId>,
     pub data: MessageHash,
     pub keygen_result_info: KeygenResultInfo<<C as CryptoScheme>::Point>,
     pub rng: Rng,
-    pub result_sender: CeremonyResultSender<<C as CryptoScheme>::Signature, SigningFailureReason>,
+    pub result_sender: CeremonyResultSender<SigningCeremony<C>>,
 }
 
 /// Multisig client acts as the frontend for the multisig functionality, delegating
@@ -232,7 +238,7 @@ where
     pub fn initiate_keygen(
         &self,
         ceremony_id: CeremonyId,
-        participants: Vec<AccountId>,
+        participants: BTreeSet<AccountId>,
     ) -> impl '_
            + Future<
         Output = Result<
@@ -305,7 +311,7 @@ where
         &self,
         ceremony_id: CeremonyId,
         key_id: KeyId,
-        signers: Vec<AccountId>,
+        signers: BTreeSet<AccountId>,
         data: MessageHash,
     ) -> impl '_
            + Future<
@@ -389,7 +395,7 @@ impl<C: CryptoScheme> MultisigClientApi<C> for MultisigClient<C> {
     async fn keygen(
         &self,
         ceremony_id: CeremonyId,
-        participants: Vec<AccountId>,
+        participants: BTreeSet<AccountId>,
     ) -> Result<
         C::Point,
         (
@@ -404,7 +410,7 @@ impl<C: CryptoScheme> MultisigClientApi<C> for MultisigClient<C> {
         &self,
         ceremony_id: CeremonyId,
         key_id: KeyId,
-        signers: Vec<AccountId>,
+        signers: BTreeSet<AccountId>,
         data: MessageHash,
     ) -> Result<
         C::Signature,

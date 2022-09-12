@@ -50,14 +50,12 @@ impl<P: ECPoint> KeygenResult<P> {
 pub struct KeygenResultInfo<P: ECPoint> {
     #[serde(bound = "")]
     pub key: Arc<KeygenResult<P>>,
-    pub validator_map: Arc<PartyIdxMapping>,
+    pub validator_mapping: Arc<PartyIdxMapping>,
     pub params: ThresholdParameters,
 }
 
 #[derive(Error, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum CeremonyFailureReason<T> {
-    #[error("Duplicate Ceremony Id")]
-    DuplicateCeremonyId,
     #[error("Expired before being authorized")]
     ExpiredBeforeBeingAuthorized,
     #[error("Invalid Participants")]
@@ -103,7 +101,7 @@ pub enum BroadcastFailureReason {
     Inconsistency,
 }
 
-#[derive(Error, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Error, Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub enum CeremonyStageName {
     // Keygen
     #[error("Hash Commitments")]
@@ -148,9 +146,6 @@ impl CeremonyFailureReason<SigningFailureReason> {
             CeremonyFailureReason::BroadcastFailure(_, _) => {
                 slog::warn!(logger, #SIGNING_CEREMONY_FAILED, "{}: {}",SIGNING_CEREMONY_FAILED_PREFIX, self; REPORTED_PARTIES_KEY => reported_parties);
             }
-            CeremonyFailureReason::DuplicateCeremonyId => {
-                slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "{}: {}",REQUEST_TO_SIGN_IGNORED_PREFIX, self);
-            }
             CeremonyFailureReason::ExpiredBeforeBeingAuthorized => {
                 slog::warn!(logger,#UNAUTHORIZED_SIGNING_EXPIRED, "{}: {}",SIGNING_CEREMONY_FAILED_PREFIX, self);
             }
@@ -174,9 +169,6 @@ impl CeremonyFailureReason<KeygenFailureReason> {
     pub fn log(&self, reported_parties: &BTreeSet<AccountId>, logger: &slog::Logger) {
         let reported_parties = format_iterator(reported_parties).to_string();
         match self {
-            CeremonyFailureReason::DuplicateCeremonyId => {
-                slog::warn!(logger, #KEYGEN_REQUEST_IGNORED, "{}: {}",KEYGEN_REQUEST_IGNORED_PREFIX, self);
-            }
             CeremonyFailureReason::BroadcastFailure(_, _) => {
                 slog::warn!(logger, #KEYGEN_CEREMONY_FAILED, "{}: {}",KEYGEN_CEREMONY_FAILED_PREFIX, self; REPORTED_PARTIES_KEY => reported_parties);
             }

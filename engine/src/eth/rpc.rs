@@ -510,43 +510,12 @@ mod tests {
 
     use cf_chains::eth::{verify_transaction, UnsignedTransaction};
     use ethereum::{LegacyTransaction, LegacyTransactionMessage, TransactionV2};
-    use futures::future::BoxFuture;
     use rand::{prelude::StdRng, Rng, SeedableRng};
-    use web3::{signing::Key, Transport};
+    use web3::{signing::Key, transports::Http};
 
-    // The web3 test transport is not Send, so we create this just to satisfy the EthRpc.
-    // We don't actually need to make any RPC calls (if the necessary parameters are supplied when `sign_transaction`
-    // is called) so we just use this dummy
-    #[derive(Debug, Clone, Default)]
-    struct DummyTransport {}
-
-    impl EthTransport for DummyTransport {
-        fn transport_protocol() -> TransportProtocol {
-            // arbitrary value, doesn't matter for these tests
-            TransportProtocol::Http
-        }
-    }
-
-    impl Transport for DummyTransport {
-        type Out = BoxFuture<'static, std::result::Result<serde_json::Value, web3::Error>>;
-
-        fn prepare(
-            &self,
-            _method: &str,
-            _params: Vec<jsonrpc_core::Value>,
-        ) -> (web3::RequestId, jsonrpc_core::Call) {
-            panic!("You did not supply the appropriate parameters. Unnecessary RPC calls were attempted.")
-        }
-
-        fn send(&self, _id: web3::RequestId, _request: jsonrpc_core::Call) -> Self::Out {
-            panic!("You did not supply the appropriate parameters. Unnecessary RPC calls were attempted.")
-        }
-    }
-
-    type TestEthRpcClient = EthRpcClient<DummyTransport>;
-    impl TestEthRpcClient {
-        fn new() -> Self {
-            let web3 = web3::Web3::new(DummyTransport::default());
+    impl EthHttpRpcClient {
+        fn mock() -> Self {
+            let web3 = web3::Web3::new(Http::new("http://mock.com").unwrap());
             Self { web3 }
         }
     }
@@ -585,7 +554,7 @@ mod tests {
             let key = SecretKey::from_slice(&arr[..]).unwrap();
             let address = web3::signing::SecretKeyRef::new(&key).address();
 
-            let test_eth_rpc_client = TestEthRpcClient::new();
+            let test_eth_rpc_client = EthHttpRpcClient::mock();
             let signed_tx = test_eth_rpc_client
                 .sign_transaction(tx_params.clone(), &key)
                 .await

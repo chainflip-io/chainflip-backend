@@ -26,15 +26,14 @@ pub struct VersionedMigration<
 
 #[cfg(feature = "try-runtime")]
 mod try_runtime_helpers {
-	use frame_support::{traits::PalletInfoAccess, Twox64Concat};
+	use frame_support::{storage_alias, traits::PalletInfoAccess, Twox64Concat};
 	use sp_std::{
 		cmp::{max, min},
 		vec::Vec,
 	};
 
-	frame_support::generate_storage_alias!(
-		RuntimeUpgradeUtils, MigrationBounds => Map<(Twox64Concat, Vec<u8>), (u16, u16)>
-	);
+	#[storage_alias]
+	type MigrationBounds = StorageMap<RuntimeUpgradeUtils, Twox64Concat, Vec<u8>, (u16, u16)>;
 
 	pub fn update_migration_bounds<T: PalletInfoAccess, const FROM: u16, const TO: u16>() {
 		MigrationBounds::mutate(T::name().as_bytes(), |bounds| {

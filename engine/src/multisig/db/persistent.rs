@@ -186,7 +186,7 @@ impl PersistentKeyDB {
                 let key_id: KeyId = KeyId(key_id[PREFIX_SIZE..].into());
 
                 // deserialize the `KeygenResultInfo`
-                match bincode::deserialize::<KeygenResultInfo<C::Point>>(&*key_info) {
+                match bincode::deserialize::<KeygenResultInfo<C::Point>>(&key_info) {
                     Ok(keygen_result_info) => {
                         slog::debug!(
                             self.logger,

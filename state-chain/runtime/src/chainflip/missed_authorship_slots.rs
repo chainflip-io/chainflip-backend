@@ -1,13 +1,13 @@
 use cf_traits::MissedAuthorshipSlots;
 use codec::Decode;
+use frame_support::storage_alias;
 use sp_consensus_aura::{Slot, AURA_ENGINE_ID};
 use sp_runtime::DigestItem;
 
 use crate::System;
 
-frame_support::generate_storage_alias!(
-	AuraSlotExtraction, LastSeenSlot => Value<Slot>
-);
+#[storage_alias]
+type LastSeenSlot = StorageValue<AuraSlotExtraction, Slot>;
 
 fn extract_slot_from_digest_item(item: &DigestItem) -> Option<Slot> {
 	item.as_pre_runtime().and_then(|(id, mut data)| {

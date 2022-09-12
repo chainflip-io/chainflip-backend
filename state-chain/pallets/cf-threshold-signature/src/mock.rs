@@ -9,8 +9,11 @@ use cf_chains::{
 	ChainCrypto,
 };
 use cf_traits::{
-	mocks::{ceremony_id_provider::MockCeremonyIdProvider, system_state_info::MockSystemStateInfo},
-	AsyncResult, Chainflip, EpochIndex, ThresholdSigner,
+	mocks::{
+		ceremony_id_provider::MockCeremonyIdProvider, signer_nomination::MockNominator,
+		system_state_info::MockSystemStateInfo,
+	},
+	AsyncResult, Chainflip, ThresholdSigner,
 };
 use codec::{Decode, Encode};
 use frame_support::{
@@ -85,42 +88,6 @@ impl Chainflip for Test {
 	type EnsureWitnessedAtCurrentEpoch = NeverFailingOriginCheck<Self>;
 	type EpochInfo = MockEpochInfo;
 	type SystemState = MockSystemStateInfo;
-}
-
-// Mock SignerNomination
-
-thread_local! {
-	pub static THRESHOLD_NOMINEES: std::cell::RefCell<Option<Vec<u64>>> = Default::default();
-}
-
-pub struct MockNominator;
-
-impl MockNominator {
-	pub fn set_nominees(nominees: Option<Vec<u64>>) {
-		THRESHOLD_NOMINEES.with(|cell| *cell.borrow_mut() = nominees)
-	}
-
-	pub fn get_nominees() -> Option<Vec<u64>> {
-		THRESHOLD_NOMINEES.with(|cell| cell.borrow().clone())
-	}
-}
-
-impl cf_traits::SignerNomination for MockNominator {
-	type SignerId = u64;
-
-	fn nomination_with_seed<H>(
-		_seed: H,
-		_exclude_ids: &[Self::SignerId],
-	) -> Option<Self::SignerId> {
-		unimplemented!("Single signer nomination not needed for these tests.")
-	}
-
-	fn threshold_nomination_with_seed<H>(
-		_seed: H,
-		_epoch_index: EpochIndex,
-	) -> Option<Vec<Self::SignerId>> {
-		Self::get_nominees()
-	}
 }
 
 // Mock Callback
@@ -228,7 +195,7 @@ impl ExtBuilder {
 
 	pub fn with_nominees(mut self, nominees: impl IntoIterator<Item = u64>) -> Self {
 		self.ext.execute_with(|| {
-			let nominees = Vec::from_iter(nominees);
+			let nominees = BTreeSet::from_iter(nominees);
 			MockNominator::set_nominees(if nominees.is_empty() { None } else { Some(nominees) });
 		});
 		self

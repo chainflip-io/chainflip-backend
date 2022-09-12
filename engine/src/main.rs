@@ -27,7 +27,6 @@ use pallet_cf_validator::SemVer;
 use sp_core::U256;
 use utilities::print_chainflip_ascii_art;
 
-#[allow(clippy::eval_order_dependence)]
 fn main() -> anyhow::Result<()> {
     print_chainflip_ascii_art();
     use_chainflip_account_id_encoding();
@@ -213,6 +212,7 @@ fn main() -> anyhow::Result<()> {
                     eth_ws_rpc_client.clone(),
                     eth_http_rpc_client.clone(),
                     witnessing_instruction_receiver_1,
+                    true,
                     state_chain_client.clone(),
                     &root_logger,
                 )
@@ -223,6 +223,7 @@ fn main() -> anyhow::Result<()> {
                     eth_ws_rpc_client,
                     eth_http_rpc_client,
                     witnessing_instruction_receiver_2,
+                    false,
                     state_chain_client.clone(),
                     &root_logger,
                 )

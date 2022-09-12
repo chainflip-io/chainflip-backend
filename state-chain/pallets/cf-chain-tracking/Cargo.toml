@@ -18,7 +18,7 @@ cf-traits = { path = '../../traits', default-features = false }
 cf-chains = { path = '../../chains', default-features = false }
 cf-runtime-upgrade-utilities = { path = '../../runtime-upgrade-utilities', default-features = false }
 
-log = { version = '0.4.14', default-features = false }
+log = { version = '0.4.16', default-features = false }
 
 # Parity deps
 [dependencies.codec]
@@ -30,43 +30,43 @@ version = '3.0.0'
 [dependencies.frame-support]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 [dependencies.frame-system]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 [dependencies.scale-info]
 default-features = false
 features = ['derive']
-version = '2.0.1'
+version = '2.1.1'
 
 [dependencies.sp-std]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 [dependencies.sp-io]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 [dependencies.sp-runtime]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 [dependencies.frame-benchmarking]
 default-features = false
 optional = true
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 # Dev dependencies
 [dev-dependencies.sp-core]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 
 [features]

@@ -3,20 +3,22 @@ use crate::{
 	KeygenResolutionPendingSince, PalletOffence, PendingVaultRotation, SuccessVoters, Vault,
 	VaultRotationStatus, Vaults,
 };
-use cf_chains::mocks::MockThresholdSignature;
+use cf_chains::Ethereum;
 use cf_test_utilities::last_event;
 use cf_traits::{
-	mocks::ceremony_id_provider::MockCeremonyIdProvider, AsyncResult, Chainflip, EpochInfo,
-	VaultRotator,
+	mocks::{ceremony_id_provider::MockCeremonyIdProvider, threshold_signer::MockThresholdSigner},
+	AsyncResult, Chainflip, EpochInfo, VaultRotator,
 };
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
 use sp_std::collections::btree_set::BTreeSet;
+
+pub type EthMockThresholdSigner = MockThresholdSigner<Ethereum, crate::mock::Call>;
 
 macro_rules! assert_last_event {
 	($pat:pat) => {
 		let event = last_event::<MockRuntime>();
 		assert!(
-			matches!(last_event::<MockRuntime>(), $crate::mock::Event::VaultsPallet($pat)),
+			matches!(event, $crate::mock::Event::VaultsPallet($pat)),
 			"Unexpected event {:?}",
 			event
 		);
@@ -29,38 +31,29 @@ fn current_ceremony_id() -> CeremonyId {
 
 const ALL_CANDIDATES: &[<MockRuntime as Chainflip>::ValidatorId] = &[ALICE, BOB, CHARLIE];
 
-/// A Threshold signature that will verify against the Mock verifier
-const MOCK_THRESHOLD_SIG: MockThresholdSignature<[u8; 4], [u8; 4]> =
-	MockThresholdSignature::<[u8; 4], [u8; 4]> {
-		signing_key: NEW_AGG_PUB_KEY,
-		signed_payload: [0; 4],
-	};
-
 #[test]
 #[should_panic]
 fn start_vault_rotation_panics_with_no_candidates() {
 	new_test_ext().execute_with(|| {
-		<VaultsPallet as VaultRotator>::start_vault_rotation(vec![]);
+		<VaultsPallet as VaultRotator>::start_vault_rotation(BTreeSet::default());
 	});
 }
 
 #[test]
 fn keygen_request_emitted() {
+	let btree_candidates = BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned());
+
 	new_test_ext().execute_with(|| {
-		<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec());
+		<VaultsPallet as VaultRotator>::start_vault_rotation(btree_candidates.clone());
 		// Confirm we have a new vault rotation process running
 		assert_eq!(
 			<VaultsPallet as VaultRotator>::get_vault_rotation_outcome(),
 			AsyncResult::Pending
 		);
-		// Check the event emitted
 		assert_eq!(
 			last_event::<MockRuntime>(),
-			PalletEvent::<MockRuntime, _>::KeygenRequest(
-				current_ceremony_id(),
-				ALL_CANDIDATES.to_vec(),
-			)
-			.into()
+			PalletEvent::<MockRuntime, _>::KeygenRequest(current_ceremony_id(), btree_candidates)
+				.into()
 		);
 	});
 }
@@ -68,23 +61,27 @@ fn keygen_request_emitted() {
 #[test]
 #[should_panic]
 fn start_vault_rotation_panics_if_called_while_vault_rotation_in_progress() {
+	let btree_candidates = BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned());
+
 	new_test_ext().execute_with(|| {
-		<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec());
-		<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec());
+		<VaultsPallet as VaultRotator>::start_vault_rotation(btree_candidates.clone());
+		<VaultsPallet as VaultRotator>::start_vault_rotation(btree_candidates);
 	});
 }
 
 #[test]
-fn keygen_success() {
+fn keygen_success_triggers_keygen_verification() {
+	let btree_candidates = BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned());
+
 	new_test_ext().execute_with(|| {
-		<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec());
+		<VaultsPallet as VaultRotator>::start_vault_rotation(btree_candidates.clone());
 		let ceremony_id = current_ceremony_id();
 
-		VaultsPallet::on_keygen_success(ceremony_id, NEW_AGG_PUB_KEY);
+		VaultsPallet::trigger_keygen_verification(ceremony_id, NEW_AGG_PUB_KEY, btree_candidates);
 
 		assert!(matches!(
 			PendingVaultRotation::<MockRuntime, _>::get().unwrap(),
-			VaultRotationStatus::<MockRuntime, _>::AwaitingRotation { new_public_key: k } if k == NEW_AGG_PUB_KEY
+			VaultRotationStatus::<MockRuntime, _>::AwaitingKeygenVerification { new_public_key: k } if k == NEW_AGG_PUB_KEY
 		));
 	});
 }
@@ -94,17 +91,19 @@ fn keygen_failure() {
 	new_test_ext().execute_with(|| {
 		const BAD_CANDIDATES: &[<MockRuntime as Chainflip>::ValidatorId] = &[BOB, CHARLIE];
 
-		<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec());
+		<VaultsPallet as VaultRotator>::start_vault_rotation(BTreeSet::from_iter(
+			ALL_CANDIDATES.iter().cloned(),
+		));
 
 		let ceremony_id = current_ceremony_id();
 
-		// The ceremony failed.
-		VaultsPallet::on_keygen_failure(ceremony_id, BAD_CANDIDATES);
+		VaultsPallet::terminate_keygen_procedure(
+			BAD_CANDIDATES,
+			PalletEvent::KeygenFailure(ceremony_id),
+		);
 
-		// KeygenAborted event emitted.
 		assert_eq!(last_event::<MockRuntime>(), PalletEvent::KeygenFailure(ceremony_id).into());
 
-		// Outcome is ready.
 		assert_eq!(
 			<VaultsPallet as VaultRotator>::get_vault_rotation_outcome(),
 			AsyncResult::Ready(Err(BAD_CANDIDATES.to_vec()))
@@ -118,14 +117,34 @@ fn keygen_failure() {
 }
 
 #[test]
+fn keygen_verification_failure() {
+	new_test_ext().execute_with(|| {
+		let participants = (5u64..15).into_iter().collect::<BTreeSet<_>>();
+
+		let keygen_ceremony_id = 12;
+		let (request_id, _) = VaultsPallet::trigger_keygen_verification(
+			keygen_ceremony_id,
+			NEW_AGG_PUB_KEY,
+			participants.clone(),
+		);
+
+		let blamed = vec![5, 6, 7, 8];
+		assert!(blamed.iter().all(|b| participants.contains(b)));
+
+		EthMockThresholdSigner::set_signature_ready(request_id, Err(blamed.clone()));
+
+		EthMockThresholdSigner::on_signature_ready(request_id);
+
+		assert_last_event!(PalletEvent::KeygenVerificationFailure { .. });
+		MockOffenceReporter::assert_reported(PalletOffence::FailedKeygen, blamed)
+	});
+}
+
+#[test]
 fn no_active_rotation() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			VaultsPallet::report_keygen_outcome(
-				Origin::signed(ALICE),
-				1,
-				Ok((NEW_AGG_PUB_KEY, Default::default(), Default::default()))
-			),
+			VaultsPallet::report_keygen_outcome(Origin::signed(ALICE), 1, Ok(NEW_AGG_PUB_KEY)),
 			Error::<MockRuntime, _>::NoActiveRotation
 		);
 
@@ -143,13 +162,15 @@ fn no_active_rotation() {
 #[test]
 fn cannot_report_keygen_success_twice() {
 	new_test_ext().execute_with(|| {
-		<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec());
+		<VaultsPallet as VaultRotator>::start_vault_rotation(BTreeSet::from_iter(
+			ALL_CANDIDATES.iter().cloned(),
+		));
 		let ceremony_id = current_ceremony_id();
 
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			Origin::signed(ALICE),
 			ceremony_id,
-			Ok((NEW_AGG_PUB_KEY, MOCK_THRESHOLD_SIG.signed_payload, MOCK_THRESHOLD_SIG))
+			Ok(NEW_AGG_PUB_KEY)
 		));
 
 		// Can't report twice.
@@ -157,7 +178,7 @@ fn cannot_report_keygen_success_twice() {
 			VaultsPallet::report_keygen_outcome(
 				Origin::signed(ALICE),
 				ceremony_id,
-				Ok((NEW_AGG_PUB_KEY, MOCK_THRESHOLD_SIG.signed_payload, MOCK_THRESHOLD_SIG))
+				Ok(NEW_AGG_PUB_KEY)
 			),
 			Error::<MockRuntime, _>::InvalidRespondent
 		);
@@ -171,13 +192,15 @@ fn cannot_report_keygen_success_twice() {
 #[test]
 fn cannot_report_two_different_keygen_outcomes() {
 	new_test_ext().execute_with(|| {
-		<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec());
+		<VaultsPallet as VaultRotator>::start_vault_rotation(BTreeSet::from_iter(
+			ALL_CANDIDATES.iter().cloned(),
+		));
 		let ceremony_id = current_ceremony_id();
 
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			Origin::signed(ALICE),
 			ceremony_id,
-			Ok((NEW_AGG_PUB_KEY, MOCK_THRESHOLD_SIG.signed_payload, MOCK_THRESHOLD_SIG))
+			Ok(NEW_AGG_PUB_KEY)
 		));
 
 		// Can't report failure after reporting success
@@ -199,13 +222,15 @@ fn cannot_report_two_different_keygen_outcomes() {
 #[test]
 fn only_participants_can_report_keygen_outcome() {
 	new_test_ext().execute_with(|| {
-		<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec());
+		<VaultsPallet as VaultRotator>::start_vault_rotation(BTreeSet::from_iter(
+			ALL_CANDIDATES.iter().cloned(),
+		));
 		let ceremony_id = current_ceremony_id();
 
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			Origin::signed(ALICE),
 			ceremony_id,
-			Ok((NEW_AGG_PUB_KEY, MOCK_THRESHOLD_SIG.signed_payload, MOCK_THRESHOLD_SIG))
+			Ok(NEW_AGG_PUB_KEY)
 		));
 
 		// Only participants can respond.
@@ -215,7 +240,7 @@ fn only_participants_can_report_keygen_outcome() {
 			VaultsPallet::report_keygen_outcome(
 				Origin::signed(non_participant),
 				ceremony_id,
-				Ok((NEW_AGG_PUB_KEY, MOCK_THRESHOLD_SIG.signed_payload, MOCK_THRESHOLD_SIG))
+				Ok(NEW_AGG_PUB_KEY)
 			),
 			Error::<MockRuntime, _>::InvalidRespondent
 		);
@@ -229,13 +254,15 @@ fn only_participants_can_report_keygen_outcome() {
 #[test]
 fn reporting_keygen_outcome_must_be_for_pending_ceremony_id() {
 	new_test_ext().execute_with(|| {
-		<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec());
+		<VaultsPallet as VaultRotator>::start_vault_rotation(BTreeSet::from_iter(
+			ALL_CANDIDATES.iter().cloned(),
+		));
 		let ceremony_id = current_ceremony_id();
 
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			Origin::signed(ALICE),
 			ceremony_id,
-			Ok((NEW_AGG_PUB_KEY, MOCK_THRESHOLD_SIG.signed_payload, MOCK_THRESHOLD_SIG))
+			Ok(NEW_AGG_PUB_KEY)
 		));
 
 		// Ceremony id in the past (not the pending one we're waiting for)
@@ -243,7 +270,7 @@ fn reporting_keygen_outcome_must_be_for_pending_ceremony_id() {
 			VaultsPallet::report_keygen_outcome(
 				Origin::signed(ALICE),
 				ceremony_id - 1,
-				Ok((NEW_AGG_PUB_KEY, MOCK_THRESHOLD_SIG.signed_payload, MOCK_THRESHOLD_SIG))
+				Ok(NEW_AGG_PUB_KEY)
 			),
 			Error::<MockRuntime, _>::InvalidCeremonyId
 		);
@@ -257,7 +284,7 @@ fn reporting_keygen_outcome_must_be_for_pending_ceremony_id() {
 			VaultsPallet::report_keygen_outcome(
 				Origin::signed(ALICE),
 				ceremony_id + 1,
-				Ok((NEW_AGG_PUB_KEY, MOCK_THRESHOLD_SIG.signed_payload, MOCK_THRESHOLD_SIG))
+				Ok(NEW_AGG_PUB_KEY)
 			),
 			Error::<MockRuntime, _>::InvalidCeremonyId
 		);
@@ -271,15 +298,15 @@ fn reporting_keygen_outcome_must_be_for_pending_ceremony_id() {
 #[test]
 fn keygen_report_success() {
 	new_test_ext().execute_with(|| {
-		<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec());
-		let ceremony_id = current_ceremony_id();
+		<VaultsPallet as VaultRotator>::start_vault_rotation(BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()));
+		let keygen_ceremony_id = current_ceremony_id();
 
 		assert_eq!(KeygenResolutionPendingSince::<MockRuntime, _>::get(), 1);
 
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			Origin::signed(ALICE),
-			ceremony_id,
-			Ok((NEW_AGG_PUB_KEY, MOCK_THRESHOLD_SIG.signed_payload, MOCK_THRESHOLD_SIG))
+			keygen_ceremony_id,
+			Ok(NEW_AGG_PUB_KEY)
 		));
 
 		assert_eq!(
@@ -297,8 +324,8 @@ fn keygen_report_success() {
 		// Bob agrees.
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			Origin::signed(BOB),
-			ceremony_id,
-			Ok((NEW_AGG_PUB_KEY, MOCK_THRESHOLD_SIG.signed_payload, MOCK_THRESHOLD_SIG))
+			keygen_ceremony_id,
+			Ok(NEW_AGG_PUB_KEY)
 		));
 
 		// A resolution is still pending - we require 100% response rate.
@@ -317,8 +344,8 @@ fn keygen_report_success() {
 		// Charlie agrees.
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			Origin::signed(CHARLIE),
-			ceremony_id,
-			Ok((NEW_AGG_PUB_KEY, MOCK_THRESHOLD_SIG.signed_payload, MOCK_THRESHOLD_SIG))
+			keygen_ceremony_id,
+			Ok(NEW_AGG_PUB_KEY)
 		));
 
 		// This time we should have enough votes for consensus.
@@ -327,13 +354,19 @@ fn keygen_report_success() {
 			<VaultsPallet as VaultRotator>::get_vault_rotation_outcome(),
 			AsyncResult::Pending
 		);
-		if let VaultRotationStatus::AwaitingKeygen { keygen_ceremony_id, response_status } = PendingVaultRotation::<MockRuntime, _>::get().unwrap() {
-			assert_eq!(keygen_ceremony_id, ceremony_id);
+		if let VaultRotationStatus::AwaitingKeygen { keygen_ceremony_id: keygen_ceremony_id_from_status, response_status, keygen_participants } = PendingVaultRotation::<MockRuntime, _>::get().unwrap() {
+			assert_eq!(keygen_ceremony_id, keygen_ceremony_id_from_status);
 			assert_eq!(response_status.success_votes.get(&NEW_AGG_PUB_KEY).expect("new key should have votes"), &3);
+			assert_eq!(keygen_participants, BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()));
 		} else {
 			panic!("Expected to be in AwaitingKeygen state");
 		}
 		VaultsPallet::on_initialize(1);
+
+		assert!(matches!(PendingVaultRotation::<MockRuntime, _>::get().unwrap(), VaultRotationStatus::AwaitingKeygenVerification { .. }));
+
+		EthMockThresholdSigner::signature_result_last_requested(Ok(ETH_DUMMY_SIG));
+
 		assert!(matches!(PendingVaultRotation::<MockRuntime, _>::get().unwrap(), VaultRotationStatus::AwaitingRotation { .. }));
 
 		assert!(!KeygenResolutionPendingSince::<MockRuntime, _>::exists());
@@ -347,72 +380,7 @@ fn keygen_report_success() {
 			VaultRotationStatus::<MockRuntime, _>::AwaitingRotation { new_public_key: k } if k == NEW_AGG_PUB_KEY
 		));
 
-		assert_last_event!(crate::Event::KeygenSuccess(..));
-
-		// Voting has been cleared.
-		assert_eq!(SuccessVoters::<MockRuntime, _>::iter_keys().next(), None);
-		assert!(!FailureVoters::<MockRuntime, _>::exists());
-	})
-}
-
-#[test]
-fn keygen_report_success_but_bad_sig_results_in_failure() {
-	new_test_ext().execute_with(|| {
-		<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec());
-		let ceremony_id = current_ceremony_id();
-
-		assert_eq!(KeygenResolutionPendingSince::<MockRuntime, _>::get(), 1);
-
-		// Alice reports success.
-		assert_ok!(VaultsPallet::report_keygen_outcome(
-			Origin::signed(ALICE),
-			ceremony_id,
-			Ok((NEW_AGG_PUB_KEY, MOCK_THRESHOLD_SIG.signed_payload, MOCK_THRESHOLD_SIG))
-		));
-
-		// Bob agrees.
-		assert_ok!(VaultsPallet::report_keygen_outcome(
-			Origin::signed(BOB),
-			ceremony_id,
-			Ok((NEW_AGG_PUB_KEY, MOCK_THRESHOLD_SIG.signed_payload, MOCK_THRESHOLD_SIG))
-		));
-
-		// Charlie responds success but with an invalid sig, so the vote should fail.
-		assert_ok!(VaultsPallet::report_keygen_outcome(
-			Origin::signed(CHARLIE),
-			ceremony_id,
-			Ok((NEW_AGG_PUB_KEY, Default::default(), Default::default()))
-		));
-
-		assert!(FailureVoters::<MockRuntime, _>::get().contains(&CHARLIE));
-
-		let success_voters = SuccessVoters::<MockRuntime, _>::get(NEW_AGG_PUB_KEY);
-		assert!(success_voters.contains(&ALICE));
-		assert!(success_voters.contains(&BOB));
-		// Charlie is not a success voter
-		assert!(!success_voters.contains(&CHARLIE));
-
-		// We're pending until we initialise the block
-		assert!(KeygenResolutionPendingSince::<MockRuntime, _>::exists());
-		assert_eq!(
-			<VaultsPallet as VaultRotator>::get_vault_rotation_outcome(),
-			AsyncResult::Pending
-		);
-
-		// The resolution occurs in the on_initialize hook
-		VaultsPallet::on_initialize(1);
-		assert!(!KeygenResolutionPendingSince::<MockRuntime, _>::exists());
-		assert_eq!(
-			<VaultsPallet as VaultRotator>::get_vault_rotation_outcome(),
-			AsyncResult::Ready(Err(vec![CHARLIE]))
-		);
-
-		assert_eq!(
-			PendingVaultRotation::<MockRuntime, _>::get().unwrap(),
-			VaultRotationStatus::<MockRuntime, _>::Failed { offenders: vec![CHARLIE] }
-		);
-
-		assert_last_event!(crate::Event::KeygenFailure(..));
+		assert_last_event!(crate::Event::KeygenVerificationSuccess { .. });
 
 		// Voting has been cleared.
 		assert_eq!(SuccessVoters::<MockRuntime, _>::iter_keys().next(), None);
@@ -423,7 +391,9 @@ fn keygen_report_success_but_bad_sig_results_in_failure() {
 #[test]
 fn keygen_report_failure() {
 	new_test_ext().execute_with(|| {
-		<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec());
+		<VaultsPallet as VaultRotator>::start_vault_rotation(BTreeSet::from_iter(
+			ALL_CANDIDATES.iter().cloned(),
+		));
 		let ceremony_id = current_ceremony_id();
 
 		assert_eq!(KeygenResolutionPendingSince::<MockRuntime, _>::get(), 1);
@@ -498,7 +468,9 @@ fn keygen_report_failure() {
 #[test]
 fn test_keygen_timeout_period() {
 	new_test_ext().execute_with(|| {
-		<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec());
+		<VaultsPallet as VaultRotator>::start_vault_rotation(BTreeSet::from_iter(
+			ALL_CANDIDATES.iter().cloned(),
+		));
 		let ceremony_id = current_ceremony_id();
 
 		assert_eq!(KeygenResolutionPendingSince::<MockRuntime, _>::get(), 1);
@@ -528,6 +500,7 @@ fn vault_key_rotated() {
 	new_test_ext().execute_with(|| {
 		const ROTATION_BLOCK_NUMBER: u64 = 42;
 		const TX_HASH: [u8; 4] = [0xab; 4];
+		let btree_candidates = BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned());
 
 		assert_noop!(
 			VaultsPallet::vault_key_rotated(
@@ -539,9 +512,11 @@ fn vault_key_rotated() {
 			Error::<MockRuntime, _>::NoActiveRotation
 		);
 
-		<VaultsPallet as VaultRotator>::start_vault_rotation(ALL_CANDIDATES.to_vec());
+		<VaultsPallet as VaultRotator>::start_vault_rotation(btree_candidates.clone());
 		let ceremony_id = current_ceremony_id();
-		VaultsPallet::on_keygen_success(ceremony_id, NEW_AGG_PUB_KEY);
+		VaultsPallet::trigger_keygen_verification(ceremony_id, NEW_AGG_PUB_KEY, btree_candidates);
+
+		EthMockThresholdSigner::signature_result_last_requested(Ok(ETH_DUMMY_SIG));
 
 		assert_ok!(VaultsPallet::vault_key_rotated(
 			Origin::root(),
@@ -617,15 +592,7 @@ fn test_vault_key_rotated_externally() {
 mod keygen_reporting {
 	use super::*;
 	use crate::{AggKeyFor, KeygenError, KeygenOutcome, KeygenOutcomeFor, KeygenResponseStatus};
-	use frame_support::assert_err;
 	use sp_std::collections::btree_set::BTreeSet;
-
-	macro_rules! assert_ok_no_repeat {
-		($ex:expr) => {{
-			assert_ok!($ex);
-			assert_err!($ex, Error::<MockRuntime, _>::InvalidRespondent);
-		}};
-	}
 
 	macro_rules! assert_failure_outcome {
 		($ex:expr) => {
@@ -683,6 +650,8 @@ mod keygen_reporting {
 		);
 	}
 
+	// Takes an IntoIterator of tuples where the usize represents the number of times
+	// we want to repeat the T
 	fn n_times<T: Copy>(things: impl IntoIterator<Item = (usize, T)>) -> Vec<T> {
 		things
 			.into_iter()
@@ -724,6 +693,8 @@ mod keygen_reporting {
 	#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 	enum ReportedOutcome {
 		Success,
+		/// When a node considers the keygen a success, but votes for a key that is actually not
+		/// the correct key (according to the majority of nodes)
 		BadKey,
 		Failure,
 		Timeout,
@@ -753,13 +724,15 @@ mod keygen_reporting {
 		for (index, outcome) in outcomes.iter().enumerate() {
 			let id = 1 + index as u64;
 			match outcome {
-				ReportedOutcome::Success =>
-					assert_ok_no_repeat!(status.add_success_vote(&id, NEW_AGG_PUB_KEY)),
-				ReportedOutcome::BadKey =>
-					assert_ok_no_repeat!(status.add_success_vote(&id, *b"bad!")),
-				ReportedOutcome::Failure => assert_ok_no_repeat!(
-					status.add_failure_vote(&id, BTreeSet::from_iter(report_gen(id)))
-				),
+				ReportedOutcome::Success => {
+					status.add_success_vote(&id, NEW_AGG_PUB_KEY);
+				},
+				ReportedOutcome::BadKey => {
+					status.add_success_vote(&id, *b"bad!");
+				},
+				ReportedOutcome::Failure => {
+					status.add_failure_vote(&id, BTreeSet::from_iter(report_gen(id)));
+				},
 				ReportedOutcome::Timeout => {},
 			}
 		}
@@ -792,6 +765,7 @@ mod keygen_reporting {
 				for dissent in
 					[ReportedOutcome::BadKey, ReportedOutcome::Failure, ReportedOutcome::Timeout]
 				{
+					// a single node is reporting incorrectly
 					let outcome = get_outcome(
 						&n_times([(n - 1, ReportedOutcome::Success), (1, dissent)]),
 						|_| [],
@@ -828,13 +802,18 @@ mod keygen_reporting {
 	fn test_failure_dissent() {
 		new_test_ext().execute_with(|| {
 			// A keygen where no consensus is reached. Half think we failed, half think we suceeded.
-			assert!(matches!(
-				get_outcome(
-					&n_times([(3, ReportedOutcome::Failure), (3, ReportedOutcome::Success)]),
-					|_| [4, 5, 6]
+			let outcome = get_outcome(
+				&n_times([(3, ReportedOutcome::Failure), (3, ReportedOutcome::Success)]),
+				|_| [4, 5, 6],
+			);
+			assert!(
+				matches!(
+					outcome.clone(),
+					Err(KeygenError::Failure(blamed)) if blamed.is_empty(),
 				),
-				Err(KeygenError::Failure(blamed)) if blamed.is_empty()
-			));
+				"Got outcome: {:?}",
+				outcome
+			);
 
 			// A keygen where more than `threshold` nodes have reported failure, but there is no
 			// final agreement on the guilty parties. Only unresponsive nodes will be reported.
@@ -880,10 +859,15 @@ mod keygen_reporting {
 	fn test_blaming_aggregation() {
 		new_test_ext().execute_with(|| {
 			// First five candidates all report candidate 6, candidate 6 unresponsive.
-			assert!(matches!(
-				get_outcome(&reported_outcomes(b"ffffft"), |_| [6]),
-				Err(KeygenError::Failure(blamed)) if blamed == BTreeSet::from_iter([6])
-			));
+			let outcome = get_outcome(&reported_outcomes(b"ffffft"), |_| [6]);
+			assert!(
+				matches!(
+					outcome.clone(),
+					Err(KeygenError::Failure(blamed)) if blamed == BTreeSet::from_iter([6])
+				),
+				"Got outcome: {:?}",
+				outcome
+			);
 
 			// First five candidates all report candidate 6, candidate 6 reports 1.
 			assert!(matches!(
@@ -902,7 +886,6 @@ mod keygen_reporting {
 				get_outcome(&reported_outcomes(b"fftfft"), |_| []),
 				Err(KeygenError::Failure(blamed)) if blamed == BTreeSet::from_iter([3, 6])
 			));
-
 			// One candidate unresponsive, one blamed by majority.
 			assert!(matches!(
 				get_outcome(&reported_outcomes(b"ffffftf"), |id| if id != 3 { [3] } else { [4] }),

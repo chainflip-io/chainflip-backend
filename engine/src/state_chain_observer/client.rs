@@ -1,8 +1,8 @@
 use anyhow::{anyhow, bail, Context, Result};
 use cf_chains::ChainAbi;
-use cf_traits::{ChainflipAccountData, EpochIndex};
+use cf_primitives::{ChainflipAccountData, EpochIndex};
 use codec::{Decode, Encode, FullCodec};
-use custom_rpc::CustomClient;
+use custom_rpc::CustomApiClient;
 use frame_metadata::RuntimeMetadata;
 use frame_support::metadata::RuntimeMetadataPrefixed;
 use frame_support::pallet_prelude::InvalidTransaction;
@@ -10,8 +10,11 @@ use frame_support::storage::storage_prefix;
 use frame_support::storage::types::QueryKindTrait;
 use frame_system::Phase;
 use futures::{Stream, StreamExt, TryStreamExt};
-use jsonrpc_core::{Error, ErrorCode, Value};
-use jsonrpc_core_client::{RpcChannel, RpcError};
+use jsonrpsee::core::client::{ClientT, SubscriptionClientT};
+use jsonrpsee::core::{Error as RpcError, RpcResult};
+use jsonrpsee::types::error::CallError;
+use jsonrpsee::types::{ErrorObject, ErrorObjectOwned};
+use jsonrpsee::ws_client::WsClientBuilder;
 use libp2p::multiaddr::Protocol;
 use libp2p::Multiaddr;
 use multisig_p2p_transport::PeerId;
@@ -40,7 +43,7 @@ use crate::common::{read_clean_and_decode_hex_str_file, EngineTryStreamExt};
 use crate::constants::MAX_EXTRINSIC_RETRY_ATTEMPTS;
 use crate::logging::COMPONENT_KEY;
 use crate::settings;
-use utilities::{context, rpc_error_into_anyhow_error, Port};
+use utilities::{context, Port};
 
 mod signer;
 
@@ -49,19 +52,10 @@ use mockall::automock;
 
 use async_trait::async_trait;
 
-type AuthorRpcClient = sc_rpc_api::author::AuthorClient<
-    state_chain_runtime::Hash,
-    <state_chain_runtime::Block as sp_runtime::traits::Block>::Hash,
->;
-type ChainRpcClient = sc_rpc_api::chain::ChainClient<
-    state_chain_runtime::BlockNumber,
-    state_chain_runtime::Hash,
-    state_chain_runtime::Header,
-    state_chain_runtime::SignedBlock,
->;
-type StateRpcClient = sc_rpc_api::state::StateClient<state_chain_runtime::Hash>;
-type SystemRpcClient =
-    sc_rpc_api::system::SystemClient<state_chain_runtime::Hash, state_chain_runtime::BlockNumber>;
+use sc_rpc_api::author::AuthorApiClient;
+use sc_rpc_api::chain::ChainApiClient;
+use sc_rpc_api::state::StateApiClient;
+use sc_rpc_api::system::SystemApiClient;
 
 pub type EventInfo = (
     Phase,
@@ -71,13 +65,44 @@ pub type EventInfo = (
 );
 
 ////////////////////
+///
+pub trait ChainflipClient:
+    CustomApiClient
+    + SystemApiClient<state_chain_runtime::Hash, state_chain_runtime::BlockNumber>
+    + StateApiClient<state_chain_runtime::Hash>
+    + AuthorApiClient<
+        state_chain_runtime::Hash,
+        <state_chain_runtime::Block as sp_runtime::traits::Block>::Hash,
+    > + ChainApiClient<
+        state_chain_runtime::BlockNumber,
+        state_chain_runtime::Hash,
+        state_chain_runtime::Header,
+        state_chain_runtime::SignedBlock,
+    >
+{
+}
 
-pub struct StateChainRpcClient {
-    author_rpc_client: AuthorRpcClient,
-    state_rpc_client: StateRpcClient,
-    chain_rpc_client: ChainRpcClient,
-    system_rpc_client: SystemRpcClient,
-    custom_rpc_client: CustomClient,
+impl<
+        T: SubscriptionClientT
+            + ClientT
+            + CustomApiClient
+            + SystemApiClient<state_chain_runtime::Hash, state_chain_runtime::BlockNumber>
+            + StateApiClient<state_chain_runtime::Hash>
+            + AuthorApiClient<
+                state_chain_runtime::Hash,
+                <state_chain_runtime::Block as sp_runtime::traits::Block>::Hash,
+            > + ChainApiClient<
+                state_chain_runtime::BlockNumber,
+                state_chain_runtime::Hash,
+                state_chain_runtime::Header,
+                state_chain_runtime::SignedBlock,
+            >,
+    > ChainflipClient for T
+{
+}
+
+pub struct StateChainRpcClient<C: ChainflipClient> {
+    rpc_client: Arc<C>,
 }
 
 /// Wraps the substrate client library methods
@@ -87,7 +112,7 @@ pub trait StateChainRpcApi {
     async fn submit_extrinsic_rpc(
         &self,
         extrinsic: state_chain_runtime::UncheckedExtrinsic,
-    ) -> Result<sp_core::H256, RpcError>;
+    ) -> RpcResult<sp_core::H256>;
 
     async fn storage(
         &self,
@@ -125,12 +150,15 @@ pub trait StateChainRpcApi {
 }
 
 #[async_trait]
-impl StateChainRpcApi for StateChainRpcClient {
+impl<C> StateChainRpcApi for StateChainRpcClient<C>
+where
+    C: ChainflipClient + Send + Sync,
+{
     async fn submit_extrinsic_rpc(
         &self,
         extrinsic: state_chain_runtime::UncheckedExtrinsic,
-    ) -> Result<sp_core::H256, RpcError> {
-        self.author_rpc_client
+    ) -> RpcResult<sp_core::H256> {
+        self.rpc_client
             .submit_extrinsic(Bytes::from(extrinsic.encode()))
             .await
     }
@@ -139,19 +167,17 @@ impl StateChainRpcApi for StateChainRpcClient {
         &self,
         block_hash: state_chain_runtime::Hash,
     ) -> Result<Option<SignedBlock>> {
-        self.chain_rpc_client
+        self.rpc_client
             .block(Some(block_hash))
             .await
-            .map_err(rpc_error_into_anyhow_error)
             .context("get_block RPC API failed")
     }
 
     async fn latest_block_hash(&self) -> Result<H256> {
         Ok(self
-            .chain_rpc_client
+            .rpc_client
             .header(None)
             .await
-            .map_err(rpc_error_into_anyhow_error)
             .context("latest_block_hash RPC API failed")?
             .expect("Latest block hash could not be fetched")
             .hash())
@@ -162,10 +188,9 @@ impl StateChainRpcApi for StateChainRpcClient {
         block_hash: state_chain_runtime::Hash,
         storage_key: StorageKey,
     ) -> Result<Option<StorageData>> {
-        self.state_rpc_client
+        self.rpc_client
             .storage(storage_key, Some(block_hash))
             .await
-            .map_err(rpc_error_into_anyhow_error)
             .context("storage RPC API failed")
     }
 
@@ -174,18 +199,16 @@ impl StateChainRpcApi for StateChainRpcClient {
         block_hash: Option<state_chain_runtime::Hash>,
         storage_key: StorageKey,
     ) -> Result<Vec<StorageChangeSet<state_chain_runtime::Hash>>> {
-        self.state_rpc_client
+        self.rpc_client
             .query_storage_at(vec![storage_key], block_hash)
             .await
-            .map_err(rpc_error_into_anyhow_error)
             .context("storage_events_at RPC API failed")
     }
 
     async fn rotate_keys(&self) -> Result<Bytes> {
-        self.author_rpc_client
+        self.rpc_client
             .rotate_keys()
             .await
-            .map_err(rpc_error_into_anyhow_error)
             .context("rotate_keys RPC API failed")
     }
 
@@ -194,18 +217,16 @@ impl StateChainRpcApi for StateChainRpcClient {
         block_hash: state_chain_runtime::Hash,
         storage_key: StorageKey,
     ) -> Result<Vec<(StorageKey, StorageData)>> {
-        self.state_rpc_client
+        self.rpc_client
             .storage_pairs(storage_key, Some(block_hash))
             .await
-            .map_err(rpc_error_into_anyhow_error)
             .context("storage_pairs RPC API failed")
     }
 
     async fn local_listen_addresses(&self) -> Result<Vec<String>> {
-        self.system_rpc_client
+        self.rpc_client
             .system_local_listen_addresses()
             .await
-            .map_err(rpc_error_into_anyhow_error)
             .context("system_local_listen_addresses RPC API failed")
     }
 
@@ -213,18 +234,16 @@ impl StateChainRpcApi for StateChainRpcClient {
         &self,
         block_hash: state_chain_runtime::Hash,
     ) -> Result<RuntimeVersion> {
-        self.state_rpc_client
+        self.rpc_client
             .runtime_version(Some(block_hash))
             .await
-            .map_err(rpc_error_into_anyhow_error)
             .context("fetch_runtime_version RPC API failed")
     }
 
     async fn is_auction_phase(&self) -> Result<bool> {
-        self.custom_rpc_client
+        self.rpc_client
             .cf_is_auction_phase(None)
             .await
-            .map_err(rpc_error_into_anyhow_error)
             .context("cf_is_auction_phase RPC API failed")
     }
 }
@@ -393,6 +412,14 @@ mod storage_traits {
     }
 }
 
+fn invalid_err_obj(invalid_reason: InvalidTransaction) -> ErrorObjectOwned {
+    ErrorObject::owned(
+        1010,
+        "Invalid Transaction",
+        Some(<&'static str>::from(invalid_reason)),
+    )
+}
+
 impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
     fn create_and_sign_extrinsic(
         &self,
@@ -474,11 +501,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                 Err(rpc_err) => match rpc_err {
                     // This occurs when a transaction with the same nonce is in the transaction pool (and the priority is
                     // <= priority of that existing tx)
-                    RpcError::JsonRpcError(Error {
-                        // this is the error returned when the "priority is too low" i.e. nonce is too low
-                        code: ErrorCode::ServerError(1014),
-                        ..
-                    }) => {
+                    RpcError::Call(CallError::Custom(ref obj)) if obj.code() == 1014 => {
                         slog::error!(
                             logger,
                             "Extrinsic submission failed with nonce: {}. Error: {:?}",
@@ -488,13 +511,8 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                     }
                     // This occurs when the nonce has already been *consumed* i.e a transaction with that nonce
                     // is in a block
-                    RpcError::JsonRpcError(Error {
-                        // this is the error returned when the "transaction is outdated" i.e. nonce is too low
-                        code: ErrorCode::ServerError(1010),
-                        data: Some(Value::String(ref invalid_transaction)),
-                        ..
-                    }) if invalid_transaction
-                        == <&'static str>::from(InvalidTransaction::Stale) =>
+                    RpcError::Call(CallError::Custom(ref obj))
+                        if obj == &invalid_err_obj(InvalidTransaction::Stale) =>
                     {
                         slog::error!(
                             logger,
@@ -503,14 +521,8 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                             rpc_err
                         );
                     }
-                    RpcError::JsonRpcError(Error {
-                        // this is the error returned when the "transaction has bad signature" -> when the runtime is updated, since the
-                        // runtime version and/or metadata is now incorrect
-                        code: ErrorCode::ServerError(1010),
-                        data: Some(Value::String(ref invalid_transaction)),
-                        ..
-                    }) if invalid_transaction
-                        == <&'static str>::from(InvalidTransaction::BadProof) =>
+                    RpcError::Call(CallError::Custom(ref obj))
+                        if obj == &invalid_err_obj(InvalidTransaction::BadProof) =>
                     {
                         slog::error!(
                             logger,
@@ -546,7 +558,6 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                         // don't `return`, therefore go back to the top of the loop and retry sending the transaction
                     }
                     err => {
-                        let err = rpc_error_into_anyhow_error(err);
                         slog::error!(
                             logger,
                             "Extrinsic failed with error: {}. Extrinsic: {:?}",
@@ -554,7 +565,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                             &call,
                         );
                         self.nonce.fetch_sub(1, Ordering::Relaxed);
-                        return Err(err);
+                        return Err(err.into());
                     }
                 },
             }
@@ -594,26 +605,28 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             }
             Err(rpc_err) => {
                 match rpc_err {
-                    RpcError::JsonRpcError(ref e)
-                        // POOL_ALREADY_IMPORTED error occurs when the transaction is already in the pool
-                        // More than one node can submit the same unsigned extrinsic. E.g. in the case of
-                        // a threshold signature success. Thus, if we get a "Transaction already in pool" "error"
-                        // we know that this particular extrinsic has already been submitted. And so we can
-                        // ignore the error and return the transaction hash
-                        if e.code == ErrorCode::ServerError(1013) =>
-                    {
-                        slog::trace!(logger, "Unsigned extrinsic {:?} with tx_hash {:#x} already in pool.", &call, expected_hash);
+                    // POOL_ALREADY_IMPORTED error occurs when the transaction is already in the pool
+                    // More than one node can submit the same unsigned extrinsic. E.g. in the case of
+                    // a threshold signature success. Thus, if we get a "Transaction already in pool" "error"
+                    // we know that this particular extrinsic has already been submitted. And so we can
+                    // ignore the error and return the transaction hash
+                    RpcError::Call(CallError::Custom(ref obj)) if obj.code() == 1013 => {
+                        slog::trace!(
+                            logger,
+                            "Unsigned extrinsic {:?} with tx_hash {:#x} already in pool.",
+                            &call,
+                            expected_hash
+                        );
                         Ok(expected_hash)
                     }
                     _ => {
-                        let anyhow_error = rpc_error_into_anyhow_error(rpc_err);
                         slog::error!(
                             logger,
                             "Unsigned extrinsic failed with error: {}. Extrinsic: {:?}",
-                            anyhow_error,
+                            rpc_err,
                             &call
                         );
-                        Err(anyhow_error)
+                        Err(rpc_err.into())
                     }
                 }
             }
@@ -732,7 +745,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             .storage_events_at(Some(block_hash), storage_key)
             .await?
             .into_iter()
-            .map(|storage_change_set| {
+            .flat_map(|storage_change_set| {
                 let StorageChangeSet { block: _, changes } = storage_change_set;
                 changes
                     .into_iter()
@@ -741,7 +754,6 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                             .map(|data| context!(StorageType::decode(&mut &data.0[..])).unwrap())
                     })
             })
-            .flatten()
             .collect())
     }
 
@@ -910,14 +922,13 @@ pub async fn connect_to_state_chain(
 ) -> Result<(
     H256,
     impl Stream<Item = Result<state_chain_runtime::Header>>,
-    Arc<StateChainClient<StateChainRpcClient>>,
+    Arc<StateChainClient<StateChainRpcClient<impl ChainflipClient>>>,
 )> {
     inner_connect_to_state_chain(state_chain_settings, wait_for_staking, logger)
         .await
         .context("Failed to connect to state chain node")
 }
 
-#[allow(clippy::eval_order_dependence)]
 async fn inner_connect_to_state_chain(
     state_chain_settings: &settings::StateChain,
     wait_for_staking: bool,
@@ -925,7 +936,7 @@ async fn inner_connect_to_state_chain(
 ) -> Result<(
     H256,
     impl Stream<Item = Result<state_chain_runtime::Header>>,
-    Arc<StateChainClient<StateChainRpcClient>>,
+    Arc<StateChainClient<StateChainRpcClient<impl ChainflipClient>>>,
 )> {
     let logger = logger.new(o!(COMPONENT_KEY => "StateChainConnector"));
     let signer = signer::PairSigner::<sp_core::sr25519::Pair>::new(
@@ -952,18 +963,17 @@ async fn inner_connect_to_state_chain(
         // https://substrate.stackexchange.com/questions/3667/api-rpc-chain-subscribefinalizedheads-missing-blocks
         // https://arxiv.org/abs/2007.01560
         let mut sparse_finalized_block_header_stream = state_chain_rpc_client
-            .chain_rpc_client
+            .rpc_client
             .subscribe_finalized_heads()
-            .map_err(rpc_error_into_anyhow_error)?
-            .map_err(rpc_error_into_anyhow_error)
-            .chain(futures::stream::once(std::future::ready(Err(anyhow!(
-                "sparse_finalized_block_header_stream unexpectedly ended"
-            )))));
+            .await?
+            .map_err(Into::into)
+            .chain(futures::stream::once(std::future::ready(Err(
+                anyhow::anyhow!("sparse_finalized_block_header_stream unexpectedly ended"),
+            ))));
 
-        let mut latest_finalized_header =
+        let mut latest_finalized_header: state_chain_runtime::Header =
             sparse_finalized_block_header_stream.next().await.unwrap()?;
-
-        let chain_rpc_client = state_chain_rpc_client.chain_rpc_client.clone();
+        let rpc_client = state_chain_rpc_client.rpc_client.clone();
 
         (
             latest_finalized_header.clone(),
@@ -977,33 +987,27 @@ async fn inner_connect_to_state_chain(
                             next_finalized_header.clone(),
                         );
 
-                        let chain_rpc_client = chain_rpc_client.clone();
+                        let rpc_client = rpc_client.clone();
                         async move {
+                            let rpc_client = &rpc_client;
                             let intervening_headers: Vec<_> = futures::stream::iter(
                                 prev_finalized_header.number + 1..next_finalized_header.number,
                             )
-                            .then(|block_number| {
-                                let chain_rpc_client = &chain_rpc_client;
-                                async move {
-                                    let block_hash = try_unwrap_value(
-                                        chain_rpc_client
-                                            .block_hash(Some(sp_rpc::list::ListOrValue::Value(
-                                                block_number.into(),
-                                            )))
-                                            .await
-                                            .map_err(rpc_error_into_anyhow_error)?,
-                                        anyhow!("Finalized block missing hash"),
-                                    )
-                                    .unwrap();
-                                    let block_header = chain_rpc_client
-                                        .header(Some(block_hash))
-                                        .await
-                                        .map_err(rpc_error_into_anyhow_error)?
-                                        .unwrap();
-                                    assert_eq!(block_header.hash(), block_hash);
-                                    assert_eq!(block_header.number, block_number);
-                                    Result::<_, anyhow::Error>::Ok((block_hash, block_header))
-                                }
+                            .then(|block_number| async move {
+                                let block_hash = try_unwrap_value(
+                                    rpc_client
+                                        .block_hash(Some(sp_rpc::list::ListOrValue::Value(
+                                            block_number.into(),
+                                        )))
+                                        .await?,
+                                    anyhow!("Finalized block missing hash"),
+                                )
+                                .unwrap();
+                                let block_header =
+                                    rpc_client.header(Some(block_hash)).await?.unwrap();
+                                assert_eq!(block_header.hash(), block_hash);
+                                assert_eq!(block_header.number, block_number);
+                                Result::<_, anyhow::Error>::Ok((block_hash, block_header))
                             })
                             .try_collect()
                             .await?;
@@ -1037,26 +1041,20 @@ async fn inner_connect_to_state_chain(
     // Often `finalized_header` returns a significantly newer latest block than the stream returns
     // so we move the stream forward to this block
     let (mut latest_block_hash, mut latest_block_number) = {
-        let finalised_header_hash = state_chain_rpc_client
-            .chain_rpc_client
-            .finalized_head()
-            .await
-            .map_err(rpc_error_into_anyhow_error)?;
-        let finalised_header_number = state_chain_rpc_client.chain_rpc_client
+        let finalised_header_hash = state_chain_rpc_client.rpc_client.finalized_head().await?;
+        let finalised_header = state_chain_rpc_client.rpc_client
             .header(Some(finalised_header_hash))
-            .await
-            .map_err(rpc_error_into_anyhow_error)?
-            .expect("We have the hash from the chain, so there should definitely be a header for this block")
-            .number;
+            .await?
+            .expect("We have the hash from the chain, so there should definitely be a header for this block");
 
-        if first_finalized_block_header.number < finalised_header_number {
-            for block_number in first_finalized_block_header.number + 1..=finalised_header_number {
+        if first_finalized_block_header.number < finalised_header.number {
+            for block_number in first_finalized_block_header.number + 1..=finalised_header.number {
                 assert_eq!(
                     finalized_block_header_stream.next().await.unwrap()?.number,
                     block_number
                 );
             }
-            (finalised_header_hash, finalised_header_number)
+            (finalised_header_hash, finalised_header.number)
         } else {
             (
                 first_finalized_block_header.hash(),
@@ -1066,16 +1064,15 @@ async fn inner_connect_to_state_chain(
     };
 
     let (latest_block_hash, latest_block_number, account_nonce) = {
-        async fn get_account_nonce(
-            state_rpc_client: &StateRpcClient,
+        async fn get_account_nonce<C: ChainflipClient + Send + Sync>(
+            state_rpc_client: &C,
             account_storage_key: &StorageKey,
             block_hash: state_chain_runtime::Hash,
         ) -> Result<Option<u32>> {
             Ok(
                 if let Some(encoded_account_info) = state_rpc_client
                     .storage(account_storage_key.clone(), Some(block_hash))
-                    .await
-                    .map_err(rpc_error_into_anyhow_error)?
+                    .await?
                 {
                     let account_info: frame_system::AccountInfo<
                         state_chain_runtime::Index,
@@ -1088,8 +1085,10 @@ async fn inner_connect_to_state_chain(
             )
         }
 
+        let rpc_client = state_chain_rpc_client.rpc_client.as_ref();
+
         let account_nonce = match get_account_nonce(
-            &state_chain_rpc_client.state_rpc_client,
+            rpc_client,
             &account_storage_key,
             latest_block_hash,
         )
@@ -1099,12 +1098,9 @@ async fn inner_connect_to_state_chain(
             None => {
                 if wait_for_staking {
                     loop {
-                        if let Some(nonce) = get_account_nonce(
-                            &state_chain_rpc_client.state_rpc_client,
-                            &account_storage_key,
-                            latest_block_hash,
-                        )
-                        .await?
+                        if let Some(nonce) =
+                            get_account_nonce(rpc_client, &account_storage_key, latest_block_hash)
+                                .await?
                         {
                             break nonce;
                         } else {
@@ -1135,10 +1131,9 @@ async fn inner_connect_to_state_chain(
     let RuntimeMetadataPrefixed(metadata_prefix, metadata) =
         context!(RuntimeMetadataPrefixed::decode(
             &mut &state_chain_rpc_client
-                .state_rpc_client
+                .rpc_client
                 .metadata(Some(latest_block_hash))
-                .await
-                .map_err(rpc_error_into_anyhow_error)?[..],
+                .await?[..],
         ))?;
     if metadata_prefix != frame_metadata::META_RESERVED {
         bail!(
@@ -1164,10 +1159,9 @@ async fn inner_connect_to_state_chain(
             ),
             genesis_hash: try_unwrap_value(
                 state_chain_rpc_client
-                    .chain_rpc_client
+                    .rpc_client
                     .block_hash(Some(sp_rpc::number::NumberOrHex::from(0u64).into()))
-                    .await
-                    .map_err(rpc_error_into_anyhow_error)?,
+                    .await?,
                 anyhow!("Genesis block doesn't exist?"),
             )?,
             signer: signer.clone(),
@@ -1192,40 +1186,28 @@ async fn inner_connect_to_state_chain(
     ))
 }
 
-#[allow(clippy::eval_order_dependence)]
 pub async fn connect_to_state_chain_without_signer(
     state_chain_settings: &settings::StateChain,
-) -> Result<StateChainRpcClient> {
+) -> Result<StateChainRpcClient<impl ChainflipClient>> {
     let ws_endpoint = state_chain_settings.ws_endpoint.as_str();
-    let rpc_client =
-        jsonrpc_core_client::transports::ws::connect::<RpcChannel>(&url::Url::parse(ws_endpoint)?)
+    let rpc_client = Arc::new(
+        WsClientBuilder::default()
+            .build(&url::Url::parse(ws_endpoint)?)
             .await
-            .map_err(rpc_error_into_anyhow_error)
             .with_context(|| {
                 format!(
                     "Failed to establish rpc connection to substrate node '{}'",
                     ws_endpoint
                 )
-            })?;
+            })?,
+    );
 
-    let author_rpc_client: AuthorRpcClient = rpc_client.clone().into();
-    let chain_rpc_client: ChainRpcClient = rpc_client.clone().into();
-    let state_rpc_client: StateRpcClient = rpc_client.clone().into();
-    let system_rpc_client: SystemRpcClient = rpc_client.clone().into();
-    let custom_rpc_client: CustomClient = rpc_client.into();
-
-    Ok(StateChainRpcClient {
-        system_rpc_client,
-        author_rpc_client,
-        state_rpc_client,
-        chain_rpc_client,
-        custom_rpc_client,
-    })
+    Ok(StateChainRpcClient { rpc_client })
 }
 
 #[cfg(test)]
 pub mod test_utils {
-    use cf_traits::ChainflipAccountState;
+    use cf_primitives::ChainflipAccountState;
     use frame_system::AccountInfo;
 
     use super::*;
@@ -1361,11 +1343,10 @@ mod tests {
             .expect_submit_extrinsic_rpc()
             .times(MAX_EXTRINSIC_RETRY_ATTEMPTS)
             .returning(move |_| {
-                Err(RpcError::JsonRpcError(Error {
-                    code: ErrorCode::ServerError(1014),
-                    message: "Priority too low".to_string(),
-                    data: None,
-                }))
+                Err(
+                    CallError::Custom(ErrorObject::owned::<()>(1014, "Priority too low", None))
+                        .into(),
+                )
             });
 
         let state_chain_client =
@@ -1395,13 +1376,12 @@ mod tests {
             .expect_submit_extrinsic_rpc()
             .times(MAX_EXTRINSIC_RETRY_ATTEMPTS)
             .returning(move |_| {
-                Err(RpcError::JsonRpcError(Error {
-                    code: ErrorCode::ServerError(1010),
-                    message: "Invalid Transaction".to_string(),
-                    data: Some(Value::String(
-                        <&'static str>::from(InvalidTransaction::Stale).into(),
-                    )),
-                }))
+                Err(CallError::Custom(ErrorObject::owned(
+                    1010,
+                    "Invalid Transaction",
+                    Some(<&'static str>::from(InvalidTransaction::Stale)),
+                ))
+                .into())
             });
 
         let state_chain_client =
@@ -1430,13 +1410,12 @@ mod tests {
             .expect_submit_extrinsic_rpc()
             .times(1)
             .returning(move |_ext: state_chain_runtime::UncheckedExtrinsic| {
-                Err(RpcError::JsonRpcError(Error {
-                    code: ErrorCode::ServerError(1010),
-                    message: "Invalid Transaction".to_string(),
-                    data: Some(Value::String(
-                        <&'static str>::from(InvalidTransaction::BadProof).into(),
-                    )),
-                }))
+                Err(CallError::Custom(ErrorObject::owned(
+                    1010,
+                    "Invalid Transaction",
+                    Some(<&'static str>::from(InvalidTransaction::BadProof)),
+                ))
+                .into())
             });
 
         // Second time called, should succeed
@@ -1500,7 +1479,7 @@ mod tests {
         mock_state_chain_rpc_client
             .expect_submit_extrinsic_rpc()
             .times(1)
-            .returning(move |_| Err(RpcError::Timeout));
+            .returning(move |_| Err(RpcError::RequestTimeout));
 
         let state_chain_client =
             StateChainClient::create_test_sc_client(mock_state_chain_rpc_client);
@@ -1540,11 +1519,10 @@ mod tests {
             .expect_submit_extrinsic_rpc()
             .times(1)
             .returning(move |_| {
-                Err(RpcError::JsonRpcError(Error {
-                    code: ErrorCode::ServerError(1014),
-                    message: "Priority too low".to_string(),
-                    data: None,
-                }))
+                Err(
+                    CallError::Custom(ErrorObject::owned::<()>(1014, "Priority too low", None))
+                        .into(),
+                )
             });
 
         mock_state_chain_rpc_client

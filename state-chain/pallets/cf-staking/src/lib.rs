@@ -163,9 +163,14 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// A node has staked some FLIP on the Ethereum chain. \[account_id, stake_added,
-		/// total_stake\]
-		Staked(AccountId<T>, FlipBalance<T>, FlipBalance<T>),
+		/// A node has staked some FLIP on the Ethereum chain.
+		Staked {
+			account_id: AccountId<T>,
+			tx_hash: EthTransactionHash,
+			stake_added: FlipBalance<T>,
+			// may include rewards earned
+			total_stake: FlipBalance<T>,
+		},
 
 		/// A node has claimed their FLIP on the Ethereum chain. \[account_id,
 		/// claimed_amount\]
@@ -251,12 +256,18 @@ pub mod pallet {
 			amount: FlipBalance<T>,
 			withdrawal_address: EthereumAddress,
 			// Required to ensure this call is unique per staking event.
-			_tx_hash: EthTransactionHash,
+			tx_hash: EthTransactionHash,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 			T::SystemState::ensure_no_maintenance()?;
 			if Self::check_withdrawal_address(&account_id, withdrawal_address, amount).is_ok() {
-				Self::stake_account(&account_id, amount);
+				let total_stake = Self::stake_account(&account_id, amount);
+				Self::deposit_event(Event::Staked {
+					account_id,
+					tx_hash,
+					stake_added: amount,
+					total_stake,
+				});
 			}
 			Ok(().into())
 		}
@@ -333,7 +344,7 @@ pub mod pallet {
 
 			// Throw an error if the staker tries to claim too much. Otherwise decrement the stake
 			// by the amount claimed.
-			T::Flip::try_claim(&account_id, amount)?;
+			T::Flip::try_initiate_claim(&account_id, amount)?;
 
 			// Set expiry and build the claim parameters.
 			let expiry =
@@ -411,7 +422,7 @@ pub mod pallet {
 			expiries.retain(|(_, expiry_account_id)| expiry_account_id != &account_id);
 			ClaimExpiries::<T>::set(expiries);
 
-			T::Flip::settle_claim(claimed_amount);
+			T::Flip::finalize_claim(&account_id).expect("This should never return an error because we already ensured above that the pending claim does indeed exist");
 
 			if T::Flip::staked_balance(&account_id).is_zero() {
 				frame_system::Provider::<T>::killed(&account_id).unwrap_or_else(|e| {
@@ -596,7 +607,8 @@ impl<T: Config> Pallet<T> {
 			if let Some(pending_claim) = PendingClaims::<T>::take(&account_id) {
 				let claim_amount = pending_claim.amount().into();
 				// Re-credit the account
-				T::Flip::revert_claim(&account_id, claim_amount);
+				T::Flip::revert_claim(&account_id, claim_amount)
+					.expect("Pending Claim should exist since the corresponding expiry exists");
 
 				Self::deposit_event(Event::<T>::ClaimExpired(account_id, claim_amount));
 			}
@@ -635,16 +647,14 @@ impl<T: Config> Pallet<T> {
 
 	/// Add stake to an account, creating the account if it doesn't exist, and activating the
 	/// account if it is in retired state.
-	fn stake_account(account_id: &AccountId<T>, amount: T::Balance) {
+	fn stake_account(account_id: &AccountId<T>, amount: T::Balance) -> T::Balance {
 		if !frame_system::Pallet::<T>::account_exists(account_id) {
 			// Creates an account
 			let _ = frame_system::Provider::<T>::created(account_id);
 			AccountRetired::<T>::insert(&account_id, true);
 		}
 
-		let new_total = T::Flip::credit_stake(account_id, amount);
-
-		Self::deposit_event(Event::Staked(account_id.clone(), amount, new_total));
+		T::Flip::credit_stake(account_id, amount)
 	}
 
 	/// Sets the `retired` flag associated with the account to true, signalling that the account no

@@ -6,11 +6,11 @@ authors = ['Chainflip <https://chainflip.io>']
 description = 'Common traits used in the Chainflip runtime'
 
 [dependencies]
-log = { version = '0.4.14', default-features = false }
-serde = { optional = true, version = '1.0.126', features = ['derive'] }
+log = { version = '0.4.16', default-features = false }
 
 # Internal
 cf-chains = { path ='../chains', default-features = false }
+cf-primitives = { path ='../primitives', default-features = false }
 
 # Parity deps
 [dependencies.codec]
@@ -22,46 +22,47 @@ version = '3.0.0'
 [dependencies.scale-info]
 default-features = false
 features = ['derive']
-version = '2.0.1'
+version = '2.1.1'
 
 [dependencies.frame-system]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 [dependencies.frame-support]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 [dependencies.sp-runtime]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 [dependencies.sp-std]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 [dependencies.frame-benchmarking]
 default-features = false
 optional = true
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 [dev-dependencies.sp-core]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 [dev-dependencies.sp-io]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-05'
+tag = 'chainflip-monthly-2022-06'
 
 [features]
 default = ['std']
 std = [
   'cf-chains/std',
+  'cf-primitives/std',
   'codec/std',
   'scale-info/std',
   'sp-std/std',
@@ -69,7 +70,6 @@ std = [
   'frame-support/std',
   'frame-system/std',
   'sp-runtime/std',
-  'serde'
 ]
 runtime-benchmarks = [
   'frame-benchmarking/runtime-benchmarks',

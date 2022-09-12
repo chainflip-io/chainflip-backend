@@ -1,7 +1,7 @@
 use std::{collections::BTreeSet, sync::Arc};
 
-use cf_traits::AuthorityCount;
-use pallet_cf_vaults::CeremonyId;
+use async_trait::async_trait;
+use cf_primitives::{AuthorityCount, CeremonyId};
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
@@ -9,13 +9,17 @@ use crate::{
     multisig_p2p::OutgoingMultisigStageMessages,
 };
 
-use super::CeremonyFailureReason;
+use super::{CeremonyFailureReason, CeremonyStageName};
 
 /// Outcome of a given ceremony stage
 pub enum StageResult<M, Result, FailureReason> {
     /// Ceremony proceeds to the next stage
     NextStage(
-        Box<dyn CeremonyStage<Message = M, Result = Result, FailureReason = FailureReason> + Send>,
+        Box<
+            dyn CeremonyStage<Message = M, Result = Result, FailureReason = FailureReason>
+                + Send
+                + Sync,
+        >,
     ),
     /// Ceremony aborted (contains parties to report)
     Error(
@@ -37,6 +41,7 @@ pub enum ProcessMessageResult {
 }
 
 /// Defines actions that any given stage of a ceremony should be able to perform
+#[async_trait]
 pub trait CeremonyStage {
     // Message type to be processed by a particular stage
     type Message;
@@ -57,17 +62,18 @@ pub trait CeremonyStage {
         m: Self::Message,
     ) -> ProcessMessageResult;
 
-    /// This is how individual stages signal messages that should be processed in the next stage
-    fn should_delay(&self, m: &Self::Message) -> bool;
-
     /// Verify data for this stage after it is received from all other parties,
     /// either abort or proceed to the next stage based on the result
-    fn finalize(self: Box<Self>) -> StageResult<Self::Message, Self::Result, Self::FailureReason>;
+    async fn finalize(
+        self: Box<Self>,
+    ) -> StageResult<Self::Message, Self::Result, Self::FailureReason>;
 
     /// Parties we haven't heard from for the current stage
     fn awaited_parties(&self) -> BTreeSet<AuthorityCount>;
 
     fn get_stage_name(&self) -> super::CeremonyStageName;
+
+    fn ceremony_common(&self) -> &CeremonyCommon;
 }
 
 /// Data useful during any stage of a ceremony
@@ -91,6 +97,7 @@ impl CeremonyCommon {
 }
 
 pub trait PreProcessStageDataCheck {
-    fn data_size_is_valid(&self, num_of_parties: Option<AuthorityCount>) -> bool;
+    fn data_size_is_valid(&self, num_of_parties: AuthorityCount) -> bool;
     fn is_first_stage(&self) -> bool;
+    fn should_delay(stage_name: CeremonyStageName, message: &Self) -> bool;
 }

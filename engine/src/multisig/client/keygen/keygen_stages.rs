@@ -7,7 +7,8 @@ use crate::multisig::client::common::{
 };
 use crate::multisig::client::{self, KeygenResult, KeygenResultInfo};
 
-use cf_traits::AuthorityCount;
+use async_trait::async_trait;
+use cf_primitives::AuthorityCount;
 use client::{
     common::{
         broadcast::{verify_broadcasts, BroadcastStage, BroadcastStageProcessor, DataToSend},
@@ -74,6 +75,7 @@ impl<P: ECPoint> HashCommitments1<P> {
     }
 }
 
+#[async_trait]
 impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, KeygenFailureReason>
     for HashCommitments1<P>
 {
@@ -85,11 +87,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
         DataToSend::Broadcast(HashComm1(self.hash_commitment))
     }
 
-    fn should_delay(&self, m: &KeygenData<P>) -> bool {
-        matches!(m, KeygenData::VerifyHashComm2(_))
-    }
-
-    fn process(
+    async fn process(
         self,
         messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
     ) -> StageResult<KeygenData<P>, KeygenResultInfo<P>, KeygenFailureReason> {
@@ -141,6 +139,7 @@ impl<P: ECPoint> VerifyHashCommitmentsBroadcast2<P> {
 
 derive_display_as_type_name!(VerifyHashCommitmentsBroadcast2<P: ECPoint>);
 
+#[async_trait]
 impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, KeygenFailureReason>
     for VerifyHashCommitmentsBroadcast2<P>
 {
@@ -153,11 +152,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
         })
     }
 
-    fn should_delay(&self, m: &KeygenData<P>) -> bool {
-        matches!(m, KeygenData::CoeffComm3(_))
-    }
-
-    fn process(
+    async fn process(
         self,
         messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
     ) -> StageResult<KeygenData<P>, KeygenResultInfo<P>, KeygenFailureReason> {
@@ -206,6 +201,7 @@ pub struct CoefficientCommitments3<P: ECPoint> {
 
 derive_display_as_type_name!(CoefficientCommitments3<P: ECPoint>);
 
+#[async_trait]
 impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, KeygenFailureReason>
     for CoefficientCommitments3<P>
 {
@@ -216,11 +212,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
         DataToSend::Broadcast(self.own_commitment.clone())
     }
 
-    fn should_delay(&self, m: &KeygenData<P>) -> bool {
-        matches!(m, KeygenData::VerifyCoeffComm4(_))
-    }
-
-    fn process(
+    async fn process(
         self,
         messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
     ) -> KeygenStageResult<P> {
@@ -254,6 +246,7 @@ struct VerifyCommitmentsBroadcast4<P: ECPoint> {
 
 derive_display_as_type_name!(VerifyCommitmentsBroadcast4<P: ECPoint>);
 
+#[async_trait]
 impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, KeygenFailureReason>
     for VerifyCommitmentsBroadcast4<P>
 {
@@ -266,11 +259,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
         DataToSend::Broadcast(VerifyCoeffComm4 { data })
     }
 
-    fn should_delay(&self, m: &KeygenData<P>) -> bool {
-        matches!(m, KeygenData::SecretShares5(_))
-    }
-
-    fn process(
+    async fn process(
         self,
         messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
     ) -> KeygenStageResult<P> {
@@ -341,6 +330,7 @@ struct SecretSharesStage5<P: ECPoint> {
 
 derive_display_as_type_name!(SecretSharesStage5<P: ECPoint>);
 
+#[async_trait]
 impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, KeygenFailureReason>
     for SecretSharesStage5<P>
 {
@@ -354,11 +344,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
         DataToSend::Private(self.shares.0.clone())
     }
 
-    fn should_delay(&self, m: &KeygenData<P>) -> bool {
-        matches!(m, KeygenData::Complaints6(_))
-    }
-
-    fn process(
+    async fn process(
         self,
         incoming_shares: BTreeMap<AuthorityCount, Option<Self::Message>>,
     ) -> KeygenStageResult<P> {
@@ -427,6 +413,7 @@ struct ComplaintsStage6<P: ECPoint> {
 
 derive_display_as_type_name!(ComplaintsStage6<P: ECPoint>);
 
+#[async_trait]
 impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, KeygenFailureReason>
     for ComplaintsStage6<P>
 {
@@ -437,11 +424,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
         DataToSend::Broadcast(Complaints6(self.complaints.clone()))
     }
 
-    fn should_delay(&self, m: &KeygenData<P>) -> bool {
-        matches!(m, KeygenData::VerifyComplaints7(_))
-    }
-
-    fn process(
+    async fn process(
         self,
         messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
     ) -> KeygenStageResult<P> {
@@ -471,6 +454,7 @@ struct VerifyComplaintsBroadcastStage7<P: ECPoint> {
 
 derive_display_as_type_name!(VerifyComplaintsBroadcastStage7<P: ECPoint>);
 
+#[async_trait]
 impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, KeygenFailureReason>
     for VerifyComplaintsBroadcastStage7<P>
 {
@@ -483,11 +467,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
         DataToSend::Broadcast(VerifyComplaints7 { data })
     }
 
-    fn should_delay(&self, data: &KeygenData<P>) -> bool {
-        matches!(data, KeygenData::BlameResponse8(_))
-    }
-
-    fn process(
+    async fn process(
         self,
         messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
     ) -> KeygenStageResult<P> {
@@ -503,7 +483,8 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
 
         if verified_complaints.iter().all(|(_idx, c)| c.0.is_empty()) {
             // if all complaints are empty, we can finalize the ceremony
-            return finalize_keygen(self.common, self.agg_pubkey, self.shares, &self.commitments);
+            return finalize_keygen(self.common, self.agg_pubkey, self.shares, self.commitments)
+                .await;
         };
 
         // Some complaints have been issued, entering the blaming stage
@@ -554,13 +535,18 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
     }
 }
 
-fn finalize_keygen<KeygenData, P: ECPoint>(
+async fn finalize_keygen<KeygenData, P: ECPoint>(
     common: CeremonyCommon,
     agg_pubkey: ValidAggregateKey<P>,
     secret_shares: IncomingShares<P>,
-    commitments: &BTreeMap<AuthorityCount, DKGCommitment<P>>,
+    commitments: BTreeMap<AuthorityCount, DKGCommitment<P>>,
 ) -> StageResult<KeygenData, KeygenResultInfo<P>, KeygenFailureReason> {
     let params = ThresholdParameters::from_share_count(common.all_idxs.len() as AuthorityCount);
+
+    let party_public_keys =
+        tokio::task::spawn_blocking(move || derive_local_pubkeys_for_parties(params, &commitments))
+            .await
+            .unwrap();
 
     let keygen_result_info = KeygenResultInfo {
         key: Arc::new(KeygenResult {
@@ -568,9 +554,9 @@ fn finalize_keygen<KeygenData, P: ECPoint>(
                 y: agg_pubkey.0,
                 x_i: compute_secret_key_share(secret_shares),
             },
-            party_public_keys: derive_local_pubkeys_for_parties(params, commitments),
+            party_public_keys,
         }),
-        validator_map: common.validator_mapping,
+        validator_mapping: common.validator_mapping,
         params,
     };
 
@@ -588,6 +574,7 @@ struct BlameResponsesStage8<P: ECPoint> {
 
 derive_display_as_type_name!(BlameResponsesStage8<P: ECPoint>);
 
+#[async_trait]
 impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, KeygenFailureReason>
     for BlameResponsesStage8<P>
 {
@@ -632,11 +619,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
         data
     }
 
-    fn should_delay(&self, data: &KeygenData<P>) -> bool {
-        matches!(data, KeygenData::VerifyBlameResponses9(_))
-    }
-
-    fn process(
+    async fn process(
         self,
         blame_responses: BTreeMap<AuthorityCount, Option<Self::Message>>,
     ) -> KeygenStageResult<P> {
@@ -741,6 +724,7 @@ impl<P: ECPoint> VerifyBlameResponsesBroadcastStage9<P> {
     }
 }
 
+#[async_trait]
 impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, KeygenFailureReason>
     for VerifyBlameResponsesBroadcastStage9<P>
 {
@@ -753,11 +737,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
         DataToSend::Broadcast(VerifyBlameResponses9 { data })
     }
 
-    fn should_delay(&self, _: &KeygenData<P>) -> bool {
-        false
-    }
-
-    fn process(
+    async fn process(
         mut self,
         messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
     ) -> KeygenStageResult<P> {
@@ -779,7 +759,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
                     self.shares.0.insert(sender_idx, share);
                 }
 
-                finalize_keygen(self.common, self.agg_pubkey, self.shares, &self.commitments)
+                finalize_keygen(self.common, self.agg_pubkey, self.shares, self.commitments).await
             }
             Err(bad_parties) => StageResult::Error(
                 bad_parties,

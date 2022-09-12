@@ -39,11 +39,11 @@ executors:
         auth: *dockerconfig
   rust-base:
     docker:
-      - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:nightly-2021-11-16
+      - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:nightly-2022-08-08
         auth: *dockerconfig
   rust-base-ci:
     docker:
-      - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:nightly-2021-11-16
+      - image: ghcr.io/chainflip-io/chainflip-backend/rust-base:nightly-2022-08-08
         auth: *dockerconfig
         user: ci
   java-executor:
@@ -237,10 +237,10 @@ jobs:
       - merge_target
       - run: sccache --show-stats
       - run: |
-          cargo build --locked --release --features runtime-benchmarks
+          cargo ci-build --locked
           sccache --show-stats
       - run: |
-          cargo test --lib --locked --release --all-features
+          cargo ci-test --locked
           sccache --show-stats
       - persist_to_workspace:
           root: ./
@@ -275,7 +275,7 @@ jobs:
           environment:
             RUSTFLAGS: -D warnings
           command: |
-            cargo check --all-targets --all-features --locked --release
+            cargo ci-check --locked
             sccache --show-stats
 
   cargo-test:
@@ -285,7 +285,7 @@ jobs:
       - merge_target
       - run: sccache --show-stats
       - run: |
-          cargo test --lib --locked --release
+          cargo ci-test --locked
           sccache --show-stats
 
   cargo-clippy:
@@ -296,7 +296,7 @@ jobs:
       - run: sccache --show-stats
       # TODO: remove the global ignores (#1254)
       - run: |
-          sh clippy.sh
+          cargo ci-clippy
           sccache --show-stats
 
   cargo-doc:

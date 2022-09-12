@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::BTreeSet, sync::Arc};
 
 use super::*;
 use crate::{
@@ -47,7 +47,7 @@ async fn should_ignore_rts_for_unknown_key() {
     let signing_request_fut = client.initiate_signing(
         DEFAULT_SIGNING_CEREMONY_ID,
         key_id,
-        ACCOUNT_IDS.to_vec(),
+        BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
         MessageHash([0; 32]),
     );
 
@@ -69,7 +69,7 @@ async fn should_save_key_after_keygen() {
 
     // Generate a key to use in this test
     let (key_id, keygen_result_info) = {
-        let (key_id, key_data, _, _) =
+        let (key_id, key_data) =
             helpers::run_keygen(new_nodes(ACCOUNT_IDS.clone()), DEFAULT_KEYGEN_CEREMONY_ID).await;
         (key_id, key_data.into_iter().next().unwrap().1)
     };
@@ -89,8 +89,10 @@ async fn should_save_key_after_keygen() {
         );
 
         // Send Keygen Request
-        let keygen_request_fut =
-            client.initiate_keygen(DEFAULT_KEYGEN_CEREMONY_ID, ACCOUNT_IDS.to_vec());
+        let keygen_request_fut = client.initiate_keygen(
+            DEFAULT_KEYGEN_CEREMONY_ID,
+            BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
+        );
 
         // Get the oneshot channel that is linked to the keygen request
         // and send a successful keygen result
@@ -120,7 +122,7 @@ async fn should_save_key_after_keygen() {
 async fn should_load_keys_on_creation() {
     // Generate a key to use in this test
     let (key_id, stored_keygen_result_info) = {
-        let (key_id, key_data, _, _) =
+        let (key_id, key_data) =
             helpers::run_keygen(new_nodes(ACCOUNT_IDS.clone()), DEFAULT_KEYGEN_CEREMONY_ID).await;
         (key_id, key_data.into_iter().next().unwrap().1)
     };

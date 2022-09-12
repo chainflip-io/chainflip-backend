@@ -111,9 +111,11 @@ pub fn check_balance_integrity() -> bool {
 	let accounts_total = pallet_cf_flip::Account::<Test>::iter_values()
 		.map(|account| account.total())
 		.sum::<FlipBalance>();
+	let pending_claims_total =
+		pallet_cf_flip::PendingClaimsReserve::<Test>::iter_values().sum::<FlipBalance>();
 	let reserves_total = pallet_cf_flip::Reserve::<Test>::iter_values().sum::<FlipBalance>();
 
-	(accounts_total + reserves_total) == Flip::onchain_funds()
+	(accounts_total + reserves_total + pending_claims_total) == Flip::onchain_funds()
 }
 
 // Build genesis storage according to the mock runtime.

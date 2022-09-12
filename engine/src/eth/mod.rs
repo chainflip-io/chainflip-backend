@@ -15,7 +15,7 @@ pub mod utils;
 
 use anyhow::{anyhow, bail, Context, Result};
 
-use cf_traits::EpochIndex;
+use cf_primitives::EpochIndex;
 use pallet_cf_broadcast::BroadcastAttemptId;
 use regex::Regex;
 use sp_runtime::traits::Keccak256;
@@ -65,7 +65,7 @@ use event::Event;
 
 use async_trait::async_trait;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct EthNumberBloom {
     pub block_number: U64,
     pub logs_bloom: H2048,
@@ -296,7 +296,7 @@ where
 }
 
 // Used to zip on the streams, so we know which stream is returning
-#[derive(Clone, PartialEq, Debug, Copy)]
+#[derive(Clone, PartialEq, Eq, Debug, Copy)]
 pub enum TransportProtocol {
     Http,
     Ws,
@@ -321,7 +321,7 @@ pub struct BlockWithDecodedEvents<EventParameters: Debug> {
 
 /// Just contains an empty vec if there are no events
 #[derive(Debug)]
-#[cfg_attr(test, derive(PartialEq))]
+#[cfg_attr(test, derive(PartialEq, Eq))]
 pub struct BlockWithEvents<EventParameters: Debug> {
     pub block_number: u64,
     pub events: Vec<Event<EventParameters>>,
