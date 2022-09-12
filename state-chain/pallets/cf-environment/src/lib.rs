@@ -178,7 +178,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::update_supported_eth_assets())]
 		pub fn update_supported_eth_assets(
 			origin: OriginFor<T>,
 			asset: Asset,
