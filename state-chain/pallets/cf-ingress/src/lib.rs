@@ -26,8 +26,17 @@ pub mod pallet {
 		traits::{EnsureOrigin, IsType},
 	};
 	use sp_core::H256;
+	use sp_std::vec::Vec;
 
 	use frame_system::{ensure_signed, pallet_prelude::OriginFor};
+
+	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+	pub struct IngressWitness {
+		pub ingress_address: ForeignChainAddress,
+		pub asset: Asset,
+		pub amount: u128,
+		pub tx_hash: H256,
+	}
 
 	/// Details used to determine the ingress of funds.
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -86,9 +95,17 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		// We only want to witness for one asset on a particular chain
-		StartWitnessing { ingress_address: ForeignChainAddress, ingress_asset: ForeignChainAsset },
+		StartWitnessing {
+			ingress_address: ForeignChainAddress,
+			ingress_asset: ForeignChainAsset,
+		},
 
-		IngressCompleted { ingress_address: ForeignChainAddress, asset: Asset, amount: u128 },
+		IngressCompleted {
+			ingress_address: ForeignChainAddress,
+			asset: Asset,
+			amount: u128,
+			tx_hash: H256,
+		},
 	}
 
 	#[pallet::error]
@@ -101,26 +118,23 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn do_ingress(
 			origin: OriginFor<T>,
-			ingress_address: ForeignChainAddress,
-			asset: Asset,
-			amount: u128,
-			// required to ensure the witness is unique to that transaction
-			_tx_hash: H256,
+			ingress_witnesses: Vec<IngressWitness>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
-			// NB: Don't take here. We should continue witnessing this address
-			// even after an ingress to it has occurred.
-			// https://github.com/chainflip-io/chainflip-eth-contracts/pull/226
-			match OpenIntents::<T>::get(ingress_address).ok_or(Error::<T>::InvalidIntent)? {
-				Intent::LiquidityProvision { lp_account, .. } => {
-					T::LpAccountHandler::provision_account(&lp_account, asset, amount)?;
-				},
-				Intent::Swap { .. } => todo!(),
-			}
+			for IngressWitness { ingress_address, asset, amount, tx_hash } in ingress_witnesses {
+			    // NB: Don't take here. We should continue witnessing this address
+			    // even after an ingress to it has occurred.
+			    // https://github.com/chainflip-io/chainflip-eth-contracts/pull/226
+			    match OpenIntents::<T>::get(ingress_address).ok_or(Error::<T>::InvalidIntent)? {
+				    Intent::LiquidityProvision { lp_account, .. } => {
+					    T::LpAccountHandler::provision_account(&lp_account, asset, amount)?;
+				    },
+				    Intent::Swap { .. } => todo!(),
+                }
 
-			Self::deposit_event(Event::IngressCompleted { ingress_address, asset, amount });
-
+                Self::deposit_event(Event::IngressCompleted { ingress_address, asset, amount });
+            }
 			Ok(().into())
 		}
 
