@@ -9015,6 +9015,7 @@ dependencies = [
  "nanorand",
  "pallet-aura",
  "pallet-authorship",
+ "pallet-cf-account-types",
  "pallet-cf-auction",
  "pallet-cf-broadcast",
  "pallet-cf-chain-tracking",

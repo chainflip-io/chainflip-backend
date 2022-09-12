@@ -28,7 +28,7 @@ use frame_support::{
 use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{Bounded, MaybeSerializeDeserialize},
-	DispatchError, DispatchResult, RuntimeDebug,
+	DispatchError, DispatchResult, FixedPointOperand, RuntimeDebug,
 };
 use sp_std::{iter::Sum, marker::PhantomData, prelude::*};
 /// An index to a block.
@@ -46,6 +46,7 @@ pub trait Chainflip: frame_system::Config {
 		+ Ord
 		+ Copy
 		+ AtLeast32BitUnsigned
+		+ FixedPointOperand
 		+ MaybeSerializeDeserialize
 		+ Bounded
 		+ Sum<Self::Amount>;

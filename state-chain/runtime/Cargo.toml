@@ -31,6 +31,7 @@ cf-chains = { path = '../chains', default-features = false }
 cf-session-benchmarking = { path = '../cf-session-benchmarking', default-features = false, optional = true }
 
 cf-utilities = { package = 'utilities', path = '../../utilities', default-features = false }
+pallet-cf-account-types = { path = '../pallets/cf-account-types', default-features = false }
 pallet-cf-validator = { path = '../pallets/cf-validator', default-features = false }
 pallet-cf-staking = { path = '../pallets/cf-staking', default-features = false }
 pallet-cf-witnesser = { path = '../pallets/cf-witnesser', default-features = false}
@@ -239,6 +240,7 @@ std = [
   'frame-try-runtime/std',
   'nanorand/std',
   'pallet-aura/std',
+  'pallet-cf-account-types/std',
   'pallet-cf-auction/std',
   'pallet-cf-broadcast/std',
   'pallet-cf-chain-tracking/std',
