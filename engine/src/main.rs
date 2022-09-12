@@ -86,8 +86,8 @@ fn main() -> anyhow::Result<()> {
                 tokio::sync::mpsc::unbounded_channel();
 
             let (
-                witnessing_instruction_sender,
-                [witnessing_instruction_receiver_1, witnessing_instruction_receiver_2, witnessing_instruction_receiver_3, witnessing_instruction_receiver_4]
+                epoch_start_sender,
+                [epoch_start_receiver_1, epoch_start_receiver_2, epoch_start_receiver_3, epoch_start_receiver_4]
             ) = build_broadcast_channel(10);
 
             // validate chain ids
@@ -212,7 +212,7 @@ fn main() -> anyhow::Result<()> {
                     stake_manager_contract,
                     eth_ws_rpc_client.clone(),
                     eth_http_rpc_client.clone(),
-                    witnessing_instruction_receiver_1,
+                    epoch_start_receiver_1,
                     true,
                     state_chain_client.clone(),
                     &root_logger,
@@ -223,7 +223,7 @@ fn main() -> anyhow::Result<()> {
                     key_manager_contract,
                     eth_ws_rpc_client.clone(),
                     eth_http_rpc_client,
-                    witnessing_instruction_receiver_2,
+                    epoch_start_receiver_2,
                     false,
                     state_chain_client.clone(),
                     &root_logger,
@@ -233,14 +233,14 @@ fn main() -> anyhow::Result<()> {
                 eth::chain_data_witnesser::start(
                     eth_dual_rpc,
                     state_chain_client.clone(),
-                    witnessing_instruction_receiver_3,
+                    epoch_start_receiver_3,
                     cfe_settings_update_receiver,
                     &root_logger
                 )
             );
             scope.spawn(eth::ingress_witnesser::start(
                     eth_ws_rpc_client,
-                    witnessing_instruction_receiver_4,
+                    epoch_start_receiver_4,
                     eth_monitor_ingress_receiver,
                     state_chain_client.clone(),
                     state_chain_client.get_ingress_details(latest_block_hash).await.expect("Failed to get initial ingress details").into_iter().filter_map(|(foreign_chain_address, foreign_chain_asset)| {
@@ -260,7 +260,7 @@ fn main() -> anyhow::Result<()> {
                 eth_broadcaster,
                 eth_multisig_client,
                 account_peer_mapping_change_sender,
-                witnessing_instruction_sender,
+                epoch_start_sender,
                 eth_monitor_ingress_sender,
                 cfe_settings_update_sender,
                 latest_block_hash,
