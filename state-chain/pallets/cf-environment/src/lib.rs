@@ -61,6 +61,8 @@ pub mod cfe {
 
 #[frame_support::pallet]
 pub mod pallet {
+	use cf_primitives::Asset;
+
 	use super::*;
 
 	type EthereumAddress = [u8; 20];
@@ -94,6 +96,11 @@ pub mod pallet {
 	#[pallet::getter(fn flip_token_address)]
 	/// The address of the ETH Flip token contract
 	pub type FlipTokenAddress<T> = StorageValue<_, EthereumAddress, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn supported_eth_assets)]
+	/// Map of supported assets for eth
+	pub type SupportedEthAssets<T> = StorageMap<_, Blake2_128Concat, Asset, EthereumAddress>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn stake_manager_address)]
@@ -136,6 +143,9 @@ pub mod pallet {
 
 		/// The on-chain CFE settings have been updated
 		CfeSettingsUpdated { new_cfe_settings: cfe::CfeSettings },
+
+		/// TODO: write a nice comment
+		SupportedEthAssetsUpdated(Asset, EthereumAddress),
 	}
 
 	#[pallet::call]
@@ -144,7 +154,7 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [SystemStateUpdated](Event::SystemStateUpdated)
+		/// - [SupportedEthAssetsUpdated](Event::SupportedEthAssetsUpdated)
 		///
 		/// ## Errors
 		///
@@ -159,6 +169,25 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		/// Adds or updates an asset address in the map of supported eth assets.
+		/// ## Events
+		///
+		/// - [SystemStateUpdated](Event::SystemStateUpdated)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_support::error::BadOrigin)
+		#[pallet::weight(10_000)]
+		pub fn update_supported_eth_assets(
+			origin: OriginFor<T>,
+			asset: Asset,
+			address: EthereumAddress,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureGovernance::ensure_origin(origin)?;
+			SupportedEthAssets::<T>::insert(asset, address);
+			Self::deposit_event(Event::SupportedEthAssetsUpdated(asset, address));
+			Ok(().into())
+		}
 		/// Sets the current on-chain CFE settings
 		///
 		/// ## Events
