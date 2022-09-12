@@ -4,7 +4,7 @@
 //!
 //! Primitive types to be used across Chainflip's various crates
 
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_runtime::RuntimeDebug;
 
@@ -46,5 +46,33 @@ pub struct ChainflipAccountData {
 impl Default for ChainflipAccountData {
 	fn default() -> Self {
 		ChainflipAccountData { state: ChainflipAccountState::Backup }
+	}
+}
+
+/// Roles in the Chainflip network.
+///
+/// Chainflip's network is permissioned and only accessible to owners of accounts with staked Flip.
+/// In addition to staking, the account owner is required to indicate the role they intend to play
+/// in the network. This will determine in which ways the account can interact with the chain.
+///
+/// Each account can only be associated with a single role, and the role can only be updated from
+/// the initial [AccountRole::None] state.
+#[derive(PartialEq, Eq, Clone, Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebug, Copy)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub enum AccountRole {
+	/// The default account type - indicates a bare account with no special role or permissions.
+	None,
+	/// Validators are responsible for the maintenance and operation of the Chainflip network. This
+	/// role is required for any node that wishes to participate in auctions.
+	Validator,
+	/// Liquidity providers can deposit assets and deploy them in trading pools.
+	LiquidityProvider,
+	/// Relayers submit swap intents on behalf of users.
+	Relayer,
+}
+
+impl Default for AccountRole {
+	fn default() -> Self {
+		AccountRole::None
 	}
 }
