@@ -2,13 +2,15 @@ use cf_primitives::{liquidity::TradingPosition, Asset, ExchangeRate};
 use cf_traits::liquidity::AmmPoolApi;
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
+#[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 use sp_runtime::{
 	traits::{One, Zero},
 	FixedPointNumber, FixedPointOperand,
 };
 
-#[derive(Copy, Clone, Debug, Encode, Decode, MaxEncodedLen, Serialize, Deserialize, TypeInfo)]
+#[derive(Copy, Clone, Debug, Encode, Decode, MaxEncodedLen, TypeInfo)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct LiquidityPool<Balance> {
 	pub enabled: bool,
 	asset_0: Asset,

@@ -1,8 +1,10 @@
 use sp_runtime::DispatchResult;
 
 use cf_primitives::{
-	liquidity::TradingPosition, Asset, ExchangeRate, ForeignChainAsset, PoolId, PositionId,
+	liquidity::TradingPosition, Asset, ExchangeRate, ForeignChainAsset, ForeignChainAddress, PoolId, PositionId, AccountId,
 };
+
+use crate::FlipBalance;
 
 pub trait LpAccountHandler {
 	type AccountId;
@@ -19,8 +21,8 @@ pub trait LpAccountHandler {
 }
 
 impl LpAccountHandler for () {
-	type AccountId = ();
-	type Amount = ();
+	type AccountId = AccountId;
+	type Amount = FlipBalance;
 
 	fn register_lp_account(_account_id: &Self::AccountId) -> DispatchResult {
 		Ok(())
@@ -40,14 +42,24 @@ pub trait LpProvisioningApi {
 	type Amount;
 
 	/// Called from the vault when ingress is witnessed.
-	fn provision_account(who: &Self::AccountId, asset: Asset, amount: Self::Amount);
+	fn provision_account(
+		who: &Self::AccountId,
+		asset: Asset,
+		amount: Self::Amount,
+	) -> DispatchResult;
 }
 
 impl LpProvisioningApi for () {
-	type AccountId = ();
-	type Amount = ();
+	type AccountId = AccountId;
+	type Amount = FlipBalance;
 
-	fn provision_account(_who: &Self::AccountId, _asset: Asset, _amount: Self::Amount) {}
+	fn provision_account(
+		_who: &Self::AccountId,
+		_asset: Asset,
+		_amount: Self::Amount,
+	) -> DispatchResult {
+		Ok(())
+	}
 }
 
 pub trait LpWithdrawalApi {
@@ -64,9 +76,9 @@ pub trait LpWithdrawalApi {
 }
 
 impl LpWithdrawalApi for () {
-	type AccountId = ();
-	type Amount = ();
-	type EgressAddress = ();
+	type AccountId = AccountId;
+	type Amount = FlipBalance;
+	type EgressAddress = ForeignChainAddress;
 
 	fn withdraw_liquidity(
 		_who: &Self::AccountId,
@@ -95,9 +107,10 @@ pub trait LpPositionManagement {
 	) -> DispatchResult;
 	fn close_position(who: &Self::AccountId, id: PositionId) -> DispatchResult;
 }
+
 impl LpPositionManagement for () {
-	type AccountId = ();
-	type Balance = ();
+	type AccountId = AccountId;
+	type Balance = FlipBalance;
 	fn open_position(
 		_who: &Self::AccountId,
 		_pool_id: PoolId,
@@ -132,8 +145,8 @@ pub trait EgressHandler {
 }
 
 impl EgressHandler for () {
-	type Amount = ();
-	type EgressAddress = ();
+	type Amount = FlipBalance;
+	type EgressAddress = ForeignChainAddress;
 	fn add_to_egress_batch(
 		_asset: &ForeignChainAsset,
 		_amount: Self::Amount,

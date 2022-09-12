@@ -9,7 +9,7 @@
 use sp_std::str::FromStr;
 
 use cf_primitives::{ForeignChainAddress, ForeignChainAsset, IntentId};
-use cf_traits::{AddressDerivationApi, IngressApi};
+use cf_traits::{liquidity::LpProvisioningApi, AddressDerivationApi, IngressApi};
 
 use frame_support::sp_runtime::app_crypto::sp_core::H160;
 pub use pallet::*;
@@ -20,6 +20,7 @@ pub mod pallet {
 
 	use super::*;
 	use cf_primitives::Asset;
+	use cf_traits::FlipBalance;
 	use frame_support::{
 		pallet_prelude::{DispatchResultWithPostInfo, OptionQuery, ValueQuery, *},
 		traits::{EnsureOrigin, IsType},
@@ -73,15 +74,25 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 		/// Generates ingress addresses.
 		type AddressDerivation: AddressDerivationApi;
+		/// Pallet responsible to manage Liquidity Providers
+		type LpAccountHandler: LpProvisioningApi<AccountId = Self::AccountId, Amount = FlipBalance>;
 	}
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		// We only want to witness for one asset on a particular chain
-		StartWitnessing { ingress_address: ForeignChainAddress, ingress_asset: ForeignChainAsset },
+		StartWitnessing {
+			ingress_address: ForeignChainAddress,
+			ingress_asset: ForeignChainAsset,
+		},
 
-		IngressCompleted { ingress_address: ForeignChainAddress, asset: Asset, amount: u128 },
+		IngressCompleted {
+			ingress_address: ForeignChainAddress,
+			account_id: T::AccountId,
+			asset: Asset,
+			amount: u128,
+		},
 	}
 
 	#[pallet::error]
@@ -95,6 +106,7 @@ pub mod pallet {
 		pub fn do_ingress(
 			origin: OriginFor<T>,
 			ingress_address: ForeignChainAddress,
+			account_id: T::AccountId,
 			asset: Asset,
 			amount: u128,
 		) -> DispatchResultWithPostInfo {
@@ -104,9 +116,16 @@ pub mod pallet {
 			// even after an ingress to it has occurred.
 			// https://github.com/chainflip-io/chainflip-eth-contracts/pull/226
 			OpenIntents::<T>::get(ingress_address).ok_or(Error::<T>::InvalidIntent)?;
-			Self::deposit_event(Event::IngressCompleted { ingress_address, asset, amount });
 
-			// TODO: Route funds to either the LP pallet or the swap pallet
+			// Route funds to the LP pallet
+			T::LpAccountHandler::provision_account(&account_id, asset, amount)?;
+
+			Self::deposit_event(Event::IngressCompleted {
+				ingress_address,
+				account_id,
+				asset,
+				amount,
+			});
 
 			Ok(().into())
 		}
