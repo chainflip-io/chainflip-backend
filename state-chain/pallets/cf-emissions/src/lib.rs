@@ -86,7 +86,7 @@ pub mod pallet {
 
 		/// The number of blocks for the time frame we would test liveliness within
 		#[pallet::constant]
-		type HeartbeatBlockInterval: Get<<Self as frame_system::Config>::BlockNumber>;
+		type CompoundingInterval: Get<<Self as frame_system::Config>::BlockNumber>;
 
 		/// Something that can provide a nonce for the threshold signature.
 		type ReplayProtectionProvider: ReplayProtectionProvider<Self::HostChain>;
@@ -313,7 +313,7 @@ impl<T: Config> BlockEmissions for Pallet<T> {
 			calculate_inflation_to_block_reward(
 				T::Issuance::total_issuance(),
 				inflation_per_bill.into(),
-				T::FlipBalance::unique_saturated_from(T::HeartbeatBlockInterval::get()),
+				T::FlipBalance::unique_saturated_from(T::CompoundingInterval::get()),
 			)
 		}
 

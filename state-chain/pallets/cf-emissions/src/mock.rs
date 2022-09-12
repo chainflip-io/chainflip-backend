@@ -237,7 +237,7 @@ impl pallet_cf_emissions::Config for Test {
 	type Surplus = pallet_cf_flip::Surplus<Test>;
 	type Issuance = pallet_cf_flip::FlipIssuance<Test>;
 	type RewardsDistribution = MockRewardsDistribution;
-	type HeartbeatBlockInterval = HeartbeatBlockInterval;
+	type CompoundingInterval = HeartbeatBlockInterval;
 	type ReplayProtectionProvider = Self;
 	type EthEnvironmentProvider = MockEthEnvironmentProvider;
 	type Broadcaster = MockBroadcast;
