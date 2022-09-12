@@ -2,7 +2,7 @@
 name = 'pallet-cf-lp'
 version = '0.1.0'
 authors = ['Chainflip Team <https://github.com/chainflip-io>']
-description = 'Pallet for managing the liquidity pools.'
+description = 'Pallet for liquidity provider functionality.'
 edition = '2021'
 homepage = 'https://chainflip.io'
 license = '<TODO>'
