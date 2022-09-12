@@ -16,6 +16,8 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+use sp_std::vec::Vec;
+
 pub mod weights;
 pub use weights::WeightInfo;
 
@@ -84,12 +86,12 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// The network is currently paused.
 		NetworkIsInMaintenance,
-
 		/// The settings provided were invalid
 		InvalidCfeSettings,
 	}
 
 	#[pallet::pallet]
+	#[pallet::without_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
 
 	#[pallet::storage]
@@ -100,7 +102,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn supported_eth_assets)]
 	/// Map of supported assets for eth
-	pub type SupportedEthAssets<T> = StorageMap<_, Blake2_128Concat, Asset, EthereumAddress>;
+	pub type SupportedEthAssets<T: Config> = StorageMap<_, Blake2_128Concat, Asset, Vec<u8>>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn stake_manager_address)]
@@ -145,7 +147,7 @@ pub mod pallet {
 		CfeSettingsUpdated { new_cfe_settings: cfe::CfeSettings },
 
 		/// TODO: write a nice comment
-		SupportedEthAssetsUpdated(Asset, EthereumAddress),
+		SupportedEthAssetsUpdated(Asset, Vec<u8>),
 	}
 
 	#[pallet::call]
@@ -154,7 +156,7 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [SupportedEthAssetsUpdated](Event::SupportedEthAssetsUpdated)
+		/// - [SystemStateUpdated](Event::SystemStateUpdated)
 		///
 		/// ## Errors
 		///
@@ -168,11 +170,10 @@ pub mod pallet {
 			SystemStateProvider::<T>::set_system_state(state);
 			Ok(().into())
 		}
-
 		/// Adds or updates an asset address in the map of supported eth assets.
 		/// ## Events
 		///
-		/// - [SystemStateUpdated](Event::SystemStateUpdated)
+		/// - [SupportedEthAssetsUpdated](Event::SupportedEthAssetsUpdated)
 		///
 		/// ## Errors
 		///
@@ -181,10 +182,10 @@ pub mod pallet {
 		pub fn update_supported_eth_assets(
 			origin: OriginFor<T>,
 			asset: Asset,
-			address: EthereumAddress,
+			address: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			SupportedEthAssets::<T>::insert(asset, address);
+			SupportedEthAssets::<T>::insert(asset.clone(), address.clone());
 			Self::deposit_event(Event::SupportedEthAssetsUpdated(asset, address));
 			Ok(().into())
 		}

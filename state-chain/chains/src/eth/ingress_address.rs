@@ -1,6 +1,6 @@
 use cf_primitives::{Asset, IntentId};
 use sp_runtime::traits::{Hash, Keccak256};
-use sp_std::{mem::size_of, vec, vec::Vec};
+use sp_std::{mem::size_of, vec::Vec};
 
 // From master branch of chainflip-eth-contracts
 // @FIXME store on and retrieve from the chain
@@ -35,15 +35,15 @@ const PREFIX_BYTE: u8 = 0xff;
 pub fn get_create_2_address(
 	asset: Asset,
 	vault_address: [u8; 20],
+	constructor_argument: Vec<u8>,
 	intent_id: IntentId,
 ) -> [u8; 20] {
 	let deploy_bytecode = get_deploy_bytecode(asset);
-	let constructor_argument_bytes = get_constructor_argument_bytes(asset);
 
 	// We hash the concatenated deploy_bytecode and constructor_argument_bytes.
 	// This hash is used in the later CREATE2 derivation.
 	let deploy_transaction_bytes_hash =
-		Keccak256::hash(&[deploy_bytecode, constructor_argument_bytes].concat());
+		Keccak256::hash(&[deploy_bytecode, constructor_argument].concat());
 
 	// Unique salt per intent.
 	let salt = get_salt(intent_id).to_vec();
@@ -72,18 +72,6 @@ fn get_deploy_bytecode(asset: Asset) -> Vec<u8> {
 	}
 }
 
-/// Returns the constructor argument bytes for the given asset. For the ETH
-/// deposit contract, there are no constructor arguments. For the token
-/// deposit contract, the constructor argument is the asset's address.
-fn get_constructor_argument_bytes(asset: Asset) -> Vec<u8> {
-	match asset {
-		Asset::Eth => vec![],
-		Asset::Flip => todo!(),
-		Asset::Usdc => todo!(),
-		Asset::Dot => unreachable!(),
-	}
-}
-
 /// Get the CREATE2 salt for a given intent_id, equivalent to the big-endian u32, left-padded to 32
 /// bytes.
 fn get_salt(intent_id: IntentId) -> [u8; 32] {
@@ -99,7 +87,7 @@ fn test_eth_eth() {
 	const VAULT_ADDRESS: [u8; 20] = hex_literal::hex!("e7f1725E7734CE288F8367e1Bb143E90bb3F0512");
 
 	assert_eq!(
-		get_create_2_address(Asset::Eth, VAULT_ADDRESS, 420696969),
+		get_create_2_address(Asset::Eth, VAULT_ADDRESS, vec![], 420696969),
 		hex_literal::hex!("9AF943257C1dF03EA3EeD0dFa7B5328A2E4033bb")
 	);
 	println!("Derivation worked for ETH:ETH! 🚀");

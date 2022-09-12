@@ -20,12 +20,13 @@ use cf_chains::{
 	eth::{
 		self,
 		api::{EthereumApi, EthereumReplayProtection},
+		ingress_address::get_create_2_address,
 	},
 	ApiCall, ChainAbi, Ethereum, TransactionBuilder,
 };
 use cf_traits::{
-	BlockEmissions, Chainflip, EmergencyRotation, EpochInfo, Heartbeat, Issuance, NetworkState,
-	ReplayProtectionProvider, RewardsDistribution, RuntimeUpgrade,
+	AddressDerivationApi, BlockEmissions, Chainflip, EmergencyRotation, EpochInfo, Heartbeat,
+	Issuance, NetworkState, ReplayProtectionProvider, RewardsDistribution, RuntimeUpgrade,
 };
 use frame_support::traits::Get;
 use pallet_cf_chain_tracking::ChainState;
@@ -185,5 +186,21 @@ impl ReplayProtectionProvider<Ethereum> for EthReplayProtectionProvider {
 			chain_id: Environment::ethereum_chain_id(),
 			nonce: Environment::next_global_signature_nonce(),
 		}
+	}
+}
+
+pub struct EthAddressDerivationApi;
+
+impl AddressDerivationApi for EthAddressDerivationApi {
+	fn generate_address(
+		ingress_asset: cf_primitives::ForeignChainAsset,
+		intent_id: cf_primitives::IntentId,
+	) -> cf_primitives::ForeignChainAddress {
+		cf_primitives::ForeignChainAddress::Eth(get_create_2_address(
+			ingress_asset.asset,
+			Environment::vault_contract_address(),
+			Environment::supported_eth_assets(ingress_asset.asset).expect("unsupported asset!"),
+			intent_id,
+		))
 	}
 }
