@@ -5290,6 +5290,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-cf-lp"
+version = "0.1.0"
+dependencies = [
+ "cf-primitives",
+ "cf-traits",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "quickcheck",
+ "quickcheck_macros",
+ "scale-info",
+ "serde",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-cf-relayer"
 version = "0.1.0"
 dependencies = [

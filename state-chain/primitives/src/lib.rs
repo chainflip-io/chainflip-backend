@@ -6,10 +6,13 @@
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
-use sp_runtime::RuntimeDebug;
+use sp_runtime::{FixedU128, RuntimeDebug};
 
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
+
+pub mod liquidity;
+pub use liquidity::*;
 
 pub type CeremonyId = u64;
 
@@ -18,6 +21,8 @@ pub type EpochIndex = u32;
 pub type AuthorityCount = u32;
 
 pub type IntentId = u64;
+
+pub type ExchangeRate = FixedU128;
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug, Copy)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
@@ -107,4 +112,14 @@ pub enum Asset {
 pub struct ForeignChainAsset {
 	pub chain: ForeignChain,
 	pub asset: Asset,
+}
+
+/// Placeholder AccountRole enum. Will be replaced after #2138 is merged.
+#[derive(PartialEq, Eq, Clone, Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebug, Copy)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub enum AccountRole {
+	None,
+	Validator,
+	LiquidityProvider,
+	Relayer,
 }

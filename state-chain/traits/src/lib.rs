@@ -1,8 +1,10 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod async_result;
+pub mod liquidity;
 pub mod mocks;
 pub mod offence_reporting;
+pub use liquidity::*;
 
 use core::fmt::Debug;
 
@@ -11,8 +13,8 @@ use sp_std::collections::btree_set::BTreeSet;
 
 use cf_chains::{benchmarking_value::BenchmarkValue, ApiCall, ChainAbi, ChainCrypto};
 use cf_primitives::{
-	AuthorityCount, CeremonyId, ChainflipAccountData, ChainflipAccountState, EpochIndex,
-	ForeignChainAddress, ForeignChainAsset, IntentId,
+	AccountRole, AuthorityCount, CeremonyId, ChainflipAccountData, ChainflipAccountState,
+	EpochIndex, ForeignChainAddress, ForeignChainAsset, IntentId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -691,4 +693,19 @@ pub trait AddressDerivationApi {
 		ingress_asset: ForeignChainAsset,
 		intent_id: IntentId,
 	) -> ForeignChainAddress;
+}
+
+pub trait AccountRoleRegister<AccountId> {
+	fn register_account(who: &AccountId, role: AccountRole) -> DispatchResult;
+	fn get_account_role(who: &AccountId) -> AccountRole;
+}
+
+impl<AccountId> AccountRoleRegister<AccountId> for () {
+	fn register_account(_who: &AccountId, _role: AccountRole) -> DispatchResult {
+		Ok(())
+	}
+
+	fn get_account_role(_who: &AccountId) -> AccountRole {
+		AccountRole::None
+	}
 }
