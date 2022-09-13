@@ -35,15 +35,15 @@ const PREFIX_BYTE: u8 = 0xff;
 pub fn get_create_2_address(
 	asset: Asset,
 	vault_address: [u8; 20],
-	constructor_argument: Vec<u8>,
+	erc20_constructor_argument: Vec<u8>,
 	intent_id: IntentId,
 ) -> [u8; 20] {
 	let deploy_bytecode = get_deploy_bytecode(asset);
 
-	// We hash the concatenated deploy_bytecode and constructor_argument_bytes.
+	// We hash the concatenated deploy_bytecode and erc20_constructor_argument.
 	// This hash is used in the later CREATE2 derivation.
 	let deploy_transaction_bytes_hash =
-		Keccak256::hash(&[deploy_bytecode, constructor_argument].concat());
+		Keccak256::hash(&[deploy_bytecode, erc20_constructor_argument].concat());
 
 	// Unique salt per intent.
 	let salt = get_salt(intent_id).to_vec();

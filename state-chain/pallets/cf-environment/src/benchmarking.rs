@@ -3,7 +3,7 @@
 use super::*;
 
 use cf_primitives::Asset;
-use frame_benchmarking::{benchmarks, vec};
+use frame_benchmarking::benchmarks;
 
 use frame_support::dispatch::UnfilteredDispatchable;
 
@@ -30,7 +30,7 @@ benchmarks! {
 	update_supported_eth_assets {
 		let origin = T::EnsureGovernance::successful_origin();
 		let asset = Asset::Eth;
-		let address = vec![];
+		let address = [0; 20];
 		let call = Call::<T>::update_supported_eth_assets { asset, address };
 	}: { call.dispatch_bypass_filter(origin)? }
 }

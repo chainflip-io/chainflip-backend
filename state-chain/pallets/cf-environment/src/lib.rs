@@ -2,11 +2,13 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
+use crate::Erc20Address::Token;
 pub use cf_traits::EthEnvironmentProvider;
 use cf_traits::{SystemStateInfo, SystemStateManager};
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
+use sp_std::{vec, vec::Vec};
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
@@ -16,10 +18,25 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-use sp_std::vec::Vec;
-
 pub mod weights;
 pub use weights::WeightInfo;
+
+type EthereumAddress = [u8; 20];
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub enum Erc20Address {
+	Eth,
+	Token(EthereumAddress),
+}
+
+impl Erc20Address {
+	pub fn to_address_bytes(&self) -> Vec<u8> {
+		match self {
+			Erc20Address::Eth => vec![],
+			Token(addr) => addr.to_vec(),
+		}
+	}
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum SystemState {
@@ -67,8 +84,6 @@ pub mod pallet {
 
 	use super::*;
 
-	type EthereumAddress = [u8; 20];
-
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// Because we want to emit events when there is a config change during
@@ -102,7 +117,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn supported_eth_assets)]
 	/// Map of supported assets for ETH
-	pub type SupportedEthAssets<T: Config> = StorageMap<_, Blake2_128Concat, Asset, Vec<u8>>;
+	pub type SupportedEthAssets<T: Config> = StorageMap<_, Blake2_128Concat, Asset, Erc20Address>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn stake_manager_address)]
@@ -147,7 +162,7 @@ pub mod pallet {
 		CfeSettingsUpdated { new_cfe_settings: cfe::CfeSettings },
 
 		/// An supported address was added or updated
-		SupportedEthAssetsUpdated(Asset, Vec<u8>),
+		SupportedEthAssetsUpdated(Asset, Erc20Address),
 	}
 
 	#[pallet::call]
@@ -182,7 +197,7 @@ pub mod pallet {
 		pub fn update_supported_eth_assets(
 			origin: OriginFor<T>,
 			asset: Asset,
-			address: Vec<u8>,
+			address: Erc20Address,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			SupportedEthAssets::<T>::insert(asset, address.clone());

@@ -189,18 +189,24 @@ impl ReplayProtectionProvider<Ethereum> for EthReplayProtectionProvider {
 	}
 }
 
-pub struct EthAddressDerivationApi;
+pub struct AddressDerivation;
 
-impl AddressDerivationApi for EthAddressDerivationApi {
+impl AddressDerivationApi for AddressDerivation {
 	fn generate_address(
 		ingress_asset: cf_primitives::ForeignChainAsset,
 		intent_id: cf_primitives::IntentId,
 	) -> cf_primitives::ForeignChainAddress {
-		cf_primitives::ForeignChainAddress::Eth(get_create_2_address(
-			ingress_asset.asset,
-			Environment::vault_contract_address(),
-			Environment::supported_eth_assets(ingress_asset.asset).expect("unsupported asset!"),
-			intent_id,
-		))
+		match ingress_asset.chain {
+			cf_primitives::ForeignChain::Ethereum =>
+				cf_primitives::ForeignChainAddress::Eth(get_create_2_address(
+					ingress_asset.asset,
+					Environment::vault_contract_address(),
+					Environment::supported_eth_assets(ingress_asset.asset)
+						.expect("unsupported asset!")
+						.to_address_bytes(),
+					intent_id,
+				)),
+			cf_primitives::ForeignChain::Polkadot => unreachable!(),
+		}
 	}
 }
