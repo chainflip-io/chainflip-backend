@@ -199,11 +199,9 @@ fn main() -> anyhow::Result<()> {
                     &root_logger,
                 )
             );
-            // TODO Handle errors/panics from backend
-            scope.spawn(async move {
-                eth_multisig_client_backend_future.await;
-                Ok(())
-            });
+            scope.spawn(
+                eth_multisig_client_backend_future
+            );
 
             // Start eth witnessers
             scope.spawn(
