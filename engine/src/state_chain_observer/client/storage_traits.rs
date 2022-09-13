@@ -43,7 +43,7 @@ impl<
 
 // A method to safely extract type information about Substrate storage maps (As the Key and Value types are not available)
 pub trait StorageMapAssociatedTypes {
-    type Key;
+    type Key: FullCodec;
     type Value: FullCodec;
     type QueryKind: QueryKindTrait<Self::Value, Self::OnEmpty>;
     type OnEmpty;
@@ -108,5 +108,50 @@ impl<
 
     fn _hashed_key() -> StorageKey {
         StorageKey(Self::hashed_key().into())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use codec::Encode;
+    use sp_core::H256;
+    use sp_runtime::AccountId32;
+    use state_chain_runtime::EthereumInstance;
+
+    use super::*;
+
+    fn test_map_storage_key_and_back<StorageMap: StorageMapAssociatedTypes>(
+        key: <StorageMap as StorageMapAssociatedTypes>::Key,
+    ) -> bool {
+        let storage_key = StorageMap::_hashed_key_for(&key);
+
+        let key_from_storage_key = StorageMap::key_from_storage_key(&storage_key);
+        // encode so we don't need PartialEq
+        key.encode() == key_from_storage_key.encode()
+    }
+
+    #[test]
+    fn test_key_from_storage_key() {
+        // Blake2_128Concat
+        assert!(test_map_storage_key_and_back::<
+            pallet_cf_staking::AccountRetired<state_chain_runtime::Runtime>,
+        >(AccountId32::from([0x1; 32])));
+
+        // Twox64Concat
+        assert!(test_map_storage_key_and_back::<
+            pallet_cf_broadcast::BroadcastIdToAttemptNumbers<
+                state_chain_runtime::Runtime,
+                EthereumInstance,
+            >,
+        >(42));
+
+        // Identity
+        assert!(test_map_storage_key_and_back::<
+            pallet_cf_broadcast::TransactionHashWhitelist<
+                state_chain_runtime::Runtime,
+                EthereumInstance,
+            >,
+        >(H256::from([0x24; 32])));
     }
 }
