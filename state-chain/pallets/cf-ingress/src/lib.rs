@@ -65,12 +65,12 @@ pub mod pallet {
 
 	#[pallet::storage]
 	pub type IntentIngressDetails<T: Config> =
-		StorageMap<_, Blake2_128Concat, ForeignChainAddress, IngressDetails, OptionQuery>;
+		StorageMap<_, Twox64Concat, ForeignChainAddress, IngressDetails, OptionQuery>;
 
 	#[pallet::storage]
 	pub type IntentActions<T: Config> = StorageMap<
 		_,
-		Blake2_128Concat,
+		Twox64Concat,
 		ForeignChainAddress,
 		IntentAction<<T as frame_system::Config>::AccountId>,
 		OptionQuery,
