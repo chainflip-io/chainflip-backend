@@ -38,7 +38,7 @@ async fn run_on_request_to_sign<C: CryptoScheme>(
 > {
     let (result_sender, result_receiver) = oneshot::channel();
     with_task_scope(|scope| {
-        async {
+        let future: Pin<Box<dyn Future<Output = Result<()>> + Send>> = async {
             ceremony_manager.on_request_to_sign(
                 DEFAULT_SIGNING_CEREMONY_ID,
                 participants,
@@ -48,12 +48,13 @@ async fn run_on_request_to_sign<C: CryptoScheme>(
                 result_sender,
                 scope,
             );
-            Ok(())
+            anyhow::bail!("End the future so we can complete the test");
         }
-        .boxed()
+        .boxed();
+        future
     })
     .await
-    .unwrap();
+    .unwrap_err();
     result_receiver
 }
 
@@ -232,7 +233,7 @@ async fn should_not_create_unauthorized_ceremony_with_invalid_ceremony_id() {
             // Check that the message was not ignored and an unauthorised ceremony was created
             assert_eq!(ceremony_manager.get_keygen_states_len(), 1);
 
-            anyhow::bail!("End of test");
+            anyhow::bail!("End the future so we can complete the test");
         }
         .boxed();
         future
