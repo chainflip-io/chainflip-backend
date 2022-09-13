@@ -1,6 +1,7 @@
 use crate::{self as pallet_cf_lp};
-use cf_primitives::ForeignChainAddress;
-use cf_traits::mocks::ensure_origin_mock::NeverFailingOriginCheck;
+use cf_traits::mocks::{
+	ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo,
+};
 use frame_support::parameter_types;
 use frame_system as system;
 use sp_core::H256;
@@ -22,7 +23,9 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system,
-		LP: pallet_cf_lp,
+		AccountRegistry: pallet_cf_account_types,
+		Ingress: pallet_cf_ingress,
+		LiquidityProvider: pallet_cf_lp,
 	}
 );
 
@@ -58,10 +61,31 @@ impl system::Config for Test {
 	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
+impl pallet_cf_ingress::Config for Test {
+	type Event = Event;
+	type AddressDerivation = pallet_cf_ingress::KylesTestnetAddress;
+	type LpAccountHandler = LiquidityProvider;
+}
+
+impl cf_traits::Chainflip for Test {
+	type KeyId = Vec<u8>;
+	type ValidatorId = u64;
+	type Amount = u128;
+	type Call = Call;
+	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
+	type EnsureWitnessedAtCurrentEpoch = NeverFailingOriginCheck<Self>;
+	type EpochInfo = cf_traits::mocks::epoch_info::MockEpochInfo;
+	type SystemState = MockSystemStateInfo;
+}
+
+impl pallet_cf_account_types::Config for Test {
+	type Event = Event;
+}
+
 impl crate::Config for Test {
 	type Event = Event;
-	type EgressAddress = ForeignChainAddress;
-	type AccountRoleRegistry = ();
+	type AccountRoleRegistry = AccountRegistry;
+	type Ingress = Ingress;
 	type EgressHandler = ();
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 }

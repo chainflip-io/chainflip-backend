@@ -27,8 +27,8 @@ use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
 mod mock;
-// #[cfg(test)]
-// mod tests;
+#[cfg(test)]
+mod tests;
 
 pub mod liquidity_pool;
 use liquidity_pool::*;
@@ -64,7 +64,7 @@ pub mod pallet {
 		/// For registering and verifying the account role.
 		type AccountRoleRegistry: AccountRoleRegistry<Self>;
 
-		/// API used for reuqesting an ingress.
+		/// API used for requesting an ingress.
 		type Ingress: IngressApi<AccountId = <Self as frame_system::Config>::AccountId>;
 
 		/// API used to withdraw foreign assets off the chain.
@@ -319,7 +319,7 @@ pub mod pallet {
 				position,
 			});
 
-			Ok(().into())
+			Ok(())
 		}
 
 		#[pallet::weight(0)]

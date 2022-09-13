@@ -5298,6 +5298,8 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "pallet-cf-account-types",
+ "pallet-cf-ingress",
  "parity-scale-codec",
  "quickcheck",
  "quickcheck_macros",
