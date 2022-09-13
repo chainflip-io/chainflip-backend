@@ -83,14 +83,39 @@ fn test_ensure_origin_fn() {
 		Pallet::<Test>::register_as_liquidity_provider(&CHARLIE).unwrap();
 
 		// Each account should validate as the correct account type and fail otherwise.
-		ensure_relayer::<Test>(OriginFor::<Test>::signed(ALICE)).unwrap();
-		ensure_validator::<Test>(OriginFor::<Test>::signed(ALICE)).unwrap_err();
-		ensure_liquidity_provider::<Test>(OriginFor::<Test>::signed(ALICE)).unwrap_err();
-		ensure_relayer::<Test>(OriginFor::<Test>::signed(BOB)).unwrap_err();
-		ensure_validator::<Test>(OriginFor::<Test>::signed(BOB)).unwrap();
-		ensure_liquidity_provider::<Test>(OriginFor::<Test>::signed(BOB)).unwrap_err();
-		ensure_relayer::<Test>(OriginFor::<Test>::signed(CHARLIE)).unwrap_err();
-		ensure_validator::<Test>(OriginFor::<Test>::signed(CHARLIE)).unwrap_err();
-		ensure_liquidity_provider::<Test>(OriginFor::<Test>::signed(CHARLIE)).unwrap();
+		<Pallet<Test> as AccountRoleRegistry<Test>>::ensure_relayer(OriginFor::<Test>::signed(
+			ALICE,
+		))
+		.unwrap();
+		<Pallet<Test> as AccountRoleRegistry<Test>>::ensure_validator(OriginFor::<Test>::signed(
+			ALICE,
+		))
+		.unwrap_err();
+		<Pallet<Test> as AccountRoleRegistry<Test>>::ensure_liquidity_provider(
+			OriginFor::<Test>::signed(ALICE),
+		)
+		.unwrap_err();
+		<Pallet<Test> as AccountRoleRegistry<Test>>::ensure_relayer(OriginFor::<Test>::signed(BOB))
+			.unwrap_err();
+		<Pallet<Test> as AccountRoleRegistry<Test>>::ensure_validator(OriginFor::<Test>::signed(
+			BOB,
+		))
+		.unwrap();
+		<Pallet<Test> as AccountRoleRegistry<Test>>::ensure_liquidity_provider(
+			OriginFor::<Test>::signed(BOB),
+		)
+		.unwrap_err();
+		<Pallet<Test> as AccountRoleRegistry<Test>>::ensure_relayer(OriginFor::<Test>::signed(
+			CHARLIE,
+		))
+		.unwrap_err();
+		<Pallet<Test> as AccountRoleRegistry<Test>>::ensure_validator(OriginFor::<Test>::signed(
+			CHARLIE,
+		))
+		.unwrap_err();
+		<Pallet<Test> as AccountRoleRegistry<Test>>::ensure_liquidity_provider(
+			OriginFor::<Test>::signed(CHARLIE),
+		)
+		.unwrap();
 	});
 }
