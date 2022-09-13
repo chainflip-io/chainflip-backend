@@ -8,7 +8,7 @@ mod mock;
 mod tests;
 
 use cf_primitives::AccountRole;
-use cf_traits::Chainflip;
+use cf_traits::{AccountRoleRegistry, Chainflip};
 use frame_support::{
 	error::BadOrigin,
 	pallet_prelude::DispatchResult,
@@ -53,19 +53,7 @@ pub mod pallet {
 	}
 }
 
-impl<T: Config> Pallet<T> {
-	pub fn register_as_relayer(account_id: &T::AccountId) -> DispatchResult {
-		Self::register_account_role(account_id, AccountRole::Relayer)
-	}
-
-	pub fn register_as_liquidity_provider(account_id: &T::AccountId) -> DispatchResult {
-		Self::register_account_role(account_id, AccountRole::LiquidityProvider)
-	}
-
-	pub fn register_as_validator(account_id: &T::AccountId) -> DispatchResult {
-		Self::register_account_role(account_id, AccountRole::Validator)
-	}
-
+impl<T: Config> AccountRoleRegistry<T> for Pallet<T> {
 	/// Register the account role for some account id.
 	///
 	/// Fails if an account type has already been registered for this account id.
@@ -87,6 +75,18 @@ impl<T: Config> Pallet<T> {
 			}
 		})
 		.map_err(Into::into)
+	}
+
+	fn ensure_account_role(
+		origin: T::Origin,
+		role: AccountRole,
+	) -> Result<T::AccountId, BadOrigin> {
+		match role {
+			AccountRole::None => Err(BadOrigin),
+			AccountRole::Validator => ensure_validator::<T>(origin),
+			AccountRole::LiquidityProvider => ensure_liquidity_provider::<T>(origin),
+			AccountRole::Relayer => ensure_relayer::<T>(origin),
+		}
 	}
 }
 
