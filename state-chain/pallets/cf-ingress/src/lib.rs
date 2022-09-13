@@ -11,6 +11,12 @@ use sp_std::str::FromStr;
 use cf_primitives::{ForeignChainAddress, ForeignChainAsset, IntentId};
 use cf_traits::{AddressDerivationApi, IngressApi};
 
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
+
+pub mod weights;
+pub use weights::WeightInfo;
+
 use frame_support::sp_runtime::app_crypto::sp_core::H160;
 pub use pallet::*;
 
@@ -73,6 +79,8 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 		/// Generates ingress addresses.
 		type AddressDerivation: AddressDerivationApi;
+		/// Benchmark weights
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::event]

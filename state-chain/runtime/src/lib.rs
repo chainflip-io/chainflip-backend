@@ -214,6 +214,7 @@ impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 impl pallet_cf_ingress::Config for Runtime {
 	type Event = Event;
 	type AddressDerivation = pallet_cf_ingress::KylesTestnetAddress;
+	type WeightInfo = pallet_cf_ingress::weights::PalletWeight<Runtime>;
 }
 
 impl<LocalCall> SendTransactionTypes<LocalCall> for Runtime
@@ -610,6 +611,7 @@ mod benches {
 		[pallet_cf_broadcast, EthereumBroadcaster]
 		[pallet_cf_chain_tracking, EthereumChainTracking]
 		[pallet_cf_relayer, Relayer]
+		[pallet_cf_ingress, Ingress]
 	);
 }
 
