@@ -5,6 +5,7 @@ mod http_safe_stream;
 pub mod ingress_witnesser;
 pub mod key_manager;
 pub mod stake_manager;
+pub mod erc20_witnesser;
 
 pub mod event;
 
