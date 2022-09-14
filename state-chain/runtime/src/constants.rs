@@ -104,6 +104,10 @@ pub mod common {
 	/// The duration of the heartbeat interval in blocks. 150 blocks at a 6 second block time is
 	/// equivalent to 15 minutes.
 	pub const HEARTBEAT_BLOCK_INTERVAL: BlockNumber = 150;
+	/// The interval at which we update the per-block emission rate.
+	///
+	/// **Important**: If this constant is changed, we must also change
+	/// [CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL] and [BACKUP_NODE_EMISSION_INFLATION_PERBILL].
 	pub const COMPOUNDING_INTERVAL: u32 = HEARTBEAT_BLOCK_INTERVAL;
 
 	/// The mutliplier used to convert transaction weight into fees paid by the validators.
