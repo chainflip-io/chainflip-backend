@@ -2,7 +2,7 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-use crate::Erc20Address::Token;
+use cf_primitives::{Asset, EthereumAddress};
 pub use cf_traits::EthEnvironmentProvider;
 use cf_traits::{SystemStateInfo, SystemStateManager};
 use frame_support::pallet_prelude::*;
@@ -19,23 +19,6 @@ mod tests;
 
 pub mod weights;
 pub use weights::WeightInfo;
-
-type EthereumAddress = [u8; 20];
-
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub enum Erc20Address {
-	Eth,
-	Token(EthereumAddress),
-}
-
-impl Erc20Address {
-	pub fn to_address_bytes(&self) -> &[u8] {
-		match self {
-			Erc20Address::Eth => &[],
-			Token(address) => address,
-		}
-	}
-}
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum SystemState {
@@ -118,7 +101,8 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn supported_eth_assets)]
 	/// Map of supported assets for ETH
-	pub type SupportedEthAssets<T: Config> = StorageMap<_, Blake2_128Concat, Asset, Erc20Address>;
+	pub type SupportedEthAssets<T: Config> =
+		StorageMap<_, Blake2_128Concat, Asset, EthereumAddress>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn stake_manager_address)]
@@ -203,7 +187,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			ensure!(asset != Asset::Eth, Error::<T>::EthAddressNotUpdateable);
-			SupportedEthAssets::<T>::insert(asset, Erc20Address::Token(address));
+			SupportedEthAssets::<T>::insert(asset, address);
 			Self::deposit_event(Event::SupportedEthAssetsUpdated(asset, address));
 			Ok(().into())
 		}
@@ -254,7 +238,7 @@ pub mod pallet {
 			EthereumChainId::<T>::set(self.ethereum_chain_id);
 			CfeSettings::<T>::set(self.cfe_settings);
 			CurrentSystemState::<T>::set(SystemState::Normal);
-			SupportedEthAssets::<T>::insert(Asset::Eth, Erc20Address::Eth);
+			// SupportedEthAssets::<T>::insert(Asset::Eth, Erc20Address::Eth);
 		}
 	}
 }

@@ -5,6 +5,7 @@ pub mod decompose_recompose;
 pub mod epoch_transition;
 mod missed_authorship_slots;
 mod offences;
+use cf_primitives::Asset;
 pub use offences::*;
 mod signer_nomination;
 pub use missed_authorship_slots::MissedAuraSlots;
@@ -197,16 +198,21 @@ impl AddressDerivationApi for AddressDerivation {
 		intent_id: cf_primitives::IntentId,
 	) -> cf_primitives::ForeignChainAddress {
 		match ingress_asset.chain {
-			cf_primitives::ForeignChain::Ethereum =>
+			cf_primitives::ForeignChain::Ethereum => {
+				let asset_address = match ingress_asset.asset {
+					Asset::Eth => vec![],
+					_ => Environment::supported_eth_assets(ingress_asset.asset)
+						.expect("unsupported asset!")
+						.to_vec(),
+				};
 				cf_primitives::ForeignChainAddress::Eth(get_create_2_address(
 					ingress_asset.asset,
 					Environment::vault_contract_address(),
-					Environment::supported_eth_assets(ingress_asset.asset)
-						.expect("unsupported asset!")
-						.to_address_bytes(),
+					asset_address,
 					intent_id,
-				)),
-			cf_primitives::ForeignChain::Polkadot => unreachable!(),
+				))
+			},
+			cf_primitives::ForeignChain::Polkadot => todo!(),
 		}
 	}
 }
