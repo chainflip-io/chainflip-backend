@@ -8,7 +8,6 @@ use cf_traits::{SystemStateInfo, SystemStateManager};
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
-use sp_std::{vec, vec::Vec};
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
@@ -30,10 +29,10 @@ pub enum Erc20Address {
 }
 
 impl Erc20Address {
-	pub fn to_address_bytes(&self) -> Vec<u8> {
+	pub fn to_address_bytes(&self) -> &[u8] {
 		match self {
-			Erc20Address::Eth => vec![],
-			Token(addr) => addr.to_vec(),
+			Erc20Address::Eth => &[],
+			Token(address) => address,
 		}
 	}
 }
