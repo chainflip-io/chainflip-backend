@@ -35,13 +35,17 @@ pub trait Chain: Member + Parameter {
 		+ Parameter
 		+ Copy
 		+ Default
+		+ Saturating
 		+ Into<u128>
 		+ From<u128>
-		+ Saturating
 		+ FullCodec
 		+ MaxEncodedLen;
 
 	type TrackedData: Member + Parameter + MaxEncodedLen + Clone + Age<Self> + BenchmarkValue;
+
+	type ChainAsset: Member + Parameter + MaxEncodedLen;
+
+	type ChainAccount: Member + Parameter + MaxEncodedLen;
 }
 
 /// Measures the age of items associated with the Chain.
@@ -94,7 +98,7 @@ pub trait ChainAbi: ChainCrypto {
 /// A call or collection of calls that can be made to the Chainflip api on an external chain.
 ///
 /// See [eth::api::EthereumApi] for an example implementation.
-pub trait ApiCall<Abi: ChainAbi>: Parameter + MaxEncodedLen {
+pub trait ApiCall<Abi: ChainAbi>: Parameter {
 	/// Get the payload over which the threshold signature should be generated.
 	fn threshold_signature_payload(&self) -> <Abi as ChainCrypto>::Payload;
 
@@ -120,6 +124,25 @@ where
 
 	/// Refresh any time-sensitive data e.g. gas price.
 	fn refresh_unsigned_transaction(unsigned_tx: &mut Abi::UnsignedTransaction);
+}
+
+/// Contains all the parameters required to fetch incoming transactions on an external chain.
+#[derive(
+	RuntimeDebug, Copy, Clone, Default, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo,
+)]
+pub struct FetchAssetParams<T: Chain> {
+	swap_id: [u8; 32],
+	asset: T::ChainAsset,
+}
+
+/// Contains all the parameters required for transferring an asset on an external chain.
+#[derive(
+	RuntimeDebug, Copy, Clone, Default, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo,
+)]
+pub struct TransferAssetParams<T: Chain> {
+	asset: T::ChainAsset,
+	account: T::ChainAccount,
+	amount: T::ChainAmount,
 }
 
 /// Constructs the `SetAggKeyWithAggKey` api call.
@@ -167,6 +190,14 @@ pub trait RegisterClaim<Abi: ChainAbi>: ApiCall<Abi> {
 	fn amount(&self) -> u128;
 }
 
+pub trait AllBatch<Abi: ChainAbi>: ApiCall<Abi> {
+	fn new_unsigned(
+		replay_protection: Abi::ReplayProtection,
+		fetch_params: Vec<FetchAssetParams<Abi>>,
+		transfer_params: Vec<TransferAssetParams<Abi>>,
+	) -> Self;
+}
+
 #[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct Ethereum;
 
@@ -174,6 +205,8 @@ impl Chain for Ethereum {
 	type ChainBlockNumber = u64;
 	type ChainAmount = u128;
 	type TrackedData = eth::TrackedData<Self>;
+	type ChainAccount = eth::Address;
+	type ChainAsset = eth::Address;
 }
 
 impl ChainCrypto for Ethereum {
@@ -212,6 +245,8 @@ pub mod mocks {
 		type ChainBlockNumber = u64;
 		type ChainAmount = u128;
 		type TrackedData = MockTrackedData;
+		type ChainAccount = (); // Currently, we don't care about this since we don't use them in tests
+		type ChainAsset = (); // Currently, we don't care about this since we don't use them in tests
 	}
 
 	#[derive(

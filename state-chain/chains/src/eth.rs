@@ -8,7 +8,7 @@ use crate::*;
 use codec::{Decode, Encode, MaxEncodedLen};
 pub use ethabi::{
 	ethereum_types::{H256, U256},
-	Address, Hash as TxHash, Token, Uint,
+	Address, Hash as TxHash, Token, Uint, Word,
 };
 use libsecp256k1::{curve::Scalar, PublicKey, SecretKey};
 use scale_info::TypeInfo;
@@ -711,6 +711,33 @@ impl core::fmt::Debug for TransactionHash {
 impl From<H256> for TransactionHash {
 	fn from(x: H256) -> Self {
 		Self(x)
+	}
+}
+
+impl Tokenizable for FetchAssetParams<Ethereum> {
+	fn tokenize(self) -> Token {
+		Token::Tuple(vec![Token::FixedBytes(self.swap_id.to_vec()), Token::Address(self.asset)])
+	}
+}
+
+impl Tokenizable for Vec<FetchAssetParams<Ethereum>> {
+	fn tokenize(self) -> Token {
+		Token::Array(self.iter().map(|fetch_params| fetch_params.tokenize()).collect())
+	}
+}
+
+impl Tokenizable for TransferAssetParams<Ethereum> {
+	fn tokenize(self) -> Token {
+		Token::Tuple(vec![
+			Token::Address(self.asset),
+			Token::Address(self.account),
+			Token::Uint(Uint::from(self.amount)),
+		])
+	}
+}
+impl Tokenizable for Vec<TransferAssetParams<Ethereum>> {
+	fn tokenize(self) -> Token {
+		Token::Array(self.iter().map(|transfer_params| transfer_params.tokenize()).collect())
 	}
 }
 
