@@ -100,8 +100,10 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// The network is currently paused.
 		NetworkIsInMaintenance,
-		/// The settings provided were invalid
+		/// The settings provided were invalid.
 		InvalidCfeSettings,
+		/// Eth is not an Erc20 token, so its address can't be updated.
+		EthAddressNotUpdateable,
 	}
 
 	#[pallet::pallet]
@@ -161,7 +163,7 @@ pub mod pallet {
 		CfeSettingsUpdated { new_cfe_settings: cfe::CfeSettings },
 
 		/// An supported address was added or updated
-		SupportedEthAssetsUpdated(Asset, Erc20Address),
+		SupportedEthAssetsUpdated(Asset, EthereumAddress),
 	}
 
 	#[pallet::call]
@@ -185,6 +187,7 @@ pub mod pallet {
 			Ok(().into())
 		}
 		/// Adds or updates an asset address in the map of supported ETH assets.
+		///
 		/// ## Events
 		///
 		/// - [SupportedEthAssetsUpdated](Event::SupportedEthAssetsUpdated)
@@ -196,10 +199,11 @@ pub mod pallet {
 		pub fn update_supported_eth_assets(
 			origin: OriginFor<T>,
 			asset: Asset,
-			address: Erc20Address,
+			address: EthereumAddress,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			SupportedEthAssets::<T>::insert(asset, address.clone());
+			ensure!(asset != Asset::Eth, Error::<T>::EthAddressNotUpdateable);
+			SupportedEthAssets::<T>::insert(asset, Erc20Address::Token(address));
 			Self::deposit_event(Event::SupportedEthAssetsUpdated(asset, address));
 			Ok(().into())
 		}
@@ -250,6 +254,7 @@ pub mod pallet {
 			EthereumChainId::<T>::set(self.ethereum_chain_id);
 			CfeSettings::<T>::set(self.cfe_settings);
 			CurrentSystemState::<T>::set(SystemState::Normal);
+			SupportedEthAssets::<T>::insert(Asset::Eth, Erc20Address::Eth);
 		}
 	}
 }
