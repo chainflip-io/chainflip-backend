@@ -431,7 +431,7 @@ impl pallet_cf_emissions::Config for Runtime {
 	type Surplus = pallet_cf_flip::Surplus<Runtime>;
 	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
 	type RewardsDistribution = chainflip::BlockAuthorRewardDistribution;
-	type BlocksPerDay = ConstU32<DAYS>;
+	type CompoundingInterval = ConstU32<COMPOUNDING_INTERVAL>;
 	type ReplayProtectionProvider = chainflip::EthReplayProtectionProvider;
 	type EthEnvironmentProvider = Environment;
 	type WeightInfo = pallet_cf_emissions::weights::PalletWeight<Runtime>;
