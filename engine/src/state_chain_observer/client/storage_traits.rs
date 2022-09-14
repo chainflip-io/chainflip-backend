@@ -114,9 +114,9 @@ impl<
 #[cfg(test)]
 mod tests {
 
+    use cf_primitives::Asset;
+    use frame_support::{storage_alias, Blake2_128Concat, Identity, Twox64Concat};
     use sp_core::H256;
-    use sp_runtime::AccountId32;
-    use state_chain_runtime::EthereumInstance;
 
     use super::*;
 
@@ -133,30 +133,26 @@ mod tests {
         key == key_from_storage_key
     }
 
+    #[storage_alias]
+    type BlakeStorageMap = StorageMap<Test, Blake2_128Concat, H256, ()>;
+
+    #[storage_alias]
+    type TwoxStorageMap = StorageMap<Test, Twox64Concat, u32, ()>;
+
+    #[storage_alias]
+    type IdentityStorageMap = StorageMap<Test, Identity, Asset, ()>;
+
     #[test]
-    fn test_key_from_storage_key() {
+    fn test_fake_storage_keys() {
         // Blake2_128Concat
-        assert!(test_map_storage_key_and_back::<
-            pallet_cf_staking::AccountRetired<state_chain_runtime::Runtime>,
-            _,
-        >(AccountId32::from([0x1; 32])));
+        assert!(test_map_storage_key_and_back::<BlakeStorageMap, _>(
+            H256::from([0x1; 32])
+        ));
 
-        // Twox64Concat
-        assert!(test_map_storage_key_and_back::<
-            pallet_cf_broadcast::BroadcastIdToAttemptNumbers<
-                state_chain_runtime::Runtime,
-                EthereumInstance,
-            >,
-            _,
-        >(42));
+        assert!(test_map_storage_key_and_back::<TwoxStorageMap, _>(42));
 
-        // Identity
-        assert!(test_map_storage_key_and_back::<
-            pallet_cf_broadcast::TransactionHashWhitelist<
-                state_chain_runtime::Runtime,
-                EthereumInstance,
-            >,
-            _,
-        >(H256::from([0x24; 32])));
+        assert!(test_map_storage_key_and_back::<IdentityStorageMap, _>(
+            Asset::Eth
+        ));
     }
 }
