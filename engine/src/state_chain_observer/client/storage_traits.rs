@@ -114,21 +114,23 @@ impl<
 #[cfg(test)]
 mod tests {
 
-    use codec::Encode;
     use sp_core::H256;
     use sp_runtime::AccountId32;
     use state_chain_runtime::EthereumInstance;
 
     use super::*;
 
-    fn test_map_storage_key_and_back<StorageMap: StorageMapAssociatedTypes>(
-        key: <StorageMap as StorageMapAssociatedTypes>::Key,
+    fn test_map_storage_key_and_back<
+        StorageMap: StorageMapAssociatedTypes<Key = K>,
+        K: PartialEq,
+    >(
+        key: K,
     ) -> bool {
         let storage_key = StorageMap::_hashed_key_for(&key);
 
         let key_from_storage_key = StorageMap::key_from_storage_key(&storage_key);
         // encode so we don't need PartialEq
-        key.encode() == key_from_storage_key.encode()
+        key == key_from_storage_key
     }
 
     #[test]
@@ -136,6 +138,7 @@ mod tests {
         // Blake2_128Concat
         assert!(test_map_storage_key_and_back::<
             pallet_cf_staking::AccountRetired<state_chain_runtime::Runtime>,
+            _,
         >(AccountId32::from([0x1; 32])));
 
         // Twox64Concat
@@ -144,6 +147,7 @@ mod tests {
                 state_chain_runtime::Runtime,
                 EthereumInstance,
             >,
+            _,
         >(42));
 
         // Identity
@@ -152,6 +156,7 @@ mod tests {
                 state_chain_runtime::Runtime,
                 EthereumInstance,
             >,
+            _,
         >(H256::from([0x24; 32])));
     }
 }
