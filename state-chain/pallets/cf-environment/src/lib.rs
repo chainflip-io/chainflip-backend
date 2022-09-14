@@ -106,7 +106,7 @@ pub mod pallet {
 	pub type KeyManagerAddress<T> = StorageValue<_, EthereumAddress, ValueQuery>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn eth_vault_ddress)]
+	#[pallet::getter(fn eth_vault_address)]
 	/// The address of the ETH vault contract
 	pub type EthVaultAddress<T> = StorageValue<_, EthereumAddress, ValueQuery>;
 
@@ -190,7 +190,7 @@ pub mod pallet {
 		pub flip_token_address: EthereumAddress,
 		pub stake_manager_address: EthereumAddress,
 		pub key_manager_address: EthereumAddress,
-		pub eth_vault_ddress: EthereumAddress,
+		pub eth_vault_address: EthereumAddress,
 		pub ethereum_chain_id: u64,
 		pub cfe_settings: cfe::CfeSettings,
 	}
@@ -202,7 +202,7 @@ pub mod pallet {
 			FlipTokenAddress::<T>::set(self.flip_token_address);
 			StakeManagerAddress::<T>::set(self.stake_manager_address);
 			KeyManagerAddress::<T>::set(self.key_manager_address);
-			EthVaultAddress::<T>::set(self.eth_vault_ddress);
+			EthVaultAddress::<T>::set(self.eth_vault_address);
 			EthereumChainId::<T>::set(self.ethereum_chain_id);
 			CfeSettings::<T>::set(self.cfe_settings);
 			CurrentSystemState::<T>::set(SystemState::Normal);
@@ -249,7 +249,7 @@ impl<T: Config> EthEnvironmentProvider for Pallet<T> {
 	fn key_manager_address() -> [u8; 20] {
 		KeyManagerAddress::<T>::get()
 	}
-	fn eth_vault_ddress() -> [u8; 20] {
+	fn eth_vault_address() -> [u8; 20] {
 		EthVaultAddress::<T>::get()
 	}
 	fn stake_manager_address() -> [u8; 20] {

@@ -289,7 +289,7 @@ pub trait EthEnvironmentProvider {
 	fn flip_token_address() -> [u8; 20];
 	fn key_manager_address() -> [u8; 20];
 	fn stake_manager_address() -> [u8; 20];
-	fn eth_vault_ddress() -> [u8; 20];
+	fn eth_vault_address() -> [u8; 20];
 	fn chain_id() -> u64;
 }
 

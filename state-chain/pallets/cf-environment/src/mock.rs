@@ -86,7 +86,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			stake_manager_address: STAKE_MANAGER_ADDRESS,
 			key_manager_address: KEY_MANAGER_ADDRESS,
 			ethereum_chain_id: ETH_CHAIN_ID,
-			eth_vault_ddress: VAULT_ADDRESS,
+			eth_vault_address: VAULT_ADDRESS,
 			cfe_settings: CFE_SETTINGS,
 			flip_token_address: [0u8; 20],
 		},

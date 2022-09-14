@@ -5,8 +5,8 @@ pub const PARADISE: StateChainEnvironment = StateChainEnvironment {
 	flip_token_address: hex_literal::hex!("9F690f3B12700538f3872AfF504016a546E85c78"),
 	stake_manager_address: hex_literal::hex!("41f00272Ac87fFc4c1fd4B3D6E8A932FC423cF80"),
 	key_manager_address: hex_literal::hex!("4DBAf1eE163Cfe78F544D00Ce6AEB2bFb590dA75"),
-	eth_vault_ddress: hex_literal::hex!("e7f1725E7734CE288F8367e1Bb143E90bb3F0512"), // not sure??
-	ethereum_chain_id: 5,                                                            // GOERLI
+	eth_vault_address: hex_literal::hex!("e7f1725E7734CE288F8367e1Bb143E90bb3F0512"), // not sure??
+	ethereum_chain_id: 5,                                                             // GOERLI
 	eth_init_agg_key: hex_literal::hex!(
 		"0273984947f2a25bab820524aca9e71ffda6e928d731ae308e725feddeeb7c5123"
 	),

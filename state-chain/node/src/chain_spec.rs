@@ -59,7 +59,7 @@ pub struct StateChainEnvironment {
 	flip_token_address: [u8; 20],
 	stake_manager_address: [u8; 20],
 	key_manager_address: [u8; 20],
-	eth_vault_ddress: [u8; 20],
+	eth_vault_address: [u8; 20],
 	ethereum_chain_id: u64,
 	eth_init_agg_key: [u8; 33],
 	ethereum_deployment_block: u64,
@@ -87,7 +87,7 @@ pub fn get_environment() -> StateChainEnvironment {
 			.unwrap_or_else(|_| String::from(KEY_MANAGER_ADDRESS_DEFAULT)),
 	)
 	.unwrap();
-	let eth_vault_ddress: [u8; 20] = clean_eth_address(
+	let eth_vault_address: [u8; 20] = clean_eth_address(
 		&env::var("ETH_VAULT_ADDRESS").unwrap_or_else(|_| String::from(ETH_VAULT_ADDRESS_DEFAULT)),
 	)
 	.unwrap();
@@ -129,7 +129,7 @@ pub fn get_environment() -> StateChainEnvironment {
 		flip_token_address,
 		stake_manager_address,
 		key_manager_address,
-		eth_vault_ddress,
+		eth_vault_address,
 		ethereum_chain_id,
 		eth_init_agg_key,
 		ethereum_deployment_block,
@@ -170,7 +170,7 @@ pub fn development_config() -> Result<ChainSpec, String> {
 		flip_token_address,
 		stake_manager_address,
 		key_manager_address,
-		eth_vault_ddress,
+		eth_vault_address,
 		ethereum_chain_id,
 		eth_init_agg_key,
 		ethereum_deployment_block,
@@ -202,7 +202,7 @@ pub fn development_config() -> Result<ChainSpec, String> {
 					flip_token_address,
 					stake_manager_address,
 					key_manager_address,
-					eth_vault_ddress,
+					eth_vault_address,
 					ethereum_chain_id,
 					cfe_settings: CfeSettings {
 						eth_block_safety_margin,
@@ -244,7 +244,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 		flip_token_address,
 		stake_manager_address,
 		key_manager_address,
-		eth_vault_ddress,
+		eth_vault_address,
 		ethereum_chain_id,
 		eth_init_agg_key,
 		ethereum_deployment_block,
@@ -282,7 +282,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 					flip_token_address,
 					stake_manager_address,
 					key_manager_address,
-					eth_vault_ddress,
+					eth_vault_address,
 					ethereum_chain_id,
 					cfe_settings: CfeSettings {
 						eth_block_safety_margin,
@@ -350,7 +350,7 @@ fn chainflip_three_node_testnet_config_from_env(
 		flip_token_address,
 		stake_manager_address,
 		key_manager_address,
-		eth_vault_ddress,
+		eth_vault_address,
 		ethereum_chain_id,
 		eth_init_agg_key,
 		ethereum_deployment_block,
@@ -412,7 +412,7 @@ fn chainflip_three_node_testnet_config_from_env(
 					flip_token_address,
 					stake_manager_address,
 					key_manager_address,
-					eth_vault_ddress,
+					eth_vault_address,
 					ethereum_chain_id,
 					cfe_settings: CfeSettings {
 						eth_block_safety_margin,
@@ -461,7 +461,7 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 		flip_token_address,
 		stake_manager_address,
 		key_manager_address,
-		eth_vault_ddress,
+		eth_vault_address,
 		ethereum_chain_id,
 		eth_init_agg_key,
 		ethereum_deployment_block,
@@ -545,7 +545,7 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 					flip_token_address,
 					stake_manager_address,
 					key_manager_address,
-					eth_vault_ddress,
+					eth_vault_address,
 					ethereum_chain_id,
 					cfe_settings: CfeSettings {
 						eth_block_safety_margin,
