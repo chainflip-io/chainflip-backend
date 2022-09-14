@@ -123,18 +123,23 @@ pub mod pallet {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
 			for IngressWitness { ingress_address, asset, amount, tx_hash } in ingress_witnesses {
-			    // NB: Don't take here. We should continue witnessing this address
-			    // even after an ingress to it has occurred.
-			    // https://github.com/chainflip-io/chainflip-eth-contracts/pull/226
-			    match OpenIntents::<T>::get(ingress_address).ok_or(Error::<T>::InvalidIntent)? {
-				    Intent::LiquidityProvision { lp_account, .. } => {
-					    T::LpAccountHandler::provision_account(&lp_account, asset, amount)?;
-				    },
-				    Intent::Swap { .. } => todo!(),
-                }
+				// NB: Don't take here. We should continue witnessing this address
+				// even after an ingress to it has occurred.
+				// https://github.com/chainflip-io/chainflip-eth-contracts/pull/226
+				match IntentActions::<T>::get(ingress_address).ok_or(Error::<T>::InvalidIntent)? {
+					IntentAction::LiquidityProvision { lp_account, .. } => {
+						T::LpAccountHandler::provision_account(&lp_account, asset, amount)?;
+					},
+					IntentAction::Swap { .. } => todo!(),
+				}
 
-                Self::deposit_event(Event::IngressCompleted { ingress_address, asset, amount });
-            }
+				Self::deposit_event(Event::IngressCompleted {
+					ingress_address,
+					asset,
+					amount,
+					tx_hash,
+				});
+			}
 			Ok(().into())
 		}
 
