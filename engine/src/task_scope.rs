@@ -290,7 +290,7 @@ macro_rules! impl_spawn_ops {
                             Err(error) => Err(error),
                         },
                         Err(_) => {
-                            // Spawn was cancelled
+                            // Spawn was aborted
                             Ok(())
                         }
                     }
