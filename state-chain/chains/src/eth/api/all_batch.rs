@@ -103,3 +103,117 @@ impl ApiCall<Ethereum> for AllBatch {
 		self.sig_data.is_signed()
 	}
 }
+
+#[cfg(test)]
+mod test_all_batch {
+	use crate::eth::{self, SchnorrVerificationComponents};
+
+	use super::*;
+	use frame_support::assert_ok;
+
+	#[test]
+	// There have been obtuse test failures due to the loading of the contract failing
+	// It uses a different ethabi to the CFE, so we test separately
+	fn just_load_the_contract() {
+		assert_ok!(ethabi::Contract::load(
+			std::include_bytes!("../../../../../engine/src/eth/abis/Vault.json").as_ref(),
+		));
+	}
+
+	#[test]
+	fn test_claim_payload() {
+		use crate::eth::tests::asymmetrise;
+		use ethabi::Token;
+		const FAKE_KEYMAN_ADDR: [u8; 20] = asymmetrise([0xcf; 20]);
+		const CHAIN_ID: u64 = 1;
+		const NONCE: u64 = 9;
+
+		let mut dummy_swap_ids: Vec<[u8; 32]> = vec![[1_u8; 32], [2_u8; 32]];
+		let mut dummy_asset_addrs_fetch: Vec<eth::Address> =
+			vec![eth::Address::from_slice(&[3; 20]), eth::Address::from_slice(&[4; 20])];
+
+		let mut dummy_asset_addrs_transfer: Vec<eth::Address> =
+			vec![eth::Address::from_slice(&[5; 20]), eth::Address::from_slice(&[6; 20])];
+		let mut dummy_accounts: Vec<eth::Address> =
+			vec![eth::Address::from_slice(&[7; 20]), eth::Address::from_slice(&[8; 20])];
+		let mut dummy_amounts: Vec<u128> = vec![10, 20];
+
+		let dummy_fetch_asset_params: Vec<FetchAssetParams<Ethereum>> = vec![
+			FetchAssetParams::<Ethereum> {
+				swap_id: dummy_swap_ids.pop().unwrap(),
+				asset: dummy_asset_addrs_fetch.pop().unwrap(),
+			},
+			FetchAssetParams::<Ethereum> {
+				swap_id: dummy_swap_ids.pop().unwrap(),
+				asset: dummy_asset_addrs_fetch.pop().unwrap(),
+			},
+		];
+		let dummy_transfer_asset_params: Vec<TransferAssetParams<Ethereum>> = vec![
+			TransferAssetParams::<Ethereum> {
+				asset: dummy_asset_addrs_transfer.pop().unwrap(),
+				account: dummy_accounts.pop().unwrap(),
+				amount: dummy_amounts.pop().unwrap(),
+			},
+			TransferAssetParams::<Ethereum> {
+				asset: dummy_asset_addrs_transfer.pop().unwrap(),
+				account: dummy_accounts.pop().unwrap(),
+				amount: dummy_amounts.pop().unwrap(),
+			},
+		];
+
+		const FAKE_NONCE_TIMES_G_ADDR: [u8; 20] = asymmetrise([0x7f; 20]);
+		const FAKE_SIG: [u8; 32] = asymmetrise([0xe1; 32]);
+
+		let eth_vault = ethabi::Contract::load(
+			std::include_bytes!("../../../../../engine/src/eth/abis/Vault.json").as_ref(),
+		)
+		.unwrap();
+
+		let all_batch_reference = eth_vault.function("allBatch").unwrap();
+
+		let all_batch_runtime = AllBatch::new_unsigned(
+			EthereumReplayProtection {
+				key_manager_address: FAKE_KEYMAN_ADDR,
+				chain_id: CHAIN_ID,
+				nonce: NONCE,
+			},
+			dummy_fetch_asset_params.clone(),
+			dummy_transfer_asset_params.clone(),
+		);
+
+		let expected_msg_hash = all_batch_runtime.sig_data.msg_hash;
+
+		assert_eq!(all_batch_runtime.threshold_signature_payload(), expected_msg_hash);
+		let runtime_payload = all_batch_runtime
+			.clone()
+			.signed(&SchnorrVerificationComponents {
+				s: FAKE_SIG,
+				k_times_g_address: FAKE_NONCE_TIMES_G_ADDR,
+			})
+			.abi_encoded();
+
+		// Ensure signing payload isn't modified by signature.
+		assert_eq!(all_batch_runtime.threshold_signature_payload(), expected_msg_hash);
+
+		assert_eq!(
+			// Our encoding:
+			runtime_payload,
+			// "Canonical" encoding based on the abi definition above and using the ethabi crate:
+			all_batch_reference
+				.encode_input(&[
+					// sigData: SigData(address, uint, uint, uint, uint, address)
+					Token::Tuple(vec![
+						Token::Address(FAKE_KEYMAN_ADDR.into()),
+						Token::Uint(CHAIN_ID.into()),
+						Token::Uint(expected_msg_hash.0.into()),
+						Token::Uint(FAKE_SIG.into()),
+						Token::Uint(NONCE.into()),
+						Token::Address(FAKE_NONCE_TIMES_G_ADDR.into()),
+					]),
+					dummy_fetch_asset_params.tokenize(),
+					dummy_transfer_asset_params.tokenize(),
+				])
+				.unwrap()
+		);
+	}
+}
