@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::BTreeSet, sync::Arc};
 
 use cf_primitives::{Asset, ForeignChainAddress};
 use pallet_cf_ingress::IngressWitness;
@@ -24,7 +24,7 @@ pub async fn start<StateChainRpc>(
     epoch_starts_receiver: broadcast::Receiver<EpochStart>,
     eth_monitor_ingress_receiver: tokio::sync::mpsc::UnboundedReceiver<H160>,
     state_chain_client: Arc<StateChainClient<StateChainRpc>>,
-    monitored_addresses: Vec<H160>,
+    monitored_addresses: BTreeSet<H160>,
     logger: &slog::Logger,
 ) -> anyhow::Result<()>
 where
@@ -61,7 +61,7 @@ where
                         // ensuring we don't potentially miss any ingress events that occur before we start to monitor the address
                         biased;
                         Some(to_monitor) = eth_monitor_ingress_receiver.recv() => {
-                            monitored_addresses.push(to_monitor);
+                            monitored_addresses.insert(to_monitor);
                         },
                         Some(number_bloom) = safe_ws_head_stream.next() => {
                             // TODO: Factor out ending between contract witnesser and ingress witnesser
