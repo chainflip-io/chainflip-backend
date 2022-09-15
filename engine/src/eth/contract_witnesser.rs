@@ -9,6 +9,7 @@ use crate::{
 };
 
 use super::{
+    epoch_witnesser::should_end_witnessing,
     rpc::{EthHttpRpcClient, EthWsRpcClient},
     EpochStart, EthContractWitnesser,
 };
@@ -50,17 +51,12 @@ where
 
                 // TOOD: Handle None on stream, and result event being an error
                 while let Some(block) = block_stream.next().await {
-                    if let Some(end_block) = *end_witnessing_signal.lock().unwrap() {
-                        if block.block_number >= end_block {
-                            slog::info!(
-                                logger,
-                                "Finished witnessing events at ETH block: {}",
-                                block.block_number
-                            );
-                            // we have reached the block height we wanted to witness up to
-                            // so can stop the witness process
-                            break;
-                        }
+                    if should_end_witnessing(
+                        end_witnessing_signal.clone(),
+                        block.block_number,
+                        &logger,
+                    ) {
+                        break;
                     }
 
                     for event in block.events {

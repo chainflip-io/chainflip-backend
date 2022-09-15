@@ -6,7 +6,10 @@ use sp_core::H160;
 use tokio::sync::broadcast;
 use tokio_stream::StreamExt;
 
-use crate::state_chain_observer::client::{StateChainClient, StateChainRpcApi};
+use crate::{
+    eth::epoch_witnesser::should_end_witnessing,
+    state_chain_observer::client::{StateChainClient, StateChainRpcApi},
+};
 
 use super::{
     epoch_witnesser,
@@ -58,18 +61,9 @@ where
                             monitored_addresses.insert(to_monitor);
                         },
                         Some(number_bloom) = safe_ws_head_stream.next() => {
-                            // TODO: Factor out ending between contract witnesser and ingress witnesser
-                            if let Some(end_block) = *end_witnessing_signal.lock().unwrap() {
-                                if number_bloom.block_number.as_u64() >= end_block {
-                                    slog::info!(
-                                        logger,
-                                        "Finished witnessing events at ETH block: {}",
-                                        number_bloom.block_number
-                                    );
-                                    // we have reached the block height we wanted to witness up to
-                                    // so can stop the witness process
-                                    break;
-                                }
+
+                            if should_end_witnessing(end_witnessing_signal.clone(), number_bloom.block_number.as_u64(), &logger) {
+                                break;
                             }
 
                             let ingress_witnesses = eth_ws_rpc
