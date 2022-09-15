@@ -42,12 +42,6 @@ where
             let eth_ws_rpc = eth_ws_rpc.clone();
             let state_chain_client = state_chain_client.clone();
             async move {
-                slog::info!(
-                    logger,
-                    "Start witnessing from ETH block: {}",
-                    epoch_start.eth_block
-                );
-
                 // TODO: Factor out merged streams for use in contract witnesser and here
                 let mut safe_ws_head_stream = safe_ws_head_stream(
                     eth_ws_rpc.subscribe_new_heads().await?,

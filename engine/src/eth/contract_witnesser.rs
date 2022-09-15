@@ -44,11 +44,6 @@ where
             let state_chain_client = state_chain_client.clone();
 
             async move {
-                slog::info!(
-                    logger,
-                    "Start witnessing from ETH block: {}",
-                    epoch_start.eth_block
-                );
                 let mut block_stream = contract_witnesser
                     .block_stream(eth_ws_rpc, eth_http_rpc, epoch_start.eth_block, &logger)
                     .await?;
