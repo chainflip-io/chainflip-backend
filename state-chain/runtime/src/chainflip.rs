@@ -203,7 +203,8 @@ impl AddressDerivationApi for AddressDerivation {
 				let asset_address = match ingress_asset.asset {
 					Asset::Eth => vec![],
 					_ => Environment::supported_eth_assets(ingress_asset.asset)
-						.expect("unsupported asset!"),
+						.expect("unsupported asset!")
+						.to_vec(),
 				};
 				cf_primitives::ForeignChainAddress::Eth(get_create_2_address(
 					ingress_asset.asset,

@@ -276,7 +276,7 @@ impl<T: Config> SystemStateManager for SystemStateProvider<T> {
 
 impl<T: Config> EthEnvironmentProvider for Pallet<T> {
 	fn flip_token_address() -> [u8; 20] {
-		SupportedEthAssets::<T>::get(Asset::Flip).expect("Missing FLIP contract address")
+		SupportedEthAssets::<T>::get(Asset::Flip).expect("FLIP address should be added at genesis")
 	}
 	fn key_manager_address() -> [u8; 20] {
 		KeyManagerAddress::<T>::get()
