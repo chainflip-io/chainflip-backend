@@ -12,7 +12,7 @@ use frame_support::pallet_prelude::InvalidTransaction;
 use frame_support::storage::storage_prefix;
 use frame_support::storage::types::QueryKindTrait;
 use frame_system::Phase;
-use futures::{future, Stream, StreamExt, TryStreamExt};
+use futures::{Stream, StreamExt, TryStreamExt};
 use jsonrpsee::core::client::{ClientT, SubscriptionClientT};
 use jsonrpsee::core::{Error as RpcError, RpcResult};
 use jsonrpsee::types::error::CallError;
@@ -678,6 +678,9 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             .collect())
     }
 
+    /// Gets all the storage pairs (key, value) of a StorageMap.
+    /// NB: Because this is an unbounded operation, it requires the node to have
+    /// the `--rpc-methods=unsafe` enabled.
     pub async fn get_all_storage_pairs<StorageMap: storage_traits::StorageMapAssociatedTypes>(
         &self,
         block_hash: state_chain_runtime::Hash,
@@ -772,76 +775,11 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             .expect("should have a vault"))
     }
 
-    /// Paginate to get all the storage keys for a particular prefix
-    pub async fn get_all_storage_keys(
-        &self,
-        block_hash: state_chain_runtime::Hash,
-        prefix: StorageKey,
-    ) -> Result<Vec<StorageKey>> {
-        let mut start_key = None;
-        let mut keys = Vec::new();
-        loop {
-            let mut page = self
-                .state_chain_rpc_client
-                .storage_keys_paged(
-                    block_hash,
-                    prefix.clone(),
-                    STORAGE_KEYS_PAGED_MAX_COUNT,
-                    start_key,
-                )
-                .await?;
-
-            let page_len = page.len();
-            if let Some(last) = page.last() {
-                start_key = Some(last.clone());
-                keys.append(&mut page);
-
-                // If we couldn't fill the count, then we must be finished
-                if page_len < STORAGE_KEYS_PAGED_MAX_COUNT as usize {
-                    break;
-                }
-            } else {
-                break;
-            }
-        }
-
-        Ok(keys)
-    }
-
-    /// Fetches all the keys by paginating over them and then concurrently fetches the items for each key
-    pub async fn get_all_storage_map_items<StorageMap: storage_traits::StorageMapAssociatedTypes> (
-        &self,
-        block_hash: state_chain_runtime::Hash,
-    ) -> Result<
-        Vec<(
-            <StorageMap as StorageMapAssociatedTypes>::Key,
-            <StorageMap::QueryKind as QueryKindTrait<StorageMap::Value, StorageMap::OnEmpty>>::Query
-        )
-    >>{
-        let storage_keys = self
-            .get_all_storage_keys(block_hash, StorageMap::_prefix_hash())
-            .await?;
-
-        Ok(futures::stream::iter(storage_keys)
-            .map(|storage_key| StorageMap::key_from_storage_key(&storage_key))
-            .map(|key| async move {
-                (
-                    self.get_storage_map::<StorageMap>(block_hash, &key).await,
-                    key,
-                )
-            })
-            .buffered(10)
-            .take_while(|(result, _key)| future::ready(result.is_ok()))
-            .map(|(result, key)| (key, result.expect("Only taken successes")))
-            .collect::<Vec<_>>()
-            .await)
-    }
-
     pub async fn get_ingress_details(
         &self,
         block_hash: state_chain_runtime::Hash,
     ) -> Result<Vec<(ForeignChainAddress, ForeignChainAsset)>> {
-        Ok(self.get_all_storage_map_items::<pallet_cf_ingress::IntentIngressDetails<state_chain_runtime::Runtime>>(block_hash).await?.into_iter().map(|(address, opt_intent)| (address, opt_intent.expect("Must exist if the key did").ingress_asset)).collect())
+        Ok(self.get_all_storage_pairs::<pallet_cf_ingress::IntentIngressDetails<state_chain_runtime::Runtime>>(block_hash).await?.into_iter().map(|(address, opt_intent)| (address, opt_intent.expect("Must exist if the key did").ingress_asset)).collect())
     }
 
     /// Get all the events from a particular block
