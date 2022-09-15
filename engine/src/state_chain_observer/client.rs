@@ -678,18 +678,30 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             .collect())
     }
 
-    pub async fn get_storage_pairs<StorageType: Decode + Debug>(
+    pub async fn get_all_storage_pairs<StorageMap: storage_traits::StorageMapAssociatedTypes>(
         &self,
         block_hash: state_chain_runtime::Hash,
-        storage_key: StorageKey,
-    ) -> Result<Vec<StorageType>> {
+    ) -> Result<Vec<(
+            <StorageMap as StorageMapAssociatedTypes>::Key,
+            <StorageMap::QueryKind as QueryKindTrait<StorageMap::Value, StorageMap::OnEmpty>>::Query)
+        >>
+        {
         Ok(self
             .state_chain_rpc_client
-            .storage_pairs(block_hash, storage_key)
+            .storage_pairs(block_hash, StorageMap::_prefix_hash())
             .await?
             .into_iter()
-            .map(|(_, storage_data)| {
-                context!(StorageType::decode(&mut &storage_data.0[..])).unwrap()
+            .map(|(storage_key, storage_data)| {
+                (
+                    StorageMap::key_from_storage_key(&storage_key),
+                    context!(<StorageMap::QueryKind as QueryKindTrait<
+                        StorageMap::Value,
+                        StorageMap::OnEmpty,
+                    >>::Query::decode(
+                        &mut &storage_data.0[..]
+                    ))
+                    .unwrap(),
+                )
             })
             .collect())
     }
