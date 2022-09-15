@@ -126,3 +126,5 @@ pub struct ForeignChainAsset {
 	pub chain: ForeignChain,
 	pub asset: Asset,
 }
+
+pub type EgressBatch<Amount, EgressAddress> = Vec<(Amount, EgressAddress)>;

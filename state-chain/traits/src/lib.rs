@@ -14,7 +14,7 @@ use sp_std::collections::btree_set::BTreeSet;
 use cf_chains::{benchmarking_value::BenchmarkValue, ApiCall, ChainAbi, ChainCrypto};
 use cf_primitives::{
 	AccountRole, AuthorityCount, CeremonyId, ChainflipAccountData, ChainflipAccountState,
-	EpochIndex, ForeignChainAddress, ForeignChainAsset, IntentId,
+	EgressBatch, EpochIndex, ForeignChainAddress, ForeignChainAsset, IntentId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -727,4 +727,43 @@ pub trait AccountRoleRegistry<T: frame_system::Config> {
 	fn ensure_validator(origin: T::Origin) -> Result<T::AccountId, BadOrigin> {
 		Self::ensure_account_role(origin, AccountRole::Validator)
 	}
+}
+
+pub trait EgressAbiBuilder {
+	type Amount;
+	type EgressAddress;
+	type EgressTransaction;
+
+	// Take in a batch of transactions and construct the Transaction appropriate for the chain.
+	fn construct_batched_transaction(
+		asset: ForeignChainAsset,
+		batch: EgressBatch<Self::Amount, Self::EgressAddress>,
+	) -> Self::EgressTransaction;
+
+	/// Obtains the total transaction fee by deducting an equal amount from each transaction in the
+	/// batch.
+	///
+	/// Returns the total fee.
+	fn skim_transaction_fee(
+		asset: ForeignChainAsset,
+		batch: &mut EgressBatch<Self::Amount, Self::EgressAddress>,
+	) -> Self::Amount;
+
+	/// Estimates the total transaction cost for the given batch.
+	fn estimate_cost(
+		asset: ForeignChainAsset,
+		batch: &EgressBatch<Self::Amount, Self::EgressAddress>,
+	) -> Self::Amount;
+}
+
+/// API that allows other pallets to Egress assets out of the State Chain.
+pub trait EgressApi {
+	type Amount;
+	type EgressAddress;
+
+	fn add_to_egress_batch(
+		asset: ForeignChainAsset,
+		amount: Self::Amount,
+		egress_address: Self::EgressAddress,
+	) -> DispatchResult;
 }

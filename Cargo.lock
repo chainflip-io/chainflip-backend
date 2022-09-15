@@ -5200,6 +5200,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-cf-egress"
+version = "0.1.0"
+dependencies = [
+ "cf-chains",
+ "cf-primitives",
+ "cf-traits",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-cf-emissions"
 version = "0.1.0"
 dependencies = [
