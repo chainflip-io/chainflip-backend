@@ -137,12 +137,12 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// The system state has been updated
 		SystemStateUpdated { new_system_state: SystemState },
-
 		/// The on-chain CFE settings have been updated
 		CfeSettingsUpdated { new_cfe_settings: cfe::CfeSettings },
-
-		/// An supported address was added or updated
-		SupportedEthAssetsUpdated(Asset, EthereumAddress),
+		/// A new supported ETH asset was added
+		AddedNewEthAsset(Asset, EthereumAddress),
+		/// The address of an supported ETH asset was updated
+		UpdatedEthAsset(Asset, EthereumAddress),
 	}
 
 	#[pallet::call]
@@ -182,8 +182,13 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			ensure!(asset != Asset::Eth, Error::<T>::EthAddressNotUpdateable);
-			SupportedEthAssets::<T>::insert(asset, address);
-			Self::deposit_event(Event::SupportedEthAssetsUpdated(asset, address));
+			if SupportedEthAssets::<T>::contains_key(asset) {
+				SupportedEthAssets::<T>::mutate(asset, |new_address| *new_address = Some(address));
+				Self::deposit_event(Event::UpdatedEthAsset(asset, address));
+			} else {
+				SupportedEthAssets::<T>::insert(asset, address);
+				Self::deposit_event(Event::AddedNewEthAsset(asset, address));
+			}
 			Ok(().into())
 		}
 		/// Sets the current on-chain CFE settings
