@@ -93,7 +93,7 @@ fn update_supported_eth_assets() {
 				.event,
 			crate::mock::Event::Environment(crate::Event::UpdatedEthAsset(Asset::Usdc, [2; 20]),)
 		);
-		// Last but not least ☝️ - verify we can not add an address for ETH
+		// Last but not least - verify we can not add an address for ETH
 		assert_noop!(
 			Environment::update_supported_eth_assets(Origin::root(), Asset::Eth, [3; 20]),
 			<Error<Test>>::EthAddressNotUpdateable

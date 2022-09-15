@@ -215,7 +215,7 @@ impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 
 impl pallet_cf_ingress::Config for Runtime {
 	type Event = Event;
-	type AddressDerivation = chainflip::EthAddressDerivation;
+	type AddressDerivation = chainflip::AddressDerivation;
 	type LpAccountHandler = LiquidityProvider;
 }
 
