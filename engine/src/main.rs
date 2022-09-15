@@ -9,7 +9,7 @@ use chainflip_engine::{
         self, build_broadcast_channel,
         key_manager::KeyManager,
         rpc::{validate_client_chain_id, EthDualRpcClient, EthHttpRpcClient, EthWsRpcClient},
-        stake_manager::StakeManager,
+        stake_manager::{StakeManager, StakeManagerContractState},
         EthBroadcaster,
     },
     health::HealthChecker,
@@ -213,22 +213,24 @@ fn main() -> anyhow::Result<()> {
                     eth_ws_rpc_client.clone(),
                     eth_http_rpc_client.clone(),
                     epoch_start_receiver_1,
+                    StakeManagerContractState {},
                     true,
                     state_chain_client.clone(),
                     &root_logger,
                 )
             );
-            scope.spawn(
-                eth::contract_witnesser::start(
-                    key_manager_contract,
-                    eth_ws_rpc_client.clone(),
-                    eth_http_rpc_client,
-                    epoch_start_receiver_2,
-                    false,
-                    state_chain_client.clone(),
-                    &root_logger,
-                )
-            );
+            // scope.spawn(
+            //     eth::contract_witnesser::start(
+            //         key_manager_contract,
+            //         eth_ws_rpc_client.clone(),
+            //         eth_http_rpc_client,
+            //         epoch_start_receiver_2,
+            //         None,
+            //         false,
+            //         state_chain_client.clone(),
+            //         &root_logger,
+            //     )
+            // );
             scope.spawn(
                 eth::chain_data_witnesser::start(
                     eth_dual_rpc,

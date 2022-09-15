@@ -1,11 +1,11 @@
 pub mod chain_data_witnesser;
 pub mod contract_witnesser;
 mod epoch_witnesser;
+pub mod erc20_witnesser;
 mod http_safe_stream;
 pub mod ingress_witnesser;
 pub mod key_manager;
 pub mod stake_manager;
-pub mod erc20_witnesser;
 
 pub mod event;
 
@@ -74,7 +74,10 @@ pub struct EthNumberBloom {
     pub base_fee_per_gas: U256,
 }
 
-use self::rpc::{EthHttpRpcClient, EthRpcApi, EthWsRpcClient};
+use self::{
+    contract_witnesser::ContractStateUpdate,
+    rpc::{EthHttpRpcClient, EthRpcApi, EthWsRpcClient},
+};
 
 const EIP1559_TX_ID: u64 = 2;
 
@@ -782,18 +785,21 @@ pub trait EthContractWitnesser {
 
     fn decode_log_closure(&self) -> Result<DecodeLogClosure<Self::EventParameters>>;
 
-    async fn handle_event<RpcClient, EthRpcClient>(
+    async fn handle_event<RpcClient, EthRpcClient, ContractWitnesserState>(
         &self,
         epoch: EpochIndex,
         block_number: u64,
         event: Event<Self::EventParameters>,
+        // used to filter events after decoding
+        contract_witnseser_state: &ContractWitnesserState,
         state_chain_client: Arc<StateChainClient<RpcClient>>,
         eth_rpc: &EthRpcClient,
         logger: &slog::Logger,
     ) -> anyhow::Result<()>
     where
         RpcClient: 'static + StateChainRpcApi + Sync + Send,
-        EthRpcClient: EthRpcApi + Sync + Send;
+        EthRpcClient: EthRpcApi + Sync + Send,
+        ContractWitnesserState: Send + Sync + ContractStateUpdate;
 
     fn get_contract_address(&self) -> H160;
 }

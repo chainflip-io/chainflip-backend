@@ -1,4 +1,4 @@
-use std::{collections::BTreeSet, sync::Arc};
+use std::{collections::BTreeSet, pin::Pin, sync::Arc};
 
 use async_trait::async_trait;
 use cf_primitives::{Asset, EpochIndex};
@@ -11,7 +11,8 @@ use web3::{
 use crate::state_chain_observer::client::{StateChainClient, StateChainRpcApi};
 
 use super::{
-    event::Event, rpc::EthRpcApi, utils, DecodeLogClosure, EthContractWitnesser, SignatureAndEvent,
+    contract_witnesser::ContractStateUpdate, event::Event, rpc::EthRpcApi, utils, DecodeLogClosure,
+    EthContractWitnesser, SignatureAndEvent,
 };
 
 // These are the two events that must be supported as part of the ERC20 standard
@@ -41,6 +42,9 @@ pub struct Erc20Witnesser {
     pub deployed_address: H160,
     asset: Asset,
     contract: ethabi::Contract,
+
+    // TODO: Do we really want this to be so structurally different to the ingress witnesser?
+    // maybe it could be a struct too?
     monitored_addresses: BTreeSet<H160>,
 }
 
@@ -57,6 +61,37 @@ impl Erc20Witnesser {
     }
 }
 
+pub struct Erc20WitnesserState {
+    monitored_addresses: BTreeSet<H160>,
+    address_receiver: tokio::sync::broadcast::Receiver<H160>,
+}
+
+impl ContractStateUpdate for Erc20WitnesserState {
+    type Item = H160;
+
+    type Event = Erc20Event;
+
+    fn ready_to_update(
+        &'static mut self,
+    ) -> Pin<
+        Box<
+            dyn futures::Future<
+                    Output = Result<Self::Item, tokio::sync::broadcast::error::RecvError>,
+                > + Send,
+        >,
+    > {
+        Box::pin(self.address_receiver.recv())
+    }
+
+    fn update_state(&mut self, new_address: Self::Item) {
+        self.monitored_addresses.insert(new_address);
+    }
+
+    fn should_act_on(&self, event: Self::Event) -> bool {
+        true
+    }
+}
+
 #[async_trait]
 impl EthContractWitnesser for Erc20Witnesser {
     type EventParameters = Erc20Event;
@@ -66,11 +101,12 @@ impl EthContractWitnesser for Erc20Witnesser {
         "ERC20"
     }
 
-    async fn handle_event<RpcClient, EthRpcClient>(
+    async fn handle_event<RpcClient, EthRpcClient, ContractWitnesserState>(
         &self,
         epoch: EpochIndex,
         _block_number: u64,
         event: Event<Self::EventParameters>,
+        filter_state: &ContractWitnesserState,
         state_chain_client: Arc<StateChainClient<RpcClient>>,
         _eth_rpc: &EthRpcClient,
         logger: &slog::Logger,
@@ -78,8 +114,9 @@ impl EthContractWitnesser for Erc20Witnesser {
     where
         RpcClient: 'static + StateChainRpcApi + Sync + Send,
         EthRpcClient: EthRpcApi + Sync + Send,
+        ContractWitnesserState: Send + Sync + ContractStateUpdate,
     {
-        todo!("Handle the events");
+        Ok(())
     }
 
     fn get_contract_address(&self) -> H160 {
