@@ -47,6 +47,8 @@ use sp_runtime::traits::{
 	OpaqueKeys, UniqueSaturatedInto, Verify,
 };
 
+use cf_traits::EthEnvironmentProvider;
+
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
 use sp_runtime::{

@@ -2,7 +2,7 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-use cf_primitives::EthereumAddress;
+use cf_primitives::{Asset, EthereumAddress};
 pub use cf_traits::EthEnvironmentProvider;
 use cf_traits::{SystemStateInfo, SystemStateManager};
 use frame_support::pallet_prelude::*;
@@ -92,11 +92,6 @@ pub mod pallet {
 	#[pallet::pallet]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
-
-	#[pallet::storage]
-	#[pallet::getter(fn flip_token_address)]
-	/// The address of the ETH Flip token contract
-	pub type FlipTokenAddress<T> = StorageValue<_, EthereumAddress, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn supported_eth_assets)]
@@ -231,14 +226,13 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
 		fn build(&self) {
-			FlipTokenAddress::<T>::set(self.flip_token_address);
 			StakeManagerAddress::<T>::set(self.stake_manager_address);
 			KeyManagerAddress::<T>::set(self.key_manager_address);
 			EthVaultAddress::<T>::set(self.eth_vault_address);
 			EthereumChainId::<T>::set(self.ethereum_chain_id);
 			CfeSettings::<T>::set(self.cfe_settings);
 			CurrentSystemState::<T>::set(SystemState::Normal);
-			// SupportedEthAssets::<T>::insert(Asset::Eth, Erc20Address::Eth);
+			SupportedEthAssets::<T>::insert(Asset::Flip, self.flip_token_address);
 		}
 	}
 }
@@ -277,7 +271,7 @@ impl<T: Config> SystemStateManager for SystemStateProvider<T> {
 
 impl<T: Config> EthEnvironmentProvider for Pallet<T> {
 	fn flip_token_address() -> [u8; 20] {
-		FlipTokenAddress::<T>::get()
+		SupportedEthAssets::<T>::get(Asset::Flip).expect("Missing FLIP contact address")
 	}
 	fn key_manager_address() -> [u8; 20] {
 		KeyManagerAddress::<T>::get()

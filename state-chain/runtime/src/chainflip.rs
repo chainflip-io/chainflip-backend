@@ -26,8 +26,9 @@ use cf_chains::{
 	ApiCall, ChainAbi, Ethereum, TransactionBuilder,
 };
 use cf_traits::{
-	AddressDerivationApi, BlockEmissions, Chainflip, EmergencyRotation, EpochInfo, Heartbeat,
-	Issuance, NetworkState, ReplayProtectionProvider, RewardsDistribution, RuntimeUpgrade,
+	AddressDerivationApi, BlockEmissions, Chainflip, EmergencyRotation, EpochInfo,
+	EthEnvironmentProvider, Heartbeat, Issuance, NetworkState, ReplayProtectionProvider,
+	RewardsDistribution, RuntimeUpgrade,
 };
 use frame_support::traits::Get;
 use pallet_cf_chain_tracking::ChainState;
@@ -202,13 +203,12 @@ impl AddressDerivationApi for AddressDerivation {
 				let asset_address = match ingress_asset.asset {
 					Asset::Eth => vec![],
 					_ => Environment::supported_eth_assets(ingress_asset.asset)
-						.expect("unsupported asset!")
-						.to_vec(),
+						.expect("unsupported asset!"),
 				};
 				cf_primitives::ForeignChainAddress::Eth(get_create_2_address(
 					ingress_asset.asset,
-					Environment::vault_contract_address(),
-					asset_address,
+					Environment::eth_vault_address(),
+					&asset_address,
 					intent_id,
 				))
 			},
