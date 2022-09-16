@@ -121,43 +121,33 @@ mod test_all_batch {
 	}
 
 	#[test]
-	fn test_claim_payload() {
+	fn test_payload() {
 		use crate::eth::tests::asymmetrise;
 		use ethabi::Token;
 		const FAKE_KEYMAN_ADDR: [u8; 20] = asymmetrise([0xcf; 20]);
 		const CHAIN_ID: u64 = 1;
 		const NONCE: u64 = 9;
 
-		let mut dummy_swap_ids: Vec<[u8; 32]> = vec![[1_u8; 32], [2_u8; 32]];
-		let mut dummy_asset_addrs_fetch: Vec<eth::Address> =
-			vec![eth::Address::from_slice(&[3; 20]), eth::Address::from_slice(&[4; 20])];
-
-		let mut dummy_asset_addrs_transfer: Vec<eth::Address> =
-			vec![eth::Address::from_slice(&[5; 20]), eth::Address::from_slice(&[6; 20])];
-		let mut dummy_accounts: Vec<eth::Address> =
-			vec![eth::Address::from_slice(&[7; 20]), eth::Address::from_slice(&[8; 20])];
-		let mut dummy_amounts: Vec<u128> = vec![10, 20];
-
 		let dummy_fetch_asset_params: Vec<FetchAssetParams<Ethereum>> = vec![
 			FetchAssetParams::<Ethereum> {
-				swap_id: dummy_swap_ids.pop().unwrap(),
-				asset: dummy_asset_addrs_fetch.pop().unwrap(),
+				swap_id: [1_u8; 32],
+				asset: eth::Address::from_slice(&[3; 20]),
 			},
 			FetchAssetParams::<Ethereum> {
-				swap_id: dummy_swap_ids.pop().unwrap(),
-				asset: dummy_asset_addrs_fetch.pop().unwrap(),
+				swap_id: [2_u8; 32],
+				asset: eth::Address::from_slice(&[4; 20]),
 			},
 		];
 		let dummy_transfer_asset_params: Vec<TransferAssetParams<Ethereum>> = vec![
 			TransferAssetParams::<Ethereum> {
-				asset: dummy_asset_addrs_transfer.pop().unwrap(),
-				account: dummy_accounts.pop().unwrap(),
-				amount: dummy_amounts.pop().unwrap(),
+				asset: eth::Address::from_slice(&[5; 20]),
+				account: eth::Address::from_slice(&[7; 20]),
+				amount: 10,
 			},
 			TransferAssetParams::<Ethereum> {
-				asset: dummy_asset_addrs_transfer.pop().unwrap(),
-				account: dummy_accounts.pop().unwrap(),
-				amount: dummy_amounts.pop().unwrap(),
+				asset: eth::Address::from_slice(&[6; 20]),
+				account: eth::Address::from_slice(&[8; 20]),
+				amount: 20,
 			},
 		];
 
