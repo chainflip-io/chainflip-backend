@@ -118,35 +118,37 @@ pub trait StateChainRpcApi {
         &self,
         block_hash: state_chain_runtime::Hash,
         storage_key: StorageKey,
-    ) -> Result<Option<StorageData>>;
+    ) -> RpcResult<Option<StorageData>>;
 
     async fn storage_events_at(
         &self,
         block_hash: Option<state_chain_runtime::Hash>,
         storage_key: StorageKey,
-    ) -> Result<Vec<StorageChangeSet<state_chain_runtime::Hash>>>;
+    ) -> RpcResult<Vec<StorageChangeSet<state_chain_runtime::Hash>>>;
 
     async fn storage_pairs(
         &self,
         block_hash: state_chain_runtime::Hash,
         storage_key: StorageKey,
-    ) -> Result<Vec<(StorageKey, StorageData)>>;
+    ) -> RpcResult<Vec<(StorageKey, StorageData)>>;
 
-    async fn get_block(&self, block_hash: state_chain_runtime::Hash)
-        -> Result<Option<SignedBlock>>;
+    async fn get_block(
+        &self,
+        block_hash: state_chain_runtime::Hash,
+    ) -> RpcResult<Option<SignedBlock>>;
 
-    async fn latest_block_hash(&self) -> Result<H256>;
+    async fn latest_block_hash(&self) -> RpcResult<H256>;
 
-    async fn rotate_keys(&self) -> Result<Bytes>;
+    async fn rotate_keys(&self) -> RpcResult<Bytes>;
 
-    async fn local_listen_addresses(&self) -> Result<Vec<String>>;
+    async fn local_listen_addresses(&self) -> RpcResult<Vec<String>>;
 
     async fn fetch_runtime_version(
         &self,
         block_hash: state_chain_runtime::Hash,
-    ) -> Result<RuntimeVersion>;
+    ) -> RpcResult<RuntimeVersion>;
 
-    async fn is_auction_phase(&self) -> Result<bool>;
+    async fn is_auction_phase(&self) -> RpcResult<bool>;
 }
 
 #[async_trait]
@@ -166,19 +168,15 @@ where
     async fn get_block(
         &self,
         block_hash: state_chain_runtime::Hash,
-    ) -> Result<Option<SignedBlock>> {
-        self.rpc_client
-            .block(Some(block_hash))
-            .await
-            .context("get_block RPC API failed")
+    ) -> RpcResult<Option<SignedBlock>> {
+        self.rpc_client.block(Some(block_hash)).await
     }
 
-    async fn latest_block_hash(&self) -> Result<H256> {
+    async fn latest_block_hash(&self) -> RpcResult<H256> {
         Ok(self
             .rpc_client
             .header(None)
-            .await
-            .context("latest_block_hash RPC API failed")?
+            .await?
             .expect("Latest block hash could not be fetched")
             .hash())
     }
@@ -187,64 +185,47 @@ where
         &self,
         block_hash: state_chain_runtime::Hash,
         storage_key: StorageKey,
-    ) -> Result<Option<StorageData>> {
-        self.rpc_client
-            .storage(storage_key, Some(block_hash))
-            .await
-            .context("storage RPC API failed")
+    ) -> RpcResult<Option<StorageData>> {
+        self.rpc_client.storage(storage_key, Some(block_hash)).await
     }
 
     async fn storage_events_at(
         &self,
         block_hash: Option<state_chain_runtime::Hash>,
         storage_key: StorageKey,
-    ) -> Result<Vec<StorageChangeSet<state_chain_runtime::Hash>>> {
+    ) -> RpcResult<Vec<StorageChangeSet<state_chain_runtime::Hash>>> {
         self.rpc_client
             .query_storage_at(vec![storage_key], block_hash)
             .await
-            .context("storage_events_at RPC API failed")
     }
 
-    async fn rotate_keys(&self) -> Result<Bytes> {
-        self.rpc_client
-            .rotate_keys()
-            .await
-            .context("rotate_keys RPC API failed")
+    async fn rotate_keys(&self) -> RpcResult<Bytes> {
+        self.rpc_client.rotate_keys().await
     }
 
     async fn storage_pairs(
         &self,
         block_hash: state_chain_runtime::Hash,
         storage_key: StorageKey,
-    ) -> Result<Vec<(StorageKey, StorageData)>> {
+    ) -> RpcResult<Vec<(StorageKey, StorageData)>> {
         self.rpc_client
             .storage_pairs(storage_key, Some(block_hash))
             .await
-            .context("storage_pairs RPC API failed")
     }
 
-    async fn local_listen_addresses(&self) -> Result<Vec<String>> {
-        self.rpc_client
-            .system_local_listen_addresses()
-            .await
-            .context("system_local_listen_addresses RPC API failed")
+    async fn local_listen_addresses(&self) -> RpcResult<Vec<String>> {
+        self.rpc_client.system_local_listen_addresses().await
     }
 
     async fn fetch_runtime_version(
         &self,
         block_hash: state_chain_runtime::Hash,
-    ) -> Result<RuntimeVersion> {
-        self.rpc_client
-            .runtime_version(Some(block_hash))
-            .await
-            .context("fetch_runtime_version RPC API failed")
+    ) -> RpcResult<RuntimeVersion> {
+        self.rpc_client.runtime_version(Some(block_hash)).await
     }
 
-    async fn is_auction_phase(&self) -> Result<bool> {
-        self.rpc_client
-            .cf_is_auction_phase(None)
-            .await
-            .context("cf_is_auction_phase RPC API failed")
+    async fn is_auction_phase(&self) -> RpcResult<bool> {
+        self.rpc_client.cf_is_auction_phase(None).await
     }
 }
 
@@ -259,7 +240,7 @@ pub struct StateChainClient<RpcClient: StateChainRpcApi> {
     genesis_hash: state_chain_runtime::Hash,
     pub signer: signer::PairSigner<sp_core::sr25519::Pair>,
 
-    state_chain_rpc_client: RpcClient,
+    pub state_chain_rpc_client: RpcClient,
 }
 
 impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
@@ -904,7 +885,10 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
     }
 
     pub async fn is_auction_phase(&self) -> Result<bool> {
-        self.state_chain_rpc_client.is_auction_phase().await
+        self.state_chain_rpc_client
+            .is_auction_phase()
+            .await
+            .map_err(Into::into)
     }
 }
 
