@@ -7,6 +7,7 @@
 // #[cfg(test)]
 // mod tests;
 
+use cf_chains::TransferAssetParams;
 use cf_primitives::ForeignChainAsset;
 use cf_traits::{Broadcaster, EgressAbiBuilder, EgressApi, FlipBalance};
 use codec::FullCodec;
@@ -18,9 +19,9 @@ use scale_info::TypeInfo;
 pub mod pallet {
 	use super::*;
 
-	use cf_chains::{ApiCall, ChainAbi};
+	use cf_chains::{ApiCall, ChainAbi, Ethereum};
 	use cf_primitives::{EgressBatch, ForeignChainAddress};
-	use cf_traits::Chainflip;
+	use cf_traits::{Chainflip, ReplayProtectionProvider};
 	use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
 
 	#[pallet::pallet]
@@ -34,24 +35,17 @@ pub mod pallet {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
+		/// Replay protection.
+		type ReplayProtection: ReplayProtectionProvider<Ethereum>;
+
 		/// The type of the chain-native transaction.
-		type EgressTransaction: ChainAbi;
+		type EgressTransaction: cf_chains::AllBatch<Ethereum>;
 
-		/// The type of the egress address.
-		type EgressAddress: FullCodec + Clone + MaxEncodedLen + TypeInfo;
-
-		/// The egress abi builder for the chain.
-		type EgressAbiBuilder: EgressAbiBuilder<
-			Amount = FlipBalance,
-			EgressAddress = Self::EgressAddress,
-			EgressTransaction = Self::EgressTransaction,
-		>;
+		/// A broadcaster instance.
+		type Broadcaster: Broadcaster<Ethereum, ApiCall = Self::EgressTransaction>;
 
 		/// Governance origin to manage allowed assets
 		type EnsureGovernance: EnsureOrigin<Self::Origin>;
-
-		/// A broadcaster instance.
-		type Broadcaster: Broadcaster<Self::EgressTransaction, ApiCall = Self::EgressTransaction>;
 	}
 
 	#[pallet::storage]
@@ -154,8 +148,15 @@ impl<T: Config> Pallet<T> {
 		}
 
 		// Construct the Egress Tx and send it out.
-		let tx = T::EgressAbiBuilder::construct_batched_transaction(asset, batch);
-		T::Broadcaster::threshold_sign_and_broadcast(tx);
+		T::Broadcaster::threshold_sign_and_broadcast(T::EgressTransaction::new_unsigned(
+			T::ReplayProtectionProvider::replay_protection(),
+			vec![], // TODO: fetch assets
+			batch.map(|(amount, adddress)| TransferAssetParams {
+				asset: todo!(),
+				account: todo!(),
+				amount: todo!(),
+			}),
+		));
 
 		batch_size
 	}
