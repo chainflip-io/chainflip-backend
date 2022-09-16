@@ -2,6 +2,7 @@ use sp_runtime::traits::UniqueSaturatedInto;
 
 use crate::*;
 
+pub mod all_batch;
 pub mod register_claim;
 pub mod set_agg_key_with_agg_key;
 pub mod set_comm_key_with_agg_key;
@@ -9,13 +10,14 @@ pub mod set_gov_key_with_agg_key;
 pub mod update_flip_supply;
 
 /// Chainflip api calls available on Ethereum.
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum EthereumApi {
 	SetAggKeyWithAggKey(set_agg_key_with_agg_key::SetAggKeyWithAggKey),
 	RegisterClaim(register_claim::RegisterClaim),
 	UpdateFlipSupply(update_flip_supply::UpdateFlipSupply),
 	SetGovKeyWithAggKey(set_gov_key_with_agg_key::SetGovKeyWithAggKey),
 	SetCommKeyWithAggKey(set_comm_key_with_agg_key::SetCommKeyWithAggKey),
+	AllBatch(all_batch::AllBatch),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Default)]
@@ -101,6 +103,7 @@ impl RegisterClaim<Ethereum> for EthereumApi {
 			EthereumApi::UpdateFlipSupply(_) => unreachable!(),
 			EthereumApi::SetGovKeyWithAggKey(_) => unreachable!(),
 			EthereumApi::SetCommKeyWithAggKey(_) => unreachable!(),
+			EthereumApi::AllBatch(_) => unreachable!(),
 		}
 	}
 }
@@ -117,6 +120,20 @@ impl UpdateFlipSupply<Ethereum> for EthereumApi {
 			new_total_supply,
 			block_number,
 			stake_manager_address,
+		))
+	}
+}
+
+impl AllBatch<Ethereum> for EthereumApi {
+	fn new_unsigned(
+		replay_protection: EthereumReplayProtection,
+		fetch_params: Vec<eth::FetchAssetParams<Ethereum>>,
+		transfer_params: Vec<eth::TransferAssetParams<Ethereum>>,
+	) -> Self {
+		Self::AllBatch(all_batch::AllBatch::new_unsigned(
+			replay_protection,
+			fetch_params,
+			transfer_params,
 		))
 	}
 }
@@ -151,6 +168,12 @@ impl From<set_comm_key_with_agg_key::SetCommKeyWithAggKey> for EthereumApi {
 	}
 }
 
+impl From<all_batch::AllBatch> for EthereumApi {
+	fn from(tx: all_batch::AllBatch) -> Self {
+		Self::AllBatch(tx)
+	}
+}
+
 impl ApiCall<Ethereum> for EthereumApi {
 	fn threshold_signature_payload(&self) -> <Ethereum as ChainCrypto>::Payload {
 		match self {
@@ -159,6 +182,7 @@ impl ApiCall<Ethereum> for EthereumApi {
 			EthereumApi::UpdateFlipSupply(tx) => tx.threshold_signature_payload(),
 			EthereumApi::SetGovKeyWithAggKey(tx) => tx.threshold_signature_payload(),
 			EthereumApi::SetCommKeyWithAggKey(tx) => tx.threshold_signature_payload(),
+			EthereumApi::AllBatch(tx) => tx.threshold_signature_payload(),
 		}
 	}
 
@@ -169,6 +193,7 @@ impl ApiCall<Ethereum> for EthereumApi {
 			EthereumApi::UpdateFlipSupply(call) => call.signed(threshold_signature).into(),
 			EthereumApi::SetGovKeyWithAggKey(call) => call.signed(threshold_signature).into(),
 			EthereumApi::SetCommKeyWithAggKey(call) => call.signed(threshold_signature).into(),
+			EthereumApi::AllBatch(call) => call.signed(threshold_signature).into(),
 		}
 	}
 
@@ -179,6 +204,7 @@ impl ApiCall<Ethereum> for EthereumApi {
 			EthereumApi::UpdateFlipSupply(call) => call.abi_encoded(),
 			EthereumApi::SetGovKeyWithAggKey(call) => call.abi_encoded(),
 			EthereumApi::SetCommKeyWithAggKey(call) => call.abi_encoded(),
+			EthereumApi::AllBatch(call) => call.abi_encoded(),
 		}
 	}
 
@@ -189,6 +215,7 @@ impl ApiCall<Ethereum> for EthereumApi {
 			EthereumApi::UpdateFlipSupply(call) => call.is_signed(),
 			EthereumApi::SetGovKeyWithAggKey(call) => call.is_signed(),
 			EthereumApi::SetCommKeyWithAggKey(call) => call.is_signed(),
+			EthereumApi::AllBatch(call) => call.is_signed(),
 		}
 	}
 }

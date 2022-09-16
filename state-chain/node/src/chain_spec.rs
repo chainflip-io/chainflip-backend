@@ -22,9 +22,9 @@ mod network_env;
 pub type ChainSpec = sc_service::GenericChainSpec<GenesisConfig>;
 
 const FLIP_TOKEN_ADDRESS_DEFAULT: &str = "Cf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9";
-const STAKE_MANAGER_ADDRESS_DEFAULT: &str = "9Dfaa29bEc7d22ee01D533Ebe8faA2be5799C77F";
-const KEY_MANAGER_ADDRESS_DEFAULT: &str = "36fB9E46D6cBC14600D9089FD7Ce95bCf664179f";
-const VAULT_CONTRACT_ADDRESS_DEFAULT: &str = "36fB9E46D6cBC14600D9089FD7Ce95bCf664179f";
+const STAKE_MANAGER_ADDRESS_DEFAULT: &str = "9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0";
+const KEY_MANAGER_ADDRESS_DEFAULT: &str = "5FbDB2315678afecb367f032d93F642f64180aa3";
+const ETH_VAULT_ADDRESS_DEFAULT: &str = "e7f1725E7734CE288F8367e1Bb143E90bb3F0512";
 const ETHEREUM_CHAIN_ID_DEFAULT: u64 = cf_chains::eth::CHAIN_ID_RINKEBY;
 const ETH_INIT_AGG_KEY_DEFAULT: &str =
 	"02e61afd677cdfbec838c6f309deff0b2c6056f8a27f2c783b68bba6b30f667be6";
@@ -59,7 +59,7 @@ pub struct StateChainEnvironment {
 	flip_token_address: [u8; 20],
 	stake_manager_address: [u8; 20],
 	key_manager_address: [u8; 20],
-	vault_contract_address: [u8; 20],
+	eth_vault_address: [u8; 20],
 	ethereum_chain_id: u64,
 	eth_init_agg_key: [u8; 33],
 	ethereum_deployment_block: u64,
@@ -87,9 +87,8 @@ pub fn get_environment() -> StateChainEnvironment {
 			.unwrap_or_else(|_| String::from(KEY_MANAGER_ADDRESS_DEFAULT)),
 	)
 	.unwrap();
-	let vault_contract_address: [u8; 20] = clean_eth_address(
-		&env::var("VAULT_CONTRACT_ADDRESS")
-			.unwrap_or_else(|_| String::from(VAULT_CONTRACT_ADDRESS_DEFAULT)),
+	let eth_vault_address: [u8; 20] = clean_eth_address(
+		&env::var("ETH_VAULT_ADDRESS").unwrap_or_else(|_| String::from(ETH_VAULT_ADDRESS_DEFAULT)),
 	)
 	.unwrap();
 	let ethereum_chain_id = env::var("ETHEREUM_CHAIN_ID")
@@ -130,7 +129,7 @@ pub fn get_environment() -> StateChainEnvironment {
 		flip_token_address,
 		stake_manager_address,
 		key_manager_address,
-		vault_contract_address,
+		eth_vault_address,
 		ethereum_chain_id,
 		eth_init_agg_key,
 		ethereum_deployment_block,
@@ -171,7 +170,7 @@ pub fn development_config() -> Result<ChainSpec, String> {
 		flip_token_address,
 		stake_manager_address,
 		key_manager_address,
-		vault_contract_address,
+		eth_vault_address,
 		ethereum_chain_id,
 		eth_init_agg_key,
 		ethereum_deployment_block,
@@ -203,7 +202,7 @@ pub fn development_config() -> Result<ChainSpec, String> {
 					flip_token_address,
 					stake_manager_address,
 					key_manager_address,
-					vault_contract_address,
+					eth_vault_address,
 					ethereum_chain_id,
 					cfe_settings: CfeSettings {
 						eth_block_safety_margin,
@@ -245,7 +244,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 		flip_token_address,
 		stake_manager_address,
 		key_manager_address,
-		vault_contract_address,
+		eth_vault_address,
 		ethereum_chain_id,
 		eth_init_agg_key,
 		ethereum_deployment_block,
@@ -283,7 +282,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 					flip_token_address,
 					stake_manager_address,
 					key_manager_address,
-					vault_contract_address,
+					eth_vault_address,
 					ethereum_chain_id,
 					cfe_settings: CfeSettings {
 						eth_block_safety_margin,
@@ -351,7 +350,7 @@ fn chainflip_three_node_testnet_config_from_env(
 		flip_token_address,
 		stake_manager_address,
 		key_manager_address,
-		vault_contract_address,
+		eth_vault_address,
 		ethereum_chain_id,
 		eth_init_agg_key,
 		ethereum_deployment_block,
@@ -413,7 +412,7 @@ fn chainflip_three_node_testnet_config_from_env(
 					flip_token_address,
 					stake_manager_address,
 					key_manager_address,
-					vault_contract_address,
+					eth_vault_address,
 					ethereum_chain_id,
 					cfe_settings: CfeSettings {
 						eth_block_safety_margin,
@@ -462,7 +461,7 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 		flip_token_address,
 		stake_manager_address,
 		key_manager_address,
-		vault_contract_address,
+		eth_vault_address,
 		ethereum_chain_id,
 		eth_init_agg_key,
 		ethereum_deployment_block,
@@ -546,7 +545,7 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 					flip_token_address,
 					stake_manager_address,
 					key_manager_address,
-					vault_contract_address,
+					eth_vault_address,
 					ethereum_chain_id,
 					cfe_settings: CfeSettings {
 						eth_block_safety_margin,
@@ -654,8 +653,8 @@ fn testnet_genesis(
 			_instance: PhantomData,
 		},
 		emissions: EmissionsConfig {
-			current_authority_emission_inflation: CURRENT_AUTHORITY_EMISSION_INFLATION_BPS,
-			backup_node_emission_inflation: BACKUP_NODE_EMISSION_INFLATION_BPS,
+			current_authority_emission_inflation: CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL,
+			backup_node_emission_inflation: BACKUP_NODE_EMISSION_INFLATION_PERBILL,
 			supply_update_interval: SUPPLY_UPDATE_INTERVAL_DEFAULT,
 		},
 		transaction_payment: Default::default(),

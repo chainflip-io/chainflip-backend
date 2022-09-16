@@ -15,6 +15,7 @@ use cf_traits::{AddressDerivationApi, IngressApi};
 mod benchmarking;
 
 pub mod weights;
+use cf_traits::{liquidity::LpProvisioningApi, FlipBalance};
 pub use weights::WeightInfo;
 
 use frame_support::sp_runtime::app_crypto::sp_core::H160;
@@ -81,6 +82,8 @@ pub mod pallet {
 		type AddressDerivation: AddressDerivationApi;
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;
+		/// Pallet responsible for managing Liquidity Providers.
+		type LpAccountHandler: LpProvisioningApi<AccountId = Self::AccountId, Amount = FlipBalance>;
 	}
 
 	#[pallet::event]
@@ -111,10 +114,14 @@ pub mod pallet {
 			// NB: Don't take here. We should continue witnessing this address
 			// even after an ingress to it has occurred.
 			// https://github.com/chainflip-io/chainflip-eth-contracts/pull/226
-			OpenIntents::<T>::get(ingress_address).ok_or(Error::<T>::InvalidIntent)?;
-			Self::deposit_event(Event::IngressCompleted { ingress_address, asset, amount });
+			match OpenIntents::<T>::get(ingress_address).ok_or(Error::<T>::InvalidIntent)? {
+				Intent::LiquidityProvision { lp_account, .. } => {
+					T::LpAccountHandler::provision_account(&lp_account, asset, amount)?;
+				},
+				Intent::Swap { .. } => todo!(),
+			}
 
-			// TODO: Route funds to either the LP pallet or the swap pallet
+			Self::deposit_event(Event::IngressCompleted { ingress_address, asset, amount });
 
 			Ok(().into())
 		}
@@ -148,7 +155,7 @@ impl<T: Config> Pallet<T> {
 impl<T: Config> IngressApi for Pallet<T> {
 	type AccountId = <T as frame_system::Config>::AccountId;
 
-	// This should be callable by the LP pallet
+	// This should be callable by the LP pallet.
 	fn register_liquidity_ingress_intent(
 		lp_account: Self::AccountId,
 		ingress_asset: ForeignChainAsset,

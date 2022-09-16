@@ -1,7 +1,6 @@
-use crate::{self as pallet_cf_environment, cfe};
+use crate::{self as pallet_cf_lp};
 use cf_traits::mocks::{
-	ensure_origin_mock::NeverFailingOriginCheck,
-	eth_environment_provider::MockEthEnvironmentProvider,
+	ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo,
 };
 use frame_support::parameter_types;
 use frame_system as system;
@@ -24,7 +23,9 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system,
-		Environment: pallet_cf_environment,
+		AccountRegistry: pallet_cf_account_types,
+		Ingress: pallet_cf_ingress,
+		LiquidityProvider: pallet_cf_lp,
 	}
 );
 
@@ -60,37 +61,39 @@ impl system::Config for Test {
 	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
-impl pallet_cf_environment::Config for Test {
+impl pallet_cf_ingress::Config for Test {
 	type Event = Event;
-	type EnsureGovernance = NeverFailingOriginCheck<Self>;
+	type AddressDerivation = pallet_cf_ingress::KylesTestnetAddress;
+	type LpAccountHandler = LiquidityProvider;
 	type WeightInfo = ();
-	type EthEnvironmentProvider = MockEthEnvironmentProvider;
 }
 
-pub const STAKE_MANAGER_ADDRESS: [u8; 20] = [0u8; 20];
-pub const KEY_MANAGER_ADDRESS: [u8; 20] = [1u8; 20];
-pub const VAULT_ADDRESS: [u8; 20] = [2u8; 20];
-pub const ETH_CHAIN_ID: u64 = 1;
+impl cf_traits::Chainflip for Test {
+	type KeyId = Vec<u8>;
+	type ValidatorId = u64;
+	type Amount = u128;
+	type Call = Call;
+	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
+	type EnsureWitnessedAtCurrentEpoch = NeverFailingOriginCheck<Self>;
+	type EpochInfo = cf_traits::mocks::epoch_info::MockEpochInfo;
+	type SystemState = MockSystemStateInfo;
+}
 
-pub const CFE_SETTINGS: cfe::CfeSettings = cfe::CfeSettings {
-	eth_block_safety_margin: 1,
-	max_ceremony_stage_duration: 1,
-	eth_priority_fee_percentile: 50,
-};
+impl pallet_cf_account_types::Config for Test {
+	type Event = Event;
+}
+
+impl crate::Config for Test {
+	type Event = Event;
+	type AccountRoleRegistry = AccountRegistry;
+	type Ingress = Ingress;
+	type EgressHandler = ();
+	type EnsureGovernance = NeverFailingOriginCheck<Self>;
+}
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let config = GenesisConfig {
-		system: Default::default(),
-		environment: EnvironmentConfig {
-			stake_manager_address: STAKE_MANAGER_ADDRESS,
-			key_manager_address: KEY_MANAGER_ADDRESS,
-			ethereum_chain_id: ETH_CHAIN_ID,
-			eth_vault_address: VAULT_ADDRESS,
-			cfe_settings: CFE_SETTINGS,
-			flip_token_address: [0u8; 20],
-		},
-	};
+	let config = GenesisConfig { system: Default::default() };
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 

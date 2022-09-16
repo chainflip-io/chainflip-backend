@@ -5223,6 +5223,7 @@ dependencies = [
 name = "pallet-cf-environment"
 version = "0.1.0"
 dependencies = [
+ "cf-primitives",
  "cf-traits",
  "frame-benchmarking",
  "frame-support",
@@ -5286,6 +5287,28 @@ dependencies = [
  "scale-info",
  "sp-core",
  "sp-io",
+ "sp-std",
+]
+
+[[package]]
+name = "pallet-cf-lp"
+version = "0.1.0"
+dependencies = [
+ "cf-primitives",
+ "cf-traits",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "pallet-cf-account-types",
+ "pallet-cf-ingress",
+ "parity-scale-codec",
+ "quickcheck",
+ "quickcheck_macros",
+ "scale-info",
+ "serde",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
  "sp-std",
 ]
 
@@ -8995,6 +9018,7 @@ dependencies = [
  "nanorand",
  "pallet-aura",
  "pallet-authorship",
+ "pallet-cf-account-types",
  "pallet-cf-auction",
  "pallet-cf-broadcast",
  "pallet-cf-chain-tracking",
@@ -9003,6 +9027,7 @@ dependencies = [
  "pallet-cf-flip",
  "pallet-cf-governance",
  "pallet-cf-ingress",
+ "pallet-cf-lp",
  "pallet-cf-relayer",
  "pallet-cf-reputation",
  "pallet-cf-staking",

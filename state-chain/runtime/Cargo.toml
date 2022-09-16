@@ -31,6 +31,7 @@ cf-chains = { path = '../chains', default-features = false }
 cf-session-benchmarking = { path = '../cf-session-benchmarking', default-features = false, optional = true }
 
 cf-utilities = { package = 'utilities', path = '../../utilities', default-features = false }
+pallet-cf-account-types = { path = '../pallets/cf-account-types', default-features = false }
 pallet-cf-validator = { path = '../pallets/cf-validator', default-features = false }
 pallet-cf-staking = { path = '../pallets/cf-staking', default-features = false }
 pallet-cf-witnesser = { path = '../pallets/cf-witnesser', default-features = false}
@@ -47,6 +48,7 @@ pallet-cf-broadcast = { path = '../pallets/cf-broadcast', default-features = fal
 pallet-cf-environment = { path = '../pallets/cf-environment', default-features = false }
 pallet-cf-chain-tracking = { path = '../pallets/cf-chain-tracking', default-features = false }
 pallet-cf-ingress = { path = '../pallets/cf-ingress', default-features = false }
+pallet-cf-lp =  { path = '../pallets/cf-lp', default-features = false }
 
 # SCALE
 codec = { package = 'parity-scale-codec', version = '3.0.0', default-features = false, features = ['derive'] }
@@ -212,13 +214,13 @@ runtime-benchmarks = [
   'pallet-cf-flip/runtime-benchmarks',
   'pallet-cf-governance/runtime-benchmarks',
   'pallet-cf-ingress/runtime-benchmarks',
+  'pallet-cf-relayer/runtime-benchmarks',
   'pallet-cf-reputation/runtime-benchmarks',
   'pallet-cf-staking/runtime-benchmarks',
   'pallet-cf-threshold-signature/runtime-benchmarks',
   'pallet-cf-tokenholder-governance/runtime-benchmarks',
   'pallet-cf-validator/runtime-benchmarks',
   'pallet-cf-vaults/runtime-benchmarks',
-  'pallet-cf-witnesser/runtime-benchmarks',
   'pallet-cf-witnesser/runtime-benchmarks',
   'pallet-timestamp/runtime-benchmarks',
   'pallet-cf-relayer/runtime-benchmarks',
@@ -239,6 +241,7 @@ std = [
   'frame-try-runtime/std',
   'nanorand/std',
   'pallet-aura/std',
+  'pallet-cf-account-types/std',
   'pallet-cf-auction/std',
   'pallet-cf-broadcast/std',
   'pallet-cf-chain-tracking/std',
@@ -247,6 +250,7 @@ std = [
   'pallet-cf-flip/std',
   'pallet-cf-governance/std',
   'pallet-cf-ingress/std',
+  'pallet-cf-lp/std',
   'pallet-cf-relayer/std',
   'pallet-cf-reputation/std',
   'pallet-cf-staking/std',

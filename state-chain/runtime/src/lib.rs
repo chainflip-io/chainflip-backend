@@ -47,6 +47,8 @@ use sp_runtime::traits::{
 	OpaqueKeys, UniqueSaturatedInto, Verify,
 };
 
+use cf_traits::EthEnvironmentProvider;
+
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
 use sp_runtime::{
@@ -60,7 +62,7 @@ use sp_std::prelude::*;
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
-pub use cf_primitives::{ChainflipAccountData, ChainflipAccountState};
+pub use cf_primitives::{ChainflipAccountData, ChainflipAccountState, ForeignChainAddress};
 pub use cf_traits::{
 	BlockNumber, ChainflipAccount, ChainflipAccountStore, EpochInfo, FlipBalance, QualifyNode,
 	SessionKeysRegistered,
@@ -213,8 +215,21 @@ impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 
 impl pallet_cf_ingress::Config for Runtime {
 	type Event = Event;
-	type AddressDerivation = pallet_cf_ingress::KylesTestnetAddress;
 	type WeightInfo = pallet_cf_ingress::weights::PalletWeight<Runtime>;
+	type AddressDerivation = chainflip::AddressDerivation;
+	type LpAccountHandler = LiquidityProvider;
+}
+
+impl pallet_cf_lp::Config for Runtime {
+	type Event = Event;
+	type AccountRoleRegistry = AccountTypes;
+	type Ingress = Ingress;
+	type EgressHandler = ();
+	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+}
+
+impl pallet_cf_account_types::Config for Runtime {
+	type Event = Event;
 }
 
 impl<LocalCall> SendTransactionTypes<LocalCall> for Runtime
@@ -443,7 +458,7 @@ impl pallet_cf_emissions::Config for Runtime {
 	type Surplus = pallet_cf_flip::Surplus<Runtime>;
 	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
 	type RewardsDistribution = chainflip::BlockAuthorRewardDistribution;
-	type BlocksPerDay = ConstU32<DAYS>;
+	type CompoundingInterval = ConstU32<COMPOUNDING_INTERVAL>;
 	type ReplayProtectionProvider = chainflip::EthReplayProtectionProvider;
 	type EthEnvironmentProvider = Environment;
 	type WeightInfo = pallet_cf_emissions::weights::PalletWeight<Runtime>;
@@ -528,6 +543,7 @@ construct_runtime!(
 		Environment: pallet_cf_environment,
 		Flip: pallet_cf_flip,
 		Emissions: pallet_cf_emissions,
+		AccountTypes: pallet_cf_account_types,
 		Staking: pallet_cf_staking,
 		TransactionPayment: pallet_transaction_payment,
 		Witnesser: pallet_cf_witnesser,
@@ -547,6 +563,7 @@ construct_runtime!(
 		EthereumChainTracking: pallet_cf_chain_tracking::<Instance1>,
 		Ingress: pallet_cf_ingress,
 		Relayer: pallet_cf_relayer,
+		LiquidityProvider: pallet_cf_lp,
 	}
 );
 

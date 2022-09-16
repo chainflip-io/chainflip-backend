@@ -22,7 +22,7 @@ benchmarks! {
 		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::successful_origin());
 	}
 	verify {
-		assert_eq!(CurrentAuthorityEmissionInflation::<T>::get(), 1000);
+		assert_eq!(CurrentAuthorityEmissionInflation::<T>::get(), 2720);
 	}
 	update_current_authority_emission_inflation {
 		let call = Call::<T>::update_current_authority_emission_inflation{inflation: 100u32.into()};
@@ -30,7 +30,7 @@ benchmarks! {
 		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::successful_origin());
 	}
 	verify {
-		assert_eq!(BackupNodeEmissionInflation::<T>::get(), 100);
+		assert_eq!(BackupNodeEmissionInflation::<T>::get(), 284);
 	}
 	//TODO: Benchmarks for the case where the supply update is broadcasted, the future case where rewards for backup nodes are minted.
 	// Benchmark for the rewards minted case in the on init hook

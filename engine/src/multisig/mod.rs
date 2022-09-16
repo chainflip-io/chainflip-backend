@@ -12,6 +12,7 @@ pub use crypto::{eth, ChainTag, Rng};
 #[cfg(test)]
 mod tests;
 
+use anyhow::Result;
 use cf_primitives::CeremonyId;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
@@ -58,7 +59,7 @@ pub fn start_client<C>(
     logger: &slog::Logger,
 ) -> (
     Arc<MultisigClient<C>>,
-    impl futures::Future<Output = ()> + Send,
+    impl futures::Future<Output = Result<()>> + Send,
 )
 where
     C: CryptoScheme,
