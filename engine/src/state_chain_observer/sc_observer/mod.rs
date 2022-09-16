@@ -2,11 +2,11 @@
 mod tests;
 
 use anyhow::{anyhow, Context};
-use cf_primitives::CeremonyId;
+use cf_primitives::{CeremonyId, ForeignChain, ForeignChainAddress};
 use futures::{FutureExt, Stream, StreamExt};
 use pallet_cf_vaults::KeygenError;
 use slog::o;
-use sp_core::H256;
+use sp_core::{H160, H256};
 use sp_runtime::AccountId32;
 use state_chain_runtime::{AccountId, CfeSettings};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -164,6 +164,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
     )>,
 
     epoch_start_sender: broadcast::Sender<EpochStart>,
+    eth_monitor_ingress_sender: tokio::sync::mpsc::UnboundedSender<H160>,
     cfe_settings_update_sender: watch::Sender<CfeSettings>,
     initial_block_hash: H256,
     logger: slog::Logger,
@@ -415,6 +416,19 @@ where
                                                 }
                                             ) => {
                                                 cfe_settings_update_sender.send(new_cfe_settings).unwrap();
+                                            }
+                                            state_chain_runtime::Event::Ingress(
+                                                pallet_cf_ingress::Event::StartWitnessing {
+                                                    ingress_address,
+                                                    ingress_asset
+                                                }
+                                            ) => {
+                                                if let ForeignChainAddress::Eth(address) = ingress_address {
+                                                    assert_eq!(ingress_asset.chain, ForeignChain::Ethereum);
+                                                    eth_monitor_ingress_sender.send(H160::from(address)).unwrap();
+                                                } else {
+                                                    slog::warn!(logger, "Unsupported addresss: {:?}", ingress_address);
+                                                }
                                             }
                                         }}
                                     }

@@ -12,7 +12,7 @@ use jsonrpsee::ws_client::WsClientBuilder;
 use lazy_format::lazy_format;
 use multisig_p2p_transport::{PeerId, PeerIdTransferable};
 use slog::o;
-use sp_core::{storage::StorageKey, H256};
+use sp_core::H256;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 pub use multisig_p2p_transport::P2PValidatorNetworkNodeRpcApiClient;
@@ -21,8 +21,6 @@ use state_chain_runtime::AccountId;
 use codec::Encode;
 
 use zeroize::Zeroizing;
-
-use frame_support::StoragePrefixedMap;
 
 use crate::{
     common::{self, format_iterator, read_clean_and_decode_hex_str_file},
@@ -227,16 +225,12 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
         .await?;
 
     let mut account_to_peer_mapping_on_chain = state_chain_client
-        .get_storage_pairs::<(AccountId, sp_core::ed25519::Public, Port, pallet_cf_validator::Ipv6Addr)>(
-            latest_block_hash,
-            StorageKey(
-                pallet_cf_validator::AccountPeerMapping::<state_chain_runtime::Runtime>::final_prefix()
-                    .into(),
-            ),
+        .get_all_storage_pairs::<pallet_cf_validator::AccountPeerMapping::<state_chain_runtime::Runtime>>(
+            latest_block_hash
         )
         .await?
         .into_iter()
-        .map(|(account_id, public_key, port, ip_address)| {
+        .map(|(account_id, (public_key, port, ip_address))| {
             (
                 account_id,
                 (
