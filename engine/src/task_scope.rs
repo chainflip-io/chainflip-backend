@@ -515,4 +515,19 @@ mod tests {
 
         receiver.await.unwrap_err(); // we expect sender to be dropped when task is cancelled
     }
+
+    #[test]
+    fn dropping_scoped_join_handle_cancels_task() {
+        let _result = with_main_task_scope(|scope| {
+            async {
+                let _handle = scope.spawn_with_handle(async {
+                    wait_forever().await;
+                    Ok(())
+                });
+
+                Ok(())
+            }
+            .boxed()
+        });
+    }
 }
