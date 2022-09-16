@@ -200,11 +200,16 @@ pub struct Scope<'env, T, const TASKS_HAVE_STATIC_LIFETIMES: bool> {
     _phantom: std::marker::PhantomData<&'env mut &'env ()>,
 }
 
-/// This struct allows code to await on the task to exit
+/// This struct allows code to await on the task to exit, when dropped the associated task will be cancelled
 pub struct ScopedJoinHandle<T> {
     receiver: oneshot::Receiver<T>,
+    abort_handle: futures::future::AbortHandle,
 }
-
+impl<T> Drop for ScopedJoinHandle<T> {
+    fn drop(&mut self) {
+        self.abort_handle.abort();
+    }
+}
 impl<T> Future for ScopedJoinHandle<T> {
     type Output = T;
 
@@ -259,38 +264,6 @@ impl<T> FusedStream for ScopeResultStream<T> {
 
 macro_rules! impl_spawn_ops {
     ($env_lifetime:lifetime, $stat:literal, $task_lifetime:lifetime) => {
-        impl<$env_lifetime, T: 'static + Send> Scope<$env_lifetime, T, $stat> {
-            // The returned handle should only ever be awaited on inside of the task scope
-            // this spawn is associated with, or any sub-task scopes. Otherwise the await
-            // will never complete in the Error case.
-            fn spawn_with_custom_error_handling<
-                R,
-                V: 'static + Send,
-                F: $task_lifetime + Future<Output = R> + Send,
-                ErrorHandler: $task_lifetime + FnOnce(R) -> (T, Option<V>) + Send,
-            >(
-                &self,
-                error_handler: ErrorHandler,
-                f: F,
-            ) -> ScopedJoinHandle<V> {
-                let (sender, receiver) = oneshot::channel();
-
-                self.spawn(async move {
-                    let result = f.await;
-
-                    let (t, option_v) = error_handler(result);
-
-                    if let Some(v) = option_v {
-                        let _result = sender.send(v);
-                    }
-
-                    t
-                });
-
-                ScopedJoinHandle { receiver }
-            }
-        }
-
         impl<$env_lifetime> Scope<$env_lifetime, anyhow::Result<()>, $stat> {
             /// Spawns a task and gives you a handle to receive the Result::Ok of the task by awaiting
             /// on the returned handle (If the task errors/panics the scope will exit with the error/panic)
@@ -301,26 +274,32 @@ macro_rules! impl_spawn_ops {
                 &self,
                 f: F,
             ) -> ScopedJoinHandle<V> {
-                self.spawn_with_custom_error_handling(
-                    |t| match t {
-                        Ok(v) => (Ok(()), Some(v)),
-                        Err(e) => (Err(e), None),
-                    },
-                    f,
-                )
-            }
+                let (sender, receiver) = oneshot::channel();
+                let (abort_handle, abort_registration) = futures::future::AbortHandle::new_pair();
+                let f = futures::future::Abortable::new(f, abort_registration);
 
-            /// Spawns a task and gives you a handle to receive the Result of the task by awaiting
-            /// on the returned handle (If the task panics the scope will exit by panicking, but
-            /// if the task returns an error the scope will not exit)
-            pub fn spawn_with_manual_error_handling<
-                V: 'static + Send,
-                F: $task_lifetime + Future<Output = anyhow::Result<V>> + Send,
-            >(
-                &self,
-                f: F,
-            ) -> ScopedJoinHandle<anyhow::Result<V>> {
-                self.spawn_with_custom_error_handling(|t| (Ok(()), Some(t)), f)
+                self.spawn(async move {
+                    let result_aborted = f.await;
+
+                    match result_aborted {
+                        Ok(result_future) => match result_future {
+                            Ok(output) => {
+                                let _result = sender.send(output);
+                                Ok(())
+                            }
+                            Err(error) => Err(error),
+                        },
+                        Err(_) => {
+                            // Spawn was aborted
+                            Ok(())
+                        }
+                    }
+                });
+
+                ScopedJoinHandle {
+                    receiver,
+                    abort_handle,
+                }
             }
         }
     };
@@ -535,5 +514,20 @@ mod tests {
         drop(handle);
 
         receiver.await.unwrap_err(); // we expect sender to be dropped when task is cancelled
+    }
+
+    #[test]
+    fn dropping_scoped_join_handle_cancels_task() {
+        let _result = with_main_task_scope(|scope| {
+            async {
+                let _handle = scope.spawn_with_handle(async {
+                    wait_forever().await;
+                    Ok(())
+                });
+
+                Ok(())
+            }
+            .boxed()
+        });
     }
 }
