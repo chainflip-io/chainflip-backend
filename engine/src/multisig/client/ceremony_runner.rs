@@ -53,12 +53,15 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
     pub async fn run(
         ceremony_id: CeremonyId,
         mut message_receiver: UnboundedReceiver<(AccountId, Ceremony::Data)>,
-        mut request_receiver: oneshot::Receiver<PreparedRequest<Ceremony>>,
+        request_receiver: oneshot::Receiver<PreparedRequest<Ceremony>>,
         logger: slog::Logger,
     ) -> Result<(CeremonyId, CeremonyOutcome<Ceremony>)> {
         // We always create unauthorised first, it can get promoted to
         // an authorised one with a ceremony request
         let mut runner = Self::new_unauthorised(ceremony_id, &logger);
+
+        // Fuse the oneshot future so it will not get called twice
+        let mut request_receiver = request_receiver.fuse();
 
         let outcome = loop {
             tokio::select! {
