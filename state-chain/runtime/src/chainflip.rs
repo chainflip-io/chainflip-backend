@@ -5,6 +5,7 @@ pub mod decompose_recompose;
 pub mod epoch_transition;
 mod missed_authorship_slots;
 mod offences;
+use cf_primitives::Asset;
 pub use offences::*;
 mod signer_nomination;
 pub use missed_authorship_slots::MissedAuraSlots;
@@ -20,12 +21,14 @@ use cf_chains::{
 	eth::{
 		self,
 		api::{EthereumApi, EthereumReplayProtection},
+		ingress_address::get_create_2_address,
 	},
 	ApiCall, ChainAbi, Ethereum, TransactionBuilder,
 };
 use cf_traits::{
-	BlockEmissions, Chainflip, EmergencyRotation, EpochInfo, Heartbeat, Issuance, NetworkState,
-	ReplayProtectionProvider, RewardsDistribution, RuntimeUpgrade,
+	AddressDerivationApi, BlockEmissions, Chainflip, EmergencyRotation, EpochInfo,
+	EthEnvironmentProvider, Heartbeat, Issuance, NetworkState, ReplayProtectionProvider,
+	RewardsDistribution, RuntimeUpgrade,
 };
 use frame_support::traits::Get;
 use pallet_cf_chain_tracking::ChainState;
@@ -184,6 +187,33 @@ impl ReplayProtectionProvider<Ethereum> for EthReplayProtectionProvider {
 			key_manager_address: Environment::key_manager_address(),
 			chain_id: Environment::ethereum_chain_id(),
 			nonce: Environment::next_global_signature_nonce(),
+		}
+	}
+}
+
+pub struct AddressDerivation;
+
+impl AddressDerivationApi for AddressDerivation {
+	fn generate_address(
+		ingress_asset: cf_primitives::ForeignChainAsset,
+		intent_id: cf_primitives::IntentId,
+	) -> cf_primitives::ForeignChainAddress {
+		match ingress_asset.chain {
+			cf_primitives::ForeignChain::Ethereum => {
+				let asset_address = match ingress_asset.asset {
+					Asset::Eth => vec![],
+					_ => Environment::supported_eth_assets(ingress_asset.asset)
+						.expect("unsupported asset!")
+						.to_vec(),
+				};
+				cf_primitives::ForeignChainAddress::Eth(get_create_2_address(
+					ingress_asset.asset,
+					Environment::eth_vault_address(),
+					&asset_address,
+					intent_id,
+				))
+			},
+			cf_primitives::ForeignChain::Polkadot => todo!(),
 		}
 	}
 }

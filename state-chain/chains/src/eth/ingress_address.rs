@@ -1,6 +1,6 @@
 use cf_primitives::{Asset, IntentId};
 use sp_runtime::traits::{Hash, Keccak256};
-use sp_std::{mem::size_of, vec, vec::Vec};
+use sp_std::mem::size_of;
 
 // From master branch of chainflip-eth-contracts
 // @FIXME store on and retrieve from the chain
@@ -35,15 +35,15 @@ const PREFIX_BYTE: u8 = 0xff;
 pub fn get_create_2_address(
 	asset: Asset,
 	vault_address: [u8; 20],
+	erc20_constructor_argument: &[u8],
 	intent_id: IntentId,
 ) -> [u8; 20] {
 	let deploy_bytecode = get_deploy_bytecode(asset);
-	let constructor_argument_bytes = get_constructor_argument_bytes(asset);
 
-	// We hash the concatenated deploy_bytecode and constructor_argument_bytes.
+	// We hash the concatenated deploy_bytecode and erc20_constructor_argument.
 	// This hash is used in the later CREATE2 derivation.
 	let deploy_transaction_bytes_hash =
-		Keccak256::hash(&[deploy_bytecode, constructor_argument_bytes].concat());
+		Keccak256::hash(&[deploy_bytecode, erc20_constructor_argument].concat());
 
 	// Unique salt per intent.
 	let salt = get_salt(intent_id).to_vec();
@@ -63,23 +63,11 @@ pub fn get_create_2_address(
 /// the same contract bytecode (but has differing constructor arguments, see
 /// get_constructor_argument_bytes). ETH is not an ERC20 token, so the contract
 /// bytecode is different.
-fn get_deploy_bytecode(asset: Asset) -> Vec<u8> {
+fn get_deploy_bytecode(asset: Asset) -> &'static [u8] {
 	match asset {
-		Asset::Eth => DEPLOY_BYTECODE_ETH.to_vec(),
-		Asset::Flip | Asset::Usdc => DEPLOY_BYTECODE_TOKEN.to_vec(),
+		Asset::Eth => &DEPLOY_BYTECODE_ETH,
+		Asset::Flip | Asset::Usdc => &DEPLOY_BYTECODE_TOKEN,
 		// TODO: think about encoding the unreachableness of this in the type system.
-		Asset::Dot => unreachable!(),
-	}
-}
-
-/// Returns the constructor argument bytes for the given asset. For the ETH
-/// deposit contract, there are no constructor arguments. For the token
-/// deposit contract, the constructor argument is the asset's address.
-fn get_constructor_argument_bytes(asset: Asset) -> Vec<u8> {
-	match asset {
-		Asset::Eth => vec![],
-		Asset::Flip => todo!(),
-		Asset::Usdc => todo!(),
 		Asset::Dot => unreachable!(),
 	}
 }
@@ -99,7 +87,7 @@ fn test_eth_eth() {
 	const VAULT_ADDRESS: [u8; 20] = hex_literal::hex!("e7f1725E7734CE288F8367e1Bb143E90bb3F0512");
 
 	assert_eq!(
-		get_create_2_address(Asset::Eth, VAULT_ADDRESS, 420696969),
+		get_create_2_address(Asset::Eth, VAULT_ADDRESS, &[], 420696969),
 		hex_literal::hex!("9AF943257C1dF03EA3EeD0dFa7B5328A2E4033bb")
 	);
 	println!("Derivation worked for ETH:ETH! 🚀");

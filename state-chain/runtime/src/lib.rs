@@ -47,6 +47,8 @@ use sp_runtime::traits::{
 	OpaqueKeys, UniqueSaturatedInto, Verify,
 };
 
+use cf_traits::EthEnvironmentProvider;
+
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
 use sp_runtime::{
@@ -213,7 +215,7 @@ impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 
 impl pallet_cf_ingress::Config for Runtime {
 	type Event = Event;
-	type AddressDerivation = pallet_cf_ingress::KylesTestnetAddress;
+	type AddressDerivation = chainflip::AddressDerivation;
 	type LpAccountHandler = LiquidityProvider;
 }
 
