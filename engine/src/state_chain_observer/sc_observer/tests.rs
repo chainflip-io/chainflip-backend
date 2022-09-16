@@ -120,7 +120,7 @@ fn expectations_on_start(
     }
 
     mock_state_chain_rpc_client
-        .expect_submit_extrinsic_rpc()
+        .expect_submit_extrinsic()
         .never();
 
     (
@@ -726,7 +726,7 @@ async fn only_encodes_and_signs_when_specified() {
 
     // Submitting `transaction_ready_for_broadcast()`
     mock_state_chain_rpc_client
-        .expect_submit_extrinsic_rpc()
+        .expect_submit_extrinsic()
         .times(1)
         .returning(move |_| Ok(H256::default()));
 
@@ -863,7 +863,7 @@ async fn should_handle_signing_request() {
 
     let mut rpc = MockStateChainRpcApi::new();
     // Reporting signing outcome
-    rpc.expect_submit_extrinsic_rpc()
+    rpc.expect_submit_extrinsic()
         .times(1)
         .returning(move |_| Ok(H256::default()));
     let state_chain_client = Arc::new(StateChainClient::create_test_sc_client(rpc));
@@ -938,7 +938,7 @@ async fn should_handle_keygen_request() {
 
     let mut rpc = MockStateChainRpcApi::new();
     // Submitting keygen outcome
-    rpc.expect_submit_extrinsic_rpc()
+    rpc.expect_submit_extrinsic()
         .times(1)
         .returning(move |_| Ok(H256::default()));
     let state_chain_client = Arc::new(StateChainClient::create_test_sc_client(rpc));

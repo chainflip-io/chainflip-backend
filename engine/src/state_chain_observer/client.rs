@@ -109,7 +109,7 @@ pub struct StateChainRpcClient<C: ChainflipClient> {
 #[cfg_attr(test, automock)]
 #[async_trait]
 pub trait StateChainRpcApi {
-    async fn submit_extrinsic_rpc(
+    async fn submit_extrinsic(
         &self,
         extrinsic: state_chain_runtime::UncheckedExtrinsic,
     ) -> RpcResult<sp_core::H256>;
@@ -154,7 +154,7 @@ impl<C> StateChainRpcApi for StateChainRpcClient<C>
 where
     C: ChainflipClient + Send + Sync,
 {
-    async fn submit_extrinsic_rpc(
+    async fn submit_extrinsic(
         &self,
         extrinsic: state_chain_runtime::UncheckedExtrinsic,
     ) -> RpcResult<sp_core::H256> {
@@ -481,7 +481,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             let runtime_version = { self.runtime_version.read().await.clone() };
             match self
                 .state_chain_rpc_client
-                .submit_extrinsic_rpc(self.create_and_sign_extrinsic(
+                .submit_extrinsic(self.create_and_sign_extrinsic(
                     call.clone().into(),
                     &runtime_version,
                     self.genesis_hash,
@@ -587,7 +587,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         let expected_hash = BlakeTwo256::hash_of(&extrinsic);
         match self
             .state_chain_rpc_client
-            .submit_extrinsic_rpc(extrinsic)
+            .submit_extrinsic(extrinsic)
             .await
         {
             Ok(tx_hash) => {
@@ -1312,7 +1312,7 @@ mod tests {
 
         let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
         mock_state_chain_rpc_client
-            .expect_submit_extrinsic_rpc()
+            .expect_submit_extrinsic()
             .times(1)
             .returning(move |_| Ok(tx_hash));
 
@@ -1340,7 +1340,7 @@ mod tests {
 
         let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
         mock_state_chain_rpc_client
-            .expect_submit_extrinsic_rpc()
+            .expect_submit_extrinsic()
             .times(MAX_EXTRINSIC_RETRY_ATTEMPTS)
             .returning(move |_| {
                 Err(
@@ -1373,7 +1373,7 @@ mod tests {
 
         let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
         mock_state_chain_rpc_client
-            .expect_submit_extrinsic_rpc()
+            .expect_submit_extrinsic()
             .times(MAX_EXTRINSIC_RETRY_ATTEMPTS)
             .returning(move |_| {
                 Err(CallError::Custom(ErrorObject::owned(
@@ -1407,7 +1407,7 @@ mod tests {
 
         let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
         mock_state_chain_rpc_client
-            .expect_submit_extrinsic_rpc()
+            .expect_submit_extrinsic()
             .times(1)
             .returning(move |_ext: state_chain_runtime::UncheckedExtrinsic| {
                 Err(CallError::Custom(ErrorObject::owned(
@@ -1420,7 +1420,7 @@ mod tests {
 
         // Second time called, should succeed
         mock_state_chain_rpc_client
-            .expect_submit_extrinsic_rpc()
+            .expect_submit_extrinsic()
             .times(1)
             .returning(move |_| Ok(H256::default()));
 
@@ -1477,7 +1477,7 @@ mod tests {
         // Return a non-nonce related error, we submit two extrinsics that fail in the same way
         let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
         mock_state_chain_rpc_client
-            .expect_submit_extrinsic_rpc()
+            .expect_submit_extrinsic()
             .times(1)
             .returning(move |_| Err(RpcError::RequestTimeout));
 
@@ -1516,7 +1516,7 @@ mod tests {
         // Return a non-nonce related error, we submit two extrinsics that fail in the same way
         let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
         mock_state_chain_rpc_client
-            .expect_submit_extrinsic_rpc()
+            .expect_submit_extrinsic()
             .times(1)
             .returning(move |_| {
                 Err(
@@ -1526,7 +1526,7 @@ mod tests {
             });
 
         mock_state_chain_rpc_client
-            .expect_submit_extrinsic_rpc()
+            .expect_submit_extrinsic()
             .times(1)
             .returning(move |_| Ok(tx_hash));
 
