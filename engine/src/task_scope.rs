@@ -283,8 +283,8 @@ macro_rules! impl_spawn_ops {
 
                     match result_aborted {
                         Ok(result_future) => match result_future {
-                            Ok(value) => {
-                                let _result = sender.send(value);
+                            Ok(output) => {
+                                let _result = sender.send(output);
                                 Ok(())
                             }
                             Err(error) => Err(error),
