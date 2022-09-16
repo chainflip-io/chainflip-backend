@@ -465,7 +465,7 @@ pub mod pallet {
 				Error::<T>::InvalidAccountPeerMappingSignature
 			);
 
-			if let Some((_, existing_peer_id, existing_port, existing_ip_address)) =
+			if let Some((existing_peer_id, existing_port, existing_ip_address)) =
 				AccountPeerMapping::<T>::get(&account_id)
 			{
 				if (existing_peer_id, existing_port, existing_ip_address) ==
@@ -491,10 +491,7 @@ pub mod pallet {
 				MappedPeers::<T>::insert(&peer_id, ());
 			}
 
-			AccountPeerMapping::<T>::insert(
-				&account_id,
-				(account_id.clone(), peer_id, port, ip_address),
-			);
+			AccountPeerMapping::<T>::insert(&account_id, (peer_id, port, ip_address));
 
 			Self::deposit_event(Event::PeerIdRegistered(account_id, peer_id, port, ip_address));
 			Ok(().into())
@@ -692,12 +689,8 @@ pub mod pallet {
 	/// Account to Peer Mapping.
 	#[pallet::storage]
 	#[pallet::getter(fn node_peer_id)]
-	pub type AccountPeerMapping<T: Config> = StorageMap<
-		_,
-		Blake2_128Concat,
-		T::AccountId,
-		(T::AccountId, Ed25519PublicKey, Port, Ipv6Addr),
-	>;
+	pub type AccountPeerMapping<T: Config> =
+		StorageMap<_, Blake2_128Concat, T::AccountId, (Ed25519PublicKey, Port, Ipv6Addr)>;
 
 	/// Peers that are associated with account ids.
 	#[pallet::storage]
@@ -1261,7 +1254,7 @@ pub struct DeletePeerMapping<T: Config>(PhantomData<T>);
 /// account by burning it.
 impl<T: Config> OnKilledAccount<T::AccountId> for DeletePeerMapping<T> {
 	fn on_killed_account(account_id: &T::AccountId) {
-		if let Some((_, peer_id, _, _)) = AccountPeerMapping::<T>::take(&account_id) {
+		if let Some((peer_id, _, _)) = AccountPeerMapping::<T>::take(&account_id) {
 			MappedPeers::<T>::remove(&peer_id);
 			Pallet::<T>::deposit_event(Event::PeerIdUnregistered(account_id.clone(), peer_id));
 		}

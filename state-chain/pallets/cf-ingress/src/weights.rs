@@ -30,17 +30,17 @@ use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_cf_ingress.
 pub trait WeightInfo {
-	fn do_ingress() -> Weight;
+	fn do_single_ingress() -> Weight;
 }
 
 /// Weights for pallet_cf_ingress using the Substrate node and recommended hardware.
 pub struct PalletWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
-	// Storage: Ingress OpenIntents (r:1 w:0)
+	// Storage: Ingress IntentActions (r:1 w:0)
 	// Storage: LiquidityProvider FreeBalances (r:1 w:1)
-	fn do_ingress() -> Weight {
+	fn do_single_ingress() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(36_000_000 as Weight)
+		(17_000_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
@@ -48,11 +48,11 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
-	// Storage: Ingress OpenIntents (r:1 w:0)
+	// Storage: Ingress IntentActions (r:1 w:0)
 	// Storage: LiquidityProvider FreeBalances (r:1 w:1)
-	fn do_ingress() -> Weight {
+	fn do_single_ingress() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(36_000_000 as Weight)
+		(17_000_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
