@@ -102,7 +102,7 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::do_ingress())]
 		pub fn do_ingress(
 			origin: OriginFor<T>,
 			ingress_address: ForeignChainAddress,
@@ -127,7 +127,7 @@ pub mod pallet {
 		}
 
 		// TODO: Implement real implementation in liquidity provider pallet
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::register_liquidity_ingress_intent_temp())]
 		pub fn register_liquidity_ingress_intent_temp(
 			origin: OriginFor<T>,
 			ingress_asset: ForeignChainAsset,
