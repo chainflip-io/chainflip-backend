@@ -797,26 +797,6 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             .collect::<Result<Vec<_>>>()
     }
 
-    // TODO: work out how to get all vaults with a single query... not sure if possible
-    pub async fn get_vault<C>(
-        &self,
-        block_hash: state_chain_runtime::Hash,
-        epoch_index: EpochIndex,
-    ) -> Result<Vault<C>>
-    where
-        C: ChainAbi + Debug + Clone + 'static + PalletInstanceAlias,
-        state_chain_runtime::Runtime:
-            pallet_cf_vaults::Config<<C as PalletInstanceAlias>::Instance, Chain = C>,
-    {
-        Ok(self
-            .get_storage_map::<pallet_cf_vaults::Vaults<
-                state_chain_runtime::Runtime,
-                <C as PalletInstanceAlias>::Instance,
-            >>(block_hash, &epoch_index)
-            .await?
-            .expect("should have a vault"))
-    }
-
     /// Get all the events from a particular block
     pub async fn get_events(
         &self,
