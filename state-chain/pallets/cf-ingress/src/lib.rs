@@ -6,13 +6,14 @@
 // This way intents and intent ids align per chain, which makes sense given they act as an index to
 // the respective address generation function.
 
-use cf_primitives::{ForeignChainAddress, ForeignChainAsset, IntentId};
+use cf_primitives::{Asset, ForeignChainAddress, ForeignChainAsset, IntentId};
 use cf_traits::{liquidity::LpProvisioningApi, AddressDerivationApi, FlipBalance, IngressApi};
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
 pub mod weights;
+use frame_support::{pallet_prelude::DispatchResult, sp_runtime::app_crypto::sp_core};
 pub use weights::WeightInfo;
 
 pub use pallet::*;
@@ -25,7 +26,6 @@ pub mod pallet {
 	use cf_primitives::Asset;
 	use frame_support::{
 		pallet_prelude::{DispatchResultWithPostInfo, OptionQuery, ValueQuery, *},
-		sp_runtime::app_crypto::sp_core,
 		traits::{EnsureOrigin, IsType},
 	};
 	use sp_core::H256;
@@ -120,7 +120,8 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		#[pallet::weight(T::WeightInfo::do_ingress())]
+		#[pallet::weight(T::WeightInfo::do_single_ingress().saturating_mul(ingress_witnesses.
+		len() as u64))]
 		pub fn do_ingress(
 			origin: OriginFor<T>,
 			ingress_witnesses: Vec<IngressWitness>,
@@ -128,22 +129,7 @@ pub mod pallet {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
 			for IngressWitness { ingress_address, asset, amount, tx_hash } in ingress_witnesses {
-				// NB: Don't take here. We should continue witnessing this address
-				// even after an ingress to it has occurred.
-				// https://github.com/chainflip-io/chainflip-eth-contracts/pull/226
-				match IntentActions::<T>::get(ingress_address).ok_or(Error::<T>::InvalidIntent)? {
-					IntentAction::LiquidityProvision { lp_account, .. } => {
-						T::LpAccountHandler::provision_account(&lp_account, asset, amount)?;
-					},
-					IntentAction::Swap { .. } => todo!(),
-				}
-
-				Self::deposit_event(Event::IngressCompleted {
-					ingress_address,
-					asset,
-					amount,
-					tx_hash,
-				});
+				Self::do_single_ingress(ingress_address, asset, amount, tx_hash)?;
 			}
 			Ok(().into())
 		}
@@ -158,6 +144,26 @@ impl<T: Config> Pallet<T> {
 		});
 		let ingress_address = T::AddressDerivation::generate_address(ingress_asset, intent_id);
 		(intent_id, ingress_address)
+	}
+
+	fn do_single_ingress(
+		ingress_address: ForeignChainAddress,
+		asset: Asset,
+		amount: u128,
+		tx_hash: sp_core::H256,
+	) -> DispatchResult {
+		// NB: Don't take here. We should continue witnessing this address
+		// even after an ingress to it has occurred.
+		// https://github.com/chainflip-io/chainflip-eth-contracts/pull/226
+		match IntentActions::<T>::get(ingress_address).ok_or(Error::<T>::InvalidIntent)? {
+			IntentAction::LiquidityProvision { lp_account, .. } => {
+				T::LpAccountHandler::provision_account(&lp_account, asset, amount)?;
+			},
+			IntentAction::Swap { .. } => todo!(),
+		}
+
+		Self::deposit_event(Event::IngressCompleted { ingress_address, asset, amount, tx_hash });
+		Ok(())
 	}
 }
 
