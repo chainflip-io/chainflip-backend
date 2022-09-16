@@ -1,6 +1,5 @@
 use anyhow::{anyhow, bail, Context, Result};
-use cf_chains::ChainAbi;
-use cf_primitives::{ChainflipAccountData, EpochIndex};
+use cf_primitives::ChainflipAccountData;
 use codec::{Decode, Encode, FullCodec};
 use custom_rpc::CustomApiClient;
 use frame_metadata::RuntimeMetadata;
@@ -18,8 +17,6 @@ use jsonrpsee::ws_client::WsClientBuilder;
 use libp2p::multiaddr::Protocol;
 use libp2p::Multiaddr;
 use multisig_p2p_transport::PeerId;
-use pallet_cf_validator::HistoricalActiveEpochs;
-use pallet_cf_vaults::Vault;
 use slog::o;
 use sp_core::storage::StorageData;
 use sp_core::H256;
@@ -31,7 +28,7 @@ use sp_runtime::generic::Era;
 use sp_runtime::traits::{BlakeTwo256, Hash};
 use sp_runtime::{AccountId32, MultiAddress};
 use sp_version::RuntimeVersion;
-use state_chain_runtime::{PalletInstanceAlias, SignedBlock};
+use state_chain_runtime::SignedBlock;
 use std::fmt::Debug;
 use std::net::Ipv6Addr;
 use std::str::FromStr;
@@ -819,20 +816,6 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         }
     }
 
-    /// Get the status of the node at a particular block
-    pub async fn get_account_data(
-        &self,
-        block_hash: state_chain_runtime::Hash,
-    ) -> Result<ChainflipAccountData> {
-        Ok(self
-            .get_storage_map::<frame_system::Account<state_chain_runtime::Runtime>>(
-                block_hash,
-                &self.our_account_id,
-            )
-            .await?
-            .data)
-    }
-
     pub async fn rotate_session_keys(&self) -> Result<Bytes> {
         let session_key_bytes: Bytes = self.state_chain_rpc_client.rotate_keys().await?;
         Ok(session_key_bytes)
@@ -1226,14 +1209,18 @@ mod tests {
                 "Getting events from block {} with block_hash: {:?}",
                 block_number, block_hash
             );
-            let my_state_for_this_block = state_chain_client
-                .get_account_data(block_hash)
+            use frame_support::StoragePrefixedMap;
+            let state_for_this_block = state_chain_client
+                .get_storage_pairs::<(state_chain_runtime::AccountId, sp_core::ed25519::Public, Port, pallet_cf_validator::Ipv6Addr)>(block_hash, StorageKey(
+                    pallet_cf_validator::AccountPeerMapping::<state_chain_runtime::Runtime>::final_prefix()
+                        .into(),
+                ))
                 .await
                 .unwrap();
 
             println!(
-                "Returning AccountData for this block: {:?}",
-                my_state_for_this_block
+                "Returning AccountPeerMapping for this block: {:?}",
+                state_for_this_block
             );
         }
     }
