@@ -865,17 +865,6 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         .await
     }
 
-    /// Get the latest epoch number at the provided block hash
-    pub async fn epoch_at_block(
-        &self,
-        block_hash: state_chain_runtime::Hash,
-    ) -> Result<EpochIndex> {
-        self.get_storage_value::<pallet_cf_validator::CurrentEpoch<state_chain_runtime::Runtime>>(
-            block_hash,
-        )
-        .await
-    }
-
     pub async fn rotate_session_keys(&self) -> Result<Bytes> {
         let session_key_bytes: Bytes = self.state_chain_rpc_client.rotate_keys().await?;
         Ok(session_key_bytes)
