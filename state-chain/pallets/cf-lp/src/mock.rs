@@ -1,8 +1,9 @@
 use crate::{self as pallet_cf_lp};
-use cf_traits::mocks::{
-	ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo,
+use cf_traits::{
+	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
+	AddressDerivationApi,
 };
-use frame_support::parameter_types;
+use frame_support::{parameter_types, sp_runtime::app_crypto::sp_core::H160};
 use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{
@@ -11,9 +12,28 @@ use sp_runtime::{
 	BuildStorage,
 };
 
+use cf_primitives::{ForeignChainAddress, ForeignChainAsset, IntentId};
+
+use sp_std::str::FromStr;
+
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 type AccountId = u64;
+
+pub struct MockAddressDerivation;
+
+impl AddressDerivationApi for MockAddressDerivation {
+	fn generate_address(
+		_ingress_asset: ForeignChainAsset,
+		_intent_id: IntentId,
+	) -> ForeignChainAddress {
+		ForeignChainAddress::Eth(
+			H160::from_str("F29aB9EbDb481BE48b80699758e6e9a3DBD609C6")
+				.unwrap()
+				.to_fixed_bytes(),
+		)
+	}
+}
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
@@ -63,8 +83,9 @@ impl system::Config for Test {
 
 impl pallet_cf_ingress::Config for Test {
 	type Event = Event;
-	type AddressDerivation = pallet_cf_ingress::KylesTestnetAddress;
+	type AddressDerivation = MockAddressDerivation;
 	type LpAccountHandler = LiquidityProvider;
+	type WeightInfo = ();
 }
 
 impl cf_traits::Chainflip for Test {
