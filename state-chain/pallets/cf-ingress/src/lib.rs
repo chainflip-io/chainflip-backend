@@ -9,13 +9,12 @@
 use sp_std::str::FromStr;
 
 use cf_primitives::{ForeignChainAddress, ForeignChainAsset, IntentId};
-use cf_traits::{AddressDerivationApi, IngressApi};
+use cf_traits::{liquidity::LpProvisioningApi, AddressDerivationApi, FlipBalance, IngressApi};
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
 pub mod weights;
-use cf_traits::{liquidity::LpProvisioningApi, FlipBalance};
 pub use weights::WeightInfo;
 
 use frame_support::sp_runtime::app_crypto::sp_core::H160;
@@ -33,7 +32,7 @@ pub mod pallet {
 		Blake2_128,
 	};
 
-	use frame_system::{ensure_signed, pallet_prelude::OriginFor};
+	use frame_system::pallet_prelude::OriginFor;
 
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	pub struct IngressDetails {
@@ -80,10 +79,10 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 		/// Generates ingress addresses.
 		type AddressDerivation: AddressDerivationApi;
-		/// Benchmark weights
-		type WeightInfo: WeightInfo;
 		/// Pallet responsible for managing Liquidity Providers.
 		type LpAccountHandler: LpProvisioningApi<AccountId = Self::AccountId, Amount = FlipBalance>;
+		/// Benchmark weights
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::event]
@@ -122,19 +121,6 @@ pub mod pallet {
 			}
 
 			Self::deposit_event(Event::IngressCompleted { ingress_address, asset, amount });
-
-			Ok(().into())
-		}
-
-		// TODO: Implement real implementation in liquidity provider pallet
-		#[pallet::weight(T::WeightInfo::register_liquidity_ingress_intent_temp())]
-		pub fn register_liquidity_ingress_intent_temp(
-			origin: OriginFor<T>,
-			ingress_asset: ForeignChainAsset,
-		) -> DispatchResultWithPostInfo {
-			let account_id = ensure_signed(origin)?;
-
-			Self::register_liquidity_ingress_intent(account_id, ingress_asset);
 
 			Ok(().into())
 		}

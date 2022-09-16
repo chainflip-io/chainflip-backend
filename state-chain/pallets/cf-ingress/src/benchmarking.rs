@@ -3,9 +3,8 @@
 use super::*;
 
 use cf_primitives::{Asset, ForeignChain::Ethereum};
-use frame_benchmarking::{benchmarks, whitelisted_caller};
+use frame_benchmarking::{account, benchmarks};
 use frame_support::{dispatch::UnfilteredDispatchable, traits::EnsureOrigin};
-use frame_system::RawOrigin;
 
 benchmarks! {
 	do_ingress {
@@ -18,17 +17,10 @@ benchmarks! {
 					asset: Asset::Eth,
 				}
 			},
-			lp_account: whitelisted_caller()
+			lp_account: account("doogle", 0, 0)
 		});
 		let call = Call::<T>::do_ingress{ingress_address: ingress_address, asset: Asset::Eth, amount: 5};
 	}: {
 		call.dispatch_bypass_filter(T::EnsureWitnessed::successful_origin())?;
 	}
-	register_liquidity_ingress_intent_temp {
-		let caller: T::AccountId = whitelisted_caller();
-		let foreign_chain_asset = ForeignChainAsset {
-			chain: Ethereum,
-			asset: Asset::Eth,
-		};
-	}: _(RawOrigin::Signed(caller.clone()), foreign_chain_asset)
 }

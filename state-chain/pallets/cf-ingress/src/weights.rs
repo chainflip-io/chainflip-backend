@@ -31,7 +31,6 @@ use sp_std::marker::PhantomData;
 /// Weight functions needed for pallet_cf_ingress.
 pub trait WeightInfo {
 	fn do_ingress() -> Weight;
-	fn register_liquidity_ingress_intent_temp() -> Weight;
 }
 
 /// Weights for pallet_cf_ingress using the Substrate node and recommended hardware.
@@ -41,18 +40,9 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: LiquidityProvider FreeBalances (r:1 w:1)
 	fn do_ingress() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(37_000_000 as Weight)
+		(36_000_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
-	}
-	// Storage: Ingress IntentIdCounter (r:1 w:1)
-	// Storage: Environment EthVaultAddress (r:1 w:0)
-	// Storage: Ingress OpenIntents (r:0 w:1)
-	fn register_liquidity_ingress_intent_temp() -> Weight {
-		#[allow(clippy::unnecessary_cast)]
-		(35_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
 }
 
@@ -62,17 +52,8 @@ impl WeightInfo for () {
 	// Storage: LiquidityProvider FreeBalances (r:1 w:1)
 	fn do_ingress() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(37_000_000 as Weight)
+		(36_000_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
-	}
-	// Storage: Ingress IntentIdCounter (r:1 w:1)
-	// Storage: Environment EthVaultAddress (r:1 w:0)
-	// Storage: Ingress OpenIntents (r:0 w:1)
-	fn register_liquidity_ingress_intent_temp() -> Weight {
-		#[allow(clippy::unnecessary_cast)]
-		(35_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
 }

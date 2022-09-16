@@ -215,9 +215,9 @@ impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 
 impl pallet_cf_ingress::Config for Runtime {
 	type Event = Event;
-	type WeightInfo = pallet_cf_ingress::weights::PalletWeight<Runtime>;
 	type AddressDerivation = chainflip::AddressDerivation;
 	type LpAccountHandler = LiquidityProvider;
+	type WeightInfo = pallet_cf_ingress::weights::PalletWeight<Runtime>;
 }
 
 impl pallet_cf_lp::Config for Runtime {
