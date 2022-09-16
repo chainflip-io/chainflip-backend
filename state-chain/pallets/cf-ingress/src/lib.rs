@@ -6,12 +6,15 @@
 // This way intents and intent ids align per chain, which makes sense given they act as an index to
 // the respective address generation function.
 
-use sp_std::str::FromStr;
-
 use cf_primitives::{ForeignChainAddress, ForeignChainAsset, IntentId};
 use cf_traits::{liquidity::LpProvisioningApi, AddressDerivationApi, FlipBalance, IngressApi};
 
-use frame_support::sp_runtime::app_crypto::sp_core::H160;
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
+
+pub mod weights;
+pub use weights::WeightInfo;
+
 pub use pallet::*;
 
 #[frame_support::pallet]
@@ -26,7 +29,7 @@ pub mod pallet {
 		Blake2_128,
 	};
 
-	use frame_system::{ensure_signed, pallet_prelude::OriginFor};
+	use frame_system::pallet_prelude::OriginFor;
 
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	pub struct IngressDetails {
@@ -75,6 +78,8 @@ pub mod pallet {
 		type AddressDerivation: AddressDerivationApi;
 		/// Pallet responsible for managing Liquidity Providers.
 		type LpAccountHandler: LpProvisioningApi<AccountId = Self::AccountId, Amount = FlipBalance>;
+		/// Benchmark weights
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::event]
@@ -93,7 +98,7 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::do_ingress())]
 		pub fn do_ingress(
 			origin: OriginFor<T>,
 			ingress_address: ForeignChainAddress,
@@ -113,19 +118,6 @@ pub mod pallet {
 			}
 
 			Self::deposit_event(Event::IngressCompleted { ingress_address, asset, amount });
-
-			Ok(().into())
-		}
-
-		// TODO: Implement real implementation in liquidity provider pallet
-		#[pallet::weight(0)]
-		pub fn register_liquidity_ingress_intent_temp(
-			origin: OriginFor<T>,
-			ingress_asset: ForeignChainAsset,
-		) -> DispatchResultWithPostInfo {
-			let account_id = ensure_signed(origin)?;
-
-			Self::register_liquidity_ingress_intent(account_id, ingress_asset);
 
 			Ok(().into())
 		}
@@ -188,20 +180,5 @@ impl<T: Config> IngressApi for Pallet<T> {
 		Self::deposit_event(Event::StartWitnessing { ingress_address, ingress_asset });
 
 		(intent_id, ingress_address)
-	}
-}
-
-pub struct KylesTestnetAddress;
-
-impl AddressDerivationApi for KylesTestnetAddress {
-	fn generate_address(
-		_ingress_asset: ForeignChainAsset,
-		_intent_id: IntentId,
-	) -> ForeignChainAddress {
-		ForeignChainAddress::Eth(
-			H160::from_str("F29aB9EbDb481BE48b80699758e6e9a3DBD609C6")
-				.unwrap()
-				.to_fixed_bytes(),
-		)
 	}
 }
