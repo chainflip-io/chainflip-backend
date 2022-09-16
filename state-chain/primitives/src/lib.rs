@@ -27,6 +27,8 @@ pub type IntentId = u64;
 
 pub type ExchangeRate = FixedU128;
 
+pub type EthereumAddress = [u8; 20];
+
 /// Alias to 512-bit hash when used in the context of a transaction signature on the chain.
 pub type Signature = MultiSignature;
 
@@ -104,7 +106,7 @@ pub enum ForeignChain {
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum ForeignChainAddress {
-	Eth([u8; 20]),
+	Eth(EthereumAddress),
 }
 
 /// An Asset is a token or currency that can be traded via the Chainflip AMM.
