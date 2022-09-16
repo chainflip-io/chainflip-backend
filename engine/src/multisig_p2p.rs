@@ -230,7 +230,6 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
         )
         .await?
         .into_iter()
-        .map(|(account_id, opt)| (account_id, opt.expect("value must exist if key exists")))
         .map(|(account_id, (public_key, port, ip_address))| {
             (
                 account_id,

@@ -243,9 +243,9 @@ fn main() -> anyhow::Result<()> {
                     epoch_start_receiver_4,
                     eth_monitor_ingress_receiver,
                     state_chain_client.clone(),
-                    state_chain_client.get_ingress_details(latest_block_hash).await.expect("Failed to get initial ingress details").into_iter().filter_map(|(foreign_chain_address, foreign_chain_asset)| {
+                    state_chain_client.get_all_storage_pairs::<pallet_cf_ingress::IntentIngressDetails<state_chain_runtime::Runtime>>(latest_block_hash).await.expect("Failed to get initial ingress details").into_iter().filter_map(|(foreign_chain_address, intent)| {
                         if let ForeignChainAddress::Eth(address) = foreign_chain_address {
-                            assert_eq!(foreign_chain_asset.chain, ForeignChain::Ethereum);
+                            assert_eq!(intent.ingress_asset.chain, ForeignChain::Ethereum);
                             Some(H160::from(address))
                         } else {
                             None

@@ -3,7 +3,7 @@ mod storage_traits;
 
 use anyhow::{anyhow, bail, Context, Result};
 use cf_chains::ChainAbi;
-use cf_primitives::{ChainflipAccountData, EpochIndex, ForeignChainAddress, ForeignChainAsset};
+use cf_primitives::{ChainflipAccountData, EpochIndex};
 use codec::{Decode, Encode, FullCodec};
 use custom_rpc::CustomApiClient;
 use frame_metadata::RuntimeMetadata;
@@ -684,11 +684,12 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
     pub async fn get_all_storage_pairs<StorageMap: storage_traits::StorageMapAssociatedTypes>(
         &self,
         block_hash: state_chain_runtime::Hash,
-    ) -> Result<Vec<(
+    ) -> Result<
+        Vec<(
             <StorageMap as StorageMapAssociatedTypes>::Key,
-            <StorageMap::QueryKind as QueryKindTrait<StorageMap::Value, StorageMap::OnEmpty>>::Query)
-        >>
-        {
+            StorageMap::Value,
+        )>,
+    > {
         Ok(self
             .state_chain_rpc_client
             .storage_pairs(block_hash, StorageMap::_prefix_hash())
@@ -697,13 +698,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             .map(|(storage_key, storage_data)| {
                 (
                     StorageMap::key_from_storage_key(&storage_key),
-                    context!(<StorageMap::QueryKind as QueryKindTrait<
-                        StorageMap::Value,
-                        StorageMap::OnEmpty,
-                    >>::Query::decode(
-                        &mut &storage_data.0[..]
-                    ))
-                    .unwrap(),
+                    context!(StorageMap::Value::decode(&mut &storage_data.0[..])).unwrap(),
                 )
             })
             .collect())
@@ -773,13 +768,6 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             >>(block_hash, &epoch_index)
             .await?
             .expect("should have a vault"))
-    }
-
-    pub async fn get_ingress_details(
-        &self,
-        block_hash: state_chain_runtime::Hash,
-    ) -> Result<Vec<(ForeignChainAddress, ForeignChainAsset)>> {
-        Ok(self.get_all_storage_pairs::<pallet_cf_ingress::IntentIngressDetails<state_chain_runtime::Runtime>>(block_hash).await?.into_iter().map(|(address, opt_intent)| (address, opt_intent.expect("Must exist if the key did").ingress_asset)).collect())
     }
 
     /// Get all the events from a particular block
@@ -1232,12 +1220,12 @@ mod tests {
                 block_number, block_hash
             );
             let my_state_for_this_block = state_chain_client
-                .get_ingress_details(block_hash)
+                .get_all_storage_pairs::<pallet_cf_validator::AccountPeerMapping::<state_chain_runtime::Runtime>>(block_hash)
                 .await
                 .unwrap();
 
             println!(
-                "Returning IngressDetails for this block: {:?}",
+                "Returning Peer Mapping for this block: {:?}",
                 my_state_for_this_block
             );
         }
