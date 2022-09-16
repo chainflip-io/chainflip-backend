@@ -174,6 +174,9 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_current_authority_o
 
     let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
+    let (eth_monitor_ingress_sender, _eth_monitor_ingress_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+
     sc_observer::start(
         state_chain_client,
         sc_block_stream,
@@ -181,6 +184,7 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_current_authority_o
         multisig_client,
         account_peer_mapping_change_sender,
         epoch_start_sender,
+        eth_monitor_ingress_sender,
         cfe_settings_update_sender,
         initial_block_hash,
         logger,
@@ -227,6 +231,9 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_historic_on_startup
 
     let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
+    let (eth_monitor_ingress_sender, _eth_monitor_ingress_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+
     sc_observer::start(
         state_chain_client,
         sc_block_stream,
@@ -234,6 +241,7 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_historic_on_startup
         multisig_client,
         account_peer_mapping_change_sender,
         epoch_start_sender,
+        eth_monitor_ingress_sender,
         cfe_settings_update_sender,
         initial_block_hash,
         logger,
@@ -273,6 +281,9 @@ async fn sends_initial_extrinsics_when_not_historic_on_startup() {
     let (epoch_start_sender, mut epoch_start_receiver) = broadcast::channel(10);
     let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
+    let (eth_monitor_ingress_sender, _eth_monitor_ingress_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+
     sc_observer::start(
         state_chain_client,
         sc_block_stream,
@@ -280,6 +291,7 @@ async fn sends_initial_extrinsics_when_not_historic_on_startup() {
         multisig_client,
         account_peer_mapping_change_sender,
         epoch_start_sender,
+        eth_monitor_ingress_sender,
         cfe_settings_update_sender,
         initial_block_hash,
         logger,
@@ -391,6 +403,9 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
 
     let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
+    let (eth_monitor_ingress_sender, _eth_monitor_ingress_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+
     sc_observer::start(
         state_chain_client,
         sc_block_stream,
@@ -398,6 +413,7 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
         multisig_client,
         account_peer_mapping_change_sender,
         epoch_start_sender,
+        eth_monitor_ingress_sender,
         cfe_settings_update_sender,
         initial_block_hash,
         logger,
@@ -521,6 +537,9 @@ async fn not_historical_to_authority_on_new_epoch() {
 
     let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
+    let (eth_monitor_ingress_sender, _eth_monitor_ingress_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+
     sc_observer::start(
         state_chain_client,
         sc_block_stream,
@@ -528,6 +547,7 @@ async fn not_historical_to_authority_on_new_epoch() {
         multisig_client,
         account_peer_mapping_change_sender,
         epoch_start_sender,
+        eth_monitor_ingress_sender,
         cfe_settings_update_sender,
         initial_block_hash,
         logger,
@@ -651,6 +671,9 @@ async fn current_authority_to_historical_on_new_epoch_event() {
 
     let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
+    let (eth_monitor_ingress_sender, _eth_monitor_ingress_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+
     sc_observer::start(
         state_chain_client,
         sc_block_stream,
@@ -658,6 +681,7 @@ async fn current_authority_to_historical_on_new_epoch_event() {
         multisig_client,
         account_peer_mapping_change_sender,
         epoch_start_sender,
+        eth_monitor_ingress_sender,
         cfe_settings_update_sender,
         initial_block_hash,
         logger,
@@ -785,6 +809,9 @@ async fn only_encodes_and_signs_when_specified() {
 
     let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
+    let (eth_monitor_ingress_sender, _eth_monitor_ingress_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+
     sc_observer::start(
         state_chain_client,
         sc_block_stream,
@@ -792,6 +819,7 @@ async fn only_encodes_and_signs_when_specified() {
         multisig_client,
         account_peer_mapping_change_sender,
         epoch_start_sender,
+        eth_monitor_ingress_sender,
         cfe_settings_update_sender,
         initial_block_hash,
         logger,
@@ -834,6 +862,9 @@ async fn run_the_sc_observer() {
 
     let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
+    let (eth_monitor_ingress_sender, _eth_monitor_ingress_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+
     sc_observer::start(
         state_chain_client,
         block_stream,
@@ -841,6 +872,7 @@ async fn run_the_sc_observer() {
         multisig_client,
         account_peer_mapping_change_sender,
         epoch_start_sender,
+        eth_monitor_ingress_sender,
         cfe_settings_update_sender,
         initial_block_hash,
         logger,
