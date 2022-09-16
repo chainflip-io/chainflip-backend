@@ -853,18 +853,6 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             .data)
     }
 
-    /// Get the historical active epochs of this validator at a particular block
-    pub async fn get_historical_active_epochs(
-        &self,
-        block_hash: state_chain_runtime::Hash,
-    ) -> Result<Vec<EpochIndex>> {
-        self.get_storage_map::<HistoricalActiveEpochs<state_chain_runtime::Runtime>>(
-            block_hash,
-            &self.our_account_id,
-        )
-        .await
-    }
-
     pub async fn rotate_session_keys(&self) -> Result<Bytes> {
         let session_key_bytes: Bytes = self.state_chain_rpc_client.rotate_keys().await?;
         Ok(session_key_bytes)
