@@ -200,7 +200,7 @@ pub struct Scope<'env, T, const TASKS_HAVE_STATIC_LIFETIMES: bool> {
     _phantom: std::marker::PhantomData<&'env mut &'env ()>,
 }
 
-/// This struct allows code to await on the task to exit
+/// This struct allows code to await on the task to exit, when dropped the associated task will be cancelled
 pub struct ScopedJoinHandle<T> {
     receiver: oneshot::Receiver<T>,
     abort_handle: futures::future::AbortHandle,
