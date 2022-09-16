@@ -799,7 +799,7 @@ pub trait EthContractWitnesser {
     where
         RpcClient: 'static + StateChainRpcApi + Sync + Send,
         EthRpcClient: EthRpcApi + Sync + Send,
-        ContractWitnesserState: Send + Sync + ContractStateUpdate;
+        ContractWitnesserState: Send + Sync + ContractStateUpdate<Event = Self::EventParameters>;
 
     fn get_contract_address(&self) -> H160;
 }

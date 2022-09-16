@@ -195,6 +195,13 @@ pub enum KeyManagerEvent {
     },
 }
 
+pub struct KeyManagerContractState {}
+
+impl ContractStateUpdate for KeyManagerContractState {
+    type Item = ();
+    type Event = KeyManagerEvent;
+}
+
 #[async_trait]
 impl EthContractWitnesser for KeyManager {
     type EventParameters = KeyManagerEvent;

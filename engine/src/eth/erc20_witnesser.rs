@@ -42,28 +42,36 @@ pub struct Erc20Witnesser {
     pub deployed_address: H160,
     asset: Asset,
     contract: ethabi::Contract,
-
-    // TODO: Do we really want this to be so structurally different to the ingress witnesser?
-    // maybe it could be a struct too?
-    monitored_addresses: BTreeSet<H160>,
 }
 
 impl Erc20Witnesser {
     /// Loads the contract abi to get the event definitions
-    pub fn new(deployed_address: H160, asset: Asset, monitored_addresses: BTreeSet<H160>) -> Self {
+    pub fn new(deployed_address: H160, asset: Asset) -> Self {
         Self {
             deployed_address,
             asset,
             contract: ethabi::Contract::load(std::include_bytes!("abis/ERC20.json").as_ref())
                 .unwrap(),
-            monitored_addresses,
         }
     }
 }
 
 pub struct Erc20WitnesserState {
     monitored_addresses: BTreeSet<H160>,
-    address_receiver: tokio::sync::broadcast::Receiver<H160>,
+    // TODO: Broadcast receiver??
+    address_receiver: tokio::sync::mpsc::UnboundedReceiver<H160>,
+}
+
+impl Erc20WitnesserState {
+    pub fn new(
+        monitored_addresses: BTreeSet<H160>,
+        address_receiver: tokio::sync::mpsc::UnboundedReceiver<H160>,
+    ) -> Self {
+        Self {
+            monitored_addresses,
+            address_receiver,
+        }
+    }
 }
 
 impl ContractStateUpdate for Erc20WitnesserState {
@@ -71,15 +79,9 @@ impl ContractStateUpdate for Erc20WitnesserState {
 
     type Event = Erc20Event;
 
-    fn ready_to_update(
-        &'static mut self,
-    ) -> Pin<
-        Box<
-            dyn futures::Future<
-                    Output = Result<Self::Item, tokio::sync::broadcast::error::RecvError>,
-                > + Send,
-        >,
-    > {
+    fn next_item_to_update(
+        &mut self,
+    ) -> Pin<Box<dyn futures::Future<Output = Option<Self::Item>> + Send + '_>> {
         Box::pin(self.address_receiver.recv())
     }
 
@@ -87,8 +89,17 @@ impl ContractStateUpdate for Erc20WitnesserState {
         self.monitored_addresses.insert(new_address);
     }
 
-    fn should_act_on(&self, event: Self::Event) -> bool {
-        true
+    fn should_act_on(&self, event: &Self::Event) -> bool {
+        if let Erc20Event::Transfer {
+            from: _,
+            to,
+            value: _,
+        } = event
+        {
+            self.monitored_addresses.contains(to)
+        } else {
+            false
+        }
     }
 }
 
@@ -103,19 +114,27 @@ impl EthContractWitnesser for Erc20Witnesser {
 
     async fn handle_event<RpcClient, EthRpcClient, ContractWitnesserState>(
         &self,
-        epoch: EpochIndex,
+        _epoch: EpochIndex,
         _block_number: u64,
         event: Event<Self::EventParameters>,
         filter_state: &ContractWitnesserState,
-        state_chain_client: Arc<StateChainClient<RpcClient>>,
+        _state_chain_client: Arc<StateChainClient<RpcClient>>,
         _eth_rpc: &EthRpcClient,
         logger: &slog::Logger,
     ) -> Result<()>
     where
         RpcClient: 'static + StateChainRpcApi + Sync + Send,
         EthRpcClient: EthRpcApi + Sync + Send,
-        ContractWitnesserState: Send + Sync + ContractStateUpdate,
+        ContractWitnesserState: Send + Sync + ContractStateUpdate<Event = Self::EventParameters>,
     {
+        if filter_state.should_act_on(&event.event_parameters) {
+            slog::info!(
+                logger,
+                "Definitely act on this event: {:?}. Asset: {:?}",
+                event,
+                self.asset
+            );
+        }
         Ok(())
     }
 
@@ -158,7 +177,7 @@ impl EthContractWitnesser for Erc20Witnesser {
 // approval: 0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925
 #[test]
 fn generate_signatures() {
-    let contract = Erc20Witnesser::new(H160::default(), Asset::Flip, Default::default()).contract;
+    let contract = Erc20Witnesser::new(H160::default(), Asset::Flip).contract;
 
     let transfer = SignatureAndEvent::new(&contract, "Transfer").unwrap();
     println!("transfer: {:?}", transfer.signature);
@@ -175,12 +194,12 @@ mod tests {
     #[test]
     fn test_load_contract() {
         let address = H160::default();
-        Erc20Witnesser::new(address, Asset::Flip, Default::default());
+        Erc20Witnesser::new(address, Asset::Flip);
     }
 
     #[test]
     fn test_transfer_log_parsing() {
-        let erc20_witnesser = Erc20Witnesser::new(H160::default(), Asset::Flip, Default::default());
+        let erc20_witnesser = Erc20Witnesser::new(H160::default(), Asset::Flip);
         let decode_log = erc20_witnesser.decode_log_closure().unwrap();
 
         let transfer_event_signature =
@@ -231,7 +250,7 @@ mod tests {
 
     #[test]
     fn test_approval_log_parsing() {
-        let erc20_witnesser = Erc20Witnesser::new(H160::default(), Asset::Flip, Default::default());
+        let erc20_witnesser = Erc20Witnesser::new(H160::default(), Asset::Flip);
         let decode_log = erc20_witnesser.decode_log_closure().unwrap();
 
         let approval_event_signature =
@@ -284,3 +303,50 @@ mod tests {
         }
     }
 }
+
+// #[cfg(test)]
+// mod int_tests {
+//     use crate::{
+//         eth::rpc::{EthHttpRpcClient, EthWsRpcClient},
+//         logging::test_utils::new_test_logger,
+//         settings::{CommandLineOptions, Settings},
+//         state_chain_observer,
+//     };
+
+//     use super::*;
+
+//     #[tokio::test]
+//     async fn test_erc_20_witnsser() {
+//         let logger = new_test_logger();
+//         let settings =
+//             Settings::from_file_and_env("config/Local.toml", CommandLineOptions::default())
+//                 .unwrap();
+
+//         let (latest_block_hash, state_chain_block_stream, state_chain_client) =
+//             state_chain_observer::client::connect_to_state_chain(
+//                 &settings.state_chain,
+//                 true,
+//                 &logger,
+//             )
+//             .await
+//             .unwrap();
+
+//         let eth_ws_rpc_client = EthWsRpcClient::new(&settings.eth, &logger).await.unwrap();
+
+//         let eth_http_rpc_client = EthHttpRpcClient::new(&settings.eth, &logger).unwrap();
+
+//         eth::contract_witnesser::start(
+//             Erc20Witnesser::new(
+//                 sp_core::H160::from("0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"),
+//                 Asset::Flip,
+//             ),
+//             eth_ws_rpc_client.clone(),
+//             eth_http_rpc_client,
+//             epoch_start_receiver_2,
+//             KeyManagerContractState {},
+//             false,
+//             state_chain_client.clone(),
+//             &logger,
+//         )
+//     }
+// }

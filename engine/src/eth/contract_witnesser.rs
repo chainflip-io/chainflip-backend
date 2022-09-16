@@ -20,29 +20,23 @@ use super::{
 #[async_trait]
 pub trait ContractStateUpdate {
     // Item used for filtering the events.
-    type Item: 'static + Send + Sync;
+    type Item: 'static + Send + Sync + Clone + Copy;
 
     type Event;
 
-    fn ready_to_update(
-        &'static mut self,
-    ) -> Pin<
-        Box<
-            dyn futures::Future<
-                    Output = Result<Self::Item, tokio::sync::broadcast::error::RecvError>,
-                > + Send,
-        >,
-    > {
+    fn next_item_to_update(
+        &mut self,
+    ) -> Pin<Box<dyn futures::Future<Output = Option<Self::Item>> + Send + '_>> {
         Box::pin(futures::future::pending())
     }
 
     /// Returns the new inner state.
-    fn update_state(&mut self, new_item: Self::Item) {
+    fn update_state(&mut self, _new_item: Self::Item) {
         // do nothing as a default
     }
 
     /// Should we act on the event?
-    fn should_act_on(&self, event: Self::Event) -> bool {
+    fn should_act_on(&self, _event: &Self::Event) -> bool {
         true
     }
 }
@@ -65,7 +59,8 @@ pub async fn start<ContractWitnesser, StateChainRpc, ContractWitnesserState>(
 where
     ContractWitnesser: 'static + EthContractWitnesser + Sync + Send,
     StateChainRpc: 'static + StateChainRpcApi + Sync + Send,
-    ContractWitnesserState: 'static + Send + Sync + ContractStateUpdate,
+    ContractWitnesserState:
+        'static + Send + Sync + ContractStateUpdate<Event = ContractWitnesser::EventParameters>,
 {
     let contract_witnesser = Arc::new(contract_witnesser);
 
@@ -99,7 +94,7 @@ where
                 loop {
                     tokio::select! {
                         biased;
-                        Ok(new_item) = contract_witnesser_state.ready_to_update() => {
+                        Some(new_item) = contract_witnesser_state.next_item_to_update() => {
                             contract_witnesser_state.update_state(new_item);
                         },
                         Some(block) = block_stream.next() => {
