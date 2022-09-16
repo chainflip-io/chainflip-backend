@@ -6,7 +6,6 @@
 // This way intents and intent ids align per chain, which makes sense given they act as an index to
 // the respective address generation function.
 
-
 use cf_primitives::{ForeignChainAddress, ForeignChainAsset, IntentId};
 use cf_traits::{liquidity::LpProvisioningApi, AddressDerivationApi, FlipBalance, IngressApi};
 
