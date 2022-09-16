@@ -63,9 +63,6 @@ pub type EventInfo = (
     // These are the event topics
     Vec<state_chain_runtime::Hash>,
 );
-
-////////////////////
-///
 pub trait ChainflipClient:
     CustomApiClient
     + SystemApiClient<state_chain_runtime::Hash, state_chain_runtime::BlockNumber>
