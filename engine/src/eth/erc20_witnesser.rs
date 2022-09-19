@@ -106,11 +106,11 @@ impl EthContractWitnesser for Erc20Witnesser {
 
     async fn handle_event<RpcClient, EthRpcClient, ContractWitnesserState>(
         &self,
-        _epoch: EpochIndex,
+        epoch: EpochIndex,
         _block_number: u64,
         event: Event<Self::EventParameters>,
         filter_state: &ContractWitnesserState,
-        _state_chain_client: Arc<StateChainClient<RpcClient>>,
+        state_chain_client: Arc<StateChainClient<RpcClient>>,
         _eth_rpc: &EthRpcClient,
         logger: &slog::Logger,
     ) -> Result<()>
@@ -121,6 +121,29 @@ impl EthContractWitnesser for Erc20Witnesser {
             + Sync
             + ContractStateUpdate<Event = Self::EventParameters, Item = Self::StateItem>,
     {
+        if let Erc20Event::Transfer { to, value, from: _ } = event.event_parameters {
+            if filter_state.should_act_on(&to) {
+                let _result = state_chain_client
+                    .submit_signed_extrinsic(
+                        pallet_cf_witnesser::Call::witness_at_epoch {
+                            call: Box::new(
+                                pallet_cf_ingress::Call::do_ingress {
+                                    ingress_witnesses: vec![IngressWitness {
+                                        ingress_address: ForeignChainAddress::Eth(to.into()),
+                                        amount: value,
+                                        asset: self.asset,
+                                        tx_hash: event.tx_hash,
+                                    }],
+                                }
+                                .into(),
+                            ),
+                            epoch_index: epoch,
+                        },
+                        logger,
+                    )
+                    .await;
+            }
+        }
         Ok(())
     }
 
