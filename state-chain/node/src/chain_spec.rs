@@ -7,8 +7,8 @@ use sp_core::{
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::traits::{IdentifyAccount, Verify};
 use state_chain_runtime::{
-	chainflip::Offence, constants::common::*, opaque::SessionKeys, AccountId, AuctionConfig,
-	AuraConfig, BlockNumber, CfeSettings, EmissionsConfig, EnvironmentConfig,
+	chainflip::Offence, constants::common::*, opaque::SessionKeys, AccountId, AccountTypesConfig,
+	AuctionConfig, AuraConfig, BlockNumber, CfeSettings, EmissionsConfig, EnvironmentConfig,
 	EthereumThresholdSignerConfig, EthereumVaultConfig, FlipBalance, FlipConfig, GenesisConfig,
 	GovernanceConfig, GrandpaConfig, ReputationConfig, SessionConfig, Signature, StakingConfig,
 	SystemConfig, ValidatorConfig, WASM_BINARY,
@@ -592,13 +592,19 @@ fn testnet_genesis(
 	genesis_stake_amount: u128,
 	minimum_stake: u128,
 ) -> GenesisConfig {
+	let authority_ids: Vec<AccountId> =
+		initial_authorities.iter().map(|(id, ..)| id.clone()).collect();
 	GenesisConfig {
+		account_types: AccountTypesConfig {
+			genesis_authorities: authority_ids.clone(),
+			_phantom: PhantomData,
+		},
 		system: SystemConfig {
 			// Add Wasm runtime to storage.
 			code: wasm_binary.to_vec(),
 		},
 		validator: ValidatorConfig {
-			genesis_authorities: initial_authorities.iter().map(|(id, ..)| id.clone()).collect(),
+			genesis_authorities: authority_ids,
 			genesis_backups: genesis_stakers
 				.iter()
 				.cloned()
