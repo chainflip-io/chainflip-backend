@@ -206,7 +206,9 @@ impl AddressDerivationApi for AddressDerivation {
 				if ingress_asset.asset != Asset::Eth &&
 					Environment::supported_eth_assets(ingress_asset.asset).is_none()
 				{
-					return Err(DispatchError::Other("Asset not supported!"))
+					return Err(DispatchError::Other(
+						"Address derivation is currently unsupported for this asset!",
+					))
 				}
 				let asset_address = if ingress_asset.asset == Asset::Eth {
 					vec![]
