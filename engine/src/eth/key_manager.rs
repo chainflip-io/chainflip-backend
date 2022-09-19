@@ -20,9 +20,9 @@ use std::fmt::Debug;
 
 use async_trait::async_trait;
 
-use super::event::Event;
 use super::DecodeLogClosure;
 use super::EthContractWitnesser;
+use super::{contract_witnesser::ContractStateUpdate, event::Event};
 
 pub struct KeyManager {
     pub deployed_address: H160,
@@ -195,19 +195,28 @@ pub enum KeyManagerEvent {
     },
 }
 
+pub struct KeyManagerContractState {}
+
+impl ContractStateUpdate for KeyManagerContractState {
+    type Item = ();
+    type Event = KeyManagerEvent;
+}
+
 #[async_trait]
 impl EthContractWitnesser for KeyManager {
     type EventParameters = KeyManagerEvent;
+    type StateItem = ();
 
     fn contract_name(&self) -> &'static str {
         "KeyManager"
     }
 
-    async fn handle_event<RpcClient, EthRpcClient>(
+    async fn handle_event<RpcClient, EthRpcClient, ContractWitnesserState>(
         &self,
         epoch_index: EpochIndex,
         block_number: u64,
         event: Event<Self::EventParameters>,
+        _filter_state: &ContractWitnesserState,
         state_chain_client: Arc<StateChainClient<RpcClient>>,
         eth_rpc: &EthRpcClient,
         logger: &slog::Logger,
@@ -215,6 +224,9 @@ impl EthContractWitnesser for KeyManager {
     where
         RpcClient: 'static + StateChainRpcApi + Sync + Send,
         EthRpcClient: EthRpcApi + Sync + Send,
+        ContractWitnesserState: Sync
+            + Send
+            + ContractStateUpdate<Event = Self::EventParameters, Item = Self::StateItem>,
     {
         slog::info!(logger, "Handling event: {}", event);
         match event.event_parameters {
