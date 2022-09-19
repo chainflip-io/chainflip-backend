@@ -36,7 +36,10 @@ use pallet_cf_chain_tracking::ChainState;
 use frame_support::{dispatch::DispatchErrorWithPostInfo, weights::PostDispatchInfo};
 
 use pallet_cf_validator::PercentageRange;
-use sp_runtime::traits::{UniqueSaturatedFrom, UniqueSaturatedInto};
+use sp_runtime::{
+	traits::{UniqueSaturatedFrom, UniqueSaturatedInto},
+	DispatchError,
+};
 use sp_std::prelude::*;
 
 use backup_node_rewards::calculate_backup_rewards;
@@ -197,21 +200,25 @@ impl AddressDerivationApi for AddressDerivation {
 	fn generate_address(
 		ingress_asset: cf_primitives::ForeignChainAsset,
 		intent_id: cf_primitives::IntentId,
-	) -> cf_primitives::ForeignChainAddress {
+	) -> Result<cf_primitives::ForeignChainAddress, DispatchError> {
 		match ingress_asset.chain {
 			cf_primitives::ForeignChain::Ethereum => {
-				let asset_address = match ingress_asset.asset {
-					Asset::Eth => vec![],
-					_ => Environment::supported_eth_assets(ingress_asset.asset)
-						.expect("unsupported asset!")
-						.to_vec(),
+				if ingress_asset.asset != Asset::Eth &&
+					Environment::supported_eth_assets(ingress_asset.asset).is_none()
+				{
+					return Err(DispatchError::Other("Asset not supported!"))
+				}
+				let asset_address = if ingress_asset.asset == Asset::Eth {
+					vec![]
+				} else {
+					Environment::supported_eth_assets(ingress_asset.asset).unwrap().to_vec()
 				};
-				cf_primitives::ForeignChainAddress::Eth(get_create_2_address(
+				Ok(cf_primitives::ForeignChainAddress::Eth(get_create_2_address(
 					ingress_asset.asset,
 					Environment::eth_vault_address(),
 					&asset_address,
 					intent_id,
-				))
+				)))
 			},
 			cf_primitives::ForeignChain::Polkadot => todo!(),
 		}
