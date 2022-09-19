@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use crate::multisig::eth::EthSigning;
 use anyhow::{bail, Context};
+use cf_primitives::{ForeignChain, ForeignChainAddress};
 use chainflip_engine::{
     common::format_iterator,
     eth::{
@@ -24,7 +25,7 @@ use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use clap::Parser;
 use futures::FutureExt;
 use pallet_cf_validator::SemVer;
-use sp_core::U256;
+use sp_core::{H160, U256};
 use utilities::print_chainflip_ascii_art;
 
 fn main() -> anyhow::Result<()> {
@@ -85,8 +86,8 @@ fn main() -> anyhow::Result<()> {
                 tokio::sync::mpsc::unbounded_channel();
 
             let (
-                witnessing_instruction_sender,
-                [witnessing_instruction_receiver_1, witnessing_instruction_receiver_2, witnessing_instruction_receiver_3],
+                epoch_start_sender,
+                [epoch_start_receiver_1, epoch_start_receiver_2, epoch_start_receiver_3, epoch_start_receiver_4]
             ) = build_broadcast_channel(10);
 
             // validate chain ids
@@ -174,6 +175,8 @@ fn main() -> anyhow::Result<()> {
                 &root_logger,
             );
 
+            let (eth_monitor_ingress_sender, eth_monitor_ingress_receiver) = tokio::sync::mpsc::unbounded_channel();
+
             scope.spawn(async move {
                 muxer_future.await;
                 Ok(())
@@ -209,7 +212,7 @@ fn main() -> anyhow::Result<()> {
                     stake_manager_contract,
                     eth_ws_rpc_client.clone(),
                     eth_http_rpc_client.clone(),
-                    witnessing_instruction_receiver_1,
+                    epoch_start_receiver_1,
                     true,
                     state_chain_client.clone(),
                     &root_logger,
@@ -218,9 +221,9 @@ fn main() -> anyhow::Result<()> {
             scope.spawn(
                 eth::contract_witnesser::start(
                     key_manager_contract,
-                    eth_ws_rpc_client,
+                    eth_ws_rpc_client.clone(),
                     eth_http_rpc_client,
-                    witnessing_instruction_receiver_2,
+                    epoch_start_receiver_2,
                     false,
                     state_chain_client.clone(),
                     &root_logger,
@@ -230,11 +233,25 @@ fn main() -> anyhow::Result<()> {
                 eth::chain_data_witnesser::start(
                     eth_dual_rpc,
                     state_chain_client.clone(),
-                    witnessing_instruction_receiver_3,
+                    epoch_start_receiver_3,
                     cfe_settings_update_receiver,
                     &root_logger
                 )
             );
+            scope.spawn(eth::ingress_witnesser::start(
+                    eth_ws_rpc_client,
+                    epoch_start_receiver_4,
+                    eth_monitor_ingress_receiver,
+                    state_chain_client.clone(),
+                    state_chain_client.get_all_storage_pairs::<pallet_cf_ingress::IntentIngressDetails<state_chain_runtime::Runtime>>(latest_block_hash).await.expect("Failed to get initial ingress details").into_iter().filter_map(|(foreign_chain_address, intent)| {
+                        if let ForeignChainAddress::Eth(address) = foreign_chain_address {
+                            assert_eq!(intent.ingress_asset.chain, ForeignChain::Ethereum);
+                            Some(H160::from(address))
+                        } else {
+                            None
+                        }}).collect(),
+                    &root_logger
+            ));
 
             // Start state chain components
             scope.spawn(state_chain_observer::start(
@@ -243,7 +260,8 @@ fn main() -> anyhow::Result<()> {
                 eth_broadcaster,
                 eth_multisig_client,
                 account_peer_mapping_change_sender,
-                witnessing_instruction_sender,
+                epoch_start_sender,
+                eth_monitor_ingress_sender,
                 cfe_settings_update_sender,
                 latest_block_hash,
                 root_logger.clone()

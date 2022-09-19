@@ -1,3 +1,6 @@
+mod signer;
+mod storage_traits;
+
 use anyhow::{anyhow, bail, Context, Result};
 use cf_chains::ChainAbi;
 use cf_primitives::{ChainflipAccountData, EpochIndex};
@@ -44,8 +47,6 @@ use crate::constants::MAX_EXTRINSIC_RETRY_ATTEMPTS;
 use crate::logging::COMPONENT_KEY;
 use crate::settings;
 use utilities::{context, Port};
-
-mod signer;
 
 #[cfg(test)]
 use mockall::automock;
@@ -120,6 +121,14 @@ pub trait StateChainRpcApi {
         storage_key: StorageKey,
     ) -> Result<Option<StorageData>>;
 
+    async fn storage_keys_paged(
+        &self,
+        block_hash: state_chain_runtime::Hash,
+        prefix: StorageKey,
+        count: u32,
+        start_key: Option<StorageKey>,
+    ) -> Result<Vec<StorageKey>>;
+
     async fn storage_events_at(
         &self,
         block_hash: Option<state_chain_runtime::Hash>,
@@ -148,6 +157,10 @@ pub trait StateChainRpcApi {
 
     async fn is_auction_phase(&self) -> Result<bool>;
 }
+
+// TODO: https://github.com/paritytech/substrate/issues/12236
+// Value from: https://github.com/chainflip-io/substrate/blob/c172d0f683fab3792b90d876fd6ca27056af9fe9/client/rpc/src/state/mod.rs#L54
+pub const STORAGE_KEYS_PAGED_MAX_COUNT: u32 = 1000;
 
 #[async_trait]
 impl<C> StateChainRpcApi for StateChainRpcClient<C>
@@ -190,6 +203,20 @@ where
     ) -> Result<Option<StorageData>> {
         self.rpc_client
             .storage(storage_key, Some(block_hash))
+            .await
+            .context("storage RPC API failed")
+    }
+
+    /// Returns the keys with prefix with pagination support.
+    async fn storage_keys_paged(
+        &self,
+        block_hash: state_chain_runtime::Hash,
+        prefix: StorageKey,
+        count: u32,
+        start_key: Option<StorageKey>,
+    ) -> Result<Vec<StorageKey>> {
+        self.rpc_client
+            .storage_keys_paged(Some(prefix), count, start_key, Some(block_hash))
             .await
             .context("storage RPC API failed")
     }
@@ -304,113 +331,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
     }
 }
 
-mod storage_traits {
-    use codec::FullCodec;
-    use frame_support::{
-        storage::types::{QueryKindTrait, StorageDoubleMap, StorageMap, StorageValue},
-        traits::{Get, StorageInstance},
-        StorageHasher,
-    };
-    use sp_core::storage::StorageKey;
-
-    // A method to safely extract type information about Substrate storage maps (As the Key and Value types are not available)
-    pub trait StorageDoubleMapAssociatedTypes {
-        type Key1;
-        type Key2;
-        type Value: FullCodec;
-        type QueryKind: QueryKindTrait<Self::Value, Self::OnEmpty>;
-        type OnEmpty;
-
-        fn _hashed_key_for(key1: &Self::Key1, key2: &Self::Key2) -> StorageKey;
-    }
-    impl<
-            Prefix: StorageInstance,
-            Hasher1: StorageHasher,
-            Key1: FullCodec,
-            Hasher2: StorageHasher,
-            Key2: FullCodec,
-            Value: FullCodec,
-            QueryKind: QueryKindTrait<Value, OnEmpty>,
-            OnEmpty: Get<QueryKind::Query> + 'static,
-            MaxValues: Get<Option<u32>>,
-        > StorageDoubleMapAssociatedTypes
-        for StorageDoubleMap<
-            Prefix,
-            Hasher1,
-            Key1,
-            Hasher2,
-            Key2,
-            Value,
-            QueryKind,
-            OnEmpty,
-            MaxValues,
-        >
-    {
-        type Key1 = Key1;
-        type Key2 = Key2;
-        type Value = Value;
-        type QueryKind = QueryKind;
-        type OnEmpty = OnEmpty;
-
-        fn _hashed_key_for(key1: &Self::Key1, key2: &Self::Key2) -> StorageKey {
-            StorageKey(Self::hashed_key_for(key1, key2))
-        }
-    }
-
-    // A method to safely extract type information about Substrate storage maps (As the Key and Value types are not available)
-    pub trait StorageMapAssociatedTypes {
-        type Key;
-        type Value: FullCodec;
-        type QueryKind: QueryKindTrait<Self::Value, Self::OnEmpty>;
-        type OnEmpty;
-
-        fn _hashed_key_for(key: &Self::Key) -> StorageKey;
-    }
-    impl<
-            Prefix: StorageInstance,
-            Hasher: StorageHasher,
-            Key: FullCodec,
-            Value: FullCodec,
-            QueryKind: QueryKindTrait<Value, OnEmpty>,
-            OnEmpty: Get<QueryKind::Query> + 'static,
-            MaxValues: Get<Option<u32>>,
-        > StorageMapAssociatedTypes
-        for StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
-    {
-        type Key = Key;
-        type Value = Value;
-        type QueryKind = QueryKind;
-        type OnEmpty = OnEmpty;
-
-        fn _hashed_key_for(key: &Self::Key) -> StorageKey {
-            StorageKey(Self::hashed_key_for(key))
-        }
-    }
-
-    // A method to safely extract type information about Substrate storage values (As the Key and Value types are not available)
-    pub trait StorageValueAssociatedTypes {
-        type Value: FullCodec;
-        type QueryKind: QueryKindTrait<Self::Value, Self::OnEmpty>;
-        type OnEmpty;
-
-        fn _hashed_key() -> StorageKey;
-    }
-    impl<
-            Prefix: StorageInstance,
-            Value: FullCodec,
-            QueryKind: QueryKindTrait<Value, OnEmpty>,
-            OnEmpty: Get<QueryKind::Query> + 'static,
-        > StorageValueAssociatedTypes for StorageValue<Prefix, Value, QueryKind, OnEmpty>
-    {
-        type Value = Value;
-        type QueryKind = QueryKind;
-        type OnEmpty = OnEmpty;
-
-        fn _hashed_key() -> StorageKey {
-            StorageKey(Self::hashed_key().into())
-        }
-    }
-}
+use crate::state_chain_observer::client::storage_traits::StorageMapAssociatedTypes;
 
 fn invalid_err_obj(invalid_reason: InvalidTransaction) -> ErrorObjectOwned {
     ErrorObject::owned(
@@ -757,18 +678,28 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             .collect())
     }
 
-    pub async fn get_storage_pairs<StorageType: Decode + Debug>(
+    /// Gets all the storage pairs (key, value) of a StorageMap.
+    /// NB: Because this is an unbounded operation, it requires the node to have
+    /// the `--rpc-methods=unsafe` enabled.
+    pub async fn get_all_storage_pairs<StorageMap: storage_traits::StorageMapAssociatedTypes>(
         &self,
         block_hash: state_chain_runtime::Hash,
-        storage_key: StorageKey,
-    ) -> Result<Vec<StorageType>> {
+    ) -> Result<
+        Vec<(
+            <StorageMap as StorageMapAssociatedTypes>::Key,
+            StorageMap::Value,
+        )>,
+    > {
         Ok(self
             .state_chain_rpc_client
-            .storage_pairs(block_hash, storage_key)
+            .storage_pairs(block_hash, StorageMap::_prefix_hash())
             .await?
             .into_iter()
-            .map(|(_, storage_data)| {
-                context!(StorageType::decode(&mut &storage_data.0[..])).unwrap()
+            .map(|(storage_key, storage_data)| {
+                (
+                    StorageMap::key_from_storage_key(&storage_key),
+                    context!(StorageMap::Value::decode(&mut &storage_data.0[..])).unwrap(),
+                )
             })
             .collect())
     }
@@ -1289,12 +1220,12 @@ mod tests {
                 block_number, block_hash
             );
             let my_state_for_this_block = state_chain_client
-                .get_account_data(block_hash)
+                .get_all_storage_pairs::<pallet_cf_validator::AccountPeerMapping::<state_chain_runtime::Runtime>>(block_hash)
                 .await
                 .unwrap();
 
             println!(
-                "Returning AccountData for this block: {:?}",
+                "Returning Peer Mapping for this block: {:?}",
                 my_state_for_this_block
             );
         }
