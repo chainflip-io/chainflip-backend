@@ -2,7 +2,7 @@
 mod tests;
 
 use anyhow::{anyhow, Context};
-use cf_primitives::{CeremonyId, ForeignChain, ForeignChainAddress};
+use cf_primitives::{Asset, CeremonyId, ForeignChain, ForeignChainAddress};
 use futures::{FutureExt, Stream, StreamExt};
 use pallet_cf_vaults::KeygenError;
 use slog::o;
@@ -165,6 +165,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
 
     epoch_start_sender: broadcast::Sender<EpochStart>,
     eth_monitor_ingress_sender: tokio::sync::mpsc::UnboundedSender<H160>,
+    eth_monitor_erc20_ingress_sender: tokio::sync::mpsc::UnboundedSender<H160>,
     cfe_settings_update_sender: watch::Sender<CfeSettings>,
     initial_block_hash: H256,
     logger: slog::Logger,
@@ -425,7 +426,17 @@ where
                                             ) => {
                                                 if let ForeignChainAddress::Eth(address) = ingress_address {
                                                     assert_eq!(ingress_asset.chain, ForeignChain::Ethereum);
-                                                    eth_monitor_ingress_sender.send(H160::from(address)).unwrap();
+                                                    match ingress_asset.asset {
+                                                        Asset::Eth => {
+                                                            eth_monitor_ingress_sender.send(H160::from(address)).unwrap();
+                                                        }
+                                                        Asset::Flip => {
+                                                            eth_monitor_erc20_ingress_sender.send(H160::from(address)).unwrap();
+                                                        }
+                                                        _ => {
+                                                            slog::warn!(logger, "Not a supported asset: {:?}", ingress_asset);
+                                                        }
+                                                    }
                                                 } else {
                                                     slog::warn!(logger, "Unsupported addresss: {:?}", ingress_address);
                                                 }

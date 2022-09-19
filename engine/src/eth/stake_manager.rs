@@ -20,7 +20,10 @@ use async_trait::async_trait;
 
 use anyhow::{anyhow, Result};
 
-use super::{event::Event, DecodeLogClosure, EthContractWitnesser, EventParseError};
+use super::{
+    contract_witnesser::ContractStateUpdate, event::Event, DecodeLogClosure, EthContractWitnesser,
+    EventParseError,
+};
 
 pub struct StakeManager {
     pub deployed_address: H160,
@@ -82,16 +85,18 @@ pub enum StakeManagerEvent {
 #[async_trait]
 impl EthContractWitnesser for StakeManager {
     type EventParameters = StakeManagerEvent;
+    type StateItem = ();
 
     fn contract_name(&self) -> &'static str {
         "StakeManager"
     }
 
-    async fn handle_event<RpcClient, EthRpcClient>(
+    async fn handle_event<RpcClient, EthRpcClient, ContractWitnesserState>(
         &self,
         epoch: EpochIndex,
         _block_number: u64,
         event: Event<Self::EventParameters>,
+        _filter_state: &ContractWitnesserState,
         state_chain_client: Arc<StateChainClient<RpcClient>>,
         _eth_rpc: &EthRpcClient,
         logger: &slog::Logger,
@@ -99,6 +104,7 @@ impl EthContractWitnesser for StakeManager {
     where
         RpcClient: 'static + StateChainRpcApi + Sync + Send,
         EthRpcClient: EthRpcApi + Sync + Send,
+        ContractWitnesserState: Send + Sync + ContractStateUpdate<Item = Self::StateItem>,
     {
         slog::info!(logger, "Handling event: {}", event);
         match event.event_parameters {
