@@ -800,10 +800,13 @@ dependencies = [
 name = "cf-primitives"
 version = "0.1.0"
 dependencies = [
+ "ethabi",
+ "hex-literal",
  "parity-scale-codec",
  "scale-info",
  "serde",
  "sp-runtime",
+ "sp-std",
 ]
 
 [[package]]

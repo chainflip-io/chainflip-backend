@@ -7,21 +7,22 @@
 // #[cfg(test)]
 // mod tests;
 
-use cf_chains::TransferAssetParams;
-use cf_primitives::ForeignChainAsset;
-use cf_traits::{Broadcaster, EgressAbiBuilder, EgressApi, FlipBalance};
-use codec::FullCodec;
+use cf_chains::{AllBatch, TransferAssetParams};
+use cf_primitives::{
+	try_convert_foreign_chain_asset_to_ethereum_address, ForeignChain, ForeignChainAddress,
+	ForeignChainAsset,
+};
+use cf_traits::{Broadcaster, EgressApi, FlipBalance, ReplayProtectionProvider};
 use frame_support::pallet_prelude::*;
 pub use pallet::*;
-use scale_info::TypeInfo;
 
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
 
-	use cf_chains::{ApiCall, ChainAbi, Ethereum};
+	use cf_chains::Ethereum;
 	use cf_primitives::{EgressBatch, ForeignChainAddress};
-	use cf_traits::{Chainflip, ReplayProtectionProvider};
+	use cf_traits::Chainflip;
 	use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
 
 	#[pallet::pallet]
@@ -39,7 +40,7 @@ pub mod pallet {
 		type ReplayProtection: ReplayProtectionProvider<Ethereum>;
 
 		/// The type of the chain-native transaction.
-		type EgressTransaction: cf_chains::AllBatch<Ethereum>;
+		type EgressTransaction: AllBatch<Ethereum>;
 
 		/// A broadcaster instance.
 		type Broadcaster: Broadcaster<Ethereum, ApiCall = Self::EgressTransaction>;
@@ -53,7 +54,7 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		ForeignChainAsset,
-		EgressBatch<FlipBalance, T::EgressAddress>,
+		EgressBatch<FlipBalance, ForeignChainAddress>,
 		ValueQuery,
 	>;
 
@@ -148,23 +149,34 @@ impl<T: Config> Pallet<T> {
 		}
 
 		// Construct the Egress Tx and send it out.
-		T::Broadcaster::threshold_sign_and_broadcast(T::EgressTransaction::new_unsigned(
-			T::ReplayProtectionProvider::replay_protection(),
-			vec![], // TODO: fetch assets
-			batch.map(|(amount, adddress)| TransferAssetParams {
-				asset: todo!(),
-				account: todo!(),
-				amount: todo!(),
-			}),
-		));
+		if asset.chain == ForeignChain::Ethereum {
+			if let Some(asset_adress) = try_convert_foreign_chain_asset_to_ethereum_address(asset) {
+				let asset_params = batch
+					.into_iter()
+					.filter_map(|(amount, address)| match address {
+						ForeignChainAddress::Eth(eth_address) => Some(TransferAssetParams {
+							asset: asset_adress.into(),
+							account: eth_address.into(),
+							amount,
+						}),
+						_ => None,
+					})
+					.collect();
 
+				T::Broadcaster::threshold_sign_and_broadcast(T::EgressTransaction::new_unsigned(
+					T::ReplayProtection::replay_protection(),
+					vec![], // TODO: fetch assets
+					asset_params,
+				));
+			};
+		}
 		batch_size
 	}
 }
 
 impl<T: Config> EgressApi for Pallet<T> {
 	type Amount = FlipBalance;
-	type EgressAddress = T::EgressAddress;
+	type EgressAddress = ForeignChainAddress;
 
 	fn add_to_egress_batch(
 		asset: ForeignChainAsset,

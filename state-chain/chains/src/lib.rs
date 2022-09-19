@@ -140,9 +140,9 @@ pub struct FetchAssetParams<T: Chain> {
 	RuntimeDebug, Copy, Clone, Default, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo,
 )]
 pub struct TransferAssetParams<T: Chain> {
-	asset: T::ChainAsset,
-	account: T::ChainAccount,
-	amount: T::ChainAmount,
+	pub asset: T::ChainAsset,
+	pub account: T::ChainAccount,
+	pub amount: T::ChainAmount,
 }
 
 pub trait IngressAddress {
