@@ -1,6 +1,6 @@
 use cf_primitives::{Asset, IntentId};
 use sp_runtime::traits::{Hash, Keccak256};
-use sp_std::mem::size_of;
+use sp_std::{mem::size_of, vec, vec::Vec};
 
 // From master branch of chainflip-eth-contracts
 // @FIXME store on and retrieve from the chain
@@ -35,15 +35,16 @@ const PREFIX_BYTE: u8 = 0xff;
 pub fn get_create_2_address(
 	asset: Asset,
 	vault_address: [u8; 20],
-	erc20_constructor_argument: &[u8],
+	erc20_constructor_argument: Option<Vec<u8>>,
 	intent_id: IntentId,
 ) -> [u8; 20] {
 	let deploy_bytecode = get_deploy_bytecode(asset);
 
 	// We hash the concatenated deploy_bytecode and erc20_constructor_argument.
 	// This hash is used in the later CREATE2 derivation.
-	let deploy_transaction_bytes_hash =
-		Keccak256::hash(&[deploy_bytecode, erc20_constructor_argument].concat());
+	let deploy_transaction_bytes_hash = Keccak256::hash(
+		&[deploy_bytecode, &erc20_constructor_argument.unwrap_or_else(|| vec![])].concat(),
+	);
 
 	// Unique salt per intent.
 	let salt = get_salt(intent_id).to_vec();
@@ -87,7 +88,7 @@ fn test_eth_eth() {
 	const VAULT_ADDRESS: [u8; 20] = hex_literal::hex!("e7f1725E7734CE288F8367e1Bb143E90bb3F0512");
 
 	assert_eq!(
-		get_create_2_address(Asset::Eth, VAULT_ADDRESS, &[], 420696969),
+		get_create_2_address(Asset::Eth, VAULT_ADDRESS, None, 420696969),
 		hex_literal::hex!("9AF943257C1dF03EA3EeD0dFa7B5328A2E4033bb")
 	);
 	println!("Derivation worked for ETH:ETH! 🚀");

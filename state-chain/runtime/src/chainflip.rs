@@ -33,7 +33,7 @@ use cf_traits::{
 use frame_support::traits::Get;
 use pallet_cf_chain_tracking::ChainState;
 
-use frame_support::{dispatch::DispatchErrorWithPostInfo, weights::PostDispatchInfo};
+use frame_support::{dispatch::DispatchErrorWithPostInfo, ensure, weights::PostDispatchInfo};
 
 use pallet_cf_validator::PercentageRange;
 use sp_runtime::{
@@ -203,22 +203,25 @@ impl AddressDerivationApi for AddressDerivation {
 	) -> Result<cf_primitives::ForeignChainAddress, DispatchError> {
 		match ingress_asset.chain {
 			cf_primitives::ForeignChain::Ethereum => {
-				if ingress_asset.asset != Asset::Eth &&
-					Environment::supported_eth_assets(ingress_asset.asset).is_none()
-				{
-					return Err(DispatchError::Other(
+				ensure!(
+					ingress_asset.asset == Asset::Eth ||
+						Environment::supported_eth_assets(ingress_asset.asset).is_some(),
+					DispatchError::Other(
 						"Address derivation is currently unsupported for this asset!",
-					))
-				}
-				let asset_address = if ingress_asset.asset == Asset::Eth {
-					vec![]
-				} else {
-					Environment::supported_eth_assets(ingress_asset.asset).unwrap().to_vec()
-				};
+					)
+				);
 				Ok(cf_primitives::ForeignChainAddress::Eth(get_create_2_address(
 					ingress_asset.asset,
 					Environment::eth_vault_address(),
-					&asset_address,
+					if ingress_asset.asset == Asset::Eth {
+						None
+					} else {
+						Some(
+							Environment::supported_eth_assets(ingress_asset.asset)
+								.expect("ERC20 asset to be supported!")
+								.to_vec(),
+						)
+					},
 					intent_id,
 				)))
 			},
