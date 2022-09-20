@@ -43,6 +43,9 @@ impl AddressDerivationApi for AddressDerivation {
 
 #[test]
 fn test_address_generation() {
+	use crate::Runtime;
+	use pallet_cf_environment::SupportedEthAssets;
+
 	frame_support::sp_io::TestExternalities::new_empty().execute_with(|| {
 		// Expect address generation to be successfully for native ETH
 		assert!(AddressDerivation::generate_address(
@@ -53,17 +56,19 @@ fn test_address_generation() {
 			1
 		)
 		.is_ok());
-		// Expect address generation to return an error for unsupported assets
+		// Expect address generation to return an error for unsupported assets. Because we are
+		// running a test gainst ETH the DOT asset will be always unsupported.
 		assert!(AddressDerivation::generate_address(
 			cf_primitives::ForeignChainAsset {
 				chain: cf_primitives::ForeignChain::Ethereum,
-				asset: cf_primitives::Asset::Usdc,
+				asset: cf_primitives::Asset::Dot,
 			},
 			1
 		)
 		.is_err());
+		// The genesis build is not running, so we have to add it manually
+		SupportedEthAssets::<Runtime>::insert(Asset::Flip, [0; 20]);
 		// Expect address generation to be successfully for ERC20 Flip token
-		// Note: Flip is the only token supported at genesis.
 		assert!(AddressDerivation::generate_address(
 			cf_primitives::ForeignChainAsset {
 				chain: cf_primitives::ForeignChain::Ethereum,
