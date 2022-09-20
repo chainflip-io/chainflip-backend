@@ -1,4 +1,7 @@
-use std::sync::Arc;
+use std::{
+    collections::{BTreeSet, HashMap},
+    sync::Arc,
+};
 
 use crate::multisig::eth::EthSigning;
 use anyhow::{bail, Context};
@@ -26,6 +29,7 @@ use chainflip_engine::{
 use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use clap::Parser;
 use futures::FutureExt;
+use itertools::Itertools;
 use pallet_cf_validator::SemVer;
 use sp_core::{H160, U256};
 use utilities::print_chainflip_ascii_art;
@@ -197,6 +201,22 @@ fn main() -> anyhow::Result<()> {
             let (eth_monitor_flip_ingress_sender, eth_monitor_flip_ingress_receiver) = tokio::sync::mpsc::unbounded_channel();
             let (eth_monitor_usdc_ingress_sender, eth_monitor_usdc_ingress_receiver) = tokio::sync::mpsc::unbounded_channel();
 
+            let eth_chain_ingress_addresses = state_chain_client.get_all_storage_pairs::<pallet_cf_ingress::IntentIngressDetails<state_chain_runtime::Runtime>>(latest_block_hash).await.expect("Failed to get initial ingress details").into_iter().filter_map(|(foreign_chain_address, intent)| {
+                if let ForeignChainAddress::Eth(address) = foreign_chain_address {
+                    assert_eq!(intent.ingress_asset.chain, ForeignChain::Ethereum);
+                    Some((intent.ingress_asset.asset, H160::from(address)))
+                } else {
+                    None
+                }}).into_group_map();
+
+            fn monitored_addresses_from_all_eth(eth_chain_ingress_addresses: &HashMap<Asset, Vec<H160>>, asset: Asset) -> BTreeSet<H160> {
+                if let Some(eth_ingress_addresses_inner) = eth_chain_ingress_addresses.get(&asset) {
+                    eth_ingress_addresses_inner.clone()
+                } else {
+                    vec![]
+                }.into_iter().collect()
+            }
+
             scope.spawn(async move {
                 muxer_future.await;
                 Ok(())
@@ -257,7 +277,7 @@ fn main() -> anyhow::Result<()> {
                     eth_ws_rpc_client.clone(),
                     eth_http_rpc_client.clone(),
                     epoch_start_receiver_5,
-                    Erc20WitnesserState::new(Default::default(), eth_monitor_flip_ingress_receiver),
+                    Erc20WitnesserState::new(monitored_addresses_from_all_eth(&eth_chain_ingress_addresses, Asset::Flip), eth_monitor_flip_ingress_receiver),
                     false,
                     state_chain_client.clone(),
                     &root_logger,
@@ -269,7 +289,7 @@ fn main() -> anyhow::Result<()> {
                     eth_ws_rpc_client.clone(),
                     eth_http_rpc_client.clone(),
                     epoch_start_receiver_6,
-                    Erc20WitnesserState::new(Default::default(), eth_monitor_usdc_ingress_receiver),
+                    Erc20WitnesserState::new(monitored_addresses_from_all_eth(&eth_chain_ingress_addresses, Asset::Usdc), eth_monitor_usdc_ingress_receiver),
                     false,
                     state_chain_client.clone(),
                     &root_logger,
@@ -289,13 +309,7 @@ fn main() -> anyhow::Result<()> {
                     epoch_start_receiver_4,
                     eth_monitor_ingress_receiver,
                     state_chain_client.clone(),
-                    state_chain_client.get_all_storage_pairs::<pallet_cf_ingress::IntentIngressDetails<state_chain_runtime::Runtime>>(latest_block_hash).await.expect("Failed to get initial ingress details").into_iter().filter_map(|(foreign_chain_address, intent)| {
-                        if let ForeignChainAddress::Eth(address) = foreign_chain_address {
-                            assert_eq!(intent.ingress_asset.chain, ForeignChain::Ethereum);
-                            Some(H160::from(address))
-                        } else {
-                            None
-                        }}).collect(),
+                    monitored_addresses_from_all_eth(&eth_chain_ingress_addresses, Asset::Eth),
                     &root_logger
             ));
 
