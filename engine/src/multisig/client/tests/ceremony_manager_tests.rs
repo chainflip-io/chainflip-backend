@@ -6,8 +6,12 @@ use crate::{
     logging::test_utils::new_test_logger,
     multisig::{
         client::{
-            self, ceremony_manager::CeremonyManager, common::SigningFailureReason,
-            keygen::KeygenData, CeremonyFailureReason, MultisigData,
+            self,
+            ceremony_manager::CeremonyManager,
+            common::{BroadcastFailureReason, CeremonyStageName, SigningFailureReason},
+            keygen::KeygenData,
+            CeremonyFailureReason, CeremonyRequest, CeremonyRequestDetails, MultisigData,
+            SigningRequestDetails,
         },
         crypto::{CryptoScheme, Rng},
         eth::EthSigning,
@@ -240,4 +244,54 @@ async fn should_not_create_unauthorized_ceremony_with_invalid_ceremony_id() {
     })
     .await
     .unwrap_err();
+}
+
+#[tokio::test]
+async fn should_send_outcome_of_authorised_ceremony() {
+    // Create a new ceremony manager and set it running
+    let (ceremony_request_sender, ceremony_request_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+    let (_incoming_p2p_sender, incoming_p2p_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (outgoing_p2p_sender, _outgoing_p2p_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let ceremony_manager = CeremonyManager::<EthSigning>::new(
+        ACCOUNT_IDS[0].clone(),
+        outgoing_p2p_sender,
+        INITIAL_LATEST_CEREMONY_ID,
+        &new_test_logger(),
+    );
+    tokio::spawn(ceremony_manager.run(ceremony_request_receiver, incoming_p2p_receiver));
+
+    // Send a signing request
+    let (result_sender, mut result_receiver) = oneshot::channel();
+    let _result = ceremony_request_sender.send(CeremonyRequest {
+        ceremony_id: INITIAL_LATEST_CEREMONY_ID + 1,
+        details: Some(CeremonyRequestDetails::Sign(SigningRequestDetails {
+            participants: BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
+            data: MESSAGE_HASH.clone(),
+            keygen_result_info: get_key_data_for_test(BTreeSet::from_iter(
+                ACCOUNT_IDS.iter().cloned(),
+            )),
+            rng: Rng::from_seed(DEFAULT_SIGNING_SEED),
+            result_sender,
+        })),
+    });
+
+    // Advance time to cause a timeout, then check that the correct ceremony outcome was received
+    timeout_running_ceremony().await;
+    assert_eq!(
+        result_receiver.try_recv().unwrap(),
+        Err((
+            BTreeSet::default(),
+            CeremonyFailureReason::BroadcastFailure(
+                BroadcastFailureReason::InsufficientVerificationMessages,
+                CeremonyStageName::VerifyCommitmentsBroadcast2
+            ),
+        ))
+    );
+}
+
+#[tokio::test]
+async fn should_cleanup_unauthorised_ceremony_if_not_participating() {
+    // insert a fake ceremony_handle ->  send an outcome -> run ceremony_manager -> see if the task is aborted by checking the p2p channel is closed.
+    todo!();
 }

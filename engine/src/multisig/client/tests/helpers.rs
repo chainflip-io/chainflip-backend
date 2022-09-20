@@ -2,6 +2,7 @@ use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
     fmt::Display,
     sync::Arc,
+    time::Duration,
 };
 
 use anyhow::{anyhow, Result};
@@ -56,7 +57,7 @@ use crate::{
     testing::expect_recv_with_timeout,
 };
 
-use state_chain_runtime::AccountId;
+use state_chain_runtime::{constants::common::MAX_STAGE_DURATION_SECONDS, AccountId};
 
 use super::{
     ACCOUNT_IDS, DEFAULT_KEYGEN_CEREMONY_ID, DEFAULT_KEYGEN_SEED, DEFAULT_SIGNING_CEREMONY_ID,
@@ -954,4 +955,20 @@ pub fn get_key_data_for_test<P: ECPoint>(signers: BTreeSet<AccountId>) -> Keygen
     .get(signers.iter().next().unwrap())
     .expect("should get keygen for an account")
     .to_owned()
+}
+
+/// Advances time by the stage duration x2 to cause a timeout
+pub async fn timeout_running_ceremony() {
+    // A short delay to allow the ceremony runner to run
+    // its `run` function and process the signing request
+    tokio::time::sleep(Duration::from_millis(1)).await;
+
+    // We need to timeout 2 stages because the verification stage will try and recover,
+    // so we must advance time by 2x the max stage duration.
+    tokio::time::pause();
+    tokio::time::advance(Duration::from_secs((MAX_STAGE_DURATION_SECONDS * 2) as u64)).await;
+    tokio::time::resume();
+
+    // A short delay to allow the ceremony runner to process the timeout and end the task
+    tokio::time::sleep(Duration::from_millis(1)).await;
 }

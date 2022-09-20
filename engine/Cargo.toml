@@ -53,7 +53,7 @@ slog = {version = "2.7.0", features = ["max_level_trace", "release_max_level_tra
 slog-async = {version = "2.6.0"}
 slog-json = {version = "2.3.0"}
 thiserror = "1.0.26"
-tokio = {version = "1.13.1", features = ["full"]}
+tokio = {version = "1.13.1", features = ["full", "test-util"]}
 tokio-stream = "0.1.5"
 url = "1.7.2"
 num-bigint = "0.4"
