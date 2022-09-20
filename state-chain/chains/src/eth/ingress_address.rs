@@ -42,6 +42,8 @@ pub fn get_create_2_address(
 
 	// We hash the concatenated deploy_bytecode and erc20_constructor_argument.
 	// This hash is used in the later CREATE2 derivation.
+	// Note: For native ETH we don't need to add extra bytes because the constructor is empty
+	// see: https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/DepositEth.sol.
 	let deploy_transaction_bytes_hash = Keccak256::hash(
 		&[deploy_bytecode, &erc20_constructor_argument.unwrap_or_default()].concat(),
 	);
