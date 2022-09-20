@@ -1,6 +1,6 @@
 use cf_primitives::{Asset, IntentId};
 use sp_runtime::traits::{Hash, Keccak256};
-use sp_std::{mem::size_of, vec, vec::Vec};
+use sp_std::{mem::size_of, vec::Vec};
 
 // From master branch of chainflip-eth-contracts
 // @FIXME store on and retrieve from the chain
@@ -43,7 +43,7 @@ pub fn get_create_2_address(
 	// We hash the concatenated deploy_bytecode and erc20_constructor_argument.
 	// This hash is used in the later CREATE2 derivation.
 	let deploy_transaction_bytes_hash = Keccak256::hash(
-		&[deploy_bytecode, &erc20_constructor_argument.unwrap_or_else(|| vec![])].concat(),
+		&[deploy_bytecode, &erc20_constructor_argument.unwrap_or_else(Vec::new)].concat(),
 	);
 
 	// Unique salt per intent.
