@@ -73,15 +73,24 @@ fn update_supported_eth_assets() {
 	new_test_ext().execute_with(|| {
 		// Expect the FLIP token address to be set after genesis
 		assert!(SupportedEthAssets::<Test>::contains_key(Asset::Flip));
-		// Add an address for Usdc
-		assert_ok!(Environment::update_supported_eth_assets(Origin::root(), Asset::Usdc, [1; 20]));
-		assert_eq!(SupportedEthAssets::<Test>::get(Asset::Usdc), Some([1; 20]));
+		// Add an ETH address for the Dot token
+		let dot_address = [4; 20];
+		assert_eq!(SupportedEthAssets::<Test>::get(Asset::Dot), None);
+		assert_ok!(Environment::update_supported_eth_assets(
+			Origin::root(),
+			Asset::Dot,
+			dot_address
+		));
+		assert_eq!(SupportedEthAssets::<Test>::get(Asset::Dot), Some(dot_address));
 		assert_eq!(
 			frame_system::Pallet::<Test>::events()
 				.pop()
 				.expect("Event should be emitted!")
 				.event,
-			crate::mock::Event::Environment(crate::Event::AddedNewEthAsset(Asset::Usdc, [1; 20]),)
+			crate::mock::Event::Environment(crate::Event::AddedNewEthAsset(
+				Asset::Dot,
+				dot_address
+			),)
 		);
 		// Update the address for Usdc
 		assert_ok!(Environment::update_supported_eth_assets(Origin::root(), Asset::Usdc, [2; 20]));

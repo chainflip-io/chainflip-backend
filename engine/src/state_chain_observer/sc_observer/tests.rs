@@ -177,7 +177,10 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_current_authority_o
     let (eth_monitor_ingress_sender, _eth_monitor_ingress_receiver) =
         tokio::sync::mpsc::unbounded_channel();
 
-    let (eth_monitor_erc20_ingress_sender, _eth_monitor_erc20_ingress_receiver) =
+    let (eth_monitor_flip_ingress_sender, _eth_monitor_flip_ingress_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+
+    let (eth_monitor_usdc_ingress_sender, _eth_monitor_usdc_ingress_receiver) =
         tokio::sync::mpsc::unbounded_channel();
 
     sc_observer::start(
@@ -188,7 +191,8 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_current_authority_o
         account_peer_mapping_change_sender,
         epoch_start_sender,
         eth_monitor_ingress_sender,
-        eth_monitor_erc20_ingress_sender,
+        eth_monitor_flip_ingress_sender,
+        eth_monitor_usdc_ingress_sender,
         cfe_settings_update_sender,
         initial_block_hash,
         logger,
@@ -238,7 +242,10 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_historic_on_startup
     let (eth_monitor_ingress_sender, _eth_monitor_ingress_receiver) =
         tokio::sync::mpsc::unbounded_channel();
 
-    let (eth_monitor_erc20_ingress_sender, _eth_monitor_erc20_ingress_receiver) =
+    let (eth_monitor_flip_ingress_sender, _eth_monitor_flip_ingress_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+
+    let (eth_monitor_usdc_ingress_sender, _eth_monitor_usdc_ingress_receiver) =
         tokio::sync::mpsc::unbounded_channel();
 
     sc_observer::start(
@@ -249,7 +256,8 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_historic_on_startup
         account_peer_mapping_change_sender,
         epoch_start_sender,
         eth_monitor_ingress_sender,
-        eth_monitor_erc20_ingress_sender,
+        eth_monitor_flip_ingress_sender,
+        eth_monitor_usdc_ingress_sender,
         cfe_settings_update_sender,
         initial_block_hash,
         logger,
@@ -292,7 +300,10 @@ async fn sends_initial_extrinsics_when_not_historic_on_startup() {
     let (eth_monitor_ingress_sender, _eth_monitor_ingress_receiver) =
         tokio::sync::mpsc::unbounded_channel();
 
-    let (eth_monitor_erc20_ingress_sender, _eth_monitor_erc20_ingress_receiver) =
+    let (eth_monitor_flip_ingress_sender, _eth_monitor_flip_ingress_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+
+    let (eth_monitor_usdc_ingress_sender, _eth_monitor_usdc_ingress_receiver) =
         tokio::sync::mpsc::unbounded_channel();
 
     sc_observer::start(
@@ -303,7 +314,8 @@ async fn sends_initial_extrinsics_when_not_historic_on_startup() {
         account_peer_mapping_change_sender,
         epoch_start_sender,
         eth_monitor_ingress_sender,
-        eth_monitor_erc20_ingress_sender,
+        eth_monitor_flip_ingress_sender,
+        eth_monitor_usdc_ingress_sender,
         cfe_settings_update_sender,
         initial_block_hash,
         logger,
@@ -418,7 +430,10 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
     let (eth_monitor_ingress_sender, _eth_monitor_ingress_receiver) =
         tokio::sync::mpsc::unbounded_channel();
 
-    let (eth_monitor_erc20_ingress_sender, _eth_monitor_erc20_ingress_receiver) =
+    let (eth_monitor_flip_ingress_sender, _eth_monitor_flip_ingress_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+
+    let (eth_monitor_usdc_ingress_sender, _eth_monitor_usdc_ingress_receiver) =
         tokio::sync::mpsc::unbounded_channel();
 
     sc_observer::start(
@@ -429,7 +444,8 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
         account_peer_mapping_change_sender,
         epoch_start_sender,
         eth_monitor_ingress_sender,
-        eth_monitor_erc20_ingress_sender,
+        eth_monitor_flip_ingress_sender,
+        eth_monitor_usdc_ingress_sender,
         cfe_settings_update_sender,
         initial_block_hash,
         logger,
@@ -556,7 +572,10 @@ async fn not_historical_to_authority_on_new_epoch() {
     let (eth_monitor_ingress_sender, _eth_monitor_ingress_receiver) =
         tokio::sync::mpsc::unbounded_channel();
 
-    let (eth_monitor_erc20_ingress_sender, _eth_monitor_erc20_ingress_receiver) =
+    let (eth_monitor_flip_ingress_sender, _eth_monitor_flip_ingress_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+
+    let (eth_monitor_usdc_ingress_sender, _eth_monitor_usdc_ingress_receiver) =
         tokio::sync::mpsc::unbounded_channel();
 
     sc_observer::start(
@@ -567,7 +586,8 @@ async fn not_historical_to_authority_on_new_epoch() {
         account_peer_mapping_change_sender,
         epoch_start_sender,
         eth_monitor_ingress_sender,
-        eth_monitor_erc20_ingress_sender,
+        eth_monitor_flip_ingress_sender,
+        eth_monitor_usdc_ingress_sender,
         cfe_settings_update_sender,
         initial_block_hash,
         logger,
@@ -694,7 +714,10 @@ async fn current_authority_to_historical_on_new_epoch_event() {
     let (eth_monitor_ingress_sender, _eth_monitor_ingress_receiver) =
         tokio::sync::mpsc::unbounded_channel();
 
-    let (eth_monitor_erc20_ingress_sender, _eth_monitor_erc20_ingress_receiver) =
+    let (eth_monitor_flip_ingress_sender, _eth_monitor_flip_ingress_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+
+    let (eth_monitor_usdc_ingress_sender, _eth_monitor_usdc_ingress_receiver) =
         tokio::sync::mpsc::unbounded_channel();
 
     sc_observer::start(
@@ -705,7 +728,8 @@ async fn current_authority_to_historical_on_new_epoch_event() {
         account_peer_mapping_change_sender,
         epoch_start_sender,
         eth_monitor_ingress_sender,
-        eth_monitor_erc20_ingress_sender,
+        eth_monitor_flip_ingress_sender,
+        eth_monitor_usdc_ingress_sender,
         cfe_settings_update_sender,
         initial_block_hash,
         logger,
@@ -836,7 +860,10 @@ async fn only_encodes_and_signs_when_specified() {
     let (eth_monitor_ingress_sender, _eth_monitor_ingress_receiver) =
         tokio::sync::mpsc::unbounded_channel();
 
-    let (eth_monitor_erc20_ingress_sender, _eth_monitor_erc20_ingress_receiver) =
+    let (eth_monitor_flip_ingress_sender, _eth_monitor_flip_ingress_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+
+    let (eth_monitor_usdc_ingress_sender, _eth_monitor_usdc_ingress_receiver) =
         tokio::sync::mpsc::unbounded_channel();
 
     sc_observer::start(
@@ -847,7 +874,8 @@ async fn only_encodes_and_signs_when_specified() {
         account_peer_mapping_change_sender,
         epoch_start_sender,
         eth_monitor_ingress_sender,
-        eth_monitor_erc20_ingress_sender,
+        eth_monitor_flip_ingress_sender,
+        eth_monitor_usdc_ingress_sender,
         cfe_settings_update_sender,
         initial_block_hash,
         logger,
@@ -893,7 +921,10 @@ async fn run_the_sc_observer() {
     let (eth_monitor_ingress_sender, _eth_monitor_ingress_receiver) =
         tokio::sync::mpsc::unbounded_channel();
 
-    let (eth_monitor_erc20_ingress_sender, _eth_monitor_erc20_ingress_receiver) =
+    let (eth_monitor_flip_ingress_sender, _eth_monitor_flip_ingress_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+
+    let (eth_monitor_usdc_ingress_sender, _eth_monitor_usdc_ingress_receiver) =
         tokio::sync::mpsc::unbounded_channel();
 
     sc_observer::start(
@@ -904,7 +935,8 @@ async fn run_the_sc_observer() {
         account_peer_mapping_change_sender,
         epoch_start_sender,
         eth_monitor_ingress_sender,
-        eth_monitor_erc20_ingress_sender,
+        eth_monitor_flip_ingress_sender,
+        eth_monitor_usdc_ingress_sender,
         cfe_settings_update_sender,
         initial_block_hash,
         logger,
