@@ -883,12 +883,7 @@ async fn should_handle_signing_request() {
             predicate::eq(BTreeSet::from_iter([our_account_id.clone()])),
             predicate::eq(sign_data.clone()),
         )
-        .returning(|_, _, _, _| {
-            Err((
-                BTreeSet::new(),
-                CeremonyFailureReason::ExpiredBeforeBeingAuthorized,
-            ))
-        });
+        .returning(|_, _, _, _| Err((BTreeSet::new(), CeremonyFailureReason::InvalidParticipants)));
 
     let multisig_client = Arc::new(multisig_client);
 
@@ -958,12 +953,7 @@ async fn should_handle_keygen_request() {
             predicate::eq(next_ceremony_id),
             predicate::eq(BTreeSet::from_iter([our_account_id.clone()])),
         )
-        .returning(|_, _| {
-            Err((
-                BTreeSet::new(),
-                CeremonyFailureReason::ExpiredBeforeBeingAuthorized,
-            ))
-        });
+        .returning(|_, _| Err((BTreeSet::new(), CeremonyFailureReason::InvalidParticipants)));
 
     let multisig_client = Arc::new(multisig_client);
 
