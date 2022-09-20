@@ -16,8 +16,6 @@ use state_chain_runtime::{
 use std::{collections::BTreeSet, env, marker::PhantomData};
 use utilities::clean_eth_address;
 
-mod network_env;
-
 /// Specialized `ChainSpec`. This is a specialization of the general Substrate ChainSpec type.
 pub type ChainSpec = sc_service::GenericChainSpec<GenesisConfig>;
 
@@ -318,16 +316,6 @@ pub fn chainflip_three_node_testnet_config() -> Result<ChainSpec, String> {
 		"three-node-testnet",
 		ChainType::Local,
 		get_environment(),
-	)
-}
-
-/// Build the chainspec for Paradise public testnet.
-pub fn chainflip_paradise_config() -> Result<ChainSpec, String> {
-	chainflip_three_node_testnet_config_from_env(
-		"Chainflip Paradise",
-		"paradise",
-		ChainType::Live,
-		network_env::PARADISE,
 	)
 }
 
