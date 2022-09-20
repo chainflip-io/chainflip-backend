@@ -555,6 +555,14 @@ impl<C: CryptoScheme> CeremonyManager<C> {
     pub fn get_keygen_states_len(&self) -> usize {
         self.keygen_states.len()
     }
+
+    pub fn insert_signing_state_for_test(
+        &mut self,
+        ceremony_id: CeremonyId,
+        ceremony_handle: CeremonyHandle<SigningCeremony<C>>,
+    ) {
+        self.signing_states.insert(ceremony_id, ceremony_handle);
+    }
 }
 
 /// Create unique deterministic context used for generating a ZKP to prevent replay attacks
@@ -692,12 +700,17 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
     fn len(&self) -> usize {
         self.ceremony_handles.len()
     }
+
+    #[cfg(test)]
+    fn insert(&mut self, ceremony_id: CeremonyId, ceremony_handle: CeremonyHandle<Ceremony>) {
+        self.ceremony_handles.insert(ceremony_id, ceremony_handle);
+    }
 }
 
 // ==================
 
 /// Contains the result sender and the channels used to send data to a running ceremony
-struct CeremonyHandle<Ceremony: CeremonyTrait> {
+pub struct CeremonyHandle<Ceremony: CeremonyTrait> {
     pub message_sender: UnboundedSender<(AccountId, Ceremony::Data)>,
     pub request_state: CeremonyRequestState<Ceremony>,
     // When the task handle is dropped, the task will be aborted.
@@ -705,7 +718,7 @@ struct CeremonyHandle<Ceremony: CeremonyTrait> {
 }
 
 /// Contains either the request sender or the result sender depending on the state of the ceremony
-enum CeremonyRequestState<Ceremony: CeremonyTrait> {
+pub enum CeremonyRequestState<Ceremony: CeremonyTrait> {
     /// Initial state before we have received the request from the SC.
     /// Contains the oneshot channel used to relay the request to the ceremony task.
     Unauthorised(oneshot::Sender<PreparedRequest<Ceremony>>),
