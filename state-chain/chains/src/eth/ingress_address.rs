@@ -43,7 +43,7 @@ pub fn get_create_2_address(
 	// We hash the concatenated deploy_bytecode and erc20_constructor_argument.
 	// This hash is used in the later CREATE2 derivation.
 	let deploy_transaction_bytes_hash = Keccak256::hash(
-		&[deploy_bytecode, &erc20_constructor_argument.unwrap_or_else(Vec::new)].concat(),
+		&[deploy_bytecode, &erc20_constructor_argument.unwrap_or_default()].concat(),
 	);
 
 	// Unique salt per intent.
