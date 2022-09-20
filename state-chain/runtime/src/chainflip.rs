@@ -1,11 +1,11 @@
 //! Configuration, utilities and helpers for the Chainflip runtime.
+pub mod address_derivation;
 mod backup_node_rewards;
 pub mod chain_instances;
 pub mod decompose_recompose;
 pub mod epoch_transition;
 mod missed_authorship_slots;
 mod offences;
-use cf_primitives::Asset;
 pub use offences::*;
 mod signer_nomination;
 pub use missed_authorship_slots::MissedAuraSlots;
@@ -21,25 +21,20 @@ use cf_chains::{
 	eth::{
 		self,
 		api::{EthereumApi, EthereumReplayProtection},
-		ingress_address::get_create_2_address,
 	},
 	ApiCall, ChainAbi, Ethereum, TransactionBuilder,
 };
 use cf_traits::{
-	AddressDerivationApi, BlockEmissions, Chainflip, EmergencyRotation, EpochInfo,
-	EthEnvironmentProvider, Heartbeat, Issuance, NetworkState, ReplayProtectionProvider,
-	RewardsDistribution, RuntimeUpgrade,
+	BlockEmissions, Chainflip, EmergencyRotation, EpochInfo, EthEnvironmentProvider, Heartbeat,
+	Issuance, NetworkState, ReplayProtectionProvider, RewardsDistribution, RuntimeUpgrade,
 };
 use frame_support::traits::Get;
 use pallet_cf_chain_tracking::ChainState;
 
-use frame_support::{dispatch::DispatchErrorWithPostInfo, ensure, weights::PostDispatchInfo};
+use frame_support::{dispatch::DispatchErrorWithPostInfo, weights::PostDispatchInfo};
 
 use pallet_cf_validator::PercentageRange;
-use sp_runtime::{
-	traits::{UniqueSaturatedFrom, UniqueSaturatedInto},
-	DispatchError,
-};
+use sp_runtime::traits::{UniqueSaturatedFrom, UniqueSaturatedInto};
 use sp_std::prelude::*;
 
 use backup_node_rewards::calculate_backup_rewards;
@@ -190,42 +185,6 @@ impl ReplayProtectionProvider<Ethereum> for EthReplayProtectionProvider {
 			key_manager_address: Environment::key_manager_address(),
 			chain_id: Environment::ethereum_chain_id(),
 			nonce: Environment::next_global_signature_nonce(),
-		}
-	}
-}
-
-pub struct AddressDerivation;
-
-impl AddressDerivationApi for AddressDerivation {
-	fn generate_address(
-		ingress_asset: cf_primitives::ForeignChainAsset,
-		intent_id: cf_primitives::IntentId,
-	) -> Result<cf_primitives::ForeignChainAddress, DispatchError> {
-		match ingress_asset.chain {
-			cf_primitives::ForeignChain::Ethereum => {
-				ensure!(
-					ingress_asset.asset == Asset::Eth ||
-						Environment::supported_eth_assets(ingress_asset.asset).is_some(),
-					DispatchError::Other(
-						"Address derivation is currently unsupported for this asset!",
-					)
-				);
-				Ok(cf_primitives::ForeignChainAddress::Eth(get_create_2_address(
-					ingress_asset.asset,
-					Environment::eth_vault_address(),
-					if ingress_asset.asset == Asset::Eth {
-						None
-					} else {
-						Some(
-							Environment::supported_eth_assets(ingress_asset.asset)
-								.expect("ERC20 asset to be supported!")
-								.to_vec(),
-						)
-					},
-					intent_id,
-				)))
-			},
-			cf_primitives::ForeignChain::Polkadot => todo!(),
 		}
 	}
 }
