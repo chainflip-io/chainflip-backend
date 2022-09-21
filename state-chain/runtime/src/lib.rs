@@ -68,7 +68,10 @@ pub use cf_traits::{
 	SessionKeysRegistered,
 };
 pub use chainflip::chain_instances::*;
-use chainflip::{epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat};
+use chainflip::{
+	address_derivation::AddressDerivation, epoch_transition::ChainflipEpochTransitions,
+	ChainflipHeartbeat,
+};
 use constants::common::*;
 use pallet_cf_flip::{Bonder, FlipSlasher};
 pub use pallet_cf_staking::WithdrawalAddresses;
@@ -215,7 +218,7 @@ impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 
 impl pallet_cf_ingress::Config for Runtime {
 	type Event = Event;
-	type AddressDerivation = chainflip::AddressDerivation;
+	type AddressDerivation = AddressDerivation;
 	type LpAccountHandler = LiquidityProvider;
 	type WeightInfo = pallet_cf_ingress::weights::PalletWeight<Runtime>;
 }

@@ -26,12 +26,12 @@ impl AddressDerivationApi for MockAddressDerivation {
 	fn generate_address(
 		_ingress_asset: ForeignChainAsset,
 		_intent_id: IntentId,
-	) -> ForeignChainAddress {
-		ForeignChainAddress::Eth(
+	) -> Result<cf_primitives::ForeignChainAddress, sp_runtime::DispatchError> {
+		Ok(ForeignChainAddress::Eth(
 			H160::from_str("F29aB9EbDb481BE48b80699758e6e9a3DBD609C6")
 				.unwrap()
 				.to_fixed_bytes(),
-		)
+		))
 	}
 }
 
