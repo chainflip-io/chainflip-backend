@@ -1,10 +1,9 @@
-use std::{net::Ipv6Addr, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 use anyhow::{anyhow, Result};
 use itertools::Itertools;
 use slog::o;
 
-pub use multisig_p2p_transport::P2PValidatorNetworkNodeRpcApiClient;
 use sp_core::{storage::StorageKey, H256};
 use state_chain_runtime::AccountId;
 
@@ -17,14 +16,6 @@ use crate::{
         ChainflipClient, StateChainClient, StateChainRpcApi, StateChainRpcClient,
     },
 };
-
-use utilities::Port;
-
-#[derive(Debug)]
-pub enum AccountPeerMappingChange {
-    Registered(Port, Ipv6Addr),
-    Unregistered,
-}
 
 // TODO: Consider if this should be removed, particularly once we no longer use Substrate for peering
 #[derive(Debug, PartialEq, Eq)]
@@ -54,7 +45,7 @@ async fn update_registered_peer_id<RpcClient: 'static + StateChainRpcApi + Sync 
         .get_local_listen_addresses()
         .await?
         .into_iter()
-        .filter(|(_, _, ip_address)| !ip_address.is_loopback())
+        .filter(|ip_address| !ip_address.is_loopback())
         .sorted()
         .dedup()
         .collect::<Vec<_>>();
@@ -64,19 +55,16 @@ async fn update_registered_peer_id<RpcClient: 'static + StateChainRpcApi + Sync 
     }
 
     // TODO: check that pubkey hasn't changed?
-    let (resolved_ip_address, source) = if let Some(ip_address) = listening_addresses
-        .iter()
-        .find(|(_, _, ipv6_address)| {
+    let (resolved_ip_address, source) = if let Some(ip_address) =
+        listening_addresses.iter().find(|ipv6_address| {
             // Ipv6Addr::is_global doesn't handle Ipv4 mapped addresses
             match ipv6_address.to_ipv4_mapped() {
                 Some(ipv4_address) => ipv4_address.is_global(),
                 None => ipv6_address.is_global(),
             }
-        })
-        .map(|(_, _, ip_address)| *ip_address)
-    {
+        }) {
         (
-            ip_address,
+            *ip_address,
             "a public ip selected from the node's reported listening addresses",
         )
     } else if let Some(ip_address) = {
@@ -94,7 +82,7 @@ async fn update_registered_peer_id<RpcClient: 'static + StateChainRpcApi + Sync 
     } {
         (ip_address, "the node's resolved public address")
     } else {
-        let (_, _, ip_address) = listening_addresses.first().unwrap();
+        let ip_address = listening_addresses.first().unwrap();
         (
             *ip_address,
             "a private address selected from the node's listening addresses",

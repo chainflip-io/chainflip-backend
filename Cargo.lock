@@ -981,7 +981,6 @@ dependencies = [
  "libp2p",
  "log 0.4.17",
  "mockall",
- "multisig-p2p-transport",
  "num-bigint 0.4.3",
  "num-derive",
  "num-traits",
@@ -1052,7 +1051,6 @@ dependencies = [
  "hex",
  "hex-literal",
  "jsonrpsee",
- "multisig-p2p-transport",
  "pallet-transaction-payment",
  "pallet-transaction-payment-rpc",
  "sc-basic-authorship",
@@ -2665,7 +2663,6 @@ version = "0.3.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d8b7abd5d659d9b90c8cba917f6ec750a74e2dc23902ef9cd4cc8c8b22e6036a"
 dependencies = [
- "futures 0.1.31",
  "futures-channel",
  "futures-core",
  "futures-io",
@@ -4666,33 +4663,6 @@ name = "multimap"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e5ce46fe64a9d73be07dcbe690a38ce1b293be448fd8ce1e6c1b8062c9f72c6a"
-
-[[package]]
-name = "multisig-p2p-transport"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "bincode",
- "bs58",
- "futures 0.3.21",
- "ipc-channel",
- "jsonrpsee",
- "log 0.4.17",
- "mockall",
- "predicates",
- "sc-network",
- "sc-rpc",
- "sc-service",
- "scopeguard",
- "serde",
- "serde_json",
- "sp-core",
- "sp-runtime",
- "tokio",
- "tokio-stream",
- "utilities",
-]
 
 [[package]]
 name = "multistream-select"
@@ -7532,7 +7502,6 @@ dependencies = [
  "futures 0.3.21",
  "hash-db",
  "jsonrpsee",
- "lazy_static",
  "log 0.4.17",
  "parity-scale-codec",
  "parking_lot 0.12.1",
@@ -7553,7 +7522,6 @@ dependencies = [
  "sp-runtime",
  "sp-session",
  "sp-version",
- "tokio",
 ]
 
 [[package]]

@@ -23,7 +23,6 @@ path = '../runtime'
 [dependencies]
 # Local dependencies
 cf-chains = {path = "../chains"}
-multisig-p2p-transport = {path = '../multisig-p2p-transport'}
 utilities = {path = '../../utilities'}
 custom-rpc = {path = '../custom-rpc'}
 

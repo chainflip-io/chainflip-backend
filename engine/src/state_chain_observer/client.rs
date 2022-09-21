@@ -17,7 +17,6 @@ use jsonrpsee::types::{ErrorObject, ErrorObjectOwned};
 use jsonrpsee::ws_client::WsClientBuilder;
 use libp2p::multiaddr::Protocol;
 use libp2p::Multiaddr;
-use multisig_p2p_transport::PeerId;
 use pallet_cf_validator::HistoricalActiveEpochs;
 use pallet_cf_vaults::Vault;
 use slog::o;
@@ -43,7 +42,7 @@ use crate::common::{read_clean_and_decode_hex_str_file, EngineTryStreamExt};
 use crate::constants::MAX_EXTRINSIC_RETRY_ATTEMPTS;
 use crate::logging::COMPONENT_KEY;
 use crate::settings;
-use utilities::{context, Port};
+use utilities::context;
 
 mod signer;
 
@@ -773,7 +772,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             .collect())
     }
 
-    pub async fn get_local_listen_addresses(&self) -> Result<Vec<(PeerId, Port, Ipv6Addr)>> {
+    pub async fn get_local_listen_addresses(&self) -> Result<Vec<Ipv6Addr>> {
         self.state_chain_rpc_client
             .local_listen_addresses()
             .await?
@@ -784,37 +783,15 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
 
                 // Note: Nodes started without validator argument will also listen with a WebSocket (Therefore their protocol list will also contain a WS element)
 
-                Ok((
-                    protocols
-                        .iter()
-                        .find_map(|protocol| match protocol {
-                            Protocol::P2p(multihash) => Some(multihash),
-                            _ => None,
-                        })
-                        .ok_or_else(|| anyhow!("Expected P2p Protocol"))
-                        .and_then(|multihash| {
-                            PeerId::from_multihash(*multihash)
-                                .map_err(|_| anyhow!("Couldn't decode peer id"))
-                        })
-                        .with_context(|| string_multiaddr.clone())?,
-                    protocols
-                        .iter()
-                        .find_map(|protocol| match protocol {
-                            Protocol::Tcp(port) => Some(*port),
-                            _ => None,
-                        })
-                        .ok_or_else(|| anyhow!("Expected Tcp Protocol"))
-                        .with_context(|| string_multiaddr.clone())?,
-                    protocols
-                        .iter()
-                        .find_map(|protocol| match protocol {
-                            Protocol::Ip6(ip_address) => Some(*ip_address),
-                            Protocol::Ip4(ip_address) => Some(ip_address.to_ipv6_mapped()),
-                            _ => None,
-                        })
-                        .ok_or_else(|| anyhow!("Expected Ip Protocol"))
-                        .with_context(|| string_multiaddr.clone())?,
-                ))
+                protocols
+                    .iter()
+                    .find_map(|protocol| match protocol {
+                        Protocol::Ip6(ip_address) => Some(*ip_address),
+                        Protocol::Ip4(ip_address) => Some(ip_address.to_ipv6_mapped()),
+                        _ => None,
+                    })
+                    .ok_or_else(|| anyhow!("Expected Ip Protocol"))
+                    .with_context(|| string_multiaddr.clone())
             })
             .collect::<Result<Vec<_>>>()
     }

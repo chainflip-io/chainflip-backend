@@ -87,7 +87,6 @@ rand = "0.8.4"
 
 # Local deps
 cf-chains = {path = "../state-chain/chains"}
-multisig-p2p-transport = {path = "../state-chain/multisig-p2p-transport"}
 cf-primitives = {path = "../state-chain/primitives"}
 pallet-cf-auction = {path = "../state-chain/pallets/cf-auction"}
 pallet-cf-broadcast = {path = "../state-chain/pallets/cf-broadcast"}
