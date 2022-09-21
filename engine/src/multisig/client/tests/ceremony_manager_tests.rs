@@ -280,7 +280,7 @@ async fn should_send_outcome_of_authorised_ceremony() {
     });
 
     // Advance time to cause a timeout, then check that the correct ceremony outcome was received
-    timeout_running_ceremony().await;
+    cause_ceremony_timeout().await;
     assert_eq!(
         result_receiver.try_recv().unwrap(),
         Err((
@@ -365,7 +365,7 @@ async fn should_cleanup_unauthorised_ceremony_if_not_participating() {
             });
 
             // Small delay to let the ceremony manager process the request
-            tokio::time::sleep(Duration::from_millis(1)).await;
+            tokio::time::sleep(Duration::from_millis(50)).await;
 
             // Check that the channel to the ceremony runner task is closed, so the task must have been aborted.
             assert!(ceremony_runner_p2p_sender.is_closed());

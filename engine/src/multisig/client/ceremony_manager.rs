@@ -591,7 +591,7 @@ struct CeremonyStates<Ceremony: CeremonyTrait> {
     ceremony_handles: HashMap<CeremonyId, CeremonyHandle<Ceremony>>,
     // Given to each ceremony for it to send back the outcome
     outcome_sender: UnboundedSender<(CeremonyId, CeremonyOutcome<Ceremony>)>,
-    /// All authorised ceremonies will send there outcome to this channel
+    /// All authorised ceremonies will send their outcome here
     outcome_receiver: UnboundedReceiver<(CeremonyId, CeremonyOutcome<Ceremony>)>,
 }
 
@@ -679,9 +679,9 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
         }
     }
 
-    /// Removing any state associated with the unauthorized ceremony and aborting its task.
+    /// Removing any state associated with the unauthorized ceremony and therefore abort its task
     fn cleanup_unauthorised_ceremony(&mut self, ceremony_id: &CeremonyId) -> bool {
-        // The associated ceremonies task will be aborted when the handle is dropped
+        // Dropping the ceremony handle will cause any associated task to be aborted
         if let Some(ceremony_handle) = self.ceremony_handles.remove(ceremony_id) {
             assert!(
                 matches!(
@@ -729,25 +729,25 @@ pub enum CeremonyRequestState<Ceremony: CeremonyTrait> {
 
 impl<Ceremony: CeremonyTrait> CeremonyHandle<Ceremony> {
     fn spawn(
-        cid: CeremonyId,
+        ceremony_id: CeremonyId,
         outcome_sender: UnboundedSender<(CeremonyId, CeremonyOutcome<Ceremony>)>,
         scope: &Scope<'_, anyhow::Result<()>, true>,
         logger: &slog::Logger,
     ) -> Self {
-        let (msg_s, msg_r) = mpsc::unbounded_channel();
-        let (req_s, req_r) = oneshot::channel();
+        let (message_sender, message_receiver) = mpsc::unbounded_channel();
+        let (request_sender, request_receiver) = oneshot::channel();
 
         let task_handle = scope.spawn_with_handle(CeremonyRunner::<Ceremony>::run(
-            cid,
-            msg_r,
-            req_r,
+            ceremony_id,
+            message_receiver,
+            request_receiver,
             outcome_sender,
             logger.clone(),
         ));
 
         CeremonyHandle {
-            message_sender: msg_s,
-            request_state: CeremonyRequestState::Unauthorised(req_s),
+            message_sender,
+            request_state: CeremonyRequestState::Unauthorised(request_sender),
             _task_handle: task_handle,
         }
     }

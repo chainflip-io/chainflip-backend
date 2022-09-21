@@ -11,8 +11,8 @@ use crate::{
                 frost::SigningData, frost_stages::AwaitCommitments1, SigningStateCommonInfo,
             },
             tests::{
-                gen_invalid_keygen_stage_2_state, gen_keygen_data_verify_hash_comm2,
-                timeout_running_ceremony, ACCOUNT_IDS, DEFAULT_KEYGEN_CEREMONY_ID,
+                cause_ceremony_timeout, gen_invalid_keygen_stage_2_state,
+                gen_keygen_data_verify_hash_comm2, ACCOUNT_IDS, DEFAULT_KEYGEN_CEREMONY_ID,
                 DEFAULT_KEYGEN_SEED, DEFAULT_SIGNING_CEREMONY_ID, DEFAULT_SIGNING_SEED,
             },
             KeygenResult, PartyIdxMapping,
@@ -274,7 +274,7 @@ async fn should_not_timeout_unauthorised_ceremony() {
     ));
 
     // Advance time, then check that the task did not end due to a timeout
-    timeout_running_ceremony().await;
+    cause_ceremony_timeout().await;
     assert!(!task_handle.is_finished());
 }
 
@@ -311,6 +311,6 @@ async fn should_timeout_authorised_ceremony() {
 
     // Advance time, then check that the task was ended due to the timeout
     assert!(!task_handle.is_finished());
-    timeout_running_ceremony().await;
+    cause_ceremony_timeout().await;
     assert!(task_handle.is_finished());
 }

@@ -6,9 +6,10 @@ mod keygen_unit_tests;
 mod multisig_client_tests;
 
 pub use helpers::{
-    gen_invalid_keygen_stage_2_state, gen_invalid_local_sig, gen_invalid_signing_comm1,
-    get_key_data_for_test, new_nodes, run_keygen_with_err_on_high_pubkey, standard_signing,
-    timeout_running_ceremony, KeygenCeremonyRunner, SigningCeremonyRunner,
+    cause_ceremony_timeout, gen_invalid_keygen_stage_2_state, gen_invalid_local_sig,
+    gen_invalid_signing_comm1, get_key_data_for_test, new_nodes,
+    run_keygen_with_err_on_high_pubkey, standard_signing, KeygenCeremonyRunner,
+    SigningCeremonyRunner,
 };
 
 pub use keygen_data_tests::gen_keygen_data_verify_hash_comm2;

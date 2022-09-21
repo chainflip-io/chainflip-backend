@@ -958,10 +958,10 @@ pub fn get_key_data_for_test<P: ECPoint>(signers: BTreeSet<AccountId>) -> Keygen
 }
 
 /// Advances time by the stage duration x2 to cause a timeout
-pub async fn timeout_running_ceremony() {
-    // A short delay to allow the ceremony runner to run
-    // its `run` function and process the signing request
-    tokio::time::sleep(Duration::from_millis(1)).await;
+pub async fn cause_ceremony_timeout() {
+    // A short delay to allow the ceremony runner to process a request / p2p message
+    // and thus record the time the ceremony should expire.
+    tokio::time::sleep(Duration::from_millis(50)).await;
 
     // We need to timeout 2 stages because the verification stage will try and recover,
     // so we must advance time by 2x the max stage duration.
@@ -970,5 +970,5 @@ pub async fn timeout_running_ceremony() {
     tokio::time::resume();
 
     // A short delay to allow the ceremony runner to process the timeout and end the task
-    tokio::time::sleep(Duration::from_millis(1)).await;
+    tokio::time::sleep(Duration::from_millis(50)).await;
 }
