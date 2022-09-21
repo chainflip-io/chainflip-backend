@@ -83,8 +83,8 @@ pub enum StakeManagerEvent {
 impl EthContractWitnesser for StakeManager {
     type EventParameters = StakeManagerEvent;
 
-    fn contract_name(&self) -> &'static str {
-        "StakeManager"
+    fn contract_name(&self) -> String {
+        "StakeManager".to_string()
     }
 
     async fn handle_block_events<RpcClient, EthRpcClient>(

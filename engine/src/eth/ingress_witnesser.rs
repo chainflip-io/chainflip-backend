@@ -34,7 +34,7 @@ where
     StateChainRpc: 'static + StateChainRpcApi + Sync + Send,
 {
     epoch_witnesser::start(
-        "ETH-Ingress-Witnesser",
+        "ETH-Ingress-Witnesser".to_string(),
         epoch_starts_receiver,
         |_epoch_start| true,
         (monitored_addresses, eth_monitor_ingress_receiver),

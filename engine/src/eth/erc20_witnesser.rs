@@ -70,9 +70,8 @@ impl Erc20Witnesser {
 impl EthContractWitnesser for Erc20Witnesser {
     type EventParameters = Erc20Event;
 
-    // TODO: Include asset in name
-    fn contract_name(&self) -> &'static str {
-        "ERC20"
+    fn contract_name(&self) -> String {
+        format!("ERC20-{:?}", self.asset)
     }
 
     async fn handle_block_events<RpcClient, EthRpcClient>(

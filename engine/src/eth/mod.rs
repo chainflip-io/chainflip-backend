@@ -333,7 +333,7 @@ pub struct BlockWithEvents<EventParameters: Debug> {
 pub trait EthContractWitnesser {
     type EventParameters: Debug + Send + Sync + 'static;
 
-    fn contract_name(&self) -> &'static str;
+    fn contract_name(&self) -> String;
 
     /// Takes a head stream and turns it into a stream of BlockEvents for consumption by the merged stream
     async fn block_events_stream_from_head_stream<BlockHeaderStream, EthRpc>(
