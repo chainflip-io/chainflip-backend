@@ -1,5 +1,4 @@
 use anyhow::{anyhow, bail, Context, Result};
-use cf_primitives::ChainflipAccountData;
 use codec::{Decode, Encode, FullCodec};
 use custom_rpc::CustomApiClient;
 use frame_metadata::RuntimeMetadata;
@@ -1128,7 +1127,7 @@ pub async fn connect_to_state_chain_without_signer(
 
 #[cfg(test)]
 pub mod test_utils {
-    use cf_primitives::ChainflipAccountState;
+    use cf_primitives::{ChainflipAccountData, ChainflipAccountState};
     use frame_system::AccountInfo;
 
     use super::*;
