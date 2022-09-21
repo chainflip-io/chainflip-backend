@@ -74,10 +74,7 @@ pub struct EthNumberBloom {
     pub base_fee_per_gas: U256,
 }
 
-use self::{
-    contract_witnesser::ContractStateUpdate,
-    rpc::{EthHttpRpcClient, EthRpcApi, EthWsRpcClient},
-};
+use self::rpc::{EthHttpRpcClient, EthRpcApi, EthWsRpcClient};
 
 const EIP1559_TX_ID: u64 = 2;
 
@@ -335,7 +332,6 @@ pub struct BlockWithEvents<EventParameters: Debug> {
 #[async_trait]
 pub trait EthContractWitnesser {
     type EventParameters: Debug + Send + Sync + 'static;
-    type StateItem: Debug + Send + Sync + Clone + Copy;
 
     fn contract_name(&self) -> &'static str;
 
@@ -348,7 +344,7 @@ pub trait EthContractWitnesser {
         eth_rpc: EthRpc,
         logger: slog::Logger,
     ) -> Result<
-        Pin<Box<dyn Stream<Item = BlockWithDecodedEvents<Self::EventParameters>> + Send + '_>>,
+        Pin<Box<dyn Stream<Item = BlockWithDecodedEvents<Self::EventParameters>> + Send + 'static>>,
     >
     where
         BlockHeaderStream: Stream<Item = EthNumberBloom> + 'static + Send,
@@ -480,7 +476,7 @@ pub trait EthContractWitnesser {
         from_block: u64,
         logger: &slog::Logger,
         // This stream must be Send, so it can be used by the spawn
-    ) -> Result<Pin<Box<dyn Stream<Item = BlockWithEvents<Self::EventParameters>> + Send + '_>>>
+    ) -> Result<Pin<Box<dyn Stream<Item = BlockWithEvents<Self::EventParameters>> + Send + 'static>>>
     {
         let deployed_address = self.get_contract_address();
         slog::info!(
@@ -786,27 +782,24 @@ pub trait EthContractWitnesser {
 
     fn decode_log_closure(&self) -> Result<DecodeLogClosure<Self::EventParameters>>;
 
-    async fn handle_event<RpcClient, EthRpcClient, ContractWitnesserState>(
-        &self,
+    async fn handle_block_events<RpcClient, EthRpcClient>(
+        &mut self,
         epoch: EpochIndex,
         block_number: u64,
-        event: Event<Self::EventParameters>,
-        // Used to filter events after they are decoded
-        contract_witnseser_state: &ContractWitnesserState,
+        block: BlockWithEvents<Self::EventParameters>,
         state_chain_client: Arc<StateChainClient<RpcClient>>,
         eth_rpc: &EthRpcClient,
         logger: &slog::Logger,
     ) -> anyhow::Result<()>
     where
         RpcClient: 'static + StateChainRpcApi + Sync + Send,
-        EthRpcClient: EthRpcApi + Sync + Send,
-        ContractWitnesserState: Send + Sync + ContractStateUpdate<Item = Self::StateItem>;
+        EthRpcClient: EthRpcApi + Sync + Send;
 
     fn get_contract_address(&self) -> H160;
 }
 
 pub type DecodeLogClosure<EventParameters> =
-    Box<dyn Fn(H256, ethabi::RawLog) -> Result<EventParameters> + Send + Sync>;
+    Box<dyn Fn(H256, ethabi::RawLog) -> Result<EventParameters> + Send + Sync + 'static>;
 
 const MAX_SECRET_CHARACTERS_REVEALED: usize = 3;
 const SCHEMA_PADDING_LEN: usize = 3;

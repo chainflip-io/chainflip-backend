@@ -20,9 +20,9 @@ use std::fmt::Debug;
 
 use async_trait::async_trait;
 
+use super::BlockWithEvents;
 use super::DecodeLogClosure;
 use super::EthContractWitnesser;
-use super::{contract_witnesser::ContractStateUpdate, event::Event};
 
 pub struct KeyManager {
     pub deployed_address: H160,
@@ -198,18 +198,16 @@ pub enum KeyManagerEvent {
 #[async_trait]
 impl EthContractWitnesser for KeyManager {
     type EventParameters = KeyManagerEvent;
-    type StateItem = ();
 
     fn contract_name(&self) -> &'static str {
         "KeyManager"
     }
 
-    async fn handle_event<RpcClient, EthRpcClient, ContractWitnesserState>(
-        &self,
+    async fn handle_block_events<RpcClient, EthRpcClient>(
+        &mut self,
         epoch_index: EpochIndex,
         block_number: u64,
-        event: Event<Self::EventParameters>,
-        _filter_state: &ContractWitnesserState,
+        block: BlockWithEvents<Self::EventParameters>,
         state_chain_client: Arc<StateChainClient<RpcClient>>,
         eth_rpc: &EthRpcClient,
         logger: &slog::Logger,
@@ -217,103 +215,106 @@ impl EthContractWitnesser for KeyManager {
     where
         RpcClient: 'static + StateChainRpcApi + Sync + Send,
         EthRpcClient: EthRpcApi + Sync + Send,
-        ContractWitnesserState: Sync + Send + ContractStateUpdate<Item = Self::StateItem>,
     {
-        slog::info!(logger, "Handling event: {}", event);
-        match event.event_parameters {
-            KeyManagerEvent::AggKeySetByAggKey { new_agg_key, .. } => {
-                let _result = state_chain_client
-                    .submit_signed_extrinsic(
-                        pallet_cf_witnesser::Call::witness_at_epoch {
-                            call: Box::new(
-                                pallet_cf_vaults::Call::vault_key_rotated {
-                                    new_public_key: cf_chains::eth::AggKey::from_pubkey_compressed(
-                                        new_agg_key.serialize(),
-                                    ),
-                                    block_number,
-                                    tx_hash: event.tx_hash,
-                                }
-                                .into(),
-                            ),
-                            epoch_index,
-                        },
-                        logger,
-                    )
-                    .await;
-            }
-            KeyManagerEvent::AggKeySetByGovKey { new_agg_key, .. } => {
-                let _result = state_chain_client
-                    .submit_signed_extrinsic(
-                        pallet_cf_witnesser::Call::witness_at_epoch {
-                            call: Box::new(
-                                pallet_cf_vaults::Call::vault_key_rotated_externally {
-                                    new_public_key: cf_chains::eth::AggKey::from_pubkey_compressed(
-                                        new_agg_key.serialize(),
-                                    ),
-                                    block_number,
-                                    tx_hash: event.tx_hash,
-                                }
-                                .into(),
-                            ),
-                            epoch_index,
-                        },
-                        logger,
-                    )
-                    .await;
-            }
-            KeyManagerEvent::SignatureAccepted { sig_data, .. } => {
-                let tx_fee = {
-                    let TransactionReceipt {
-                        gas_used,
-                        effective_gas_price,
-                        ..
-                    } = eth_rpc.transaction_receipt(event.tx_hash).await?;
-                    let gas_used = gas_used.context("TransactionReceipt should have gas_used. This might be due to using a light client.")?;
-                    let effective_gas_price = effective_gas_price
-                        .context("TransactionReceipt should have effective gas price")?;
-                    gas_used.saturating_mul(effective_gas_price)
-                };
-                let _result = state_chain_client
-                    .submit_signed_extrinsic(
-                        pallet_cf_witnesser::Call::witness_at_epoch {
-                            call: Box::new(
-                                pallet_cf_broadcast::Call::signature_accepted {
-                                    signature: SchnorrVerificationComponents {
-                                        s: sig_data.sig.into(),
-                                        k_times_g_address: sig_data.k_times_g_address.into(),
-                                    },
-                                    tx_fee: tx_fee
-                                        .try_into()
-                                        .map_err(anyhow::Error::msg)
-                                        .context("Failed to convert tx fee to u128")?,
-                                    tx_hash: event.tx_hash,
-                                }
-                                .into(),
-                            ),
-                            epoch_index,
-                        },
-                        logger,
-                    )
-                    .await;
-            }
-            KeyManagerEvent::GovernanceAction { message } => {
-                let _result = state_chain_client
-                    .submit_signed_extrinsic(
-                        pallet_cf_witnesser::Call::witness_at_epoch {
-                            call: Box::new(
-                                pallet_cf_governance::Call::set_whitelisted_call_hash {
-                                    call_hash: message,
-                                }
-                                .into(),
-                            ),
-                            epoch_index,
-                        },
-                        logger,
-                    )
-                    .await;
-            }
-            _ => {
-                slog::trace!(logger, "Ignoring unused event: {}", event);
+        for event in block.events {
+            slog::info!(logger, "Handling event: {}", event);
+            match event.event_parameters {
+                KeyManagerEvent::AggKeySetByAggKey { new_agg_key, .. } => {
+                    let _result = state_chain_client
+                        .submit_signed_extrinsic(
+                            pallet_cf_witnesser::Call::witness_at_epoch {
+                                call: Box::new(
+                                    pallet_cf_vaults::Call::vault_key_rotated {
+                                        new_public_key:
+                                            cf_chains::eth::AggKey::from_pubkey_compressed(
+                                                new_agg_key.serialize(),
+                                            ),
+                                        block_number,
+                                        tx_hash: event.tx_hash,
+                                    }
+                                    .into(),
+                                ),
+                                epoch_index,
+                            },
+                            logger,
+                        )
+                        .await;
+                }
+                KeyManagerEvent::AggKeySetByGovKey { new_agg_key, .. } => {
+                    let _result = state_chain_client
+                        .submit_signed_extrinsic(
+                            pallet_cf_witnesser::Call::witness_at_epoch {
+                                call: Box::new(
+                                    pallet_cf_vaults::Call::vault_key_rotated_externally {
+                                        new_public_key:
+                                            cf_chains::eth::AggKey::from_pubkey_compressed(
+                                                new_agg_key.serialize(),
+                                            ),
+                                        block_number,
+                                        tx_hash: event.tx_hash,
+                                    }
+                                    .into(),
+                                ),
+                                epoch_index,
+                            },
+                            logger,
+                        )
+                        .await;
+                }
+                KeyManagerEvent::SignatureAccepted { sig_data, .. } => {
+                    let tx_fee = {
+                        let TransactionReceipt {
+                            gas_used,
+                            effective_gas_price,
+                            ..
+                        } = eth_rpc.transaction_receipt(event.tx_hash).await?;
+                        let gas_used = gas_used.context("TransactionReceipt should have gas_used. This might be due to using a light client.")?;
+                        let effective_gas_price = effective_gas_price
+                            .context("TransactionReceipt should have effective gas price")?;
+                        gas_used.saturating_mul(effective_gas_price)
+                    };
+                    let _result = state_chain_client
+                        .submit_signed_extrinsic(
+                            pallet_cf_witnesser::Call::witness_at_epoch {
+                                call: Box::new(
+                                    pallet_cf_broadcast::Call::signature_accepted {
+                                        signature: SchnorrVerificationComponents {
+                                            s: sig_data.sig.into(),
+                                            k_times_g_address: sig_data.k_times_g_address.into(),
+                                        },
+                                        tx_fee: tx_fee
+                                            .try_into()
+                                            .map_err(anyhow::Error::msg)
+                                            .context("Failed to convert tx fee to u128")?,
+                                        tx_hash: event.tx_hash,
+                                    }
+                                    .into(),
+                                ),
+                                epoch_index,
+                            },
+                            logger,
+                        )
+                        .await;
+                }
+                KeyManagerEvent::GovernanceAction { message } => {
+                    let _result = state_chain_client
+                        .submit_signed_extrinsic(
+                            pallet_cf_witnesser::Call::witness_at_epoch {
+                                call: Box::new(
+                                    pallet_cf_governance::Call::set_whitelisted_call_hash {
+                                        call_hash: message,
+                                    }
+                                    .into(),
+                                ),
+                                epoch_index,
+                            },
+                            logger,
+                        )
+                        .await;
+                }
+                _ => {
+                    slog::trace!(logger, "Ignoring unused event: {}", event);
+                }
             }
         }
 

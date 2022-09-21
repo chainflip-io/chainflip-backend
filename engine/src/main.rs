@@ -10,8 +10,7 @@ use chainflip_engine::{
     common::format_iterator,
     eth::{
         self, build_broadcast_channel,
-        contract_witnesser::NoContractState,
-        erc20_witnesser::{Erc20Witnesser, Erc20WitnesserState},
+        erc20_witnesser::Erc20Witnesser,
         key_manager::KeyManager,
         rpc::{validate_client_chain_id, EthDualRpcClient, EthHttpRpcClient, EthWsRpcClient},
         stake_manager::StakeManager,
@@ -253,7 +252,6 @@ fn main() -> anyhow::Result<()> {
                     eth_ws_rpc_client.clone(),
                     eth_http_rpc_client.clone(),
                     epoch_start_receiver_1,
-                    NoContractState {},
                     true,
                     state_chain_client.clone(),
                     &root_logger,
@@ -265,7 +263,6 @@ fn main() -> anyhow::Result<()> {
                     eth_ws_rpc_client.clone(),
                     eth_http_rpc_client.clone(),
                     epoch_start_receiver_2,
-                    NoContractState {},
                     false,
                     state_chain_client.clone(),
                     &root_logger,
@@ -273,11 +270,10 @@ fn main() -> anyhow::Result<()> {
             );
             scope.spawn(
                 eth::contract_witnesser::start(
-                    Erc20Witnesser::new(flip_contract_address.into(), Asset::Flip),
+                    Erc20Witnesser::new(flip_contract_address.into(), Asset::Flip, monitored_addresses_from_all_eth(&eth_chain_ingress_addresses, Asset::Flip), eth_monitor_flip_ingress_receiver),
                     eth_ws_rpc_client.clone(),
                     eth_http_rpc_client.clone(),
                     epoch_start_receiver_5,
-                    Erc20WitnesserState::new(monitored_addresses_from_all_eth(&eth_chain_ingress_addresses, Asset::Flip), eth_monitor_flip_ingress_receiver),
                     false,
                     state_chain_client.clone(),
                     &root_logger,
@@ -285,11 +281,10 @@ fn main() -> anyhow::Result<()> {
             );
             scope.spawn(
                 eth::contract_witnesser::start(
-                    Erc20Witnesser::new(usdc_contract_address.into(), Asset::Usdc),
+                    Erc20Witnesser::new(usdc_contract_address.into(), Asset::Usdc, monitored_addresses_from_all_eth(&eth_chain_ingress_addresses, Asset::Usdc), eth_monitor_usdc_ingress_receiver),
                     eth_ws_rpc_client.clone(),
                     eth_http_rpc_client.clone(),
                     epoch_start_receiver_6,
-                    Erc20WitnesserState::new(monitored_addresses_from_all_eth(&eth_chain_ingress_addresses, Asset::Usdc), eth_monitor_usdc_ingress_receiver),
                     false,
                     state_chain_client.clone(),
                     &root_logger,
