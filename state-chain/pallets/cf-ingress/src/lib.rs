@@ -13,7 +13,10 @@ use cf_traits::{liquidity::LpProvisioningApi, AddressDerivationApi, FlipBalance,
 mod benchmarking;
 
 pub mod weights;
-use frame_support::{pallet_prelude::DispatchResult, sp_runtime::app_crypto::sp_core};
+use frame_support::{
+	pallet_prelude::DispatchResult,
+	sp_runtime::{app_crypto::sp_core, DispatchError},
+};
 pub use weights::WeightInfo;
 
 pub use pallet::*;
@@ -137,13 +140,14 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-	fn generate_new_address(ingress_asset: ForeignChainAsset) -> (IntentId, ForeignChainAddress) {
-		let intent_id = IntentIdCounter::<T>::mutate(|id| {
-			*id += 1;
-			*id
-		});
-		let ingress_address = T::AddressDerivation::generate_address(ingress_asset, intent_id);
-		(intent_id, ingress_address)
+	fn generate_new_address(
+		ingress_asset: ForeignChainAsset,
+	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
+		let next_intent_id = IntentIdCounter::<T>::get() + 1;
+		let ingress_address =
+			T::AddressDerivation::generate_address(ingress_asset, next_intent_id)?;
+		IntentIdCounter::<T>::put(next_intent_id);
+		Ok((next_intent_id, ingress_address))
 	}
 
 	fn do_single_ingress(
@@ -174,8 +178,8 @@ impl<T: Config> IngressApi for Pallet<T> {
 	fn register_liquidity_ingress_intent(
 		lp_account: Self::AccountId,
 		ingress_asset: ForeignChainAsset,
-	) -> (IntentId, ForeignChainAddress) {
-		let (intent_id, ingress_address) = Self::generate_new_address(ingress_asset);
+	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
+		let (intent_id, ingress_address) = Self::generate_new_address(ingress_asset)?;
 
 		IntentIngressDetails::<T>::insert(
 			ingress_address,
@@ -188,7 +192,7 @@ impl<T: Config> IngressApi for Pallet<T> {
 
 		Self::deposit_event(Event::StartWitnessing { ingress_address, ingress_asset });
 
-		(intent_id, ingress_address)
+		Ok((intent_id, ingress_address))
 	}
 
 	// This should only be callable by the relayer.
@@ -197,8 +201,8 @@ impl<T: Config> IngressApi for Pallet<T> {
 		egress_asset: ForeignChainAsset,
 		egress_address: ForeignChainAddress,
 		relayer_commission_bps: u16,
-	) -> (IntentId, ForeignChainAddress) {
-		let (intent_id, ingress_address) = Self::generate_new_address(ingress_asset);
+	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
+		let (intent_id, ingress_address) = Self::generate_new_address(ingress_asset)?;
 
 		IntentIngressDetails::<T>::insert(
 			ingress_address,
@@ -211,6 +215,6 @@ impl<T: Config> IngressApi for Pallet<T> {
 
 		Self::deposit_event(Event::StartWitnessing { ingress_address, ingress_asset });
 
-		(intent_id, ingress_address)
+		Ok((intent_id, ingress_address))
 	}
 }

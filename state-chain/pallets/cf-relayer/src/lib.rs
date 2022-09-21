@@ -65,13 +65,12 @@ pub mod pallet {
 
 			// TODO: ensure egress address chain matches egress asset chain
 			//   (or consider if we can merge both into one struct / derive one from the other)
-
 			let (intent_id, ingress_address) = T::Ingress::register_swap_intent(
 				ingress_asset,
 				egress_asset,
 				egress_address,
 				relayer_commission_bps,
-			);
+			)?;
 
 			Self::deposit_event(Event::<T>::NewSwapIntent { intent_id, ingress_address });
 

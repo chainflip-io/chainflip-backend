@@ -1,5 +1,5 @@
 use crate::{self as pallet_cf_relayer};
-use cf_primitives::{ForeignChainAddress, ForeignChainAsset, IntentId};
+use cf_primitives::{ForeignChainAddress, ForeignChainAsset};
 use cf_traits::IngressApi;
 use frame_support::parameter_types;
 use frame_system as system;
@@ -66,8 +66,8 @@ impl IngressApi for MockIngress {
 	fn register_liquidity_ingress_intent(
 		_lp_account: Self::AccountId,
 		_ingress_asset: ForeignChainAsset,
-	) -> (IntentId, ForeignChainAddress) {
-		(0, ForeignChainAddress::Eth(Default::default()))
+	) -> Result<(u64, cf_primitives::ForeignChainAddress), sp_runtime::DispatchError> {
+		Ok((0, ForeignChainAddress::Eth(Default::default())))
 	}
 
 	fn register_swap_intent(
@@ -75,8 +75,8 @@ impl IngressApi for MockIngress {
 		_egress_asset: ForeignChainAsset,
 		_egress_address: ForeignChainAddress,
 		_relayer_commission_bps: u16,
-	) -> (IntentId, ForeignChainAddress) {
-		(0, ForeignChainAddress::Eth(Default::default()))
+	) -> Result<(u64, cf_primitives::ForeignChainAddress), sp_runtime::DispatchError> {
+		Ok((0, ForeignChainAddress::Eth(Default::default())))
 	}
 }
 

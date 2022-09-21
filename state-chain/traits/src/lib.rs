@@ -679,7 +679,7 @@ pub trait IngressApi {
 	fn register_liquidity_ingress_intent(
 		lp_account: Self::AccountId,
 		ingress_asset: ForeignChainAsset,
-	) -> (IntentId, ForeignChainAddress);
+	) -> Result<(IntentId, ForeignChainAddress), DispatchError>;
 
 	/// Issues an intent id and ingress address for a new swap.
 	fn register_swap_intent(
@@ -687,7 +687,7 @@ pub trait IngressApi {
 		egress_asset: ForeignChainAsset,
 		egress_address: ForeignChainAddress,
 		relayer_commission_bps: u16,
-	) -> (IntentId, ForeignChainAddress);
+	) -> Result<(IntentId, ForeignChainAddress), DispatchError>;
 }
 
 /// Generates a deterministic ingress address for some combination of asset, chain and intent id.
@@ -695,7 +695,7 @@ pub trait AddressDerivationApi {
 	fn generate_address(
 		ingress_asset: ForeignChainAsset,
 		intent_id: IntentId,
-	) -> ForeignChainAddress;
+	) -> Result<ForeignChainAddress, DispatchError>;
 }
 
 pub trait AccountRoleRegistry<T: frame_system::Config> {

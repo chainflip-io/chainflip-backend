@@ -239,7 +239,7 @@ pub mod pallet {
 			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(who)?;
 
 			let (intent_id, ingress_address) =
-				T::Ingress::register_liquidity_ingress_intent(account_id, asset);
+				T::Ingress::register_liquidity_ingress_intent(account_id, asset)?;
 
 			Self::deposit_event(Event::DepositAddressReady { intent_id, ingress_address });
 
