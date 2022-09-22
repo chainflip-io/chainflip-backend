@@ -162,3 +162,8 @@ csv = "1.1.6"
 tempfile = "3.3.0"
 ethereum = "0.12"
 rlp = "0.5"
+
+[features]
+ibiza = [
+    'state-chain-runtime/ibiza'
+]

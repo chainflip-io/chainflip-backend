@@ -296,3 +296,4 @@ try-runtime = [
   'pallet-cf-validator/try-runtime',
   'pallet-cf-vaults/try-runtime',
 ]
+ibiza = []

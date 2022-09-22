@@ -1,3 +1,5 @@
+#![cfg(feature = "ibiza")]
+
 use std::{collections::BTreeSet, pin::Pin, sync::Arc};
 
 use async_trait::async_trait;
