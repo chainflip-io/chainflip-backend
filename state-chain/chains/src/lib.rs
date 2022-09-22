@@ -1,5 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use crate::benchmarking_value::BenchmarkValue;
+use cf_primitives::EthBalance;
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use eth::SchnorrVerificationComponents;
 use ethereum_types::H256;
@@ -208,7 +209,7 @@ pub struct Ethereum;
 
 impl Chain for Ethereum {
 	type ChainBlockNumber = u64;
-	type ChainAmount = u128;
+	type ChainAmount = EthBalance;
 	type TrackedData = eth::TrackedData<Self>;
 	type ChainAccount = eth::Address;
 	type ChainAsset = eth::Address;
@@ -248,7 +249,7 @@ pub mod mocks {
 	// Chain implementation used for testing.
 	impl Chain for MockEthereum {
 		type ChainBlockNumber = u64;
-		type ChainAmount = u128;
+		type ChainAmount = EthBalance;
 		type TrackedData = MockTrackedData;
 		type ChainAccount = (); // Currently, we don't care about this since we don't use them in tests
 		type ChainAsset = (); // Currently, we don't care about this since we don't use them in tests

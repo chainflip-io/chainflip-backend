@@ -11,11 +11,11 @@ use core::fmt::Debug;
 pub use async_result::AsyncResult;
 use sp_std::collections::btree_set::BTreeSet;
 
-use cf_chains::{benchmarking_value::BenchmarkValue, ApiCall, ChainAbi, ChainCrypto};
+use cf_chains::{benchmarking_value::BenchmarkValue, ApiCall, Chain, ChainAbi, ChainCrypto};
 use cf_primitives::{
 	AccountRole, Asset, AuthorityCount, CeremonyId, ChainflipAccountData, ChainflipAccountState,
-	EgressBatch, EpochIndex, EthBalance, EthereumAddress, ExchangeRate, ForeignChainAddress,
-	ForeignChainAsset, IntentId,
+	EgressBatch, EpochIndex, EthereumAddress, ExchangeRate, ForeignChainAddress, ForeignChainAsset,
+	IntentId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -297,7 +297,6 @@ pub trait EthEnvironmentProvider {
 	fn stake_manager_address() -> [u8; 20];
 	fn eth_vault_address() -> [u8; 20];
 	fn chain_id() -> u64;
-	fn current_gas_fee() -> EthBalance;
 }
 
 /// Provides the exchange rate between Eth to other assets
@@ -775,6 +774,10 @@ pub trait EgressApi {
 	) -> DispatchResult;
 }
 
-pub trait EthereumAssetAddressConverter {
+pub trait SupportedEthAssetsAddressProvider {
 	fn try_get_asset_address(asset: Asset) -> Option<EthereumAddress>;
+}
+
+pub trait ChainTrackedDataProvider<C: Chain> {
+	fn get_tracked_data() -> Option<C::TrackedData>;
 }

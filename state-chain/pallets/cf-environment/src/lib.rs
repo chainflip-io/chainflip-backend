@@ -2,14 +2,12 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-use cf_primitives::{Asset, EthBalance, EthereumAddress};
-pub use cf_traits::{EthEnvironmentProvider, EthereumAssetAddressConverter};
+use cf_primitives::{Asset, EthereumAddress};
+pub use cf_traits::{EthEnvironmentProvider, SupportedEthAssetsAddressProvider};
 use cf_traits::{SystemStateInfo, SystemStateManager};
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
-
-use hex_literal::hex;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
@@ -294,9 +292,6 @@ impl<T: Config> EthEnvironmentProvider for Pallet<T> {
 	fn chain_id() -> u64 {
 		EthereumChainId::<T>::get()
 	}
-	fn current_gas_fee() -> EthBalance {
-		0 // TODO: Add logic to fetch the current Gas fee for the Eth chain
-	}
 }
 
 impl<T: Config> Pallet<T> {
@@ -308,14 +303,8 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-impl<T: Config> EthereumAssetAddressConverter for Pallet<T> {
+impl<T: Config> SupportedEthAssetsAddressProvider for Pallet<T> {
 	fn try_get_asset_address(asset: Asset) -> Option<EthereumAddress> {
-		match asset {
-			// !TODO : Ensure these are correct
-			Asset::Eth => Some(hex!("0000000000000000000000000000000000000000")),
-			Asset::Flip => Some(Pallet::<T>::flip_token_address()),
-			Asset::Usdc => Some(hex!("0000000000000000000000000000000000000000")),
-			_ => None,
-		}
+		Pallet::<T>::supported_eth_assets(asset)
 	}
 }

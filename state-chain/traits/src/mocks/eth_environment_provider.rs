@@ -17,7 +17,4 @@ impl crate::EthEnvironmentProvider for MockEthEnvironmentProvider {
 	fn chain_id() -> u64 {
 		42
 	}
-	fn current_gas_fee() -> cf_primitives::EthBalance {
-		0
-	}
 }

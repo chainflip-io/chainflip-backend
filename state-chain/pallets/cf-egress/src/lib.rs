@@ -7,11 +7,11 @@
 // #[cfg(test)]
 // mod tests;
 
-use cf_chains::{AllBatch, TransferAssetParams};
+use cf_chains::{AllBatch, Ethereum, TransferAssetParams};
 use cf_primitives::{EgressBatch, ForeignChain, ForeignChainAddress, ForeignChainAsset};
 use cf_traits::{
-	Broadcaster, EgressAbiBuilder, EgressApi, EthEnvironmentProvider, EthExchangeRateProvider,
-	EthereumAssetAddressConverter, FlipBalance, ReplayProtectionProvider,
+	Broadcaster, ChainTrackedDataProvider, EgressAbiBuilder, EgressApi, EthExchangeRateProvider,
+	FlipBalance, ReplayProtectionProvider, SupportedEthAssetsAddressProvider,
 };
 use frame_support::pallet_prelude::*;
 pub use pallet::*;
@@ -21,7 +21,6 @@ use sp_runtime::{traits::Zero, FixedPointNumber};
 pub mod pallet {
 	use super::*;
 
-	use cf_chains::Ethereum;
 	use cf_traits::Chainflip;
 	use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
 
@@ -49,10 +48,10 @@ pub mod pallet {
 		type EnsureGovernance: EnsureOrigin<Self::Origin>;
 
 		/// API for getting Eth related parameters.
-		type EthEnvironmentProvider: EthEnvironmentProvider;
+		type ChainTrackedDataProvider: ChainTrackedDataProvider<Ethereum>;
 
 		/// An API for getting Ethereum related parameters
-		type EthereumAssetAddressConverter: EthereumAssetAddressConverter;
+		type SupportedEthAssetsAddressProvider: SupportedEthAssetsAddressProvider;
 
 		/// Price feeder that provides the exchange rate for Eth to other assets.
 		type EthExchangeRateProvider: EthExchangeRateProvider;
@@ -88,7 +87,7 @@ pub mod pallet {
 			asset: ForeignChainAsset,
 			num_tx: u32,
 			gas_fee: FlipBalance,
-		}
+		},
 	}
 
 	#[pallet::error]
@@ -215,7 +214,7 @@ impl<T: Config> EgressAbiBuilder for Pallet<T> {
 			return None
 		}
 		if let Some(asset_address) =
-			T::EthereumAssetAddressConverter::try_get_asset_address(asset.asset)
+			T::SupportedEthAssetsAddressProvider::try_get_asset_address(asset.asset)
 		{
 			// Take the transaction fee by skimming from the batch.
 			let total_fee = Self::skim_transaction_fee(asset, batch);
@@ -233,11 +232,14 @@ impl<T: Config> EgressAbiBuilder for Pallet<T> {
 				})
 				.collect();
 
-			Some((T::EgressTransaction::new_unsigned(
-				T::ReplayProtection::replay_protection(),
-				vec![], // TODO: fetch assets
-				asset_params,
-			), total_fee))
+			Some((
+				T::EgressTransaction::new_unsigned(
+					T::ReplayProtection::replay_protection(),
+					vec![], // TODO: fetch assets
+					asset_params,
+				),
+				total_fee,
+			))
 		} else {
 			None
 		}
@@ -270,10 +272,15 @@ impl<T: Config> EgressAbiBuilder for Pallet<T> {
 	) -> Self::Amount {
 		// TODO: Gets the gas fee cost in Eth and convert it to the given asset
 		match asset.chain {
-			ForeignChain::Ethereum =>
+			ForeignChain::Ethereum => {
+				let tracked_data = T::ChainTrackedDataProvider::get_tracked_data()
+					.expect("Ethereum network should always be configured");
+
+				// Convert the gas fee (in target chain's native currency) into target currency.
 				T::EthExchangeRateProvider::get_eth_exchange_rate(asset.asset)
-					.checked_mul_int(T::EthEnvironmentProvider::current_gas_fee())
-					.unwrap_or_default(),
+					.checked_mul_int(tracked_data.base_fee)
+					.unwrap_or_default()
+			},
 			ForeignChain::Polkadot => 0,
 		}
 	}
