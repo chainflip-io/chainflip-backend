@@ -13,8 +13,9 @@ use sp_std::collections::btree_set::BTreeSet;
 
 use cf_chains::{benchmarking_value::BenchmarkValue, ApiCall, ChainAbi, ChainCrypto};
 use cf_primitives::{
-	AccountRole, AuthorityCount, CeremonyId, ChainflipAccountData, ChainflipAccountState,
-	EgressBatch, EpochIndex, ForeignChainAddress, ForeignChainAsset, IntentId,
+	AccountRole, Asset, AuthorityCount, CeremonyId, ChainflipAccountData, ChainflipAccountState,
+	EgressBatch, EpochIndex, EthBalance, EthereumAddress, ExchangeRate, ForeignChainAddress,
+	ForeignChainAsset, IntentId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -296,6 +297,12 @@ pub trait EthEnvironmentProvider {
 	fn stake_manager_address() -> [u8; 20];
 	fn eth_vault_address() -> [u8; 20];
 	fn chain_id() -> u64;
+	fn current_gas_fee() -> EthBalance;
+}
+
+/// Provides the exchange rate between Eth to other assets
+pub trait EthExchangeRateProvider {
+	fn get_eth_exchange_rate(asset: Asset) -> ExchangeRate;
 }
 
 /// A representation of the current network state for this heartbeat interval.
@@ -737,8 +744,8 @@ pub trait EgressAbiBuilder {
 	// Take in a batch of transactions and construct the Transaction appropriate for the chain.
 	fn construct_batched_transaction(
 		asset: ForeignChainAsset,
-		batch: EgressBatch<Self::Amount, Self::EgressAddress>,
-	) -> Self::EgressTransaction;
+		batch: &mut EgressBatch<Self::Amount, Self::EgressAddress>,
+	) -> Option<(Self::EgressTransaction, FlipBalance)>;
 
 	/// Obtains the total transaction fee by deducting an equal amount from each transaction in the
 	/// batch.
@@ -766,4 +773,8 @@ pub trait EgressApi {
 		amount: Self::Amount,
 		egress_address: Self::EgressAddress,
 	) -> DispatchResult;
+}
+
+pub trait EthereumAssetAddressConverter {
+	fn try_get_asset_address(asset: Asset) -> Option<EthereumAddress>;
 }

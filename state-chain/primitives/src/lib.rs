@@ -5,7 +5,6 @@
 //! Primitive types to be used across Chainflip's various crates
 
 use codec::{Decode, Encode, MaxEncodedLen};
-use hex_literal::hex;
 use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{IdentifyAccount, Verify},
@@ -30,6 +29,8 @@ pub type IntentId = u64;
 pub type ExchangeRate = FixedU128;
 
 pub type EthereumAddress = [u8; 20];
+
+pub type EthBalance = u128;
 
 /// Alias to 512-bit hash when used in the context of a transaction signature on the chain.
 pub type Signature = MultiSignature;
@@ -129,21 +130,4 @@ pub struct ForeignChainAsset {
 	pub asset: Asset,
 }
 
-// Preset address for different assets in Ethereum
-pub fn try_convert_foreign_chain_asset_to_ethereum_address(
-	asset: ForeignChainAsset,
-) -> Option<EthereumAddress> {
-	match asset.chain {
-		ForeignChain::Ethereum => {
-			match asset.asset {
-				// !TODO : Ensure these are correct
-				Asset::Eth => Some(hex!("0000000000000000000000000000000000000000")),
-				Asset::Flip => Some(hex!("0000000000000000000000000000000000000000")),
-				Asset::Usdc => Some(hex!("0000000000000000000000000000000000000000")),
-				_ => None,
-			}
-		},
-		_ => None,
-	}
-}
 pub type EgressBatch<Amount, EgressAddress> = Vec<(Amount, EgressAddress)>;

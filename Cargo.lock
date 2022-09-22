@@ -801,7 +801,6 @@ name = "cf-primitives"
 version = "0.1.0"
 dependencies = [
  "ethabi",
- "hex-literal",
  "parity-scale-codec",
  "scale-info",
  "serde",
@@ -5216,6 +5215,7 @@ dependencies = [
  "scale-info",
  "sp-core",
  "sp-io",
+ "sp-runtime",
  "sp-std",
 ]
 
@@ -5250,6 +5250,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "hex-literal",
  "parity-scale-codec",
  "scale-info",
  "serde",
