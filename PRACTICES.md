@@ -9,6 +9,7 @@ We choose to document our practices here inside this repository, so they are eas
 # Requirements
 
 Our practices must be:
+
 - As unambiguous as possible. It should be clear how and when the practice applies. If necessary they should include clarifying examples. Ideally these examples would be from our codebase, and include links to PRs and issues.
 - Well-reasoned. Otherwise we will likely alienate some developers. As such each practice should be justified using logic, principles, ideals, and other practices.
 
@@ -46,6 +47,22 @@ Each commit should be well named. While writing the occasional "ARGHHH" commit m
 Before requesting a review, developers are encouraged to conduct a thorough self-review of their own work. The approach to self-reviewing should be the same approach taken to reviewing the work of others. Investigate assumptions are being made, look for bugs, try and break it, think about how it could be structured to read better. Often you'll be able to find ways to improve your own code before the reviewer does.
 
 
+## Correctness
+
+The Chainflip network will be securing significant amounts of funds for its users. The protocol has been designed with security and token-economic incentives in mind, but none of this matters if the code does not implement the design correctly. Therefore, before merging any code to `develop` we should be able to reason about its correctness and demonstrate that our code meets requirements.
+
+Correctness in this instance means that we know what the code should do; that it indeed fulfils its stated purpose; that we have considered all edge cases. In the spirit of readability, correctness should be as easy as possible to reason about by anyone reading, reviewing or auditing the code.
+
+The strongest guarantee of correctness is enforced through the type system. Supporting this, we can use unit testing, property-based testing, or integration testing. Where unenforced assumptions are made, these should be clearly documented using (doc-)comments.
+
+## Maintainability
+
+According to Google:
+
+> Code maintainability is a capability that requires organization-wide coordination, since it relies on being able to search, reuse, and change other teams' code.
+
+Maintainability is one of the main drivers of a team's success and ability to move forward. Wherever possible we should actively resist accumulating technical debt, and reduce it when we have the opportunity. As long as we follow our other practices, we should be working towards this ideal.
+
 # Ideals
 
 # Practices
@@ -68,4 +85,4 @@ Improving the speed and effectiveness of code reviews directly improves the spee
 
 ## Better not perfect
 
-If a PR improves the overall quality of the code base, reviewers should tend towards approving over holding up the PR. Assuming there are no bugs introduced, this may mean approving with some comments, perhaps suggesting that some improvements be taken out into their own issue, or for even smaller items, allowing the developer to make a judgement call on whether to include it before merging. 
+If a PR improves the overall quality of the code base, reviewers should tend towards approving over holding up the PR. Assuming there are no bugs introduced, this may mean approving with some comments, perhaps suggesting that some improvements be taken out into their own issue, or for even smaller items, allowing the developer to make a judgement call on whether to include it before merging.
