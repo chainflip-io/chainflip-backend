@@ -152,34 +152,34 @@ impl EthContractWitnesser for Erc20Witnesser {
     }
 }
 
-// Convenience test to allow us to generate the signatures of the events, allowing us
-// to manually query the contract for the events
-// current signatures below:
-// transfer: 0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef
-// approval: 0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925
-#[test]
-fn generate_signatures() {
-    let (_eth_monitor_erc20_ingress_sender, eth_monitor_erc20_ingress_receiver) =
-        tokio::sync::mpsc::unbounded_channel();
-    let contract = Erc20Witnesser::new(
-        H160::default(),
-        Asset::Flip,
-        Default::default(),
-        eth_monitor_erc20_ingress_receiver,
-    )
-    .contract;
-
-    let transfer = SignatureAndEvent::new(&contract, "Transfer").unwrap();
-    println!("transfer: {:?}", transfer.signature);
-    let approval = SignatureAndEvent::new(&contract, "Approval").unwrap();
-    println!("approval: {:?}", approval.signature);
-}
-
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
 
     use super::*;
+
+    // Convenience test to allow us to generate the signatures of the events, allowing us
+    // to manually query the contract for the events
+    // current signatures below:
+    // transfer: 0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef
+    // approval: 0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925
+    #[test]
+    fn generate_signatures() {
+        let (_eth_monitor_erc20_ingress_sender, eth_monitor_erc20_ingress_receiver) =
+            tokio::sync::mpsc::unbounded_channel();
+        let contract = Erc20Witnesser::new(
+            H160::default(),
+            Asset::Flip,
+            Default::default(),
+            eth_monitor_erc20_ingress_receiver,
+        )
+        .contract;
+
+        let transfer = SignatureAndEvent::new(&contract, "Transfer").unwrap();
+        println!("transfer: {:?}", transfer.signature);
+        let approval = SignatureAndEvent::new(&contract, "Approval").unwrap();
+        println!("approval: {:?}", approval.signature);
+    }
 
     #[test]
     fn test_load_contract() {
