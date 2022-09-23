@@ -1,6 +1,4 @@
 use anyhow::{anyhow, bail, Context, Result};
-use cf_chains::ChainAbi;
-use cf_primitives::{ChainflipAccountData, EpochIndex};
 use codec::{Decode, Encode, FullCodec};
 use custom_rpc::CustomApiClient;
 use frame_metadata::RuntimeMetadata;
@@ -18,8 +16,6 @@ use jsonrpsee::ws_client::WsClientBuilder;
 use libp2p::multiaddr::Protocol;
 use libp2p::Multiaddr;
 use multisig_p2p_transport::PeerId;
-use pallet_cf_validator::HistoricalActiveEpochs;
-use pallet_cf_vaults::Vault;
 use slog::o;
 use sp_core::storage::StorageData;
 use sp_core::H256;
@@ -31,7 +27,7 @@ use sp_runtime::generic::Era;
 use sp_runtime::traits::{BlakeTwo256, Hash};
 use sp_runtime::{AccountId32, MultiAddress};
 use sp_version::RuntimeVersion;
-use state_chain_runtime::{PalletInstanceAlias, SignedBlock};
+use state_chain_runtime::SignedBlock;
 use std::fmt::Debug;
 use std::net::Ipv6Addr;
 use std::str::FromStr;
@@ -63,9 +59,6 @@ pub type EventInfo = (
     // These are the event topics
     Vec<state_chain_runtime::Hash>,
 );
-
-////////////////////
-///
 pub trait ChainflipClient:
     CustomApiClient
     + SystemApiClient<state_chain_runtime::Hash, state_chain_runtime::BlockNumber>
@@ -109,7 +102,7 @@ pub struct StateChainRpcClient<C: ChainflipClient> {
 #[cfg_attr(test, automock)]
 #[async_trait]
 pub trait StateChainRpcApi {
-    async fn submit_extrinsic_rpc(
+    async fn submit_extrinsic(
         &self,
         extrinsic: state_chain_runtime::UncheckedExtrinsic,
     ) -> RpcResult<sp_core::H256>;
@@ -118,35 +111,37 @@ pub trait StateChainRpcApi {
         &self,
         block_hash: state_chain_runtime::Hash,
         storage_key: StorageKey,
-    ) -> Result<Option<StorageData>>;
+    ) -> RpcResult<Option<StorageData>>;
 
     async fn storage_events_at(
         &self,
         block_hash: Option<state_chain_runtime::Hash>,
         storage_key: StorageKey,
-    ) -> Result<Vec<StorageChangeSet<state_chain_runtime::Hash>>>;
+    ) -> RpcResult<Vec<StorageChangeSet<state_chain_runtime::Hash>>>;
 
     async fn storage_pairs(
         &self,
         block_hash: state_chain_runtime::Hash,
         storage_key: StorageKey,
-    ) -> Result<Vec<(StorageKey, StorageData)>>;
+    ) -> RpcResult<Vec<(StorageKey, StorageData)>>;
 
-    async fn get_block(&self, block_hash: state_chain_runtime::Hash)
-        -> Result<Option<SignedBlock>>;
+    async fn get_block(
+        &self,
+        block_hash: state_chain_runtime::Hash,
+    ) -> RpcResult<Option<SignedBlock>>;
 
-    async fn latest_block_hash(&self) -> Result<H256>;
+    async fn latest_block_hash(&self) -> RpcResult<H256>;
 
-    async fn rotate_keys(&self) -> Result<Bytes>;
+    async fn rotate_keys(&self) -> RpcResult<Bytes>;
 
-    async fn local_listen_addresses(&self) -> Result<Vec<String>>;
+    async fn local_listen_addresses(&self) -> RpcResult<Vec<String>>;
 
     async fn fetch_runtime_version(
         &self,
         block_hash: state_chain_runtime::Hash,
-    ) -> Result<RuntimeVersion>;
+    ) -> RpcResult<RuntimeVersion>;
 
-    async fn is_auction_phase(&self) -> Result<bool>;
+    async fn is_auction_phase(&self) -> RpcResult<bool>;
 }
 
 #[async_trait]
@@ -154,7 +149,7 @@ impl<C> StateChainRpcApi for StateChainRpcClient<C>
 where
     C: ChainflipClient + Send + Sync,
 {
-    async fn submit_extrinsic_rpc(
+    async fn submit_extrinsic(
         &self,
         extrinsic: state_chain_runtime::UncheckedExtrinsic,
     ) -> RpcResult<sp_core::H256> {
@@ -166,19 +161,15 @@ where
     async fn get_block(
         &self,
         block_hash: state_chain_runtime::Hash,
-    ) -> Result<Option<SignedBlock>> {
-        self.rpc_client
-            .block(Some(block_hash))
-            .await
-            .context("get_block RPC API failed")
+    ) -> RpcResult<Option<SignedBlock>> {
+        self.rpc_client.block(Some(block_hash)).await
     }
 
-    async fn latest_block_hash(&self) -> Result<H256> {
+    async fn latest_block_hash(&self) -> RpcResult<H256> {
         Ok(self
             .rpc_client
             .header(None)
-            .await
-            .context("latest_block_hash RPC API failed")?
+            .await?
             .expect("Latest block hash could not be fetched")
             .hash())
     }
@@ -187,64 +178,47 @@ where
         &self,
         block_hash: state_chain_runtime::Hash,
         storage_key: StorageKey,
-    ) -> Result<Option<StorageData>> {
-        self.rpc_client
-            .storage(storage_key, Some(block_hash))
-            .await
-            .context("storage RPC API failed")
+    ) -> RpcResult<Option<StorageData>> {
+        self.rpc_client.storage(storage_key, Some(block_hash)).await
     }
 
     async fn storage_events_at(
         &self,
         block_hash: Option<state_chain_runtime::Hash>,
         storage_key: StorageKey,
-    ) -> Result<Vec<StorageChangeSet<state_chain_runtime::Hash>>> {
+    ) -> RpcResult<Vec<StorageChangeSet<state_chain_runtime::Hash>>> {
         self.rpc_client
             .query_storage_at(vec![storage_key], block_hash)
             .await
-            .context("storage_events_at RPC API failed")
     }
 
-    async fn rotate_keys(&self) -> Result<Bytes> {
-        self.rpc_client
-            .rotate_keys()
-            .await
-            .context("rotate_keys RPC API failed")
+    async fn rotate_keys(&self) -> RpcResult<Bytes> {
+        self.rpc_client.rotate_keys().await
     }
 
     async fn storage_pairs(
         &self,
         block_hash: state_chain_runtime::Hash,
         storage_key: StorageKey,
-    ) -> Result<Vec<(StorageKey, StorageData)>> {
+    ) -> RpcResult<Vec<(StorageKey, StorageData)>> {
         self.rpc_client
             .storage_pairs(storage_key, Some(block_hash))
             .await
-            .context("storage_pairs RPC API failed")
     }
 
-    async fn local_listen_addresses(&self) -> Result<Vec<String>> {
-        self.rpc_client
-            .system_local_listen_addresses()
-            .await
-            .context("system_local_listen_addresses RPC API failed")
+    async fn local_listen_addresses(&self) -> RpcResult<Vec<String>> {
+        self.rpc_client.system_local_listen_addresses().await
     }
 
     async fn fetch_runtime_version(
         &self,
         block_hash: state_chain_runtime::Hash,
-    ) -> Result<RuntimeVersion> {
-        self.rpc_client
-            .runtime_version(Some(block_hash))
-            .await
-            .context("fetch_runtime_version RPC API failed")
+    ) -> RpcResult<RuntimeVersion> {
+        self.rpc_client.runtime_version(Some(block_hash)).await
     }
 
-    async fn is_auction_phase(&self) -> Result<bool> {
-        self.rpc_client
-            .cf_is_auction_phase(None)
-            .await
-            .context("cf_is_auction_phase RPC API failed")
+    async fn is_auction_phase(&self) -> RpcResult<bool> {
+        self.rpc_client.cf_is_auction_phase(None).await
     }
 }
 
@@ -259,7 +233,7 @@ pub struct StateChainClient<RpcClient: StateChainRpcApi> {
     genesis_hash: state_chain_runtime::Hash,
     pub signer: signer::PairSigner<sp_core::sr25519::Pair>,
 
-    state_chain_rpc_client: RpcClient,
+    pub state_chain_rpc_client: RpcClient,
 }
 
 impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
@@ -481,7 +455,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             let runtime_version = { self.runtime_version.read().await.clone() };
             match self
                 .state_chain_rpc_client
-                .submit_extrinsic_rpc(self.create_and_sign_extrinsic(
+                .submit_extrinsic(self.create_and_sign_extrinsic(
                     call.clone().into(),
                     &runtime_version,
                     self.genesis_hash,
@@ -587,7 +561,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         let expected_hash = BlakeTwo256::hash_of(&extrinsic);
         match self
             .state_chain_rpc_client
-            .submit_extrinsic_rpc(extrinsic)
+            .submit_extrinsic(extrinsic)
             .await
         {
             Ok(tx_hash) => {
@@ -819,26 +793,6 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             .collect::<Result<Vec<_>>>()
     }
 
-    // TODO: work out how to get all vaults with a single query... not sure if possible
-    pub async fn get_vault<C>(
-        &self,
-        block_hash: state_chain_runtime::Hash,
-        epoch_index: EpochIndex,
-    ) -> Result<Vault<C>>
-    where
-        C: ChainAbi + Debug + Clone + 'static + PalletInstanceAlias,
-        state_chain_runtime::Runtime:
-            pallet_cf_vaults::Config<<C as PalletInstanceAlias>::Instance, Chain = C>,
-    {
-        Ok(self
-            .get_storage_map::<pallet_cf_vaults::Vaults<
-                state_chain_runtime::Runtime,
-                <C as PalletInstanceAlias>::Instance,
-            >>(block_hash, &epoch_index)
-            .await?
-            .expect("should have a vault"))
-    }
-
     /// Get all the events from a particular block
     pub async fn get_events(
         &self,
@@ -861,50 +815,16 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         }
     }
 
-    /// Get the status of the node at a particular block
-    pub async fn get_account_data(
-        &self,
-        block_hash: state_chain_runtime::Hash,
-    ) -> Result<ChainflipAccountData> {
-        Ok(self
-            .get_storage_map::<frame_system::Account<state_chain_runtime::Runtime>>(
-                block_hash,
-                &self.our_account_id,
-            )
-            .await?
-            .data)
-    }
-
-    /// Get the historical active epochs of this validator at a particular block
-    pub async fn get_historical_active_epochs(
-        &self,
-        block_hash: state_chain_runtime::Hash,
-    ) -> Result<Vec<EpochIndex>> {
-        self.get_storage_map::<HistoricalActiveEpochs<state_chain_runtime::Runtime>>(
-            block_hash,
-            &self.our_account_id,
-        )
-        .await
-    }
-
-    /// Get the latest epoch number at the provided block hash
-    pub async fn epoch_at_block(
-        &self,
-        block_hash: state_chain_runtime::Hash,
-    ) -> Result<EpochIndex> {
-        self.get_storage_value::<pallet_cf_validator::CurrentEpoch<state_chain_runtime::Runtime>>(
-            block_hash,
-        )
-        .await
-    }
-
     pub async fn rotate_session_keys(&self) -> Result<Bytes> {
         let session_key_bytes: Bytes = self.state_chain_rpc_client.rotate_keys().await?;
         Ok(session_key_bytes)
     }
 
     pub async fn is_auction_phase(&self) -> Result<bool> {
-        self.state_chain_rpc_client.is_auction_phase().await
+        self.state_chain_rpc_client
+            .is_auction_phase()
+            .await
+            .map_err(Into::into)
     }
 }
 
@@ -1207,7 +1127,7 @@ pub async fn connect_to_state_chain_without_signer(
 
 #[cfg(test)]
 pub mod test_utils {
-    use cf_primitives::ChainflipAccountState;
+    use cf_primitives::{ChainflipAccountData, ChainflipAccountState};
     use frame_system::AccountInfo;
 
     use super::*;
@@ -1288,14 +1208,18 @@ mod tests {
                 "Getting events from block {} with block_hash: {:?}",
                 block_number, block_hash
             );
-            let my_state_for_this_block = state_chain_client
-                .get_account_data(block_hash)
+            use frame_support::StoragePrefixedMap;
+            let state_for_this_block = state_chain_client
+                .get_storage_pairs::<(state_chain_runtime::AccountId, sp_core::ed25519::Public, Port, pallet_cf_validator::Ipv6Addr)>(block_hash, StorageKey(
+                    pallet_cf_validator::AccountPeerMapping::<state_chain_runtime::Runtime>::final_prefix()
+                        .into(),
+                ))
                 .await
                 .unwrap();
 
             println!(
-                "Returning AccountData for this block: {:?}",
-                my_state_for_this_block
+                "Returning AccountPeerMapping for this block: {:?}",
+                state_for_this_block
             );
         }
     }
@@ -1312,7 +1236,7 @@ mod tests {
 
         let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
         mock_state_chain_rpc_client
-            .expect_submit_extrinsic_rpc()
+            .expect_submit_extrinsic()
             .times(1)
             .returning(move |_| Ok(tx_hash));
 
@@ -1340,7 +1264,7 @@ mod tests {
 
         let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
         mock_state_chain_rpc_client
-            .expect_submit_extrinsic_rpc()
+            .expect_submit_extrinsic()
             .times(MAX_EXTRINSIC_RETRY_ATTEMPTS)
             .returning(move |_| {
                 Err(
@@ -1373,7 +1297,7 @@ mod tests {
 
         let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
         mock_state_chain_rpc_client
-            .expect_submit_extrinsic_rpc()
+            .expect_submit_extrinsic()
             .times(MAX_EXTRINSIC_RETRY_ATTEMPTS)
             .returning(move |_| {
                 Err(CallError::Custom(ErrorObject::owned(
@@ -1407,7 +1331,7 @@ mod tests {
 
         let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
         mock_state_chain_rpc_client
-            .expect_submit_extrinsic_rpc()
+            .expect_submit_extrinsic()
             .times(1)
             .returning(move |_ext: state_chain_runtime::UncheckedExtrinsic| {
                 Err(CallError::Custom(ErrorObject::owned(
@@ -1420,7 +1344,7 @@ mod tests {
 
         // Second time called, should succeed
         mock_state_chain_rpc_client
-            .expect_submit_extrinsic_rpc()
+            .expect_submit_extrinsic()
             .times(1)
             .returning(move |_| Ok(H256::default()));
 
@@ -1477,7 +1401,7 @@ mod tests {
         // Return a non-nonce related error, we submit two extrinsics that fail in the same way
         let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
         mock_state_chain_rpc_client
-            .expect_submit_extrinsic_rpc()
+            .expect_submit_extrinsic()
             .times(1)
             .returning(move |_| Err(RpcError::RequestTimeout));
 
@@ -1516,7 +1440,7 @@ mod tests {
         // Return a non-nonce related error, we submit two extrinsics that fail in the same way
         let mut mock_state_chain_rpc_client = MockStateChainRpcApi::new();
         mock_state_chain_rpc_client
-            .expect_submit_extrinsic_rpc()
+            .expect_submit_extrinsic()
             .times(1)
             .returning(move |_| {
                 Err(
@@ -1526,7 +1450,7 @@ mod tests {
             });
 
         mock_state_chain_rpc_client
-            .expect_submit_extrinsic_rpc()
+            .expect_submit_extrinsic()
             .times(1)
             .returning(move |_| Ok(tx_hash));
 
