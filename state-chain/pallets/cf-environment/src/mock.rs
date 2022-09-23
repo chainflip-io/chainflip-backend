@@ -89,6 +89,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			eth_vault_address: VAULT_ADDRESS,
 			cfe_settings: CFE_SETTINGS,
 			flip_token_address: [0u8; 20],
+			eth_usdc_address: [0x2; 20],
 		},
 	};
 
