@@ -91,31 +91,35 @@ impl EthContractWitnesser for Erc20Witnesser {
             self.monitored_addresses.insert(address);
         }
 
-        for event in block.events {
-            if let Erc20Event::Transfer { to, value, from: _ } = event.event_parameters {
-                if self.monitored_addresses.contains(&to) {
-                    let _result = state_chain_client
-                        .submit_signed_extrinsic(
-                            pallet_cf_witnesser::Call::witness_at_epoch {
-                                call: Box::new(
-                                    pallet_cf_ingress::Call::do_ingress {
-                                        ingress_witnesses: vec![IngressWitness {
-                                            ingress_address: ForeignChainAddress::Eth(to.into()),
-                                            amount: value,
-                                            asset: self.asset,
-                                            tx_hash: event.tx_hash,
-                                        }],
-                                    }
-                                    .into(),
-                                ),
-                                epoch_index: epoch,
-                            },
-                            logger,
-                        )
-                        .await;
+        let ingress_witnesses = block
+            .events
+            .into_iter()
+            .filter_map(|event| match event.event_parameters {
+                Erc20Event::Transfer { to, value, from: _ }
+                    if self.monitored_addresses.contains(&to) =>
+                {
+                    Some(IngressWitness {
+                        ingress_address: ForeignChainAddress::Eth(to.into()),
+                        amount: value,
+                        asset: self.asset,
+                        tx_hash: event.tx_hash,
+                    })
                 }
-            }
-        }
+                _ => None,
+            })
+            .collect();
+
+        let _result = state_chain_client
+            .submit_signed_extrinsic(
+                pallet_cf_witnesser::Call::witness_at_epoch {
+                    call: Box::new(
+                        pallet_cf_ingress::Call::do_ingress { ingress_witnesses }.into(),
+                    ),
+                    epoch_index: epoch,
+                },
+                logger,
+            )
+            .await;
 
         Ok(())
     }
