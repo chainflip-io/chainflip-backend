@@ -200,12 +200,16 @@ fn main() -> anyhow::Result<()> {
             let (eth_monitor_flip_ingress_sender, eth_monitor_flip_ingress_receiver) = tokio::sync::mpsc::unbounded_channel();
             let (eth_monitor_usdc_ingress_sender, eth_monitor_usdc_ingress_receiver) = tokio::sync::mpsc::unbounded_channel();
 
-            let eth_chain_ingress_addresses = state_chain_client.get_all_storage_pairs::<pallet_cf_ingress::IntentIngressDetails<state_chain_runtime::Runtime>>(latest_block_hash).await.expect("Failed to get initial ingress details").into_iter().filter_map(|(foreign_chain_address, intent)| {
-                if let ForeignChainAddress::Eth(address) = foreign_chain_address {
-                    assert_eq!(intent.ingress_asset.chain, ForeignChain::Ethereum);
-                    Some((intent.ingress_asset.asset, H160::from(address)))
-                } else {
-                    None
+            let eth_chain_ingress_addresses = state_chain_client.get_all_storage_pairs::<pallet_cf_ingress::IntentIngressDetails<state_chain_runtime::Runtime>>(latest_block_hash)
+                .await
+                .expect("Failed to get initial ingress details")
+                .into_iter()
+                .filter_map(|(foreign_chain_address, intent)| {
+                    if let ForeignChainAddress::Eth(address) = foreign_chain_address {
+                        assert_eq!(intent.ingress_asset.chain, ForeignChain::Ethereum);
+                        Some((intent.ingress_asset.asset, H160::from(address)))
+                    } else {
+                        None
                 }}).into_group_map();
 
             fn monitored_addresses_from_all_eth(eth_chain_ingress_addresses: &HashMap<Asset, Vec<H160>>, asset: Asset) -> BTreeSet<H160> {
