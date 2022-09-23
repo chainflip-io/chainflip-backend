@@ -37,7 +37,7 @@ pub enum Erc20Event {
 
 use anyhow::Result;
 
-/// Can witness txs of a a particular ERC20 token to any of the monitored addresses.
+/// Can witness txs of a particular ERC20 token to any of the monitored addresses.
 /// NB: Any tokens watched by this must *strictly* adhere to the ERC20 standard: https://eips.ethereum.org/EIPS/eip-20
 pub struct Erc20Witnesser {
     pub deployed_address: H160,
