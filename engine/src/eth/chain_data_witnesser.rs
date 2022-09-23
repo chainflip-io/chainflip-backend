@@ -26,7 +26,7 @@ where
     ScRpcClient: 'static + StateChainRpcApi + Send + Sync,
 {
     super::epoch_witnesser::start(
-        "ETH-Chain-Data",
+        "ETH-Chain-Data".to_string(),
         epoch_start_receiver,
         |epoch_start| epoch_start.current,
         None,

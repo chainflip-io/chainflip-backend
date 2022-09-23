@@ -32,7 +32,7 @@ pub fn should_end_witnessing(
 }
 
 pub async fn start<G, F, Fut, State>(
-    log_key: &'static str,
+    log_key: String,
     mut epoch_start_receiver: broadcast::Receiver<EpochStart>,
     mut should_epoch_participant_witness: G,
     initial_state: State,
