@@ -202,7 +202,7 @@ fn main() -> anyhow::Result<()> {
 
             let eth_chain_ingress_addresses = state_chain_client.get_all_storage_pairs::<pallet_cf_ingress::IntentIngressDetails<state_chain_runtime::Runtime>>(latest_block_hash)
                 .await
-                .expect("Failed to get initial ingress details")
+                .context("Failed to get initial ingress details")?
                 .into_iter()
                 .filter_map(|(foreign_chain_address, intent)| {
                     if let ForeignChainAddress::Eth(address) = foreign_chain_address {
