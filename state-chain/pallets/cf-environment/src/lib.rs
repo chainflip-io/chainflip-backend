@@ -220,6 +220,7 @@ pub mod pallet {
 	#[cfg_attr(feature = "std", derive(Default))]
 	pub struct GenesisConfig {
 		pub flip_token_address: EthereumAddress,
+		pub eth_usdc_address: EthereumAddress,
 		pub stake_manager_address: EthereumAddress,
 		pub key_manager_address: EthereumAddress,
 		pub eth_vault_address: EthereumAddress,
@@ -238,6 +239,7 @@ pub mod pallet {
 			CfeSettings::<T>::set(self.cfe_settings);
 			CurrentSystemState::<T>::set(SystemState::Normal);
 			SupportedEthAssets::<T>::insert(Asset::Flip, self.flip_token_address);
+			SupportedEthAssets::<T>::insert(Asset::Usdc, self.eth_usdc_address);
 		}
 	}
 }
