@@ -2,10 +2,10 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-// #[cfg(test)]
-// mod mock;
-// #[cfg(test)]
-// mod tests;
+#[cfg(test)]
+mod mock;
+#[cfg(test)]
+mod tests;
 
 use cf_chains::{AllBatch, Ethereum, TransferAssetParams};
 use cf_primitives::{EgressBatch, ForeignChain, ForeignChainAddress, ForeignChainAsset};
@@ -78,7 +78,6 @@ pub mod pallet {
 			allowed: bool,
 		},
 		EgressScheduled {
-			account_id: T::AccountId,
 			asset: ForeignChainAsset,
 			amount: FlipBalance,
 			egress_address: ForeignChainAddress,
@@ -156,6 +155,10 @@ impl<T: Config> Pallet<T> {
 			None => 0,
 		};
 		let mut batch = all_scheduled.split_off(split_point);
+		if batch.is_empty() {
+			return 0
+		}
+
 		let batch_size = batch.len();
 		if !all_scheduled.is_empty() {
 			ScheduledEgressBatches::<T>::insert(asset, all_scheduled);
@@ -195,6 +198,7 @@ impl<T: Config> EgressApi for Pallet<T> {
 		ScheduledEgressBatches::<T>::mutate(&asset, |batch| {
 			batch.push((amount, egress_address));
 		});
+		Self::deposit_event(Event::<T>::EgressScheduled { asset, amount, egress_address });
 
 		Ok(())
 	}
