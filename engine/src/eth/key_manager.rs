@@ -434,53 +434,6 @@ impl KeyManager {
     }
 }
 
-// Convenience test to allow us to generate the signatures of the events, allowing us
-// to manually query the contract for the events
-// current signatures below:
-// ak_nonce_consumers_set: 0x4d44910489c7d151e8e9e918a73a0081a95b08fd2d8f2011a6e99548d2f585eb
-// ak_nonce_consumers_updated: 0x4f2c4ca40026b3ddbe8c1f23b9dc777d3ebaa9f1a30baa8de230d6b556b1a04f
-// ak_set_by_ak: 0x5cba64f32f2576e404f74394dc04611cce7416e299c94db0667d4e315e852521
-// ak_set_by_gk: 0xe441a6cf7a12870075eb2f6399c0de122bfe6cd8a75bfa83b05d5b611552532e
-// ck_set_by_ak: 0x999bc9c97358a1254b8ba2c1e65893b34385bf27c448cb21af3f19eee6b809ce
-// ck_set_by_ck: 0xb8529adc43e07de6ef9ce6a65ca2e5ad5f52b155e85bbbc28f7d3c165170deab
-// gk_set_by_ak: 0x6049e088bb150ffb9041c7bfd3f7d4017d79a930d2d23e2f331eeffb0cb74297
-// gk_set_by_gk: 0xb79780665df55038fba66988b1b3f2eda919a59b75cd2581f31f8f04f58bec7c
-// gov_action: 0x06e69d4af70b00b0c269b2707345abc134d9767085930456d9d03285f1eaf5c7
-// sig_accepted: 0x38045dba3d9ee1fee641ad521bd1cf34c28562f6658772ee04678edf17b9a3bc
-#[test]
-fn generate_signatures() {
-    let contract = KeyManager::new(H160::default()).contract;
-
-    let ak_nonce_consumers_set =
-        SignatureAndEvent::new(&contract, "AggKeyNonceConsumersSet").unwrap();
-    println!(
-        "ak_nonce_consumers_set: {:?}",
-        ak_nonce_consumers_set.signature
-    );
-    let ak_nonce_consumers_updated =
-        SignatureAndEvent::new(&contract, "AggKeyNonceConsumersUpdated").unwrap();
-    println!(
-        "ak_nonce_consumers_updated: {:?}",
-        ak_nonce_consumers_updated.signature
-    );
-    let ak_set_by_ak = SignatureAndEvent::new(&contract, "AggKeySetByAggKey").unwrap();
-    println!("ak_set_by_ak: {:?}", ak_set_by_ak.signature);
-    let ak_set_by_gk = SignatureAndEvent::new(&contract, "AggKeySetByGovKey").unwrap();
-    println!("ak_set_by_gk: {:?}", ak_set_by_gk.signature);
-    let ck_set_by_ak = SignatureAndEvent::new(&contract, "CommKeySetByAggKey").unwrap();
-    println!("ck_set_by_ak: {:?}", ck_set_by_ak.signature);
-    let ck_set_by_ck = SignatureAndEvent::new(&contract, "CommKeySetByCommKey").unwrap();
-    println!("ck_set_by_ck: {:?}", ck_set_by_ck.signature);
-    let gk_set_by_ak = SignatureAndEvent::new(&contract, "GovKeySetByAggKey").unwrap();
-    println!("gk_set_by_ak: {:?}", gk_set_by_ak.signature);
-    let gk_set_by_gk = SignatureAndEvent::new(&contract, "GovKeySetByGovKey").unwrap();
-    println!("gk_set_by_gk: {:?}", gk_set_by_gk.signature);
-    let gov_action = SignatureAndEvent::new(&contract, "GovernanceAction").unwrap();
-    println!("gov_action: {:?}", gov_action.signature);
-    let sig_accepted = SignatureAndEvent::new(&contract, "SignatureAccepted").unwrap();
-    println!("sig_accepted: {:?}", sig_accepted.signature);
-}
-
 #[cfg(test)]
 mod tests {
 
@@ -496,6 +449,53 @@ mod tests {
 
     // All the key strings in this test are decimal pub keys derived from the priv keys in the consts.py script
     // https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/tests/consts.py
+
+    // Convenience test to allow us to generate the signatures of the events, allowing us
+    // to manually query the contract for the events
+    // current signatures below:
+    // ak_nonce_consumers_set: 0x4d44910489c7d151e8e9e918a73a0081a95b08fd2d8f2011a6e99548d2f585eb
+    // ak_nonce_consumers_updated: 0x4f2c4ca40026b3ddbe8c1f23b9dc777d3ebaa9f1a30baa8de230d6b556b1a04f
+    // ak_set_by_ak: 0x5cba64f32f2576e404f74394dc04611cce7416e299c94db0667d4e315e852521
+    // ak_set_by_gk: 0xe441a6cf7a12870075eb2f6399c0de122bfe6cd8a75bfa83b05d5b611552532e
+    // ck_set_by_ak: 0x999bc9c97358a1254b8ba2c1e65893b34385bf27c448cb21af3f19eee6b809ce
+    // ck_set_by_ck: 0xb8529adc43e07de6ef9ce6a65ca2e5ad5f52b155e85bbbc28f7d3c165170deab
+    // gk_set_by_ak: 0x6049e088bb150ffb9041c7bfd3f7d4017d79a930d2d23e2f331eeffb0cb74297
+    // gk_set_by_gk: 0xb79780665df55038fba66988b1b3f2eda919a59b75cd2581f31f8f04f58bec7c
+    // gov_action: 0x06e69d4af70b00b0c269b2707345abc134d9767085930456d9d03285f1eaf5c7
+    // sig_accepted: 0x38045dba3d9ee1fee641ad521bd1cf34c28562f6658772ee04678edf17b9a3bc
+    #[test]
+    fn generate_signatures() {
+        let contract = KeyManager::new(H160::default()).contract;
+
+        let ak_nonce_consumers_set =
+            SignatureAndEvent::new(&contract, "AggKeyNonceConsumersSet").unwrap();
+        println!(
+            "ak_nonce_consumers_set: {:?}",
+            ak_nonce_consumers_set.signature
+        );
+        let ak_nonce_consumers_updated =
+            SignatureAndEvent::new(&contract, "AggKeyNonceConsumersUpdated").unwrap();
+        println!(
+            "ak_nonce_consumers_updated: {:?}",
+            ak_nonce_consumers_updated.signature
+        );
+        let ak_set_by_ak = SignatureAndEvent::new(&contract, "AggKeySetByAggKey").unwrap();
+        println!("ak_set_by_ak: {:?}", ak_set_by_ak.signature);
+        let ak_set_by_gk = SignatureAndEvent::new(&contract, "AggKeySetByGovKey").unwrap();
+        println!("ak_set_by_gk: {:?}", ak_set_by_gk.signature);
+        let ck_set_by_ak = SignatureAndEvent::new(&contract, "CommKeySetByAggKey").unwrap();
+        println!("ck_set_by_ak: {:?}", ck_set_by_ak.signature);
+        let ck_set_by_ck = SignatureAndEvent::new(&contract, "CommKeySetByCommKey").unwrap();
+        println!("ck_set_by_ck: {:?}", ck_set_by_ck.signature);
+        let gk_set_by_ak = SignatureAndEvent::new(&contract, "GovKeySetByAggKey").unwrap();
+        println!("gk_set_by_ak: {:?}", gk_set_by_ak.signature);
+        let gk_set_by_gk = SignatureAndEvent::new(&contract, "GovKeySetByGovKey").unwrap();
+        println!("gk_set_by_gk: {:?}", gk_set_by_gk.signature);
+        let gov_action = SignatureAndEvent::new(&contract, "GovernanceAction").unwrap();
+        println!("gov_action: {:?}", gov_action.signature);
+        let sig_accepted = SignatureAndEvent::new(&contract, "SignatureAccepted").unwrap();
+        println!("sig_accepted: {:?}", sig_accepted.signature);
+    }
 
     fn new_test_key_manager() -> KeyManager {
         KeyManager::new(H160::default())
