@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use futures::StreamExt;
-use tokio::sync::broadcast;
+use tokio::sync::broadcast::{self};
 
 use crate::{
     eth::rpc::EthDualRpcClient,
@@ -30,18 +30,15 @@ where
     ContractWitnesser: 'static + EthContractWitnesser + Sync + Send,
     StateChainRpc: 'static + StateChainRpcApi + Sync + Send,
 {
-    let contract_witnesser = Arc::new(contract_witnesser);
-
     super::epoch_witnesser::start(
         contract_witnesser.contract_name(),
         epoch_starts_receiver,
         move |epoch_start| witness_historical_epochs || epoch_start.current,
-        (),
-        move |end_witnessing_signal, epoch_start, (), logger| {
+        contract_witnesser,
+        move |end_witnessing_signal, epoch_start, mut contract_witnesser, logger| {
             let eth_ws_rpc = eth_ws_rpc.clone();
             let eth_http_rpc = eth_http_rpc.clone();
             let dual_rpc = EthDualRpcClient::new(eth_ws_rpc.clone(), eth_http_rpc.clone(), &logger);
-            let contract_witnesser = contract_witnesser.clone();
             let state_chain_client = state_chain_client.clone();
 
             async move {
@@ -49,7 +46,6 @@ where
                     .block_stream(eth_ws_rpc, eth_http_rpc, epoch_start.eth_block, &logger)
                     .await?;
 
-                // TOOD: Handle None on stream, and result event being an error
                 while let Some(block) = block_stream.next().await {
                     if should_end_witnessing(
                         end_witnessing_signal.clone(),
@@ -59,21 +55,18 @@ where
                         break;
                     }
 
-                    for event in block.events {
-                        contract_witnesser
-                            .handle_event(
-                                epoch_start.index,
-                                block.block_number,
-                                event,
-                                state_chain_client.clone(),
-                                &dual_rpc,
-                                &logger,
-                            )
-                            .await?;
-                    }
+                    contract_witnesser
+                        .handle_block_events(
+                            epoch_start.index,
+                            block.block_number,
+                            block,
+                            state_chain_client.clone(),
+                            &dual_rpc,
+                            &logger,
+                        )
+                        .await?;
                 }
-
-                Ok(())
+                Ok(contract_witnesser)
             }
         },
         logger,

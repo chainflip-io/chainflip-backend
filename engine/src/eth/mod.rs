@@ -1,6 +1,7 @@
 pub mod chain_data_witnesser;
 pub mod contract_witnesser;
 mod epoch_witnesser;
+pub mod erc20_witnesser;
 mod http_safe_stream;
 pub mod ingress_witnesser;
 pub mod key_manager;
@@ -332,7 +333,7 @@ pub struct BlockWithEvents<EventParameters: Debug> {
 pub trait EthContractWitnesser {
     type EventParameters: Debug + Send + Sync + 'static;
 
-    fn contract_name(&self) -> &'static str;
+    fn contract_name(&self) -> String;
 
     /// Takes a head stream and turns it into a stream of BlockEvents for consumption by the merged stream
     async fn block_events_stream_from_head_stream<BlockHeaderStream, EthRpc>(
@@ -343,7 +344,7 @@ pub trait EthContractWitnesser {
         eth_rpc: EthRpc,
         logger: slog::Logger,
     ) -> Result<
-        Pin<Box<dyn Stream<Item = BlockWithDecodedEvents<Self::EventParameters>> + Send + '_>>,
+        Pin<Box<dyn Stream<Item = BlockWithDecodedEvents<Self::EventParameters>> + Send + 'static>>,
     >
     where
         BlockHeaderStream: Stream<Item = EthNumberBloom> + 'static + Send,
@@ -475,7 +476,7 @@ pub trait EthContractWitnesser {
         from_block: u64,
         logger: &slog::Logger,
         // This stream must be Send, so it can be used by the spawn
-    ) -> Result<Pin<Box<dyn Stream<Item = BlockWithEvents<Self::EventParameters>> + Send + '_>>>
+    ) -> Result<Pin<Box<dyn Stream<Item = BlockWithEvents<Self::EventParameters>> + Send + 'static>>>
     {
         let deployed_address = self.get_contract_address();
         slog::info!(
@@ -781,11 +782,11 @@ pub trait EthContractWitnesser {
 
     fn decode_log_closure(&self) -> Result<DecodeLogClosure<Self::EventParameters>>;
 
-    async fn handle_event<RpcClient, EthRpcClient>(
-        &self,
+    async fn handle_block_events<RpcClient, EthRpcClient>(
+        &mut self,
         epoch: EpochIndex,
         block_number: u64,
-        event: Event<Self::EventParameters>,
+        block: BlockWithEvents<Self::EventParameters>,
         state_chain_client: Arc<StateChainClient<RpcClient>>,
         eth_rpc: &EthRpcClient,
         logger: &slog::Logger,
@@ -798,7 +799,7 @@ pub trait EthContractWitnesser {
 }
 
 pub type DecodeLogClosure<EventParameters> =
-    Box<dyn Fn(H256, ethabi::RawLog) -> Result<EventParameters> + Send + Sync>;
+    Box<dyn Fn(H256, ethabi::RawLog) -> Result<EventParameters> + Send + Sync + 'static>;
 
 const MAX_SECRET_CHARACTERS_REVEALED: usize = 3;
 const SCHEMA_PADDING_LEN: usize = 3;
