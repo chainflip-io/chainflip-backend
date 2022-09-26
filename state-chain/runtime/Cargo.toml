@@ -223,7 +223,6 @@ runtime-benchmarks = [
   'pallet-cf-vaults/runtime-benchmarks',
   'pallet-cf-witnesser/runtime-benchmarks',
   'pallet-timestamp/runtime-benchmarks',
-  'pallet-cf-relayer/runtime-benchmarks',
   'sp-runtime/runtime-benchmarks',
   'cf-session-benchmarking',
 ]
@@ -295,4 +294,9 @@ try-runtime = [
   'pallet-cf-reputation/try-runtime',
   'pallet-cf-validator/try-runtime',
   'pallet-cf-vaults/try-runtime',
+]
+ibiza = [
+  'pallet-cf-ingress/ibiza',
+  'pallet-cf-relayer/ibiza',
+  'pallet-cf-lp/ibiza',
 ]

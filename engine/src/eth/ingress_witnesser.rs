@@ -1,3 +1,5 @@
+#![cfg(feature = "ibiza")]
+
 use std::{collections::BTreeSet, sync::Arc};
 
 use cf_primitives::{Asset, ForeignChainAddress};
