@@ -1,3 +1,4 @@
+use cf_primitives::AccountRole;
 use sc_service::{ChainType, Properties};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{
@@ -596,7 +597,11 @@ fn testnet_genesis(
 		initial_authorities.iter().map(|(id, ..)| id.clone()).collect();
 	GenesisConfig {
 		account_types: AccountTypesConfig {
-			genesis_authorities: authority_ids.clone(),
+			initial_account_roles: authority_ids
+				.clone()
+				.into_iter()
+				.map(|account_id| (account_id, AccountRole::Validator))
+				.collect(),
 			_phantom: PhantomData,
 		},
 		system: SystemConfig {

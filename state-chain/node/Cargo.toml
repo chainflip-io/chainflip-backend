@@ -26,6 +26,7 @@ cf-chains = {path = "../chains"}
 multisig-p2p-transport = {path = '../multisig-p2p-transport'}
 utilities = {path = '../../utilities'}
 custom-rpc = {path = '../custom-rpc'}
+cf-primitives = { path = '../primitives' }
 
 # Added by Chainflip
 futures = {version = '0.3.4'}

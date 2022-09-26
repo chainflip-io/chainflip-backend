@@ -1042,6 +1042,7 @@ name = "chainflip-node"
 version = "0.5.0"
 dependencies = [
  "cf-chains",
+ "cf-primitives",
  "clap",
  "custom-rpc",
  "frame-benchmarking",
