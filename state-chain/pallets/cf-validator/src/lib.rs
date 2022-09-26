@@ -1268,6 +1268,16 @@ impl<T: Config> OnKilledAccount<T::AccountId> for DeletePeerMapping<T> {
 	}
 }
 
+pub struct DeleteVanityName<T: Config>(PhantomData<T>);
+
+impl<T: Config> OnKilledAccount<T::AccountId> for DeleteVanityName<T> {
+	fn on_killed_account(account_id: &T::AccountId) {
+		let mut vanity_names = VanityNames::<T>::get();
+		vanity_names.remove(account_id);
+		VanityNames::<T>::put(vanity_names);
+	}
+}
+
 pub struct PeerMapping<T>(PhantomData<T>);
 
 impl<T: Config> QualifyNode for PeerMapping<T> {

@@ -287,6 +287,7 @@ impl frame_system::Config for Runtime {
 	type OnKilledAccount = (
 		pallet_cf_flip::BurnFlipAccount<Self>,
 		pallet_cf_validator::DeletePeerMapping<Self>,
+		pallet_cf_validator::DeleteVanityName<Self>,
 		GrandpaOffenceReporter<Self>,
 	);
 	/// The data to be stored in an account.
