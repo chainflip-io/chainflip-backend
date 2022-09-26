@@ -250,8 +250,8 @@ impl<T: Config> EgressAbiBuilder for Pallet<T> {
 			Some((
 				T::EgressTransaction::new_unsigned(
 					T::ReplayProtection::replay_protection(),
-					vec![], // TODO: fetch assets
-					asset_params,
+					vec![],       // No incoming asset
+					asset_params, // All outgoing asset info
 				),
 				total_fee,
 			))
