@@ -134,5 +134,5 @@ async fn connect_two_nodes() {
         )]))
         .unwrap();
 
-    let _ = expect_recv_with_timeout(&mut node2.msg_receiver);
+    let _ = expect_recv_with_timeout(&mut node2.msg_receiver).await;
 }

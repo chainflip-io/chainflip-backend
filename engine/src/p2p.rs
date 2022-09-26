@@ -464,7 +464,7 @@ impl P2PContext {
         // TODO: we may want to use routing ids based on the pubkey to allow connection reuse
         // when the peer reconnects
 
-        self.monitor_handle.start_monitoring_for(&peer);
+        self.monitor_handle.start_monitoring_for(&socket, &peer);
 
         let endpoint = format!("tcp://[{}]:{}", peer.ip, peer.port);
         socket.connect(&endpoint).unwrap();

@@ -35,7 +35,7 @@ pub struct MonitorHandle {
 }
 
 impl MonitorHandle {
-    pub fn start_monitoring_for(&mut self, peer: &PeerInfo) {
+    pub fn start_monitoring_for(&mut self, socket_to_monitor: &zmq::Socket, peer: &PeerInfo) {
         use rand::RngCore;
 
         // Generate a random id to prevent accidentally attempting
@@ -53,7 +53,7 @@ impl MonitorHandle {
             | zmq::SocketEvent::HANDSHAKE_SUCCEEDED.to_raw();
 
         // This makes ZMQ publish socket events
-        self.socket
+        socket_to_monitor
             .monitor(&monitor_endpoint, flags as i32)
             .unwrap();
 
