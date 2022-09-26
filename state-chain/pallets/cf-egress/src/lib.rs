@@ -2,10 +2,14 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
+
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
 mod tests;
+mod weights;
 
 use cf_chains::{AllBatch, Ethereum, TransferAssetParams};
 use cf_primitives::{EgressBatch, ForeignChain, ForeignChainAddress, ForeignChainAsset};
@@ -16,6 +20,8 @@ use cf_traits::{
 use frame_support::pallet_prelude::*;
 pub use pallet::*;
 use sp_runtime::{traits::Zero, FixedPointNumber};
+use sp_std::vec;
+pub use weights::WeightInfo;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -34,6 +40,9 @@ pub mod pallet {
 	pub trait Config: Chainflip {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+
+		/// Benchmark weights
+		type WeightInfo: WeightInfo;
 
 		/// Replay protection.
 		type ReplayProtection: ReplayProtectionProvider<Ethereum>;
@@ -98,13 +107,18 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		/// Take a batch of scheduled Egress and send them out
-		fn on_idle(_block_number: BlockNumberFor<T>, _remaining_weight: Weight) -> Weight {
-			// Estimate number of Egress Tx using weight
+		fn on_idle(_block_number: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
+			let mut weights_left = remaining_weight;
 
 			AllowedEgressAssets::<T>::iter().for_each(|(asset, ())| {
-				Self::send_scheduled_batch_transaction(asset, None);
+				if weights_left > T::WeightInfo::send_batch_egress(1) {
+					let tx_count = Self::send_scheduled_batch_transaction(asset, None);
+					weights_left =
+						weights_left.saturating_sub(T::WeightInfo::send_batch_egress(tx_count));
+				}
 			});
-			0
+
+			remaining_weight.saturating_sub(weights_left)
 		}
 	}
 
@@ -116,13 +130,13 @@ pub mod pallet {
 		/// ## Events
 		///
 		/// - [On update](Event::AssetPermissionSet)
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::set_asset_egress_permission())]
 		pub fn set_asset_egress_permission(
 			origin: OriginFor<T>,
 			asset: ForeignChainAsset,
 			allowed: bool,
 		) -> DispatchResult {
-			T::EnsureGovernance::ensure_origin(origin)?;
+			let _ok = T::EnsureGovernance::ensure_origin(origin)?;
 			match allowed {
 				true =>
 					if !AllowedEgressAssets::<T>::contains_key(asset) {
@@ -144,14 +158,11 @@ pub mod pallet {
 impl<T: Config> Pallet<T> {
 	// Take Some(number of) or all scheduled batch Egress and send send it out.
 	// Returns the actual number of Egress sent
-	fn send_scheduled_batch_transaction(
-		asset: ForeignChainAsset,
-		maybe_count: Option<usize>,
-	) -> usize {
+	fn send_scheduled_batch_transaction(asset: ForeignChainAsset, maybe_count: Option<u32>) -> u32 {
 		// Take the scheduled Egress calls to be sent out of storage.
 		let mut all_scheduled = ScheduledEgressBatches::<T>::take(asset);
-		let split_point = match maybe_count {
-			Some(count) => all_scheduled.len().saturating_sub(count),
+		let split_point: usize = match maybe_count {
+			Some(count) => all_scheduled.len().saturating_sub(count as usize),
 			None => 0,
 		};
 		let mut batch = all_scheduled.split_off(split_point);
@@ -159,7 +170,7 @@ impl<T: Config> Pallet<T> {
 			return 0
 		}
 
-		let batch_size = batch.len();
+		let batch_size = batch.len() as u32;
 		if !all_scheduled.is_empty() {
 			ScheduledEgressBatches::<T>::insert(asset, all_scheduled);
 		}
@@ -172,7 +183,7 @@ impl<T: Config> Pallet<T> {
 				T::Broadcaster::threshold_sign_and_broadcast(egress_transaction);
 				Self::deposit_event(Event::<T>::EgressBroadcasted {
 					asset,
-					num_tx: batch_size as u32,
+					num_tx: batch_size,
 					gas_fee: fee,
 				});
 			};
@@ -266,6 +277,7 @@ impl<T: Config> EgressAbiBuilder for Pallet<T> {
 				total_fee = total_fee.saturating_add(fee_each);
 			});
 		}
+
 		total_fee
 	}
 
@@ -277,8 +289,8 @@ impl<T: Config> EgressAbiBuilder for Pallet<T> {
 		// TODO: Gets the gas fee cost in Eth and convert it to the given asset
 		match asset.chain {
 			ForeignChain::Ethereum => {
-				let tracked_data = T::ChainTrackedDataProvider::get_tracked_data()
-					.expect("Ethereum network should always be configured");
+				let tracked_data =
+					T::ChainTrackedDataProvider::get_tracked_data().unwrap_or_default();
 
 				// Convert the gas fee (in target chain's native currency) into target currency.
 				T::EthExchangeRateProvider::get_eth_exchange_rate(asset.asset)

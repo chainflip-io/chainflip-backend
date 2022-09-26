@@ -13,7 +13,7 @@ pub mod weights;
 pub use weights::WeightInfo;
 
 use cf_chains::{Age, Chain};
-use cf_traits::{ChainTrackedDataProvider, Chainflip};
+use cf_traits::Chainflip;
 use frame_support::dispatch::DispatchResultWithPostInfo;
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
@@ -98,11 +98,5 @@ pub mod pallet {
 
 			Ok(().into())
 		}
-	}
-}
-
-impl<T: Config> ChainTrackedDataProvider<T::TargetChain> for Pallet<T> {
-	fn get_tracked_data() -> Option<<T::TargetChain as Chain>::TrackedData> {
-		ChainState::<T>::get()
 	}
 }

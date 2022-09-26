@@ -12,8 +12,8 @@ use cf_primitives::{
 	Asset, ForeignChainAddress, ForeignChainAsset, IntentId,
 };
 use cf_traits::{
-	liquidity::{AmmPoolApi, EgressHandler, LpProvisioningApi},
-	AccountRoleRegistry, Chainflip, IngressApi,
+	liquidity::{AmmPoolApi, LpProvisioningApi},
+	AccountRoleRegistry, Chainflip, EgressApi, IngressApi,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
@@ -68,7 +68,7 @@ pub mod pallet {
 		type Ingress: IngressApi<AccountId = <Self as frame_system::Config>::AccountId>;
 
 		/// API used to withdraw foreign assets off the chain.
-		type EgressHandler: EgressHandler<Amount = Self::Amount>;
+		type EgressHandler: EgressApi<Amount = Self::Amount, EgressAddress = ForeignChainAddress>;
 
 		/// For governance checks.
 		type EnsureGovernance: EnsureOrigin<Self::Origin>;
@@ -259,7 +259,7 @@ pub mod pallet {
 			Pallet::<T>::try_debit(&account_id, foreign_asset.asset, amount)?;
 
 			// Send the assets off-chain.
-			T::EgressHandler::add_to_egress_batch(&foreign_asset, amount, &egress_address)?;
+			T::EgressHandler::add_to_egress_batch(foreign_asset, amount, egress_address)?;
 
 			Ok(().into())
 		}

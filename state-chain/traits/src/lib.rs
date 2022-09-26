@@ -22,14 +22,13 @@ use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable},
 	error::BadOrigin,
 	pallet_prelude::Member,
-	sp_runtime::traits::AtLeast32BitUnsigned,
 	traits::{EnsureOrigin, Get, Imbalance, IsType, StoredMap},
 	Hashable, Parameter,
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
-	traits::{Bounded, MaybeSerializeDeserialize},
-	DispatchError, DispatchResult, FixedPointOperand, RuntimeDebug,
+	traits::{AtLeast32BitUnsigned, Bounded, MaybeSerializeDeserialize},
+	DispatchError, DispatchResult, FixedPointNumber, FixedPointOperand, RuntimeDebug,
 };
 use sp_std::{iter::Sum, marker::PhantomData, prelude::*};
 /// An index to a block.
@@ -302,6 +301,13 @@ pub trait EthEnvironmentProvider {
 /// Provides the exchange rate between Eth to other assets
 pub trait EthExchangeRateProvider {
 	fn get_eth_exchange_rate(asset: Asset) -> ExchangeRate;
+}
+
+// Default always returns 1 : 1 exchange rate.
+impl EthExchangeRateProvider for () {
+	fn get_eth_exchange_rate(_asset: Asset) -> ExchangeRate {
+		ExchangeRate::saturating_from_rational(1, 1)
+	}
 }
 
 /// A representation of the current network state for this heartbeat interval.
@@ -772,6 +778,19 @@ pub trait EgressApi {
 		amount: Self::Amount,
 		egress_address: Self::EgressAddress,
 	) -> DispatchResult;
+}
+
+impl EgressApi for () {
+	type Amount = FlipBalance;
+	type EgressAddress = ForeignChainAddress;
+
+	fn add_to_egress_batch(
+		_asset: ForeignChainAsset,
+		_amount: Self::Amount,
+		_egress_address: ForeignChainAddress,
+	) -> DispatchResult {
+		Ok(())
+	}
 }
 
 pub trait SupportedEthAssetsAddressProvider {

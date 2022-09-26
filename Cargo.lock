@@ -9044,6 +9044,7 @@ dependencies = [
  "pallet-cf-auction",
  "pallet-cf-broadcast",
  "pallet-cf-chain-tracking",
+ "pallet-cf-egress",
  "pallet-cf-emissions",
  "pallet-cf-environment",
  "pallet-cf-flip",

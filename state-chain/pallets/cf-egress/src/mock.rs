@@ -137,8 +137,8 @@ pub struct MockEthAssetAddressProvider;
 impl SupportedEthAssetsAddressProvider for MockEthAssetAddressProvider {
 	fn try_get_asset_address(asset: Asset) -> Option<EthereumAddress> {
 		match asset {
-			Asset::Eth => Some([0xEE; 20]),
-			Asset::Flip => Some([1u8; 20]),
+			Asset::Eth => Some([0xFF; 20]),
+			Asset::Flip => Some([0xFE; 20]),
 			_ => None,
 		}
 	}
@@ -156,6 +156,7 @@ impl EthExchangeRateProvider for MockExchangeRateProvider {
 
 impl crate::Config for Test {
 	type Event = Event;
+	type WeightInfo = ();
 	type ReplayProtection = Self;
 	type EgressTransaction = EthereumApi;
 	type Broadcaster = MockBroadcast;
