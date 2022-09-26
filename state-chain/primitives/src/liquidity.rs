@@ -1,6 +1,5 @@
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
-use sp_runtime::RuntimeDebug;
 
 use crate::Asset;
 
@@ -62,13 +61,4 @@ impl<Volume: Default + Copy> TradingPosition<Volume> {
 			_ => Default::default(),
 		}
 	}
-}
-
-#[derive(PartialEq, Eq, Clone, Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebug, Copy)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub enum AccountRole {
-	None,
-	Validator,
-	LiquidityProvider,
-	Relayer,
 }

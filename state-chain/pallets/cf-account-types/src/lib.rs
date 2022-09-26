@@ -51,6 +51,28 @@ pub mod pallet {
 		/// Accounts can only be upgraded from the initial [AccountRole::Undefined] state.
 		AccountRoleAlreadyRegistered,
 	}
+
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
+		pub initial_account_roles: Vec<(T::AccountId, AccountRole)>,
+		pub _phantom: PhantomData<I>,
+	}
+
+	#[cfg(feature = "std")]
+	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
+		fn default() -> Self {
+			Self { initial_account_roles: Default::default(), _phantom: PhantomData }
+		}
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
+		fn build(&self) {
+			for (account, role) in &self.initial_account_roles {
+				AccountRoles::<T, I>::insert(account, role);
+			}
+		}
+	}
 }
 
 impl<T: Config> AccountRoleRegistry<T> for Pallet<T> {
