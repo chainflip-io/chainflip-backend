@@ -276,6 +276,9 @@ impl<T: Config> EgressAbiBuilder for Pallet<T> {
 				*amount = amount.saturating_sub(fee_each);
 				total_fee = total_fee.saturating_add(fee_each);
 			});
+
+			// Remove any transaction that is zero
+			batch.retain(|(amount, _)| !amount.is_zero());
 		}
 
 		total_fee

@@ -42,7 +42,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Environment SupportedEthAssets (r:1 w:0)
 	fn send_batch_egress(n: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(15_471_000 as Weight)
+		(15_442_000 as Weight)
 			// Standard Error: 0
 			.saturating_add((22_000 as Weight).saturating_mul(n as Weight))
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
@@ -51,7 +51,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Egress AllowedEgressAssets (r:1 w:1)
 	fn set_asset_egress_permission() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(13_000_000 as Weight)
+		(14_000_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
@@ -64,7 +64,7 @@ impl WeightInfo for () {
 	// Storage: Environment SupportedEthAssets (r:1 w:0)
 	fn send_batch_egress(n: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(15_471_000 as Weight)
+		(15_442_000 as Weight)
 			// Standard Error: 0
 			.saturating_add((22_000 as Weight).saturating_mul(n as Weight))
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
@@ -73,7 +73,7 @@ impl WeightInfo for () {
 	// Storage: Egress AllowedEgressAssets (r:1 w:1)
 	fn set_asset_egress_permission() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(13_000_000 as Weight)
+		(14_000_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
