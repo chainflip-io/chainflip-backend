@@ -74,7 +74,7 @@ pub struct EthNumberBloom {
     pub base_fee_per_gas: U256,
 }
 
-use self::rpc::{EthHttpRpcClient, EthRpcApi, EthWsRpcClient};
+use self::rpc::{EthDualRpcClient, EthRpcApi};
 
 const EIP1559_TX_ID: u64 = 2;
 
@@ -470,8 +470,7 @@ pub trait EthContractWitnesser {
     /// ahead of from_block (otherwise it will wait until we have reached from_block)
     async fn block_stream(
         &self,
-        eth_ws_rpc: EthWsRpcClient,
-        eth_http_rpc: EthHttpRpcClient,
+        eth_dual_rpc: EthDualRpcClient,
         // usually the start of the validator's active window
         from_block: u64,
         logger: &slog::Logger,
@@ -485,7 +484,7 @@ pub trait EthContractWitnesser {
             hex::encode(deployed_address)
         );
 
-        let eth_head_stream = eth_ws_rpc.subscribe_new_heads().await?;
+        let eth_head_stream = eth_dual_rpc.ws_client.subscribe_new_heads().await?;
 
         let safe_ws_head_stream =
             safe_ws_head_stream(eth_head_stream, ETH_BLOCK_SAFETY_MARGIN, logger);
@@ -495,13 +494,13 @@ pub trait EthContractWitnesser {
                 from_block,
                 deployed_address,
                 safe_ws_head_stream,
-                eth_ws_rpc,
+                eth_dual_rpc.ws_client,
                 logger.clone(),
             )
             .await?;
 
         let safe_http_head_stream = safe_polling_http_head_stream(
-            eth_http_rpc.clone(),
+            eth_dual_rpc.http_client.clone(),
             HTTP_POLL_INTERVAL,
             ETH_BLOCK_SAFETY_MARGIN,
             logger,
@@ -513,7 +512,7 @@ pub trait EthContractWitnesser {
                 from_block,
                 deployed_address,
                 safe_http_head_stream,
-                eth_http_rpc,
+                eth_dual_rpc.http_client,
                 logger.clone(),
             )
             .await?;

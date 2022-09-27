@@ -1,9 +1,6 @@
 use cf_chains::eth::H256;
 use chainflip_engine::{
-    eth::{
-        rpc::{EthDualRpcClient, EthHttpRpcClient, EthWsRpcClient},
-        EthBroadcaster,
-    },
+    eth::{rpc::EthDualRpcClient, EthBroadcaster},
     state_chain_observer::client::{
         connect_to_state_chain, connect_to_state_chain_without_signer, StateChainRpcApi,
     },
@@ -20,7 +17,7 @@ use state_chain_runtime::opaque::SessionKeys;
 use web3::types::H160;
 
 use crate::settings::CFCommand::*;
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use pallet_cf_validator::MAX_LENGTH_FOR_VANITY_NAME;
 use utilities::clean_eth_address;
 
@@ -234,14 +231,9 @@ async fn register_claim(
 
     let eth_broadcaster = EthBroadcaster::new(
         &settings.eth,
-        EthDualRpcClient::new(
-            EthWsRpcClient::new(&settings.eth, logger)
-                .await
-                .expect("Unable to create EthWslRpcClient"),
-            EthHttpRpcClient::new(&settings.eth, logger)
-                .expect("Unable to create EthHttpRpcClient"),
-            logger,
-        ),
+        EthDualRpcClient::new(&settings.eth, chain_id.into(), logger)
+            .await
+            .context("Could not create EthDualRpcClient")?,
         logger,
     )?;
 

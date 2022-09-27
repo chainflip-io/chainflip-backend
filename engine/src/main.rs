@@ -1,16 +1,12 @@
 use std::sync::Arc;
 
 use crate::multisig::eth::EthSigning;
-use anyhow::{bail, Context};
+use anyhow::Context;
 
 use chainflip_engine::{
-    common::format_iterator,
     eth::{
-        self, build_broadcast_channel,
-        key_manager::KeyManager,
-        rpc::{validate_client_chain_id, EthDualRpcClient, EthHttpRpcClient, EthWsRpcClient},
-        stake_manager::StakeManager,
-        EthBroadcaster,
+        self, build_broadcast_channel, key_manager::KeyManager, rpc::EthDualRpcClient,
+        stake_manager::StakeManager, EthBroadcaster,
     },
     health::HealthChecker,
     logging,
@@ -49,24 +45,24 @@ fn main() -> anyhow::Result<()> {
                 scope.spawn(HealthChecker::new(health_check_settings, &root_logger).await?.run());
             }
 
-            // Init web3 and eth broadcaster before connecting to SC, so we can diagnose these config errors, before
-            // we connect to the SC (which requires the user to be staked)
-            let eth_ws_rpc_client = EthWsRpcClient::new(&settings.eth, &root_logger)
-                .await
-                .context("Failed to create EthWsRpcClient")?;
-
-            let eth_http_rpc_client =
-                EthHttpRpcClient::new(&settings.eth, &root_logger).context("Failed to create EthHttpRpcClient")?;
-
-            let eth_dual_rpc =
-                EthDualRpcClient::new(eth_ws_rpc_client.clone(), eth_http_rpc_client.clone(), &root_logger);
-
-            let eth_broadcaster = EthBroadcaster::new(&settings.eth, eth_dual_rpc.clone(), &root_logger)
-                .context("Failed to create ETH broadcaster")?;
-
             let (latest_block_hash, state_chain_block_stream, state_chain_client) =
                 state_chain_observer::client::connect_to_state_chain(&settings.state_chain, true, &root_logger)
                     .await?;
+
+            let eth_dual_rpc =
+                EthDualRpcClient::new(&settings.eth, U256::from(state_chain_client
+                    .get_storage_value::<pallet_cf_environment::EthereumChainId::<state_chain_runtime::Runtime>>(
+                        latest_block_hash,
+                    )
+                    .await
+                    .context("Failed to get EthereumChainId from state chain")?
+                ),
+                &root_logger)
+                .await
+                .context("Failed to create EthDualRpcClient")?;
+
+            let eth_broadcaster = EthBroadcaster::new(&settings.eth, eth_dual_rpc.clone(), &root_logger)
+                .context("Failed to create ETH broadcaster")?;
 
             state_chain_client
                 .submit_signed_extrinsic(
@@ -90,33 +86,6 @@ fn main() -> anyhow::Result<()> {
                 epoch_start_sender,
                 [epoch_start_receiver_1, epoch_start_receiver_2, epoch_start_receiver_3, _epoch_start_receiver_4, _epoch_start_receiver_5, _epoch_start_receiver_6]
             ) = build_broadcast_channel(10);
-
-            // validate chain ids
-            {
-                let expected_chain_id = U256::from(state_chain_client
-                    .get_storage_value::<pallet_cf_environment::EthereumChainId::<state_chain_runtime::Runtime>>(
-                        latest_block_hash,
-                    )
-                    .await
-                    .context("Failed to get EthereumChainId from state chain")?);
-
-                let mut errors = [
-                    validate_client_chain_id(
-                        &eth_ws_rpc_client,
-                        expected_chain_id,
-                    ).await,
-                    validate_client_chain_id(
-                        &eth_http_rpc_client,
-                        expected_chain_id,
-                    ).await]
-                    .into_iter()
-                    .filter_map(|res| res.err())
-                    .peekable();
-
-                if errors.peek().is_some() {
-                    bail!("Inconsistent chain configuration. Terminating.{}", format_iterator(errors));
-                }
-            }
 
             let cfe_settings = state_chain_client
                 .get_storage_value::<pallet_cf_environment::CfeSettings<state_chain_runtime::Runtime>>(
@@ -209,8 +178,7 @@ fn main() -> anyhow::Result<()> {
             scope.spawn(
                 eth::contract_witnesser::start(
                     stake_manager_contract,
-                    eth_ws_rpc_client.clone(),
-                    eth_http_rpc_client.clone(),
+                    eth_dual_rpc.clone(),
                     epoch_start_receiver_1,
                     true,
                     state_chain_client.clone(),
@@ -220,8 +188,7 @@ fn main() -> anyhow::Result<()> {
             scope.spawn(
                 eth::contract_witnesser::start(
                     key_manager_contract,
-                    eth_ws_rpc_client.clone(),
-                    eth_http_rpc_client.clone(),
+                    eth_dual_rpc.clone(),
                     epoch_start_receiver_2,
                     false,
                     state_chain_client.clone(),
@@ -230,7 +197,7 @@ fn main() -> anyhow::Result<()> {
             );
             scope.spawn(
                 eth::chain_data_witnesser::start(
-                    eth_dual_rpc,
+                    eth_dual_rpc.clone(),
                     state_chain_client.clone(),
                     epoch_start_receiver_3,
                     cfe_settings_update_receiver,
@@ -304,7 +271,7 @@ fn main() -> anyhow::Result<()> {
                 }
 
                 scope.spawn(eth::ingress_witnesser::start(
-                    eth_ws_rpc_client.clone(),
+                    eth_dual_rpc.clone(),
                     _epoch_start_receiver_4,
                     eth_monitor_ingress_receiver,
                     state_chain_client.clone(),
@@ -314,8 +281,7 @@ fn main() -> anyhow::Result<()> {
                 scope.spawn(
                     eth::contract_witnesser::start(
                         Erc20Witnesser::new(flip_contract_address.into(), Asset::Flip, monitored_addresses_from_all_eth(&eth_chain_ingress_addresses, Asset::Flip), eth_monitor_flip_ingress_receiver),
-                        eth_ws_rpc_client.clone(),
-                        eth_http_rpc_client.clone(),
+                        eth_dual_rpc.clone(),
                         _epoch_start_receiver_5,
                         false,
                         state_chain_client.clone(),
@@ -325,8 +291,7 @@ fn main() -> anyhow::Result<()> {
                 scope.spawn(
                     eth::contract_witnesser::start(
                         Erc20Witnesser::new(usdc_contract_address.into(), Asset::Usdc, monitored_addresses_from_all_eth(&eth_chain_ingress_addresses, Asset::Usdc), eth_monitor_usdc_ingress_receiver),
-                        eth_ws_rpc_client,
-                        eth_http_rpc_client,
+                        eth_dual_rpc,
                         _epoch_start_receiver_6,
                         false,
                         state_chain_client,
