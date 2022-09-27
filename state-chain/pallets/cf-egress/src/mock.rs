@@ -6,7 +6,7 @@ pub use cf_chains::{
 	},
 	ChainAbi, Ethereum,
 };
-use cf_primitives::EthBalance;
+use cf_primitives::EthAmount;
 pub use cf_primitives::{Asset, EthereumAddress, ExchangeRate};
 pub use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
@@ -95,7 +95,7 @@ impl ReplayProtectionProvider<Ethereum> for Test {
 }
 
 parameter_types! {
-	pub static LastEgressSent: Vec<(EthereumAddress, EthBalance, EthereumAddress)> = vec![];
+	pub static LastEgressSent: Vec<(EthereumAddress, EthAmount, EthereumAddress)> = vec![];
 }
 
 pub struct MockBroadcast;
@@ -112,7 +112,7 @@ impl Broadcaster<Ethereum> for MockBroadcast {
 			LastEgressSent::set(
 				param
 					.into_iter()
-					.map(|param| (param.asset.into(), param.amount, param.account.into()))
+					.map(|param| (param.asset.into(), param.amount, param.to.into()))
 					.collect(),
 			);
 		}
@@ -138,7 +138,7 @@ impl SupportedEthAssetsAddressProvider for MockEthAssetAddressProvider {
 	fn try_get_asset_address(asset: Asset) -> Option<EthereumAddress> {
 		match asset {
 			Asset::Eth => Some([0xFF; 20]),
-			Asset::Flip => Some([0xFE; 20]),
+			Asset::Flip => Some([0x00; 20]),
 			_ => None,
 		}
 	}
@@ -156,14 +156,14 @@ impl EthExchangeRateProvider for MockExchangeRateProvider {
 
 impl crate::Config for Test {
 	type Event = Event;
-	type WeightInfo = ();
 	type ReplayProtection = Self;
 	type EgressTransaction = EthereumApi;
-	type Broadcaster = MockBroadcast;
+	type EthereumBroadcaster = MockBroadcast;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type ChainTrackedDataProvider = MockEthTrackedDataProvider;
 	type SupportedEthAssetsAddressProvider = MockEthAssetAddressProvider;
 	type EthExchangeRateProvider = MockExchangeRateProvider;
+	type WeightInfo = ();
 }
 
 // Build genesis storage according to the mock runtime.

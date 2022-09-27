@@ -74,6 +74,7 @@ std = [
   'frame-system/std',
   'scale-info/std',
   'sp-std/std',
+  'sp-runtime/std',
 ]
 runtime-benchmarks = [
   'cf-traits/runtime-benchmarks',

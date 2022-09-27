@@ -246,14 +246,14 @@ impl ChainTrackedDataProvider<Ethereum> for EthereumTrackedDataProvider {
 
 impl pallet_cf_egress::Config for Runtime {
 	type Event = Event;
-	type WeightInfo = ();
 	type ReplayProtection = chainflip::EthReplayProtectionProvider;
 	type EgressTransaction = EthereumApi;
-	type Broadcaster = EthereumBroadcaster;
+	type EthereumBroadcaster = EthereumBroadcaster;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type ChainTrackedDataProvider = EthereumTrackedDataProvider;
 	type SupportedEthAssetsAddressProvider = Environment;
 	type EthExchangeRateProvider = ();
+	type WeightInfo = ();
 }
 
 impl pallet_cf_account_types::Config for Runtime {

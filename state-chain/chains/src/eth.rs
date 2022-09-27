@@ -733,7 +733,7 @@ impl Tokenizable for TransferAssetParams<Ethereum> {
 	fn tokenize(self) -> Token {
 		Token::Tuple(vec![
 			Token::Address(self.asset),
-			Token::Address(self.account),
+			Token::Address(self.to),
 			Token::Uint(Uint::from(self.amount)),
 		])
 	}

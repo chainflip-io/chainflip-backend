@@ -259,7 +259,7 @@ pub mod pallet {
 			Pallet::<T>::try_debit(&account_id, foreign_asset.asset, amount)?;
 
 			// Send the assets off-chain.
-			T::EgressHandler::add_to_egress_batch(foreign_asset, amount, egress_address)?;
+			T::EgressHandler::egress_asset(foreign_asset, amount, egress_address)?;
 
 			Ok(().into())
 		}

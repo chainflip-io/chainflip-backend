@@ -748,24 +748,9 @@ pub trait EgressAbiBuilder {
 
 	// Take in a batch of transactions and construct the Transaction appropriate for the chain.
 	fn construct_batched_transaction(
-		asset: ForeignChainAsset,
-		batch: &mut EgressBatch<Self::Amount, Self::EgressAddress>,
-	) -> Option<(Self::EgressTransaction, FlipBalance)>;
-
-	/// Obtains the total transaction fee by deducting an equal amount from each transaction in the
-	/// batch.
-	///
-	/// Returns the total fee.
-	fn skim_transaction_fee(
-		asset: ForeignChainAsset,
-		batch: &mut EgressBatch<Self::Amount, Self::EgressAddress>,
-	) -> Self::Amount;
-
-	/// Estimates the total transaction cost for the given batch.
-	fn estimate_cost(
-		asset: ForeignChainAsset,
-		batch: &EgressBatch<Self::Amount, Self::EgressAddress>,
-	) -> Self::Amount;
+		foreign_asset: ForeignChainAsset,
+		batch: EgressBatch<Self::Amount, Self::EgressAddress>,
+	) -> Option<Self::EgressTransaction>;
 }
 
 /// API that allows other pallets to Egress assets out of the State Chain.
@@ -773,8 +758,8 @@ pub trait EgressApi {
 	type Amount;
 	type EgressAddress;
 
-	fn add_to_egress_batch(
-		asset: ForeignChainAsset,
+	fn egress_asset(
+		foreign_asset: ForeignChainAsset,
 		amount: Self::Amount,
 		egress_address: Self::EgressAddress,
 	) -> DispatchResult;
@@ -784,8 +769,8 @@ impl EgressApi for () {
 	type Amount = FlipBalance;
 	type EgressAddress = ForeignChainAddress;
 
-	fn add_to_egress_batch(
-		_asset: ForeignChainAsset,
+	fn egress_asset(
+		_foreign_asset: ForeignChainAsset,
 		_amount: Self::Amount,
 		_egress_address: ForeignChainAddress,
 	) -> DispatchResult {
