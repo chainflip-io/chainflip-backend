@@ -25,6 +25,8 @@ Feature flags do create some noise in the codebase. This is unavoidable, but the
 We use rust/cargo's built in [features](https://doc.rust-lang.org/cargo/reference/features.html) to allow us to do compile-time feature flagging.
 Here are some feature flag use guidelines to ensure we use them effectively, and avoid some of the pitfalls.
 
+Here's an [example](https://github.com/chainflip-io/chainflip-backend/pull/2175) from our codebase.
+
 ### Use guidelines
 - Try not to use them at all. They should be used sparingly, and only when necessary. 
 - They should be as short-lived as possible. Maintain and clean them aggressively, once a feature flagged feature has been released, all occurrences of that flag should be deleted from the codebase. 
