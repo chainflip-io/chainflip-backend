@@ -114,8 +114,6 @@ fn on_idle_can_send_batch_all() {
 			],
 		);
 
-		// Fee is set as 1000. Transaction sent is cleared
-		assert_eq!(MockEthTrackedData::get().unwrap().base_fee, 1_000);
 		assert_eq!(LastEgressSent::get(), vec![]);
 
 		// Take all scheduled Egress and Broadcast as batch

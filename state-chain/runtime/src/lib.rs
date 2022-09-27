@@ -67,8 +67,8 @@ use sp_version::RuntimeVersion;
 
 pub use cf_primitives::{ChainflipAccountData, ChainflipAccountState, ForeignChainAddress};
 pub use cf_traits::{
-	BlockNumber, ChainTrackedDataProvider, ChainflipAccount, ChainflipAccountStore, EpochInfo,
-	EthEnvironmentProvider, FlipBalance, QualifyNode, SessionKeysRegistered,
+	BlockNumber, ChainflipAccount, ChainflipAccountStore, EpochInfo, EthEnvironmentProvider,
+	FlipBalance, QualifyNode, SessionKeysRegistered,
 };
 pub use chainflip::chain_instances::*;
 use chainflip::{epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat};
@@ -237,22 +237,13 @@ impl pallet_cf_lp::Config for Runtime {
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 }
 
-pub struct EthereumTrackedDataProvider;
-impl ChainTrackedDataProvider<Ethereum> for EthereumTrackedDataProvider {
-	fn get_tracked_data() -> Option<<Ethereum as cf_chains::Chain>::TrackedData> {
-		pallet_cf_chain_tracking::ChainState::<Runtime, Instance1>::get()
-	}
-}
-
 impl pallet_cf_egress::Config for Runtime {
 	type Event = Event;
 	type ReplayProtection = chainflip::EthReplayProtectionProvider;
-	type EgressTransaction = EthereumApi;
+	type EthereumEgressTransaction = EthereumApi;
 	type EthereumBroadcaster = EthereumBroadcaster;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
-	type ChainTrackedDataProvider = EthereumTrackedDataProvider;
 	type SupportedEthAssetsAddressProvider = Environment;
-	type EthExchangeRateProvider = ();
 	type WeightInfo = ();
 }
 

@@ -14,8 +14,8 @@ mod weights;
 use cf_chains::{AllBatch, Ethereum, TransferAssetParams};
 use cf_primitives::{EgressBatch, ForeignChain, ForeignChainAddress, ForeignChainAsset};
 use cf_traits::{
-	Broadcaster, ChainTrackedDataProvider, EgressAbiBuilder, EgressApi, EthExchangeRateProvider,
-	FlipBalance, ReplayProtectionProvider, SupportedEthAssetsAddressProvider,
+	Broadcaster, EgressAbiBuilder, EgressApi, FlipBalance, ReplayProtectionProvider,
+	SupportedEthAssetsAddressProvider,
 };
 use frame_support::pallet_prelude::*;
 pub use pallet::*;
@@ -44,22 +44,16 @@ pub mod pallet {
 		type ReplayProtection: ReplayProtectionProvider<Ethereum>;
 
 		/// The type of the chain-native transaction.
-		type EgressTransaction: AllBatch<Ethereum>;
+		type EthereumEgressTransaction: AllBatch<Ethereum>;
 
 		/// A broadcaster instance.
-		type EthereumBroadcaster: Broadcaster<Ethereum, ApiCall = Self::EgressTransaction>;
+		type EthereumBroadcaster: Broadcaster<Ethereum, ApiCall = Self::EthereumEgressTransaction>;
 
 		/// Governance origin to manage allowed assets
 		type EnsureGovernance: EnsureOrigin<Self::Origin>;
 
-		/// API for getting Eth related parameters.
-		type ChainTrackedDataProvider: ChainTrackedDataProvider<Ethereum>;
-
 		/// An API for getting Ethereum related parameters
 		type SupportedEthAssetsAddressProvider: SupportedEthAssetsAddressProvider;
-
-		/// Price feeder that provides the exchange rate for Eth to other assets.
-		type EthExchangeRateProvider: EthExchangeRateProvider;
 
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;
@@ -233,7 +227,7 @@ impl<T: Config> EgressApi for Pallet<T> {
 impl<T: Config> EgressAbiBuilder for Pallet<T> {
 	type Amount = FlipBalance;
 	type EgressAddress = ForeignChainAddress;
-	type EgressTransaction = T::EgressTransaction;
+	type EgressTransaction = T::EthereumEgressTransaction;
 
 	// Take in a batch of transactions and construct the Transaction appropriate for the chain.
 	fn construct_batched_transaction(
@@ -247,7 +241,7 @@ impl<T: Config> EgressAbiBuilder for Pallet<T> {
 		let asset_address =
 			T::SupportedEthAssetsAddressProvider::try_get_asset_address(foreign_asset.asset)?;
 
-		Some(T::EgressTransaction::new_unsigned(
+		Some(T::EthereumEgressTransaction::new_unsigned(
 			T::ReplayProtection::replay_protection(),
 			vec![], // No incoming asset
 			batch

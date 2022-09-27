@@ -11,11 +11,10 @@ use core::fmt::Debug;
 pub use async_result::AsyncResult;
 use sp_std::collections::btree_set::BTreeSet;
 
-use cf_chains::{benchmarking_value::BenchmarkValue, ApiCall, Chain, ChainAbi, ChainCrypto};
+use cf_chains::{benchmarking_value::BenchmarkValue, ApiCall, ChainAbi, ChainCrypto};
 use cf_primitives::{
 	AccountRole, Asset, AuthorityCount, CeremonyId, ChainflipAccountData, ChainflipAccountState,
-	EgressBatch, EpochIndex, EthereumAddress, ExchangeRate, ForeignChainAddress, ForeignChainAsset,
-	IntentId,
+	EgressBatch, EpochIndex, EthereumAddress, ForeignChainAddress, ForeignChainAsset, IntentId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -28,7 +27,7 @@ use frame_support::{
 use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, Bounded, MaybeSerializeDeserialize},
-	DispatchError, DispatchResult, FixedPointNumber, FixedPointOperand, RuntimeDebug,
+	DispatchError, DispatchResult, FixedPointOperand, RuntimeDebug,
 };
 use sp_std::{iter::Sum, marker::PhantomData, prelude::*};
 /// An index to a block.
@@ -296,18 +295,6 @@ pub trait EthEnvironmentProvider {
 	fn stake_manager_address() -> [u8; 20];
 	fn eth_vault_address() -> [u8; 20];
 	fn chain_id() -> u64;
-}
-
-/// Provides the exchange rate between Eth to other assets
-pub trait EthExchangeRateProvider {
-	fn get_eth_exchange_rate(asset: Asset) -> ExchangeRate;
-}
-
-// Default always returns 1 : 1 exchange rate.
-impl EthExchangeRateProvider for () {
-	fn get_eth_exchange_rate(_asset: Asset) -> ExchangeRate {
-		ExchangeRate::saturating_from_rational(1, 1)
-	}
 }
 
 /// A representation of the current network state for this heartbeat interval.
@@ -780,8 +767,4 @@ impl EgressApi for () {
 
 pub trait SupportedEthAssetsAddressProvider {
 	fn try_get_asset_address(asset: Asset) -> Option<EthereumAddress>;
-}
-
-pub trait ChainTrackedDataProvider<C: Chain> {
-	fn get_tracked_data() -> Option<C::TrackedData>;
 }

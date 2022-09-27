@@ -1,17 +1,13 @@
 pub use crate::{self as pallet_cf_egress};
 pub use cf_chains::{
-	eth::{
-		api::{EthereumApi, EthereumReplayProtection},
-		TrackedData,
-	},
+	eth::api::{EthereumApi, EthereumReplayProtection},
 	ChainAbi, Ethereum,
 };
 use cf_primitives::EthAmount;
 pub use cf_primitives::{Asset, EthereumAddress, ExchangeRate};
 pub use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
-	Broadcaster, ChainTrackedDataProvider, EthExchangeRateProvider, ReplayProtectionProvider,
-	SupportedEthAssetsAddressProvider,
+	Broadcaster, ReplayProtectionProvider, SupportedEthAssetsAddressProvider,
 };
 use frame_support::parameter_types;
 use frame_system as system;
@@ -19,7 +15,7 @@ use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
-	BuildStorage, FixedPointNumber,
+	BuildStorage,
 };
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -119,20 +115,6 @@ impl Broadcaster<Ethereum> for MockBroadcast {
 	}
 }
 
-parameter_types! {
-	pub static MockEthTrackedData: Option<TrackedData<Ethereum>> = Some(TrackedData {
-		block_height: 0,
-		base_fee: 1_000,
-		priority_fee: 5_000,
-	});
-}
-pub struct MockEthTrackedDataProvider;
-impl ChainTrackedDataProvider<Ethereum> for MockEthTrackedDataProvider {
-	fn get_tracked_data() -> Option<TrackedData<Ethereum>> {
-		MockEthTrackedData::get()
-	}
-}
-
 pub struct MockEthAssetAddressProvider;
 impl SupportedEthAssetsAddressProvider for MockEthAssetAddressProvider {
 	fn try_get_asset_address(asset: Asset) -> Option<EthereumAddress> {
@@ -144,25 +126,13 @@ impl SupportedEthAssetsAddressProvider for MockEthAssetAddressProvider {
 	}
 }
 
-parameter_types! {
-	pub static MockExchangeRate: ExchangeRate = ExchangeRate::saturating_from_rational(1, 1);
-}
-pub struct MockExchangeRateProvider;
-impl EthExchangeRateProvider for MockExchangeRateProvider {
-	fn get_eth_exchange_rate(_asset: Asset) -> ExchangeRate {
-		MockExchangeRate::get()
-	}
-}
-
 impl crate::Config for Test {
 	type Event = Event;
 	type ReplayProtection = Self;
-	type EgressTransaction = EthereumApi;
+	type EthereumEgressTransaction = EthereumApi;
 	type EthereumBroadcaster = MockBroadcast;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
-	type ChainTrackedDataProvider = MockEthTrackedDataProvider;
 	type SupportedEthAssetsAddressProvider = MockEthAssetAddressProvider;
-	type EthExchangeRateProvider = MockExchangeRateProvider;
 	type WeightInfo = ();
 }
 
