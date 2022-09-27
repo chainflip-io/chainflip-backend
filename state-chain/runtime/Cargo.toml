@@ -38,7 +38,7 @@ pallet-cf-witnesser = { path = '../pallets/cf-witnesser', default-features = fal
 pallet-cf-flip = { path = '../pallets/cf-flip', default-features = false }
 pallet-cf-auction = { path = '../pallets/cf-auction', default-features = false }
 pallet-cf-emissions = { path = '../pallets/cf-emissions', default-features = false }
-pallet-cf-relayer = { path = '../pallets/cf-relayer', default-features = false }
+pallet-cf-relayer = { path = '../pallets/cf-relayer', default-features = false, optional = true }
 pallet-cf-governance = { path = '../pallets/cf-governance', default-features = false }
 pallet-cf-tokenholder-governance = { path = '../pallets/cf-tokenholder-governance', default-features = false }
 pallet-cf-reputation = { path = '../pallets/cf-reputation', default-features = false }
@@ -47,8 +47,8 @@ pallet-cf-threshold-signature = { path = '../pallets/cf-threshold-signature', de
 pallet-cf-broadcast = { path = '../pallets/cf-broadcast', default-features = false }
 pallet-cf-environment = { path = '../pallets/cf-environment', default-features = false }
 pallet-cf-chain-tracking = { path = '../pallets/cf-chain-tracking', default-features = false }
-pallet-cf-ingress = { path = '../pallets/cf-ingress', default-features = false }
-pallet-cf-lp =  { path = '../pallets/cf-lp', default-features = false }
+pallet-cf-ingress = { path = '../pallets/cf-ingress', default-features = false, optional = true }
+pallet-cf-lp =  { path = '../pallets/cf-lp', default-features = false, optional = true }
 
 # SCALE
 codec = { package = 'parity-scale-codec', version = '3.0.0', default-features = false, features = ['derive'] }
@@ -223,7 +223,6 @@ runtime-benchmarks = [
   'pallet-cf-vaults/runtime-benchmarks',
   'pallet-cf-witnesser/runtime-benchmarks',
   'pallet-timestamp/runtime-benchmarks',
-  'pallet-cf-relayer/runtime-benchmarks',
   'sp-runtime/runtime-benchmarks',
   'cf-session-benchmarking',
 ]
@@ -295,4 +294,9 @@ try-runtime = [
   'pallet-cf-reputation/try-runtime',
   'pallet-cf-validator/try-runtime',
   'pallet-cf-vaults/try-runtime',
+]
+ibiza = [
+  'pallet-cf-ingress',
+  'pallet-cf-relayer',
+  'pallet-cf-lp',
 ]

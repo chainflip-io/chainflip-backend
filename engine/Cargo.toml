@@ -91,7 +91,7 @@ pallet-cf-chain-tracking = {path = "../state-chain/pallets/cf-chain-tracking"}
 pallet-cf-environment = {path = "../state-chain/pallets/cf-environment"}
 pallet-cf-flip = {path = "../state-chain/pallets/cf-flip"}
 pallet-cf-governance = {path = "../state-chain/pallets/cf-governance"}
-pallet-cf-ingress = {path = "../state-chain/pallets/cf-ingress"}
+pallet-cf-ingress = {path = "../state-chain/pallets/cf-ingress", optional = true }
 pallet-cf-reputation = {path = "../state-chain/pallets/cf-reputation"}
 pallet-cf-staking = {path = "../state-chain/pallets/cf-staking"}
 pallet-cf-threshold-signature = {path = "../state-chain/pallets/cf-threshold-signature"}
@@ -162,3 +162,9 @@ csv = "1.1.6"
 tempfile = "3.3.0"
 ethereum = "0.12"
 rlp = "0.5"
+
+[features]
+ibiza = [
+    'pallet-cf-ingress',
+    'state-chain-runtime/ibiza'
+]

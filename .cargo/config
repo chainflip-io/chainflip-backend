@@ -7,6 +7,9 @@ cf-test = "test --lib --all-features"
 # TODO: add all-features and clean up benchmarks.
 cf-clippy = "clippy --all-targets"
 
+
+ci-build-ibiza = "build --release --features ibiza"
+
 ci-check = "check --all-targets --all-features --release"
 ci-build = "build --release --features runtime-benchmarks"
 ci-test = "test --lib --all-features --release"
