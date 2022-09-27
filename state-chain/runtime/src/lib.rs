@@ -16,11 +16,7 @@ use crate::{
 		RuntimeApiPendingClaim,
 	},
 };
-use cf_chains::{
-	eth,
-	eth::api::{register_claim::RegisterClaim, EthereumApi},
-	Ethereum,
-};
+use cf_chains::{eth, eth::api::register_claim::RegisterClaim, Ethereum};
 
 pub use frame_support::{
 	construct_runtime, debug,
@@ -241,7 +237,7 @@ impl pallet_cf_lp::Config for Runtime {
 impl pallet_cf_egress::Config for Runtime {
 	type Event = Event;
 	type ReplayProtection = chainflip::EthReplayProtectionProvider;
-	type EthereumEgressTransaction = EthereumApi;
+	type EthereumEgressTransaction = eth::api::EthereumApi;
 	type EthereumBroadcaster = EthereumBroadcaster;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type SupportedEthAssetsAddressProvider = Environment;
