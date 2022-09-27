@@ -231,7 +231,7 @@ async fn register_claim(
 
     let eth_broadcaster = EthBroadcaster::new(
         &settings.eth,
-        EthDualRpcClient::new(&settings.eth, logger)
+        EthDualRpcClient::new(&settings.eth, Some(chain_id.into()), logger)
             .await
             .context("Could not create EthDualRpcClient")?,
         logger,

@@ -41,6 +41,7 @@ where
         &Settings::from_file_and_env("config/Testing.toml", CommandLineOptions::default())
             .unwrap()
             .eth,
+        None,
         &logger,
     )
     .await

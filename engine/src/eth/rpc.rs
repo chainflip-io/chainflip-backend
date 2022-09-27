@@ -16,9 +16,10 @@ use futures::{
     FutureExt,
 };
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 
 use crate::{
+    common::format_iterator,
     constants::{ETH_DUAL_REQUEST_TIMEOUT, ETH_LOG_REQUEST_TIMEOUT, SYNC_POLL_INTERVAL},
     logging::COMPONENT_KEY,
     settings,
@@ -357,7 +358,14 @@ pub struct EthDualRpcClient {
 }
 
 impl EthDualRpcClient {
-    pub async fn new(eth_settings: &settings::Eth, logger: &slog::Logger) -> Result<Self> {
+    /// Create an Ethereum Rpc Client, containing a HTTP and a WS client.
+    /// Passing a value to expected_chain_id ensures the endpoints provided in settings are pointing to nodes
+    /// with the same `chain_id` as that provided.
+    pub async fn new(
+        eth_settings: &settings::Eth,
+        expected_chain_id: Option<U256>,
+        logger: &slog::Logger,
+    ) -> Result<Self> {
         let logger = logger.new(slog::o!(COMPONENT_KEY => "Eth-DualRpcClient"));
 
         let ws_client = EthWsRpcClient::new(eth_settings, &logger)
@@ -366,6 +374,23 @@ impl EthDualRpcClient {
 
         let http_client = EthHttpRpcClient::new(eth_settings, &logger)
             .context("Failed to create EthHttpRpcClient")?;
+
+        if let Some(expected_chain_id) = expected_chain_id {
+            let mut errors = [
+                validate_client_chain_id(&ws_client, expected_chain_id).await,
+                validate_client_chain_id(&http_client, expected_chain_id).await,
+            ]
+            .into_iter()
+            .filter_map(|res| res.err())
+            .peekable();
+
+            if errors.peek().is_some() {
+                bail!(
+                    "Inconsistent chain configuration. Terminating.{}",
+                    format_iterator(errors)
+                );
+            }
+        }
 
         Ok(Self {
             ws_client,

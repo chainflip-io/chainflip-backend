@@ -1,16 +1,12 @@
 use std::sync::Arc;
 
 use crate::multisig::eth::EthSigning;
-use anyhow::{bail, Context};
+use anyhow::Context;
 
 use chainflip_engine::{
-    common::format_iterator,
     eth::{
-        self, build_broadcast_channel,
-        key_manager::KeyManager,
-        rpc::{validate_client_chain_id, EthDualRpcClient},
-        stake_manager::StakeManager,
-        EthBroadcaster,
+        self, build_broadcast_channel, key_manager::KeyManager, rpc::EthDualRpcClient,
+        stake_manager::StakeManager, EthBroadcaster,
     },
     health::HealthChecker,
     logging,
@@ -49,15 +45,24 @@ fn main() -> anyhow::Result<()> {
                 scope.spawn(HealthChecker::new(health_check_settings, &root_logger).await?.run());
             }
 
-            let eth_dual_rpc =
-                EthDualRpcClient::new(&settings.eth, &root_logger).await.context("Failed to create EthDualRpcClient")?;
-
-            let eth_broadcaster = EthBroadcaster::new(&settings.eth, eth_dual_rpc.clone(), &root_logger)
-                .context("Failed to create ETH broadcaster")?;
-
             let (latest_block_hash, state_chain_block_stream, state_chain_client) =
                 state_chain_observer::client::connect_to_state_chain(&settings.state_chain, true, &root_logger)
                     .await?;
+
+            let eth_dual_rpc =
+                EthDualRpcClient::new(&settings.eth, Some(U256::from(state_chain_client
+                    .get_storage_value::<pallet_cf_environment::EthereumChainId::<state_chain_runtime::Runtime>>(
+                        latest_block_hash,
+                    )
+                    .await
+                    .context("Failed to get EthereumChainId from state chain")?
+                )),
+                &root_logger)
+                .await
+                .context("Failed to create EthDualRpcClient")?;
+
+            let eth_broadcaster = EthBroadcaster::new(&settings.eth, eth_dual_rpc.clone(), &root_logger)
+                .context("Failed to create ETH broadcaster")?;
 
             state_chain_client
                 .submit_signed_extrinsic(
@@ -81,33 +86,6 @@ fn main() -> anyhow::Result<()> {
                 epoch_start_sender,
                 [epoch_start_receiver_1, epoch_start_receiver_2, epoch_start_receiver_3, _epoch_start_receiver_4, _epoch_start_receiver_5, _epoch_start_receiver_6]
             ) = build_broadcast_channel(10);
-
-            // validate chain ids
-            {
-                let expected_chain_id = U256::from(state_chain_client
-                    .get_storage_value::<pallet_cf_environment::EthereumChainId::<state_chain_runtime::Runtime>>(
-                        latest_block_hash,
-                    )
-                    .await
-                    .context("Failed to get EthereumChainId from state chain")?);
-
-                let mut errors = [
-                    validate_client_chain_id(
-                        &eth_dual_rpc.ws_client,
-                        expected_chain_id,
-                    ).await,
-                    validate_client_chain_id(
-                        &eth_dual_rpc.http_client,
-                        expected_chain_id,
-                    ).await]
-                    .into_iter()
-                    .filter_map(|res| res.err())
-                    .peekable();
-
-                if errors.peek().is_some() {
-                    bail!("Inconsistent chain configuration. Terminating.{}", format_iterator(errors));
-                }
-            }
 
             let cfe_settings = state_chain_client
                 .get_storage_value::<pallet_cf_environment::CfeSettings<state_chain_runtime::Runtime>>(
