@@ -209,8 +209,7 @@ fn main() -> anyhow::Result<()> {
             scope.spawn(
                 eth::contract_witnesser::start(
                     stake_manager_contract,
-                    eth_ws_rpc_client.clone(),
-                    eth_http_rpc_client.clone(),
+                    eth_dual_rpc.clone(),
                     epoch_start_receiver_1,
                     true,
                     state_chain_client.clone(),
@@ -220,8 +219,7 @@ fn main() -> anyhow::Result<()> {
             scope.spawn(
                 eth::contract_witnesser::start(
                     key_manager_contract,
-                    eth_ws_rpc_client.clone(),
-                    eth_http_rpc_client.clone(),
+                    eth_dual_rpc.clone(),
                     epoch_start_receiver_2,
                     false,
                     state_chain_client.clone(),
@@ -230,7 +228,7 @@ fn main() -> anyhow::Result<()> {
             );
             scope.spawn(
                 eth::chain_data_witnesser::start(
-                    eth_dual_rpc,
+                    eth_dual_rpc.clone(),
                     state_chain_client.clone(),
                     epoch_start_receiver_3,
                     cfe_settings_update_receiver,
@@ -314,8 +312,7 @@ fn main() -> anyhow::Result<()> {
                 scope.spawn(
                     eth::contract_witnesser::start(
                         Erc20Witnesser::new(flip_contract_address.into(), Asset::Flip, monitored_addresses_from_all_eth(&eth_chain_ingress_addresses, Asset::Flip), eth_monitor_flip_ingress_receiver),
-                        eth_ws_rpc_client.clone(),
-                        eth_http_rpc_client.clone(),
+                        eth_dual_rpc.clone(),
                         _epoch_start_receiver_5,
                         false,
                         state_chain_client.clone(),
@@ -325,8 +322,7 @@ fn main() -> anyhow::Result<()> {
                 scope.spawn(
                     eth::contract_witnesser::start(
                         Erc20Witnesser::new(usdc_contract_address.into(), Asset::Usdc, monitored_addresses_from_all_eth(&eth_chain_ingress_addresses, Asset::Usdc), eth_monitor_usdc_ingress_receiver),
-                        eth_ws_rpc_client,
-                        eth_http_rpc_client,
+                        eth_dual_rpc,
                         _epoch_start_receiver_6,
                         false,
                         state_chain_client,

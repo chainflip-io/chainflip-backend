@@ -351,8 +351,8 @@ impl EthHttpRpcClient {
 
 #[derive(Clone)]
 pub struct EthDualRpcClient {
-    ws_client: EthWsRpcClient,
-    http_client: EthHttpRpcClient,
+    pub ws_client: EthWsRpcClient,
+    pub http_client: EthHttpRpcClient,
     logger: slog::Logger,
 }
 

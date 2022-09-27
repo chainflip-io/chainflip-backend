@@ -1,7 +1,7 @@
 use chainflip_engine::{
     eth::{
         event::Event,
-        rpc::{EthHttpRpcClient, EthWsRpcClient},
+        rpc::{EthDualRpcClient, EthHttpRpcClient, EthWsRpcClient},
         EthContractWitnesser,
     },
     settings::{CommandLineOptions, Settings},
@@ -44,12 +44,13 @@ where
     let settings =
         Settings::from_file_and_env("config/Testing.toml", CommandLineOptions::default()).unwrap();
 
-    let eth_ws_rpc_client = EthWsRpcClient::new(&settings.eth, &logger)
-        .await
-        .expect("Couldn't create EthWsRpcClient");
-
-    let eth_http_rpc_client =
-        EthHttpRpcClient::new(&settings.eth, &logger).expect("Couldn't create EthHttpRpcClient");
+    let eth_dual_rpc = EthDualRpcClient::new(
+        EthWsRpcClient::new(&settings.eth, &logger)
+            .await
+            .expect("Couldn't create EthWsRpcClient"),
+        EthHttpRpcClient::new(&settings.eth, &logger).expect("Couldn't create EthHttpRpcClient"),
+        &logger,
+    );
 
     const EVENT_STREAM_TIMEOUT_MESSAGE: &str = "Timeout getting events. You might need to run hardhat with --config hardhat-interval-mining.config.js";
 
@@ -57,7 +58,7 @@ where
     // in which it should have already done it's job.
     let events = tokio::time::timeout(
         std::time::Duration::from_secs(10),
-        contract_manager.block_stream(eth_ws_rpc_client, eth_http_rpc_client, 0, &logger),
+        contract_manager.block_stream(eth_dual_rpc, 0, &logger),
     )
     .await
     .expect(EVENT_STREAM_TIMEOUT_MESSAGE)
