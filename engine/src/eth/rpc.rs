@@ -357,16 +357,21 @@ pub struct EthDualRpcClient {
 }
 
 impl EthDualRpcClient {
-    pub fn new(
-        ws_client: EthWsRpcClient,
-        http_client: EthHttpRpcClient,
-        logger: &slog::Logger,
-    ) -> Self {
-        Self {
+    pub async fn new(eth_settings: &settings::Eth, logger: &slog::Logger) -> Result<Self> {
+        let logger = logger.new(slog::o!(COMPONENT_KEY => "Eth-DualRpcClient"));
+
+        let ws_client = EthWsRpcClient::new(eth_settings, &logger)
+            .await
+            .context("Failed to create EthWsRpcClient")?;
+
+        let http_client = EthHttpRpcClient::new(eth_settings, &logger)
+            .context("Failed to create EthHttpRpcClient")?;
+
+        Ok(Self {
             ws_client,
             http_client,
-            logger: logger.new(slog::o!(COMPONENT_KEY => "Eth-DualRpcClient")),
-        }
+            logger,
+        })
     }
 }
 

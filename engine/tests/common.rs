@@ -1,9 +1,5 @@
 use chainflip_engine::{
-    eth::{
-        event::Event,
-        rpc::{EthDualRpcClient, EthHttpRpcClient, EthWsRpcClient},
-        EthContractWitnesser,
-    },
+    eth::{event::Event, rpc::EthDualRpcClient, EthContractWitnesser},
     settings::{CommandLineOptions, Settings},
 };
 use config::{Config, ConfigError, File};
@@ -41,16 +37,14 @@ pub async fn get_contract_events<Manager>(
 where
     Manager: EthContractWitnesser + std::marker::Sync,
 {
-    let settings =
-        Settings::from_file_and_env("config/Testing.toml", CommandLineOptions::default()).unwrap();
-
     let eth_dual_rpc = EthDualRpcClient::new(
-        EthWsRpcClient::new(&settings.eth, &logger)
-            .await
-            .expect("Couldn't create EthWsRpcClient"),
-        EthHttpRpcClient::new(&settings.eth, &logger).expect("Couldn't create EthHttpRpcClient"),
+        &Settings::from_file_and_env("config/Testing.toml", CommandLineOptions::default())
+            .unwrap()
+            .eth,
         &logger,
-    );
+    )
+    .await
+    .expect("Could not create EthDualRpcClient");
 
     const EVENT_STREAM_TIMEOUT_MESSAGE: &str = "Timeout getting events. You might need to run hardhat with --config hardhat-interval-mining.config.js";
 

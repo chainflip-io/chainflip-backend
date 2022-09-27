@@ -8,7 +8,7 @@ use chainflip_engine::{
     eth::{
         self, build_broadcast_channel,
         key_manager::KeyManager,
-        rpc::{validate_client_chain_id, EthDualRpcClient, EthHttpRpcClient, EthWsRpcClient},
+        rpc::{validate_client_chain_id, EthDualRpcClient},
         stake_manager::StakeManager,
         EthBroadcaster,
     },
@@ -49,17 +49,8 @@ fn main() -> anyhow::Result<()> {
                 scope.spawn(HealthChecker::new(health_check_settings, &root_logger).await?.run());
             }
 
-            // Init web3 and eth broadcaster before connecting to SC, so we can diagnose these config errors, before
-            // we connect to the SC (which requires the user to be staked)
-            let eth_ws_rpc_client = EthWsRpcClient::new(&settings.eth, &root_logger)
-                .await
-                .context("Failed to create EthWsRpcClient")?;
-
-            let eth_http_rpc_client =
-                EthHttpRpcClient::new(&settings.eth, &root_logger).context("Failed to create EthHttpRpcClient")?;
-
             let eth_dual_rpc =
-                EthDualRpcClient::new(eth_ws_rpc_client.clone(), eth_http_rpc_client.clone(), &root_logger);
+                EthDualRpcClient::new(&settings.eth, &root_logger).await.context("Failed to create EthDualRpcClient")?;
 
             let eth_broadcaster = EthBroadcaster::new(&settings.eth, eth_dual_rpc.clone(), &root_logger)
                 .context("Failed to create ETH broadcaster")?;
@@ -102,11 +93,11 @@ fn main() -> anyhow::Result<()> {
 
                 let mut errors = [
                     validate_client_chain_id(
-                        &eth_ws_rpc_client,
+                        &eth_dual_rpc.ws_client,
                         expected_chain_id,
                     ).await,
                     validate_client_chain_id(
-                        &eth_http_rpc_client,
+                        &eth_dual_rpc.http_client,
                         expected_chain_id,
                     ).await]
                     .into_iter()
@@ -302,7 +293,7 @@ fn main() -> anyhow::Result<()> {
                 }
 
                 scope.spawn(eth::ingress_witnesser::start(
-                    eth_ws_rpc_client.clone(),
+                    eth_dual_rpc.ws_client.clone(),
                     _epoch_start_receiver_4,
                     eth_monitor_ingress_receiver,
                     state_chain_client.clone(),
