@@ -28,8 +28,8 @@ Here are some feature flag use guidelines to ensure we use them effectively, and
 Here's an [example](https://github.com/chainflip-io/chainflip-backend/pull/2175) from our codebase.
 
 ### Use guidelines
-- Try not to use them at all. They should be used sparingly, and only when necessary. 
-- They should be as short-lived as possible. Maintain and clean them aggressively, once a feature flagged feature has been released, all occurrences of that flag should be deleted from the codebase. 
+- Try not to use them at all. They should be used sparingly, and only when necessary. Normally there will be at most two "states" of the codebase. The current release (unflagged), next release (feature flagged by release name).
+- They should be as short-lived as possible. Maintain and clean them aggressively, once a feature flagged feature has been released, all occurrences of that flag should be deleted from the codebase.
 - *Never* repurpose feature flags. Create a new one for something new, or [risk losing half a billion dollars](https://blog.statsig.com/how-to-lose-half-a-billion-dollars-with-bad-feature-flags-ccebb26adeec)
 - The codebase must pass CI i.e. no warnings, tests passing *no matter which features are enabled*
 - Tests that are for feature flagged functionality can just be in their own module, with the feature flag added to the module. Test behaviour should not change based on a feature flag. Any test depending on a flag should be either enabled or disabled completely by that flag.
