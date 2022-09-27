@@ -17,6 +17,34 @@ use crate::{
 
 use super::{BlockWithDecodedEvents, BlockWithEvents};
 
+/// Merges two streams of `BlockWithDecodedEvents`. The intent of this function is to create redundancy for HTTP and WS block event streams.
+///
+/// For a particular ETH block, this will only return the events for that block once, this includes blocks without events of interest. i.e. we always return
+/// a contiguous sequence of ETH block numbers (`BlockWithEvents` containing this block number).
+///
+/// This will always yield from the protocol that reaches the next block number fastest (in practice this is normally WS).
+///
+/// If the decoding has failed on one of these blocks, then we attempt to recover by waiting for the other stream to reach that block, and see if it was successful.
+/// If we the other stream gets to that point then we terminate the whole stream.
+///
+/// If the stream being used to recover terminates (i.e. no events left to yield) then this stream will terminate.
+///
+/// If just one of the stream terminates, but the other is still yielding blocks (not in recovery) this stream will continue to yield blocks until there is an error or it terminates.
+///
+/// Logging:
+/// - Logs when the merged stream yields
+/// - Logs when one stream is behind every [ETH_STILL_BEHIND_LOG_INTERVAL].
+/// - Trace logs every block yield from both streams
+///
+/// Panics:
+/// - If the streams passed into the merged streams first elements are different this can panic. The assumption is that both streams passed in should be synced to the node at the start.
+/// - If one of the input streams is not a contiguous stream. This can be ensured by preprocessing any raw stream. e.g. see [ws_safe_stream.rs]
+///
+/// See the tests at the bottom of this file for some examples.
+///
+/// Developer notes:
+/// - "Pulled" refers to an item taken from one of the inner streams
+/// - "Yielded" refers to an item to be returned from this stream
 pub async fn merged_block_events_stream<
     'a,
     BlockEventsStreamWs,
