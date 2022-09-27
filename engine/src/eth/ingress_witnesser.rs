@@ -15,7 +15,7 @@ use crate::{
 
 use super::{
     epoch_witnesser,
-    rpc::{EthRpcApi, EthWsRpcApi, EthWsRpcClient},
+    rpc::{EthDualRpcClient, EthRpcApi, EthWsRpcApi},
     ws_safe_stream::safe_ws_head_stream,
     EpochStart,
 };
@@ -24,8 +24,7 @@ use crate::eth::ETH_BLOCK_SAFETY_MARGIN;
 
 // NB: This code can emit the same witness multiple times. e.g. if the CFE restarts in the middle of witnessing a window of blocks
 pub async fn start<StateChainRpc>(
-    // TODO: Add HTTP client and merged stream functionality for redundancy
-    eth_ws_rpc: EthWsRpcClient,
+    eth_dual_rpc: EthDualRpcClient,
     epoch_starts_receiver: broadcast::Receiver<EpochStart>,
     eth_monitor_ingress_receiver: tokio::sync::mpsc::UnboundedReceiver<H160>,
     state_chain_client: Arc<StateChainClient<StateChainRpc>>,
@@ -44,7 +43,9 @@ where
               epoch_start,
               (mut monitored_addresses, mut eth_monitor_ingress_receiver),
               logger| {
-            let eth_ws_rpc = eth_ws_rpc.clone();
+
+            // TODO: Add HTTP client and merged stream functionality for redundancy
+            let eth_ws_rpc = eth_dual_rpc.ws_client.clone();
             let state_chain_client = state_chain_client.clone();
             async move {
                 // TODO: Factor out merged streams for use in contract witnesser and here

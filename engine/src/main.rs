@@ -271,7 +271,7 @@ fn main() -> anyhow::Result<()> {
                 }
 
                 scope.spawn(eth::ingress_witnesser::start(
-                    eth_dual_rpc.ws_client.clone(),
+                    eth_dual_rpc.clone(),
                     _epoch_start_receiver_4,
                     eth_monitor_ingress_receiver,
                     state_chain_client.clone(),
