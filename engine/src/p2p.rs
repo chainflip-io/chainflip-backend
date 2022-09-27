@@ -301,7 +301,7 @@ impl P2PContext {
                 Some((pubkey, payload)) = incoming_message_receiver.recv() => {
                     // before we forward the messages to other modules we map
                     // the x25519 pubkey to their account id here
-                    self.on_incoming_message(pubkey, payload);
+                    self.forward_incoming_message(pubkey, payload);
                 }
                 Some(peer_info) = reconnect_receiver.recv() => {
                     self.reconnect_to_peer(peer_info);
@@ -361,7 +361,7 @@ impl P2PContext {
         }
     }
 
-    fn on_incoming_message(&mut self, pubkey: XPublicKey, payload: Vec<u8>) {
+    fn forward_incoming_message(&mut self, pubkey: XPublicKey, payload: Vec<u8>) {
         if let Some(acc_id) = self.x25519_to_account_id.get(&pubkey) {
             slog::trace!(self.logger, "Received a message from {}", acc_id);
             self.incoming_message_sender
