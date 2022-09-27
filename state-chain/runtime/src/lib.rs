@@ -237,6 +237,7 @@ impl pallet_cf_lp::Config for Runtime {
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 }
 
+#[cfg(feature = "ibiza")]
 impl pallet_cf_egress::Config for Runtime {
 	type Event = Event;
 	type ReplayProtection = chainflip::EthReplayProtectionProvider;
