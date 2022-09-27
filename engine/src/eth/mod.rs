@@ -311,7 +311,7 @@ impl fmt::Display for TransportProtocol {
 }
 
 /// Contains empty vec when no interesting events
-/// Ok if the logs decode successfully, error if not
+/// Ok if *all* the relevant logs of that block decode successfully, Error if not
 #[derive(Debug)]
 pub struct BlockWithDecodedEvents<EventParameters: Debug> {
     pub block_number: u64,
