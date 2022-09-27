@@ -368,6 +368,31 @@ impl EthDualRpcClient {
     ) -> Result<Self> {
         let dual_rpc = Self::inner_new(eth_settings, logger).await?;
 
+        pub async fn validate_client_chain_id<T>(
+            client: &EthRpcClient<T>,
+            expected_chain_id: U256,
+        ) -> anyhow::Result<()>
+        where
+            T: Send + Sync + EthTransport,
+            T::Out: Send,
+        {
+            let chain_id = client
+                .chain_id()
+                .await
+                .context("Failed to fetch chain id")?;
+
+            if chain_id != expected_chain_id {
+                return Err(anyhow!(
+                    "Expected ETH chain id {}, received {} through {}.",
+                    expected_chain_id,
+                    chain_id,
+                    T::transport_protocol()
+                ));
+            }
+
+            Ok(())
+        }
+
         let mut errors = [
             validate_client_chain_id(&dual_rpc.ws_client, expected_chain_id).await,
             validate_client_chain_id(&dual_rpc.http_client, expected_chain_id).await,
@@ -685,29 +710,4 @@ mod tests {
             );
         }
     }
-}
-
-pub async fn validate_client_chain_id<T>(
-    client: &EthRpcClient<T>,
-    expected_chain_id: U256,
-) -> anyhow::Result<()>
-where
-    T: Send + Sync + EthTransport,
-    T::Out: Send,
-{
-    let chain_id = client
-        .chain_id()
-        .await
-        .context("Failed to fetch chain id")?;
-
-    if chain_id != expected_chain_id {
-        return Err(anyhow!(
-            "Expected ETH chain id {}, received {} through {}.",
-            expected_chain_id,
-            chain_id,
-            T::transport_protocol()
-        ));
-    }
-
-    Ok(())
 }
