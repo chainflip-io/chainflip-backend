@@ -6,6 +6,10 @@ pub use state_chain_runtime::constants::common::eth::BLOCK_SAFETY_MARGIN as ETH_
 /// are allowed to create unauthorized ceremonies (delayed messages)
 pub const CEREMONY_ID_WINDOW: u64 = 6000;
 
+// This choice of port is arbitrary
+// TODO: make this configurable
+pub const DEFAULT_CFE_PORT: u16 = 8078;
+
 // ======= State chain client =======
 
 /// Number of times to retry after incrementing the nonce on a nonce error

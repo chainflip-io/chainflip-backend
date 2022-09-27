@@ -4,6 +4,7 @@ use crate::multisig::eth::EthSigning;
 use anyhow::{bail, Context};
 use chainflip_engine::{
     common::{format_iterator, read_clean_and_decode_hex_str_file},
+    constants::DEFAULT_CFE_PORT,
     eth::{
         self, build_broadcast_channel,
         key_manager::KeyManager,
@@ -162,10 +163,6 @@ fn main() -> anyhow::Result<()> {
 
             let own_peer_info = current_peer_infos.iter().find(|pi| pi.account_id == state_chain_client.our_account_id).cloned();
 
-            // This choice of port is arbitrary
-            // TODO: make this configurable
-            let cfe_port: u16 = 8078;
-
             let node_key = {
                 let secret = read_clean_and_decode_hex_str_file(&settings.node_p2p.node_key_file, "Node Key", |str| {
                     ed25519_dalek::SecretKey::from_bytes(
@@ -182,7 +179,7 @@ fn main() -> anyhow::Result<()> {
             };
 
             let (outgoing_message_sender, peer_update_sender, incoming_message_receiver, p2p_fut) =
-                p2p::start(&node_key, cfe_port, current_peer_infos, state_chain_client.our_account_id.clone(), &root_logger);
+                p2p::start(&node_key, DEFAULT_CFE_PORT, current_peer_infos, state_chain_client.our_account_id.clone(), &root_logger);
 
             scope.spawn(async move {
                 p2p_fut.await;
@@ -214,7 +211,7 @@ fn main() -> anyhow::Result<()> {
                 multisig_p2p::start(
                     node_key,
                     state_chain_client.clone(),
-                    cfe_port,
+                    DEFAULT_CFE_PORT,
                     own_peer_info,
                     &root_logger,
                 )
