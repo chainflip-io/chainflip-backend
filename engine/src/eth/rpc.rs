@@ -363,9 +363,36 @@ impl EthDualRpcClient {
     /// with the same `chain_id` as that provided.
     pub async fn new(
         eth_settings: &settings::Eth,
-        expected_chain_id: Option<U256>,
+        expected_chain_id: U256,
         logger: &slog::Logger,
     ) -> Result<Self> {
+        let dual_rpc = Self::inner_new(eth_settings, logger).await?;
+
+        let mut errors = [
+            validate_client_chain_id(&dual_rpc.ws_client, expected_chain_id).await,
+            validate_client_chain_id(&dual_rpc.http_client, expected_chain_id).await,
+        ]
+        .into_iter()
+        .filter_map(|res| res.err())
+        .peekable();
+
+        if errors.peek().is_some() {
+            bail!(
+                "Inconsistent chain configuration. Terminating.{}",
+                format_iterator(errors)
+            );
+        }
+
+        Ok(dual_rpc)
+    }
+
+    #[cfg(feature = "integration-test")]
+    /// For tests we assume we're pointing to the correct chain_id.
+    pub async fn new_test(eth_settings: &settings::Eth, logger: &slog::Logger) -> Result<Self> {
+        Self::inner_new(eth_settings, logger).await
+    }
+
+    async fn inner_new(eth_settings: &settings::Eth, logger: &slog::Logger) -> Result<Self> {
         let logger = logger.new(slog::o!(COMPONENT_KEY => "Eth-DualRpcClient"));
 
         let ws_client = EthWsRpcClient::new(eth_settings, &logger)
@@ -374,23 +401,6 @@ impl EthDualRpcClient {
 
         let http_client = EthHttpRpcClient::new(eth_settings, &logger)
             .context("Failed to create EthHttpRpcClient")?;
-
-        if let Some(expected_chain_id) = expected_chain_id {
-            let mut errors = [
-                validate_client_chain_id(&ws_client, expected_chain_id).await,
-                validate_client_chain_id(&http_client, expected_chain_id).await,
-            ]
-            .into_iter()
-            .filter_map(|res| res.err())
-            .peekable();
-
-            if errors.peek().is_some() {
-                bail!(
-                    "Inconsistent chain configuration. Terminating.{}",
-                    format_iterator(errors)
-                );
-            }
-        }
 
         Ok(Self {
             ws_client,

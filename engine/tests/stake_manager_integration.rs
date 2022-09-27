@@ -1,3 +1,5 @@
+#![cfg(feature = "integration-test")]
+
 //! This tests integration with the StakeManager contract
 //! For instruction on how to run this test, see `engine/tests/README.md`
 

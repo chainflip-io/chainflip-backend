@@ -1,3 +1,5 @@
+#![cfg(feature = "integration-test")]
+
 //! This tests integration with the KeyManager contract
 //! For instruction on how to run this test, see `engine/tests/README.md`
 
@@ -13,6 +15,7 @@ use web3::types::U256;
 mod common;
 use crate::common::IntegrationTestConfig;
 
+#[cfg(feature = "integration-test")]
 #[tokio::test]
 pub async fn test_all_key_manager_events() {
     let root_logger = utils::new_cli_logger();

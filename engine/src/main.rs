@@ -50,13 +50,13 @@ fn main() -> anyhow::Result<()> {
                     .await?;
 
             let eth_dual_rpc =
-                EthDualRpcClient::new(&settings.eth, Some(U256::from(state_chain_client
+                EthDualRpcClient::new(&settings.eth, U256::from(state_chain_client
                     .get_storage_value::<pallet_cf_environment::EthereumChainId::<state_chain_runtime::Runtime>>(
                         latest_block_hash,
                     )
                     .await
                     .context("Failed to get EthereumChainId from state chain")?
-                )),
+                ),
                 &root_logger)
                 .await
                 .context("Failed to create EthDualRpcClient")?;

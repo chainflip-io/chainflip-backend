@@ -1,3 +1,5 @@
+#![cfg(feature = "integration-test")]
+
 use chainflip_engine::{
     eth::{event::Event, rpc::EthDualRpcClient, EthContractWitnesser},
     settings::{CommandLineOptions, Settings},
@@ -37,11 +39,10 @@ pub async fn get_contract_events<Manager>(
 where
     Manager: EthContractWitnesser + std::marker::Sync,
 {
-    let eth_dual_rpc = EthDualRpcClient::new(
+    let eth_dual_rpc = EthDualRpcClient::new_test(
         &Settings::from_file_and_env("config/Testing.toml", CommandLineOptions::default())
             .unwrap()
             .eth,
-        None,
         &logger,
     )
     .await

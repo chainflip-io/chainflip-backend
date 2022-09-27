@@ -164,6 +164,7 @@ ethereum = "0.12"
 rlp = "0.5"
 
 [features]
+integration-test = []
 ibiza = [
     'pallet-cf-ingress',
     'state-chain-runtime/ibiza'
