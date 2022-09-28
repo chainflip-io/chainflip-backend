@@ -39,7 +39,7 @@ impl BenchmarkValue for Address {
 
 impl BenchmarkValue for H256 {
 	fn benchmark_value() -> Self {
-		EthereumApi::benchmark_value().threshold_signature_payload().into()
+		EthereumApi::benchmark_value().threshold_signature_payload()
 	}
 }
 
