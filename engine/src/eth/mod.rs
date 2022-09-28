@@ -5,7 +5,7 @@ pub mod erc20_witnesser;
 mod http_safe_stream;
 pub mod ingress_witnesser;
 pub mod key_manager;
-mod merged_block_events_stream;
+mod merged_block_items_stream;
 pub mod stake_manager;
 
 pub mod event;
@@ -28,7 +28,7 @@ use crate::{
     constants::ETH_BLOCK_SAFETY_MARGIN,
     eth::{
         http_safe_stream::{safe_polling_http_head_stream, HTTP_POLL_INTERVAL},
-        merged_block_events_stream::merged_block_events_stream,
+        merged_block_items_stream::merged_block_items_stream,
         rpc::EthWsRpcApi,
         ws_safe_stream::safe_ws_head_stream,
     },
@@ -530,7 +530,7 @@ pub trait EthContractWitnesser {
             )
             .await?;
 
-        merged_block_events_stream(safe_ws_block_events, safe_http_block_events, logger.clone())
+        merged_block_items_stream(safe_ws_block_events, safe_http_block_events, logger.clone())
             .await
     }
 
