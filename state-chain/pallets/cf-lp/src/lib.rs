@@ -233,10 +233,10 @@ pub mod pallet {
 
 		#[pallet::weight(0)]
 		pub fn request_deposit_address(
-			who: OriginFor<T>,
+			origin: OriginFor<T>,
 			asset: ForeignChainAsset,
 		) -> DispatchResultWithPostInfo {
-			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(who)?;
+			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
 			let (intent_id, ingress_address) =
 				T::Ingress::register_liquidity_ingress_intent(account_id, asset)?;
@@ -248,12 +248,12 @@ pub mod pallet {
 
 		#[pallet::weight(0)]
 		pub fn withdraw_liquidity(
-			who: OriginFor<T>,
+			origin: OriginFor<T>,
 			amount: AssetAmount,
 			foreign_asset: ForeignChainAsset,
 			egress_address: ForeignChainAddress,
 		) -> DispatchResultWithPostInfo {
-			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(who)?;
+			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
 			ensure!(
 				T::EgressApi::is_egress_valid(&foreign_asset, &egress_address,),
@@ -280,11 +280,11 @@ pub mod pallet {
 
 		#[pallet::weight(0)]
 		pub fn open_position(
-			who: OriginFor<T>,
+			origin: OriginFor<T>,
 			pool_id: PoolId,
 			position: TradingPosition<AssetAmount>,
 		) -> DispatchResult {
-			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(who)?;
+			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
 			// Ensure the liquidity pool is enabled.
 			let mut pool =
@@ -329,12 +329,12 @@ pub mod pallet {
 
 		#[pallet::weight(0)]
 		pub fn update_position(
-			who: OriginFor<T>,
+			origin: OriginFor<T>,
 			pool_id: PoolId,
 			id: PositionId,
 			new_position: TradingPosition<AssetAmount>,
 		) -> DispatchResultWithPostInfo {
-			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(who)?;
+			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
 			TradingPositions::<T>::try_mutate(id, |maybe_position| {
 				match maybe_position.as_mut() {
