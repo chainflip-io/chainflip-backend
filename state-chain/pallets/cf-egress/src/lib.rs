@@ -213,13 +213,10 @@ impl<T: Config> Pallet<T> {
 }
 
 impl<T: Config> EgressApi for Pallet<T> {
-	type Amount = AssetAmount;
-	type EgressAddress = ForeignChainAddress;
-
 	fn schedule_egress(
 		foreign_asset: ForeignChainAsset,
-		amount: Self::Amount,
-		egress_address: Self::EgressAddress,
+		amount: AssetAmount,
+		egress_address: ForeignChainAddress,
 	) -> DispatchResult {
 		ensure!(
 			DisabledEgressAssets::<T>::get(foreign_asset).is_none(),
@@ -240,7 +237,7 @@ impl<T: Config> EgressApi for Pallet<T> {
 
 	fn is_egress_valid(
 		foreign_asset: &ForeignChainAsset,
-		egress_address: &Self::EgressAddress,
+		egress_address: &ForeignChainAddress,
 	) -> bool {
 		match foreign_asset.chain {
 			ForeignChain::Ethereum =>

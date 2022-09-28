@@ -111,13 +111,10 @@ parameter_types! {
 }
 pub struct MockEgressApi;
 impl EgressApi for MockEgressApi {
-	type Amount = AssetAmount;
-	type EgressAddress = ForeignChainAddress;
-
 	fn schedule_egress(
 		foreign_asset: ForeignChainAsset,
-		amount: Self::Amount,
-		egress_address: Self::EgressAddress,
+		amount: AssetAmount,
+		egress_address: ForeignChainAddress,
 	) -> DispatchResult {
 		LastEgress::set(Some((foreign_asset, amount, egress_address)));
 		Ok(())
@@ -125,7 +122,7 @@ impl EgressApi for MockEgressApi {
 
 	fn is_egress_valid(
 		_foreign_asset: &ForeignChainAsset,
-		_egress_address: &Self::EgressAddress,
+		_egress_address: &ForeignChainAddress,
 	) -> bool {
 		IsValid::get()
 	}

@@ -9,7 +9,7 @@ use sp_runtime::DispatchResult;
 
 use cf_primitives::{
 	liquidity::{PoolId, PositionId, TradingPosition},
-	Asset, ForeignChainAddress, ForeignChainAsset, IntentId,
+	Asset, AssetAmount, ForeignChainAddress, ForeignChainAsset, IntentId,
 };
 use cf_traits::{
 	liquidity::{AmmPoolApi, LpProvisioningApi},
@@ -17,7 +17,6 @@ use cf_traits::{
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
-use sp_runtime::traits::Saturating;
 
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
@@ -51,7 +50,6 @@ impl<AccountId, Amount> UserTradingPosition<AccountId, Amount> {
 
 #[frame_support::pallet]
 pub mod pallet {
-
 	use super::*;
 
 	#[pallet::config]
@@ -68,7 +66,7 @@ pub mod pallet {
 		type Ingress: IngressApi<AccountId = <Self as frame_system::Config>::AccountId>;
 
 		/// API used to withdraw foreign assets off the chain.
-		type EgressApi: EgressApi<Amount = Self::Amount, EgressAddress = ForeignChainAddress>;
+		type EgressApi: EgressApi;
 
 		/// For governance checks.
 		type EnsureGovernance: EnsureOrigin<Self::Origin>;
@@ -104,12 +102,12 @@ pub mod pallet {
 		AccountDebited {
 			account_id: T::AccountId,
 			asset: Asset,
-			amount_debited: T::Amount,
+			amount_debited: AssetAmount,
 		},
 		AccountCredited {
 			account_id: T::AccountId,
 			asset: Asset,
-			amount_credited: T::Amount,
+			amount_credited: AssetAmount,
 		},
 		LiquidityPoolAdded {
 			asset0: Asset,
@@ -124,13 +122,13 @@ pub mod pallet {
 			account_id: T::AccountId,
 			position_id: PositionId,
 			pool_id: PoolId,
-			position: TradingPosition<T::Amount>,
+			position: TradingPosition<AssetAmount>,
 		},
 		TradingPositionUpdated {
 			account_id: T::AccountId,
 			position_id: PositionId,
 			pool_id: PoolId,
-			new_position: TradingPosition<T::Amount>,
+			new_position: TradingPosition<AssetAmount>,
 		},
 		TradingPositionClosed {
 			account_id: T::AccountId,
@@ -148,18 +146,18 @@ pub mod pallet {
 	#[pallet::storage]
 	/// Storage for user's free balances/ DoubleMap: (AccountId, Asset) => Balance
 	pub type FreeBalances<T: Config> =
-		StorageDoubleMap<_, Twox64Concat, T::AccountId, Identity, Asset, T::Amount>;
+		StorageDoubleMap<_, Twox64Concat, T::AccountId, Identity, Asset, AssetAmount>;
 
 	#[pallet::storage]
 	/// Stores liquidity pools that are allowed: PoolId => LiquidityPool
 	pub type LiquidityPools<T: Config> =
-		StorageMap<_, Twox64Concat, PoolId, LiquidityPool<T::Amount>>;
+		StorageMap<_, Twox64Concat, PoolId, LiquidityPool<AssetAmount>>;
 
 	#[pallet::storage]
 	/// A map of Amm Position ID to the TradingPosition and owner. Map: PositionId =>
 	/// UserTradingPosition
 	pub type TradingPositions<T: Config> =
-		StorageMap<_, Twox64Concat, PositionId, UserTradingPosition<T::AccountId, T::Amount>>;
+		StorageMap<_, Twox64Concat, PositionId, UserTradingPosition<T::AccountId, AssetAmount>>;
 
 	#[pallet::storage]
 	/// Stores the Position ID for the next Amm position.
@@ -190,7 +188,7 @@ pub mod pallet {
 				Error::<T>::LiquidityPoolAlreadyExists
 			);
 
-			LiquidityPools::<T>::insert(pool_id, LiquidityPool::<T::Amount>::new(asset0, asset1));
+			LiquidityPools::<T>::insert(pool_id, LiquidityPool::<AssetAmount>::new(asset0, asset1));
 
 			Self::deposit_event(Event::LiquidityPoolAdded { asset0, asset1 });
 
@@ -251,7 +249,7 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn withdraw_liquidity(
 			who: OriginFor<T>,
-			amount: T::Amount,
+			amount: AssetAmount,
 			foreign_asset: ForeignChainAsset,
 			egress_address: ForeignChainAddress,
 		) -> DispatchResultWithPostInfo {
@@ -284,7 +282,7 @@ pub mod pallet {
 		pub fn open_position(
 			who: OriginFor<T>,
 			pool_id: PoolId,
-			position: TradingPosition<T::Amount>,
+			position: TradingPosition<AssetAmount>,
 		) -> DispatchResult {
 			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(who)?;
 
@@ -312,7 +310,7 @@ pub mod pallet {
 			// Insert the position into
 			TradingPositions::<T>::insert(
 				position_id,
-				UserTradingPosition::<T::AccountId, T::Amount>::new(
+				UserTradingPosition::<T::AccountId, AssetAmount>::new(
 					account_id.clone(),
 					position,
 					pool_id,
@@ -334,7 +332,7 @@ pub mod pallet {
 			who: OriginFor<T>,
 			pool_id: PoolId,
 			id: PositionId,
-			new_position: TradingPosition<T::Amount>,
+			new_position: TradingPosition<AssetAmount>,
 		) -> DispatchResultWithPostInfo {
 			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(who)?;
 
@@ -440,7 +438,7 @@ impl<T: Config> Pallet<T> {
 	fn try_debit(
 		account_id: &T::AccountId,
 		asset: Asset,
-		amount: T::Amount,
+		amount: AssetAmount,
 	) -> Result<(), Error<T>> {
 		let mut balance = FreeBalances::<T>::get(account_id, asset).unwrap_or_default();
 		ensure!(balance >= amount, Error::<T>::InsufficientBalance);
@@ -455,7 +453,11 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	fn credit(account_id: &T::AccountId, asset: Asset, amount: T::Amount) -> Result<(), Error<T>> {
+	fn credit(
+		account_id: &T::AccountId,
+		asset: Asset,
+		amount: AssetAmount,
+	) -> Result<(), Error<T>> {
 		FreeBalances::<T>::mutate(account_id, asset, |maybe_balance| {
 			let mut balance = maybe_balance.unwrap_or_default();
 			balance = balance.saturating_add(amount);
@@ -473,7 +475,7 @@ impl<T: Config> Pallet<T> {
 
 impl<T: Config> LpProvisioningApi for Pallet<T> {
 	type AccountId = <T as frame_system::Config>::AccountId;
-	type Amount = T::Amount;
+	type Amount = AssetAmount;
 
 	fn provision_account(
 		account_id: &Self::AccountId,

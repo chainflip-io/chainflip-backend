@@ -13,8 +13,9 @@ use sp_std::collections::btree_set::BTreeSet;
 
 use cf_chains::{benchmarking_value::BenchmarkValue, ApiCall, ChainAbi, ChainCrypto};
 use cf_primitives::{
-	AccountRole, Asset, AuthorityCount, CeremonyId, ChainflipAccountData, ChainflipAccountState,
-	EpochIndex, EthereumAddress, ForeignChainAddress, ForeignChainAsset, IntentId,
+	AccountRole, Asset, AssetAmount, AuthorityCount, CeremonyId, ChainflipAccountData,
+	ChainflipAccountState, EpochIndex, EthereumAddress, ForeignChainAddress, ForeignChainAsset,
+	IntentId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -730,18 +731,15 @@ pub trait AccountRoleRegistry<T: frame_system::Config> {
 
 /// API that allows other pallets to Egress assets out of the State Chain.
 pub trait EgressApi {
-	type Amount;
-	type EgressAddress;
-
 	fn schedule_egress(
 		foreign_asset: ForeignChainAsset,
-		amount: Self::Amount,
-		egress_address: Self::EgressAddress,
+		amount: AssetAmount,
+		egress_address: ForeignChainAddress,
 	) -> DispatchResult;
 
 	fn is_egress_valid(
 		foreign_asset: &ForeignChainAsset,
-		egress_address: &Self::EgressAddress,
+		egress_address: &ForeignChainAddress,
 	) -> bool;
 }
 
