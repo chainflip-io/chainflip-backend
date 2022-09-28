@@ -17,7 +17,7 @@ const SUPPLY_UPDATE_INTERVAL: u32 = 100;
 benchmarks! {
 	// Benchmark for the backup node emission inflation update extrinsic
 	update_backup_node_emission_inflation {
-		let call = Call::<T>::update_backup_node_emission_inflation{inflation: 100u32.into()};
+		let call = Call::<T>::update_backup_node_emission_inflation{inflation: 100u32};
 	}: {
 		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::successful_origin());
 	}
@@ -25,7 +25,7 @@ benchmarks! {
 		assert_eq!(CurrentAuthorityEmissionInflation::<T>::get(), 2720);
 	}
 	update_current_authority_emission_inflation {
-		let call = Call::<T>::update_current_authority_emission_inflation{inflation: 100u32.into()};
+		let call = Call::<T>::update_current_authority_emission_inflation{inflation: 100u32};
 	}: {
 		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::successful_origin());
 	}
@@ -53,7 +53,7 @@ benchmarks! {
 	}
 	verify {
 		 let supply_update_interval = Pallet::<T>::supply_update_interval();
-		 assert_eq!(supply_update_interval, (100 as u32).into());
+		 assert_eq!(supply_update_interval, (100_u32).into());
 	}
 
 	impl_benchmark_test_suite!(
