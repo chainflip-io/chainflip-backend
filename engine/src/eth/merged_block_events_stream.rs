@@ -15,19 +15,19 @@ use crate::{
     logging::{ETH_HTTP_STREAM_YIELDED, ETH_STREAM_BEHIND, ETH_WS_STREAM_YIELDED},
 };
 
-use super::{BlockWithDecodedEvents, BlockWithEvents};
+use super::{BlockWithBlockItems, BlockWithProcessedBlockItems};
 
-/// Merges two streams of `BlockWithDecodedEvents`. The intent of this function is to create redundancy for HTTP and WS block event streams.
+/// Merges two streams of `BlockWithProcessedBlockItems`. The intent of this function is to create redundancy for HTTP and WS block item streams.
 ///
-/// For a particular ETH block, this will only return the events for that block once, this includes blocks without events of interest. i.e. we always return
-/// a contiguous sequence of ETH block numbers (`BlockWithEvents` containing this block number).
+/// For a particular ETH block, this will only return the items for that block once, this includes blocks without items of interest. i.e. we always return
+/// a contiguous sequence of ETH block numbers (`BlockWithBlockItems` containing this block number).
 ///
 /// This will always yield from the protocol that reaches the next block number fastest (in practice this is normally WS).
 ///
 /// If the decoding has failed on one of these blocks, then we attempt to recover by waiting for the other stream to reach that block, and see if it was successful.
 /// If we the other stream gets to that point then we terminate the whole stream.
 ///
-/// If the stream being used to recover terminates (i.e. no events left to yield) then this stream will terminate.
+/// If the stream being used to recover terminates (i.e. no items left to yield) then this stream will terminate.
 ///
 /// If just one of the stream terminates, but the other is still yielding blocks (not in recovery) this stream will continue to yield blocks until there is an error or it terminates.
 ///
@@ -45,21 +45,16 @@ use super::{BlockWithDecodedEvents, BlockWithEvents};
 /// Developer notes:
 /// - "Pulled" refers to an item taken from one of the inner streams
 /// - "Yielded" refers to an item to be returned from this stream
-pub async fn merged_block_events_stream<
-    'a,
-    BlockEventsStreamWs,
-    BlockEventsStreamHttp,
-    EventParameters,
->(
-    safe_ws_block_events_stream: BlockEventsStreamWs,
-    safe_http_block_events_stream: BlockEventsStreamHttp,
+pub async fn merged_block_items_stream<'a, BlockItemsStreamWs, BlockItemsStreamHttp, BlockItem>(
+    safe_ws_block_items_stream: BlockItemsStreamWs,
+    safe_http_block_items_stream: BlockItemsStreamHttp,
     logger: slog::Logger,
-) -> Result<Pin<Box<dyn Stream<Item = BlockWithEvents<EventParameters>> + Send + 'a>>>
+) -> Result<Pin<Box<dyn Stream<Item = BlockWithBlockItems<BlockItem>> + Send + 'a>>>
 where
-    EventParameters: Debug + Send + Sync + 'static,
-    BlockEventsStreamWs: Stream<Item = BlockWithDecodedEvents<EventParameters>> + Unpin + Send + 'a,
-    BlockEventsStreamHttp:
-        Stream<Item = BlockWithDecodedEvents<EventParameters>> + Unpin + Send + 'a,
+    BlockItem: Debug + Send + Sync + 'static,
+    BlockItemsStreamWs: Stream<Item = BlockWithProcessedBlockItems<BlockItem>> + Unpin + Send + 'a,
+    BlockItemsStreamHttp:
+        Stream<Item = BlockWithProcessedBlockItems<BlockItem>> + Unpin + Send + 'a,
 {
     #[derive(Debug)]
     struct ProtocolState {
@@ -73,27 +68,27 @@ where
         logger: slog::Logger,
     }
 
-    struct StreamState<BlockEventsStreamWs: Stream, BlockEventsStreamHttp: Stream> {
+    struct StreamState<BlockItemsStreamWs: Stream, BlockItemsStreamHttp: Stream> {
         ws_state: ProtocolState,
-        ws_stream: BlockEventsStreamWs,
+        ws_stream: BlockItemsStreamWs,
         http_state: ProtocolState,
-        http_stream: BlockEventsStreamHttp,
+        http_stream: BlockItemsStreamHttp,
         merged_stream_state: MergedStreamState,
     }
 
-    let init_state = StreamState::<BlockEventsStreamWs, BlockEventsStreamHttp> {
+    let init_state = StreamState::<BlockItemsStreamWs, BlockItemsStreamHttp> {
         ws_state: ProtocolState {
             last_block_pulled: 0,
             log_ticker: make_periodic_tick(ETH_STILL_BEHIND_LOG_INTERVAL, false),
             protocol: TransportProtocol::Ws,
         },
-        ws_stream: safe_ws_block_events_stream,
+        ws_stream: safe_ws_block_items_stream,
         http_state: ProtocolState {
             last_block_pulled: 0,
             log_ticker: make_periodic_tick(ETH_STILL_BEHIND_LOG_INTERVAL, false),
             protocol: TransportProtocol::Http,
         },
-        http_stream: safe_http_block_events_stream,
+        http_stream: safe_http_block_items_stream,
         merged_stream_state: MergedStreamState {
             last_block_yielded: 0,
             logger,
@@ -154,36 +149,36 @@ where
     // 2. the protocol streams have not started at the same block
     // 3. failure in `recover_with_other_stream`
     // When returning Ok, will return None if:
-    // 1. the protocol stream is behind the next block to yield
+    // 1. the protocol stream is behind the next block to yield p
     async fn do_for_protocol<
-        BlockEventsStream: Stream<Item = BlockWithDecodedEvents<EventParameters>> + Unpin,
-        EventParameters: Debug,
+        BlockItemsStream: Stream<Item = BlockWithProcessedBlockItems<BlockItem>> + Unpin,
+        BlockItem: Debug,
     >(
         merged_stream_state: &mut MergedStreamState,
         protocol_state: &mut ProtocolState,
         other_protocol_state: &mut ProtocolState,
-        mut other_protocol_stream: BlockEventsStream,
-        block_events: BlockWithDecodedEvents<EventParameters>,
-    ) -> Result<Option<BlockWithEvents<EventParameters>>> {
+        mut other_protocol_stream: BlockItemsStream,
+        block_with_processed_block_items: BlockWithProcessedBlockItems<BlockItem>,
+    ) -> Result<Option<BlockWithBlockItems<BlockItem>>> {
         let next_block_to_yield = merged_stream_state.last_block_yielded + 1;
         let merged_has_yielded = merged_stream_state.last_block_yielded != 0;
         let has_pulled = protocol_state.last_block_pulled != 0;
 
         assert!(!has_pulled
-            || (block_events.block_number == protocol_state.last_block_pulled + 1), "ETH {} stream is expected to be a contiguous sequence of block events. Last pulled `{}`, got `{}`", protocol_state.protocol, protocol_state.last_block_pulled, block_events.block_number);
+            || (block_with_processed_block_items.block_number == protocol_state.last_block_pulled + 1), "ETH {} stream is expected to be a contiguous sequence of block items. Last pulled `{}`, got `{}`", protocol_state.protocol, protocol_state.last_block_pulled, block_with_processed_block_items.block_number);
 
-        protocol_state.last_block_pulled = block_events.block_number;
+        protocol_state.last_block_pulled = block_with_processed_block_items.block_number;
 
-        let opt_block_events = if merged_has_yielded {
-            if block_events.block_number == next_block_to_yield {
-                Some(block_events)
+        let opt_block_items = if merged_has_yielded {
+            if block_with_processed_block_items.block_number == next_block_to_yield {
+                Some(block_with_processed_block_items)
                 // if we're only one block "behind" we're not really "behind", we were just the second stream polled
-            } else if block_events.block_number + 1 < next_block_to_yield {
+            } else if block_with_processed_block_items.block_number + 1 < next_block_to_yield {
                 None
-            } else if block_events.block_number < next_block_to_yield {
+            } else if block_with_processed_block_items.block_number < next_block_to_yield {
                 // we're behind, but we only want to log once every interval
                 if protocol_state.log_ticker.tick().now_or_never().is_some() {
-                    slog::trace!(merged_stream_state.logger, "ETH {} stream pulled block {}. But this is behind the next block to yield of {}. Continuing...", protocol_state.protocol, block_events.block_number, next_block_to_yield);
+                    slog::trace!(merged_stream_state.logger, "ETH {} stream pulled block {}. But this is behind the next block to yield of {}. Continuing...", protocol_state.protocol, block_with_processed_block_items.block_number, next_block_to_yield);
                 }
                 None
             } else {
@@ -191,57 +186,64 @@ where
             }
         } else {
             // yield
-            Some(block_events)
+            Some(block_with_processed_block_items)
         };
 
-        if let Some(block_events) = opt_block_events {
-            match block_events.decode_events_result {
-                Ok(events) => {
+        if let Some(block_with_processed_block_items) = opt_block_items {
+            match block_with_processed_block_items.processed_block_items {
+                Ok(block_items) => {
                     // yield, if we are at high enough block number
                     log_when_yielding(
                         protocol_state,
                         other_protocol_state,
                         merged_stream_state,
-                        block_events.block_number,
+                        block_with_processed_block_items.block_number,
                     );
-                    Ok(Some(BlockWithEvents {
-                        block_number: block_events.block_number,
-                        events,
+                    Ok(Some(BlockWithBlockItems {
+                        block_number: block_with_processed_block_items.block_number,
+                        block_items,
                     }))
                 }
                 Err(err) => {
                     slog::error!(
                         merged_stream_state.logger,
-                        "ETH {} stream failed to get events for ETH block `{}`. Attempting to recover. Error: {}",
+                        "ETH {} stream failed to get block items for ETH block `{}`. Attempting to recover. Error: {}",
                         protocol_state.protocol,
-                        block_events.block_number,
+                        block_with_processed_block_items.block_number,
                         err
                     );
-                    while let Some(block_events) = other_protocol_stream.next().await {
-                        other_protocol_state.last_block_pulled = block_events.block_number;
-                        match block_events.block_number.cmp(&next_block_to_yield) {
+                    while let Some(block_with_processed_block_items) =
+                        other_protocol_stream.next().await
+                    {
+                        other_protocol_state.last_block_pulled =
+                            block_with_processed_block_items.block_number;
+                        match block_with_processed_block_items
+                            .block_number
+                            .cmp(&next_block_to_yield)
+                        {
                             Ordering::Equal => {
                                 // we want to yield this one :)
-                                match block_events.decode_events_result {
-                                    Ok(events) => {
+                                match block_with_processed_block_items.processed_block_items {
+                                    Ok(block_items) => {
                                         log_when_yielding(
                                             other_protocol_state,
                                             protocol_state,
                                             merged_stream_state,
-                                            block_events.block_number,
+                                            block_with_processed_block_items.block_number,
                                         );
-                                        return Ok(Some(BlockWithEvents {
-                                            block_number: block_events.block_number,
-                                            events,
+                                        return Ok(Some(BlockWithBlockItems {
+                                            block_number: block_with_processed_block_items
+                                                .block_number,
+                                            block_items,
                                         }));
                                     }
                                     Err(err) => {
-                                        bail!("ETH {} stream failed with error, on block {} that we were recovering from: {}", other_protocol_state.protocol, block_events.block_number, err);
+                                        bail!("ETH {} stream failed with error, on block {} that we were recovering from: {}", other_protocol_state.protocol, block_with_processed_block_items.block_number, err);
                                     }
                                 }
                             }
                             Ordering::Less => {
-                                slog::trace!(merged_stream_state.logger, "ETH {} stream pulled block `{}` but still below the next block to yield of {}", other_protocol_state.protocol, block_events.block_number, next_block_to_yield)
+                                slog::trace!(merged_stream_state.logger, "ETH {} stream pulled block `{}` but still below the next block to yield of {}", other_protocol_state.protocol, block_with_processed_block_items.block_number, next_block_to_yield)
                             }
                             Ordering::Greater => {
                                 // This is ensured by the safe streams
@@ -249,7 +251,7 @@ where
                                     "ETH {} stream skipped blocks. Next block to yield was `{}` but got block `{}`. This should not occur",
                                     other_protocol_state.protocol,
                                     next_block_to_yield,
-                                    block_events.block_number
+                                    block_with_processed_block_items.block_number
                                 );
                             }
                         }
@@ -270,22 +272,22 @@ where
         init_state,
         |mut stream_state| async move {
             loop {
-                let next_clean_block_events = tokio::select! {
-                    Some(block_events) = stream_state.ws_stream.next() => {
-                        do_for_protocol(&mut stream_state.merged_stream_state, &mut stream_state.ws_state, &mut stream_state.http_state, &mut stream_state.http_stream, block_events).await
+                let next_clean_block_items = tokio::select! {
+                    Some(block_items) = stream_state.ws_stream.next() => {
+                        do_for_protocol(&mut stream_state.merged_stream_state, &mut stream_state.ws_state, &mut stream_state.http_state, &mut stream_state.http_stream, block_items).await
                     }
-                    Some(block_events) = stream_state.http_stream.next() => {
-                        do_for_protocol(&mut stream_state.merged_stream_state, &mut stream_state.http_state, &mut stream_state.ws_state, &mut stream_state.ws_stream, block_events).await
+                    Some(block_items) = stream_state.http_stream.next() => {
+                        do_for_protocol(&mut stream_state.merged_stream_state, &mut stream_state.http_state, &mut stream_state.ws_state, &mut stream_state.ws_stream, block_items).await
                     }
                     else => break None
                 };
 
-                match next_clean_block_events {
-                    Ok(opt_clean_block_events) => {
-                        if let Some(clean_block_events) = opt_clean_block_events {
+                match next_clean_block_items {
+                    Ok(opt_clean_block_items) => {
+                        if let Some(clean_block_items) = opt_clean_block_items {
                             stream_state.merged_stream_state.last_block_yielded =
-                                clean_block_events.block_number;
-                            break Some((clean_block_events, stream_state));
+                                clean_block_items.block_number;
+                            break Some((clean_block_items, stream_state));
                         }
                     }
                     Err(err) => {
@@ -342,35 +344,41 @@ mod merged_stream_tests {
     fn block_with_ok_events_decoding(
         block_number: u64,
         log_indices: &[u8],
-    ) -> BlockWithDecodedEvents<KeyManagerEvent> {
-        BlockWithDecodedEvents {
+    ) -> BlockWithProcessedBlockItems<Event<KeyManagerEvent>> {
+        BlockWithProcessedBlockItems {
             block_number,
-            decode_events_result: Ok(make_dummy_events(log_indices)),
+            processed_block_items: Ok(make_dummy_events(log_indices)),
         }
     }
 
     fn block_with_err_events_decoding(
         block_number: u64,
-    ) -> BlockWithDecodedEvents<KeyManagerEvent> {
-        BlockWithDecodedEvents {
+    ) -> BlockWithProcessedBlockItems<Event<KeyManagerEvent>> {
+        BlockWithProcessedBlockItems {
             block_number,
-            decode_events_result: Err(anyhow!("NOOOO")),
+            processed_block_items: Err(anyhow!("NOOOO")),
         }
     }
 
     fn block_with_events(
         block_number: u64,
         log_indices: &[u8],
-    ) -> BlockWithEvents<KeyManagerEvent> {
-        BlockWithEvents {
+    ) -> BlockWithBlockItems<Event<KeyManagerEvent>> {
+        BlockWithBlockItems {
             block_number,
-            events: make_dummy_events(log_indices),
+            block_items: make_dummy_events(log_indices),
         }
     }
 
     async fn test_merged_stream_interleaving(
-        interleaved_blocks: Vec<(BlockWithDecodedEvents<KeyManagerEvent>, TransportProtocol)>,
-        expected_blocks: &[(BlockWithEvents<KeyManagerEvent>, TransportProtocol)],
+        interleaved_blocks: Vec<(
+            BlockWithProcessedBlockItems<Event<KeyManagerEvent>>,
+            TransportProtocol,
+        )>,
+        expected_blocks: &[(
+            BlockWithBlockItems<Event<KeyManagerEvent>>,
+            TransportProtocol,
+        )],
     ) {
         // Generate a stream for each protocol, that, when selected upon, will return
         // in the order the blocks are passed in
@@ -407,21 +415,23 @@ mod merged_stream_tests {
                 protocol_last_returned = protocol;
             }
 
-            let delayed_stream =
-                |blocks: Vec<(BlockWithDecodedEvents<KeyManagerEvent>, Duration)>| {
-                    let blocks = blocks.into_iter();
-                    Box::pin(
-                        stream::unfold(blocks, |mut blocks| async move {
-                            if let Some((i, d)) = blocks.next() {
-                                tokio::time::sleep(d).await;
-                                Some((i, blocks))
-                            } else {
-                                None
-                            }
-                        })
-                        .fuse(),
-                    )
-                };
+            let delayed_stream = |blocks: Vec<(
+                BlockWithProcessedBlockItems<Event<KeyManagerEvent>>,
+                Duration,
+            )>| {
+                let blocks = blocks.into_iter();
+                Box::pin(
+                    stream::unfold(blocks, |mut blocks| async move {
+                        if let Some((i, d)) = blocks.next() {
+                            tokio::time::sleep(d).await;
+                            Some((i, blocks))
+                        } else {
+                            None
+                        }
+                    })
+                    .fuse(),
+                )
+            };
 
             (delayed_stream(ws_blocks), delayed_stream(http_blocks))
         };
@@ -429,7 +439,7 @@ mod merged_stream_tests {
         let (logger, mut tag_cache) = new_test_logger_with_tag_cache();
 
         assert_eq!(
-            merged_block_events_stream(ws_stream, http_stream, logger)
+            merged_block_items_stream(ws_stream, http_stream, logger)
                 .await
                 .unwrap()
                 .map(move |x| {
@@ -457,9 +467,9 @@ mod merged_stream_tests {
 
     #[tokio::test]
     async fn empty_inners_returns_none() {
-        assert!(merged_block_events_stream(
-            Box::pin(stream::empty::<BlockWithDecodedEvents<()>>()),
-            Box::pin(stream::empty::<BlockWithDecodedEvents<()>>()),
+        assert!(merged_block_items_stream(
+            Box::pin(stream::empty::<BlockWithProcessedBlockItems<()>>()),
+            Box::pin(stream::empty::<BlockWithProcessedBlockItems<()>>()),
             new_test_logger(),
         )
         .await
@@ -472,7 +482,7 @@ mod merged_stream_tests {
     #[tokio::test]
     async fn merged_does_not_return_duplicate_blocks() {
         assert_eq!(
-            merged_block_events_stream(
+            merged_block_items_stream(
                 Box::pin(stream::iter([
                     block_with_ok_events_decoding(10, &[0]),
                     block_with_ok_events_decoding(11, &[]),
@@ -503,7 +513,7 @@ mod merged_stream_tests {
     #[tokio::test]
     async fn merged_stream_handles_broken_stream() {
         assert_eq!(
-            merged_block_events_stream(
+            merged_block_items_stream(
                 Box::pin(stream::empty()),
                 Box::pin(stream::iter([
                     block_with_ok_events_decoding(10, &[0]),
@@ -598,7 +608,7 @@ mod merged_stream_tests {
         let ws_range = 10..54;
 
         assert!(Iterator::eq(
-            merged_block_events_stream(
+            merged_block_items_stream(
                 stream::iter(
                     ws_range
                         .clone()
@@ -619,7 +629,7 @@ mod merged_stream_tests {
 
     #[tokio::test]
     async fn merged_stream_panics_if_a_stream_moves_backwards() {
-        let mut stream = merged_block_events_stream(
+        let mut stream = merged_block_items_stream(
             Box::pin(stream::iter([
                 block_with_ok_events_decoding(12, &[0]),
                 block_with_ok_events_decoding(13, &[]),
@@ -704,7 +714,7 @@ mod merged_stream_tests {
     #[tokio::test]
     async fn merged_stream_exits_when_both_streams_have_error_events_for_a_block() {
         assert_eq!(
-            merged_block_events_stream(
+            merged_block_items_stream(
                 Box::pin(stream::iter([
                     block_with_ok_events_decoding(11, &[0]),
                     block_with_err_events_decoding(12),

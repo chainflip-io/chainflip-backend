@@ -20,7 +20,9 @@ use async_trait::async_trait;
 
 use anyhow::{anyhow, Result};
 
-use super::{BlockWithEvents, DecodeLogClosure, EthContractWitnesser, EventParseError};
+use super::{
+    event::Event, BlockWithBlockItems, DecodeLogClosure, EthContractWitnesser, EventParseError,
+};
 
 pub struct StakeManager {
     pub deployed_address: H160,
@@ -91,7 +93,7 @@ impl EthContractWitnesser for StakeManager {
         &mut self,
         epoch: EpochIndex,
         _block_number: u64,
-        block: BlockWithEvents<Self::EventParameters>,
+        block: BlockWithBlockItems<Event<Self::EventParameters>>,
         state_chain_client: Arc<StateChainClient<RpcClient>>,
         _eth_rpc: &EthRpcClient,
         logger: &slog::Logger,
@@ -100,7 +102,7 @@ impl EthContractWitnesser for StakeManager {
         RpcClient: 'static + StateChainRpcApi + Sync + Send,
         EthRpcClient: EthRpcApi + Sync + Send,
     {
-        for event in block.events {
+        for event in block.block_items {
             slog::info!(logger, "Handling event: {}", event);
             match event.event_parameters {
                 StakeManagerEvent::Staked {
