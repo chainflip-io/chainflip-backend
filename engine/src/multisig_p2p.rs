@@ -8,6 +8,7 @@ use sp_core::{storage::StorageKey, H256};
 use state_chain_runtime::AccountId;
 
 use codec::Encode;
+use utilities::make_periodic_tick;
 
 use crate::{
     logging::COMPONENT_KEY,
@@ -154,6 +155,8 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
 ) -> Result<()> {
     let logger = logger.new(o!(COMPONENT_KEY => "P2PClient"));
 
+    let mut update_interval = make_periodic_tick(Duration::from_secs(60), false);
+
     loop {
         update_registered_peer_id(
             &node_key,
@@ -164,7 +167,7 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
         )
         .await?;
 
-        tokio::time::sleep(Duration::from_secs(60)).await;
+        update_interval.tick().await;
     }
 }
 
