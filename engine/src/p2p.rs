@@ -370,7 +370,7 @@ impl P2PContext {
         } else {
             slog::warn!(
                 self.logger,
-                "Received a message for an unknown ed25519 key: {}",
+                "Received a message for an unknown x25519 key: {}",
                 to_string(&pubkey)
             );
         }
