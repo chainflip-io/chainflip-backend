@@ -2,10 +2,11 @@ use crate as pallet_cf_staking;
 use cf_chains::{eth, eth::api::EthereumReplayProtection, ChainAbi, ChainCrypto, Ethereum};
 use cf_primitives::{AuthorityCount, CeremonyId};
 use cf_traits::{
-	impl_mock_waived_fees, mocks::system_state_info::MockSystemStateInfo, AsyncResult,
-	ThresholdSigner, WaivedFees,
+	impl_mock_waived_fees, mocks::system_state_info::MockSystemStateInfo, AccountRoleRegistry,
+	AsyncResult, ThresholdSigner, WaivedFees,
 };
 use frame_support::{dispatch::DispatchResultWithPostInfo, parameter_types};
+use frame_system::{ensure_signed, Config};
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
@@ -27,6 +28,10 @@ use cf_traits::{
 	Chainflip, ReplayProtectionProvider,
 };
 
+impl pallet_cf_account_types::Config for Test {
+	type Event = Event;
+}
+
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
 	pub enum Test where
@@ -35,6 +40,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system,
+		AccountTypes: pallet_cf_account_types,
 		Flip: pallet_cf_flip,
 		Staking: pallet_cf_staking,
 	}
@@ -126,6 +132,26 @@ impl ReplayProtectionProvider<Ethereum> for Test {
 		}
 	}
 }
+
+pub struct MockAccountRoleRegistry;
+
+impl<T: Config> AccountRoleRegistry<T> for MockAccountRoleRegistry {
+	fn register_account_role(
+		_who: &<T as frame_system::Config>::AccountId,
+		_role: cf_primitives::AccountRole,
+	) -> sp_runtime::DispatchResult {
+		unimplemented!("Not used yet");
+	}
+
+	fn ensure_account_role(
+		origin: <T as frame_system::Config>::Origin,
+		_role: cf_primitives::AccountRole,
+	) -> Result<<T as frame_system::Config>::AccountId, frame_support::error::BadOrigin> {
+		// always passes, regardless of role for the benchmarks
+		ensure_signed(origin)
+	}
+}
+
 pub struct MockThresholdSigner;
 
 thread_local! {
@@ -193,6 +219,7 @@ impl pallet_cf_staking::Config for Test {
 	type Event = Event;
 	type TimeSource = time_source::Mock;
 	type Balance = u128;
+	type AccountRoleRegistry = MockAccountRoleRegistry;
 	type Flip = Flip;
 	type WeightInfo = ();
 	type StakerId = AccountId;
@@ -214,6 +241,7 @@ pub const MIN_STAKE: u128 = 10;
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
+		account_types: Default::default(),
 		system: Default::default(),
 		flip: FlipConfig { total_issuance: 1_000_000 },
 		staking: StakingConfig {
