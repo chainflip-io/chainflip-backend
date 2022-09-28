@@ -125,7 +125,8 @@ fn on_idle_can_send_batch_all() {
 		// Take all scheduled Egress and Broadcast as batch
 		Egress::on_idle(1, 1_000_000_000_000u64);
 
-		// ETH batch is sent first, followed by FLIP batch.
+		// The order the assets are iterated are random but deterministic.
+		// In this case ETH batch is sent first, followed by FLIP batch.
 		assert_eq!(
 			LastEgressSent::get(),
 			vec![

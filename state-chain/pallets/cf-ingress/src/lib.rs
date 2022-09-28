@@ -6,8 +6,8 @@
 // This way intents and intent ids align per chain, which makes sense given they act as an index to
 // the respective address generation function.
 
-use cf_primitives::{Asset, ForeignChainAddress, ForeignChainAsset, IntentId};
-use cf_traits::{liquidity::LpProvisioningApi, AddressDerivationApi, FlipBalance, IngressApi};
+use cf_primitives::{Asset, AssetAmount, ForeignChainAddress, ForeignChainAsset, IntentId};
+use cf_traits::{liquidity::LpProvisioningApi, AddressDerivationApi, IngressApi};
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
@@ -94,7 +94,7 @@ pub mod pallet {
 		/// Generates ingress addresses.
 		type AddressDerivation: AddressDerivationApi;
 		/// Pallet responsible for managing Liquidity Providers.
-		type LpAccountHandler: LpProvisioningApi<AccountId = Self::AccountId, Amount = FlipBalance>;
+		type LpAccountHandler: LpProvisioningApi<AccountId = Self::AccountId, Amount = AssetAmount>;
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;
 	}
