@@ -327,31 +327,19 @@ pub struct BlockWithBlockItems<BlockItem: Debug> {
     pub block_items: Vec<BlockItem>,
 }
 
-/// Takes a head stream and turns it into a stream of BlockEvents for consumption by the merged stream
-async fn block_events_stream_from_head_stream<BlockHeaderStream, EthRpc, EventParameters>(
+// TODO: Tests?
+pub async fn block_head_range_stream<BlockHeaderStream, EthRpc>(
     from_block: u64,
-    contract_address: H160,
     safe_head_stream: BlockHeaderStream,
-    decode_log_fn: DecodeLogClosure<EventParameters>,
     eth_rpc: EthRpc,
-    logger: slog::Logger,
-) -> Result<
-    Pin<
-        Box<
-            dyn Stream<Item = BlockWithProcessedBlockItems<Event<EventParameters>>>
-                + Send
-                + 'static,
-        >,
-    >,
->
+    logger: &slog::Logger,
+) -> Result<Pin<Box<dyn Stream<Item = EthNumberBloom> + Send + 'static>>>
 where
-    EventParameters: Debug + Send + Sync + 'static,
     BlockHeaderStream: Stream<Item = EthNumberBloom> + 'static + Send,
     EthRpc: 'static + EthRpcApi + Send + Sync + Clone,
 {
     let from_block = U64::from(from_block);
     let mut safe_head_stream = Box::pin(safe_head_stream);
-
     // only allow pulling from the stream once we are actually at our from_block number
     while let Some(best_safe_block_header) = safe_head_stream.next().await {
         let best_safe_block_number = best_safe_block_header.block_number;
@@ -385,83 +373,105 @@ where
                 ),
             );
 
-            let past_and_fut_heads = stream::unfold(
-                (past_heads, safe_head_stream),
-                |(mut past_heads, mut safe_head_stream)| async {
-                    // we want to consume the past logs stream first, terminating if any of these logs are an error
-                    if let Some(result_past_log) = past_heads.next().await {
-                        if let Ok(past_log) = result_past_log {
-                            Some((past_log, (past_heads, safe_head_stream)))
-                        } else {
-                            None
-                        }
-                    } else {
-                        // the past logs were consumed, now we consume the "future" logs
-                        safe_head_stream
-                            .next()
-                            .await
-                            .map(|future_log| (future_log, (past_heads, safe_head_stream)))
-                    }
-                },
-            )
-            .fuse();
-            let eth_rpc_c = eth_rpc.clone();
-
-            // convert from heads to blocks with events
             return Ok(Box::pin(
-                past_and_fut_heads
-                    .then(move |header| {
-                        let eth_rpc = eth_rpc_c.clone();
-
-                        async move {
-                            let block_number = header.block_number;
-                            let mut contract_bloom = Bloom::default();
-                            contract_bloom.accrue(Input::Raw(&contract_address.0));
-
-                            // if we have logs for this block, fetch them.
-                            let result_logs = if header.logs_bloom.contains_bloom(&contract_bloom) {
-                                eth_rpc
-                                    .get_logs(
-                                        FilterBuilder::default()
-                                            // from_block *and* to_block are *inclusive*
-                                            .from_block(BlockNumber::Number(block_number))
-                                            .to_block(BlockNumber::Number(block_number))
-                                            .address(vec![contract_address])
-                                            .build(),
-                                    )
-                                    .await
+                stream::unfold(
+                    (past_heads, safe_head_stream),
+                    |(mut past_heads, mut safe_head_stream)| async {
+                        // we want to consume the past logs stream first, terminating if any of these logs are an error
+                        if let Some(result_past_log) = past_heads.next().await {
+                            if let Ok(past_log) = result_past_log {
+                                Some((past_log, (past_heads, safe_head_stream)))
                             } else {
-                                // we know there won't be interesting logs, so don't fetch for events
-                                Ok(vec![])
-                            };
-
-                            (block_number.as_u64(), result_logs)
+                                None
+                            }
+                        } else {
+                            // the past logs were consumed, now we consume the "future" logs
+                            safe_head_stream
+                                .next()
+                                .await
+                                .map(|future_log| (future_log, (past_heads, safe_head_stream)))
                         }
-                    })
-                    .map(
-                        move |(block_number, result_logs)| BlockWithProcessedBlockItems {
-                            block_number,
-                            processed_block_items: result_logs.and_then(|logs| {
-                                logs.into_iter()
-                                    .map(
-                                        |unparsed_log| -> Result<
-                                            Event<EventParameters>,
-                                            anyhow::Error,
-                                        > {
-                                            Event::<EventParameters>::new_from_unparsed_logs(
-                                                &decode_log_fn,
-                                                unparsed_log,
-                                            )
-                                        },
-                                    )
-                                    .collect::<Result<Vec<_>>>()
-                            }),
-                        },
-                    ),
+                    },
+                )
+                .fuse(),
             ));
         }
     }
     Err(anyhow!("No events in ETH safe head stream"))
+}
+
+/// Takes a head stream and turns it into a stream of BlockEvents for consumption by the merged stream
+async fn block_events_stream_from_head_stream<BlockHeaderStream, EthRpc, EventParameters>(
+    from_block: u64,
+    contract_address: H160,
+    safe_head_stream: BlockHeaderStream,
+    decode_log_fn: DecodeLogClosure<EventParameters>,
+    eth_rpc: EthRpc,
+    logger: slog::Logger,
+) -> Result<
+    Pin<
+        Box<
+            dyn Stream<Item = BlockWithProcessedBlockItems<Event<EventParameters>>>
+                + Send
+                + 'static,
+        >,
+    >,
+>
+where
+    EventParameters: Debug + Send + Sync + 'static,
+    BlockHeaderStream: Stream<Item = EthNumberBloom> + 'static + Send,
+    EthRpc: 'static + EthRpcApi + Send + Sync + Clone,
+{
+    // convert from heads to blocks with events
+    Ok(Box::pin(
+        block_head_range_stream(from_block, safe_head_stream, eth_rpc.clone(), &logger)
+            .await?
+            .then(move |header| {
+                let eth_rpc = eth_rpc.clone();
+
+                async move {
+                    let block_number = header.block_number;
+                    let mut contract_bloom = Bloom::default();
+                    contract_bloom.accrue(Input::Raw(&contract_address.0));
+
+                    // if we have logs for this block, fetch them.
+                    let result_logs = if header.logs_bloom.contains_bloom(&contract_bloom) {
+                        eth_rpc
+                            .get_logs(
+                                FilterBuilder::default()
+                                    // from_block *and* to_block are *inclusive*
+                                    .from_block(BlockNumber::Number(block_number))
+                                    .to_block(BlockNumber::Number(block_number))
+                                    .address(vec![contract_address])
+                                    .build(),
+                            )
+                            .await
+                    } else {
+                        // we know there won't be interesting logs, so don't fetch for events
+                        Ok(vec![])
+                    };
+
+                    (block_number.as_u64(), result_logs)
+                }
+            })
+            .map(
+                move |(block_number, result_logs)| BlockWithProcessedBlockItems {
+                    block_number,
+                    processed_block_items: result_logs.and_then(|logs| {
+                        logs.into_iter()
+                            .map(
+                                |unparsed_log| -> Result<Event<EventParameters>, anyhow::Error> {
+                                    Event::<EventParameters>::new_from_unparsed_logs(
+                                        &decode_log_fn,
+                                        unparsed_log,
+                                    )
+                                },
+                            )
+                            .collect::<Result<Vec<_>>>()
+                    }),
+                },
+            ),
+    ))
 }
 
 #[async_trait]
