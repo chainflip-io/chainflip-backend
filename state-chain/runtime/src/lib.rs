@@ -192,6 +192,7 @@ impl pallet_cf_relayer::Config for Runtime {
 	type Event = Event;
 	type Ingress = Ingress;
 	type WeightInfo = pallet_cf_relayer::weights::PalletWeight<Runtime>;
+	type AccountRoleRegistry = AccountTypes;
 }
 
 impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {

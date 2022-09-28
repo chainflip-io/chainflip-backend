@@ -21,6 +21,7 @@ pub use weights::WeightInfo;
 pub mod pallet {
 
 	use cf_primitives::IntentId;
+	use cf_traits::AccountRoleRegistry;
 
 	use super::*;
 
@@ -28,6 +29,10 @@ pub mod pallet {
 	pub trait Config: frame_system::Config {
 		/// Standard Event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+
+		/// For registering and verifying the account role.
+		type AccountRoleRegistry: AccountRoleRegistry<Self>;
+
 		/// An interface to the ingress api implementation.
 		type Ingress: IngressApi<AccountId = <Self as frame_system::Config>::AccountId>;
 		/// Weight information
@@ -60,8 +65,7 @@ pub mod pallet {
 			egress_address: ForeignChainAddress,
 			relayer_commission_bps: u16,
 		) -> DispatchResultWithPostInfo {
-			// TODO: should be ensure_relayer.
-			let _ = ensure_signed(origin)?;
+			T::AccountRoleRegistry::ensure_relayer(origin)?;
 
 			// TODO: ensure egress address chain matches egress asset chain
 			//   (or consider if we can merge both into one struct / derive one from the other)
