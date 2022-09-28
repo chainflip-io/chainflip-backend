@@ -1,9 +1,11 @@
 use crate::{self as pallet_cf_lp};
 use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
-	AddressDerivationApi,
+	AddressDerivationApi, EgressApi,
 };
-use frame_support::{parameter_types, sp_runtime::app_crypto::sp_core::H160};
+use frame_support::{
+	dispatch::DispatchResult, parameter_types, sp_runtime::app_crypto::sp_core::H160,
+};
 use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{
@@ -12,7 +14,7 @@ use sp_runtime::{
 	BuildStorage,
 };
 
-use cf_primitives::{ForeignChainAddress, ForeignChainAsset, IntentId};
+use cf_primitives::{AssetAmount, ForeignChainAddress, ForeignChainAsset, IntentId};
 
 use sp_std::str::FromStr;
 
@@ -103,11 +105,37 @@ impl pallet_cf_account_types::Config for Test {
 	type Event = Event;
 }
 
+parameter_types! {
+	pub static IsValid: bool = false;
+	pub static LastEgress: Option<(ForeignChainAsset, AssetAmount, ForeignChainAddress)> = None;
+}
+pub struct MockEgressApi;
+impl EgressApi for MockEgressApi {
+	type Amount = AssetAmount;
+	type EgressAddress = ForeignChainAddress;
+
+	fn schedule_egress(
+		foreign_asset: ForeignChainAsset,
+		amount: Self::Amount,
+		egress_address: Self::EgressAddress,
+	) -> DispatchResult {
+		LastEgress::set(Some((foreign_asset, amount, egress_address)));
+		Ok(())
+	}
+
+	fn is_egress_valid(
+		_foreign_asset: &ForeignChainAsset,
+		_egress_address: &Self::EgressAddress,
+	) -> bool {
+		IsValid::get()
+	}
+}
+
 impl crate::Config for Test {
 	type Event = Event;
 	type AccountRoleRegistry = AccountRegistry;
 	type Ingress = Ingress;
-	type EgressHandler = ();
+	type EgressApi = MockEgressApi;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 }
 

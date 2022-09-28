@@ -3,7 +3,7 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use cf_primitives::{Asset, EthereumAddress};
-pub use cf_traits::{EthEnvironmentProvider, SupportedEthAssetsAddressProvider};
+pub use cf_traits::{EthEnvironmentProvider, EthereumAssetsAddressProvider};
 use cf_traits::{SystemStateInfo, SystemStateManager};
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
@@ -303,7 +303,7 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-impl<T: Config> SupportedEthAssetsAddressProvider for Pallet<T> {
+impl<T: Config> EthereumAssetsAddressProvider for Pallet<T> {
 	fn try_get_asset_address(asset: Asset) -> Option<EthereumAddress> {
 		Pallet::<T>::supported_eth_assets(asset)
 	}

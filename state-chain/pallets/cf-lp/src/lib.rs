@@ -68,7 +68,7 @@ pub mod pallet {
 		type Ingress: IngressApi<AccountId = <Self as frame_system::Config>::AccountId>;
 
 		/// API used to withdraw foreign assets off the chain.
-		type EgressHandler: EgressApi<Amount = Self::Amount, EgressAddress = ForeignChainAddress>;
+		type EgressApi: EgressApi<Amount = Self::Amount, EgressAddress = ForeignChainAddress>;
 
 		/// For governance checks.
 		type EnsureGovernance: EnsureOrigin<Self::Origin>;
@@ -90,6 +90,8 @@ pub mod pallet {
 		LiquidityPoolDoesNotExist,
 		// The liquidity pool is currently disabled.
 		LiquidityPoolDisabled,
+		// The Asset cannot be egressed to the destination chain.
+		InvalidEgressAddress,
 	}
 
 	#[pallet::event]
@@ -255,11 +257,16 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(who)?;
 
+			ensure!(
+				T::EgressApi::is_egress_valid(&foreign_asset, &egress_address,),
+				Error::<T>::InvalidEgressAddress
+			);
+
 			// Debit the asset from the account.
 			Pallet::<T>::try_debit(&account_id, foreign_asset.asset, amount)?;
 
 			// Send the assets off-chain.
-			T::EgressHandler::egress_asset(foreign_asset, amount, egress_address)?;
+			T::EgressApi::schedule_egress(foreign_asset, amount, egress_address)?;
 
 			Ok(().into())
 		}

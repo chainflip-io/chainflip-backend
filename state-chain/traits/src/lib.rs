@@ -14,7 +14,7 @@ use sp_std::collections::btree_set::BTreeSet;
 use cf_chains::{benchmarking_value::BenchmarkValue, ApiCall, ChainAbi, ChainCrypto};
 use cf_primitives::{
 	AccountRole, Asset, AuthorityCount, CeremonyId, ChainflipAccountData, ChainflipAccountState,
-	EgressBatch, EpochIndex, EthereumAddress, ForeignChainAddress, ForeignChainAsset, IntentId,
+	EpochIndex, EthereumAddress, ForeignChainAddress, ForeignChainAsset, IntentId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -728,43 +728,23 @@ pub trait AccountRoleRegistry<T: frame_system::Config> {
 	}
 }
 
-pub trait EgressAbiBuilder {
-	type Amount;
-	type EgressAddress;
-	type EgressTransaction;
-
-	// Take in a batch of transactions and construct the Transaction appropriate for the chain.
-	fn construct_batched_transaction(
-		foreign_asset: ForeignChainAsset,
-		batch: EgressBatch<Self::Amount, Self::EgressAddress>,
-	) -> Option<Self::EgressTransaction>;
-}
-
 /// API that allows other pallets to Egress assets out of the State Chain.
 pub trait EgressApi {
 	type Amount;
 	type EgressAddress;
 
-	fn egress_asset(
+	fn schedule_egress(
 		foreign_asset: ForeignChainAsset,
 		amount: Self::Amount,
 		egress_address: Self::EgressAddress,
 	) -> DispatchResult;
+
+	fn is_egress_valid(
+		foreign_asset: &ForeignChainAsset,
+		egress_address: &Self::EgressAddress,
+	) -> bool;
 }
 
-impl EgressApi for () {
-	type Amount = FlipBalance;
-	type EgressAddress = ForeignChainAddress;
-
-	fn egress_asset(
-		_foreign_asset: ForeignChainAsset,
-		_amount: Self::Amount,
-		_egress_address: ForeignChainAddress,
-	) -> DispatchResult {
-		Ok(())
-	}
-}
-
-pub trait SupportedEthAssetsAddressProvider {
+pub trait EthereumAssetsAddressProvider {
 	fn try_get_asset_address(asset: Asset) -> Option<EthereumAddress>;
 }

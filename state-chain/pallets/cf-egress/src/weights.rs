@@ -31,7 +31,7 @@ use sp_std::marker::PhantomData;
 /// Weight functions needed for pallet_cf_egress.
 pub trait WeightInfo {
 	fn send_batch_egress(n: u32, ) -> Weight;
-	fn set_asset_egress_permission() -> Weight;
+	fn disable_asset_egress() -> Weight;
 }
 
 /// Weights for pallet_cf_egress using the Substrate node and recommended hardware.
@@ -49,7 +49,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Egress AllowedEgressAssets (r:1 w:1)
-	fn set_asset_egress_permission() -> Weight {
+	fn disable_asset_egress() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
 		(13_000_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
@@ -71,7 +71,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Egress AllowedEgressAssets (r:1 w:1)
-	fn set_asset_egress_permission() -> Weight {
+	fn disable_asset_egress() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
 		(13_000_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))

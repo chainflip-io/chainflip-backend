@@ -2,7 +2,7 @@
 
 use super::*;
 
-use crate::{AllowedEgressAssets, ScheduledEgress};
+use crate::{DisabledEgressAssets, ScheduledEgress};
 use cf_primitives::{Asset, EthereumAddress, ForeignChain};
 use frame_benchmarking::benchmarks;
 use frame_support::traits::Hooks;
@@ -14,7 +14,6 @@ const ALICE_ETH: EthereumAddress = [100u8; 20];
 benchmarks! {
 	send_batch_egress {
 		let n in 1u32 .. 255u32;
-		AllowedEgressAssets::<T>::insert(ETH_ETH, ());
 		let mut batch = vec![];
 
 		for i in 0..n {
@@ -32,11 +31,11 @@ benchmarks! {
 		).is_empty());
 	}
 
-	set_asset_egress_permission {
+	disable_asset_egress {
 		let origin = T::EnsureGovernance::successful_origin();
-	} : {let _ = Pallet::<T>::set_asset_egress_permission(origin, ETH_ETH, true);}
+	} : { let _ = Pallet::<T>::disable_asset_egress(origin, ETH_ETH, true); }
 	verify {
-		assert!(AllowedEgressAssets::<T>::get(
+		assert!(DisabledEgressAssets::<T>::get(
 			ETH_ETH,
 		).is_some());
 	}

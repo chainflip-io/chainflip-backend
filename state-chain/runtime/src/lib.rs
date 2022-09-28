@@ -229,18 +229,18 @@ impl pallet_cf_lp::Config for Runtime {
 	type Event = Event;
 	type AccountRoleRegistry = AccountTypes;
 	type Ingress = Ingress;
-	type EgressHandler = Egress;
+	type EgressApi = Egress;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 }
 
 #[cfg(feature = "ibiza")]
 impl pallet_cf_egress::Config for Runtime {
 	type Event = Event;
-	type ReplayProtection = chainflip::EthReplayProtectionProvider;
+	type EthereumReplayProtection = chainflip::EthReplayProtectionProvider;
 	type EthereumEgressTransaction = eth::api::EthereumApi;
 	type EthereumBroadcaster = EthereumBroadcaster;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
-	type SupportedEthAssetsAddressProvider = Environment;
+	type EthereumAssetsAddressProvider = Environment;
 	type WeightInfo = ();
 }
 

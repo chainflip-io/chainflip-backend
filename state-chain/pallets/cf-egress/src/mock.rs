@@ -7,7 +7,7 @@ use cf_primitives::EthAmount;
 pub use cf_primitives::{Asset, EthereumAddress, ExchangeRate};
 pub use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
-	Broadcaster, ReplayProtectionProvider, SupportedEthAssetsAddressProvider,
+	Broadcaster, EthereumAssetsAddressProvider, ReplayProtectionProvider,
 };
 use frame_support::parameter_types;
 use frame_system as system;
@@ -116,7 +116,7 @@ impl Broadcaster<Ethereum> for MockBroadcast {
 }
 
 pub struct MockEthAssetAddressProvider;
-impl SupportedEthAssetsAddressProvider for MockEthAssetAddressProvider {
+impl EthereumAssetsAddressProvider for MockEthAssetAddressProvider {
 	fn try_get_asset_address(asset: Asset) -> Option<EthereumAddress> {
 		match asset {
 			Asset::Eth => Some([0xFF; 20]),
@@ -128,11 +128,11 @@ impl SupportedEthAssetsAddressProvider for MockEthAssetAddressProvider {
 
 impl crate::Config for Test {
 	type Event = Event;
-	type ReplayProtection = Self;
+	type EthereumReplayProtection = Self;
 	type EthereumEgressTransaction = EthereumApi;
 	type EthereumBroadcaster = MockBroadcast;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
-	type SupportedEthAssetsAddressProvider = MockEthAssetAddressProvider;
+	type EthereumAssetsAddressProvider = MockEthAssetAddressProvider;
 	type WeightInfo = ();
 }
 
