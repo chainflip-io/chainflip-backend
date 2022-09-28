@@ -7,6 +7,7 @@ use cf_chains::{
 };
 use cf_traits::{
 	mocks::{
+		account_role_registry::MockAccountRoleRegistry,
 		ensure_origin_mock::NeverFailingOriginCheck, epoch_info::MockEpochInfo,
 		signer_nomination::MockNominator, system_state_info::MockSystemStateInfo,
 		threshold_signer::MockThresholdSigner,
@@ -138,6 +139,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type Event = Event;
 	type Call = Call;
 	type Offence = PalletOffence;
+	type AccountRoleRegistry = MockAccountRoleRegistry;
 	type TargetChain = MockEthereum;
 	type ApiCall = MockApiCall<MockEthereum>;
 	type TransactionBuilder = MockTransactionBuilder<Self::TargetChain, Self::ApiCall>;

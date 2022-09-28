@@ -2,11 +2,13 @@ use crate as pallet_cf_staking;
 use cf_chains::{eth, eth::api::EthereumReplayProtection, ChainAbi, ChainCrypto, Ethereum};
 use cf_primitives::{AuthorityCount, CeremonyId};
 use cf_traits::{
-	impl_mock_waived_fees, mocks::system_state_info::MockSystemStateInfo, AccountRoleRegistry,
+	impl_mock_waived_fees,
+	mocks::{
+		account_role_registry::MockAccountRoleRegistry, system_state_info::MockSystemStateInfo,
+	},
 	AsyncResult, ThresholdSigner, WaivedFees,
 };
 use frame_support::{dispatch::DispatchResultWithPostInfo, parameter_types};
-use frame_system::{ensure_signed, Config};
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
@@ -130,25 +132,6 @@ impl ReplayProtectionProvider<Ethereum> for Test {
 			chain_id: CHAIN_ID,
 			nonce: COUNTER,
 		}
-	}
-}
-
-pub struct MockAccountRoleRegistry;
-
-impl<T: Config> AccountRoleRegistry<T> for MockAccountRoleRegistry {
-	fn register_account_role(
-		_who: &<T as frame_system::Config>::AccountId,
-		_role: cf_primitives::AccountRole,
-	) -> sp_runtime::DispatchResult {
-		unimplemented!("Not used yet");
-	}
-
-	fn ensure_account_role(
-		origin: <T as frame_system::Config>::Origin,
-		_role: cf_primitives::AccountRole,
-	) -> Result<<T as frame_system::Config>::AccountId, frame_support::error::BadOrigin> {
-		// always passes, regardless of role for the benchmarks
-		ensure_signed(origin)
 	}
 }
 

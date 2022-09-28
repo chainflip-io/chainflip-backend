@@ -529,6 +529,7 @@ impl pallet_cf_broadcast::Config<EthereumInstance> for Runtime {
 	type Event = Event;
 	type Call = Call;
 	type Offence = chainflip::Offence;
+	type AccountRoleRegistry = AccountTypes;
 	type TargetChain = Ethereum;
 	type ApiCall = eth::api::EthereumApi;
 	type ThresholdSigner = EthereumThresholdSigner;

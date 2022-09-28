@@ -1,0 +1,22 @@
+use frame_system::{ensure_signed, Config};
+
+use crate::AccountRoleRegistry;
+
+pub struct MockAccountRoleRegistry;
+
+impl<T: Config> AccountRoleRegistry<T> for MockAccountRoleRegistry {
+	fn register_account_role(
+		_who: &<T as frame_system::Config>::AccountId,
+		_role: cf_primitives::AccountRole,
+	) -> sp_runtime::DispatchResult {
+		unimplemented!("Not used yet");
+	}
+
+	fn ensure_account_role(
+		origin: <T as frame_system::Config>::Origin,
+		_role: cf_primitives::AccountRole,
+	) -> Result<<T as frame_system::Config>::AccountId, frame_support::error::BadOrigin> {
+		// always passes, regardless of role for the benchmarks
+		ensure_signed(origin)
+	}
+}
