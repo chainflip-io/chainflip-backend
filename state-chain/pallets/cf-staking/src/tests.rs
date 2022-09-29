@@ -181,6 +181,7 @@ fn cannot_double_claim() {
 			0,
 			"As Alice's claim is claimed it should have no expiry"
 		);
+		assert!(PendingClaims::<Test>::get(&ALICE).is_none());
 
 		// Should now be able to claim the rest.
 		assert_ok!(Staking::claim(Origin::signed(ALICE), stake_a2.into(), ETH_DUMMY_ADDR));
@@ -196,6 +197,7 @@ fn cannot_double_claim() {
 			0,
 			"As Alice's claim is claimed it should have no expiry"
 		);
+		assert!(PendingClaims::<Test>::get(&ALICE).is_none());
 
 		// Remaining stake should be zero
 		assert_eq!(Flip::total_balance_of(&ALICE), 0u128);
