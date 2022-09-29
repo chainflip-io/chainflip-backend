@@ -921,6 +921,7 @@ version = "0.5.0"
 dependencies = [
  "anyhow",
  "cf-chains",
+ "cf-primitives",
  "chainflip-engine",
  "chainflip-node",
  "clap",
@@ -928,6 +929,7 @@ dependencies = [
  "futures 0.3.21",
  "hex",
  "jsonrpsee",
+ "pallet-cf-account-types",
  "pallet-cf-environment",
  "pallet-cf-staking",
  "pallet-cf-threshold-signature",

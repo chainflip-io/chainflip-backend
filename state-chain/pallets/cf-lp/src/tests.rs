@@ -46,8 +46,8 @@ fn only_liquidity_provider_can_manage_positions() {
 #[test]
 fn egress_chain_and_asset_must_match() {
 	new_test_ext().execute_with(|| {
-		AccountRegistry::on_new_account(&ALICE);
-		assert_ok!(AccountRegistry::register_account_role(&ALICE, AccountRole::LiquidityProvider));
+		AccountTypes::on_new_account(&ALICE);
+		assert_ok!(AccountTypes::register_account_role(&ALICE, AccountRole::LiquidityProvider));
 
 		assert_noop!(
 			LiquidityProvider::withdraw_liquidity(
@@ -73,8 +73,8 @@ fn egress_chain_and_asset_must_match() {
 #[test]
 fn liquidity_providers_can_withdraw_liquidity() {
 	new_test_ext().execute_with(|| {
-		AccountRegistry::on_new_account(&ALICE);
-		assert_ok!(AccountRegistry::register_account_role(&ALICE, AccountRole::LiquidityProvider));
+		AccountTypes::on_new_account(&ALICE);
+		assert_ok!(AccountTypes::register_account_role(&ALICE, AccountRole::LiquidityProvider));
 		FreeBalances::<Test>::insert(ALICE, Asset::Eth, 1_000);
 
 		assert!(!IsValid::get());

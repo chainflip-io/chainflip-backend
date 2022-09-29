@@ -1,3 +1,4 @@
+use cf_primitives::AccountRole;
 use chainflip_engine::settings::{
     CfSettings, Eth, EthSharedOptions, StateChain, StateChainOptions,
 };
@@ -56,6 +57,8 @@ pub enum CFCommand {
         #[clap(long = "register", hide = true)]
         should_register_claim: bool,
     },
+    #[clap(about = "Set your account role to the Validator, Relayer, Liquidity Provider")]
+    RegisterAccountRole { role: AccountRole },
     #[clap(about = "Rotate your session keys")]
     Rotate {},
     #[clap(about = "Retire from Auction participation")]

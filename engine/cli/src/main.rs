@@ -1,4 +1,5 @@
 use cf_chains::eth::H256;
+use cf_primitives::AccountRole;
 use chainflip_engine::{
     eth::{rpc::EthDualRpcClient, EthBroadcaster},
     state_chain_observer::client::{
@@ -63,6 +64,7 @@ async fn run_cli() -> Result<()> {
             )
             .await
         }
+        RegisterAccountRole { role } => register_account_role(role, &cli_settings, &logger).await,
         Rotate {} => rotate_keys(&cli_settings, &logger).await,
         Retire {} => retire_account(&cli_settings, &logger).await,
         Activate {} => activate_account(&cli_settings, &logger).await,
@@ -329,6 +331,25 @@ async fn set_vanity_name(
         .await
         .expect("Could not set vanity name for your account");
     println!("Vanity name set at tx {:#x}.", tx_hash);
+    Ok(())
+}
+
+async fn register_account_role(
+    role: AccountRole,
+    settings: &CLISettings,
+    logger: &slog::Logger,
+) -> Result<()> {
+    let (_, _, state_chain_client) =
+        connect_to_state_chain(&settings.state_chain, false, logger).await?;
+
+    let tx_hash = state_chain_client
+        .submit_signed_extrinsic(
+            pallet_cf_account_types::Call::register_account_role_xt { role },
+            logger,
+        )
+        .await
+        .expect("Could not set register account role for account");
+    println!("Account role set at tx {:#x}.", tx_hash);
     Ok(())
 }
 

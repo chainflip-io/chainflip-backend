@@ -4,6 +4,10 @@
 //!
 //! Primitive types to be used across Chainflip's various crates
 
+use core::str::FromStr;
+
+use scale_info::prelude::{format, string::String};
+
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_runtime::{
@@ -95,6 +99,23 @@ pub enum AccountRole {
 	LiquidityProvider,
 	/// Relayers submit swap intents on behalf of users.
 	Relayer,
+}
+
+impl FromStr for AccountRole {
+	type Err = String;
+
+	fn from_str(s: &str) -> Result<Self, Self::Err> {
+		let lower_str = s.to_lowercase();
+		if lower_str == "v" || lower_str == "validator" {
+			Ok(Self::Validator)
+		} else if lower_str == "lp" || lower_str == "liquidity provider" {
+			Ok(Self::LiquidityProvider)
+		} else if lower_str == "r" || lower_str == "relayer" {
+			Ok(Self::Relayer)
+		} else {
+			Err(format!("{} is not a valid role. The valid roles (with their shorthand input) are: 'Validator' (v), 'Liquidity Provider' (lp), 'Relayer' (r)", s))
+		}
+	}
 }
 
 impl Default for AccountRole {
