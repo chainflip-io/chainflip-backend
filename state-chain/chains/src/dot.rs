@@ -1,16 +1,16 @@
 use crate::*;
 pub mod eth;
 
-pub struct Polkadot;
 
 use sp_runtime::{generic::SignedPayload, MultiAddress, MultiSignature};
-use substrate_subxt::extrinsic::UncheckedExtrinsic;
+pub use polkadot_runtime::Runtime;
 
-pub type PolkadotRuntime = todo!(); //we need to import the latest polkadot runtime here
 
-pub type PolkadotRuntimeCall = todo!(); //This needs to be imported from the current runtime of polkadot
+pub type PolkadotRuntime = polkadot_runtime::Runtime; //we need to import the latest polkadot runtime here
 
-pub type PolkadotAggkey = eth::AggKey; //Currently, we are using the same Aggkey (or same framework with a different key) to sign for
+pub type PolkadotRuntimeCall = polkadot_runtime::RuntimeCall; //This needs to be imported from the current runtime of polkadot
+
+//pub type PolkadotAggkey = PolkadotAccount; //Currently, we are using the same Aggkey (or same framework with a different key) to sign for
 									   // polkadot transaction as we do for ethereum transactions
 
 pub type PolkadotGovKey = eth::Address; //Same as above
@@ -42,6 +42,9 @@ pub type EncodedPolkadotPayload = &[u8];
 
 pub type PolkadotLookup = <PolkadotRuntime as frame_system::Config>::Lookup;
 
+
+pub struct Polkadot;
+
 impl Chain for Polkadot {
 	type ChainBlockNumber = u64;
 	type ChainAmount = u128;
@@ -51,7 +54,7 @@ impl Chain for Polkadot {
 }
 
 impl ChainCrypto for Polkadot {
-	type AggKey = PolkadotAggkey;
+	type AggKey = <Polkadot as Chain>::ChainAccount;
 	type Payload = EncodedPolkadotPayload;
 	type ThresholdSignature = PolkadotSignature;
 	type TransactionHash = ();
@@ -62,16 +65,12 @@ impl ChainCrypto for Polkadot {
 		payload: &Self::Payload,
 		signature: &Self::ThresholdSignature,
 	) -> bool {
-		agg_key
-			.verify(payload.as_fixed_bytes(), signature)
-			.map_err(|e| log::debug!("Ethereum signature verification failed: {:?}.", e))
-			.is_ok()
+		signature.verify(payload, agg_key)
 	}
 
 	fn agg_key_to_payload(agg_key: Self::AggKey) -> Self::Payload {
-		H256(Blake2_256::hash(&agg_key.to_pubkey_compressed())) //should also be same as ethereum since
-		                                                // same signing mechanism is used for
-		                                                // polkadot as ethereum
+		//H256(Blake2_256::hash(&agg_key.to_pubkey_compressed()))
+        todo!();
 	}
 }
 
