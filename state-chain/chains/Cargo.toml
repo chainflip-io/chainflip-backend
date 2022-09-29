@@ -55,6 +55,24 @@ default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'chainflip-monthly-2022-06'
 
+# Polkadot dependencies
+[dependencies.pallet-balances]
+default-features = false
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'chainflip-monthly-2022-06'
+
+[dependencies.pallet-utility]
+default-features = false
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'chainflip-monthly-2022-06'
+
+[dependencies.pallet-proxy]
+default-features = false
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'chainflip-monthly-2022-06'
+
+# Latest checked out version of polkadot
+polkadot-runtime = {path = "../../polkadot"}
 
 [dev-dependencies]
 cf-test-utilities = { path = '../test-utilities' }
