@@ -34,6 +34,13 @@ use cf_traits::SystemStateInfo;
 use sp_runtime::traits::{AtLeast32BitUnsigned, CheckedSub, Zero};
 
 use frame_support::pallet_prelude::Weight;
+
+/// This address is used by the Ethereum contracts to indicate that no withdrawal address was
+/// specified when staking.
+///
+/// Normally, this means that the staker staked via the 'normal' staking contract. The presence of
+/// any other address indicates that the funds were staked from the *vesting* contract and can only
+/// be withdrawn to the specified address.
 pub const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
 
 #[frame_support::pallet]
@@ -617,7 +624,10 @@ impl<T: Config> Pallet<T> {
 		T::WeightInfo::expire_pending_claims_at(expiries_len)
 	}
 
-	/// Checks the withdrawal address requirements and saves the address if provided
+	/// Checks the withdrawal address requirements and saves the address if provided.
+	///
+	/// If a non-zero address was provided, then it *must* match the address that was
+	/// provided on the initial account-creating staking event.
 	fn check_withdrawal_address(
 		account_id: &AccountId<T>,
 		withdrawal_address: EthereumAddress,
