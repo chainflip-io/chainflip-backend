@@ -171,7 +171,7 @@ fn main() -> anyhow::Result<()> {
                     .map_err(anyhow::Error::new)
                 })?;
 
-                let public: ed25519_dalek::PublicKey = (&secret).into();
+                let public = (&secret).into();
                 ed25519_dalek::Keypair {
                     secret,
                     public,
