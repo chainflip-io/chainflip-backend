@@ -105,8 +105,8 @@ pub trait ApiCall<Abi: ChainAbi>: Parameter {
 	/// Add the threshold signature to the api call.
 	fn signed(self, threshold_signature: &<Abi as ChainCrypto>::ThresholdSignature) -> Self;
 
-	/// The call, encoded as a vector of bytes using the chain's native encoding.
-	fn abi_encoded(&self) -> Vec<u8>;
+	/// The call, encoded according to the chain's native encoding.
+	fn chain_encoded(&self) -> <Abi as ChainAbi>::SignedTransaction;
 
 	/// Checks we have updated the sig data to non-default values.
 	fn is_signed(&self) -> bool;
@@ -400,7 +400,7 @@ pub mod mocks {
 			Self(self.0, Some(threshold_signature.clone()))
 		}
 
-		fn abi_encoded(&self) -> Vec<u8> {
+		fn chain_encoded(&self) -> <C as ChainAbi>::SignedTransaction {
 			self.encode()
 		}
 

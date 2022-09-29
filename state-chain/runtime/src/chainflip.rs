@@ -133,7 +133,7 @@ impl TransactionBuilder<Ethereum, EthereumApi> for EthTransactionBuilder {
 				EthereumApi::SetCommKeyWithAggKey(_) => Environment::key_manager_address().into(),
 				EthereumApi::AllBatch(_) => Environment::eth_vault_address().into(),
 			},
-			data: signed_call.abi_encoded(),
+			data: signed_call.chain_encoded(),
 			..Default::default()
 		}
 	}

@@ -164,7 +164,7 @@ impl ApiCall<MockEthereum> for MockSetAggKeyWithAggKey {
 		unimplemented!()
 	}
 
-	fn abi_encoded(&self) -> Vec<u8> {
+	fn chain_encoded(&self) -> Vec<u8> {
 		unimplemented!()
 	}
 

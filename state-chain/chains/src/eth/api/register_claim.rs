@@ -89,19 +89,8 @@ impl RegisterClaim {
 			],
 		)
 	}
-}
 
-impl ApiCall<Ethereum> for RegisterClaim {
-	fn threshold_signature_payload(&self) -> <Ethereum as ChainCrypto>::Payload {
-		self.sig_data.msg_hash
-	}
-
-	fn signed(mut self, signature: &<Ethereum as ChainCrypto>::ThresholdSignature) -> Self {
-		self.sig_data.insert_signature(signature);
-		self
-	}
-
-	fn abi_encoded(&self) -> <Ethereum as ChainAbi>::SignedTransaction {
+	fn abi_encoded(&self) -> Vec<u8> {
 		self.get_function()
 			.encode_input(&[
 				self.sig_data.tokenize(),
@@ -116,6 +105,21 @@ impl ApiCall<Ethereum> for RegisterClaim {
 					Therefore, as long as the tests pass, it can't fail at runtime.
 				"#,
 			)
+	}
+}
+
+impl ApiCall<Ethereum> for RegisterClaim {
+	fn threshold_signature_payload(&self) -> <Ethereum as ChainCrypto>::Payload {
+		self.sig_data.msg_hash
+	}
+
+	fn signed(mut self, signature: &<Ethereum as ChainCrypto>::ThresholdSignature) -> Self {
+		self.sig_data.insert_signature(signature);
+		self
+	}
+
+	fn chain_encoded(&self) -> <Ethereum as ChainAbi>::SignedTransaction {
+		self.abi_encoded()
 	}
 
 	fn is_signed(&self) -> bool {
@@ -181,7 +185,7 @@ mod test_register_claim {
 				s: FAKE_SIG,
 				k_times_g_address: FAKE_NONCE_TIMES_G_ADDR,
 			})
-			.abi_encoded(); // Ensure signing payload isn't modified by signature.
+			.chain_encoded(); // Ensure signing payload isn't modified by signature.
 
 		assert_eq!(register_claim_runtime.threshold_signature_payload(), expected_msg_hash);
 
