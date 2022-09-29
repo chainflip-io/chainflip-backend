@@ -26,7 +26,7 @@ benchmarks! {
 
 		let call = Call::<T>::staked {
 			account_id: caller.clone(),
-			amount: amount,
+			amount,
 			withdrawal_address,
 			tx_hash,
 		};
@@ -41,8 +41,8 @@ benchmarks! {
 	claim {
 		// If we claim an amount which takes us below the minimum stake, the claim
 		// will fail.
-		let balance_to_stake: T::Balance = T::Balance::from(MinimumStake::<T>::get() * T::Balance::from(2u128));
-		let balance_to_claim: T::Balance = T::Balance::from(MinimumStake::<T>::get());
+		let balance_to_stake: T::Balance = MinimumStake::<T>::get() * T::Balance::from(2u128);
+		let balance_to_claim: T::Balance = MinimumStake::<T>::get();
 		let tx_hash: pallet::EthTransactionHash = [211u8; 32];
 		let withdrawal_address: EthereumAddress = [42u8; 20];
 
@@ -66,7 +66,7 @@ benchmarks! {
 		let withdrawal_address: EthereumAddress = [42u8; 20];
 		let caller: T::AccountId = whitelisted_caller();
 
-		let balance_to_stake: T::Balance = T::Balance::from(MinimumStake::<T>::get());
+		let balance_to_stake: T::Balance = MinimumStake::<T>::get();
 		let tx_hash: pallet::EthTransactionHash = [211u8; 32];
 
 		let caller: T::AccountId = whitelisted_caller();
@@ -98,7 +98,7 @@ benchmarks! {
 		// Stake some funds to claim
 		Call::<T>::staked {
 			account_id: caller.clone(),
-			amount: T::Balance::from(MinimumStake::<T>::get()),
+			amount: MinimumStake::<T>::get(),
 			withdrawal_address,
 			tx_hash
 		}.dispatch_bypass_filter(origin.clone())?;
@@ -126,7 +126,7 @@ benchmarks! {
 		// Stake some funds to claim
 		Call::<T>::staked {
 			account_id: caller.clone(),
-			amount: T::Balance::from(MinimumStake::<T>::get()),
+			amount: MinimumStake::<T>::get(),
 			withdrawal_address,
 			tx_hash: [211u8; 32],
 		}.dispatch_bypass_filter(T::EnsureWitnessed::successful_origin())?;
@@ -177,7 +177,7 @@ benchmarks! {
 		assert!(ClaimExpiries::<T>::decode_len().unwrap_or_default() == 0);
 	}
 	expire_pending_claims_at {
-		let b in 0 .. 150 as u32;
+		let b in 0 .. 150_u32;
 		let accounts = create_accounts::<T>(150);
 
 		let eth_base_addr: EthereumAddress = [1u8; 20];
@@ -187,7 +187,7 @@ benchmarks! {
 			let withdrawal_address = eth_base_addr.map(|x| x + i as u8);
 			Call::<T>::staked {
 				account_id: staker.clone(),
-				amount: T::Balance::from(MinimumStake::<T>::get()),
+				amount: MinimumStake::<T>::get(),
 				withdrawal_address,
 				tx_hash: [0; 32]
 			}.dispatch_bypass_filter(T::EnsureWitnessed::successful_origin())?;
@@ -203,13 +203,13 @@ benchmarks! {
 	}
 	update_minimum_stake {
 		let call = Call::<T>::update_minimum_stake {
-			minimum_stake: T::Balance::from(MinimumStake::<T>::get()),
+			minimum_stake: MinimumStake::<T>::get(),
 		};
 
 		let origin = T::EnsureGovernance::successful_origin();
 	} : { call.dispatch_bypass_filter(origin)? }
 	verify {
-		assert_eq!(T::Balance::from(MinimumStake::<T>::get()), T::Balance::from(MinimumStake::<T>::get()));
+		assert_eq!(MinimumStake::<T>::get(), MinimumStake::<T>::get());
 	}
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);

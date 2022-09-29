@@ -39,11 +39,11 @@ benchmarks_instance_pallet! {
 		KeygenResolutionPendingSince::<T, I>::put(current_block);
 		let caller: T::AccountId = whitelisted_caller();
 		let keygen_participants: BTreeSet<T::ValidatorId> = generate_authority_set::<T, I>(150, caller.clone().into());
-		let blamed: BTreeSet<T::ValidatorId> = generate_authority_set::<T, I>(b, caller.clone().into());
+		let blamed: BTreeSet<T::ValidatorId> = generate_authority_set::<T, I>(b, caller.into());
 		let mut keygen_response_status = KeygenResponseStatus::<T, I>::new(keygen_participants.clone());
 
 		for validator_id in &keygen_participants {
-			let _result = keygen_response_status.add_failure_vote(validator_id, blamed.clone());
+			keygen_response_status.add_failure_vote(validator_id, blamed.clone());
 		}
 
 		PendingVaultRotation::<T, I>::put(
@@ -66,11 +66,11 @@ benchmarks_instance_pallet! {
 		let current_block: T::BlockNumber = 0u32.into();
 		KeygenResolutionPendingSince::<T, I>::put(current_block);
 		let caller: T::AccountId = whitelisted_caller();
-		let keygen_participants: BTreeSet<T::ValidatorId> = generate_authority_set::<T, I>(150, caller.clone().into());
+		let keygen_participants: BTreeSet<T::ValidatorId> = generate_authority_set::<T, I>(150, caller.into());
 		let mut keygen_response_status = KeygenResponseStatus::<T, I>::new(keygen_participants.clone());
 
 		for validator_id in &keygen_participants {
-			let _result = keygen_response_status.add_success_vote(
+			keygen_response_status.add_success_vote(
 				validator_id,
 				AggKeyFor::<T, I>::benchmark_value()
 			);
@@ -121,7 +121,7 @@ benchmarks_instance_pallet! {
 	on_keygen_verification_result {
 		let caller: T::AccountId = whitelisted_caller();
 		let agg_key = AggKeyFor::<T, I>::benchmark_value();
-		let keygen_participants = generate_authority_set::<T, I>(150, caller.clone().into());
+		let keygen_participants = generate_authority_set::<T, I>(150, caller.into());
 		let (request_id, signing_ceremony_id) = Pallet::<T, I>::trigger_keygen_verification(CEREMONY_ID, agg_key, keygen_participants.into_iter().collect());
 		T::ThresholdSigner::insert_signature(
 			request_id,
@@ -148,7 +148,7 @@ benchmarks_instance_pallet! {
 			VaultRotationStatus::<T, I>::AwaitingRotation { new_public_key },
 		);
 		let call = Call::<T, I>::vault_key_rotated {
-			new_public_key: new_public_key,
+			new_public_key,
 			block_number: 5u64.into(),
 			tx_hash: Decode::decode(&mut &TX_HASH[..]).unwrap()
 		};

@@ -25,6 +25,7 @@ path = '../runtime'
 cf-chains = {path = "../chains"}
 utilities = {path = '../../utilities'}
 custom-rpc = {path = '../custom-rpc'}
+cf-primitives = { path = '../primitives' }
 
 # Added by Chainflip
 futures = {version = '0.3.4'}

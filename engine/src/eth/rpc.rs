@@ -5,7 +5,7 @@ use web3::{
     signing::SecretKeyRef,
     types::{
         Block, BlockHeader, BlockNumber, Bytes, CallRequest, FeeHistory, Filter, Log,
-        SignedTransaction, SyncState, TransactionParameters, TransactionReceipt, U64,
+        SignedTransaction, SyncState, Transaction, TransactionParameters, TransactionReceipt, U64,
     },
     Web3,
 };
@@ -16,9 +16,10 @@ use futures::{
     FutureExt,
 };
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 
 use crate::{
+    common::format_iterator,
     constants::{ETH_DUAL_REQUEST_TIMEOUT, ETH_LOG_REQUEST_TIMEOUT, SYNC_POLL_INTERVAL},
     logging::COMPONENT_KEY,
     settings,
@@ -109,6 +110,8 @@ pub trait EthRpcApi: Send + Sync {
     /// - Request fails
     /// - Request succeeds, but doesn't return a block
     async fn block(&self, block_number: U64) -> Result<Block<H256>>;
+
+    async fn block_with_txs(&self, block_number: U64) -> Result<Block<Transaction>>;
 
     async fn fee_history(
         &self,
@@ -229,6 +232,26 @@ where
             })
     }
 
+    async fn block_with_txs(&self, block_number: U64) -> Result<Block<Transaction>> {
+        self.web3
+            .eth()
+            .block_with_txs(block_number.into())
+            .await
+            .context(format!(
+                "{} client: Failed to fetch block with transactions",
+                T::transport_protocol()
+            ))
+            .and_then(|opt_block| {
+                opt_block.ok_or_else(|| {
+                    anyhow!(
+                        "{} client: Getting ETH block for block number {} returned None",
+                        T::transport_protocol(),
+                        block_number,
+                    )
+                })
+            })
+    }
+
     async fn fee_history(
         &self,
         block_count: U256,
@@ -329,22 +352,86 @@ impl EthHttpRpcClient {
 
 #[derive(Clone)]
 pub struct EthDualRpcClient {
-    ws_client: EthWsRpcClient,
-    http_client: EthHttpRpcClient,
+    pub ws_client: EthWsRpcClient,
+    pub http_client: EthHttpRpcClient,
     logger: slog::Logger,
 }
 
 impl EthDualRpcClient {
-    pub fn new(
-        ws_client: EthWsRpcClient,
-        http_client: EthHttpRpcClient,
+    /// Create an Ethereum Rpc Client, containing a HTTP and a WS client.
+    /// Passing a value to expected_chain_id ensures the endpoints provided in settings are pointing to nodes
+    /// with the same `chain_id` as that provided.
+    pub async fn new(
+        eth_settings: &settings::Eth,
+        expected_chain_id: U256,
         logger: &slog::Logger,
-    ) -> Self {
-        Self {
+    ) -> Result<Self> {
+        let dual_rpc = Self::inner_new(eth_settings, logger).await?;
+
+        pub async fn validate_client_chain_id<T>(
+            client: &EthRpcClient<T>,
+            expected_chain_id: U256,
+        ) -> anyhow::Result<()>
+        where
+            T: Send + Sync + EthTransport,
+            T::Out: Send,
+        {
+            let chain_id = client
+                .chain_id()
+                .await
+                .context("Failed to fetch chain id")?;
+
+            if chain_id != expected_chain_id {
+                return Err(anyhow!(
+                    "Expected ETH chain id {}, received {} through {}.",
+                    expected_chain_id,
+                    chain_id,
+                    T::transport_protocol()
+                ));
+            }
+
+            Ok(())
+        }
+
+        let mut errors = [
+            validate_client_chain_id(&dual_rpc.ws_client, expected_chain_id).await,
+            validate_client_chain_id(&dual_rpc.http_client, expected_chain_id).await,
+        ]
+        .into_iter()
+        .filter_map(|res| res.err())
+        .peekable();
+
+        if errors.peek().is_some() {
+            bail!(
+                "Inconsistent chain configuration. Terminating.{}",
+                format_iterator(errors)
+            );
+        }
+
+        Ok(dual_rpc)
+    }
+
+    #[cfg(feature = "integration-test")]
+    /// For tests we assume we're pointing to the correct chain_id.
+    pub async fn new_test(eth_settings: &settings::Eth, logger: &slog::Logger) -> Result<Self> {
+        Self::inner_new(eth_settings, logger).await
+    }
+
+    async fn inner_new(eth_settings: &settings::Eth, logger: &slog::Logger) -> Result<Self> {
+        let logger = logger.new(slog::o!(COMPONENT_KEY => "Eth-DualRpcClient"));
+
+        let ws_client = EthWsRpcClient::new(eth_settings, &logger)
+            .await
+            .context("Failed to create EthWsRpcClient")?;
+
+        let http_client = EthHttpRpcClient::new(eth_settings, &logger)
+            .context("Failed to create EthHttpRpcClient")?;
+
+        Ok(Self {
             ws_client,
             http_client,
-            logger: logger.new(slog::o!(COMPONENT_KEY => "Eth-DualRpcClient")),
-        }
+            logger,
+        })
     }
 }
 
@@ -437,6 +524,10 @@ impl EthRpcApi for EthDualRpcClient {
         dual_call_rpc!(self, block, block_number)
     }
 
+    async fn block_with_txs(&self, block_number: U64) -> Result<Block<Transaction>> {
+        dual_call_rpc!(self, block_with_txs, block_number)
+    }
+
     async fn fee_history(
         &self,
         block_count: U256,
@@ -488,6 +579,8 @@ pub mod mocks {
             async fn transaction_receipt(&self, tx_hash: H256) -> Result<TransactionReceipt>;
 
             async fn block(&self, block_number: U64) -> Result<Block<H256>>;
+
+            async fn block_with_txs(&self, block_number: U64) -> Result<Block<Transaction>>;
 
             async fn fee_history(
                 &self,
@@ -617,29 +710,4 @@ mod tests {
             );
         }
     }
-}
-
-pub async fn validate_client_chain_id<T>(
-    client: &EthRpcClient<T>,
-    expected_chain_id: U256,
-) -> anyhow::Result<()>
-where
-    T: Send + Sync + EthTransport,
-    T::Out: Send,
-{
-    let chain_id = client
-        .chain_id()
-        .await
-        .context("Failed to fetch chain id")?;
-
-    if chain_id != expected_chain_id {
-        return Err(anyhow!(
-            "Expected ETH chain id {}, received {} through {}.",
-            expected_chain_id,
-            chain_id,
-            T::transport_protocol()
-        ));
-    }
-
-    Ok(())
 }

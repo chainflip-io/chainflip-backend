@@ -11,7 +11,7 @@ benchmarks! {
 		let origin = T::EnsureGovernance::successful_origin();
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
-		assert_eq!(Pallet::<T>::slashing_rate(), slashing_rate.into())
+		assert_eq!(Pallet::<T>::slashing_rate(), slashing_rate)
 	}
 
 	reap_one_account {

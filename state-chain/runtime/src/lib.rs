@@ -47,6 +47,8 @@ use sp_runtime::traits::{
 	OpaqueKeys, UniqueSaturatedInto, Verify,
 };
 
+use cf_traits::EthEnvironmentProvider;
+
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
 use sp_runtime::{
@@ -60,7 +62,7 @@ use sp_std::prelude::*;
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
-pub use cf_primitives::{ChainflipAccountData, ChainflipAccountState};
+pub use cf_primitives::{ChainflipAccountData, ChainflipAccountState, ForeignChainAddress};
 pub use cf_traits::{
 	BlockNumber, ChainflipAccount, ChainflipAccountStore, EpochInfo, FlipBalance, QualifyNode,
 	SessionKeysRegistered,
@@ -186,6 +188,13 @@ impl pallet_cf_environment::Config for Runtime {
 	type EthEnvironmentProvider = Environment;
 }
 
+#[cfg(feature = "ibiza")]
+impl pallet_cf_relayer::Config for Runtime {
+	type Event = Event;
+	type Ingress = Ingress;
+	type WeightInfo = pallet_cf_relayer::weights::PalletWeight<Runtime>;
+}
+
 impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 	type Event = Event;
 	type Call = Call;
@@ -203,6 +212,30 @@ impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 	type ReplayProtectionProvider = chainflip::EthReplayProtectionProvider;
 	type EthEnvironmentProvider = Environment;
 	type SystemStateManager = pallet_cf_environment::SystemStateProvider<Runtime>;
+}
+
+#[cfg(feature = "ibiza")]
+use chainflip::address_derivation::AddressDerivation;
+
+#[cfg(feature = "ibiza")]
+impl pallet_cf_ingress::Config for Runtime {
+	type Event = Event;
+	type AddressDerivation = AddressDerivation;
+	type LpAccountHandler = LiquidityProvider;
+	type WeightInfo = pallet_cf_ingress::weights::PalletWeight<Runtime>;
+}
+
+#[cfg(feature = "ibiza")]
+impl pallet_cf_lp::Config for Runtime {
+	type Event = Event;
+	type AccountRoleRegistry = AccountTypes;
+	type Ingress = Ingress;
+	type EgressHandler = ();
+	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+}
+
+impl pallet_cf_account_types::Config for Runtime {
+	type Event = Event;
 }
 
 impl<LocalCall> SendTransactionTypes<LocalCall> for Runtime
@@ -287,6 +320,7 @@ impl frame_system::Config for Runtime {
 	type OnKilledAccount = (
 		pallet_cf_flip::BurnFlipAccount<Self>,
 		pallet_cf_validator::DeletePeerMapping<Self>,
+		pallet_cf_validator::DeleteVanityName<Self>,
 		GrandpaOffenceReporter<Self>,
 	);
 	/// The data to be stored in an account.
@@ -504,6 +538,8 @@ impl pallet_cf_chain_tracking::Config<EthereumInstance> for Runtime {
 	type AgeLimit = ConstU64<{ constants::common::eth::BLOCK_SAFETY_MARGIN }>;
 }
 
+// The latest release runtime
+#[cfg(not(feature = "ibiza"))]
 construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
@@ -516,6 +552,7 @@ construct_runtime!(
 		Environment: pallet_cf_environment,
 		Flip: pallet_cf_flip,
 		Emissions: pallet_cf_emissions,
+		AccountTypes: pallet_cf_account_types,
 		Staking: pallet_cf_staking,
 		TransactionPayment: pallet_transaction_payment,
 		Witnesser: pallet_cf_witnesser,
@@ -533,6 +570,43 @@ construct_runtime!(
 		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>,
 		EthereumBroadcaster: pallet_cf_broadcast::<Instance1>,
 		EthereumChainTracking: pallet_cf_chain_tracking::<Instance1>,
+	}
+);
+
+#[cfg(feature = "ibiza")]
+construct_runtime!(
+	pub enum Runtime where
+		Block = Block,
+		NodeBlock = opaque::Block,
+		UncheckedExtrinsic = UncheckedExtrinsic
+	{
+		System: frame_system,
+		RandomnessCollectiveFlip: pallet_randomness_collective_flip,
+		Timestamp: pallet_timestamp,
+		Environment: pallet_cf_environment,
+		Flip: pallet_cf_flip,
+		Emissions: pallet_cf_emissions,
+		AccountTypes: pallet_cf_account_types,
+		Staking: pallet_cf_staking,
+		TransactionPayment: pallet_transaction_payment,
+		Witnesser: pallet_cf_witnesser,
+		Auction: pallet_cf_auction,
+		Validator: pallet_cf_validator,
+		Session: pallet_session,
+		Historical: session_historical::{Pallet},
+		Aura: pallet_aura,
+		Authorship: pallet_authorship,
+		Grandpa: pallet_grandpa,
+		Governance: pallet_cf_governance,
+		TokenholderGovernance: pallet_cf_tokenholder_governance,
+		EthereumVault: pallet_cf_vaults::<Instance1>,
+		Reputation: pallet_cf_reputation,
+		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>,
+		EthereumBroadcaster: pallet_cf_broadcast::<Instance1>,
+		EthereumChainTracking: pallet_cf_chain_tracking::<Instance1>,
+		Ingress: pallet_cf_ingress,
+		Relayer: pallet_cf_relayer,
+		LiquidityProvider: pallet_cf_lp,
 	}
 );
 
@@ -575,6 +649,34 @@ pub type Executive = frame_executive::Executive<
 #[macro_use]
 extern crate frame_benchmarking;
 
+#[cfg(feature = "ibiza")]
+#[cfg(feature = "runtime-benchmarks")]
+mod benches {
+	define_benchmarks!(
+		[frame_benchmarking, BaselineBench::<Runtime>]
+		[frame_system, SystemBench::<Runtime>]
+		[pallet_timestamp, Timestamp]
+		[pallet_cf_environment, Environment]
+		[pallet_cf_flip, Flip]
+		[pallet_cf_emissions, Emissions]
+		[pallet_cf_staking, Staking]
+		[pallet_session, SessionBench::<Runtime>]
+		[pallet_cf_witnesser, Witnesser]
+		[pallet_cf_auction, Auction]
+		[pallet_cf_validator, Validator]
+		[pallet_cf_governance, Governance]
+		[pallet_cf_tokenholder_governance, TokenholderGovernance]
+		[pallet_cf_vaults, EthereumVault]
+		[pallet_cf_reputation, Reputation]
+		[pallet_cf_threshold_signature, EthereumThresholdSigner]
+		[pallet_cf_broadcast, EthereumBroadcaster]
+		[pallet_cf_chain_tracking, EthereumChainTracking]
+		[pallet_cf_relayer, Relayer]
+		[pallet_cf_ingress, Ingress]
+	);
+}
+
+#[cfg(not(feature = "ibiza"))]
 #[cfg(feature = "runtime-benchmarks")]
 mod benches {
 	define_benchmarks!(

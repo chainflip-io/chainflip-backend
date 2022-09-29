@@ -9,12 +9,12 @@ license = '<TODO>'
 publish = false
 repository = 'https://github.com/chainflip-io/chainflip-backend'
 
-
 [package.metadata.docs.rs]
 targets = ['x86_64-unknown-linux-gnu']
 
 [dependencies]
 cf-traits = { path = '../../traits', default-features = false }
+cf-primitives = {path = '../../primitives', default-features = false}
 serde = {optional = true, version = '1.0.126', features = ['derive']}
 
 # Parity deps

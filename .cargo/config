@@ -5,12 +5,15 @@
 # Run unit tests but not integration tests
 cf-test = "test --lib --all-features"
 # TODO: add all-features and clean up benchmarks.
-cf-clippy = "clippy --all-targets"
+cf-clippy = "clippy --all-targets --all-features"
+
+
+ci-build-ibiza = "build --release --features ibiza"
 
 ci-check = "check --all-targets --all-features --release"
 ci-build = "build --release --features runtime-benchmarks"
 ci-test = "test --lib --all-features --release"
-ci-clippy = "clippy --all-targets -- -D warnings"
+ci-clippy = "clippy --all-targets --all-features -- -D warnings"
 
 # Run just the CFE unit tests
 cfe-test = "test --package chainflip-engine --lib"

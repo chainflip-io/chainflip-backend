@@ -3,8 +3,8 @@ use std::{sync::Arc, time::Duration};
 use anyhow::{anyhow, Result};
 use itertools::Itertools;
 use slog::o;
+use sp_core::H256;
 
-use sp_core::{storage::StorageKey, H256};
 use state_chain_runtime::AccountId;
 
 use codec::Encode;
@@ -177,23 +177,11 @@ pub async fn get_current_peer_infos(
     >,
     block_hash: H256,
 ) -> anyhow::Result<Vec<PeerInfo>> {
-    use frame_support::StoragePrefixedMap;
-
-    let storage_key = StorageKey(
-        pallet_cf_validator::AccountPeerMapping::<state_chain_runtime::Runtime>::final_prefix()
-            .into(),
-    );
-
     let peer_infos: Vec<_> = state_chain_client
-        .get_storage_pairs::<(
-            AccountId,
-            sp_core::ed25519::Public,
-            u16,
-            pallet_cf_validator::Ipv6Addr,
-        )>(block_hash, storage_key)
+        .get_all_storage_pairs::<pallet_cf_validator::AccountPeerMapping::<state_chain_runtime::Runtime>>(block_hash)
         .await?
         .into_iter()
-        .map(|(account_id, public_key, port, ip_address)| {
+        .map(|(account_id, (public_key, port, ip_address))| {
             PeerInfo::new(account_id, public_key, ip_address.into(), port)
         })
         .collect();

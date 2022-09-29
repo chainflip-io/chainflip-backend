@@ -25,6 +25,9 @@ use crate::{
     task_scope::{with_task_scope, Scope},
 };
 
+#[cfg(feature = "ibiza")]
+use sp_core::H160;
+
 async fn handle_keygen_request<'a, MultisigClient, RpcClient>(
     scope: &Scope<'a, anyhow::Result<()>, true>,
     multisig_client: Arc<MultisigClient>,
@@ -126,10 +129,11 @@ async fn handle_signing_request<'a, MultisigClient, RpcClient>(
 // Wrap the match so we add a log message before executing the processing of the event
 // if we are processing. Else, ignore it.
 macro_rules! match_event {
-    ($logger:ident, $event:ident { $($bind:pat $(if $condition:expr)? => $block:expr)+ }) => {{
+    ($logger:ident, $event:ident { $($(#[$cfg_param:meta])? $bind:pat $(if $condition:expr)? => $block:expr)+ }) => {{
         let formatted_event = format!("{:?}", $event);
         match $event {
             $(
+                $(#[$cfg_param])?
                 $bind => {
                     $(if !$condition {
                         slog::trace!(
@@ -159,6 +163,13 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
     multisig_client: Arc<MultisigClient>,
     peer_update_sender: UnboundedSender<PeerUpdate>,
     epoch_start_sender: broadcast::Sender<EpochStart>,
+    #[cfg(feature = "ibiza")] eth_monitor_ingress_sender: tokio::sync::mpsc::UnboundedSender<H160>,
+    #[cfg(feature = "ibiza")] eth_monitor_flip_ingress_sender: tokio::sync::mpsc::UnboundedSender<
+        H160,
+    >,
+    #[cfg(feature = "ibiza")] eth_monitor_usdc_ingress_sender: tokio::sync::mpsc::UnboundedSender<
+        H160,
+    >,
     cfe_settings_update_sender: watch::Sender<CfeSettings>,
     initial_block_hash: H256,
     logger: slog::Logger,
@@ -402,6 +413,34 @@ where
                                                 }
                                             ) => {
                                                 cfe_settings_update_sender.send(new_cfe_settings).unwrap();
+                                            }
+                                            #[cfg(feature = "ibiza")]
+                                            state_chain_runtime::Event::Ingress(
+                                                pallet_cf_ingress::Event::StartWitnessing {
+                                                    ingress_address,
+                                                    ingress_asset
+                                                }
+                                            ) => {
+                                                use cf_primitives::{Asset, ForeignChain, ForeignChainAddress};
+                                                if let ForeignChainAddress::Eth(address) = ingress_address {
+                                                    assert_eq!(ingress_asset.chain, ForeignChain::Ethereum);
+                                                    match ingress_asset.asset {
+                                                        Asset::Eth => {
+                                                            eth_monitor_ingress_sender.send(H160::from(address)).unwrap();
+                                                        }
+                                                        Asset::Flip => {
+                                                            eth_monitor_flip_ingress_sender.send(H160::from(address)).unwrap();
+                                                        }
+                                                        Asset::Usdc => {
+                                                            eth_monitor_usdc_ingress_sender.send(H160::from(address)).unwrap();
+                                                        }
+                                                        _ => {
+                                                            slog::warn!(logger, "Not a supported asset: {:?}", ingress_asset);
+                                                        }
+                                                    }
+                                                } else {
+                                                    slog::warn!(logger, "Unsupported addresss: {:?}", ingress_address);
+                                                }
                                             }
                                         }}
                                     }

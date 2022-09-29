@@ -1,8 +1,10 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod async_result;
+pub mod liquidity;
 pub mod mocks;
 pub mod offence_reporting;
+pub use liquidity::*;
 
 use core::fmt::Debug;
 
@@ -11,11 +13,13 @@ use sp_std::collections::btree_set::BTreeSet;
 
 use cf_chains::{benchmarking_value::BenchmarkValue, ApiCall, ChainAbi, ChainCrypto};
 use cf_primitives::{
-	AuthorityCount, CeremonyId, ChainflipAccountData, ChainflipAccountState, EpochIndex,
+	AccountRole, AuthorityCount, CeremonyId, ChainflipAccountData, ChainflipAccountState,
+	EpochIndex, ForeignChainAddress, ForeignChainAsset, IntentId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable},
+	error::BadOrigin,
 	pallet_prelude::Member,
 	sp_runtime::traits::AtLeast32BitUnsigned,
 	traits::{EnsureOrigin, Get, Imbalance, IsType, StoredMap},
@@ -24,7 +28,7 @@ use frame_support::{
 use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{Bounded, MaybeSerializeDeserialize},
-	DispatchError, DispatchResult, RuntimeDebug,
+	DispatchError, DispatchResult, FixedPointOperand, RuntimeDebug,
 };
 use sp_std::{iter::Sum, marker::PhantomData, prelude::*};
 /// An index to a block.
@@ -42,6 +46,7 @@ pub trait Chainflip: frame_system::Config {
 		+ Ord
 		+ Copy
 		+ AtLeast32BitUnsigned
+		+ FixedPointOperand
 		+ MaybeSerializeDeserialize
 		+ Bounded
 		+ Sum<Self::Amount>;
@@ -664,4 +669,62 @@ pub trait StakingInfo {
 	fn total_stake_of(account_id: &Self::AccountId) -> Self::Balance;
 	/// Returns the total stake held on-chain.
 	fn total_onchain_stake() -> Self::Balance;
+}
+
+/// Allow pallets to register `Intent`s in the Ingress pallet.
+pub trait IngressApi {
+	type AccountId;
+
+	/// Issues an intent id and ingress address for a new liquidity deposit.
+	fn register_liquidity_ingress_intent(
+		lp_account: Self::AccountId,
+		ingress_asset: ForeignChainAsset,
+	) -> Result<(IntentId, ForeignChainAddress), DispatchError>;
+
+	/// Issues an intent id and ingress address for a new swap.
+	fn register_swap_intent(
+		ingress_asset: ForeignChainAsset,
+		egress_asset: ForeignChainAsset,
+		egress_address: ForeignChainAddress,
+		relayer_commission_bps: u16,
+	) -> Result<(IntentId, ForeignChainAddress), DispatchError>;
+}
+
+/// Generates a deterministic ingress address for some combination of asset, chain and intent id.
+pub trait AddressDerivationApi {
+	fn generate_address(
+		ingress_asset: ForeignChainAsset,
+		intent_id: IntentId,
+	) -> Result<ForeignChainAddress, DispatchError>;
+}
+
+pub trait AccountRoleRegistry<T: frame_system::Config> {
+	fn register_account_role(who: &T::AccountId, role: AccountRole) -> DispatchResult;
+
+	fn register_as_relayer(account_id: &T::AccountId) -> DispatchResult {
+		Self::register_account_role(account_id, AccountRole::Relayer)
+	}
+
+	fn register_as_liquidity_provider(account_id: &T::AccountId) -> DispatchResult {
+		Self::register_account_role(account_id, AccountRole::LiquidityProvider)
+	}
+
+	fn register_as_validator(account_id: &T::AccountId) -> DispatchResult {
+		Self::register_account_role(account_id, AccountRole::Validator)
+	}
+
+	fn ensure_account_role(origin: T::Origin, role: AccountRole)
+		-> Result<T::AccountId, BadOrigin>;
+
+	fn ensure_relayer(origin: T::Origin) -> Result<T::AccountId, BadOrigin> {
+		Self::ensure_account_role(origin, AccountRole::Relayer)
+	}
+
+	fn ensure_liquidity_provider(origin: T::Origin) -> Result<T::AccountId, BadOrigin> {
+		Self::ensure_account_role(origin, AccountRole::LiquidityProvider)
+	}
+
+	fn ensure_validator(origin: T::Origin) -> Result<T::AccountId, BadOrigin> {
+		Self::ensure_account_role(origin, AccountRole::Validator)
+	}
 }

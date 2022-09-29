@@ -120,7 +120,7 @@ fn expectations_on_start(
     }
 
     mock_state_chain_rpc_client
-        .expect_submit_extrinsic_rpc()
+        .expect_submit_extrinsic()
         .never();
 
     (
@@ -174,6 +174,16 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_current_authority_o
 
     let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
+    #[cfg(feature = "ibiza")]
+    let (eth_monitor_ingress_sender, _eth_monitor_ingress_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+    #[cfg(feature = "ibiza")]
+    let (eth_monitor_flip_ingress_sender, _eth_monitor_flip_ingress_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+    #[cfg(feature = "ibiza")]
+    let (eth_monitor_usdc_ingress_sender, _eth_monitor_usdc_ingress_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+
     sc_observer::start(
         state_chain_client,
         sc_block_stream,
@@ -181,6 +191,12 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_current_authority_o
         multisig_client,
         account_peer_mapping_change_sender,
         epoch_start_sender,
+        #[cfg(feature = "ibiza")]
+        eth_monitor_ingress_sender,
+        #[cfg(feature = "ibiza")]
+        eth_monitor_flip_ingress_sender,
+        #[cfg(feature = "ibiza")]
+        eth_monitor_usdc_ingress_sender,
         cfe_settings_update_sender,
         initial_block_hash,
         logger,
@@ -227,6 +243,16 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_historic_on_startup
 
     let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
+    #[cfg(feature = "ibiza")]
+    let (eth_monitor_ingress_sender, _eth_monitor_ingress_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+    #[cfg(feature = "ibiza")]
+    let (eth_monitor_flip_ingress_sender, _eth_monitor_flip_ingress_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+    #[cfg(feature = "ibiza")]
+    let (eth_monitor_usdc_ingress_sender, _eth_monitor_usdc_ingress_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+
     sc_observer::start(
         state_chain_client,
         sc_block_stream,
@@ -234,6 +260,12 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_historic_on_startup
         multisig_client,
         account_peer_mapping_change_sender,
         epoch_start_sender,
+        #[cfg(feature = "ibiza")]
+        eth_monitor_ingress_sender,
+        #[cfg(feature = "ibiza")]
+        eth_monitor_flip_ingress_sender,
+        #[cfg(feature = "ibiza")]
+        eth_monitor_usdc_ingress_sender,
         cfe_settings_update_sender,
         initial_block_hash,
         logger,
@@ -273,6 +305,16 @@ async fn sends_initial_extrinsics_when_not_historic_on_startup() {
     let (epoch_start_sender, mut epoch_start_receiver) = broadcast::channel(10);
     let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
+    #[cfg(feature = "ibiza")]
+    let (eth_monitor_ingress_sender, _eth_monitor_ingress_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+    #[cfg(feature = "ibiza")]
+    let (eth_monitor_flip_ingress_sender, _eth_monitor_flip_ingress_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+    #[cfg(feature = "ibiza")]
+    let (eth_monitor_usdc_ingress_sender, _eth_monitor_usdc_ingress_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+
     sc_observer::start(
         state_chain_client,
         sc_block_stream,
@@ -280,6 +322,12 @@ async fn sends_initial_extrinsics_when_not_historic_on_startup() {
         multisig_client,
         account_peer_mapping_change_sender,
         epoch_start_sender,
+        #[cfg(feature = "ibiza")]
+        eth_monitor_ingress_sender,
+        #[cfg(feature = "ibiza")]
+        eth_monitor_flip_ingress_sender,
+        #[cfg(feature = "ibiza")]
+        eth_monitor_usdc_ingress_sender,
         cfe_settings_update_sender,
         initial_block_hash,
         logger,
@@ -391,6 +439,16 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
 
     let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
+    #[cfg(feature = "ibiza")]
+    let (eth_monitor_ingress_sender, _eth_monitor_ingress_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+    #[cfg(feature = "ibiza")]
+    let (eth_monitor_flip_ingress_sender, _eth_monitor_flip_ingress_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+    #[cfg(feature = "ibiza")]
+    let (eth_monitor_usdc_ingress_sender, _eth_monitor_usdc_ingress_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+
     sc_observer::start(
         state_chain_client,
         sc_block_stream,
@@ -398,6 +456,12 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
         multisig_client,
         account_peer_mapping_change_sender,
         epoch_start_sender,
+        #[cfg(feature = "ibiza")]
+        eth_monitor_ingress_sender,
+        #[cfg(feature = "ibiza")]
+        eth_monitor_flip_ingress_sender,
+        #[cfg(feature = "ibiza")]
+        eth_monitor_usdc_ingress_sender,
         cfe_settings_update_sender,
         initial_block_hash,
         logger,
@@ -521,6 +585,16 @@ async fn not_historical_to_authority_on_new_epoch() {
 
     let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
+    #[cfg(feature = "ibiza")]
+    let (eth_monitor_ingress_sender, _eth_monitor_ingress_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+    #[cfg(feature = "ibiza")]
+    let (eth_monitor_flip_ingress_sender, _eth_monitor_flip_ingress_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+    #[cfg(feature = "ibiza")]
+    let (eth_monitor_usdc_ingress_sender, _eth_monitor_usdc_ingress_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+
     sc_observer::start(
         state_chain_client,
         sc_block_stream,
@@ -528,6 +602,12 @@ async fn not_historical_to_authority_on_new_epoch() {
         multisig_client,
         account_peer_mapping_change_sender,
         epoch_start_sender,
+        #[cfg(feature = "ibiza")]
+        eth_monitor_ingress_sender,
+        #[cfg(feature = "ibiza")]
+        eth_monitor_flip_ingress_sender,
+        #[cfg(feature = "ibiza")]
+        eth_monitor_usdc_ingress_sender,
         cfe_settings_update_sender,
         initial_block_hash,
         logger,
@@ -651,6 +731,16 @@ async fn current_authority_to_historical_on_new_epoch_event() {
 
     let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
+    #[cfg(feature = "ibiza")]
+    let (eth_monitor_ingress_sender, _eth_monitor_ingress_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+    #[cfg(feature = "ibiza")]
+    let (eth_monitor_flip_ingress_sender, _eth_monitor_flip_ingress_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+    #[cfg(feature = "ibiza")]
+    let (eth_monitor_usdc_ingress_sender, _eth_monitor_usdc_ingress_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+
     sc_observer::start(
         state_chain_client,
         sc_block_stream,
@@ -658,6 +748,12 @@ async fn current_authority_to_historical_on_new_epoch_event() {
         multisig_client,
         account_peer_mapping_change_sender,
         epoch_start_sender,
+        #[cfg(feature = "ibiza")]
+        eth_monitor_ingress_sender,
+        #[cfg(feature = "ibiza")]
+        eth_monitor_flip_ingress_sender,
+        #[cfg(feature = "ibiza")]
+        eth_monitor_usdc_ingress_sender,
         cfe_settings_update_sender,
         initial_block_hash,
         logger,
@@ -726,7 +822,7 @@ async fn only_encodes_and_signs_when_specified() {
 
     // Submitting `transaction_ready_for_broadcast()`
     mock_state_chain_rpc_client
-        .expect_submit_extrinsic_rpc()
+        .expect_submit_extrinsic()
         .times(1)
         .returning(move |_| Ok(H256::default()));
 
@@ -785,6 +881,16 @@ async fn only_encodes_and_signs_when_specified() {
 
     let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
+    #[cfg(feature = "ibiza")]
+    let (eth_monitor_ingress_sender, _eth_monitor_ingress_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+    #[cfg(feature = "ibiza")]
+    let (eth_monitor_flip_ingress_sender, _eth_monitor_flip_ingress_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+    #[cfg(feature = "ibiza")]
+    let (eth_monitor_usdc_ingress_sender, _eth_monitor_usdc_ingress_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+
     sc_observer::start(
         state_chain_client,
         sc_block_stream,
@@ -792,6 +898,12 @@ async fn only_encodes_and_signs_when_specified() {
         multisig_client,
         account_peer_mapping_change_sender,
         epoch_start_sender,
+        #[cfg(feature = "ibiza")]
+        eth_monitor_ingress_sender,
+        #[cfg(feature = "ibiza")]
+        eth_monitor_flip_ingress_sender,
+        #[cfg(feature = "ibiza")]
+        eth_monitor_usdc_ingress_sender,
         cfe_settings_update_sender,
         initial_block_hash,
         logger,
@@ -834,6 +946,16 @@ async fn run_the_sc_observer() {
 
     let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
+    #[cfg(feature = "ibiza")]
+    let (eth_monitor_ingress_sender, _eth_monitor_ingress_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+    #[cfg(feature = "ibiza")]
+    let (eth_monitor_flip_ingress_sender, _eth_monitor_flip_ingress_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+    #[cfg(feature = "ibiza")]
+    let (eth_monitor_usdc_ingress_sender, _eth_monitor_usdc_ingress_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+
     sc_observer::start(
         state_chain_client,
         block_stream,
@@ -841,6 +963,12 @@ async fn run_the_sc_observer() {
         multisig_client,
         account_peer_mapping_change_sender,
         epoch_start_sender,
+        #[cfg(feature = "ibiza")]
+        eth_monitor_ingress_sender,
+        #[cfg(feature = "ibiza")]
+        eth_monitor_flip_ingress_sender,
+        #[cfg(feature = "ibiza")]
+        eth_monitor_usdc_ingress_sender,
         cfe_settings_update_sender,
         initial_block_hash,
         logger,
@@ -863,7 +991,7 @@ async fn should_handle_signing_request() {
 
     let mut rpc = MockStateChainRpcApi::new();
     // Reporting signing outcome
-    rpc.expect_submit_extrinsic_rpc()
+    rpc.expect_submit_extrinsic()
         .times(1)
         .returning(move |_| Ok(H256::default()));
     let state_chain_client = Arc::new(StateChainClient::create_test_sc_client(rpc));
@@ -938,7 +1066,7 @@ async fn should_handle_keygen_request() {
 
     let mut rpc = MockStateChainRpcApi::new();
     // Submitting keygen outcome
-    rpc.expect_submit_extrinsic_rpc()
+    rpc.expect_submit_extrinsic()
         .times(1)
         .returning(move |_| Ok(H256::default()));
     let state_chain_client = Arc::new(StateChainClient::create_test_sc_client(rpc));

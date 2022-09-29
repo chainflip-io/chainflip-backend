@@ -14,7 +14,7 @@ benchmarks! {
 		let call: <T as Config>::Call = frame_system::Call::remark{ remark: vec![] }.into();
 		let epoch = T::EpochInfo::epoch_index();
 
-		T::EpochInfo::add_authority_info_for_epoch(epoch, vec![validator_id.clone()]);
+		T::EpochInfo::add_authority_info_for_epoch(epoch, vec![validator_id]);
 
 		// TODO: currently we don't measure the actual execution path
 		// we need to set the threshold to 1 to do this.
