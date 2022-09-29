@@ -1,6 +1,6 @@
 use std::{collections::BTreeSet, pin::Pin, time::Duration};
 
-use super::{helpers::get_key_data_for_test, *};
+use super::{helpers::get_key_data_for_test, keygen_data_tests::gen_keygen_data_hash_comm1, *};
 use crate::{
     constants::CEREMONY_ID_WINDOW,
     logging::test_utils::new_test_logger,
@@ -13,16 +13,18 @@ use crate::{
             ceremony_runner::CeremonyRunner,
             common::{BroadcastFailureReason, CeremonyStageName, SigningFailureReason},
             keygen::KeygenData,
-            CeremonyFailureReason, CeremonyRequest, CeremonyRequestDetails, MultisigData,
-            SigningRequestDetails,
+            CeremonyFailureReason, CeremonyRequest, CeremonyRequestDetails, KeygenRequestDetails,
+            MultisigData, SigningRequestDetails,
         },
         crypto::{CryptoScheme, Rng},
         eth::{EthSchnorrSignature, EthSigning},
         tests::fixtures::MESSAGE_HASH,
     },
+    multisig_p2p::OutgoingMultisigStageMessages,
     task_scope::with_task_scope,
 };
 use anyhow::Result;
+use cf_primitives::CeremonyId;
 use client::MultisigMessage;
 use futures::{Future, FutureExt};
 use rand_legacy::SeedableRng;
@@ -79,6 +81,7 @@ fn new_ceremony_manager_for_test(our_account_id: AccountId) -> CeremonyManager<E
 fn send_signing_request(
     ceremony_request_sender: &tokio::sync::mpsc::UnboundedSender<CeremonyRequest<EthSigning>>,
     participants: BTreeSet<AccountId32>,
+    ceremony_id: CeremonyId,
 ) -> tokio::sync::oneshot::Receiver<
     Result<
         EthSchnorrSignature,
@@ -91,7 +94,7 @@ fn send_signing_request(
     let (result_sender, result_receiver) = oneshot::channel();
 
     let request = CeremonyRequest {
-        ceremony_id: INITIAL_LATEST_CEREMONY_ID + 1,
+        ceremony_id,
         details: Some(CeremonyRequestDetails::Sign(SigningRequestDetails::<
             EthSigning,
         > {
@@ -108,6 +111,31 @@ fn send_signing_request(
     let _result = ceremony_request_sender.send(request);
 
     result_receiver
+}
+
+fn spawn_ceremony_manager(
+    our_account_id: AccountId,
+) -> (
+    mpsc::UnboundedSender<CeremonyRequest<EthSigning>>,
+    mpsc::UnboundedSender<(AccountId32, Vec<u8>)>,
+    mpsc::UnboundedReceiver<OutgoingMultisigStageMessages>,
+) {
+    let (ceremony_request_sender, ceremony_request_receiver) = mpsc::unbounded_channel();
+    let (incoming_p2p_sender, incoming_p2p_receiver) = mpsc::unbounded_channel();
+    let (outgoing_p2p_sender, outgoing_p2p_receiver) = mpsc::unbounded_channel();
+    let ceremony_manager = CeremonyManager::<EthSigning>::new(
+        our_account_id,
+        outgoing_p2p_sender,
+        INITIAL_LATEST_CEREMONY_ID,
+        &new_test_logger(),
+    );
+    tokio::spawn(ceremony_manager.run(ceremony_request_receiver, incoming_p2p_receiver));
+
+    (
+        ceremony_request_sender,
+        incoming_p2p_sender,
+        outgoing_p2p_receiver,
+    )
 }
 
 #[tokio::test]
@@ -286,23 +314,14 @@ async fn should_not_create_unauthorized_ceremony_with_invalid_ceremony_id() {
 
 #[tokio::test]
 async fn should_send_outcome_of_authorised_ceremony() {
-    // Create a new ceremony manager and set it running
-    let (ceremony_request_sender, ceremony_request_receiver) =
-        tokio::sync::mpsc::unbounded_channel();
-    let (_incoming_p2p_sender, incoming_p2p_receiver) = tokio::sync::mpsc::unbounded_channel();
-    let (outgoing_p2p_sender, _outgoing_p2p_receiver) = tokio::sync::mpsc::unbounded_channel();
-    let ceremony_manager = CeremonyManager::<EthSigning>::new(
-        ACCOUNT_IDS[0].clone(),
-        outgoing_p2p_sender,
-        INITIAL_LATEST_CEREMONY_ID,
-        &new_test_logger(),
-    );
-    tokio::spawn(ceremony_manager.run(ceremony_request_receiver, incoming_p2p_receiver));
+    let (ceremony_request_sender, _incoming_p2p_sender, _outgoing_p2p_receiver) =
+        spawn_ceremony_manager(ACCOUNT_IDS[0].clone());
 
     // Send a signing request in order to create an authorised ceremony
     let mut result_receiver = send_signing_request(
         &ceremony_request_sender,
         BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
+        INITIAL_LATEST_CEREMONY_ID + 1,
     );
 
     // Advance time to cause a timeout, then check that the correct ceremony outcome was received
@@ -362,7 +381,7 @@ async fn should_cleanup_unauthorised_ceremony_if_not_participating() {
                 _task_handle: task_handle,
             };
             ceremony_manager
-                .insert_signing_state_for_test(DEFAULT_SIGNING_CEREMONY_ID, ceremony_handle);
+                .insert_signing_state_for_test(INITIAL_LATEST_CEREMONY_ID + 1, ceremony_handle);
 
             // Start the ceremony manager running
             tokio::spawn(ceremony_manager.run(ceremony_request_receiver, incoming_p2p_receiver));
@@ -374,7 +393,11 @@ async fn should_cleanup_unauthorised_ceremony_if_not_participating() {
             let mut participants = BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned());
             participants.remove(&our_account_id);
 
-            let _result_receiver = send_signing_request(&ceremony_request_sender, participants);
+            let _result_receiver = send_signing_request(
+                &ceremony_request_sender,
+                participants,
+                INITIAL_LATEST_CEREMONY_ID + 1,
+            );
 
             // Small delay to let the ceremony manager process the request
             tokio::time::sleep(Duration::from_millis(50)).await;
@@ -388,4 +411,61 @@ async fn should_cleanup_unauthorised_ceremony_if_not_participating() {
     })
     .await
     .unwrap();
+}
+
+// Test that the ceremony manager will take an incoming p2p message and give it to the ceremony runner.
+// Also checks that the ceremony runner processes incoming messages.
+#[tokio::test]
+async fn should_route_p2p_message() {
+    let our_account_id = ACCOUNT_IDS[0].clone();
+    let sender_account_id = ACCOUNT_IDS[1].clone();
+    let ceremony_id = INITIAL_LATEST_CEREMONY_ID + 1;
+
+    let (ceremony_request_sender, incoming_p2p_sender, mut outgoing_p2p_receiver) =
+        spawn_ceremony_manager(our_account_id.clone());
+
+    // Send a keygen request with only 2 participants, us and one other node.
+    // So we will only need to receive one p2p message to complete the stage and advance.
+    let participants = vec![our_account_id, sender_account_id.clone()]
+        .into_iter()
+        .collect();
+    let (result_sender, _result_receiver) = oneshot::channel();
+    let request = CeremonyRequest {
+        ceremony_id,
+        details: Some(CeremonyRequestDetails::Keygen(KeygenRequestDetails::<
+            EthSigning,
+        > {
+            rng: Rng::from_seed(DEFAULT_KEYGEN_SEED),
+            participants,
+            result_sender,
+        })),
+    };
+
+    let _result = ceremony_request_sender.send(request);
+
+    // Small delay to let the ceremony start
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    // Receive the stage 1 broadcast
+    let _stage_1_broadcast = outgoing_p2p_receiver.try_recv().unwrap();
+
+    // Send a stage 1 p2p message
+    let message = bincode::serialize(&MultisigMessage {
+        ceremony_id,
+        data: MultisigData::Keygen(gen_keygen_data_hash_comm1()),
+    })
+    .unwrap();
+
+    incoming_p2p_sender
+        .send((sender_account_id, message))
+        .unwrap();
+
+    // Small delay to let the ceremony manager process the message
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    // Check that a broadcast was sent out. Meaning that the ceremony received the message and moved to stage 2.
+    assert!(matches!(
+        outgoing_p2p_receiver.try_recv().unwrap(),
+        OutgoingMultisigStageMessages::Broadcast(..)
+    ))
 }
