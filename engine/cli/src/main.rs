@@ -297,13 +297,34 @@ async fn retire_account(settings: &CLISettings, logger: &slog::Logger) -> Result
 }
 
 async fn activate_account(settings: &CLISettings, logger: &slog::Logger) -> Result<()> {
-    let (_, _, state_chain_client) =
+    let (latest_block_hash, _, state_chain_client) =
         connect_to_state_chain(&settings.state_chain, false, logger).await?;
-    let tx_hash = state_chain_client
-        .submit_signed_extrinsic(pallet_cf_staking::Call::activate_account {}, logger)
+
+    match state_chain_client
+        .get_storage_map::<pallet_cf_account_types::AccountRoles<state_chain_runtime::Runtime>>(
+            latest_block_hash,
+            &state_chain_client.our_account_id,
+        )
         .await
-        .expect("Could not activate account");
-    println!("Account activated at tx {:#x}.", tx_hash);
+        .expect("Failed to request AccountRole")
+        .ok_or_else(|| anyhow!("Your account is not staked. You must first stake and then register your account role as Validator before activating your account."))?
+    {
+        AccountRole::Validator => {
+            let tx_hash = state_chain_client
+                .submit_signed_extrinsic(pallet_cf_staking::Call::activate_account {}, logger)
+                .await
+                .expect("Could not activate account");
+            println!("Account activated at tx {:#x}.", tx_hash);
+        }
+        AccountRole::None => {
+            println!("You have not yet registered an account role. If you wish to activate your account to gain a chance at becoming an authority on the Chainflip network
+            you must first register your account as the Validator role. Please see the `register-account-role` command on this CLI.")
+        }
+        _ => {
+            println!("You have already registered an account role for this account that is not the Validator role. You cannot activate your account for participation as an authority on the Chainflip network.")
+        }
+    }
+
     Ok(())
 }
 
