@@ -35,7 +35,7 @@ pub mod pallet {
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::storage]
-	pub(crate) type AccountRoles<T: Config<I>, I: 'static = ()> =
+	pub type AccountRoles<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Identity, T::AccountId, AccountRole>;
 
 	#[pallet::event]

@@ -1,5 +1,7 @@
 use crate::{self as pallet_cf_witness, WitnessDataExtraction};
-use cf_traits::mocks::{self, epoch_info::MockEpochInfo};
+use cf_traits::mocks::{
+	self, account_role_registry::MockAccountRoleRegistry, epoch_info::MockEpochInfo,
+};
 use frame_support::parameter_types;
 use frame_system as system;
 use sp_core::H256;
@@ -62,6 +64,7 @@ impl system::Config for Test {
 impl pallet_cf_witness::Config for Test {
 	type Event = Event;
 	type Origin = Origin;
+	type AccountRoleRegistry = MockAccountRoleRegistry;
 	type Call = Call;
 	type ValidatorId = AccountId;
 	type EpochInfo = mocks::epoch_info::Mock;
