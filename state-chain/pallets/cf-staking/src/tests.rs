@@ -1,6 +1,6 @@
 use crate::{
-	mock::*, pallet, AccountRetired, ClaimExpiries, Error, EthereumAddress, FailedStakeAttempts,
-	Pallet, PendingClaims, WithdrawalAddresses,
+	mock::*, pallet, AccountRetired, ClaimAmount, ClaimExpiries, Error, EthereumAddress,
+	FailedStakeAttempts, Pallet, PendingClaims, WithdrawalAddresses,
 };
 use cf_chains::RegisterClaim;
 use cf_test_utilities::assert_event_sequence;
@@ -554,7 +554,7 @@ fn test_claim_all() {
 		Bonder::<Test>::update_bond(&ALICE, BOND);
 
 		// Claim all available funds.
-		assert_ok!(Staking::claim(Origin::signed(ALICE), None, ETH_DUMMY_ADDR));
+		assert_ok!(Staking::claim(Origin::signed(ALICE), ClaimAmount::Max, ETH_DUMMY_ADDR));
 
 		// We should have a claim for the full staked amount minus the bond.
 		assert_event_sequence!(

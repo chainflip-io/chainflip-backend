@@ -47,7 +47,7 @@ pub const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
 pub mod pallet {
 	use super::*;
 	use cf_chains::{ApiCall, Ethereum};
-	use frame_support::pallet_prelude::*;
+	use frame_support::{pallet_prelude::*, Parameter};
 	use frame_system::pallet_prelude::*;
 
 	pub type AccountId<T> = <T as frame_system::Config>::AccountId;
@@ -61,6 +61,18 @@ pub mod pallet {
 	pub type Retired = bool;
 
 	pub type EthTransactionHash = [u8; 32];
+
+	#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+	pub enum ClaimAmount<T: Parameter> {
+		Max,
+		Exact(T),
+	}
+
+	impl<T: Parameter> From<T> for ClaimAmount<T> {
+		fn from(t: T) -> Self {
+			Self::Exact(t)
+		}
+	}
 
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
@@ -281,8 +293,6 @@ pub mod pallet {
 
 		/// Get FLIP that is held for me by the system, signed by my authority key.
 		///
-		/// If amount of None is provided it will claim all claimable funds.
-		///
 		/// On success, the implementation of [ThresholdSigner] should emit an event. The attached
 		/// claim request needs to be signed by a threshold of authorities in order to produce valid
 		/// data that can be submitted to the StakeManager Smart Contract.
@@ -304,16 +314,19 @@ pub mod pallet {
 		///
 		/// - [ThresholdSigner]
 		/// - [StakeTransfer]
-		#[pallet::weight({ if amount.is_some() { T::WeightInfo::claim() } else { T::WeightInfo::claim_all() }})]
+		#[pallet::weight({ if matches!(amount, ClaimAmount::Exact(_)) { T::WeightInfo::claim() } else { T::WeightInfo::claim_all() }})]
 		pub fn claim(
 			origin: OriginFor<T>,
-			amount: Option<FlipBalance<T>>,
+			amount: ClaimAmount<FlipBalance<T>>,
 			address: EthereumAddress,
 		) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
 
 			// claim all if no amount provided
-			let amount = amount.unwrap_or_else(|| T::Flip::claimable_balance(&account_id));
+			let amount = match amount {
+				ClaimAmount::Max => T::Flip::claimable_balance(&account_id),
+				ClaimAmount::Exact(amount) => amount,
+			};
 
 			// Ensure we are claiming something
 			ensure!(amount > Zero::zero(), Error::<T>::InvalidClaim);
