@@ -543,7 +543,7 @@ impl P2PContext {
             .set_curve_secretkey(&self.key.secret_key.to_bytes())
             .unwrap();
 
-        let endpoint = format!("tcp://{}:{}", ip, port);
+        let endpoint = format!("tcp://[{}]:{}", ip, port);
         slog::info!(
             self.logger,
             "Started listening for incoming p2p connections on: {}",
