@@ -94,7 +94,10 @@ std = [
   'serde',
   'sp-runtime/std',
   'sp-std/std',
-  'secp256k1'
+  'secp256k1',
+  'pallet-proxy/std',
+  'pallet-balances/std',
+  'pallet-utility/std',
 ]
 runtime-benchmarks = [
   'frame-support/runtime-benchmarks',

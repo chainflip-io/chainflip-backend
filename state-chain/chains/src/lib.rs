@@ -376,7 +376,11 @@ pub mod mocks {
 	}
 
 	#[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
-	pub struct MockApiCall<C: ChainCrypto>(C::Payload, Option<C::ThresholdSignature>);
+	pub struct MockApiCall<C: ChainAbi>(
+		C::Payload,
+		Option<C::ThresholdSignature>,
+		Option<<C as ChainAbi>::SignedTransaction>,
+	);
 
 	#[cfg(feature = "runtime-benchmarks")]
 	impl<C: ChainCrypto> BenchmarkValue for MockApiCall<C> {
@@ -385,7 +389,7 @@ pub mod mocks {
 		}
 	}
 
-	impl<C: ChainCrypto> MaxEncodedLen for MockApiCall<C> {
+	impl<C: ChainAbi> MaxEncodedLen for MockApiCall<C> {
 		fn max_encoded_len() -> usize {
 			<[u8; 32]>::max_encoded_len() * 3
 		}
@@ -397,11 +401,11 @@ pub mod mocks {
 		}
 
 		fn signed(self, threshold_signature: &<C as ChainCrypto>::ThresholdSignature) -> Self {
-			Self(self.0, Some(threshold_signature.clone()))
+			Self(self.0, Some(threshold_signature.clone()), self.2)
 		}
 
 		fn chain_encoded(&self) -> <C as ChainAbi>::SignedTransaction {
-			self.encode()
+			self.2.clone().unwrap()
 		}
 
 		fn is_signed(&self) -> bool {
