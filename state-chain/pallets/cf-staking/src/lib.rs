@@ -650,9 +650,13 @@ impl<T: Config> Pallet<T> {
 			return Ok(())
 		}
 		if frame_system::Pallet::<T>::account_exists(account_id) {
+			// If we reach here, the account already exists, so any provided withdrawal address
+			// *must* match the one that was added on the initial account-creating staking event.
 			match WithdrawalAddresses::<T>::get(&account_id) {
 				Some(existing) if withdrawal_address == existing => Ok(()),
 				_ => {
+					// Keep a record of the failed attempt so that we can potentially investigate
+					// and / or consider refunding automatically or via governance.
 					FailedStakeAttempts::<T>::append(&account_id, (withdrawal_address, amount));
 					Self::deposit_event(Event::FailedStakeAttempt(
 						account_id.clone(),
@@ -663,6 +667,8 @@ impl<T: Config> Pallet<T> {
 				},
 			}
 		} else {
+			// This is the initial account-creating staking event. We store teh withdrawal address
+			// for this account.
 			WithdrawalAddresses::<T>::insert(account_id, withdrawal_address);
 			Ok(())
 		}
