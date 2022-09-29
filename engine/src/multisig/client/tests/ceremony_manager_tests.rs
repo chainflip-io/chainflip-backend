@@ -17,7 +17,7 @@ use crate::{
             SigningRequestDetails,
         },
         crypto::{CryptoScheme, Rng},
-        eth::EthSigning,
+        eth::{EthSchnorrSignature, EthSigning},
         tests::fixtures::MESSAGE_HASH,
     },
     task_scope::with_task_scope,
@@ -73,6 +73,41 @@ fn new_ceremony_manager_for_test(our_account_id: AccountId) -> CeremonyManager<E
         INITIAL_LATEST_CEREMONY_ID,
         &new_test_logger(),
     )
+}
+
+/// Sends a signing request to the ceremony manager with a junk key and some default values.
+fn send_signing_request(
+    ceremony_request_sender: &tokio::sync::mpsc::UnboundedSender<CeremonyRequest<EthSigning>>,
+    participants: BTreeSet<AccountId32>,
+) -> tokio::sync::oneshot::Receiver<
+    Result<
+        EthSchnorrSignature,
+        (
+            BTreeSet<AccountId32>,
+            CeremonyFailureReason<SigningFailureReason>,
+        ),
+    >,
+> {
+    let (result_sender, result_receiver) = oneshot::channel();
+
+    let request = CeremonyRequest {
+        ceremony_id: INITIAL_LATEST_CEREMONY_ID + 1,
+        details: Some(CeremonyRequestDetails::Sign(SigningRequestDetails::<
+            EthSigning,
+        > {
+            participants,
+            data: MESSAGE_HASH.clone(),
+            keygen_result_info: get_key_data_for_test(BTreeSet::from_iter(
+                ACCOUNT_IDS.iter().cloned(),
+            )),
+            rng: Rng::from_seed(DEFAULT_SIGNING_SEED),
+            result_sender,
+        })),
+    };
+
+    let _result = ceremony_request_sender.send(request);
+
+    result_receiver
 }
 
 #[tokio::test]
@@ -264,20 +299,11 @@ async fn should_send_outcome_of_authorised_ceremony() {
     );
     tokio::spawn(ceremony_manager.run(ceremony_request_receiver, incoming_p2p_receiver));
 
-    // Send a signing request
-    let (result_sender, mut result_receiver) = oneshot::channel();
-    let _result = ceremony_request_sender.send(CeremonyRequest {
-        ceremony_id: INITIAL_LATEST_CEREMONY_ID + 1,
-        details: Some(CeremonyRequestDetails::Sign(SigningRequestDetails {
-            participants: BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
-            data: MESSAGE_HASH.clone(),
-            keygen_result_info: get_key_data_for_test(BTreeSet::from_iter(
-                ACCOUNT_IDS.iter().cloned(),
-            )),
-            rng: Rng::from_seed(DEFAULT_SIGNING_SEED),
-            result_sender,
-        })),
-    });
+    // Send a signing request in order to create an authorised ceremony
+    let mut result_receiver = send_signing_request(
+        &ceremony_request_sender,
+        BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
+    );
 
     // Advance time to cause a timeout, then check that the correct ceremony outcome was received
     cause_ceremony_timeout().await;
@@ -348,21 +374,7 @@ async fn should_cleanup_unauthorised_ceremony_if_not_participating() {
             let mut participants = BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned());
             participants.remove(&our_account_id);
 
-            let (result_sender, _result_receiver) = oneshot::channel();
-            let _result = ceremony_request_sender.send(CeremonyRequest {
-                ceremony_id: INITIAL_LATEST_CEREMONY_ID + 1,
-                details: Some(CeremonyRequestDetails::Sign(SigningRequestDetails::<
-                    EthSigning,
-                > {
-                    participants,
-                    data: MESSAGE_HASH.clone(),
-                    keygen_result_info: get_key_data_for_test(BTreeSet::from_iter(
-                        ACCOUNT_IDS.iter().cloned(),
-                    )),
-                    rng: Rng::from_seed(DEFAULT_SIGNING_SEED),
-                    result_sender,
-                })),
-            });
+            let _result_receiver = send_signing_request(&ceremony_request_sender, participants);
 
             // Small delay to let the ceremony manager process the request
             tokio::time::sleep(Duration::from_millis(50)).await;
