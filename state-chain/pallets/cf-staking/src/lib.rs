@@ -490,11 +490,12 @@ pub mod pallet {
 					// This should never happen unless there is a mistake in the implementation.
 					log::error!("Callback triggered with no signature. Signature status {:?}", r);
 					Error::<T>::SignatureNotReady
-				})?;
+				})?
+				.expect("Assumption: post_claim_signature only triggered when the signature ceremony results in success");
 
 			let claim_details_signed = PendingClaims::<T>::get(&account_id)
 				.ok_or(Error::<T>::NoPendingClaim)?
-				.signed(&signature.expect("signature can not be unavailable"));
+				.signed(&signature);
 
 			PendingClaims::<T>::insert(&account_id, &claim_details_signed);
 			Self::deposit_event(Event::ClaimSignatureIssued(
