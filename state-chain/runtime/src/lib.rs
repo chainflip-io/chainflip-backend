@@ -164,6 +164,7 @@ parameter_types! {
 impl pallet_cf_validator::Config for Runtime {
 	type Event = Event;
 	type Offence = chainflip::Offence;
+	type AccountRoleRegistry = AccountTypes;
 	type EpochTransitionHandler = ChainflipEpochTransitions;
 	type MinEpoch = MinEpoch;
 	type ValidatorWeightInfo = pallet_cf_validator::weights::PalletWeight<Runtime>;

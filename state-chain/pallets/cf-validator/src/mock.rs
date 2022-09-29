@@ -3,6 +3,7 @@ use crate as pallet_cf_validator;
 use cf_primitives::ChainflipAccountData;
 use cf_traits::{
 	mocks::{
+		account_role_registry::MockAccountRoleRegistry,
 		ensure_origin_mock::NeverFailingOriginCheck, epoch_info::MockEpochInfo,
 		qualify_node::QualifyAll, reputation_resetter::MockReputationResetter,
 		system_state_info::MockSystemStateInfo, vault_rotation::MockVaultRotator,
@@ -241,6 +242,7 @@ impl Config for Test {
 	type Event = Event;
 	type Offence = PalletOffence;
 	type EpochTransitionHandler = TestEpochTransitionHandler;
+	type AccountRoleRegistry = MockAccountRoleRegistry;
 	type MinEpoch = MinEpoch;
 	type ValidatorWeightInfo = ();
 	type Auctioneer = MockAuctioneer;
