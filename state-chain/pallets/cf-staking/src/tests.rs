@@ -560,6 +560,7 @@ fn test_claim_all() {
 
 		// Claim all available funds.
 		assert_ok!(Staking::claim(Origin::signed(ALICE), ClaimAmount::Max, ETH_DUMMY_ADDR));
+		assert_eq!(Flip::total_balance_of(&ALICE), BOND);
 
 		// We should have a claim for the full staked amount minus the bond.
 		assert_event_sequence!(
