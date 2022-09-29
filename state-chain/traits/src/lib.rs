@@ -13,21 +13,21 @@ use sp_std::collections::btree_set::BTreeSet;
 
 use cf_chains::{benchmarking_value::BenchmarkValue, ApiCall, ChainAbi, ChainCrypto};
 use cf_primitives::{
-	AccountRole, AuthorityCount, CeremonyId, ChainflipAccountData, ChainflipAccountState,
-	EpochIndex, ForeignChainAddress, ForeignChainAsset, IntentId,
+	AccountRole, Asset, AssetAmount, AuthorityCount, CeremonyId, ChainflipAccountData,
+	ChainflipAccountState, EpochIndex, EthereumAddress, ForeignChainAddress, ForeignChainAsset,
+	IntentId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable},
 	error::BadOrigin,
 	pallet_prelude::Member,
-	sp_runtime::traits::AtLeast32BitUnsigned,
 	traits::{EnsureOrigin, Get, Imbalance, IsType, StoredMap},
 	Hashable, Parameter,
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
-	traits::{Bounded, MaybeSerializeDeserialize},
+	traits::{AtLeast32BitUnsigned, Bounded, MaybeSerializeDeserialize},
 	DispatchError, DispatchResult, FixedPointOperand, RuntimeDebug,
 };
 use sp_std::{iter::Sum, marker::PhantomData, prelude::*};
@@ -727,4 +727,22 @@ pub trait AccountRoleRegistry<T: frame_system::Config> {
 	fn ensure_validator(origin: T::Origin) -> Result<T::AccountId, BadOrigin> {
 		Self::ensure_account_role(origin, AccountRole::Validator)
 	}
+}
+
+/// API that allows other pallets to Egress assets out of the State Chain.
+pub trait EgressApi {
+	fn schedule_egress(
+		foreign_asset: ForeignChainAsset,
+		amount: AssetAmount,
+		egress_address: ForeignChainAddress,
+	) -> DispatchResult;
+
+	fn is_egress_valid(
+		foreign_asset: &ForeignChainAsset,
+		egress_address: &ForeignChainAddress,
+	) -> bool;
+}
+
+pub trait EthereumAssetsAddressProvider {
+	fn try_get_asset_address(asset: Asset) -> Option<EthereumAddress>;
 }

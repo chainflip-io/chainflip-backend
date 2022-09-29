@@ -10,6 +10,7 @@ use sp_runtime::{
 	traits::{IdentifyAccount, Verify},
 	FixedU128, MultiSignature, RuntimeDebug,
 };
+use sp_std::vec::Vec;
 
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
@@ -28,6 +29,12 @@ pub type IntentId = u64;
 pub type ExchangeRate = FixedU128;
 
 pub type EthereumAddress = [u8; 20];
+
+pub type EthAmount = u128;
+
+pub type AssetAmount = u128;
+
+pub const ETHEREUM_ETH_ADDRESS: EthereumAddress = [0xEE; 20];
 
 /// Alias to 512-bit hash when used in the context of a transaction signature on the chain.
 pub type Signature = MultiSignature;
@@ -126,3 +133,5 @@ pub struct ForeignChainAsset {
 	pub chain: ForeignChain,
 	pub asset: Asset,
 }
+
+pub type EgressBatch<Amount, EgressAddress> = Vec<(Amount, EgressAddress)>;

@@ -141,12 +141,12 @@ mod test_all_batch {
 		let dummy_transfer_asset_params: Vec<TransferAssetParams<Ethereum>> = vec![
 			TransferAssetParams::<Ethereum> {
 				asset: eth::Address::from_slice(&[5; 20]),
-				account: eth::Address::from_slice(&[7; 20]),
+				to: eth::Address::from_slice(&[7; 20]),
 				amount: 10,
 			},
 			TransferAssetParams::<Ethereum> {
 				asset: eth::Address::from_slice(&[6; 20]),
-				account: eth::Address::from_slice(&[8; 20]),
+				to: eth::Address::from_slice(&[8; 20]),
 				amount: 20,
 			},
 		];

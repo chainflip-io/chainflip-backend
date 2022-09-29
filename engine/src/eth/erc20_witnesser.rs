@@ -3,7 +3,7 @@
 use std::{collections::BTreeSet, sync::Arc};
 
 use async_trait::async_trait;
-use cf_primitives::{Asset, EpochIndex, ForeignChainAddress};
+use cf_primitives::{Asset, EpochIndex, EthAmount, ForeignChainAddress};
 use sp_core::H256;
 use web3::{
     ethabi::{self, RawLog},
@@ -25,12 +25,12 @@ pub enum Erc20Event {
     Transfer {
         from: ethabi::Address,
         to: ethabi::Address,
-        value: u128,
+        value: EthAmount,
     },
     Approval {
         owner: ethabi::Address,
         spender: ethabi::Address,
-        value: u128,
+        value: EthAmount,
     },
     // A contract adhering to the ERC20 standard may also emit *more* than the standard events.
     // We don't care about these ones.

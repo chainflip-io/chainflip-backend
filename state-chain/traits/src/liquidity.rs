@@ -135,26 +135,6 @@ impl LpPositionManagement for () {
 pub trait PalletLpApi: LpProvisioningApi + LpWithdrawalApi + LpPositionManagement {}
 impl PalletLpApi for () {}
 
-pub trait EgressHandler {
-	type Amount;
-	fn add_to_egress_batch(
-		asset: &ForeignChainAsset,
-		amount: Self::Amount,
-		egress_address: &ForeignChainAddress,
-	) -> DispatchResult;
-}
-
-impl EgressHandler for () {
-	type Amount = FlipBalance;
-	fn add_to_egress_batch(
-		_asset: &ForeignChainAsset,
-		_amount: Self::Amount,
-		_egress_address: &ForeignChainAddress,
-	) -> DispatchResult {
-		Ok(())
-	}
-}
-
 /// Base Amm pool api common to both LPs and swaps.
 pub trait AmmPoolApi {
 	type Balance;

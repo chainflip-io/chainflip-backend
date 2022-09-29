@@ -800,10 +800,12 @@ dependencies = [
 name = "cf-primitives"
 version = "0.1.0"
 dependencies = [
+ "ethabi",
  "parity-scale-codec",
  "scale-info",
  "serde",
  "sp-runtime",
+ "sp-std",
 ]
 
 [[package]]
@@ -5200,6 +5202,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-cf-egress"
+version = "0.1.0"
+dependencies = [
+ "cf-chains",
+ "cf-primitives",
+ "cf-traits",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-cf-emissions"
 version = "0.1.0"
 dependencies = [
@@ -9024,6 +9044,7 @@ dependencies = [
  "pallet-cf-auction",
  "pallet-cf-broadcast",
  "pallet-cf-chain-tracking",
+ "pallet-cf-egress",
  "pallet-cf-emissions",
  "pallet-cf-environment",
  "pallet-cf-flip",

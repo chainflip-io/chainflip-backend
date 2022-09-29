@@ -72,7 +72,7 @@ impl IngressApi for MockIngress {
 
 	fn register_swap_intent(
 		_ingress_asset: ForeignChainAsset,
-		_egress_asset: ForeignChainAsset,
+		_schedule_egress: ForeignChainAsset,
 		_egress_address: ForeignChainAddress,
 		_relayer_commission_bps: u16,
 	) -> Result<(u64, cf_primitives::ForeignChainAddress), sp_runtime::DispatchError> {

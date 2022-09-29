@@ -15,6 +15,7 @@ members = [
   'state-chain/pallets/cf-flip',
   'state-chain/pallets/cf-governance',
   'state-chain/pallets/cf-ingress',
+  'state-chain/pallets/cf-egress',
   'state-chain/pallets/cf-lp',
   'state-chain/pallets/cf-reputation',
   'state-chain/pallets/cf-staking',

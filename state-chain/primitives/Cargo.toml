@@ -7,8 +7,14 @@ description = 'Common primitive types used across Chainflip'
 
 [dependencies]
 serde = { optional = true, version = '1.0.126', features = ['derive'] }
+ethabi = {default-features = false, version = '17.0'}
 
 [dependencies.sp-runtime]
+default-features = false
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'chainflip-monthly-2022-06'
+
+[dependencies.sp-std]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'chainflip-monthly-2022-06'
@@ -28,7 +34,9 @@ version = '2.0.1'
 default = ['std']
 std = [
   'codec/std',
+  'ethabi/full-serde',
   'scale-info/std',
   'serde',
   'sp-runtime/std',
+  'sp-std/std',
 ]

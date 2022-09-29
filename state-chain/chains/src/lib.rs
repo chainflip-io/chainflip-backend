@@ -1,5 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use crate::benchmarking_value::BenchmarkValue;
+use cf_primitives::EthAmount;
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use eth::SchnorrVerificationComponents;
 use ethereum_types::H256;
@@ -140,9 +141,9 @@ pub struct FetchAssetParams<T: Chain> {
 	RuntimeDebug, Copy, Clone, Default, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo,
 )]
 pub struct TransferAssetParams<T: Chain> {
-	asset: T::ChainAsset,
-	account: T::ChainAccount,
-	amount: T::ChainAmount,
+	pub asset: T::ChainAsset,
+	pub to: T::ChainAccount,
+	pub amount: T::ChainAmount,
 }
 
 pub trait IngressAddress {
@@ -208,7 +209,7 @@ pub struct Ethereum;
 
 impl Chain for Ethereum {
 	type ChainBlockNumber = u64;
-	type ChainAmount = u128;
+	type ChainAmount = EthAmount;
 	type TrackedData = eth::TrackedData<Self>;
 	type ChainAccount = eth::Address;
 	type ChainAsset = eth::Address;
@@ -248,7 +249,7 @@ pub mod mocks {
 	// Chain implementation used for testing.
 	impl Chain for MockEthereum {
 		type ChainBlockNumber = u64;
-		type ChainAmount = u128;
+		type ChainAmount = EthAmount;
 		type TrackedData = MockTrackedData;
 		type ChainAccount = (); // Currently, we don't care about this since we don't use them in tests
 		type ChainAsset = (); // Currently, we don't care about this since we don't use them in tests

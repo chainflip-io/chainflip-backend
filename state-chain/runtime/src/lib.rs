@@ -17,6 +17,7 @@ use crate::{
 	},
 };
 use cf_chains::{eth, eth::api::register_claim::RegisterClaim, Ethereum};
+
 pub use frame_support::{
 	construct_runtime, debug,
 	instances::Instance1,
@@ -47,8 +48,6 @@ use sp_runtime::traits::{
 	OpaqueKeys, UniqueSaturatedInto, Verify,
 };
 
-use cf_traits::EthEnvironmentProvider;
-
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
 use sp_runtime::{
@@ -64,8 +63,8 @@ use sp_version::RuntimeVersion;
 
 pub use cf_primitives::{ChainflipAccountData, ChainflipAccountState, ForeignChainAddress};
 pub use cf_traits::{
-	BlockNumber, ChainflipAccount, ChainflipAccountStore, EpochInfo, FlipBalance, QualifyNode,
-	SessionKeysRegistered,
+	BlockNumber, ChainflipAccount, ChainflipAccountStore, EpochInfo, EthEnvironmentProvider,
+	FlipBalance, QualifyNode, SessionKeysRegistered,
 };
 pub use chainflip::chain_instances::*;
 use chainflip::{epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat};
@@ -230,8 +229,19 @@ impl pallet_cf_lp::Config for Runtime {
 	type Event = Event;
 	type AccountRoleRegistry = AccountTypes;
 	type Ingress = Ingress;
-	type EgressHandler = ();
+	type EgressApi = Egress;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+}
+
+#[cfg(feature = "ibiza")]
+impl pallet_cf_egress::Config for Runtime {
+	type Event = Event;
+	type EthereumReplayProtection = chainflip::EthReplayProtectionProvider;
+	type EthereumEgressTransaction = eth::api::EthereumApi;
+	type EthereumBroadcaster = EthereumBroadcaster;
+	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+	type EthereumAssetsAddressProvider = Environment;
+	type WeightInfo = ();
 }
 
 impl pallet_cf_account_types::Config for Runtime {
@@ -505,7 +515,7 @@ impl pallet_cf_threshold_signature::Config<EthereumInstance> for Runtime {
 	type ThresholdCallable = Call;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type SignerNomination = chainflip::RandomSignerNomination;
-	type TargetChain = cf_chains::Ethereum;
+	type TargetChain = Ethereum;
 	type KeyProvider = EthereumVault;
 	type OffenceReporter = Reputation;
 	type CeremonyIdProvider = pallet_cf_validator::CeremonyIdProvider<Self>;
@@ -517,7 +527,7 @@ impl pallet_cf_broadcast::Config<EthereumInstance> for Runtime {
 	type Event = Event;
 	type Call = Call;
 	type Offence = chainflip::Offence;
-	type TargetChain = cf_chains::Ethereum;
+	type TargetChain = Ethereum;
 	type ApiCall = eth::api::EthereumApi;
 	type ThresholdSigner = EthereumThresholdSigner;
 	type TransactionBuilder = chainflip::EthTransactionBuilder;
@@ -605,6 +615,7 @@ construct_runtime!(
 		EthereumBroadcaster: pallet_cf_broadcast::<Instance1>,
 		EthereumChainTracking: pallet_cf_chain_tracking::<Instance1>,
 		Ingress: pallet_cf_ingress,
+		Egress: pallet_cf_egress,
 		Relayer: pallet_cf_relayer,
 		LiquidityProvider: pallet_cf_lp,
 	}
@@ -673,6 +684,7 @@ mod benches {
 		[pallet_cf_chain_tracking, EthereumChainTracking]
 		[pallet_cf_relayer, Relayer]
 		[pallet_cf_ingress, Ingress]
+		[pallet_cf_egress, Egress]
 	);
 }
 
