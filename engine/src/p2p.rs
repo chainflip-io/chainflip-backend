@@ -262,7 +262,7 @@ impl P2PContext {
         };
 
         for peer_info in current_peers {
-            context.add_or_update_peer(peer_info);
+            context.handle_peer_update(peer_info);
         }
 
         let incoming_message_receiver_ed25519 = context.start_listening_thread(ip, port);
@@ -358,7 +358,7 @@ impl P2PContext {
 
     fn on_peer_update(&mut self, update: PeerUpdate) {
         match update {
-            PeerUpdate::Registered(peer_info) => self.add_or_update_peer(peer_info),
+            PeerUpdate::Registered(peer_info) => self.handle_peer_update(peer_info),
             PeerUpdate::Deregistered(account_id, pubkey) => self.remove_peer(account_id, pubkey),
         }
     }
@@ -484,8 +484,25 @@ impl P2PContext {
             .is_none());
     }
 
+    fn handle_own_registration(&mut self) {
+        slog::debug!(
+            self.logger,
+            "Received own node's registration. Starting to connect to peers."
+        );
+
+        if let PeerState::Pending(peers) = &mut self.state {
+            let peers = std::mem::take(peers);
+            // Connect to all outstanding peers
+            for peer in peers {
+                self.connect_to_peer(peer)
+            }
+            self.state = PeerState::Registered;
+        };
+    }
+
     fn add_or_update_peer(&mut self, peer: PeerInfo) {
         slog::debug!(self.logger, "Received new peer info: {}", peer);
+
         if self.active_connections.contains_key(&peer.account_id) {
             slog::debug!(
                 self.logger,
@@ -494,39 +511,36 @@ impl P2PContext {
             );
         }
 
-        if peer.account_id == self.our_account_id {
-            if let PeerState::Pending(peers) = &mut self.state {
-                let peers = std::mem::take(peers);
-                // Connect to all outstanding peers
-                for peer in peers {
-                    self.connect_to_peer(peer)
-                }
-                self.state = PeerState::Registered;
-            };
-        } else {
-            let peer_pubkey = &peer.pubkey;
-            self.authenticator.add_peer(*peer_pubkey);
+        let peer_pubkey = &peer.pubkey;
+        self.authenticator.add_peer(*peer_pubkey);
 
-            slog::trace!(
-                self.logger,
-                "Adding x25519 to account id mapping: {} -> {}",
-                &peer.account_id,
-                to_string(peer_pubkey)
-            );
+        slog::trace!(
+            self.logger,
+            "Adding x25519 to account id mapping: {} -> {}",
+            &peer.account_id,
+            to_string(peer_pubkey)
+        );
 
-            self.x25519_to_account_id
-                .insert(*peer_pubkey, peer.account_id.clone());
+        self.x25519_to_account_id
+            .insert(*peer_pubkey, peer.account_id.clone());
 
-            match &mut self.state {
-                PeerState::Pending(peers) => {
-                    // Not ready to start connecting to peers yet
-                    slog::info!(self.logger, "Delaying connecting to {}", peer.account_id);
-                    peers.push(peer);
-                }
-                PeerState::Registered => {
-                    self.connect_to_peer(peer);
-                }
+        match &mut self.state {
+            PeerState::Pending(peers) => {
+                // Not ready to start connecting to peers yet
+                slog::info!(self.logger, "Delaying connecting to {}", peer.account_id);
+                peers.push(peer);
             }
+            PeerState::Registered => {
+                self.connect_to_peer(peer);
+            }
+        }
+    }
+
+    fn handle_peer_update(&mut self, peer: PeerInfo) {
+        if peer.account_id == self.our_account_id {
+            self.handle_own_registration();
+        } else {
+            self.add_or_update_peer(peer);
         }
     }
 
