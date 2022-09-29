@@ -515,6 +515,7 @@ impl pallet_cf_threshold_signature::Config<EthereumInstance> for Runtime {
 	type Event = Event;
 	type Offence = chainflip::Offence;
 	type RuntimeOrigin = Origin;
+	type AccountRoleRegistry = AccountTypes;
 	type ThresholdCallable = Call;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type SignerNomination = chainflip::RandomSignerNomination;

@@ -10,6 +10,7 @@ use cf_chains::{
 };
 use cf_traits::{
 	mocks::{
+		account_role_registry::MockAccountRoleRegistry,
 		ceremony_id_provider::MockCeremonyIdProvider, signer_nomination::MockNominator,
 		system_state_info::MockSystemStateInfo,
 	},
@@ -170,6 +171,7 @@ impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 	type Event = Event;
 	type Offence = PalletOffence;
 	type RuntimeOrigin = Origin;
+	type AccountRoleRegistry = MockAccountRoleRegistry;
 	type ThresholdCallable = MockCallback<MockEthereum>;
 	type TargetChain = MockEthereum;
 	type SignerNomination = MockNominator;
