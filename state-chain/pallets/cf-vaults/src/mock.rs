@@ -16,6 +16,7 @@ use super::*;
 use cf_chains::{eth, mocks::MockEthereum, ApiCall, ChainCrypto};
 use cf_traits::{
 	mocks::{
+		account_role_registry::MockAccountRoleRegistry,
 		ceremony_id_provider::MockCeremonyIdProvider, ensure_origin_mock::NeverFailingOriginCheck,
 		epoch_info::MockEpochInfo, eth_environment_provider::MockEthEnvironmentProvider,
 		eth_replay_protection_provider::MockEthReplayProtectionProvider,
@@ -205,6 +206,7 @@ impl pallet_cf_vaults::Config for MockRuntime {
 	type Offence = PalletOffence;
 	type Chain = MockEthereum;
 	type Call = Call;
+	type AccountRoleRegistry = MockAccountRoleRegistry;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
 	type ThresholdSigner = MockThresholdSigner<MockEthereum, Call>;

@@ -11,7 +11,7 @@ use cf_traits::{
 	ReplayProtectionProvider, RetryPolicy, SystemStateManager, ThresholdSigner, VaultRotator,
 };
 use frame_support::pallet_prelude::*;
-use frame_system::{ensure_signed, pallet_prelude::*};
+use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use sp_runtime::traits::{BlockNumberProvider, One, Saturating};
 use sp_std::{
@@ -205,7 +205,7 @@ pub enum PalletOffence {
 #[frame_support::pallet]
 pub mod pallet {
 
-	use cf_traits::ThresholdSigner;
+	use cf_traits::{AccountRoleRegistry, ThresholdSigner};
 
 	use super::*;
 
@@ -225,6 +225,9 @@ pub mod pallet {
 
 		/// Ensure that only threshold signature consensus can trigger a key_verification success
 		type EnsureThresholdSigned: EnsureOrigin<Self::Origin>;
+
+		/// For registering and verifying the account role.
+		type AccountRoleRegistry: AccountRoleRegistry<Self>;
 
 		/// Offences supported in this runtime.
 		type Offence: From<PalletOffence>;
@@ -471,7 +474,7 @@ pub mod pallet {
 			ceremony_id: CeremonyId,
 			reported_outcome: ReportedKeygenOutcomeFor<T, I>,
 		) -> DispatchResultWithPostInfo {
-			let reporter = ensure_signed(origin)?.into();
+			let reporter = T::AccountRoleRegistry::ensure_validator(origin)?.into();
 
 			// -- Validity checks.
 

@@ -202,6 +202,7 @@ impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, EthereumInstance>;
+	type AccountRoleRegistry = AccountTypes;
 	type ThresholdSigner = EthereumThresholdSigner;
 	type Offence = chainflip::Offence;
 	type Chain = Ethereum;
