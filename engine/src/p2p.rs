@@ -139,7 +139,6 @@ fn to_string(pk: &XPublicKey) -> String {
 }
 /// The state a nodes needs for p2p
 pub struct P2PContext {
-    zmq_context: zmq::Context,
     /// Our own key, used for initiating and accepting secure connections
     key: KeyPair,
     /// A handle to the authenticator thread that can be used to make changes to the
@@ -158,6 +157,9 @@ pub struct P2PContext {
     /// Our own "registration" status on the network
     state: PeerState,
     our_account_id: AccountId,
+    /// NOTE: zmq context is intentionally declared at the bottom of the struct
+    /// to ensure its destructor is called after that of any zmq sockets
+    zmq_context: zmq::Context,
     logger: slog::Logger,
 }
 
