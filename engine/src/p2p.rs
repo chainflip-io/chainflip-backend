@@ -574,25 +574,52 @@ impl P2PContext {
         // This OS thread is for incoming messages
         // TODO: combine this with the authentication thread?
         std::thread::spawn(move || loop {
-            // Sender id is automatically attached by ZMQ,
-            // we are not interested in it
-            let _sender_id = socket.recv_msg(0).unwrap();
+            let mut parts = receive_multipart(&socket).unwrap();
 
-            let mut msg = socket.recv_msg(0).unwrap();
+            // We require that all messages exchanged between
+            // peers only consist of one part. ZMQ dealer
+            // sockets automatically prepend a sender id
+            // (which we ignore) to every message, giving
+            // us a 2 part message.
+            if parts.len() == 2 {
+                let msg = &mut parts[1];
 
-            // This value is ZMQ convention for the public
-            // key of message's origin
-            const PUBLIC_KEY_TAG: &str = "User-Id";
-            let pubkey = msg.gets(PUBLIC_KEY_TAG).expect("pubkey is always present");
+                // This value is ZMQ convention for the public
+                // key of message's origin
+                const PUBLIC_KEY_TAG: &str = "User-Id";
+                let pubkey = msg.gets(PUBLIC_KEY_TAG).expect("pubkey is always present");
 
-            let pubkey: [u8; 32] = hex::decode(pubkey).unwrap().try_into().unwrap();
-            let pubkey = XPublicKey::from(pubkey);
+                let pubkey: [u8; 32] = hex::decode(pubkey).unwrap().try_into().unwrap();
+                let pubkey = XPublicKey::from(pubkey);
 
-            incoming_message_sender
-                .send((pubkey, msg.to_vec()))
-                .unwrap();
+                incoming_message_sender
+                    .send((pubkey, msg.to_vec()))
+                    .unwrap();
+            }
         });
 
         incoming_message_receiver
     }
+}
+
+/// Unlike recv_multipart available on zmq::Socket, this collects
+/// original message structs rather than payload bytes only
+fn receive_multipart(socket: &zmq::Socket) -> zmq::Result<Vec<zmq::Message>> {
+    // This indicates that we always want to block while
+    // waiting for new messages
+    let flags = 0;
+
+    let mut parts = vec![];
+
+    loop {
+        let mut part = zmq::Message::new();
+        socket.recv(&mut part, flags)?;
+        parts.push(part);
+
+        let more_parts = socket.get_rcvmore()?;
+        if !more_parts {
+            break;
+        }
+    }
+    Ok(parts)
 }
