@@ -432,6 +432,9 @@ fn test_retirement() {
 			}),
 			Event::Staking(crate::Event::AccountActivated(ALICE))
 		);
+
+		assert_ok!(Staking::retire_account(Origin::signed(ALICE)));
+		assert!(AccountRetired::<Test>::get(ALICE));
 	});
 }
 
