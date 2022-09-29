@@ -13,7 +13,8 @@ mod weights;
 
 use cf_chains::{AllBatch, Ethereum, TransferAssetParams};
 use cf_primitives::{
-	AssetAmount, EgressBatch, ForeignChain, ForeignChainAddress, ForeignChainAsset,
+	Asset, AssetAmount, EgressBatch, EthereumAddress, ForeignChain, ForeignChainAddress,
+	ForeignChainAsset, ETHEREUM_ETH_ADDRESS,
 };
 use cf_traits::{Broadcaster, EgressApi, EthereumAssetsAddressProvider, ReplayProtectionProvider};
 use frame_support::pallet_prelude::*;
@@ -188,9 +189,9 @@ impl<T: Config> Pallet<T> {
 		// Construct the Egress Tx and send it out.
 		// NOTE: currently, we only support Ethereum chain.
 		if foreign_asset.chain == ForeignChain::Ethereum {
-			let asset_address =
-				T::EthereumAssetsAddressProvider::try_get_asset_address(foreign_asset.asset)
-					.expect("Asset is guaranteed to be supported.");
+			let asset_address = Self::get_asset_ethereum_address(foreign_asset.asset)
+				.expect("Asset is guaranteed to be supported.");
+
 			let egress_transaction = T::EthereumEgressTransaction::new_unsigned(
 				T::EthereumReplayProtection::replay_protection(),
 				vec![], // No incoming asset
@@ -208,6 +209,14 @@ impl<T: Config> Pallet<T> {
 			);
 			T::EthereumBroadcaster::threshold_sign_and_broadcast(egress_transaction);
 			Self::deposit_event(Event::<T>::EgressBroadcasted { foreign_asset, batch_size });
+		}
+	}
+
+	fn get_asset_ethereum_address(asset: Asset) -> Option<EthereumAddress> {
+		if asset == Asset::Eth {
+			Some(ETHEREUM_ETH_ADDRESS)
+		} else {
+			T::EthereumAssetsAddressProvider::try_get_asset_address(asset)
 		}
 	}
 }
@@ -242,8 +251,7 @@ impl<T: Config> EgressApi for Pallet<T> {
 		match foreign_asset.chain {
 			ForeignChain::Ethereum =>
 				matches!(egress_address, ForeignChainAddress::Eth(..)) &&
-					T::EthereumAssetsAddressProvider::try_get_asset_address(foreign_asset.asset)
-						.is_some(),
+					Self::get_asset_ethereum_address(foreign_asset.asset).is_some(),
 			ForeignChain::Polkadot => matches!(egress_address, ForeignChainAddress::Dot(..)),
 		}
 	}

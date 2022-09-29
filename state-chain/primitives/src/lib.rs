@@ -34,6 +34,8 @@ pub type EthAmount = u128;
 
 pub type AssetAmount = u128;
 
+pub const ETHEREUM_ETH_ADDRESS: EthereumAddress = [0xEE; 20];
+
 /// Alias to 512-bit hash when used in the context of a transaction signature on the chain.
 pub type Signature = MultiSignature;
 

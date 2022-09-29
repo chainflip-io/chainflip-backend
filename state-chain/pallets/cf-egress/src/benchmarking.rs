@@ -24,7 +24,7 @@ benchmarks! {
 			ETH_ETH,
 			batch,
 		);
-	} : { let _ = Pallet::<T>::on_idle(Default::default(), 1_000_000_000); }
+	} : { let _ = Pallet::<T>::on_idle(Default::default(), 1_000_000_000_000_000); }
 	verify {
 		assert!(ScheduledEgress::<T>::get(
 			ETH_ETH,

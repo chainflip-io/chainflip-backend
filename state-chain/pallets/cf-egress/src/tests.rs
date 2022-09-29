@@ -15,7 +15,7 @@ const ETH_FLIP: ForeignChainAsset =
 fn can_only_schedule_egress_allowed_asset() {
 	new_test_ext().execute_with(|| {
 		let asset = ETH_ETH;
-		assert!(MockEthAssetAddressProvider::try_get_asset_address(asset.asset).is_some());
+		assert!(Egress::get_asset_ethereum_address(asset.asset).is_some());
 
 		// Cannot egress assets that are blacklisted.
 		assert!(DisabledEgressAssets::<Test>::get(asset).is_none());
@@ -181,10 +181,10 @@ fn can_manually_send_batch_all() {
 		assert_eq!(
 			LastEgressSent::get(),
 			vec![
-				([0xFF; 20], 1000u128, ALICE_ETH_ADDRESS),
-				([0xFF; 20], 2000u128, ALICE_ETH_ADDRESS),
-				([0xFF; 20], 3000u128, BOB_ETH_ADDRESS),
-				([0xFF; 20], 4000u128, BOB_ETH_ADDRESS),
+				([0xEE; 20], 1000u128, ALICE_ETH_ADDRESS),
+				([0xEE; 20], 2000u128, ALICE_ETH_ADDRESS),
+				([0xEE; 20], 3000u128, BOB_ETH_ADDRESS),
+				([0xEE; 20], 4000u128, BOB_ETH_ADDRESS),
 			]
 		);
 		System::assert_has_event(Event::Egress(crate::Event::EgressBroadcasted {

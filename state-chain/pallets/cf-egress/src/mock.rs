@@ -119,7 +119,6 @@ pub struct MockEthAssetAddressProvider;
 impl EthereumAssetsAddressProvider for MockEthAssetAddressProvider {
 	fn try_get_asset_address(asset: Asset) -> Option<EthereumAddress> {
 		match asset {
-			Asset::Eth => Some([0xFF; 20]),
 			Asset::Flip => Some([0x00; 20]),
 			_ => None,
 		}
