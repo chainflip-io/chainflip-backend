@@ -25,9 +25,39 @@ use crate::{
 };
 
 use rand_legacy::SeedableRng;
+use sp_runtime::AccountId32;
 use tokio::sync::mpsc;
 
 use super::*;
+
+type CeremonyRunnerChannels = (
+    UnboundedSender<(AccountId32, SigningData<Point>)>,
+    tokio::sync::oneshot::Sender<PreparedRequest<SigningCeremony<EthSigning>>>,
+    UnboundedReceiver<(CeremonyId, CeremonyOutcome<SigningCeremony<EthSigning>>)>,
+);
+
+/// Spawn a signing ceremony runner task in the an unauthorised state with some default parameters
+fn spawn_signing_ceremony_runner() -> (
+    tokio::task::JoinHandle<Result<(), anyhow::Error>>,
+    CeremonyRunnerChannels,
+) {
+    let (message_sender, message_receiver) = mpsc::unbounded_channel();
+    let (request_sender, request_receiver) = oneshot::channel();
+    let (outcome_sender, outcome_receiver) = mpsc::unbounded_channel();
+
+    let task_handle = tokio::spawn(CeremonyRunner::<SigningCeremony<EthSigning>>::run(
+        DEFAULT_SIGNING_CEREMONY_ID,
+        message_receiver,
+        request_receiver,
+        outcome_sender,
+        new_test_logger(),
+    ));
+
+    (
+        task_handle,
+        (message_sender, request_sender, outcome_receiver),
+    )
+}
 
 #[tokio::test]
 async fn should_ignore_stage_data_with_incorrect_size() {
@@ -260,18 +290,7 @@ async fn should_ignore_message_from_unexpected_stage() {
 
 #[tokio::test]
 async fn should_not_timeout_unauthorised_ceremony() {
-    let (_msg_s, msg_r) = mpsc::unbounded_channel();
-    let (_req_s, req_r) = oneshot::channel();
-    let (outcome_sender, _outcome_receiver) = mpsc::unbounded_channel();
-
-    // Spawn a ceremony runner task in the default unauthorised state
-    let task_handle = tokio::spawn(CeremonyRunner::<SigningCeremony<EthSigning>>::run(
-        DEFAULT_SIGNING_CEREMONY_ID,
-        msg_r,
-        req_r,
-        outcome_sender,
-        new_test_logger(),
-    ));
+    let (task_handle, _channels) = spawn_signing_ceremony_runner();
 
     // Advance time, then check that the task did not end due to a timeout
     cause_ceremony_timeout().await;
@@ -280,22 +299,12 @@ async fn should_not_timeout_unauthorised_ceremony() {
 
 #[tokio::test]
 async fn should_timeout_authorised_ceremony() {
-    let (_msg_s, msg_r) = mpsc::unbounded_channel();
-    let (req_s, req_r) = oneshot::channel();
-    let (outcome_sender, _outcome_receiver) = mpsc::unbounded_channel();
-    let (outgoing_p2p_sender, _outgoing_p2p_receiver) = tokio::sync::mpsc::unbounded_channel();
-
-    // Spawn a ceremony runner task in the default unauthorised state
-    let task_handle = tokio::spawn(CeremonyRunner::<SigningCeremony<EthSigning>>::run(
-        DEFAULT_SIGNING_CEREMONY_ID,
-        msg_r,
-        req_r,
-        outcome_sender,
-        new_test_logger(),
-    ));
+    let (task_handle, (_message_sender, request_sender, _outcome_receiver)) =
+        spawn_signing_ceremony_runner();
 
     // Send a signing request
-    let _res = req_s.send(
+    let (outgoing_p2p_sender, _outgoing_p2p_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let _res = request_sender.send(
         prepare_signing_request(
             DEFAULT_SIGNING_CEREMONY_ID,
             &ACCOUNT_IDS[0],
