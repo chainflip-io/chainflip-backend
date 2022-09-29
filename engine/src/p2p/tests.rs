@@ -1,14 +1,15 @@
-use crate::{p2p::KeyPair, testing::expect_recv_with_timeout};
+use crate::testing::expect_recv_with_timeout;
 
-use super::{P2PContext, PeerInfo, PeerUpdate};
 use crate::multisig_p2p::OutgoingMultisigStageMessages;
+use crate::p2p::{self, PeerInfo, PeerUpdate};
 use sp_core::ed25519::Public;
 use state_chain_runtime::AccountId;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
-fn create_node_info(id: AccountId, pubkey: Public, port: u16) -> PeerInfo {
+fn create_node_info(id: AccountId, node_key: &ed25519_dalek::Keypair, port: u16) -> PeerInfo {
     use std::net::Ipv4Addr;
     let ip = "0.0.0.0".parse::<Ipv4Addr>().unwrap().to_ipv6_mapped();
+    let pubkey = Public(node_key.public.to_bytes());
     PeerInfo::new(id, pubkey, ip, port)
 }
 
@@ -19,16 +20,15 @@ struct Node {
 }
 
 fn spawn_node(
-    key: KeyPair,
+    key: &ed25519_dalek::Keypair,
     idx: usize,
     our_peer_info: PeerInfo,
     peer_infos: &[PeerInfo],
     logger: &slog::Logger,
 ) -> Node {
     let account_id = AccountId::new([idx as u8 + 1; 32]);
-    let (msg_sender, peer_update_sender, msg_receiver, fut) = P2PContext::start(
+    let (msg_sender, peer_update_sender, msg_receiver, fut) = p2p::start(
         key,
-        our_peer_info.ip.to_ipv4().unwrap(),
         our_peer_info.port,
         peer_infos.to_vec(),
         account_id,
@@ -45,25 +45,15 @@ fn spawn_node(
 }
 
 // Create an x25519 keypair along with the corresponding ed25519 public key
-fn create_keypair() -> (KeyPair, Public) {
+fn create_keypair() -> ed25519_dalek::Keypair {
     use rand::RngCore;
     let mut secret_key_bytes = [0; 32];
     rand::thread_rng().fill_bytes(&mut secret_key_bytes);
 
-    let ed_secret_key =
-        ed25519_dalek::SecretKey::from_bytes(&secret_key_bytes).expect("invalid key size");
-    let ed_public_key: ed25519_dalek::PublicKey = (&ed_secret_key).into();
+    let secret = ed25519_dalek::SecretKey::from_bytes(&secret_key_bytes).expect("invalid key size");
+    let public: ed25519_dalek::PublicKey = (&secret).into();
 
-    let secret_key = super::ed25519_secret_key_to_x25519_secret_key(&ed_secret_key);
-    let public_key: x25519_dalek::PublicKey = (&secret_key).into();
-
-    (
-        KeyPair {
-            public_key,
-            secret_key,
-        },
-        Public(*ed_public_key.as_bytes()),
-    )
+    ed25519_dalek::Keypair { secret, public }
 }
 
 /// Ensure that a node can (eventually) receive messages from a peer
@@ -74,17 +64,17 @@ async fn connect_two_nodes() {
     use crate::logging::test_utils::new_test_logger;
     let logger = new_test_logger();
 
-    let (keypair1, ed_pk1) = create_keypair();
-    let (keypair2, ed_pk2) = create_keypair();
+    let node_key1 = create_keypair();
+    let node_key2 = create_keypair();
 
     // TODO: automatically select ports to avoid any potential conflicts
     // with other tests
-    let pi1 = create_node_info(AccountId::new([1; 32]), ed_pk1, 8087);
-    let pi2 = create_node_info(AccountId::new([2; 32]), ed_pk2, 8088);
+    let pi1 = create_node_info(AccountId::new([1; 32]), &node_key1, 8087);
+    let pi2 = create_node_info(AccountId::new([2; 32]), &node_key2, 8088);
 
     // Node 1 knows about node 2 from the startup
     let node1 = spawn_node(
-        keypair1,
+        &node_key1,
         0,
         pi1.clone(),
         &[pi1.clone(), pi2.clone()],
@@ -98,7 +88,7 @@ async fn connect_two_nodes() {
     // ----------------------------------------------------------------
 
     // Node 2 only knows about itself from the startup
-    let mut node2 = spawn_node(keypair2, 1, pi2.clone(), &[pi2.clone()], &logger);
+    let mut node2 = spawn_node(&node_key2, 1, pi2.clone(), &[pi2.clone()], &logger);
 
     // ----------------------------------------------------------------
     // Node 2 should start around this time, and receive a connection

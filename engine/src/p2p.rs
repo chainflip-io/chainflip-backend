@@ -5,7 +5,7 @@ mod tests;
 
 use std::collections::{BTreeMap, HashMap};
 use std::future::Future;
-use std::net::{Ipv4Addr, Ipv6Addr};
+use std::net::Ipv6Addr;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -138,7 +138,7 @@ fn to_string(pk: &XPublicKey) -> String {
     hex::encode(pk.as_bytes())
 }
 /// The state a nodes needs for p2p
-pub struct P2PContext {
+struct P2PContext {
     /// Our own key, used for initiating and accepting secure connections
     key: KeyPair,
     /// A handle to the authenticator thread that can be used to make changes to the
@@ -163,38 +163,6 @@ pub struct P2PContext {
     logger: slog::Logger,
 }
 
-pub fn start(
-    node_key: &ed25519_dalek::Keypair,
-    cfe_port: u16,
-    peer_infos: Vec<PeerInfo>,
-    our_account_id: AccountId,
-    logger: &slog::Logger,
-) -> (
-    UnboundedSender<OutgoingMultisigStageMessages>,
-    UnboundedSender<PeerUpdate>,
-    UnboundedReceiver<(AccountId, Vec<u8>)>,
-    impl Future<Output = ()>,
-) {
-    let secret_key = ed25519_secret_key_to_x25519_secret_key(&node_key.secret);
-
-    let public_key: x25519_dalek::PublicKey = (&secret_key).into();
-    slog::debug!(
-        logger,
-        "Our derived x25519 pubkey: {:?}",
-        to_string(&public_key)
-    );
-
-    let key = KeyPair {
-        public_key,
-        secret_key,
-    };
-
-    // We listen on all interfaces
-    let ip: Ipv4Addr = "0.0.0.0".parse().unwrap();
-
-    P2PContext::start(key, ip, cfe_port, peer_infos, our_account_id, logger)
-}
-
 fn set_general_client_socket_options(socket: &zmq::Socket) {
     // Discard any pending messages when disconnecting a socket
     socket.set_linger(0).unwrap();
@@ -215,76 +183,91 @@ fn set_general_client_socket_options(socket: &zmq::Socket) {
         .unwrap();
 }
 
-impl P2PContext {
-    fn start(
-        key: KeyPair,
-        ip: Ipv4Addr,
-        port: u16,
-        current_peers: Vec<PeerInfo>,
-        our_account_id: AccountId,
-        logger: &slog::Logger,
-    ) -> (
-        UnboundedSender<OutgoingMultisigStageMessages>,
-        UnboundedSender<PeerUpdate>,
-        UnboundedReceiver<(AccountId, Vec<u8>)>,
-        impl Future<Output = ()>,
-    ) {
-        let zmq_context = zmq::Context::new();
+pub fn start(
+    node_key: &ed25519_dalek::Keypair,
+    port: u16,
+    current_peers: Vec<PeerInfo>,
+    our_account_id: AccountId,
+    logger: &slog::Logger,
+) -> (
+    UnboundedSender<OutgoingMultisigStageMessages>,
+    UnboundedSender<PeerUpdate>,
+    UnboundedReceiver<(AccountId, Vec<u8>)>,
+    impl Future<Output = ()>,
+) {
+    let key = {
+        let secret_key = ed25519_secret_key_to_x25519_secret_key(&node_key.secret);
 
-        // TODO: consider if we need to change the default limit for open sockets
-        // (the default is 1024)
-
-        // TODO: consider keeping track of "last activity" on any outgoing
-        // socket connection and disconnecting inactive peers (see proxy_expire_idle_peers
-        // in OxenMQ)
-
-        let logger = logger.new(slog::o!(COMPONENT_KEY => "p2p"));
-
-        let authenticator = auth::start_authentication_thread(zmq_context.clone(), &logger);
-
-        let (incoming_message_sender, incoming_message_receiver) =
-            tokio::sync::mpsc::unbounded_channel();
-
-        let (monitor_handle, reconnect_receiver) =
-            monitor::start_monitoring_thread(zmq_context.clone(), &logger);
-
-        let mut context = P2PContext {
-            zmq_context,
-            key,
-            monitor_handle,
-            authenticator,
-            active_connections: Default::default(),
-            x25519_to_account_id: Default::default(),
-            incoming_message_sender,
-            our_account_id,
-            state: PeerState::Pending(vec![]),
+        let public_key: x25519_dalek::PublicKey = (&secret_key).into();
+        slog::debug!(
             logger,
-        };
-
-        for peer_info in current_peers {
-            context.handle_peer_update(peer_info);
-        }
-
-        let incoming_message_receiver_ed25519 = context.start_listening_thread(ip, port);
-
-        let (out_msg_sender, out_msg_receiver) = tokio::sync::mpsc::unbounded_channel();
-        let (peer_update_sender, peer_update_receiver) = tokio::sync::mpsc::unbounded_channel();
-
-        let fut = context.control_loop(
-            out_msg_receiver,
-            incoming_message_receiver_ed25519,
-            peer_update_receiver,
-            reconnect_receiver,
+            "Our derived x25519 pubkey: {:?}",
+            to_string(&public_key)
         );
 
-        (
-            out_msg_sender,
-            peer_update_sender,
-            incoming_message_receiver,
-            fut,
-        )
+        KeyPair {
+            public_key,
+            secret_key,
+        }
+    };
+
+    let zmq_context = zmq::Context::new();
+
+    // TODO: consider if we need to change the default limit for open sockets
+    // (the default is 1024)
+
+    // TODO: consider keeping track of "last activity" on any outgoing
+    // socket connection and disconnecting inactive peers (see proxy_expire_idle_peers
+    // in OxenMQ)
+
+    let logger = logger.new(slog::o!(COMPONENT_KEY => "p2p"));
+
+    let authenticator = auth::start_authentication_thread(zmq_context.clone(), &logger);
+
+    let (incoming_message_sender, incoming_message_receiver) =
+        tokio::sync::mpsc::unbounded_channel();
+
+    let (monitor_handle, reconnect_receiver) =
+        monitor::start_monitoring_thread(zmq_context.clone(), &logger);
+
+    let mut context = P2PContext {
+        zmq_context,
+        key,
+        monitor_handle,
+        authenticator,
+        active_connections: Default::default(),
+        x25519_to_account_id: Default::default(),
+        incoming_message_sender,
+        our_account_id,
+        state: PeerState::Pending(vec![]),
+        logger,
+    };
+
+    for peer_info in current_peers {
+        context.handle_peer_update(peer_info);
     }
 
+    let incoming_message_receiver_ed25519 = context.start_listening_thread(port);
+
+    let (out_msg_sender, out_msg_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (peer_update_sender, peer_update_receiver) = tokio::sync::mpsc::unbounded_channel();
+
+    let fut = context.control_loop(
+        out_msg_receiver,
+        incoming_message_receiver_ed25519,
+        peer_update_receiver,
+        reconnect_receiver,
+    );
+
+    (
+        out_msg_sender,
+        peer_update_sender,
+        incoming_message_receiver,
+        fut,
+    )
+}
+
+impl P2PContext {
     async fn control_loop(
         mut self,
         mut outgoing_message_receiver: UnboundedReceiver<OutgoingMultisigStageMessages>,
@@ -545,11 +528,7 @@ impl P2PContext {
     }
 
     /// Start listening for incoming p2p messages on a separate thread
-    fn start_listening_thread(
-        &mut self,
-        ip: Ipv4Addr,
-        port: u16,
-    ) -> UnboundedReceiver<(XPublicKey, Vec<u8>)> {
+    fn start_listening_thread(&mut self, port: u16) -> UnboundedReceiver<(XPublicKey, Vec<u8>)> {
         let socket = self.zmq_context.socket(zmq::SocketType::ROUTER).unwrap();
 
         socket.set_router_mandatory(true).unwrap();
@@ -559,7 +538,8 @@ impl P2PContext {
             .set_curve_secretkey(&self.key.secret_key.to_bytes())
             .unwrap();
 
-        let endpoint = format!("tcp://[{}]:{}", ip, port);
+        // Listen on all interfaces
+        let endpoint = format!("tcp://0.0.0.0:{}", port);
         slog::info!(
             self.logger,
             "Started listening for incoming p2p connections on: {}",
