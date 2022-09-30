@@ -3,6 +3,7 @@ use chainflip_engine::settings::{
 };
 use clap::Parser;
 use config::ConfigError;
+use pallet_cf_governance::ProposalId;
 use serde::Deserialize;
 
 #[derive(Parser, Clone)]
@@ -71,6 +72,15 @@ pub enum CFCommand {
     Query {
         #[clap(help = "Block hash to be queried")]
         block_hash: state_chain_runtime::Hash,
+    },
+    #[clap(
+        // this is only useful for testing. No need to show to the end user.
+        hide = true,
+        about = "Force a key rotation. This can only be executed by the governance dictator"
+    )]
+    ForceRotation {
+        #[clap(help = "The governance proposal id that will be associated with this rotation.")]
+        id: ProposalId,
     },
 }
 
