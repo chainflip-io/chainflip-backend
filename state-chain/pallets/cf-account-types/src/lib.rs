@@ -78,7 +78,7 @@ pub mod pallet {
 		pub fn register_account_role_xt(origin: OriginFor<T>, role: AccountRole) -> DispatchResult {
 			let who: T::AccountId = ensure_signed(origin)?;
 			Self::register_account_role(&who, role)?;
-			Ok(().into())
+			Ok(())
 		}
 	}
 }
