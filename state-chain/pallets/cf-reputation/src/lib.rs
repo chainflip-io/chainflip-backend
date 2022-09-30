@@ -472,8 +472,6 @@ impl<T: Config> Pallet<T> {
 		offence: &T::Offence,
 		suspension: T::BlockNumber,
 	) {
-		// Scoped::<T, RuntimeSuspensionTracker<T>>::scoped(offence)
-		// 	.mutate(|tracker| tracker.suspend(validators.iter().cloned(), suspension));
 		let mut tracker = <SuspensionTracker<_, _, _> as StorageLoadable<T>>::load(offence);
 		tracker.suspend(validators.into_iter().cloned(), suspension);
 		StorageLoadable::<T>::commit(&mut tracker);
