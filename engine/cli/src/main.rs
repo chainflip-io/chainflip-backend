@@ -363,6 +363,15 @@ async fn register_account_role(
     let (_, _, state_chain_client) =
         connect_to_state_chain(&settings.state_chain, false, logger).await?;
 
+    println!(
+        "Submtting `register-account-role` with role: {:?}. This cannot be reversed for your account.",
+        role
+    );
+
+    if !confirm_submit() {
+        return Ok(());
+    }
+
     let tx_hash = state_chain_client
         .submit_signed_extrinsic(
             pallet_cf_account_types::Call::register_account_role_xt { role },
