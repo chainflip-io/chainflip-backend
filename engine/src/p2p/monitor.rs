@@ -11,7 +11,7 @@
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
-use super::PeerInfo;
+use super::{socket::OutgoingSocket, PeerInfo};
 
 /// Describes peer connection to start monitoring
 #[derive(Serialize, Deserialize, Debug)]
@@ -35,7 +35,7 @@ pub struct MonitorHandle {
 }
 
 impl MonitorHandle {
-    pub fn start_monitoring_for(&mut self, socket_to_monitor: &zmq::Socket, peer: &PeerInfo) {
+    pub fn start_monitoring_for(&mut self, socket_to_monitor: &OutgoingSocket, peer: &PeerInfo) {
         use rand::RngCore;
 
         // Generate a random id to prevent accidentally attempting
@@ -53,9 +53,7 @@ impl MonitorHandle {
             | zmq::SocketEvent::HANDSHAKE_SUCCEEDED.to_raw();
 
         // This makes ZMQ publish socket events
-        socket_to_monitor
-            .monitor(&monitor_endpoint, flags as i32)
-            .unwrap();
+        socket_to_monitor.enable_socket_events(&monitor_endpoint, flags);
 
         // This is how we communicate to the monitor thread to
         // start listening to the socket events

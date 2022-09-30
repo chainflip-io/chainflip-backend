@@ -1,5 +1,6 @@
 mod auth;
 mod monitor;
+mod socket;
 #[cfg(test)]
 mod tests;
 
@@ -7,7 +8,6 @@ use std::collections::{BTreeMap, HashMap};
 use std::future::Future;
 use std::net::Ipv6Addr;
 use std::sync::Arc;
-use std::time::Duration;
 
 use auth::Authenticator;
 use serde::{Deserialize, Serialize};
@@ -18,24 +18,9 @@ use x25519_dalek::StaticSecret;
 
 use crate::logging::COMPONENT_KEY;
 use crate::multisig_p2p::OutgoingMultisigStageMessages;
+use crate::p2p::socket::OutgoingSocket;
 
-/// Wait this long until attempting to reconnect
-const RECONNECT_INTERVAL: Duration = Duration::from_millis(250);
-/// Reconnection uses exponential backoff: each reconnection attempt
-/// waits for twice as long as the previous attempt, up to this maximum
-const RECONNECT_INTERVAL_MAX: Duration = Duration::from_secs(5);
-
-/// Maximum incoming message size: if a remote tries sending a message larger than
-/// this they get disconnected (TODO: make sure this is slightly more that the
-/// theoretical maximum needed for multisig; 2MB is a conservative estimate.)
-const MAX_MESSAGE_SIZE: i64 = 2 * 1024 * 1024;
-
-/// How often should ZMQ send heartbeat messages in order to detect
-/// dead connections sooner (setting this to 0 disables heartbeats)
-const CONNECTION_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(15);
-/// How long to wait for a heartbeat response before timing out the
-/// connection
-const CONNECTION_HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(30);
+use self::socket::ConnectedOutgoingSocket;
 
 type EdPublicKey = ed25519::Public;
 type XPublicKey = x25519_dalek::PublicKey;
@@ -43,16 +28,6 @@ type XPublicKey = x25519_dalek::PublicKey;
 pub struct KeyPair {
     pub public_key: XPublicKey,
     pub secret_key: StaticSecret,
-}
-
-struct SocketInfo {
-    socket: zmq::Socket,
-    // NOTE: ZMQ sockets can technically connect to more than
-    // one endpoints, so we need to provide a specific endpoint
-    // when disconnecting (even though we only connect to one
-    // peer with "client" sockets). We store the endpoint here
-    // for this reason.
-    endpoint: String,
 }
 
 #[derive(Debug)]
@@ -146,7 +121,7 @@ struct P2PContext {
     authenticator: Arc<Authenticator>,
     /// NOTE: The mapping is from AccountId because we want to optimise for message
     /// sending, which uses AccountId
-    active_connections: BTreeMap<AccountId, SocketInfo>,
+    active_connections: BTreeMap<AccountId, ConnectedOutgoingSocket>,
     /// NOTE: this is used for incoming messages when we want to map them to account_id
     /// NOTE: we don't use BTreeMap here because XPublicKey doesn't implement Ord.
     x25519_to_account_id: HashMap<XPublicKey, AccountId>,
@@ -161,26 +136,6 @@ struct P2PContext {
     /// to ensure its destructor is called after that of any zmq sockets
     zmq_context: zmq::Context,
     logger: slog::Logger,
-}
-
-fn set_general_client_socket_options(socket: &zmq::Socket) {
-    // Discard any pending messages when disconnecting a socket
-    socket.set_linger(0).unwrap();
-
-    socket.set_ipv6(true).unwrap();
-    socket
-        .set_reconnect_ivl(RECONNECT_INTERVAL.as_millis() as i32)
-        .unwrap();
-    socket
-        .set_reconnect_ivl_max(RECONNECT_INTERVAL_MAX.as_millis() as i32)
-        .unwrap();
-    socket.set_maxmsgsize(MAX_MESSAGE_SIZE).unwrap();
-    socket
-        .set_heartbeat_ivl(CONNECTION_HEARTBEAT_INTERVAL.as_millis() as i32)
-        .unwrap();
-    socket
-        .set_heartbeat_timeout(CONNECTION_HEARTBEAT_TIMEOUT.as_millis() as i32)
-        .unwrap();
 }
 
 pub fn start(
@@ -312,22 +267,8 @@ impl P2PContext {
 
     fn send_message(&self, account_id: AccountId, payload: Vec<u8>) {
         match self.active_connections.get(&account_id) {
-            Some(SocketInfo { socket, .. }) => {
-                // By setting the DONTWAIT option we are ensuring that the
-                // messages are dropped if the buffer for this particular
-                // peer is full rather than blocking the thread (this should
-                // rarely even happen, and it would usually indicate that the
-                // peer has been offline for a long time)
-                if let Err(err) = socket.send(payload, zmq::DONTWAIT) {
-                    slog::warn!(
-                        self.logger,
-                        "Failed to send a message to {}: {}",
-                        account_id,
-                        err
-                    );
-                } else {
-                    slog::trace!(self.logger, "Sent a message to: {}", account_id);
-                }
+            Some(socket) => {
+                socket.send(payload);
             }
             None => {
                 slog::warn!(
@@ -398,72 +339,37 @@ impl P2PContext {
             }
         };
 
-        if let Some(SocketInfo { socket, endpoint }) = self.active_connections.remove(&account_id) {
-            match socket.disconnect(&endpoint) {
-                Ok(()) => {
-                    slog::debug!(self.logger, "Disconnected from peer: {}", account_id);
-                }
-                Err(err) => {
-                    slog::warn!(
-                        self.logger,
-                        "Could not disconnect from peer: {}, ({})",
-                        account_id,
-                        err
-                    );
-                }
-            }
+        if self.active_connections.remove(&account_id).is_none() {
+            slog::error!(
+                self.logger,
+                "Failed to disconnect: no active connection with peer: {}",
+                account_id
+            );
         }
     }
 
     fn reconnect_to_peer(&mut self, peer: PeerInfo) {
         slog::info!(self.logger, "Reconnecting to peer: {}", peer.account_id);
-        if let Some(socket_info) = self.active_connections.remove(&peer.account_id) {
-            socket_info
-                .socket
-                .disconnect(&socket_info.endpoint)
-                .unwrap();
-        } else {
-            panic!("Can only reconnect to existing peers!");
-        }
-
+        self.active_connections
+            .remove(&peer.account_id)
+            .expect("Can only reconnect to existing peers");
         self.connect_to_peer(peer)
     }
 
     fn connect_to_peer(&mut self, peer: PeerInfo) {
-        slog::info!(self.logger, "Connecting to: {}", peer.account_id);
+        slog::debug!(self.logger, "Connecting to: {}", peer.account_id);
 
         let account_id = peer.account_id.clone();
 
-        let socket = self.zmq_context.socket(zmq::SocketType::DEALER).unwrap();
-
-        set_general_client_socket_options(&socket);
-
-        socket
-            .set_curve_secretkey(&self.key.secret_key.to_bytes())
-            .unwrap();
-        socket
-            .set_curve_publickey(self.key.public_key.as_bytes())
-            .unwrap();
-        socket.set_curve_serverkey(peer.pubkey.as_bytes()).unwrap();
-
-        // TODO: we may want to use routing ids based on the pubkey to allow connection reuse
-        // when the peer reconnects
+        let socket = OutgoingSocket::new(&self.zmq_context, &self.key);
 
         self.monitor_handle.start_monitoring_for(&socket, &peer);
 
-        let endpoint = format!("tcp://[{}]:{}", peer.ip, peer.port);
-        socket.connect(&endpoint).unwrap();
-
-        slog::debug!(
-            self.logger,
-            "Connecting to peer {} at {}",
-            account_id,
-            &endpoint
-        );
+        let connected_socket = socket.connect(peer, &self.logger);
 
         assert!(self
             .active_connections
-            .insert(account_id, SocketInfo { socket, endpoint })
+            .insert(account_id, connected_socket)
             .is_none());
     }
 
