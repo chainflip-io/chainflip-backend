@@ -489,17 +489,18 @@ impl<T: Config> Pallet<T> {
 		// If there is something in the pipeline execute it
 		if ExecutionPipeline::<T>::decode_len() > Some(0) {
 			for (call, id) in ExecutionPipeline::<T>::get() {
-				let opt_call: Option<<T as Config>::Call> = Decode::decode(&mut &(*call)).ok();
-				Self::deposit_event(if let Some(call) = opt_call {
-					execution_weight += call.get_dispatch_info().weight;
-					match call.dispatch_bypass_filter((RawOrigin::GovernanceApproval).into()) {
-						Ok(_) => Event::Executed(id),
-						Err(err) => Event::FailedExecution(err.error),
-					}
-				} else {
-					// Emit an error if the decode of a call failed
-					Event::DecodeOfCallFailed(id)
-				})
+				Self::deposit_event(
+					if let Some(call) = <T as Config>::Call::decode(&mut &(*call)).ok() {
+						execution_weight += call.get_dispatch_info().weight;
+						match call.dispatch_bypass_filter((RawOrigin::GovernanceApproval).into()) {
+							Ok(_) => Event::Executed(id),
+							Err(err) => Event::FailedExecution(err.error),
+						}
+					} else {
+						// Emit an error if the decode of a call failed
+						Event::DecodeOfCallFailed(id)
+					},
+				)
 			}
 			// Clean up execution pipeline
 			ExecutionPipeline::<T>::set(vec![]);
