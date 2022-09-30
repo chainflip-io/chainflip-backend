@@ -21,7 +21,7 @@ use sp_std::marker::PhantomData;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::pallet_prelude::{DispatchResultWithPostInfo, *};
+	use frame_support::pallet_prelude::*;
 
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
@@ -75,10 +75,7 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		#[pallet::weight(0)]
-		pub fn register_account_role_xt(
-			origin: OriginFor<T>,
-			role: AccountRole,
-		) -> DispatchResultWithPostInfo {
+		pub fn register_account_role_xt(origin: OriginFor<T>, role: AccountRole) -> DispatchResult {
 			let who: T::AccountId = ensure_signed(origin)?;
 			Self::register_account_role(&who, role)?;
 			Ok(().into())
