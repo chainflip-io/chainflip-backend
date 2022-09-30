@@ -76,6 +76,8 @@ We use a variation on conventional commits to keep our commits clear for reviewe
 `chore`: Code has been moved, dead code removed, file renamed, merging imports, function name typos, changing module structure, bumping dependency versions etc. There shouldn't be any code changes in a `chore` commit.
 `doc`: Comments, READMEs and any other form of documentation e.g. diagrams have been changed.
 
+The order of prececedece is as listed. So if a commit includes a feature and test changes you'd use feature.
+
 ## Code
 
 ## Development Operations
