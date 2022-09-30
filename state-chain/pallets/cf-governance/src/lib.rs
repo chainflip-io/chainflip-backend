@@ -539,7 +539,7 @@ impl<T: Config> Pallet<T> {
 	fn try_approve(account: T::AccountId, id: u32) -> Result<(), DispatchError> {
 		let mut votes = 0;
 		Proposals::<T>::mutate(id, |proposal| {
-			if proposal.approved.insert(account) {
+			if !proposal.approved.insert(account) {
 				return Err(Error::<T>::AlreadyApproved)
 			}
 			votes = proposal.approved.len();
