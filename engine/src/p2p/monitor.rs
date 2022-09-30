@@ -9,6 +9,7 @@
 //! manually on receiving `HANDSHAKE_FAILED_AUTH` error.
 
 use serde::{Deserialize, Serialize};
+use state_chain_runtime::AccountId;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use super::{socket::OutgoingSocket, PeerInfo};
@@ -18,16 +19,15 @@ use super::{socket::OutgoingSocket, PeerInfo};
 pub struct SocketToMonitor {
     /// Endpoint on which to listen for socket events
     pub endpoint: String,
-    /// Information used to make another connection
-    /// attempt if necessary
-    pub peer_info: PeerInfo,
+    /// Account id of the peer we are attempting to connect to
+    pub account_id: AccountId,
 }
 
 enum SocketType {
     /// Used to receive new sockets to monitor
     PeerReceiver,
     /// Used to receive zmq events from a socket
-    PeerMonitor(PeerInfo),
+    PeerMonitor(AccountId),
 }
 
 pub struct MonitorHandle {
@@ -58,7 +58,7 @@ impl MonitorHandle {
         // This is how we communicate to the monitor thread to
         // start listening to the socket events
         let peer_connection = SocketToMonitor {
-            peer_info: peer.clone(),
+            account_id: peer.account_id.clone(),
             endpoint: monitor_endpoint,
         };
 
@@ -70,7 +70,7 @@ impl MonitorHandle {
 /// Creates a channel that delays delivery by `delay`
 fn create_delayed_reconnect_channel(
     delay: std::time::Duration,
-) -> (UnboundedSender<PeerInfo>, UnboundedReceiver<PeerInfo>) {
+) -> (UnboundedSender<AccountId>, UnboundedReceiver<AccountId>) {
     let (reconnect_sender, mut reconnect_receiver) = tokio::sync::mpsc::unbounded_channel();
 
     let (delayed_reconnect_sender, delayed_reconnect_receiver) =
@@ -94,18 +94,14 @@ fn stop_monitoring_for_peer(
     idx: usize,
     logger: &slog::Logger,
 ) {
-    let peer_info = match sockets_to_poll.remove(idx).1 {
+    let account_id = match sockets_to_poll.remove(idx).1 {
         SocketType::PeerReceiver => {
             panic!("Peer receiver should never be removed");
         }
-        SocketType::PeerMonitor(peer_info) => peer_info,
+        SocketType::PeerMonitor(account_id) => account_id,
     };
 
-    slog::trace!(
-        logger,
-        "No longer monitoring peer: {}",
-        peer_info.account_id
-    );
+    slog::trace!(logger, "No longer monitoring peer: {}", account_id);
 }
 
 /// Returns a socket (used by p2p control loop to send new
@@ -114,7 +110,7 @@ fn stop_monitoring_for_peer(
 pub fn start_monitoring_thread(
     context: zmq::Context,
     logger: &slog::Logger,
-) -> (MonitorHandle, UnboundedReceiver<PeerInfo>) {
+) -> (MonitorHandle, UnboundedReceiver<AccountId>) {
     let logger = logger.clone();
 
     // This essentially opens a (ZMQ) channel that the monitor thread
@@ -166,20 +162,20 @@ pub fn start_monitoring_thread(
                 match socket_type {
                     SocketType::PeerReceiver => {
                         let SocketToMonitor {
-                            peer_info,
+                            account_id,
                             endpoint,
                         } = bincode::deserialize(&message[0].to_vec()).unwrap();
 
-                        slog::info!(logger, "Start monitoring peer {}", &peer_info.account_id);
+                        slog::info!(logger, "Start monitoring peer {}", &account_id);
 
                         // Create a monitoring socket for the new peer
                         let monitor_socket = context.socket(zmq::PAIR).unwrap();
                         monitor_socket.set_linger(0).unwrap();
                         monitor_socket.connect(&endpoint).unwrap();
 
-                        sockets_to_poll.push((monitor_socket, SocketType::PeerMonitor(peer_info)));
+                        sockets_to_poll.push((monitor_socket, SocketType::PeerMonitor(account_id)));
                     }
-                    SocketType::PeerMonitor(peer_info) => {
+                    SocketType::PeerMonitor(account_id) => {
                         // We are only interested in the event id (the first two bytes of the first message)
                         let event_id = u16::from_le_bytes(message[0][0..2].try_into().unwrap());
                         match zmq::SocketEvent::from_raw(event_id) {
@@ -187,9 +183,9 @@ pub fn start_monitoring_thread(
                                 slog::warn!(
                                     logger,
                                     "Socket event: authentication failed with {}",
-                                    peer_info.account_id
+                                    account_id
                                 );
-                                reconnect_sender.send(peer_info.clone()).unwrap();
+                                reconnect_sender.send(account_id.clone()).unwrap();
                             }
                             zmq::SocketEvent::MONITOR_STOPPED => {
                                 // This event usually indicates that the socket of interest
@@ -203,7 +199,7 @@ pub fn start_monitoring_thread(
                                 slog::trace!(
                                     logger,
                                     "Socket event: authentication success with {}",
-                                    peer_info.account_id
+                                    account_id
                                 );
                                 stop_monitoring_for_peer(&mut sockets_to_poll, idx, &logger);
                             }

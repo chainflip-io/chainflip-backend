@@ -1,7 +1,5 @@
 use std::time::Duration;
 
-use state_chain_runtime::AccountId;
-
 use super::{KeyPair, PeerInfo};
 
 /// Wait this long until attempting to reconnect
@@ -21,6 +19,10 @@ const CONNECTION_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(15);
 /// How long to wait for a heartbeat response before timing out the
 /// connection
 const CONNECTION_HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(30);
+
+fn endpoint_from_peer_info(peer: &PeerInfo) -> String {
+    format!("tcp://[{}]:{}", peer.ip, peer.port)
+}
 
 /// Socket to be used for connecting to peer on the network
 pub struct OutgoingSocket {
@@ -60,16 +62,14 @@ impl OutgoingSocket {
     }
 
     pub fn enable_socket_events(&self, monitor_endpoint: &str, flags: u16) {
-        self.socket
-            .monitor(&monitor_endpoint, flags as i32)
-            .unwrap();
+        self.socket.monitor(monitor_endpoint, flags as i32).unwrap();
     }
 
     pub fn connect(self, peer: PeerInfo, logger: &slog::Logger) -> ConnectedOutgoingSocket {
         let socket = self.socket;
         socket.set_curve_serverkey(peer.pubkey.as_bytes()).unwrap();
 
-        let endpoint = format!("tcp://[{}]:{}", peer.ip, peer.port);
+        let endpoint = endpoint_from_peer_info(&peer);
         socket.connect(&endpoint).unwrap();
 
         slog::debug!(
@@ -81,8 +81,7 @@ impl OutgoingSocket {
 
         ConnectedOutgoingSocket {
             socket,
-            peer_id: peer.account_id,
-            endpoint,
+            peer,
             logger: logger.clone(),
         }
     }
@@ -90,13 +89,12 @@ impl OutgoingSocket {
 
 pub struct ConnectedOutgoingSocket {
     socket: zmq::Socket,
-    peer_id: AccountId,
+    peer: PeerInfo,
     // NOTE: ZMQ sockets can technically connect to more than
     // one endpoints, so we need to provide a specific endpoint
     // when disconnecting (even though we only connect to one
     // peer with "client" sockets). We store the endpoint here
     // for this reason.
-    endpoint: String,
     logger: slog::Logger,
 }
 
@@ -111,26 +109,35 @@ impl ConnectedOutgoingSocket {
             slog::warn!(
                 self.logger,
                 "Failed to send a message to {}: {}",
-                self.peer_id,
+                self.peer.account_id,
                 err
             );
         } else {
-            slog::trace!(self.logger, "Sent a message to: {}", self.peer_id);
+            slog::trace!(self.logger, "Sent a message to: {}", self.peer.account_id);
         }
+    }
+
+    pub fn peer(&self) -> &PeerInfo {
+        &self.peer
     }
 }
 
 impl Drop for ConnectedOutgoingSocket {
     fn drop(&mut self) {
-        match self.socket.disconnect(&self.endpoint) {
+        let endpoint = endpoint_from_peer_info(&self.peer);
+        match self.socket.disconnect(&endpoint) {
             Ok(()) => {
-                slog::debug!(self.logger, "Disconnected from peer: {}", self.peer_id);
+                slog::debug!(
+                    self.logger,
+                    "Disconnected from peer: {}",
+                    self.peer.account_id
+                );
             }
             Err(err) => {
                 slog::error!(
                     self.logger,
                     "Could not disconnect from peer: {} [{}]",
-                    self.peer_id,
+                    self.peer.account_id,
                     err
                 );
             }

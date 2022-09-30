@@ -44,12 +44,12 @@ impl Authenticator {
         self.allowed_pubkeys.write().unwrap().insert(peer_pubkey);
     }
 
-    pub fn remove_peer(&self, peer_pubkey: XPublicKey) {
-        if self.allowed_pubkeys.write().unwrap().remove(&peer_pubkey) {
+    pub fn remove_peer(&self, peer_pubkey: &XPublicKey) {
+        if self.allowed_pubkeys.write().unwrap().remove(peer_pubkey) {
             slog::debug!(
                 self.logger,
                 "Removed from the list of allowed pubkeys: {}",
-                to_string(&peer_pubkey)
+                to_string(peer_pubkey)
             );
         }
     }

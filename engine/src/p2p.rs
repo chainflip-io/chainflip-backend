@@ -228,7 +228,7 @@ impl P2PContext {
         mut outgoing_message_receiver: UnboundedReceiver<OutgoingMultisigStageMessages>,
         mut incoming_message_receiver: UnboundedReceiver<(XPublicKey, Vec<u8>)>,
         mut peer_update_receiver: UnboundedReceiver<PeerUpdate>,
-        mut reconnect_receiver: UnboundedReceiver<PeerInfo>,
+        mut reconnect_receiver: UnboundedReceiver<AccountId>,
     ) {
         loop {
             tokio::select! {
@@ -243,8 +243,8 @@ impl P2PContext {
                     // the x25519 pubkey to their account id here
                     self.forward_incoming_message(pubkey, payload);
                 }
-                Some(peer_info) = reconnect_receiver.recv() => {
-                    self.reconnect_to_peer(peer_info);
+                Some(account_id) = reconnect_receiver.recv() => {
+                    self.reconnect_to_peer(account_id);
                 }
             }
         }
@@ -283,7 +283,7 @@ impl P2PContext {
     fn on_peer_update(&mut self, update: PeerUpdate) {
         match update {
             PeerUpdate::Registered(peer_info) => self.handle_peer_update(peer_info),
-            PeerUpdate::Deregistered(account_id, pubkey) => self.remove_peer(account_id, pubkey),
+            PeerUpdate::Deregistered(account_id, _pubkey) => self.remove_peer(account_id),
         }
     }
 
@@ -302,58 +302,42 @@ impl P2PContext {
         }
     }
 
+    fn remove_peer_and_disconnect_socket(&mut self, socket: ConnectedOutgoingSocket) {
+        let pubkey = &socket.peer().pubkey;
+        self.authenticator.remove_peer(pubkey);
+        assert!(
+            self.x25519_to_account_id.remove(pubkey).is_some(),
+            "Invariant violation: pubkey must be present"
+        );
+    }
+
     /// Removing a peer means: (1) removing it from the list of allowed nodes,
     /// (2) disconnecting our "client" socket with that node, (3) removing
     /// any references to it in local state (mappings)
-    fn remove_peer(&mut self, account_id: AccountId, ed_public_key: EdPublicKey) {
+    fn remove_peer(&mut self, account_id: AccountId) {
         // NOTE: There is no (trivial) way to disconnect peers that are
         // already connected to our listening ZMQ socket, we can only
         // prevent future connections from being established and rely
         // on peer from disconnecting from "client side".
         // TODO: ensure that stale/inactive connections are terminated
 
-        let public_key = {
-            let pk = ed25519_dalek::PublicKey::from_bytes(&ed_public_key.0).unwrap();
-            ed25519_public_key_to_x25519_public_key(&pk)
-        };
-
-        self.authenticator.remove_peer(public_key);
-
-        match self.x25519_to_account_id.remove(&public_key) {
-            Some(stored_account_id) => {
-                if account_id != stored_account_id {
-                    slog::warn!(
-                        self.logger,
-                        "Stored account id {} does not match provided {} in the request to remove peer",
-                        stored_account_id, account_id
-                    );
-                }
-            }
-            None => {
-                slog::warn!(
-                    self.logger,
-                    "No account id matches the ed25519 key provided in the request to remove peer: {}",
-                    to_string(&public_key)
-                );
-                return;
-            }
-        };
-
-        if self.active_connections.remove(&account_id).is_none() {
-            slog::error!(
-                self.logger,
-                "Failed to disconnect: no active connection with peer: {}",
-                account_id
-            );
+        if let Some(existing_socket) = self.active_connections.remove(&account_id) {
+            self.remove_peer_and_disconnect_socket(existing_socket);
+        } else {
+            slog::error!(self.logger, "Failed remove unknown peer: {}", account_id);
         }
     }
 
-    fn reconnect_to_peer(&mut self, peer: PeerInfo) {
-        slog::info!(self.logger, "Reconnecting to peer: {}", peer.account_id);
-        self.active_connections
-            .remove(&peer.account_id)
+    /// Reconnect to peer assuming that its peer info hasn't changed
+    fn reconnect_to_peer(&mut self, account_id: AccountId) {
+        slog::info!(self.logger, "Reconnecting to peer: {}", account_id);
+
+        let existing_socket = self
+            .active_connections
+            .remove(&account_id)
             .expect("Can only reconnect to existing peers");
-        self.connect_to_peer(peer)
+
+        self.connect_to_peer(existing_socket.peer().clone());
     }
 
     fn connect_to_peer(&mut self, peer: PeerInfo) {
@@ -392,12 +376,14 @@ impl P2PContext {
     fn add_or_update_peer(&mut self, peer: PeerInfo) {
         slog::debug!(self.logger, "Received new peer info: {}", peer);
 
-        if self.active_connections.contains_key(&peer.account_id) {
+        if let Some(existing_socket) = self.active_connections.remove(&peer.account_id) {
             slog::debug!(
                 self.logger,
-                "Account id {} is already registered, updating",
+                "Account id {} is already known, updating info and reconnecting",
                 &peer.account_id
             );
+
+            self.remove_peer_and_disconnect_socket(existing_socket);
         }
 
         let peer_pubkey = &peer.pubkey;
