@@ -2,9 +2,7 @@ use frame_system::{ensure_signed, Config};
 
 use crate::AccountRoleRegistry;
 
-pub struct MockAccountRoleRegistry;
-
-impl<T: Config> AccountRoleRegistry<T> for MockAccountRoleRegistry {
+impl<T: Config> AccountRoleRegistry<T> for () {
 	fn register_account_role(
 		_who: &<T as frame_system::Config>::AccountId,
 		_role: cf_primitives::AccountRole,

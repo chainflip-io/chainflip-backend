@@ -1,6 +1,6 @@
 use crate::{self as pallet_cf_relayer};
 use cf_primitives::{ForeignChainAddress, ForeignChainAsset};
-use cf_traits::{mocks::account_role_registry::MockAccountRoleRegistry, IngressApi};
+use cf_traits::IngressApi;
 use frame_support::parameter_types;
 use frame_system as system;
 use sp_core::H256;
@@ -83,7 +83,7 @@ impl IngressApi for MockIngress {
 impl pallet_cf_relayer::Config for Test {
 	type Event = Event;
 	type Ingress = MockIngress;
-	type AccountRoleRegistry = MockAccountRoleRegistry;
+	type AccountRoleRegistry = ();
 	type WeightInfo = ();
 }
 

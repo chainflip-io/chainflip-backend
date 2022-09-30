@@ -2,11 +2,8 @@ use crate as pallet_cf_staking;
 use cf_chains::{eth, eth::api::EthereumReplayProtection, ChainAbi, ChainCrypto, Ethereum};
 use cf_primitives::{AuthorityCount, CeremonyId};
 use cf_traits::{
-	impl_mock_waived_fees,
-	mocks::{
-		account_role_registry::MockAccountRoleRegistry, system_state_info::MockSystemStateInfo,
-	},
-	AsyncResult, ThresholdSigner, WaivedFees,
+	impl_mock_waived_fees, mocks::system_state_info::MockSystemStateInfo, AsyncResult,
+	ThresholdSigner, WaivedFees,
 };
 use frame_support::{dispatch::DispatchResultWithPostInfo, parameter_types};
 use sp_runtime::{
@@ -202,7 +199,7 @@ impl pallet_cf_staking::Config for Test {
 	type Event = Event;
 	type TimeSource = time_source::Mock;
 	type Balance = u128;
-	type AccountRoleRegistry = MockAccountRoleRegistry;
+	type AccountRoleRegistry = ();
 	type Flip = Flip;
 	type WeightInfo = ();
 	type StakerId = AccountId;
