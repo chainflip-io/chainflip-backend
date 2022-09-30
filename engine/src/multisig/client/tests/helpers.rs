@@ -959,11 +959,11 @@ pub fn get_key_data_for_test<P: ECPoint>(signers: BTreeSet<AccountId>) -> Keygen
 
 /// Advances time by the stage duration x2 to cause a timeout
 pub async fn cause_ceremony_timeout() {
-    // Delay a small amount incase the ceremony runner has not processed the request/p2p message yet,
+    // Delay a small amount in case the ceremony runner has not processed the request/p2p message yet,
     // and thus record the time the ceremony should expire.
     tokio::time::sleep(Duration::from_millis(50)).await;
 
-    // We need to timeout 2 stages incase the second stage in a verification stage and will try to recover.
+    // We need to timeout 2 stages in case the second stage in a verification stage and will try to recover.
     // So we must advance time by 2x the max stage duration.
     tokio::time::pause();
     tokio::time::advance(Duration::from_secs((MAX_STAGE_DURATION_SECONDS * 2) as u64)).await;

@@ -305,7 +305,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
             }
             None => {
                 // Because unauthorised ceremonies don't timeout, We must check the id of ceremonies that we are not
-                // participating in and cleanup any unauthorised ceremonies that may of been created by a bad p2p message.
+                // participating in and cleanup any unauthorised ceremonies that may have been created by a bad p2p message.
                 if self
                     .signing_states
                     .cleanup_unauthorised_ceremony(&request.ceremony_id)
