@@ -14,7 +14,10 @@ use cf_traits::{
 pub mod weights;
 pub use weights::WeightInfo;
 
-use frame_support::{pallet_prelude::*, traits::Get};
+use frame_support::{
+	pallet_prelude::*,
+	traits::{Get, OnKilledAccount},
+};
 pub use pallet::*;
 use sp_runtime::traits::Zero;
 use sp_std::{
@@ -506,5 +509,12 @@ impl<T: Config> ReputationResetter for Pallet<T> {
 			rep.reset_reputation();
 			rep.reset_online_credits();
 		});
+	}
+}
+
+impl<T: Config> OnKilledAccount<T::ValidatorId> for Pallet<T> {
+	fn on_killed_account(who: &T::ValidatorId) {
+		Reputations::<T>::remove(who);
+		LastHeartbeat::<T>::remove(who);
 	}
 }
