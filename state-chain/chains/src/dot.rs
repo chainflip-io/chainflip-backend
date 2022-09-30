@@ -1,29 +1,36 @@
 use crate::*;
-pub mod eth;
 
+pub use eth::Address;
+
+use polkadot_runtime::Runtime;
 
 use sp_runtime::{generic::SignedPayload, MultiAddress, MultiSignature};
-pub use polkadot_runtime::Runtime;
-
 
 pub type PolkadotRuntime = polkadot_runtime::Runtime; //we need to import the latest polkadot runtime here
 
 pub type PolkadotRuntimeCall = polkadot_runtime::RuntimeCall; //This needs to be imported from the current runtime of polkadot
 
-//pub type PolkadotAggkey = PolkadotAccount; //Currently, we are using the same Aggkey (or same framework with a different key) to sign for
-									   // polkadot transaction as we do for ethereum transactions
+//pub type PolkadotAggkey = PolkadotAccount; //Currently, we are using the same Aggkey (or same
+// framework with a different key) to sign for polkadot transaction as we do for ethereum
+// transactions
 
 pub type PolkadotGovKey = eth::Address; //Same as above
 
 pub type PolkadotBlockHashCount = todo!(); //import from runtime common types crate in polkadot repo
 
 pub type PolkadotAddress = MultiAddress<PolkadotRuntime::AccountId, ()>; //import this type
-// from multiaddress.rs
+																		 // from multiaddress.rs
 pub type PolkadotSignature = MultiSignature;
 
-pub type PolkadotUncheckedExtrinsic = generic::UncheckedExtrinsic<PolkadotAddress, PolkadotRuntimeCall, PolkadotSignature, PolkadotSignedExtra>;
+pub type PolkadotUncheckedExtrinsic = generic::UncheckedExtrinsic<
+	PolkadotAddress,
+	PolkadotRuntimeCall,
+	PolkadotSignature,
+	PolkadotSignedExtra,
+>;
 
-pub type PolkadotSignedExtra = (  //import from polkadot runtime
+pub type PolkadotSignedExtra = (
+	//import from polkadot runtime
 	frame_system::CheckNonZeroSender<Runtime>,
 	frame_system::CheckSpecVersion<Runtime>,
 	frame_system::CheckTxVersion<Runtime>,
@@ -41,7 +48,6 @@ pub type PolkadotPayload = generic::SignedPayload<PolkadotRuntimeCall, PolkadotS
 pub type EncodedPolkadotPayload = &[u8];
 
 pub type PolkadotLookup = <PolkadotRuntime as frame_system::Config>::Lookup;
-
 
 pub struct Polkadot;
 
@@ -70,7 +76,7 @@ impl ChainCrypto for Polkadot {
 
 	fn agg_key_to_payload(agg_key: Self::AggKey) -> Self::Payload {
 		//H256(Blake2_256::hash(&agg_key.to_pubkey_compressed()))
-        todo!();
+		todo!();
 	}
 }
 
@@ -93,33 +99,34 @@ impl ChainAbi for Polkadot {
 
 #[derive(Encode, Decode, TypeInfo, Copy, Clone, RuntimeDebug, Default, PartialEq, Eq)]
 pub struct PolkadotExtrinsicSignatureHandler {
-    vault_account: Polkadot::ChainAccount,
+	vault_account: <Polkadot as Chain>::ChainAccount,
 	extrinsic_call: PolkadotRuntimeCall,
-	signed_extrinsic: Polkadot::SignedTransaction,
-	signature_payload: Polkadot::Payload,
+	signed_extrinsic: <Polkadot as ChainAbi>::SignedTransaction,
+	signature_payload: <Polkadot as ChainCrypto>::Payload,
 	nonce: <PolkadotRuntime as frame_system::Config>::Index,
-    extra: PolkadotSignedExtra,
+	extra: PolkadotSignedExtra,
 }
 
 impl ExtrinsicSignatureHandler {
-	pub fn new_empty(nonce: <PolkadotRuntime as frame_system::Config>::Index, vault_account: Polkadot::ChainAccount) -> Self {
-		Self { 
-            nonce:nonce,
-            vault_account:vault_account,
-            ..Default::default() 
-            }
+	pub fn new_empty(
+		nonce: <PolkadotRuntime as frame_system::Config>::Index,
+		vault_account: <Polkadot as Chain>::ChainAccount,
+	) -> Self {
+		Self { nonce, vault_account, ..Default::default() }
 	}
 	pub fn insert_extrinsic_call(&mut self, extrinsic_call: PolkadotRuntimeCall) {
 		self.extrinsic_call = extrinsic_call;
 	}
 
-	pub fn insert_and_get_threshold_signature_payload(&self) -> Polkadot::Payload {
-        use sp_runtime::traits::StaticLookup;
+	pub fn insert_and_get_threshold_signature_payload(&self) -> <Polkadot as ChainCrypto>::Payload {
+		use sp_runtime::traits::StaticLookup;
 		// take the biggest period possible.
-		let period =
-			PolkadotBlockHashCount::get().checked_next_power_of_two().map(|c| c / 2).unwrap_or(2) as u64;
+		let period = PolkadotBlockHashCount::get()
+			.checked_next_power_of_two()
+			.map(|c| c / 2)
+			.unwrap_or(2) as u64;
 
-		let current_block = frame_system::Pallet<PolkadotRuntime>::block_number()
+		let current_block = frame_system::Pallet::<PolkadotRuntime>::block_number()
 			.saturated_into::<u64>()
 			// The `System::block_number` is initialized with `n+1`,
 			// so the actual block number is `n`.
@@ -144,27 +151,36 @@ impl ExtrinsicSignatureHandler {
 				log::warn!("Unable to create signed payload: {:?}", e);
 			})
 			.ok()?;
-        self.signature_payload = raw_payload.using_encoded(|encoded_payload| encoded_payload);
-        self.extra = extra;
+		self.signature_payload = raw_payload.using_encoded(|encoded_payload| encoded_payload);
+		self.extra = extra;
 
-        self.signature_payload
-    }
+		self.signature_payload
+	}
 
-	pub fn insert_and_get_signed_unchecked_extrinsic(&mut self, signature: <Polkadot as ChainCrypto>::ThresholdSignature) -> PolkadotUncheckedExtrinsic {
-        self.signed_extrinsic = PolkadotRuntime::PolkadotUncheckedExtrinsic::new_signed(self.extrinsic_call, PolkadotAddress::Id(self.vault_account.clone()), signature, self.extra )
-    }
+	pub fn insert_and_get_signed_unchecked_extrinsic(
+		&mut self,
+		signature: <Polkadot as ChainCrypto>::ThresholdSignature,
+	) -> PolkadotUncheckedExtrinsic {
+		self.signed_extrinsic = PolkadotRuntime::PolkadotUncheckedExtrinsic::new_signed(
+			self.extrinsic_call,
+			PolkadotAddress::Id(self.vault_account.clone()),
+			signature,
+			self.extra,
+		)
+	}
 	pub fn is_signed(&self) -> bool {
-        match self.signature {
+		match self.signature {
 			Some((signed, signature, extra)) => {
 				let raw_payload = SignedPayload::new(self.extrinsic_call, self.extra)?;
-				if !raw_payload.using_encoded(|payload| signature.verify(payload, &self.vault_account)) {
+				if !raw_payload
+					.using_encoded(|payload| signature.verify(payload, &self.vault_account))
+				{
 					false
+				} else {
+					true
 				}
-                else {
-                    true
-                }
-            },
+			},
 			None => false,
 		}
-    }
+	}
 }
