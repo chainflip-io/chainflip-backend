@@ -515,5 +515,6 @@ impl<T: Config> ReputationResetter for Pallet<T> {
 impl<T: Config> OnKilledAccount<T::ValidatorId> for Pallet<T> {
 	fn on_killed_account(who: &T::ValidatorId) {
 		Reputations::<T>::remove(who);
+		LastHeartbeat::<T>::remove(who);
 	}
 }
