@@ -34,6 +34,7 @@ pub mod pallet {
 		pallet_prelude::*,
 		traits::{UnfilteredDispatchable, UnixTime},
 	};
+	use sp_std::collections::btree_set::BTreeSet;
 
 	use codec::Encode;
 	use frame_system::{pallet, pallet_prelude::*};
@@ -45,10 +46,10 @@ pub mod pallet {
 	/// Proposal struct
 	#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 	pub struct Proposal<AccountId> {
-		/// Encoded representation of a extrinsic
+		/// Encoded representation of a extrinsic.
 		pub call: OpaqueCall,
-		/// Array of accounts which already approved the proposal
-		pub approved: Vec<AccountId>,
+		/// Accounts who have already approved the proposal.
+		pub approved: BTreeSet<AccountId>,
 	}
 
 	impl<T> Default for Proposal<T> {
@@ -504,7 +505,7 @@ impl<T: Config> Pallet<T> {
 		// Generate the next proposal id
 		let id = Self::get_next_id();
 		// Insert a new proposal
-		Proposals::<T>::insert(id, Proposal { call: call.encode(), approved: vec![] });
+		Proposals::<T>::insert(id, Proposal { call: call.encode(), approved: Default::default() });
 		// Update the proposal counter
 		ProposalIdCounter::<T>::put(id);
 		// Add the proposal to the active proposals array
@@ -538,12 +539,9 @@ impl<T: Config> Pallet<T> {
 	fn try_approve(account: T::AccountId, id: u32) -> Result<(), DispatchError> {
 		let mut votes = 0;
 		Proposals::<T>::mutate(id, |proposal| {
-			// Check already approved
-			if proposal.approved.contains(&account) {
+			if !proposal.approved.insert(account) {
 				return Err(Error::<T>::AlreadyApproved)
 			}
-			// Add account to approved array
-			proposal.approved.push(account);
 			votes = proposal.approved.len();
 			Self::deposit_event(Event::Approved(id));
 			Ok(())
