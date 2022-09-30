@@ -701,8 +701,7 @@ impl<T: Config> Pallet<T> {
 	/// Checks if an account has signalled their intention to retire. If the account
 	/// has never staked any tokens, returns [Error::UnknownAccount].
 	pub fn is_retired(account: &AccountId<T>) -> Result<bool, Error<T>> {
-		let result = ActiveBidder::<T>::try_get(account).map_err(|_| Error::UnknownAccount)?;
-		Ok(!result)
+		Ok(!ActiveBidder::<T>::try_get(account).map_err(|_| Error::UnknownAccount)?)
 	}
 
 	/// Registers the expiry time for an account's pending claim. At the provided time, any pending
