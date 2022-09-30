@@ -111,9 +111,9 @@ pub mod pallet {
 	#[pallet::generate_store(pub (super) trait Store)]
 	pub struct Pallet<T>(PhantomData<T>);
 
-	/// Store the list of staked accounts and whether or not they are retired.
+	/// Store the list of staked accounts and whether or not they are a active bidder.
 	#[pallet::storage]
-	pub type AccountRetired<T: Config> =
+	pub type ActiveBidder<T: Config> =
 		StorageMap<_, Blake2_128Concat, AccountId<T>, Retired, ValueQuery>;
 
 	/// PendingClaims can be in one of two states:
@@ -182,7 +182,7 @@ pub mod pallet {
 		/// An account has retired and will no longer take part in auctions. \[account_id\]
 		AccountRetired(AccountId<T>),
 
-		/// A previously retired account  has been re-activated. \[account_id\]
+		/// A previously retired account has been re-activated. \[account_id\]
 		AccountActivated(AccountId<T>),
 
 		/// A claim has expired without being executed. \[account_id, nonce, amount\]
@@ -489,7 +489,7 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [AccountRetired](Event::AccountRetired)
+		/// - [ActiveBidder](Event::ActiveBidder)
 		///
 		/// ## Errors
 		///
@@ -645,13 +645,13 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	/// Add stake to an account, creating the account if it doesn't exist, and activating the
-	/// account if it is in retired state.
+	/// Add stake to an account, creating the account if it doesn't exist, an account is not
+	/// implicit a bidder and needs to ge activated manually.
 	fn stake_account(account_id: &AccountId<T>, amount: T::Balance) -> T::Balance {
 		if !frame_system::Pallet::<T>::account_exists(account_id) {
 			// Creates an account
 			let _ = frame_system::Provider::<T>::created(account_id);
-			AccountRetired::<T>::insert(&account_id, true);
+			ActiveBidder::<T>::insert(&account_id, false);
 		}
 
 		T::Flip::credit_stake(account_id, amount)
@@ -663,13 +663,13 @@ impl<T: Config> Pallet<T> {
 	/// Returns an error if the account has already been retired, or if the account has no stake
 	/// associated.
 	fn retire(account_id: &AccountId<T>) -> Result<(), Error<T>> {
-		AccountRetired::<T>::try_mutate_exists(account_id, |maybe_status| {
+		ActiveBidder::<T>::try_mutate_exists(account_id, |maybe_status| {
 			match maybe_status.as_mut() {
-				Some(retired) => {
-					if *retired {
+				Some(active) => {
+					if !*active {
 						return Err(Error::AlreadyRetired)
 					}
-					*retired = true;
+					*active = false;
 					Self::deposit_event(Event::AccountRetired(account_id.clone()));
 					Ok(())
 				},
@@ -683,13 +683,13 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Returns an error if the account is not retired, or if the account has no stake associated.
 	fn activate(account_id: &AccountId<T>) -> Result<(), Error<T>> {
-		AccountRetired::<T>::try_mutate_exists(account_id, |maybe_status| {
+		ActiveBidder::<T>::try_mutate_exists(account_id, |maybe_status| {
 			match maybe_status.as_mut() {
-				Some(retired) => {
-					if !*retired {
+				Some(active) => {
+					if *active {
 						return Err(Error::AlreadyActive)
 					}
-					*retired = false;
+					*active = true;
 					Self::deposit_event(Event::AccountActivated(account_id.clone()));
 					Ok(())
 				},
@@ -701,7 +701,8 @@ impl<T: Config> Pallet<T> {
 	/// Checks if an account has signalled their intention to retire. If the account
 	/// has never staked any tokens, returns [Error::UnknownAccount].
 	pub fn is_retired(account: &AccountId<T>) -> Result<bool, Error<T>> {
-		AccountRetired::<T>::try_get(account).map_err(|_| Error::UnknownAccount)
+		let result = ActiveBidder::<T>::try_get(account).map_err(|_| Error::UnknownAccount)?;
+		Ok(!result)
 	}
 
 	/// Registers the expiry time for an account's pending claim. At the provided time, any pending
@@ -729,13 +730,13 @@ impl<T: Config> BidderProvider for Pallet<T> {
 	type Amount = T::Balance;
 
 	fn get_bidders() -> Vec<Bid<Self::ValidatorId, Self::Amount>> {
-		AccountRetired::<T>::iter()
-			.filter_map(|(bidder_id, retired)| {
-				if retired {
-					None
-				} else {
+		ActiveBidder::<T>::iter()
+			.filter_map(|(bidder_id, active)| {
+				if active {
 					let amount = T::Flip::staked_balance(&bidder_id);
 					Some(Bid { bidder_id, amount })
+				} else {
+					None
 				}
 			})
 			.collect()

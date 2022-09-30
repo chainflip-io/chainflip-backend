@@ -1,5 +1,5 @@
 use crate::{
-	mock::*, pallet, AccountRetired, ClaimExpiries, Error, EthereumAddress, FailedStakeAttempts,
+	mock::*, pallet, ActiveBidder, ClaimExpiries, Error, EthereumAddress, FailedStakeAttempts,
 	Pallet, PendingClaims, WithdrawalAddresses,
 };
 use cf_chains::RegisterClaim;
@@ -24,9 +24,9 @@ const TX_HASH: pallet::EthTransactionHash = [211u8; 32];
 fn genesis_nodes_are_activated_by_default() {
 	new_test_ext().execute_with(|| {
 		// Expect the genesis node to be activated.
-		assert!(AccountRetired::<Test>::contains_key(&CHARLIE));
+		assert!(ActiveBidder::<Test>::contains_key(&CHARLIE));
 		// Expect a not genesis node not to be activated.
-		assert!(!AccountRetired::<Test>::contains_key(&ALICE));
+		assert!(!ActiveBidder::<Test>::contains_key(&ALICE));
 	});
 }
 
