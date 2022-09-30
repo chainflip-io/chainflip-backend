@@ -932,6 +932,7 @@ dependencies = [
  "jsonrpsee",
  "pallet-cf-account-types",
  "pallet-cf-environment",
+ "pallet-cf-governance",
  "pallet-cf-staking",
  "pallet-cf-threshold-signature",
  "pallet-cf-validator",
