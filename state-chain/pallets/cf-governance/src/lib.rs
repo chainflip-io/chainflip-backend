@@ -497,7 +497,6 @@ impl<T: Config> Pallet<T> {
 							Err(err) => Event::FailedExecution(err.error),
 						}
 					} else {
-						// Emit an error if the decode of a call failed
 						Event::DecodeOfCallFailed(id)
 					},
 				)
