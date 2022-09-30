@@ -41,11 +41,9 @@ A rough guideline for the maximum of what constitutes "small" is around 400 line
 
 Each commit should be well named. While writing the occasional "ARGHHH" commit meessage may give us the stress relief we need, we should instead seek other stress reduction strategies, and have well named commits like "fix: authority rewards are now rewarded at each block" so as not to annoy and stress your fellow developers (which might result in "ARGGGH"s with more "G"s). This is important for two reasons: debugging, to find where bugs were introduced and providing reviewers a nice description of what to expect in a commit, also allowing them to navigate your PR more easily.
 
-
 ### Self review
 
 Before requesting a review, developers are encouraged to conduct a thorough self-review of their own work. The approach to self-reviewing should be the same approach taken to reviewing the work of others. Investigate assumptions are being made, look for bugs, try and break it, think about how it could be structured to read better. Often you'll be able to find ways to improve your own code before the reviewer does.
-
 
 ## Correctness
 
@@ -63,9 +61,20 @@ According to Google:
 
 Maintainability is one of the main drivers of a team's success and ability to move forward. Wherever possible we should actively resist accumulating technical debt, and reduce it when we have the opportunity. As long as we follow our other practices, we should be working towards this ideal.
 
-# Ideals
-
 # Practices
+
+A set of practices we follow within the backend repo at Chainflip.
+
+## Commit names
+
+We use a variation on conventional commits to keep our commits clear for reviewers and to encourage meaningful commits.
+
+`feature/feat`: Functionality has been extended in some way.
+`fix`: The code has been changed to fix a bug
+`refactor`: The code has been changed but the changes do not effect the behaviour.
+`test`: Test code has been added or changed (though tests will often/usually be included as part of a `feat` or `fix` commit).
+`chore`: Code has been moved, dead code removed, file renamed, merging imports, function name typos, changing module structure, bumping dependency versions etc. There shouldn't be any code changes in a `chore` commit.
+`doc`: Comments, READMEs and any other form of documentation e.g. diagrams have been changed.
 
 ## Code
 
