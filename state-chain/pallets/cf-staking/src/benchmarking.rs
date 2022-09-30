@@ -34,7 +34,7 @@ benchmarks! {
 
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
-		assert!(AccountRetired::<T>::get(&caller));
+		assert!(ActiveBidder::<T>::get(&caller));
 		assert_eq!(T::Flip::staked_balance(&caller), amount);
 	}
 
@@ -153,20 +153,20 @@ benchmarks! {
 
 	retire_account {
 		let caller: T::AccountId = whitelisted_caller();
-		AccountRetired::<T>::insert(caller.clone(), false);
+		ActiveBidder::<T>::insert(caller.clone(), false);
 
 	}:_(RawOrigin::Signed(caller.clone()))
 	verify {
-		assert!(AccountRetired::<T>::get(caller));
+		assert!(ActiveBidder::<T>::get(caller));
 	}
 
 	activate_account {
 		let caller: T::AccountId = whitelisted_caller();
-		AccountRetired::<T>::insert(caller.clone(), true);
+		ActiveBidder::<T>::insert(caller.clone(), true);
 
 	}:_(RawOrigin::Signed(caller.clone()))
 	verify {
-		assert!(!AccountRetired::<T>::get(caller));
+		assert!(!ActiveBidder::<T>::get(caller));
 	}
 
 	on_initialize_best_case {
