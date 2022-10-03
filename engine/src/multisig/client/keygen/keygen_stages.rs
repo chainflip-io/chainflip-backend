@@ -1,7 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
-use crate::common::format_iterator;
 use crate::multisig::client::common::{
     CeremonyFailureReason, CeremonyStageName, KeygenFailureReason,
 };
@@ -277,6 +276,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
             commitments,
             self.hash_commitments,
             &self.context,
+            self.common.validator_mapping.clone(),
             &self.common.logger,
         ) {
             Ok(comms) => comms,
@@ -363,8 +363,8 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
                     } else {
                         slog::warn!(
                             self.common.logger,
-                            "Received invalid secret share from party: {}",
-                            sender_idx
+                            "Received invalid secret share";
+                            "from_id" => self.common.validator_mapping.get_id(sender_idx).expect("Should map idx").to_string()
                         );
 
                         bad_parties.insert(sender_idx);
@@ -373,8 +373,8 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
                 } else {
                     slog::warn!(
                         self.common.logger,
-                        "Received no secret share from party: {}",
-                        sender_idx
+                        "Received no secret share";
+                        "from_id" => self.common.validator_mapping.get_id(sender_idx).expect("Should map idx").to_string()
                     );
 
                     bad_parties.insert(sender_idx);
@@ -498,8 +498,9 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
                     } else {
                         slog::warn!(
                             self.common.logger,
-                            "Invalid index in complaint: {}",
-                            format_iterator(blamed_idxs)
+                            "Invalid index [{}] in complaint",
+                            idx_blamed;
+                            "from_id" => self.common.validator_mapping.get_id(*idx_from).expect("Should map idx").to_string(),
                         );
                         false
                     }
@@ -590,9 +591,12 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
                 if complaint.0.contains(&self.common.own_idx) {
                     slog::warn!(
                         self.common.logger,
-                        "[{}] we are blamed by [{}]",
-                        self.common.own_idx,
-                        idx
+                        "We are blamed by {}",
+                        self.common
+                            .validator_mapping
+                            .get_id(*idx)
+                            .expect("Should map idx")
+                            .to_string()
                     );
 
                     Some(*idx)
@@ -607,7 +611,15 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
             idxs_to_reveal
                 .iter()
                 .map(|idx| {
-                    slog::debug!(self.common.logger, "revealing share for [{}]", *idx);
+                    slog::debug!(
+                        self.common.logger,
+                        "Revealing share for {}",
+                        self.common
+                            .validator_mapping
+                            .get_id(*idx)
+                            .expect("Should map idx")
+                            .to_string()
+                    );
                     (*idx, self.outgoing_shares.0[idx].clone())
                 })
                 .collect(),
@@ -686,8 +698,8 @@ impl<P: ECPoint> VerifyBlameResponsesBroadcastStage9<P> {
                 if !is_blame_response_complete(*sender_idx, response, &self.complaints) {
                     slog::warn!(
                         self.common.logger,
-                        "Incomplete blame response from party: {}",
-                        sender_idx
+                        "Incomplete blame response";
+                        "from_id" => self.common.validator_mapping.get_id(*sender_idx).expect("Should map idx").to_string()
                     );
 
                     return Err(sender_idx);
@@ -698,8 +710,8 @@ impl<P: ECPoint> VerifyBlameResponsesBroadcastStage9<P> {
                 }) {
                     slog::warn!(
                         self.common.logger,
-                        "Invalid secret share in a blame response from party: {}",
-                        sender_idx
+                        "Invalid secret share in a blame response";
+                        "from_id" => self.common.validator_mapping.get_id(*sender_idx).expect("Should map idx").to_string()
                     );
 
                     return Err(sender_idx);
