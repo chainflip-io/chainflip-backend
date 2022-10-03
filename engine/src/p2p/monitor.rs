@@ -153,8 +153,10 @@ pub fn start_monitoring_thread(
                 .map(|(idx, _)| idx)
                 .collect();
 
-            for idx in readable_indexes {
-                let (socket, socket_type) = &sockets_to_poll[idx];
+            // NOTE: we read in reverse order to ensure that
+            // removing elements is safe
+            for idx in readable_indexes.iter().rev() {
+                let (socket, socket_type) = &sockets_to_poll[*idx];
                 // NOTE: we only read from each socket once even though
                 // there may be more than one event ready (the remaining
                 // events, if any, will simply be read in the next iteration)
@@ -191,7 +193,7 @@ pub fn start_monitoring_thread(
                                 // This event usually indicates that the socket of interest
                                 // has been closed, so we remove any reference to it on our
                                 // side too
-                                stop_monitoring_for_peer(&mut sockets_to_poll, idx, &logger);
+                                stop_monitoring_for_peer(&mut sockets_to_poll, *idx, &logger);
                             }
                             zmq::SocketEvent::HANDSHAKE_SUCCEEDED => {
                                 // We no longer need to monitor the socket once we have
@@ -201,7 +203,7 @@ pub fn start_monitoring_thread(
                                     "Socket event: authentication success with {}",
                                     account_id
                                 );
-                                stop_monitoring_for_peer(&mut sockets_to_poll, idx, &logger);
+                                stop_monitoring_for_peer(&mut sockets_to_poll, *idx, &logger);
                             }
                             unknown_event => {
                                 slog::error!(
