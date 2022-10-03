@@ -1,6 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use crate::benchmarking_value::BenchmarkValue;
-use cf_primitives::EthAmount;
+use cf_primitives::{EthAmount, EthereumSwapId};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use eth::SchnorrVerificationComponents;
 use ethereum_types::H256;
@@ -132,8 +132,8 @@ where
 	RuntimeDebug, Copy, Clone, Default, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo,
 )]
 pub struct FetchAssetParams<T: Chain> {
-	swap_id: [u8; 32],
-	asset: T::ChainAsset,
+	pub swap_id: EthereumSwapId,
+	pub asset: T::ChainAsset,
 }
 
 /// Contains all the parameters required for transferring an asset on an external chain.

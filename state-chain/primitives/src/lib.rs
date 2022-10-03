@@ -32,6 +32,8 @@ pub type EthereumAddress = [u8; 20];
 
 pub type EthAmount = u128;
 
+pub type EthereumSwapId = [u8; 32];
+
 pub type AssetAmount = u128;
 
 pub const ETHEREUM_ETH_ADDRESS: EthereumAddress = [0xEE; 20];

@@ -11,15 +11,18 @@ mod mock;
 mod tests;
 mod weights;
 
-use cf_chains::{AllBatch, Ethereum, TransferAssetParams};
+use cf_chains::{AllBatch, Ethereum, FetchAssetParams, TransferAssetParams};
 use cf_primitives::{
-	Asset, AssetAmount, EgressBatch, EthereumAddress, ForeignChain, ForeignChainAddress,
-	ForeignChainAsset, ETHEREUM_ETH_ADDRESS,
+	Asset, AssetAmount, EgressBatch, EthereumAddress, EthereumSwapId, ForeignChain,
+	ForeignChainAddress, ForeignChainAsset, ETHEREUM_ETH_ADDRESS,
 };
-use cf_traits::{Broadcaster, EgressApi, EthereumAssetsAddressProvider, ReplayProtectionProvider};
+use cf_traits::{
+	Broadcaster, EgressApi, EthereumAssetsAddressProvider, IngressFetchApi,
+	ReplayProtectionProvider,
+};
 use frame_support::pallet_prelude::*;
 pub use pallet::*;
-use sp_std::vec;
+pub use sp_std::{vec, vec::Vec};
 pub use weights::WeightInfo;
 
 #[frame_support::pallet]
@@ -59,6 +62,8 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 	}
 
+	/// Scheduled egress for all supported chains.
+	/// TODO: Enforce chain and address consistency via type.
 	#[pallet::storage]
 	pub(crate) type ScheduledEgress<T: Config> = StorageMap<
 		_,
@@ -68,7 +73,12 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
-	// Stores the list of assets that are not allowed to be egressed.
+	/// Scheduled fetch requests for the Ethereum chain.
+	#[pallet::storage]
+	pub(crate) type EthereumScheduledIngressFetch<T: Config> =
+		StorageMap<_, Twox64Concat, Asset, Vec<EthereumSwapId>, ValueQuery>;
+
+	/// Stores the list of assets that are not allowed to be egressed.
 	#[pallet::storage]
 	pub(crate) type DisabledEgressAssets<T: Config> =
 		StorageMap<_, Twox64Concat, ForeignChainAsset, (), OptionQuery>;
@@ -88,6 +98,10 @@ pub mod pallet {
 		EgressBroadcasted {
 			foreign_asset: ForeignChainAsset,
 			batch_size: u32,
+		},
+		EthereumIngressFetchScheduled {
+			asset: Asset,
+			swap_id: EthereumSwapId,
 		},
 	}
 
@@ -194,7 +208,13 @@ impl<T: Config> Pallet<T> {
 
 			let egress_transaction = T::EthereumEgressTransaction::new_unsigned(
 				T::EthereumReplayProtection::replay_protection(),
-				vec![], // No incoming asset
+				EthereumScheduledIngressFetch::<T>::take(foreign_asset.asset)
+					.iter()
+					.map(|swap_id| FetchAssetParams {
+						swap_id: *swap_id,
+						asset: asset_address.into(),
+					})
+					.collect(),
 				batch
 					.iter()
 					.filter_map(|(amount, address)| match address {
@@ -253,6 +273,18 @@ impl<T: Config> EgressApi for Pallet<T> {
 				matches!(egress_address, ForeignChainAddress::Eth(..)) &&
 					Self::get_asset_ethereum_address(foreign_asset.asset).is_some(),
 			ForeignChain::Polkadot => matches!(egress_address, ForeignChainAddress::Dot(..)),
+		}
+	}
+}
+
+impl<T: Config> IngressFetchApi for Pallet<T> {
+	fn schedule_fetch(fetch_details: Vec<(ForeignChain, Asset, EthereumSwapId)>) {
+		for (chain, asset, swap_id) in fetch_details {
+			// Currently only Ethereum fetching is supported.
+			if chain == ForeignChain::Ethereum {
+				EthereumScheduledIngressFetch::<T>::append(&asset, swap_id);
+				Self::deposit_event(Event::<T>::EthereumIngressFetchScheduled { asset, swap_id });
+			}
 		}
 	}
 }
