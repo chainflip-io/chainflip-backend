@@ -5,7 +5,6 @@ use anyhow::Context;
 
 use chainflip_engine::{
     common::read_clean_and_decode_hex_str_file,
-    constants::DEFAULT_CFE_PORT,
     eth::{
         self, build_broadcast_channel, key_manager::KeyManager, rpc::EthDualRpcClient,
         stake_manager::StakeManager, EthBroadcaster,
@@ -151,7 +150,7 @@ fn main() -> anyhow::Result<()> {
             };
 
             let (outgoing_message_sender, peer_update_sender, incoming_message_receiver, p2p_fut) =
-                p2p::start(&node_key, DEFAULT_CFE_PORT, current_peer_infos, state_chain_client.our_account_id.clone(), &root_logger);
+                p2p::start(&node_key, settings.node_p2p.port, current_peer_infos, state_chain_client.our_account_id.clone(), &root_logger);
 
             scope.spawn(async move {
                 p2p_fut.await;
@@ -183,7 +182,8 @@ fn main() -> anyhow::Result<()> {
                 multisig_p2p::start(
                     node_key,
                     state_chain_client.clone(),
-                    DEFAULT_CFE_PORT,
+                    settings.node_p2p.ip_address,
+                    settings.node_p2p.port,
                     own_peer_info,
                     &root_logger,
                 )

@@ -1,7 +1,10 @@
-use std::{sync::Arc, time::Duration};
+use std::{
+    net::{IpAddr, Ipv6Addr},
+    sync::Arc,
+    time::Duration,
+};
 
-use anyhow::{anyhow, Result};
-use itertools::Itertools;
+use anyhow::Result;
 use slog::o;
 use sp_core::H256;
 
@@ -35,62 +38,14 @@ async fn update_registered_peer_id<RpcClient: 'static + StateChainRpcApi + Sync 
     node_key: &ed25519_dalek::Keypair,
     state_chain_client: &Arc<StateChainClient<RpcClient>>,
     previous_registered_peer_info: &mut Option<PeerInfo>,
+    ip_address: Ipv6Addr,
     cfe_port: u16,
     logger: &slog::Logger,
 ) -> Result<()> {
-    // TODO Don't Register Private Ips on Live chains
+    // TODO: Read previous peer info in a loop until we are
+    // certain that the registered info is up to date
 
-    // TODO: stop relying on SC for obtaining our IP address and
-    // instead have the operator provided it in the config
-    let listening_addresses = state_chain_client
-        .get_local_listen_addresses()
-        .await?
-        .into_iter()
-        .filter(|ip_address| !ip_address.is_loopback())
-        .sorted()
-        .dedup()
-        .collect::<Vec<_>>();
-
-    if listening_addresses.is_empty() {
-        return Err(anyhow!("No non-loopback listening addresses reported",));
-    }
-
-    // TODO: check that pubkey hasn't changed?
-    let (resolved_ip_address, source) = if let Some(ip_address) =
-        listening_addresses.iter().find(|ipv6_address| {
-            // Ipv6Addr::is_global doesn't handle Ipv4 mapped addresses
-            match ipv6_address.to_ipv4_mapped() {
-                Some(ipv4_address) => ipv4_address.is_global(),
-                None => ipv6_address.is_global(),
-            }
-        }) {
-        (
-            *ip_address,
-            "a public ip selected from the node's reported listening addresses",
-        )
-    } else if let Some(ip_address) = {
-        slog::warn!(logger, "The node is not reporting a public ip address");
-
-        if let Some(public_ip) = public_ip::addr().await {
-            Some(match public_ip {
-                std::net::IpAddr::V4(ip) => ip.to_ipv6_mapped(),
-                std::net::IpAddr::V6(ip) => ip,
-            })
-        } else {
-            slog::warn!(logger, "We could not resolve the node's public ip address");
-            None
-        }
-    } {
-        (ip_address, "the node's resolved public address")
-    } else {
-        let ip_address = listening_addresses.first().unwrap();
-        (
-            *ip_address,
-            "a private address selected from the node's listening addresses",
-        )
-    };
-
-    if Some((resolved_ip_address, cfe_port))
+    if Some((ip_address, cfe_port))
         != previous_registered_peer_info
             .as_ref()
             .map(|pi| (pi.ip, pi.port))
@@ -107,10 +62,9 @@ async fn update_registered_peer_id<RpcClient: 'static + StateChainRpcApi + Sync 
 
         slog::info!(
             logger,
-            "Registering node's ip address, and port number [{}]:{}. This ip address is {}. {}.",
-            resolved_ip_address,
+            "Registering node's ip address, and port number [{}]:{}. {}.",
+            ip_address,
             cfe_port,
-            source,
             extra_info,
         );
 
@@ -127,7 +81,7 @@ async fn update_registered_peer_id<RpcClient: 'static + StateChainRpcApi + Sync 
                 pallet_cf_validator::Call::register_peer_id {
                     peer_id,
                     port: cfe_port,
-                    ip_address: resolved_ip_address.into(),
+                    ip_address: ip_address.into(),
                     // We sign over our account id
                     signature: sp_core::ed25519::Signature::try_from(signature.as_ref()).unwrap(),
                 },
@@ -138,7 +92,7 @@ async fn update_registered_peer_id<RpcClient: 'static + StateChainRpcApi + Sync 
         *previous_registered_peer_info = Some(PeerInfo::new(
             state_chain_client.our_account_id.clone(),
             peer_id,
-            resolved_ip_address,
+            ip_address,
             cfe_port,
         ));
     }
@@ -149,11 +103,17 @@ async fn update_registered_peer_id<RpcClient: 'static + StateChainRpcApi + Sync 
 pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
     node_key: ed25519_dalek::Keypair,
     state_chain_client: Arc<StateChainClient<RpcClient>>,
+    ip_address: IpAddr,
     cfe_port: u16,
     mut previous_registered_peer_info: Option<PeerInfo>,
     logger: &slog::Logger,
 ) -> Result<()> {
     let logger = logger.new(o!(COMPONENT_KEY => "P2PClient"));
+
+    let ip_address = match ip_address {
+        IpAddr::V4(ipv4) => ipv4.to_ipv6_mapped(),
+        IpAddr::V6(ipv6) => ipv6,
+    };
 
     let mut update_interval = make_periodic_tick(Duration::from_secs(60), false);
 
@@ -162,6 +122,7 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
             &node_key,
             &state_chain_client,
             &mut previous_registered_peer_info,
+            ip_address,
             cfe_port,
             &logger,
         )
