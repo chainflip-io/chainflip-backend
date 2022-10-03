@@ -27,7 +27,7 @@ fn spawn_node(
     logger: &slog::Logger,
 ) -> Node {
     let account_id = AccountId::new([idx as u8 + 1; 32]);
-    let (msg_sender, peer_update_sender, msg_receiver, fut) = p2p::start(
+    let (msg_sender, peer_update_sender, msg_receiver, _, fut) = p2p::start(
         key,
         our_peer_info.port,
         peer_infos.to_vec(),

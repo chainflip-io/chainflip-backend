@@ -149,7 +149,7 @@ fn main() -> anyhow::Result<()> {
                 }
             };
 
-            let (outgoing_message_sender, peer_update_sender, incoming_message_receiver, p2p_fut) =
+            let (outgoing_message_sender, peer_update_sender, incoming_message_receiver, own_peer_info_receiver, p2p_fut) =
                 p2p::start(&node_key, settings.node_p2p.port, current_peer_infos, state_chain_client.our_account_id.clone(), &root_logger);
 
             scope.spawn(async move {
@@ -185,6 +185,7 @@ fn main() -> anyhow::Result<()> {
                     settings.node_p2p.ip_address,
                     settings.node_p2p.port,
                     own_peer_info,
+                    own_peer_info_receiver,
                     &root_logger,
                 )
             );

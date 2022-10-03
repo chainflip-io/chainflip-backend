@@ -127,6 +127,7 @@ struct P2PContext {
     x25519_to_account_id: HashMap<XPublicKey, AccountId>,
     /// Channel through which we send incoming messages to the multisig
     incoming_message_sender: UnboundedSender<(AccountId, Vec<u8>)>,
+    own_peer_info_sender: UnboundedSender<PeerInfo>,
     /// This is how we communicate with the "monitor" thread
     monitor_handle: monitor::MonitorHandle,
     /// Our own "registration" status on the network
@@ -148,6 +149,7 @@ pub fn start(
     UnboundedSender<OutgoingMultisigStageMessages>,
     UnboundedSender<PeerUpdate>,
     UnboundedReceiver<(AccountId, Vec<u8>)>,
+    UnboundedReceiver<PeerInfo>,
     impl Future<Output = ()>,
 ) {
     let key = {
@@ -185,6 +187,9 @@ pub fn start(
     let (monitor_handle, reconnect_receiver) =
         monitor::start_monitoring_thread(zmq_context.clone(), &logger);
 
+    // A channel used to notify whenever our own peer info changes on SC
+    let (own_peer_info_sender, own_peer_info_receiver) = tokio::sync::mpsc::unbounded_channel();
+
     let mut context = P2PContext {
         zmq_context,
         key,
@@ -193,6 +198,7 @@ pub fn start(
         active_connections: Default::default(),
         x25519_to_account_id: Default::default(),
         incoming_message_sender,
+        own_peer_info_sender,
         our_account_id,
         state: PeerState::Pending(vec![]),
         logger,
@@ -218,6 +224,7 @@ pub fn start(
         out_msg_sender,
         peer_update_sender,
         incoming_message_receiver,
+        own_peer_info_receiver,
         fut,
     )
 }
@@ -357,11 +364,13 @@ impl P2PContext {
             .is_none());
     }
 
-    fn handle_own_registration(&mut self) {
+    fn handle_own_registration(&mut self, own_info: PeerInfo) {
         slog::debug!(
             self.logger,
             "Received own node's registration. Starting to connect to peers."
         );
+
+        self.own_peer_info_sender.send(own_info).unwrap();
 
         if let PeerState::Pending(peers) = &mut self.state {
             let peers = std::mem::take(peers);
@@ -413,7 +422,7 @@ impl P2PContext {
 
     fn handle_peer_update(&mut self, peer: PeerInfo) {
         if peer.account_id == self.our_account_id {
-            self.handle_own_registration();
+            self.handle_own_registration(peer);
         } else {
             self.add_or_update_peer(peer);
         }
