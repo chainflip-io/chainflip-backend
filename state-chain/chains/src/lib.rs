@@ -17,7 +17,7 @@ use sp_std::{
 
 pub mod benchmarking_value;
 
-pub mod dot;
+//pub mod dot;
 pub mod eth;
 
 /// A trait representing all the types and constants that need to be implemented for supported
