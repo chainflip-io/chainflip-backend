@@ -364,7 +364,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
                         slog::warn!(
                             self.common.logger,
                             "Received invalid secret share";
-                            "from_id" => self.common.validator_mapping.get_id(sender_idx).expect("Should map idx").to_string()
+                            "from_id" => self.common.validator_mapping.get_id(sender_idx).to_string()
                         );
 
                         bad_parties.insert(sender_idx);
@@ -374,7 +374,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
                     slog::warn!(
                         self.common.logger,
                         "Received no secret share";
-                        "from_id" => self.common.validator_mapping.get_id(sender_idx).expect("Should map idx").to_string()
+                        "from_id" => self.common.validator_mapping.get_id(sender_idx).to_string()
                     );
 
                     bad_parties.insert(sender_idx);
@@ -500,7 +500,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
                             self.common.logger,
                             "Invalid index [{}] in complaint",
                             idx_blamed;
-                            "from_id" => self.common.validator_mapping.get_id(*idx_from).expect("Should map idx").to_string(),
+                            "from_id" => self.common.validator_mapping.get_id(*idx_from).to_string(),
                         );
                         false
                     }
@@ -592,11 +592,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
                     slog::warn!(
                         self.common.logger,
                         "We are blamed by {}",
-                        self.common
-                            .validator_mapping
-                            .get_id(*idx)
-                            .expect("Should map idx")
-                            .to_string()
+                        self.common.validator_mapping.get_id(*idx).to_string()
                     );
 
                     Some(*idx)
@@ -614,11 +610,7 @@ impl<P: ECPoint> BroadcastStageProcessor<KeygenData<P>, KeygenResultInfo<P>, Key
                     slog::debug!(
                         self.common.logger,
                         "Revealing share for {}",
-                        self.common
-                            .validator_mapping
-                            .get_id(*idx)
-                            .expect("Should map idx")
-                            .to_string()
+                        self.common.validator_mapping.get_id(*idx).to_string()
                     );
                     (*idx, self.outgoing_shares.0[idx].clone())
                 })
@@ -699,7 +691,7 @@ impl<P: ECPoint> VerifyBlameResponsesBroadcastStage9<P> {
                     slog::warn!(
                         self.common.logger,
                         "Incomplete blame response";
-                        "from_id" => self.common.validator_mapping.get_id(*sender_idx).expect("Should map idx").to_string()
+                        "from_id" => self.common.validator_mapping.get_id(*sender_idx).to_string()
                     );
 
                     return Err(sender_idx);
@@ -711,7 +703,7 @@ impl<P: ECPoint> VerifyBlameResponsesBroadcastStage9<P> {
                     slog::warn!(
                         self.common.logger,
                         "Invalid secret share in a blame response";
-                        "from_id" => self.common.validator_mapping.get_id(*sender_idx).expect("Should map idx").to_string()
+                        "from_id" => self.common.validator_mapping.get_id(*sender_idx).to_string()
                     );
 
                     return Err(sender_idx);

@@ -280,10 +280,10 @@ pub fn validate_commitments<P: ECPoint>(
                 .expect("message must be present due to ceremony runner invariants");
 
             if !is_valid_zkp(challenge, &c.zkp, &c.commitments) {
-                slog::warn!(logger, "Invalid ZKP commitment"; "from_id" => validator_mapping.get_id(*idx).expect("Should map idx").to_string());
+                slog::warn!(logger, "Invalid ZKP commitment"; "from_id" => validator_mapping.get_id(*idx).to_string());
                 Some(*idx)
             } else if !is_valid_hash_commitment(c, &hash_commitment.0) {
-                slog::warn!(logger, "Invalid hash commitment"; "from_id" => validator_mapping.get_id(*idx).expect("Should map idx").to_string());
+                slog::warn!(logger, "Invalid hash commitment"; "from_id" => validator_mapping.get_id(*idx).to_string());
                 Some(*idx)
             } else {
                 None
@@ -583,7 +583,7 @@ pub mod genesis {
                     .collect();
 
                 (
-                    validator_mapping.get_id(idx).unwrap().clone(),
+                    validator_mapping.get_id(idx).clone(),
                     KeygenResultInfo {
                         key: Arc::new(KeygenResult {
                             key_share: KeyShare {

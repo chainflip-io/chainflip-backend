@@ -114,13 +114,7 @@ where
     fn init(&mut self) {
         let common = &self.common;
 
-        let idx_to_id = |idx: &AuthorityCount| {
-            common
-                .validator_mapping
-                .get_id(*idx)
-                .expect("Unknown account index")
-                .clone()
-        };
+        let idx_to_id = |idx: &AuthorityCount| common.validator_mapping.get_id(*idx).clone();
 
         let (own_message, outgoing_messages) = match self.processor.init() {
             DataToSend::Broadcast(stage_data) => {
@@ -183,7 +177,7 @@ where
                     "Ignoring unexpected message {} while in stage {}",
                     incorrect_type,
                     self;
-                    "from_id" => self.common.validator_mapping.get_id(signer_idx).expect("Should map idx").to_string(),
+                    "from_id" => self.common.validator_mapping.get_id(signer_idx).to_string(),
                 );
                 return ProcessMessageResult::NotReady;
             }
@@ -194,7 +188,7 @@ where
                 self.common.logger,
                 "Ignoring a redundant message for stage {}",
                 self;
-                "from_id" => self.common.validator_mapping.get_id(signer_idx).expect("Should map idx").to_string(),
+                "from_id" => self.common.validator_mapping.get_id(signer_idx).to_string(),
             );
             return ProcessMessageResult::NotReady;
         }
@@ -204,7 +198,7 @@ where
                 self.common.logger,
                 "Ignoring a message from non-participant for stage {}",
                 self;
-                "from_id" => self.common.validator_mapping.get_id(signer_idx).expect("Should map idx").to_string(),
+                "from_id" => self.common.validator_mapping.get_id(signer_idx).to_string(),
             );
             return ProcessMessageResult::NotReady;
         }
