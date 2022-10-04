@@ -12,6 +12,8 @@ use serde::{Deserialize, Serialize};
 use state_chain_runtime::AccountId;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
+use crate::p2p::socket::DO_NOT_LINGER;
+
 use super::{socket::OutgoingSocket, PeerInfo};
 
 /// Describes peer connection to start monitoring
@@ -172,7 +174,7 @@ pub fn start_monitoring_thread(
 
                         // Create a monitoring socket for the new peer
                         let monitor_socket = context.socket(zmq::PAIR).unwrap();
-                        monitor_socket.set_linger(0).unwrap();
+                        monitor_socket.set_linger(DO_NOT_LINGER).unwrap();
                         monitor_socket.connect(&endpoint).unwrap();
 
                         sockets_to_poll.push((monitor_socket, SocketType::PeerMonitor(account_id)));

@@ -19,6 +19,10 @@ const CONNECTION_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(15);
 /// How long to wait for a heartbeat response before timing out the
 /// connection
 const CONNECTION_HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(30);
+/// An argument to set_linger on a socket that, when set, ensures that
+/// we don't attempt to deliver pending messages before destorying the
+/// socket
+pub const DO_NOT_LINGER: i32 = 0;
 
 fn endpoint_from_peer_info(peer: &PeerInfo) -> String {
     format!("tcp://[{}]:{}", peer.ip, peer.port)
@@ -34,7 +38,7 @@ impl OutgoingSocket {
         let socket = context.socket(zmq::SocketType::DEALER).unwrap();
 
         // Discard any pending messages when disconnecting a socket
-        socket.set_linger(0).unwrap();
+        socket.set_linger(DO_NOT_LINGER).unwrap();
 
         socket.set_ipv6(true).unwrap();
         socket

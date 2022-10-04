@@ -6,6 +6,8 @@
 use std::collections::HashSet;
 use std::sync::{Arc, RwLock};
 
+use crate::p2p::socket::DO_NOT_LINGER;
+
 use super::{to_string, XPublicKey};
 
 /// These values are ZMQ convention
@@ -101,7 +103,7 @@ pub fn start_authentication_thread(
     let authenticator = Arc::new(Authenticator::new(logger));
 
     let zap_socket = context.socket(zmq::REP).unwrap();
-    zap_socket.set_linger(0).unwrap();
+    zap_socket.set_linger(DO_NOT_LINGER).unwrap();
 
     // ZMQ convention is for the authentication thread
     // to listen on this endpoint
