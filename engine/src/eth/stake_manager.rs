@@ -21,7 +21,7 @@ use async_trait::async_trait;
 use anyhow::{anyhow, Result};
 
 use super::{
-    event::Event, BlockWithBlockItems, DecodeLogClosure, EthContractWitnesser, EventParseError,
+    event::Event, BlockWithItems, DecodeLogClosure, EthContractWitnesser, EventParseError,
 };
 
 pub struct StakeManager {
@@ -93,7 +93,7 @@ impl EthContractWitnesser for StakeManager {
         &mut self,
         epoch: EpochIndex,
         _block_number: u64,
-        block: BlockWithBlockItems<Event<Self::EventParameters>>,
+        block: BlockWithItems<Event<Self::EventParameters>>,
         state_chain_client: Arc<StateChainClient<RpcClient>>,
         _eth_rpc: &EthRpcClient,
         logger: &slog::Logger,

@@ -22,7 +22,7 @@ use async_trait::async_trait;
 
 use super::DecodeLogClosure;
 use super::EthContractWitnesser;
-use super::{event::Event, BlockWithBlockItems};
+use super::{event::Event, BlockWithItems};
 
 pub struct KeyManager {
     pub deployed_address: H160,
@@ -207,7 +207,7 @@ impl EthContractWitnesser for KeyManager {
         &mut self,
         epoch_index: EpochIndex,
         block_number: u64,
-        block: BlockWithBlockItems<Event<Self::EventParameters>>,
+        block: BlockWithItems<Event<Self::EventParameters>>,
         state_chain_client: Arc<StateChainClient<RpcClient>>,
         eth_rpc: &EthRpcClient,
         logger: &slog::Logger,

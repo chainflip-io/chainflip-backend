@@ -314,7 +314,7 @@ impl fmt::Display for TransportProtocol {
 /// Ok if *all* the relevant items of that block processed successfully, Error if the request
 /// to retrieve the block items failed, or the processing failed.
 #[derive(Debug)]
-pub struct BlockWithProcessedBlockItems<BlockItem: Debug> {
+pub struct BlockWithProcessedItems<BlockItem: Debug> {
     pub block_number: u64,
     pub processed_block_items: Result<Vec<BlockItem>>,
 }
@@ -322,7 +322,7 @@ pub struct BlockWithProcessedBlockItems<BlockItem: Debug> {
 /// Just contains an empty vec if there are no events
 #[derive(Debug)]
 #[cfg_attr(test, derive(PartialEq, Eq))]
-pub struct BlockWithBlockItems<BlockItem: Debug> {
+pub struct BlockWithItems<BlockItem: Debug> {
     pub block_number: u64,
     pub block_items: Vec<BlockItem>,
 }
@@ -409,13 +409,7 @@ async fn block_events_stream_from_head_stream<BlockHeaderStream, EthRpc, EventPa
     eth_rpc: EthRpc,
     logger: slog::Logger,
 ) -> Result<
-    Pin<
-        Box<
-            dyn Stream<Item = BlockWithProcessedBlockItems<Event<EventParameters>>>
-                + Send
-                + 'static,
-        >,
-    >,
+    Pin<Box<dyn Stream<Item = BlockWithProcessedItems<Event<EventParameters>>> + Send + 'static>>,
 >
 where
     EventParameters: Debug + Send + Sync + 'static,
@@ -454,23 +448,21 @@ where
                     (block_number.as_u64(), result_logs)
                 }
             })
-            .map(
-                move |(block_number, result_logs)| BlockWithProcessedBlockItems {
-                    block_number,
-                    processed_block_items: result_logs.and_then(|logs| {
-                        logs.into_iter()
-                            .map(
-                                |unparsed_log| -> Result<Event<EventParameters>, anyhow::Error> {
-                                    Event::<EventParameters>::new_from_unparsed_logs(
-                                        &decode_log_fn,
-                                        unparsed_log,
-                                    )
-                                },
-                            )
-                            .collect::<Result<Vec<_>>>()
-                    }),
-                },
-            ),
+            .map(move |(block_number, result_logs)| BlockWithProcessedItems {
+                block_number,
+                processed_block_items: result_logs.and_then(|logs| {
+                    logs.into_iter()
+                        .map(
+                            |unparsed_log| -> Result<Event<EventParameters>, anyhow::Error> {
+                                Event::<EventParameters>::new_from_unparsed_logs(
+                                    &decode_log_fn,
+                                    unparsed_log,
+                                )
+                            },
+                        )
+                        .collect::<Result<Vec<_>>>()
+                }),
+            }),
     ))
 }
 
@@ -490,13 +482,7 @@ pub trait EthContractWitnesser {
         logger: &slog::Logger,
         // This stream must be Send, so it can be used by the spawn
     ) -> Result<
-        Pin<
-            Box<
-                dyn Stream<Item = BlockWithBlockItems<Event<Self::EventParameters>>>
-                    + Send
-                    + 'static,
-            >,
-        >,
+        Pin<Box<dyn Stream<Item = BlockWithItems<Event<Self::EventParameters>>> + Send + 'static>>,
     > {
         let deployed_address = self.get_contract_address();
         slog::info!(
@@ -548,7 +534,7 @@ pub trait EthContractWitnesser {
         &mut self,
         epoch: EpochIndex,
         block_number: u64,
-        block: BlockWithBlockItems<Event<Self::EventParameters>>,
+        block: BlockWithItems<Event<Self::EventParameters>>,
         state_chain_client: Arc<StateChainClient<RpcClient>>,
         eth_rpc: &EthRpcClient,
         logger: &slog::Logger,
