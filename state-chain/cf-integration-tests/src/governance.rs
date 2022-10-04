@@ -5,7 +5,7 @@ use pallet_transaction_payment::OnChargeTransaction;
 
 #[test]
 // Governance is allowed to make free calls to governance gated extrinsics.
-fn restriction_handling() {
+fn governance_members_pay_no_fees_for_governance_extrinsics() {
 	super::genesis::default().build().execute_with(|| {
 		let call: state_chain_runtime::Call = frame_system::Call::remark { remark: vec![] }.into();
 		let gov_call: state_chain_runtime::Call =
