@@ -3,8 +3,8 @@ pub use cf_chains::{
 	eth::api::{EthereumApi, EthereumReplayProtection},
 	ChainAbi, Ethereum,
 };
-use cf_primitives::EthAmount;
 pub use cf_primitives::{Asset, EthereumAddress, ExchangeRate};
+use cf_primitives::{EthAmount, EthereumSwapId};
 pub use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
 	Broadcaster, EthereumAssetsAddressProvider, ReplayProtectionProvider,
@@ -22,6 +22,7 @@ type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 type AccountId = u64;
 
+pub const ETHEREUM_FLIP_ADDRESS: EthereumAddress = [0x00; 20];
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
 	pub enum Test where
@@ -92,6 +93,7 @@ impl ReplayProtectionProvider<Ethereum> for Test {
 
 parameter_types! {
 	pub static LastEgressSent: Vec<(EthereumAddress, EthAmount, EthereumAddress)> = vec![];
+	pub static LastFetchesSent: Vec<(EthereumSwapId, EthereumAddress)> = vec![];
 }
 
 pub struct MockBroadcast;
@@ -101,15 +103,18 @@ impl Broadcaster<Ethereum> for MockBroadcast {
 	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) {
 		if let EthereumApi::AllBatch(cf_chains::eth::api::all_batch::AllBatch {
 			sig_data: _,
-			fetch_params: _,
-			transfer_params: param,
+			fetch_params: fetches,
+			transfer_params: transfers,
 		}) = api_call
 		{
 			LastEgressSent::set(
-				param
+				transfers
 					.into_iter()
-					.map(|param| (param.asset.into(), param.amount, param.to.into()))
+					.map(|transfer| (transfer.asset.into(), transfer.amount, transfer.to.into()))
 					.collect(),
+			);
+			LastFetchesSent::set(
+				fetches.into_iter().map(|fetch| (fetch.swap_id, fetch.asset.into())).collect(),
 			);
 		}
 	}
@@ -119,7 +124,7 @@ pub struct MockEthAssetAddressProvider;
 impl EthereumAssetsAddressProvider for MockEthAssetAddressProvider {
 	fn try_get_asset_address(asset: Asset) -> Option<EthereumAddress> {
 		match asset {
-			Asset::Flip => Some([0x00; 20]),
+			Asset::Flip => Some(ETHEREUM_FLIP_ADDRESS),
 			_ => None,
 		}
 	}

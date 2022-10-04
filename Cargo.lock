@@ -5300,6 +5300,7 @@ dependencies = [
 name = "pallet-cf-ingress"
 version = "0.1.0"
 dependencies = [
+ "cf-chains",
  "cf-primitives",
  "cf-traits",
  "frame-benchmarking",

@@ -14,8 +14,8 @@ use sp_std::collections::btree_set::BTreeSet;
 use cf_chains::{benchmarking_value::BenchmarkValue, ApiCall, ChainAbi, ChainCrypto};
 use cf_primitives::{
 	AccountRole, Asset, AssetAmount, AuthorityCount, CeremonyId, ChainflipAccountData,
-	ChainflipAccountState, EpochIndex, EthereumAddress, EthereumSwapId, ForeignChain,
-	ForeignChainAddress, ForeignChainAsset, IntentId,
+	ChainflipAccountState, EpochIndex, EthereumAddress, EthereumSwapId, ForeignChainAddress,
+	ForeignChainAsset, IntentId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -750,7 +750,12 @@ pub trait EthereumAssetsAddressProvider {
 /// API that Schedules funds to be fetched from an ingress address and transferred to the main vault
 /// account. It's caller's responsibility to ensure that the asset/address combination are
 /// valid.
-/// TODO: enforce this via the type system.
+///
+/// Schedule functions are chain specific, as each chain may require different data to do fetching.
 pub trait IngressFetchApi {
-	fn schedule_fetch(fetch_details: Vec<(ForeignChain, Asset, EthereumSwapId)>);
+	fn schedule_ethereum_fetch(fetch_details: Vec<(Asset, EthereumSwapId)>);
+}
+
+impl IngressFetchApi for () {
+	fn schedule_ethereum_fetch(_fetch_details: Vec<(Asset, EthereumSwapId)>) {}
 }

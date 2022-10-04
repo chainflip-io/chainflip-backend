@@ -97,11 +97,11 @@ pub mod pallet {
 		},
 		EgressBroadcasted {
 			foreign_asset: ForeignChainAsset,
-			batch_size: u32,
+			egress_batch_size: u32,
+			fetch_batch_size: u32,
 		},
-		EthereumIngressFetchScheduled {
-			asset: Asset,
-			swap_id: EthereumSwapId,
+		EthereumIngressFetchesScheduled {
+			fetches_added: u32,
 		},
 	}
 
@@ -195,8 +195,8 @@ impl<T: Config> Pallet<T> {
 		batch: EgressBatch<AssetAmount, ForeignChainAddress>,
 	) {
 		// Take the scheduled Egress calls to be sent out of storage.
-		let batch_size = batch.len() as u32;
-		if batch_size == 0 {
+		let egress_batch_size = batch.len() as u32;
+		if egress_batch_size == 0 {
 			return
 		}
 
@@ -206,15 +206,19 @@ impl<T: Config> Pallet<T> {
 			let asset_address = Self::get_asset_ethereum_address(foreign_asset.asset)
 				.expect("Asset is guaranteed to be supported.");
 
-			let egress_transaction = T::EthereumEgressTransaction::new_unsigned(
-				T::EthereumReplayProtection::replay_protection(),
+			let fetch_batch: Vec<FetchAssetParams<Ethereum>> =
 				EthereumScheduledIngressFetch::<T>::take(foreign_asset.asset)
 					.iter()
 					.map(|swap_id| FetchAssetParams {
 						swap_id: *swap_id,
 						asset: asset_address.into(),
 					})
-					.collect(),
+					.collect();
+			let fetch_batch_size = fetch_batch.len() as u32;
+
+			let egress_transaction = T::EthereumEgressTransaction::new_unsigned(
+				T::EthereumReplayProtection::replay_protection(),
+				fetch_batch,
 				batch
 					.iter()
 					.filter_map(|(amount, address)| match address {
@@ -228,7 +232,11 @@ impl<T: Config> Pallet<T> {
 					.collect(), // All outgoing asset info
 			);
 			T::EthereumBroadcaster::threshold_sign_and_broadcast(egress_transaction);
-			Self::deposit_event(Event::<T>::EgressBroadcasted { foreign_asset, batch_size });
+			Self::deposit_event(Event::<T>::EgressBroadcasted {
+				foreign_asset,
+				egress_batch_size,
+				fetch_batch_size,
+			});
 		}
 	}
 
@@ -278,13 +286,13 @@ impl<T: Config> EgressApi for Pallet<T> {
 }
 
 impl<T: Config> IngressFetchApi for Pallet<T> {
-	fn schedule_fetch(fetch_details: Vec<(ForeignChain, Asset, EthereumSwapId)>) {
-		for (chain, asset, swap_id) in fetch_details {
-			// Currently only Ethereum fetching is supported.
-			if chain == ForeignChain::Ethereum {
-				EthereumScheduledIngressFetch::<T>::append(&asset, swap_id);
-				Self::deposit_event(Event::<T>::EthereumIngressFetchScheduled { asset, swap_id });
-			}
+	fn schedule_ethereum_fetch(fetch_details: Vec<(Asset, EthereumSwapId)>) {
+		Self::deposit_event(Event::<T>::EthereumIngressFetchesScheduled {
+			fetches_added: fetch_details.len() as u32,
+		});
+
+		for (asset, swap_id) in fetch_details {
+			EthereumScheduledIngressFetch::<T>::append(&asset, swap_id);
 		}
 	}
 }
