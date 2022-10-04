@@ -59,7 +59,7 @@ where
     .await
     .expect(EVENT_STREAM_TIMEOUT_MESSAGE)
     .unwrap()
-    .map(|block| futures::stream::iter(block.events))
+    .map(|block| futures::stream::iter(block.block_items))
     .flatten()
     .take_until(tokio::time::sleep(std::time::Duration::from_millis(1000)))
     .collect::<Vec<_>>()

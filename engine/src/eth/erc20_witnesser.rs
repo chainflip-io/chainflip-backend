@@ -13,7 +13,7 @@ use web3::{
 use crate::state_chain_observer::client::{StateChainClient, StateChainRpcApi};
 
 use super::{
-    rpc::EthRpcApi, utils, BlockWithEvents, DecodeLogClosure, EthContractWitnesser,
+    event::Event, rpc::EthRpcApi, utils, BlockWithItems, DecodeLogClosure, EthContractWitnesser,
     SignatureAndEvent,
 };
 use pallet_cf_ingress::IngressWitness;
@@ -80,7 +80,7 @@ impl EthContractWitnesser for Erc20Witnesser {
         &mut self,
         epoch: EpochIndex,
         _block_number: u64,
-        block: BlockWithEvents<Self::EventParameters>,
+        block: BlockWithItems<Event<Self::EventParameters>>,
         state_chain_client: Arc<StateChainClient<RpcClient>>,
         _eth_rpc: &EthRpcClient,
         logger: &slog::Logger,
@@ -94,7 +94,7 @@ impl EthContractWitnesser for Erc20Witnesser {
         }
 
         let ingress_witnesses = block
-            .events
+            .block_items
             .into_iter()
             .filter_map(|event| match event.event_parameters {
                 Erc20Event::Transfer { to, value, from: _ }
