@@ -405,7 +405,7 @@ fn test_retirement() {
 		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
 
 		// Expect the account to be retired by default
-		assert!(Staking::is_retired(&ALICE).unwrap());
+		assert!(!ActiveBidder::<Test>::try_get(ALICE).expect("we know ALICE as a bidder"));
 
 		// Can't retire if retired
 		assert_noop!(Staking::retire_account(Origin::signed(ALICE)), <Error<Test>>::AlreadyRetired);

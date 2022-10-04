@@ -646,7 +646,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Add stake to an account, creating the account if it doesn't exist, an account is not
-	/// implicit a bidder and needs to ge activated manually.
+	/// an implicit bidder and needs to be activated manually.
 	fn stake_account(account_id: &AccountId<T>, amount: T::Balance) -> T::Balance {
 		if !frame_system::Pallet::<T>::account_exists(account_id) {
 			// Creates an account
@@ -696,12 +696,6 @@ impl<T: Config> Pallet<T> {
 				None => Err(Error::UnknownAccount),
 			}
 		})
-	}
-
-	/// Checks if an account has signalled their intention to retire. If the account
-	/// has never staked any tokens, returns [Error::UnknownAccount].
-	pub fn is_retired(account: &AccountId<T>) -> Result<bool, Error<T>> {
-		Ok(!ActiveBidder::<T>::try_get(account).map_err(|_| Error::UnknownAccount)?)
 	}
 
 	/// Registers the expiry time for an account's pending claim. At the provided time, any pending
