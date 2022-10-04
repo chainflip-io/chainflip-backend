@@ -23,7 +23,7 @@ serde = {optional = true, version = '1.0.126', features = ['derive']}
 log = { version = '0.4.16', default-features = false }
 
 # Latest checked out version of polkadot
-# polkadot-runtime = {path = "../../polkadot-0.9.24/runtime/polkadot"}
+# polkadot-runtime = {path = "../../polkadot-0.9.29-minimal/runtime/polkadot"}
 
 # Substrate packages
 [dependencies.codec]
