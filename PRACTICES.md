@@ -70,13 +70,13 @@ A set of practices we follow within the backend repo at Chainflip.
 We use a variation on conventional commits to keep our commits clear for reviewers and to encourage meaningful commits.
 
 `feature/feat`: Functionality has been extended in some way.
-`fix`: The code has been changed to fix a bug
-`refactor`: The code has been changed but the changes do not effect the behaviour.
+`fix`: The code has been changed to fix a bug.
+`refactor`: The code has been changed but the changes do not affect the behaviour.
 `test`: Test code has been added or changed (though tests will often/usually be included as part of a `feat` or `fix` commit).
 `chore`: Code has been moved, dead code removed, file renamed, merging imports, function name typos, changing module structure, bumping dependency versions etc. There shouldn't be any code changes in a `chore` commit.
 `doc`: Comments, READMEs and any other form of documentation e.g. diagrams have been changed.
 
-The order of prececedece is as listed. So if a commit includes a feature and test changes you'd use feature.
+The order of prececedece is as listed. So if a commit includes a feature and test changes you'd use `feature`.
 
 ## Code
 
