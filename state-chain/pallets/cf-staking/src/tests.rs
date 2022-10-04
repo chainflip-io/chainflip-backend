@@ -434,7 +434,7 @@ fn test_retirement() {
 		);
 
 		assert_ok!(Staking::retire_account(Origin::signed(ALICE)));
-		assert!(AccountRetired::<Test>::get(ALICE));
+		assert!(!ActiveBidder::<Test>::get(ALICE));
 	});
 }
 
