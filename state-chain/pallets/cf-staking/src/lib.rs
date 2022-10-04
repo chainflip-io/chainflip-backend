@@ -34,13 +34,20 @@ use cf_traits::SystemStateInfo;
 use sp_runtime::traits::{AtLeast32BitUnsigned, CheckedSub, Zero};
 
 use frame_support::pallet_prelude::Weight;
+
+/// This address is used by the Ethereum contracts to indicate that no withdrawal address was
+/// specified when staking.
+///
+/// Normally, this means that the staker staked via the 'normal' staking contract flow. The presence
+/// of any other address indicates that the funds were staked from the *vesting* contract and can
+/// only be withdrawn to the specified address.
 pub const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
 
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
 	use cf_chains::{ApiCall, Ethereum};
-	use frame_support::pallet_prelude::*;
+	use frame_support::{pallet_prelude::*, Parameter};
 	use frame_system::pallet_prelude::*;
 
 	pub type AccountId<T> = <T as frame_system::Config>::AccountId;
@@ -54,6 +61,18 @@ pub mod pallet {
 	pub type Retired = bool;
 
 	pub type EthTransactionHash = [u8; 32];
+
+	#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+	pub enum ClaimAmount<T: Parameter> {
+		Max,
+		Exact(T),
+	}
+
+	impl<T: Parameter> From<T> for ClaimAmount<T> {
+		fn from(t: T) -> Self {
+			Self::Exact(t)
+		}
+	}
 
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
@@ -274,8 +293,6 @@ pub mod pallet {
 
 		/// Get FLIP that is held for me by the system, signed by my authority key.
 		///
-		/// If amount of None is provided it will claim all claimable funds.
-		///
 		/// On success, the implementation of [ThresholdSigner] should emit an event. The attached
 		/// claim request needs to be signed by a threshold of authorities in order to produce valid
 		/// data that can be submitted to the StakeManager Smart Contract.
@@ -297,16 +314,18 @@ pub mod pallet {
 		///
 		/// - [ThresholdSigner]
 		/// - [StakeTransfer]
-		#[pallet::weight({ if amount.is_some() { T::WeightInfo::claim() } else { T::WeightInfo::claim_all() }})]
+		#[pallet::weight({ if matches!(amount, ClaimAmount::Exact(_)) { T::WeightInfo::claim() } else { T::WeightInfo::claim_all() }})]
 		pub fn claim(
 			origin: OriginFor<T>,
-			amount: Option<FlipBalance<T>>,
+			amount: ClaimAmount<FlipBalance<T>>,
 			address: EthereumAddress,
 		) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
 
-			// claim all if no amount provided
-			let amount = amount.unwrap_or_else(|| T::Flip::claimable_balance(&account_id));
+			let amount = match amount {
+				ClaimAmount::Max => T::Flip::claimable_balance(&account_id),
+				ClaimAmount::Exact(amount) => amount,
+			};
 
 			// Ensure we are claiming something
 			ensure!(amount > Zero::zero(), Error::<T>::InvalidClaim);
@@ -470,11 +489,12 @@ pub mod pallet {
 					// This should never happen unless there is a mistake in the implementation.
 					log::error!("Callback triggered with no signature. Signature status {:?}", r);
 					Error::<T>::SignatureNotReady
-				})?;
+				})?
+				.expect("Assumption: post_claim_signature only triggered when the signature ceremony results in success");
 
 			let claim_details_signed = PendingClaims::<T>::get(&account_id)
 				.ok_or(Error::<T>::NoPendingClaim)?
-				.signed(&signature.expect("signature can not be unavailable"));
+				.signed(&signature);
 
 			PendingClaims::<T>::insert(&account_id, &claim_details_signed);
 			Self::deposit_event(Event::ClaimSignatureIssued(
@@ -617,7 +637,10 @@ impl<T: Config> Pallet<T> {
 		T::WeightInfo::expire_pending_claims_at(expiries_len)
 	}
 
-	/// Checks the withdrawal address requirements and saves the address if provided
+	/// Checks the withdrawal address requirements and saves the address if provided.
+	///
+	/// If a non-zero address was provided, then it *must* match the address that was
+	/// provided on the initial account-creating staking event.
 	fn check_withdrawal_address(
 		account_id: &AccountId<T>,
 		withdrawal_address: EthereumAddress,
@@ -627,9 +650,19 @@ impl<T: Config> Pallet<T> {
 			return Ok(())
 		}
 		if frame_system::Pallet::<T>::account_exists(account_id) {
+			// If we reach here, the account already exists, so any provided withdrawal address
+			// *must* match the one that was added on the initial account-creating staking event,
+			// otherwise this staking event cannot be processed.
 			match WithdrawalAddresses::<T>::get(&account_id) {
 				Some(existing) if withdrawal_address == existing => Ok(()),
 				_ => {
+					// The staking event was invalid - this should only happen if someone bypasses
+					// our standard ethereum contract interfaces. We don't automatically refund here
+					// otherwise it's attack vector (refunds require a broadcast, which is
+					// expensive).
+					//
+					// Instead, we keep a record of the failed attempt so that we can potentially
+					// investigate and / or consider refunding automatically or via governance.
 					FailedStakeAttempts::<T>::append(&account_id, (withdrawal_address, amount));
 					Self::deposit_event(Event::FailedStakeAttempt(
 						account_id.clone(),
@@ -640,6 +673,8 @@ impl<T: Config> Pallet<T> {
 				},
 			}
 		} else {
+			// This is the initial account-creating staking event. We store the withdrawal address
+			// for this account.
 			WithdrawalAddresses::<T>::insert(account_id, withdrawal_address);
 			Ok(())
 		}
