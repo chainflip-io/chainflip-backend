@@ -1,5 +1,5 @@
 use crate::{
-	mock::*, pallet, AccountRetired, ClaimAmount, ClaimExpiries, Error, EthereumAddress,
+	mock::*, pallet, ActiveBidder, ClaimAmount, ClaimExpiries, Error, EthereumAddress,
 	FailedStakeAttempts, Pallet, PendingClaims, WithdrawalAddresses,
 };
 use cf_chains::RegisterClaim;
@@ -24,9 +24,9 @@ const TX_HASH: pallet::EthTransactionHash = [211u8; 32];
 fn genesis_nodes_are_activated_by_default() {
 	new_test_ext().execute_with(|| {
 		// Expect the genesis node to be activated.
-		assert!(AccountRetired::<Test>::contains_key(&CHARLIE));
+		assert!(ActiveBidder::<Test>::contains_key(&CHARLIE));
 		// Expect a not genesis node not to be activated.
-		assert!(!AccountRetired::<Test>::contains_key(&ALICE));
+		assert!(!ActiveBidder::<Test>::contains_key(&ALICE));
 	});
 }
 
@@ -407,7 +407,7 @@ fn test_retirement() {
 		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
 
 		// Expect the account to be retired by default
-		assert!(Staking::is_retired(&ALICE).unwrap());
+		assert!(!ActiveBidder::<Test>::try_get(ALICE).expect("we know ALICE as a bidder"));
 
 		// Can't retire if retired
 		assert_noop!(Staking::retire_account(Origin::signed(ALICE)), <Error<Test>>::AlreadyRetired);
@@ -434,7 +434,7 @@ fn test_retirement() {
 		);
 
 		assert_ok!(Staking::retire_account(Origin::signed(ALICE)));
-		assert!(AccountRetired::<Test>::get(ALICE));
+		assert!(!ActiveBidder::<Test>::get(ALICE));
 	});
 }
 
