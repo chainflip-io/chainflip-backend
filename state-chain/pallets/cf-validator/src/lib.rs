@@ -194,8 +194,12 @@ pub mod pallet {
 		RotationPhaseUpdated { new_phase: RotationPhase<T> },
 		/// An emergency rotation has been initiated.
 		EmergencyRotationInitiated,
-		/// The CFE version has been updated \[Validator, Old Version, New Version]
-		CFEVersionUpdated(ValidatorIdOf<T>, Version, Version),
+		/// The CFE version has been updated.
+		CFEVersionUpdated {
+			account_id: ValidatorIdOf<T>,
+			old_version: Version,
+			new_version: Version,
+		},
 		/// An authority has register her current PeerId \[account_id, public_key, port,
 		/// ip_address\]
 		PeerIdRegistered(T::AccountId, Ed25519PublicKey, Port, Ipv6Addr),
@@ -514,19 +518,22 @@ pub mod pallet {
 		///
 		/// - None
 		#[pallet::weight(T::ValidatorWeightInfo::cfe_version())]
-		pub fn cfe_version(origin: OriginFor<T>, version: Version) -> DispatchResultWithPostInfo {
+		pub fn cfe_version(
+			origin: OriginFor<T>,
+			new_version: Version,
+		) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
 			let validator_id = <ValidatorIdOf<T> as IsType<
 				<T as frame_system::Config>::AccountId,
 			>>::from_ref(&account_id);
 			NodeCFEVersion::<T>::try_mutate(&validator_id, |current_version| {
-				if *current_version != version {
-					Self::deposit_event(Event::CFEVersionUpdated(
-						validator_id.clone(),
-						current_version.clone(),
-						version.clone(),
-					));
-					*current_version = version;
+				if *current_version != new_version {
+					Self::deposit_event(Event::CFEVersionUpdated {
+						account_id: validator_id.clone(),
+						old_version: current_version.clone(),
+						new_version: new_version.clone(),
+					});
+					*current_version = new_version;
 				}
 				Ok(().into())
 			})
