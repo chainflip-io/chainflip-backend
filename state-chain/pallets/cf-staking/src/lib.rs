@@ -38,9 +38,9 @@ use frame_support::pallet_prelude::Weight;
 /// This address is used by the Ethereum contracts to indicate that no withdrawal address was
 /// specified when staking.
 ///
-/// Normally, this means that the staker staked via the 'normal' staking contract. The presence of
-/// any other address indicates that the funds were staked from the *vesting* contract and can only
-/// be withdrawn to the specified address.
+/// Normally, this means that the staker staked via the 'normal' staking contract flow. The presence
+/// of any other address indicates that the funds were staked from the *vesting* contract and can
+/// only be withdrawn to the specified address.
 pub const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
 
 #[frame_support::pallet]
@@ -322,7 +322,6 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
 
-			// claim all if no amount provided
 			let amount = match amount {
 				ClaimAmount::Max => T::Flip::claimable_balance(&account_id),
 				ClaimAmount::Exact(amount) => amount,
@@ -652,12 +651,18 @@ impl<T: Config> Pallet<T> {
 		}
 		if frame_system::Pallet::<T>::account_exists(account_id) {
 			// If we reach here, the account already exists, so any provided withdrawal address
-			// *must* match the one that was added on the initial account-creating staking event.
+			// *must* match the one that was added on the initial account-creating staking event,
+			// otherwise this staking event cannot be processed.
 			match WithdrawalAddresses::<T>::get(&account_id) {
 				Some(existing) if withdrawal_address == existing => Ok(()),
 				_ => {
-					// Keep a record of the failed attempt so that we can potentially investigate
-					// and / or consider refunding automatically or via governance.
+					// The staking event was invalid - this should only happen if someone bypasses
+					// our standard ethereum contract interfaces. We don't automatically refund here
+					// otherwise it's attack vector (refunds require a broadcast, which is
+					// expensive).
+					//
+					// Instead, we keep a record of the failed attempt so that we can potentially
+					// investigate and / or consider refunding automatically or via governance.
 					FailedStakeAttempts::<T>::append(&account_id, (withdrawal_address, amount));
 					Self::deposit_event(Event::FailedStakeAttempt(
 						account_id.clone(),
@@ -668,7 +673,7 @@ impl<T: Config> Pallet<T> {
 				},
 			}
 		} else {
-			// This is the initial account-creating staking event. We store teh withdrawal address
+			// This is the initial account-creating staking event. We store the withdrawal address
 			// for this account.
 			WithdrawalAddresses::<T>::insert(account_id, withdrawal_address);
 			Ok(())
