@@ -406,7 +406,7 @@ jobs:
           background: true
           command: |
             IP_ADDRESS=$(curl -s ifconfig.me)
-            grep -rl NEXT_PUBLIC_EXPLORER_GRAPHQL_API_PLACEHOLDER engine/config/CI.toml | xargs sed -i -e "s,IP_ADDRESS,${IP_ADDRESS},g"
+            grep -rl IP_ADDRESS engine/config/CI.toml | xargs sed -i -e "s,IP_ADDRESS,${IP_ADDRESS},g"
             ./target/release/chainflip-engine --config-path engine/config/CI.toml
       - run:
           name: Check Engine Health
