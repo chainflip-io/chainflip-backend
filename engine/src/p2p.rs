@@ -452,6 +452,8 @@ impl P2PContext {
         let (incoming_message_sender, incoming_message_receiver) =
             tokio::sync::mpsc::unbounded_channel();
 
+        let logger = self.logger.clone();
+
         // This OS thread is for incoming messages
         // TODO: combine this with the authentication thread?
         std::thread::spawn(move || loop {
@@ -476,6 +478,12 @@ impl P2PContext {
                 incoming_message_sender
                     .send((pubkey, msg.to_vec()))
                     .unwrap();
+            } else {
+                slog::warn!(
+                    logger,
+                    "Ignoring a multipart message with unexpected number of parts ({})",
+                    parts.len()
+                )
             }
         });
 
