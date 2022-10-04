@@ -11,10 +11,12 @@ mod mock;
 mod tests;
 mod weights;
 
-use cf_chains::{AllBatch, Ethereum, FetchAssetParams, TransferAssetParams};
+use cf_chains::{
+	eth::ingress_address::get_salt, AllBatch, Ethereum, FetchAssetParams, TransferAssetParams,
+};
 use cf_primitives::{
-	Asset, AssetAmount, EgressBatch, EthereumAddress, EthereumSwapId, ForeignChain,
-	ForeignChainAddress, ForeignChainAsset, ETHEREUM_ETH_ADDRESS,
+	Asset, AssetAmount, EgressBatch, EthereumAddress, FetchParameter, ForeignChain,
+	ForeignChainAddress, ForeignChainAsset, IntentId, ETHEREUM_ETH_ADDRESS,
 };
 use cf_traits::{
 	Broadcaster, EgressApi, EthereumAssetsAddressProvider, IngressFetchApi,
@@ -76,7 +78,7 @@ pub mod pallet {
 	/// Scheduled fetch requests for the Ethereum chain.
 	#[pallet::storage]
 	pub(crate) type EthereumScheduledIngressFetch<T: Config> =
-		StorageMap<_, Twox64Concat, Asset, Vec<EthereumSwapId>, ValueQuery>;
+		StorageMap<_, Twox64Concat, Asset, Vec<IntentId>, ValueQuery>;
 
 	/// Stores the list of assets that are not allowed to be egressed.
 	#[pallet::storage]
@@ -209,8 +211,8 @@ impl<T: Config> Pallet<T> {
 			let fetch_batch: Vec<FetchAssetParams<Ethereum>> =
 				EthereumScheduledIngressFetch::<T>::take(foreign_asset.asset)
 					.iter()
-					.map(|swap_id| FetchAssetParams {
-						swap_id: *swap_id,
+					.map(|&intent_id| FetchAssetParams {
+						swap_id: get_salt(intent_id),
 						asset: asset_address.into(),
 					})
 					.collect();
@@ -286,13 +288,14 @@ impl<T: Config> EgressApi for Pallet<T> {
 }
 
 impl<T: Config> IngressFetchApi for Pallet<T> {
-	fn schedule_ethereum_fetch(fetch_details: Vec<(Asset, EthereumSwapId)>) {
+	fn schedule_ingress_fetch(fetch_details: Vec<(Asset, FetchParameter)>) {
 		Self::deposit_event(Event::<T>::EthereumIngressFetchesScheduled {
 			fetches_added: fetch_details.len() as u32,
 		});
 
-		for (asset, swap_id) in fetch_details {
-			EthereumScheduledIngressFetch::<T>::append(&asset, swap_id);
+		for (asset, fetch_param) in fetch_details {
+			let FetchParameter::Eth(intent_id) = fetch_param;
+			EthereumScheduledIngressFetch::<T>::append(&asset, intent_id);
 		}
 	}
 }

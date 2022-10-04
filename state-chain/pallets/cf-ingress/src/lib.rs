@@ -6,9 +6,9 @@
 // This way intents and intent ids align per chain, which makes sense given they act as an index to
 // the respective address generation function.
 
-use cf_chains::eth::ingress_address::get_salt;
 use cf_primitives::{
-	Asset, AssetAmount, ForeignChain, ForeignChainAddress, ForeignChainAsset, IntentId,
+	Asset, AssetAmount, FetchParameter, ForeignChain, ForeignChainAddress, ForeignChainAsset,
+	IntentId,
 };
 use cf_traits::{liquidity::LpProvisioningApi, AddressDerivationApi, IngressApi, IngressFetchApi};
 
@@ -190,9 +190,9 @@ impl<T: Config> IngressApi for Pallet<T> {
 
 		// Register the fetch intent for ethereum ingress
 		if ingress_asset.chain == ForeignChain::Ethereum {
-			T::IngressFetchApi::schedule_ethereum_fetch(vec![(
+			T::IngressFetchApi::schedule_ingress_fetch(vec![(
 				ingress_asset.asset,
-				get_salt(intent_id),
+				FetchParameter::Eth(intent_id),
 			)]);
 		}
 
@@ -221,9 +221,9 @@ impl<T: Config> IngressApi for Pallet<T> {
 
 		// Register the fetch intent for ethereum ingress
 		if ingress_asset.chain == ForeignChain::Ethereum {
-			T::IngressFetchApi::schedule_ethereum_fetch(vec![(
+			T::IngressFetchApi::schedule_ingress_fetch(vec![(
 				ingress_asset.asset,
-				get_salt(intent_id),
+				FetchParameter::Eth(intent_id),
 			)]);
 		}
 
