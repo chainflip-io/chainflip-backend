@@ -386,7 +386,7 @@ jobs:
       - run:
           name: Start Node
           background: true
-          command: ./target/release/chainflip-node --chain cf-dev --node-key-file=node_key_file --ip_address=$(curl ifconfig.me) --port=8078
+          command: ./target/release/chainflip-node --chain cf-dev --node-key-file=node_key_file -- --ip_address=$(curl ifconfig.me) --port=8078
       - run:
           name: Check Node Health
           command: >
