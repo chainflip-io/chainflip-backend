@@ -81,7 +81,7 @@ pub mod pallet {
 	/// Stores the list of assets that are not allowed to be egressed.
 	#[pallet::storage]
 	pub(crate) type DisabledEgressAssets<T: Config> =
-		StorageMap<_, Twox64Concat, ForeignChainAsset, (), OptionQuery>;
+		StorageMap<_, Twox64Concat, ForeignChainAsset, ()>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -120,7 +120,7 @@ pub mod pallet {
 			let mut assets_to_send = vec![];
 
 			ScheduledEgress::<T>::iter().for_each(|(asset, batch)| {
-				if DisabledEgressAssets::<T>::get(asset).is_none() {
+				if DisabledEgressAssets::<T>::contains_key(asset) {
 					let new_egress_batch_size =
 						egress_batch_size.saturating_add(batch.len() as u32);
 					let new_fetch_batch_size = fetch_batch_size.saturating_add(
