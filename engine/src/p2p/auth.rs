@@ -1,4 +1,4 @@
-//! Implements ZAP (ZeroMQ Authentication Protocol server).
+//! Implements ZAP (ZeroMQ Authentication Protocol) handler.
 //! For details, see https://rfc.zeromq.org/spec/27.
 //! To use, create one Authenticator instance, and call
 //! run on a separate thread.
@@ -102,11 +102,13 @@ pub fn start_authentication_thread(
 ) -> Arc<Authenticator> {
     let authenticator = Arc::new(Authenticator::new(logger));
 
+    // Note ZMQ implements the REQ side of this socket
+    // internally.
     let zap_socket = context.socket(zmq::REP).unwrap();
     zap_socket.set_linger(DO_NOT_LINGER).unwrap();
 
-    // ZMQ convention is for the authentication thread
-    // to listen on this endpoint
+    // Zap specification requires the authentication thread
+    // to listen on this endpoint.
     const AUTH_ENDPOINT: &str = "inproc://zeromq.zap.01";
     zap_socket.bind(AUTH_ENDPOINT).unwrap();
 
