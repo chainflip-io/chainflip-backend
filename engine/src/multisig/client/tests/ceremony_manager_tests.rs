@@ -6,8 +6,11 @@ use crate::{
     logging::test_utils::new_test_logger,
     multisig::{
         client::{
-            self, ceremony_manager::CeremonyManager, common::SigningFailureReason,
-            keygen::KeygenData, CeremonyFailureReason, MultisigData,
+            self,
+            ceremony_manager::CeremonyManager,
+            common::{SigningFailureReason, SigningStageName},
+            keygen::KeygenData,
+            CeremonyFailureReason, MultisigData,
         },
         crypto::{CryptoScheme, Rng},
         eth::EthSigning,
@@ -32,7 +35,7 @@ async fn run_on_request_to_sign<C: CryptoScheme>(
         <C as CryptoScheme>::Signature,
         (
             BTreeSet<AccountId32>,
-            CeremonyFailureReason<SigningFailureReason>,
+            CeremonyFailureReason<SigningFailureReason, SigningStageName>,
         ),
     >,
 > {

@@ -13,6 +13,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::{collections::BTreeSet, sync::Arc, time::Duration};
 use tokio::sync::{broadcast, mpsc::UnboundedSender, watch};
 
+use crate::multisig::client::KeygenStageName;
 use crate::{
     eth::{rpc::EthRpcApi, EpochStart, EthBroadcaster},
     logging::COMPONENT_KEY,
@@ -54,8 +55,11 @@ async fn handle_keygen_request<'a, MultisigClient, RpcClient>(
                                 )
                             })
                             .map_err(|(bad_account_ids, reason)| {
-                                if let CeremonyFailureReason::<KeygenFailureReason>::Other(
-                                    KeygenFailureReason::KeyNotCompatible,
+                                if let CeremonyFailureReason::<
+                                    KeygenFailureReason,
+                                    KeygenStageName,
+                                >::Other(
+                                    KeygenFailureReason::KeyNotCompatible
                                 ) = reason
                                 {
                                     KeygenError::Incompatible

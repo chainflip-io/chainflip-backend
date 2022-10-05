@@ -55,7 +55,7 @@ pub struct KeygenResultInfo<P: ECPoint> {
 }
 
 #[derive(Error, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum CeremonyFailureReason<T> {
+pub enum CeremonyFailureReason<T, CeremonyStageName> {
     #[error("Expired before being authorized")]
     ExpiredBeforeBeingAuthorized,
     #[error("Invalid Participants")]
@@ -102,8 +102,7 @@ pub enum BroadcastFailureReason {
 }
 
 #[derive(Error, Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
-pub enum CeremonyStageName {
-    // Keygen
+pub enum KeygenStageName {
     #[error("Hash Commitments")]
     HashCommitments1,
     #[error("Verify Hash Commitments")]
@@ -122,8 +121,10 @@ pub enum CeremonyStageName {
     BlameResponsesStage8,
     #[error("Verify Blame Responses")]
     VerifyBlameResponsesBroadcastStage9,
+}
 
-    // Signing
+#[derive(Error, Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+pub enum SigningStageName {
     #[error("Commitments")]
     AwaitCommitments1,
     #[error("Verify Commitments")]
@@ -139,7 +140,7 @@ const KEYGEN_CEREMONY_FAILED_PREFIX: &str = "Keygen ceremony failed";
 const REQUEST_TO_SIGN_IGNORED_PREFIX: &str = "Signing request ignored";
 const KEYGEN_REQUEST_IGNORED_PREFIX: &str = "Keygen request ignored";
 
-impl CeremonyFailureReason<SigningFailureReason> {
+impl CeremonyFailureReason<SigningFailureReason, SigningStageName> {
     pub fn log(&self, reported_parties: &BTreeSet<AccountId>, logger: &slog::Logger) {
         let reported_parties = format_iterator(reported_parties).to_string();
         match self {
@@ -165,7 +166,7 @@ impl CeremonyFailureReason<SigningFailureReason> {
     }
 }
 
-impl CeremonyFailureReason<KeygenFailureReason> {
+impl CeremonyFailureReason<KeygenFailureReason, KeygenStageName> {
     pub fn log(&self, reported_parties: &BTreeSet<AccountId>, logger: &slog::Logger) {
         let reported_parties = format_iterator(reported_parties).to_string();
         match self {

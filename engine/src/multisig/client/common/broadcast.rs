@@ -5,16 +5,13 @@ use cf_primitives::AuthorityCount;
 
 use crate::{
     multisig::{
-        client::{MultisigData, MultisigMessage},
-        crypto::ECPoint,
+        client::{ceremony_manager::CeremonyTrait, MultisigMessage},
+        crypto::CryptoScheme,
     },
     multisig_p2p::OutgoingMultisigStageMessages,
 };
 
-use super::{
-    ceremony_stage::{CeremonyCommon, CeremonyStage, ProcessMessageResult, StageResult},
-    CeremonyStageName,
-};
+use super::ceremony_stage::{CeremonyCommon, CeremonyStage, ProcessMessageResult, StageResult};
 
 pub use super::broadcast_verification::verify_broadcasts;
 
@@ -30,13 +27,13 @@ pub enum DataToSend<T> {
 /// Abstracts away computations performed during every "broadcast" stage
 /// of a ceremony
 #[async_trait]
-pub trait BroadcastStageProcessor<Data, Result, FailureReason>: Display {
+pub trait BroadcastStageProcessor<C: CeremonyTrait>: Display {
     /// The specific variant of D shared between parties
     /// during this stage
-    type Message: Clone + Into<Data> + TryFrom<Data>;
+    type Message: Clone + Into<C::Data> + TryFrom<C::Data, Error = C::Data> + Send;
 
     /// Unique stage name used for logging and testing.
-    const NAME: CeremonyStageName;
+    const NAME: C::CeremonyStageName;
 
     /// Init the stage, returning the data to broadcast
     fn init(&mut self) -> DataToSend<Self::Message>;
@@ -47,15 +44,14 @@ pub trait BroadcastStageProcessor<Data, Result, FailureReason>: Display {
     async fn process(
         self,
         messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
-    ) -> StageResult<Data, Result, FailureReason>;
+    ) -> StageResult<C>;
 }
 
 /// Responsible for broadcasting/collecting of stage data,
 /// delegating the actual processing to `StageProcessor`
-pub struct BroadcastStage<Data, Result, Stage, Point, FailureReason>
+pub struct BroadcastStage<C: CeremonyTrait, Stage>
 where
-    Stage: BroadcastStageProcessor<Data, Result, FailureReason>,
-    Point: ECPoint,
+    Stage: BroadcastStageProcessor<C>,
 {
     common: CeremonyCommon,
     /// Messages collected so far
@@ -63,15 +59,12 @@ where
     /// Determines the actual computations before/after
     /// the data is collected
     processor: Stage,
-    _phantom: PhantomData<Point>,
+    _phantom: PhantomData<<C::Crypto as CryptoScheme>::Point>,
 }
 
-impl<Data, Result, Stage, Point, FailureReason>
-    BroadcastStage<Data, Result, Stage, Point, FailureReason>
+impl<C: CeremonyTrait, Stage> BroadcastStage<C, Stage>
 where
-    Data: Clone,
-    Point: ECPoint,
-    Stage: BroadcastStageProcessor<Data, Result, FailureReason>,
+    Stage: BroadcastStageProcessor<C>,
 {
     pub fn new(processor: Stage, common: CeremonyCommon) -> Self {
         BroadcastStage {
@@ -83,12 +76,10 @@ where
     }
 }
 
-impl<Data, Result, Stage, Point, FailureReason> Display
-    for BroadcastStage<Data, Result, Stage, Point, FailureReason>
+impl<C: CeremonyTrait, Stage> Display for BroadcastStage<C, Stage>
 where
-    Stage: BroadcastStageProcessor<Data, Result, FailureReason>,
-    Point: ECPoint,
-    BroadcastStage<Data, Result, Stage, Point, FailureReason>: CeremonyStage,
+    Stage: BroadcastStageProcessor<C>,
+    BroadcastStage<C, Stage>: CeremonyStage<C>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "BroadcastStage({})", &self.get_stage_name())
@@ -96,21 +87,10 @@ where
 }
 
 #[async_trait]
-impl<Point, Data, Result, Stage, FailureReason, TryFromError> CeremonyStage
-    for BroadcastStage<Data, Result, Stage, Point, FailureReason>
+impl<C: CeremonyTrait, Stage> CeremonyStage<C> for BroadcastStage<C, Stage>
 where
-    Point: ECPoint,
-    Data: Clone + Display + Into<MultisigData<Point>>,
-    Result: Clone,
-    Stage: BroadcastStageProcessor<Data, Result, FailureReason> + Send,
-    <Stage as BroadcastStageProcessor<Data, Result, FailureReason>>::Message:
-        TryFrom<Data, Error = TryFromError> + Send,
-    TryFromError: Display,
+    Stage: BroadcastStageProcessor<C> + Send,
 {
-    type Message = Data;
-    type Result = Result;
-    type FailureReason = FailureReason;
-
     fn init(&mut self) {
         let common = &self.common;
 
@@ -124,7 +104,7 @@ where
 
         let (own_message, outgoing_messages) = match self.processor.init() {
             DataToSend::Broadcast(stage_data) => {
-                let ceremony_data: Data = stage_data.clone().into();
+                let ceremony_data: C::Data = stage_data.clone().into();
                 (
                     stage_data,
                     OutgoingMultisigStageMessages::Broadcast(
@@ -150,7 +130,7 @@ where
                     messages
                         .into_iter()
                         .map(|(idx, stage_data)| {
-                            let ceremony_data: Data = stage_data.into();
+                            let ceremony_data: C::Data = stage_data.into();
                             (
                                 idx_to_id(&idx),
                                 bincode::serialize(&MultisigMessage {
@@ -174,7 +154,7 @@ where
             .expect("Could not send p2p message.");
     }
 
-    fn process_message(&mut self, signer_idx: AuthorityCount, m: Data) -> ProcessMessageResult {
+    fn process_message(&mut self, signer_idx: AuthorityCount, m: C::Data) -> ProcessMessageResult {
         let m: Stage::Message = match m.try_into() {
             Ok(m) => m,
             Err(incorrect_type) => {
@@ -218,7 +198,7 @@ where
         }
     }
 
-    async fn finalize(mut self: Box<Self>) -> StageResult<Data, Result, FailureReason> {
+    async fn finalize(mut self: Box<Self>) -> StageResult<C> {
         // Because we might want to finalize the stage before
         // all data has been received (e.g. due to a timeout),
         // we insert None for any missing data
@@ -249,8 +229,8 @@ where
         awaited
     }
 
-    fn get_stage_name(&self) -> CeremonyStageName {
-        <Stage as BroadcastStageProcessor<Data, Result, FailureReason>>::NAME
+    fn get_stage_name(&self) -> C::CeremonyStageName {
+        <Stage as BroadcastStageProcessor<C>>::NAME
     }
 
     fn ceremony_common(&self) -> &CeremonyCommon {

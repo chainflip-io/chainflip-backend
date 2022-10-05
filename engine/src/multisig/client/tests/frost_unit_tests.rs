@@ -7,7 +7,7 @@ use rand_legacy::SeedableRng;
 use crate::multisig::{
     client::{
         common::{
-            BroadcastFailureReason, CeremonyFailureReason, CeremonyStageName, SigningFailureReason,
+            BroadcastFailureReason, CeremonyFailureReason, SigningFailureReason, SigningStageName,
         },
         keygen::generate_key_data,
         signing::frost,
@@ -74,7 +74,7 @@ async fn should_report_on_inconsistent_broadcast_comm1() {
             &[bad_account_id],
             CeremonyFailureReason::BroadcastFailure(
                 BroadcastFailureReason::Inconsistency,
-                CeremonyStageName::VerifyCommitmentsBroadcast2,
+                SigningStageName::VerifyCommitmentsBroadcast2,
             ),
         )
         .await;
@@ -103,7 +103,7 @@ async fn should_report_on_inconsistent_broadcast_local_sig3() {
             &[bad_account_id],
             CeremonyFailureReason::BroadcastFailure(
                 BroadcastFailureReason::Inconsistency,
-                CeremonyStageName::VerifyLocalSigsBroadcastStage4,
+                SigningStageName::VerifyLocalSigsBroadcastStage4,
             ),
         )
         .await;
@@ -304,7 +304,7 @@ mod timeout {
                     &[non_sending_party_id_1],
                     CeremonyFailureReason::BroadcastFailure(
                         BroadcastFailureReason::InsufficientMessages,
-                        CeremonyStageName::VerifyCommitmentsBroadcast2,
+                        SigningStageName::VerifyCommitmentsBroadcast2,
                     ),
                 )
                 .await
@@ -341,7 +341,7 @@ mod timeout {
                     &[non_sending_party_id_1],
                     CeremonyFailureReason::BroadcastFailure(
                         BroadcastFailureReason::InsufficientMessages,
-                        CeremonyStageName::VerifyLocalSigsBroadcastStage4,
+                        SigningStageName::VerifyLocalSigsBroadcastStage4,
                     ),
                 )
                 .await

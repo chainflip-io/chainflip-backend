@@ -147,7 +147,7 @@ fn gen_stage_1_signing_state(
         logger: logger.clone(),
     };
 
-    let processor = AwaitCommitments1::<EthSigning>::new(
+    let processor = AwaitCommitments1::<Point>::new(
         common.clone(),
         SigningStateCommonInfo {
             data: MESSAGE_HASH.clone(),

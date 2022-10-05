@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
 
 use crate::multisig::{
-    client::common::{BroadcastVerificationMessage, CeremonyStageName, PreProcessStageDataCheck},
+    client::common::{BroadcastVerificationMessage, PreProcessStageDataCheck, SigningStageName},
     crypto::{CryptoScheme, ECPoint, ECScalar, KeyShare, Rng},
 };
 
@@ -106,7 +106,7 @@ impl<P: ECPoint> Display for SigningData<P> {
     }
 }
 
-impl<P: ECPoint> PreProcessStageDataCheck for SigningData<P> {
+impl<P: ECPoint> PreProcessStageDataCheck<SigningStageName> for SigningData<P> {
     /// Check that the number of elements and indexes in the data is correct
     fn data_size_is_valid(&self, num_of_parties: AuthorityCount) -> bool {
         match self {
@@ -127,22 +127,21 @@ impl<P: ECPoint> PreProcessStageDataCheck for SigningData<P> {
     }
 
     /// Returns true if this message should be delayed for the given stage
-    fn should_delay(stage_name: CeremonyStageName, message: &Self) -> bool {
+    fn should_delay(stage_name: SigningStageName, message: &Self) -> bool {
         match stage_name {
-            CeremonyStageName::AwaitCommitments1 => {
+            SigningStageName::AwaitCommitments1 => {
                 matches!(message, SigningData::BroadcastVerificationStage2(_))
             }
-            CeremonyStageName::VerifyCommitmentsBroadcast2 => {
+            SigningStageName::VerifyCommitmentsBroadcast2 => {
                 matches!(message, SigningData::LocalSigStage3(_))
             }
-            CeremonyStageName::LocalSigStage3 => {
+            SigningStageName::LocalSigStage3 => {
                 matches!(message, SigningData::VerifyLocalSigsStage4(_))
             }
-            CeremonyStageName::VerifyLocalSigsBroadcastStage4 => {
+            SigningStageName::VerifyLocalSigsBroadcastStage4 => {
                 // Last stage, nothing to delay
                 false
             }
-            _ => false,
         }
     }
 }
@@ -463,10 +462,10 @@ mod tests {
         let default_length = 1;
 
         let stage_name = [
-            CeremonyStageName::AwaitCommitments1,
-            CeremonyStageName::VerifyCommitmentsBroadcast2,
-            CeremonyStageName::LocalSigStage3,
-            CeremonyStageName::VerifyLocalSigsBroadcastStage4,
+            SigningStageName::AwaitCommitments1,
+            SigningStageName::VerifyCommitmentsBroadcast2,
+            SigningStageName::LocalSigStage3,
+            SigningStageName::VerifyLocalSigsBroadcastStage4,
         ];
         let stage_data = [
             gen_signing_data_stage1(),

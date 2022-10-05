@@ -31,7 +31,10 @@ type OptionalCeremonyReturn<Ceremony> = Option<
         <Ceremony as CeremonyTrait>::Output,
         (
             BTreeSet<AccountId>,
-            CeremonyFailureReason<<Ceremony as CeremonyTrait>::FailureReason>,
+            CeremonyFailureReason<
+                <Ceremony as CeremonyTrait>::FailureReason,
+                <Ceremony as CeremonyTrait>::CeremonyStageName,
+            >,
         ),
     >,
 >;
