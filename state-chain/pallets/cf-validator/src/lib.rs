@@ -526,7 +526,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			new_version: Version,
 		) -> DispatchResultWithPostInfo {
-			let account_id = ensure_validator(origin)?;
+			let account_id = T::AccountRoleRegistry::ensure_validator(origin)?;
 			let validator_id = <ValidatorIdOf<T> as IsType<
 				<T as frame_system::Config>::AccountId,
 			>>::from_ref(&account_id);

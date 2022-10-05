@@ -47,8 +47,8 @@ pub const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
 pub mod pallet {
 	use super::*;
 	use cf_chains::{ApiCall, Ethereum};
-	use frame_support::{pallet_prelude::*, Parameter};
 	use cf_traits::AccountRoleRegistry;
+	use frame_support::{pallet_prelude::*, Parameter};
 	use frame_system::pallet_prelude::*;
 
 	pub type AccountId<T> = <T as frame_system::Config>::AccountId;
