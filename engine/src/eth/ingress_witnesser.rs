@@ -14,7 +14,7 @@ use crate::{
 };
 
 use super::{
-    block_head_range_stream, epoch_witnesser,
+    block_head_stream_from, epoch_witnesser,
     rpc::{EthDualRpcClient, EthRpcApi, EthWsRpcApi},
     ws_safe_stream::safe_ws_head_stream,
     EpochStart,
@@ -50,7 +50,7 @@ where
             async move {
                 // TODO: Factor out merged streams for use in contract witnesser and here
 
-                let mut safe_ws_range_stream = block_head_range_stream(epoch_start.eth_block, safe_ws_head_stream(
+                let mut safe_ws_range_stream = block_head_stream_from(epoch_start.eth_block, safe_ws_head_stream(
                     eth_ws_rpc.subscribe_new_heads().await?,
                     ETH_BLOCK_SAFETY_MARGIN,
                     &logger,

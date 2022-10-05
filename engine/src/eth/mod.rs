@@ -328,7 +328,7 @@ pub struct BlockWithItems<BlockItem: Debug> {
 }
 
 // TODO: Tests?
-pub async fn block_head_range_stream<BlockHeaderStream, EthRpc>(
+pub async fn block_head_stream_from<BlockHeaderStream, EthRpc>(
     from_block: u64,
     safe_head_stream: BlockHeaderStream,
     eth_rpc: EthRpc,
@@ -418,7 +418,7 @@ where
 {
     // convert from heads to blocks with events
     Ok(Box::pin(
-        block_head_range_stream(from_block, safe_head_stream, eth_rpc.clone(), &logger)
+        block_head_stream_from(from_block, safe_head_stream, eth_rpc.clone(), &logger)
             .await?
             .then(move |header| {
                 let eth_rpc = eth_rpc.clone();
