@@ -11,9 +11,7 @@ mod mock;
 mod tests;
 mod weights;
 
-use cf_chains::{
-	eth::ingress_address::get_salt, AllBatch, Ethereum, FetchAssetParams, TransferAssetParams,
-};
+use cf_chains::{AllBatch, Ethereum, FetchAssetParams, TransferAssetParams};
 use cf_primitives::{
 	Asset, AssetAmount, EgressBatch, EthereumAddress, ForeignChain, ForeignChainAddress,
 	ForeignChainAsset, IntentId, ETHEREUM_ETH_ADDRESS,
@@ -214,7 +212,7 @@ impl<T: Config> Pallet<T> {
 				EthereumScheduledIngressFetch::<T>::take(foreign_asset.asset)
 					.iter()
 					.map(|&intent_id| FetchAssetParams {
-						swap_id: get_salt(intent_id),
+						swap_id: intent_id,
 						asset: asset_address.into(),
 					})
 					.for_each(|fetch| ethereum_fetch_batch.push(fetch));

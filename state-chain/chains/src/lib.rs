@@ -1,6 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use crate::benchmarking_value::BenchmarkValue;
-use cf_primitives::EthAmount;
+use cf_primitives::{EthAmount, IntentId};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use eth::SchnorrVerificationComponents;
 use ethereum_types::H256;
@@ -132,7 +132,7 @@ where
 	RuntimeDebug, Copy, Clone, Default, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo,
 )]
 pub struct FetchAssetParams<T: Chain> {
-	pub swap_id: [u8; 32],
+	pub swap_id: IntentId,
 	pub asset: T::ChainAsset,
 }
 
