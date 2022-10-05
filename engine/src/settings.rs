@@ -21,7 +21,7 @@ pub struct P2P {
     #[serde(deserialize_with = "deser_path")]
     pub node_key_file: PathBuf,
     pub ip_address: IpAddr,
-    pub port: u16,
+    pub port: Port,
 }
 
 #[derive(Debug, Deserialize, Clone, Default)]
@@ -120,7 +120,7 @@ pub struct CommandLineOptions {
     #[clap(long = "p2p.ip_address")]
     ip_address: Option<IpAddr>,
     #[clap(long = "p2p.port")]
-    p2p_port: Option<u16>,
+    p2p_port: Option<Port>,
 
     #[clap(flatten)]
     state_chain_opts: StateChainOptions,

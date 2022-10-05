@@ -5,8 +5,9 @@ use crate::p2p::{self, PeerInfo, PeerUpdate};
 use sp_core::ed25519::Public;
 use state_chain_runtime::AccountId;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use utilities::Port;
 
-fn create_node_info(id: AccountId, node_key: &ed25519_dalek::Keypair, port: u16) -> PeerInfo {
+fn create_node_info(id: AccountId, node_key: &ed25519_dalek::Keypair, port: Port) -> PeerInfo {
     use std::net::Ipv4Addr;
     let ip = "0.0.0.0".parse::<Ipv4Addr>().unwrap().to_ipv6_mapped();
     let pubkey = Public(node_key.public.to_bytes());

@@ -12,7 +12,7 @@ use tokio::sync::mpsc::UnboundedReceiver;
 use state_chain_runtime::AccountId;
 
 use codec::Encode;
-use utilities::make_periodic_tick;
+use utilities::{make_periodic_tick, Port};
 
 use crate::{
     logging::COMPONENT_KEY,
@@ -40,7 +40,7 @@ async fn update_registered_peer_id<RpcClient: 'static + StateChainRpcApi + Sync 
     state_chain_client: &Arc<StateChainClient<RpcClient>>,
     previous_registered_peer_info: &Option<PeerInfo>,
     ip_address: Ipv6Addr,
-    cfe_port: u16,
+    cfe_port: Port,
     logger: &slog::Logger,
 ) -> Result<()> {
     let extra_info = match previous_registered_peer_info.as_ref() {
@@ -89,7 +89,7 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
     node_key: ed25519_dalek::Keypair,
     state_chain_client: Arc<StateChainClient<RpcClient>>,
     ip_address: IpAddr,
-    cfe_port: u16,
+    cfe_port: Port,
     mut previous_registered_peer_info: Option<PeerInfo>,
     mut own_peer_info_receiver: UnboundedReceiver<PeerInfo>,
     logger: &slog::Logger,

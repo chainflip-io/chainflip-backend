@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use sp_core::ed25519;
 use state_chain_runtime::AccountId;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use utilities::Port;
 use x25519_dalek::StaticSecret;
 
 use crate::logging::COMPONENT_KEY;
@@ -41,11 +42,16 @@ pub struct PeerInfo {
     pub account_id: AccountId,
     pub pubkey: XPublicKey,
     pub ip: Ipv6Addr,
-    pub port: u16,
+    pub port: Port,
 }
 
 impl PeerInfo {
-    pub fn new(account_id: AccountId, ed_public_key: EdPublicKey, ip: Ipv6Addr, port: u16) -> Self {
+    pub fn new(
+        account_id: AccountId,
+        ed_public_key: EdPublicKey,
+        ip: Ipv6Addr,
+        port: Port,
+    ) -> Self {
         let ed_public_key = ed25519_dalek::PublicKey::from_bytes(&ed_public_key.0).unwrap();
         let x_public_key = ed25519_public_key_to_x25519_public_key(&ed_public_key);
 
@@ -141,7 +147,7 @@ struct P2PContext {
 
 pub fn start(
     node_key: &ed25519_dalek::Keypair,
-    port: u16,
+    port: Port,
     current_peers: Vec<PeerInfo>,
     our_account_id: AccountId,
     logger: &slog::Logger,
@@ -429,7 +435,7 @@ impl P2PContext {
     }
 
     /// Start listening for incoming p2p messages on a separate thread
-    fn start_listening_thread(&mut self, port: u16) -> UnboundedReceiver<(XPublicKey, Vec<u8>)> {
+    fn start_listening_thread(&mut self, port: Port) -> UnboundedReceiver<(XPublicKey, Vec<u8>)> {
         let socket = self.zmq_context.socket(zmq::SocketType::ROUTER).unwrap();
 
         socket.set_router_mandatory(true).unwrap();
