@@ -146,10 +146,6 @@ pub trait StateChainRpcApi {
     async fn is_auction_phase(&self) -> RpcResult<bool>;
 }
 
-// TODO: https://github.com/paritytech/substrate/issues/12236
-// Value from: https://github.com/chainflip-io/substrate/blob/c172d0f683fab3792b90d876fd6ca27056af9fe9/client/rpc/src/state/mod.rs#L54
-pub const STORAGE_KEYS_PAGED_MAX_COUNT: u32 = 1000;
-
 #[async_trait]
 impl<C> StateChainRpcApi for StateChainRpcClient<C>
 where
