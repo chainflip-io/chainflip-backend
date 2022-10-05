@@ -15,8 +15,8 @@ use cf_chains::{
 	eth::ingress_address::get_salt, AllBatch, Ethereum, FetchAssetParams, TransferAssetParams,
 };
 use cf_primitives::{
-	Asset, AssetAmount, EgressBatch, EthereumAddress, FetchParameter, ForeignChain,
-	ForeignChainAddress, ForeignChainAsset, IntentId, ETHEREUM_ETH_ADDRESS,
+	Asset, AssetAmount, EgressBatch, EthereumAddress, ForeignChain, ForeignChainAddress,
+	ForeignChainAsset, IntentId, ETHEREUM_ETH_ADDRESS,
 };
 use cf_traits::{
 	Broadcaster, EgressApi, EthereumAssetsAddressProvider, IngressFetchApi,
@@ -102,7 +102,7 @@ pub mod pallet {
 			egress_batch_size: u32,
 			fetch_batch_size: u32,
 		},
-		EthereumIngressFetchesScheduled {
+		IngressFetchesScheduled {
 			fetches_added: u32,
 		},
 	}
@@ -294,13 +294,12 @@ impl<T: Config> EgressApi for Pallet<T> {
 }
 
 impl<T: Config> IngressFetchApi for Pallet<T> {
-	fn schedule_ingress_fetch(fetch_details: Vec<(Asset, FetchParameter)>) {
-		Self::deposit_event(Event::<T>::EthereumIngressFetchesScheduled {
+	fn schedule_ingress_fetch(fetch_details: Vec<(Asset, IntentId)>) {
+		Self::deposit_event(Event::<T>::IngressFetchesScheduled {
 			fetches_added: fetch_details.len() as u32,
 		});
 
-		for (asset, fetch_param) in fetch_details {
-			let FetchParameter::Eth(intent_id) = fetch_param;
+		for (asset, intent_id) in fetch_details {
 			EthereumScheduledIngressFetch::<T>::append(&asset, intent_id);
 		}
 	}

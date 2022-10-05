@@ -14,8 +14,8 @@ use sp_std::collections::btree_set::BTreeSet;
 use cf_chains::{benchmarking_value::BenchmarkValue, ApiCall, ChainAbi, ChainCrypto};
 use cf_primitives::{
 	AccountRole, Asset, AssetAmount, AuthorityCount, CeremonyId, ChainflipAccountData,
-	ChainflipAccountState, EpochIndex, EthereumAddress, FetchParameter, ForeignChainAddress,
-	ForeignChainAsset, IntentId,
+	ChainflipAccountState, EpochIndex, EthereumAddress, ForeignChainAddress, ForeignChainAsset,
+	IntentId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -753,9 +753,9 @@ pub trait EthereumAssetsAddressProvider {
 ///
 /// Schedule functions are chain specific, as each chain may require different data to do fetching.
 pub trait IngressFetchApi {
-	fn schedule_ingress_fetch(fetch_params: Vec<(Asset, FetchParameter)>);
+	fn schedule_ingress_fetch(fetch_params: Vec<(Asset, IntentId)>);
 }
 
 impl IngressFetchApi for () {
-	fn schedule_ingress_fetch(_fetch_params: Vec<(Asset, FetchParameter)>) {}
+	fn schedule_ingress_fetch(_fetch_params: Vec<(Asset, IntentId)>) {}
 }

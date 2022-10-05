@@ -58,18 +58,18 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumThresholdSigner RequestCallback (r:0 w:1)
 	fn send_batch_egress(n: u32, m: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(114_978_000 as Weight)
-			// Standard Error: 1_000
-			.saturating_add((750_000 as Weight).saturating_mul(n as Weight))
-			// Standard Error: 1_000
-			.saturating_add((597_000 as Weight).saturating_mul(m as Weight))
+		(98_691_000 as Weight)
+			// Standard Error: 4_000
+			.saturating_add((552_000 as Weight).saturating_mul(n as Weight))
+			// Standard Error: 4_000
+			.saturating_add((456_000 as Weight).saturating_mul(m as Weight))
 			.saturating_add(T::DbWeight::get().reads(15 as Weight))
 			.saturating_add(T::DbWeight::get().writes(11 as Weight))
 	}
 	// Storage: Egress DisabledEgressAssets (r:1 w:1)
 	fn disable_asset_egress() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(17_000_000 as Weight)
+		(13_000_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
@@ -98,18 +98,18 @@ impl WeightInfo for () {
 	// Storage: EthereumThresholdSigner RequestCallback (r:0 w:1)
 	fn send_batch_egress(n: u32, m: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(114_978_000 as Weight)
-			// Standard Error: 1_000
-			.saturating_add((750_000 as Weight).saturating_mul(n as Weight))
-			// Standard Error: 1_000
-			.saturating_add((597_000 as Weight).saturating_mul(m as Weight))
+		(98_691_000 as Weight)
+			// Standard Error: 4_000
+			.saturating_add((552_000 as Weight).saturating_mul(n as Weight))
+			// Standard Error: 4_000
+			.saturating_add((456_000 as Weight).saturating_mul(m as Weight))
 			.saturating_add(RocksDbWeight::get().reads(15 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(11 as Weight))
 	}
 	// Storage: Egress DisabledEgressAssets (r:1 w:1)
 	fn disable_asset_egress() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(17_000_000 as Weight)
+		(13_000_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}

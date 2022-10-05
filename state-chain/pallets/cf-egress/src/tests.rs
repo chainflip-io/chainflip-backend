@@ -1,9 +1,7 @@
 use crate::{mock::*, DisabledEgressAssets, EthereumScheduledIngressFetch, ScheduledEgress};
 
 use cf_chains::eth::ingress_address::get_salt;
-use cf_primitives::{
-	FetchParameter, ForeignChain, ForeignChainAddress, ForeignChainAsset, ETHEREUM_ETH_ADDRESS,
-};
+use cf_primitives::{ForeignChain, ForeignChainAddress, ForeignChainAsset, ETHEREUM_ETH_ADDRESS};
 use cf_traits::{EgressApi, IngressFetchApi};
 
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
@@ -107,22 +105,22 @@ fn can_schedule_ingress_fetchegress_to_batch() {
 		assert!(EthereumScheduledIngressFetch::<Test>::get(Asset::Dot).is_empty());
 
 		Egress::schedule_ingress_fetch(vec![
-			(Asset::Eth, FetchParameter::Eth(1)),
-			(Asset::Eth, FetchParameter::Eth(2)),
-			(Asset::Dot, FetchParameter::Eth(3)),
+			(Asset::Eth, 1u64),
+			(Asset::Eth, 2u64),
+			(Asset::Dot, 3u64),
 		]);
 
 		assert_eq!(EthereumScheduledIngressFetch::<Test>::get(Asset::Eth), vec![1, 2]);
 		assert_eq!(EthereumScheduledIngressFetch::<Test>::get(Asset::Dot), vec![3]);
 
-		System::assert_last_event(Event::Egress(crate::Event::EthereumIngressFetchesScheduled {
+		System::assert_last_event(Event::Egress(crate::Event::IngressFetchesScheduled {
 			fetches_added: 3u32,
 		}));
 
-		Egress::schedule_ingress_fetch(vec![(Asset::Eth, FetchParameter::Eth(4))]);
+		Egress::schedule_ingress_fetch(vec![(Asset::Eth, 4u64)]);
 
 		assert_eq!(EthereumScheduledIngressFetch::<Test>::get(Asset::Eth), vec![1, 2, 4]);
-		System::assert_last_event(Event::Egress(crate::Event::EthereumIngressFetchesScheduled {
+		System::assert_last_event(Event::Egress(crate::Event::IngressFetchesScheduled {
 			fetches_added: 1u32,
 		}));
 	});

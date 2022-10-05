@@ -7,8 +7,7 @@
 // the respective address generation function.
 
 use cf_primitives::{
-	Asset, AssetAmount, FetchParameter, ForeignChain, ForeignChainAddress, ForeignChainAsset,
-	IntentId,
+	Asset, AssetAmount, ForeignChain, ForeignChainAddress, ForeignChainAsset, IntentId,
 };
 use cf_traits::{liquidity::LpProvisioningApi, AddressDerivationApi, IngressApi, IngressFetchApi};
 
@@ -190,10 +189,7 @@ impl<T: Config> IngressApi for Pallet<T> {
 
 		// Register the fetch intent for ethereum ingress
 		if ingress_asset.chain == ForeignChain::Ethereum {
-			T::IngressFetchApi::schedule_ingress_fetch(vec![(
-				ingress_asset.asset,
-				FetchParameter::Eth(intent_id),
-			)]);
+			T::IngressFetchApi::schedule_ingress_fetch(vec![(ingress_asset.asset, intent_id)]);
 		}
 
 		IntentIngressDetails::<T>::insert(
@@ -221,10 +217,7 @@ impl<T: Config> IngressApi for Pallet<T> {
 
 		// Register the fetch intent for ethereum ingress
 		if ingress_asset.chain == ForeignChain::Ethereum {
-			T::IngressFetchApi::schedule_ingress_fetch(vec![(
-				ingress_asset.asset,
-				FetchParameter::Eth(intent_id),
-			)]);
+			T::IngressFetchApi::schedule_ingress_fetch(vec![(ingress_asset.asset, intent_id)]);
 		}
 
 		IntentIngressDetails::<T>::insert(

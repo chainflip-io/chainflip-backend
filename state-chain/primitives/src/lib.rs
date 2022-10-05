@@ -135,8 +135,3 @@ pub struct ForeignChainAsset {
 }
 
 pub type EgressBatch<Amount, EgressAddress> = Vec<(Amount, EgressAddress)>;
-
-// Contains parameter needed to perform fetch operation for each chain.
-pub enum FetchParameter {
-	Eth(IntentId),
-}
