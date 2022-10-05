@@ -152,7 +152,6 @@ fn on_idle_can_send_batch_all() {
 			],
 		);
 		EthereumScheduledIngressFetch::<Test>::insert(Asset::Flip, vec![5]);
-
 		EthereumScheduledIngressFetch::<Test>::insert(Asset::Usdc, vec![6, 7]);
 
 		assert!(LastEgressSent::get().is_empty());
@@ -165,24 +164,32 @@ fn on_idle_can_send_batch_all() {
 		assert_eq!(
 			LastEgressSent::get(),
 			vec![
-				(ETHEREUM_FLIP_ADDRESS, 5000u128, ALICE_ETH_ADDRESS),
-				(ETHEREUM_FLIP_ADDRESS, 6000u128, ALICE_ETH_ADDRESS),
-				(ETHEREUM_FLIP_ADDRESS, 7000u128, BOB_ETH_ADDRESS),
-				(ETHEREUM_FLIP_ADDRESS, 8000u128, BOB_ETH_ADDRESS),
+				(ETHEREUM_ETH_ADDRESS, 1_000u128, ALICE_ETH_ADDRESS),
+				(ETHEREUM_ETH_ADDRESS, 2_000u128, ALICE_ETH_ADDRESS),
+				(ETHEREUM_ETH_ADDRESS, 3_000u128, BOB_ETH_ADDRESS),
+				(ETHEREUM_ETH_ADDRESS, 4_000u128, BOB_ETH_ADDRESS),
+				(ETHEREUM_FLIP_ADDRESS, 5_000u128, ALICE_ETH_ADDRESS),
+				(ETHEREUM_FLIP_ADDRESS, 6_000u128, ALICE_ETH_ADDRESS),
+				(ETHEREUM_FLIP_ADDRESS, 7_000u128, BOB_ETH_ADDRESS),
+				(ETHEREUM_FLIP_ADDRESS, 8_000u128, BOB_ETH_ADDRESS),
 			]
 		);
 
-		assert_eq!(LastFetchesSent::get(), vec![(get_salt(5), ETHEREUM_FLIP_ADDRESS)]);
+		assert_eq!(
+			LastFetchesSent::get(),
+			vec![
+				(get_salt(1), ETHEREUM_ETH_ADDRESS),
+				(get_salt(2), ETHEREUM_ETH_ADDRESS),
+				(get_salt(3), ETHEREUM_ETH_ADDRESS),
+				(get_salt(4), ETHEREUM_ETH_ADDRESS),
+				(get_salt(5), ETHEREUM_FLIP_ADDRESS)
+			]
+		);
 
 		System::assert_has_event(Event::Egress(crate::Event::EgressBroadcasted {
-			foreign_asset: ETH_ETH,
-			egress_batch_size: 4u32,
-			fetch_batch_size: 4u32,
-		}));
-		System::assert_has_event(Event::Egress(crate::Event::EgressBroadcasted {
-			foreign_asset: ETH_FLIP,
-			egress_batch_size: 4u32,
-			fetch_batch_size: 1u32,
+			foreign_assets: vec![ETH_ETH, ETH_FLIP],
+			egress_batch_size: 8u32,
+			fetch_batch_size: 5u32,
 		}));
 
 		assert!(ScheduledEgress::<Test>::get(ETH_ETH).is_empty());
@@ -234,7 +241,7 @@ fn can_manually_send_batch_all() {
 		);
 		assert_eq!(LastFetchesSent::get(), vec![(get_salt(1), ETHEREUM_ETH_ADDRESS),],);
 		System::assert_has_event(Event::Egress(crate::Event::EgressBroadcasted {
-			foreign_asset: ETH_ETH,
+			foreign_assets: vec![ETH_ETH],
 			egress_batch_size: 4u32,
 			fetch_batch_size: 1u32,
 		}));
