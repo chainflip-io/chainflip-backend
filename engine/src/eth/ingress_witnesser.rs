@@ -1,12 +1,14 @@
 #![cfg(feature = "ibiza")]
 
-use std::{collections::BTreeSet, sync::Arc};
+use std::{collections::BTreeSet, pin::Pin, sync::Arc};
 
 use cf_primitives::{Asset, ForeignChainAddress};
+use futures::Stream;
 use pallet_cf_ingress::IngressWitness;
 use sp_core::H160;
 use tokio::sync::broadcast;
 use tokio_stream::StreamExt;
+use web3::types::Transaction;
 
 use crate::{
     eth::epoch_witnesser::should_end_witnessing,
@@ -15,12 +17,48 @@ use crate::{
 
 use super::{
     block_head_stream_from, epoch_witnesser,
+    http_safe_stream::{safe_polling_http_head_stream, HTTP_POLL_INTERVAL},
+    merged_block_items_stream,
     rpc::{EthDualRpcClient, EthRpcApi, EthWsRpcApi},
     ws_safe_stream::safe_ws_head_stream,
-    EpochStart,
+    BlockWithProcessedItems, EpochStart, EthNumberBloom,
 };
 
+use anyhow::Result;
+
 use crate::eth::ETH_BLOCK_SAFETY_MARGIN;
+
+async fn block_transactions_stream_from_head_stream<BlockHeaderStream, EthRpc>(
+    from_block: u64,
+    safe_head_stream: BlockHeaderStream,
+    eth_rpc: EthRpc,
+    logger: &slog::Logger,
+) -> Result<Pin<Box<dyn Stream<Item = BlockWithProcessedItems<Transaction>> + Send + 'static>>>
+where
+    BlockHeaderStream: Stream<Item = EthNumberBloom> + 'static + Send,
+    EthRpc: 'static + EthRpcApi + Send + Sync + Clone,
+{
+    Ok(Box::pin(
+        block_head_stream_from(from_block, safe_head_stream, eth_rpc.clone(), logger)
+            .await?
+            .then(move |header| {
+                let eth_rpc = eth_rpc.clone();
+                async move {
+                    (
+                        header.block_number.as_u64(),
+                        eth_rpc.block_with_txs(header.block_number).await,
+                    )
+                }
+            })
+            .map(
+                move |(block_number, result_stuff)| BlockWithProcessedItems {
+                    block_number,
+                    processed_block_items: result_stuff
+                        .map(|block_with_txs| block_with_txs.transactions),
+                },
+            ),
+    ))
+}
 
 // NB: This code can emit the same witness multiple times. e.g. if the CFE restarts in the middle of witnessing a window of blocks
 pub async fn start<StateChainRpc>(
@@ -44,17 +82,27 @@ where
               (mut monitored_addresses, mut eth_monitor_ingress_receiver),
               logger| {
 
-            // TODO: Add HTTP client and merged stream functionality for redundancy
             let eth_ws_rpc = eth_dual_rpc.ws_client.clone();
+            let eth_http_rpc = eth_dual_rpc.http_client.clone();
             let state_chain_client = state_chain_client.clone();
             async move {
-                // TODO: Factor out merged streams for use in contract witnesser and here
+                let safe_ws_tx_stream = block_transactions_stream_from_head_stream(epoch_start.eth_block,
+                     safe_ws_head_stream(
+                        eth_ws_rpc.subscribe_new_heads().await?,
+                        ETH_BLOCK_SAFETY_MARGIN,
+                        &logger,
+                    ), eth_ws_rpc.clone(), &logger).await?;
 
-                let mut safe_ws_range_stream = block_head_stream_from(epoch_start.eth_block, safe_ws_head_stream(
-                    eth_ws_rpc.subscribe_new_heads().await?,
+                let safe_http_tx_stream = block_transactions_stream_from_head_stream(epoch_start.eth_block,
+                    safe_polling_http_head_stream(
+                    eth_http_rpc.clone(),
+                    HTTP_POLL_INTERVAL,
                     ETH_BLOCK_SAFETY_MARGIN,
-                    &logger,
-                ), eth_ws_rpc.clone(), &logger).await?;
+                    &logger
+                ).await, eth_http_rpc.clone(), &logger).await?;
+
+
+                let mut merged_stream = merged_block_items_stream(safe_ws_tx_stream, safe_http_tx_stream, logger.clone()).await?;
 
                 loop {
                     tokio::select! {
@@ -64,16 +112,13 @@ where
                         Some(to_monitor) = eth_monitor_ingress_receiver.recv() => {
                             monitored_addresses.insert(to_monitor);
                         },
-                        Some(number_bloom) = safe_ws_range_stream.next() => {
+                        Some(block_with_txs) = merged_stream.next() => {
 
-                            if should_end_witnessing(end_witnessing_signal.clone(), number_bloom.block_number.as_u64(), &logger) {
+                            if should_end_witnessing(end_witnessing_signal.clone(), block_with_txs.block_number, &logger) {
                                 break;
                             }
 
-                            let ingress_witnesses = eth_ws_rpc
-                                .block_with_txs(number_bloom.block_number)
-                                .await?
-                                .transactions
+                            let ingress_witnesses = block_with_txs.block_items
                                 .iter()
                                 .filter_map(|tx| {
                                     let to_addr = tx.to?;
