@@ -192,9 +192,13 @@ pub fn start_monitoring_thread(
                                 reconnect_sender.send(account_id.clone()).unwrap();
                             }
                             zmq::SocketEvent::MONITOR_STOPPED => {
-                                // This event usually indicates that the socket of interest
-                                // has been closed, so we remove any reference to it on our
-                                // side too
+                                // This event indicates that the socket of interest has
+                                // been dropped/closed, so we remove any reference to it on our
+                                // side too.
+                                // Note that this only happens if we are already reconnecting
+                                // (with a new socket) or if we were told by SC to remove the
+                                // peer, so there is no danger that we won't connect because
+                                // the monitoring stopped.
                                 stop_monitoring_for_peer(&mut sockets_to_poll, *idx, &logger);
                             }
                             zmq::SocketEvent::HANDSHAKE_SUCCEEDED => {
