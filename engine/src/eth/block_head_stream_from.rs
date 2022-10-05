@@ -6,7 +6,7 @@ use web3::types::U64;
 use super::{rpc::EthRpcApi, EthNumberBloom};
 use futures::StreamExt;
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 
 pub async fn block_head_stream_from<BlockHeaderStream, EthRpc>(
     from_block: u64,
@@ -34,18 +34,18 @@ where
         } else {
             // our chain_head is above the from_block number
 
-            let eth_rpc_c = eth_rpc.clone();
-
             let past_heads = Box::pin(
                 stream::iter(from_block.as_u64()..=best_safe_block_number.as_u64()).then(
                     move |block_number| {
-                        let eth_rpc = eth_rpc_c.clone();
+                        let eth_rpc = eth_rpc.clone();
                         async move {
                             eth_rpc
                                 .block(U64::from(block_number))
                                 .await
                                 .and_then(|block| {
-                                    let number_bloom: Result<EthNumberBloom> = block.try_into();
+                                    let number_bloom: Result<EthNumberBloom> = block
+                                        .try_into()
+                                        .context("Failed to convert Block to EthNumberBloom");
                                     number_bloom
                                 })
                         }
@@ -78,4 +78,71 @@ where
         }
     }
     Err(anyhow!("No events in ETH safe head stream"))
+}
+
+#[cfg(test)]
+mod tests {
+    use sp_core::H256;
+    use web3::types::Block;
+
+    use crate::{eth::rpc::mocks::MockEthHttpRpcClient, logging::test_utils::new_test_logger};
+
+    use super::*;
+
+    fn block(block_number: U64) -> Result<Block<H256>> {
+        Ok(Block {
+            number: Some(block_number),
+            logs_bloom: Some(Default::default()),
+            base_fee_per_gas: Some(Default::default()),
+            ..Default::default()
+        })
+    }
+
+    // We don't care about the logs_bloom or base_fee_per_gas for these tests
+    fn number_bloom(block_number: u64) -> EthNumberBloom {
+        EthNumberBloom {
+            block_number: U64::from(block_number),
+            logs_bloom: Default::default(),
+            base_fee_per_gas: Default::default(),
+        }
+    }
+
+    #[tokio::test]
+    async fn stream_does_not_begin_yielding_until_at_from_block() {
+        let logger = new_test_logger();
+
+        let inner_stream_starts_at = 10;
+        let from_block = 15;
+        let inner_stream_ends_at = 20;
+
+        // .block should not be called on the RPC returned from here
+        let mut mock_eth_rpc = MockEthHttpRpcClient::new();
+        let mut mock_eth_rpc2 = MockEthHttpRpcClient::new();
+        mock_eth_rpc2.expect_block().returning(|n| block(n));
+        mock_eth_rpc.expect_clone().return_once(|| mock_eth_rpc2);
+
+        let safe_head_stream = stream::iter(
+            (inner_stream_starts_at..inner_stream_ends_at).map(|number| number_bloom(number)),
+        );
+
+        let mut safe_head_stream_from =
+            block_head_stream_from(from_block, safe_head_stream, mock_eth_rpc, &logger)
+                .await
+                .unwrap();
+
+        // We should only be yielding from the `from_block`
+        for expected_block_number in from_block..inner_stream_ends_at {
+            assert_eq!(
+                safe_head_stream_from
+                    .next()
+                    .await
+                    .unwrap()
+                    .block_number
+                    .as_u64(),
+                expected_block_number
+            );
+        }
+
+        assert!(safe_head_stream_from.next().await.is_none());
+    }
 }

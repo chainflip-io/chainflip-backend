@@ -591,6 +591,10 @@ pub mod mocks {
 
             async fn block_number(&self) -> Result<U64>;
         }
+
+        impl Clone for EthHttpRpcClient {
+            fn clone(&self) -> Self;
+        }
     );
 }
 
