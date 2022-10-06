@@ -78,7 +78,7 @@ impl std::fmt::Display for PeerInfo {
 }
 
 /// Used to track "registration" status on the network
-enum PeerState {
+enum RegistrationStatus {
     /// The node is not yet known to the network (its peer info
     /// may not be known to the network yet)
     /// (Stores future peers to connect to when then node is registered)
@@ -137,7 +137,7 @@ struct P2PContext {
     /// This is how we communicate with the "monitor" thread
     monitor_handle: monitor::MonitorHandle,
     /// Our own "registration" status on the network
-    state: PeerState,
+    status: RegistrationStatus,
     our_account_id: AccountId,
     /// NOTE: zmq context is intentionally declared at the bottom of the struct
     /// to ensure its destructor is called after that of any zmq sockets
@@ -206,7 +206,7 @@ pub fn start(
         incoming_message_sender,
         own_peer_info_sender,
         our_account_id,
-        state: PeerState::Pending(vec![]),
+        status: RegistrationStatus::Pending(vec![]),
         logger,
     };
 
@@ -378,13 +378,13 @@ impl P2PContext {
 
         self.own_peer_info_sender.send(own_info).unwrap();
 
-        if let PeerState::Pending(peers) = &mut self.state {
+        if let RegistrationStatus::Pending(peers) = &mut self.status {
             let peers = std::mem::take(peers);
             // Connect to all outstanding peers
             for peer in peers {
                 self.connect_to_peer(peer)
             }
-            self.state = PeerState::Registered;
+            self.status = RegistrationStatus::Registered;
         };
     }
 
@@ -414,13 +414,13 @@ impl P2PContext {
         self.x25519_to_account_id
             .insert(*peer_pubkey, peer.account_id.clone());
 
-        match &mut self.state {
-            PeerState::Pending(peers) => {
+        match &mut self.status {
+            RegistrationStatus::Pending(peers) => {
                 // Not ready to start connecting to peers yet
                 slog::info!(self.logger, "Delaying connecting to {}", peer.account_id);
                 peers.push(peer);
             }
-            PeerState::Registered => {
+            RegistrationStatus::Registered => {
                 self.connect_to_peer(peer);
             }
         }
