@@ -128,7 +128,11 @@ impl<T: Config> OnKilledAccount<T::AccountId> for Pallet<T> {
 
 impl<T: Config> OnNewAccount<T::AccountId> for Pallet<T> {
 	fn on_new_account(who: &T::AccountId) {
-		AccountRoles::<T>::insert(who, AccountRole::default());
+		// The only time an account could be created an already have an account role
+		// Validator, is at genesis.
+		if AccountRoles::<T>::get(who) != Some(AccountRole::Validator) {
+			AccountRoles::<T>::insert(who, AccountRole::default());
+		}
 	}
 }
 

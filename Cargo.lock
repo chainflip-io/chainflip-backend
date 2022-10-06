@@ -762,6 +762,7 @@ dependencies = [
  "libsecp256k1",
  "pallet-aura",
  "pallet-authorship",
+ "pallet-cf-account-types",
  "pallet-cf-auction",
  "pallet-cf-broadcast",
  "pallet-cf-emissions",

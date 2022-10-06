@@ -368,9 +368,6 @@ impl Network {
 		// Include any nodes already *created* to the test network
 		for node in existing_nodes {
 			network.add_engine(node);
-			// Only need to setup peer mapping as the AccountInfo is already set up if they
-			// are genesis nodes
-			Cli::register_as_validator(node);
 			setup_peer_mapping(node);
 		}
 

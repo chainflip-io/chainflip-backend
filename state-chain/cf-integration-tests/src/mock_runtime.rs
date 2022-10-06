@@ -3,13 +3,13 @@ use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::{traits::Zero, BuildStorage};
 use state_chain_runtime::{
-	chainflip::Offence, constants::common::*, opaque::SessionKeys, AccountId, AuctionConfig,
-	EmissionsConfig, EthereumVaultConfig, FlipConfig, GovernanceConfig, ReputationConfig, Runtime,
-	SessionConfig, StakingConfig, System, ValidatorConfig,
+	chainflip::Offence, constants::common::*, opaque::SessionKeys, AccountId, AccountTypesConfig,
+	AuctionConfig, EmissionsConfig, EthereumVaultConfig, FlipConfig, GovernanceConfig,
+	ReputationConfig, Runtime, SessionConfig, StakingConfig, System, ValidatorConfig,
 };
 
 use crate::{get_from_seed, network, GENESIS_KEY};
-use cf_primitives::AuthorityCount;
+use cf_primitives::{AccountRole, AuthorityCount};
 use cf_traits::{BlockNumber, FlipBalance};
 
 pub struct ExtBuilder {
@@ -121,6 +121,13 @@ impl ExtBuilder {
 				current_authority_emission_inflation: CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL,
 				backup_node_emission_inflation: BACKUP_NODE_EMISSION_INFLATION_PERBILL,
 				supply_update_interval: SUPPLY_UPDATE_INTERVAL_DEFAULT,
+			},
+			account_types: AccountTypesConfig {
+				initial_account_roles: self
+					.accounts
+					.iter()
+					.map(|(id, _)| (id.clone(), AccountRole::Validator))
+					.collect(),
 			},
 			..state_chain_runtime::GenesisConfig::default()
 		}
