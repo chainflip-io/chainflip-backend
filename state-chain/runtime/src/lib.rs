@@ -7,6 +7,7 @@ pub mod runtime_apis;
 mod weights;
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
+use pallet_cf_validator::ValidatorState;
 use runtime_apis::BackupOrPassive;
 
 use crate::{
