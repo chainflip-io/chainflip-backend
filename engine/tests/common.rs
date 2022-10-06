@@ -48,8 +48,6 @@ where
     .await
     .expect("Could not create EthDualRpcClient");
 
-    const EVENT_STREAM_TIMEOUT_MESSAGE: &str = "Timeout getting events. You might need to run hardhat with --config hardhat-interval-mining.config.js";
-
     // The stream is infinite unless we stop it after a short time
     // in which it should have already done it's job.
     let events = tokio::time::timeout(
@@ -57,7 +55,7 @@ where
         contract_manager.block_stream(eth_dual_rpc, 0, &logger),
     )
     .await
-    .expect(EVENT_STREAM_TIMEOUT_MESSAGE)
+    .expect("Timeout getting events. You might need to run hardhat with --config hardhat-interval-mining.config.js")
     .unwrap()
     .map(|block| futures::stream::iter(block.block_items))
     .flatten()
