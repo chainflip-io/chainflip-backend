@@ -156,7 +156,7 @@ impl EthContractWitnesser for StakeManager {
         Ok(())
     }
 
-    fn get_contract_address(&self) -> H160 {
+    fn contract_address(&self) -> H160 {
         self.deployed_address
     }
 

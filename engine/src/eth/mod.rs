@@ -407,7 +407,7 @@ where
     EventParameters: Debug + Send + Sync + 'static,
     ContractWitnesser: EthContractWitnesser<EventParameters = EventParameters>,
 {
-    let contract_address = contract_witnesser.get_contract_address();
+    let contract_address = contract_witnesser.contract_address();
     slog::info!(
         logger,
         "Subscribing to ETH events from contract at address: {:?}",
@@ -468,7 +468,7 @@ pub trait EthContractWitnesser {
         RpcClient: 'static + StateChainRpcApi + Sync + Send,
         EthRpcClient: EthRpcApi + Sync + Send;
 
-    fn get_contract_address(&self) -> H160;
+    fn contract_address(&self) -> H160;
 }
 
 pub type DecodeLogClosure<EventParameters> =
