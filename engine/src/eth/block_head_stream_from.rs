@@ -8,6 +8,11 @@ use futures::StreamExt;
 
 use anyhow::{anyhow, Context, Result};
 
+/// Takes a reorg-safe stream (strictly monotonically increasing block headers) and returns a stream of block headers
+/// that begin at the `from_block` specified. This is necessary because when querying for the head of the chain, you will
+/// get the head of the latest block the RPC knows about. If latest block is *before* our `from_block` then we must wait until
+/// our RPC is at the block before taking any actions. If the latest block is *after* our `from_block` then we must query for the
+/// blocks before this one before yielding the "current" headers.
 pub async fn block_head_stream_from<BlockHeaderStream, EthRpc>(
     from_block: u64,
     safe_head_stream: BlockHeaderStream,
@@ -20,7 +25,6 @@ where
 {
     let from_block = U64::from(from_block);
     let mut safe_head_stream = Box::pin(safe_head_stream);
-    // only allow pulling from the stream once we are actually at our from_block number
     while let Some(best_safe_block_header) = safe_head_stream.next().await {
         let best_safe_block_number = best_safe_block_header.block_number;
         // we only want to start witnessing once we reach the from_block specified
