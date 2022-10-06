@@ -125,26 +125,3 @@ impl ConnectedOutgoingSocket {
         &self.peer
     }
 }
-
-impl Drop for ConnectedOutgoingSocket {
-    fn drop(&mut self) {
-        let endpoint = endpoint_from_peer_info(&self.peer);
-        match self.socket.disconnect(&endpoint) {
-            Ok(()) => {
-                slog::debug!(
-                    self.logger,
-                    "Disconnected from peer: {}",
-                    self.peer.account_id
-                );
-            }
-            Err(err) => {
-                slog::error!(
-                    self.logger,
-                    "Could not disconnect from peer: {} [{}]",
-                    self.peer.account_id,
-                    err
-                );
-            }
-        }
-    }
-}
