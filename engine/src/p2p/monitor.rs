@@ -211,13 +211,10 @@ pub fn start_monitoring_thread(
                                 );
                                 stop_monitoring_for_peer(&mut sockets_to_poll, *idx, &logger);
                             }
-                            unknown_event => {
-                                slog::error!(
-                                    logger,
-                                    "MONITOR: unexpected socket event: {}",
-                                    unknown_event.to_raw()
-                                );
-                            }
+                            unknown_event => panic!(
+                                "P2P AUTH MONITOR: unexpected socket event: {:?}",
+                                unknown_event
+                            ),
                         }
                     }
                 }
