@@ -95,13 +95,13 @@ pub mod pallet {
 			amount: AssetAmount,
 			egress_address: ForeignChainAddress,
 		},
-		EgressBroadcasted {
+		IngressFetchesScheduled {
+			fetches_added: u32,
+		},
+		EgressBroadcastRequested {
 			foreign_assets: Vec<ForeignChainAsset>,
 			egress_batch_size: u32,
 			fetch_batch_size: u32,
-		},
-		IngressFetchesScheduled {
-			fetches_added: u32,
 		},
 	}
 
@@ -176,7 +176,7 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [on_success](Event::EgressBroadcasted)
+		/// - [on_success](Event::EgressBroadcastRequested)
 		#[pallet::weight(T::WeightInfo::send_batch_egress(0, 0))]
 		pub fn send_scheduled_egress_for_asset(
 			origin: OriginFor<T>,
@@ -232,17 +232,19 @@ impl<T: Config> Pallet<T> {
 		});
 
 		if !ethereum_egress_batch.is_empty() || !ethereum_fetch_batch.is_empty() {
-			Self::deposit_event(Event::<T>::EgressBroadcasted {
-				foreign_assets,
-				egress_batch_size: ethereum_egress_batch.len() as u32,
-				fetch_batch_size: ethereum_fetch_batch.len() as u32,
-			});
+			let egress_batch_size = ethereum_egress_batch.len();
+			let fetch_batch_size = ethereum_fetch_batch.len();
 			let egress_transaction = T::EthereumEgressTransaction::new_unsigned(
 				T::EthereumReplayProtection::replay_protection(),
 				ethereum_fetch_batch,
 				ethereum_egress_batch,
 			);
 			T::EthereumBroadcaster::threshold_sign_and_broadcast(egress_transaction);
+			Self::deposit_event(Event::<T>::EgressBroadcastRequested {
+				foreign_assets,
+				egress_batch_size: egress_batch_size as u32,
+				fetch_batch_size: fetch_batch_size as u32,
+			});
 		}
 	}
 
@@ -293,12 +295,10 @@ impl<T: Config> EgressApi for Pallet<T> {
 
 impl<T: Config> IngressFetchApi for Pallet<T> {
 	fn schedule_ingress_fetch(fetch_details: Vec<(Asset, IntentId)>) {
-		Self::deposit_event(Event::<T>::IngressFetchesScheduled {
-			fetches_added: fetch_details.len() as u32,
-		});
-
+		let fetches_added = fetch_details.len() as u32;
 		for (asset, intent_id) in fetch_details {
 			EthereumScheduledIngressFetch::<T>::append(&asset, intent_id);
 		}
+		Self::deposit_event(Event::<T>::IngressFetchesScheduled { fetches_added });
 	}
 }

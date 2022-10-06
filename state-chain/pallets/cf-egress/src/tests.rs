@@ -183,7 +183,7 @@ fn on_idle_can_send_batch_all() {
 			]
 		);
 
-		System::assert_has_event(Event::Egress(crate::Event::EgressBroadcasted {
+		System::assert_has_event(Event::Egress(crate::Event::EgressBroadcastRequested {
 			foreign_assets: vec![ETH_ETH, ETH_FLIP],
 			egress_batch_size: 8u32,
 			fetch_batch_size: 5u32,
@@ -237,7 +237,7 @@ fn can_manually_send_batch_all() {
 			]
 		);
 		assert_eq!(LastFetchesSent::get(), vec![(1u64, ETHEREUM_ETH_ADDRESS),],);
-		System::assert_has_event(Event::Egress(crate::Event::EgressBroadcasted {
+		System::assert_has_event(Event::Egress(crate::Event::EgressBroadcastRequested {
 			foreign_assets: vec![ETH_ETH],
 			egress_batch_size: 4u32,
 			fetch_batch_size: 1u32,
