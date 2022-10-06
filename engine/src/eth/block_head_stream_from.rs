@@ -179,9 +179,8 @@ mod tests {
         let from_block = 15;
         let inner_stream_ends_at = 20;
 
-        let safe_head_stream = stream::iter(
-            (inner_stream_starts_at..inner_stream_ends_at).map(|number| number_bloom(number)),
-        );
+        let safe_head_stream =
+            stream::iter((inner_stream_starts_at..inner_stream_ends_at).map(number_bloom));
 
         let mut safe_head_stream_from =
             block_head_stream_from(from_block, safe_head_stream, MockEthRpc {}, &logger)
@@ -212,9 +211,8 @@ mod tests {
         let inner_stream_starts_at = 15;
         let inner_stream_ends_at = 20;
 
-        let safe_head_stream = stream::iter(
-            (inner_stream_starts_at..inner_stream_ends_at).map(|number| number_bloom(number)),
-        );
+        let safe_head_stream =
+            stream::iter((inner_stream_starts_at..inner_stream_ends_at).map(number_bloom));
 
         let mut safe_head_stream_from =
             block_head_stream_from(from_block, safe_head_stream, MockEthRpc {}, &logger)
