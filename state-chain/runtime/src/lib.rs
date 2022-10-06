@@ -169,7 +169,7 @@ impl pallet_cf_validator::Config for Runtime {
 	type ValidatorWeightInfo = pallet_cf_validator::weights::PalletWeight<Runtime>;
 	type Auctioneer = Auction;
 	type VaultRotator = EthereumVault;
-	type ChainflipAccount = cf_traits::ChainflipAccountStore<Self>;
+	// type ChainflipAccount = cf_traits::ChainflipAccountStore<Self>;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type MissedAuthorshipSlots = chainflip::MissedAuraSlots;
 	type BidderProvider = pallet_cf_staking::Pallet<Self>;
@@ -334,7 +334,7 @@ impl frame_system::Config for Runtime {
 		GrandpaOffenceReporter<Self>,
 	);
 	/// The data to be stored in an account.
-	type AccountData = ChainflipAccountData;
+	type AccountData = (); //ChainflipAccountData;
 	/// Weight information for the extrinsics of this pallet.
 	type SystemWeightInfo = weights::frame_system::SubstrateWeight<Runtime>;
 	/// This is used as an identifier of the chain.
@@ -776,7 +776,6 @@ impl_runtime_apis! {
 			let account_info = pallet_cf_flip::Account::<Runtime>::get(&account_id);
 			let reputation_info = pallet_cf_reputation::Reputations::<Runtime>::get(&account_id);
 			let withdrawal_address = pallet_cf_staking::WithdrawalAddresses::<Runtime>::get(&account_id).unwrap_or([0; 20]);
-			let account_data = ChainflipAccountStore::<Runtime>::get(&account_id);
 
 			RuntimeApiAccountInfo {
 				stake: account_info.total(),
@@ -787,21 +786,10 @@ impl_runtime_apis! {
 				online_credits: reputation_info.online_credits,
 				reputation_points: reputation_info.reputation_points,
 				withdrawal_address,
-				state: if account_data.state == ChainflipAccountState::CurrentAuthority {
-					ChainflipAccountStateWithPassive::CurrentAuthority
-				} else {
-					// if the node is in this set, they were previously known as backups
-					let backup_or_passive = if Validator::highest_staked_qualified_backup_nodes_lookup().contains(&account_id) {
-						BackupOrPassive::Backup
-					} else {
-						BackupOrPassive::Passive
-					};
-
-					match account_data.state {
-						ChainflipAccountState::Backup => ChainflipAccountStateWithPassive::BackupOrPassive(backup_or_passive),
-						ChainflipAccountState::HistoricalAuthority => ChainflipAccountStateWithPassive::HistoricalAuthority(backup_or_passive),
-						_ => unreachable!("Already checked for current authority")
-					}
+				state: match Validator::get_validator_state(account_id) {
+					ValidatorState::Authority => ChainflipAccountStateWithPassive::CurrentAuthority,
+					ValidatorState::Backup => ChainflipAccountStateWithPassive::BackupOrPassive(BackupOrPassive::Backup),
+					ValidatorState::Passive => ChainflipAccountStateWithPassive::BackupOrPassive(BackupOrPassive::Passive)
 				},
 			}
 		}

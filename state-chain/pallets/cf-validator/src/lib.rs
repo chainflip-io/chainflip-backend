@@ -43,6 +43,13 @@ use crate::rotation_state::RotationState;
 
 type SessionIndex = u32;
 
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub enum ValidatorState {
+	Authority,
+	Backup,
+	Passive,
+}
+
 #[derive(
 	Clone, Debug, Default, PartialEq, Eq, PartialOrd, Encode, Decode, TypeInfo, MaxEncodedLen,
 )]
@@ -142,9 +149,6 @@ pub mod pallet {
 
 		/// The lifecycle of a vault rotation
 		type VaultRotator: VaultRotator<ValidatorId = ValidatorIdOf<Self>>;
-
-		/// For looking up Chainflip Account data.
-		type ChainflipAccount: ChainflipAccount<AccountId = Self::AccountId>;
 
 		/// Implementation of EnsureOrigin trait for governance
 		type EnsureGovernance: EnsureOrigin<Self::Origin>;
@@ -793,9 +797,6 @@ pub mod pallet {
 
 			const GENESIS_EPOCH: u32 = 1;
 			CurrentEpoch::<T>::set(GENESIS_EPOCH);
-			for id in &self.genesis_authorities {
-				T::ChainflipAccount::set_current_authority(id.into_ref());
-			}
 
 			Pallet::<T>::initialise_new_epoch(
 				GENESIS_EPOCH,
@@ -920,7 +921,7 @@ impl<T: Config> Pallet<T> {
 			.filter(|authority| !new_authorities_lookup.contains(authority))
 		{
 			log::trace!(target: "cf-validator", "Setting old authority {:?} to historical.", historical_authority);
-			T::ChainflipAccount::set_historical_authority(historical_authority.into_ref());
+			// T::ChainflipAccount::set_historical_authority(historical_authority.into_ref());
 		}
 
 		for incoming_authority in new_authorities_lookup
@@ -928,7 +929,6 @@ impl<T: Config> Pallet<T> {
 			.filter(|authority| !old_authorities_lookup.contains(authority))
 		{
 			log::trace!(target: "cf-validator", "Setting new authority {:?} to current authority.", incoming_authority);
-			T::ChainflipAccount::set_current_authority(incoming_authority.into_ref());
 		}
 
 		let new_authorities = rotation_state.authority_candidates::<Vec<_>>();
@@ -960,7 +960,6 @@ impl<T: Config> Pallet<T> {
 			num_expired_authorities += 1;
 			EpochHistory::<T>::deactivate_epoch(authority, epoch);
 			if EpochHistory::<T>::number_of_active_epochs_for_authority(authority) == 0 {
-				T::ChainflipAccount::from_historical_to_backup(authority.into_ref());
 				T::ReputationResetter::reset_reputation(authority);
 			}
 			T::Bonder::update_bond(authority, EpochHistory::<T>::active_bond(authority));
@@ -1127,6 +1126,19 @@ impl<T: Config> Pallet<T> {
 		}
 
 		T::ValidatorWeightInfo::missed_authorship_slots(num_missed_slots)
+	}
+
+	/// Returns the current state of a validator
+	pub fn get_validator_state(account_id: T::AccountId) -> ValidatorState {
+		let current_authorities = Self::current_authorities();
+		let current_backup = Backups::<T>::get();
+		if current_authorities.contains(&account_id.clone().into()) {
+			return ValidatorState::Authority
+		}
+		if current_backup.contains_key(&account_id.into()) {
+			return ValidatorState::Backup
+		}
+		ValidatorState::Passive
 	}
 }
 

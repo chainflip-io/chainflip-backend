@@ -245,7 +245,6 @@ impl Config for Test {
 	type ValidatorWeightInfo = ();
 	type Auctioneer = MockAuctioneer;
 	type VaultRotator = MockVaultRotator;
-	type ChainflipAccount = ChainflipAccountStore<Self>;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type MissedAuthorshipSlots = MockMissedAuthorshipSlots;
 	type BidderProvider = MockBidderProvider;
