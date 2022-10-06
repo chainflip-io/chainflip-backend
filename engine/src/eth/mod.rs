@@ -420,33 +420,30 @@ pub trait EthContractWitnesser {
             hex::encode(deployed_address)
         );
 
-        let eth_head_stream = eth_dual_rpc.ws_client.subscribe_new_heads().await?;
-
-        let safe_ws_head_stream =
-            safe_ws_head_stream(eth_head_stream, ETH_BLOCK_SAFETY_MARGIN, logger);
-
         let safe_ws_block_events = block_events_stream_from_head_stream(
             from_block,
             deployed_address,
-            safe_ws_head_stream,
+            safe_ws_head_stream(
+                eth_dual_rpc.ws_client.subscribe_new_heads().await?,
+                ETH_BLOCK_SAFETY_MARGIN,
+                logger,
+            ),
             self.decode_log_closure()?,
             eth_dual_rpc.ws_client,
             logger.clone(),
         )
         .await?;
 
-        let safe_http_head_stream = safe_polling_http_head_stream(
-            eth_dual_rpc.http_client.clone(),
-            HTTP_POLL_INTERVAL,
-            ETH_BLOCK_SAFETY_MARGIN,
-            logger,
-        )
-        .await;
-
         let safe_http_block_events = block_events_stream_from_head_stream(
             from_block,
             deployed_address,
-            safe_http_head_stream,
+            safe_polling_http_head_stream(
+                eth_dual_rpc.http_client.clone(),
+                HTTP_POLL_INTERVAL,
+                ETH_BLOCK_SAFETY_MARGIN,
+                logger,
+            )
+            .await,
             self.decode_log_closure()?,
             eth_dual_rpc.http_client,
             logger.clone(),
