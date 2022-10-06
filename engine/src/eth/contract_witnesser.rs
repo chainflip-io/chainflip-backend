@@ -8,7 +8,10 @@ use crate::{
     state_chain_observer::client::{StateChainClient, StateChainRpcApi},
 };
 
-use super::{epoch_witnesser::should_end_witnessing, EpochStart, EthContractWitnesser};
+use super::{
+    block_events_stream_for_contract_from, epoch_witnesser::should_end_witnessing, EpochStart,
+    EthContractWitnesser,
+};
 
 // NB: This code can emit the same witness multiple times. e.g. if the CFE restarts in the middle of witnessing a window of blocks
 pub async fn start<ContractWitnesser, StateChainRpc>(
@@ -35,9 +38,13 @@ where
             let eth_dual_rpc = eth_dual_rpc.clone();
 
             async move {
-                let mut block_stream = contract_witnesser
-                    .block_stream(eth_dual_rpc.clone(), epoch_start.eth_block, &logger)
-                    .await?;
+                let mut block_stream = block_events_stream_for_contract_from(
+                    epoch_start.eth_block,
+                    &contract_witnesser,
+                    eth_dual_rpc.clone(),
+                    &logger,
+                )
+                .await?;
 
                 while let Some(block) = block_stream.next().await {
                     if should_end_witnessing(

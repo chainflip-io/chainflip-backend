@@ -1,7 +1,10 @@
 #![cfg(feature = "integration-test")]
 
 use chainflip_engine::{
-    eth::{event::Event, rpc::EthDualRpcClient, EthContractWitnesser},
+    eth::{
+        block_events_stream_for_contract_from, event::Event, rpc::EthDualRpcClient,
+        EthContractWitnesser,
+    },
     settings::{CommandLineOptions, Settings},
 };
 use config::{Config, ConfigError, File};
@@ -32,12 +35,12 @@ impl IntegrationTestConfig {
     }
 }
 
-pub async fn get_contract_events<Manager>(
-    contract_manager: Manager,
+pub async fn get_contract_events<ContractWitnesser>(
+    contract_witnesser: ContractWitnesser,
     logger: slog::Logger,
-) -> Vec<Event<<Manager as EthContractWitnesser>::EventParameters>>
+) -> Vec<Event<<ContractWitnesser as EthContractWitnesser>::EventParameters>>
 where
-    Manager: EthContractWitnesser + std::marker::Sync,
+    ContractWitnesser: EthContractWitnesser + std::marker::Sync,
 {
     let eth_dual_rpc = EthDualRpcClient::new_test(
         &Settings::from_file_and_env("config/Testing.toml", CommandLineOptions::default())
@@ -52,7 +55,12 @@ where
     // in which it should have already done it's job.
     let events = tokio::time::timeout(
         std::time::Duration::from_secs(10),
-        contract_manager.block_stream(eth_dual_rpc, 0, &logger),
+        block_events_stream_for_contract_from(
+            0,
+            &contract_witnesser,
+            eth_dual_rpc.clone(),
+            &logger,
+        ),
     )
     .await
     .expect("Timeout getting events. You might need to run hardhat with --config hardhat-interval-mining.config.js")
