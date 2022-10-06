@@ -82,20 +82,80 @@ where
 
 #[cfg(test)]
 mod tests {
-    use sp_core::H256;
-    use web3::types::Block;
+    use async_trait::async_trait;
+    use sp_core::{H256, U256};
+    use web3::types::{
+        Block, BlockNumber, Bytes, CallRequest, FeeHistory, Filter, Log, SignedTransaction,
+        Transaction, TransactionParameters, TransactionReceipt,
+    };
+    use web3_secp256k1::SecretKey;
 
-    use crate::{eth::rpc::mocks::MockEthHttpRpcClient, logging::test_utils::new_test_logger};
+    use crate::logging::test_utils::new_test_logger;
 
     use super::*;
 
-    fn block(block_number: U64) -> Result<Block<H256>> {
-        Ok(Block {
-            number: Some(block_number),
-            logs_bloom: Some(Default::default()),
-            base_fee_per_gas: Some(Default::default()),
-            ..Default::default()
-        })
+    #[derive(Clone)]
+    struct MockEthRpc {}
+
+    #[async_trait]
+    impl EthRpcApi for MockEthRpc {
+        async fn estimate_gas(
+            &self,
+            _req: CallRequest,
+            _block: Option<BlockNumber>,
+        ) -> Result<U256> {
+            unimplemented!("not used");
+        }
+
+        async fn sign_transaction(
+            &self,
+            _tx: TransactionParameters,
+            _key: &SecretKey,
+        ) -> Result<SignedTransaction> {
+            unimplemented!("not used");
+        }
+
+        async fn send_raw_transaction(&self, _rlp: Bytes) -> Result<H256> {
+            unimplemented!("not used");
+        }
+
+        async fn get_logs(&self, _filter: Filter) -> Result<Vec<Log>> {
+            unimplemented!("not used");
+        }
+
+        async fn chain_id(&self) -> Result<U256> {
+            unimplemented!("not used");
+        }
+
+        async fn transaction_receipt(&self, _tx_hash: H256) -> Result<TransactionReceipt> {
+            unimplemented!("not used");
+        }
+
+        async fn block(&self, block_number: U64) -> Result<Block<H256>> {
+            Ok(Block {
+                number: Some(block_number),
+                logs_bloom: Some(Default::default()),
+                base_fee_per_gas: Some(Default::default()),
+                ..Default::default()
+            })
+        }
+
+        async fn block_with_txs(&self, _block_number: U64) -> Result<Block<Transaction>> {
+            unimplemented!("not used");
+        }
+
+        async fn fee_history(
+            &self,
+            _block_count: U256,
+            _newest_block: BlockNumber,
+            _reward_percentiles: Option<Vec<f64>>,
+        ) -> Result<FeeHistory> {
+            unimplemented!("not used");
+        }
+
+        async fn block_number(&self) -> Result<U64> {
+            unimplemented!("not used");
+        }
     }
 
     // We don't care about the logs_bloom or base_fee_per_gas for these tests
@@ -115,18 +175,12 @@ mod tests {
         let from_block = 15;
         let inner_stream_ends_at = 20;
 
-        // .block should not be called on the RPC returned from here
-        let mut mock_eth_rpc = MockEthHttpRpcClient::new();
-        let mut mock_eth_rpc2 = MockEthHttpRpcClient::new();
-        mock_eth_rpc2.expect_block().returning(|n| block(n));
-        mock_eth_rpc.expect_clone().return_once(|| mock_eth_rpc2);
-
         let safe_head_stream = stream::iter(
             (inner_stream_starts_at..inner_stream_ends_at).map(|number| number_bloom(number)),
         );
 
         let mut safe_head_stream_from =
-            block_head_stream_from(from_block, safe_head_stream, mock_eth_rpc, &logger)
+            block_head_stream_from(from_block, safe_head_stream, MockEthRpc {}, &logger)
                 .await
                 .unwrap();
 
@@ -143,6 +197,37 @@ mod tests {
             );
         }
 
+        assert!(safe_head_stream_from.next().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn stream_goes_back_if_inner_stream_starts_ahead_of_from_block() {
+        let logger = new_test_logger();
+
+        let from_block = 10;
+        let inner_stream_starts_at = 15;
+        let inner_stream_ends_at = 20;
+
+        let safe_head_stream = stream::iter(
+            (inner_stream_starts_at..inner_stream_ends_at).map(|number| number_bloom(number)),
+        );
+
+        let mut safe_head_stream_from =
+            block_head_stream_from(from_block, safe_head_stream, MockEthRpc {}, &logger)
+                .await
+                .unwrap();
+
+        for expected_block_number in from_block..inner_stream_ends_at {
+            assert_eq!(
+                safe_head_stream_from
+                    .next()
+                    .await
+                    .unwrap()
+                    .block_number
+                    .as_u64(),
+                expected_block_number
+            );
+        }
         assert!(safe_head_stream_from.next().await.is_none());
     }
 }
