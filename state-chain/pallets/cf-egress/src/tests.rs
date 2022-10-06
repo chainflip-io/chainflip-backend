@@ -1,6 +1,5 @@
 use crate::{mock::*, DisabledEgressAssets, EthereumScheduledIngressFetch, ScheduledEgress};
 
-use cf_chains::eth::ingress_address::get_salt;
 use cf_primitives::{ForeignChain, ForeignChainAddress, ForeignChainAsset, ETHEREUM_ETH_ADDRESS};
 use cf_traits::{EgressApi, IngressFetchApi};
 
@@ -176,11 +175,11 @@ fn on_idle_can_send_batch_all() {
 		assert_eq!(
 			LastFetchesSent::get(),
 			vec![
-				(get_salt(1), ETHEREUM_ETH_ADDRESS),
-				(get_salt(2), ETHEREUM_ETH_ADDRESS),
-				(get_salt(3), ETHEREUM_ETH_ADDRESS),
-				(get_salt(4), ETHEREUM_ETH_ADDRESS),
-				(get_salt(5), ETHEREUM_FLIP_ADDRESS)
+				(1u64, ETHEREUM_ETH_ADDRESS),
+				(2u64, ETHEREUM_ETH_ADDRESS),
+				(3u64, ETHEREUM_ETH_ADDRESS),
+				(4u64, ETHEREUM_ETH_ADDRESS),
+				(5u64, ETHEREUM_FLIP_ADDRESS)
 			]
 		);
 
@@ -237,7 +236,7 @@ fn can_manually_send_batch_all() {
 				(ETHEREUM_ETH_ADDRESS, 4000u128, BOB_ETH_ADDRESS),
 			]
 		);
-		assert_eq!(LastFetchesSent::get(), vec![(get_salt(1), ETHEREUM_ETH_ADDRESS),],);
+		assert_eq!(LastFetchesSent::get(), vec![(1u64, ETHEREUM_ETH_ADDRESS),],);
 		System::assert_has_event(Event::Egress(crate::Event::EgressBroadcasted {
 			foreign_assets: vec![ETH_ETH],
 			egress_batch_size: 4u32,

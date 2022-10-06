@@ -120,7 +120,7 @@ pub mod pallet {
 			let mut assets_to_send = vec![];
 
 			ScheduledEgress::<T>::iter().for_each(|(asset, batch)| {
-				if DisabledEgressAssets::<T>::contains_key(asset) {
+				if !DisabledEgressAssets::<T>::contains_key(asset) {
 					let new_egress_batch_size =
 						egress_batch_size.saturating_add(batch.len() as u32);
 					let new_fetch_batch_size = fetch_batch_size.saturating_add(

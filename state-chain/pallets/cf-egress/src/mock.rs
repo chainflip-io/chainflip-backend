@@ -3,8 +3,8 @@ pub use cf_chains::{
 	eth::api::{EthereumApi, EthereumReplayProtection},
 	ChainAbi, Ethereum,
 };
-use cf_primitives::EthAmount;
 pub use cf_primitives::{Asset, EthereumAddress, ExchangeRate};
+use cf_primitives::{EthAmount, IntentId};
 pub use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
 	Broadcaster, EthereumAssetsAddressProvider, ReplayProtectionProvider,
@@ -93,7 +93,7 @@ impl ReplayProtectionProvider<Ethereum> for Test {
 
 parameter_types! {
 	pub static LastEgressSent: Vec<(EthereumAddress, EthAmount, EthereumAddress)> = vec![];
-	pub static LastFetchesSent: Vec<([u8; 32], EthereumAddress)> = vec![];
+	pub static LastFetchesSent: Vec<(IntentId, EthereumAddress)> = vec![];
 }
 
 pub struct MockBroadcast;
