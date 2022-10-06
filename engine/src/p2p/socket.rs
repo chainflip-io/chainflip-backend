@@ -24,10 +24,6 @@ const CONNECTION_HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(30);
 /// socket
 pub const DO_NOT_LINGER: i32 = 0;
 
-fn endpoint_from_peer_info(peer: &PeerInfo) -> String {
-    format!("tcp://[{}]:{}", peer.ip, peer.port)
-}
-
 /// Socket to be used for connecting to peer on the network
 pub struct OutgoingSocket {
     socket: zmq::Socket,
@@ -73,14 +69,14 @@ impl OutgoingSocket {
         let socket = self.socket;
         socket.set_curve_serverkey(peer.pubkey.as_bytes()).unwrap();
 
-        let endpoint = endpoint_from_peer_info(&peer);
+        let endpoint = peer.zmq_endpoint();
         socket.connect(&endpoint).unwrap();
 
         slog::debug!(
             logger,
             "Connecting to peer {} at {}",
             peer.account_id,
-            &endpoint
+            &endpoint,
         );
 
         ConnectedOutgoingSocket {

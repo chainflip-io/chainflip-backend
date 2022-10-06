@@ -62,6 +62,10 @@ impl PeerInfo {
             port,
         }
     }
+
+    pub fn zmq_endpoint(&self) -> String {
+        format!("tcp://[{}]:{}", self.ip, self.port)
+    }
 }
 
 impl std::fmt::Display for PeerInfo {
