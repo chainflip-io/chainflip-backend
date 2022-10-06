@@ -101,6 +101,8 @@ mod tests {
     #[derive(Clone)]
     struct MockEthRpc {}
 
+    const FAILURE_BLOCK_NUMBER: u64 = 30;
+
     #[async_trait]
     impl EthRpcApi for MockEthRpc {
         async fn estimate_gas(
@@ -135,13 +137,18 @@ mod tests {
             unimplemented!("not used");
         }
 
+        /// Produces error at block 30.
         async fn block(&self, block_number: U64) -> Result<Block<H256>> {
-            Ok(Block {
-                number: Some(block_number),
-                logs_bloom: Some(Default::default()),
-                base_fee_per_gas: Some(Default::default()),
-                ..Default::default()
-            })
+            if block_number == U64::from(FAILURE_BLOCK_NUMBER) {
+                Err(anyhow!("Why did you try to query for block 30?"))
+            } else {
+                Ok(Block {
+                    number: Some(block_number),
+                    logs_bloom: Some(Default::default()),
+                    base_fee_per_gas: Some(Default::default()),
+                    ..Default::default()
+                })
+            }
         }
 
         async fn block_with_txs(&self, _block_number: U64) -> Result<Block<Transaction>> {
@@ -207,9 +214,11 @@ mod tests {
     async fn stream_goes_back_if_inner_stream_starts_ahead_of_from_block() {
         let logger = new_test_logger();
 
-        let from_block = 10;
-        let inner_stream_starts_at = 15;
-        let inner_stream_ends_at = 20;
+        // choose blocks so we have to query back to block 30, which is explicitly set as a failure block
+        // in the mock.
+        let from_block = 27;
+        let inner_stream_starts_at = 34;
+        let inner_stream_ends_at = 40;
 
         let safe_head_stream =
             stream::iter((inner_stream_starts_at..inner_stream_ends_at).map(number_bloom));
@@ -219,7 +228,7 @@ mod tests {
                 .await
                 .unwrap();
 
-        for expected_block_number in from_block..inner_stream_ends_at {
+        for expected_block_number in from_block..FAILURE_BLOCK_NUMBER {
             assert_eq!(
                 safe_head_stream_from
                     .next()
