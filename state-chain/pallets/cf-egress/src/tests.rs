@@ -98,7 +98,7 @@ fn can_schedule_egress_to_batch() {
 }
 
 #[test]
-fn can_schedule_ingress_fetchegress_to_batch() {
+fn can_schedule_ingress_fetch() {
 	new_test_ext().execute_with(|| {
 		assert!(EthereumScheduledIngressFetch::<Test>::get(Asset::Eth).is_empty());
 		assert!(EthereumScheduledIngressFetch::<Test>::get(Asset::Dot).is_empty());
