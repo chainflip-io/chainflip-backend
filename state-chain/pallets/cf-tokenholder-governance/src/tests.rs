@@ -134,7 +134,7 @@ fn cannot_create_proposal_with_insufficient_liquidity() {
 }
 
 #[test]
-fn not_enough_backed_liquidity() {
+fn not_enough_backed_liquidity_for_proposal_enactment() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(TokenholderGovernance::submit_proposal(
 			Origin::signed(ALICE),
