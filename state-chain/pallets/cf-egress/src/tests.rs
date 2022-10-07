@@ -3,7 +3,7 @@ use crate::{mock::*, DisabledEgressAssets, EthereumScheduledIngressFetch, Schedu
 use cf_primitives::{ForeignChain, ForeignChainAddress, ForeignChainAsset, ETHEREUM_ETH_ADDRESS};
 use cf_traits::{EgressApi, IngressFetchApi};
 
-use frame_support::{assert_noop, assert_ok, traits::Hooks};
+use frame_support::{assert_ok, traits::Hooks};
 const ALICE_ETH_ADDRESS: EthereumAddress = [100u8; 20];
 const BOB_ETH_ADDRESS: EthereumAddress = [101u8; 20];
 const ETH_ETH: ForeignChainAsset =
@@ -25,9 +25,19 @@ fn can_only_schedule_egress_allowed_asset() {
 			asset,
 			disabled: true,
 		}));
-		assert_noop!(
-			Egress::schedule_egress(asset, 1_000, ForeignChainAddress::Eth(ALICE_ETH_ADDRESS)),
-			crate::Error::<Test>::AssetEgressDisabled
+		assert_ok!(Egress::schedule_egress(
+			asset,
+			1_000,
+			ForeignChainAddress::Eth(ALICE_ETH_ADDRESS)
+		));
+		LastEgressSent::set(vec![]);
+		Egress::on_idle(1, 1_000_000_000_000u64);
+
+		// The egress has not been sent
+		assert!(LastEgressSent::get().is_empty());
+		assert_eq!(
+			ScheduledEgress::<Test>::get(ETH_ETH),
+			vec![(1_000, ForeignChainAddress::Eth(ALICE_ETH_ADDRESS))]
 		);
 
 		// re-enable the asset for Egress
@@ -37,11 +47,13 @@ fn can_only_schedule_egress_allowed_asset() {
 			asset,
 			disabled: false,
 		}));
-		assert_ok!(Egress::schedule_egress(
-			asset,
-			1_000,
-			ForeignChainAddress::Eth(ALICE_ETH_ADDRESS)
-		),);
+
+		LastEgressSent::set(vec![]);
+		Egress::on_idle(1, 1_000_000_000_000u64);
+
+		// The egress should be sent now
+		assert_eq!(LastEgressSent::get(), vec![(ETHEREUM_ETH_ADDRESS, 1_000, ALICE_ETH_ADDRESS)]);
+		assert!(ScheduledEgress::<Test>::get(ETH_ETH).is_empty());
 	});
 }
 
@@ -128,28 +140,55 @@ fn can_schedule_ingress_fetch() {
 #[test]
 fn on_idle_can_send_batch_all() {
 	new_test_ext().execute_with(|| {
-		ScheduledEgress::<Test>::insert(
+		assert_ok!(Egress::schedule_egress(
 			ETH_ETH,
-			vec![
-				(1_000, ForeignChainAddress::Eth(ALICE_ETH_ADDRESS)),
-				(2_000, ForeignChainAddress::Eth(ALICE_ETH_ADDRESS)),
-				(3_000, ForeignChainAddress::Eth(BOB_ETH_ADDRESS)),
-				(4_000, ForeignChainAddress::Eth(BOB_ETH_ADDRESS)),
-			],
-		);
-		EthereumScheduledIngressFetch::<Test>::insert(Asset::Eth, vec![1, 2, 3, 4]);
+			1_000,
+			ForeignChainAddress::Eth(ALICE_ETH_ADDRESS),
+		));
+		assert_ok!(Egress::schedule_egress(
+			ETH_ETH,
+			2_000,
+			ForeignChainAddress::Eth(ALICE_ETH_ADDRESS),
+		));
+		assert_ok!(Egress::schedule_egress(
+			ETH_ETH,
+			3_000,
+			ForeignChainAddress::Eth(BOB_ETH_ADDRESS),
+		));
+		assert_ok!(Egress::schedule_egress(
+			ETH_ETH,
+			4_000,
+			ForeignChainAddress::Eth(BOB_ETH_ADDRESS),
+		));
+		Egress::schedule_ingress_fetch(vec![
+			(Asset::Eth, 1),
+			(Asset::Eth, 2),
+			(Asset::Eth, 3),
+			(Asset::Eth, 4),
+		]);
 
-		ScheduledEgress::<Test>::insert(
+		assert_ok!(Egress::schedule_egress(
 			ETH_FLIP,
-			vec![
-				(5_000, ForeignChainAddress::Eth(ALICE_ETH_ADDRESS)),
-				(6_000, ForeignChainAddress::Eth(ALICE_ETH_ADDRESS)),
-				(7_000, ForeignChainAddress::Eth(BOB_ETH_ADDRESS)),
-				(8_000, ForeignChainAddress::Eth(BOB_ETH_ADDRESS)),
-			],
-		);
-		EthereumScheduledIngressFetch::<Test>::insert(Asset::Flip, vec![5]);
-		EthereumScheduledIngressFetch::<Test>::insert(Asset::Usdc, vec![6, 7]);
+			5_000,
+			ForeignChainAddress::Eth(ALICE_ETH_ADDRESS),
+		));
+		assert_ok!(Egress::schedule_egress(
+			ETH_FLIP,
+			6_000,
+			ForeignChainAddress::Eth(ALICE_ETH_ADDRESS),
+		));
+		assert_ok!(Egress::schedule_egress(
+			ETH_FLIP,
+			7_000,
+			ForeignChainAddress::Eth(BOB_ETH_ADDRESS),
+		));
+		assert_ok!(Egress::schedule_egress(
+			ETH_FLIP,
+			8_000,
+			ForeignChainAddress::Eth(BOB_ETH_ADDRESS),
+		));
+		Egress::schedule_ingress_fetch(vec![(Asset::Flip, 5)]);
+		Egress::schedule_ingress_fetch(vec![(Asset::Usdc, 6), (Asset::Usdc, 7)]);
 
 		assert!(LastEgressSent::get().is_empty());
 
@@ -202,28 +241,51 @@ fn on_idle_can_send_batch_all() {
 #[test]
 fn can_manually_send_batch_all() {
 	new_test_ext().execute_with(|| {
-		ScheduledEgress::<Test>::insert(
+		assert_ok!(Egress::schedule_egress(
 			ETH_ETH,
-			vec![
-				(1_000, ForeignChainAddress::Eth(ALICE_ETH_ADDRESS)),
-				(2_000, ForeignChainAddress::Eth(ALICE_ETH_ADDRESS)),
-				(3_000, ForeignChainAddress::Eth(BOB_ETH_ADDRESS)),
-				(4_000, ForeignChainAddress::Eth(BOB_ETH_ADDRESS)),
-			],
-		);
-		EthereumScheduledIngressFetch::<Test>::insert(Asset::Eth, vec![1]);
+			1_000,
+			ForeignChainAddress::Eth(ALICE_ETH_ADDRESS),
+		));
+		assert_ok!(Egress::schedule_egress(
+			ETH_ETH,
+			2_000,
+			ForeignChainAddress::Eth(ALICE_ETH_ADDRESS),
+		));
+		assert_ok!(Egress::schedule_egress(
+			ETH_ETH,
+			3_000,
+			ForeignChainAddress::Eth(BOB_ETH_ADDRESS),
+		));
+		assert_ok!(Egress::schedule_egress(
+			ETH_ETH,
+			4_000,
+			ForeignChainAddress::Eth(BOB_ETH_ADDRESS),
+		));
 
-		ScheduledEgress::<Test>::insert(
+		assert_ok!(Egress::schedule_egress(
 			ETH_FLIP,
-			vec![
-				(5_000, ForeignChainAddress::Eth(ALICE_ETH_ADDRESS)),
-				(6_000, ForeignChainAddress::Eth(ALICE_ETH_ADDRESS)),
-				(7_000, ForeignChainAddress::Eth(BOB_ETH_ADDRESS)),
-				(8_000, ForeignChainAddress::Eth(BOB_ETH_ADDRESS)),
-			],
-		);
-		EthereumScheduledIngressFetch::<Test>::insert(Asset::Flip, vec![2]);
+			5_000,
+			ForeignChainAddress::Eth(ALICE_ETH_ADDRESS),
+		));
+		assert_ok!(Egress::schedule_egress(
+			ETH_FLIP,
+			6_000,
+			ForeignChainAddress::Eth(ALICE_ETH_ADDRESS),
+		));
+		assert_ok!(Egress::schedule_egress(
+			ETH_FLIP,
+			7_000,
+			ForeignChainAddress::Eth(BOB_ETH_ADDRESS),
+		));
+		assert_ok!(Egress::schedule_egress(
+			ETH_FLIP,
+			8_000,
+			ForeignChainAddress::Eth(BOB_ETH_ADDRESS),
+		));
+		Egress::schedule_ingress_fetch(vec![(Asset::Eth, 1), (Asset::Flip, 2)]);
 
+		LastEgressSent::set(vec![]);
+		LastFetchesSent::set(vec![]);
 		assert_ok!(Egress::send_scheduled_egress_for_asset(Origin::root(), ETH_ETH));
 
 		// Only `ETH_ETH` are egressed

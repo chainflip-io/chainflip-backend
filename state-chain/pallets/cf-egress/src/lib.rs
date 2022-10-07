@@ -106,10 +106,7 @@ pub mod pallet {
 	}
 
 	#[pallet::error]
-	pub enum Error<T> {
-		// The given asset is not allowed to be Egressed
-		AssetEgressDisabled,
-	}
+	pub enum Error<T> {}
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
@@ -183,11 +180,6 @@ pub mod pallet {
 			foreign_asset: ForeignChainAsset,
 		) -> DispatchResult {
 			let _ok = T::EnsureGovernance::ensure_origin(origin)?;
-
-			ensure!(
-				DisabledEgressAssets::<T>::get(foreign_asset).is_none(),
-				Error::<T>::AssetEgressDisabled
-			);
 
 			Self::send_scheduled_batch_for_assets(vec![foreign_asset]);
 
@@ -263,11 +255,6 @@ impl<T: Config> EgressApi for Pallet<T> {
 		amount: AssetAmount,
 		egress_address: ForeignChainAddress,
 	) -> DispatchResult {
-		ensure!(
-			DisabledEgressAssets::<T>::get(foreign_asset).is_none(),
-			Error::<T>::AssetEgressDisabled
-		);
-
 		debug_assert!(
 			Self::is_egress_valid(&foreign_asset, &egress_address),
 			"Egress validity is checked by calling functions."
