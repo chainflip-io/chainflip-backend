@@ -124,7 +124,6 @@ pub mod pallet {
 		ProposalDoesntExist,
 	}
 
-
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(block_number: BlockNumberFor<T>) -> Weight {
@@ -226,7 +225,6 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		pub fn resolve_vote(proposal: Proposal<T>) -> usize {
 			let backers = Backers::<T>::take(&proposal);
-			let votes = backers.len();
 			let total_backed =
 				backers.iter().map(T::StakingInfo::total_stake_of).sum::<T::Amount>();
 			let total_stake = T::StakingInfo::total_onchain_stake();
@@ -249,7 +247,7 @@ pub mod pallet {
 			} else {
 				Self::deposit_event(Event::<T>::ProposalRejected { proposal });
 			}
-			votes
+			backers.len()
 		}
 	}
 }
