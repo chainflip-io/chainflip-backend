@@ -70,7 +70,7 @@ fn update_gov_key_via_onchain_proposal() {
 }
 
 #[test]
-fn fees_getting_burned() {
+fn fees_are_burned_on_successful_proposal() {
 	new_test_ext().execute_with(|| {
 		let balance_before = Flip::total_balance_of(&ALICE);
 		assert_ok!(TokenholderGovernance::submit_proposal(
