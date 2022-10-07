@@ -59,7 +59,7 @@ pub enum CFCommand {
     },
     #[clap(about = "Set your account role to the Validator, Relayer, Liquidity Provider")]
     RegisterAccountRole {
-        #[clap(value_parser = account_role_parser)]
+        #[clap(help = "Validator (v), Liquidity Provider (lp), Relayer (r)", value_parser = account_role_parser)]
         role: AccountRole,
     },
     #[clap(about = "Rotate your session keys")]
