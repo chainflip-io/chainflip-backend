@@ -13,6 +13,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::{collections::BTreeSet, sync::Arc, time::Duration};
 use tokio::sync::{broadcast, mpsc::UnboundedSender, watch};
 
+use crate::p2p::{PeerInfo, PeerUpdate};
 use crate::{
     eth::{rpc::EthRpcApi, EpochStart, EthBroadcaster},
     logging::COMPONENT_KEY,
@@ -20,7 +21,6 @@ use crate::{
         client::{CeremonyFailureReason, KeygenFailureReason, MultisigClientApi},
         KeyId, MessageHash,
     },
-    multisig_p2p::AccountPeerMappingChange,
     state_chain_observer::client::{StateChainClient, StateChainRpcApi},
     task_scope::{with_task_scope, Scope},
 };
@@ -161,12 +161,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
     sc_block_stream: BlockStream,
     eth_broadcaster: EthBroadcaster<EthRpc>,
     multisig_client: Arc<MultisigClient>,
-    account_peer_mapping_change_sender: UnboundedSender<(
-        AccountId,
-        sp_core::ed25519::Public,
-        AccountPeerMappingChange,
-    )>,
-
+    peer_update_sender: UnboundedSender<PeerUpdate>,
     epoch_start_sender: broadcast::Sender<EpochStart>,
     #[cfg(feature = "ibiza")] eth_monitor_ingress_sender: tokio::sync::mpsc::UnboundedSender<H160>,
     #[cfg(feature = "ibiza")] eth_monitor_flip_ingress_sender: tokio::sync::mpsc::UnboundedSender<
@@ -291,34 +286,26 @@ where
                                             state_chain_runtime::Event::Validator(
                                                 pallet_cf_validator::Event::PeerIdRegistered(
                                                     account_id,
-                                                    peer_id,
+                                                    ed25519_pubkey,
                                                     port,
                                                     ip_address,
                                                 ),
                                             ) => {
-                                                account_peer_mapping_change_sender
-                                                    .send((
-                                                        account_id,
-                                                        peer_id,
-                                                        AccountPeerMappingChange::Registered(
-                                                            port,
-                                                            ip_address.into(),
-                                                        ),
-                                                    ))
+                                                peer_update_sender
+                                                    .send(PeerUpdate::Registered(
+                                                            PeerInfo::new(account_id, ed25519_pubkey, ip_address.into(), port)
+                                                        )
+                                                    )
                                                     .unwrap();
                                             }
                                             state_chain_runtime::Event::Validator(
                                                 pallet_cf_validator::Event::PeerIdUnregistered(
                                                     account_id,
-                                                    peer_id,
+                                                    ed25519_pubkey,
                                                 ),
                                             ) => {
-                                                account_peer_mapping_change_sender
-                                                    .send((
-                                                        account_id,
-                                                        peer_id,
-                                                        AccountPeerMappingChange::Unregistered,
-                                                    ))
+                                                peer_update_sender
+                                                    .send(PeerUpdate::Deregistered(account_id, ed25519_pubkey))
                                                     .unwrap();
                                             }
                                             state_chain_runtime::Event::EthereumVault(

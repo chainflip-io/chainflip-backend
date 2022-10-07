@@ -25,7 +25,7 @@ macro_rules! assert_future_panics {
 /// Makes a tick that outputs every duration and if ticks are "missed" (as tick() wasn't called for some time)
 /// it will immediately output a single tick on the next call to tick() and resume ticking every duration.
 ///
-/// The supplied duration should be >> 5ms due to the underlying implementation of [Intervall::poll_tick].
+/// The supplied duration should be >> 5ms due to the underlying implementation of [Interval::poll_tick].
 pub fn make_periodic_tick(duration: Duration, yield_immediately: bool) -> tokio::time::Interval {
     let mut interval = tokio::time::interval_at(
         tokio::time::Instant::now()

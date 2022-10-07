@@ -16,9 +16,6 @@ use jsonrpsee::core::{Error as RpcError, RpcResult};
 use jsonrpsee::types::error::CallError;
 use jsonrpsee::types::{ErrorObject, ErrorObjectOwned};
 use jsonrpsee::ws_client::WsClientBuilder;
-use libp2p::multiaddr::Protocol;
-use libp2p::Multiaddr;
-use multisig_p2p_transport::PeerId;
 use slog::o;
 use sp_core::storage::StorageData;
 use sp_core::H256;
@@ -32,8 +29,6 @@ use sp_runtime::{AccountId32, MultiAddress};
 use sp_version::RuntimeVersion;
 use state_chain_runtime::SignedBlock;
 use std::fmt::Debug;
-use std::net::Ipv6Addr;
-use std::str::FromStr;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -42,7 +37,7 @@ use crate::common::{read_clean_and_decode_hex_str_file, EngineTryStreamExt};
 use crate::constants::MAX_EXTRINSIC_RETRY_ATTEMPTS;
 use crate::logging::COMPONENT_KEY;
 use crate::settings;
-use utilities::{context, Port};
+use utilities::context;
 
 #[cfg(test)]
 use mockall::automock;
@@ -143,8 +138,6 @@ pub trait StateChainRpcApi {
 
     async fn rotate_keys(&self) -> RpcResult<Bytes>;
 
-    async fn local_listen_addresses(&self) -> RpcResult<Vec<String>>;
-
     async fn fetch_runtime_version(
         &self,
         block_hash: state_chain_runtime::Hash,
@@ -231,10 +224,6 @@ where
         self.rpc_client
             .storage_pairs(storage_key, Some(block_hash))
             .await
-    }
-
-    async fn local_listen_addresses(&self) -> RpcResult<Vec<String>> {
-        self.rpc_client.system_local_listen_addresses().await
     }
 
     async fn fetch_runtime_version(
@@ -676,52 +665,6 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                 )
             })
             .collect())
-    }
-
-    pub async fn get_local_listen_addresses(&self) -> Result<Vec<(PeerId, Port, Ipv6Addr)>> {
-        self.state_chain_rpc_client
-            .local_listen_addresses()
-            .await?
-            .into_iter()
-            .map(|string_multiaddr| {
-                let multiaddr = Multiaddr::from_str(&string_multiaddr)?;
-                let protocols = multiaddr.into_iter().collect::<Vec<_>>();
-
-                // Note: Nodes started without validator argument will also listen with a WebSocket (Therefore their protocol list will also contain a WS element)
-
-                Ok((
-                    protocols
-                        .iter()
-                        .find_map(|protocol| match protocol {
-                            Protocol::P2p(multihash) => Some(multihash),
-                            _ => None,
-                        })
-                        .ok_or_else(|| anyhow!("Expected P2p Protocol"))
-                        .and_then(|multihash| {
-                            PeerId::from_multihash(*multihash)
-                                .map_err(|_| anyhow!("Couldn't decode peer id"))
-                        })
-                        .with_context(|| string_multiaddr.clone())?,
-                    protocols
-                        .iter()
-                        .find_map(|protocol| match protocol {
-                            Protocol::Tcp(port) => Some(*port),
-                            _ => None,
-                        })
-                        .ok_or_else(|| anyhow!("Expected Tcp Protocol"))
-                        .with_context(|| string_multiaddr.clone())?,
-                    protocols
-                        .iter()
-                        .find_map(|protocol| match protocol {
-                            Protocol::Ip6(ip_address) => Some(*ip_address),
-                            Protocol::Ip4(ip_address) => Some(ip_address.to_ipv6_mapped()),
-                            _ => None,
-                        })
-                        .ok_or_else(|| anyhow!("Expected Ip Protocol"))
-                        .with_context(|| string_multiaddr.clone())?,
-                ))
-            })
-            .collect::<Result<Vec<_>>>()
     }
 
     /// Get all the events from a particular block
