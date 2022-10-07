@@ -85,7 +85,8 @@ pub mod pallet {
 	pub type Backers<T: Config> =
 		StorageMap<_, Twox64Concat, Proposal<T>, Vec<T::AccountId>, ValueQuery>;
 
-	/// The Government key proposal currently awaiting enactment, if any.
+	/// The Government key proposal currently awaiting enactment, if any. Indexed by the block
+	/// number we will attempt to enact this update.
 	#[pallet::storage]
 	#[pallet::getter(fn gov_enactment)]
 	pub type GovKeyUpdateAwaitingEnactment<T> = StorageValue<
@@ -94,7 +95,8 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
-	/// The Community key proposal currently awaiting enactment, if any.
+	/// The Community key proposal currently awaiting enactment, if any. Indexed by the block number
+	/// we will attempt to enact this update.
 	#[pallet::storage]
 	#[pallet::getter(fn community_enactment)]
 	pub type CommKeyUpdateAwaitingEnactment<T> = StorageValue<
@@ -222,6 +224,7 @@ pub mod pallet {
 			Ok(().into())
 		}
 	}
+
 	impl<T: Config> Pallet<T> {
 		pub fn resolve_vote(proposal: Proposal<T>) -> usize {
 			let backers = Backers::<T>::take(&proposal);
