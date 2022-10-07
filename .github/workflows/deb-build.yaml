@@ -1,0 +1,96 @@
+name: Build Packages
+on:
+  push:
+    branches:
+      - 'feature/deb_**'
+
+env:
+  APTLY_VERSION: "1.5.0"
+  REGISTRY: "ghcr.io"
+  RUST_IMAGE_NAME: "${{ github.repository }}/rust-base"
+  REPO_REGION: "eu-central-1"
+  REPO_BUCKET: "apt.aws.chainflip.xyz"
+
+jobs:
+  docker-build-deb:
+    runs-on: ubuntu-latest
+    environment: development
+    container:
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08"
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Install cargo-deb
+        run: cargo install cargo-deb
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Setup cargo cache
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - name: Get date and commit SHA
+        id: vars
+        run: |
+          echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
+          echo "::set-output name=date::$(date +'%d%m%Y-%H%M')"
+      - name: Build packages
+        run: | 
+          cargo deb --no-strip --deb-revision "${{ steps.vars.outputs.sha_short }}-${{ steps.vars.outputs.date }}" -p chainflip-engine
+          cargo deb --no-strip --deb-revision "${{ steps.vars.outputs.sha_short }}-${{ steps.vars.outputs.date }}" -p chainflip-cli 
+          cargo deb --no-strip --deb-revision "${{ steps.vars.outputs.sha_short }}-${{ steps.vars.outputs.date }}" -p chainflip-node
+      - uses: actions/upload-artifact@v2
+        with:
+          name: packages
+          path: target/debian/*.deb
+
+  publish-deb:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    environment: development
+    needs: [docker-build-deb]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Install Aptly
+        run: | 
+          wget https://github.com/aptly-dev/aptly/releases/download/v${APTLY_VERSION}/aptly_${APTLY_VERSION}_amd64.deb -O /tmp/aptly_${APTLY_VERSION}_amd64.deb
+          sudo dpkg -i /tmp/aptly_${APTLY_VERSION}_amd64.deb
+      - name: Configure AWS credentials using OIDC
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-region: eu-central-1
+          role-to-assume: arn:aws:iam::962042992619:role/chainflip-github-bot
+      - name:  Configure aptly
+        run: |
+          sudo apt update
+          sudo apt install -y moreutils
+          aptly config show
+          jq --argjson S3PublishEndpoints "$(<.github/workflows/aptly_dev_s3.json)" '.S3PublishEndpoints += $S3PublishEndpoints' ~/.aptly.conf | sponge ~/.aptly.conf 
+      - name: Import GPG package signing key
+        id: import_gpg
+        uses: crazy-max/ghaction-import-gpg@v5
+        with:
+          gpg_private_key: ${{ secrets.CF_DEV_PGP_KEY }}
+          # passphrase: ${{ secrets.PASSPHRASE }}
+      - name: List keys
+        run: gpg -K
+      - name: Download previously built packages
+        uses: actions/download-artifact@v3
+        with:
+          name: packages
+          path: packages/
+      - name: Run aptly
+        run: |
+          export AWS_SDK_LOAD_CONFIG=1
+          aptly repo create local
+          aptly repo add local packages/*.deb
+          aptly snapshot create snap from repo local
+          aptly publish -gpg-key=${{ steps.import_gpg.outputs.keyid }} -distribution=ubuntu snapshot snap s3:chainflip-dev:ci/
