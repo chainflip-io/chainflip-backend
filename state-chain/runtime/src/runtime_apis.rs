@@ -1,5 +1,6 @@
 use crate::chainflip::Offence;
 use cf_chains::eth::SigData;
+use cf_primitives::ChainflipAccountState;
 use codec::{Decode, Encode};
 use pallet_cf_governance::GovCallHash;
 #[cfg(feature = "std")]
@@ -25,6 +26,19 @@ pub enum ChainflipAccountStateWithPassive {
 	CurrentAuthority,
 	HistoricalAuthority(BackupOrPassive),
 	BackupOrPassive(BackupOrPassive),
+}
+
+impl ChainflipAccountStateWithPassive {
+	pub fn map(state: ChainflipAccountState) -> Self {
+		match state {
+			ChainflipAccountState::CurrentAuthority =>
+				ChainflipAccountStateWithPassive::CurrentAuthority,
+			ChainflipAccountState::Backup =>
+				ChainflipAccountStateWithPassive::BackupOrPassive(BackupOrPassive::Backup),
+			ChainflipAccountState::HistoricalAuthority =>
+				ChainflipAccountStateWithPassive::BackupOrPassive(BackupOrPassive::Passive),
+		}
+	}
 }
 
 #[derive(Encode, Decode, Eq, PartialEq)]

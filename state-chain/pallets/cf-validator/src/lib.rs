@@ -16,12 +16,12 @@ pub use weights::WeightInfo;
 mod benchmarking;
 mod rotation_state;
 
-use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex};
+use cf_primitives::{AuthorityCount, CeremonyId, ChainflipAccountState, EpochIndex};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, Auctioneer, Bid, BidderProvider, Bonding,
-	Chainflip, ChainflipAccount, EmergencyRotation, EpochInfo, EpochTransitionHandler,
-	ExecutionCondition, HistoricalEpoch, MissedAuthorshipSlots, QualifyNode, ReputationResetter,
-	StakeHandler, SystemStateInfo, VaultRotator,
+	Chainflip, EmergencyRotation, EpochInfo, EpochTransitionHandler, ExecutionCondition,
+	HistoricalEpoch, MissedAuthorshipSlots, QualifyNode, ReputationResetter, StakeHandler,
+	SystemStateInfo, VaultRotator,
 };
 use cf_utilities::Port;
 use frame_support::{
@@ -42,13 +42,6 @@ use sp_std::{
 use crate::rotation_state::RotationState;
 
 type SessionIndex = u32;
-
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub enum ValidatorState {
-	Authority,
-	Backup,
-	Passive,
-}
 
 #[derive(
 	Clone, Debug, Default, PartialEq, Eq, PartialOrd, Encode, Decode, TypeInfo, MaxEncodedLen,
@@ -1129,16 +1122,18 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Returns the current state of a validator
-	pub fn get_validator_state(account_id: T::AccountId) -> ValidatorState {
+	pub fn get_validator_state(account_id: T::AccountId) -> ChainflipAccountState {
 		let current_authorities = Self::current_authorities();
 		let current_backup = Backups::<T>::get();
 		if current_authorities.contains(&account_id.clone().into()) {
-			return ValidatorState::Authority
+			return ChainflipAccountState::CurrentAuthority
 		}
 		if current_backup.contains_key(&account_id.into()) {
-			return ValidatorState::Backup
+			return ChainflipAccountState::Backup
 		}
-		ValidatorState::Passive
+		// Is bonded but not a backup (stake not high enough).
+		// TODO: Check the stake
+		ChainflipAccountState::HistoricalAuthority
 	}
 }
 

@@ -1,7 +1,7 @@
 use super::*;
 use cf_chains::eth::{to_ethereum_address, AggKey, SchnorrVerificationComponents};
 use cf_primitives::{ChainflipAccountState, EpochIndex};
-use cf_traits::{ChainflipAccount, ChainflipAccountStore, EpochInfo, FlipBalance};
+use cf_traits::{EpochInfo, FlipBalance};
 use codec::Encode;
 use frame_support::traits::OnFinalize;
 use libsecp256k1::PublicKey;
@@ -192,7 +192,7 @@ impl Engine {
 	}
 
 	fn state(&self) -> ChainflipAccountState {
-		ChainflipAccountStore::<Runtime>::get(&self.node_id).state
+		Validator::get_validator_state(self.node_id.clone())
 	}
 
 	// Handle events from contract

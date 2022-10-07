@@ -7,7 +7,7 @@ use cf_traits::{
 		qualify_node::QualifyAll, reputation_resetter::MockReputationResetter,
 		system_state_info::MockSystemStateInfo, vault_rotation::MockVaultRotator,
 	},
-	Bid, Chainflip, ChainflipAccountStore, QualifyNode, RuntimeAuctionOutcome,
+	Bid, Chainflip, QualifyNode, RuntimeAuctionOutcome,
 };
 use frame_support::{
 	construct_runtime, parameter_types,
@@ -281,26 +281,6 @@ macro_rules! assert_invariants {
 				.collect::<BTreeSet<_>>()
 				.is_disjoint(&ValidatorPallet::highest_staked_qualified_backup_nodes_lookup()),
 			"Backup nodes and validators should not overlap",
-		);
-		assert!(
-			ValidatorPallet::current_authorities()
-				.iter()
-				.all(|id| <Test as Config>::ChainflipAccount::get(id).state.is_authority()),
-			"All authorities should have their account state set accordingly. Got: {:?}",
-			ValidatorPallet::current_authorities()
-				.iter()
-				.map(|id| (id, <Test as Config>::ChainflipAccount::get(id).state))
-				.collect::<Vec<_>>(),
-		);
-		assert!(
-			ValidatorPallet::highest_staked_qualified_backup_nodes_lookup()
-				.iter()
-				.all(|id| <Test as Config>::ChainflipAccount::get(id).state.is_backup()),
-			"All backup nodes should have their account state set accordingly. Got: {:?}",
-			ValidatorPallet::highest_staked_qualified_backup_nodes_lookup()
-				.iter()
-				.map(|id| (id, <Test as Config>::ChainflipAccount::get(id).state))
-				.collect::<Vec<_>>(),
 		);
 	};
 }

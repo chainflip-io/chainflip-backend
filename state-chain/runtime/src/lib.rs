@@ -7,8 +7,6 @@ pub mod runtime_apis;
 mod weights;
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
-use pallet_cf_validator::ValidatorState;
-use runtime_apis::BackupOrPassive;
 
 use crate::{
 	chainflip::Offence,
@@ -64,8 +62,8 @@ use sp_version::RuntimeVersion;
 
 pub use cf_primitives::{ChainflipAccountData, ChainflipAccountState, ForeignChainAddress};
 pub use cf_traits::{
-	BlockNumber, ChainflipAccount, ChainflipAccountStore, EpochInfo, EthEnvironmentProvider,
-	FlipBalance, QualifyNode, SessionKeysRegistered,
+	BlockNumber, ChainflipAccount, EpochInfo, EthEnvironmentProvider, FlipBalance, QualifyNode,
+	SessionKeysRegistered,
 };
 pub use chainflip::chain_instances::*;
 use chainflip::{epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat};
@@ -787,11 +785,7 @@ impl_runtime_apis! {
 				online_credits: reputation_info.online_credits,
 				reputation_points: reputation_info.reputation_points,
 				withdrawal_address,
-				state: match Validator::get_validator_state(account_id) {
-					ValidatorState::Authority => ChainflipAccountStateWithPassive::CurrentAuthority,
-					ValidatorState::Backup => ChainflipAccountStateWithPassive::BackupOrPassive(BackupOrPassive::Backup),
-					ValidatorState::Passive => ChainflipAccountStateWithPassive::BackupOrPassive(BackupOrPassive::Passive)
-				},
+				state: ChainflipAccountStateWithPassive::map(Validator::get_validator_state(account_id)),
 			}
 		}
 
