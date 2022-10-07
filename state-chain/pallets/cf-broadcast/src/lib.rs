@@ -69,7 +69,7 @@ pub enum PalletOffence {
 pub mod pallet {
 	use super::*;
 	use cf_chains::benchmarking_value::BenchmarkValue;
-	use cf_traits::KeyProvider;
+	use cf_traits::{AccountRoleRegistry, KeyProvider};
 	use frame_support::{ensure, pallet_prelude::*, traits::EnsureOrigin};
 	use frame_system::pallet_prelude::*;
 
@@ -146,6 +146,9 @@ pub mod pallet {
 
 		/// The pallet dispatches calls, so it depends on the runtime's aggregated Call type.
 		type Call: From<Call<Self, I>> + IsType<<Self as frame_system::Config>::Call>;
+
+		/// For registering and verifying the account role.
+		type AccountRoleRegistry: AccountRoleRegistry<Self>;
 
 		/// Offences that can be reported in this runtime.
 		type Offence: From<PalletOffence>;
@@ -403,7 +406,7 @@ pub mod pallet {
 			signed_tx: SignedTransactionFor<T, I>,
 			signer_id: SignerIdFor<T, I>,
 		) -> DispatchResultWithPostInfo {
-			let extrinsic_signer = ensure_signed(origin)?;
+			let extrinsic_signer = T::AccountRoleRegistry::ensure_validator(origin)?;
 
 			let signing_attempt = AwaitingTransactionSignature::<T, I>::get(broadcast_attempt_id)
 				.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?;
@@ -497,7 +500,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			broadcast_attempt_id: BroadcastAttemptId,
 		) -> DispatchResultWithPostInfo {
-			let extrinsic_signer: <T as Chainflip>::ValidatorId = ensure_signed(origin)?.into();
+			let extrinsic_signer = T::AccountRoleRegistry::ensure_validator(origin)?.into();
 
 			let signing_attempt = AwaitingTransactionSignature::<T, I>::get(broadcast_attempt_id)
 				.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?;

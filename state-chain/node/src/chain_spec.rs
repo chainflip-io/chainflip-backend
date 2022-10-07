@@ -602,7 +602,6 @@ fn testnet_genesis(
 				.into_iter()
 				.map(|account_id| (account_id, AccountRole::Validator))
 				.collect(),
-			_phantom: PhantomData,
 		},
 		system: SystemConfig {
 			// Add Wasm runtime to storage.
