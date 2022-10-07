@@ -314,14 +314,14 @@ impl<C: CryptoScheme> CeremonyManager<C> {
                     .signing_states
                     .cleanup_unauthorised_ceremony(&request.ceremony_id)
                 {
-                    CeremonyFailureReason::<SigningFailureReason>::NotParticipatingInUnauthorisedCeremony
+                    CeremonyFailureReason::<SigningFailureReason, SigningStageName>::NotParticipatingInUnauthorisedCeremony
                         .log(&BTreeSet::default(), &self.logger);
                 }
                 if self
                     .keygen_states
                     .cleanup_unauthorised_ceremony(&request.ceremony_id)
                 {
-                    CeremonyFailureReason::<KeygenFailureReason>::NotParticipatingInUnauthorisedCeremony
+                    CeremonyFailureReason::<KeygenFailureReason, KeygenStageName>::NotParticipatingInUnauthorisedCeremony
                         .log(&BTreeSet::default(), &self.logger);
                 }
             }

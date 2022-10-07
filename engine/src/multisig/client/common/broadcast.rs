@@ -1,13 +1,10 @@
-use std::{collections::BTreeMap, fmt::Display, marker::PhantomData};
+use std::{collections::BTreeMap, fmt::Display};
 
 use async_trait::async_trait;
 use cf_primitives::AuthorityCount;
 
 use crate::{
-    multisig::{
-        client::{ceremony_manager::CeremonyTrait, MultisigMessage},
-        crypto::CryptoScheme,
-    },
+    multisig::client::{ceremony_manager::CeremonyTrait, MultisigMessage},
     multisig_p2p::OutgoingMultisigStageMessages,
 };
 
@@ -59,7 +56,6 @@ where
     /// Determines the actual computations before/after
     /// the data is collected
     processor: Stage,
-    _phantom: PhantomData<<C::Crypto as CryptoScheme>::Point>,
 }
 
 impl<C: CeremonyTrait, Stage> BroadcastStage<C, Stage>
@@ -71,7 +67,6 @@ where
             common,
             messages: BTreeMap::new(),
             processor,
-            _phantom: Default::default(),
         }
     }
 }
