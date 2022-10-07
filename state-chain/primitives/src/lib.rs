@@ -50,6 +50,7 @@ pub enum ChainflipAccountState {
 	/// Historical implies backup too
 	HistoricalAuthority,
 	Backup,
+	Passive,
 }
 
 impl ChainflipAccountState {

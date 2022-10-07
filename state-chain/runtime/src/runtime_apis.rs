@@ -35,8 +35,9 @@ impl ChainflipAccountStateWithPassive {
 				ChainflipAccountStateWithPassive::CurrentAuthority,
 			ChainflipAccountState::Backup =>
 				ChainflipAccountStateWithPassive::BackupOrPassive(BackupOrPassive::Backup),
-			ChainflipAccountState::HistoricalAuthority =>
+			ChainflipAccountState::Passive =>
 				ChainflipAccountStateWithPassive::BackupOrPassive(BackupOrPassive::Passive),
+			ChainflipAccountState::HistoricalAuthority => unreachable!(),
 		}
 	}
 }

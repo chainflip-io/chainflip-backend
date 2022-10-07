@@ -183,7 +183,7 @@ fn epoch_rotates() {
 				assert!(
 					matches!(
 						Validator::get_validator_state(account.clone()),
-						ChainflipAccountState::Backup | ChainflipAccountState::HistoricalAuthority,
+						ChainflipAccountState::Backup | ChainflipAccountState::Passive,
 					),
 					"should be a backup node"
 				);
