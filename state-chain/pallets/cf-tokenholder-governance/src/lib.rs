@@ -229,20 +229,14 @@ pub mod pallet {
 				if backers.iter().map(T::StakingInfo::total_stake_of).sum::<T::Amount>() >
 					(T::StakingInfo::total_onchain_stake() / 3u32.into()) * 2u32.into()
 				{
+					let enactment_block =
+						<frame_system::Pallet<T>>::block_number() + T::EnactmentDelay::get();
 					match proposal {
 						SetGovernanceKey(key) => {
-							GovKeyUpdateAwaitingEnactment::<T>::put((
-								<frame_system::Pallet<T>>::block_number() +
-									T::EnactmentDelay::get(),
-								key,
-							));
+							GovKeyUpdateAwaitingEnactment::<T>::put((enactment_block, key));
 						},
 						SetCommunityKey(key) => {
-							CommKeyUpdateAwaitingEnactment::<T>::put((
-								<frame_system::Pallet<T>>::block_number() +
-									T::EnactmentDelay::get(),
-								key,
-							));
+							CommKeyUpdateAwaitingEnactment::<T>::put((enactment_block, key));
 						},
 					}
 					Event::<T>::ProposalPassed { proposal }
