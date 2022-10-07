@@ -116,7 +116,6 @@ commands:
               git fetch && git merge origin/$target_branch --no-edit
             fi
 ######################## /Commands ########################
-
 ######################## Workflows ########################
 workflows:
   chainflip-backend-non-blocking:
@@ -413,7 +412,7 @@ jobs:
             --url 'http://localhost:5555/health'
             --connect-timeout 5
             --max-time 10
-            --retry 3
+            --retry 5
             --retry-delay 1
             --retry-max-time 20
             --retry-all-errors

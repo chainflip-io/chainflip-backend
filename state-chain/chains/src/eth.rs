@@ -25,7 +25,7 @@ use sp_std::{
 	str, vec,
 };
 
-use self::api::EthereumReplayProtection;
+use self::{api::EthereumReplayProtection, ingress_address::get_salt};
 
 // Reference constants for the chain spec
 pub const CHAIN_ID_MAINNET: u64 = 1;
@@ -719,7 +719,10 @@ impl From<H256> for TransactionHash {
 
 impl Tokenizable for FetchAssetParams<Ethereum> {
 	fn tokenize(self) -> Token {
-		Token::Tuple(vec![Token::FixedBytes(self.swap_id.to_vec()), Token::Address(self.asset)])
+		Token::Tuple(vec![
+			Token::FixedBytes(get_salt(self.swap_id).to_vec()),
+			Token::Address(self.asset),
+		])
 	}
 }
 

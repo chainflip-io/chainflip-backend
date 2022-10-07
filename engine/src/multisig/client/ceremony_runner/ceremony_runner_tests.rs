@@ -4,16 +4,16 @@ use crate::{
     logging::test_utils::new_test_logger,
     multisig::{
         client::{
-            ceremony_manager::{KeygenCeremony, SigningCeremony},
+            ceremony_manager::{prepare_signing_request, KeygenCeremony, SigningCeremony},
             common::{broadcast::BroadcastStage, CeremonyCommon},
             gen_signing_data_stage1, gen_signing_data_stage4, get_key_data_for_test,
             signing::{
                 frost::SigningData, frost_stages::AwaitCommitments1, SigningStateCommonInfo,
             },
             tests::{
-                gen_invalid_keygen_stage_2_state, gen_keygen_data_verify_hash_comm2, ACCOUNT_IDS,
-                DEFAULT_KEYGEN_CEREMONY_ID, DEFAULT_KEYGEN_SEED, DEFAULT_SIGNING_CEREMONY_ID,
-                DEFAULT_SIGNING_SEED,
+                cause_ceremony_timeout, gen_invalid_keygen_stage_2_state,
+                gen_keygen_data_verify_hash_comm2, ACCOUNT_IDS, DEFAULT_KEYGEN_CEREMONY_ID,
+                DEFAULT_KEYGEN_SEED, DEFAULT_SIGNING_CEREMONY_ID, DEFAULT_SIGNING_SEED,
             },
             KeygenResult, PartyIdxMapping,
         },
@@ -25,8 +25,39 @@ use crate::{
 };
 
 use rand_legacy::SeedableRng;
+use sp_runtime::AccountId32;
+use tokio::sync::mpsc;
 
 use super::*;
+
+type CeremonyRunnerChannels = (
+    UnboundedSender<(AccountId32, SigningData<Point>)>,
+    tokio::sync::oneshot::Sender<PreparedRequest<SigningCeremony<EthSigning>>>,
+    UnboundedReceiver<(CeremonyId, CeremonyOutcome<SigningCeremony<EthSigning>>)>,
+);
+
+/// Spawn a signing ceremony runner task in the an unauthorised state with some default parameters
+fn spawn_signing_ceremony_runner() -> (
+    tokio::task::JoinHandle<Result<(), anyhow::Error>>,
+    CeremonyRunnerChannels,
+) {
+    let (message_sender, message_receiver) = mpsc::unbounded_channel();
+    let (request_sender, request_receiver) = oneshot::channel();
+    let (outcome_sender, outcome_receiver) = mpsc::unbounded_channel();
+
+    let task_handle = tokio::spawn(CeremonyRunner::<SigningCeremony<EthSigning>>::run(
+        DEFAULT_SIGNING_CEREMONY_ID,
+        message_receiver,
+        request_receiver,
+        outcome_sender,
+        new_test_logger(),
+    ));
+
+    (
+        task_handle,
+        (message_sender, request_sender, outcome_receiver),
+    )
+}
 
 #[tokio::test]
 async fn should_ignore_stage_data_with_incorrect_size() {
@@ -69,7 +100,11 @@ async fn should_ignore_non_stage_1_messages_while_unauthorised() {
 
     // Create an unauthorised ceremony
     let mut unauthorised_ceremony_runner: CeremonyRunner<KeygenCeremony<EthSigning>> =
-        CeremonyRunner::new_unauthorised(DEFAULT_KEYGEN_CEREMONY_ID, &new_test_logger());
+        CeremonyRunner::new_unauthorised(
+            DEFAULT_KEYGEN_CEREMONY_ID,
+            mpsc::unbounded_channel().0,
+            &new_test_logger(),
+        );
 
     // Process a stage 2 message
     assert_eq!(
@@ -90,7 +125,11 @@ async fn should_ignore_non_stage_1_messages_while_unauthorised() {
 async fn should_delay_stage_1_message_while_unauthorised() {
     // Create an unauthorised ceremony
     let mut unauthorised_ceremony_runner: CeremonyRunner<SigningCeremony<EthSigning>> =
-        CeremonyRunner::new_unauthorised(DEFAULT_KEYGEN_CEREMONY_ID, &new_test_logger());
+        CeremonyRunner::new_unauthorised(
+            DEFAULT_KEYGEN_CEREMONY_ID,
+            mpsc::unbounded_channel().0,
+            &new_test_logger(),
+        );
 
     // Process a stage 1 message
     assert_eq!(
@@ -247,4 +286,40 @@ async fn should_ignore_message_from_unexpected_stage() {
         gen_signing_data_stage4(signing_idxs.len() as u32),
     )
     .await;
+}
+
+#[tokio::test]
+async fn should_not_timeout_unauthorised_ceremony() {
+    let (task_handle, _channels) = spawn_signing_ceremony_runner();
+
+    // Advance time, then check that the task did not end due to a timeout
+    cause_ceremony_timeout().await;
+    assert!(!task_handle.is_finished());
+}
+
+#[tokio::test]
+async fn should_timeout_authorised_ceremony() {
+    let (task_handle, (_message_sender, request_sender, _outcome_receiver)) =
+        spawn_signing_ceremony_runner();
+
+    // Send a signing request
+    let (outgoing_p2p_sender, _outgoing_p2p_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let _res = request_sender.send(
+        prepare_signing_request(
+            DEFAULT_SIGNING_CEREMONY_ID,
+            &ACCOUNT_IDS[0],
+            BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
+            get_key_data_for_test(BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned())),
+            MESSAGE_HASH.clone(),
+            &outgoing_p2p_sender,
+            Rng::from_seed(DEFAULT_SIGNING_SEED),
+            &new_test_logger(),
+        )
+        .unwrap(),
+    );
+
+    // Advance time, then check that the task was ended due to the timeout
+    assert!(!task_handle.is_finished());
+    cause_ceremony_timeout().await;
+    assert!(task_handle.is_finished());
 }
