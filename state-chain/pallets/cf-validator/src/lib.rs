@@ -1130,8 +1130,6 @@ impl<T: Config> Pallet<T> {
 		if current_backup.contains_key(&account_id.into()) {
 			return ChainflipAccountState::Backup
 		}
-		// TODO: We should check also the stake here. In the current usage of the function it's
-		// impossible that we ever reach this point with an account that has no stake it at all.
 		ChainflipAccountState::Passive
 	}
 }
