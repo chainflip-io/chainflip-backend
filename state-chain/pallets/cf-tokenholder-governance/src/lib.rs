@@ -228,7 +228,7 @@ pub mod pallet {
 			let total_backed =
 				backers.iter().map(T::StakingInfo::total_stake_of).sum::<T::Amount>();
 			let total_stake = T::StakingInfo::total_onchain_stake();
-			if total_backed > (total_stake / 3u32.into()) * 2u32.into() {
+			Self::deposit_event(if total_backed > (total_stake / 3u32.into()) * 2u32.into() {
 				match proposal {
 					SetGovernanceKey(key) => {
 						GovKeyUpdateAwaitingEnactment::<T>::put((
@@ -243,10 +243,10 @@ pub mod pallet {
 						));
 					},
 				}
-				Self::deposit_event(Event::<T>::ProposalPassed { proposal });
+				Event::<T>::ProposalPassed { proposal }
 			} else {
-				Self::deposit_event(Event::<T>::ProposalRejected { proposal });
-			}
+				Event::<T>::ProposalRejected { proposal }
+			});
 			backers.len()
 		}
 	}
