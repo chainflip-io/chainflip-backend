@@ -914,7 +914,6 @@ impl<T: Config> Pallet<T> {
 			.filter(|authority| !new_authorities_lookup.contains(authority))
 		{
 			log::trace!(target: "cf-validator", "Setting old authority {:?} to historical.", historical_authority);
-			// T::ChainflipAccount::set_historical_authority(historical_authority.into_ref());
 		}
 
 		for incoming_authority in new_authorities_lookup

@@ -168,7 +168,6 @@ impl pallet_cf_validator::Config for Runtime {
 	type ValidatorWeightInfo = pallet_cf_validator::weights::PalletWeight<Runtime>;
 	type Auctioneer = Auction;
 	type VaultRotator = EthereumVault;
-	// type ChainflipAccount = cf_traits::ChainflipAccountStore<Self>;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type MissedAuthorshipSlots = chainflip::MissedAuraSlots;
 	type BidderProvider = pallet_cf_staking::Pallet<Self>;
@@ -333,7 +332,7 @@ impl frame_system::Config for Runtime {
 		GrandpaOffenceReporter<Self>,
 	);
 	/// The data to be stored in an account.
-	type AccountData = (); //ChainflipAccountData;
+	type AccountData = ();
 	/// Weight information for the extrinsics of this pallet.
 	type SystemWeightInfo = weights::frame_system::SubstrateWeight<Runtime>;
 	/// This is used as an identifier of the chain.
