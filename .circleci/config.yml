@@ -373,6 +373,7 @@ jobs:
 
   test-single-node:
     executor: chainflip-master
+    env
     steps:
       - checkout
       - attach_workspace:
@@ -387,6 +388,8 @@ jobs:
       - run:
           name: Start Node
           background: true
+          environment:
+            ETHEREUM_CHAIN_ID: 5
           command: ./target/release/chainflip-node --chain cf-dev --node-key-file=node_key_file
       - run:
           name: Check Node Health
