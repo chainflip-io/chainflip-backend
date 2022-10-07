@@ -570,8 +570,9 @@ construct_runtime!(
 		Environment: pallet_cf_environment,
 		Flip: pallet_cf_flip,
 		Emissions: pallet_cf_emissions,
-		AccountTypes: pallet_cf_account_types,
 		Staking: pallet_cf_staking,
+		// AccountTypes after staking, since account creation comes first.
+		AccountTypes: pallet_cf_account_types,
 		TransactionPayment: pallet_transaction_payment,
 		Witnesser: pallet_cf_witnesser,
 		Auction: pallet_cf_auction,
@@ -604,8 +605,9 @@ construct_runtime!(
 		Environment: pallet_cf_environment,
 		Flip: pallet_cf_flip,
 		Emissions: pallet_cf_emissions,
-		AccountTypes: pallet_cf_account_types,
+		// AccountTypes after staking, since account creation comes first.
 		Staking: pallet_cf_staking,
+		AccountTypes: pallet_cf_account_types,
 		TransactionPayment: pallet_transaction_payment,
 		Witnesser: pallet_cf_witnesser,
 		Auction: pallet_cf_auction,
