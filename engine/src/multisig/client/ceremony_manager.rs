@@ -1,6 +1,5 @@
 use anyhow::{bail, Context, Result};
 use futures::FutureExt;
-use futures::{stream::FuturesUnordered, StreamExt};
 use std::collections::{hash_map, BTreeSet, HashMap};
 use std::fmt::{Debug, Display};
 use std::marker::PhantomData;
@@ -308,7 +307,24 @@ impl<C: CryptoScheme> CeremonyManager<C> {
                     scope,
                 );
             }
-            None => { /* Not participating in the ceremony, so do nothing */ }
+            None => {
+                // Because unauthorised ceremonies don't timeout, We must check the id of ceremonies that we are not
+                // participating in and cleanup any unauthorised ceremonies that may have been created by a bad p2p message.
+                if self
+                    .signing_states
+                    .cleanup_unauthorised_ceremony(&request.ceremony_id)
+                {
+                    CeremonyFailureReason::<SigningFailureReason>::NotParticipatingInUnauthorisedCeremony
+                        .log(&BTreeSet::default(), &self.logger);
+                }
+                if self
+                    .keygen_states
+                    .cleanup_unauthorised_ceremony(&request.ceremony_id)
+                {
+                    CeremonyFailureReason::<KeygenFailureReason>::NotParticipatingInUnauthorisedCeremony
+                        .log(&BTreeSet::default(), &self.logger);
+                }
+            }
         }
     }
 
@@ -335,11 +351,11 @@ impl<C: CryptoScheme> CeremonyManager<C> {
                                 },
                             }
                         }
-                        Some((id, outcome)) = self.signing_states.ceremony_futures.next() => {
-                            self.signing_states.finalize_ceremony(id, outcome);
+                        Some((id, outcome)) = self.signing_states.outcome_receiver.recv() => {
+                            self.signing_states.finalize_authorised_ceremony(id, outcome);
                         }
-                        Some((id, outcome)) = self.keygen_states.ceremony_futures.next() => {
-                            self.keygen_states.finalize_ceremony(id, outcome);
+                        Some((id, outcome)) = self.keygen_states.outcome_receiver.recv() => {
+                            self.keygen_states.finalize_authorised_ceremony(id, outcome);
                         }
                     }
                 }
@@ -544,6 +560,14 @@ impl<C: CryptoScheme> CeremonyManager<C> {
     pub fn get_keygen_states_len(&self) -> usize {
         self.keygen_states.len()
     }
+
+    pub fn insert_signing_state_for_test(
+        &mut self,
+        ceremony_id: CeremonyId,
+        ceremony_handle: CeremonyHandle<SigningCeremony<C>>,
+    ) {
+        self.signing_states.insert(ceremony_id, ceremony_handle);
+    }
 }
 
 /// Create unique deterministic context used for generating a ZKP to prevent replay attacks
@@ -570,15 +594,19 @@ pub fn generate_keygen_context(
 struct CeremonyStates<Ceremony: CeremonyTrait> {
     // Collection of all ceremony handles used to send data to the ceremony tasks
     ceremony_handles: HashMap<CeremonyId, CeremonyHandle<Ceremony>>,
-    /// used to get notified when a ceremony is finished
-    ceremony_futures: FuturesUnordered<ScopedJoinHandle<(CeremonyId, CeremonyOutcome<Ceremony>)>>,
+    // Given to each ceremony for it to send back the outcome
+    outcome_sender: UnboundedSender<(CeremonyId, CeremonyOutcome<Ceremony>)>,
+    /// All authorised ceremonies will send their outcome here
+    outcome_receiver: UnboundedReceiver<(CeremonyId, CeremonyOutcome<Ceremony>)>,
 }
 
 impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
     fn new() -> Self {
+        let (outcome_sender, outcome_receiver) = mpsc::unbounded_channel();
         Self {
             ceremony_handles: HashMap::new(),
-            ceremony_futures: Default::default(),
+            outcome_sender,
+            outcome_receiver,
         }
     }
 
@@ -601,10 +629,12 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
                 if ceremony_id > latest_ceremony_id
                     && ceremony_id <= latest_ceremony_id + CEREMONY_ID_WINDOW
                 {
-                    let (ceremony_handle, task_handle) =
-                        CeremonyHandle::spawn(ceremony_id, scope, logger);
-                    self.ceremony_futures.push(task_handle);
-                    entry.insert(ceremony_handle)
+                    entry.insert(CeremonyHandle::spawn(
+                        ceremony_id,
+                        self.outcome_sender.clone(),
+                        scope,
+                        logger,
+                    ))
                 } else {
                     slog::debug!(
                         logger,
@@ -632,43 +662,42 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
         logger: &slog::Logger,
     ) -> &mut CeremonyHandle<Ceremony> {
         self.ceremony_handles.entry(ceremony_id).or_insert_with(|| {
-            let (ceremony_handle, task_handle) = CeremonyHandle::spawn(ceremony_id, scope, logger);
-
-            self.ceremony_futures.push(task_handle);
-
-            ceremony_handle
+            CeremonyHandle::spawn(ceremony_id, self.outcome_sender.clone(), scope, logger)
         })
     }
 
     /// Send the outcome of the ceremony and remove its state
-    fn finalize_ceremony(
+    fn finalize_authorised_ceremony(
         &mut self,
         ceremony_id: CeremonyId,
         ceremony_outcome: CeremonyOutcome<Ceremony>,
     ) {
-        match self
+        if let CeremonyRequestState::Authorised(result_sender) = self
             .ceremony_handles
             .remove(&ceremony_id)
             .expect("Should have handle")
             .request_state
         {
-            CeremonyRequestState::Authorised(result_sender) => {
-                let _result = result_sender.send(ceremony_outcome);
-            }
-            CeremonyRequestState::Unauthorised(_) => {
-                // Only caused by `CeremonyFailureReason::ExpiredBeforeBeingAuthorized`,
-                // We do not report timeout of unauthorised ceremonies
-            }
+            let _result = result_sender.send(ceremony_outcome);
+        } else {
+            panic!("Expected authorised ceremony");
         }
     }
 
-    /// Removing any state associated with the unauthorized ceremony
-    fn cleanup_unauthorised_ceremony(&mut self, ceremony_id: &CeremonyId) {
-        if let Some(removed) = self.ceremony_handles.remove(ceremony_id) {
+    /// Removing any state associated with the unauthorized ceremony and therefore abort its task
+    fn cleanup_unauthorised_ceremony(&mut self, ceremony_id: &CeremonyId) -> bool {
+        // Dropping the ceremony handle will cause any associated task to be aborted
+        if let Some(ceremony_handle) = self.ceremony_handles.remove(ceremony_id) {
             assert!(
-                matches!(removed.request_state, CeremonyRequestState::Unauthorised(_)),
+                matches!(
+                    ceremony_handle.request_state,
+                    CeremonyRequestState::Unauthorised(_)
+                ),
                 "Expected an unauthorised ceremony"
             );
+            true
+        } else {
+            false
         }
     }
 
@@ -676,18 +705,25 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
     fn len(&self) -> usize {
         self.ceremony_handles.len()
     }
+
+    #[cfg(test)]
+    fn insert(&mut self, ceremony_id: CeremonyId, ceremony_handle: CeremonyHandle<Ceremony>) {
+        self.ceremony_handles.insert(ceremony_id, ceremony_handle);
+    }
 }
 
 // ==================
 
 /// Contains the result sender and the channels used to send data to a running ceremony
-struct CeremonyHandle<Ceremony: CeremonyTrait> {
+pub struct CeremonyHandle<Ceremony: CeremonyTrait> {
     pub message_sender: UnboundedSender<(AccountId, Ceremony::Data)>,
     pub request_state: CeremonyRequestState<Ceremony>,
+    // When the task handle is dropped, the task will be aborted.
+    pub _task_handle: ScopedJoinHandle<()>,
 }
 
 /// Contains either the request sender or the result sender depending on the state of the ceremony
-enum CeremonyRequestState<Ceremony: CeremonyTrait> {
+pub enum CeremonyRequestState<Ceremony: CeremonyTrait> {
     /// Initial state before we have received the request from the SC.
     /// Contains the oneshot channel used to relay the request to the ceremony task.
     Unauthorised(oneshot::Sender<PreparedRequest<Ceremony>>),
@@ -698,30 +734,27 @@ enum CeremonyRequestState<Ceremony: CeremonyTrait> {
 
 impl<Ceremony: CeremonyTrait> CeremonyHandle<Ceremony> {
     fn spawn(
-        cid: CeremonyId,
+        ceremony_id: CeremonyId,
+        outcome_sender: UnboundedSender<(CeremonyId, CeremonyOutcome<Ceremony>)>,
         scope: &Scope<'_, anyhow::Result<()>, true>,
         logger: &slog::Logger,
-    ) -> (
-        Self,
-        ScopedJoinHandle<(CeremonyId, CeremonyOutcome<Ceremony>)>,
-    ) {
-        let (msg_s, msg_r) = mpsc::unbounded_channel();
-        let (req_s, req_r) = oneshot::channel();
+    ) -> Self {
+        let (message_sender, message_receiver) = mpsc::unbounded_channel();
+        let (request_sender, request_receiver) = oneshot::channel();
 
         let task_handle = scope.spawn_with_handle(CeremonyRunner::<Ceremony>::run(
-            cid,
-            msg_r,
-            req_r,
+            ceremony_id,
+            message_receiver,
+            request_receiver,
+            outcome_sender,
             logger.clone(),
         ));
 
-        (
-            CeremonyHandle {
-                message_sender: msg_s,
-                request_state: CeremonyRequestState::Unauthorised(req_s),
-            },
-            task_handle,
-        )
+        CeremonyHandle {
+            message_sender,
+            request_state: CeremonyRequestState::Unauthorised(request_sender),
+            _task_handle: task_handle,
+        }
     }
 
     fn on_request(

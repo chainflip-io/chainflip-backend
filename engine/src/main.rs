@@ -67,7 +67,7 @@ fn main() -> anyhow::Result<()> {
             state_chain_client
                 .submit_signed_extrinsic(
                     pallet_cf_validator::Call::cfe_version {
-                        version: SemVer {
+                        new_version: SemVer {
                             major: env!("CARGO_PKG_VERSION_MAJOR").parse::<u8>().unwrap(),
                             minor: env!("CARGO_PKG_VERSION_MINOR").parse::<u8>().unwrap(),
                             patch: env!("CARGO_PKG_VERSION_PATCH").parse::<u8>().unwrap(),

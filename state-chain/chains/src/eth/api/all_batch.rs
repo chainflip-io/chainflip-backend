@@ -130,11 +130,11 @@ mod test_all_batch {
 
 		let dummy_fetch_asset_params: Vec<FetchAssetParams<Ethereum>> = vec![
 			FetchAssetParams::<Ethereum> {
-				swap_id: [1_u8; 32],
+				swap_id: 1u64,
 				asset: eth::Address::from_slice(&[3; 20]),
 			},
 			FetchAssetParams::<Ethereum> {
-				swap_id: [2_u8; 32],
+				swap_id: 2u64,
 				asset: eth::Address::from_slice(&[4; 20]),
 			},
 		];

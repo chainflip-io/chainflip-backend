@@ -221,6 +221,7 @@ impl pallet_cf_ingress::Config for Runtime {
 	type Event = Event;
 	type AddressDerivation = AddressDerivation;
 	type LpAccountHandler = LiquidityProvider;
+	type IngressFetchApi = Egress;
 	type WeightInfo = pallet_cf_ingress::weights::PalletWeight<Runtime>;
 }
 
@@ -783,7 +784,7 @@ impl_runtime_apis! {
 				bond: account_info.bond(),
 				last_heartbeat: pallet_cf_reputation::LastHeartbeat::<Runtime>::get(&account_id).unwrap_or(0),
 				is_live: Reputation::is_qualified(&account_id),
-				is_activated: !pallet_cf_staking::AccountRetired::<Runtime>::get(&account_id),
+				is_activated: pallet_cf_staking::ActiveBidder::<Runtime>::get(&account_id),
 				online_credits: reputation_info.online_credits,
 				reputation_points: reputation_info.reputation_points,
 				withdrawal_address,
