@@ -225,28 +225,31 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		pub fn resolve_vote(proposal: Proposal<T>) -> usize {
 			let backers = Backers::<T>::take(&proposal);
-			let total_backed =
-				backers.iter().map(T::StakingInfo::total_stake_of).sum::<T::Amount>();
-			let total_stake = T::StakingInfo::total_onchain_stake();
-			Self::deposit_event(if total_backed > (total_stake / 3u32.into()) * 2u32.into() {
-				match proposal {
-					SetGovernanceKey(key) => {
-						GovKeyUpdateAwaitingEnactment::<T>::put((
-							<frame_system::Pallet<T>>::block_number() + T::EnactmentDelay::get(),
-							key,
-						));
-					},
-					SetCommunityKey(key) => {
-						CommKeyUpdateAwaitingEnactment::<T>::put((
-							<frame_system::Pallet<T>>::block_number() + T::EnactmentDelay::get(),
-							key,
-						));
-					},
-				}
-				Event::<T>::ProposalPassed { proposal }
-			} else {
-				Event::<T>::ProposalRejected { proposal }
-			});
+			Self::deposit_event(
+				if backers.iter().map(T::StakingInfo::total_stake_of).sum::<T::Amount>() >
+					(T::StakingInfo::total_onchain_stake() / 3u32.into()) * 2u32.into()
+				{
+					match proposal {
+						SetGovernanceKey(key) => {
+							GovKeyUpdateAwaitingEnactment::<T>::put((
+								<frame_system::Pallet<T>>::block_number() +
+									T::EnactmentDelay::get(),
+								key,
+							));
+						},
+						SetCommunityKey(key) => {
+							CommKeyUpdateAwaitingEnactment::<T>::put((
+								<frame_system::Pallet<T>>::block_number() +
+									T::EnactmentDelay::get(),
+								key,
+							));
+						},
+					}
+					Event::<T>::ProposalPassed { proposal }
+				} else {
+					Event::<T>::ProposalRejected { proposal }
+				},
+			);
 			backers.len()
 		}
 	}
