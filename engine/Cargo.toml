@@ -9,7 +9,7 @@ depends = "$auto"
 extended-description = """\
 Chainflip Validator Engine Package"""
 maintainer = "Chainflip UG <dev@chainflip.io>"
-name = "engine"
+name = "chainflip-engine"
 priority = "required"
 section = "rust"
 
