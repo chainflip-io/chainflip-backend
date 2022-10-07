@@ -181,11 +181,10 @@ fn epoch_rotates() {
 			for account in keyless_nodes.iter() {
 				// TODO: Check historical epochs
 				assert!(
-					match Validator::get_validator_state(account.clone()) {
-						ChainflipAccountState::Backup |
-						ChainflipAccountState::HistoricalAuthority => true,
-						_ => false,
-					},
+					matches!(
+						Validator::get_validator_state(account.clone()),
+						ChainflipAccountState::Backup | ChainflipAccountState::HistoricalAuthority,
+					),
 					"should be a backup node"
 				);
 			}
