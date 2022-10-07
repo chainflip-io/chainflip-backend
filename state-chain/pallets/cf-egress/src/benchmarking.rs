@@ -14,15 +14,24 @@ const ALICE_ETH: EthereumAddress = [100u8; 20];
 benchmarks! {
 	send_batch_egress {
 		let n in 1u32 .. 255u32;
-		let mut batch = vec![];
+		let m in 1u32 .. 255u32;
+		let mut egress_batch = vec![];
+		let mut fetch_batch = vec![];
 
 		for i in 0..n {
-			batch.push((1_000, ForeignChainAddress::Eth(ALICE_ETH)));
+			egress_batch.push((1_000, ForeignChainAddress::Eth(ALICE_ETH)));
+		}
+		for i in 0..m {
+			fetch_batch.push(i as u64);
 		}
 
 		ScheduledEgress::<T>::insert(
 			ETH_ETH,
-			batch,
+			egress_batch,
+		);
+		EthereumScheduledIngressFetch::<T>::insert(
+			Asset::Eth,
+			fetch_batch,
 		);
 	} : { let _ = Pallet::<T>::on_idle(Default::default(), 1_000_000_000_000_000); }
 	verify {

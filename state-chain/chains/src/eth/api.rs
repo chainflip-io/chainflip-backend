@@ -127,8 +127,8 @@ impl UpdateFlipSupply<Ethereum> for EthereumApi {
 impl AllBatch<Ethereum> for EthereumApi {
 	fn new_unsigned(
 		replay_protection: EthereumReplayProtection,
-		fetch_params: Vec<eth::FetchAssetParams<Ethereum>>,
-		transfer_params: Vec<eth::TransferAssetParams<Ethereum>>,
+		fetch_params: Vec<FetchAssetParams<Ethereum>>,
+		transfer_params: Vec<TransferAssetParams<Ethereum>>,
 	) -> Self {
 		Self::AllBatch(all_batch::AllBatch::new_unsigned(
 			replay_protection,

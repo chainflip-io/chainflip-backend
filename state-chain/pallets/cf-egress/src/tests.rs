@@ -1,7 +1,7 @@
-use crate::{mock::*, DisabledEgressAssets, ScheduledEgress};
+use crate::{mock::*, DisabledEgressAssets, EthereumScheduledIngressFetch, ScheduledEgress};
 
-use cf_primitives::{ForeignChain, ForeignChainAddress, ForeignChainAsset};
-use cf_traits::EgressApi;
+use cf_primitives::{ForeignChain, ForeignChainAddress, ForeignChainAsset, ETHEREUM_ETH_ADDRESS};
+use cf_traits::{EgressApi, IngressFetchApi};
 
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
 const ALICE_ETH_ADDRESS: EthereumAddress = [100u8; 20];
@@ -98,6 +98,34 @@ fn can_schedule_egress_to_batch() {
 }
 
 #[test]
+fn can_schedule_ingress_fetch() {
+	new_test_ext().execute_with(|| {
+		assert!(EthereumScheduledIngressFetch::<Test>::get(Asset::Eth).is_empty());
+		assert!(EthereumScheduledIngressFetch::<Test>::get(Asset::Dot).is_empty());
+
+		Egress::schedule_ingress_fetch(vec![
+			(Asset::Eth, 1u64),
+			(Asset::Eth, 2u64),
+			(Asset::Dot, 3u64),
+		]);
+
+		assert_eq!(EthereumScheduledIngressFetch::<Test>::get(Asset::Eth), vec![1, 2]);
+		assert_eq!(EthereumScheduledIngressFetch::<Test>::get(Asset::Dot), vec![3]);
+
+		System::assert_last_event(Event::Egress(crate::Event::IngressFetchesScheduled {
+			fetches_added: 3u32,
+		}));
+
+		Egress::schedule_ingress_fetch(vec![(Asset::Eth, 4u64)]);
+
+		assert_eq!(EthereumScheduledIngressFetch::<Test>::get(Asset::Eth), vec![1, 2, 4]);
+		System::assert_last_event(Event::Egress(crate::Event::IngressFetchesScheduled {
+			fetches_added: 1u32,
+		}));
+	});
+}
+
+#[test]
 fn on_idle_can_send_batch_all() {
 	new_test_ext().execute_with(|| {
 		ScheduledEgress::<Test>::insert(
@@ -109,6 +137,7 @@ fn on_idle_can_send_batch_all() {
 				(4_000, ForeignChainAddress::Eth(BOB_ETH_ADDRESS)),
 			],
 		);
+		EthereumScheduledIngressFetch::<Test>::insert(Asset::Eth, vec![1, 2, 3, 4]);
 
 		ScheduledEgress::<Test>::insert(
 			ETH_FLIP,
@@ -119,8 +148,10 @@ fn on_idle_can_send_batch_all() {
 				(8_000, ForeignChainAddress::Eth(BOB_ETH_ADDRESS)),
 			],
 		);
+		EthereumScheduledIngressFetch::<Test>::insert(Asset::Flip, vec![5]);
+		EthereumScheduledIngressFetch::<Test>::insert(Asset::Usdc, vec![6, 7]);
 
-		assert_eq!(LastEgressSent::get(), vec![]);
+		assert!(LastEgressSent::get().is_empty());
 
 		// Take all scheduled Egress and Broadcast as batch
 		Egress::on_idle(1, 1_000_000_000_000u64);
@@ -130,23 +161,41 @@ fn on_idle_can_send_batch_all() {
 		assert_eq!(
 			LastEgressSent::get(),
 			vec![
-				([0x00; 20], 5000u128, ALICE_ETH_ADDRESS),
-				([0x00; 20], 6000u128, ALICE_ETH_ADDRESS),
-				([0x00; 20], 7000u128, BOB_ETH_ADDRESS),
-				([0x00; 20], 8000u128, BOB_ETH_ADDRESS),
+				(ETHEREUM_ETH_ADDRESS, 1_000u128, ALICE_ETH_ADDRESS),
+				(ETHEREUM_ETH_ADDRESS, 2_000u128, ALICE_ETH_ADDRESS),
+				(ETHEREUM_ETH_ADDRESS, 3_000u128, BOB_ETH_ADDRESS),
+				(ETHEREUM_ETH_ADDRESS, 4_000u128, BOB_ETH_ADDRESS),
+				(ETHEREUM_FLIP_ADDRESS, 5_000u128, ALICE_ETH_ADDRESS),
+				(ETHEREUM_FLIP_ADDRESS, 6_000u128, ALICE_ETH_ADDRESS),
+				(ETHEREUM_FLIP_ADDRESS, 7_000u128, BOB_ETH_ADDRESS),
+				(ETHEREUM_FLIP_ADDRESS, 8_000u128, BOB_ETH_ADDRESS),
 			]
 		);
-		System::assert_has_event(Event::Egress(crate::Event::EgressBroadcasted {
-			foreign_asset: ETH_ETH,
-			batch_size: 4u32,
-		}));
-		System::assert_has_event(Event::Egress(crate::Event::EgressBroadcasted {
-			foreign_asset: ETH_FLIP,
-			batch_size: 4u32,
+
+		assert_eq!(
+			LastFetchesSent::get(),
+			vec![
+				(1u64, ETHEREUM_ETH_ADDRESS),
+				(2u64, ETHEREUM_ETH_ADDRESS),
+				(3u64, ETHEREUM_ETH_ADDRESS),
+				(4u64, ETHEREUM_ETH_ADDRESS),
+				(5u64, ETHEREUM_FLIP_ADDRESS)
+			]
+		);
+
+		System::assert_has_event(Event::Egress(crate::Event::EgressBroadcastRequested {
+			foreign_assets: vec![ETH_ETH, ETH_FLIP],
+			egress_batch_size: 8u32,
+			fetch_batch_size: 5u32,
 		}));
 
-		assert_eq!(ScheduledEgress::<Test>::get(ETH_ETH), vec![]);
-		assert_eq!(ScheduledEgress::<Test>::get(ETH_FLIP), vec![]);
+		assert!(ScheduledEgress::<Test>::get(ETH_ETH).is_empty());
+		assert!(EthereumScheduledIngressFetch::<Test>::get(Asset::Eth).is_empty());
+		assert!(ScheduledEgress::<Test>::get(ETH_FLIP).is_empty());
+		assert!(EthereumScheduledIngressFetch::<Test>::get(Asset::Flip).is_empty());
+
+		// Only Eth and Flip are sent, Usdc is unaffected.
+		assert_eq!(EthereumScheduledIngressFetch::<Test>::get(Asset::Usdc), vec![6, 7]);
 	});
 }
 
@@ -162,6 +211,7 @@ fn can_manually_send_batch_all() {
 				(4_000, ForeignChainAddress::Eth(BOB_ETH_ADDRESS)),
 			],
 		);
+		EthereumScheduledIngressFetch::<Test>::insert(Asset::Eth, vec![1]);
 
 		ScheduledEgress::<Test>::insert(
 			ETH_FLIP,
@@ -172,8 +222,7 @@ fn can_manually_send_batch_all() {
 				(8_000, ForeignChainAddress::Eth(BOB_ETH_ADDRESS)),
 			],
 		);
-
-		assert_eq!(LastEgressSent::get(), vec![]);
+		EthereumScheduledIngressFetch::<Test>::insert(Asset::Flip, vec![2]);
 
 		assert_ok!(Egress::send_scheduled_egress_for_asset(Origin::root(), ETH_ETH));
 
@@ -181,18 +230,22 @@ fn can_manually_send_batch_all() {
 		assert_eq!(
 			LastEgressSent::get(),
 			vec![
-				([0xEE; 20], 1000u128, ALICE_ETH_ADDRESS),
-				([0xEE; 20], 2000u128, ALICE_ETH_ADDRESS),
-				([0xEE; 20], 3000u128, BOB_ETH_ADDRESS),
-				([0xEE; 20], 4000u128, BOB_ETH_ADDRESS),
+				(ETHEREUM_ETH_ADDRESS, 1000u128, ALICE_ETH_ADDRESS),
+				(ETHEREUM_ETH_ADDRESS, 2000u128, ALICE_ETH_ADDRESS),
+				(ETHEREUM_ETH_ADDRESS, 3000u128, BOB_ETH_ADDRESS),
+				(ETHEREUM_ETH_ADDRESS, 4000u128, BOB_ETH_ADDRESS),
 			]
 		);
-		System::assert_has_event(Event::Egress(crate::Event::EgressBroadcasted {
-			foreign_asset: ETH_ETH,
-			batch_size: 4u32,
+		assert_eq!(LastFetchesSent::get(), vec![(1u64, ETHEREUM_ETH_ADDRESS),],);
+		System::assert_has_event(Event::Egress(crate::Event::EgressBroadcastRequested {
+			foreign_assets: vec![ETH_ETH],
+			egress_batch_size: 4u32,
+			fetch_batch_size: 1u32,
 		}));
 
 		assert!(ScheduledEgress::<Test>::get(ETH_ETH).is_empty());
+		assert!(EthereumScheduledIngressFetch::<Test>::get(Asset::Eth).is_empty());
 		assert!(!ScheduledEgress::<Test>::get(ETH_FLIP).is_empty());
+		assert!(!EthereumScheduledIngressFetch::<Test>::get(Asset::Flip).is_empty());
 	});
 }

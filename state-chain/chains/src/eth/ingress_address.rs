@@ -77,7 +77,7 @@ fn get_deploy_bytecode(asset: Asset) -> &'static [u8] {
 
 /// Get the CREATE2 salt for a given intent_id, equivalent to the big-endian u32, left-padded to 32
 /// bytes.
-fn get_salt(intent_id: IntentId) -> [u8; 32] {
+pub fn get_salt(intent_id: IntentId) -> [u8; 32] {
 	let mut salt = [0u8; 32];
 	let offset = 32 - size_of::<IntentId>();
 	salt.get_mut(offset..).unwrap().copy_from_slice(&intent_id.to_be_bytes());

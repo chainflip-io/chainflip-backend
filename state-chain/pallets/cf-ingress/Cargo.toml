@@ -13,6 +13,7 @@ repository = 'https://github.com/chainflip-io/chainflip-backend'
 [dependencies]
 cf-traits = {path = '../../traits', default-features = false}
 cf-primitives = {path = '../../primitives', default-features = false}
+cf-chains = {path = '../../chains', default-features = false}
 
 # ==== Parity deps ====
 [dependencies.codec]
@@ -61,6 +62,7 @@ default = ['std']
 std = [
   'cf-primitives/std',
   'cf-traits/std',
+  'cf-chains/std',
   'codec/std',
   'frame-benchmarking/std',
   'frame-support/std',

@@ -6,20 +6,23 @@
 // This way intents and intent ids align per chain, which makes sense given they act as an index to
 // the respective address generation function.
 
-use cf_primitives::{Asset, AssetAmount, ForeignChainAddress, ForeignChainAsset, IntentId};
-use cf_traits::{liquidity::LpProvisioningApi, AddressDerivationApi, IngressApi};
+use cf_primitives::{
+	Asset, AssetAmount, ForeignChain, ForeignChainAddress, ForeignChainAsset, IntentId,
+};
+use cf_traits::{liquidity::LpProvisioningApi, AddressDerivationApi, IngressApi, IngressFetchApi};
+
+use frame_support::{
+	pallet_prelude::DispatchResult,
+	sp_runtime::{app_crypto::sp_core, DispatchError},
+};
+use sp_std::vec;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
 pub mod weights;
-use frame_support::{
-	pallet_prelude::DispatchResult,
-	sp_runtime::{app_crypto::sp_core, DispatchError},
-};
-pub use weights::WeightInfo;
-
 pub use pallet::*;
+pub use weights::WeightInfo;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -27,6 +30,7 @@ pub mod pallet {
 
 	use super::*;
 	use cf_primitives::Asset;
+	use cf_traits::IngressFetchApi;
 	use frame_support::{
 		pallet_prelude::{DispatchResultWithPostInfo, OptionQuery, ValueQuery, *},
 		traits::{EnsureOrigin, IsType},
@@ -95,6 +99,8 @@ pub mod pallet {
 		type AddressDerivation: AddressDerivationApi;
 		/// Pallet responsible for managing Liquidity Providers.
 		type LpAccountHandler: LpProvisioningApi<AccountId = Self::AccountId, Amount = AssetAmount>;
+		/// For scheduling fetch requests.
+		type IngressFetchApi: IngressFetchApi;
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;
 	}
@@ -181,6 +187,11 @@ impl<T: Config> IngressApi for Pallet<T> {
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
 		let (intent_id, ingress_address) = Self::generate_new_address(ingress_asset)?;
 
+		// Register the fetch intent for ethereum ingress
+		if ingress_asset.chain == ForeignChain::Ethereum {
+			T::IngressFetchApi::schedule_ingress_fetch(vec![(ingress_asset.asset, intent_id)]);
+		}
+
 		IntentIngressDetails::<T>::insert(
 			ingress_address,
 			IngressDetails { intent_id, ingress_asset },
@@ -203,6 +214,11 @@ impl<T: Config> IngressApi for Pallet<T> {
 		relayer_commission_bps: u16,
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
 		let (intent_id, ingress_address) = Self::generate_new_address(ingress_asset)?;
+
+		// Register the fetch intent for ethereum ingress
+		if ingress_asset.chain == ForeignChain::Ethereum {
+			T::IngressFetchApi::schedule_ingress_fetch(vec![(ingress_asset.asset, intent_id)]);
+		}
 
 		IntentIngressDetails::<T>::insert(
 			ingress_address,

@@ -746,3 +746,16 @@ pub trait EgressApi {
 pub trait EthereumAssetsAddressProvider {
 	fn try_get_asset_address(asset: Asset) -> Option<EthereumAddress>;
 }
+
+/// API that Schedules funds to be fetched from an ingress address and transferred to the main vault
+/// account. It's caller's responsibility to ensure that the asset/address combination are
+/// valid.
+///
+/// Schedule functions are chain specific, as each chain may require different data to do fetching.
+pub trait IngressFetchApi {
+	fn schedule_ingress_fetch(fetch_params: Vec<(Asset, IntentId)>);
+}
+
+impl IngressFetchApi for () {
+	fn schedule_ingress_fetch(_fetch_params: Vec<(Asset, IntentId)>) {}
+}

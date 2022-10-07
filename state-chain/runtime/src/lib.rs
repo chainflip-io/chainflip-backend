@@ -221,6 +221,7 @@ impl pallet_cf_ingress::Config for Runtime {
 	type Event = Event;
 	type AddressDerivation = AddressDerivation;
 	type LpAccountHandler = LiquidityProvider;
+	type IngressFetchApi = Egress;
 	type WeightInfo = pallet_cf_ingress::weights::PalletWeight<Runtime>;
 }
 
