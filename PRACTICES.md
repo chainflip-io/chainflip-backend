@@ -34,7 +34,7 @@ These are the foundation of our practices...
 
 ## Prioritise Readability
 
-Developers spend most of their time reading existing code rather that adding new code (citation needed?). We should therefore put extra effort into ensuring that the code is clear (not just the implementation, but the code's intent too).
+Developers spend most of their time reading existing code rather that adding new code. We should therefore put extra effort into ensuring that the code is clear (not just the implementation, but the code's intent too).
 
 Specifically, readability should be prioritised over code's performance where the performance does not matter (e.g. don't optimise prematurely, particularly if the optimisation makes the code more complex). Clever tricks should in general be avoided if it leads to code that takes a considerable amount of effort to parse (and there is a reasonable, if less perfect or clever, alternative).
 
