@@ -1,14 +1,14 @@
 mod p2p_core;
 
-use std::{net::IpAddr, sync::Arc};
+use std::sync::Arc;
 
+use crate::settings::P2P as P2PSettings;
 use anyhow::Context;
 use cf_primitives::AccountId;
 use futures::{Future, FutureExt};
 pub use p2p_core::{PeerInfo, PeerUpdate};
 use sp_core::H256;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
-use utilities::Port;
 
 use crate::{
     multisig_p2p::{self, OutgoingMultisigStageMessages},
@@ -21,8 +21,7 @@ pub async fn start(
     state_chain_client: Arc<
         StateChainClient<StateChainRpcClient<impl ChainflipClient + Send + Sync + 'static>>,
     >,
-    port: Port,
-    ip_address: IpAddr,
+    settings: P2PSettings,
     latest_block_hash: H256,
     logger: &slog::Logger,
 ) -> anyhow::Result<(
@@ -48,7 +47,13 @@ pub async fn start(
         incoming_message_receiver,
         own_peer_info_receiver,
         p2p_fut,
-    ) = p2p_core::start(&node_key, port, current_peers, our_account_id, logger);
+    ) = p2p_core::start(
+        &node_key,
+        settings.port,
+        current_peers,
+        our_account_id,
+        logger,
+    );
 
     let logger = logger.clone();
 
@@ -62,8 +67,8 @@ pub async fn start(
             scope.spawn(multisig_p2p::start(
                 node_key,
                 state_chain_client,
-                ip_address,
-                port,
+                settings.ip_address,
+                settings.port,
                 own_peer_info,
                 own_peer_info_receiver,
                 logger,

@@ -150,7 +150,7 @@ fn main() -> anyhow::Result<()> {
                 peer_update_sender,
                 incoming_message_receiver,
                 p2p_fut,
-            ) = p2p::start(node_key, state_chain_client.clone(), settings.node_p2p.port, settings.node_p2p.ip_address, latest_block_hash, &root_logger).await.context("Failed to start p2p module")?;
+            ) = p2p::start(node_key, state_chain_client.clone(), settings.node_p2p, latest_block_hash, &root_logger).await.context("Failed to start p2p module")?;
 
             scope.spawn(p2p_fut);
 
