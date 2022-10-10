@@ -50,12 +50,6 @@ pub enum ChainflipAccountState {
 	Backup,
 }
 
-impl ChainflipAccountState {
-	pub fn is_authority(&self) -> bool {
-		matches!(self, ChainflipAccountState::CurrentAuthority)
-	}
-}
-
 // TODO: Just use the AccountState
 #[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, TypeInfo, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
