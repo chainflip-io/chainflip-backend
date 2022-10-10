@@ -3,7 +3,7 @@ use sp_std::collections::btree_set::BTreeSet;
 use crate::mock_runtime::ExtBuilder;
 
 use super::*;
-use cf_primitives::{AccountRole, ChainflipAccountState};
+use cf_primitives::AccountRole;
 use cf_traits::{EpochInfo, QualifyNode, StakeTransfer};
 pub const GENESIS_BALANCE: FlipBalance = TOTAL_ISSUANCE / 100;
 

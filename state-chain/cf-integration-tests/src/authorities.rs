@@ -1,8 +1,8 @@
 use crate::{
-	genesis, get_validator_state, network, NodeId, GENESIS_EPOCH, HEARTBEAT_BLOCK_INTERVAL,
-	VAULT_ROTATION_BLOCKS,
+	genesis, get_validator_state, network, ChainflipAccountState, NodeId, GENESIS_EPOCH,
+	HEARTBEAT_BLOCK_INTERVAL, VAULT_ROTATION_BLOCKS,
 };
-use cf_primitives::{AuthorityCount, ChainflipAccountState};
+use cf_primitives::AuthorityCount;
 use cf_traits::{EpochInfo, FlipBalance, StakeTransfer};
 use sp_runtime::AccountId32;
 use state_chain_runtime::{Flip, Validator};
