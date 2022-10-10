@@ -23,7 +23,7 @@ use state_chain_runtime::AccountId;
 pub const DEFAULT_KEYGEN_SEED: [u8; 32] = [8; 32];
 pub const DEFAULT_SIGNING_SEED: [u8; 32] = [4; 32];
 
-// Default ceremony ids used many unit tests.
+// Default ceremony ids used in many unit tests.
 /// The initial latest ceremony id starts at 0,
 /// so the first ceremony request must have a ceremony id of 1.
 /// Also the SC will never send a ceremony request at id 0.
