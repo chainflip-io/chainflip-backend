@@ -48,7 +48,6 @@ pub type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::Account
 pub enum ChainflipAccountState {
 	CurrentAuthority,
 	Backup,
-	Passive,
 }
 
 impl ChainflipAccountState {
