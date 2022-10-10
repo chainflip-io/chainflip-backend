@@ -323,8 +323,8 @@ pub mod pallet {
 			amount: ClaimAmount<FlipBalance<T>>,
 			address: EthereumAddress,
 		) -> DispatchResultWithPostInfo {
-			T::SystemState::ensure_no_maintenance()?;
 			let account_id = ensure_signed(origin)?;
+			T::SystemState::ensure_no_maintenance()?;
 
 			let amount = match amount {
 				ClaimAmount::Max => T::Flip::claimable_balance(&account_id),

@@ -677,7 +677,7 @@ fn maintenance_mode_blocks_claim_requests() {
 	new_test_ext().execute_with(|| {
 		MockSystemStateInfo::set_maintenance(true);
 		assert_noop!(
-			Staking::claim(Origin::root(), ClaimAmount::Max, ETH_DUMMY_ADDR),
+			Staking::claim(Origin::signed(ALICE), ClaimAmount::Max, ETH_DUMMY_ADDR),
 			DispatchError::Other("We are in maintenance!")
 		);
 		MockSystemStateInfo::set_maintenance(false);
