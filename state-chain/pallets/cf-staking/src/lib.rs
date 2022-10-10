@@ -684,7 +684,7 @@ impl<T: Config> Pallet<T> {
 		T::Flip::credit_stake(account_id, amount)
 	}
 
-	/// Sets the `retired` flag associated with the account to true, signalling that the account no
+	/// Sets the `active` flag associated with the account to false, signalling that the account no
 	/// longer wishes to participate in auctions.
 	///
 	/// Returns an error if the account has already been retired, or if the account has no stake
@@ -705,10 +705,11 @@ impl<T: Config> Pallet<T> {
 		})
 	}
 
-	/// Sets the `retired` flag associated with the account to false, signalling that the account
-	/// wishes to come out of retirement.
+	/// Sets the `active` flag associated with the account to true, signalling that the account
+	/// wishes to participate in auctions, to become a network authority.
 	///
-	/// Returns an error if the account is not retired, or if the account has no stake associated.
+	/// Returns an error if the account is already active, or if the account has no stake
+	/// associated.
 	fn activate(account_id: &AccountId<T>) -> Result<(), Error<T>> {
 		ActiveBidder::<T>::try_mutate_exists(account_id, |maybe_status| {
 			match maybe_status.as_mut() {
