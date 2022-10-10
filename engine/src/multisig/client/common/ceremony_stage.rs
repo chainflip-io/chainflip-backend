@@ -6,7 +6,7 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
     multisig::{client::utils::PartyIdxMapping, crypto::Rng},
-    multisig_p2p::OutgoingMultisigStageMessages,
+    p2p::OutgoingMultisigStageMessages,
 };
 
 use super::{CeremonyFailureReason, CeremonyStageName};

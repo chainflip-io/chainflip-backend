@@ -1,7 +1,7 @@
 use crate::testing::expect_recv_with_timeout;
 
 use super::{PeerInfo, PeerUpdate};
-use crate::multisig_p2p::OutgoingMultisigStageMessages;
+use crate::p2p::OutgoingMultisigStageMessages;
 use sp_core::ed25519::Public;
 use state_chain_runtime::AccountId;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};

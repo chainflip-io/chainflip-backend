@@ -13,7 +13,7 @@ use crate::multisig::client::keygen::generate_key_data_until_compatible;
 use crate::multisig::client::CeremonyRequestDetails;
 use crate::multisig::crypto::ECScalar;
 use crate::multisig::crypto::{CryptoScheme, ECPoint, Rng};
-use crate::multisig_p2p::OutgoingMultisigStageMessages;
+use crate::p2p::OutgoingMultisigStageMessages;
 use crate::task_scope::{with_task_scope, Scope, ScopedJoinHandle};
 use cf_primitives::{AuthorityCount, CeremonyId};
 use state_chain_runtime::AccountId;

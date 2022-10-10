@@ -8,7 +8,7 @@ use crate::{
         client::{MultisigData, MultisigMessage},
         crypto::ECPoint,
     },
-    multisig_p2p::OutgoingMultisigStageMessages,
+    p2p::OutgoingMultisigStageMessages,
 };
 
 use super::{

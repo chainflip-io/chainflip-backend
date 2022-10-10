@@ -1,24 +1,26 @@
+mod multisig_p2p;
 mod p2p_core;
+mod p2p_muxer;
 
 use std::{marker::PhantomData, sync::Arc};
 
 use crate::{
     common::read_clean_and_decode_hex_str_file,
     multisig::{eth::EthSigning, CryptoScheme},
-    multisig_p2p::OutgoingMultisigStageMessages,
-    p2p_muxer::P2PMuxer,
     settings::P2P as P2PSettings,
 };
+
 use anyhow::Context;
 use cf_primitives::AccountId;
 use futures::{Future, FutureExt};
+pub use multisig_p2p::OutgoingMultisigStageMessages;
 pub use p2p_core::{PeerInfo, PeerUpdate};
+use p2p_muxer::P2PMuxer;
 use sp_core::H256;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use zeroize::Zeroizing;
 
 use crate::{
-    multisig_p2p,
     state_chain_observer::client::{ChainflipClient, StateChainClient, StateChainRpcClient},
     task_scope::with_task_scope,
 };

@@ -18,7 +18,7 @@ use utilities::Port;
 use x25519_dalek::StaticSecret;
 
 use crate::logging::COMPONENT_KEY;
-use crate::multisig_p2p::OutgoingMultisigStageMessages;
+use crate::p2p::OutgoingMultisigStageMessages;
 use socket::OutgoingSocket;
 
 use self::socket::ConnectedOutgoingSocket;

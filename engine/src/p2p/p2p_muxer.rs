@@ -6,7 +6,7 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use crate::{
     logging::COMPONENT_KEY,
     multisig::{eth::EthSigning, ChainTag},
-    multisig_p2p::OutgoingMultisigStageMessages,
+    p2p::OutgoingMultisigStageMessages,
     p2p::{MultisigMessageReceiver, MultisigMessageSender},
 };
 
@@ -195,7 +195,7 @@ mod tests {
 
     use super::*;
 
-    use crate::multisig_p2p::OutgoingMultisigStageMessages;
+    use crate::p2p::OutgoingMultisigStageMessages;
     use crate::testing::expect_recv_with_timeout;
 
     const ACC_1: AccountId = AccountId::new([b'A'; 32]);
