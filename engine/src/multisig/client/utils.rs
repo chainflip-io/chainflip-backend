@@ -23,12 +23,12 @@ impl PartyIdxMapping {
     pub fn get_id(&self, idx: AuthorityCount) -> &AccountId {
         let idx_sub_one = idx
             .checked_sub(1)
-            .expect("Party mapping index must be larger then 0");
+            .expect("Party mapping index must be larger than 0");
 
         self.account_ids
             .iter()
             .nth(idx_sub_one as usize)
-            .unwrap_or_else(|| panic!("Party mapping index of [{}] is invalid", idx))
+            .unwrap_or_else(|| panic!("Party index of [{}] is invalid", idx))
     }
 
     /// Map all signer ids to their corresponding signer idx
@@ -119,11 +119,14 @@ mod utils_tests {
 
     #[test]
     fn get_index_mapping_works() {
-        let map =
-            PartyIdxMapping::from_participants(BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()));
+        let a = AccountId::new([b'A'; 32]);
+        let b = AccountId::new([b'B'; 32]);
+        let c = AccountId::new([b'C'; 32]);
 
-        assert_eq!(map.get_idx(&ACCOUNT_IDS[2]), Some(3));
-        assert_eq!(map.get_id(3), &ACCOUNT_IDS[2]);
+        let map = PartyIdxMapping::from_participants(BTreeSet::from_iter([a, c.clone(), b]));
+
+        assert_eq!(map.get_idx(&c), Some(3));
+        assert_eq!(map.get_id(3), &c);
     }
 
     #[test]
