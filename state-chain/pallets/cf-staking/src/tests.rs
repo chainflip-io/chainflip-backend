@@ -474,7 +474,8 @@ fn claim_expiry() {
 		// Tick the clock forward and expire.
 		const NEXT_TICK: u64 = 7;
 		time_source::Mock::tick(Duration::from_secs(NEXT_TICK));
-		assert!(INIT_TICK + NEXT_TICK > CLAIM_TTL_SECS);
+		let total_ticked = NEXT_TICK + INIT_TICK;
+		assert!(total_ticked > CLAIM_TTL_SECS);
 
 		Pallet::<Test>::on_initialize(0);
 
