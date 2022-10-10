@@ -4,8 +4,6 @@ mod storage_traits;
 use anyhow::{anyhow, bail, Context, Result};
 use codec::{Decode, Encode, FullCodec};
 use custom_rpc::CustomApiClient;
-use frame_metadata::RuntimeMetadata;
-use frame_support::metadata::RuntimeMetadataPrefixed;
 use frame_support::pallet_prelude::InvalidTransaction;
 use frame_support::storage::storage_prefix;
 use frame_support::storage::types::QueryKindTrait;
@@ -918,25 +916,6 @@ async fn inner_connect_to_state_chain(
         latest_block_hash
     );
 
-    let RuntimeMetadataPrefixed(metadata_prefix, metadata) =
-        context!(RuntimeMetadataPrefixed::decode(
-            &mut &state_chain_rpc_client
-                .rpc_client
-                .metadata(Some(latest_block_hash))
-                .await?[..],
-        ))?;
-    if metadata_prefix != frame_metadata::META_RESERVED {
-        bail!(
-            "Invalid Metadata Prefix {}, expected {}.",
-            metadata_prefix,
-            frame_metadata::META_RESERVED
-        )
-    }
-    let metadata = match metadata {
-        RuntimeMetadata::V14(meta) => meta,
-        other => bail!("Invalid Metadata version {:?}, expected V14", other),
-    };
-
     Ok((
         latest_block_hash,
         finalized_block_header_stream,
@@ -959,19 +938,10 @@ async fn inner_connect_to_state_chain(
             our_account_id,
             // TODO: Make this type safe: frame_system::Events::<state_chain_runtime::Runtime>::hashed_key() - Events is private :(
             events_storage_key: StorageKey(storage_prefix(b"System", b"Events").to_vec()),
-            heartbeat_block_interval: context!(u32::decode(
-                &mut &metadata
-                    .pallets
-                    .iter()
-                    .find(|pallet| pallet.name == "Reputation")
-                    .unwrap()
-                    .constants
-                    .iter()
-                    .find(|constant| constant.name == "HeartbeatBlockInterval")
-                    .unwrap()
-                    .value[..],
-            ))
-            .unwrap(),
+            heartbeat_block_interval: {
+                use frame_support::traits::Get;
+                <state_chain_runtime::Runtime as pallet_cf_reputation::Config>::HeartbeatBlockInterval::get()
+            },
         }),
     ))
 }
