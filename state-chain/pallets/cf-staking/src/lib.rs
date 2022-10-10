@@ -590,20 +590,8 @@ pub mod pallet {
 			ClaimTTL::<T>::set(self.claim_ttl.as_secs());
 			for (staker, amount) in self.genesis_stakers.iter() {
 				Pallet::<T>::stake_account(staker, *amount);
-				match Pallet::<T>::activate(staker) {
-					Ok(_) => {
-						// Activated account successful.
-						log::info!("Activated genesis account {:?}", staker);
-					},
-					Err(Error::AlreadyActive) => {
-						// If the account is already active, we don't need to do anything.
-						log::warn!("Account already activated {:?}", staker);
-					},
-					Err(e) => {
-						// This should never happen unless there is a mistake in the implementation.
-						log::error!("Unexpected error while activating account {:?}", e);
-					},
-				}
+				Pallet::<T>::activate(staker)
+					.expect("The account was just created so this can't fail.");
 			}
 		}
 	}
