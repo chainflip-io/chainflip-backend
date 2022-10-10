@@ -1,4 +1,4 @@
-mod multisig_p2p;
+mod peer_info_submitter;
 mod p2p_core;
 mod p2p_muxer;
 
@@ -13,7 +13,7 @@ use crate::{
 use anyhow::Context;
 use cf_primitives::AccountId;
 use futures::{Future, FutureExt};
-pub use multisig_p2p::OutgoingMultisigStageMessages;
+pub use peer_info_submitter::OutgoingMultisigStageMessages;
 pub use p2p_core::{PeerInfo, PeerUpdate};
 use p2p_muxer::P2PMuxer;
 use sp_core::H256;
@@ -73,7 +73,7 @@ pub async fn start(
     };
 
     let current_peers =
-        multisig_p2p::get_current_peer_infos(&state_chain_client, latest_block_hash)
+        peer_info_submitter::get_current_peer_infos(&state_chain_client, latest_block_hash)
             .await
             .context("Failed to get initial peer info")?;
     let our_account_id = state_chain_client.our_account_id.clone();
@@ -109,7 +109,7 @@ pub async fn start(
                 Ok(())
             });
 
-            scope.spawn(multisig_p2p::start(
+            scope.spawn(peer_info_submitter::start(
                 node_key,
                 state_chain_client,
                 settings.ip_address,
