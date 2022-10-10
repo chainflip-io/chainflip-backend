@@ -196,7 +196,7 @@ impl Engine {
 	}
 
 	fn state(&self) -> ChainflipAccountState {
-		Validator::get_validator_state(self.node_id.clone())
+		get_validator_state(&self.node_id)
 	}
 
 	// Handle events from contract

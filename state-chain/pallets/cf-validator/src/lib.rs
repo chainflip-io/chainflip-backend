@@ -16,7 +16,7 @@ pub use weights::WeightInfo;
 mod benchmarking;
 mod rotation_state;
 
-use cf_primitives::{AuthorityCount, CeremonyId, ChainflipAccountState, EpochIndex};
+use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, Auctioneer, Bid, BidderProvider, Bonding,
 	Chainflip, EmergencyRotation, EpochInfo, EpochTransitionHandler, ExecutionCondition,
@@ -911,21 +911,6 @@ impl<T: Config> Pallet<T> {
 
 		// Update current / historical authority status.
 		let new_authorities_lookup = rotation_state.authority_candidates::<BTreeSet<_>>();
-		let old_authorities_lookup =
-			BTreeSet::<ValidatorIdOf<T>>::from_iter(CurrentAuthorities::<T>::get().into_iter());
-		for historical_authority in old_authorities_lookup
-			.iter()
-			.filter(|authority| !new_authorities_lookup.contains(authority))
-		{
-			log::trace!(target: "cf-validator", "Setting old authority {:?} to historical.", historical_authority);
-		}
-
-		for incoming_authority in new_authorities_lookup
-			.iter()
-			.filter(|authority| !old_authorities_lookup.contains(authority))
-		{
-			log::trace!(target: "cf-validator", "Setting new authority {:?} to current authority.", incoming_authority);
-		}
 
 		let new_authorities = rotation_state.authority_candidates::<Vec<_>>();
 
@@ -1122,19 +1107,6 @@ impl<T: Config> Pallet<T> {
 		}
 
 		T::ValidatorWeightInfo::missed_authorship_slots(num_missed_slots)
-	}
-
-	/// Returns the current state of a validator
-	pub fn get_validator_state(account_id: T::AccountId) -> ChainflipAccountState {
-		let current_authorities = Self::current_authorities();
-		let current_backup = Backups::<T>::get();
-		if current_authorities.contains(&account_id.clone().into()) {
-			return ChainflipAccountState::CurrentAuthority
-		}
-		if current_backup.contains_key(&account_id.into()) {
-			return ChainflipAccountState::Backup
-		}
-		ChainflipAccountState::Passive
 	}
 }
 

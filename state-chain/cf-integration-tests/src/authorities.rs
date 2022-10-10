@@ -1,5 +1,6 @@
 use crate::{
-	genesis, network, NodeId, GENESIS_EPOCH, HEARTBEAT_BLOCK_INTERVAL, VAULT_ROTATION_BLOCKS,
+	genesis, get_validator_state, network, NodeId, GENESIS_EPOCH, HEARTBEAT_BLOCK_INTERVAL,
+	VAULT_ROTATION_BLOCKS,
 };
 use cf_primitives::{AuthorityCount, ChainflipAccountState};
 use cf_traits::{EpochInfo, FlipBalance, StakeTransfer};
@@ -114,10 +115,10 @@ fn genesis_nodes_rotated_out_accumulate_rewards_correctly() {
 			);
 
 			current_authorities.iter().for_each(|account_id| {
-				let account_data = Validator::get_validator_state(account_id.clone());
-				assert_eq!(account_data, ChainflipAccountState::CurrentAuthority);
-				// we were active in teh first epoch
-
+				assert_eq!(
+					get_validator_state(&account_id),
+					ChainflipAccountState::CurrentAuthority
+				);
 				// TODO: Check historical epochs
 			});
 
@@ -134,9 +135,8 @@ fn genesis_nodes_rotated_out_accumulate_rewards_correctly() {
 			);
 
 			highest_staked_backup_nodes.iter().for_each(|account_id| {
-				let account_data = Validator::get_validator_state(account_id.clone());
 				// we were active in the first epoch
-				assert_eq!(account_data, ChainflipAccountState::Backup);
+				assert_eq!(get_validator_state(&account_id), ChainflipAccountState::Backup);
 				// TODO: Check historical epochs
 			});
 

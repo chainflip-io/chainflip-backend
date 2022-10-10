@@ -183,10 +183,7 @@ fn epoch_rotates() {
 			for account in keyless_nodes.iter() {
 				// TODO: Check historical epochs
 				assert!(
-					matches!(
-						Validator::get_validator_state(account.clone()),
-						ChainflipAccountState::Passive,
-					),
+					matches!(get_validator_state(&account), ChainflipAccountState::Backup,),
 					"should be a backup node"
 				);
 			}
@@ -195,7 +192,7 @@ fn epoch_rotates() {
 				// TODO: Check historical epochs
 				assert_eq!(
 					ChainflipAccountState::CurrentAuthority,
-					Validator::get_validator_state(account.clone()),
+					get_validator_state(&account),
 					"should be CurrentAuthority"
 				);
 			}
@@ -213,7 +210,7 @@ fn epoch_rotates() {
 
 			assert_eq!(
 				ChainflipAccountState::Backup,
-				Validator::get_validator_state(late_staker),
+				get_validator_state(&late_staker),
 				"late staker should be a backup node"
 			);
 		});

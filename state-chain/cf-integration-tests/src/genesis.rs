@@ -96,9 +96,8 @@ fn state_of_genesis_is_as_expected() {
 		}
 
 		for account in accounts.iter() {
-			let account_data = Validator::get_validator_state(account.clone());
 			// TODO: Check historical epochs
-			assert_eq!(ChainflipAccountState::CurrentAuthority, account_data);
+			assert_eq!(ChainflipAccountState::CurrentAuthority, get_validator_state(&account));
 		}
 	});
 }

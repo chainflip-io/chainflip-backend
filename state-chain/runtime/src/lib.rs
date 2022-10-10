@@ -11,8 +11,8 @@ use pallet_cf_governance::GovCallHash;
 use crate::{
 	chainflip::Offence,
 	runtime_apis::{
-		ChainflipAccountStateWithPassive, RuntimeApiAccountInfo, RuntimeApiPenalty,
-		RuntimeApiPendingClaim,
+		BackupOrPassive, ChainflipAccountStateWithPassive, RuntimeApiAccountInfo,
+		RuntimeApiPenalty, RuntimeApiPendingClaim,
 	},
 };
 use cf_chains::{eth, eth::api::register_claim::RegisterClaim, Ethereum};
@@ -785,6 +785,16 @@ impl_runtime_apis! {
 			let reputation_info = pallet_cf_reputation::Reputations::<Runtime>::get(&account_id);
 			let withdrawal_address = pallet_cf_staking::WithdrawalAddresses::<Runtime>::get(&account_id).unwrap_or([0; 20]);
 
+			let get_validator_state = |account_id: &AccountId| -> ChainflipAccountStateWithPassive {
+				if Validator::current_authorities().contains(account_id) {
+					return ChainflipAccountStateWithPassive::CurrentAuthority;
+				}
+				if Validator::highest_staked_qualified_backup_nodes_lookup().contains(account_id) {
+					return ChainflipAccountStateWithPassive::BackupOrPassive(BackupOrPassive::Backup);
+				}
+				ChainflipAccountStateWithPassive::BackupOrPassive(BackupOrPassive::Passive)
+			};
+
 			RuntimeApiAccountInfo {
 				stake: account_info.total(),
 				bond: account_info.bond(),
@@ -794,7 +804,7 @@ impl_runtime_apis! {
 				online_credits: reputation_info.online_credits,
 				reputation_points: reputation_info.reputation_points,
 				withdrawal_address,
-				state: ChainflipAccountStateWithPassive::map(Validator::get_validator_state(account_id)),
+				state: get_validator_state(&account_id),
 			}
 		}
 

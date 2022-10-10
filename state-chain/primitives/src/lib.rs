@@ -47,8 +47,6 @@ pub type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::Account
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum ChainflipAccountState {
 	CurrentAuthority,
-	/// Historical implies backup too
-	HistoricalAuthority,
 	Backup,
 	Passive,
 }
@@ -56,10 +54,6 @@ pub enum ChainflipAccountState {
 impl ChainflipAccountState {
 	pub fn is_authority(&self) -> bool {
 		matches!(self, ChainflipAccountState::CurrentAuthority)
-	}
-
-	pub fn is_backup(&self) -> bool {
-		matches!(self, ChainflipAccountState::HistoricalAuthority | ChainflipAccountState::Backup)
 	}
 }
 
