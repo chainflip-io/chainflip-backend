@@ -4,7 +4,7 @@ use crate::mock_runtime::ExtBuilder;
 
 use super::*;
 use cf_primitives::{AccountRole, ChainflipAccountState};
-use cf_traits::{ChainflipAccount, ChainflipAccountStore, EpochInfo, QualifyNode, StakeTransfer};
+use cf_traits::{EpochInfo, QualifyNode, StakeTransfer};
 pub const GENESIS_BALANCE: FlipBalance = TOTAL_ISSUANCE / 100;
 
 pub fn default() -> ExtBuilder {
@@ -96,9 +96,8 @@ fn state_of_genesis_is_as_expected() {
 		}
 
 		for account in accounts.iter() {
-			let account_data = ChainflipAccountStore::<Runtime>::get(account);
 			// TODO: Check historical epochs
-			assert_eq!(ChainflipAccountState::CurrentAuthority, account_data.state);
+			assert_eq!(ChainflipAccountState::CurrentAuthority, get_validator_state(account));
 		}
 	});
 }
