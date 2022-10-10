@@ -241,6 +241,7 @@ impl Config for Test {
 	type Event = Event;
 	type Offence = PalletOffence;
 	type EpochTransitionHandler = TestEpochTransitionHandler;
+	type AccountRoleRegistry = ();
 	type MinEpoch = MinEpoch;
 	type ValidatorWeightInfo = ();
 	type Auctioneer = MockAuctioneer;

@@ -83,6 +83,7 @@ impl IngressApi for MockIngress {
 impl pallet_cf_relayer::Config for Test {
 	type Event = Event;
 	type Ingress = MockIngress;
+	type AccountRoleRegistry = ();
 	type WeightInfo = ();
 }
 

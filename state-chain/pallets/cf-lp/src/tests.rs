@@ -19,8 +19,8 @@ fn only_liquidity_provider_can_manage_positions() {
 		};
 		let pool_id = (Asset::Eth, Asset::Usdc);
 
-		AccountRegistry::on_new_account(&ALICE);
-		assert_ok!(AccountRegistry::register_account_role(&ALICE, AccountRole::None));
+		AccountTypes::on_new_account(&ALICE);
+		assert_ok!(AccountTypes::register_account_role(&ALICE, AccountRole::None));
 		assert_ok!(LiquidityProvider::add_liquidity_pool(Origin::root(), pool_id.0, pool_id.1));
 		assert_ok!(LiquidityProvider::set_liquidity_pool_status(
 			Origin::root(),
@@ -46,8 +46,8 @@ fn only_liquidity_provider_can_manage_positions() {
 #[test]
 fn egress_chain_and_asset_must_match() {
 	new_test_ext().execute_with(|| {
-		AccountRegistry::on_new_account(&ALICE);
-		assert_ok!(AccountRegistry::register_account_role(&ALICE, AccountRole::LiquidityProvider));
+		AccountTypes::on_new_account(&ALICE);
+		assert_ok!(AccountTypes::register_account_role(&ALICE, AccountRole::LiquidityProvider));
 
 		assert_noop!(
 			LiquidityProvider::withdraw_liquidity(
@@ -73,8 +73,8 @@ fn egress_chain_and_asset_must_match() {
 #[test]
 fn liquidity_providers_can_withdraw_liquidity() {
 	new_test_ext().execute_with(|| {
-		AccountRegistry::on_new_account(&ALICE);
-		assert_ok!(AccountRegistry::register_account_role(&ALICE, AccountRole::LiquidityProvider));
+		AccountTypes::on_new_account(&ALICE);
+		assert_ok!(AccountTypes::register_account_role(&ALICE, AccountRole::LiquidityProvider));
 		FreeBalances::<Test>::insert(ALICE, Asset::Eth, 1_000);
 
 		assert!(!IsValid::get());
