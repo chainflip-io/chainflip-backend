@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use state_chain_runtime::AccountId;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
-use crate::p2p::socket::DO_NOT_LINGER;
+use super::socket::DO_NOT_LINGER;
 
 use super::{socket::OutgoingSocket, PeerInfo};
 
