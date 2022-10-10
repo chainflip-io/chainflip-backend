@@ -641,34 +641,33 @@ impl<T: Config> Pallet<T> {
 		if withdrawal_address == ETH_ZERO_ADDRESS {
 			return Ok(())
 		}
-		if frame_system::Pallet::<T>::account_exists(account_id) {
-			// If we reach here, the account already exists, so any provided withdrawal address
-			// *must* match the one that was added on the initial account-creating staking event,
-			// otherwise this staking event cannot be processed.
-			match WithdrawalAddresses::<T>::get(&account_id) {
-				Some(existing) if withdrawal_address == existing => Ok(()),
-				_ => {
-					// The staking event was invalid - this should only happen if someone bypasses
-					// our standard ethereum contract interfaces. We don't automatically refund here
-					// otherwise it's attack vector (refunds require a broadcast, which is
-					// expensive).
-					//
-					// Instead, we keep a record of the failed attempt so that we can potentially
-					// investigate and / or consider refunding automatically or via governance.
-					FailedStakeAttempts::<T>::append(&account_id, (withdrawal_address, amount));
-					Self::deposit_event(Event::FailedStakeAttempt(
-						account_id.clone(),
-						withdrawal_address,
-						amount,
-					));
-					Err(Error::<T>::WithdrawalAddressRestricted)
-				},
-			}
-		} else {
+		if !frame_system::Pallet::<T>::account_exists(account_id) {
 			// This is the initial account-creating staking event. We store the withdrawal address
 			// for this account.
 			WithdrawalAddresses::<T>::insert(account_id, withdrawal_address);
-			Ok(())
+			return Ok(())
+		}
+		// If we reach here, the account already exists, so any provided withdrawal address
+		// *must* match the one that was added on the initial account-creating staking event,
+		// otherwise this staking event cannot be processed.
+		match WithdrawalAddresses::<T>::get(&account_id) {
+			Some(existing) if withdrawal_address == existing => Ok(()),
+			_ => {
+				// The staking event was invalid - this should only happen if someone bypasses
+				// our standard ethereum contract interfaces. We don't automatically refund here
+				// otherwise it's attack vector (refunds require a broadcast, which is
+				// expensive).
+				//
+				// Instead, we keep a record of the failed attempt so that we can potentially
+				// investigate and / or consider refunding automatically or via governance.
+				FailedStakeAttempts::<T>::append(&account_id, (withdrawal_address, amount));
+				Self::deposit_event(Event::FailedStakeAttempt(
+					account_id.clone(),
+					withdrawal_address,
+					amount,
+				));
+				Err(Error::<T>::WithdrawalAddressRestricted)
+			},
 		}
 	}
 
