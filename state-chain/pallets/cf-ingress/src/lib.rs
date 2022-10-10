@@ -30,7 +30,6 @@ pub mod pallet {
 
 	use super::*;
 	use cf_primitives::Asset;
-	use cf_traits::IngressFetchApi;
 	use frame_support::{
 		pallet_prelude::{DispatchResultWithPostInfo, OptionQuery, ValueQuery, *},
 		traits::{EnsureOrigin, IsType},
@@ -189,7 +188,10 @@ impl<T: Config> IngressApi for Pallet<T> {
 
 		// Register the fetch intent for ethereum ingress
 		if ingress_asset.chain == ForeignChain::Ethereum {
-			T::IngressFetchApi::schedule_ingress_fetch(vec![(ingress_asset.asset, intent_id)]);
+			T::IngressFetchApi::schedule_ethereum_ingress_fetch(vec![(
+				ingress_asset.asset,
+				intent_id,
+			)]);
 		}
 
 		IntentIngressDetails::<T>::insert(
@@ -217,7 +219,10 @@ impl<T: Config> IngressApi for Pallet<T> {
 
 		// Register the fetch intent for ethereum ingress
 		if ingress_asset.chain == ForeignChain::Ethereum {
-			T::IngressFetchApi::schedule_ingress_fetch(vec![(ingress_asset.asset, intent_id)]);
+			T::IngressFetchApi::schedule_ethereum_ingress_fetch(vec![(
+				ingress_asset.asset,
+				intent_id,
+			)]);
 		}
 
 		IntentIngressDetails::<T>::insert(

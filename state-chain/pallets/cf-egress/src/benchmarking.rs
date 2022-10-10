@@ -2,50 +2,51 @@
 
 use super::*;
 
-use crate::{DisabledEgressAssets, ScheduledEgress};
-use cf_primitives::{Asset, EthereumAddress, ForeignChain};
+use crate::{EthereumDisabledEgressAssets, EthereumScheduledEgress, EthereumScheduledIngressFetch};
+use cf_primitives::{Asset, EthereumAddress, ETHEREUM_ETH_ADDRESS};
 use frame_benchmarking::benchmarks;
 use frame_support::traits::Hooks;
 
-const ETH_ETH: ForeignChainAsset =
-	ForeignChainAsset { chain: ForeignChain::Ethereum, asset: Asset::Eth };
 const ALICE_ETH: EthereumAddress = [100u8; 20];
 
 benchmarks! {
-	send_batch_egress {
+	send_ethereum_batch {
 		let n in 1u32 .. 255u32;
 		let m in 1u32 .. 255u32;
 		let mut egress_batch = vec![];
 		let mut fetch_batch = vec![];
 
 		for i in 0..n {
-			egress_batch.push((1_000, ForeignChainAddress::Eth(ALICE_ETH)));
+			fetch_batch.push(
+				FetchAssetParams { swap_id: i as u64, asset: ETHEREUM_ETH_ADDRESS.into() }
+			);
 		}
 		for i in 0..m {
-			fetch_batch.push(i as u64);
+			egress_batch.push(TransferAssetParams {
+				asset: ETHEREUM_ETH_ADDRESS.into(),
+				to: ALICE_ETH.into(),
+				amount: 1_000u128
+			});
 		}
 
-		ScheduledEgress::<T>::insert(
-			ETH_ETH,
+		EthereumScheduledEgress::<T>::set(
 			egress_batch,
 		);
-		EthereumScheduledIngressFetch::<T>::insert(
-			Asset::Eth,
+		EthereumScheduledIngressFetch::<T>::set(
 			fetch_batch,
 		);
 	} : { let _ = Pallet::<T>::on_idle(Default::default(), 1_000_000_000_000_000); }
 	verify {
-		assert!(ScheduledEgress::<T>::get(
-			ETH_ETH,
-		).is_empty());
+		assert!(EthereumScheduledEgress::<T>::get().is_empty());
+		assert!(EthereumScheduledIngressFetch::<T>::get().is_empty());
 	}
 
-	disable_asset_egress {
+	disable_ethereum_asset_egress {
 		let origin = T::EnsureGovernance::successful_origin();
-	} : { let _ = Pallet::<T>::disable_asset_egress(origin, ETH_ETH, true); }
+	} : { let _ = Pallet::<T>::disable_ethereum_asset_egress(origin, Asset::Eth, true); }
 	verify {
-		assert!(DisabledEgressAssets::<T>::get(
-			ETH_ETH,
+		assert!(EthereumDisabledEgressAssets::<T>::get(
+			ETHEREUM_ETH_ADDRESS,
 		).is_some());
 	}
 
