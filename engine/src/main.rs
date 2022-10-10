@@ -12,7 +12,6 @@ use chainflip_engine::{
     logging,
     multisig::{self, client::key_store::KeyStore, PersistentKeyDB},
     p2p,
-    p2p_muxer::P2PMuxer,
     settings::{CommandLineOptions, Settings},
     state_chain_observer::{self},
     task_scope::with_main_task_scope,
@@ -128,24 +127,13 @@ fn main() -> anyhow::Result<()> {
             );
 
             let (
-                outgoing_message_sender, 
+                eth_outgoing_sender,
+                eth_incoming_receiver,
                 peer_update_sender,
-                incoming_message_receiver,
                 p2p_fut,
             ) = p2p::start(state_chain_client.clone(), settings.node_p2p, latest_block_hash, &root_logger).await.context("Failed to start p2p module")?;
 
             scope.spawn(p2p_fut);
-
-            let (eth_outgoing_sender, eth_incoming_receiver, muxer_future) = P2PMuxer::start(
-                incoming_message_receiver,
-                outgoing_message_sender,
-                &root_logger,
-            );
-
-            scope.spawn(async move {
-                muxer_future.await;
-                Ok(())
-            });
 
             let (eth_multisig_client, eth_multisig_client_backend_future) =
                 multisig::start_client::<EthSigning>(

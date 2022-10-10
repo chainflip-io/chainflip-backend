@@ -21,7 +21,7 @@ use std::sync::Arc;
 
 use crate::{
     logging::COMPONENT_KEY,
-    p2p_muxer::{MultisigMessageReceiver, MultisigMessageSender},
+    p2p::{MultisigMessageReceiver, MultisigMessageSender},
 };
 use slog::o;
 use state_chain_runtime::AccountId;

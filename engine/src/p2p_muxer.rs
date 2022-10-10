@@ -1,5 +1,3 @@
-use std::marker::PhantomData;
-
 use anyhow::{anyhow, Result};
 use futures::Future;
 use state_chain_runtime::AccountId;
@@ -7,18 +5,10 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use crate::{
     logging::COMPONENT_KEY,
-    multisig::{eth::EthSigning, ChainTag, CryptoScheme},
+    multisig::{eth::EthSigning, ChainTag},
     multisig_p2p::OutgoingMultisigStageMessages,
+    p2p::{MultisigMessageReceiver, MultisigMessageSender},
 };
-
-pub struct MultisigMessageSender<C: CryptoScheme>(
-    pub UnboundedSender<OutgoingMultisigStageMessages>,
-    PhantomData<C>,
-);
-pub struct MultisigMessageReceiver<C: CryptoScheme>(
-    pub UnboundedReceiver<(AccountId, Vec<u8>)>,
-    PhantomData<C>,
-);
 
 pub struct P2PMuxer {
     all_incoming_receiver: UnboundedReceiver<(AccountId, Vec<u8>)>,
@@ -123,8 +113,8 @@ impl P2PMuxer {
         let muxer_fut = muxer.run();
 
         (
-            MultisigMessageSender::<EthSigning>(eth_outgoing_sender, PhantomData),
-            MultisigMessageReceiver::<EthSigning>(eth_incoming_receiver, PhantomData),
+            MultisigMessageSender::<EthSigning>::new(eth_outgoing_sender),
+            MultisigMessageReceiver::<EthSigning>::new(eth_incoming_receiver),
             muxer_fut,
         )
     }

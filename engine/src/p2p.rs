@@ -1,8 +1,14 @@
 mod p2p_core;
 
-use std::sync::Arc;
+use std::{marker::PhantomData, sync::Arc};
 
-use crate::{common::read_clean_and_decode_hex_str_file, settings::P2P as P2PSettings};
+use crate::{
+    common::read_clean_and_decode_hex_str_file,
+    multisig::{eth::EthSigning, CryptoScheme},
+    multisig_p2p::OutgoingMultisigStageMessages,
+    p2p_muxer::P2PMuxer,
+    settings::P2P as P2PSettings,
+};
 use anyhow::Context;
 use cf_primitives::AccountId;
 use futures::{Future, FutureExt};
@@ -12,10 +18,31 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use zeroize::Zeroizing;
 
 use crate::{
-    multisig_p2p::{self, OutgoingMultisigStageMessages},
+    multisig_p2p,
     state_chain_observer::client::{ChainflipClient, StateChainClient, StateChainRpcClient},
     task_scope::with_task_scope,
 };
+
+pub struct MultisigMessageSender<C: CryptoScheme>(
+    pub UnboundedSender<OutgoingMultisigStageMessages>,
+    PhantomData<C>,
+);
+
+impl<C: CryptoScheme> MultisigMessageSender<C> {
+    pub fn new(sender: UnboundedSender<OutgoingMultisigStageMessages>) -> Self {
+        MultisigMessageSender(sender, PhantomData)
+    }
+}
+pub struct MultisigMessageReceiver<C: CryptoScheme>(
+    pub UnboundedReceiver<(AccountId, Vec<u8>)>,
+    PhantomData<C>,
+);
+
+impl<C: CryptoScheme> MultisigMessageReceiver<C> {
+    pub fn new(receiver: UnboundedReceiver<(AccountId, Vec<u8>)>) -> Self {
+        MultisigMessageReceiver(receiver, PhantomData)
+    }
+}
 
 pub async fn start(
     state_chain_client: Arc<
@@ -25,9 +52,9 @@ pub async fn start(
     latest_block_hash: H256,
     logger: &slog::Logger,
 ) -> anyhow::Result<(
-    UnboundedSender<OutgoingMultisigStageMessages>,
+    MultisigMessageSender<EthSigning>,
+    MultisigMessageReceiver<EthSigning>,
     UnboundedSender<PeerUpdate>,
-    UnboundedReceiver<(AccountId, Vec<u8>)>,
     impl Future<Output = anyhow::Result<()>>,
 )> {
     let node_key = {
@@ -68,6 +95,9 @@ pub async fn start(
         logger,
     );
 
+    let (eth_outgoing_sender, eth_incoming_receiver, muxer_future) =
+        P2PMuxer::start(incoming_message_receiver, outgoing_message_sender, &logger);
+
     let logger = logger.clone();
 
     let fut = with_task_scope(move |scope| {
@@ -87,6 +117,11 @@ pub async fn start(
                 logger,
             ));
 
+            scope.spawn(async move {
+                muxer_future.await;
+                Ok(())
+            });
+
             Ok(())
         }
         .boxed();
@@ -94,9 +129,9 @@ pub async fn start(
     });
 
     Ok((
-        outgoing_message_sender,
+        eth_outgoing_sender,
+        eth_incoming_receiver,
         peer_update_sender,
-        incoming_message_receiver,
         fut,
     ))
 }
