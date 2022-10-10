@@ -104,12 +104,12 @@ pub async fn start(
     );
 
     let (eth_outgoing_sender, eth_incoming_receiver, muxer_future) =
-        P2PMuxer::start(incoming_message_receiver, outgoing_message_sender, &logger);
+        P2PMuxer::start(incoming_message_receiver, outgoing_message_sender, logger);
 
     let logger = logger.clone();
 
     let fut = with_task_scope(move |scope| {
-        let fut = async move {
+        async move {
             scope.spawn(async {
                 p2p_fut.await;
                 Ok(())
@@ -132,8 +132,7 @@ pub async fn start(
 
             Ok(())
         }
-        .boxed();
-        fut
+        .boxed()
     });
 
     Ok((
