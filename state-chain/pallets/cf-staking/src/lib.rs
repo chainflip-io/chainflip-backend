@@ -59,8 +59,6 @@ pub mod pallet {
 
 	pub type FlipBalance<T> = <T as Config>::Balance;
 
-	pub type Retired = bool;
-
 	pub type EthTransactionHash = [u8; 32];
 
 	#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -143,7 +141,7 @@ pub mod pallet {
 	/// Store the list of staked accounts and whether or not they are a active bidder.
 	#[pallet::storage]
 	pub type ActiveBidder<T: Config> =
-		StorageMap<_, Blake2_128Concat, AccountId<T>, Retired, ValueQuery>;
+		StorageMap<_, Blake2_128Concat, AccountId<T>, bool, ValueQuery>;
 
 	/// PendingClaims can be in one of two states:
 	/// - Pending threshold signature to allow registration of the claim.
