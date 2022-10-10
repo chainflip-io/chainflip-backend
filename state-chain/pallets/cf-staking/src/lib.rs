@@ -255,7 +255,7 @@ pub mod pallet {
 		/// An invalid claim has been made
 		InvalidClaim,
 
-		/// Below the minimum stake
+		/// When requesting a claim, you must not have an amount below the minimum stake.
 		BelowMinimumStake,
 
 		/// The claim signature could not be found.
@@ -337,31 +337,24 @@ pub mod pallet {
 				ClaimAmount::Exact(amount) => amount,
 			};
 
-			// Ensure we are claiming something
 			ensure!(amount > Zero::zero(), Error::<T>::InvalidClaim);
 
-			// Ensure that we're not claiming to the zero address
 			ensure!(address != ETH_ZERO_ADDRESS, Error::<T>::InvalidClaim);
 
-			// No new claim requests can be processed if we're currently in an auction phase.
 			ensure!(!T::EpochInfo::is_auction_phase(), Error::<T>::AuctionPhase);
 
-			// If a claim already exists, return an error. The staker must either execute their
-			// claim voucher or wait until expiry before creating a new claim.
+			// The staker must either execute their claim voucher or wait until expiry before
+			// creating a new claim.
 			ensure!(!PendingClaims::<T>::contains_key(&account_id), Error::<T>::PendingClaim);
 
-			// Check if a return address exists - if not just go with the provided claim address
 			if let Some(withdrawal_address) = WithdrawalAddresses::<T>::get(&account_id) {
-				// Check if the address is different from the stored address - if yes error out
 				if withdrawal_address != address {
 					return Err(Error::<T>::WithdrawalAddressRestricted.into())
 				}
 			}
 
-			// Calculate the maximum that would remain after this claim and ensure it won't be less
-			// than the system's minimum stake.  N.B. This would be caught in
-			// `StakeTranser::try_claim()` but this will need to be handled in a refactor of that
-			// trait(?)
+			// Calculate the amount that would remain after this claim and ensure it won't be less
+			// than the system's minimum stake.
 			let remaining = T::Flip::staked_balance(&account_id)
 				.checked_sub(&amount)
 				.ok_or(Error::<T>::InvalidClaim)?;
@@ -405,7 +398,6 @@ pub mod pallet {
 				},
 			);
 
-			// Store the claim params for later.
 			PendingClaims::<T>::insert(account_id, call);
 
 			Ok(().into())
