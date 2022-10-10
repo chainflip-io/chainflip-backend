@@ -282,7 +282,6 @@ pub mod pallet {
 			tx_hash: EthTransactionHash,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
-			T::SystemState::ensure_no_maintenance()?;
 			if Self::check_withdrawal_address(&account_id, withdrawal_address, amount).is_ok() {
 				let total_stake = Self::stake_account(&account_id, amount);
 				Self::deposit_event(Event::Staked {
@@ -325,6 +324,7 @@ pub mod pallet {
 			address: EthereumAddress,
 		) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
+			T::SystemState::ensure_no_maintenance()?;
 
 			let amount = match amount {
 				ClaimAmount::Max => T::Flip::claimable_balance(&account_id),
@@ -427,7 +427,6 @@ pub mod pallet {
 			_tx_hash: EthTransactionHash,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
-			T::SystemState::ensure_no_maintenance()?;
 
 			ensure!(
 				claimed_amount ==

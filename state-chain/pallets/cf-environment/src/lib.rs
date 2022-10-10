@@ -182,13 +182,13 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			ensure!(asset != Asset::Eth, Error::<T>::EthAddressNotUpdateable);
-			if SupportedEthAssets::<T>::contains_key(asset) {
+			Self::deposit_event(if SupportedEthAssets::<T>::contains_key(asset) {
 				SupportedEthAssets::<T>::mutate(asset, |new_address| *new_address = Some(address));
-				Self::deposit_event(Event::UpdatedEthAsset(asset, address));
+				Event::UpdatedEthAsset(asset, address)
 			} else {
 				SupportedEthAssets::<T>::insert(asset, address);
-				Self::deposit_event(Event::AddedNewEthAsset(asset, address));
-			}
+				Event::AddedNewEthAsset(asset, address)
+			});
 			Ok(().into())
 		}
 		/// Sets the current on-chain CFE settings
@@ -277,16 +277,16 @@ impl<T: Config> SystemStateManager for SystemStateProvider<T> {
 }
 
 impl<T: Config> EthEnvironmentProvider for Pallet<T> {
-	fn flip_token_address() -> [u8; 20] {
+	fn flip_token_address() -> EthereumAddress {
 		SupportedEthAssets::<T>::get(Asset::Flip).expect("FLIP address should be added at genesis")
 	}
-	fn key_manager_address() -> [u8; 20] {
+	fn key_manager_address() -> EthereumAddress {
 		KeyManagerAddress::<T>::get()
 	}
-	fn eth_vault_address() -> [u8; 20] {
+	fn eth_vault_address() -> EthereumAddress {
 		EthVaultAddress::<T>::get()
 	}
-	fn stake_manager_address() -> [u8; 20] {
+	fn stake_manager_address() -> EthereumAddress {
 		StakeManagerAddress::<T>::get()
 	}
 	fn chain_id() -> u64 {
