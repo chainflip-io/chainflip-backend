@@ -1,3 +1,4 @@
+use cf_primitives::AccountRole;
 use chainflip_engine::settings::{
     CfSettings, Eth, EthSharedOptions, StateChain, StateChainOptions,
 };
@@ -56,6 +57,11 @@ pub enum CFCommand {
         #[clap(long = "register", hide = true)]
         should_register_claim: bool,
     },
+    #[clap(about = "Set your account role to the Validator, Relayer, Liquidity Provider")]
+    RegisterAccountRole {
+        #[clap(help = "Validator (v), Liquidity Provider (lp), Relayer (r)", value_parser = account_role_parser)]
+        role: AccountRole,
+    },
     #[clap(about = "Rotate your session keys")]
     Rotate {},
     #[clap(about = "Retire from Auction participation")]
@@ -72,6 +78,19 @@ pub enum CFCommand {
         #[clap(help = "Block hash to be queried")]
         block_hash: state_chain_runtime::Hash,
     },
+}
+
+fn account_role_parser(s: &str) -> Result<AccountRole, String> {
+    let lower_str = s.to_lowercase();
+    if lower_str == "v" || lower_str == "validator" {
+        Ok(AccountRole::Validator)
+    } else if lower_str == "lp" || lower_str == "liquidity provider" {
+        Ok(AccountRole::LiquidityProvider)
+    } else if lower_str == "r" || lower_str == "relayer" {
+        Ok(AccountRole::Relayer)
+    } else {
+        Err(format!("{} is not a valid role. The valid roles (with their shorthand input) are: 'Validator' (v), 'Liquidity Provider' (lp), 'Relayer' (r)", s))
+    }
 }
 
 #[derive(Deserialize, Debug, Default)]

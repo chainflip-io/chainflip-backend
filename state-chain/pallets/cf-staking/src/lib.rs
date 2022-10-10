@@ -47,6 +47,7 @@ pub const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
 pub mod pallet {
 	use super::*;
 	use cf_chains::{ApiCall, Ethereum};
+	use cf_traits::AccountRoleRegistry;
 	use frame_support::{pallet_prelude::*, Parameter};
 	use frame_system::pallet_prelude::*;
 
@@ -82,6 +83,9 @@ pub mod pallet {
 
 		/// The type containing all calls that are dispatchable from the threshold source.
 		type ThresholdCallable: From<Call<Self>>;
+
+		/// For registering and verifying the account role.
+		type AccountRoleRegistry: AccountRoleRegistry<Self>;
 
 		type StakerId: AsRef<[u8; 32]> + IsType<<Self as frame_system::Config>::AccountId>;
 
@@ -517,7 +521,7 @@ pub mod pallet {
 		/// - [UnknownAccount](Error::UnknownAccount)
 		#[pallet::weight(T::WeightInfo::retire_account())]
 		pub fn retire_account(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
-			let who = ensure_signed(origin)?;
+			let who = T::AccountRoleRegistry::ensure_validator(origin)?;
 			Self::retire(&who)?;
 			Ok(().into())
 		}
@@ -535,7 +539,7 @@ pub mod pallet {
 		/// - [UnknownAccount](Error::UnknownAccount)
 		#[pallet::weight(T::WeightInfo::activate_account())]
 		pub fn activate_account(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
-			let who = ensure_signed(origin)?;
+			let who = T::AccountRoleRegistry::ensure_validator(origin)?;
 			Self::activate(&who)?;
 			Ok(().into())
 		}

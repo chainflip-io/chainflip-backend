@@ -61,14 +61,14 @@ const THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS_DEFAULT: u32 = 10;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::AsyncResult;
+	use cf_traits::{AccountRoleRegistry, AsyncResult};
 	use frame_support::{
 		dispatch::DispatchResultWithPostInfo,
 		pallet_prelude::{InvalidTransaction, *},
 		unsigned::{TransactionValidity, ValidateUnsigned},
 		Twox64Concat,
 	};
-	use frame_system::{ensure_none, pallet_prelude::*};
+	use frame_system::ensure_none;
 
 	/// Context for tracking the progress of a threshold signature request.
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -163,6 +163,9 @@ pub mod pallet {
 
 		/// The top-level offence type must support this pallet's offence type.
 		type Offence: From<PalletOffence>;
+
+		/// For registering and verifying the account role.
+		type AccountRoleRegistry: AccountRoleRegistry<Self>;
 
 		/// The top-level origin type of the runtime.
 		type RuntimeOrigin: From<Origin<Self, I>>
@@ -500,7 +503,7 @@ pub mod pallet {
 			id: CeremonyId,
 			offenders: BTreeSet<<T as Chainflip>::ValidatorId>,
 		) -> DispatchResultWithPostInfo {
-			let reporter_id = ensure_signed(origin)?.into();
+			let reporter_id = T::AccountRoleRegistry::ensure_validator(origin)?.into();
 
 			PendingCeremonies::<T, I>::try_mutate(id, |maybe_context| {
 				maybe_context

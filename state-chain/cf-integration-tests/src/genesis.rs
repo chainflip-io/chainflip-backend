@@ -3,7 +3,7 @@ use sp_std::collections::btree_set::BTreeSet;
 use crate::mock_runtime::ExtBuilder;
 
 use super::*;
-use cf_primitives::ChainflipAccountState;
+use cf_primitives::{AccountRole, ChainflipAccountState};
 use cf_traits::{EpochInfo, QualifyNode, StakeTransfer};
 pub const GENESIS_BALANCE: FlipBalance = TOTAL_ISSUANCE / 100;
 
@@ -80,11 +80,18 @@ fn state_of_genesis_is_as_expected() {
 			"invalid emission inflation for backup authorities"
 		);
 
-		for account in accounts.iter() {
+		for account in &accounts {
 			assert_eq!(
 				Reputation::reputation(account),
 				pallet_cf_reputation::ReputationTracker::<Runtime>::default(),
 				"authority shouldn't have reputation points"
+			);
+		}
+
+		for account in &accounts {
+			assert_eq!(
+				pallet_cf_account_types::AccountRoles::<Runtime>::get(account).unwrap(),
+				AccountRole::Validator
 			);
 		}
 
