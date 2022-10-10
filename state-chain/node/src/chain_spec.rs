@@ -25,7 +25,7 @@ const ETH_USDC_ADDRESS_DEFAULT: &str = "a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48
 const STAKE_MANAGER_ADDRESS_DEFAULT: &str = "9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0";
 const KEY_MANAGER_ADDRESS_DEFAULT: &str = "5FbDB2315678afecb367f032d93F642f64180aa3";
 const ETH_VAULT_ADDRESS_DEFAULT: &str = "e7f1725E7734CE288F8367e1Bb143E90bb3F0512";
-const ETHEREUM_CHAIN_ID_DEFAULT: u64 = cf_chains::eth::CHAIN_ID_RINKEBY;
+const ETHEREUM_CHAIN_ID_DEFAULT: u64 = cf_chains::eth::CHAIN_ID_GOERLI;
 const ETH_INIT_AGG_KEY_DEFAULT: &str =
 	"02e61afd677cdfbec838c6f309deff0b2c6056f8a27f2c783b68bba6b30f667be6";
 // 50k FLIP in FLIPPERINOSs
@@ -602,7 +602,6 @@ fn testnet_genesis(
 				.into_iter()
 				.map(|account_id| (account_id, AccountRole::Validator))
 				.collect(),
-			_phantom: PhantomData,
 		},
 		system: SystemConfig {
 			// Add Wasm runtime to storage.
@@ -641,7 +640,7 @@ fn testnet_genesis(
 				.map(|acct| (acct.clone(), genesis_stake_amount))
 				.collect::<Vec<(AccountId, FlipBalance)>>(),
 			minimum_stake,
-			claim_ttl: core::time::Duration::from_secs(3 * CLAIM_DELAY),
+			claim_ttl: core::time::Duration::from_secs(3 * CLAIM_DELAY_SECS),
 		},
 		auction: AuctionConfig {
 			min_size: min_authorities,

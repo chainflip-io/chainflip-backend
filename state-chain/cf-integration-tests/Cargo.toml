@@ -32,6 +32,7 @@ pallet-cf-vaults = { path = '../pallets/cf-vaults'}
 pallet-cf-threshold-signature = { path = '../pallets/cf-threshold-signature'}
 pallet-cf-broadcast = { path = '../pallets/cf-broadcast'}
 pallet-cf-environment = { path = '../pallets/cf-environment'}
+pallet-cf-account-types = { path = '../pallets/cf-account-types'}
 
 
 # Additional FRAME pallets

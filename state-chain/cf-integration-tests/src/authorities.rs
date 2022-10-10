@@ -1,10 +1,11 @@
 use crate::{
-	genesis, network, NodeId, GENESIS_EPOCH, HEARTBEAT_BLOCK_INTERVAL, VAULT_ROTATION_BLOCKS,
+	genesis, get_validator_state, network, ChainflipAccountState, NodeId, GENESIS_EPOCH,
+	HEARTBEAT_BLOCK_INTERVAL, VAULT_ROTATION_BLOCKS,
 };
-use cf_primitives::{AuthorityCount, ChainflipAccountState};
-use cf_traits::{ChainflipAccount, ChainflipAccountStore, EpochInfo, FlipBalance, StakeTransfer};
+use cf_primitives::AuthorityCount;
+use cf_traits::{EpochInfo, FlipBalance, StakeTransfer};
 use sp_runtime::AccountId32;
-use state_chain_runtime::{Flip, Runtime, Validator};
+use state_chain_runtime::{Flip, Validator};
 use std::collections::HashMap;
 
 #[test]
@@ -83,6 +84,7 @@ fn genesis_nodes_rotated_out_accumulate_rewards_correctly() {
 			testnet.move_forward_blocks(1);
 
 			for node in &init_backup_nodes {
+				network::Cli::register_as_validator(node);
 				network::setup_account_and_peer_mapping(node);
 				network::Cli::activate_account(node);
 			}
@@ -113,10 +115,10 @@ fn genesis_nodes_rotated_out_accumulate_rewards_correctly() {
 			);
 
 			current_authorities.iter().for_each(|account_id| {
-				let account_data = ChainflipAccountStore::<Runtime>::get(account_id);
-				assert_eq!(account_data.state, ChainflipAccountState::CurrentAuthority);
-				// we were active in teh first epoch
-
+				assert_eq!(
+					get_validator_state(account_id),
+					ChainflipAccountState::CurrentAuthority
+				);
 				// TODO: Check historical epochs
 			});
 
@@ -133,9 +135,8 @@ fn genesis_nodes_rotated_out_accumulate_rewards_correctly() {
 			);
 
 			highest_staked_backup_nodes.iter().for_each(|account_id| {
-				let account_data = ChainflipAccountStore::<Runtime>::get(account_id);
 				// we were active in the first epoch
-				assert_eq!(account_data.state, ChainflipAccountState::HistoricalAuthority);
+				assert_eq!(get_validator_state(account_id), ChainflipAccountState::Backup);
 				// TODO: Check historical epochs
 			});
 

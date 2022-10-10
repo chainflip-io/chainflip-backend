@@ -214,7 +214,6 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 		&config.chain_spec,
 	);
 
-	config.network.extra_sets.push(multisig_p2p_transport::p2p_peers_set_config());
 	config
 		.network
 		.extra_sets
@@ -252,13 +251,6 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 	let enable_grandpa = !config.disable_grandpa;
 	let prometheus_registry = config.prometheus_registry().cloned();
 
-	let (rpc_request_handler, p2p_message_handler_future) =
-		multisig_p2p_transport::new_p2p_network_node(
-			network.clone(),
-			task_manager.spawn_handle(),
-			multisig_p2p_transport::RETRY_SEND_INTERVAL,
-		);
-
 	let rpc_builder = {
 		let client = client.clone();
 		let pool = transaction_pool.clone();
@@ -266,11 +258,6 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 		Box::new(move |deny_unsafe, subscription_executor| {
 			let build = || {
 				let mut module = RpcModule::new(());
-				module.merge(
-					multisig_p2p_transport::P2PValidatorNetworkNodeRpcApiServer::into_rpc(
-						rpc_request_handler.clone(),
-					),
-				)?;
 
 				module.merge(substrate_frame_rpc_system::SystemApiServer::into_rpc(
 					substrate_frame_rpc_system::System::new(
@@ -386,12 +373,6 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 		telemetry: telemetry.as_ref().map(|x| x.handle()),
 		protocol_name: grandpa_protocol_name,
 	};
-
-	task_manager.spawn_essential_handle().spawn_blocking(
-		"cf-p2p",
-		"chainflip",
-		p2p_message_handler_future,
-	);
 
 	if enable_grandpa {
 		// start the full GRANDPA voter

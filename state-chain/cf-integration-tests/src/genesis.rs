@@ -3,8 +3,8 @@ use sp_std::collections::btree_set::BTreeSet;
 use crate::mock_runtime::ExtBuilder;
 
 use super::*;
-use cf_primitives::ChainflipAccountState;
-use cf_traits::{ChainflipAccount, ChainflipAccountStore, EpochInfo, QualifyNode, StakeTransfer};
+use cf_primitives::AccountRole;
+use cf_traits::{EpochInfo, QualifyNode, StakeTransfer};
 pub const GENESIS_BALANCE: FlipBalance = TOTAL_ISSUANCE / 100;
 
 pub fn default() -> ExtBuilder {
@@ -80,7 +80,7 @@ fn state_of_genesis_is_as_expected() {
 			"invalid emission inflation for backup authorities"
 		);
 
-		for account in accounts.iter() {
+		for account in &accounts {
 			assert_eq!(
 				Reputation::reputation(account),
 				pallet_cf_reputation::ReputationTracker::<Runtime>::default(),
@@ -88,10 +88,16 @@ fn state_of_genesis_is_as_expected() {
 			);
 		}
 
+		for account in &accounts {
+			assert_eq!(
+				pallet_cf_account_types::AccountRoles::<Runtime>::get(account).unwrap(),
+				AccountRole::Validator
+			);
+		}
+
 		for account in accounts.iter() {
-			let account_data = ChainflipAccountStore::<Runtime>::get(account);
 			// TODO: Check historical epochs
-			assert_eq!(ChainflipAccountState::CurrentAuthority, account_data.state);
+			assert_eq!(ChainflipAccountState::CurrentAuthority, get_validator_state(account));
 		}
 	});
 }

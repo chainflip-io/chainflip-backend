@@ -62,6 +62,7 @@ impl system::Config for Test {
 impl pallet_cf_witness::Config for Test {
 	type Event = Event;
 	type Origin = Origin;
+	type AccountRoleRegistry = ();
 	type Call = Call;
 	type ValidatorId = AccountId;
 	type EpochInfo = mocks::epoch_info::Mock;

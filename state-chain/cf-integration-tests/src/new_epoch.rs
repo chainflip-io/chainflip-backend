@@ -2,8 +2,7 @@ use std::collections::BTreeSet;
 
 use super::*;
 use crate::{genesis::GENESIS_BALANCE, network::Network};
-use cf_primitives::ChainflipAccountState;
-use cf_traits::{ChainflipAccount, ChainflipAccountStore, EpochInfo};
+use cf_traits::EpochInfo;
 use frame_support::traits::Hooks;
 use pallet_cf_validator::RotationPhase;
 use state_chain_runtime::Validator;
@@ -141,10 +140,12 @@ fn epoch_rotates() {
 			testnet.move_forward_blocks(1);
 
 			for node in &backup_nodes {
+				network::Cli::register_as_validator(node);
 				network::setup_account_and_peer_mapping(node);
 				network::Cli::activate_account(node);
 			}
 			for node in &keyless_nodes {
+				network::Cli::register_as_validator(node);
 				network::setup_peer_mapping(node);
 				network::Cli::activate_account(node);
 			}
@@ -180,9 +181,8 @@ fn epoch_rotates() {
 
 			for account in keyless_nodes.iter() {
 				// TODO: Check historical epochs
-				assert_eq!(
-					ChainflipAccountState::Backup,
-					ChainflipAccountStore::<Runtime>::get(account).state,
+				assert!(
+					matches!(get_validator_state(account), ChainflipAccountState::Backup,),
 					"should be a backup node"
 				);
 			}
@@ -191,7 +191,7 @@ fn epoch_rotates() {
 				// TODO: Check historical epochs
 				assert_eq!(
 					ChainflipAccountState::CurrentAuthority,
-					ChainflipAccountStore::<Runtime>::get(account).state,
+					get_validator_state(account),
 					"should be CurrentAuthority"
 				);
 			}
@@ -209,7 +209,7 @@ fn epoch_rotates() {
 
 			assert_eq!(
 				ChainflipAccountState::Backup,
-				ChainflipAccountStore::<Runtime>::get(&late_staker).state,
+				get_validator_state(&late_staker),
 				"late staker should be a backup node"
 			);
 		});

@@ -25,27 +25,26 @@ pub mod pallet {
 
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
-	pub trait Config<I: 'static = ()>: Chainflip {
+	pub trait Config: Chainflip {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
-		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
+		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 	}
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
-	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
+	pub struct Pallet<T>(PhantomData<T>);
 
 	#[pallet::storage]
-	pub(crate) type AccountRoles<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Identity, T::AccountId, AccountRole>;
+	pub type AccountRoles<T: Config> = StorageMap<_, Identity, T::AccountId, AccountRole>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum Event<T: Config<I>, I: 'static = ()> {
+	pub enum Event<T: Config> {
 		AccountRoleRegistered { account_id: T::AccountId, role: AccountRole },
 	}
 
 	#[pallet::error]
-	pub enum Error<T, I = ()> {
+	pub enum Error<T> {
 		UnknownAccount,
 		AccountNotInitialised,
 		/// Accounts can only be upgraded from the initial [AccountRole::Undefined] state.
@@ -53,24 +52,33 @@ pub mod pallet {
 	}
 
 	#[pallet::genesis_config]
-	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
+	pub struct GenesisConfig<T: Config> {
 		pub initial_account_roles: Vec<(T::AccountId, AccountRole)>,
-		pub _phantom: PhantomData<I>,
 	}
 
 	#[cfg(feature = "std")]
-	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
+	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self { initial_account_roles: Default::default(), _phantom: PhantomData }
+			Self { initial_account_roles: Default::default() }
 		}
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
+	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			for (account, role) in &self.initial_account_roles {
-				AccountRoles::<T, I>::insert(account, role);
+				AccountRoles::<T>::insert(account, role);
 			}
+		}
+	}
+
+	#[pallet::call]
+	impl<T: Config> Pallet<T> {
+		#[pallet::weight(0)]
+		pub fn register_account_role_xt(origin: OriginFor<T>, role: AccountRole) -> DispatchResult {
+			let who: T::AccountId = ensure_signed(origin)?;
+			Self::register_account_role(&who, role)?;
+			Ok(())
 		}
 	}
 }
