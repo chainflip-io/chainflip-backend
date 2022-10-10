@@ -92,7 +92,7 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
     cfe_port: Port,
     mut previous_registered_peer_info: Option<PeerInfo>,
     mut own_peer_info_receiver: UnboundedReceiver<PeerInfo>,
-    logger: &slog::Logger,
+    logger: slog::Logger,
 ) -> Result<()> {
     let logger = logger.new(o!(COMPONENT_KEY => "P2PClient"));
 

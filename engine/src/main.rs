@@ -12,7 +12,7 @@ use chainflip_engine::{
     health::HealthChecker,
     logging,
     multisig::{self, client::key_store::KeyStore, PersistentKeyDB},
-    multisig_p2p, p2p,
+    p2p,
     p2p_muxer::P2PMuxer,
     settings::{CommandLineOptions, Settings},
     state_chain_observer::{self},
@@ -129,10 +129,6 @@ fn main() -> anyhow::Result<()> {
                 .context("Failed to open database")?,
             );
 
-            // TODO: clean this up by putting all p2p related initialisation into a separate function
-            let current_peer_infos = multisig_p2p::get_current_peer_infos(&state_chain_client, latest_block_hash).await.context("Failed to get initial peer info")?;
-
-            let own_peer_info = current_peer_infos.iter().find(|pi| pi.account_id == state_chain_client.our_account_id).cloned();
 
             let node_key = {
                 let secret = read_clean_and_decode_hex_str_file(&settings.node_p2p.node_key_file, "Node Key", |str| {
@@ -149,13 +145,14 @@ fn main() -> anyhow::Result<()> {
                 }
             };
 
-            let (outgoing_message_sender, peer_update_sender, incoming_message_receiver, own_peer_info_receiver, p2p_fut) =
-                p2p::start(&node_key, settings.node_p2p.port, current_peer_infos, state_chain_client.our_account_id.clone(), &root_logger);
+            let (
+                outgoing_message_sender, 
+                peer_update_sender,
+                incoming_message_receiver,
+                p2p_fut,
+            ) = p2p::start(node_key, state_chain_client.clone(), settings.node_p2p.port, settings.node_p2p.ip_address, latest_block_hash, &root_logger).await.context("Failed to start p2p module")?;
 
-            scope.spawn(async move {
-                p2p_fut.await;
-                Ok(())
-            });
+            scope.spawn(p2p_fut);
 
             let (eth_outgoing_sender, eth_incoming_receiver, muxer_future) = P2PMuxer::start(
                 incoming_message_receiver,
@@ -178,17 +175,6 @@ fn main() -> anyhow::Result<()> {
                     &root_logger,
                 );
 
-            scope.spawn(
-                multisig_p2p::start(
-                    node_key,
-                    state_chain_client.clone(),
-                    settings.node_p2p.ip_address,
-                    settings.node_p2p.port,
-                    own_peer_info,
-                    own_peer_info_receiver,
-                    &root_logger,
-                )
-            );
             scope.spawn(
                 eth_multisig_client_backend_future
             );
