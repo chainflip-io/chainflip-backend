@@ -370,8 +370,7 @@ pub mod pallet {
 			T::Flip::try_initiate_claim(&account_id, amount)?;
 
 			// Set expiry and build the claim parameters.
-			let expiry =
-				(T::TimeSource::now() + Duration::from_secs(ClaimTTLSeconds::<T>::get())).as_secs();
+			let expiry = T::TimeSource::now().as_secs() + ClaimTTLSeconds::<T>::get();
 
 			Self::register_claim_expiry(account_id.clone(), expiry);
 
