@@ -9,8 +9,6 @@ use slog::o;
 use sp_core::H256;
 use tokio::sync::mpsc::UnboundedReceiver;
 
-use state_chain_runtime::AccountId;
-
 use codec::Encode;
 use utilities::{make_periodic_tick, Port};
 
@@ -21,13 +19,6 @@ use crate::{
         ChainflipClient, StateChainClient, StateChainRpcApi, StateChainRpcClient,
     },
 };
-
-// TODO: Consider if this should be removed, particularly once we no longer use Substrate for peering
-#[derive(Debug, PartialEq, Eq)]
-pub enum OutgoingMultisigStageMessages {
-    Broadcast(Vec<AccountId>, Vec<u8>),
-    Private(Vec<(AccountId, Vec<u8>)>),
-}
 
 /*
 TODO: This code should be merged into the multisig top-level function (start_client),

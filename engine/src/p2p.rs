@@ -1,6 +1,6 @@
-mod peer_info_submitter;
 mod p2p_core;
 mod p2p_muxer;
+mod peer_info_submitter;
 
 use std::{marker::PhantomData, sync::Arc};
 
@@ -13,7 +13,6 @@ use crate::{
 use anyhow::Context;
 use cf_primitives::AccountId;
 use futures::{Future, FutureExt};
-pub use peer_info_submitter::OutgoingMultisigStageMessages;
 pub use p2p_core::{PeerInfo, PeerUpdate};
 use p2p_muxer::P2PMuxer;
 use sp_core::H256;
@@ -24,6 +23,13 @@ use crate::{
     state_chain_observer::client::{ChainflipClient, StateChainClient, StateChainRpcClient},
     task_scope::with_task_scope,
 };
+
+// TODO: Consider if this should be removed, particularly once we no longer use Substrate for peering
+#[derive(Debug, PartialEq, Eq)]
+pub enum OutgoingMultisigStageMessages {
+    Broadcast(Vec<AccountId>, Vec<u8>),
+    Private(Vec<(AccountId, Vec<u8>)>),
+}
 
 pub struct MultisigMessageSender<C: CryptoScheme>(
     pub UnboundedSender<OutgoingMultisigStageMessages>,
