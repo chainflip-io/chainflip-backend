@@ -21,7 +21,7 @@ use state_chain_runtime::{
 	Reputation, Runtime, Staking, System, Timestamp, Validator, Witnesser,
 };
 
-use cf_primitives::{AuthorityCount, ChainflipAccountState, EpochIndex};
+use cf_primitives::{AuthorityCount, EpochIndex};
 use cf_traits::{BlockNumber, EpochInfo, FlipBalance};
 use libsecp256k1::SecretKey;
 use pallet_cf_staking::{EthTransactionHash, EthereumAddress};
@@ -60,3 +60,10 @@ pub fn get_validator_state(account_id: &AccountId) -> ChainflipAccountState {
 
 // The minimum number of blocks a vault rotation should last
 const VAULT_ROTATION_BLOCKS: BlockNumber = 6;
+
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub enum ChainflipAccountState {
+	CurrentAuthority,
+	Backup,
+}

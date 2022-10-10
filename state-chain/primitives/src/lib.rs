@@ -43,33 +43,6 @@ pub type Signature = MultiSignature;
 /// to the public key of our transaction signing scheme.
 pub type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::AccountId;
 
-#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug, Copy)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub enum ChainflipAccountState {
-	CurrentAuthority,
-	Backup,
-	Passive,
-}
-
-impl ChainflipAccountState {
-	pub fn is_authority(&self) -> bool {
-		matches!(self, ChainflipAccountState::CurrentAuthority)
-	}
-}
-
-// TODO: Just use the AccountState
-#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, TypeInfo, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub struct ChainflipAccountData {
-	pub state: ChainflipAccountState,
-}
-
-impl Default for ChainflipAccountData {
-	fn default() -> Self {
-		ChainflipAccountData { state: ChainflipAccountState::Backup }
-	}
-}
-
 /// Roles in the Chainflip network.
 ///
 /// Chainflip's network is permissioned and only accessible to owners of accounts with staked Flip.
