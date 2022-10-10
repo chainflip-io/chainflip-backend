@@ -182,13 +182,13 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			ensure!(asset != Asset::Eth, Error::<T>::EthAddressNotUpdateable);
-			if SupportedEthAssets::<T>::contains_key(asset) {
+			Self::deposit_event(if SupportedEthAssets::<T>::contains_key(asset) {
 				SupportedEthAssets::<T>::mutate(asset, |new_address| *new_address = Some(address));
-				Self::deposit_event(Event::UpdatedEthAsset(asset, address));
+				Event::UpdatedEthAsset(asset, address)
 			} else {
 				SupportedEthAssets::<T>::insert(asset, address);
-				Self::deposit_event(Event::AddedNewEthAsset(asset, address));
-			}
+				Event::AddedNewEthAsset(asset, address)
+			});
 			Ok(().into())
 		}
 		/// Sets the current on-chain CFE settings
