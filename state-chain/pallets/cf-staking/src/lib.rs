@@ -169,7 +169,7 @@ pub mod pallet {
 
 	/// TTL for a claim from the moment of issue.
 	#[pallet::storage]
-	pub type ClaimTTL<T: Config> = StorageValue<_, u64, ValueQuery>;
+	pub type ClaimTTLSeconds<T: Config> = StorageValue<_, u64, ValueQuery>;
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
@@ -371,7 +371,7 @@ pub mod pallet {
 
 			// Set expiry and build the claim parameters.
 			let expiry =
-				(T::TimeSource::now() + Duration::from_secs(ClaimTTL::<T>::get())).as_secs();
+				(T::TimeSource::now() + Duration::from_secs(ClaimTTLSeconds::<T>::get())).as_secs();
 
 			Self::register_claim_expiry(account_id.clone(), expiry);
 
@@ -587,7 +587,7 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			MinimumStake::<T>::set(self.minimum_stake);
-			ClaimTTL::<T>::set(self.claim_ttl.as_secs());
+			ClaimTTLSeconds::<T>::set(self.claim_ttl.as_secs());
 			for (staker, amount) in self.genesis_stakers.iter() {
 				Pallet::<T>::stake_account(staker, *amount);
 				Pallet::<T>::activate(staker)
