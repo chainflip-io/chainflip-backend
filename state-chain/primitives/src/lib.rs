@@ -50,19 +50,6 @@ pub enum ChainflipAccountState {
 	Backup,
 }
 
-// TODO: Just use the AccountState
-#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, TypeInfo, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub struct ChainflipAccountData {
-	pub state: ChainflipAccountState,
-}
-
-impl Default for ChainflipAccountData {
-	fn default() -> Self {
-		ChainflipAccountData { state: ChainflipAccountState::Backup }
-	}
-}
-
 /// Roles in the Chainflip network.
 ///
 /// Chainflip's network is permissioned and only accessible to owners of accounts with staked Flip.

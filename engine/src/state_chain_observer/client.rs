@@ -1001,7 +1001,6 @@ pub async fn connect_to_state_chain_without_signer(
 
 #[cfg(test)]
 pub mod test_utils {
-    use cf_primitives::{ChainflipAccountData, ChainflipAccountState};
     use frame_system::AccountInfo;
 
     use super::*;
@@ -1026,9 +1025,7 @@ pub mod test_utils {
             consumers: 1,
             providers: 2,
             sufficients: 0,
-            data: ChainflipAccountData {
-                state: ChainflipAccountState::CurrentAuthority,
-            },
+            data: (),
         };
 
         let storage_change_set = storage_change_set_from(account_info, H256::default());
