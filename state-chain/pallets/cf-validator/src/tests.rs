@@ -199,11 +199,11 @@ fn send_cfe_version() {
 
 		assert_eq!(
 			last_event::<Test>(),
-			mock::Event::ValidatorPallet(crate::Event::CFEVersionUpdated(
-				authority,
-				SemVer::default(),
-				version.clone()
-			)),
+			mock::Event::ValidatorPallet(crate::Event::CFEVersionUpdated {
+				account_id: authority,
+				old_version: SemVer::default(),
+				new_version: version.clone(),
+			}),
 			"should emit event on updated version"
 		);
 
@@ -219,11 +219,11 @@ fn send_cfe_version() {
 
 		assert_eq!(
 			last_event::<Test>(),
-			mock::Event::ValidatorPallet(crate::Event::CFEVersionUpdated(
-				authority,
-				version,
-				new_version.clone()
-			)),
+			mock::Event::ValidatorPallet(crate::Event::CFEVersionUpdated {
+				account_id: authority,
+				old_version: version,
+				new_version: new_version.clone(),
+			}),
 			"should emit event on updated version"
 		);
 

@@ -45,7 +45,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system,
-		AccountRegistry: pallet_cf_account_types,
+		AccountTypes: pallet_cf_account_types,
 		Ingress: pallet_cf_ingress,
 		LiquidityProvider: pallet_cf_lp,
 	}
@@ -87,6 +87,7 @@ impl pallet_cf_ingress::Config for Test {
 	type Event = Event;
 	type AddressDerivation = MockAddressDerivation;
 	type LpAccountHandler = LiquidityProvider;
+	type IngressFetchApi = ();
 	type WeightInfo = ();
 }
 
@@ -130,7 +131,7 @@ impl EgressApi for MockEgressApi {
 
 impl crate::Config for Test {
 	type Event = Event;
-	type AccountRoleRegistry = AccountRegistry;
+	type AccountRoleRegistry = AccountTypes;
 	type Ingress = Ingress;
 	type EgressApi = MockEgressApi;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
@@ -138,7 +139,7 @@ impl crate::Config for Test {
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let config = GenesisConfig { system: Default::default(), account_registry: Default::default() };
+	let config = GenesisConfig { system: Default::default(), account_types: Default::default() };
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 

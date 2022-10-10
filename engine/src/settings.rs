@@ -1,6 +1,7 @@
 use std::{
     ffi::OsStr,
     fmt,
+    net::IpAddr,
     path::{Path, PathBuf},
 };
 
@@ -19,6 +20,8 @@ use utilities::Port;
 pub struct P2P {
     #[serde(deserialize_with = "deser_path")]
     pub node_key_file: PathBuf,
+    pub ip_address: IpAddr,
+    pub port: Port,
 }
 
 #[derive(Debug, Deserialize, Clone, Default)]
@@ -114,6 +117,10 @@ pub struct CommandLineOptions {
     // P2P Settings
     #[clap(long = "p2p.node_key_file", parse(from_os_str))]
     node_key_file: Option<PathBuf>,
+    #[clap(long = "p2p.ip_address")]
+    ip_address: Option<IpAddr>,
+    #[clap(long = "p2p.port")]
+    p2p_port: Option<Port>,
 
     #[clap(flatten)]
     state_chain_opts: StateChainOptions,
@@ -140,6 +147,8 @@ impl CommandLineOptions {
             log_whitelist: None,
             log_blacklist: None,
             node_key_file: None,
+            ip_address: None,
+            p2p_port: None,
             state_chain_opts: StateChainOptions::default(),
             eth_opts: EthSharedOptions::default(),
             health_check_hostname: None,
@@ -239,6 +248,14 @@ impl Settings {
 
         if let Some(opt) = opts.node_key_file {
             settings.node_p2p.node_key_file = opt
+        };
+
+        if let Some(opt) = opts.ip_address {
+            settings.node_p2p.ip_address = opt
+        };
+
+        if let Some(opt) = opts.p2p_port {
+            settings.node_p2p.port = opt
         };
 
         // State Chain
@@ -341,10 +358,14 @@ mod tests {
     pub fn set_test_env() {
         use std::env;
 
-        use crate::constants::{ETH_HTTP_NODE_ENDPOINT, ETH_WS_NODE_ENDPOINT};
+        use crate::constants::{
+            ETH_HTTP_NODE_ENDPOINT, ETH_WS_NODE_ENDPOINT, NODE_P2P_IP_ADDRESS, NODE_P2P_PORT,
+        };
 
         env::set_var(ETH_HTTP_NODE_ENDPOINT, "http://localhost:8545");
         env::set_var(ETH_WS_NODE_ENDPOINT, "ws://localhost:8545");
+        env::set_var(NODE_P2P_IP_ADDRESS, "1.1.1.1");
+        env::set_var(NODE_P2P_PORT, "8087");
     }
 
     #[test]
@@ -441,6 +462,8 @@ mod tests {
             log_whitelist: Some(vec!["test1".to_owned()]),
             log_blacklist: Some(vec!["test2".to_owned()]),
             node_key_file: Some(PathBuf::from_str("node_key_file").unwrap()),
+            ip_address: Some("1.1.1.1".parse().unwrap()),
+            p2p_port: Some(8087),
             state_chain_opts: StateChainOptions {
                 state_chain_ws_endpoint: Some("ws://endpoint:1234".to_owned()),
                 state_chain_signing_key_file: Some(PathBuf::from_str("signing_key_file").unwrap()),

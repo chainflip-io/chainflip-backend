@@ -14,7 +14,7 @@ use crate::{
 };
 
 use super::{
-    epoch_witnesser,
+    block_head_range_stream, epoch_witnesser,
     rpc::{EthDualRpcClient, EthRpcApi, EthWsRpcApi},
     ws_safe_stream::safe_ws_head_stream,
     EpochStart,
@@ -49,11 +49,12 @@ where
             let state_chain_client = state_chain_client.clone();
             async move {
                 // TODO: Factor out merged streams for use in contract witnesser and here
-                let mut safe_ws_head_stream = safe_ws_head_stream(
+
+                let mut safe_ws_range_stream = block_head_range_stream(epoch_start.eth_block, safe_ws_head_stream(
                     eth_ws_rpc.subscribe_new_heads().await?,
                     ETH_BLOCK_SAFETY_MARGIN,
                     &logger,
-                );
+                ), eth_ws_rpc.clone(), &logger).await?;
 
                 loop {
                     tokio::select! {
@@ -63,7 +64,7 @@ where
                         Some(to_monitor) = eth_monitor_ingress_receiver.recv() => {
                             monitored_addresses.insert(to_monitor);
                         },
-                        Some(number_bloom) = safe_ws_head_stream.next() => {
+                        Some(number_bloom) = safe_ws_range_stream.next() => {
 
                             if should_end_witnessing(end_witnessing_signal.clone(), number_bloom.block_number.as_u64(), &logger) {
                                 break;

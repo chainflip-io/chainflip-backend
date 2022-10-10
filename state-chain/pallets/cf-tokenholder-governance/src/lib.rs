@@ -85,7 +85,8 @@ pub mod pallet {
 	pub type Backers<T: Config> =
 		StorageMap<_, Twox64Concat, Proposal<T>, Vec<T::AccountId>, ValueQuery>;
 
-	/// The Government key proposal currently awaiting enactment, if any.
+	/// The Government key proposal currently awaiting enactment, if any. Indexed by the block
+	/// number we will attempt to enact this update.
 	#[pallet::storage]
 	#[pallet::getter(fn gov_enactment)]
 	pub type GovKeyUpdateAwaitingEnactment<T> = StorageValue<
@@ -94,7 +95,8 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
-	/// The Community key proposal currently awaiting enactment, if any.
+	/// The Community key proposal currently awaiting enactment, if any. Indexed by the block number
+	/// we will attempt to enact this update.
 	#[pallet::storage]
 	#[pallet::getter(fn community_enactment)]
 	pub type CommKeyUpdateAwaitingEnactment<T> = StorageValue<
@@ -126,15 +128,15 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
+		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
 			let mut weight = 0;
-			if let Some(proposal) = Proposals::<T>::take(n) {
+			if let Some(proposal) = Proposals::<T>::take(current_block) {
 				weight = T::WeightInfo::on_initialize_resolve_votes(
 					Self::resolve_vote(proposal).try_into().unwrap(),
 				);
 			}
 			if let Some((enactment_block, gov_key)) = GovKeyUpdateAwaitingEnactment::<T>::get() {
-				if enactment_block == n {
+				if enactment_block == current_block {
 					T::Broadcaster::threshold_sign_and_broadcast(
 						<T::ApiCalls as SetGovKeyApiCall<T::Chain>>::new_unsigned(
 							T::ReplayProtectionProvider::replay_protection(),
@@ -149,7 +151,7 @@ pub mod pallet {
 				}
 			}
 			if let Some((enactment_block, comm_key)) = CommKeyUpdateAwaitingEnactment::<T>::get() {
-				if enactment_block == n {
+				if enactment_block == current_block {
 					T::Broadcaster::threshold_sign_and_broadcast(
 						<T::ApiCalls as SetCommunityKeyApiCall<T::Chain>>::new_unsigned(
 							T::ReplayProtectionProvider::replay_protection(),
@@ -222,33 +224,30 @@ pub mod pallet {
 			Ok(().into())
 		}
 	}
+
 	impl<T: Config> Pallet<T> {
 		pub fn resolve_vote(proposal: Proposal<T>) -> usize {
 			let backers = Backers::<T>::take(&proposal);
-			let votes = backers.len();
-			let total_backed =
-				backers.iter().map(T::StakingInfo::total_stake_of).sum::<T::Amount>();
-			let total_stake = T::StakingInfo::total_onchain_stake();
-			if total_backed > (total_stake / 3u32.into()) * 2u32.into() {
-				match proposal {
-					SetGovernanceKey(key) => {
-						GovKeyUpdateAwaitingEnactment::<T>::put((
-							<frame_system::Pallet<T>>::block_number() + T::EnactmentDelay::get(),
-							key,
-						));
-					},
-					SetCommunityKey(key) => {
-						CommKeyUpdateAwaitingEnactment::<T>::put((
-							<frame_system::Pallet<T>>::block_number() + T::EnactmentDelay::get(),
-							key,
-						));
-					},
-				}
-				Self::deposit_event(Event::<T>::ProposalPassed { proposal });
-			} else {
-				Self::deposit_event(Event::<T>::ProposalRejected { proposal });
-			}
-			votes
+			Self::deposit_event(
+				if backers.iter().map(T::StakingInfo::total_stake_of).sum::<T::Amount>() >
+					(T::StakingInfo::total_onchain_stake() / 3u32.into()) * 2u32.into()
+				{
+					let enactment_block =
+						<frame_system::Pallet<T>>::block_number() + T::EnactmentDelay::get();
+					match proposal {
+						SetGovernanceKey(key) => {
+							GovKeyUpdateAwaitingEnactment::<T>::put((enactment_block, key));
+						},
+						SetCommunityKey(key) => {
+							CommKeyUpdateAwaitingEnactment::<T>::put((enactment_block, key));
+						},
+					}
+					Event::<T>::ProposalPassed { proposal }
+				} else {
+					Event::<T>::ProposalRejected { proposal }
+				},
+			);
+			backers.len()
 		}
 	}
 }

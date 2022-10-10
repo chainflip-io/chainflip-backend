@@ -43,7 +43,7 @@ impl frame_system::Config for Test {
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
-	type AccountData = cf_primitives::ChainflipAccountData;
+	type AccountData = ();
 	type OnNewAccount = MockAccountTypes;
 	type OnKilledAccount = MockAccountTypes;
 	type SystemWeightInfo = ();

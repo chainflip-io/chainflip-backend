@@ -1,11 +1,11 @@
 use super::*;
 use cf_chains::eth::{to_ethereum_address, AggKey, SchnorrVerificationComponents};
-use cf_primitives::{ChainflipAccountState, EpochIndex};
-use cf_traits::{ChainflipAccount, ChainflipAccountStore, EpochInfo, FlipBalance};
+use cf_primitives::{AccountRole, EpochIndex};
+use cf_traits::{AccountRoleRegistry, EpochInfo, FlipBalance};
 use codec::Encode;
 use frame_support::traits::OnFinalize;
 use libsecp256k1::PublicKey;
-use state_chain_runtime::{Authorship, Event, Origin};
+use state_chain_runtime::{AccountTypes, Authorship, Event, Origin};
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 // arbitrary units of block time
@@ -76,6 +76,10 @@ pub struct Cli;
 impl Cli {
 	pub fn activate_account(account: &NodeId) {
 		assert_ok!(Staking::activate_account(Origin::signed(account.clone())));
+	}
+
+	pub fn register_as_validator(account: &NodeId) {
+		assert_ok!(AccountTypes::register_account_role(account, AccountRole::Validator));
 	}
 }
 
@@ -192,7 +196,7 @@ impl Engine {
 	}
 
 	fn state(&self) -> ChainflipAccountState {
-		ChainflipAccountStore::<Runtime>::get(&self.node_id).state
+		get_validator_state(&self.node_id)
 	}
 
 	// Handle events from contract
@@ -362,8 +366,6 @@ impl Network {
 		// Include any nodes already *created* to the test network
 		for node in existing_nodes {
 			network.add_engine(node);
-			// Only need to setup peer mapping as the AccountInfo is already set up if they
-			// are genesis nodes
 			setup_peer_mapping(node);
 		}
 

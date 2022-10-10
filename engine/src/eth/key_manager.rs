@@ -20,9 +20,9 @@ use std::fmt::Debug;
 
 use async_trait::async_trait;
 
-use super::BlockWithEvents;
 use super::DecodeLogClosure;
 use super::EthContractWitnesser;
+use super::{event::Event, BlockWithItems};
 
 pub struct KeyManager {
     pub deployed_address: H160,
@@ -207,7 +207,7 @@ impl EthContractWitnesser for KeyManager {
         &mut self,
         epoch_index: EpochIndex,
         block_number: u64,
-        block: BlockWithEvents<Self::EventParameters>,
+        block: BlockWithItems<Event<Self::EventParameters>>,
         state_chain_client: Arc<StateChainClient<RpcClient>>,
         eth_rpc: &EthRpcClient,
         logger: &slog::Logger,
@@ -216,7 +216,7 @@ impl EthContractWitnesser for KeyManager {
         RpcClient: 'static + StateChainRpcApi + Sync + Send,
         EthRpcClient: EthRpcApi + Sync + Send,
     {
-        for event in block.events {
+        for event in block.block_items {
             slog::info!(logger, "Handling event: {}", event);
             match event.event_parameters {
                 KeyManagerEvent::AggKeySetByAggKey { new_agg_key, .. } => {
