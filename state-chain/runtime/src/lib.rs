@@ -339,6 +339,7 @@ impl frame_system::Config for Runtime {
 		pallet_cf_validator::DeletePeerMapping<Self>,
 		pallet_cf_validator::DeleteVanityName<Self>,
 		GrandpaOffenceReporter<Self>,
+		Staking,
 	);
 	/// The data to be stored in an account.
 	type AccountData = ChainflipAccountData;

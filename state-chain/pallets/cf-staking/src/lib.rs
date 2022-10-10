@@ -23,7 +23,7 @@ use cf_traits::{
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
-	traits::{EnsureOrigin, HandleLifetime, IsType, UnixTime},
+	traits::{EnsureOrigin, HandleLifetime, IsType, OnKilledAccount, UnixTime},
 };
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
@@ -760,5 +760,16 @@ impl<T: Config> BidderProvider for Pallet<T> {
 				}
 			})
 			.collect()
+	}
+}
+
+/// Ensure we clean up account specific items that definitely won't be required once the account
+/// leaves the network.
+/// NB: We deliberately don't include FailedStakeAttempts. Given something we went wrong, these can
+/// be handled by governance. We don't want to lose track of them.
+impl<T: Config> OnKilledAccount<T::AccountId> for Pallet<T> {
+	fn on_killed_account(account_id: &T::AccountId) {
+		WithdrawalAddresses::<T>::remove(account_id);
+		ActiveBidder::<T>::remove(account_id);
 	}
 }
