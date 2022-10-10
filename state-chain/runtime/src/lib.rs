@@ -66,7 +66,10 @@ pub use cf_traits::{
 };
 pub use chainflip::chain_instances::*;
 use chainflip::{epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat};
-use constants::common::*;
+use constants::common::{
+	eth::{BLOCK_SAFETY_MARGIN, CONSERVATIVE_BLOCK_TIME_SECS},
+	*,
+};
 use pallet_cf_flip::{Bonder, FlipSlasher};
 pub use pallet_cf_staking::WithdrawalAddresses;
 use pallet_cf_validator::PercentageRange;
@@ -333,6 +336,7 @@ impl frame_system::Config for Runtime {
 		pallet_cf_validator::DeletePeerMapping<Self>,
 		pallet_cf_validator::DeleteVanityName<Self>,
 		GrandpaOffenceReporter<Self>,
+		Staking,
 	);
 	/// The data to be stored in an account.
 	type AccountData = ();
@@ -439,6 +443,7 @@ impl pallet_cf_staking::Config for Runtime {
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, Instance1>;
 	type RegisterClaim = eth::api::EthereumApi;
+	type ClaimDelayBufferSeconds = ConstU64<{ BLOCK_SAFETY_MARGIN * CONSERVATIVE_BLOCK_TIME_SECS }>;
 	type TimeSource = Timestamp;
 	type WeightInfo = pallet_cf_staking::weights::PalletWeight<Runtime>;
 }

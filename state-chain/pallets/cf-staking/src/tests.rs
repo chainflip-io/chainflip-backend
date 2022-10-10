@@ -460,7 +460,8 @@ fn claim_expiry() {
 
 		// If we stay within the defined bounds, we can claim.
 		time_source::Mock::reset_to(START_TIME);
-		time_source::Mock::tick(Duration::from_secs(4));
+		const INIT_TICK: u64 = 4;
+		time_source::Mock::tick(Duration::from_secs(INIT_TICK));
 		assert_ok!(Staking::post_claim_signature(Origin::root(), ALICE, 0));
 
 		// Trigger expiry.
@@ -471,7 +472,22 @@ fn claim_expiry() {
 		assert!(PendingClaims::<Test>::contains_key(BOB));
 
 		// Tick the clock forward and expire.
-		time_source::Mock::tick(Duration::from_secs(7));
+		const NEXT_TICK: u64 = 7;
+		time_source::Mock::tick(Duration::from_secs(NEXT_TICK));
+		let total_ticked = NEXT_TICK + INIT_TICK;
+		assert!(total_ticked > CLAIM_TTL_SECS);
+
+		Pallet::<Test>::on_initialize(0);
+
+		// Both claims should still exist. We have only passed the *contract* expiry.
+		// We still need to wait for `ClaimDelayBufferSeconds` until the claim
+		// is expired on the SC.
+
+		assert!(PendingClaims::<Test>::contains_key(ALICE));
+		assert!(PendingClaims::<Test>::contains_key(BOB));
+
+		// Now we let `ClaimDelayBufferSeconds` elapse
+		time_source::Mock::tick(Duration::from_secs(CLAIM_DELAY_BUFFER_SECS));
 		Pallet::<Test>::on_initialize(0);
 
 		// Alice should have expired but not Bob.
