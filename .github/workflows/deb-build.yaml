@@ -15,6 +15,8 @@ jobs:
   docker-build-deb:
     runs-on: ubuntu-latest
     environment: development
+    outputs:
+      codename: ${{ steps.lsb-release.outputs.codename }}
     container:
       image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08"
       credentials:
@@ -25,25 +27,19 @@ jobs:
         run: cargo install cargo-deb
       - name: Checkout
         uses: actions/checkout@v2
-      - name: Setup cargo cache
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-      - name: Get date and commit SHA
-        id: vars
-        run: |
-          echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
-          echo "::set-output name=date::$(date +'%d%m%Y-%H%M')"
+      - name: Setup rust cache
+        uses: Swatinem/rust-cache@v2
       - name: Build packages
         run: | 
-          cargo deb --no-strip --deb-revision "${{ steps.vars.outputs.sha_short }}-${{ steps.vars.outputs.date }}" -p chainflip-engine
-          cargo deb --no-strip --deb-revision "${{ steps.vars.outputs.sha_short }}-${{ steps.vars.outputs.date }}" -p chainflip-cli 
-          cargo deb --no-strip --deb-revision "${{ steps.vars.outputs.sha_short }}-${{ steps.vars.outputs.date }}" -p chainflip-node
+          cargo deb --no-strip -p chainflip-engine
+          cargo deb --no-strip -p chainflip-cli
+          cargo deb --no-strip -p chainflip-node
+      - name: Get lsb-release codename
+        id: lsb-release
+        run: |
+          apt update
+          apt install -y lsb-release
+          echo "::set-output name=codename::$(lsb_release -c -s)"
       - uses: actions/upload-artifact@v2
         with:
           name: packages
@@ -59,6 +55,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v2
+      - name: Get date, commit SHA, distribution codename
+        id: vars
+        run: |
+          echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
+          echo "::set-output name=date::$(date +'%d%m%Y-%H%M')"
       - name: Install Aptly
         run: | 
           wget https://github.com/aptly-dev/aptly/releases/download/v${APTLY_VERSION}/aptly_${APTLY_VERSION}_amd64.deb -O /tmp/aptly_${APTLY_VERSION}_amd64.deb
@@ -68,7 +69,7 @@ jobs:
         with:
           aws-region: eu-central-1
           role-to-assume: arn:aws:iam::962042992619:role/chainflip-github-bot
-      - name:  Configure aptly
+      - name: Configure aptly
         run: |
           sudo apt update
           sudo apt install -y moreutils
@@ -93,4 +94,9 @@ jobs:
           aptly repo create local
           aptly repo add local packages/*.deb
           aptly snapshot create snap from repo local
-          aptly publish -gpg-key=${{ steps.import_gpg.outputs.keyid }} -distribution=ubuntu snapshot snap s3:chainflip-dev:ci/
+          aptly publish -gpg-key=${{ steps.import_gpg.outputs.keyid }} -distribution=${{ needs.docker-build-deb.outputs.codename }} snapshot snap "s3:chainflip-dev:ci/${{ steps.vars.outputs.sha_short }}-${{ steps.vars.outputs.date }}/"
+          echo "############################"
+          echo "Packages can be installed with the following commands: "
+          echo "sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys ${{ steps.import_gpg.outputs.keyid }}"
+          echo "echo \"deb https://${REPO_BUCKET}/ci/${{ steps.vars.outputs.sha_short }}-${{ steps.vars.outputs.date }}/ ${{ needs.docker-build-deb.outputs.codename }} main\"  | sudo tee /etc/apt/sources.list.d/chainflip.list"
+ 
