@@ -2,13 +2,14 @@ mod p2p_core;
 
 use std::sync::Arc;
 
-use crate::settings::P2P as P2PSettings;
+use crate::{common::read_clean_and_decode_hex_str_file, settings::P2P as P2PSettings};
 use anyhow::Context;
 use cf_primitives::AccountId;
 use futures::{Future, FutureExt};
 pub use p2p_core::{PeerInfo, PeerUpdate};
 use sp_core::H256;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use zeroize::Zeroizing;
 
 use crate::{
     multisig_p2p::{self, OutgoingMultisigStageMessages},
@@ -17,7 +18,6 @@ use crate::{
 };
 
 pub async fn start(
-    node_key: ed25519_dalek::Keypair,
     state_chain_client: Arc<
         StateChainClient<StateChainRpcClient<impl ChainflipClient + Send + Sync + 'static>>,
     >,
@@ -30,6 +30,19 @@ pub async fn start(
     UnboundedReceiver<(AccountId, Vec<u8>)>,
     impl Future<Output = anyhow::Result<()>>,
 )> {
+    let node_key = {
+        let secret =
+            read_clean_and_decode_hex_str_file(&settings.node_key_file, "Node Key", |str| {
+                ed25519_dalek::SecretKey::from_bytes(
+                    &Zeroizing::new(hex::decode(str).map_err(anyhow::Error::new)?)[..],
+                )
+                .map_err(anyhow::Error::new)
+            })?;
+
+        let public = (&secret).into();
+        ed25519_dalek::Keypair { secret, public }
+    };
+
     let current_peers =
         multisig_p2p::get_current_peer_infos(&state_chain_client, latest_block_hash)
             .await

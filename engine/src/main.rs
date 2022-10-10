@@ -4,7 +4,6 @@ use crate::multisig::eth::EthSigning;
 use anyhow::Context;
 
 use chainflip_engine::{
-    common::read_clean_and_decode_hex_str_file,
     eth::{
         self, build_broadcast_channel, key_manager::KeyManager, rpc::EthDualRpcClient,
         stake_manager::StakeManager, EthBroadcaster,
@@ -25,7 +24,6 @@ use futures::FutureExt;
 use pallet_cf_validator::SemVer;
 use sp_core::U256;
 use utilities::print_chainflip_ascii_art;
-use zeroize::Zeroizing;
 
 fn main() -> anyhow::Result<()> {
     print_chainflip_ascii_art();
@@ -129,28 +127,12 @@ fn main() -> anyhow::Result<()> {
                 .context("Failed to open database")?,
             );
 
-
-            let node_key = {
-                let secret = read_clean_and_decode_hex_str_file(&settings.node_p2p.node_key_file, "Node Key", |str| {
-                    ed25519_dalek::SecretKey::from_bytes(
-                        &Zeroizing::new(hex::decode(str).map_err(anyhow::Error::new)?)[..],
-                    )
-                    .map_err(anyhow::Error::new)
-                })?;
-
-                let public = (&secret).into();
-                ed25519_dalek::Keypair {
-                    secret,
-                    public,
-                }
-            };
-
             let (
                 outgoing_message_sender, 
                 peer_update_sender,
                 incoming_message_receiver,
                 p2p_fut,
-            ) = p2p::start(node_key, state_chain_client.clone(), settings.node_p2p, latest_block_hash, &root_logger).await.context("Failed to start p2p module")?;
+            ) = p2p::start(state_chain_client.clone(), settings.node_p2p, latest_block_hash, &root_logger).await.context("Failed to start p2p module")?;
 
             scope.spawn(p2p_fut);
 
