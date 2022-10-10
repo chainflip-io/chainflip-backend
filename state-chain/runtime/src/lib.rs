@@ -62,8 +62,7 @@ use sp_version::RuntimeVersion;
 
 pub use cf_primitives::{ChainflipAccountData, ChainflipAccountState, ForeignChainAddress};
 pub use cf_traits::{
-	BlockNumber, ChainflipAccount, EpochInfo, EthEnvironmentProvider, FlipBalance, QualifyNode,
-	SessionKeysRegistered,
+	BlockNumber, EpochInfo, EthEnvironmentProvider, FlipBalance, QualifyNode, SessionKeysRegistered,
 };
 pub use chainflip::chain_instances::*;
 use chainflip::{epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat};

@@ -13,8 +13,8 @@ use sp_std::collections::btree_set::BTreeSet;
 
 use cf_chains::{benchmarking_value::BenchmarkValue, ApiCall, ChainAbi, ChainCrypto};
 use cf_primitives::{
-	AccountRole, Asset, AssetAmount, AuthorityCount, CeremonyId, ChainflipAccountData, EpochIndex,
-	EthereumAddress, ForeignChainAddress, ForeignChainAsset, IntentId,
+	AccountRole, Asset, AssetAmount, AuthorityCount, CeremonyId, EpochIndex, EthereumAddress,
+	ForeignChainAddress, ForeignChainAsset, IntentId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -329,20 +329,6 @@ impl<ValidatorId> NetworkState<ValidatorId> {
 pub trait EmergencyRotation {
 	/// Request an emergency rotation
 	fn request_emergency_rotation();
-}
-
-pub trait ChainflipAccount {
-	type AccountId;
-
-	/// Get the account data for the given account id.
-	fn get(account_id: &Self::AccountId) -> ChainflipAccountData;
-	/// Set the node to be a current authority
-	fn set_current_authority(account_id: &Self::AccountId);
-	/// Sets the authority state to historical
-	fn set_historical_authority(account_id: &Self::AccountId);
-	/// Sets the current authority to the historical authority, should be called
-	/// once the authority has no more active epochs
-	fn from_historical_to_backup(account_id: &Self::AccountId);
 }
 
 /// Slashing a node
