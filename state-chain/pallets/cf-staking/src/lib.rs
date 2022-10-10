@@ -122,6 +122,12 @@ pub mod pallet {
 		/// The implementation of the register claim transaction.
 		type RegisterClaim: RegisterClaim<Ethereum> + Member + Parameter;
 
+		/// We must ensure the claim expires on the chain *after* it expires on the contract.
+		/// We should be extra sure that this is the case, else it opens the possibility for double
+		/// claiming.
+		#[pallet::constant]
+		type ClaimDelayBufferSeconds: Get<u64>;
+
 		/// Something that provides the current time.
 		type TimeSource: UnixTime;
 
@@ -369,17 +375,23 @@ pub mod pallet {
 			// by the amount claimed.
 			T::Flip::try_initiate_claim(&account_id, amount)?;
 
-			// Set expiry and build the claim parameters.
-			let expiry = T::TimeSource::now().as_secs() + ClaimTTLSeconds::<T>::get();
+			let contract_expiry = T::TimeSource::now().as_secs() + ClaimTTLSeconds::<T>::get();
 
-			Self::register_claim_expiry(account_id.clone(), expiry);
+			// IMPORTANT: The claim should *always* expire on the SC *later* than on the contract.
+			// If this does not occur, it means there's a window for a user to execute their claim
+			// on Ethereum after it has been expired on our chain. This means they get their funds
+			// on Ethereum, and the SC will revert the pending claim, giving them back their funds.
+			Self::register_claim_expiry(
+				account_id.clone(),
+				contract_expiry + T::ClaimDelayBufferSeconds::get(),
+			);
 
 			let call = T::RegisterClaim::new_unsigned(
 				T::ReplayProtectionProvider::replay_protection(),
 				<T as Config>::StakerId::from_ref(&account_id).as_ref(),
 				amount.into(),
 				&address,
-				expiry,
+				contract_expiry,
 			);
 
 			T::ThresholdSigner::request_signature_with_callback(
