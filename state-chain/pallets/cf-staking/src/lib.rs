@@ -765,7 +765,7 @@ impl<T: Config> BidderProvider for Pallet<T> {
 
 /// Ensure we clean up account specific items that definitely won't be required once the account
 /// leaves the network.
-/// NB: We deliberately don't include FailedStakeAttempts. Given something we went wrong, these can
+/// NB: We deliberately don't include FailedStakeAttempts. Given something went wrong, these can
 /// be handled by governance. We don't want to lose track of them.
 impl<T: Config> OnKilledAccount<T::AccountId> for Pallet<T> {
 	fn on_killed_account(account_id: &T::AccountId) {
