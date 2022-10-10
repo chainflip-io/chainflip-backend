@@ -128,15 +128,15 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_initialize(block_number: BlockNumberFor<T>) -> Weight {
+		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
 			let mut weight = 0;
-			if let Some(proposal) = Proposals::<T>::take(block_number) {
+			if let Some(proposal) = Proposals::<T>::take(current_block) {
 				weight = T::WeightInfo::on_initialize_resolve_votes(
 					Self::resolve_vote(proposal).try_into().unwrap(),
 				);
 			}
 			if let Some((enactment_block, gov_key)) = GovKeyUpdateAwaitingEnactment::<T>::get() {
-				if enactment_block == block_number {
+				if enactment_block == current_block {
 					T::Broadcaster::threshold_sign_and_broadcast(
 						<T::ApiCalls as SetGovKeyApiCall<T::Chain>>::new_unsigned(
 							T::ReplayProtectionProvider::replay_protection(),
@@ -151,7 +151,7 @@ pub mod pallet {
 				}
 			}
 			if let Some((enactment_block, comm_key)) = CommKeyUpdateAwaitingEnactment::<T>::get() {
-				if enactment_block == block_number {
+				if enactment_block == current_block {
 					T::Broadcaster::threshold_sign_and_broadcast(
 						<T::ApiCalls as SetCommunityKeyApiCall<T::Chain>>::new_unsigned(
 							T::ReplayProtectionProvider::replay_protection(),
