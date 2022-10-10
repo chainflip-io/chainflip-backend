@@ -116,7 +116,7 @@ fn genesis_nodes_rotated_out_accumulate_rewards_correctly() {
 
 			current_authorities.iter().for_each(|account_id| {
 				assert_eq!(
-					get_validator_state(&account_id),
+					get_validator_state(account_id),
 					ChainflipAccountState::CurrentAuthority
 				);
 				// TODO: Check historical epochs
@@ -136,7 +136,7 @@ fn genesis_nodes_rotated_out_accumulate_rewards_correctly() {
 
 			highest_staked_backup_nodes.iter().for_each(|account_id| {
 				// we were active in the first epoch
-				assert_eq!(get_validator_state(&account_id), ChainflipAccountState::Backup);
+				assert_eq!(get_validator_state(account_id), ChainflipAccountState::Backup);
 				// TODO: Check historical epochs
 			});
 

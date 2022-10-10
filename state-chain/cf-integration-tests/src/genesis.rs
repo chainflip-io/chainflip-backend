@@ -97,7 +97,7 @@ fn state_of_genesis_is_as_expected() {
 
 		for account in accounts.iter() {
 			// TODO: Check historical epochs
-			assert_eq!(ChainflipAccountState::CurrentAuthority, get_validator_state(&account));
+			assert_eq!(ChainflipAccountState::CurrentAuthority, get_validator_state(account));
 		}
 	});
 }
