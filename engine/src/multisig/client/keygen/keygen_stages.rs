@@ -41,18 +41,18 @@ use super::{keygen_data::VerifyBlameResponses9, HashContext};
 
 type KeygenStageResult<Crypto> = StageResult<KeygenCeremony<Crypto>>;
 
-pub struct HashCommitments1<P: ECPoint> {
+pub struct HashCommitments1<Crypto: CryptoScheme> {
     common: CeremonyCommon,
     allow_high_pubkey: bool,
-    own_commitment: DKGUnverifiedCommitment<P>,
+    own_commitment: DKGUnverifiedCommitment<Crypto::Point>,
     hash_commitment: H256,
-    shares: OutgoingShares<P>,
+    shares: OutgoingShares<Crypto::Point>,
     context: HashContext,
 }
 
-derive_display_as_type_name!(HashCommitments1<P: ECPoint>);
+derive_display_as_type_name!(HashCommitments1<Crypto: CryptoScheme>);
 
-impl<P: ECPoint> HashCommitments1<P> {
+impl<Crypto: CryptoScheme> HashCommitments1<Crypto> {
     pub fn new(mut common: CeremonyCommon, allow_high_pubkey: bool, context: HashContext) -> Self {
         // Generate the secret polynomial and commit to it by hashing all public coefficients
         let params = ThresholdParameters::from_share_count(
@@ -77,7 +77,7 @@ impl<P: ECPoint> HashCommitments1<P> {
 
 #[async_trait]
 impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
-    for HashCommitments1<Crypto::Point>
+    for HashCommitments1<Crypto>
 {
     type Message = HashComm1;
     const NAME: KeygenStageName = KeygenStageName::HashCommitments1;
@@ -107,23 +107,23 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
     }
 }
 
-pub struct VerifyHashCommitmentsBroadcast2<P: ECPoint> {
+pub struct VerifyHashCommitmentsBroadcast2<Crypto: CryptoScheme> {
     common: CeremonyCommon,
     allow_high_pubkey: bool,
-    own_commitment: DKGUnverifiedCommitment<P>,
+    own_commitment: DKGUnverifiedCommitment<Crypto::Point>,
     hash_commitments: BTreeMap<AuthorityCount, Option<HashComm1>>,
-    shares_to_send: OutgoingShares<P>,
+    shares_to_send: OutgoingShares<Crypto::Point>,
     context: HashContext,
 }
 
 #[cfg(test)]
-impl<P: ECPoint> VerifyHashCommitmentsBroadcast2<P> {
+impl<Crypto: CryptoScheme> VerifyHashCommitmentsBroadcast2<Crypto> {
     pub fn new(
         common: CeremonyCommon,
         allow_high_pubkey: bool,
-        own_commitment: DKGUnverifiedCommitment<P>,
+        own_commitment: DKGUnverifiedCommitment<Crypto::Point>,
         hash_commitments: BTreeMap<AuthorityCount, Option<HashComm1>>,
-        shares_to_send: OutgoingShares<P>,
+        shares_to_send: OutgoingShares<Crypto::Point>,
         context: HashContext,
     ) -> Self {
         Self {
@@ -137,11 +137,11 @@ impl<P: ECPoint> VerifyHashCommitmentsBroadcast2<P> {
     }
 }
 
-derive_display_as_type_name!(VerifyHashCommitmentsBroadcast2<P: ECPoint>);
+derive_display_as_type_name!(VerifyHashCommitmentsBroadcast2<Crypto: CryptoScheme>);
 
 #[async_trait]
 impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
-    for VerifyHashCommitmentsBroadcast2<Crypto::Point>
+    for VerifyHashCommitmentsBroadcast2<Crypto>
 {
     type Message = VerifyHashComm2;
     const NAME: KeygenStageName = KeygenStageName::VerifyHashCommitmentsBroadcast2;
@@ -161,19 +161,12 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
             Err((reported_parties, abort_reason)) => {
                 return KeygenStageResult::Error(
                     reported_parties,
-                    CeremonyFailureReason::BroadcastFailure(
-                        abort_reason,
-                        <Self as BroadcastStageProcessor<KeygenCeremony<Crypto>>>::NAME,
-                    ),
+                    CeremonyFailureReason::BroadcastFailure(abort_reason, Self::NAME),
                 );
             }
         };
 
-        slog::debug!(
-            self.common.logger,
-            "{} is successful",
-            <Self as BroadcastStageProcessor<KeygenCeremony<Crypto>>>::NAME
-        );
+        slog::debug!(self.common.logger, "{} is successful", Self::NAME);
 
         // Just saving hash commitments for now. We will use them
         // once the parties reveal their public coefficients (next two stages)
@@ -242,20 +235,20 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 }
 
 /// Stage 4: verify broadcasts of Stage 3 data
-struct VerifyCommitmentsBroadcast4<P: ECPoint> {
+struct VerifyCommitmentsBroadcast4<Crypto: CryptoScheme> {
     common: CeremonyCommon,
     hash_commitments: BTreeMap<AuthorityCount, HashComm1>,
-    commitments: BTreeMap<AuthorityCount, Option<CoeffComm3<P>>>,
-    shares_to_send: OutgoingShares<P>,
+    commitments: BTreeMap<AuthorityCount, Option<CoeffComm3<Crypto::Point>>>,
+    shares_to_send: OutgoingShares<Crypto::Point>,
     allow_high_pubkey: bool,
     context: HashContext,
 }
 
-derive_display_as_type_name!(VerifyCommitmentsBroadcast4<P: ECPoint>);
+derive_display_as_type_name!(VerifyCommitmentsBroadcast4<Crypto: CryptoScheme>);
 
 #[async_trait]
 impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
-    for VerifyCommitmentsBroadcast4<Crypto::Point>
+    for VerifyCommitmentsBroadcast4<Crypto>
 {
     type Message = VerifyCoeffComm4<Crypto::Point>;
     const NAME: KeygenStageName = KeygenStageName::VerifyCommitmentsBroadcast4;
@@ -275,10 +268,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
             Err((reported_parties, abort_reason)) => {
                 return KeygenStageResult::Error(
                     reported_parties,
-                    CeremonyFailureReason::BroadcastFailure(
-                        abort_reason,
-                        <Self as BroadcastStageProcessor<KeygenCeremony<Crypto>>>::NAME,
-                    ),
+                    CeremonyFailureReason::BroadcastFailure(abort_reason, Self::NAME),
                 );
             }
         };
@@ -295,11 +285,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
             }
         };
 
-        slog::debug!(
-            self.common.logger,
-            "{} is successful",
-            <Self as BroadcastStageProcessor<KeygenCeremony<Crypto>>>::NAME
-        );
+        slog::debug!(self.common.logger, "{} is successful", Self::NAME);
 
         // At this point we know everyone's commitments, which can already be
         // used to derive the resulting aggregate public key. Before proceeding
@@ -334,19 +320,19 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 }
 
 /// Stage 5: distribute (distinct) secret shares of our secret to each party
-struct SecretSharesStage5<P: ECPoint> {
+struct SecretSharesStage5<Crypto: CryptoScheme> {
     common: CeremonyCommon,
     // commitments (verified to have been broadcast correctly)
-    commitments: BTreeMap<AuthorityCount, DKGCommitment<P>>,
-    shares: OutgoingShares<P>,
-    agg_pubkey: ValidAggregateKey<P>,
+    commitments: BTreeMap<AuthorityCount, DKGCommitment<Crypto::Point>>,
+    shares: OutgoingShares<Crypto::Point>,
+    agg_pubkey: ValidAggregateKey<Crypto::Point>,
 }
 
-derive_display_as_type_name!(SecretSharesStage5<P: ECPoint>);
+derive_display_as_type_name!(SecretSharesStage5<Crypto: CryptoScheme>);
 
 #[async_trait]
 impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
-    for SecretSharesStage5<Crypto::Point>
+    for SecretSharesStage5<Crypto>
 {
     type Message = SecretShare5<Crypto::Point>;
     const NAME: KeygenStageName = KeygenStageName::SecretSharesStage5;
@@ -414,22 +400,22 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 /// During this stage parties have a chance to complain about
 /// a party sending a secret share that isn't valid when checked
 /// against the commitments
-struct ComplaintsStage6<P: ECPoint> {
+struct ComplaintsStage6<Crypto: CryptoScheme> {
     common: CeremonyCommon,
     // commitments (verified to have been broadcast correctly)
-    commitments: BTreeMap<AuthorityCount, DKGCommitment<P>>,
-    agg_pubkey: ValidAggregateKey<P>,
+    commitments: BTreeMap<AuthorityCount, DKGCommitment<Crypto::Point>>,
+    agg_pubkey: ValidAggregateKey<Crypto::Point>,
     /// Shares sent to us from other parties (secret)
-    shares: IncomingShares<P>,
-    outgoing_shares: OutgoingShares<P>,
+    shares: IncomingShares<Crypto::Point>,
+    outgoing_shares: OutgoingShares<Crypto::Point>,
     complaints: BTreeSet<AuthorityCount>,
 }
 
-derive_display_as_type_name!(ComplaintsStage6<P: ECPoint>);
+derive_display_as_type_name!(ComplaintsStage6<Crypto: CryptoScheme>);
 
 #[async_trait]
 impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
-    for ComplaintsStage6<Crypto::Point>
+    for ComplaintsStage6<Crypto>
 {
     type Message = Complaints6;
     const NAME: KeygenStageName = KeygenStageName::ComplaintsStage6;
@@ -457,20 +443,20 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
     }
 }
 
-struct VerifyComplaintsBroadcastStage7<P: ECPoint> {
+struct VerifyComplaintsBroadcastStage7<Crypto: CryptoScheme> {
     common: CeremonyCommon,
-    agg_pubkey: ValidAggregateKey<P>,
+    agg_pubkey: ValidAggregateKey<Crypto::Point>,
     received_complaints: BTreeMap<AuthorityCount, Option<Complaints6>>,
-    commitments: BTreeMap<AuthorityCount, DKGCommitment<P>>,
-    shares: IncomingShares<P>,
-    outgoing_shares: OutgoingShares<P>,
+    commitments: BTreeMap<AuthorityCount, DKGCommitment<Crypto::Point>>,
+    shares: IncomingShares<Crypto::Point>,
+    outgoing_shares: OutgoingShares<Crypto::Point>,
 }
 
-derive_display_as_type_name!(VerifyComplaintsBroadcastStage7<P: ECPoint>);
+derive_display_as_type_name!(VerifyComplaintsBroadcastStage7<Crypto: CryptoScheme>);
 
 #[async_trait]
 impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
-    for VerifyComplaintsBroadcastStage7<Crypto::Point>
+    for VerifyComplaintsBroadcastStage7<Crypto>
 {
     type Message = VerifyComplaints7;
     const NAME: KeygenStageName = KeygenStageName::VerifyComplaintsBroadcastStage7;
@@ -490,10 +476,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
             Err((reported_parties, abort_reason)) => {
                 return KeygenStageResult::Error(
                     reported_parties,
-                    CeremonyFailureReason::BroadcastFailure(
-                        abort_reason,
-                        <Self as BroadcastStageProcessor<KeygenCeremony<Crypto>>>::NAME,
-                    ),
+                    CeremonyFailureReason::BroadcastFailure(abort_reason, Self::NAME),
                 );
             }
         };
@@ -585,20 +568,20 @@ async fn finalize_keygen<Crypto: CryptoScheme>(
     StageResult::Done(keygen_result_info)
 }
 
-struct BlameResponsesStage8<P: ECPoint> {
+struct BlameResponsesStage8<Crypto: CryptoScheme> {
     common: CeremonyCommon,
     complaints: BTreeMap<AuthorityCount, Complaints6>,
-    agg_pubkey: ValidAggregateKey<P>,
-    shares: IncomingShares<P>,
-    outgoing_shares: OutgoingShares<P>,
-    commitments: BTreeMap<AuthorityCount, DKGCommitment<P>>,
+    agg_pubkey: ValidAggregateKey<Crypto::Point>,
+    shares: IncomingShares<Crypto::Point>,
+    outgoing_shares: OutgoingShares<Crypto::Point>,
+    commitments: BTreeMap<AuthorityCount, DKGCommitment<Crypto::Point>>,
 }
 
-derive_display_as_type_name!(BlameResponsesStage8<P: ECPoint>);
+derive_display_as_type_name!(BlameResponsesStage8<Crypto: CryptoScheme>);
 
 #[async_trait]
 impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
-    for BlameResponsesStage8<Crypto::Point>
+    for BlameResponsesStage8<Crypto>
 {
     type Message = BlameResponse8<Crypto::Point>;
     const NAME: KeygenStageName = KeygenStageName::BlameResponsesStage8;
@@ -660,17 +643,17 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
     }
 }
 
-struct VerifyBlameResponsesBroadcastStage9<P: ECPoint> {
+struct VerifyBlameResponsesBroadcastStage9<Crypto: CryptoScheme> {
     common: CeremonyCommon,
     complaints: BTreeMap<AuthorityCount, Complaints6>,
-    agg_pubkey: ValidAggregateKey<P>,
+    agg_pubkey: ValidAggregateKey<Crypto::Point>,
     // Blame responses received from other parties in the previous communication round
-    blame_responses: BTreeMap<AuthorityCount, Option<BlameResponse8<P>>>,
-    shares: IncomingShares<P>,
-    commitments: BTreeMap<AuthorityCount, DKGCommitment<P>>,
+    blame_responses: BTreeMap<AuthorityCount, Option<BlameResponse8<Crypto::Point>>>,
+    shares: IncomingShares<Crypto::Point>,
+    commitments: BTreeMap<AuthorityCount, DKGCommitment<Crypto::Point>>,
 }
 
-derive_display_as_type_name!(VerifyBlameResponsesBroadcastStage9<P: ECPoint>);
+derive_display_as_type_name!(VerifyBlameResponsesBroadcastStage9<Crypto: CryptoScheme>);
 
 /// Checks for sender_idx that their blame response contains exactly
 /// a share for each party that blamed them
@@ -694,14 +677,15 @@ fn is_blame_response_complete<P: ECPoint>(
     Iterator::eq(response.0.keys(), expected_idxs_iter)
 }
 
-impl<P: ECPoint> VerifyBlameResponsesBroadcastStage9<P> {
+impl<Crypto: CryptoScheme> VerifyBlameResponsesBroadcastStage9<Crypto> {
     /// Check that blame responses contain all (and only) the requested shares, and that all the shares are valid.
     /// If all responses are valid, returns shares destined for us along with the corresponding index. Otherwise,
     /// returns a list of party indexes who provided invalid responses.
     fn check_blame_responses(
         &self,
-        blame_responses: BTreeMap<AuthorityCount, BlameResponse8<P>>,
-    ) -> Result<BTreeMap<AuthorityCount, ShamirShare<P>>, BTreeSet<AuthorityCount>> {
+        blame_responses: BTreeMap<AuthorityCount, BlameResponse8<Crypto::Point>>,
+    ) -> Result<BTreeMap<AuthorityCount, ShamirShare<Crypto::Point>>, BTreeSet<AuthorityCount>>
+    {
         let (shares_for_us, bad_parties): (Vec<_>, BTreeSet<_>) = blame_responses
             .iter()
             .map(|(sender_idx, response)| {
@@ -748,7 +732,7 @@ impl<P: ECPoint> VerifyBlameResponsesBroadcastStage9<P> {
 
 #[async_trait]
 impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
-    for VerifyBlameResponsesBroadcastStage9<Crypto::Point>
+    for VerifyBlameResponsesBroadcastStage9<Crypto>
 {
     type Message = VerifyBlameResponses9<Crypto::Point>;
     const NAME: KeygenStageName = KeygenStageName::VerifyBlameResponsesBroadcastStage9;
@@ -763,21 +747,14 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
         mut self,
         messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
     ) -> KeygenStageResult<Crypto> {
-        slog::debug!(
-            self.common.logger,
-            "Processing {}",
-            <Self as BroadcastStageProcessor<KeygenCeremony<Crypto>>>::NAME
-        );
+        slog::debug!(self.common.logger, "Processing {}", Self::NAME);
 
         let verified_responses = match verify_broadcasts(messages, &self.common.logger) {
             Ok(comms) => comms,
             Err((reported_parties, abort_reason)) => {
                 return KeygenStageResult::Error(
                     reported_parties,
-                    CeremonyFailureReason::BroadcastFailure(
-                        abort_reason,
-                        <Self as BroadcastStageProcessor<KeygenCeremony<Crypto>>>::NAME,
-                    ),
+                    CeremonyFailureReason::BroadcastFailure(abort_reason, Self::NAME),
                 );
             }
         };

@@ -178,7 +178,7 @@ pub fn prepare_signing_request<Crypto: CryptoScheme>(
             rng,
         };
 
-        let processor = AwaitCommitments1::<Crypto::Point>::new(
+        let processor = AwaitCommitments1::<Crypto>::new(
             common.clone(),
             SigningStateCommonInfo {
                 data,
