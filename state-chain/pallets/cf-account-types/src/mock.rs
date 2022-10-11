@@ -65,6 +65,7 @@ impl Chainflip for Test {
 
 impl Config for Test {
 	type Event = Event;
+	type WeightInfo = ();
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
