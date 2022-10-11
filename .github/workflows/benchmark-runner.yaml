@@ -41,6 +41,7 @@ jobs:
           OP_CONNECT_HOST: ${{ secrets.CF_1PASSWORD_CONNECTOR_URL }}
           OP_CONNECT_TOKEN: ${{ secrets.CF_1PASSWORD_CONNECTOR_TOKEN_READ_ONLY }}
           CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN: op://github-actions/CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN/password
+
       - name: Checkout chainflip-platform-monorepo
         uses: actions/checkout@v3
         with:

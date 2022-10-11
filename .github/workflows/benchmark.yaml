@@ -28,9 +28,7 @@ on:
 jobs:
   run_benchmarks:
     env:
-      CIRCLE_TOKEN: ${{ secrets.CIRCLE_TOKEN }}
       CIRCLE_CI_ARTIFACT_URL: ${{ github.event.inputs.circleCiArtifactUrl }}
-
     runs-on:
       [
         self-hosted,
@@ -41,6 +39,19 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v2
+
+      - name: Setup Tailscale 🪡 ⚙️
+        id: tailscale
+        uses: tailscale/github-action@main
+        with:
+          authkey: ${{ secrets.CF_TAILSCALE_AUTHKEY }}
+
+      - name: Load secret 🗝👨‍💻
+        uses: 1password/load-secrets-action@v1
+        env:
+          OP_CONNECT_HOST: ${{ secrets.CF_1PASSWORD_CONNECTOR_URL }}
+          OP_CONNECT_TOKEN: ${{ secrets.CF_1PASSWORD_CONNECTOR_TOKEN_READ_ONLY }}
+          CF_CIRCLE_TOKEN: op://github-actions/CF_CIRCLE_TOKEN/password
 
       - name: Download binary to benchmark
         run: |
