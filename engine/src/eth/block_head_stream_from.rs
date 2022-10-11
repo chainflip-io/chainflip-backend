@@ -214,6 +214,36 @@ mod tests {
     async fn stream_goes_back_if_inner_stream_starts_ahead_of_from_block() {
         let logger = new_test_logger();
 
+        let from_block = 10;
+        let inner_stream_starts_at = 15;
+        let inner_stream_ends_at = 20;
+
+        let safe_head_stream =
+            stream::iter((inner_stream_starts_at..inner_stream_ends_at).map(number_bloom));
+
+        let mut safe_head_stream_from =
+            block_head_stream_from(from_block, safe_head_stream, MockEthRpc {}, &logger)
+                .await
+                .unwrap();
+
+        for expected_block_number in from_block..inner_stream_ends_at {
+            assert_eq!(
+                safe_head_stream_from
+                    .next()
+                    .await
+                    .unwrap()
+                    .block_number
+                    .as_u64(),
+                expected_block_number
+            );
+        }
+        assert!(safe_head_stream_from.next().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn stream_terminates_if_error_fetching_block_when_going_back() {
+        let logger = new_test_logger();
+
         // choose blocks so we have to query back to block 30, which is explicitly set as a failure block
         // in the mock.
         let from_block = 27;
