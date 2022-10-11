@@ -286,7 +286,11 @@ fn main() -> anyhow::Result<()> {
                     }}).into_group_map();
 
                 fn monitored_addresses_from_all_eth(eth_chain_ingress_addresses: &HashMap<Asset, Vec<H160>>, asset: Asset) -> BTreeSet<H160> {
-                    eth_chain_ingress_addresses.get(&asset).expect("State Chain must contain these asset addresses at genesis").iter().cloned().collect()
+                    if let Some(eth_ingress_addresses) = eth_chain_ingress_addresses.get(&asset) {
+                        eth_ingress_addresses.clone()
+                    } else {
+                        Default::default()
+                    }.iter().cloned().collect()
                 }
 
                 scope.spawn(eth::ingress_witnesser::start(
