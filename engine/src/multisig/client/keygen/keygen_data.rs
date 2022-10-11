@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use utilities::threshold_from_share_count;
 
 use crate::multisig::{
-    client::common::{BroadcastVerificationMessage, CeremonyStageName, PreProcessStageDataCheck},
+    client::common::{BroadcastVerificationMessage, KeygenStageName, PreProcessStageDataCheck},
     crypto::ECPoint,
 };
 
@@ -47,7 +47,7 @@ impl<P: ECPoint> std::fmt::Display for KeygenData<P> {
     }
 }
 
-impl<P: ECPoint> PreProcessStageDataCheck for KeygenData<P> {
+impl<P: ECPoint> PreProcessStageDataCheck<KeygenStageName> for KeygenData<P> {
     /// Check that the number of elements in the data is correct
     fn data_size_is_valid(&self, num_of_parties: AuthorityCount) -> bool {
         let num_of_parties = num_of_parties as usize;
@@ -111,37 +111,36 @@ impl<P: ECPoint> PreProcessStageDataCheck for KeygenData<P> {
     }
 
     /// Returns true if this message should be delayed for the given stage
-    fn should_delay(stage_name: CeremonyStageName, message: &Self) -> bool {
+    fn should_delay(stage_name: KeygenStageName, message: &Self) -> bool {
         match stage_name {
-            CeremonyStageName::HashCommitments1 => {
+            KeygenStageName::HashCommitments1 => {
                 matches!(message, KeygenData::VerifyHashComm2(_))
             }
-            CeremonyStageName::VerifyHashCommitmentsBroadcast2 => {
+            KeygenStageName::VerifyHashCommitmentsBroadcast2 => {
                 matches!(message, KeygenData::CoeffComm3(_))
             }
-            CeremonyStageName::CoefficientCommitments3 => {
+            KeygenStageName::CoefficientCommitments3 => {
                 matches!(message, KeygenData::VerifyCoeffComm4(_))
             }
-            CeremonyStageName::VerifyCommitmentsBroadcast4 => {
+            KeygenStageName::VerifyCommitmentsBroadcast4 => {
                 matches!(message, KeygenData::SecretShares5(_))
             }
-            CeremonyStageName::SecretSharesStage5 => {
+            KeygenStageName::SecretSharesStage5 => {
                 matches!(message, KeygenData::Complaints6(_))
             }
-            CeremonyStageName::ComplaintsStage6 => {
+            KeygenStageName::ComplaintsStage6 => {
                 matches!(message, KeygenData::VerifyComplaints7(_))
             }
-            CeremonyStageName::VerifyComplaintsBroadcastStage7 => {
+            KeygenStageName::VerifyComplaintsBroadcastStage7 => {
                 matches!(message, KeygenData::BlameResponse8(_))
             }
-            CeremonyStageName::BlameResponsesStage8 => {
+            KeygenStageName::BlameResponsesStage8 => {
                 matches!(message, KeygenData::VerifyBlameResponses9(_))
             }
-            CeremonyStageName::VerifyBlameResponsesBroadcastStage9 => {
+            KeygenStageName::VerifyBlameResponsesBroadcastStage9 => {
                 // Last stage, nothing to delay
                 false
             }
-            _ => false,
         }
     }
 }
