@@ -133,9 +133,10 @@ async fn handle_signing_request<'a, MultisigClient, RpcClient>(
 // Wrap the match so we add a log message before executing the processing of the event
 // if we are processing. Else, ignore it.
 macro_rules! match_event {
-    ($logger:ident, $event:ident { $($(#[$cfg_param:meta])? $bind:pat $(if $condition:expr)? => $block:expr)+ }) => {{
-        let formatted_event = format!("{:?}", $event);
-        match $event {
+    ($event:expr, $logger:ident { $($(#[$cfg_param:meta])? $bind:pat $(if $condition:expr)? => $block:expr)+ }) => {{
+        let event = $event;
+        let formatted_event = format!("{:?}", event);
+        match event {
             $(
                 $(#[$cfg_param])?
                 $bind => {
@@ -274,10 +275,10 @@ where
                                 current_block_hash
                             );
 
-                            match state_chain_client.get_events(current_block_hash).await {
+                            match state_chain_client.get_storage_value::<frame_system::Events::<state_chain_runtime::Runtime>>(current_block_hash).await {
                                 Ok(events) => {
-                                    for (_phase, event, _topics) in events {
-                                        match_event! { logger, event {
+                                    for event_record in events {
+                                        match_event! {event_record.event, logger {
                                             state_chain_runtime::Event::Validator(
                                                 pallet_cf_validator::Event::NewEpoch(new_epoch),
                                             ) => {

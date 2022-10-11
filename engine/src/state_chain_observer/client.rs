@@ -5,7 +5,6 @@ use anyhow::{anyhow, bail, Context, Result};
 use codec::{Decode, Encode, FullCodec};
 use custom_rpc::CustomApiClient;
 use frame_support::pallet_prelude::InvalidTransaction;
-use frame_support::storage::storage_prefix;
 use frame_support::storage::types::QueryKindTrait;
 use frame_system::Phase;
 use futures::{Stream, StreamExt, TryStreamExt};
@@ -17,16 +16,12 @@ use jsonrpsee::ws_client::WsClientBuilder;
 use slog::o;
 use sp_core::storage::StorageData;
 use sp_core::H256;
-use sp_core::{
-    storage::{StorageChangeSet, StorageKey},
-    Bytes, Pair,
-};
+use sp_core::{storage::StorageKey, Bytes, Pair};
 use sp_runtime::generic::Era;
 use sp_runtime::traits::{BlakeTwo256, Hash};
 use sp_runtime::{AccountId32, MultiAddress};
 use sp_version::RuntimeVersion;
 use state_chain_runtime::SignedBlock;
-use std::fmt::Debug;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -47,12 +42,6 @@ use sc_rpc_api::chain::ChainApiClient;
 use sc_rpc_api::state::StateApiClient;
 use sc_rpc_api::system::SystemApiClient;
 
-pub type EventInfo = (
-    Phase,
-    state_chain_runtime::Event,
-    // These are the event topics
-    Vec<state_chain_runtime::Hash>,
-);
 pub trait ChainflipClient:
     CustomApiClient
     + SystemApiClient<state_chain_runtime::Hash, state_chain_runtime::BlockNumber>
@@ -114,12 +103,6 @@ pub trait StateChainRpcApi {
         count: u32,
         start_key: Option<StorageKey>,
     ) -> Result<Vec<StorageKey>>;
-
-    async fn storage_events_at(
-        &self,
-        block_hash: Option<state_chain_runtime::Hash>,
-        storage_key: StorageKey,
-    ) -> RpcResult<Vec<StorageChangeSet<state_chain_runtime::Hash>>>;
 
     async fn storage_pairs(
         &self,
@@ -196,16 +179,6 @@ where
             .context("storage RPC API failed")
     }
 
-    async fn storage_events_at(
-        &self,
-        block_hash: Option<state_chain_runtime::Hash>,
-        storage_key: StorageKey,
-    ) -> RpcResult<Vec<StorageChangeSet<state_chain_runtime::Hash>>> {
-        self.rpc_client
-            .query_storage_at(vec![storage_key], block_hash)
-            .await
-    }
-
     async fn rotate_keys(&self) -> RpcResult<Bytes> {
         self.rpc_client.rotate_keys().await
     }
@@ -233,7 +206,6 @@ where
 }
 
 pub struct StateChainClient<RpcClient: StateChainRpcApi> {
-    events_storage_key: StorageKey,
     pub heartbeat_block_interval: u32,
     nonce: AtomicU32,
     /// Our Node's AccountId
@@ -250,12 +222,6 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
     pub fn get_genesis_hash(&self) -> state_chain_runtime::Hash {
         self.genesis_hash
     }
-}
-
-// use this events key, to save creating chain metadata in the tests
-#[cfg(test)]
-pub fn mock_events_key() -> StorageKey {
-    StorageKey(vec![2; 32])
 }
 
 #[cfg(test)]
@@ -277,7 +243,6 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
 
         Self {
             heartbeat_block_interval: 20,
-            events_storage_key: mock_events_key(),
             nonce: AtomicU32::new(0),
             our_account_id: AccountId32::new(OUR_ACCOUNT_ID_BYTES),
             state_chain_rpc_client: rpc_client,
@@ -530,15 +495,15 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                     hash == extrinsic_hash
                 }) {
                     Some(extrinsic_index_found) => {
-                        let events_for_block = self.get_events(block_hash).await?;
+                        let events_for_block = self.get_storage_value::<frame_system::Events::<state_chain_runtime::Runtime>>(block_hash).await?;
                         return Ok(events_for_block
                             .into_iter()
-                            .filter_map(|(phase, event, _)| {
-                                if let Phase::ApplyExtrinsic(i) = phase {
+                            .filter_map(|event_record| {
+                                if let Phase::ApplyExtrinsic(i) = event_record.phase {
                                     if i as usize != extrinsic_index_found {
                                         None
                                     } else {
-                                        Some(event)
+                                        Some(event_record.event)
                                     }
                                 } else {
                                     None
@@ -613,28 +578,6 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         self.get_storage_item::<StorageDoubleMap::Value, StorageDoubleMap::OnEmpty, StorageDoubleMap::QueryKind>(StorageDoubleMap::_hashed_key_for(key1, key2), block_hash, "double map").await
     }
 
-    async fn get_from_storage_with_key<StorageType: Decode + Debug>(
-        &self,
-        block_hash: state_chain_runtime::Hash,
-        storage_key: StorageKey,
-    ) -> Result<Vec<StorageType>> {
-        Ok(self
-            .state_chain_rpc_client
-            .storage_events_at(Some(block_hash), storage_key)
-            .await?
-            .into_iter()
-            .flat_map(|storage_change_set| {
-                let StorageChangeSet { block: _, changes } = storage_change_set;
-                changes
-                    .into_iter()
-                    .filter_map(|(_storage_key, option_data)| {
-                        option_data
-                            .map(|data| context!(StorageType::decode(&mut &data.0[..])).unwrap())
-                    })
-            })
-            .collect())
-    }
-
     /// Gets all the storage pairs (key, value) of a StorageMap.
     /// NB: Because this is an unbounded operation, it requires the node to have
     /// the `--rpc-methods=unsafe` enabled.
@@ -659,28 +602,6 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
                 )
             })
             .collect())
-    }
-
-    /// Get all the events from a particular block
-    pub async fn get_events(
-        &self,
-        block_hash: state_chain_runtime::Hash,
-    ) -> Result<Vec<EventInfo>> {
-        let events = self
-            .get_from_storage_with_key::<Vec<EventInfo>>(
-                block_hash,
-                self.events_storage_key.clone(),
-            )
-            .await
-            .context(format!(
-                "Failed to get events for block hash {:#x}",
-                block_hash
-            ))?;
-        if let Some(events) = events.last() {
-            Ok(events.to_owned())
-        } else {
-            Ok(vec![])
-        }
     }
 
     pub async fn rotate_session_keys(&self) -> Result<Bytes> {
@@ -936,8 +857,6 @@ async fn inner_connect_to_state_chain(
             signer: signer.clone(),
             state_chain_rpc_client,
             our_account_id,
-            // TODO: Make this type safe: frame_system::Events::<state_chain_runtime::Runtime>::hashed_key() - Events is private :(
-            events_storage_key: StorageKey(storage_prefix(b"System", b"Events").to_vec()),
             heartbeat_block_interval: {
                 use frame_support::traits::Get;
                 <state_chain_runtime::Runtime as pallet_cf_reputation::Config>::HeartbeatBlockInterval::get()
@@ -963,46 +882,6 @@ pub async fn connect_to_state_chain_without_signer(
     );
 
     Ok(StateChainRpcClient { rpc_client })
-}
-
-#[cfg(test)]
-pub mod test_utils {
-    use frame_system::AccountInfo;
-
-    use super::*;
-
-    /// Used to make mocking of items returned from the state chain easier,
-    /// as the trait wraps a call that returns encoded items from the chain
-    pub fn storage_change_set_from<StorageType: Encode>(
-        change: StorageType,
-        block: state_chain_runtime::Hash,
-    ) -> StorageChangeSet<state_chain_runtime::Hash> {
-        let storage_data: StorageData = StorageData(change.encode());
-        let changes: Vec<(StorageKey, Option<StorageData>)> =
-            vec![(StorageKey(vec![0u8; 32]), Some(storage_data))];
-        StorageChangeSet { block, changes }
-    }
-
-    #[test]
-    fn storage_change_set_encoding_works() {
-        let account_info = AccountInfo {
-            nonce: 12u32,
-            consumers: 1,
-            providers: 2,
-            sufficients: 0,
-            data: (),
-        };
-
-        let storage_change_set = storage_change_set_from(account_info, H256::default());
-
-        let changes = storage_change_set.changes[0].clone();
-        let storage_data = changes.1.unwrap().0;
-
-        // this was retrieved from the chain itself
-        let storage_data_expected: Vec<u8> = vec![12, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0];
-
-        assert_eq!(storage_data, storage_data_expected);
-    }
 }
 
 #[cfg(test)]

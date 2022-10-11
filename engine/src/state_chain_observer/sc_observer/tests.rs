@@ -30,10 +30,7 @@ use crate::{
     multisig::client::{mocks::MockMultisigClientApi, CeremonyFailureReason},
     settings::Settings,
     state_chain_observer::{
-        client::{
-            mock_events_key, test_utils::storage_change_set_from, MockStateChainRpcApi,
-            StateChainClient, OUR_ACCOUNT_ID_BYTES,
-        },
+        client::{MockStateChainRpcApi, StateChainClient, OUR_ACCOUNT_ID_BYTES},
         sc_observer,
     },
     task_scope::with_task_scope,
@@ -411,26 +408,36 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
     // We will match on every block hash, but only the events key, as we want to return no events
     // on every block
     mock_state_chain_rpc_client
-        .expect_storage_events_at()
-        .with(eq(Some(empty_block_header.hash())), eq(mock_events_key()))
+        .expect_storage()
+        .with(
+            eq(empty_block_header.hash()),
+            eq(StorageKey(
+                frame_system::Events::<Runtime>::hashed_key().into(),
+            )),
+        )
         .times(1)
-        .returning(|_, _| Ok(vec![]));
+        .returning(|_, _| Ok(None));
 
     mock_state_chain_rpc_client
-        .expect_storage_events_at()
-        .with(eq(Some(new_epoch_block_header_hash)), eq(mock_events_key()))
+        .expect_storage()
+        .with(
+            eq(new_epoch_block_header_hash),
+            eq(StorageKey(
+                frame_system::Events::<Runtime>::hashed_key().into(),
+            )),
+        )
         .times(1)
         .returning(move |_, _| {
-            Ok(vec![storage_change_set_from(
-                vec![(
-                    Phase::ApplyExtrinsic(0),
-                    state_chain_runtime::Event::Validator(pallet_cf_validator::Event::NewEpoch(
-                        EPOCH_FOUR_INDEX,
-                    )),
-                    vec![H256::default()],
-                )],
-                new_epoch_block_header_hash,
-            )])
+            Ok(Some(StorageData(
+                vec![frame_system::EventRecord {
+                    phase: Phase::ApplyExtrinsic(0),
+                    event: state_chain_runtime::Event::Validator(
+                        pallet_cf_validator::Event::NewEpoch(EPOCH_FOUR_INDEX),
+                    ),
+                    topics: vec![H256::default()],
+                }]
+                .encode(),
+            )))
         });
 
     let state_chain_client = Arc::new(StateChainClient::create_test_sc_client(
@@ -557,26 +564,36 @@ async fn not_historical_to_authority_on_new_epoch() {
     // We will match on every block hash, but only the events key, as we want to return no events
     // on every block
     mock_state_chain_rpc_client
-        .expect_storage_events_at()
-        .with(eq(Some(empty_block_header.hash())), eq(mock_events_key()))
+        .expect_storage()
+        .with(
+            eq(empty_block_header.hash()),
+            eq(StorageKey(
+                frame_system::Events::<Runtime>::hashed_key().into(),
+            )),
+        )
         .times(1)
-        .returning(|_, _| Ok(vec![]));
+        .returning(|_, _| Ok(None));
 
     mock_state_chain_rpc_client
-        .expect_storage_events_at()
-        .with(eq(Some(new_epoch_block_header_hash)), eq(mock_events_key()))
+        .expect_storage()
+        .with(
+            eq(new_epoch_block_header_hash),
+            eq(StorageKey(
+                frame_system::Events::<Runtime>::hashed_key().into(),
+            )),
+        )
         .times(1)
         .returning(move |_, _| {
-            Ok(vec![storage_change_set_from(
-                vec![(
-                    Phase::ApplyExtrinsic(0),
-                    state_chain_runtime::Event::Validator(pallet_cf_validator::Event::NewEpoch(
-                        EPOCH_FOUR_INDEX,
-                    )),
-                    vec![H256::default()],
-                )],
-                new_epoch_block_header_hash,
-            )])
+            Ok(Some(StorageData(
+                vec![frame_system::EventRecord {
+                    phase: Phase::ApplyExtrinsic(0),
+                    event: state_chain_runtime::Event::Validator(
+                        pallet_cf_validator::Event::NewEpoch(EPOCH_FOUR_INDEX),
+                    ),
+                    topics: vec![H256::default()],
+                }]
+                .encode(),
+            )))
         });
 
     let state_chain_client = Arc::new(StateChainClient::create_test_sc_client(
@@ -688,29 +705,39 @@ async fn current_authority_to_historical_on_new_epoch_event() {
 
     // Get events from the block
     mock_state_chain_rpc_client
-        .expect_storage_events_at()
-        .with(eq(Some(new_epoch_block_header_hash)), eq(mock_events_key()))
+        .expect_storage()
+        .with(
+            eq(new_epoch_block_header_hash),
+            eq(StorageKey(
+                frame_system::Events::<Runtime>::hashed_key().into(),
+            )),
+        )
         .times(1)
         .returning(move |_, _| {
-            Ok(vec![storage_change_set_from(
-                vec![(
-                    Phase::ApplyExtrinsic(0),
-                    state_chain_runtime::Event::Validator(pallet_cf_validator::Event::NewEpoch(
-                        EPOCH_FOUR_INDEX,
-                    )),
-                    vec![H256::default()],
-                )],
-                new_epoch_block_header_hash,
-            )])
+            Ok(Some(StorageData(
+                vec![frame_system::EventRecord {
+                    phase: Phase::ApplyExtrinsic(0),
+                    event: state_chain_runtime::Event::Validator(
+                        pallet_cf_validator::Event::NewEpoch(EPOCH_FOUR_INDEX),
+                    ),
+                    topics: vec![H256::default()],
+                }]
+                .encode(),
+            )))
         });
 
     // We will match on every block hash, but only the events key, as we want to return no events
     // on every block
     mock_state_chain_rpc_client
-        .expect_storage_events_at()
-        .with(predicate::always(), eq(mock_events_key()))
+        .expect_storage()
+        .with(
+            predicate::always(),
+            eq(StorageKey(
+                frame_system::Events::<Runtime>::hashed_key().into(),
+            )),
+        )
         .times(3)
-        .returning(|_, _| Ok(vec![]));
+        .returning(|_, _| Ok(None));
 
     let state_chain_client = Arc::new(StateChainClient::create_test_sc_client(
         mock_state_chain_rpc_client,
@@ -829,39 +856,44 @@ async fn only_encodes_and_signs_when_specified() {
     // get the events for the new block - will contain 2 events, one for us to sign and one for us not to sign
     let block_header_hash = block_header.hash();
     mock_state_chain_rpc_client
-        .expect_storage_events_at()
-        .with(eq(Some(block_header_hash)), eq(mock_events_key()))
+        .expect_storage()
+        .with(
+            eq(block_header_hash),
+            eq(StorageKey(
+                frame_system::Events::<Runtime>::hashed_key().into(),
+            )),
+        )
         .times(1)
         .returning(move |_, _| {
-            Ok(vec![storage_change_set_from(
+            Ok(Some(StorageData(
                 vec![
-                    (
+                    frame_system::EventRecord {
                         // sign this one
-                        Phase::ApplyExtrinsic(0),
-                        state_chain_runtime::Event::EthereumBroadcaster(
+                        phase: Phase::ApplyExtrinsic(0),
+                        event: state_chain_runtime::Event::EthereumBroadcaster(
                             pallet_cf_broadcast::Event::TransactionSigningRequest(
                                 BroadcastAttemptId::default(),
                                 AccountId32::new(OUR_ACCOUNT_ID_BYTES),
                                 UnsignedTransaction::default(),
                             ),
                         ),
-                        vec![H256::default()],
-                    ),
-                    (
+                        topics: vec![H256::default()],
+                    },
+                    frame_system::EventRecord {
                         // do NOT sign this one
-                        Phase::ApplyExtrinsic(1),
-                        state_chain_runtime::Event::EthereumBroadcaster(
+                        phase: Phase::ApplyExtrinsic(1),
+                        event: state_chain_runtime::Event::EthereumBroadcaster(
                             pallet_cf_broadcast::Event::TransactionSigningRequest(
                                 BroadcastAttemptId::default(),
                                 AccountId32::new([1; 32]),
                                 UnsignedTransaction::default(),
                             ),
                         ),
-                        vec![H256::default()],
-                    ),
-                ],
-                block_header_hash,
-            )])
+                        topics: vec![H256::default()],
+                    },
+                ]
+                .encode(),
+            )))
         });
 
     let state_chain_client = Arc::new(StateChainClient::create_test_sc_client(
