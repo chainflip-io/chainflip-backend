@@ -5172,6 +5172,7 @@ name = "pallet-cf-broadcast"
 version = "0.1.0"
 dependencies = [
  "cf-chains",
+ "cf-primitives",
  "cf-runtime-upgrade-utilities",
  "cf-traits",
  "frame-benchmarking",

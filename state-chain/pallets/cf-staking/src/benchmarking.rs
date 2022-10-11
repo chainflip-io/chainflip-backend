@@ -4,6 +4,8 @@
 use super::*;
 
 use cf_chains::{ApiCall, ChainCrypto, Ethereum};
+use cf_primitives::AccountRole;
+use cf_traits::AccountRoleRegistry;
 use frame_benchmarking::{account, benchmarks, whitelisted_caller};
 use frame_support::{dispatch::UnfilteredDispatchable, traits::OnInitialize};
 use frame_system::RawOrigin;
@@ -152,6 +154,7 @@ benchmarks! {
 
 	retire_account {
 		let caller: T::AccountId = whitelisted_caller();
+		let _ = T::AccountRoleRegistry::register_account_role(&caller, AccountRole::Validator);
 		ActiveBidder::<T>::insert(caller.clone(), true);
 
 	}:_(RawOrigin::Signed(caller.clone()))
@@ -161,6 +164,7 @@ benchmarks! {
 
 	activate_account {
 		let caller: T::AccountId = whitelisted_caller();
+		let _ = T::AccountRoleRegistry::register_account_role(&caller, AccountRole::Validator);
 		ActiveBidder::<T>::insert(caller.clone(), false);
 
 	}:_(RawOrigin::Signed(caller.clone()))
