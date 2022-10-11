@@ -380,11 +380,11 @@ async fn should_cleanup_unauthorised_ceremony_if_not_participating() {
                 mpsc::unbounded_channel();
             let (_ceremony_runner_request_sender, ceremony_runner_request_receiver) =
                 oneshot::channel();
-            let ceremony_id = INITIAL_LATEST_CEREMONY_ID + 1;
+            const CEREMONY_ID: CeremonyId = INITIAL_LATEST_CEREMONY_ID + 1;
 
             let task_handle =
                 scope.spawn_with_handle(CeremonyRunner::<SigningCeremony<EthSigning>>::run(
-                    ceremony_id,
+                    CEREMONY_ID,
                     ceremony_runner_p2p_receiver,
                     ceremony_runner_request_receiver,
                     mpsc::unbounded_channel().0,
@@ -397,7 +397,7 @@ async fn should_cleanup_unauthorised_ceremony_if_not_participating() {
                 request_state: CeremonyRequestState::Unauthorised(oneshot::channel().0),
                 _task_handle: task_handle,
             };
-            ceremony_manager.insert_signing_state_for_test(ceremony_id, ceremony_handle);
+            ceremony_manager.insert_signing_state_for_test(CEREMONY_ID, ceremony_handle);
 
             // Start the ceremony manager running
             tokio::spawn(ceremony_manager.run(ceremony_request_receiver, incoming_p2p_receiver));
@@ -405,13 +405,13 @@ async fn should_cleanup_unauthorised_ceremony_if_not_participating() {
             // Sanity check that the channel to the ceremony runner task is open
             assert!(!ceremony_runner_p2p_sender.is_closed());
 
-            // Send a signing request that we are not participating in with
-            // that has the same ceremony id as the unauthorised ceremony
+            // Send a signing request that we are not participating in
+            // which has the same ceremony id as the unauthorised ceremony
             let mut participants = BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned());
             participants.remove(&our_account_id);
 
             let _result_receiver =
-                send_signing_request(&ceremony_request_sender, participants, ceremony_id);
+                send_signing_request(&ceremony_request_sender, participants, CEREMONY_ID);
 
             // Small delay to let the ceremony manager process the request
             tokio::time::sleep(Duration::from_millis(50)).await;
