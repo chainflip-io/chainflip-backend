@@ -91,11 +91,11 @@ where
 
                 let safe_http_tx_stream = block_transactions_stream_from_head_stream(epoch_start.eth_block,
                     safe_polling_http_head_stream(
-                    eth_http_rpc.clone(),
-                    HTTP_POLL_INTERVAL,
-                    ETH_BLOCK_SAFETY_MARGIN,
-                    &logger
-                ).await, eth_http_rpc.clone(), &logger).await?;
+                        eth_http_rpc.clone(),
+                        HTTP_POLL_INTERVAL,
+                        ETH_BLOCK_SAFETY_MARGIN,
+                        &logger
+                    ).await, eth_http_rpc.clone(), &logger).await?;
 
 
                 let mut merged_stream = merged_block_items_stream(safe_ws_tx_stream, safe_http_tx_stream, logger.clone()).await?;
