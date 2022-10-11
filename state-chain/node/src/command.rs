@@ -1,5 +1,5 @@
 use crate::{
-	chain_spec,
+	chain_spec::{self, use_chainflip_account_id_encoding},
 	cli::{Cli, Subcommand},
 	command_helper::{inherent_benchmark_data, BenchmarkExtrinsicBuilder},
 	service,
@@ -55,6 +55,7 @@ impl SubstrateCli for Cli {
 /// Parse and run command line arguments
 pub fn run() -> sc_cli::Result<()> {
 	let cli = Cli::from_args();
+	use_chainflip_account_id_encoding();
 
 	match &cli.subcommand {
 		Some(Subcommand::Key(cmd)) => cmd.run(&cli),
@@ -166,6 +167,7 @@ pub fn run() -> sc_cli::Result<()> {
         You can enable it with `--features try-runtime`."
 			.into()),
 		None => {
+			utilities::print_chainflip_ascii_art();
 			let runner = cli.create_runner(&cli.run)?;
 			runner.run_node_until_exit(|config| async move {
 				service::new_full(config).map_err(sc_cli::Error::Service)
