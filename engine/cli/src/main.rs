@@ -19,6 +19,7 @@ use web3::types::H160;
 
 use crate::settings::CFCommand::*;
 use anyhow::{anyhow, bail, Context, Result};
+use pallet_cf_governance::ProposalId;
 use pallet_cf_validator::MAX_LENGTH_FOR_VANITY_NAME;
 use utilities::clean_eth_address;
 
@@ -70,6 +71,7 @@ async fn run_cli() -> Result<()> {
         Activate {} => activate_account(&cli_settings, &logger).await,
         Query { block_hash } => request_block(block_hash, &cli_settings).await,
         VanityName { name } => set_vanity_name(name, &cli_settings, &logger).await,
+        ForceRotation { id } => force_rotation(id, &cli_settings, &logger).await,
     }
 }
 
@@ -380,6 +382,37 @@ async fn register_account_role(
         .await
         .expect("Could not set register account role for account");
     println!("Account role set at tx {:#x}.", tx_hash);
+    Ok(())
+}
+
+// Account must be the governance dictator in order for this to work.
+async fn force_rotation(
+    id: ProposalId,
+    settings: &CLISettings,
+    logger: &slog::Logger,
+) -> Result<()> {
+    let (_, _, state_chain_client) =
+        connect_to_state_chain(&settings.state_chain, false, logger).await?;
+
+    state_chain_client
+        .submit_signed_extrinsic(
+            pallet_cf_governance::Call::propose_governance_extrinsic {
+                call: Box::new(pallet_cf_validator::Call::force_rotation {}.into()),
+            },
+            logger,
+        )
+        .await
+        .expect("Should submit sudo governance proposal");
+
+    println!("Submitting governance proposal for rotation.");
+
+    state_chain_client
+        .submit_signed_extrinsic(pallet_cf_governance::Call::approve { id }, logger)
+        .await
+        .expect("Should submit approval, triggering execution of the forced rotation");
+
+    println!("Approved governance proposal {}. Rotation should commence soon if you are the governance dictator", id);
+
     Ok(())
 }
 
