@@ -447,7 +447,10 @@ where
             <Self as CeremonyRunnerStrategy>::CheckedOutput,
             (
                 BTreeSet<AccountId>,
-                CeremonyFailureReason<<<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::FailureReason>,
+                CeremonyFailureReason<
+                    <<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::FailureReason,
+                    <<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::CeremonyStageName,
+                >,
             ),
         >,
     >{
@@ -519,6 +522,7 @@ where
         bad_account_ids: &[AccountId],
         expected_failure_reason: CeremonyFailureReason<
             <<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::FailureReason,
+            <<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::CeremonyStageName,
         >,
     ) -> Option<()> {
         let (reported, reason) = self.collect_and_check_outcomes().await?.unwrap_err();
@@ -537,6 +541,7 @@ where
         bad_account_ids: &[AccountId],
         expected_failure_reason: CeremonyFailureReason<
             <<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::FailureReason,
+            <<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::CeremonyStageName,
         >,
     ) {
         self.try_complete_with_error(bad_account_ids, expected_failure_reason)
