@@ -12,54 +12,48 @@ env:
   REPO_BUCKET: "apt.aws.chainflip.xyz"
 
 jobs:
-  docker-build-deb:
-    runs-on: ubuntu-latest
+  build-deb:
+    strategy:
+      fail-fast: true
+      matrix:
+        os: [ubuntu-20.04, ubuntu-22.04]
+    name: Build and publish packages on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
     environment: development
-    outputs:
-      codename: ${{ steps.lsb-release.outputs.codename }}
-    container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08"
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-    steps:
-      - name: Install cargo-deb
-        run: cargo install cargo-deb
-      - name: Checkout
-        uses: actions/checkout@v2
-      - name: Setup rust cache
-        uses: Swatinem/rust-cache@v2
-      - name: Build packages
-        run: | 
-          cargo deb --no-strip -p chainflip-engine
-          cargo deb --no-strip -p chainflip-cli
-          cargo deb --no-strip -p chainflip-node
-      - name: Get lsb-release codename
-        id: lsb-release
-        run: |
-          apt update
-          apt install -y lsb-release
-          echo "::set-output name=codename::$(lsb_release -c -s)"
-      - uses: actions/upload-artifact@v2
-        with:
-          name: packages
-          path: target/debian/*.deb
-
-  publish-deb:
-    runs-on: ubuntu-latest
     permissions:
       id-token: write
       contents: read
-    environment: development
-    needs: [docker-build-deb]
     steps:
       - name: Checkout
         uses: actions/checkout@v2
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y --no-install-recommends moreutils
+      - name: Install rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2022-08-08
+          default: true
+          target: wasm32-unknown-unknown
+          override: true
+          components: rustfmt, clippy
+      - name: Setup rust cache
+        uses: Swatinem/rust-cache@v2
+      - name: Install cargo-deb
+        run: cargo install cargo-deb
       - name: Get date, commit SHA, distribution codename
         id: vars
         run: |
           echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
-          echo "::set-output name=date::$(date +'%d%m%Y-%H%M')"
+          echo "::set-output name=date::$(date +'%Y%m%d%H%M')"
+          echo "::set-output name=codename::$(lsb_release -c -s)"
+      - name: Build packages
+        run: |
+          export DEB_REVISION="${{ steps.vars.outputs.date }}~${{ steps.vars.outputs.codename }}"
+          cargo deb --no-strip -p chainflip-engine --deb-revision "${DEB_REVISION}"
+          cargo deb --no-strip -p chainflip-cli --deb-revision "${DEB_REVISION}"
+          cargo deb --no-strip -p chainflip-node --deb-revision "${DEB_REVISION}"
       - name: Install Aptly
         run: | 
           wget https://github.com/aptly-dev/aptly/releases/download/v${APTLY_VERSION}/aptly_${APTLY_VERSION}_amd64.deb -O /tmp/aptly_${APTLY_VERSION}_amd64.deb
@@ -71,8 +65,6 @@ jobs:
           role-to-assume: arn:aws:iam::962042992619:role/chainflip-github-bot
       - name: Configure aptly
         run: |
-          sudo apt update
-          sudo apt install -y moreutils
           aptly config show
           jq --argjson S3PublishEndpoints "$(<.github/workflows/aptly_dev_s3.json)" '.S3PublishEndpoints += $S3PublishEndpoints' ~/.aptly.conf | sponge ~/.aptly.conf 
       - name: Import GPG package signing key
@@ -80,23 +72,23 @@ jobs:
         uses: crazy-max/ghaction-import-gpg@v5
         with:
           gpg_private_key: ${{ secrets.CF_DEV_PGP_KEY }}
-          # passphrase: ${{ secrets.PASSPHRASE }}
+          # passphrase: ${{ secrets.PASSPHRASE }} # Empty pass for development
       - name: List keys
         run: gpg -K
-      - name: Download previously built packages
-        uses: actions/download-artifact@v3
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v2
         with:
-          name: packages
-          path: packages/
+          name: packages-${{ matrix.os }}
+          path: target/debian/*.deb
       - name: Run aptly
         run: |
           export AWS_SDK_LOAD_CONFIG=1
           aptly repo create local
-          aptly repo add local packages/*.deb
+          aptly repo add local target/debian/*.deb
           aptly snapshot create snap from repo local
-          aptly publish -gpg-key=${{ steps.import_gpg.outputs.keyid }} -distribution=${{ needs.docker-build-deb.outputs.codename }} snapshot snap "s3:chainflip-dev:ci/${{ steps.vars.outputs.sha_short }}-${{ steps.vars.outputs.date }}/"
+          aptly publish -gpg-key=${{ steps.import_gpg.outputs.keyid }} -distribution=${{ steps.vars.outputs.codename }} snapshot -force-overwrite snap "s3:chainflip-dev:ci/${{ steps.vars.outputs.sha_short }}/"
           echo "############################"
           echo "Packages can be installed with the following commands: "
           echo "sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys ${{ steps.import_gpg.outputs.keyid }}"
-          echo "echo \"deb https://${REPO_BUCKET}/ci/${{ steps.vars.outputs.sha_short }}-${{ steps.vars.outputs.date }}/ ${{ needs.docker-build-deb.outputs.codename }} main\"  | sudo tee /etc/apt/sources.list.d/chainflip.list"
+          echo "echo \"deb https://${REPO_BUCKET}/ci/${{ steps.vars.outputs.sha_short }}/ ${{ steps.vars.outputs.codename }} main\"  | sudo tee /etc/apt/sources.list.d/chainflip.list"
  
