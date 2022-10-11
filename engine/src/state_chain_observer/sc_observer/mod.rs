@@ -188,8 +188,13 @@ where
     with_task_scope(|scope| async {
         let logger = logger.new(o!(COMPONENT_KEY => "SCObserver"));
 
+        let heartbeat_block_interval: state_chain_runtime::BlockNumber = {
+            use frame_support::traits::Get;
+            <state_chain_runtime::Runtime as pallet_cf_reputation::Config>::HeartbeatBlockInterval::get()
+        };
+
         let blocks_per_heartbeat =
-            std::cmp::max(1, state_chain_client.heartbeat_block_interval / 2);
+            std::cmp::max(1, heartbeat_block_interval / 2);
 
         slog::info!(
             logger,
@@ -464,7 +469,7 @@ where
                             // We send it in the middle of the online interval (so any node sync issues don't
                             // cause issues (if we tried to send on one of the interval boundaries)
                             if ((current_block_header.number
-                                + (state_chain_client.heartbeat_block_interval / 2))
+                                + (heartbeat_block_interval / 2))
                                 % blocks_per_heartbeat
                                 // Submitting earlier than one minute in may falsely indicate liveness.
                                 == 0) && has_submitted_init_heartbeat.load(Ordering::Relaxed)

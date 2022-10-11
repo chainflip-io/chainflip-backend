@@ -206,7 +206,6 @@ where
 }
 
 pub struct StateChainClient<RpcClient: StateChainRpcApi> {
-    pub heartbeat_block_interval: u32,
     nonce: AtomicU32,
     /// Our Node's AccountId
     pub our_account_id: AccountId32,
@@ -242,7 +241,6 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
         use signer::PairSigner;
 
         Self {
-            heartbeat_block_interval: 20,
             nonce: AtomicU32::new(0),
             our_account_id: AccountId32::new(OUR_ACCOUNT_ID_BYTES),
             state_chain_rpc_client: rpc_client,
@@ -857,10 +855,6 @@ async fn inner_connect_to_state_chain(
             signer: signer.clone(),
             state_chain_rpc_client,
             our_account_id,
-            heartbeat_block_interval: {
-                use frame_support::traits::Get;
-                <state_chain_runtime::Runtime as pallet_cf_reputation::Config>::HeartbeatBlockInterval::get()
-            },
         }),
     ))
 }
