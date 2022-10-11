@@ -295,7 +295,9 @@ pub mod pallet {
 				} else if current_block.saturating_sub(KeygenResolutionPendingSince::<T, I>::get()) >=
 					KeygenResponseTimeout::<T, I>::get()
 				{
-					log::debug!("Keygen response timeout has elapsed, reporting keygen failure.");
+					log::debug!(
+						"Keygen response timeout has elapsed, attempting to resolve outcome..."
+					);
 					Self::deposit_event(Event::<T, I>::KeygenResponseTimeout(keygen_ceremony_id));
 				} else {
 					return weight
