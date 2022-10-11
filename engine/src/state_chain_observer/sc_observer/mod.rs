@@ -188,8 +188,8 @@ where
     with_task_scope(|scope| async {
         let logger = logger.new(o!(COMPONENT_KEY => "SCObserver"));
 
-        let heartbeat_block_interval: state_chain_runtime::BlockNumber = {
-            use frame_support::traits::Get;
+        let heartbeat_block_interval = {
+            use frame_support::traits::TypedGet;
             <state_chain_runtime::Runtime as pallet_cf_reputation::Config>::HeartbeatBlockInterval::get()
         };
 

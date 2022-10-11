@@ -30,7 +30,10 @@ use crate::{
     multisig::client::{mocks::MockMultisigClientApi, CeremonyFailureReason},
     settings::Settings,
     state_chain_observer::{
-        client::{MockStateChainRpcApi, StateChainClient, OUR_ACCOUNT_ID_BYTES},
+        client::{
+            storage_traits::StorageValueAssociatedTypes, MockStateChainRpcApi, StateChainClient,
+            NOT_OUR_ACCOUNT_ID_BYTES, OUR_ACCOUNT_ID_BYTES,
+        },
         sc_observer,
     },
     task_scope::with_task_scope,
@@ -416,7 +419,12 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
             )),
         )
         .times(1)
-        .returning(|_, _| Ok(None));
+        .returning(|_, _| {
+            Ok(Some(StorageData(
+                <frame_system::Events<Runtime> as StorageValueAssociatedTypes>::Value::default()
+                    .encode(),
+            )))
+        });
 
     mock_state_chain_rpc_client
         .expect_storage()
@@ -572,7 +580,12 @@ async fn not_historical_to_authority_on_new_epoch() {
             )),
         )
         .times(1)
-        .returning(|_, _| Ok(None));
+        .returning(|_, _| {
+            Ok(Some(StorageData(
+                <frame_system::Events<Runtime> as StorageValueAssociatedTypes>::Value::default()
+                    .encode(),
+            )))
+        });
 
     mock_state_chain_rpc_client
         .expect_storage()
@@ -737,7 +750,12 @@ async fn current_authority_to_historical_on_new_epoch_event() {
             )),
         )
         .times(3)
-        .returning(|_, _| Ok(None));
+        .returning(|_, _| {
+            Ok(Some(StorageData(
+                <frame_system::Events<Runtime> as StorageValueAssociatedTypes>::Value::default()
+                    .encode(),
+            )))
+        });
 
     let state_chain_client = Arc::new(StateChainClient::create_test_sc_client(
         mock_state_chain_rpc_client,
@@ -885,7 +903,7 @@ async fn only_encodes_and_signs_when_specified() {
                         event: state_chain_runtime::Event::EthereumBroadcaster(
                             pallet_cf_broadcast::Event::TransactionSigningRequest(
                                 BroadcastAttemptId::default(),
-                                AccountId32::new([1; 32]),
+                                AccountId32::new(NOT_OUR_ACCOUNT_ID_BYTES),
                                 UnsignedTransaction::default(),
                             ),
                         ),

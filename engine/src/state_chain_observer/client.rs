@@ -1,5 +1,5 @@
 mod signer;
-mod storage_traits;
+pub mod storage_traits;
 
 use anyhow::{anyhow, bail, Context, Result};
 use codec::{Decode, Encode, FullCodec};
@@ -225,6 +225,9 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
 
 #[cfg(test)]
 pub const OUR_ACCOUNT_ID_BYTES: [u8; 32] = [0; 32];
+
+#[cfg(test)]
+pub const NOT_OUR_ACCOUNT_ID_BYTES: [u8; 32] = [1; 32];
 
 #[cfg(test)]
 pub fn mock_account_storage_key() -> StorageKey {
