@@ -44,19 +44,15 @@ where
             .then(move |header| {
                 let eth_rpc = eth_rpc.clone();
                 async move {
-                    (
-                        header.block_number.as_u64(),
-                        eth_rpc.block_with_txs(header.block_number).await,
-                    )
+                    BlockWithProcessedItems {
+                        block_number: header.block_number.as_u64(),
+                        processed_block_items: eth_rpc
+                            .block_with_txs(header.block_number)
+                            .await
+                            .map(|block| block.transactions),
+                    }
                 }
-            })
-            .map(
-                move |(block_number, result_stuff)| BlockWithProcessedItems {
-                    block_number,
-                    processed_block_items: result_stuff
-                        .map(|block_with_txs| block_with_txs.transactions),
-                },
-            ),
+            }),
     ))
 }
 
