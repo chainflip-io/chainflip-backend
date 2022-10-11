@@ -395,8 +395,8 @@ where
     ))
 }
 
-/// Get an block events stream for the contract, returning the stream only if the head of the stream is
-/// ahead of from_block (otherwise it will wait until we have reached from_block)
+/// Get a block events stream for the contract, returning the stream only if the head of the stream is
+/// ahead of from_block (otherwise it will wait until we have reached from_block).
 pub async fn block_events_stream_for_contract_from<EventParameters, ContractWitnesser>(
     from_block: u64,
     contract_witnesser: &ContractWitnesser,
