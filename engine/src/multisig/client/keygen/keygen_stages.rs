@@ -1,7 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
-use crate::common::format_iterator;
 use crate::multisig::client::ceremony_manager::KeygenCeremony;
 use crate::multisig::client::common::{
     CeremonyFailureReason, KeygenFailureReason, KeygenStageName,
