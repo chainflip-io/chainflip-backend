@@ -172,10 +172,10 @@ pub trait VaultRotator {
 	fn start_vault_rotation(candidates: BTreeSet<Self::ValidatorId>);
 
 	/// Poll for the vault rotation outcome.
-	fn get_vault_rotation_outcome() -> AsyncResult<Result<(), Vec<Self::ValidatorId>>>;
+	fn get_vault_rotation_outcome() -> AsyncResult<Result<(), BTreeSet<Self::ValidatorId>>>;
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn set_vault_rotation_outcome(_outcome: AsyncResult<Result<(), Vec<Self::ValidatorId>>>) {
+	fn set_vault_rotation_outcome(_outcome: AsyncResult<Result<(), BTreeSet<Self::ValidatorId>>>) {
 		unimplemented!()
 	}
 }

@@ -49,10 +49,8 @@ impl<Id: Ord + Clone, Amount: AtLeast32BitUnsigned + Copy> RotationState<Id, Amo
 		}
 	}
 
-	pub fn ban(&mut self, new_banned: impl IntoIterator<Item = Id>) {
-		for id in new_banned {
-			self.banned.insert(id);
-		}
+	pub fn ban(&mut self, new_banned: BTreeSet<Id>) {
+		self.banned = new_banned
 	}
 
 	pub fn authority_candidates<I: FromIterator<Id>>(&self) -> I {
