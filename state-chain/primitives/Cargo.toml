@@ -12,12 +12,12 @@ ethabi = {default-features = false, version = '17.0'}
 [dependencies.sp-runtime]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06'
+tag = 'chainflip-monthly-2022-06+01'
 
 [dependencies.sp-std]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06'
+tag = 'chainflip-monthly-2022-06+01'
 
 [dependencies.codec]
 default-features = false

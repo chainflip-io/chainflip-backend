@@ -29,8 +29,9 @@ pallet-cf-account-types = { path = '../../state-chain/pallets/cf-account-types' 
 cf-primitives = {path = "../../state-chain/primitives"}
 pallet-cf-governance = {path = "../../state-chain/pallets/cf-governance"}
 state-chain-runtime = {path = "../../state-chain/runtime"}
+frame-system = {git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2022-06+01'}
 
 # Substrate key types
-sp-consensus-aura = {git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2022-06'}
-sp-core = {git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2022-06'}
-sp-finality-grandpa = {git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2022-06'}
+sp-consensus-aura = {git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2022-06+01'}
+sp-core = {git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2022-06+01'}
+sp-finality-grandpa = {git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2022-06+01'}
