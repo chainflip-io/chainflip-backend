@@ -5,7 +5,7 @@ use cf_traits::{
 	impl_mock_waived_fees, mocks::system_state_info::MockSystemStateInfo, AsyncResult,
 	ThresholdSigner, WaivedFees,
 };
-use frame_support::{dispatch::DispatchResultWithPostInfo, parameter_types};
+use frame_support::{dispatch::DispatchResultWithPostInfo, parameter_types, traits::ConstU64};
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
@@ -27,6 +27,10 @@ use cf_traits::{
 	Chainflip, ReplayProtectionProvider,
 };
 
+impl pallet_cf_account_types::Config for Test {
+	type Event = Event;
+}
+
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
 	pub enum Test where
@@ -35,6 +39,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system,
+		AccountTypes: pallet_cf_account_types,
 		Flip: pallet_cf_flip,
 		Staking: pallet_cf_staking,
 	}
@@ -126,6 +131,7 @@ impl ReplayProtectionProvider<Ethereum> for Test {
 		}
 	}
 }
+
 pub struct MockThresholdSigner;
 
 thread_local! {
@@ -189,10 +195,13 @@ impl ThresholdSigner<Ethereum> for MockThresholdSigner {
 pub const ETH_DUMMY_SIG: eth::SchnorrVerificationComponents =
 	eth::SchnorrVerificationComponents { s: [0xcf; 32], k_times_g_address: [0xcf; 20] };
 
+pub const CLAIM_DELAY_BUFFER_SECS: u64 = 10;
+
 impl pallet_cf_staking::Config for Test {
 	type Event = Event;
 	type TimeSource = time_source::Mock;
 	type Balance = u128;
+	type AccountRoleRegistry = ();
 	type Flip = Flip;
 	type WeightInfo = ();
 	type StakerId = AccountId;
@@ -201,9 +210,12 @@ impl pallet_cf_staking::Config for Test {
 	type ThresholdCallable = Call;
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
+	type ClaimDelayBufferSeconds = ConstU64<CLAIM_DELAY_BUFFER_SECS>;
 	type RegisterClaim = eth::api::EthereumApi;
 	type EthEnvironmentProvider = MockEthEnvironmentProvider;
 }
+
+pub const CLAIM_TTL_SECS: u64 = 10;
 
 pub const ALICE: AccountId = AccountId32::new([0xa1; 32]);
 pub const BOB: AccountId = AccountId32::new([0xb0; 32]);
@@ -214,12 +226,13 @@ pub const MIN_STAKE: u128 = 10;
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
+		account_types: Default::default(),
 		system: Default::default(),
 		flip: FlipConfig { total_issuance: 1_000_000 },
 		staking: StakingConfig {
 			genesis_stakers: vec![(CHARLIE, MIN_STAKE)],
 			minimum_stake: MIN_STAKE,
-			claim_ttl: Duration::from_secs(10),
+			claim_ttl: Duration::from_secs(CLAIM_TTL_SECS),
 		},
 	};
 

@@ -69,9 +69,7 @@ benchmarks_instance_pallet! {
 		let mut threshold_set = PendingCeremonies::<T, I>::get(ceremony_id).unwrap().remaining_respondents.into_iter();
 
 		let reporter = threshold_set.next().unwrap();
-		let offenders = BTreeSet::from_iter(threshold_set.take(a as usize))
-			.try_into()
-			.expect("Benchmark threshold should not exceed BTreeSet bounds");
+		let offenders = BTreeSet::from_iter(threshold_set.take(a as usize));
 	} : _(RawOrigin::Signed(reporter.into()), ceremony_id, offenders)
 	determine_offenders {
 		let a in 1 .. 200;
@@ -130,7 +128,7 @@ benchmarks_instance_pallet! {
 	verify {
 		assert_eq!(
 			RetryQueues::<T, I>::decode_len(T::CeremonyRetryDelay::get()).unwrap_or_default(),
-			0 as usize,
+			0_usize,
 		);
 	}
 

@@ -11,8 +11,28 @@ use crate::{
 
 use super::EpochStart;
 
+pub fn should_end_witnessing(
+    end_witnessing_signal: Arc<Mutex<Option<u64>>>,
+    current_block_number: u64,
+    logger: &slog::Logger,
+) -> bool {
+    if let Some(end_block) = *end_witnessing_signal.lock().unwrap() {
+        if current_block_number >= end_block {
+            slog::info!(
+                logger,
+                "Finished witnessing events at ETH block: {}",
+                current_block_number
+            );
+            // we have reached the block height we wanted to witness up to
+            // so can stop the witness process
+            return true;
+        }
+    }
+    false
+}
+
 pub async fn start<G, F, Fut, State>(
-    log_key: &'static str,
+    log_key: String,
     mut epoch_start_receiver: broadcast::Receiver<EpochStart>,
     mut should_epoch_participant_witness: G,
     initial_state: State,
@@ -52,6 +72,12 @@ where
                             let end_witnessing_signal = Arc::new(Mutex::new(None));
 
                             let logger = logger.clone();
+
+                            slog::info!(
+                                logger,
+                                "Start witnessing from ETH block: {}",
+                                epoch_start.eth_block
+                            );
 
                             (
                                 end_witnessing_signal.clone(),

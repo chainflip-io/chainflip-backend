@@ -1,9 +1,7 @@
 use cf_chains::eth::H256;
+use cf_primitives::AccountRole;
 use chainflip_engine::{
-    eth::{
-        rpc::{EthDualRpcClient, EthHttpRpcClient, EthWsRpcClient},
-        EthBroadcaster,
-    },
+    eth::{rpc::EthDualRpcClient, EthBroadcaster},
     state_chain_observer::client::{
         connect_to_state_chain, connect_to_state_chain_without_signer, StateChainRpcApi,
     },
@@ -20,7 +18,8 @@ use state_chain_runtime::opaque::SessionKeys;
 use web3::types::H160;
 
 use crate::settings::CFCommand::*;
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, Context, Result};
+use pallet_cf_governance::ProposalId;
 use pallet_cf_validator::MAX_LENGTH_FOR_VANITY_NAME;
 use utilities::clean_eth_address;
 
@@ -66,11 +65,13 @@ async fn run_cli() -> Result<()> {
             )
             .await
         }
+        RegisterAccountRole { role } => register_account_role(role, &cli_settings, &logger).await,
         Rotate {} => rotate_keys(&cli_settings, &logger).await,
         Retire {} => retire_account(&cli_settings, &logger).await,
         Activate {} => activate_account(&cli_settings, &logger).await,
         Query { block_hash } => request_block(block_hash, &cli_settings).await,
         VanityName { name } => set_vanity_name(name, &cli_settings, &logger).await,
+        ForceRotation { id } => force_rotation(id, &cli_settings, &logger).await,
     }
 }
 
@@ -234,14 +235,9 @@ async fn register_claim(
 
     let eth_broadcaster = EthBroadcaster::new(
         &settings.eth,
-        EthDualRpcClient::new(
-            EthWsRpcClient::new(&settings.eth, logger)
-                .await
-                .expect("Unable to create EthWslRpcClient"),
-            EthHttpRpcClient::new(&settings.eth, logger)
-                .expect("Unable to create EthHttpRpcClient"),
-            logger,
-        ),
+        EthDualRpcClient::new(&settings.eth, chain_id.into(), logger)
+            .await
+            .context("Could not create EthDualRpcClient")?,
         logger,
     )?;
 
@@ -303,13 +299,34 @@ async fn retire_account(settings: &CLISettings, logger: &slog::Logger) -> Result
 }
 
 async fn activate_account(settings: &CLISettings, logger: &slog::Logger) -> Result<()> {
-    let (_, _, state_chain_client) =
+    let (latest_block_hash, _, state_chain_client) =
         connect_to_state_chain(&settings.state_chain, false, logger).await?;
-    let tx_hash = state_chain_client
-        .submit_signed_extrinsic(pallet_cf_staking::Call::activate_account {}, logger)
+
+    match state_chain_client
+        .get_storage_map::<pallet_cf_account_types::AccountRoles<state_chain_runtime::Runtime>>(
+            latest_block_hash,
+            &state_chain_client.our_account_id,
+        )
         .await
-        .expect("Could not activate account");
-    println!("Account activated at tx {:#x}.", tx_hash);
+        .expect("Failed to request AccountRole")
+        .ok_or_else(|| anyhow!("Your account is not staked. You must first stake and then register your account role as Validator before activating your account."))?
+    {
+        AccountRole::Validator => {
+            let tx_hash = state_chain_client
+                .submit_signed_extrinsic(pallet_cf_staking::Call::activate_account {}, logger)
+                .await
+                .expect("Could not activate account");
+            println!("Account activated at tx {:#x}.", tx_hash);
+        }
+        AccountRole::None => {
+            println!("You have not yet registered an account role. If you wish to activate your account to gain a chance at becoming an authority on the Chainflip network
+            you must first register your account as the Validator role. Please see the `register-account-role` command on this CLI.")
+        }
+        _ => {
+            println!("You have already registered an account role for this account that is not the Validator role. You cannot activate your account for participation as an authority on the Chainflip network.")
+        }
+    }
+
     Ok(())
 }
 
@@ -337,6 +354,65 @@ async fn set_vanity_name(
         .await
         .expect("Could not set vanity name for your account");
     println!("Vanity name set at tx {:#x}.", tx_hash);
+    Ok(())
+}
+
+async fn register_account_role(
+    role: AccountRole,
+    settings: &CLISettings,
+    logger: &slog::Logger,
+) -> Result<()> {
+    let (_, _, state_chain_client) =
+        connect_to_state_chain(&settings.state_chain, false, logger).await?;
+
+    println!(
+        "Submtting `register-account-role` with role: {:?}. This cannot be reversed for your account.",
+        role
+    );
+
+    if !confirm_submit() {
+        return Ok(());
+    }
+
+    let tx_hash = state_chain_client
+        .submit_signed_extrinsic(
+            pallet_cf_account_types::Call::register_account_role_xt { role },
+            logger,
+        )
+        .await
+        .expect("Could not set register account role for account");
+    println!("Account role set at tx {:#x}.", tx_hash);
+    Ok(())
+}
+
+// Account must be the governance dictator in order for this to work.
+async fn force_rotation(
+    id: ProposalId,
+    settings: &CLISettings,
+    logger: &slog::Logger,
+) -> Result<()> {
+    let (_, _, state_chain_client) =
+        connect_to_state_chain(&settings.state_chain, false, logger).await?;
+
+    state_chain_client
+        .submit_signed_extrinsic(
+            pallet_cf_governance::Call::propose_governance_extrinsic {
+                call: Box::new(pallet_cf_validator::Call::force_rotation {}.into()),
+            },
+            logger,
+        )
+        .await
+        .expect("Should submit sudo governance proposal");
+
+    println!("Submitting governance proposal for rotation.");
+
+    state_chain_client
+        .submit_signed_extrinsic(pallet_cf_governance::Call::approve { id }, logger)
+        .await
+        .expect("Should submit approval, triggering execution of the forced rotation");
+
+    println!("Approved governance proposal {}. Rotation should commence soon if you are the governance dictator", id);
+
     Ok(())
 }
 

@@ -5,7 +5,7 @@ use rand_legacy::SeedableRng;
 
 use crate::multisig::{
     client::{
-        common::{BroadcastVerificationMessage, CeremonyStageName, PreProcessStageDataCheck},
+        common::{BroadcastVerificationMessage, KeygenStageName, PreProcessStageDataCheck},
         keygen::{BlameResponse8, Complaints6, KeygenData, SecretShare5},
     },
     crypto::Rng,
@@ -249,15 +249,15 @@ fn check_data_size_verify_blame_responses9() {
 fn should_delay_correct_data_for_stage() {
     let default_length = 1;
     let stage_name = [
-        CeremonyStageName::HashCommitments1,
-        CeremonyStageName::VerifyHashCommitmentsBroadcast2,
-        CeremonyStageName::CoefficientCommitments3,
-        CeremonyStageName::VerifyCommitmentsBroadcast4,
-        CeremonyStageName::SecretSharesStage5,
-        CeremonyStageName::ComplaintsStage6,
-        CeremonyStageName::VerifyComplaintsBroadcastStage7,
-        CeremonyStageName::BlameResponsesStage8,
-        CeremonyStageName::VerifyBlameResponsesBroadcastStage9,
+        KeygenStageName::HashCommitments1,
+        KeygenStageName::VerifyHashCommitmentsBroadcast2,
+        KeygenStageName::CoefficientCommitments3,
+        KeygenStageName::VerifyCommitmentsBroadcast4,
+        KeygenStageName::SecretSharesStage5,
+        KeygenStageName::ComplaintsStage6,
+        KeygenStageName::VerifyComplaintsBroadcastStage7,
+        KeygenStageName::BlameResponsesStage8,
+        KeygenStageName::VerifyBlameResponsesBroadcastStage9,
     ];
     let stage_data = [
         gen_keygen_data_hash_comm1(),

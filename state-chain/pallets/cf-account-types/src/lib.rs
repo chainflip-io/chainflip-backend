@@ -8,7 +8,7 @@ mod mock;
 mod tests;
 
 use cf_primitives::AccountRole;
-use cf_traits::Chainflip;
+use cf_traits::{AccountRoleRegistry, Chainflip};
 use frame_support::{
 	error::BadOrigin,
 	pallet_prelude::DispatchResult,
@@ -25,47 +25,65 @@ pub mod pallet {
 
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
-	pub trait Config<I: 'static = ()>: Chainflip {
+	pub trait Config: Chainflip {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
-		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
+		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 	}
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
-	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
+	pub struct Pallet<T>(PhantomData<T>);
 
 	#[pallet::storage]
-	pub(crate) type AccountRoles<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Identity, T::AccountId, AccountRole>;
+	pub type AccountRoles<T: Config> = StorageMap<_, Identity, T::AccountId, AccountRole>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum Event<T: Config<I>, I: 'static = ()> {
+	pub enum Event<T: Config> {
 		AccountRoleRegistered { account_id: T::AccountId, role: AccountRole },
 	}
 
 	#[pallet::error]
-	pub enum Error<T, I = ()> {
+	pub enum Error<T> {
 		UnknownAccount,
 		AccountNotInitialised,
 		/// Accounts can only be upgraded from the initial [AccountRole::Undefined] state.
 		AccountRoleAlreadyRegistered,
 	}
+
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config> {
+		pub initial_account_roles: Vec<(T::AccountId, AccountRole)>,
+	}
+
+	#[cfg(feature = "std")]
+	impl<T: Config> Default for GenesisConfig<T> {
+		fn default() -> Self {
+			Self { initial_account_roles: Default::default() }
+		}
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+		fn build(&self) {
+			for (account, role) in &self.initial_account_roles {
+				AccountRoles::<T>::insert(account, role);
+			}
+		}
+	}
+
+	#[pallet::call]
+	impl<T: Config> Pallet<T> {
+		#[pallet::weight(0)]
+		pub fn register_account_role_xt(origin: OriginFor<T>, role: AccountRole) -> DispatchResult {
+			let who: T::AccountId = ensure_signed(origin)?;
+			Self::register_account_role(&who, role)?;
+			Ok(())
+		}
+	}
 }
 
-impl<T: Config> Pallet<T> {
-	pub fn register_as_relayer(account_id: &T::AccountId) -> DispatchResult {
-		Self::register_account_role(account_id, AccountRole::Relayer)
-	}
-
-	pub fn register_as_liquidity_provider(account_id: &T::AccountId) -> DispatchResult {
-		Self::register_account_role(account_id, AccountRole::LiquidityProvider)
-	}
-
-	pub fn register_as_validator(account_id: &T::AccountId) -> DispatchResult {
-		Self::register_account_role(account_id, AccountRole::Validator)
-	}
-
+impl<T: Config> AccountRoleRegistry<T> for Pallet<T> {
 	/// Register the account role for some account id.
 	///
 	/// Fails if an account type has already been registered for this account id.
@@ -87,6 +105,18 @@ impl<T: Config> Pallet<T> {
 			}
 		})
 		.map_err(Into::into)
+	}
+
+	fn ensure_account_role(
+		origin: T::Origin,
+		role: AccountRole,
+	) -> Result<T::AccountId, BadOrigin> {
+		match role {
+			AccountRole::None => Err(BadOrigin),
+			AccountRole::Validator => ensure_validator::<T>(origin),
+			AccountRole::LiquidityProvider => ensure_liquidity_provider::<T>(origin),
+			AccountRole::Relayer => ensure_relayer::<T>(origin),
+		}
 	}
 }
 

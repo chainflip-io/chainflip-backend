@@ -53,7 +53,7 @@ benchmarks! {
 		let interval = T::HeartbeatBlockInterval::get();
 		let next_block_number = interval + 1u32.into();
 	} : {
-		Pallet::<T>::on_initialize((next_block_number).into());
+		Pallet::<T>::on_initialize(next_block_number);
 	}
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);

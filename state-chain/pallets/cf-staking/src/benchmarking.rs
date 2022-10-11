@@ -26,7 +26,7 @@ benchmarks! {
 
 		let call = Call::<T>::staked {
 			account_id: caller.clone(),
-			amount: amount,
+			amount,
 			withdrawal_address,
 			tx_hash,
 		};
@@ -34,15 +34,14 @@ benchmarks! {
 
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
-		assert!(AccountRetired::<T>::get(&caller));
 		assert_eq!(T::Flip::staked_balance(&caller), amount);
 	}
 
 	claim {
 		// If we claim an amount which takes us below the minimum stake, the claim
 		// will fail.
-		let balance_to_stake: T::Balance = T::Balance::from(MinimumStake::<T>::get() * T::Balance::from(2u128));
-		let balance_to_claim: T::Balance = T::Balance::from(MinimumStake::<T>::get());
+		let balance_to_stake: T::Balance = MinimumStake::<T>::get() * T::Balance::from(2u128);
+		let balance_to_claim = ClaimAmount::Exact(MinimumStake::<T>::get());
 		let tx_hash: pallet::EthTransactionHash = [211u8; 32];
 		let withdrawal_address: EthereumAddress = [42u8; 20];
 
@@ -58,7 +57,7 @@ benchmarks! {
 		};
 		stake_call.dispatch_bypass_filter(origin)?;
 
-	} :_(RawOrigin::Signed(caller.clone()), Some(balance_to_claim), withdrawal_address)
+	} :_(RawOrigin::Signed(caller.clone()), balance_to_claim, withdrawal_address)
 	verify {
 		assert!(PendingClaims::<T>::contains_key(&caller));
 	}
@@ -66,7 +65,7 @@ benchmarks! {
 		let withdrawal_address: EthereumAddress = [42u8; 20];
 		let caller: T::AccountId = whitelisted_caller();
 
-		let balance_to_stake: T::Balance = T::Balance::from(MinimumStake::<T>::get());
+		let balance_to_stake: T::Balance = MinimumStake::<T>::get();
 		let tx_hash: pallet::EthTransactionHash = [211u8; 32];
 
 		let caller: T::AccountId = whitelisted_caller();
@@ -80,7 +79,7 @@ benchmarks! {
 		}.dispatch_bypass_filter(origin)?;
 
 		let call = Call::<T>::claim {
-			amount: None,
+			amount: ClaimAmount::Max,
 			address: withdrawal_address,
 		};
 	}: { call.dispatch_bypass_filter(RawOrigin::Signed(caller.clone()).into())? }
@@ -98,14 +97,14 @@ benchmarks! {
 		// Stake some funds to claim
 		Call::<T>::staked {
 			account_id: caller.clone(),
-			amount: T::Balance::from(MinimumStake::<T>::get()),
+			amount: MinimumStake::<T>::get(),
 			withdrawal_address,
 			tx_hash
 		}.dispatch_bypass_filter(origin.clone())?;
 
 		// Push a claim
 		let claimable = T::Flip::claimable_balance(&caller);
-		Pallet::<T>::claim(RawOrigin::Signed(caller.clone()).into(), None, withdrawal_address)?;
+		Pallet::<T>::claim(RawOrigin::Signed(caller.clone()).into(), ClaimAmount::Max, withdrawal_address)?;
 
 		let call = Call::<T>::claimed {
 			account_id: caller.clone(),
@@ -126,13 +125,13 @@ benchmarks! {
 		// Stake some funds to claim
 		Call::<T>::staked {
 			account_id: caller.clone(),
-			amount: T::Balance::from(MinimumStake::<T>::get()),
+			amount: MinimumStake::<T>::get(),
 			withdrawal_address,
 			tx_hash: [211u8; 32],
 		}.dispatch_bypass_filter(T::EnsureWitnessed::successful_origin())?;
 
 		// requests a signature. So it's in the AsyncResult::Pending state
-		Pallet::<T>::claim(RawOrigin::Signed(caller.clone()).into(), None, withdrawal_address)?;
+		Pallet::<T>::claim(RawOrigin::Signed(caller.clone()).into(), ClaimAmount::Max, withdrawal_address)?;
 
 		// inserts signature so it's in the AsyncResult::Ready state
 		let signature_request_id = <T::ThresholdSigner as ThresholdSigner<Ethereum>>::RequestId::benchmark_value();
@@ -153,20 +152,20 @@ benchmarks! {
 
 	retire_account {
 		let caller: T::AccountId = whitelisted_caller();
-		AccountRetired::<T>::insert(caller.clone(), false);
+		ActiveBidder::<T>::insert(caller.clone(), true);
 
 	}:_(RawOrigin::Signed(caller.clone()))
 	verify {
-		assert!(AccountRetired::<T>::get(caller));
+		assert!(!ActiveBidder::<T>::get(caller));
 	}
 
 	activate_account {
 		let caller: T::AccountId = whitelisted_caller();
-		AccountRetired::<T>::insert(caller.clone(), true);
+		ActiveBidder::<T>::insert(caller.clone(), false);
 
 	}:_(RawOrigin::Signed(caller.clone()))
 	verify {
-		assert!(!AccountRetired::<T>::get(caller));
+		assert!(ActiveBidder::<T>::get(caller));
 	}
 
 	on_initialize_best_case {
@@ -177,7 +176,7 @@ benchmarks! {
 		assert!(ClaimExpiries::<T>::decode_len().unwrap_or_default() == 0);
 	}
 	expire_pending_claims_at {
-		let b in 0 .. 150 as u32;
+		let b in 0 .. 150_u32;
 		let accounts = create_accounts::<T>(150);
 
 		let eth_base_addr: EthereumAddress = [1u8; 20];
@@ -187,11 +186,11 @@ benchmarks! {
 			let withdrawal_address = eth_base_addr.map(|x| x + i as u8);
 			Call::<T>::staked {
 				account_id: staker.clone(),
-				amount: T::Balance::from(MinimumStake::<T>::get()),
+				amount: MinimumStake::<T>::get(),
 				withdrawal_address,
 				tx_hash: [0; 32]
 			}.dispatch_bypass_filter(T::EnsureWitnessed::successful_origin())?;
-			Pallet::<T>::claim(RawOrigin::Signed(staker.clone()).into(), None, withdrawal_address)?;
+			Pallet::<T>::claim(RawOrigin::Signed(staker.clone()).into(), ClaimAmount::Max, withdrawal_address)?;
 
 			// we're registering the claim to be expired at the unix epoch.
 			// T::TimeSource::now().as_secs() evaulates to 0 in the benchmarks. So this ensures
@@ -203,13 +202,13 @@ benchmarks! {
 	}
 	update_minimum_stake {
 		let call = Call::<T>::update_minimum_stake {
-			minimum_stake: T::Balance::from(MinimumStake::<T>::get()),
+			minimum_stake: MinimumStake::<T>::get(),
 		};
 
 		let origin = T::EnsureGovernance::successful_origin();
 	} : { call.dispatch_bypass_filter(origin)? }
 	verify {
-		assert_eq!(T::Balance::from(MinimumStake::<T>::get()), T::Balance::from(MinimumStake::<T>::get()));
+		assert_eq!(MinimumStake::<T>::get(), MinimumStake::<T>::get());
 	}
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);

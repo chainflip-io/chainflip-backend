@@ -19,9 +19,9 @@ mod rotation_state;
 use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, Auctioneer, Bid, BidderProvider, Bonding,
-	Chainflip, ChainflipAccount, EmergencyRotation, EpochInfo, EpochTransitionHandler,
-	ExecutionCondition, HistoricalEpoch, MissedAuthorshipSlots, QualifyNode, ReputationResetter,
-	StakeHandler, SystemStateInfo, VaultRotator,
+	Chainflip, EmergencyRotation, EpochInfo, EpochTransitionHandler, ExecutionCondition,
+	HistoricalEpoch, MissedAuthorshipSlots, QualifyNode, ReputationResetter, StakeHandler,
+	SystemStateInfo, VaultRotator,
 };
 use cf_utilities::Port;
 use frame_support::{
@@ -111,6 +111,7 @@ pub type Percentage = u8;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use cf_traits::AccountRoleRegistry;
 	use frame_system::pallet_prelude::*;
 	use pallet_session::WeightInfo as SessionWeightInfo;
 	use sp_runtime::app_crypto::RuntimePublic;
@@ -130,6 +131,9 @@ pub mod pallet {
 		/// The top-level offence type must support this pallet's offence type.
 		type Offence: From<PalletOffence>;
 
+		/// For registering and verifying the account role.
+		type AccountRoleRegistry: AccountRoleRegistry<Self>;
+
 		/// A handler for epoch lifecycle events
 		type EpochTransitionHandler: EpochTransitionHandler<ValidatorId = ValidatorIdOf<Self>>;
 
@@ -142,9 +146,6 @@ pub mod pallet {
 
 		/// The lifecycle of a vault rotation
 		type VaultRotator: VaultRotator<ValidatorId = ValidatorIdOf<Self>>;
-
-		/// For looking up Chainflip Account data.
-		type ChainflipAccount: ChainflipAccount<AccountId = Self::AccountId>;
 
 		/// Implementation of EnsureOrigin trait for governance
 		type EnsureGovernance: EnsureOrigin<Self::Origin>;
@@ -194,8 +195,12 @@ pub mod pallet {
 		RotationPhaseUpdated { new_phase: RotationPhase<T> },
 		/// An emergency rotation has been initiated.
 		EmergencyRotationInitiated,
-		/// The CFE version has been updated \[Validator, Old Version, New Version]
-		CFEVersionUpdated(ValidatorIdOf<T>, Version, Version),
+		/// The CFE version has been updated.
+		CFEVersionUpdated {
+			account_id: ValidatorIdOf<T>,
+			old_version: Version,
+			new_version: Version,
+		},
 		/// An authority has register her current PeerId \[account_id, public_key, port,
 		/// ip_address\]
 		PeerIdRegistered(T::AccountId, Ed25519PublicKey, Port, Ipv6Addr),
@@ -453,19 +458,19 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			// TODO Consider ensuring is non-private IP / valid IP
 
-			let account_id = ensure_signed(origin)?;
+			let account_id = T::AccountRoleRegistry::ensure_validator(origin)?;
 
 			// Note: This signature verify doesn't need replay protection as you need the
-			// account_id's private key to pass the above ensure_signed which has replay protection.
-			// Note: Decode impl for peer_id's type doesn't detect invalid PublicKeys, so we rely on
-			// the RuntimePublic::verify call below to do that (which internally uses
+			// account_id's private key to pass the above ensure_validator which has replay
+			// protection. Note: Decode impl for peer_id's type doesn't detect invalid PublicKeys,
+			// so we rely on the RuntimePublic::verify call below to do that (which internally uses
 			// ed25519_dalek::PublicKey::from_bytes to do it).
 			ensure!(
 				RuntimePublic::verify(&peer_id, &account_id.encode(), &signature),
 				Error::<T>::InvalidAccountPeerMappingSignature
 			);
 
-			if let Some((_, existing_peer_id, existing_port, existing_ip_address)) =
+			if let Some((existing_peer_id, existing_port, existing_ip_address)) =
 				AccountPeerMapping::<T>::get(&account_id)
 			{
 				if (existing_peer_id, existing_port, existing_ip_address) ==
@@ -491,10 +496,7 @@ pub mod pallet {
 				MappedPeers::<T>::insert(&peer_id, ());
 			}
 
-			AccountPeerMapping::<T>::insert(
-				&account_id,
-				(account_id.clone(), peer_id, port, ip_address),
-			);
+			AccountPeerMapping::<T>::insert(&account_id, (peer_id, port, ip_address));
 
 			Self::deposit_event(Event::PeerIdRegistered(account_id, peer_id, port, ip_address));
 			Ok(().into())
@@ -517,19 +519,22 @@ pub mod pallet {
 		///
 		/// - None
 		#[pallet::weight(T::ValidatorWeightInfo::cfe_version())]
-		pub fn cfe_version(origin: OriginFor<T>, version: Version) -> DispatchResultWithPostInfo {
-			let account_id = ensure_signed(origin)?;
+		pub fn cfe_version(
+			origin: OriginFor<T>,
+			new_version: Version,
+		) -> DispatchResultWithPostInfo {
+			let account_id = T::AccountRoleRegistry::ensure_validator(origin)?;
 			let validator_id = <ValidatorIdOf<T> as IsType<
 				<T as frame_system::Config>::AccountId,
 			>>::from_ref(&account_id);
 			NodeCFEVersion::<T>::try_mutate(&validator_id, |current_version| {
-				if *current_version != version {
-					Self::deposit_event(Event::CFEVersionUpdated(
-						validator_id.clone(),
-						current_version.clone(),
-						version.clone(),
-					));
-					*current_version = version;
+				if *current_version != new_version {
+					Self::deposit_event(Event::CFEVersionUpdated {
+						account_id: validator_id.clone(),
+						old_version: current_version.clone(),
+						new_version: new_version.clone(),
+					});
+					*current_version = new_version;
 				}
 				Ok(().into())
 			})
@@ -692,12 +697,8 @@ pub mod pallet {
 	/// Account to Peer Mapping.
 	#[pallet::storage]
 	#[pallet::getter(fn node_peer_id)]
-	pub type AccountPeerMapping<T: Config> = StorageMap<
-		_,
-		Blake2_128Concat,
-		T::AccountId,
-		(T::AccountId, Ed25519PublicKey, Port, Ipv6Addr),
-	>;
+	pub type AccountPeerMapping<T: Config> =
+		StorageMap<_, Blake2_128Concat, T::AccountId, (Ed25519PublicKey, Port, Ipv6Addr)>;
 
 	/// Peers that are associated with account ids.
 	#[pallet::storage]
@@ -793,9 +794,6 @@ pub mod pallet {
 
 			const GENESIS_EPOCH: u32 = 1;
 			CurrentEpoch::<T>::set(GENESIS_EPOCH);
-			for id in &self.genesis_authorities {
-				T::ChainflipAccount::set_current_authority(id.into_ref());
-			}
 
 			Pallet::<T>::initialise_new_epoch(
 				GENESIS_EPOCH,
@@ -913,23 +911,6 @@ impl<T: Config> Pallet<T> {
 
 		// Update current / historical authority status.
 		let new_authorities_lookup = rotation_state.authority_candidates::<BTreeSet<_>>();
-		let old_authorities_lookup =
-			BTreeSet::<ValidatorIdOf<T>>::from_iter(CurrentAuthorities::<T>::get().into_iter());
-		for historical_authority in old_authorities_lookup
-			.iter()
-			.filter(|authority| !new_authorities_lookup.contains(authority))
-		{
-			log::trace!(target: "cf-validator", "Setting old authority {:?} to historical.", historical_authority);
-			T::ChainflipAccount::set_historical_authority(historical_authority.into_ref());
-		}
-
-		for incoming_authority in new_authorities_lookup
-			.iter()
-			.filter(|authority| !old_authorities_lookup.contains(authority))
-		{
-			log::trace!(target: "cf-validator", "Setting new authority {:?} to current authority.", incoming_authority);
-			T::ChainflipAccount::set_current_authority(incoming_authority.into_ref());
-		}
 
 		let new_authorities = rotation_state.authority_candidates::<Vec<_>>();
 
@@ -960,7 +941,6 @@ impl<T: Config> Pallet<T> {
 			num_expired_authorities += 1;
 			EpochHistory::<T>::deactivate_epoch(authority, epoch);
 			if EpochHistory::<T>::number_of_active_epochs_for_authority(authority) == 0 {
-				T::ChainflipAccount::from_historical_to_backup(authority.into_ref());
 				T::ReputationResetter::reset_reputation(authority);
 			}
 			T::Bonder::update_bond(authority, EpochHistory::<T>::active_bond(authority));
@@ -1261,7 +1241,7 @@ pub struct DeletePeerMapping<T: Config>(PhantomData<T>);
 /// account by burning it.
 impl<T: Config> OnKilledAccount<T::AccountId> for DeletePeerMapping<T> {
 	fn on_killed_account(account_id: &T::AccountId) {
-		if let Some((_, peer_id, _, _)) = AccountPeerMapping::<T>::take(&account_id) {
+		if let Some((peer_id, _, _)) = AccountPeerMapping::<T>::take(&account_id) {
 			MappedPeers::<T>::remove(&peer_id);
 			Pallet::<T>::deposit_event(Event::PeerIdUnregistered(account_id.clone(), peer_id));
 		}

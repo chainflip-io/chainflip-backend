@@ -2,6 +2,7 @@
 
 use super::*;
 
+use cf_primitives::Asset;
 use frame_benchmarking::benchmarks;
 
 use frame_support::dispatch::UnfilteredDispatchable;
@@ -22,8 +23,14 @@ benchmarks! {
 		};
 		let call = Call::<T>::set_cfe_settings { cfe_settings };
 		let origin = T::EnsureGovernance::successful_origin();
-	} : { call.dispatch_bypass_filter(origin)? }
+	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert_eq!(CfeSettings::<T>::get(), cfe_settings);
 	}
+	update_supported_eth_assets {
+		let origin = T::EnsureGovernance::successful_origin();
+		let asset = Asset::Eth;
+		let address = [0; 20];
+		let call = Call::<T>::update_supported_eth_assets { asset, address };
+	}: { call.dispatch_bypass_filter(origin)? }
 }
