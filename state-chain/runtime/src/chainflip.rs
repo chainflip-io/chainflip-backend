@@ -1,4 +1,5 @@
 //! Configuration, utilities and helpers for the Chainflip runtime.
+pub mod address_derivation;
 mod backup_node_rewards;
 pub mod chain_instances;
 pub mod decompose_recompose;
@@ -24,8 +25,8 @@ use cf_chains::{
 	ApiCall, ChainAbi, Ethereum, TransactionBuilder,
 };
 use cf_traits::{
-	BlockEmissions, Chainflip, EmergencyRotation, EpochInfo, Heartbeat, Issuance, NetworkState,
-	ReplayProtectionProvider, RewardsDistribution, RuntimeUpgrade,
+	BlockEmissions, Chainflip, EmergencyRotation, EpochInfo, EthEnvironmentProvider, Heartbeat,
+	Issuance, NetworkState, ReplayProtectionProvider, RewardsDistribution, RuntimeUpgrade,
 };
 use frame_support::traits::Get;
 use pallet_cf_chain_tracking::ChainState;

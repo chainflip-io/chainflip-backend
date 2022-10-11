@@ -116,7 +116,6 @@ commands:
               git fetch && git merge origin/$target_branch --no-edit
             fi
 ######################## /Commands ########################
-
 ######################## Workflows ########################
 workflows:
   chainflip-backend-non-blocking:
@@ -142,17 +141,18 @@ workflows:
           <<: *ignore_main_branches
 
       # The follow jobs always run, regardless of PR or merge.
-      - cargo-check:
-          requires:
-            - cargo-fmt
-          context:
-            - ghcr-credentials
-            - github-credentials
       - cargo-fmt:
           context:
             - ghcr-credentials
             - github-credentials
       - cargo-build-and-test:
+          requires:
+            - cargo-fmt
+          context:
+            - ghcr-credentials
+            - github-credentials
+            - discord-webhooks
+      - cargo-build-ibiza:
           requires:
             - cargo-fmt
           context:
@@ -252,6 +252,25 @@ jobs:
             - target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm
       - send_notification:
           only_for_branches: "develop"
+
+  cargo-build-ibiza:
+    executor: rust-base-ci
+    resource_class: xlarge
+    steps:
+      - checkout
+      - merge_target
+      - run: sccache --show-stats
+      - run: |
+          cargo ci-build-ibiza --locked
+          sccache --show-stats
+      - send_notification:
+          only_for_branches: "develop"
+      - run:
+          command: |
+            mkdir -p /tmp/ibiza/artifacts
+            cp target/release/chainflip-node target/release/chainflip-engine target/release/chainflip-cli target/release/generate-genesis-keys target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm /tmp/ibiza/artifacts
+      - store_artifacts:
+          path: /tmp/ibiza/artifacts
 
   cargo-fmt:
     executor: rust-base
@@ -393,7 +412,7 @@ jobs:
             --url 'http://localhost:5555/health'
             --connect-timeout 5
             --max-time 10
-            --retry 3
+            --retry 5
             --retry-delay 1
             --retry-max-time 20
             --retry-all-errors

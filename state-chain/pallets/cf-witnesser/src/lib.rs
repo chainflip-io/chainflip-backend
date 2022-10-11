@@ -44,6 +44,7 @@ pub trait WitnessDataExtraction {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use cf_traits::AccountRoleRegistry;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
@@ -55,6 +56,9 @@ pub mod pallet {
 
 		/// The outer Origin needs to be compatible with this pallet's Origin
 		type Origin: From<RawOrigin>;
+
+		/// For registering and verifying the account role.
+		type AccountRoleRegistry: AccountRoleRegistry<Self>;
 
 		/// The overarching call type.
 		type Call: Member
@@ -246,7 +250,7 @@ pub mod pallet {
 			mut call: Box<<T as Config>::Call>,
 			epoch_index: EpochIndex,
 		) -> DispatchResultWithPostInfo {
-			let who = ensure_signed(origin)?;
+			let who = T::AccountRoleRegistry::ensure_validator(origin)?;
 
 			let last_expired_epoch = T::EpochInfo::last_expired_epoch();
 			let current_epoch = T::EpochInfo::epoch_index();

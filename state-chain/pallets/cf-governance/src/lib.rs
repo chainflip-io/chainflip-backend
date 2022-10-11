@@ -8,7 +8,6 @@ use frame_support::{
 	traits::{EnsureOrigin, Get, UnixTime},
 };
 pub use pallet::*;
-use sp_runtime::DispatchError;
 use sp_std::{boxed::Box, ops::Add, vec, vec::Vec};
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -34,6 +33,7 @@ pub mod pallet {
 		pallet_prelude::*,
 		traits::{UnfilteredDispatchable, UnixTime},
 	};
+	use sp_std::collections::btree_set::BTreeSet;
 
 	use codec::Encode;
 	use frame_system::{pallet, pallet_prelude::*};
@@ -45,10 +45,10 @@ pub mod pallet {
 	/// Proposal struct
 	#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 	pub struct Proposal<AccountId> {
-		/// Encoded representation of a extrinsic
+		/// Encoded representation of a extrinsic.
 		pub call: OpaqueCall,
-		/// Array of accounts which already approved the proposal
-		pub approved: Vec<AccountId>,
+		/// Accounts who have already approved the proposal.
+		pub approved: BTreeSet<AccountId>,
 	}
 
 	impl<T> Default for Proposal<T> {
@@ -286,12 +286,25 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::approve())]
 		pub fn approve(origin: OriginFor<T>, id: ProposalId) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			// Ensure origin is part of the governance
 			ensure!(Members::<T>::get().contains(&who), Error::<T>::NotMember);
-			// Ensure that the proposal exists
 			ensure!(Proposals::<T>::contains_key(id), Error::<T>::ProposalNotFound);
+
 			// Try to approve the proposal
-			Self::try_approve(who, id)?;
+			let proposal = Proposals::<T>::mutate(id, |proposal| {
+				if !proposal.approved.insert(who) {
+					return Err(Error::<T>::AlreadyApproved)
+				}
+				Self::deposit_event(Event::Approved(id));
+				Ok(proposal.clone())
+			})?;
+
+			if Self::majority_reached(proposal.approved.len()) {
+				ExecutionPipeline::<T>::append((proposal.call, id));
+				Proposals::<T>::remove(id);
+				let mut active_proposals = ActiveProposals::<T>::get();
+				active_proposals.retain(|x| x.0 != id);
+				ActiveProposals::<T>::set(active_proposals);
+			}
 			// Governance members don't pay transaction fees
 			Ok(Pays::No.into())
 		}
@@ -476,14 +489,13 @@ impl<T: Config> Pallet<T> {
 		// If there is something in the pipeline execute it
 		if ExecutionPipeline::<T>::decode_len() > Some(0) {
 			for (call, id) in ExecutionPipeline::<T>::get() {
-				Self::deposit_event(if let Some(call) = Self::decode_call(&call) {
+				Self::deposit_event(if let Ok(call) = <T as Config>::Call::decode(&mut &(*call)) {
 					execution_weight += call.get_dispatch_info().weight;
 					match call.dispatch_bypass_filter((RawOrigin::GovernanceApproval).into()) {
 						Ok(_) => Event::Executed(id),
 						Err(err) => Event::FailedExecution(err.error),
 					}
 				} else {
-					// Emit an error if the decode of a call failed
 					Event::DecodeOfCallFailed(id)
 				})
 			}
@@ -502,62 +514,18 @@ impl<T: Config> Pallet<T> {
 	/// Push a proposal
 	fn push_proposal(call: Box<<T as Config>::Call>) -> u32 {
 		// Generate the next proposal id
-		let id = Self::get_next_id();
+		let id = ProposalIdCounter::<T>::get().add(1);
 		// Insert a new proposal
-		Proposals::<T>::insert(id, Proposal { call: call.encode(), approved: vec![] });
+		Proposals::<T>::insert(id, Proposal { call: call.encode(), approved: Default::default() });
 		// Update the proposal counter
 		ProposalIdCounter::<T>::put(id);
 		// Add the proposal to the active proposals array
 		ActiveProposals::<T>::append((id, T::TimeSource::now().as_secs() + ExpiryTime::<T>::get()));
 		id
 	}
-	/// Returns the next proposal id
-	fn get_next_id() -> ProposalId {
-		ProposalIdCounter::<T>::get().add(1)
-	}
-	/// Executes an proposal if the majority is reached
-	fn schedule_proposal_execution(id: ProposalId) -> Result<(), DispatchError> {
-		let proposal = Proposals::<T>::get(id);
-		// Try to decode the stored extrinsic
-		// Push the proposal to the execution pipeline
-		ExecutionPipeline::<T>::append((proposal.call, id));
-		// Remove the proposal from storage
-		Proposals::<T>::remove(id);
-		// Remove the proposal from active proposals
-		let mut active_proposals = ActiveProposals::<T>::get();
-		active_proposals.retain(|x| x.0 != id);
-		// Set the new active proposals
-		ActiveProposals::<T>::set(active_proposals);
-		Ok(())
-	}
+
 	/// Checks if the majority for a proposal is reached
 	fn majority_reached(approvals: usize) -> bool {
 		approvals > Members::<T>::decode_len().unwrap_or_default() / 2
-	}
-	/// Tries to approve a proposal
-	fn try_approve(account: T::AccountId, id: u32) -> Result<(), DispatchError> {
-		let mut votes = 0;
-		Proposals::<T>::mutate(id, |proposal| {
-			// Check already approved
-			if proposal.approved.contains(&account) {
-				return Err(Error::<T>::AlreadyApproved)
-			}
-			// Add account to approved array
-			proposal.approved.push(account);
-			votes = proposal.approved.len();
-			Self::deposit_event(Event::Approved(id));
-			Ok(())
-		})?;
-		// Check if the majority is reached
-		if Self::majority_reached(votes) {
-			// Schedule execution
-			Self::schedule_proposal_execution(id)?;
-		}
-		Ok(())
-	}
-	/// Decodes a encoded representation of a Call
-	/// Returns None if the encode of the extrinsic has failed
-	fn decode_call(call: &[u8]) -> Option<<T as Config>::Call> {
-		Decode::decode(&mut &(*call)).ok()
 	}
 }

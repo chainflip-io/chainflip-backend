@@ -4,6 +4,8 @@ pub mod api;
 #[cfg(feature = "runtime-benchmarks")]
 pub mod benchmarking;
 
+pub mod ingress_address;
+
 use crate::*;
 use codec::{Decode, Encode, MaxEncodedLen};
 pub use ethabi::{
@@ -23,12 +25,11 @@ use sp_std::{
 	str, vec,
 };
 
-use self::api::EthereumReplayProtection;
+use self::{api::EthereumReplayProtection, ingress_address::get_salt};
 
 // Reference constants for the chain spec
 pub const CHAIN_ID_MAINNET: u64 = 1;
 pub const CHAIN_ID_ROPSTEN: u64 = 3;
-pub const CHAIN_ID_RINKEBY: u64 = 4;
 pub const CHAIN_ID_GOERLI: u64 = 5;
 pub const CHAIN_ID_KOVAN: u64 = 42;
 
@@ -708,6 +709,7 @@ impl core::fmt::Debug for TransactionHash {
 		f.write_fmt(format_args!("{:#?}", self.0))
 	}
 }
+
 impl From<H256> for TransactionHash {
 	fn from(x: H256) -> Self {
 		Self(x)
@@ -716,7 +718,10 @@ impl From<H256> for TransactionHash {
 
 impl Tokenizable for FetchAssetParams<Ethereum> {
 	fn tokenize(self) -> Token {
-		Token::Tuple(vec![Token::FixedBytes(self.swap_id.to_vec()), Token::Address(self.asset)])
+		Token::Tuple(vec![
+			Token::FixedBytes(get_salt(self.swap_id).to_vec()),
+			Token::Address(self.asset),
+		])
 	}
 }
 
@@ -730,7 +735,7 @@ impl Tokenizable for TransferAssetParams<Ethereum> {
 	fn tokenize(self) -> Token {
 		Token::Tuple(vec![
 			Token::Address(self.asset),
-			Token::Address(self.account),
+			Token::Address(self.to),
 			Token::Uint(Uint::from(self.amount)),
 		])
 	}

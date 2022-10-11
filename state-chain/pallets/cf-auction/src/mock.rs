@@ -1,6 +1,5 @@
 use super::*;
 use crate as pallet_cf_auction;
-use cf_primitives::ChainflipAccountData;
 use cf_traits::{
 	mocks::{
 		ensure_origin_mock::NeverFailingOriginCheck, epoch_info::MockEpochInfo,
@@ -15,7 +14,7 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage,
 };
-use std::{cell::RefCell, collections::HashMap};
+use std::cell::RefCell;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -30,7 +29,6 @@ pub const MAX_AUTHORITY_SET_EXPANSION: u32 = 2;
 thread_local! {
 	// A set of bidders, we initialise this with the proposed genesis bidders
 	pub static BIDDER_SET: RefCell<Vec<Bid<ValidatorId, Amount>>> = RefCell::new(vec![]);
-	pub static CHAINFLIP_ACCOUNTS: RefCell<HashMap<u64, ChainflipAccountData>> = RefCell::new(HashMap::new());
 }
 
 construct_runtime!(
@@ -66,7 +64,7 @@ impl frame_system::Config for Test {
 	type DbWeight = ();
 	type Version = ();
 	type PalletInfo = PalletInfo;
-	type AccountData = ChainflipAccountData;
+	type AccountData = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();

@@ -4,6 +4,7 @@ use codec::{Decode, Encode};
 use frame_support::{storage, StorageHasher, Twox64Concat};
 
 // pub mod broadcaster;
+pub mod account_role_registry;
 pub mod ceremony_id_provider;
 pub mod ensure_origin_mock;
 pub mod ensure_witnessed;

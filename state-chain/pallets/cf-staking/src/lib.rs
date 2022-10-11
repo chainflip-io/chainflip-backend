@@ -23,7 +23,7 @@ use cf_traits::{
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
-	traits::{EnsureOrigin, HandleLifetime, IsType, UnixTime},
+	traits::{EnsureOrigin, HandleLifetime, IsType, OnKilledAccount, UnixTime},
 };
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
@@ -34,13 +34,21 @@ use cf_traits::SystemStateInfo;
 use sp_runtime::traits::{AtLeast32BitUnsigned, CheckedSub, Zero};
 
 use frame_support::pallet_prelude::Weight;
+
+/// This address is used by the Ethereum contracts to indicate that no withdrawal address was
+/// specified when staking.
+///
+/// Normally, this means that the staker staked via the 'normal' staking contract flow. The presence
+/// of any other address indicates that the funds were staked from the *vesting* contract and can
+/// only be withdrawn to the specified address.
 pub const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
 
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
 	use cf_chains::{ApiCall, Ethereum};
-	use frame_support::pallet_prelude::*;
+	use cf_traits::AccountRoleRegistry;
+	use frame_support::{pallet_prelude::*, Parameter};
 	use frame_system::pallet_prelude::*;
 
 	pub type AccountId<T> = <T as frame_system::Config>::AccountId;
@@ -51,9 +59,19 @@ pub mod pallet {
 
 	pub type FlipBalance<T> = <T as Config>::Balance;
 
-	pub type Retired = bool;
-
 	pub type EthTransactionHash = [u8; 32];
+
+	#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+	pub enum ClaimAmount<T: Parameter> {
+		Max,
+		Exact(T),
+	}
+
+	impl<T: Parameter> From<T> for ClaimAmount<T> {
+		fn from(t: T) -> Self {
+			Self::Exact(t)
+		}
+	}
 
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
@@ -63,6 +81,9 @@ pub mod pallet {
 
 		/// The type containing all calls that are dispatchable from the threshold source.
 		type ThresholdCallable: From<Call<Self>>;
+
+		/// For registering and verifying the account role.
+		type AccountRoleRegistry: AccountRoleRegistry<Self>;
 
 		type StakerId: AsRef<[u8; 32]> + IsType<<Self as frame_system::Config>::AccountId>;
 
@@ -99,6 +120,12 @@ pub mod pallet {
 		/// The implementation of the register claim transaction.
 		type RegisterClaim: RegisterClaim<Ethereum> + Member + Parameter;
 
+		/// We must ensure the claim expires on the chain *after* it expires on the contract.
+		/// We should be extra sure that this is the case, else it opens the possibility for double
+		/// claiming.
+		#[pallet::constant]
+		type ClaimDelayBufferSeconds: Get<u64>;
+
 		/// Something that provides the current time.
 		type TimeSource: UnixTime;
 
@@ -111,10 +138,10 @@ pub mod pallet {
 	#[pallet::generate_store(pub (super) trait Store)]
 	pub struct Pallet<T>(PhantomData<T>);
 
-	/// Store the list of staked accounts and whether or not they are retired.
+	/// Store the list of staked accounts and whether or not they are a active bidder.
 	#[pallet::storage]
-	pub type AccountRetired<T: Config> =
-		StorageMap<_, Blake2_128Concat, AccountId<T>, Retired, ValueQuery>;
+	pub type ActiveBidder<T: Config> =
+		StorageMap<_, Blake2_128Concat, AccountId<T>, bool, ValueQuery>;
 
 	/// PendingClaims can be in one of two states:
 	/// - Pending threshold signature to allow registration of the claim.
@@ -146,7 +173,7 @@ pub mod pallet {
 
 	/// TTL for a claim from the moment of issue.
 	#[pallet::storage]
-	pub type ClaimTTL<T: Config> = StorageValue<_, u64, ValueQuery>;
+	pub type ClaimTTLSeconds<T: Config> = StorageValue<_, u64, ValueQuery>;
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
@@ -182,7 +209,7 @@ pub mod pallet {
 		/// An account has retired and will no longer take part in auctions. \[account_id\]
 		AccountRetired(AccountId<T>),
 
-		/// A previously retired account  has been re-activated. \[account_id\]
+		/// A previously retired account has been re-activated. \[account_id\]
 		AccountActivated(AccountId<T>),
 
 		/// A claim has expired without being executed. \[account_id, nonce, amount\]
@@ -226,7 +253,7 @@ pub mod pallet {
 		/// An invalid claim has been made
 		InvalidClaim,
 
-		/// Below the minimum stake
+		/// When requesting a claim, you must not have an amount below the minimum stake.
 		BelowMinimumStake,
 
 		/// The claim signature could not be found.
@@ -259,7 +286,6 @@ pub mod pallet {
 			tx_hash: EthTransactionHash,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
-			T::SystemState::ensure_no_maintenance()?;
 			if Self::check_withdrawal_address(&account_id, withdrawal_address, amount).is_ok() {
 				let total_stake = Self::stake_account(&account_id, amount);
 				Self::deposit_event(Event::Staked {
@@ -273,8 +299,6 @@ pub mod pallet {
 		}
 
 		/// Get FLIP that is held for me by the system, signed by my authority key.
-		///
-		/// If amount of None is provided it will claim all claimable funds.
 		///
 		/// On success, the implementation of [ThresholdSigner] should emit an event. The attached
 		/// claim request needs to be signed by a threshold of authorities in order to produce valid
@@ -297,42 +321,38 @@ pub mod pallet {
 		///
 		/// - [ThresholdSigner]
 		/// - [StakeTransfer]
-		#[pallet::weight({ if amount.is_some() { T::WeightInfo::claim() } else { T::WeightInfo::claim_all() }})]
+		#[pallet::weight({ if matches!(amount, ClaimAmount::Exact(_)) { T::WeightInfo::claim() } else { T::WeightInfo::claim_all() }})]
 		pub fn claim(
 			origin: OriginFor<T>,
-			amount: Option<FlipBalance<T>>,
+			amount: ClaimAmount<FlipBalance<T>>,
 			address: EthereumAddress,
 		) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
+			T::SystemState::ensure_no_maintenance()?;
 
-			// claim all if no amount provided
-			let amount = amount.unwrap_or_else(|| T::Flip::claimable_balance(&account_id));
+			let amount = match amount {
+				ClaimAmount::Max => T::Flip::claimable_balance(&account_id),
+				ClaimAmount::Exact(amount) => amount,
+			};
 
-			// Ensure we are claiming something
 			ensure!(amount > Zero::zero(), Error::<T>::InvalidClaim);
 
-			// Ensure that we're not claiming to the zero address
 			ensure!(address != ETH_ZERO_ADDRESS, Error::<T>::InvalidClaim);
 
-			// No new claim requests can be processed if we're currently in an auction phase.
 			ensure!(!T::EpochInfo::is_auction_phase(), Error::<T>::AuctionPhase);
 
-			// If a claim already exists, return an error. The staker must either execute their
-			// claim voucher or wait until expiry before creating a new claim.
+			// The staker must either execute their claim voucher or wait until expiry before
+			// creating a new claim.
 			ensure!(!PendingClaims::<T>::contains_key(&account_id), Error::<T>::PendingClaim);
 
-			// Check if a return address exists - if not just go with the provided claim address
 			if let Some(withdrawal_address) = WithdrawalAddresses::<T>::get(&account_id) {
-				// Check if the address is different from the stored address - if yes error out
 				if withdrawal_address != address {
 					return Err(Error::<T>::WithdrawalAddressRestricted.into())
 				}
 			}
 
-			// Calculate the maximum that would remain after this claim and ensure it won't be less
-			// than the system's minimum stake.  N.B. This would be caught in
-			// `StakeTranser::try_claim()` but this will need to be handled in a refactor of that
-			// trait(?)
+			// Calculate the amount that would remain after this claim and ensure it won't be less
+			// than the system's minimum stake.
 			let remaining = T::Flip::staked_balance(&account_id)
 				.checked_sub(&amount)
 				.ok_or(Error::<T>::InvalidClaim)?;
@@ -346,18 +366,23 @@ pub mod pallet {
 			// by the amount claimed.
 			T::Flip::try_initiate_claim(&account_id, amount)?;
 
-			// Set expiry and build the claim parameters.
-			let expiry =
-				(T::TimeSource::now() + Duration::from_secs(ClaimTTL::<T>::get())).as_secs();
+			let contract_expiry = T::TimeSource::now().as_secs() + ClaimTTLSeconds::<T>::get();
 
-			Self::register_claim_expiry(account_id.clone(), expiry);
+			// IMPORTANT: The claim should *always* expire on the SC *later* than on the contract.
+			// If this does not occur, it means there's a window for a user to execute their claim
+			// on Ethereum after it has been expired on our chain. This means they get their funds
+			// on Ethereum, and the SC will revert the pending claim, giving them back their funds.
+			Self::register_claim_expiry(
+				account_id.clone(),
+				contract_expiry + T::ClaimDelayBufferSeconds::get(),
+			);
 
 			let call = T::RegisterClaim::new_unsigned(
 				T::ReplayProtectionProvider::replay_protection(),
 				<T as Config>::StakerId::from_ref(&account_id).as_ref(),
 				amount.into(),
 				&address,
-				expiry,
+				contract_expiry,
 			);
 
 			T::ThresholdSigner::request_signature_with_callback(
@@ -371,7 +396,6 @@ pub mod pallet {
 				},
 			);
 
-			// Store the claim params for later.
 			PendingClaims::<T>::insert(account_id, call);
 
 			Ok(().into())
@@ -404,7 +428,6 @@ pub mod pallet {
 			_tx_hash: EthTransactionHash,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
-			T::SystemState::ensure_no_maintenance()?;
 
 			ensure!(
 				claimed_amount ==
@@ -470,11 +493,12 @@ pub mod pallet {
 					// This should never happen unless there is a mistake in the implementation.
 					log::error!("Callback triggered with no signature. Signature status {:?}", r);
 					Error::<T>::SignatureNotReady
-				})?;
+				})?
+				.expect("Assumption: post_claim_signature only triggered when the signature ceremony results in success");
 
 			let claim_details_signed = PendingClaims::<T>::get(&account_id)
 				.ok_or(Error::<T>::NoPendingClaim)?
-				.signed(&signature.expect("signature can not be unavailable"));
+				.signed(&signature);
 
 			PendingClaims::<T>::insert(&account_id, &claim_details_signed);
 			Self::deposit_event(Event::ClaimSignatureIssued(
@@ -489,7 +513,7 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [AccountRetired](Event::AccountRetired)
+		/// - [ActiveBidder](Event::ActiveBidder)
 		///
 		/// ## Errors
 		///
@@ -497,7 +521,7 @@ pub mod pallet {
 		/// - [UnknownAccount](Error::UnknownAccount)
 		#[pallet::weight(T::WeightInfo::retire_account())]
 		pub fn retire_account(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
-			let who = ensure_signed(origin)?;
+			let who = T::AccountRoleRegistry::ensure_validator(origin)?;
 			Self::retire(&who)?;
 			Ok(().into())
 		}
@@ -515,7 +539,7 @@ pub mod pallet {
 		/// - [UnknownAccount](Error::UnknownAccount)
 		#[pallet::weight(T::WeightInfo::activate_account())]
 		pub fn activate_account(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
-			let who = ensure_signed(origin)?;
+			let who = T::AccountRoleRegistry::ensure_validator(origin)?;
 			Self::activate(&who)?;
 			Ok(().into())
 		}
@@ -564,23 +588,11 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			MinimumStake::<T>::set(self.minimum_stake);
-			ClaimTTL::<T>::set(self.claim_ttl.as_secs());
+			ClaimTTLSeconds::<T>::set(self.claim_ttl.as_secs());
 			for (staker, amount) in self.genesis_stakers.iter() {
 				Pallet::<T>::stake_account(staker, *amount);
-				match Pallet::<T>::activate(staker) {
-					Ok(_) => {
-						// Activated account successful.
-						log::info!("Activated genesis account {:?}", staker);
-					},
-					Err(Error::AlreadyActive) => {
-						// If the account is already active, we don't need to do anything.
-						log::warn!("Account already activated {:?}", staker);
-					},
-					Err(e) => {
-						// This should never happen unless there is a mistake in the implementation.
-						log::error!("Unexpected error while activating account {:?}", e);
-					},
-				}
+				Pallet::<T>::activate(staker)
+					.expect("The account was just created so this can't fail.");
 			}
 		}
 	}
@@ -617,7 +629,10 @@ impl<T: Config> Pallet<T> {
 		T::WeightInfo::expire_pending_claims_at(expiries_len)
 	}
 
-	/// Checks the withdrawal address requirements and saves the address if provided
+	/// Checks the withdrawal address requirements and saves the address if provided.
+	///
+	/// If a non-zero address was provided, then it *must* match the address that was
+	/// provided on the initial account-creating staking event.
 	fn check_withdrawal_address(
 		account_id: &AccountId<T>,
 		withdrawal_address: EthereumAddress,
@@ -626,50 +641,61 @@ impl<T: Config> Pallet<T> {
 		if withdrawal_address == ETH_ZERO_ADDRESS {
 			return Ok(())
 		}
-		if frame_system::Pallet::<T>::account_exists(account_id) {
-			match WithdrawalAddresses::<T>::get(&account_id) {
-				Some(existing) if withdrawal_address == existing => Ok(()),
-				_ => {
-					FailedStakeAttempts::<T>::append(&account_id, (withdrawal_address, amount));
-					Self::deposit_event(Event::FailedStakeAttempt(
-						account_id.clone(),
-						withdrawal_address,
-						amount,
-					));
-					Err(Error::<T>::WithdrawalAddressRestricted)
-				},
-			}
-		} else {
+		if !frame_system::Pallet::<T>::account_exists(account_id) {
+			// This is the initial account-creating staking event. We store the withdrawal address
+			// for this account.
 			WithdrawalAddresses::<T>::insert(account_id, withdrawal_address);
-			Ok(())
+			return Ok(())
+		}
+		// If we reach here, the account already exists, so any provided withdrawal address
+		// *must* match the one that was added on the initial account-creating staking event,
+		// otherwise this staking event cannot be processed.
+		match WithdrawalAddresses::<T>::get(&account_id) {
+			Some(existing) if withdrawal_address == existing => Ok(()),
+			_ => {
+				// The staking event was invalid - this should only happen if someone bypasses
+				// our standard ethereum contract interfaces. We don't automatically refund here
+				// otherwise it's attack vector (refunds require a broadcast, which is
+				// expensive).
+				//
+				// Instead, we keep a record of the failed attempt so that we can potentially
+				// investigate and / or consider refunding automatically or via governance.
+				FailedStakeAttempts::<T>::append(&account_id, (withdrawal_address, amount));
+				Self::deposit_event(Event::FailedStakeAttempt(
+					account_id.clone(),
+					withdrawal_address,
+					amount,
+				));
+				Err(Error::<T>::WithdrawalAddressRestricted)
+			},
 		}
 	}
 
-	/// Add stake to an account, creating the account if it doesn't exist, and activating the
-	/// account if it is in retired state.
+	/// Add stake to an account, creating the account if it doesn't exist, an account is not
+	/// an implicit bidder and needs to be activated manually.
 	fn stake_account(account_id: &AccountId<T>, amount: T::Balance) -> T::Balance {
 		if !frame_system::Pallet::<T>::account_exists(account_id) {
 			// Creates an account
 			let _ = frame_system::Provider::<T>::created(account_id);
-			AccountRetired::<T>::insert(&account_id, true);
+			ActiveBidder::<T>::insert(&account_id, false);
 		}
 
 		T::Flip::credit_stake(account_id, amount)
 	}
 
-	/// Sets the `retired` flag associated with the account to true, signalling that the account no
+	/// Sets the `active` flag associated with the account to false, signalling that the account no
 	/// longer wishes to participate in auctions.
 	///
 	/// Returns an error if the account has already been retired, or if the account has no stake
 	/// associated.
 	fn retire(account_id: &AccountId<T>) -> Result<(), Error<T>> {
-		AccountRetired::<T>::try_mutate_exists(account_id, |maybe_status| {
+		ActiveBidder::<T>::try_mutate_exists(account_id, |maybe_status| {
 			match maybe_status.as_mut() {
-				Some(retired) => {
-					if *retired {
+				Some(active) => {
+					if !*active {
 						return Err(Error::AlreadyRetired)
 					}
-					*retired = true;
+					*active = false;
 					Self::deposit_event(Event::AccountRetired(account_id.clone()));
 					Ok(())
 				},
@@ -678,30 +704,25 @@ impl<T: Config> Pallet<T> {
 		})
 	}
 
-	/// Sets the `retired` flag associated with the account to false, signalling that the account
-	/// wishes to come out of retirement.
+	/// Sets the `active` flag associated with the account to true, signalling that the account
+	/// wishes to participate in auctions, to become a network authority.
 	///
-	/// Returns an error if the account is not retired, or if the account has no stake associated.
+	/// Returns an error if the account is already active, or if the account has no stake
+	/// associated.
 	fn activate(account_id: &AccountId<T>) -> Result<(), Error<T>> {
-		AccountRetired::<T>::try_mutate_exists(account_id, |maybe_status| {
+		ActiveBidder::<T>::try_mutate_exists(account_id, |maybe_status| {
 			match maybe_status.as_mut() {
-				Some(retired) => {
-					if !*retired {
+				Some(active) => {
+					if *active {
 						return Err(Error::AlreadyActive)
 					}
-					*retired = false;
+					*active = true;
 					Self::deposit_event(Event::AccountActivated(account_id.clone()));
 					Ok(())
 				},
 				None => Err(Error::UnknownAccount),
 			}
 		})
-	}
-
-	/// Checks if an account has signalled their intention to retire. If the account
-	/// has never staked any tokens, returns [Error::UnknownAccount].
-	pub fn is_retired(account: &AccountId<T>) -> Result<bool, Error<T>> {
-		AccountRetired::<T>::try_get(account).map_err(|_| Error::UnknownAccount)
 	}
 
 	/// Registers the expiry time for an account's pending claim. At the provided time, any pending
@@ -729,15 +750,26 @@ impl<T: Config> BidderProvider for Pallet<T> {
 	type Amount = T::Balance;
 
 	fn get_bidders() -> Vec<Bid<Self::ValidatorId, Self::Amount>> {
-		AccountRetired::<T>::iter()
-			.filter_map(|(bidder_id, retired)| {
-				if retired {
-					None
-				} else {
+		ActiveBidder::<T>::iter()
+			.filter_map(|(bidder_id, active)| {
+				if active {
 					let amount = T::Flip::staked_balance(&bidder_id);
 					Some(Bid { bidder_id, amount })
+				} else {
+					None
 				}
 			})
 			.collect()
+	}
+}
+
+/// Ensure we clean up account specific items that definitely won't be required once the account
+/// leaves the network.
+/// NB: We deliberately don't include FailedStakeAttempts. Given something went wrong, these can
+/// be handled by governance. We don't want to lose track of them.
+impl<T: Config> OnKilledAccount<T::AccountId> for Pallet<T> {
+	fn on_killed_account(account_id: &T::AccountId) {
+		WithdrawalAddresses::<T>::remove(account_id);
+		ActiveBidder::<T>::remove(account_id);
 	}
 }

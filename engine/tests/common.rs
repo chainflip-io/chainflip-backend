@@ -1,7 +1,8 @@
+#![cfg(feature = "integration-test")]
+
 use chainflip_engine::{
     eth::{
-        event::Event,
-        rpc::{EthHttpRpcClient, EthWsRpcClient},
+        block_events_stream_for_contract_from, event::Event, rpc::EthDualRpcClient,
         EthContractWitnesser,
     },
     settings::{CommandLineOptions, Settings},
@@ -34,35 +35,37 @@ impl IntegrationTestConfig {
     }
 }
 
-pub async fn get_contract_events<Manager>(
-    contract_manager: Manager,
+pub async fn get_contract_events<ContractWitnesser>(
+    contract_witnesser: ContractWitnesser,
     logger: slog::Logger,
-) -> Vec<Event<<Manager as EthContractWitnesser>::EventParameters>>
+) -> Vec<Event<<ContractWitnesser as EthContractWitnesser>::EventParameters>>
 where
-    Manager: EthContractWitnesser + std::marker::Sync,
+    ContractWitnesser: EthContractWitnesser + std::marker::Sync,
 {
-    let settings =
-        Settings::from_file_and_env("config/Testing.toml", CommandLineOptions::default()).unwrap();
-
-    let eth_ws_rpc_client = EthWsRpcClient::new(&settings.eth, &logger)
-        .await
-        .expect("Couldn't create EthWsRpcClient");
-
-    let eth_http_rpc_client =
-        EthHttpRpcClient::new(&settings.eth, &logger).expect("Couldn't create EthHttpRpcClient");
-
-    const EVENT_STREAM_TIMEOUT_MESSAGE: &str = "Timeout getting events. You might need to run hardhat with --config hardhat-interval-mining.config.js";
+    let eth_dual_rpc = EthDualRpcClient::new_test(
+        &Settings::from_file_and_env("config/Testing.toml", CommandLineOptions::default())
+            .unwrap()
+            .eth,
+        &logger,
+    )
+    .await
+    .expect("Could not create EthDualRpcClient");
 
     // The stream is infinite unless we stop it after a short time
     // in which it should have already done it's job.
     let events = tokio::time::timeout(
         std::time::Duration::from_secs(10),
-        contract_manager.block_stream(eth_ws_rpc_client, eth_http_rpc_client, 0, &logger),
+        block_events_stream_for_contract_from(
+            0,
+            &contract_witnesser,
+            eth_dual_rpc.clone(),
+            &logger,
+        ),
     )
     .await
-    .expect(EVENT_STREAM_TIMEOUT_MESSAGE)
+    .expect("Timeout getting events. You might need to run hardhat with --config hardhat-interval-mining.config.js")
     .unwrap()
-    .map(|block| futures::stream::iter(block.events))
+    .map(|block| futures::stream::iter(block.block_items))
     .flatten()
     .take_until(tokio::time::sleep(std::time::Duration::from_millis(1000)))
     .collect::<Vec<_>>()

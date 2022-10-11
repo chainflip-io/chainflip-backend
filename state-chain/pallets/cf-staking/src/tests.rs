@@ -1,6 +1,6 @@
 use crate::{
-	mock::*, pallet, AccountRetired, ClaimExpiries, Error, EthereumAddress, FailedStakeAttempts,
-	Pallet, PendingClaims, WithdrawalAddresses,
+	mock::*, pallet, ActiveBidder, ClaimAmount, ClaimExpiries, Error, EthereumAddress,
+	FailedStakeAttempts, Pallet, PendingClaims, WithdrawalAddresses,
 };
 use cf_chains::RegisterClaim;
 use cf_test_utilities::assert_event_sequence;
@@ -24,9 +24,9 @@ const TX_HASH: pallet::EthTransactionHash = [211u8; 32];
 fn genesis_nodes_are_activated_by_default() {
 	new_test_ext().execute_with(|| {
 		// Expect the genesis node to be activated.
-		assert!(AccountRetired::<Test>::contains_key(&CHARLIE));
+		assert!(ActiveBidder::<Test>::contains_key(&CHARLIE));
 		// Expect a not genesis node not to be activated.
-		assert!(!AccountRetired::<Test>::contains_key(&ALICE));
+		assert!(!ActiveBidder::<Test>::contains_key(&ALICE));
 	});
 }
 
@@ -181,6 +181,7 @@ fn cannot_double_claim() {
 			0,
 			"As Alice's claim is claimed it should have no expiry"
 		);
+		assert!(PendingClaims::<Test>::get(&ALICE).is_none());
 
 		// Should now be able to claim the rest.
 		assert_ok!(Staking::claim(Origin::signed(ALICE), stake_a2.into(), ETH_DUMMY_ADDR));
@@ -196,6 +197,7 @@ fn cannot_double_claim() {
 			0,
 			"As Alice's claim is claimed it should have no expiry"
 		);
+		assert!(PendingClaims::<Test>::get(&ALICE).is_none());
 
 		// Remaining stake should be zero
 		assert_eq!(Flip::total_balance_of(&ALICE), 0u128);
@@ -405,7 +407,7 @@ fn test_retirement() {
 		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
 
 		// Expect the account to be retired by default
-		assert!(Staking::is_retired(&ALICE).unwrap());
+		assert!(!ActiveBidder::<Test>::try_get(ALICE).expect("we know ALICE as a bidder"));
 
 		// Can't retire if retired
 		assert_noop!(Staking::retire_account(Origin::signed(ALICE)), <Error<Test>>::AlreadyRetired);
@@ -430,6 +432,9 @@ fn test_retirement() {
 			}),
 			Event::Staking(crate::Event::AccountActivated(ALICE))
 		);
+
+		assert_ok!(Staking::retire_account(Origin::signed(ALICE)));
+		assert!(!ActiveBidder::<Test>::get(ALICE));
 	});
 }
 
@@ -455,7 +460,8 @@ fn claim_expiry() {
 
 		// If we stay within the defined bounds, we can claim.
 		time_source::Mock::reset_to(START_TIME);
-		time_source::Mock::tick(Duration::from_secs(4));
+		const INIT_TICK: u64 = 4;
+		time_source::Mock::tick(Duration::from_secs(INIT_TICK));
 		assert_ok!(Staking::post_claim_signature(Origin::root(), ALICE, 0));
 
 		// Trigger expiry.
@@ -466,7 +472,22 @@ fn claim_expiry() {
 		assert!(PendingClaims::<Test>::contains_key(BOB));
 
 		// Tick the clock forward and expire.
-		time_source::Mock::tick(Duration::from_secs(7));
+		const NEXT_TICK: u64 = 7;
+		time_source::Mock::tick(Duration::from_secs(NEXT_TICK));
+		let total_ticked = NEXT_TICK + INIT_TICK;
+		assert!(total_ticked > CLAIM_TTL_SECS);
+
+		Pallet::<Test>::on_initialize(0);
+
+		// Both claims should still exist. We have only passed the *contract* expiry.
+		// We still need to wait for `ClaimDelayBufferSeconds` until the claim
+		// is expired on the SC.
+
+		assert!(PendingClaims::<Test>::contains_key(ALICE));
+		assert!(PendingClaims::<Test>::contains_key(BOB));
+
+		// Now we let `ClaimDelayBufferSeconds` elapse
+		time_source::Mock::tick(Duration::from_secs(CLAIM_DELAY_BUFFER_SECS));
 		Pallet::<Test>::on_initialize(0);
 
 		// Alice should have expired but not Bob.
@@ -554,7 +575,8 @@ fn test_claim_all() {
 		Bonder::<Test>::update_bond(&ALICE, BOND);
 
 		// Claim all available funds.
-		assert_ok!(Staking::claim(Origin::signed(ALICE), None, ETH_DUMMY_ADDR));
+		assert_ok!(Staking::claim(Origin::signed(ALICE), ClaimAmount::Max, ETH_DUMMY_ADDR));
+		assert_eq!(Flip::total_balance_of(&ALICE), BOND);
 
 		// We should have a claim for the full staked amount minus the bond.
 		assert_event_sequence!(
@@ -667,15 +689,11 @@ fn stake_with_provided_withdrawal_only_on_first_attempt() {
 }
 
 #[test]
-fn maintenance_mode() {
+fn maintenance_mode_blocks_claim_requests() {
 	new_test_ext().execute_with(|| {
 		MockSystemStateInfo::set_maintenance(true);
 		assert_noop!(
-			Staking::staked(Origin::root(), ALICE, 20, ETH_DUMMY_ADDR, TX_HASH),
-			DispatchError::Other("We are in maintenance!")
-		);
-		assert_noop!(
-			Staking::claimed(Origin::root(), ALICE, 20, TX_HASH),
+			Staking::claim(Origin::signed(ALICE), ClaimAmount::Max, ETH_DUMMY_ADDR),
 			DispatchError::Other("We are in maintenance!")
 		);
 		MockSystemStateInfo::set_maintenance(false);

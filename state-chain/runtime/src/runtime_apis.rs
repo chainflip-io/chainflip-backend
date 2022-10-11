@@ -23,7 +23,6 @@ pub enum BackupOrPassive {
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum ChainflipAccountStateWithPassive {
 	CurrentAuthority,
-	HistoricalAuthority(BackupOrPassive),
 	BackupOrPassive(BackupOrPassive),
 }
 

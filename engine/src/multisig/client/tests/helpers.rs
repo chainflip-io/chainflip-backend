@@ -2,6 +2,7 @@ use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
     fmt::Display,
     sync::Arc,
+    time::Duration,
 };
 
 use anyhow::{anyhow, Result};
@@ -56,7 +57,7 @@ use crate::{
     testing::expect_recv_with_timeout,
 };
 
-use state_chain_runtime::AccountId;
+use state_chain_runtime::{constants::common::MAX_STAGE_DURATION_SECONDS, AccountId};
 
 use super::{
     ACCOUNT_IDS, DEFAULT_KEYGEN_CEREMONY_ID, DEFAULT_KEYGEN_SEED, DEFAULT_SIGNING_CEREMONY_ID,
@@ -446,7 +447,10 @@ where
             <Self as CeremonyRunnerStrategy>::CheckedOutput,
             (
                 BTreeSet<AccountId>,
-                CeremonyFailureReason<<<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::FailureReason>,
+                CeremonyFailureReason<
+                    <<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::FailureReason,
+                    <<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::CeremonyStageName,
+                >,
             ),
         >,
     >{
@@ -518,6 +522,7 @@ where
         bad_account_ids: &[AccountId],
         expected_failure_reason: CeremonyFailureReason<
             <<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::FailureReason,
+            <<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::CeremonyStageName,
         >,
     ) -> Option<()> {
         let (reported, reason) = self.collect_and_check_outcomes().await?.unwrap_err();
@@ -536,6 +541,7 @@ where
         bad_account_ids: &[AccountId],
         expected_failure_reason: CeremonyFailureReason<
             <<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::FailureReason,
+            <<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::CeremonyStageName,
         >,
     ) {
         self.try_complete_with_error(bad_account_ids, expected_failure_reason)
@@ -954,4 +960,20 @@ pub fn get_key_data_for_test<P: ECPoint>(signers: BTreeSet<AccountId>) -> Keygen
     .get(signers.iter().next().unwrap())
     .expect("should get keygen for an account")
     .to_owned()
+}
+
+/// Advances time by the stage duration x2 to cause a timeout
+pub async fn cause_ceremony_timeout() {
+    // Delay a small amount in case the ceremony runner has not processed the request/p2p message yet,
+    // and thus record the time the ceremony should expire.
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    // We need to timeout 2 stages in case the second stage in a verification stage and will try to recover.
+    // So we must advance time by 2x the max stage duration.
+    tokio::time::pause();
+    tokio::time::advance(Duration::from_secs((MAX_STAGE_DURATION_SECONDS * 2) as u64)).await;
+    tokio::time::resume();
+
+    // A short delay to allow the ceremony runner to process the timeout and end the task
+    tokio::time::sleep(Duration::from_millis(50)).await;
 }

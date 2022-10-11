@@ -6,10 +6,17 @@
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
-use sp_runtime::RuntimeDebug;
+use sp_runtime::{
+	traits::{IdentifyAccount, Verify},
+	FixedU128, MultiSignature, RuntimeDebug,
+};
+use sp_std::vec::Vec;
 
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
+
+pub mod liquidity;
+pub use liquidity::*;
 
 pub type CeremonyId = u64;
 
@@ -17,37 +24,24 @@ pub type EpochIndex = u32;
 
 pub type AuthorityCount = u32;
 
-#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug, Copy)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub enum ChainflipAccountState {
-	CurrentAuthority,
-	/// Historical implies backup too
-	HistoricalAuthority,
-	Backup,
-}
+pub type IntentId = u64;
 
-impl ChainflipAccountState {
-	pub fn is_authority(&self) -> bool {
-		matches!(self, ChainflipAccountState::CurrentAuthority)
-	}
+pub type ExchangeRate = FixedU128;
 
-	pub fn is_backup(&self) -> bool {
-		matches!(self, ChainflipAccountState::HistoricalAuthority | ChainflipAccountState::Backup)
-	}
-}
+pub type EthereumAddress = [u8; 20];
 
-// TODO: Just use the AccountState
-#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, TypeInfo, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub struct ChainflipAccountData {
-	pub state: ChainflipAccountState,
-}
+pub type EthAmount = u128;
 
-impl Default for ChainflipAccountData {
-	fn default() -> Self {
-		ChainflipAccountData { state: ChainflipAccountState::Backup }
-	}
-}
+pub type AssetAmount = u128;
+
+pub const ETHEREUM_ETH_ADDRESS: EthereumAddress = [0xEE; 20];
+
+/// Alias to 512-bit hash when used in the context of a transaction signature on the chain.
+pub type Signature = MultiSignature;
+
+/// Some way of identifying an account on the chain. We intentionally make it equivalent
+/// to the public key of our transaction signing scheme.
+pub type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::AccountId;
 
 /// Roles in the Chainflip network.
 ///
@@ -76,3 +70,36 @@ impl Default for AccountRole {
 		AccountRole::None
 	}
 }
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub enum ForeignChain {
+	Ethereum,
+	Polkadot,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub enum ForeignChainAddress {
+	Eth(EthereumAddress),
+	Dot([u8; 32]),
+}
+
+/// An Asset is a token or currency that can be traded via the Chainflip AMM.
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy, Hash)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub enum Asset {
+	Eth,
+	Flip,
+	Usdc,
+	Dot,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct ForeignChainAsset {
+	pub chain: ForeignChain,
+	pub asset: Asset,
+}
+
+pub type EgressBatch<Amount, EgressAddress> = Vec<(Amount, EgressAddress)>;

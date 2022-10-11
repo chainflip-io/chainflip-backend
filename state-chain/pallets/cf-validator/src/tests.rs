@@ -199,11 +199,11 @@ fn send_cfe_version() {
 
 		assert_eq!(
 			last_event::<Test>(),
-			mock::Event::ValidatorPallet(crate::Event::CFEVersionUpdated(
-				authority,
-				SemVer::default(),
-				version.clone()
-			)),
+			mock::Event::ValidatorPallet(crate::Event::CFEVersionUpdated {
+				account_id: authority,
+				old_version: SemVer::default(),
+				new_version: version.clone(),
+			}),
 			"should emit event on updated version"
 		);
 
@@ -219,11 +219,11 @@ fn send_cfe_version() {
 
 		assert_eq!(
 			last_event::<Test>(),
-			mock::Event::ValidatorPallet(crate::Event::CFEVersionUpdated(
-				authority,
-				version,
-				new_version.clone()
-			)),
+			mock::Event::ValidatorPallet(crate::Event::CFEVersionUpdated {
+				account_id: authority,
+				old_version: version,
+				new_version: new_version.clone(),
+			}),
 			"should emit event on updated version"
 		);
 
@@ -290,10 +290,7 @@ fn register_peer_id() {
 			"should emit event on register peer id"
 		);
 		assert_eq!(ValidatorPallet::mapped_peer(&alice_peer_public_key), Some(()));
-		assert_eq!(
-			ValidatorPallet::node_peer_id(&ALICE),
-			Some((ALICE, alice_peer_public_key, 40044, 10))
-		);
+		assert_eq!(ValidatorPallet::node_peer_id(&ALICE), Some((alice_peer_public_key, 40044, 10)));
 
 		// New mappings to overlapping peer id are disallowed
 		assert_noop!(
@@ -328,10 +325,7 @@ fn register_peer_id() {
 			"should emit event on register peer id"
 		);
 		assert_eq!(ValidatorPallet::mapped_peer(&bob_peer_public_key), Some(()));
-		assert_eq!(
-			ValidatorPallet::node_peer_id(&BOB),
-			Some((BOB, bob_peer_public_key, 40043, 11))
-		);
+		assert_eq!(ValidatorPallet::node_peer_id(&BOB), Some((bob_peer_public_key, 40043, 11)));
 
 		// Changing existing mapping to overlapping peer id is disallowed
 		assert_noop!(
@@ -367,10 +361,7 @@ fn register_peer_id() {
 			"should emit event on register peer id"
 		);
 		assert_eq!(ValidatorPallet::mapped_peer(&bob_peer_public_key), Some(()));
-		assert_eq!(
-			ValidatorPallet::node_peer_id(&BOB),
-			Some((BOB, bob_peer_public_key, 40043, 11))
-		);
+		assert_eq!(ValidatorPallet::node_peer_id(&BOB), Some((bob_peer_public_key, 40043, 11)));
 
 		// Updating only the ip address works
 		assert_ok!(ValidatorPallet::register_peer_id(
@@ -391,10 +382,7 @@ fn register_peer_id() {
 			"should emit event on register peer id"
 		);
 		assert_eq!(ValidatorPallet::mapped_peer(&bob_peer_public_key), Some(()));
-		assert_eq!(
-			ValidatorPallet::node_peer_id(&BOB),
-			Some((BOB, bob_peer_public_key, 40043, 12))
-		);
+		assert_eq!(ValidatorPallet::node_peer_id(&BOB), Some((bob_peer_public_key, 40043, 12)));
 	});
 }
 

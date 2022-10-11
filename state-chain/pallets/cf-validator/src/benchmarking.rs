@@ -179,7 +179,7 @@ benchmarks! {
 		let pair: p2p_crypto::Public = RuntimeAppPublic::generate_pair(None);
 		let signature: Ed25519Signature = pair.sign(&caller.encode()).unwrap().try_into().unwrap();
 		let public_key: Ed25519PublicKey = pair.try_into().unwrap();
-	}: _(RawOrigin::Signed(caller.clone().into()), public_key, 0, 0, signature)
+	}: _(RawOrigin::Signed(caller.clone()), public_key, 0, 0, signature)
 	verify {
 		assert!(MappedPeers::<T>::contains_key(&public_key));
 		assert!(AccountPeerMapping::<T>::contains_key(&caller));
@@ -190,7 +190,7 @@ benchmarks! {
 		let name = str::repeat("x", 64).as_bytes().to_vec();
 	}: _(RawOrigin::Signed(caller.clone()), name.clone())
 	verify {
-		assert_eq!(VanityNames::<T>::get().get(&caller.into()), Some(&name));
+		assert_eq!(VanityNames::<T>::get().get(&caller), Some(&name));
 	}
 
 	expire_epoch {
@@ -362,7 +362,7 @@ benchmarks! {
 				CurrentRotationPhase::<T>::get(),
 				RotationPhase::VaultsRotating(rotation_state)
 					if rotation_state.authority_candidates::<BTreeSet<_>>().is_disjoint(
-						&offenders.clone().into_iter().collect::<BTreeSet<_>>()
+						&offenders.into_iter().collect::<BTreeSet<_>>()
 					)
 			),
 			"Offenders should not be authority candidates."

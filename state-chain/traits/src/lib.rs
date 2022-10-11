@@ -1,8 +1,10 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod async_result;
+pub mod liquidity;
 pub mod mocks;
 pub mod offence_reporting;
+pub use liquidity::*;
 
 use core::fmt::Debug;
 
@@ -11,20 +13,21 @@ use sp_std::collections::btree_set::BTreeSet;
 
 use cf_chains::{benchmarking_value::BenchmarkValue, ApiCall, ChainAbi, ChainCrypto};
 use cf_primitives::{
-	AuthorityCount, CeremonyId, ChainflipAccountData, ChainflipAccountState, EpochIndex,
+	AccountRole, Asset, AssetAmount, AuthorityCount, CeremonyId, EpochIndex, EthereumAddress,
+	ForeignChainAddress, ForeignChainAsset, IntentId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable},
+	error::BadOrigin,
 	pallet_prelude::Member,
-	sp_runtime::traits::AtLeast32BitUnsigned,
-	traits::{EnsureOrigin, Get, Imbalance, IsType, StoredMap},
+	traits::{EnsureOrigin, Get, Imbalance, IsType},
 	Hashable, Parameter,
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
-	traits::{Bounded, MaybeSerializeDeserialize},
-	DispatchError, DispatchResult, RuntimeDebug,
+	traits::{AtLeast32BitUnsigned, Bounded, MaybeSerializeDeserialize},
+	DispatchError, DispatchResult, FixedPointOperand, RuntimeDebug,
 };
 use sp_std::{iter::Sum, marker::PhantomData, prelude::*};
 /// An index to a block.
@@ -42,6 +45,7 @@ pub trait Chainflip: frame_system::Config {
 		+ Ord
 		+ Copy
 		+ AtLeast32BitUnsigned
+		+ FixedPointOperand
 		+ MaybeSerializeDeserialize
 		+ Bounded
 		+ Sum<Self::Amount>;
@@ -327,63 +331,6 @@ pub trait EmergencyRotation {
 	fn request_emergency_rotation();
 }
 
-pub trait ChainflipAccount {
-	type AccountId;
-
-	/// Get the account data for the given account id.
-	fn get(account_id: &Self::AccountId) -> ChainflipAccountData;
-	/// Set the node to be a current authority
-	fn set_current_authority(account_id: &Self::AccountId);
-	/// Sets the authority state to historical
-	fn set_historical_authority(account_id: &Self::AccountId);
-	/// Sets the current authority to the historical authority, should be called
-	/// once the authority has no more active epochs
-	fn from_historical_to_backup(account_id: &Self::AccountId);
-}
-
-pub struct ChainflipAccountStore<T>(PhantomData<T>);
-
-impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccount
-	for ChainflipAccountStore<T>
-{
-	type AccountId = T::AccountId;
-
-	fn get(account_id: &Self::AccountId) -> ChainflipAccountData {
-		frame_system::Pallet::<T>::get(account_id)
-	}
-
-	/// Set the last epoch number and set the account state to Validator
-	fn set_current_authority(account_id: &Self::AccountId) {
-		log::debug!("Setting current authority {:?}", account_id);
-		frame_system::Pallet::<T>::mutate(account_id, |account_data| {
-			account_data.state = ChainflipAccountState::CurrentAuthority;
-		})
-		.unwrap_or_else(|e| log::error!("Mutating account state failed {:?}", e));
-	}
-
-	fn set_historical_authority(account_id: &Self::AccountId) {
-		frame_system::Pallet::<T>::mutate(account_id, |account_data| {
-			account_data.state = ChainflipAccountState::HistoricalAuthority;
-		})
-		.unwrap_or_else(|e| log::error!("Mutating account state failed {:?}", e));
-	}
-
-	fn from_historical_to_backup(account_id: &Self::AccountId) {
-		frame_system::Pallet::<T>::mutate(account_id, |account_data| match account_data.state {
-			ChainflipAccountState::HistoricalAuthority => {
-				account_data.state = ChainflipAccountState::Backup;
-			},
-			_ => {
-				const ERROR_MESSAGE: &str = "Attempted to transition to backup from historical, on a non-historical authority";
-				log::error!("{}", ERROR_MESSAGE);
-				#[cfg(test)]
-				panic!("{}", ERROR_MESSAGE);
-			},
-		})
-		.unwrap_or_else(|e| log::error!("Mutating account state failed {:?}", e));
-	}
-}
-
 /// Slashing a node
 pub trait Slashing {
 	/// An identifier for our node
@@ -664,4 +611,93 @@ pub trait StakingInfo {
 	fn total_stake_of(account_id: &Self::AccountId) -> Self::Balance;
 	/// Returns the total stake held on-chain.
 	fn total_onchain_stake() -> Self::Balance;
+}
+
+/// Allow pallets to register `Intent`s in the Ingress pallet.
+pub trait IngressApi {
+	type AccountId;
+
+	/// Issues an intent id and ingress address for a new liquidity deposit.
+	fn register_liquidity_ingress_intent(
+		lp_account: Self::AccountId,
+		ingress_asset: ForeignChainAsset,
+	) -> Result<(IntentId, ForeignChainAddress), DispatchError>;
+
+	/// Issues an intent id and ingress address for a new swap.
+	fn register_swap_intent(
+		ingress_asset: ForeignChainAsset,
+		egress_asset: ForeignChainAsset,
+		egress_address: ForeignChainAddress,
+		relayer_commission_bps: u16,
+	) -> Result<(IntentId, ForeignChainAddress), DispatchError>;
+}
+
+/// Generates a deterministic ingress address for some combination of asset, chain and intent id.
+pub trait AddressDerivationApi {
+	fn generate_address(
+		ingress_asset: ForeignChainAsset,
+		intent_id: IntentId,
+	) -> Result<ForeignChainAddress, DispatchError>;
+}
+
+pub trait AccountRoleRegistry<T: frame_system::Config> {
+	fn register_account_role(who: &T::AccountId, role: AccountRole) -> DispatchResult;
+
+	fn register_as_relayer(account_id: &T::AccountId) -> DispatchResult {
+		Self::register_account_role(account_id, AccountRole::Relayer)
+	}
+
+	fn register_as_liquidity_provider(account_id: &T::AccountId) -> DispatchResult {
+		Self::register_account_role(account_id, AccountRole::LiquidityProvider)
+	}
+
+	fn register_as_validator(account_id: &T::AccountId) -> DispatchResult {
+		Self::register_account_role(account_id, AccountRole::Validator)
+	}
+
+	fn ensure_account_role(origin: T::Origin, role: AccountRole)
+		-> Result<T::AccountId, BadOrigin>;
+
+	fn ensure_relayer(origin: T::Origin) -> Result<T::AccountId, BadOrigin> {
+		Self::ensure_account_role(origin, AccountRole::Relayer)
+	}
+
+	fn ensure_liquidity_provider(origin: T::Origin) -> Result<T::AccountId, BadOrigin> {
+		Self::ensure_account_role(origin, AccountRole::LiquidityProvider)
+	}
+
+	fn ensure_validator(origin: T::Origin) -> Result<T::AccountId, BadOrigin> {
+		Self::ensure_account_role(origin, AccountRole::Validator)
+	}
+}
+
+/// API that allows other pallets to Egress assets out of the State Chain.
+pub trait EgressApi {
+	fn schedule_egress(
+		foreign_asset: ForeignChainAsset,
+		amount: AssetAmount,
+		egress_address: ForeignChainAddress,
+	) -> DispatchResult;
+
+	fn is_egress_valid(
+		foreign_asset: &ForeignChainAsset,
+		egress_address: &ForeignChainAddress,
+	) -> bool;
+}
+
+pub trait EthereumAssetsAddressProvider {
+	fn try_get_asset_address(asset: Asset) -> Option<EthereumAddress>;
+}
+
+/// API that Schedules funds to be fetched from an ingress address and transferred to the main vault
+/// account. It's caller's responsibility to ensure that the asset/address combination are
+/// valid.
+///
+/// Schedule functions are chain specific, as each chain may require different data to do fetching.
+pub trait IngressFetchApi {
+	fn schedule_ingress_fetch(fetch_params: Vec<(Asset, IntentId)>);
+}
+
+impl IngressFetchApi for () {
+	fn schedule_ingress_fetch(_fetch_params: Vec<(Asset, IntentId)>) {}
 }

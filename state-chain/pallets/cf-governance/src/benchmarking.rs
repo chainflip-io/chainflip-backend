@@ -31,7 +31,7 @@ benchmarks! {
 	}
 	new_membership_set {
 		let caller: T::AccountId = whitelisted_caller();
-		let members = vec![caller.clone()];
+		let members = vec![caller];
 		let call = Call::<T>::new_membership_set{ accounts: members.clone() };
 		let origin = T::EnsureGovernance::successful_origin();
 	}: { call.dispatch_bypass_filter(origin)? }
@@ -70,7 +70,7 @@ benchmarks! {
 		let call_hash = [0xb; 32];
 
 		let call = Call::<T>::set_whitelisted_call_hash{
-			call_hash: call_hash.clone(),
+			call_hash,
 		};
 
 	} : {
@@ -93,10 +93,10 @@ benchmarks! {
 			T::Version::get(),
 		));
 
-		GovKeyWhitelistedCallHash::<T>::put(call_hash.clone());
+		GovKeyWhitelistedCallHash::<T>::put(call_hash);
 
 		let call = Call::<T>::submit_govkey_call {
-			call: Box::new(new_membership_set_call.into()),
+			call: Box::new(new_membership_set_call),
 		};
 	} : {
 		call.dispatch_bypass_filter(T::EnsureGovernance::successful_origin())?;

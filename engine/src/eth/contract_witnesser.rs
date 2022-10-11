@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use futures::StreamExt;
-use tokio::sync::broadcast;
+use tokio::sync::broadcast::{self};
 
 use crate::{
     eth::rpc::EthDualRpcClient,
@@ -9,15 +9,14 @@ use crate::{
 };
 
 use super::{
-    rpc::{EthHttpRpcClient, EthWsRpcClient},
-    EpochStart, EthContractWitnesser,
+    block_events_stream_for_contract_from, epoch_witnesser::should_end_witnessing, EpochStart,
+    EthContractWitnesser,
 };
 
 // NB: This code can emit the same witness multiple times. e.g. if the CFE restarts in the middle of witnessing a window of blocks
 pub async fn start<ContractWitnesser, StateChainRpc>(
     contract_witnesser: ContractWitnesser,
-    eth_ws_rpc: EthWsRpcClient,
-    eth_http_rpc: EthHttpRpcClient,
+    eth_dual_rpc: EthDualRpcClient,
     epoch_starts_receiver: broadcast::Receiver<EpochStart>,
     // In some cases there is no use witnessing older epochs since any actions that could be taken either have already
     // been taken, or can no longer be taken.
@@ -29,60 +28,45 @@ where
     ContractWitnesser: 'static + EthContractWitnesser + Sync + Send,
     StateChainRpc: 'static + StateChainRpcApi + Sync + Send,
 {
-    let contract_witnesser = Arc::new(contract_witnesser);
-
     super::epoch_witnesser::start(
         contract_witnesser.contract_name(),
         epoch_starts_receiver,
         move |epoch_start| witness_historical_epochs || epoch_start.current,
-        (),
-        move |end_witnessing_signal, epoch_start, (), logger| {
-            let eth_ws_rpc = eth_ws_rpc.clone();
-            let eth_http_rpc = eth_http_rpc.clone();
-            let dual_rpc = EthDualRpcClient::new(eth_ws_rpc.clone(), eth_http_rpc.clone(), &logger);
-            let contract_witnesser = contract_witnesser.clone();
+        contract_witnesser,
+        move |end_witnessing_signal, epoch_start, mut contract_witnesser, logger| {
             let state_chain_client = state_chain_client.clone();
+            let eth_dual_rpc = eth_dual_rpc.clone();
 
             async move {
-                slog::info!(
-                    logger,
-                    "Start witnessing from ETH block: {}",
-                    epoch_start.eth_block
-                );
-                let mut block_stream = contract_witnesser
-                    .block_stream(eth_ws_rpc, eth_http_rpc, epoch_start.eth_block, &logger)
-                    .await?;
+                let mut block_stream = block_events_stream_for_contract_from(
+                    epoch_start.eth_block,
+                    &contract_witnesser,
+                    eth_dual_rpc.clone(),
+                    &logger,
+                )
+                .await?;
 
-                // TOOD: Handle None on stream, and result event being an error
                 while let Some(block) = block_stream.next().await {
-                    if let Some(end_block) = *end_witnessing_signal.lock().unwrap() {
-                        if block.block_number >= end_block {
-                            slog::info!(
-                                logger,
-                                "Finished witnessing events at ETH block: {}",
-                                block.block_number
-                            );
-                            // we have reached the block height we wanted to witness up to
-                            // so can stop the witness process
-                            break;
-                        }
+                    if should_end_witnessing(
+                        end_witnessing_signal.clone(),
+                        block.block_number,
+                        &logger,
+                    ) {
+                        break;
                     }
 
-                    for event in block.events {
-                        contract_witnesser
-                            .handle_event(
-                                epoch_start.index,
-                                block.block_number,
-                                event,
-                                state_chain_client.clone(),
-                                &dual_rpc,
-                                &logger,
-                            )
-                            .await?;
-                    }
+                    contract_witnesser
+                        .handle_block_events(
+                            epoch_start.index,
+                            block.block_number,
+                            block,
+                            state_chain_client.clone(),
+                            &eth_dual_rpc,
+                            &logger,
+                        )
+                        .await?;
                 }
-
-                Ok(())
+                Ok(contract_witnesser)
             }
         },
         logger,

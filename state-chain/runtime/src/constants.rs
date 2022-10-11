@@ -65,11 +65,11 @@ pub mod common {
 		KEYGEN_TIMEOUT_BUFFER_SECONDS) /
 		SECONDS_PER_BLOCK as u32;
 
-	/// Claims go live 48 hours after registration, so we need to allow enough time beyond that.
 	pub const SECS_IN_AN_HOUR: u64 = 3600;
+
 	// This should be the same as the `CLAIM_DELAY` in:
 	// https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/StakeManager.sol
-	pub const CLAIM_DELAY: u64 = 48 * SECS_IN_AN_HOUR;
+	pub const CLAIM_DELAY_SECS: u64 = 48 * SECS_IN_AN_HOUR;
 
 	// NOTE: Currently it is not possible to change the slot duration after the chain has started.
 	//       Attempting to do so will brick block production.
@@ -127,5 +127,9 @@ pub mod common {
 
 		/// Number of blocks to wait until we deem the block to be safe.
 		pub const BLOCK_SAFETY_MARGIN: <Ethereum as Chain>::ChainBlockNumber = 4;
+
+		/// Most Ethereum blocks are validated in around 12 seconds. This is a conservative
+		/// time, in case things go wrong.
+		pub const CONSERVATIVE_BLOCK_TIME_SECS: u64 = 20;
 	}
 }

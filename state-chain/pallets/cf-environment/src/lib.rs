@@ -2,7 +2,8 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-pub use cf_traits::EthEnvironmentProvider;
+use cf_primitives::{Asset, EthereumAddress};
+pub use cf_traits::{EthEnvironmentProvider, EthereumAssetsAddressProvider};
 use cf_traits::{SystemStateInfo, SystemStateManager};
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
@@ -61,9 +62,9 @@ pub mod cfe {
 
 #[frame_support::pallet]
 pub mod pallet {
-	use super::*;
+	use cf_primitives::Asset;
 
-	type EthereumAddress = [u8; 20];
+	use super::*;
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -82,18 +83,21 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// The network is currently paused.
 		NetworkIsInMaintenance,
-
-		/// The settings provided were invalid
+		/// The settings provided were invalid.
 		InvalidCfeSettings,
+		/// Eth is not an Erc20 token, so its address can't be updated.
+		EthAddressNotUpdateable,
 	}
 
 	#[pallet::pallet]
+	#[pallet::without_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
 
 	#[pallet::storage]
-	#[pallet::getter(fn flip_token_address)]
-	/// The address of the ETH Flip token contract
-	pub type FlipTokenAddress<T> = StorageValue<_, EthereumAddress, ValueQuery>;
+	#[pallet::getter(fn supported_eth_assets)]
+	/// Map of supported assets for ETH
+	pub type SupportedEthAssets<T: Config> =
+		StorageMap<_, Blake2_128Concat, Asset, EthereumAddress>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn stake_manager_address)]
@@ -133,9 +137,12 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// The system state has been updated
 		SystemStateUpdated { new_system_state: SystemState },
-
 		/// The on-chain CFE settings have been updated
 		CfeSettingsUpdated { new_cfe_settings: cfe::CfeSettings },
+		/// A new supported ETH asset was added
+		AddedNewEthAsset(Asset, EthereumAddress),
+		/// The address of an supported ETH asset was updated
+		UpdatedEthAsset(Asset, EthereumAddress),
 	}
 
 	#[pallet::call]
@@ -158,7 +165,32 @@ pub mod pallet {
 			SystemStateProvider::<T>::set_system_state(state);
 			Ok(().into())
 		}
-
+		/// Adds or updates an asset address in the map of supported ETH assets.
+		///
+		/// ## Events
+		///
+		/// - [SupportedEthAssetsUpdated](Event::SupportedEthAssetsUpdated)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_support::error::BadOrigin)
+		#[pallet::weight(T::WeightInfo::update_supported_eth_assets())]
+		pub fn update_supported_eth_assets(
+			origin: OriginFor<T>,
+			asset: Asset,
+			address: EthereumAddress,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureGovernance::ensure_origin(origin)?;
+			ensure!(asset != Asset::Eth, Error::<T>::EthAddressNotUpdateable);
+			Self::deposit_event(if SupportedEthAssets::<T>::contains_key(asset) {
+				SupportedEthAssets::<T>::mutate(asset, |new_address| *new_address = Some(address));
+				Event::UpdatedEthAsset(asset, address)
+			} else {
+				SupportedEthAssets::<T>::insert(asset, address);
+				Event::AddedNewEthAsset(asset, address)
+			});
+			Ok(().into())
+		}
 		/// Sets the current on-chain CFE settings
 		///
 		/// ## Events
@@ -188,6 +220,7 @@ pub mod pallet {
 	#[cfg_attr(feature = "std", derive(Default))]
 	pub struct GenesisConfig {
 		pub flip_token_address: EthereumAddress,
+		pub eth_usdc_address: EthereumAddress,
 		pub stake_manager_address: EthereumAddress,
 		pub key_manager_address: EthereumAddress,
 		pub eth_vault_address: EthereumAddress,
@@ -199,13 +232,14 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
 		fn build(&self) {
-			FlipTokenAddress::<T>::set(self.flip_token_address);
 			StakeManagerAddress::<T>::set(self.stake_manager_address);
 			KeyManagerAddress::<T>::set(self.key_manager_address);
 			EthVaultAddress::<T>::set(self.eth_vault_address);
 			EthereumChainId::<T>::set(self.ethereum_chain_id);
 			CfeSettings::<T>::set(self.cfe_settings);
 			CurrentSystemState::<T>::set(SystemState::Normal);
+			SupportedEthAssets::<T>::insert(Asset::Flip, self.flip_token_address);
+			SupportedEthAssets::<T>::insert(Asset::Usdc, self.eth_usdc_address);
 		}
 	}
 }
@@ -243,16 +277,16 @@ impl<T: Config> SystemStateManager for SystemStateProvider<T> {
 }
 
 impl<T: Config> EthEnvironmentProvider for Pallet<T> {
-	fn flip_token_address() -> [u8; 20] {
-		FlipTokenAddress::<T>::get()
+	fn flip_token_address() -> EthereumAddress {
+		SupportedEthAssets::<T>::get(Asset::Flip).expect("FLIP address should be added at genesis")
 	}
-	fn key_manager_address() -> [u8; 20] {
+	fn key_manager_address() -> EthereumAddress {
 		KeyManagerAddress::<T>::get()
 	}
-	fn eth_vault_address() -> [u8; 20] {
+	fn eth_vault_address() -> EthereumAddress {
 		EthVaultAddress::<T>::get()
 	}
-	fn stake_manager_address() -> [u8; 20] {
+	fn stake_manager_address() -> EthereumAddress {
 		StakeManagerAddress::<T>::get()
 	}
 	fn chain_id() -> u64 {
@@ -266,5 +300,11 @@ impl<T: Config> Pallet<T> {
 			*nonce += 1;
 			*nonce
 		})
+	}
+}
+
+impl<T: Config> EthereumAssetsAddressProvider for Pallet<T> {
+	fn try_get_asset_address(asset: Asset) -> Option<EthereumAddress> {
+		Pallet::<T>::supported_eth_assets(asset)
 	}
 }

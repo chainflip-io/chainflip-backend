@@ -205,6 +205,7 @@ impl pallet_cf_vaults::Config for MockRuntime {
 	type Offence = PalletOffence;
 	type Chain = MockEthereum;
 	type Call = Call;
+	type AccountRoleRegistry = ();
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
 	type ThresholdSigner = MockThresholdSigner<MockEthereum, Call>;

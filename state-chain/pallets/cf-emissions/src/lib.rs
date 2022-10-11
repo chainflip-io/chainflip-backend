@@ -172,7 +172,6 @@ pub mod pallet {
 						current_block,
 					);
 					Self::deposit_event(Event::SupplyUpdateBroadcastRequested(current_block));
-					// Update this pallet's state.
 					LastSupplyUpdateBlock::<T>::set(current_block);
 				} else {
 					log::info!("System maintenance: skipping supply update broadcast.");

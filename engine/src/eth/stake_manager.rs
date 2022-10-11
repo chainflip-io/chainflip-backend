@@ -20,7 +20,9 @@ use async_trait::async_trait;
 
 use anyhow::{anyhow, Result};
 
-use super::{event::Event, DecodeLogClosure, EthContractWitnesser, EventParseError};
+use super::{
+    event::Event, BlockWithItems, DecodeLogClosure, EthContractWitnesser, EventParseError,
+};
 
 pub struct StakeManager {
     pub deployed_address: H160,
@@ -83,15 +85,15 @@ pub enum StakeManagerEvent {
 impl EthContractWitnesser for StakeManager {
     type EventParameters = StakeManagerEvent;
 
-    fn contract_name(&self) -> &'static str {
-        "StakeManager"
+    fn contract_name(&self) -> String {
+        "StakeManager".to_string()
     }
 
-    async fn handle_event<RpcClient, EthRpcClient>(
-        &self,
+    async fn handle_block_events<RpcClient, EthRpcClient>(
+        &mut self,
         epoch: EpochIndex,
         _block_number: u64,
-        event: Event<Self::EventParameters>,
+        block: BlockWithItems<Event<Self::EventParameters>>,
         state_chain_client: Arc<StateChainClient<RpcClient>>,
         _eth_rpc: &EthRpcClient,
         logger: &slog::Logger,
@@ -100,59 +102,61 @@ impl EthContractWitnesser for StakeManager {
         RpcClient: 'static + StateChainRpcApi + Sync + Send,
         EthRpcClient: EthRpcApi + Sync + Send,
     {
-        slog::info!(logger, "Handling event: {}", event);
-        match event.event_parameters {
-            StakeManagerEvent::Staked {
-                account_id,
-                amount,
-                staker: _,
-                return_addr,
-            } => {
-                let _result = state_chain_client
-                    .submit_signed_extrinsic(
-                        pallet_cf_witnesser::Call::witness_at_epoch {
-                            call: Box::new(
-                                pallet_cf_staking::Call::staked {
-                                    account_id,
-                                    amount,
-                                    withdrawal_address: return_addr.0,
-                                    tx_hash: event.tx_hash.into(),
-                                }
-                                .into(),
-                            ),
-                            epoch_index: epoch,
-                        },
-                        logger,
-                    )
-                    .await;
-            }
-            StakeManagerEvent::ClaimExecuted { account_id, amount } => {
-                let _result = state_chain_client
-                    .submit_signed_extrinsic(
-                        pallet_cf_witnesser::Call::witness_at_epoch {
-                            call: Box::new(
-                                pallet_cf_staking::Call::claimed {
-                                    account_id,
-                                    claimed_amount: amount,
-                                    tx_hash: event.tx_hash.to_fixed_bytes(),
-                                }
-                                .into(),
-                            ),
-                            epoch_index: epoch,
-                        },
-                        logger,
-                    )
-                    .await;
-            }
-            _ => {
-                slog::trace!(logger, "Ignoring unused event: {}", event);
+        for event in block.block_items {
+            slog::info!(logger, "Handling event: {}", event);
+            match event.event_parameters {
+                StakeManagerEvent::Staked {
+                    account_id,
+                    amount,
+                    staker: _,
+                    return_addr,
+                } => {
+                    let _result = state_chain_client
+                        .submit_signed_extrinsic(
+                            pallet_cf_witnesser::Call::witness_at_epoch {
+                                call: Box::new(
+                                    pallet_cf_staking::Call::staked {
+                                        account_id,
+                                        amount,
+                                        withdrawal_address: return_addr.0,
+                                        tx_hash: event.tx_hash.into(),
+                                    }
+                                    .into(),
+                                ),
+                                epoch_index: epoch,
+                            },
+                            logger,
+                        )
+                        .await;
+                }
+                StakeManagerEvent::ClaimExecuted { account_id, amount } => {
+                    let _result = state_chain_client
+                        .submit_signed_extrinsic(
+                            pallet_cf_witnesser::Call::witness_at_epoch {
+                                call: Box::new(
+                                    pallet_cf_staking::Call::claimed {
+                                        account_id,
+                                        claimed_amount: amount,
+                                        tx_hash: event.tx_hash.to_fixed_bytes(),
+                                    }
+                                    .into(),
+                                ),
+                                epoch_index: epoch,
+                            },
+                            logger,
+                        )
+                        .await;
+                }
+                _ => {
+                    slog::trace!(logger, "Ignoring unused event: {}", event);
+                }
             }
         }
 
         Ok(())
     }
 
-    fn get_contract_address(&self) -> H160 {
+    fn contract_address(&self) -> H160 {
         self.deployed_address
     }
 

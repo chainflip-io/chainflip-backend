@@ -1,3 +1,6 @@
+mod signer;
+mod storage_traits;
+
 use anyhow::{anyhow, bail, Context, Result};
 use codec::{Decode, Encode, FullCodec};
 use custom_rpc::CustomApiClient;
@@ -13,9 +16,6 @@ use jsonrpsee::core::{Error as RpcError, RpcResult};
 use jsonrpsee::types::error::CallError;
 use jsonrpsee::types::{ErrorObject, ErrorObjectOwned};
 use jsonrpsee::ws_client::WsClientBuilder;
-use libp2p::multiaddr::Protocol;
-use libp2p::Multiaddr;
-use multisig_p2p_transport::PeerId;
 use slog::o;
 use sp_core::storage::StorageData;
 use sp_core::H256;
@@ -29,8 +29,6 @@ use sp_runtime::{AccountId32, MultiAddress};
 use sp_version::RuntimeVersion;
 use state_chain_runtime::SignedBlock;
 use std::fmt::Debug;
-use std::net::Ipv6Addr;
-use std::str::FromStr;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -39,9 +37,7 @@ use crate::common::{read_clean_and_decode_hex_str_file, EngineTryStreamExt};
 use crate::constants::MAX_EXTRINSIC_RETRY_ATTEMPTS;
 use crate::logging::COMPONENT_KEY;
 use crate::settings;
-use utilities::{context, Port};
-
-mod signer;
+use utilities::context;
 
 #[cfg(test)]
 use mockall::automock;
@@ -113,6 +109,14 @@ pub trait StateChainRpcApi {
         storage_key: StorageKey,
     ) -> RpcResult<Option<StorageData>>;
 
+    async fn storage_keys_paged(
+        &self,
+        block_hash: state_chain_runtime::Hash,
+        prefix: StorageKey,
+        count: u32,
+        start_key: Option<StorageKey>,
+    ) -> Result<Vec<StorageKey>>;
+
     async fn storage_events_at(
         &self,
         block_hash: Option<state_chain_runtime::Hash>,
@@ -134,8 +138,6 @@ pub trait StateChainRpcApi {
 
     async fn rotate_keys(&self) -> RpcResult<Bytes>;
 
-    async fn local_listen_addresses(&self) -> RpcResult<Vec<String>>;
-
     async fn fetch_runtime_version(
         &self,
         block_hash: state_chain_runtime::Hash,
@@ -143,6 +145,10 @@ pub trait StateChainRpcApi {
 
     async fn is_auction_phase(&self) -> RpcResult<bool>;
 }
+
+// TODO: https://github.com/paritytech/substrate/issues/12236
+// Value from: https://github.com/chainflip-io/substrate/blob/c172d0f683fab3792b90d876fd6ca27056af9fe9/client/rpc/src/state/mod.rs#L54
+pub const STORAGE_KEYS_PAGED_MAX_COUNT: u32 = 1000;
 
 #[async_trait]
 impl<C> StateChainRpcApi for StateChainRpcClient<C>
@@ -182,6 +188,20 @@ where
         self.rpc_client.storage(storage_key, Some(block_hash)).await
     }
 
+    /// Returns the keys with prefix with pagination support.
+    async fn storage_keys_paged(
+        &self,
+        block_hash: state_chain_runtime::Hash,
+        prefix: StorageKey,
+        count: u32,
+        start_key: Option<StorageKey>,
+    ) -> Result<Vec<StorageKey>> {
+        self.rpc_client
+            .storage_keys_paged(Some(prefix), count, start_key, Some(block_hash))
+            .await
+            .context("storage RPC API failed")
+    }
+
     async fn storage_events_at(
         &self,
         block_hash: Option<state_chain_runtime::Hash>,
@@ -204,10 +224,6 @@ where
         self.rpc_client
             .storage_pairs(storage_key, Some(block_hash))
             .await
-    }
-
-    async fn local_listen_addresses(&self) -> RpcResult<Vec<String>> {
-        self.rpc_client.system_local_listen_addresses().await
     }
 
     async fn fetch_runtime_version(
@@ -278,113 +294,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
     }
 }
 
-mod storage_traits {
-    use codec::FullCodec;
-    use frame_support::{
-        storage::types::{QueryKindTrait, StorageDoubleMap, StorageMap, StorageValue},
-        traits::{Get, StorageInstance},
-        StorageHasher,
-    };
-    use sp_core::storage::StorageKey;
-
-    // A method to safely extract type information about Substrate storage maps (As the Key and Value types are not available)
-    pub trait StorageDoubleMapAssociatedTypes {
-        type Key1;
-        type Key2;
-        type Value: FullCodec;
-        type QueryKind: QueryKindTrait<Self::Value, Self::OnEmpty>;
-        type OnEmpty;
-
-        fn _hashed_key_for(key1: &Self::Key1, key2: &Self::Key2) -> StorageKey;
-    }
-    impl<
-            Prefix: StorageInstance,
-            Hasher1: StorageHasher,
-            Key1: FullCodec,
-            Hasher2: StorageHasher,
-            Key2: FullCodec,
-            Value: FullCodec,
-            QueryKind: QueryKindTrait<Value, OnEmpty>,
-            OnEmpty: Get<QueryKind::Query> + 'static,
-            MaxValues: Get<Option<u32>>,
-        > StorageDoubleMapAssociatedTypes
-        for StorageDoubleMap<
-            Prefix,
-            Hasher1,
-            Key1,
-            Hasher2,
-            Key2,
-            Value,
-            QueryKind,
-            OnEmpty,
-            MaxValues,
-        >
-    {
-        type Key1 = Key1;
-        type Key2 = Key2;
-        type Value = Value;
-        type QueryKind = QueryKind;
-        type OnEmpty = OnEmpty;
-
-        fn _hashed_key_for(key1: &Self::Key1, key2: &Self::Key2) -> StorageKey {
-            StorageKey(Self::hashed_key_for(key1, key2))
-        }
-    }
-
-    // A method to safely extract type information about Substrate storage maps (As the Key and Value types are not available)
-    pub trait StorageMapAssociatedTypes {
-        type Key;
-        type Value: FullCodec;
-        type QueryKind: QueryKindTrait<Self::Value, Self::OnEmpty>;
-        type OnEmpty;
-
-        fn _hashed_key_for(key: &Self::Key) -> StorageKey;
-    }
-    impl<
-            Prefix: StorageInstance,
-            Hasher: StorageHasher,
-            Key: FullCodec,
-            Value: FullCodec,
-            QueryKind: QueryKindTrait<Value, OnEmpty>,
-            OnEmpty: Get<QueryKind::Query> + 'static,
-            MaxValues: Get<Option<u32>>,
-        > StorageMapAssociatedTypes
-        for StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
-    {
-        type Key = Key;
-        type Value = Value;
-        type QueryKind = QueryKind;
-        type OnEmpty = OnEmpty;
-
-        fn _hashed_key_for(key: &Self::Key) -> StorageKey {
-            StorageKey(Self::hashed_key_for(key))
-        }
-    }
-
-    // A method to safely extract type information about Substrate storage values (As the Key and Value types are not available)
-    pub trait StorageValueAssociatedTypes {
-        type Value: FullCodec;
-        type QueryKind: QueryKindTrait<Self::Value, Self::OnEmpty>;
-        type OnEmpty;
-
-        fn _hashed_key() -> StorageKey;
-    }
-    impl<
-            Prefix: StorageInstance,
-            Value: FullCodec,
-            QueryKind: QueryKindTrait<Value, OnEmpty>,
-            OnEmpty: Get<QueryKind::Query> + 'static,
-        > StorageValueAssociatedTypes for StorageValue<Prefix, Value, QueryKind, OnEmpty>
-    {
-        type Value = Value;
-        type QueryKind = QueryKind;
-        type OnEmpty = OnEmpty;
-
-        fn _hashed_key() -> StorageKey {
-            StorageKey(Self::hashed_key().into())
-        }
-    }
-}
+use crate::state_chain_observer::client::storage_traits::StorageMapAssociatedTypes;
 
 fn invalid_err_obj(invalid_reason: InvalidTransaction) -> ErrorObjectOwned {
     ErrorObject::owned(
@@ -731,66 +641,30 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
             .collect())
     }
 
-    pub async fn get_storage_pairs<StorageType: Decode + Debug>(
+    /// Gets all the storage pairs (key, value) of a StorageMap.
+    /// NB: Because this is an unbounded operation, it requires the node to have
+    /// the `--rpc-methods=unsafe` enabled.
+    pub async fn get_all_storage_pairs<StorageMap: storage_traits::StorageMapAssociatedTypes>(
         &self,
         block_hash: state_chain_runtime::Hash,
-        storage_key: StorageKey,
-    ) -> Result<Vec<StorageType>> {
+    ) -> Result<
+        Vec<(
+            <StorageMap as StorageMapAssociatedTypes>::Key,
+            StorageMap::Value,
+        )>,
+    > {
         Ok(self
             .state_chain_rpc_client
-            .storage_pairs(block_hash, storage_key)
+            .storage_pairs(block_hash, StorageMap::_prefix_hash())
             .await?
             .into_iter()
-            .map(|(_, storage_data)| {
-                context!(StorageType::decode(&mut &storage_data.0[..])).unwrap()
+            .map(|(storage_key, storage_data)| {
+                (
+                    StorageMap::key_from_storage_key(&storage_key),
+                    context!(StorageMap::Value::decode(&mut &storage_data.0[..])).unwrap(),
+                )
             })
             .collect())
-    }
-
-    pub async fn get_local_listen_addresses(&self) -> Result<Vec<(PeerId, Port, Ipv6Addr)>> {
-        self.state_chain_rpc_client
-            .local_listen_addresses()
-            .await?
-            .into_iter()
-            .map(|string_multiaddr| {
-                let multiaddr = Multiaddr::from_str(&string_multiaddr)?;
-                let protocols = multiaddr.into_iter().collect::<Vec<_>>();
-
-                // Note: Nodes started without validator argument will also listen with a WebSocket (Therefore their protocol list will also contain a WS element)
-
-                Ok((
-                    protocols
-                        .iter()
-                        .find_map(|protocol| match protocol {
-                            Protocol::P2p(multihash) => Some(multihash),
-                            _ => None,
-                        })
-                        .ok_or_else(|| anyhow!("Expected P2p Protocol"))
-                        .and_then(|multihash| {
-                            PeerId::from_multihash(*multihash)
-                                .map_err(|_| anyhow!("Couldn't decode peer id"))
-                        })
-                        .with_context(|| string_multiaddr.clone())?,
-                    protocols
-                        .iter()
-                        .find_map(|protocol| match protocol {
-                            Protocol::Tcp(port) => Some(*port),
-                            _ => None,
-                        })
-                        .ok_or_else(|| anyhow!("Expected Tcp Protocol"))
-                        .with_context(|| string_multiaddr.clone())?,
-                    protocols
-                        .iter()
-                        .find_map(|protocol| match protocol {
-                            Protocol::Ip6(ip_address) => Some(*ip_address),
-                            Protocol::Ip4(ip_address) => Some(ip_address.to_ipv6_mapped()),
-                            _ => None,
-                        })
-                        .ok_or_else(|| anyhow!("Expected Ip Protocol"))
-                        .with_context(|| string_multiaddr.clone())?,
-                ))
-            })
-            .collect::<Result<Vec<_>>>()
     }
 
     /// Get all the events from a particular block
@@ -1127,7 +1001,6 @@ pub async fn connect_to_state_chain_without_signer(
 
 #[cfg(test)]
 pub mod test_utils {
-    use cf_primitives::{ChainflipAccountData, ChainflipAccountState};
     use frame_system::AccountInfo;
 
     use super::*;
@@ -1144,7 +1017,6 @@ pub mod test_utils {
         StorageChangeSet { block, changes }
     }
 
-    // TODO: Get some chain data for this test
     #[test]
     fn storage_change_set_encoding_works() {
         let account_info = AccountInfo {
@@ -1152,9 +1024,7 @@ pub mod test_utils {
             consumers: 1,
             providers: 2,
             sufficients: 0,
-            data: ChainflipAccountData {
-                state: ChainflipAccountState::CurrentAuthority,
-            },
+            data: (),
         };
 
         let storage_change_set = storage_change_set_from(account_info, H256::default());
@@ -1163,8 +1033,7 @@ pub mod test_utils {
         let storage_data = changes.1.unwrap().0;
 
         // this was retrieved from the chain itself
-        let storage_data_expected: Vec<u8> =
-            vec![12, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0];
+        let storage_data_expected: Vec<u8> = vec![12, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0];
 
         assert_eq!(storage_data, storage_data_expected);
     }
@@ -1208,18 +1077,14 @@ mod tests {
                 "Getting events from block {} with block_hash: {:?}",
                 block_number, block_hash
             );
-            use frame_support::StoragePrefixedMap;
-            let state_for_this_block = state_chain_client
-                .get_storage_pairs::<(state_chain_runtime::AccountId, sp_core::ed25519::Public, Port, pallet_cf_validator::Ipv6Addr)>(block_hash, StorageKey(
-                    pallet_cf_validator::AccountPeerMapping::<state_chain_runtime::Runtime>::final_prefix()
-                        .into(),
-                ))
+            let my_state_for_this_block = state_chain_client
+                .get_all_storage_pairs::<pallet_cf_validator::AccountPeerMapping::<state_chain_runtime::Runtime>>(block_hash)
                 .await
                 .unwrap();
 
             println!(
                 "Returning AccountPeerMapping for this block: {:?}",
-                state_for_this_block
+                my_state_for_this_block
             );
         }
     }
