@@ -189,7 +189,7 @@ mod tests {
         let safe_head_stream =
             stream::iter((inner_stream_starts_at..inner_stream_ends_at).map(number_bloom));
 
-        let mut safe_head_stream_from =
+        let mut block_head_stream_from =
             block_head_stream_from(from_block, safe_head_stream, MockEthRpc {}, &logger)
                 .await
                 .unwrap();
@@ -197,7 +197,7 @@ mod tests {
         // We should only be yielding from the `from_block`
         for expected_block_number in from_block..inner_stream_ends_at {
             assert_eq!(
-                safe_head_stream_from
+                block_head_stream_from
                     .next()
                     .await
                     .unwrap()
@@ -207,7 +207,7 @@ mod tests {
             );
         }
 
-        assert!(safe_head_stream_from.next().await.is_none());
+        assert!(block_head_stream_from.next().await.is_none());
     }
 
     #[tokio::test]
@@ -221,14 +221,14 @@ mod tests {
         let safe_head_stream =
             stream::iter((inner_stream_starts_at..inner_stream_ends_at).map(number_bloom));
 
-        let mut safe_head_stream_from =
+        let mut block_head_stream_from =
             block_head_stream_from(from_block, safe_head_stream, MockEthRpc {}, &logger)
                 .await
                 .unwrap();
 
         for expected_block_number in from_block..inner_stream_ends_at {
             assert_eq!(
-                safe_head_stream_from
+                block_head_stream_from
                     .next()
                     .await
                     .unwrap()
@@ -237,7 +237,7 @@ mod tests {
                 expected_block_number
             );
         }
-        assert!(safe_head_stream_from.next().await.is_none());
+        assert!(block_head_stream_from.next().await.is_none());
     }
 
     #[tokio::test]
@@ -253,14 +253,14 @@ mod tests {
         let safe_head_stream =
             stream::iter((inner_stream_starts_at..inner_stream_ends_at).map(number_bloom));
 
-        let mut safe_head_stream_from =
+        let mut block_head_stream_from =
             block_head_stream_from(from_block, safe_head_stream, MockEthRpc {}, &logger)
                 .await
                 .unwrap();
 
         for expected_block_number in from_block..FAILURE_BLOCK_NUMBER {
             assert_eq!(
-                safe_head_stream_from
+                block_head_stream_from
                     .next()
                     .await
                     .unwrap()
@@ -269,6 +269,6 @@ mod tests {
                 expected_block_number
             );
         }
-        assert!(safe_head_stream_from.next().await.is_none());
+        assert!(block_head_stream_from.next().await.is_none());
     }
 }
