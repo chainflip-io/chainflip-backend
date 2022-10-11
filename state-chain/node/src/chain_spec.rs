@@ -602,9 +602,9 @@ const PERSEVERANCE_ENV: StateChainEnvironment = StateChainEnvironment {
 pub fn perseverance_config() -> Result<ChainSpec, String> {
 	let wasm_binary = WASM_BINARY.ok_or_else(|| "Wasm binary not available".to_string())?;
 	const BASHFUL_SR25519: [u8; 32] =
-		hex_literal::hex!["7895167d2c4a2483b39b60f9292e58db76e279ad9fde8cf3fcdc3f22ea4b7039"];
+		hex_literal::hex!["789523326e5f007f7643f14fa9e6bcfaaff9dd217e7e7a384648a46398245d55"];
 	const BASHFUL_ED25519: [u8; 32] =
-		hex_literal::hex!["8f0dfbf52a0de7d11203691fd83b1fcc355f0de9c8ddf0c1e165f5cf6bca3e94"];
+		hex_literal::hex!["7fdaaa9becf88f9f0a3590bd087ddce9f8d284ccf914c542e4c9f0c0e6440a6a"];
 	const DOC_SR25519: [u8; 32] =
 		hex_literal::hex!["7a467c9e1722b35408618a0cffc87c1e8433798e9c5a79339a10d71ede9e9d79"];
 	const DOC_ED25519: [u8; 32] =
