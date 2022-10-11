@@ -35,5 +35,4 @@ members = [
   'utilities',
   'state-chain/custom-rpc',
   'state-chain/cf-session-benchmarking',
-  'polkadot-0.9.29-minimal/runtime/polkadot'
 ]
