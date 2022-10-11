@@ -1,3 +1,4 @@
+use cf_chains::eth::CHAIN_ID_GOERLI;
 use cf_primitives::AccountRole;
 use sc_service::{ChainType, Properties};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
@@ -147,7 +148,7 @@ pub fn get_environment() -> StateChainEnvironment {
 
 /// The reputation penalty and suspension duration for each offence.
 const PENALTIES: &[(Offence, (i32, BlockNumber))] = &[
-	(Offence::ParticipateKeygenFailed, (15, u32::MAX)),
+	(Offence::ParticipateKeygenFailed, (15, HEARTBEAT_BLOCK_INTERVAL)),
 	(Offence::ParticipateSigningFailed, (15, HEARTBEAT_BLOCK_INTERVAL)),
 	(Offence::MissedAuthorshipSlot, (15, HEARTBEAT_BLOCK_INTERVAL)),
 	(Offence::MissedHeartbeat, (15, HEARTBEAT_BLOCK_INTERVAL)),
@@ -581,7 +582,23 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 	))
 }
 
-// TODO: Hard-code values and generate chainspec.
+const PERSEVERANCE_ENV: StateChainEnvironment = StateChainEnvironment {
+	flip_token_address: hex_literal::hex!("1353DE92af0e7eaFFD8DAE7CFe7649814a8ebc07"),
+	eth_usdc_address: hex_literal::hex!("07865c6E87B9F70255377e024ace6630C1Eaa37F"),
+	stake_manager_address: hex_literal::hex!("9D55C1768e8DF3ec937bf3554ADe293Df321E837"),
+	key_manager_address: hex_literal::hex!("BF7EA295bE3F574b82143A4Dd7cdD2F7Ef4e3739"),
+	eth_vault_address: hex_literal::hex!("b7669Fb07c66AcC0083A8d55BD3a473c0f2C5667"),
+	ethereum_chain_id: CHAIN_ID_GOERLI,
+	eth_init_agg_key: hex_literal::hex!(
+		"0313eb7d2010b2a7eb64e3a6ce153a89affe99082f722f0484ea2f34a3849fe04d"
+	),
+	ethereum_deployment_block: 7749978u64,
+	genesis_stake_amount: 5_000 * FLIPPERINOS_PER_FLIP,
+	min_stake: 10 * FLIPPERINOS_PER_FLIP,
+	eth_block_safety_margin: 4,
+	max_ceremony_stage_duration: 300,
+};
+
 pub fn perseverance_config() -> Result<ChainSpec, String> {
 	let wasm_binary = WASM_BINARY.ok_or_else(|| "Wasm binary not available".to_string())?;
 	const BASHFUL_SR25519: [u8; 32] =
@@ -611,7 +628,7 @@ pub fn perseverance_config() -> Result<ChainSpec, String> {
 		eth_block_safety_margin,
 		max_ceremony_stage_duration,
 		min_stake,
-	} = get_environment();
+	} = PERSEVERANCE_ENV;
 	Ok(ChainSpec::from_genesis(
 		"Chainflip-Perseverance",
 		"Chainflip-Perseverance",
