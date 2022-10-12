@@ -4,19 +4,17 @@ use crate::multisig::eth::EthSigning;
 use anyhow::Context;
 
 use chainflip_engine::{
-    common::read_clean_and_decode_hex_str_file,
-    eth::{
-        self, build_broadcast_channel, key_manager::KeyManager, rpc::EthDualRpcClient,
-        stake_manager::StakeManager, EthBroadcaster,
-    },
-    health::HealthChecker,
-    logging,
-    multisig::{self, client::key_store::KeyStore, PersistentKeyDB},
-    multisig_p2p, p2p,
-    p2p_muxer::P2PMuxer,
-    settings::{CommandLineOptions, Settings},
-    state_chain_observer::{self},
-    task_scope::with_main_task_scope,
+	eth::{
+		self, build_broadcast_channel, key_manager::KeyManager, rpc::EthDualRpcClient,
+		stake_manager::StakeManager, EthBroadcaster,
+	},
+	health::HealthChecker,
+	logging,
+	multisig::{self, client::key_store::KeyStore, PersistentKeyDB},
+	p2p,
+	settings::{CommandLineOptions, Settings},
+	state_chain_observer::{self},
+	task_scope::with_main_task_scope,
 };
 
 use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
@@ -25,23 +23,22 @@ use futures::FutureExt;
 use pallet_cf_validator::SemVer;
 use sp_core::U256;
 use utilities::print_chainflip_ascii_art;
-use zeroize::Zeroizing;
 
 fn main() -> anyhow::Result<()> {
-    print_chainflip_ascii_art();
-    use_chainflip_account_id_encoding();
+	print_chainflip_ascii_art();
+	use_chainflip_account_id_encoding();
 
-    let settings = Settings::new(CommandLineOptions::parse()).context("Error reading settings")?;
+	let settings = Settings::new(CommandLineOptions::parse()).context("Error reading settings")?;
 
-    let root_logger = logging::utils::new_json_logger_with_tag_filter(
-        settings.log.whitelist.clone(),
-        settings.log.blacklist.clone(),
-    );
+	let root_logger = logging::utils::new_json_logger_with_tag_filter(
+		settings.log.whitelist.clone(),
+		settings.log.blacklist.clone(),
+	);
 
-    slog::info!(root_logger, "Start the engines! :broom: :broom: ");
+	slog::info!(root_logger, "Start the engines! :broom: :broom: ");
 
-    with_main_task_scope(|scope| {
-        async {
+	with_main_task_scope(|scope| {
+		async {
 
             if let Some(health_check_settings) = &settings.health_check {
                 scope.spawn(HealthChecker::new(health_check_settings, &root_logger).await?.run());
@@ -129,44 +126,14 @@ fn main() -> anyhow::Result<()> {
                 .context("Failed to open database")?,
             );
 
-            // TODO: clean this up by putting all p2p related initialisation into a separate function
-            let current_peer_infos = multisig_p2p::get_current_peer_infos(&state_chain_client, latest_block_hash).await.context("Failed to get initial peer info")?;
+            let (
+                eth_outgoing_sender,
+                eth_incoming_receiver,
+                peer_update_sender,
+                p2p_fut,
+            ) = p2p::start(state_chain_client.clone(), settings.node_p2p, latest_block_hash, &root_logger).await.context("Failed to start p2p module")?;
 
-            let own_peer_info = current_peer_infos.iter().find(|pi| pi.account_id == state_chain_client.our_account_id).cloned();
-
-            let node_key = {
-                let secret = read_clean_and_decode_hex_str_file(&settings.node_p2p.node_key_file, "Node Key", |str| {
-                    ed25519_dalek::SecretKey::from_bytes(
-                        &Zeroizing::new(hex::decode(str).map_err(anyhow::Error::new)?)[..],
-                    )
-                    .map_err(anyhow::Error::new)
-                })?;
-
-                let public = (&secret).into();
-                ed25519_dalek::Keypair {
-                    secret,
-                    public,
-                }
-            };
-
-            let (outgoing_message_sender, peer_update_sender, incoming_message_receiver, own_peer_info_receiver, p2p_fut) =
-                p2p::start(&node_key, settings.node_p2p.port, current_peer_infos, state_chain_client.our_account_id.clone(), &root_logger);
-
-            scope.spawn(async move {
-                p2p_fut.await;
-                Ok(())
-            });
-
-            let (eth_outgoing_sender, eth_incoming_receiver, muxer_future) = P2PMuxer::start(
-                incoming_message_receiver,
-                outgoing_message_sender,
-                &root_logger,
-            );
-
-            scope.spawn(async move {
-                muxer_future.await;
-                Ok(())
-            });
+            scope.spawn(p2p_fut);
 
             let (eth_multisig_client, eth_multisig_client_backend_future) =
                 multisig::start_client::<EthSigning>(
@@ -178,17 +145,6 @@ fn main() -> anyhow::Result<()> {
                     &root_logger,
                 );
 
-            scope.spawn(
-                multisig_p2p::start(
-                    node_key,
-                    state_chain_client.clone(),
-                    settings.node_p2p.ip_address,
-                    settings.node_p2p.port,
-                    own_peer_info,
-                    own_peer_info_receiver,
-                    &root_logger,
-                )
-            );
             scope.spawn(
                 eth_multisig_client_backend_future
             );
@@ -325,5 +281,5 @@ fn main() -> anyhow::Result<()> {
 
             Ok(())
         }.boxed()
-    })
+	})
 }

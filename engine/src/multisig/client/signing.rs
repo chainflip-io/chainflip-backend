@@ -10,6 +10,6 @@ use super::common::KeygenResult;
 /// Data common for signing stages
 #[derive(Clone)]
 pub struct SigningStateCommonInfo<P: ECPoint> {
-    pub data: MessageHash,
-    pub key: Arc<KeygenResult<P>>,
+	pub data: MessageHash,
+	pub key: Arc<KeygenResult<P>>,
 }
