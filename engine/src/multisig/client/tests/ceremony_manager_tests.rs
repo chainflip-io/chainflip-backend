@@ -20,7 +20,7 @@ use crate::{
         eth::{EthSchnorrSignature, EthSigning},
         tests::fixtures::MESSAGE_HASH,
     },
-    multisig_p2p::OutgoingMultisigStageMessages,
+    p2p::OutgoingMultisigStageMessages,
     task_scope::with_task_scope,
 };
 use anyhow::Result;

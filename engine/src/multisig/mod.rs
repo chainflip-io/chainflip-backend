@@ -7,20 +7,22 @@ mod crypto;
 /// Storage for the keys
 pub mod db;
 
-pub use crypto::{eth, ChainTag, Rng};
+pub use crypto::{eth, ChainTag, CryptoScheme, Rng};
 
 #[cfg(test)]
 mod tests;
 
 use anyhow::Result;
 use cf_primitives::CeremonyId;
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use serde::{Deserialize, Serialize};
 
 use std::sync::Arc;
 
-use crate::{logging::COMPONENT_KEY, multisig_p2p::OutgoingMultisigStageMessages};
+use crate::{
+    logging::COMPONENT_KEY,
+    p2p::{MultisigMessageReceiver, MultisigMessageSender},
+};
 use slog::o;
 use state_chain_runtime::AccountId;
 
@@ -28,7 +30,7 @@ pub use client::{MultisigClient, MultisigMessage};
 
 pub use db::PersistentKeyDB;
 
-use self::{client::key_store::KeyStore, crypto::CryptoScheme};
+use self::client::key_store::KeyStore;
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Hash, Eq)]
 pub struct MessageHash(pub [u8; 32]);
@@ -53,8 +55,8 @@ impl std::fmt::Display for KeyId {
 pub fn start_client<C>(
     my_account_id: AccountId,
     key_store: KeyStore<C>,
-    incoming_p2p_message_receiver: UnboundedReceiver<(AccountId, Vec<u8>)>,
-    outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
+    incoming_p2p_message_receiver: MultisigMessageReceiver<C>,
+    outgoing_p2p_message_sender: MultisigMessageSender<C>,
     latest_ceremony_id: CeremonyId,
     logger: &slog::Logger,
 ) -> (
@@ -83,12 +85,12 @@ where
 
         let ceremony_manager = CeremonyManager::<C>::new(
             my_account_id,
-            outgoing_p2p_message_sender,
+            outgoing_p2p_message_sender.0,
             latest_ceremony_id,
             &logger,
         );
 
-        ceremony_manager.run(ceremony_request_receiver, incoming_p2p_message_receiver)
+        ceremony_manager.run(ceremony_request_receiver, incoming_p2p_message_receiver.0)
     };
 
     (multisig_client, multisig_client_backend_future)

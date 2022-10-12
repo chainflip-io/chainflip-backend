@@ -6,7 +6,7 @@
 use std::collections::HashSet;
 use std::sync::{Arc, RwLock};
 
-use crate::p2p::socket::DO_NOT_LINGER;
+use super::socket::DO_NOT_LINGER;
 
 use super::{to_string, XPublicKey};
 

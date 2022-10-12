@@ -5,7 +5,7 @@ use cf_primitives::AuthorityCount;
 
 use crate::{
     multisig::client::{ceremony_manager::CeremonyTrait, MultisigMessage},
-    multisig_p2p::OutgoingMultisigStageMessages,
+    p2p::OutgoingMultisigStageMessages,
 };
 
 use super::ceremony_stage::{CeremonyCommon, CeremonyStage, ProcessMessageResult, StageResult};

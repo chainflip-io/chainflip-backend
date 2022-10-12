@@ -38,7 +38,7 @@ use crate::{
         crypto::{ECPoint, Rng},
         KeyId, MessageHash,
     },
-    multisig_p2p::OutgoingMultisigStageMessages,
+    p2p::OutgoingMultisigStageMessages,
 };
 
 use signing::frost::{self, LocalSig3, SigningCommitment};

@@ -4,7 +4,10 @@ use state_chain_runtime::AccountId;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use crate::{
-    logging::COMPONENT_KEY, multisig::ChainTag, multisig_p2p::OutgoingMultisigStageMessages,
+    logging::COMPONENT_KEY,
+    multisig::{eth::EthSigning, ChainTag},
+    p2p::OutgoingMultisigStageMessages,
+    p2p::{MultisigMessageReceiver, MultisigMessageSender},
 };
 
 pub struct P2PMuxer {
@@ -92,8 +95,8 @@ impl P2PMuxer {
         all_outgoing_sender: UnboundedSender<OutgoingMultisigStageMessages>,
         logger: &slog::Logger,
     ) -> (
-        UnboundedSender<OutgoingMultisigStageMessages>,
-        UnboundedReceiver<(AccountId, Vec<u8>)>,
+        MultisigMessageSender<EthSigning>,
+        MultisigMessageReceiver<EthSigning>,
         impl Future<Output = ()>,
     ) {
         let (eth_outgoing_sender, eth_outgoing_receiver) = tokio::sync::mpsc::unbounded_channel();
@@ -109,7 +112,11 @@ impl P2PMuxer {
 
         let muxer_fut = muxer.run();
 
-        (eth_outgoing_sender, eth_incoming_receiver, muxer_fut)
+        (
+            MultisigMessageSender::<EthSigning>::new(eth_outgoing_sender),
+            MultisigMessageReceiver::<EthSigning>::new(eth_incoming_receiver),
+            muxer_fut,
+        )
     }
 
     async fn process_incoming(&mut self, account_id: AccountId, data: Vec<u8>) {
@@ -188,7 +195,7 @@ mod tests {
 
     use super::*;
 
-    use crate::multisig_p2p::OutgoingMultisigStageMessages;
+    use crate::p2p::OutgoingMultisigStageMessages;
     use crate::testing::expect_recv_with_timeout;
 
     const ACC_1: AccountId = AccountId::new([b'A'; 32]);
@@ -215,7 +222,7 @@ mod tests {
 
         let message = OutgoingMultisigStageMessages::Broadcast(vec![ACC_1, ACC_2], DATA_1.to_vec());
 
-        eth_outgoing_sender.send(message).unwrap();
+        eth_outgoing_sender.0.send(message).unwrap();
 
         let received = expect_recv_with_timeout(&mut p2p_outgoing_receiver).await;
 
@@ -251,7 +258,7 @@ mod tests {
             (ACC_2, [VERSION_PREFIX, ETH_TAG_PREFIX, DATA_2].concat()),
         ]);
 
-        eth_outgoing_sender.send(message).unwrap();
+        eth_outgoing_sender.0.send(message).unwrap();
 
         let received = expect_recv_with_timeout(&mut p2p_outgoing_receiver).await;
 
@@ -286,7 +293,7 @@ mod tests {
 
         p2p_incoming_sender.send((ACC_1, bytes)).unwrap();
 
-        let received = expect_recv_with_timeout(&mut eth_incoming_receiver).await;
+        let received = expect_recv_with_timeout(&mut eth_incoming_receiver.0).await;
 
         assert_eq!(received, (ACC_1, DATA_1.to_vec()));
     }

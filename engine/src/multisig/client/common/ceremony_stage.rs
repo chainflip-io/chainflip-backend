@@ -9,7 +9,7 @@ use crate::{
         client::{ceremony_manager::CeremonyTrait, utils::PartyIdxMapping},
         crypto::Rng,
     },
-    multisig_p2p::OutgoingMultisigStageMessages,
+    p2p::OutgoingMultisigStageMessages,
 };
 
 use super::CeremonyFailureReason;
