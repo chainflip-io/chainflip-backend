@@ -184,12 +184,8 @@ pub mod pallet {
 		ProposalNotFound,
 		/// Decode of call failed
 		DecodeOfCallFailed,
-		/// The majority was not reached when the execution was triggered
-		MajorityNotReached,
 		/// A runtime upgrade has failed because the upgrade conditions were not satisfied
 		UpgradeConditionsNotMet,
-		/// A runtime upgrade was not successful
-		UpgradeHasFailed,
 		/// The call hash was not whitelisted
 		CallHashNotWhitelisted,
 	}
