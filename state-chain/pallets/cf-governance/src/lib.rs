@@ -289,7 +289,8 @@ pub mod pallet {
 			approved_id: ProposalId,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			ensure!(Members::<T>::get().contains(&who), Error::<T>::NotMember);
+			let members = Members::<T>::get();
+			ensure!(members.contains(&who), Error::<T>::NotMember);
 			ensure!(Proposals::<T>::contains_key(approved_id), Error::<T>::ProposalNotFound);
 
 			// Try to approve the proposal
@@ -301,7 +302,7 @@ pub mod pallet {
 				Ok(proposal.clone())
 			})?;
 
-			if proposal.approved.len() > (Members::<T>::decode_len().unwrap_or_default() / 2) {
+			if proposal.approved.len() > (members.len() / 2) {
 				ExecutionPipeline::<T>::append((proposal.call, approved_id));
 				Proposals::<T>::remove(approved_id);
 				ActiveProposals::<T>::mutate(|proposals| {
