@@ -372,7 +372,7 @@ mod tests {
     fn gen_signing_data_stage2(participant_count: AuthorityCount) -> SigningData<Point> {
         let mut rng = Rng::from_seed([0; 32]);
         SigningData::<Point>::BroadcastVerificationStage2(BroadcastVerificationMessage {
-            data: (0..participant_count)
+            data: (1..=participant_count)
                 .map(|i| {
                     (
                         i as AuthorityCount,
@@ -386,7 +386,7 @@ mod tests {
     pub fn gen_signing_data_stage4(participant_count: AuthorityCount) -> SigningData<Point> {
         let mut rng = Rng::from_seed([0; 32]);
         SigningData::<Point>::VerifyLocalSigsStage4(BroadcastVerificationMessage {
-            data: (0..participant_count)
+            data: (1..=participant_count)
                 .map(|i| (i as AuthorityCount, Some(gen_invalid_local_sig(&mut rng))))
                 .collect(),
         })

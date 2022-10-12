@@ -68,11 +68,7 @@ where
         .filter(|(sender, message)| {
             let valid = check_verification_message_indexes(message, &participating_idxs);
             if !(valid) {
-                slog::warn!(
-                    logger,
-                    "Disregarding verification messages from: {}",
-                    sender
-                );
+                slog::warn!(logger, "Disregarding verification message from: {}", sender);
             }
             valid
         })
