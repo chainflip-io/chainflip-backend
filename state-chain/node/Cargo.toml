@@ -89,6 +89,9 @@ try-runtime = [
   "state-chain-runtime/try-runtime",
   "try-runtime-cli",
 ]
+ibiza = [
+  "state-chain-runtime/ibiza"
+]
 
 [package.metadata.deb]
 depends = "$auto"
