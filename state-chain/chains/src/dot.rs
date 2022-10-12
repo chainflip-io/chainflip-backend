@@ -121,7 +121,7 @@ impl ChainAbi for Polkadot {
 }
 
 #[derive(Debug, Encode, Decode, TypeInfo, Eq, PartialEq, Clone)]
-pub struct PolkadotExtrinsicSignatureHandler {
+pub struct PolkadotExtrinsicHandler {
 	vault_account: <Polkadot as Chain>::ChainAccount,
 	extrinsic_call: Option<PolkadotRuntimeCall>,
 	signed_extrinsic: <Polkadot as ChainAbi>::SignedTransaction,
@@ -130,7 +130,7 @@ pub struct PolkadotExtrinsicSignatureHandler {
 	signature_payload: Option<<Polkadot as ChainCrypto>::Payload>,
 }
 
-impl PolkadotExtrinsicSignatureHandler {
+impl PolkadotExtrinsicHandler {
 	pub fn new_empty(
 		nonce: PolkadotIndex,
 		vault_account: <Polkadot as Chain>::ChainAccount,
@@ -604,147 +604,8 @@ pub enum ProxyCall {
 #[derive(Debug, Encode, Decode, Copy, Clone, Eq, PartialEq, TypeInfo)]
 pub struct PolkadotChargeTransactionPayment(#[codec(compact)] PolkadotBalance);
 
-// impl SignedExtension for DummyChargeTransactionPayment {
-// 	const IDENTIFIER: &'static str = "DummyChargeTransactionPayment";
-// 	type AccountId = PolkadotAccountId;
-// 	type Call = PolkadotRuntimeCall;
-// 	type AdditionalSigned = ();
-// 	type Pre = ();
-// 	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> {
-// 		Ok(())
-// 	}
-// 	fn validate(
-// 		&self,
-// 		_who: &Self::AccountId,
-// 		_call: &Self::Call,
-// 		_info: &DispatchInfoOf<Self::Call>,
-// 		_len: usize,
-// 	) -> TransactionValidity {
-// 		Ok(<ValidTransaction as Default>::default())
-// 	}
-
-// 	fn pre_dispatch(
-// 		self,
-// 		_who: &Self::AccountId,
-// 		_call: &Self::Call,
-// 		_info: &DispatchInfoOf<Self::Call>,
-// 		_len: usize,
-// 	) -> Result<Self::Pre, TransactionValidityError> {
-// 		Ok(())
-// 	}
-
-// 	fn post_dispatch(
-// 		_maybe_pre: Option<Self::Pre>,
-// 		_info: &DispatchInfoOf<Self::Call>,
-// 		_post_info: &PostDispatchInfoOf<Self::Call>,
-// 		_len: usize,
-// 		_result: &DispatchResult,
-// 	) -> Result<(), TransactionValidityError> {
-// 		Ok(())
-// 	}
-// }
-
-//#[derive(Encode, Decode, Debug, Clone, Eq, PartialEq, scale_info::TypeInfo)]
-//pub struct DummyPrevalidateAttests(());
-// impl SignedExtension for DummyPrevalidateAttests {
-// 	const IDENTIFIER: &'static str = "Dummy";
-// 	type AccountId = PolkadotAccountId;
-// 	type Call = PolkadotRuntimeCall;
-// 	type AdditionalSigned = ();
-// 	type Pre = ();
-// 	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> {
-// 		Ok(())
-// 	}
-// 	fn validate(
-// 		&self,
-// 		_who: &Self::AccountId,
-// 		_call: &Self::Call,
-// 		_info: &DispatchInfoOf<Self::Call>,
-// 		_len: usize,
-// 	) -> TransactionValidity {
-// 		Ok(<ValidTransaction as Default>::default())
-// 	}
-
-// 	fn pre_dispatch(
-// 		self,
-// 		_who: &Self::AccountId,
-// 		_call: &Self::Call,
-// 		_info: &DispatchInfoOf<Self::Call>,
-// 		_len: usize,
-// 	) -> Result<Self::Pre, TransactionValidityError> {
-// 		Ok(())
-// 	}
-
-// 	fn post_dispatch(
-// 		_maybe_pre: Option<Self::Pre>,
-// 		_info: &DispatchInfoOf<Self::Call>,
-// 		_post_info: &PostDispatchInfoOf<Self::Call>,
-// 		_len: usize,
-// 		_result: &DispatchResult,
-// 	) -> Result<(), TransactionValidityError> {
-// 		Ok(())
-// 	}
-// }
-
-/// Nonce check and increment to give replay protection for transactions.
-///
-/// # Transaction Validity
-///
-/// This extension affects `requires` and `provides` tags of validity, but DOES NOT
-/// set the `priority` field. Make sure that AT LEAST one of the signed extension sets
-/// some kind of priority upon validating transactions.
 #[derive(Debug, Encode, Decode, Copy, Clone, Eq, PartialEq, TypeInfo)]
 pub struct PolkadotCheckNonce(#[codec(compact)] pub PolkadotIndex);
-
-// impl PolkadotCheckNonce {
-// 	pub fn from(nonce: PolkadotIndex) -> Self {
-// 		Self(nonce)
-// 	}
-// }
-
-// impl sp_std::fmt::Debug for PolkadotCheckNonce {
-// 	#[cfg(feature = "std")]
-// 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-// 		write!(f, "PolkadotCheckNonce({})", self.0)
-// 	}
-
-// 	#[cfg(not(feature = "std"))]
-// 	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-// 		Ok(())
-// 	}
-// }
-
-// impl SignedExtension for PolkadotCheckNonce {
-// 	type AccountId = PolkadotAccountId;
-// 	type Call = PolkadotRuntimeCall;
-// 	type AdditionalSigned = ();
-// 	type Pre = ();
-// 	const IDENTIFIER: &'static str = "PolkadotCheckNonce";
-
-// 	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> {
-// 		Ok(())
-// 	}
-
-// 	fn pre_dispatch(
-// 		self,
-// 		who: &Self::AccountId,
-// 		_call: &Self::Call,
-// 		_info: &DispatchInfoOf<Self::Call>,
-// 		_len: usize,
-// 	) -> Result<(), TransactionValidityError> {
-// 		Ok(())
-// 	}
-
-// 	fn validate(
-// 		&self,
-// 		who: &Self::AccountId,
-// 		_call: &Self::Call,
-// 		_info: &DispatchInfoOf<Self::Call>,
-// 		_len: usize,
-// 	) -> TransactionValidity {
-// 		Ok(<ValidTransaction as Default>::default())
-// 	}
-// }
 
 #[derive(Debug, Encode, Decode, Copy, Clone, Eq, PartialEq, TypeInfo)]
 pub struct PolkadotCheckMortality(pub Era);
