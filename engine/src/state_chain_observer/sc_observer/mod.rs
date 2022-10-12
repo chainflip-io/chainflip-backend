@@ -9,125 +9,127 @@ use slog::o;
 use sp_core::H256;
 use sp_runtime::AccountId32;
 use state_chain_runtime::{AccountId, CfeSettings};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::{collections::BTreeSet, sync::Arc, time::Duration};
+use std::{
+	collections::BTreeSet,
+	sync::{
+		atomic::{AtomicBool, Ordering},
+		Arc,
+	},
+	time::Duration,
+};
 use tokio::sync::{broadcast, mpsc::UnboundedSender, watch};
 
-use crate::multisig::client::KeygenStageName;
-use crate::p2p::{PeerInfo, PeerUpdate};
 use crate::{
-    eth::{rpc::EthRpcApi, EpochStart, EthBroadcaster},
-    logging::COMPONENT_KEY,
-    multisig::{
-        client::{CeremonyFailureReason, KeygenFailureReason, MultisigClientApi},
-        KeyId, MessageHash,
-    },
-    state_chain_observer::client::{StateChainClient, StateChainRpcApi},
-    task_scope::{with_task_scope, Scope},
+	eth::{rpc::EthRpcApi, EpochStart, EthBroadcaster},
+	logging::COMPONENT_KEY,
+	multisig::{
+		client::{CeremonyFailureReason, KeygenFailureReason, KeygenStageName, MultisigClientApi},
+		KeyId, MessageHash,
+	},
+	p2p::{PeerInfo, PeerUpdate},
+	state_chain_observer::client::{StateChainClient, StateChainRpcApi},
+	task_scope::{with_task_scope, Scope},
 };
 
 #[cfg(feature = "ibiza")]
 use sp_core::H160;
 
 async fn handle_keygen_request<'a, MultisigClient, RpcClient>(
-    scope: &Scope<'a, anyhow::Result<()>, true>,
-    multisig_client: Arc<MultisigClient>,
-    state_chain_client: Arc<StateChainClient<RpcClient>>,
-    ceremony_id: CeremonyId,
-    keygen_participants: BTreeSet<AccountId32>,
-    logger: slog::Logger,
+	scope: &Scope<'a, anyhow::Result<()>, true>,
+	multisig_client: Arc<MultisigClient>,
+	state_chain_client: Arc<StateChainClient<RpcClient>>,
+	ceremony_id: CeremonyId,
+	keygen_participants: BTreeSet<AccountId32>,
+	logger: slog::Logger,
 ) where
-    MultisigClient: MultisigClientApi<crate::multisig::eth::EthSigning> + Send + Sync + 'static,
-    RpcClient: StateChainRpcApi + Send + Sync + 'static,
+	MultisigClient: MultisigClientApi<crate::multisig::eth::EthSigning> + Send + Sync + 'static,
+	RpcClient: StateChainRpcApi + Send + Sync + 'static,
 {
-    if keygen_participants.contains(&state_chain_client.our_account_id) {
-        scope.spawn(async move {
-            let _result = state_chain_client
-                .submit_signed_extrinsic(
-                    pallet_cf_vaults::Call::report_keygen_outcome {
-                        ceremony_id,
-                        reported_outcome: multisig_client
-                            .keygen(ceremony_id, keygen_participants.clone())
-                            .await
-                            .map(|point| {
-                                cf_chains::eth::AggKey::from_pubkey_compressed(
-                                    point.get_element().serialize(),
-                                )
-                            })
-                            .map_err(|(bad_account_ids, reason)| {
-                                if let CeremonyFailureReason::<
-                                    KeygenFailureReason,
-                                    KeygenStageName,
-                                >::Other(
-                                    KeygenFailureReason::KeyNotCompatible
-                                ) = reason
-                                {
-                                    KeygenError::Incompatible
-                                } else {
-                                    KeygenError::Failure(bad_account_ids)
-                                }
-                            }),
-                    },
-                    &logger,
-                )
-                .await;
-            Ok(())
-        });
-    } else {
-        // If we are not participating, just send an empty ceremony request (needed for ceremony id tracking)
-        multisig_client.update_latest_ceremony_id(ceremony_id);
-    }
+	if keygen_participants.contains(&state_chain_client.our_account_id) {
+		scope.spawn(async move {
+			let _result = state_chain_client
+				.submit_signed_extrinsic(
+					pallet_cf_vaults::Call::report_keygen_outcome {
+						ceremony_id,
+						reported_outcome: multisig_client
+							.keygen(ceremony_id, keygen_participants.clone())
+							.await
+							.map(|point| {
+								cf_chains::eth::AggKey::from_pubkey_compressed(
+									point.get_element().serialize(),
+								)
+							})
+							.map_err(|(bad_account_ids, reason)| {
+								if let CeremonyFailureReason::<
+										KeygenFailureReason,
+										KeygenStageName,
+									>::Other(KeygenFailureReason::KeyNotCompatible) = reason
+									{
+										KeygenError::Incompatible
+									} else {
+										KeygenError::Failure(bad_account_ids)
+									}
+							}),
+					},
+					&logger,
+				)
+				.await;
+			Ok(())
+		});
+	} else {
+		// If we are not participating, just send an empty ceremony request (needed for ceremony id
+		// tracking)
+		multisig_client.update_latest_ceremony_id(ceremony_id);
+	}
 }
 
 async fn handle_signing_request<'a, MultisigClient, RpcClient>(
-    scope: &Scope<'a, anyhow::Result<()>, true>,
-    multisig_client: Arc<MultisigClient>,
-    state_chain_client: Arc<StateChainClient<RpcClient>>,
-    ceremony_id: CeremonyId,
-    key_id: KeyId,
-    signers: BTreeSet<AccountId>,
-    data: MessageHash,
-    logger: slog::Logger,
+	scope: &Scope<'a, anyhow::Result<()>, true>,
+	multisig_client: Arc<MultisigClient>,
+	state_chain_client: Arc<StateChainClient<RpcClient>>,
+	ceremony_id: CeremonyId,
+	key_id: KeyId,
+	signers: BTreeSet<AccountId>,
+	data: MessageHash,
+	logger: slog::Logger,
 ) where
-    MultisigClient: MultisigClientApi<crate::multisig::eth::EthSigning> + Send + Sync + 'static,
-    RpcClient: StateChainRpcApi + Send + Sync + 'static,
+	MultisigClient: MultisigClientApi<crate::multisig::eth::EthSigning> + Send + Sync + 'static,
+	RpcClient: StateChainRpcApi + Send + Sync + 'static,
 {
-    if signers.contains(&state_chain_client.our_account_id) {
-        // Send a signing request and wait to submit the result to the SC
-        scope.spawn(async move {
-            match multisig_client
-                .sign(ceremony_id, key_id, signers, data)
-                .await
-            {
-                Ok(signature) => {
-                    let _result = state_chain_client
-                        .submit_unsigned_extrinsic(
-                            pallet_cf_threshold_signature::Call::signature_success {
-                                ceremony_id,
-                                signature: signature.into(),
-                            },
-                            &logger,
-                        )
-                        .await;
-                }
-                Err((bad_account_ids, _reason)) => {
-                    let _result = state_chain_client
-                        .submit_signed_extrinsic(
-                            pallet_cf_threshold_signature::Call::report_signature_failed {
-                                id: ceremony_id,
-                                offenders: BTreeSet::from_iter(bad_account_ids),
-                            },
-                            &logger,
-                        )
-                        .await;
-                }
-            }
-            Ok(())
-        });
-    } else {
-        // If we are not participating, just send an empty ceremony request (needed for ceremony id tracking)
-        multisig_client.update_latest_ceremony_id(ceremony_id);
-    }
+	if signers.contains(&state_chain_client.our_account_id) {
+		// Send a signing request and wait to submit the result to the SC
+		scope.spawn(async move {
+			match multisig_client.sign(ceremony_id, key_id, signers, data).await {
+				Ok(signature) => {
+					let _result = state_chain_client
+						.submit_unsigned_extrinsic(
+							pallet_cf_threshold_signature::Call::signature_success {
+								ceremony_id,
+								signature: signature.into(),
+							},
+							&logger,
+						)
+						.await;
+				},
+				Err((bad_account_ids, _reason)) => {
+					let _result = state_chain_client
+						.submit_signed_extrinsic(
+							pallet_cf_threshold_signature::Call::report_signature_failed {
+								id: ceremony_id,
+								offenders: BTreeSet::from_iter(bad_account_ids),
+							},
+							&logger,
+						)
+						.await;
+				},
+			}
+			Ok(())
+		});
+	} else {
+		// If we are not participating, just send an empty ceremony request (needed for ceremony id
+		// tracking)
+		multisig_client.update_latest_ceremony_id(ceremony_id);
+	}
 }
 
 // Wrap the match so we add a log message before executing the processing of the event
@@ -162,30 +164,30 @@ macro_rules! match_event {
 }
 
 pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
-    state_chain_client: Arc<StateChainClient<RpcClient>>,
-    sc_block_stream: BlockStream,
-    eth_broadcaster: EthBroadcaster<EthRpc>,
-    multisig_client: Arc<MultisigClient>,
-    peer_update_sender: UnboundedSender<PeerUpdate>,
-    epoch_start_sender: broadcast::Sender<EpochStart>,
-    #[cfg(feature = "ibiza")] eth_monitor_ingress_sender: tokio::sync::mpsc::UnboundedSender<H160>,
-    #[cfg(feature = "ibiza")] eth_monitor_flip_ingress_sender: tokio::sync::mpsc::UnboundedSender<
-        H160,
-    >,
-    #[cfg(feature = "ibiza")] eth_monitor_usdc_ingress_sender: tokio::sync::mpsc::UnboundedSender<
-        H160,
-    >,
-    cfe_settings_update_sender: watch::Sender<CfeSettings>,
-    initial_block_hash: H256,
-    logger: slog::Logger,
+	state_chain_client: Arc<StateChainClient<RpcClient>>,
+	sc_block_stream: BlockStream,
+	eth_broadcaster: EthBroadcaster<EthRpc>,
+	multisig_client: Arc<MultisigClient>,
+	peer_update_sender: UnboundedSender<PeerUpdate>,
+	epoch_start_sender: broadcast::Sender<EpochStart>,
+	#[cfg(feature = "ibiza")] eth_monitor_ingress_sender: tokio::sync::mpsc::UnboundedSender<H160>,
+	#[cfg(feature = "ibiza")] eth_monitor_flip_ingress_sender: tokio::sync::mpsc::UnboundedSender<
+		H160,
+	>,
+	#[cfg(feature = "ibiza")] eth_monitor_usdc_ingress_sender: tokio::sync::mpsc::UnboundedSender<
+		H160,
+	>,
+	cfe_settings_update_sender: watch::Sender<CfeSettings>,
+	initial_block_hash: H256,
+	logger: slog::Logger,
 ) -> Result<(), anyhow::Error>
 where
-    BlockStream: Stream<Item = anyhow::Result<state_chain_runtime::Header>> + Send + 'static,
-    RpcClient: StateChainRpcApi + Send + Sync + 'static,
-    EthRpc: EthRpcApi + Send + Sync + 'static,
-    MultisigClient: MultisigClientApi<crate::multisig::eth::EthSigning> + Send + Sync + 'static,
+	BlockStream: Stream<Item = anyhow::Result<state_chain_runtime::Header>> + Send + 'static,
+	RpcClient: StateChainRpcApi + Send + Sync + 'static,
+	EthRpc: EthRpcApi + Send + Sync + 'static,
+	MultisigClient: MultisigClientApi<crate::multisig::eth::EthSigning> + Send + Sync + 'static,
 {
-    with_task_scope(|scope| async {
+	with_task_scope(|scope| async {
         let logger = logger.new(o!(COMPONENT_KEY => "SCObserver"));
 
         let heartbeat_block_interval = {
