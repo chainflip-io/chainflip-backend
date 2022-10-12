@@ -2,7 +2,8 @@ use crate::*;
 
 pub mod batch_fetch;
 
-//use polkadot_runtime::Runtime;
+#[cfg(feature = "runtime-benchmarks")]
+pub mod benchmarking;
 
 use sp_core::{crypto::UncheckedFrom, sr25519, H256};
 use sp_runtime::{
@@ -103,9 +104,9 @@ impl ChainCrypto for Polkadot {
 }
 
 impl ChainAbi for Polkadot {
-	type UnsignedTransaction = ();
+	type UnsignedTransaction = PolkadotEmptyType;
 	type SignedTransaction = Option<PolkadotUncheckedExtrinsic>;
-	type SignerCredential = PolkadotAccountId; // Depending on how we structure the process of transaction submission polkadot (two step
+	type SignerCredential = PolkadotEmptyType; // Depending on how we structure the process of transaction submission polkadot (two step
 										   // process or one), we might or might not need this type -> discussion
 	type ReplayProtection = (); //Todo
 	type ValidationError = (); //Todo
@@ -839,3 +840,5 @@ impl Into<Vec<u8>> for PolkadotPublicKey {
 		self.0 .0.to_vec()
 	}
 }
+#[derive(TypeInfo, Clone, Debug, Eq, PartialEq, Encode, Decode, Default)]
+pub struct PolkadotEmptyType(pub Option<()>);
