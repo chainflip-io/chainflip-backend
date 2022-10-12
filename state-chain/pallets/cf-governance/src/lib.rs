@@ -493,7 +493,7 @@ impl<T: Config> Pallet<T> {
 		let mut execution_weight = 0;
 		// If there is something in the pipeline execute it
 		if ExecutionPipeline::<T>::decode_len() > Some(0) {
-			for (call, id) in ExecutionPipeline::<T>::get() {
+			for (call, id) in ExecutionPipeline::<T>::take() {
 				Self::deposit_event(if let Ok(call) = <T as Config>::Call::decode(&mut &(*call)) {
 					execution_weight += call.get_dispatch_info().weight;
 					match call.dispatch_bypass_filter((RawOrigin::GovernanceApproval).into()) {
@@ -504,8 +504,6 @@ impl<T: Config> Pallet<T> {
 					Event::DecodeOfCallFailed(id)
 				})
 			}
-			// Clean up execution pipeline
-			ExecutionPipeline::<T>::set(vec![]);
 		}
 		execution_weight
 	}
