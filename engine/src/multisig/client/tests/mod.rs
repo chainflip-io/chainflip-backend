@@ -7,10 +7,10 @@ mod multisig_client_tests;
 
 use cf_primitives::CeremonyId;
 pub use helpers::{
-    cause_ceremony_timeout, gen_invalid_keygen_stage_2_state, gen_invalid_local_sig,
-    gen_invalid_signing_comm1, get_key_data_for_test, new_nodes,
-    run_keygen_with_err_on_high_pubkey, standard_signing, KeygenCeremonyRunner,
-    SigningCeremonyRunner,
+	cause_ceremony_timeout, gen_invalid_keygen_stage_2_state, gen_invalid_local_sig,
+	gen_invalid_signing_comm1, get_key_data_for_test, new_nodes,
+	run_keygen_with_err_on_high_pubkey, standard_signing, KeygenCeremonyRunner,
+	SigningCeremonyRunner,
 };
 
 pub use keygen_data_tests::gen_keygen_data_verify_hash_comm2;
@@ -33,8 +33,6 @@ pub const DEFAULT_KEYGEN_CEREMONY_ID: CeremonyId = INITIAL_LATEST_CEREMONY_ID + 
 pub const DEFAULT_SIGNING_CEREMONY_ID: CeremonyId = DEFAULT_KEYGEN_CEREMONY_ID + 1;
 
 lazy_static! {
-    pub static ref ACCOUNT_IDS: Vec<AccountId> = [1, 2, 3, 4]
-        .iter()
-        .map(|i| AccountId::new([*i; 32]))
-        .collect();
+	pub static ref ACCOUNT_IDS: Vec<AccountId> =
+		[1, 2, 3, 4].iter().map(|i| AccountId::new([*i; 32])).collect();
 }

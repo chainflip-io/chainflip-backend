@@ -7,31 +7,31 @@ use super::KeygenResultInfo;
 // Successfully generated multisig keys live here
 pub struct KeyStore<C>
 where
-    C: CryptoScheme,
+	C: CryptoScheme,
 {
-    keys: HashMap<KeyId, KeygenResultInfo<C::Point>>,
-    db: Arc<PersistentKeyDB>,
+	keys: HashMap<KeyId, KeygenResultInfo<C::Point>>,
+	db: Arc<PersistentKeyDB>,
 }
 
 impl<C> KeyStore<C>
 where
-    C: CryptoScheme,
+	C: CryptoScheme,
 {
-    /// Load the keys from persistent memory and put them into a new keystore
-    pub fn new(db: Arc<PersistentKeyDB>) -> Self {
-        let keys = db.load_keys::<C>();
+	/// Load the keys from persistent memory and put them into a new keystore
+	pub fn new(db: Arc<PersistentKeyDB>) -> Self {
+		let keys = db.load_keys::<C>();
 
-        KeyStore { keys, db }
-    }
+		KeyStore { keys, db }
+	}
 
-    /// Get the key for the given key id
-    pub fn get_key(&self, key_id: &KeyId) -> Option<&KeygenResultInfo<C::Point>> {
-        self.keys.get(key_id)
-    }
+	/// Get the key for the given key id
+	pub fn get_key(&self, key_id: &KeyId) -> Option<&KeygenResultInfo<C::Point>> {
+		self.keys.get(key_id)
+	}
 
-    /// Save or update the key data and write it to persistent memory
-    pub fn set_key(&mut self, key_id: KeyId, key: KeygenResultInfo<C::Point>) {
-        self.db.update_key::<C>(&key_id, &key);
-        self.keys.insert(key_id, key);
-    }
+	/// Save or update the key data and write it to persistent memory
+	pub fn set_key(&mut self, key_id: KeyId, key: KeygenResultInfo<C::Point>) {
+		self.db.update_key::<C>(&key_id, &key);
+		self.keys.insert(key_id, key);
+	}
 }

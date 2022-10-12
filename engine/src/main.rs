@@ -4,17 +4,17 @@ use crate::multisig::eth::EthSigning;
 use anyhow::Context;
 
 use chainflip_engine::{
-    eth::{
-        self, build_broadcast_channel, key_manager::KeyManager, rpc::EthDualRpcClient,
-        stake_manager::StakeManager, EthBroadcaster,
-    },
-    health::HealthChecker,
-    logging,
-    multisig::{self, client::key_store::KeyStore, PersistentKeyDB},
-    p2p,
-    settings::{CommandLineOptions, Settings},
-    state_chain_observer::{self},
-    task_scope::with_main_task_scope,
+	eth::{
+		self, build_broadcast_channel, key_manager::KeyManager, rpc::EthDualRpcClient,
+		stake_manager::StakeManager, EthBroadcaster,
+	},
+	health::HealthChecker,
+	logging,
+	multisig::{self, client::key_store::KeyStore, PersistentKeyDB},
+	p2p,
+	settings::{CommandLineOptions, Settings},
+	state_chain_observer::{self},
+	task_scope::with_main_task_scope,
 };
 
 use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
@@ -25,20 +25,20 @@ use sp_core::U256;
 use utilities::print_chainflip_ascii_art;
 
 fn main() -> anyhow::Result<()> {
-    print_chainflip_ascii_art();
-    use_chainflip_account_id_encoding();
+	print_chainflip_ascii_art();
+	use_chainflip_account_id_encoding();
 
-    let settings = Settings::new(CommandLineOptions::parse()).context("Error reading settings")?;
+	let settings = Settings::new(CommandLineOptions::parse()).context("Error reading settings")?;
 
-    let root_logger = logging::utils::new_json_logger_with_tag_filter(
-        settings.log.whitelist.clone(),
-        settings.log.blacklist.clone(),
-    );
+	let root_logger = logging::utils::new_json_logger_with_tag_filter(
+		settings.log.whitelist.clone(),
+		settings.log.blacklist.clone(),
+	);
 
-    slog::info!(root_logger, "Start the engines! :broom: :broom: ");
+	slog::info!(root_logger, "Start the engines! :broom: :broom: ");
 
-    with_main_task_scope(|scope| {
-        async {
+	with_main_task_scope(|scope| {
+		async {
 
             if let Some(health_check_settings) = &settings.health_check {
                 scope.spawn(HealthChecker::new(health_check_settings, &root_logger).await?.run());
@@ -281,5 +281,5 @@ fn main() -> anyhow::Result<()> {
 
             Ok(())
         }.boxed()
-    })
+	})
 }
