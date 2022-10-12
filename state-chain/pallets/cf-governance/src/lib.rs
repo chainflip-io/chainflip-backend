@@ -8,7 +8,7 @@ use frame_support::{
 	traits::{EnsureOrigin, Get, UnixTime},
 };
 pub use pallet::*;
-use sp_std::{boxed::Box, ops::Add, vec, vec::Vec};
+use sp_std::{boxed::Box, ops::Add, vec::Vec};
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
@@ -148,8 +148,7 @@ pub mod pallet {
 		fn on_initialize(_n: BlockNumberFor<T>) -> Weight {
 			// Check expiry and expire the proposals if needed
 			let active_proposal_weight = Self::check_expiry();
-			// Execute all proposals which reached threshold in the last block
-			let execution_weight = Self::execute_proposals();
+			let execution_weight = Self::execute_proposals_pending_execution();
 			active_proposal_weight + execution_weight
 		}
 	}
@@ -488,8 +487,7 @@ impl<T: Config> Pallet<T> {
 			_ => T::WeightInfo::on_initialize_best_case(),
 		}
 	}
-	/// Executes all proposals in the pipeline
-	fn execute_proposals() -> Weight {
+	fn execute_proposals_pending_execution() -> Weight {
 		let mut execution_weight = 0;
 		// If there is something in the pipeline execute it
 		if ExecutionPipeline::<T>::decode_len() > Some(0) {
@@ -507,14 +505,14 @@ impl<T: Config> Pallet<T> {
 		}
 		execution_weight
 	}
-	/// Expire proposals
+
 	fn expire_proposals(expired: Vec<ActiveProposal>) {
 		for ActiveProposal { proposal_id, .. } in expired {
 			Proposals::<T>::remove(proposal_id);
 			Self::deposit_event(Event::Expired(proposal_id));
 		}
 	}
-	/// Push a proposal
+
 	fn push_proposal(call: Box<<T as Config>::Call>) -> u32 {
 		let proposal_id = ProposalIdCounter::<T>::get().add(1);
 		Proposals::<T>::insert(
