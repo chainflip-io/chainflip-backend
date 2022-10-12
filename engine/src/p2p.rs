@@ -1,5 +1,5 @@
+mod muxer;
 mod p2p_core;
-mod p2p_muxer;
 mod peer_info_submitter;
 
 use std::{marker::PhantomData, sync::Arc};
@@ -13,8 +13,8 @@ use crate::{
 use anyhow::Context;
 use cf_primitives::AccountId;
 use futures::{Future, FutureExt};
+use muxer::P2PMuxer;
 pub use p2p_core::{PeerInfo, PeerUpdate};
-use p2p_muxer::P2PMuxer;
 use sp_core::H256;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use zeroize::Zeroizing;
