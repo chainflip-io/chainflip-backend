@@ -3,7 +3,8 @@ use std::collections::BTreeMap;
 use crate::multisig::{
     client::{
         self,
-        common::{CeremonyFailureReason, CeremonyStageName, SigningFailureReason},
+        ceremony_manager::SigningCeremony,
+        common::{CeremonyFailureReason, SigningFailureReason, SigningStageName},
         signing,
     },
     crypto::CryptoScheme,
@@ -16,32 +17,26 @@ use client::common::{
     {CeremonyCommon, StageResult},
 };
 
-use signing::frost::{
-    self, Comm1, LocalSig3, SecretNoncePair, SigningData, VerifyComm2, VerifyLocalSig4,
-};
+use signing::frost::{self, Comm1, LocalSig3, SecretNoncePair, VerifyComm2, VerifyLocalSig4};
 
 use signing::SigningStateCommonInfo;
 
-type SigningStageResult<C> = StageResult<
-    SigningData<<C as CryptoScheme>::Point>,
-    <C as CryptoScheme>::Signature,
-    SigningFailureReason,
->;
+type SigningStageResult<Crypto> = StageResult<SigningCeremony<Crypto>>;
 
 // *********** Await Commitments1 *************
 
 /// Stage 1: Generate an broadcast our secret nonce pair
 /// and collect those from all other parties
-pub struct AwaitCommitments1<C: CryptoScheme> {
+pub struct AwaitCommitments1<Crypto: CryptoScheme> {
     common: CeremonyCommon,
-    signing_common: SigningStateCommonInfo<C::Point>,
-    nonces: Box<SecretNoncePair<C::Point>>,
+    signing_common: SigningStateCommonInfo<Crypto::Point>,
+    nonces: Box<SecretNoncePair<Crypto::Point>>,
 }
 
-impl<C: CryptoScheme> AwaitCommitments1<C> {
+impl<Crypto: CryptoScheme> AwaitCommitments1<Crypto> {
     pub fn new(
         mut common: CeremonyCommon,
-        signing_common: SigningStateCommonInfo<C::Point>,
+        signing_common: SigningStateCommonInfo<Crypto::Point>,
     ) -> Self {
         let nonces = SecretNoncePair::sample_random(&mut common.rng);
 
@@ -53,15 +48,14 @@ impl<C: CryptoScheme> AwaitCommitments1<C> {
     }
 }
 
-derive_display_as_type_name!(AwaitCommitments1<C: CryptoScheme>);
+derive_display_as_type_name!(AwaitCommitments1<Crypto: CryptoScheme>);
 
 #[async_trait]
-impl<C: CryptoScheme>
-    BroadcastStageProcessor<SigningData<C::Point>, C::Signature, SigningFailureReason>
-    for AwaitCommitments1<C>
+impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
+    for AwaitCommitments1<Crypto>
 {
-    type Message = Comm1<C::Point>;
-    const NAME: CeremonyStageName = CeremonyStageName::AwaitCommitments1;
+    type Message = Comm1<Crypto::Point>;
+    const NAME: SigningStageName = SigningStageName::AwaitCommitments1;
 
     fn init(&mut self) -> DataToSend<Self::Message> {
         DataToSend::Broadcast(Comm1 {
@@ -73,10 +67,10 @@ impl<C: CryptoScheme>
     async fn process(
         self,
         messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
-    ) -> SigningStageResult<C> {
+    ) -> SigningStageResult<Crypto> {
         // No verification is necessary here, just generating new stage
 
-        let processor = VerifyCommitmentsBroadcast2::<C> {
+        let processor = VerifyCommitmentsBroadcast2::<Crypto> {
             common: self.common.clone(),
             signing_common: self.signing_common.clone(),
             nonces: self.nonces,
@@ -92,24 +86,23 @@ impl<C: CryptoScheme>
 // ************
 
 /// Stage 2: Verifying data broadcast during stage 1
-struct VerifyCommitmentsBroadcast2<C: CryptoScheme> {
+struct VerifyCommitmentsBroadcast2<Crypto: CryptoScheme> {
     common: CeremonyCommon,
-    signing_common: SigningStateCommonInfo<C::Point>,
+    signing_common: SigningStateCommonInfo<Crypto::Point>,
     // Our nonce pair generated in the previous stage
-    nonces: Box<SecretNoncePair<C::Point>>,
+    nonces: Box<SecretNoncePair<Crypto::Point>>,
     // Public nonce commitments collected in the previous stage
-    commitments: BTreeMap<AuthorityCount, Option<Comm1<C::Point>>>,
+    commitments: BTreeMap<AuthorityCount, Option<Comm1<Crypto::Point>>>,
 }
 
-derive_display_as_type_name!(VerifyCommitmentsBroadcast2<C: CryptoScheme>);
+derive_display_as_type_name!(VerifyCommitmentsBroadcast2<Crypto: CryptoScheme>);
 
 #[async_trait]
-impl<C: CryptoScheme>
-    BroadcastStageProcessor<SigningData<C::Point>, C::Signature, SigningFailureReason>
-    for VerifyCommitmentsBroadcast2<C>
+impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
+    for VerifyCommitmentsBroadcast2<Crypto>
 {
-    type Message = VerifyComm2<C::Point>;
-    const NAME: CeremonyStageName = CeremonyStageName::VerifyCommitmentsBroadcast2;
+    type Message = VerifyComm2<Crypto::Point>;
+    const NAME: SigningStageName = SigningStageName::VerifyCommitmentsBroadcast2;
 
     /// Simply report all data that we have received from
     /// other parties in the last stage
@@ -123,11 +116,11 @@ impl<C: CryptoScheme>
     async fn process(
         self,
         messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
-    ) -> SigningStageResult<C> {
+    ) -> SigningStageResult<Crypto> {
         let verified_commitments = match verify_broadcasts(messages, &self.common.logger) {
             Ok(comms) => comms,
             Err((reported_parties, abort_reason)) => {
-                return SigningStageResult::<C>::Error(
+                return SigningStageResult::Error(
                     reported_parties,
                     CeremonyFailureReason::BroadcastFailure(abort_reason, Self::NAME),
                 );
@@ -136,7 +129,7 @@ impl<C: CryptoScheme>
 
         slog::debug!(self.common.logger, "{} is successful", Self::NAME);
 
-        let processor = LocalSigStage3::<C> {
+        let processor = LocalSigStage3::<Crypto> {
             common: self.common.clone(),
             signing_common: self.signing_common,
             nonces: self.nonces,
@@ -150,29 +143,28 @@ impl<C: CryptoScheme>
 }
 
 /// Stage 3: Generating and broadcasting signature response shares
-struct LocalSigStage3<C: CryptoScheme> {
+struct LocalSigStage3<Crypto: CryptoScheme> {
     common: CeremonyCommon,
-    signing_common: SigningStateCommonInfo<C::Point>,
+    signing_common: SigningStateCommonInfo<Crypto::Point>,
     // Our nonce pair generated in the previous stage
-    nonces: Box<SecretNoncePair<C::Point>>,
+    nonces: Box<SecretNoncePair<Crypto::Point>>,
     // Public nonce commitments (verified)
-    commitments: BTreeMap<AuthorityCount, Comm1<C::Point>>,
+    commitments: BTreeMap<AuthorityCount, Comm1<Crypto::Point>>,
 }
 
-derive_display_as_type_name!(LocalSigStage3<C: CryptoScheme>);
+derive_display_as_type_name!(LocalSigStage3<Crypto: CryptoScheme>);
 
 #[async_trait]
-impl<C: CryptoScheme>
-    BroadcastStageProcessor<SigningData<C::Point>, C::Signature, SigningFailureReason>
-    for LocalSigStage3<C>
+impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
+    for LocalSigStage3<Crypto>
 {
-    type Message = LocalSig3<C::Point>;
-    const NAME: CeremonyStageName = CeremonyStageName::LocalSigStage3;
+    type Message = LocalSig3<Crypto::Point>;
+    const NAME: SigningStageName = SigningStageName::LocalSigStage3;
 
     /// With all nonce commitments verified, we can generate the group commitment
     /// and our share of signature response, which we broadcast to other parties.
     fn init(&mut self) -> DataToSend<Self::Message> {
-        let data = DataToSend::Broadcast(frost::generate_local_sig::<C>(
+        let data = DataToSend::Broadcast(frost::generate_local_sig::<Crypto>(
             &self.signing_common.data.0,
             &self.signing_common.key.key_share,
             &self.nonces,
@@ -195,8 +187,8 @@ impl<C: CryptoScheme>
     async fn process(
         self,
         messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
-    ) -> SigningStageResult<C> {
-        let processor = VerifyLocalSigsBroadcastStage4::<C> {
+    ) -> SigningStageResult<Crypto> {
+        let processor = VerifyLocalSigsBroadcastStage4::<Crypto> {
             common: self.common.clone(),
             signing_common: self.signing_common.clone(),
             commitments: self.commitments,
@@ -210,24 +202,23 @@ impl<C: CryptoScheme>
 }
 
 /// Stage 4: Verifying the broadcasting of signature shares
-struct VerifyLocalSigsBroadcastStage4<C: CryptoScheme> {
+struct VerifyLocalSigsBroadcastStage4<Crypto: CryptoScheme> {
     common: CeremonyCommon,
-    signing_common: SigningStateCommonInfo<C::Point>,
+    signing_common: SigningStateCommonInfo<Crypto::Point>,
     /// Nonce commitments from all parties (verified to be correctly broadcast)
-    commitments: BTreeMap<AuthorityCount, Comm1<C::Point>>,
+    commitments: BTreeMap<AuthorityCount, Comm1<Crypto::Point>>,
     /// Signature shares sent to us (NOT verified to be correctly broadcast)
-    local_sigs: BTreeMap<AuthorityCount, Option<LocalSig3<C::Point>>>,
+    local_sigs: BTreeMap<AuthorityCount, Option<LocalSig3<Crypto::Point>>>,
 }
 
-derive_display_as_type_name!(VerifyLocalSigsBroadcastStage4<C: CryptoScheme>);
+derive_display_as_type_name!(VerifyLocalSigsBroadcastStage4<Crypto: CryptoScheme>);
 
 #[async_trait]
-impl<C: CryptoScheme>
-    BroadcastStageProcessor<SigningData<C::Point>, C::Signature, SigningFailureReason>
-    for VerifyLocalSigsBroadcastStage4<C>
+impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
+    for VerifyLocalSigsBroadcastStage4<Crypto>
 {
-    type Message = VerifyLocalSig4<C::Point>;
-    const NAME: CeremonyStageName = CeremonyStageName::VerifyLocalSigsBroadcastStage4;
+    type Message = VerifyLocalSig4<Crypto::Point>;
+    const NAME: SigningStageName = SigningStageName::VerifyLocalSigsBroadcastStage4;
 
     /// Broadcast all signature shares sent to us
     fn init(&mut self) -> DataToSend<Self::Message> {
@@ -241,11 +232,11 @@ impl<C: CryptoScheme>
     async fn process(
         self,
         messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
-    ) -> SigningStageResult<C> {
+    ) -> SigningStageResult<Crypto> {
         let local_sigs = match verify_broadcasts(messages, &self.common.logger) {
             Ok(sigs) => sigs,
             Err((reported_parties, abort_reason)) => {
-                return SigningStageResult::<C>::Error(
+                return SigningStageResult::Error(
                     reported_parties,
                     CeremonyFailureReason::BroadcastFailure(abort_reason, Self::NAME),
                 );
@@ -266,7 +257,7 @@ impl<C: CryptoScheme>
             })
             .collect();
 
-        match frost::aggregate_signature::<C>(
+        match frost::aggregate_signature::<Crypto>(
             &self.signing_common.data.0,
             all_idxs,
             self.signing_common.key.get_public_key(),

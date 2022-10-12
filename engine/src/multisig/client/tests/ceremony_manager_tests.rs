@@ -11,7 +11,7 @@ use crate::{
                 CeremonyHandle, CeremonyManager, CeremonyRequestState, SigningCeremony,
             },
             ceremony_runner::CeremonyRunner,
-            common::{BroadcastFailureReason, CeremonyStageName, SigningFailureReason},
+            common::{BroadcastFailureReason, SigningFailureReason, SigningStageName},
             keygen::KeygenData,
             CeremonyFailureReason, CeremonyRequest, CeremonyRequestDetails, MultisigData,
             SigningRequestDetails,
@@ -39,7 +39,7 @@ async fn run_on_request_to_sign<C: CryptoScheme>(
         <C as CryptoScheme>::Signature,
         (
             BTreeSet<AccountId32>,
-            CeremonyFailureReason<SigningFailureReason>,
+            CeremonyFailureReason<SigningFailureReason, SigningStageName>,
         ),
     >,
 > {
@@ -84,7 +84,7 @@ fn send_signing_request(
         EthSchnorrSignature,
         (
             BTreeSet<AccountId32>,
-            CeremonyFailureReason<SigningFailureReason>,
+            CeremonyFailureReason<SigningFailureReason, SigningStageName>,
         ),
     >,
 > {
@@ -313,7 +313,7 @@ async fn should_send_outcome_of_authorised_ceremony() {
             BTreeSet::default(),
             CeremonyFailureReason::BroadcastFailure(
                 BroadcastFailureReason::InsufficientVerificationMessages,
-                CeremonyStageName::VerifyCommitmentsBroadcast2
+                SigningStageName::VerifyCommitmentsBroadcast2
             ),
         ))
     );

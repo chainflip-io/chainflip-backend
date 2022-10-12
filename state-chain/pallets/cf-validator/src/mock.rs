@@ -1,13 +1,12 @@
 use super::*;
 use crate as pallet_cf_validator;
-use cf_primitives::ChainflipAccountData;
 use cf_traits::{
 	mocks::{
 		ensure_origin_mock::NeverFailingOriginCheck, epoch_info::MockEpochInfo,
 		qualify_node::QualifyAll, reputation_resetter::MockReputationResetter,
 		system_state_info::MockSystemStateInfo, vault_rotation::MockVaultRotator,
 	},
-	Bid, Chainflip, ChainflipAccountStore, QualifyNode, RuntimeAuctionOutcome,
+	Bid, Chainflip, QualifyNode, RuntimeAuctionOutcome,
 };
 use frame_support::{
 	construct_runtime, parameter_types,
@@ -62,7 +61,7 @@ impl frame_system::Config for Test {
 	type DbWeight = ();
 	type Version = ();
 	type PalletInfo = PalletInfo;
-	type AccountData = ChainflipAccountData;
+	type AccountData = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
@@ -246,7 +245,6 @@ impl Config for Test {
 	type ValidatorWeightInfo = ();
 	type Auctioneer = MockAuctioneer;
 	type VaultRotator = MockVaultRotator;
-	type ChainflipAccount = ChainflipAccountStore<Self>;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type MissedAuthorshipSlots = MockMissedAuthorshipSlots;
 	type BidderProvider = MockBidderProvider;
@@ -283,26 +281,6 @@ macro_rules! assert_invariants {
 				.collect::<BTreeSet<_>>()
 				.is_disjoint(&ValidatorPallet::highest_staked_qualified_backup_nodes_lookup()),
 			"Backup nodes and validators should not overlap",
-		);
-		assert!(
-			ValidatorPallet::current_authorities()
-				.iter()
-				.all(|id| <Test as Config>::ChainflipAccount::get(id).state.is_authority()),
-			"All authorities should have their account state set accordingly. Got: {:?}",
-			ValidatorPallet::current_authorities()
-				.iter()
-				.map(|id| (id, <Test as Config>::ChainflipAccount::get(id).state))
-				.collect::<Vec<_>>(),
-		);
-		assert!(
-			ValidatorPallet::highest_staked_qualified_backup_nodes_lookup()
-				.iter()
-				.all(|id| <Test as Config>::ChainflipAccount::get(id).state.is_backup()),
-			"All backup nodes should have their account state set accordingly. Got: {:?}",
-			ValidatorPallet::highest_staked_qualified_backup_nodes_lookup()
-				.iter()
-				.map(|id| (id, <Test as Config>::ChainflipAccount::get(id).state))
-				.collect::<Vec<_>>(),
 		);
 	};
 }

@@ -13,6 +13,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::{collections::BTreeSet, sync::Arc, time::Duration};
 use tokio::sync::{broadcast, mpsc::UnboundedSender, watch};
 
+use crate::multisig::client::KeygenStageName;
 use crate::p2p::{PeerInfo, PeerUpdate};
 use crate::{
     eth::{rpc::EthRpcApi, EpochStart, EthBroadcaster},
@@ -54,8 +55,11 @@ async fn handle_keygen_request<'a, MultisigClient, RpcClient>(
                                 )
                             })
                             .map_err(|(bad_account_ids, reason)| {
-                                if let CeremonyFailureReason::<KeygenFailureReason>::Other(
-                                    KeygenFailureReason::KeyNotCompatible,
+                                if let CeremonyFailureReason::<
+                                    KeygenFailureReason,
+                                    KeygenStageName,
+                                >::Other(
+                                    KeygenFailureReason::KeyNotCompatible
                                 ) = reason
                                 {
                                     KeygenError::Incompatible
@@ -129,9 +133,10 @@ async fn handle_signing_request<'a, MultisigClient, RpcClient>(
 // Wrap the match so we add a log message before executing the processing of the event
 // if we are processing. Else, ignore it.
 macro_rules! match_event {
-    ($logger:ident, $event:ident { $($(#[$cfg_param:meta])? $bind:pat $(if $condition:expr)? => $block:expr)+ }) => {{
-        let formatted_event = format!("{:?}", $event);
-        match $event {
+    ($event:expr, $logger:ident { $($(#[$cfg_param:meta])? $bind:pat $(if $condition:expr)? => $block:expr)+ }) => {{
+        let event = $event;
+        let formatted_event = format!("{:?}", event);
+        match event {
             $(
                 $(#[$cfg_param])?
                 $bind => {
@@ -183,8 +188,13 @@ where
     with_task_scope(|scope| async {
         let logger = logger.new(o!(COMPONENT_KEY => "SCObserver"));
 
+        let heartbeat_block_interval = {
+            use frame_support::traits::TypedGet;
+            <state_chain_runtime::Runtime as pallet_cf_reputation::Config>::HeartbeatBlockInterval::get()
+        };
+
         let blocks_per_heartbeat =
-            std::cmp::max(1, state_chain_client.heartbeat_block_interval / 2);
+            std::cmp::max(1, heartbeat_block_interval / 2);
 
         slog::info!(
             logger,
@@ -270,10 +280,10 @@ where
                                 current_block_hash
                             );
 
-                            match state_chain_client.get_events(current_block_hash).await {
+                            match state_chain_client.get_storage_value::<frame_system::Events::<state_chain_runtime::Runtime>>(current_block_hash).await {
                                 Ok(events) => {
-                                    for (_phase, event, _topics) in events {
-                                        match_event! { logger, event {
+                                    for event_record in events {
+                                        match_event! {event_record.event, logger {
                                             state_chain_runtime::Event::Validator(
                                                 pallet_cf_validator::Event::NewEpoch(new_epoch),
                                             ) => {
@@ -459,7 +469,7 @@ where
                             // We send it in the middle of the online interval (so any node sync issues don't
                             // cause issues (if we tried to send on one of the interval boundaries)
                             if ((current_block_header.number
-                                + (state_chain_client.heartbeat_block_interval / 2))
+                                + (heartbeat_block_interval / 2))
                                 % blocks_per_heartbeat
                                 // Submitting earlier than one minute in may falsely indicate liveness.
                                 == 0) && has_submitted_init_heartbeat.load(Ordering::Relaxed)

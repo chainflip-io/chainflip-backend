@@ -1,3 +1,4 @@
+mod block_head_stream_from;
 pub mod chain_data_witnesser;
 pub mod contract_witnesser;
 mod epoch_witnesser;
@@ -23,6 +24,7 @@ use pallet_cf_broadcast::BroadcastAttemptId;
 use regex::Regex;
 use sp_runtime::traits::Keccak256;
 
+use crate::eth::block_head_stream_from::block_head_stream_from;
 use crate::{
     common::read_clean_and_decode_hex_str_file,
     constants::ETH_BLOCK_SAFETY_MARGIN,
@@ -37,7 +39,7 @@ use crate::{
     state_chain_observer::client::{StateChainClient, StateChainRpcApi},
 };
 use ethbloom::{Bloom, Input};
-use futures::{stream, StreamExt};
+use futures::StreamExt;
 use slog::o;
 use sp_core::{Hasher, H160, U256};
 use std::{
@@ -327,79 +329,6 @@ pub struct BlockWithItems<BlockItem: Debug> {
     pub block_items: Vec<BlockItem>,
 }
 
-// TODO: Tests?
-pub async fn block_head_range_stream<BlockHeaderStream, EthRpc>(
-    from_block: u64,
-    safe_head_stream: BlockHeaderStream,
-    eth_rpc: EthRpc,
-    logger: &slog::Logger,
-) -> Result<Pin<Box<dyn Stream<Item = EthNumberBloom> + Send + 'static>>>
-where
-    BlockHeaderStream: Stream<Item = EthNumberBloom> + 'static + Send,
-    EthRpc: 'static + EthRpcApi + Send + Sync + Clone,
-{
-    let from_block = U64::from(from_block);
-    let mut safe_head_stream = Box::pin(safe_head_stream);
-    // only allow pulling from the stream once we are actually at our from_block number
-    while let Some(best_safe_block_header) = safe_head_stream.next().await {
-        let best_safe_block_number = best_safe_block_header.block_number;
-        // we only want to start witnessing once we reach the from_block specified
-        if best_safe_block_number < from_block {
-            slog::trace!(
-                logger,
-                "Not witnessing until ETH block `{}` Received block `{}` from stream.",
-                from_block,
-                best_safe_block_number
-            );
-        } else {
-            // our chain_head is above the from_block number
-
-            let eth_rpc_c = eth_rpc.clone();
-
-            let past_heads = Box::pin(
-                stream::iter(from_block.as_u64()..=best_safe_block_number.as_u64()).then(
-                    move |block_number| {
-                        let eth_rpc = eth_rpc_c.clone();
-                        async move {
-                            eth_rpc
-                                .block(U64::from(block_number))
-                                .await
-                                .and_then(|block| {
-                                    let number_bloom: Result<EthNumberBloom> = block.try_into();
-                                    number_bloom
-                                })
-                        }
-                    },
-                ),
-            );
-
-            return Ok(Box::pin(
-                stream::unfold(
-                    (past_heads, safe_head_stream),
-                    |(mut past_heads, mut safe_head_stream)| async {
-                        // we want to consume the past logs stream first, terminating if any of these logs are an error
-                        if let Some(result_past_log) = past_heads.next().await {
-                            if let Ok(past_log) = result_past_log {
-                                Some((past_log, (past_heads, safe_head_stream)))
-                            } else {
-                                None
-                            }
-                        } else {
-                            // the past logs were consumed, now we consume the "future" logs
-                            safe_head_stream
-                                .next()
-                                .await
-                                .map(|future_log| (future_log, (past_heads, safe_head_stream)))
-                        }
-                    },
-                )
-                .fuse(),
-            ));
-        }
-    }
-    Err(anyhow!("No events in ETH safe head stream"))
-}
-
 /// Takes a head stream and turns it into a stream of BlockEvents for consumption by the merged stream
 async fn block_events_stream_from_head_stream<BlockHeaderStream, EthRpc, EventParameters>(
     from_block: u64,
@@ -418,7 +347,7 @@ where
 {
     // convert from heads to blocks with events
     Ok(Box::pin(
-        block_head_range_stream(from_block, safe_head_stream, eth_rpc.clone(), &logger)
+        block_head_stream_from(from_block, safe_head_stream, eth_rpc.clone(), &logger)
             .await?
             .then(move |header| {
                 let eth_rpc = eth_rpc.clone();
@@ -466,67 +395,63 @@ where
     ))
 }
 
-#[async_trait]
-pub trait EthContractWitnesser {
-    type EventParameters: Debug + Send + Sync + 'static;
+/// Get a block events stream for the contract, returning the stream only if the head of the stream is
+/// ahead of from_block (otherwise it will wait until we have reached from_block).
+pub async fn block_events_stream_for_contract_from<EventParameters, ContractWitnesser>(
+    from_block: u64,
+    contract_witnesser: &ContractWitnesser,
+    eth_dual_rpc: EthDualRpcClient,
+    logger: &slog::Logger,
+) -> Result<Pin<Box<dyn Stream<Item = BlockWithItems<Event<EventParameters>>> + Send + 'static>>>
+where
+    EventParameters: Debug + Send + Sync + 'static,
+    ContractWitnesser: EthContractWitnesser<EventParameters = EventParameters>,
+{
+    let contract_address = contract_witnesser.contract_address();
+    slog::info!(
+        logger,
+        "Subscribing to ETH events from contract at address: {:?}",
+        hex::encode(contract_address)
+    );
 
-    fn contract_name(&self) -> String;
-
-    /// Get an block stream for the contract, returning the stream only if the head of the stream is
-    /// ahead of from_block (otherwise it will wait until we have reached from_block)
-    async fn block_stream(
-        &self,
-        eth_dual_rpc: EthDualRpcClient,
-        // usually the start of the validator's active window
-        from_block: u64,
-        logger: &slog::Logger,
-        // This stream must be Send, so it can be used by the spawn
-    ) -> Result<
-        Pin<Box<dyn Stream<Item = BlockWithItems<Event<Self::EventParameters>>> + Send + 'static>>,
-    > {
-        let deployed_address = self.get_contract_address();
-        slog::info!(
+    let safe_ws_block_events = block_events_stream_from_head_stream(
+        from_block,
+        contract_address,
+        safe_ws_head_stream(
+            eth_dual_rpc.ws_client.subscribe_new_heads().await?,
+            ETH_BLOCK_SAFETY_MARGIN,
             logger,
-            "Subscribing to ETH events from contract at address: {:?}",
-            hex::encode(deployed_address)
-        );
+        ),
+        contract_witnesser.decode_log_closure()?,
+        eth_dual_rpc.ws_client,
+        logger.clone(),
+    )
+    .await?;
 
-        let eth_head_stream = eth_dual_rpc.ws_client.subscribe_new_heads().await?;
-
-        let safe_ws_head_stream =
-            safe_ws_head_stream(eth_head_stream, ETH_BLOCK_SAFETY_MARGIN, logger);
-
-        let safe_ws_block_events = block_events_stream_from_head_stream(
-            from_block,
-            deployed_address,
-            safe_ws_head_stream,
-            self.decode_log_closure()?,
-            eth_dual_rpc.ws_client,
-            logger.clone(),
-        )
-        .await?;
-
-        let safe_http_head_stream = safe_polling_http_head_stream(
+    let safe_http_block_events = block_events_stream_from_head_stream(
+        from_block,
+        contract_address,
+        safe_polling_http_head_stream(
             eth_dual_rpc.http_client.clone(),
             HTTP_POLL_INTERVAL,
             ETH_BLOCK_SAFETY_MARGIN,
             logger,
         )
-        .await;
+        .await,
+        contract_witnesser.decode_log_closure()?,
+        eth_dual_rpc.http_client,
+        logger.clone(),
+    )
+    .await?;
 
-        let safe_http_block_events = block_events_stream_from_head_stream(
-            from_block,
-            deployed_address,
-            safe_http_head_stream,
-            self.decode_log_closure()?,
-            eth_dual_rpc.http_client,
-            logger.clone(),
-        )
-        .await?;
+    merged_block_items_stream(safe_ws_block_events, safe_http_block_events, logger.clone()).await
+}
 
-        merged_block_items_stream(safe_ws_block_events, safe_http_block_events, logger.clone())
-            .await
-    }
+#[async_trait]
+pub trait EthContractWitnesser {
+    type EventParameters: Debug + Send + Sync + 'static;
+
+    fn contract_name(&self) -> String;
 
     fn decode_log_closure(&self) -> Result<DecodeLogClosure<Self::EventParameters>>;
 
@@ -543,7 +468,7 @@ pub trait EthContractWitnesser {
         RpcClient: 'static + StateChainRpcApi + Sync + Send,
         EthRpcClient: EthRpcApi + Sync + Send;
 
-    fn get_contract_address(&self) -> H160;
+    fn contract_address(&self) -> H160;
 }
 
 pub type DecodeLogClosure<EventParameters> =

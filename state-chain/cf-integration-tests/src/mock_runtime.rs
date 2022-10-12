@@ -87,7 +87,7 @@ impl ExtBuilder {
 			staking: StakingConfig {
 				genesis_stakers: self.accounts.clone(),
 				minimum_stake: DEFAULT_MIN_STAKE,
-				claim_ttl: core::time::Duration::from_secs(3 * CLAIM_DELAY),
+				claim_ttl: core::time::Duration::from_secs(3 * CLAIM_DELAY_SECS),
 			},
 			auction: AuctionConfig {
 				min_size: self.min_authorities,

@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 use crate::multisig::{
     client::{
         common::{
-            BroadcastFailureReason, CeremonyFailureReason, CeremonyStageName, KeygenFailureReason,
+            BroadcastFailureReason, CeremonyFailureReason, KeygenFailureReason, KeygenStageName,
         },
         keygen::{
             self, generate_key_data_until_compatible, Complaints6, VerifyComplaints7,
@@ -271,7 +271,7 @@ async fn should_report_on_inconsistent_broadcast_comm1() {
             &[bad_account_id.clone()],
             CeremonyFailureReason::BroadcastFailure(
                 BroadcastFailureReason::Inconsistency,
-                CeremonyStageName::VerifyCommitmentsBroadcast4,
+                KeygenStageName::VerifyCommitmentsBroadcast4,
             ),
         )
         .await;
@@ -305,7 +305,7 @@ async fn should_report_on_inconsistent_broadcast_hash_comm1a() {
             &[bad_account_id.clone()],
             CeremonyFailureReason::BroadcastFailure(
                 BroadcastFailureReason::Inconsistency,
-                CeremonyStageName::VerifyHashCommitmentsBroadcast2,
+                KeygenStageName::VerifyHashCommitmentsBroadcast2,
             ),
         )
         .await;
@@ -393,7 +393,7 @@ async fn should_report_on_inconsistent_broadcast_complaints4() {
             &[bad_account_id.clone()],
             CeremonyFailureReason::BroadcastFailure(
                 BroadcastFailureReason::Inconsistency,
-                CeremonyStageName::VerifyComplaintsBroadcastStage7,
+                KeygenStageName::VerifyComplaintsBroadcastStage7,
             ),
         )
         .await;
@@ -464,7 +464,7 @@ async fn should_report_on_inconsistent_broadcast_blame_responses6() {
             &[bad_account_id.clone()],
             CeremonyFailureReason::BroadcastFailure(
                 BroadcastFailureReason::Inconsistency,
-                CeremonyStageName::VerifyBlameResponsesBroadcastStage9,
+                KeygenStageName::VerifyBlameResponsesBroadcastStage9,
             ),
         )
         .await;
@@ -892,7 +892,7 @@ mod timeout {
                     &[non_sending_party_id_1],
                     CeremonyFailureReason::BroadcastFailure(
                         BroadcastFailureReason::InsufficientMessages,
-                        CeremonyStageName::VerifyHashCommitmentsBroadcast2,
+                        KeygenStageName::VerifyHashCommitmentsBroadcast2,
                     ),
                 )
                 .await
@@ -926,7 +926,7 @@ mod timeout {
                     &[non_sending_party_id_1],
                     CeremonyFailureReason::BroadcastFailure(
                         BroadcastFailureReason::InsufficientMessages,
-                        CeremonyStageName::VerifyCommitmentsBroadcast4,
+                        KeygenStageName::VerifyCommitmentsBroadcast4,
                     ),
                 )
                 .await
@@ -968,7 +968,7 @@ mod timeout {
                     &[non_sending_party_id_1],
                     CeremonyFailureReason::BroadcastFailure(
                         BroadcastFailureReason::InsufficientMessages,
-                        CeremonyStageName::VerifyComplaintsBroadcastStage7,
+                        KeygenStageName::VerifyComplaintsBroadcastStage7,
                     ),
                 )
                 .await
@@ -1025,7 +1025,7 @@ mod timeout {
                     &[non_sending_party_id_1],
                     CeremonyFailureReason::BroadcastFailure(
                         BroadcastFailureReason::InsufficientMessages,
-                        CeremonyStageName::VerifyBlameResponsesBroadcastStage9,
+                        KeygenStageName::VerifyBlameResponsesBroadcastStage9,
                     ),
                 )
                 .await

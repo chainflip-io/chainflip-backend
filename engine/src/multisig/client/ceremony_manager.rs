@@ -32,20 +32,33 @@ use client::common::{
 
 use crate::multisig::MessageHash;
 
-use super::common::{CeremonyStage, PreProcessStageDataCheck};
+use super::common::{CeremonyStage, KeygenStageName, PreProcessStageDataCheck, SigningStageName};
 use super::keygen::{HashCommitments1, HashContext, KeygenData};
 use super::{CeremonyRequest, MultisigData, MultisigMessage};
 
-pub type CeremonyOutcome<Ceremony> = Result<
-    <Ceremony as CeremonyTrait>::Output,
+pub type CeremonyOutcome<C> = Result<
+    <C as CeremonyTrait>::Output,
     (
         BTreeSet<AccountId>,
-        CeremonyFailureReason<<Ceremony as CeremonyTrait>::FailureReason>,
+        CeremonyFailureReason<
+            <C as CeremonyTrait>::FailureReason,
+            <C as CeremonyTrait>::CeremonyStageName,
+        >,
     ),
 >;
 
 pub type CeremonyResultSender<Ceremony> = oneshot::Sender<CeremonyOutcome<Ceremony>>;
 pub type CeremonyResultReceiver<Ceremony> = oneshot::Receiver<CeremonyOutcome<Ceremony>>;
+
+type SigningCeremonyFailureReason<Crypto> = CeremonyFailureReason<
+    <SigningCeremony<Crypto> as CeremonyTrait>::FailureReason,
+    <SigningCeremony<Crypto> as CeremonyTrait>::CeremonyStageName,
+>;
+
+type KeygenCeremonyFailureReason<Crypto> = CeremonyFailureReason<
+    <KeygenCeremony<Crypto> as CeremonyTrait>::FailureReason,
+    <KeygenCeremony<Crypto> as CeremonyTrait>::CeremonyStageName,
+>;
 
 /// Ceremony trait combines type parameters that are often used together
 pub trait CeremonyTrait: 'static {
@@ -54,16 +67,18 @@ pub trait CeremonyTrait: 'static {
     // The type of data that will be used in p2p for this ceremony type
     type Data: Debug
         + Display
-        + PreProcessStageDataCheck
+        + PreProcessStageDataCheck<Self::CeremonyStageName>
         + TryFrom<
             MultisigData<<Self::Crypto as CryptoScheme>::Point>,
             Error = MultisigData<<Self::Crypto as CryptoScheme>::Point>,
-        > + Send
+        > + Into<MultisigData<<Self::Crypto as CryptoScheme>::Point>>
+        + Send
         + 'static;
     type Request: Send + 'static;
     /// The product of a successful ceremony result
     type Output: Debug + Send + 'static;
     type FailureReason: Debug + Display + Send + 'static + PartialEq + Ord;
+    type CeremonyStageName: Debug + Display + Ord + Send;
 }
 
 pub struct KeygenCeremony<C> {
@@ -76,18 +91,20 @@ impl<C: CryptoScheme> CeremonyTrait for KeygenCeremony<C> {
     type Request = CeremonyRequest<C>;
     type Output = KeygenResultInfo<<C as CryptoScheme>::Point>;
     type FailureReason = KeygenFailureReason;
+    type CeremonyStageName = KeygenStageName;
 }
 
 pub struct SigningCeremony<C> {
     _phantom: PhantomData<C>,
 }
 
-impl<C: CryptoScheme> CeremonyTrait for SigningCeremony<C> {
-    type Crypto = C;
-    type Data = SigningData<<C as CryptoScheme>::Point>;
-    type Request = CeremonyRequest<C>;
-    type Output = <C as CryptoScheme>::Signature;
+impl<Crypto: CryptoScheme> CeremonyTrait for SigningCeremony<Crypto> {
+    type Crypto = Crypto;
+    type Data = SigningData<<Crypto as CryptoScheme>::Point>;
+    type Request = CeremonyRequest<Crypto>;
+    type Output = <Crypto as CryptoScheme>::Signature;
     type FailureReason = SigningFailureReason;
+    type CeremonyStageName = SigningStageName;
 }
 
 /// Responsible for mapping ceremonies to the corresponding states and
@@ -103,14 +120,7 @@ pub struct CeremonyManager<C: CryptoScheme> {
 }
 
 // A CeremonyStage for either keygen or signing
-pub type DynStage<Ceremony> = Box<
-    dyn CeremonyStage<
-            Message = <Ceremony as CeremonyTrait>::Data,
-            Result = <Ceremony as CeremonyTrait>::Output,
-            FailureReason = <Ceremony as CeremonyTrait>::FailureReason,
-        > + Send
-        + Sync,
->;
+pub type DynStage<C> = Box<dyn CeremonyStage<C> + Send + Sync>;
 
 // A ceremony request that has passed initial checks and setup its initial stage
 pub struct PreparedRequest<C: CeremonyTrait> {
@@ -118,19 +128,16 @@ pub struct PreparedRequest<C: CeremonyTrait> {
 }
 
 // Initial checks and setup before sending the request to the `CeremonyRunner`
-pub fn prepare_signing_request<C: CryptoScheme>(
+pub fn prepare_signing_request<Crypto: CryptoScheme>(
     ceremony_id: CeremonyId,
     own_account_id: &AccountId,
     signers: BTreeSet<AccountId>,
-    key_info: KeygenResultInfo<C::Point>,
+    key_info: KeygenResultInfo<Crypto::Point>,
     data: MessageHash,
     outgoing_p2p_message_sender: &UnboundedSender<OutgoingMultisigStageMessages>,
     rng: Rng,
     logger: &slog::Logger,
-) -> Result<
-    PreparedRequest<SigningCeremony<C>>,
-    CeremonyFailureReason<<SigningCeremony<C> as CeremonyTrait>::FailureReason>,
-> {
+) -> Result<PreparedRequest<SigningCeremony<Crypto>>, SigningCeremonyFailureReason<Crypto>> {
     // Check that we have enough signers
     let minimum_signers_needed = key_info.params.threshold + 1;
     let signers_len: AuthorityCount = signers.len().try_into().expect("too many signers");
@@ -171,7 +178,7 @@ pub fn prepare_signing_request<C: CryptoScheme>(
             rng,
         };
 
-        let processor = AwaitCommitments1::<C>::new(
+        let processor = AwaitCommitments1::<Crypto>::new(
             common.clone(),
             SigningStateCommonInfo {
                 data,
@@ -186,7 +193,7 @@ pub fn prepare_signing_request<C: CryptoScheme>(
 }
 
 // Initial checks and setup before sending the request to the `CeremonyRunner`
-pub fn prepare_keygen_request<C: CryptoScheme>(
+pub fn prepare_keygen_request<Crypto: CryptoScheme>(
     ceremony_id: CeremonyId,
     own_account_id: &AccountId,
     participants: BTreeSet<AccountId>,
@@ -194,10 +201,7 @@ pub fn prepare_keygen_request<C: CryptoScheme>(
     rng: Rng,
     allowing_high_pubkey: bool,
     logger: &slog::Logger,
-) -> Result<
-    PreparedRequest<KeygenCeremony<C>>,
-    CeremonyFailureReason<<KeygenCeremony<C> as CeremonyTrait>::FailureReason>,
-> {
+) -> Result<PreparedRequest<KeygenCeremony<Crypto>>, KeygenCeremonyFailureReason<Crypto>> {
     let validator_mapping = Arc::new(PartyIdxMapping::from_participants(participants.clone()));
 
     let (our_idx, signer_idxs) =
@@ -310,14 +314,14 @@ impl<C: CryptoScheme> CeremonyManager<C> {
                     .signing_states
                     .cleanup_unauthorised_ceremony(&request.ceremony_id)
                 {
-                    CeremonyFailureReason::<SigningFailureReason>::NotParticipatingInUnauthorisedCeremony
+                    CeremonyFailureReason::<SigningFailureReason, SigningStageName>::NotParticipatingInUnauthorisedCeremony
                         .log(&BTreeSet::default(), &self.logger);
                 }
                 if self
                     .keygen_states
                     .cleanup_unauthorised_ceremony(&request.ceremony_id)
                 {
-                    CeremonyFailureReason::<KeygenFailureReason>::NotParticipatingInUnauthorisedCeremony
+                    CeremonyFailureReason::<KeygenFailureReason, KeygenStageName>::NotParticipatingInUnauthorisedCeremony
                         .log(&BTreeSet::default(), &self.logger);
                 }
             }

@@ -15,29 +15,19 @@ const ANOTHER_GOV_KEY_PROPOSAL: [u8; 32] = [2u8; 32];
 #[test]
 fn update_gov_key_via_onchain_proposal() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(TokenholderGovernance::submit_proposal(
-			Origin::signed(ALICE),
-			Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)
-		));
+		let proposal = Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL);
+		assert_ok!(TokenholderGovernance::submit_proposal(Origin::signed(ALICE), proposal));
 		assert_eq!(
 			last_event::<Test>(),
-			crate::mock::Event::TokenholderGovernance(crate::Event::ProposalSubmitted {
-				proposal: Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)
-			}),
+			crate::mock::Event::TokenholderGovernance(crate::Event::ProposalSubmitted { proposal }),
 		);
 		assert!(Proposals::<Test>::contains_key(
 			<frame_system::Pallet<Test>>::block_number() +
 				<mock::Test as Config>::VotingPeriod::get()
 		));
 		// Back the proposal to ensure threshold
-		assert_ok!(TokenholderGovernance::back_proposal(
-			Origin::signed(BOB),
-			Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)
-		));
-		assert_ok!(TokenholderGovernance::back_proposal(
-			Origin::signed(CHARLES),
-			Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)
-		));
+		assert_ok!(TokenholderGovernance::back_proposal(Origin::signed(BOB), proposal));
+		assert_ok!(TokenholderGovernance::back_proposal(Origin::signed(CHARLES), proposal));
 		// Jump to the block in which we expect the proposal
 		TokenholderGovernance::on_initialize(
 			<frame_system::Pallet<Test>>::block_number() +
@@ -49,9 +39,7 @@ fn update_gov_key_via_onchain_proposal() {
 		));
 		assert_eq!(
 			last_event::<Test>(),
-			crate::mock::Event::TokenholderGovernance(crate::Event::ProposalPassed {
-				proposal: Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)
-			}),
+			crate::mock::Event::TokenholderGovernance(crate::Event::ProposalPassed { proposal }),
 		);
 		// Expect the proposal to be moved to the enactment stage
 		assert!(GovKeyUpdateAwaitingEnactment::<Test>::get().is_some());
@@ -62,15 +50,13 @@ fn update_gov_key_via_onchain_proposal() {
 		assert!(GovKeyUpdateAwaitingEnactment::<Test>::get().is_none());
 		assert_eq!(
 			last_event::<Test>(),
-			crate::mock::Event::TokenholderGovernance(crate::Event::ProposalEnacted {
-				proposal: Proposal::SetGovernanceKey(GOV_KEY_PROPOSAL)
-			}),
+			crate::mock::Event::TokenholderGovernance(crate::Event::ProposalEnacted { proposal }),
 		);
 	});
 }
 
 #[test]
-fn fees_getting_burned() {
+fn fees_are_burned_on_successful_proposal() {
 	new_test_ext().execute_with(|| {
 		let balance_before = Flip::total_balance_of(&ALICE);
 		assert_ok!(TokenholderGovernance::submit_proposal(
@@ -134,7 +120,7 @@ fn cannot_create_proposal_with_insufficient_liquidity() {
 }
 
 #[test]
-fn not_enough_backed_liquidity() {
+fn not_enough_backed_liquidity_for_proposal_enactment() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(TokenholderGovernance::submit_proposal(
 			Origin::signed(ALICE),

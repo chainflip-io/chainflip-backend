@@ -5,29 +5,26 @@ use cf_primitives::{AuthorityCount, CeremonyId};
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
-    multisig::{client::utils::PartyIdxMapping, crypto::Rng},
+    multisig::{
+        client::{ceremony_manager::CeremonyTrait, utils::PartyIdxMapping},
+        crypto::Rng,
+    },
     p2p::OutgoingMultisigStageMessages,
 };
 
-use super::{CeremonyFailureReason, CeremonyStageName};
+use super::CeremonyFailureReason;
 
 /// Outcome of a given ceremony stage
-pub enum StageResult<M, Result, FailureReason> {
+pub enum StageResult<C: CeremonyTrait> {
     /// Ceremony proceeds to the next stage
-    NextStage(
-        Box<
-            dyn CeremonyStage<Message = M, Result = Result, FailureReason = FailureReason>
-                + Send
-                + Sync,
-        >,
-    ),
+    NextStage(Box<dyn CeremonyStage<C> + Send + Sync>),
     /// Ceremony aborted (contains parties to report)
     Error(
         BTreeSet<AuthorityCount>,
-        CeremonyFailureReason<FailureReason>,
+        CeremonyFailureReason<C::FailureReason, C::CeremonyStageName>,
     ),
     /// Ceremony finished and successful
-    Done(Result),
+    Done(C::Output),
 }
 
 /// The result of processing a message for a stage from a single party
@@ -42,36 +39,23 @@ pub enum ProcessMessageResult {
 
 /// Defines actions that any given stage of a ceremony should be able to perform
 #[async_trait]
-pub trait CeremonyStage {
-    // Message type to be processed by a particular stage
-    type Message;
-    // Result to return if the ceremony is successful
-    type Result;
-    // Failure reason type to return if the ceremony is aborted
-    type FailureReason;
-
+pub trait CeremonyStage<C: CeremonyTrait> {
     /// Perform initial computation for this stage (and initiate communication with other parties)
     fn init(&mut self);
 
     /// Process message from signer at index `signer_idx`. Precondition: the signer is a valid
     /// holder of the key and selected to participate in this ceremony (TODO: also check that
     /// we haven't processed a message from them?)
-    fn process_message(
-        &mut self,
-        signer_idx: AuthorityCount,
-        m: Self::Message,
-    ) -> ProcessMessageResult;
+    fn process_message(&mut self, signer_idx: AuthorityCount, m: C::Data) -> ProcessMessageResult;
 
     /// Verify data for this stage after it is received from all other parties,
     /// either abort or proceed to the next stage based on the result
-    async fn finalize(
-        self: Box<Self>,
-    ) -> StageResult<Self::Message, Self::Result, Self::FailureReason>;
+    async fn finalize(self: Box<Self>) -> StageResult<C>;
 
     /// Parties we haven't heard from for the current stage
     fn awaited_parties(&self) -> BTreeSet<AuthorityCount>;
 
-    fn get_stage_name(&self) -> super::CeremonyStageName;
+    fn get_stage_name(&self) -> C::CeremonyStageName;
 
     fn ceremony_common(&self) -> &CeremonyCommon;
 }
@@ -96,7 +80,7 @@ impl CeremonyCommon {
     }
 }
 
-pub trait PreProcessStageDataCheck {
+pub trait PreProcessStageDataCheck<CeremonyStageName> {
     fn data_size_is_valid(&self, num_of_parties: AuthorityCount) -> bool;
     fn is_first_stage(&self) -> bool;
     fn should_delay(stage_name: CeremonyStageName, message: &Self) -> bool;
