@@ -18,6 +18,7 @@ use sp_std::{
 
 pub mod benchmarking_value;
 
+#[cfg(feature = "ibiza")]
 pub mod dot;
 pub mod eth;
 
