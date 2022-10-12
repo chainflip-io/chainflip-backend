@@ -382,7 +382,7 @@ async fn force_rotation(
 	println!("Submitting governance proposal for rotation.");
 
 	state_chain_client
-		.submit_signed_extrinsic(pallet_cf_governance::Call::approve { id }, logger)
+		.submit_signed_extrinsic(pallet_cf_governance::Call::approve { approved_id: id }, logger)
 		.await
 		.expect("Should submit approval, triggering execution of the forced rotation");
 

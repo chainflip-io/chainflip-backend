@@ -285,25 +285,29 @@ pub mod pallet {
 		/// - [ProposalNotFound](Error::ProposalNotFound)
 		/// - [AlreadyApproved](Error::AlreadyApproved)
 		#[pallet::weight(T::WeightInfo::approve())]
-		pub fn approve(origin: OriginFor<T>, id: ProposalId) -> DispatchResultWithPostInfo {
+		pub fn approve(
+			origin: OriginFor<T>,
+			approved_id: ProposalId,
+		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			ensure!(Members::<T>::get().contains(&who), Error::<T>::NotMember);
-			ensure!(Proposals::<T>::contains_key(id), Error::<T>::ProposalNotFound);
+			ensure!(Proposals::<T>::contains_key(approved_id), Error::<T>::ProposalNotFound);
 
 			// Try to approve the proposal
-			let proposal = Proposals::<T>::mutate(id, |proposal| {
+			let proposal = Proposals::<T>::mutate(approved_id, |proposal| {
 				if !proposal.approved.insert(who) {
 					return Err(Error::<T>::AlreadyApproved)
 				}
-				Self::deposit_event(Event::Approved(id));
+				Self::deposit_event(Event::Approved(approved_id));
 				Ok(proposal.clone())
 			})?;
 
 			if proposal.approved.len() > (Members::<T>::decode_len().unwrap_or_default() / 2) {
-				ExecutionPipeline::<T>::append((proposal.call, id));
-				Proposals::<T>::remove(id);
+				ExecutionPipeline::<T>::append((proposal.call, approved_id));
+				Proposals::<T>::remove(approved_id);
 				let mut active_proposals = ActiveProposals::<T>::get();
-				active_proposals.retain(|ActiveProposal { proposal_id, .. }| *proposal_id != id);
+				active_proposals
+					.retain(|ActiveProposal { proposal_id, .. }| *proposal_id != approved_id);
 				ActiveProposals::<T>::set(active_proposals);
 			}
 			// Governance members don't pay transaction fees
