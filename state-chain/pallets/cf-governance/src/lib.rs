@@ -477,12 +477,9 @@ impl<T: Config> Pallet<T> {
 					ActiveProposals::<T>::get().iter().partition(|active_proposal| {
 						active_proposal.expiry_time <= T::TimeSource::now().as_secs()
 					});
-				// Remove expired proposals
-				let number_expired_proposals = expired.len() as u32;
-				Self::expire_proposals(expired);
+
 				ActiveProposals::<T>::set(active);
-				T::WeightInfo::on_initialize(proposal_len as u32) +
-					T::WeightInfo::expire_proposals(number_expired_proposals)
+				Self::expire_proposals(expired) + T::WeightInfo::on_initialize(proposal_len as u32)
 			},
 			_ => T::WeightInfo::on_initialize_best_case(),
 		}
@@ -506,11 +503,12 @@ impl<T: Config> Pallet<T> {
 		execution_weight
 	}
 
-	fn expire_proposals(expired: Vec<ActiveProposal>) {
-		for ActiveProposal { proposal_id, .. } in expired {
+	fn expire_proposals(expired: Vec<ActiveProposal>) -> Weight {
+		for ActiveProposal { proposal_id, .. } in &expired {
 			Proposals::<T>::remove(proposal_id);
-			Self::deposit_event(Event::Expired(proposal_id));
+			Self::deposit_event(Event::Expired(*proposal_id));
 		}
+		T::WeightInfo::expire_proposals(expired.len() as u32)
 	}
 
 	fn push_proposal(call: Box<<T as Config>::Call>) -> u32 {
