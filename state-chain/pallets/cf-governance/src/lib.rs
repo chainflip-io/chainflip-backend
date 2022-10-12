@@ -304,10 +304,10 @@ pub mod pallet {
 			if proposal.approved.len() > (Members::<T>::decode_len().unwrap_or_default() / 2) {
 				ExecutionPipeline::<T>::append((proposal.call, approved_id));
 				Proposals::<T>::remove(approved_id);
-				let mut active_proposals = ActiveProposals::<T>::get();
-				active_proposals
-					.retain(|ActiveProposal { proposal_id, .. }| *proposal_id != approved_id);
-				ActiveProposals::<T>::set(active_proposals);
+				ActiveProposals::<T>::mutate(|proposals| {
+					proposals
+						.retain(|ActiveProposal { proposal_id, .. }| *proposal_id != approved_id)
+				});
 			}
 			// Governance members don't pay transaction fees
 			Ok(Pays::No.into())
