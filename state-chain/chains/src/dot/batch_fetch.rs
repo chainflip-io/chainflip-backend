@@ -17,7 +17,7 @@ pub type IntentId = u16;
 /// ids.
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct BatchFetch {
-	/// The signature hancler for creating and signing polkadot extrinsics
+	/// The hancler for creating and signing polkadot extrinsics
 	pub extrinsic_handler: PolkadotExtrinsicHandler,
 	/// The list of all inbound deposits that are to be fetched in this batch call.
 	pub intent_ids: Vec<IntentId>,
@@ -33,10 +33,11 @@ impl BatchFetch {
 			extrinsic_handler: PolkadotExtrinsicHandler::new_empty(nonce, vault_account),
 			intent_ids,
 		};
+		// create and insert polkadot runtime call
 		calldata
 			.extrinsic_handler
 			.insert_extrinsic_call(calldata.extrinsic_call_polkadot());
-
+		// compute and insert the threshold signature payload
 		calldata.extrinsic_handler.insert_threshold_signature_payload().expect(
 			"This should not fail since SignedExtension of the SignedExtra type is implemented",
 		);

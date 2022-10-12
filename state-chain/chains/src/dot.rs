@@ -120,6 +120,7 @@ impl ChainAbi for Polkadot {
 	}
 }
 
+/// The hancler for creating and signing polkadot extrinsics, and creating signature payload
 #[derive(Debug, Encode, Decode, TypeInfo, Eq, PartialEq, Clone)]
 pub struct PolkadotExtrinsicHandler {
 	vault_account: <Polkadot as Chain>::ChainAccount,
@@ -144,6 +145,7 @@ impl PolkadotExtrinsicHandler {
 			signature_payload: None,
 		}
 	}
+
 	pub fn insert_extrinsic_call(&mut self, extrinsic_call: PolkadotRuntimeCall) {
 		self.extrinsic_call = Some(extrinsic_call);
 	}
@@ -188,6 +190,7 @@ impl PolkadotExtrinsicHandler {
 		));
 		self.signed_extrinsic.clone()
 	}
+
 	pub fn is_signed(&self) -> Option<bool> {
 		match self.signed_extrinsic.clone()?.signature {
 			Some((_signed, signature, extra)) => {
@@ -206,6 +209,7 @@ impl PolkadotExtrinsicHandler {
 	}
 }
 
+// The Polkadot Runtime type that is expected by the polkadot runtime
 #[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 pub enum PolkadotRuntimeCall {
 	#[codec(index = 0u8)]
