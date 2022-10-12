@@ -54,16 +54,6 @@ fn not_a_member() {
 }
 
 #[test]
-fn threshold_is_simple_majority() {
-	new_test_ext().execute_with(|| {
-		assert!(!Governance::majority_reached(0));
-		assert!(!Governance::majority_reached(1));
-		assert!(Governance::majority_reached(2));
-		assert!(Governance::majority_reached(3));
-	});
-}
-
-#[test]
 fn propose_a_governance_extrinsic_and_expect_execution() {
 	new_test_ext().execute_with(|| {
 		// Propose a governance extrinsic

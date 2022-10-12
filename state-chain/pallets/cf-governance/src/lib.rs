@@ -294,7 +294,7 @@ pub mod pallet {
 				Ok(proposal.clone())
 			})?;
 
-			if Self::majority_reached(proposal.approved.len()) {
+			if proposal.approved.len() > (Members::<T>::decode_len().unwrap_or_default() / 2) {
 				ExecutionPipeline::<T>::append((proposal.call, id));
 				Proposals::<T>::remove(id);
 				let mut active_proposals = ActiveProposals::<T>::get();
@@ -518,10 +518,5 @@ impl<T: Config> Pallet<T> {
 		// Add the proposal to the active proposals array
 		ActiveProposals::<T>::append((id, T::TimeSource::now().as_secs() + ExpiryTime::<T>::get()));
 		id
-	}
-
-	/// Checks if the majority for a proposal is reached
-	fn majority_reached(approvals: usize) -> bool {
-		approvals > Members::<T>::decode_len().unwrap_or_default() / 2
 	}
 }
