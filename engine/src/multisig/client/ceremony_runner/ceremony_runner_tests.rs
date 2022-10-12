@@ -12,8 +12,8 @@ use crate::{
             },
             tests::{
                 cause_ceremony_timeout, gen_invalid_keygen_stage_2_state,
-                gen_keygen_data_verify_hash_comm2, ACCOUNT_IDS, DEFAULT_KEYGEN_CEREMONY_ID,
-                DEFAULT_KEYGEN_SEED, DEFAULT_SIGNING_CEREMONY_ID, DEFAULT_SIGNING_SEED,
+                gen_keygen_data_verify_hash_comm2, ACCOUNT_IDS, DEFAULT_KEYGEN_SEED,
+                DEFAULT_SIGNING_SEED,
             },
             KeygenResult, PartyIdxMapping,
         },
@@ -36,6 +36,9 @@ type CeremonyRunnerChannels = (
     UnboundedReceiver<(CeremonyId, CeremonyOutcome<SigningCeremony<EthSigning>>)>,
 );
 
+// For these tests the ceremony id does not matter
+const DEFAULT_CEREMONY_ID: CeremonyId = 1;
+
 /// Spawn a signing ceremony runner task in the an unauthorised state with some default parameters
 fn spawn_signing_ceremony_runner() -> (
     tokio::task::JoinHandle<Result<(), anyhow::Error>>,
@@ -46,7 +49,7 @@ fn spawn_signing_ceremony_runner() -> (
     let (outcome_sender, outcome_receiver) = mpsc::unbounded_channel();
 
     let task_handle = tokio::spawn(CeremonyRunner::<SigningCeremony<EthSigning>>::run(
-        DEFAULT_SIGNING_CEREMONY_ID,
+        DEFAULT_CEREMONY_ID,
         message_receiver,
         request_receiver,
         outcome_sender,
@@ -63,14 +66,13 @@ fn spawn_signing_ceremony_runner() -> (
 async fn should_ignore_stage_data_with_incorrect_size() {
     let logger = new_test_logger();
     let rng = Rng::from_seed(DEFAULT_KEYGEN_SEED);
-    let ceremony_id = DEFAULT_KEYGEN_CEREMONY_ID;
     let num_of_participants = ACCOUNT_IDS.len() as u32;
 
     // This test only works on message stage data that can have incorrect size (ie. not first stage),
     // so we must create a stage 2 state and add it to the ceremony managers keygen states,
     // allowing us to process a stage 2 message.
     let mut stage_2_state = gen_invalid_keygen_stage_2_state::<<EthSigning as CryptoScheme>::Point>(
-        ceremony_id,
+        DEFAULT_CEREMONY_ID,
         BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
         rng,
         logger.clone(),
@@ -101,7 +103,7 @@ async fn should_ignore_non_stage_1_messages_while_unauthorised() {
     // Create an unauthorised ceremony
     let mut unauthorised_ceremony_runner: CeremonyRunner<KeygenCeremony<EthSigning>> =
         CeremonyRunner::new_unauthorised(
-            DEFAULT_KEYGEN_CEREMONY_ID,
+            DEFAULT_CEREMONY_ID,
             mpsc::unbounded_channel().0,
             &new_test_logger(),
         );
@@ -126,7 +128,7 @@ async fn should_delay_stage_1_message_while_unauthorised() {
     // Create an unauthorised ceremony
     let mut unauthorised_ceremony_runner: CeremonyRunner<SigningCeremony<EthSigning>> =
         CeremonyRunner::new_unauthorised(
-            DEFAULT_KEYGEN_CEREMONY_ID,
+            DEFAULT_CEREMONY_ID,
             mpsc::unbounded_channel().0,
             &new_test_logger(),
         );
@@ -177,7 +179,7 @@ fn gen_stage_1_signing_state(
         ACCOUNT_IDS.iter().cloned(),
     )));
     let common = CeremonyCommon {
-        ceremony_id: DEFAULT_SIGNING_CEREMONY_ID,
+        ceremony_id: DEFAULT_CEREMONY_ID,
         own_idx,
         all_idxs: signing_idxs,
         outgoing_p2p_message_sender: tokio::sync::mpsc::unbounded_channel().0,
@@ -197,7 +199,7 @@ fn gen_stage_1_signing_state(
     let stage = Box::new(BroadcastStage::new(processor, common));
 
     CeremonyRunner::<SigningCeremony<EthSigning>>::new_authorised(
-        DEFAULT_SIGNING_CEREMONY_ID,
+        DEFAULT_CEREMONY_ID,
         stage,
         logger,
     )
@@ -306,7 +308,7 @@ async fn should_timeout_authorised_ceremony() {
     let (outgoing_p2p_sender, _outgoing_p2p_receiver) = tokio::sync::mpsc::unbounded_channel();
     let _res = request_sender.send(
         prepare_signing_request(
-            DEFAULT_SIGNING_CEREMONY_ID,
+            DEFAULT_CEREMONY_ID,
             &ACCOUNT_IDS[0],
             BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
             get_key_data_for_test(BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned())),

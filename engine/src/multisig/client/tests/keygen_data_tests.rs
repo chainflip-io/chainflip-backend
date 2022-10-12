@@ -25,7 +25,7 @@ pub fn gen_keygen_data_hash_comm1() -> KeygenData<Point> {
 pub fn gen_keygen_data_verify_hash_comm2(participant_count: AuthorityCount) -> KeygenData<Point> {
     let mut rng = Rng::from_seed([0; 32]);
     KeygenData::VerifyHashComm2(BroadcastVerificationMessage {
-        data: (0..participant_count)
+        data: (1..=participant_count)
             .map(|i| (i as AuthorityCount, Some(get_invalid_hash_comm(&mut rng))))
             .collect(),
     })
@@ -42,7 +42,7 @@ fn gen_keygen_data_verify_coeff_comm4(
 ) -> KeygenData<Point> {
     let mut rng = Rng::from_seed([0; 32]);
     KeygenData::VerifyCoeffComm4(BroadcastVerificationMessage {
-        data: (0..participant_count_outer)
+        data: (1..=participant_count_outer)
             .map(|i| {
                 (
                     i as AuthorityCount,
@@ -59,7 +59,7 @@ fn gen_keygen_secret_shares5() -> KeygenData<Point> {
 }
 
 fn gen_keygen_data_complaints6(participant_count: AuthorityCount) -> KeygenData<Point> {
-    KeygenData::Complaints6(Complaints6(BTreeSet::from_iter(0..participant_count)))
+    KeygenData::Complaints6(Complaints6(BTreeSet::from_iter(1..=participant_count)))
 }
 
 fn gen_keygen_data_verify_complaints7(
@@ -67,11 +67,13 @@ fn gen_keygen_data_verify_complaints7(
     participant_count_inner: AuthorityCount,
 ) -> KeygenData<Point> {
     KeygenData::VerifyComplaints7(BroadcastVerificationMessage {
-        data: (0..participant_count_outer)
+        data: (1..=participant_count_outer)
             .map(|i| {
                 (
                     i as AuthorityCount,
-                    Some(Complaints6(BTreeSet::from_iter(0..participant_count_inner))),
+                    Some(Complaints6(BTreeSet::from_iter(
+                        1..=participant_count_inner,
+                    ))),
                 )
             })
             .collect(),
@@ -81,7 +83,7 @@ fn gen_keygen_data_verify_complaints7(
 fn gen_keygen_data_blame_response8(participant_count: AuthorityCount) -> KeygenData<Point> {
     let mut rng = Rng::from_seed([0; 32]);
     KeygenData::BlameResponse8(BlameResponse8(
-        (0..participant_count)
+        (1..=participant_count)
             .map(|i| (i, SecretShare5::create_random(&mut rng)))
             .collect(),
     ))
