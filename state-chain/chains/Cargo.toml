@@ -57,22 +57,6 @@ default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'chainflip-monthly-2022-06'
 
-# Polkadot dependencies
-[dependencies.pallet-balances]
-default-features = false
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06'
-
-[dependencies.pallet-utility]
-default-features = false
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06'
-
-[dependencies.pallet-proxy]
-default-features = false
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06'
-
 [dependencies.sp-core]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
@@ -100,9 +84,6 @@ std = [
   'sp-runtime/std',
   'sp-std/std',
   'secp256k1',
-  'pallet-proxy/std',
-  'pallet-balances/std',
-  'pallet-utility/std',
   'sp-core/std'
 ]
 runtime-benchmarks = [
