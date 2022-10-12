@@ -10,9 +10,9 @@ use crate::{
     settings::P2P as P2PSettings,
 };
 
+pub use self::core::{PeerInfo, PeerUpdate};
 use anyhow::Context;
 use cf_primitives::AccountId;
-pub use core::{PeerInfo, PeerUpdate};
 use futures::{Future, FutureExt};
 use muxer::P2PMuxer;
 use sp_core::H256;
