@@ -41,7 +41,12 @@ pub mod pallet {
 
 	use super::{GovCallHash, WeightInfo};
 
-	pub type ActiveProposal = (ProposalId, Timestamp);
+	#[derive(Encode, Decode, TypeInfo, Clone, Copy, RuntimeDebug, PartialEq, Eq)]
+	pub struct ActiveProposal {
+		pub proposal_id: ProposalId,
+		pub expiry_time: Timestamp,
+	}
+
 	/// Proposal struct
 	#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 	pub struct Proposal<AccountId> {
@@ -298,7 +303,7 @@ pub mod pallet {
 				ExecutionPipeline::<T>::append((proposal.call, id));
 				Proposals::<T>::remove(id);
 				let mut active_proposals = ActiveProposals::<T>::get();
-				active_proposals.retain(|x| x.0 != id);
+				active_proposals.retain(|ActiveProposal { proposal_id, .. }| *proposal_id != id);
 				ActiveProposals::<T>::set(active_proposals);
 			}
 			// Governance members don't pay transaction fees
@@ -466,9 +471,9 @@ impl<T: Config> Pallet<T> {
 			Some(proposal_len) if proposal_len > 0 => {
 				// Separate the proposals into expired an active by partitioning
 				let (expired, active): (Vec<ActiveProposal>, Vec<ActiveProposal>) =
-					ActiveProposals::<T>::get()
-						.iter()
-						.partition(|p| p.1 <= T::TimeSource::now().as_secs());
+					ActiveProposals::<T>::get().iter().partition(|active_proposal| {
+						active_proposal.expiry_time <= T::TimeSource::now().as_secs()
+					});
 				// Remove expired proposals
 				let number_expired_proposals = expired.len() as u32;
 				Self::expire_proposals(expired);
@@ -502,21 +507,23 @@ impl<T: Config> Pallet<T> {
 	}
 	/// Expire proposals
 	fn expire_proposals(expired: Vec<ActiveProposal>) {
-		for expired_proposal in expired {
-			Proposals::<T>::remove(expired_proposal.0);
-			Self::deposit_event(Event::Expired(expired_proposal.0));
+		for ActiveProposal { proposal_id, .. } in expired {
+			Proposals::<T>::remove(proposal_id);
+			Self::deposit_event(Event::Expired(proposal_id));
 		}
 	}
 	/// Push a proposal
 	fn push_proposal(call: Box<<T as Config>::Call>) -> u32 {
-		// Generate the next proposal id
-		let id = ProposalIdCounter::<T>::get().add(1);
-		// Insert a new proposal
-		Proposals::<T>::insert(id, Proposal { call: call.encode(), approved: Default::default() });
-		// Update the proposal counter
-		ProposalIdCounter::<T>::put(id);
-		// Add the proposal to the active proposals array
-		ActiveProposals::<T>::append((id, T::TimeSource::now().as_secs() + ExpiryTime::<T>::get()));
-		id
+		let proposal_id = ProposalIdCounter::<T>::get().add(1);
+		Proposals::<T>::insert(
+			proposal_id,
+			Proposal { call: call.encode(), approved: Default::default() },
+		);
+		ProposalIdCounter::<T>::put(proposal_id);
+		ActiveProposals::<T>::append(ActiveProposal {
+			proposal_id,
+			expiry_time: T::TimeSource::now().as_secs() + ExpiryTime::<T>::get(),
+		});
+		proposal_id
 	}
 }
