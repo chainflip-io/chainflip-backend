@@ -69,7 +69,7 @@ impl cf_traits::SignerNomination for RandomSignerNomination {
 	) -> Option<Self::SignerId> {
 		select_one(
 			seed_from_hashable(seed),
-			eligible_authorities(<Validator as EpochInfo>::epoch_index(), exclude_ids),
+			eligible_authorities(Validator::epoch_index(), exclude_ids),
 		)
 	}
 
@@ -80,7 +80,7 @@ impl cf_traits::SignerNomination for RandomSignerNomination {
 		try_select_random_subset(
 			seed_from_hashable(seed),
 			cf_utilities::success_threshold_from_share_count(
-				<Validator as EpochInfo>::authority_count_at_epoch(epoch_index).unwrap_or_default(),
+				Validator::authority_count_at_epoch(epoch_index).unwrap_or_default(),
 			) as usize,
 			eligible_authorities(epoch_index, &[]),
 		)
@@ -115,8 +115,8 @@ mod tests {
 		threshold: usize,
 		set: BTreeSet<T>,
 	) {
-		let source = BTreeSet::from_iter(set.clone());
-		let result = BTreeSet::from_iter(try_select_random_subset(seed, threshold, set).unwrap());
+		let source = set.clone();
+		let result = try_select_random_subset(seed, threshold, set).unwrap();
 		assert!(result.len() == threshold);
 		assert!(source.is_superset(&result))
 	}
@@ -150,10 +150,8 @@ mod tests {
 			// Note: strictly speaking these don't have to be different but the chances of a
 			// collision should be quite low.
 			assert_ne!(
-				BTreeSet::from_iter(try_select_random_subset(seed, 100, set.clone()).unwrap()),
-				BTreeSet::from_iter(
-					try_select_random_subset(seed + 100, 100, set.clone()).unwrap()
-				),
+				try_select_random_subset(seed, 100, set.clone()).unwrap(),
+				try_select_random_subset(seed + 100, 100, set.clone()).unwrap(),
 			);
 		}
 	}
@@ -163,8 +161,8 @@ mod tests {
 		let set = (0..150).collect::<BTreeSet<_>>();
 		for seed in 0..100 {
 			assert_eq!(
-				BTreeSet::from_iter(try_select_random_subset(seed, 100, set.clone()).unwrap()),
-				BTreeSet::from_iter(try_select_random_subset(seed, 100, set.clone()).unwrap()),
+				try_select_random_subset(seed, 100, set.clone()).unwrap(),
+				try_select_random_subset(seed, 100, set.clone()).unwrap(),
 			);
 		}
 	}
