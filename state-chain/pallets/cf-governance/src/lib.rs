@@ -468,11 +468,9 @@ impl<T: Config> Pallet<T> {
 		(frame_support::Hashable::blake2_256(&(data, nonce, T::Version::get())), nonce)
 	}
 
-	/// Checks the expiry state of the proposals
 	fn check_expiry() -> Weight {
 		match ActiveProposals::<T>::decode_len() {
 			Some(proposal_len) if proposal_len > 0 => {
-				// Separate the proposals into expired an active by partitioning
 				let (expired, active): (Vec<ActiveProposal>, Vec<ActiveProposal>) =
 					ActiveProposals::<T>::get().iter().partition(|active_proposal| {
 						active_proposal.expiry_time <= T::TimeSource::now().as_secs()
