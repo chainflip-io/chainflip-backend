@@ -20,9 +20,15 @@ impl PartyIdxMapping {
     }
 
     /// Get party account id based on their index
-    pub fn get_id(&self, idx: AuthorityCount) -> Option<&AccountId> {
-        let idx = idx.checked_sub(1)?;
-        self.account_ids.iter().nth(idx as usize)
+    pub fn get_id(&self, idx: AuthorityCount) -> &AccountId {
+        let idx_sub_one = idx
+            .checked_sub(1)
+            .expect("Party mapping index must be larger than 0");
+
+        self.account_ids
+            .iter()
+            .nth(idx_sub_one as usize)
+            .unwrap_or_else(|| panic!("Party index of [{}] is invalid", idx))
     }
 
     /// Map all signer ids to their corresponding signer idx
@@ -40,13 +46,7 @@ impl PartyIdxMapping {
     /// Convert all indexes to Account Ids. Precondition: the indexes must be
     /// valid for the ceremony
     pub fn get_ids(&self, idxs: BTreeSet<AuthorityCount>) -> BTreeSet<AccountId> {
-        idxs.iter()
-            .map(|idx| {
-                self.get_id(*idx)
-                    .expect("Precondition violation: unknown idx")
-                    .clone()
-            })
-            .collect()
+        idxs.iter().map(|idx| self.get_id(*idx).clone()).collect()
     }
 
     pub fn from_participants(participants: BTreeSet<AccountId>) -> Self {
@@ -113,6 +113,10 @@ macro_rules! derive_display_as_type_name {
 
 #[cfg(test)]
 mod utils_tests {
+    use utilities::assert_panics;
+
+    use crate::multisig::client::tests::ACCOUNT_IDS;
+
     use super::*;
 
     #[test]
@@ -121,12 +125,26 @@ mod utils_tests {
         let b = AccountId::new([b'B'; 32]);
         let c = AccountId::new([b'C'; 32]);
 
-        let signers = BTreeSet::from_iter([a, c.clone(), b]);
-
-        let map = PartyIdxMapping::from_participants(signers);
+        let map = PartyIdxMapping::from_participants(BTreeSet::from_iter([a, c.clone(), b]));
 
         assert_eq!(map.get_idx(&c), Some(3));
-        assert_eq!(map.get_id(3), Some(&c));
+        assert_eq!(map.get_id(3), &c);
+    }
+
+    #[test]
+    fn get_id_panics_if_index_is_zero() {
+        let map =
+            PartyIdxMapping::from_participants(BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()));
+
+        assert_panics!(map.get_id(0));
+    }
+
+    #[test]
+    fn get_id_panics_if_index_is_too_large() {
+        let map =
+            PartyIdxMapping::from_participants(BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()));
+
+        assert_panics!(map.get_id((ACCOUNT_IDS.len() + 1) as u32));
     }
 }
 

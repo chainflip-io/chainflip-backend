@@ -11,7 +11,10 @@ use zeroize::Zeroize;
 use anyhow::anyhow;
 
 use crate::multisig::{
-    client::{common::KeygenFailureReason, KeygenResult, KeygenResultInfo, ThresholdParameters},
+    client::{
+        common::KeygenFailureReason, KeygenResult, KeygenResultInfo, PartyIdxMapping,
+        ThresholdParameters,
+    },
     crypto::{ECPoint, ECScalar, KeyShare, Rng},
 };
 
@@ -261,6 +264,7 @@ pub fn validate_commitments<P: ECPoint>(
     public_coefficients: BTreeMap<AuthorityCount, DKGUnverifiedCommitment<P>>,
     hash_commitments: BTreeMap<AuthorityCount, HashComm1>,
     context: &HashContext,
+    validator_mapping: Arc<PartyIdxMapping>,
     logger: &slog::Logger,
 ) -> Result<
     BTreeMap<AuthorityCount, DKGCommitment<P>>,
@@ -276,10 +280,10 @@ pub fn validate_commitments<P: ECPoint>(
                 .expect("message must be present due to ceremony runner invariants");
 
             if !is_valid_zkp(challenge, &c.zkp, &c.commitments) {
-                slog::warn!(logger, "Invalid ZKP commitment from party: {}", idx);
+                slog::warn!(logger, "Invalid ZKP commitment"; "from_id" => validator_mapping.get_id(*idx).to_string());
                 Some(*idx)
             } else if !is_valid_hash_commitment(c, &hash_commitment.0) {
-                slog::warn!(logger, "Invalid hash commitment for party: {}", idx);
+                slog::warn!(logger, "Invalid hash commitment"; "from_id" => validator_mapping.get_id(*idx).to_string());
                 Some(*idx)
             } else {
                 None
@@ -445,6 +449,7 @@ mod tests {
     #[test]
     fn keygen_sequential() {
         use crate::multisig::crypto::eth::{Point, Scalar};
+        use state_chain_runtime::AccountId;
 
         let n = 4;
         let t = 2;
@@ -481,6 +486,9 @@ mod tests {
             commitments,
             hash_commitments,
             &context,
+            Arc::new(PartyIdxMapping::from_participants(BTreeSet::from_iter(
+                (1..=n as u8).map(|i| AccountId::new([i; 32]))
+            ))),
             &new_test_logger()
         ));
 
@@ -575,7 +583,7 @@ pub mod genesis {
                     .collect();
 
                 (
-                    validator_mapping.get_id(idx).unwrap().clone(),
+                    validator_mapping.get_id(idx).clone(),
                     KeygenResultInfo {
                         key: Arc::new(KeygenResult {
                             key_share: KeyShare {
