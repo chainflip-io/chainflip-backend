@@ -1,5 +1,5 @@
+mod core;
 mod muxer;
-mod p2p_core;
 mod peer_info_submitter;
 
 use std::{marker::PhantomData, sync::Arc};
@@ -12,9 +12,9 @@ use crate::{
 
 use anyhow::Context;
 use cf_primitives::AccountId;
+pub use core::{PeerInfo, PeerUpdate};
 use futures::{Future, FutureExt};
 use muxer::P2PMuxer;
-pub use p2p_core::{PeerInfo, PeerUpdate};
 use sp_core::H256;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use zeroize::Zeroizing;
@@ -95,7 +95,7 @@ pub async fn start(
         incoming_message_receiver,
         own_peer_info_receiver,
         p2p_fut,
-    ) = p2p_core::start(
+    ) = core::start(
         &node_key,
         settings.port,
         current_peers,
