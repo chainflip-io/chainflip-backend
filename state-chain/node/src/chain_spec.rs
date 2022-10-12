@@ -583,16 +583,16 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 }
 
 const PERSEVERANCE_ENV: StateChainEnvironment = StateChainEnvironment {
-	flip_token_address: hex_literal::hex!("1353DE92af0e7eaFFD8DAE7CFe7649814a8ebc07"),
+	flip_token_address: hex_literal::hex!("3C2bb6FFDe958ada25B1F4aDB40d93F252fd3510"),
 	eth_usdc_address: hex_literal::hex!("07865c6E87B9F70255377e024ace6630C1Eaa37F"),
-	stake_manager_address: hex_literal::hex!("9D55C1768e8DF3ec937bf3554ADe293Df321E837"),
-	key_manager_address: hex_literal::hex!("BF7EA295bE3F574b82143A4Dd7cdD2F7Ef4e3739"),
-	eth_vault_address: hex_literal::hex!("b7669Fb07c66AcC0083A8d55BD3a473c0f2C5667"),
+	stake_manager_address: hex_literal::hex!("Ff4a902cE5605F5793aC3F748c332dDFe5bed873"),
+	key_manager_address: hex_literal::hex!("f676fb8339C98BD096C1f42a295A2a15BbB60FA6"),
+	eth_vault_address: hex_literal::hex!("9d552CB8e738fAe1AA815A0a9B570529981D5Ca1"),
 	ethereum_chain_id: CHAIN_ID_GOERLI,
 	eth_init_agg_key: hex_literal::hex!(
-		"0313eb7d2010b2a7eb64e3a6ce153a89affe99082f722f0484ea2f34a3849fe04d"
+		"03428f4cf61857c7b921c2719b52d6ad48405df5070f94411b1b66d7b0c2b51c75"
 	),
-	ethereum_deployment_block: 7749978u64,
+	ethereum_deployment_block: 7755503u64,
 	genesis_stake_amount: 5_000 * FLIPPERINOS_PER_FLIP,
 	min_stake: 10 * FLIPPERINOS_PER_FLIP,
 	eth_block_safety_margin: 4,
