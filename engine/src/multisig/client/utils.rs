@@ -113,6 +113,8 @@ macro_rules! derive_display_as_type_name {
 
 #[cfg(test)]
 mod utils_tests {
+    use utilities::assert_panics;
+
     use crate::multisig::client::tests::ACCOUNT_IDS;
 
     use super::*;
@@ -130,21 +132,19 @@ mod utils_tests {
     }
 
     #[test]
-    #[should_panic]
     fn get_id_panics_if_index_is_zero() {
         let map =
             PartyIdxMapping::from_participants(BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()));
 
-        let _id = map.get_id(0);
+        assert_panics!(map.get_id(0));
     }
 
     #[test]
-    #[should_panic]
     fn get_id_panics_if_index_is_too_large() {
         let map =
             PartyIdxMapping::from_participants(BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()));
 
-        let _id = map.get_id((ACCOUNT_IDS.len() + 1) as u32);
+        assert_panics!(map.get_id((ACCOUNT_IDS.len() + 1) as u32));
     }
 }
 
