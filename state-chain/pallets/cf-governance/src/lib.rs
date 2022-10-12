@@ -469,18 +469,18 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn check_expiry() -> Weight {
-		match ActiveProposals::<T>::decode_len() {
-			Some(proposal_len) if proposal_len > 0 => {
-				let (expired, active): (Vec<ActiveProposal>, Vec<ActiveProposal>) =
-					ActiveProposals::<T>::get().iter().partition(|active_proposal| {
-						active_proposal.expiry_time <= T::TimeSource::now().as_secs()
-					});
-
-				ActiveProposals::<T>::set(active);
-				Self::expire_proposals(expired) + T::WeightInfo::on_initialize(proposal_len as u32)
-			},
-			_ => T::WeightInfo::on_initialize_best_case(),
+		let active_proposals = ActiveProposals::<T>::get();
+		let num_proposals = active_proposals.len();
+		if num_proposals == 0 {
+			return T::WeightInfo::on_initialize_best_case()
 		}
+		let (expired, active): (Vec<ActiveProposal>, Vec<ActiveProposal>) =
+			active_proposals.iter().partition(|active_proposal| {
+				active_proposal.expiry_time <= T::TimeSource::now().as_secs()
+			});
+
+		ActiveProposals::<T>::set(active);
+		Self::expire_proposals(expired) + T::WeightInfo::on_initialize(num_proposals as u32)
 	}
 	fn execute_proposals_pending_execution() -> Weight {
 		let mut execution_weight = 0;
