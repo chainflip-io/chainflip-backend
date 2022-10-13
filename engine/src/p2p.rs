@@ -81,6 +81,8 @@ impl std::fmt::Display for PeerInfo {
     }
 }
 
+const INCOMING_MONITOR_ENDPOINT: &str = "inproc://incoming_monitor";
+
 /// Used to track "registration" status on the network
 enum RegistrationStatus {
     /// The node is not yet known to the network (its peer info
@@ -217,6 +219,8 @@ pub fn start(
     for peer_info in current_peers {
         context.handle_peer_update(peer_info);
     }
+
+    context.start_incoming_socket_monitor();
 
     let incoming_message_receiver_ed25519 = context.start_listening_thread(port);
 
@@ -438,9 +442,52 @@ impl P2PContext {
         }
     }
 
+    fn start_incoming_socket_monitor(&self) {
+        let context = self.zmq_context.clone();
+        let logger = self.logger.clone();
+        std::thread::spawn(move || {
+            let monitor_socket = context.socket(zmq::PAIR).unwrap();
+            monitor_socket.connect(INCOMING_MONITOR_ENDPOINT).unwrap();
+            loop {
+                let message = monitor_socket.recv_multipart(0).unwrap();
+
+                // We are only interested in the event id (the first two bytes of the first message)
+                // (second message is our own endpoint which we already know)
+                let event_id = u16::from_le_bytes(message[0][0..2].try_into().unwrap());
+                match zmq::SocketEvent::from_raw(event_id) {
+                    zmq::SocketEvent::LISTENING => {
+                        slog::warn!(logger, "Listening socket event: LISTENING",);
+                    }
+                    zmq::SocketEvent::ACCEPTED => {
+                        slog::warn!(logger, "Listening socket event: ACCEPTED",);
+                    }
+                    zmq::SocketEvent::DISCONNECTED => {
+                        slog::warn!(logger, "Listening socket event: DISCONNECTED",);
+                    }
+                    zmq::SocketEvent::HANDSHAKE_FAILED_AUTH => {
+                        slog::warn!(logger, "Listening socket event: HANDSHAKE_FAILED_AUTH",);
+                    }
+                    zmq::SocketEvent::HANDSHAKE_SUCCEEDED => {
+                        slog::warn!(logger, "Listening socket event: HANDSHAKE_SUCCEEDED",);
+                    }
+                    other_event_id => {
+                        println!("Listening socket event: {}", other_event_id.to_raw());
+                    }
+                }
+            }
+        });
+    }
+
     /// Start listening for incoming p2p messages on a separate thread
     fn start_listening_thread(&mut self, port: Port) -> UnboundedReceiver<(XPublicKey, Vec<u8>)> {
         let socket = self.zmq_context.socket(zmq::SocketType::ROUTER).unwrap();
+
+        socket
+            .monitor(
+                INCOMING_MONITOR_ENDPOINT,
+                zmq::SocketEvent::ALL.to_raw() as i32,
+            )
+            .unwrap();
 
         socket.set_router_mandatory(true).unwrap();
         socket.set_router_handover(true).unwrap();
