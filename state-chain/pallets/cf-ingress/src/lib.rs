@@ -30,6 +30,7 @@ pub mod pallet {
 
 	use super::*;
 	use cf_primitives::Asset;
+	use cf_traits::IngressFetchApi;
 	use frame_support::{
 		pallet_prelude::{DispatchResultWithPostInfo, OptionQuery, ValueQuery, *},
 		traits::{EnsureOrigin, IsType},
