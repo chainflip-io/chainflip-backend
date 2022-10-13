@@ -148,7 +148,7 @@ pub mod pallet {
 		fn on_initialize(_n: BlockNumberFor<T>) -> Weight {
 			// Check expiry and expire the proposals if needed
 			let active_proposal_weight = Self::check_expiry();
-			let execution_weight = Self::execute_proposals_pending_execution();
+			let execution_weight = Self::execute_pending_proposals();
 			active_proposal_weight + execution_weight
 		}
 	}
@@ -483,7 +483,7 @@ impl<T: Config> Pallet<T> {
 		ActiveProposals::<T>::set(active);
 		Self::expire_proposals(expired) + T::WeightInfo::on_initialize(num_proposals as u32)
 	}
-	fn execute_proposals_pending_execution() -> Weight {
+	fn execute_pending_proposals() -> Weight {
 		let mut execution_weight = 0;
 		for (call, id) in ExecutionPipeline::<T>::take() {
 			Self::deposit_event(if let Ok(call) = <T as Config>::Call::decode(&mut &(*call)) {
