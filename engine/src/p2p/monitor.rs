@@ -50,9 +50,7 @@ impl MonitorHandle {
         let monitor_endpoint = format!("inproc://monitor-client-{}-{}", peer.account_id, random_id);
 
         // These are the only events we are interested in
-        let flags = zmq::SocketEvent::HANDSHAKE_FAILED_AUTH.to_raw()
-            | zmq::SocketEvent::MONITOR_STOPPED.to_raw()
-            | zmq::SocketEvent::HANDSHAKE_SUCCEEDED.to_raw();
+        let flags = zmq::SocketEvent::ALL.to_raw();
 
         // This makes ZMQ publish socket events
         socket_to_monitor.enable_socket_events(&monitor_endpoint, flags);
@@ -211,10 +209,60 @@ pub fn start_monitoring_thread(
                                 );
                                 stop_monitoring_for_peer(&mut sockets_to_poll, *idx, &logger);
                             }
-                            unknown_event => panic!(
-                                "P2P AUTH MONITOR: unexpected socket event: {:?}",
-                                unknown_event
-                            ),
+                            zmq::SocketEvent::HANDSHAKE_FAILED_PROTOCOL => {
+                                slog::trace!(
+                                    logger,
+                                    "Socket event: HANDSHAKE_FAILED_PROTOCOL {}",
+                                    account_id
+                                );
+                            }
+                            zmq::SocketEvent::HANDSHAKE_FAILED_NO_DETAIL => {
+                                slog::trace!(
+                                    logger,
+                                    "Socket event: HANDSHAKE_FAILED_NO_DETAIL {}",
+                                    account_id
+                                );
+                            }
+                            zmq::SocketEvent::DISCONNECTED => {
+                                slog::trace!(logger, "Socket event: DISCONNECTED {}", account_id);
+                            }
+                            zmq::SocketEvent::CLOSE_FAILED => {
+                                slog::trace!(logger, "Socket event: CLOSE_FAILED {}", account_id);
+                            }
+                            zmq::SocketEvent::CLOSED => {
+                                slog::trace!(logger, "Socket event: CLOSED {}", account_id);
+                            }
+                            zmq::SocketEvent::ACCEPT_FAILED => {
+                                slog::trace!(logger, "Socket event: ACCEPT_FAILED {}", account_id);
+                            }
+                            zmq::SocketEvent::ACCEPTED => {
+                                slog::trace!(logger, "Socket event: ACCEPTED {}", account_id);
+                            }
+                            zmq::SocketEvent::CONNECT_RETRIED => {
+                                slog::trace!(
+                                    logger,
+                                    "Socket event: CONNECT_RETRIED {}",
+                                    account_id
+                                );
+                            }
+                            zmq::SocketEvent::CONNECT_DELAYED => {
+                                slog::trace!(
+                                    logger,
+                                    "Socket event: CONNECT_DELAYED {}",
+                                    account_id
+                                );
+                            }
+                            zmq::SocketEvent::CONNECTED => {
+                                slog::trace!(logger, "Socket event: CONNECTED {}", account_id);
+                            }
+                            unexpected_event => {
+                                slog::trace!(
+                                    logger,
+                                    "Socket event: ({}) {}",
+                                    unexpected_event.to_raw(),
+                                    account_id
+                                );
+                            }
                         }
                     }
                 }
