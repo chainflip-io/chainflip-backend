@@ -14,6 +14,24 @@ use super::{EthNumberBloom, EthRpcApi};
 
 use futures::StreamExt;
 
+macro_rules! retry_rpc_until_success {
+    ($eth_rpc:expr, $method:ident, $poll_interval:expr, $logger:expr, $($arg:expr),*) => {
+        {
+            loop {
+                match $eth_rpc.$method($($arg),*).await {
+                    Ok(item) => {
+                        break item;
+                    }
+                    Err(err) => {
+                        slog::error!($logger, "Error fetching {}. {}", stringify!($method), err);
+                        $poll_interval.tick().await;
+                    }
+                }
+            }
+        }
+    }
+}
+
 pub async fn safe_polling_http_head_stream<HttpRpc>(
 	eth_http_rpc: HttpRpc,
 	poll_interval: Duration,
@@ -49,27 +67,15 @@ where
 				logger,
 			} = &mut state;
 
-			async fn get_unsafe_block_number<HttpRpc: EthRpcApi>(
-				eth_http_rpc: &HttpRpc,
-				poll_interval: &mut Interval,
-				logger: &slog::Logger,
-			) -> U64 {
-				loop {
-					match eth_http_rpc.block_number().await {
-						Ok(block_number) => break block_number,
-						Err(err) => {
-							slog::error!(logger, "Error fetching ETH block number: {}", err);
-							poll_interval.tick().await;
-						},
-					};
-				}
-			}
-
 			let last_head_fetched = if let Some(last_head_fetched) = option_last_head_fetched {
 				last_head_fetched
 			} else {
-				option_last_head_fetched
-					.insert(get_unsafe_block_number(eth_http_rpc, poll_interval, logger).await)
+				option_last_head_fetched.insert(retry_rpc_until_success!(
+					eth_http_rpc,
+					block_number,
+					poll_interval,
+					logger,
+				))
 			};
 
 			// Only request the latest block number if we are out of blocks to yield
@@ -82,7 +88,7 @@ where
 			} {
 				poll_interval.tick().await;
 				let unsafe_block_number =
-					get_unsafe_block_number(eth_http_rpc, poll_interval, logger).await;
+					retry_rpc_until_success!(eth_http_rpc, block_number, poll_interval, logger,);
 
 				// Fetched unsafe_block_number is more than `safety_margin` blocks behind the last
 				// fetched ETH block number (last_head_fetched)
@@ -100,16 +106,14 @@ where
 				last_head_fetched.checked_sub(U64::from(safety_margin)).unwrap()
 			};
 
-			let block = loop {
-				match eth_http_rpc.block(next_block_to_yield).await {
-					Ok(block) => break block,
-					Err(err) => {
-						slog::error!(logger, "Error fetching ETH block: {}", err);
-						poll_interval.tick().await;
-					},
-				}
-			};
-			let number_bloom = EthNumberBloom::try_from(block).ok()?;
+			let number_bloom = EthNumberBloom::try_from(retry_rpc_until_success!(
+				eth_http_rpc,
+				block,
+				poll_interval,
+				logger,
+				next_block_to_yield
+			))
+			.ok()?;
 			*option_last_block_yielded = Some(number_bloom.block_number);
 			Some((number_bloom, state))
 		})
