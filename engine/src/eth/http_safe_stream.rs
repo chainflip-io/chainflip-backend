@@ -15,21 +15,17 @@ use super::{EthNumberBloom, EthRpcApi};
 use futures::StreamExt;
 
 macro_rules! retry_rpc_until_success {
-    ($eth_rpc:expr, $method:ident, $poll_interval:expr, $logger:expr, $($arg:expr),*) => {
-        {
-            loop {
-                match $eth_rpc.$method($($arg),*).await {
-                    Ok(item) => {
-                        break item;
-                    }
-                    Err(err) => {
-                        slog::error!($logger, "Error fetching {}. {}", stringify!($method), err);
-                        $poll_interval.tick().await;
-                    }
-                }
-            }
-        }
-    }
+	($eth_rpc_call:expr, $poll_interval:expr, $logger:expr) => {{
+		loop {
+			match $eth_rpc_call.await {
+				Ok(item) => break item,
+				Err(err) => {
+					slog::error!($logger, "Error fetching {}. {}", stringify!($eth_rpc_call), err);
+					$poll_interval.tick().await;
+				},
+			}
+		}
+	}};
 }
 
 pub async fn safe_polling_http_head_stream<HttpRpc>(
@@ -71,10 +67,9 @@ where
 				last_head_fetched
 			} else {
 				option_last_head_fetched.insert(retry_rpc_until_success!(
-					eth_http_rpc,
-					block_number,
+					eth_http_rpc.block_number(),
 					poll_interval,
-					logger,
+					logger
 				))
 			};
 
@@ -88,7 +83,7 @@ where
 			} {
 				poll_interval.tick().await;
 				let unsafe_block_number =
-					retry_rpc_until_success!(eth_http_rpc, block_number, poll_interval, logger,);
+					retry_rpc_until_success!(eth_http_rpc.block_number(), poll_interval, logger);
 
 				// Fetched unsafe_block_number is more than `safety_margin` blocks behind the last
 				// fetched ETH block number (last_head_fetched)
@@ -107,11 +102,9 @@ where
 			};
 
 			let number_bloom = EthNumberBloom::try_from(retry_rpc_until_success!(
-				eth_http_rpc,
-				block,
+				eth_http_rpc.block(next_block_to_yield),
 				poll_interval,
-				logger,
-				next_block_to_yield
+				logger
 			))
 			.ok()?;
 			*option_last_block_yielded = Some(number_bloom.block_number);
