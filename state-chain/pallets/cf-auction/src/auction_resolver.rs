@@ -45,11 +45,11 @@ impl SetSizeMaximisingAuctionResolver {
 		current_size: u32,
 		parameters @ SetSizeParameters { min_size, max_size, max_expansion }: SetSizeParameters,
 	) -> Result<Self, AuctionError> {
-		ensure!(min_size > 0, AuctionError::InvalidParameters);
-		ensure!(min_size <= max_size, AuctionError::InvalidParameters);
 		ensure!(
-			current_size.saturating_add(max_expansion) >= min_size,
-			AuctionError::InconsistentRanges
+			min_size > 0 &&
+				min_size <= max_size &&
+				current_size.saturating_add(max_expansion) >= min_size,
+			AuctionError::InvalidParameters
 		);
 		Ok(Self { current_size, parameters })
 	}
