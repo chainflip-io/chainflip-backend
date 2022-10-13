@@ -207,7 +207,7 @@ pub fn start_monitoring_thread(
                                     "Socket event: authentication success with {}",
                                     account_id
                                 );
-                                stop_monitoring_for_peer(&mut sockets_to_poll, *idx, &logger);
+                                // stop_monitoring_for_peer(&mut sockets_to_poll, *idx, &logger);
                             }
                             zmq::SocketEvent::HANDSHAKE_FAILED_PROTOCOL => {
                                 slog::trace!(
