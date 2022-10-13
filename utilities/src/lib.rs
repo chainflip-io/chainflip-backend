@@ -23,6 +23,19 @@ macro_rules! assert_err {
 	};
 }
 
+#[macro_export]
+macro_rules! unwrap_or_continue {
+	($res:expr, $logger:expr) => {
+		match $res {
+			Ok(val) => val,
+			Err(e) => {
+				slog::warn!($logger, "{}; skipped.", e);
+				continue
+			},
+		}
+	};
+}
+
 #[cfg(test)]
 mod test_asserts {
 	use crate::assert_panics;

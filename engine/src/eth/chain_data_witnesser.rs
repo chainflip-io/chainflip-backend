@@ -9,7 +9,7 @@ use cf_chains::{eth::TrackedData, Ethereum};
 use sp_core::U256;
 use state_chain_runtime::CfeSettings;
 use tokio::sync::{broadcast, watch};
-use utilities::{context, make_periodic_tick};
+use utilities::{context, make_periodic_tick, unwrap_or_continue};
 use web3::types::{BlockNumber, U64};
 
 const ETH_CHAIN_TRACKING_POLL_INTERVAL: Duration = Duration::from_secs(4);
@@ -41,29 +41,34 @@ where
 
             let state_chain_client = state_chain_client.clone();
             async move {
-                let mut poll_interval = make_periodic_tick(ETH_CHAIN_TRACKING_POLL_INTERVAL, false);
+                let mut poll_interval = make_periodic_tick(ETH_CHAIN_TRACKING_POLL_INTERVAL, true);
 
                 loop {
                     if let Some(_end_block) = *end_witnessing_signal.lock().unwrap() {
                         break;
                     }
 
-                    let block_number = eth_rpc.block_number().await?;
-                    let block_hash = context!(eth_rpc.block(block_number).await?.hash)?;
-                    if last_witnessed_block_hash != Some(block_hash) {
-                        let priority_fee = cfe_settings_update_receiver
+                    poll_interval.tick().await;
+
+                    let block_number = unwrap_or_continue!(eth_rpc.block_number().await, &logger);
+                    let block = unwrap_or_continue!(eth_rpc.block(block_number).await, &logger);
+                    let block_hash = unwrap_or_continue!(context!(block.hash), &logger);
+                    let priority_fee = cfe_settings_update_receiver
                             .borrow()
                             .eth_priority_fee_percentile;
+                    let latest_tracked_data = unwrap_or_continue!(get_tracked_data(
+                        &eth_rpc,
+                        block_number.as_u64(),
+                        priority_fee
+                    ).await, &logger);
+
+                    if last_witnessed_block_hash != Some(block_hash) {
                         let _result = state_chain_client
                             .submit_signed_extrinsic(
                                 state_chain_runtime::Call::Witnesser(pallet_cf_witnesser::Call::witness_at_epoch {
                                     call: Box::new(state_chain_runtime::Call::EthereumChainTracking(
                                         pallet_cf_chain_tracking::Call::update_chain_state {
-                                            state: get_tracked_data(
-                                                &eth_rpc,
-                                                block_number.as_u64(),
-                                                priority_fee
-                                            ).await?,
+                                            state: latest_tracked_data,
                                         },
                                     )),
                                     epoch_index: epoch_start.index
@@ -74,8 +79,6 @@ where
 
                         last_witnessed_block_hash = Some(block_hash);
                     }
-
-                    poll_interval.tick().await;
                 }
 
                 Ok(last_witnessed_block_hash)
