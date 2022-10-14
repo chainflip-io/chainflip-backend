@@ -205,28 +205,6 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
 	}
 }
 
-#[cfg(test)]
-pub const OUR_ACCOUNT_ID_BYTES: [u8; 32] = [0; 32];
-
-#[cfg(test)]
-pub const NOT_OUR_ACCOUNT_ID_BYTES: [u8; 32] = [1; 32];
-
-#[cfg(test)]
-impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
-	pub fn create_test_sc_client(rpc_client: RpcClient) -> Self {
-		use signer::PairSigner;
-
-		Self {
-			nonce: AtomicU32::new(0),
-			our_account_id: AccountId32::new(OUR_ACCOUNT_ID_BYTES),
-			state_chain_rpc_client: rpc_client,
-			runtime_version: RwLock::new(RuntimeVersion::default()),
-			genesis_hash: Default::default(),
-			signer: PairSigner::new(Pair::generate().0),
-		}
-	}
-}
-
 use crate::state_chain_observer::client::storage_traits::StorageMapAssociatedTypes;
 
 fn invalid_err_obj(invalid_reason: InvalidTransaction) -> ErrorObjectOwned {
@@ -837,6 +815,28 @@ pub async fn connect_to_state_chain_without_signer(
 	);
 
 	Ok(StateChainRpcClient { rpc_client })
+}
+
+#[cfg(test)]
+pub const OUR_ACCOUNT_ID_BYTES: [u8; 32] = [0; 32];
+
+#[cfg(test)]
+pub const NOT_OUR_ACCOUNT_ID_BYTES: [u8; 32] = [1; 32];
+
+#[cfg(test)]
+impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
+	pub fn create_test_sc_client(rpc_client: RpcClient) -> Self {
+		use signer::PairSigner;
+
+		Self {
+			nonce: AtomicU32::new(0),
+			our_account_id: AccountId32::new(OUR_ACCOUNT_ID_BYTES),
+			state_chain_rpc_client: rpc_client,
+			runtime_version: RwLock::new(RuntimeVersion::default()),
+			genesis_hash: Default::default(),
+			signer: PairSigner::new(Pair::generate().0),
+		}
+	}
 }
 
 #[cfg(test)]
