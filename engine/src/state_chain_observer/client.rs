@@ -104,14 +104,6 @@ pub trait StateChainRpcApi {
 		storage_key: StorageKey,
 	) -> RpcResult<Option<StorageData>>;
 
-	async fn storage_keys_paged(
-		&self,
-		block_hash: state_chain_runtime::Hash,
-		prefix: StorageKey,
-		count: u32,
-		start_key: Option<StorageKey>,
-	) -> Result<Vec<StorageKey>>;
-
 	async fn storage_pairs(
 		&self,
 		block_hash: state_chain_runtime::Hash,
@@ -171,20 +163,6 @@ where
 		self.rpc_client.storage(storage_key, Some(block_hash)).await
 	}
 
-	/// Returns the keys with prefix with pagination support.
-	async fn storage_keys_paged(
-		&self,
-		block_hash: state_chain_runtime::Hash,
-		prefix: StorageKey,
-		count: u32,
-		start_key: Option<StorageKey>,
-	) -> Result<Vec<StorageKey>> {
-		self.rpc_client
-			.storage_keys_paged(Some(prefix), count, start_key, Some(block_hash))
-			.await
-			.context("storage RPC API failed")
-	}
-
 	async fn rotate_keys(&self) -> RpcResult<Bytes> {
 		self.rpc_client.rotate_keys().await
 	}
@@ -232,13 +210,6 @@ pub const OUR_ACCOUNT_ID_BYTES: [u8; 32] = [0; 32];
 
 #[cfg(test)]
 pub const NOT_OUR_ACCOUNT_ID_BYTES: [u8; 32] = [1; 32];
-
-#[cfg(test)]
-pub fn mock_account_storage_key() -> StorageKey {
-	StorageKey(frame_system::Account::<state_chain_runtime::Runtime>::hashed_key_for(
-		&AccountId32::new(OUR_ACCOUNT_ID_BYTES),
-	))
-}
 
 #[cfg(test)]
 impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {

@@ -103,11 +103,7 @@ mod tests {
 
 	#[async_trait]
 	impl EthRpcApi for MockEthRpc {
-		async fn estimate_gas(
-			&self,
-			_req: CallRequest,
-			_block: Option<BlockNumber>,
-		) -> Result<U256> {
+		async fn estimate_gas(&self, _req: CallRequest) -> Result<U256> {
 			unimplemented!("not used");
 		}
 
