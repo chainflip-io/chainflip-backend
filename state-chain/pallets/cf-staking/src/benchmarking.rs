@@ -162,22 +162,22 @@ benchmarks! {
 		frame_system::Pallet::<T>::events().pop().expect("No event has been emitted from the post_claim_signature extrinsic");
 	}
 
-	// retire_account {
-	// 	let caller: T::AccountId = whitelisted_caller();
-	// 	ActiveBidder::<T>::insert(caller.clone(), true);
-	// 	EnsureValidator::<T>::register_account(caller.clone());
-	// }:_(RawOrigin::Signed(caller.clone()))
-	// verify {
-	// 	assert!(!ActiveBidder::<T>::get(caller));
-	// }
+	retire_account {
+		let caller: T::AccountId = whitelisted_caller();
+		ActiveBidder::<T>::insert(caller.clone(), true);
+		EnsureValidator::<T>::register_account(caller.clone());
+	}:_(RawOrigin::Signed(caller.clone()))
+	verify {
+		assert!(!ActiveBidder::<T>::get(caller));
+	}
 
 	activate_account {
-		let caller = EnsureValidator::<T>::successful_origin();
-		// let account_id = caller.as_signed();
-		// let call = Call::<T>::activate_account{};
-	}:_(caller)
+		let caller: T::AccountId = whitelisted_caller();
+		ActiveBidder::<T>::insert(caller.clone(), false);
+		EnsureValidator::<T>::register_account(caller.clone());
+	}:_(RawOrigin::Signed(caller.clone()))
 	verify {
-		// assert!(ActiveBidder::<T>::get(caller));
+		assert!(ActiveBidder::<T>::get(caller));
 	}
 
 	on_initialize_best_case {

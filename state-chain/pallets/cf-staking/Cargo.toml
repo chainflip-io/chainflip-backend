@@ -92,12 +92,14 @@ std = [
   'sp-core/std',
   'sp-std/std',
   'cf-runtime-upgrade-utilities/std',
+  'pallet-cf-account-types/std'
 ]
 runtime-benchmarks = [
   'cf-traits/runtime-benchmarks',
   'frame-benchmarking/runtime-benchmarks',
   'frame-support/runtime-benchmarks',
   'frame-system/runtime-benchmarks',
+  'pallet-cf-account-types/runtime-benchmarks'
 ]
 try-runtime = [
   'frame-support/try-runtime',

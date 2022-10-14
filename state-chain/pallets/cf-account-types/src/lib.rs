@@ -133,7 +133,7 @@ impl<T: Config> OnNewAccount<T::AccountId> for Pallet<T> {
 }
 
 macro_rules! define_ensure_origin {
-	( $fn_name:ident, $struct_name:ident, $account_variant:pat, $account_role:expr, $success_origin:ident) => {
+	( $fn_name:ident, $struct_name:ident, $account_variant:pat, $account_role:expr) => {
 		/// Implements EnsureOrigin, enforcing the correct [AccountType].
 		pub struct $struct_name<T>(PhantomData<T>);
 
@@ -181,20 +181,17 @@ define_ensure_origin!(
 	ensure_relayer,
 	EnsureRelayer,
 	AccountRole::Relayer, // successful_origin_relayer
-	AccountRole::Relayer,
-	register_successful_origin_relayer
+	AccountRole::Relayer
 );
 define_ensure_origin!(
 	ensure_validator,
 	EnsureValidator,
 	AccountRole::Validator, // successful_origin_validator
-	AccountRole::Validator,
-	register_successful_origin_validator
+	AccountRole::Validator
 );
 define_ensure_origin!(
 	ensure_liquidity_provider,
 	EnsureLiquidityProvider,
 	AccountRole::LiquidityProvider, // successful_origin_liquidity_provider
-	AccountRole::LiquidityProvider,
-	register_successful_origin_provider
+	AccountRole::LiquidityProvider
 );
