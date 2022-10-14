@@ -12,33 +12,33 @@ use sp_runtime::{
 	MultiAddress, MultiSignature,
 };
 
-use sp_runtime::transaction_validity::{
-	TransactionValidity, TransactionValidityError, ValidTransaction,
+use sp_core::crypto::AccountId32;
+use sp_runtime::{
+	traits::{AccountIdLookup, Verify},
+	transaction_validity::{TransactionValidity, TransactionValidityError, ValidTransaction},
 };
 
-use sp_runtime::traits::{AccountIdLookup, IdentifyAccount, Verify};
-
 use codec::{Decode, Encode};
+use core::str::FromStr;
 use scale_info::TypeInfo;
 
 pub type PolkadotSignature = sr25519::Signature;
 
-pub type PolkadotGovKey = eth::Address; //Same as above
+pub type PolkadotGovKey = PolkadotEmptyType; // Todo
 
 pub type PolkadotBalance = u128;
 pub type PolkadotBlockNumber = u32;
-pub type PolkadotNonce = u32;
-pub type PolkadotIndex = PolkadotNonce;
+pub type PolkadotIndex = u32;
 pub type PolkadotHash = sp_core::H256;
 
 /// Alias to the opaque account ID type for this chain, actually a `AccountId32`. This is always
 /// 32 bytes.
-pub type PolkadotAccountId = <<MultiSignature as Verify>::Signer as IdentifyAccount>::AccountId;
+pub type PolkadotAccountId = AccountId32;
 
-pub type PolkadotAddress = MultiAddress<PolkadotAccountId, ()>; //import this type
-																// from multiaddress.rs
+pub type PolkadotAddress = MultiAddress<PolkadotAccountId, ()>;
 
-pub type PolkadotAccountIdLookup = <AccountIdLookup<PolkadotAccountId, ()> as StaticLookup>::Source; //import this struct from traits.rs in polkadot runtime primitives repo
+//import this struct from traits.rs in polkadot runtime primitives repo
+pub type PolkadotAccountIdLookup = <AccountIdLookup<PolkadotAccountId, ()> as StaticLookup>::Source;
 
 pub type PolkadotCallHasher = BlakeTwo256;
 
@@ -54,9 +54,10 @@ pub type PolkadotPayload = SignedPayload<PolkadotRuntimeCall, PolkadotSignedExtr
 pub type EncodedPolkadotPayload = Vec<u8>;
 
 pub const POLKADOT_BLOCK_HASH_COUNT: PolkadotBlockNumber = 2400; //import from runtime common types crate in polkadot repo
-pub const POLKADOT_SPEC_VERSION: PolkadotSpecVersion = 0;
-pub const POLKADOT_TRANSACTION_VERSION: PolkadotTransactionVersion = 1;
-pub const POLKADOT_GENESIS_HASH: PolkadotHash = H256([2; 32]);
+pub const POLKADOT_SPEC_VERSION: PolkadotSpecVersion = 9290;
+pub const POLKADOT_TRANSACTION_VERSION: PolkadotTransactionVersion = 14;
+pub const POLKADOT_GENESIS_HASH: &'static str =
+	"0x91b171bb158e2d3848fa23a9f1c25182fb8e20313b2c1eb49219da7a70ce90c3";
 
 #[allow(clippy::unnecessary_cast)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -86,7 +87,7 @@ impl ChainCrypto for Polkadot {
 	type AggKey = PolkadotPublicKey;
 	type Payload = EncodedPolkadotPayload;
 	type ThresholdSignature = PolkadotSignature;
-	type TransactionHash = (); //Todo
+	type TransactionHash = PolkadotHash;
 	type GovKey = PolkadotGovKey;
 
 	fn verify_threshold_signature(
@@ -97,9 +98,8 @@ impl ChainCrypto for Polkadot {
 		signature.verify(&payload[..], &agg_key.0)
 	}
 
-	fn agg_key_to_payload(_agg_key: Self::AggKey) -> Self::Payload {
-		//H256(Blake2_256::hash(&agg_key.to_pubkey_compressed()))
-		todo!();
+	fn agg_key_to_payload(agg_key: Self::AggKey) -> Self::Payload {
+		Blake2_256::hash(&agg_key.0 .0).to_vec()
 	}
 }
 
@@ -653,8 +653,8 @@ impl SignedExtension for PolkadotSignedExtra {
 			(),
 			POLKADOT_SPEC_VERSION,
 			POLKADOT_TRANSACTION_VERSION,
-			POLKADOT_GENESIS_HASH,
-			POLKADOT_GENESIS_HASH,
+			H256::from_str(POLKADOT_GENESIS_HASH).unwrap(),
+			H256::from_str(POLKADOT_GENESIS_HASH).unwrap(),
 			(),
 			(),
 			(),
@@ -705,5 +705,5 @@ impl Into<Vec<u8>> for PolkadotPublicKey {
 		self.0 .0.to_vec()
 	}
 }
-#[derive(TypeInfo, Clone, Debug, Eq, PartialEq, Encode, Decode, Default)]
+#[derive(TypeInfo, Clone, Copy, Debug, Eq, PartialEq, Encode, Decode, Default)]
 pub struct PolkadotEmptyType(pub Option<()>);
