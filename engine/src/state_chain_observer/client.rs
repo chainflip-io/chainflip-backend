@@ -212,13 +212,6 @@ pub const OUR_ACCOUNT_ID_BYTES: [u8; 32] = [0; 32];
 pub const NOT_OUR_ACCOUNT_ID_BYTES: [u8; 32] = [1; 32];
 
 #[cfg(test)]
-pub fn mock_account_storage_key() -> StorageKey {
-	StorageKey(frame_system::Account::<state_chain_runtime::Runtime>::hashed_key_for(
-		&AccountId32::new(OUR_ACCOUNT_ID_BYTES),
-	))
-}
-
-#[cfg(test)]
 impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
 	pub fn create_test_sc_client(rpc_client: RpcClient) -> Self {
 		use signer::PairSigner;
