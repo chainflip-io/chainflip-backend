@@ -1,6 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
+#![feature(is_sorted)]
 
 mod auction_resolver;
 #[cfg(feature = "runtime-benchmarks")]

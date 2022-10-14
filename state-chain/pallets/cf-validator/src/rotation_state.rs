@@ -20,8 +20,10 @@ impl<Id: Ord + Clone, Amount: AtLeast32BitUnsigned + Copy> RotationState<Id, Amo
 	where
 		T: Config<Amount = Amount> + Chainflip<ValidatorId = Id>,
 	{
+		debug_assert!(losers.is_sorted_by_key(|&Bid { amount, .. }| Reverse(amount)));
 		let authorities = Pallet::<T>::current_authorities().into_iter().collect::<BTreeSet<_>>();
 
+		// We don't want backups with too low a stake to be in the authority set.
 		let highest_staked_qualified_backup_nodes =
 			Pallet::<T>::highest_staked_qualified_backup_nodes_lookup();
 
@@ -67,5 +69,46 @@ impl<Id: Ord + Clone, Amount: AtLeast32BitUnsigned + Copy> RotationState<Id, Amo
 
 	pub fn num_primary_candidates(&self) -> u32 {
 		self.primary_candidates.len() as u32
+	}
+}
+
+#[cfg(test)]
+mod rotation_state_tests {
+	use super::*;
+
+	#[test]
+	fn banning_is_additive() {
+		let mut rotation_state = RotationState::<u64, u64> {
+			primary_candidates: (0..10).collect(),
+			secondary_candidates: (20..30).collect(),
+			banned: Default::default(),
+			bond: 500,
+		};
+
+		let first_ban = BTreeSet::from([8, 9, 7]);
+		rotation_state.ban(first_ban.clone());
+		assert_eq!(first_ban, rotation_state.banned);
+
+		let second_ban = BTreeSet::from([1, 2, 3]);
+		rotation_state.ban(second_ban.clone());
+		assert_eq!(
+			first_ban.union(&second_ban).into_iter().cloned().collect::<BTreeSet<_>>(),
+			rotation_state.banned
+		);
+	}
+
+	#[test]
+	fn authority_candidates_no_banned_and_primary_first() {
+		let rotation_state = RotationState::<u64, u64> {
+			primary_candidates: (0..10).collect(),
+			secondary_candidates: (20..30).collect(),
+			banned: BTreeSet::from([1, 2, 4]),
+			bond: 500,
+		};
+
+		let candidates: Vec<_> = rotation_state.authority_candidates();
+
+		assert_eq!(candidates.len(), rotation_state.primary_candidates.len());
+		assert_eq!(candidates, vec![0, 3, 5, 6, 7, 8, 9, 20, 21, 22]);
 	}
 }
