@@ -801,7 +801,7 @@ async fn only_encodes_and_signs_when_specified() {
 	eth_rpc_mock
 		.expect_estimate_gas()
 		.times(1)
-		.returning(|_, _| Ok(U256::from(100_000)));
+		.returning(|_| Ok(U256::from(100_000)));
 
 	eth_rpc_mock.expect_sign_transaction().times(1).returning(|_, _| {
 		// just a nothing signed transaction

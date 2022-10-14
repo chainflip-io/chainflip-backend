@@ -222,7 +222,7 @@ where
 						};
 
 						self.eth_rpc
-							.estimate_gas(call_request, None)
+							.estimate_gas(call_request)
 							.await
 							.context("Failed to estimate gas")?
 					},
