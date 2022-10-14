@@ -56,7 +56,7 @@ pub type EncodedPolkadotPayload = Vec<u8>;
 pub const POLKADOT_BLOCK_HASH_COUNT: PolkadotBlockNumber = 2400; //import from runtime common types crate in polkadot repo
 pub const POLKADOT_SPEC_VERSION: PolkadotSpecVersion = 9290;
 pub const POLKADOT_TRANSACTION_VERSION: PolkadotTransactionVersion = 14;
-pub const POLKADOT_GENESIS_HASH: &'static str =
+pub const POLKADOT_GENESIS_HASH: &str =
 	"0x91b171bb158e2d3848fa23a9f1c25182fb8e20313b2c1eb49219da7a70ce90c3";
 
 #[allow(clippy::unnecessary_cast)]
