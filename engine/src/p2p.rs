@@ -64,7 +64,13 @@ impl PeerInfo {
     }
 
     pub fn zmq_endpoint(&self) -> String {
-        format!("tcp://[{}]:{}", self.ip, self.port)
+        format!(
+            "tcp://[{}]:{}",
+            self.ip
+                .to_ipv4_mapped()
+                .expect("P2P Ip Address must be IPv4-compatible."),
+            self.port
+        )
     }
 }
 

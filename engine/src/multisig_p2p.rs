@@ -4,7 +4,7 @@ use std::{
     time::Duration,
 };
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use slog::o;
 use sp_core::H256;
 use tokio::sync::mpsc::UnboundedReceiver;
@@ -97,9 +97,12 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
     let logger = logger.new(o!(COMPONENT_KEY => "P2PClient"));
 
     let ip_address = match ip_address {
-        IpAddr::V4(ipv4) => ipv4.to_ipv6_mapped(),
-        IpAddr::V6(ipv6) => ipv6,
-    };
+        IpAddr::V4(ipv4) => ipv4,
+        IpAddr::V6(ipv6) => ipv6
+            .to_ipv4_mapped()
+            .ok_or_else(|| anyhow!("Configured P2P IP Address must be IPv4-compatible."))?,
+    }
+    .to_ipv6_mapped();
 
     let mut update_interval = make_periodic_tick(Duration::from_secs(60), true);
 
