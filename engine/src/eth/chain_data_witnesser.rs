@@ -84,13 +84,8 @@ where
     ).await
 }
 
-/// Queries the rpc node and builds the `TrackedData` for Ethereum at the requested block number.
-///
-/// Value in Wei is rounded to nearest Gwei in an effort to ensure agreement between nodes in the
-/// presence of floating point / rounding error. This approach is still vulnerable when the true
-/// value is near the rounding boundary.
-///
-/// See: https://github.com/chainflip-io/chainflip-backend/issues/1803
+/// Queries the rpc node for the fee history and builds the `TrackedData` for Ethereum at the latest
+/// block number.
 async fn get_tracked_data<EthRpcClient: EthRpcApi + Send + Sync>(
 	rpc: &EthRpcClient,
 	priority_fee_percentile: u8,
