@@ -817,6 +817,7 @@ pub async fn connect_to_state_chain_without_signer(
 	Ok(StateChainRpcClient { rpc_client })
 }
 
+/*
 #[cfg(test)]
 pub const OUR_ACCOUNT_ID_BYTES: [u8; 32] = [0; 32];
 
@@ -1123,3 +1124,4 @@ mod tests {
 		assert_eq!(state_chain_client.nonce.load(Ordering::Relaxed), 2);
 	}
 }
+*/
