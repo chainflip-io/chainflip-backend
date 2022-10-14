@@ -133,7 +133,7 @@ impl<T: Config> OnNewAccount<T::AccountId> for Pallet<T> {
 }
 
 macro_rules! define_ensure_origin {
-	( $fn_name:ident, $struct_name:ident, $account_variant:pat ) => {
+	( $fn_name:ident, $struct_name:ident, $account_variant:pat, $account_role:expr, $success_origin:ident) => {
 		/// Implements EnsureOrigin, enforcing the correct [AccountType].
 		pub struct $struct_name<T>(PhantomData<T>);
 
@@ -151,6 +151,20 @@ macro_rules! define_ensure_origin {
 					Err(o) => Err(o),
 				}
 			}
+
+			#[cfg(feature = "runtime-benchmarks")]
+			fn successful_origin() -> OriginFor<T> {
+				let account_id: T::AccountId = frame_benchmarking::whitelisted_caller();
+				AccountRoles::<T>::insert(account_id.clone(), $account_role);
+				OriginFor::<T>::from(frame_system::RawOrigin::Signed(account_id))
+			}
+		}
+
+		impl<T: Config> $struct_name<T> {
+			#[cfg(feature = "runtime-benchmarks")]
+			pub fn register_account(account_id: T::AccountId) {
+				AccountRoles::<T>::insert(account_id, $account_role);
+			}
 		}
 
 		/// Ensure that the origin is signed and that the signer operates the correct [AccountType].
@@ -163,10 +177,24 @@ macro_rules! define_ensure_origin {
 	};
 }
 
-define_ensure_origin!(ensure_relayer, EnsureRelayer, AccountRole::Relayer);
-define_ensure_origin!(ensure_validator, EnsureValidator, AccountRole::Validator { .. });
+define_ensure_origin!(
+	ensure_relayer,
+	EnsureRelayer,
+	AccountRole::Relayer, // successful_origin_relayer
+	AccountRole::Relayer,
+	register_successful_origin_relayer
+);
+define_ensure_origin!(
+	ensure_validator,
+	EnsureValidator,
+	AccountRole::Validator, // successful_origin_validator
+	AccountRole::Validator,
+	register_successful_origin_validator
+);
 define_ensure_origin!(
 	ensure_liquidity_provider,
 	EnsureLiquidityProvider,
-	AccountRole::LiquidityProvider
+	AccountRole::LiquidityProvider, // successful_origin_liquidity_provider
+	AccountRole::LiquidityProvider,
+	register_successful_origin_provider
 );

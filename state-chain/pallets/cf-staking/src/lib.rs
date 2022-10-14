@@ -519,7 +519,7 @@ pub mod pallet {
 		///
 		/// - [AlreadyRetired](Error::AlreadyRetired)
 		/// - [UnknownAccount](Error::UnknownAccount)
-		#[pallet::weight(T::WeightInfo::retire_account())]
+		#[pallet::weight(0)]
 		pub fn retire_account(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let who = T::AccountRoleRegistry::ensure_validator(origin)?;
 			Self::retire(&who)?;
@@ -537,7 +537,7 @@ pub mod pallet {
 		///
 		/// - [AlreadyActive](Error::AlreadyActive)
 		/// - [UnknownAccount](Error::UnknownAccount)
-		#[pallet::weight(T::WeightInfo::activate_account())]
+		#[pallet::weight(0)]
 		pub fn activate_account(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let who = T::AccountRoleRegistry::ensure_validator(origin)?;
 			Self::activate(&who)?;

@@ -7,9 +7,14 @@ use cf_chains::{ApiCall, ChainCrypto, Ethereum};
 use cf_primitives::AccountRole;
 use cf_traits::AccountRoleRegistry;
 use frame_benchmarking::{account, benchmarks, whitelisted_caller};
-use frame_support::{dispatch::UnfilteredDispatchable, traits::OnInitialize};
+use frame_support::{
+	dispatch::UnfilteredDispatchable,
+	traits::{EnsureOrigin, OnInitialize},
+};
 use frame_system::RawOrigin;
 use sp_std::vec::Vec;
+
+use pallet_cf_account_types::EnsureValidator;
 
 type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 use cf_chains::benchmarking_value::BenchmarkValue;
@@ -19,6 +24,11 @@ fn create_accounts<T: Config>(count: u32) -> Vec<AccountIdOf<T>> {
 }
 
 benchmarks! {
+
+	where_clause {
+		where
+			T: pallet_cf_account_types::Config,
+	}
 
 	staked {
 		let amount: T::Balance = T::Balance::from(100u32);
@@ -152,24 +162,22 @@ benchmarks! {
 		frame_system::Pallet::<T>::events().pop().expect("No event has been emitted from the post_claim_signature extrinsic");
 	}
 
-	retire_account {
-		let caller: T::AccountId = whitelisted_caller();
-		T::AccountRoleRegistry::register_account_role(&caller, AccountRole::Validator)?;
-		ActiveBidder::<T>::insert(caller.clone(), true);
-
-	}:_(RawOrigin::Signed(caller.clone()))
-	verify {
-		assert!(!ActiveBidder::<T>::get(caller));
-	}
+	// retire_account {
+	// 	let caller: T::AccountId = whitelisted_caller();
+	// 	ActiveBidder::<T>::insert(caller.clone(), true);
+	// 	EnsureValidator::<T>::register_account(caller.clone());
+	// }:_(RawOrigin::Signed(caller.clone()))
+	// verify {
+	// 	assert!(!ActiveBidder::<T>::get(caller));
+	// }
 
 	activate_account {
-		let caller: T::AccountId = whitelisted_caller();
-		T::AccountRoleRegistry::register_account_role(&caller, AccountRole::Validator)?;
-		ActiveBidder::<T>::insert(caller.clone(), false);
-
-	}:_(RawOrigin::Signed(caller.clone()))
+		let caller = EnsureValidator::<T>::successful_origin();
+		// let account_id = caller.as_signed();
+		// let call = Call::<T>::activate_account{};
+	}:_(caller)
 	verify {
-		assert!(ActiveBidder::<T>::get(caller));
+		// assert!(ActiveBidder::<T>::get(caller));
 	}
 
 	on_initialize_best_case {
