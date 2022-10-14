@@ -10,7 +10,7 @@ use sp_core::U256;
 use state_chain_runtime::CfeSettings;
 use tokio::sync::{broadcast, watch};
 use utilities::{context, make_periodic_tick};
-use web3::types::{BlockNumber, U64};
+use web3::types::BlockNumber;
 
 const ETH_CHAIN_TRACKING_POLL_INTERVAL: Duration = Duration::from_secs(4);
 
@@ -29,11 +29,11 @@ where
         "ETH-Chain-Data".to_string(),
         epoch_start_receiver,
         |epoch_start| epoch_start.current,
-        None,
+        0,
         move |
             end_witnessing_signal,
             epoch_start,
-            mut last_witnessed_block_hash,
+            mut last_witnessed_block_number,
             logger
         | {
             let eth_rpc = eth_rpc.clone();
@@ -48,22 +48,21 @@ where
                         break;
                     }
 
-                    let block_number = eth_rpc.block_number().await?;
-                    let block_hash = context!(eth_rpc.block(block_number).await?.hash)?;
-                    if last_witnessed_block_hash != Some(block_hash) {
-                        let priority_fee = cfe_settings_update_receiver
+                    let priority_fee = cfe_settings_update_receiver
                             .borrow()
                             .eth_priority_fee_percentile;
+                    let latest_data = get_tracked_data(
+                        &eth_rpc,
+                        priority_fee
+                    ).await?;
+
+                    if latest_data.block_height > last_witnessed_block_number  {
                         let _result = state_chain_client
                             .submit_signed_extrinsic(
                                 state_chain_runtime::Call::Witnesser(pallet_cf_witnesser::Call::witness_at_epoch {
                                     call: Box::new(state_chain_runtime::Call::EthereumChainTracking(
                                         pallet_cf_chain_tracking::Call::update_chain_state {
-                                            state: get_tracked_data(
-                                                &eth_rpc,
-                                                block_number.as_u64(),
-                                                priority_fee
-                                            ).await?,
+                                            state: latest_data,
                                         },
                                     )),
                                     epoch_index: epoch_start.index
@@ -72,13 +71,13 @@ where
                             )
                             .await;
 
-                        last_witnessed_block_hash = Some(block_hash);
+                        last_witnessed_block_number = latest_data.block_height;
                     }
 
                     poll_interval.tick().await;
                 }
 
-                Ok(last_witnessed_block_hash)
+                Ok(last_witnessed_block_number)
             }
         },
         logger,
@@ -94,26 +93,32 @@ where
 /// See: https://github.com/chainflip-io/chainflip-backend/issues/1803
 async fn get_tracked_data<EthRpcClient: EthRpcApi + Send + Sync>(
 	rpc: &EthRpcClient,
-	block_number: u64,
 	priority_fee_percentile: u8,
 ) -> anyhow::Result<TrackedData<Ethereum>> {
 	let fee_history = rpc
 		.fee_history(
 			U256::one(),
-			BlockNumber::Number(U64::from(block_number)),
+			BlockNumber::Latest,
 			Some(vec![priority_fee_percentile as f64 / 100_f64]),
 		)
 		.await?;
 
-	Ok(TrackedData::<Ethereum> {
-		block_height: block_number,
-		base_fee: context!(fee_history.base_fee_per_gas.first())?.as_u128(),
-		priority_fee: context!(context!(context!(fee_history.reward)?.first())?.first())?.as_u128(),
-	})
+	if let BlockNumber::Number(block_number) = fee_history.oldest_block {
+		Ok(TrackedData::<Ethereum> {
+			block_height: block_number.as_u64(),
+			base_fee: context!(fee_history.base_fee_per_gas.first())?.as_u128(),
+			priority_fee: context!(context!(context!(fee_history.reward)?.first())?.first())?
+				.as_u128(),
+		})
+	} else {
+		Err(anyhow::anyhow!("fee_history did not return `oldest_block` as a number"))
+	}
 }
 
 #[cfg(test)]
 mod tests {
+	use web3::types::U64;
+
 	use super::*;
 
 	#[tokio::test]
@@ -127,9 +132,9 @@ mod tests {
 		let mut rpc = MockEthRpcApi::new();
 
 		// ** Rpc Api Assumptions **
-		rpc.expect_fee_history().once().returning(|_, block_number, _| {
+		rpc.expect_fee_history().once().returning(|_, _, _| {
 			Ok(web3::types::FeeHistory {
-				oldest_block: block_number,
+				oldest_block: BlockNumber::Number(U64::from(BLOCK_HEIGHT)),
 				base_fee_per_gas: vec![U256::from(BASE_FEE)],
 				gas_used_ratio: vec![],
 				reward: Some(vec![vec![U256::from(PRIORITY_FEE)]]),
@@ -138,7 +143,7 @@ mod tests {
 		// ** Rpc Api Assumptions **
 
 		assert_eq!(
-			get_tracked_data(&rpc, BLOCK_HEIGHT, 50).await.unwrap(),
+			get_tracked_data(&rpc, 50).await.unwrap(),
 			TrackedData {
 				block_height: BLOCK_HEIGHT,
 				base_fee: BASE_FEE,
