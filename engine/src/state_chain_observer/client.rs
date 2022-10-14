@@ -104,14 +104,6 @@ pub trait StateChainRpcApi {
 		storage_key: StorageKey,
 	) -> RpcResult<Option<StorageData>>;
 
-	async fn storage_keys_paged(
-		&self,
-		block_hash: state_chain_runtime::Hash,
-		prefix: StorageKey,
-		count: u32,
-		start_key: Option<StorageKey>,
-	) -> Result<Vec<StorageKey>>;
-
 	async fn storage_pairs(
 		&self,
 		block_hash: state_chain_runtime::Hash,
@@ -169,20 +161,6 @@ where
 		storage_key: StorageKey,
 	) -> RpcResult<Option<StorageData>> {
 		self.rpc_client.storage(storage_key, Some(block_hash)).await
-	}
-
-	/// Returns the keys with prefix with pagination support.
-	async fn storage_keys_paged(
-		&self,
-		block_hash: state_chain_runtime::Hash,
-		prefix: StorageKey,
-		count: u32,
-		start_key: Option<StorageKey>,
-	) -> Result<Vec<StorageKey>> {
-		self.rpc_client
-			.storage_keys_paged(Some(prefix), count, start_key, Some(block_hash))
-			.await
-			.context("storage RPC API failed")
 	}
 
 	async fn rotate_keys(&self) -> RpcResult<Bytes> {
