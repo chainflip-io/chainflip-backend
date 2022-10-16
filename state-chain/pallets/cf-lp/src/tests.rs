@@ -4,7 +4,9 @@ use cf_primitives::{
 	liquidity::AmmRange, AccountRole, Asset, ForeignChain, ForeignChainAddress, ForeignChainAsset,
 	TradingPosition,
 };
-use cf_traits::AccountRoleRegistry;
+use cf_traits::{
+	mocks::system_state_info::MockSystemStateInfo, AccountRoleRegistry, SystemStateInfo,
+};
 use frame_support::{assert_noop, assert_ok, error::BadOrigin, traits::OnNewAccount};
 
 const ALICE: u64 = 1;
@@ -104,5 +106,57 @@ fn liquidity_providers_can_withdraw_liquidity() {
 				ForeignChainAddress::Eth([0x00; 20])
 			))
 		);
+	});
+}
+
+#[test]
+fn cannot_deposit_and_withdrawal_during_maintenance() {
+	new_test_ext().execute_with(|| {
+		// Setup account for ALICE
+		AccountTypes::on_new_account(&ALICE);
+		assert_ok!(AccountTypes::register_account_role(&ALICE, AccountRole::LiquidityProvider));
+		FreeBalances::<Test>::insert(ALICE, Asset::Eth, 1_000);
+		IsValid::set(true);
+
+		// Activate maintenance mode
+		MockSystemStateInfo::set_maintenance(true);
+		assert!(MockSystemStateInfo::is_maintenance_mode());
+
+		// Cannot request deposit address during maintenance.
+		assert_noop!(
+			LiquidityProvider::request_deposit_address(
+				Origin::signed(ALICE),
+				ForeignChainAsset { chain: ForeignChain::Ethereum, asset: Asset::Eth },
+			),
+			"We are in maintenance!"
+		);
+
+		// Cannot withdraw liquidity during maintenance.
+		assert_noop!(
+			LiquidityProvider::withdraw_liquidity(
+				Origin::signed(ALICE),
+				100,
+				ForeignChainAsset { chain: ForeignChain::Ethereum, asset: Asset::Eth },
+				ForeignChainAddress::Eth([0x00; 20]),
+			),
+			"We are in maintenance!"
+		);
+
+		// Deactivate maintenance mode
+		MockSystemStateInfo::set_maintenance(false);
+		assert!(!MockSystemStateInfo::is_maintenance_mode());
+
+		// Deposit and withdrawal can now work as per normal.
+		assert_ok!(LiquidityProvider::request_deposit_address(
+			Origin::signed(ALICE),
+			ForeignChainAsset { chain: ForeignChain::Ethereum, asset: Asset::Eth },
+		));
+
+		assert_ok!(LiquidityProvider::withdraw_liquidity(
+			Origin::signed(ALICE),
+			100,
+			ForeignChainAsset { chain: ForeignChain::Ethereum, asset: Asset::Eth },
+			ForeignChainAddress::Eth([0x00; 20]),
+		));
 	});
 }

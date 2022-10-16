@@ -13,7 +13,7 @@ use cf_primitives::{
 };
 use cf_traits::{
 	liquidity::{AmmPoolApi, LpProvisioningApi},
-	AccountRoleRegistry, Chainflip, EgressApi, IngressApi,
+	AccountRoleRegistry, Chainflip, EgressApi, IngressApi, SystemStateInfo,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
@@ -236,6 +236,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			asset: ForeignChainAsset,
 		) -> DispatchResultWithPostInfo {
+			T::SystemState::ensure_no_maintenance()?;
 			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
 			let (intent_id, ingress_address) =
@@ -253,6 +254,7 @@ pub mod pallet {
 			foreign_asset: ForeignChainAsset,
 			egress_address: ForeignChainAddress,
 		) -> DispatchResultWithPostInfo {
+			T::SystemState::ensure_no_maintenance()?;
 			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
 			ensure!(
