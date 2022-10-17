@@ -326,7 +326,7 @@ fn fail_path_due_to_report_signature_failed() {
 }
 
 #[test]
-fn test_not_enough_signers_for_threshold() {
+fn test_not_enough_signers_for_threshold_schedules_retry() {
 	const NOMINEES: [u64; 0] = [];
 	const AUTHORITIES: [u64; 5] = [1, 2, 3, 4, 5];
 	ExtBuilder::new()
