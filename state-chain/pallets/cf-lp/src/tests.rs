@@ -160,3 +160,57 @@ fn cannot_deposit_and_withdrawal_during_maintenance() {
 		));
 	});
 }
+
+#[test]
+fn cannot_manage_liquidity_during_maintenance() {
+	new_test_ext().execute_with(|| {
+		// Setup account and liquidity pool
+		AccountTypes::on_new_account(&ALICE);
+		assert_ok!(AccountTypes::register_account_role(&ALICE, AccountRole::LiquidityProvider));
+		FreeBalances::<Test>::insert(ALICE, Asset::Eth, 1_000_000);
+		FreeBalances::<Test>::insert(ALICE, Asset::Usdc, 1_000_000);
+		IsValid::set(true);
+
+		let position = TradingPosition::ClassicV3 {
+			range: AmmRange { lower: 0, upper: 0 },
+			volume_0: 100,
+			volume_1: 1000,
+		};
+		let pool_id = (Asset::Eth, Asset::Usdc);
+
+		assert_ok!(LiquidityProvider::add_liquidity_pool(Origin::root(), pool_id.0, pool_id.1));
+		assert_ok!(LiquidityProvider::set_liquidity_pool_status(
+			Origin::root(),
+			pool_id.0,
+			pool_id.1,
+			true
+		));
+
+		// Activate maintenance mode
+		MockSystemStateInfo::set_maintenance(true);
+		assert!(MockSystemStateInfo::is_maintenance_mode());
+
+		assert_noop!(
+			LiquidityProvider::open_position(Origin::signed(ALICE), pool_id, position,),
+			"We are in maintenance!"
+		);
+		assert_noop!(
+			LiquidityProvider::update_position(Origin::signed(ALICE), pool_id, 0, position,),
+			"We are in maintenance!"
+		);
+		assert_noop!(
+			LiquidityProvider::close_position(Origin::signed(ALICE), 0,),
+			"We are in maintenance!"
+		);
+
+		// Deactivate maintenance mode
+		MockSystemStateInfo::set_maintenance(false);
+		assert!(!MockSystemStateInfo::is_maintenance_mode());
+
+		assert_ok!(LiquidityProvider::open_position(Origin::signed(ALICE), pool_id, position,),);
+		assert_ok!(
+			LiquidityProvider::update_position(Origin::signed(ALICE), pool_id, 0, position,),
+		);
+		assert_ok!(LiquidityProvider::close_position(Origin::signed(ALICE), 0,),);
+	});
+}

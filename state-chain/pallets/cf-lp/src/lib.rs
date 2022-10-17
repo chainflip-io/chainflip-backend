@@ -286,6 +286,7 @@ pub mod pallet {
 			pool_id: PoolId,
 			position: TradingPosition<AssetAmount>,
 		) -> DispatchResult {
+			T::SystemState::ensure_no_maintenance()?;
 			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
 			// Ensure the liquidity pool is enabled.
@@ -336,6 +337,7 @@ pub mod pallet {
 			id: PositionId,
 			new_position: TradingPosition<AssetAmount>,
 		) -> DispatchResultWithPostInfo {
+			T::SystemState::ensure_no_maintenance()?;
 			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
 			TradingPositions::<T>::try_mutate(id, |maybe_position| {
@@ -402,6 +404,7 @@ pub mod pallet {
 
 		#[pallet::weight(0)]
 		pub fn close_position(who: OriginFor<T>, id: PositionId) -> DispatchResult {
+			T::SystemState::ensure_no_maintenance()?;
 			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(who)?;
 
 			// Remove the position.
