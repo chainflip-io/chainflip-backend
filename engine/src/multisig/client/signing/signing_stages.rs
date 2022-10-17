@@ -17,7 +17,9 @@ use client::common::{
 	CeremonyCommon, StageResult,
 };
 
-use signing::frost::{self, Comm1, LocalSig3, SecretNoncePair, VerifyComm2, VerifyLocalSig4};
+use signing::signing_detail::{
+	self, Comm1, LocalSig3, SecretNoncePair, VerifyComm2, VerifyLocalSig4,
+};
 
 use signing::SigningStateCommonInfo;
 
@@ -156,7 +158,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 	/// With all nonce commitments verified, we can generate the group commitment
 	/// and our share of signature response, which we broadcast to other parties.
 	fn init(&mut self) -> DataToSend<Self::Message> {
-		let data = DataToSend::Broadcast(frost::generate_local_sig::<Crypto>(
+		let data = DataToSend::Broadcast(signing_detail::generate_local_sig::<Crypto>(
 			&self.signing_common.data.0,
 			&self.signing_common.key.key_share,
 			&self.nonces,
@@ -243,7 +245,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 			.map(|idx| (*idx, self.signing_common.key.party_public_keys[*idx as usize - 1]))
 			.collect();
 
-		match frost::aggregate_signature::<Crypto>(
+		match signing_detail::aggregate_signature::<Crypto>(
 			&self.signing_common.data.0,
 			all_idxs,
 			self.signing_common.key.get_public_key(),

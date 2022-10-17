@@ -13,7 +13,8 @@ use crate::{
 				DEFAULT_KEYGEN_SEED, DEFAULT_SIGNING_SEED,
 			},
 			signing::{
-				frost::SigningData, frost_stages::AwaitCommitments1, SigningStateCommonInfo,
+				signing_detail::SigningData, signing_stages::AwaitCommitments1,
+				SigningStateCommonInfo,
 			},
 			KeygenResult, PartyIdxMapping,
 		},

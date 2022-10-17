@@ -13,7 +13,7 @@ use crate::multisig::{
 			DEFAULT_SIGNING_CEREMONY_ID, DEFAULT_SIGNING_SEED,
 		},
 		keygen::generate_key_data,
-		signing::frost,
+		signing::signing_detail,
 	},
 	tests::fixtures::MESSAGE_HASH,
 	Rng,
@@ -21,9 +21,9 @@ use crate::multisig::{
 
 // We choose (arbitrarily) to use eth crypto for unit tests.
 use crate::multisig::crypto::eth::Point;
-type VerifyComm2 = frost::VerifyComm2<Point>;
-type LocalSig3 = frost::LocalSig3<Point>;
-type VerifyLocalSig4 = frost::VerifyLocalSig4<Point>;
+type VerifyComm2 = signing_detail::VerifyComm2<Point>;
+type LocalSig3 = signing_detail::LocalSig3<Point>;
+type VerifyLocalSig4 = signing_detail::VerifyLocalSig4<Point>;
 
 #[tokio::test]
 async fn should_report_on_invalid_local_sig3() {
@@ -131,7 +131,7 @@ mod timeout {
 
 	mod during_regular_stage {
 
-		type SigningData = crate::multisig::client::signing::frost::SigningData<Point>;
+		type SigningData = crate::multisig::client::signing::signing_detail::SigningData<Point>;
 
 		use super::*;
 

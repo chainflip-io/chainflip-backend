@@ -1,5 +1,5 @@
-pub mod frost;
-pub mod frost_stages;
+pub mod signing_detail;
+pub mod signing_stages;
 
 use std::sync::Arc;
 

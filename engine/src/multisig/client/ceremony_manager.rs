@@ -29,7 +29,7 @@ use cf_primitives::{AuthorityCount, CeremonyId};
 use state_chain_runtime::AccountId;
 
 use client::{
-	ceremony_runner::CeremonyRunner, signing::frost::SigningData, utils::PartyIdxMapping,
+	ceremony_runner::CeremonyRunner, signing::signing_detail::SigningData, utils::PartyIdxMapping,
 };
 
 use tokio::sync::oneshot;
@@ -176,7 +176,7 @@ pub fn prepare_signing_request<Crypto: CryptoScheme>(
 
 	// Prepare initial ceremony stage
 	let initial_stage = {
-		use super::signing::{frost_stages::AwaitCommitments1, SigningStateCommonInfo};
+		use super::signing::{signing_stages::AwaitCommitments1, SigningStateCommonInfo};
 
 		let common = CeremonyCommon {
 			ceremony_id,
@@ -534,7 +534,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 
 		let r = C::Point::from_scalar(&nonce);
 
-		let sigma = client::signing::frost::generate_schnorr_response::<C>(
+		let sigma = client::signing::signing_detail::generate_schnorr_response::<C>(
 			&key.x_i, key.y, r, nonce, &data.0,
 		);
 
