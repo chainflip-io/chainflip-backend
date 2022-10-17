@@ -599,7 +599,7 @@ const PERSEVERANCE_ENV: StateChainEnvironment = StateChainEnvironment {
 	max_ceremony_stage_duration: 300,
 };
 
-pub fn perseverance_config() -> Result<ChainSpec, String> {
+pub fn perseverance_new_config() -> Result<ChainSpec, String> {
 	let wasm_binary = WASM_BINARY.ok_or_else(|| "Wasm binary not available".to_string())?;
 	const BASHFUL_SR25519: [u8; 32] =
 		hex_literal::hex!["789523326e5f007f7643f14fa9e6bcfaaff9dd217e7e7a384648a46398245d55"];

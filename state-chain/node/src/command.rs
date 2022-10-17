@@ -41,7 +41,7 @@ impl SubstrateCli for Cli {
 			"cf-dev" => Box::new(chain_spec::cf_development_config()?),
 			"three-node-test" => Box::new(chain_spec::chainflip_three_node_testnet_config()?),
 			"test" => Box::new(chain_spec::chainflip_testnet_config()?),
-			"perseverance-new" => Box::new(chain_spec::perseverance_config()?),
+			"perseverance-new" => Box::new(chain_spec::perseverance_new_config()?),
 			"perseverance" => Box::new(chain_spec::ChainSpec::from_json_bytes(
 				include_bytes!("../chainspecs/perseverance.chainspec.raw.json").as_slice(),
 			)?),
