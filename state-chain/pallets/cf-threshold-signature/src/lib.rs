@@ -340,9 +340,6 @@ pub mod pallet {
 				{
 					num_retries += 1;
 
-					let offenders = failed_ceremony_context.offenders();
-					num_offenders += offenders.len();
-
 					// Clean up old ceremony and start a new one if the retry policy allows it
 					if let Some(RequestContext {
 						request_id,
@@ -352,6 +349,8 @@ pub mod pallet {
 						retry_policy,
 					}) = OpenRequests::<T, I>::take(ceremony_id)
 					{
+						let offenders = failed_ceremony_context.offenders();
+						num_offenders += offenders.len();
 						match retry_policy {
 							RetryPolicy::Always => {
 								T::OffenceReporter::report_many(
