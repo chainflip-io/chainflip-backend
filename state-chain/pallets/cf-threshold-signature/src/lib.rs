@@ -588,16 +588,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let ceremony_key_id =
 			requested_key_id.clone().unwrap_or_else(T::KeyProvider::current_key_id);
 
-		let (event, log_message, ceremony_participants) = if let Some(nominees) = participants
-			.or_else(|| {
+		let (event, log_message, ceremony_participants, retry_delay) = if let Some(nominees) =
+			participants.or_else(|| {
 				T::SignerNomination::threshold_nomination_with_seed(
 					(ceremony_id, attempt_count),
 					T::EpochInfo::epoch_index(),
 				)
 			}) {
-			// Schedule a retry on timeout.
-			Self::schedule_retry(ceremony_id, ThresholdSignatureResponseTimeout::<T, I>::get());
-
 			(
 				Event::<T, I>::ThresholdSignatureRequest(
 					ceremony_id,
@@ -611,10 +608,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					attempt_count
 				),
 				nominees,
+				ThresholdSignatureResponseTimeout::<T, I>::get(),
 			)
 		} else {
-			Self::schedule_retry(ceremony_id, T::CeremonyRetryDelay::get());
-
 			(
 				Event::<T, I>::SignersUnavailable(ceremony_id),
 				scale_info::prelude::format!(
@@ -623,8 +619,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					attempt_count
 				),
 				BTreeSet::default(),
+				T::CeremonyRetryDelay::get(),
 			)
 		};
+
+		Self::schedule_retry(ceremony_id, retry_delay);
 
 		log::trace!(
 			target: "threshold-signing",
