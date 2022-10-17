@@ -294,6 +294,8 @@ fn fail_path_no_timeout() {
 			let retry_block_redundant = frame_system::Pallet::<Test>::current_block_number() +
 				THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS_DEFAULT as u64;
 
+			assert!(retry_block_redundant > retry_block);
+
 			assert!(!MockCallback::has_executed(request_id));
 			assert_eq!(EthereumThresholdSigner::retry_queues(retry_block).len(), 1);
 			assert_eq!(EthereumThresholdSigner::retry_queues(retry_block_redundant).len(), 1);
