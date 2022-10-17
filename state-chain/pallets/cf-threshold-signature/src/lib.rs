@@ -519,8 +519,8 @@ pub mod pallet {
 						}
 
 						if context.remaining_respondents.is_empty() {
-							// No more respondents waiting: we can retry
-							Self::schedule_retry(id, T::CeremonyRetryDelay::get());
+							// No more respondents waiting: we can retry on the next block.
+							Self::schedule_retry(id, 1u32.into());
 						}
 
 						Ok(())
@@ -569,9 +569,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let ceremony_id =
 			Self::new_ceremony_attempt(request_id, payload, 0, key_id, participants, retry_policy);
 
-		// Schedule a retry on timeout.
-		Self::schedule_retry(ceremony_id, ThresholdSignatureResponseTimeout::<T, I>::get());
-
 		Signatures::<T, I>::insert(request_id, AsyncResult::Pending);
 
 		(request_id, ceremony_id)
@@ -598,6 +595,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					T::EpochInfo::epoch_index(),
 				)
 			}) {
+			// Schedule a retry on timeout.
+			Self::schedule_retry(ceremony_id, ThresholdSignatureResponseTimeout::<T, I>::get());
+
 			(
 				Event::<T, I>::ThresholdSignatureRequest(
 					ceremony_id,

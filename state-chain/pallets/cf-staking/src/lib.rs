@@ -439,11 +439,10 @@ pub mod pallet {
 			);
 
 			PendingClaims::<T>::remove(&account_id);
-			// Remove claim expiry for this account.  We assume one claim per account here.
-			// `retain` those elements in their positions and removing the account that has claimed
-			let mut expiries = ClaimExpiries::<T>::get();
-			expiries.retain(|(_, expiry_account_id)| expiry_account_id != &account_id);
-			ClaimExpiries::<T>::set(expiries);
+			// Assumption: One claim per account here.
+			ClaimExpiries::<T>::mutate(|expiries| {
+				expiries.retain(|(_, expiry_account_id)| expiry_account_id != &account_id);
+			});
 
 			T::Flip::finalize_claim(&account_id).expect("This should never return an error because we already ensured above that the pending claim does indeed exist");
 

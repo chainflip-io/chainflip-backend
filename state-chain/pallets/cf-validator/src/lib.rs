@@ -1075,7 +1075,7 @@ impl<T: Config> Pallet<T> {
 
 		let limit = Self::backup_reward_nodes_limit();
 		if limit < backups.len() {
-			backups.select_nth_unstable_by_key(limit - 1, |(_, amount)| Reverse(*amount));
+			backups.select_nth_unstable_by_key(limit, |(_, amount)| Reverse(*amount));
 			backups.truncate(limit);
 		}
 

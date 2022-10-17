@@ -19,7 +19,8 @@ pub const ETH_LOG_REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
 /// Duration before we timeout a select_ok request to both http and ws
 pub const ETH_DUAL_REQUEST_TIMEOUT: Duration = Duration::from_secs(3);
 
-/// Duration between each poll of the web3 client, to check if we are synced to the head of the chain
+/// Duration between each poll of the web3 client, to check if we are synced to the head of the
+/// chain
 pub const SYNC_POLL_INTERVAL: Duration = Duration::from_secs(4);
 
 /// Number of blocks one of the protocols needs to fall behind before we sound the alarms
