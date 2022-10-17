@@ -7,7 +7,11 @@ use crate::{
 };
 use cf_chains::mocks::MockEthereum;
 use cf_traits::{mocks::signer_nomination::MockNominator, AsyncResult, Chainflip};
-use frame_support::{assert_noop, assert_ok, instances::Instance1, traits::Hooks};
+use frame_support::{
+	assert_noop, assert_ok,
+	instances::Instance1,
+	traits::{Hooks, OnInitialize},
+};
 use frame_system::pallet_prelude::BlockNumberFor;
 use sp_runtime::traits::BlockNumberProvider;
 
@@ -220,11 +224,10 @@ fn fail_path_with_timeout() {
 			// Account 1 has 1 blame vote against it.
 			assert_eq!(request_context.blame_counts, BTreeMap::from_iter([(1, 1)]));
 
-			let timeout_delay: <Test as frame_system::Config>::BlockNumber =
-				THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS_DEFAULT.into();
 			// Callback has *not* executed but is scheduled for a retry after the timeout has
 			// elapsed.
-			let retry_block = frame_system::Pallet::<Test>::current_block_number() + timeout_delay;
+			let retry_block = frame_system::Pallet::<Test>::current_block_number() +
+				THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS_DEFAULT as u64;
 
 			assert!(!MockCallback::has_executed(request_id));
 			assert_eq!(MockEthereumThresholdSigner::retry_queues(retry_block).len(), 1);
@@ -233,12 +236,15 @@ fn fail_path_with_timeout() {
 			MockOffenceReporter::assert_reported(PalletOffence::ParticipateSigningFailed, vec![]);
 
 			// Process retries.
-			<MockEthereumThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(
-				retry_block,
-			);
+			System::set_block_number(retry_block);
+			<AllPalletsWithSystem as OnInitialize<_>>::on_initialize(retry_block);
 
-			// Expect the retry queue to be empty
+			// Expect the retry queue for this block to be empty.
 			assert!(MockEthereumThresholdSigner::retry_queues(retry_block).is_empty());
+			// Another timeout should have been added for the new ceremony.
+			let retry_block = frame_system::Pallet::<Test>::current_block_number() +
+				THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS_DEFAULT as u64;
+			assert!(!MockEthereumThresholdSigner::retry_queues(retry_block).is_empty());
 
 			// Participant 1 was reported for not responding.
 			MockOffenceReporter::assert_reported(PalletOffence::ParticipateSigningFailed, vec![1]);
@@ -285,14 +291,12 @@ fn fail_path_no_timeout() {
 
 			// Callback has *not* executed but is scheduled for a retry after the CeremonyRetryDelay
 			// *and* the threshold timeout.
-			let ceremony_retry_delay =
-				<Test as crate::Config<Instance1>>::CeremonyRetryDelay::get();
-			let init_timeout_delay: <Test as frame_system::Config>::BlockNumber =
-				THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS_DEFAULT.into();
+			let ceremony_retry_delay: <Test as frame_system::Config>::BlockNumber =
+				<Test as crate::Config<_>>::CeremonyRetryDelay::get();
 			let retry_block =
 				frame_system::Pallet::<Test>::current_block_number() + ceremony_retry_delay;
-			let retry_block_redundant =
-				frame_system::Pallet::<Test>::current_block_number() + init_timeout_delay;
+			let retry_block_redundant = frame_system::Pallet::<Test>::current_block_number() +
+				THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS_DEFAULT as u64;
 
 			assert!(!MockCallback::has_executed(request_id));
 			assert_eq!(MockEthereumThresholdSigner::retry_queues(retry_block).len(), 1);
