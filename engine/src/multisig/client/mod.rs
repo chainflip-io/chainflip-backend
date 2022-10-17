@@ -7,7 +7,10 @@ pub mod keygen;
 pub mod signing;
 
 #[cfg(test)]
-mod tests;
+mod helpers;
+
+#[cfg(test)]
+mod multisig_client_tests;
 
 pub mod ceremony_manager;
 
@@ -40,10 +43,13 @@ pub use utils::PartyIdxMapping;
 pub use utils::ensure_unsorted;
 
 #[cfg(test)]
-pub use tests::get_key_data_for_test;
+pub use helpers::get_key_data_for_test;
 
 #[cfg(test)]
 pub use signing::frost::{gen_signing_data_stage1, gen_signing_data_stage4};
+
+#[cfg(test)]
+pub use keygen::keygen_data::{gen_keygen_data_hash_comm1, gen_keygen_data_verify_hash_comm2};
 
 use self::{
 	ceremony_manager::{CeremonyResultSender, KeygenCeremony, SigningCeremony},

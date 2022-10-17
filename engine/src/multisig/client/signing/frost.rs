@@ -2,6 +2,8 @@
 //! Comments in this file reference sections from this document.
 //! Note that unlike the protocol described in the document, we don't have a
 //! centralised signature aggregator and don't have a preprocessing stage.
+#[cfg(test)]
+mod tests;
 
 use std::{
 	collections::{BTreeMap, BTreeSet},
@@ -19,7 +21,7 @@ use crate::multisig::{
 };
 
 #[cfg(test)]
-pub use tests::{gen_signing_data_stage1, gen_signing_data_stage4};
+pub use basic_tests::{gen_signing_data_stage1, gen_signing_data_stage4};
 
 use sha2::{Digest, Sha256};
 
@@ -335,12 +337,12 @@ pub fn aggregate_signature<C: CryptoScheme>(
 }
 
 #[cfg(test)]
-mod tests {
+mod basic_tests {
 
 	use super::*;
 
 	use crate::multisig::{
-		client::tests::{gen_invalid_local_sig, gen_invalid_signing_comm1},
+		client::helpers::{gen_invalid_local_sig, gen_invalid_signing_comm1},
 		crypto::eth::{EthSigning, Point, Scalar},
 	};
 

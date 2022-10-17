@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod tests;
+
 use std::collections::{BTreeMap, BTreeSet};
 
 use cf_primitives::AuthorityCount;
@@ -10,6 +13,9 @@ use crate::multisig::{
 };
 
 use super::keygen_frost::ShamirShare;
+
+#[cfg(test)]
+pub use tests::{gen_keygen_data_hash_comm1, gen_keygen_data_verify_hash_comm2};
 
 /// Data sent between parties over p2p for a keygen ceremony
 #[derive(Clone, Debug, Serialize, Deserialize)]

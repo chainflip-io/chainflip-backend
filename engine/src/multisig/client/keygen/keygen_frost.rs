@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod tests;
+
 use std::{
 	collections::{BTreeMap, BTreeSet},
 	sync::Arc,
@@ -390,7 +393,7 @@ impl<P: ECPoint> DKGUnverifiedCommitment<P> {
 }
 
 #[cfg(test)]
-mod tests {
+mod basic_tests {
 
 	use utilities::assert_ok;
 

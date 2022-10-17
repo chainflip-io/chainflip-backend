@@ -1,5 +1,5 @@
 #[cfg(test)]
-mod ceremony_runner_tests;
+mod tests;
 
 use std::{
 	collections::{BTreeMap, BTreeSet},

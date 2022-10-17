@@ -1,5 +1,3 @@
-#![cfg(test)]
-
 use std::collections::BTreeSet;
 
 use rand_legacy::SeedableRng;
@@ -9,17 +7,17 @@ use crate::multisig::{
 		common::{
 			BroadcastFailureReason, CeremonyFailureReason, SigningFailureReason, SigningStageName,
 		},
+		helpers::{
+			gen_invalid_local_sig, gen_invalid_signing_comm1, new_nodes, new_signing_ceremony,
+			run_stages, SigningCeremonyRunner, ACCOUNT_IDS, DEFAULT_KEYGEN_SEED,
+			DEFAULT_SIGNING_CEREMONY_ID, DEFAULT_SIGNING_SEED,
+		},
 		keygen::generate_key_data,
 		signing::frost,
-		tests::helpers::{
-			gen_invalid_local_sig, gen_invalid_signing_comm1, new_signing_ceremony, run_stages,
-		},
 	},
 	tests::fixtures::MESSAGE_HASH,
 	Rng,
 };
-
-use super::*;
 
 // We choose (arbitrarily) to use eth crypto for unit tests.
 use crate::multisig::crypto::eth::Point;

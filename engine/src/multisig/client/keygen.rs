@@ -1,4 +1,4 @@
-mod keygen_data;
+pub mod keygen_data;
 mod keygen_frost;
 mod keygen_stages;
 

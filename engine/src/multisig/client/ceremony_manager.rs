@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod tests;
+
 use anyhow::{bail, Context, Result};
 use futures::FutureExt;
 use std::{

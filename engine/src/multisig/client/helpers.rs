@@ -59,10 +59,25 @@ use crate::{
 
 use state_chain_runtime::{constants::common::MAX_STAGE_DURATION_SECONDS, AccountId};
 
-use super::{
-	ACCOUNT_IDS, DEFAULT_KEYGEN_CEREMONY_ID, DEFAULT_KEYGEN_SEED, DEFAULT_SIGNING_CEREMONY_ID,
-	DEFAULT_SIGNING_SEED, INITIAL_LATEST_CEREMONY_ID,
-};
+use lazy_static::lazy_static;
+
+/// Default seeds
+pub const DEFAULT_KEYGEN_SEED: [u8; 32] = [8; 32];
+pub const DEFAULT_SIGNING_SEED: [u8; 32] = [4; 32];
+
+// Default ceremony ids used in many unit tests.
+/// The initial latest ceremony id starts at 0,
+/// so the first ceremony request must have a ceremony id of 1.
+/// Also the SC will never send a ceremony request at id 0.
+pub const INITIAL_LATEST_CEREMONY_ID: CeremonyId = 0;
+// Ceremony ids must be consecutive.
+pub const DEFAULT_KEYGEN_CEREMONY_ID: CeremonyId = INITIAL_LATEST_CEREMONY_ID + 1;
+pub const DEFAULT_SIGNING_CEREMONY_ID: CeremonyId = DEFAULT_KEYGEN_CEREMONY_ID + 1;
+
+lazy_static! {
+	pub static ref ACCOUNT_IDS: Vec<AccountId> =
+		[1, 2, 3, 4].iter().map(|i| AccountId::new([*i; 32])).collect();
+}
 
 pub type StageMessages<T> = HashMap<AccountId, HashMap<AccountId, T>>;
 type SigningCeremonyEth = SigningCeremony<EthSigning>;
