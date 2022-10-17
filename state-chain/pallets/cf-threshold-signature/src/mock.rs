@@ -160,7 +160,7 @@ pub const INVALID_SIGNATURE: <MockEthereum as ChainCrypto>::ThresholdSignature =
 	MockThresholdSignature::<_, _> { signing_key: *b"BAD!", signed_payload: *b"BAD!" };
 
 parameter_types! {
-	pub const CeremonyRetryDelay: <Test as frame_system::Config>::BlockNumber = 1;
+	pub const CeremonyRetryDelay: <Test as frame_system::Config>::BlockNumber = 4;
 }
 
 pub type MockOffenceReporter =
@@ -225,6 +225,14 @@ impl ExtBuilder {
 			assert_eq!(
 				pending.remaining_respondents,
 				BTreeSet::from_iter(MockNominator::get_nominees().unwrap_or_default())
+			);
+			assert_eq!(
+				EthereumThresholdSigner::retry_queues(
+					frame_system::Pallet::<Test>::block_number() +
+						EthereumThresholdSigner::threshold_signature_response_timeout()
+				)
+				.len(),
+				1
 			);
 			assert!(matches!(
 				EthereumThresholdSigner::signatures(request_id),

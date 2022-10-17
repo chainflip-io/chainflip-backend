@@ -266,6 +266,8 @@ fn fail_path_due_to_report_signature_failed() {
 		.with_request(b"OHAI")
 		.build()
 		.execute_with(|| {
+			// progress by one block *after* the initial request is inserted (in the ExtBuilder)
+			System::set_block_number(frame_system::Pallet::<Test>::current_block_number() + 1);
 			let ceremony_id = current_ceremony_id();
 			let RequestContext { request_id, attempt_count, .. } =
 				EthereumThresholdSigner::open_requests(ceremony_id).unwrap();
@@ -274,53 +276,57 @@ fn fail_path_due_to_report_signature_failed() {
 				.map(|(id, report)| MockCfe { id, behaviour: CfeBehaviour::ReportFailure(report) })
 				.collect::<Vec<_>>();
 
-			// CFEs respond
+			// CFEs responds, triggering a retry for the next block.
 			run_cfes_on_sc_events(&cfes[..]);
+			let next_block_retry = frame_system::Pallet::<Test>::current_block_number() + 1;
+			let timeout_block_for_next_retry = next_block_retry +
+				EthereumThresholdSigner::threshold_signature_response_timeout() as u64;
 
-			// Request is still in pending state but scheduled for retry.
-			let request_context = EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
+			assert_eq!(EthereumThresholdSigner::retry_queues(next_block_retry).len(), 1);
 
 			// Account 1 has 4 blame votes against it. The other accounts have no votes against
 			// them.
-			assert_eq!(request_context.blame_counts, BTreeMap::from_iter([(1, 4)]));
+			assert_eq!(
+				EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap().blame_counts,
+				BTreeMap::from_iter([(1, 4)])
+			);
 
-			// Callback has *not* executed but is scheduled for a retry after the CeremonyRetryDelay
-			// *and* the threshold timeout.
-			let retry_block = frame_system::Pallet::<Test>::current_block_number() +
-				<Test as crate::Config<_>>::CeremonyRetryDelay::get();
-			let retry_block_redundant = frame_system::Pallet::<Test>::current_block_number() +
-				EthereumThresholdSigner::threshold_signature_response_timeout() as u64;
-
-			assert!(retry_block_redundant > retry_block);
-
-			assert!(!MockCallback::has_executed(request_id));
-			assert_eq!(EthereumThresholdSigner::retry_queues(retry_block).len(), 1);
-			assert_eq!(EthereumThresholdSigner::retry_queues(retry_block_redundant).len(), 1);
-
-			// The offender has not yet been reported.
-			MockOffenceReporter::assert_reported(PalletOffence::ParticipateSigningFailed, vec![]);
-
-			// Process retries.
-			<EthereumThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(retry_block);
-			// We will only execute the callback for retry_policy never or on a success.
-			assert!(!MockCallback::has_executed(request_id));
-
-			// We have process the retry at `retry_block`
-			assert!(EthereumThresholdSigner::retry_queues(retry_block).is_empty());
+			// after the block is process, we of course have moved to the next block.
+			System::set_block_number(next_block_retry);
+			<EthereumThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(
+				next_block_retry,
+			);
 
 			// We did reach the reporting threshold, participant 1 was reported.
 			MockOffenceReporter::assert_reported(PalletOffence::ParticipateSigningFailed, vec![1]);
 
-			// We still have an open request for the next retry
+			assert!(!MockCallback::has_executed(request_id));
+			assert!(EthereumThresholdSigner::retry_queues(next_block_retry).is_empty());
+
+			assert_eq!(
+				EthereumThresholdSigner::retry_queues(timeout_block_for_next_retry).len(),
+				1
+			);
+
 			assert_eq!(
 				get_ceremony_context(ceremony_id + 1, request_id, attempt_count + 1)
 					.remaining_respondents,
 				BTreeSet::from_iter(MockNominator::get_nominees().unwrap().into_iter())
 			);
 
-			// Processing the redundant retry request has no effect.
+			System::set_block_number(timeout_block_for_next_retry);
 			<EthereumThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(
-				retry_block_redundant,
+				timeout_block_for_next_retry,
+			);
+			assert!(EthereumThresholdSigner::retry_queues(timeout_block_for_next_retry).is_empty());
+
+			assert_eq!(
+				EthereumThresholdSigner::retry_queues(
+					timeout_block_for_next_retry +
+						EthereumThresholdSigner::threshold_signature_response_timeout()
+				)
+				.len(),
+				1
 			);
 		});
 }
