@@ -2,8 +2,7 @@ use std::collections::HashMap;
 
 use cf_primitives::AccountRole;
 use chainflip_engine::settings::{
-	insert_command_line_option, insert_command_line_option_path, CfSettings, Eth, EthSharedOptions,
-	StateChain, StateChainOptions,
+	CfSettings, Eth, EthSharedOptions, StateChain, StateChainOptions,
 };
 use clap::Parser;
 use config::{ConfigError, Source, Value};
@@ -33,35 +32,9 @@ impl Source for CLICommandLineOptions {
 	fn collect(&self) -> std::result::Result<config::Map<String, Value>, ConfigError> {
 		let mut map: HashMap<String, Value> = HashMap::new();
 
-		insert_command_line_option(
-			&mut map,
-			"state_chain.ws_endpoint",
-			&self.state_chain_opts.state_chain_ws_endpoint,
-		);
+		self.state_chain_opts.insert_all(&mut map);
 
-		insert_command_line_option_path(
-			&mut map,
-			"state_chain.signing_key_file",
-			&self.state_chain_opts.state_chain_signing_key_file,
-		);
-
-		insert_command_line_option(
-			&mut map,
-			"eth.ws_node_endpoint",
-			&self.eth_opts.eth_ws_node_endpoint,
-		);
-
-		insert_command_line_option(
-			&mut map,
-			"eth.http_node_endpoint",
-			&self.eth_opts.eth_http_node_endpoint,
-		);
-
-		insert_command_line_option_path(
-			&mut map,
-			"eth.private_key_file",
-			&self.eth_opts.eth_private_key_file,
-		);
+		self.eth_opts.insert_all(&mut map);
 
 		Ok(map)
 	}

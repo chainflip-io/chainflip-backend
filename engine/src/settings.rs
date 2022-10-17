@@ -215,16 +215,17 @@ where
 		// Choose what file to use
 		let file = match &optional_file {
 			Some(path) => {
-				// If the user has set the config file path, then error if its missing.
-				if !Path::new(path).is_file() {
+				if Path::new(path).is_file() {
+					path
+				} else {
+					// If the user has set the config file path, then error if its missing.
 					return Err(ConfigError::Message(format!("File not found: {}", path)))
 				}
-				path
 			},
 			None => default_file,
 		};
 
-		// If the file does not exist, we will try and continue anyway.
+		// If the file does not exist we will try and continue anyway.
 		// Because if all of the settings are covered in the environment and cli options, then we
 		// don't need it.
 		let file_present = Path::new(file).is_file();
@@ -304,31 +305,10 @@ impl Source for CommandLineOptions {
 
 		insert_command_line_option(&mut map, "node_p2p.port", &self.p2p_port);
 
-		insert_command_line_option(
-			&mut map,
-			"state_chain.ws_endpoint",
-			&self.state_chain_opts.state_chain_ws_endpoint,
-		);
-		insert_command_line_option_path(
-			&mut map,
-			"state_chain.signing_key_file",
-			&self.state_chain_opts.state_chain_signing_key_file,
-		);
-		insert_command_line_option(
-			&mut map,
-			"eth.ws_node_endpoint",
-			&self.eth_opts.eth_ws_node_endpoint,
-		);
-		insert_command_line_option(
-			&mut map,
-			"eth.http_node_endpoint",
-			&self.eth_opts.eth_http_node_endpoint,
-		);
-		insert_command_line_option_path(
-			&mut map,
-			"eth.private_key_file",
-			&self.eth_opts.eth_private_key_file,
-		);
+		self.state_chain_opts.insert_all(&mut map);
+
+		self.eth_opts.insert_all(&mut map);
+
 		insert_command_line_option(&mut map, "health_check.hostname", &self.health_check_hostname);
 		insert_command_line_option(&mut map, "health_check.port", &self.health_check_port);
 		insert_command_line_option_path(&mut map, "signing.db_file", &self.signing_db_file);
@@ -363,6 +343,39 @@ pub fn insert_command_line_option_path(
 		setting_str,
 		&option.as_ref().map(|path| path.to_string_lossy().to_string()),
 	);
+}
+
+impl StateChainOptions {
+	/// Inserts all the State Chain Options into the given map (if Some)
+	pub fn insert_all(&self, mut map: &mut HashMap<String, Value>) {
+		insert_command_line_option(
+			&mut map,
+			"state_chain.ws_endpoint",
+			&self.state_chain_ws_endpoint,
+		);
+		insert_command_line_option_path(
+			&mut map,
+			"state_chain.signing_key_file",
+			&self.state_chain_signing_key_file,
+		);
+	}
+}
+
+impl EthSharedOptions {
+	/// Inserts all the Eth Shared Options into the given map (if Some)
+	pub fn insert_all(&self, mut map: &mut HashMap<String, Value>) {
+		insert_command_line_option(&mut map, "eth.ws_node_endpoint", &self.eth_ws_node_endpoint);
+		insert_command_line_option(
+			&mut map,
+			"eth.http_node_endpoint",
+			&self.eth_http_node_endpoint,
+		);
+		insert_command_line_option_path(
+			&mut map,
+			"eth.private_key_file",
+			&self.eth_private_key_file,
+		);
+	}
 }
 
 impl Settings {
