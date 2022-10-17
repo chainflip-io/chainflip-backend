@@ -8,6 +8,7 @@ use pallet_session::Config as SessionConfig;
 
 use sp_application_crypto::RuntimeAppPublic;
 use sp_runtime::{Digest, DigestItem};
+use sp_std::vec;
 
 use cf_traits::AuctionOutcome;
 

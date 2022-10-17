@@ -27,7 +27,7 @@ use frame_support::{
 };
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
-use sp_std::{prelude::*, time::Duration};
+use sp_std::prelude::*;
 
 use cf_traits::SystemStateInfo;
 
@@ -45,11 +45,14 @@ pub const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
 
 #[frame_support::pallet]
 pub mod pallet {
+
 	use super::*;
 	use cf_chains::{ApiCall, Ethereum};
 	use cf_traits::AccountRoleRegistry;
 	use frame_support::{pallet_prelude::*, Parameter};
 	use frame_system::pallet_prelude::*;
+
+	use sp_std::time::Duration;
 
 	pub type AccountId<T> = <T as frame_system::Config>::AccountId;
 
