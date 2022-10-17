@@ -53,11 +53,19 @@ pub type PolkadotUncheckedExtrinsic =
 pub type PolkadotPayload = SignedPayload<PolkadotRuntimeCall, PolkadotSignedExtra>;
 pub type EncodedPolkadotPayload = Vec<u8>;
 
-pub const POLKADOT_BLOCK_HASH_COUNT: PolkadotBlockNumber = 2400; //import from runtime common types crate in polkadot repo
-pub const POLKADOT_SPEC_VERSION: PolkadotSpecVersion = 9290;
-pub const POLKADOT_TRANSACTION_VERSION: PolkadotTransactionVersion = 14;
+// Polkadot mainnet
+// pub const POLKADOT_BLOCK_HASH_COUNT: PolkadotBlockNumber = 2400; //import from runtime common
+// types crate in polkadot repo pub const POLKADOT_SPEC_VERSION: PolkadotSpecVersion = 9290;
+// pub const POLKADOT_TRANSACTION_VERSION: PolkadotTransactionVersion = 14;
+// pub const POLKADOT_GENESIS_HASH: &str =
+// 	"0x91b171bb158e2d3848fa23a9f1c25182fb8e20313b2c1eb49219da7a70ce90c3";
+
+// Westend testnet
+pub const POLKADOT_BLOCK_HASH_COUNT: PolkadotBlockNumber = 4096; //import from runtime common types crate in polkadot repo
+pub const POLKADOT_SPEC_VERSION: PolkadotSpecVersion = 9300;
+pub const POLKADOT_TRANSACTION_VERSION: PolkadotTransactionVersion = 13;
 pub const POLKADOT_GENESIS_HASH: &str =
-	"0x91b171bb158e2d3848fa23a9f1c25182fb8e20313b2c1eb49219da7a70ce90c3";
+	"0xe143f23803ac50e8f6f8e62695d1ce9e4e1d68aa36c1cd2cfd15340213f3423e";
 
 #[allow(clippy::unnecessary_cast)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -105,27 +113,27 @@ impl ChainCrypto for Polkadot {
 
 impl ChainAbi for Polkadot {
 	type UnsignedTransaction = PolkadotEmptyType;
-	type SignedTransaction = Option<PolkadotUncheckedExtrinsic>;
-	type SignerCredential = PolkadotEmptyType; // Depending on how we structure the process of transaction submission polkadot (two step
-										   // process or one), we might or might not need this type -> discussion
+	type SignedTransaction = Vec<u8>;
+	type SignerCredential = PolkadotEmptyType; // Not needed in Polkadot since the second signature (by the transaction submitter) is not
+										   // needed
 	type ReplayProtection = (); //Todo
-	type ValidationError = (); //Todo
+	type ValidationError = ();
 
 	fn verify_signed_transaction(
 		_unsigned_tx: &Self::UnsignedTransaction,
 		_signed_tx: &Self::SignedTransaction,
 		_signer_credential: &Self::SignerCredential,
 	) -> Result<Self::TransactionHash, Self::ValidationError> {
-		todo!(); //<UncheckedExtrinsic as Checkable>::check()
-	}
+		Err(())
+	} // This function is not needed in Polkadot
 }
 
-/// The hancler for creating and signing polkadot extrinsics, and creating signature payload
+/// The handler for creating and signing polkadot extrinsics, and creating signature payload
 #[derive(Debug, Encode, Decode, TypeInfo, Eq, PartialEq, Clone)]
 pub struct PolkadotExtrinsicHandler {
 	vault_account: <Polkadot as Chain>::ChainAccount,
 	extrinsic_call: Option<PolkadotRuntimeCall>,
-	signed_extrinsic: <Polkadot as ChainAbi>::SignedTransaction,
+	signed_extrinsic: Option<PolkadotUncheckedExtrinsic>,
 	nonce: PolkadotIndex,
 	extra: Option<PolkadotSignedExtra>,
 	signature_payload: Option<<Polkadot as ChainCrypto>::Payload>,
@@ -214,7 +222,7 @@ impl PolkadotExtrinsicHandler {
 pub enum PolkadotRuntimeCall {
 	#[codec(index = 0u8)]
 	System(SystemCall),
-	#[codec(index = 5u8)]
+	#[codec(index = 4u8)] // INDEX FOR WESTEND: 4, FOR POLKADOT: 5
 	Balances(BalancesCall),
 	#[codec(index = 26u8)]
 	Utility(UtilityCall),
@@ -707,3 +715,62 @@ impl Into<Vec<u8>> for PolkadotPublicKey {
 }
 #[derive(TypeInfo, Clone, Copy, Debug, Eq, PartialEq, Encode, Decode, Default)]
 pub struct PolkadotEmptyType(pub Option<()>);
+
+#[cfg(test)]
+mod test_fetch_batch {
+
+	use super::*;
+	use crate::dot::sr25519::Pair;
+	use sp_core::crypto::Pair as TraitPair;
+	use sp_runtime::{traits::IdentifyAccount, MultiSigner};
+
+	// test westend account 1 (CHAINFLIP-TEST)
+	// address: "5E2WfQFeafdktJ5AAF6ZGZ71Yj4fiJnHWRomVmeoStMNhoZe"
+	pub const RAW_SEED_1: [u8; 32] =
+		hex_literal::hex!("858c1ee915090a119d4cb0774b908fa585ef7882f4648c577606490cc94f6e15");
+	pub const NONCE_1: u32 = 4; //correct nonce has to be provided for this account (see/track onchain)
+
+	// test westend account 2 (CHAINFLIP-TEST-2)
+	// address: "5GNn92C9ngX4sNp3UjqGzPbdRfbbV8hyyVVNZaH2z9e5kzxA"
+	pub const RAW_SEED_2: [u8; 32] =
+		hex_literal::hex!("4b734882accd7a0e27b8b0d3cb7db79ab4da559d1d5f84f35fd218a1ee12ece4");
+	pub const _NONCE_2: u32 = 1; //correct nonce has to be provided for this account (see/track onchain)
+
+	#[test]
+	fn create_test_extrinsic() {
+		let keypair_1: Pair = <Pair as TraitPair>::from_seed(&RAW_SEED_1);
+		let keypair_2: Pair = <Pair as TraitPair>::from_seed(&RAW_SEED_2);
+
+		let account_id_1: AccountId32 = MultiSigner::Sr25519(keypair_1.public()).into_account();
+		let account_id_2: AccountId32 = MultiSigner::Sr25519(keypair_2.public()).into_account();
+
+		let test_runtime_call: PolkadotRuntimeCall =
+			PolkadotRuntimeCall::Balances(BalancesCall::transfer {
+				dest: PolkadotAccountIdLookup::from(account_id_2),
+				value: 35_000_000_000u128, //0.035 WND
+			});
+
+		println!(
+			"CallHash: {}",
+			test_runtime_call.using_encoded(|encoded| hex::encode(Blake2_256::hash(encoded)))
+		);
+		println!("Encoded Call: {}", hex::encode(test_runtime_call.encode()));
+
+		let mut extrinsic_handler = PolkadotExtrinsicHandler::new_empty(NONCE_1, account_id_1);
+		extrinsic_handler.insert_extrinsic_call(test_runtime_call);
+		extrinsic_handler
+			.insert_threshold_signature_payload()
+			.expect("This shouldn't fail");
+
+		let signed_extrinsic: Option<PolkadotUncheckedExtrinsic> = extrinsic_handler
+			.insert_signature_and_get_signed_unchecked_extrinsic(
+				keypair_1.sign(
+					&extrinsic_handler.signature_payload.clone().expect("This can't fail")[..],
+				),
+			);
+
+		assert!(extrinsic_handler.is_signed().unwrap_or(false));
+
+		println!("encoded extrinsic: {}", hex::encode(signed_extrinsic.unwrap().encode()));
+	}
+}
