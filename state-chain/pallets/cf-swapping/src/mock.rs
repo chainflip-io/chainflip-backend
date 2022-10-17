@@ -1,4 +1,4 @@
-use crate::{self as pallet_cf_relayer};
+use crate::{self as pallet_cf_swapping};
 use cf_primitives::{ForeignChainAddress, ForeignChainAsset};
 use cf_traits::IngressApi;
 use frame_support::parameter_types;
@@ -22,7 +22,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system,
-		Relayer: pallet_cf_relayer,
+		Relayer: pallet_cf_swapping,
 	}
 );
 
@@ -80,7 +80,7 @@ impl IngressApi for MockIngress {
 	}
 }
 
-impl pallet_cf_relayer::Config for Test {
+impl pallet_cf_swapping::Config for Test {
 	type Event = Event;
 	type Ingress = MockIngress;
 	type AccountRoleRegistry = ();

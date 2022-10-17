@@ -189,10 +189,10 @@ impl pallet_cf_environment::Config for Runtime {
 }
 
 #[cfg(feature = "ibiza")]
-impl pallet_cf_relayer::Config for Runtime {
+impl pallet_cf_swapping::Config for Runtime {
 	type Event = Event;
 	type Ingress = Ingress;
-	type WeightInfo = pallet_cf_relayer::weights::PalletWeight<Runtime>;
+	type WeightInfo = pallet_cf_swapping::weights::PalletWeight<Runtime>;
 	type AccountRoleRegistry = AccountTypes;
 }
 
@@ -628,7 +628,7 @@ construct_runtime!(
 		EthereumChainTracking: pallet_cf_chain_tracking::<Instance1>,
 		Ingress: pallet_cf_ingress,
 		Egress: pallet_cf_egress,
-		Relayer: pallet_cf_relayer,
+		Swapping: pallet_cf_swapping,
 		LiquidityProvider: pallet_cf_lp,
 	}
 );
@@ -694,7 +694,7 @@ mod benches {
 		[pallet_cf_threshold_signature, EthereumThresholdSigner]
 		[pallet_cf_broadcast, EthereumBroadcaster]
 		[pallet_cf_chain_tracking, EthereumChainTracking]
-		[pallet_cf_relayer, Relayer]
+		[pallet_cf_swapping, Swapping]
 		[pallet_cf_ingress, Ingress]
 		[pallet_cf_egress, Egress]
 	);
