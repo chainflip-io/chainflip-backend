@@ -2,7 +2,7 @@ use std::{collections::BTreeSet, marker::PhantomData};
 
 use crate::{
 	self as pallet_cf_threshold_signature, CeremonyId, EnsureThresholdSigned, LiveCeremonies,
-	OpenRequests, PalletOffence, RequestContext, RequestId,
+	OpenRequests, PalletOffence, RequestContext, RequestId, RetryQueues,
 };
 use cf_chains::{
 	mocks::{MockEthereum, MockThresholdSignature},
@@ -287,13 +287,18 @@ impl TestExternalitiesWithCheck {
 	}
 
 	/// Checks conditions that should always hold.
+	///
+	/// Every ceremony in OpenRequests should always have a corresponding entry in LiveCeremonies.
+	/// Every ceremony should also have at least one retry scheduled.
 	pub fn do_consistency_check() {
+		let retries = BTreeSet::<_>::from_iter(RetryQueues::<Test, _>::iter_values().flatten());
 		OpenRequests::<Test, _>::iter().for_each(
 			|(ceremony_id, RequestContext { request_id, attempt_count, .. })| {
 				assert_eq!(
 					LiveCeremonies::<Test, _>::get(request_id).unwrap(),
 					(ceremony_id, attempt_count)
 				);
+				assert!(retries.contains(&ceremony_id));
 			},
 		);
 		LiveCeremonies::<Test, _>::iter().for_each(
