@@ -71,7 +71,7 @@ benchmarks_instance_pallet! {
 
 		let reporter = threshold_set.next().unwrap();
 		let account: T::AccountId = reporter.clone().into();
-		<T as pallet::Config<I>>::AccountRoleRegistry::register_account(account.clone().into(), AccountRole::Validator);
+		<T as pallet::Config<I>>::AccountRoleRegistry::register_account(account.into(), AccountRole::Validator);
 		let offenders = BTreeSet::from_iter(threshold_set.take(a as usize));
 	} : _(RawOrigin::Signed(reporter.into()), ceremony_id, offenders)
 	determine_offenders {
