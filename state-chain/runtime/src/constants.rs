@@ -1,7 +1,6 @@
 pub mod common {
 	use cf_primitives::AuthorityCount;
 	use cf_traits::{BlockNumber, FlipBalance};
-	use pallet_cf_broadcast::AttemptCount;
 
 	pub const CHAINFLIP_SS58_PREFIX: u16 = 2112;
 
@@ -91,9 +90,6 @@ pub mod common {
 	// is taken as 10 percent for authority emissions and 1 percent for backup node emissions.
 	pub const CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL: u32 = 2720;
 	pub const BACKUP_NODE_EMISSION_INFLATION_PERBILL: u32 = 284;
-
-	/// The maximum number of broadcast attempts
-	pub const MAXIMUM_BROADCAST_ATTEMPTS: AttemptCount = 100;
 
 	/// The default minimum stake, 1_000 x 10^18
 	pub const DEFAULT_MIN_STAKE: FlipBalance = 1_000 * 10u128.pow(18);
