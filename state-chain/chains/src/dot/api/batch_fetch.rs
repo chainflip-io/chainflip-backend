@@ -3,8 +3,8 @@ use scale_info::TypeInfo;
 use sp_std::{boxed::Box, vec::Vec};
 
 use crate::dot::{
-	BalancesCall, Polkadot, PolkadotAccountIdLookup, PolkadotExtrinsicHandler, PolkadotIndex,
-	PolkadotProxyType, PolkadotRuntimeCall, ProxyCall, UtilityCall,
+	BalancesCall, Polkadot, PolkadotAccountIdLookup, PolkadotExtrinsicHandler, PolkadotProxyType,
+	PolkadotReplayProtection, PolkadotRuntimeCall, ProxyCall, UtilityCall,
 };
 
 use crate::{ApiCall, Chain, ChainAbi, ChainCrypto};
@@ -25,12 +25,15 @@ pub struct BatchFetch {
 
 impl BatchFetch {
 	pub fn new_unsigned(
-		nonce: PolkadotIndex,
+		replay_protection: PolkadotReplayProtection,
 		intent_ids: Vec<IntentId>,
 		vault_account: <Polkadot as Chain>::ChainAccount,
 	) -> Self {
 		let mut calldata = Self {
-			extrinsic_handler: PolkadotExtrinsicHandler::new_empty(nonce, vault_account),
+			extrinsic_handler: PolkadotExtrinsicHandler::new_empty(
+				replay_protection,
+				vault_account,
+			),
 			intent_ids,
 		};
 		// create and insert polkadot runtime call
