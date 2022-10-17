@@ -351,7 +351,7 @@ pub mod pallet {
 					{
 						let offenders = failed_ceremony_context.offenders();
 						num_offenders += offenders.len();
-						match retry_policy {
+						Self::deposit_event(match retry_policy {
 							RetryPolicy::Always => {
 								T::OffenceReporter::report_many(
 									PalletOffence::ParticipateSigningFailed,
@@ -365,7 +365,7 @@ pub mod pallet {
 									None,
 									RetryPolicy::Always,
 								);
-								Self::deposit_event(Event::<T, I>::RetryRequested(ceremony_id));
+								Event::<T, I>::RetryRequested(ceremony_id)
 							},
 							RetryPolicy::Never => {
 								Signatures::<T, I>::insert(
@@ -373,14 +373,14 @@ pub mod pallet {
 									AsyncResult::Ready(Err(offenders.clone())),
 								);
 								Self::maybe_dispatch_callback(request_id, ceremony_id);
-								Self::deposit_event(Event::<T, I>::ThresholdSignatureFailed(
+								Event::<T, I>::ThresholdSignatureFailed(
 									request_id,
 									ceremony_id,
 									failed_ceremony_context.key_id,
 									offenders,
-								));
+								)
 							},
-						}
+						})
 					} else {
 						log::error!("Retry failed: No ceremony such ceremony: {}.", ceremony_id);
 					}
