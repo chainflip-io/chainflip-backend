@@ -3,7 +3,6 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::{
 	self as pallet_cf_threshold_signature, mock::*, AttemptCount, CeremonyContext, CeremonyId,
 	Error, PalletOffence, RequestContext, RequestId,
-	THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS_DEFAULT,
 };
 use cf_chains::mocks::MockEthereum;
 use cf_traits::{mocks::signer_nomination::MockNominator, AsyncResult, Chainflip};
@@ -226,7 +225,7 @@ fn fail_path_with_timeout() {
 			// Callback has *not* executed but is scheduled for a retry after the timeout has
 			// elapsed.
 			let retry_block = frame_system::Pallet::<Test>::current_block_number() +
-				THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS_DEFAULT as u64;
+				EthereumThresholdSigner::threshold_signature_response_timeout() as u64;
 
 			assert!(!MockCallback::has_executed(request_id));
 			assert_eq!(EthereumThresholdSigner::retry_queues(retry_block).len(), 1);
@@ -242,16 +241,16 @@ fn fail_path_with_timeout() {
 			assert!(EthereumThresholdSigner::retry_queues(retry_block).is_empty());
 			// Another timeout should have been added for the new ceremony.
 			let retry_block = frame_system::Pallet::<Test>::current_block_number() +
-				THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS_DEFAULT as u64;
+				EthereumThresholdSigner::threshold_signature_response_timeout() as u64;
 			assert!(!EthereumThresholdSigner::retry_queues(retry_block).is_empty());
 
 			// Participant 1 was reported for not responding.
 			MockOffenceReporter::assert_reported(PalletOffence::ParticipateSigningFailed, vec![1]);
 
 			// We have a new request pending: New ceremony_id, same request context.
-			let context = get_ceremony_context(ceremony_id + 1, request_id, attempt_count + 1);
 			assert_eq!(
-				context.remaining_respondents,
+				get_ceremony_context(ceremony_id + 1, request_id, attempt_count + 1)
+					.remaining_respondents,
 				BTreeSet::from_iter(MockNominator::get_nominees().unwrap().into_iter())
 			);
 		});
@@ -287,12 +286,10 @@ fn fail_path_due_to_report_signature_failed() {
 
 			// Callback has *not* executed but is scheduled for a retry after the CeremonyRetryDelay
 			// *and* the threshold timeout.
-			let ceremony_retry_delay: <Test as frame_system::Config>::BlockNumber =
+			let retry_block = frame_system::Pallet::<Test>::current_block_number() +
 				<Test as crate::Config<_>>::CeremonyRetryDelay::get();
-			let retry_block =
-				frame_system::Pallet::<Test>::current_block_number() + ceremony_retry_delay;
 			let retry_block_redundant = frame_system::Pallet::<Test>::current_block_number() +
-				THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS_DEFAULT as u64;
+				EthereumThresholdSigner::threshold_signature_response_timeout() as u64;
 
 			assert!(retry_block_redundant > retry_block);
 
@@ -305,18 +302,19 @@ fn fail_path_due_to_report_signature_failed() {
 
 			// Process retries.
 			<EthereumThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(retry_block);
+			// We will only execute the callback for retry_policy never or on a success.
 			assert!(!MockCallback::has_executed(request_id));
 
-			// No longer pending retry.
+			// We have process the retry at `retry_block`
 			assert!(EthereumThresholdSigner::retry_queues(retry_block).is_empty());
 
 			// We did reach the reporting threshold, participant 1 was reported.
 			MockOffenceReporter::assert_reported(PalletOffence::ParticipateSigningFailed, vec![1]);
 
-			// We have a new request pending: New ceremony_id, same request context.
-			let pending = get_ceremony_context(ceremony_id + 1, request_id, attempt_count + 1);
+			// We still have an open request for the next retry
 			assert_eq!(
-				pending.remaining_respondents,
+				get_ceremony_context(ceremony_id + 1, request_id, attempt_count + 1)
+					.remaining_respondents,
 				BTreeSet::from_iter(MockNominator::get_nominees().unwrap().into_iter())
 			);
 
@@ -373,7 +371,7 @@ mod unsigned_validation {
 			let ceremony = PendingCeremonies::<Test, Instance1>::get(ceremony_id);
 			let request = OpenRequests::<Test, Instance1>::get(ceremony_id);
 			let timeout_delay: <Test as frame_system::Config>::BlockNumber =
-				THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS_DEFAULT.into();
+				EthereumThresholdSigner::threshold_signature_response_timeout().into();
 			let retry_block = frame_system::Pallet::<Test>::current_block_number() + timeout_delay;
 			assert_eq!(ceremony.clone().unwrap().key_id, &CUSTOM_AGG_KEY);
 			assert_eq!(ceremony.unwrap().remaining_respondents, participants);

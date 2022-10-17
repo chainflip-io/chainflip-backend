@@ -259,6 +259,7 @@ pub mod pallet {
 
 	/// Maximum duration of a threshold signing ceremony before it is timed out and retried
 	#[pallet::storage]
+	#[pallet::getter(fn threshold_signature_response_timeout)]
 	pub type ThresholdSignatureResponseTimeout<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
