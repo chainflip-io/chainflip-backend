@@ -669,6 +669,10 @@ pub trait AccountRoleRegistry<T: frame_system::Config> {
 	fn ensure_validator(origin: T::Origin) -> Result<T::AccountId, BadOrigin> {
 		Self::ensure_account_role(origin, AccountRole::Validator)
 	}
+	#[cfg(feature = "runtime-benchmarks")]
+	fn register_account(_account_id: T::AccountId, _role: AccountRole) {
+		unimplemented!()
+	}
 }
 
 /// API that allows other pallets to Egress assets out of the State Chain.

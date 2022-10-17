@@ -97,7 +97,7 @@ benchmarks_instance_pallet! {
 	}
 	report_keygen_outcome {
 		let caller: T::AccountId = whitelisted_caller();
-		T::AccountRoleRegistry::register_account_role(&caller, AccountRole::Validator)?;
+		T::AccountRoleRegistry::register_account(caller.clone(), AccountRole::Validator);
 
 		let keygen_participants = generate_authority_set::<T, I>(150, caller.clone().into());
 		PendingVaultRotation::<T, I>::put(

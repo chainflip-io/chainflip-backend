@@ -14,8 +14,6 @@ use frame_support::{
 use frame_system::RawOrigin;
 use sp_std::vec::Vec;
 
-use pallet_cf_account_types::EnsureValidator;
-
 type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 use cf_chains::benchmarking_value::BenchmarkValue;
 
@@ -165,7 +163,7 @@ benchmarks! {
 	retire_account {
 		let caller: T::AccountId = whitelisted_caller();
 		ActiveBidder::<T>::insert(caller.clone(), true);
-		EnsureValidator::<T>::register_account(caller.clone());
+		T::AccountRoleRegistry::register_account(caller.clone(), AccountRole::Validator);
 	}:_(RawOrigin::Signed(caller.clone()))
 	verify {
 		assert!(!ActiveBidder::<T>::get(caller));
@@ -174,7 +172,7 @@ benchmarks! {
 	activate_account {
 		let caller: T::AccountId = whitelisted_caller();
 		ActiveBidder::<T>::insert(caller.clone(), false);
-		EnsureValidator::<T>::register_account(caller.clone());
+		T::AccountRoleRegistry::register_account(caller.clone(), AccountRole::Validator);
 	}:_(RawOrigin::Signed(caller.clone()))
 	verify {
 		assert!(ActiveBidder::<T>::get(caller));
