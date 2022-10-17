@@ -271,13 +271,10 @@ fn fail_path_no_timeout() {
 			let ceremony_id = current_ceremony_id();
 			let RequestContext { request_id, attempt_count, .. } =
 				MockEthereumThresholdSigner::open_requests(ceremony_id).unwrap();
-			let cfes = [
-				MockCfe { id: 1, behaviour: CfeBehaviour::ReportFailure(vec![]) },
-				MockCfe { id: 2, behaviour: CfeBehaviour::ReportFailure(vec![1]) },
-				MockCfe { id: 3, behaviour: CfeBehaviour::ReportFailure(vec![1]) },
-				MockCfe { id: 4, behaviour: CfeBehaviour::ReportFailure(vec![1]) },
-				MockCfe { id: 5, behaviour: CfeBehaviour::ReportFailure(vec![1]) },
-			];
+			let cfes = [(1, vec![]), (2, vec![1]), (3, vec![1]), (4, vec![1]), (5, vec![1])]
+				.into_iter()
+				.map(|(id, report)| MockCfe { id, behaviour: CfeBehaviour::ReportFailure(report) })
+				.collect::<Vec<_>>();
 
 			// CFEs respond
 			tick(&cfes[..]);
