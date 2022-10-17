@@ -281,7 +281,8 @@ fn fail_path_no_timeout() {
 			// Request is still in pending state but scheduled for retry.
 			let request_context = EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
 
-			// Account 1 has 4 blame votes against it.
+			// Account 1 has 4 blame votes against it. The other accounts have no votes against
+			// them.
 			assert_eq!(request_context.blame_counts, BTreeMap::from_iter([(1, 4)]));
 
 			// Callback has *not* executed but is scheduled for a retry after the CeremonyRetryDelay
