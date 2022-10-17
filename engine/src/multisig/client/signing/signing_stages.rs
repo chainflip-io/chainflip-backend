@@ -17,11 +17,11 @@ use client::common::{
 	CeremonyCommon, StageResult,
 };
 
-use signing::signing_detail::{
-	self, Comm1, LocalSig3, SecretNoncePair, VerifyComm2, VerifyLocalSig4,
-};
+use signing::signing_detail::{self, SecretNoncePair};
 
 use signing::SigningStateCommonInfo;
+
+use super::signing_data::{Comm1, LocalSig3, VerifyComm2, VerifyLocalSig4};
 
 type SigningStageResult<Crypto> = StageResult<SigningCeremony<Crypto>>;
 

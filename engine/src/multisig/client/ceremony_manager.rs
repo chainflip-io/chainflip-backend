@@ -28,9 +28,7 @@ use crate::{
 use cf_primitives::{AuthorityCount, CeremonyId};
 use state_chain_runtime::AccountId;
 
-use client::{
-	ceremony_runner::CeremonyRunner, signing::signing_detail::SigningData, utils::PartyIdxMapping,
-};
+use client::{ceremony_runner::CeremonyRunner, utils::PartyIdxMapping};
 
 use tokio::sync::oneshot;
 
@@ -45,6 +43,7 @@ use crate::multisig::MessageHash;
 use super::{
 	common::{CeremonyStage, KeygenStageName, PreProcessStageDataCheck, SigningStageName},
 	keygen::{HashCommitments1, HashContext, KeygenData},
+	signing::signing_data::SigningData,
 	CeremonyRequest, MultisigData, MultisigMessage,
 };
 
