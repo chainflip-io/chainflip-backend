@@ -736,6 +736,7 @@ mod test_polkadot_extrinsics {
 		hex_literal::hex!("4b734882accd7a0e27b8b0d3cb7db79ab4da559d1d5f84f35fd218a1ee12ece4");
 	pub const _NONCE_2: u32 = 1; //correct nonce has to be provided for this account (see/track onchain)
 
+	#[ignore]
 	#[test]
 	fn create_test_extrinsic() {
 		let keypair_1: Pair = <Pair as TraitPair>::from_seed(&RAW_SEED_1);
