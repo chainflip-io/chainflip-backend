@@ -752,10 +752,10 @@ mod test_polkadot_extrinsics {
 			});
 
 		println!(
-			"CallHash: {}",
+			"CallHash: 0x{}",
 			test_runtime_call.using_encoded(|encoded| hex::encode(Blake2_256::hash(encoded)))
 		);
-		println!("Encoded Call: {}", hex::encode(test_runtime_call.encode()));
+		println!("Encoded Call: 0x{}", hex::encode(test_runtime_call.encode()));
 
 		let mut extrinsic_handler = PolkadotExtrinsicHandler::new_empty(NONCE_1, account_id_1);
 		extrinsic_handler.insert_extrinsic_call(test_runtime_call);
@@ -772,6 +772,6 @@ mod test_polkadot_extrinsics {
 
 		assert!(extrinsic_handler.is_signed().unwrap_or(false));
 
-		println!("encoded extrinsic: {}", hex::encode(signed_extrinsic.unwrap().encode()));
+		println!("encoded extrinsic: 0x{}", hex::encode(signed_extrinsic.unwrap().encode()));
 	}
 }

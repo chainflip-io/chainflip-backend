@@ -95,3 +95,54 @@ impl ApiCall<Polkadot> for BatchFetch {
 		self.extrinsic_handler.is_signed().unwrap_or(false)
 	}
 }
+
+#[cfg(test)]
+mod test_batch_fetch {
+
+	use super::*;
+	use crate::dot::sr25519::Pair;
+	use sp_core::{
+		crypto::{AccountId32, Pair as TraitPair},
+		Hasher,
+	};
+	use sp_runtime::{
+		traits::{BlakeTwo256, IdentifyAccount},
+		MultiSigner,
+	};
+
+	// test westend account 1 (CHAINFLIP-TEST)
+	// address: "5E2WfQFeafdktJ5AAF6ZGZ71Yj4fiJnHWRomVmeoStMNhoZe"
+	pub const RAW_SEED_1: [u8; 32] =
+		hex_literal::hex!("858c1ee915090a119d4cb0774b908fa585ef7882f4648c577606490cc94f6e15");
+	pub const NONCE_1: u32 = 4; //correct nonce has to be provided for this account (see/track onchain)
+
+	#[ignore]
+	#[test]
+	fn create_test_api_call() {
+		let keypair_1: Pair = <Pair as TraitPair>::from_seed(&RAW_SEED_1);
+		let account_id_1: AccountId32 = MultiSigner::Sr25519(keypair_1.public()).into_account();
+
+		let dummy_intent_ids: Vec<u16> = vec![1, 2, 3];
+
+		let batch_fetch_api = BatchFetch::new_unsigned(NONCE_1, dummy_intent_ids, account_id_1);
+
+		println!(
+			"CallHash: 0x{}",
+			batch_fetch_api
+				.extrinsic_handler
+				.extrinsic_call
+				.using_encoded(|encoded| hex::encode(BlakeTwo256::hash(encoded)))
+		);
+		println!(
+			"Encoded Call: 0x{}",
+			hex::encode(batch_fetch_api.extrinsic_handler.extrinsic_call.encode())
+		);
+
+		let batch_fetch_api = batch_fetch_api
+			.clone()
+			.signed(&keypair_1.sign(&batch_fetch_api.threshold_signature_payload()));
+		assert!(batch_fetch_api.is_signed());
+
+		println!("encoded extrinsic: 0x{}", hex::encode(batch_fetch_api.chain_encoded()));
+	}
+}
