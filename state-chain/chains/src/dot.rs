@@ -717,7 +717,7 @@ impl Into<Vec<u8>> for PolkadotPublicKey {
 pub struct PolkadotEmptyType(pub Option<()>);
 
 #[cfg(test)]
-mod test_fetch_batch {
+mod test_polkadot_extrinsics {
 
 	use super::*;
 	use crate::dot::sr25519::Pair;
