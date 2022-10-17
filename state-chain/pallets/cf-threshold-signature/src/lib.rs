@@ -58,6 +58,14 @@ pub enum PalletOffence {
 #[cfg(feature = "std")]
 const THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS_DEFAULT: u32 = 10;
 
+pub mod releases {
+	use frame_support::traits::StorageVersion;
+	// Genesis version
+	pub const V0: StorageVersion = StorageVersion::new(0);
+	// Version 1 - No changes, ensure ceremony expiry.
+	pub const V1: StorageVersion = StorageVersion::new(1);
+}
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -391,6 +399,21 @@ pub mod pallet {
 
 			T::Weights::on_initialize(T::EpochInfo::current_authority_count(), num_retries) +
 				T::Weights::report_offenders(num_offenders as u32)
+		}
+
+		fn on_runtime_upgrade() -> frame_support::weights::Weight {
+			if <Self as GetStorageVersion>::on_chain_storage_version() == releases::V0 {
+				releases::V1.put::<Self>();
+
+				for ceremony_id in PendingCeremonies::<T, I>::iter_keys() {
+					log::info!("Scheduling ");
+					Pallet::<T, I>::schedule_retry(ceremony_id, 1u32.into());
+				}
+
+				0
+			} else {
+				T::DbWeight::get().reads(1)
+			}
 		}
 	}
 
