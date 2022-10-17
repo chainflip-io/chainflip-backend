@@ -258,7 +258,7 @@ fn fail_path_with_timeout() {
 }
 
 #[test]
-fn fail_path_no_timeout() {
+fn fail_path_due_to_report_signature_failed() {
 	const NOMINEES: [u64; 5] = [1, 2, 3, 4, 5];
 	const AUTHORITIES: [u64; 10] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 	ExtBuilder::new()
