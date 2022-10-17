@@ -41,7 +41,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system,
-		MockEthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>,
+		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>,
 	}
 );
 
@@ -106,7 +106,7 @@ impl MockCallback<MockEthereum> {
 
 	pub fn call(self) {
 		assert!(matches!(
-			<MockEthereumThresholdSigner as ThresholdSigner<_>>::signature_result(self.0),
+			<EthereumThresholdSigner as ThresholdSigner<_>>::signature_result(self.0),
 			AsyncResult::Ready(..)
 		));
 		CALL_DISPATCHED.with(|cell| *(cell.borrow_mut()) = Some(self.0));
@@ -213,12 +213,12 @@ impl ExtBuilder {
 		self.ext.execute_with(|| {
 			// Initiate request
 			let request_id =
-				<MockEthereumThresholdSigner as ThresholdSigner<_>>::request_signature(*message);
+				<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(*message);
 			let (ceremony_id, attempt) =
-				MockEthereumThresholdSigner::live_ceremonies(request_id).unwrap();
-			let pending = MockEthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
+				EthereumThresholdSigner::live_ceremonies(request_id).unwrap();
+			let pending = EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
 			assert_eq!(
-				MockEthereumThresholdSigner::open_requests(ceremony_id).unwrap().payload,
+				EthereumThresholdSigner::open_requests(ceremony_id).unwrap().payload,
 				*message
 			);
 			assert_eq!(attempt, 0);
@@ -227,7 +227,7 @@ impl ExtBuilder {
 				BTreeSet::from_iter(MockNominator::get_nominees().unwrap_or_default())
 			);
 			assert!(matches!(
-				MockEthereumThresholdSigner::signatures(request_id),
+				EthereumThresholdSigner::signatures(request_id),
 				AsyncResult::Pending
 			));
 		});
@@ -241,15 +241,13 @@ impl ExtBuilder {
 	) -> Self {
 		self.ext.execute_with(|| {
 			// Initiate request
-			let request_id = MockEthereumThresholdSigner::request_signature_with_callback(
-				*message,
-				callback_gen,
-			);
+			let request_id =
+				EthereumThresholdSigner::request_signature_with_callback(*message, callback_gen);
 			let (ceremony_id, attempt) =
-				MockEthereumThresholdSigner::live_ceremonies(request_id).unwrap();
-			let pending = MockEthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
+				EthereumThresholdSigner::live_ceremonies(request_id).unwrap();
+			let pending = EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
 			assert_eq!(
-				MockEthereumThresholdSigner::open_requests(ceremony_id).unwrap().payload,
+				EthereumThresholdSigner::open_requests(ceremony_id).unwrap().payload,
 				*message
 			);
 			assert_eq!(attempt, 0);
@@ -258,10 +256,10 @@ impl ExtBuilder {
 				BTreeSet::from_iter(MockNominator::get_nominees().unwrap_or_default())
 			);
 			assert!(matches!(
-				MockEthereumThresholdSigner::signatures(request_id),
+				EthereumThresholdSigner::signatures(request_id),
 				AsyncResult::Pending
 			));
-			assert!(MockEthereumThresholdSigner::request_callback(request_id).is_some());
+			assert!(EthereumThresholdSigner::request_callback(request_id).is_some());
 		});
 		self
 	}
