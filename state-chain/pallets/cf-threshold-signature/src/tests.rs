@@ -40,7 +40,7 @@ struct MockCfe {
 	behaviour: CfeBehaviour,
 }
 
-fn tick(cfes: &[MockCfe]) {
+fn run_cfes_on_sc_events(cfes: &[MockCfe]) {
 	let events = System::events();
 	System::reset_events();
 	for event_record in events {
@@ -148,7 +148,7 @@ fn happy_path_no_callback() {
 				EthereumThresholdSigner::open_requests(ceremony_id).unwrap();
 			let cfe = MockCfe { id: 1, behaviour: CfeBehaviour::Success };
 
-			tick(&[cfe]);
+			run_cfes_on_sc_events(&[cfe]);
 
 			// Request is complete
 			assert!(EthereumThresholdSigner::pending_ceremonies(ceremony_id).is_none());
@@ -179,7 +179,7 @@ fn happy_path_with_callback() {
 				EthereumThresholdSigner::open_requests(ceremony_id).unwrap();
 			let cfe = MockCfe { id: 1, behaviour: CfeBehaviour::Success };
 
-			tick(&[cfe]);
+			run_cfes_on_sc_events(&[cfe]);
 
 			// Request is complete
 			assert!(EthereumThresholdSigner::pending_ceremonies(ceremony_id).is_none());
@@ -215,7 +215,7 @@ fn fail_path_with_timeout() {
 			];
 
 			// CFEs respond
-			tick(&cfes[..]);
+			run_cfes_on_sc_events(&cfes[..]);
 
 			// Request is still pending waiting for account 1.
 			let request_context = EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
@@ -276,7 +276,7 @@ fn fail_path_no_timeout() {
 				.collect::<Vec<_>>();
 
 			// CFEs respond
-			tick(&cfes[..]);
+			run_cfes_on_sc_events(&cfes[..]);
 
 			// Request is still in pending state but scheduled for retry.
 			let request_context = EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
@@ -305,6 +305,7 @@ fn fail_path_no_timeout() {
 
 			// Process retries.
 			<EthereumThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(retry_block);
+			assert!(!MockCallback::has_executed(request_id));
 
 			// No longer pending retry.
 			assert!(EthereumThresholdSigner::retry_queues(retry_block).is_empty());
