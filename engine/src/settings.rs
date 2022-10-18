@@ -140,6 +140,9 @@ pub struct CommandLineOptions {
 	signing_db_file: Option<PathBuf>,
 }
 
+const HEALTH_CHECK_HOSTNAME: &str = "health_check.hostname";
+const HEALTH_CHECK_PORT: &str = "health_check.port";
+
 impl CommandLineOptions {
 	/// Creates an empty CommandLineOptions with `None` for all fields
 	pub fn new() -> CommandLineOptions {
@@ -282,8 +285,8 @@ impl CfSettings for Settings {
 		config_builder: ConfigBuilder<config::builder::DefaultState>,
 	) -> Result<ConfigBuilder<config::builder::DefaultState>, ConfigError> {
 		config_builder
-			.set_default("health_check.hostname", HealthCheck::default().hostname)?
-			.set_default("health_check.port", HealthCheck::default().port)
+			.set_default(HEALTH_CHECK_HOSTNAME, HealthCheck::default().hostname)?
+			.set_default(HEALTH_CHECK_PORT, HealthCheck::default().port)
 	}
 }
 
@@ -309,8 +312,8 @@ impl Source for CommandLineOptions {
 
 		self.eth_opts.insert_all(&mut map);
 
-		insert_command_line_option(&mut map, "health_check.hostname", &self.health_check_hostname);
-		insert_command_line_option(&mut map, "health_check.port", &self.health_check_port);
+		insert_command_line_option(&mut map, HEALTH_CHECK_HOSTNAME, &self.health_check_hostname);
+		insert_command_line_option(&mut map, HEALTH_CHECK_PORT, &self.health_check_port);
 		insert_command_line_option_path(&mut map, "signing.db_file", &self.signing_db_file);
 		insert_command_line_option(&mut map, "log.whitelist", &self.log_whitelist);
 		insert_command_line_option(&mut map, "log.blacklist", &self.log_blacklist);
