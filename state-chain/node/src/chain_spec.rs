@@ -1,3 +1,4 @@
+use cf_chains::eth::CHAIN_ID_GOERLI;
 use cf_primitives::AccountRole;
 use sc_service::{ChainType, Properties};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
@@ -28,8 +29,7 @@ const ETH_VAULT_ADDRESS_DEFAULT: &str = "e7f1725E7734CE288F8367e1Bb143E90bb3F051
 const ETHEREUM_CHAIN_ID_DEFAULT: u64 = cf_chains::eth::CHAIN_ID_GOERLI;
 const ETH_INIT_AGG_KEY_DEFAULT: &str =
 	"02e61afd677cdfbec838c6f309deff0b2c6056f8a27f2c783b68bba6b30f667be6";
-// 50k FLIP in FLIPPERINOSs
-const GENESIS_STAKE_AMOUNT_DEFAULT: FlipBalance = 50_000_000_000_000_000_000_000;
+const GENESIS_STAKE_AMOUNT_DEFAULT: FlipBalance = 5_000 * FLIPPERINOS_PER_FLIP;
 const ETH_DEPLOYMENT_BLOCK_DEFAULT: u64 = 0;
 const ETH_PRIORITY_FEE_PERCENTILE_DEFAULT: u8 = 50;
 
@@ -148,7 +148,7 @@ pub fn get_environment() -> StateChainEnvironment {
 
 /// The reputation penalty and suspension duration for each offence.
 const PENALTIES: &[(Offence, (i32, BlockNumber))] = &[
-	(Offence::ParticipateKeygenFailed, (15, u32::MAX)),
+	(Offence::ParticipateKeygenFailed, (15, HEARTBEAT_BLOCK_INTERVAL)),
 	(Offence::ParticipateSigningFailed, (15, HEARTBEAT_BLOCK_INTERVAL)),
 	(Offence::MissedAuthorshipSlot, (15, HEARTBEAT_BLOCK_INTERVAL)),
 	(Offence::MissedHeartbeat, (15, HEARTBEAT_BLOCK_INTERVAL)),
@@ -222,6 +222,7 @@ pub fn development_config() -> Result<ChainSpec, String> {
 				ethereum_deployment_block,
 				genesis_stake_amount,
 				min_stake,
+				8 * HOURS,
 			)
 		},
 		// Bootnodes
@@ -304,6 +305,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 				ethereum_deployment_block,
 				genesis_stake_amount,
 				min_stake,
+				8 * HOURS,
 			)
 		},
 		// Bootnodes
@@ -426,6 +428,7 @@ fn chainflip_three_node_testnet_config_from_env(
 				ethereum_deployment_block,
 				genesis_stake_amount,
 				min_stake,
+				8 * HOURS,
 			)
 		},
 		// Bootnodes
@@ -561,6 +564,119 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 				ethereum_deployment_block,
 				genesis_stake_amount,
 				min_stake,
+				8 * HOURS,
+			)
+		},
+		// Bootnodes
+		vec![],
+		// Telemetry
+		None,
+		// Protocol ID
+		None,
+		// Fork ID
+		None,
+		// Properties
+		Some(chainflip_properties()),
+		// Extensions
+		None,
+	))
+}
+
+const PERSEVERANCE_ENV: StateChainEnvironment = StateChainEnvironment {
+	flip_token_address: hex_literal::hex!("0E1D4594cB44D3E929dc0fb32F1c35A26D6e8e7f"),
+	eth_usdc_address: hex_literal::hex!("07865c6E87B9F70255377e024ace6630C1Eaa37F"),
+	stake_manager_address: hex_literal::hex!("A599338c8D71ff516854DA954937330aAA25CC44"),
+	key_manager_address: hex_literal::hex!("624Ab0aB5334aEAb7853d33503c5553Dfb937499"),
+	eth_vault_address: hex_literal::hex!("f2f5D8b18573721361540087A52C05f5FB6d02c1"),
+	ethereum_chain_id: CHAIN_ID_GOERLI,
+	eth_init_agg_key: hex_literal::hex!(
+		"035217961720cf058f447afaebf25e7c14bc44b069ebda50f44dbf25db31b8944c"
+	),
+	ethereum_deployment_block: 7755959u64,
+	genesis_stake_amount: 5_000 * FLIPPERINOS_PER_FLIP,
+	min_stake: 10 * FLIPPERINOS_PER_FLIP,
+	eth_block_safety_margin: 4,
+	max_ceremony_stage_duration: 300,
+};
+
+pub fn perseverance_new_config() -> Result<ChainSpec, String> {
+	let wasm_binary = WASM_BINARY.ok_or_else(|| "Wasm binary not available".to_string())?;
+	const BASHFUL_SR25519: [u8; 32] =
+		hex_literal::hex!["789523326e5f007f7643f14fa9e6bcfaaff9dd217e7e7a384648a46398245d55"];
+	const BASHFUL_ED25519: [u8; 32] =
+		hex_literal::hex!["7fdaaa9becf88f9f0a3590bd087ddce9f8d284ccf914c542e4c9f0c0e6440a6a"];
+	const DOC_SR25519: [u8; 32] =
+		hex_literal::hex!["7a467c9e1722b35408618a0cffc87c1e8433798e9c5a79339a10d71ede9e9d79"];
+	const DOC_ED25519: [u8; 32] =
+		hex_literal::hex!["3489d0b548c5de56c1f3bd679dbabe3b0bff44fb5e7a377931c1c54590de5de6"];
+	const DOPEY_SR25519: [u8; 32] =
+		hex_literal::hex!["7a4738071f16c71ef3e5d94504d472fdf73228cb6a36e744e0caaf13555c3c01"];
+	const DOPEY_ED25519: [u8; 32] =
+		hex_literal::hex!["d9a7e774a58c50062caf081a69556736e62eb0c854461f4485f281f60c53160f"];
+	const SNOW_WHITE_SR25519: [u8; 32] =
+		hex_literal::hex!["84f131a66e88e3e5f8dce20d413cab3fbb13769a14a4c7b640b7222863ef353d"];
+	let StateChainEnvironment {
+		flip_token_address,
+		eth_usdc_address,
+		stake_manager_address,
+		key_manager_address,
+		eth_vault_address,
+		ethereum_chain_id,
+		eth_init_agg_key,
+		ethereum_deployment_block,
+		genesis_stake_amount,
+		eth_block_safety_margin,
+		max_ceremony_stage_duration,
+		min_stake,
+	} = PERSEVERANCE_ENV;
+	Ok(ChainSpec::from_genesis(
+		"Chainflip-Perseverance",
+		"Chainflip-Perseverance",
+		ChainType::Live,
+		move || {
+			testnet_genesis(
+				wasm_binary,
+				// Initial PoA authorities
+				vec![
+					(
+						BASHFUL_SR25519.into(),
+						BASHFUL_SR25519.unchecked_into(),
+						BASHFUL_ED25519.unchecked_into(),
+					),
+					(
+						DOC_SR25519.into(),
+						DOC_SR25519.unchecked_into(),
+						DOC_ED25519.unchecked_into(),
+					),
+					(
+						DOPEY_SR25519.into(),
+						DOPEY_SR25519.unchecked_into(),
+						DOPEY_ED25519.unchecked_into(),
+					),
+				],
+				// Governance account - Snow White
+				SNOW_WHITE_SR25519.into(),
+				// Stakers at genesis
+				vec![BASHFUL_SR25519.into(), DOC_SR25519.into(), DOPEY_SR25519.into()],
+				2,
+				EnvironmentConfig {
+					flip_token_address,
+					eth_usdc_address,
+					stake_manager_address,
+					key_manager_address,
+					eth_vault_address,
+					ethereum_chain_id,
+					cfe_settings: CfeSettings {
+						eth_block_safety_margin,
+						max_ceremony_stage_duration,
+						eth_priority_fee_percentile: ETH_PRIORITY_FEE_PERCENTILE_DEFAULT,
+					},
+				},
+				eth_init_agg_key,
+				ethereum_deployment_block,
+				genesis_stake_amount,
+				min_stake,
+				3 * HOURS,
 			)
 		},
 		// Bootnodes
@@ -592,6 +708,7 @@ fn testnet_genesis(
 	ethereum_deployment_block: u64,
 	genesis_stake_amount: u128,
 	minimum_stake: u128,
+	blocks_per_epoch: BlockNumber,
 ) -> GenesisConfig {
 	let authority_ids: Vec<AccountId> =
 		initial_authorities.iter().map(|(id, ..)| id.clone()).collect();
@@ -621,7 +738,7 @@ fn testnet_genesis(
 				)
 				.map(|account_id| (account_id.clone(), genesis_stake_amount))
 				.collect(),
-			blocks_per_epoch: 8 * HOURS,
+			blocks_per_epoch,
 			claim_period_as_percentage: PERCENT_OF_EPOCH_PERIOD_CLAIMABLE,
 			backup_reward_node_percentage: 20,
 			bond: genesis_stake_amount,
