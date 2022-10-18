@@ -235,10 +235,10 @@ pub mod pallet {
 	pub type RequestCallback<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, RequestId, <T as Config<I>>::ThresholdCallable>;
 
-	/// Generated signatures.
+	/// State of the threshold signature requested.
 	#[pallet::storage]
-	#[pallet::getter(fn signatures)]
-	pub type Signatures<T: Config<I>, I: 'static = ()> =
+	#[pallet::getter(fn signature)]
+	pub type Signature<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, RequestId, AsyncResult<SignatureResultFor<T, I>>, ValueQuery>;
 
 	/// A map containing lists of ceremony ids that should be retried at the block stored in the
@@ -357,7 +357,7 @@ pub mod pallet {
 							Event::<T, I>::RetryRequested(ceremony_id)
 						},
 						RetryPolicy::Never => {
-							Signatures::<T, I>::insert(
+							Signature::<T, I>::insert(
 								request_id,
 								AsyncResult::Ready(Err(offenders.clone())),
 							);
@@ -450,6 +450,7 @@ pub mod pallet {
 				log::error!("Invalid ceremony_id received {}.", ceremony_id);
 				Error::<T, I>::InvalidCeremonyId
 			})?;
+
 			LiveCeremonies::<T, I>::remove(request_id);
 
 			// Report the success once we know the CeremonyId is valid
@@ -462,7 +463,7 @@ pub mod pallet {
 				attempt_count
 			);
 
-			Signatures::<T, I>::insert(request_id, AsyncResult::Ready(Ok(signature)));
+			Signature::<T, I>::insert(request_id, AsyncResult::Ready(Ok(signature)));
 			Self::maybe_dispatch_callback(request_id, ceremony_id);
 
 			Ok(().into())
@@ -553,7 +554,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let ceremony_id =
 			Self::new_ceremony_attempt(request_id, payload, 0, key_id, participants, retry_policy);
 
-		Signatures::<T, I>::insert(request_id, AsyncResult::Pending);
+		Signature::<T, I>::insert(request_id, AsyncResult::Pending);
 
 		(request_id, ceremony_id)
 	}
@@ -709,7 +710,7 @@ where
 	fn signature_result(
 		request_id: Self::RequestId,
 	) -> cf_traits::AsyncResult<SignatureResultFor<T, I>> {
-		Signatures::<T, I>::take(request_id)
+		Signature::<T, I>::take(request_id)
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
@@ -717,7 +718,7 @@ where
 		request_id: Self::RequestId,
 		signature: <T::TargetChain as ChainCrypto>::ThresholdSignature,
 	) {
-		Signatures::<T, I>::insert(request_id, AsyncResult::Ready(Ok(signature)));
+		Signature::<T, I>::insert(request_id, AsyncResult::Ready(Ok(signature)));
 	}
 
 	fn request_signature_with(

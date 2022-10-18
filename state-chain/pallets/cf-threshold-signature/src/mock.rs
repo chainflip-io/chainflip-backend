@@ -222,10 +222,7 @@ impl ExtBuilder {
 				pending.remaining_respondents,
 				BTreeSet::from_iter(MockNominator::get_nominees().unwrap_or_default())
 			);
-			assert!(matches!(
-				EthereumThresholdSigner::signatures(request_id),
-				AsyncResult::Pending
-			));
+			assert!(matches!(EthereumThresholdSigner::signature(request_id), AsyncResult::Pending));
 		});
 		self
 	}
@@ -247,10 +244,7 @@ impl ExtBuilder {
 				pending.remaining_respondents,
 				BTreeSet::from_iter(MockNominator::get_nominees().unwrap_or_default())
 			);
-			assert!(matches!(
-				EthereumThresholdSigner::signatures(request_id),
-				AsyncResult::Pending
-			));
+			assert!(matches!(EthereumThresholdSigner::signature(request_id), AsyncResult::Pending));
 			assert!(EthereumThresholdSigner::request_callback(request_id).is_some());
 		});
 		self

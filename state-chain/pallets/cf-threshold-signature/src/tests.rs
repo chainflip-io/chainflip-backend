@@ -158,7 +158,7 @@ fn happy_path_no_callback() {
 
 			// Signature is available
 			assert!(matches!(
-				EthereumThresholdSigner::signatures(request_id),
+				EthereumThresholdSigner::signature(request_id),
 				AsyncResult::Ready(..)
 			));
 
@@ -194,9 +194,9 @@ fn happy_path_with_callback() {
 
 			// Signature has been consumed.
 			assert!(
-				matches!(EthereumThresholdSigner::signatures(request_id), AsyncResult::Void),
+				matches!(EthereumThresholdSigner::signature(request_id), AsyncResult::Void),
 				"Expected Void, got {:?}",
-				EthereumThresholdSigner::signatures(request_id)
+				EthereumThresholdSigner::signature(request_id)
 			);
 		});
 }
