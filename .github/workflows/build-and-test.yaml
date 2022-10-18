@@ -6,6 +6,7 @@ on:
 
 env:
   SCCACHE_CACHE_SIZE: 8G
+  SCCACHE_REDIS: ${{ secrets.SCCACHE_REDIS }}
 
 jobs:
   cargo-fmt:
