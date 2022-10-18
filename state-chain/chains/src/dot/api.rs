@@ -4,7 +4,7 @@ pub mod batch_fetch;
 
 use crate::dot::{Polkadot, PolkadotAccountId, PolkadotReplayProtection};
 
-/// Chainflip api calls available on Ethereum.
+/// Chainflip api calls available on Polkadot.
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum PolkadotApi {
 	BatchFetch(batch_fetch::BatchFetch),

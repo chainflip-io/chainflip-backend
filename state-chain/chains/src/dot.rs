@@ -54,7 +54,7 @@ pub type PolkadotPayload = SignedPayload<PolkadotRuntimeCall, PolkadotSignedExtr
 pub type EncodedPolkadotPayload = Vec<u8>;
 
 // Polkadot mainnet
-mod PolkadotMainnet {
+mod polkadot_mainnet {
 	use super::*;
 	pub const BLOCK_HASH_COUNT: PolkadotBlockNumber = 4096; //import from runtime common
 	pub const SPEC_VERSION: PolkadotSpecVersion = 9300;
@@ -63,7 +63,8 @@ mod PolkadotMainnet {
 		"0x91b171bb158e2d3848fa23a9f1c25182fb8e20313b2c1eb49219da7a70ce90c3";
 }
 // Westend testnet
-mod WestendTestnet {
+#[allow(dead_code)]
+mod westend_mestnet {
 	use super::*;
 	pub const BLOCK_HASH_COUNT: PolkadotBlockNumber = 4096; //import from runtime common types crate in polkadot repo
 	pub const SPEC_VERSION: PolkadotSpecVersion = 9300;
@@ -183,8 +184,8 @@ impl PolkadotExtrinsicHandler {
 			(),
 			self.replay_protection.chain_data.spec_version,
 			self.replay_protection.chain_data.transaction_version,
-			H256::from_str(self.replay_protection.chain_data.genesis_hash).unwrap(),
-			H256::from_str(self.replay_protection.chain_data.genesis_hash).unwrap(),
+			H256::from_str(&self.replay_protection.chain_data.genesis_hash).unwrap(),
+			H256::from_str(&self.replay_protection.chain_data.genesis_hash).unwrap(),
 			(),
 			(),
 			(),
@@ -672,10 +673,10 @@ impl SignedExtension for PolkadotSignedExtra {
 	) -> sp_std::result::Result<Self::AdditionalSigned, TransactionValidityError> {
 		Ok((
 			(),
-			PolkadotMainnet::SPEC_VERSION,
-			PolkadotMainnet::TRANSACTION_VERSION,
-			H256::from_str(PolkadotMainnet::GENESIS_HASH).unwrap(),
-			H256::from_str(PolkadotMainnet::GENESIS_HASH).unwrap(),
+			polkadot_mainnet::SPEC_VERSION,
+			polkadot_mainnet::TRANSACTION_VERSION,
+			H256::from_str(polkadot_mainnet::GENESIS_HASH).unwrap(),
+			H256::from_str(polkadot_mainnet::GENESIS_HASH).unwrap(),
 			(),
 			(),
 			(),
@@ -733,7 +734,7 @@ pub struct PolkadotEmptyType(pub Option<()>);
 pub struct ChainData {
 	pub spec_version: PolkadotSpecVersion,
 	pub transaction_version: PolkadotTransactionVersion,
-	pub genesis_hash: &str,
+	pub genesis_hash: String,
 	pub block_hash_count: PolkadotBlockNumber,
 }
 #[derive(Debug, Encode, Decode, TypeInfo, Eq, PartialEq, Clone)]
@@ -741,6 +742,21 @@ pub struct PolkadotReplayProtection {
 	pub chain_data: ChainData,
 	pub nonce: PolkadotIndex,
 	pub tip: PolkadotBalance,
+}
+
+impl Default for PolkadotReplayProtection {
+	fn default() -> Self {
+		Self {
+			chain_data: ChainData {
+				spec_version: polkadot_mainnet::SPEC_VERSION,
+				transaction_version: polkadot_mainnet::TRANSACTION_VERSION,
+				genesis_hash: polkadot_mainnet::GENESIS_HASH.to_string(),
+				block_hash_count: polkadot_mainnet::BLOCK_HASH_COUNT,
+			},
+			nonce: 0,
+			tip: 0,
+		}
+	}
 }
 
 #[cfg(test)]

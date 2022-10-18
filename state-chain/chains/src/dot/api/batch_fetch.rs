@@ -7,11 +7,9 @@ use crate::dot::{
 	PolkadotReplayProtection, PolkadotRuntimeCall, ProxyCall, UtilityCall,
 };
 
-use crate::{ApiCall, Chain, ChainAbi, ChainCrypto};
+use crate::{ApiCall, Chain, ChainAbi, ChainCrypto, IntentId};
 
 use sp_runtime::RuntimeDebug;
-
-pub type IntentId = u16;
 
 /// Represents all the arguments required to build the call to fetch assets for all given intent
 /// ids.
@@ -58,7 +56,7 @@ impl BatchFetch {
 					.iter()
 					.map(|intent_id| {
 						PolkadotRuntimeCall::Utility(UtilityCall::as_derivative {
-							index: *intent_id,
+							index: *intent_id as u16, // todo: THIS IS TO BE REVISITED LATER
 							call: Box::new(PolkadotRuntimeCall::Balances(
 								BalancesCall::transfer_all {
 									dest: PolkadotAccountIdLookup::from(
