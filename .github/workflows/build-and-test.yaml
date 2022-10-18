@@ -9,7 +9,7 @@ env:
 
 jobs:
   cargo-fmt:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     environment: development
     container:
       image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08"
@@ -24,7 +24,7 @@ jobs:
           cargo fmt --all -- --check
 
   build-and-test:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     environment: development
     needs: [cargo-fmt]
     container:
@@ -61,7 +61,7 @@ jobs:
             ./target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm
 
   build-ibiza:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     environment: development
     needs: [cargo-fmt]
     container:
@@ -95,7 +95,7 @@ jobs:
             ./target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm
 
   test-single-node:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     environment: development
     needs: [build-and-test]
     steps:
