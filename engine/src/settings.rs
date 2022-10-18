@@ -350,14 +350,10 @@ pub fn insert_command_line_option_path(
 
 impl StateChainOptions {
 	/// Inserts all the State Chain Options into the given map (if Some)
-	pub fn insert_all(&self, mut map: &mut HashMap<String, Value>) {
-		insert_command_line_option(
-			&mut map,
-			"state_chain.ws_endpoint",
-			&self.state_chain_ws_endpoint,
-		);
+	pub fn insert_all(&self, map: &mut HashMap<String, Value>) {
+		insert_command_line_option(map, "state_chain.ws_endpoint", &self.state_chain_ws_endpoint);
 		insert_command_line_option_path(
-			&mut map,
+			map,
 			"state_chain.signing_key_file",
 			&self.state_chain_signing_key_file,
 		);
@@ -366,18 +362,10 @@ impl StateChainOptions {
 
 impl EthOptions {
 	/// Inserts all the Eth Shared Options into the given map (if Some)
-	pub fn insert_all(&self, mut map: &mut HashMap<String, Value>) {
-		insert_command_line_option(&mut map, "eth.ws_node_endpoint", &self.eth_ws_node_endpoint);
-		insert_command_line_option(
-			&mut map,
-			"eth.http_node_endpoint",
-			&self.eth_http_node_endpoint,
-		);
-		insert_command_line_option_path(
-			&mut map,
-			"eth.private_key_file",
-			&self.eth_private_key_file,
-		);
+	pub fn insert_all(&self, map: &mut HashMap<String, Value>) {
+		insert_command_line_option(map, "eth.ws_node_endpoint", &self.eth_ws_node_endpoint);
+		insert_command_line_option(map, "eth.http_node_endpoint", &self.eth_http_node_endpoint);
+		insert_command_line_option_path(map, "eth.private_key_file", &self.eth_private_key_file);
 	}
 }
 
