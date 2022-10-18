@@ -418,9 +418,9 @@ mod unsigned_validation {
 			let (ceremony_id, _) = LiveCeremonies::<Test, _>::get(request_id).unwrap();
 			assert_eq!(ceremony_id, ceremony_id_from_req);
 			let ceremony = PendingCeremonies::<Test, Instance1>::get(ceremony_id).unwrap();
-			let timeout_delay: <Test as frame_system::Config>::BlockNumber =
-				EthereumThresholdSigner::threshold_signature_response_timeout().into();
-			let retry_block = frame_system::Pallet::<Test>::current_block_number() + timeout_delay;
+
+			let retry_block = frame_system::Pallet::<Test>::current_block_number() +
+				EthereumThresholdSigner::threshold_signature_response_timeout();
 			assert_eq!(ceremony.clone().key_id, &CUSTOM_AGG_KEY);
 			assert_eq!(ceremony.remaining_respondents, participants);
 			assert_eq!(ceremony.request_context.retry_policy, RetryPolicy::Never);
