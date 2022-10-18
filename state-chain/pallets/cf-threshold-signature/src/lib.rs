@@ -73,6 +73,9 @@ pub mod pallet {
 	pub struct RequestContext<T: Config<I>, I: 'static> {
 		pub request_id: RequestId,
 		/// The number of ceremonies attempted so far, excluding the current one.
+		/// Currently we do not limit the number of retry attempts.
+		/// Unless specified by the RetryPolicy::Never.
+		/// Most transactions are critical, so we should retry until success.
 		pub attempt_count: AttemptCount,
 		/// The payload to be signed over.
 		pub payload: PayloadFor<T, I>,
