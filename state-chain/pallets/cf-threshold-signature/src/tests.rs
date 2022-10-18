@@ -454,7 +454,7 @@ mod unsigned_validation {
 			let (request_id, ceremony_id_from_req) =
 				EthereumThresholdSigner::request_signature_with(
 					CUSTOM_AGG_KEY.into(),
-					participants.clone(),
+					participants,
 					PAYLOAD,
 					RetryPolicy::Never,
 				);
