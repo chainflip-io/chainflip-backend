@@ -64,7 +64,7 @@ mod polkadot_mainnet {
 }
 // Westend testnet
 #[allow(dead_code)]
-mod westend_mestnet {
+mod westend_testnet {
 	use super::*;
 	pub const BLOCK_HASH_COUNT: PolkadotBlockNumber = 4096; //import from runtime common types crate in polkadot repo
 	pub const SPEC_VERSION: PolkadotSpecVersion = 9300;
@@ -744,6 +744,34 @@ pub struct PolkadotReplayProtection {
 	pub tip: PolkadotBalance,
 }
 
+pub enum NetworkChoice {
+	PolkadotMainnet,
+	WestendTestnet,
+}
+
+impl PolkadotReplayProtection {
+	fn new(nonce: PolkadotIndex, tip: PolkadotBalance, network_choice: NetworkChoice) -> Self {
+		Self {
+			chain_data: match network_choice {
+				NetworkChoice::PolkadotMainnet => ChainData {
+					spec_version: polkadot_mainnet::SPEC_VERSION,
+					transaction_version: polkadot_mainnet::TRANSACTION_VERSION,
+					genesis_hash: polkadot_mainnet::GENESIS_HASH.to_string(),
+					block_hash_count: polkadot_mainnet::BLOCK_HASH_COUNT,
+				},
+				NetworkChoice::WestendTestnet => ChainData {
+					spec_version: westend_testnet::SPEC_VERSION,
+					transaction_version: westend_testnet::TRANSACTION_VERSION,
+					genesis_hash: westend_testnet::GENESIS_HASH.to_string(),
+					block_hash_count: westend_testnet::BLOCK_HASH_COUNT,
+				},
+			},
+			nonce,
+			tip,
+		}
+	}
+}
+
 impl Default for PolkadotReplayProtection {
 	fn default() -> Self {
 		Self {
@@ -800,7 +828,10 @@ mod test_polkadot_extrinsics {
 		);
 		println!("Encoded Call: 0x{}", hex::encode(test_runtime_call.encode()));
 
-		let mut extrinsic_handler = PolkadotExtrinsicHandler::new_empty(NONCE_1, account_id_1);
+		let mut extrinsic_handler = PolkadotExtrinsicHandler::new_empty(
+			PolkadotReplayProtection::new(NONCE_1, 0, NetworkChoice::WestendTestnet),
+			account_id_1,
+		);
 		extrinsic_handler.insert_extrinsic_call(test_runtime_call);
 		extrinsic_handler
 			.insert_threshold_signature_payload()

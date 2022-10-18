@@ -101,7 +101,7 @@ impl ApiCall<Polkadot> for BatchFetch {
 mod test_batch_fetch {
 
 	use super::*;
-	use crate::dot::sr25519::Pair;
+	use crate::dot::{sr25519::Pair, NetworkChoice};
 	use sp_core::{
 		crypto::{AccountId32, Pair as TraitPair},
 		Hasher,
@@ -123,9 +123,13 @@ mod test_batch_fetch {
 		let keypair_1: Pair = <Pair as TraitPair>::from_seed(&RAW_SEED_1);
 		let account_id_1: AccountId32 = MultiSigner::Sr25519(keypair_1.public()).into_account();
 
-		let dummy_intent_ids: Vec<u16> = vec![1, 2, 3];
+		let dummy_intent_ids: Vec<u64> = vec![1, 2, 3];
 
-		let batch_fetch_api = BatchFetch::new_unsigned(NONCE_1, dummy_intent_ids, account_id_1);
+		let batch_fetch_api = BatchFetch::new_unsigned(
+			PolkadotReplayProtection::new(NONCE_1, 0, NetworkChoice::WestendTestnet),
+			dummy_intent_ids,
+			account_id_1,
+		);
 
 		println!(
 			"CallHash: 0x{}",
