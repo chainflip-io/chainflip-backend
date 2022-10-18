@@ -1,8 +1,10 @@
 name: Build Packages
 on:
-  push:
-    branches:
-      - 'feature/deb_**'
+  workflow_call:
+
+  # push:
+  #   branches:
+  #     - 'feature/deb_**'
 
 env:
   APTLY_VERSION: "1.5.0"
@@ -13,12 +15,13 @@ env:
 
 jobs:
   build-deb:
-    strategy:
-      fail-fast: true
-      matrix:
-        os: [ubuntu-20.04, ubuntu-22.04]
-    name: Build and publish packages on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
+    # strategy:
+    #   fail-fast: true
+    #   matrix:
+    #     os: [ubuntu-20.04, ubuntu-22.04]
+    name: Build and publish packages on self-hosted
+    #runs-on: ${{ matrix.os }}
+    runs-on: self-hosted
     environment: development
     permissions:
       id-token: write
@@ -26,10 +29,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v2
-      - name: Install dependencies
+      - name: Install dependencies and prepare env
         run: |
           sudo apt update
           sudo apt install -y --no-install-recommends moreutils
+          sudo chown $USER -R /usr/local/bin
       - name: Install rust toolchain
         uses: actions-rs/toolchain@v1
         with:
@@ -38,8 +42,11 @@ jobs:
           target: wasm32-unknown-unknown
           override: true
           components: rustfmt, clippy
-      - name: Setup rust cache
-        uses: Swatinem/rust-cache@v2
+      - name: Setup sccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          max-size: 32G
+          variant: sccache
       - name: Install cargo-deb
         run: cargo install cargo-deb
       - name: Get date, commit SHA, distribution codename
@@ -55,7 +62,7 @@ jobs:
           cargo deb --no-strip -p chainflip-cli --deb-revision "${DEB_REVISION}"
           cargo deb --no-strip -p chainflip-node --deb-revision "${DEB_REVISION}"
       - name: Install Aptly
-        run: | 
+        run: |
           wget https://github.com/aptly-dev/aptly/releases/download/v${APTLY_VERSION}/aptly_${APTLY_VERSION}_amd64.deb -O /tmp/aptly_${APTLY_VERSION}_amd64.deb
           sudo dpkg -i /tmp/aptly_${APTLY_VERSION}_amd64.deb
       - name: Configure AWS credentials using OIDC
@@ -66,7 +73,7 @@ jobs:
       - name: Configure aptly
         run: |
           aptly config show
-          jq --argjson S3PublishEndpoints "$(<.github/workflows/aptly_dev_s3.json)" '.S3PublishEndpoints += $S3PublishEndpoints' ~/.aptly.conf | sponge ~/.aptly.conf 
+          jq --argjson S3PublishEndpoints "$(<.github/workflows/aptly_dev_s3.json)" '.S3PublishEndpoints += $S3PublishEndpoints' ~/.aptly.conf | sponge ~/.aptly.conf
       - name: Import GPG package signing key
         id: import_gpg
         uses: crazy-max/ghaction-import-gpg@v5
@@ -91,4 +98,3 @@ jobs:
           echo "Packages can be installed with the following commands: "
           echo "sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys ${{ steps.import_gpg.outputs.keyid }}"
           echo "echo \"deb https://${REPO_BUCKET}/ci/${{ steps.vars.outputs.sha_short }}/ ${{ steps.vars.outputs.codename }} main\"  | sudo tee /etc/apt/sources.list.d/chainflip.list"
- 

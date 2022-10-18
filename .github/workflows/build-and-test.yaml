@@ -23,6 +23,35 @@ jobs:
       - name: Check format
         run: |
           cargo fmt --all -- --check
+  cargo-doc:
+    runs-on: self-hosted
+    environment: development
+    container:
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08"
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Update APT
+        run: apt update
+      - name: Setup sccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          max-size: 32G
+          variant: sccache
+      - run: sccache --show-stats
+      - name: Run cargo doc
+        run: |
+          cargo doc --workspace --document-private-items --no-deps
+      - run: sccache --show-stats
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: chainflip-backend-doc
+          path: |
+            ./target/doc/
 
   build-and-test:
     runs-on: self-hosted
@@ -188,3 +217,8 @@ jobs:
           name: generated-diagram
           path: |
             chainflip-docgen/generated
+
+  deb-build:
+    needs: [test-single-node]
+    uses: ./.github/workflows/.deb-build.yaml
+    secrets: inherit
