@@ -5,7 +5,10 @@ use crate::{
 	Error, PalletOffence, RequestContext, RequestId,
 };
 use cf_chains::mocks::MockEthereum;
-use cf_traits::{mocks::signer_nomination::MockNominator, AsyncResult, Chainflip};
+use cf_traits::{
+	mocks::signer_nomination::MockNominator, AsyncResult, Chainflip, KeyProvider, RetryPolicy,
+	ThresholdSigner,
+};
 use frame_support::{
 	assert_err, assert_noop, assert_ok,
 	instances::Instance1,
@@ -235,6 +238,44 @@ fn signature_success_can_only_succeed_once_per_request() {
 			);
 			assert_eq!(MockCallback::times_called(), 1);
 		});
+}
+
+// The assumption here is that when we don't want to retry, it's a special case, and the error will
+// be handled by the callback itself, allowing a more custom failure logic than simply "retrying".
+#[test]
+fn retry_policy_never_calls_callback_on_failure() {
+	const NOMINEES: [u64; 2] = [1, 2];
+	const AUTHORITIES: [u64; 3] = [1, 2, 3];
+	ExtBuilder::new()
+		.with_authorities(AUTHORITIES)
+		.with_nominees(NOMINEES)
+		.build()
+		.execute_with(|| {
+			const PAYLOAD: &[u8; 4] = b"OHAI";
+			let (request_id, signing_ceremony_id) = EthereumThresholdSigner::request_signature_with(
+				MockKeyProvider::current_key_id(),
+				NOMINEES.into_iter().collect(),
+				*PAYLOAD,
+				RetryPolicy::Never,
+			);
+			assert_ok!(EthereumThresholdSigner::register_callback(
+				request_id,
+				MockCallback::new(request_id)
+			));
+
+			// Callback was just registered, so cannot have been called.
+			assert!(!MockCallback::has_executed(request_id));
+			assert_eq!(MockCallback::times_called(), 0);
+
+			// report signature success
+			run_cfes_on_sc_events(&[MockCfe {
+				id: signing_ceremony_id,
+				behaviour: CfeBehaviour::Success,
+			}]);
+
+			assert!(MockCallback::has_executed(request_id));
+			assert_eq!(MockCallback::times_called(), 1);
+		})
 }
 
 #[test]
