@@ -113,7 +113,7 @@ async fn should_sign_with_all_parties() {
 	.expect("Should generate key for test");
 
 	let mut signing_ceremony = SigningCeremonyRunner::new_with_all_signers(
-		new_nodes(ACCOUNT_IDS.clone(), DEFAULT_SIGNING_CEREMONY_ID),
+		new_nodes(ACCOUNT_IDS.clone()),
 		DEFAULT_SIGNING_CEREMONY_ID,
 		key_id,
 		key_data,
