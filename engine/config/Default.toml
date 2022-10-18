@@ -2,7 +2,7 @@
 [node_p2p]
 node_key_file = "/run/secrets/node_key_file"
 ip_address = "0.0.0.0"
-port = "8078"
+port = 8078
 
 [state_chain]
 # 32 byte hex secret key - associated with the node's public id (public key)
