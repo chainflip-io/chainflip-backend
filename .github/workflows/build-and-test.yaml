@@ -5,11 +5,12 @@ on:
       - "feature/ci_**"
 
 env:
-  SCCACHE_CACHE_SIZE: 8G
+  SCCACHE_CACHE_SIZE: 32G
+  SCCACHE_REDIS: ${{ secrets.SCCACHE_REDIS }}
 
 jobs:
   cargo-fmt:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     environment: development
     container:
       image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08"
@@ -24,7 +25,7 @@ jobs:
           cargo fmt --all -- --check
 
   build-and-test:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     environment: development
     needs: [cargo-fmt]
     container:
@@ -40,7 +41,7 @@ jobs:
       - name: Setup sccache
         uses: hendrikmuhs/ccache-action@v1.2
         with:
-          max-size: 8GB
+          max-size: 32G
           variant: sccache
       - run: sccache --show-stats
       - run: |
@@ -61,7 +62,7 @@ jobs:
             ./target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm
 
   build-ibiza:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     environment: development
     needs: [cargo-fmt]
     container:
@@ -77,7 +78,7 @@ jobs:
       - name: Setup sccache
         uses: hendrikmuhs/ccache-action@v1.2
         with:
-          max-size: 8GB
+          max-size: 32G
           variant: sccache
       - run: sccache --show-stats
       - run: |
@@ -95,7 +96,7 @@ jobs:
             ./target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm
 
   test-single-node:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     environment: development
     needs: [build-and-test]
     steps:
@@ -173,6 +174,10 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y graphviz
+      - uses: actions/setup-java@v3
+        with:
+          distribution: "zulu"
+          java-version: "17"
       - name: Generate class diagram
         run: |
           cd chainflip-docgen/
