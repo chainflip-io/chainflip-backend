@@ -427,7 +427,7 @@ mod unsigned_validation {
 			// Process retries.
 			<EthereumThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(retry_block);
 			assert!(RetryQueues::<Test, Instance1>::take(retry_block).is_empty());
-			assert!(PendingCeremonies::<Test, Instance1>::take(retry_block).is_none());
+			assert!(PendingCeremonies::<Test, Instance1>::take(ceremony_id).is_none());
 		});
 	}
 
