@@ -21,6 +21,7 @@ use utilities::{assert_ok, success_threshold_from_share_count, threshold_from_sh
 
 use crate::{
 	common::{all_same, split_at},
+	logging::{test_utils::new_test_logger, CEREMONY_ID_KEY},
 	multisig::{
 		client::{
 			ceremony_manager::{
@@ -46,7 +47,6 @@ use signing::frost::{self, LocalSig3, SigningCommitment};
 use keygen::{generate_shares_and_commitment, DKGUnverifiedCommitment};
 
 use crate::{
-	logging::{self},
 	multisig::{
 		client::{keygen, MultisigMessage},
 		// This determines which crypto scheme will be used in tests
@@ -61,7 +61,7 @@ use state_chain_runtime::{constants::common::MAX_STAGE_DURATION_SECONDS, Account
 
 use super::{
 	ACCOUNT_IDS, DEFAULT_KEYGEN_CEREMONY_ID, DEFAULT_KEYGEN_SEED, DEFAULT_SIGNING_CEREMONY_ID,
-	DEFAULT_SIGNING_SEED, INITIAL_LATEST_CEREMONY_ID,
+	DEFAULT_SIGNING_SEED,
 };
 
 pub type StageMessages<T> = HashMap<AccountId, HashMap<AccountId, T>>;
@@ -80,14 +80,19 @@ pub struct Node<C: CeremonyTrait> {
 	logger: slog::Logger,
 }
 
-fn new_node<C: CeremonyTrait>(account_id: AccountId, allowing_high_pubkey: bool) -> Node<C> {
-	let logger = logging::test_utils::new_test_logger();
-	let logger = logger.new(slog::o!("account_id" => account_id.to_string()));
+fn new_node<C: CeremonyTrait>(
+	account_id: AccountId,
+	allowing_high_pubkey: bool,
+	ceremony_id: CeremonyId,
+) -> Node<C> {
+	let logger = new_test_logger()
+		.new(slog::o!("account_id" => account_id.to_string()))
+		.new(slog::o!(CEREMONY_ID_KEY => ceremony_id));
+
 	let (outgoing_p2p_message_sender, outgoing_p2p_message_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
-	let ceremony_runner =
-		CeremonyRunner::new_unauthorised_for_test(INITIAL_LATEST_CEREMONY_ID, &logger);
+	let ceremony_runner = CeremonyRunner::new_unauthorised_for_test(logger.clone());
 
 	Node {
 		outgoing_p2p_message_sender,
@@ -187,10 +192,11 @@ impl Node<KeygenCeremonyEth> {
 
 pub fn new_nodes<AccountIds: IntoIterator<Item = AccountId>, C: CeremonyTrait>(
 	account_ids: AccountIds,
+	ceremony_id: CeremonyId,
 ) -> HashMap<AccountId, Node<C>> {
 	account_ids
 		.into_iter()
-		.map(|account_id| (account_id.clone(), new_node(account_id, true)))
+		.map(|account_id| (account_id.clone(), new_node(account_id, true, ceremony_id)))
 		.collect()
 }
 
@@ -199,10 +205,11 @@ pub fn new_nodes_without_allow_high_pubkey<
 	C: CeremonyTrait,
 >(
 	account_ids: AccountIds,
+	ceremony_id: CeremonyId,
 ) -> HashMap<AccountId, Node<C>> {
 	account_ids
 		.into_iter()
-		.map(|account_id| (account_id.clone(), new_node(account_id, false)))
+		.map(|account_id| (account_id.clone(), new_node(account_id, false, ceremony_id)))
 		.collect()
 }
 
@@ -605,7 +612,7 @@ impl KeygenCeremonyRunner {
 	/// Create a keygen ceremony with all ACCOUNT_IDS and default parameters
 	pub fn new_with_default() -> Self {
 		KeygenCeremonyRunner::new(
-			new_nodes(ACCOUNT_IDS.clone()),
+			new_nodes(ACCOUNT_IDS.clone(), DEFAULT_KEYGEN_CEREMONY_ID),
 			DEFAULT_KEYGEN_CEREMONY_ID,
 			Rng::from_seed(DEFAULT_KEYGEN_SEED),
 		)
@@ -709,7 +716,7 @@ pub async fn new_signing_ceremony(
 	.expect("Should generate key for test");
 
 	SigningCeremonyRunner::new_with_threshold_subset_of_signers(
-		new_nodes(ACCOUNT_IDS.clone()),
+		new_nodes(ACCOUNT_IDS.clone(), DEFAULT_SIGNING_CEREMONY_ID),
 		DEFAULT_SIGNING_CEREMONY_ID,
 		key_id,
 		key_data,
@@ -769,7 +776,7 @@ pub async fn run_keygen_with_err_on_high_pubkey<AccountIds: IntoIterator<Item = 
 	(),
 > {
 	let mut keygen_ceremony = KeygenCeremonyRunner::new(
-		new_nodes_without_allow_high_pubkey(account_ids),
+		new_nodes_without_allow_high_pubkey(account_ids, DEFAULT_KEYGEN_CEREMONY_ID),
 		DEFAULT_KEYGEN_CEREMONY_ID,
 		Rng::from_entropy(),
 	);
@@ -891,7 +898,7 @@ pub fn gen_invalid_keygen_stage_2_state<P: ECPoint>(
 
 	let stage = Box::new(BroadcastStage::new(processor, common));
 
-	CeremonyRunner::new_authorised(ceremony_id, stage, logger)
+	CeremonyRunner::new_authorised(stage, logger)
 }
 
 /// Generates key data using the DEFAULT_KEYGEN_SEED and returns the KeygenResultInfo for the first

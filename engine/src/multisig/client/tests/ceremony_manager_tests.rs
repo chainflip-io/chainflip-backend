@@ -364,7 +364,7 @@ async fn should_cleanup_unauthorised_ceremony_if_not_participating() {
 					ceremony_runner_p2p_receiver,
 					ceremony_runner_request_receiver,
 					mpsc::unbounded_channel().0,
-					crate::logging::test_utils::new_test_logger(),
+					new_test_logger(),
 				));
 
 			// Turn the task handle into a ceremony handle and insert it into the ceremony manager

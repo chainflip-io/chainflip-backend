@@ -34,7 +34,11 @@ type KeygenData = keygen::KeygenData<Point>;
 /// generate a key without entering a blaming stage
 #[tokio::test]
 async fn happy_path_results_in_valid_key() {
-	let (_, _) = run_keygen(new_nodes(ACCOUNT_IDS.clone()), DEFAULT_KEYGEN_CEREMONY_ID).await;
+	let (_, _) = run_keygen(
+		new_nodes(ACCOUNT_IDS.clone(), DEFAULT_KEYGEN_CEREMONY_ID),
+		DEFAULT_KEYGEN_CEREMONY_ID,
+	)
+	.await;
 }
 
 /// If at least one party is blamed during the "Complaints" stage, we
@@ -913,8 +917,8 @@ async fn genesis_keys_can_sign() {
 
 	let (mut signing_ceremony, _non_signing_nodes) =
 		SigningCeremonyRunner::new_with_threshold_subset_of_signers(
-			new_nodes(account_ids),
-			1,
+			new_nodes(account_ids, DEFAULT_SIGNING_CEREMONY_ID),
+			DEFAULT_SIGNING_CEREMONY_ID,
 			key_id.clone(),
 			key_data.clone(),
 			MESSAGE_HASH.clone(),

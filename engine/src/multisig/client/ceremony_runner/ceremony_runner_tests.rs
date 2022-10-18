@@ -95,11 +95,7 @@ async fn should_ignore_non_stage_1_messages_while_unauthorised() {
 
 	// Create an unauthorised ceremony
 	let mut unauthorised_ceremony_runner: CeremonyRunner<KeygenCeremony<EthSigning>> =
-		CeremonyRunner::new_unauthorised(
-			DEFAULT_CEREMONY_ID,
-			mpsc::unbounded_channel().0,
-			&new_test_logger(),
-		);
+		CeremonyRunner::new_unauthorised(mpsc::unbounded_channel().0, new_test_logger());
 
 	// Process a stage 2 message
 	assert_eq!(
@@ -120,11 +116,7 @@ async fn should_ignore_non_stage_1_messages_while_unauthorised() {
 async fn should_delay_stage_1_message_while_unauthorised() {
 	// Create an unauthorised ceremony
 	let mut unauthorised_ceremony_runner: CeremonyRunner<SigningCeremony<EthSigning>> =
-		CeremonyRunner::new_unauthorised(
-			DEFAULT_CEREMONY_ID,
-			mpsc::unbounded_channel().0,
-			&new_test_logger(),
-		);
+		CeremonyRunner::new_unauthorised(mpsc::unbounded_channel().0, new_test_logger());
 
 	// Process a stage 1 message
 	assert_eq!(
@@ -182,11 +174,7 @@ fn gen_stage_1_signing_state(
 
 	let stage = Box::new(BroadcastStage::new(processor, common));
 
-	CeremonyRunner::<SigningCeremony<EthSigning>>::new_authorised(
-		DEFAULT_CEREMONY_ID,
-		stage,
-		logger,
-	)
+	CeremonyRunner::<SigningCeremony<EthSigning>>::new_authorised(stage, logger)
 }
 
 #[tokio::test]

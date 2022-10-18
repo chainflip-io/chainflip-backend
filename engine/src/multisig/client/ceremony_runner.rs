@@ -66,7 +66,10 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 	) -> Result<()> {
 		// We always create unauthorised first, it can get promoted to
 		// an authorised one with a ceremony request
-		let mut runner = Self::new_unauthorised(ceremony_id, outcome_sender, &logger);
+		let mut runner = Self::new_unauthorised(
+			outcome_sender,
+			logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id)),
+		);
 
 		// Fuse the oneshot future so it will not get called twice
 		let mut request_receiver = request_receiver.fuse();
@@ -110,9 +113,8 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 	/// shortly). Until such request is received, we can start delaying messages, but
 	/// cannot make any progress otherwise
 	fn new_unauthorised(
-		ceremony_id: CeremonyId,
 		outcome_sender: UnboundedSender<(CeremonyId, CeremonyOutcome<Ceremony>)>,
-		logger: &slog::Logger,
+		logger: slog::Logger,
 	) -> Self {
 		CeremonyRunner {
 			stage: None,
@@ -120,7 +122,7 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 			// Unauthorised ceremonies cannot timeout, so just set the timeout to 0 for now.
 			timeout_handle: Box::pin(tokio::time::sleep(tokio::time::Duration::ZERO)),
 			outcome_sender,
-			logger: logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id)),
+			logger,
 		}
 	}
 
@@ -338,21 +340,17 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 #[cfg(test)]
 impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 	/// This is to allow calling a private method from tests
-	pub fn new_unauthorised_for_test(ceremony_id: CeremonyId, logger: &slog::Logger) -> Self {
-		Self::new_unauthorised(ceremony_id, tokio::sync::mpsc::unbounded_channel().0, logger)
+	pub fn new_unauthorised_for_test(logger: slog::Logger) -> Self {
+		Self::new_unauthorised(tokio::sync::mpsc::unbounded_channel().0, logger)
 	}
 
-	pub fn new_authorised(
-		ceremony_id: CeremonyId,
-		stage: DynStage<Ceremony>,
-		logger: slog::Logger,
-	) -> Self {
+	pub fn new_authorised(stage: DynStage<Ceremony>, logger: slog::Logger) -> Self {
 		CeremonyRunner {
 			stage: Some(stage),
 			delayed_messages: Default::default(),
 			timeout_handle: Box::pin(tokio::time::sleep(MAX_STAGE_DURATION)),
 			outcome_sender: tokio::sync::mpsc::unbounded_channel().0,
-			logger: logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id)),
+			logger,
 		}
 	}
 
