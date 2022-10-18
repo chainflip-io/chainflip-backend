@@ -5,7 +5,7 @@ on:
       - "feature/ci_**"
 
 env:
-  SCCACHE_CACHE_SIZE: 14G
+  SCCACHE_CACHE_SIZE: 32G
   SCCACHE_REDIS: ${{ secrets.SCCACHE_REDIS }}
 
 jobs:
@@ -41,7 +41,7 @@ jobs:
       - name: Setup sccache
         uses: hendrikmuhs/ccache-action@v1.2
         with:
-          max-size: 14G
+          max-size: 32G
           variant: sccache
       - run: sccache --show-stats
       - run: |
@@ -78,7 +78,7 @@ jobs:
       - name: Setup sccache
         uses: hendrikmuhs/ccache-action@v1.2
         with:
-          max-size: 14G
+          max-size: 32G
           variant: sccache
       - run: sccache --show-stats
       - run: |
