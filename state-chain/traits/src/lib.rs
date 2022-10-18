@@ -499,11 +499,12 @@ impl<T, R: frame_support::traits::ValidatorRegistration<T>> QualifyNode
 	}
 }
 
-impl<A, B, C> QualifyNode for (A, B, C)
+impl<A, B, C, D> QualifyNode for (A, B, C, D)
 where
 	A: QualifyNode<ValidatorId = B::ValidatorId>,
 	B: QualifyNode,
 	C: QualifyNode<ValidatorId = B::ValidatorId>,
+	D: QualifyNode<ValidatorId = B::ValidatorId>,
 	B::ValidatorId: Debug,
 {
 	type ValidatorId = A::ValidatorId;
@@ -511,7 +512,8 @@ where
 	fn is_qualified(validator_id: &Self::ValidatorId) -> bool {
 		A::is_qualified(validator_id) &&
 			B::is_qualified(validator_id) &&
-			C::is_qualified(validator_id)
+			C::is_qualified(validator_id) &&
+			D::is_qualified(validator_id)
 	}
 }
 /// Handles the check of execution conditions
