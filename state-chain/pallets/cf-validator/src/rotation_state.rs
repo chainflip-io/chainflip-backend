@@ -98,7 +98,7 @@ mod rotation_state_tests {
 	}
 
 	#[test]
-	fn authority_candidates_no_banned_and_primary_first() {
+	fn authority_candidates_prefers_primaries_and_excludes_banned() {
 		let rotation_state = RotationState::<u64, u64> {
 			primary_candidates: (0..10).collect(),
 			secondary_candidates: (20..30).collect(),
@@ -108,7 +108,6 @@ mod rotation_state_tests {
 
 		let candidates: Vec<_> = rotation_state.authority_candidates();
 
-		assert_eq!(candidates.len(), rotation_state.primary_candidates.len());
 		assert_eq!(candidates, vec![0, 3, 5, 6, 7, 8, 9, 20, 21, 22]);
 	}
 }
