@@ -1,9 +1,7 @@
 use std::collections::HashMap;
 
 use cf_primitives::AccountRole;
-use chainflip_engine::settings::{
-	CfSettings, Eth, EthSharedOptions, StateChain, StateChainOptions,
-};
+use chainflip_engine::settings::{CfSettings, Eth, EthOptions, StateChain, StateChainOptions};
 use clap::Parser;
 use config::{ConfigError, Source, Value};
 use pallet_cf_governance::ProposalId;
@@ -18,7 +16,7 @@ pub struct CLICommandLineOptions {
 	state_chain_opts: StateChainOptions,
 
 	#[clap(flatten)]
-	eth_opts: EthSharedOptions,
+	eth_opts: EthOptions,
 
 	#[clap(subcommand)]
 	pub cmd: CFCommand,
@@ -46,7 +44,7 @@ impl Default for CLICommandLineOptions {
 		Self {
 			config_path: None,
 			state_chain_opts: StateChainOptions::default(),
-			eth_opts: EthSharedOptions::default(),
+			eth_opts: EthOptions::default(),
 			// an arbitrary simple command
 			cmd: CFCommand::Retire {},
 		}
@@ -178,7 +176,7 @@ mod tests {
 				state_chain_signing_key_file: Some(PathBuf::from_str("signing_key_file").unwrap()),
 			},
 
-			eth_opts: EthSharedOptions {
+			eth_opts: EthOptions {
 				eth_ws_node_endpoint: Some("ws://endpoint2:1234".to_owned()),
 				eth_http_node_endpoint: Some("http://endpoint3:1234".to_owned()),
 				eth_private_key_file: Some(PathBuf::from_str("eth_key_file").unwrap()),

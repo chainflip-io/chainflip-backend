@@ -96,7 +96,7 @@ pub struct StateChainOptions {
 }
 
 #[derive(Parser, Debug, Clone, Default)]
-pub struct EthSharedOptions {
+pub struct EthOptions {
 	#[clap(long = "eth.ws_node_endpoint")]
 	pub eth_ws_node_endpoint: Option<String>,
 	#[clap(long = "eth.http_node_endpoint")]
@@ -127,7 +127,7 @@ pub struct CommandLineOptions {
 	state_chain_opts: StateChainOptions,
 
 	#[clap(flatten)]
-	eth_opts: EthSharedOptions,
+	eth_opts: EthOptions,
 
 	// Health Check Settings
 	#[clap(long = "health_check.hostname")]
@@ -154,7 +154,7 @@ impl CommandLineOptions {
 			ip_address: None,
 			p2p_port: None,
 			state_chain_opts: StateChainOptions::default(),
-			eth_opts: EthSharedOptions::default(),
+			eth_opts: EthOptions::default(),
 			health_check_hostname: None,
 			health_check_port: None,
 			signing_db_file: None,
@@ -364,7 +364,7 @@ impl StateChainOptions {
 	}
 }
 
-impl EthSharedOptions {
+impl EthOptions {
 	/// Inserts all the Eth Shared Options into the given map (if Some)
 	pub fn insert_all(&self, mut map: &mut HashMap<String, Value>) {
 		insert_command_line_option(&mut map, "eth.ws_node_endpoint", &self.eth_ws_node_endpoint);
@@ -539,7 +539,7 @@ mod tests {
 				state_chain_ws_endpoint: Some("ws://endpoint:1234".to_owned()),
 				state_chain_signing_key_file: Some(PathBuf::from_str("signing_key_file").unwrap()),
 			},
-			eth_opts: EthSharedOptions {
+			eth_opts: EthOptions {
 				eth_ws_node_endpoint: Some("ws://endpoint:4321".to_owned()),
 				eth_http_node_endpoint: Some("http://endpoint:4321".to_owned()),
 				eth_private_key_file: Some(PathBuf::from_str("eth_key_file").unwrap()),
