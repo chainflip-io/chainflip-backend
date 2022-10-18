@@ -12,14 +12,14 @@ impl MockPallet for MockVaultRotator {
 const BEHAVIOUR: &[u8] = b"BEHAVIOUR";
 const ROTATION_OUTCOME: &[u8] = b"ROTATION_OUTCOME";
 
-type MockVaultOutcome = Result<(), Vec<u64>>;
+type MockVaultOutcome = Result<(), BTreeSet<u64>>;
 
 impl MockVaultRotator {
 	pub fn succeeding() {
 		Self::put_storage(BEHAVIOUR, b"", MockVaultOutcome::Ok(()));
 	}
 
-	pub fn failing(offenders: Vec<u64>) {
+	pub fn failing(offenders: BTreeSet<u64>) {
 		Self::put_storage(BEHAVIOUR, b"", MockVaultOutcome::Err(offenders));
 	}
 
@@ -65,11 +65,12 @@ fn test_mock() {
 			AsyncResult::Ready(MockVaultOutcome::Ok(()))
 		);
 		<MockVaultRotator as VaultRotator>::start_vault_rotation(BTreeSet::default());
-		MockVaultRotator::failing(vec![42]);
+		let offenders = BTreeSet::from([42]);
+		MockVaultRotator::failing(offenders.clone());
 		MockVaultRotator::on_initialise();
 		assert_eq!(
 			<MockVaultRotator as VaultRotator>::get_vault_rotation_outcome(),
-			AsyncResult::Ready(MockVaultOutcome::Err(vec![42]))
+			AsyncResult::Ready(MockVaultOutcome::Err(offenders))
 		);
 	})
 }

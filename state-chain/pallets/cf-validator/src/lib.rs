@@ -1065,7 +1065,8 @@ impl<T: Config> Pallet<T> {
 			Self::current_authority_count() as usize
 	}
 
-	// Returns the bids of the highest staked backup nodes, who are eligible for the backup rewards
+	/// Returns the bids of the highest staked backup nodes, who are eligible for the backup rewards
+	/// sorted by bids highest to lowest.
 	pub fn highest_staked_qualified_backup_node_bids(
 	) -> impl Iterator<Item = Bid<ValidatorIdOf<T>, <T as Chainflip>::Amount>> {
 		let mut backups: Vec<_> = Backups::<T>::get()
