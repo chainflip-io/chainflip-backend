@@ -94,6 +94,7 @@ impl Chainflip for Test {
 
 thread_local! {
 	pub static CALL_DISPATCHED: std::cell::RefCell<Option<RequestId>> = Default::default();
+	pub static TIMES_CALLED: std::cell::RefCell<u8> = Default::default();
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -110,10 +111,15 @@ impl MockCallback<MockEthereum> {
 			AsyncResult::Ready(..)
 		));
 		CALL_DISPATCHED.with(|cell| *(cell.borrow_mut()) = Some(self.0));
+		TIMES_CALLED.with(|times| *times.borrow_mut() += 1)
 	}
 
 	pub fn has_executed(id: RequestId) -> bool {
 		CALL_DISPATCHED.with(|cell| *cell.borrow()) == Some(id)
+	}
+
+	pub fn times_called() -> u8 {
+		TIMES_CALLED.with(|cell| *cell.borrow())
 	}
 }
 

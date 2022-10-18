@@ -7,7 +7,7 @@ use crate::{
 use cf_chains::mocks::MockEthereum;
 use cf_traits::{mocks::signer_nomination::MockNominator, AsyncResult, Chainflip};
 use frame_support::{
-	assert_noop, assert_ok,
+	assert_err, assert_noop, assert_ok,
 	instances::Instance1,
 	traits::{Hooks, OnInitialize},
 };
@@ -60,7 +60,7 @@ impl MockCfe {
 		match event {
 			Event::EthereumThresholdSigner(
 				pallet_cf_threshold_signature::Event::ThresholdSignatureRequest(
-					req_id,
+					ceremony_id,
 					key_id,
 					signers,
 					payload,
@@ -75,7 +75,7 @@ impl MockCfe {
 						assert_noop!(
 							EthereumThresholdSigner::signature_success(
 								Origin::none(),
-								req_id + 1,
+								ceremony_id + 1,
 								sign(payload)
 							),
 							Error::<Test, Instance1>::InvalidCeremonyId
@@ -83,7 +83,7 @@ impl MockCfe {
 
 						assert_ok!(EthereumThresholdSigner::signature_success(
 							Origin::none(),
-							req_id,
+							ceremony_id,
 							sign(payload),
 						));
 					},
@@ -92,7 +92,7 @@ impl MockCfe {
 						assert_noop!(
 							EthereumThresholdSigner::report_signature_failed(
 								Origin::signed(self.id),
-								req_id * 2,
+								ceremony_id * 2,
 								BTreeSet::from_iter(bad.clone()),
 							),
 							Error::<Test, Instance1>::InvalidCeremonyId
@@ -102,7 +102,7 @@ impl MockCfe {
 						assert_noop!(
 							EthereumThresholdSigner::report_signature_failed(
 								Origin::signed(signers.iter().max().unwrap() + 1),
-								req_id,
+								ceremony_id,
 								BTreeSet::from_iter(bad.clone()),
 							),
 							Error::<Test, Instance1>::InvalidRespondent
@@ -110,7 +110,7 @@ impl MockCfe {
 
 						assert_ok!(EthereumThresholdSigner::report_signature_failed(
 							Origin::signed(self.id),
-							req_id,
+							ceremony_id,
 							BTreeSet::from_iter(bad.clone()),
 						));
 
@@ -118,7 +118,7 @@ impl MockCfe {
 						assert_noop!(
 							EthereumThresholdSigner::report_signature_failed(
 								Origin::signed(self.id),
-								req_id,
+								ceremony_id,
 								BTreeSet::from_iter(bad.clone()),
 							),
 							Error::<Test, Instance1>::InvalidRespondent
@@ -198,6 +198,42 @@ fn happy_path_with_callback() {
 				"Expected Void, got {:?}",
 				EthereumThresholdSigner::signature(request_id)
 			);
+		});
+}
+
+#[test]
+fn signature_success_can_only_succeed_once_per_request() {
+	const NOMINEES: [u64; 2] = [1, 2];
+	const AUTHORITIES: [u64; 3] = [1, 2, 3];
+	const PAYLOAD: &[u8; 4] = b"OHAI";
+	ExtBuilder::new()
+		.with_authorities(AUTHORITIES)
+		.with_nominees(NOMINEES)
+		.with_request_and_callback(PAYLOAD, MockCallback::new)
+		.build()
+		.execute_with(|| {
+			let ceremony_id = current_ceremony_id();
+			let CeremonyContext::<Test, Instance1> {
+				request_context: RequestContext::<Test, Instance1> { request_id, .. },
+				..
+			} = EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
+			assert_eq!(MockCallback::times_called(), 0);
+			// report signature success
+			run_cfes_on_sc_events(&[MockCfe { id: 1, behaviour: CfeBehaviour::Success }]);
+
+			assert!(MockCallback::has_executed(request_id));
+			assert_eq!(MockCallback::times_called(), 1);
+
+			// Submit the same success again
+			assert_err!(
+				EthereumThresholdSigner::signature_success(
+					Origin::none(),
+					ceremony_id,
+					sign(*PAYLOAD)
+				),
+				Error::<Test, Instance1>::InvalidCeremonyId
+			);
+			assert_eq!(MockCallback::times_called(), 1);
 		});
 }
 
