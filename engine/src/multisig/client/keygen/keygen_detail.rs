@@ -358,7 +358,7 @@ pub fn generate_hash_commitment<P: ECPoint>(
 /// corresponds to the sum of the actual coefficient being zero, which would reduce the degree of
 /// the sharing polynomial (in Shamir Secret Sharing) and thus would reduce the effective threshold
 /// of the aggregate key
-pub fn check_high_degree_commitments<P: ECPoint>(
+fn check_high_degree_commitments<P: ECPoint>(
 	commitments: &BTreeMap<AuthorityCount, DKGCommitment<P>>,
 ) -> bool {
 	let high_degree_sum: P =
