@@ -172,10 +172,10 @@ pub trait VaultRotator {
 	fn start_vault_rotation(candidates: BTreeSet<Self::ValidatorId>);
 
 	/// Poll for the vault rotation outcome.
-	fn get_vault_rotation_outcome() -> AsyncResult<Result<(), Vec<Self::ValidatorId>>>;
+	fn get_vault_rotation_outcome() -> AsyncResult<Result<(), BTreeSet<Self::ValidatorId>>>;
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn set_vault_rotation_outcome(_outcome: AsyncResult<Result<(), Vec<Self::ValidatorId>>>) {
+	fn set_vault_rotation_outcome(_outcome: AsyncResult<Result<(), BTreeSet<Self::ValidatorId>>>) {
 		unimplemented!()
 	}
 }
@@ -499,11 +499,12 @@ impl<T, R: frame_support::traits::ValidatorRegistration<T>> QualifyNode
 	}
 }
 
-impl<A, B, C> QualifyNode for (A, B, C)
+impl<A, B, C, D> QualifyNode for (A, B, C, D)
 where
 	A: QualifyNode<ValidatorId = B::ValidatorId>,
 	B: QualifyNode,
 	C: QualifyNode<ValidatorId = B::ValidatorId>,
+	D: QualifyNode<ValidatorId = B::ValidatorId>,
 	B::ValidatorId: Debug,
 {
 	type ValidatorId = A::ValidatorId;
@@ -511,7 +512,8 @@ where
 	fn is_qualified(validator_id: &Self::ValidatorId) -> bool {
 		A::is_qualified(validator_id) &&
 			B::is_qualified(validator_id) &&
-			C::is_qualified(validator_id)
+			C::is_qualified(validator_id) &&
+			D::is_qualified(validator_id)
 	}
 }
 /// Handles the check of execution conditions
@@ -669,6 +671,8 @@ pub trait AccountRoleRegistry<T: frame_system::Config> {
 	fn ensure_validator(origin: T::Origin) -> Result<T::AccountId, BadOrigin> {
 		Self::ensure_account_role(origin, AccountRole::Validator)
 	}
+	#[cfg(feature = "runtime-benchmarks")]
+	fn register_account(_account_id: T::AccountId, _role: AccountRole) {}
 }
 
 /// API that allows other pallets to Egress assets out of the State Chain.

@@ -1,4 +1,5 @@
 use std::{
+	collections::HashMap,
 	ffi::OsStr,
 	fmt,
 	net::IpAddr,
@@ -6,7 +7,7 @@ use std::{
 };
 
 use anyhow::bail;
-use config::{Config, ConfigError, Environment, File};
+use config::{Config, ConfigBuilder, ConfigError, Environment, File, Map, Source, Value};
 use serde::{de, Deserialize, Deserializer};
 
 pub use anyhow::Result;
@@ -95,7 +96,7 @@ pub struct StateChainOptions {
 }
 
 #[derive(Parser, Debug, Clone, Default)]
-pub struct EthSharedOptions {
+pub struct EthOptions {
 	#[clap(long = "eth.ws_node_endpoint")]
 	pub eth_ws_node_endpoint: Option<String>,
 	#[clap(long = "eth.http_node_endpoint")]
@@ -126,7 +127,7 @@ pub struct CommandLineOptions {
 	state_chain_opts: StateChainOptions,
 
 	#[clap(flatten)]
-	eth_opts: EthSharedOptions,
+	eth_opts: EthOptions,
 
 	// Health Check Settings
 	#[clap(long = "health_check.hostname")]
@@ -139,6 +140,9 @@ pub struct CommandLineOptions {
 	signing_db_file: Option<PathBuf>,
 }
 
+const HEALTH_CHECK_HOSTNAME: &str = "health_check.hostname";
+const HEALTH_CHECK_PORT: &str = "health_check.port";
+
 impl CommandLineOptions {
 	/// Creates an empty CommandLineOptions with `None` for all fields
 	pub fn new() -> CommandLineOptions {
@@ -150,7 +154,7 @@ impl CommandLineOptions {
 			ip_address: None,
 			p2p_port: None,
 			state_chain_opts: StateChainOptions::default(),
-			eth_opts: EthSharedOptions::default(),
+			eth_opts: EthOptions::default(),
 			health_check_hostname: None,
 			health_check_port: None,
 			signing_db_file: None,
@@ -191,17 +195,74 @@ where
 }
 
 /// Describes behaviour required by a struct to be used for as settings/configuration
-pub trait CfSettings {
-	type Settings: DeserializeOwned;
+pub trait CfSettings
+where
+	Self: DeserializeOwned,
+{
+	type CommandLineOptions: Source + Send + Sync + 'static;
 
-	/// Deserialize the TOML file pointed to by `path` into a `Settings` struct
-	/// If an item exists in the file *and* the environment, the environment overrides the file.
-	fn settings_from_file_and_env(file: &str) -> Result<Self::Settings, ConfigError> {
-		Config::builder()
-			.add_source(File::with_name(file))
+	/// Uses the `default_file` unless the `optional_file` is Some.
+	/// Merges settings from a TOML file, environment and provided command line options.
+	/// Merge priority is:
+	/// 1 - Command line options
+	/// 2 - Environment
+	/// 3 - TOML file
+	fn load_settings_from_all_sources(
+		default_file: &str,
+		optional_file: Option<String>,
+		opts: Self::CommandLineOptions,
+	) -> Result<Self, ConfigError> {
+		// Set the custom default settings
+		let mut builder = Self::set_defaults(Config::builder())?;
+
+		// Choose what file to use
+		let file = match &optional_file {
+			Some(path) => {
+				if Path::new(path).is_file() {
+					path
+				} else {
+					// If the user has set the config file path, then error if its missing.
+					return Err(ConfigError::Message(format!("File not found: {}", path)))
+				}
+			},
+			None => default_file,
+		};
+
+		// If the file does not exist we will try and continue anyway.
+		// Because if all of the settings are covered in the environment and cli options, then we
+		// don't need it.
+		let file_present = Path::new(file).is_file();
+		if file_present {
+			builder = builder.add_source(File::with_name(file));
+		}
+
+		let settings: Self = builder
 			.add_source(Environment::default().separator("__"))
+			.add_source(opts)
 			.build()?
 			.try_deserialize()
+			.map_err(|e| {
+				// Add context to the error message if the file was missing.
+				ConfigError::Message(if file_present {
+					e.to_string()
+				} else {
+					format!("Default config file is missing {}: {}", file, e)
+				})
+			})?;
+
+		settings.validate_settings()?;
+
+		Ok(settings)
+	}
+
+	/// Set the default values of any settings. These values will be overridden by all other
+	/// sources. Any set this way will become optional (If no other source contains the settings, it
+	/// will NOT panic).
+	fn set_defaults(
+		config_builder: ConfigBuilder<config::builder::DefaultState>,
+	) -> Result<ConfigBuilder<config::builder::DefaultState>, ConfigError> {
+		// This function is optional, so just pass it through.
+		Ok(config_builder)
 	}
 
 	/// Validate the formatting of some settings
@@ -209,7 +270,7 @@ pub trait CfSettings {
 }
 
 impl CfSettings for Settings {
-	type Settings = Self;
+	type CommandLineOptions = CommandLineOptions;
 
 	fn validate_settings(&self) -> Result<(), ConfigError> {
 		self.eth.validate_settings()?;
@@ -219,96 +280,111 @@ impl CfSettings for Settings {
 		is_valid_db_path(self.signing.db_file.as_path())
 			.map_err(|e| ConfigError::Message(e.to_string()))
 	}
+
+	fn set_defaults(
+		config_builder: ConfigBuilder<config::builder::DefaultState>,
+	) -> Result<ConfigBuilder<config::builder::DefaultState>, ConfigError> {
+		config_builder
+			.set_default(HEALTH_CHECK_HOSTNAME, HealthCheck::default().hostname)?
+			.set_default(HEALTH_CHECK_PORT, HealthCheck::default().port)
+	}
+}
+
+impl Source for CommandLineOptions {
+	fn clone_into_box(&self) -> Box<dyn Source + Send + Sync> {
+		Box::new((*self).clone())
+	}
+
+	fn collect(&self) -> std::result::Result<Map<String, Value>, ConfigError> {
+		let mut map: HashMap<String, Value> = HashMap::new();
+
+		insert_command_line_option_path(&mut map, "node_p2p.node_key_file", &self.node_key_file);
+
+		insert_command_line_option(
+			&mut map,
+			"node_p2p.ip_address",
+			&self.ip_address.map(|ip| ip.to_string()),
+		);
+
+		insert_command_line_option(&mut map, "node_p2p.port", &self.p2p_port);
+
+		self.state_chain_opts.insert_all(&mut map);
+
+		self.eth_opts.insert_all(&mut map);
+
+		insert_command_line_option(&mut map, HEALTH_CHECK_HOSTNAME, &self.health_check_hostname);
+		insert_command_line_option(&mut map, HEALTH_CHECK_PORT, &self.health_check_port);
+		insert_command_line_option_path(&mut map, "signing.db_file", &self.signing_db_file);
+		insert_command_line_option(&mut map, "log.whitelist", &self.log_whitelist);
+		insert_command_line_option(&mut map, "log.blacklist", &self.log_blacklist);
+
+		Ok(map)
+	}
+}
+
+/// Inserts the provided option (if Some) as a `config::Value` into the map using the setting_str as
+/// the key. Used in the `impl Source for CommandLineOptions` to help build a map of the options.
+pub fn insert_command_line_option<T>(
+	map: &mut HashMap<String, Value>,
+	setting_str: &str,
+	option: &Option<T>,
+) where
+	T: Into<Value> + Clone,
+{
+	if let Some(value) = option {
+		map.insert(setting_str.to_string(), value.clone().into());
+	}
+}
+
+pub fn insert_command_line_option_path(
+	map: &mut HashMap<String, Value>,
+	setting_str: &str,
+	option: &Option<PathBuf>,
+) {
+	insert_command_line_option(
+		map,
+		setting_str,
+		&option.as_ref().map(|path| path.to_string_lossy().to_string()),
+	);
+}
+
+impl StateChainOptions {
+	/// Inserts all the State Chain Options into the given map (if Some)
+	pub fn insert_all(&self, map: &mut HashMap<String, Value>) {
+		insert_command_line_option(map, "state_chain.ws_endpoint", &self.state_chain_ws_endpoint);
+		insert_command_line_option_path(
+			map,
+			"state_chain.signing_key_file",
+			&self.state_chain_signing_key_file,
+		);
+	}
+}
+
+impl EthOptions {
+	/// Inserts all the Eth Shared Options into the given map (if Some)
+	pub fn insert_all(&self, map: &mut HashMap<String, Value>) {
+		insert_command_line_option(map, "eth.ws_node_endpoint", &self.eth_ws_node_endpoint);
+		insert_command_line_option(map, "eth.http_node_endpoint", &self.eth_http_node_endpoint);
+		insert_command_line_option_path(map, "eth.private_key_file", &self.eth_private_key_file);
+	}
 }
 
 impl Settings {
-	/// New settings loaded from the provided path or "config/Default.toml" with overridden values
-	/// from the `CommandLineOptions`
+	/// New settings loaded from the `config_path` in the `CommandLineOptions` or
+	/// "config/Default.toml" if none, with overridden values from the environment and
+	/// `CommandLineOptions`
 	pub fn new(opts: CommandLineOptions) -> Result<Self, ConfigError> {
-		let settings = Self::from_file_and_env(
-			match &opts.config_path.clone() {
-				Some(path) => path,
-				None => "config/Default.toml",
-			},
-			opts,
-		)?;
-
-		Ok(settings)
+		Self::load_settings_from_all_sources("config/Default.toml", opts.config_path.clone(), opts)
 	}
 
 	#[cfg(test)]
 	pub fn new_test() -> Result<Self, ConfigError> {
 		tests::set_test_env();
-		Settings::from_file_and_env("config/Testing.toml", CommandLineOptions::default())
-	}
-
-	/// Load settings from a TOML file
-	/// If opts contains another file name, it'll use that as the default
-	pub fn from_file_and_env(file: &str, opts: CommandLineOptions) -> Result<Self, ConfigError> {
-		let mut settings = Self::settings_from_file_and_env(file)?;
-
-		if let Some(opt) = opts.node_key_file {
-			settings.node_p2p.node_key_file = opt
-		};
-
-		if let Some(opt) = opts.ip_address {
-			settings.node_p2p.ip_address = opt
-		};
-
-		if let Some(opt) = opts.p2p_port {
-			settings.node_p2p.port = opt
-		};
-
-		// State Chain
-		if let Some(opt) = opts.state_chain_opts.state_chain_ws_endpoint {
-			settings.state_chain.ws_endpoint = opt
-		};
-		if let Some(opt) = opts.state_chain_opts.state_chain_signing_key_file {
-			settings.state_chain.signing_key_file = opt
-		};
-
-		// Eth
-		if let Some(opt) = opts.eth_opts.eth_ws_node_endpoint {
-			settings.eth.ws_node_endpoint = opt
-		};
-
-		if let Some(opt) = opts.eth_opts.eth_http_node_endpoint {
-			settings.eth.http_node_endpoint = opt
-		};
-
-		if let Some(opt) = opts.eth_opts.eth_private_key_file {
-			settings.eth.private_key_file = opt
-		};
-
-		// Health Check - this is optional
-		let mut health_check = HealthCheck::default();
-		if let Some(opt) = opts.health_check_hostname {
-			health_check.hostname = opt;
-		};
-		if let Some(opt) = opts.health_check_port {
-			health_check.port = opt;
-		};
-		// Don't override the healthcheck settings unless something has changed
-		if health_check != HealthCheck::default() {
-			settings.health_check = Some(health_check);
-		}
-
-		// Signing
-		if let Some(opt) = opts.signing_db_file {
-			settings.signing.db_file = opt
-		};
-
-		// log
-		if let Some(opt) = opts.log_whitelist {
-			settings.log.whitelist = opt;
-		};
-		if let Some(opt) = opts.log_blacklist {
-			settings.log.blacklist = opt;
-		};
-
-		settings.validate_settings()?;
-
-		Ok(settings)
+		Settings::load_settings_from_all_sources(
+			"config/Testing.toml",
+			None,
+			CommandLineOptions::default(),
+		)
 	}
 }
 
@@ -437,8 +513,8 @@ mod tests {
 	fn test_all_command_line_options() {
 		use std::str::FromStr;
 
-		// Fill the options with junk values that will pass the parsing/validation.
-		// The junk values need to be different from the values in `Default.toml` for the test to
+		// Fill the options with test values that will pass the parsing/validation.
+		// The test values need to be different from the values in `Default.toml` for the test to
 		// work. Leave the `config_path` option out, it is covered in a separate test.
 		let opts = CommandLineOptions {
 			config_path: None,
@@ -451,17 +527,17 @@ mod tests {
 				state_chain_ws_endpoint: Some("ws://endpoint:1234".to_owned()),
 				state_chain_signing_key_file: Some(PathBuf::from_str("signing_key_file").unwrap()),
 			},
-			eth_opts: EthSharedOptions {
+			eth_opts: EthOptions {
 				eth_ws_node_endpoint: Some("ws://endpoint:4321".to_owned()),
 				eth_http_node_endpoint: Some("http://endpoint:4321".to_owned()),
-				eth_private_key_file: Some(PathBuf::from_str("not/a/real/path.toml").unwrap()),
+				eth_private_key_file: Some(PathBuf::from_str("eth_key_file").unwrap()),
 			},
 			health_check_hostname: Some("health_check_hostname".to_owned()),
 			health_check_port: Some(1337),
 			signing_db_file: Some(PathBuf::from_str("also/not/real.db").unwrap()),
 		};
 
-		// Load the junk opts into the settings
+		// Load the test opts into the settings
 		let settings = Settings::new(opts.clone()).unwrap();
 
 		// Compare the opts and the settings

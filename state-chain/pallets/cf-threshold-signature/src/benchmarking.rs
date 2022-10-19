@@ -4,7 +4,8 @@
 use super::*;
 
 use cf_chains::{benchmarking_value::BenchmarkValue, ChainCrypto};
-use cf_traits::{Chainflip, ThresholdSigner};
+use cf_primitives::AccountRole;
+use cf_traits::{AccountRoleRegistry, Chainflip, ThresholdSigner};
 use frame_benchmarking::{account, benchmarks_instance_pallet, whitelist_account};
 use frame_support::{
 	assert_ok,
@@ -69,6 +70,8 @@ benchmarks_instance_pallet! {
 		let mut threshold_set = PendingCeremonies::<T, I>::get(ceremony_id).unwrap().remaining_respondents.into_iter();
 
 		let reporter = threshold_set.next().unwrap();
+		let account: T::AccountId = reporter.clone().into();
+		<T as pallet::Config<I>>::AccountRoleRegistry::register_account(account, AccountRole::Validator);
 		let offenders = BTreeSet::from_iter(threshold_set.take(a as usize));
 	} : _(RawOrigin::Signed(reporter.into()), ceremony_id, offenders)
 	determine_offenders {

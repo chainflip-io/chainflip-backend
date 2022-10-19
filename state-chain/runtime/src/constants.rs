@@ -1,7 +1,6 @@
 pub mod common {
 	use cf_primitives::AuthorityCount;
 	use cf_traits::{BlockNumber, FlipBalance};
-	use pallet_cf_broadcast::AttemptCount;
 
 	pub const CHAINFLIP_SS58_PREFIX: u16 = 2112;
 
@@ -65,11 +64,10 @@ pub mod common {
 		KEYGEN_TIMEOUT_BUFFER_SECONDS) /
 		SECONDS_PER_BLOCK as u32;
 
-	pub const SECS_IN_AN_HOUR: u64 = 3600;
-
+	pub const SECS_PER_MINUTE: u64 = 60;
 	// This should be the same as the `CLAIM_DELAY` in:
 	// https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/StakeManager.sol
-	pub const CLAIM_DELAY_SECS: u64 = 48 * SECS_IN_AN_HOUR;
+	pub const CLAIM_DELAY_SECS: u64 = 5 * SECS_PER_MINUTE;
 
 	// NOTE: Currently it is not possible to change the slot duration after the chain has started.
 	//       Attempting to do so will brick block production.
@@ -88,15 +86,12 @@ pub mod common {
 
 	// The following values are calculated by solving the above equation for x using n =
 	// (365*14400)/150 (since compunding is done every heartbeat which is every 150 blocks) and inf
-	// is taken as 10 percent for authority emissions and 1 percent for backup node emissions.
-	pub const CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL: u32 = 2720;
-	pub const BACKUP_NODE_EMISSION_INFLATION_PERBILL: u32 = 284;
-
-	/// The maximum number of broadcast attempts
-	pub const MAXIMUM_BROADCAST_ATTEMPTS: AttemptCount = 100;
+	// is taken as 0.1 percent for authority emissions and 0.02 percent for backup node emissions.
+	pub const CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL: u32 = 28;
+	pub const BACKUP_NODE_EMISSION_INFLATION_PERBILL: u32 = 6;
 
 	/// The default minimum stake, 1_000 x 10^18
-	pub const DEFAULT_MIN_STAKE: FlipBalance = 1_000 * 10u128.pow(18);
+	pub const DEFAULT_MIN_STAKE: FlipBalance = 10 * FLIPPERINOS_PER_FLIP;
 
 	/// Percent of the epoch we are allowed to claim
 	pub const PERCENT_OF_EPOCH_PERIOD_CLAIMABLE: u8 = 50;

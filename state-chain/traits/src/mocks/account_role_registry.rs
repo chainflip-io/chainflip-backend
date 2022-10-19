@@ -7,7 +7,7 @@ impl<T: Config> AccountRoleRegistry<T> for () {
 		_who: &<T as frame_system::Config>::AccountId,
 		_role: cf_primitives::AccountRole,
 	) -> sp_runtime::DispatchResult {
-		unimplemented!("Not used yet");
+		Ok(())
 	}
 
 	fn ensure_account_role(

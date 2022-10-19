@@ -843,7 +843,7 @@ mod tests {
 
 	use crate::{
 		logging::{self, test_utils::new_test_logger},
-		settings::{CommandLineOptions, Settings},
+		settings::{CfSettings, CommandLineOptions, Settings},
 	};
 
 	use utilities::assert_ok;
@@ -854,9 +854,12 @@ mod tests {
 	#[tokio::main]
 	#[test]
 	async fn test_finalised_storage_subs() {
-		let settings =
-			Settings::from_file_and_env("config/Local.toml", CommandLineOptions::default())
-				.unwrap();
+		let settings = <Settings as CfSettings>::load_settings_from_all_sources(
+			"config/Local.toml",
+			None,
+			CommandLineOptions::default(),
+		)
+		.unwrap();
 		let logger = logging::test_utils::new_test_logger();
 		let (_, mut block_stream, state_chain_client) =
 			connect_to_state_chain(&settings.state_chain, false, &logger)

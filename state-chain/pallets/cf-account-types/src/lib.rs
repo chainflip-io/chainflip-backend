@@ -8,7 +8,7 @@ mod mock;
 mod tests;
 
 use cf_primitives::AccountRole;
-use cf_traits::{AccountRoleRegistry, Chainflip};
+use cf_traits::{AccountRoleRegistry, Chainflip, QualifyNode};
 use frame_support::{
 	error::BadOrigin,
 	pallet_prelude::DispatchResult,
@@ -118,6 +118,11 @@ impl<T: Config> AccountRoleRegistry<T> for Pallet<T> {
 			AccountRole::Relayer => ensure_relayer::<T>(origin),
 		}
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn register_account(account_id: T::AccountId, role: AccountRole) {
+		AccountRoles::<T>::insert(account_id, role);
+	}
 }
 
 impl<T: Config> OnKilledAccount<T::AccountId> for Pallet<T> {
@@ -129,6 +134,18 @@ impl<T: Config> OnKilledAccount<T::AccountId> for Pallet<T> {
 impl<T: Config> OnNewAccount<T::AccountId> for Pallet<T> {
 	fn on_new_account(who: &T::AccountId) {
 		AccountRoles::<T>::insert(who, AccountRole::default());
+	}
+}
+
+impl<T: Config> QualifyNode for Pallet<T> {
+	type ValidatorId = T::AccountId;
+
+	fn is_qualified(validator_id: &Self::ValidatorId) -> bool {
+		if let Some(role) = AccountRoles::<T>::get(validator_id) {
+			AccountRole::Validator == role
+		} else {
+			false
+		}
 	}
 }
 
@@ -164,7 +181,7 @@ macro_rules! define_ensure_origin {
 }
 
 define_ensure_origin!(ensure_relayer, EnsureRelayer, AccountRole::Relayer);
-define_ensure_origin!(ensure_validator, EnsureValidator, AccountRole::Validator { .. });
+define_ensure_origin!(ensure_validator, EnsureValidator, AccountRole::Validator);
 define_ensure_origin!(
 	ensure_liquidity_provider,
 	EnsureLiquidityProvider,

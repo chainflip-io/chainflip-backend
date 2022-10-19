@@ -6,6 +6,9 @@ use pallet_cf_reputation::Config as ReputationConfig;
 use pallet_cf_staking::Config as StakingConfig;
 use pallet_session::Config as SessionConfig;
 
+use cf_primitives::AccountRole;
+use cf_traits::AccountRoleRegistry;
+
 use sp_application_crypto::RuntimeAppPublic;
 use sp_runtime::{Digest, DigestItem};
 use sp_std::vec;
@@ -165,6 +168,7 @@ benchmarks! {
 	}
 	cfe_version {
 		let caller: T::AccountId = whitelisted_caller();
+		<T as pallet::Config>::AccountRoleRegistry::register_account(caller.clone(), AccountRole::Validator);
 		let version = SemVer {
 			major: 1,
 			minor: 2,
@@ -177,6 +181,7 @@ benchmarks! {
 	}
 	register_peer_id {
 		let caller: T::AccountId = account("doogle", 0, 0);
+		<T as pallet::Config>::AccountRoleRegistry::register_account(caller.clone(), AccountRole::Validator);
 		let pair: p2p_crypto::Public = RuntimeAppPublic::generate_pair(None);
 		let signature: Ed25519Signature = pair.sign(&caller.encode()).unwrap().try_into().unwrap();
 		let public_key: Ed25519PublicKey = pair.try_into().unwrap();
@@ -349,7 +354,7 @@ benchmarks! {
 		start_vault_rotation::<T>(150, 50, 1);
 
 		// Simulate failure.
-		let offenders = bidder_set::<T, ValidatorIdOf<T>, _>(o, 1).collect::<Vec<_>>();
+		let offenders = bidder_set::<T, ValidatorIdOf<T>, _>(o, 1).collect::<BTreeSet<_>>();
 		T::VaultRotator::set_vault_rotation_outcome(AsyncResult::Ready(Err(offenders.clone())));
 
 		// This assertion ensures we are using the correct weight parameters.
@@ -363,7 +368,7 @@ benchmarks! {
 				CurrentRotationPhase::<T>::get(),
 				RotationPhase::VaultsRotating(rotation_state)
 					if rotation_state.authority_candidates::<BTreeSet<_>>().is_disjoint(
-						&offenders.into_iter().collect::<BTreeSet<_>>()
+						&offenders
 					)
 			),
 			"Offenders should not be authority candidates."

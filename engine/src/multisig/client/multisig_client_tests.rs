@@ -10,6 +10,9 @@ use crate::{
 		client::{
 			self,
 			common::{CeremonyFailureReason, SigningFailureReason},
+			helpers::{
+				new_nodes, ACCOUNT_IDS, DEFAULT_KEYGEN_CEREMONY_ID, DEFAULT_SIGNING_CEREMONY_ID,
+			},
 			key_store::KeyStore,
 			CeremonyRequestDetails,
 		},

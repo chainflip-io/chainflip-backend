@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod tests;
+
 use std::collections::{BTreeMap, BTreeSet};
 
 use cf_primitives::AuthorityCount;
@@ -9,7 +12,10 @@ use crate::multisig::{
 	crypto::ECPoint,
 };
 
-use super::keygen_frost::ShamirShare;
+use super::keygen_detail::ShamirShare;
+
+#[cfg(test)]
+pub use tests::{gen_keygen_data_hash_comm1, gen_keygen_data_verify_hash_comm2};
 
 /// Data sent between parties over p2p for a keygen ceremony
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -151,7 +157,7 @@ pub struct HashComm1(pub sp_core::H256);
 
 pub type VerifyHashComm2 = BroadcastVerificationMessage<HashComm1>;
 
-pub type CoeffComm3<P> = super::keygen_frost::DKGUnverifiedCommitment<P>;
+pub type CoeffComm3<P> = super::keygen_detail::DKGUnverifiedCommitment<P>;
 
 pub type VerifyCoeffComm4<P> = BroadcastVerificationMessage<CoeffComm3<P>>;
 
