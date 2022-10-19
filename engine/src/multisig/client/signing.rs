@@ -2,6 +2,9 @@ pub mod signing_data;
 pub mod signing_detail;
 pub mod signing_stages;
 
+#[cfg(test)]
+mod tests;
+
 use std::sync::Arc;
 
 use crate::multisig::{crypto::ECPoint, MessageHash};

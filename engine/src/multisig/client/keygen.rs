@@ -3,6 +3,9 @@ mod keygen_detail;
 mod keygen_stages;
 
 #[cfg(test)]
+mod tests;
+
+#[cfg(test)]
 pub use keygen_detail::{
 	generate_shares_and_commitment, genesis::generate_key_data, DKGUnverifiedCommitment,
 	OutgoingShares,

@@ -2,9 +2,6 @@
 //! Comments in this file reference sections from this document.
 //! Note that unlike the protocol described in the document, we don't have a
 //! centralised signature aggregator and don't have a preprocessing stage.
-#[cfg(test)]
-mod tests;
-
 use std::collections::{BTreeMap, BTreeSet};
 
 use cf_primitives::AuthorityCount;
@@ -232,7 +229,7 @@ pub fn aggregate_signature<C: CryptoScheme>(
 }
 
 #[cfg(test)]
-mod basic_tests {
+mod tests {
 
 	use super::*;
 
