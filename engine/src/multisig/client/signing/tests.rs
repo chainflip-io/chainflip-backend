@@ -1,5 +1,3 @@
-#![cfg(test)]
-
 use std::collections::BTreeSet;
 
 use rand_legacy::SeedableRng;
@@ -9,23 +7,23 @@ use crate::multisig::{
 		common::{
 			BroadcastFailureReason, CeremonyFailureReason, SigningFailureReason, SigningStageName,
 		},
-		keygen::generate_key_data,
-		signing::frost,
-		tests::helpers::{
-			gen_invalid_local_sig, gen_invalid_signing_comm1, new_signing_ceremony, run_stages,
+		helpers::{
+			gen_invalid_local_sig, gen_invalid_signing_comm1, new_nodes, new_signing_ceremony,
+			run_stages, SigningCeremonyRunner, ACCOUNT_IDS, DEFAULT_KEYGEN_SEED,
+			DEFAULT_SIGNING_CEREMONY_ID, DEFAULT_SIGNING_SEED,
 		},
+		keygen::generate_key_data,
+		signing::signing_data,
 	},
 	tests::fixtures::MESSAGE_HASH,
 	Rng,
 };
 
-use super::*;
-
 // We choose (arbitrarily) to use eth crypto for unit tests.
 use crate::multisig::crypto::eth::Point;
-type VerifyComm2 = frost::VerifyComm2<Point>;
-type LocalSig3 = frost::LocalSig3<Point>;
-type VerifyLocalSig4 = frost::VerifyLocalSig4<Point>;
+type VerifyComm2 = signing_data::VerifyComm2<Point>;
+type LocalSig3 = signing_data::LocalSig3<Point>;
+type VerifyLocalSig4 = signing_data::VerifyLocalSig4<Point>;
 
 #[tokio::test]
 async fn should_report_on_invalid_local_sig3() {
@@ -133,7 +131,7 @@ mod timeout {
 
 	mod during_regular_stage {
 
-		type SigningData = crate::multisig::client::signing::frost::SigningData<Point>;
+		type SigningData = crate::multisig::client::signing::signing_data::SigningData<Point>;
 
 		use super::*;
 

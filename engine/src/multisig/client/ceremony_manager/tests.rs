@@ -1,6 +1,5 @@
 use std::{collections::BTreeSet, pin::Pin, time::Duration};
 
-use super::{helpers::get_key_data_for_test, keygen_data_tests::gen_keygen_data_hash_comm1, *};
 use crate::{
 	constants::CEREMONY_ID_WINDOW,
 	logging::test_utils::new_test_logger,
@@ -12,6 +11,11 @@ use crate::{
 			},
 			ceremony_runner::CeremonyRunner,
 			common::{BroadcastFailureReason, SigningFailureReason, SigningStageName},
+			gen_keygen_data_hash_comm1, get_key_data_for_test,
+			helpers::{
+				cause_ceremony_timeout, ACCOUNT_IDS, DEFAULT_KEYGEN_SEED, DEFAULT_SIGNING_SEED,
+				INITIAL_LATEST_CEREMONY_ID,
+			},
 			keygen::KeygenData,
 			CeremonyFailureReason, CeremonyRequest, CeremonyRequestDetails, KeygenRequestDetails,
 			MultisigData, SigningRequestDetails,
@@ -24,7 +28,7 @@ use crate::{
 	task_scope::with_task_scope,
 };
 use anyhow::Result;
-use cf_primitives::CeremonyId;
+use cf_primitives::{AccountId, CeremonyId};
 use client::MultisigMessage;
 use futures::{Future, FutureExt};
 use rand_legacy::SeedableRng;
@@ -282,7 +286,7 @@ async fn should_not_create_unauthorized_ceremony_with_invalid_ceremony_id() {
 			);
 
 			// Check that the messages were ignored and no unauthorised ceremonies were created
-			assert_eq!(ceremony_manager.get_keygen_states_len(), 0);
+			assert_eq!(ceremony_manager.keygen_states.ceremony_handles.len(), 0);
 
 			// Process a stage 1 message with a ceremony id that in the future but still within the
 			// window
@@ -293,7 +297,7 @@ async fn should_not_create_unauthorized_ceremony_with_invalid_ceremony_id() {
 			);
 
 			// Check that the message was not ignored and an unauthorised ceremony was created
-			assert_eq!(ceremony_manager.get_keygen_states_len(), 1);
+			assert_eq!(ceremony_manager.keygen_states.ceremony_handles.len(), 1);
 
 			anyhow::bail!("End the future so we can complete the test");
 		}
@@ -373,7 +377,10 @@ async fn should_cleanup_unauthorised_ceremony_if_not_participating() {
 				request_state: CeremonyRequestState::Unauthorised(oneshot::channel().0),
 				_task_handle: task_handle,
 			};
-			ceremony_manager.insert_signing_state_for_test(CEREMONY_ID, ceremony_handle);
+			ceremony_manager
+				.signing_states
+				.ceremony_handles
+				.insert(CEREMONY_ID, ceremony_handle);
 
 			// Start the ceremony manager running
 			tokio::spawn(ceremony_manager.run(ceremony_request_receiver, incoming_p2p_receiver));

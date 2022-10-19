@@ -349,7 +349,7 @@ benchmarks! {
 		start_vault_rotation::<T>(150, 50, 1);
 
 		// Simulate failure.
-		let offenders = bidder_set::<T, ValidatorIdOf<T>, _>(o, 1).collect::<Vec<_>>();
+		let offenders = bidder_set::<T, ValidatorIdOf<T>, _>(o, 1).collect::<BTreeSet<_>>();
 		T::VaultRotator::set_vault_rotation_outcome(AsyncResult::Ready(Err(offenders.clone())));
 
 		// This assertion ensures we are using the correct weight parameters.
@@ -363,7 +363,7 @@ benchmarks! {
 				CurrentRotationPhase::<T>::get(),
 				RotationPhase::VaultsRotating(rotation_state)
 					if rotation_state.authority_candidates::<BTreeSet<_>>().is_disjoint(
-						&offenders.into_iter().collect::<BTreeSet<_>>()
+						&offenders
 					)
 			),
 			"Offenders should not be authority candidates."

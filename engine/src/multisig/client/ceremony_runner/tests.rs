@@ -6,14 +6,14 @@ use crate::{
 		client::{
 			ceremony_manager::{prepare_signing_request, KeygenCeremony, SigningCeremony},
 			common::{broadcast::BroadcastStage, CeremonyCommon},
-			gen_signing_data_stage1, gen_signing_data_stage4, get_key_data_for_test,
-			signing::{
-				frost::SigningData, frost_stages::AwaitCommitments1, SigningStateCommonInfo,
+			gen_keygen_data_verify_hash_comm2, get_key_data_for_test,
+			helpers::{
+				cause_ceremony_timeout, gen_invalid_keygen_stage_2_state, ACCOUNT_IDS,
+				DEFAULT_KEYGEN_SEED, DEFAULT_SIGNING_SEED,
 			},
-			tests::{
-				cause_ceremony_timeout, gen_invalid_keygen_stage_2_state,
-				gen_keygen_data_verify_hash_comm2, ACCOUNT_IDS, DEFAULT_KEYGEN_SEED,
-				DEFAULT_SIGNING_SEED,
+			signing::{
+				gen_signing_data_stage1, gen_signing_data_stage4, AwaitCommitments1, SigningData,
+				SigningStateCommonInfo,
 			},
 			KeygenResult, PartyIdxMapping,
 		},

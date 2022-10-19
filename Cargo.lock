@@ -5160,6 +5160,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "log 0.4.17",
+ "nanorand",
  "parity-scale-codec",
  "scale-info",
  "sp-core",

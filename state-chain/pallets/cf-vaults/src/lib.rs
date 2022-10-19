@@ -185,7 +185,7 @@ pub enum VaultRotationStatus<T: Config<I>, I: 'static = ()> {
 	/// The key has been successfully updated on the contract.
 	Complete { tx_hash: <T::Chain as ChainCrypto>::TransactionHash },
 	/// The rotation has failed at one of the above stages.
-	Failed { offenders: Vec<T::ValidatorId> },
+	Failed { offenders: BTreeSet<T::ValidatorId> },
 }
 
 /// A single vault.
@@ -295,7 +295,9 @@ pub mod pallet {
 				} else if current_block.saturating_sub(KeygenResolutionPendingSince::<T, I>::get()) >=
 					KeygenResponseTimeout::<T, I>::get()
 				{
-					log::debug!("Keygen response timeout has elapsed, reporting keygen failure.");
+					log::debug!(
+						"Keygen response timeout has elapsed, attempting to resolve outcome..."
+					);
 					Self::deposit_event(Event::<T, I>::KeygenResponseTimeout(keygen_ceremony_id));
 				} else {
 					return weight
@@ -317,7 +319,7 @@ pub mod pallet {
 					},
 					Err(KeygenError::Incompatible) => {
 						PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Failed {
-							offenders: Vec::new(),
+							offenders: Default::default(),
 						});
 						Self::deposit_event(Event::KeygenIncompatible(keygen_ceremony_id));
 					},
@@ -776,7 +778,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn terminate_keygen_procedure(offenders: &[T::ValidatorId], event: Event<T, I>) {
 		T::OffenceReporter::report_many(PalletOffence::FailedKeygen, offenders);
 		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Failed {
-			offenders: offenders.to_vec(),
+			offenders: offenders.iter().cloned().collect(),
 		});
 		Self::deposit_event(event);
 	}
@@ -810,7 +812,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 	}
 
 	/// Get the status of the current key generation
-	fn get_vault_rotation_outcome() -> AsyncResult<Result<(), Vec<T::ValidatorId>>> {
+	fn get_vault_rotation_outcome() -> AsyncResult<Result<(), BTreeSet<T::ValidatorId>>> {
 		match PendingVaultRotation::<T, I>::decode_variant() {
 			Some(VaultRotationStatusVariant::AwaitingKeygen) => AsyncResult::Pending,
 			Some(VaultRotationStatusVariant::AwaitingKeygenVerification) => AsyncResult::Pending,
@@ -827,7 +829,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn set_vault_rotation_outcome(outcome: AsyncResult<Result<(), Vec<Self::ValidatorId>>>) {
+	fn set_vault_rotation_outcome(outcome: AsyncResult<Result<(), BTreeSet<Self::ValidatorId>>>) {
 		match outcome {
 			AsyncResult::Pending => {
 				PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingKeygen {

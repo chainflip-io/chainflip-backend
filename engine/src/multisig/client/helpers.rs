@@ -42,7 +42,7 @@ use crate::{
 	p2p::OutgoingMultisigStageMessages,
 };
 
-use signing::frost::{self, LocalSig3, SigningCommitment};
+use signing::{LocalSig3, SigningCommitment};
 
 use keygen::{generate_shares_and_commitment, DKGUnverifiedCommitment};
 
@@ -59,10 +59,25 @@ use crate::{
 
 use state_chain_runtime::{constants::common::MAX_STAGE_DURATION_SECONDS, AccountId};
 
-use super::{
-	ACCOUNT_IDS, DEFAULT_KEYGEN_CEREMONY_ID, DEFAULT_KEYGEN_SEED, DEFAULT_SIGNING_CEREMONY_ID,
-	DEFAULT_SIGNING_SEED,
-};
+use lazy_static::lazy_static;
+
+/// Default seeds
+pub const DEFAULT_KEYGEN_SEED: [u8; 32] = [8; 32];
+pub const DEFAULT_SIGNING_SEED: [u8; 32] = [4; 32];
+
+// Default ceremony ids used in many unit tests.
+/// The initial latest ceremony id starts at 0,
+/// so the first ceremony request must have a ceremony id of 1.
+/// Also the SC will never send a ceremony request at id 0.
+pub const INITIAL_LATEST_CEREMONY_ID: CeremonyId = 0;
+// Ceremony ids must be consecutive.
+pub const DEFAULT_KEYGEN_CEREMONY_ID: CeremonyId = INITIAL_LATEST_CEREMONY_ID + 1;
+pub const DEFAULT_SIGNING_CEREMONY_ID: CeremonyId = DEFAULT_KEYGEN_CEREMONY_ID + 1;
+
+lazy_static! {
+	pub static ref ACCOUNT_IDS: Vec<AccountId> =
+		[1, 2, 3, 4].iter().map(|i| AccountId::new([*i; 32])).collect();
+}
 
 pub type StageMessages<T> = HashMap<AccountId, HashMap<AccountId, T>>;
 type SigningCeremonyEth = SigningCeremony<EthSigning>;
@@ -623,7 +638,7 @@ pub type SigningCeremonyRunner =
 impl CeremonyRunnerStrategy for SigningCeremonyRunner {
 	type CeremonyType = SigningCeremonyEth;
 	type CheckedOutput = EthSchnorrSignature;
-	type InitialStageData = frost::Comm1<Point>;
+	type InitialStageData = signing::Comm1<Point>;
 
 	fn post_successful_complete_check(
 		&self,
@@ -722,9 +737,9 @@ pub async fn standard_signing(signing_ceremony: &mut SigningCeremonyRunner) -> E
 	let messages = run_stages!(
 		signing_ceremony,
 		stage_1_messages,
-		frost::VerifyComm2<Point>,
-		frost::LocalSig3<Point>,
-		frost::VerifyLocalSig4<Point>
+		signing::VerifyComm2<Point>,
+		signing::LocalSig3<Point>,
+		signing::VerifyLocalSig4<Point>
 	);
 	signing_ceremony.distribute_messages(messages).await;
 	signing_ceremony.complete().await
@@ -813,7 +828,7 @@ pub async fn run_keygen_with_err_on_high_pubkey<AccountIds: IntoIterator<Item = 
 pub fn gen_invalid_local_sig<P: ECPoint>(rng: &mut Rng) -> LocalSig3<P> {
 	use crate::multisig::crypto::ECScalar;
 
-	frost::LocalSig3 { response: P::Scalar::random(rng) }
+	signing::LocalSig3 { response: P::Scalar::random(rng) }
 }
 
 pub fn get_invalid_hash_comm(rng: &mut Rng) -> keygen::HashComm1 {

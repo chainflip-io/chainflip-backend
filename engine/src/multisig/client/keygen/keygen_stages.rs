@@ -28,7 +28,7 @@ use keygen::{
 	keygen_data::{
 		BlameResponse8, CoeffComm3, Complaints6, SecretShare5, VerifyCoeffComm4, VerifyComplaints7,
 	},
-	keygen_frost::{
+	keygen_detail::{
 		derive_aggregate_pubkey, generate_shares_and_commitment, validate_commitments,
 		verify_share, DKGCommitment, DKGUnverifiedCommitment, IncomingShares, OutgoingShares,
 	},
@@ -36,7 +36,7 @@ use keygen::{
 
 use super::{
 	keygen_data::{HashComm1, VerifyBlameResponses9, VerifyHashComm2},
-	keygen_frost::{
+	keygen_detail::{
 		compute_secret_key_share, derive_local_pubkeys_for_parties, generate_hash_commitment,
 		ShamirShare, ValidAggregateKey,
 	},

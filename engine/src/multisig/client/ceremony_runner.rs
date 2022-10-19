@@ -1,5 +1,5 @@
 #[cfg(test)]
-mod ceremony_runner_tests;
+mod tests;
 
 use std::{
 	collections::{BTreeMap, BTreeSet},
@@ -315,9 +315,9 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 			// implementation to try to recover or agree on who to report.
 
 			slog::warn!(
-                        self.logger,
-                        "Ceremony stage timed out before all messages collected; trying to finalize current stage anyway"
-                    );
+				self.logger,
+				"Ceremony stage timed out before all messages collected; trying to finalize current stage anyway"
+			);
 
 			// Log the account ids of the missing messages
 			let missing_messages_from_accounts =
@@ -354,7 +354,7 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 		}
 	}
 
-	pub fn get_awaited_parties_count(&self) -> Option<AuthorityCount> {
+	fn get_awaited_parties_count(&self) -> Option<AuthorityCount> {
 		self.stage.as_ref().map(|stage| stage.awaited_parties().len() as AuthorityCount)
 	}
 

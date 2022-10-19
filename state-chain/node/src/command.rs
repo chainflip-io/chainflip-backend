@@ -1,5 +1,5 @@
 use crate::{
-	chain_spec,
+	chain_spec::{self, use_chainflip_account_id_encoding},
 	cli::{Cli, Subcommand},
 	command_helper::{inherent_benchmark_data, BenchmarkExtrinsicBuilder},
 	service,
@@ -41,6 +41,10 @@ impl SubstrateCli for Cli {
 			"cf-dev" => Box::new(chain_spec::cf_development_config()?),
 			"three-node-test" => Box::new(chain_spec::chainflip_three_node_testnet_config()?),
 			"test" => Box::new(chain_spec::chainflip_testnet_config()?),
+			"perseverance-new" => Box::new(chain_spec::perseverance_new_config()?),
+			"perseverance" => Box::new(chain_spec::ChainSpec::from_json_bytes(
+				include_bytes!("../chainspecs/perseverance.chainspec.raw.json").as_slice(),
+			)?),
 			path =>
 				Box::new(chain_spec::ChainSpec::from_json_file(std::path::PathBuf::from(path))?),
 		})
@@ -54,6 +58,7 @@ impl SubstrateCli for Cli {
 /// Parse and run command line arguments
 pub fn run() -> sc_cli::Result<()> {
 	let cli = Cli::from_args();
+	use_chainflip_account_id_encoding();
 
 	match &cli.subcommand {
 		Some(Subcommand::Key(cmd)) => cmd.run(&cli),
@@ -165,6 +170,7 @@ pub fn run() -> sc_cli::Result<()> {
         You can enable it with `--features try-runtime`."
 			.into()),
 		None => {
+			utilities::print_chainflip_ascii_art();
 			let runner = cli.create_runner(&cli.run)?;
 			runner.run_node_until_exit(|config| async move {
 				service::new_full(config).map_err(sc_cli::Error::Service)

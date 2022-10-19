@@ -150,6 +150,7 @@ impl pallet_cf_auction::Config for Runtime {
 			<Self as frame_system::Config>::AccountId,
 			pallet_session::Pallet<Self>,
 		>,
+		AccountTypes,
 	);
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 }

@@ -5,7 +5,7 @@ use chainflip_engine::{
 		block_events_stream_for_contract_from, event::Event, rpc::EthDualRpcClient,
 		EthContractWitnesser,
 	},
-	settings::{CommandLineOptions, Settings},
+	settings::{CfSettings, CommandLineOptions, Settings},
 };
 use config::{Config, ConfigError, File};
 use futures::stream::StreamExt;
@@ -40,9 +40,13 @@ where
 	ContractWitnesser: EthContractWitnesser + std::marker::Sync,
 {
 	let eth_dual_rpc = EthDualRpcClient::new_test(
-		&Settings::from_file_and_env("config/Testing.toml", CommandLineOptions::default())
-			.unwrap()
-			.eth,
+		&<Settings as CfSettings>::load_settings_from_all_sources(
+			"config/Testing.toml",
+			None,
+			CommandLineOptions::default(),
+		)
+		.unwrap()
+		.eth,
 		&logger,
 	)
 	.await
