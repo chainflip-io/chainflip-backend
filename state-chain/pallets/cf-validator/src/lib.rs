@@ -1010,7 +1010,13 @@ impl<T: Config> Pallet<T> {
 			return T::ValidatorWeightInfo::start_authority_rotation_in_maintenance_mode()
 		}
 		log::info!(target: "cf-validator", "Starting rotation");
-		match Self::resolve_auction() {
+
+		match SetSizeMaximisingAuctionResolver::try_new(
+			T::EpochInfo::current_authority_count(),
+			AuctionParameters::<T>::get(),
+		)
+		.and_then(|resolver| resolver.resolve_auction(Self::qualified_bidders().collect()))
+		{
 			Ok(auction_outcome) => {
 				debug_assert!(!auction_outcome.winners.is_empty());
 				debug_assert!({
@@ -1129,18 +1135,6 @@ impl<T: Config> Pallet<T> {
 		)?;
 		AuctionParameters::<T>::put(new_parameters);
 		Ok(())
-	}
-
-	fn resolve_auction() -> Result<AuctionOutcome<ValidatorIdOf<T>, T::Amount>, Error<T>> {
-		let outcome = SetSizeMaximisingAuctionResolver::try_new(
-			T::EpochInfo::current_authority_count(),
-			AuctionParameters::<T>::get(),
-		)?
-		.resolve_auction(Self::qualified_bidders().collect())?;
-
-		Self::deposit_event(Event::AuctionCompleted(outcome.winners.clone(), outcome.bond));
-
-		Ok(outcome)
 	}
 
 	fn qualified_bidders() -> impl Iterator<Item = Bid<ValidatorIdOf<T>, T::Amount>> {
