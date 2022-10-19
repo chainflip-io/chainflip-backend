@@ -1059,22 +1059,13 @@ impl<T: Config> Pallet<T> {
 
 	fn start_vault_rotation(rotation_state: RuntimeRotationState<T>) {
 		let candidates: BTreeSet<_> = rotation_state.authority_candidates();
-		// TODO: Check if this if condition is necessary. Seems like it could be an
-		// assert instead.
-		let SetSizeParameters { min_size, .. } = AuctionParameters::<T>::get();
-		Self::set_rotation_phase(if (candidates.len() as u32) < min_size {
-			log::warn!(
-				target: "cf-validator",
-				"Only {:?} authority candidates available, not enough to satisfy the minimum set size of {:?}. - aborting rotation.",
-				candidates.len(),
-				min_size
-			);
-			RotationPhase::Idle
-		} else {
-			T::VaultRotator::start_vault_rotation(candidates);
-			log::info!(target: "cf-validator", "Vault rotation initiated.");
-			RotationPhase::VaultsRotating(rotation_state)
+		debug_assert!({
+			let SetSizeParameters { min_size, .. } = AuctionParameters::<T>::get();
+			candidates.len() as u32 >= min_size
 		});
+		T::VaultRotator::start_vault_rotation(candidates);
+		log::info!(target: "cf-validator", "Vault rotation initiated.");
+		Self::set_rotation_phase(RotationPhase::VaultsRotating(rotation_state));
 	}
 
 	/// Returns the number of backup nodes eligible for rewards
