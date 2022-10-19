@@ -24,4 +24,7 @@ benchmarks! {
 	}: {
 		Pallet::<T>::execute_swap(swap);
 	}
+	on_idle {}: {
+		Pallet::<T>::on_idle(T::BlockNumber::from(1u32), 1);
+	}
 }

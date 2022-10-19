@@ -61,10 +61,10 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		// Move swaps into AMM
+		/// Do swapping with remaining weight in this block
 		fn on_idle(_block_number: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
 			// The computational cost for a swap - TODO: Add the real weight values here
-			let swap_weight = 100;
+			let swap_weight = T::WeightInfo::execute_swap();
 			let mut swaps = SwapQueue::<T>::get();
 			// Calculate the capacities we have left for this block
 			let capacity = (remaining_weight / swap_weight) as usize;
@@ -77,7 +77,8 @@ pub mod pallet {
 			}
 			// Write the rest back (potentially and empty vector).
 			SwapQueue::<T>::put(swaps);
-			0
+			// return the weight we used during the execution of this function
+			swap_weight * capacity as u64 + T::WeightInfo::on_idle()
 		}
 	}
 
@@ -88,7 +89,7 @@ pub mod pallet {
 		/// ## Events
 		///
 		/// - [NewSwapIntent](Event::NewSwapIntent)
-		#[pallet::weight(T::WeightInfo::request_swap_intent())]
+		#[pallet::weight(T::WeightInfo::register_swap_intent())]
 		pub fn register_swap_intent(
 			origin: OriginFor<T>,
 			ingress_asset: ForeignChainAsset,
@@ -114,7 +115,7 @@ pub mod pallet {
 	}
 
 	impl<T: Config> Pallet<T> {
-		/// Executes a swap.This includes the whole process of:
+		/// Executes a swap. This includes the whole process of:
 		///
 		/// - Doing the Swap inside the AMM
 		/// - Doing the egress
