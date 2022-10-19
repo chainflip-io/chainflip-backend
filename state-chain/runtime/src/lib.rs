@@ -139,22 +139,6 @@ pub fn native_version() -> NativeVersion {
 	NativeVersion { runtime_version: VERSION, can_author_with: Default::default() }
 }
 
-impl pallet_cf_auction::Config for Runtime {
-	type Event = Event;
-	type BidderProvider = pallet_cf_staking::Pallet<Self>;
-	type WeightInfo = pallet_cf_auction::weights::PalletWeight<Runtime>;
-	type AuctionQualification = (
-		Reputation,
-		pallet_cf_validator::PeerMapping<Self>,
-		SessionKeysRegistered<
-			<Self as frame_system::Config>::AccountId,
-			pallet_session::Pallet<Self>,
-		>,
-		AccountTypes,
-	);
-	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
-}
-
 parameter_types! {
 	pub const MinEpoch: BlockNumber = 1;
 	pub const EmergencyRotationPercentageRange: PercentageRange = PercentageRange {
@@ -170,12 +154,19 @@ impl pallet_cf_validator::Config for Runtime {
 	type EpochTransitionHandler = ChainflipEpochTransitions;
 	type MinEpoch = MinEpoch;
 	type ValidatorWeightInfo = pallet_cf_validator::weights::PalletWeight<Runtime>;
-	type Auctioneer = Auction;
 	type VaultRotator = EthereumVault;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type MissedAuthorshipSlots = chainflip::MissedAuraSlots;
 	type BidderProvider = pallet_cf_staking::Pallet<Self>;
-	type ValidatorQualification = <Self as pallet_cf_auction::Config>::AuctionQualification;
+	type AuctionQualification = (
+		Reputation,
+		pallet_cf_validator::PeerMapping<Self>,
+		SessionKeysRegistered<
+			<Self as frame_system::Config>::AccountId,
+			pallet_session::Pallet<Self>,
+		>,
+		AccountTypes,
+	);
 	type OffenceReporter = Reputation;
 	type EmergencyRotationPercentageRange = EmergencyRotationPercentageRange;
 	type Bonder = Bonder<Runtime>;
@@ -579,7 +570,6 @@ construct_runtime!(
 		AccountTypes: pallet_cf_account_types,
 		TransactionPayment: pallet_transaction_payment,
 		Witnesser: pallet_cf_witnesser,
-		Auction: pallet_cf_auction,
 		Validator: pallet_cf_validator,
 		Session: pallet_session,
 		Historical: session_historical::{Pallet},
@@ -614,7 +604,6 @@ construct_runtime!(
 		AccountTypes: pallet_cf_account_types,
 		TransactionPayment: pallet_transaction_payment,
 		Witnesser: pallet_cf_witnesser,
-		Auction: pallet_cf_auction,
 		Validator: pallet_cf_validator,
 		Session: pallet_session,
 		Historical: session_historical::{Pallet},
@@ -687,7 +676,6 @@ mod benches {
 		[pallet_cf_staking, Staking]
 		[pallet_session, SessionBench::<Runtime>]
 		[pallet_cf_witnesser, Witnesser]
-		[pallet_cf_auction, Auction]
 		[pallet_cf_validator, Validator]
 		[pallet_cf_governance, Governance]
 		[pallet_cf_tokenholder_governance, TokenholderGovernance]
@@ -716,7 +704,6 @@ mod benches {
 		[pallet_cf_staking, Staking]
 		[pallet_session, SessionBench::<Runtime>]
 		[pallet_cf_witnesser, Witnesser]
-		[pallet_cf_auction, Auction]
 		[pallet_cf_validator, Validator]
 		[pallet_cf_governance, Governance]
 		[pallet_cf_tokenholder_governance, TokenholderGovernance]
@@ -754,7 +741,7 @@ impl_runtime_apis! {
 			(vault.public_key.to_pubkey_compressed(), vault.active_from_block.unique_saturated_into())
 		}
 		fn cf_auction_parameters() -> (u32, u32) {
-			let auction_params = Auction::auction_parameters();
+			let auction_params = Validator::auction_parameters();
 			(auction_params.min_size, auction_params.max_size)
 		}
 		fn cf_min_stake() -> u128 {
@@ -854,7 +841,7 @@ impl_runtime_apis! {
 		}
 
 		fn cf_auction_state() -> AuctionState {
-			let auction_params = Auction::auction_parameters();
+			let auction_params = Validator::auction_parameters();
 
 			AuctionState {
 				blocks_per_epoch: Validator::blocks_per_epoch(),

@@ -411,5 +411,18 @@ benchmarks! {
 			),
 		);
 	}
+	set_auction_parameters {
+		let params = SetSizeParameters {
+			min_size: 3,
+			max_size: 150,
+			max_expansion: 15,
+		};
+	}: _(RawOrigin::Root, params)
+	verify {
+		assert_eq!(
+			Pallet::<T>::auction_parameters(),
+			params
+		);
+	}
 
 }

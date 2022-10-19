@@ -94,8 +94,6 @@ impl pallet_session::Config for Test {
 	type WeightInfo = ();
 }
 
-pub struct MockAuctioneer;
-
 pub const AUCTION_WINNERS: [ValidatorId; 5] = [0, 1, 2, 3, 4];
 pub const WINNING_BIDS: [Amount; 5] = [120, 120, 110, 105, 100];
 pub const AUCTION_LOSERS: [ValidatorId; 3] = [5, 6, 7];
@@ -116,29 +114,6 @@ thread_local! {
 	pub static NUMBER_OF_AUCTIONS_ATTEMPTED: RefCell<u8> = RefCell::new(0);
 }
 
-impl MockAuctioneer {
-	pub fn set_next_auction_outcome(behaviour: Result<RuntimeAuctionOutcome<Test>, &'static str>) {
-		NEXT_AUCTION_OUTCOME.with(|cell| {
-			*cell.borrow_mut() = behaviour;
-		});
-	}
-
-	pub fn number_of_auctions_attempted() -> u8 {
-		NUMBER_OF_AUCTIONS_ATTEMPTED.with(|cell| *cell.borrow())
-	}
-}
-
-impl Auctioneer<Test> for MockAuctioneer {
-	type Error = &'static str;
-
-	fn resolve_auction() -> Result<RuntimeAuctionOutcome<Test>, Self::Error> {
-		NUMBER_OF_AUCTIONS_ATTEMPTED.with(|cell| {
-			*cell.borrow_mut() += 1;
-		});
-		NEXT_AUCTION_OUTCOME.with(|cell| cell.borrow().clone())
-	}
-}
-
 impl ValidatorRegistration<ValidatorId> for Test {
 	fn is_registered(_id: &ValidatorId) -> bool {
 		true
@@ -151,8 +126,7 @@ impl EpochTransitionHandler for TestEpochTransitionHandler {
 	type ValidatorId = ValidatorId;
 
 	fn on_new_epoch(_epoch_authorities: &[Self::ValidatorId]) {
-		// Reset the auctioneer to ensure we don't accidentally call it after the epoch has ended.
-		MockAuctioneer::set_next_auction_outcome(Err("MockAuctioneer is not initialised"));
+		// TODO: Look at what makes sense here
 	}
 }
 
@@ -167,6 +141,8 @@ impl QualifyNode for MockQualifyValidator {
 
 thread_local! {
 	pub static MISSED_SLOTS: RefCell<(u64, u64)> = RefCell::new(Default::default());
+
+	pub static BIDDERS: RefCell<Vec<Bid<ValidatorId, Amount>>> = RefCell::new(Default::default());
 }
 
 pub struct MockMissedAuthorshipSlots;
@@ -221,18 +197,30 @@ pub type MockOffenceReporter =
 
 pub struct MockBidderProvider;
 
+impl MockBidderProvider {
+	pub fn set_bids(bids: Vec<Bid<ValidatorId, Amount>>) {
+		BIDDERS.with(|cell| *cell.borrow_mut() = bids);
+	}
+
+	pub fn set_winning_bids() {
+		BIDDERS.with(|cell| {
+			*cell.borrow_mut() = AUCTION_WINNERS
+				.zip(WINNING_BIDS)
+				.into_iter()
+				.chain(AUCTION_LOSERS.zip(LOSING_BIDS))
+				.chain(sp_std::iter::once((UNQUALIFIED_NODE, UNQUALIFIED_NODE_BID)))
+				.map(|(bidder_id, amount)| Bid { bidder_id, amount })
+				.collect()
+		})
+	}
+}
+
 impl BidderProvider for MockBidderProvider {
 	type ValidatorId = ValidatorId;
 	type Amount = Amount;
 
 	fn get_bidders() -> Vec<Bid<Self::ValidatorId, Self::Amount>> {
-		AUCTION_WINNERS
-			.zip(WINNING_BIDS)
-			.into_iter()
-			.chain(AUCTION_LOSERS.zip(LOSING_BIDS))
-			.chain(sp_std::iter::once((UNQUALIFIED_NODE, UNQUALIFIED_NODE_BID)))
-			.map(|(bidder_id, amount)| Bid { bidder_id, amount })
-			.collect()
+		BIDDERS.with(|cell| cell.borrow().clone())
 	}
 }
 
@@ -243,7 +231,6 @@ impl Config for Test {
 	type AccountRoleRegistry = ();
 	type MinEpoch = MinEpoch;
 	type ValidatorWeightInfo = ();
-	type Auctioneer = MockAuctioneer;
 	type VaultRotator = MockVaultRotator;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type MissedAuthorshipSlots = MockMissedAuthorshipSlots;
@@ -252,7 +239,7 @@ impl Config for Test {
 	type EmergencyRotationPercentageRange = EmergencyRotationPercentageRange;
 	type Bonder = MockBonder;
 	type ReputationResetter = MockReputationResetter<Self>;
-	type ValidatorQualification = QualifyAll<ValidatorId>;
+	type AuctionQualification = QualifyAll<ValidatorId>;
 }
 
 /// Session pallet requires a set of validators at genesis.
@@ -309,6 +296,10 @@ impl TestExternalitiesWithCheck {
 	}
 }
 
+pub const MIN_AUTHORITY_SIZE: u32 = 1;
+pub const MAX_AUTHORITY_SIZE: u32 = 5;
+pub const MAX_AUTHORITY_SET_EXPANSION: u32 = 5;
+
 pub(crate) fn new_test_ext() -> TestExternalitiesWithCheck {
 	// Log nothing by default, set RUST_LOG=debug in the environment and use
 	// `cargo test -- --no-capture` to enable debug logs.
@@ -338,6 +329,9 @@ pub(crate) fn new_test_ext() -> TestExternalitiesWithCheck {
 				claim_period_as_percentage: CLAIM_PERCENTAGE_AT_GENESIS,
 				backup_reward_node_percentage: 34,
 				authority_set_min_size: 3,
+				min_size: MIN_AUTHORITY_SIZE,
+				max_size: MAX_AUTHORITY_SIZE,
+				max_expansion: MAX_AUTHORITY_SET_EXPANSION,
 			},
 		}
 		.build_storage()

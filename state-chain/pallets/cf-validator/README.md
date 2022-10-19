@@ -39,6 +39,17 @@ and an Auction session in which we continue with our current validator set and r
 candidates for validation.  Once validated and confirmed become our new set of validators within the
 Epoch session.
 
+## Auctions
+
+This pallet implements the Chainflip Authority selection process. Upon execution of the selection process, a set of Bidders, provided by the [BidderProvider] trait, have their suitability evaluated and a set winners is selected.
+
+The set of Winners is the subset of Bidders which meet the following criteria:
+
+- A status of Online
+- A Staked balance > 0
+- Have registered session keys for both AURA and GRANDPA
+- A Staked balance which is greater than or equal to the 150th valid Bidder's Staked balance
+
 ## Rotations
 
 ![AuthorityRotation-2022-06-23](https://user-images.githubusercontent.com/3168260/175980603-65989945-d928-4f1d-b0a2-8033c7be5259.png)
@@ -70,3 +81,8 @@ code. Advancement through each of the rotation phases is driven by the `on_initi
   a fixed number of blocks set with `set_blocks_for_epoch` and an Auction session which is of an
   undetermined number of blocks.
 - Emergency Rotation: A rotation that is triggered because network liveness has dropped below the liveness threshold.
+- Bidder: An entity that has placed a bid and would hope to be included in the winning set
+- Winners: Those Bidders that have been evaluated and have been included in the winning set
+- Minimum Bid: The minimum bid required to be included in the Winners set
+- Backup Node: A group of bidders who make up a group size of ideally 1/3 of the desired authority set size.  They are expected to act as a reserve in that they are fully functioning nodes that are ready
+  to become an authority during any upcoming rotation.

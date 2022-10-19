@@ -12,13 +12,15 @@ mod tests;
 pub mod weights;
 pub use weights::WeightInfo;
 
+mod auction_resolver;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 mod rotation_state;
 
+pub use auction_resolver::*;
 use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex};
 use cf_traits::{
-	offence_reporting::OffenceReporter, AsyncResult, Auctioneer, Bid, BidderProvider, Bonding,
+	offence_reporting::OffenceReporter, AsyncResult, AuctionOutcome, Bid, BidderProvider, Bonding,
 	Chainflip, EmergencyRotation, EpochInfo, EpochTransitionHandler, ExecutionCondition,
 	HistoricalEpoch, MissedAuthorshipSlots, QualifyNode, ReputationResetter, StakeHandler,
 	SystemStateInfo, VaultRotator,
@@ -141,9 +143,6 @@ pub mod pallet {
 		#[pallet::constant]
 		type MinEpoch: Get<<Self as frame_system::Config>::BlockNumber>;
 
-		/// Resolves auctions.
-		type Auctioneer: Auctioneer<Self>;
-
 		/// The lifecycle of a vault rotation
 		type VaultRotator: VaultRotator<ValidatorId = ValidatorIdOf<Self>>;
 
@@ -160,7 +159,7 @@ pub mod pallet {
 		>;
 
 		/// Criteria that need to be fulfilled to qualify as a validator node (authority or backup).
-		type ValidatorQualification: QualifyNode<ValidatorId = ValidatorIdOf<Self>>;
+		type AuctionQualification: QualifyNode<ValidatorId = ValidatorIdOf<Self>>;
 
 		/// For reporting missed authorship slots.
 		type OffenceReporter: OffenceReporter<
@@ -302,6 +301,11 @@ pub mod pallet {
 	#[pallet::getter(fn authority_set_min_size)]
 	pub type AuthoritySetMinSize<T> = StorageValue<_, u8, ValueQuery>;
 
+	/// Auction parameters.
+	#[pallet::storage]
+	#[pallet::getter(fn auction_parameters)]
+	pub(super) type AuctionParameters<T: Config> = StorageValue<_, SetSizeParameters, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -334,6 +338,10 @@ pub mod pallet {
 		BackupRewardNodePercentageUpdated(Percentage),
 		/// The minimum authority set size has been updated.
 		AuthoritySetMinSizeUpdated { min_size: u8 },
+		/// An auction has a set of winners \[winners, bond\]
+		AuctionCompleted(Vec<ValidatorIdOf<T>>, T::Amount),
+		/// The auction parameters have been changed \[new_parameters\]
+		AuctionParametersChanged(SetSizeParameters),
 	}
 
 	#[pallet::error]
@@ -354,6 +362,12 @@ pub mod pallet {
 		InvalidCharactersInName,
 		/// Invalid minimum authority set size.
 		InvalidAuthoritySetMinSize,
+		/// Auction parameters are invalid.
+		InvalidAuctionParameters,
+		/// The dynamic set size ranges are inconsistent.
+		InconsistentRanges,
+		/// Not enough bidders were available to resolve the auction.
+		NotEnoughBidders,
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -754,6 +768,28 @@ pub mod pallet {
 			Self::deposit_event(Event::AuthoritySetMinSizeUpdated { min_size });
 			Ok(().into())
 		}
+
+		/// Sets the auction parameters.
+		///
+		/// The dispatch origin of this function must be Governance.
+		///
+		/// ## Events
+		///
+		/// - [AuctionParametersChanged](Event::AuctionParametersChanged)
+		///
+		/// ## Errors
+		///
+		/// - [InvalidAuctionParameters](Error::InvalidAuctionParameters)
+		#[pallet::weight(0)]
+		pub fn set_auction_parameters(
+			origin: OriginFor<T>,
+			parameters: SetSizeParameters,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureGovernance::ensure_origin(origin)?;
+			Self::try_update_auction_parameters(parameters)?;
+			Self::deposit_event(Event::AuctionParametersChanged(parameters));
+			Ok(().into())
+		}
 	}
 
 	#[pallet::genesis_config]
@@ -765,6 +801,9 @@ pub mod pallet {
 		pub claim_period_as_percentage: Percentage,
 		pub backup_reward_node_percentage: Percentage,
 		pub authority_set_min_size: u8,
+		pub min_size: u32,
+		pub max_size: u32,
+		pub max_expansion: u32,
 	}
 
 	#[cfg(feature = "std")]
@@ -778,6 +817,9 @@ pub mod pallet {
 				claim_period_as_percentage: Zero::zero(),
 				backup_reward_node_percentage: Zero::zero(),
 				authority_set_min_size: Zero::zero(),
+				min_size: 3,
+				max_size: 15,
+				max_expansion: 5,
 			}
 		}
 	}
@@ -794,6 +836,13 @@ pub mod pallet {
 
 			const GENESIS_EPOCH: u32 = 1;
 			CurrentEpoch::<T>::set(GENESIS_EPOCH);
+
+			Pallet::<T>::try_update_auction_parameters(SetSizeParameters {
+				min_size: self.min_size,
+				max_size: self.max_size,
+				max_expansion: self.max_expansion,
+			})
+			.expect("we should provide valid auction parameters at genesis");
 
 			Pallet::<T>::initialise_new_epoch(
 				GENESIS_EPOCH,
@@ -922,7 +971,7 @@ impl<T: Config> Pallet<T> {
 				.into_iter()
 				.filter(|bid| {
 					!new_authorities_lookup.contains(&bid.bidder_id) &&
-						T::ValidatorQualification::is_qualified(&bid.bidder_id)
+						T::AuctionQualification::is_qualified(&bid.bidder_id)
 				})
 				.map(|Bid { bidder_id, amount }| (bidder_id, amount))
 				.collect(),
@@ -1001,7 +1050,7 @@ impl<T: Config> Pallet<T> {
 			return T::ValidatorWeightInfo::start_authority_rotation_in_maintenance_mode()
 		}
 		log::info!(target: "cf-validator", "Starting rotation");
-		match T::Auctioneer::resolve_auction() {
+		match Self::resolve_auction() {
 			Ok(auction_outcome) => {
 				debug_assert!(!auction_outcome.winners.is_empty());
 				debug_assert!({
@@ -1033,7 +1082,7 @@ impl<T: Config> Pallet<T> {
 				weight
 			},
 			Err(e) => {
-				log::warn!(target: "cf-validator", "auction failed due to error: {:?}", e.into());
+				log::warn!(target: "cf-validator", "auction failed due to error: {:?}", e);
 				// Use an approximation again - see comment above.
 				T::ValidatorWeightInfo::start_authority_rotation({
 					Self::current_authority_count() + Self::backup_reward_nodes_limit() as u32
@@ -1071,7 +1120,7 @@ impl<T: Config> Pallet<T> {
 	) -> impl Iterator<Item = Bid<ValidatorIdOf<T>, <T as Chainflip>::Amount>> {
 		let mut backups: Vec<_> = Backups::<T>::get()
 			.into_iter()
-			.filter(|(bidder_id, _)| T::ValidatorQualification::is_qualified(bidder_id))
+			.filter(|(bidder_id, _)| T::AuctionQualification::is_qualified(bidder_id))
 			.collect();
 
 		let limit = Self::backup_reward_nodes_limit();
@@ -1108,6 +1157,31 @@ impl<T: Config> Pallet<T> {
 		}
 
 		T::ValidatorWeightInfo::missed_authorship_slots(num_missed_slots)
+	}
+
+	fn try_update_auction_parameters(new_parameters: SetSizeParameters) -> Result<(), Error<T>> {
+		let _ = SetSizeMaximisingAuctionResolver::try_new(
+			T::EpochInfo::current_authority_count(),
+			new_parameters,
+		)?;
+		AuctionParameters::<T>::put(new_parameters);
+		Ok(())
+	}
+
+	fn resolve_auction() -> Result<AuctionOutcome<ValidatorIdOf<T>, T::Amount>, Error<T>> {
+		let mut bids = T::BidderProvider::get_bidders();
+		// Determine if this node is qualified for bidding
+		bids.retain(|Bid { bidder_id, .. }| T::AuctionQualification::is_qualified(bidder_id));
+
+		let outcome = SetSizeMaximisingAuctionResolver::try_new(
+			T::EpochInfo::current_authority_count(),
+			AuctionParameters::<T>::get(),
+		)?
+		.resolve_auction(bids)?;
+
+		Self::deposit_event(Event::AuctionCompleted(outcome.winners.clone(), outcome.bond));
+
+		Ok(outcome)
 	}
 }
 
