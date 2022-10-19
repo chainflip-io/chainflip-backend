@@ -1,6 +1,4 @@
-use cf_primitives::{
-	liquidity::TradingPosition, Asset, ExchangeRate, ForeignChainAddress, ForeignChainAsset,
-};
+use cf_primitives::{liquidity::TradingPosition, Asset, ExchangeRate, ForeignChainAsset};
 use cf_traits::liquidity::AmmPoolApi;
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
@@ -67,12 +65,10 @@ impl<Balance: FixedPointOperand + Default> AmmPoolApi for LiquidityPool<Balance>
 	}
 
 	fn swap(
-		ingress_asset: cf_primitives::Asset,
-		egress_asset: ForeignChainAsset,
-		ingress_amount: Self::Balance,
+		_ingress_asset: cf_primitives::Asset,
+		_egress_asset: ForeignChainAsset,
+		_ingress_amount: Self::Balance,
 	) -> Self::Balance {
-		// TODO: Add some implementation here - this is only for the purpose of making the benchmark
-		// pass.
-		Balance::default()
+		todo!()
 	}
 }
