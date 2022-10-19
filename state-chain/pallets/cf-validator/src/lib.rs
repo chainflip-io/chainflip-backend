@@ -926,13 +926,14 @@ impl<T: Config> Pallet<T> {
 			new_epoch,
 			&new_authorities,
 			rotation_state.bond,
-			T::BidderProvider::get_bidders()
-				.into_iter()
-				.filter(|bid| {
-					!new_authorities_lookup.contains(&bid.bidder_id) &&
-						T::AuctionQualification::is_qualified(&bid.bidder_id)
+			Self::qualified_bidders()
+				.filter_map(|Bid { bidder_id, amount }| {
+					if !new_authorities_lookup.contains(&bidder_id) {
+						Some((bidder_id, amount))
+					} else {
+						None
+					}
 				})
-				.map(|Bid { bidder_id, amount }| (bidder_id, amount))
 				.collect(),
 		);
 
@@ -1131,19 +1132,21 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn resolve_auction() -> Result<AuctionOutcome<ValidatorIdOf<T>, T::Amount>, Error<T>> {
-		let mut bids = T::BidderProvider::get_bidders();
-		// Determine if this node is qualified for bidding
-		bids.retain(|Bid { bidder_id, .. }| T::AuctionQualification::is_qualified(bidder_id));
-
 		let outcome = SetSizeMaximisingAuctionResolver::try_new(
 			T::EpochInfo::current_authority_count(),
 			AuctionParameters::<T>::get(),
 		)?
-		.resolve_auction(bids)?;
+		.resolve_auction(Self::qualified_bidders().collect())?;
 
 		Self::deposit_event(Event::AuctionCompleted(outcome.winners.clone(), outcome.bond));
 
 		Ok(outcome)
+	}
+
+	fn qualified_bidders() -> impl Iterator<Item = Bid<ValidatorIdOf<T>, T::Amount>> {
+		T::BidderProvider::get_bidders()
+			.into_iter()
+			.filter(|bid| T::AuctionQualification::is_qualified(&bid.bidder_id))
 	}
 }
 
