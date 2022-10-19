@@ -328,7 +328,6 @@ pub(crate) fn new_test_ext() -> TestExternalitiesWithCheck {
 				bond: GENESIS_BOND,
 				claim_period_as_percentage: CLAIM_PERCENTAGE_AT_GENESIS,
 				backup_reward_node_percentage: 34,
-				authority_set_min_size: 3,
 				min_size: MIN_AUTHORITY_SIZE,
 				max_size: MAX_AUTHORITY_SIZE,
 				max_expansion: MAX_AUTHORITY_SET_EXPANSION,
