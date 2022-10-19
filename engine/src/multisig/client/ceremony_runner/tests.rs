@@ -12,8 +12,8 @@ use crate::{
 				DEFAULT_KEYGEN_SEED, DEFAULT_SIGNING_SEED,
 			},
 			signing::{
-				gen_signing_data_stage1, gen_signing_data_stage4, signing_data::SigningData,
-				signing_stages::AwaitCommitments1, SigningStateCommonInfo,
+				gen_signing_data_stage1, gen_signing_data_stage4, AwaitCommitments1, SigningData,
+				SigningStateCommonInfo,
 			},
 			KeygenResult, PartyIdxMapping,
 		},

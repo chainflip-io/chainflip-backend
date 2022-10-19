@@ -46,16 +46,16 @@ pub use utils::ensure_unsorted;
 pub use helpers::get_key_data_for_test;
 
 #[cfg(test)]
-pub use signing::signing_data::{gen_signing_data_stage1, gen_signing_data_stage4};
+pub use signing::{gen_signing_data_stage1, gen_signing_data_stage4};
 
 #[cfg(test)]
-pub use keygen::keygen_data::{gen_keygen_data_hash_comm1, gen_keygen_data_verify_hash_comm2};
+pub use keygen::{gen_keygen_data_hash_comm1, gen_keygen_data_verify_hash_comm2};
 
 use self::{
 	ceremony_manager::{CeremonyResultSender, KeygenCeremony, SigningCeremony},
 	common::SigningStageName,
 	key_store::KeyStore,
-	signing::signing_data::SigningData,
+	signing::SigningData,
 };
 
 use super::{

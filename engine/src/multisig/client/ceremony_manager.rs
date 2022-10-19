@@ -43,7 +43,7 @@ use crate::multisig::MessageHash;
 use super::{
 	common::{CeremonyStage, KeygenStageName, PreProcessStageDataCheck, SigningStageName},
 	keygen::{HashCommitments1, HashContext, KeygenData},
-	signing::signing_data::SigningData,
+	signing::SigningData,
 	CeremonyRequest, MultisigData, MultisigMessage,
 };
 
@@ -175,7 +175,7 @@ pub fn prepare_signing_request<Crypto: CryptoScheme>(
 
 	// Prepare initial ceremony stage
 	let initial_stage = {
-		use super::signing::{signing_stages::AwaitCommitments1, SigningStateCommonInfo};
+		use super::signing::{AwaitCommitments1, SigningStateCommonInfo};
 
 		let common = CeremonyCommon {
 			ceremony_id,
@@ -533,9 +533,8 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 
 		let r = C::Point::from_scalar(&nonce);
 
-		let sigma = client::signing::signing_detail::generate_schnorr_response::<C>(
-			&key.x_i, key.y, r, nonce, &data.0,
-		);
+		let sigma =
+			client::signing::generate_schnorr_response::<C>(&key.x_i, key.y, r, nonce, &data.0);
 
 		C::build_signature(sigma, r)
 	}

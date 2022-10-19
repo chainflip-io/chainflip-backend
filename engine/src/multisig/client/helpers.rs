@@ -41,7 +41,7 @@ use crate::{
 	p2p::OutgoingMultisigStageMessages,
 };
 
-use signing::signing_data::{LocalSig3, SigningCommitment};
+use signing::{LocalSig3, SigningCommitment};
 
 use keygen::{generate_shares_and_commitment, DKGUnverifiedCommitment};
 
