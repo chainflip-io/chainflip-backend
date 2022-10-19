@@ -71,6 +71,8 @@ impl<Balance: FixedPointOperand + Default> AmmPoolApi for LiquidityPool<Balance>
 		egress_asset: ForeignChainAsset,
 		ingress_amount: Self::Balance,
 	) -> Self::Balance {
-		todo!()
+		// TODO: Add some implementation here - this is only for the purpose of making the benchmark
+		// pass.
+		Balance::default()
 	}
 }
