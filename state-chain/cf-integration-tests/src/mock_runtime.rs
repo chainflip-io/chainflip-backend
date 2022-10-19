@@ -105,8 +105,6 @@ impl ExtBuilder {
 				bond: self.accounts.iter().map(|(_, stake)| *stake).min().unwrap(),
 				claim_period_as_percentage: PERCENT_OF_EPOCH_PERIOD_CLAIMABLE,
 				backup_reward_node_percentage: 34,
-				authority_set_min_size: self.min_authorities as u8,
-				// TODO: Look at deduping this
 				min_size: self.min_authorities,
 				max_size: self.max_authorities,
 				max_expansion: self.max_authorities,

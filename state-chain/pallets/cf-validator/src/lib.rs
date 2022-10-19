@@ -296,11 +296,6 @@ pub mod pallet {
 	#[pallet::getter(fn backup_reward_node_percentage)]
 	pub type BackupRewardNodePercentage<T> = StorageValue<_, Percentage, ValueQuery>;
 
-	/// The absolute minimum number of authority nodes for the next epoch.
-	#[pallet::storage]
-	#[pallet::getter(fn authority_set_min_size)]
-	pub type AuthoritySetMinSize<T> = StorageValue<_, u8, ValueQuery>;
-
 	/// Auction parameters.
 	#[pallet::storage]
 	#[pallet::getter(fn auction_parameters)]
@@ -736,39 +731,6 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Allow governance to set the minimum size of the authority set.
-		///
-		/// The dispatch origin of this function must be governance.
-		///
-		/// ## Events
-		///
-		/// - [BackupRewardNodePercentageUpdated](Event::BackupRewardNodePercentageUpdated)
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_system::error::BadOrigin)
-		/// - [InvalidAuthoritySetSize](Error::InvalidAuthoritySetSize)
-		///
-		/// ## Dependencies
-		///
-		/// - [EnsureGovernance]
-		#[pallet::weight(T::ValidatorWeightInfo::set_authority_set_min_size())]
-		pub fn set_authority_set_min_size(
-			origin: OriginFor<T>,
-			min_size: u8,
-		) -> DispatchResultWithPostInfo {
-			T::EnsureGovernance::ensure_origin(origin)?;
-			ensure!(
-				u32::from(min_size) <= <Self as EpochInfo>::current_authority_count(),
-				Error::<T>::InvalidAuthoritySetMinSize
-			);
-
-			AuthoritySetMinSize::<T>::put(min_size);
-
-			Self::deposit_event(Event::AuthoritySetMinSizeUpdated { min_size });
-			Ok(().into())
-		}
-
 		/// Sets the auction parameters.
 		///
 		/// The dispatch origin of this function must be Governance.
@@ -800,7 +762,6 @@ pub mod pallet {
 		pub bond: T::Amount,
 		pub claim_period_as_percentage: Percentage,
 		pub backup_reward_node_percentage: Percentage,
-		pub authority_set_min_size: u8,
 		pub min_size: u32,
 		pub max_size: u32,
 		pub max_expansion: u32,
@@ -816,7 +777,6 @@ pub mod pallet {
 				bond: Default::default(),
 				claim_period_as_percentage: Zero::zero(),
 				backup_reward_node_percentage: Zero::zero(),
-				authority_set_min_size: Zero::zero(),
 				min_size: 3,
 				max_size: 15,
 				max_expansion: 5,
@@ -829,7 +789,6 @@ pub mod pallet {
 		fn build(&self) {
 			LastExpiredEpoch::<T>::set(Default::default());
 			BlocksPerEpoch::<T>::set(self.blocks_per_epoch);
-			AuthoritySetMinSize::<T>::set(self.authority_set_min_size);
 			CurrentRotationPhase::<T>::set(RotationPhase::Idle);
 			ClaimPeriodAsPercentage::<T>::set(self.claim_period_as_percentage);
 			BackupRewardNodePercentage::<T>::set(self.backup_reward_node_percentage);
@@ -1093,12 +1052,15 @@ impl<T: Config> Pallet<T> {
 
 	fn start_vault_rotation(rotation_state: RuntimeRotationState<T>) {
 		let candidates: BTreeSet<_> = rotation_state.authority_candidates();
-		if candidates.len() < AuthoritySetMinSize::<T>::get().into() {
+		// TODO: Check if this if condition is necessary. Seems like it could be an
+		// assert instead.
+		let SetSizeParameters { min_size, .. } = AuctionParameters::<T>::get();
+		if (candidates.len() as u32) < min_size {
 			log::warn!(
 				target: "cf-validator",
 				"Only {:?} authority candidates available, not enough to satisfy the minimum set size of {:?}. - aborting rotation.",
 				candidates.len(),
-				AuthoritySetMinSize::<T>::get()
+				min_size
 			);
 			Self::set_rotation_phase(RotationPhase::Idle);
 		} else {
@@ -1160,7 +1122,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn try_update_auction_parameters(new_parameters: SetSizeParameters) -> Result<(), Error<T>> {
-		let _ = SetSizeMaximisingAuctionResolver::try_new(
+		SetSizeMaximisingAuctionResolver::try_new(
 			T::EpochInfo::current_authority_count(),
 			new_parameters,
 		)?;
