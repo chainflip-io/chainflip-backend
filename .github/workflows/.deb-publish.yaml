@@ -9,7 +9,6 @@ on:
 env:
   APTLY_VERSION: "1.5.0"
   REGISTRY: "ghcr.io"
-  RUST_IMAGE_NAME: "${{ github.repository }}/rust-base"
   REPO_REGION: "eu-central-1"
   REPO_BUCKET: "apt.aws.chainflip.xyz"
 
@@ -29,40 +28,20 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v2
-      - name: Install dependencies and prepare env
-        run: |
-          sudo apt update
-          sudo apt install -y --no-install-recommends moreutils
-          sudo chown $USER -R /usr/local/bin
-      - name: Install rust toolchain
-        uses: actions-rs/toolchain@v1
+      - name: Download packages
+        uses: actions/download-artifact@v2
         with:
-          toolchain: nightly-2022-08-08
-          default: true
-          target: wasm32-unknown-unknown
-          override: true
-          components: rustfmt, clippy
-      - name: Setup sccache
-        uses: hendrikmuhs/ccache-action@v1.2
-        with:
-          max-size: 32G
-          variant: sccache
-      - name: Install cargo-deb
-        run: cargo install cargo-deb
-      - name: Get date, commit SHA, distribution codename
+          name: chainflip-backend-packages
+          path: packages
+      - name: Get commit SHA, distribution codename
         id: vars
         run: |
           echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
-          echo "::set-output name=date::$(date +'%Y%m%d%H%M')"
           echo "::set-output name=codename::$(lsb_release -c -s)"
-      - name: Build packages
+      - name: Install Aptly and dependencies
         run: |
-          export DEB_REVISION="${{ steps.vars.outputs.date }}~${{ steps.vars.outputs.codename }}"
-          cargo deb --no-strip -p chainflip-engine --deb-revision "${DEB_REVISION}"
-          cargo deb --no-strip -p chainflip-cli --deb-revision "${DEB_REVISION}"
-          cargo deb --no-strip -p chainflip-node --deb-revision "${DEB_REVISION}"
-      - name: Install Aptly
-        run: |
+          sudo apt update
+          sudo apt install -y --no-install-recommends moreutils
           wget https://github.com/aptly-dev/aptly/releases/download/v${APTLY_VERSION}/aptly_${APTLY_VERSION}_amd64.deb -O /tmp/aptly_${APTLY_VERSION}_amd64.deb
           sudo dpkg -i /tmp/aptly_${APTLY_VERSION}_amd64.deb
       - name: Configure AWS credentials using OIDC
@@ -82,16 +61,11 @@ jobs:
           # passphrase: ${{ secrets.PASSPHRASE }} # Empty pass for development
       - name: List keys
         run: gpg -K
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v2
-        with:
-          name: packages-${{ matrix.os }}
-          path: target/debian/*.deb
       - name: Run aptly
         run: |
           export AWS_SDK_LOAD_CONFIG=1
           aptly repo create local
-          aptly repo add local target/debian/*.deb
+          aptly repo add local packages/*.deb
           aptly snapshot create snap from repo local
           aptly publish -gpg-key=${{ steps.import_gpg.outputs.keyid }} -distribution=${{ steps.vars.outputs.codename }} snapshot -force-overwrite snap "s3:chainflip-dev:ci/${{ steps.vars.outputs.sha_short }}/"
           echo "############################"

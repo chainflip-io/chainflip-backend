@@ -79,10 +79,26 @@ jobs:
       - run: |
           cargo ci-test --locked
           sccache --show-stats
-      - name: Upload artifacts
+      - name: Install cargo-deb
+        run: cargo install cargo-deb
+      - name: Get date
+        id: vars
+        run: |
+          echo "::set-output name=date::$(date +'%Y%m%d%H%M')"
+      - name: Build packages
+        run: |
+          cargo deb --no-strip -p chainflip-engine --deb-revision "${{ steps.vars.outputs.date }}"
+          cargo deb --no-strip -p chainflip-cli --deb-revision "${{ steps.vars.outputs.date }}"
+          cargo deb --no-strip -p chainflip-node --deb-revision "${{ steps.vars.outputs.date }}"
+      - name: Upload packages
+        uses: actions/upload-artifact@v2
+        with:
+          name: chainflip-backend-packages
+          path: target/debian/*.deb
+      - name: Upload binary artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: chainflip-backend
+          name: chainflip-backend-bin
           path: |
             ./target/release/chainflip-node
             ./target/release/chainflip-engine
@@ -137,7 +153,7 @@ jobs:
       - name: Download previously built binaries
         uses: actions/download-artifact@v3
         with:
-          name: chainflip-backend
+          name: chainflip-backend-bin
           path: ./target/release
       - name: Setup config and give permissions
         run: |
@@ -218,7 +234,7 @@ jobs:
           path: |
             chainflip-docgen/generated
 
-  deb-build:
+  deb-publish:
     needs: [test-single-node]
-    uses: ./.github/workflows/.deb-build.yaml
+    uses: ./.github/workflows/.deb-publish.yaml
     secrets: inherit
