@@ -54,6 +54,10 @@ pub fn init_bidders<T: RuntimeConfig>(n: u32, set_id: u32, flip_staked: u128) {
 			pallet_cf_staking::ETH_ZERO_ADDRESS,
 			Default::default()
 		));
+		<T as Config>::AccountRoleRegistry::register_account(
+			bidder.clone(),
+			AccountRole::Validator,
+		);
 		assert_ok!(pallet_cf_staking::Pallet::<T>::activate_account(bidder_origin.clone(),));
 
 		let public_key: p2p_crypto::Public = RuntimeAppPublic::generate_pair(None);
@@ -181,7 +185,6 @@ benchmarks! {
 		assert!(MappedPeers::<T>::contains_key(&public_key));
 		assert!(AccountPeerMapping::<T>::contains_key(&caller));
 	}
-
 	set_vanity_name {
 		let caller: T::AccountId = whitelisted_caller();
 		let name = str::repeat("x", 64).as_bytes().to_vec();
@@ -189,7 +192,6 @@ benchmarks! {
 	verify {
 		assert_eq!(VanityNames::<T>::get().get(&caller), Some(&name));
 	}
-
 	expire_epoch {
 		// 3 is the minimum number bidders for a successful auction.
 		let a in 3 .. 150;
@@ -215,7 +217,6 @@ benchmarks! {
 	verify {
 		assert_eq!(LastExpiredEpoch::<T>::get(), EPOCH_TO_EXPIRE);
 	}
-
 	missed_authorship_slots {
 		// Unlikely we will ever miss 10 successive blocks.
 		let m in 1 .. 10;
@@ -403,12 +404,14 @@ benchmarks! {
 		);
 	}
 	set_auction_parameters {
+		let origin = <T as Config>::EnsureGovernance::successful_origin();
 		let params = SetSizeParameters {
 			min_size: 3,
 			max_size: 150,
 			max_expansion: 15,
 		};
-	}: _(RawOrigin::Root, params)
+		let call = Call::<T>::set_auction_parameters{parameters: params};
+	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert_eq!(
 			Pallet::<T>::auction_parameters(),
