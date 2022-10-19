@@ -118,6 +118,11 @@ impl<T: Config> AccountRoleRegistry<T> for Pallet<T> {
 			AccountRole::Relayer => ensure_relayer::<T>(origin),
 		}
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn register_account(account_id: T::AccountId, role: AccountRole) {
+		AccountRoles::<T>::insert(account_id, role);
+	}
 }
 
 impl<T: Config> OnKilledAccount<T::AccountId> for Pallet<T> {
@@ -176,7 +181,7 @@ macro_rules! define_ensure_origin {
 }
 
 define_ensure_origin!(ensure_relayer, EnsureRelayer, AccountRole::Relayer);
-define_ensure_origin!(ensure_validator, EnsureValidator, AccountRole::Validator { .. });
+define_ensure_origin!(ensure_validator, EnsureValidator, AccountRole::Validator);
 define_ensure_origin!(
 	ensure_liquidity_provider,
 	EnsureLiquidityProvider,

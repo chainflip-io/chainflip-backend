@@ -11,6 +11,9 @@ use frame_benchmarking::{account, benchmarks_instance_pallet, whitelisted_caller
 use frame_support::dispatch::UnfilteredDispatchable;
 use frame_system::RawOrigin;
 
+use cf_primitives::AccountRole;
+use cf_traits::AccountRoleRegistry;
+
 // Note: Currently we only have one chain (ETH) - as soon we've
 // another chain we've to take this in account in our weight calculation benchmark.
 
@@ -94,6 +97,7 @@ benchmarks_instance_pallet! {
 	}
 	report_keygen_outcome {
 		let caller: T::AccountId = whitelisted_caller();
+		T::AccountRoleRegistry::register_account(caller.clone(), AccountRole::Validator);
 
 		let keygen_participants = generate_authority_set::<T, I>(150, caller.clone().into());
 		PendingVaultRotation::<T, I>::put(

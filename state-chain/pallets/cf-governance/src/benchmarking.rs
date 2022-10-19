@@ -74,7 +74,7 @@ benchmarks! {
 		};
 
 	} : {
-		call.dispatch_bypass_filter(T::EnsureWitnessed::successful_origin())?;
+		call.dispatch_bypass_filter(T::EnsureWitnessedAtCurrentEpoch::successful_origin())?;
 	}
 	verify {
 		assert_eq!(GovKeyWhitelistedCallHash::<T>::get().unwrap(), call_hash);

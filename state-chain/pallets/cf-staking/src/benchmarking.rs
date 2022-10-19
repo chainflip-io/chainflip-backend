@@ -4,8 +4,13 @@
 use super::*;
 
 use cf_chains::{ApiCall, ChainCrypto, Ethereum};
+use cf_primitives::AccountRole;
+use cf_traits::AccountRoleRegistry;
 use frame_benchmarking::{account, benchmarks, whitelisted_caller};
-use frame_support::{dispatch::UnfilteredDispatchable, traits::OnInitialize};
+use frame_support::{
+	dispatch::UnfilteredDispatchable,
+	traits::{EnsureOrigin, OnInitialize},
+};
 use frame_system::RawOrigin;
 use sp_std::vec::Vec;
 
@@ -17,6 +22,11 @@ fn create_accounts<T: Config>(count: u32) -> Vec<AccountIdOf<T>> {
 }
 
 benchmarks! {
+
+	where_clause {
+		where
+			T: pallet_cf_account_types::Config,
+	}
 
 	staked {
 		let amount: T::Balance = T::Balance::from(100u32);
@@ -153,7 +163,7 @@ benchmarks! {
 	retire_account {
 		let caller: T::AccountId = whitelisted_caller();
 		ActiveBidder::<T>::insert(caller.clone(), true);
-
+		T::AccountRoleRegistry::register_account(caller.clone(), AccountRole::Validator);
 	}:_(RawOrigin::Signed(caller.clone()))
 	verify {
 		assert!(!ActiveBidder::<T>::get(caller));
@@ -162,7 +172,7 @@ benchmarks! {
 	activate_account {
 		let caller: T::AccountId = whitelisted_caller();
 		ActiveBidder::<T>::insert(caller.clone(), false);
-
+		T::AccountRoleRegistry::register_account(caller.clone(), AccountRole::Validator);
 	}:_(RawOrigin::Signed(caller.clone()))
 	verify {
 		assert!(ActiveBidder::<T>::get(caller));
