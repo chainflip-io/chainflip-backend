@@ -18,7 +18,7 @@ jobs:
     #   fail-fast: true
     #   matrix:
     #     os: [ubuntu-20.04, ubuntu-22.04]
-    name: Build and publish packages on self-hosted
+    name: Publish packages to the repository
     #runs-on: ${{ matrix.os }}
     runs-on: self-hosted
     environment: development
@@ -27,17 +27,17 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Download packages
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: chainflip-backend-packages
           path: packages
       - name: Get commit SHA, distribution codename
         id: vars
         run: |
-          echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
-          echo "::set-output name=codename::$(lsb_release -c -s)"
+          echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          echo "codename=$(lsb_release -c -s)" >> $GITHUB_OUTPUT
       - name: Install Aptly and dependencies
         run: |
           sudo apt update
@@ -71,4 +71,4 @@ jobs:
           echo "############################"
           echo "Packages can be installed with the following commands: "
           echo "sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys ${{ steps.import_gpg.outputs.keyid }}"
-          echo "echo \"deb https://${REPO_BUCKET}/ci/${{ steps.vars.outputs.sha_short }}/ ${{ steps.vars.outputs.codename }} main\"  | sudo tee /etc/apt/sources.list.d/chainflip.list"
+          echo "echo \"deb https://user:password@${REPO_BUCKET}/ci/${{ steps.vars.outputs.sha_short }}/ ${{ steps.vars.outputs.codename }} main\"  | sudo tee /etc/apt/sources.list.d/chainflip.list"

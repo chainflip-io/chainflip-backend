@@ -84,12 +84,13 @@ jobs:
       - name: Get date
         id: vars
         run: |
-          echo "::set-output name=date::$(date +'%Y%m%d%H%M')"
+          echo "date=$(date +'%Y%m%d%H%M')" >> $GITHUB_OUTPUT
       - name: Build packages
         run: |
-          cargo deb --no-strip -p chainflip-engine --deb-revision "${{ steps.vars.outputs.date }}"
-          cargo deb --no-strip -p chainflip-cli --deb-revision "${{ steps.vars.outputs.date }}"
-          cargo deb --no-strip -p chainflip-node --deb-revision "${{ steps.vars.outputs.date }}"
+          cargo deb --no-build --no-strip -p chainflip-engine --deb-revision "${{ steps.vars.outputs.date }}"
+          cargo deb --no-build --no-strip -p chainflip-cli --deb-revision "${{ steps.vars.outputs.date }}"
+          cargo deb --no-build --no-strip -p chainflip-node --deb-revision "${{ steps.vars.outputs.date }}"
+          cargo deb --no-build --no-strip -p generate-genesis-keys --deb-revision "${{ steps.vars.outputs.date }}"
       - name: Upload packages
         uses: actions/upload-artifact@v2
         with:

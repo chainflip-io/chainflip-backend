@@ -4,6 +4,15 @@ edition = '2021'
 name = "generate-genesis-keys"
 version = "0.1.0"
 
+[package.metadata.deb]
+depends = "$auto"
+extended-description = """\
+Chainflip Genesis Keys Generator Package"""
+maintainer = "Chainflip UG <dev@chainflip.io>"
+name = "chainflip-generate-genesis-keys"
+priority = "required"
+section = "rust"
+
 [dependencies]
 anyhow = "1.0"
 chainflip-engine = {path = "../../engine/"}

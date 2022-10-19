@@ -97,6 +97,7 @@ ibiza = [
 depends = "$auto"
 extended-description = """\
 Chainflip Node Package"""
+features = ["runtime-benchmarks"]
 maintainer = "Chainflip UG <dev@chainflip.io>"
 name = "chainflip-node"
 priority = "required"
