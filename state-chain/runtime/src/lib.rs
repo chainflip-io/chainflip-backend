@@ -7,6 +7,7 @@ pub mod runtime_apis;
 mod weights;
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
+use pallet_cf_lp::liquidity_pool::LiquidityPool;
 
 use crate::{
 	chainflip::Offence,
@@ -194,6 +195,8 @@ impl pallet_cf_swapping::Config for Runtime {
 	type Ingress = Ingress;
 	type WeightInfo = pallet_cf_swapping::weights::PalletWeight<Runtime>;
 	type AccountRoleRegistry = AccountTypes;
+	type AmmPoolApi = LiquidityPool<Balance>;
+	type Egress = Egress;
 }
 
 impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
@@ -224,6 +227,7 @@ impl pallet_cf_ingress::Config for Runtime {
 	type Event = Event;
 	type AddressDerivation = AddressDerivation;
 	type LpAccountHandler = LiquidityProvider;
+	type SwapIntentHandler = Swapping;
 	type IngressFetchApi = Egress;
 	type WeightInfo = pallet_cf_ingress::weights::PalletWeight<Runtime>;
 }

@@ -1,7 +1,7 @@
 use crate::{self as pallet_cf_lp};
 use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
-	AddressDerivationApi, EgressApi,
+	AddressDerivationApi, EgressApi, SwapIntentHandler,
 };
 use frame_support::{
 	dispatch::DispatchResult, parameter_types, sp_runtime::app_crypto::sp_core::H160,
@@ -34,6 +34,20 @@ impl AddressDerivationApi for MockAddressDerivation {
 				.unwrap()
 				.to_fixed_bytes(),
 		))
+	}
+}
+
+pub struct MockSwapIntentHandler;
+
+impl SwapIntentHandler for MockSwapIntentHandler {
+	fn schedule_swap(
+		from: cf_primitives::Asset,
+		to: ForeignChainAsset,
+		amount: AssetAmount,
+		ingress_address: ForeignChainAddress,
+		egress_address: ForeignChainAddress,
+	) {
+		todo!()
 	}
 }
 
@@ -88,6 +102,7 @@ impl pallet_cf_ingress::Config for Test {
 	type AddressDerivation = MockAddressDerivation;
 	type LpAccountHandler = LiquidityProvider;
 	type IngressFetchApi = ();
+	type SwapIntentHandler = MockSwapIntentHandler;
 	type WeightInfo = ();
 }
 

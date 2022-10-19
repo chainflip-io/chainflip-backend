@@ -11,6 +11,7 @@ use cf_primitives::{
 };
 use cf_traits::{liquidity::LpProvisioningApi, AddressDerivationApi, IngressApi, IngressFetchApi};
 
+use cf_traits::SwapIntentHandler;
 use frame_support::{
 	pallet_prelude::DispatchResult,
 	sp_runtime::{app_crypto::sp_core, DispatchError},
@@ -30,7 +31,7 @@ pub mod pallet {
 
 	use super::*;
 	use cf_primitives::Asset;
-	use cf_traits::IngressFetchApi;
+	use cf_traits::{IngressFetchApi, SwapIntentHandler};
 	use frame_support::{
 		pallet_prelude::{DispatchResultWithPostInfo, OptionQuery, ValueQuery, *},
 		traits::{EnsureOrigin, IsType},
@@ -101,6 +102,8 @@ pub mod pallet {
 		type LpAccountHandler: LpProvisioningApi<AccountId = Self::AccountId, Amount = AssetAmount>;
 		/// For scheduling fetch requests.
 		type IngressFetchApi: IngressFetchApi;
+		/// For scheduling swaps.
+		type SwapIntentHandler: SwapIntentHandler;
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;
 	}
@@ -169,9 +172,16 @@ impl<T: Config> Pallet<T> {
 			IntentAction::LiquidityProvision { lp_account, .. } => {
 				T::LpAccountHandler::provision_account(&lp_account, asset, amount)?;
 			},
-			IntentAction::Swap { .. } => todo!(),
+			IntentAction::Swap { egress_address, egress_asset, .. } => {
+				T::SwapIntentHandler::schedule_swap(
+					asset,
+					egress_asset,
+					amount,
+					ingress_address,
+					egress_address,
+				);
+			},
 		}
-
 		Self::deposit_event(Event::IngressCompleted { ingress_address, asset, amount, tx_hash });
 		Ok(())
 	}

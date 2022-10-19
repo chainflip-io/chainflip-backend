@@ -1,8 +1,10 @@
-# Chainflip Relayer Pallet
+# Chainflip Swapping Pallet
 
-A module to manage the interaction with Relayers.
+A module to manage swapping.
 
 ## Overview
+
+TODO: Add more description about swapping
 
 The design of the Chainflip network requires the role of a Relayer to make it possible to interact with Chainflip without the need for specialized wallet software. To achieve this we need a pallet with which a Relayer can interact to fulfill his role and kick off the ingress process for witnessing incoming transactions to a vault for the CFE and make it possible to swap assets.
 

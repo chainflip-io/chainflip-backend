@@ -1,18 +1,22 @@
 use crate::{self as pallet_cf_swapping};
-use cf_primitives::{ForeignChainAddress, ForeignChainAsset};
-use cf_traits::IngressApi;
+use cf_primitives::{AssetAmount, ForeignChainAddress, ForeignChainAsset};
+use cf_traits::{
+	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
+	AmmPoolApi, Chainflip, EgressApi, IngressApi,
+};
 use frame_support::parameter_types;
 use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
-	BuildStorage,
+	BuildStorage, DispatchResult,
 };
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 type AccountId = u64;
+type Balance = u128;
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
@@ -80,10 +84,82 @@ impl IngressApi for MockIngress {
 	}
 }
 
+pub struct MockEgressApi;
+impl EgressApi for MockEgressApi {
+	fn schedule_egress(
+		foreign_asset: ForeignChainAsset,
+		amount: AssetAmount,
+		egress_address: ForeignChainAddress,
+	) -> DispatchResult {
+		Ok(())
+	}
+
+	fn is_egress_valid(
+		_foreign_asset: &ForeignChainAsset,
+		_egress_address: &ForeignChainAddress,
+	) -> bool {
+		true
+	}
+}
+
+pub struct MockAmmPoolApi;
+
+impl AmmPoolApi for MockAmmPoolApi {
+	type Balance = Balance;
+
+	fn asset_0(&self) -> cf_primitives::Asset {
+		todo!()
+	}
+
+	fn asset_1(&self) -> cf_primitives::Asset {
+		todo!()
+	}
+
+	fn liquidity_0(&self) -> Self::Balance {
+		todo!()
+	}
+
+	fn liquidity_1(&self) -> Self::Balance {
+		todo!()
+	}
+
+	fn get_exchange_rate(&self) -> cf_primitives::ExchangeRate {
+		todo!()
+	}
+
+	fn get_liquidity_requirement(
+		&self,
+		position: &cf_primitives::TradingPosition<Self::Balance>,
+	) -> Option<(Self::Balance, Self::Balance)> {
+		todo!()
+	}
+
+	fn swap(
+		ingress_asset: cf_primitives::Asset,
+		egress_asset: ForeignChainAsset,
+		ingress_amount: Self::Balance,
+	) -> Self::Balance {
+		todo!()
+	}
+}
+
+impl Chainflip for Test {
+	type KeyId = Vec<u8>;
+	type ValidatorId = u64;
+	type Amount = u128;
+	type Call = Call;
+	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
+	type EnsureWitnessedAtCurrentEpoch = NeverFailingOriginCheck<Self>;
+	type EpochInfo = cf_traits::mocks::epoch_info::MockEpochInfo;
+	type SystemState = MockSystemStateInfo;
+}
+
 impl pallet_cf_swapping::Config for Test {
 	type Event = Event;
 	type Ingress = MockIngress;
 	type AccountRoleRegistry = ();
+	type Egress = MockEgressApi;
+	type AmmPoolApi = MockAmmPoolApi;
 	type WeightInfo = ();
 }
 
