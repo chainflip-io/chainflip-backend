@@ -712,21 +712,16 @@ impl TryFrom<Vec<u8>> for PolkadotPublicKey {
 	type Error = ();
 
 	fn try_from(data: Vec<u8>) -> Result<Self, Self::Error> {
-		if data.len() != 32 {
-			return Err(())
-		}
-		let mut r = [0u8; 32];
-		r.copy_from_slice(&data[..]);
-		Ok(Self(sr25519::Public::unchecked_from(r)))
+		data.as_slice().try_into().map(Self)
 	}
 }
 
-#[allow(clippy::from_over_into)]
-impl Into<Vec<u8>> for PolkadotPublicKey {
-	fn into(self) -> Vec<u8> {
-		self.0 .0.to_vec()
+impl From<PolkadotPublicKey> for Vec<u8> {
+	fn from(k: PolkadotPublicKey) -> Self {
+		k.0.to_vec()
 	}
 }
+
 #[derive(TypeInfo, Clone, Copy, Debug, Eq, PartialEq, Encode, Decode, Default)]
 pub struct PolkadotEmptyType(pub Option<()>);
 
