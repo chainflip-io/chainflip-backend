@@ -4,7 +4,7 @@ use cf_traits::{liquidity::AmmPoolApi, IngressApi};
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
-use sp_std::vec::Vec;
+use sp_std::{cmp, vec::Vec};
 
 #[cfg(test)]
 mod mock;
@@ -63,22 +63,23 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		/// Do swapping with remaining weight in this block
 		fn on_idle(_block_number: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
-			// The computational cost for a swap - TODO: Add the real weight values here
+			// The computational cost for a swap.
 			let swap_weight = T::WeightInfo::execute_swap();
 			let mut swaps = SwapQueue::<T>::get();
-			// Calculate the capacities we have left for this block
-			let capacity = (remaining_weight / swap_weight) as usize;
-			// Split the array in what we can process during this block and the rest. If we could do
-			// more we just process all.
-			let cut_off = if (swaps.len() as usize) < capacity { swaps.len() } else { capacity };
-			let left_swaps = swaps.split_off(cut_off);
+			// We split the array in what we can process during this block and the rest. If we could
+			// do more we just process all. We calculate the index based on the available weight and
+			// the weight we need for performing a single swap.
+			let left_swaps = swaps.split_off(cmp::min(
+				swaps.len(),
+				(remaining_weight.saturating_div(swap_weight)) as usize,
+			));
 			for swap in swaps.iter() {
 				Self::execute_swap(*swap);
 			}
-			// Write the rest back (potentially and empty vector).
+			// Write the rest back (potentially an empty vector).
 			SwapQueue::<T>::put(left_swaps);
-			// return the weight we used during the execution of this function
-			swap_weight * capacity as u64 + T::WeightInfo::on_idle()
+			// return the weight we used during the execution of this function.
+			swap_weight * swaps.len() as u64 + T::WeightInfo::on_idle()
 		}
 	}
 
@@ -100,7 +101,7 @@ pub mod pallet {
 			T::AccountRoleRegistry::ensure_relayer(origin)?;
 
 			// TODO: ensure egress address chain matches egress asset chain
-			//   (or consider if we can merge both into one struct / derive one from the other)
+			// (or consider if we can merge both into one struct / derive one from the other)
 			let (intent_id, ingress_address) = T::Ingress::register_swap_intent(
 				ingress_asset,
 				egress_asset,
