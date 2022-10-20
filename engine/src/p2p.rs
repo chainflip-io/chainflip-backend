@@ -10,7 +10,7 @@ use std::{
 
 use crate::{
 	common::read_clean_and_decode_hex_str_file,
-	multisig::{eth::EthSigning, CryptoScheme},
+	multisig::{eth::EthSigning, polkadot::PolkadotSigning, CryptoScheme},
 	settings::P2P as P2PSettings,
 };
 
@@ -67,6 +67,8 @@ pub async fn start(
 ) -> anyhow::Result<(
 	MultisigMessageSender<EthSigning>,
 	MultisigMessageReceiver<EthSigning>,
+	MultisigMessageSender<PolkadotSigning>,
+	MultisigMessageReceiver<PolkadotSigning>,
 	UnboundedSender<PeerUpdate>,
 	impl Future<Output = anyhow::Result<()>>,
 )> {
@@ -103,8 +105,13 @@ pub async fn start(
 		p2p_fut,
 	) = core::start(&node_key, settings.port, current_peers, our_account_id, logger);
 
-	let (eth_outgoing_sender, eth_incoming_receiver, muxer_future) =
-		P2PMuxer::start(incoming_message_receiver, outgoing_message_sender, logger);
+	let (
+		eth_outgoing_sender,
+		eth_incoming_receiver,
+		dot_outgoing_sender,
+		dot_incoming_receiver,
+		muxer_future,
+	) = P2PMuxer::start(incoming_message_receiver, outgoing_message_sender, logger);
 
 	let logger = logger.clone();
 
@@ -135,5 +142,12 @@ pub async fn start(
 		.boxed()
 	});
 
-	Ok((eth_outgoing_sender, eth_incoming_receiver, peer_update_sender, fut))
+	Ok((
+		eth_outgoing_sender,
+		eth_incoming_receiver,
+		dot_outgoing_sender,
+		dot_incoming_receiver,
+		peer_update_sender,
+		fut,
+	))
 }

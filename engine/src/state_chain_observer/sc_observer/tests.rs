@@ -147,7 +147,8 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_current_authority_o
 	let state_chain_client =
 		Arc::new(StateChainClient::create_test_sc_client(mock_state_chain_rpc_client));
 
-	let multisig_client = Arc::new(MockMultisigClientApi::new());
+	let eth_multisig_client = Arc::new(MockMultisigClientApi::new());
+	let dot_multisig_client = Arc::new(MockMultisigClientApi::new());
 
 	// No blocks in the stream
 	let sc_block_stream = tokio_stream::iter(vec![]);
@@ -179,7 +180,8 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_current_authority_o
 		state_chain_client,
 		sc_block_stream,
 		eth_broadcaster,
-		multisig_client,
+		eth_multisig_client,
+		dot_multisig_client,
 		account_peer_mapping_change_sender,
 		epoch_start_sender,
 		#[cfg(feature = "ibiza")]
@@ -224,7 +226,8 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_historic_on_startup
 
 	let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
 
-	let multisig_client = Arc::new(MockMultisigClientApi::new());
+	let eth_multisig_client = Arc::new(MockMultisigClientApi::new());
+	let dot_multisig_client = Arc::new(MockMultisigClientApi::new());
 
 	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
@@ -247,7 +250,8 @@ async fn sends_initial_extrinsics_and_starts_witnessing_when_historic_on_startup
 		state_chain_client,
 		sc_block_stream,
 		eth_broadcaster,
-		multisig_client,
+		eth_multisig_client,
+		dot_multisig_client,
 		account_peer_mapping_change_sender,
 		epoch_start_sender,
 		#[cfg(feature = "ibiza")]
@@ -286,7 +290,8 @@ async fn sends_initial_extrinsics_when_not_historic_on_startup() {
 
 	let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
 
-	let multisig_client = Arc::new(MockMultisigClientApi::new());
+	let eth_multisig_client = Arc::new(MockMultisigClientApi::new());
+	let dot_multisig_client = Arc::new(MockMultisigClientApi::new());
 
 	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
@@ -308,7 +313,8 @@ async fn sends_initial_extrinsics_when_not_historic_on_startup() {
 		state_chain_client,
 		sc_block_stream,
 		eth_broadcaster,
-		multisig_client,
+		eth_multisig_client,
+		dot_multisig_client,
 		account_peer_mapping_change_sender,
 		epoch_start_sender,
 		#[cfg(feature = "ibiza")]
@@ -337,7 +343,8 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
 
 	let eth_broadcaster = EthBroadcaster::new_test(MockEthRpcApi::new(), &logger);
 
-	let multisig_client = Arc::new(MockMultisigClientApi::new());
+	let eth_multisig_client = Arc::new(MockMultisigClientApi::new());
+	let dot_multisig_client = Arc::new(MockMultisigClientApi::new());
 
 	// === FAKE BLOCKHEADERS ===
 	// two empty blocks in the stream
@@ -446,7 +453,8 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
 		state_chain_client,
 		sc_block_stream,
 		eth_broadcaster,
-		multisig_client,
+		eth_multisig_client,
+		dot_multisig_client,
 		account_peer_mapping_change_sender,
 		epoch_start_sender,
 		#[cfg(feature = "ibiza")]
@@ -487,7 +495,8 @@ async fn not_historical_to_authority_on_new_epoch() {
 
 	let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
 
-	let multisig_client = Arc::new(MockMultisigClientApi::new());
+	let eth_multisig_client = Arc::new(MockMultisigClientApi::new());
+	let dot_multisig_client = Arc::new(MockMultisigClientApi::new());
 
 	// === FAKE BLOCKHEADERS ===
 	// two empty blocks in the stream
@@ -598,7 +607,8 @@ async fn not_historical_to_authority_on_new_epoch() {
 		state_chain_client,
 		sc_block_stream,
 		eth_broadcaster,
-		multisig_client,
+		eth_multisig_client,
+		dot_multisig_client,
 		account_peer_mapping_change_sender,
 		epoch_start_sender,
 		#[cfg(feature = "ibiza")]
@@ -729,7 +739,8 @@ async fn current_authority_to_historical_on_new_epoch_event() {
 
 	let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
 
-	let multisig_client = Arc::new(MockMultisigClientApi::new());
+	let eth_multisig_client = Arc::new(MockMultisigClientApi::new());
+	let dot_multisig_client = Arc::new(MockMultisigClientApi::new());
 
 	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
@@ -752,7 +763,8 @@ async fn current_authority_to_historical_on_new_epoch_event() {
 		state_chain_client,
 		sc_block_stream,
 		eth_broadcaster,
-		multisig_client,
+		eth_multisig_client,
+		dot_multisig_client,
 		account_peer_mapping_change_sender,
 		epoch_start_sender,
 		#[cfg(feature = "ibiza")]
@@ -879,7 +891,8 @@ async fn only_encodes_and_signs_when_specified() {
 
 	let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
 
-	let multisig_client = Arc::new(MockMultisigClientApi::new());
+	let eth_multisig_client = Arc::new(MockMultisigClientApi::new());
+	let dot_multisig_client = Arc::new(MockMultisigClientApi::new());
 
 	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
@@ -902,7 +915,8 @@ async fn only_encodes_and_signs_when_specified() {
 		state_chain_client,
 		sc_block_stream,
 		eth_broadcaster,
-		multisig_client,
+		eth_multisig_client,
+		dot_multisig_client,
 		account_peer_mapping_change_sender,
 		epoch_start_sender,
 		#[cfg(feature = "ibiza")]
@@ -947,7 +961,8 @@ async fn run_the_sc_observer() {
 	let eth_broadcaster =
 		EthBroadcaster::new(&settings.eth, eth_ws_rpc_client.clone(), &logger).unwrap();
 
-	let multisig_client = Arc::new(MockMultisigClientApi::new());
+	let eth_multisig_client = Arc::new(MockMultisigClientApi::new());
+	let dot_multisig_client = Arc::new(MockMultisigClientApi::new());
 
 	let (epoch_start_sender, _) = broadcast::channel(10);
 
@@ -967,7 +982,8 @@ async fn run_the_sc_observer() {
 		state_chain_client,
 		block_stream,
 		eth_broadcaster,
-		multisig_client,
+		eth_multisig_client,
+		dot_multisig_client,
 		account_peer_mapping_change_sender,
 		epoch_start_sender,
 		#[cfg(feature = "ibiza")]

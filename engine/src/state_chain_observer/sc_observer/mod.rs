@@ -24,6 +24,8 @@ use crate::{
 	logging::COMPONENT_KEY,
 	multisig::{
 		client::{KeygenFailureReason, MultisigClientApi},
+		eth::EthSigning,
+		polkadot::PolkadotSigning,
 		KeyId, MessageHash,
 	},
 	p2p::{PeerInfo, PeerUpdate},
@@ -42,7 +44,7 @@ async fn handle_keygen_request<'a, MultisigClient, RpcClient>(
 	keygen_participants: BTreeSet<AccountId32>,
 	logger: slog::Logger,
 ) where
-	MultisigClient: MultisigClientApi<crate::multisig::eth::EthSigning> + Send + Sync + 'static,
+	MultisigClient: MultisigClientApi<EthSigning> + Send + Sync + 'static,
 	RpcClient: StateChainRpcApi + Send + Sync + 'static,
 {
 	if keygen_participants.contains(&state_chain_client.our_account_id) {
@@ -89,7 +91,7 @@ async fn handle_signing_request<'a, MultisigClient, RpcClient>(
 	data: MessageHash,
 	logger: slog::Logger,
 ) where
-	MultisigClient: MultisigClientApi<crate::multisig::eth::EthSigning> + Send + Sync + 'static,
+	MultisigClient: MultisigClientApi<EthSigning> + Send + Sync + 'static,
 	RpcClient: StateChainRpcApi + Send + Sync + 'static,
 {
 	if signers.contains(&state_chain_client.our_account_id) {
@@ -159,11 +161,12 @@ macro_rules! match_event {
     }}
 }
 
-pub async fn start<BlockStream, RpcClient, EthRpc, MultisigClient>(
+pub async fn start<BlockStream, RpcClient, EthRpc, EthMultisigClient, PolkadotMultisigClient>(
 	state_chain_client: Arc<StateChainClient<RpcClient>>,
 	sc_block_stream: BlockStream,
 	eth_broadcaster: EthBroadcaster<EthRpc>,
-	multisig_client: Arc<MultisigClient>,
+	eth_multisig_client: Arc<EthMultisigClient>,
+	_dot_multisig_client: Arc<PolkadotMultisigClient>,
 	peer_update_sender: UnboundedSender<PeerUpdate>,
 	epoch_start_sender: broadcast::Sender<EpochStart>,
 	#[cfg(feature = "ibiza")] eth_monitor_ingress_sender: tokio::sync::mpsc::UnboundedSender<H160>,
@@ -181,7 +184,8 @@ where
 	BlockStream: Stream<Item = anyhow::Result<state_chain_runtime::Header>> + Send + 'static,
 	RpcClient: StateChainRpcApi + Send + Sync + 'static,
 	EthRpc: EthRpcApi + Send + Sync + 'static,
-	MultisigClient: MultisigClientApi<crate::multisig::eth::EthSigning> + Send + Sync + 'static,
+	EthMultisigClient: MultisigClientApi<EthSigning> + Send + Sync + 'static,
+	PolkadotMultisigClient: MultisigClientApi<PolkadotSigning> + Send + Sync + 'static,
 {
 	with_task_scope(|scope| async {
         let logger = logger.new(o!(COMPONENT_KEY => "SCObserver"));
@@ -324,7 +328,7 @@ where
                                             ) => {
                                                 handle_keygen_request(
                                                     scope,
-                                                    multisig_client.clone(),
+                                                    eth_multisig_client.clone(),
                                                     state_chain_client.clone(),
                                                     ceremony_id,
                                                     keygen_participants,
@@ -341,7 +345,7 @@ where
                                             ) => {
                                                 handle_signing_request(
                                                         scope,
-                                                    multisig_client.clone(),
+                                                        eth_multisig_client.clone(),
                                                     state_chain_client.clone(),
                                                     ceremony_id,
                                                     KeyId(key_id),

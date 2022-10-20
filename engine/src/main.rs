@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::multisig::eth::EthSigning;
+use crate::multisig::{eth::EthSigning, polkadot::PolkadotSigning};
 use anyhow::Context;
 
 use chainflip_engine::{
@@ -110,12 +110,12 @@ fn main() -> anyhow::Result<()> {
             let key_manager_contract =
                 KeyManager::new(key_manager_address.into());
 
-            let latest_ceremony_id = state_chain_client
+            let eth_latest_ceremony_id = state_chain_client
             .get_storage_value::<pallet_cf_validator::CeremonyIdCounter<state_chain_runtime::Runtime>>(
                 latest_block_hash,
             )
             .await
-            .context("Failed to get CeremonyIdCounter from SC")?;
+            .context("Failed to get ETH CeremonyIdCounter from SC")?;
 
             let db = Arc::new(
                 PersistentKeyDB::new_and_migrate_to_latest(
@@ -129,6 +129,8 @@ fn main() -> anyhow::Result<()> {
             let (
                 eth_outgoing_sender,
                 eth_incoming_receiver,
+                dot_outgoing_sender,
+                dot_incoming_receiver,
                 peer_update_sender,
                 p2p_fut,
             ) = p2p::start(state_chain_client.clone(), settings.node_p2p, latest_block_hash, &root_logger).await.context("Failed to start p2p module")?;
@@ -138,15 +140,29 @@ fn main() -> anyhow::Result<()> {
             let (eth_multisig_client, eth_multisig_client_backend_future) =
                 multisig::start_client::<EthSigning>(
                     state_chain_client.our_account_id.clone(),
-                    KeyStore::new(db),
+                    KeyStore::new(db.clone()),
                     eth_incoming_receiver,
                     eth_outgoing_sender,
-                    latest_ceremony_id,
+                    eth_latest_ceremony_id,
                     &root_logger,
                 );
 
             scope.spawn(
                 eth_multisig_client_backend_future
+            );
+
+            let (dot_multisig_client, dot_multisig_client_backend_future) =
+                multisig::start_client::<PolkadotSigning>(
+                    state_chain_client.our_account_id.clone(),
+                    KeyStore::new(db),
+                    dot_incoming_receiver,
+                    dot_outgoing_sender,
+                    0, // TODO: get dot_latest_ceremony_id from SC
+                    &root_logger,
+                );
+
+            scope.spawn(
+                dot_multisig_client_backend_future
             );
 
             // Start eth witnessers
@@ -193,6 +209,7 @@ fn main() -> anyhow::Result<()> {
                 state_chain_block_stream,
                 eth_broadcaster,
                 eth_multisig_client,
+                dot_multisig_client,
                 peer_update_sender,
                 epoch_start_sender,
                 #[cfg(feature = "ibiza")] eth_monitor_ingress_sender,
