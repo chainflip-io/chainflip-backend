@@ -77,5 +77,14 @@ jobs:
           echo "sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys ${{ steps.import_gpg.outputs.keyid }}" >> $GITHUB_STEP_SUMMARY
           echo "echo \"deb https://{user}:{password}@${REPO_BUCKET}/ci/${{ steps.vars.outputs.sha_short }}/ ${{ steps.vars.outputs.codename }} main\"  | sudo tee /etc/apt/sources.list.d/chainflip.list" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "You can find the basic auth credentials in 1Password under \`apt repo basic auth\` secret" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "After these steps, run *apt update* and install the desired packages" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "apt update" >> $GITHUB_STEP_SUMMARY
+          echo "apt install chainflip-cli" >> $GITHUB_STEP_SUMMARY
+          echo "apt install chainflip-node" >> $GITHUB_STEP_SUMMARY
+          echo "apt install chainflip-engine" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "### Usage in \`testnet-tools\`" >> $GITHUB_STEP_SUMMARY
+          echo "Use the full commit hash: \`$GITHUB_SHA\` for your network configuration. " >> $GITHUB_STEP_SUMMARY
