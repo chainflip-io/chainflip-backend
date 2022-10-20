@@ -60,6 +60,17 @@ impl SetAggKeyWithAggKey {
 			],
 		)
 	}
+
+	fn abi_encoded(&self) -> Vec<u8> {
+		self.get_function()
+			.encode_input(&[self.sig_data.tokenize(), self.new_key.tokenize()])
+			.expect(
+				r#"
+						This can only fail if the parameter types don't match the function signature encoded below.
+						Therefore, as long as the tests pass, it can't fail at runtime.
+					"#,
+			)
+	}
 }
 
 impl ApiCall<Ethereum> for SetAggKeyWithAggKey {
@@ -72,15 +83,8 @@ impl ApiCall<Ethereum> for SetAggKeyWithAggKey {
 		self
 	}
 
-	fn abi_encoded(&self) -> <Ethereum as ChainAbi>::SignedTransaction {
-		self.get_function()
-			.encode_input(&[self.sig_data.tokenize(), self.new_key.tokenize()])
-			.expect(
-				r#"
-						This can only fail if the parameter types don't match the function signature encoded below.
-						Therefore, as long as the tests pass, it can't fail at runtime.
-					"#,
-			)
+	fn chain_encoded(&self) -> <Ethereum as ChainAbi>::SignedTransaction {
+		self.abi_encoded()
 	}
 
 	fn is_signed(&self) -> bool {
@@ -173,7 +177,7 @@ mod test_set_agg_key_with_agg_key {
 				s: FAKE_SIG,
 				k_times_g_address: FAKE_NONCE_TIMES_G_ADDR,
 			})
-			.abi_encoded();
+			.chain_encoded();
 		// Ensure signing payload isn't modified by signature.
 		assert_eq!(set_agg_key_runtime.threshold_signature_payload(), expected_msg_hash);
 

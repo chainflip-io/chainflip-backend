@@ -18,6 +18,8 @@ use sp_std::{
 
 pub mod benchmarking_value;
 
+#[cfg(feature = "ibiza")]
+pub mod dot;
 pub mod eth;
 
 /// A trait representing all the types and constants that need to be implemented for supported
@@ -106,8 +108,8 @@ pub trait ApiCall<Abi: ChainAbi>: Parameter {
 	/// Add the threshold signature to the api call.
 	fn signed(self, threshold_signature: &<Abi as ChainCrypto>::ThresholdSignature) -> Self;
 
-	/// The call, encoded as a vector of bytes using the chain's native encoding.
-	fn abi_encoded(&self) -> Vec<u8>;
+	/// The call, encoded according to the chain's native encoding.
+	fn chain_encoded(&self) -> <Abi as ChainAbi>::SignedTransaction;
 
 	/// Checks we have updated the sig data to non-default values.
 	fn is_signed(&self) -> bool;
@@ -382,16 +384,24 @@ pub mod mocks {
 	}
 
 	#[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
-	pub struct MockApiCall<C: ChainCrypto>(C::Payload, Option<C::ThresholdSignature>);
+	pub struct MockApiCall<C: ChainAbi>(
+		C::Payload,
+		Option<C::ThresholdSignature>,
+		Option<<C as ChainAbi>::SignedTransaction>,
+	);
 
 	#[cfg(feature = "runtime-benchmarks")]
-	impl<C: ChainCrypto> BenchmarkValue for MockApiCall<C> {
+	impl<C: ChainCrypto + ChainAbi> BenchmarkValue for MockApiCall<C> {
 		fn benchmark_value() -> Self {
-			Self(C::Payload::benchmark_value(), Some(C::ThresholdSignature::benchmark_value()))
+			Self(
+				C::Payload::benchmark_value(),
+				Some(C::ThresholdSignature::benchmark_value()),
+				Some(<C as ChainAbi>::SignedTransaction::benchmark_value()),
+			)
 		}
 	}
 
-	impl<C: ChainCrypto> MaxEncodedLen for MockApiCall<C> {
+	impl<C: ChainAbi> MaxEncodedLen for MockApiCall<C> {
 		fn max_encoded_len() -> usize {
 			<[u8; 32]>::max_encoded_len() * 3
 		}
@@ -403,11 +413,11 @@ pub mod mocks {
 		}
 
 		fn signed(self, threshold_signature: &<C as ChainCrypto>::ThresholdSignature) -> Self {
-			Self(self.0, Some(threshold_signature.clone()))
+			Self(self.0, Some(threshold_signature.clone()), self.2)
 		}
 
-		fn abi_encoded(&self) -> Vec<u8> {
-			self.encode()
+		fn chain_encoded(&self) -> <C as ChainAbi>::SignedTransaction {
+			self.2.clone().unwrap()
 		}
 
 		fn is_signed(&self) -> bool {
