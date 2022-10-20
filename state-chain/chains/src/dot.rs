@@ -117,11 +117,11 @@ impl ChainCrypto for Polkadot {
 }
 
 impl ChainAbi for Polkadot {
-	type UnsignedTransaction = ();
+	type UnsignedTransaction = PolkadotTransactionData;
 	type SignedTransaction = Vec<u8>;
 	// Not needed in Polkadot since we can sign natively with the AggKey.
 	type SignerCredential = ();
-	type ReplayProtection = (); //Todo
+	type ReplayProtection = PolkadotReplayProtection;
 	type ValidationError = ();
 
 	// This function is not needed in Polkadot.
@@ -132,6 +132,12 @@ impl ChainAbi for Polkadot {
 	) -> Result<Self::TransactionHash, Self::ValidationError> {
 		Err(())
 	}
+}
+
+#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]
+pub struct PolkadotTransactionData {
+	pub chain: NetworkChoice,
+	pub encoded_extrinsic: Vec<u8>,
 }
 
 /// The handler for creating and signing polkadot extrinsics, and creating signature payload
@@ -184,8 +190,8 @@ impl PolkadotExtrinsicHandler {
 			(),
 			self.replay_protection.chain_data.spec_version,
 			self.replay_protection.chain_data.transaction_version,
-			H256::from_str(&self.replay_protection.chain_data.genesis_hash).unwrap(),
-			H256::from_str(&self.replay_protection.chain_data.genesis_hash).unwrap(),
+			self.replay_protection.chain_data.genesis_hash,
+			self.replay_protection.chain_data.genesis_hash,
 			(),
 			(),
 			(),
@@ -726,7 +732,7 @@ impl From<PolkadotPublicKey> for Vec<u8> {
 pub struct ChainData {
 	pub spec_version: PolkadotSpecVersion,
 	pub transaction_version: PolkadotTransactionVersion,
-	pub genesis_hash: String,
+	pub genesis_hash: PolkadotHash,
 	pub block_hash_count: PolkadotBlockNumber,
 }
 #[derive(Debug, Encode, Decode, TypeInfo, Eq, PartialEq, Clone)]
@@ -736,9 +742,16 @@ pub struct PolkadotReplayProtection {
 	pub tip: PolkadotBalance,
 }
 
+#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub enum NetworkChoice {
 	PolkadotMainnet,
 	WestendTestnet,
+}
+
+impl Default for NetworkChoice {
+	fn default() -> Self {
+		NetworkChoice::PolkadotMainnet
+	}
 }
 
 impl PolkadotReplayProtection {
@@ -749,13 +762,13 @@ impl PolkadotReplayProtection {
 				NetworkChoice::PolkadotMainnet => ChainData {
 					spec_version: polkadot_mainnet::SPEC_VERSION,
 					transaction_version: polkadot_mainnet::TRANSACTION_VERSION,
-					genesis_hash: polkadot_mainnet::GENESIS_HASH.to_string(),
+					genesis_hash: H256::from_str(polkadot_mainnet::GENESIS_HASH).unwrap(),
 					block_hash_count: polkadot_mainnet::BLOCK_HASH_COUNT,
 				},
 				NetworkChoice::WestendTestnet => ChainData {
 					spec_version: westend_testnet::SPEC_VERSION,
 					transaction_version: westend_testnet::TRANSACTION_VERSION,
-					genesis_hash: westend_testnet::GENESIS_HASH.to_string(),
+					genesis_hash: H256::from_str(westend_testnet::GENESIS_HASH).unwrap(),
 					block_hash_count: westend_testnet::BLOCK_HASH_COUNT,
 				},
 			},
@@ -771,7 +784,7 @@ impl Default for PolkadotReplayProtection {
 			chain_data: ChainData {
 				spec_version: polkadot_mainnet::SPEC_VERSION,
 				transaction_version: polkadot_mainnet::TRANSACTION_VERSION,
-				genesis_hash: polkadot_mainnet::GENESIS_HASH.to_string(),
+				genesis_hash: H256::from_str(polkadot_mainnet::GENESIS_HASH).unwrap(),
 				block_hash_count: polkadot_mainnet::BLOCK_HASH_COUNT,
 			},
 			nonce: 0,

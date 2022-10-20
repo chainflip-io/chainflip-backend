@@ -1,10 +1,10 @@
 use crate::{
 	benchmarking_value::BenchmarkValue,
 	dot::{
-		BalancesCall, Polkadot, PolkadotAccountIdLookup, PolkadotAddress,
+		BalancesCall, NetworkChoice, Polkadot, PolkadotAccountIdLookup, PolkadotAddress,
 		PolkadotChargeTransactionPayment, PolkadotCheckMortality, PolkadotCheckNonce,
 		PolkadotPublicKey, PolkadotRuntimeCall, PolkadotSignature, PolkadotSignedExtra,
-		PolkadotUncheckedExtrinsic,
+		PolkadotTransactionData, PolkadotUncheckedExtrinsic,
 	},
 	eth::TrackedData,
 };
@@ -17,6 +17,7 @@ const ACCOUNT_ID_1: [u8; 32] = [2u8; 32];
 const ACCOUNT_ID_2: [u8; 32] = [3u8; 32];
 const PUBLIC_KEY: [u8; 32] = [4u8; 32];
 const NONCE: u32 = 5;
+const ENCODED_EXTRINSIC: [u8; 100] = [3u8; 100];
 
 impl BenchmarkValue for Option<PolkadotUncheckedExtrinsic> {
 	fn benchmark_value() -> Self {
@@ -63,5 +64,14 @@ impl BenchmarkValue for PolkadotPublicKey {
 impl BenchmarkValue for TrackedData<Polkadot> {
 	fn benchmark_value() -> Self {
 		Self { block_height: 1000, base_fee: 10_000_000_000, priority_fee: 2_000_000_000 }
+	}
+}
+
+impl BenchmarkValue for PolkadotTransactionData {
+	fn benchmark_value() -> Self {
+		Self {
+			chain: NetworkChoice::PolkadotMainnet,
+			encoded_extrinsic: ENCODED_EXTRINSIC.to_vec(),
+		}
 	}
 }
