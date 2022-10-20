@@ -13,10 +13,12 @@ macro_rules! impl_default_benchmark_value {
 	($element:ty) => {
 		#[cfg(feature = "runtime-benchmarks")]
 		impl BenchmarkValue for $element {
-			#[cfg(feature = "runtime-benchmarks")]
+			// #[cfg(feature = "runtime-benchmarks")]
 			fn benchmark_value() -> Self {
 				<$element>::default()
 			}
 		}
 	};
 }
+
+impl_default_benchmark_value!(());

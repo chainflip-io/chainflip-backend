@@ -88,7 +88,7 @@ impl EthTransport for web3::transports::Http {
 #[cfg_attr(test, automock)]
 #[async_trait]
 pub trait EthRpcApi: Send + Sync {
-	async fn estimate_gas(&self, req: CallRequest, block: Option<BlockNumber>) -> Result<U256>;
+	async fn estimate_gas(&self, req: CallRequest) -> Result<U256>;
 
 	async fn sign_transaction(
 		&self,
@@ -128,10 +128,10 @@ where
 	T: Send + Sync + EthTransport,
 	T::Out: Send,
 {
-	async fn estimate_gas(&self, req: CallRequest, block: Option<BlockNumber>) -> Result<U256> {
+	async fn estimate_gas(&self, req: CallRequest) -> Result<U256> {
 		self.web3
 			.eth()
-			.estimate_gas(req, block)
+			.estimate_gas(req, None)
 			.await
 			.context(format!("{} client: Failed to estimate gas", T::transport_protocol()))
 	}
@@ -456,8 +456,8 @@ macro_rules! dual_call_rpc {
 
 #[async_trait]
 impl EthRpcApi for EthDualRpcClient {
-	async fn estimate_gas(&self, req: CallRequest, block: Option<BlockNumber>) -> Result<U256> {
-		dual_call_rpc!(self, estimate_gas, req, block)
+	async fn estimate_gas(&self, req: CallRequest) -> Result<U256> {
+		dual_call_rpc!(self, estimate_gas, req)
 	}
 
 	async fn sign_transaction(
@@ -522,7 +522,7 @@ pub mod mocks {
 
 		#[async_trait]
 		impl EthRpcApi for EthHttpRpcClient {
-			async fn estimate_gas(&self, req: CallRequest, block: Option<BlockNumber>) -> Result<U256>;
+			async fn estimate_gas(&self, req: CallRequest) -> Result<U256>;
 
 			async fn sign_transaction(
 				&self,

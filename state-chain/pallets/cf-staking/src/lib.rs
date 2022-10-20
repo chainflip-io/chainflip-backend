@@ -27,7 +27,7 @@ use frame_support::{
 };
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
-use sp_std::{prelude::*, time::Duration};
+use sp_std::prelude::*;
 
 use cf_traits::SystemStateInfo;
 
@@ -45,11 +45,14 @@ pub const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
 
 #[frame_support::pallet]
 pub mod pallet {
+
 	use super::*;
 	use cf_chains::{ApiCall, Ethereum};
 	use cf_traits::AccountRoleRegistry;
 	use frame_support::{pallet_prelude::*, Parameter};
 	use frame_system::pallet_prelude::*;
+
+	use sp_std::time::Duration;
 
 	pub type AccountId<T> = <T as frame_system::Config>::AccountId;
 
@@ -439,11 +442,10 @@ pub mod pallet {
 			);
 
 			PendingClaims::<T>::remove(&account_id);
-			// Remove claim expiry for this account.  We assume one claim per account here.
-			// `retain` those elements in their positions and removing the account that has claimed
-			let mut expiries = ClaimExpiries::<T>::get();
-			expiries.retain(|(_, expiry_account_id)| expiry_account_id != &account_id);
-			ClaimExpiries::<T>::set(expiries);
+			// Assumption: One claim per account here.
+			ClaimExpiries::<T>::mutate(|expiries| {
+				expiries.retain(|(_, expiry_account_id)| expiry_account_id != &account_id);
+			});
 
 			T::Flip::finalize_claim(&account_id).expect("This should never return an error because we already ensured above that the pending claim does indeed exist");
 

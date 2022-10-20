@@ -351,7 +351,7 @@ async fn register_account_role(
 
 	let tx_hash = state_chain_client
 		.submit_signed_extrinsic(
-			pallet_cf_account_types::Call::register_account_role_xt { role },
+			pallet_cf_account_types::Call::register_account_role { role },
 			logger,
 		)
 		.await
@@ -382,7 +382,7 @@ async fn force_rotation(
 	println!("Submitting governance proposal for rotation.");
 
 	state_chain_client
-		.submit_signed_extrinsic(pallet_cf_governance::Call::approve { id }, logger)
+		.submit_signed_extrinsic(pallet_cf_governance::Call::approve { approved_id: id }, logger)
 		.await
 		.expect("Should submit approval, triggering execution of the forced rotation");
 

@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 
-use crate::{self as pallet_cf_broadcast, AttemptCount, Instance1, PalletOffence};
+use crate::{self as pallet_cf_broadcast, Instance1, PalletOffence};
 use cf_chains::{
 	mocks::{MockApiCall, MockEthereum, MockTransactionBuilder},
 	ChainCrypto, Ethereum,
@@ -84,12 +84,10 @@ impl Chainflip for Test {
 
 pub const SIGNING_EXPIRY_BLOCKS: <Test as frame_system::Config>::BlockNumber = 2;
 pub const TRANSMISSION_EXPIRY_BLOCKS: <Test as frame_system::Config>::BlockNumber = 4;
-pub const MAXIMUM_BROADCAST_ATTEMPTS: AttemptCount = 3;
 
 parameter_types! {
 	pub const SigningTimeout: <Test as frame_system::Config>::BlockNumber = SIGNING_EXPIRY_BLOCKS;
 	pub const TransmissionTimeout: <Test as frame_system::Config>::BlockNumber = TRANSMISSION_EXPIRY_BLOCKS;
-	pub const MaximumAttempts: AttemptCount = MAXIMUM_BROADCAST_ATTEMPTS;
 }
 
 pub type MockOffenceReporter =

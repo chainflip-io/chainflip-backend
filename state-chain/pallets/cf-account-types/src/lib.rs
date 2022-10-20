@@ -2,13 +2,18 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
 mod tests;
 
+pub mod weights;
+use weights::WeightInfo;
+
 use cf_primitives::AccountRole;
-use cf_traits::{AccountRoleRegistry, Chainflip};
+use cf_traits::{AccountRoleRegistry, Chainflip, QualifyNode};
 use frame_support::{
 	error::BadOrigin,
 	pallet_prelude::DispatchResult,
@@ -28,6 +33,9 @@ pub mod pallet {
 	pub trait Config: Chainflip {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+
+		/// Weights.
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::pallet]
@@ -74,10 +82,10 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		#[pallet::weight(0)]
-		pub fn register_account_role_xt(origin: OriginFor<T>, role: AccountRole) -> DispatchResult {
+		#[pallet::weight(T::WeightInfo::register_account_role())]
+		pub fn register_account_role(origin: OriginFor<T>, role: AccountRole) -> DispatchResult {
 			let who: T::AccountId = ensure_signed(origin)?;
-			Self::register_account_role(&who, role)?;
+			<Self as AccountRoleRegistry<T>>::register_account_role(&who, role)?;
 			Ok(())
 		}
 	}
@@ -118,6 +126,11 @@ impl<T: Config> AccountRoleRegistry<T> for Pallet<T> {
 			AccountRole::Relayer => ensure_relayer::<T>(origin),
 		}
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn register_account(account_id: T::AccountId, role: AccountRole) {
+		AccountRoles::<T>::insert(account_id, role);
+	}
 }
 
 impl<T: Config> OnKilledAccount<T::AccountId> for Pallet<T> {
@@ -129,6 +142,18 @@ impl<T: Config> OnKilledAccount<T::AccountId> for Pallet<T> {
 impl<T: Config> OnNewAccount<T::AccountId> for Pallet<T> {
 	fn on_new_account(who: &T::AccountId) {
 		AccountRoles::<T>::insert(who, AccountRole::default());
+	}
+}
+
+impl<T: Config> QualifyNode for Pallet<T> {
+	type ValidatorId = T::AccountId;
+
+	fn is_qualified(validator_id: &Self::ValidatorId) -> bool {
+		if let Some(role) = AccountRoles::<T>::get(validator_id) {
+			AccountRole::Validator == role
+		} else {
+			false
+		}
 	}
 }
 
@@ -164,7 +189,7 @@ macro_rules! define_ensure_origin {
 }
 
 define_ensure_origin!(ensure_relayer, EnsureRelayer, AccountRole::Relayer);
-define_ensure_origin!(ensure_validator, EnsureValidator, AccountRole::Validator { .. });
+define_ensure_origin!(ensure_validator, EnsureValidator, AccountRole::Validator);
 define_ensure_origin!(
 	ensure_liquidity_provider,
 	EnsureLiquidityProvider,

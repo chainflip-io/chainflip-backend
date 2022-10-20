@@ -59,7 +59,6 @@ tag = 'chainflip-monthly-2022-06+01'
 
 [dependencies.frame-benchmarking]
 default-features = false
-optional = true
 git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'chainflip-monthly-2022-06+01'
 

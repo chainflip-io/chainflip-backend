@@ -5,7 +5,7 @@ pub mod api;
 #[cfg(feature = "runtime-benchmarks")]
 pub mod benchmarking;
 
-use sp_core::{crypto::UncheckedFrom, sr25519, H256};
+use sp_core::{sr25519, H256};
 use sp_runtime::{
 	generic::{Era, SignedPayload, UncheckedExtrinsic},
 	traits::{BlakeTwo256, DispatchInfoOf, Hash, SignedExtension, StaticLookup},
@@ -24,7 +24,7 @@ use scale_info::TypeInfo;
 
 pub type PolkadotSignature = sr25519::Signature;
 
-pub type PolkadotGovKey = PolkadotEmptyType; // Todo
+pub type PolkadotGovKey = (); // Todo
 
 pub type PolkadotBalance = u128;
 pub type PolkadotBlockNumber = u32;
@@ -37,7 +37,6 @@ pub type PolkadotAccountId = AccountId32;
 
 pub type PolkadotAddress = MultiAddress<PolkadotAccountId, ()>;
 
-//import this struct from traits.rs in polkadot runtime primitives repo
 pub type PolkadotAccountIdLookup = <AccountIdLookup<PolkadotAccountId, ()> as StaticLookup>::Source;
 
 pub type PolkadotCallHasher = BlakeTwo256;
@@ -113,29 +112,26 @@ impl ChainCrypto for Polkadot {
 	}
 
 	fn agg_key_to_payload(agg_key: Self::AggKey) -> Self::Payload {
-		Blake2_256::hash(&agg_key.0 .0).to_vec()
+		Blake2_256::hash(&agg_key.0).to_vec()
 	}
 }
 
-// pub struct PolkadotTransactionSubmissionData {
-// 	<Polkadot as ChainAbi
-// }
-
 impl ChainAbi for Polkadot {
-	type UnsignedTransaction = PolkadotUncheckedExtrinsic;
+	type UnsignedTransaction = ();
 	type SignedTransaction = Vec<u8>;
-	type SignerCredential = PolkadotEmptyType; // Not needed in Polkadot since the second signature (by the transaction submitter) is not
-										   // needed
-	type ReplayProtection = PolkadotReplayProtection;
+	// Not needed in Polkadot since we can sign natively with the AggKey.
+	type SignerCredential = ();
+	type ReplayProtection = (); //Todo
 	type ValidationError = ();
 
+	// This function is not needed in Polkadot.
 	fn verify_signed_transaction(
 		_unsigned_tx: &Self::UnsignedTransaction,
 		_signed_tx: &Self::SignedTransaction,
 		_signer_credential: &Self::SignerCredential,
 	) -> Result<Self::TransactionHash, Self::ValidationError> {
 		Err(())
-	} // This function is not needed in Polkadot
+	}
 }
 
 /// The handler for creating and signing polkadot extrinsics, and creating signature payload

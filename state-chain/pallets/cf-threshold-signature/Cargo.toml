@@ -87,6 +87,8 @@ std = [
   'log/std',
   'sp-std/std',
   'sp-runtime/std',
+  # for the benchmark tests
+  'pallet-cf-validator/std',
 ]
 runtime-benchmarks = [
   'frame-benchmarking/runtime-benchmarks',
@@ -95,6 +97,7 @@ runtime-benchmarks = [
   'cf-traits/runtime-benchmarks',
   'cf-chains/runtime-benchmarks',
   'pallet-cf-validator',
+  'pallet-cf-validator/runtime-benchmarks',
   'pallet-cf-reputation',
 ]
 try-runtime = ['frame-support/try-runtime']

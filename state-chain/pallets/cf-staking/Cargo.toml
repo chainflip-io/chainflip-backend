@@ -17,6 +17,7 @@ targets = ['x86_64-unknown-linux-gnu']
 cf-traits = {path = '../../traits', default-features = false}
 cf-primitives = { path ='../../primitives', default-features = false }
 cf-chains = {path = '../../chains', default-features = false}
+pallet-cf-account-types = { path = '../cf-account-types', default-features = false }
 cf-runtime-upgrade-utilities = { path = '../../runtime-upgrade-utilities', default-features = false }
 
 # Non-substrate external deps
@@ -91,12 +92,14 @@ std = [
   'sp-core/std',
   'sp-std/std',
   'cf-runtime-upgrade-utilities/std',
+  'pallet-cf-account-types/std'
 ]
 runtime-benchmarks = [
   'cf-traits/runtime-benchmarks',
   'frame-benchmarking/runtime-benchmarks',
   'frame-support/runtime-benchmarks',
   'frame-system/runtime-benchmarks',
+  'pallet-cf-account-types/runtime-benchmarks'
 ]
 try-runtime = [
   'frame-support/try-runtime',

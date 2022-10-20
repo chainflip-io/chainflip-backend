@@ -1,4 +1,4 @@
-use cf_primitives::AuthorityCount;
+use cf_primitives::{AccountId, AuthorityCount};
 use rand_legacy::FromEntropy;
 use std::collections::BTreeSet;
 
@@ -7,20 +7,19 @@ use crate::multisig::{
 		common::{
 			BroadcastFailureReason, CeremonyFailureReason, KeygenFailureReason, KeygenStageName,
 		},
+		helpers::{
+			gen_invalid_keygen_comm1, get_invalid_hash_comm, new_nodes, run_keygen,
+			run_keygen_with_err_on_high_pubkey, run_stages, standard_signing, KeygenCeremonyRunner,
+			SigningCeremonyRunner, ACCOUNT_IDS, DEFAULT_KEYGEN_CEREMONY_ID,
+		},
 		keygen::{
 			self, generate_key_data_until_compatible, Complaints6, VerifyComplaints7,
 			VerifyHashComm2,
-		},
-		tests::helpers::{
-			gen_invalid_keygen_comm1, get_invalid_hash_comm, new_nodes, run_keygen, run_stages,
-			KeygenCeremonyRunner,
 		},
 		utils::PartyIdxMapping,
 	},
 	crypto::Rng,
 };
-
-use super::*;
 
 use crate::multisig::crypto::eth::Point;
 type CoeffComm3 = keygen::CoeffComm3<Point>;
@@ -212,7 +211,7 @@ async fn should_report_on_inconsistent_broadcast_comm1() {
 	let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
 	let messages = ceremony.request().await;
-	let mut messages = helpers::run_stages!(ceremony, messages, VerifyHashComm2, CoeffComm3);
+	let mut messages = run_stages!(ceremony, messages, VerifyHashComm2, CoeffComm3);
 
 	let [bad_account_id] = &ceremony.select_account_ids();
 
@@ -252,7 +251,7 @@ async fn should_report_on_inconsistent_broadcast_hash_comm1a() {
 		*message = hash_comm.clone();
 	}
 
-	let messages = helpers::run_stages!(ceremony, messages, VerifyHashComm2,);
+	let messages = run_stages!(ceremony, messages, VerifyHashComm2,);
 
 	ceremony.distribute_messages(messages).await;
 	ceremony
@@ -274,7 +273,7 @@ async fn should_report_on_invalid_hash_comm1a() {
 	let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
 	let messages = ceremony.request().await;
-	let mut messages = helpers::run_stages!(ceremony, messages, VerifyHashComm2, CoeffComm3);
+	let mut messages = run_stages!(ceremony, messages, VerifyHashComm2, CoeffComm3);
 
 	let [bad_account_id] = ceremony.select_account_ids();
 
@@ -408,7 +407,7 @@ async fn should_report_on_invalid_comm1() {
 	let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
 	let messages = ceremony.request().await;
-	let mut messages = helpers::run_stages!(ceremony, messages, VerifyHashComm2, CoeffComm3);
+	let mut messages = run_stages!(ceremony, messages, VerifyHashComm2, CoeffComm3);
 
 	let [bad_account_id] = ceremony.select_account_ids();
 
@@ -491,7 +490,7 @@ mod timeout {
 
 	use super::*;
 
-	use crate::multisig::client::tests::helpers::KeygenCeremonyRunner;
+	use crate::multisig::client::helpers::KeygenCeremonyRunner;
 
 	mod during_regular_stage {
 

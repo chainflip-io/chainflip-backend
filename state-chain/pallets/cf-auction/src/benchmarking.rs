@@ -4,16 +4,18 @@
 use super::*;
 
 use frame_benchmarking::benchmarks;
-use frame_system::RawOrigin;
+use frame_support::dispatch::UnfilteredDispatchable;
 
 benchmarks! {
 	set_auction_parameters {
+		let origin = T::EnsureGovernance::successful_origin();
 		let params = SetSizeParameters {
 			min_size: 3,
 			max_size: 150,
 			max_expansion: 15,
 		};
-	}: _(RawOrigin::Root, params)
+		let call = Call::<T>::set_auction_parameters{parameters: params};
+	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert_eq!(
 			Pallet::<T>::auction_parameters(),

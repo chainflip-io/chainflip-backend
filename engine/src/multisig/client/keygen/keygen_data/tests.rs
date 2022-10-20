@@ -6,13 +6,12 @@ use rand_legacy::SeedableRng;
 use crate::multisig::{
 	client::{
 		common::{BroadcastVerificationMessage, KeygenStageName, PreProcessStageDataCheck},
+		helpers::{gen_invalid_keygen_comm1, get_invalid_hash_comm},
 		keygen::{BlameResponse8, Complaints6, KeygenData, SecretShare5},
 	},
 	crypto::Rng,
 	eth::Point,
 };
-
-use super::helpers::{gen_invalid_keygen_comm1, get_invalid_hash_comm};
 
 /// ==========================
 // Generate invalid keygen data with the given number of elements in its inner and outer

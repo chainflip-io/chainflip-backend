@@ -193,6 +193,9 @@ fn backup_should_fail_if_already_exists() {
 }
 
 #[test]
+// TODO: Re-enable this test for linux. We currently do this because Github Actions must run with
+// root user. And so the readonly permissions will be ignored.
+#[cfg(not(target_os = "linux"))]
 fn backup_should_fail_if_cant_copy_files() {
 	let logger = new_test_logger();
 	let (directory, db_path) = new_temp_directory_with_nonexistent_file();

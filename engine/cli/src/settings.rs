@@ -1,13 +1,13 @@
+use std::collections::HashMap;
+
 use cf_primitives::AccountRole;
-use chainflip_engine::settings::{
-	CfSettings, Eth, EthSharedOptions, StateChain, StateChainOptions,
-};
+use chainflip_engine::settings::{CfSettings, Eth, EthOptions, StateChain, StateChainOptions};
 use clap::Parser;
-use config::ConfigError;
+use config::{ConfigError, Source, Value};
 use pallet_cf_governance::ProposalId;
 use serde::Deserialize;
 
-#[derive(Parser, Clone)]
+#[derive(Parser, Clone, Debug)]
 pub struct CLICommandLineOptions {
 	#[clap(short = 'c', long = "config-path")]
 	config_path: Option<String>,
@@ -16,20 +16,25 @@ pub struct CLICommandLineOptions {
 	state_chain_opts: StateChainOptions,
 
 	#[clap(flatten)]
-	eth_opts: EthSharedOptions,
+	eth_opts: EthOptions,
 
 	#[clap(subcommand)]
 	pub cmd: CFCommand,
 }
 
-impl CLICommandLineOptions {
-	pub fn all_options_are_set(&self) -> bool {
-		self.state_chain_opts.state_chain_ws_endpoint.is_some()
-            && self.state_chain_opts.state_chain_signing_key_file.is_some()
-            // eth options present
-            && self.eth_opts.eth_ws_node_endpoint.is_some()
-            && self.eth_opts.eth_http_node_endpoint.is_some()
-            && self.eth_opts.eth_private_key_file.is_some()
+impl Source for CLICommandLineOptions {
+	fn clone_into_box(&self) -> Box<dyn Source + Send + Sync> {
+		Box::new((*self).clone())
+	}
+
+	fn collect(&self) -> std::result::Result<config::Map<String, Value>, ConfigError> {
+		let mut map: HashMap<String, Value> = HashMap::new();
+
+		self.state_chain_opts.insert_all(&mut map);
+
+		self.eth_opts.insert_all(&mut map);
+
+		Ok(map)
 	}
 }
 
@@ -39,14 +44,14 @@ impl Default for CLICommandLineOptions {
 		Self {
 			config_path: None,
 			state_chain_opts: StateChainOptions::default(),
-			eth_opts: EthSharedOptions::default(),
+			eth_opts: EthOptions::default(),
 			// an arbitrary simple command
 			cmd: CFCommand::Retire {},
 		}
 	}
 }
 
-#[derive(Parser, Clone)]
+#[derive(Parser, Clone, Debug)]
 pub enum CFCommand {
 	#[clap(about = "Submit an extrinsic to request generation of a claim certificate")]
 	Claim {
@@ -111,7 +116,7 @@ pub struct CLISettings {
 }
 
 impl CfSettings for CLISettings {
-	type Settings = Self;
+	type CommandLineOptions = CLICommandLineOptions;
 
 	fn validate_settings(&self) -> Result<(), ConfigError> {
 		self.eth.validate_settings()?;
@@ -121,54 +126,18 @@ impl CfSettings for CLISettings {
 }
 
 impl CLISettings {
+	/// New settings loaded from the `config_path` in the `CommandLineOptions` or
+	/// "config/Default.toml" if none, with overridden values from the environment and
+	/// `CommandLineOptions`
 	pub fn new(opts: CLICommandLineOptions) -> Result<Self, ConfigError> {
-		let cli_settings = if !opts.all_options_are_set() {
-			Self::from_file_and_env(
-				match &opts.config_path.clone() {
-					Some(path) => path,
-					None => "./engine/config/Default.toml",
-				},
-				opts,
-			)?
-		} else {
-			CLISettings::default()
-		};
-
-		cli_settings.validate_settings()?;
-
-		Ok(cli_settings)
-	}
-
-	fn from_file_and_env(file: &str, opts: CLICommandLineOptions) -> Result<Self, ConfigError> {
-		let mut cli_settings = Self::settings_from_file_and_env(file)?;
-
-		// Override State Chain settings with the cmd line options
-		if let Some(ws_endpoint) = opts.state_chain_opts.state_chain_ws_endpoint {
-			cli_settings.state_chain.ws_endpoint = ws_endpoint
-		};
-		if let Some(signing_key_file) = opts.state_chain_opts.state_chain_signing_key_file {
-			cli_settings.state_chain.signing_key_file = signing_key_file
-		};
-
-		// Override Eth settings
-		if let Some(private_key_file) = opts.eth_opts.eth_private_key_file {
-			cli_settings.eth.private_key_file = private_key_file
-		};
-
-		if let Some(ws_node_endpoint) = opts.eth_opts.eth_ws_node_endpoint {
-			cli_settings.eth.ws_node_endpoint = ws_node_endpoint
-		};
-
-		if let Some(http_node_endpoint) = opts.eth_opts.eth_http_node_endpoint {
-			cli_settings.eth.http_node_endpoint = http_node_endpoint
-		};
-
-		Ok(cli_settings)
+		Self::load_settings_from_all_sources("config/Default.toml", opts.config_path.clone(), opts)
 	}
 }
 
 #[cfg(test)]
 mod tests {
+
+	use std::{path::PathBuf, str::FromStr};
 
 	use super::*;
 
@@ -185,13 +154,51 @@ mod tests {
 	fn init_default_config() {
 		set_test_env();
 
-		let settings = CLISettings::from_file_and_env(
+		let settings = CLISettings::load_settings_from_all_sources(
 			"../config/Default.toml",
+			None,
 			CLICommandLineOptions::default(),
 		)
 		.unwrap();
 
 		assert_eq!(settings.state_chain.ws_endpoint, "ws://localhost:9944");
 		assert_eq!(settings.eth.ws_node_endpoint, "ws://localhost:8545");
+	}
+
+	#[test]
+	fn test_all_command_line_options() {
+		// Fill the command line options with test data that is different for that in `Default.toml`
+		let opts = CLICommandLineOptions {
+			config_path: None, // Not used in this test
+
+			state_chain_opts: StateChainOptions {
+				state_chain_ws_endpoint: Some("ws://endpoint:1234".to_owned()),
+				state_chain_signing_key_file: Some(PathBuf::from_str("signing_key_file").unwrap()),
+			},
+
+			eth_opts: EthOptions {
+				eth_ws_node_endpoint: Some("ws://endpoint2:1234".to_owned()),
+				eth_http_node_endpoint: Some("http://endpoint3:1234".to_owned()),
+				eth_private_key_file: Some(PathBuf::from_str("eth_key_file").unwrap()),
+			},
+
+			cmd: CFCommand::Rotate {}, // Not used in this test
+		};
+
+		// Load the test opts into the settings
+		let settings = CLISettings::new(opts.clone()).unwrap();
+
+		// Compare the opts and the settings
+		assert_eq!(
+			opts.state_chain_opts.state_chain_ws_endpoint.unwrap(),
+			settings.state_chain.ws_endpoint
+		);
+		assert_eq!(
+			opts.state_chain_opts.state_chain_signing_key_file.unwrap(),
+			settings.state_chain.signing_key_file
+		);
+		assert_eq!(opts.eth_opts.eth_ws_node_endpoint.unwrap(), settings.eth.ws_node_endpoint);
+		assert_eq!(opts.eth_opts.eth_http_node_endpoint.unwrap(), settings.eth.http_node_endpoint);
+		assert_eq!(opts.eth_opts.eth_private_key_file.unwrap(), settings.eth.private_key_file);
 	}
 }

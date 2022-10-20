@@ -45,11 +45,11 @@ impl SetSizeMaximisingAuctionResolver {
 		current_size: u32,
 		parameters @ SetSizeParameters { min_size, max_size, max_expansion }: SetSizeParameters,
 	) -> Result<Self, AuctionError> {
-		ensure!(min_size > 0, AuctionError::InvalidParameters);
-		ensure!(min_size <= max_size, AuctionError::InvalidParameters);
 		ensure!(
-			current_size.saturating_add(max_expansion) >= min_size,
-			AuctionError::InconsistentRanges
+			min_size > 0 &&
+				min_size <= max_size &&
+				current_size.saturating_add(max_expansion) >= min_size,
+			AuctionError::InvalidParameters
 		);
 		Ok(Self { current_size, parameters })
 	}
@@ -218,5 +218,36 @@ mod test_auction_resolution {
 		assert_eq!(outcome.winners.len() as u32, CURRENT_SIZE + MAX_EXPANSION);
 
 		check_auction_resolution_invariants!(candidates, auction_resolver, outcome);
+	}
+
+	#[test]
+	fn losers_are_returned_in_order_of_descending_bid_amount() {
+		const CURRENT_SIZE: u32 = 5;
+		const MAX_EXPANSION: u32 = 10;
+		const AUCTION_PARAMETERS: SetSizeParameters = SetSizeParameters {
+			min_size: CURRENT_SIZE,
+			max_size: CURRENT_SIZE,
+			max_expansion: MAX_EXPANSION,
+		};
+		let auction_resolver =
+			SetSizeMaximisingAuctionResolver::try_new(CURRENT_SIZE, AUCTION_PARAMETERS).unwrap();
+
+		use nanorand::{Rng, WyRand};
+
+		let candidates = 0u64..100;
+		let mut bids: Vec<_> = (100_u64..200).collect();
+		WyRand::new_seed(4).shuffle(&mut bids);
+
+		let candidates: Vec<_> = candidates
+			.zip(bids)
+			.map(|(bidder_id, amount)| Bid { bidder_id, amount })
+			.collect();
+
+		let outcome = auction_resolver.resolve_auction(candidates).unwrap();
+
+		assert_eq!(outcome.bond, 195);
+		assert_eq!(outcome.winners.len(), CURRENT_SIZE as usize);
+
+		assert!(outcome.losers.is_sorted_by_key(|&Bid { amount, .. }| Reverse(amount)));
 	}
 }

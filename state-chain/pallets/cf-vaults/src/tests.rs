@@ -106,7 +106,7 @@ fn keygen_failure() {
 
 		assert_eq!(
 			<VaultsPallet as VaultRotator>::get_vault_rotation_outcome(),
-			AsyncResult::Ready(Err(BAD_CANDIDATES.to_vec()))
+			AsyncResult::Ready(Err(BAD_CANDIDATES.iter().cloned().collect()))
 		);
 
 		MockOffenceReporter::assert_reported(
@@ -452,7 +452,7 @@ fn keygen_report_failure() {
 		assert!(!KeygenResolutionPendingSince::<MockRuntime, _>::exists());
 		assert_eq!(
 			<VaultsPallet as VaultRotator>::get_vault_rotation_outcome(),
-			AsyncResult::Ready(Err(vec![CHARLIE]))
+			AsyncResult::Ready(Err(BTreeSet::from([CHARLIE])))
 		);
 
 		MockOffenceReporter::assert_reported(PalletOffence::FailedKeygen, vec![CHARLIE]);
