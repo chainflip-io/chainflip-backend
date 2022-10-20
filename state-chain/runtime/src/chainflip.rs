@@ -18,6 +18,7 @@ use crate::{
 };
 
 use cf_chains::{
+	dot::{Polkadot, PolkadotApi},
 	eth::{
 		self,
 		api::{EthereumApi, EthereumReplayProtection},
@@ -133,6 +134,38 @@ impl TransactionBuilder<Ethereum, EthereumApi> for EthTransactionBuilder {
 				EthereumApi::SetGovKeyWithAggKey(_) => Environment::key_manager_address().into(),
 				EthereumApi::SetCommKeyWithAggKey(_) => Environment::key_manager_address().into(),
 				EthereumApi::AllBatch(_) => Environment::eth_vault_address().into(),
+			},
+			data: signed_call.chain_encoded(),
+			..Default::default()
+		}
+	}
+
+	fn refresh_unsigned_transaction(unsigned_tx: &mut <Ethereum as ChainAbi>::UnsignedTransaction) {
+		if let Some(chain_state) = ChainState::<Runtime, EthereumInstance>::get() {
+			// double the last block's base fee. This way we know it'll be selectable for at least 6
+			// blocks (12.5% increase on each block)
+			let max_fee_per_gas = chain_state.base_fee * 2 + chain_state.priority_fee;
+			unsigned_tx.max_fee_per_gas = Some(U256::from(max_fee_per_gas));
+			unsigned_tx.max_priority_fee_per_gas = Some(U256::from(chain_state.priority_fee));
+		}
+		// if we don't have ChainState, we leave it unmodified
+	}
+}
+
+#[cfg(feature = "ibiza")]
+pub struct DotTransactionBuilder;
+#[cfg(feature = "ibiza")]
+impl TransactionBuilder<Polkadot, PolkadotApi> for EthTransactionBuilder {
+	fn build_transaction(signed_call: &PolkadotApi) -> <Polkadot as ChainAbi>::UnsignedTransaction {
+		eth::UnsignedTransaction {
+			chain_id: Environment::ethereum_chain_id(),
+			contract: match signed_call {
+				PolkadotApi::SetAggKeyWithAggKey(_) => Environment::key_manager_address().into(),
+				PolkadotApi::RegisterClaim(_) => Environment::stake_manager_address().into(),
+				PolkadotApi::UpdateFlipSupply(_) => Environment::flip_token_address().into(),
+				PolkadotApi::SetGovKeyWithAggKey(_) => Environment::key_manager_address().into(),
+				PolkadotApi::SetCommKeyWithAggKey(_) => Environment::key_manager_address().into(),
+				PolkadotApi::AllBatch(_) => Environment::eth_vault_address().into(),
 			},
 			data: signed_call.chain_encoded(),
 			..Default::default()

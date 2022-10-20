@@ -117,8 +117,12 @@ impl ChainCrypto for Polkadot {
 	}
 }
 
+// pub struct PolkadotTransactionSubmissionData {
+// 	<Polkadot as ChainAbi
+// }
+
 impl ChainAbi for Polkadot {
-	type UnsignedTransaction = PolkadotEmptyType;
+	type UnsignedTransaction = PolkadotUncheckedExtrinsic;
 	type SignedTransaction = Vec<u8>;
 	type SignerCredential = PolkadotEmptyType; // Not needed in Polkadot since the second signature (by the transaction submitter) is not
 										   // needed
