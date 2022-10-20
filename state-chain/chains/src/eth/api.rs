@@ -197,14 +197,14 @@ impl ApiCall<Ethereum> for EthereumApi {
 		}
 	}
 
-	fn abi_encoded(&self) -> <Ethereum as ChainAbi>::SignedTransaction {
+	fn chain_encoded(&self) -> <Ethereum as ChainAbi>::SignedTransaction {
 		match self {
-			EthereumApi::SetAggKeyWithAggKey(call) => call.abi_encoded(),
-			EthereumApi::RegisterClaim(call) => call.abi_encoded(),
-			EthereumApi::UpdateFlipSupply(call) => call.abi_encoded(),
-			EthereumApi::SetGovKeyWithAggKey(call) => call.abi_encoded(),
-			EthereumApi::SetCommKeyWithAggKey(call) => call.abi_encoded(),
-			EthereumApi::AllBatch(call) => call.abi_encoded(),
+			EthereumApi::SetAggKeyWithAggKey(call) => call.chain_encoded(),
+			EthereumApi::RegisterClaim(call) => call.chain_encoded(),
+			EthereumApi::UpdateFlipSupply(call) => call.chain_encoded(),
+			EthereumApi::SetGovKeyWithAggKey(call) => call.chain_encoded(),
+			EthereumApi::SetCommKeyWithAggKey(call) => call.chain_encoded(),
+			EthereumApi::AllBatch(call) => call.chain_encoded(),
 		}
 	}
 

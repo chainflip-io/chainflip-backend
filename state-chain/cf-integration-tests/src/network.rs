@@ -79,7 +79,12 @@ impl Cli {
 	}
 
 	pub fn register_as_validator(account: &NodeId) {
-		assert_ok!(AccountTypes::register_account_role(account, AccountRole::Validator));
+		assert_ok!(
+			<AccountTypes as AccountRoleRegistry<state_chain_runtime::Runtime>>::register_account_role(
+				account,
+				AccountRole::Validator
+			)
+		);
 	}
 }
 

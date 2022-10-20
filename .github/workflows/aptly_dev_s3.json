@@ -1,0 +1,18 @@
+{
+    "chainflip-dev": {
+      "region": "eu-central-1",
+      "bucket": "apt.aws.chainflip.xyz",
+      "endpoint": "",
+      "awsAccessKeyID": "",
+      "awsSecretAccessKey": "",
+      "awsSessionToken": "",
+      "prefix": "",
+      "acl": "public-read",
+      "storageClass": "",
+      "encryptionMethod": "",
+      "plusWorkaround": false,
+      "disableMultiDel": false,
+      "forceSigV2": false,
+      "debug": false
+    }
+  }
