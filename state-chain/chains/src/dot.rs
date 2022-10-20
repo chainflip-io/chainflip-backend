@@ -722,9 +722,6 @@ impl From<PolkadotPublicKey> for Vec<u8> {
 	}
 }
 
-#[derive(TypeInfo, Clone, Copy, Debug, Eq, PartialEq, Encode, Decode, Default)]
-pub struct PolkadotEmptyType(pub Option<()>);
-
 #[derive(Debug, Encode, Decode, TypeInfo, Eq, PartialEq, Clone)]
 pub struct ChainData {
 	pub spec_version: PolkadotSpecVersion,
