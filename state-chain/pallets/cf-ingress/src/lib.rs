@@ -12,7 +12,7 @@ use cf_primitives::{
 use cf_traits::{liquidity::LpProvisioningApi, AddressDerivationApi, IngressApi, IngressFetchApi};
 
 use frame_support::{
-	pallet_prelude::DispatchResult,
+	pallet_prelude::*,
 	sp_runtime::{app_crypto::sp_core, DispatchError},
 };
 use sp_std::vec;
@@ -30,9 +30,8 @@ pub mod pallet {
 
 	use super::*;
 	use cf_primitives::Asset;
-	use cf_traits::IngressFetchApi;
 	use frame_support::{
-		pallet_prelude::{DispatchResultWithPostInfo, OptionQuery, ValueQuery, *},
+		pallet_prelude::{DispatchResultWithPostInfo, OptionQuery, ValueQuery},
 		traits::{EnsureOrigin, IsType},
 	};
 	use sp_core::H256;
@@ -125,6 +124,7 @@ pub mod pallet {
 	#[pallet::error]
 	pub enum Error<T> {
 		InvalidIntent,
+		IngressMismatchWithIntent,
 	}
 
 	#[pallet::call]
@@ -167,7 +167,24 @@ impl<T: Config> Pallet<T> {
 		// https://github.com/chainflip-io/chainflip-eth-contracts/pull/226
 		match IntentActions::<T>::get(ingress_address).ok_or(Error::<T>::InvalidIntent)? {
 			IntentAction::LiquidityProvision { lp_account, .. } => {
-				T::LpAccountHandler::provision_account(&lp_account, asset, amount)?;
+				let ingress = IntentIngressDetails::<T>::get(ingress_address)
+					.ok_or(Error::<T>::InvalidIntent)?;
+
+				ensure!(
+					ingress.ingress_asset.asset == asset,
+					Error::<T>::IngressMismatchWithIntent
+				);
+				match (ingress_address, ingress.ingress_asset.chain) {
+					(ForeignChainAddress::Eth(_), ForeignChain::Ethereum) => {
+						T::IngressFetchApi::schedule_ethereum_ingress_fetch(vec![(
+							asset,
+							ingress.intent_id,
+						)]);
+						T::LpAccountHandler::provision_account(&lp_account, asset, amount)?;
+						Ok(())
+					},
+					_ => Err(Error::<T>::IngressMismatchWithIntent),
+				}?;
 			},
 			IntentAction::Swap { .. } => todo!(),
 		}
@@ -186,14 +203,6 @@ impl<T: Config> IngressApi for Pallet<T> {
 		ingress_asset: ForeignChainAsset,
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
 		let (intent_id, ingress_address) = Self::generate_new_address(ingress_asset)?;
-
-		// Register the fetch intent for ethereum ingress
-		if ingress_asset.chain == ForeignChain::Ethereum {
-			T::IngressFetchApi::schedule_ethereum_ingress_fetch(vec![(
-				ingress_asset.asset,
-				intent_id,
-			)]);
-		}
 
 		IntentIngressDetails::<T>::insert(
 			ingress_address,
@@ -217,14 +226,6 @@ impl<T: Config> IngressApi for Pallet<T> {
 		relayer_commission_bps: u16,
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
 		let (intent_id, ingress_address) = Self::generate_new_address(ingress_asset)?;
-
-		// Register the fetch intent for ethereum ingress
-		if ingress_asset.chain == ForeignChain::Ethereum {
-			T::IngressFetchApi::schedule_ethereum_ingress_fetch(vec![(
-				ingress_asset.asset,
-				intent_id,
-			)]);
-		}
 
 		IntentIngressDetails::<T>::insert(
 			ingress_address,
