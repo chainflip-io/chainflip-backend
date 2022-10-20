@@ -73,7 +73,7 @@ pub mod pallet {
 			let cut_off = if (swaps.len() as usize) < capacity { swaps.len() } else { capacity };
 			let swaps_that_fit = swaps.split_off(cut_off);
 			for swap in swaps_that_fit.iter() {
-				Self::execute_swap(swap.clone());
+				Self::execute_swap(*swap);
 			}
 			// Write the rest back (potentially and empty vector).
 			SwapQueue::<T>::put(swaps);
@@ -127,7 +127,7 @@ pub mod pallet {
 			// Send the assets off-chain.
 			// TODO: If this is falling we have to reschedule it. Not sure if this is the right
 			// place for it though. I would expect the Egress pallet is responsible for that?
-			if let Err(_) = T::Egress::schedule_egress(swap.to, amount, swap.egress_address) {
+			if T::Egress::schedule_egress(swap.to, amount, swap.egress_address).is_err() {
 				log::warn!("Failed to egress swap.");
 			}
 		}
