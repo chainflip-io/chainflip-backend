@@ -202,7 +202,10 @@ pub fn start_monitoring_thread(
 								// It is important that we continue monitoring the socket because
 								// ZMQ can automatically attempt to reconnect (e.g. if the peer
 								// restarts), and if it fails due to authentication error, we still
-								// want to reconnect manually
+								// want to reconnect manually.
+								// Also, if we stop reading monitor events, the sending side of
+								// the monitor socket can block, which in turn can block the
+								// socket that is being monitored.
 								slog::trace!(
 									logger,
 									"Socket event: authentication success with {}",
