@@ -123,7 +123,10 @@ fn cannot_deposit_and_withdrawal_during_maintenance() {
 	new_test_ext().execute_with(|| {
 		// Setup account for ALICE
 		AccountTypes::on_new_account(&ALICE);
-		assert_ok!(AccountTypes::register_account_role(&ALICE, AccountRole::LiquidityProvider));
+		assert_ok!(<AccountTypes as AccountRoleRegistry<_>>::register_account_role(
+			&ALICE,
+			AccountRole::LiquidityProvider
+		));
 		FreeBalances::<Test>::insert(ALICE, Asset::Eth, 1_000);
 		IsValid::set(true);
 
@@ -175,7 +178,10 @@ fn cannot_manage_liquidity_during_maintenance() {
 	new_test_ext().execute_with(|| {
 		// Setup account and liquidity pool
 		AccountTypes::on_new_account(&ALICE);
-		assert_ok!(AccountTypes::register_account_role(&ALICE, AccountRole::LiquidityProvider));
+		assert_ok!(<AccountTypes as AccountRoleRegistry<_>>::register_account_role(
+			&ALICE,
+			AccountRole::LiquidityProvider
+		));
 		FreeBalances::<Test>::insert(ALICE, Asset::Eth, 1_000_000);
 		FreeBalances::<Test>::insert(ALICE, Asset::Usdc, 1_000_000);
 		IsValid::set(true);
