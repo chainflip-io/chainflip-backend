@@ -119,6 +119,7 @@ impl cf_traits::Chainflip for Test {
 
 impl pallet_cf_account_types::Config for Test {
 	type Event = Event;
+	type WeightInfo = ();
 }
 
 parameter_types! {

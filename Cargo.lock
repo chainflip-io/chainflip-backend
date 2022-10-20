@@ -743,6 +743,7 @@ dependencies = [
  "scale-info",
  "secp256k1 0.21.3",
  "serde",
+ "sp-core",
  "sp-runtime",
  "sp-std",
 ]

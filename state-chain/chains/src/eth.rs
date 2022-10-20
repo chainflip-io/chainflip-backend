@@ -821,6 +821,7 @@ mod verification_tests {
 	use Keccak256;
 
 	#[test]
+	#[cfg(feature = "runtime-integration-tests")]
 	fn test_signature() {
 		// Message to sign over
 		let msg: [u8; 32] = Keccak256::hash(b"Whats it going to be then, eh?")

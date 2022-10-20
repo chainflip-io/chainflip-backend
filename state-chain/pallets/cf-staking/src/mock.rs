@@ -29,6 +29,7 @@ use cf_traits::{
 
 impl pallet_cf_account_types::Config for Test {
 	type Event = Event;
+	type WeightInfo = ();
 }
 
 // Configure a mock runtime to test the pallet.

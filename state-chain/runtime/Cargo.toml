@@ -207,6 +207,7 @@ runtime-benchmarks = [
   'frame-system-benchmarking',
   'frame-system/runtime-benchmarks',
   'hex-literal',
+  'pallet-cf-account-types/runtime-benchmarks',
   'pallet-cf-auction/runtime-benchmarks',
   'pallet-cf-broadcast/runtime-benchmarks',
   'pallet-cf-chain-tracking/runtime-benchmarks',
