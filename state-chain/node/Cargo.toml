@@ -98,7 +98,7 @@ depends = "$auto"
 extended-description = """\
 Chainflip Node Package"""
 features = ["runtime-benchmarks"]
-maintainer = "Chainflip UG <dev@chainflip.io>"
+maintainer = "Chainflip Labs GmbH <dev@chainflip.io>"
 name = "chainflip-node"
 priority = "required"
 section = "rust"

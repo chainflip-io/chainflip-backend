@@ -1,10 +1,6 @@
-name: Build Packages
+name: Publish Packages
 on:
   workflow_call:
-
-  # push:
-  #   branches:
-  #     - 'feature/deb_**'
 
 env:
   APTLY_VERSION: "1.5.0"
@@ -14,13 +10,8 @@ env:
 
 jobs:
   build-deb:
-    # strategy:
-    #   fail-fast: true
-    #   matrix:
-    #     os: [ubuntu-20.04, ubuntu-22.04]
-    name: Publish packages to the repository
-    #runs-on: ${{ matrix.os }}
-    runs-on: self-hosted
+    name: Build Deb
+    runs-on: [self-hosted, linux, x64, ephemeral]
     environment: development
     permissions:
       id-token: write
@@ -36,7 +27,7 @@ jobs:
       - name: Get commit SHA, distribution codename
         id: vars
         run: |
-          echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          echo "sha_long=$GITHUB_SHA" >> $GITHUB_OUTPUT
           echo "codename=$(lsb_release -c -s)" >> $GITHUB_OUTPUT
       - name: Install Aptly and dependencies
         run: |
@@ -58,7 +49,6 @@ jobs:
         uses: crazy-max/ghaction-import-gpg@v5
         with:
           gpg_private_key: ${{ secrets.CF_DEV_PGP_KEY }}
-          # passphrase: ${{ secrets.PASSPHRASE }} # Empty pass for development
       - name: List keys
         run: gpg -K
       - name: Run aptly
@@ -67,7 +57,7 @@ jobs:
           aptly repo create local
           aptly repo add local packages/*.deb
           aptly snapshot create snap from repo local
-          aptly publish -gpg-key=${{ steps.import_gpg.outputs.keyid }} -distribution=${{ steps.vars.outputs.codename }} snapshot -force-overwrite snap "s3:chainflip-dev:ci/${{ steps.vars.outputs.sha_short }}/"
+          aptly publish -gpg-key=${{ steps.import_gpg.outputs.keyid }} -distribution=${{ steps.vars.outputs.codename }} snapshot -force-overwrite snap "s3:chainflip-dev:ci/${{ steps.vars.outputs.sha_long }}/"
       - name: Summary
         run: |
           echo "### Packages published! :rocket:" >> $GITHUB_STEP_SUMMARY
@@ -75,7 +65,16 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
           echo "sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys ${{ steps.import_gpg.outputs.keyid }}" >> $GITHUB_STEP_SUMMARY
-          echo "echo \"deb https://{user}:{password}@${REPO_BUCKET}/ci/${{ steps.vars.outputs.sha_short }}/ ${{ steps.vars.outputs.codename }} main\"  | sudo tee /etc/apt/sources.list.d/chainflip.list" >> $GITHUB_STEP_SUMMARY
+          echo "echo \"deb https://{user}:{password}@${REPO_BUCKET}/ci/${{ steps.vars.outputs.sha_long }}/ ${{ steps.vars.outputs.codename }} main\"  | sudo tee /etc/apt/sources.list.d/chainflip.list" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "You can find the basic auth credentials in 1Password under \`apt repo basic auth\` secret" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "After these steps, run *apt update* and install the desired packages" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "apt update" >> $GITHUB_STEP_SUMMARY
+          echo "apt install chainflip-cli" >> $GITHUB_STEP_SUMMARY
+          echo "apt install chainflip-node" >> $GITHUB_STEP_SUMMARY
+          echo "apt install chainflip-engine" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "### Usage in \`testnet-tools\`" >> $GITHUB_STEP_SUMMARY
+          echo "Use the full commit hash: \`$GITHUB_SHA\` for your network configuration. " >> $GITHUB_STEP_SUMMARY

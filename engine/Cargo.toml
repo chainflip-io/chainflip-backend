@@ -8,7 +8,7 @@ version = "0.5.0"
 depends = "$auto"
 extended-description = """\
 Chainflip Validator Engine Package"""
-maintainer = "Chainflip UG <dev@chainflip.io>"
+maintainer = "Chainflip Labs GmbH <dev@chainflip.io>"
 name = "chainflip-engine"
 priority = "required"
 section = "rust"
