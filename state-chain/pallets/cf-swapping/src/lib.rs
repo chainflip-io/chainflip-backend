@@ -37,9 +37,9 @@ pub mod pallet {
 		type Ingress: IngressApi<AccountId = <Self as frame_system::Config>::AccountId>;
 		/// An interface to the egress api implementation.
 		type Egress: EgressApi;
-		/// The AMM
+		/// An interface to the AMM api implementation.
 		type AmmPoolApi: AmmPoolApi<Balance = AssetAmount>;
-		/// Weight information
+		/// The Weight information.
 		type WeightInfo: WeightInfo;
 	}
 
@@ -71,12 +71,12 @@ pub mod pallet {
 			// Split the array in what we can process during this block and the rest. If we could do
 			// more we just process all.
 			let cut_off = if (swaps.len() as usize) < capacity { swaps.len() } else { capacity };
-			let swaps_that_fit = swaps.split_off(cut_off);
-			for swap in swaps_that_fit.iter() {
+			let left_swaps = swaps.split_off(cut_off);
+			for swap in swaps.iter() {
 				Self::execute_swap(*swap);
 			}
 			// Write the rest back (potentially and empty vector).
-			SwapQueue::<T>::put(swaps);
+			SwapQueue::<T>::put(left_swaps);
 			// return the weight we used during the execution of this function
 			swap_weight * capacity as u64 + T::WeightInfo::on_idle()
 		}

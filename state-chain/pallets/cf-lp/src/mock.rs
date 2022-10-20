@@ -41,11 +41,11 @@ pub struct MockSwapIntentHandler;
 
 impl SwapIntentHandler for MockSwapIntentHandler {
 	fn schedule_swap(
-		from: cf_primitives::Asset,
-		to: ForeignChainAsset,
-		amount: AssetAmount,
-		ingress_address: ForeignChainAddress,
-		egress_address: ForeignChainAddress,
+		_from: cf_primitives::Asset,
+		_to: ForeignChainAsset,
+		_amount: AssetAmount,
+		_ingress_address: ForeignChainAddress,
+		_egress_address: ForeignChainAddress,
 	) {
 		todo!()
 	}

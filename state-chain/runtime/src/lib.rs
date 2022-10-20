@@ -7,7 +7,6 @@ pub mod runtime_apis;
 mod weights;
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
-use pallet_cf_lp::liquidity_pool::LiquidityPool;
 
 use crate::{
 	chainflip::Offence,

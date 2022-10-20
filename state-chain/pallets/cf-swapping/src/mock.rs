@@ -26,7 +26,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system,
-		Relayer: pallet_cf_swapping,
+		Swapping: pallet_cf_swapping,
 	}
 );
 
@@ -87,9 +87,9 @@ impl IngressApi for MockIngress {
 pub struct MockEgressApi;
 impl EgressApi for MockEgressApi {
 	fn schedule_egress(
-		foreign_asset: ForeignChainAsset,
-		amount: AssetAmount,
-		egress_address: ForeignChainAddress,
+		_foreign_asset: ForeignChainAsset,
+		_amount: AssetAmount,
+		_egress_address: ForeignChainAddress,
 	) -> DispatchResult {
 		Ok(())
 	}
@@ -129,17 +129,17 @@ impl AmmPoolApi for MockAmmPoolApi {
 
 	fn get_liquidity_requirement(
 		&self,
-		position: &cf_primitives::TradingPosition<Self::Balance>,
+		_position: &cf_primitives::TradingPosition<Self::Balance>,
 	) -> Option<(Self::Balance, Self::Balance)> {
 		todo!()
 	}
 
 	fn swap(
-		ingress_asset: cf_primitives::Asset,
-		egress_asset: ForeignChainAsset,
-		ingress_amount: Self::Balance,
+		_ingress_asset: cf_primitives::Asset,
+		_egress_asset: ForeignChainAsset,
+		_ingress_amount: Self::Balance,
 	) -> Self::Balance {
-		todo!()
+		Self::Balance::default()
 	}
 }
 
