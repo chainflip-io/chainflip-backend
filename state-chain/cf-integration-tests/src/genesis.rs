@@ -7,6 +7,8 @@ use cf_primitives::AccountRole;
 use cf_traits::{EpochInfo, QualifyNode, StakeTransfer};
 pub const GENESIS_BALANCE: FlipBalance = TOTAL_ISSUANCE / 100;
 
+const BLOCKS_PER_EPOCH: u32 = 1000;
+
 pub fn default() -> ExtBuilder {
 	ExtBuilder::default()
 		.accounts(vec![
@@ -15,6 +17,7 @@ pub fn default() -> ExtBuilder {
 			(AccountId::from(CHARLIE), GENESIS_BALANCE),
 		])
 		.root(AccountId::from(ERIN))
+		.blocks_per_epoch(BLOCKS_PER_EPOCH)
 }
 
 #[test]
@@ -38,7 +41,7 @@ fn state_of_genesis_is_as_expected() {
 
 		assert_eq!(
 			Validator::blocks_per_epoch(),
-			0,
+			BLOCKS_PER_EPOCH,
 			"epochs will not rotate automatically from genesis"
 		);
 
