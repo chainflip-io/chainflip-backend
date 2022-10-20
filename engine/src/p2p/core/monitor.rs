@@ -204,8 +204,8 @@ pub fn start_monitoring_thread(
 								// restarts), and if it fails due to authentication error, we still
 								// want to reconnect manually.
 								// Also, if we stop reading monitor events, the sending side of
-								// the monitor socket can block, which in turn can block the
-								// socket that is being monitored.
+								// the monitor socket can block, which in turn can block ZMQ's
+								// internal event loop, seemingly blocking all other sockets.
 								slog::trace!(
 									logger,
 									"Socket event: authentication success with {}",
