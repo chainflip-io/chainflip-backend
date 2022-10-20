@@ -357,6 +357,7 @@ pub mod pallet {
 								request_id,
 								AsyncResult::Ready(Err(offenders.clone())),
 							);
+							LiveCeremonies::<T, I>::remove(request_id);
 							Self::maybe_dispatch_callback(request_id, ceremony_id);
 							Event::<T, I>::ThresholdSignatureFailed(
 								request_id,

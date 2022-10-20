@@ -252,7 +252,7 @@ fn retry_policy_never_calls_callback_on_failure() {
 		.build()
 		.execute_with(|| {
 			const PAYLOAD: &[u8; 4] = b"OHAI";
-			let (request_id, signing_ceremony_id) = EthereumThresholdSigner::request_signature_with(
+			let (request_id, _) = EthereumThresholdSigner::request_signature_with(
 				MockKeyProvider::current_key_id(),
 				NOMINEES.into_iter().collect(),
 				*PAYLOAD,
@@ -267,11 +267,15 @@ fn retry_policy_never_calls_callback_on_failure() {
 			assert!(!MockCallback::has_executed(request_id));
 			assert_eq!(MockCallback::times_called(), 0);
 
-			// report signature success
-			run_cfes_on_sc_events(&[MockCfe {
-				id: signing_ceremony_id,
-				behaviour: CfeBehaviour::Success,
-			}]);
+			let cfes = NOMINEES
+				.iter()
+				.map(|id| MockCfe { id: *id, behaviour: CfeBehaviour::ReportFailure(vec![]) })
+				.collect::<Vec<_>>();
+			run_cfes_on_sc_events(&cfes);
+
+			<AllPalletsWithSystem as OnInitialize<_>>::on_initialize(
+				System::current_block_number() + 1,
+			);
 
 			assert!(MockCallback::has_executed(request_id));
 			assert_eq!(MockCallback::times_called(), 1);
