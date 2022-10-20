@@ -3,8 +3,8 @@ use crate::{
 	dot::{
 		BalancesCall, Polkadot, PolkadotAccountIdLookup, PolkadotAddress,
 		PolkadotChargeTransactionPayment, PolkadotCheckMortality, PolkadotCheckNonce,
-		PolkadotEmptyType, PolkadotPublicKey, PolkadotRuntimeCall, PolkadotSignature,
-		PolkadotSignedExtra, PolkadotUncheckedExtrinsic,
+		PolkadotPublicKey, PolkadotRuntimeCall, PolkadotSignature, PolkadotSignedExtra,
+		PolkadotUncheckedExtrinsic,
 	},
 	eth::TrackedData,
 };
@@ -63,11 +63,5 @@ impl BenchmarkValue for PolkadotPublicKey {
 impl BenchmarkValue for TrackedData<Polkadot> {
 	fn benchmark_value() -> Self {
 		Self { block_height: 1000, base_fee: 10_000_000_000, priority_fee: 2_000_000_000 }
-	}
-}
-
-impl BenchmarkValue for PolkadotEmptyType {
-	fn benchmark_value() -> Self {
-		Self(None)
 	}
 }
