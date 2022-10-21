@@ -1,4 +1,5 @@
 mod signer;
+mod rpc_api;
 pub mod storage_traits;
 
 use anyhow::{anyhow, bail, Context, Result};
