@@ -8,13 +8,15 @@ on:
 
 env:
   SCCACHE_CACHE_SIZE: 32G
-  SCCACHE_REDIS: ${{ secrets.SCCACHE_REDIS }}
-  SCCACHE_DIR: ""
 
 jobs:
+  get-secrets:
+    name: Get Secrets from 1Password
+    uses: ./github/workflows/.get-secrets.yaml
+    secrets: inherit
+
   cargo-fmt:
     runs-on: [self-hosted, linux, x64, ephemeral]
-    environment: development
     container:
       image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08"
       credentials:
@@ -26,9 +28,12 @@ jobs:
       - name: Check format
         run: |
           cargo fmt --all -- --check
+
   cargo-doc:
     runs-on: [self-hosted, linux, x64, ephemeral]
-    environment: development
+    needs: [get-secrets]
+    env:
+      SCCACHE_REDIS: ${{ needs.get-secrets.outputs.SCCACHE_REDIS }}
     container:
       image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08"
       credentials:
@@ -42,7 +47,7 @@ jobs:
       - name: Setup sccache
         uses: hendrikmuhs/ccache-action@v1.2
         with:
-          max-size: 32G
+          max-size: ${{ env.SCCACHE_CACHE_SIZE }}
           variant: sccache
           save: false
       - run: sccache --show-stats
@@ -59,8 +64,9 @@ jobs:
 
   build-and-test:
     runs-on: [self-hosted, linux, x64, ephemeral]
-    environment: development
-    needs: [cargo-fmt]
+    needs: [cargo-fmt, get-secrets]
+    env:
+      SCCACHE_REDIS: ${{ needs.get-secrets.outputs.SCCACHE_REDIS }}
     container:
       image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08"
       credentials:
@@ -74,7 +80,7 @@ jobs:
       - name: Setup sccache
         uses: hendrikmuhs/ccache-action@v1.2
         with:
-          max-size: 32G
+          max-size: ${{ env.SCCACHE_CACHE_SIZE }}
           variant: sccache
           save: false
       - run: sccache --show-stats
@@ -114,8 +120,9 @@ jobs:
 
   build-ibiza:
     runs-on: [self-hosted, linux, x64, ephemeral]
-    environment: development
-    needs: [cargo-fmt]
+    needs: [cargo-fmt, get-secrets]
+    env:
+      SCCACHE_REDIS: ${{ needs.get-secrets.outputs.SCCACHE_REDIS }}
     container:
       image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08"
       credentials:
@@ -129,7 +136,7 @@ jobs:
       - name: Setup sccache
         uses: hendrikmuhs/ccache-action@v1.2
         with:
-          max-size: 32G
+          max-size: ${{ env.SCCACHE_CACHE_SIZE }}
           variant: sccache
           save: false
       - run: sccache --show-stats
@@ -149,8 +156,7 @@ jobs:
 
   test-single-node:
     runs-on: [self-hosted, linux, x64, ephemeral]
-    environment: development
-    needs: [build-and-test]
+    needs: [build-and-test, get-secrets]
     steps:
       - uses: actions/setup-node@v3
         with:
@@ -165,9 +171,9 @@ jobs:
       - name: Setup config and give permissions
         run: |
           mkdir config
-          echo -n ${{ secrets.BASHFUL_SIGNING_KEY }} > signing_key_file
-          echo -n ${{ secrets.ETH_PRIVATE_KEY }} > eth_private_key_file
-          echo -n ${{ secrets.NODE_KEY }} > node_key_file
+          echo -n ${{ needs.get-secrets.outputs.BASHFUL_SIGNING_KEY }} > signing_key_file
+          echo -n ${{ needs.get-secrets.outputs.ETH_PRIVATE_KEY }} > eth_private_key_file
+          echo -n ${{ needs.get-secrets.outputs.NODE_KEY }} > node_key_file
           chmod +x ./target/release/chainflip*
       - name: Run node in background
         run: |
@@ -191,9 +197,9 @@ jobs:
           ./target/release/chainflip-engine --config-path engine/config/CI.toml &
           sleep 2
         env:
-          ETH__NODE_ENDPOINT: ${{ secrets.ETH__NODE_ENDPOINT }}
-          ETH__WS_NODE_ENDPOINT: ${{ secrets.ETH__WS_NODE_ENDPOINT }}
-          ETH__HTTP_NODE_ENDPOINT: ${{ secrets.ETH__HTTP_NODE_ENDPOINT }}
+          ETH__NODE_ENDPOINT: ${{ needs.get-secrets.outputs.ETH__NODE_ENDPOINT }}
+          ETH__WS_NODE_ENDPOINT: ${{ needs.get-secrets.outputs.ETH__WS_NODE_ENDPOINT }}
+          ETH__HTTP_NODE_ENDPOINT: ${{ needs.get-secrets.outputs.ETH__HTTP_NODE_ENDPOINT }}
       - name: Check engine health
         run: >
           curl
@@ -243,6 +249,7 @@ jobs:
 
   deb-publish:
     name: Publish to APT repo
-    needs: [test-single-node]
+    needs: [test-single-node, get-secrets]
     uses: ./.github/workflows/.deb-publish.yaml
-    secrets: inherit
+    secrets:
+      CF_DEV_PGP_KEY: ${{ needs.get-secrets.outputs.CF_DEV_PGP_KEY }}
