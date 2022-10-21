@@ -681,7 +681,7 @@ pub trait EgressApi {
 		foreign_asset: ForeignChainAsset,
 		amount: AssetAmount,
 		egress_address: ForeignChainAddress,
-	) -> DispatchResult;
+	);
 
 	fn is_egress_valid(
 		foreign_asset: &ForeignChainAsset,
@@ -699,9 +699,9 @@ pub trait EthereumAssetsAddressProvider {
 ///
 /// Schedule functions are chain specific, as each chain may require different data to do fetching.
 pub trait IngressFetchApi {
-	fn schedule_ingress_fetch(fetch_params: Vec<(Asset, IntentId)>);
+	fn schedule_ethereum_ingress_fetch(fetch_details: Vec<(Asset, IntentId)>);
 }
 
 impl IngressFetchApi for () {
-	fn schedule_ingress_fetch(_fetch_params: Vec<(Asset, IntentId)>) {}
+	fn schedule_ethereum_ingress_fetch(_fetch_details: Vec<(Asset, IntentId)>) {}
 }
