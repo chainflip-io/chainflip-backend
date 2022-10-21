@@ -482,7 +482,7 @@ async fn inner_connect_to_state_chain(
 							.then(|block_number| async move {
 								let block_hash =
 									rpc_client.block_hash(block_number).await?.unwrap();
-								let block_header = rpc_client.header(block_hash).await?;
+								let block_header = rpc_client.block_header(block_hash).await?;
 								assert_eq!(block_header.hash(), block_hash);
 								assert_eq!(block_header.number, block_number);
 								Result::<_, anyhow::Error>::Ok((block_hash, block_header))
@@ -520,7 +520,7 @@ async fn inner_connect_to_state_chain(
 	// so we move the stream forward to this block
 	let (mut latest_block_hash, mut latest_block_number) = {
 		let finalised_header_hash = rpc_client.latest_finalized_block_hash().await?;
-		let finalised_header = rpc_client.header(finalised_header_hash).await?;
+		let finalised_header = rpc_client.block_header(finalised_header_hash).await?;
 
 		if first_finalized_block_header.number < finalised_header.number {
 			for block_number in first_finalized_block_header.number + 1..=finalised_header.number {

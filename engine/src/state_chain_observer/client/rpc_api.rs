@@ -93,7 +93,7 @@ pub trait RpcApi {
 		block_number: state_chain_runtime::BlockNumber,
 	) -> RpcResult<Option<state_chain_runtime::Hash>>;
 
-	async fn header(
+	async fn block_header(
 		&self,
 		block_hash: state_chain_runtime::Hash,
 	) -> RpcResult<state_chain_runtime::Header>;
@@ -171,7 +171,7 @@ impl<RawRpcClient: RawRpcApi + Send + Sync> RpcApi for RpcClient<RawRpcClient> {
 		))
 	}
 
-	async fn header(
+	async fn block_header(
 		&self,
 		block_hash: state_chain_runtime::Hash,
 	) -> RpcResult<state_chain_runtime::Header> {
