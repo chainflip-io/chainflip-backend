@@ -159,7 +159,7 @@ impl<T: Config> QualifyNode for Pallet<T> {
 
 macro_rules! define_ensure_origin {
 	( $fn_name:ident, $struct_name:ident, $account_variant:pat ) => {
-		/// Implements EnsureOrigin, enforcing the correct [AccountType].
+		/// Implements EnsureOrigin, enforcing the correct [AccountRole].
 		pub struct $struct_name<T>(PhantomData<T>);
 
 		impl<T: Config> EnsureOrigin<OriginFor<T>> for $struct_name<T> {
@@ -178,7 +178,7 @@ macro_rules! define_ensure_origin {
 			}
 		}
 
-		/// Ensure that the origin is signed and that the signer operates the correct [AccountType].
+		/// Ensure that the origin is signed and that the signer operates the correct [AccountRole].
 		pub fn $fn_name<T: Config>(o: OriginFor<T>) -> Result<T::AccountId, BadOrigin> {
 			ensure_signed(o).and_then(|account_id| match AccountRoles::<T>::get(&account_id) {
 				Some($account_variant) => Ok(account_id),

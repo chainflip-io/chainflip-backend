@@ -5,7 +5,7 @@ use cf_traits::{AccountRoleRegistry, EpochInfo, FlipBalance};
 use codec::Encode;
 use frame_support::traits::OnFinalize;
 use libsecp256k1::PublicKey;
-use state_chain_runtime::{AccountTypes, Authorship, Event, Origin};
+use state_chain_runtime::{AccountRoles, Authorship, Event, Origin};
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 // arbitrary units of block time
@@ -80,7 +80,7 @@ impl Cli {
 
 	pub fn register_as_validator(account: &NodeId) {
 		assert_ok!(
-			<AccountTypes as AccountRoleRegistry<state_chain_runtime::Runtime>>::register_account_role(
+			<AccountRoles as AccountRoleRegistry<state_chain_runtime::Runtime>>::register_account_role(
 				account,
 				AccountRole::Validator
 			)

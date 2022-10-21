@@ -9,7 +9,7 @@ use sp_core::{
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::traits::{IdentifyAccount, Verify};
 use state_chain_runtime::{
-	chainflip::Offence, constants::common::*, opaque::SessionKeys, AccountId, AccountTypesConfig,
+	chainflip::Offence, constants::common::*, opaque::SessionKeys, AccountId, AccountRolesConfig,
 	AuraConfig, BlockNumber, CfeSettings, EmissionsConfig, EnvironmentConfig,
 	EthereumThresholdSignerConfig, EthereumVaultConfig, FlipBalance, FlipConfig, GenesisConfig,
 	GovernanceConfig, GrandpaConfig, ReputationConfig, SessionConfig, Signature, StakingConfig,
@@ -713,7 +713,7 @@ fn testnet_genesis(
 	let authority_ids: Vec<AccountId> =
 		initial_authorities.iter().map(|(id, ..)| id.clone()).collect();
 	GenesisConfig {
-		account_types: AccountTypesConfig {
+		account_roles: AccountRolesConfig {
 			initial_account_roles: authority_ids
 				.clone()
 				.into_iter()

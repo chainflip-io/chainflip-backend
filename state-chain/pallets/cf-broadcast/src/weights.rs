@@ -51,7 +51,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads((1 as Weight).saturating_mul(x as Weight)))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
-	// Storage: AccountTypes AccountRoles (r:1 w:0)
+	// Storage: AccountRoles AccountRoles (r:1 w:0)
 	// Storage: EthereumBroadcaster AwaitingTransactionSignature (r:1 w:1)
 	// Storage: EthereumBroadcaster TransactionFeeDeficit (r:1 w:1)
 	// Storage: EthereumBroadcaster RefundSignerId (r:1 w:1)
@@ -64,7 +64,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 			.saturating_add(T::DbWeight::get().writes(6 as Weight))
 	}
-	// Storage: AccountTypes AccountRoles (r:1 w:0)
+	// Storage: AccountRoles AccountRoles (r:1 w:0)
 	// Storage: EthereumBroadcaster AwaitingTransactionSignature (r:1 w:1)
 	// Storage: EthereumBroadcaster FailedTransactionSigners (r:1 w:1)
 	// Storage: EthereumBroadcaster BroadcastIdToAttemptNumbers (r:1 w:1)
@@ -136,7 +136,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads((1 as Weight).saturating_mul(x as Weight)))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
-	// Storage: AccountTypes AccountRoles (r:1 w:0)
+	// Storage: AccountRoles AccountRoles (r:1 w:0)
 	// Storage: EthereumBroadcaster AwaitingTransactionSignature (r:1 w:1)
 	// Storage: EthereumBroadcaster TransactionFeeDeficit (r:1 w:1)
 	// Storage: EthereumBroadcaster RefundSignerId (r:1 w:1)
@@ -149,7 +149,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(6 as Weight))
 	}
-	// Storage: AccountTypes AccountRoles (r:1 w:0)
+	// Storage: AccountRoles AccountRoles (r:1 w:0)
 	// Storage: EthereumBroadcaster AwaitingTransactionSignature (r:1 w:1)
 	// Storage: EthereumBroadcaster FailedTransactionSigners (r:1 w:1)
 	// Storage: EthereumBroadcaster BroadcastIdToAttemptNumbers (r:1 w:1)
