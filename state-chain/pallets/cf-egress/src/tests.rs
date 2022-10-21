@@ -18,7 +18,7 @@ const ETH_FLIP: ForeignChainAsset =
 fn disallowed_asset_will_not_be_batch_sent() {
 	new_test_ext().execute_with(|| {
 		let asset = ETH_ETH;
-		assert!(Egress::get_asset_ethereum_address(asset.asset).is_some());
+		assert!(Egress::get_asset_identifier(asset.asset).is_some());
 
 		// Cannot egress assets that are blacklisted.
 		assert!(EthereumDisabledEgressAssets::<Test>::get(asset.asset).is_none());
@@ -249,8 +249,33 @@ fn on_idle_batch_size_is_limited_by_weight() {
 		LastEgressSent::set(vec![]);
 		LastFetchesSent::set(vec![]);
 
-		// There's enough weights for 3 Egress and 0 fetches
-		Egress::on_idle(1, <Test as crate::Config>::WeightInfo::send_ethereum_batch(0, 3) + 1);
+		// There's enough weights for 3 fetches and 0 egress
+		Egress::on_idle(1, <Test as crate::Config>::WeightInfo::send_ethereum_batch(3, 0) + 1);
+
+		assert_eq!(
+			LastFetchesSent::get(),
+			vec![(3, ETHEREUM_FLIP_ADDRESS), (4, ETHEREUM_FLIP_ADDRESS), (1, ETHEREUM_ETH_ADDRESS)]
+		);
+		assert!(LastEgressSent::get().is_empty());
+
+		System::assert_has_event(Event::Egress(crate::Event::EthereumBatchBroadcastRequested {
+			fetch_batch_size: 3u32,
+			egress_batch_size: 0u32,
+		}));
+
+		assert!(EthereumScheduledIngressFetch::<Test>::get(Asset::Flip).is_empty());
+		assert_eq!(EthereumScheduledIngressFetch::<Test>::get(Asset::Eth), vec![2]);
+		assert_eq!(
+			EthereumScheduledEgress::<Test>::get(Asset::Eth),
+			vec![(1000, ALICE_ETH_ADDRESS), (2000, ALICE_ETH_ADDRESS)]
+		);
+		assert_eq!(
+			EthereumScheduledEgress::<Test>::get(Asset::Flip),
+			vec![(3000, ALICE_ETH_ADDRESS), (4000, ALICE_ETH_ADDRESS)]
+		);
+
+		// Send the last Fetch and 3 Egress
+		Egress::on_idle(1, <Test as crate::Config>::WeightInfo::send_ethereum_batch(1, 3) + 1);
 
 		assert_eq!(
 			LastEgressSent::get(),
@@ -260,39 +285,18 @@ fn on_idle_batch_size_is_limited_by_weight() {
 				(ETHEREUM_ETH_ADDRESS, 1000u128, ALICE_ETH_ADDRESS),
 			]
 		);
-		assert!(LastFetchesSent::get().is_empty());
+		assert_eq!(LastFetchesSent::get(), vec![(2, ETHEREUM_ETH_ADDRESS)]);
 		System::assert_has_event(Event::Egress(crate::Event::EthereumBatchBroadcastRequested {
-			fetch_batch_size: 0u32,
+			fetch_batch_size: 1u32,
 			egress_batch_size: 3u32,
 		}));
 
 		assert!(EthereumScheduledEgress::<Test>::get(Asset::Flip).is_empty());
-		assert_eq!(EthereumScheduledIngressFetch::<Test>::get(Asset::Flip), vec![3, 4]);
+		assert!(EthereumScheduledIngressFetch::<Test>::get(Asset::Flip).is_empty());
 		assert_eq!(
 			EthereumScheduledEgress::<Test>::get(Asset::Eth),
-			vec![(2000, ALICE_ETH_ADDRESS)]
+			vec![(2_000, ALICE_ETH_ADDRESS)]
 		);
-		assert_eq!(EthereumScheduledIngressFetch::<Test>::get(Asset::Eth), vec![1, 2]);
-
-		// Send the last Egress and 3 fetches
-		Egress::on_idle(1, <Test as crate::Config>::WeightInfo::send_ethereum_batch(3, 1) + 1);
-
-		assert_eq!(
-			LastEgressSent::get(),
-			vec![(ETHEREUM_ETH_ADDRESS, 2000u128, ALICE_ETH_ADDRESS),]
-		);
-		assert_eq!(
-			LastFetchesSent::get(),
-			vec![(3, ETHEREUM_FLIP_ADDRESS), (4, ETHEREUM_FLIP_ADDRESS), (1, ETHEREUM_ETH_ADDRESS)]
-		);
-		System::assert_has_event(Event::Egress(crate::Event::EthereumBatchBroadcastRequested {
-			fetch_batch_size: 3u32,
-			egress_batch_size: 1u32,
-		}));
-
-		assert!(EthereumScheduledEgress::<Test>::get(Asset::Flip).is_empty());
-		assert!(EthereumScheduledIngressFetch::<Test>::get(Asset::Flip).is_empty());
-		assert!(EthereumScheduledEgress::<Test>::get(Asset::Eth).is_empty());
-		assert_eq!(EthereumScheduledIngressFetch::<Test>::get(Asset::Eth), vec![2]);
+		assert!(EthereumScheduledIngressFetch::<Test>::get(Asset::Eth).is_empty());
 	});
 }
