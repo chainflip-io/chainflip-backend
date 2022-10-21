@@ -1,0 +1,234 @@
+use async_trait::async_trait;
+
+use anyhow::Context;
+use jsonrpsee::{
+	core::{
+		client::{ClientT, SubscriptionClientT},
+		RpcResult,
+	},
+	ws_client::WsClientBuilder,
+};
+use sp_core::{
+	storage::{StorageData, StorageKey},
+	Bytes, H256,
+};
+use sp_runtime::traits::BlakeTwo256;
+use sp_version::RuntimeVersion;
+use state_chain_runtime::SignedBlock;
+
+use codec::Encode;
+use custom_rpc::CustomApiClient;
+use sc_rpc_api::{
+	author::AuthorApiClient, chain::ChainApiClient, state::StateApiClient, system::SystemApiClient,
+};
+
+#[cfg(test)]
+use mockall::automock;
+
+use crate::settings;
+
+pub trait RawRpcApi:
+	CustomApiClient
+	+ SystemApiClient<state_chain_runtime::Hash, state_chain_runtime::BlockNumber>
+	+ StateApiClient<state_chain_runtime::Hash>
+	+ AuthorApiClient<
+		state_chain_runtime::Hash,
+		<state_chain_runtime::Block as sp_runtime::traits::Block>::Hash,
+	> + ChainApiClient<
+		state_chain_runtime::BlockNumber,
+		state_chain_runtime::Hash,
+		state_chain_runtime::Header,
+		state_chain_runtime::SignedBlock,
+	>
+{
+}
+
+impl<
+		T: SubscriptionClientT
+			+ ClientT
+			+ CustomApiClient
+			+ SystemApiClient<state_chain_runtime::Hash, state_chain_runtime::BlockNumber>
+			+ StateApiClient<state_chain_runtime::Hash>
+			+ AuthorApiClient<
+				state_chain_runtime::Hash,
+				<state_chain_runtime::Block as sp_runtime::traits::Block>::Hash,
+			> + ChainApiClient<
+				state_chain_runtime::BlockNumber,
+				state_chain_runtime::Hash,
+				state_chain_runtime::Header,
+				state_chain_runtime::SignedBlock,
+			>,
+	> RawRpcApi for T
+{
+}
+
+pub struct RpcClient<RawRpcClient> {
+	rpc_client: RawRpcClient,
+}
+
+impl RpcClient<jsonrpsee::ws_client::WsClient> {
+	pub async fn new(state_chain_settings: &settings::StateChain) -> Result<Self, anyhow::Error> {
+		let ws_endpoint = state_chain_settings.ws_endpoint.as_str();
+		Ok(Self {
+			rpc_client: WsClientBuilder::default()
+				.build(&url::Url::parse(ws_endpoint)?)
+				.await
+				.with_context(|| {
+					format!(
+						"Failed to establish rpc connection to substrate node '{}'",
+						ws_endpoint
+					)
+				})?,
+		})
+	}
+}
+
+/// Wraps the substrate client library methods
+#[cfg_attr(test, automock)]
+#[async_trait]
+pub trait StateChainRpcApi {
+	async fn submit_extrinsic(
+		&self,
+		extrinsic: state_chain_runtime::UncheckedExtrinsic,
+	) -> RpcResult<sp_core::H256>;
+
+	async fn storage(
+		&self,
+		block_hash: state_chain_runtime::Hash,
+		storage_key: StorageKey,
+	) -> RpcResult<Option<StorageData>>;
+
+	async fn storage_pairs(
+		&self,
+		block_hash: state_chain_runtime::Hash,
+		storage_key: StorageKey,
+	) -> RpcResult<Vec<(StorageKey, StorageData)>>;
+
+	async fn get_block(
+		&self,
+		block_hash: state_chain_runtime::Hash,
+	) -> RpcResult<Option<SignedBlock>>;
+
+	async fn block_hash(
+		&self,
+		block_number: state_chain_runtime::BlockNumber,
+	) -> RpcResult<Option<state_chain_runtime::Hash>>;
+
+	async fn header(
+		&self,
+		block_hash: state_chain_runtime::Hash,
+	) -> RpcResult<state_chain_runtime::Header>;
+
+	async fn latest_finalized_block_hash(&self) -> RpcResult<state_chain_runtime::Hash>;
+
+	async fn subscribe_finalized_block_headers(
+		&self,
+	) -> RpcResult<
+		jsonrpsee::core::client::Subscription<sp_runtime::generic::Header<u32, BlakeTwo256>>,
+	>;
+
+	async fn latest_block_hash(&self) -> RpcResult<H256>;
+
+	async fn rotate_keys(&self) -> RpcResult<Bytes>;
+
+	async fn fetch_runtime_version(
+		&self,
+		block_hash: state_chain_runtime::Hash,
+	) -> RpcResult<RuntimeVersion>;
+
+	async fn is_auction_phase(&self) -> RpcResult<bool>;
+}
+
+fn unwrap_value<T>(list_or_value: sp_rpc::list::ListOrValue<T>) -> T {
+	match list_or_value {
+		sp_rpc::list::ListOrValue::Value(value) => value,
+		_ => panic!(),
+	}
+}
+
+#[async_trait]
+impl<RawRpcClient: RawRpcApi + Send + Sync> StateChainRpcApi for RpcClient<RawRpcClient> {
+	async fn submit_extrinsic(
+		&self,
+		extrinsic: state_chain_runtime::UncheckedExtrinsic,
+	) -> RpcResult<sp_core::H256> {
+		self.rpc_client.submit_extrinsic(Bytes::from(extrinsic.encode())).await
+	}
+
+	async fn get_block(
+		&self,
+		block_hash: state_chain_runtime::Hash,
+	) -> RpcResult<Option<SignedBlock>> {
+		self.rpc_client.block(Some(block_hash)).await
+	}
+
+	async fn block_hash(
+		&self,
+		block_number: state_chain_runtime::BlockNumber,
+	) -> RpcResult<Option<state_chain_runtime::Hash>> {
+		Ok(unwrap_value(
+			self.rpc_client
+				.block_hash(Some(sp_rpc::list::ListOrValue::Value(block_number.into())))
+				.await?,
+		))
+	}
+
+	async fn header(
+		&self,
+		block_hash: state_chain_runtime::Hash,
+	) -> RpcResult<state_chain_runtime::Header> {
+		Ok(self.rpc_client.header(Some(block_hash)).await?.unwrap())
+	}
+
+	async fn latest_finalized_block_hash(&self) -> RpcResult<state_chain_runtime::Hash> {
+		self.rpc_client.finalized_head().await
+	}
+
+	async fn subscribe_finalized_block_headers(
+		&self,
+	) -> RpcResult<
+		jsonrpsee::core::client::Subscription<sp_runtime::generic::Header<u32, BlakeTwo256>>,
+	> {
+		self.rpc_client.subscribe_finalized_heads().await
+	}
+
+	async fn latest_block_hash(&self) -> RpcResult<H256> {
+		Ok(self
+			.rpc_client
+			.header(None)
+			.await?
+			.expect("Latest block hash could not be fetched")
+			.hash())
+	}
+
+	async fn storage(
+		&self,
+		block_hash: state_chain_runtime::Hash,
+		storage_key: StorageKey,
+	) -> RpcResult<Option<StorageData>> {
+		self.rpc_client.storage(storage_key, Some(block_hash)).await
+	}
+
+	async fn rotate_keys(&self) -> RpcResult<Bytes> {
+		self.rpc_client.rotate_keys().await
+	}
+
+	async fn storage_pairs(
+		&self,
+		block_hash: state_chain_runtime::Hash,
+		storage_key: StorageKey,
+	) -> RpcResult<Vec<(StorageKey, StorageData)>> {
+		self.rpc_client.storage_pairs(storage_key, Some(block_hash)).await
+	}
+
+	async fn fetch_runtime_version(
+		&self,
+		block_hash: state_chain_runtime::Hash,
+	) -> RpcResult<RuntimeVersion> {
+		self.rpc_client.runtime_version(Some(block_hash)).await
+	}
+
+	async fn is_auction_phase(&self) -> RpcResult<bool> {
+		self.rpc_client.cf_is_auction_phase(None).await
+	}
+}
