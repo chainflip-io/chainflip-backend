@@ -286,7 +286,7 @@ impl StateChainClient {
 		while let Some(result_header) = block_stream.next().await {
 			let header = result_header?;
 			let block_hash = header.hash();
-			if let Some(signed_block) = self.rpc_client.get_block(block_hash).await? {
+			if let Some(signed_block) = self.rpc_client.block(block_hash).await? {
 				match signed_block.block.extrinsics.iter().position(|ext| {
 					let hash = BlakeTwo256::hash_of(ext);
 					hash == extrinsic_hash

@@ -68,7 +68,7 @@ async fn request_block(
 
 	let state_chain_rpc_client = RpcClient::new(&settings.state_chain).await?;
 
-	match state_chain_rpc_client.get_block(block_hash).await? {
+	match state_chain_rpc_client.block(block_hash).await? {
 		Some(block) => {
 			println!("{:#?}", block);
 		},
