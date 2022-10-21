@@ -180,7 +180,7 @@ impl StateChainClient {
 						// we retry this one, with the updated runtime_version
 						self.nonce.fetch_sub(1, Ordering::Relaxed);
 
-						let latest_block_hash = self.rpc_client.latest_block_hash().await?;
+						let latest_block_hash = self.rpc_client.latest_finalized_block_hash().await?;
 
 						let runtime_version =
 							self.rpc_client.fetch_runtime_version(latest_block_hash).await?;

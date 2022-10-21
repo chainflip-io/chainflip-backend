@@ -10,7 +10,7 @@ use jsonrpsee::{
 };
 use sp_core::{
 	storage::{StorageData, StorageKey},
-	Bytes, H256,
+	Bytes,
 };
 use sp_runtime::traits::BlakeTwo256;
 use sp_version::RuntimeVersion;
@@ -106,8 +106,6 @@ pub trait RpcApi {
 		jsonrpsee::core::client::Subscription<sp_runtime::generic::Header<u32, BlakeTwo256>>,
 	>;
 
-	async fn latest_block_hash(&self) -> RpcResult<H256>;
-
 	async fn rotate_keys(&self) -> RpcResult<Bytes>;
 
 	async fn fetch_runtime_version(
@@ -190,15 +188,6 @@ impl<RawRpcClient: RawRpcApi + Send + Sync> RpcApi for RpcClient<RawRpcClient> {
 		jsonrpsee::core::client::Subscription<sp_runtime::generic::Header<u32, BlakeTwo256>>,
 	> {
 		self.rpc_client.subscribe_finalized_heads().await
-	}
-
-	async fn latest_block_hash(&self) -> RpcResult<H256> {
-		Ok(self
-			.rpc_client
-			.header(None)
-			.await?
-			.expect("Latest block hash could not be fetched")
-			.hash())
 	}
 
 	async fn storage(
