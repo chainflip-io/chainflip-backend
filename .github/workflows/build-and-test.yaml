@@ -12,7 +12,7 @@ env:
 jobs:
   get-secrets:
     name: Get Secrets from 1Password
-    uses: ./github/workflows/.get-secrets.yaml
+    uses: ./.github/workflows/.get-secrets.yaml
     secrets: inherit
 
   cargo-fmt:
