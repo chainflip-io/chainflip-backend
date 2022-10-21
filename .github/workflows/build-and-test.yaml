@@ -12,7 +12,7 @@ env:
 
 jobs:
   cargo-fmt:
-    runs-on: [self-hosted, linux, x64, ephemeral]
+    runs-on: [Rust-Runners]
     container:
       image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08"
       credentials:
@@ -25,7 +25,7 @@ jobs:
         run: cargo fmt --all -- --check
 
   cargo-clippy:
-    runs-on: [self-hosted, linux, x64, ephemeral]
+    runs-on: [Rust-Runners]
     container:
       image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08"
       credentials:
@@ -38,7 +38,7 @@ jobs:
         run: cargo ci-clippy
 
   cargo-doc:
-    runs-on: [self-hosted, linux, x64, ephemeral]
+    runs-on: [Rust-Runners]
     container:
       image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08"
       credentials:
@@ -68,7 +68,7 @@ jobs:
             ./target/doc/
 
   build-and-test:
-    runs-on: [self-hosted, linux, x64, ephemeral]
+    runs-on: [Rust-Runners]
     needs: [cargo-fmt]
     container:
       image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08"
@@ -122,7 +122,7 @@ jobs:
             ./target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm
 
   build-ibiza:
-    runs-on: [self-hosted, linux, x64, ephemeral]
+    runs-on: [Rust-Runners]
     needs: [cargo-fmt]
     container:
       image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08"
@@ -156,7 +156,7 @@ jobs:
             ./target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm
 
   test-single-node:
-    runs-on: [self-hosted, linux, x64, ephemeral]
+    runs-on: [Rust-Runners]
     needs: [build-and-test]
     steps:
       - uses: actions/setup-node@v3

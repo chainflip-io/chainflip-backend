@@ -11,7 +11,7 @@ env:
 jobs:
   build-deb:
     name: Build Deb
-    runs-on: [self-hosted, linux, x64, ephemeral]
+    runs-on: [Rust-Runners]
     permissions:
       id-token: write
       contents: read
