@@ -23,6 +23,7 @@ jobs:
         uses: actions/checkout@v3
       - name: Check Format
         run: cargo fmt --all -- --check
+
   cargo-clippy:
     runs-on: [self-hosted, linux, x64, ephemeral]
     container:
@@ -35,6 +36,7 @@ jobs:
         uses: actions/checkout@v3
       - name: Check Linting
         run: cargo ci-clippy
+
   cargo-doc:
     runs-on: [self-hosted, linux, x64, ephemeral]
     container:
