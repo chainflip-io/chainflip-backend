@@ -29,7 +29,7 @@ use crate::{
 		KeyId, MessageHash,
 	},
 	p2p::{PeerInfo, PeerUpdate},
-	state_chain_observer::client::StateChainClient,
+	state_chain_observer::client::{storage_traits::SafeStorageApi, StateChainClient},
 	task_scope::{with_task_scope, Scope},
 };
 
@@ -209,7 +209,7 @@ where
                 epoch_start_sender.send(EpochStart {
                     index,
                     eth_block: state_chain_client
-                        .get_storage_map::<pallet_cf_vaults::Vaults<
+                        .get_storage_map_entry::<pallet_cf_vaults::Vaults<
                             state_chain_runtime::Runtime,
                             state_chain_runtime::EthereumInstance,
                         >>(block_hash, &index)
@@ -224,7 +224,7 @@ where
         };
 
         {
-            let historical_active_epochs = BTreeSet::from_iter(state_chain_client.get_storage_map::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>(
+            let historical_active_epochs = BTreeSet::from_iter(state_chain_client.get_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>(
                 initial_block_hash,
                 &state_chain_client.our_account_id
             ).await.unwrap());
@@ -286,7 +286,7 @@ where
                                             state_chain_runtime::Event::Validator(
                                                 pallet_cf_validator::Event::NewEpoch(new_epoch),
                                             ) => {
-                                                start_epoch(current_block_hash, new_epoch, true, state_chain_client.get_storage_double_map::<pallet_cf_validator::AuthorityIndex<state_chain_runtime::Runtime>>(
+                                                start_epoch(current_block_hash, new_epoch, true, state_chain_client.get_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<state_chain_runtime::Runtime>>(
                                                     current_block_hash,
                                                     &new_epoch,
                                                     &state_chain_client.our_account_id

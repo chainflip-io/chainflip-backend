@@ -2,7 +2,9 @@ use cf_chains::eth::H256;
 use cf_primitives::AccountRole;
 use chainflip_engine::{
 	eth::{rpc::EthDualRpcClient, EthBroadcaster},
-	state_chain_observer::client::{connect_to_state_chain, RpcApi, RpcClient},
+	state_chain_observer::client::{
+		connect_to_state_chain, storage_traits::SafeStorageApi, RpcApi, RpcClient,
+	},
 };
 use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use clap::Parser;
@@ -280,7 +282,7 @@ async fn activate_account(settings: &CLISettings, logger: &slog::Logger) -> Resu
 		connect_to_state_chain(&settings.state_chain, false, logger).await?;
 
 	match state_chain_client
-        .get_storage_map::<pallet_cf_account_roles::AccountRoles<state_chain_runtime::Runtime>>(
+        .get_storage_map_entry::<pallet_cf_account_roles::AccountRoles<state_chain_runtime::Runtime>>(
             latest_block_hash,
             &state_chain_client.our_account_id,
         )

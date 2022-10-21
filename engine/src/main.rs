@@ -13,7 +13,7 @@ use chainflip_engine::{
 	multisig::{self, client::key_store::KeyStore, PersistentKeyDB},
 	p2p,
 	settings::{CommandLineOptions, Settings},
-	state_chain_observer::{self},
+	state_chain_observer::{self, client::storage_traits::SafeStorageApi},
 	task_scope::with_main_task_scope,
 };
 
@@ -228,7 +228,7 @@ fn main() -> anyhow::Result<()> {
                 use cf_primitives::Asset;
 
                 let flip_contract_address = state_chain_client
-                    .get_storage_map::<pallet_cf_environment::SupportedEthAssets::<
+                    .get_storage_map_entry::<pallet_cf_environment::SupportedEthAssets::<
                         state_chain_runtime::Runtime,
                     >>(latest_block_hash, &Asset::Flip)
                     .await
@@ -236,14 +236,14 @@ fn main() -> anyhow::Result<()> {
                     .expect("FLIP address must exist at genesis");
 
                 let usdc_contract_address = state_chain_client
-                    .get_storage_map::<pallet_cf_environment::SupportedEthAssets::<
+                    .get_storage_map_entry::<pallet_cf_environment::SupportedEthAssets::<
                         state_chain_runtime::Runtime,
                     >>(latest_block_hash, &Asset::Usdc)
                     .await
                     .context("Failed to get USDC address from SC")?
                     .expect("USDC address must exist at genesis");
 
-                let eth_chain_ingress_addresses = state_chain_client.get_all_storage_pairs::<pallet_cf_ingress::IntentIngressDetails<state_chain_runtime::Runtime>>(latest_block_hash)
+                let eth_chain_ingress_addresses = state_chain_client.get_storage_map::<pallet_cf_ingress::IntentIngressDetails<state_chain_runtime::Runtime>>(latest_block_hash)
                     .await
                     .context("Failed to get initial ingress details")?
                     .into_iter()

@@ -5,8 +5,8 @@ pub mod storage_traits;
 pub use rpc_api::{RpcApi, RpcClient};
 
 use anyhow::{anyhow, bail, Context, Result};
-use codec::{Decode, Encode, FullCodec};
-use frame_support::{pallet_prelude::InvalidTransaction, storage::types::QueryKindTrait};
+use codec::{Decode, Encode};
+use frame_support::pallet_prelude::InvalidTransaction;
 use frame_system::Phase;
 use futures::{Stream, StreamExt, TryStreamExt};
 use jsonrpsee::{
@@ -36,6 +36,8 @@ use crate::{
 };
 use utilities::context;
 
+use self::storage_traits::SafeStorageApi;
+
 pub struct StateChainClient {
 	nonce: AtomicU32,
 	/// Our Node's AccountId
@@ -53,8 +55,6 @@ impl StateChainClient {
 		self.genesis_hash
 	}
 }
-
-use crate::state_chain_observer::client::storage_traits::StorageMapAssociatedTypes;
 
 fn invalid_err_obj(invalid_reason: InvalidTransaction) -> ErrorObjectOwned {
 	ErrorObject::owned(1010, "Invalid Transaction", Some(<&'static str>::from(invalid_reason)))
@@ -318,87 +318,6 @@ impl StateChainClient {
 			};
 		}
 		Err(anyhow!("Block stream loop exited, no event found",))
-	}
-
-	async fn get_storage_item<
-		Value: FullCodec,
-		OnEmpty,
-		QueryKind: QueryKindTrait<Value, OnEmpty>,
-	>(
-		&self,
-		storage_key: StorageKey,
-		block_hash: H256,
-		log_str: &str,
-	) -> Result<<QueryKind as QueryKindTrait<Value, OnEmpty>>::Query> {
-		Ok(QueryKind::from_optional_value_to_query(
-			self.rpc_client
-				.storage(block_hash, storage_key.clone())
-				.await
-				.context(format!(
-					"Failed to get storage {} with key: {:?} at block hash {:#x}",
-					log_str, storage_key, block_hash
-				))?
-				.map(|data| context!(Value::decode(&mut &data.0[..])).unwrap()),
-		))
-	}
-
-    pub async fn get_storage_value<StorageValue: storage_traits::StorageValueAssociatedTypes>(
-        &self,
-        block_hash: state_chain_runtime::Hash,
-	) -> Result<<StorageValue::QueryKind as QueryKindTrait<StorageValue::Value, StorageValue::OnEmpty>>::Query>{
-		self.get_storage_item::<StorageValue::Value, StorageValue::OnEmpty, StorageValue::QueryKind>(StorageValue::_hashed_key(), block_hash, "value").await
-	}
-
-	pub async fn get_storage_map<StorageMap: storage_traits::StorageMapAssociatedTypes>(
-		&self,
-		block_hash: state_chain_runtime::Hash,
-		key: &StorageMap::Key,
-	) -> Result<
-		<StorageMap::QueryKind as QueryKindTrait<StorageMap::Value, StorageMap::OnEmpty>>::Query,
-	> {
-		self.get_storage_item::<StorageMap::Value, StorageMap::OnEmpty, StorageMap::QueryKind>(
-			StorageMap::_hashed_key_for(key),
-			block_hash,
-			"map",
-		)
-		.await
-	}
-
-	pub async fn get_storage_double_map<
-		StorageDoubleMap: storage_traits::StorageDoubleMapAssociatedTypes,
-	>(
-		&self,
-		block_hash: state_chain_runtime::Hash,
-		key1: &StorageDoubleMap::Key1,
-		key2: &StorageDoubleMap::Key2,
-	) -> Result<
-		<StorageDoubleMap::QueryKind as QueryKindTrait<
-			StorageDoubleMap::Value,
-			StorageDoubleMap::OnEmpty,
-		>>::Query,
-	> {
-		self.get_storage_item::<StorageDoubleMap::Value, StorageDoubleMap::OnEmpty, StorageDoubleMap::QueryKind>(StorageDoubleMap::_hashed_key_for(key1, key2), block_hash, "double map").await
-	}
-
-	/// Gets all the storage pairs (key, value) of a StorageMap.
-	/// NB: Because this is an unbounded operation, it requires the node to have
-	/// the `--rpc-methods=unsafe` enabled.
-	pub async fn get_all_storage_pairs<StorageMap: storage_traits::StorageMapAssociatedTypes>(
-		&self,
-		block_hash: state_chain_runtime::Hash,
-	) -> Result<Vec<(<StorageMap as StorageMapAssociatedTypes>::Key, StorageMap::Value)>> {
-		Ok(self
-			.rpc_client
-			.storage_pairs(block_hash, StorageMap::_prefix_hash())
-			.await?
-			.into_iter()
-			.map(|(storage_key, storage_data)| {
-				(
-					StorageMap::key_from_storage_key(&storage_key),
-					context!(StorageMap::Value::decode(&mut &storage_data.0[..])).unwrap(),
-				)
-			})
-			.collect())
 	}
 
 	pub async fn rotate_session_keys(&self) -> Result<Bytes> {

@@ -1,4 +1,5 @@
-use codec::FullCodec;
+use async_trait::async_trait;
+use codec::{Decode, FullCodec};
 use frame_support::{
 	storage::{
 		generator::StorageMap as StorageMapTrait,
@@ -7,7 +8,11 @@ use frame_support::{
 	traits::{Get, StorageInstance},
 	ReversibleStorageHasher, StorageHasher,
 };
+use jsonrpsee::core::RpcResult;
 use sp_core::storage::StorageKey;
+use utilities::context;
+
+use super::RpcApi;
 
 // A method to safely extract type information about Substrate storage maps (As the Key and Value
 // types are not available)
@@ -113,6 +118,140 @@ impl<
 
 	fn _hashed_key() -> StorageKey {
 		StorageKey(Self::hashed_key().into())
+	}
+}
+
+#[async_trait]
+pub trait SafeStorageApi {
+	async fn get_storage_item<
+		Value: codec::FullCodec,
+		OnEmpty,
+		QueryKind: QueryKindTrait<Value, OnEmpty>,
+	>(
+		&self,
+		storage_key: StorageKey,
+		block_hash: state_chain_runtime::Hash,
+	) -> RpcResult<<QueryKind as QueryKindTrait<Value, OnEmpty>>::Query>;
+
+	async fn get_storage_value<StorageValue: StorageValueAssociatedTypes>(
+		&self,
+		block_hash: state_chain_runtime::Hash,
+	) -> RpcResult<<StorageValue::QueryKind as QueryKindTrait<StorageValue::Value, StorageValue::OnEmpty>>::Query>;
+
+	async fn get_storage_map_entry<StorageMap: StorageMapAssociatedTypes>(
+		&self,
+		block_hash: state_chain_runtime::Hash,
+		key: &StorageMap::Key,
+	) -> RpcResult<
+		<StorageMap::QueryKind as QueryKindTrait<StorageMap::Value, StorageMap::OnEmpty>>::Query,
+	>
+	where
+		StorageMap::Key: Sync;
+
+	async fn get_storage_double_map_entry<StorageDoubleMap: StorageDoubleMapAssociatedTypes>(
+		&self,
+		block_hash: state_chain_runtime::Hash,
+		key1: &StorageDoubleMap::Key1,
+		key2: &StorageDoubleMap::Key2,
+	) -> RpcResult<
+		<StorageDoubleMap::QueryKind as QueryKindTrait<
+			StorageDoubleMap::Value,
+			StorageDoubleMap::OnEmpty,
+		>>::Query,
+	>
+	where
+		StorageDoubleMap::Key1: Sync,
+		StorageDoubleMap::Key2: Sync;
+
+	/// Gets all the storage pairs (key, value) of a StorageMap.
+	/// NB: Because this is an unbounded operation, it requires the node to have
+	/// the `--rpc-methods=unsafe` enabled.
+	async fn get_storage_map<StorageMap: StorageMapAssociatedTypes>(
+		&self,
+		block_hash: state_chain_runtime::Hash,
+	) -> RpcResult<Vec<(<StorageMap as StorageMapAssociatedTypes>::Key, StorageMap::Value)>>;
+}
+
+#[async_trait]
+impl SafeStorageApi for super::StateChainClient {
+	async fn get_storage_item<
+		Value: codec::FullCodec,
+		OnEmpty,
+		QueryKind: QueryKindTrait<Value, OnEmpty>,
+	>(
+		&self,
+		storage_key: StorageKey,
+		block_hash: state_chain_runtime::Hash,
+	) -> RpcResult<<QueryKind as QueryKindTrait<Value, OnEmpty>>::Query> {
+		Ok(QueryKind::from_optional_value_to_query(
+			self.rpc_client
+				.storage(block_hash, storage_key.clone())
+				.await?
+				.map(|data| context!(Value::decode(&mut &data.0[..])).unwrap()),
+		))
+	}
+
+	async fn get_storage_value<StorageValue: StorageValueAssociatedTypes>(
+		&self,
+		block_hash: state_chain_runtime::Hash,
+	) -> RpcResult<<StorageValue::QueryKind as QueryKindTrait<StorageValue::Value, StorageValue::OnEmpty>>::Query>{
+		self.get_storage_item::<StorageValue::Value, StorageValue::OnEmpty, StorageValue::QueryKind>(StorageValue::_hashed_key(), block_hash).await
+	}
+
+	async fn get_storage_map_entry<StorageMap: StorageMapAssociatedTypes>(
+		&self,
+		block_hash: state_chain_runtime::Hash,
+		key: &StorageMap::Key,
+	) -> RpcResult<
+		<StorageMap::QueryKind as QueryKindTrait<StorageMap::Value, StorageMap::OnEmpty>>::Query,
+	>
+	where
+		StorageMap::Key: Sync,
+	{
+		self.get_storage_item::<StorageMap::Value, StorageMap::OnEmpty, StorageMap::QueryKind>(
+			StorageMap::_hashed_key_for(key),
+			block_hash,
+		)
+		.await
+	}
+
+	async fn get_storage_double_map_entry<StorageDoubleMap: StorageDoubleMapAssociatedTypes>(
+		&self,
+		block_hash: state_chain_runtime::Hash,
+		key1: &StorageDoubleMap::Key1,
+		key2: &StorageDoubleMap::Key2,
+	) -> RpcResult<
+		<StorageDoubleMap::QueryKind as QueryKindTrait<
+			StorageDoubleMap::Value,
+			StorageDoubleMap::OnEmpty,
+		>>::Query,
+	>
+	where
+		StorageDoubleMap::Key1: Sync,
+		StorageDoubleMap::Key2: Sync,
+	{
+		self.get_storage_item::<StorageDoubleMap::Value, StorageDoubleMap::OnEmpty, StorageDoubleMap::QueryKind>(StorageDoubleMap::_hashed_key_for(key1, key2), block_hash).await
+	}
+
+	/// Gets all the storage pairs (key, value) of a StorageMap.
+	/// NB: Because this is an unbounded operation, it requires the node to have
+	/// the `--rpc-methods=unsafe` enabled.
+	async fn get_storage_map<StorageMap: StorageMapAssociatedTypes>(
+		&self,
+		block_hash: state_chain_runtime::Hash,
+	) -> RpcResult<Vec<(<StorageMap as StorageMapAssociatedTypes>::Key, StorageMap::Value)>> {
+		Ok(self
+			.rpc_client
+			.storage_pairs(block_hash, StorageMap::_prefix_hash())
+			.await?
+			.into_iter()
+			.map(|(storage_key, storage_data)| {
+				(
+					StorageMap::key_from_storage_key(&storage_key),
+					context!(StorageMap::Value::decode(&mut &storage_data.0[..])).unwrap(),
+				)
+			})
+			.collect())
 	}
 }
 

@@ -13,7 +13,9 @@ use codec::Encode;
 use utilities::{make_periodic_tick, Port};
 
 use crate::{
-	logging::COMPONENT_KEY, p2p::PeerInfo, state_chain_observer::client::StateChainClient,
+	logging::COMPONENT_KEY,
+	p2p::PeerInfo,
+	state_chain_observer::client::{storage_traits::SafeStorageApi, StateChainClient},
 };
 
 async fn update_registered_peer_id(
@@ -121,7 +123,7 @@ pub async fn get_current_peer_infos(
 	block_hash: H256,
 ) -> anyhow::Result<Vec<PeerInfo>> {
 	let peer_infos: Vec<_> = state_chain_client
-		.get_all_storage_pairs::<pallet_cf_validator::AccountPeerMapping<state_chain_runtime::Runtime>>(
+		.get_storage_map::<pallet_cf_validator::AccountPeerMapping<state_chain_runtime::Runtime>>(
 			block_hash,
 		)
 		.await?
