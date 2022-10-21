@@ -2,7 +2,7 @@ use cf_chains::eth::H256;
 use cf_primitives::AccountRole;
 use chainflip_engine::{
 	eth::{rpc::EthDualRpcClient, EthBroadcaster},
-	state_chain_observer::client::{connect_to_state_chain, RpcClient, StateChainRpcApi},
+	state_chain_observer::client::{connect_to_state_chain, RpcClient, RpcApi},
 };
 use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use clap::Parser;

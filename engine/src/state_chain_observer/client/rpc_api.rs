@@ -86,7 +86,7 @@ impl RpcClient<jsonrpsee::ws_client::WsClient> {
 /// Wraps the substrate client library methods
 #[cfg_attr(test, automock)]
 #[async_trait]
-pub trait StateChainRpcApi {
+pub trait RpcApi {
 	async fn submit_extrinsic(
 		&self,
 		extrinsic: state_chain_runtime::UncheckedExtrinsic,
@@ -147,7 +147,7 @@ fn unwrap_value<T>(list_or_value: sp_rpc::list::ListOrValue<T>) -> T {
 }
 
 #[async_trait]
-impl<RawRpcClient: RawRpcApi + Send + Sync> StateChainRpcApi for RpcClient<RawRpcClient> {
+impl<RawRpcClient: RawRpcApi + Send + Sync> RpcApi for RpcClient<RawRpcClient> {
 	async fn submit_extrinsic(
 		&self,
 		extrinsic: state_chain_runtime::UncheckedExtrinsic,

@@ -2,7 +2,7 @@ mod rpc_api;
 mod signer;
 pub mod storage_traits;
 
-pub use rpc_api::{RpcClient, StateChainRpcApi};
+pub use rpc_api::{RpcClient, RpcApi};
 
 use anyhow::{anyhow, bail, Context, Result};
 use codec::{Decode, Encode, FullCodec};
@@ -536,7 +536,7 @@ async fn inner_connect_to_state_chain(
 	};
 
 	let (latest_block_hash, latest_block_number, account_nonce) = {
-		async fn get_account_nonce<StateChainRpcClient: rpc_api::StateChainRpcApi + Send + Sync>(
+		async fn get_account_nonce<StateChainRpcClient: rpc_api::RpcApi + Send + Sync>(
 			state_rpc_client: &StateChainRpcClient,
 			account_storage_key: &StorageKey,
 			block_hash: state_chain_runtime::Hash,
