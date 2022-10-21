@@ -11,7 +11,7 @@ env:
 jobs:
   build-deb:
     name: Build Deb
-    runs-on: [Rust-Runners]
+    runs-on: [Rust-Runner]
     permissions:
       id-token: write
       contents: read
