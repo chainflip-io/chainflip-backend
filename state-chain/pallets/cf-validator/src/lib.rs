@@ -1018,6 +1018,10 @@ impl<T: Config> Pallet<T> {
 		.and_then(|resolver| resolver.resolve_auction(Self::qualified_bidders().collect()))
 		{
 			Ok(auction_outcome) => {
+				Self::deposit_event(Event::AuctionCompleted(
+					auction_outcome.winners.clone(),
+					auction_outcome.bond,
+				));
 				debug_assert!(!auction_outcome.winners.is_empty());
 				debug_assert!({
 					let bids = T::BidderProvider::get_bidders()
