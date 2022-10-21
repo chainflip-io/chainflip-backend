@@ -14,7 +14,6 @@ env:
 jobs:
   cargo-fmt:
     runs-on: [self-hosted, linux, x64, ephemeral]
-    environment: development
     container:
       image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08"
       credentials:
@@ -28,7 +27,6 @@ jobs:
           cargo fmt --all -- --check
   cargo-doc:
     runs-on: [self-hosted, linux, x64, ephemeral]
-    environment: development
     container:
       image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08"
       credentials:
@@ -59,7 +57,6 @@ jobs:
 
   build-and-test:
     runs-on: [self-hosted, linux, x64, ephemeral]
-    environment: development
     needs: [cargo-fmt]
     container:
       image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08"
@@ -114,7 +111,6 @@ jobs:
 
   build-ibiza:
     runs-on: [self-hosted, linux, x64, ephemeral]
-    environment: development
     needs: [cargo-fmt]
     container:
       image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08"
@@ -149,7 +145,6 @@ jobs:
 
   test-single-node:
     runs-on: [self-hosted, linux, x64, ephemeral]
-    environment: development
     needs: [build-and-test]
     steps:
       - uses: actions/setup-node@v3
