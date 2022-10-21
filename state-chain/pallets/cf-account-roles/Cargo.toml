@@ -1,8 +1,8 @@
 [package]
-name = 'pallet-cf-account-types'
+name = 'pallet-cf-account-roles'
 version = '0.1.0'
 authors = ['Chainflip Team <https://github.com/chainflip-io>']
-description = 'Chainflip account types pallet.'
+description = 'Chainflip account roles pallet.'
 edition = '2021'
 homepage = 'https://chainflip.io'
 license = '<TODO>'

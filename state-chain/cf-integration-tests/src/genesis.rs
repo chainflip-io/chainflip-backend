@@ -90,7 +90,7 @@ fn state_of_genesis_is_as_expected() {
 
 		for account in &accounts {
 			assert_eq!(
-				pallet_cf_account_types::AccountRoles::<Runtime>::get(account).unwrap(),
+				pallet_cf_account_roles::AccountRoles::<Runtime>::get(account).unwrap(),
 				AccountRole::Validator
 			);
 		}

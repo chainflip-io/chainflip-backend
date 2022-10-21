@@ -757,7 +757,7 @@ dependencies = [
  "libsecp256k1",
  "pallet-aura",
  "pallet-authorship",
- "pallet-cf-account-types",
+ "pallet-cf-account-roles",
  "pallet-cf-broadcast",
  "pallet-cf-emissions",
  "pallet-cf-environment",
@@ -925,7 +925,7 @@ dependencies = [
  "futures 0.3.21",
  "hex",
  "jsonrpsee",
- "pallet-cf-account-types",
+ "pallet-cf-account-roles",
  "pallet-cf-environment",
  "pallet-cf-governance",
  "pallet-cf-staking",
@@ -5122,7 +5122,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-cf-account-types"
+name = "pallet-cf-account-roles"
 version = "0.1.0"
 dependencies = [
  "cf-primitives",
@@ -5300,7 +5300,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "pallet-cf-account-types",
+ "pallet-cf-account-roles",
  "pallet-cf-ingress",
  "parity-scale-codec",
  "quickcheck",
@@ -5364,7 +5364,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "log 0.4.17",
- "pallet-cf-account-types",
+ "pallet-cf-account-roles",
  "pallet-cf-flip",
  "parity-scale-codec",
  "scale-info",
@@ -9019,7 +9019,7 @@ dependencies = [
  "nanorand",
  "pallet-aura",
  "pallet-authorship",
- "pallet-cf-account-types",
+ "pallet-cf-account-roles",
  "pallet-cf-broadcast",
  "pallet-cf-chain-tracking",
  "pallet-cf-egress",

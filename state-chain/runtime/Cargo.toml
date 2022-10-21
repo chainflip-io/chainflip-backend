@@ -31,7 +31,7 @@ cf-chains = { path = '../chains', default-features = false }
 cf-session-benchmarking = { path = '../cf-session-benchmarking', default-features = false, optional = true }
 
 cf-utilities = { package = 'utilities', path = '../../utilities', default-features = false }
-pallet-cf-account-types = { path = '../pallets/cf-account-types', default-features = false }
+pallet-cf-account-roles = { path = '../pallets/cf-account-roles', default-features = false }
 pallet-cf-validator = { path = '../pallets/cf-validator', default-features = false }
 pallet-cf-staking = { path = '../pallets/cf-staking', default-features = false }
 pallet-cf-witnesser = { path = '../pallets/cf-witnesser', default-features = false}
@@ -206,7 +206,7 @@ runtime-benchmarks = [
   'frame-system-benchmarking',
   'frame-system/runtime-benchmarks',
   'hex-literal',
-  'pallet-cf-account-types/runtime-benchmarks',
+  'pallet-cf-account-roles/runtime-benchmarks',
   'pallet-cf-broadcast/runtime-benchmarks',
   'pallet-cf-chain-tracking/runtime-benchmarks',
   'pallet-cf-emissions/runtime-benchmarks',
@@ -241,7 +241,7 @@ std = [
   'frame-try-runtime/std',
   'nanorand/std',
   'pallet-aura/std',
-  'pallet-cf-account-types/std',
+  'pallet-cf-account-roles/std',
   'pallet-cf-broadcast/std',
   'pallet-cf-chain-tracking/std',
   'pallet-cf-egress/std',

@@ -5,7 +5,7 @@ panic = 'unwind'
 members = [
   'state-chain/chains',
   'state-chain/node',
-  'state-chain/pallets/cf-account-types',
+  'state-chain/pallets/cf-account-roles',
   'state-chain/pallets/cf-broadcast',
   'state-chain/pallets/cf-chain-tracking',
   'state-chain/pallets/cf-emissions',

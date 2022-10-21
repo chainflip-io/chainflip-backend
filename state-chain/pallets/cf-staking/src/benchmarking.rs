@@ -25,7 +25,7 @@ benchmarks! {
 
 	where_clause {
 		where
-			T: pallet_cf_account_types::Config,
+			T: pallet_cf_account_roles::Config,
 	}
 
 	staked {

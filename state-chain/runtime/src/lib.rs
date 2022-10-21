@@ -240,9 +240,9 @@ impl pallet_cf_egress::Config for Runtime {
 	type WeightInfo = ();
 }
 
-impl pallet_cf_account_types::Config for Runtime {
+impl pallet_cf_account_roles::Config for Runtime {
 	type Event = Event;
-	type WeightInfo = pallet_cf_account_types::weights::PalletWeight<Runtime>;
+	type WeightInfo = pallet_cf_account_roles::weights::PalletWeight<Runtime>;
 }
 
 impl<LocalCall> SendTransactionTypes<LocalCall> for Runtime
@@ -567,7 +567,7 @@ construct_runtime!(
 		Emissions: pallet_cf_emissions,
 		Staking: pallet_cf_staking,
 		// AccountTypes after staking, since account creation comes first.
-		AccountTypes: pallet_cf_account_types,
+		AccountTypes: pallet_cf_account_roles,
 		TransactionPayment: pallet_transaction_payment,
 		Witnesser: pallet_cf_witnesser,
 		Validator: pallet_cf_validator,
@@ -601,7 +601,7 @@ construct_runtime!(
 		Emissions: pallet_cf_emissions,
 		// AccountTypes after staking, since account creation comes first.
 		Staking: pallet_cf_staking,
-		AccountTypes: pallet_cf_account_types,
+		AccountTypes: pallet_cf_account_roles,
 		TransactionPayment: pallet_transaction_payment,
 		Witnesser: pallet_cf_witnesser,
 		Validator: pallet_cf_validator,
@@ -684,7 +684,7 @@ mod benches {
 		[pallet_cf_threshold_signature, EthereumThresholdSigner]
 		[pallet_cf_broadcast, EthereumBroadcaster]
 		[pallet_cf_chain_tracking, EthereumChainTracking]
-		[pallet_cf_account_types, AccountTypes]
+		[pallet_cf_account_roles, AccountTypes]
 		[pallet_cf_relayer, Relayer]
 		[pallet_cf_ingress, Ingress]
 		[pallet_cf_egress, Egress]
