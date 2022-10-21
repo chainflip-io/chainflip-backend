@@ -305,4 +305,5 @@ ibiza = [
   'pallet-cf-ingress',
   'pallet-cf-relayer',
   'pallet-cf-lp',
+  'cf-chains/ibiza'
 ]
