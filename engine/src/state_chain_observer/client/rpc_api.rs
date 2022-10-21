@@ -150,6 +150,22 @@ impl<RawRpcClient: RawRpcApi + Send + Sync> RpcApi for RpcClient<RawRpcClient> {
 		self.rpc_client.submit_extrinsic(Bytes::from(extrinsic.encode())).await
 	}
 
+	async fn storage(
+		&self,
+		block_hash: state_chain_runtime::Hash,
+		storage_key: StorageKey,
+	) -> RpcResult<Option<StorageData>> {
+		self.rpc_client.storage(storage_key, Some(block_hash)).await
+	}
+
+	async fn storage_pairs(
+		&self,
+		block_hash: state_chain_runtime::Hash,
+		storage_key: StorageKey,
+	) -> RpcResult<Vec<(StorageKey, StorageData)>> {
+		self.rpc_client.storage_pairs(storage_key, Some(block_hash)).await
+	}
+
 	async fn block(&self, block_hash: state_chain_runtime::Hash) -> RpcResult<Option<SignedBlock>> {
 		self.rpc_client.block(Some(block_hash)).await
 	}
@@ -184,24 +200,8 @@ impl<RawRpcClient: RawRpcApi + Send + Sync> RpcApi for RpcClient<RawRpcClient> {
 		self.rpc_client.subscribe_finalized_heads().await
 	}
 
-	async fn storage(
-		&self,
-		block_hash: state_chain_runtime::Hash,
-		storage_key: StorageKey,
-	) -> RpcResult<Option<StorageData>> {
-		self.rpc_client.storage(storage_key, Some(block_hash)).await
-	}
-
 	async fn rotate_keys(&self) -> RpcResult<Bytes> {
 		self.rpc_client.rotate_keys().await
-	}
-
-	async fn storage_pairs(
-		&self,
-		block_hash: state_chain_runtime::Hash,
-		storage_key: StorageKey,
-	) -> RpcResult<Vec<(StorageKey, StorageData)>> {
-		self.rpc_client.storage_pairs(storage_key, Some(block_hash)).await
 	}
 
 	async fn fetch_runtime_version(
