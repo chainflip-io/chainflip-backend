@@ -9,11 +9,10 @@ on:
 env:
   SCCACHE_CACHE_SIZE: 32G
   SCCACHE_REDIS: ${{ secrets.SCCACHE_REDIS }}
-  SCCACHE_DIR: ""
 
 jobs:
   cargo-fmt:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, ephemeral]
     container:
       image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08"
       credentials:
@@ -22,10 +21,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-      - name: Check format
+      - name: Check Format
         run: cargo fmt --all -- --check
   cargo-clippy:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, ephemeral]
     container:
       image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08"
       credentials:
@@ -34,7 +33,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-      - name: Check format
+      - name: Check Linting
         run: cargo ci-clippy
   cargo-doc:
     runs-on: [self-hosted, linux, x64, ephemeral]
@@ -51,7 +50,7 @@ jobs:
       - name: Setup sccache
         uses: hendrikmuhs/ccache-action@v1.2
         with:
-          max-size: 32G
+          max-size: ${{ env.SCCACHE_CACHE_SIZE }}
           variant: sccache
           save: false
       - run: sccache --show-stats
@@ -82,7 +81,7 @@ jobs:
       - name: Setup sccache
         uses: hendrikmuhs/ccache-action@v1.2
         with:
-          max-size: 32G
+          max-size: ${{ env.SCCACHE_CACHE_SIZE }}
           variant: sccache
           save: false
       - run: sccache --show-stats
@@ -136,7 +135,7 @@ jobs:
       - name: Setup sccache
         uses: hendrikmuhs/ccache-action@v1.2
         with:
-          max-size: 32G
+          max-size: ${{ env.SCCACHE_CACHE_SIZE }}
           variant: sccache
           save: false
       - run: sccache --show-stats
