@@ -83,10 +83,7 @@ pub trait RpcApi {
 		storage_key: StorageKey,
 	) -> RpcResult<Vec<(StorageKey, StorageData)>>;
 
-	async fn block(
-		&self,
-		block_hash: state_chain_runtime::Hash,
-	) -> RpcResult<Option<SignedBlock>>;
+	async fn block(&self, block_hash: state_chain_runtime::Hash) -> RpcResult<Option<SignedBlock>>;
 
 	async fn block_hash(
 		&self,
@@ -153,10 +150,7 @@ impl<RawRpcClient: RawRpcApi + Send + Sync> RpcApi for RpcClient<RawRpcClient> {
 		self.rpc_client.submit_extrinsic(Bytes::from(extrinsic.encode())).await
 	}
 
-	async fn block(
-		&self,
-		block_hash: state_chain_runtime::Hash,
-	) -> RpcResult<Option<SignedBlock>> {
+	async fn block(&self, block_hash: state_chain_runtime::Hash) -> RpcResult<Option<SignedBlock>> {
 		self.rpc_client.block(Some(block_hash)).await
 	}
 
