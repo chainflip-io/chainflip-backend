@@ -190,6 +190,9 @@ impl pallet_cf_environment::Config for Runtime {
 }
 
 #[cfg(feature = "ibiza")]
+use pallet_cf_lp::liquidity_pool::LiquidityPool;
+
+#[cfg(feature = "ibiza")]
 impl pallet_cf_swapping::Config for Runtime {
 	type Event = Event;
 	type Ingress = Ingress;
