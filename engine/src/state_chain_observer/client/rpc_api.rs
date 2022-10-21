@@ -62,27 +62,6 @@ impl<
 {
 }
 
-pub struct RpcClient<RawRpcClient> {
-	rpc_client: RawRpcClient,
-}
-
-impl RpcClient<jsonrpsee::ws_client::WsClient> {
-	pub async fn new(state_chain_settings: &settings::StateChain) -> Result<Self, anyhow::Error> {
-		let ws_endpoint = state_chain_settings.ws_endpoint.as_str();
-		Ok(Self {
-			rpc_client: WsClientBuilder::default()
-				.build(&url::Url::parse(ws_endpoint)?)
-				.await
-				.with_context(|| {
-					format!(
-						"Failed to establish rpc connection to substrate node '{}'",
-						ws_endpoint
-					)
-				})?,
-		})
-	}
-}
-
 /// Wraps the substrate client library methods
 #[cfg_attr(test, automock)]
 #[async_trait]
@@ -137,6 +116,27 @@ pub trait RpcApi {
 	) -> RpcResult<RuntimeVersion>;
 
 	async fn is_auction_phase(&self) -> RpcResult<bool>;
+}
+
+pub struct RpcClient<RawRpcClient> {
+	rpc_client: RawRpcClient,
+}
+
+impl RpcClient<jsonrpsee::ws_client::WsClient> {
+	pub async fn new(state_chain_settings: &settings::StateChain) -> Result<Self, anyhow::Error> {
+		let ws_endpoint = state_chain_settings.ws_endpoint.as_str();
+		Ok(Self {
+			rpc_client: WsClientBuilder::default()
+				.build(&url::Url::parse(ws_endpoint)?)
+				.await
+				.with_context(|| {
+					format!(
+						"Failed to establish rpc connection to substrate node '{}'",
+						ws_endpoint
+					)
+				})?,
+		})
+	}
 }
 
 fn unwrap_value<T>(list_or_value: sp_rpc::list::ListOrValue<T>) -> T {
