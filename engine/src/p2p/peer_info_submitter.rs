@@ -15,7 +15,7 @@ use utilities::{make_periodic_tick, Port};
 use crate::{
 	logging::COMPONENT_KEY,
 	p2p::PeerInfo,
-	state_chain_observer::client::{storage_traits::SafeStorageApi, StateChainClient},
+	state_chain_observer::client::{storage_api::SafeStorageApi, StateChainClient},
 };
 
 async fn update_registered_peer_id(

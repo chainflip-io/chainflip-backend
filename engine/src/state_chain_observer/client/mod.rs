@@ -1,6 +1,6 @@
 mod rpc_api;
 mod signer;
-pub mod storage_traits;
+pub mod storage_api;
 
 pub use rpc_api::{RpcApi, RpcClient};
 
@@ -36,7 +36,7 @@ use crate::{
 };
 use utilities::context;
 
-use self::storage_traits::SafeStorageApi;
+use self::storage_api::SafeStorageApi;
 
 pub struct StateChainClient {
 	nonce: AtomicU32,

@@ -3,7 +3,7 @@ use cf_primitives::AccountRole;
 use chainflip_engine::{
 	eth::{rpc::EthDualRpcClient, EthBroadcaster},
 	state_chain_observer::client::{
-		connect_to_state_chain, storage_traits::SafeStorageApi, RpcApi, RpcClient,
+		connect_to_state_chain, storage_api::SafeStorageApi, RpcApi, RpcClient,
 	},
 };
 use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
