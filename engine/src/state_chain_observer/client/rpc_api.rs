@@ -27,7 +27,7 @@ use mockall::automock;
 
 use crate::settings;
 
-pub trait RawRpcApi:
+trait RawRpcApi:
 	CustomApiClient
 	+ SystemApiClient<state_chain_runtime::Hash, state_chain_runtime::BlockNumber>
 	+ StateApiClient<state_chain_runtime::Hash>
