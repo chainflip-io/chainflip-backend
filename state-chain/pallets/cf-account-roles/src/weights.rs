@@ -34,7 +34,7 @@ pub trait WeightInfo {
 /// Weights for pallet_cf_account_roles using the Substrate node and recommended hardware.
 pub struct PalletWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
-	// Storage: AccountTypes AccountRoles (r:1 w:1)
+	// Storage: AccountRoles AccountRoles (r:1 w:1)
 	fn register_account_role() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
 		(14_000_000 as Weight)
@@ -45,7 +45,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
-	// Storage: AccountTypes AccountRoles (r:1 w:1)
+	// Storage: AccountRoles AccountRoles (r:1 w:1)
 	fn register_account_role() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
 		(14_000_000 as Weight)

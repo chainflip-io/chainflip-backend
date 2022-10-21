@@ -54,6 +54,6 @@ fn account_deletion_removes_relevant_storage_items() {
 		assert!(!MappedPeers::<Runtime>::contains_key(peer_id));
 		let vanity_names = VanityNames::<Runtime>::get();
 		assert!(vanity_names.get(&backup_node).is_none());
-		assert_eq!(pallet_cf_account_types::AccountRoles::<Runtime>::get(&backup_node), None);
+		assert_eq!(pallet_cf_account_roles::AccountRoles::<Runtime>::get(&backup_node), None);
 	});
 }

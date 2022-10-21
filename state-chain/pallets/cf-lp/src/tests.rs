@@ -21,8 +21,8 @@ fn only_liquidity_provider_can_manage_positions() {
 		};
 		let pool_id = (Asset::Eth, Asset::Usdc);
 
-		AccountTypes::on_new_account(&ALICE);
-		assert_ok!(<AccountTypes as AccountRoleRegistry<Test>>::register_account_role(
+		AccountRoles::on_new_account(&ALICE);
+		assert_ok!(<AccountRoles as AccountRoleRegistry<Test>>::register_account_role(
 			&ALICE,
 			AccountRole::None
 		));
@@ -51,8 +51,8 @@ fn only_liquidity_provider_can_manage_positions() {
 #[test]
 fn egress_chain_and_asset_must_match() {
 	new_test_ext().execute_with(|| {
-		AccountTypes::on_new_account(&ALICE);
-		assert_ok!(<AccountTypes as AccountRoleRegistry<Test>>::register_account_role(
+		AccountRoles::on_new_account(&ALICE);
+		assert_ok!(<AccountRoles as AccountRoleRegistry<Test>>::register_account_role(
 			&ALICE,
 			AccountRole::LiquidityProvider
 		));
@@ -81,8 +81,8 @@ fn egress_chain_and_asset_must_match() {
 #[test]
 fn liquidity_providers_can_withdraw_liquidity() {
 	new_test_ext().execute_with(|| {
-		AccountTypes::on_new_account(&ALICE);
-		assert_ok!(<AccountTypes as AccountRoleRegistry<Test>>::register_account_role(
+		AccountRoles::on_new_account(&ALICE);
+		assert_ok!(<AccountRoles as AccountRoleRegistry<Test>>::register_account_role(
 			&ALICE,
 			AccountRole::LiquidityProvider
 		));
@@ -122,8 +122,8 @@ fn liquidity_providers_can_withdraw_liquidity() {
 fn cannot_deposit_and_withdrawal_during_maintenance() {
 	new_test_ext().execute_with(|| {
 		// Setup account for ALICE
-		AccountTypes::on_new_account(&ALICE);
-		assert_ok!(<AccountTypes as AccountRoleRegistry<_>>::register_account_role(
+		AccountRoles::on_new_account(&ALICE);
+		assert_ok!(<AccountRoles as AccountRoleRegistry<_>>::register_account_role(
 			&ALICE,
 			AccountRole::LiquidityProvider
 		));
@@ -177,8 +177,8 @@ fn cannot_deposit_and_withdrawal_during_maintenance() {
 fn cannot_manage_liquidity_during_maintenance() {
 	new_test_ext().execute_with(|| {
 		// Setup account and liquidity pool
-		AccountTypes::on_new_account(&ALICE);
-		assert_ok!(<AccountTypes as AccountRoleRegistry<_>>::register_account_role(
+		AccountRoles::on_new_account(&ALICE);
+		assert_ok!(<AccountRoles as AccountRoleRegistry<_>>::register_account_role(
 			&ALICE,
 			AccountRole::LiquidityProvider
 		));

@@ -74,7 +74,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 			.saturating_add(T::DbWeight::get().writes(11 as Weight))
 	}
-	// Storage: AccountTypes AccountRoles (r:1 w:0)
+	// Storage: AccountRoles AccountRoles (r:1 w:0)
 	// Storage: EthereumVault PendingVaultRotation (r:1 w:1)
 	// Storage: EthereumVault SuccessVoters (r:1 w:1)
 	fn report_keygen_outcome() -> Weight {
@@ -167,7 +167,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(11 as Weight))
 	}
-	// Storage: AccountTypes AccountRoles (r:1 w:0)
+	// Storage: AccountRoles AccountRoles (r:1 w:0)
 	// Storage: EthereumVault PendingVaultRotation (r:1 w:1)
 	// Storage: EthereumVault SuccessVoters (r:1 w:1)
 	fn report_keygen_outcome() -> Weight {

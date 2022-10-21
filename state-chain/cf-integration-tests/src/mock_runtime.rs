@@ -3,7 +3,7 @@ use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::{traits::Zero, BuildStorage};
 use state_chain_runtime::{
-	chainflip::Offence, constants::common::*, opaque::SessionKeys, AccountId, AccountTypesConfig,
+	chainflip::Offence, constants::common::*, opaque::SessionKeys, AccountId, AccountRolesConfig,
 	EmissionsConfig, EthereumVaultConfig, FlipConfig, GovernanceConfig, ReputationConfig, Runtime,
 	SessionConfig, StakingConfig, System, ValidatorConfig,
 };
@@ -120,7 +120,7 @@ impl ExtBuilder {
 				backup_node_emission_inflation: BACKUP_NODE_EMISSION_INFLATION_PERBILL,
 				supply_update_interval: SUPPLY_UPDATE_INTERVAL_DEFAULT,
 			},
-			account_types: AccountTypesConfig {
+			account_roles: AccountRolesConfig {
 				initial_account_roles: self
 					.accounts
 					.iter()
