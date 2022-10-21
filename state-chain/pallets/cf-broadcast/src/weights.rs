@@ -31,7 +31,7 @@ use sp_std::marker::PhantomData;
 /// Weight functions needed for pallet_cf_broadcast.
 pub trait WeightInfo {
 	fn on_initialize(x: u32, ) -> Weight;
-	fn transaction_ready_for_transmission() -> Weight;
+	fn whitelist_transaction_for_refund() -> Weight;
 	fn transaction_signing_failure() -> Weight;
 	fn on_signature_ready() -> Weight;
 	fn start_next_broadcast_attempt() -> Weight;
@@ -58,7 +58,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumBroadcaster Expiries (r:1 w:1)
 	// Storage: EthereumBroadcaster TransactionHashWhitelist (r:0 w:1)
 	// Storage: EthereumBroadcaster AwaitingTransmission (r:0 w:1)
-	fn transaction_ready_for_transmission() -> Weight {
+	fn whitelist_transaction_for_refund() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
 		(343_000_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
@@ -143,7 +143,7 @@ impl WeightInfo for () {
 	// Storage: EthereumBroadcaster Expiries (r:1 w:1)
 	// Storage: EthereumBroadcaster TransactionHashWhitelist (r:0 w:1)
 	// Storage: EthereumBroadcaster AwaitingTransmission (r:0 w:1)
-	fn transaction_ready_for_transmission() -> Weight {
+	fn whitelist_transaction_for_refund() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
 		(343_000_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))

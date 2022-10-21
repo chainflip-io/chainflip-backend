@@ -351,12 +351,12 @@ where
                                                 ).await;
                                             }
                                             state_chain_runtime::Event::EthereumBroadcaster(
-                                                pallet_cf_broadcast::Event::TransactionSigningRequest(
+                                                pallet_cf_broadcast::Event::TransactionBroadcastRequest {
                                                     broadcast_attempt_id,
-                                                    validator_id,
+                                                    nominee,
                                                     unsigned_tx,
-                                                ),
-                                            ) if validator_id == state_chain_client.our_account_id => {
+                                                },
+                                            ) if nominee == state_chain_client.our_account_id => {
                                                 slog::debug!(
                                                     logger,
                                                     "Received signing request with broadcast_attempt_id {} for transaction: {:?}",
@@ -367,7 +367,7 @@ where
                                                     Ok(raw_signed_tx) => {
                                                         let _result = state_chain_client.submit_signed_extrinsic(
                                                             state_chain_runtime::Call::EthereumBroadcaster(
-                                                                pallet_cf_broadcast::Call::transaction_ready_for_transmission {
+                                                                pallet_cf_broadcast::Call::whitelist_transaction_for_refund {
                                                                     broadcast_attempt_id,
                                                                     signed_tx: raw_signed_tx.0.clone(),
                                                                     signer_id: eth_broadcaster.address,
@@ -405,15 +405,6 @@ where
                                                         ).await;
                                                     }
                                                 }
-                                            }
-                                            state_chain_runtime::Event::EthereumBroadcaster(
-                                                pallet_cf_broadcast::Event::TransmissionRequest(
-                                                    broadcast_attempt_id,
-                                                    signed_tx,
-                                                ),
-                                            ) => {
-                                                eth_broadcaster
-                                                    .send_for_broadcast_attempt(signed_tx, broadcast_attempt_id).await
                                             }
                                             state_chain_runtime::Event::Environment(
                                                 pallet_cf_environment::Event::CfeSettingsUpdated {
