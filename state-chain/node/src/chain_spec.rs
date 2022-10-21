@@ -288,7 +288,9 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 				vec![
 					// Bashful
 					bashful_sr25519.into(),
+					#[cfg(feature = "ibiza")]
 					get_account_id_from_seed::<sr25519::Public>("Alice"),
+					#[cfg(feature = "ibiza")]
 					get_account_id_from_seed::<sr25519::Public>("Bob"),
 				],
 				1,
@@ -413,7 +415,9 @@ fn chainflip_three_node_testnet_config_from_env(
 					doc_sr25519.into(),
 					// Dopey
 					dopey_sr25519.into(),
+					#[cfg(feature = "ibiza")]
 					get_account_id_from_seed::<sr25519::Public>("Alice"),
+					#[cfg(feature = "ibiza")]
 					get_account_id_from_seed::<sr25519::Public>("Bob"),
 				],
 				2,
@@ -551,7 +555,9 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 					grumpy_sr25519.into(),
 					// Happy
 					happy_sr25519.into(),
+					#[cfg(feature = "ibiza")]
 					get_account_id_from_seed::<sr25519::Public>("Alice"),
+					#[cfg(feature = "ibiza")]
 					get_account_id_from_seed::<sr25519::Public>("Bob"),
 				],
 				3,
