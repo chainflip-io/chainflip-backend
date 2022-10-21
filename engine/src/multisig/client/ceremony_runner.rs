@@ -24,21 +24,15 @@ use state_chain_runtime::{constants::common::MAX_STAGE_DURATION_SECONDS, Account
 
 use super::{
 	ceremony_manager::{CeremonyOutcome, CeremonyTrait, DynStage, PreparedRequest},
-	common::{CeremonyFailureReason, PreProcessStageDataCheck},
+	common::PreProcessStageDataCheck,
 };
 
 const MAX_STAGE_DURATION: Duration = Duration::from_secs(MAX_STAGE_DURATION_SECONDS as u64);
 
-type OptionalCeremonyReturn<Ceremony> = Option<
+type OptionalCeremonyReturn<C> = Option<
 	Result<
-		<Ceremony as CeremonyTrait>::Output,
-		(
-			BTreeSet<AccountId>,
-			CeremonyFailureReason<
-				<Ceremony as CeremonyTrait>::FailureReason,
-				<Ceremony as CeremonyTrait>::CeremonyStageName,
-			>,
-		),
+		<C as CeremonyTrait>::Output,
+		(BTreeSet<AccountId>, <C as CeremonyTrait>::FailureReason),
 	>,
 >;
 

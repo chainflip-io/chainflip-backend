@@ -23,7 +23,7 @@ use crate::{
 	eth::{rpc::EthRpcApi, EpochStart, EthBroadcaster},
 	logging::COMPONENT_KEY,
 	multisig::{
-		client::{CeremonyFailureReason, KeygenFailureReason, KeygenStageName, MultisigClientApi},
+		client::{KeygenFailureReason, MultisigClientApi},
 		KeyId, MessageHash,
 	},
 	p2p::{PeerInfo, PeerUpdate},
@@ -60,15 +60,11 @@ async fn handle_keygen_request<'a, MultisigClient, RpcClient>(
 								)
 							})
 							.map_err(|(bad_account_ids, reason)| {
-								if let CeremonyFailureReason::<
-										KeygenFailureReason,
-										KeygenStageName,
-									>::Other(KeygenFailureReason::KeyNotCompatible) = reason
-									{
-										KeygenError::Incompatible
-									} else {
-										KeygenError::Failure(bad_account_ids)
-									}
+								if let KeygenFailureReason::KeyNotCompatible = reason {
+									KeygenError::Incompatible
+								} else {
+									KeygenError::Failure(bad_account_ids)
+								}
 							}),
 					},
 					&logger,

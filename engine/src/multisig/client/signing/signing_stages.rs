@@ -4,7 +4,7 @@ use crate::multisig::{
 	client::{
 		self,
 		ceremony_manager::SigningCeremony,
-		common::{CeremonyFailureReason, SigningFailureReason, SigningStageName},
+		common::{SigningFailureReason, SigningStageName},
 		signing,
 	},
 	crypto::CryptoScheme,
@@ -117,7 +117,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 			Err((reported_parties, abort_reason)) =>
 				return SigningStageResult::Error(
 					reported_parties,
-					CeremonyFailureReason::BroadcastFailure(abort_reason, Self::NAME),
+					SigningFailureReason::BroadcastFailure(abort_reason, Self::NAME),
 				),
 		};
 
@@ -232,7 +232,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 			Err((reported_parties, abort_reason)) =>
 				return SigningStageResult::Error(
 					reported_parties,
-					CeremonyFailureReason::BroadcastFailure(abort_reason, Self::NAME),
+					SigningFailureReason::BroadcastFailure(abort_reason, Self::NAME),
 				),
 		};
 
@@ -254,10 +254,8 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 			&local_sigs,
 		) {
 			Ok(sig) => StageResult::Done(sig),
-			Err(failed_idxs) => StageResult::Error(
-				failed_idxs,
-				CeremonyFailureReason::Other(SigningFailureReason::InvalidSigShare),
-			),
+			Err(failed_idxs) =>
+				StageResult::Error(failed_idxs, SigningFailureReason::InvalidSigShare),
 		}
 	}
 }

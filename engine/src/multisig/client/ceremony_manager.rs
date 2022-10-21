@@ -49,27 +49,11 @@ use super::{
 
 pub type CeremonyOutcome<C> = Result<
 	<C as CeremonyTrait>::Output,
-	(
-		BTreeSet<AccountId>,
-		CeremonyFailureReason<
-			<C as CeremonyTrait>::FailureReason,
-			<C as CeremonyTrait>::CeremonyStageName,
-		>,
-	),
+	(BTreeSet<AccountId>, <C as CeremonyTrait>::FailureReason),
 >;
 
 pub type CeremonyResultSender<Ceremony> = oneshot::Sender<CeremonyOutcome<Ceremony>>;
 pub type CeremonyResultReceiver<Ceremony> = oneshot::Receiver<CeremonyOutcome<Ceremony>>;
-
-type SigningCeremonyFailureReason<Crypto> = CeremonyFailureReason<
-	<SigningCeremony<Crypto> as CeremonyTrait>::FailureReason,
-	<SigningCeremony<Crypto> as CeremonyTrait>::CeremonyStageName,
->;
-
-type KeygenCeremonyFailureReason<Crypto> = CeremonyFailureReason<
-	<KeygenCeremony<Crypto> as CeremonyTrait>::FailureReason,
-	<KeygenCeremony<Crypto> as CeremonyTrait>::CeremonyStageName,
->;
 
 /// Ceremony trait combines type parameters that are often used together
 pub trait CeremonyTrait: 'static {
@@ -88,7 +72,7 @@ pub trait CeremonyTrait: 'static {
 	type Request: Send + 'static;
 	/// The product of a successful ceremony result
 	type Output: Debug + Send + 'static;
-	type FailureReason: Debug + Display + Send + 'static + PartialEq + Ord;
+	type FailureReason: CeremonyFailureReason + Send + Ord + Debug;
 	type CeremonyStageName: Debug + Display + Ord + Send;
 }
 
@@ -148,7 +132,7 @@ pub fn prepare_signing_request<Crypto: CryptoScheme>(
 	outgoing_p2p_message_sender: &UnboundedSender<OutgoingMultisigStageMessages>,
 	rng: Rng,
 	logger: &slog::Logger,
-) -> Result<PreparedRequest<SigningCeremony<Crypto>>, SigningCeremonyFailureReason<Crypto>> {
+) -> Result<PreparedRequest<SigningCeremony<Crypto>>, SigningFailureReason> {
 	// Check that we have enough signers
 	let minimum_signers_needed = key_info.params.threshold + 1;
 	let signers_len: AuthorityCount = signers.len().try_into().expect("too many signers");
@@ -160,7 +144,7 @@ pub fn prepare_signing_request<Crypto: CryptoScheme>(
 			minimum_signers_needed
 		);
 
-		return Err(CeremonyFailureReason::Other(SigningFailureReason::NotEnoughSigners))
+		return Err(SigningFailureReason::NotEnoughSigners)
 	}
 
 	// Generate signer indexes
@@ -169,7 +153,7 @@ pub fn prepare_signing_request<Crypto: CryptoScheme>(
 			Ok(result) => result,
 			Err(reason) => {
 				slog::debug!(logger, "Request to sign invalid: {}", reason);
-				return Err(CeremonyFailureReason::InvalidParticipants)
+				return Err(SigningFailureReason::InvalidParticipants)
 			},
 		};
 
@@ -207,7 +191,7 @@ pub fn prepare_keygen_request<Crypto: CryptoScheme>(
 	rng: Rng,
 	allowing_high_pubkey: bool,
 	logger: &slog::Logger,
-) -> Result<PreparedRequest<KeygenCeremony<Crypto>>, KeygenCeremonyFailureReason<Crypto>> {
+) -> Result<PreparedRequest<KeygenCeremony<Crypto>>, KeygenFailureReason> {
 	let validator_mapping = Arc::new(PartyIdxMapping::from_participants(participants.clone()));
 
 	let (our_idx, signer_idxs) =
@@ -216,7 +200,7 @@ pub fn prepare_keygen_request<Crypto: CryptoScheme>(
 			Err(reason) => {
 				slog::debug!(logger, "Keygen request invalid: {}", reason);
 
-				return Err(CeremonyFailureReason::InvalidParticipants)
+				return Err(KeygenFailureReason::InvalidParticipants)
 			},
 		};
 
@@ -313,12 +297,12 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 				// that we are not participating in and cleanup any unauthorised ceremonies that may
 				// have been created by a bad p2p message.
 				if self.signing_states.cleanup_unauthorised_ceremony(&request.ceremony_id) {
-					CeremonyFailureReason::<SigningFailureReason, SigningStageName>::NotParticipatingInUnauthorisedCeremony
-                        .log(&BTreeSet::default(), &self.logger);
+					SigningFailureReason::NotParticipatingInUnauthorisedCeremony
+						.log(&BTreeSet::default(), &self.logger);
 				}
 				if self.keygen_states.cleanup_unauthorised_ceremony(&request.ceremony_id) {
-					CeremonyFailureReason::<KeygenFailureReason, KeygenStageName>::NotParticipatingInUnauthorisedCeremony
-                        .log(&BTreeSet::default(), &self.logger);
+					KeygenFailureReason::NotParticipatingInUnauthorisedCeremony
+						.log(&BTreeSet::default(), &self.logger);
 				}
 			},
 		}
