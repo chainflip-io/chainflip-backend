@@ -13,16 +13,12 @@ use codec::Encode;
 use utilities::{make_periodic_tick, Port};
 
 use crate::{
-	logging::COMPONENT_KEY,
-	p2p::PeerInfo,
-	state_chain_observer::client::{
-		ChainflipClient, StateChainClient, StateChainRpcApi, StateChainRpcClient,
-	},
+	logging::COMPONENT_KEY, p2p::PeerInfo, state_chain_observer::client::StateChainClient,
 };
 
-async fn update_registered_peer_id<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
+async fn update_registered_peer_id(
 	node_key: &ed25519_dalek::Keypair,
-	state_chain_client: &Arc<StateChainClient<RpcClient>>,
+	state_chain_client: &Arc<StateChainClient>,
 	previous_registered_peer_info: &Option<PeerInfo>,
 	ip_address: Ipv6Addr,
 	cfe_port: Port,
@@ -70,9 +66,9 @@ async fn update_registered_peer_id<RpcClient: 'static + StateChainRpcApi + Sync 
 	Ok(())
 }
 
-pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
+pub async fn start(
 	node_key: ed25519_dalek::Keypair,
-	state_chain_client: Arc<StateChainClient<RpcClient>>,
+	state_chain_client: Arc<StateChainClient>,
 	ip_address: IpAddr,
 	cfe_port: Port,
 	mut previous_registered_peer_info: Option<PeerInfo>,
@@ -121,9 +117,7 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
 }
 
 pub async fn get_current_peer_infos(
-	state_chain_client: &Arc<
-		StateChainClient<StateChainRpcClient<impl ChainflipClient + Send + Sync>>,
-	>,
+	state_chain_client: &Arc<StateChainClient>,
 	block_hash: H256,
 ) -> anyhow::Result<Vec<PeerInfo>> {
 	let peer_infos: Vec<_> = state_chain_client

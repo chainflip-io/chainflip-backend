@@ -23,10 +23,7 @@ use sp_core::H256;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use zeroize::Zeroizing;
 
-use crate::{
-	state_chain_observer::client::{ChainflipClient, StateChainClient, StateChainRpcClient},
-	task_scope::with_task_scope,
-};
+use crate::{state_chain_observer::client::StateChainClient, task_scope::with_task_scope};
 
 // TODO: Consider if this should be removed, particularly once we no longer use Substrate for
 // peering
@@ -58,9 +55,7 @@ impl<C: CryptoScheme> MultisigMessageReceiver<C> {
 }
 
 pub async fn start(
-	state_chain_client: Arc<
-		StateChainClient<StateChainRpcClient<impl ChainflipClient + Send + Sync + 'static>>,
-	>,
+	state_chain_client: Arc<StateChainClient>,
 	settings: P2PSettings,
 	latest_block_hash: H256,
 	logger: &slog::Logger,

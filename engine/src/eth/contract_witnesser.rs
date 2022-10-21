@@ -3,10 +3,7 @@ use std::sync::Arc;
 use futures::StreamExt;
 use tokio::sync::broadcast::{self};
 
-use crate::{
-	eth::rpc::EthDualRpcClient,
-	state_chain_observer::client::{StateChainClient, StateChainRpcApi},
-};
+use crate::{eth::rpc::EthDualRpcClient, state_chain_observer::client::StateChainClient};
 
 use super::{
 	block_events_stream_for_contract_from, epoch_witnesser::should_end_witnessing, EpochStart,
@@ -15,19 +12,18 @@ use super::{
 
 // NB: This code can emit the same witness multiple times. e.g. if the CFE restarts in the middle of
 // witnessing a window of blocks
-pub async fn start<ContractWitnesser, StateChainRpc>(
+pub async fn start<ContractWitnesser>(
 	contract_witnesser: ContractWitnesser,
 	eth_dual_rpc: EthDualRpcClient,
 	epoch_starts_receiver: broadcast::Receiver<EpochStart>,
 	// In some cases there is no use witnessing older epochs since any actions that could be taken
 	// either have already been taken, or can no longer be taken.
 	witness_historical_epochs: bool,
-	state_chain_client: Arc<StateChainClient<StateChainRpc>>,
+	state_chain_client: Arc<StateChainClient>,
 	logger: &slog::Logger,
 ) -> anyhow::Result<()>
 where
 	ContractWitnesser: 'static + EthContractWitnesser + Sync + Send,
-	StateChainRpc: 'static + StateChainRpcApi + Sync + Send,
 {
 	super::epoch_witnesser::start(
 		contract_witnesser.contract_name(),

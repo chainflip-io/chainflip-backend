@@ -10,7 +10,7 @@ use web3::{
 	types::H160,
 };
 
-use crate::state_chain_observer::client::{StateChainClient, StateChainRpcApi};
+use crate::state_chain_observer::client::StateChainClient;
 
 use super::{
 	event::Event, rpc::EthRpcApi, utils, BlockWithItems, DecodeLogClosure, EthContractWitnesser,
@@ -68,17 +68,16 @@ impl EthContractWitnesser for Erc20Witnesser {
 		format!("ERC20-{:?}", self.asset)
 	}
 
-	async fn handle_block_events<RpcClient, EthRpcClient>(
+	async fn handle_block_events<EthRpcClient>(
 		&mut self,
 		epoch: EpochIndex,
 		_block_number: u64,
 		block: BlockWithItems<Event<Self::EventParameters>>,
-		state_chain_client: Arc<StateChainClient<RpcClient>>,
+		state_chain_client: Arc<StateChainClient>,
 		_eth_rpc: &EthRpcClient,
 		logger: &slog::Logger,
 	) -> Result<()>
 	where
-		RpcClient: 'static + StateChainRpcApi + Sync + Send,
 		EthRpcClient: EthRpcApi + Sync + Send,
 	{
 		while let Ok(address) = self.monitored_address_receiver.try_recv() {

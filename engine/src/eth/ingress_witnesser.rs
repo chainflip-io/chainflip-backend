@@ -11,8 +11,7 @@ use tokio_stream::StreamExt;
 use web3::types::Transaction;
 
 use crate::{
-	eth::epoch_witnesser::should_end_witnessing,
-	state_chain_observer::client::{StateChainClient, StateChainRpcApi},
+	eth::epoch_witnesser::should_end_witnessing, state_chain_observer::client::StateChainClient,
 };
 
 use super::{
@@ -58,17 +57,14 @@ where
 
 // NB: This code can emit the same witness multiple times. e.g. if the CFE restarts in the middle of
 // witnessing a window of blocks
-pub async fn start<StateChainRpc>(
+pub async fn start(
 	eth_dual_rpc: EthDualRpcClient,
 	epoch_starts_receiver: broadcast::Receiver<EpochStart>,
 	eth_monitor_ingress_receiver: tokio::sync::mpsc::UnboundedReceiver<H160>,
-	state_chain_client: Arc<StateChainClient<StateChainRpc>>,
+	state_chain_client: Arc<StateChainClient>,
 	monitored_addresses: BTreeSet<H160>,
 	logger: &slog::Logger,
-) -> anyhow::Result<()>
-where
-	StateChainRpc: 'static + StateChainRpcApi + Sync + Send,
-{
+) -> anyhow::Result<()> {
 	epoch_witnesser::start(
 		"ETH-Ingress-Witnesser".to_string(),
 		epoch_starts_receiver,

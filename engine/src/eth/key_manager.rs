@@ -1,6 +1,6 @@
 use crate::{
 	eth::{utils, EthRpcApi, EventParseError, SignatureAndEvent},
-	state_chain_observer::client::{StateChainClient, StateChainRpcApi},
+	state_chain_observer::client::StateChainClient,
 };
 use cf_chains::eth::{SchnorrVerificationComponents, TransactionFee};
 use cf_primitives::EpochIndex;
@@ -191,17 +191,16 @@ impl EthContractWitnesser for KeyManager {
 		"KeyManager".to_string()
 	}
 
-	async fn handle_block_events<RpcClient, EthRpcClient>(
+	async fn handle_block_events<EthRpcClient>(
 		&mut self,
 		epoch_index: EpochIndex,
 		block_number: u64,
 		block: BlockWithItems<Event<Self::EventParameters>>,
-		state_chain_client: Arc<StateChainClient<RpcClient>>,
+		state_chain_client: Arc<StateChainClient>,
 		eth_rpc: &EthRpcClient,
 		logger: &slog::Logger,
 	) -> anyhow::Result<()>
 	where
-		RpcClient: 'static + StateChainRpcApi + Sync + Send,
 		EthRpcClient: EthRpcApi + Sync + Send,
 	{
 		for event in block.block_items {

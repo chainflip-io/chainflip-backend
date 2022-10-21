@@ -29,23 +29,22 @@ use crate::{
 		KeyId, MessageHash,
 	},
 	p2p::{PeerInfo, PeerUpdate},
-	state_chain_observer::client::{StateChainClient, StateChainRpcApi},
+	state_chain_observer::client::StateChainClient,
 	task_scope::{with_task_scope, Scope},
 };
 
 #[cfg(feature = "ibiza")]
 use sp_core::H160;
 
-async fn handle_keygen_request<'a, MultisigClient, RpcClient>(
+async fn handle_keygen_request<'a, MultisigClient>(
 	scope: &Scope<'a, anyhow::Result<()>, true>,
 	multisig_client: Arc<MultisigClient>,
-	state_chain_client: Arc<StateChainClient<RpcClient>>,
+	state_chain_client: Arc<StateChainClient>,
 	ceremony_id: CeremonyId,
 	keygen_participants: BTreeSet<AccountId32>,
 	logger: slog::Logger,
 ) where
 	MultisigClient: MultisigClientApi<EthSigning> + Send + Sync + 'static,
-	RpcClient: StateChainRpcApi + Send + Sync + 'static,
 {
 	if keygen_participants.contains(&state_chain_client.our_account_id) {
 		scope.spawn(async move {
@@ -81,10 +80,10 @@ async fn handle_keygen_request<'a, MultisigClient, RpcClient>(
 	}
 }
 
-async fn handle_signing_request<'a, MultisigClient, RpcClient>(
+async fn handle_signing_request<'a, MultisigClient>(
 	scope: &Scope<'a, anyhow::Result<()>, true>,
 	multisig_client: Arc<MultisigClient>,
-	state_chain_client: Arc<StateChainClient<RpcClient>>,
+	state_chain_client: Arc<StateChainClient>,
 	ceremony_id: CeremonyId,
 	key_id: KeyId,
 	signers: BTreeSet<AccountId>,
@@ -92,7 +91,6 @@ async fn handle_signing_request<'a, MultisigClient, RpcClient>(
 	logger: slog::Logger,
 ) where
 	MultisigClient: MultisigClientApi<EthSigning> + Send + Sync + 'static,
-	RpcClient: StateChainRpcApi + Send + Sync + 'static,
 {
 	if signers.contains(&state_chain_client.our_account_id) {
 		// Send a signing request and wait to submit the result to the SC
@@ -161,8 +159,8 @@ macro_rules! match_event {
     }}
 }
 
-pub async fn start<BlockStream, RpcClient, EthRpc, EthMultisigClient, PolkadotMultisigClient>(
-	state_chain_client: Arc<StateChainClient<RpcClient>>,
+pub async fn start<BlockStream, EthRpc, EthMultisigClient, PolkadotMultisigClient>(
+	state_chain_client: Arc<StateChainClient>,
 	sc_block_stream: BlockStream,
 	eth_broadcaster: EthBroadcaster<EthRpc>,
 	eth_multisig_client: Arc<EthMultisigClient>,
@@ -182,7 +180,6 @@ pub async fn start<BlockStream, RpcClient, EthRpc, EthMultisigClient, PolkadotMu
 ) -> Result<(), anyhow::Error>
 where
 	BlockStream: Stream<Item = anyhow::Result<state_chain_runtime::Header>> + Send + 'static,
-	RpcClient: StateChainRpcApi + Send + Sync + 'static,
 	EthRpc: EthRpcApi + Send + Sync + 'static,
 	EthMultisigClient: MultisigClientApi<EthSigning> + Send + Sync + 'static,
 	PolkadotMultisigClient: MultisigClientApi<PolkadotSigning> + Send + Sync + 'static,
