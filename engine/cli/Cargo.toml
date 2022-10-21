@@ -25,7 +25,7 @@ pallet-cf-environment = {path = "../../state-chain/pallets/cf-environment"}
 pallet-cf-staking = {path = "../../state-chain/pallets/cf-staking"}
 pallet-cf-threshold-signature = {path = "../../state-chain/pallets/cf-threshold-signature"}
 pallet-cf-validator = {path = "../../state-chain/pallets/cf-validator"}
-pallet-cf-account-types = { path = '../../state-chain/pallets/cf-account-types' }
+pallet-cf-account-roles = { path = '../../state-chain/pallets/cf-account-roles' }
 cf-primitives = {path = "../../state-chain/primitives"}
 pallet-cf-governance = {path = "../../state-chain/pallets/cf-governance"}
 state-chain-runtime = {path = "../../state-chain/runtime"}

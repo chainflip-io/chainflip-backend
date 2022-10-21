@@ -43,7 +43,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system,
-		AccountTypes: pallet_cf_account_types,
+		AccountTypes: pallet_cf_account_roles,
 		Ingress: pallet_cf_ingress,
 		LiquidityProvider: pallet_cf_lp,
 	}
@@ -100,7 +100,7 @@ impl cf_traits::Chainflip for Test {
 	type SystemState = MockSystemStateInfo;
 }
 
-impl pallet_cf_account_types::Config for Test {
+impl pallet_cf_account_roles::Config for Test {
 	type Event = Event;
 	type WeightInfo = ();
 }

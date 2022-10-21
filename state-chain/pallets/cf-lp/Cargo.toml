@@ -62,7 +62,7 @@ tag = 'chainflip-monthly-2022-06+01'
 quickcheck = '1'
 quickcheck_macros = '1'
 pallet-cf-ingress = {path = '../cf-ingress'}
-pallet-cf-account-types = {path = '../cf-account-types'}
+pallet-cf-account-roles = {path = '../cf-account-roles'}
 
 [features]
 default = ['std']

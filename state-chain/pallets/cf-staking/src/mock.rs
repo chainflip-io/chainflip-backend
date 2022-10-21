@@ -27,7 +27,7 @@ use cf_traits::{
 	Chainflip, ReplayProtectionProvider,
 };
 
-impl pallet_cf_account_types::Config for Test {
+impl pallet_cf_account_roles::Config for Test {
 	type Event = Event;
 	type WeightInfo = ();
 }
@@ -40,7 +40,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system,
-		AccountTypes: pallet_cf_account_types,
+		AccountTypes: pallet_cf_account_roles,
 		Flip: pallet_cf_flip,
 		Staking: pallet_cf_staking,
 	}
