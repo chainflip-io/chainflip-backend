@@ -458,12 +458,10 @@ pub mod pallet {
 					signed_tx,
 				));
 
-				// Schedule expiry.
-				let expiry_block =
-					frame_system::Pallet::<T>::block_number() + T::TransmissionTimeout::get();
-				Expiries::<T, I>::mutate(expiry_block, |entries| {
-					entries.push((BroadcastStage::Transmission, broadcast_attempt_id))
-				});
+				Expiries::<T, I>::append(
+					frame_system::Pallet::<T>::block_number() + T::TransmissionTimeout::get(),
+					(BroadcastStage::Transmission, broadcast_attempt_id),
+				);
 			} else {
 				log::warn!(
 					"Unable to verify tranaction signature for broadcast attempt id {}",

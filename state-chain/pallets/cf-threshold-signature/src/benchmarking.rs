@@ -84,6 +84,13 @@ benchmarks_instance_pallet! {
 			.collect();
 
 		let completed_response_context = CeremonyContext::<T, I> {
+			request_context: RequestContext::<T, I> {
+				request_id: 1,
+				attempt_count: 0,
+				key_id: Some(<T as Chainflip>::KeyId::benchmark_value()),
+				payload: PayloadFor::<T, I>::benchmark_value(),
+				retry_policy: RetryPolicy::Always
+			},
 			remaining_respondents:Default::default(),
 			blame_counts,
 			participant_count:a,
