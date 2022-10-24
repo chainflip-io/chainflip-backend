@@ -14,17 +14,19 @@ use sp_runtime::RuntimeDebug;
 /// Represents all the arguments required to build the call to fetch assets for all given intent
 /// ids.
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
-pub struct BatchFetch {
+pub struct RotateVaultProxy {
 	/// The handler for creating and signing polkadot extrinsics
 	pub extrinsic_handler: PolkadotExtrinsicHandler,
 	/// The list of all inbound deposits that are to be fetched in this batch call.
-	pub intent_ids: Vec<IntentId>,
+	pub new_key: PolkadotPublicKey,
+	pub old_key: PolkadotPublicKey,
 }
 
-impl BatchFetch {
+impl RotateVaultProxy {
 	pub fn new_unsigned(
 		replay_protection: PolkadotReplayProtection,
-		intent_ids: Vec<IntentId>,
+		new_proxy: PolkadotPublicKey,
+		old_proxy: PolkadotPublicKey,
 		vault_account: <Polkadot as Chain>::ChainAccount,
 	) -> Self {
 		let mut calldata = Self {
@@ -32,7 +34,7 @@ impl BatchFetch {
 				replay_protection,
 				vault_account,
 			),
-			intent_ids,
+			new_proxy,
 		};
 		// create and insert polkadot runtime call
 		calldata
@@ -50,24 +52,23 @@ impl BatchFetch {
 		PolkadotRuntimeCall::Proxy(ProxyCall::proxy {
 			real: PolkadotAccountIdLookup::from(self.extrinsic_handler.vault_account.clone()),
 			force_proxy_type: Some(PolkadotProxyType::Any),
-			call: Box::new(PolkadotRuntimeCall::Utility(UtilityCall::batch {
-				calls: self
-					.intent_ids
-					.iter()
-					.map(|intent_id| {
-						PolkadotRuntimeCall::Utility(UtilityCall::as_derivative {
-							index: *intent_id as u16, // todo: THIS IS TO BE REVISITED LATER
-							call: Box::new(PolkadotRuntimeCall::Balances(
-								BalancesCall::transfer_all {
-									dest: PolkadotAccountIdLookup::from(
-										self.extrinsic_handler.vault_account.clone(),
-									),
-									keep_alive: false,
-								},
-							)),
-						})
-					})
-					.collect::<Vec<PolkadotRuntimeCall>>(),
+			call: Box::new(PolkadotRuntimeCall::Utility(UtilityCall::batch_all {
+				calls: vec![
+					PolkadotRuntimeCall::Proxy(ProxyCall::add_proxy {
+						delegate: PolkadotAccountIdLookup::from(
+							MultiSigner::Sr25519(old_new_keypair.new_proxy).into_account(),
+						),
+						proxy_type: PolkadotProxyType::Any,
+						delay: 0,
+					}),
+					PolkadotRuntimeCall::Proxy(ProxyCall::remove_proxy {
+						elegate: PolkadotAccountIdLookup::from(
+							MultiSigner::Sr25519(old_new_keypair.old_proxy).into_account(),
+						),
+						proxy_type: PolkadotProxyType::Any,
+						delay: 0,
+					}),
+				],
 			})),
 		})
 	}
@@ -123,31 +124,29 @@ mod test_batch_fetch {
 		let keypair_1: Pair = <Pair as TraitPair>::from_seed(&RAW_SEED_1);
 		let account_id_1: AccountId32 = MultiSigner::Sr25519(keypair_1.public()).into_account();
 
-		let dummy_intent_ids: Vec<u64> = vec![1, 2, 3];
-
-		let batch_fetch_api = BatchFetch::new_unsigned(
+		let rotate_vault_proxy_api = BatchFetch::new_unsigned(
 			PolkadotReplayProtection::new(NONCE_1, 0, NetworkChoice::WestendTestnet),
-			dummy_intent_ids,
+			account_id_2,
 			account_id_1,
 		);
 
 		println!(
 			"CallHash: 0x{}",
-			batch_fetch_api
+			rotate_vault_proxy_api
 				.extrinsic_handler
 				.extrinsic_call
 				.using_encoded(|encoded| hex::encode(BlakeTwo256::hash(encoded)))
 		);
 		println!(
 			"Encoded Call: 0x{}",
-			hex::encode(batch_fetch_api.extrinsic_handler.extrinsic_call.encode())
+			hex::encode(rotate_vault_proxy_api.extrinsic_handler.extrinsic_call.encode())
 		);
 
-		let batch_fetch_api = batch_fetch_api
+		let rotate_vault_proxy_api = rotate_vault_proxy_api
 			.clone()
-			.signed(&keypair_1.sign(&batch_fetch_api.threshold_signature_payload()));
-		assert!(batch_fetch_api.is_signed());
+			.signed(&keypair_1.sign(&rotate_vault_proxy_api.threshold_signature_payload()));
+		assert!(rotate_vault_proxy_api.is_signed());
 
-		println!("encoded extrinsic: 0x{}", hex::encode(batch_fetch_api.chain_encoded()));
+		println!("encoded extrinsic: 0x{}", hex::encode(rotate_vault_proxy_api.chain_encoded()));
 	}
 }

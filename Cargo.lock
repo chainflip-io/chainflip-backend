@@ -5253,6 +5253,7 @@ dependencies = [
 name = "pallet-cf-environment"
 version = "0.1.0"
 dependencies = [
+ "cf-chains",
  "cf-primitives",
  "cf-traits",
  "frame-benchmarking",
