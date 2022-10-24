@@ -155,6 +155,23 @@ jobs:
             ./target/release/generate-genesis-keys
             ./target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm
 
+  run-benchmarks:
+    runs-on: [self-hosted, linux, x64, ephemeral]
+    needs: [build-and-test]
+    if: github.ref_name == 'develop'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Download previously built binaries
+        uses: actions/download-artifact@v3
+        with:
+          name: chainflip-backend-bin
+          path: ./target/release
+      - name: Run benchmarks
+        run: |
+          chmod +x ./target/release/chainflip-node
+          ./state-chain/scripts/benchmark-all.sh --binary ./target/release/chainflip-node --steps 1 --repetitions 1
+
   test-single-node:
     runs-on: [self-hosted, linux, x64, ephemeral]
     needs: [build-and-test]
