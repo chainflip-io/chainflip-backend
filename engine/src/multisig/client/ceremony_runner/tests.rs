@@ -1,27 +1,25 @@
-use std::sync::Arc;
-
 use crate::{
 	logging::test_utils::new_test_logger,
 	multisig::{
 		client::{
 			ceremony_manager::{prepare_signing_request, KeygenCeremony, SigningCeremony},
-			common::{broadcast::BroadcastStage, CeremonyCommon},
+			common::SigningStageName,
 			gen_keygen_data_verify_hash_comm2, get_key_data_for_test,
 			helpers::{
 				cause_ceremony_timeout, gen_invalid_keygen_stage_2_state, ACCOUNT_IDS,
 				DEFAULT_KEYGEN_SEED, DEFAULT_SIGNING_SEED,
 			},
 			signing::{
-				gen_signing_data_stage1, gen_signing_data_stage4, AwaitCommitments1, SigningData,
-				SigningStateCommonInfo,
+				gen_signing_data_stage1, gen_signing_data_stage2, gen_signing_data_stage4,
+				SigningData,
 			},
-			KeygenResult, PartyIdxMapping,
 		},
 		crypto::CryptoScheme,
 		eth::{EthSigning, Point},
 		tests::fixtures::MESSAGE_HASH,
 		Rng,
 	},
+	p2p::OutgoingMultisigStageMessages,
 };
 
 use rand_legacy::SeedableRng;
@@ -59,7 +57,6 @@ fn spawn_signing_ceremony_runner(
 
 #[tokio::test]
 async fn should_ignore_stage_data_with_incorrect_size() {
-	let logger = new_test_logger();
 	let rng = Rng::from_seed(DEFAULT_KEYGEN_SEED);
 	let num_of_participants = ACCOUNT_IDS.len() as u32;
 
@@ -70,7 +67,7 @@ async fn should_ignore_stage_data_with_incorrect_size() {
 		DEFAULT_CEREMONY_ID,
 		BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
 		rng,
-		logger.clone(),
+		new_test_logger(),
 	);
 
 	// Built a stage 2 message that has the incorrect number of elements
@@ -118,24 +115,89 @@ async fn should_ignore_non_stage_1_messages_while_unauthorised() {
 
 #[tokio::test]
 async fn should_delay_stage_1_message_while_unauthorised() {
+	let our_account_id = ACCOUNT_IDS[0].clone();
+	let sender_account_id = ACCOUNT_IDS[2].clone();
+
 	// Create an unauthorised ceremony
-	let mut unauthorised_ceremony_runner: CeremonyRunner<SigningCeremony<EthSigning>> =
+	let mut ceremony_runner: CeremonyRunner<SigningCeremony<EthSigning>> =
 		CeremonyRunner::new_unauthorised(
 			DEFAULT_CEREMONY_ID,
 			mpsc::unbounded_channel().0,
 			&new_test_logger(),
 		);
 
-	// Process a stage 1 message
+	// Process a stage 1 message (It should get delayed)
 	assert_eq!(
-		unauthorised_ceremony_runner
-			.process_or_delay_message(ACCOUNT_IDS[0].clone(), gen_signing_data_stage1())
+		ceremony_runner
+			.process_or_delay_message(sender_account_id.clone(), gen_signing_data_stage1())
 			.await,
 		None
 	);
 
-	// Check that the message was delayed
-	assert_eq!(unauthorised_ceremony_runner.delayed_messages.len(), 1);
+	// Process a signing request with only 2 participants (us and one other)
+	let participants = BTreeSet::from_iter([our_account_id.clone(), sender_account_id]);
+	let (outgoing_p2p_sender, _outgoing_p2p_receiver) = tokio::sync::mpsc::unbounded_channel();
+	let initial_stage = prepare_signing_request(
+		DEFAULT_CEREMONY_ID,
+		&our_account_id.clone(),
+		participants.clone(),
+		get_key_data_for_test(participants),
+		MESSAGE_HASH.clone(),
+		&outgoing_p2p_sender,
+		Rng::from_seed(DEFAULT_SIGNING_SEED),
+		&new_test_logger(),
+	)
+	.unwrap()
+	.initial_stage;
+	ceremony_runner.on_ceremony_request(initial_stage).await;
+
+	// Check that the ceremony processed the delayed message and caused it to progress to the next
+	// stage.
+	assert_eq!(
+		ceremony_runner.stage.unwrap().get_stage_name(),
+		SigningStageName::VerifyCommitmentsBroadcast2
+	);
+}
+
+#[tokio::test]
+async fn should_process_delayed_messages_after_finishing_a_stage() {
+	let our_account_id = ACCOUNT_IDS[0].clone();
+	let sender_account_id = ACCOUNT_IDS[1].clone();
+	// This test must only have 2 participants, so a single message from the sender will cause the
+	// stage to complete.
+	let participants = BTreeSet::from_iter([our_account_id.clone(), sender_account_id.clone()]);
+
+	// The relevant code path is the same for all stages,
+	// so we just start at stage 1 for this test.
+	let (mut ceremony_runner, _outgoing_p2p_receiver) =
+		gen_stage_1_signing_state(our_account_id, participants.clone()).await;
+
+	// Process a stage 2 message (It should get delayed)
+	assert_eq!(
+		ceremony_runner
+			.process_or_delay_message(
+				sender_account_id.clone(),
+				gen_signing_data_stage2(participants.len() as AuthorityCount)
+			)
+			.await,
+		None
+	);
+
+	// Process a stage 1 message. This will cause the ceremony to progress to stage 2 and process
+	// the delayed message. The processing of the delayed message will cause the completion of stage
+	// 2 and therefore fail with BroadcastFailure because the data we used was invalid.
+	assert!(matches!(
+		ceremony_runner
+			.process_or_delay_message(sender_account_id.clone(), gen_signing_data_stage1())
+			.await,
+		Some(Err((
+			_,
+			CeremonyFailureReason::BroadcastFailure(
+				_,
+				SigningStageName::VerifyCommitmentsBroadcast2
+			)
+		)))
+	));
 }
 
 /// Sends a message to the state and makes sure it was ignored (not delayed or accepted)
@@ -152,104 +214,90 @@ async fn ensure_message_is_ignored(
 	assert_eq!(state.get_awaited_parties_count(), awaited_parties_before_message);
 }
 
-/// Setup a ceremony runner for a signing ceremony at stage 1 (in an authorised state)
-fn gen_stage_1_signing_state(
-	own_idx: AuthorityCount,
-	signing_idxs: BTreeSet<AuthorityCount>,
-) -> CeremonyRunner<SigningCeremony<EthSigning>> {
-	let rng = Rng::from_seed(DEFAULT_SIGNING_SEED);
+/// Create a ceremony runner and process a signing request
+async fn gen_stage_1_signing_state(
+	our_account_id: AccountId,
+	participants: BTreeSet<AccountId>,
+) -> (CeremonyRunner<SigningCeremony<EthSigning>>, UnboundedReceiver<OutgoingMultisigStageMessages>)
+{
 	let logger = new_test_logger();
-	let key: Arc<KeygenResult<Point>> =
-		get_key_data_for_test(BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned())).key;
 
-	let validator_mapping = Arc::new(PartyIdxMapping::from_participants(BTreeSet::from_iter(
-		ACCOUNT_IDS.iter().cloned(),
-	)));
-	let common = CeremonyCommon {
-		ceremony_id: DEFAULT_CEREMONY_ID,
-		own_idx,
-		all_idxs: signing_idxs,
-		outgoing_p2p_message_sender: tokio::sync::mpsc::unbounded_channel().0,
-		validator_mapping,
-		rng,
-		logger: logger.clone(),
-	};
-
-	let processor = AwaitCommitments1::<EthSigning>::new(
-		common.clone(),
-		SigningStateCommonInfo { data: MESSAGE_HASH.clone(), key },
+	let mut ceremony_runner = CeremonyRunner::new_unauthorised(
+		DEFAULT_CEREMONY_ID,
+		tokio::sync::mpsc::unbounded_channel().0,
+		&logger,
 	);
 
-	let stage = Box::new(BroadcastStage::new(processor, common));
-
-	CeremonyRunner::<SigningCeremony<EthSigning>>::new_authorised(
+	let (outgoing_p2p_sender, outgoing_p2p_receiver) = tokio::sync::mpsc::unbounded_channel();
+	let initial_stage = prepare_signing_request(
 		DEFAULT_CEREMONY_ID,
-		stage,
-		logger,
+		&our_account_id.clone(),
+		BTreeSet::from_iter(participants.clone()),
+		get_key_data_for_test(BTreeSet::from_iter(participants)),
+		MESSAGE_HASH.clone(),
+		&outgoing_p2p_sender,
+		Rng::from_seed(DEFAULT_SIGNING_SEED),
+		&logger,
 	)
+	.unwrap()
+	.initial_stage;
+	ceremony_runner.on_ceremony_request(initial_stage).await;
+
+	(ceremony_runner, outgoing_p2p_receiver)
 }
 
 #[tokio::test]
 async fn should_ignore_duplicate_message() {
-	let own_idx = 0;
-	let sender_idx = 1;
-	let signing_idxs = BTreeSet::from_iter([own_idx, sender_idx]);
+	let our_account_id = ACCOUNT_IDS[0].clone();
+	let sender_account_id = ACCOUNT_IDS[1].clone();
+	// This test must have more then 2 participants to stop the stage advancing after a single
+	// message
+	let participants = BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned());
 
 	// The relevant code path is the same for all stages,
 	// so we just use a stage 1 state for this test.
-	let mut stage_1_state = gen_stage_1_signing_state(own_idx, signing_idxs.clone());
+	let (mut stage_1_state, _) = gen_stage_1_signing_state(our_account_id, participants).await;
 
 	// Process a valid message
 	assert_eq!(
 		stage_1_state
-			.process_or_delay_message(
-				ACCOUNT_IDS[sender_idx as usize].clone(),
-				gen_signing_data_stage1()
-			)
+			.process_or_delay_message(sender_account_id.clone(), gen_signing_data_stage1())
 			.await,
 		None
 	);
 
 	// Process a duplicate of that message
-	ensure_message_is_ignored(
-		&mut stage_1_state,
-		ACCOUNT_IDS[sender_idx as usize].clone(),
-		gen_signing_data_stage1(),
-	)
-	.await;
+	ensure_message_is_ignored(&mut stage_1_state, sender_account_id, gen_signing_data_stage1())
+		.await;
 }
 
 #[tokio::test]
 async fn should_ignore_message_from_non_participating_account() {
-	let own_idx = 0;
-	let sender_idx = 1;
-	let signing_idxs = BTreeSet::from_iter([own_idx, sender_idx]);
-	let non_participant_idx = 2;
-	assert!(!signing_idxs.contains(&(non_participant_idx)));
+	let our_account_id = ACCOUNT_IDS[0].clone();
+	let mut participants = BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned());
+	let non_participant_id = ACCOUNT_IDS[2].clone();
+	participants.remove(&non_participant_id);
+	assert!(!participants.contains(&non_participant_id));
 
 	// The relevant code path is the same for all stages,
 	// so we just use a stage 1 state for this test.
-	let mut stage_1_state = gen_stage_1_signing_state(own_idx, signing_idxs.clone());
+	let (mut stage_1_state, _) = gen_stage_1_signing_state(our_account_id, participants).await;
 
 	// Process a message from a node that is not in the signing ceremony
-	ensure_message_is_ignored(
-		&mut stage_1_state,
-		ACCOUNT_IDS[non_participant_idx as usize].clone(),
-		gen_signing_data_stage1(),
-	)
-	.await;
+	ensure_message_is_ignored(&mut stage_1_state, non_participant_id, gen_signing_data_stage1())
+		.await;
 }
 
 #[tokio::test]
 async fn should_ignore_message_from_unknown_account_id() {
-	let own_idx = 0;
-	let sender_idx = 1;
-	let signing_idxs = BTreeSet::from_iter([own_idx, sender_idx]);
+	let our_account_id = ACCOUNT_IDS[0].clone();
+	let participants = BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned());
 	let unknown_id = AccountId::new([0; 32]);
+	assert!(!ACCOUNT_IDS.contains(&unknown_id));
 
 	// The relevant code path is the same for all stages,
 	// so we just use a stage 1 state for this test.
-	let mut stage_1_state = gen_stage_1_signing_state(own_idx, signing_idxs.clone());
+	let (mut stage_1_state, _) = gen_stage_1_signing_state(our_account_id, participants).await;
 
 	// Process a message from an unknown AccountId
 	ensure_message_is_ignored(&mut stage_1_state, unknown_id, gen_signing_data_stage1()).await;
@@ -257,19 +305,20 @@ async fn should_ignore_message_from_unknown_account_id() {
 
 #[tokio::test]
 async fn should_ignore_message_from_unexpected_stage() {
-	let own_idx = 0;
-	let sender_idx = 1;
-	let signing_idxs = BTreeSet::from_iter([own_idx, sender_idx]);
+	let our_account_id = ACCOUNT_IDS[0].clone();
+	let sender_account_id = ACCOUNT_IDS[1].clone();
+	let participants = BTreeSet::from_iter([our_account_id.clone(), sender_account_id.clone()]);
 
 	// The relevant code path is the same for all stages,
 	// so we just use a stage 1 state for this test.
-	let mut stage_1_state = gen_stage_1_signing_state(own_idx, signing_idxs.clone());
+	let (mut stage_1_state, _) =
+		gen_stage_1_signing_state(our_account_id, participants.clone()).await;
 
 	// Process a message from an unexpected stage
 	ensure_message_is_ignored(
 		&mut stage_1_state,
-		ACCOUNT_IDS[sender_idx as usize].clone(),
-		gen_signing_data_stage4(signing_idxs.len() as u32),
+		sender_account_id,
+		gen_signing_data_stage4(participants.len() as u32),
 	)
 	.await;
 }
