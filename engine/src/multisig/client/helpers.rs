@@ -136,8 +136,8 @@ impl<C: CeremonyTrait> Node<C> {
 			Ok(_) => {
 				slog::debug!(self.logger, "Node got successful outcome");
 			},
-			Err((_, failure_reason)) => {
-				slog::debug!(self.logger, "Node got failure outcome: {}", failure_reason);
+			Err((reported_parties, failure_reason)) => {
+				failure_reason.log(reported_parties, &self.logger);
 			},
 		}
 
@@ -430,20 +430,17 @@ where
 	}
 
 	// Checks if all nodes have an outcome and the outcomes are consistent, returning the outcome.
-    async fn collect_and_check_outcomes(
-        &mut self,
-    ) -> Option<
-        Result<
-            <Self as CeremonyRunnerStrategy>::CheckedOutput,
-            (
-                BTreeSet<AccountId>,
-                CeremonyFailureReason<
-                    <<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::FailureReason,
-                    <<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::CeremonyStageName,
-                >,
-            ),
-        >,
-	>{
+	async fn collect_and_check_outcomes(
+		&mut self,
+	) -> Option<
+		Result<
+			<Self as CeremonyRunnerStrategy>::CheckedOutput,
+			(
+				BTreeSet<AccountId>,
+				<<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::FailureReason,
+			),
+		>,
+	> {
 		// Gather the outcomes from all the nodes
 		let results: HashMap<_, _> = self
 			.nodes
@@ -506,10 +503,7 @@ where
 	async fn try_complete_with_error(
 		&mut self,
 		bad_account_ids: &[AccountId],
-		expected_failure_reason: CeremonyFailureReason<
-			<<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::FailureReason,
-			<<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::CeremonyStageName,
-		>,
+		expected_failure_reason: <<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::FailureReason,
 	) -> Option<()> {
 		let (reported, reason) = self.collect_and_check_outcomes().await?.unwrap_err();
 		assert_eq!(BTreeSet::from_iter(bad_account_ids.iter()), reported.iter().collect());
@@ -522,10 +516,7 @@ where
 	pub async fn complete_with_error(
 		&mut self,
 		bad_account_ids: &[AccountId],
-		expected_failure_reason: CeremonyFailureReason<
-			<<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::FailureReason,
-			<<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::CeremonyStageName,
-		>,
+		expected_failure_reason: <<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::FailureReason,
 	) {
 		self.try_complete_with_error(bad_account_ids, expected_failure_reason)
 			.await
@@ -799,10 +790,7 @@ pub async fn run_keygen_with_err_on_high_pubkey<AccountIds: IntoIterator<Item = 
 	);
 	keygen_ceremony.distribute_messages(stage_4_messages).await;
 	match keygen_ceremony
-		.try_complete_with_error(
-			&[],
-			CeremonyFailureReason::Other(KeygenFailureReason::KeyNotCompatible),
-		)
+		.try_complete_with_error(&[], KeygenFailureReason::KeyNotCompatible)
 		.await
 	{
 		Some(_) => Err(()),

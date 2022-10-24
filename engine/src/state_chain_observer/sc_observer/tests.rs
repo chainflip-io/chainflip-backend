@@ -27,7 +27,7 @@ use crate::{
 		EpochStart, EthBroadcaster,
 	},
 	logging::test_utils::new_test_logger,
-	multisig::client::{mocks::MockMultisigClientApi, CeremonyFailureReason},
+	multisig::client::{mocks::MockMultisigClientApi, KeygenFailureReason, SigningFailureReason},
 	settings::Settings,
 	state_chain_observer::{
 		client::{
@@ -1016,7 +1016,7 @@ async fn should_handle_signing_request() {
 			predicate::eq(BTreeSet::from_iter([our_account_id.clone()])),
 			predicate::eq(sign_data.clone()),
 		)
-		.returning(|_, _, _, _| Err((BTreeSet::new(), CeremonyFailureReason::InvalidParticipants)));
+		.returning(|_, _, _, _| Err((BTreeSet::new(), SigningFailureReason::InvalidParticipants)));
 
 	let multisig_client = Arc::new(multisig_client);
 
@@ -1084,7 +1084,7 @@ async fn should_handle_keygen_request() {
 			predicate::eq(next_ceremony_id),
 			predicate::eq(BTreeSet::from_iter([our_account_id.clone()])),
 		)
-		.returning(|_, _| Err((BTreeSet::new(), CeremonyFailureReason::InvalidParticipants)));
+		.returning(|_, _| Err((BTreeSet::new(), KeygenFailureReason::InvalidParticipants)));
 
 	let multisig_client = Arc::new(multisig_client);
 
