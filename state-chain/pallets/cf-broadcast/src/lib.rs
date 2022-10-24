@@ -394,11 +394,6 @@ pub mod pallet {
 
 				Self::take_and_clean_up_broadcast_attempt(broadcast_attempt_id);
 
-				// Do we still report nodes for not whitelisting their tx successfully?
-				T::OffenceReporter::report(
-					PalletOffence::InvalidTransactionAuthored,
-					signing_attempt.nominee,
-				);
 				Self::schedule_retry(signing_attempt.broadcast_attempt);
 			}
 
