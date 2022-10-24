@@ -4,8 +4,8 @@ use sp_finality_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::{traits::Zero, BuildStorage};
 use state_chain_runtime::{
 	chainflip::Offence, constants::common::*, opaque::SessionKeys, AccountId, AccountTypesConfig,
-	AuctionConfig, EmissionsConfig, EthereumVaultConfig, FlipConfig, GovernanceConfig,
-	ReputationConfig, Runtime, SessionConfig, StakingConfig, System, ValidatorConfig,
+	EmissionsConfig, EthereumVaultConfig, FlipConfig, GovernanceConfig, ReputationConfig, Runtime,
+	SessionConfig, StakingConfig, System, ValidatorConfig,
 };
 
 use crate::{get_from_seed, network, GENESIS_KEY};
@@ -89,11 +89,6 @@ impl ExtBuilder {
 				minimum_stake: DEFAULT_MIN_STAKE,
 				claim_ttl: core::time::Duration::from_secs(3 * CLAIM_DELAY_SECS),
 			},
-			auction: AuctionConfig {
-				min_size: self.min_authorities,
-				max_size: self.max_authorities,
-				max_expansion: self.max_authorities,
-			},
 			reputation: ReputationConfig {
 				accrual_ratio: ACCRUAL_RATIO,
 				penalties: vec![(Offence::MissedHeartbeat, (15, 150))],
@@ -110,7 +105,10 @@ impl ExtBuilder {
 				bond: self.accounts.iter().map(|(_, stake)| *stake).min().unwrap(),
 				claim_period_as_percentage: PERCENT_OF_EPOCH_PERIOD_CLAIMABLE,
 				backup_reward_node_percentage: 34,
-				authority_set_min_size: self.min_authorities as u8,
+				authority_set_min_size: self.min_authorities,
+				min_size: self.min_authorities,
+				max_size: self.max_authorities,
+				max_expansion: self.max_authorities,
 			},
 			ethereum_vault: EthereumVaultConfig {
 				vault_key: ethereum_vault_key,

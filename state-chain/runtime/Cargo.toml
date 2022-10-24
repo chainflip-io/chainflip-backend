@@ -36,7 +36,6 @@ pallet-cf-validator = { path = '../pallets/cf-validator', default-features = fal
 pallet-cf-staking = { path = '../pallets/cf-staking', default-features = false }
 pallet-cf-witnesser = { path = '../pallets/cf-witnesser', default-features = false}
 pallet-cf-flip = { path = '../pallets/cf-flip', default-features = false }
-pallet-cf-auction = { path = '../pallets/cf-auction', default-features = false }
 pallet-cf-emissions = { path = '../pallets/cf-emissions', default-features = false }
 pallet-cf-relayer = { path = '../pallets/cf-relayer', default-features = false, optional = true }
 pallet-cf-governance = { path = '../pallets/cf-governance', default-features = false }
@@ -208,7 +207,6 @@ runtime-benchmarks = [
   'frame-system/runtime-benchmarks',
   'hex-literal',
   'pallet-cf-account-types/runtime-benchmarks',
-  'pallet-cf-auction/runtime-benchmarks',
   'pallet-cf-broadcast/runtime-benchmarks',
   'pallet-cf-chain-tracking/runtime-benchmarks',
   'pallet-cf-emissions/runtime-benchmarks',
@@ -244,7 +242,6 @@ std = [
   'nanorand/std',
   'pallet-aura/std',
   'pallet-cf-account-types/std',
-  'pallet-cf-auction/std',
   'pallet-cf-broadcast/std',
   'pallet-cf-chain-tracking/std',
   'pallet-cf-egress/std',
@@ -290,7 +287,6 @@ try-runtime = [
   'pallet-grandpa/try-runtime',
   'pallet-timestamp/try-runtime',
   'pallet-transaction-payment/try-runtime',
-  'pallet-cf-auction/try-runtime',
   'pallet-cf-egress/try-runtime',
   'pallet-cf-emissions/try-runtime',
   'pallet-cf-environment/try-runtime',

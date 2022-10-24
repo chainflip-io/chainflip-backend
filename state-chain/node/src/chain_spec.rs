@@ -10,7 +10,7 @@ use sp_finality_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::traits::{IdentifyAccount, Verify};
 use state_chain_runtime::{
 	chainflip::Offence, constants::common::*, opaque::SessionKeys, AccountId, AccountTypesConfig,
-	AuctionConfig, AuraConfig, BlockNumber, CfeSettings, EmissionsConfig, EnvironmentConfig,
+	AuraConfig, BlockNumber, CfeSettings, EmissionsConfig, EnvironmentConfig,
 	EthereumThresholdSignerConfig, EthereumVaultConfig, FlipBalance, FlipConfig, GenesisConfig,
 	GovernanceConfig, GrandpaConfig, ReputationConfig, SessionConfig, Signature, StakingConfig,
 	SystemConfig, ValidatorConfig, WASM_BINARY,
@@ -756,7 +756,10 @@ fn testnet_genesis(
 			claim_period_as_percentage: PERCENT_OF_EPOCH_PERIOD_CLAIMABLE,
 			backup_reward_node_percentage: 20,
 			bond: genesis_stake_amount,
-			authority_set_min_size: min_authorities as u8,
+			authority_set_min_size: min_authorities,
+			min_size: min_authorities,
+			max_size: MAX_AUTHORITIES,
+			max_expansion: MAX_AUTHORITIES,
 		},
 		session: SessionConfig {
 			keys: initial_authorities
@@ -772,11 +775,6 @@ fn testnet_genesis(
 				.collect::<Vec<(AccountId, FlipBalance)>>(),
 			minimum_stake,
 			claim_ttl: core::time::Duration::from_secs(3 * CLAIM_DELAY_SECS),
-		},
-		auction: AuctionConfig {
-			min_size: min_authorities,
-			max_size: MAX_AUTHORITIES,
-			max_expansion: MAX_AUTHORITIES,
 		},
 		aura: AuraConfig { authorities: vec![] },
 		grandpa: GrandpaConfig { authorities: vec![] },

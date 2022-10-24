@@ -159,12 +159,6 @@ impl<CandidateId, BidAmount: Default> Default for AuctionOutcome<CandidateId, Bi
 	}
 }
 
-pub trait Auctioneer<T: Chainflip> {
-	type Error: Into<DispatchError>;
-
-	fn resolve_auction() -> Result<RuntimeAuctionOutcome<T>, Self::Error>;
-}
-
 pub trait VaultRotator {
 	type ValidatorId;
 
