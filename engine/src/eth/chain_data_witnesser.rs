@@ -29,11 +29,11 @@ where
         "ETH-Chain-Data".to_string(),
         epoch_start_receiver,
         |epoch_start| epoch_start.current,
-        0,
+        TrackedData::<Ethereum>::default(),
         move |
             end_witnessing_signal,
             epoch_start,
-            mut last_witnessed_block_number,
+            mut last_witnessed_data,
             logger
         | {
             let eth_rpc = eth_rpc.clone();
@@ -56,7 +56,7 @@ where
                         priority_fee
                     ).await?;
 
-                    if latest_data.block_height > last_witnessed_block_number  {
+                    if latest_data.block_height > last_witnessed_data.block_height || latest_data.base_fee != last_witnessed_data.base_fee {
                         let _result = state_chain_client
                             .submit_signed_extrinsic(
                                 state_chain_runtime::Call::Witnesser(pallet_cf_witnesser::Call::witness_at_epoch {
@@ -71,13 +71,15 @@ where
                             )
                             .await;
 
-                        last_witnessed_block_number = latest_data.block_height;
+
+                        last_witnessed_data = latest_data;
+
                     }
 
                     poll_interval.tick().await;
                 }
 
-                Ok(last_witnessed_block_number)
+                Ok(last_witnessed_data)
             }
         },
         logger,
