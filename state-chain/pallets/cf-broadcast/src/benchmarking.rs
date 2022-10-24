@@ -49,18 +49,38 @@ fn generate_on_signature_ready_call<T: pallet::Config<I>, I>() -> pallet::Call<T
 // TODO: check if we really reach the expensive parts of the code.
 benchmarks_instance_pallet! {
 	on_initialize {
-		let expiry_block = T::BlockNumber::from(6u32);
+		// We add one because one is added at genesis
+		let timeout_block = frame_system::Pallet::<T>::block_number() + T::BroadcastTimeout::get() + 1_u32.into();
 		// Complexity parameter for expiry queue.
 		let x in 1 .. 1000u32;
 		for i in 1 .. x {
 			let broadcast_attempt_id = BroadcastAttemptId {broadcast_id: i, attempt_count: 1};
-			Timeouts::<T, I>::append(expiry_block, broadcast_attempt_id);
+			Timeouts::<T, I>::append(timeout_block, broadcast_attempt_id);
 			ThresholdSignatureData::<T, I>::insert(i, (ApiCallFor::<T, I>::benchmark_value(), ThresholdSignatureFor::<T, I>::benchmark_value()))
 		}
 		let valid_key = <<T as Config<I>>::TargetChain as ChainCrypto>::AggKey::benchmark_value();
 		T::KeyProvider::set_key(valid_key);
 	} : {
-		Pallet::<T, I>::on_initialize(expiry_block);
+		Pallet::<T, I>::on_initialize(timeout_block);
+	}
+	whitelist_transaction_for_refund {
+		// We add one because one is added at genesis
+		let caller: T::AccountId = whitelisted_caller();
+		T::AccountRoleRegistry::register_account(caller.clone(), AccountRole::Validator);
+		let broadcast_attempt_id = BroadcastAttemptId {
+			broadcast_id: 1,
+			attempt_count: 1
+		};
+		insert_transaction_broadcast_attempt::<T, I>(caller.clone().into(), broadcast_attempt_id);
+		generate_on_signature_ready_call::<T, I>().dispatch_bypass_filter(T::EnsureThresholdSigned::successful_origin())?;
+		let valid_key = <<T as Config<I>>::TargetChain as ChainCrypto>::AggKey::benchmark_value();
+		T::KeyProvider::set_key(valid_key);
+		T::AccountRoleRegistry::register_account(caller.clone(), AccountRole::Validator);
+		let signed_tx = SignedTransactionFor::<T, I>::benchmark_value();
+		let signer_id = SignerIdFor::<T, I>::benchmark_value();
+	} : _(RawOrigin::Signed(caller.clone()), broadcast_attempt_id, signed_tx, signer_id.clone())
+	verify {
+		assert_eq!(RefundSignerId::<T, I>::get(caller).unwrap(), signer_id);
 	}
 	// TODO: add a benchmark for the failure case
 	transaction_signing_failure {
@@ -82,7 +102,8 @@ benchmarks_instance_pallet! {
 		assert!(Timeouts::<T, I>::contains_key(expiry_block));
 	}
 	on_signature_ready {
-		let should_expire_in = T::BlockNumber::from(6u32);
+		// We add one because one is added at genesis
+		let timeout_block = frame_system::Pallet::<T>::block_number() + T::BroadcastTimeout::get() + 1_u32.into();
 		let broadcast_attempt_id = BroadcastAttemptId {
 			broadcast_id: 1,
 			attempt_count: 1
@@ -95,7 +116,7 @@ benchmarks_instance_pallet! {
 	verify {
 		assert_eq!(BroadcastIdCounter::<T, I>::get(), 1);
 		assert!(BroadcastIdToAttemptNumbers::<T, I>::contains_key(1));
-		assert!(Timeouts::<T, I>::contains_key(should_expire_in));
+		assert!(Timeouts::<T, I>::contains_key(timeout_block));
 	}
 	start_next_broadcast_attempt {
 		let broadcast_attempt_id = Pallet::<T, I>::start_broadcast(&BenchmarkValue::benchmark_value(), BenchmarkValue::benchmark_value(), BenchmarkValue::benchmark_value());
