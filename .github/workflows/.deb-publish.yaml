@@ -1,0 +1,79 @@
+name: Publish Packages
+on:
+  workflow_call:
+
+env:
+  APTLY_VERSION: "1.5.0"
+  REGISTRY: "ghcr.io"
+  REPO_REGION: "eu-central-1"
+  REPO_BUCKET: "apt.aws.chainflip.xyz"
+
+jobs:
+  build-deb:
+    name: Build Deb
+    runs-on: [self-hosted, linux, x64, ephemeral]
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Download packages
+        uses: actions/download-artifact@v3
+        with:
+          name: chainflip-backend-packages
+          path: packages
+      - name: Get commit SHA, distribution codename
+        id: vars
+        run: |
+          echo "sha_long=$GITHUB_SHA" >> $GITHUB_OUTPUT
+          echo "codename=$(lsb_release -c -s)" >> $GITHUB_OUTPUT
+      - name: Install Aptly and dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y --no-install-recommends moreutils
+          wget https://github.com/aptly-dev/aptly/releases/download/v${APTLY_VERSION}/aptly_${APTLY_VERSION}_amd64.deb -O /tmp/aptly_${APTLY_VERSION}_amd64.deb
+          sudo dpkg -i /tmp/aptly_${APTLY_VERSION}_amd64.deb
+      - name: Configure AWS credentials using OIDC
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-region: eu-central-1
+          role-to-assume: arn:aws:iam::962042992619:role/chainflip-github-bot
+      - name: Configure aptly
+        run: |
+          aptly config show
+          jq --argjson S3PublishEndpoints "$(<.github/workflows/aptly_dev_s3.json)" '.S3PublishEndpoints += $S3PublishEndpoints' ~/.aptly.conf | sponge ~/.aptly.conf
+      - name: Import GPG package signing key
+        id: import_gpg
+        uses: crazy-max/ghaction-import-gpg@v5
+        with:
+          gpg_private_key: ${{ secrets.CF_DEV_PGP_KEY }}
+      - name: List keys
+        run: gpg -K
+      - name: Run aptly
+        run: |
+          export AWS_SDK_LOAD_CONFIG=1
+          aptly repo create local
+          aptly repo add local packages/*.deb
+          aptly snapshot create snap from repo local
+          aptly publish -gpg-key=${{ steps.import_gpg.outputs.keyid }} -distribution=${{ steps.vars.outputs.codename }} snapshot -force-overwrite snap "s3:chainflip-dev:ci/${{ steps.vars.outputs.sha_long }}/"
+      - name: Summary
+        run: |
+          echo "### Packages published! :rocket:" >> $GITHUB_STEP_SUMMARY
+          echo "Packages can be installed with the following commands: " >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys ${{ steps.import_gpg.outputs.keyid }}" >> $GITHUB_STEP_SUMMARY
+          echo "echo \"deb https://{user}:{password}@${REPO_BUCKET}/ci/${{ steps.vars.outputs.sha_long }}/ ${{ steps.vars.outputs.codename }} main\"  | sudo tee /etc/apt/sources.list.d/chainflip.list" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "You can find the basic auth credentials in 1Password under \`apt repo basic auth\` secret" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "After these steps, run *apt update* and install the desired packages" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "apt update" >> $GITHUB_STEP_SUMMARY
+          echo "apt install chainflip-cli" >> $GITHUB_STEP_SUMMARY
+          echo "apt install chainflip-node" >> $GITHUB_STEP_SUMMARY
+          echo "apt install chainflip-engine" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "### Usage in \`testnet-tools\`" >> $GITHUB_STEP_SUMMARY
+          echo "Use the full commit hash: \`$GITHUB_SHA\` for your network configuration. " >> $GITHUB_STEP_SUMMARY

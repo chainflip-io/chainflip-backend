@@ -10,7 +10,6 @@ use sp_runtime::{
 	traits::{IdentifyAccount, Verify},
 	FixedU128, MultiSignature, RuntimeDebug,
 };
-use sp_std::vec::Vec;
 
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
@@ -101,5 +100,3 @@ pub struct ForeignChainAsset {
 	pub chain: ForeignChain,
 	pub asset: Asset,
 }
-
-pub type EgressBatch<Amount, EgressAddress> = Vec<(Amount, EgressAddress)>;

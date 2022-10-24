@@ -351,7 +351,7 @@ async fn register_account_role(
 
 	let tx_hash = state_chain_client
 		.submit_signed_extrinsic(
-			pallet_cf_account_types::Call::register_account_role_xt { role },
+			pallet_cf_account_types::Call::register_account_role { role },
 			logger,
 		)
 		.await

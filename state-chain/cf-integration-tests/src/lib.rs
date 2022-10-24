@@ -6,6 +6,7 @@ mod signer_nomination;
 
 mod mock_runtime;
 
+mod account;
 mod authorities;
 mod genesis;
 mod governance;
