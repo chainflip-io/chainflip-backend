@@ -759,7 +759,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			ensure!(
-				u32::from(min_size) <= <Self as EpochInfo>::current_authority_count(),
+				min_size <= <Self as EpochInfo>::current_authority_count(),
 				Error::<T>::InvalidAuthoritySetMinSize
 			);
 
