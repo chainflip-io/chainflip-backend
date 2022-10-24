@@ -1,15 +1,16 @@
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
-use sp_std::{boxed::Box, vec::Vec};
+use sp_std::{boxed::Box, vec};
 
 use crate::dot::{
-	BalancesCall, Polkadot, PolkadotAccountIdLookup, PolkadotExtrinsicHandler, PolkadotProxyType,
-	PolkadotReplayProtection, PolkadotRuntimeCall, ProxyCall, UtilityCall,
+	Polkadot, PolkadotAccountId, PolkadotAccountIdLookup, PolkadotExtrinsicHandler,
+	PolkadotProxyType, PolkadotPublicKey, PolkadotReplayProtection, PolkadotRuntimeCall, ProxyCall,
+	UtilityCall,
 };
 
-use crate::{ApiCall, Chain, ChainAbi, ChainCrypto, IntentId};
+use crate::{ApiCall, ChainAbi, ChainCrypto};
 
-use sp_runtime::RuntimeDebug;
+use sp_runtime::{traits::IdentifyAccount, MultiSigner, RuntimeDebug};
 
 /// Represents all the arguments required to build the call to fetch assets for all given intent
 /// ids.
@@ -17,9 +18,12 @@ use sp_runtime::RuntimeDebug;
 pub struct RotateVaultProxy {
 	/// The handler for creating and signing polkadot extrinsics
 	pub extrinsic_handler: PolkadotExtrinsicHandler,
-	/// The list of all inbound deposits that are to be fetched in this batch call.
-	pub new_key: PolkadotPublicKey,
-	pub old_key: PolkadotPublicKey,
+	/// The new proxy account public key
+	pub new_proxy: PolkadotPublicKey,
+	/// The old proxy account public Key
+	pub old_proxy: PolkadotPublicKey,
+	/// The vault anonymous Polkadot AccountId
+	pub vault_account: PolkadotAccountId,
 }
 
 impl RotateVaultProxy {
@@ -27,14 +31,16 @@ impl RotateVaultProxy {
 		replay_protection: PolkadotReplayProtection,
 		new_proxy: PolkadotPublicKey,
 		old_proxy: PolkadotPublicKey,
-		vault_account: <Polkadot as Chain>::ChainAccount,
+		vault_account: PolkadotAccountId,
 	) -> Self {
 		let mut calldata = Self {
 			extrinsic_handler: PolkadotExtrinsicHandler::new_empty(
 				replay_protection,
-				vault_account,
+				MultiSigner::Sr25519(old_proxy.clone().0).into_account(),
 			),
 			new_proxy,
+			old_proxy,
+			vault_account,
 		};
 		// create and insert polkadot runtime call
 		calldata
@@ -50,20 +56,20 @@ impl RotateVaultProxy {
 
 	fn extrinsic_call_polkadot(&self) -> PolkadotRuntimeCall {
 		PolkadotRuntimeCall::Proxy(ProxyCall::proxy {
-			real: PolkadotAccountIdLookup::from(self.extrinsic_handler.vault_account.clone()),
+			real: PolkadotAccountIdLookup::from(self.vault_account.clone()),
 			force_proxy_type: Some(PolkadotProxyType::Any),
 			call: Box::new(PolkadotRuntimeCall::Utility(UtilityCall::batch_all {
 				calls: vec![
 					PolkadotRuntimeCall::Proxy(ProxyCall::add_proxy {
 						delegate: PolkadotAccountIdLookup::from(
-							MultiSigner::Sr25519(old_new_keypair.new_proxy).into_account(),
+							MultiSigner::Sr25519(self.new_proxy.0).into_account(),
 						),
 						proxy_type: PolkadotProxyType::Any,
 						delay: 0,
 					}),
 					PolkadotRuntimeCall::Proxy(ProxyCall::remove_proxy {
-						elegate: PolkadotAccountIdLookup::from(
-							MultiSigner::Sr25519(old_new_keypair.old_proxy).into_account(),
+						delegate: PolkadotAccountIdLookup::from(
+							MultiSigner::Sr25519(self.old_proxy.0).into_account(),
 						),
 						proxy_type: PolkadotProxyType::Any,
 						delay: 0,
@@ -74,7 +80,7 @@ impl RotateVaultProxy {
 	}
 }
 
-impl ApiCall<Polkadot> for BatchFetch {
+impl ApiCall<Polkadot> for RotateVaultProxy {
 	fn threshold_signature_payload(&self) -> <Polkadot as ChainCrypto>::Payload {
 		self
 		.extrinsic_handler
@@ -99,7 +105,7 @@ impl ApiCall<Polkadot> for BatchFetch {
 }
 
 #[cfg(test)]
-mod test_batch_fetch {
+mod test_rotate_vault_proxy {
 
 	use super::*;
 	use crate::dot::{sr25519::Pair, NetworkChoice};
@@ -116,18 +122,40 @@ mod test_batch_fetch {
 	// address: "5E2WfQFeafdktJ5AAF6ZGZ71Yj4fiJnHWRomVmeoStMNhoZe"
 	pub const RAW_SEED_1: [u8; 32] =
 		hex_literal::hex!("858c1ee915090a119d4cb0774b908fa585ef7882f4648c577606490cc94f6e15");
-	pub const NONCE_1: u32 = 4; //correct nonce has to be provided for this account (see/track onchain)
+	pub const _NONCE_1: u32 = 6; //correct nonce has to be provided for this account (see/track onchain)
+
+	// test westend account 2 (CHAINFLIP-TEST-2)
+	// address: "5GNn92C9ngX4sNp3UjqGzPbdRfbbV8hyyVVNZaH2z9e5kzxA"
+	pub const RAW_SEED_2: [u8; 32] =
+		hex_literal::hex!("4b734882accd7a0e27b8b0d3cb7db79ab4da559d1d5f84f35fd218a1ee12ece4");
+	pub const NONCE_2: u32 = 1; //correct nonce has to be provided for this account (see/track onchain)
+
+	// test westend account 3 (CHAINFLIP-TEST-3)
+	// address: "5CLpD6DBg2hFToBJYKDB7bPVAf4TKw2F1Q2xbnzdHSikH3uK"
+	pub const RAW_SEED_3: [u8; 32] =
+		hex_literal::hex!("ce7fec0dd410141c04e246a91f7ac909aa9707b56a8ecd33e794a49f1b5d70e6");
+	pub const _NONCE_3: u32 = 0; //correct nonce has to be provided for this account (see/track onchain)
 
 	#[ignore]
 	#[test]
 	fn create_test_api_call() {
-		let keypair_1: Pair = <Pair as TraitPair>::from_seed(&RAW_SEED_1);
-		let account_id_1: AccountId32 = MultiSigner::Sr25519(keypair_1.public()).into_account();
+		let keypair_vault: Pair = <Pair as TraitPair>::from_seed(&RAW_SEED_1);
+		let account_id_vault: AccountId32 =
+			MultiSigner::Sr25519(keypair_vault.public()).into_account();
 
-		let rotate_vault_proxy_api = BatchFetch::new_unsigned(
-			PolkadotReplayProtection::new(NONCE_1, 0, NetworkChoice::WestendTestnet),
-			account_id_2,
-			account_id_1,
+		let keypair_old_proxy: Pair = <Pair as TraitPair>::from_seed(&RAW_SEED_2);
+		let _account_id_old_proxy: AccountId32 =
+			MultiSigner::Sr25519(keypair_old_proxy.public()).into_account();
+
+		let keypair_new_proxy: Pair = <Pair as TraitPair>::from_seed(&RAW_SEED_3);
+		let _account_id_new_proxy: AccountId32 =
+			MultiSigner::Sr25519(keypair_new_proxy.public()).into_account();
+
+		let rotate_vault_proxy_api = RotateVaultProxy::new_unsigned(
+			PolkadotReplayProtection::new(NONCE_2, 0, NetworkChoice::WestendTestnet),
+			PolkadotPublicKey(keypair_new_proxy.public()),
+			PolkadotPublicKey(keypair_old_proxy.public()),
+			account_id_vault,
 		);
 
 		println!(
@@ -135,16 +163,25 @@ mod test_batch_fetch {
 			rotate_vault_proxy_api
 				.extrinsic_handler
 				.extrinsic_call
+				.clone()
+				.unwrap()
 				.using_encoded(|encoded| hex::encode(BlakeTwo256::hash(encoded)))
 		);
 		println!(
 			"Encoded Call: 0x{}",
-			hex::encode(rotate_vault_proxy_api.extrinsic_handler.extrinsic_call.encode())
+			hex::encode(
+				rotate_vault_proxy_api
+					.extrinsic_handler
+					.extrinsic_call
+					.clone()
+					.unwrap()
+					.encode()
+			)
 		);
 
 		let rotate_vault_proxy_api = rotate_vault_proxy_api
 			.clone()
-			.signed(&keypair_1.sign(&rotate_vault_proxy_api.threshold_signature_payload()));
+			.signed(&keypair_old_proxy.sign(&rotate_vault_proxy_api.threshold_signature_payload()));
 		assert!(rotate_vault_proxy_api.is_signed());
 
 		println!("encoded extrinsic: 0x{}", hex::encode(rotate_vault_proxy_api.chain_encoded()));

@@ -1,6 +1,7 @@
 use crate::*;
 
 pub mod batch_fetch;
+pub mod rotate_vault_proxy;
 
 use crate::dot::{Polkadot, PolkadotAccountId, PolkadotReplayProtection};
 
@@ -14,11 +15,13 @@ impl PolkadotBatchFetch for PolkadotApi {
 	fn new_unsigned(
 		replay_protection: PolkadotReplayProtection,
 		intent_ids: Vec<IntentId>,
+		proxy_account: PolkadotAccountId,
 		vault_account: PolkadotAccountId,
 	) -> Self {
 		Self::BatchFetch(batch_fetch::BatchFetch::new_unsigned(
 			replay_protection,
 			intent_ids,
+			proxy_account,
 			vault_account,
 		))
 	}
@@ -28,6 +31,7 @@ pub trait PolkadotBatchFetch: ApiCall<Polkadot> {
 	fn new_unsigned(
 		replay_protection: <Polkadot as ChainAbi>::ReplayProtection,
 		intent_ids: Vec<IntentId>,
+		proxy_account: <Polkadot as Chain>::ChainAccount,
 		vault_account: <Polkadot as Chain>::ChainAccount,
 	) -> Self;
 }

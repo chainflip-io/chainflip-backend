@@ -143,22 +143,22 @@ pub struct PolkadotTransactionData {
 /// The handler for creating and signing polkadot extrinsics, and creating signature payload
 #[derive(Debug, Encode, Decode, TypeInfo, Eq, PartialEq, Clone)]
 pub struct PolkadotExtrinsicHandler {
-	vault_account: <Polkadot as Chain>::ChainAccount,
+	extrinsic_origin: PolkadotAccountId,
 	extrinsic_call: Option<PolkadotRuntimeCall>,
 	signed_extrinsic: Option<PolkadotUncheckedExtrinsic>,
 	replay_protection: PolkadotReplayProtection,
 	extra: Option<PolkadotSignedExtra>,
-	signature_payload: Option<<Polkadot as ChainCrypto>::Payload>,
+	signature_payload: Option<EncodedPolkadotPayload>,
 }
 
 impl PolkadotExtrinsicHandler {
 	pub fn new_empty(
 		replay_protection: PolkadotReplayProtection,
-		vault_account: <Polkadot as Chain>::ChainAccount,
+		extrinsic_origin: PolkadotAccountId,
 	) -> Self {
 		Self {
 			replay_protection,
-			vault_account,
+			extrinsic_origin,
 			extrinsic_call: None,
 			signed_extrinsic: None,
 			extra: None,
@@ -212,7 +212,7 @@ impl PolkadotExtrinsicHandler {
 	) -> Option<PolkadotUncheckedExtrinsic> {
 		self.signed_extrinsic = Some(PolkadotUncheckedExtrinsic::new_signed(
 			self.extrinsic_call.clone()?,
-			PolkadotAddress::Id(self.vault_account.clone()),
+			PolkadotAddress::Id(self.extrinsic_origin.clone()),
 			sp_runtime::MultiSignature::Sr25519(signature),
 			self.extra?,
 		));
@@ -225,7 +225,7 @@ impl PolkadotExtrinsicHandler {
 				let raw_payload =
 					SignedPayload::new(self.signed_extrinsic.clone()?.function, extra).ok()?;
 				if !raw_payload
-					.using_encoded(|payload| signature.verify(payload, &self.vault_account))
+					.using_encoded(|payload| signature.verify(payload, &self.extrinsic_origin))
 				{
 					Some(false)
 				} else {
@@ -244,9 +244,9 @@ pub enum PolkadotRuntimeCall {
 	System(SystemCall),
 	#[codec(index = 4u8)] // INDEX FOR WESTEND: 4, FOR POLKADOT: 5
 	Balances(BalancesCall),
-	#[codec(index = 26u8)]
+	#[codec(index = 16u8)] // INDEX FOR WESTEND: 16, FOR POLKADOT: 26
 	Utility(UtilityCall),
-	#[codec(index = 29u8)]
+	#[codec(index = 22u8)] // INDEX FOR WESTEND: 22, FOR POLKADOT: 29
 	Proxy(ProxyCall),
 }
 

@@ -2,8 +2,8 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-#[cfg(feature = "ibiza")]
-use cf_chains::dot::PolkadotPublicKey;
+// #[cfg(feature = "ibiza")]
+// use cf_chains::dot::PolkadotPublicKey;
 use cf_primitives::{Asset, EthereumAddress};
 pub use cf_traits::{EthEnvironmentProvider, EthereumAssetsAddressProvider};
 use cf_traits::{SystemStateInfo, SystemStateManager};
@@ -134,11 +134,11 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type GlobalSignatureNonce<T> = StorageValue<_, SignatureNonce, ValueQuery>;
 
-	#[cfg(feature = "ibiza")]
-	#[pallet::storage]
-	#[pallet::getter(fn polkadot_vault_public_key)]
-	/// The Public Key of the Polkadot Vault Account
-	pub type PolkadotVaultPublicKey<T> = StorageValue<_, PolkadotPublicKey, ValueQuery>;
+	// #[cfg(feature = "ibiza")]
+	// #[pallet::storage]
+	// #[pallet::getter(fn polkadot_vault_public_key)]
+	// /// The Public Key of the Polkadot Vault Account
+	// pub type PolkadotVaultPublicKey<T> = StorageValue<_, PolkadotPublicKey, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
