@@ -742,6 +742,7 @@ fn testnet_genesis(
 			claim_period_as_percentage: PERCENT_OF_EPOCH_PERIOD_CLAIMABLE,
 			backup_reward_node_percentage: 20,
 			bond: genesis_stake_amount,
+			authority_set_min_size: min_authorities,
 			min_size: min_authorities,
 			max_size: MAX_AUTHORITIES,
 			max_expansion: MAX_AUTHORITIES,
