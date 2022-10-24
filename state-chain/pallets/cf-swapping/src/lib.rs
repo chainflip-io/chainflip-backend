@@ -69,7 +69,7 @@ pub mod pallet {
 			// We split the array in what we can process during this block and the rest. If we could
 			// do more we just process all. We calculate the index based on the available weight and
 			// the weight we need for performing a single swap.
-			let left_swaps = swaps.split_off(cmp::min(
+			let remaining_swaps = swaps.split_off(cmp::min(
 				swaps.len(),
 				(remaining_weight.saturating_div(swap_weight)) as usize,
 			));
@@ -77,7 +77,7 @@ pub mod pallet {
 				Self::execute_swap(*swap);
 			}
 			// Write the rest back (potentially an empty vector).
-			SwapQueue::<T>::put(left_swaps);
+			SwapQueue::<T>::put(remaining_swaps);
 			// return the weight we used during the execution of this function.
 			swap_weight * swaps.len() as u64 + T::WeightInfo::on_idle()
 		}
@@ -143,9 +143,7 @@ pub mod pallet {
 			ingress_address: ForeignChainAddress,
 			egress_address: ForeignChainAddress,
 		) {
-			SwapQueue::<T>::mutate(|swaps| {
-				swaps.push(Swap { from, to, amount, ingress_address, egress_address })
-			});
+			SwapQueue::<T>::append(Swap { from, to, amount, ingress_address, egress_address });
 		}
 	}
 }
