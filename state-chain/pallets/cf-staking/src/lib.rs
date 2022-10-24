@@ -505,7 +505,7 @@ pub mod pallet {
 			PendingClaims::<T>::insert(&account_id, &claim_details_signed);
 			Self::deposit_event(Event::ClaimSignatureIssued(
 				account_id,
-				claim_details_signed.abi_encoded(),
+				claim_details_signed.chain_encoded(),
 			));
 			Ok(().into())
 		}

@@ -266,7 +266,7 @@ pub mod pallet {
 			Pallet::<T>::try_debit(&account_id, foreign_asset.asset, amount)?;
 
 			// Send the assets off-chain.
-			T::EgressApi::schedule_egress(foreign_asset, amount, egress_address)?;
+			T::EgressApi::schedule_egress(foreign_asset, amount, egress_address);
 
 			Ok(().into())
 		}

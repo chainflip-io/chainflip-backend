@@ -11,6 +11,9 @@ use frame_support::{
 };
 use frame_system::RawOrigin;
 
+use cf_primitives::AccountRole;
+use cf_traits::AccountRoleRegistry;
+
 use cf_chains::benchmarking_value::BenchmarkValue;
 
 // Inserts a new transaction signing attempt into the storage.
@@ -64,6 +67,7 @@ benchmarks_instance_pallet! {
 	}
 	transaction_ready_for_transmission {
 		let caller: T::AccountId = whitelisted_caller();
+		T::AccountRoleRegistry::register_account(caller.clone(), AccountRole::Validator);
 		let broadcast_attempt_id = BroadcastAttemptId {
 			broadcast_id: 1,
 			attempt_count: 1
@@ -72,6 +76,7 @@ benchmarks_instance_pallet! {
 		generate_on_signature_ready_call::<T, I>().dispatch_bypass_filter(T::EnsureThresholdSigned::successful_origin())?;
 		let valid_key = <<T as Config<I>>::TargetChain as ChainCrypto>::AggKey::benchmark_value();
 		T::KeyProvider::set_key(valid_key);
+		T::AccountRoleRegistry::register_account(caller.clone(), AccountRole::Validator);
 	} : _(RawOrigin::Signed(caller), broadcast_attempt_id, SignedTransactionFor::<T, I>::benchmark_value(), SignerIdFor::<T, I>::benchmark_value())
 	verify {
 		assert!(Expiries::<T, I>::contains_key(frame_system::Pallet::<T>::block_number() + T::TransmissionTimeout::get()));
@@ -81,6 +86,7 @@ benchmarks_instance_pallet! {
 		// TODO: This benchmark is the success case. The failure case is not yet implemented and can be quite expensive in the worst case.
 		// Unfortunately with the current implementation, there is no good way to determine this before we execute the benchmark.
 		let caller: T::AccountId = whitelisted_caller();
+		T::AccountRoleRegistry::register_account(caller.clone(), AccountRole::Validator);
 		let broadcast_attempt_id = BroadcastAttemptId {
 			broadcast_id: 1,
 			attempt_count: 1

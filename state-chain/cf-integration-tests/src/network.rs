@@ -3,8 +3,9 @@ use cf_chains::eth::{to_ethereum_address, AggKey, SchnorrVerificationComponents}
 use cf_primitives::{AccountRole, EpochIndex};
 use cf_traits::{AccountRoleRegistry, EpochInfo, FlipBalance};
 use codec::Encode;
-use frame_support::traits::OnFinalize;
+use frame_support::traits::{OnFinalize, OnIdle};
 use libsecp256k1::PublicKey;
+use pallet_cf_staking::{ClaimAmount, MinimumStake};
 use state_chain_runtime::{AccountTypes, Authorship, Event, Origin};
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
@@ -16,6 +17,8 @@ pub const BLOCK_TIME: u64 = 1000;
 #[derive(Debug, Clone)]
 pub enum ContractEvent {
 	Staked { node_id: NodeId, amount: FlipBalance, total: FlipBalance, epoch: EpochIndex },
+
+	Claimed { node_id: NodeId, amount: FlipBalance, epoch: EpochIndex },
 }
 
 macro_rules! on_events {
@@ -26,7 +29,7 @@ macro_rules! on_events {
 	}
 }
 
-pub const NEW_STAKE_AMOUNT: FlipBalance = 4;
+pub const NEW_STAKE_AMOUNT: FlipBalance = DEFAULT_MIN_STAKE + 1;
 
 pub fn create_testnet_with_new_staker() -> (Network, AccountId32) {
 	let (mut testnet, backup_nodes) = Network::create(1, &Validator::current_authorities());
@@ -52,14 +55,21 @@ pub struct StakingContract {
 }
 
 impl StakingContract {
-	// Stake for NODE
 	pub fn stake(&mut self, node_id: NodeId, amount: FlipBalance, epoch: EpochIndex) {
+		assert!(amount >= MinimumStake::<Runtime>::get());
 		let current_amount = self.stakes.get(&node_id).unwrap_or(&0);
 		let total = current_amount + amount;
 		self.stakes.insert(node_id.clone(), total);
 
 		self.events.push(ContractEvent::Staked { node_id, amount, total, epoch });
 	}
+
+	// We don't really care about the process of "registering" and then "executing" claim here.
+	// The only thing the SC cares about is the *execution* of the claim.
+	pub fn execute_claim(&mut self, node_id: NodeId, amount: FlipBalance, epoch: EpochIndex) {
+		self.events.push(ContractEvent::Claimed { node_id, amount, epoch });
+	}
+
 	// Get events for this contract
 	fn events(&self) -> Vec<ContractEvent> {
 		self.events.clone()
@@ -78,8 +88,24 @@ impl Cli {
 		assert_ok!(Staking::activate_account(Origin::signed(account.clone())));
 	}
 
+	pub fn claim(account: &NodeId, amount: ClaimAmount<FlipBalance>, eth_address: EthereumAddress) {
+		assert_ok!(Staking::claim(Origin::signed(account.clone()), amount, eth_address));
+	}
+
+	pub fn set_vanity_name(account: &NodeId, name: &str) {
+		assert_ok!(Validator::set_vanity_name(
+			Origin::signed(account.clone()),
+			name.as_bytes().to_vec()
+		));
+	}
+
 	pub fn register_as_validator(account: &NodeId) {
-		assert_ok!(AccountTypes::register_account_role(account, AccountRole::Validator));
+		assert_ok!(
+			<AccountTypes as AccountRoleRegistry<state_chain_runtime::Runtime>>::register_account_role(
+				account,
+				AccountRole::Validator
+			)
+		);
 	}
 }
 
@@ -204,7 +230,6 @@ impl Engine {
 		if self.state() == ChainflipAccountState::CurrentAuthority && self.live {
 			match event {
 				ContractEvent::Staked { node_id: validator_id, amount, epoch, .. } => {
-					// Witness event -> send transaction to state chain
 					state_chain_runtime::Witnesser::witness_at_epoch(
 						Origin::signed(self.node_id.clone()),
 						Box::new(
@@ -212,6 +237,21 @@ impl Engine {
 								account_id: validator_id.clone(),
 								amount: *amount,
 								withdrawal_address: ETH_ZERO_ADDRESS,
+								tx_hash: TX_HASH,
+							}
+							.into(),
+						),
+						*epoch,
+					)
+					.expect("should be able to witness stake for node");
+				},
+				ContractEvent::Claimed { node_id, amount, epoch } => {
+					state_chain_runtime::Witnesser::witness_at_epoch(
+						Origin::signed(self.node_id.clone()),
+						Box::new(
+							pallet_cf_staking::Call::claimed {
+								account_id: node_id.clone(),
+								claimed_amount: *amount,
 								tx_hash: TX_HASH,
 							}
 							.into(),
@@ -427,6 +467,9 @@ impl Network {
 			state_chain_runtime::AllPalletsWithoutSystem::on_initialize(block_number);
 			// We must finalise this to clear the previous author which is otherwise cached
 			Authorship::on_finalize(block_number);
+
+			// Provide very large weight to ensure all on_idle processing can occur
+			state_chain_runtime::AllPalletsWithoutSystem::on_idle(block_number, 1_000_000_000_000);
 
 			for event in self.stake_manager_contract.events() {
 				for engine in self.engines.values() {

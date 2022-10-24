@@ -22,7 +22,10 @@ fn only_liquidity_provider_can_manage_positions() {
 		let pool_id = (Asset::Eth, Asset::Usdc);
 
 		AccountTypes::on_new_account(&ALICE);
-		assert_ok!(AccountTypes::register_account_role(&ALICE, AccountRole::None));
+		assert_ok!(<AccountTypes as AccountRoleRegistry<Test>>::register_account_role(
+			&ALICE,
+			AccountRole::None
+		));
 		assert_ok!(LiquidityProvider::add_liquidity_pool(Origin::root(), pool_id.0, pool_id.1));
 		assert_ok!(LiquidityProvider::set_liquidity_pool_status(
 			Origin::root(),
@@ -49,7 +52,10 @@ fn only_liquidity_provider_can_manage_positions() {
 fn egress_chain_and_asset_must_match() {
 	new_test_ext().execute_with(|| {
 		AccountTypes::on_new_account(&ALICE);
-		assert_ok!(AccountTypes::register_account_role(&ALICE, AccountRole::LiquidityProvider));
+		assert_ok!(<AccountTypes as AccountRoleRegistry<Test>>::register_account_role(
+			&ALICE,
+			AccountRole::LiquidityProvider
+		));
 
 		assert_noop!(
 			LiquidityProvider::withdraw_liquidity(
@@ -76,7 +82,10 @@ fn egress_chain_and_asset_must_match() {
 fn liquidity_providers_can_withdraw_liquidity() {
 	new_test_ext().execute_with(|| {
 		AccountTypes::on_new_account(&ALICE);
-		assert_ok!(AccountTypes::register_account_role(&ALICE, AccountRole::LiquidityProvider));
+		assert_ok!(<AccountTypes as AccountRoleRegistry<Test>>::register_account_role(
+			&ALICE,
+			AccountRole::LiquidityProvider
+		));
 		FreeBalances::<Test>::insert(ALICE, Asset::Eth, 1_000);
 
 		assert!(!IsValid::get());
@@ -114,7 +123,10 @@ fn cannot_deposit_and_withdrawal_during_maintenance() {
 	new_test_ext().execute_with(|| {
 		// Setup account for ALICE
 		AccountTypes::on_new_account(&ALICE);
-		assert_ok!(AccountTypes::register_account_role(&ALICE, AccountRole::LiquidityProvider));
+		assert_ok!(<AccountTypes as AccountRoleRegistry<_>>::register_account_role(
+			&ALICE,
+			AccountRole::LiquidityProvider
+		));
 		FreeBalances::<Test>::insert(ALICE, Asset::Eth, 1_000);
 		IsValid::set(true);
 
@@ -166,7 +178,10 @@ fn cannot_manage_liquidity_during_maintenance() {
 	new_test_ext().execute_with(|| {
 		// Setup account and liquidity pool
 		AccountTypes::on_new_account(&ALICE);
-		assert_ok!(AccountTypes::register_account_role(&ALICE, AccountRole::LiquidityProvider));
+		assert_ok!(<AccountTypes as AccountRoleRegistry<_>>::register_account_role(
+			&ALICE,
+			AccountRole::LiquidityProvider
+		));
 		FreeBalances::<Test>::insert(ALICE, Asset::Eth, 1_000_000);
 		FreeBalances::<Test>::insert(ALICE, Asset::Usdc, 1_000_000);
 		IsValid::set(true);

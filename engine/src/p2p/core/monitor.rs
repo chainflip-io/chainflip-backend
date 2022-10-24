@@ -199,14 +199,18 @@ pub fn start_monitoring_thread(
 								stop_monitoring_for_peer(&mut sockets_to_poll, *idx, &logger);
 							},
 							zmq::SocketEvent::HANDSHAKE_SUCCEEDED => {
-								// We no longer need to monitor the socket once we have
-								// successfully connected (and authenticated) to the peer
+								// It is important that we continue monitoring the socket because
+								// ZMQ can automatically attempt to reconnect (e.g. if the peer
+								// restarts), and if it fails due to authentication error, we still
+								// want to reconnect manually.
+								// Also, if we stop reading monitor events, the sending side of
+								// the monitor socket can block, which in turn can block ZMQ's
+								// internal event loop, seemingly blocking all other sockets.
 								slog::trace!(
 									logger,
 									"Socket event: authentication success with {}",
 									account_id
 								);
-								stop_monitoring_for_peer(&mut sockets_to_poll, *idx, &logger);
 							},
 							unknown_event => panic!(
 								"P2P AUTH MONITOR: unexpected socket event: {:?}",

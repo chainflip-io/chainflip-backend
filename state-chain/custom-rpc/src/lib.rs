@@ -42,6 +42,15 @@ pub struct RpcPenalty {
 
 type RpcSuspensions = Vec<(Offence, Vec<(u32, AccountId32)>)>;
 
+#[derive(Serialize, Deserialize)]
+pub struct RpcAuctionState {
+	blocks_per_epoch: u32,
+	current_epoch_started_at: u32,
+	claim_period_as_percentage: u8,
+	min_stake: NumberOrHex,
+	auction_size_range: (u32, u32),
+}
+
 #[rpc(server, client, namespace = "cf")]
 /// The custom RPC endpoints for the state chain node.
 pub trait CustomApi {
@@ -125,6 +134,9 @@ pub trait CustomApi {
 		call: Vec<u8>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<GovCallHash>;
+	#[method(name = "auction_state")]
+	fn cf_auction_state(&self, at: Option<state_chain_runtime::Hash>)
+		-> RpcResult<RpcAuctionState>;
 }
 
 /// An RPC extension for the state chain node.
@@ -365,5 +377,21 @@ where
 			.runtime_api()
 			.cf_generate_gov_key_call_hash(&self.query_block_id(at), call)
 			.map_err(to_rpc_error)
+	}
+
+	fn cf_auction_state(&self, at: Option<<B as BlockT>::Hash>) -> RpcResult<RpcAuctionState> {
+		let auction_state = self
+			.client
+			.runtime_api()
+			.cf_auction_state(&self.query_block_id(at))
+			.map_err(to_rpc_error)?;
+
+		Ok(RpcAuctionState {
+			blocks_per_epoch: auction_state.blocks_per_epoch,
+			current_epoch_started_at: auction_state.current_epoch_started_at,
+			claim_period_as_percentage: auction_state.claim_period_as_percentage,
+			min_stake: auction_state.min_stake.into(),
+			auction_size_range: auction_state.auction_size_range,
+		})
 	}
 }

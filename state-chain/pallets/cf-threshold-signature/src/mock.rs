@@ -1,8 +1,8 @@
 use std::{collections::BTreeSet, marker::PhantomData};
 
 use crate::{
-	self as pallet_cf_threshold_signature, CeremonyId, EnsureThresholdSigned, LiveCeremonies,
-	OpenRequests, PalletOffence, RequestContext, RequestId, RetryQueues,
+	self as pallet_cf_threshold_signature, CeremonyContext, CeremonyId, EnsureThresholdSigned,
+	LiveCeremonies, PalletOffence, PendingCeremonies, RequestContext, RequestId, RetryQueues,
 };
 use cf_chains::{
 	mocks::{MockEthereum, MockThresholdSignature},
@@ -41,7 +41,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system,
-		MockEthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>,
+		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>,
 	}
 );
 
@@ -94,6 +94,7 @@ impl Chainflip for Test {
 
 thread_local! {
 	pub static CALL_DISPATCHED: std::cell::RefCell<Option<RequestId>> = Default::default();
+	pub static TIMES_CALLED: std::cell::RefCell<u8> = Default::default();
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -106,14 +107,19 @@ impl MockCallback<MockEthereum> {
 
 	pub fn call(self) {
 		assert!(matches!(
-			<MockEthereumThresholdSigner as ThresholdSigner<_>>::signature_result(self.0),
+			<EthereumThresholdSigner as ThresholdSigner<_>>::signature_result(self.0),
 			AsyncResult::Ready(..)
 		));
 		CALL_DISPATCHED.with(|cell| *(cell.borrow_mut()) = Some(self.0));
+		TIMES_CALLED.with(|times| *times.borrow_mut() += 1)
 	}
 
 	pub fn has_executed(id: RequestId) -> bool {
 		CALL_DISPATCHED.with(|cell| *cell.borrow()) == Some(id)
+	}
+
+	pub fn times_called() -> u8 {
+		TIMES_CALLED.with(|cell| *cell.borrow())
 	}
 }
 
@@ -160,7 +166,7 @@ pub const INVALID_SIGNATURE: <MockEthereum as ChainCrypto>::ThresholdSignature =
 	MockThresholdSignature::<_, _> { signing_key: *b"BAD!", signed_payload: *b"BAD!" };
 
 parameter_types! {
-	pub const CeremonyRetryDelay: <Test as frame_system::Config>::BlockNumber = 1;
+	pub const CeremonyRetryDelay: <Test as frame_system::Config>::BlockNumber = 4;
 }
 
 pub type MockOffenceReporter =
@@ -213,23 +219,16 @@ impl ExtBuilder {
 		self.ext.execute_with(|| {
 			// Initiate request
 			let request_id =
-				<MockEthereumThresholdSigner as ThresholdSigner<_>>::request_signature(*message);
+				<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(*message);
 			let (ceremony_id, attempt) =
-				MockEthereumThresholdSigner::live_ceremonies(request_id).unwrap();
-			let pending = MockEthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
-			assert_eq!(
-				MockEthereumThresholdSigner::open_requests(ceremony_id).unwrap().payload,
-				*message
-			);
+				EthereumThresholdSigner::live_ceremonies(request_id).unwrap();
+			let pending = EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
 			assert_eq!(attempt, 0);
 			assert_eq!(
 				pending.remaining_respondents,
 				BTreeSet::from_iter(MockNominator::get_nominees().unwrap_or_default())
 			);
-			assert!(matches!(
-				MockEthereumThresholdSigner::signatures(request_id),
-				AsyncResult::Pending
-			));
+			assert!(matches!(EthereumThresholdSigner::signature(request_id), AsyncResult::Pending));
 		});
 		self
 	}
@@ -241,27 +240,18 @@ impl ExtBuilder {
 	) -> Self {
 		self.ext.execute_with(|| {
 			// Initiate request
-			let request_id = MockEthereumThresholdSigner::request_signature_with_callback(
-				*message,
-				callback_gen,
-			);
+			let request_id =
+				EthereumThresholdSigner::request_signature_with_callback(*message, callback_gen);
 			let (ceremony_id, attempt) =
-				MockEthereumThresholdSigner::live_ceremonies(request_id).unwrap();
-			let pending = MockEthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
-			assert_eq!(
-				MockEthereumThresholdSigner::open_requests(ceremony_id).unwrap().payload,
-				*message
-			);
+				EthereumThresholdSigner::live_ceremonies(request_id).unwrap();
+			let pending = EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
 			assert_eq!(attempt, 0);
 			assert_eq!(
 				pending.remaining_respondents,
 				BTreeSet::from_iter(MockNominator::get_nominees().unwrap_or_default())
 			);
-			assert!(matches!(
-				MockEthereumThresholdSigner::signatures(request_id),
-				AsyncResult::Pending
-			));
-			assert!(MockEthereumThresholdSigner::request_callback(request_id).is_some());
+			assert!(matches!(EthereumThresholdSigner::signature(request_id), AsyncResult::Pending));
+			assert!(EthereumThresholdSigner::request_callback(request_id).is_some());
 		});
 		self
 	}
@@ -292,8 +282,14 @@ impl TestExternalitiesWithCheck {
 	/// Every ceremony should also have at least one retry scheduled.
 	pub fn do_consistency_check() {
 		let retries = BTreeSet::<_>::from_iter(RetryQueues::<Test, _>::iter_values().flatten());
-		OpenRequests::<Test, _>::iter().for_each(
-			|(ceremony_id, RequestContext { request_id, attempt_count, .. })| {
+		PendingCeremonies::<Test, _>::iter().for_each(
+			|(
+				ceremony_id,
+				CeremonyContext {
+					request_context: RequestContext { request_id, attempt_count, .. },
+					..
+				},
+			)| {
 				assert_eq!(
 					LiveCeremonies::<Test, _>::get(request_id).unwrap(),
 					(ceremony_id, attempt_count)
@@ -303,11 +299,12 @@ impl TestExternalitiesWithCheck {
 		);
 		LiveCeremonies::<Test, _>::iter().for_each(
 			|(live_request_id, (live_ceremony_id, live_attempt_count))| {
-				assert!(matches!(
-					OpenRequests::<Test, _>::get(live_ceremony_id),
-					Some(RequestContext { request_id, attempt_count, .. })
-						if (request_id, attempt_count) == (live_request_id, live_attempt_count),
-				));
+				let CeremonyContext::<Test, Instance1> {
+					request_context:
+						RequestContext::<Test, Instance1> { request_id, attempt_count, .. },
+					..
+				} = EthereumThresholdSigner::pending_ceremonies(live_ceremony_id).unwrap();
+				assert!((request_id, attempt_count) == (live_request_id, live_attempt_count));
 			},
 		);
 	}

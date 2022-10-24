@@ -57,6 +57,12 @@ default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'chainflip-monthly-2022-06+01'
 
+[dependencies.sp-core]
+default-features = false
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'chainflip-monthly-2022-06+01'
+
+
 [dev-dependencies]
 cf-test-utilities = { path = '../test-utilities' }
 rand = {version='0.8.4'}
@@ -77,10 +83,13 @@ std = [
   'serde',
   'sp-runtime/std',
   'sp-std/std',
-  'secp256k1'
+  'secp256k1',
+  'sp-core/std'
 ]
 runtime-benchmarks = [
   'frame-support/runtime-benchmarks',
   'frame-system/runtime-benchmarks',
 ]
 runtime-integration-tests = []
+
+ibiza = []

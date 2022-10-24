@@ -671,6 +671,8 @@ pub trait AccountRoleRegistry<T: frame_system::Config> {
 	fn ensure_validator(origin: T::Origin) -> Result<T::AccountId, BadOrigin> {
 		Self::ensure_account_role(origin, AccountRole::Validator)
 	}
+	#[cfg(feature = "runtime-benchmarks")]
+	fn register_account(_account_id: T::AccountId, _role: AccountRole) {}
 }
 
 /// API that allows other pallets to Egress assets out of the State Chain.
@@ -679,7 +681,7 @@ pub trait EgressApi {
 		foreign_asset: ForeignChainAsset,
 		amount: AssetAmount,
 		egress_address: ForeignChainAddress,
-	) -> DispatchResult;
+	);
 
 	fn is_egress_valid(
 		foreign_asset: &ForeignChainAsset,
@@ -697,9 +699,9 @@ pub trait EthereumAssetsAddressProvider {
 ///
 /// Schedule functions are chain specific, as each chain may require different data to do fetching.
 pub trait IngressFetchApi {
-	fn schedule_ingress_fetch(fetch_params: Vec<(Asset, IntentId)>);
+	fn schedule_ethereum_ingress_fetch(fetch_details: Vec<(Asset, IntentId)>);
 }
 
 impl IngressFetchApi for () {
-	fn schedule_ingress_fetch(_fetch_params: Vec<(Asset, IntentId)>) {}
+	fn schedule_ethereum_ingress_fetch(_fetch_details: Vec<(Asset, IntentId)>) {}
 }
