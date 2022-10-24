@@ -124,8 +124,9 @@ benchmarks_instance_pallet! {
 		for _ in 0..r {
 			Pallet::<T, I>::new_ceremony_attempt(1, PayloadFor::<T, I>::benchmark_value(), 1, None, None, RetryPolicy::Always);
 		}
+
 		assert_eq!(
-			RetryQueues::<T, I>::decode_len(T::CeremonyRetryDelay::get()).unwrap_or_default(),
+			RetryQueues::<T, I>::decode_len(ThresholdSignatureResponseTimeout::<T, I>::get()).unwrap_or_default(),
 			r as usize,
 		);
 
@@ -133,11 +134,11 @@ benchmarks_instance_pallet! {
 		add_authorities::<T, _>((0..a).map(|i| account::<<T as Chainflip>::ValidatorId>("signers", i, SEED)));
 
 	}: {
-		Pallet::<T, I>::on_initialize(T::CeremonyRetryDelay::get())
+		Pallet::<T, I>::on_initialize(ThresholdSignatureResponseTimeout::<T, I>::get())
 	}
 	verify {
 		assert_eq!(
-			RetryQueues::<T, I>::decode_len(T::CeremonyRetryDelay::get()).unwrap_or_default(),
+			RetryQueues::<T, I>::decode_len(ThresholdSignatureResponseTimeout::<T, I>::get()).unwrap_or_default(),
 			0_usize,
 		);
 	}
