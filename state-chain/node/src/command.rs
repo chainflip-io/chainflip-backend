@@ -41,9 +41,13 @@ impl SubstrateCli for Cli {
 			"cf-dev" => Box::new(chain_spec::cf_development_config()?),
 			"three-node-test" => Box::new(chain_spec::chainflip_three_node_testnet_config()?),
 			"test" => Box::new(chain_spec::chainflip_testnet_config()?),
-			"perseverance-new" => Box::new(chain_spec::perseverance_new_config()?),
+			"perseverance-new" => Box::new(chain_spec::perseverance::Config::build_spec()?),
+			"sisyphos-new" => Box::new(chain_spec::sisyphos::Config::build_spec()?),
 			"perseverance" => Box::new(chain_spec::ChainSpec::from_json_bytes(
 				include_bytes!("../chainspecs/perseverance.chainspec.raw.json").as_slice(),
+			)?),
+			"sisyphos" => Box::new(chain_spec::ChainSpec::from_json_bytes(
+				include_bytes!("../chainspecs/sisyphos.chainspec.raw.json").as_slice(),
 			)?),
 			path =>
 				Box::new(chain_spec::ChainSpec::from_json_file(std::path::PathBuf::from(path))?),
