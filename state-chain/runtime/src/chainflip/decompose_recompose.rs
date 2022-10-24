@@ -34,7 +34,7 @@ impl WitnessDataExtraction for Call {
 				// Encoding is order-preserving so we can sort the raw encoded bytes and then decode
 				// just the result.
 				let len = data.len();
-				let median_index = if len % 2 == 0 { (len - 1) / 2 } else { len / 2 };
+				let median_index = if len % 2 == 0 { (len.saturating_sub(1)) / 2 } else { len / 2 };
 				let (_, median_bytes, _) = data.select_nth_unstable(median_index);
 
 				match Decode::decode(&mut &median_bytes[..]) {

@@ -45,7 +45,7 @@ pub struct BroadcastAttemptId {
 impl BroadcastAttemptId {
 	/// Increment the attempt count for a particular BroadcastAttemptId
 	pub fn next_attempt(&self) -> Self {
-		Self { attempt_count: self.attempt_count + 1, ..*self }
+		Self { attempt_count: self.attempt_count.wrapping_add(1), ..*self }
 	}
 }
 
@@ -379,7 +379,7 @@ pub mod pallet {
 			for retry in retries {
 				Self::start_next_broadcast_attempt(retry);
 			}
-			next_broadcast_weight * retries_len as Weight
+			next_broadcast_weight.saturating_mul(retries_len as u64) as Weight
 		}
 	}
 
