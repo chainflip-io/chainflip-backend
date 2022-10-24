@@ -1,10 +1,11 @@
 use crate::{
 	mock::*, AwaitingTransactionBroadcast, BroadcastAttemptId, BroadcastId,
 	BroadcastIdToAttemptNumbers, BroadcastRetryQueue, Error, Event as BroadcastEvent, Expiries,
-	FailedTransactionSigners, Instance1, PalletOffence, RefundSignerId,
-	SignatureToBroadcastIdLookup, ThresholdSignatureData, TransactionFeeDeficit,
-	TransactionHashWhitelist, WeightInfo,
+	FailedBroadcasters, Instance1, PalletOffence, RefundSignerId, SignatureToBroadcastIdLookup,
+	ThresholdSignatureData, TransactionFeeDeficit, TransactionHashWhitelist, WeightInfo,
 };
+
+use sp_std::collections::btree_set::BTreeSet;
 
 use cf_chains::{
 	mocks::{
@@ -137,7 +138,7 @@ fn assert_broadcast_storage_cleaned_up(broadcast_id: BroadcastId) {
 		SignatureToBroadcastIdLookup::<Test, Instance1>::get(MockThresholdSignature::default())
 			.is_none()
 	);
-	assert!(FailedTransactionSigners::<Test, Instance1>::get(broadcast_id).is_none());
+	assert!(FailedBroadcasters::<Test, Instance1>::get(broadcast_id).is_none());
 	assert!(BroadcastIdToAttemptNumbers::<Test, Instance1>::get(broadcast_id).is_none());
 	assert!(ThresholdSignatureData::<Test, Instance1>::get(broadcast_id).is_none());
 }
@@ -299,19 +300,18 @@ fn test_transaction_signing_failed() {
 #[test]
 fn test_bad_signature_when_whitelisting() {
 	new_test_ext().execute_with(|| {
-		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
+		// Set two nominees so we can check later that the failing id was excluded from
+		// the nomination of the retry.
+		MockNominator::set_nominees(Some(BTreeSet::from([1, 2])));
+
 		let broadcast_attempt_id = Broadcaster::start_broadcast(
 			&MockThresholdSignature::default(),
 			MockUnsignedTransaction,
 			MockApiCall::default(),
 		);
-		assert!(
-			AwaitingTransactionBroadcast::<Test, Instance1>::get(broadcast_attempt_id)
-				.unwrap()
-				.broadcast_attempt
-				.broadcast_attempt_id
-				.attempt_count == 0
-		);
+		let broadcast_request =
+			AwaitingTransactionBroadcast::<Test, Instance1>::get(broadcast_attempt_id).unwrap();
+		assert_eq!(broadcast_request.broadcast_attempt.broadcast_attempt_id.attempt_count, 0);
 
 		// CFE responds with an invalid transaction.
 		MockCfe::respond(Scenario::BadSigner);
@@ -321,6 +321,17 @@ fn test_bad_signature_when_whitelisting() {
 			AwaitingTransactionBroadcast::<Test, Instance1>::get(broadcast_attempt_id).is_none()
 		);
 		assert_eq!(BroadcastRetryQueue::<Test, Instance1>::decode_len().unwrap_or_default(), 1);
+
+		// process retries
+		Broadcaster::on_idle(0, 10_000_000_000);
+
+		let next_broadcast_request = AwaitingTransactionBroadcast::<Test, Instance1>::get(
+			broadcast_attempt_id.next_attempt(),
+		)
+		.unwrap();
+
+		assert_eq!(next_broadcast_request.broadcast_attempt.broadcast_attempt_id.attempt_count, 1);
+		assert!(broadcast_request.nominee != next_broadcast_request.nominee);
 	})
 }
 

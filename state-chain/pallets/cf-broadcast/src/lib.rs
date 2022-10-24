@@ -190,7 +190,7 @@ pub mod pallet {
 
 	/// Contains a list of the authorities that have failed to sign a particular broadcast.
 	#[pallet::storage]
-	pub type FailedTransactionSigners<T: Config<I>, I: 'static = ()> =
+	pub type FailedBroadcasters<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, BroadcastId, Vec<T::ValidatorId>>;
 
 	/// Live transaction broadcast requests.
@@ -393,7 +393,7 @@ pub mod pallet {
 
 				Self::take_and_clean_up_broadcast_attempt(broadcast_attempt_id);
 
-				Self::schedule_retry(signing_attempt.broadcast_attempt);
+				Self::schedule_retry(signing_attempt.broadcast_attempt, extrinsic_signer.into());
 			}
 
 			Ok(().into())
@@ -423,14 +423,9 @@ pub mod pallet {
 			// Only the nominated signer can say they failed to sign
 			ensure!(signing_attempt.nominee == extrinsic_signer, Error::<T, I>::InvalidSigner);
 
-			FailedTransactionSigners::<T, I>::append(
-				broadcast_attempt_id.broadcast_id,
-				&extrinsic_signer,
-			);
-
 			Self::take_and_clean_up_broadcast_attempt(broadcast_attempt_id);
 
-			Self::schedule_retry(signing_attempt.broadcast_attempt);
+			Self::schedule_retry(signing_attempt.broadcast_attempt, extrinsic_signer);
 
 			Ok(().into())
 		}
@@ -519,7 +514,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				attempt_count,
 			});
 		}
-		FailedTransactionSigners::<T, I>::remove(broadcast_id);
+		FailedBroadcasters::<T, I>::remove(broadcast_id);
 
 		if let Some((_, signature)) = ThresholdSignatureData::<T, I>::take(broadcast_id) {
 			SignatureToBroadcastIdLookup::<T, I>::remove(signature);
@@ -620,10 +615,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			.encode();
 		if let Some(nominated_signer) = T::SignerNomination::nomination_with_seed(
 			seed,
-			&FailedTransactionSigners::<T, I>::get(
-				broadcast_attempt.broadcast_attempt_id.broadcast_id,
-			)
-			.unwrap_or_default(),
+			&FailedBroadcasters::<T, I>::get(broadcast_attempt.broadcast_attempt_id.broadcast_id)
+				.unwrap_or_default(),
 		) {
 			// write, or overwrite the old entry if it exists (on a retry)
 			AwaitingTransactionBroadcast::<T, I>::insert(
@@ -657,7 +650,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Schedule a failed attempt for retry when the next block is authored.
 	/// We will abort the broadcast once all authorities have attempt to sign the transaction
-	fn schedule_retry(failed_broadcast_attempt: BroadcastAttempt<T, I>) {
+	fn schedule_retry(
+		failed_broadcast_attempt: BroadcastAttempt<T, I>,
+		failed_signer: T::ValidatorId,
+	) {
+		FailedBroadcasters::<T, I>::append(
+			failed_broadcast_attempt.broadcast_attempt_id.broadcast_id,
+			&failed_signer,
+		);
 		if failed_broadcast_attempt.broadcast_attempt_id.attempt_count <
 			// -1 to exclude the first node
 			(T::EpochInfo::current_authority_count().saturating_sub(1))
@@ -667,7 +667,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				failed_broadcast_attempt.broadcast_attempt_id,
 			));
 		} else {
-			if let Some(failed_signers) = FailedTransactionSigners::<T, I>::get(
+			if let Some(failed_signers) = FailedBroadcasters::<T, I>::get(
 				failed_broadcast_attempt.broadcast_attempt_id.broadcast_id,
 			) {
 				T::OffenceReporter::report_many(
