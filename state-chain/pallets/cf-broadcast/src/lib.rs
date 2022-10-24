@@ -255,21 +255,20 @@ pub mod pallet {
 			nominee: T::ValidatorId,
 			unsigned_tx: UnsignedTransactionFor<T, I>,
 		},
-		/// A failed broadcast attempt has been scheduled for retry. \[broadcast_attempt_id\]
-		BroadcastRetryScheduled(BroadcastAttemptId),
+		/// A failed broadcast attempt has been scheduled for retry.
+		BroadcastRetryScheduled { broadcast_attempt_id: BroadcastAttemptId },
 		/// A broadcast attempt timed out.
 		BroadcastAttemptTimeout { broadcast_attempt_id: BroadcastAttemptId },
 		/// A broadcast has been aborted after all authorities have attempted to broadcast the
-		/// transaction and failed. \[broadcast_id\]
-		BroadcastAborted(BroadcastId),
+		/// transaction and failed.
+		BroadcastAborted { broadcast_id: BroadcastId },
 		/// An account id has used a new signer id for a transaction
-		/// so we want to refund to that new signer id \[account_id, signer_id\]
-		RefundSignerIdUpdated(T::AccountId, SignerIdFor<T, I>),
-		/// A broadcast has successfully been completed. \[broadcast_id\]
-		BroadcastSuccess(BroadcastId),
+		/// so we want to refund to that new signer id.
+		RefundSignerIdUpdated { account_id: T::AccountId, new_signer_id: SignerIdFor<T, I> },
+		/// A broadcast has successfully been completed.
+		BroadcastSuccess { broadcast_id: BroadcastId },
 		/// A broadcast's threshold signature is invalid, we will attempt to re-sign it.
-		/// \[broadcast_id\]
-		ThresholdSignatureInvalid(BroadcastId),
+		ThresholdSignatureInvalid { broadcast_id: BroadcastId },
 	}
 
 	#[pallet::error]
@@ -384,10 +383,10 @@ pub mod pallet {
 				// store the latest signer id used by an authority
 				if RefundSignerId::<T, I>::get(&extrinsic_signer) != Some(signer_id.clone()) {
 					RefundSignerId::<T, I>::insert(&extrinsic_signer, &signer_id);
-					Self::deposit_event(Event::<T, I>::RefundSignerIdUpdated(
-						extrinsic_signer,
-						signer_id,
-					));
+					Self::deposit_event(Event::<T, I>::RefundSignerIdUpdated {
+						account_id: extrinsic_signer,
+						new_signer_id: signer_id,
+					});
 				}
 			} else {
 				log::warn!(
@@ -502,7 +501,7 @@ pub mod pallet {
 					}
 				});
 			}
-			Self::deposit_event(Event::<T, I>::BroadcastSuccess(broadcast_id));
+			Self::deposit_event(Event::<T, I>::BroadcastSuccess { broadcast_id });
 			Ok(().into())
 		}
 	}
@@ -605,7 +604,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					"Signature is invalid -> rescheduled threshold signature for broadcast id {}.",
 					broadcast_id
 				);
-				Self::deposit_event(Event::<T, I>::ThresholdSignatureInvalid(broadcast_id));
+				Self::deposit_event(Event::<T, I>::ThresholdSignatureInvalid { broadcast_id });
 			}
 		} else {
 			log::error!("No threshold signature data is available.");
@@ -667,9 +666,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			(T::EpochInfo::current_authority_count().saturating_sub(1))
 		{
 			BroadcastRetryQueue::<T, I>::append(&failed_broadcast_attempt);
-			Self::deposit_event(Event::<T, I>::BroadcastRetryScheduled(
-				failed_broadcast_attempt.broadcast_attempt_id,
-			));
+			Self::deposit_event(Event::<T, I>::BroadcastRetryScheduled {
+				broadcast_attempt_id: failed_broadcast_attempt.broadcast_attempt_id,
+			});
 		} else {
 			if let Some(failed_signers) = FailedBroadcasters::<T, I>::get(
 				failed_broadcast_attempt.broadcast_attempt_id.broadcast_id,
@@ -684,9 +683,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				failed_broadcast_attempt.broadcast_attempt_id.broadcast_id,
 			);
 
-			Self::deposit_event(Event::<T, I>::BroadcastAborted(
-				failed_broadcast_attempt.broadcast_attempt_id.broadcast_id,
-			));
+			Self::deposit_event(Event::<T, I>::BroadcastAborted {
+				broadcast_id: failed_broadcast_attempt.broadcast_attempt_id.broadcast_id,
+			});
 		}
 	}
 }

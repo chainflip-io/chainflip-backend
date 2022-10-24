@@ -111,22 +111,22 @@ impl MockCfe {
 						},
 					}
 				},
-				BroadcastEvent::BroadcastSuccess(_) => {
+				BroadcastEvent::BroadcastSuccess { .. } => {
 					// Informational only. no action required by the CFE.
 				},
-				BroadcastEvent::BroadcastRetryScheduled(_) => {
+				BroadcastEvent::BroadcastRetryScheduled { .. } => {
 					// Informational only. No action required by the CFE.
 				},
 				BroadcastEvent::BroadcastAttemptTimeout { broadcast_attempt_id } =>
 					TIMEDOUT_ATTEMPTS.with(|cell| cell.borrow_mut().push(broadcast_attempt_id)),
-				BroadcastEvent::BroadcastAborted(_) => {
+				BroadcastEvent::BroadcastAborted { .. } => {
 					// Informational only. No action required by the CFE.
 				},
 				BroadcastEvent::__Ignore(_, _) => unreachable!(),
-				BroadcastEvent::RefundSignerIdUpdated(_, _) => {
+				BroadcastEvent::RefundSignerIdUpdated { .. } => {
 					// Information only. No action required by the CFE.
 				},
-				BroadcastEvent::ThresholdSignatureInvalid(_) => {},
+				BroadcastEvent::ThresholdSignatureInvalid { .. } => {},
 			},
 			_ => panic!("Unexpected event"),
 		};
@@ -200,7 +200,7 @@ fn test_abort_after_number_of_attempts_is_equal_to_the_number_of_authorities() {
 
 		assert_eq!(
 			System::events().pop().expect("an event").event,
-			Event::Broadcaster(crate::Event::BroadcastAborted(1))
+			Event::Broadcaster(crate::Event::BroadcastAborted { broadcast_id: 1 })
 		);
 
 		// all the authorities have attempted to sign, and all have failed
