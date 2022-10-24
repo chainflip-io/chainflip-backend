@@ -515,7 +515,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		for attempt_count in
 			BroadcastIdToAttemptNumbers::<T, I>::take(broadcast_id).unwrap_or_default()
 		{
-			AwaitingTransactionBroadcast::<T, I>::take(BroadcastAttemptId {
+			AwaitingTransactionBroadcast::<T, I>::remove(BroadcastAttemptId {
 				broadcast_id,
 				attempt_count,
 			});
