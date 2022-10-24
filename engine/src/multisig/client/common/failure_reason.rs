@@ -13,6 +13,8 @@ use crate::{
 
 use thiserror::Error;
 
+use super::{KeygenStageName, SigningStageName};
+
 #[derive(Error, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum SigningFailureReason {
 	#[error("Not participating in unauthorised ceremony")]
@@ -58,40 +60,6 @@ pub enum BroadcastFailureReason {
 	/// Consensus could not be reached for one or more parties due to differing values
 	#[error("Inconsistency")]
 	Inconsistency,
-}
-
-#[derive(Error, Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
-pub enum KeygenStageName {
-	#[error("Hash Commitments")]
-	HashCommitments1,
-	#[error("Verify Hash Commitments")]
-	VerifyHashCommitmentsBroadcast2,
-	#[error("Coefficient Commitments")]
-	CoefficientCommitments3,
-	#[error("Verify Coefficient Commitments")]
-	VerifyCommitmentsBroadcast4,
-	#[error("Secret Shares")]
-	SecretSharesStage5,
-	#[error("Complaints")]
-	ComplaintsStage6,
-	#[error("Verify Complaints")]
-	VerifyComplaintsBroadcastStage7,
-	#[error("Blame Responses")]
-	BlameResponsesStage8,
-	#[error("Verify Blame Responses")]
-	VerifyBlameResponsesBroadcastStage9,
-}
-
-#[derive(Error, Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
-pub enum SigningStageName {
-	#[error("Commitments")]
-	AwaitCommitments1,
-	#[error("Verify Commitments")]
-	VerifyCommitmentsBroadcast2,
-	#[error("Local Signatures")]
-	LocalSigStage3,
-	#[error("Verify Local Signatures")]
-	VerifyLocalSigsBroadcastStage4,
 }
 
 const SIGNING_CEREMONY_FAILED_PREFIX: &str = "Signing ceremony failed";

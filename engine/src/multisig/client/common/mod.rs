@@ -10,13 +10,14 @@ pub use ceremony_stage::{
 pub use broadcast_verification::BroadcastVerificationMessage;
 
 pub use failure_reason::{
-	BroadcastFailureReason, CeremonyFailureReason, KeygenFailureReason, KeygenStageName,
-	SigningFailureReason, SigningStageName,
+	BroadcastFailureReason, CeremonyFailureReason, KeygenFailureReason, SigningFailureReason,
 };
 
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
+
+use thiserror::Error;
 
 use crate::multisig::crypto::{ECPoint, KeyShare};
 
@@ -47,4 +48,38 @@ pub struct KeygenResultInfo<P: ECPoint> {
 	pub key: Arc<KeygenResult<P>>,
 	pub validator_mapping: Arc<PartyIdxMapping>,
 	pub params: ThresholdParameters,
+}
+
+#[derive(Error, Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+pub enum KeygenStageName {
+	#[error("Hash Commitments")]
+	HashCommitments1,
+	#[error("Verify Hash Commitments")]
+	VerifyHashCommitmentsBroadcast2,
+	#[error("Coefficient Commitments")]
+	CoefficientCommitments3,
+	#[error("Verify Coefficient Commitments")]
+	VerifyCommitmentsBroadcast4,
+	#[error("Secret Shares")]
+	SecretSharesStage5,
+	#[error("Complaints")]
+	ComplaintsStage6,
+	#[error("Verify Complaints")]
+	VerifyComplaintsBroadcastStage7,
+	#[error("Blame Responses")]
+	BlameResponsesStage8,
+	#[error("Verify Blame Responses")]
+	VerifyBlameResponsesBroadcastStage9,
+}
+
+#[derive(Error, Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+pub enum SigningStageName {
+	#[error("Commitments")]
+	AwaitCommitments1,
+	#[error("Verify Commitments")]
+	VerifyCommitmentsBroadcast2,
+	#[error("Local Signatures")]
+	LocalSigStage3,
+	#[error("Verify Local Signatures")]
+	VerifyLocalSigsBroadcastStage4,
 }
