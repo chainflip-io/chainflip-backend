@@ -13,6 +13,7 @@ use crate::{
 				gen_signing_data_stage1, gen_signing_data_stage2, gen_signing_data_stage4,
 				SigningData,
 			},
+			SigningFailureReason,
 		},
 		crypto::CryptoScheme,
 		eth::{EthSigning, Point},
@@ -184,7 +185,7 @@ async fn should_process_delayed_messages_after_finishing_a_stage() {
 			.await,
 		Some(Err((
 			_,
-			CeremonyFailureReason::BroadcastFailure(
+			SigningFailureReason::BroadcastFailure(
 				_,
 				SigningStageName::VerifyCommitmentsBroadcast2
 			)
