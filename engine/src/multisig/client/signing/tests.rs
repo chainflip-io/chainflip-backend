@@ -4,9 +4,7 @@ use rand_legacy::SeedableRng;
 
 use crate::multisig::{
 	client::{
-		common::{
-			BroadcastFailureReason, CeremonyFailureReason, SigningFailureReason, SigningStageName,
-		},
+		common::{BroadcastFailureReason, SigningFailureReason, SigningStageName},
 		helpers::{
 			gen_invalid_local_sig, gen_invalid_signing_comm1, new_nodes, new_signing_ceremony,
 			run_stages, SigningCeremonyRunner, ACCOUNT_IDS, DEFAULT_KEYGEN_SEED,
@@ -42,10 +40,7 @@ async fn should_report_on_invalid_local_sig3() {
 	let messages = signing_ceremony.run_stage::<VerifyLocalSig4, _, _>(messages).await;
 	signing_ceremony.distribute_messages(messages).await;
 	signing_ceremony
-		.complete_with_error(
-			&[bad_account_id],
-			CeremonyFailureReason::Other(SigningFailureReason::InvalidSigShare),
-		)
+		.complete_with_error(&[bad_account_id], SigningFailureReason::InvalidSigShare)
 		.await;
 }
 
@@ -66,7 +61,7 @@ async fn should_report_on_inconsistent_broadcast_comm1() {
 	signing_ceremony
 		.complete_with_error(
 			&[bad_account_id],
-			CeremonyFailureReason::BroadcastFailure(
+			SigningFailureReason::BroadcastFailure(
 				BroadcastFailureReason::Inconsistency,
 				SigningStageName::VerifyCommitmentsBroadcast2,
 			),
@@ -93,7 +88,7 @@ async fn should_report_on_inconsistent_broadcast_local_sig3() {
 	signing_ceremony
 		.complete_with_error(
 			&[bad_account_id],
-			CeremonyFailureReason::BroadcastFailure(
+			SigningFailureReason::BroadcastFailure(
 				BroadcastFailureReason::Inconsistency,
 				SigningStageName::VerifyLocalSigsBroadcastStage4,
 			),
@@ -281,7 +276,7 @@ mod timeout {
 			signing_ceremony
 				.complete_with_error(
 					&[non_sending_party_id_1],
-					CeremonyFailureReason::BroadcastFailure(
+					SigningFailureReason::BroadcastFailure(
 						BroadcastFailureReason::InsufficientMessages,
 						SigningStageName::VerifyCommitmentsBroadcast2,
 					),
@@ -319,7 +314,7 @@ mod timeout {
 			signing_ceremony
 				.complete_with_error(
 					&[non_sending_party_id_1],
-					CeremonyFailureReason::BroadcastFailure(
+					SigningFailureReason::BroadcastFailure(
 						BroadcastFailureReason::InsufficientMessages,
 						SigningStageName::VerifyLocalSigsBroadcastStage4,
 					),

@@ -3,9 +3,7 @@ use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
 	AddressDerivationApi, EgressApi, SwapIntentHandler,
 };
-use frame_support::{
-	dispatch::DispatchResult, parameter_types, sp_runtime::app_crypto::sp_core::H160,
-};
+use frame_support::{parameter_types, sp_runtime::app_crypto::sp_core::H160};
 use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{
@@ -132,9 +130,8 @@ impl EgressApi for MockEgressApi {
 		foreign_asset: ForeignChainAsset,
 		amount: AssetAmount,
 		egress_address: ForeignChainAddress,
-	) -> DispatchResult {
+	) {
 		LastEgress::set(Some((foreign_asset, amount, egress_address)));
-		Ok(())
 	}
 
 	fn is_egress_valid(

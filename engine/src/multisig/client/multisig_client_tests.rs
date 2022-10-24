@@ -9,7 +9,7 @@ use crate::{
 	multisig::{
 		client::{
 			self,
-			common::{CeremonyFailureReason, SigningFailureReason},
+			common::SigningFailureReason,
 			helpers::{
 				new_nodes, ACCOUNT_IDS, DEFAULT_KEYGEN_CEREMONY_ID, DEFAULT_SIGNING_CEREMONY_ID,
 			},
@@ -56,7 +56,7 @@ async fn should_ignore_rts_for_unknown_key() {
 
 	// Check sign request fails immediately with "unknown key" error
 	let (_, failure_reason) = assert_err!(assert_future_can_complete(signing_request_fut));
-	assert_eq!(failure_reason, CeremonyFailureReason::Other(SigningFailureReason::UnknownKey));
+	assert_eq!(failure_reason, SigningFailureReason::UnknownKey);
 
 	// Check that the signing failure reason is being logged
 	assert!(tag_cache.contains_tag(REQUEST_TO_SIGN_IGNORED));

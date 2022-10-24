@@ -124,13 +124,11 @@ pub mod pallet {
 		/// We are going to benchmark this function individually to have a approximation of
 		/// how 'expensive' a swap is.
 		pub fn execute_swap(swap: Swap) {
-			let amount = T::AmmPoolApi::swap(swap.from, swap.to, swap.amount);
-			// Send the assets off-chain.
-			// TODO: If this is falling we have to reschedule it. Not sure if this is the right
-			// place for it though. I would expect the Egress pallet is responsible for that?
-			if T::Egress::schedule_egress(swap.to, amount, swap.egress_address).is_err() {
-				log::warn!("Failed to egress swap.");
-			}
+			T::Egress::schedule_egress(
+				swap.to,
+				T::AmmPoolApi::swap(swap.from, swap.to, swap.amount),
+				swap.egress_address,
+			);
 		}
 	}
 

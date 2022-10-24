@@ -21,6 +21,7 @@ use utilities::{assert_ok, success_threshold_from_share_count, threshold_from_sh
 
 use crate::{
 	common::{all_same, split_at},
+	logging::test_utils::new_test_logger,
 	multisig::{
 		client::{
 			ceremony_manager::{
@@ -46,7 +47,6 @@ use signing::{LocalSig3, SigningCommitment};
 use keygen::{generate_shares_and_commitment, DKGUnverifiedCommitment};
 
 use crate::{
-	logging::{self},
 	multisig::{
 		client::{keygen, MultisigMessage},
 		// This determines which crypto scheme will be used in tests
@@ -96,13 +96,12 @@ pub struct Node<C: CeremonyTrait> {
 }
 
 fn new_node<C: CeremonyTrait>(account_id: AccountId, allowing_high_pubkey: bool) -> Node<C> {
-	let logger = logging::test_utils::new_test_logger();
-	let logger = logger.new(slog::o!("account_id" => account_id.to_string()));
+	let logger = new_test_logger().new(slog::o!("account_id" => account_id.to_string()));
+
 	let (outgoing_p2p_message_sender, outgoing_p2p_message_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
-	let ceremony_runner =
-		CeremonyRunner::new_unauthorised_for_test(INITIAL_LATEST_CEREMONY_ID, &logger);
+	let ceremony_runner = CeremonyRunner::new_unauthorised_for_test(logger.clone());
 
 	Node {
 		outgoing_p2p_message_sender,
@@ -136,8 +135,8 @@ impl<C: CeremonyTrait> Node<C> {
 			Ok(_) => {
 				slog::debug!(self.logger, "Node got successful outcome");
 			},
-			Err((_, failure_reason)) => {
-				slog::debug!(self.logger, "Node got failure outcome: {}", failure_reason);
+			Err((reported_parties, failure_reason)) => {
+				failure_reason.log(reported_parties, &self.logger);
 			},
 		}
 
@@ -430,20 +429,17 @@ where
 	}
 
 	// Checks if all nodes have an outcome and the outcomes are consistent, returning the outcome.
-    async fn collect_and_check_outcomes(
-        &mut self,
-    ) -> Option<
-        Result<
-            <Self as CeremonyRunnerStrategy>::CheckedOutput,
-            (
-                BTreeSet<AccountId>,
-                CeremonyFailureReason<
-                    <<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::FailureReason,
-                    <<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::CeremonyStageName,
-                >,
-            ),
-        >,
-	>{
+	async fn collect_and_check_outcomes(
+		&mut self,
+	) -> Option<
+		Result<
+			<Self as CeremonyRunnerStrategy>::CheckedOutput,
+			(
+				BTreeSet<AccountId>,
+				<<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::FailureReason,
+			),
+		>,
+	> {
 		// Gather the outcomes from all the nodes
 		let results: HashMap<_, _> = self
 			.nodes
@@ -506,10 +502,7 @@ where
 	async fn try_complete_with_error(
 		&mut self,
 		bad_account_ids: &[AccountId],
-		expected_failure_reason: CeremonyFailureReason<
-			<<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::FailureReason,
-			<<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::CeremonyStageName,
-		>,
+		expected_failure_reason: <<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::FailureReason,
 	) -> Option<()> {
 		let (reported, reason) = self.collect_and_check_outcomes().await?.unwrap_err();
 		assert_eq!(BTreeSet::from_iter(bad_account_ids.iter()), reported.iter().collect());
@@ -522,10 +515,7 @@ where
 	pub async fn complete_with_error(
 		&mut self,
 		bad_account_ids: &[AccountId],
-		expected_failure_reason: CeremonyFailureReason<
-			<<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::FailureReason,
-			<<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::CeremonyStageName,
-		>,
+		expected_failure_reason: <<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::FailureReason,
 	) {
 		self.try_complete_with_error(bad_account_ids, expected_failure_reason)
 			.await
@@ -799,10 +789,7 @@ pub async fn run_keygen_with_err_on_high_pubkey<AccountIds: IntoIterator<Item = 
 	);
 	keygen_ceremony.distribute_messages(stage_4_messages).await;
 	match keygen_ceremony
-		.try_complete_with_error(
-			&[],
-			CeremonyFailureReason::Other(KeygenFailureReason::KeyNotCompatible),
-		)
+		.try_complete_with_error(&[], KeygenFailureReason::KeyNotCompatible)
 		.await
 	{
 		Some(_) => Err(()),
@@ -906,7 +893,7 @@ pub fn gen_invalid_keygen_stage_2_state<P: ECPoint>(
 
 	let stage = Box::new(BroadcastStage::new(processor, common));
 
-	CeremonyRunner::new_authorised(ceremony_id, stage, logger)
+	CeremonyRunner::new_authorised(stage, logger)
 }
 
 /// Generates key data using the DEFAULT_KEYGEN_SEED and returns the KeygenResultInfo for the first

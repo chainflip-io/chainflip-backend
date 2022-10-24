@@ -11,7 +11,7 @@ use pallet_cf_governance::GovCallHash;
 use crate::{
 	chainflip::Offence,
 	runtime_apis::{
-		BackupOrPassive, ChainflipAccountStateWithPassive, RuntimeApiAccountInfo,
+		AuctionState, BackupOrPassive, ChainflipAccountStateWithPassive, RuntimeApiAccountInfo,
 		RuntimeApiPenalty, RuntimeApiPendingClaim,
 	},
 };
@@ -345,6 +345,7 @@ impl frame_system::Config for Runtime {
 		pallet_cf_validator::DeleteVanityName<Self>,
 		GrandpaOffenceReporter<Self>,
 		Staking,
+		AccountTypes,
 	);
 	/// The data to be stored in an account.
 	type AccountData = ();
@@ -857,6 +858,18 @@ impl_runtime_apis! {
 			call: Vec<u8>,
 		) -> GovCallHash {
 			Governance::compute_gov_key_call_hash::<_>(call).0
+		}
+
+		fn cf_auction_state() -> AuctionState {
+			let auction_params = Auction::auction_parameters();
+
+			AuctionState {
+				blocks_per_epoch: Validator::blocks_per_epoch(),
+				current_epoch_started_at: Validator::current_epoch_started_at(),
+				claim_period_as_percentage: Validator::claim_period_as_percentage(),
+				min_stake: MinimumStake::<Runtime>::get().unique_saturated_into(),
+				auction_size_range: (auction_params.min_size, auction_params.max_size)
+			}
 		}
 	}
 	// END custom runtime APIs

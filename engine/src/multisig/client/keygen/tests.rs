@@ -4,13 +4,12 @@ use std::collections::BTreeSet;
 
 use crate::multisig::{
 	client::{
-		common::{
-			BroadcastFailureReason, CeremonyFailureReason, KeygenFailureReason, KeygenStageName,
-		},
+		common::{BroadcastFailureReason, KeygenFailureReason, KeygenStageName},
 		helpers::{
 			gen_invalid_keygen_comm1, get_invalid_hash_comm, new_nodes, run_keygen,
 			run_keygen_with_err_on_high_pubkey, run_stages, standard_signing, KeygenCeremonyRunner,
 			SigningCeremonyRunner, ACCOUNT_IDS, DEFAULT_KEYGEN_CEREMONY_ID,
+			DEFAULT_SIGNING_CEREMONY_ID,
 		},
 		keygen::{
 			self, generate_key_data_until_compatible, Complaints6, VerifyComplaints7,
@@ -153,10 +152,7 @@ async fn should_report_on_invalid_blame_response6() {
 	let messages = ceremony.run_stage::<VerifyBlameResponses9, _, _>(messages).await;
 	ceremony.distribute_messages(messages).await;
 	ceremony
-		.complete_with_error(
-			&[bad_node_id_1.clone()],
-			CeremonyFailureReason::Other(KeygenFailureReason::InvalidBlameResponse),
-		)
+		.complete_with_error(&[bad_node_id_1.clone()], KeygenFailureReason::InvalidBlameResponse)
 		.await;
 }
 
@@ -196,10 +192,7 @@ async fn should_report_on_incomplete_blame_response() {
 	let messages = ceremony.run_stage::<VerifyBlameResponses9, _, _>(messages).await;
 	ceremony.distribute_messages(messages).await;
 	ceremony
-		.complete_with_error(
-			&[bad_node_id_1.clone()],
-			CeremonyFailureReason::Other(KeygenFailureReason::InvalidBlameResponse),
-		)
+		.complete_with_error(&[bad_node_id_1.clone()], KeygenFailureReason::InvalidBlameResponse)
 		.await;
 }
 
@@ -228,7 +221,7 @@ async fn should_report_on_inconsistent_broadcast_comm1() {
 	ceremony
 		.complete_with_error(
 			&[bad_account_id.clone()],
-			CeremonyFailureReason::BroadcastFailure(
+			KeygenFailureReason::BroadcastFailure(
 				BroadcastFailureReason::Inconsistency,
 				KeygenStageName::VerifyCommitmentsBroadcast4,
 			),
@@ -257,7 +250,7 @@ async fn should_report_on_inconsistent_broadcast_hash_comm1a() {
 	ceremony
 		.complete_with_error(
 			&[bad_account_id.clone()],
-			CeremonyFailureReason::BroadcastFailure(
+			KeygenFailureReason::BroadcastFailure(
 				BroadcastFailureReason::Inconsistency,
 				KeygenStageName::VerifyHashCommitmentsBroadcast2,
 			),
@@ -294,10 +287,7 @@ async fn should_report_on_invalid_hash_comm1a() {
 	ceremony.distribute_messages(messages).await;
 
 	ceremony
-		.complete_with_error(
-			&[bad_account_id],
-			CeremonyFailureReason::Other(KeygenFailureReason::InvalidCommitment),
-		)
+		.complete_with_error(&[bad_account_id], KeygenFailureReason::InvalidCommitment)
 		.await;
 }
 
@@ -333,7 +323,7 @@ async fn should_report_on_inconsistent_broadcast_complaints4() {
 	ceremony
 		.complete_with_error(
 			&[bad_account_id.clone()],
-			CeremonyFailureReason::BroadcastFailure(
+			KeygenFailureReason::BroadcastFailure(
 				BroadcastFailureReason::Inconsistency,
 				KeygenStageName::VerifyComplaintsBroadcastStage7,
 			),
@@ -392,7 +382,7 @@ async fn should_report_on_inconsistent_broadcast_blame_responses6() {
 	ceremony
 		.complete_with_error(
 			&[bad_account_id.clone()],
-			CeremonyFailureReason::BroadcastFailure(
+			KeygenFailureReason::BroadcastFailure(
 				BroadcastFailureReason::Inconsistency,
 				KeygenStageName::VerifyBlameResponsesBroadcastStage9,
 			),
@@ -428,10 +418,7 @@ async fn should_report_on_invalid_comm1() {
 	ceremony.distribute_messages(messages).await;
 
 	ceremony
-		.complete_with_error(
-			&[bad_account_id],
-			CeremonyFailureReason::Other(KeygenFailureReason::InvalidCommitment),
-		)
+		.complete_with_error(&[bad_account_id], KeygenFailureReason::InvalidCommitment)
 		.await;
 }
 
@@ -463,10 +450,7 @@ async fn should_report_on_invalid_complaints4() {
 	let messages = ceremony.run_stage::<keygen::VerifyComplaints7, _, _>(messages).await;
 	ceremony.distribute_messages(messages).await;
 	ceremony
-		.complete_with_error(
-			&[bad_account_id],
-			CeremonyFailureReason::Other(KeygenFailureReason::InvalidComplaint),
-		)
+		.complete_with_error(&[bad_account_id], KeygenFailureReason::InvalidComplaint)
 		.await;
 }
 
@@ -762,7 +746,7 @@ mod timeout {
 			ceremony
 				.complete_with_error(
 					&[non_sending_party_id_1],
-					CeremonyFailureReason::BroadcastFailure(
+					KeygenFailureReason::BroadcastFailure(
 						BroadcastFailureReason::InsufficientMessages,
 						KeygenStageName::VerifyHashCommitmentsBroadcast2,
 					),
@@ -796,7 +780,7 @@ mod timeout {
 			ceremony
 				.complete_with_error(
 					&[non_sending_party_id_1],
-					CeremonyFailureReason::BroadcastFailure(
+					KeygenFailureReason::BroadcastFailure(
 						BroadcastFailureReason::InsufficientMessages,
 						KeygenStageName::VerifyCommitmentsBroadcast4,
 					),
@@ -838,7 +822,7 @@ mod timeout {
 			ceremony
 				.complete_with_error(
 					&[non_sending_party_id_1],
-					CeremonyFailureReason::BroadcastFailure(
+					KeygenFailureReason::BroadcastFailure(
 						BroadcastFailureReason::InsufficientMessages,
 						KeygenStageName::VerifyComplaintsBroadcastStage7,
 					),
@@ -890,7 +874,7 @@ mod timeout {
 			ceremony
 				.complete_with_error(
 					&[non_sending_party_id_1],
-					CeremonyFailureReason::BroadcastFailure(
+					KeygenFailureReason::BroadcastFailure(
 						BroadcastFailureReason::InsufficientMessages,
 						KeygenStageName::VerifyBlameResponsesBroadcastStage9,
 					),
@@ -913,7 +897,7 @@ async fn genesis_keys_can_sign() {
 	let (mut signing_ceremony, _non_signing_nodes) =
 		SigningCeremonyRunner::new_with_threshold_subset_of_signers(
 			new_nodes(account_ids),
-			1,
+			DEFAULT_SIGNING_CEREMONY_ID,
 			key_id.clone(),
 			key_data.clone(),
 			MESSAGE_HASH.clone(),

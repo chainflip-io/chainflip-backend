@@ -2,7 +2,11 @@ mod core;
 mod muxer;
 mod peer_info_submitter;
 
-use std::{marker::PhantomData, sync::Arc};
+use std::{
+	marker::PhantomData,
+	net::{IpAddr, Ipv4Addr},
+	sync::Arc,
+};
 
 use crate::{
 	common::read_clean_and_decode_hex_str_file,
@@ -66,6 +70,10 @@ pub async fn start(
 	UnboundedSender<PeerUpdate>,
 	impl Future<Output = anyhow::Result<()>>,
 )> {
+	if settings.ip_address == IpAddr::V4(Ipv4Addr::UNSPECIFIED) {
+		anyhow::bail!("Should provide a valid IP address");
+	}
+
 	let node_key = {
 		let secret =
 			read_clean_and_decode_hex_str_file(&settings.node_key_file, "Node Key", |str| {

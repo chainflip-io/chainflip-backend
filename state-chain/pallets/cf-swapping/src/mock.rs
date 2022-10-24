@@ -10,7 +10,7 @@ use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
-	BuildStorage, DispatchResult,
+	BuildStorage,
 };
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -90,8 +90,7 @@ impl EgressApi for MockEgressApi {
 		_foreign_asset: ForeignChainAsset,
 		_amount: AssetAmount,
 		_egress_address: ForeignChainAddress,
-	) -> DispatchResult {
-		Ok(())
+	) {
 	}
 
 	fn is_egress_valid(

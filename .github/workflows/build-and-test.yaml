@@ -2,17 +2,17 @@ name: Checks
 on:
   push:
     branches:
-      - "feature/ci_**"
+      - develop
+      - release/*
+  pull_request:
 
 env:
   SCCACHE_CACHE_SIZE: 32G
   SCCACHE_REDIS: ${{ secrets.SCCACHE_REDIS }}
-  SCCACHE_DIR: ""
 
 jobs:
   cargo-fmt:
     runs-on: [self-hosted, linux, x64, ephemeral]
-    environment: development
     container:
       image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08"
       credentials:
@@ -21,12 +21,24 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-      - name: Check format
-        run: |
-          cargo fmt --all -- --check
+      - name: Check Format
+        run: cargo fmt --all -- --check
+
+  cargo-clippy:
+    runs-on: [self-hosted, linux, x64, ephemeral]
+    container:
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08"
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Check Linting
+        run: cargo ci-clippy
+
   cargo-doc:
     runs-on: [self-hosted, linux, x64, ephemeral]
-    environment: development
     container:
       image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08"
       credentials:
@@ -40,7 +52,7 @@ jobs:
       - name: Setup sccache
         uses: hendrikmuhs/ccache-action@v1.2
         with:
-          max-size: 32G
+          max-size: ${{ env.SCCACHE_CACHE_SIZE }}
           variant: sccache
           save: false
       - run: sccache --show-stats
@@ -57,7 +69,6 @@ jobs:
 
   build-and-test:
     runs-on: [self-hosted, linux, x64, ephemeral]
-    environment: development
     needs: [cargo-fmt]
     container:
       image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08"
@@ -72,7 +83,7 @@ jobs:
       - name: Setup sccache
         uses: hendrikmuhs/ccache-action@v1.2
         with:
-          max-size: 32G
+          max-size: ${{ env.SCCACHE_CACHE_SIZE }}
           variant: sccache
           save: false
       - run: sccache --show-stats
@@ -112,7 +123,6 @@ jobs:
 
   build-ibiza:
     runs-on: [self-hosted, linux, x64, ephemeral]
-    environment: development
     needs: [cargo-fmt]
     container:
       image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08"
@@ -127,7 +137,7 @@ jobs:
       - name: Setup sccache
         uses: hendrikmuhs/ccache-action@v1.2
         with:
-          max-size: 32G
+          max-size: ${{ env.SCCACHE_CACHE_SIZE }}
           variant: sccache
           save: false
       - run: sccache --show-stats
@@ -147,7 +157,6 @@ jobs:
 
   test-single-node:
     runs-on: [self-hosted, linux, x64, ephemeral]
-    environment: development
     needs: [build-and-test]
     steps:
       - uses: actions/setup-node@v3

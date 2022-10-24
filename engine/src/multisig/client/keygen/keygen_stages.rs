@@ -6,7 +6,7 @@ use std::{
 use crate::multisig::client::{
 	self,
 	ceremony_manager::KeygenCeremony,
-	common::{CeremonyFailureReason, KeygenFailureReason, KeygenStageName},
+	common::{KeygenFailureReason, KeygenStageName},
 	KeygenResult, KeygenResultInfo,
 };
 
@@ -163,7 +163,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 			Err((reported_parties, abort_reason)) =>
 				return KeygenStageResult::Error(
 					reported_parties,
-					CeremonyFailureReason::BroadcastFailure(abort_reason, Self::NAME),
+					KeygenFailureReason::BroadcastFailure(abort_reason, Self::NAME),
 				),
 		};
 
@@ -269,7 +269,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 			Err((reported_parties, abort_reason)) =>
 				return KeygenStageResult::Error(
 					reported_parties,
-					CeremonyFailureReason::BroadcastFailure(abort_reason, Self::NAME),
+					KeygenFailureReason::BroadcastFailure(abort_reason, Self::NAME),
 				),
 		};
 
@@ -281,8 +281,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 			&self.common.logger,
 		) {
 			Ok(comms) => comms,
-			Err((blamed_parties, reason)) =>
-				return StageResult::Error(blamed_parties, CeremonyFailureReason::Other(reason)),
+			Err((blamed_parties, reason)) => return StageResult::Error(blamed_parties, reason),
 		};
 
 		slog::debug!(self.common.logger, "{} is successful", Self::NAME);
@@ -310,10 +309,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 				// It is nobody's fault that the key is not compatible,
 				// so we abort with an empty list of responsible nodes
 				// to let the State Chain restart the ceremony
-				StageResult::Error(
-					BTreeSet::new(),
-					CeremonyFailureReason::Other(KeygenFailureReason::KeyNotCompatible),
-				)
+				StageResult::Error(BTreeSet::new(), KeygenFailureReason::KeyNotCompatible)
 			},
 		}
 	}
@@ -476,7 +472,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 			Err((reported_parties, abort_reason)) =>
 				return KeygenStageResult::Error(
 					reported_parties,
-					CeremonyFailureReason::BroadcastFailure(abort_reason, Self::NAME),
+					KeygenFailureReason::BroadcastFailure(abort_reason, Self::NAME),
 				),
 		};
 
@@ -532,10 +528,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 
 			StageResult::NextStage(Box::new(stage))
 		} else {
-			StageResult::Error(
-				idxs_to_report,
-				CeremonyFailureReason::Other(KeygenFailureReason::InvalidComplaint),
-			)
+			StageResult::Error(idxs_to_report, KeygenFailureReason::InvalidComplaint)
 		}
 	}
 }
@@ -756,7 +749,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 			Err((reported_parties, abort_reason)) =>
 				return KeygenStageResult::Error(
 					reported_parties,
-					CeremonyFailureReason::BroadcastFailure(abort_reason, Self::NAME),
+					KeygenFailureReason::BroadcastFailure(abort_reason, Self::NAME),
 				),
 		};
 
@@ -768,10 +761,8 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 
 				finalize_keygen(self.common, self.agg_pubkey, self.shares, self.commitments).await
 			},
-			Err(bad_parties) => StageResult::Error(
-				bad_parties,
-				CeremonyFailureReason::Other(KeygenFailureReason::InvalidBlameResponse),
-			),
+			Err(bad_parties) =>
+				StageResult::Error(bad_parties, KeygenFailureReason::InvalidBlameResponse),
 		}
 	}
 }

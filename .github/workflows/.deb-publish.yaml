@@ -12,7 +12,6 @@ jobs:
   build-deb:
     name: Build Deb
     runs-on: [self-hosted, linux, x64, ephemeral]
-    environment: development
     permissions:
       id-token: write
       contents: read

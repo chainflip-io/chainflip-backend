@@ -17,8 +17,8 @@ use crate::{
 				INITIAL_LATEST_CEREMONY_ID,
 			},
 			keygen::KeygenData,
-			CeremonyFailureReason, CeremonyRequest, CeremonyRequestDetails, KeygenRequestDetails,
-			MultisigData, SigningRequestDetails,
+			CeremonyRequest, CeremonyRequestDetails, KeygenRequestDetails, MultisigData,
+			SigningRequestDetails,
 		},
 		crypto::{CryptoScheme, Rng},
 		eth::{EthSchnorrSignature, EthSigning},
@@ -42,10 +42,7 @@ async fn run_on_request_to_sign<C: CryptoScheme>(
 	participants: BTreeSet<sp_runtime::AccountId32>,
 	ceremony_id: CeremonyId,
 ) -> oneshot::Receiver<
-	Result<
-		<C as CryptoScheme>::Signature,
-		(BTreeSet<AccountId32>, CeremonyFailureReason<SigningFailureReason, SigningStageName>),
-	>,
+	Result<<C as CryptoScheme>::Signature, (BTreeSet<AccountId32>, SigningFailureReason)>,
 > {
 	let (result_sender, result_receiver) = oneshot::channel();
 	with_task_scope(|scope| {
@@ -88,10 +85,7 @@ fn send_signing_request(
 	participants: BTreeSet<AccountId32>,
 	ceremony_id: CeremonyId,
 ) -> tokio::sync::oneshot::Receiver<
-	Result<
-		EthSchnorrSignature,
-		(BTreeSet<AccountId32>, CeremonyFailureReason<SigningFailureReason, SigningStageName>),
-	>,
+	Result<EthSchnorrSignature, (BTreeSet<AccountId32>, SigningFailureReason)>,
 > {
 	let (result_sender, result_receiver) = oneshot::channel();
 
@@ -203,10 +197,7 @@ async fn should_ignore_rts_with_insufficient_number_of_signers() {
 	// Receive the NotEnoughSigners error result
 	assert_eq!(
 		result_receiver.try_recv().expect("Failed to receive ceremony result"),
-		Err((
-			BTreeSet::default(),
-			CeremonyFailureReason::Other(SigningFailureReason::NotEnoughSigners),
-		))
+		Err((BTreeSet::default(), SigningFailureReason::NotEnoughSigners,))
 	);
 }
 
@@ -242,7 +233,7 @@ async fn should_ignore_rts_with_unknown_signer_id() {
 	// Receive the InvalidParticipants error result
 	assert_eq!(
 		result_receiver.try_recv().expect("Failed to receive ceremony result"),
-		Err((BTreeSet::default(), CeremonyFailureReason::InvalidParticipants,))
+		Err((BTreeSet::default(), SigningFailureReason::InvalidParticipants,))
 	);
 }
 
@@ -326,7 +317,7 @@ async fn should_send_outcome_of_authorised_ceremony() {
 		result_receiver.try_recv().unwrap(),
 		Err((
 			BTreeSet::default(),
-			CeremonyFailureReason::BroadcastFailure(
+			SigningFailureReason::BroadcastFailure(
 				BroadcastFailureReason::InsufficientVerificationMessages,
 				SigningStageName::VerifyCommitmentsBroadcast2
 			),
@@ -368,7 +359,7 @@ async fn should_cleanup_unauthorised_ceremony_if_not_participating() {
 					ceremony_runner_p2p_receiver,
 					ceremony_runner_request_receiver,
 					mpsc::unbounded_channel().0,
-					crate::logging::test_utils::new_test_logger(),
+					new_test_logger(),
 				));
 
 			// Turn the task handle into a ceremony handle and insert it into the ceremony manager
