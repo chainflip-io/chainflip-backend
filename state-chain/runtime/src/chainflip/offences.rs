@@ -17,7 +17,7 @@ pub enum Offence {
 	/// An invalid transaction was authored.
 	InvalidTransactionAuthored,
 	/// Authority reported they could not sign an ethereum transaction.
-	FailedToSignTransaction,
+	FailedToBroadcastTransaction,
 	/// An authority missed their authorship slot.
 	MissedAuthorshipSlot,
 	/// A node has missed a heartbeat submission.
@@ -50,8 +50,8 @@ impl From<pallet_cf_broadcast::PalletOffence> for Offence {
 		match offences {
 			pallet_cf_broadcast::PalletOffence::InvalidTransactionAuthored =>
 				Self::InvalidTransactionAuthored,
-			pallet_cf_broadcast::PalletOffence::FailedToSignTransaction =>
-				Self::FailedToSignTransaction,
+			pallet_cf_broadcast::PalletOffence::FailedToBroadcastTransaction =>
+				Self::FailedToBroadcastTransaction,
 		}
 	}
 }

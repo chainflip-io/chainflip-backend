@@ -205,7 +205,7 @@ fn test_abort_after_number_of_attempts_is_equal_to_the_number_of_authorities() {
 		// all the authorities have attempted to sign, and all have failed
 		// therefore all are reported
 		MockOffenceReporter::assert_reported(
-			PalletOffence::FailedToSignTransaction,
+			PalletOffence::FailedToBroadcastTransaction,
 			MockEpochInfo::current_authorities(),
 		);
 

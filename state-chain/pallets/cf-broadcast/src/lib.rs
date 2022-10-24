@@ -62,7 +62,7 @@ impl sp_std::fmt::Display for BroadcastAttemptId {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum PalletOffence {
 	InvalidTransactionAuthored,
-	FailedToSignTransaction,
+	FailedToBroadcastTransaction,
 }
 
 #[frame_support::pallet]
@@ -294,7 +294,6 @@ pub mod pallet {
 			let expiries = Expiries::<T, I>::take(block_number);
 			for attempt_id in expiries.iter() {
 				if let Some(attempt) = Self::take_and_clean_up_broadcast_attempt(*attempt_id) {
-					// TODO: Should we report here?
 					Self::deposit_event(Event::<T, I>::BroadcastAttemptExpired {
 						broadcast_attempt_id: *attempt_id,
 					});
@@ -678,7 +677,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				failed_broadcast_attempt.broadcast_attempt_id.broadcast_id,
 			) {
 				T::OffenceReporter::report_many(
-					PalletOffence::FailedToSignTransaction,
+					PalletOffence::FailedToBroadcastTransaction,
 					&failed_signers,
 				);
 			}
