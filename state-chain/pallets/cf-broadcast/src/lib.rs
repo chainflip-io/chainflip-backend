@@ -289,6 +289,10 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
 		/// The `on_initialize` hook for this pallet handles scheduled expiries.
+		///
+		/// /// ## Events
+		///
+		/// - [BroadcastAttemptTimeout](Event::BroadcastAttemptTimeout)
 		fn on_initialize(block_number: BlockNumberFor<T>) -> frame_support::weights::Weight {
 			let expiries = Timeouts::<T, I>::take(block_number);
 			for attempt_id in expiries.iter() {
