@@ -321,12 +321,6 @@ fn test_bad_signature_when_whitelisting() {
 			AwaitingTransactionBroadcast::<Test, Instance1>::get(broadcast_attempt_id).is_none()
 		);
 		assert_eq!(BroadcastRetryQueue::<Test, Instance1>::decode_len().unwrap_or_default(), 1);
-
-		MockOffenceReporter::assert_reported(
-			PalletOffence::InvalidTransactionAuthored,
-			// get the nominee that was used in the broadcast call
-			vec![MockNominator::get_last_nominee().unwrap()],
-		);
 	})
 }
 

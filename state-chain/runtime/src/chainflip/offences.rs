@@ -14,8 +14,6 @@ pub enum Offence {
 	ParticipateSigningFailed,
 	/// There was a failure in participation during a key generation ceremony.
 	ParticipateKeygenFailed,
-	/// An invalid transaction was authored.
-	InvalidTransactionAuthored,
 	/// Authority reported they could not sign an ethereum transaction.
 	FailedToBroadcastTransaction,
 	/// An authority missed their authorship slot.
@@ -48,8 +46,6 @@ impl OffenceList<Runtime> for SigningOffences {
 impl From<pallet_cf_broadcast::PalletOffence> for Offence {
 	fn from(offences: pallet_cf_broadcast::PalletOffence) -> Self {
 		match offences {
-			pallet_cf_broadcast::PalletOffence::InvalidTransactionAuthored =>
-				Self::InvalidTransactionAuthored,
 			pallet_cf_broadcast::PalletOffence::FailedToBroadcastTransaction =>
 				Self::FailedToBroadcastTransaction,
 		}

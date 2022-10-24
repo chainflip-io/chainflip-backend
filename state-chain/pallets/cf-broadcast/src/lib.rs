@@ -61,7 +61,6 @@ impl sp_std::fmt::Display for BroadcastAttemptId {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum PalletOffence {
-	InvalidTransactionAuthored,
 	FailedToBroadcastTransaction,
 }
 

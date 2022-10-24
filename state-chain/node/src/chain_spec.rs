@@ -152,7 +152,6 @@ const PENALTIES: &[(Offence, (i32, BlockNumber))] = &[
 	(Offence::ParticipateSigningFailed, (15, HEARTBEAT_BLOCK_INTERVAL)),
 	(Offence::MissedAuthorshipSlot, (15, HEARTBEAT_BLOCK_INTERVAL)),
 	(Offence::MissedHeartbeat, (15, HEARTBEAT_BLOCK_INTERVAL)),
-	(Offence::InvalidTransactionAuthored, (15, 0)),
 	// Exclude them from the nomination pool of the next attempt.
 	(Offence::FailedToBroadcastTransaction, (10, 0)),
 	(Offence::GrandpaEquivocation, (50, HEARTBEAT_BLOCK_INTERVAL * 5)),
