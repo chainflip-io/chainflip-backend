@@ -49,7 +49,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Flip Account (r:1 w:1)
 	// Storage: Validator CurrentAuthorities (r:1 w:0)
 	// Storage: Validator Backups (r:1 w:1)
-	// Storage: AccountTypes AccountRoles (r:0 w:1)
+	// Storage: AccountRoles AccountRoles (r:0 w:1)
 	// Storage: Staking WithdrawalAddresses (r:0 w:1)
 	// Storage: Staking ActiveBidder (r:0 w:1)
 	fn staked() -> Weight {
@@ -156,7 +156,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
-	// Storage: AccountTypes AccountRoles (r:1 w:0)
+	// Storage: AccountRoles AccountRoles (r:1 w:0)
 	// Storage: Staking ActiveBidder (r:1 w:1)
 	fn retire_account() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
@@ -164,7 +164,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
-	// Storage: AccountTypes AccountRoles (r:1 w:0)
+	// Storage: AccountRoles AccountRoles (r:1 w:0)
 	// Storage: Staking ActiveBidder (r:1 w:1)
 	fn activate_account() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
@@ -208,7 +208,7 @@ impl WeightInfo for () {
 	// Storage: Flip Account (r:1 w:1)
 	// Storage: Validator CurrentAuthorities (r:1 w:0)
 	// Storage: Validator Backups (r:1 w:1)
-	// Storage: AccountTypes AccountRoles (r:0 w:1)
+	// Storage: AccountRoles AccountRoles (r:0 w:1)
 	// Storage: Staking WithdrawalAddresses (r:0 w:1)
 	// Storage: Staking ActiveBidder (r:0 w:1)
 	fn staked() -> Weight {
@@ -315,7 +315,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
-	// Storage: AccountTypes AccountRoles (r:1 w:0)
+	// Storage: AccountRoles AccountRoles (r:1 w:0)
 	// Storage: Staking ActiveBidder (r:1 w:1)
 	fn retire_account() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
@@ -323,7 +323,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
-	// Storage: AccountTypes AccountRoles (r:1 w:0)
+	// Storage: AccountRoles AccountRoles (r:1 w:0)
 	// Storage: Staking ActiveBidder (r:1 w:1)
 	fn activate_account() -> Weight {
 		#[allow(clippy::unnecessary_cast)]

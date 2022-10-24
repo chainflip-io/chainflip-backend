@@ -72,7 +72,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
-	// Storage: AccountTypes AccountRoles (r:1 w:0)
+	// Storage: AccountRoles AccountRoles (r:1 w:0)
 	// Storage: Validator NodeCFEVersion (r:1 w:1)
 	fn cfe_version() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
@@ -80,7 +80,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
-	// Storage: AccountTypes AccountRoles (r:1 w:0)
+	// Storage: AccountRoles AccountRoles (r:1 w:0)
 	// Storage: Validator AccountPeerMapping (r:1 w:1)
 	// Storage: Validator MappedPeers (r:1 w:1)
 	fn register_peer_id() -> Weight {
@@ -145,7 +145,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Reputation LastHeartbeat (r:6 w:0)
 	// Storage: Validator AccountPeerMapping (r:6 w:0)
 	// Storage: Session NextKeys (r:3 w:0)
-	// Storage: AccountTypes AccountRoles (r:3 w:0)
+	// Storage: AccountRoles AccountRoles (r:3 w:0)
 	// Storage: Validator Backups (r:1 w:0)
 	// Storage: Validator BackupRewardNodePercentage (r:1 w:0)
 	// Storage: EthereumVault PendingVaultRotation (r:1 w:1)
@@ -252,7 +252,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
-	// Storage: AccountTypes AccountRoles (r:1 w:0)
+	// Storage: AccountRoles AccountRoles (r:1 w:0)
 	// Storage: Validator NodeCFEVersion (r:1 w:1)
 	fn cfe_version() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
@@ -260,7 +260,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
-	// Storage: AccountTypes AccountRoles (r:1 w:0)
+	// Storage: AccountRoles AccountRoles (r:1 w:0)
 	// Storage: Validator AccountPeerMapping (r:1 w:1)
 	// Storage: Validator MappedPeers (r:1 w:1)
 	fn register_peer_id() -> Weight {
@@ -325,7 +325,7 @@ impl WeightInfo for () {
 	// Storage: Reputation LastHeartbeat (r:6 w:0)
 	// Storage: Validator AccountPeerMapping (r:6 w:0)
 	// Storage: Session NextKeys (r:3 w:0)
-	// Storage: AccountTypes AccountRoles (r:3 w:0)
+	// Storage: AccountRoles AccountRoles (r:3 w:0)
 	// Storage: Validator Backups (r:1 w:0)
 	// Storage: Validator BackupRewardNodePercentage (r:1 w:0)
 	// Storage: EthereumVault PendingVaultRotation (r:1 w:1)

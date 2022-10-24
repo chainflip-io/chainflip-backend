@@ -17,7 +17,7 @@ targets = ['x86_64-unknown-linux-gnu']
 cf-traits = {path = '../../traits', default-features = false}
 cf-primitives = { path ='../../primitives', default-features = false }
 cf-chains = {path = '../../chains', default-features = false}
-pallet-cf-account-types = { path = '../cf-account-types', default-features = false }
+pallet-cf-account-roles = { path = '../cf-account-roles', default-features = false }
 cf-runtime-upgrade-utilities = { path = '../../runtime-upgrade-utilities', default-features = false }
 
 # Non-substrate external deps
@@ -70,7 +70,7 @@ tag = 'chainflip-monthly-2022-06+01'
 [dev-dependencies]
 pallet-cf-flip = {path = '../cf-flip'}
 cf-test-utilities = { path = '../../test-utilities' }
-pallet-cf-account-types = { path = '../cf-account-types' }
+pallet-cf-account-roles = { path = '../cf-account-roles' }
 
 [dev-dependencies.sp-io]
 git = 'https://github.com/chainflip-io/substrate.git'
@@ -92,14 +92,14 @@ std = [
   'sp-core/std',
   'sp-std/std',
   'cf-runtime-upgrade-utilities/std',
-  'pallet-cf-account-types/std'
+  'pallet-cf-account-roles/std'
 ]
 runtime-benchmarks = [
   'cf-traits/runtime-benchmarks',
   'frame-benchmarking/runtime-benchmarks',
   'frame-support/runtime-benchmarks',
   'frame-system/runtime-benchmarks',
-  'pallet-cf-account-types/runtime-benchmarks'
+  'pallet-cf-account-roles/runtime-benchmarks'
 ]
 try-runtime = [
   'frame-support/try-runtime',

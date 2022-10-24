@@ -27,7 +27,7 @@ use cf_traits::{
 	Chainflip, ReplayProtectionProvider,
 };
 
-impl pallet_cf_account_types::Config for Test {
+impl pallet_cf_account_roles::Config for Test {
 	type Event = Event;
 	type WeightInfo = ();
 }
@@ -40,7 +40,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system,
-		AccountTypes: pallet_cf_account_types,
+		AccountRoles: pallet_cf_account_roles,
 		Flip: pallet_cf_flip,
 		Staking: pallet_cf_staking,
 	}
@@ -227,7 +227,7 @@ pub const MIN_STAKE: u128 = 10;
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
-		account_types: Default::default(),
+		account_roles: Default::default(),
 		system: Default::default(),
 		flip: FlipConfig { total_issuance: 1_000_000 },
 		staking: StakingConfig {
