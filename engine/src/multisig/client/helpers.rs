@@ -21,6 +21,7 @@ use utilities::{assert_ok, success_threshold_from_share_count, threshold_from_sh
 
 use crate::{
 	common::{all_same, split_at},
+	logging::test_utils::new_test_logger,
 	multisig::{
 		client::{
 			ceremony_manager::{
@@ -46,7 +47,6 @@ use signing::{LocalSig3, SigningCommitment};
 use keygen::{generate_shares_and_commitment, DKGUnverifiedCommitment};
 
 use crate::{
-	logging::{self},
 	multisig::{
 		client::{keygen, MultisigMessage},
 		// This determines which crypto scheme will be used in tests
@@ -96,13 +96,12 @@ pub struct Node<C: CeremonyTrait> {
 }
 
 fn new_node<C: CeremonyTrait>(account_id: AccountId, allowing_high_pubkey: bool) -> Node<C> {
-	let logger = logging::test_utils::new_test_logger();
-	let logger = logger.new(slog::o!("account_id" => account_id.to_string()));
+	let logger = new_test_logger().new(slog::o!("account_id" => account_id.to_string()));
+
 	let (outgoing_p2p_message_sender, outgoing_p2p_message_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
-	let ceremony_runner =
-		CeremonyRunner::new_unauthorised_for_test(INITIAL_LATEST_CEREMONY_ID, &logger);
+	let ceremony_runner = CeremonyRunner::new_unauthorised_for_test(logger.clone());
 
 	Node {
 		outgoing_p2p_message_sender,
@@ -894,7 +893,7 @@ pub fn gen_invalid_keygen_stage_2_state<P: ECPoint>(
 
 	let stage = Box::new(BroadcastStage::new(processor, common));
 
-	CeremonyRunner::new_authorised(ceremony_id, stage, logger)
+	CeremonyRunner::new_authorised(stage, logger)
 }
 
 /// Generates key data using the DEFAULT_KEYGEN_SEED and returns the KeygenResultInfo for the first

@@ -9,6 +9,7 @@ use crate::multisig::{
 			gen_invalid_keygen_comm1, get_invalid_hash_comm, new_nodes, run_keygen,
 			run_keygen_with_err_on_high_pubkey, run_stages, standard_signing, KeygenCeremonyRunner,
 			SigningCeremonyRunner, ACCOUNT_IDS, DEFAULT_KEYGEN_CEREMONY_ID,
+			DEFAULT_SIGNING_CEREMONY_ID,
 		},
 		keygen::{
 			self, generate_key_data_until_compatible, Complaints6, VerifyComplaints7,
@@ -896,7 +897,7 @@ async fn genesis_keys_can_sign() {
 	let (mut signing_ceremony, _non_signing_nodes) =
 		SigningCeremonyRunner::new_with_threshold_subset_of_signers(
 			new_nodes(account_ids),
-			1,
+			DEFAULT_SIGNING_CEREMONY_ID,
 			key_id.clone(),
 			key_data.clone(),
 			MESSAGE_HASH.clone(),
