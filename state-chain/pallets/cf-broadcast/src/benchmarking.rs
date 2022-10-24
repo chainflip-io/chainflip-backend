@@ -54,7 +54,7 @@ benchmarks_instance_pallet! {
 		let x in 1 .. 1000u32;
 		for i in 1 .. x {
 			let broadcast_attempt_id = BroadcastAttemptId {broadcast_id: i, attempt_count: 1};
-			Expiries::<T, I>::append(expiry_block, broadcast_attempt_id);
+			Timeouts::<T, I>::append(expiry_block, broadcast_attempt_id);
 			ThresholdSignatureData::<T, I>::insert(i, (ApiCallFor::<T, I>::benchmark_value(), ThresholdSignatureFor::<T, I>::benchmark_value()))
 		}
 		let valid_key = <<T as Config<I>>::TargetChain as ChainCrypto>::AggKey::benchmark_value();
@@ -79,7 +79,7 @@ benchmarks_instance_pallet! {
 		T::KeyProvider::set_key(valid_key);
 	}: _(RawOrigin::Signed(caller), broadcast_attempt_id)
 	verify {
-		assert!(Expiries::<T, I>::contains_key(expiry_block));
+		assert!(Timeouts::<T, I>::contains_key(expiry_block));
 	}
 	on_signature_ready {
 		let should_expire_in = T::BlockNumber::from(6u32);
@@ -95,7 +95,7 @@ benchmarks_instance_pallet! {
 	verify {
 		assert_eq!(BroadcastIdCounter::<T, I>::get(), 1);
 		assert!(BroadcastIdToAttemptNumbers::<T, I>::contains_key(1));
-		assert!(Expiries::<T, I>::contains_key(should_expire_in));
+		assert!(Timeouts::<T, I>::contains_key(should_expire_in));
 	}
 	start_next_broadcast_attempt {
 		let broadcast_attempt_id = Pallet::<T, I>::start_broadcast(&BenchmarkValue::benchmark_value(), BenchmarkValue::benchmark_value(), BenchmarkValue::benchmark_value());

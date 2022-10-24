@@ -1,8 +1,8 @@
 use crate::{
 	mock::*, AwaitingTransactionBroadcast, BroadcastAttemptId, BroadcastId,
-	BroadcastIdToAttemptNumbers, BroadcastRetryQueue, Error, Event as BroadcastEvent, Expiries,
+	BroadcastIdToAttemptNumbers, BroadcastRetryQueue, Error, Event as BroadcastEvent,
 	FailedBroadcasters, Instance1, PalletOffence, RefundSignerId, SignatureToBroadcastIdLookup,
-	ThresholdSignatureData, TransactionFeeDeficit, TransactionHashWhitelist, WeightInfo,
+	ThresholdSignatureData, Timeouts, TransactionFeeDeficit, TransactionHashWhitelist, WeightInfo,
 };
 
 use sp_std::collections::btree_set::BTreeSet;
@@ -33,7 +33,7 @@ enum Scenario {
 }
 
 thread_local! {
-	pub static EXPIRED_ATTEMPTS: std::cell::RefCell<Vec<BroadcastAttemptId>> = Default::default();
+	pub static TIMEDOUT_ATTEMPTS: std::cell::RefCell<Vec<BroadcastAttemptId>> = Default::default();
 	pub static ABORTED_BROADCAST: std::cell::RefCell<BroadcastId> = Default::default();
 }
 
@@ -117,8 +117,8 @@ impl MockCfe {
 				BroadcastEvent::BroadcastRetryScheduled(_) => {
 					// Informational only. No action required by the CFE.
 				},
-				BroadcastEvent::BroadcastAttemptExpired { broadcast_attempt_id } =>
-					EXPIRED_ATTEMPTS.with(|cell| cell.borrow_mut().push(broadcast_attempt_id)),
+				BroadcastEvent::BroadcastAttemptTimeout { broadcast_attempt_id } =>
+					TIMEDOUT_ATTEMPTS.with(|cell| cell.borrow_mut().push(broadcast_attempt_id)),
 				BroadcastEvent::BroadcastAborted(_) => {
 					// Informational only. No action required by the CFE.
 				},
@@ -391,10 +391,10 @@ fn cannot_whitelist_call_after_expired() {
 				.attempt_count == 0
 		);
 		let current_block = System::block_number();
-		// we should have no expiries at this point, but in expiry blocks we should
-		assert_eq!(Expiries::<Test, Instance1>::get(current_block), vec![]);
+		// we should have no Timeouts at this point, but in expiry blocks we should
+		assert_eq!(Timeouts::<Test, Instance1>::get(current_block), vec![]);
 		let expiry_block = current_block + BROADCAST_EXPIRY_BLOCKS;
-		assert_eq!(Expiries::<Test, Instance1>::get(expiry_block), vec![broadcast_attempt_id]);
+		assert_eq!(Timeouts::<Test, Instance1>::get(expiry_block), vec![broadcast_attempt_id]);
 
 		// Simulate the expiry hook for the expected expiry block.
 		Broadcaster::on_initialize(expiry_block);
@@ -415,7 +415,7 @@ fn cannot_whitelist_call_after_expired() {
 		// actually the same block since the current block number is unchanged
 		// the current block number + BROADCAST_EXPIRY_BLOCKS is also unchanged
 		// but, the retry has the incremented attempt_count of course
-		assert_eq!(Expiries::<Test, Instance1>::get(expiry_block), vec![next_broadcast_attempt_id]);
+		assert_eq!(Timeouts::<Test, Instance1>::get(expiry_block), vec![next_broadcast_attempt_id]);
 
 		// The first attempt has expired, which has triggered a second attempt.
 		// We now whitelist the first call.
@@ -613,7 +613,7 @@ fn test_signature_request_expiry() {
 				.is_none());
 
 			assert_eq!(
-				EXPIRED_ATTEMPTS.with(|cell| *cell.borrow().first().unwrap()),
+				TIMEDOUT_ATTEMPTS.with(|cell| *cell.borrow().first().unwrap()),
 				broadcast_attempt_id,
 			);
 
@@ -663,7 +663,7 @@ fn test_transmission_request_expiry() {
 
 		let check_end_state = || {
 			assert_eq!(
-				EXPIRED_ATTEMPTS.with(|cell| *cell.borrow().first().unwrap()),
+				TIMEDOUT_ATTEMPTS.with(|cell| *cell.borrow().first().unwrap()),
 				broadcast_attempt_id,
 			);
 			// New attempt is live with same broadcast_id and incremented attempt_count.

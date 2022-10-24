@@ -216,7 +216,7 @@ pub mod pallet {
 	/// A mapping from block number to a list of signing or broadcast attempts that expire at that
 	/// block number.
 	#[pallet::storage]
-	pub type Expiries<T: Config<I>, I: 'static = ()> =
+	pub type Timeouts<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, T::BlockNumber, Vec<BroadcastAttemptId>, ValueQuery>;
 
 	/// Stores all needed information to be able to re-request the signature
@@ -257,8 +257,8 @@ pub mod pallet {
 		},
 		/// A failed broadcast attempt has been scheduled for retry. \[broadcast_attempt_id\]
 		BroadcastRetryScheduled(BroadcastAttemptId),
-		/// A broadcast attempt expired.
-		BroadcastAttemptExpired { broadcast_attempt_id: BroadcastAttemptId },
+		/// A broadcast attempt timed out.
+		BroadcastAttemptTimeout { broadcast_attempt_id: BroadcastAttemptId },
 		/// A broadcast has been aborted after all authorities have attempted to broadcast the
 		/// transaction and failed. \[broadcast_id\]
 		BroadcastAborted(BroadcastId),
@@ -290,10 +290,10 @@ pub mod pallet {
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
 		/// The `on_initialize` hook for this pallet handles scheduled expiries.
 		fn on_initialize(block_number: BlockNumberFor<T>) -> frame_support::weights::Weight {
-			let expiries = Expiries::<T, I>::take(block_number);
+			let expiries = Timeouts::<T, I>::take(block_number);
 			for attempt_id in expiries.iter() {
 				if let Some(attempt) = Self::take_and_clean_up_broadcast_attempt(*attempt_id) {
-					Self::deposit_event(Event::<T, I>::BroadcastAttemptExpired {
+					Self::deposit_event(Event::<T, I>::BroadcastAttemptTimeout {
 						broadcast_attempt_id: *attempt_id,
 					});
 					Self::start_next_broadcast_attempt(attempt);
@@ -630,7 +630,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				},
 			);
 
-			Expiries::<T, I>::append(
+			Timeouts::<T, I>::append(
 				frame_system::Pallet::<T>::block_number() + T::BroadcastTimeout::get(),
 				broadcast_attempt.broadcast_attempt_id,
 			);
