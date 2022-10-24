@@ -11,6 +11,10 @@ env:
   SCCACHE_REDIS: ${{ secrets.SCCACHE_REDIS }}
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ github.ref_name }}"
   cargo-fmt:
     runs-on: [self-hosted, linux, x64, ephemeral]
     container:
@@ -158,6 +162,7 @@ jobs:
   run-benchmarks:
     runs-on: [self-hosted, linux, x64, ephemeral]
     needs: [build-and-test]
+    if: github.ref_name == 'develop'
     steps:
       - name: Checkout
         uses: actions/checkout@v3
