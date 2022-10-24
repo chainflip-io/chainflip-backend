@@ -6,8 +6,8 @@ use cf_primitives::CeremonyId;
 use futures::{FutureExt, Stream, StreamExt};
 use pallet_cf_vaults::KeygenError;
 use slog::o;
-use sp_core::H256;
-use sp_runtime::AccountId32;
+use sp_core::{Hasher, H256};
+use sp_runtime::{traits::Keccak256, AccountId32};
 use state_chain_runtime::{AccountId, CfeSettings};
 use std::{
 	collections::BTreeSet,
@@ -378,7 +378,29 @@ where
 
                                                         // We want to transmit here to decrease the delay between getting a gas price estimate
                                                         // and transmitting it to the Ethereum network
-                                                        eth_broadcaster.send_for_broadcast_attempt(raw_signed_tx.0, broadcast_attempt_id).await
+                                                        let expected_broadcast_tx_hash = Keccak256::hash(&raw_signed_tx.0[..]);
+                                                        match eth_broadcaster.send(raw_signed_tx.0).await {
+                                                            Ok(tx_hash) => {
+                                                                slog::debug!(
+                                                                    logger,
+                                                                    "Successful TransmissionRequest broadcast_attempt_id {}, tx_hash: {:#x}",
+                                                                    broadcast_attempt_id,
+                                                                    tx_hash
+                                                                );
+                                                                assert_eq!(
+                                                                    tx_hash, expected_broadcast_tx_hash,
+                                                                    "tx_hash returned from `send` does not match expected hash"
+                                                                );
+                                                            },
+                                                            Err(e) => {
+                                                                slog::info!(
+                                                                    logger,
+                                                                    "TransmissionRequest broadcast_attempt_id {} failed: {:?}",
+                                                                    broadcast_attempt_id,
+                                                                    e
+                                                                );
+                                                            },
+                                                        }
                                                     }
                                                     Err(e) => {
                                                         // Note: this error case should only occur if there is a problem with the
