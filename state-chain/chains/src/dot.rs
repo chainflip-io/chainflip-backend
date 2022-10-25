@@ -830,7 +830,7 @@ mod test_polkadot_extrinsics {
 
 		let mut extrinsic_handler = PolkadotExtrinsicHandler::new_empty(
 			PolkadotReplayProtection::new(NONCE_1, 0, NetworkChoice::WestendTestnet),
-			account_id_1.clone(),
+			account_id_1,
 		);
 		extrinsic_handler.insert_extrinsic_call(test_runtime_call);
 		extrinsic_handler
