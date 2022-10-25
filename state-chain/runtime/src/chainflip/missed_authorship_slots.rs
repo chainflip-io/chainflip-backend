@@ -9,6 +9,7 @@ use crate::System;
 #[storage_alias]
 type LastSeenSlot = StorageValue<AuraSlotExtraction, Slot>;
 
+// https://github.com/chainflip-io/substrate/blob/c172d0f683fab3792b90d876fd6ca27056af9fe9/frame/aura/src/lib.rs#L179
 fn extract_slot_from_digest_item(item: &DigestItem) -> Option<Slot> {
 	item.as_pre_runtime().and_then(|(id, mut data)| {
 		if id == AURA_ENGINE_ID {

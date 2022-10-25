@@ -1156,9 +1156,9 @@ impl<T: Config> Pallet<T> {
 		for slot in T::MissedAuthorshipSlots::missed_slots() {
 			num_missed_slots += 1;
 			// https://github.com/chainflip-io/substrate/blob/c172d0f683fab3792b90d876fd6ca27056af9fe9/frame/aura/src/lib.rs#L97
-			let validator_index = slot % <Self as EpochInfo>::current_authority_count() as u64;
+			let authority_index = slot % <Self as EpochInfo>::current_authority_count() as u64;
 			if let Some(id) =
-				<Self as EpochInfo>::current_authorities().get(validator_index as usize)
+				<Self as EpochInfo>::current_authorities().get(authority_index as usize)
 			{
 				T::OffenceReporter::report(PalletOffence::MissedAuthorshipSlot, id.clone());
 			} else {
