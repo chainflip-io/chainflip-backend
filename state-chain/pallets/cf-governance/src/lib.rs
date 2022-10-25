@@ -390,7 +390,7 @@ pub mod pallet {
 							Err(_) => Event::GovKeyCallExecutionFailed { call_hash },
 						},
 					);
-					NextGovKeyCallHashNonce::<T>::put(nonce.saturating_add(1));
+					NextGovKeyCallHashNonce::<T>::put(nonce.wrapping_add(1));
 					GovKeyWhitelistedCallHash::<T>::kill();
 
 					Ok(Pays::No.into())
