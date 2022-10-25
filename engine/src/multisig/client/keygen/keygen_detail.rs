@@ -296,7 +296,7 @@ pub fn derive_aggregate_pubkey<C: CryptoScheme>(
 ) -> anyhow::Result<ValidAggregateKey<C::Point>> {
 	let pubkey: C::Point = commitments.iter().map(|(_idx, c)| c.commitments.0[0]).sum();
 
-	if !allow_high_pubkey && C::is_pubkey_compatible(&pubkey) {
+	if !allow_high_pubkey && !C::is_pubkey_compatible(&pubkey) {
 		Err(anyhow!("pubkey is not compatible"))
 	} else if check_high_degree_commitments(commitments) {
 		// Sanity check (the chance of this failing is infinitesimal due to the
