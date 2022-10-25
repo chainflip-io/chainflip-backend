@@ -659,6 +659,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		if failed_broadcast_attempt.broadcast_attempt_id.attempt_count ==
 			T::EpochInfo::current_authority_count()
+				.checked_sub(1)
+				.expect("We must have at least one authority")
 		{
 			if let Some(failed_signers) = FailedBroadcasters::<T, I>::get(
 				failed_broadcast_attempt.broadcast_attempt_id.broadcast_id,
