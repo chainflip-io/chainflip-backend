@@ -221,17 +221,11 @@ impl PolkadotExtrinsicHandler {
 
 	pub fn is_signed(&self) -> Option<bool> {
 		match self.signed_extrinsic.clone()?.signature {
-			Some((_signed, signature, extra)) => {
-				let raw_payload =
-					SignedPayload::new(self.signed_extrinsic.clone()?.function, extra).ok()?;
-				if !raw_payload
-					.using_encoded(|payload| signature.verify(payload, &self.extrinsic_origin))
-				{
-					Some(false)
-				} else {
-					Some(true)
-				}
-			},
+			Some((_signed, signature, _extra)) => Some(signature.verify(
+				&self.signature_payload.clone().expect("Payload should exist")[..],
+				&self.extrinsic_origin,
+			)),
+
 			None => Some(false),
 		}
 	}
@@ -805,13 +799,13 @@ mod test_polkadot_extrinsics {
 	// address: "5E2WfQFeafdktJ5AAF6ZGZ71Yj4fiJnHWRomVmeoStMNhoZe"
 	pub const RAW_SEED_1: [u8; 32] =
 		hex_literal::hex!("858c1ee915090a119d4cb0774b908fa585ef7882f4648c577606490cc94f6e15");
-	pub const NONCE_1: u32 = 4; //correct nonce has to be provided for this account (see/track onchain)
+	pub const NONCE_1: u32 = 10; //correct nonce has to be provided for this account (see/track onchain)
 
 	// test westend account 2 (CHAINFLIP-TEST-2)
 	// address: "5GNn92C9ngX4sNp3UjqGzPbdRfbbV8hyyVVNZaH2z9e5kzxA"
 	pub const RAW_SEED_2: [u8; 32] =
 		hex_literal::hex!("4b734882accd7a0e27b8b0d3cb7db79ab4da559d1d5f84f35fd218a1ee12ece4");
-	pub const _NONCE_2: u32 = 1; //correct nonce has to be provided for this account (see/track onchain)
+	pub const _NONCE_2: u32 = 0; //correct nonce has to be provided for this account (see/track onchain)
 
 	#[ignore]
 	#[test]
@@ -836,14 +830,12 @@ mod test_polkadot_extrinsics {
 
 		let mut extrinsic_handler = PolkadotExtrinsicHandler::new_empty(
 			PolkadotReplayProtection::new(NONCE_1, 0, NetworkChoice::WestendTestnet),
-			account_id_1,
+			account_id_1.clone(),
 		);
 		extrinsic_handler.insert_extrinsic_call(test_runtime_call);
 		extrinsic_handler
 			.insert_threshold_signature_payload()
 			.expect("This shouldn't fail");
-
-		println!("SignedPayload: {:?}", extrinsic_handler.signature_payload.clone().unwrap());
 
 		let signed_extrinsic: Option<PolkadotUncheckedExtrinsic> = extrinsic_handler
 			.insert_signature_and_get_signed_unchecked_extrinsic(
@@ -851,17 +843,6 @@ mod test_polkadot_extrinsics {
 					&extrinsic_handler.signature_payload.clone().expect("This can't fail")[..],
 				),
 			);
-
-		println!(
-			"Signature: {:?}",
-			extrinsic_handler.signed_extrinsic.clone().unwrap().signature.unwrap().1
-		);
-		println!(
-			"Signature_2: {:?}",
-			keypair_1
-				.sign(&extrinsic_handler.signature_payload.clone().expect("This can't fail")[..],)
-		);
-		println!("Signer PublicKey: {}", keypair_1.public());
 
 		assert!(extrinsic_handler.is_signed().unwrap_or(false));
 

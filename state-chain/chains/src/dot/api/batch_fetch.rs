@@ -91,7 +91,7 @@ impl ApiCall<Polkadot> for BatchFetch {
 	}
 
 	fn chain_encoded(&self) -> <Polkadot as ChainAbi>::SignedTransaction {
-		self.extrinsic_handler.signed_extrinsic.clone().encode()
+		self.extrinsic_handler.signed_extrinsic.clone().unwrap().encode()
 	}
 
 	fn is_signed(&self) -> bool {
