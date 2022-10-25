@@ -852,6 +852,17 @@ mod test_polkadot_extrinsics {
 				),
 			);
 
+		println!(
+			"Signature: {:?}",
+			extrinsic_handler.signed_extrinsic.clone().unwrap().signature.unwrap().1
+		);
+		println!(
+			"Signature_2: {:?}",
+			keypair_1
+				.sign(&extrinsic_handler.signature_payload.clone().expect("This can't fail")[..],)
+		);
+		println!("Signer PublicKey: {}", keypair_1.public());
+
 		assert!(extrinsic_handler.is_signed().unwrap_or(false));
 
 		println!("encoded extrinsic: 0x{}", hex::encode(signed_extrinsic.unwrap().encode()));
