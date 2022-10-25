@@ -37,7 +37,7 @@ use crate::{
 			signing, KeygenResultInfo, PartyIdxMapping, ThresholdParameters,
 		},
 		crypto::{ECPoint, Rng},
-		KeyId, MessageHash,
+		CryptoScheme, KeyId, MessageHash,
 	},
 	p2p::OutgoingMultisigStageMessages,
 };
@@ -706,7 +706,7 @@ impl SigningCeremonyRunner {
 
 pub async fn new_signing_ceremony(
 ) -> (SigningCeremonyRunner, HashMap<AccountId, Node<SigningCeremonyEth>>) {
-	let (key_id, key_data) = generate_key_data(
+	let (key_id, key_data) = generate_key_data::<EthSigning>(
 		BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
 		&mut Rng::from_seed(DEFAULT_KEYGEN_SEED),
 		true,
@@ -898,8 +898,10 @@ pub fn gen_invalid_keygen_stage_2_state<P: ECPoint>(
 
 /// Generates key data using the DEFAULT_KEYGEN_SEED and returns the KeygenResultInfo for the first
 /// signer.
-pub fn get_key_data_for_test<P: ECPoint>(signers: BTreeSet<AccountId>) -> KeygenResultInfo<P> {
-	generate_key_data(signers.clone(), &mut Rng::from_seed(DEFAULT_KEYGEN_SEED), true)
+pub fn get_key_data_for_test<C: CryptoScheme>(
+	signers: BTreeSet<AccountId>,
+) -> KeygenResultInfo<C::Point> {
+	generate_key_data::<C>(signers.clone(), &mut Rng::from_seed(DEFAULT_KEYGEN_SEED), true)
 		.expect("Should not be able to fail generating key data")
 		.1
 		.get(signers.iter().next().unwrap())
