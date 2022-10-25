@@ -20,7 +20,7 @@ fn insert_transaction_broadcast_attempt<T: pallet::Config<I>, I: 'static>(
 	nominee: <T as Chainflip>::ValidatorId,
 	broadcast_attempt_id: BroadcastAttemptId,
 ) {
-	AwaitingTransactionBroadcast::<T, I>::insert(
+	AwaitingBroadcast::<T, I>::insert(
 		broadcast_attempt_id,
 		TransactionSigningAttempt {
 			broadcast_attempt: BroadcastAttempt::<T, I> {
@@ -131,7 +131,7 @@ benchmarks_instance_pallet! {
 		})
 	}
 	verify {
-		assert!(AwaitingTransactionBroadcast::<T, I>::contains_key(broadcast_attempt_id.next_attempt()));
+		assert!(AwaitingBroadcast::<T, I>::contains_key(broadcast_attempt_id.next_attempt()));
 	}
 	signature_accepted {
 		let caller: T::AccountId = whitelisted_caller();

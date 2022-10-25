@@ -41,7 +41,7 @@ pub trait WeightInfo {
 pub struct PalletWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumBroadcaster Timeouts (r:1 w:0)
-	// Storage: EthereumBroadcaster AwaitingTransactionBroadcast (r:49 w:0)
+	// Storage: EthereumBroadcaster AwaitingBroadcast (r:49 w:0)
 	fn on_initialize(x: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
 		(0 as Weight)
@@ -51,7 +51,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	// Storage: AccountRoles AccountRoles (r:1 w:0)
-	// Storage: EthereumBroadcaster AwaitingTransactionBroadcast (r:1 w:0)
+	// Storage: EthereumBroadcaster AwaitingBroadcast (r:1 w:0)
 	// Storage: EthereumBroadcaster TransactionFeeDeficit (r:1 w:1)
 	// Storage: EthereumBroadcaster RefundSignerId (r:1 w:1)
 	// Storage: EthereumBroadcaster TransactionHashWhitelist (r:0 w:1)
@@ -62,7 +62,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
 	// Storage: AccountRoles AccountRoles (r:1 w:0)
-	// Storage: EthereumBroadcaster AwaitingTransactionBroadcast (r:1 w:1)
+	// Storage: EthereumBroadcaster AwaitingBroadcast (r:1 w:1)
 	// Storage: EthereumBroadcaster FailedBroadcasters (r:1 w:1)
 	// Storage: Validator CurrentAuthorities (r:1 w:0)
 	// Storage: EthereumBroadcaster BroadcastRetryQueue (r:1 w:1)
@@ -81,7 +81,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Validator CurrentEpoch (r:1 w:0)
 	// Storage: Validator HistoricalAuthorities (r:1 w:0)
 	// Storage: EthereumBroadcaster Timeouts (r:1 w:1)
-	// Storage: EthereumBroadcaster AwaitingTransactionBroadcast (r:0 w:1)
+	// Storage: EthereumBroadcaster AwaitingBroadcast (r:0 w:1)
 	// Storage: EthereumBroadcaster SignatureToBroadcastIdLookup (r:0 w:1)
 	// Storage: EthereumBroadcaster BroadcastIdToAttemptNumbers (r:0 w:1)
 	// Storage: EthereumBroadcaster ThresholdSignatureData (r:0 w:1)
@@ -99,7 +99,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumBroadcaster FailedBroadcasters (r:1 w:0)
 	// Storage: Validator HistoricalAuthorities (r:1 w:0)
 	// Storage: EthereumBroadcaster Timeouts (r:1 w:1)
-	// Storage: EthereumBroadcaster AwaitingTransactionBroadcast (r:0 w:1)
+	// Storage: EthereumBroadcaster AwaitingBroadcast (r:0 w:1)
 	fn start_next_broadcast_attempt() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
 		(157_000_000 as Weight)
@@ -123,7 +123,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 // For backwards compatibility and tests
 impl WeightInfo for () {
 	// Storage: EthereumBroadcaster Timeouts (r:1 w:0)
-	// Storage: EthereumBroadcaster AwaitingTransactionBroadcast (r:49 w:0)
+	// Storage: EthereumBroadcaster AwaitingBroadcast (r:49 w:0)
 	fn on_initialize(x: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
 		(0 as Weight)
@@ -133,7 +133,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	// Storage: AccountRoles AccountRoles (r:1 w:0)
-	// Storage: EthereumBroadcaster AwaitingTransactionBroadcast (r:1 w:0)
+	// Storage: EthereumBroadcaster AwaitingBroadcast (r:1 w:0)
 	// Storage: EthereumBroadcaster TransactionFeeDeficit (r:1 w:1)
 	// Storage: EthereumBroadcaster RefundSignerId (r:1 w:1)
 	// Storage: EthereumBroadcaster TransactionHashWhitelist (r:0 w:1)
@@ -144,7 +144,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
 	// Storage: AccountRoles AccountRoles (r:1 w:0)
-	// Storage: EthereumBroadcaster AwaitingTransactionBroadcast (r:1 w:1)
+	// Storage: EthereumBroadcaster AwaitingBroadcast (r:1 w:1)
 	// Storage: EthereumBroadcaster FailedBroadcasters (r:1 w:1)
 	// Storage: Validator CurrentAuthorities (r:1 w:0)
 	// Storage: EthereumBroadcaster BroadcastRetryQueue (r:1 w:1)
@@ -163,7 +163,7 @@ impl WeightInfo for () {
 	// Storage: Validator CurrentEpoch (r:1 w:0)
 	// Storage: Validator HistoricalAuthorities (r:1 w:0)
 	// Storage: EthereumBroadcaster Timeouts (r:1 w:1)
-	// Storage: EthereumBroadcaster AwaitingTransactionBroadcast (r:0 w:1)
+	// Storage: EthereumBroadcaster AwaitingBroadcast (r:0 w:1)
 	// Storage: EthereumBroadcaster SignatureToBroadcastIdLookup (r:0 w:1)
 	// Storage: EthereumBroadcaster BroadcastIdToAttemptNumbers (r:0 w:1)
 	// Storage: EthereumBroadcaster ThresholdSignatureData (r:0 w:1)
@@ -181,7 +181,7 @@ impl WeightInfo for () {
 	// Storage: EthereumBroadcaster FailedBroadcasters (r:1 w:0)
 	// Storage: Validator HistoricalAuthorities (r:1 w:0)
 	// Storage: EthereumBroadcaster Timeouts (r:1 w:1)
-	// Storage: EthereumBroadcaster AwaitingTransactionBroadcast (r:0 w:1)
+	// Storage: EthereumBroadcaster AwaitingBroadcast (r:0 w:1)
 	fn start_next_broadcast_attempt() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
 		(157_000_000 as Weight)

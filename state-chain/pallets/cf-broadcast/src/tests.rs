@@ -1,8 +1,8 @@
 use crate::{
-	mock::*, AwaitingTransactionBroadcast, BroadcastAttemptId, BroadcastId,
-	BroadcastIdToAttemptNumbers, BroadcastRetryQueue, Error, Event as BroadcastEvent,
-	FailedBroadcasters, Instance1, PalletOffence, RefundSignerId, SignatureToBroadcastIdLookup,
-	ThresholdSignatureData, Timeouts, TransactionFeeDeficit, TransactionHashWhitelist, WeightInfo,
+	mock::*, AwaitingBroadcast, BroadcastAttemptId, BroadcastId, BroadcastIdToAttemptNumbers,
+	BroadcastRetryQueue, Error, Event as BroadcastEvent, FailedBroadcasters, Instance1,
+	PalletOffence, RefundSignerId, SignatureToBroadcastIdLookup, ThresholdSignatureData, Timeouts,
+	TransactionFeeDeficit, TransactionHashWhitelist, WeightInfo,
 };
 
 use sp_std::collections::btree_set::BTreeSet;
@@ -152,15 +152,11 @@ fn test_broadcast_happy_path() {
 			MockUnsignedTransaction,
 			MockApiCall::default(),
 		);
-		assert!(
-			AwaitingTransactionBroadcast::<Test, Instance1>::get(broadcast_attempt_id).is_some()
-		);
+		assert!(AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id).is_some());
 
 		// CFE responds with a signed transaction to whitelist for the refund.
 		MockCfe::respond(Scenario::HappyPath);
-		assert!(
-			AwaitingTransactionBroadcast::<Test, Instance1>::get(broadcast_attempt_id).is_some()
-		);
+		assert!(AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id).is_some());
 
 		assert_ok!(Broadcaster::signature_accepted(
 			Origin::root(),
@@ -168,9 +164,7 @@ fn test_broadcast_happy_path() {
 			Default::default(),
 			ETH_TX_HASH,
 		));
-		assert!(
-			AwaitingTransactionBroadcast::<Test, Instance1>::get(broadcast_attempt_id).is_none()
-		);
+		assert!(AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id).is_none());
 
 		assert_broadcast_storage_cleaned_up(broadcast_attempt_id.broadcast_id);
 	})
@@ -244,10 +238,8 @@ fn on_idle_caps_broadcasts_when_not_enough_weight() {
 		Broadcaster::on_initialize(0);
 
 		// only the first one should have retried, incremented attempt count
-		assert!(AwaitingTransactionBroadcast::<Test, Instance1>::get(
-			broadcast_attempt_id.next_attempt()
-		)
-		.is_some());
+		assert!(AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id.next_attempt())
+			.is_some());
 		// the other should be still in the retry queue
 		let retry_queue = BroadcastRetryQueue::<Test, Instance1>::get();
 		assert_eq!(retry_queue.len(), 1);
@@ -265,7 +257,7 @@ fn test_transaction_signing_failed() {
 			MockApiCall::default(),
 		);
 		assert!(
-			AwaitingTransactionBroadcast::<Test, Instance1>::get(broadcast_attempt_id)
+			AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id)
 				.unwrap()
 				.broadcast_attempt
 				.broadcast_attempt_id
@@ -274,9 +266,7 @@ fn test_transaction_signing_failed() {
 
 		// CFE responds with a signed transaction. This moves us to the broadcast stage.
 		MockCfe::respond(Scenario::SigningFailure);
-		assert!(
-			AwaitingTransactionBroadcast::<Test, Instance1>::get(broadcast_attempt_id).is_none()
-		);
+		assert!(AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id).is_none());
 		assert_eq!(
 			BroadcastRetryQueue::<Test, Instance1>::get()
 				.into_iter()
@@ -290,10 +280,8 @@ fn test_transaction_signing_failed() {
 		Broadcaster::on_idle(0, LARGE_EXCESS_WEIGHT);
 		Broadcaster::on_initialize(0);
 
-		assert!(AwaitingTransactionBroadcast::<Test, Instance1>::get(
-			broadcast_attempt_id.next_attempt()
-		)
-		.is_some());
+		assert!(AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id.next_attempt())
+			.is_some());
 	})
 }
 
@@ -310,25 +298,21 @@ fn test_bad_signature_when_whitelisting() {
 			MockApiCall::default(),
 		);
 		let broadcast_request =
-			AwaitingTransactionBroadcast::<Test, Instance1>::get(broadcast_attempt_id).unwrap();
+			AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id).unwrap();
 		assert_eq!(broadcast_request.broadcast_attempt.broadcast_attempt_id.attempt_count, 0);
 
 		// CFE responds with an invalid transaction.
 		MockCfe::respond(Scenario::BadSigner);
 
 		// Broadcast is removed and scheduled for retry.
-		assert!(
-			AwaitingTransactionBroadcast::<Test, Instance1>::get(broadcast_attempt_id).is_none()
-		);
+		assert!(AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id).is_none());
 		assert_eq!(BroadcastRetryQueue::<Test, Instance1>::decode_len().unwrap_or_default(), 1);
 
 		// process retries
 		Broadcaster::on_idle(0, 10_000_000_000);
 
-		let next_broadcast_request = AwaitingTransactionBroadcast::<Test, Instance1>::get(
-			broadcast_attempt_id.next_attempt(),
-		)
-		.unwrap();
+		let next_broadcast_request =
+			AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id.next_attempt()).unwrap();
 
 		assert_eq!(next_broadcast_request.broadcast_attempt.broadcast_attempt_id.attempt_count, 1);
 		assert!(broadcast_request.nominee != next_broadcast_request.nominee);
@@ -384,7 +368,7 @@ fn cannot_whitelist_call_after_expired() {
 			MockApiCall::default(),
 		);
 		assert!(
-			AwaitingTransactionBroadcast::<Test, Instance1>::get(broadcast_attempt_id)
+			AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id)
 				.unwrap()
 				.broadcast_attempt
 				.broadcast_attempt_id
@@ -400,13 +384,10 @@ fn cannot_whitelist_call_after_expired() {
 		Broadcaster::on_initialize(expiry_block);
 
 		// The first one reached expiry so we start a retry
-		assert!(
-			AwaitingTransactionBroadcast::<Test, Instance1>::get(broadcast_attempt_id).is_none()
-		);
+		assert!(AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id).is_none());
 		let next_broadcast_attempt_id = broadcast_attempt_id.next_attempt();
 		let broadcast_request =
-			AwaitingTransactionBroadcast::<Test, Instance1>::get(next_broadcast_attempt_id)
-				.unwrap();
+			AwaitingBroadcast::<Test, Instance1>::get(next_broadcast_attempt_id).unwrap();
 		assert_eq!(broadcast_request.broadcast_attempt.broadcast_attempt_id.attempt_count, 1);
 
 		// This is a little confusing. Because we don't progress in blocks. i.e.
@@ -470,7 +451,7 @@ fn signature_accepted_of_whitelisted_tx_hash_results_in_refund_for_whitelister()
 			MockApiCall::default(),
 		);
 		let tx_sig_request =
-			AwaitingTransactionBroadcast::<Test, Instance1>::get(broadcast_attempt_id).unwrap();
+			AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id).unwrap();
 
 		let signed_tx = tx_sig_request.broadcast_attempt.unsigned_tx.signed(Validity::Valid);
 		assert_ok!(Broadcaster::whitelist_transaction_for_refund(
@@ -523,7 +504,7 @@ fn signature_accepted_of_non_whitelisted_tx_hash_results_in_no_refund() {
 			MockApiCall::default(),
 		);
 		let tx_sig_request =
-			AwaitingTransactionBroadcast::<Test, Instance1>::get(broadcast_attempt_id).unwrap();
+			AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id).unwrap();
 
 		let signed_tx = tx_sig_request.broadcast_attempt.unsigned_tx.signed(Validity::Valid);
 		assert_ok!(Broadcaster::whitelist_transaction_for_refund(
@@ -582,7 +563,7 @@ fn test_signature_request_expiry() {
 		);
 		let first_broadcast_id = broadcast_attempt_id.broadcast_id;
 		assert!(
-			AwaitingTransactionBroadcast::<Test, Instance1>::get(broadcast_attempt_id)
+			AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id)
 				.unwrap()
 				.broadcast_attempt
 				.broadcast_attempt_id
@@ -595,7 +576,7 @@ fn test_signature_request_expiry() {
 		MockCfe::respond(Scenario::Timeout);
 
 		assert!(
-			AwaitingTransactionBroadcast::<Test, Instance1>::get(broadcast_attempt_id)
+			AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id)
 				.unwrap()
 				.broadcast_attempt
 				.broadcast_attempt_id
@@ -609,8 +590,7 @@ fn test_signature_request_expiry() {
 
 		let check_end_state = || {
 			// old attempt has expired, but the data still exists
-			assert!(AwaitingTransactionBroadcast::<Test, Instance1>::get(broadcast_attempt_id)
-				.is_none());
+			assert!(AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id).is_none());
 
 			assert_eq!(
 				TIMEDOUT_ATTEMPTS.with(|cell| *cell.borrow().first().unwrap()),
@@ -619,10 +599,9 @@ fn test_signature_request_expiry() {
 
 			// New attempt is live with same broadcast_id and incremented attempt_count.
 			assert!({
-				let new_attempt = AwaitingTransactionBroadcast::<Test, Instance1>::get(
-					broadcast_attempt_id.next_attempt(),
-				)
-				.unwrap();
+				let new_attempt =
+					AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id.next_attempt())
+						.unwrap();
 				new_attempt.broadcast_attempt.broadcast_attempt_id.attempt_count == 1 &&
 					new_attempt.broadcast_attempt.broadcast_attempt_id.broadcast_id ==
 						first_broadcast_id
@@ -668,10 +647,9 @@ fn test_transmission_request_expiry() {
 			);
 			// New attempt is live with same broadcast_id and incremented attempt_count.
 			assert!({
-				let new_attempt = AwaitingTransactionBroadcast::<Test, Instance1>::get(
-					broadcast_attempt_id.next_attempt(),
-				)
-				.unwrap();
+				let new_attempt =
+					AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id.next_attempt())
+						.unwrap();
 				new_attempt.broadcast_attempt.broadcast_attempt_id.attempt_count == 1 &&
 					new_attempt.broadcast_attempt.broadcast_attempt_id.broadcast_id ==
 						first_broadcast_id
@@ -702,9 +680,7 @@ fn re_request_threshold_signature() {
 			MockThresholdSigner::<MockEthereum, Call>::signature_result(0),
 			AsyncResult::Void
 		);
-		assert!(
-			AwaitingTransactionBroadcast::<Test, Instance1>::get(broadcast_attempt_id).is_some()
-		);
+		assert!(AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id).is_some());
 		assert_eq!(
 			BroadcastIdToAttemptNumbers::<Test, Instance1>::get(broadcast_attempt_id.broadcast_id)
 				.unwrap(),
@@ -714,9 +690,7 @@ fn re_request_threshold_signature() {
 		MockKeyProvider::set_valid(false);
 		Broadcaster::on_initialize(BROADCAST_EXPIRY_BLOCKS + 1);
 		// Expect the broadcast to be deleted
-		assert!(
-			AwaitingTransactionBroadcast::<Test, Instance1>::get(broadcast_attempt_id).is_none()
-		);
+		assert!(AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id).is_none());
 		// Verify storage has been deleted
 		assert!(SignatureToBroadcastIdLookup::<Test, Instance1>::get(
 			MockThresholdSignature::default()

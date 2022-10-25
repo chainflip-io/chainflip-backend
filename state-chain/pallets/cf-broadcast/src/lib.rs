@@ -195,7 +195,7 @@ pub mod pallet {
 
 	/// Live transaction broadcast requests.
 	#[pallet::storage]
-	pub type AwaitingTransactionBroadcast<T: Config<I>, I: 'static = ()> = StorageMap<
+	pub type AwaitingBroadcast<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
 		Twox64Concat,
 		BroadcastAttemptId,
@@ -355,7 +355,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let extrinsic_signer = T::AccountRoleRegistry::ensure_validator(origin)?;
 
-			let signing_attempt = AwaitingTransactionBroadcast::<T, I>::get(broadcast_attempt_id)
+			let signing_attempt = AwaitingBroadcast::<T, I>::get(broadcast_attempt_id)
 				.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?;
 
 			ensure!(
@@ -420,7 +420,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let extrinsic_signer = T::AccountRoleRegistry::ensure_validator(origin)?.into();
 
-			let signing_attempt = AwaitingTransactionBroadcast::<T, I>::get(broadcast_attempt_id)
+			let signing_attempt = AwaitingBroadcast::<T, I>::get(broadcast_attempt_id)
 				.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?;
 
 			// Only the nominated signer can say they failed to sign
@@ -512,10 +512,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		for attempt_count in
 			BroadcastIdToAttemptNumbers::<T, I>::take(broadcast_id).unwrap_or_default()
 		{
-			AwaitingTransactionBroadcast::<T, I>::remove(BroadcastAttemptId {
-				broadcast_id,
-				attempt_count,
-			});
+			AwaitingBroadcast::<T, I>::remove(BroadcastAttemptId { broadcast_id, attempt_count });
 		}
 		FailedBroadcasters::<T, I>::remove(broadcast_id);
 
@@ -527,9 +524,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn take_and_clean_up_broadcast_attempt(
 		broadcast_attempt_id: BroadcastAttemptId,
 	) -> Option<BroadcastAttempt<T, I>> {
-		if let Some(signing_attempt) =
-			AwaitingTransactionBroadcast::<T, I>::take(broadcast_attempt_id)
-		{
+		if let Some(signing_attempt) = AwaitingBroadcast::<T, I>::take(broadcast_attempt_id) {
 			assert_eq!(
 				signing_attempt.broadcast_attempt.broadcast_attempt_id,
 				broadcast_attempt_id,
@@ -622,7 +617,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				.unwrap_or_default(),
 		) {
 			// write, or overwrite the old entry if it exists (on a retry)
-			AwaitingTransactionBroadcast::<T, I>::insert(
+			AwaitingBroadcast::<T, I>::insert(
 				broadcast_attempt.broadcast_attempt_id,
 				TransactionSigningAttempt {
 					broadcast_attempt: BroadcastAttempt::<T, I> {
