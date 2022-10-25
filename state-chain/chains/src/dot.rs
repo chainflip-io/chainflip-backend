@@ -843,6 +843,8 @@ mod test_polkadot_extrinsics {
 			.insert_threshold_signature_payload()
 			.expect("This shouldn't fail");
 
+		println!("SignedPayload: {:?}", extrinsic_handler.signature_payload.clone().unwrap());
+
 		let signed_extrinsic: Option<PolkadotUncheckedExtrinsic> = extrinsic_handler
 			.insert_signature_and_get_signed_unchecked_extrinsic(
 				keypair_1.sign(
