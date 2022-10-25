@@ -12,13 +12,15 @@ mod tests;
 pub mod weights;
 pub use weights::WeightInfo;
 
+mod auction_resolver;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 mod rotation_state;
 
+pub use auction_resolver::*;
 use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex};
 use cf_traits::{
-	offence_reporting::OffenceReporter, AsyncResult, Auctioneer, Bid, BidderProvider, Bonding,
+	offence_reporting::OffenceReporter, AsyncResult, AuctionOutcome, Bid, BidderProvider, Bonding,
 	Chainflip, EmergencyRotation, EpochInfo, EpochTransitionHandler, ExecutionCondition,
 	HistoricalEpoch, MissedAuthorshipSlots, QualifyNode, ReputationResetter, StakeHandler,
 	SystemStateInfo, VaultRotator,
@@ -141,9 +143,6 @@ pub mod pallet {
 		#[pallet::constant]
 		type MinEpoch: Get<<Self as frame_system::Config>::BlockNumber>;
 
-		/// Resolves auctions.
-		type Auctioneer: Auctioneer<Self>;
-
 		/// The lifecycle of a vault rotation
 		type VaultRotator: VaultRotator<ValidatorId = ValidatorIdOf<Self>>;
 
@@ -160,7 +159,7 @@ pub mod pallet {
 		>;
 
 		/// Criteria that need to be fulfilled to qualify as a validator node (authority or backup).
-		type ValidatorQualification: QualifyNode<ValidatorId = ValidatorIdOf<Self>>;
+		type AuctionQualification: QualifyNode<ValidatorId = ValidatorIdOf<Self>>;
 
 		/// For reporting missed authorship slots.
 		type OffenceReporter: OffenceReporter<
@@ -181,6 +180,131 @@ pub mod pallet {
 		/// Benchmark weights.
 		type ValidatorWeightInfo: WeightInfo;
 	}
+
+	/// Percentage of epoch we allow claims.
+	#[pallet::storage]
+	#[pallet::getter(fn claim_period_as_percentage)]
+	pub type ClaimPeriodAsPercentage<T: Config> = StorageValue<_, Percentage, ValueQuery>;
+
+	/// The starting block number for the current epoch.
+	#[pallet::storage]
+	#[pallet::getter(fn current_epoch_started_at)]
+	pub type CurrentEpochStartedAt<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
+
+	/// The duration of an epoch in blocks.
+	#[pallet::storage]
+	#[pallet::getter(fn blocks_per_epoch)]
+	pub type BlocksPerEpoch<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
+
+	/// Current epoch index.
+	#[pallet::storage]
+	#[pallet::getter(fn current_epoch)]
+	pub type CurrentEpoch<T: Config> = StorageValue<_, EpochIndex, ValueQuery>;
+
+	/// Defines a unique index for each authority for each epoch.
+	#[pallet::storage]
+	#[pallet::getter(fn authority_index)]
+	pub type AuthorityIndex<T: Config> = StorageDoubleMap<
+		_,
+		Twox64Concat,
+		EpochIndex,
+		Blake2_128Concat,
+		ValidatorIdOf<T>,
+		AuthorityCount,
+	>;
+
+	/// Track epochs and their associated authority count.
+	#[pallet::storage]
+	#[pallet::getter(fn epoch_authority_count)]
+	pub type EpochAuthorityCount<T: Config> =
+		StorageMap<_, Twox64Concat, EpochIndex, AuthorityCount>;
+
+	/// The rotation phase we are currently at.
+	#[pallet::storage]
+	#[pallet::getter(fn current_rotation_phase)]
+	pub type CurrentRotationPhase<T: Config> = StorageValue<_, RotationPhase<T>, ValueQuery>;
+
+	/// A list of the current authorites.
+	#[pallet::storage]
+	pub type CurrentAuthorities<T: Config> = StorageValue<_, Vec<ValidatorIdOf<T>>, ValueQuery>;
+
+	/// Vanity names of the validators stored as a Map with the current validator IDs as key.
+	#[pallet::storage]
+	#[pallet::getter(fn vanity_names)]
+	pub type VanityNames<T: Config> =
+		StorageValue<_, BTreeMap<T::AccountId, VanityName>, ValueQuery>;
+
+	/// The bond of the current epoch.
+	#[pallet::storage]
+	#[pallet::getter(fn bond)]
+	pub type Bond<T: Config> = StorageValue<_, T::Amount, ValueQuery>;
+
+	/// Account to Peer Mapping.
+	#[pallet::storage]
+	#[pallet::getter(fn node_peer_id)]
+	pub type AccountPeerMapping<T: Config> =
+		StorageMap<_, Blake2_128Concat, T::AccountId, (Ed25519PublicKey, Port, Ipv6Addr)>;
+
+	/// Peers that are associated with account ids.
+	#[pallet::storage]
+	#[pallet::getter(fn mapped_peer)]
+	pub type MappedPeers<T: Config> = StorageMap<_, Blake2_128Concat, Ed25519PublicKey, ()>;
+
+	/// Node CFE version.
+	#[pallet::storage]
+	#[pallet::getter(fn node_cfe_version)]
+	pub type NodeCFEVersion<T: Config> =
+		StorageMap<_, Blake2_128Concat, ValidatorIdOf<T>, Version, ValueQuery>;
+
+	/// The last expired epoch index.
+	#[pallet::storage]
+	pub type LastExpiredEpoch<T: Config> = StorageValue<_, EpochIndex, ValueQuery>;
+
+	/// A map storing the expiry block numbers for old epochs.
+	#[pallet::storage]
+	pub type EpochExpiries<T: Config> =
+		StorageMap<_, Twox64Concat, T::BlockNumber, EpochIndex, OptionQuery>;
+
+	/// A map between an epoch and an vector of authorities (participating in this epoch).
+	#[pallet::storage]
+	pub type HistoricalAuthorities<T: Config> =
+		StorageMap<_, Twox64Concat, EpochIndex, Vec<ValidatorIdOf<T>>, ValueQuery>;
+
+	/// A map between an epoch and the bonded balance (MAB)
+	#[pallet::storage]
+	pub type HistoricalBonds<T: Config> =
+		StorageMap<_, Twox64Concat, EpochIndex, T::Amount, ValueQuery>;
+
+	/// A map between an authority and a set of all the active epochs a node was an authority in
+	#[pallet::storage]
+	pub type HistoricalActiveEpochs<T: Config> =
+		StorageMap<_, Twox64Concat, ValidatorIdOf<T>, Vec<EpochIndex>, ValueQuery>;
+
+	/// Counter for generating unique ceremony ids.
+	#[pallet::storage]
+	#[pallet::getter(fn ceremony_id_counter)]
+	pub type CeremonyIdCounter<T> = StorageValue<_, CeremonyId, ValueQuery>;
+
+	/// Backups, nodes who are not in the authority set, but are staked.
+	#[pallet::storage]
+	#[pallet::getter(fn backups)]
+	pub type Backups<T: Config> = StorageValue<_, BackupMap<T>, ValueQuery>;
+
+	/// Determines the number of backup nodes who receive rewards as a percentage
+	/// of the authority count.
+	#[pallet::storage]
+	#[pallet::getter(fn backup_reward_node_percentage)]
+	pub type BackupRewardNodePercentage<T> = StorageValue<_, Percentage, ValueQuery>;
+
+	/// The absolute minimum number of authority nodes for the next epoch.
+	#[pallet::storage]
+	#[pallet::getter(fn authority_set_min_size)]
+	pub type AuthoritySetMinSize<T> = StorageValue<_, AuthorityCount, ValueQuery>;
+
+	/// Auction parameters.
+	#[pallet::storage]
+	#[pallet::getter(fn auction_parameters)]
+	pub(super) type AuctionParameters<T: Config> = StorageValue<_, SetSizeParameters, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
@@ -213,7 +337,11 @@ pub mod pallet {
 		/// The backup node percentage has been updated \[percentage\].
 		BackupRewardNodePercentageUpdated(Percentage),
 		/// The minimum authority set size has been updated.
-		AuthoritySetMinSizeUpdated { min_size: u8 },
+		AuthoritySetMinSizeUpdated { min_size: AuthorityCount },
+		/// An auction has a set of winners \[winners, bond\]
+		AuctionCompleted(Vec<ValidatorIdOf<T>>, T::Amount),
+		/// The auction parameters have been changed \[new_parameters\]
+		AuctionParametersChanged(SetSizeParameters),
 	}
 
 	#[pallet::error]
@@ -234,6 +362,12 @@ pub mod pallet {
 		InvalidCharactersInName,
 		/// Invalid minimum authority set size.
 		InvalidAuthoritySetMinSize,
+		/// Auction parameters are invalid.
+		InvalidAuctionParameters,
+		/// The dynamic set size ranges are inconsistent.
+		InconsistentRanges,
+		/// Not enough bidders were available to resolve the auction.
+		NotEnoughBidders,
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -621,11 +755,11 @@ pub mod pallet {
 		#[pallet::weight(T::ValidatorWeightInfo::set_authority_set_min_size())]
 		pub fn set_authority_set_min_size(
 			origin: OriginFor<T>,
-			min_size: u8,
+			min_size: AuthorityCount,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			ensure!(
-				u32::from(min_size) <= <Self as EpochInfo>::current_authority_count(),
+				min_size <= <Self as EpochInfo>::current_authority_count(),
 				Error::<T>::InvalidAuthoritySetMinSize
 			);
 
@@ -634,127 +768,29 @@ pub mod pallet {
 			Self::deposit_event(Event::AuthoritySetMinSizeUpdated { min_size });
 			Ok(().into())
 		}
+
+		/// Sets the auction parameters.
+		///
+		/// The dispatch origin of this function must be Governance.
+		///
+		/// ## Events
+		///
+		/// - [AuctionParametersChanged](Event::AuctionParametersChanged)
+		///
+		/// ## Errors
+		///
+		/// - [InvalidAuctionParameters](Error::InvalidAuctionParameters)
+		#[pallet::weight(T::ValidatorWeightInfo::set_auction_parameters())]
+		pub fn set_auction_parameters(
+			origin: OriginFor<T>,
+			parameters: SetSizeParameters,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureGovernance::ensure_origin(origin)?;
+			Self::try_update_auction_parameters(parameters)?;
+			Self::deposit_event(Event::AuctionParametersChanged(parameters));
+			Ok(().into())
+		}
 	}
-
-	/// Percentage of epoch we allow claims.
-	#[pallet::storage]
-	#[pallet::getter(fn claim_period_as_percentage)]
-	pub type ClaimPeriodAsPercentage<T: Config> = StorageValue<_, Percentage, ValueQuery>;
-
-	/// The starting block number for the current epoch.
-	#[pallet::storage]
-	#[pallet::getter(fn current_epoch_started_at)]
-	pub type CurrentEpochStartedAt<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
-
-	/// The duration of an epoch in blocks.
-	#[pallet::storage]
-	#[pallet::getter(fn blocks_per_epoch)]
-	pub type BlocksPerEpoch<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
-
-	/// Current epoch index.
-	#[pallet::storage]
-	#[pallet::getter(fn current_epoch)]
-	pub type CurrentEpoch<T: Config> = StorageValue<_, EpochIndex, ValueQuery>;
-
-	/// Defines a unique index for each authority for each epoch.
-	#[pallet::storage]
-	#[pallet::getter(fn authority_index)]
-	pub type AuthorityIndex<T: Config> = StorageDoubleMap<
-		_,
-		Twox64Concat,
-		EpochIndex,
-		Blake2_128Concat,
-		ValidatorIdOf<T>,
-		AuthorityCount,
-	>;
-
-	/// Track epochs and their associated authority count.
-	#[pallet::storage]
-	#[pallet::getter(fn epoch_authority_count)]
-	pub type EpochAuthorityCount<T: Config> =
-		StorageMap<_, Twox64Concat, EpochIndex, AuthorityCount>;
-
-	/// The rotation phase we are currently at.
-	#[pallet::storage]
-	#[pallet::getter(fn current_rotation_phase)]
-	pub type CurrentRotationPhase<T: Config> = StorageValue<_, RotationPhase<T>, ValueQuery>;
-
-	/// A list of the current authorites.
-	#[pallet::storage]
-	pub type CurrentAuthorities<T: Config> = StorageValue<_, Vec<ValidatorIdOf<T>>, ValueQuery>;
-
-	/// Vanity names of the validators stored as a Map with the current validator IDs as key.
-	#[pallet::storage]
-	#[pallet::getter(fn vanity_names)]
-	pub type VanityNames<T: Config> =
-		StorageValue<_, BTreeMap<T::AccountId, VanityName>, ValueQuery>;
-
-	/// The bond of the current epoch.
-	#[pallet::storage]
-	#[pallet::getter(fn bond)]
-	pub type Bond<T: Config> = StorageValue<_, T::Amount, ValueQuery>;
-
-	/// Account to Peer Mapping.
-	#[pallet::storage]
-	#[pallet::getter(fn node_peer_id)]
-	pub type AccountPeerMapping<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::AccountId, (Ed25519PublicKey, Port, Ipv6Addr)>;
-
-	/// Peers that are associated with account ids.
-	#[pallet::storage]
-	#[pallet::getter(fn mapped_peer)]
-	pub type MappedPeers<T: Config> = StorageMap<_, Blake2_128Concat, Ed25519PublicKey, ()>;
-
-	/// Node CFE version.
-	#[pallet::storage]
-	#[pallet::getter(fn node_cfe_version)]
-	pub type NodeCFEVersion<T: Config> =
-		StorageMap<_, Blake2_128Concat, ValidatorIdOf<T>, Version, ValueQuery>;
-
-	/// The last expired epoch index.
-	#[pallet::storage]
-	pub type LastExpiredEpoch<T: Config> = StorageValue<_, EpochIndex, ValueQuery>;
-
-	/// A map storing the expiry block numbers for old epochs.
-	#[pallet::storage]
-	pub type EpochExpiries<T: Config> =
-		StorageMap<_, Twox64Concat, T::BlockNumber, EpochIndex, OptionQuery>;
-
-	/// A map between an epoch and an vector of authorities (participating in this epoch).
-	#[pallet::storage]
-	pub type HistoricalAuthorities<T: Config> =
-		StorageMap<_, Twox64Concat, EpochIndex, Vec<ValidatorIdOf<T>>, ValueQuery>;
-
-	/// A map between an epoch and the bonded balance (MAB)
-	#[pallet::storage]
-	pub type HistoricalBonds<T: Config> =
-		StorageMap<_, Twox64Concat, EpochIndex, T::Amount, ValueQuery>;
-
-	/// A map between an authority and a set of all the active epochs a node was an authority in
-	#[pallet::storage]
-	pub type HistoricalActiveEpochs<T: Config> =
-		StorageMap<_, Twox64Concat, ValidatorIdOf<T>, Vec<EpochIndex>, ValueQuery>;
-
-	/// Counter for generating unique ceremony ids.
-	#[pallet::storage]
-	#[pallet::getter(fn ceremony_id_counter)]
-	pub type CeremonyIdCounter<T> = StorageValue<_, CeremonyId, ValueQuery>;
-
-	/// Backups, nodes who are not in the authority set, but are staked.
-	#[pallet::storage]
-	#[pallet::getter(fn backups)]
-	pub type Backups<T: Config> = StorageValue<_, BackupMap<T>, ValueQuery>;
-
-	/// Determines the number of backup nodes who receive rewards as a percentage
-	/// of the authority count.
-	#[pallet::storage]
-	#[pallet::getter(fn backup_reward_node_percentage)]
-	pub type BackupRewardNodePercentage<T> = StorageValue<_, Percentage, ValueQuery>;
-
-	/// The absolute minimum number of authority nodes for the next epoch.
-	#[pallet::storage]
-	#[pallet::getter(fn authority_set_min_size)]
-	pub type AuthoritySetMinSize<T> = StorageValue<_, u8, ValueQuery>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
@@ -764,7 +800,10 @@ pub mod pallet {
 		pub bond: T::Amount,
 		pub claim_period_as_percentage: Percentage,
 		pub backup_reward_node_percentage: Percentage,
-		pub authority_set_min_size: u8,
+		pub authority_set_min_size: AuthorityCount,
+		pub min_size: AuthorityCount,
+		pub max_size: AuthorityCount,
+		pub max_expansion: AuthorityCount,
 	}
 
 	#[cfg(feature = "std")]
@@ -778,6 +817,9 @@ pub mod pallet {
 				claim_period_as_percentage: Zero::zero(),
 				backup_reward_node_percentage: Zero::zero(),
 				authority_set_min_size: Zero::zero(),
+				min_size: 3,
+				max_size: 15,
+				max_expansion: 5,
 			}
 		}
 	}
@@ -787,13 +829,20 @@ pub mod pallet {
 		fn build(&self) {
 			LastExpiredEpoch::<T>::set(Default::default());
 			BlocksPerEpoch::<T>::set(self.blocks_per_epoch);
-			AuthoritySetMinSize::<T>::set(self.authority_set_min_size);
 			CurrentRotationPhase::<T>::set(RotationPhase::Idle);
 			ClaimPeriodAsPercentage::<T>::set(self.claim_period_as_percentage);
 			BackupRewardNodePercentage::<T>::set(self.backup_reward_node_percentage);
+			AuthoritySetMinSize::<T>::set(self.authority_set_min_size);
 
 			const GENESIS_EPOCH: u32 = 1;
 			CurrentEpoch::<T>::set(GENESIS_EPOCH);
+
+			Pallet::<T>::try_update_auction_parameters(SetSizeParameters {
+				min_size: self.min_size,
+				max_size: self.max_size,
+				max_expansion: self.max_expansion,
+			})
+			.expect("we should provide valid auction parameters at genesis");
 
 			Pallet::<T>::initialise_new_epoch(
 				GENESIS_EPOCH,
@@ -918,13 +967,14 @@ impl<T: Config> Pallet<T> {
 			new_epoch,
 			&new_authorities,
 			rotation_state.bond,
-			T::BidderProvider::get_bidders()
-				.into_iter()
-				.filter(|bid| {
-					!new_authorities_lookup.contains(&bid.bidder_id) &&
-						T::ValidatorQualification::is_qualified(&bid.bidder_id)
+			Self::qualified_bidders()
+				.filter_map(|Bid { bidder_id, amount }| {
+					if !new_authorities_lookup.contains(&bidder_id) {
+						Some((bidder_id, amount))
+					} else {
+						None
+					}
 				})
-				.map(|Bid { bidder_id, amount }| (bidder_id, amount))
 				.collect(),
 		);
 
@@ -1001,8 +1051,18 @@ impl<T: Config> Pallet<T> {
 			return T::ValidatorWeightInfo::start_authority_rotation_in_maintenance_mode()
 		}
 		log::info!(target: "cf-validator", "Starting rotation");
-		match T::Auctioneer::resolve_auction() {
+
+		match SetSizeMaximisingAuctionResolver::try_new(
+			T::EpochInfo::current_authority_count(),
+			AuctionParameters::<T>::get(),
+		)
+		.and_then(|resolver| resolver.resolve_auction(Self::qualified_bidders().collect()))
+		{
 			Ok(auction_outcome) => {
+				Self::deposit_event(Event::AuctionCompleted(
+					auction_outcome.winners.clone(),
+					auction_outcome.bond,
+				));
 				debug_assert!(!auction_outcome.winners.is_empty());
 				debug_assert!({
 					let bids = T::BidderProvider::get_bidders()
@@ -1033,7 +1093,7 @@ impl<T: Config> Pallet<T> {
 				weight
 			},
 			Err(e) => {
-				log::warn!(target: "cf-validator", "auction failed due to error: {:?}", e.into());
+				log::warn!(target: "cf-validator", "auction failed due to error: {:?}", e);
 				// Use an approximation again - see comment above.
 				T::ValidatorWeightInfo::start_authority_rotation({
 					Self::current_authority_count() + Self::backup_reward_nodes_limit() as u32
@@ -1044,19 +1104,20 @@ impl<T: Config> Pallet<T> {
 
 	fn start_vault_rotation(rotation_state: RuntimeRotationState<T>) {
 		let candidates: BTreeSet<_> = rotation_state.authority_candidates();
-		if candidates.len() < AuthoritySetMinSize::<T>::get().into() {
+		let SetSizeParameters { min_size, .. } = AuctionParameters::<T>::get();
+		Self::set_rotation_phase(if (candidates.len() as u32) < min_size {
 			log::warn!(
 				target: "cf-validator",
 				"Only {:?} authority candidates available, not enough to satisfy the minimum set size of {:?}. - aborting rotation.",
 				candidates.len(),
-				AuthoritySetMinSize::<T>::get()
+				min_size
 			);
-			Self::set_rotation_phase(RotationPhase::Idle);
+			RotationPhase::Idle
 		} else {
 			T::VaultRotator::start_vault_rotation(candidates);
 			log::info!(target: "cf-validator", "Vault rotation initiated.");
-			Self::set_rotation_phase(RotationPhase::VaultsRotating(rotation_state));
-		}
+			RotationPhase::VaultsRotating(rotation_state)
+		})
 	}
 
 	/// Returns the number of backup nodes eligible for rewards
@@ -1071,7 +1132,7 @@ impl<T: Config> Pallet<T> {
 	) -> impl Iterator<Item = Bid<ValidatorIdOf<T>, <T as Chainflip>::Amount>> {
 		let mut backups: Vec<_> = Backups::<T>::get()
 			.into_iter()
-			.filter(|(bidder_id, _)| T::ValidatorQualification::is_qualified(bidder_id))
+			.filter(|(bidder_id, _)| T::AuctionQualification::is_qualified(bidder_id))
 			.collect();
 
 		let limit = Self::backup_reward_nodes_limit();
@@ -1108,6 +1169,21 @@ impl<T: Config> Pallet<T> {
 		}
 
 		T::ValidatorWeightInfo::missed_authorship_slots(num_missed_slots)
+	}
+
+	fn try_update_auction_parameters(new_parameters: SetSizeParameters) -> Result<(), Error<T>> {
+		SetSizeMaximisingAuctionResolver::try_new(
+			T::EpochInfo::current_authority_count(),
+			new_parameters,
+		)?;
+		AuctionParameters::<T>::put(new_parameters);
+		Ok(())
+	}
+
+	fn qualified_bidders() -> impl Iterator<Item = Bid<ValidatorIdOf<T>, T::Amount>> {
+		T::BidderProvider::get_bidders()
+			.into_iter()
+			.filter(|bid| T::AuctionQualification::is_qualified(&bid.bidder_id))
 	}
 }
 

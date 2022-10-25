@@ -140,12 +140,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e22d1f4b888c298a027c99dc9048015fac177587de20fc30232a057dfbe24a21"
 
 [[package]]
-name = "assert_matches"
-version = "1.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b34d609dfbaf33d6889b2b7106d3ca345eacad44200913df5ba02bfd31d2ba9"
-
-[[package]]
 name = "async-channel"
 version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -763,8 +757,7 @@ dependencies = [
  "libsecp256k1",
  "pallet-aura",
  "pallet-authorship",
- "pallet-cf-account-types",
- "pallet-cf-auction",
+ "pallet-cf-account-roles",
  "pallet-cf-broadcast",
  "pallet-cf-emissions",
  "pallet-cf-environment",
@@ -932,7 +925,7 @@ dependencies = [
  "futures 0.3.21",
  "hex",
  "jsonrpsee",
- "pallet-cf-account-types",
+ "pallet-cf-account-roles",
  "pallet-cf-environment",
  "pallet-cf-governance",
  "pallet-cf-staking",
@@ -993,7 +986,6 @@ dependencies = [
  "num-bigint 0.4.3",
  "num-derive",
  "num-traits",
- "pallet-cf-auction",
  "pallet-cf-broadcast",
  "pallet-cf-chain-tracking",
  "pallet-cf-environment",
@@ -5130,7 +5122,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-cf-account-types"
+name = "pallet-cf-account-roles"
 version = "0.1.0"
 dependencies = [
  "cf-primitives",
@@ -5140,28 +5132,6 @@ dependencies = [
  "frame-support",
  "frame-system",
  "log 0.4.17",
- "parity-scale-codec",
- "scale-info",
- "sp-core",
- "sp-io",
- "sp-runtime",
- "sp-std",
-]
-
-[[package]]
-name = "pallet-cf-auction"
-version = "0.1.0"
-dependencies = [
- "assert_matches",
- "cf-primitives",
- "cf-runtime-upgrade-utilities",
- "cf-test-utilities",
- "cf-traits",
- "frame-benchmarking",
- "frame-support",
- "frame-system",
- "log 0.4.17",
- "nanorand",
  "parity-scale-codec",
  "scale-info",
  "sp-core",
@@ -5330,7 +5300,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "pallet-cf-account-types",
+ "pallet-cf-account-roles",
  "pallet-cf-ingress",
  "parity-scale-codec",
  "quickcheck",
@@ -5377,7 +5347,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "log 0.4.17",
- "pallet-cf-account-types",
+ "pallet-cf-account-roles",
  "pallet-cf-flip",
  "parity-scale-codec",
  "scale-info",
@@ -5459,6 +5429,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "log 0.4.17",
+ "nanorand",
  "pallet-cf-reputation",
  "pallet-cf-staking",
  "pallet-cf-vaults",
@@ -9050,8 +9021,7 @@ dependencies = [
  "nanorand",
  "pallet-aura",
  "pallet-authorship",
- "pallet-cf-account-types",
- "pallet-cf-auction",
+ "pallet-cf-account-roles",
  "pallet-cf-broadcast",
  "pallet-cf-chain-tracking",
  "pallet-cf-egress",

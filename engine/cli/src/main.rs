@@ -283,7 +283,7 @@ async fn activate_account(settings: &CLISettings, logger: &slog::Logger) -> Resu
 		connect_to_state_chain(&settings.state_chain, false, logger).await?;
 
 	match state_chain_client
-        .get_storage_map::<pallet_cf_account_types::AccountRoles<state_chain_runtime::Runtime>>(
+        .get_storage_map::<pallet_cf_account_roles::AccountRoles<state_chain_runtime::Runtime>>(
             latest_block_hash,
             &state_chain_client.our_account_id,
         )
@@ -351,7 +351,7 @@ async fn register_account_role(
 
 	let tx_hash = state_chain_client
 		.submit_signed_extrinsic(
-			pallet_cf_account_types::Call::register_account_role { role },
+			pallet_cf_account_roles::Call::register_account_role { role },
 			logger,
 		)
 		.await

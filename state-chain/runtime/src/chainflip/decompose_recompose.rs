@@ -121,7 +121,7 @@ mod tests {
 			);
 
 			for (index, authority_id) in authorities.into_iter().enumerate() {
-				pallet_cf_account_types::AccountRoles::<Runtime>::insert(
+				pallet_cf_account_roles::AccountRoles::<Runtime>::insert(
 					&authority_id,
 					AccountRole::Validator,
 				);

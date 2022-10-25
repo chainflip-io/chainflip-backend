@@ -1,4 +1,4 @@
-use crate::{self as pallet_cf_account_types, Config};
+use crate::{self as pallet_cf_account_roles, Config};
 use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
 	Chainflip,
@@ -21,7 +21,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system,
-		MockAccountTypes: pallet_cf_account_types,
+		MockAccountRoles: pallet_cf_account_roles,
 	}
 );
 
@@ -44,8 +44,8 @@ impl frame_system::Config for Test {
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = ();
-	type OnNewAccount = MockAccountTypes;
-	type OnKilledAccount = MockAccountTypes;
+	type OnNewAccount = MockAccountRoles;
+	type OnKilledAccount = MockAccountRoles;
 	type SystemWeightInfo = ();
 	type SS58Prefix = ConstU16<42>;
 	type OnSetCode = ();
