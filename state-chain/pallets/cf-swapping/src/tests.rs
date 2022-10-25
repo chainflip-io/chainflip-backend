@@ -3,10 +3,9 @@ use cf_primitives::{Asset, AssetAmount, ForeignChain, ForeignChainAddress, Forei
 use cf_traits::SwapIntentHandler;
 use frame_support::assert_ok;
 
-use crate::Swap;
 use frame_support::traits::Hooks;
 
-fn insert_swaps(number_of_swaps: usize) -> Vec<Swap> {
+fn insert_swaps(number_of_swaps: usize) {
 	for i in 0..number_of_swaps {
 		<Pallet<Test> as SwapIntentHandler>::schedule_swap(
 			Asset::Eth,
@@ -19,7 +18,6 @@ fn insert_swaps(number_of_swaps: usize) -> Vec<Swap> {
 	}
 	let swaps = SwapQueue::<Test>::get();
 	assert_eq!(swaps.len(), number_of_swaps);
-	swaps
 }
 
 #[test]
@@ -36,16 +34,19 @@ fn register_swap_intent_success_with_valid_parameters() {
 }
 
 #[test]
-fn number_of_swaps_processed_limited_by_weight() {
+fn process_all_swaps() {
 	new_test_ext().execute_with(|| {
 		const NUMBER_OF_SWAPS: usize = 10;
 		insert_swaps(NUMBER_OF_SWAPS);
-		// Expect that we process all swaps if we have enough weight
 		Swapping::on_idle(1, <() as WeightInfo>::execute_swap() * (NUMBER_OF_SWAPS as u64));
 		assert_eq!(SwapQueue::<Test>::get().len(), 0);
-		// Expect that we only process 8 of 10 swaps if we have limited weight for that
-		MockEgressApi::clear();
-		insert_swaps(NUMBER_OF_SWAPS);
+	});
+}
+
+#[test]
+fn number_of_swaps_processed_limited_by_weight() {
+	new_test_ext().execute_with(|| {
+		insert_swaps(10);
 		Swapping::on_idle(1, <() as WeightInfo>::execute_swap() * 8);
 		assert_eq!(SwapQueue::<Test>::get().len(), 2);
 		// Expect Swaps to be egressed in the right order
