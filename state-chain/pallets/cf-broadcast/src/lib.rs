@@ -661,15 +661,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			failed_broadcast_attempt.broadcast_attempt_id.broadcast_id,
 			&failed_signer,
 		);
-		if failed_broadcast_attempt.broadcast_attempt_id.attempt_count <
-			// -1 to exclude the first node
-			(T::EpochInfo::current_authority_count().saturating_sub(1))
+
+		if failed_broadcast_attempt.broadcast_attempt_id.attempt_count ==
+			T::EpochInfo::current_authority_count()
 		{
-			BroadcastRetryQueue::<T, I>::append(&failed_broadcast_attempt);
-			Self::deposit_event(Event::<T, I>::BroadcastRetryScheduled {
-				broadcast_attempt_id: failed_broadcast_attempt.broadcast_attempt_id,
-			});
-		} else {
 			if let Some(failed_signers) = FailedBroadcasters::<T, I>::get(
 				failed_broadcast_attempt.broadcast_attempt_id.broadcast_id,
 			) {
@@ -685,6 +680,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 			Self::deposit_event(Event::<T, I>::BroadcastAborted {
 				broadcast_id: failed_broadcast_attempt.broadcast_attempt_id.broadcast_id,
+			});
+		} else {
+			BroadcastRetryQueue::<T, I>::append(&failed_broadcast_attempt);
+			Self::deposit_event(Event::<T, I>::BroadcastRetryScheduled {
+				broadcast_attempt_id: failed_broadcast_attempt.broadcast_attempt_id,
 			});
 		}
 	}
