@@ -14,7 +14,7 @@ pub enum Offence {
 	ParticipateSigningFailed,
 	/// There was a failure in participation during a key generation ceremony.
 	ParticipateKeygenFailed,
-	/// Authority reported they could not sign an ethereum transaction.
+	/// An authority did not broadcast a transaction.
 	FailedToBroadcastTransaction,
 	/// An authority missed their authorship slot.
 	MissedAuthorshipSlot,
