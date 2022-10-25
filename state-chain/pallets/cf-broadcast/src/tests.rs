@@ -194,14 +194,9 @@ fn test_abort_after_number_of_attempts_is_equal_to_the_number_of_authorities() {
 
 		assert_eq!(
 			System::events().pop().expect("an event").event,
-			Event::Broadcaster(crate::Event::BroadcastAborted { broadcast_id: 1 })
-		);
-
-		// all the authorities have attempted to sign, and all have failed
-		// therefore all are reported
-		MockOffenceReporter::assert_reported(
-			PalletOffence::FailedToBroadcastTransaction,
-			MockEpochInfo::current_authorities(),
+			Event::Broadcaster(crate::Event::BroadcastAborted {
+				broadcast_id: broadcast_attempt_id.broadcast_id
+			})
 		);
 
 		assert_broadcast_storage_cleaned_up(broadcast_attempt_id.broadcast_id);
@@ -491,6 +486,44 @@ fn signature_accepted_of_whitelisted_tx_hash_results_in_refund_for_whitelister()
 			FEE_PAID
 		);
 		assert!(TransactionFeeDeficit::<Test, Instance1>::get(tx_sig_request.nominee + 1).is_none());
+	});
+}
+
+// the nodes who failed to broadcast should be report if we succeed, since success
+// indicates the failed nodes could have succeeded themselves.
+#[test]
+fn signature_accepted_after_timeout_reports_failed_nodes() {
+	new_test_ext().execute_with(|| {
+		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
+		Broadcaster::start_broadcast(
+			&MockThresholdSignature::default(),
+			MockUnsignedTransaction,
+			MockApiCall::default(),
+		);
+
+		let mut failed_authorities = vec![];
+		// The last node succeeds
+		for _ in 0..MockEpochInfo::current_authority_count() - 1 {
+			// Nominated signer responds that they can't sign the transaction.
+			MockCfe::respond(Scenario::SigningFailure);
+			failed_authorities.push(MockNominator::get_last_nominee().unwrap());
+
+			// retry should kick off at end of block if sufficient block space is free.
+			Broadcaster::on_idle(0, LARGE_EXCESS_WEIGHT);
+			Broadcaster::on_initialize(0);
+		}
+
+		assert_ok!(Broadcaster::signature_accepted(
+			Origin::root(),
+			MockThresholdSignature::default(),
+			Default::default(),
+			ETH_TX_HASH,
+		));
+
+		MockOffenceReporter::assert_reported(
+			PalletOffence::FailedToBroadcastTransaction,
+			failed_authorities,
+		);
 	});
 }
 

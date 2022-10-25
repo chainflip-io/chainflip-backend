@@ -490,7 +490,6 @@ pub mod pallet {
 			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
 			let broadcast_id = SignatureToBroadcastIdLookup::<T, I>::take(signature)
 				.ok_or(Error::<T, I>::InvalidPayload)?;
-			Self::clean_up_broadcast_storage(broadcast_id);
 			// Add fee deficits only when we know everything else is ok
 			// if this tx hash has been whitelisted, we can add the fee deficit to the authority's
 			// account
@@ -501,6 +500,15 @@ pub mod pallet {
 					}
 				});
 			}
+			// If people failed to broadcast before we got a success, they should be reported.
+			if let Some(failed_signers) = FailedBroadcasters::<T, I>::get(broadcast_id) {
+				T::OffenceReporter::report_many(
+					PalletOffence::FailedToBroadcastTransaction,
+					&failed_signers,
+				);
+			}
+
+			Self::clean_up_broadcast_storage(broadcast_id);
 			Self::deposit_event(Event::<T, I>::BroadcastSuccess { broadcast_id });
 			Ok(().into())
 		}
@@ -662,15 +670,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				.checked_sub(1)
 				.expect("We must have at least one authority")
 		{
-			if let Some(failed_signers) = FailedBroadcasters::<T, I>::get(
-				failed_broadcast_attempt.broadcast_attempt_id.broadcast_id,
-			) {
-				T::OffenceReporter::report_many(
-					PalletOffence::FailedToBroadcastTransaction,
-					&failed_signers,
-				);
-			}
-
 			Self::clean_up_broadcast_storage(
 				failed_broadcast_attempt.broadcast_attempt_id.broadcast_id,
 			);
