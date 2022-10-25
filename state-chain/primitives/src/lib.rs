@@ -104,13 +104,3 @@ pub struct ForeignChainAsset {
 }
 
 pub type EgressBatch<Amount, EgressAddress> = Vec<(Amount, EgressAddress)>;
-
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub struct Swap {
-	pub from: Asset,
-	pub to: ForeignChainAsset,
-	pub amount: AssetAmount,
-	pub ingress_address: ForeignChainAddress,
-	pub egress_address: ForeignChainAddress,
-}

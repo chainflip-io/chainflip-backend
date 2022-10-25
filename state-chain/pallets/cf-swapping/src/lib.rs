@@ -1,5 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-use cf_primitives::{ForeignChainAddress, ForeignChainAsset};
+use cf_primitives::{Asset, AssetAmount, ForeignChainAddress, ForeignChainAsset};
 use cf_traits::{liquidity::AmmPoolApi, IngressApi};
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
@@ -18,10 +18,23 @@ mod benchmarking;
 pub mod weights;
 pub use weights::WeightInfo;
 
+#[cfg(feature = "std")]
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct Swap {
+	pub from: Asset,
+	pub to: ForeignChainAsset,
+	pub amount: AssetAmount,
+	pub ingress_address: ForeignChainAddress,
+	pub egress_address: ForeignChainAddress,
+}
+
 #[frame_support::pallet]
 pub mod pallet {
 
-	use cf_primitives::{Asset, AssetAmount, IntentId, Swap};
+	use cf_primitives::{Asset, AssetAmount, IntentId};
 	use cf_traits::{AccountRoleRegistry, Chainflip, EgressApi, SwapIntentHandler};
 
 	use super::*;

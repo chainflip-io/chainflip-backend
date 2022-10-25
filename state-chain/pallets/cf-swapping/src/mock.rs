@@ -1,10 +1,10 @@
-use crate::{self as pallet_cf_swapping};
+use crate::{self as pallet_cf_swapping, Pallet};
 use cf_primitives::{AssetAmount, ForeignChainAddress, ForeignChainAsset};
 use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
 	AmmPoolApi, Chainflip, EgressApi, IngressApi,
 };
-use frame_support::parameter_types;
+use frame_support::{parameter_types, storage_alias};
 use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{
@@ -17,6 +17,9 @@ type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 type AccountId = u64;
 type Balance = u128;
+
+#[storage_alias]
+pub type EgressQueue<T: crate::pallet::Config> = StorageValue<Pallet<T>, Vec<AssetAmount>>;
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
@@ -88,9 +91,15 @@ pub struct MockEgressApi;
 impl EgressApi for MockEgressApi {
 	fn schedule_egress(
 		_foreign_asset: ForeignChainAsset,
-		_amount: AssetAmount,
+		amount: AssetAmount,
 		_egress_address: ForeignChainAddress,
 	) {
+		if let Some(mut egresses) = EgressQueue::<Test>::get() {
+			egresses.push(amount);
+			EgressQueue::<Test>::put(egresses);
+		} else {
+			EgressQueue::<Test>::put(vec![amount]);
+		}
 	}
 
 	fn is_egress_valid(
@@ -98,6 +107,12 @@ impl EgressApi for MockEgressApi {
 		_egress_address: &ForeignChainAddress,
 	) -> bool {
 		true
+	}
+}
+
+impl MockEgressApi {
+	pub fn clear() {
+		EgressQueue::<Test>::kill();
 	}
 }
 
@@ -136,9 +151,9 @@ impl AmmPoolApi for MockAmmPoolApi {
 	fn swap(
 		_ingress_asset: cf_primitives::Asset,
 		_egress_asset: ForeignChainAsset,
-		_ingress_amount: Self::Balance,
+		ingress_amount: Self::Balance,
 	) -> Self::Balance {
-		Self::Balance::default()
+		ingress_amount
 	}
 }
 

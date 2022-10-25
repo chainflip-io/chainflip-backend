@@ -15,6 +15,7 @@ targets = ['x86_64-unknown-linux-gnu']
 [dependencies]
 # Internal dependencies
 cf-traits = {path = '../../traits', default-features = false}
+serde = { optional = true, version = '1.0.126', features = ['derive'] }
 cf-primitives = {path = '../../primitives', default-features = false}
 
 log = { version = '0.4.16', default-features = false }
@@ -71,6 +72,7 @@ std = [
   'cf-primitives/std',
   'codec/std',
   'scale-info/std',
+  'serde',
   'frame-benchmarking/std',
   'frame-support/std',
   'frame-system/std',
