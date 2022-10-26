@@ -179,11 +179,46 @@ fn reporting_any_offence_should_penalise_reputation_points_and_suspend() {
 #[test]
 fn suspensions() {
 	new_test_ext().execute_with(|| {
-		ReputationPallet::suspend_all(&[1, 2, 3], &AllOffences::ForgettingYourYubiKey, 10);
+		const SUSPENSION_DURATION: u64 = 10;
+		let first_suspend = [1, 2, 3];
+		ReputationPallet::suspend_all(
+			&first_suspend,
+			&AllOffences::ForgettingYourYubiKey,
+			SUSPENSION_DURATION,
+		);
 		assert_eq!(
 			ReputationPallet::validators_suspended_for(&[AllOffences::ForgettingYourYubiKey,]),
-			[1, 2, 3].into_iter().collect(),
+			first_suspend.into_iter().collect(),
 		);
+
+		advance_by_block();
+
+		// overlapping suspensions, 1 not included
+		let second_suspend = [2, 3, 4, 6];
+		ReputationPallet::suspend_all(
+			&second_suspend,
+			&AllOffences::ForgettingYourYubiKey,
+			SUSPENSION_DURATION,
+		);
+		assert_eq!(
+			ReputationPallet::validators_suspended_for(&[AllOffences::ForgettingYourYubiKey,]),
+			[1, 2, 3, 4, 6].into_iter().collect(),
+		);
+
+		for _ in 0..SUSPENSION_DURATION {
+			advance_by_block();
+		}
+
+		// 1 was not re-suspended, so they have served their time. Only the second suspended remain.
+		assert_eq!(
+			ReputationPallet::validators_suspended_for(&[AllOffences::ForgettingYourYubiKey,]),
+			second_suspend.into_iter().collect(),
+		);
+
+		advance_by_block();
+
+		assert!(ReputationPallet::validators_suspended_for(&[AllOffences::ForgettingYourYubiKey,])
+			.is_empty());
 	});
 }
 

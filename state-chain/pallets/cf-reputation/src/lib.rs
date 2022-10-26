@@ -19,29 +19,20 @@ use frame_support::{
 	traits::{Get, OnKilledAccount},
 };
 pub use pallet::*;
-use sp_runtime::traits::Zero;
+use sp_runtime::traits::{BlockNumberProvider, Saturating, Zero};
 use sp_std::{
 	collections::{btree_set::BTreeSet, vec_deque::VecDeque},
-	iter::Iterator,
+	iter::{self, Iterator},
 	prelude::*,
 };
-
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
 mod reporting_adapter;
 mod reputation;
-mod suspensions;
 
 pub use reporting_adapter::*;
 pub use reputation::*;
-pub use suspensions::*;
-
-type RuntimeSuspensionTracker<T> = SuspensionTracker<
-	<T as Chainflip>::ValidatorId,
-	<T as frame_system::Config>::BlockNumber,
-	<T as Config>::Offence,
->;
 
 impl<T: Config> ReputationParameters for T {
 	type OnlineCredits = T::BlockNumber;
@@ -467,17 +458,31 @@ impl<T: Config> Pallet<T> {
 		offence: &T::Offence,
 		suspension: T::BlockNumber,
 	) {
-		let mut tracker = <SuspensionTracker<_, _, _> as StorageLoadable<T>>::load(offence);
-		tracker.suspend(validators.into_iter().cloned(), suspension);
-		StorageLoadable::<T>::commit(&mut tracker);
+		let current_block = frame_system::Pallet::<T>::current_block_number();
+		let mut suspensions = Suspensions::<T>::get(offence);
+		suspensions.extend(
+			iter::repeat(current_block.saturating_add(suspension))
+				.zip(validators.into_iter().cloned()),
+		);
+		suspensions.make_contiguous().sort_unstable_by_key(|(block, _)| *block);
+		while matches!(suspensions.front(), Some((block, _)) if *block < current_block) {
+			suspensions.pop_front();
+		}
+		Suspensions::<T>::insert(offence, suspensions);
 	}
 
 	/// Gets a list of validators that are suspended for committing any of a list of offences.
 	pub fn validators_suspended_for(offences: &[T::Offence]) -> BTreeSet<T::ValidatorId> {
+		let current_block = frame_system::Pallet::<T>::current_block_number();
 		offences
 			.iter()
 			.flat_map(|offence| {
-				<RuntimeSuspensionTracker<T> as StorageLoadable<T>>::load(offence).get_suspended()
+				Suspensions::<T>::get(offence)
+					.iter()
+					.skip_while(move |(block, _)| *block < current_block)
+					.map(|(_, id)| id)
+					.cloned()
+					.collect::<BTreeSet<_>>()
 			})
 			.collect()
 	}
