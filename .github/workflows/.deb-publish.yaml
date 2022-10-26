@@ -3,15 +3,15 @@ on:
   workflow_call:
     inputs:
       s3-prefix:
-        description: 'Prefix for S3 bucket'
+        description: Prefix for S3 bucket
         required: false
         type: string
         default: 'ci'
       artifacts:
-        description: 'Artifacts to publish'
+        description: Artifacts to publish
         required: false
         type: string
-        default: 'chainflip-backend-packages'
+        default: chainflip-backend-packages
 
 env:
   APTLY_VERSION: "1.5.0"

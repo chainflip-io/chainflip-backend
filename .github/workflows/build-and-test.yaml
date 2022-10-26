@@ -144,10 +144,27 @@ jobs:
       - run: |
           cargo ci-build-ibiza --locked
           sccache --show-stats
+      - name: Install cargo-deb
+        run: cargo install cargo-deb
+      - name: Get date
+        id: vars
+        run: |
+          echo "date=$(date +'%Y%m%d%H%M')" >> $GITHUB_OUTPUT
+      - name: Build packages
+        run: |
+          cargo deb --no-build --no-strip -p chainflip-engine --deb-revision "${{ steps.vars.outputs.date }}"
+          cargo deb --no-build --no-strip -p chainflip-cli --deb-revision "${{ steps.vars.outputs.date }}"
+          cargo deb --no-build --no-strip -p chainflip-node --deb-revision "${{ steps.vars.outputs.date }}"
+          cargo deb --no-build --no-strip -p generate-genesis-keys --deb-revision "${{ steps.vars.outputs.date }}"
+      - name: Upload packages
+        uses: actions/upload-artifact@v3
+        with:
+          name: chainflip-backend-packages-ibiza
+          path: target/debian/*.deb
       - name: Upload artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: chainflip-backend-ibiza
+          name: chainflip-backend-bin-ibiza
           path: |
             ./target/release/chainflip-node
             ./target/release/chainflip-engine
