@@ -317,7 +317,7 @@ pub mod pallet {
 				},
 				_ => {
 					Reputations::<T>::mutate(&validator_id, |rep| {
-						rep.boost_reputation(Self::online_credit_reward());
+						rep.boost_reputation(T::HeartbeatBlockInterval::get());
 					});
 				},
 			};
@@ -460,12 +460,6 @@ impl<T: Config> Pallet<T> {
 				T::Slasher::slash(&validator_id, T::HeartbeatBlockInterval::get());
 			}
 		}
-	}
-
-	/// Return number of online credits for reward
-	fn online_credit_reward() -> T::BlockNumber {
-		// Equivalent to the number of blocks used for the heartbeat
-		T::HeartbeatBlockInterval::get()
 	}
 
 	pub fn suspend_all<'a>(
