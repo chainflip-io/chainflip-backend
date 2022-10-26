@@ -20,12 +20,8 @@ type Block = frame_system::mocking::MockBlock<Test>;
 type AccountId = u64;
 type Balance = u128;
 
-#[cfg(feature = "std")]
-use serde::{Deserialize, Serialize};
-
 /// A helper type for testing
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct EgressTransaction {
 	pub foreign_asset: ForeignChainAsset,
 	pub amount: AssetAmount,

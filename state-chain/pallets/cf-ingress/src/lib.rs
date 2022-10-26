@@ -191,13 +191,30 @@ impl<T: Config> Pallet<T> {
 				}?;
 			},
 			IntentAction::Swap { egress_address, egress_asset, .. } => {
-				T::SwapIntentHandler::schedule_swap(
-					asset,
-					egress_asset,
-					amount,
-					ingress_address,
-					egress_address,
+				let ingress = IntentIngressDetails::<T>::get(ingress_address)
+					.ok_or(Error::<T>::InvalidIntent)?;
+
+				ensure!(
+					ingress.ingress_asset.asset == asset,
+					Error::<T>::IngressMismatchWithIntent
 				);
+				match (ingress_address, ingress.ingress_asset.chain) {
+					(ForeignChainAddress::Eth(_), ForeignChain::Ethereum) => {
+						T::IngressFetchApi::schedule_ethereum_ingress_fetch(vec![(
+							asset,
+							ingress.intent_id,
+						)]);
+						T::SwapIntentHandler::schedule_swap(
+							asset,
+							egress_asset,
+							amount,
+							ingress_address,
+							egress_address,
+						);
+						Ok(())
+					},
+					_ => Err(Error::<T>::IngressMismatchWithIntent),
+				}?;
 			},
 		}
 		Self::deposit_event(Event::IngressCompleted { ingress_address, asset, amount, tx_hash });

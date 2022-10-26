@@ -18,11 +18,7 @@ mod benchmarking;
 pub mod weights;
 pub use weights::WeightInfo;
 
-#[cfg(feature = "std")]
-use serde::{Deserialize, Serialize};
-
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct Swap {
 	pub from: Asset,
 	pub to: ForeignChainAsset,
