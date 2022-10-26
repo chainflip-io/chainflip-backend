@@ -109,18 +109,6 @@ mod point_impls {
 		fn point_at_infinity() -> Self {
 			Point(None)
 		}
-
-		fn is_compatible(&self) -> bool {
-			// Check if the public key's x coordinate is smaller than "half secp256k1's order",
-			// which is a requirement imposed by the Key Manager contract
-			let pk = self.get_element();
-			let pubkey = cf_chains::eth::AggKey::from_pubkey_compressed(pk.serialize());
-
-			let x = BigUint::from_bytes_be(&pubkey.pub_key_x);
-			let half_order = BigUint::from_bytes_be(&CURVE_ORDER) / 2u32 + 1u32;
-
-			x < half_order
-		}
 	}
 
 	impl Serialize for Point {

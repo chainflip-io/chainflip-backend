@@ -495,7 +495,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 	fn single_party_keygen(&self, rng: Rng) -> KeygenResultInfo<C::Point> {
 		slog::info!(self.logger, "Performing solo keygen");
 
-		let (_key_id, key_data) = generate_key_data_until_compatible(
+		let (_key_id, key_data) = generate_key_data_until_compatible::<C>(
 			BTreeSet::from_iter([self.my_account_id.clone()]),
 			30,
 			rng,

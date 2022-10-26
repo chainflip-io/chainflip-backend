@@ -16,6 +16,7 @@ use crate::multisig::{
 		ThresholdParameters,
 	},
 	crypto::{ECPoint, ECScalar, KeyShare, Rng},
+	CryptoScheme,
 };
 
 use super::keygen_data::HashComm1;
@@ -289,13 +290,13 @@ pub struct ValidAggregateKey<P: ECPoint>(pub P);
 /// Derive aggregate pubkey from party commitments
 /// Note that setting `allow_high_pubkey` to true lets us skip compatibility check
 /// in tests as otherwise they would be non-deterministic
-pub fn derive_aggregate_pubkey<P: ECPoint>(
-	commitments: &BTreeMap<AuthorityCount, DKGCommitment<P>>,
+pub fn derive_aggregate_pubkey<C: CryptoScheme>(
+	commitments: &BTreeMap<AuthorityCount, DKGCommitment<C::Point>>,
 	allow_high_pubkey: bool,
-) -> anyhow::Result<ValidAggregateKey<P>> {
-	let pubkey: P = commitments.iter().map(|(_idx, c)| c.commitments.0[0]).sum();
+) -> anyhow::Result<ValidAggregateKey<C::Point>> {
+	let pubkey: C::Point = commitments.iter().map(|(_idx, c)| c.commitments.0[0]).sum();
 
-	if !allow_high_pubkey && !pubkey.is_compatible() {
+	if !allow_high_pubkey && !C::is_pubkey_compatible(&pubkey) {
 		Err(anyhow!("pubkey is not compatible"))
 	} else if check_high_degree_commitments(commitments) {
 		// Sanity check (the chance of this failing is infinitesimal due to the
@@ -488,16 +489,16 @@ pub mod genesis {
 
 	/// Attempts to generate key data until we generate a key that is contract
 	/// compatible. It will try `max_attempts` before failing.
-	pub fn generate_key_data_until_compatible<P: ECPoint>(
+	pub fn generate_key_data_until_compatible<C: CryptoScheme>(
 		account_ids: BTreeSet<AccountId>,
 		max_attempts: usize,
 		mut rng: Rng,
-	) -> (KeyId, HashMap<AccountId, KeygenResultInfo<P>>) {
+	) -> (KeyId, HashMap<AccountId, KeygenResultInfo<C::Point>>) {
 		let mut attempt_counter = 0;
 
 		loop {
 			attempt_counter += 1;
-			match generate_key_data::<P>(account_ids.clone(), &mut rng, false) {
+			match generate_key_data::<C>(account_ids.clone(), &mut rng, false) {
 				Ok(result) => break result,
 				Err(_) => {
 					// limit iteration so we don't loop forever
@@ -509,23 +510,24 @@ pub mod genesis {
 		}
 	}
 
-	pub fn generate_key_data<P: ECPoint>(
+	pub fn generate_key_data<C: CryptoScheme>(
 		signers: BTreeSet<AccountId>,
 		rng: &mut Rng,
 		allow_high_pubkey: bool,
-	) -> anyhow::Result<(KeyId, HashMap<AccountId, KeygenResultInfo<P>>)> {
+	) -> anyhow::Result<(KeyId, HashMap<AccountId, KeygenResultInfo<C::Point>>)> {
 		let params = ThresholdParameters::from_share_count(signers.len() as AuthorityCount);
 		let n = params.share_count;
 		let t = params.threshold;
 
 		let (commitments, outgoing_secret_shares): (BTreeMap<_, _>, BTreeMap<_, _>) = (1..=n)
 			.map(|idx| {
-				let (_secret, commitments, shares) = generate_secret_and_shares::<P>(rng, n, t);
+				let (_secret, commitments, shares) =
+					generate_secret_and_shares::<C::Point>(rng, n, t);
 				((idx, DKGCommitment { commitments }), (idx, shares))
 			})
 			.unzip();
 
-		let agg_pubkey = derive_aggregate_pubkey(&commitments, allow_high_pubkey)?;
+		let agg_pubkey = derive_aggregate_pubkey::<C>(&commitments, allow_high_pubkey)?;
 
 		let validator_mapping = PartyIdxMapping::from_participants(signers);
 
