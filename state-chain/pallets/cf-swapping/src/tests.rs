@@ -50,34 +50,6 @@ fn generate_test_swaps() -> Vec<Swap> {
 			ingress_address: ForeignChainAddress::Eth([3; 20]),
 			egress_address: ForeignChainAddress::Eth([4; 20]),
 		},
-		Swap {
-			from: Asset::Flip,
-			to: ForeignChainAsset { chain: ForeignChain::Ethereum, asset: Asset::Usdc },
-			amount: 70,
-			ingress_address: ForeignChainAddress::Eth([5; 20]),
-			egress_address: ForeignChainAddress::Eth([6; 20]),
-		},
-		Swap {
-			from: Asset::Flip,
-			to: ForeignChainAsset { chain: ForeignChain::Ethereum, asset: Asset::Usdc },
-			amount: 80,
-			ingress_address: ForeignChainAddress::Eth([7; 20]),
-			egress_address: ForeignChainAddress::Eth([8; 20]),
-		},
-		Swap {
-			from: Asset::Flip,
-			to: ForeignChainAsset { chain: ForeignChain::Ethereum, asset: Asset::Usdc },
-			amount: 90,
-			ingress_address: ForeignChainAddress::Eth([9; 20]),
-			egress_address: ForeignChainAddress::Eth([5; 20]),
-		},
-		Swap {
-			from: Asset::Flip,
-			to: ForeignChainAsset { chain: ForeignChain::Ethereum, asset: Asset::Usdc },
-			amount: 100,
-			ingress_address: ForeignChainAddress::Eth([1; 20]),
-			egress_address: ForeignChainAddress::Eth([2; 20]),
-		},
 	]
 }
 
@@ -113,6 +85,17 @@ fn process_all_swaps() {
 		insert_swaps(swaps.clone());
 		Swapping::on_idle(1, <() as WeightInfo>::execute_swap() * (swaps.len() as u64));
 		assert_eq!(SwapQueue::<Test>::get().len(), 0);
+		assert_eq!(
+			EgressQueue::<Test>::get().unwrap(),
+			swaps
+				.iter()
+				.map(|swap: &Swap| EgressTransaction {
+					foreign_asset: swap.to,
+					amount: swap.amount,
+					egress_address: swap.egress_address,
+				})
+				.collect::<Vec<EgressTransaction>>()
+		);
 	});
 }
 
@@ -120,26 +103,12 @@ fn process_all_swaps() {
 fn number_of_swaps_processed_limited_by_weight() {
 	new_test_ext().execute_with(|| {
 		let swaps = generate_test_swaps();
-		insert_swaps(swaps);
-		Swapping::on_idle(1, <() as WeightInfo>::execute_swap() * 8);
-		// Expect 2 swaps left in the SwapQueue.
-		assert_eq!(SwapQueue::<Test>::get().len(), 2);
-	});
-}
-
-#[test]
-fn ensure_order_of_swap_processing() {
-	new_test_ext().execute_with(|| {
-		let swaps = generate_test_swaps();
 		insert_swaps(swaps.clone());
-		// Let's process 5/10 swaps.
-		Swapping::on_idle(1, <() as WeightInfo>::execute_swap() * 5);
-		let remaining_swaps = SwapQueue::<Test>::get();
-		assert_eq!(remaining_swaps.len(), 5);
-		// Expect the first five swaps to be executed and in the Storage of the Mock.
+		Swapping::on_idle(1, <() as WeightInfo>::execute_swap() * 3);
+		assert_eq!(SwapQueue::<Test>::get().len(), 3);
 		assert_eq!(
 			EgressQueue::<Test>::get().unwrap(),
-			swaps[0..5]
+			swaps[0..3]
 				.iter()
 				.map(|swap: &Swap| EgressTransaction {
 					foreign_asset: swap.to,
