@@ -1,6 +1,6 @@
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::RuntimeDebug;
-use pallet_cf_reputation::{GetValidatorsExcludedFor, OffenceList};
+use pallet_cf_reputation::OffenceList;
 use pallet_grandpa::GrandpaEquivocationOffence;
 use scale_info::TypeInfo;
 
@@ -25,8 +25,6 @@ pub enum Offence {
 	/// Grandpa equivocation detected.
 	GrandpaEquivocation,
 }
-
-pub type ExclusionSetFor<L> = GetValidatorsExcludedFor<Runtime, L>;
 
 pub struct KeygenOffences;
 
