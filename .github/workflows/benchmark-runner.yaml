@@ -29,7 +29,8 @@ jobs:
     name: Terrafrom ${{ github.event.inputs.command }}
     runs-on: ubuntu-latest
     steps:
-      - uses: AutoModality/action-clean@v1
+      - name: Clean the workspace
+        run: rm -rf $GITHUB_WORKSPACE/*
       - name: Setup Tailscale 🪡 ⚙️
         id: tailscale
         uses: tailscale/github-action@main

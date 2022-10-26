@@ -37,7 +37,8 @@ jobs:
         "${{ github.event.inputs.benchmark_machine_spec }}",
       ]
     steps:
-      - uses: AutoModality/action-clean@v1
+      - name: Clean the workspace
+        run: rm -rf $GITHUB_WORKSPACE/*
       - name: Checkout
         uses: actions/checkout@v2
 
