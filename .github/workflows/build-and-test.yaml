@@ -283,7 +283,7 @@ jobs:
             chainflip-docgen/generated
 
   deb-publish:
-    name: Publish to APT repo
+    name: Publish Packages to APT repo
     needs: [test-single-node]
     uses: ./.github/workflows/.deb-publish.yaml
     with:
@@ -292,7 +292,7 @@ jobs:
     secrets: inherit
 
   deb-publish-ibiza:
-    name: Publish to APT repo
+    name: Publish Ibiza Packages to APT repo
     needs: [build-ibiza]
     uses: ./.github/workflows/.deb-publish.yaml
     with:
