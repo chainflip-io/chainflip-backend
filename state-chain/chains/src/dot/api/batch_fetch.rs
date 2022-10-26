@@ -3,7 +3,7 @@ use scale_info::TypeInfo;
 use sp_std::{boxed::Box, vec::Vec};
 
 use crate::dot::{
-	BalancesCall, Polkadot, PolkadotAccountId, PolkadotAccountIdLookup, PolkadotExtrinsicHandler,
+	BalancesCall, Polkadot, PolkadotAccountId, PolkadotAccountIdLookup, PolkadotExtrinsicBuilder,
 	PolkadotProxyType, PolkadotReplayProtection, PolkadotRuntimeCall, ProxyCall, UtilityCall,
 };
 
@@ -16,7 +16,7 @@ use sp_runtime::RuntimeDebug;
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct BatchFetch {
 	/// The handler for creating and signing polkadot extrinsics
-	pub extrinsic_handler: PolkadotExtrinsicHandler,
+	pub extrinsic_handler: PolkadotExtrinsicBuilder,
 	/// The list of all inbound deposits that are to be fetched in this batch call.
 	pub intent_ids: Vec<IntentId>,
 	/// The vault anonymous Polkadot AccountId
@@ -31,7 +31,7 @@ impl BatchFetch {
 		vault_account: PolkadotAccountId,
 	) -> Self {
 		let mut calldata = Self {
-			extrinsic_handler: PolkadotExtrinsicHandler::new_empty(
+			extrinsic_handler: PolkadotExtrinsicBuilder::new_empty(
 				replay_protection,
 				proxy_account,
 			),

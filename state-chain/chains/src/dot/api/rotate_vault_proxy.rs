@@ -3,7 +3,7 @@ use scale_info::TypeInfo;
 use sp_std::{boxed::Box, vec};
 
 use crate::dot::{
-	BalancesCall, Polkadot, PolkadotAccountId, PolkadotAccountIdLookup, PolkadotExtrinsicHandler,
+	BalancesCall, Polkadot, PolkadotAccountId, PolkadotAccountIdLookup, PolkadotExtrinsicBuilder,
 	PolkadotProxyType, PolkadotPublicKey, PolkadotReplayProtection, PolkadotRuntimeCall, ProxyCall,
 	UtilityCall,
 };
@@ -17,7 +17,7 @@ use sp_runtime::{traits::IdentifyAccount, MultiSigner, RuntimeDebug};
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct RotateVaultProxy {
 	/// The handler for creating and signing polkadot extrinsics
-	pub extrinsic_handler: PolkadotExtrinsicHandler,
+	pub extrinsic_handler: PolkadotExtrinsicBuilder,
 	/// The new proxy account public key
 	pub new_proxy: PolkadotPublicKey,
 	/// The old proxy account public Key
@@ -34,7 +34,7 @@ impl RotateVaultProxy {
 		vault_account: PolkadotAccountId,
 	) -> Self {
 		let mut calldata = Self {
-			extrinsic_handler: PolkadotExtrinsicHandler::new_empty(
+			extrinsic_handler: PolkadotExtrinsicBuilder::new_empty(
 				replay_protection,
 				MultiSigner::Sr25519(old_proxy.0).into_account(),
 			),

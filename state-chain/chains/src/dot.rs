@@ -76,13 +76,6 @@ mod westend_testnet {
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum PolkadotProxyType {
 	Any = 0,
-	NonTransfer = 1,
-	Governance = 2,
-	Staking = 3,
-	// Skip 4 as it is now removed (was SudoBalances)
-	IdentityJudgement = 5,
-	CancelProxy = 6,
-	Auction = 7,
 }
 
 #[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -142,7 +135,7 @@ pub struct PolkadotTransactionData {
 
 /// The handler for creating and signing polkadot extrinsics, and creating signature payload
 #[derive(Debug, Encode, Decode, TypeInfo, Eq, PartialEq, Clone)]
-pub struct PolkadotExtrinsicHandler {
+pub struct PolkadotExtrinsicBuilder {
 	extrinsic_origin: PolkadotAccountId,
 	extrinsic_call: Option<PolkadotRuntimeCall>,
 	signed_extrinsic: Option<PolkadotUncheckedExtrinsic>,
@@ -151,7 +144,7 @@ pub struct PolkadotExtrinsicHandler {
 	signature_payload: Option<EncodedPolkadotPayload>,
 }
 
-impl PolkadotExtrinsicHandler {
+impl PolkadotExtrinsicBuilder {
 	pub fn new_empty(
 		replay_protection: PolkadotReplayProtection,
 		extrinsic_origin: PolkadotAccountId,
@@ -828,7 +821,7 @@ mod test_polkadot_extrinsics {
 		);
 		println!("Encoded Call: 0x{}", hex::encode(test_runtime_call.encode()));
 
-		let mut extrinsic_handler = PolkadotExtrinsicHandler::new_empty(
+		let mut extrinsic_handler = PolkadotExtrinsicBuilder::new_empty(
 			PolkadotReplayProtection::new(NONCE_1, 0, NetworkChoice::WestendTestnet),
 			account_id_1,
 		);
