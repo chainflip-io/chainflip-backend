@@ -30,9 +30,6 @@ where
 		.into_iter()
 		.map(|Bid { bidder_id, amount }| (bidder_id, amount / QUANTISATION_FACTOR));
 
-	// Our emission cap for this heartbeat interval
-	let emissions_cap = backup_node_emission_per_block.saturating_mul(reward_interwal);
-
 	// Emissions for this heartbeat interval for the active set
 	let authority_rewards = current_authority_emission_per_block.saturating_mul(reward_interwal);
 
@@ -59,6 +56,9 @@ where
 			(node_id, reward)
 		})
 		.collect();
+
+	// Our emission cap for this heartbeat interval
+	let emissions_cap = backup_node_emission_per_block.saturating_mul(reward_interwal);
 
 	// Cap if needed
 	if total_rewards > emissions_cap {
