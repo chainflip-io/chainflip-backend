@@ -26,9 +26,6 @@ where
 		backup_node_emission_per_block / QUANTISATION_FACTOR,
 		current_authority_emission_per_block / QUANTISATION_FACTOR,
 	);
-	let backup_nodes = backup_nodes
-		.into_iter()
-		.map(|Bid { bidder_id, amount }| (bidder_id, amount / QUANTISATION_FACTOR));
 
 	// Emissions for this heartbeat interval for the active set
 	let authority_rewards = current_authority_emission_per_block.saturating_mul(reward_interwal);
@@ -42,7 +39,9 @@ where
 
 	// Calculate rewards for each backup node and total rewards for capping
 	let rewards: Vec<_> = backup_nodes
-		.map(|(node_id, backup_stake)| {
+		.into_iter()
+		.map(|Bid { bidder_id, amount }| {
+			let backup_stake = amount / QUANTISATION_FACTOR;
 			let reward = min(
 				average_authority_reward,
 				multiply_by_rational(
@@ -58,7 +57,7 @@ where
 			.checked_div(10_u128)
 			.unwrap();
 			total_rewards += reward;
-			(node_id, reward)
+			(bidder_id, reward)
 		})
 		.collect();
 
