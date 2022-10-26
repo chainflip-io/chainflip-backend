@@ -53,7 +53,7 @@ fn eligible_authorities(
 	HistoricalAuthorities::<Runtime>::get(at_epoch)
 		.into_iter()
 		.collect::<BTreeSet<_>>()
-		.difference(&exclude_ids)
+		.difference(exclude_ids)
 		.cloned()
 		.collect()
 }
