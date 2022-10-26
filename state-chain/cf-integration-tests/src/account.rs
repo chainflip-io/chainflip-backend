@@ -2,9 +2,10 @@
 
 use crate::{network, GENESIS_EPOCH};
 use cf_traits::EpochInfo;
+use pallet_cf_reputation::Reputations;
 use pallet_cf_staking::{ClaimAmount, MinimumStake};
 use pallet_cf_validator::{AccountPeerMapping, MappedPeers, VanityNames};
-use state_chain_runtime::{Runtime, Validator};
+use state_chain_runtime::{Reputation, Runtime, Validator};
 
 #[test]
 fn account_deletion_removes_relevant_storage_items() {
@@ -30,6 +31,8 @@ fn account_deletion_removes_relevant_storage_items() {
 		assert!(MappedPeers::<Runtime>::contains_key(peer_id));
 
 		network::Cli::activate_account(&backup_node);
+		Reputation::heartbeat(state_chain_runtime::Origin::signed(backup_node.clone())).unwrap();
+		assert!(Reputations::<Runtime>::get(backup_node.clone()).online_credits > 0);
 
 		let elon_vanity_name = "ElonShibMoonInu";
 		network::Cli::set_vanity_name(&backup_node, elon_vanity_name);
@@ -55,5 +58,6 @@ fn account_deletion_removes_relevant_storage_items() {
 		let vanity_names = VanityNames::<Runtime>::get();
 		assert!(vanity_names.get(&backup_node).is_none());
 		assert_eq!(pallet_cf_account_roles::AccountRoles::<Runtime>::get(&backup_node), None);
+		assert_eq!(Reputations::<Runtime>::get(backup_node).online_credits, 0);
 	});
 }

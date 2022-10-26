@@ -331,6 +331,7 @@ impl frame_system::Config for Runtime {
 		GrandpaOffenceReporter<Self>,
 		Staking,
 		AccountRoles,
+		Reputation,
 	);
 	/// The data to be stored in an account.
 	type AccountData = ();
