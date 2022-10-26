@@ -65,7 +65,7 @@ pub use cf_traits::{
 	BlockNumber, EpochInfo, EthEnvironmentProvider, FlipBalance, QualifyNode, SessionKeysRegistered,
 };
 pub use chainflip::chain_instances::*;
-use chainflip::{epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat};
+use chainflip::{epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat, SigningOffences};
 use constants::common::{
 	eth::{BLOCK_SAFETY_MARGIN, CONSERVATIVE_BLOCK_TIME_SECS},
 	*,
@@ -517,7 +517,7 @@ impl pallet_cf_threshold_signature::Config<EthereumInstance> for Runtime {
 	type AccountRoleRegistry = AccountRoles;
 	type ThresholdCallable = Call;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
-	type SignerNomination = chainflip::RandomSignerNomination;
+	type SignerNomination = chainflip::RandomSignerNomination<SigningOffences>;
 	type TargetChain = Ethereum;
 	type KeyProvider = EthereumVault;
 	type OffenceReporter = Reputation;
@@ -535,7 +535,7 @@ impl pallet_cf_broadcast::Config<EthereumInstance> for Runtime {
 	type ApiCall = eth::api::EthereumApi;
 	type ThresholdSigner = EthereumThresholdSigner;
 	type TransactionBuilder = chainflip::EthTransactionBuilder;
-	type SignerNomination = chainflip::RandomSignerNomination;
+	type SignerNomination = chainflip::RandomSignerNomination<()>;
 	type OffenceReporter = Reputation;
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, Instance1>;

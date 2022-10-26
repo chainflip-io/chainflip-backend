@@ -430,6 +430,10 @@ pub trait OffenceList<T: Config> {
 	const OFFENCES: &'static [T::Offence];
 }
 
+impl<T: Config> OffenceList<T> for () {
+	const OFFENCES: &'static [<T>::Offence] = &[];
+}
+
 pub struct GetValidatorsExcludedFor<T: Config, L: OffenceList<T>>(
 	sp_std::marker::PhantomData<(T, L)>,
 );
