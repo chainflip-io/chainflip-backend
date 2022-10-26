@@ -75,9 +75,11 @@ impl<ExclusionOffences: OffenceList<Runtime>> cf_traits::SignerNomination
 		seed: H,
 		exclude_ids: &[Self::SignerId],
 	) -> Option<Self::SignerId> {
+		let mut all_excludes = GetValidatorsExcludedFor::<Runtime, ExclusionOffences>::get();
+		all_excludes.extend(exclude_ids.iter().cloned());
 		select_one(
 			seed_from_hashable(seed),
-			eligible_authorities(Validator::epoch_index(), &exclude_ids.iter().cloned().collect()),
+			eligible_authorities(Validator::epoch_index(), &all_excludes),
 		)
 	}
 
