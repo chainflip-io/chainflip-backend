@@ -269,4 +269,16 @@ jobs:
     name: Publish to APT repo
     needs: [test-single-node]
     uses: ./.github/workflows/.deb-publish.yaml
+    with:
+      s3-prefix: ci
+      artefacts: chainflip-backend-packages
+    secrets: inherit
+
+  deb-publish-ibiza:
+    name: Publish to APT repo
+    needs: [build-ibiza]
+    uses: ./.github/workflows/.deb-publish.yaml
+    with:
+      s3-prefix: ci/ibiza
+      artefacts: chainflip-backend-packages-ibiza
     secrets: inherit
