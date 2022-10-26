@@ -502,6 +502,7 @@ parameter_types! {
 impl pallet_cf_reputation::Config for Runtime {
 	type Event = Event;
 	type Offence = chainflip::Offence;
+	type AccountRoleRegistry = AccountRoles;
 	type Heartbeat = ChainflipHeartbeat;
 	type HeartbeatBlockInterval = ConstU32<HEARTBEAT_BLOCK_INTERVAL>;
 	type ReputationPointFloorAndCeiling = ReputationPointFloorAndCeiling;

@@ -81,7 +81,7 @@ pub enum PalletOffence {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{EpochInfo, QualifyNode};
+	use cf_traits::{AccountRoleRegistry, EpochInfo, QualifyNode};
 	use frame_support::sp_runtime::traits::BlockNumberProvider;
 	use frame_system::pallet_prelude::*;
 
@@ -95,6 +95,9 @@ pub mod pallet {
 	pub trait Config: Chainflip {
 		/// The event type
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+
+		/// For registering and verifying the account role.
+		type AccountRoleRegistry: AccountRoleRegistry<Self>;
 
 		/// The runtime offence type must be compatible with this pallet's offence type.
 		type Offence: From<PalletOffence>
@@ -295,7 +298,8 @@ pub mod pallet {
 		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[pallet::weight(T::WeightInfo::heartbeat())]
 		pub fn heartbeat(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
-			let validator_id: T::ValidatorId = ensure_signed(origin)?.into();
+			let validator_id: T::ValidatorId =
+				T::AccountRoleRegistry::ensure_validator(origin)?.into();
 			let current_block_number = frame_system::Pallet::<T>::current_block_number();
 
 			let start_of_this_interval =
