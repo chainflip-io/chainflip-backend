@@ -271,7 +271,7 @@ jobs:
     uses: ./.github/workflows/.deb-publish.yaml
     with:
       s3-prefix: ci
-      artefacts: chainflip-backend-packages
+      artifacts: chainflip-backend-packages
     secrets: inherit
 
   deb-publish-ibiza:
@@ -280,5 +280,5 @@ jobs:
     uses: ./.github/workflows/.deb-publish.yaml
     with:
       s3-prefix: ci/ibiza
-      artefacts: chainflip-backend-packages-ibiza
+      artifacts: chainflip-backend-packages-ibiza
     secrets: inherit
