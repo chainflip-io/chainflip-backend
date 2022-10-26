@@ -125,6 +125,7 @@ pub mod pallet {
 	pub enum Error<T> {
 		InvalidIntent,
 		IngressMismatchWithIntent,
+		IntentIdsExhausted,
 	}
 
 	#[pallet::call]
@@ -149,7 +150,9 @@ impl<T: Config> Pallet<T> {
 	fn generate_new_address(
 		ingress_asset: ForeignChainAsset,
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
-		let next_intent_id = IntentIdCounter::<T>::get() + 1;
+		let next_intent_id = IntentIdCounter::<T>::get()
+			.checked_add(1)
+			.ok_or(Error::<T>::IntentIdsExhausted)?;
 		let ingress_address =
 			T::AddressDerivation::generate_address(ingress_asset, next_intent_id)?;
 		IntentIdCounter::<T>::put(next_intent_id);

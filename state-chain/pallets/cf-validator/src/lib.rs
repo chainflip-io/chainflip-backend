@@ -527,7 +527,7 @@ pub mod pallet {
 		/// The weight is related to the number of bidders. Getting that number is quite expensive
 		/// so we use 2 * authority_count as an approximation.
 		#[pallet::weight(T::ValidatorWeightInfo::start_authority_rotation(
-			<Pallet<T> as EpochInfo>::current_authority_count() * 2
+			<Pallet<T> as EpochInfo>::current_authority_count().saturating_mul(2)
 		))]
 		pub fn force_rotation(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;

@@ -47,10 +47,14 @@ where
 		.map(|(node_id, backup_stake)| {
 			let reward = min(
 				average_authority_reward,
-				multiply_by_rational(average_authority_reward * backup_stake, backup_stake, bond)
-					.unwrap()
-					.checked_div(bond)
-					.unwrap(),
+				multiply_by_rational(
+					average_authority_reward.saturating_mul(backup_stake),
+					backup_stake,
+					bond,
+				)
+				.unwrap()
+				.checked_div(bond)
+				.unwrap(),
 			)
 			.saturating_mul(8_u128)
 			.checked_div(10_u128)
@@ -67,12 +71,12 @@ where
 			.map(|(id, reward)| {
 				(id, multiply_by_rational(reward, emissions_cap, total_rewards).unwrap_or_default())
 			})
-			.map(|(id, reward)| (id, (reward * QUANTISATION_FACTOR).into()))
+			.map(|(id, reward)| (id, (reward.saturating_mul(QUANTISATION_FACTOR)).into()))
 			.collect()
 	} else {
 		rewards
 			.into_iter()
-			.map(|(id, reward)| (id, (reward * QUANTISATION_FACTOR).into()))
+			.map(|(id, reward)| (id, (reward.saturating_mul(QUANTISATION_FACTOR)).into()))
 			.collect()
 	}
 }
