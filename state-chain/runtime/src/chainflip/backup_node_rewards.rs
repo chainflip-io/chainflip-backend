@@ -45,10 +45,14 @@ where
 		.map(|(node_id, backup_stake)| {
 			let reward = min(
 				average_authority_reward,
-				multiply_by_rational(average_authority_reward * backup_stake, backup_stake, bond)
-					.unwrap()
-					.checked_div(bond)
-					.unwrap(),
+				multiply_by_rational(
+					average_authority_reward.saturating_mul(backup_stake),
+					backup_stake,
+					bond,
+				)
+				.unwrap()
+				.checked_div(bond)
+				.unwrap(),
 			)
 			.saturating_mul(8_u128)
 			.checked_div(10_u128)
