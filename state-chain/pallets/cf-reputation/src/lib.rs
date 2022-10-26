@@ -197,14 +197,14 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// An offence has been penalised. \[offender, offence, penalty\]
-		OffencePenalty(T::ValidatorId, T::Offence, ReputationPoints),
-		/// The accrual rate for our reputation points has been updated \[points, online_credits\]
-		AccrualRateUpdated(ReputationPoints, T::BlockNumber),
-		/// The penalty for missing a heartbeat has been updated. \[points\]
-		MissedHeartbeatPenaltyUpdated(ReputationPoints),
-		/// The penalty for some offence has been updated \[offence, old_penalty, new_penalty\]
-		PenaltyUpdated(T::Offence, Penalty<T>, Penalty<T>),
+		/// An offence has been penalised.
+		OffencePenalty { offender: T::ValidatorId, offence: T::Offence, penalty: ReputationPoints },
+		/// The accrual rate for our reputation points has been updated.
+		AccrualRateUpdated { reputation_points: ReputationPoints, online_credits: T::BlockNumber },
+		/// The penalty for missing a heartbeat has been updated.
+		MissedHeartbeatPenaltyUpdated { new_reputation_penalty: ReputationPoints },
+		/// The penalty for some offence has been updated.
+		PenaltyUpdated { offence: T::Offence, old_penalty: Penalty<T>, new_penalty: Penalty<T> },
 	}
 
 	#[pallet::error]
@@ -240,7 +240,7 @@ pub mod pallet {
 			);
 
 			AccrualRatio::<T>::set((reputation_points, online_credits));
-			Self::deposit_event(Event::AccrualRateUpdated(reputation_points, online_credits));
+			Self::deposit_event(Event::AccrualRateUpdated { reputation_points, online_credits });
 
 			Ok(().into())
 		}
@@ -253,16 +253,19 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::update_missed_heartbeat_penalty())]
 		pub fn update_missed_heartbeat_penalty(
 			origin: OriginFor<T>,
-			reputation: ReputationPoints,
+			new_reputation_penalty: ReputationPoints,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
 			Penalties::<T>::insert(
 				T::Offence::from(PalletOffence::MissedHeartbeat),
-				Penalty::<T> { reputation, suspension: T::HeartbeatBlockInterval::get() },
+				Penalty::<T> {
+					reputation: new_reputation_penalty,
+					suspension: T::HeartbeatBlockInterval::get(),
+				},
 			);
 
-			Self::deposit_event(Event::MissedHeartbeatPenaltyUpdated(reputation));
+			Self::deposit_event(Event::MissedHeartbeatPenaltyUpdated { new_reputation_penalty });
 			Ok(().into())
 		}
 
@@ -275,13 +278,13 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
-			let old = Penalties::<T>::mutate(&offence, |penalty| {
+			let old_penalty = Penalties::<T>::mutate(&offence, |penalty| {
 				let old = penalty.clone();
 				*penalty = new_penalty.clone();
 				old
 			});
 
-			Self::deposit_event(Event::<T>::PenaltyUpdated(offence, old, new_penalty));
+			Self::deposit_event(Event::<T>::PenaltyUpdated { offence, old_penalty, new_penalty });
 
 			Ok(().into())
 		}
@@ -406,11 +409,11 @@ impl<T: Config> OffenceReporter for Pallet<T> {
 				Reputations::<T>::mutate(&validator_id, |rep| {
 					rep.deduct_reputation(penalty.reputation);
 				});
-				Self::deposit_event(Event::OffencePenalty(
-					validator_id.clone(),
+				Self::deposit_event(Event::OffencePenalty {
+					offender: validator_id.clone(),
 					offence,
-					penalty.reputation,
-				));
+					penalty: penalty.reputation,
+				});
 			}
 		}
 
