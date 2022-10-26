@@ -9,6 +9,7 @@ use crate::System;
 #[storage_alias]
 type LastSeenSlot = StorageValue<AuraSlotExtraction, Slot>;
 
+// https://github.com/chainflip-io/substrate/blob/c172d0f683fab3792b90d876fd6ca27056af9fe9/frame/aura/src/lib.rs#L179
 fn extract_slot_from_digest_item(item: &DigestItem) -> Option<Slot> {
 	item.as_pre_runtime().and_then(|(id, mut data)| {
 		if id == AURA_ENGINE_ID {
@@ -187,19 +188,19 @@ mod test_missed_authorship_slots {
 			simulate_block_authorship(3, |missed_slots| {
 				assert_eq!(missed_slots, [2].map(to_slot));
 			});
-			assert_eq!(Aura::current_slot(), GENESIS_SLOT + 3);
+			assert_eq!(Aura::current_slot(), to_slot(3));
 
 			// Author for the next slot, assert we haven't missed a slot.
 			simulate_block_authorship(4, |missed_slots| {
 				assert!(missed_slots.is_empty());
 			});
-			assert_eq!(Aura::current_slot(), GENESIS_SLOT + 4);
+			assert_eq!(Aura::current_slot(), to_slot(4));
 
 			// Author for slot 7, assert we missed slots 5 and 6.
 			simulate_block_authorship(7, |missed_slots| {
 				assert_eq!(missed_slots, [5, 6].map(to_slot));
 			});
-			assert_eq!(Aura::current_slot(), GENESIS_SLOT + 7);
+			assert_eq!(Aura::current_slot(), to_slot(7));
 		});
 	}
 }
