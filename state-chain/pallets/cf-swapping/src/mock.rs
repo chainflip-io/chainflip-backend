@@ -4,8 +4,10 @@ use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
 	AmmPoolApi, Chainflip, EgressApi, IngressApi,
 };
+use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{parameter_types, storage_alias};
 use frame_system as system;
+use scale_info::TypeInfo;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -18,8 +20,20 @@ type Block = frame_system::mocking::MockBlock<Test>;
 type AccountId = u64;
 type Balance = u128;
 
+#[cfg(feature = "std")]
+use serde::{Deserialize, Serialize};
+
+/// A helper type for testing
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct EgressTransaction {
+	pub foreign_asset: ForeignChainAsset,
+	pub amount: AssetAmount,
+	pub egress_address: ForeignChainAddress,
+}
+
 #[storage_alias]
-pub type EgressQueue<T: crate::pallet::Config> = StorageValue<Pallet<T>, Vec<AssetAmount>>;
+pub type EgressQueue<T: crate::pallet::Config> = StorageValue<Pallet<T>, Vec<EgressTransaction>>;
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
@@ -90,15 +104,19 @@ impl IngressApi for MockIngress {
 pub struct MockEgressApi;
 impl EgressApi for MockEgressApi {
 	fn schedule_egress(
-		_foreign_asset: ForeignChainAsset,
+		foreign_asset: ForeignChainAsset,
 		amount: AssetAmount,
-		_egress_address: ForeignChainAddress,
+		egress_address: ForeignChainAddress,
 	) {
 		if let Some(mut egresses) = EgressQueue::<Test>::get() {
-			egresses.push(amount);
+			egresses.push(EgressTransaction { foreign_asset, amount, egress_address });
 			EgressQueue::<Test>::put(egresses);
 		} else {
-			EgressQueue::<Test>::put(vec![amount]);
+			EgressQueue::<Test>::put(vec![EgressTransaction {
+				foreign_asset,
+				amount,
+				egress_address,
+			}]);
 		}
 	}
 
