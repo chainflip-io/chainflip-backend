@@ -1,15 +1,11 @@
 use crate::{mock::*, Error, *};
 use cf_test_utilities::last_event;
 use cf_traits::{
-	mocks::{
-		reputation_resetter::MockReputationResetter, system_state_info::MockSystemStateInfo,
-		vault_rotation::MockVaultRotator,
-	},
+	mocks::{system_state_info::MockSystemStateInfo, vault_rotation::MockVaultRotator},
 	AuctionOutcome, SystemStateInfo, VaultRotator,
 };
 use frame_support::{assert_noop, assert_ok};
 use frame_system::RawOrigin;
-use pallet_session::SessionManager;
 
 const ALICE: u64 = 100;
 const BOB: u64 = 101;
@@ -499,46 +495,6 @@ fn no_auction_during_maintenance() {
 			CurrentRotationPhase::<Test>::get(),
 			RotationPhase::<Test>::VaultsRotating(..)
 		));
-	});
-}
-
-#[test]
-fn test_reputation_reset() {
-	new_test_ext().execute_with_unchecked_invariants(|| {
-		// Simulate an epoch rotation and give the validators some reputation.
-		CurrentRotationPhase::<Test>::put(RotationPhase::<Test>::SessionRotating(
-			simple_rotation_state(vec![1, 2, 3], None),
-		));
-		ValidatorPallet::start_session(0);
-
-		for id in &ValidatorPallet::current_authorities() {
-			MockReputationResetter::<Test>::set_reputation(id, 100);
-		}
-
-		let first_epoch = ValidatorPallet::current_epoch();
-
-		// Simulate another epoch rotation and give the validators some reputation.
-		CurrentRotationPhase::<Test>::put(RotationPhase::<Test>::SessionRotating(
-			simple_rotation_state(vec![4, 5, 6], None),
-		));
-		ValidatorPallet::start_session(0);
-
-		for id in &ValidatorPallet::current_authorities() {
-			MockReputationResetter::<Test>::set_reputation(id, 100);
-		}
-
-		for id in &[1, 2, 3, 4, 5, 6] {
-			assert_eq!(MockReputationResetter::<Test>::get_reputation(id), 100);
-		}
-
-		ValidatorPallet::expire_epoch(first_epoch);
-
-		for id in &[1, 2, 3] {
-			assert_eq!(MockReputationResetter::<Test>::get_reputation(id), 0);
-		}
-		for id in &[4, 5, 6] {
-			assert_eq!(MockReputationResetter::<Test>::get_reputation(id), 100);
-		}
 	});
 }
 
