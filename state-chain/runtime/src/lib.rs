@@ -819,7 +819,7 @@ impl_runtime_apis! {
 		fn cf_penalties() -> Vec<(Offence, RuntimeApiPenalty)> {
 			pallet_cf_reputation::Penalties::<Runtime>::iter_keys()
 				.map(|offence| {
-					let penalty = pallet_cf_reputation::Penalties::<Runtime>::get(offence).unwrap_or_default();
+					let penalty = pallet_cf_reputation::Penalties::<Runtime>::get(offence);
 					(offence, RuntimeApiPenalty {
 						reputation_points: penalty.reputation,
 						suspension_duration_blocks: penalty.suspension

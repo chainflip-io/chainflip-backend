@@ -180,7 +180,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn penalties)]
 	/// The penalty to be applied for each offence.
-	pub type Penalties<T: Config> = StorageMap<_, Twox64Concat, T::Offence, Penalty<T>>;
+	pub type Penalties<T: Config> = StorageMap<_, Twox64Concat, T::Offence, Penalty<T>, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn offence_time_slot_tracker)]
@@ -273,17 +273,17 @@ pub mod pallet {
 		pub fn set_penalty(
 			origin: OriginFor<T>,
 			offence: T::Offence,
-			penalty: Penalty<T>,
+			new_penalty: Penalty<T>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
-			let old = Penalties::<T>::mutate(&offence, |maybe_penalty| {
-				let old = maybe_penalty.clone().unwrap_or_default();
-				*maybe_penalty = Some(penalty.clone());
+			let old = Penalties::<T>::mutate(&offence, |penalty| {
+				let old = penalty.clone();
+				*penalty = new_penalty.clone();
 				old
 			});
 
-			Self::deposit_event(Event::<T>::PenaltyUpdated(offence, old, penalty));
+			Self::deposit_event(Event::<T>::PenaltyUpdated(offence, old, new_penalty));
 
 			Ok(().into())
 		}
@@ -491,10 +491,7 @@ impl<T: Config> Pallet<T> {
 	/// available.
 	fn resolve_penalty_for<O: Into<T::Offence>>(offence: O) -> Penalty<T> {
 		let offence: T::Offence = offence.into();
-		Penalties::<T>::get(&offence).unwrap_or_else(|| {
-			log::warn!("No penalty defined for offence {:?}, using default.", offence);
-			Default::default()
-		})
+		Penalties::<T>::get(&offence)
 	}
 }
 
