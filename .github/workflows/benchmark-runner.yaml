@@ -30,7 +30,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Clean the workspace
-        run: rm -rf $GITHUB_WORKSPACE/*
+        run: echo ${{ secrets.CF_RUNNER_SUDO_PASSWORD }} | sudo -S rm -rf $GITHUB_WORKSPACE/*
       - name: Setup Tailscale 🪡 ⚙️
         id: tailscale
         uses: tailscale/github-action@main

@@ -20,7 +20,7 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Clean the workspace
-        run: rm -rf $GITHUB_WORKSPACE/*
+        run: echo ${{ secrets.CF_RUNNER_SUDO_PASSWORD }} | sudo -S rm -rf $GITHUB_WORKSPACE/*
       - name: Checkout
         uses: actions/checkout@v3
       - name: Check Format
@@ -35,7 +35,7 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Clean the workspace
-        run: rm -rf $GITHUB_WORKSPACE/*
+        run: echo ${{ secrets.CF_RUNNER_SUDO_PASSWORD }} | sudo -S rm -rf $GITHUB_WORKSPACE/*
       - name: Checkout
         uses: actions/checkout@v3
       - name: Check Linting
@@ -50,7 +50,7 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Clean the workspace
-        run: rm -rf $GITHUB_WORKSPACE/*
+        run: echo ${{ secrets.CF_RUNNER_SUDO_PASSWORD }} | sudo -S rm -rf $GITHUB_WORKSPACE/*
       - name: Checkout
         uses: actions/checkout@v3
       - name: Update APT
@@ -83,7 +83,7 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Clean the workspace
-        run: rm -rf $GITHUB_WORKSPACE/*
+        run: echo ${{ secrets.CF_RUNNER_SUDO_PASSWORD }} | sudo -S rm -rf $GITHUB_WORKSPACE/*
       - name: Checkout
         uses: actions/checkout@v3
       - name: Update APT
@@ -139,7 +139,7 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Clean the workspace
-        run: rm -rf $GITHUB_WORKSPACE/*
+        run: echo ${{ secrets.CF_RUNNER_SUDO_PASSWORD }} | sudo -S rm -rf $GITHUB_WORKSPACE/*
       - name: Checkout
         uses: actions/checkout@v3
       - name: Update APT
@@ -171,7 +171,7 @@ jobs:
     if: github.ref_name == 'develop'
     steps:
       - name: Clean the workspace
-        run: rm -rf $GITHUB_WORKSPACE/*
+        run: echo ${{ secrets.CF_RUNNER_SUDO_PASSWORD }} | sudo -S rm -rf $GITHUB_WORKSPACE/*
       - name: Checkout
         uses: actions/checkout@v3
       - name: Download previously built binaries
@@ -189,7 +189,7 @@ jobs:
     needs: [build-and-test]
     steps:
       - name: Clean the workspace
-        run: rm -rf $GITHUB_WORKSPACE/*
+        run: echo ${{ secrets.CF_RUNNER_SUDO_PASSWORD }} | sudo -S rm -rf $GITHUB_WORKSPACE/*
       - uses: actions/setup-node@v3
         with:
           node-version: 17

@@ -38,7 +38,7 @@ jobs:
       ]
     steps:
       - name: Clean the workspace
-        run: rm -rf $GITHUB_WORKSPACE/*
+        run: echo ${{ secrets.CF_RUNNER_SUDO_PASSWORD }} | sudo -S rm -rf $GITHUB_WORKSPACE/*
       - name: Checkout
         uses: actions/checkout@v2
 
