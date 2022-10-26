@@ -37,6 +37,7 @@ jobs:
         "${{ github.event.inputs.benchmark_machine_spec }}",
       ]
     steps:
+      - uses: AutoModality/action-clean@v1
       - name: Checkout
         uses: actions/checkout@v2
 
