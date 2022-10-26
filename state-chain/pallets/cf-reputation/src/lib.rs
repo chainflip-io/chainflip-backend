@@ -211,8 +211,6 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// Tried to set the accrual ration to something invalid.
 		InvalidAccrualRatio,
-		/// The block in a reputation point penalty must be non-zero.
-		InvalidReputationPenaltyRate,
 	}
 
 	#[pallet::call]
