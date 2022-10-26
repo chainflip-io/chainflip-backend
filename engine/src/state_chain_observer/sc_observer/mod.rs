@@ -166,7 +166,7 @@ pub async fn start<BlockStream, RpcClient, EthRpc, EthMultisigClient, PolkadotMu
 	sc_block_stream: BlockStream,
 	eth_broadcaster: EthBroadcaster<EthRpc>,
 	eth_multisig_client: Arc<EthMultisigClient>,
-	_dot_multisig_client: Arc<PolkadotMultisigClient>,
+	dot_multisig_client: Arc<PolkadotMultisigClient>,
 	peer_update_sender: UnboundedSender<PeerUpdate>,
 	epoch_start_sender: broadcast::Sender<EpochStart>,
 	#[cfg(feature = "ibiza")] eth_monitor_ingress_sender: tokio::sync::mpsc::UnboundedSender<H160>,
@@ -326,6 +326,9 @@ where
                                                     keygen_participants,
                                                 ),
                                             ) => {
+                                                // Ceremony id tracking is global, so update all other clients
+                                                dot_multisig_client.update_latest_ceremony_id(ceremony_id);
+
                                                 handle_keygen_request(
                                                     scope,
                                                     eth_multisig_client.clone(),
@@ -343,6 +346,9 @@ where
                                                     payload,
                                                 ),
                                             ) => {
+                                                // Ceremony id tracking is global, so update all other clients
+                                                dot_multisig_client.update_latest_ceremony_id(ceremony_id);
+
                                                 handle_signing_request(
                                                         scope,
                                                         eth_multisig_client.clone(),

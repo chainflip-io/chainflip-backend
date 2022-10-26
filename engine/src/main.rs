@@ -110,7 +110,7 @@ fn main() -> anyhow::Result<()> {
             let key_manager_contract =
                 KeyManager::new(key_manager_address.into());
 
-            let eth_latest_ceremony_id = state_chain_client
+            let latest_ceremony_id = state_chain_client
             .get_storage_value::<pallet_cf_validator::CeremonyIdCounter<state_chain_runtime::Runtime>>(
                 latest_block_hash,
             )
@@ -143,7 +143,7 @@ fn main() -> anyhow::Result<()> {
                     KeyStore::new(db.clone()),
                     eth_incoming_receiver,
                     eth_outgoing_sender,
-                    eth_latest_ceremony_id,
+                    latest_ceremony_id,
                     &root_logger,
                 );
 
@@ -157,7 +157,7 @@ fn main() -> anyhow::Result<()> {
                     KeyStore::new(db),
                     dot_incoming_receiver,
                     dot_outgoing_sender,
-                    0, // TODO: get dot_latest_ceremony_id from SC
+                    latest_ceremony_id,
                     &root_logger,
                 );
 
