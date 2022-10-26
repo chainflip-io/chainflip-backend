@@ -82,7 +82,7 @@ pub trait ChainAbi: ChainCrypto {
 	type UnsignedTransaction: Member + Parameter + Default + BenchmarkValue;
 	type SignedTransaction: Member + Parameter + BenchmarkValue;
 	type SignerCredential: Member + Parameter + BenchmarkValue;
-	type ReplayProtection: Member + Parameter + Default;
+	type ReplayProtection: Member + Parameter;
 	type ValidationError;
 
 	/// Verify the signed transaction when it is submitted to the state chain by the nominated

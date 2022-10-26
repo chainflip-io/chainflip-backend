@@ -765,21 +765,6 @@ impl PolkadotReplayProtection {
 	}
 }
 
-impl Default for PolkadotReplayProtection {
-	fn default() -> Self {
-		Self {
-			chain_data: ChainData {
-				spec_version: polkadot_mainnet::SPEC_VERSION,
-				transaction_version: polkadot_mainnet::TRANSACTION_VERSION,
-				genesis_hash: H256::from_str(polkadot_mainnet::GENESIS_HASH).unwrap(),
-				block_hash_count: polkadot_mainnet::BLOCK_HASH_COUNT,
-			},
-			nonce: 0,
-			tip: 0,
-		}
-	}
-}
-
 #[cfg(test)]
 mod test_polkadot_extrinsics {
 
