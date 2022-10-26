@@ -34,13 +34,14 @@ where
 	let authority_rewards = current_authority_emission_per_block.saturating_mul(reward_interwal);
 
 	// The average authority emission
-	let average_authority_reward = authority_rewards.checked_div(current_authority_count).unwrap();
+	let average_authority_reward = authority_rewards
+		.checked_div(current_authority_count)
+		.expect("we always have more than one authority");
 
 	let mut total_rewards = 0_u128;
 
 	// Calculate rewards for each backup node and total rewards for capping
 	let rewards: Vec<_> = backup_nodes
-		.into_iter()
 		.map(|(node_id, backup_stake)| {
 			let reward = min(
 				average_authority_reward,
