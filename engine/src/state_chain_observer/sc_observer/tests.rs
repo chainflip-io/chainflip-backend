@@ -847,11 +847,11 @@ async fn only_encodes_and_signs_when_specified() {
 						// sign this one
 						phase: Phase::ApplyExtrinsic(0),
 						event: state_chain_runtime::Event::EthereumBroadcaster(
-							pallet_cf_broadcast::Event::TransactionSigningRequest(
-								BroadcastAttemptId::default(),
-								AccountId32::new(OUR_ACCOUNT_ID_BYTES),
-								UnsignedTransaction::default(),
-							),
+							pallet_cf_broadcast::Event::TransactionBroadcastRequest {
+								broadcast_attempt_id: BroadcastAttemptId::default(),
+								nominee: AccountId32::new(OUR_ACCOUNT_ID_BYTES),
+								unsigned_tx: UnsignedTransaction::default(),
+							},
 						),
 						topics: vec![H256::default()],
 					},
@@ -859,11 +859,11 @@ async fn only_encodes_and_signs_when_specified() {
 						// do NOT sign this one
 						phase: Phase::ApplyExtrinsic(1),
 						event: state_chain_runtime::Event::EthereumBroadcaster(
-							pallet_cf_broadcast::Event::TransactionSigningRequest(
-								BroadcastAttemptId::default(),
-								AccountId32::new(NOT_OUR_ACCOUNT_ID_BYTES),
-								UnsignedTransaction::default(),
-							),
+							pallet_cf_broadcast::Event::TransactionBroadcastRequest {
+								broadcast_attempt_id: BroadcastAttemptId::default(),
+								nominee: AccountId32::new(NOT_OUR_ACCOUNT_ID_BYTES),
+								unsigned_tx: UnsignedTransaction::default(),
+							},
 						),
 						topics: vec![H256::default()],
 					},

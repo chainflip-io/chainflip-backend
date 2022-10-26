@@ -16,12 +16,11 @@ use cf_traits::AccountRoleRegistry;
 
 use cf_chains::benchmarking_value::BenchmarkValue;
 
-// Inserts a new transaction signing attempt into the storage.
-fn insert_transaction_signing_attempt<T: pallet::Config<I>, I: 'static>(
+fn insert_transaction_broadcast_attempt<T: pallet::Config<I>, I: 'static>(
 	nominee: <T as Chainflip>::ValidatorId,
 	broadcast_attempt_id: BroadcastAttemptId,
 ) {
-	AwaitingTransactionSignature::<T, I>::insert(
+	AwaitingBroadcast::<T, I>::insert(
 		broadcast_attempt_id,
 		TransactionSigningAttempt {
 			broadcast_attempt: BroadcastAttempt::<T, I> {
@@ -50,36 +49,38 @@ fn generate_on_signature_ready_call<T: pallet::Config<I>, I>() -> pallet::Call<T
 // TODO: check if we really reach the expensive parts of the code.
 benchmarks_instance_pallet! {
 	on_initialize {
-		let expiry_block = T::BlockNumber::from(6u32);
+		// We add one because one is added at genesis
+		let timeout_block = frame_system::Pallet::<T>::block_number() + T::BroadcastTimeout::get() + 1_u32.into();
 		// Complexity parameter for expiry queue.
 		let x in 1 .. 1000u32;
 		for i in 1 .. x {
 			let broadcast_attempt_id = BroadcastAttemptId {broadcast_id: i, attempt_count: 1};
-			Expiries::<T, I>::mutate(expiry_block, |entries| {
-				entries.push((BroadcastStage::TransactionSigning, broadcast_attempt_id))
-			});
+			Timeouts::<T, I>::append(timeout_block, broadcast_attempt_id);
 			ThresholdSignatureData::<T, I>::insert(i, (ApiCallFor::<T, I>::benchmark_value(), ThresholdSignatureFor::<T, I>::benchmark_value()))
 		}
 		let valid_key = <<T as Config<I>>::TargetChain as ChainCrypto>::AggKey::benchmark_value();
 		T::KeyProvider::set_key(valid_key);
 	} : {
-		Pallet::<T, I>::on_initialize(expiry_block);
+		Pallet::<T, I>::on_initialize(timeout_block);
 	}
-	transaction_ready_for_transmission {
+	whitelist_transaction_for_refund {
+		// We add one because one is added at genesis
 		let caller: T::AccountId = whitelisted_caller();
 		T::AccountRoleRegistry::register_account(caller.clone(), AccountRole::Validator);
 		let broadcast_attempt_id = BroadcastAttemptId {
 			broadcast_id: 1,
 			attempt_count: 1
 		};
-		insert_transaction_signing_attempt::<T, I>(caller.clone().into(), broadcast_attempt_id);
+		insert_transaction_broadcast_attempt::<T, I>(caller.clone().into(), broadcast_attempt_id);
 		generate_on_signature_ready_call::<T, I>().dispatch_bypass_filter(T::EnsureThresholdSigned::successful_origin())?;
 		let valid_key = <<T as Config<I>>::TargetChain as ChainCrypto>::AggKey::benchmark_value();
 		T::KeyProvider::set_key(valid_key);
 		T::AccountRoleRegistry::register_account(caller.clone(), AccountRole::Validator);
-	} : _(RawOrigin::Signed(caller), broadcast_attempt_id, SignedTransactionFor::<T, I>::benchmark_value(), SignerIdFor::<T, I>::benchmark_value())
+		let signed_tx = SignedTransactionFor::<T, I>::benchmark_value();
+		let signer_id = SignerIdFor::<T, I>::benchmark_value();
+	} : _(RawOrigin::Signed(caller.clone()), broadcast_attempt_id, signed_tx, signer_id.clone())
 	verify {
-		assert!(Expiries::<T, I>::contains_key(frame_system::Pallet::<T>::block_number() + T::TransmissionTimeout::get()));
+		assert_eq!(RefundSignerId::<T, I>::get(caller).unwrap(), signer_id);
 	}
 	// TODO: add a benchmark for the failure case
 	transaction_signing_failure {
@@ -91,22 +92,23 @@ benchmarks_instance_pallet! {
 			broadcast_id: 1,
 			attempt_count: 1
 		};
-		insert_transaction_signing_attempt::<T, I>(caller.clone().into(), broadcast_attempt_id);
+		insert_transaction_broadcast_attempt::<T, I>(caller.clone().into(), broadcast_attempt_id);
 		generate_on_signature_ready_call::<T, I>().dispatch_bypass_filter(T::EnsureThresholdSigned::successful_origin())?;
-		let expiry_block = frame_system::Pallet::<T>::block_number() + T::SigningTimeout::get();
+		let expiry_block = frame_system::Pallet::<T>::block_number() + T::BroadcastTimeout::get();
 		let valid_key = <<T as Config<I>>::TargetChain as ChainCrypto>::AggKey::benchmark_value();
 		T::KeyProvider::set_key(valid_key);
 	}: _(RawOrigin::Signed(caller), broadcast_attempt_id)
 	verify {
-		assert!(Expiries::<T, I>::contains_key(expiry_block));
+		assert!(Timeouts::<T, I>::contains_key(expiry_block));
 	}
 	on_signature_ready {
-		let should_expire_in = T::BlockNumber::from(6u32);
+		// We add one because one is added at genesis
+		let timeout_block = frame_system::Pallet::<T>::block_number() + T::BroadcastTimeout::get() + 1_u32.into();
 		let broadcast_attempt_id = BroadcastAttemptId {
 			broadcast_id: 1,
 			attempt_count: 1
 		};
-		insert_transaction_signing_attempt::<T, I>(whitelisted_caller(), broadcast_attempt_id);
+		insert_transaction_broadcast_attempt::<T, I>(whitelisted_caller(), broadcast_attempt_id);
 		let call = generate_on_signature_ready_call::<T, I>();
 		let valid_key = <<T as Config<I>>::TargetChain as ChainCrypto>::AggKey::benchmark_value();
 		T::KeyProvider::set_key(valid_key);
@@ -114,7 +116,7 @@ benchmarks_instance_pallet! {
 	verify {
 		assert_eq!(BroadcastIdCounter::<T, I>::get(), 1);
 		assert!(BroadcastIdToAttemptNumbers::<T, I>::contains_key(1));
-		assert!(Expiries::<T, I>::contains_key(should_expire_in));
+		assert!(Timeouts::<T, I>::contains_key(timeout_block));
 	}
 	start_next_broadcast_attempt {
 		let broadcast_attempt_id = Pallet::<T, I>::start_broadcast(&BenchmarkValue::benchmark_value(), BenchmarkValue::benchmark_value(), BenchmarkValue::benchmark_value());
@@ -129,7 +131,7 @@ benchmarks_instance_pallet! {
 		})
 	}
 	verify {
-		assert!(AwaitingTransactionSignature::<T, I>::contains_key(broadcast_attempt_id.next_attempt()));
+		assert!(AwaitingBroadcast::<T, I>::contains_key(broadcast_attempt_id.next_attempt()));
 	}
 	signature_accepted {
 		let caller: T::AccountId = whitelisted_caller();

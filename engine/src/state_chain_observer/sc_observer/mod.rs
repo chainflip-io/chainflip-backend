@@ -6,8 +6,8 @@ use cf_primitives::CeremonyId;
 use futures::{FutureExt, Stream, StreamExt};
 use pallet_cf_vaults::KeygenError;
 use slog::o;
-use sp_core::H256;
-use sp_runtime::AccountId32;
+use sp_core::{Hasher, H256};
+use sp_runtime::{traits::Keccak256, AccountId32};
 use state_chain_runtime::{AccountId, CfeSettings};
 use std::{
 	collections::BTreeSet,
@@ -351,12 +351,12 @@ where
                                                 ).await;
                                             }
                                             state_chain_runtime::Event::EthereumBroadcaster(
-                                                pallet_cf_broadcast::Event::TransactionSigningRequest(
+                                                pallet_cf_broadcast::Event::TransactionBroadcastRequest {
                                                     broadcast_attempt_id,
-                                                    validator_id,
+                                                    nominee,
                                                     unsigned_tx,
-                                                ),
-                                            ) if validator_id == state_chain_client.our_account_id => {
+                                                },
+                                            ) if nominee == state_chain_client.our_account_id => {
                                                 slog::debug!(
                                                     logger,
                                                     "Received signing request with broadcast_attempt_id {} for transaction: {:?}",
@@ -367,7 +367,7 @@ where
                                                     Ok(raw_signed_tx) => {
                                                         let _result = state_chain_client.submit_signed_extrinsic(
                                                             state_chain_runtime::Call::EthereumBroadcaster(
-                                                                pallet_cf_broadcast::Call::transaction_ready_for_transmission {
+                                                                pallet_cf_broadcast::Call::whitelist_transaction_for_refund {
                                                                     broadcast_attempt_id,
                                                                     signed_tx: raw_signed_tx.0.clone(),
                                                                     signer_id: eth_broadcaster.address,
@@ -378,7 +378,29 @@ where
 
                                                         // We want to transmit here to decrease the delay between getting a gas price estimate
                                                         // and transmitting it to the Ethereum network
-                                                        eth_broadcaster.send_for_broadcast_attempt(raw_signed_tx.0, broadcast_attempt_id).await
+                                                        let expected_broadcast_tx_hash = Keccak256::hash(&raw_signed_tx.0[..]);
+                                                        match eth_broadcaster.send(raw_signed_tx.0).await {
+                                                            Ok(tx_hash) => {
+                                                                slog::debug!(
+                                                                    logger,
+                                                                    "Successful TransmissionRequest broadcast_attempt_id {}, tx_hash: {:#x}",
+                                                                    broadcast_attempt_id,
+                                                                    tx_hash
+                                                                );
+                                                                assert_eq!(
+                                                                    tx_hash, expected_broadcast_tx_hash,
+                                                                    "tx_hash returned from `send` does not match expected hash"
+                                                                );
+                                                            },
+                                                            Err(e) => {
+                                                                slog::info!(
+                                                                    logger,
+                                                                    "TransmissionRequest broadcast_attempt_id {} failed: {:?}",
+                                                                    broadcast_attempt_id,
+                                                                    e
+                                                                );
+                                                            },
+                                                        }
                                                     }
                                                     Err(e) => {
                                                         // Note: this error case should only occur if there is a problem with the
@@ -405,15 +427,6 @@ where
                                                         ).await;
                                                     }
                                                 }
-                                            }
-                                            state_chain_runtime::Event::EthereumBroadcaster(
-                                                pallet_cf_broadcast::Event::TransmissionRequest(
-                                                    broadcast_attempt_id,
-                                                    signed_tx,
-                                                ),
-                                            ) => {
-                                                eth_broadcaster
-                                                    .send_for_broadcast_attempt(signed_tx, broadcast_attempt_id).await
                                             }
                                             state_chain_runtime::Event::Environment(
                                                 pallet_cf_environment::Event::CfeSettingsUpdated {

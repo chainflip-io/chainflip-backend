@@ -31,7 +31,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system,
-		MockBroadcast: pallet_cf_broadcast::<Instance1>,
+		Broadcaster: pallet_cf_broadcast::<Instance1>,
 	}
 );
 
@@ -82,12 +82,10 @@ impl Chainflip for Test {
 	type SystemState = MockSystemStateInfo;
 }
 
-pub const SIGNING_EXPIRY_BLOCKS: <Test as frame_system::Config>::BlockNumber = 2;
-pub const TRANSMISSION_EXPIRY_BLOCKS: <Test as frame_system::Config>::BlockNumber = 4;
+pub const BROADCAST_EXPIRY_BLOCKS: <Test as frame_system::Config>::BlockNumber = 4;
 
 parameter_types! {
-	pub const SigningTimeout: <Test as frame_system::Config>::BlockNumber = SIGNING_EXPIRY_BLOCKS;
-	pub const TransmissionTimeout: <Test as frame_system::Config>::BlockNumber = TRANSMISSION_EXPIRY_BLOCKS;
+	pub const BroadcastTimeout: <Test as frame_system::Config>::BlockNumber = BROADCAST_EXPIRY_BLOCKS;
 }
 
 pub type MockOffenceReporter =
@@ -144,8 +142,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type SignerNomination = MockNominator;
 	type OffenceReporter = MockOffenceReporter;
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
-	type SigningTimeout = SigningTimeout;
-	type TransmissionTimeout = TransmissionTimeout;
+	type BroadcastTimeout = BroadcastTimeout;
 	type WeightInfo = ();
 	type KeyProvider = MockKeyProvider;
 }
