@@ -1,10 +1,11 @@
 use crate::{Runtime, Validator};
 use cf_primitives::EpochIndex;
 use cf_traits::{Chainflip, EpochInfo};
-use frame_support::Hashable;
+use frame_support::{traits::Get, Hashable};
 use nanorand::{Rng, WyRand};
+use pallet_cf_reputation::{GetValidatorsExcludedFor, OffenceList};
 use pallet_cf_validator::HistoricalAuthorities;
-use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
+use sp_std::{collections::btree_set::BTreeSet, marker::PhantomData, vec::Vec};
 
 /// Tries to select `n` items randomly from the provided BTreeSet.
 ///
@@ -47,20 +48,27 @@ fn seed_from_hashable<H: Hashable>(value: H) -> u64 {
 
 fn eligible_authorities(
 	at_epoch: EpochIndex,
-	exclude_ids: &[<Runtime as Chainflip>::ValidatorId],
+	exclude_ids: &BTreeSet<<Runtime as Chainflip>::ValidatorId>,
 ) -> BTreeSet<<Runtime as Chainflip>::ValidatorId> {
 	HistoricalAuthorities::<Runtime>::get(at_epoch)
 		.into_iter()
 		.collect::<BTreeSet<_>>()
-		.difference(&exclude_ids.iter().cloned().collect())
+		.difference(&exclude_ids)
 		.cloned()
 		.collect()
 }
 
 /// Nominates pseudo-random signers based on the provided seed.
-pub struct RandomSignerNomination;
+///
+/// Signers serving a suspension for any of the offences in ExclusionOffences are
+/// excluded from being nominated.
+pub struct RandomSignerNomination<ExclusionOffences: OffenceList<Runtime>>(
+	PhantomData<ExclusionOffences>,
+);
 
-impl cf_traits::SignerNomination for RandomSignerNomination {
+impl<ExclusionOffences: OffenceList<Runtime>> cf_traits::SignerNomination
+	for RandomSignerNomination<ExclusionOffences>
+{
 	type SignerId = <Runtime as Chainflip>::ValidatorId;
 
 	fn nomination_with_seed<H: Hashable>(
@@ -69,7 +77,7 @@ impl cf_traits::SignerNomination for RandomSignerNomination {
 	) -> Option<Self::SignerId> {
 		select_one(
 			seed_from_hashable(seed),
-			eligible_authorities(Validator::epoch_index(), exclude_ids),
+			eligible_authorities(Validator::epoch_index(), &exclude_ids.iter().cloned().collect()),
 		)
 	}
 
@@ -82,7 +90,10 @@ impl cf_traits::SignerNomination for RandomSignerNomination {
 			cf_utilities::success_threshold_from_share_count(
 				Validator::authority_count_at_epoch(epoch_index).unwrap_or_default(),
 			) as usize,
-			eligible_authorities(epoch_index, &[]),
+			eligible_authorities(
+				epoch_index,
+				&GetValidatorsExcludedFor::<Runtime, ExclusionOffences>::get(),
+			),
 		)
 	}
 }
