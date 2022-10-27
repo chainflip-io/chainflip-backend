@@ -15,6 +15,8 @@ use std::fmt::Debug;
 use generic_array::GenericArray;
 use serde::{Deserialize, Serialize};
 
+use super::KeyId;
+
 /// The db uses a static length prefix, that must include the keygen data prefix and the chain tag
 pub const CHAIN_TAG_SIZE: usize = std::mem::size_of::<ChainTag>();
 
@@ -79,10 +81,15 @@ pub trait ECPoint:
 	}
 }
 
+pub trait Verifiable {
+	fn verify(&self, key_id: &KeyId, message: &[u8; 32]) -> anyhow::Result<()>;
+}
+
 pub trait CryptoScheme: 'static {
 	type Point: ECPoint;
 
-	type Signature: Debug
+	type Signature: Verifiable
+		+ Debug
 		+ Clone
 		+ PartialEq
 		+ serde::Serialize

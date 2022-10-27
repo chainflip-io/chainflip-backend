@@ -1,4 +1,4 @@
-use super::{curve25519_ristretto::Point, ChainTag, CryptoScheme};
+use super::{curve25519_ristretto::Point, ChainTag, CryptoScheme, Verifiable};
 use schnorrkel::context::{SigningContext, SigningTranscript};
 use serde::{Deserialize, Serialize};
 
@@ -29,6 +29,12 @@ impl<'de> Deserialize<'de> for PolkadotSignature {
 		schnorrkel::Signature::from_bytes(&bytes)
 			.map(PolkadotSignature)
 			.map_err(serde::de::Error::custom)
+	}
+}
+
+impl Verifiable for PolkadotSignature {
+	fn verify(&self, _key_id: &crate::multisig::KeyId, _message: &[u8; 32]) -> anyhow::Result<()> {
+		todo!()
 	}
 }
 
