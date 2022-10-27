@@ -12,7 +12,7 @@ mod tests;
 pub mod weights;
 pub use weights::WeightInfo;
 
-use cf_chains::{ApiCall, ChainAbi, ChainCrypto, TransactionBuilder};
+use cf_chains::{ApiCall, ChainAbi, ChainCrypto, FeeRefundCalculator, TransactionBuilder};
 use cf_traits::{
 	offence_reporting::OffenceReporter, Broadcaster, Chainflip, EpochInfo, SignerNomination,
 	ThresholdSigner,
@@ -98,6 +98,10 @@ pub mod pallet {
 	pub type ChainAmountFor<T, I> =
 		<<T as Config<I>>::TargetChain as cf_chains::Chain>::ChainAmount;
 
+	/// Type alias for the Amount type of a particular chain.
+	pub type TransactionFeeFor<T, I> =
+		<<T as Config<I>>::TargetChain as cf_chains::Chain>::TransactionFee;
+
 	/// Type alias for the instance's configured ApiCall.
 	pub type ApiCallFor<T, I> = <T as Config<I>>::ApiCall;
 
@@ -112,6 +116,7 @@ pub mod pallet {
 		pub unsigned_tx: UnsignedTransactionFor<T, I>,
 	}
 
+	// TODO: Rename
 	/// The first step in the process - a transaction signing attempt.
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	#[scale_info(skip_type_params(T, I))]
@@ -229,22 +234,10 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
-	/// Tracks how much an account is owed for paying transaction fees.
+	/// Tracks how much a signer id is owed for paying transaction fees.
 	#[pallet::storage]
 	pub type TransactionFeeDeficit<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, T::AccountId, ChainAmountFor<T, I>>;
-
-	/// A mapping of the transaction hash we expect to witness
-	/// to the account id of the authority who will receive a fee
-	/// refund if that transaction succeeds.
-	#[pallet::storage]
-	pub type TransactionHashWhitelist<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Identity, TransactionHashFor<T, I>, T::AccountId>;
-
-	/// The signer id to send refunds to for a given account id.
-	#[pallet::storage]
-	pub type RefundSignerId<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, T::AccountId, SignerIdFor<T, I>>;
+		StorageMap<_, Twox64Concat, SignerIdFor<T, I>, ChainAmountFor<T, I>, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -332,76 +325,6 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
-		/// Called by the nominated signer when they have completed and signed the transaction, and
-		/// it is therefore ready to be transmitted. The signed transaction is stored on-chain so
-		/// that any node can potentially transmit it to the target chain. Emits an event that will
-		/// trigger the transmission to the target chain.
-		///
-		/// ## Events
-		///
-		/// - [TransmissionRequest](Event::TransmissionRequest)
-		/// - [BroadcastRetryScheduled](Event::BroadcastRetryScheduled)
-		///
-		/// ## Errors
-		///
-		/// - [InvalidBroadcastAttemptId](Error::InvalidBroadcastAttemptId)
-		/// - [InvalidSigner](Error::InvalidSigner)
-		#[pallet::weight(T::WeightInfo::whitelist_transaction_for_refund())]
-		pub fn whitelist_transaction_for_refund(
-			origin: OriginFor<T>,
-			broadcast_attempt_id: BroadcastAttemptId,
-			signed_tx: SignedTransactionFor<T, I>,
-			signer_id: SignerIdFor<T, I>,
-		) -> DispatchResultWithPostInfo {
-			let extrinsic_signer = T::AccountRoleRegistry::ensure_validator(origin)?;
-
-			let signing_attempt = AwaitingBroadcast::<T, I>::get(broadcast_attempt_id)
-				.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?;
-
-			ensure!(
-				signing_attempt.nominee == extrinsic_signer.clone().into(),
-				Error::<T, I>::InvalidSigner
-			);
-
-			if let Ok(tx_hash) = T::TargetChain::verify_signed_transaction(
-				&signing_attempt.broadcast_attempt.unsigned_tx,
-				&signed_tx,
-				&signer_id,
-			) {
-				// Ensure we've initialised and whitelisted the account id to accumulate a deficit
-				if !TransactionFeeDeficit::<T, I>::contains_key(&extrinsic_signer) {
-					TransactionFeeDeficit::<T, I>::insert(
-						&extrinsic_signer,
-						ChainAmountFor::<T, I>::default(),
-					);
-				}
-
-				// Whitelist the transaction hash. This ensures that we only refund txs that were
-				// precommitted to by nominated signers - so we can refund accordingly.
-				TransactionHashWhitelist::<T, I>::insert(tx_hash, &extrinsic_signer);
-
-				// store the latest signer id used by an authority
-				if RefundSignerId::<T, I>::get(&extrinsic_signer) != Some(signer_id.clone()) {
-					RefundSignerId::<T, I>::insert(&extrinsic_signer, &signer_id);
-					Self::deposit_event(Event::<T, I>::RefundSignerIdUpdated {
-						account_id: extrinsic_signer,
-						new_signer_id: signer_id,
-					});
-				}
-			} else {
-				log::warn!(
-					"Unable to verify tranaction signature for broadcast attempt id {}",
-					broadcast_attempt_id
-				);
-
-				Self::take_awaiting_broadcast(broadcast_attempt_id);
-
-				Self::schedule_retry(signing_attempt.broadcast_attempt, extrinsic_signer.into());
-			}
-
-			Ok(().into())
-		}
-
 		/// Submitted by the nominated node when they cannot sign the transaction.
 		/// This triggers a retry of the signing of the transaction
 		///
@@ -473,6 +396,10 @@ pub mod pallet {
 
 		/// Nodes have witnessed that a signature was accepted on the target chain.
 		///
+		/// We add to the deficit to later be refunded, and clean up storage related to
+		/// this broadcast, reporting any nodes who failed this particular broadcast before
+		/// this success.
+		///
 		/// ## Events
 		///
 		/// - [BroadcastSuccess](Event::BroadcastSuccess)
@@ -480,26 +407,31 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [InvalidPayload](Event::InvalidPayload)
+		/// - [InvalidBroadcastAttemptId](Event::InvalidBroadcastAttemptId)
 		#[pallet::weight(T::WeightInfo::signature_accepted())]
 		pub fn signature_accepted(
 			origin: OriginFor<T>,
 			signature: ThresholdSignatureFor<T, I>,
-			tx_fee: ChainAmountFor<T, I>,
-			tx_hash: TransactionHashFor<T, I>,
+			signer_id: SignerIdFor<T, I>,
+			tx_fee: TransactionFeeFor<T, I>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
 			let broadcast_id = SignatureToBroadcastIdLookup::<T, I>::take(signature)
 				.ok_or(Error::<T, I>::InvalidPayload)?;
-			// Add fee deficits only when we know everything else is ok
-			// if this tx hash has been whitelisted, we can add the fee deficit to the authority's
-			// account
-			if let Some(account_id) = TransactionHashWhitelist::<T, I>::take(&tx_hash) {
-				TransactionFeeDeficit::<T, I>::mutate(account_id, |fee_deficit| {
-					if let Some(fee_deficit) = fee_deficit.as_mut() {
-						*fee_deficit = fee_deficit.saturating_add(tx_fee);
-					}
-				});
-			}
+
+			let to_refund = AwaitingBroadcast::<T, I>::get(BroadcastAttemptId {
+				broadcast_id,
+				attempt_count: BroadcastAttemptCount::<T, I>::get(broadcast_id),
+			})
+			.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?
+			.broadcast_attempt
+			.unsigned_tx
+			.return_fee_refund(tx_fee);
+
+			TransactionFeeDeficit::<T, I>::mutate(signer_id, |fee_deficit| {
+				*fee_deficit = fee_deficit.saturating_add(to_refund);
+			});
+
 			// If people failed to broadcast before we got a success, they should be reported.
 			if let Some(failed_signers) = FailedBroadcasters::<T, I>::get(broadcast_id) {
 				T::OffenceReporter::report_many(

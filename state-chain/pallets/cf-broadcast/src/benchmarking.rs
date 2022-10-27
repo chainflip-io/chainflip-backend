@@ -63,25 +63,6 @@ benchmarks_instance_pallet! {
 	} : {
 		Pallet::<T, I>::on_initialize(timeout_block);
 	}
-	whitelist_transaction_for_refund {
-		// We add one because one is added at genesis
-		let caller: T::AccountId = whitelisted_caller();
-		T::AccountRoleRegistry::register_account(caller.clone(), AccountRole::Validator);
-		let broadcast_attempt_id = BroadcastAttemptId {
-			broadcast_id: 1,
-			attempt_count: 1
-		};
-		insert_transaction_broadcast_attempt::<T, I>(caller.clone().into(), broadcast_attempt_id);
-		generate_on_signature_ready_call::<T, I>().dispatch_bypass_filter(T::EnsureThresholdSigned::successful_origin())?;
-		let valid_key = <<T as Config<I>>::TargetChain as ChainCrypto>::AggKey::benchmark_value();
-		T::KeyProvider::set_key(valid_key);
-		T::AccountRoleRegistry::register_account(caller.clone(), AccountRole::Validator);
-		let signed_tx = SignedTransactionFor::<T, I>::benchmark_value();
-		let signer_id = SignerIdFor::<T, I>::benchmark_value();
-	} : _(RawOrigin::Signed(caller.clone()), broadcast_attempt_id, signed_tx, signer_id.clone())
-	verify {
-		assert_eq!(RefundSignerId::<T, I>::get(caller).unwrap(), signer_id);
-	}
 	// TODO: add a benchmark for the failure case
 	transaction_signing_failure {
 		// TODO: This benchmark is the success case. The failure case is not yet implemented and can be quite expensive in the worst case.
@@ -135,13 +116,12 @@ benchmarks_instance_pallet! {
 	}
 	signature_accepted {
 		let caller: T::AccountId = whitelisted_caller();
-		let tx_hash = TransactionHashFor::<T, I>::default();
-		TransactionHashWhitelist::<T, I>::insert(&tx_hash, caller);
+		let signer_id = SignerIdFor::<T, I>::benchmark_value();
 		SignatureToBroadcastIdLookup::<T, I>::insert(ThresholdSignatureFor::<T, I>::benchmark_value(), 1);
 		let call = Call::<T, I>::signature_accepted{
 			signature: ThresholdSignatureFor::<T, I>::benchmark_value(),
+			signer_id,
 			tx_fee: ChainAmountFor::<T, I>::default(),
-			tx_hash,
 		};
 		let valid_key = <<T as Config<I>>::TargetChain as ChainCrypto>::AggKey::benchmark_value();
 		T::KeyProvider::set_key(valid_key);

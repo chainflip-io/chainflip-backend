@@ -1,8 +1,8 @@
 use crate::{
 	mock::*, AwaitingBroadcast, BroadcastAttemptCount, BroadcastAttemptId, BroadcastId,
 	BroadcastRetryQueue, Error, Event as BroadcastEvent, FailedBroadcasters, Instance1,
-	PalletOffence, RefundSignerId, SignatureToBroadcastIdLookup, ThresholdSignatureData, Timeouts,
-	TransactionFeeDeficit, TransactionHashWhitelist, WeightInfo,
+	PalletOffence, SignatureToBroadcastIdLookup, ThresholdSignatureData, Timeouts,
+	TransactionFeeDeficit, WeightInfo,
 };
 
 use sp_std::collections::btree_set::BTreeSet;
@@ -345,7 +345,7 @@ fn test_invalid_sigdata_is_noop() {
 				RawOrigin::Signed(0).into(),
 				MockThresholdSignature::default(),
 				0,
-				[0u8; 4],
+				3,
 			),
 			Error::<Test, Instance1>::InvalidPayload
 		);
@@ -581,7 +581,7 @@ fn signature_accepted_of_non_whitelisted_tx_hash_results_in_no_refund() {
 			TransactionFeeDeficit::<Test, Instance1>::get(tx_sig_request.nominee).unwrap(),
 			0
 		);
-		assert!(TransactionFeeDeficit::<Test, Instance1>::get(tx_sig_request.nominee + 1).is_none());
+		assert_eq(TransactionFeeDeficit::<Test, Instance1>::get(tx_sig_request.nominee + 1), 0);
 	});
 }
 
