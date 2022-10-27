@@ -26,25 +26,22 @@ where
 		backup_node_emission_per_block / QUANTISATION_FACTOR,
 		current_authority_emission_per_block / QUANTISATION_FACTOR,
 	);
-	let backup_nodes = backup_nodes
-		.into_iter()
-		.map(|Bid { bidder_id, amount }| (bidder_id, amount / QUANTISATION_FACTOR));
-
-	// Our emission cap for this heartbeat interval
-	let emissions_cap = backup_node_emission_per_block.saturating_mul(reward_interwal);
 
 	// Emissions for this heartbeat interval for the active set
 	let authority_rewards = current_authority_emission_per_block.saturating_mul(reward_interwal);
 
 	// The average authority emission
-	let average_authority_reward = authority_rewards.checked_div(current_authority_count).unwrap();
+	let average_authority_reward = authority_rewards
+		.checked_div(current_authority_count)
+		.expect("we always have more than one authority");
 
 	let mut total_rewards = 0_u128;
 
 	// Calculate rewards for each backup node and total rewards for capping
 	let rewards: Vec<_> = backup_nodes
 		.into_iter()
-		.map(|(node_id, backup_stake)| {
+		.map(|Bid { bidder_id, amount }| {
+			let backup_stake = amount / QUANTISATION_FACTOR;
 			let reward = min(
 				average_authority_reward,
 				multiply_by_rational(
@@ -60,9 +57,12 @@ where
 			.checked_div(10_u128)
 			.unwrap();
 			total_rewards += reward;
-			(node_id, reward)
+			(bidder_id, reward)
 		})
 		.collect();
+
+	// Our emission cap for this heartbeat interval
+	let emissions_cap = backup_node_emission_per_block.saturating_mul(reward_interwal);
 
 	// Cap if needed
 	if total_rewards > emissions_cap {
