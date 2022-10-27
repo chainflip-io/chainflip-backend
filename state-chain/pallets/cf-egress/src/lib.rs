@@ -213,7 +213,7 @@ impl<T: Config> Pallet<T> {
 		let batch_to_send: Vec<_> =
 			EthereumScheduledRequests::<T>::mutate(|requests: &mut Vec<EthereumRequest>| {
 				// Take up to batch_size requests to be sent
-				let mut available_batch_size = maybe_size.unwrap_or_else(|| requests.len() as u32);
+				let mut available_batch_size = maybe_size.unwrap_or(requests.len() as u32);
 
 				// Filter out disabled assets
 				requests
@@ -230,7 +230,7 @@ impl<T: Config> Pallet<T> {
 					.collect()
 			});
 
-		if batch_to_send.len() == 0 {
+		if batch_to_send.is_empty() {
 			return 0
 		}
 
