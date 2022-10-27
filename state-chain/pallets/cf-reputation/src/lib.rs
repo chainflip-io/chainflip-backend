@@ -464,10 +464,8 @@ impl<T: Config> Pallet<T> {
 	) {
 		let current_block = frame_system::Pallet::<T>::current_block_number();
 		let mut suspensions = Suspensions::<T>::get(offence);
-		suspensions.extend(
-			iter::repeat(current_block.saturating_add(suspension))
-				.zip(validators.into_iter().cloned()),
-		);
+		let suspend_until = current_block.saturating_add(suspension);
+		suspensions.extend(iter::repeat(suspend_until).zip(validators.into_iter().cloned()));
 		suspensions.make_contiguous().sort_unstable_by_key(|(block, _)| *block);
 		while matches!(suspensions.front(), Some((block, _)) if *block < current_block) {
 			suspensions.pop_front();
