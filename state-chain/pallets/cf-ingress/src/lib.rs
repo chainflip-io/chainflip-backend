@@ -129,6 +129,7 @@ pub mod pallet {
 	pub enum Error<T> {
 		InvalidIntent,
 		IngressMismatchWithIntent,
+		UnsupportedAsset,
 	}
 
 	#[pallet::call]
@@ -169,21 +170,18 @@ impl<T: Config> Pallet<T> {
 		// NB: Don't take here. We should continue witnessing this address
 		// even after an ingress to it has occurred.
 		// https://github.com/chainflip-io/chainflip-eth-contracts/pull/226
+		ensure!(
+			matches!(asset, Asset::Eth | Asset::Flip | Asset::Usdc),
+			Error::<T>::UnsupportedAsset
+		);
+		let ingress =
+			IntentIngressDetails::<T>::get(ingress_address).ok_or(Error::<T>::InvalidIntent)?;
+		ensure!(ingress.ingress_asset.asset == asset, Error::<T>::IngressMismatchWithIntent);
+		T::IngressFetchApi::schedule_ethereum_ingress_fetch(vec![(asset, ingress.intent_id)]);
 		match IntentActions::<T>::get(ingress_address).ok_or(Error::<T>::InvalidIntent)? {
 			IntentAction::LiquidityProvision { lp_account, .. } => {
-				let ingress = IntentIngressDetails::<T>::get(ingress_address)
-					.ok_or(Error::<T>::InvalidIntent)?;
-
-				ensure!(
-					ingress.ingress_asset.asset == asset,
-					Error::<T>::IngressMismatchWithIntent
-				);
 				match (ingress_address, ingress.ingress_asset.chain) {
 					(ForeignChainAddress::Eth(_), ForeignChain::Ethereum) => {
-						T::IngressFetchApi::schedule_ethereum_ingress_fetch(vec![(
-							asset,
-							ingress.intent_id,
-						)]);
 						T::LpAccountHandler::provision_account(&lp_account, asset, amount)?;
 						Ok(())
 					},
@@ -191,19 +189,8 @@ impl<T: Config> Pallet<T> {
 				}?;
 			},
 			IntentAction::Swap { egress_address, egress_asset, .. } => {
-				let ingress = IntentIngressDetails::<T>::get(ingress_address)
-					.ok_or(Error::<T>::InvalidIntent)?;
-
-				ensure!(
-					ingress.ingress_asset.asset == asset,
-					Error::<T>::IngressMismatchWithIntent
-				);
 				match (ingress_address, ingress.ingress_asset.chain) {
 					(ForeignChainAddress::Eth(_), ForeignChain::Ethereum) => {
-						T::IngressFetchApi::schedule_ethereum_ingress_fetch(vec![(
-							asset,
-							ingress.intent_id,
-						)]);
 						T::SwapIntentHandler::schedule_swap(
 							asset,
 							egress_asset,
