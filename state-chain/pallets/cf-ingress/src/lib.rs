@@ -170,9 +170,6 @@ impl<T: Config> Pallet<T> {
 		amount: u128,
 		tx_hash: sp_core::H256,
 	) -> DispatchResult {
-		// NB: Don't take here. We should continue witnessing this address
-		// even after an ingress to it has occurred.
-		// https://github.com/chainflip-io/chainflip-eth-contracts/pull/226
 		ensure!(
 			matches!(asset, Asset::Eth | Asset::Flip | Asset::Usdc),
 			Error::<T>::UnsupportedAsset
@@ -181,6 +178,9 @@ impl<T: Config> Pallet<T> {
 			IntentIngressDetails::<T>::get(ingress_address).ok_or(Error::<T>::InvalidIntent)?;
 		ensure!(ingress.ingress_asset.asset == asset, Error::<T>::IngressMismatchWithIntent);
 		T::IngressFetchApi::schedule_ethereum_ingress_fetch(vec![(asset, ingress.intent_id)]);
+		// NB: Don't take here. We should continue witnessing this address
+		// even after an ingress to it has occurred.
+		// https://github.com/chainflip-io/chainflip-eth-contracts/pull/226
 		match IntentActions::<T>::get(ingress_address).ok_or(Error::<T>::InvalidIntent)? {
 			IntentAction::LiquidityProvision { lp_account, .. } => {
 				match (ingress_address, ingress.ingress_asset.chain) {
