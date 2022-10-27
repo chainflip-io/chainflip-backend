@@ -77,15 +77,6 @@ pub trait ECPoint:
 	fn is_point_at_infinity(&self) -> bool {
 		self == &Self::point_at_infinity()
 	}
-
-	// Only relevant for ETH contract keys
-	// TODO: this is a property of a signing scheme
-	// rather than the underlying curve, so this
-	// should be moved to `CryptoScheme` before we
-	// add Bitcoin or any other secp256k1 scheme
-	fn is_compatible(&self) -> bool {
-		true
-	}
 }
 
 pub trait CryptoScheme: 'static {
@@ -122,6 +113,12 @@ pub trait CryptoScheme: 'static {
 		private_key: &<Self::Point as ECPoint>::Scalar,
 		challenge: <Self::Point as ECPoint>::Scalar,
 	) -> <Self::Point as ECPoint>::Scalar;
+
+	// Only relevant for ETH contract keys, which is the only
+	// implementation that is expected to overwrite this
+	fn is_pubkey_compatible(_pubkey: &Self::Point) -> bool {
+		true
+	}
 }
 
 pub trait ECScalar:

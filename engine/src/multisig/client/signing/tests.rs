@@ -13,6 +13,7 @@ use crate::multisig::{
 		keygen::generate_key_data,
 		signing::signing_data,
 	},
+	eth::EthSigning,
 	tests::fixtures::MESSAGE_HASH,
 	Rng,
 };
@@ -98,7 +99,7 @@ async fn should_report_on_inconsistent_broadcast_local_sig3() {
 
 #[tokio::test]
 async fn should_sign_with_all_parties() {
-	let (key_id, key_data) = generate_key_data(
+	let (key_id, key_data) = generate_key_data::<EthSigning>(
 		BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
 		&mut Rng::from_seed(DEFAULT_KEYGEN_SEED),
 		true,

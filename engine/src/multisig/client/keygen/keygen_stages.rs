@@ -291,7 +291,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 		// with the ceremony, we need to make sure that the key is compatible
 		// with the Key Manager contract, aborting if it isn't.
 
-		match derive_aggregate_pubkey(&commitments, self.allow_high_pubkey) {
+		match derive_aggregate_pubkey::<Crypto>(&commitments, self.allow_high_pubkey) {
 			Ok(agg_pubkey) => {
 				let processor = SecretSharesStage5 {
 					common: self.common.clone(),

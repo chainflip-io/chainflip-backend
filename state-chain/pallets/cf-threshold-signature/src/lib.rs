@@ -127,7 +127,7 @@ pub mod pallet {
 		pub fn offenders(&self) -> Vec<T::ValidatorId> {
 			// A threshold for number of blame 'accusations' that are required for someone to be
 			// punished.
-			let blame_threshold = self.participant_count * 2 / 3;
+			let blame_threshold = self.participant_count.saturating_mul(2) / 3;
 			// The maximum number of offenders we are willing to report without risking the liveness
 			// of the network.
 			let liveness_threshold = self.participant_count / 2;

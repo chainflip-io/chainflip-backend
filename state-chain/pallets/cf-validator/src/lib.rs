@@ -527,7 +527,7 @@ pub mod pallet {
 		/// The weight is related to the number of bidders. Getting that number is quite expensive
 		/// so we use 2 * authority_count as an approximation.
 		#[pallet::weight(T::ValidatorWeightInfo::start_authority_rotation(
-			<Pallet<T> as EpochInfo>::current_authority_count() * 2
+			<Pallet<T> as EpochInfo>::current_authority_count().saturating_mul(2)
 		))]
 		pub fn force_rotation(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
@@ -1155,9 +1155,10 @@ impl<T: Config> Pallet<T> {
 		let mut num_missed_slots = 0;
 		for slot in T::MissedAuthorshipSlots::missed_slots() {
 			num_missed_slots += 1;
-			let validator_index = slot % <Self as EpochInfo>::current_authority_count() as u64;
+			// https://github.com/chainflip-io/substrate/blob/c172d0f683fab3792b90d876fd6ca27056af9fe9/frame/aura/src/lib.rs#L97
+			let authority_index = slot % <Self as EpochInfo>::current_authority_count() as u64;
 			if let Some(id) =
-				<Self as EpochInfo>::current_authorities().get(validator_index as usize)
+				<Self as EpochInfo>::current_authorities().get(authority_index as usize)
 			{
 				T::OffenceReporter::report(PalletOffence::MissedAuthorshipSlot, id.clone());
 			} else {

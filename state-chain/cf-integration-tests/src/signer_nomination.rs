@@ -17,7 +17,8 @@ fn signer_nomination_respects_epoch() {
 			EpochAuthorityCount::<Runtime>::get(genesis_epoch).unwrap()
 		);
 
-		assert!(RandomSignerNomination::threshold_nomination_with_seed((), genesis_epoch)
+		// TODO: Test Signer Nomination *with* banning.
+		assert!(RandomSignerNomination::<()>::threshold_nomination_with_seed((), genesis_epoch)
 			.expect("Non empty set, no one is banned")
 			.into_iter()
 			.all(|n| genesis_authorities.contains(&n)));
@@ -39,14 +40,15 @@ fn signer_nomination_respects_epoch() {
 			.all(|n| !genesis_authorities.contains(&n)));
 
 		// asking to sign at new epoch works
-		let new_nominees = RandomSignerNomination::threshold_nomination_with_seed((), next_epoch)
-			.expect("Non empty set, no one banned");
+		let new_nominees =
+			RandomSignerNomination::<()>::threshold_nomination_with_seed((), next_epoch)
+				.expect("Non empty set, no one banned");
 		assert!(new_nominees.iter().all(|n| !genesis_authorities.contains(n)));
 		assert!(new_nominees.iter().all(|n| new_authorities.contains(n)));
 
 		// asking to sign at old epoch still works
 		let old_nominees =
-			RandomSignerNomination::threshold_nomination_with_seed((), genesis_epoch)
+			RandomSignerNomination::<()>::threshold_nomination_with_seed((), genesis_epoch)
 				.expect("Non empty, no one banned");
 		assert!(old_nominees.iter().all(|n| genesis_authorities.contains(n)));
 

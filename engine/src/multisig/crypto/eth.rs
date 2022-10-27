@@ -7,6 +7,8 @@ use super::{ChainTag, CryptoScheme, ECPoint};
 // TODO: we probably want to change the "clients" to
 // solely use "CryptoScheme" as generic parameter instead.
 pub use super::secp256k1::{Point, Scalar};
+use num_bigint::BigUint;
+use secp256k1::constants::CURVE_ORDER;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -60,5 +62,17 @@ impl CryptoScheme for EthSigning {
 		challenge: <Self::Point as ECPoint>::Scalar,
 	) -> <Self::Point as ECPoint>::Scalar {
 		nonce - challenge * private_key
+	}
+
+	fn is_pubkey_compatible(pubkey: &Self::Point) -> bool {
+		// Check if the public key's x coordinate is smaller than "half secp256k1's order",
+		// which is a requirement imposed by the Key Manager contract
+		let pk = pubkey.get_element();
+		let pubkey = cf_chains::eth::AggKey::from_pubkey_compressed(pk.serialize());
+
+		let x = BigUint::from_bytes_be(&pubkey.pub_key_x);
+		let half_order = BigUint::from_bytes_be(&CURVE_ORDER) / 2u32 + 1u32;
+
+		x < half_order
 	}
 }

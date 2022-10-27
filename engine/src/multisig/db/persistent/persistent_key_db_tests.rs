@@ -10,7 +10,7 @@ use crate::{
 	logging::test_utils::new_test_logger,
 	multisig::{
 		client::get_key_data_for_test,
-		crypto::{polkadot::PolkadotSigning, ECPoint},
+		crypto::polkadot::PolkadotSigning,
 		db::persistent::{
 			create_backup, create_backup_with_directory_name, migrate_db_to_latest,
 			LATEST_SCHEMA_VERSION,
@@ -57,8 +57,8 @@ fn find_backups(temp_dir: &TempDir, db_path: PathBuf) -> Result<Vec<PathBuf>, st
 	Ok(backups)
 }
 
-fn get_single_key_data<P: ECPoint>() -> KeygenResultInfo<P> {
-	get_key_data_for_test::<P>(BTreeSet::from_iter([AccountId32::new([0; 32])]))
+fn get_single_key_data<C: CryptoScheme>() -> KeygenResultInfo<C::Point> {
+	get_key_data_for_test::<C>(BTreeSet::from_iter([AccountId32::new([0; 32])]))
 }
 
 // Just a random key
@@ -144,7 +144,7 @@ fn can_load_keys_with_current_keygen_info() {
 	{
 		let p_db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, None, &logger).unwrap();
 
-		p_db.update_key::<Scheme>(&key_id, &get_single_key_data());
+		p_db.update_key::<Scheme>(&key_id, &get_single_key_data::<Scheme>());
 	}
 
 	{
@@ -170,7 +170,7 @@ fn can_update_key() {
 	// there should be no key [0; 33] yet
 	assert!(keys_before.get(&key_id).is_none());
 
-	p_db.update_key::<Scheme>(&key_id, &get_single_key_data());
+	p_db.update_key::<Scheme>(&key_id, &get_single_key_data::<Scheme>());
 
 	let keys_before = p_db.load_keys::<Scheme>();
 	assert!(keys_before.get(&key_id).is_some());
@@ -232,7 +232,7 @@ fn can_load_key_from_backup() {
 	{
 		let p_db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, None, &logger).unwrap();
 
-		p_db.update_key::<Scheme>(&key_id, &get_single_key_data());
+		p_db.update_key::<Scheme>(&key_id, &get_single_key_data::<Scheme>());
 	}
 
 	// Do a backup of the db,
@@ -266,8 +266,8 @@ fn can_use_multiple_crypto_schemes() {
 	{
 		let p_db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, None, &logger).unwrap();
 
-		p_db.update_key::<Scheme1>(&scheme_1_key_id, &get_single_key_data());
-		p_db.update_key::<Scheme2>(&scheme_2_key_id, &get_single_key_data());
+		p_db.update_key::<Scheme1>(&scheme_1_key_id, &get_single_key_data::<Scheme1>());
+		p_db.update_key::<Scheme2>(&scheme_2_key_id, &get_single_key_data::<Scheme2>());
 	}
 
 	// Open the db and load the keys of both types
