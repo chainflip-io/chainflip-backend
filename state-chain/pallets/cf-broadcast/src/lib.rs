@@ -185,8 +185,8 @@ pub mod pallet {
 
 	/// Maps a BroadcastId to a list of unresolved broadcast attempt numbers.
 	#[pallet::storage]
-	pub type BroadcastIdToAttemptNumbers<T, I = ()> =
-		StorageMap<_, Twox64Concat, BroadcastId, Vec<AttemptCount>, OptionQuery>;
+	pub type BroadcastAttemptCount<T, I = ()> =
+		StorageMap<_, Twox64Concat, BroadcastId, AttemptCount, ValueQuery>;
 
 	/// Contains a list of the authorities that have failed to sign a particular broadcast.
 	#[pallet::storage]
@@ -295,7 +295,7 @@ pub mod pallet {
 		fn on_initialize(block_number: BlockNumberFor<T>) -> frame_support::weights::Weight {
 			let expiries = Timeouts::<T, I>::take(block_number);
 			for attempt_id in expiries.iter() {
-				if let Some(attempt) = Self::take_and_clean_up_broadcast_attempt(*attempt_id) {
+				if let Some(attempt) = Self::take_awaiting_broadcast(*attempt_id) {
 					Self::deposit_event(Event::<T, I>::BroadcastAttemptTimeout {
 						broadcast_attempt_id: *attempt_id,
 					});
@@ -394,7 +394,7 @@ pub mod pallet {
 					broadcast_attempt_id
 				);
 
-				Self::take_and_clean_up_broadcast_attempt(broadcast_attempt_id);
+				Self::take_awaiting_broadcast(broadcast_attempt_id);
 
 				Self::schedule_retry(signing_attempt.broadcast_attempt, extrinsic_signer.into());
 			}
@@ -426,7 +426,7 @@ pub mod pallet {
 			// Only the nominated signer can say they failed to sign
 			ensure!(signing_attempt.nominee == extrinsic_signer, Error::<T, I>::InvalidSigner);
 
-			Self::take_and_clean_up_broadcast_attempt(broadcast_attempt_id);
+			Self::take_awaiting_broadcast(broadcast_attempt_id);
 
 			Self::schedule_retry(signing_attempt.broadcast_attempt, extrinsic_signer);
 
@@ -518,7 +518,7 @@ pub mod pallet {
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn clean_up_broadcast_storage(broadcast_id: BroadcastId) {
 		for attempt_count in
-			BroadcastIdToAttemptNumbers::<T, I>::take(broadcast_id).unwrap_or_default()
+			AttemptCount::default()..=(BroadcastAttemptCount::<T, I>::take(broadcast_id))
 		{
 			AwaitingBroadcast::<T, I>::remove(BroadcastAttemptId { broadcast_id, attempt_count });
 		}
@@ -529,7 +529,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 	}
 
-	pub fn take_and_clean_up_broadcast_attempt(
+	pub fn take_awaiting_broadcast(
 		broadcast_attempt_id: BroadcastAttemptId,
 	) -> Option<BroadcastAttempt<T, I>> {
 		if let Some(signing_attempt) = AwaitingBroadcast::<T, I>::take(broadcast_attempt_id) {
@@ -568,7 +568,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		});
 
 		SignatureToBroadcastIdLookup::<T, I>::insert(signature, broadcast_id);
-		BroadcastIdToAttemptNumbers::<T, I>::insert(broadcast_id, vec![0]);
 
 		ThresholdSignatureData::<T, I>::insert(broadcast_id, (api_call, signature));
 
@@ -591,10 +590,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				let next_broadcast_attempt_id =
 					broadcast_attempt.broadcast_attempt_id.next_attempt();
 
-				BroadcastIdToAttemptNumbers::<T, I>::append(
-					broadcast_id,
-					next_broadcast_attempt_id.attempt_count,
-				);
+				BroadcastAttemptCount::<T, I>::mutate(broadcast_id, |attempt_count| {
+					*attempt_count += 1;
+					*attempt_count
+				});
 
 				Self::start_broadcast_attempt(BroadcastAttempt::<T, I> {
 					broadcast_attempt_id: next_broadcast_attempt_id,

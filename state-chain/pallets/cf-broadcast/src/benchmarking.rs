@@ -115,7 +115,7 @@ benchmarks_instance_pallet! {
 	} : { call.dispatch_bypass_filter(T::EnsureThresholdSigned::successful_origin())? }
 	verify {
 		assert_eq!(BroadcastIdCounter::<T, I>::get(), 1);
-		assert!(BroadcastIdToAttemptNumbers::<T, I>::contains_key(1));
+		assert!(BroadcastAttemptCount::<T, I>::contains_key(1));
 		assert!(Timeouts::<T, I>::contains_key(timeout_block));
 	}
 	start_next_broadcast_attempt {

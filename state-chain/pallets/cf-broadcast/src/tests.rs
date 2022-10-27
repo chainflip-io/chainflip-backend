@@ -1,5 +1,5 @@
 use crate::{
-	mock::*, AwaitingBroadcast, BroadcastAttemptId, BroadcastId, BroadcastIdToAttemptNumbers,
+	mock::*, AwaitingBroadcast, BroadcastAttemptCount, BroadcastAttemptId, BroadcastId,
 	BroadcastRetryQueue, Error, Event as BroadcastEvent, FailedBroadcasters, Instance1,
 	PalletOffence, RefundSignerId, SignatureToBroadcastIdLookup, ThresholdSignatureData, Timeouts,
 	TransactionFeeDeficit, TransactionHashWhitelist, WeightInfo,
@@ -139,7 +139,7 @@ fn assert_broadcast_storage_cleaned_up(broadcast_id: BroadcastId) {
 			.is_none()
 	);
 	assert!(FailedBroadcasters::<Test, Instance1>::get(broadcast_id).is_none());
-	assert!(BroadcastIdToAttemptNumbers::<Test, Instance1>::get(broadcast_id).is_none());
+	assert_eq!(BroadcastAttemptCount::<Test, Instance1>::get(broadcast_id), 0);
 	assert!(ThresholdSignatureData::<Test, Instance1>::get(broadcast_id).is_none());
 }
 
@@ -715,9 +715,8 @@ fn re_request_threshold_signature() {
 		);
 		assert!(AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id).is_some());
 		assert_eq!(
-			BroadcastIdToAttemptNumbers::<Test, Instance1>::get(broadcast_attempt_id.broadcast_id)
-				.unwrap(),
-			vec![0]
+			BroadcastAttemptCount::<Test, Instance1>::get(broadcast_attempt_id.broadcast_id),
+			0
 		);
 		// Simualte a key rotation to invalidate the signature
 		MockKeyProvider::set_valid(false);
@@ -729,10 +728,10 @@ fn re_request_threshold_signature() {
 			MockThresholdSignature::default()
 		)
 		.is_none());
-		assert!(BroadcastIdToAttemptNumbers::<Test, Instance1>::get(
-			broadcast_attempt_id.broadcast_id
-		)
-		.is_none());
+		assert_eq!(
+			BroadcastAttemptCount::<Test, Instance1>::get(broadcast_attempt_id.broadcast_id),
+			0
+		);
 		assert!(ThresholdSignatureData::<Test, Instance1>::get(broadcast_attempt_id.broadcast_id)
 			.is_none());
 		// Verify that we have a new signature request in the pipeline
