@@ -1,7 +1,10 @@
 use crate::{mock::*, Error, *};
 use cf_test_utilities::last_event;
 use cf_traits::{
-	mocks::{system_state_info::MockSystemStateInfo, vault_rotation::MockVaultRotator},
+	mocks::{
+		reputation_resetter::MockReputationResetter, system_state_info::MockSystemStateInfo,
+		vault_rotation::MockVaultRotator,
+	},
 	AuctionOutcome, SystemStateInfo, VaultRotator,
 };
 use frame_support::{assert_noop, assert_ok};
@@ -518,6 +521,16 @@ fn rotating_during_rotation_is_noop() {
 	});
 }
 
+#[test]
+fn test_reputation_is_reset_on_expired_epoch() {
+	new_test_ext().execute_with_unchecked_invariants(|| {
+		assert!(!MockReputationResetter::<Test>::reputation_was_reset());
+
+		ValidatorPallet::expire_epoch(ValidatorPallet::current_epoch());
+
+		assert!(MockReputationResetter::<Test>::reputation_was_reset());
+	});
+}
 #[cfg(test)]
 mod bond_expiry {
 	use super::*;
