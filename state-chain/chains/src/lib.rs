@@ -2,7 +2,8 @@
 use core::fmt::Display;
 
 use crate::benchmarking_value::BenchmarkValue;
-use cf_primitives::{EthAmount, IntentId};
+pub use cf_primitives::chains::Ethereum;
+use cf_primitives::{chains::assets, EthAmount, IntentId};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
@@ -52,6 +53,8 @@ pub trait Chain: Member + Parameter {
 	type ChainAsset: Member + Parameter + MaxEncodedLen;
 
 	type ChainAccount: Member + Parameter + MaxEncodedLen + BenchmarkValue;
+
+	type SupportedAsset: Member + Parameter + MaxEncodedLen;
 }
 
 /// Measures the age of items associated with the Chain.
@@ -225,7 +228,8 @@ pub mod mocks {
 		type TrackedData = MockTrackedData;
 		type TransactionFee = TransactionFee;
 		type ChainAccount = u64; // Currently, we don't care about this since we don't use them in tests
-		type ChainAsset = (); // Currently, we don't care about this since we don't use them in tests
+		type ChainAsset = ();
+		type SupportedAsset = assets::eth::Asset;
 	}
 
 	#[derive(
