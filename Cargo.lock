@@ -5334,7 +5334,6 @@ dependencies = [
 name = "pallet-cf-reputation"
 version = "0.1.0"
 dependencies = [
- "cf-primitives",
  "cf-runtime-upgrade-utilities",
  "cf-traits",
  "frame-benchmarking",
