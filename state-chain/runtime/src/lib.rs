@@ -184,11 +184,16 @@ impl pallet_cf_environment::Config for Runtime {
 }
 
 #[cfg(feature = "ibiza")]
-impl pallet_cf_relayer::Config for Runtime {
+use pallet_cf_lp::liquidity_pool::LiquidityPool;
+
+#[cfg(feature = "ibiza")]
+impl pallet_cf_swapping::Config for Runtime {
 	type Event = Event;
 	type Ingress = Ingress;
-	type WeightInfo = pallet_cf_relayer::weights::PalletWeight<Runtime>;
+	type AmmPoolApi = LiquidityPool<Balance>;
+	type Egress = Egress;
 	type AccountRoleRegistry = AccountRoles;
+	type WeightInfo = pallet_cf_swapping::weights::PalletWeight<Runtime>;
 }
 
 impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
@@ -219,6 +224,7 @@ impl pallet_cf_ingress::Config for Runtime {
 	type Event = Event;
 	type AddressDerivation = AddressDerivation;
 	type LpAccountHandler = LiquidityProvider;
+	type SwapIntentHandler = Swapping;
 	type IngressFetchApi = Egress;
 	type WeightInfo = pallet_cf_ingress::weights::PalletWeight<Runtime>;
 }
@@ -624,7 +630,7 @@ construct_runtime!(
 		EthereumChainTracking: pallet_cf_chain_tracking::<Instance1>,
 		Ingress: pallet_cf_ingress,
 		Egress: pallet_cf_egress,
-		Relayer: pallet_cf_relayer,
+		Swapping: pallet_cf_swapping,
 		LiquidityProvider: pallet_cf_lp,
 	}
 );
@@ -689,8 +695,8 @@ mod benches {
 		[pallet_cf_threshold_signature, EthereumThresholdSigner]
 		[pallet_cf_broadcast, EthereumBroadcaster]
 		[pallet_cf_chain_tracking, EthereumChainTracking]
+		[pallet_cf_swapping, Swapping]
 		[pallet_cf_account_roles, AccountRoles]
-		[pallet_cf_relayer, Relayer]
 		[pallet_cf_ingress, Ingress]
 		[pallet_cf_egress, Egress]
 	);
