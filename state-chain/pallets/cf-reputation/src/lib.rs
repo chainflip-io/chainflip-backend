@@ -19,29 +19,20 @@ use frame_support::{
 	traits::{Get, OnKilledAccount},
 };
 pub use pallet::*;
-use sp_runtime::traits::Zero;
+use sp_runtime::traits::{BlockNumberProvider, Saturating, Zero};
 use sp_std::{
 	collections::{btree_set::BTreeSet, vec_deque::VecDeque},
-	iter::Iterator,
+	iter::{self, Iterator},
 	prelude::*,
 };
-
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
 mod reporting_adapter;
 mod reputation;
-mod suspensions;
 
 pub use reporting_adapter::*;
 pub use reputation::*;
-pub use suspensions::*;
-
-type RuntimeSuspensionTracker<T> = SuspensionTracker<
-	<T as Chainflip>::ValidatorId,
-	<T as frame_system::Config>::BlockNumber,
-	<T as Config>::Offence,
->;
 
 impl<T: Config> ReputationParameters for T {
 	type OnlineCredits = T::BlockNumber;
@@ -90,7 +81,7 @@ pub enum PalletOffence {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{EpochInfo, QualifyNode};
+	use cf_traits::{AccountRoleRegistry, EpochInfo, QualifyNode};
 	use frame_support::sp_runtime::traits::BlockNumberProvider;
 	use frame_system::pallet_prelude::*;
 
@@ -104,6 +95,9 @@ pub mod pallet {
 	pub trait Config: Chainflip {
 		/// The event type
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+
+		/// For registering and verifying the account role.
+		type AccountRoleRegistry: AccountRoleRegistry<Self>;
 
 		/// The runtime offence type must be compatible with this pallet's offence type.
 		type Offence: From<PalletOffence>
@@ -180,7 +174,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn penalties)]
 	/// The penalty to be applied for each offence.
-	pub type Penalties<T: Config> = StorageMap<_, Twox64Concat, T::Offence, Penalty<T>>;
+	pub type Penalties<T: Config> = StorageMap<_, Twox64Concat, T::Offence, Penalty<T>, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn offence_time_slot_tracker)]
@@ -197,22 +191,20 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// An offence has been penalised. \[offender, offence, penalty\]
-		OffencePenalty(T::ValidatorId, T::Offence, ReputationPoints),
-		/// The accrual rate for our reputation points has been updated \[points, online_credits\]
-		AccrualRateUpdated(ReputationPoints, T::BlockNumber),
-		/// The penalty for missing a heartbeat has been updated. \[points\]
-		MissedHeartbeatPenaltyUpdated(ReputationPoints),
-		/// The penalty for some offence has been updated \[offence, old_penalty, new_penalty\]
-		PenaltyUpdated(T::Offence, Penalty<T>, Penalty<T>),
+		/// An offence has been penalised.
+		OffencePenalty { offender: T::ValidatorId, offence: T::Offence, penalty: ReputationPoints },
+		/// The accrual rate for our reputation points has been updated.
+		AccrualRateUpdated { reputation_points: ReputationPoints, online_credits: T::BlockNumber },
+		/// The penalty for missing a heartbeat has been updated.
+		MissedHeartbeatPenaltyUpdated { new_reputation_penalty: ReputationPoints },
+		/// The penalty for some offence has been updated.
+		PenaltyUpdated { offence: T::Offence, old_penalty: Penalty<T>, new_penalty: Penalty<T> },
 	}
 
 	#[pallet::error]
 	pub enum Error<T> {
 		/// Tried to set the accrual ration to something invalid.
 		InvalidAccrualRatio,
-		/// The block in a reputation point penalty must be non-zero.
-		InvalidReputationPenaltyRate,
 	}
 
 	#[pallet::call]
@@ -242,7 +234,7 @@ pub mod pallet {
 			);
 
 			AccrualRatio::<T>::set((reputation_points, online_credits));
-			Self::deposit_event(Event::AccrualRateUpdated(reputation_points, online_credits));
+			Self::deposit_event(Event::AccrualRateUpdated { reputation_points, online_credits });
 
 			Ok(().into())
 		}
@@ -255,16 +247,19 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::update_missed_heartbeat_penalty())]
 		pub fn update_missed_heartbeat_penalty(
 			origin: OriginFor<T>,
-			reputation: ReputationPoints,
+			new_reputation_penalty: ReputationPoints,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
 			Penalties::<T>::insert(
 				T::Offence::from(PalletOffence::MissedHeartbeat),
-				Penalty::<T> { reputation, suspension: T::HeartbeatBlockInterval::get() },
+				Penalty::<T> {
+					reputation: new_reputation_penalty,
+					suspension: T::HeartbeatBlockInterval::get(),
+				},
 			);
 
-			Self::deposit_event(Event::MissedHeartbeatPenaltyUpdated(reputation));
+			Self::deposit_event(Event::MissedHeartbeatPenaltyUpdated { new_reputation_penalty });
 			Ok(().into())
 		}
 
@@ -273,17 +268,17 @@ pub mod pallet {
 		pub fn set_penalty(
 			origin: OriginFor<T>,
 			offence: T::Offence,
-			penalty: Penalty<T>,
+			new_penalty: Penalty<T>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
-			let old = Penalties::<T>::mutate(&offence, |maybe_penalty| {
-				let old = maybe_penalty.clone().unwrap_or_default();
-				*maybe_penalty = Some(penalty.clone());
+			let old_penalty = Penalties::<T>::mutate(&offence, |penalty| {
+				let old = penalty.clone();
+				*penalty = new_penalty.clone();
 				old
 			});
 
-			Self::deposit_event(Event::<T>::PenaltyUpdated(offence, old, penalty));
+			Self::deposit_event(Event::<T>::PenaltyUpdated { offence, old_penalty, new_penalty });
 
 			Ok(().into())
 		}
@@ -303,7 +298,8 @@ pub mod pallet {
 		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[pallet::weight(T::WeightInfo::heartbeat())]
 		pub fn heartbeat(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
-			let validator_id: T::ValidatorId = ensure_signed(origin)?.into();
+			let validator_id: T::ValidatorId =
+				T::AccountRoleRegistry::ensure_validator(origin)?.into();
 			let current_block_number = frame_system::Pallet::<T>::current_block_number();
 
 			let start_of_this_interval =
@@ -316,7 +312,7 @@ pub mod pallet {
 				},
 				_ => {
 					Reputations::<T>::mutate(&validator_id, |rep| {
-						rep.boost_reputation(Self::online_credit_reward());
+						rep.boost_reputation(T::HeartbeatBlockInterval::get());
 					});
 				},
 			};
@@ -408,11 +404,11 @@ impl<T: Config> OffenceReporter for Pallet<T> {
 				Reputations::<T>::mutate(&validator_id, |rep| {
 					rep.deduct_reputation(penalty.reputation);
 				});
-				Self::deposit_event(Event::OffencePenalty(
-					validator_id.clone(),
+				Self::deposit_event(Event::OffencePenalty {
+					offender: validator_id.clone(),
 					offence,
-					penalty.reputation,
-				));
+					penalty: penalty.reputation,
+				});
 			}
 		}
 
@@ -465,28 +461,34 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	/// Return number of online credits for reward
-	fn online_credit_reward() -> T::BlockNumber {
-		// Equivalent to the number of blocks used for the heartbeat
-		T::HeartbeatBlockInterval::get()
-	}
-
 	pub fn suspend_all<'a>(
 		validators: impl IntoIterator<Item = &'a T::ValidatorId>,
 		offence: &T::Offence,
 		suspension: T::BlockNumber,
 	) {
-		let mut tracker = <SuspensionTracker<_, _, _> as StorageLoadable<T>>::load(offence);
-		tracker.suspend(validators.into_iter().cloned(), suspension);
-		StorageLoadable::<T>::commit(&mut tracker);
+		let current_block = frame_system::Pallet::<T>::current_block_number();
+		let mut suspensions = Suspensions::<T>::get(offence);
+		let suspend_until = current_block.saturating_add(suspension);
+		suspensions.extend(iter::repeat(suspend_until).zip(validators.into_iter().cloned()));
+		suspensions.make_contiguous().sort_unstable_by_key(|(block, _)| *block);
+		while matches!(suspensions.front(), Some((block, _)) if *block < current_block) {
+			suspensions.pop_front();
+		}
+		Suspensions::<T>::insert(offence, suspensions);
 	}
 
 	/// Gets a list of validators that are suspended for committing any of a list of offences.
 	pub fn validators_suspended_for(offences: &[T::Offence]) -> BTreeSet<T::ValidatorId> {
+		let current_block = frame_system::Pallet::<T>::current_block_number();
 		offences
 			.iter()
 			.flat_map(|offence| {
-				<RuntimeSuspensionTracker<T> as StorageLoadable<T>>::load(offence).get_suspended()
+				Suspensions::<T>::get(offence)
+					.iter()
+					.skip_while(move |(block, _)| *block < current_block)
+					.map(|(_, id)| id)
+					.cloned()
+					.collect::<BTreeSet<_>>()
 			})
 			.collect()
 	}
@@ -495,10 +497,7 @@ impl<T: Config> Pallet<T> {
 	/// available.
 	fn resolve_penalty_for<O: Into<T::Offence>>(offence: O) -> Penalty<T> {
 		let offence: T::Offence = offence.into();
-		Penalties::<T>::get(&offence).unwrap_or_else(|| {
-			log::warn!("No penalty defined for offence {:?}, using default.", offence);
-			Default::default()
-		})
+		Penalties::<T>::get(&offence)
 	}
 }
 
