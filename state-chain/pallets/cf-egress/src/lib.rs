@@ -1,4 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
+#![feature(drain_filter)]
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
@@ -22,6 +23,7 @@ use cf_traits::{
 };
 use frame_support::pallet_prelude::*;
 pub use pallet::*;
+use sp_runtime::traits::Saturating;
 pub use sp_std::{vec, vec::Vec};
 pub use weights::WeightInfo;
 
@@ -44,6 +46,15 @@ pub struct EthereumTransferParam {
 pub enum EthereumRequest {
 	Fetch(EthereumFetchParam),
 	Egress(EthereumTransferParam),
+}
+
+impl EthereumRequest {
+	fn asset(&self) -> Asset {
+		match self {
+			EthereumRequest::Fetch(params) => params.asset,
+			EthereumRequest::Egress(params) => params.asset,
+		}
+	}
 }
 
 #[frame_support::pallet]
@@ -121,7 +132,8 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		/// Take a batch of scheduled Egress and send them out
 		fn on_idle(_block_number: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
-			// Ensure we have enough weight to send an non-empty batch, and request queue isn't empty.
+			// Ensure we have enough weight to send an non-empty batch, and request queue isn't
+			// empty.
 			if remaining_weight <= T::WeightInfo::send_ethereum_batch(1u32) ||
 				EthereumScheduledRequests::<T>::decode_len() == Some(0)
 			{
@@ -211,80 +223,72 @@ impl<T: Config> Pallet<T> {
 		if maybe_size == Some(0) {
 			return 0
 		}
-		let mut batch_to_send = vec![];
 
-		EthereumScheduledRequests::<T>::mutate(|requests| {
-			let mut blacklisted = vec![];
-			// Filter out disabled assets
-			requests.iter().for_each(|&request| match request {
-				EthereumRequest::Egress(EthereumTransferParam { asset, to: _, amount: _ }) =>
-					if !EthereumDisabledEgressAssets::<T>::contains_key(asset) {
-						batch_to_send.push(request);
-					} else {
-						blacklisted.push(request);
-					},
-				_ => batch_to_send.push(request),
-			});
-			// Take up to batch_size requests to be sent
-			let batch_size = match maybe_size {
-				Some(n) => sp_std::cmp::min(n as usize, batch_to_send.len()),
-				None => batch_to_send.len(),
-			};
-			if batch_size > 0 {
-				// Return the remainder into storage
-				let mut leftover = batch_to_send.split_off(batch_size);
-				if !leftover.is_empty() {
-					blacklisted.append(&mut leftover);
-				}
-				*requests = blacklisted;
-			}
-		});
+		let batch_to_send: Vec<_> =
+			EthereumScheduledRequests::<T>::mutate(|requests: &mut Vec<EthereumRequest>| {
+				// Take up to batch_size requests to be sent
+				let mut available_batch_size = maybe_size.unwrap_or_else(|| requests.len() as u32);
 
-		if !batch_to_send.is_empty() {
-			// Construct the Params required for Ethereum AllBatch all.
-			let mut fetch_params = vec![];
-			let mut egress_params = vec![];
-			for request in batch_to_send {
-				match request {
-					EthereumRequest::Fetch(EthereumFetchParam { intent_id, asset }) => {
-						// Asset should always have a valid Ethereum address
-						if let Some(asset_address) = Self::get_ethereum_asset_identifier(asset) {
-							fetch_params.push(FetchAssetParams {
-								swap_id: intent_id,
-								asset: asset_address.into(),
-							});
+				// Filter out disabled assets
+				requests
+					.drain_filter(|request| {
+						if available_batch_size > 0 &&
+							!EthereumDisabledEgressAssets::<T>::contains_key(request.asset())
+						{
+							available_batch_size.saturating_reduce(1);
+							true
+						} else {
+							false
 						}
-					},
-					EthereumRequest::Egress(EthereumTransferParam { asset, to, amount }) => {
-						// Asset should always have a valid Ethereum address
-						if let Some(asset_address) = Self::get_ethereum_asset_identifier(asset) {
-							egress_params.push(TransferAssetParams {
-								asset: asset_address.into(),
-								to: to.into(),
-								amount,
-							});
-						}
-					},
-				}
-			}
-			let fetch_batch_size = fetch_params.len() as u32;
-			let egress_batch_size = egress_params.len() as u32;
-
-			// Construct and send the transaction.
-			let egress_transaction = T::EthereumEgressTransaction::new_unsigned(
-				T::EthereumReplayProtection::replay_protection(),
-				fetch_params,
-				egress_params,
-			);
-			T::EthereumBroadcaster::threshold_sign_and_broadcast(egress_transaction);
-			Self::deposit_event(Event::<T>::EthereumBatchBroadcastRequested {
-				fetch_batch_size,
-				egress_batch_size,
+					})
+					.collect()
 			});
-			fetch_batch_size.saturating_add(egress_batch_size)
-		} else {
-			0u32
+
+		if batch_to_send.len() == 0 {
+			return 0
 		}
+
+		// Construct the Params required for Ethereum AllBatch all.
+		let mut fetch_params = vec![];
+		let mut egress_params = vec![];
+		for request in batch_to_send {
+			match request {
+				EthereumRequest::Fetch(EthereumFetchParam { intent_id, asset }) => {
+					// Asset should always have a valid Ethereum address
+					if let Some(asset_address) = Self::get_ethereum_asset_identifier(asset) {
+						fetch_params.push(FetchAssetParams {
+							swap_id: intent_id,
+							asset: asset_address.into(),
+						});
+					}
+				},
+				EthereumRequest::Egress(EthereumTransferParam { asset, to, amount }) => {
+					// Asset should always have a valid Ethereum address
+					if let Some(asset_address) = Self::get_ethereum_asset_identifier(asset) {
+						egress_params.push(TransferAssetParams {
+							asset: asset_address.into(),
+							to: to.into(),
+							amount,
+						});
+					}
+				},
+			}
+		}
+		let fetch_batch_size = fetch_params.len() as u32;
+		let egress_batch_size = egress_params.len() as u32;
+
+		// Construct and send the transaction.
+		let egress_transaction = T::EthereumEgressTransaction::new_unsigned(
+			T::EthereumReplayProtection::replay_protection(),
+			fetch_params,
+			egress_params,
+		);
+		T::EthereumBroadcaster::threshold_sign_and_broadcast(egress_transaction);
+		Self::deposit_event(Event::<T>::EthereumBatchBroadcastRequested {
+			fetch_batch_size,
+			egress_batch_size,
+		});
+		fetch_batch_size.saturating_add(egress_batch_size)
 	}
 
 	fn get_ethereum_asset_identifier(asset: Asset) -> Option<EthereumAddress> {
