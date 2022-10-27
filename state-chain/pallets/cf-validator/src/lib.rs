@@ -1217,9 +1217,7 @@ impl<T: Config> HistoricalEpoch for EpochHistory<T> {
 	}
 
 	fn activate_epoch(authority: &Self::ValidatorId, epoch: EpochIndex) {
-		HistoricalActiveEpochs::<T>::mutate(authority, |epochs| {
-			epochs.push(epoch);
-		});
+		HistoricalActiveEpochs::<T>::append(authority, epoch);
 	}
 
 	fn active_bond(authority: &Self::ValidatorId) -> Self::Amount {

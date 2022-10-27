@@ -9,7 +9,6 @@ use cf_traits::{
 };
 use frame_support::{assert_noop, assert_ok};
 use frame_system::RawOrigin;
-use pallet_session::SessionManager;
 
 const ALICE: u64 = 100;
 const BOB: u64 = 101;
@@ -503,46 +502,6 @@ fn no_auction_during_maintenance() {
 }
 
 #[test]
-fn test_reputation_reset() {
-	new_test_ext().execute_with_unchecked_invariants(|| {
-		// Simulate an epoch rotation and give the validators some reputation.
-		CurrentRotationPhase::<Test>::put(RotationPhase::<Test>::SessionRotating(
-			simple_rotation_state(vec![1, 2, 3], None),
-		));
-		ValidatorPallet::start_session(0);
-
-		for id in &ValidatorPallet::current_authorities() {
-			MockReputationResetter::<Test>::set_reputation(id, 100);
-		}
-
-		let first_epoch = ValidatorPallet::current_epoch();
-
-		// Simulate another epoch rotation and give the validators some reputation.
-		CurrentRotationPhase::<Test>::put(RotationPhase::<Test>::SessionRotating(
-			simple_rotation_state(vec![4, 5, 6], None),
-		));
-		ValidatorPallet::start_session(0);
-
-		for id in &ValidatorPallet::current_authorities() {
-			MockReputationResetter::<Test>::set_reputation(id, 100);
-		}
-
-		for id in &[1, 2, 3, 4, 5, 6] {
-			assert_eq!(MockReputationResetter::<Test>::get_reputation(id), 100);
-		}
-
-		ValidatorPallet::expire_epoch(first_epoch);
-
-		for id in &[1, 2, 3] {
-			assert_eq!(MockReputationResetter::<Test>::get_reputation(id), 0);
-		}
-		for id in &[4, 5, 6] {
-			assert_eq!(MockReputationResetter::<Test>::get_reputation(id), 100);
-		}
-	});
-}
-
-#[test]
 fn rotating_during_rotation_is_noop() {
 	new_test_ext().execute_with_unchecked_invariants(|| {
 		MockBidderProvider::set_winning_bids();
@@ -562,6 +521,16 @@ fn rotating_during_rotation_is_noop() {
 	});
 }
 
+#[test]
+fn test_reputation_is_reset_on_expired_epoch() {
+	new_test_ext().execute_with_unchecked_invariants(|| {
+		assert!(!MockReputationResetter::<Test>::reputation_was_reset());
+
+		ValidatorPallet::expire_epoch(ValidatorPallet::current_epoch());
+
+		assert!(MockReputationResetter::<Test>::reputation_was_reset());
+	});
+}
 #[cfg(test)]
 mod bond_expiry {
 	use super::*;

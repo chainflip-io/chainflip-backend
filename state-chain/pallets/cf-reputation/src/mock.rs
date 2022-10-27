@@ -163,6 +163,7 @@ impl Config for Test {
 	type Event = Event;
 	type Offence = AllOffences;
 	type HeartbeatBlockInterval = HeartbeatBlockInterval;
+	type AccountRoleRegistry = ();
 	type Heartbeat = MockHeartbeat;
 	type ReputationPointFloorAndCeiling = ReputationPointFloorAndCeiling;
 	type Slasher = MockSlasher;

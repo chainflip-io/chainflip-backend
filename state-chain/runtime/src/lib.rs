@@ -334,6 +334,7 @@ impl frame_system::Config for Runtime {
 		GrandpaOffenceReporter<Self>,
 		Staking,
 		AccountRoles,
+		Reputation,
 	);
 	/// The data to be stored in an account.
 	type AccountData = ();
@@ -504,6 +505,7 @@ parameter_types! {
 impl pallet_cf_reputation::Config for Runtime {
 	type Event = Event;
 	type Offence = chainflip::Offence;
+	type AccountRoleRegistry = AccountRoles;
 	type Heartbeat = ChainflipHeartbeat;
 	type HeartbeatBlockInterval = ConstU32<HEARTBEAT_BLOCK_INTERVAL>;
 	type ReputationPointFloorAndCeiling = ReputationPointFloorAndCeiling;
@@ -821,7 +823,7 @@ impl_runtime_apis! {
 		fn cf_penalties() -> Vec<(Offence, RuntimeApiPenalty)> {
 			pallet_cf_reputation::Penalties::<Runtime>::iter_keys()
 				.map(|offence| {
-					let penalty = pallet_cf_reputation::Penalties::<Runtime>::get(offence).unwrap_or_default();
+					let penalty = pallet_cf_reputation::Penalties::<Runtime>::get(offence);
 					(offence, RuntimeApiPenalty {
 						reputation_points: penalty.reputation,
 						suspension_duration_blocks: penalty.suspension
