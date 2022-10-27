@@ -132,7 +132,7 @@ pub mod pallet {
 								.drain(..sp_std::cmp::min(batch.len(), fetches_left as usize))
 								.for_each(|intent_id| {
 									ethereum_fetch_batch.push(FetchAssetParams {
-										swap_id: intent_id,
+										intent_id,
 										asset: asset_address.into(),
 									})
 								});
@@ -242,7 +242,7 @@ pub mod pallet {
 						EthereumScheduledIngressFetch::<T>::take(asset).iter().for_each(
 							|intent_id| {
 								ethereum_fetch_batch.push(FetchAssetParams {
-									swap_id: *intent_id,
+									intent_id: *intent_id,
 									asset: asset_address.into(),
 								})
 							},

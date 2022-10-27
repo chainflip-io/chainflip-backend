@@ -1,6 +1,6 @@
 use crate::*;
 
-pub mod batch_fetch;
+pub mod batch_fetch_and_transfer;
 pub mod rotate_vault_proxy;
 
 use crate::dot::{Polkadot, PolkadotAccountId, PolkadotReplayProtection};
@@ -8,19 +8,21 @@ use crate::dot::{Polkadot, PolkadotAccountId, PolkadotReplayProtection};
 /// Chainflip api calls available on Polkadot.
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum PolkadotApi {
-	BatchFetch(batch_fetch::BatchFetch),
+	BatchFetch(batch_fetch_and_transfer::BatchFetchAndTransfer),
 }
 
 impl PolkadotBatchFetch for PolkadotApi {
 	fn new_unsigned(
 		replay_protection: PolkadotReplayProtection,
-		intent_ids: Vec<IntentId>,
+		fetch_params: Vec<FetchAssetParams<Polkadot>>,
+		transfer_params: Vec<TransferAssetParams<Polkadot>>,
 		proxy_account: PolkadotAccountId,
 		vault_account: PolkadotAccountId,
 	) -> Self {
-		Self::BatchFetch(batch_fetch::BatchFetch::new_unsigned(
+		Self::BatchFetch(batch_fetch_and_transfer::BatchFetchAndTransfer::new_unsigned(
 			replay_protection,
-			intent_ids,
+			fetch_params,
+			transfer_params,
 			proxy_account,
 			vault_account,
 		))
@@ -30,14 +32,15 @@ impl PolkadotBatchFetch for PolkadotApi {
 pub trait PolkadotBatchFetch: ApiCall<Polkadot> {
 	fn new_unsigned(
 		replay_protection: <Polkadot as ChainAbi>::ReplayProtection,
-		intent_ids: Vec<IntentId>,
+		fetch_params: Vec<FetchAssetParams<Polkadot>>,
+		transfer_params: Vec<TransferAssetParams<Polkadot>>,
 		proxy_account: <Polkadot as Chain>::ChainAccount,
 		vault_account: <Polkadot as Chain>::ChainAccount,
 	) -> Self;
 }
 
-impl From<batch_fetch::BatchFetch> for PolkadotApi {
-	fn from(tx: batch_fetch::BatchFetch) -> Self {
+impl From<batch_fetch_and_transfer::BatchFetchAndTransfer> for PolkadotApi {
+	fn from(tx: batch_fetch_and_transfer::BatchFetchAndTransfer) -> Self {
 		Self::BatchFetch(tx)
 	}
 }

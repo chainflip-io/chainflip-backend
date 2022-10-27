@@ -114,7 +114,7 @@ impl Broadcaster<Ethereum> for MockBroadcast {
 					.collect(),
 			);
 			LastFetchesSent::set(
-				fetches.into_iter().map(|fetch| (fetch.swap_id, fetch.asset.into())).collect(),
+				fetches.into_iter().map(|fetch| (fetch.intent_id, fetch.asset.into())).collect(),
 			);
 		}
 	}

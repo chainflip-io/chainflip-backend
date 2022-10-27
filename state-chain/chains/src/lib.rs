@@ -134,7 +134,7 @@ where
 	RuntimeDebug, Copy, Clone, Default, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo,
 )]
 pub struct FetchAssetParams<T: Chain> {
-	pub swap_id: IntentId,
+	pub intent_id: IntentId,
 	pub asset: T::ChainAsset,
 }
 
