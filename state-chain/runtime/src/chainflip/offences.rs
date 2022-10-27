@@ -40,6 +40,12 @@ impl OffenceList<Runtime> for SigningOffences {
 	];
 }
 
+pub struct BroadcastExclusionOffences;
+
+impl OffenceList<Runtime> for BroadcastExclusionOffences {
+	const OFFENCES: &'static [Offence] = &[Offence::MissedAuthorshipSlot, Offence::MissedHeartbeat];
+}
+
 // Boilerplate
 impl From<pallet_cf_broadcast::PalletOffence> for Offence {
 	fn from(offences: pallet_cf_broadcast::PalletOffence) -> Self {
