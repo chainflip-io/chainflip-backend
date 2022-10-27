@@ -27,32 +27,18 @@ use sp_runtime::traits::Saturating;
 pub use sp_std::{vec, vec::Vec};
 pub use weights::WeightInfo;
 
-/// Intermediary struct for storing Fetch Params.
-#[derive(RuntimeDebug, Eq, PartialEq, Copy, Clone, Encode, Decode, MaxEncodedLen, TypeInfo)]
-pub struct EthereumFetchParam {
-	pub intent_id: IntentId,
-	pub asset: Asset,
-}
-
-/// Intermediary struct for storing Egress/Transfer Params.
-#[derive(RuntimeDebug, Eq, PartialEq, Copy, Clone, Encode, Decode, MaxEncodedLen, TypeInfo)]
-pub struct EthereumTransferParam {
-	pub asset: Asset,
-	pub to: EthereumAddress,
-	pub amount: AssetAmount,
-}
 /// Enum wrapper for fetch and egress requests.
 #[derive(RuntimeDebug, Eq, PartialEq, Copy, Clone, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub enum EthereumRequest {
-	Fetch(EthereumFetchParam),
-	Egress(EthereumTransferParam),
+	Fetch { intent_id: IntentId, asset: Asset },
+	Transfer { asset: Asset, to: EthereumAddress, amount: AssetAmount },
 }
 
 impl EthereumRequest {
-	fn asset(&self) -> Asset {
+	fn asset(&self) -> &Asset {
 		match self {
-			EthereumRequest::Fetch(params) => params.asset,
-			EthereumRequest::Egress(params) => params.asset,
+			EthereumRequest::Fetch { asset, .. } => asset,
+			EthereumRequest::Transfer { asset, .. } => asset,
 		}
 	}
 }
@@ -253,7 +239,7 @@ impl<T: Config> Pallet<T> {
 		let mut egress_params = vec![];
 		for request in batch_to_send {
 			match request {
-				EthereumRequest::Fetch(EthereumFetchParam { intent_id, asset }) => {
+				EthereumRequest::Fetch { intent_id, asset } => {
 					// Asset should always have a valid Ethereum address
 					if let Some(asset_address) = Self::get_ethereum_asset_identifier(asset) {
 						fetch_params.push(FetchAssetParams {
@@ -262,7 +248,7 @@ impl<T: Config> Pallet<T> {
 						});
 					}
 				},
-				EthereumRequest::Egress(EthereumTransferParam { asset, to, amount }) => {
+				EthereumRequest::Transfer { asset, to, amount } => {
 					// Asset should always have a valid Ethereum address
 					if let Some(asset_address) = Self::get_ethereum_asset_identifier(asset) {
 						egress_params.push(TransferAssetParams {
@@ -315,9 +301,11 @@ impl<T: Config> EgressApi for Pallet<T> {
 		if let (ForeignChain::Ethereum, ForeignChainAddress::Eth(eth_address)) =
 			(foreign_asset.chain, egress_address)
 		{
-			EthereumScheduledRequests::<T>::append(EthereumRequest::Egress(
-				EthereumTransferParam { asset: foreign_asset.asset, to: eth_address, amount },
-			));
+			EthereumScheduledRequests::<T>::append(EthereumRequest::Transfer {
+				asset: foreign_asset.asset,
+				to: eth_address,
+				amount,
+			});
 		}
 
 		Self::deposit_event(Event::<T>::EgressScheduled { foreign_asset, amount, egress_address });
@@ -345,10 +333,7 @@ impl<T: Config> IngressFetchApi for Pallet<T> {
 				"Asset validity is checked by calling functions."
 			);
 
-			EthereumScheduledRequests::<T>::append(EthereumRequest::Fetch(EthereumFetchParam {
-				intent_id,
-				asset,
-			}));
+			EthereumScheduledRequests::<T>::append(EthereumRequest::Fetch { intent_id, asset });
 		}
 		Self::deposit_event(Event::<T>::IngressFetchesScheduled { fetches_added });
 	}

@@ -1,6 +1,5 @@
 use crate::{
-	mock::*, EthereumDisabledEgressAssets, EthereumFetchParam, EthereumRequest,
-	EthereumScheduledRequests, EthereumTransferParam, WeightInfo,
+	mock::*, EthereumDisabledEgressAssets, EthereumRequest, EthereumScheduledRequests, WeightInfo,
 };
 
 use cf_primitives::{ForeignChain, ForeignChainAddress, ForeignChainAsset, ETHEREUM_ETH_ADDRESS};
@@ -36,11 +35,11 @@ fn disallowed_asset_will_not_be_batch_sent() {
 		assert!(LastEgressSent::get().is_empty());
 		assert_eq!(
 			EthereumScheduledRequests::<Test>::get(),
-			vec![EthereumRequest::Egress(EthereumTransferParam {
+			vec![EthereumRequest::Transfer {
 				asset: Asset::Eth,
 				amount: 1_000,
 				to: ALICE_ETH_ADDRESS,
-			})]
+			}]
 		);
 
 		// re-enable the asset for Egress
@@ -82,26 +81,26 @@ fn can_schedule_egress_to_batch() {
 		assert_eq!(
 			EthereumScheduledRequests::<Test>::get(),
 			vec![
-				EthereumRequest::Egress(EthereumTransferParam {
+				EthereumRequest::Transfer {
 					asset: Asset::Eth,
 					amount: 1_000,
 					to: ALICE_ETH_ADDRESS,
-				}),
-				EthereumRequest::Egress(EthereumTransferParam {
+				},
+				EthereumRequest::Transfer {
 					asset: Asset::Eth,
 					amount: 2_000,
 					to: ALICE_ETH_ADDRESS,
-				}),
-				EthereumRequest::Egress(EthereumTransferParam {
+				},
+				EthereumRequest::Transfer {
 					asset: Asset::Flip,
 					amount: 3_000,
 					to: BOB_ETH_ADDRESS,
-				}),
-				EthereumRequest::Egress(EthereumTransferParam {
+				},
+				EthereumRequest::Transfer {
 					asset: Asset::Flip,
 					amount: 4_000,
 					to: BOB_ETH_ADDRESS,
-				})
+				},
 			]
 		);
 	});
@@ -120,9 +119,9 @@ fn can_schedule_ethereum_ingress_fetch() {
 		assert_eq!(
 			EthereumScheduledRequests::<Test>::get(),
 			vec![
-				EthereumRequest::Fetch(EthereumFetchParam { intent_id: 1u64, asset: Asset::Eth }),
-				EthereumRequest::Fetch(EthereumFetchParam { intent_id: 2u64, asset: Asset::Eth }),
-				EthereumRequest::Fetch(EthereumFetchParam { intent_id: 3u64, asset: Asset::Dot })
+				EthereumRequest::Fetch { intent_id: 1u64, asset: Asset::Eth },
+				EthereumRequest::Fetch { intent_id: 2u64, asset: Asset::Eth },
+				EthereumRequest::Fetch { intent_id: 3u64, asset: Asset::Dot },
 			]
 		);
 
@@ -135,10 +134,10 @@ fn can_schedule_ethereum_ingress_fetch() {
 		assert_eq!(
 			EthereumScheduledRequests::<Test>::get(),
 			vec![
-				EthereumRequest::Fetch(EthereumFetchParam { intent_id: 1u64, asset: Asset::Eth }),
-				EthereumRequest::Fetch(EthereumFetchParam { intent_id: 2u64, asset: Asset::Eth }),
-				EthereumRequest::Fetch(EthereumFetchParam { intent_id: 3u64, asset: Asset::Dot }),
-				EthereumRequest::Fetch(EthereumFetchParam { intent_id: 4u64, asset: Asset::Eth })
+				EthereumRequest::Fetch { intent_id: 1u64, asset: Asset::Eth },
+				EthereumRequest::Fetch { intent_id: 2u64, asset: Asset::Eth },
+				EthereumRequest::Fetch { intent_id: 3u64, asset: Asset::Dot },
+				EthereumRequest::Fetch { intent_id: 4u64, asset: Asset::Eth },
 			]
 		);
 		System::assert_last_event(Event::Egress(crate::Event::IngressFetchesScheduled {
@@ -331,13 +330,13 @@ fn on_idle_batch_size_is_limited_by_weight() {
 		assert_eq!(
 			EthereumScheduledRequests::<Test>::get(),
 			vec![
-				EthereumRequest::Egress(EthereumTransferParam {
+				EthereumRequest::Transfer {
 					asset: Asset::Flip,
 					amount: 5_000,
 					to: ALICE_ETH_ADDRESS,
-				}),
-				EthereumRequest::Fetch(EthereumFetchParam { intent_id: 3u64, asset: Asset::Flip }),
-				EthereumRequest::Fetch(EthereumFetchParam { intent_id: 4u64, asset: Asset::Flip })
+				},
+				EthereumRequest::Fetch { intent_id: 3u64, asset: Asset::Flip },
+				EthereumRequest::Fetch { intent_id: 4u64, asset: Asset::Flip },
 			]
 		);
 	});
