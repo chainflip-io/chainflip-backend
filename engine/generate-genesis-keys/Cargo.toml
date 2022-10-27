@@ -32,3 +32,6 @@ version = "0.18.0"
 # https://github.com/rust-rocksdb/rust-rocksdb/pull/555
 default-features = false
 features = ["lz4"]
+
+[dev-dependencies]
+tempfile = "3.3.0"

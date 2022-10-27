@@ -2692,6 +2692,7 @@ dependencies = [
  "rocksdb",
  "serde_json",
  "state-chain-runtime",
+ "tempfile",
 ]
 
 [[package]]
