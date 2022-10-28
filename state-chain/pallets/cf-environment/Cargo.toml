@@ -15,6 +15,7 @@ targets = ['x86_64-unknown-linux-gnu']
 [dependencies]
 cf-traits = { path = '../../traits', default-features = false }
 cf-primitives = {path = '../../primitives', default-features = false}
+cf-chains = {optional = true, path = '../../chains', default-features = false}
 serde = {optional = true, version = '1.0.126', features = ['derive']}
 
 # Parity deps
@@ -84,3 +85,5 @@ runtime-benchmarks = [
   'frame-system/runtime-benchmarks',
 ]
 try-runtime = ['frame-support/try-runtime']
+
+ibiza = ["cf-chains/ibiza"]

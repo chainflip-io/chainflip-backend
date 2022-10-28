@@ -2,6 +2,9 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
+#[cfg(feature = "ibiza")]
+use cf_chains::dot::{NetworkChoice, PolkadotAccountId, PolkadotIndex};
+
 use cf_primitives::{Asset, EthereumAddress};
 pub use cf_traits::{EthEnvironmentProvider, EthereumAssetsAddressProvider};
 use cf_traits::{SystemStateInfo, SystemStateManager};
@@ -116,8 +119,31 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::getter(fn ethereum_chain_id)]
-	/// The address of the ETH chain id
+	/// The ETH chain id
 	pub type EthereumChainId<T> = StorageValue<_, u64, ValueQuery>;
+
+	#[cfg(feature = "ibiza")]
+	#[pallet::storage]
+	#[pallet::getter(fn polkadot_vault_account_id)]
+	/// The Polkadot Vault Anonymous Account
+	pub type PolkadotVaultAccountId<T> = StorageValue<_, PolkadotAccountId, OptionQuery>;
+
+	#[cfg(feature = "ibiza")]
+	#[pallet::storage]
+	#[pallet::getter(fn polkadot_current_proxy_account_id)]
+	/// The Polkadot Vault Anonymous Account
+	pub type PolkadotCurrentProxyAccountId<T> = StorageValue<_, PolkadotAccountId, OptionQuery>;
+
+	#[cfg(feature = "ibiza")]
+	#[pallet::storage]
+	/// Current Nonce of the current Polkadot Proxy Account
+	pub type PolkadotProxyAccountNonce<T> = StorageValue<_, PolkadotIndex, ValueQuery>;
+
+	#[cfg(feature = "ibiza")]
+	#[pallet::storage]
+	#[pallet::getter(fn get_polkadot_network_choice)]
+	/// The Polkadot Network Choice (Westend, Polkadot)
+	pub type PolkadotNetworkChoice<T> = StorageValue<_, NetworkChoice, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn cfe_settings)]
@@ -297,6 +323,14 @@ impl<T: Config> EthEnvironmentProvider for Pallet<T> {
 impl<T: Config> Pallet<T> {
 	pub fn next_global_signature_nonce() -> SignatureNonce {
 		GlobalSignatureNonce::<T>::mutate(|nonce| {
+			*nonce += 1;
+			*nonce
+		})
+	}
+
+	#[cfg(feature = "ibiza")]
+	pub fn next_polkadot_proxy_account_nonce() -> PolkadotIndex {
+		PolkadotProxyAccountNonce::<T>::mutate(|nonce| {
 			*nonce += 1;
 			*nonce
 		})

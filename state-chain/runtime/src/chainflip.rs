@@ -162,7 +162,7 @@ pub struct DotTransactionBuilder;
 impl TransactionBuilder<Polkadot, PolkadotApi> for DotTransactionBuilder {
 	fn build_transaction(signed_call: &PolkadotApi) -> <Polkadot as ChainAbi>::UnsignedTransaction {
 		PolkadotTransactionData {
-			chain: NetworkChoice::PolkadotMainnet,
+			chain: NetworkChoice::WestendTestnet,
 			encoded_extrinsic: signed_call.chain_encoded(),
 		}
 	}
@@ -223,7 +223,13 @@ impl ReplayProtectionProvider<Polkadot> for DotApiCallDataProvider {
 	// Get the Environment values for vault_account, NetworkChoice and the next nonce for the
 	// proxy_account
 	fn replay_protection() -> PolkadotReplayProtection {
-		todo!() //pull from environment
+		PolkadotReplayProtection::new(
+			Environment::next_polkadot_proxy_account_nonce(),
+			0,
+			Environment::get_polkadot_network_choice(),
+		) //Todo: Instead
+		 // of 0, tip needs
+		 // to be set here
 	}
 }
 #[cfg(feature = "ibiza")]
