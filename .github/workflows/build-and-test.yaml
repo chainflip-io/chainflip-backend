@@ -19,7 +19,7 @@ jobs:
           echo "USER: $USER"
           echo "GITHUB_WORKSPACE: $GITHUB_WORKSPACE"
           ls -la $GITHUB_WORKSPACE
-          chown runner:runner -R $GITHUB_WORKSPACE/*
+          sudo chown -R $USER:$USER $GITHUB_WORKSPACE/_work/${{ github.repository }}
           rm -rf $GITHUB_WORKSPACE/*
           ls -la $GITHUB_WORKSPACE
 
