@@ -81,11 +81,14 @@ pub enum PolkadotProxyType {
 #[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct Polkadot;
 
+type DotAmount = u128;
+
 impl Chain for Polkadot {
 	type ChainBlockNumber = u64;
-	type ChainAmount = u128;
+	type ChainAmount = DotAmount;
 	type TrackedData = eth::TrackedData<Self>;
 	type ChainAccount = PolkadotAccountId;
+	type TransactionFee = Self::ChainAmount;
 	type ChainAsset = ();
 }
 
@@ -106,6 +109,15 @@ impl ChainCrypto for Polkadot {
 
 	fn agg_key_to_payload(agg_key: Self::AggKey) -> Self::Payload {
 		Blake2_256::hash(&agg_key.0).to_vec()
+	}
+}
+
+impl FeeRefundCalculator<Polkadot> for PolkadotTransactionData {
+	fn return_fee_refund(
+		&self,
+		fee_paid: <Polkadot as Chain>::TransactionFee,
+	) -> <Polkadot as Chain>::ChainAmount {
+		fee_paid
 	}
 }
 

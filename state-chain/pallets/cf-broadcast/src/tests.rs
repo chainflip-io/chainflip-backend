@@ -1,18 +1,14 @@
 use crate::{
-	mock::*, AwaitingBroadcast, BroadcastAttemptId, BroadcastId, BroadcastIdToAttemptNumbers,
+	mock::*, AwaitingBroadcast, BroadcastAttemptCount, BroadcastAttemptId, BroadcastId,
 	BroadcastRetryQueue, Error, Event as BroadcastEvent, FailedBroadcasters, Instance1,
-	PalletOffence, RefundSignerId, SignatureToBroadcastIdLookup, ThresholdSignatureData, Timeouts,
-	TransactionFeeDeficit, TransactionHashWhitelist, WeightInfo,
+	PalletOffence, SignatureToBroadcastIdLookup, ThresholdSignatureData, TransactionFeeDeficit,
+	WeightInfo,
 };
+use cf_chains::FeeRefundCalculator;
 
-use sp_std::collections::btree_set::BTreeSet;
-
-use cf_chains::{
-	mocks::{
-		MockApiCall, MockEthereum, MockThresholdSignature, MockUnsignedTransaction, Validity,
-		ETH_TX_HASH,
-	},
-	ChainAbi,
+use cf_chains::mocks::{
+	MockApiCall, MockEthereum, MockThresholdSignature, MockUnsignedTransaction, Validity,
+	ETH_TX_FEE,
 };
 use cf_traits::{
 	mocks::{
@@ -27,7 +23,6 @@ use frame_system::RawOrigin;
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Scenario {
 	HappyPath,
-	BadSigner,
 	SigningFailure,
 	Timeout,
 }
@@ -57,7 +52,7 @@ impl MockCfe {
 				BroadcastEvent::TransactionBroadcastRequest {
 					broadcast_attempt_id,
 					nominee,
-					unsigned_tx,
+					unsigned_tx: _,
 				} => {
 					match scenario {
 						Scenario::SigningFailure => {
@@ -89,25 +84,6 @@ impl MockCfe {
 								MockNominator::get_last_nominee().unwrap(),
 								"CFE using wrong nomination"
 							);
-							assert_noop!(
-								Broadcaster::whitelist_transaction_for_refund(
-									RawOrigin::Signed(nominee + 1).into(),
-									broadcast_attempt_id,
-									unsigned_tx.clone().signed(Validity::Valid),
-									Validity::Valid
-								),
-								Error::<Test, Instance1>::InvalidSigner
-							);
-							// Only the nominee can return the signed tx.
-							assert_ok!(Broadcaster::whitelist_transaction_for_refund(
-								RawOrigin::Signed(nominee).into(),
-								broadcast_attempt_id,
-								unsigned_tx.signed(Validity::Valid),
-								match scenario {
-									Scenario::BadSigner => Validity::Invalid,
-									_ => Validity::Valid,
-								}
-							));
 						},
 					}
 				},
@@ -123,9 +99,6 @@ impl MockCfe {
 					// Informational only. No action required by the CFE.
 				},
 				BroadcastEvent::__Ignore(_, _) => unreachable!(),
-				BroadcastEvent::RefundSignerIdUpdated { .. } => {
-					// Information only. No action required by the CFE.
-				},
 				BroadcastEvent::ThresholdSignatureInvalid { .. } => {},
 			},
 			_ => panic!("Unexpected event"),
@@ -139,12 +112,13 @@ fn assert_broadcast_storage_cleaned_up(broadcast_id: BroadcastId) {
 			.is_none()
 	);
 	assert!(FailedBroadcasters::<Test, Instance1>::get(broadcast_id).is_none());
-	assert!(BroadcastIdToAttemptNumbers::<Test, Instance1>::get(broadcast_id).is_none());
+	assert_eq!(BroadcastAttemptCount::<Test, Instance1>::get(broadcast_id), 0);
 	assert!(ThresholdSignatureData::<Test, Instance1>::get(broadcast_id).is_none());
 }
 
+// The happy path :)
 #[test]
-fn test_broadcast_happy_path() {
+fn signature_accepted_results_in_refund_for_signer() {
 	new_test_ext().execute_with(|| {
 		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
 		let broadcast_attempt_id = Broadcaster::start_broadcast(
@@ -152,22 +126,28 @@ fn test_broadcast_happy_path() {
 			MockUnsignedTransaction,
 			MockApiCall::default(),
 		);
-		assert!(AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id).is_some());
+		let tx_sig_request =
+			AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id).unwrap();
 
-		// CFE responds with a signed transaction to whitelist for the refund.
-		MockCfe::respond(Scenario::HappyPath);
-		assert!(AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id).is_some());
+		assert_eq!(TransactionFeeDeficit::<Test, Instance1>::get(Validity::Valid), 0);
 
 		assert_ok!(Broadcaster::signature_accepted(
 			Origin::root(),
 			MockThresholdSignature::default(),
-			Default::default(),
-			ETH_TX_HASH,
+			Validity::Valid,
+			ETH_TX_FEE,
 		));
+
+		let expected_refund =
+			tx_sig_request.broadcast_attempt.unsigned_tx.return_fee_refund(ETH_TX_FEE);
+
 		assert!(AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id).is_none());
 
+		assert_eq!(TransactionFeeDeficit::<Test, Instance1>::get(Validity::Valid), expected_refund);
+		assert_eq!(TransactionFeeDeficit::<Test, Instance1>::get(Validity::Invalid), 0);
+
 		assert_broadcast_storage_cleaned_up(broadcast_attempt_id.broadcast_id);
-	})
+	});
 }
 
 #[test]
@@ -281,52 +261,8 @@ fn test_transaction_signing_failed() {
 }
 
 #[test]
-fn test_bad_signature_when_whitelisting() {
-	new_test_ext().execute_with(|| {
-		// Set two nominees so we can check later that the failing id was excluded from
-		// the nomination of the retry.
-		MockNominator::set_nominees(Some(BTreeSet::from([1, 2])));
-
-		let broadcast_attempt_id = Broadcaster::start_broadcast(
-			&MockThresholdSignature::default(),
-			MockUnsignedTransaction,
-			MockApiCall::default(),
-		);
-		let broadcast_request =
-			AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id).unwrap();
-		assert_eq!(broadcast_request.broadcast_attempt.broadcast_attempt_id.attempt_count, 0);
-
-		// CFE responds with an invalid transaction.
-		MockCfe::respond(Scenario::BadSigner);
-
-		// Broadcast is removed and scheduled for retry.
-		assert!(AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id).is_none());
-		assert_eq!(BroadcastRetryQueue::<Test, Instance1>::decode_len().unwrap_or_default(), 1);
-
-		// process retries
-		Broadcaster::on_idle(0, 10_000_000_000);
-
-		let next_broadcast_request =
-			AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id.next_attempt()).unwrap();
-
-		assert_eq!(next_broadcast_request.broadcast_attempt.broadcast_attempt_id.attempt_count, 1);
-		assert!(broadcast_request.nominee != next_broadcast_request.nominee);
-	})
-}
-
-#[test]
 fn test_invalid_id_is_noop() {
 	new_test_ext().execute_with(|| {
-		assert_noop!(
-			Broadcaster::whitelist_transaction_for_refund(
-				RawOrigin::Signed(0).into(),
-				BroadcastAttemptId::default(),
-				<<MockEthereum as ChainAbi>::UnsignedTransaction>::default()
-					.signed(Validity::Valid),
-				Validity::Valid
-			),
-			Error::<Test, Instance1>::InvalidBroadcastAttemptId
-		);
 		assert_noop!(
 			Broadcaster::transaction_signing_failure(
 				RawOrigin::Signed(0).into(),
@@ -344,149 +280,12 @@ fn test_invalid_sigdata_is_noop() {
 			Broadcaster::signature_accepted(
 				RawOrigin::Signed(0).into(),
 				MockThresholdSignature::default(),
-				0,
-				[0u8; 4],
+				Validity::Valid,
+				ETH_TX_FEE,
 			),
 			Error::<Test, Instance1>::InvalidPayload
 		);
 	})
-}
-
-// This is so someone can't get refunded if they were slow to submit their tx.
-#[test]
-fn cannot_whitelist_call_after_expired() {
-	new_test_ext().execute_with(|| {
-		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
-		let broadcast_attempt_id = Broadcaster::start_broadcast(
-			&MockThresholdSignature::default(),
-			MockUnsignedTransaction,
-			MockApiCall::default(),
-		);
-		assert!(
-			AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id)
-				.unwrap()
-				.broadcast_attempt
-				.broadcast_attempt_id
-				.attempt_count == 0
-		);
-		let current_block = System::block_number();
-		// we should have no Timeouts at this point, but in expiry blocks we should
-		assert_eq!(Timeouts::<Test, Instance1>::get(current_block), vec![]);
-		let expiry_block = current_block + BROADCAST_EXPIRY_BLOCKS;
-		assert_eq!(Timeouts::<Test, Instance1>::get(expiry_block), vec![broadcast_attempt_id]);
-
-		// Simulate the expiry hook for the expected expiry block.
-		Broadcaster::on_initialize(expiry_block);
-
-		// The first one reached expiry so we start a retry
-		assert!(AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id).is_none());
-		let next_broadcast_attempt_id = broadcast_attempt_id.next_attempt();
-		let broadcast_request =
-			AwaitingBroadcast::<Test, Instance1>::get(next_broadcast_attempt_id).unwrap();
-		assert_eq!(broadcast_request.broadcast_attempt.broadcast_attempt_id.attempt_count, 1);
-
-		// This is a little confusing. Because we don't progress in blocks. i.e.
-		// System::block_number() does not change
-		// so when we retry the expired transaction, the *new* expiry block for the retry is
-		// actually the same block since the current block number is unchanged
-		// the current block number + BROADCAST_EXPIRY_BLOCKS is also unchanged
-		// but, the retry has the incremented attempt_count of course
-		assert_eq!(Timeouts::<Test, Instance1>::get(expiry_block), vec![next_broadcast_attempt_id]);
-
-		// The first attempt has expired, which has triggered a second attempt.
-		// We now whitelist the first call.
-		assert_noop!(
-			Broadcaster::whitelist_transaction_for_refund(
-				RawOrigin::Signed(broadcast_request.nominee).into(),
-				broadcast_attempt_id,
-				broadcast_request.broadcast_attempt.unsigned_tx.clone().signed(Validity::Valid),
-				Validity::Valid,
-			),
-			Error::<Test, Instance1>::InvalidBroadcastAttemptId
-		);
-		// We still shouldn't have a valid signer in the deficit map yet
-		// or any of the related maps
-		assert!(TransactionFeeDeficit::<Test, Instance1>::get(broadcast_request.nominee).is_none());
-		assert!(TransactionHashWhitelist::<Test, Instance1>::get(ETH_TX_HASH).is_none());
-		assert!(RefundSignerId::<Test, Instance1>::get(broadcast_request.nominee).is_none());
-	});
-}
-
-// This is possible if someone tries to mess with us. They could just submit the tx to ETH without
-// submitting the whitelist we check this to ensure there are no negative effects of this.
-#[test]
-fn signature_success_no_whitelisted_call_no_side_effects() {
-	new_test_ext().execute_with(|| {
-		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
-		let broadcast_attempt_id = Broadcaster::start_broadcast(
-			&MockThresholdSignature::default(),
-			MockUnsignedTransaction,
-			MockApiCall::default(),
-		);
-
-		const FEE_PAID: u128 = 200;
-		assert_ok!(Broadcaster::signature_accepted(
-			Origin::root(),
-			MockThresholdSignature::default(),
-			FEE_PAID,
-			ETH_TX_HASH,
-		));
-
-		assert_broadcast_storage_cleaned_up(broadcast_attempt_id.broadcast_id);
-	});
-}
-
-#[test]
-fn signature_accepted_of_whitelisted_tx_hash_results_in_refund_for_whitelister() {
-	new_test_ext().execute_with(|| {
-		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
-		let broadcast_attempt_id = Broadcaster::start_broadcast(
-			&MockThresholdSignature::default(),
-			MockUnsignedTransaction,
-			MockApiCall::default(),
-		);
-		let tx_sig_request =
-			AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id).unwrap();
-
-		let signed_tx = tx_sig_request.broadcast_attempt.unsigned_tx.signed(Validity::Valid);
-		assert_ok!(Broadcaster::whitelist_transaction_for_refund(
-			RawOrigin::Signed(tx_sig_request.nominee).into(),
-			broadcast_attempt_id,
-			signed_tx,
-			Validity::Valid,
-		));
-
-		// We have whitelisted their address, 0 deficit
-		assert_eq!(
-			TransactionFeeDeficit::<Test, Instance1>::get(tx_sig_request.nominee).unwrap(),
-			0
-		);
-		// The mapping from TransactionHash to account id should be updated
-		assert_eq!(
-			TransactionHashWhitelist::<Test, Instance1>::get(ETH_TX_HASH).unwrap(),
-			tx_sig_request.nominee
-		);
-
-		// The mapping from account id to signer id should be updated
-		assert_eq!(
-			RefundSignerId::<Test, Instance1>::get(tx_sig_request.nominee).unwrap(),
-			Validity::Valid
-		);
-
-		const FEE_PAID: u128 = 200;
-		assert_ok!(Broadcaster::signature_accepted(
-			Origin::root(),
-			MockThresholdSignature::default(),
-			FEE_PAID,
-			ETH_TX_HASH,
-		));
-
-		assert_eq!(
-			TransactionFeeDeficit::<Test, Instance1>::get(tx_sig_request.nominee).unwrap(),
-			FEE_PAID
-		);
-		assert!(TransactionFeeDeficit::<Test, Instance1>::get(tx_sig_request.nominee + 1).is_none());
-	});
 }
 
 // the nodes who failed to broadcast should be report if we succeed, since success
@@ -517,71 +316,13 @@ fn signature_accepted_after_timeout_reports_failed_nodes() {
 			Origin::root(),
 			MockThresholdSignature::default(),
 			Default::default(),
-			ETH_TX_HASH,
+			ETH_TX_FEE,
 		));
 
 		MockOffenceReporter::assert_reported(
 			PalletOffence::FailedToBroadcastTransaction,
 			failed_authorities,
 		);
-	});
-}
-
-#[test]
-fn signature_accepted_of_non_whitelisted_tx_hash_results_in_no_refund() {
-	new_test_ext().execute_with(|| {
-		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
-		let broadcast_attempt_id = Broadcaster::start_broadcast(
-			&MockThresholdSignature::default(),
-			MockUnsignedTransaction,
-			MockApiCall::default(),
-		);
-		let tx_sig_request =
-			AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id).unwrap();
-
-		let signed_tx = tx_sig_request.broadcast_attempt.unsigned_tx.signed(Validity::Valid);
-		assert_ok!(Broadcaster::whitelist_transaction_for_refund(
-			RawOrigin::Signed(tx_sig_request.nominee).into(),
-			broadcast_attempt_id,
-			signed_tx,
-			Validity::Valid,
-		));
-
-		// We have whitelisted their address, 0 deficit
-		assert_eq!(
-			TransactionFeeDeficit::<Test, Instance1>::get(tx_sig_request.nominee).unwrap(),
-			0
-		);
-		// The mapping from TransactionHash to account id should be updated
-		assert_eq!(
-			TransactionHashWhitelist::<Test, Instance1>::get(ETH_TX_HASH).unwrap(),
-			tx_sig_request.nominee
-		);
-
-		// The refund mapping from account id to signer id should be updated
-		assert_eq!(
-			RefundSignerId::<Test, Instance1>::get(tx_sig_request.nominee).unwrap(),
-			Validity::Valid
-		);
-
-		// simulates a node submitting a diff tx than the one they committed to
-		// when they submitted `whitelist_transaction_for_refund`
-		let mut bad_eth_tx_hash = ETH_TX_HASH;
-		bad_eth_tx_hash[0] = ETH_TX_HASH[0] + 1;
-
-		const FEE_PAID: u128 = 200;
-		assert_ok!(Broadcaster::signature_accepted(
-			Origin::root(),
-			MockThresholdSignature::default(),
-			FEE_PAID,
-			bad_eth_tx_hash,
-		));
-
-		assert_eq!(
-			TransactionFeeDeficit::<Test, Instance1>::get(tx_sig_request.nominee).unwrap(),
-			0
-		);
-		assert!(TransactionFeeDeficit::<Test, Instance1>::get(tx_sig_request.nominee + 1).is_none());
 	});
 }
 
@@ -715,9 +456,8 @@ fn re_request_threshold_signature() {
 		);
 		assert!(AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id).is_some());
 		assert_eq!(
-			BroadcastIdToAttemptNumbers::<Test, Instance1>::get(broadcast_attempt_id.broadcast_id)
-				.unwrap(),
-			vec![0]
+			BroadcastAttemptCount::<Test, Instance1>::get(broadcast_attempt_id.broadcast_id),
+			0
 		);
 		// Simualte a key rotation to invalidate the signature
 		MockKeyProvider::set_valid(false);
@@ -729,10 +469,10 @@ fn re_request_threshold_signature() {
 			MockThresholdSignature::default()
 		)
 		.is_none());
-		assert!(BroadcastIdToAttemptNumbers::<Test, Instance1>::get(
-			broadcast_attempt_id.broadcast_id
-		)
-		.is_none());
+		assert_eq!(
+			BroadcastAttemptCount::<Test, Instance1>::get(broadcast_attempt_id.broadcast_id),
+			0
+		);
 		assert!(ThresholdSignatureData::<Test, Instance1>::get(broadcast_attempt_id.broadcast_id)
 			.is_none());
 		// Verify that we have a new signature request in the pipeline
