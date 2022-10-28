@@ -365,17 +365,6 @@ where
                                                 );
                                                 match eth_broadcaster.encode_and_sign_tx(unsigned_tx).await {
                                                     Ok(raw_signed_tx) => {
-                                                        let _result = state_chain_client.submit_signed_extrinsic(
-                                                            state_chain_runtime::Call::EthereumBroadcaster(
-                                                                pallet_cf_broadcast::Call::whitelist_transaction_for_refund {
-                                                                    broadcast_attempt_id,
-                                                                    signed_tx: raw_signed_tx.0.clone(),
-                                                                    signer_id: eth_broadcaster.address,
-                                                                },
-                                                            ),
-                                                            &logger,
-                                                        ).await;
-
                                                         // We want to transmit here to decrease the delay between getting a gas price estimate
                                                         // and transmitting it to the Ethereum network
                                                         let expected_broadcast_tx_hash = Keccak256::hash(&raw_signed_tx.0[..]);
