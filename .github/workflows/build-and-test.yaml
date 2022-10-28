@@ -19,8 +19,9 @@ jobs:
           echo "USER: $USER"
           echo "GITHUB_WORKSPACE: $GITHUB_WORKSPACE"
           ls -la $GITHUB_WORKSPACE
-          chown docker:docker -R $GITHUB_WORKSPACE/*
+          chown runner:runner -R $GITHUB_WORKSPACE/*
           rm -rf $GITHUB_WORKSPACE/*
+          ls -la $GITHUB_WORKSPACE
 
   cargo-fmt:
     runs-on: [hetzner]
@@ -43,8 +44,6 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - name: Clean the workspace
-        run: echo ${{ secrets.CF_RUNNER_SUDO_PASSWORD }} | sudo -S rm -rf $GITHUB_WORKSPACE/*
       - name: Checkout
         uses: actions/checkout@v3
       - name: Check Linting
@@ -58,8 +57,6 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - name: Clean the workspace
-        run: echo ${{ secrets.CF_RUNNER_SUDO_PASSWORD }} | sudo -S rm -rf $GITHUB_WORKSPACE/*
       - name: Checkout
         uses: actions/checkout@v3
       - name: Update APT
@@ -91,8 +88,6 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - name: Clean the workspace
-        run: echo ${{ secrets.CF_RUNNER_SUDO_PASSWORD }} | sudo -S rm -rf $GITHUB_WORKSPACE/*
       - name: Checkout
         uses: actions/checkout@v3
       - name: Update APT
@@ -147,8 +142,6 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - name: Clean the workspace
-        run: echo ${{ secrets.CF_RUNNER_SUDO_PASSWORD }} | sudo -S rm -rf $GITHUB_WORKSPACE/*
       - name: Checkout
         uses: actions/checkout@v3
       - name: Update APT
@@ -179,8 +172,6 @@ jobs:
     needs: [build-and-test]
     if: github.ref_name == 'develop'
     steps:
-      - name: Clean the workspace
-        run: echo ${{ secrets.CF_RUNNER_SUDO_PASSWORD }} | sudo -S rm -rf $GITHUB_WORKSPACE/*
       - name: Checkout
         uses: actions/checkout@v3
       - name: Download previously built binaries
@@ -197,8 +188,6 @@ jobs:
     runs-on: [hetzner]
     needs: [build-and-test]
     steps:
-      - name: Clean the workspace
-        run: echo ${{ secrets.CF_RUNNER_SUDO_PASSWORD }} | sudo -S rm -rf $GITHUB_WORKSPACE/*
       - uses: actions/setup-node@v3
         with:
           node-version: 17
