@@ -103,13 +103,10 @@ pub mod common {
 	pub const HEARTBEAT_BLOCK_INTERVAL: BlockNumber = 150;
 
 	/// The offences committable within the protocol and their respective reputation penalty and
-	/// suspension durations
-	const SIGNING_OR_KEYGEN_PENALTY: (i32, BlockNumber) = (15, HEARTBEAT_BLOCK_INTERVAL);
-
-	/// The reputation penalty and suspension duration for each offence.
+	/// suspension durations.
 	pub const PENALTIES: &[(Offence, (i32, BlockNumber))] = &[
-		(Offence::ParticipateKeygenFailed, SIGNING_OR_KEYGEN_PENALTY),
-		(Offence::ParticipateSigningFailed, SIGNING_OR_KEYGEN_PENALTY),
+		(Offence::ParticipateKeygenFailed, (15, HEARTBEAT_BLOCK_INTERVAL)),
+		(Offence::ParticipateSigningFailed, (15, HEARTBEAT_BLOCK_INTERVAL)),
 		(Offence::MissedAuthorshipSlot, (15, HEARTBEAT_BLOCK_INTERVAL)),
 		(Offence::MissedHeartbeat, (15, HEARTBEAT_BLOCK_INTERVAL)),
 		// We exclude them from the nomination pool of the next attempt,
