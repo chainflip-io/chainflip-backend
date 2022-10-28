@@ -11,18 +11,6 @@ env:
   SCCACHE_REDIS: ${{ secrets.SCCACHE_REDIS }}
 
 jobs:
-  cleanup:
-    runs-on: [hetzner]
-    steps:
-      - name: Clean the workspace
-        run: |
-          echo "USER: $USER"
-          echo "GITHUB_WORKSPACE: $GITHUB_WORKSPACE"
-          ls -la $GITHUB_WORKSPACE
-          echo ${{ secrets.CF_RUNNER_SUDO_PASSWORD }} | sudo -S chown -R $USER:$USER $GITHUB_WORKSPACE/*
-          rm -rf $GITHUB_WORKSPACE/*
-          ls -la $GITHUB_WORKSPACE
-
   cargo-fmt:
     runs-on: [hetzner]
     container:
