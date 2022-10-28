@@ -10,7 +10,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: "${{ github.repository }}/rust-base"
+  IMAGE_NAME: '${{ github.repository }}/rust-base'
   TAG: ${{ github.event.inputs.nightly_version }}
 
 jobs:
@@ -21,8 +21,6 @@ jobs:
       packages: write
     runs-on: ubuntu-latest
     steps:
-      - name: Clean the workspace
-        run: echo ${{ secrets.CF_RUNNER_SUDO_PASSWORD }} | sudo -S rm -rf $GITHUB_WORKSPACE/*
       - name: Checkout
         uses: actions/checkout@v2
 

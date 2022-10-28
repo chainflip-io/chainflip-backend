@@ -29,8 +29,6 @@ jobs:
     name: Terrafrom ${{ github.event.inputs.command }}
     runs-on: ubuntu-latest
     steps:
-      - name: Clean the workspace
-        run: echo ${{ secrets.CF_RUNNER_SUDO_PASSWORD }} | sudo -S rm -rf $GITHUB_WORKSPACE/*
       - name: Setup Tailscale 🪡 ⚙️
         id: tailscale
         uses: tailscale/github-action@main
@@ -82,7 +80,9 @@ jobs:
 
       - name: Terraform Workspace
         id: workspace
-        run: terraform workspace new ${{ github.event.inputs.benchmark_machine_spec }} || terraform workspace select ${{ github.event.inputs.benchmark_machine_spec }}
+        run:
+          terraform workspace new ${{ github.event.inputs.benchmark_machine_spec }} || terraform workspace select ${{ github.event.inputs.benchmark_machine_spec
+          }}
         working-directory: ./aws/Workloads/benchmarks-github-runner
 
       - name: Terraform Validate
@@ -95,19 +95,14 @@ jobs:
         if: github.event.inputs.command == 'apply'
         id: plan
         run: >
-          terraform plan
-          -no-color
-          -out tfplan
+          terraform plan -no-color -out tfplan
         working-directory: ./aws/Workloads/benchmarks-github-runner
 
       - name: Terraform Apply
         id: apply
         if: github.event.inputs.command == 'apply'
         run: >
-          terraform apply
-          -no-color
-          -auto-approve
-          "tfplan"
+          terraform apply -no-color -auto-approve "tfplan"
         working-directory: ./aws/Workloads/benchmarks-github-runner
 
       - name: Get EC2 Instance ID
@@ -120,9 +115,7 @@ jobs:
         id: destroy
         if: github.event.inputs.command == 'destroy'
         run: >
-          terraform destroy
-          -no-color
-          -auto-approve
+          terraform destroy -no-color -auto-approve
         working-directory: ./aws/Workloads/benchmarks-github-runner
 
       - name: Terraform Workspace
