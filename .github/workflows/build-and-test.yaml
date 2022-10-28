@@ -14,13 +14,16 @@ jobs:
   cargo-fmt:
     runs-on: [hetzner]
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08"
+      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08'
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Clean the workspace
-        run: echo ${{ secrets.CF_RUNNER_SUDO_PASSWORD }} | sudo -S rm -rf $GITHUB_WORKSPACE/*
+        run: |
+          ls -la $GITHUB_WORKSPACE
+          chown runner:docker -R $GITHUB_WORKSPACE/*
+          rm -rf $GITHUB_WORKSPACE/*
       - name: Checkout
         uses: actions/checkout@v3
       - name: Check Format
@@ -29,7 +32,7 @@ jobs:
   cargo-clippy:
     runs-on: [hetzner]
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08"
+      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08'
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -44,7 +47,7 @@ jobs:
   cargo-doc:
     runs-on: [hetzner]
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08"
+      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08'
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -77,7 +80,7 @@ jobs:
     runs-on: [hetzner]
     needs: [cargo-fmt]
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08"
+      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08'
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -133,7 +136,7 @@ jobs:
     runs-on: [hetzner]
     needs: [cargo-fmt]
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08"
+      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08'
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -213,17 +216,8 @@ jobs:
           sleep 2
       - name: Check node health
         run: >
-          curl --request POST -L
-          -H "Content-Type:application/json;charset=utf-8"
-          --data '{"id":1, "jsonrpc":"2.0", "method": "system_health"}'
-          --url 'http://localhost:9933'
-          --connect-timeout 5
-          --max-time 10
-          --retry 3
-          --retry-delay 1
-          --retry-max-time 20
-          --retry-connrefused
-          -vv
+          curl --request POST -L -H "Content-Type:application/json;charset=utf-8" --data '{"id":1, "jsonrpc":"2.0", "method": "system_health"}' --url
+          'http://localhost:9933' --connect-timeout 5 --max-time 10 --retry 3 --retry-delay 1 --retry-max-time 20 --retry-connrefused -vv
       - name: Run engine in background
         run: |
           ./target/release/chainflip-engine --config-path engine/config/CI.toml &
@@ -234,15 +228,7 @@ jobs:
           ETH__HTTP_NODE_ENDPOINT: ${{ secrets.ETH__HTTP_NODE_ENDPOINT }}
       - name: Check engine health
         run: >
-          curl
-          --url 'http://localhost:5555/health'
-          --connect-timeout 5
-          --max-time 10
-          --retry 5
-          --retry-delay 1
-          --retry-max-time 20
-          --retry-connrefused
-          -vv
+          curl --url 'http://localhost:5555/health' --connect-timeout 5 --max-time 10 --retry 5 --retry-delay 1 --retry-max-time 20 --retry-connrefused -vv
       - name: Clone docgen
         uses: actions/checkout@v3
         with:
@@ -266,8 +252,8 @@ jobs:
           sudo apt-get install -y graphviz
       - uses: actions/setup-java@v3
         with:
-          distribution: "zulu"
-          java-version: "17"
+          distribution: 'zulu'
+          java-version: '17'
       - name: Generate class diagram
         run: |
           cd chainflip-docgen/
