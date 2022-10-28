@@ -25,7 +25,7 @@ pub struct StateChainClient {
 	nonce: AtomicU32,
 	runtime_version: RwLock<sp_version::RuntimeVersion>,
 	genesis_hash: state_chain_runtime::Hash,
-	pub signer: signer::PairSigner<sp_core::sr25519::Pair>,
+	signer: signer::PairSigner<sp_core::sr25519::Pair>,
 	pub base_rpc_client: Arc<base_rpc_api::BaseRpcClient<jsonrpsee::ws_client::WsClient>>,
 }
 

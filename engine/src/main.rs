@@ -139,7 +139,7 @@ fn main() -> anyhow::Result<()> {
 
             let (eth_multisig_client, eth_multisig_client_backend_future) =
                 multisig::start_client::<EthSigning>(
-                    state_chain_client.signer.account_id.clone(),
+                    state_chain_client.account_id(),
                     KeyStore::new(db.clone()),
                     eth_incoming_receiver,
                     eth_outgoing_sender,
@@ -153,7 +153,7 @@ fn main() -> anyhow::Result<()> {
 
             let (dot_multisig_client, dot_multisig_client_backend_future) =
                 multisig::start_client::<PolkadotSigning>(
-                    state_chain_client.signer.account_id.clone(),
+                    state_chain_client.account_id(),
                     KeyStore::new(db),
                     dot_incoming_receiver,
                     dot_outgoing_sender,

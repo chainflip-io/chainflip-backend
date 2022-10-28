@@ -12,6 +12,7 @@ use crate::{
 	common::read_clean_and_decode_hex_str_file,
 	multisig::{eth::EthSigning, polkadot::PolkadotSigning, CryptoScheme},
 	settings::P2P as P2PSettings,
+	state_chain_observer::client::{extrinsic_api::ExtrinsicApi, StateChainClient},
 };
 
 pub use self::core::{PeerInfo, PeerUpdate};
@@ -23,7 +24,7 @@ use sp_core::H256;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use zeroize::Zeroizing;
 
-use crate::{state_chain_observer::client::StateChainClient, task_scope::with_task_scope};
+use crate::task_scope::with_task_scope;
 
 // TODO: Consider if this should be removed, particularly once we no longer use Substrate for
 // peering
@@ -88,7 +89,7 @@ pub async fn start(
 		peer_info_submitter::get_current_peer_infos(&state_chain_client, latest_block_hash)
 			.await
 			.context("Failed to get initial peer info")?;
-	let our_account_id = state_chain_client.signer.account_id.clone();
+	let our_account_id = state_chain_client.account_id();
 
 	let own_peer_info = current_peers.iter().find(|pi| pi.account_id == our_account_id).cloned();
 

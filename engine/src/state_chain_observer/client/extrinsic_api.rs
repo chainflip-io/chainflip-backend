@@ -17,6 +17,7 @@ use sp_runtime::{
 	MultiAddress,
 };
 use sp_version::RuntimeVersion;
+use state_chain_runtime::AccountId;
 
 use crate::constants::MAX_EXTRINSIC_RETRY_ATTEMPTS;
 
@@ -24,6 +25,8 @@ use super::{base_rpc_api::BaseRpcApi, storage_api::SafeStorageApi};
 
 #[async_trait]
 pub trait ExtrinsicApi {
+	fn account_id(&self) -> AccountId;
+
 	async fn submit_signed_extrinsic<Call>(
 		&self,
 		call: Call,
@@ -103,6 +106,10 @@ impl super::StateChainClient {
 
 #[async_trait]
 impl ExtrinsicApi for super::StateChainClient {
+	fn account_id(&self) -> AccountId {
+		self.signer.account_id.clone()
+	}
+
 	/// Sign and submit an extrinsic, retrying up to [MAX_EXTRINSIC_RETRY_ATTEMPTS] times if it
 	/// fails on an invalid nonce.
 	async fn submit_signed_extrinsic<Call>(&self, call: Call, logger: &slog::Logger) -> Result<H256>

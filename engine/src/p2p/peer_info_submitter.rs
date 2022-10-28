@@ -50,7 +50,7 @@ async fn update_registered_peer_id(
 
 	let signature = {
 		use ed25519_dalek::Signer;
-		let payload = &state_chain_client.signer.account_id.encode();
+		let payload = &state_chain_client.account_id().encode();
 		node_key.sign(payload)
 	};
 

@@ -48,7 +48,7 @@ async fn handle_keygen_request<'a, MultisigClient>(
 ) where
 	MultisigClient: MultisigClientApi<EthSigning> + Send + Sync + 'static,
 {
-	if keygen_participants.contains(&state_chain_client.signer.account_id) {
+	if keygen_participants.contains(&state_chain_client.account_id()) {
 		scope.spawn(async move {
 			let _result = state_chain_client
 				.submit_signed_extrinsic(
@@ -94,7 +94,7 @@ async fn handle_signing_request<'a, MultisigClient>(
 ) where
 	MultisigClient: MultisigClientApi<EthSigning> + Send + Sync + 'static,
 {
-	if signers.contains(&state_chain_client.signer.account_id) {
+	if signers.contains(&state_chain_client.account_id()) {
 		// Send a signing request and wait to submit the result to the SC
 		scope.spawn(async move {
 			match multisig_client.sign(ceremony_id, key_id, signers, data).await {
@@ -228,7 +228,7 @@ where
         {
             let historical_active_epochs = BTreeSet::from_iter(state_chain_client.get_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>(
                 initial_block_hash,
-                &state_chain_client.signer.account_id
+                &state_chain_client.account_id()
             ).await.unwrap());
 
             let current_epoch = state_chain_client
@@ -291,7 +291,7 @@ where
                                                 start_epoch(current_block_hash, new_epoch, true, state_chain_client.get_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<state_chain_runtime::Runtime>>(
                                                     current_block_hash,
                                                     &new_epoch,
-                                                    &state_chain_client.signer.account_id
+                                                    &state_chain_client.account_id()
                                                 ).await.unwrap().is_some()).await;
                                             }
                                             state_chain_runtime::Event::Validator(
@@ -366,7 +366,7 @@ where
                                                     nominee,
                                                     unsigned_tx,
                                                 },
-                                            ) if nominee == state_chain_client.signer.account_id => {
+                                            ) if nominee == state_chain_client.account_id() => {
                                                 slog::debug!(
                                                     logger,
                                                     "Received signing request with broadcast_attempt_id {} for transaction: {:?}",
