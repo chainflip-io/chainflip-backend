@@ -3,7 +3,7 @@ use cf_primitives::AccountRole;
 use chainflip_engine::{
 	eth::{rpc::EthDualRpcClient, EthBroadcaster},
 	state_chain_observer::client::{
-		connect_to_state_chain, storage_api::SafeStorageApi, RpcApi, RpcClient,
+		connect_to_state_chain, storage_api::SafeStorageApi, BaseRpcApi, BaseRpcClient,
 	},
 };
 use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
@@ -68,7 +68,7 @@ async fn request_block(
 ) -> Result<()> {
 	println!("Querying the state chain for the block with hash {:x?}.", block_hash);
 
-	let state_chain_rpc_client = RpcClient::new(&settings.state_chain).await?;
+	let state_chain_rpc_client = BaseRpcClient::new(&settings.state_chain).await?;
 
 	match state_chain_rpc_client.block(block_hash).await? {
 		Some(block) => {

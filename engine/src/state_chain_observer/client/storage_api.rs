@@ -12,7 +12,7 @@ use jsonrpsee::core::RpcResult;
 use sp_core::storage::StorageKey;
 use utilities::context;
 
-use super::RpcApi;
+use super::BaseRpcApi;
 
 // A method to safely extract type information about Substrate storage maps (As the Key and Value
 // types are not available)
@@ -184,7 +184,7 @@ impl SafeStorageApi for super::StateChainClient {
 		block_hash: state_chain_runtime::Hash,
 	) -> RpcResult<<QueryKind as QueryKindTrait<Value, OnEmpty>>::Query> {
 		Ok(QueryKind::from_optional_value_to_query(
-			self.rpc_client
+			self.base_rpc_client
 				.storage(block_hash, storage_key.clone())
 				.await?
 				.map(|data| context!(Value::decode(&mut &data.0[..])).unwrap()),
@@ -241,7 +241,7 @@ impl SafeStorageApi for super::StateChainClient {
 		block_hash: state_chain_runtime::Hash,
 	) -> RpcResult<Vec<(<StorageMap as StorageMapAssociatedTypes>::Key, StorageMap::Value)>> {
 		Ok(self
-			.rpc_client
+			.base_rpc_client
 			.storage_pairs(block_hash, StorageMap::_prefix_hash())
 			.await?
 			.into_iter()

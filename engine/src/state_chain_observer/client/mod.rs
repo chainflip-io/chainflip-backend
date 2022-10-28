@@ -1,8 +1,8 @@
-mod rpc_api;
+mod base_rpc_api;
 mod signer;
 pub mod storage_api;
 
-pub use rpc_api::{RpcApi, RpcClient};
+pub use base_rpc_api::{BaseRpcApi, BaseRpcClient};
 
 use anyhow::{anyhow, bail, Context, Result};
 use codec::{Decode, Encode};
@@ -47,7 +47,7 @@ pub struct StateChainClient {
 	genesis_hash: state_chain_runtime::Hash,
 	pub signer: signer::PairSigner<sp_core::sr25519::Pair>,
 
-	pub rpc_client: Arc<rpc_api::RpcClient<jsonrpsee::ws_client::WsClient>>,
+	pub base_rpc_client: Arc<base_rpc_api::BaseRpcClient<jsonrpsee::ws_client::WsClient>>,
 }
 
 impl StateChainClient {
@@ -121,7 +121,7 @@ impl StateChainClient {
 			let nonce = self.nonce.fetch_add(1, Ordering::Relaxed);
 			let runtime_version = { self.runtime_version.read().await.clone() };
 			match self
-				.rpc_client
+				.base_rpc_client
 				.submit_extrinsic(self.create_and_sign_extrinsic(
 					call.clone().into(),
 					&runtime_version,
@@ -181,10 +181,10 @@ impl StateChainClient {
 						self.nonce.fetch_sub(1, Ordering::Relaxed);
 
 						let latest_block_hash =
-							self.rpc_client.latest_finalized_block_hash().await?;
+							self.base_rpc_client.latest_finalized_block_hash().await?;
 
 						let runtime_version =
-							self.rpc_client.fetch_runtime_version(latest_block_hash).await?;
+							self.base_rpc_client.fetch_runtime_version(latest_block_hash).await?;
 
 						{
 							let runtime_version_locked =
@@ -230,7 +230,7 @@ impl StateChainClient {
 	{
 		let extrinsic = state_chain_runtime::UncheckedExtrinsic::new_unsigned(call.clone().into());
 		let expected_hash = BlakeTwo256::hash_of(&extrinsic);
-		match self.rpc_client.submit_extrinsic(extrinsic).await {
+		match self.base_rpc_client.submit_extrinsic(extrinsic).await {
 			Ok(tx_hash) => {
 				slog::info!(
 					logger,
@@ -287,7 +287,7 @@ impl StateChainClient {
 		while let Some(result_header) = block_stream.next().await {
 			let header = result_header?;
 			let block_hash = header.hash();
-			if let Some(signed_block) = self.rpc_client.block(block_hash).await? {
+			if let Some(signed_block) = self.base_rpc_client.block(block_hash).await? {
 				match signed_block.block.extrinsics.iter().position(|ext| {
 					let hash = BlakeTwo256::hash_of(ext);
 					hash == extrinsic_hash
@@ -321,12 +321,12 @@ impl StateChainClient {
 	}
 
 	pub async fn rotate_session_keys(&self) -> Result<Bytes> {
-		let session_key_bytes: Bytes = self.rpc_client.rotate_keys().await?;
+		let session_key_bytes: Bytes = self.base_rpc_client.rotate_keys().await?;
 		Ok(session_key_bytes)
 	}
 
 	pub async fn is_auction_phase(&self) -> Result<bool> {
-		self.rpc_client.is_auction_phase().await.map_err(Into::into)
+		self.base_rpc_client.is_auction_phase().await.map_err(Into::into)
 	}
 }
 
@@ -365,13 +365,13 @@ async fn inner_connect_to_state_chain(
 		frame_system::Account::<state_chain_runtime::Runtime>::hashed_key_for(&our_account_id),
 	);
 
-	let rpc_client = Arc::new(rpc_api::RpcClient::new(state_chain_settings).await?);
+	let base_rpc_client = Arc::new(base_rpc_api::BaseRpcClient::new(state_chain_settings).await?);
 
 	let (first_finalized_block_header, mut finalized_block_header_stream) = {
 		// https://substrate.stackexchange.com/questions/3667/api-rpc-chain-subscribefinalizedheads-missing-blocks
 		// https://arxiv.org/abs/2007.01560
 		let mut sparse_finalized_block_header_stream =
-			rpc_client.subscribe_finalized_block_headers().await?.map_err(Into::into).chain(
+			base_rpc_client.subscribe_finalized_block_headers().await?.map_err(Into::into).chain(
 				futures::stream::once(std::future::ready(Err(anyhow::anyhow!(
 					"sparse_finalized_block_header_stream unexpectedly ended"
 				)))),
@@ -379,7 +379,7 @@ async fn inner_connect_to_state_chain(
 
 		let mut latest_finalized_header: state_chain_runtime::Header =
 			sparse_finalized_block_header_stream.next().await.unwrap()?;
-		let rpc_client = rpc_client.clone();
+		let base_rpc_client = base_rpc_client.clone();
 
 		(
 			latest_finalized_header.clone(),
@@ -393,16 +393,16 @@ async fn inner_connect_to_state_chain(
 							next_finalized_header.clone(),
 						);
 
-						let rpc_client = rpc_client.clone();
+						let base_rpc_client = base_rpc_client.clone();
 						async move {
-							let rpc_client = &rpc_client;
+							let base_rpc_client = &base_rpc_client;
 							let intervening_headers: Vec<_> = futures::stream::iter(
 								prev_finalized_header.number + 1..next_finalized_header.number,
 							)
 							.then(|block_number| async move {
 								let block_hash =
-									rpc_client.block_hash(block_number).await?.unwrap();
-								let block_header = rpc_client.block_header(block_hash).await?;
+									base_rpc_client.block_hash(block_number).await?.unwrap();
+								let block_header = base_rpc_client.block_header(block_hash).await?;
 								assert_eq!(block_header.hash(), block_hash);
 								assert_eq!(block_header.number, block_number);
 								Result::<_, anyhow::Error>::Ok((block_hash, block_header))
@@ -439,8 +439,8 @@ async fn inner_connect_to_state_chain(
 	// Often `finalized_header` returns a significantly newer latest block than the stream returns
 	// so we move the stream forward to this block
 	let (mut latest_block_hash, mut latest_block_number) = {
-		let finalised_header_hash = rpc_client.latest_finalized_block_hash().await?;
-		let finalised_header = rpc_client.block_header(finalised_header_hash).await?;
+		let finalised_header_hash = base_rpc_client.latest_finalized_block_hash().await?;
+		let finalised_header = base_rpc_client.block_header(finalised_header_hash).await?;
 
 		if first_finalized_block_header.number < finalised_header.number {
 			for block_number in first_finalized_block_header.number + 1..=finalised_header.number {
@@ -456,7 +456,7 @@ async fn inner_connect_to_state_chain(
 	};
 
 	let (latest_block_hash, latest_block_number, account_nonce) = {
-		async fn get_account_nonce<StateChainRpcClient: rpc_api::RpcApi + Send + Sync>(
+		async fn get_account_nonce<StateChainRpcClient: base_rpc_api::BaseRpcApi + Send + Sync>(
 			state_rpc_client: &StateChainRpcClient,
 			account_storage_key: &StorageKey,
 			block_hash: state_chain_runtime::Hash,
@@ -476,10 +476,10 @@ async fn inner_connect_to_state_chain(
 			)
 		}
 
-		let rpc_client = rpc_client.as_ref();
+		let base_rpc_client = base_rpc_client.as_ref();
 
 		let account_nonce = match get_account_nonce(
-			rpc_client,
+			base_rpc_client,
 			&account_storage_key,
 			latest_block_hash,
 		)
@@ -490,7 +490,7 @@ async fn inner_connect_to_state_chain(
 				if wait_for_staking {
 					loop {
 						if let Some(nonce) =
-							get_account_nonce(rpc_client, &account_storage_key, latest_block_hash)
+							get_account_nonce(base_rpc_client, &account_storage_key, latest_block_hash)
 								.await?
 						{
 							break nonce
@@ -524,11 +524,11 @@ async fn inner_connect_to_state_chain(
 		Arc::new(StateChainClient {
 			nonce: AtomicU32::new(account_nonce),
 			runtime_version: RwLock::new(
-				rpc_client.fetch_runtime_version(latest_block_hash).await?,
+				base_rpc_client.fetch_runtime_version(latest_block_hash).await?,
 			),
-			genesis_hash: rpc_client.block_hash(0).await?.unwrap(),
+			genesis_hash: base_rpc_client.block_hash(0).await?.unwrap(),
 			signer: signer.clone(),
-			rpc_client,
+			base_rpc_client,
 			our_account_id,
 		}),
 	))
@@ -542,14 +542,14 @@ pub const OUR_ACCOUNT_ID_BYTES: [u8; 32] = [0; 32];
 pub const NOT_OUR_ACCOUNT_ID_BYTES: [u8; 32] = [1; 32];
 
 #[cfg(test)]
-impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
-	pub fn create_test_sc_client(rpc_client: RpcClient) -> Self {
+impl<BaseRpcClient: StateChainRpcApi> StateChainClient<BaseRpcClient> {
+	pub fn create_test_sc_client(base_rpc_client: BaseRpcClient) -> Self {
 		use signer::PairSigner;
 
 		Self {
 			nonce: AtomicU32::new(0),
 			our_account_id: AccountId32::new(OUR_ACCOUNT_ID_BYTES),
-			rpc_client: rpc_client,
+			base_rpc_client: base_rpc_client,
 			runtime_version: RwLock::new(RuntimeVersion::default()),
 			genesis_hash: Default::default(),
 			signer: PairSigner::new(Pair::generate().0),
