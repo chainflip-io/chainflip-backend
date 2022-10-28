@@ -9,7 +9,7 @@ use state_chain_runtime::{
 };
 
 #[test]
-fn signer_nomination_respects_epoch() {
+fn threshold_signer_nomination_respects_epoch() {
 	super::genesis::default().build().execute_with(|| {
 		let genesis_authorities = Validator::current_authorities();
 		let genesis_epoch = Validator::epoch_index();
