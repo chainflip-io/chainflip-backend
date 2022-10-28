@@ -7,7 +7,13 @@ use pallet_cf_validator::{
 	CurrentAuthorities, CurrentEpoch, EpochAuthorityCount, HistoricalAuthorities,
 };
 use sp_runtime::AccountId32;
-use state_chain_runtime::{chainflip::RandomSignerNomination, Reputation, Runtime, Validator};
+use state_chain_runtime::{EthereumInstance, Reputation, Runtime, Validator};
+
+type RuntimeThresholdSignerNomination =
+	<Runtime as pallet_cf_threshold_signature::Config<EthereumInstance>>::ThresholdSignerNomination;
+
+type RuntimeBroadcastsignerNomination =
+	<Runtime as pallet_cf_broadcast::Config<EthereumInstance>>::BroadcastSignerNomination;
 
 #[test]
 fn threshold_signer_nomination_respects_epoch() {
@@ -21,10 +27,13 @@ fn threshold_signer_nomination_respects_epoch() {
 			EpochAuthorityCount::<Runtime>::get(genesis_epoch).unwrap()
 		);
 
-		assert!(RandomSignerNomination::threshold_nomination_with_seed((), genesis_epoch)
-			.expect("Non empty set, no one is banned")
-			.into_iter()
-			.all(|n| genesis_authorities.contains(&n)));
+		assert!(RuntimeThresholdSignerNomination::threshold_nomination_with_seed(
+			(),
+			genesis_epoch
+		)
+		.expect("Non empty set, no one is banned")
+		.into_iter()
+		.all(|n| genesis_authorities.contains(&n)));
 
 		// simulate transition to next epoch
 		let next_epoch = genesis_epoch + 1;
@@ -43,14 +52,15 @@ fn threshold_signer_nomination_respects_epoch() {
 			.all(|n| !genesis_authorities.contains(&n)));
 
 		// asking to sign at new epoch works
-		let new_nominees = RandomSignerNomination::threshold_nomination_with_seed((), next_epoch)
-			.expect("Non empty set, no one banned");
+		let new_nominees =
+			RuntimeThresholdSignerNomination::threshold_nomination_with_seed((), next_epoch)
+				.expect("Non empty set, no one banned");
 		assert!(new_nominees.iter().all(|n| !genesis_authorities.contains(n)));
 		assert!(new_nominees.iter().all(|n| new_authorities.contains(n)));
 
 		// asking to sign at old epoch still works
 		let old_nominees =
-			RandomSignerNomination::threshold_nomination_with_seed((), genesis_epoch)
+			RuntimeThresholdSignerNomination::threshold_nomination_with_seed((), genesis_epoch)
 				.expect("Non empty, no one banned");
 		assert!(old_nominees.iter().all(|n| genesis_authorities.contains(n)));
 
@@ -67,9 +77,12 @@ fn test_not_nominated_for_offence<F: Fn(crate::AccountId)>(penalise: F) {
 	penalise(node1.clone());
 
 	for seed in 0..20 {
-		assert!(!RandomSignerNomination::threshold_nomination_with_seed(seed, genesis_epoch,)
-			.unwrap()
-			.contains(&node1));
+		assert!(!RuntimeThresholdSignerNomination::threshold_nomination_with_seed(
+			seed,
+			genesis_epoch,
+		)
+		.unwrap()
+		.contains(&node1));
 	}
 }
 
@@ -100,7 +113,10 @@ fn offline_nodes_are_not_nominated_transaction_signing() {
 
 		for seed in 0..20 {
 			// no extra ids, excluded.
-			assert_ne!(RandomSignerNomination::nomination_with_seed(seed, &[]).unwrap(), node1);
+			assert_ne!(
+				RuntimeBroadcastsignerNomination::nomination_with_seed(seed, &[]).unwrap(),
+				node1
+			);
 		}
 	});
 }
