@@ -115,11 +115,23 @@ pub trait CryptoScheme: 'static {
 		msg_hash: &[u8; 32],
 	) -> <Self::Point as ECPoint>::Scalar;
 
+	/// Build challenge response using our key share
 	fn build_response(
 		nonce: <Self::Point as ECPoint>::Scalar,
 		private_key: &<Self::Point as ECPoint>::Scalar,
 		challenge: <Self::Point as ECPoint>::Scalar,
 	) -> <Self::Point as ECPoint>::Scalar;
+
+	/// Check that a party's challenge response is valid
+	/// w.r.t their public key share
+	/// (See step 7.b in Figure 3, page 15 of https://eprint.iacr.org/2020/852.pdf)
+	fn is_party_response_valid(
+		y_i: &Self::Point,
+		lambda_i: &<Self::Point as ECPoint>::Scalar,
+		commitment: &Self::Point,
+		challenge: &<Self::Point as ECPoint>::Scalar,
+		signature_response: &<Self::Point as ECPoint>::Scalar,
+	) -> bool;
 
 	// Only relevant for ETH contract keys, which is the only
 	// implementation that is expected to overwrite this

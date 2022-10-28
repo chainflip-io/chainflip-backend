@@ -79,6 +79,16 @@ impl CryptoScheme for EthSigning {
 		nonce - challenge * private_key
 	}
 
+	fn is_party_response_valid(
+		y_i: &Self::Point,
+		lambda_i: &<Self::Point as ECPoint>::Scalar,
+		commitment: &Self::Point,
+		challenge: &<Self::Point as ECPoint>::Scalar,
+		signature_response: &<Self::Point as ECPoint>::Scalar,
+	) -> bool {
+		Point::from_scalar(signature_response) == *commitment - (*y_i) * challenge * lambda_i
+	}
+
 	fn is_pubkey_compatible(pubkey: &Self::Point) -> bool {
 		// Check if the public key's x coordinate is smaller than "half secp256k1's order",
 		// which is a requirement imposed by the Key Manager contract

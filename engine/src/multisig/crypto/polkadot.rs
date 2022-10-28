@@ -1,4 +1,4 @@
-use super::{curve25519_ristretto::Point, ChainTag, CryptoScheme, Verifiable};
+use super::{curve25519_ristretto::Point, ChainTag, CryptoScheme, ECPoint, Verifiable};
 use schnorrkel::context::{SigningContext, SigningTranscript};
 use serde::{Deserialize, Serialize};
 
@@ -33,8 +33,12 @@ impl<'de> Deserialize<'de> for PolkadotSignature {
 }
 
 impl Verifiable for PolkadotSignature {
-	fn verify(&self, _key_id: &crate::multisig::KeyId, _message: &[u8; 32]) -> anyhow::Result<()> {
-		todo!()
+	fn verify(&self, key_id: &crate::multisig::KeyId, message: &[u8; 32]) -> anyhow::Result<()> {
+		let public_key = schnorrkel::PublicKey::from_bytes(&key_id.0).expect("invalid public key");
+
+		let context = schnorrkel::signing_context(SIGNING_CTX);
+
+		public_key.verify(context.bytes(message), &self.0).map_err(anyhow::Error::msg)
 	}
 }
 
@@ -79,6 +83,16 @@ impl CryptoScheme for PolkadotSigning {
 		t.commit_point(b"sign:R", &nonce_commitment.get_element().compress());
 
 		t.challenge_scalar(b"sign:c").into()
+	}
+
+	fn is_party_response_valid(
+		y_i: &Self::Point,
+		lambda_i: &<Self::Point as ECPoint>::Scalar,
+		commitment: &Self::Point,
+		challenge: &<Self::Point as ECPoint>::Scalar,
+		signature_response: &<Self::Point as ECPoint>::Scalar,
+	) -> bool {
+		Point::from_scalar(signature_response) == *commitment + (*y_i) * challenge * lambda_i
 	}
 
 	fn build_response(
