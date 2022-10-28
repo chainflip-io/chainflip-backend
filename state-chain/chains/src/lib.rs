@@ -42,8 +42,7 @@ pub trait Chain: Member + Parameter {
 		+ Into<u128>
 		+ From<u128>
 		+ FullCodec
-		+ MaxEncodedLen
-		+ BenchmarkValue;
+		+ MaxEncodedLen;
 
 	type TransactionFee: Member + Parameter + MaxEncodedLen + BenchmarkValue;
 
