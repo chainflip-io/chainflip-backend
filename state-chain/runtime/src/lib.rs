@@ -65,7 +65,10 @@ pub use cf_traits::{
 	BlockNumber, EpochInfo, EthEnvironmentProvider, FlipBalance, QualifyNode, SessionKeysRegistered,
 };
 pub use chainflip::chain_instances::*;
-use chainflip::{epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat};
+use chainflip::{
+	epoch_transition::ChainflipEpochTransitions, BroadcastExclusionOffences, ChainflipHeartbeat,
+	SigningOffences,
+};
 use constants::common::{
 	eth::{BLOCK_SAFETY_MARGIN, CONSERVATIVE_BLOCK_TIME_SECS},
 	*,
@@ -181,11 +184,16 @@ impl pallet_cf_environment::Config for Runtime {
 }
 
 #[cfg(feature = "ibiza")]
-impl pallet_cf_relayer::Config for Runtime {
+use pallet_cf_lp::liquidity_pool::LiquidityPool;
+
+#[cfg(feature = "ibiza")]
+impl pallet_cf_swapping::Config for Runtime {
 	type Event = Event;
 	type Ingress = Ingress;
-	type WeightInfo = pallet_cf_relayer::weights::PalletWeight<Runtime>;
+	type AmmPoolApi = LiquidityPool<Balance>;
+	type Egress = Egress;
 	type AccountRoleRegistry = AccountRoles;
+	type WeightInfo = pallet_cf_swapping::weights::PalletWeight<Runtime>;
 }
 
 impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
@@ -216,6 +224,7 @@ impl pallet_cf_ingress::Config for Runtime {
 	type Event = Event;
 	type AddressDerivation = AddressDerivation;
 	type LpAccountHandler = LiquidityProvider;
+	type SwapIntentHandler = Swapping;
 	type IngressFetchApi = Egress;
 	type WeightInfo = pallet_cf_ingress::weights::PalletWeight<Runtime>;
 }
@@ -331,6 +340,7 @@ impl frame_system::Config for Runtime {
 		GrandpaOffenceReporter<Self>,
 		Staking,
 		AccountRoles,
+		Reputation,
 	);
 	/// The data to be stored in an account.
 	type AccountData = ();
@@ -501,6 +511,7 @@ parameter_types! {
 impl pallet_cf_reputation::Config for Runtime {
 	type Event = Event;
 	type Offence = chainflip::Offence;
+	type AccountRoleRegistry = AccountRoles;
 	type Heartbeat = ChainflipHeartbeat;
 	type HeartbeatBlockInterval = ConstU32<HEARTBEAT_BLOCK_INTERVAL>;
 	type ReputationPointFloorAndCeiling = ReputationPointFloorAndCeiling;
@@ -517,7 +528,7 @@ impl pallet_cf_threshold_signature::Config<EthereumInstance> for Runtime {
 	type AccountRoleRegistry = AccountRoles;
 	type ThresholdCallable = Call;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
-	type SignerNomination = chainflip::RandomSignerNomination;
+	type SignerNomination = chainflip::RandomSignerNomination<SigningOffences>;
 	type TargetChain = Ethereum;
 	type KeyProvider = EthereumVault;
 	type OffenceReporter = Reputation;
@@ -535,12 +546,11 @@ impl pallet_cf_broadcast::Config<EthereumInstance> for Runtime {
 	type ApiCall = eth::api::EthereumApi;
 	type ThresholdSigner = EthereumThresholdSigner;
 	type TransactionBuilder = chainflip::EthTransactionBuilder;
-	type SignerNomination = chainflip::RandomSignerNomination;
+	type SignerNomination = chainflip::RandomSignerNomination<BroadcastExclusionOffences>;
 	type OffenceReporter = Reputation;
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, Instance1>;
-	type SigningTimeout = ConstU32<5>;
-	type TransmissionTimeout = ConstU32<{ 10 * MINUTES }>;
+	type BroadcastTimeout = ConstU32<{ 10 * MINUTES }>;
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type KeyProvider = EthereumVault;
 }
@@ -620,7 +630,7 @@ construct_runtime!(
 		EthereumChainTracking: pallet_cf_chain_tracking::<Instance1>,
 		Ingress: pallet_cf_ingress,
 		Egress: pallet_cf_egress,
-		Relayer: pallet_cf_relayer,
+		Swapping: pallet_cf_swapping,
 		LiquidityProvider: pallet_cf_lp,
 	}
 );
@@ -685,8 +695,8 @@ mod benches {
 		[pallet_cf_threshold_signature, EthereumThresholdSigner]
 		[pallet_cf_broadcast, EthereumBroadcaster]
 		[pallet_cf_chain_tracking, EthereumChainTracking]
+		[pallet_cf_swapping, Swapping]
 		[pallet_cf_account_roles, AccountRoles]
-		[pallet_cf_relayer, Relayer]
 		[pallet_cf_ingress, Ingress]
 		[pallet_cf_egress, Egress]
 	);
@@ -819,7 +829,7 @@ impl_runtime_apis! {
 		fn cf_penalties() -> Vec<(Offence, RuntimeApiPenalty)> {
 			pallet_cf_reputation::Penalties::<Runtime>::iter_keys()
 				.map(|offence| {
-					let penalty = pallet_cf_reputation::Penalties::<Runtime>::get(offence).unwrap_or_default();
+					let penalty = pallet_cf_reputation::Penalties::<Runtime>::get(offence);
 					(offence, RuntimeApiPenalty {
 						reputation_points: penalty.reputation,
 						suspension_duration_blocks: penalty.suspension

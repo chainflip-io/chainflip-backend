@@ -6,6 +6,17 @@ use cf_primitives::{
 };
 
 use crate::FlipBalance;
+use cf_primitives::AssetAmount;
+
+pub trait SwapIntentHandler {
+	fn schedule_swap(
+		from: Asset,
+		to: ForeignChainAsset,
+		amount: AssetAmount,
+		ingress_address: ForeignChainAddress,
+		egress_address: ForeignChainAddress,
+	);
+}
 
 pub trait LpAccountHandler {
 	type AccountId;
@@ -153,4 +164,10 @@ pub trait AmmPoolApi {
 		&self,
 		position: &TradingPosition<Self::Balance>,
 	) -> Option<(Self::Balance, Self::Balance)>;
+
+	fn swap(
+		ingress_asset: Asset,
+		egress_asset: ForeignChainAsset,
+		ingress_amount: Self::Balance,
+	) -> Self::Balance;
 }

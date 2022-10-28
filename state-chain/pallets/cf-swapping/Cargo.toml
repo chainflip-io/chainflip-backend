@@ -1,8 +1,8 @@
 [package]
-name = 'pallet-cf-relayer'
+name = 'pallet-cf-swapping'
 version = '0.1.0'
 authors = ['Chainflip Team <https://github.com/chainflip-io>']
-description = 'The relayer pallet.'
+description = 'The swapping pallet.'
 edition = '2021'
 homepage = 'https://chainflip.io'
 license = '<TODO>'
@@ -16,6 +16,8 @@ targets = ['x86_64-unknown-linux-gnu']
 # Internal dependencies
 cf-traits = {path = '../../traits', default-features = false}
 cf-primitives = {path = '../../primitives', default-features = false}
+
+log = { version = '0.4.16', default-features = false }
 
 # Parity deps
 [dependencies.codec]

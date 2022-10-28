@@ -2,7 +2,7 @@
 
 use super::*;
 
-use crate::{EthereumDisabledEgressAssets, EthereumScheduledEgress};
+use crate::{EthereumDisabledEgressAssets, EthereumRequest, EthereumScheduledRequests};
 use cf_primitives::{Asset, EthereumAddress, ForeignChain};
 use frame_benchmarking::benchmarks;
 use frame_support::traits::Hooks;
@@ -13,31 +13,29 @@ const ALICE_ETH: EthereumAddress = [100u8; 20];
 
 benchmarks! {
 	send_ethereum_batch {
-		let n in 1u32 .. 255u32;
-		let m in 1u32 .. 255u32;
-		let mut egress_batch = vec![];
-		let mut fetch_batch = vec![];
+		let n in 1u32 .. 254u32;
+		let mut batch = vec![];
 
+		// We combine fetch and egress into a single variable, assuming the weight cost is similar.
 		for i in 0..n {
-			fetch_batch.push(i as u64);
-		}
-		for i in 0..m {
-			egress_batch.push((1_000, ALICE_ETH));
+			if i%2==0 {
+				batch.push(EthereumRequest::Fetch {
+					intent_id: 1,
+					asset: Asset::Eth,
+				});
+			} else {
+				batch.push(EthereumRequest::Transfer {
+					asset: Asset::Eth,
+					to: ALICE_ETH,
+					amount: 1_000,
+				});
+			}
 		}
 
-		EthereumScheduledEgress::<T>::insert(
-			Asset::Eth,
-			egress_batch,
-		);
-		EthereumScheduledIngressFetch::<T>::insert(
-			Asset::Eth,
-			fetch_batch,
-		);
+		EthereumScheduledRequests::<T>::put(batch);
 	} : { let _ = Pallet::<T>::on_idle(Default::default(), 1_000_000_000_000_000); }
 	verify {
-		assert!(EthereumScheduledEgress::<T>::get(
-			Asset::Eth,
-		).is_empty());
+		assert!(EthereumScheduledRequests::<T>::get().is_empty());
 	}
 
 	disable_asset_egress {

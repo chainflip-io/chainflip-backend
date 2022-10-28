@@ -19,4 +19,12 @@ benchmarks! {
 		ForeignChainAddress::Eth(Default::default()),
 		0
 	)
+	execute_swap {
+		let swap = Swap { from: Asset::Eth, to: ForeignChainAsset { chain: ForeignChain::Ethereum, asset: Asset::Usdc }, amount: 10, ingress_address: ForeignChainAddress::Eth(Default::default()), egress_address: ForeignChainAddress::Eth(Default::default())};
+	}: {
+		Pallet::<T>::execute_swap(swap);
+	}
+	on_idle {}: {
+		Pallet::<T>::on_idle(T::BlockNumber::from(1u32), 1);
+	}
 }

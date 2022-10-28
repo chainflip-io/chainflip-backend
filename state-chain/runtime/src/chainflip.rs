@@ -16,7 +16,8 @@ use crate::{
 	AccountId, Authorship, BlockNumber, Call, EmergencyRotationPercentageRange, Emissions,
 	Environment, EthereumInstance, Flip, FlipBalance, Reputation, Runtime, System, Validator,
 };
-
+#[cfg(feature = "ibiza")]
+use cf_chains::dot::{api::PolkadotApi, NetworkChoice, Polkadot, PolkadotTransactionData};
 use cf_chains::{
 	eth::{
 		self,
@@ -149,6 +150,24 @@ impl TransactionBuilder<Ethereum, EthereumApi> for EthTransactionBuilder {
 			unsigned_tx.max_priority_fee_per_gas = Some(U256::from(chain_state.priority_fee));
 		}
 		// if we don't have ChainState, we leave it unmodified
+	}
+}
+
+#[cfg(feature = "ibiza")]
+pub struct DotTransactionBuilder;
+#[cfg(feature = "ibiza")]
+impl TransactionBuilder<Polkadot, PolkadotApi> for DotTransactionBuilder {
+	fn build_transaction(signed_call: &PolkadotApi) -> <Polkadot as ChainAbi>::UnsignedTransaction {
+		PolkadotTransactionData {
+			chain: NetworkChoice::PolkadotMainnet,
+			encoded_extrinsic: signed_call.chain_encoded(),
+		}
+	}
+
+	fn refresh_unsigned_transaction(
+		_unsigned_tx: &mut <Polkadot as ChainAbi>::UnsignedTransaction,
+	) {
+		todo!();
 	}
 }
 

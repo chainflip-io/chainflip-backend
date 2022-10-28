@@ -11,6 +11,7 @@ use cf_primitives::{
 };
 use cf_traits::{liquidity::LpProvisioningApi, AddressDerivationApi, IngressApi, IngressFetchApi};
 
+use cf_traits::SwapIntentHandler;
 use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{app_crypto::sp_core, DispatchError},
@@ -30,6 +31,7 @@ pub mod pallet {
 
 	use super::*;
 	use cf_primitives::Asset;
+	use cf_traits::{IngressFetchApi, SwapIntentHandler};
 	use frame_support::{
 		pallet_prelude::{DispatchResultWithPostInfo, OptionQuery, ValueQuery},
 		traits::{EnsureOrigin, IsType},
@@ -100,6 +102,8 @@ pub mod pallet {
 		type LpAccountHandler: LpProvisioningApi<AccountId = Self::AccountId, Amount = AssetAmount>;
 		/// For scheduling fetch requests.
 		type IngressFetchApi: IngressFetchApi;
+		/// For scheduling swaps.
+		type SwapIntentHandler: SwapIntentHandler;
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;
 	}
@@ -126,6 +130,7 @@ pub mod pallet {
 		InvalidIntent,
 		IngressMismatchWithIntent,
 		IntentIdsExhausted,
+		UnsupportedAsset,
 	}
 
 	#[pallet::call]
@@ -165,33 +170,43 @@ impl<T: Config> Pallet<T> {
 		amount: u128,
 		tx_hash: sp_core::H256,
 	) -> DispatchResult {
+		ensure!(
+			matches!(asset, Asset::Eth | Asset::Flip | Asset::Usdc),
+			Error::<T>::UnsupportedAsset
+		);
+		let ingress =
+			IntentIngressDetails::<T>::get(ingress_address).ok_or(Error::<T>::InvalidIntent)?;
+		ensure!(ingress.ingress_asset.asset == asset, Error::<T>::IngressMismatchWithIntent);
+		T::IngressFetchApi::schedule_ethereum_ingress_fetch(vec![(asset, ingress.intent_id)]);
 		// NB: Don't take here. We should continue witnessing this address
 		// even after an ingress to it has occurred.
 		// https://github.com/chainflip-io/chainflip-eth-contracts/pull/226
 		match IntentActions::<T>::get(ingress_address).ok_or(Error::<T>::InvalidIntent)? {
 			IntentAction::LiquidityProvision { lp_account, .. } => {
-				let ingress = IntentIngressDetails::<T>::get(ingress_address)
-					.ok_or(Error::<T>::InvalidIntent)?;
-
-				ensure!(
-					ingress.ingress_asset.asset == asset,
-					Error::<T>::IngressMismatchWithIntent
-				);
 				match (ingress_address, ingress.ingress_asset.chain) {
 					(ForeignChainAddress::Eth(_), ForeignChain::Ethereum) => {
-						T::IngressFetchApi::schedule_ethereum_ingress_fetch(vec![(
-							asset,
-							ingress.intent_id,
-						)]);
 						T::LpAccountHandler::provision_account(&lp_account, asset, amount)?;
 						Ok(())
 					},
 					_ => Err(Error::<T>::IngressMismatchWithIntent),
 				}?;
 			},
-			IntentAction::Swap { .. } => todo!(),
+			IntentAction::Swap { egress_address, egress_asset, .. } => {
+				match (ingress_address, ingress.ingress_asset.chain) {
+					(ForeignChainAddress::Eth(_), ForeignChain::Ethereum) => {
+						T::SwapIntentHandler::schedule_swap(
+							asset,
+							egress_asset,
+							amount,
+							ingress_address,
+							egress_address,
+						);
+						Ok(())
+					},
+					_ => Err(Error::<T>::IngressMismatchWithIntent),
+				}?;
+			},
 		}
-
 		Self::deposit_event(Event::IngressCompleted { ingress_address, asset, amount, tx_hash });
 		Ok(())
 	}

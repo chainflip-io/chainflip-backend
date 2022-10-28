@@ -1,6 +1,17 @@
 name: Publish Packages
 on:
   workflow_call:
+    inputs:
+      s3-prefix:
+        description: Prefix for S3 bucket
+        required: false
+        type: string
+        default: 'ci'
+      artifacts:
+        description: Artifacts to publish
+        required: false
+        type: string
+        default: chainflip-backend-packages
 
 env:
   APTLY_VERSION: '1.5.0'
@@ -21,7 +32,7 @@ jobs:
       - name: Download packages
         uses: actions/download-artifact@v3
         with:
-          name: chainflip-backend-packages
+          name: ${{ inputs.artifacts }}
           path: packages
       - name: Get commit SHA, distribution codename
         id: vars
@@ -56,15 +67,20 @@ jobs:
           aptly repo create local
           aptly repo add local packages/*.deb
           aptly snapshot create snap from repo local
-          aptly publish -gpg-key=${{ steps.import_gpg.outputs.keyid }} -distribution=${{ steps.vars.outputs.codename }} snapshot -force-overwrite snap "s3:chainflip-dev:ci/${{ steps.vars.outputs.sha_long }}/"
+          aptly publish -gpg-key=${{ steps.import_gpg.outputs.keyid }} -distribution=${{ steps.vars.outputs.codename }} snapshot -force-overwrite snap "s3:chainflip-dev:${{ inputs.s3-prefix }}/${{ steps.vars.outputs.sha_long }}/"
+      - name: Set Summary Title
+        if: ${{ !contains(inputs.artifacts, 'ibiza') }}
+        run: echo "### Packages Published! :rocket:" >> $GITHUB_STEP_SUMMARY
+      - name: Set Summary Title
+        if: contains(inputs.artifacts, 'ibiza')
+        run: echo "### Ibiza Packages Published! :rocket:" >> $GITHUB_STEP_SUMMARY
       - name: Summary
         run: |
-          echo "### Packages published! :rocket:" >> $GITHUB_STEP_SUMMARY
           echo "Packages can be installed with the following commands: " >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
           echo "sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys ${{ steps.import_gpg.outputs.keyid }}" >> $GITHUB_STEP_SUMMARY
-          echo "echo \"deb https://{user}:{password}@${REPO_BUCKET}/ci/${{ steps.vars.outputs.sha_long }}/ ${{ steps.vars.outputs.codename }} main\"  | sudo tee /etc/apt/sources.list.d/chainflip.list" >> $GITHUB_STEP_SUMMARY
+          echo "echo \"deb https://{user}:{password}@${REPO_BUCKET}/${{ inputs.s3-prefix }}/${{ steps.vars.outputs.sha_long }}/ ${{ steps.vars.outputs.codename }} main\"  | sudo tee /etc/apt/sources.list.d/chainflip.list" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           echo "You can find the basic auth credentials in 1Password under \`apt repo basic auth\` secret" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY

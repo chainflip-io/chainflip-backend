@@ -5314,23 +5314,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-cf-relayer"
-version = "0.1.0"
-dependencies = [
- "cf-primitives",
- "cf-traits",
- "frame-benchmarking",
- "frame-support",
- "frame-system",
- "parity-scale-codec",
- "scale-info",
- "sp-core",
- "sp-io",
- "sp-runtime",
- "sp-std",
-]
-
-[[package]]
 name = "pallet-cf-reputation"
 version = "0.1.0"
 dependencies = [
@@ -5366,6 +5349,24 @@ dependencies = [
  "log 0.4.17",
  "pallet-cf-account-roles",
  "pallet-cf-flip",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "pallet-cf-swapping"
+version = "0.1.0"
+dependencies = [
+ "cf-primitives",
+ "cf-traits",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "log 0.4.17",
  "parity-scale-codec",
  "scale-info",
  "sp-core",
@@ -9029,9 +9030,9 @@ dependencies = [
  "pallet-cf-governance",
  "pallet-cf-ingress",
  "pallet-cf-lp",
- "pallet-cf-relayer",
  "pallet-cf-reputation",
  "pallet-cf-staking",
+ "pallet-cf-swapping",
  "pallet-cf-threshold-signature",
  "pallet-cf-tokenholder-governance",
  "pallet-cf-validator",
