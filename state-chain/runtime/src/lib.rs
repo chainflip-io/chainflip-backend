@@ -528,7 +528,7 @@ impl pallet_cf_threshold_signature::Config<EthereumInstance> for Runtime {
 	type AccountRoleRegistry = AccountRoles;
 	type ThresholdCallable = Call;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
-	type SignerNomination = chainflip::RandomSignerNomination<SigningOffences>;
+	type ThresholdSignerNomination = chainflip::RandomSignerNomination<SigningOffences>;
 	type TargetChain = Ethereum;
 	type KeyProvider = EthereumVault;
 	type OffenceReporter = Reputation;
@@ -546,7 +546,7 @@ impl pallet_cf_broadcast::Config<EthereumInstance> for Runtime {
 	type ApiCall = eth::api::EthereumApi;
 	type ThresholdSigner = EthereumThresholdSigner;
 	type TransactionBuilder = chainflip::EthTransactionBuilder;
-	type SignerNomination = chainflip::RandomSignerNomination<BroadcastExclusionOffences>;
+	type SingleSignerNomination = chainflip::RandomSignerNomination<BroadcastExclusionOffences>;
 	type OffenceReporter = Reputation;
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, Instance1>;

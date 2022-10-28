@@ -20,8 +20,9 @@ use cf_chains::ChainCrypto;
 use cf_primitives::{AuthorityCount, CeremonyId};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, CeremonyIdProvider, Chainflip, EpochInfo,
-	KeyProvider, RetryPolicy, SignerNomination,
+	KeyProvider, RetryPolicy, ThresholdSignerNomination,
 };
+
 use frame_support::{
 	dispatch::UnfilteredDispatchable,
 	ensure,
@@ -58,7 +59,7 @@ pub enum PalletOffence {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{AccountRoleRegistry, AsyncResult};
+	use cf_traits::{AccountRoleRegistry, AsyncResult, ThresholdSignerNomination};
 	use frame_support::{
 		dispatch::DispatchResultWithPostInfo,
 		pallet_prelude::{InvalidTransaction, *},
@@ -183,7 +184,7 @@ pub mod pallet {
 		type TargetChain: ChainCrypto;
 
 		/// Signer nomination.
-		type SignerNomination: SignerNomination<SignerId = Self::ValidatorId>;
+		type ThresholdSignerNomination: ThresholdSignerNomination<SignerId = Self::ValidatorId>;
 
 		/// Something that provides the current key for signing.
 		type KeyProvider: KeyProvider<Self::TargetChain, KeyId = Self::KeyId>;
@@ -572,7 +573,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let (event, log_message, ceremony_participants, retry_delay) = if let Some(nominees) =
 			participants.or_else(|| {
-				T::SignerNomination::threshold_nomination_with_seed(
+				T::ThresholdSignerNomination::threshold_nomination_with_seed(
 					(ceremony_id, attempt_count),
 					T::EpochInfo::epoch_index(),
 				)

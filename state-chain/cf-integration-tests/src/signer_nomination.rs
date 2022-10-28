@@ -1,4 +1,4 @@
-use cf_traits::{EpochInfo, SignerNomination};
+use cf_traits::{EpochInfo, ThresholdSignerNomination};
 use pallet_cf_validator::{
 	CurrentAuthorities, CurrentEpoch, EpochAuthorityCount, HistoricalAuthorities,
 };

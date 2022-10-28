@@ -66,7 +66,7 @@ pub struct RandomSignerNomination<ExclusionOffences: OffenceList<Runtime>>(
 	PhantomData<ExclusionOffences>,
 );
 
-impl<ExclusionOffences: OffenceList<Runtime>> cf_traits::SignerNomination
+impl<ExclusionOffences: OffenceList<Runtime>> cf_traits::SingleSignerNomination
 	for RandomSignerNomination<ExclusionOffences>
 {
 	type SignerId = <Runtime as Chainflip>::ValidatorId;
@@ -82,6 +82,12 @@ impl<ExclusionOffences: OffenceList<Runtime>> cf_traits::SignerNomination
 			eligible_authorities(Validator::epoch_index(), &all_excludes),
 		)
 	}
+}
+
+impl<ExclusionOffences: OffenceList<Runtime>> cf_traits::ThresholdSignerNomination
+	for RandomSignerNomination<ExclusionOffences>
+{
+	type SignerId = <Runtime as Chainflip>::ValidatorId;
 
 	fn threshold_nomination_with_seed<H: Hashable>(
 		seed: H,
