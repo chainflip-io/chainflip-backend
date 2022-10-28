@@ -3,10 +3,7 @@ use pallet_cf_validator::{
 	CurrentAuthorities, CurrentEpoch, EpochAuthorityCount, HistoricalAuthorities,
 };
 use sp_runtime::AccountId32;
-use state_chain_runtime::{
-	chainflip::{BroadcastExclusionOffences, RandomSignerNomination, SigningOffences},
-	Reputation, Runtime, Validator,
-};
+use state_chain_runtime::{chainflip::RandomSignerNomination, Reputation, Runtime, Validator};
 
 #[test]
 fn threshold_signer_nomination_respects_epoch() {
@@ -20,7 +17,7 @@ fn threshold_signer_nomination_respects_epoch() {
 			EpochAuthorityCount::<Runtime>::get(genesis_epoch).unwrap()
 		);
 
-		assert!(RandomSignerNomination::<()>::threshold_nomination_with_seed((), genesis_epoch)
+		assert!(RandomSignerNomination::threshold_nomination_with_seed((), genesis_epoch)
 			.expect("Non empty set, no one is banned")
 			.into_iter()
 			.all(|n| genesis_authorities.contains(&n)));
@@ -42,15 +39,14 @@ fn threshold_signer_nomination_respects_epoch() {
 			.all(|n| !genesis_authorities.contains(&n)));
 
 		// asking to sign at new epoch works
-		let new_nominees =
-			RandomSignerNomination::<()>::threshold_nomination_with_seed((), next_epoch)
-				.expect("Non empty set, no one banned");
+		let new_nominees = RandomSignerNomination::threshold_nomination_with_seed((), next_epoch)
+			.expect("Non empty set, no one banned");
 		assert!(new_nominees.iter().all(|n| !genesis_authorities.contains(n)));
 		assert!(new_nominees.iter().all(|n| new_authorities.contains(n)));
 
 		// asking to sign at old epoch still works
 		let old_nominees =
-			RandomSignerNomination::<()>::threshold_nomination_with_seed((), genesis_epoch)
+			RandomSignerNomination::threshold_nomination_with_seed((), genesis_epoch)
 				.expect("Non empty, no one banned");
 		assert!(old_nominees.iter().all(|n| genesis_authorities.contains(n)));
 
@@ -69,15 +65,14 @@ fn offline_nodes_are_not_nominated_for_threshold_signing() {
 		Reputation::penalise_offline_authorities(vec![node1.clone()]);
 
 		for seed in 0..20 {
-			assert!(!RandomSignerNomination::<SigningOffences>::threshold_nomination_with_seed(
-				seed,
-				genesis_epoch,
-			)
-			.unwrap()
-			.contains(&node1));
+			assert!(!RandomSignerNomination::threshold_nomination_with_seed(seed, genesis_epoch,)
+				.unwrap()
+				.contains(&node1));
 		}
 	});
 }
+
+// TODO: Test the diff, the extra signing offence
 
 #[test]
 fn offline_nodes_are_not_nominated_transaction_signing() {
@@ -88,14 +83,7 @@ fn offline_nodes_are_not_nominated_transaction_signing() {
 
 		for seed in 0..20 {
 			// no extra ids, excluded.
-			assert_ne!(
-				RandomSignerNomination::<BroadcastExclusionOffences>::nomination_with_seed(
-					seed,
-					&[]
-				)
-				.unwrap(),
-				node1
-			);
+			assert_ne!(RandomSignerNomination::nomination_with_seed(seed, &[]).unwrap(), node1);
 		}
 	});
 }

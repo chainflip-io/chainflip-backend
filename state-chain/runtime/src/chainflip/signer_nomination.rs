@@ -1,11 +1,12 @@
-use crate::{Runtime, Validator};
+use crate::{Reputation, Runtime, Validator};
 use cf_primitives::EpochIndex;
 use cf_traits::{Chainflip, EpochInfo};
-use frame_support::{traits::Get, Hashable};
+use frame_support::Hashable;
 use nanorand::{Rng, WyRand};
-use pallet_cf_reputation::{GetValidatorsExcludedFor, OffenceList};
 use pallet_cf_validator::HistoricalAuthorities;
-use sp_std::{collections::btree_set::BTreeSet, marker::PhantomData, vec::Vec};
+use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
+
+use super::Offence;
 
 /// Tries to select `n` items randomly from the provided BTreeSet.
 ///
@@ -62,20 +63,19 @@ fn eligible_authorities(
 ///
 /// Signers serving a suspension for any of the offences in ExclusionOffences are
 /// excluded from being nominated.
-pub struct RandomSignerNomination<ExclusionOffences: OffenceList<Runtime>>(
-	PhantomData<ExclusionOffences>,
-);
+pub struct RandomSignerNomination;
 
-impl<ExclusionOffences: OffenceList<Runtime>> cf_traits::SingleSignerNomination
-	for RandomSignerNomination<ExclusionOffences>
-{
+impl cf_traits::SingleSignerNomination for RandomSignerNomination {
 	type SignerId = <Runtime as Chainflip>::ValidatorId;
 
 	fn nomination_with_seed<H: Hashable>(
 		seed: H,
 		exclude_ids: &[Self::SignerId],
 	) -> Option<Self::SignerId> {
-		let mut all_excludes = GetValidatorsExcludedFor::<Runtime, ExclusionOffences>::get();
+		let mut all_excludes = Reputation::validators_suspended_for(&[
+			Offence::MissedAuthorshipSlot,
+			Offence::MissedHeartbeat,
+		]);
 		all_excludes.extend(exclude_ids.iter().cloned());
 		select_one(
 			seed_from_hashable(seed),
@@ -84,9 +84,7 @@ impl<ExclusionOffences: OffenceList<Runtime>> cf_traits::SingleSignerNomination
 	}
 }
 
-impl<ExclusionOffences: OffenceList<Runtime>> cf_traits::ThresholdSignerNomination
-	for RandomSignerNomination<ExclusionOffences>
-{
+impl cf_traits::ThresholdSignerNomination for RandomSignerNomination {
 	type SignerId = <Runtime as Chainflip>::ValidatorId;
 
 	fn threshold_nomination_with_seed<H: Hashable>(
@@ -100,7 +98,11 @@ impl<ExclusionOffences: OffenceList<Runtime>> cf_traits::ThresholdSignerNominati
 			) as usize,
 			eligible_authorities(
 				epoch_index,
-				&GetValidatorsExcludedFor::<Runtime, ExclusionOffences>::get(),
+				&Reputation::validators_suspended_for(&[
+					Offence::ParticipateSigningFailed,
+					Offence::MissedAuthorshipSlot,
+					Offence::MissedHeartbeat,
+				]),
 			),
 		)
 	}
