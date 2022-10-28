@@ -15,7 +15,7 @@ use jsonrpsee::{
 };
 
 use slog::o;
-use sp_core::{storage::StorageKey, Bytes, Pair, H256};
+use sp_core::{storage::StorageKey, Pair, H256};
 use sp_runtime::{
 	generic::Era,
 	traits::{BlakeTwo256, Hash},
@@ -314,15 +314,6 @@ impl StateChainClient {
 			};
 		}
 		Err(anyhow!("Block stream loop exited, no event found",))
-	}
-
-	pub async fn rotate_session_keys(&self) -> Result<Bytes> {
-		let session_key_bytes: Bytes = self.base_rpc_client.rotate_keys().await?;
-		Ok(session_key_bytes)
-	}
-
-	pub async fn is_auction_phase(&self) -> Result<bool> {
-		self.base_rpc_client.is_auction_phase().await.map_err(Into::into)
 	}
 }
 

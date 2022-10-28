@@ -3,7 +3,7 @@ use cf_primitives::AccountRole;
 use chainflip_engine::{
 	eth::{rpc::EthDualRpcClient, EthBroadcaster},
 	state_chain_observer::client::{
-		connect_to_state_chain, storage_api::SafeStorageApi, BaseRpcApi, BaseRpcClient,
+		connect_to_state_chain, storage_api::SafeStorageApi, BaseRpcApi, BaseRpcClient, StateChainClient,
 	},
 };
 use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
@@ -11,13 +11,14 @@ use clap::Parser;
 use futures::StreamExt;
 use settings::{CLICommandLineOptions, CLISettings};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use sp_core::{ed25519::Public as EdPublic, sr25519::Public as SrPublic};
+use sp_core::{ed25519::Public as EdPublic, sr25519::Public as SrPublic, Bytes};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use state_chain_runtime::opaque::SessionKeys;
 use web3::types::H160;
 
 use crate::settings::CFCommand::*;
 use anyhow::{anyhow, bail, Context, Result};
+use async_trait::async_trait;
 use pallet_cf_governance::ProposalId;
 use pallet_cf_validator::MAX_LENGTH_FOR_VANITY_NAME;
 use utilities::clean_eth_address;
@@ -77,6 +78,18 @@ async fn request_block(
 		None => println!("Could not find block with block hash {:x?}", block_hash),
 	}
 	Ok(())
+}
+
+#[async_trait]
+trait AuctionPhaseApi {
+	async fn is_auction_phase(&self) -> Result<bool>;
+}
+
+#[async_trait]
+impl AuctionPhaseApi for StateChainClient {
+	async fn is_auction_phase(&self) -> Result<bool> {
+		self.base_rpc_client.is_auction_phase().await.map_err(Into::into)
+	}
 }
 
 async fn request_claim(
@@ -236,6 +249,19 @@ async fn register_claim(
 				.0,
 		)
 		.await
+}
+
+#[async_trait]
+trait RotateSessionKeysApi {
+	async fn rotate_session_keys(&self) -> Result<Bytes>;
+}
+
+#[async_trait]
+impl RotateSessionKeysApi for StateChainClient {
+	async fn rotate_session_keys(&self) -> Result<Bytes> {
+		let session_key_bytes: Bytes = self.base_rpc_client.rotate_keys().await?;
+		Ok(session_key_bytes)
+	}
 }
 
 async fn rotate_keys(settings: &CLISettings, logger: &slog::Logger) -> Result<()> {

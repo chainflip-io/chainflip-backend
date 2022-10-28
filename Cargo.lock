@@ -915,6 +915,7 @@ name = "chainflip-cli"
 version = "0.5.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "cf-chains",
  "cf-primitives",
  "chainflip-engine",
