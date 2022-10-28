@@ -115,7 +115,7 @@ fn main() -> anyhow::Result<()> {
                 latest_block_hash,
             )
             .await
-            .context("Failed to get ETH CeremonyIdCounter from SC")?;
+            .context("Failed to get CeremonyIdCounter from SC")?;
 
             let db = Arc::new(
                 PersistentKeyDB::new_and_migrate_to_latest(
