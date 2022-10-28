@@ -84,10 +84,11 @@ benchmarks_instance_pallet! {
 	}
 	on_signature_ready {
 		// We add one because one is added at genesis
+		let broadcast_id = 1;
 		let timeout_block = frame_system::Pallet::<T>::block_number() + T::BroadcastTimeout::get() + 1_u32.into();
 		let broadcast_attempt_id = BroadcastAttemptId {
-			broadcast_id: 1,
-			attempt_count: 1
+			broadcast_id,
+			attempt_count: 0
 		};
 		insert_transaction_broadcast_attempt::<T, I>(whitelisted_caller(), broadcast_attempt_id);
 		let call = generate_on_signature_ready_call::<T, I>();
@@ -96,7 +97,7 @@ benchmarks_instance_pallet! {
 	} : { call.dispatch_bypass_filter(T::EnsureThresholdSigned::successful_origin())? }
 	verify {
 		assert_eq!(BroadcastIdCounter::<T, I>::get(), 1);
-		assert!(BroadcastAttemptCount::<T, I>::contains_key(1));
+		assert_eq!(BroadcastAttemptCount::<T, I>::get(broadcast_id), 0);
 		assert!(Timeouts::<T, I>::contains_key(timeout_block));
 	}
 	start_next_broadcast_attempt {
@@ -118,6 +119,12 @@ benchmarks_instance_pallet! {
 		let caller: T::AccountId = whitelisted_caller();
 		let signer_id = SignerIdFor::<T, I>::benchmark_value();
 		SignatureToBroadcastIdLookup::<T, I>::insert(ThresholdSignatureFor::<T, I>::benchmark_value(), 1);
+
+		let broadcast_attempt_id = BroadcastAttemptId {
+			broadcast_id: 1,
+			attempt_count: 0
+		};
+		insert_transaction_broadcast_attempt::<T, I>(whitelisted_caller(), broadcast_attempt_id);
 		let call = Call::<T, I>::signature_accepted{
 			signature: ThresholdSignatureFor::<T, I>::benchmark_value(),
 			signer_id,
