@@ -1,8 +1,8 @@
-mod base_rpc_api;
+pub mod base_rpc_api;
 mod signer;
 pub mod storage_api;
 
-pub use base_rpc_api::{BaseRpcApi, BaseRpcClient};
+use base_rpc_api::BaseRpcApi;
 
 use anyhow::{anyhow, bail, Context, Result};
 use codec::{Decode, Encode};
