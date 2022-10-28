@@ -3,7 +3,9 @@ use std::sync::Arc;
 use futures::StreamExt;
 use tokio::sync::broadcast::{self};
 
-use crate::{eth::rpc::EthDualRpcClient, state_chain_observer::client::StateChainClient};
+use crate::{
+	eth::rpc::EthDualRpcClient, state_chain_observer::client::extrinsic_api::ExtrinsicApi,
+};
 
 use super::{
 	block_events_stream_for_contract_from, epoch_witnesser::should_end_witnessing, EpochStart,
@@ -12,7 +14,7 @@ use super::{
 
 // NB: This code can emit the same witness multiple times. e.g. if the CFE restarts in the middle of
 // witnessing a window of blocks
-pub async fn start<ContractWitnesser>(
+pub async fn start<StateChainClient, ContractWitnesser>(
 	contract_witnesser: ContractWitnesser,
 	eth_dual_rpc: EthDualRpcClient,
 	epoch_starts_receiver: broadcast::Receiver<EpochStart>,
@@ -24,6 +26,7 @@ pub async fn start<ContractWitnesser>(
 ) -> anyhow::Result<()>
 where
 	ContractWitnesser: 'static + EthContractWitnesser + Sync + Send,
+	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
 {
 	super::epoch_witnesser::start(
 		contract_witnesser.contract_name(),

@@ -12,7 +12,7 @@ use crate::{
 	common::read_clean_and_decode_hex_str_file,
 	multisig::{eth::EthSigning, polkadot::PolkadotSigning, CryptoScheme},
 	settings::P2P as P2PSettings,
-	state_chain_observer::client::{extrinsic_api::ExtrinsicApi, StateChainClient},
+	state_chain_observer::client::{extrinsic_api::ExtrinsicApi, storage_api::SafeStorageApi},
 };
 
 pub use self::core::{PeerInfo, PeerUpdate};
@@ -55,7 +55,7 @@ impl<C: CryptoScheme> MultisigMessageReceiver<C> {
 	}
 }
 
-pub async fn start(
+pub async fn start<StateChainClient>(
 	state_chain_client: Arc<StateChainClient>,
 	settings: P2PSettings,
 	latest_block_hash: H256,
@@ -67,7 +67,10 @@ pub async fn start(
 	MultisigMessageReceiver<PolkadotSigning>,
 	UnboundedSender<PeerUpdate>,
 	impl Future<Output = anyhow::Result<()>>,
-)> {
+)>
+where
+	StateChainClient: SafeStorageApi + ExtrinsicApi + 'static + Send + Sync,
+{
 	if settings.ip_address == IpAddr::V4(Ipv4Addr::UNSPECIFIED) {
 		anyhow::bail!("Should provide a valid IP address");
 	}

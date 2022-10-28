@@ -29,16 +29,14 @@ use crate::{
 		KeyId, MessageHash,
 	},
 	p2p::{PeerInfo, PeerUpdate},
-	state_chain_observer::client::{
-		extrinsic_api::ExtrinsicApi, storage_api::SafeStorageApi, StateChainClient,
-	},
+	state_chain_observer::client::{extrinsic_api::ExtrinsicApi, storage_api::SafeStorageApi},
 	task_scope::{with_task_scope, Scope},
 };
 
 #[cfg(feature = "ibiza")]
 use sp_core::H160;
 
-async fn handle_keygen_request<'a, MultisigClient>(
+async fn handle_keygen_request<'a, StateChainClient, MultisigClient>(
 	scope: &Scope<'a, anyhow::Result<()>, true>,
 	multisig_client: Arc<MultisigClient>,
 	state_chain_client: Arc<StateChainClient>,
@@ -47,6 +45,7 @@ async fn handle_keygen_request<'a, MultisigClient>(
 	logger: slog::Logger,
 ) where
 	MultisigClient: MultisigClientApi<EthSigning> + Send + Sync + 'static,
+	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
 {
 	if keygen_participants.contains(&state_chain_client.account_id()) {
 		scope.spawn(async move {
@@ -82,7 +81,7 @@ async fn handle_keygen_request<'a, MultisigClient>(
 	}
 }
 
-async fn handle_signing_request<'a, MultisigClient>(
+async fn handle_signing_request<'a, StateChainClient, MultisigClient>(
 	scope: &Scope<'a, anyhow::Result<()>, true>,
 	multisig_client: Arc<MultisigClient>,
 	state_chain_client: Arc<StateChainClient>,
@@ -93,6 +92,7 @@ async fn handle_signing_request<'a, MultisigClient>(
 	logger: slog::Logger,
 ) where
 	MultisigClient: MultisigClientApi<EthSigning> + Send + Sync + 'static,
+	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
 {
 	if signers.contains(&state_chain_client.account_id()) {
 		// Send a signing request and wait to submit the result to the SC
@@ -161,7 +161,13 @@ macro_rules! match_event {
     }}
 }
 
-pub async fn start<BlockStream, EthRpc, EthMultisigClient, PolkadotMultisigClient>(
+pub async fn start<
+	StateChainClient,
+	BlockStream,
+	EthRpc,
+	EthMultisigClient,
+	PolkadotMultisigClient,
+>(
 	state_chain_client: Arc<StateChainClient>,
 	sc_block_stream: BlockStream,
 	eth_broadcaster: EthBroadcaster<EthRpc>,
@@ -185,6 +191,7 @@ where
 	EthRpc: EthRpcApi + Send + Sync + 'static,
 	EthMultisigClient: MultisigClientApi<EthSigning> + Send + Sync + 'static,
 	PolkadotMultisigClient: MultisigClientApi<PolkadotSigning> + Send + Sync + 'static,
+	StateChainClient: SafeStorageApi + ExtrinsicApi + 'static + Send + Sync,
 {
 	with_task_scope(|scope| async {
         let logger = logger.new(o!(COMPONENT_KEY => "SCObserver"));
