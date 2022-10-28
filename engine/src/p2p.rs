@@ -88,7 +88,7 @@ pub async fn start(
 		peer_info_submitter::get_current_peer_infos(&state_chain_client, latest_block_hash)
 			.await
 			.context("Failed to get initial peer info")?;
-	let our_account_id = state_chain_client.our_account_id.clone();
+	let our_account_id = state_chain_client.signer.account_id.clone();
 
 	let own_peer_info = current_peers.iter().find(|pi| pi.account_id == our_account_id).cloned();
 

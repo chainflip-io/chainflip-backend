@@ -19,7 +19,7 @@ use sp_core::{storage::StorageKey, Bytes, Pair, H256};
 use sp_runtime::{
 	generic::Era,
 	traits::{BlakeTwo256, Hash},
-	AccountId32, MultiAddress,
+	MultiAddress,
 };
 use sp_version::RuntimeVersion;
 use std::sync::{
@@ -40,13 +40,9 @@ use self::storage_api::SafeStorageApi;
 
 pub struct StateChainClient {
 	nonce: AtomicU32,
-	/// Our Node's AccountId
-	pub our_account_id: AccountId32,
-
 	runtime_version: RwLock<sp_version::RuntimeVersion>,
 	genesis_hash: state_chain_runtime::Hash,
 	pub signer: signer::PairSigner<sp_core::sr25519::Pair>,
-
 	pub base_rpc_client: Arc<base_rpc_api::BaseRpcClient<jsonrpsee::ws_client::WsClient>>,
 }
 
@@ -100,7 +96,7 @@ impl StateChainClient {
 
 		state_chain_runtime::UncheckedExtrinsic::new_signed(
 			call,
-			MultiAddress::Id(self.signer.account_id().clone()),
+			MultiAddress::Id(self.signer.account_id.clone()),
 			signature,
 			extra,
 		)
@@ -359,10 +355,8 @@ async fn inner_connect_to_state_chain(
 		)?),
 	);
 
-	let our_account_id = signer.account_id().to_owned();
-
 	let account_storage_key = StorageKey(
-		frame_system::Account::<state_chain_runtime::Runtime>::hashed_key_for(&our_account_id),
+		frame_system::Account::<state_chain_runtime::Runtime>::hashed_key_for(&signer.account_id),
 	);
 
 	let base_rpc_client = Arc::new(base_rpc_api::BaseRpcClient::new(state_chain_settings).await?);
@@ -370,12 +364,13 @@ async fn inner_connect_to_state_chain(
 	let (first_finalized_block_header, mut finalized_block_header_stream) = {
 		// https://substrate.stackexchange.com/questions/3667/api-rpc-chain-subscribefinalizedheads-missing-blocks
 		// https://arxiv.org/abs/2007.01560
-		let mut sparse_finalized_block_header_stream =
-			base_rpc_client.subscribe_finalized_block_headers().await?.map_err(Into::into).chain(
-				futures::stream::once(std::future::ready(Err(anyhow::anyhow!(
-					"sparse_finalized_block_header_stream unexpectedly ended"
-				)))),
-			);
+		let mut sparse_finalized_block_header_stream = base_rpc_client
+			.subscribe_finalized_block_headers()
+			.await?
+			.map_err(Into::into)
+			.chain(futures::stream::once(std::future::ready(Err(anyhow::anyhow!(
+				"sparse_finalized_block_header_stream unexpectedly ended"
+			)))));
 
 		let mut latest_finalized_header: state_chain_runtime::Header =
 			sparse_finalized_block_header_stream.next().await.unwrap()?;
@@ -489,13 +484,16 @@ async fn inner_connect_to_state_chain(
 			None =>
 				if wait_for_staking {
 					loop {
-						if let Some(nonce) =
-							get_account_nonce(base_rpc_client, &account_storage_key, latest_block_hash)
-								.await?
+						if let Some(nonce) = get_account_nonce(
+							base_rpc_client,
+							&account_storage_key,
+							latest_block_hash,
+						)
+						.await?
 						{
 							break nonce
 						} else {
-							slog::warn!(logger, "Your Chainflip account {} is not staked. WAITING for account to be staked at block: {}", our_account_id, latest_block_number);
+							slog::warn!(logger, "Your Chainflip account {} is not staked. WAITING for account to be staked at block: {}", signer.account_id, latest_block_number);
 							let block_header =
 								finalized_block_header_stream.next().await.unwrap()?;
 							latest_block_hash = block_header.hash();
@@ -504,7 +502,7 @@ async fn inner_connect_to_state_chain(
 						}
 					}
 				} else {
-					bail!("Your Chainflip account {} is not staked", our_account_id);
+					bail!("Your Chainflip account {} is not staked", signer.account_id);
 				},
 		};
 
@@ -529,7 +527,6 @@ async fn inner_connect_to_state_chain(
 			genesis_hash: base_rpc_client.block_hash(0).await?.unwrap(),
 			signer: signer.clone(),
 			base_rpc_client,
-			our_account_id,
 		}),
 	))
 }

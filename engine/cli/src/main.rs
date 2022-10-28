@@ -157,7 +157,7 @@ async fn request_claim(
 						pallet_cf_staking::Event::ClaimSignatureIssued(validator_id, claim_cert),
 					) = event_record.event
 					{
-						if validator_id == state_chain_client.our_account_id {
+						if validator_id == state_chain_client.signer.account_id {
 							if should_register_claim {
 								println!(
 									"Your claim certificate is: {:?}",
@@ -284,7 +284,7 @@ async fn activate_account(settings: &CLISettings, logger: &slog::Logger) -> Resu
 	match state_chain_client
         .get_storage_map_entry::<pallet_cf_account_roles::AccountRoles<state_chain_runtime::Runtime>>(
             latest_block_hash,
-            &state_chain_client.our_account_id,
+            &state_chain_client.signer.account_id,
         )
         .await
         .expect("Failed to request AccountRole")
