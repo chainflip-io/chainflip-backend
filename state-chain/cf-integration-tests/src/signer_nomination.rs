@@ -59,38 +59,35 @@ fn threshold_signer_nomination_respects_epoch() {
 	})
 }
 
+fn test_not_nominated_for_offence<F: Fn(crate::AccountId)>(penalise: F) {
+	let genesis_epoch = Validator::epoch_index();
+
+	let node1 = Validator::current_authorities().first().unwrap().clone();
+
+	penalise(node1.clone());
+
+	for seed in 0..20 {
+		assert!(!RandomSignerNomination::threshold_nomination_with_seed(seed, genesis_epoch,)
+			.unwrap()
+			.contains(&node1));
+	}
+}
+
 #[test]
 fn offline_nodes_are_not_nominated_for_threshold_signing() {
 	super::genesis::default().build().execute_with(|| {
-		let genesis_epoch = Validator::epoch_index();
-
-		let node1 = Validator::current_authorities().first().unwrap().clone();
-
-		Reputation::penalise_offline_authorities(vec![node1.clone()]);
-
-		for seed in 0..20 {
-			assert!(!RandomSignerNomination::threshold_nomination_with_seed(seed, genesis_epoch,)
-				.unwrap()
-				.contains(&node1));
-		}
+		test_not_nominated_for_offence(|node_id| {
+			Reputation::penalise_offline_authorities(vec![node_id])
+		});
 	});
 }
 
 #[test]
 fn nodes_who_failed_to_sign_excluded_from_threshold_nomination() {
 	super::genesis::default().build().execute_with(|| {
-		let genesis_epoch = Validator::epoch_index();
-
-		let node1 = Validator::current_authorities().first().unwrap().clone();
-
-		Reputation::report_many(PalletOffence::ParticipateSigningFailed, &[node1.clone()]);
-
-		for seed in 0..20 {
-			let nomination =
-				RandomSignerNomination::threshold_nomination_with_seed(seed, genesis_epoch)
-					.unwrap();
-			assert!(!nomination.contains(&node1));
-		}
+		test_not_nominated_for_offence(|node_id| {
+			Reputation::report_many(PalletOffence::ParticipateSigningFailed, &[node_id])
+		});
 	});
 }
 
