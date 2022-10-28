@@ -242,10 +242,8 @@ impl<T: Config> Pallet<T> {
 				EthereumRequest::Fetch { intent_id, asset } => {
 					// Asset should always have a valid Ethereum address
 					if let Some(asset_address) = Self::get_ethereum_asset_identifier(asset) {
-						fetch_params.push(FetchAssetParams {
-							swap_id: intent_id,
-							asset: asset_address.into(),
-						});
+						fetch_params
+							.push(FetchAssetParams { intent_id, asset: asset_address.into() });
 					}
 				},
 				EthereumRequest::Transfer { asset, to, amount } => {
