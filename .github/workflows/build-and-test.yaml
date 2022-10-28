@@ -21,8 +21,9 @@ jobs:
     steps:
       - name: Clean the workspace
         run: |
+          echo $USER
           ls -la $GITHUB_WORKSPACE
-          chown runner:docker -R $GITHUB_WORKSPACE/*
+          chown runner:runner -R $GITHUB_WORKSPACE/*
           rm -rf $GITHUB_WORKSPACE/*
       - name: Checkout
         uses: actions/checkout@v3
