@@ -1,9 +1,12 @@
-use cf_traits::{EpochInfo, ThresholdSignerNomination};
+use cf_traits::{EpochInfo, SingleSignerNomination, ThresholdSignerNomination};
 use pallet_cf_validator::{
 	CurrentAuthorities, CurrentEpoch, EpochAuthorityCount, HistoricalAuthorities,
 };
 use sp_runtime::AccountId32;
-use state_chain_runtime::{chainflip::RandomSignerNomination, Runtime, Validator};
+use state_chain_runtime::{
+	chainflip::{BroadcastExclusionOffences, RandomSignerNomination, SigningOffences},
+	Reputation, Runtime, Validator,
+};
 
 #[test]
 fn signer_nomination_respects_epoch() {
@@ -17,7 +20,6 @@ fn signer_nomination_respects_epoch() {
 			EpochAuthorityCount::<Runtime>::get(genesis_epoch).unwrap()
 		);
 
-		// TODO: Test Signer Nomination *with* banning.
 		assert!(RandomSignerNomination::<()>::threshold_nomination_with_seed((), genesis_epoch)
 			.expect("Non empty set, no one is banned")
 			.into_iter()
@@ -55,4 +57,45 @@ fn signer_nomination_respects_epoch() {
 		// double the number of authorities should mean we have a higher threshold
 		assert!(new_nominees.len() > old_nominees.len());
 	})
+}
+
+#[test]
+fn offline_nodes_are_not_nominated_for_threshold_signing() {
+	super::genesis::default().build().execute_with(|| {
+		let genesis_epoch = Validator::epoch_index();
+
+		let node1 = Validator::current_authorities().first().unwrap().clone();
+
+		Reputation::penalise_offline_authorities(vec![node1.clone()]);
+
+		for seed in 0..20 {
+			assert!(!RandomSignerNomination::<SigningOffences>::threshold_nomination_with_seed(
+				seed,
+				genesis_epoch,
+			)
+			.unwrap()
+			.contains(&node1));
+		}
+	});
+}
+
+#[test]
+fn offline_nodes_are_not_nominated_transaction_signing() {
+	super::genesis::default().build().execute_with(|| {
+		let node1 = Validator::current_authorities().first().unwrap().clone();
+
+		Reputation::penalise_offline_authorities(vec![node1.clone()]);
+
+		for seed in 0..20 {
+			// no extra ids, excluded.
+			assert_ne!(
+				RandomSignerNomination::<BroadcastExclusionOffences>::nomination_with_seed(
+					seed,
+					&[]
+				)
+				.unwrap(),
+				node1
+			);
+		}
+	});
 }
