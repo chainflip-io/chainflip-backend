@@ -9,7 +9,7 @@ on:
 env:
   SCCACHE_CACHE_SIZE: 32G
   SCCACHE_REDIS: ${{ secrets.SCCACHE_REDIS }}
-
+  CF_RUNNER_SUDO_PASSWORD: ${{ secrets.CF_RUNNER_SUDO_PASSWORD }}
 jobs:
   cargo-fmt:
     runs-on: [hetzner]
@@ -231,8 +231,8 @@ jobs:
           npm run generate
       - name: Install graphviz
         run: |
-          sudo apt-get update
-          sudo apt-get install -y graphviz
+          echo ${{ secrets.CF_RUNNER_SUDO_PASSWORD }} | sudo -S apt-get update
+          echo ${{ secrets.CF_RUNNER_SUDO_PASSWORD }} | sudo -S apt-get install -y graphviz
       - uses: actions/setup-java@v3
         with:
           distribution: 'zulu'

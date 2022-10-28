@@ -7,7 +7,6 @@ env:
   REGISTRY: 'ghcr.io'
   REPO_REGION: 'eu-central-1'
   REPO_BUCKET: 'apt.aws.chainflip.xyz'
-  CF_RUNNER_SUDO_PASSWORD: ${{ secrets.CF_RUNNER_SUDO_PASSWORD }}
 
 jobs:
   build-deb:
