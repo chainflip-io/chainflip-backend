@@ -23,6 +23,7 @@ pub struct P2P {
 	pub node_key_file: PathBuf,
 	pub ip_address: IpAddr,
 	pub port: Port,
+	pub allow_local_ip: bool,
 }
 
 #[derive(Debug, Deserialize, Clone, Default)]
@@ -105,7 +106,19 @@ pub struct EthOptions {
 	pub eth_private_key_file: Option<PathBuf>,
 }
 
-#[derive(Parser, Debug, Clone)]
+#[derive(Parser, Debug, Clone, Default)]
+pub struct P2POptions {
+	#[clap(long = "p2p.node_key_file", parse(from_os_str))]
+	node_key_file: Option<PathBuf>,
+	#[clap(long = "p2p.ip_address")]
+	ip_address: Option<IpAddr>,
+	#[clap(long = "p2p.port")]
+	p2p_port: Option<Port>,
+	#[clap(long = "p2p.allow_local_ip")]
+	allow_local_ip: Option<bool>,
+}
+
+#[derive(Parser, Debug, Clone, Default)]
 pub struct CommandLineOptions {
 	// Misc Options
 	#[clap(short = 'c', long = "config-path")]
@@ -115,13 +128,8 @@ pub struct CommandLineOptions {
 	#[clap(short = 'b', long = "log-blacklist")]
 	log_blacklist: Option<Vec<String>>,
 
-	// P2P Settings
-	#[clap(long = "p2p.node_key_file", parse(from_os_str))]
-	node_key_file: Option<PathBuf>,
-	#[clap(long = "p2p.ip_address")]
-	ip_address: Option<IpAddr>,
-	#[clap(long = "p2p.port")]
-	p2p_port: Option<Port>,
+	#[clap(flatten)]
+	p2p_opts: P2POptions,
 
 	#[clap(flatten)]
 	state_chain_opts: StateChainOptions,
@@ -142,31 +150,7 @@ pub struct CommandLineOptions {
 
 const HEALTH_CHECK_HOSTNAME: &str = "health_check.hostname";
 const HEALTH_CHECK_PORT: &str = "health_check.port";
-
-impl CommandLineOptions {
-	/// Creates an empty CommandLineOptions with `None` for all fields
-	pub fn new() -> CommandLineOptions {
-		CommandLineOptions {
-			config_path: None,
-			log_whitelist: None,
-			log_blacklist: None,
-			node_key_file: None,
-			ip_address: None,
-			p2p_port: None,
-			state_chain_opts: StateChainOptions::default(),
-			eth_opts: EthOptions::default(),
-			health_check_hostname: None,
-			health_check_port: None,
-			signing_db_file: None,
-		}
-	}
-}
-
-impl Default for CommandLineOptions {
-	fn default() -> Self {
-		Self::new()
-	}
-}
+const ALLOW_LOCAL_IP: &str = "node_p2p.allow_local_ip";
 
 // We use PathBuf because the value must be Sized, Path is not Sized
 fn deser_path<'de, D>(deserializer: D) -> std::result::Result<PathBuf, D::Error>
@@ -286,7 +270,8 @@ impl CfSettings for Settings {
 	) -> Result<ConfigBuilder<config::builder::DefaultState>, ConfigError> {
 		config_builder
 			.set_default(HEALTH_CHECK_HOSTNAME, HealthCheck::default().hostname)?
-			.set_default(HEALTH_CHECK_PORT, HealthCheck::default().port)
+			.set_default(HEALTH_CHECK_PORT, HealthCheck::default().port)?
+			.set_default(ALLOW_LOCAL_IP, false)
 	}
 }
 
@@ -298,15 +283,7 @@ impl Source for CommandLineOptions {
 	fn collect(&self) -> std::result::Result<Map<String, Value>, ConfigError> {
 		let mut map: HashMap<String, Value> = HashMap::new();
 
-		insert_command_line_option_path(&mut map, "node_p2p.node_key_file", &self.node_key_file);
-
-		insert_command_line_option(
-			&mut map,
-			"node_p2p.ip_address",
-			&self.ip_address.map(|ip| ip.to_string()),
-		);
-
-		insert_command_line_option(&mut map, "node_p2p.port", &self.p2p_port);
+		self.p2p_opts.insert_all(&mut map);
 
 		self.state_chain_opts.insert_all(&mut map);
 
@@ -366,6 +343,20 @@ impl EthOptions {
 		insert_command_line_option(map, "eth.ws_node_endpoint", &self.eth_ws_node_endpoint);
 		insert_command_line_option(map, "eth.http_node_endpoint", &self.eth_http_node_endpoint);
 		insert_command_line_option_path(map, "eth.private_key_file", &self.eth_private_key_file);
+	}
+}
+
+impl P2POptions {
+	/// Inserts all the Eth Shared Options into the given map (if Some)
+	pub fn insert_all(&self, map: &mut HashMap<String, Value>) {
+		insert_command_line_option_path(map, "node_p2p.node_key_file", &self.node_key_file);
+		insert_command_line_option(
+			map,
+			"node_p2p.ip_address",
+			&self.ip_address.map(|ip| ip.to_string()),
+		);
+		insert_command_line_option(map, "node_p2p.port", &self.p2p_port);
+		insert_command_line_option(map, ALLOW_LOCAL_IP, &self.allow_local_ip);
 	}
 }
 
@@ -493,15 +484,17 @@ mod tests {
 	#[test]
 	fn test_config_command_line_option() {
 		// Load both the settings files using the --config command line option
-		let mut opts = CommandLineOptions::new();
-		opts.config_path = Some("config/Testing.toml".to_owned());
+		let settings1 = Settings::new(CommandLineOptions {
+			config_path: Some("config/Testing.toml".to_owned()),
+			..Default::default()
+		})
+		.unwrap();
 
-		let settings1 = Settings::new(opts).unwrap();
-
-		let mut opts = CommandLineOptions::new();
-		opts.config_path = Some("config/Default.toml".to_owned());
-
-		let settings2 = Settings::new(opts).unwrap();
+		let settings2 = Settings::new(CommandLineOptions {
+			config_path: Some("config/Default.toml".to_owned()),
+			..Default::default()
+		})
+		.unwrap();
 
 		// Now compare a value that should be different to confirm that both files loaded.
 		// Note: This test will break/fail if the Testing.toml and Default.toml have the same
@@ -520,9 +513,12 @@ mod tests {
 			config_path: None,
 			log_whitelist: Some(vec!["test1".to_owned()]),
 			log_blacklist: Some(vec!["test2".to_owned()]),
-			node_key_file: Some(PathBuf::from_str("node_key_file").unwrap()),
-			ip_address: Some("1.1.1.1".parse().unwrap()),
-			p2p_port: Some(8087),
+			p2p_opts: P2POptions {
+				node_key_file: Some(PathBuf::from_str("node_key_file").unwrap()),
+				ip_address: Some("1.1.1.1".parse().unwrap()),
+				p2p_port: Some(8087),
+				allow_local_ip: Some(false),
+			},
 			state_chain_opts: StateChainOptions {
 				state_chain_ws_endpoint: Some("ws://endpoint:1234".to_owned()),
 				state_chain_signing_key_file: Some(PathBuf::from_str("signing_key_file").unwrap()),
@@ -541,7 +537,10 @@ mod tests {
 		let settings = Settings::new(opts.clone()).unwrap();
 
 		// Compare the opts and the settings
-		assert_eq!(opts.node_key_file.unwrap(), settings.node_p2p.node_key_file);
+		assert_eq!(opts.p2p_opts.node_key_file.unwrap(), settings.node_p2p.node_key_file);
+		assert_eq!(opts.p2p_opts.p2p_port.unwrap(), settings.node_p2p.port);
+		assert_eq!(opts.p2p_opts.ip_address.unwrap(), settings.node_p2p.ip_address);
+		assert_eq!(opts.p2p_opts.allow_local_ip.unwrap(), settings.node_p2p.allow_local_ip);
 
 		assert_eq!(
 			opts.state_chain_opts.state_chain_ws_endpoint.unwrap(),
