@@ -42,9 +42,10 @@ pub trait Chain: Member + Parameter {
 		+ Into<u128>
 		+ From<u128>
 		+ FullCodec
-		+ MaxEncodedLen;
+		+ MaxEncodedLen
+		+ BenchmarkValue;
 
-	type TransactionFee: Member + Parameter + MaxEncodedLen;
+	type TransactionFee: Member + Parameter + MaxEncodedLen + BenchmarkValue;
 
 	type TrackedData: Member + Parameter + MaxEncodedLen + Clone + Age<Self> + BenchmarkValue;
 
@@ -260,7 +261,10 @@ impl ChainCrypto for Ethereum {
 pub mod mocks {
 	use sp_std::marker::PhantomData;
 
-	use crate::{eth::api::EthereumReplayProtection, *};
+	use crate::{
+		eth::{api::EthereumReplayProtection, TransactionFee},
+		*,
+	};
 
 	#[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	pub struct MockEthereum;
@@ -270,7 +274,7 @@ pub mod mocks {
 		type ChainBlockNumber = u64;
 		type ChainAmount = EthAmount;
 		type TrackedData = MockTrackedData;
-		type TransactionFee = Self::ChainAmount;
+		type TransactionFee = TransactionFee;
 		type ChainAccount = (); // Currently, we don't care about this since we don't use them in tests
 		type ChainAsset = (); // Currently, we don't care about this since we don't use them in tests
 	}
@@ -386,6 +390,9 @@ pub mod mocks {
 	impl_default_benchmark_value!(MockUnsignedTransaction);
 
 	pub const ETH_TX_HASH: <MockEthereum as ChainCrypto>::TransactionHash = [0xbc; 4];
+
+	pub const ETH_TX_FEE: <MockEthereum as Chain>::TransactionFee =
+		TransactionFee { effective_gas_price: 200, gas_used: 100 };
 
 	impl ChainAbi for MockEthereum {
 		type UnsignedTransaction = MockUnsignedTransaction;

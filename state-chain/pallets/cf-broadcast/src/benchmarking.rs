@@ -121,7 +121,7 @@ benchmarks_instance_pallet! {
 		let call = Call::<T, I>::signature_accepted{
 			signature: ThresholdSignatureFor::<T, I>::benchmark_value(),
 			signer_id,
-			tx_fee: ChainAmountFor::<T, I>::default(),
+			tx_fee: TransactionFeeFor::<T, I>::benchmark_value(),
 		};
 		let valid_key = <<T as Config<I>>::TargetChain as ChainCrypto>::AggKey::benchmark_value();
 		T::KeyProvider::set_key(valid_key);
