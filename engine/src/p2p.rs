@@ -76,6 +76,10 @@ pub async fn start(
 		anyhow::bail!("Should provide a valid IP address");
 	}
 
+	if !settings.allow_local_ip && !IpAddr::is_global(&settings.ip_address) {
+		anyhow::bail!("Provided IP address is not globally routable");
+	}
+
 	let node_key = {
 		let secret =
 			read_clean_and_decode_hex_str_file(&settings.node_key_file, "Node Key", |str| {
