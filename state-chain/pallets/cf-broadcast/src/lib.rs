@@ -255,9 +255,6 @@ pub mod pallet {
 		/// A broadcast has been aborted after all authorities have attempted to broadcast the
 		/// transaction and failed.
 		BroadcastAborted { broadcast_id: BroadcastId },
-		/// An account id has used a new signer id for a transaction
-		/// so we want to refund to that new signer id.
-		RefundSignerIdUpdated { account_id: T::AccountId, new_signer_id: SignerIdFor<T, I> },
 		/// A broadcast has successfully been completed.
 		BroadcastSuccess { broadcast_id: BroadcastId },
 		/// A broadcast's threshold signature is invalid, we will attempt to re-sign it.
