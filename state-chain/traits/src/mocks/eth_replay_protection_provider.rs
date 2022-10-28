@@ -14,3 +14,12 @@ where
 			.into()
 	}
 }
+
+impl<T: ChainAbi> crate::ApiCallDataProvider<T> for MockEthReplayProtectionProvider<T>
+where
+	<T as ChainAbi>::ApiCallExtraData: From<()>,
+{
+	fn chain_extra_data() -> <T as ChainAbi>::ApiCallExtraData {
+		().into()
+	}
+}

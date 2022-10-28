@@ -115,6 +115,7 @@ impl ChainAbi for Polkadot {
 	// Not needed in Polkadot since we can sign natively with the AggKey.
 	type SignerCredential = ();
 	type ReplayProtection = PolkadotReplayProtection;
+	type ApiCallExtraData = CurrentVaultAndProxy;
 	type ValidationError = ();
 
 	// This function is not needed in Polkadot.
@@ -125,6 +126,11 @@ impl ChainAbi for Polkadot {
 	) -> Result<Self::TransactionHash, Self::ValidationError> {
 		Err(())
 	}
+}
+
+pub struct CurrentVaultAndProxy {
+	pub vault_account: PolkadotAccountId,
+	pub proxy_account: PolkadotAccountId,
 }
 
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]

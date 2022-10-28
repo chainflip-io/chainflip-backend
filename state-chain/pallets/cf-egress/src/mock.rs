@@ -5,6 +5,7 @@ pub use cf_chains::{
 };
 pub use cf_primitives::{Asset, EthereumAddress, ExchangeRate};
 use cf_primitives::{EthAmount, IntentId};
+use cf_traits::ApiCallDataProvider;
 pub use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
 	Broadcaster, EthereumAssetsAddressProvider, ReplayProtectionProvider,
@@ -89,6 +90,10 @@ impl ReplayProtectionProvider<Ethereum> for Test {
 			nonce: COUNTER,
 		}
 	}
+}
+
+impl ApiCallDataProvider<Ethereum> for Test {
+	fn chain_extra_data() -> <Ethereum as ChainAbi>::ApiCallExtraData {}
 }
 
 parameter_types! {
