@@ -743,7 +743,7 @@ impl Default for NetworkChoice {
 
 impl PolkadotReplayProtection {
 	#[allow(dead_code)]
-	fn new(nonce: PolkadotIndex, tip: PolkadotBalance, network_choice: NetworkChoice) -> Self {
+	pub fn new(nonce: PolkadotIndex, tip: PolkadotBalance, network_choice: NetworkChoice) -> Self {
 		Self {
 			chain_data: match network_choice {
 				NetworkChoice::PolkadotMainnet => ChainData {
