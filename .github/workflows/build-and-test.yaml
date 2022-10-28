@@ -11,6 +11,17 @@ env:
   SCCACHE_REDIS: ${{ secrets.SCCACHE_REDIS }}
 
 jobs:
+  cleanup:
+    runs-on: [hetzner]
+    steps:
+      - name: Clean the workspace
+        run: |
+          echo "USER: $USER"
+          echo "GITHUB_WORKSPACE: $GITHUB_WORKSPACE"
+          ls -la $GITHUB_WORKSPACE
+          chown docker:docker -R $GITHUB_WORKSPACE/*
+          rm -rf $GITHUB_WORKSPACE/*
+
   cargo-fmt:
     runs-on: [hetzner]
     container:
@@ -19,12 +30,6 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - name: Clean the workspace
-        run: |
-          echo $USER
-          ls -la $GITHUB_WORKSPACE
-          chown runner:runner -R $GITHUB_WORKSPACE/*
-          rm -rf $GITHUB_WORKSPACE/*
       - name: Checkout
         uses: actions/checkout@v3
       - name: Check Format
