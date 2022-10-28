@@ -14,11 +14,19 @@ use std::{
 	path::Path,
 };
 
+use serde::{Deserialize, Serialize};
+
 const ENV_VAR_INPUT_FILE: &str = "GENESIS_NODE_IDS";
 
 const DB_EXTENSION: &str = "db";
 
 type Record = (String, AccountId);
+
+#[derive(Serialize, Deserialize)]
+struct AggKeys {
+	eth_agg_key: String,
+	dot_agg_key: String,
+}
 
 fn load_node_ids_from_csv<R>(mut reader: csv::Reader<R>) -> HashMap<AccountId, String>
 where
@@ -62,11 +70,18 @@ fn main() {
 		.expect("Should read from csv file"),
 	);
 
-	generate_and_save_keys::<EthSigning>(node_id_to_name_map.clone());
-	generate_and_save_keys::<PolkadotSigning>(node_id_to_name_map);
+	let agg_keys = AggKeys {
+		eth_agg_key: generate_and_save_keys::<EthSigning>(&node_id_to_name_map),
+		dot_agg_key: generate_and_save_keys::<PolkadotSigning>(&node_id_to_name_map),
+	};
+
+	// output to stdout - CI can read the json from stdout
+	println!("{}", serde_json::to_string_pretty(&agg_keys).expect("Should prettify json"));
 }
 
-fn generate_and_save_keys<Crypto: CryptoScheme>(node_id_to_name_map: HashMap<AccountId, String>) {
+fn generate_and_save_keys<Crypto: CryptoScheme>(
+	node_id_to_name_map: &HashMap<AccountId, String>,
+) -> String {
 	let (key_id, key_shares) = generate_key_data_until_compatible::<Crypto>(
 		BTreeSet::from_iter(node_id_to_name_map.keys().cloned()),
 		20,
@@ -91,14 +106,7 @@ fn generate_and_save_keys<Crypto: CryptoScheme>(node_id_to_name_map: HashMap<Acc
 		.update_key::<Crypto>(&key_id, &key_share);
 	}
 
-	// output to stdout - CI can read the json from stdout
-	println!(
-		"{}",
-		serde_json::to_string_pretty(
-			&serde_json::json!({ format!("{}_agg_key",Crypto::NAME): key_id.to_string() })
-		)
-		.expect("Should prettify_json")
-	);
+	key_id.to_string()
 }
 
 #[cfg(test)]
@@ -111,8 +119,8 @@ fn should_generate_and_save_all_keys() {
 	let node_id_to_name_map =
 		HashMap::from_iter(vec![(AccountId::new([0; 32]), db_path.to_string_lossy().to_string())]);
 
-	generate_and_save_keys::<EthSigning>(node_id_to_name_map.clone());
-	generate_and_save_keys::<PolkadotSigning>(node_id_to_name_map);
+	generate_and_save_keys::<EthSigning>(&node_id_to_name_map);
+	generate_and_save_keys::<PolkadotSigning>(&node_id_to_name_map);
 
 	// Open the db and check the keys
 	let db = PersistentKeyDB::new_and_migrate_to_latest(
