@@ -1,4 +1,4 @@
-use crate::state_chain_observer::client::StateChainClient;
+use crate::state_chain_observer::client::{extrinsic_api::ExtrinsicApi, StateChainClient};
 use std::sync::Arc;
 
 use crate::eth::{utils, EthRpcApi, SignatureAndEvent};

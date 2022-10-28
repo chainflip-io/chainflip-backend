@@ -10,7 +10,7 @@ use web3::{
 	types::H160,
 };
 
-use crate::state_chain_observer::client::StateChainClient;
+use crate::state_chain_observer::client::{extrinsic_api::ExtrinsicApi, StateChainClient};
 
 use super::{
 	event::Event, rpc::EthRpcApi, utils, BlockWithItems, DecodeLogClosure, EthContractWitnesser,

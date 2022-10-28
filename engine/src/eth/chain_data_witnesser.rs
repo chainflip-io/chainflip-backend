@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use crate::state_chain_observer::client::StateChainClient;
+use crate::state_chain_observer::client::{extrinsic_api::ExtrinsicApi, StateChainClient};
 
 use super::{rpc::EthRpcApi, EpochStart};
 

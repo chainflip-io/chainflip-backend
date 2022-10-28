@@ -1,6 +1,6 @@
 use crate::{
 	eth::{utils, EthRpcApi, EventParseError, SignatureAndEvent},
-	state_chain_observer::client::StateChainClient,
+	state_chain_observer::client::{extrinsic_api::ExtrinsicApi, StateChainClient},
 };
 use cf_chains::eth::{SchnorrVerificationComponents, TransactionFee};
 use cf_primitives::EpochIndex;

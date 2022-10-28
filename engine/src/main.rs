@@ -13,7 +13,10 @@ use chainflip_engine::{
 	multisig::{self, client::key_store::KeyStore, PersistentKeyDB},
 	p2p,
 	settings::{CommandLineOptions, Settings},
-	state_chain_observer::{self, client::storage_api::SafeStorageApi},
+	state_chain_observer::{
+		self,
+		client::{extrinsic_api::ExtrinsicApi, storage_api::SafeStorageApi},
+	},
 	task_scope::with_main_task_scope,
 };
 

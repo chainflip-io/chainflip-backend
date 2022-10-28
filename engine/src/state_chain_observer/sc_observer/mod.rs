@@ -29,7 +29,9 @@ use crate::{
 		KeyId, MessageHash,
 	},
 	p2p::{PeerInfo, PeerUpdate},
-	state_chain_observer::client::{storage_api::SafeStorageApi, StateChainClient},
+	state_chain_observer::client::{
+		extrinsic_api::ExtrinsicApi, storage_api::SafeStorageApi, StateChainClient,
+	},
 	task_scope::{with_task_scope, Scope},
 };
 

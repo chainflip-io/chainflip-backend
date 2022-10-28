@@ -11,7 +11,8 @@ use tokio_stream::StreamExt;
 use web3::types::Transaction;
 
 use crate::{
-	eth::epoch_witnesser::should_end_witnessing, state_chain_observer::client::StateChainClient,
+	eth::epoch_witnesser::should_end_witnessing,
+	state_chain_observer::client::{extrinsic_api::ExtrinsicApi, StateChainClient},
 };
 
 use super::{
