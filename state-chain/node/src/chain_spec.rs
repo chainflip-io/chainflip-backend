@@ -146,13 +146,16 @@ pub fn get_environment() -> StateChainEnvironment {
 	}
 }
 
+const SIGNING_OR_KEYGEN_PENALTY: (i32, BlockNumber) = (15, HEARTBEAT_BLOCK_INTERVAL);
+
 /// The reputation penalty and suspension duration for each offence.
 const PENALTIES: &[(Offence, (i32, BlockNumber))] = &[
-	(Offence::ParticipateKeygenFailed, (15, HEARTBEAT_BLOCK_INTERVAL)),
-	(Offence::ParticipateSigningFailed, (15, HEARTBEAT_BLOCK_INTERVAL)),
+	(Offence::ParticipateKeygenFailed, SIGNING_OR_KEYGEN_PENALTY),
+	(Offence::ParticipateSigningFailed, SIGNING_OR_KEYGEN_PENALTY),
 	(Offence::MissedAuthorshipSlot, (15, HEARTBEAT_BLOCK_INTERVAL)),
 	(Offence::MissedHeartbeat, (15, HEARTBEAT_BLOCK_INTERVAL)),
-	// Exclude them from the nomination pool of the next attempt.
+	// We exclude them from the nomination pool of the next attempt,
+	// so there is no need to suspend them further.
 	(Offence::FailedToBroadcastTransaction, (10, 0)),
 	(Offence::GrandpaEquivocation, (50, HEARTBEAT_BLOCK_INTERVAL * 5)),
 ];
