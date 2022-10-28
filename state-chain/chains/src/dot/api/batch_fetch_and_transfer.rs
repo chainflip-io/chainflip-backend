@@ -124,7 +124,7 @@ mod test_batch_fetch {
 	use crate::dot::{sr25519::Pair, NetworkChoice};
 	use sp_core::{
 		crypto::{AccountId32, Pair as TraitPair},
-		Hasher,
+		sr25519, Hasher,
 	};
 	use sp_runtime::{
 		traits::{BlakeTwo256, IdentifyAccount},
@@ -154,11 +154,34 @@ mod test_batch_fetch {
 		let account_id_proxy: AccountId32 =
 			MultiSigner::Sr25519(keypair_proxy.public()).into_account();
 
-		let dummy_intent_ids: Vec<u64> = vec![1, 2, 3];
+		let dummy_fetch_params: Vec<FetchAssetParams<Polkadot>> = vec![
+			FetchAssetParams::<Polkadot> { intent_id: 1, asset: () },
+			FetchAssetParams::<Polkadot> { intent_id: 2, asset: () },
+			FetchAssetParams::<Polkadot> { intent_id: 3, asset: () },
+		];
 
-		let batch_fetch_api = BatchFetch::new_unsigned(
+		let dummy_transfer_params: Vec<TransferAssetParams<Polkadot>> = vec![
+			TransferAssetParams::<Polkadot> {
+				to: MultiSigner::Sr25519(sr25519::Public([7u8; 32])).into_account(),
+				amount: 4,
+				asset: (),
+			},
+			TransferAssetParams::<Polkadot> {
+				to: MultiSigner::Sr25519(sr25519::Public([8u8; 32])).into_account(),
+				amount: 5,
+				asset: (),
+			},
+			TransferAssetParams::<Polkadot> {
+				to: MultiSigner::Sr25519(sr25519::Public([9u8; 32])).into_account(),
+				amount: 6,
+				asset: (),
+			},
+		];
+
+		let batch_fetch_api = BatchFetchAndTransfer::new_unsigned(
 			PolkadotReplayProtection::new(NONCE_1, 0, NetworkChoice::WestendTestnet),
-			dummy_intent_ids,
+			dummy_fetch_params,
+			dummy_transfer_params,
 			account_id_proxy,
 			account_id_vault,
 		);
