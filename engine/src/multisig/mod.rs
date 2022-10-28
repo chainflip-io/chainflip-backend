@@ -7,7 +7,7 @@ mod crypto;
 /// Storage for the keys
 pub mod db;
 
-pub use crypto::{eth, ChainTag, CryptoScheme, Rng};
+pub use crypto::{eth, polkadot, ChainTag, CryptoScheme, Rng};
 
 #[cfg(test)]
 mod tests;
