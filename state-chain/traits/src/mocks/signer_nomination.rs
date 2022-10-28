@@ -1,6 +1,6 @@
 use sp_std::collections::btree_set::BTreeSet;
 
-use crate::{EpochIndex, EpochInfo, SingleSignerNomination, ThresholdSignerNomination};
+use crate::{BroadcastSignerNomination, EpochIndex, EpochInfo, ThresholdSignerNomination};
 
 thread_local! {
 	pub static THRESHOLD_NOMINEES: std::cell::RefCell<Option<BTreeSet<u64>>> = Default::default();
@@ -9,7 +9,7 @@ thread_local! {
 
 pub struct MockNominator;
 
-impl SingleSignerNomination for MockNominator {
+impl BroadcastSignerNomination for MockNominator {
 	type SignerId = u64;
 
 	fn nomination_with_seed<S>(
@@ -58,7 +58,7 @@ impl MockNominator {
 	}
 
 	pub fn use_current_authorities_as_nominees<
-		E: EpochInfo<ValidatorId = <Self as SingleSignerNomination>::SignerId>,
+		E: EpochInfo<ValidatorId = <Self as BroadcastSignerNomination>::SignerId>,
 	>() {
 		Self::set_nominees(Some(BTreeSet::from_iter(E::current_authorities())));
 	}

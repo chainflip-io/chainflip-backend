@@ -336,7 +336,7 @@ pub trait Slashing {
 }
 
 /// Can nominate a single account.
-pub trait SingleSignerNomination {
+pub trait BroadcastSignerNomination {
 	/// The id type of signer
 	type SignerId;
 

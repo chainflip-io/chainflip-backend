@@ -14,8 +14,8 @@ pub use weights::WeightInfo;
 
 use cf_chains::{ApiCall, ChainAbi, ChainCrypto, FeeRefundCalculator, TransactionBuilder};
 use cf_traits::{
-	offence_reporting::OffenceReporter, Broadcaster, Chainflip, EpochInfo, SingleSignerNomination,
-	ThresholdSigner,
+	offence_reporting::OffenceReporter, BroadcastSignerNomination, Broadcaster, Chainflip,
+	EpochInfo, ThresholdSigner,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -68,7 +68,7 @@ pub enum PalletOffence {
 pub mod pallet {
 	use super::*;
 	use cf_chains::benchmarking_value::BenchmarkValue;
-	use cf_traits::{AccountRoleRegistry, KeyProvider, SingleSignerNomination};
+	use cf_traits::{AccountRoleRegistry, BroadcastSignerNomination, KeyProvider};
 	use frame_support::{ensure, pallet_prelude::*, traits::EnsureOrigin};
 	use frame_system::pallet_prelude::*;
 
@@ -157,7 +157,7 @@ pub mod pallet {
 		>;
 
 		/// Signer nomination.
-		type SingleSignerNomination: SingleSignerNomination<SignerId = Self::ValidatorId>;
+		type BroadcastSignerNomination: BroadcastSignerNomination<SignerId = Self::ValidatorId>;
 
 		/// For reporting bad actors.
 		type OffenceReporter: OffenceReporter<
@@ -547,7 +547,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let seed = (broadcast_attempt.broadcast_attempt_id, broadcast_attempt.unsigned_tx.clone())
 			.encode();
-		if let Some(nominated_signer) = T::SingleSignerNomination::nomination_with_seed(
+		if let Some(nominated_signer) = T::BroadcastSignerNomination::nomination_with_seed(
 			seed,
 			&FailedBroadcasters::<T, I>::get(broadcast_attempt.broadcast_attempt_id.broadcast_id)
 				.unwrap_or_default(),

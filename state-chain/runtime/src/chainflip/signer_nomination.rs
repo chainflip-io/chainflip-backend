@@ -65,7 +65,7 @@ fn eligible_authorities(
 /// excluded from being nominated.
 pub struct RandomSignerNomination;
 
-impl cf_traits::SingleSignerNomination for RandomSignerNomination {
+impl cf_traits::BroadcastSignerNomination for RandomSignerNomination {
 	type SignerId = <Runtime as Chainflip>::ValidatorId;
 
 	fn nomination_with_seed<H: Hashable>(

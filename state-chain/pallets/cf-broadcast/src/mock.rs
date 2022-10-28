@@ -139,7 +139,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type ApiCall = MockApiCall<MockEthereum>;
 	type TransactionBuilder = MockTransactionBuilder<Self::TargetChain, Self::ApiCall>;
 	type ThresholdSigner = MockThresholdSigner<MockEthereum, Call>;
-	type SingleSignerNomination = MockNominator;
+	type BroadcastSignerNomination = MockNominator;
 	type OffenceReporter = MockOffenceReporter;
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
 	type BroadcastTimeout = BroadcastTimeout;

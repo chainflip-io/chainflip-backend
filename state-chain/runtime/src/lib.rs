@@ -543,7 +543,7 @@ impl pallet_cf_broadcast::Config<EthereumInstance> for Runtime {
 	type ApiCall = eth::api::EthereumApi;
 	type ThresholdSigner = EthereumThresholdSigner;
 	type TransactionBuilder = chainflip::EthTransactionBuilder;
-	type SingleSignerNomination = chainflip::RandomSignerNomination;
+	type BroadcastSignerNomination = chainflip::RandomSignerNomination;
 	type OffenceReporter = Reputation;
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, Instance1>;
