@@ -328,11 +328,6 @@ impl<T: Config> IngressFetchApi for Pallet<T> {
 	fn schedule_ethereum_ingress_fetch(fetch_details: Vec<(Asset, IntentId)>) {
 		let fetches_added = fetch_details.len() as u32;
 		for (asset, intent_id) in fetch_details {
-			debug_assert!(
-				Self::get_ethereum_asset_identifier(asset).is_some(),
-				"Asset validity is checked by calling functions."
-			);
-
 			EthereumScheduledRequests::<T>::append(EthereumRequest::Fetch { intent_id, asset });
 		}
 		Self::deposit_event(Event::<T>::IngressFetchesScheduled { fetches_added });
