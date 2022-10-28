@@ -1,4 +1,8 @@
-use cf_traits::{EpochInfo, SingleSignerNomination, ThresholdSignerNomination};
+use cf_traits::{
+	offence_reporting::OffenceReporter, EpochInfo, SingleSignerNomination,
+	ThresholdSignerNomination,
+};
+use pallet_cf_threshold_signature::PalletOffence;
 use pallet_cf_validator::{
 	CurrentAuthorities, CurrentEpoch, EpochAuthorityCount, HistoricalAuthorities,
 };
@@ -72,7 +76,23 @@ fn offline_nodes_are_not_nominated_for_threshold_signing() {
 	});
 }
 
-// TODO: Test the diff, the extra signing offence
+#[test]
+fn nodes_who_failed_to_sign_excluded_from_threshold_nomination() {
+	super::genesis::default().build().execute_with(|| {
+		let genesis_epoch = Validator::epoch_index();
+
+		let node1 = Validator::current_authorities().first().unwrap().clone();
+
+		Reputation::report_many(PalletOffence::ParticipateSigningFailed, &[node1.clone()]);
+
+		for seed in 0..20 {
+			let nomination =
+				RandomSignerNomination::threshold_nomination_with_seed(seed, genesis_epoch)
+					.unwrap();
+			assert!(!nomination.contains(&node1));
+		}
+	});
+}
 
 #[test]
 fn offline_nodes_are_not_nominated_transaction_signing() {

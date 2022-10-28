@@ -2,6 +2,8 @@ pub mod common {
 	use cf_primitives::AuthorityCount;
 	use cf_traits::{BlockNumber, FlipBalance};
 
+	use crate::chainflip::Offence;
+
 	pub const CHAINFLIP_SS58_PREFIX: u16 = 2112;
 
 	const FLIP_DECIMALS: u32 = 18;
@@ -99,6 +101,23 @@ pub mod common {
 	/// The duration of the heartbeat interval in blocks. 150 blocks at a 6 second block time is
 	/// equivalent to 15 minutes.
 	pub const HEARTBEAT_BLOCK_INTERVAL: BlockNumber = 150;
+
+	/// The offences committable within the protocol and their respective reputation penalty and
+	/// suspension durations
+	const SIGNING_OR_KEYGEN_PENALTY: (i32, BlockNumber) = (15, HEARTBEAT_BLOCK_INTERVAL);
+
+	/// The reputation penalty and suspension duration for each offence.
+	pub const PENALTIES: &[(Offence, (i32, BlockNumber))] = &[
+		(Offence::ParticipateKeygenFailed, SIGNING_OR_KEYGEN_PENALTY),
+		(Offence::ParticipateSigningFailed, SIGNING_OR_KEYGEN_PENALTY),
+		(Offence::MissedAuthorshipSlot, (15, HEARTBEAT_BLOCK_INTERVAL)),
+		(Offence::MissedHeartbeat, (15, HEARTBEAT_BLOCK_INTERVAL)),
+		// We exclude them from the nomination pool of the next attempt,
+		// so there is no need to suspend them further.
+		(Offence::FailedToBroadcastTransaction, (10, 0)),
+		(Offence::GrandpaEquivocation, (50, HEARTBEAT_BLOCK_INTERVAL * 5)),
+	];
+
 	/// The interval at which we update the per-block emission rate.
 	///
 	/// **Important**: If this constant is changed, we must also change
