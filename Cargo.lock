@@ -2690,8 +2690,10 @@ dependencies = [
  "hex",
  "rand 0.6.5",
  "rocksdb",
+ "serde",
  "serde_json",
  "state-chain-runtime",
+ "tempfile",
 ]
 
 [[package]]

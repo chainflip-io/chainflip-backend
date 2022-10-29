@@ -1,6 +1,9 @@
 use chainflip_engine::{
 	logging::utils::new_discard_logger,
-	multisig::{client::keygen::generate_key_data_until_compatible, eth, PersistentKeyDB, Rng},
+	multisig::{
+		client::keygen::generate_key_data_until_compatible, eth::EthSigning,
+		polkadot::PolkadotSigning, CryptoScheme, PersistentKeyDB, Rng,
+	},
 };
 use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use rand_legacy::FromEntropy;
@@ -11,11 +14,19 @@ use std::{
 	path::Path,
 };
 
+use serde::{Deserialize, Serialize};
+
 const ENV_VAR_INPUT_FILE: &str = "GENESIS_NODE_IDS";
 
 const DB_EXTENSION: &str = "db";
 
 type Record = (String, AccountId);
+
+#[derive(Serialize, Deserialize)]
+struct AggKeys {
+	eth_agg_key: String,
+	dot_agg_key: String,
+}
 
 fn load_node_ids_from_csv<R>(mut reader: csv::Reader<R>) -> HashMap<AccountId, String>
 where
@@ -59,7 +70,19 @@ fn main() {
 		.expect("Should read from csv file"),
 	);
 
-	let (eth_key_id, key_shares) = generate_key_data_until_compatible::<eth::EthSigning>(
+	let agg_keys = AggKeys {
+		eth_agg_key: generate_and_save_keys::<EthSigning>(&node_id_to_name_map),
+		dot_agg_key: generate_and_save_keys::<PolkadotSigning>(&node_id_to_name_map),
+	};
+
+	// output to stdout - CI can read the json from stdout
+	println!("{}", serde_json::to_string_pretty(&agg_keys).expect("Should prettify json"));
+}
+
+fn generate_and_save_keys<Crypto: CryptoScheme>(
+	node_id_to_name_map: &HashMap<AccountId, String>,
+) -> String {
+	let (key_id, key_shares) = generate_key_data_until_compatible::<Crypto>(
 		BTreeSet::from_iter(node_id_to_name_map.keys().cloned()),
 		20,
 		Rng::from_entropy(),
@@ -80,13 +103,33 @@ fn main() {
 			&new_discard_logger(),
 		)
 		.expect("Should create database at latest version")
-		.update_key::<eth::EthSigning>(&eth_key_id, &key_share);
+		.update_key::<Crypto>(&key_id, &key_share);
 	}
 
-	// output to stdout - CI can read the json from stdout
-	println!(
-		"{}",
-		serde_json::to_string_pretty(&serde_json::json!({ "eth_agg_key": eth_key_id.to_string() }))
-			.expect("Should prettify_json")
-	);
+	key_id.to_string()
+}
+
+#[cfg(test)]
+#[test]
+fn should_generate_and_save_all_keys() {
+	let tempdir = tempfile::TempDir::new().unwrap();
+	let db_path = tempdir.path().to_owned().join("test");
+
+	// Using the db_path as the node name, so the db is created within the temp directory
+	let node_id_to_name_map =
+		HashMap::from_iter(vec![(AccountId::new([0; 32]), db_path.to_string_lossy().to_string())]);
+
+	generate_and_save_keys::<EthSigning>(&node_id_to_name_map);
+	generate_and_save_keys::<PolkadotSigning>(&node_id_to_name_map);
+
+	// Open the db and check the keys
+	let db = PersistentKeyDB::new_and_migrate_to_latest(
+		&db_path.with_extension(DB_EXTENSION),
+		None,
+		&new_discard_logger(),
+	)
+	.unwrap();
+
+	assert_eq!(db.load_keys::<EthSigning>().len(), 1);
+	assert_eq!(db.load_keys::<PolkadotSigning>().len(), 1);
 }
