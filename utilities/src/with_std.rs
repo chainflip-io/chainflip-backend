@@ -1,5 +1,7 @@
 use core::time::Duration;
 use futures::{stream, Stream};
+#[doc(hidden)]
+pub use lazy_format::lazy_format as internal_lazy_format;
 
 #[macro_export]
 macro_rules! assert_panics {
@@ -159,12 +161,26 @@ pub mod mockall_utilities {
 }
 
 #[macro_export]
+macro_rules! repository_link {
+	() => {
+		if let Some(commit_hash) = core::option_env!("CIRCLE_SHA1") {
+			Some(utilities::internal_lazy_format!(
+				"https://github.com/chainflip-io/chainflip-backend/tree/{commit_hash}"
+			))
+		} else {
+			None
+		}
+	};
+}
+
+#[macro_export]
 macro_rules! here {
 	() => {
-		lazy_format::lazy_format!(
+		utilities::internal_lazy_format!(
 			// CIRCLE_SHA1 is CircleCI's environment variable exposing the git commit hash
-			if let Some(commit_hash) = core::option_env!("CIRCLE_SHA1") => (
-				"https://github.com/chainflip-io/chainflip-backend/tree/{commit_hash}/{}#L{}#C{}",
+			if let Some(repository_link) = utilities::repository_link!() => (
+				"{}/{}#L{}#C{}",
+				repository_link,
 				file!(),
 				line!(),
 				column!()
@@ -198,4 +214,26 @@ macro_rules! context {
 
 		get_expr_type($e, utilities::here!())
 	}};
+}
+
+#[macro_export]
+macro_rules! print_starting {
+	() => {
+		println!(
+			"Starting {} v{} ({})",
+			env!("CARGO_PKG_NAME"),
+			env!("CARGO_PKG_VERSION"),
+			utilities::lazy_format!(if let Some(repository_link) = utilities::repository_link!() => ("CI Build: {}", repository_link) else => ("Non-CI Build"))
+		);
+		println!(
+			"
+			 ██████╗██╗  ██╗ █████╗ ██╗███╗   ██╗███████╗██╗     ██╗██████╗
+			██╔════╝██║  ██║██╔══██╗██║████╗  ██║██╔════╝██║     ██║██╔══██╗
+			██║     ███████║███████║██║██╔██╗ ██║█████╗  ██║     ██║██████╔╝
+			██║     ██╔══██║██╔══██║██║██║╚██╗██║██╔══╝  ██║     ██║██╔═══╝
+			╚██████╗██║  ██║██║  ██║██║██║ ╚████║██║     ███████╗██║██║
+			 ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝╚═╝  ╚═══╝╚═╝     ╚══════╝╚═╝╚═╝
+			"
+		)
+	}
 }

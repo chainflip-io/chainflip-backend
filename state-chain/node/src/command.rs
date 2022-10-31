@@ -170,7 +170,7 @@ pub fn run() -> sc_cli::Result<()> {
         You can enable it with `--features try-runtime`."
 			.into()),
 		None => {
-			utilities::print_chainflip_ascii_art();
+			utilities::print_starting!();
 			let runner = cli.create_runner(&cli.run)?;
 			runner.run_node_until_exit(|config| async move {
 				service::new_full(config).map_err(sc_cli::Error::Service)

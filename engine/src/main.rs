@@ -22,11 +22,10 @@ use clap::Parser;
 use futures::FutureExt;
 use pallet_cf_validator::SemVer;
 use sp_core::U256;
-use utilities::print_chainflip_ascii_art;
 
 fn main() -> anyhow::Result<()> {
-	print_chainflip_ascii_art();
 	use_chainflip_account_id_encoding();
+	utilities::print_starting!();
 
 	let settings = Settings::new(CommandLineOptions::parse()).context("Error reading settings")?;
 
@@ -34,8 +33,6 @@ fn main() -> anyhow::Result<()> {
 		settings.log.whitelist.clone(),
 		settings.log.blacklist.clone(),
 	);
-
-	slog::info!(root_logger, "Start the engines! :broom: :broom: ");
 
 	with_main_task_scope(|scope| {
 		async {
