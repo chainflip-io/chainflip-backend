@@ -14,8 +14,7 @@ use utilities::context;
 
 use super::BaseRpcApi;
 
-// A method to safely extract type information about Substrate storage maps (As the Key and Value
-// types are not available)
+/// This trait extracts otherwise private type information about Substrate storage double maps
 pub trait StorageDoubleMapAssociatedTypes {
 	type Key1;
 	type Key2;
@@ -49,8 +48,7 @@ impl<
 	}
 }
 
-// A method to safely extract type information about Substrate storage maps (As the Key and Value
-// types are not available)
+/// This trait extracts otherwise private type information about Substrate storage maps
 pub trait StorageMapAssociatedTypes {
 	type Key: FullCodec;
 	type Value: FullCodec;
@@ -96,8 +94,7 @@ impl<
 	}
 }
 
-// A method to safely extract type information about Substrate storage values (As the Key and Value
-// types are not available)
+/// This trait extracts otherwise private type information about Substrate storage values
 pub trait StorageValueAssociatedTypes {
 	type Value: FullCodec;
 	type QueryKind: QueryKindTrait<Self::Value, Self::OnEmpty>;
