@@ -62,12 +62,13 @@ impl MockCfe {
 	fn process_event(&self, event: Event) {
 		match event {
 			Event::EthereumThresholdSigner(
-				pallet_cf_threshold_signature::Event::ThresholdSignatureRequest(
+				pallet_cf_threshold_signature::Event::ThresholdSignatureRequest {
+					request_id: _,
 					ceremony_id,
 					key_id,
-					signers,
+					signatories: signers,
 					payload,
-				),
+				},
 			) => {
 				assert_eq!(key_id, &MOCK_AGG_KEY);
 				assert_eq!(signers, MockNominator::get_nominees().unwrap());
