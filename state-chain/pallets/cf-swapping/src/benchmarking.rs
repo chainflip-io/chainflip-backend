@@ -20,7 +20,7 @@ benchmarks! {
 		0
 	)
 	execute_swap {
-		let swap = Swap { from: Asset::Eth, to: ForeignChainAsset { chain: ForeignChain::Ethereum, asset: Asset::Usdc }, amount: 10, ingress_address: ForeignChainAddress::Eth(Default::default()), egress_address: ForeignChainAddress::Eth(Default::default())};
+		let swap = Swap { from: Asset::Eth, to: ForeignChainAsset { chain: ForeignChain::Ethereum, asset: Asset::Usdc }, amount: 10, egress_address: ForeignChainAddress::Eth(Default::default()), relayer_id: whitelisted_caller()};
 	}: {
 		Pallet::<T>::execute_swap(swap);
 	}
