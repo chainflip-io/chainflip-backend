@@ -240,6 +240,108 @@ async fn inner_connect_to_state_chain(
 	))
 }
 
+#[cfg(test)]
+pub mod mocks {
+	use crate::state_chain_observer::client::{
+		extrinsic_api::ExtrinsicApi, storage_api::SafeStorageApi,
+	};
+	use anyhow::Result;
+	use async_trait::async_trait;
+	use frame_support::storage::types::QueryKindTrait;
+	use futures::Stream;
+	use jsonrpsee::core::RpcResult;
+	use mockall::mock;
+	use sp_core::{storage::StorageKey, H256};
+	use state_chain_runtime::AccountId;
+
+	use super::storage_api::{
+		StorageDoubleMapAssociatedTypes, StorageMapAssociatedTypes, StorageValueAssociatedTypes,
+	};
+
+	mock! {
+		pub StateChainClient {}
+		#[async_trait]
+		impl ExtrinsicApi for StateChainClient {
+			fn account_id(&self) -> AccountId;
+
+			async fn submit_signed_extrinsic<Call>(
+				&self,
+				call: Call,
+				logger: &slog::Logger,
+			) -> Result<H256>
+			where
+				Call: Into<state_chain_runtime::Call> + Clone + std::fmt::Debug + Send + Sync + 'static;
+
+			async fn submit_unsigned_extrinsic<Call>(
+				&self,
+				call: Call,
+				logger: &slog::Logger,
+			) -> Result<H256>
+			where
+				Call: Into<state_chain_runtime::Call> + Clone + std::fmt::Debug + Send + Sync + 'static;
+
+			async fn watch_submitted_extrinsic<BlockStream>(
+				&self,
+				extrinsic_hash: state_chain_runtime::Hash,
+				block_stream: &mut BlockStream,
+			) -> Result<Vec<state_chain_runtime::Event>>
+			where
+				BlockStream:
+					Stream<Item = anyhow::Result<state_chain_runtime::Header>> + Unpin + Send + 'static;
+		}
+		#[async_trait]
+		impl SafeStorageApi for StateChainClient {
+			async fn get_storage_item<
+				Value: codec::FullCodec + 'static,
+				OnEmpty: 'static,
+				QueryKind: QueryKindTrait<Value, OnEmpty> + 'static,
+			>(
+				&self,
+				storage_key: StorageKey,
+				block_hash: state_chain_runtime::Hash,
+			) -> RpcResult<<QueryKind as QueryKindTrait<Value, OnEmpty>>::Query>;
+
+			async fn get_storage_value<StorageValue: StorageValueAssociatedTypes + 'static>(
+				&self,
+				block_hash: state_chain_runtime::Hash,
+			) -> RpcResult<<StorageValue::QueryKind as QueryKindTrait<StorageValue::Value, StorageValue::OnEmpty>>::Query>;
+
+			async fn get_storage_map_entry<StorageMap: StorageMapAssociatedTypes + 'static>(
+				&self,
+				block_hash: state_chain_runtime::Hash,
+				key: &StorageMap::Key,
+			) -> RpcResult<
+				<StorageMap::QueryKind as QueryKindTrait<StorageMap::Value, StorageMap::OnEmpty>>::Query,
+			>
+			where
+				StorageMap::Key: Sync;
+
+			async fn get_storage_double_map_entry<StorageDoubleMap: StorageDoubleMapAssociatedTypes + 'static>(
+				&self,
+				block_hash: state_chain_runtime::Hash,
+				key1: &StorageDoubleMap::Key1,
+				key2: &StorageDoubleMap::Key2,
+			) -> RpcResult<
+				<StorageDoubleMap::QueryKind as QueryKindTrait<
+					StorageDoubleMap::Value,
+					StorageDoubleMap::OnEmpty,
+				>>::Query,
+			>
+			where
+				StorageDoubleMap::Key1: Sync,
+				StorageDoubleMap::Key2: Sync;
+
+			/// Gets all the storage pairs (key, value) of a StorageMap.
+			/// NB: Because this is an unbounded operation, it requires the node to have
+			/// the `--rpc-methods=unsafe` enabled.
+			async fn get_storage_map<StorageMap: StorageMapAssociatedTypes + 'static>(
+				&self,
+				block_hash: state_chain_runtime::Hash,
+			) -> RpcResult<Vec<(<StorageMap as StorageMapAssociatedTypes>::Key, StorageMap::Value)>>;
+		}
+	}
+}
+
 /*
 #[cfg(test)]
 pub const OUR_ACCOUNT_ID_BYTES: [u8; 32] = [0; 32];

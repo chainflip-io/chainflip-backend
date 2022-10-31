@@ -121,24 +121,25 @@ impl<
 	}
 }
 
+// Note 'static on the generics in this trait are only required for mockall to mock it
 #[async_trait]
 pub trait SafeStorageApi {
 	async fn get_storage_item<
-		Value: codec::FullCodec,
-		OnEmpty,
-		QueryKind: QueryKindTrait<Value, OnEmpty>,
+		Value: codec::FullCodec + 'static,
+		OnEmpty: 'static,
+		QueryKind: QueryKindTrait<Value, OnEmpty> + 'static,
 	>(
 		&self,
 		storage_key: StorageKey,
 		block_hash: state_chain_runtime::Hash,
 	) -> RpcResult<<QueryKind as QueryKindTrait<Value, OnEmpty>>::Query>;
 
-	async fn get_storage_value<StorageValue: StorageValueAssociatedTypes>(
+	async fn get_storage_value<StorageValue: StorageValueAssociatedTypes + 'static>(
 		&self,
 		block_hash: state_chain_runtime::Hash,
 	) -> RpcResult<<StorageValue::QueryKind as QueryKindTrait<StorageValue::Value, StorageValue::OnEmpty>>::Query>;
 
-	async fn get_storage_map_entry<StorageMap: StorageMapAssociatedTypes>(
+	async fn get_storage_map_entry<StorageMap: StorageMapAssociatedTypes + 'static>(
 		&self,
 		block_hash: state_chain_runtime::Hash,
 		key: &StorageMap::Key,
@@ -148,7 +149,9 @@ pub trait SafeStorageApi {
 	where
 		StorageMap::Key: Sync;
 
-	async fn get_storage_double_map_entry<StorageDoubleMap: StorageDoubleMapAssociatedTypes>(
+	async fn get_storage_double_map_entry<
+		StorageDoubleMap: StorageDoubleMapAssociatedTypes + 'static,
+	>(
 		&self,
 		block_hash: state_chain_runtime::Hash,
 		key1: &StorageDoubleMap::Key1,
@@ -166,7 +169,7 @@ pub trait SafeStorageApi {
 	/// Gets all the storage pairs (key, value) of a StorageMap.
 	/// NB: Because this is an unbounded operation, it requires the node to have
 	/// the `--rpc-methods=unsafe` enabled.
-	async fn get_storage_map<StorageMap: StorageMapAssociatedTypes>(
+	async fn get_storage_map<StorageMap: StorageMapAssociatedTypes + 'static>(
 		&self,
 		block_hash: state_chain_runtime::Hash,
 	) -> RpcResult<Vec<(<StorageMap as StorageMapAssociatedTypes>::Key, StorageMap::Value)>>;
@@ -175,9 +178,9 @@ pub trait SafeStorageApi {
 #[async_trait]
 impl SafeStorageApi for super::StateChainClient {
 	async fn get_storage_item<
-		Value: codec::FullCodec,
-		OnEmpty,
-		QueryKind: QueryKindTrait<Value, OnEmpty>,
+		Value: codec::FullCodec + 'static,
+		OnEmpty: 'static,
+		QueryKind: QueryKindTrait<Value, OnEmpty> + 'static,
 	>(
 		&self,
 		storage_key: StorageKey,
@@ -191,14 +194,14 @@ impl SafeStorageApi for super::StateChainClient {
 		))
 	}
 
-	async fn get_storage_value<StorageValue: StorageValueAssociatedTypes>(
+	async fn get_storage_value<StorageValue: StorageValueAssociatedTypes + 'static>(
 		&self,
 		block_hash: state_chain_runtime::Hash,
 	) -> RpcResult<<StorageValue::QueryKind as QueryKindTrait<StorageValue::Value, StorageValue::OnEmpty>>::Query>{
 		self.get_storage_item::<StorageValue::Value, StorageValue::OnEmpty, StorageValue::QueryKind>(StorageValue::_hashed_key(), block_hash).await
 	}
 
-	async fn get_storage_map_entry<StorageMap: StorageMapAssociatedTypes>(
+	async fn get_storage_map_entry<StorageMap: StorageMapAssociatedTypes + 'static>(
 		&self,
 		block_hash: state_chain_runtime::Hash,
 		key: &StorageMap::Key,
@@ -215,7 +218,9 @@ impl SafeStorageApi for super::StateChainClient {
 		.await
 	}
 
-	async fn get_storage_double_map_entry<StorageDoubleMap: StorageDoubleMapAssociatedTypes>(
+	async fn get_storage_double_map_entry<
+		StorageDoubleMap: StorageDoubleMapAssociatedTypes + 'static,
+	>(
 		&self,
 		block_hash: state_chain_runtime::Hash,
 		key1: &StorageDoubleMap::Key1,
@@ -236,7 +241,7 @@ impl SafeStorageApi for super::StateChainClient {
 	/// Gets all the storage pairs (key, value) of a StorageMap.
 	/// NB: Because this is an unbounded operation, it requires the node to have
 	/// the `--rpc-methods=unsafe` enabled.
-	async fn get_storage_map<StorageMap: StorageMapAssociatedTypes>(
+	async fn get_storage_map<StorageMap: StorageMapAssociatedTypes + 'static>(
 		&self,
 		block_hash: state_chain_runtime::Hash,
 	) -> RpcResult<Vec<(<StorageMap as StorageMapAssociatedTypes>::Key, StorageMap::Value)>> {

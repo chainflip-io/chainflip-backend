@@ -23,6 +23,7 @@ use crate::constants::MAX_EXTRINSIC_RETRY_ATTEMPTS;
 
 use super::{base_rpc_api::BaseRpcApi, storage_api::SafeStorageApi};
 
+// Note 'static on the generics in this trait are only required for mockall to mock it
 #[async_trait]
 pub trait ExtrinsicApi {
 	fn account_id(&self) -> AccountId;
@@ -33,7 +34,7 @@ pub trait ExtrinsicApi {
 		logger: &slog::Logger,
 	) -> Result<H256>
 	where
-		Call: Into<state_chain_runtime::Call> + Clone + std::fmt::Debug + Send + Sync;
+		Call: Into<state_chain_runtime::Call> + Clone + std::fmt::Debug + Send + Sync + 'static;
 
 	async fn submit_unsigned_extrinsic<Call>(
 		&self,
@@ -41,7 +42,7 @@ pub trait ExtrinsicApi {
 		logger: &slog::Logger,
 	) -> Result<H256>
 	where
-		Call: Into<state_chain_runtime::Call> + Clone + std::fmt::Debug + Send + Sync;
+		Call: Into<state_chain_runtime::Call> + Clone + std::fmt::Debug + Send + Sync + 'static;
 
 	async fn watch_submitted_extrinsic<BlockStream>(
 		&self,
@@ -114,7 +115,7 @@ impl ExtrinsicApi for super::StateChainClient {
 	/// fails on an invalid nonce.
 	async fn submit_signed_extrinsic<Call>(&self, call: Call, logger: &slog::Logger) -> Result<H256>
 	where
-		Call: Into<state_chain_runtime::Call> + Clone + std::fmt::Debug + Send + Sync,
+		Call: Into<state_chain_runtime::Call> + Clone + std::fmt::Debug + Send + Sync + 'static,
 	{
 		for _ in 0..MAX_EXTRINSIC_RETRY_ATTEMPTS {
 			// use the previous value but increment it for the next thread that loads/fetches it
@@ -222,7 +223,7 @@ impl ExtrinsicApi for super::StateChainClient {
 		logger: &slog::Logger,
 	) -> Result<H256>
 	where
-		Call: Into<state_chain_runtime::Call> + std::fmt::Debug + Clone + Send + Sync,
+		Call: Into<state_chain_runtime::Call> + std::fmt::Debug + Clone + Send + Sync + 'static,
 	{
 		let extrinsic = state_chain_runtime::UncheckedExtrinsic::new_unsigned(call.clone().into());
 		let expected_hash = BlakeTwo256::hash_of(&extrinsic);
