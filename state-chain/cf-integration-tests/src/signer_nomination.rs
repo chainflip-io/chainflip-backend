@@ -1,5 +1,5 @@
 use cf_traits::{
-	offence_reporting::OffenceReporter, BroadcastSignerNomination, EpochInfo,
+	offence_reporting::OffenceReporter, EpochInfo, SingleSignerNomination,
 	ThresholdSignerNomination,
 };
 use pallet_cf_threshold_signature::PalletOffence;

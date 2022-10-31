@@ -14,8 +14,8 @@ pub use weights::WeightInfo;
 
 use cf_chains::{ApiCall, ChainAbi, ChainCrypto, FeeRefundCalculator, TransactionBuilder};
 use cf_traits::{
-	offence_reporting::OffenceReporter, BroadcastSignerNomination, Broadcaster, Chainflip,
-	EpochInfo, ThresholdSigner,
+	offence_reporting::OffenceReporter, Broadcaster, Chainflip, EpochInfo, SingleSignerNomination,
+	ThresholdSigner,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -68,7 +68,7 @@ pub enum PalletOffence {
 pub mod pallet {
 	use super::*;
 	use cf_chains::benchmarking_value::BenchmarkValue;
-	use cf_traits::{AccountRoleRegistry, BroadcastSignerNomination, KeyProvider};
+	use cf_traits::{AccountRoleRegistry, KeyProvider, SingleSignerNomination};
 	use frame_support::{ensure, pallet_prelude::*, traits::EnsureOrigin};
 	use frame_system::pallet_prelude::*;
 
@@ -157,7 +157,7 @@ pub mod pallet {
 		>;
 
 		/// Signer nomination.
-		type BroadcastSignerNomination: BroadcastSignerNomination<SignerId = Self::ValidatorId>;
+		type BroadcastSignerNomination: SingleSignerNomination<SignerId = Self::ValidatorId>;
 
 		/// For reporting bad actors.
 		type OffenceReporter: OffenceReporter<
