@@ -10028,6 +10028,7 @@ dependencies = [
  "anyhow",
  "futures 0.3.21",
  "hex",
+ "lazy_format",
  "mockall",
  "predicates",
  "tokio",
