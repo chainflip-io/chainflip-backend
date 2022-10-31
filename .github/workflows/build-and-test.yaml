@@ -9,12 +9,12 @@ on:
 env:
   SCCACHE_CACHE_SIZE: 32G
   SCCACHE_REDIS: ${{ secrets.SCCACHE_REDIS }}
-
+  CF_RUNNER_SUDO_PASSWORD: ${{ secrets.CF_RUNNER_SUDO_PASSWORD }}
 jobs:
   cargo-fmt:
-    runs-on: [self-hosted, linux, x64, ephemeral]
+    runs-on: [hetzner]
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08"
+      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08'
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -25,9 +25,9 @@ jobs:
         run: cargo fmt --all -- --check
 
   cargo-clippy:
-    runs-on: [self-hosted, linux, x64, ephemeral]
+    runs-on: [hetzner]
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08"
+      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08'
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -38,9 +38,9 @@ jobs:
         run: cargo ci-clippy
 
   cargo-doc:
-    runs-on: [self-hosted, linux, x64, ephemeral]
+    runs-on: [hetzner]
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08"
+      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08'
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -68,10 +68,10 @@ jobs:
             ./target/doc/
 
   build-and-test:
-    runs-on: [self-hosted, linux, x64, ephemeral]
+    runs-on: [hetzner]
     needs: [cargo-fmt]
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08"
+      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08'
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -122,10 +122,10 @@ jobs:
             ./target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm
 
   build-ibiza:
-    runs-on: [self-hosted, linux, x64, ephemeral]
+    runs-on: [hetzner]
     needs: [cargo-fmt]
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08"
+      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08'
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -173,7 +173,7 @@ jobs:
             ./target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm
 
   run-benchmarks:
-    runs-on: [self-hosted, linux, x64, ephemeral]
+    runs-on: [hetzner]
     needs: [build-and-test]
     if: github.ref_name == 'develop'
     steps:
@@ -190,7 +190,7 @@ jobs:
           ./state-chain/scripts/benchmark-all.sh --binary ./target/release/chainflip-node --steps 1 --repetitions 1
 
   test-single-node:
-    runs-on: [self-hosted, linux, x64, ephemeral]
+    runs-on: [hetzner]
     needs: [build-and-test]
     steps:
       - uses: actions/setup-node@v3
@@ -216,17 +216,8 @@ jobs:
           sleep 2
       - name: Check node health
         run: >
-          curl --request POST -L
-          -H "Content-Type:application/json;charset=utf-8"
-          --data '{"id":1, "jsonrpc":"2.0", "method": "system_health"}'
-          --url 'http://localhost:9933'
-          --connect-timeout 5
-          --max-time 10
-          --retry 3
-          --retry-delay 1
-          --retry-max-time 20
-          --retry-connrefused
-          -vv
+          curl --request POST -L -H "Content-Type:application/json;charset=utf-8" --data '{"id":1, "jsonrpc":"2.0", "method": "system_health"}' --url
+          'http://localhost:9933' --connect-timeout 5 --max-time 10 --retry 3 --retry-delay 1 --retry-max-time 20 --retry-connrefused -vv
       - name: Run engine in background
         run: |
           ./target/release/chainflip-engine --config-path engine/config/CI.toml &
@@ -237,15 +228,7 @@ jobs:
           ETH__HTTP_NODE_ENDPOINT: ${{ secrets.ETH__HTTP_NODE_ENDPOINT }}
       - name: Check engine health
         run: >
-          curl
-          --url 'http://localhost:5555/health'
-          --connect-timeout 5
-          --max-time 10
-          --retry 5
-          --retry-delay 1
-          --retry-max-time 20
-          --retry-connrefused
-          -vv
+          curl --url 'http://localhost:5555/health' --connect-timeout 5 --max-time 10 --retry 5 --retry-delay 1 --retry-max-time 20 --retry-connrefused -vv
       - name: Clone docgen
         uses: actions/checkout@v3
         with:
@@ -265,12 +248,12 @@ jobs:
           npm run generate
       - name: Install graphviz
         run: |
-          sudo apt-get update
-          sudo apt-get install -y graphviz
+          echo ${{ secrets.CF_RUNNER_SUDO_PASSWORD }} | sudo -S apt-get update
+          echo ${{ secrets.CF_RUNNER_SUDO_PASSWORD }} | sudo -S apt-get install -y graphviz
       - uses: actions/setup-java@v3
         with:
-          distribution: "zulu"
-          java-version: "17"
+          distribution: 'zulu'
+          java-version: '17'
       - name: Generate class diagram
         run: |
           cd chainflip-docgen/
