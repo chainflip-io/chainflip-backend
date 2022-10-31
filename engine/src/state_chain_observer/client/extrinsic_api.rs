@@ -291,7 +291,7 @@ impl ExtrinsicApi for super::StateChainClient {
 				}) {
 					Some(extrinsic_index_found) => {
 						let events_for_block = self
-							.get_storage_value::<frame_system::Events<state_chain_runtime::Runtime>>(
+							.storage_value::<frame_system::Events<state_chain_runtime::Runtime>>(
 								block_hash,
 							)
 							.await?;

@@ -291,7 +291,7 @@ pub mod mocks {
 		}
 		#[async_trait]
 		impl SafeStorageApi for StateChainClient {
-			async fn get_storage_item<
+			async fn storage_item<
 				Value: codec::FullCodec + 'static,
 				OnEmpty: 'static,
 				QueryKind: QueryKindTrait<Value, OnEmpty> + 'static,
@@ -301,12 +301,12 @@ pub mod mocks {
 				block_hash: state_chain_runtime::Hash,
 			) -> RpcResult<<QueryKind as QueryKindTrait<Value, OnEmpty>>::Query>;
 
-			async fn get_storage_value<StorageValue: StorageValueAssociatedTypes + 'static>(
+			async fn storage_value<StorageValue: StorageValueAssociatedTypes + 'static>(
 				&self,
 				block_hash: state_chain_runtime::Hash,
 			) -> RpcResult<<StorageValue::QueryKind as QueryKindTrait<StorageValue::Value, StorageValue::OnEmpty>>::Query>;
 
-			async fn get_storage_map_entry<StorageMap: StorageMapAssociatedTypes + 'static>(
+			async fn storage_map_entry<StorageMap: StorageMapAssociatedTypes + 'static>(
 				&self,
 				block_hash: state_chain_runtime::Hash,
 				key: &StorageMap::Key,
@@ -316,7 +316,7 @@ pub mod mocks {
 			where
 				StorageMap::Key: Sync;
 
-			async fn get_storage_double_map_entry<StorageDoubleMap: StorageDoubleMapAssociatedTypes + 'static>(
+			async fn storage_double_map_entry<StorageDoubleMap: StorageDoubleMapAssociatedTypes + 'static>(
 				&self,
 				block_hash: state_chain_runtime::Hash,
 				key1: &StorageDoubleMap::Key1,
@@ -334,7 +334,7 @@ pub mod mocks {
 			/// Gets all the storage pairs (key, value) of a StorageMap.
 			/// NB: Because this is an unbounded operation, it requires the node to have
 			/// the `--rpc-methods=unsafe` enabled.
-			async fn get_storage_map<StorageMap: StorageMapAssociatedTypes + 'static>(
+			async fn storage_map<StorageMap: StorageMapAssociatedTypes + 'static>(
 				&self,
 				block_hash: state_chain_runtime::Hash,
 			) -> RpcResult<Vec<(<StorageMap as StorageMapAssociatedTypes>::Key, StorageMap::Value)>>;

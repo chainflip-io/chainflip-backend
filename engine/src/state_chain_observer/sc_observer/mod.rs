@@ -220,7 +220,7 @@ where
                 epoch_start_sender.send(EpochStart {
                     index,
                     eth_block: state_chain_client
-                        .get_storage_map_entry::<pallet_cf_vaults::Vaults<
+                        .storage_map_entry::<pallet_cf_vaults::Vaults<
                             state_chain_runtime::Runtime,
                             state_chain_runtime::EthereumInstance,
                         >>(block_hash, &index)
@@ -235,13 +235,13 @@ where
         };
 
         {
-            let historical_active_epochs = BTreeSet::from_iter(state_chain_client.get_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>(
+            let historical_active_epochs = BTreeSet::from_iter(state_chain_client.storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>(
                 initial_block_hash,
                 &account_id
             ).await.unwrap());
 
             let current_epoch = state_chain_client
-                .get_storage_value::<pallet_cf_validator::CurrentEpoch<
+                .storage_value::<pallet_cf_validator::CurrentEpoch<
                     state_chain_runtime::Runtime,
                 >>(initial_block_hash)
                 .await
@@ -290,14 +290,14 @@ where
                                 current_block_hash
                             );
 
-                            match state_chain_client.get_storage_value::<frame_system::Events::<state_chain_runtime::Runtime>>(current_block_hash).await {
+                            match state_chain_client.storage_value::<frame_system::Events::<state_chain_runtime::Runtime>>(current_block_hash).await {
                                 Ok(events) => {
                                     for event_record in events {
                                         match_event! {event_record.event, logger {
                                             state_chain_runtime::Event::Validator(
                                                 pallet_cf_validator::Event::NewEpoch(new_epoch),
                                             ) => {
-                                                start_epoch(current_block_hash, new_epoch, true, state_chain_client.get_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<state_chain_runtime::Runtime>>(
+                                                start_epoch(current_block_hash, new_epoch, true, state_chain_client.storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<state_chain_runtime::Runtime>>(
                                                     current_block_hash,
                                                     &new_epoch,
                                                     &account_id

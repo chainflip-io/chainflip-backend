@@ -47,18 +47,17 @@ async fn starts_witnessing_when_current_authority() {
 		|| account_id
 	});
 
-	state_chain_client.expect_get_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>()
+	state_chain_client.expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>()
 		.with(eq(initial_block_hash), eq(account_id))
 		.once()
 		.return_once(move |_, _| Ok(vec![3]));
 	state_chain_client
-		.expect_get_storage_value::<pallet_cf_validator::CurrentEpoch<state_chain_runtime::Runtime>>(
-		)
+		.expect_storage_value::<pallet_cf_validator::CurrentEpoch<state_chain_runtime::Runtime>>()
 		.with(eq(initial_block_hash))
 		.once()
 		.return_once(move |_| Ok(3));
 	state_chain_client
-		.expect_get_storage_map_entry::<pallet_cf_vaults::Vaults<
+		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
 			state_chain_runtime::Runtime,
 			state_chain_runtime::EthereumInstance,
 		>>()
@@ -139,18 +138,17 @@ async fn starts_witnessing_when_historic_on_startup() {
 		|| account_id
 	});
 
-	state_chain_client.expect_get_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>()
+	state_chain_client.expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>()
 		.with(eq(initial_block_hash), eq(account_id))
 		.once()
 		.return_once(move |_, _| Ok(vec![3]));
 	state_chain_client
-		.expect_get_storage_value::<pallet_cf_validator::CurrentEpoch<state_chain_runtime::Runtime>>(
-		)
+		.expect_storage_value::<pallet_cf_validator::CurrentEpoch<state_chain_runtime::Runtime>>()
 		.with(eq(initial_block_hash))
 		.once()
 		.return_once(move |_| Ok(4));
 	state_chain_client
-		.expect_get_storage_map_entry::<pallet_cf_vaults::Vaults<
+		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
 			state_chain_runtime::Runtime,
 			state_chain_runtime::EthereumInstance,
 		>>()
@@ -160,7 +158,7 @@ async fn starts_witnessing_when_historic_on_startup() {
 			Ok(Some(Vault { public_key: Default::default(), active_from_block: 30 }))
 		});
 	state_chain_client
-		.expect_get_storage_map_entry::<pallet_cf_vaults::Vaults<
+		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
 			state_chain_runtime::Runtime,
 			state_chain_runtime::EthereumInstance,
 		>>()
@@ -244,18 +242,17 @@ async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
 		|| account_id
 	});
 
-	state_chain_client.expect_get_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>()
+	state_chain_client.expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>()
 		.with(eq(initial_block_hash), eq(account_id))
 		.once()
 		.return_once(move |_, _| Ok(vec![]));
 	state_chain_client
-		.expect_get_storage_value::<pallet_cf_validator::CurrentEpoch<state_chain_runtime::Runtime>>(
-		)
+		.expect_storage_value::<pallet_cf_validator::CurrentEpoch<state_chain_runtime::Runtime>>()
 		.with(eq(initial_block_hash))
 		.once()
 		.return_once(move |_| Ok(3));
 	state_chain_client
-		.expect_get_storage_map_entry::<pallet_cf_vaults::Vaults<
+		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
 			state_chain_runtime::Runtime,
 			state_chain_runtime::EthereumInstance,
 		>>()
@@ -334,18 +331,17 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
 		|| account_id
 	});
 
-	state_chain_client.expect_get_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>()
+	state_chain_client.expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>()
 		.with(eq(initial_block_hash), eq(account_id.clone()))
 		.once()
 		.return_once(move |_, _| Ok(vec![4]));
 	state_chain_client
-		.expect_get_storage_value::<pallet_cf_validator::CurrentEpoch<state_chain_runtime::Runtime>>(
-		)
+		.expect_storage_value::<pallet_cf_validator::CurrentEpoch<state_chain_runtime::Runtime>>()
 		.with(eq(initial_block_hash))
 		.once()
 		.return_once(move |_| Ok(4));
 	state_chain_client
-		.expect_get_storage_map_entry::<pallet_cf_vaults::Vaults<
+		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
 			state_chain_runtime::Runtime,
 			state_chain_runtime::EthereumInstance,
 		>>()
@@ -363,12 +359,12 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
 		Ok(new_epoch_block_header.clone()),
 	]);
 	state_chain_client
-		.expect_get_storage_value::<frame_system::Events<state_chain_runtime::Runtime>>()
+		.expect_storage_value::<frame_system::Events<state_chain_runtime::Runtime>>()
 		.with(eq(empty_block_header.hash()))
 		.once()
 		.return_once(move |_| Ok(vec![]));
 	state_chain_client
-		.expect_get_storage_value::<frame_system::Events<state_chain_runtime::Runtime>>()
+		.expect_storage_value::<frame_system::Events<state_chain_runtime::Runtime>>()
 		.with(eq(new_epoch_block_header_hash))
 		.once()
 		.return_once(move |_| {
@@ -382,7 +378,7 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
 		});
 
 	state_chain_client
-		.expect_get_storage_map_entry::<pallet_cf_vaults::Vaults<
+		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
 			state_chain_runtime::Runtime,
 			state_chain_runtime::EthereumInstance,
 		>>()
@@ -391,7 +387,7 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
 		.return_once(move |_, _| {
 			Ok(Some(Vault { public_key: Default::default(), active_from_block: 50 }))
 		});
-	state_chain_client.expect_get_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<state_chain_runtime::Runtime>>()
+	state_chain_client.expect_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<state_chain_runtime::Runtime>>()
 		.with(eq(new_epoch_block_header_hash), eq(5), eq(account_id.clone()))
 		.once()
 		.return_once(move |_, _, _| Ok(Some(1)));
@@ -465,18 +461,17 @@ async fn not_historical_to_authority_on_new_epoch() {
 		|| account_id
 	});
 
-	state_chain_client.expect_get_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>()
+	state_chain_client.expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>()
 		.with(eq(initial_block_hash), eq(account_id.clone()))
 		.once()
 		.return_once(move |_, _| Ok(vec![]));
 	state_chain_client
-		.expect_get_storage_value::<pallet_cf_validator::CurrentEpoch<state_chain_runtime::Runtime>>(
-		)
+		.expect_storage_value::<pallet_cf_validator::CurrentEpoch<state_chain_runtime::Runtime>>()
 		.with(eq(initial_block_hash))
 		.once()
 		.return_once(move |_| Ok(3));
 	state_chain_client
-		.expect_get_storage_map_entry::<pallet_cf_vaults::Vaults<
+		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
 			state_chain_runtime::Runtime,
 			state_chain_runtime::EthereumInstance,
 		>>()
@@ -494,12 +489,12 @@ async fn not_historical_to_authority_on_new_epoch() {
 		Ok(new_epoch_block_header.clone()),
 	]);
 	state_chain_client
-		.expect_get_storage_value::<frame_system::Events<state_chain_runtime::Runtime>>()
+		.expect_storage_value::<frame_system::Events<state_chain_runtime::Runtime>>()
 		.with(eq(empty_block_header.hash()))
 		.once()
 		.return_once(move |_| Ok(vec![]));
 	state_chain_client
-		.expect_get_storage_value::<frame_system::Events<state_chain_runtime::Runtime>>()
+		.expect_storage_value::<frame_system::Events<state_chain_runtime::Runtime>>()
 		.with(eq(new_epoch_block_header_hash))
 		.once()
 		.return_once(move |_| {
@@ -513,7 +508,7 @@ async fn not_historical_to_authority_on_new_epoch() {
 		});
 
 	state_chain_client
-		.expect_get_storage_map_entry::<pallet_cf_vaults::Vaults<
+		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
 			state_chain_runtime::Runtime,
 			state_chain_runtime::EthereumInstance,
 		>>()
@@ -522,7 +517,7 @@ async fn not_historical_to_authority_on_new_epoch() {
 		.return_once(move |_, _| {
 			Ok(Some(Vault { public_key: Default::default(), active_from_block: 40 }))
 		});
-	state_chain_client.expect_get_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<state_chain_runtime::Runtime>>()
+	state_chain_client.expect_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<state_chain_runtime::Runtime>>()
 		.with(eq(new_epoch_block_header_hash), eq(4), eq(account_id.clone()))
 		.once()
 		.return_once(move |_, _, _| Ok(Some(1)));
@@ -598,18 +593,17 @@ async fn current_authority_to_historical_on_new_epoch_event() {
 		|| account_id
 	});
 
-	state_chain_client.expect_get_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>()
+	state_chain_client.expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>()
 		.with(eq(initial_block_hash), eq(account_id.clone()))
 		.once()
 		.return_once(move |_, _| Ok(vec![3]));
 	state_chain_client
-		.expect_get_storage_value::<pallet_cf_validator::CurrentEpoch<state_chain_runtime::Runtime>>(
-		)
+		.expect_storage_value::<pallet_cf_validator::CurrentEpoch<state_chain_runtime::Runtime>>()
 		.with(eq(initial_block_hash))
 		.once()
 		.return_once(move |_| Ok(3));
 	state_chain_client
-		.expect_get_storage_map_entry::<pallet_cf_vaults::Vaults<
+		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
 			state_chain_runtime::Runtime,
 			state_chain_runtime::EthereumInstance,
 		>>()
@@ -626,12 +620,12 @@ async fn current_authority_to_historical_on_new_epoch_event() {
 		tokio_stream::iter([Ok(empty_block_header.clone()), Ok(new_epoch_block_header.clone())]);
 
 	state_chain_client
-		.expect_get_storage_value::<frame_system::Events<state_chain_runtime::Runtime>>()
+		.expect_storage_value::<frame_system::Events<state_chain_runtime::Runtime>>()
 		.with(eq(empty_block_header.hash()))
 		.once()
 		.return_once(move |_| Ok(vec![]));
 	state_chain_client
-		.expect_get_storage_value::<frame_system::Events<state_chain_runtime::Runtime>>()
+		.expect_storage_value::<frame_system::Events<state_chain_runtime::Runtime>>()
 		.with(eq(new_epoch_block_header_hash))
 		.once()
 		.return_once(move |_| {
@@ -645,7 +639,7 @@ async fn current_authority_to_historical_on_new_epoch_event() {
 		});
 
 	state_chain_client
-		.expect_get_storage_map_entry::<pallet_cf_vaults::Vaults<
+		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
 			state_chain_runtime::Runtime,
 			state_chain_runtime::EthereumInstance,
 		>>()
@@ -654,7 +648,7 @@ async fn current_authority_to_historical_on_new_epoch_event() {
 		.return_once(move |_, _| {
 			Ok(Some(Vault { public_key: Default::default(), active_from_block: 40 }))
 		});
-	state_chain_client.expect_get_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<state_chain_runtime::Runtime>>()
+	state_chain_client.expect_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<state_chain_runtime::Runtime>>()
 		.with(eq(new_epoch_block_header_hash), eq(4), eq(account_id.clone()))
 		.once()
 		.return_once(move |_, _, _| Ok(None));
@@ -732,18 +726,17 @@ async fn only_encodes_and_signs_when_specified() {
 		|| account_id
 	});
 
-	state_chain_client.expect_get_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>()
+	state_chain_client.expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>()
 		.with(eq(initial_block_hash), eq(account_id.clone()))
 		.once()
 		.return_once(move |_, _| Ok(vec![3]));
 	state_chain_client
-		.expect_get_storage_value::<pallet_cf_validator::CurrentEpoch<state_chain_runtime::Runtime>>(
-		)
+		.expect_storage_value::<pallet_cf_validator::CurrentEpoch<state_chain_runtime::Runtime>>()
 		.with(eq(initial_block_hash))
 		.once()
 		.return_once(move |_| Ok(3));
 	state_chain_client
-		.expect_get_storage_map_entry::<pallet_cf_vaults::Vaults<
+		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
 			state_chain_runtime::Runtime,
 			state_chain_runtime::EthereumInstance,
 		>>()
@@ -785,7 +778,7 @@ async fn only_encodes_and_signs_when_specified() {
 		.return_once(|_, _| Ok(H256::default()));
 
 	state_chain_client
-		.expect_get_storage_value::<frame_system::Events<state_chain_runtime::Runtime>>()
+		.expect_storage_value::<frame_system::Events<state_chain_runtime::Runtime>>()
 		.with(eq(block_header.hash()))
 		.once()
 		.return_once(move |_| {

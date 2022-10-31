@@ -165,9 +165,7 @@ async fn request_claim(
 				let header = result_header.expect("Failed to get a valid block header");
 				let block_hash = header.hash();
 				let events = state_chain_client
-					.get_storage_value::<frame_system::Events<state_chain_runtime::Runtime>>(
-						block_hash,
-					)
+					.storage_value::<frame_system::Events<state_chain_runtime::Runtime>>(block_hash)
 					.await?;
 				for event_record in events {
 					if let state_chain_runtime::Event::Staking(
@@ -181,13 +179,13 @@ async fn request_claim(
 									hex::encode(claim_cert.clone())
 								);
 								let chain_id = state_chain_client
-									.get_storage_value::<pallet_cf_environment::EthereumChainId<
+									.storage_value::<pallet_cf_environment::EthereumChainId<
 										state_chain_runtime::Runtime,
 									>>(block_hash)
 									.await
 									.expect("Failed to fetch EthereumChainId from the State Chain");
 								let stake_manager_address = state_chain_client
-									.get_storage_value::<pallet_cf_environment::StakeManagerAddress<
+									.storage_value::<pallet_cf_environment::StakeManagerAddress<
 										state_chain_runtime::Runtime,
 									>>(block_hash)
 									.await
@@ -312,7 +310,7 @@ async fn activate_account(settings: &CLISettings, logger: &slog::Logger) -> Resu
 		connect_to_state_chain(&settings.state_chain, false, logger).await?;
 
 	match state_chain_client
-        .get_storage_map_entry::<pallet_cf_account_roles::AccountRoles<state_chain_runtime::Runtime>>(
+        .storage_map_entry::<pallet_cf_account_roles::AccountRoles<state_chain_runtime::Runtime>>(
             latest_block_hash,
             &state_chain_client.account_id(),
         )

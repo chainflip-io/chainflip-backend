@@ -132,7 +132,7 @@ where
 	StateChainClient: SafeStorageApi,
 {
 	let peer_infos: Vec<_> = state_chain_client
-		.get_storage_map::<pallet_cf_validator::AccountPeerMapping<state_chain_runtime::Runtime>>(
+		.storage_map::<pallet_cf_validator::AccountPeerMapping<state_chain_runtime::Runtime>>(
 			block_hash,
 		)
 		.await?
