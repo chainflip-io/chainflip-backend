@@ -1,4 +1,4 @@
-use crate::{mock::*, Config, Pallet, Swap, SwapQueue, WeightInfo};
+use crate::{mock::*, Pallet, Swap, SwapQueue, WeightInfo};
 use cf_primitives::{Asset, ForeignChain, ForeignChainAddress, ForeignChainAsset};
 use cf_traits::SwapIntentHandler;
 use frame_support::assert_ok;
@@ -53,7 +53,7 @@ fn generate_test_swaps() -> Vec<Swap<u64>> {
 	]
 }
 
-fn insert_swaps<T: Config>(swaps: Vec<Swap<u64>>) {
+fn insert_swaps(swaps: Vec<Swap<u64>>) {
 	for swap in swaps.iter() {
 		<Pallet<Test> as SwapIntentHandler>::schedule_swap(
 			swap.from,
@@ -83,7 +83,7 @@ fn register_swap_intent_success_with_valid_parameters() {
 fn process_all_swaps() {
 	new_test_ext().execute_with(|| {
 		let swaps = generate_test_swaps();
-		insert_swaps::<Test>(swaps.clone());
+		insert_swaps(swaps.clone());
 		Swapping::on_idle(1, <() as WeightInfo>::execute_swap() * (swaps.len() as u64));
 		assert_eq!(SwapQueue::<Test>::get().len(), 0);
 		assert_eq!(
@@ -104,7 +104,7 @@ fn process_all_swaps() {
 fn number_of_swaps_processed_limited_by_weight() {
 	new_test_ext().execute_with(|| {
 		let swaps = generate_test_swaps();
-		insert_swaps::<Test>(swaps.clone());
+		insert_swaps(swaps.clone());
 		Swapping::on_idle(1, <() as WeightInfo>::execute_swap() * 3);
 		assert_eq!(SwapQueue::<Test>::get().len(), 3);
 		assert_eq!(

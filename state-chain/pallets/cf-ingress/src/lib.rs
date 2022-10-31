@@ -220,7 +220,7 @@ impl<T: Config> Pallet<T> {
 }
 
 impl<T: Config> IngressApi for Pallet<T> {
-	type AccountId = T::AccountId;
+	type AccountId = <T as frame_system::Config>::AccountId;
 
 	// This should be callable by the LP pallet.
 	fn register_liquidity_ingress_intent(
