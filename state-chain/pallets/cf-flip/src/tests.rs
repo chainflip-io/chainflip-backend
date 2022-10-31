@@ -11,6 +11,7 @@ use frame_support::{
 };
 use quickcheck::{Arbitrary, Gen, TestResult};
 use quickcheck_macros::quickcheck;
+use sp_runtime::Permill;
 
 impl FlipOperation {
 	pub fn execute(&self) -> bool {
@@ -279,17 +280,14 @@ impl FlipOperation {
 			},
 			FlipOperation::SlashAccount(account_id, slashing_rate, bond, blocks_offline, mint) => {
 				let blocks_per_day: u128 = <Test as Config>::BlocksPerDay::get() as u128;
-				// Bound the slashing rate since it represents a percentage.
-				let slashing_rate_bounded = slashing_rate % 50;
-				let expected_slash: u128 =
-					((bond / 100_u128).saturating_mul(slashing_rate_bounded) / blocks_per_day)
-						.saturating_mul(*blocks_offline as u128);
+				let expected_slash: u128 = (*slashing_rate * (*bond as u128) / blocks_per_day)
+					.saturating_mul(*blocks_offline as u128);
 				// Mint some Flip for testing - 100 is not enough and unrealistic for this usecase
 				Flip::settle(account_id, Flip::mint(*mint).into());
 				let initial_balance: u128 = Flip::total_balance_of(account_id);
 				Bonder::<Test>::update_bond(account_id, *bond);
 
-				SlashingRate::<Test>::set(slashing_rate_bounded);
+				SlashingRate::<Test>::set(*slashing_rate);
 				FlipSlasher::<Test>::slash(account_id, *blocks_offline);
 				let balance_after = Flip::total_balance_of(account_id);
 				// Check if the diff between the balances is the expected slash
@@ -378,7 +376,7 @@ impl Arbitrary for FlipOperation {
 			),
 			15 => FlipOperation::SlashAccount(
 				random_account(g),
-				SlashingRateType::arbitrary(g),
+				Permill::from_rational(u32::arbitrary(g), u32::MAX),
 				Bond::arbitrary(g),
 				BlocksOffline::arbitrary(g),
 				Mint::arbitrary(g),
