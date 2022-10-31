@@ -252,6 +252,12 @@ pub mod pallet {
 		pub eth_vault_address: EthereumAddress,
 		pub ethereum_chain_id: u64,
 		pub cfe_settings: cfe::CfeSettings,
+		#[cfg(feature = "ibiza")]
+		pub polkadot_vault_account_id: Option<PolkadotAccountId>,
+		#[cfg(feature = "ibiza")]
+		pub polkadot_proxy_account_id: Option<PolkadotAccountId>,
+		#[cfg(feature = "ibiza")]
+		pub polkadot_network_choice: NetworkChoice,
 	}
 
 	/// Sets the genesis config
@@ -266,6 +272,14 @@ pub mod pallet {
 			CurrentSystemState::<T>::set(SystemState::Normal);
 			SupportedEthAssets::<T>::insert(Asset::Flip, self.flip_token_address);
 			SupportedEthAssets::<T>::insert(Asset::Usdc, self.eth_usdc_address);
+			#[cfg(feature = "ibiza")]
+			PolkadotVaultAccountId::<T>::set(self.polkadot_vault_account_id.clone());
+			#[cfg(feature = "ibiza")]
+			PolkadotCurrentProxyAccountId::<T>::set(self.polkadot_proxy_account_id.clone());
+			#[cfg(feature = "ibiza")]
+			PolkadotNetworkChoice::<T>::set(self.polkadot_network_choice.clone());
+			#[cfg(feature = "ibiza")]
+			PolkadotProxyAccountNonce::<T>::set(0);
 		}
 	}
 }
@@ -332,7 +346,7 @@ impl<T: Config> Pallet<T> {
 	pub fn next_polkadot_proxy_account_nonce() -> PolkadotIndex {
 		PolkadotProxyAccountNonce::<T>::mutate(|nonce| {
 			*nonce += 1;
-			*nonce
+			*nonce - 1
 		})
 	}
 }

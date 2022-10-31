@@ -5,6 +5,7 @@ pub mod api;
 #[cfg(feature = "runtime-benchmarks")]
 pub mod benchmarking;
 
+use frame_support::{Deserialize, Serialize};
 use sp_core::{sr25519, H256};
 use sp_runtime::{
 	generic::{Era, SignedPayload, UncheckedExtrinsic},
@@ -735,7 +736,7 @@ pub struct PolkadotReplayProtection {
 	pub tip: PolkadotBalance,
 }
 
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum NetworkChoice {
 	PolkadotMainnet,
 	WestendTestnet,
