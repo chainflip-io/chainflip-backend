@@ -171,7 +171,7 @@ macro_rules! here {
 			)
 			// Add a special cool method for adding line numbers
 			// Ripped from: https://github.com/dtolnay/anyhow/issues/22
-			else => ("{}", concat!(file!(), " line ", line!(), " column ", column!()))
+			else => ("{}", concat!(file!(), ":", line!(), ":", column!()))
 		)
 	};
 }
