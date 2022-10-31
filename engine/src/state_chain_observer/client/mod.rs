@@ -331,9 +331,6 @@ pub mod mocks {
 				StorageDoubleMap::Key1: Sync,
 				StorageDoubleMap::Key2: Sync;
 
-			/// Gets all the storage pairs (key, value) of a StorageMap.
-			/// NB: Because this is an unbounded operation, it requires the node to have
-			/// the `--rpc-methods=unsafe` enabled.
 			async fn storage_map<StorageMap: StorageMapAssociatedTypes + 'static>(
 				&self,
 				block_hash: state_chain_runtime::Hash,
