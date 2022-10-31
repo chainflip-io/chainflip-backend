@@ -62,6 +62,7 @@ pub mod pallet {
 		Swap {
 			egress_asset: ForeignChainAsset,
 			egress_address: ForeignChainAddress,
+			relayer_id: AccountId,
 			relayer_commission_bps: u16,
 		},
 		LiquidityProvision {
@@ -103,7 +104,7 @@ pub mod pallet {
 		/// For scheduling fetch requests.
 		type IngressFetchApi: IngressFetchApi;
 		/// For scheduling swaps.
-		type SwapIntentHandler: SwapIntentHandler;
+		type SwapIntentHandler: SwapIntentHandler<AccountId = Self::AccountId>;
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;
 	}
@@ -191,15 +192,21 @@ impl<T: Config> Pallet<T> {
 					_ => Err(Error::<T>::IngressMismatchWithIntent),
 				}?;
 			},
-			IntentAction::Swap { egress_address, egress_asset, .. } => {
+			IntentAction::Swap {
+				egress_address,
+				egress_asset,
+				relayer_id,
+				relayer_commission_bps,
+			} => {
 				match (ingress_address, ingress.ingress_asset.chain) {
 					(ForeignChainAddress::Eth(_), ForeignChain::Ethereum) => {
 						T::SwapIntentHandler::schedule_swap(
 							asset,
 							egress_asset,
 							amount,
-							ingress_address,
 							egress_address,
+							relayer_id,
+							relayer_commission_bps,
 						);
 						Ok(())
 					},
@@ -213,7 +220,7 @@ impl<T: Config> Pallet<T> {
 }
 
 impl<T: Config> IngressApi for Pallet<T> {
-	type AccountId = <T as frame_system::Config>::AccountId;
+	type AccountId = T::AccountId;
 
 	// This should be callable by the LP pallet.
 	fn register_liquidity_ingress_intent(
@@ -242,6 +249,7 @@ impl<T: Config> IngressApi for Pallet<T> {
 		egress_asset: ForeignChainAsset,
 		egress_address: ForeignChainAddress,
 		relayer_commission_bps: u16,
+		relayer_id: T::AccountId,
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
 		let (intent_id, ingress_address) = Self::generate_new_address(ingress_asset)?;
 
@@ -251,7 +259,7 @@ impl<T: Config> IngressApi for Pallet<T> {
 		);
 		IntentActions::<T>::insert(
 			ingress_address,
-			IntentAction::Swap { egress_address, egress_asset, relayer_commission_bps },
+			IntentAction::Swap { egress_address, egress_asset, relayer_commission_bps, relayer_id },
 		);
 
 		Self::deposit_event(Event::StartWitnessing { ingress_address, ingress_asset });

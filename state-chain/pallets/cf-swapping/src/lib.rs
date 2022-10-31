@@ -19,12 +19,12 @@ pub mod weights;
 pub use weights::WeightInfo;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
-pub struct Swap {
+pub struct Swap<AccountId> {
 	pub from: Asset,
 	pub to: ForeignChainAsset,
 	pub amount: AssetAmount,
-	pub ingress_address: ForeignChainAddress,
 	pub egress_address: ForeignChainAddress,
+	pub relayer_id: AccountId,
 }
 
 #[frame_support::pallet]
@@ -59,7 +59,7 @@ pub mod pallet {
 
 	/// Scheduled Swaps
 	#[pallet::storage]
-	pub(super) type SwapQueue<T: Config> = StorageValue<_, Vec<Swap>, ValueQuery>;
+	pub(super) type SwapQueue<T: Config> = StorageValue<_, Vec<Swap<T::AccountId>>, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -83,7 +83,7 @@ pub mod pallet {
 				(remaining_weight.saturating_div(swap_weight)) as usize,
 			));
 			for swap in swaps.iter() {
-				Self::execute_swap(*swap);
+				Self::execute_swap(swap.clone());
 			}
 			// Write the rest back (potentially an empty vector).
 			SwapQueue::<T>::put(remaining_swaps);
@@ -107,7 +107,7 @@ pub mod pallet {
 			egress_address: ForeignChainAddress,
 			relayer_commission_bps: u16,
 		) -> DispatchResultWithPostInfo {
-			T::AccountRoleRegistry::ensure_relayer(origin)?;
+			let relayer = T::AccountRoleRegistry::ensure_relayer(origin)?;
 
 			// TODO: ensure egress address chain matches egress asset chain
 			// (or consider if we can merge both into one struct / derive one from the other)
@@ -116,6 +116,7 @@ pub mod pallet {
 				egress_asset,
 				egress_address,
 				relayer_commission_bps,
+				relayer,
 			)?;
 
 			Self::deposit_event(Event::<T>::NewSwapIntent { intent_id, ingress_address });
@@ -132,7 +133,7 @@ pub mod pallet {
 		///
 		/// We are going to benchmark this function individually to have a approximation of
 		/// how 'expensive' a swap is.
-		pub fn execute_swap(swap: Swap) {
+		pub fn execute_swap(swap: Swap<T::AccountId>) {
 			T::Egress::schedule_egress(
 				swap.to,
 				T::AmmPoolApi::swap(swap.from, swap.to, swap.amount),
@@ -142,15 +143,17 @@ pub mod pallet {
 	}
 
 	impl<T: Config> SwapIntentHandler for Pallet<T> {
+		type AccountId = T::AccountId;
 		/// Callback function to kick of the swapping process after a successful ingress.
 		fn schedule_swap(
 			from: Asset,
 			to: ForeignChainAsset,
 			amount: AssetAmount,
-			ingress_address: ForeignChainAddress,
 			egress_address: ForeignChainAddress,
+			relayer_id: Self::AccountId,
+			_relayer_commission_bps: u16,
 		) {
-			SwapQueue::<T>::append(Swap { from, to, amount, ingress_address, egress_address });
+			SwapQueue::<T>::append(Swap { from, to, amount, egress_address, relayer_id });
 		}
 	}
 }

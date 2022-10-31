@@ -92,6 +92,7 @@ impl IngressApi for MockIngress {
 		_schedule_egress: ForeignChainAsset,
 		_egress_address: ForeignChainAddress,
 		_relayer_commission_bps: u16,
+		_relayer_id: Self::AccountId,
 	) -> Result<(u64, cf_primitives::ForeignChainAddress), sp_runtime::DispatchError> {
 		Ok((0, ForeignChainAddress::Eth(Default::default())))
 	}
