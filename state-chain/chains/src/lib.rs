@@ -90,6 +90,7 @@ pub trait ChainAbi: ChainCrypto {
 	type SignerCredential: Member + Parameter + BenchmarkValue;
 	type ReplayProtection: Member + Parameter;
 	type ValidationError;
+	type ApiCallExtraData;
 
 	/// Verify the signed transaction when it is submitted to the state chain by the nominated
 	/// signer.
@@ -140,7 +141,7 @@ where
 	RuntimeDebug, Copy, Clone, Default, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo,
 )]
 pub struct FetchAssetParams<T: Chain> {
-	pub swap_id: IntentId,
+	pub intent_id: IntentId,
 	pub asset: T::ChainAsset,
 }
 
@@ -163,6 +164,7 @@ pub trait IngressAddress {
 pub trait SetAggKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
 		replay_protection: Abi::ReplayProtection,
+		chain_specific_data: Abi::ApiCallExtraData,
 		new_key: <Abi as ChainCrypto>::AggKey,
 	) -> Self;
 }
@@ -207,6 +209,7 @@ pub trait RegisterClaim<Abi: ChainAbi>: ApiCall<Abi> {
 pub trait AllBatch<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
 		replay_protection: Abi::ReplayProtection,
+		chain_specific_data: Abi::ApiCallExtraData,
 		fetch_params: Vec<FetchAssetParams<Abi>>,
 		transfer_params: Vec<TransferAssetParams<Abi>>,
 	) -> Self;
@@ -399,6 +402,7 @@ pub mod mocks {
 		type SignerCredential = Validity;
 		type ReplayProtection = EthereumReplayProtection;
 		type ValidationError = &'static str;
+		type ApiCallExtraData = ();
 
 		fn verify_signed_transaction(
 			unsigned_tx: &Self::UnsignedTransaction,

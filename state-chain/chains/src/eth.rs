@@ -737,7 +737,7 @@ impl From<H256> for TransactionHash {
 impl Tokenizable for FetchAssetParams<Ethereum> {
 	fn tokenize(self) -> Token {
 		Token::Tuple(vec![
-			Token::FixedBytes(get_salt(self.swap_id).to_vec()),
+			Token::FixedBytes(get_salt(self.intent_id).to_vec()),
 			Token::Address(self.asset),
 		])
 	}
