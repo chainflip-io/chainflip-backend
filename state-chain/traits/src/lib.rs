@@ -277,7 +277,7 @@ pub trait EmissionsTrigger {
 	fn trigger_emissions();
 }
 
-/// Provides a chain-specific replay protection instance
+/// Provides chain-specific replay protection data.
 pub trait ReplayProtectionProvider<Abi: ChainAbi> {
 	fn replay_protection() -> Abi::ReplayProtection;
 }
