@@ -114,14 +114,14 @@ fn can_schedule_ethereum_ingress_fetch() {
 		Egress::schedule_ethereum_ingress_fetch(vec![
 			(Asset::Eth, 1u64),
 			(Asset::Eth, 2u64),
-			(Asset::Dot, 3u64),
+			(Asset::Flip, 3u64),
 		]);
 		assert_eq!(
 			EthereumScheduledRequests::<Test>::get(),
 			vec![
 				EthereumRequest::Fetch { intent_id: 1u64, asset: Asset::Eth },
 				EthereumRequest::Fetch { intent_id: 2u64, asset: Asset::Eth },
-				EthereumRequest::Fetch { intent_id: 3u64, asset: Asset::Dot },
+				EthereumRequest::Fetch { intent_id: 3u64, asset: Asset::Flip },
 			]
 		);
 
@@ -136,7 +136,7 @@ fn can_schedule_ethereum_ingress_fetch() {
 			vec![
 				EthereumRequest::Fetch { intent_id: 1u64, asset: Asset::Eth },
 				EthereumRequest::Fetch { intent_id: 2u64, asset: Asset::Eth },
-				EthereumRequest::Fetch { intent_id: 3u64, asset: Asset::Dot },
+				EthereumRequest::Fetch { intent_id: 3u64, asset: Asset::Flip },
 				EthereumRequest::Fetch { intent_id: 4u64, asset: Asset::Eth },
 			]
 		);
@@ -164,11 +164,7 @@ fn on_idle_can_send_batch_all() {
 		Egress::schedule_egress(ETH_FLIP, 6_000, ForeignChainAddress::Eth(ALICE_ETH_ADDRESS));
 		Egress::schedule_egress(ETH_FLIP, 7_000, ForeignChainAddress::Eth(BOB_ETH_ADDRESS));
 		Egress::schedule_egress(ETH_FLIP, 8_000, ForeignChainAddress::Eth(BOB_ETH_ADDRESS));
-		Egress::schedule_ethereum_ingress_fetch(vec![
-			(Asset::Flip, 5),
-			// Unsupported items should never be added. But if they are, system should not panic
-			(Asset::Usdc, 6),
-		]);
+		Egress::schedule_ethereum_ingress_fetch(vec![(Asset::Flip, 5)]);
 
 		assert!(LastEgressSent::get().is_empty());
 
@@ -365,5 +361,24 @@ fn on_idle_does_nothing_if_nothing_to_send() {
 		);
 
 		assert_eq!(EthereumScheduledRequests::<Test>::decode_len(), Some(4));
+	});
+}
+
+#[test]
+fn unsupported_assets_should_not_panic() {
+	new_test_ext().execute_with(|| {
+		// Dot and Usdc are not supported in the `MockEthAssetAddressProvider`.
+		EthereumScheduledRequests::<Test>::set(vec![
+			EthereumRequest::Transfer { asset: Asset::Dot, amount: 1_000, to: ALICE_ETH_ADDRESS },
+			EthereumRequest::Fetch { intent_id: 0, asset: Asset::Usdc },
+		]);
+
+		// Unsupported items are ignored and does not panic
+		assert_eq!(
+			Egress::on_idle(1, 1_000_000_000_000_000u64),
+			<Test as crate::Config>::WeightInfo::send_ethereum_batch(0)
+		);
+
+		assert_eq!(EthereumScheduledRequests::<Test>::decode_len(), Some(0));
 	});
 }
