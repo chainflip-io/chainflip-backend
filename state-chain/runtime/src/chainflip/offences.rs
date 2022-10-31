@@ -1,10 +1,7 @@
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::RuntimeDebug;
-use pallet_cf_reputation::OffenceList;
 use pallet_grandpa::GrandpaEquivocationOffence;
 use scale_info::TypeInfo;
-
-use crate::Runtime;
 
 /// Offences that can be reported in this runtime.
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
@@ -22,28 +19,6 @@ pub enum Offence {
 	MissedHeartbeat,
 	/// Grandpa equivocation detected.
 	GrandpaEquivocation,
-}
-
-pub struct KeygenOffences;
-
-impl OffenceList<Runtime> for KeygenOffences {
-	const OFFENCES: &'static [Offence] = &[Offence::ParticipateKeygenFailed];
-}
-
-pub struct SigningOffences;
-
-impl OffenceList<Runtime> for SigningOffences {
-	const OFFENCES: &'static [Offence] = &[
-		Offence::ParticipateSigningFailed,
-		Offence::MissedAuthorshipSlot,
-		Offence::MissedHeartbeat,
-	];
-}
-
-pub struct BroadcastExclusionOffences;
-
-impl OffenceList<Runtime> for BroadcastExclusionOffences {
-	const OFFENCES: &'static [Offence] = &[Offence::MissedAuthorshipSlot, Offence::MissedHeartbeat];
 }
 
 // Boilerplate
@@ -76,8 +51,7 @@ impl From<pallet_cf_threshold_signature::PalletOffence> for Offence {
 impl From<pallet_cf_vaults::PalletOffence> for Offence {
 	fn from(offences: pallet_cf_vaults::PalletOffence) -> Self {
 		match offences {
-			// Failing keygen should carry the same consequences as failing a signing ceremony.
-			pallet_cf_vaults::PalletOffence::FailedKeygen => Self::ParticipateSigningFailed,
+			pallet_cf_vaults::PalletOffence::FailedKeygen => Self::ParticipateKeygenFailed,
 		}
 	}
 }
