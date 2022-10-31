@@ -123,7 +123,7 @@ pub mod pallet {
 			if remaining_weight <= T::WeightInfo::send_ethereum_batch(1u32) ||
 				EthereumScheduledRequests::<T>::decode_len() == Some(0)
 			{
-				return 0
+				return T::WeightInfo::on_idle_with_nothing_to_send()
 			}
 
 			// Calculate the number of requests that the weight allows.
