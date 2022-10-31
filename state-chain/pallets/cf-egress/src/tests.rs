@@ -367,6 +367,7 @@ fn on_idle_does_nothing_if_nothing_to_send() {
 #[test]
 fn unsupported_assets_should_not_panic() {
 	new_test_ext().execute_with(|| {
+		// Dot and Usdc are not supported in the `MockEthAssetAddressProvider`.
 		EthereumScheduledRequests::<Test>::set(vec![
 			EthereumRequest::Transfer { asset: Asset::Dot, amount: 1_000, to: ALICE_ETH_ADDRESS },
 			EthereumRequest::Fetch { intent_id: 0, asset: Asset::Usdc },
