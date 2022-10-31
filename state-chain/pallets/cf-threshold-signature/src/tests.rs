@@ -66,12 +66,12 @@ impl MockCfe {
 					request_id: _,
 					ceremony_id,
 					key_id,
-					signatories: signers,
+					signatories,
 					payload,
 				},
 			) => {
 				assert_eq!(key_id, &MOCK_AGG_KEY);
-				assert_eq!(signers, MockNominator::get_nominees().unwrap());
+				assert_eq!(signatories, MockNominator::get_nominees().unwrap());
 
 				match &self.behaviour {
 					CfeBehaviour::Success => {
@@ -105,7 +105,7 @@ impl MockCfe {
 						// Unsolicited responses are rejected.
 						assert_noop!(
 							EthereumThresholdSigner::report_signature_failed(
-								Origin::signed(signers.iter().max().unwrap() + 1),
+								Origin::signed(signatories.iter().max().unwrap() + 1),
 								ceremony_id,
 								BTreeSet::from_iter(bad.clone()),
 							),
