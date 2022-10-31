@@ -203,7 +203,7 @@ pub trait RegisterClaim<Abi: ChainAbi>: ApiCall<Abi> {
 pub trait AllBatch<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
 		replay_protection: Abi::ReplayProtection,
-		chain_speicif_data: Abi::ApiCallExtraData,
+		chain_specific_data: Abi::ApiCallExtraData,
 		fetch_params: Vec<FetchAssetParams<Abi>>,
 		transfer_params: Vec<TransferAssetParams<Abi>>,
 	) -> Self;
