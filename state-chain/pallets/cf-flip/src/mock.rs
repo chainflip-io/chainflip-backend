@@ -12,7 +12,7 @@ use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
-	BuildStorage,
+	BuildStorage, Permill,
 };
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -147,7 +147,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	ext
 }
 
-pub type SlashingRateType = u128;
+pub type SlashingRateType = Permill;
 pub type Bond = u128;
 pub type BlocksOffline = u64;
 pub type Mint = u128;
