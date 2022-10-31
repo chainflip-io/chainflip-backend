@@ -9,11 +9,11 @@ use sp_core::{
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::traits::{IdentifyAccount, Verify};
 use state_chain_runtime::{
-	chainflip::Offence, constants::common::*, opaque::SessionKeys, AccountId, AccountRolesConfig,
-	AuraConfig, BlockNumber, CfeSettings, EmissionsConfig, EnvironmentConfig,
-	EthereumThresholdSignerConfig, EthereumVaultConfig, FlipBalance, FlipConfig, GenesisConfig,
-	GovernanceConfig, GrandpaConfig, ReputationConfig, SessionConfig, Signature, StakingConfig,
-	SystemConfig, ValidatorConfig, WASM_BINARY,
+	constants::common::*, opaque::SessionKeys, AccountId, AccountRolesConfig, AuraConfig,
+	BlockNumber, CfeSettings, EmissionsConfig, EnvironmentConfig, EthereumThresholdSignerConfig,
+	EthereumVaultConfig, FlipBalance, FlipConfig, GenesisConfig, GovernanceConfig, GrandpaConfig,
+	ReputationConfig, SessionConfig, Signature, StakingConfig, SystemConfig, ValidatorConfig,
+	WASM_BINARY,
 };
 use std::{collections::BTreeSet, env, marker::PhantomData};
 use utilities::clean_eth_address;
@@ -145,17 +145,6 @@ pub fn get_environment() -> StateChainEnvironment {
 		min_stake,
 	}
 }
-
-/// The reputation penalty and suspension duration for each offence.
-const PENALTIES: &[(Offence, (i32, BlockNumber))] = &[
-	(Offence::ParticipateKeygenFailed, (15, HEARTBEAT_BLOCK_INTERVAL)),
-	(Offence::ParticipateSigningFailed, (15, HEARTBEAT_BLOCK_INTERVAL)),
-	(Offence::MissedAuthorshipSlot, (15, HEARTBEAT_BLOCK_INTERVAL)),
-	(Offence::MissedHeartbeat, (15, HEARTBEAT_BLOCK_INTERVAL)),
-	// Exclude them from the nomination pool of the next attempt.
-	(Offence::FailedToBroadcastTransaction, (10, 0)),
-	(Offence::GrandpaEquivocation, (50, HEARTBEAT_BLOCK_INTERVAL * 5)),
-];
 
 /// Generate an Aura authority key.
 pub fn authority_keys_from_seed(s: &str) -> (AccountId, AuraId, GrandpaId) {
