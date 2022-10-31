@@ -316,9 +316,9 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
 					// This occurs when a transaction with the same nonce is in the transaction pool
 					// (and the priority is <= priority of that existing tx)
 					RpcError::Call(CallError::Custom(ref obj)) if obj.code() == 1014 => {
-						slog::error!(
+						slog::warn!(
 							logger,
-							"Extrinsic submission failed with nonce: {}. Error: {:?}",
+							"Extrinsic submission failed with nonce: {}. Error: {:?}. Transaction with same nonce found in transaction pool.",
 							nonce,
 							rpc_err
 						);
@@ -328,9 +328,13 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
 					RpcError::Call(CallError::Custom(ref obj))
 						if obj == &invalid_err_obj(InvalidTransaction::Stale) =>
 					{
-						slog::error!(
+						// Since we can submit, crash (lose in-memory nonce state), restart => fetch
+						// nonce from finalised. If the tx we submitted is not yet finalised, we
+						// will fetch a nonce that will be too low. Which would cause this warning
+						// on startup at submission of first (possibly couple) of extrinsics.
+						slog::warn!(
 							logger,
-							"Extrinsic submission failed with nonce: {}. Error: {:?}",
+							"Extrinsic submission failed with nonce: {}. Error: {:?}. Transaction stale.",
 							nonce,
 							rpc_err
 						);
@@ -338,7 +342,7 @@ impl<RpcClient: StateChainRpcApi> StateChainClient<RpcClient> {
 					RpcError::Call(CallError::Custom(ref obj))
 						if obj == &invalid_err_obj(InvalidTransaction::BadProof) =>
 					{
-						slog::error!(
+						slog::warn!(
                             logger,
                             "Extrinsic submission failed with nonce: {}. Error: {:?}. Refetching the runtime version.",
                             nonce,
