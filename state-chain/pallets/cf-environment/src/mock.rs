@@ -1,4 +1,5 @@
 use crate::{self as pallet_cf_environment, cfe};
+use cf_chains::dot::POLKADOT_CONFIG;
 use cf_traits::mocks::{
 	ensure_origin_mock::NeverFailingOriginCheck,
 	eth_environment_provider::MockEthEnvironmentProvider,
@@ -95,7 +96,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			#[cfg(feature = "ibiza")]
 			polkadot_proxy_account_id: None,
 			#[cfg(feature = "ibiza")]
-			polkadot_network_config: None,
+			polkadot_network_config: POLKADOT_CONFIG,
 		},
 	};
 

@@ -3,7 +3,11 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 #[cfg(feature = "ibiza")]
-use cf_chains::dot::{PolkadotAccountId, PolkadotConfig, PolkadotIndex};
+use cf_chains::dot::{PolkadotAccountId, PolkadotConfig, PolkadotIndex, RAW_SEED_1, RAW_SEED_2};
+
+use sp_core::{crypto::Pair as TraitPair, sr25519::Pair};
+
+use sp_runtime::{traits::IdentifyAccount, MultiSigner};
 
 use cf_primitives::{Asset, EthereumAddress};
 pub use cf_traits::{EthEnvironmentProvider, EthereumAssetsAddressProvider};
@@ -143,7 +147,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn get_polkadot_network_choice)]
 	/// The Polkadot Network Configuration
-	pub type PolkadotNetworkConfig<T> = StorageValue<_, PolkadotConfig, OptionQuery>;
+	pub type PolkadotNetworkConfig<T> = StorageValue<_, PolkadotConfig, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn cfe_settings)]
@@ -257,7 +261,7 @@ pub mod pallet {
 		#[cfg(feature = "ibiza")]
 		pub polkadot_proxy_account_id: Option<PolkadotAccountId>,
 		#[cfg(feature = "ibiza")]
-		pub polkadot_network_config: Option<PolkadotConfig>,
+		pub polkadot_network_config: PolkadotConfig,
 	}
 
 	/// Sets the genesis config
@@ -347,6 +351,27 @@ impl<T: Config> Pallet<T> {
 		PolkadotProxyAccountNonce::<T>::mutate(|nonce| {
 			*nonce += 1;
 			*nonce - 1
+		})
+	}
+
+	#[cfg(feature = "ibiza")]
+	pub fn get_polkadot_network_config() -> PolkadotConfig {
+		PolkadotNetworkConfig::<T>::get()
+	}
+
+	#[cfg(feature = "ibiza")]
+	pub fn get_vault_account() -> PolkadotAccountId {
+		PolkadotVaultAccountId::<T>::get().unwrap_or_else(|| {
+			let keypair: Pair = <Pair as TraitPair>::from_seed(&RAW_SEED_1);
+			MultiSigner::Sr25519(keypair.public()).into_account()
+		})
+	}
+
+	#[cfg(feature = "ibiza")]
+	pub fn get_current_proxy_account() -> PolkadotAccountId {
+		PolkadotCurrentProxyAccountId::<T>::get().unwrap_or_else(|| {
+			let keypair: Pair = <Pair as TraitPair>::from_seed(&RAW_SEED_2);
+			MultiSigner::Sr25519(keypair.public()).into_account()
 		})
 	}
 }

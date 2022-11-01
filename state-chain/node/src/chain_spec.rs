@@ -1,5 +1,7 @@
 #[cfg(feature = "ibiza")]
-use cf_chains::dot::{PolkadotAccountId, WESTEND_CONFIG};
+use cf_chains::dot::{
+	PolkadotAccountId, POLKADOT_PROXY_ACCOUNT, POLKADOT_VAULT_ACCOUNT, WESTEND_CONFIG,
+};
 use cf_chains::eth::CHAIN_ID_GOERLI;
 use cf_primitives::AccountRole;
 use sc_service::{ChainType, Properties};
@@ -34,11 +36,6 @@ const ETH_INIT_AGG_KEY_DEFAULT: &str =
 const GENESIS_STAKE_AMOUNT_DEFAULT: FlipBalance = 5_000 * FLIPPERINOS_PER_FLIP;
 const ETH_DEPLOYMENT_BLOCK_DEFAULT: u64 = 0;
 const ETH_PRIORITY_FEE_PERCENTILE_DEFAULT: u8 = 50;
-
-#[cfg(feature = "ibiza")]
-pub const POLKADOT_VAULT_ACCOUNT: Option<PolkadotAccountId> = None;
-#[cfg(feature = "ibiza")]
-pub const POLKADOT_PROXY_ACCOUNT: Option<PolkadotAccountId> = None;
 
 /// Generate a crypto pair from seed.
 pub fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {
@@ -229,7 +226,7 @@ pub fn development_config() -> Result<ChainSpec, String> {
 					#[cfg(feature = "ibiza")]
 					polkadot_proxy_account_id: POLKADOT_PROXY_ACCOUNT,
 					#[cfg(feature = "ibiza")]
-					polkadot_network_config: Some(WESTEND_CONFIG),
+					polkadot_network_config: WESTEND_CONFIG,
 				},
 				eth_init_agg_key,
 				ethereum_deployment_block,
@@ -322,7 +319,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 					#[cfg(feature = "ibiza")]
 					polkadot_proxy_account_id: POLKADOT_PROXY_ACCOUNT,
 					#[cfg(feature = "ibiza")]
-					polkadot_network_config: Some(WESTEND_CONFIG),
+					polkadot_network_config: WESTEND_CONFIG,
 				},
 				eth_init_agg_key,
 				ethereum_deployment_block,
@@ -455,7 +452,7 @@ fn chainflip_three_node_testnet_config_from_env(
 					#[cfg(feature = "ibiza")]
 					polkadot_proxy_account_id: POLKADOT_PROXY_ACCOUNT,
 					#[cfg(feature = "ibiza")]
-					polkadot_network_config: Some(WESTEND_CONFIG),
+					polkadot_network_config: WESTEND_CONFIG,
 				},
 				eth_init_agg_key,
 				ethereum_deployment_block,
@@ -601,7 +598,7 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 					#[cfg(feature = "ibiza")]
 					polkadot_proxy_account_id: POLKADOT_PROXY_ACCOUNT,
 					#[cfg(feature = "ibiza")]
-					polkadot_network_config: Some(WESTEND_CONFIG),
+					polkadot_network_config: WESTEND_CONFIG,
 				},
 				eth_init_agg_key,
 				ethereum_deployment_block,
@@ -719,7 +716,7 @@ pub fn perseverance_new_config() -> Result<ChainSpec, String> {
 					#[cfg(feature = "ibiza")]
 					polkadot_proxy_account_id: POLKADOT_PROXY_ACCOUNT,
 					#[cfg(feature = "ibiza")]
-					polkadot_network_config: Some(WESTEND_CONFIG),
+					polkadot_network_config: WESTEND_CONFIG,
 				},
 				eth_init_agg_key,
 				ethereum_deployment_block,

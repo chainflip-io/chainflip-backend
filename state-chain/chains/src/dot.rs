@@ -74,6 +74,29 @@ pub const POLKADOT_CONFIG: PolkadotConfig = PolkadotConfig {
 	block_hash_count: 4096,
 };
 
+// test westend account 1 (CHAINFLIP-TEST)
+// address: "5E2WfQFeafdktJ5AAF6ZGZ71Yj4fiJnHWRomVmeoStMNhoZe"
+pub const RAW_SEED_1: [u8; 32] =
+	hex_literal::hex!("858c1ee915090a119d4cb0774b908fa585ef7882f4648c577606490cc94f6e15");
+pub const NONCE_1: u32 = 11; //correct nonce has to be provided for this account (see/track onchain)
+
+// test westend account 2 (CHAINFLIP-TEST-2)
+// address: "5GNn92C9ngX4sNp3UjqGzPbdRfbbV8hyyVVNZaH2z9e5kzxA"
+pub const RAW_SEED_2: [u8; 32] =
+	hex_literal::hex!("4b734882accd7a0e27b8b0d3cb7db79ab4da559d1d5f84f35fd218a1ee12ece4");
+pub const NONCE_2: u32 = 0; //correct nonce has to be provided for this account (see/track onchain)
+
+// test westend account 3 (CHAINFLIP-TEST-3)
+// address: "5CLpD6DBg2hFToBJYKDB7bPVAf4TKw2F1Q2xbnzdHSikH3uK"
+pub const RAW_SEED_3: [u8; 32] =
+	hex_literal::hex!("ce7fec0dd410141c04e246a91f7ac909aa9707b56a8ecd33e794a49f1b5d70e6");
+pub const NONCE_3: u32 = 0; //correct nonce has to be provided for this account (see/track onchain)
+
+#[cfg(feature = "ibiza")]
+pub const POLKADOT_VAULT_ACCOUNT: Option<PolkadotAccountId> = None;
+#[cfg(feature = "ibiza")]
+pub const POLKADOT_PROXY_ACCOUNT: Option<PolkadotAccountId> = None;
+
 #[allow(clippy::unnecessary_cast)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum PolkadotProxyType {
@@ -730,6 +753,13 @@ pub struct PolkadotConfig {
 	pub genesis_hash: [u8; 32],
 	pub block_hash_count: PolkadotBlockNumber,
 }
+
+impl Default for PolkadotConfig {
+	fn default() -> Self {
+		POLKADOT_CONFIG
+	}
+}
+
 #[derive(Debug, Encode, Decode, TypeInfo, Eq, PartialEq, Clone)]
 pub struct PolkadotReplayProtection {
 	pub polkadot_config: PolkadotConfig,
@@ -754,18 +784,6 @@ mod test_polkadot_extrinsics {
 	use crate::dot::sr25519::Pair;
 	use sp_core::crypto::Pair as TraitPair;
 	use sp_runtime::{traits::IdentifyAccount, MultiSigner};
-
-	// test westend account 1 (CHAINFLIP-TEST)
-	// address: "5E2WfQFeafdktJ5AAF6ZGZ71Yj4fiJnHWRomVmeoStMNhoZe"
-	pub const RAW_SEED_1: [u8; 32] =
-		hex_literal::hex!("858c1ee915090a119d4cb0774b908fa585ef7882f4648c577606490cc94f6e15");
-	pub const NONCE_1: u32 = 11; //correct nonce has to be provided for this account (see/track onchain)
-
-	// test westend account 2 (CHAINFLIP-TEST-2)
-	// address: "5GNn92C9ngX4sNp3UjqGzPbdRfbbV8hyyVVNZaH2z9e5kzxA"
-	pub const RAW_SEED_2: [u8; 32] =
-		hex_literal::hex!("4b734882accd7a0e27b8b0d3cb7db79ab4da559d1d5f84f35fd218a1ee12ece4");
-	pub const _NONCE_2: u32 = 0; //correct nonce has to be provided for this account (see/track onchain)
 
 	#[ignore]
 	#[test]

@@ -218,20 +218,22 @@ impl ReplayProtectionProvider<Polkadot> for DotApiCallDataProvider {
 	// Get the Environment values for vault_account, NetworkChoice and the next nonce for the
 	// proxy_account
 	fn replay_protection() -> PolkadotReplayProtection {
-		// PolkadotReplayProtection::new(
-		// 	Environment::next_polkadot_proxy_account_nonce(),
-		// 	0,
-		// 	Environment::get_polkadot_network_config(),
-		// ) //Todo: Instead
-		// of 0, tip needs
-		// to be set here
-		todo!()
+		PolkadotReplayProtection::new(
+			Environment::next_polkadot_proxy_account_nonce(),
+			0,
+			Environment::get_polkadot_network_config(),
+		) //Todo: Instead
+		 // of 0, tip needs
+		 // to be set here
 	}
 }
 #[cfg(feature = "ibiza")]
 impl ApiCallDataProvider<Polkadot> for DotApiCallDataProvider {
 	// Get the current vault_account and proxy_account ids.
 	fn chain_extra_data() -> <Polkadot as ChainAbi>::ApiCallExtraData {
-		todo!(); //Pull from environment
+		CurrentVaultAndProxy {
+			vault_account: Environment::get_vault_account(),
+			proxy_account: Environment::get_current_proxy_account(),
+		}
 	}
 }
