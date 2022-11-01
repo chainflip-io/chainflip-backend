@@ -48,9 +48,19 @@ pub struct Eth {
 	pub private_key_file: PathBuf,
 }
 
+#[cfg(feature = "ibiza")]
 #[derive(Debug, Deserialize, Clone, Default)]
 pub struct Dot {
 	pub ws_node_endpoint: String,
+}
+
+#[cfg(feature = "ibiza")]
+impl Dot {
+	pub fn validate_settings(&self) -> Result<(), ConfigError> {
+		parse_websocket_endpoint(&self.ws_node_endpoint)
+			.map_err(|e| ConfigError::Message(e.to_string()))?;
+		Ok(())
+	}
 }
 
 impl Eth {
@@ -58,14 +68,6 @@ impl Eth {
 		parse_websocket_endpoint(&self.ws_node_endpoint)
 			.map_err(|e| ConfigError::Message(e.to_string()))?;
 		parse_http_endpoint(&self.http_node_endpoint)
-			.map_err(|e| ConfigError::Message(e.to_string()))?;
-		Ok(())
-	}
-}
-
-impl Dot {
-	pub fn validate_settings(&self) -> Result<(), ConfigError> {
-		parse_websocket_endpoint(&self.ws_node_endpoint)
 			.map_err(|e| ConfigError::Message(e.to_string()))?;
 		Ok(())
 	}
@@ -94,6 +96,7 @@ pub struct Settings {
 	pub node_p2p: P2P,
 	pub state_chain: StateChain,
 	pub eth: Eth,
+	#[cfg(feature = "ibiza")]
 	pub dot: Dot,
 	pub health_check: Option<HealthCheck>,
 	pub signing: Signing,
@@ -119,6 +122,12 @@ pub struct EthOptions {
 	pub eth_private_key_file: Option<PathBuf>,
 }
 
+#[cfg(feature = "ibiza")]
+#[derive(Parser, Debug, Clone, Default)]
+pub struct DotOptions {
+	pub dot_ws_node_endpoint: Option<String>,
+}
+
 #[derive(Parser, Debug, Clone)]
 pub struct CommandLineOptions {
 	// Misc Options
@@ -142,6 +151,10 @@ pub struct CommandLineOptions {
 
 	#[clap(flatten)]
 	eth_opts: EthOptions,
+
+	#[cfg(feature = "ibiza")]
+	#[clap(flatten)]
+	dot_opts: DotOptions,
 
 	// Health Check Settings
 	#[clap(long = "health_check.hostname")]
@@ -169,6 +182,8 @@ impl CommandLineOptions {
 			p2p_port: None,
 			state_chain_opts: StateChainOptions::default(),
 			eth_opts: EthOptions::default(),
+			#[cfg(feature = "ibiza")]
+			dot_opts: DotOptions::default(),
 			health_check_hostname: None,
 			health_check_port: None,
 			signing_db_file: None,
@@ -289,6 +304,7 @@ impl CfSettings for Settings {
 	fn validate_settings(&self) -> Result<(), ConfigError> {
 		self.eth.validate_settings()?;
 
+		#[cfg(feature = "ibiza")]
 		self.dot.validate_settings()?;
 
 		self.state_chain.validate_settings()?;
@@ -327,6 +343,13 @@ impl Source for CommandLineOptions {
 		self.state_chain_opts.insert_all(&mut map);
 
 		self.eth_opts.insert_all(&mut map);
+
+		#[cfg(feature = "ibiza")]
+		insert_command_line_option(
+			&mut map,
+			"dot.ws_node_endpoint",
+			&self.dot_opts.dot_ws_node_endpoint,
+		);
 
 		insert_command_line_option(&mut map, HEALTH_CHECK_HOSTNAME, &self.health_check_hostname);
 		insert_command_line_option(&mut map, HEALTH_CHECK_PORT, &self.health_check_port);
@@ -390,7 +413,11 @@ impl Settings {
 	/// "config/Default.toml" if none, with overridden values from the environment and
 	/// `CommandLineOptions`
 	pub fn new(opts: CommandLineOptions) -> Result<Self, ConfigError> {
-		Self::load_settings_from_all_sources("config/Default.toml", opts.config_path.clone(), opts)
+		#[cfg(not(feature = "ibiza"))]
+		let default_settings = "config/Default.toml";
+		#[cfg(feature = "ibiza")]
+		let default_settings = "config/IbizaDefault.toml";
+		Self::load_settings_from_all_sources(default_settings, opts.config_path.clone(), opts)
 	}
 
 	#[cfg(test)]
@@ -515,7 +542,13 @@ mod tests {
 		let settings1 = Settings::new(opts).unwrap();
 
 		let mut opts = CommandLineOptions::new();
-		opts.config_path = Some("config/Default.toml".to_owned());
+
+		#[cfg(not(feature = "ibiza"))]
+		let default_file = "config/Default.toml";
+		#[cfg(feature = "ibiza")]
+		let default_file = "config/IbizaDefault.toml";
+
+		opts.config_path = Some(default_file.to_owned());
 
 		let settings2 = Settings::new(opts).unwrap();
 
@@ -548,6 +581,8 @@ mod tests {
 				eth_http_node_endpoint: Some("http://endpoint:4321".to_owned()),
 				eth_private_key_file: Some(PathBuf::from_str("eth_key_file").unwrap()),
 			},
+			#[cfg(feature = "ibiza")]
+			dot_opts: DotOptions { dot_ws_node_endpoint: Some("ws://endpoint:4321".to_owned()) },
 			health_check_hostname: Some("health_check_hostname".to_owned()),
 			health_check_port: Some(1337),
 			signing_db_file: Some(PathBuf::from_str("also/not/real.db").unwrap()),

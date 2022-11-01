@@ -81,19 +81,29 @@ where
 #[cfg(test)]
 mod tests {
 
-	use crate::{dot::witnesser::MiniHeader, logging::test_utils::new_test_logger};
+	use crate::logging::test_utils::new_test_logger;
 
 	use super::*;
 
 	const FAILURE_BLOCK_NUMBER: u64 = 30;
 
-	pub async fn test_block_head_stream_from<HeaderStream>(
+	struct MockHeader {
+		block_number: u64,
+	}
+
+	impl BlockNumberable for MockHeader {
+		fn block_number(&self) -> u64 {
+			self.block_number
+		}
+	}
+
+	async fn test_block_head_stream_from<HeaderStream>(
 		from_block: u64,
 		safe_head_stream: HeaderStream,
 		logger: &slog::Logger,
-	) -> Result<Pin<Box<dyn Stream<Item = MiniHeader> + Send + 'static>>>
+	) -> Result<Pin<Box<dyn Stream<Item = MockHeader> + Send + 'static>>>
 	where
-		HeaderStream: Stream<Item = MiniHeader> + 'static + Send,
+		HeaderStream: Stream<Item = MockHeader> + 'static + Send,
 	{
 		block_head_stream_from(
 			from_block,
@@ -104,7 +114,7 @@ mod tests {
 					if block_number == FAILURE_BLOCK_NUMBER {
 						Err(anyhow!("This is not the block you're looking for"))
 					} else {
-						Ok(MiniHeader { block_number })
+						Ok(MockHeader { block_number })
 					}
 				})
 			},
@@ -113,8 +123,8 @@ mod tests {
 		.await
 	}
 
-	fn mini_header(block_number: u64) -> MiniHeader {
-		MiniHeader { block_number }
+	fn mock_header(block_number: u64) -> MockHeader {
+		MockHeader { block_number }
 	}
 
 	#[tokio::test]
@@ -126,7 +136,7 @@ mod tests {
 		let inner_stream_ends_at = 20;
 
 		let safe_head_stream =
-			stream::iter((inner_stream_starts_at..inner_stream_ends_at).map(mini_header));
+			stream::iter((inner_stream_starts_at..inner_stream_ends_at).map(mock_header));
 
 		let mut block_head_stream_from =
 			test_block_head_stream_from(from_block, safe_head_stream, &logger)
@@ -153,7 +163,7 @@ mod tests {
 		let inner_stream_ends_at = 20;
 
 		let safe_head_stream =
-			stream::iter((inner_stream_starts_at..inner_stream_ends_at).map(mini_header));
+			stream::iter((inner_stream_starts_at..inner_stream_ends_at).map(mock_header));
 
 		let mut block_head_stream_from =
 			test_block_head_stream_from(from_block, safe_head_stream, &logger)
@@ -180,7 +190,7 @@ mod tests {
 		let inner_stream_ends_at = 40;
 
 		let safe_head_stream =
-			stream::iter((inner_stream_starts_at..inner_stream_ends_at).map(mini_header));
+			stream::iter((inner_stream_starts_at..inner_stream_ends_at).map(mock_header));
 
 		let mut block_head_stream_from =
 			test_block_head_stream_from(from_block, safe_head_stream, &logger)
