@@ -30,7 +30,7 @@ use frame_support::{
 use codec::{Decode, Encode, MaxEncodedLen};
 use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, MaybeSerializeDeserialize, Saturating, UniqueSaturatedInto},
-	DispatchError, RuntimeDebug,
+	DispatchError, Permill, RuntimeDebug,
 };
 use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 
@@ -111,7 +111,7 @@ pub mod pallet {
 	/// The slashing rate in percent - slash per day = n % of MBA.
 	#[pallet::storage]
 	#[pallet::getter(fn slashing_rate)]
-	pub type SlashingRate<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
+	pub type SlashingRate<T: Config> = StorageValue<_, Permill, ValueQuery>;
 
 	/// The number of tokens currently off-chain.
 	#[pallet::storage]
@@ -144,8 +144,6 @@ pub mod pallet {
 		InsufficientLiquidity,
 		/// Not enough reserves.
 		InsufficientReserves,
-		/// Invalid Slashing Rate: Has to be between 0 and 100
-		InvalidSlashingRate,
 		/// No pending claim for this ID.
 		NoPendingClaimForThisID,
 	}
@@ -189,22 +187,17 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_system::error::BadOrigin)
-		/// - [InvalidSlashingRate](Error::InvalidSlashingRate)
 		///
 		/// ## Dependencies
 		///
 		/// - [EnsureGovernance]
 		#[pallet::weight(T::WeightInfo::set_slashing_rate())]
-		pub fn set_slashing_rate(
-			origin: OriginFor<T>,
-			slashing_rate: T::Balance,
-		) -> DispatchResultWithPostInfo {
+		pub fn set_slashing_rate(origin: OriginFor<T>, slashing_rate: Permill) -> DispatchResult {
 			// Ensure the extrinsic was executed by the governance
 			T::EnsureGovernance::ensure_origin(origin)?;
-			ensure!(slashing_rate <= T::Balance::from(100u32), Error::<T>::InvalidSlashingRate);
 			// Set the slashing rate
 			SlashingRate::<T>::set(slashing_rate);
-			Ok(().into())
+			Ok(())
 		}
 	}
 
@@ -226,7 +219,7 @@ pub mod pallet {
 		fn build(&self) {
 			TotalIssuance::<T>::set(self.total_issuance);
 			OffchainFunds::<T>::set(self.total_issuance);
-			SlashingRate::<T>::set(Default::default());
+			SlashingRate::<T>::set(Permill::zero());
 		}
 	}
 }
@@ -589,13 +582,13 @@ where
 
 	fn slash(account_id: &Self::AccountId, blocks_offline: Self::BlockNumber) {
 		// Get the slashing rate
-		let slashing_rate: T::Balance = SlashingRate::<T>::get();
+		let slashing_rate: Permill = SlashingRate::<T>::get();
 		// Get the MAB aka the bond
 		let bond = Account::<T>::get(account_id).bond;
 		// Get blocks_offline as Balance
 		let blocks_offline: T::Balance = blocks_offline.unique_saturated_into();
 		// slash per day = n % of MAB
-		let slash_per_day = (bond / T::Balance::from(100_u32)).saturating_mul(slashing_rate);
+		let slash_per_day = slashing_rate * bond;
 		// Burn per block
 		let burn_per_block = slash_per_day / T::BlocksPerDay::get().unique_saturated_into();
 		// Total amount of burn

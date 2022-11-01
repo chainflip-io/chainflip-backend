@@ -47,5 +47,8 @@ benchmarks! {
 		).is_some());
 	}
 
+	on_idle_with_nothing_to_send {
+	} : { let _ = crate::Pallet::<T>::on_idle(Default::default(), T::WeightInfo::send_ethereum_batch(2u32)); }
+
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test);
 }

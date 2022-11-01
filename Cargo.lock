@@ -770,7 +770,6 @@ dependencies = [
  "pallet-cf-vaults",
  "pallet-cf-witnesser",
  "pallet-grandpa",
- "pallet-randomness-collective-flip",
  "pallet-session",
  "pallet-timestamp",
  "pallet-transaction-payment",
@@ -915,6 +914,7 @@ name = "chainflip-cli"
 version = "0.5.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "cf-chains",
  "cf-primitives",
  "chainflip-engine",
@@ -2690,8 +2690,10 @@ dependencies = [
  "hex",
  "rand 0.6.5",
  "rocksdb",
+ "serde",
  "serde_json",
  "state-chain-runtime",
+ "tempfile",
 ]
 
 [[package]]
@@ -5515,20 +5517,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-randomness-collective-flip"
-version = "4.0.0-dev"
-source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-06+01#2e0ebad1febc40db4eceaaab04dcfe66cf266c32"
-dependencies = [
- "frame-support",
- "frame-system",
- "parity-scale-codec",
- "safe-mix",
- "scale-info",
- "sp-runtime",
- "sp-std",
-]
-
-[[package]]
 name = "pallet-session"
 version = "4.0.0-dev"
 source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-06+01#2e0ebad1febc40db4eceaaab04dcfe66cf266c32"
@@ -6924,15 +6912,6 @@ name = "ryu"
 version = "1.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4501abdff3ae82a1c1b477a17252eb69cee9e66eb915c1abaa4f44d873df9f09"
-
-[[package]]
-name = "safe-mix"
-version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6d3d055a2582e6b00ed7a31c1524040aa391092bf636328350813f3a0605215c"
-dependencies = [
- "rustc_version 0.2.3",
-]
 
 [[package]]
 name = "safemem"
@@ -9041,7 +9020,6 @@ dependencies = [
  "pallet-cf-vaults",
  "pallet-cf-witnesser",
  "pallet-grandpa",
- "pallet-randomness-collective-flip",
  "pallet-session",
  "pallet-timestamp",
  "pallet-transaction-payment",
@@ -9532,6 +9510,7 @@ dependencies = [
  "futures-core",
  "pin-project-lite 0.2.9",
  "tokio",
+ "tokio-util 0.7.3",
 ]
 
 [[package]]
@@ -10031,6 +10010,7 @@ dependencies = [
  "anyhow",
  "futures 0.3.21",
  "hex",
+ "lazy_format",
  "mockall",
  "predicates",
  "tokio",

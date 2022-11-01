@@ -21,6 +21,7 @@ use sp_runtime::{
 	RuntimeDebug,
 };
 use sp_std::{
+	cmp::min,
 	convert::{TryFrom, TryInto},
 	str, vec,
 };
@@ -509,6 +510,13 @@ impl From<CheckedTransactionParameter> for TransactionVerificationError {
 	}
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
+pub struct TransactionFee {
+	// priority + base
+	pub effective_gas_price: EthAmount,
+	pub gas_used: u128,
+}
+
 /// Required information to construct and sign an ethereum transaction. Equivalent to
 /// [ethereum::EIP1559TransactionMessage] with the following fields omitted: nonce,
 ///
@@ -525,6 +533,16 @@ pub struct UnsignedTransaction {
 	pub contract: Address,
 	pub value: U256,
 	pub data: Vec<u8>,
+}
+
+impl FeeRefundCalculator<Ethereum> for UnsignedTransaction {
+	fn return_fee_refund(
+		&self,
+		fee_paid: <Ethereum as Chain>::TransactionFee,
+	) -> <Ethereum as Chain>::ChainAmount {
+		min(self.max_fee_per_gas.unwrap_or_default().as_u128(), fee_paid.effective_gas_price)
+			.saturating_mul(fee_paid.gas_used)
+	}
 }
 
 impl UnsignedTransaction {

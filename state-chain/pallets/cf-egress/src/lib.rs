@@ -124,7 +124,7 @@ pub mod pallet {
 			if remaining_weight <= T::WeightInfo::send_ethereum_batch(1u32) ||
 				EthereumScheduledRequests::<T>::decode_len() == Some(0)
 			{
-				return 0
+				return T::WeightInfo::on_idle_with_nothing_to_send()
 			}
 
 			// Calculate the number of requests that the weight allows.
@@ -333,7 +333,6 @@ impl<T: Config> IngressFetchApi for Pallet<T> {
 				Self::get_ethereum_asset_identifier(asset).is_some(),
 				"Asset validity is checked by calling functions."
 			);
-
 			EthereumScheduledRequests::<T>::append(EthereumRequest::Fetch { intent_id, asset });
 		}
 		Self::deposit_event(Event::<T>::IngressFetchesScheduled { fetches_added });

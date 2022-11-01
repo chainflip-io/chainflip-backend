@@ -280,11 +280,12 @@ impl Engine {
 					},
 					Event::EthereumThresholdSigner(
 						// A signature request
-						pallet_cf_threshold_signature::Event::ThresholdSignatureRequest(
+						pallet_cf_threshold_signature::Event::ThresholdSignatureRequest{
+							request_id: _,
 							ceremony_id,
 							key_id,
-							_signers,
-							payload)) => {
+							signatories: _signatories,
+							payload}) => {
 
 						// if we unwrap on this, we'll panic, because we will have already succeeded
 						// on a previous submission (all nodes submit this)
@@ -296,7 +297,7 @@ impl Engine {
 					},
 					Event::EthereumThresholdSigner(
 						// A threshold has been met for this signature
-						pallet_cf_threshold_signature::Event::ThresholdDispatchComplete(..)) => {
+						pallet_cf_threshold_signature::Event::ThresholdDispatchComplete{..}) => {
 							if let EngineState::Rotation = self.engine_state {
 								// If we rotating let's witness the keys being rotated on the contract
 								let _result = state_chain_runtime::Witnesser::witness_at_epoch(

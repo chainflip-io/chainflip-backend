@@ -3,9 +3,9 @@ use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::{traits::Zero, BuildStorage};
 use state_chain_runtime::{
-	chainflip::Offence, constants::common::*, opaque::SessionKeys, AccountId, AccountRolesConfig,
-	EmissionsConfig, EthereumVaultConfig, FlipConfig, GovernanceConfig, ReputationConfig, Runtime,
-	SessionConfig, StakingConfig, System, ValidatorConfig,
+	constants::common::*, opaque::SessionKeys, AccountId, AccountRolesConfig, EmissionsConfig,
+	EthereumVaultConfig, FlipConfig, GovernanceConfig, ReputationConfig, Runtime, SessionConfig,
+	StakingConfig, System, ValidatorConfig,
 };
 
 use crate::{get_from_seed, network, GENESIS_KEY};
@@ -91,7 +91,7 @@ impl ExtBuilder {
 			},
 			reputation: ReputationConfig {
 				accrual_ratio: ACCRUAL_RATIO,
-				penalties: vec![(Offence::MissedHeartbeat, (15, 150))],
+				penalties: PENALTIES.to_vec(),
 				genesis_nodes: self.accounts.iter().map(|(id, _)| id.clone()).collect(),
 			},
 			governance: GovernanceConfig {

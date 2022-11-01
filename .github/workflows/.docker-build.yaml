@@ -10,7 +10,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: "${{ github.repository }}/rust-base"
+  IMAGE_NAME: '${{ github.repository }}/rust-base'
   TAG: ${{ github.event.inputs.nightly_version }}
 
 jobs:

@@ -277,7 +277,7 @@ pub trait EmissionsTrigger {
 	fn trigger_emissions();
 }
 
-/// Provides a chain-specific replay protection instance
+/// Provides chain-specific replay protection data.
 pub trait ReplayProtectionProvider<Abi: ChainAbi> {
 	fn replay_protection() -> Abi::ReplayProtection;
 }
@@ -339,9 +339,9 @@ pub trait Slashing {
 	fn slash(validator_id: &Self::AccountId, blocks_offline: Self::BlockNumber);
 }
 
-/// Something that can nominate signers from the set of active validators.
-pub trait SignerNomination {
-	/// The id type of signers. Most likely the same as the runtime's `ValidatorId`.
+/// Can nominate a single account.
+pub trait SingleSignerNomination {
+	/// The id type of signer
 	type SignerId;
 
 	/// Returns a random live signer, excluding particular provided signers. The seed value is used
@@ -350,6 +350,11 @@ pub trait SignerNomination {
 		seed: H,
 		exclude_ids: &[Self::SignerId],
 	) -> Option<Self::SignerId>;
+}
+
+pub trait ThresholdSignerNomination {
+	/// The id type of signers
+	type SignerId;
 
 	/// Returns a list of live signers where the number of signers is sufficient to author a
 	/// threshold signature. The seed value is used as a source of randomness.
