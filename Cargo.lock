@@ -1011,7 +1011,6 @@ dependencies = [
  "rlp",
  "rocksdb",
  "sc-rpc-api",
- "scale-info",
  "schnorrkel",
  "secp256k1 0.20.3",
  "secp256k1 0.21.3",
