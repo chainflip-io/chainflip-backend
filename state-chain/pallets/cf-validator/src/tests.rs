@@ -14,7 +14,7 @@ const ALICE: u64 = 100;
 const BOB: u64 = 101;
 const GENESIS_EPOCH: u32 = 1;
 
-fn assert_epoch_number(n: EpochIndex) {
+fn assert_epoch_index(n: EpochIndex) {
 	assert_eq!(
 		ValidatorPallet::epoch_index(),
 		n,
@@ -27,7 +27,7 @@ fn assert_epoch_number(n: EpochIndex) {
 
 macro_rules! assert_default_rotation_outcome {
 	() => {
-		assert_epoch_number(GENESIS_EPOCH + 1);
+		assert_epoch_index(GENESIS_EPOCH + 1);
 		assert_eq!(Bond::<Test>::get(), BOND, "bond should be updated");
 		assert_eq!(ValidatorPallet::current_authorities(), AUCTION_WINNERS.to_vec());
 	};
@@ -101,7 +101,7 @@ fn should_retry_rotation_until_success_with_failing_auctions() {
 		run_to_block(EPOCH_DURATION);
 		// Move forward a few blocks, the auction will be failing
 		move_forward_blocks(100);
-		assert_epoch_number(GENESIS_EPOCH);
+		assert_epoch_index(GENESIS_EPOCH);
 		assert_eq!(CurrentRotationPhase::<Test>::get(), RotationPhase::<Test>::Idle);
 
 		// Now that we have bidders, we should succeed the auction, and complete the rotation
@@ -116,7 +116,7 @@ fn should_retry_rotation_until_success_with_failing_auctions() {
 		while CurrentRotationPhase::<Test>::get() != RotationPhase::<Test>::Idle {
 			move_forward_blocks(1);
 		}
-		assert_epoch_number(GENESIS_EPOCH + 1);
+		assert_epoch_index(GENESIS_EPOCH + 1);
 	});
 }
 
@@ -186,7 +186,7 @@ fn genesis() {
 			"We should have a set of validators at genesis"
 		);
 		assert_eq!(Bond::<Test>::get(), GENESIS_BOND, "We should have a minimum bid at genesis");
-		assert_epoch_number(GENESIS_EPOCH);
+		assert_epoch_index(GENESIS_EPOCH);
 		assert_invariants!();
 	});
 }

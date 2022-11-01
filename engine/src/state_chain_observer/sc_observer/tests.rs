@@ -128,7 +128,7 @@ async fn starts_witnessing_when_current_authority() {
 			.await
 			.unwrap(),
 		vec![EpochStart {
-			index: initial_epoch,
+			epoch_index: initial_epoch,
 			eth_block: initial_epoch_from_block,
 			current: true,
 			participant: true
@@ -245,13 +245,13 @@ async fn starts_witnessing_when_historic_on_startup() {
 			.unwrap(),
 		vec![
 			EpochStart {
-				index: active_epoch,
+				epoch_index: active_epoch,
 				eth_block: active_epoch_from_block,
 				current: false,
 				participant: true
 			},
 			EpochStart {
-				index: current_epoch,
+				epoch_index: current_epoch,
 				eth_block: current_epoch_from_block,
 				current: true,
 				participant: false
@@ -351,7 +351,7 @@ async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
 			.await
 			.unwrap(),
 		vec![EpochStart {
-			index: initial_epoch,
+			epoch_index: initial_epoch,
 			eth_block: initial_epoch_from_block,
 			current: true,
 			participant: false
@@ -494,13 +494,13 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
 			.unwrap(),
 		vec![
 			EpochStart {
-				index: initial_epoch,
+				epoch_index: initial_epoch,
 				eth_block: initial_epoch_from_block,
 				current: true,
 				participant: true
 			},
 			EpochStart {
-				index: new_epoch,
+				epoch_index: new_epoch,
 				eth_block: new_epoch_from_block,
 				current: true,
 				participant: true
@@ -646,13 +646,13 @@ async fn not_historical_to_authority_on_new_epoch() {
 			.unwrap(),
 		vec![
 			EpochStart {
-				index: initial_epoch,
+				epoch_index: initial_epoch,
 				eth_block: initial_epoch_from_block,
 				current: true,
 				participant: false
 			},
 			EpochStart {
-				index: new_epoch,
+				epoch_index: new_epoch,
 				eth_block: new_epoch_from_block,
 				current: true,
 				participant: true
@@ -797,13 +797,13 @@ async fn current_authority_to_historical_on_new_epoch_event() {
 			.unwrap(),
 		vec![
 			EpochStart {
-				index: initial_epoch,
+				epoch_index: initial_epoch,
 				eth_block: initial_epoch_from_block,
 				current: true,
 				participant: true
 			},
 			EpochStart {
-				index: new_epoch_from_block,
+				epoch_index: new_epoch,
 				eth_block: new_epoch_from_block,
 				current: true,
 				participant: false

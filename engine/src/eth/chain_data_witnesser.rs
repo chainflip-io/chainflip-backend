@@ -65,7 +65,7 @@ where
                                             state: latest_data,
                                         },
                                     )),
-                                    epoch_index: epoch_start.index
+                                    epoch_index: epoch_start.epoch_index
                                 }),
                                 &logger,
                             )

@@ -101,7 +101,7 @@ impl SignatureAndEvent {
 #[derive(Clone, Debug)]
 #[cfg_attr(test, derive(PartialEq))]
 pub struct EpochStart {
-	pub index: EpochIndex,
+	pub epoch_index: EpochIndex,
 	pub eth_block: <cf_chains::Ethereum as cf_chains::Chain>::ChainBlockNumber,
 	pub current: bool,
 	pub participant: bool,

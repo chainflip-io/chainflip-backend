@@ -57,7 +57,7 @@ where
 
 					contract_witnesser
 						.handle_block_events(
-							epoch_start.index,
+							epoch_start.epoch_index,
 							block.block_number,
 							block,
 							state_chain_client.clone(),

@@ -218,7 +218,7 @@ where
 
             async move {
                 epoch_start_sender.send(EpochStart {
-                    index,
+                    epoch_index: index,
                     eth_block: state_chain_client
                         .storage_map_entry::<pallet_cf_vaults::Vaults<
                             state_chain_runtime::Runtime,
