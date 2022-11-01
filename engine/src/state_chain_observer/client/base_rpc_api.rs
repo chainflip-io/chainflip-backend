@@ -27,7 +27,7 @@ use mockall::automock;
 
 use crate::settings;
 
-trait RawRpcApi:
+pub trait RawRpcApi:
 	CustomApiClient
 	+ SystemApiClient<state_chain_runtime::Hash, state_chain_runtime::BlockNumber>
 	+ StateApiClient<state_chain_runtime::Hash>
@@ -108,15 +108,11 @@ pub trait BaseRpcApi {
 		jsonrpsee::core::client::Subscription<sp_runtime::generic::Header<u32, BlakeTwo256>>,
 	>;
 
-	async fn rotate_keys(&self) -> RpcResult<Bytes>;
-
 	async fn runtime_version(&self) -> RpcResult<RuntimeVersion>;
-
-	async fn is_auction_phase(&self) -> RpcResult<bool>;
 }
 
 pub struct BaseRpcClient<RawRpcClient> {
-	raw_rpc_client: RawRpcClient,
+	pub raw_rpc_client: RawRpcClient,
 }
 
 impl BaseRpcClient<jsonrpsee::ws_client::WsClient> {
@@ -205,15 +201,7 @@ impl<RawRpcClient: RawRpcApi + Send + Sync> BaseRpcApi for BaseRpcClient<RawRpcC
 		self.raw_rpc_client.subscribe_finalized_heads().await
 	}
 
-	async fn rotate_keys(&self) -> RpcResult<Bytes> {
-		self.raw_rpc_client.rotate_keys().await
-	}
-
 	async fn runtime_version(&self) -> RpcResult<RuntimeVersion> {
 		self.raw_rpc_client.runtime_version(None).await
-	}
-
-	async fn is_auction_phase(&self) -> RpcResult<bool> {
-		self.raw_rpc_client.cf_is_auction_phase(None).await
 	}
 }
