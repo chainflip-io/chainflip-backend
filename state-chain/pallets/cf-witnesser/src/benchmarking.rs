@@ -6,6 +6,7 @@ use super::*;
 use cf_primitives::AccountRole;
 use cf_traits::AccountRoleRegistry;
 use frame_benchmarking::{benchmarks, whitelisted_caller};
+use frame_support::traits::Hooks;
 use frame_system::RawOrigin;
 use sp_std::{boxed::Box, vec};
 
@@ -38,6 +39,10 @@ benchmarks! {
 			Votes::<T>::insert(0, call_hash, vec![0]);
 		}
 	} : { let _ = Votes::<T>::clear_prefix(0, u32::MAX, None); }
+
+	on_idle_with_nothing_to_remove {
+		EpochsToCull::<T>::append(1);
+	} : { let _ = crate::Pallet::<T>::on_idle(Default::default(), Default::default()); }
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
 }

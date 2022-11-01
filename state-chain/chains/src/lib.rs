@@ -44,6 +44,8 @@ pub trait Chain: Member + Parameter {
 		+ FullCodec
 		+ MaxEncodedLen;
 
+	type TransactionFee: Member + Parameter + MaxEncodedLen + BenchmarkValue;
+
 	type TrackedData: Member + Parameter + MaxEncodedLen + Clone + Age<Self> + BenchmarkValue;
 
 	type ChainAsset: Member + Parameter + MaxEncodedLen;
@@ -79,11 +81,16 @@ pub trait ChainCrypto: Chain {
 
 /// Common abi-related types and operations for some external chain.
 pub trait ChainAbi: ChainCrypto {
-	type UnsignedTransaction: Member + Parameter + Default + BenchmarkValue;
+	type UnsignedTransaction: Member
+		+ Parameter
+		+ Default
+		+ BenchmarkValue
+		+ FeeRefundCalculator<Self>;
 	type SignedTransaction: Member + Parameter + BenchmarkValue;
 	type SignerCredential: Member + Parameter + BenchmarkValue;
 	type ReplayProtection: Member + Parameter;
 	type ValidationError;
+	type ApiCallExtraData;
 
 	/// Verify the signed transaction when it is submitted to the state chain by the nominated
 	/// signer.
@@ -134,7 +141,7 @@ where
 	RuntimeDebug, Copy, Clone, Default, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo,
 )]
 pub struct FetchAssetParams<T: Chain> {
-	pub swap_id: IntentId,
+	pub intent_id: IntentId,
 	pub asset: T::ChainAsset,
 }
 
@@ -157,6 +164,7 @@ pub trait IngressAddress {
 pub trait SetAggKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
 		replay_protection: Abi::ReplayProtection,
+		chain_specific_data: Abi::ApiCallExtraData,
 		new_key: <Abi as ChainCrypto>::AggKey,
 	) -> Self;
 }
@@ -201,9 +209,20 @@ pub trait RegisterClaim<Abi: ChainAbi>: ApiCall<Abi> {
 pub trait AllBatch<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
 		replay_protection: Abi::ReplayProtection,
+		chain_specific_data: Abi::ApiCallExtraData,
 		fetch_params: Vec<FetchAssetParams<Abi>>,
 		transfer_params: Vec<TransferAssetParams<Abi>>,
 	) -> Self;
+}
+
+pub trait FeeRefundCalculator<C: Chain> {
+	/// Takes the generic TransactionFee, allowing us to compare with the fee
+	/// we expected (contained in self) and return the fee we want to refund
+	/// the signing account.
+	fn return_fee_refund(
+		&self,
+		fee_paid: <C as Chain>::TransactionFee,
+	) -> <C as Chain>::ChainAmount;
 }
 
 #[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -212,6 +231,7 @@ pub struct Ethereum;
 impl Chain for Ethereum {
 	type ChainBlockNumber = u64;
 	type ChainAmount = EthAmount;
+	type TransactionFee = eth::TransactionFee;
 	type TrackedData = eth::TrackedData<Self>;
 	type ChainAccount = eth::Address;
 	type ChainAsset = eth::Address;
@@ -243,7 +263,10 @@ impl ChainCrypto for Ethereum {
 pub mod mocks {
 	use sp_std::marker::PhantomData;
 
-	use crate::{eth::api::EthereumReplayProtection, *};
+	use crate::{
+		eth::{api::EthereumReplayProtection, TransactionFee},
+		*,
+	};
 
 	#[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	pub struct MockEthereum;
@@ -253,6 +276,7 @@ pub mod mocks {
 		type ChainBlockNumber = u64;
 		type ChainAmount = EthAmount;
 		type TrackedData = MockTrackedData;
+		type TransactionFee = TransactionFee;
 		type ChainAccount = (); // Currently, we don't care about this since we don't use them in tests
 		type ChainAsset = (); // Currently, we don't care about this since we don't use them in tests
 	}
@@ -289,6 +313,15 @@ pub mod mocks {
 		/// Simulate a transaction signature.
 		pub fn signed(self, signature: Validity) -> MockSignedTransation<Self> {
 			MockSignedTransation::<Self> { transaction: self, signature }
+		}
+	}
+
+	impl FeeRefundCalculator<MockEthereum> for MockUnsignedTransaction {
+		fn return_fee_refund(
+			&self,
+			_fee_paid: <MockEthereum as Chain>::TransactionFee,
+		) -> <MockEthereum as Chain>::ChainAmount {
+			<MockEthereum as Chain>::ChainAmount::default()
 		}
 	}
 
@@ -360,12 +393,16 @@ pub mod mocks {
 
 	pub const ETH_TX_HASH: <MockEthereum as ChainCrypto>::TransactionHash = [0xbc; 4];
 
+	pub const ETH_TX_FEE: <MockEthereum as Chain>::TransactionFee =
+		TransactionFee { effective_gas_price: 200, gas_used: 100 };
+
 	impl ChainAbi for MockEthereum {
 		type UnsignedTransaction = MockUnsignedTransaction;
 		type SignedTransaction = MockSignedTransation<Self::UnsignedTransaction>;
 		type SignerCredential = Validity;
 		type ReplayProtection = EthereumReplayProtection;
 		type ValidationError = &'static str;
+		type ApiCallExtraData = ();
 
 		fn verify_signed_transaction(
 			unsigned_tx: &Self::UnsignedTransaction,

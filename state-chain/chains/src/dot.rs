@@ -81,11 +81,14 @@ pub enum PolkadotProxyType {
 #[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct Polkadot;
 
+type DotAmount = u128;
+
 impl Chain for Polkadot {
 	type ChainBlockNumber = u64;
-	type ChainAmount = u128;
+	type ChainAmount = DotAmount;
 	type TrackedData = eth::TrackedData<Self>;
 	type ChainAccount = PolkadotAccountId;
+	type TransactionFee = Self::ChainAmount;
 	type ChainAsset = ();
 }
 
@@ -109,12 +112,22 @@ impl ChainCrypto for Polkadot {
 	}
 }
 
+impl FeeRefundCalculator<Polkadot> for PolkadotTransactionData {
+	fn return_fee_refund(
+		&self,
+		fee_paid: <Polkadot as Chain>::TransactionFee,
+	) -> <Polkadot as Chain>::ChainAmount {
+		fee_paid
+	}
+}
+
 impl ChainAbi for Polkadot {
 	type UnsignedTransaction = PolkadotTransactionData;
 	type SignedTransaction = Vec<u8>;
 	// Not needed in Polkadot since we can sign natively with the AggKey.
 	type SignerCredential = ();
 	type ReplayProtection = PolkadotReplayProtection;
+	type ApiCallExtraData = CurrentVaultAndProxy;
 	type ValidationError = ();
 
 	// This function is not needed in Polkadot.
@@ -125,6 +138,11 @@ impl ChainAbi for Polkadot {
 	) -> Result<Self::TransactionHash, Self::ValidationError> {
 		Err(())
 	}
+}
+
+pub struct CurrentVaultAndProxy {
+	pub vault_account: PolkadotAccountId,
+	pub proxy_account: PolkadotAccountId,
 }
 
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]
@@ -743,7 +761,7 @@ impl Default for NetworkChoice {
 
 impl PolkadotReplayProtection {
 	#[allow(dead_code)]
-	fn new(nonce: PolkadotIndex, tip: PolkadotBalance, network_choice: NetworkChoice) -> Self {
+	pub fn new(nonce: PolkadotIndex, tip: PolkadotBalance, network_choice: NetworkChoice) -> Self {
 		Self {
 			chain_data: match network_choice {
 				NetworkChoice::PolkadotMainnet => ChainData {

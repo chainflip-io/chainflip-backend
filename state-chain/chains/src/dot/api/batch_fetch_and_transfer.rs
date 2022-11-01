@@ -7,26 +7,29 @@ use crate::dot::{
 	PolkadotProxyType, PolkadotReplayProtection, PolkadotRuntimeCall, ProxyCall, UtilityCall,
 };
 
-use crate::{ApiCall, ChainAbi, ChainCrypto, IntentId};
+use crate::{ApiCall, ChainAbi, ChainCrypto, FetchAssetParams, TransferAssetParams};
 
 use sp_runtime::RuntimeDebug;
 
 /// Represents all the arguments required to build the call to fetch assets for all given intent
 /// ids.
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
-pub struct BatchFetch {
+pub struct BatchFetchAndTransfer {
 	/// The handler for creating and signing polkadot extrinsics
 	pub extrinsic_handler: PolkadotExtrinsicBuilder,
 	/// The list of all inbound deposits that are to be fetched in this batch call.
-	pub intent_ids: Vec<IntentId>,
+	pub fetch_params: Vec<FetchAssetParams<Polkadot>>,
+	/// The list of all outbound transfers that are to be executed in this call.
+	pub transfer_params: Vec<TransferAssetParams<Polkadot>>,
 	/// The vault anonymous Polkadot AccountId
 	pub vault_account: PolkadotAccountId,
 }
 
-impl BatchFetch {
+impl BatchFetchAndTransfer {
 	pub fn new_unsigned(
 		replay_protection: PolkadotReplayProtection,
-		intent_ids: Vec<IntentId>,
+		fetch_params: Vec<FetchAssetParams<Polkadot>>,
+		transfer_params: Vec<TransferAssetParams<Polkadot>>,
 		proxy_account: PolkadotAccountId,
 		vault_account: PolkadotAccountId,
 	) -> Self {
@@ -35,7 +38,8 @@ impl BatchFetch {
 				replay_protection,
 				proxy_account,
 			),
-			intent_ids,
+			fetch_params,
+			transfer_params,
 			vault_account,
 		};
 		// create and insert polkadot runtime call
@@ -55,27 +59,41 @@ impl BatchFetch {
 			real: PolkadotAccountIdLookup::from(self.vault_account.clone()),
 			force_proxy_type: Some(PolkadotProxyType::Any),
 			call: Box::new(PolkadotRuntimeCall::Utility(UtilityCall::batch {
-				calls: self
-					.intent_ids
-					.iter()
-					.map(|intent_id| {
-						PolkadotRuntimeCall::Utility(UtilityCall::as_derivative {
-							index: *intent_id as u16, // todo: THIS IS TO BE REVISITED LATER
-							call: Box::new(PolkadotRuntimeCall::Balances(
-								BalancesCall::transfer_all {
-									dest: PolkadotAccountIdLookup::from(self.vault_account.clone()),
-									keep_alive: false,
-								},
-							)),
+				calls: [
+					self.fetch_params
+						.iter()
+						.map(|fetch_param| {
+							PolkadotRuntimeCall::Utility(UtilityCall::as_derivative {
+								index: fetch_param.intent_id as u16, /* todo: THIS IS TO BE
+								                                      * REVISITED LATER */
+								call: Box::new(PolkadotRuntimeCall::Balances(
+									BalancesCall::transfer_all {
+										dest: PolkadotAccountIdLookup::from(
+											self.vault_account.clone(),
+										),
+										keep_alive: false,
+									},
+								)),
+							})
 						})
-					})
-					.collect::<Vec<PolkadotRuntimeCall>>(),
+						.collect::<Vec<PolkadotRuntimeCall>>(),
+					self.transfer_params
+						.iter()
+						.map(|transfer_param| {
+							PolkadotRuntimeCall::Balances(BalancesCall::transfer {
+								dest: PolkadotAccountIdLookup::from(transfer_param.to.clone()),
+								value: transfer_param.amount,
+							})
+						})
+						.collect::<Vec<PolkadotRuntimeCall>>(),
+				]
+				.concat(),
 			})),
 		})
 	}
 }
 
-impl ApiCall<Polkadot> for BatchFetch {
+impl ApiCall<Polkadot> for BatchFetchAndTransfer {
 	fn threshold_signature_payload(&self) -> <Polkadot as ChainCrypto>::Payload {
 		self
 		.extrinsic_handler
@@ -106,7 +124,7 @@ mod test_batch_fetch {
 	use crate::dot::{sr25519::Pair, NetworkChoice};
 	use sp_core::{
 		crypto::{AccountId32, Pair as TraitPair},
-		Hasher,
+		sr25519, Hasher,
 	};
 	use sp_runtime::{
 		traits::{BlakeTwo256, IdentifyAccount},
@@ -136,11 +154,34 @@ mod test_batch_fetch {
 		let account_id_proxy: AccountId32 =
 			MultiSigner::Sr25519(keypair_proxy.public()).into_account();
 
-		let dummy_intent_ids: Vec<u64> = vec![1, 2, 3];
+		let dummy_fetch_params: Vec<FetchAssetParams<Polkadot>> = vec![
+			FetchAssetParams::<Polkadot> { intent_id: 1, asset: () },
+			FetchAssetParams::<Polkadot> { intent_id: 2, asset: () },
+			FetchAssetParams::<Polkadot> { intent_id: 3, asset: () },
+		];
 
-		let batch_fetch_api = BatchFetch::new_unsigned(
+		let dummy_transfer_params: Vec<TransferAssetParams<Polkadot>> = vec![
+			TransferAssetParams::<Polkadot> {
+				to: MultiSigner::Sr25519(sr25519::Public([7u8; 32])).into_account(),
+				amount: 4,
+				asset: (),
+			},
+			TransferAssetParams::<Polkadot> {
+				to: MultiSigner::Sr25519(sr25519::Public([8u8; 32])).into_account(),
+				amount: 5,
+				asset: (),
+			},
+			TransferAssetParams::<Polkadot> {
+				to: MultiSigner::Sr25519(sr25519::Public([9u8; 32])).into_account(),
+				amount: 6,
+				asset: (),
+			},
+		];
+
+		let batch_fetch_api = BatchFetchAndTransfer::new_unsigned(
 			PolkadotReplayProtection::new(NONCE_1, 0, NetworkChoice::WestendTestnet),
-			dummy_intent_ids,
+			dummy_fetch_params,
+			dummy_transfer_params,
 			account_id_proxy,
 			account_id_vault,
 		);

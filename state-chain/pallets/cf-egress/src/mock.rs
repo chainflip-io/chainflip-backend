@@ -5,6 +5,7 @@ pub use cf_chains::{
 };
 pub use cf_primitives::{Asset, EthereumAddress, ExchangeRate};
 use cf_primitives::{EthAmount, IntentId};
+use cf_traits::ApiCallDataProvider;
 pub use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
 	Broadcaster, EthereumAssetsAddressProvider, ReplayProtectionProvider,
@@ -91,6 +92,10 @@ impl ReplayProtectionProvider<Ethereum> for Test {
 	}
 }
 
+impl ApiCallDataProvider<Ethereum> for Test {
+	fn chain_extra_data() -> <Ethereum as ChainAbi>::ApiCallExtraData {}
+}
+
 parameter_types! {
 	pub static LastEgressSent: Vec<(EthereumAddress, EthAmount, EthereumAddress)> = vec![];
 	pub static LastFetchesSent: Vec<(IntentId, EthereumAddress)> = vec![];
@@ -114,7 +119,7 @@ impl Broadcaster<Ethereum> for MockBroadcast {
 					.collect(),
 			);
 			LastFetchesSent::set(
-				fetches.into_iter().map(|fetch| (fetch.swap_id, fetch.asset.into())).collect(),
+				fetches.into_iter().map(|fetch| (fetch.intent_id, fetch.asset.into())).collect(),
 			);
 		}
 	}

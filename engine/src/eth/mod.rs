@@ -34,7 +34,7 @@ use crate::{
 	},
 	logging::COMPONENT_KEY,
 	settings,
-	state_chain_observer::client::{StateChainClient, StateChainRpcApi},
+	state_chain_observer::client::extrinsic_api::ExtrinsicApi,
 };
 use ethbloom::{Bloom, Input};
 use futures::StreamExt;
@@ -101,7 +101,7 @@ impl SignatureAndEvent {
 #[derive(Clone, Debug)]
 #[cfg_attr(test, derive(PartialEq))]
 pub struct EpochStart {
-	pub index: EpochIndex,
+	pub epoch_index: EpochIndex,
 	pub eth_block: <cf_chains::Ethereum as cf_chains::Chain>::ChainBlockNumber,
 	pub current: bool,
 	pub participant: bool,
@@ -420,18 +420,18 @@ pub trait EthContractWitnesser {
 
 	fn decode_log_closure(&self) -> Result<DecodeLogClosure<Self::EventParameters>>;
 
-	async fn handle_block_events<RpcClient, EthRpcClient>(
+	async fn handle_block_events<StateChainClient, EthRpcClient>(
 		&mut self,
 		epoch: EpochIndex,
 		block_number: u64,
 		block: BlockWithItems<Event<Self::EventParameters>>,
-		state_chain_client: Arc<StateChainClient<RpcClient>>,
+		state_chain_client: Arc<StateChainClient>,
 		eth_rpc: &EthRpcClient,
 		logger: &slog::Logger,
 	) -> anyhow::Result<()>
 	where
-		RpcClient: 'static + StateChainRpcApi + Sync + Send,
-		EthRpcClient: EthRpcApi + Sync + Send;
+		EthRpcClient: EthRpcApi + Sync + Send,
+		StateChainClient: ExtrinsicApi + Send + Sync;
 
 	fn contract_address(&self) -> H160;
 }

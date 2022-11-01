@@ -493,6 +493,7 @@ impl<T: Config> Pallet<T> {
 			.collect()
 	}
 
+	// penalties get
 	/// Look up the penalty for the given offence. Uses the default value if no mapping is
 	/// available.
 	fn resolve_penalty_for<O: Into<T::Offence>>(offence: O) -> Penalty<T> {

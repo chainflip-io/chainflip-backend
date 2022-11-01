@@ -11,7 +11,10 @@ use crate::{
 const SIG_NONCE: [u8; 32] = [1u8; 32];
 const PRIVATE_KEY: [u8; 32] = [2u8; 32];
 
+use cf_primitives::EthAmount;
 use libsecp256k1::{PublicKey, SecretKey};
+
+use super::TransactionFee;
 
 impl BenchmarkValue for SchnorrVerificationComponents {
 	fn benchmark_value() -> Self {
@@ -89,5 +92,17 @@ impl BenchmarkValue for UnsignedTransaction {
 impl BenchmarkValue for TrackedData<Ethereum> {
 	fn benchmark_value() -> Self {
 		Self { block_height: 1000, base_fee: 10_000_000_000, priority_fee: 2_000_000_000 }
+	}
+}
+
+impl BenchmarkValue for TransactionFee {
+	fn benchmark_value() -> Self {
+		Self { effective_gas_price: 2_000_000_000, gas_used: 50_000 }
+	}
+}
+
+impl BenchmarkValue for EthAmount {
+	fn benchmark_value() -> Self {
+		2000
 	}
 }

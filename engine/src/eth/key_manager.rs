@@ -1,8 +1,8 @@
 use crate::{
 	eth::{utils, EthRpcApi, EventParseError, SignatureAndEvent},
-	state_chain_observer::client::{StateChainClient, StateChainRpcApi},
+	state_chain_observer::client::extrinsic_api::ExtrinsicApi,
 };
-use cf_chains::eth::SchnorrVerificationComponents;
+use cf_chains::eth::{SchnorrVerificationComponents, TransactionFee};
 use cf_primitives::EpochIndex;
 use std::sync::Arc;
 use web3::{
@@ -191,18 +191,18 @@ impl EthContractWitnesser for KeyManager {
 		"KeyManager".to_string()
 	}
 
-	async fn handle_block_events<RpcClient, EthRpcClient>(
+	async fn handle_block_events<StateChainClient, EthRpcClient>(
 		&mut self,
 		epoch_index: EpochIndex,
 		block_number: u64,
 		block: BlockWithItems<Event<Self::EventParameters>>,
-		state_chain_client: Arc<StateChainClient<RpcClient>>,
+		state_chain_client: Arc<StateChainClient>,
 		eth_rpc: &EthRpcClient,
 		logger: &slog::Logger,
 	) -> anyhow::Result<()>
 	where
-		RpcClient: 'static + StateChainRpcApi + Sync + Send,
 		EthRpcClient: EthRpcApi + Sync + Send,
+		StateChainClient: ExtrinsicApi + Send + Sync,
 	{
 		for event in block.block_items {
 			slog::info!(logger, "Handling event: {}", event);
@@ -250,14 +250,12 @@ impl EthContractWitnesser for KeyManager {
 						.await;
 				},
 				KeyManagerEvent::SignatureAccepted { sig_data, .. } => {
-					let tx_fee = {
-						let TransactionReceipt { gas_used, effective_gas_price, .. } =
-							eth_rpc.transaction_receipt(event.tx_hash).await?;
-						let gas_used = gas_used.context("TransactionReceipt should have gas_used. This might be due to using a light client.")?;
-						let effective_gas_price = effective_gas_price
-							.context("TransactionReceipt should have effective gas price")?;
-						gas_used.saturating_mul(effective_gas_price)
-					};
+					let TransactionReceipt { gas_used, effective_gas_price, from, .. } =
+						eth_rpc.transaction_receipt(event.tx_hash).await?;
+					let gas_used = gas_used.context("TransactionReceipt should have gas_used. This might be due to using a light client.")?.as_u128();
+					let effective_gas_price = effective_gas_price
+						.context("TransactionReceipt should have effective gas price")?
+						.as_u128();
 					let _result = state_chain_client
 						.submit_signed_extrinsic(
 							pallet_cf_witnesser::Call::witness_at_epoch {
@@ -267,11 +265,8 @@ impl EthContractWitnesser for KeyManager {
 											s: sig_data.sig.into(),
 											k_times_g_address: sig_data.k_times_g_address.into(),
 										},
-										tx_fee: tx_fee
-											.try_into()
-											.map_err(anyhow::Error::msg)
-											.context("Failed to convert tx fee to u128")?,
-										tx_hash: event.tx_hash,
+										signer_id: from,
+										tx_fee: TransactionFee { effective_gas_price, gas_used },
 									}
 									.into(),
 								),
