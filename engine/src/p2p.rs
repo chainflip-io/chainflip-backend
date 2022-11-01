@@ -12,7 +12,7 @@ use crate::{
 	common::read_clean_and_decode_hex_str_file,
 	multisig::{eth::EthSigning, polkadot::PolkadotSigning, CryptoScheme},
 	settings::P2P as P2PSettings,
-	state_chain_observer::client::{extrinsic_api::ExtrinsicApi, storage_api::SafeStorageApi},
+	state_chain_observer::client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi},
 };
 
 pub use self::core::{PeerInfo, PeerUpdate};
@@ -69,7 +69,7 @@ pub async fn start<StateChainClient>(
 	impl Future<Output = anyhow::Result<()>>,
 )>
 where
-	StateChainClient: SafeStorageApi + ExtrinsicApi + 'static + Send + Sync,
+	StateChainClient: StorageApi + ExtrinsicApi + 'static + Send + Sync,
 {
 	if settings.ip_address == IpAddr::V4(Ipv4Addr::UNSPECIFIED) {
 		anyhow::bail!("Should provide a valid IP address");

@@ -120,7 +120,7 @@ impl<
 
 // Note 'static on the generics in this trait are only required for mockall to mock it
 #[async_trait]
-pub trait SafeStorageApi {
+pub trait StorageApi {
 	async fn storage_item<
 		Value: codec::FullCodec + 'static,
 		OnEmpty: 'static,
@@ -168,7 +168,7 @@ pub trait SafeStorageApi {
 }
 
 #[async_trait]
-impl SafeStorageApi for super::StateChainClient {
+impl StorageApi for super::StateChainClient {
 	async fn storage_item<
 		Value: codec::FullCodec + 'static,
 		OnEmpty: 'static,

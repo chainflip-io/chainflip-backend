@@ -6,7 +6,7 @@ use chainflip_engine::{
 		base_rpc_api::{BaseRpcApi, BaseRpcClient},
 		connect_to_state_chain,
 		extrinsic_api::ExtrinsicApi,
-		storage_api::SafeStorageApi,
+		storage_api::StorageApi,
 		StateChainClient,
 	},
 };

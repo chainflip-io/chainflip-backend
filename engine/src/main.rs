@@ -15,7 +15,7 @@ use chainflip_engine::{
 	settings::{CommandLineOptions, Settings},
 	state_chain_observer::{
 		self,
-		client::{extrinsic_api::ExtrinsicApi, storage_api::SafeStorageApi},
+		client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi},
 	},
 	task_scope::with_main_task_scope,
 };

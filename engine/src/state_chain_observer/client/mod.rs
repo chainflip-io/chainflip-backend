@@ -243,7 +243,7 @@ async fn inner_connect_to_state_chain(
 #[cfg(test)]
 pub mod mocks {
 	use crate::state_chain_observer::client::{
-		extrinsic_api::ExtrinsicApi, storage_api::SafeStorageApi,
+		extrinsic_api::ExtrinsicApi, storage_api::StorageApi,
 	};
 	use anyhow::Result;
 	use async_trait::async_trait;
@@ -290,7 +290,7 @@ pub mod mocks {
 					Stream<Item = anyhow::Result<state_chain_runtime::Header>> + Unpin + Send + 'static;
 		}
 		#[async_trait]
-		impl SafeStorageApi for StateChainClient {
+		impl StorageApi for StateChainClient {
 			async fn storage_item<
 				Value: codec::FullCodec + 'static,
 				OnEmpty: 'static,

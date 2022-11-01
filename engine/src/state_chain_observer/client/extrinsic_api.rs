@@ -21,7 +21,7 @@ use state_chain_runtime::AccountId;
 
 use crate::constants::MAX_EXTRINSIC_RETRY_ATTEMPTS;
 
-use super::{base_rpc_api::BaseRpcApi, storage_api::SafeStorageApi};
+use super::{base_rpc_api::BaseRpcApi, storage_api::StorageApi};
 
 // Note 'static on the generics in this trait are only required for mockall to mock it
 #[async_trait]

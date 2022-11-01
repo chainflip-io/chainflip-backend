@@ -29,7 +29,7 @@ use crate::{
 		KeyId, MessageHash,
 	},
 	p2p::{PeerInfo, PeerUpdate},
-	state_chain_observer::client::{extrinsic_api::ExtrinsicApi, storage_api::SafeStorageApi},
+	state_chain_observer::client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi},
 	task_scope::{with_task_scope, Scope},
 };
 
@@ -191,7 +191,7 @@ where
 	EthRpc: EthRpcApi + Send + Sync + 'static,
 	EthMultisigClient: MultisigClientApi<EthSigning> + Send + Sync + 'static,
 	PolkadotMultisigClient: MultisigClientApi<PolkadotSigning> + Send + Sync + 'static,
-	StateChainClient: SafeStorageApi + ExtrinsicApi + 'static + Send + Sync,
+	StateChainClient: StorageApi + ExtrinsicApi + 'static + Send + Sync,
 {
 	with_task_scope(|scope| async {
         let logger = logger.new(o!(COMPONENT_KEY => "SCObserver"));
