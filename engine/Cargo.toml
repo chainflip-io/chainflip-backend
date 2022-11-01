@@ -114,9 +114,6 @@ version = "0.18.0"
 default-features = false
 features = ["lz4"]
 
-primitives = { package = "polkadot-primitives", path = "../../primitives", default-features = false }
-
-
 # substrate deps
 [dependencies.codec]
 features = ['derive', 'full']

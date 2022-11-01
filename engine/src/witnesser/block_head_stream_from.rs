@@ -15,25 +15,24 @@ use anyhow::{anyhow, Result};
 /// block before taking any actions. If the latest block is *after* our `from_block` then we must
 /// query for the blocks before this one before yielding the "current" headers.
 pub async fn block_head_stream_from<
-	BlockHeaderStream,
-	CustomHeader,
+	HeaderStream,
+	Header,
 	// A closure that will get or generate the custom header type that we use for a particular
 	// chain.
-	GetCustomHeaderClosure,
-	CustomHeaderFut,
+	GetHeaderClosure,
+	HeaderFut,
 >(
 	from_block: u64,
-	safe_head_stream: BlockHeaderStream,
-	fn_block_number_thing: GetCustomHeaderClosure,
+	safe_head_stream: HeaderStream,
+	get_header_fn: GetHeaderClosure,
 	logger: &slog::Logger,
-) -> Result<Pin<Box<dyn Stream<Item = CustomHeader> + Send + 'static>>>
+) -> Result<Pin<Box<dyn Stream<Item = Header> + Send + 'static>>>
 where
-	BlockHeaderStream: Stream<Item = CustomHeader> + 'static + Send,
-	CustomHeader: BlockNumberable + 'static + Send,
-	GetCustomHeaderClosure: Fn(u64) -> Pin<Box<CustomHeaderFut>> + Send + 'static,
-	CustomHeaderFut: Future<Output = Result<CustomHeader>> + Send + 'static,
+	HeaderStream: Stream<Item = Header> + 'static + Send,
+	Header: BlockNumberable + 'static + Send,
+	GetHeaderClosure: Fn(u64) -> HeaderFut + Send + 'static,
+	HeaderFut: Future<Output = Result<Header>> + Send + Unpin + 'static,
 {
-	// let from_block = U64::from(from_block);
 	let mut safe_head_stream = Box::pin(safe_head_stream);
 	while let Some(best_safe_block_header) = safe_head_stream.next().await {
 		let best_safe_block_number = best_safe_block_header.block_number();
@@ -48,9 +47,8 @@ where
 		} else {
 			// our chain_head is above the from_block number
 
-			let past_heads = Box::pin(
-				stream::iter(from_block..=best_safe_block_number).then(fn_block_number_thing),
-			);
+			let past_heads =
+				Box::pin(stream::iter(from_block..=best_safe_block_number).then(get_header_fn));
 
 			return Ok(Box::pin(
 				stream::unfold(
@@ -89,13 +87,13 @@ mod tests {
 
 	const FAILURE_BLOCK_NUMBER: u64 = 30;
 
-	pub async fn test_block_head_stream_from<BlockHeaderStream>(
+	pub async fn test_block_head_stream_from<HeaderStream>(
 		from_block: u64,
-		safe_head_stream: BlockHeaderStream,
+		safe_head_stream: HeaderStream,
 		logger: &slog::Logger,
 	) -> Result<Pin<Box<dyn Stream<Item = MiniHeader> + Send + 'static>>>
 	where
-		BlockHeaderStream: Stream<Item = MiniHeader> + 'static + Send,
+		HeaderStream: Stream<Item = MiniHeader> + 'static + Send,
 	{
 		block_head_stream_from(
 			from_block,
