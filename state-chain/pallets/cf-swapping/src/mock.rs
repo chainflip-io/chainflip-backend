@@ -167,9 +167,9 @@ impl AmmPoolApi for MockAmmPoolApi {
 		_from: cf_primitives::Asset,
 		_to: ForeignChainAsset,
 		swap_input: Self::Balance,
-		fee: u16,
+		_fee: u16,
 	) -> (Self::Balance, (cf_primitives::Asset, Self::Balance)) {
-		(swap_input, (cf_primitives::Asset::Usdc, swap_input / fee as u128))
+		(swap_input, (cf_primitives::Asset::Usdc, 5))
 	}
 }
 

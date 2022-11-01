@@ -130,12 +130,14 @@ fn number_of_swaps_processed_limited_by_weight() {
 #[test]
 fn expect_earned_fees_to_be_recorded() {
 	new_test_ext().execute_with(|| {
+		const ALICE: u64 = 2_u64;
+		const BOB: u64 = 3_u64;
 		<Pallet<Test> as SwapIntentHandler>::schedule_swap(
 			Asset::Flip,
 			ForeignChainAsset { chain: ForeignChain::Ethereum, asset: Asset::Usdc },
 			10,
 			ForeignChainAddress::Eth([2; 20]),
-			2_u64,
+			ALICE,
 			2,
 		);
 		<Pallet<Test> as SwapIntentHandler>::schedule_swap(
@@ -143,18 +145,18 @@ fn expect_earned_fees_to_be_recorded() {
 			ForeignChainAsset { chain: ForeignChain::Ethereum, asset: Asset::Usdc },
 			20,
 			ForeignChainAddress::Eth([2; 20]),
-			3_u64,
+			BOB,
 			2,
 		);
 		Swapping::on_idle(1, <() as WeightInfo>::execute_swap() * 2);
 		assert_eq!(EarnedRelayerFees::<Test>::get(2, cf_primitives::Asset::Usdc), Some(5));
-		assert_eq!(EarnedRelayerFees::<Test>::get(3, cf_primitives::Asset::Usdc), Some(10));
+		assert_eq!(EarnedRelayerFees::<Test>::get(3, cf_primitives::Asset::Usdc), Some(5));
 		<Pallet<Test> as SwapIntentHandler>::schedule_swap(
 			Asset::Flip,
 			ForeignChainAsset { chain: ForeignChain::Ethereum, asset: Asset::Usdc },
 			10,
 			ForeignChainAddress::Eth([2; 20]),
-			2_u64,
+			ALICE,
 			2,
 		);
 		Swapping::on_idle(1, <() as WeightInfo>::execute_swap());

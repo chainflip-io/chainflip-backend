@@ -143,7 +143,7 @@ pub mod pallet {
 			let (swap_output, earned_fees) =
 				T::AmmPoolApi::swap(swap.from, swap.to, swap.amount, swap.relayer_commission_bps);
 			let (asset, fee) = earned_fees;
-			EarnedRelayerFees::<T>::mutate(swap.relayer_id.clone(), asset, |maybe_fees| {
+			EarnedRelayerFees::<T>::mutate(&swap.relayer_id, asset, |maybe_fees| {
 				if let Some(fees) = maybe_fees {
 					*maybe_fees = Some(fees.saturating_add(fee))
 				} else {
