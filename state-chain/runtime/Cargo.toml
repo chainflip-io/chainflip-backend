@@ -108,6 +108,11 @@ default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'chainflip-monthly-2022-06+01'
 
+[dependencies.pallet-randomness-collective-flip]
+default-features = false
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'chainflip-monthly-2022-06+01'
+
 [dependencies.pallet-timestamp]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
@@ -254,6 +259,7 @@ std = [
   'pallet-cf-vaults/std',
   'pallet-cf-witnesser/std',
   'pallet-grandpa/std',
+  'pallet-randomness-collective-flip/std',
   'pallet-session/std',
   'pallet-timestamp/std',
   'pallet-transaction-payment/std',
