@@ -48,11 +48,24 @@ pub struct Eth {
 	pub private_key_file: PathBuf,
 }
 
+#[derive(Debug, Deserialize, Clone, Default)]
+pub struct Dot {
+	pub ws_node_endpoint: String,
+}
+
 impl Eth {
 	pub fn validate_settings(&self) -> Result<(), ConfigError> {
 		parse_websocket_endpoint(&self.ws_node_endpoint)
 			.map_err(|e| ConfigError::Message(e.to_string()))?;
 		parse_http_endpoint(&self.http_node_endpoint)
+			.map_err(|e| ConfigError::Message(e.to_string()))?;
+		Ok(())
+	}
+}
+
+impl Dot {
+	pub fn validate_settings(&self) -> Result<(), ConfigError> {
+		parse_websocket_endpoint(&self.ws_node_endpoint)
 			.map_err(|e| ConfigError::Message(e.to_string()))?;
 		Ok(())
 	}
@@ -81,6 +94,7 @@ pub struct Settings {
 	pub node_p2p: P2P,
 	pub state_chain: StateChain,
 	pub eth: Eth,
+	pub dot: Dot,
 	pub health_check: Option<HealthCheck>,
 	pub signing: Signing,
 	#[serde(default)]
@@ -274,6 +288,8 @@ impl CfSettings for Settings {
 
 	fn validate_settings(&self) -> Result<(), ConfigError> {
 		self.eth.validate_settings()?;
+
+		self.dot.validate_settings()?;
 
 		self.state_chain.validate_settings()?;
 
