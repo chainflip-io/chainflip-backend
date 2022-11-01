@@ -1,5 +1,5 @@
 #[cfg(feature = "ibiza")]
-use cf_chains::dot::{PolkadotAccountId, PolkadotConfig};
+use cf_chains::dot::{PolkadotAccountId, WESTEND_CONFIG};
 use cf_chains::eth::CHAIN_ID_GOERLI;
 use cf_primitives::AccountRole;
 use sc_service::{ChainType, Properties};
@@ -35,18 +35,9 @@ const GENESIS_STAKE_AMOUNT_DEFAULT: FlipBalance = 5_000 * FLIPPERINOS_PER_FLIP;
 const ETH_DEPLOYMENT_BLOCK_DEFAULT: u64 = 0;
 const ETH_PRIORITY_FEE_PERCENTILE_DEFAULT: u8 = 50;
 
-// Westend testnet
 #[cfg(feature = "ibiza")]
-pub const WESTEND_CONFIG: PolkadotConfig = PolkadotConfig {
-	spec_version: 9300,
-	transaction_version: 13,
-	genesis_hash: hex_literal::hex!(
-		"e143f23803ac50e8f6f8e62695d1ce9e4e1d68aa36c1cd2cfd15340213f3423e"
-	),
-	block_hash_count: 4096,
-};
-
 pub const POLKADOT_VAULT_ACCOUNT: Option<PolkadotAccountId> = None;
+#[cfg(feature = "ibiza")]
 pub const POLKADOT_PROXY_ACCOUNT: Option<PolkadotAccountId> = None;
 
 /// Generate a crypto pair from seed.

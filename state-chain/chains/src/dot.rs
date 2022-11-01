@@ -52,22 +52,24 @@ pub type PolkadotUncheckedExtrinsic =
 pub type PolkadotPayload = SignedPayload<PolkadotRuntimeCall, PolkadotSignedExtra>;
 pub type EncodedPolkadotPayload = Vec<u8>;
 
+// Westend testnet
+#[cfg(feature = "ibiza")]
+pub const WESTEND_CONFIG: PolkadotConfig = PolkadotConfig {
+	spec_version: 9310,
+	transaction_version: 14,
+	genesis_hash: hex_literal::hex!(
+		"e143f23803ac50e8f6f8e62695d1ce9e4e1d68aa36c1cd2cfd15340213f3423e"
+	),
+	block_hash_count: 4096,
+};
+
 // Polkadot mainnet
+#[cfg(feature = "ibiza")]
 pub const POLKADOT_CONFIG: PolkadotConfig = PolkadotConfig {
 	spec_version: 9300,
 	transaction_version: 15,
 	genesis_hash: hex_literal::hex!(
 		"91b171bb158e2d3848fa23a9f1c25182fb8e20313b2c1eb49219da7a70ce90c3"
-	),
-	block_hash_count: 4096,
-};
-
-// Westend testnet
-pub const WESTEND_CONFIG: PolkadotConfig = PolkadotConfig {
-	spec_version: 9300,
-	transaction_version: 13,
-	genesis_hash: hex_literal::hex!(
-		"e143f23803ac50e8f6f8e62695d1ce9e4e1d68aa36c1cd2cfd15340213f3423e"
 	),
 	block_hash_count: 4096,
 };
@@ -661,6 +663,9 @@ impl SignedExtension for PolkadotSignedExtra {
 	type Pre = ();
 	const IDENTIFIER: &'static str = "PolkadotSignedExtra";
 
+	// This is a dummy implementation of additional_signed required by SignedPayload. This is never
+	// actually used since the extrinsic builder that constructs the payload uses its own
+	// additional_signed and constructs payload from raw.
 	fn additional_signed(
 		&self,
 	) -> sp_std::result::Result<Self::AdditionalSigned, TransactionValidityError> {
