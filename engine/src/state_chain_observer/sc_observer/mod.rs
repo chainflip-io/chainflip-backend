@@ -339,12 +339,13 @@ where
                                                 ).await;
                                             }
                                             state_chain_runtime::Event::EthereumThresholdSigner(
-                                                pallet_cf_threshold_signature::Event::ThresholdSignatureRequest(
+                                                pallet_cf_threshold_signature::Event::ThresholdSignatureRequest{
+                                                    request_id: _,
                                                     ceremony_id,
                                                     key_id,
-                                                    signers,
+                                                    signatories,
                                                     payload,
-                                                ),
+                                                },
                                             ) => {
                                                 // Ceremony id tracking is global, so update all other clients
                                                 dot_multisig_client.update_latest_ceremony_id(ceremony_id);
@@ -355,7 +356,7 @@ where
                                                     state_chain_client.clone(),
                                                     ceremony_id,
                                                     KeyId(key_id),
-                                                    signers,
+                                                    signatories,
                                                     MessageHash(payload.to_fixed_bytes()),
                                                     logger.clone(),
                                                 ).await;

@@ -141,7 +141,7 @@ async fn request_claim(
 
 	for event in events {
 		if let state_chain_runtime::Event::EthereumThresholdSigner(
-			pallet_cf_threshold_signature::Event::ThresholdSignatureRequest(..),
+			pallet_cf_threshold_signature::Event::ThresholdSignatureRequest { .. },
 		) = event
 		{
 			println!("Your claim request is on chain.\nWaiting for signed claim data...");

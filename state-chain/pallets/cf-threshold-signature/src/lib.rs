@@ -280,27 +280,52 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
-		/// \[ceremony_id, key_id, signatories, payload\]
-		ThresholdSignatureRequest(CeremonyId, T::KeyId, BTreeSet<T::ValidatorId>, PayloadFor<T, I>),
-		/// \[ceremony_id, key_id, offenders\]
-		ThresholdSignatureFailed(RequestId, CeremonyId, T::KeyId, Vec<T::ValidatorId>),
+		ThresholdSignatureRequest {
+			request_id: RequestId,
+			ceremony_id: CeremonyId,
+			key_id: T::KeyId,
+			signatories: BTreeSet<T::ValidatorId>,
+			payload: PayloadFor<T, I>,
+		},
+		ThresholdSignatureFailed {
+			request_id: RequestId,
+			ceremony_id: CeremonyId,
+			key_id: T::KeyId,
+			offenders: Vec<T::ValidatorId>,
+		},
 		/// The threshold signature posted back to the chain was verified.
-		ThresholdSignatureSuccess(CeremonyId),
+		ThresholdSignatureSuccess {
+			request_id: RequestId,
+			ceremony_id: CeremonyId,
+		},
 		/// We have had a signature success and we have dispatched the associated callback
-		/// \[ceremony_id, result\]
-		ThresholdDispatchComplete(CeremonyId, DispatchResult),
-		/// \[ceremony_id\]
-		RetryRequested(CeremonyId),
-		/// The threshold signature has already succeeded or failed, so this retry is no longer
-		/// valid \[ceremony_id\]
-		StaleRetryDiscarded(CeremonyId),
-		/// \[ceremony_id, reporter_id\]
-		FailureReportProcessed(CeremonyId, T::ValidatorId),
+		ThresholdDispatchComplete {
+			request_id: RequestId,
+			ceremony_id: CeremonyId,
+			result: DispatchResult,
+		},
+		RetryRequested {
+			request_id: RequestId,
+			ceremony_id: CeremonyId,
+		},
+		/// The threshold signature has already succeeded or failed, so this retry is discarded
+		StaleRetryDiscarded {
+			ceremony_id: CeremonyId,
+		},
+		FailureReportProcessed {
+			request_id: RequestId,
+			ceremony_id: CeremonyId,
+			reporter_id: T::ValidatorId,
+		},
 		/// Not enough signers were available to reach threshold. Ceremony will be retried.
-		/// \[ceremony_id\]
-		SignersUnavailable(CeremonyId),
+		SignersUnavailable {
+			request_id: RequestId,
+			ceremony_id: CeremonyId,
+		},
 		/// The threshold signature response timeout has been updated
-		ThresholdSignatureResponseTimeoutUpdated { new_timeout: BlockNumberFor<T> },
+		ThresholdSignatureResponseTimeoutUpdated {
+			new_timeout: BlockNumberFor<T>,
+		},
 	}
 
 	#[pallet::error]
@@ -351,7 +376,7 @@ pub mod pallet {
 								None,
 								RetryPolicy::Always,
 							);
-							Event::<T, I>::RetryRequested(ceremony_id)
+							Event::<T, I>::RetryRequested { request_id, ceremony_id }
 						},
 						RetryPolicy::Never => {
 							Signature::<T, I>::insert(
@@ -360,16 +385,16 @@ pub mod pallet {
 							);
 							LiveCeremonies::<T, I>::remove(request_id);
 							Self::maybe_dispatch_callback(request_id, ceremony_id);
-							Event::<T, I>::ThresholdSignatureFailed(
+							Event::<T, I>::ThresholdSignatureFailed {
 								request_id,
 								ceremony_id,
-								failed_ceremony_context.key_id,
+								key_id: failed_ceremony_context.key_id,
 								offenders,
-							)
+							}
 						},
 					})
 				} else {
-					Self::deposit_event(Event::<T, I>::StaleRetryDiscarded(ceremony_id))
+					Self::deposit_event(Event::<T, I>::StaleRetryDiscarded { ceremony_id })
 				}
 			}
 
@@ -452,7 +477,10 @@ pub mod pallet {
 			LiveCeremonies::<T, I>::remove(request_id);
 
 			// Report the success once we know the CeremonyId is valid
-			Self::deposit_event(Event::<T, I>::ThresholdSignatureSuccess(ceremony_id));
+			Self::deposit_event(Event::<T, I>::ThresholdSignatureSuccess {
+				request_id,
+				ceremony_id,
+			});
 
 			log::debug!(
 				"Threshold signature request {} suceeded at ceremony {} after {} attempts.",
@@ -506,11 +534,15 @@ pub mod pallet {
 							Self::schedule_retry(id, 1u32.into());
 						}
 
+						Self::deposit_event(Event::<T, I>::FailureReportProcessed {
+							request_id: context.request_context.request_id,
+							ceremony_id: id,
+							reporter_id,
+						});
+
 						Ok(())
 					})
 			})?;
-
-			Self::deposit_event(Event::<T, I>::FailureReportProcessed(id, reporter_id));
 
 			Ok(().into())
 		}
@@ -579,12 +611,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				)
 			}) {
 			(
-				Event::<T, I>::ThresholdSignatureRequest(
+				Event::<T, I>::ThresholdSignatureRequest {
+					request_id,
 					ceremony_id,
-					ceremony_key_id.clone(),
-					nominees.clone(),
-					payload.clone(),
-				),
+					key_id: ceremony_key_id.clone(),
+					signatories: nominees.clone(),
+					payload: payload.clone(),
+				},
 				scale_info::prelude::format!(
 					"Threshold set selected for request {}, requesting signature ceremony {}.",
 					request_id,
@@ -595,7 +628,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			)
 		} else {
 			(
-				Event::<T, I>::SignersUnavailable(ceremony_id),
+				Event::<T, I>::SignersUnavailable { request_id, ceremony_id },
 				scale_info::prelude::format!(
 					"Not enough signers for request {} at attempt {}, scheduling retry.",
 					request_id,
@@ -648,15 +681,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Dispatches the callback if one has been registered.
 	fn maybe_dispatch_callback(request_id: RequestId, ceremony_id: CeremonyId) {
 		if let Some(call) = RequestCallback::<T, I>::take(request_id) {
-			Self::deposit_event(Event::<T, I>::ThresholdDispatchComplete(
+			Self::deposit_event(Event::<T, I>::ThresholdDispatchComplete {
+				request_id,
 				ceremony_id,
-				call.dispatch_bypass_filter(Origin(Default::default()).into())
+				result: call
+					.dispatch_bypass_filter(Origin(Default::default()).into())
 					.map(|_| ())
 					.map_err(|e| {
 						log::error!("Threshold dispatch failed for ceremony {}.", ceremony_id);
 						e.error
 					}),
-			));
+			});
 		}
 	}
 }
