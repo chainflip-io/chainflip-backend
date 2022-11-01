@@ -137,7 +137,10 @@ impl BaseRpcClient<jsonrpsee::ws_client::WsClient> {
 fn unwrap_value<T>(list_or_value: sp_rpc::list::ListOrValue<T>) -> T {
 	match list_or_value {
 		sp_rpc::list::ListOrValue::Value(value) => value,
-		_ => panic!(),
+		_ => panic!(
+			"Expected a Value of {0} actually received a List of {0}",
+			std::any::type_name::<T>()
+		),
 	}
 }
 
