@@ -130,7 +130,6 @@ fn number_of_swaps_processed_limited_by_weight() {
 #[test]
 fn expect_earned_fees_to_be_recorded() {
 	new_test_ext().execute_with(|| {
-		// Add two swaps
 		<Pallet<Test> as SwapIntentHandler>::schedule_swap(
 			Asset::Flip,
 			ForeignChainAsset { chain: ForeignChain::Ethereum, asset: Asset::Usdc },
@@ -147,11 +146,9 @@ fn expect_earned_fees_to_be_recorded() {
 			3_u64,
 			2,
 		);
-		// Process both
 		Swapping::on_idle(1, <() as WeightInfo>::execute_swap() * 2);
 		assert_eq!(EarnedRelayerFees::<Test>::get(2, cf_primitives::Asset::Usdc), Some(5));
 		assert_eq!(EarnedRelayerFees::<Test>::get(3, cf_primitives::Asset::Usdc), Some(10));
-		// Add another swap for relayer 2
 		<Pallet<Test> as SwapIntentHandler>::schedule_swap(
 			Asset::Flip,
 			ForeignChainAsset { chain: ForeignChain::Ethereum, asset: Asset::Usdc },
@@ -160,9 +157,7 @@ fn expect_earned_fees_to_be_recorded() {
 			2_u64,
 			2,
 		);
-		// Process the swap
 		Swapping::on_idle(1, <() as WeightInfo>::execute_swap() * 1);
-		// Expect the total on chain rewards to be increased
 		assert_eq!(EarnedRelayerFees::<Test>::get(2, cf_primitives::Asset::Usdc), Some(10));
 	});
 }
