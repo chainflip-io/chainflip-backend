@@ -29,25 +29,25 @@ use crate::{
 		KeyId, MessageHash,
 	},
 	p2p::{PeerInfo, PeerUpdate},
-	state_chain_observer::client::{StateChainClient, StateChainRpcApi},
+	state_chain_observer::client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi},
 	task_scope::{with_task_scope, Scope},
 };
 
 #[cfg(feature = "ibiza")]
 use sp_core::H160;
 
-async fn handle_keygen_request<'a, MultisigClient, RpcClient>(
+async fn handle_keygen_request<'a, StateChainClient, MultisigClient>(
 	scope: &Scope<'a, anyhow::Result<()>, true>,
 	multisig_client: Arc<MultisigClient>,
-	state_chain_client: Arc<StateChainClient<RpcClient>>,
+	state_chain_client: Arc<StateChainClient>,
 	ceremony_id: CeremonyId,
 	keygen_participants: BTreeSet<AccountId32>,
 	logger: slog::Logger,
 ) where
 	MultisigClient: MultisigClientApi<EthSigning> + Send + Sync + 'static,
-	RpcClient: StateChainRpcApi + Send + Sync + 'static,
+	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
 {
-	if keygen_participants.contains(&state_chain_client.our_account_id) {
+	if keygen_participants.contains(&state_chain_client.account_id()) {
 		scope.spawn(async move {
 			let _result = state_chain_client
 				.submit_signed_extrinsic(
@@ -81,10 +81,10 @@ async fn handle_keygen_request<'a, MultisigClient, RpcClient>(
 	}
 }
 
-async fn handle_signing_request<'a, MultisigClient, RpcClient>(
+async fn handle_signing_request<'a, StateChainClient, MultisigClient>(
 	scope: &Scope<'a, anyhow::Result<()>, true>,
 	multisig_client: Arc<MultisigClient>,
-	state_chain_client: Arc<StateChainClient<RpcClient>>,
+	state_chain_client: Arc<StateChainClient>,
 	ceremony_id: CeremonyId,
 	key_id: KeyId,
 	signers: BTreeSet<AccountId>,
@@ -92,9 +92,9 @@ async fn handle_signing_request<'a, MultisigClient, RpcClient>(
 	logger: slog::Logger,
 ) where
 	MultisigClient: MultisigClientApi<EthSigning> + Send + Sync + 'static,
-	RpcClient: StateChainRpcApi + Send + Sync + 'static,
+	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
 {
-	if signers.contains(&state_chain_client.our_account_id) {
+	if signers.contains(&state_chain_client.account_id()) {
 		// Send a signing request and wait to submit the result to the SC
 		scope.spawn(async move {
 			match multisig_client.sign(ceremony_id, key_id, signers, data).await {
@@ -161,8 +161,14 @@ macro_rules! match_event {
     }}
 }
 
-pub async fn start<BlockStream, RpcClient, EthRpc, EthMultisigClient, PolkadotMultisigClient>(
-	state_chain_client: Arc<StateChainClient<RpcClient>>,
+pub async fn start<
+	StateChainClient,
+	BlockStream,
+	EthRpc,
+	EthMultisigClient,
+	PolkadotMultisigClient,
+>(
+	state_chain_client: Arc<StateChainClient>,
 	sc_block_stream: BlockStream,
 	eth_broadcaster: EthBroadcaster<EthRpc>,
 	eth_multisig_client: Arc<EthMultisigClient>,
@@ -182,13 +188,15 @@ pub async fn start<BlockStream, RpcClient, EthRpc, EthMultisigClient, PolkadotMu
 ) -> Result<(), anyhow::Error>
 where
 	BlockStream: Stream<Item = anyhow::Result<state_chain_runtime::Header>> + Send + 'static,
-	RpcClient: StateChainRpcApi + Send + Sync + 'static,
 	EthRpc: EthRpcApi + Send + Sync + 'static,
 	EthMultisigClient: MultisigClientApi<EthSigning> + Send + Sync + 'static,
 	PolkadotMultisigClient: MultisigClientApi<PolkadotSigning> + Send + Sync + 'static,
+	StateChainClient: StorageApi + ExtrinsicApi + 'static + Send + Sync,
 {
 	with_task_scope(|scope| async {
         let logger = logger.new(o!(COMPONENT_KEY => "SCObserver"));
+
+        let account_id = state_chain_client.account_id();
 
         let heartbeat_block_interval = {
             use frame_support::traits::TypedGet;
@@ -210,9 +218,9 @@ where
 
             async move {
                 epoch_start_sender.send(EpochStart {
-                    index,
+                    epoch_index: index,
                     eth_block: state_chain_client
-                        .get_storage_map::<pallet_cf_vaults::Vaults<
+                        .storage_map_entry::<pallet_cf_vaults::Vaults<
                             state_chain_runtime::Runtime,
                             state_chain_runtime::EthereumInstance,
                         >>(block_hash, &index)
@@ -227,13 +235,13 @@ where
         };
 
         {
-            let historical_active_epochs = BTreeSet::from_iter(state_chain_client.get_storage_map::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>(
+            let historical_active_epochs = BTreeSet::from_iter(state_chain_client.storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>(
                 initial_block_hash,
-                &state_chain_client.our_account_id
+                &account_id
             ).await.unwrap());
 
             let current_epoch = state_chain_client
-                .get_storage_value::<pallet_cf_validator::CurrentEpoch<
+                .storage_value::<pallet_cf_validator::CurrentEpoch<
                     state_chain_runtime::Runtime,
                 >>(initial_block_hash)
                 .await
@@ -282,17 +290,17 @@ where
                                 current_block_hash
                             );
 
-                            match state_chain_client.get_storage_value::<frame_system::Events::<state_chain_runtime::Runtime>>(current_block_hash).await {
+                            match state_chain_client.storage_value::<frame_system::Events::<state_chain_runtime::Runtime>>(current_block_hash).await {
                                 Ok(events) => {
                                     for event_record in events {
                                         match_event! {event_record.event, logger {
                                             state_chain_runtime::Event::Validator(
                                                 pallet_cf_validator::Event::NewEpoch(new_epoch),
                                             ) => {
-                                                start_epoch(current_block_hash, new_epoch, true, state_chain_client.get_storage_double_map::<pallet_cf_validator::AuthorityIndex<state_chain_runtime::Runtime>>(
+                                                start_epoch(current_block_hash, new_epoch, true, state_chain_client.storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<state_chain_runtime::Runtime>>(
                                                     current_block_hash,
                                                     &new_epoch,
-                                                    &state_chain_client.our_account_id
+                                                    &account_id
                                                 ).await.unwrap().is_some()).await;
                                             }
                                             state_chain_runtime::Event::Validator(
@@ -366,7 +374,7 @@ where
                                                     nominee,
                                                     unsigned_tx,
                                                 },
-                                            ) if nominee == state_chain_client.our_account_id => {
+                                            ) if nominee == account_id => {
                                                 slog::debug!(
                                                     logger,
                                                     "Received signing request with broadcast_attempt_id {} for transaction: {:?}",

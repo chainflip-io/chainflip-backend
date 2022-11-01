@@ -915,6 +915,7 @@ name = "chainflip-cli"
 version = "0.5.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "cf-chains",
  "cf-primitives",
  "chainflip-engine",
@@ -9529,6 +9530,7 @@ dependencies = [
  "futures-core",
  "pin-project-lite 0.2.9",
  "tokio",
+ "tokio-util 0.7.3",
 ]
 
 [[package]]
