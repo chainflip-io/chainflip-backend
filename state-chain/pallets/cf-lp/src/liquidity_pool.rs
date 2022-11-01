@@ -65,10 +65,11 @@ impl<Balance: FixedPointOperand + Default> AmmPoolApi for LiquidityPool<Balance>
 	}
 
 	fn swap(
-		_ingress_asset: cf_primitives::Asset,
-		_egress_asset: ForeignChainAsset,
-		_ingress_amount: Self::Balance,
-	) -> Self::Balance {
+		_from: Asset,
+		_to: ForeignChainAsset,
+		_swap_input: Self::Balance,
+		_fee: u16,
+	) -> (Self::Balance, (Asset, Self::Balance)) {
 		todo!()
 	}
 }

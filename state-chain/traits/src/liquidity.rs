@@ -168,8 +168,9 @@ pub trait AmmPoolApi {
 	) -> Option<(Self::Balance, Self::Balance)>;
 
 	fn swap(
-		ingress_asset: Asset,
-		egress_asset: ForeignChainAsset,
-		ingress_amount: Self::Balance,
-	) -> Self::Balance;
+		from: Asset,
+		to: ForeignChainAsset,
+		swap_input: Self::Balance,
+		fee: u16,
+	) -> (Self::Balance, (Asset, Self::Balance));
 }

@@ -1,4 +1,4 @@
-use crate::{mock::*, Pallet, Swap, SwapQueue, WeightInfo};
+use crate::{mock::*, EarnedRelayerFees, Pallet, Swap, SwapQueue, WeightInfo};
 use cf_primitives::{Asset, ForeignChain, ForeignChainAddress, ForeignChainAsset};
 use cf_traits::SwapIntentHandler;
 use frame_support::assert_ok;
@@ -14,6 +14,7 @@ fn generate_test_swaps() -> Vec<Swap<u64>> {
 			amount: 10,
 			egress_address: ForeignChainAddress::Eth([2; 20]),
 			relayer_id: 2_u64,
+			relayer_commission_bps: 2,
 		},
 		Swap {
 			from: Asset::Usdc,
@@ -21,6 +22,7 @@ fn generate_test_swaps() -> Vec<Swap<u64>> {
 			amount: 20,
 			egress_address: ForeignChainAddress::Eth([4; 20]),
 			relayer_id: 3_u64,
+			relayer_commission_bps: 2,
 		},
 		Swap {
 			from: Asset::Eth,
@@ -28,6 +30,7 @@ fn generate_test_swaps() -> Vec<Swap<u64>> {
 			amount: 30,
 			egress_address: ForeignChainAddress::Eth([7; 20]),
 			relayer_id: 4_u64,
+			relayer_commission_bps: 2,
 		},
 		Swap {
 			from: Asset::Flip,
@@ -35,6 +38,7 @@ fn generate_test_swaps() -> Vec<Swap<u64>> {
 			amount: 40,
 			egress_address: ForeignChainAddress::Eth([9; 20]),
 			relayer_id: 5_u64,
+			relayer_commission_bps: 2,
 		},
 		Swap {
 			from: Asset::Flip,
@@ -42,6 +46,7 @@ fn generate_test_swaps() -> Vec<Swap<u64>> {
 			amount: 50,
 			egress_address: ForeignChainAddress::Eth([2; 20]),
 			relayer_id: 6_u64,
+			relayer_commission_bps: 2,
 		},
 		Swap {
 			from: Asset::Flip,
@@ -49,6 +54,7 @@ fn generate_test_swaps() -> Vec<Swap<u64>> {
 			amount: 60,
 			egress_address: ForeignChainAddress::Eth([4; 20]),
 			relayer_id: 7_u64,
+			relayer_commission_bps: 2,
 		},
 	]
 }
@@ -118,5 +124,45 @@ fn number_of_swaps_processed_limited_by_weight() {
 				})
 				.collect::<Vec<EgressTransaction>>()
 		);
+	});
+}
+
+#[test]
+fn expect_earned_fees_to_be_recorded() {
+	new_test_ext().execute_with(|| {
+		// Add two swaps
+		<Pallet<Test> as SwapIntentHandler>::schedule_swap(
+			Asset::Flip,
+			ForeignChainAsset { chain: ForeignChain::Ethereum, asset: Asset::Usdc },
+			10,
+			ForeignChainAddress::Eth([2; 20]),
+			2_u64,
+			2,
+		);
+		<Pallet<Test> as SwapIntentHandler>::schedule_swap(
+			Asset::Flip,
+			ForeignChainAsset { chain: ForeignChain::Ethereum, asset: Asset::Usdc },
+			20,
+			ForeignChainAddress::Eth([2; 20]),
+			3_u64,
+			2,
+		);
+		// Process both
+		Swapping::on_idle(1, <() as WeightInfo>::execute_swap() * 2);
+		assert_eq!(EarnedRelayerFees::<Test>::get(2, cf_primitives::Asset::Usdc), Some(5));
+		assert_eq!(EarnedRelayerFees::<Test>::get(3, cf_primitives::Asset::Usdc), Some(10));
+		// Add another swap for relayer 2
+		<Pallet<Test> as SwapIntentHandler>::schedule_swap(
+			Asset::Flip,
+			ForeignChainAsset { chain: ForeignChain::Ethereum, asset: Asset::Usdc },
+			10,
+			ForeignChainAddress::Eth([2; 20]),
+			2_u64,
+			2,
+		);
+		// Process the swap
+		Swapping::on_idle(1, <() as WeightInfo>::execute_swap() * 1);
+		// Expect the total on chain rewards to be increased
+		assert_eq!(EarnedRelayerFees::<Test>::get(2, cf_primitives::Asset::Usdc), Some(10));
 	});
 }

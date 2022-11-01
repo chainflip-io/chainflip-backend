@@ -25,6 +25,7 @@ pub struct Swap<AccountId> {
 	pub amount: AssetAmount,
 	pub egress_address: ForeignChainAddress,
 	pub relayer_id: AccountId,
+	pub relayer_commission_bps: u16,
 }
 
 #[frame_support::pallet]
@@ -60,6 +61,11 @@ pub mod pallet {
 	/// Scheduled Swaps
 	#[pallet::storage]
 	pub(super) type SwapQueue<T: Config> = StorageValue<_, Vec<Swap<T::AccountId>>, ValueQuery>;
+
+	/// Earned Fees by Relayers
+	#[pallet::storage]
+	pub(super) type EarnedRelayerFees<T: Config> =
+		StorageDoubleMap<_, Twox64Concat, T::AccountId, Identity, Asset, AssetAmount>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -134,11 +140,17 @@ pub mod pallet {
 		/// We are going to benchmark this function individually to have a approximation of
 		/// how 'expensive' a swap is.
 		pub fn execute_swap(swap: Swap<T::AccountId>) {
-			T::Egress::schedule_egress(
-				swap.to,
-				T::AmmPoolApi::swap(swap.from, swap.to, swap.amount),
-				swap.egress_address,
-			);
+			let (swap_output, earned_fees) =
+				T::AmmPoolApi::swap(swap.from, swap.to, swap.amount, swap.relayer_commission_bps);
+			let (asset, fee) = earned_fees;
+			EarnedRelayerFees::<T>::mutate(swap.relayer_id.clone(), asset, |maybe_fees| {
+				if let Some(fees) = maybe_fees {
+					*maybe_fees = Some(fees.saturating_add(fee))
+				} else {
+					*maybe_fees = Some(fee)
+				}
+			});
+			T::Egress::schedule_egress(swap.to, swap_output, swap.egress_address);
 		}
 	}
 
@@ -151,9 +163,16 @@ pub mod pallet {
 			amount: AssetAmount,
 			egress_address: ForeignChainAddress,
 			relayer_id: Self::AccountId,
-			_relayer_commission_bps: u16,
+			relayer_commission_bps: u16,
 		) {
-			SwapQueue::<T>::append(Swap { from, to, amount, egress_address, relayer_id });
+			SwapQueue::<T>::append(Swap {
+				from,
+				to,
+				amount,
+				egress_address,
+				relayer_id,
+				relayer_commission_bps,
+			});
 		}
 	}
 }
