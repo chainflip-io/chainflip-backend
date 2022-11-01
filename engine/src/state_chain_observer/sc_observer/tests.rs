@@ -37,6 +37,8 @@ fn test_header(number: u32) -> Header {
 
 #[tokio::test]
 async fn starts_witnessing_when_current_authority() {
+	let initial_epoch = 3;
+	let initial_epoch_from_block = 30;
 	let initial_block_hash = H256::default();
 	let account_id = AccountId::new([0; 32]);
 
@@ -50,21 +52,24 @@ async fn starts_witnessing_when_current_authority() {
 	state_chain_client.expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>()
 		.with(eq(initial_block_hash), eq(account_id))
 		.once()
-		.return_once(move |_, _| Ok(vec![3]));
+		.return_once(move |_, _| Ok(vec![initial_epoch]));
 	state_chain_client
 		.expect_storage_value::<pallet_cf_validator::CurrentEpoch<state_chain_runtime::Runtime>>()
 		.with(eq(initial_block_hash))
 		.once()
-		.return_once(move |_| Ok(3));
+		.return_once(move |_| Ok(initial_epoch));
 	state_chain_client
 		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
 			state_chain_runtime::Runtime,
 			state_chain_runtime::EthereumInstance,
 		>>()
-		.with(eq(initial_block_hash), eq(3))
+		.with(eq(initial_block_hash), eq(initial_epoch))
 		.once()
 		.return_once(move |_, _| {
-			Ok(Some(Vault { public_key: Default::default(), active_from_block: 30 }))
+			Ok(Some(Vault {
+				public_key: Default::default(),
+				active_from_block: initial_epoch_from_block,
+			}))
 		});
 
 	let eth_multisig_client = Arc::new(MockMultisigClientApi::new());
@@ -122,12 +127,21 @@ async fn starts_witnessing_when_current_authority() {
 			.try_collect::<Vec<_>>()
 			.await
 			.unwrap(),
-		vec![EpochStart { index: 3, eth_block: 30, current: true, participant: true }]
+		vec![EpochStart {
+			index: initial_epoch,
+			eth_block: initial_epoch_from_block,
+			current: true,
+			participant: true
+		}]
 	);
 }
 
 #[tokio::test]
 async fn starts_witnessing_when_historic_on_startup() {
+	let active_epoch = 3;
+	let active_epoch_from_block = 30;
+	let current_epoch = 4;
+	let current_epoch_from_block = 40;
 	let initial_block_hash = H256::default();
 	let account_id = AccountId::new([0; 32]);
 
@@ -141,31 +155,37 @@ async fn starts_witnessing_when_historic_on_startup() {
 	state_chain_client.expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>()
 		.with(eq(initial_block_hash), eq(account_id))
 		.once()
-		.return_once(move |_, _| Ok(vec![3]));
+		.return_once(move |_, _| Ok(vec![active_epoch]));
 	state_chain_client
 		.expect_storage_value::<pallet_cf_validator::CurrentEpoch<state_chain_runtime::Runtime>>()
 		.with(eq(initial_block_hash))
 		.once()
-		.return_once(move |_| Ok(4));
+		.return_once(move |_| Ok(current_epoch));
 	state_chain_client
 		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
 			state_chain_runtime::Runtime,
 			state_chain_runtime::EthereumInstance,
 		>>()
-		.with(eq(initial_block_hash), eq(3))
+		.with(eq(initial_block_hash), eq(active_epoch))
 		.once()
 		.return_once(move |_, _| {
-			Ok(Some(Vault { public_key: Default::default(), active_from_block: 30 }))
+			Ok(Some(Vault {
+				public_key: Default::default(),
+				active_from_block: active_epoch_from_block,
+			}))
 		});
 	state_chain_client
 		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
 			state_chain_runtime::Runtime,
 			state_chain_runtime::EthereumInstance,
 		>>()
-		.with(eq(initial_block_hash), eq(4))
+		.with(eq(initial_block_hash), eq(current_epoch))
 		.once()
 		.return_once(move |_, _| {
-			Ok(Some(Vault { public_key: Default::default(), active_from_block: 40 }))
+			Ok(Some(Vault {
+				public_key: Default::default(),
+				active_from_block: current_epoch_from_block,
+			}))
 		});
 
 	// No blocks in the stream
@@ -224,14 +244,26 @@ async fn starts_witnessing_when_historic_on_startup() {
 			.await
 			.unwrap(),
 		vec![
-			EpochStart { index: 3, eth_block: 30, current: false, participant: true },
-			EpochStart { index: 4, eth_block: 40, current: true, participant: false }
+			EpochStart {
+				index: active_epoch,
+				eth_block: active_epoch_from_block,
+				current: false,
+				participant: true
+			},
+			EpochStart {
+				index: current_epoch,
+				eth_block: current_epoch_from_block,
+				current: true,
+				participant: false
+			}
 		]
 	);
 }
 
 #[tokio::test]
 async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
+	let initial_epoch = 3;
+	let initial_epoch_from_block = 30;
 	let initial_block_hash = H256::default();
 	let account_id = AccountId::new([0; 32]);
 
@@ -250,7 +282,7 @@ async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
 		.expect_storage_value::<pallet_cf_validator::CurrentEpoch<state_chain_runtime::Runtime>>()
 		.with(eq(initial_block_hash))
 		.once()
-		.return_once(move |_| Ok(3));
+		.return_once(move |_| Ok(initial_epoch));
 	state_chain_client
 		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
 			state_chain_runtime::Runtime,
@@ -259,7 +291,10 @@ async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
 		.with(eq(initial_block_hash), eq(3))
 		.once()
 		.return_once(move |_, _| {
-			Ok(Some(Vault { public_key: Default::default(), active_from_block: 30 }))
+			Ok(Some(Vault {
+				public_key: Default::default(),
+				active_from_block: initial_epoch_from_block,
+			}))
 		});
 
 	let sc_block_stream = tokio_stream::iter(vec![]);
@@ -315,12 +350,21 @@ async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
 			.try_collect::<Vec<_>>()
 			.await
 			.unwrap(),
-		vec![EpochStart { index: 3, eth_block: 30, current: true, participant: false }]
+		vec![EpochStart {
+			index: initial_epoch,
+			eth_block: initial_epoch_from_block,
+			current: true,
+			participant: false
+		}]
 	);
 }
 
 #[tokio::test]
 async fn current_authority_to_current_authority_on_new_epoch_event() {
+	let initial_epoch = 4;
+	let initial_epoch_from_block = 40;
+	let new_epoch = 5;
+	let new_epoch_from_block = 50;
 	let initial_block_hash = H256::default();
 	let account_id = AccountId::new([0; 32]);
 
@@ -334,21 +378,24 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
 	state_chain_client.expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>()
 		.with(eq(initial_block_hash), eq(account_id.clone()))
 		.once()
-		.return_once(move |_, _| Ok(vec![4]));
+		.return_once(move |_, _| Ok(vec![initial_epoch]));
 	state_chain_client
 		.expect_storage_value::<pallet_cf_validator::CurrentEpoch<state_chain_runtime::Runtime>>()
 		.with(eq(initial_block_hash))
 		.once()
-		.return_once(move |_| Ok(4));
+		.return_once(move |_| Ok(initial_epoch));
 	state_chain_client
 		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
 			state_chain_runtime::Runtime,
 			state_chain_runtime::EthereumInstance,
 		>>()
-		.with(eq(initial_block_hash), eq(4))
+		.with(eq(initial_block_hash), eq(initial_epoch))
 		.once()
 		.return_once(move |_, _| {
-			Ok(Some(Vault { public_key: Default::default(), active_from_block: 40 }))
+			Ok(Some(Vault {
+				public_key: Default::default(),
+				active_from_block: initial_epoch_from_block,
+			}))
 		});
 
 	let empty_block_header = test_header(20);
@@ -371,7 +418,7 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
 			Ok(vec![Box::new(frame_system::EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
 				event: state_chain_runtime::Event::Validator(pallet_cf_validator::Event::NewEpoch(
-					5,
+					new_epoch,
 				)),
 				topics: vec![H256::default()],
 			})])
@@ -382,10 +429,13 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
 			state_chain_runtime::Runtime,
 			state_chain_runtime::EthereumInstance,
 		>>()
-		.with(eq(new_epoch_block_header_hash), eq(5))
+		.with(eq(new_epoch_block_header_hash), eq(new_epoch))
 		.once()
 		.return_once(move |_, _| {
-			Ok(Some(Vault { public_key: Default::default(), active_from_block: 50 }))
+			Ok(Some(Vault {
+				public_key: Default::default(),
+				active_from_block: new_epoch_from_block,
+			}))
 		});
 	state_chain_client.expect_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<state_chain_runtime::Runtime>>()
 		.with(eq(new_epoch_block_header_hash), eq(5), eq(account_id.clone()))
@@ -443,14 +493,28 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
 			.await
 			.unwrap(),
 		vec![
-			EpochStart { index: 4, eth_block: 40, current: true, participant: true },
-			EpochStart { index: 5, eth_block: 50, current: true, participant: true }
+			EpochStart {
+				index: initial_epoch,
+				eth_block: initial_epoch_from_block,
+				current: true,
+				participant: true
+			},
+			EpochStart {
+				index: new_epoch,
+				eth_block: new_epoch_from_block,
+				current: true,
+				participant: true
+			}
 		]
 	);
 }
 
 #[tokio::test]
 async fn not_historical_to_authority_on_new_epoch() {
+	let initial_epoch = 3;
+	let initial_epoch_from_block = 30;
+	let new_epoch = 4;
+	let new_epoch_from_block = 40;
 	let initial_block_hash = H256::default();
 	let account_id = AccountId::new([0; 32]);
 
@@ -469,16 +533,19 @@ async fn not_historical_to_authority_on_new_epoch() {
 		.expect_storage_value::<pallet_cf_validator::CurrentEpoch<state_chain_runtime::Runtime>>()
 		.with(eq(initial_block_hash))
 		.once()
-		.return_once(move |_| Ok(3));
+		.return_once(move |_| Ok(initial_epoch));
 	state_chain_client
 		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
 			state_chain_runtime::Runtime,
 			state_chain_runtime::EthereumInstance,
 		>>()
-		.with(eq(initial_block_hash), eq(3))
+		.with(eq(initial_block_hash), eq(initial_epoch))
 		.once()
 		.return_once(move |_, _| {
-			Ok(Some(Vault { public_key: Default::default(), active_from_block: 30 }))
+			Ok(Some(Vault {
+				public_key: Default::default(),
+				active_from_block: initial_epoch_from_block,
+			}))
 		});
 
 	let empty_block_header = test_header(20);
@@ -501,7 +568,7 @@ async fn not_historical_to_authority_on_new_epoch() {
 			Ok(vec![Box::new(frame_system::EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
 				event: state_chain_runtime::Event::Validator(pallet_cf_validator::Event::NewEpoch(
-					4,
+					new_epoch,
 				)),
 				topics: vec![H256::default()],
 			})])
@@ -512,13 +579,16 @@ async fn not_historical_to_authority_on_new_epoch() {
 			state_chain_runtime::Runtime,
 			state_chain_runtime::EthereumInstance,
 		>>()
-		.with(eq(new_epoch_block_header_hash), eq(4))
+		.with(eq(new_epoch_block_header_hash), eq(new_epoch))
 		.once()
 		.return_once(move |_, _| {
-			Ok(Some(Vault { public_key: Default::default(), active_from_block: 40 }))
+			Ok(Some(Vault {
+				public_key: Default::default(),
+				active_from_block: new_epoch_from_block,
+			}))
 		});
 	state_chain_client.expect_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<state_chain_runtime::Runtime>>()
-		.with(eq(new_epoch_block_header_hash), eq(4), eq(account_id.clone()))
+		.with(eq(new_epoch_block_header_hash), eq(new_epoch), eq(account_id.clone()))
 		.once()
 		.return_once(move |_, _, _| Ok(Some(1)));
 
@@ -575,14 +645,28 @@ async fn not_historical_to_authority_on_new_epoch() {
 			.await
 			.unwrap(),
 		vec![
-			EpochStart { index: 3, eth_block: 30, current: true, participant: false },
-			EpochStart { index: 4, eth_block: 40, current: true, participant: true }
+			EpochStart {
+				index: initial_epoch,
+				eth_block: initial_epoch_from_block,
+				current: true,
+				participant: false
+			},
+			EpochStart {
+				index: new_epoch,
+				eth_block: new_epoch_from_block,
+				current: true,
+				participant: true
+			}
 		]
 	);
 }
 
 #[tokio::test]
 async fn current_authority_to_historical_on_new_epoch_event() {
+	let initial_epoch = 3;
+	let initial_epoch_from_block = 30;
+	let new_epoch = 4;
+	let new_epoch_from_block = 40;
 	let initial_block_hash = H256::default();
 	let account_id = AccountId::new([0; 32]);
 
@@ -596,12 +680,12 @@ async fn current_authority_to_historical_on_new_epoch_event() {
 	state_chain_client.expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>()
 		.with(eq(initial_block_hash), eq(account_id.clone()))
 		.once()
-		.return_once(move |_, _| Ok(vec![3]));
+		.return_once(move |_, _| Ok(vec![initial_epoch]));
 	state_chain_client
 		.expect_storage_value::<pallet_cf_validator::CurrentEpoch<state_chain_runtime::Runtime>>()
 		.with(eq(initial_block_hash))
 		.once()
-		.return_once(move |_| Ok(3));
+		.return_once(move |_| Ok(initial_epoch));
 	state_chain_client
 		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
 			state_chain_runtime::Runtime,
@@ -610,7 +694,10 @@ async fn current_authority_to_historical_on_new_epoch_event() {
 		.with(eq(initial_block_hash), eq(3))
 		.once()
 		.return_once(move |_, _| {
-			Ok(Some(Vault { public_key: Default::default(), active_from_block: 30 }))
+			Ok(Some(Vault {
+				public_key: Default::default(),
+				active_from_block: initial_epoch_from_block,
+			}))
 		});
 
 	let empty_block_header = test_header(20);
@@ -632,7 +719,7 @@ async fn current_authority_to_historical_on_new_epoch_event() {
 			Ok(vec![Box::new(frame_system::EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
 				event: state_chain_runtime::Event::Validator(pallet_cf_validator::Event::NewEpoch(
-					4,
+					new_epoch,
 				)),
 				topics: vec![H256::default()],
 			})])
@@ -643,10 +730,13 @@ async fn current_authority_to_historical_on_new_epoch_event() {
 			state_chain_runtime::Runtime,
 			state_chain_runtime::EthereumInstance,
 		>>()
-		.with(eq(new_epoch_block_header_hash), eq(4))
+		.with(eq(new_epoch_block_header_hash), eq(new_epoch))
 		.once()
 		.return_once(move |_, _| {
-			Ok(Some(Vault { public_key: Default::default(), active_from_block: 40 }))
+			Ok(Some(Vault {
+				public_key: Default::default(),
+				active_from_block: new_epoch_from_block,
+			}))
 		});
 	state_chain_client.expect_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<state_chain_runtime::Runtime>>()
 		.with(eq(new_epoch_block_header_hash), eq(4), eq(account_id.clone()))
@@ -706,8 +796,18 @@ async fn current_authority_to_historical_on_new_epoch_event() {
 			.await
 			.unwrap(),
 		vec![
-			EpochStart { index: 3, eth_block: 30, current: true, participant: true },
-			EpochStart { index: 4, eth_block: 40, current: true, participant: false }
+			EpochStart {
+				index: initial_epoch,
+				eth_block: initial_epoch_from_block,
+				current: true,
+				participant: true
+			},
+			EpochStart {
+				index: new_epoch_from_block,
+				eth_block: new_epoch_from_block,
+				current: true,
+				participant: false
+			}
 		]
 	);
 }
