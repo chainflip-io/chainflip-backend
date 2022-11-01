@@ -157,7 +157,7 @@ fn expect_earned_fees_to_be_recorded() {
 			2_u64,
 			2,
 		);
-		Swapping::on_idle(1, <() as WeightInfo>::execute_swap() * 1);
+		Swapping::on_idle(1, <() as WeightInfo>::execute_swap());
 		assert_eq!(EarnedRelayerFees::<Test>::get(2, cf_primitives::Asset::Usdc), Some(10));
 	});
 }
