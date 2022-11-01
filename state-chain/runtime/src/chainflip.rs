@@ -17,7 +17,10 @@ use crate::{
 	Environment, EthereumInstance, Flip, FlipBalance, Reputation, Runtime, System, Validator,
 };
 #[cfg(feature = "ibiza")]
-use cf_chains::dot::{api::PolkadotApi, CurrentVaultAndProxy, Polkadot, PolkadotReplayProtection};
+use cf_chains::dot::{
+	api::PolkadotApi, CurrentVaultAndProxy, Polkadot, PolkadotReplayProtection,
+	PolkadotTransactionData,
+};
 use cf_chains::{
 	eth::{
 		self,
@@ -159,7 +162,7 @@ pub struct DotTransactionBuilder;
 #[cfg(feature = "ibiza")]
 impl TransactionBuilder<Polkadot, PolkadotApi> for DotTransactionBuilder {
 	fn build_transaction(signed_call: &PolkadotApi) -> <Polkadot as ChainAbi>::UnsignedTransaction {
-		signed_call.chain_encoded()
+		PolkadotTransactionData { encoded_extrinsic: signed_call.chain_encoded() }
 	}
 
 	fn refresh_unsigned_transaction(
