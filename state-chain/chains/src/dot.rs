@@ -53,7 +53,6 @@ pub type PolkadotPayload = SignedPayload<PolkadotRuntimeCall, PolkadotSignedExtr
 pub type EncodedPolkadotPayload = Vec<u8>;
 
 // Westend testnet
-#[cfg(feature = "ibiza")]
 pub const WESTEND_CONFIG: PolkadotConfig = PolkadotConfig {
 	spec_version: 9310,
 	transaction_version: 14,
@@ -64,7 +63,6 @@ pub const WESTEND_CONFIG: PolkadotConfig = PolkadotConfig {
 };
 
 // Polkadot mainnet
-#[cfg(feature = "ibiza")]
 pub const POLKADOT_CONFIG: PolkadotConfig = PolkadotConfig {
 	spec_version: 9300,
 	transaction_version: 15,
@@ -92,9 +90,7 @@ pub const RAW_SEED_3: [u8; 32] =
 	hex_literal::hex!("ce7fec0dd410141c04e246a91f7ac909aa9707b56a8ecd33e794a49f1b5d70e6");
 pub const NONCE_3: u32 = 0; //correct nonce has to be provided for this account (see/track onchain)
 
-#[cfg(feature = "ibiza")]
 pub const POLKADOT_VAULT_ACCOUNT: Option<PolkadotAccountId> = None;
-#[cfg(feature = "ibiza")]
 pub const POLKADOT_PROXY_ACCOUNT: Option<PolkadotAccountId> = None;
 
 #[allow(clippy::unnecessary_cast)]
@@ -783,7 +779,7 @@ mod test_polkadot_extrinsics {
 	use super::*;
 	use crate::dot::sr25519::Pair;
 	use sp_core::crypto::Pair as TraitPair;
-	use sp_runtime::{traits::IdentifyAccount, MultiSigner};
+	use sp_runtime::{app_crypto::Ss58Codec, traits::IdentifyAccount, MultiSigner};
 
 	#[ignore]
 	#[test]
@@ -825,5 +821,42 @@ mod test_polkadot_extrinsics {
 		assert!(extrinsic_handler.is_signed().unwrap_or(false));
 
 		println!("encoded extrinsic: 0x{}", hex::encode(signed_extrinsic.unwrap().encode()));
+	}
+
+	#[ignore]
+	#[test]
+	fn get_public_keys() {
+		println!(
+			"Public Key 1: {:?}",
+			PolkadotAccountId::from_ss58check("5E2WfQFeafdktJ5AAF6ZGZ71Yj4fiJnHWRomVmeoStMNhoZe")
+				.unwrap()
+		);
+		println!(
+			"Public Key 2: {:?}",
+			PolkadotAccountId::from_ss58check("5GNn92C9ngX4sNp3UjqGzPbdRfbbV8hyyVVNZaH2z9e5kzxA")
+				.unwrap()
+		);
+
+		println!(
+			"Public Key 3: {:?}",
+			PolkadotAccountId::from_ss58check("5CLpD6DBg2hFToBJYKDB7bPVAf4TKw2F1Q2xbnzdHSikH3uK")
+				.unwrap()
+		);
+
+		let keypair_1: Pair = <Pair as TraitPair>::from_seed(&RAW_SEED_1);
+		let account_id_1: AccountId32 = MultiSigner::Sr25519(keypair_1.public()).into_account();
+
+		assert_eq!(
+			account_id_1,
+			PolkadotAccountId::from_ss58check("5E2WfQFeafdktJ5AAF6ZGZ71Yj4fiJnHWRomVmeoStMNhoZe")
+				.unwrap()
+		);
+
+		assert_eq!(
+			PolkadotAccountId::new(hex_literal::hex!(
+				"56cc4af8ff9fb97c60320ae43d35bd831b14f0b7065f3385db0dbf4cb5d8766f"
+			)),
+			account_id_1
+		);
 	}
 }

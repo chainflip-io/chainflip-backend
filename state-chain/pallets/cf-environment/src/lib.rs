@@ -3,11 +3,7 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 #[cfg(feature = "ibiza")]
-use cf_chains::dot::{PolkadotAccountId, PolkadotConfig, PolkadotIndex, RAW_SEED_1, RAW_SEED_2};
-
-use sp_core::{crypto::Pair as TraitPair, sr25519::Pair};
-
-use sp_runtime::{traits::IdentifyAccount, MultiSigner};
+use cf_chains::dot::{PolkadotAccountId, PolkadotConfig, PolkadotIndex};
 
 use cf_primitives::{Asset, EthereumAddress};
 pub use cf_traits::{EthEnvironmentProvider, EthereumAssetsAddressProvider};
@@ -362,16 +358,18 @@ impl<T: Config> Pallet<T> {
 	#[cfg(feature = "ibiza")]
 	pub fn get_vault_account() -> PolkadotAccountId {
 		PolkadotVaultAccountId::<T>::get().unwrap_or_else(|| {
-			let keypair: Pair = <Pair as TraitPair>::from_seed(&RAW_SEED_1);
-			MultiSigner::Sr25519(keypair.public()).into_account()
+			PolkadotAccountId::new(hex_literal::hex!(
+				"56cc4af8ff9fb97c60320ae43d35bd831b14f0b7065f3385db0dbf4cb5d8766f"
+			)) // CHAINFLIP-TEST account
 		})
 	}
 
 	#[cfg(feature = "ibiza")]
 	pub fn get_current_proxy_account() -> PolkadotAccountId {
 		PolkadotCurrentProxyAccountId::<T>::get().unwrap_or_else(|| {
-			let keypair: Pair = <Pair as TraitPair>::from_seed(&RAW_SEED_2);
-			MultiSigner::Sr25519(keypair.public()).into_account()
+			PolkadotAccountId::new(hex_literal::hex!(
+				"beb9c3f0ae5bda798dd3b65fe345fdf9031946849d8925ae7be73ee9407c6737"
+			)) // CHAINFLIP-TEST-2 account
 		})
 	}
 }

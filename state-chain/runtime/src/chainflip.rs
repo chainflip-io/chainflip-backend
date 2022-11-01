@@ -17,7 +17,7 @@ use crate::{
 	Environment, EthereumInstance, Flip, FlipBalance, Reputation, Runtime, System, Validator,
 };
 #[cfg(feature = "ibiza")]
-use cf_chains::dot::{api::PolkadotApi, Polkadot, PolkadotReplayProtection};
+use cf_chains::dot::{api::PolkadotApi, CurrentVaultAndProxy, Polkadot, PolkadotReplayProtection};
 use cf_chains::{
 	eth::{
 		self,

@@ -1,7 +1,5 @@
 #[cfg(feature = "ibiza")]
-use cf_chains::dot::{
-	PolkadotAccountId, POLKADOT_PROXY_ACCOUNT, POLKADOT_VAULT_ACCOUNT, WESTEND_CONFIG,
-};
+use cf_chains::dot::{POLKADOT_PROXY_ACCOUNT, POLKADOT_VAULT_ACCOUNT, WESTEND_CONFIG};
 use cf_chains::eth::CHAIN_ID_GOERLI;
 use cf_primitives::AccountRole;
 use sc_service::{ChainType, Properties};

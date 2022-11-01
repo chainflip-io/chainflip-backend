@@ -1,4 +1,5 @@
 use crate::{self as pallet_cf_environment, cfe};
+#[cfg(feature = "ibiza")]
 use cf_chains::dot::POLKADOT_CONFIG;
 use cf_traits::mocks::{
 	ensure_origin_mock::NeverFailingOriginCheck,
