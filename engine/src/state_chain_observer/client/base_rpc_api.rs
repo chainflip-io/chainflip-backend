@@ -62,10 +62,12 @@ impl<
 {
 }
 
-/// Wraps the substrate client library methods. This trait allows us to easily mock a State Chain.
-/// Currently we assume that provided block_hash's are valid, and panic if the Rpc returns nothing
-/// (i.e. as if that block doesn't exist), but for calls that use block_number we return an Option
-/// to indicate if the associated block exists or not and do not ever panic.
+/// Wraps the substrate client library methods. This trait allows us to mock a State Chain RPC.
+/// It assumes that provided block_hash's are valid as we would have gotten them from the
+/// RPC itself, and so it panics if a provided block_hash is invalid i.e. doesn't exist.
+/// For calls that use block_number instead we return an Option to indicate if the associated block
+/// exists or not and do not ever panic. As in some cases we make requests for block
+/// numbers the RPC has not previously provided.
 #[cfg_attr(test, automock)]
 #[async_trait]
 pub trait BaseRpcApi {
