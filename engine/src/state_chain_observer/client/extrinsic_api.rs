@@ -21,7 +21,7 @@ use state_chain_runtime::AccountId;
 
 use crate::constants::MAX_EXTRINSIC_RETRY_ATTEMPTS;
 
-use super::{base_rpc_api::BaseRpcApi, storage_api::StorageApi};
+use super::storage_api::StorageApi;
 
 // Note 'static on the generics in this trait are only required for mockall to mock it
 #[async_trait]
@@ -58,7 +58,7 @@ fn invalid_err_obj(invalid_reason: InvalidTransaction) -> ErrorObjectOwned {
 	ErrorObject::owned(1010, "Invalid Transaction", Some(<&'static str>::from(invalid_reason)))
 }
 
-impl super::StateChainClient {
+impl<BaseRpcApi> super::StateChainClient<BaseRpcApi> {
 	fn create_and_sign_extrinsic(
 		&self,
 		call: state_chain_runtime::Call,
@@ -106,7 +106,9 @@ impl super::StateChainClient {
 }
 
 #[async_trait]
-impl ExtrinsicApi for super::StateChainClient {
+impl<BaseRpcApi: super::base_rpc_api::BaseRpcApi + Send + Sync + 'static> ExtrinsicApi
+	for super::StateChainClient<BaseRpcApi>
+{
 	fn account_id(&self) -> AccountId {
 		self.signer.account_id.clone()
 	}
