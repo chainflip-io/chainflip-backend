@@ -17,9 +17,7 @@ use crate::{
 	Environment, EthereumInstance, Flip, FlipBalance, Reputation, Runtime, System, Validator,
 };
 #[cfg(feature = "ibiza")]
-use cf_chains::dot::{
-	api::PolkadotApi, NetworkChoice, Polkadot, PolkadotReplayProtection, PolkadotTransactionData,
-};
+use cf_chains::dot::{api::PolkadotApi, Polkadot, PolkadotReplayProtection};
 use cf_chains::{
 	eth::{
 		self,
@@ -161,10 +159,7 @@ pub struct DotTransactionBuilder;
 #[cfg(feature = "ibiza")]
 impl TransactionBuilder<Polkadot, PolkadotApi> for DotTransactionBuilder {
 	fn build_transaction(signed_call: &PolkadotApi) -> <Polkadot as ChainAbi>::UnsignedTransaction {
-		PolkadotTransactionData {
-			chain: NetworkChoice::WestendTestnet,
-			encoded_extrinsic: signed_call.chain_encoded(),
-		}
+		signed_call.chain_encoded()
 	}
 
 	fn refresh_unsigned_transaction(
@@ -223,13 +218,14 @@ impl ReplayProtectionProvider<Polkadot> for DotApiCallDataProvider {
 	// Get the Environment values for vault_account, NetworkChoice and the next nonce for the
 	// proxy_account
 	fn replay_protection() -> PolkadotReplayProtection {
-		PolkadotReplayProtection::new(
-			Environment::next_polkadot_proxy_account_nonce(),
-			0,
-			Environment::get_polkadot_network_choice(),
-		) //Todo: Instead
-		 // of 0, tip needs
-		 // to be set here
+		// PolkadotReplayProtection::new(
+		// 	Environment::next_polkadot_proxy_account_nonce(),
+		// 	0,
+		// 	Environment::get_polkadot_network_config(),
+		// ) //Todo: Instead
+		// of 0, tip needs
+		// to be set here
+		todo!()
 	}
 }
 #[cfg(feature = "ibiza")]

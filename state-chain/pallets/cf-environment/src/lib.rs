@@ -3,7 +3,7 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 #[cfg(feature = "ibiza")]
-use cf_chains::dot::{NetworkChoice, PolkadotAccountId, PolkadotIndex};
+use cf_chains::dot::{PolkadotAccountId, PolkadotConfig, PolkadotIndex};
 
 use cf_primitives::{Asset, EthereumAddress};
 pub use cf_traits::{EthEnvironmentProvider, EthereumAssetsAddressProvider};
@@ -142,8 +142,8 @@ pub mod pallet {
 	#[cfg(feature = "ibiza")]
 	#[pallet::storage]
 	#[pallet::getter(fn get_polkadot_network_choice)]
-	/// The Polkadot Network Choice (Westend, Polkadot)
-	pub type PolkadotNetworkChoice<T> = StorageValue<_, NetworkChoice, ValueQuery>;
+	/// The Polkadot Network Configuration
+	pub type PolkadotNetworkConfig<T> = StorageValue<_, PolkadotConfig, OptionQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn cfe_settings)]
@@ -257,7 +257,7 @@ pub mod pallet {
 		#[cfg(feature = "ibiza")]
 		pub polkadot_proxy_account_id: Option<PolkadotAccountId>,
 		#[cfg(feature = "ibiza")]
-		pub polkadot_network_choice: NetworkChoice,
+		pub polkadot_network_config: Option<PolkadotConfig>,
 	}
 
 	/// Sets the genesis config
@@ -277,7 +277,7 @@ pub mod pallet {
 			#[cfg(feature = "ibiza")]
 			PolkadotCurrentProxyAccountId::<T>::set(self.polkadot_proxy_account_id.clone());
 			#[cfg(feature = "ibiza")]
-			PolkadotNetworkChoice::<T>::set(self.polkadot_network_choice.clone());
+			PolkadotNetworkConfig::<T>::set(self.polkadot_network_config.clone());
 			#[cfg(feature = "ibiza")]
 			PolkadotProxyAccountNonce::<T>::set(0);
 		}

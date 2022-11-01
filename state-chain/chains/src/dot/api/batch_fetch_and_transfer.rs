@@ -121,7 +121,7 @@ impl ApiCall<Polkadot> for BatchFetchAndTransfer {
 mod test_batch_fetch {
 
 	use super::*;
-	use crate::dot::{sr25519::Pair, NetworkChoice};
+	use crate::dot::{sr25519::Pair, WESTEND_CONFIG};
 	use sp_core::{
 		crypto::{AccountId32, Pair as TraitPair},
 		sr25519, Hasher,
@@ -179,7 +179,7 @@ mod test_batch_fetch {
 		];
 
 		let batch_fetch_api = BatchFetchAndTransfer::new_unsigned(
-			PolkadotReplayProtection::new(NONCE_1, 0, NetworkChoice::WestendTestnet),
+			PolkadotReplayProtection::new(NONCE_1, 0, WESTEND_CONFIG),
 			dummy_fetch_params,
 			dummy_transfer_params,
 			account_id_proxy,

@@ -90,6 +90,12 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			cfe_settings: CFE_SETTINGS,
 			flip_token_address: [0u8; 20],
 			eth_usdc_address: [0x2; 20],
+			#[cfg(feature = "ibiza")]
+			polkadot_vault_account_id: None,
+			#[cfg(feature = "ibiza")]
+			polkadot_proxy_account_id: None,
+			#[cfg(feature = "ibiza")]
+			polkadot_network_config: None,
 		},
 	};
 
