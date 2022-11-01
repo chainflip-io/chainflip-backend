@@ -108,10 +108,7 @@ pub trait BaseRpcApi {
 
 	async fn rotate_keys(&self) -> RpcResult<Bytes>;
 
-	async fn fetch_runtime_version(
-		&self,
-		block_hash: state_chain_runtime::Hash,
-	) -> RpcResult<RuntimeVersion>;
+	async fn runtime_version(&self) -> RpcResult<RuntimeVersion>;
 
 	async fn is_auction_phase(&self) -> RpcResult<bool>;
 }
@@ -210,11 +207,8 @@ impl<RawRpcClient: RawRpcApi + Send + Sync> BaseRpcApi for BaseRpcClient<RawRpcC
 		self.base_rpc_client.rotate_keys().await
 	}
 
-	async fn fetch_runtime_version(
-		&self,
-		block_hash: state_chain_runtime::Hash,
-	) -> RpcResult<RuntimeVersion> {
-		self.base_rpc_client.runtime_version(Some(block_hash)).await
+	async fn runtime_version(&self) -> RpcResult<RuntimeVersion> {
+		self.base_rpc_client.runtime_version(None).await
 	}
 
 	async fn is_auction_phase(&self) -> RpcResult<bool> {

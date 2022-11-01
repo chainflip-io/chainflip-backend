@@ -181,11 +181,7 @@ impl ExtrinsicApi for super::StateChainClient {
 						// we retry this one, with the updated runtime_version
 						self.nonce.fetch_sub(1, Ordering::Relaxed);
 
-						let latest_block_hash =
-							self.base_rpc_client.latest_finalized_block_hash().await?;
-
-						let runtime_version =
-							self.base_rpc_client.fetch_runtime_version(latest_block_hash).await?;
+						let runtime_version = self.base_rpc_client.runtime_version().await?;
 
 						{
 							let runtime_version_locked =

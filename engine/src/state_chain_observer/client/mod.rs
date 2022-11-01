@@ -230,9 +230,7 @@ async fn inner_connect_to_state_chain(
 		finalized_block_header_stream,
 		Arc::new(StateChainClient {
 			nonce: AtomicU32::new(account_nonce),
-			runtime_version: RwLock::new(
-				base_rpc_client.fetch_runtime_version(latest_block_hash).await?,
-			),
+			runtime_version: RwLock::new(base_rpc_client.runtime_version().await?),
 			genesis_hash: base_rpc_client.block_hash(0).await?.unwrap(),
 			signer: signer.clone(),
 			base_rpc_client,
