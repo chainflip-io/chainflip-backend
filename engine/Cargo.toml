@@ -52,7 +52,6 @@ sha2 = "0.9.5"
 slog = {version = "2.7.0", features = ["max_level_trace", "release_max_level_trace"]}
 slog-async = {version = "2.6.0"}
 slog-json = {version = "2.3.0"}
-subxt = "0.24.0"
 thiserror = "1.0.26"
 tokio = {version = "1.13.1", features = ["full", "test-util"]}
 tokio-stream = {version = "0.1.5", features = ["sync"]}
@@ -105,6 +104,10 @@ custom-rpc = {path = "../state-chain/custom-rpc"}
 state-chain-runtime = {path = "../state-chain/runtime"}
 chainflip-node = {path = "../state-chain/node"}
 utilities = {path = "../utilities"}
+
+[dependencies.subxt]
+git = 'https://github.com/chainflip-io/substrate-subxt.git'
+tag = 'chainflip-monthly-2022-06+01'
 
 [dependencies.rocksdb]
 version = "0.18.0"
