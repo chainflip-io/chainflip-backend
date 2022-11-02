@@ -2,7 +2,6 @@
 use core::fmt::Display;
 
 use crate::benchmarking_value::BenchmarkValue;
-pub use cf_primitives::chains::Ethereum;
 use cf_primitives::{chains::assets, AssetAmount, EthAmount, IntentId};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{

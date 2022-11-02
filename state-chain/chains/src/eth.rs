@@ -7,6 +7,7 @@ pub mod benchmarking;
 pub mod ingress_address;
 
 use crate::*;
+pub use cf_primitives::chains::{assets, Ethereum};
 use codec::{Decode, Encode, MaxEncodedLen};
 pub use ethabi::{
 	ethereum_types::{H256, U256},
@@ -33,9 +34,6 @@ pub const CHAIN_ID_MAINNET: u64 = 1;
 pub const CHAIN_ID_ROPSTEN: u64 = 3;
 pub const CHAIN_ID_GOERLI: u64 = 5;
 pub const CHAIN_ID_KOVAN: u64 = 42;
-
-#[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub struct Ethereum;
 
 impl Chain for Ethereum {
 	type ChainBlockNumber = u64;

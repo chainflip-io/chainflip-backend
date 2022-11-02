@@ -676,17 +676,12 @@ pub trait AccountRoleRegistry<T: frame_system::Config> {
 }
 
 /// API that allows other pallets to Egress assets out of the State Chain.
-pub trait EgressApi {
+pub trait EgressApi<C: cf_chains::Chain> {
 	fn schedule_egress(
-		foreign_asset: ForeignChainAsset,
+		foreign_asset: C::ChainAsset,
 		amount: AssetAmount,
-		egress_address: ForeignChainAddress,
+		egress_address: C::ChainAccount,
 	);
-
-	fn is_egress_valid(
-		foreign_asset: &ForeignChainAsset,
-		egress_address: &ForeignChainAddress,
-	) -> bool;
 }
 
 pub trait EthereumAssetsAddressProvider {
@@ -698,10 +693,10 @@ pub trait EthereumAssetsAddressProvider {
 /// valid.
 ///
 /// Schedule functions are chain specific, as each chain may require different data to do fetching.
-pub trait IngressFetchApi {
-	fn schedule_ethereum_ingress_fetch(fetch_details: Vec<(Asset, IntentId)>);
+pub trait IngressFetchApi<C: cf_chains::Chain> {
+	fn schedule_ingress_fetch(fetch_details: Vec<(C::ChainAsset, IntentId)>);
 }
 
-impl IngressFetchApi for () {
-	fn schedule_ethereum_ingress_fetch(_fetch_details: Vec<(Asset, IntentId)>) {}
+impl<C: cf_chains::Chain> IngressFetchApi<C> for () {
+	fn schedule_ingress_fetch(_fetch_details: Vec<(C::ChainAsset, IntentId)>) {}
 }

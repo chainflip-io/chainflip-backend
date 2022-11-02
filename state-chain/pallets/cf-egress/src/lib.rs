@@ -12,15 +12,12 @@ mod mock;
 mod tests;
 mod weights;
 
-use cf_chains::{AllBatch, FetchAssetParams, TransferAssetParams};
+use cf_chains::{AllBatch, Chain, FetchAssetParams, TransferAssetParams};
 use cf_primitives::{
-	Asset, AssetAmount, EthereumAddress, ForeignChain, ForeignChainAddress, ForeignChainAsset,
-	IntentId, ETHEREUM_ETH_ADDRESS,
+	chains::{assets, Ethereum},
+	AssetAmount, ForeignChain, IntentId,
 };
-use cf_traits::{
-	ApiCallDataProvider, Broadcaster, EgressApi, EthereumAssetsAddressProvider, IngressFetchApi,
-	ReplayProtectionProvider,
-};
+use cf_traits::{Broadcaster, EgressApi, IngressFetchApi, ReplayProtectionProvider};
 use frame_support::pallet_prelude::*;
 pub use pallet::*;
 use sp_runtime::traits::Saturating;
@@ -29,16 +26,16 @@ pub use weights::WeightInfo;
 
 /// Enum wrapper for fetch and egress requests.
 #[derive(RuntimeDebug, Eq, PartialEq, Copy, Clone, Encode, Decode, MaxEncodedLen, TypeInfo)]
-pub enum EthereumRequest {
-	Fetch { intent_id: IntentId, asset: Asset },
-	Transfer { asset: Asset, to: EthereumAddress, amount: AssetAmount },
+pub enum FetchOrTransfer<C: Chain> {
+	Fetch { intent_id: IntentId, asset: C::ChainAsset },
+	Transfer { asset: C::ChainAsset, to: C::ChainAccount, amount: AssetAmount },
 }
 
-impl EthereumRequest {
-	fn asset(&self) -> &Asset {
+impl<C: Chain> FetchOrTransfer<C> {
+	fn asset(&self) -> &C::ChainAsset {
 		match self {
-			EthereumRequest::Fetch { asset, .. } => asset,
-			EthereumRequest::Transfer { asset, .. } => asset,
+			FetchOrTransfer::Fetch { asset, .. } => asset,
+			FetchOrTransfer::Transfer { asset, .. } => asset,
 		}
 	}
 }
@@ -47,8 +44,8 @@ impl EthereumRequest {
 pub mod pallet {
 	use super::*;
 
-	use cf_chains::eth::Ethereum;
-	use cf_traits::{ApiCallDataProvider, Chainflip};
+	use cf_primitives::chains::assets;
+	use cf_traits::Chainflip;
 	use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
 
 	#[pallet::pallet]
@@ -63,20 +60,16 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// Replay protection.
-		type EthereumReplayProtection: ReplayProtectionProvider<Ethereum>
-			+ ApiCallDataProvider<Ethereum>;
+		type ReplayProtection: ReplayProtectionProvider<Ethereum>;
 
 		/// The type of the chain-native transaction.
-		type EthereumEgressTransaction: AllBatch<Ethereum>;
+		type AllBatch: AllBatch<Ethereum>;
 
 		/// A broadcaster instance.
-		type EthereumBroadcaster: Broadcaster<Ethereum, ApiCall = Self::EthereumEgressTransaction>;
+		type Broadcaster: Broadcaster<Ethereum, ApiCall = Self::AllBatch>;
 
 		/// Governance origin to manage allowed assets
 		type EnsureGovernance: EnsureOrigin<Self::Origin>;
-
-		/// An API for getting Ethereum related parameters
-		type EthereumAssetsAddressProvider: EthereumAssetsAddressProvider;
 
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;
@@ -85,24 +78,24 @@ pub mod pallet {
 	/// Scheduled fetch and egress for the Ethereum chain.
 	#[pallet::storage]
 	pub(crate) type EthereumScheduledRequests<T: Config> =
-		StorageValue<_, Vec<EthereumRequest>, ValueQuery>;
+		StorageValue<_, Vec<FetchOrTransfer<Ethereum>>, ValueQuery>;
 
 	/// Stores the list of assets that are not allowed to be egressed.
 	#[pallet::storage]
 	pub(crate) type EthereumDisabledEgressAssets<T: Config> =
-		StorageMap<_, Twox64Concat, Asset, ()>;
+		StorageMap<_, Twox64Concat, assets::eth::Asset, ()>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		AssetEgressDisabled {
-			foreign_asset: ForeignChainAsset,
+			asset: assets::eth::Asset,
 			disabled: bool,
 		},
 		EgressScheduled {
-			foreign_asset: ForeignChainAsset,
+			asset: assets::eth::Asset,
 			amount: AssetAmount,
-			egress_address: ForeignChainAddress,
+			egress_address: <Ethereum as Chain>::ChainAccount,
 		},
 		IngressFetchesScheduled {
 			fetches_added: u32,
@@ -157,20 +150,18 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::disable_asset_egress())]
 		pub fn disable_asset_egress(
 			origin: OriginFor<T>,
-			foreign_asset: ForeignChainAsset,
+			asset: assets::eth::Asset,
 			disabled: bool,
 		) -> DispatchResult {
 			let _ok = T::EnsureGovernance::ensure_origin(origin)?;
 
-			if foreign_asset.chain == ForeignChain::Ethereum {
-				if disabled {
-					EthereumDisabledEgressAssets::<T>::insert(foreign_asset.asset, ());
-				} else {
-					EthereumDisabledEgressAssets::<T>::remove(foreign_asset.asset);
-				}
+			if disabled {
+				EthereumDisabledEgressAssets::<T>::insert(asset, ());
+			} else {
+				EthereumDisabledEgressAssets::<T>::remove(asset);
 			}
 
-			Self::deposit_event(Event::<T>::AssetEgressDisabled { foreign_asset, disabled });
+			Self::deposit_event(Event::<T>::AssetEgressDisabled { asset, disabled });
 
 			Ok(())
 		}
@@ -213,7 +204,7 @@ impl<T: Config> Pallet<T> {
 		}
 
 		let batch_to_send: Vec<_> =
-			EthereumScheduledRequests::<T>::mutate(|requests: &mut Vec<EthereumRequest>| {
+			EthereumScheduledRequests::<T>::mutate(|requests: &mut Vec<_>| {
 				// Take up to batch_size requests to be sent
 				let mut available_batch_size = maybe_size.unwrap_or(requests.len() as u32);
 
@@ -236,27 +227,15 @@ impl<T: Config> Pallet<T> {
 			return 0
 		}
 
-		// Construct the Params required for Ethereum AllBatch all.
 		let mut fetch_params = vec![];
 		let mut egress_params = vec![];
 		for request in batch_to_send {
 			match request {
-				EthereumRequest::Fetch { intent_id, asset } => {
-					// Asset should always have a valid Ethereum address
-					if let Some(asset_address) = Self::get_ethereum_asset_identifier(asset) {
-						fetch_params
-							.push(FetchAssetParams { intent_id, asset: asset_address.into() });
-					}
+				FetchOrTransfer::<Ethereum>::Fetch { intent_id, asset } => {
+					fetch_params.push(FetchAssetParams { intent_id, asset });
 				},
-				EthereumRequest::Transfer { asset, to, amount } => {
-					// Asset should always have a valid Ethereum address
-					if let Some(asset_address) = Self::get_ethereum_asset_identifier(asset) {
-						egress_params.push(TransferAssetParams {
-							asset: asset_address.into(),
-							to: to.into(),
-							amount,
-						});
-					}
+				FetchOrTransfer::<Ethereum>::Transfer { asset, to, amount } => {
+					egress_params.push(TransferAssetParams { asset, to, amount });
 				},
 			}
 		}
@@ -265,76 +244,44 @@ impl<T: Config> Pallet<T> {
 
 		// Construct and send the transaction.
 		#[allow(clippy::unit_arg)]
-		let egress_transaction = T::EthereumEgressTransaction::new_unsigned(
-			T::EthereumReplayProtection::replay_protection(),
-			T::EthereumReplayProtection::chain_extra_data(),
+		let egress_transaction = T::AllBatch::new_unsigned(
+			T::ReplayProtection::replay_protection(),
 			fetch_params,
 			egress_params,
 		);
-		T::EthereumBroadcaster::threshold_sign_and_broadcast(egress_transaction);
+		T::Broadcaster::threshold_sign_and_broadcast(egress_transaction);
 		Self::deposit_event(Event::<T>::EthereumBatchBroadcastRequested {
 			fetch_batch_size,
 			egress_batch_size,
 		});
 		fetch_batch_size.saturating_add(egress_batch_size)
 	}
-
-	fn get_ethereum_asset_identifier(asset: Asset) -> Option<EthereumAddress> {
-		if asset == Asset::Eth {
-			Some(ETHEREUM_ETH_ADDRESS)
-		} else {
-			T::EthereumAssetsAddressProvider::try_get_asset_address(asset)
-		}
-	}
 }
 
-impl<T: Config> EgressApi for Pallet<T> {
+impl<T: Config> EgressApi<Ethereum> for Pallet<T> {
 	fn schedule_egress(
-		foreign_asset: ForeignChainAsset,
+		asset: <Ethereum as Chain>::ChainAsset,
 		amount: AssetAmount,
-		egress_address: ForeignChainAddress,
+		egress_address: <Ethereum as Chain>::ChainAccount,
 	) {
-		debug_assert!(
-			Self::is_egress_valid(&foreign_asset, &egress_address),
-			"Egress validity is checked by calling functions."
-		);
+		EthereumScheduledRequests::<T>::append(FetchOrTransfer::<Ethereum>::Transfer {
+			asset,
+			to: egress_address,
+			amount,
+		});
 
-		// Currently only Ethereum chain is supported
-		if let (ForeignChain::Ethereum, ForeignChainAddress::Eth(eth_address)) =
-			(foreign_asset.chain, egress_address)
-		{
-			EthereumScheduledRequests::<T>::append(EthereumRequest::Transfer {
-				asset: foreign_asset.asset,
-				to: eth_address,
-				amount,
-			});
-		}
-
-		Self::deposit_event(Event::<T>::EgressScheduled { foreign_asset, amount, egress_address });
-	}
-
-	fn is_egress_valid(
-		foreign_asset: &ForeignChainAsset,
-		egress_address: &ForeignChainAddress,
-	) -> bool {
-		match foreign_asset.chain {
-			ForeignChain::Ethereum =>
-				matches!(egress_address, ForeignChainAddress::Eth(..)) &&
-					Self::get_ethereum_asset_identifier(foreign_asset.asset).is_some(),
-			ForeignChain::Polkadot => matches!(egress_address, ForeignChainAddress::Dot(..)),
-		}
+		Self::deposit_event(Event::<T>::EgressScheduled { asset, amount, egress_address });
 	}
 }
 
-impl<T: Config> IngressFetchApi for Pallet<T> {
-	fn schedule_ethereum_ingress_fetch(fetch_details: Vec<(Asset, IntentId)>) {
+impl<T: Config> IngressFetchApi<Ethereum> for Pallet<T> {
+	fn schedule_ingress_fetch(fetch_details: Vec<(assets::eth::Asset, IntentId)>) {
 		let fetches_added = fetch_details.len() as u32;
 		for (asset, intent_id) in fetch_details {
-			debug_assert!(
-				Self::get_ethereum_asset_identifier(asset).is_some(),
-				"Asset validity is checked by calling functions."
-			);
-			EthereumScheduledRequests::<T>::append(EthereumRequest::Fetch { intent_id, asset });
+			EthereumScheduledRequests::<T>::append(FetchOrTransfer::<Ethereum>::Fetch {
+				intent_id,
+				asset,
+			});
 		}
 		Self::deposit_event(Event::<T>::IngressFetchesScheduled { fetches_added });
 	}
