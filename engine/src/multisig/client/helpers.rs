@@ -5,8 +5,7 @@ use std::{
 	time::Duration,
 };
 
-use anyhow::{anyhow, Result};
-use cf_chains::eth::{AggKey, SchnorrVerificationComponents};
+use anyhow::Result;
 use cf_primitives::{AuthorityCount, CeremonyId};
 use futures::{stream, StreamExt};
 use itertools::{Either, Itertools};
@@ -36,7 +35,7 @@ use crate::{
 			keygen::{generate_key_data, HashComm1, HashContext, VerifyHashCommitmentsBroadcast2},
 			signing, KeygenResultInfo, PartyIdxMapping, ThresholdParameters,
 		},
-		crypto::{ECPoint, Rng},
+		crypto::{ECPoint, Rng, Verifiable},
 		CryptoScheme, KeyId, MessageHash,
 	},
 	p2p::OutgoingMultisigStageMessages,
@@ -51,7 +50,7 @@ use crate::{
 		client::{keygen, MultisigMessage},
 		// This determines which crypto scheme will be used in tests
 		// (we make arbitrary choice to use eth)
-		crypto::eth::{EthSchnorrSignature, EthSigning, Point},
+		crypto::eth::{EthSigning, Point},
 		tests::fixtures::MESSAGE_HASH,
 	},
 	testing::expect_recv_with_timeout,
@@ -80,7 +79,6 @@ lazy_static! {
 }
 
 pub type StageMessages<T> = HashMap<AccountId, HashMap<AccountId, T>>;
-type SigningCeremonyEth = SigningCeremony<EthSigning>;
 type KeygenCeremonyEth = KeygenCeremony<EthSigning>;
 
 pub struct Node<C: CeremonyTrait> {
@@ -115,12 +113,12 @@ fn new_node<C: CeremonyTrait>(account_id: AccountId, allowing_high_pubkey: bool)
 }
 
 // Exists so some of the tests can easily modify signing requests
-pub struct SigningCeremonyDetails {
+pub struct SigningCeremonyDetails<C: CryptoScheme> {
 	pub rng: Rng,
 	pub ceremony_id: CeremonyId,
 	pub signers: BTreeSet<AccountId>,
 	pub message_hash: MessageHash,
-	pub keygen_result_info: KeygenResultInfo<Point>,
+	pub keygen_result_info: KeygenResultInfo<C::Point>,
 }
 
 pub struct KeygenCeremonyDetails {
@@ -153,12 +151,12 @@ impl<C: CeremonyTrait> Node<C> {
 	}
 }
 
-impl Node<SigningCeremonyEth> {
-	pub async fn request_signing(&mut self, signing_ceremony_details: SigningCeremonyDetails) {
+impl<C: CryptoScheme> Node<SigningCeremony<C>> {
+	pub async fn request_signing(&mut self, signing_ceremony_details: SigningCeremonyDetails<C>) {
 		let SigningCeremonyDetails { rng, ceremony_id, signers, message_hash, keygen_result_info } =
 			signing_ceremony_details;
 
-		let request = prepare_signing_request::<EthSigning>(
+		let request = prepare_signing_request::<C>(
 			ceremony_id,
 			&self.own_account_id,
 			signers,
@@ -617,19 +615,19 @@ impl KeygenCeremonyRunner {
 	}
 }
 
-pub struct SigningCeremonyRunnerData {
+pub struct SigningCeremonyRunnerData<C: CryptoScheme> {
 	pub key_id: KeyId,
-	pub key_data: HashMap<AccountId, KeygenResultInfo<Point>>,
+	pub key_data: HashMap<AccountId, KeygenResultInfo<C::Point>>,
 	pub message_hash: MessageHash,
 }
-pub type SigningCeremonyRunner =
-	CeremonyTestRunner<SigningCeremonyRunnerData, SigningCeremony<EthSigning>>;
+pub type SigningCeremonyRunner<C> =
+	CeremonyTestRunner<SigningCeremonyRunnerData<C>, SigningCeremony<C>>;
 
 #[async_trait]
-impl CeremonyRunnerStrategy for SigningCeremonyRunner {
-	type CeremonyType = SigningCeremonyEth;
-	type CheckedOutput = EthSchnorrSignature;
-	type InitialStageData = signing::Comm1<Point>;
+impl<C: CryptoScheme> CeremonyRunnerStrategy for SigningCeremonyRunner<C> {
+	type CeremonyType = SigningCeremony<C>;
+	type CheckedOutput = C::Signature;
+	type InitialStageData = signing::Comm1<C::Point>;
 
 	fn post_successful_complete_check(
 		&self,
@@ -638,7 +636,8 @@ impl CeremonyRunnerStrategy for SigningCeremonyRunner {
 		let signature = all_same(outputs.into_iter().map(|(_, signature)| signature))
 			.expect("Signatures don't match");
 
-		verify_sig_with_aggkey(&signature, &self.ceremony_runner_data.key_id)
+		signature
+			.verify(&self.ceremony_runner_data.key_id, &MESSAGE_HASH.0)
 			.expect("Should be valid signature");
 
 		signature
@@ -654,12 +653,13 @@ impl CeremonyRunnerStrategy for SigningCeremonyRunner {
 			.await;
 	}
 }
-impl SigningCeremonyRunner {
+
+impl<C: CryptoScheme> SigningCeremonyRunner<C> {
 	pub fn new_with_all_signers(
-		nodes: HashMap<AccountId, Node<SigningCeremonyEth>>,
+		nodes: HashMap<AccountId, Node<SigningCeremony<C>>>,
 		ceremony_id: CeremonyId,
 		key_id: KeyId,
-		key_data: HashMap<AccountId, KeygenResultInfo<Point>>,
+		key_data: HashMap<AccountId, KeygenResultInfo<C::Point>>,
 		message_hash: MessageHash,
 		rng: Rng,
 	) -> Self {
@@ -672,13 +672,13 @@ impl SigningCeremonyRunner {
 	}
 
 	pub fn new_with_threshold_subset_of_signers(
-		nodes: HashMap<AccountId, Node<SigningCeremonyEth>>,
+		nodes: HashMap<AccountId, Node<SigningCeremony<C>>>,
 		ceremony_id: CeremonyId,
 		key_id: KeyId,
-		key_data: HashMap<AccountId, KeygenResultInfo<Point>>,
+		key_data: HashMap<AccountId, KeygenResultInfo<C::Point>>,
 		message_hash: MessageHash,
 		rng: Rng,
-	) -> (Self, HashMap<AccountId, Node<SigningCeremonyEth>>) {
+	) -> (Self, HashMap<AccountId, Node<SigningCeremony<C>>>) {
 		let nodes_len = nodes.len();
 		let (signers, non_signers) = split_at(
 			nodes.into_iter().sorted_by_key(|(account_id, _)| account_id.clone()),
@@ -691,7 +691,10 @@ impl SigningCeremonyRunner {
 		)
 	}
 
-	pub fn signing_ceremony_details(&mut self, account_id: &AccountId) -> SigningCeremonyDetails {
+	pub fn signing_ceremony_details(
+		&mut self,
+		account_id: &AccountId,
+	) -> SigningCeremonyDetails<C> {
 		use rand_legacy::Rng as _;
 
 		SigningCeremonyDetails {
@@ -704,9 +707,9 @@ impl SigningCeremonyRunner {
 	}
 }
 
-pub async fn new_signing_ceremony(
-) -> (SigningCeremonyRunner, HashMap<AccountId, Node<SigningCeremonyEth>>) {
-	let (key_id, key_data) = generate_key_data::<EthSigning>(
+pub async fn new_signing_ceremony<C: CryptoScheme>(
+) -> (SigningCeremonyRunner<C>, HashMap<AccountId, Node<SigningCeremony<C>>>) {
+	let (key_id, key_data) = generate_key_data::<C>(
 		BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
 		&mut Rng::from_seed(DEFAULT_KEYGEN_SEED),
 		true,
@@ -723,14 +726,16 @@ pub async fn new_signing_ceremony(
 	)
 }
 
-pub async fn standard_signing(signing_ceremony: &mut SigningCeremonyRunner) -> EthSchnorrSignature {
+pub async fn standard_signing<C: CryptoScheme>(
+	signing_ceremony: &mut SigningCeremonyRunner<C>,
+) -> C::Signature {
 	let stage_1_messages = signing_ceremony.request().await;
 	let messages = run_stages!(
 		signing_ceremony,
 		stage_1_messages,
-		signing::VerifyComm2<Point>,
-		signing::LocalSig3<Point>,
-		signing::VerifyLocalSig4<Point>
+		signing::VerifyComm2<C::Point>,
+		signing::LocalSig3<C::Point>,
+		signing::VerifyLocalSig4<C::Point>
 	);
 	signing_ceremony.distribute_messages(messages).await;
 	signing_ceremony.complete().await
@@ -848,20 +853,6 @@ pub fn gen_invalid_keygen_comm1<P: ECPoint>(
 
 pub fn gen_invalid_signing_comm1(rng: &mut Rng) -> SigningCommitment<Point> {
 	SigningCommitment { d: Point::random(rng), e: Point::random(rng) }
-}
-
-/// Using the given key_id, verify the signature is correct
-pub fn verify_sig_with_aggkey(sig: &EthSchnorrSignature, key_id: &KeyId) -> Result<()> {
-	// Get the aggkey
-	let pk_ser: &[u8; 33] = key_id.0[..].try_into().unwrap();
-	let agg_key = AggKey::from_pubkey_compressed(*pk_ser);
-
-	// Verify the signature with the aggkey
-	agg_key
-		.verify(&MESSAGE_HASH.0, &SchnorrVerificationComponents::from(sig.clone()))
-		.map_err(|e| anyhow!("Failed to verify signature: {:?}", e))?;
-
-	Ok(())
 }
 
 pub fn gen_invalid_keygen_stage_2_state<P: ECPoint>(

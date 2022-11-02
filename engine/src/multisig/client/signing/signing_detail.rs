@@ -167,20 +167,6 @@ pub fn generate_schnorr_response<C: CryptoScheme>(
 	C::build_response(nonce, private_key, challenge)
 }
 
-/// Check the validity of a signature response share.
-/// (See step 7.b in Figure 3, page 15.)
-/// TODO: we will likely need a separate verification
-/// function for each blockchain
-fn is_party_response_valid<Point: ECPoint>(
-	y_i: &Point,
-	lambda_i: &Point::Scalar,
-	commitment: &Point,
-	challenge: &Point::Scalar,
-	signature_response: &Point::Scalar,
-) -> bool {
-	Point::from_scalar(signature_response) == *commitment - (*y_i) * challenge * lambda_i
-}
-
 /// Combine local signatures received from all parties into the final
 /// (aggregate) signature given that no party misbehaved. Otherwise
 /// return the misbehaving parties.
@@ -212,7 +198,13 @@ pub fn aggregate_signature<C: CryptoScheme>(
 
 			let response = &responses[signer_idx];
 
-			!is_party_response_valid(&y_i, &lambda_i, &commitment_i, &challenge, &response.response)
+			!C::is_party_response_valid(
+				&y_i,
+				&lambda_i,
+				&commitment_i,
+				&challenge,
+				&response.response,
+			)
 		})
 		.collect();
 
@@ -274,7 +266,7 @@ mod tests {
 		// signing to work for a single party)
 		let dummy_lambda = Scalar::from(1);
 
-		assert!(is_party_response_valid(
+		assert!(EthSigning::is_party_response_valid(
 			&public_key,
 			&dummy_lambda,
 			&commitment,

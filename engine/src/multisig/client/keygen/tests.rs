@@ -895,7 +895,7 @@ async fn genesis_keys_can_sign() {
 		generate_key_data_until_compatible::<EthSigning>(account_ids.clone(), 20, rng);
 
 	let (mut signing_ceremony, _non_signing_nodes) =
-		SigningCeremonyRunner::new_with_threshold_subset_of_signers(
+		SigningCeremonyRunner::<EthSigning>::new_with_threshold_subset_of_signers(
 			new_nodes(account_ids),
 			DEFAULT_SIGNING_CEREMONY_ID,
 			key_id.clone(),
