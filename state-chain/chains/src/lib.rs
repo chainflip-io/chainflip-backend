@@ -53,8 +53,6 @@ pub trait Chain: Member + Parameter {
 	type ChainAsset: Member + Parameter + MaxEncodedLen;
 
 	type ChainAccount: Member + Parameter + MaxEncodedLen + BenchmarkValue;
-
-	type SupportedAsset: Member + Parameter + MaxEncodedLen;
 }
 
 /// Measures the age of items associated with the Chain.
@@ -87,7 +85,6 @@ pub trait ChainCrypto: Chain {
 pub trait ChainAbi: ChainCrypto {
 	type Transaction: Member + Parameter + Default + BenchmarkValue + FeeRefundCalculator<Self>;
 	type ReplayProtection: Member + Parameter;
-	type ApiCallExtraData;
 }
 
 /// A call or collection of calls that can be made to the Chainflip api on an external chain.
@@ -147,7 +144,7 @@ pub trait IngressAddress {
 pub trait SetAggKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
 		replay_protection: Abi::ReplayProtection,
-		chain_specific_data: Abi::ApiCallExtraData,
+		old_key: <Abi as ChainCrypto>::AggKey,
 		new_key: <Abi as ChainCrypto>::AggKey,
 	) -> Self;
 }
@@ -225,8 +222,7 @@ pub mod mocks {
 		type TrackedData = MockTrackedData;
 		type TransactionFee = TransactionFee;
 		type ChainAccount = u64; // Currently, we don't care about this since we don't use them in tests
-		type ChainAsset = ();
-		type SupportedAsset = assets::eth::Asset;
+		type ChainAsset = assets::eth::Asset;
 	}
 
 	#[derive(
@@ -305,7 +301,6 @@ pub mod mocks {
 	impl ChainAbi for MockEthereum {
 		type Transaction = MockTransaction;
 		type ReplayProtection = EthereumReplayProtection;
-		type ApiCallExtraData = ();
 	}
 
 	#[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]

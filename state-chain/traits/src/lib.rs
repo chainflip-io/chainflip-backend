@@ -281,10 +281,6 @@ pub trait EmissionsTrigger {
 pub trait ReplayProtectionProvider<Abi: ChainAbi> {
 	fn replay_protection() -> Abi::ReplayProtection;
 }
-/// Provides chain-specific Extra data needed to build apicalls for that chain.
-pub trait ApiCallDataProvider<Abi: ChainAbi> {
-	fn chain_extra_data() -> Abi::ApiCallExtraData;
-}
 
 /// Provides the environment data for ethereum-like chains.
 pub trait EthEnvironmentProvider {

@@ -205,7 +205,7 @@ pub enum PalletOffence {
 #[frame_support::pallet]
 pub mod pallet {
 
-	use cf_traits::{AccountRoleRegistry, ApiCallDataProvider, ThresholdSigner};
+	use cf_traits::{AccountRoleRegistry, ThresholdSigner};
 
 	use super::*;
 
@@ -263,8 +263,7 @@ pub mod pallet {
 		type EthEnvironmentProvider: EthEnvironmentProvider;
 
 		// Something that can give us the next nonce.
-		type ReplayProtectionProvider: ReplayProtectionProvider<Self::Chain>
-			+ ApiCallDataProvider<Self::Chain>;
+		type ReplayProtectionProvider: ReplayProtectionProvider<Self::Chain>;
 
 		// A trait which allows us to put the chain into maintenance mode.
 		type SystemStateManager: SystemStateManager;
@@ -548,7 +547,7 @@ pub mod pallet {
 					T::Broadcaster::threshold_sign_and_broadcast(
 						<T::ApiCall as SetAggKeyWithAggKey<_>>::new_unsigned(
 							<T::ReplayProtectionProvider>::replay_protection(),
-							<T::ReplayProtectionProvider>::chain_extra_data(),
+							<Self as KeyProvider<_>>::current_key(),
 							new_public_key,
 						),
 					);

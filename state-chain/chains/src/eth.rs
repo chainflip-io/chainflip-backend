@@ -43,8 +43,7 @@ impl Chain for Ethereum {
 	type TransactionFee = eth::TransactionFee;
 	type TrackedData = eth::TrackedData<Self>;
 	type ChainAccount = eth::Address;
-	type ChainAsset = eth::Address;
-	type SupportedAsset = assets::eth::Asset;
+	type ChainAsset = assets::eth::Asset;
 }
 
 impl ChainCrypto for Ethereum {
