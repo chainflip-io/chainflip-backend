@@ -111,8 +111,7 @@ impl Chain for Polkadot {
 	type TrackedData = eth::TrackedData<Self>;
 	type ChainAccount = PolkadotAccountId;
 	type TransactionFee = Self::ChainAmount;
-	type ChainAsset = ();
-	type SupportedAsset = assets::dot::Asset;
+	type ChainAsset = assets::dot::Asset;
 }
 
 impl ChainCrypto for Polkadot {
@@ -152,7 +151,6 @@ impl FeeRefundCalculator<Polkadot> for PolkadotTransactionData {
 impl ChainAbi for Polkadot {
 	type Transaction = PolkadotTransactionData;
 	type ReplayProtection = PolkadotReplayProtection;
-	type ApiCallExtraData = CurrentVaultAndProxy;
 }
 
 pub struct CurrentVaultAndProxy {

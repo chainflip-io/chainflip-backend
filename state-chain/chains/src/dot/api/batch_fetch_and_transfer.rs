@@ -1,3 +1,4 @@
+use cf_primitives::chains::assets;
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 use sp_std::{boxed::Box, vec::Vec};
@@ -18,9 +19,9 @@ pub struct BatchFetchAndTransfer {
 	/// The handler for creating and signing polkadot extrinsics
 	pub extrinsic_handler: PolkadotExtrinsicBuilder,
 	/// The list of all inbound deposits that are to be fetched in this batch call.
-	pub fetch_params: Vec<FetchAssetParams<Polkadot>>,
+	pub fetch_params: Vec<FetchAssetParams<assets::dot::Asset>>,
 	/// The list of all outbound transfers that are to be executed in this call.
-	pub transfer_params: Vec<TransferAssetParams<Polkadot>>,
+	pub transfer_params: Vec<TransferAssetParams<assets::dot::Asset, PolkadotAccountId>>,
 	/// The vault anonymous Polkadot AccountId
 	pub vault_account: PolkadotAccountId,
 }
@@ -28,8 +29,8 @@ pub struct BatchFetchAndTransfer {
 impl BatchFetchAndTransfer {
 	pub fn new_unsigned(
 		replay_protection: PolkadotReplayProtection,
-		fetch_params: Vec<FetchAssetParams<Polkadot>>,
-		transfer_params: Vec<TransferAssetParams<Polkadot>>,
+		fetch_params: Vec<FetchAssetParams<assets::dot::Asset>>,
+		transfer_params: Vec<TransferAssetParams<assets::dot::Asset, PolkadotAccountId>>,
 		proxy_account: PolkadotAccountId,
 		vault_account: PolkadotAccountId,
 	) -> Self {

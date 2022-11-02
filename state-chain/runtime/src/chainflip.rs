@@ -6,6 +6,7 @@ pub mod decompose_recompose;
 pub mod epoch_transition;
 mod missed_authorship_slots;
 mod offences;
+use cf_primitives::{chains::assets, EthereumAddress, ETHEREUM_ETH_ADDRESS};
 pub use offences::*;
 mod signer_nomination;
 pub use missed_authorship_slots::MissedAuraSlots;
@@ -27,7 +28,7 @@ use cf_chains::{
 		api::{EthereumApi, EthereumReplayProtection},
 		Ethereum,
 	},
-	ApiCall, ChainAbi, TransactionBuilder,
+	ApiCall, ChainAbi, ChainEnvironment, TransactionBuilder,
 };
 use cf_traits::{
 	ApiCallDataProvider, BlockEmissions, Chainflip, EmergencyRotation, EpochInfo,
@@ -126,6 +127,22 @@ impl cf_traits::WaivedFees for WaivedFees {
 	}
 }
 
+pub struct EthEnvironment;
+
+impl ChainEnvironment<assets::eth::Asset> for EthEnvironment {
+	type LookupValue = EthereumAddress;
+
+	fn lookup(
+		asset: assets::eth::Asset,
+	) -> Result<Self::LookupValue, frame_support::error::LookupError> {
+		Ok(match asset {
+			assets::eth::Asset::Eth => ETHEREUM_ETH_ADDRESS,
+			assets::eth::Asset::Flip => Environment::flip_token_address(),
+			assets::eth::Asset::Usdc => todo!(),
+		})
+	}
+}
+
 pub struct EthTransactionBuilder;
 
 impl TransactionBuilder<Ethereum, EthereumApi> for EthTransactionBuilder {
@@ -139,6 +156,7 @@ impl TransactionBuilder<Ethereum, EthereumApi> for EthTransactionBuilder {
 				EthereumApi::SetGovKeyWithAggKey(_) => Environment::key_manager_address().into(),
 				EthereumApi::SetCommKeyWithAggKey(_) => Environment::key_manager_address().into(),
 				EthereumApi::AllBatch(_) => Environment::eth_vault_address().into(),
+				EthereumApi::_Phantom(..) => unreachable!(),
 			},
 			data: signed_call.chain_encoded(),
 			..Default::default()
@@ -195,9 +213,7 @@ impl RuntimeUpgrade for RuntimeUpgradeManager {
 	}
 }
 
-pub struct EthApiCallDataProvider;
-
-impl ReplayProtectionProvider<Ethereum> for EthApiCallDataProvider {
+impl ReplayProtectionProvider<Ethereum> for EthEnvironment {
 	// Get the Environment values for key_manager_address and chain_id, then use
 	// the next global signature nonce
 	fn replay_protection() -> EthereumReplayProtection {
@@ -209,14 +225,10 @@ impl ReplayProtectionProvider<Ethereum> for EthApiCallDataProvider {
 	}
 }
 
-impl ApiCallDataProvider<Ethereum> for EthApiCallDataProvider {
-	fn chain_extra_data() -> <Ethereum as ChainAbi>::ApiCallExtraData {}
-}
-
 #[cfg(feature = "ibiza")]
-pub struct DotApiCallDataProvider;
+pub struct DotEnvironment;
 #[cfg(feature = "ibiza")]
-impl ReplayProtectionProvider<Polkadot> for DotApiCallDataProvider {
+impl ReplayProtectionProvider<Polkadot> for DotEnvironment {
 	// Get the Environment values for vault_account, NetworkChoice and the next nonce for the
 	// proxy_account
 	fn replay_protection() -> PolkadotReplayProtection {
@@ -229,13 +241,16 @@ impl ReplayProtectionProvider<Polkadot> for DotApiCallDataProvider {
 		 // to be set here
 	}
 }
+
 #[cfg(feature = "ibiza")]
-impl ApiCallDataProvider<Polkadot> for DotApiCallDataProvider {
-	// Get the current vault_account and proxy_account ids.
-	fn chain_extra_data() -> <Polkadot as ChainAbi>::ApiCallExtraData {
-		CurrentVaultAndProxy {
-			vault_account: Environment::get_vault_account(),
-			proxy_account: Environment::get_current_proxy_account(),
+impl ChainEnvironment<cf_chains::dot::api::SystemAccounts> for DotEnvironment {
+	type LookupValue;
+
+	fn lookup(
+		query: cf_chains::dot::api::SystemAccounts,
+	) -> Result<Self::LookupValue, frame_support::error::LookupError> {
+		match query {
+			_ => todo!(), //Pull from environment
 		}
 	}
 }

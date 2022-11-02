@@ -140,6 +140,20 @@ pub trait IngressAddress {
 	/// Returns an ingress address
 	fn derive_address(self, vault_address: Self::AddressType, intent_id: u32) -> Self::AddressType;
 }
+
+/// Similar to [frame_support::StaticLookup] but with the `Key` as a type parameter instead of an
+/// associated type.
+///
+/// This allows us to define multiple lookups on a single type.
+///
+/// TODO: Consider making the lookup infallible.
+pub trait ChainEnvironment<LookupKey: codec::Codec + Clone + PartialEq + Debug + TypeInfo> {
+	type LookupValue;
+
+	/// Attempt a lookup.
+	fn lookup(s: LookupKey) -> Result<Self::LookupValue, frame_support::error::LookupError>;
+}
+
 /// Constructs the `SetAggKeyWithAggKey` api call.
 pub trait SetAggKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
