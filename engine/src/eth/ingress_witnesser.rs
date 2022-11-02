@@ -16,7 +16,7 @@ use crate::{
 };
 
 use super::{
-	block_head_stream_from, epoch_witnesser,
+	epoch_witnesser, eth_block_head_stream_from,
 	http_safe_stream::{safe_polling_http_head_stream, HTTP_POLL_INTERVAL},
 	merged_block_items_stream,
 	rpc::{EthDualRpcClient, EthRpcApi, EthWsRpcApi},
@@ -39,7 +39,7 @@ where
 	EthRpc: 'static + EthRpcApi + Send + Sync + Clone,
 {
 	Ok(Box::pin(
-		block_head_stream_from(from_block, safe_head_stream, eth_rpc.clone(), logger)
+		eth_block_head_stream_from(from_block, safe_head_stream, eth_rpc.clone(), logger)
 			.await?
 			.then(move |header| {
 				let eth_rpc = eth_rpc.clone();

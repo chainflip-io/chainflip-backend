@@ -52,6 +52,7 @@ sha2 = "0.9.5"
 slog = {version = "2.7.0", features = ["max_level_trace", "release_max_level_trace"]}
 slog-async = {version = "2.6.0"}
 slog-json = {version = "2.3.0"}
+subxt = "0.24.0"
 thiserror = "1.0.26"
 tokio = {version = "1.13.1", features = ["full", "test-util"]}
 tokio-stream = {version = "0.1.5", features = ["sync"]}
@@ -112,7 +113,6 @@ version = "0.18.0"
 # https://github.com/rust-rocksdb/rust-rocksdb/pull/555
 default-features = false
 features = ["lz4"]
-
 
 # substrate deps
 [dependencies.codec]
