@@ -249,7 +249,7 @@ jobs:
             chainflip-docgen/generated
 
   deb-publish:
-    name: Publish to APT repo
-    needs: [test-single-node]
+    name: Publish Packages to APT repo
+    needs: [build-and-test]
     uses: ./.github/workflows/.deb-publish.yaml
     secrets: inherit
