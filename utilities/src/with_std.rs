@@ -163,7 +163,7 @@ pub mod mockall_utilities {
 #[macro_export]
 macro_rules! repository_link {
 	() => {
-		if let Some(commit_hash) = core::option_env!("CIRCLE_SHA1") {
+		if let Some(commit_hash) = core::option_env!("GITHUB_SHA") {
 			Some(utilities::internal_lazy_format!(
 				"https://github.com/chainflip-io/chainflip-backend/tree/{commit_hash}"
 			))
