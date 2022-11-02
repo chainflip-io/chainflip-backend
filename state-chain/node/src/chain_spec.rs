@@ -31,6 +31,7 @@ const ETH_INIT_AGG_KEY_DEFAULT: &str =
 	"02e61afd677cdfbec838c6f309deff0b2c6056f8a27f2c783b68bba6b30f667be6";
 const GENESIS_STAKE_AMOUNT_DEFAULT: FlipBalance = 5_000 * FLIPPERINOS_PER_FLIP;
 const ETH_DEPLOYMENT_BLOCK_DEFAULT: u64 = 0;
+const CLAIM_DELAY_DEFAULT: u64 = 80;
 const ETH_PRIORITY_FEE_PERCENTILE_DEFAULT: u8 = 50;
 
 /// Generate a crypto pair from seed.
@@ -65,6 +66,7 @@ pub struct StateChainEnvironment {
 	eth_init_agg_key: [u8; 33],
 	ethereum_deployment_block: u64,
 	genesis_stake_amount: u128,
+	claim_delay_buffer_seconds: u64,
 	/// Note: Minimum stake should be expressed in Flipperinos.
 	min_stake: u128,
 	// CFE config values starts here
@@ -130,6 +132,11 @@ pub fn get_environment() -> StateChainEnvironment {
 		.map(|s| s.parse::<u128>().expect("MIN_STAKE env var could not be parsed to u128"))
 		.unwrap_or(DEFAULT_MIN_STAKE);
 
+	let claim_delay_buffer_seconds = env::var("CLAIM_DELAY")
+		.unwrap_or_else(|_| CLAIM_DELAY_DEFAULT.to_string())
+		.parse::<u64>()
+		.expect("CLAIM_DELAY env var could not be parsed to u64");
+
 	StateChainEnvironment {
 		flip_token_address,
 		eth_usdc_address,
@@ -143,6 +150,7 @@ pub fn get_environment() -> StateChainEnvironment {
 		eth_block_safety_margin,
 		max_ceremony_stage_duration,
 		min_stake,
+		claim_delay_buffer_seconds,
 	}
 }
 
@@ -172,6 +180,7 @@ pub fn development_config() -> Result<ChainSpec, String> {
 		eth_block_safety_margin,
 		max_ceremony_stage_duration,
 		min_stake,
+		claim_delay_buffer_seconds,
 	} = get_environment();
 	Ok(ChainSpec::from_genesis(
 		"Develop",
@@ -210,6 +219,7 @@ pub fn development_config() -> Result<ChainSpec, String> {
 				genesis_stake_amount,
 				min_stake,
 				8 * HOURS,
+				claim_delay_buffer_seconds,
 			)
 		},
 		// Bootnodes
@@ -249,6 +259,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 		eth_block_safety_margin,
 		max_ceremony_stage_duration,
 		min_stake,
+		claim_delay_buffer_seconds,
 	} = get_environment();
 	Ok(ChainSpec::from_genesis(
 		"CF Develop",
@@ -297,6 +308,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 				genesis_stake_amount,
 				min_stake,
 				8 * HOURS,
+				claim_delay_buffer_seconds,
 			)
 		},
 		// Bootnodes
@@ -352,6 +364,7 @@ fn chainflip_three_node_testnet_config_from_env(
 		eth_block_safety_margin,
 		max_ceremony_stage_duration,
 		min_stake,
+		claim_delay_buffer_seconds,
 	} = environment;
 	Ok(ChainSpec::from_genesis(
 		name,
@@ -424,6 +437,7 @@ fn chainflip_three_node_testnet_config_from_env(
 				genesis_stake_amount,
 				min_stake,
 				8 * HOURS,
+				claim_delay_buffer_seconds,
 			)
 		},
 		// Bootnodes
@@ -470,6 +484,7 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 		eth_block_safety_margin,
 		max_ceremony_stage_duration,
 		min_stake,
+		claim_delay_buffer_seconds,
 	} = get_environment();
 	Ok(ChainSpec::from_genesis(
 		"Internal testnet",
@@ -564,6 +579,7 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 				genesis_stake_amount,
 				min_stake,
 				8 * HOURS,
+				claim_delay_buffer_seconds,
 			)
 		},
 		// Bootnodes
@@ -596,6 +612,7 @@ const PERSEVERANCE_ENV: StateChainEnvironment = StateChainEnvironment {
 	min_stake: 10 * FLIPPERINOS_PER_FLIP,
 	eth_block_safety_margin: 4,
 	max_ceremony_stage_duration: 300,
+	claim_delay_buffer_seconds: 80,
 };
 
 pub fn perseverance_new_config() -> Result<ChainSpec, String> {
@@ -627,6 +644,7 @@ pub fn perseverance_new_config() -> Result<ChainSpec, String> {
 		eth_block_safety_margin,
 		max_ceremony_stage_duration,
 		min_stake,
+		claim_delay_buffer_seconds,
 	} = PERSEVERANCE_ENV;
 	Ok(ChainSpec::from_genesis(
 		"Chainflip-Perseverance",
@@ -676,6 +694,7 @@ pub fn perseverance_new_config() -> Result<ChainSpec, String> {
 				genesis_stake_amount,
 				min_stake,
 				3 * HOURS,
+				claim_delay_buffer_seconds,
 			)
 		},
 		// Bootnodes
@@ -708,6 +727,7 @@ fn testnet_genesis(
 	genesis_stake_amount: u128,
 	minimum_stake: u128,
 	blocks_per_epoch: BlockNumber,
+	claim_delay_buffer_seconds: u64,
 ) -> GenesisConfig {
 	let authority_ids: Vec<AccountId> =
 		initial_authorities.iter().map(|(id, ..)| id.clone()).collect();
@@ -760,6 +780,7 @@ fn testnet_genesis(
 				.collect::<Vec<(AccountId, FlipBalance)>>(),
 			minimum_stake,
 			claim_ttl: core::time::Duration::from_secs(3 * CLAIM_DELAY_SECS),
+			claim_delay_buffer_seconds,
 		},
 		aura: AuraConfig { authorities: vec![] },
 		grandpa: GrandpaConfig { authorities: vec![] },
