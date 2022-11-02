@@ -121,8 +121,8 @@ impl AllBatch<Ethereum> for EthereumApi {
 	fn new_unsigned(
 		replay_protection: EthereumReplayProtection,
 		_chain_specific_data: (),
-		fetch_params: Vec<FetchAssetParams<Ethereum>>,
-		transfer_params: Vec<TransferAssetParams<Ethereum>>,
+		fetch_params: Vec<FetchAssetParams<assets::eth::Asset>>,
+		transfer_params: Vec<TransferAssetParams<assets::eth::Asset, Address>>,
 	) -> Self {
 		Self::AllBatch(all_batch::AllBatch::new_unsigned(
 			replay_protection,

@@ -4,7 +4,7 @@ use scale_info::TypeInfo;
 use sp_std::{boxed::Box, vec, vec::Vec};
 
 use crate::{
-	eth::{Ethereum, SigData, Tokenizable},
+	eth::{Address, Ethereum, SigData, Tokenizable},
 	ApiCall, ChainCrypto,
 };
 
@@ -14,6 +14,10 @@ use super::{ethabi_function, ethabi_param, EthereumReplayProtection};
 
 use sp_runtime::RuntimeDebug;
 
+// Assets on Ethereum are identified by their contract address.
+type EncodeableFetchAssetParams = FetchAssetParams<Address>;
+type EncodeableTransferAssetParams = TransferAssetParams<Address, Address>;
+
 /// Represents all the arguments required to build the call to Vault's 'allBatch'
 /// function.
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]
@@ -21,16 +25,16 @@ pub struct AllBatch {
 	/// The signature data for validation and replay protection.
 	pub sig_data: SigData,
 	/// The list of all inbound deposits that are to be fetched in this batch call.
-	pub fetch_params: Vec<FetchAssetParams<Ethereum>>,
+	pub fetch_params: Vec<EncodeableFetchAssetParams>,
 	/// The list of all outbound transfers that need to be made to given addresses.
-	pub transfer_params: Vec<TransferAssetParams<Ethereum>>,
+	pub transfer_params: Vec<EncodeableTransferAssetParams>,
 }
 
 impl AllBatch {
 	pub fn new_unsigned(
 		replay_protection: EthereumReplayProtection,
-		fetch_params: Vec<FetchAssetParams<Ethereum>>,
-		transfer_params: Vec<TransferAssetParams<Ethereum>>,
+		fetch_params: Vec<EncodeableFetchAssetParams>,
+		transfer_params: Vec<EncodeableTransferAssetParams>,
 	) -> Self {
 		let mut calldata =
 			Self { sig_data: SigData::new_empty(replay_protection), fetch_params, transfer_params };
@@ -132,25 +136,20 @@ mod test_all_batch {
 		const CHAIN_ID: u64 = 1;
 		const NONCE: u64 = 9;
 
-		let dummy_fetch_asset_params: Vec<FetchAssetParams<Ethereum>> = vec![
-			FetchAssetParams::<Ethereum> {
-				intent_id: 1u64,
-				asset: eth::Address::from_slice(&[3; 20]),
-			},
-			FetchAssetParams::<Ethereum> {
-				intent_id: 2u64,
-				asset: eth::Address::from_slice(&[4; 20]),
-			},
+		let dummy_fetch_asset_params = vec![
+			FetchAssetParams { intent_id: 1u64, asset: Address::from_slice(&[3; 20]) },
+			FetchAssetParams { intent_id: 2u64, asset: Address::from_slice(&[4; 20]) },
 		];
-		let dummy_transfer_asset_params: Vec<TransferAssetParams<Ethereum>> = vec![
-			TransferAssetParams::<Ethereum> {
-				asset: eth::Address::from_slice(&[5; 20]),
-				to: eth::Address::from_slice(&[7; 20]),
+
+		let dummy_transfer_asset_params = vec![
+			TransferAssetParams {
+				asset: Address::from_slice(&[5; 20]),
+				to: Address::from_slice(&[7; 20]),
 				amount: 10,
 			},
-			TransferAssetParams::<Ethereum> {
-				asset: eth::Address::from_slice(&[6; 20]),
-				to: eth::Address::from_slice(&[8; 20]),
+			TransferAssetParams {
+				asset: Address::from_slice(&[6; 20]),
+				to: Address::from_slice(&[8; 20]),
 				amount: 20,
 			},
 		];

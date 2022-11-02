@@ -3,7 +3,7 @@ use core::fmt::Display;
 
 use crate::benchmarking_value::BenchmarkValue;
 pub use cf_primitives::chains::Ethereum;
-use cf_primitives::{chains::assets, EthAmount, IntentId};
+use cf_primitives::{chains::assets, AssetAmount, EthAmount, IntentId};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
@@ -125,19 +125,17 @@ where
 #[derive(
 	RuntimeDebug, Copy, Clone, Default, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo,
 )]
-pub struct FetchAssetParams<T: Chain> {
+pub struct FetchAssetParams<Asset> {
 	pub intent_id: IntentId,
-	pub asset: T::ChainAsset,
+	pub asset: Asset,
 }
 
 /// Contains all the parameters required for transferring an asset on an external chain.
-#[derive(
-	RuntimeDebug, Copy, Clone, Default, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo,
-)]
-pub struct TransferAssetParams<T: Chain> {
-	pub asset: T::ChainAsset,
-	pub to: T::ChainAccount,
-	pub amount: T::ChainAmount,
+#[derive(RuntimeDebug, Clone, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
+pub struct TransferAssetParams<Asset, Address> {
+	pub asset: Asset,
+	pub to: Address,
+	pub amount: AssetAmount,
 }
 
 pub trait IngressAddress {
@@ -194,9 +192,8 @@ pub trait RegisterClaim<Abi: ChainAbi>: ApiCall<Abi> {
 pub trait AllBatch<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
 		replay_protection: Abi::ReplayProtection,
-		chain_specific_data: Abi::ApiCallExtraData,
-		fetch_params: Vec<FetchAssetParams<Abi>>,
-		transfer_params: Vec<TransferAssetParams<Abi>>,
+		fetch_params: Vec<FetchAssetParams<Abi::ChainAsset>>,
+		transfer_params: Vec<TransferAssetParams<Abi::ChainAsset, Abi::ChainAccount>>,
 	) -> Self;
 }
 
