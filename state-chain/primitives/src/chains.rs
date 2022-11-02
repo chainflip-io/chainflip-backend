@@ -25,6 +25,9 @@ macro_rules! chains {
 	}
 }
 
+/// Can be any Chain.
+pub struct AnyChain;
+
 chains! {
 	Ethereum,
 	Polkadot

@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 pub mod any {
 	use super::*;
+	pub type Chain = AnyChain;
 
 	/// A token or currency that can be swapped natively in the Chainflip AMM.
 	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy, Hash)]
