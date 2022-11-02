@@ -267,7 +267,7 @@ jobs:
 
   deb-publish:
     name: Publish Packages to APT repo
-    needs: [test-single-node]
+    needs: [build-and-test]
     uses: ./.github/workflows/.deb-publish.yaml
     with:
       s3-prefix: ci
