@@ -15,6 +15,8 @@ use sp_runtime::{
 	BuildStorage,
 };
 
+pub const RELAYER_FEE: u128 = 5;
+
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 type AccountId = u64;
@@ -169,7 +171,7 @@ impl AmmPoolApi for MockAmmPoolApi {
 		swap_input: Self::Balance,
 		_fee: u16,
 	) -> (Self::Balance, (cf_primitives::Asset, Self::Balance)) {
-		(swap_input, (cf_primitives::Asset::Usdc, 5))
+		(swap_input, (cf_primitives::Asset::Usdc, RELAYER_FEE))
 	}
 }
 

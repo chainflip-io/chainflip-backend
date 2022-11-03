@@ -149,8 +149,14 @@ fn expect_earned_fees_to_be_recorded() {
 			2,
 		);
 		Swapping::on_idle(1, <() as WeightInfo>::execute_swap() * 2);
-		assert_eq!(EarnedRelayerFees::<Test>::get(2, cf_primitives::Asset::Usdc), Some(5));
-		assert_eq!(EarnedRelayerFees::<Test>::get(3, cf_primitives::Asset::Usdc), Some(5));
+		assert_eq!(
+			EarnedRelayerFees::<Test>::get(2, cf_primitives::Asset::Usdc),
+			Some(RELAYER_FEE)
+		);
+		assert_eq!(
+			EarnedRelayerFees::<Test>::get(3, cf_primitives::Asset::Usdc),
+			Some(RELAYER_FEE)
+		);
 		<Pallet<Test> as SwapIntentHandler>::schedule_swap(
 			Asset::Flip,
 			ForeignChainAsset { chain: ForeignChain::Ethereum, asset: Asset::Usdc },
@@ -160,6 +166,9 @@ fn expect_earned_fees_to_be_recorded() {
 			2,
 		);
 		Swapping::on_idle(1, <() as WeightInfo>::execute_swap());
-		assert_eq!(EarnedRelayerFees::<Test>::get(2, cf_primitives::Asset::Usdc), Some(10));
+		assert_eq!(
+			EarnedRelayerFees::<Test>::get(2, cf_primitives::Asset::Usdc),
+			Some(RELAYER_FEE * 2)
+		);
 	});
 }

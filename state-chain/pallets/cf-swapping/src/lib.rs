@@ -65,7 +65,7 @@ pub mod pallet {
 	/// Earned Fees by Relayers
 	#[pallet::storage]
 	pub(super) type EarnedRelayerFees<T: Config> =
-		StorageDoubleMap<_, Twox64Concat, T::AccountId, Identity, Asset, AssetAmount>;
+		StorageDoubleMap<_, Identity, T::AccountId, Twox64Concat, Asset, AssetAmount>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -88,8 +88,8 @@ pub mod pallet {
 				swaps.len(),
 				(remaining_weight.saturating_div(swap_weight)) as usize,
 			));
-			for swap in swaps.iter() {
-				Self::execute_swap(swap.clone());
+			for swap in swaps.clone() {
+				Self::execute_swap(swap);
 			}
 			// Write the rest back (potentially an empty vector).
 			SwapQueue::<T>::put(remaining_swaps);
@@ -140,9 +140,8 @@ pub mod pallet {
 		/// We are going to benchmark this function individually to have a approximation of
 		/// how 'expensive' a swap is.
 		pub fn execute_swap(swap: Swap<T::AccountId>) {
-			let (swap_output, earned_fees) =
+			let (swap_output, (asset, fee)) =
 				T::AmmPoolApi::swap(swap.from, swap.to, swap.amount, swap.relayer_commission_bps);
-			let (asset, fee) = earned_fees;
 			EarnedRelayerFees::<T>::mutate(&swap.relayer_id, asset, |maybe_fees| {
 				if let Some(fees) = maybe_fees {
 					*maybe_fees = Some(fees.saturating_add(fee))
