@@ -105,7 +105,10 @@ jobs:
           save: false
       - run: sccache --show-stats
       - run: |
-          cargo ci-build --locked
+          ls -la ./target/
+          echo COMMIT_HASH: $COMMIT_HASH
+          echo BRANCH_NAME: $BRANCH_NAME
+          COMMIT_HASH=$COMMIT_HASH BRANCH_NAME=$BRANCH_NAME cargo ci-build --locked
           sccache --show-stats
       - run: |
           ls -la ./target/
