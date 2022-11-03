@@ -108,7 +108,10 @@ jobs:
           cargo ci-build --locked
           sccache --show-stats
       - run: |
-          cargo ci-test --locked
+          ls -la ./target/
+          echo COMMIT_HASH: $COMMIT_HASH
+          echo BRANCH_NAME: $BRANCH_NAME
+          COMMIT_HASH=$COMMIT_HASH BRANCH_NAME=$BRANCH_NAME cargo ci-test --locked
           sccache --show-stats
       - name: Install cargo-deb
         run: cargo install cargo-deb
