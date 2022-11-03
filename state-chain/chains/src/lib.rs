@@ -1,4 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
+use core::fmt::Display;
+
 use crate::benchmarking_value::BenchmarkValue;
 use cf_primitives::{EthAmount, IntentId};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
@@ -30,7 +32,8 @@ pub trait Chain: Member + Parameter {
 		+ MaybeSerializeDeserialize
 		+ AtLeast32BitUnsigned
 		+ From<u64>
-		+ MaxEncodedLen;
+		+ MaxEncodedLen
+		+ Display;
 
 	type ChainAmount: Member
 		+ Parameter

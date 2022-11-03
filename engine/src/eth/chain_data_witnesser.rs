@@ -20,7 +20,7 @@ const ETH_CHAIN_TRACKING_POLL_INTERVAL: Duration = Duration::from_secs(4);
 pub async fn start<StateChainClient, EthRpcClient>(
 	eth_rpc: EthRpcClient,
 	state_chain_client: Arc<StateChainClient>,
-	epoch_start_receiver: broadcast::Receiver<EpochStart>,
+	epoch_start_receiver: broadcast::Receiver<EpochStart<Ethereum>>,
 	cfe_settings_update_receiver: watch::Receiver<CfeSettings>,
 	logger: &slog::Logger,
 ) -> anyhow::Result<()>

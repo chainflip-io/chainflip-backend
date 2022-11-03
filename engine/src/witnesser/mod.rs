@@ -5,11 +5,13 @@ use cf_primitives::EpochIndex;
 pub mod block_head_stream_from;
 pub mod epoch_witnesser;
 
+pub type ChainBlockNumber<Chain> = <Chain as cf_chains::Chain>::ChainBlockNumber;
+
 #[derive(Clone, Debug)]
 #[cfg_attr(test, derive(PartialEq))]
-pub struct EpochStart {
+pub struct EpochStart<Chain: cf_chains::Chain> {
 	pub epoch_index: EpochIndex,
-	pub eth_block: <cf_chains::eth::Ethereum as cf_chains::Chain>::ChainBlockNumber,
+	pub block_number: ChainBlockNumber<Chain>,
 	pub current: bool,
 	pub participant: bool,
 }

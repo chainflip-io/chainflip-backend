@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use cf_chains::eth::Ethereum;
 use futures::StreamExt;
 use tokio::sync::broadcast::{self};
 
@@ -19,7 +20,7 @@ use super::{block_events_stream_for_contract_from, EthContractWitnesser};
 pub async fn start<StateChainClient, ContractWitnesser>(
 	contract_witnesser: ContractWitnesser,
 	eth_dual_rpc: EthDualRpcClient,
-	epoch_starts_receiver: broadcast::Receiver<EpochStart>,
+	epoch_starts_receiver: broadcast::Receiver<EpochStart<Ethereum>>,
 	// In some cases there is no use witnessing older epochs since any actions that could be taken
 	// either have already been taken, or can no longer be taken.
 	witness_historical_epochs: bool,
@@ -41,7 +42,7 @@ where
 
 			async move {
 				let mut block_stream = block_events_stream_for_contract_from(
-					epoch_start.eth_block,
+					epoch_start.block_number,
 					&contract_witnesser,
 					eth_dual_rpc.clone(),
 					&logger,
@@ -49,7 +50,7 @@ where
 				.await?;
 
 				while let Some(block) = block_stream.next().await {
-					if should_end_witnessing(
+					if should_end_witnessing::<Ethereum>(
 						end_witnessing_signal.clone(),
 						block.block_number,
 						&logger,
