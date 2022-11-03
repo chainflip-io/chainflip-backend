@@ -12,6 +12,10 @@ on:
         required: false
         type: string
         default: chainflip-backend-packages
+      commit_hash:
+        description: Commit SHA
+        required: true
+        type: string
 
 env:
   APTLY_VERSION: '1.5.0'
@@ -22,7 +26,7 @@ env:
 jobs:
   build-deb:
     name: Build Deb
-    runs-on: [self-hosted, linux, x64, ephemeral]
+    runs-on: ubuntu-latest
     permissions:
       id-token: write
       contents: read
@@ -37,7 +41,6 @@ jobs:
       - name: Get commit SHA, distribution codename
         id: vars
         run: |
-          echo "sha_long=$GITHUB_SHA" >> $GITHUB_OUTPUT
           echo "codename=$(lsb_release -c -s)" >> $GITHUB_OUTPUT
       - name: Install Aptly and dependencies
         run: |
@@ -67,7 +70,7 @@ jobs:
           aptly repo create local
           aptly repo add local packages/*.deb
           aptly snapshot create snap from repo local
-          aptly publish -gpg-key=${{ steps.import_gpg.outputs.keyid }} -distribution=${{ steps.vars.outputs.codename }} snapshot -force-overwrite snap "s3:chainflip-dev:${{ inputs.s3-prefix }}/${{ steps.vars.outputs.sha_long }}/"
+          aptly publish -gpg-key=${{ steps.import_gpg.outputs.keyid }} -distribution=${{ steps.vars.outputs.codename }} snapshot -force-overwrite snap "s3:chainflip-dev:${{ inputs.s3-prefix }}/${{ inputs.commit_hash }}/"
       - name: Set Summary Title
         if: ${{ !contains(inputs.artifacts, 'ibiza') }}
         run: echo "### Packages Published! :rocket:" >> $GITHUB_STEP_SUMMARY
@@ -80,7 +83,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
           echo "sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys ${{ steps.import_gpg.outputs.keyid }}" >> $GITHUB_STEP_SUMMARY
-          echo "echo \"deb https://{user}:{password}@${REPO_BUCKET}/${{ inputs.s3-prefix }}/${{ steps.vars.outputs.sha_long }}/ ${{ steps.vars.outputs.codename }} main\"  | sudo tee /etc/apt/sources.list.d/chainflip.list" >> $GITHUB_STEP_SUMMARY
+          echo "echo \"deb https://{user}:{password}@${REPO_BUCKET}/${{ inputs.s3-prefix }}/${{ inputs.commit_hash }}/ ${{ steps.vars.outputs.codename }} main\"  | sudo tee /etc/apt/sources.list.d/chainflip.list" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           echo "You can find the basic auth credentials in 1Password under \`apt repo basic auth\` secret" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -92,4 +95,4 @@ jobs:
           echo "apt install chainflip-engine" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           echo "### Usage in \`testnet-tools\`" >> $GITHUB_STEP_SUMMARY
-          echo "Use the full commit hash: \`$GITHUB_SHA\` for your network configuration. " >> $GITHUB_STEP_SUMMARY
+          echo "Use the full commit hash: \`${{ inputs.commit_hash }}\` for your network configuration. " >> $GITHUB_STEP_SUMMARY
