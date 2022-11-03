@@ -11,8 +11,8 @@ jobs:
   set-variables:
     runs-on: ubuntu-latest
     outputs:
-      commit_sha: ${{ steps.step1.outputs.test }}
-      branch_name: ${{ steps.step2.outputs.test }}
+      commit_sha: ${{ steps.commit_sha.outputs.test }}
+      branch_name: ${{ steps.branch_name.outputs.test }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
