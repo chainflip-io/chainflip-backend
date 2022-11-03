@@ -88,13 +88,14 @@ pub mod pallet {
 				swaps.len(),
 				(remaining_weight.saturating_div(swap_weight)) as usize,
 			));
-			for swap in swaps.clone() {
+			let swaps_executed = swaps.len();
+			for swap in swaps {
 				Self::execute_swap(swap);
 			}
 			// Write the rest back (potentially an empty vector).
 			SwapQueue::<T>::put(remaining_swaps);
 			// return the weight we used during the execution of this function.
-			swap_weight * swaps.len() as u64 + T::WeightInfo::on_idle()
+			swap_weight * swaps_executed as u64 + T::WeightInfo::on_idle()
 		}
 	}
 
