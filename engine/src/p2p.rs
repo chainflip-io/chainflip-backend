@@ -12,6 +12,7 @@ use crate::{
 	common::read_clean_and_decode_hex_str_file,
 	multisig::{eth::EthSigning, polkadot::PolkadotSigning, CryptoScheme},
 	settings::P2P as P2PSettings,
+	state_chain_observer::client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi},
 };
 
 pub use self::core::{PeerInfo, PeerUpdate};
@@ -23,10 +24,7 @@ use sp_core::H256;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use zeroize::Zeroizing;
 
-use crate::{
-	state_chain_observer::client::{ChainflipClient, StateChainClient, StateChainRpcClient},
-	task_scope::with_task_scope,
-};
+use crate::task_scope::with_task_scope;
 
 // TODO: Consider if this should be removed, particularly once we no longer use Substrate for
 // peering
@@ -57,10 +55,8 @@ impl<C: CryptoScheme> MultisigMessageReceiver<C> {
 	}
 }
 
-pub async fn start(
-	state_chain_client: Arc<
-		StateChainClient<StateChainRpcClient<impl ChainflipClient + Send + Sync + 'static>>,
-	>,
+pub async fn start<StateChainClient>(
+	state_chain_client: Arc<StateChainClient>,
 	settings: P2PSettings,
 	latest_block_hash: H256,
 	logger: &slog::Logger,
@@ -71,7 +67,10 @@ pub async fn start(
 	MultisigMessageReceiver<PolkadotSigning>,
 	UnboundedSender<PeerUpdate>,
 	impl Future<Output = anyhow::Result<()>>,
-)> {
+)>
+where
+	StateChainClient: StorageApi + ExtrinsicApi + 'static + Send + Sync,
+{
 	if settings.ip_address == IpAddr::V4(Ipv4Addr::UNSPECIFIED) {
 		anyhow::bail!("Should provide a valid IP address");
 	}
@@ -97,7 +96,7 @@ pub async fn start(
 		peer_info_submitter::get_current_peer_infos(&state_chain_client, latest_block_hash)
 			.await
 			.context("Failed to get initial peer info")?;
-	let our_account_id = state_chain_client.our_account_id.clone();
+	let our_account_id = state_chain_client.account_id();
 
 	let own_peer_info = current_peers.iter().find(|pi| pi.account_id == our_account_id).cloned();
 

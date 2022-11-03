@@ -12,11 +12,11 @@ use web3::types::Transaction;
 
 use crate::{
 	eth::epoch_witnesser::should_end_witnessing,
-	state_chain_observer::client::{StateChainClient, StateChainRpcApi},
+	state_chain_observer::client::extrinsic_api::ExtrinsicApi,
 };
 
 use super::{
-	block_head_stream_from, epoch_witnesser,
+	epoch_witnesser, eth_block_head_stream_from,
 	http_safe_stream::{safe_polling_http_head_stream, HTTP_POLL_INTERVAL},
 	merged_block_items_stream,
 	rpc::{EthDualRpcClient, EthRpcApi, EthWsRpcApi},
@@ -39,7 +39,7 @@ where
 	EthRpc: 'static + EthRpcApi + Send + Sync + Clone,
 {
 	Ok(Box::pin(
-		block_head_stream_from(from_block, safe_head_stream, eth_rpc.clone(), logger)
+		eth_block_head_stream_from(from_block, safe_head_stream, eth_rpc.clone(), logger)
 			.await?
 			.then(move |header| {
 				let eth_rpc = eth_rpc.clone();
@@ -58,16 +58,16 @@ where
 
 // NB: This code can emit the same witness multiple times. e.g. if the CFE restarts in the middle of
 // witnessing a window of blocks
-pub async fn start<StateChainRpc>(
+pub async fn start<StateChainClient>(
 	eth_dual_rpc: EthDualRpcClient,
 	epoch_starts_receiver: broadcast::Receiver<EpochStart>,
 	eth_monitor_ingress_receiver: tokio::sync::mpsc::UnboundedReceiver<H160>,
-	state_chain_client: Arc<StateChainClient<StateChainRpc>>,
+	state_chain_client: Arc<StateChainClient>,
 	monitored_addresses: BTreeSet<H160>,
 	logger: &slog::Logger,
 ) -> anyhow::Result<()>
 where
-	StateChainRpc: 'static + StateChainRpcApi + Sync + Send,
+	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
 {
 	epoch_witnesser::start(
 		"ETH-Ingress-Witnesser".to_string(),
@@ -159,7 +159,7 @@ where
 												}
 												.into(),
 											),
-											epoch_index: epoch_start.index,
+											epoch_index: epoch_start.epoch_index,
 										},
 										&logger,
 									)

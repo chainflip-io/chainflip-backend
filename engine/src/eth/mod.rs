@@ -1,4 +1,3 @@
-mod block_head_stream_from;
 pub mod chain_data_witnesser;
 pub mod contract_witnesser;
 mod epoch_witnesser;
@@ -26,7 +25,6 @@ use crate::{
 	common::read_clean_and_decode_hex_str_file,
 	constants::ETH_BLOCK_SAFETY_MARGIN,
 	eth::{
-		block_head_stream_from::block_head_stream_from,
 		http_safe_stream::{safe_polling_http_head_stream, HTTP_POLL_INTERVAL},
 		merged_block_items_stream::merged_block_items_stream,
 		rpc::EthWsRpcApi,
@@ -34,7 +32,8 @@ use crate::{
 	},
 	logging::COMPONENT_KEY,
 	settings,
-	state_chain_observer::client::{StateChainClient, StateChainRpcApi},
+	state_chain_observer::client::extrinsic_api::ExtrinsicApi,
+	witnesser::{block_head_stream_from::block_head_stream_from, BlockNumberable},
 };
 use ethbloom::{Bloom, Input};
 use futures::StreamExt;
@@ -71,6 +70,12 @@ pub struct EthNumberBloom {
 	pub base_fee_per_gas: U256,
 }
 
+impl BlockNumberable for EthNumberBloom {
+	fn block_number(&self) -> u64 {
+		self.block_number.as_u64()
+	}
+}
+
 use self::rpc::{EthDualRpcClient, EthRpcApi};
 
 const EIP1559_TX_ID: u64 = 2;
@@ -101,7 +106,7 @@ impl SignatureAndEvent {
 #[derive(Clone, Debug)]
 #[cfg_attr(test, derive(PartialEq))]
 pub struct EpochStart {
-	pub index: EpochIndex,
+	pub epoch_index: EpochIndex,
 	pub eth_block: <cf_chains::Ethereum as cf_chains::Chain>::ChainBlockNumber,
 	pub current: bool,
 	pub participant: bool,
@@ -295,6 +300,34 @@ pub struct BlockWithItems<BlockItem: Debug> {
 	pub block_items: Vec<BlockItem>,
 }
 
+async fn eth_block_head_stream_from<BlockHeaderStream, EthRpc>(
+	from_block: u64,
+	safe_head_stream: BlockHeaderStream,
+	eth_rpc: EthRpc,
+	logger: &slog::Logger,
+) -> Result<Pin<Box<dyn Stream<Item = EthNumberBloom> + Send + 'static>>>
+where
+	BlockHeaderStream: Stream<Item = EthNumberBloom> + 'static + Send,
+	EthRpc: 'static + EthRpcApi + Send + Sync + Clone,
+{
+	block_head_stream_from(
+		from_block,
+		safe_head_stream,
+		move |block_number| {
+			let eth_rpc = eth_rpc.clone();
+			Box::pin(async move {
+				eth_rpc.block(U64::from(block_number)).await.and_then(|block| {
+					let number_bloom: Result<EthNumberBloom> =
+						block.try_into().context("Failed to convert Block to EthNumberBloom");
+					number_bloom
+				})
+			})
+		},
+		logger,
+	)
+	.await
+}
+
 /// Takes a head stream and turns it into a stream of BlockEvents for consumption by the merged
 /// stream
 async fn block_events_stream_from_head_stream<BlockHeaderStream, EthRpc, EventParameters>(
@@ -314,7 +347,7 @@ where
 {
 	// convert from heads to blocks with events
 	Ok(Box::pin(
-		block_head_stream_from(from_block, safe_head_stream, eth_rpc.clone(), &logger)
+		eth_block_head_stream_from(from_block, safe_head_stream, eth_rpc.clone(), &logger)
 			.await?
 			.then(move |header| {
 				let eth_rpc = eth_rpc.clone();
@@ -420,18 +453,18 @@ pub trait EthContractWitnesser {
 
 	fn decode_log_closure(&self) -> Result<DecodeLogClosure<Self::EventParameters>>;
 
-	async fn handle_block_events<RpcClient, EthRpcClient>(
+	async fn handle_block_events<StateChainClient, EthRpcClient>(
 		&mut self,
 		epoch: EpochIndex,
 		block_number: u64,
 		block: BlockWithItems<Event<Self::EventParameters>>,
-		state_chain_client: Arc<StateChainClient<RpcClient>>,
+		state_chain_client: Arc<StateChainClient>,
 		eth_rpc: &EthRpcClient,
 		logger: &slog::Logger,
 	) -> anyhow::Result<()>
 	where
-		RpcClient: 'static + StateChainRpcApi + Sync + Send,
-		EthRpcClient: EthRpcApi + Sync + Send;
+		EthRpcClient: EthRpcApi + Sync + Send,
+		StateChainClient: ExtrinsicApi + Send + Sync;
 
 	fn contract_address(&self) -> H160;
 }

@@ -17,7 +17,9 @@ use crate::{
 	Environment, EthereumInstance, Flip, FlipBalance, Reputation, Runtime, System, Validator,
 };
 #[cfg(feature = "ibiza")]
-use cf_chains::dot::{api::PolkadotApi, NetworkChoice, Polkadot, PolkadotTransactionData};
+use cf_chains::dot::{
+	api::PolkadotApi, NetworkChoice, Polkadot, PolkadotReplayProtection, PolkadotTransactionData,
+};
 use cf_chains::{
 	eth::{
 		self,
@@ -26,8 +28,9 @@ use cf_chains::{
 	ApiCall, ChainAbi, Ethereum, TransactionBuilder,
 };
 use cf_traits::{
-	BlockEmissions, Chainflip, EmergencyRotation, EpochInfo, EthEnvironmentProvider, Heartbeat,
-	Issuance, NetworkState, ReplayProtectionProvider, RewardsDistribution, RuntimeUpgrade,
+	ApiCallDataProvider, BlockEmissions, Chainflip, EmergencyRotation, EpochInfo,
+	EthEnvironmentProvider, Heartbeat, Issuance, NetworkState, ReplayProtectionProvider,
+	RewardsDistribution, RuntimeUpgrade,
 };
 use frame_support::traits::Get;
 use pallet_cf_chain_tracking::ChainState;
@@ -195,9 +198,9 @@ impl RuntimeUpgrade for RuntimeUpgradeManager {
 	}
 }
 
-pub struct EthReplayProtectionProvider;
+pub struct EthApiCallDataProvider;
 
-impl ReplayProtectionProvider<Ethereum> for EthReplayProtectionProvider {
+impl ReplayProtectionProvider<Ethereum> for EthApiCallDataProvider {
 	// Get the Environment values for key_manager_address and chain_id, then use
 	// the next global signature nonce
 	fn replay_protection() -> EthereumReplayProtection {
@@ -206,5 +209,27 @@ impl ReplayProtectionProvider<Ethereum> for EthReplayProtectionProvider {
 			chain_id: Environment::ethereum_chain_id(),
 			nonce: Environment::next_global_signature_nonce(),
 		}
+	}
+}
+
+impl ApiCallDataProvider<Ethereum> for EthApiCallDataProvider {
+	fn chain_extra_data() -> <Ethereum as ChainAbi>::ApiCallExtraData {}
+}
+
+#[cfg(feature = "ibiza")]
+pub struct DotApiCallDataProvider;
+#[cfg(feature = "ibiza")]
+impl ReplayProtectionProvider<Polkadot> for DotApiCallDataProvider {
+	// Get the Environment values for vault_account, NetworkChoice and the next nonce for the
+	// proxy_account
+	fn replay_protection() -> PolkadotReplayProtection {
+		todo!() //pull from environment
+	}
+}
+#[cfg(feature = "ibiza")]
+impl ApiCallDataProvider<Polkadot> for DotApiCallDataProvider {
+	// Get the current vault_account and proxy_account ids.
+	fn chain_extra_data() -> <Polkadot as ChainAbi>::ApiCallExtraData {
+		todo!(); //Pull from environment
 	}
 }

@@ -121,14 +121,18 @@ pub mod pallet {
 		/// Clear stale data from expired epochs
 		fn on_idle(_block_number: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
 			let mut epochs_to_cull = EpochsToCull::<T>::get();
-			let epoch = if let Some(epoch) = epochs_to_cull.pop() { epoch } else { return 0 };
+			let epoch = if let Some(epoch) = epochs_to_cull.pop() {
+				epoch
+			} else {
+				return T::WeightInfo::on_idle_with_nothing_to_remove()
+			};
 
 			let max_deletions_count_remaining = remaining_weight
 				.checked_div(T::WeightInfo::remove_storage_items(1))
 				.unwrap_or_default();
 
 			if max_deletions_count_remaining == 0 {
-				return 0
+				return T::WeightInfo::on_idle_with_nothing_to_remove()
 			}
 
 			let mut deletions_count_remaining = max_deletions_count_remaining;

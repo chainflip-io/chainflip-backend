@@ -9,12 +9,12 @@ on:
 env:
   SCCACHE_CACHE_SIZE: 32G
   SCCACHE_REDIS: ${{ secrets.SCCACHE_REDIS }}
-
+  CF_RUNNER_SUDO_PASSWORD: ${{ secrets.CF_RUNNER_SUDO_PASSWORD }}
 jobs:
   cargo-fmt:
-    runs-on: [self-hosted, linux, x64, ephemeral]
+    runs-on: [hetzner]
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08"
+      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08'
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -25,9 +25,9 @@ jobs:
         run: cargo fmt --all -- --check
 
   cargo-clippy:
-    runs-on: [self-hosted, linux, x64, ephemeral]
+    runs-on: [hetzner]
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08"
+      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08'
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -38,9 +38,9 @@ jobs:
         run: cargo ci-clippy
 
   cargo-doc:
-    runs-on: [self-hosted, linux, x64, ephemeral]
+    runs-on: [hetzner]
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08"
+      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08'
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -68,10 +68,10 @@ jobs:
             ./target/doc/
 
   build-and-test:
-    runs-on: [self-hosted, linux, x64, ephemeral]
+    runs-on: [hetzner]
     needs: [cargo-fmt]
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08"
+      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08'
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -122,10 +122,10 @@ jobs:
             ./target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm
 
   build-ibiza:
-    runs-on: [self-hosted, linux, x64, ephemeral]
+    runs-on: [hetzner]
     needs: [cargo-fmt]
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08"
+      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08'
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -144,10 +144,27 @@ jobs:
       - run: |
           cargo ci-build-ibiza --locked
           sccache --show-stats
+      - name: Install cargo-deb
+        run: cargo install cargo-deb
+      - name: Get date
+        id: vars
+        run: |
+          echo "date=$(date +'%Y%m%d%H%M')" >> $GITHUB_OUTPUT
+      - name: Build packages
+        run: |
+          cargo deb --no-build --no-strip -p chainflip-engine --deb-revision "${{ steps.vars.outputs.date }}"
+          cargo deb --no-build --no-strip -p chainflip-cli --deb-revision "${{ steps.vars.outputs.date }}"
+          cargo deb --no-build --no-strip -p chainflip-node --deb-revision "${{ steps.vars.outputs.date }}"
+          cargo deb --no-build --no-strip -p generate-genesis-keys --deb-revision "${{ steps.vars.outputs.date }}"
+      - name: Upload packages
+        uses: actions/upload-artifact@v3
+        with:
+          name: chainflip-backend-packages-ibiza
+          path: target/debian/*.deb
       - name: Upload artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: chainflip-backend-ibiza
+          name: chainflip-backend-bin-ibiza
           path: |
             ./target/release/chainflip-node
             ./target/release/chainflip-engine
@@ -156,7 +173,7 @@ jobs:
             ./target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm
 
   run-benchmarks:
-    runs-on: [self-hosted, linux, x64, ephemeral]
+    runs-on: [hetzner]
     needs: [build-and-test]
     if: github.ref_name == 'develop'
     steps:
@@ -173,7 +190,7 @@ jobs:
           ./state-chain/scripts/benchmark-all.sh --binary ./target/release/chainflip-node --steps 1 --repetitions 1
 
   test-single-node:
-    runs-on: [self-hosted, linux, x64, ephemeral]
+    runs-on: [hetzner]
     needs: [build-and-test]
     steps:
       - uses: actions/setup-node@v3
@@ -199,17 +216,8 @@ jobs:
           sleep 2
       - name: Check node health
         run: >
-          curl --request POST -L
-          -H "Content-Type:application/json;charset=utf-8"
-          --data '{"id":1, "jsonrpc":"2.0", "method": "system_health"}'
-          --url 'http://localhost:9933'
-          --connect-timeout 5
-          --max-time 10
-          --retry 3
-          --retry-delay 1
-          --retry-max-time 20
-          --retry-connrefused
-          -vv
+          curl --request POST -L -H "Content-Type:application/json;charset=utf-8" --data '{"id":1, "jsonrpc":"2.0", "method": "system_health"}' --url
+          'http://localhost:9933' --connect-timeout 5 --max-time 10 --retry 3 --retry-delay 1 --retry-max-time 20 --retry-connrefused -vv
       - name: Run engine in background
         run: |
           ./target/release/chainflip-engine --config-path engine/config/CI.toml &
@@ -220,15 +228,7 @@ jobs:
           ETH__HTTP_NODE_ENDPOINT: ${{ secrets.ETH__HTTP_NODE_ENDPOINT }}
       - name: Check engine health
         run: >
-          curl
-          --url 'http://localhost:5555/health'
-          --connect-timeout 5
-          --max-time 10
-          --retry 5
-          --retry-delay 1
-          --retry-max-time 20
-          --retry-connrefused
-          -vv
+          curl --url 'http://localhost:5555/health' --connect-timeout 5 --max-time 10 --retry 5 --retry-delay 1 --retry-max-time 20 --retry-connrefused -vv
       - name: Clone docgen
         uses: actions/checkout@v3
         with:
@@ -248,12 +248,12 @@ jobs:
           npm run generate
       - name: Install graphviz
         run: |
-          sudo apt-get update
-          sudo apt-get install -y graphviz
+          echo ${{ secrets.CF_RUNNER_SUDO_PASSWORD }} | sudo -S apt-get update
+          echo ${{ secrets.CF_RUNNER_SUDO_PASSWORD }} | sudo -S apt-get install -y graphviz
       - uses: actions/setup-java@v3
         with:
-          distribution: "zulu"
-          java-version: "17"
+          distribution: 'zulu'
+          java-version: '17'
       - name: Generate class diagram
         run: |
           cd chainflip-docgen/
@@ -266,7 +266,19 @@ jobs:
             chainflip-docgen/generated
 
   deb-publish:
-    name: Publish to APT repo
-    needs: [test-single-node]
+    name: Publish Packages to APT repo
+    needs: [build-and-test]
     uses: ./.github/workflows/.deb-publish.yaml
+    with:
+      s3-prefix: ci
+      artifacts: chainflip-backend-packages
+    secrets: inherit
+
+  deb-publish-ibiza:
+    name: Publish Ibiza Packages to APT repo
+    needs: [build-ibiza]
+    uses: ./.github/workflows/.deb-publish.yaml
+    with:
+      s3-prefix: ci/ibiza
+      artifacts: chainflip-backend-packages-ibiza
     secrets: inherit

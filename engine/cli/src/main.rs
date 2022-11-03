@@ -3,7 +3,11 @@ use cf_primitives::AccountRole;
 use chainflip_engine::{
 	eth::{rpc::EthDualRpcClient, EthBroadcaster},
 	state_chain_observer::client::{
-		connect_to_state_chain, connect_to_state_chain_without_signer, StateChainRpcApi,
+		base_rpc_api::{BaseRpcApi, BaseRpcClient, RawRpcApi},
+		connect_to_state_chain,
+		extrinsic_api::ExtrinsicApi,
+		storage_api::StorageApi,
+		StateChainClient,
 	},
 };
 use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
@@ -11,13 +15,14 @@ use clap::Parser;
 use futures::StreamExt;
 use settings::{CLICommandLineOptions, CLISettings};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use sp_core::{ed25519::Public as EdPublic, sr25519::Public as SrPublic};
+use sp_core::{ed25519::Public as EdPublic, sr25519::Public as SrPublic, Bytes};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use state_chain_runtime::opaque::SessionKeys;
 use web3::types::H160;
 
 use crate::settings::CFCommand::*;
 use anyhow::{anyhow, bail, Context, Result};
+use async_trait::async_trait;
 use pallet_cf_governance::ProposalId;
 use pallet_cf_validator::MAX_LENGTH_FOR_VANITY_NAME;
 use utilities::clean_eth_address;
@@ -68,16 +73,33 @@ async fn request_block(
 ) -> Result<()> {
 	println!("Querying the state chain for the block with hash {:x?}.", block_hash);
 
-	let state_chain_rpc_client =
-		connect_to_state_chain_without_signer(&settings.state_chain).await?;
+	let state_chain_rpc_client = BaseRpcClient::new(&settings.state_chain).await?;
 
-	match state_chain_rpc_client.get_block(block_hash).await? {
+	match state_chain_rpc_client.block(block_hash).await? {
 		Some(block) => {
 			println!("{:#?}", block);
 		},
 		None => println!("Could not find block with block hash {:x?}", block_hash),
 	}
 	Ok(())
+}
+
+#[async_trait]
+trait AuctionPhaseApi {
+	async fn is_auction_phase(&self) -> Result<bool>;
+}
+
+#[async_trait]
+impl<RawRpcClient: RawRpcApi + Send + Sync + 'static> AuctionPhaseApi
+	for StateChainClient<BaseRpcClient<RawRpcClient>>
+{
+	async fn is_auction_phase(&self) -> Result<bool> {
+		self.base_rpc_client
+			.raw_rpc_client
+			.cf_is_auction_phase(None)
+			.await
+			.map_err(Into::into)
+	}
 }
 
 async fn request_claim(
@@ -141,7 +163,7 @@ async fn request_claim(
 
 	for event in events {
 		if let state_chain_runtime::Event::EthereumThresholdSigner(
-			pallet_cf_threshold_signature::Event::ThresholdSignatureRequest(..),
+			pallet_cf_threshold_signature::Event::ThresholdSignatureRequest { .. },
 		) = event
 		{
 			println!("Your claim request is on chain.\nWaiting for signed claim data...");
@@ -149,29 +171,27 @@ async fn request_claim(
 				let header = result_header.expect("Failed to get a valid block header");
 				let block_hash = header.hash();
 				let events = state_chain_client
-					.get_storage_value::<frame_system::Events<state_chain_runtime::Runtime>>(
-						block_hash,
-					)
+					.storage_value::<frame_system::Events<state_chain_runtime::Runtime>>(block_hash)
 					.await?;
 				for event_record in events {
 					if let state_chain_runtime::Event::Staking(
 						pallet_cf_staking::Event::ClaimSignatureIssued(validator_id, claim_cert),
 					) = event_record.event
 					{
-						if validator_id == state_chain_client.our_account_id {
+						if validator_id == state_chain_client.account_id() {
 							if should_register_claim {
 								println!(
 									"Your claim certificate is: {:?}",
 									hex::encode(claim_cert.clone())
 								);
 								let chain_id = state_chain_client
-									.get_storage_value::<pallet_cf_environment::EthereumChainId<
+									.storage_value::<pallet_cf_environment::EthereumChainId<
 										state_chain_runtime::Runtime,
 									>>(block_hash)
 									.await
 									.expect("Failed to fetch EthereumChainId from the State Chain");
 								let stake_manager_address = state_chain_client
-									.get_storage_value::<pallet_cf_environment::StakeManagerAddress<
+									.storage_value::<pallet_cf_environment::StakeManagerAddress<
 										state_chain_runtime::Runtime,
 									>>(block_hash)
 									.await
@@ -239,6 +259,21 @@ async fn register_claim(
 		.await
 }
 
+#[async_trait]
+trait RotateSessionKeysApi {
+	async fn rotate_session_keys(&self) -> Result<Bytes>;
+}
+
+#[async_trait]
+impl<RawRpcClient: RawRpcApi + Send + Sync + 'static> RotateSessionKeysApi
+	for StateChainClient<BaseRpcClient<RawRpcClient>>
+{
+	async fn rotate_session_keys(&self) -> Result<Bytes> {
+		let session_key_bytes: Bytes = self.base_rpc_client.raw_rpc_client.rotate_keys().await?;
+		Ok(session_key_bytes)
+	}
+}
+
 async fn rotate_keys(settings: &CLISettings, logger: &slog::Logger) -> Result<()> {
 	let (_, _, state_chain_client) =
 		connect_to_state_chain(&settings.state_chain, false, logger).await?;
@@ -283,9 +318,9 @@ async fn activate_account(settings: &CLISettings, logger: &slog::Logger) -> Resu
 		connect_to_state_chain(&settings.state_chain, false, logger).await?;
 
 	match state_chain_client
-        .get_storage_map::<pallet_cf_account_roles::AccountRoles<state_chain_runtime::Runtime>>(
+        .storage_map_entry::<pallet_cf_account_roles::AccountRoles<state_chain_runtime::Runtime>>(
             latest_block_hash,
-            &state_chain_client.our_account_id,
+            &state_chain_client.account_id(),
         )
         .await
         .expect("Failed to request AccountRole")

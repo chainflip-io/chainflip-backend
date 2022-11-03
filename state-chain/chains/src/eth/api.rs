@@ -33,6 +33,7 @@ impl ChainAbi for Ethereum {
 	type SignerCredential = eth::Address;
 	type ReplayProtection = EthereumReplayProtection;
 	type ValidationError = eth::TransactionVerificationError;
+	type ApiCallExtraData = ();
 
 	fn verify_signed_transaction(
 		unsigned_tx: &Self::UnsignedTransaction,
@@ -46,6 +47,7 @@ impl ChainAbi for Ethereum {
 impl SetAggKeyWithAggKey<Ethereum> for EthereumApi {
 	fn new_unsigned(
 		replay_protection: EthereumReplayProtection,
+		_chain_specific_data: (),
 		new_key: <Ethereum as ChainCrypto>::AggKey,
 	) -> Self {
 		Self::SetAggKeyWithAggKey(set_agg_key_with_agg_key::SetAggKeyWithAggKey::new_unsigned(
@@ -127,6 +129,7 @@ impl UpdateFlipSupply<Ethereum> for EthereumApi {
 impl AllBatch<Ethereum> for EthereumApi {
 	fn new_unsigned(
 		replay_protection: EthereumReplayProtection,
+		_chain_specific_data: (),
 		fetch_params: Vec<FetchAssetParams<Ethereum>>,
 		transfer_params: Vec<TransferAssetParams<Ethereum>>,
 	) -> Self {

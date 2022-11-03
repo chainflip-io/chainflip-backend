@@ -1,10 +1,7 @@
-use crate::state_chain_observer::client::StateChainClient;
+use crate::state_chain_observer::client::extrinsic_api::ExtrinsicApi;
 use std::sync::Arc;
 
-use crate::{
-	eth::{utils, EthRpcApi, SignatureAndEvent},
-	state_chain_observer::client::StateChainRpcApi,
-};
+use crate::eth::{utils, EthRpcApi, SignatureAndEvent};
 
 use cf_primitives::EpochIndex;
 use sp_runtime::AccountId32;
@@ -89,18 +86,18 @@ impl EthContractWitnesser for StakeManager {
 		"StakeManager".to_string()
 	}
 
-	async fn handle_block_events<RpcClient, EthRpcClient>(
+	async fn handle_block_events<StateChainClient, EthRpcClient>(
 		&mut self,
 		epoch: EpochIndex,
 		_block_number: u64,
 		block: BlockWithItems<Event<Self::EventParameters>>,
-		state_chain_client: Arc<StateChainClient<RpcClient>>,
+		state_chain_client: Arc<StateChainClient>,
 		_eth_rpc: &EthRpcClient,
 		logger: &slog::Logger,
 	) -> anyhow::Result<()>
 	where
-		RpcClient: 'static + StateChainRpcApi + Sync + Send,
 		EthRpcClient: EthRpcApi + Sync + Send,
+		StateChainClient: ExtrinsicApi + Send + Sync,
 	{
 		for event in block.block_items {
 			slog::info!(logger, "Handling event: {}", event);

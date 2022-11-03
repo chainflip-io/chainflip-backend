@@ -179,7 +179,7 @@ impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 	type AccountRoleRegistry = ();
 	type ThresholdCallable = MockCallback<MockEthereum>;
 	type TargetChain = MockEthereum;
-	type SignerNomination = MockNominator;
+	type ThresholdSignerNomination = MockNominator;
 	type KeyProvider = MockKeyProvider;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type OffenceReporter = MockOffenceReporter;

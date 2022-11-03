@@ -13,7 +13,10 @@ use chainflip_engine::{
 	multisig::{self, client::key_store::KeyStore, PersistentKeyDB},
 	p2p,
 	settings::{CommandLineOptions, Settings},
-	state_chain_observer::{self},
+	state_chain_observer::{
+		self,
+		client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi},
+	},
 	task_scope::with_main_task_scope,
 };
 
@@ -22,11 +25,10 @@ use clap::Parser;
 use futures::FutureExt;
 use pallet_cf_validator::SemVer;
 use sp_core::U256;
-use utilities::print_chainflip_ascii_art;
 
 fn main() -> anyhow::Result<()> {
-	print_chainflip_ascii_art();
 	use_chainflip_account_id_encoding();
+	utilities::print_starting!();
 
 	let settings = Settings::new(CommandLineOptions::parse()).context("Error reading settings")?;
 
@@ -34,8 +36,6 @@ fn main() -> anyhow::Result<()> {
 		settings.log.whitelist.clone(),
 		settings.log.blacklist.clone(),
 	);
-
-	slog::info!(root_logger, "Start the engines! :broom: :broom: ");
 
 	with_main_task_scope(|scope| {
 		async {
@@ -50,7 +50,7 @@ fn main() -> anyhow::Result<()> {
 
             let eth_dual_rpc =
                 EthDualRpcClient::new(&settings.eth, U256::from(state_chain_client
-                    .get_storage_value::<pallet_cf_environment::EthereumChainId::<state_chain_runtime::Runtime>>(
+                    .storage_value::<pallet_cf_environment::EthereumChainId::<state_chain_runtime::Runtime>>(
                         latest_block_hash,
                     )
                     .await
@@ -83,7 +83,7 @@ fn main() -> anyhow::Result<()> {
             ) = build_broadcast_channel(10);
 
             let cfe_settings = state_chain_client
-                .get_storage_value::<pallet_cf_environment::CfeSettings<state_chain_runtime::Runtime>>(
+                .storage_value::<pallet_cf_environment::CfeSettings<state_chain_runtime::Runtime>>(
                     latest_block_hash,
                 )
                 .await
@@ -93,7 +93,7 @@ fn main() -> anyhow::Result<()> {
                 tokio::sync::watch::channel(cfe_settings);
 
             let stake_manager_address = state_chain_client
-                .get_storage_value::<pallet_cf_environment::StakeManagerAddress::<
+                .storage_value::<pallet_cf_environment::StakeManagerAddress::<
                     state_chain_runtime::Runtime,
                 >>(latest_block_hash)
                 .await
@@ -101,7 +101,7 @@ fn main() -> anyhow::Result<()> {
             let stake_manager_contract = StakeManager::new(stake_manager_address.into());
 
             let key_manager_address = state_chain_client
-                .get_storage_value::<pallet_cf_environment::KeyManagerAddress::<
+                .storage_value::<pallet_cf_environment::KeyManagerAddress::<
                     state_chain_runtime::Runtime,
                 >>(latest_block_hash)
                 .await
@@ -111,7 +111,7 @@ fn main() -> anyhow::Result<()> {
                 KeyManager::new(key_manager_address.into());
 
             let latest_ceremony_id = state_chain_client
-            .get_storage_value::<pallet_cf_validator::CeremonyIdCounter<state_chain_runtime::Runtime>>(
+            .storage_value::<pallet_cf_validator::CeremonyIdCounter<state_chain_runtime::Runtime>>(
                 latest_block_hash,
             )
             .await
@@ -139,7 +139,7 @@ fn main() -> anyhow::Result<()> {
 
             let (eth_multisig_client, eth_multisig_client_backend_future) =
                 multisig::start_client::<EthSigning>(
-                    state_chain_client.our_account_id.clone(),
+                    state_chain_client.account_id(),
                     KeyStore::new(db.clone()),
                     eth_incoming_receiver,
                     eth_outgoing_sender,
@@ -153,7 +153,7 @@ fn main() -> anyhow::Result<()> {
 
             let (dot_multisig_client, dot_multisig_client_backend_future) =
                 multisig::start_client::<PolkadotSigning>(
-                    state_chain_client.our_account_id.clone(),
+                    state_chain_client.account_id(),
                     KeyStore::new(db),
                     dot_incoming_receiver,
                     dot_outgoing_sender,
@@ -231,7 +231,7 @@ fn main() -> anyhow::Result<()> {
                 use cf_primitives::Asset;
 
                 let flip_contract_address = state_chain_client
-                    .get_storage_map::<pallet_cf_environment::SupportedEthAssets::<
+                    .storage_map_entry::<pallet_cf_environment::SupportedEthAssets::<
                         state_chain_runtime::Runtime,
                     >>(latest_block_hash, &Asset::Flip)
                     .await
@@ -239,14 +239,14 @@ fn main() -> anyhow::Result<()> {
                     .expect("FLIP address must exist at genesis");
 
                 let usdc_contract_address = state_chain_client
-                    .get_storage_map::<pallet_cf_environment::SupportedEthAssets::<
+                    .storage_map_entry::<pallet_cf_environment::SupportedEthAssets::<
                         state_chain_runtime::Runtime,
                     >>(latest_block_hash, &Asset::Usdc)
                     .await
                     .context("Failed to get USDC address from SC")?
                     .expect("USDC address must exist at genesis");
 
-                let eth_chain_ingress_addresses = state_chain_client.get_all_storage_pairs::<pallet_cf_ingress::IntentIngressDetails<state_chain_runtime::Runtime>>(latest_block_hash)
+                let eth_chain_ingress_addresses = state_chain_client.storage_map::<pallet_cf_ingress::IntentIngressDetails<state_chain_runtime::Runtime>>(latest_block_hash)
                     .await
                     .context("Failed to get initial ingress details")?
                     .into_iter()

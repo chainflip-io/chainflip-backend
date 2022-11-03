@@ -18,7 +18,7 @@ use cf_primitives::{
 	IntentId, ETHEREUM_ETH_ADDRESS,
 };
 use cf_traits::{
-	Broadcaster, EgressApi, EthereumAssetsAddressProvider, IngressFetchApi,
+	ApiCallDataProvider, Broadcaster, EgressApi, EthereumAssetsAddressProvider, IngressFetchApi,
 	ReplayProtectionProvider,
 };
 use frame_support::pallet_prelude::*;
@@ -47,7 +47,7 @@ impl EthereumRequest {
 pub mod pallet {
 	use super::*;
 
-	use cf_traits::Chainflip;
+	use cf_traits::{ApiCallDataProvider, Chainflip};
 	use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
 
 	#[pallet::pallet]
@@ -62,7 +62,8 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// Replay protection.
-		type EthereumReplayProtection: ReplayProtectionProvider<Ethereum>;
+		type EthereumReplayProtection: ReplayProtectionProvider<Ethereum>
+			+ ApiCallDataProvider<Ethereum>;
 
 		/// The type of the chain-native transaction.
 		type EthereumEgressTransaction: AllBatch<Ethereum>;
@@ -123,7 +124,7 @@ pub mod pallet {
 			if remaining_weight <= T::WeightInfo::send_ethereum_batch(1u32) ||
 				EthereumScheduledRequests::<T>::decode_len() == Some(0)
 			{
-				return 0
+				return T::WeightInfo::on_idle_with_nothing_to_send()
 			}
 
 			// Calculate the number of requests that the weight allows.
@@ -242,10 +243,8 @@ impl<T: Config> Pallet<T> {
 				EthereumRequest::Fetch { intent_id, asset } => {
 					// Asset should always have a valid Ethereum address
 					if let Some(asset_address) = Self::get_ethereum_asset_identifier(asset) {
-						fetch_params.push(FetchAssetParams {
-							swap_id: intent_id,
-							asset: asset_address.into(),
-						});
+						fetch_params
+							.push(FetchAssetParams { intent_id, asset: asset_address.into() });
 					}
 				},
 				EthereumRequest::Transfer { asset, to, amount } => {
@@ -264,8 +263,10 @@ impl<T: Config> Pallet<T> {
 		let egress_batch_size = egress_params.len() as u32;
 
 		// Construct and send the transaction.
+		#[allow(clippy::unit_arg)]
 		let egress_transaction = T::EthereumEgressTransaction::new_unsigned(
 			T::EthereumReplayProtection::replay_protection(),
+			T::EthereumReplayProtection::chain_extra_data(),
 			fetch_params,
 			egress_params,
 		);
@@ -332,7 +333,6 @@ impl<T: Config> IngressFetchApi for Pallet<T> {
 				Self::get_ethereum_asset_identifier(asset).is_some(),
 				"Asset validity is checked by calling functions."
 			);
-
 			EthereumScheduledRequests::<T>::append(EthereumRequest::Fetch { intent_id, asset });
 		}
 		Self::deposit_event(Event::<T>::IngressFetchesScheduled { fetches_added });

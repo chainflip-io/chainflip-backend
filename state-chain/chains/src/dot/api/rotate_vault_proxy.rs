@@ -20,8 +20,8 @@ pub struct RotateVaultProxy {
 	pub extrinsic_handler: PolkadotExtrinsicBuilder,
 	/// The new proxy account public key
 	pub new_proxy: PolkadotPublicKey,
-	/// The old proxy account public Key
-	pub old_proxy: PolkadotPublicKey,
+	/// The current proxy AccountId
+	pub old_proxy: PolkadotAccountId,
 	/// The vault anonymous Polkadot AccountId
 	pub vault_account: PolkadotAccountId,
 }
@@ -30,13 +30,13 @@ impl RotateVaultProxy {
 	pub fn new_unsigned(
 		replay_protection: PolkadotReplayProtection,
 		new_proxy: PolkadotPublicKey,
-		old_proxy: PolkadotPublicKey,
+		old_proxy: PolkadotAccountId,
 		vault_account: PolkadotAccountId,
 	) -> Self {
 		let mut calldata = Self {
 			extrinsic_handler: PolkadotExtrinsicBuilder::new_empty(
 				replay_protection,
-				MultiSigner::Sr25519(old_proxy.0).into_account(),
+				old_proxy.clone(),
 			),
 			new_proxy,
 			old_proxy,
@@ -70,9 +70,7 @@ impl RotateVaultProxy {
 								delay: 0,
 							}),
 							PolkadotRuntimeCall::Proxy(ProxyCall::remove_proxy {
-								delegate: PolkadotAccountIdLookup::from(
-									MultiSigner::Sr25519(self.old_proxy.0).into_account(),
-								),
+								delegate: PolkadotAccountIdLookup::from(self.old_proxy.clone()),
 								proxy_type: PolkadotProxyType::Any,
 								delay: 0,
 							}),
@@ -154,7 +152,7 @@ mod test_rotate_vault_proxy {
 			MultiSigner::Sr25519(keypair_vault.public()).into_account();
 
 		let keypair_old_proxy: Pair = <Pair as TraitPair>::from_seed(&RAW_SEED_2);
-		let _account_id_old_proxy: AccountId32 =
+		let account_id_old_proxy: AccountId32 =
 			MultiSigner::Sr25519(keypair_old_proxy.public()).into_account();
 
 		let keypair_new_proxy: Pair = <Pair as TraitPair>::from_seed(&RAW_SEED_3);
@@ -164,7 +162,7 @@ mod test_rotate_vault_proxy {
 		let rotate_vault_proxy_api = RotateVaultProxy::new_unsigned(
 			PolkadotReplayProtection::new(NONCE_2, 0, NetworkChoice::WestendTestnet),
 			PolkadotPublicKey(keypair_new_proxy.public()),
-			PolkadotPublicKey(keypair_old_proxy.public()),
+			account_id_old_proxy,
 			account_id_vault,
 		);
 

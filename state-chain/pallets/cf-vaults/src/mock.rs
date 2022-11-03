@@ -146,6 +146,7 @@ pub struct MockSetAggKeyWithAggKey {
 impl SetAggKeyWithAggKey<MockEthereum> for MockSetAggKeyWithAggKey {
 	fn new_unsigned(
 		nonce: <MockEthereum as ChainAbi>::ReplayProtection,
+		_chain_specific_data: <MockEthereum as ChainAbi>::ApiCallExtraData,
 		new_key: <MockEthereum as ChainCrypto>::AggKey,
 	) -> Self {
 		Self { nonce, new_key }

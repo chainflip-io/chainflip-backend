@@ -15,19 +15,20 @@ use utilities::{make_periodic_tick, Port};
 use crate::{
 	logging::COMPONENT_KEY,
 	p2p::PeerInfo,
-	state_chain_observer::client::{
-		ChainflipClient, StateChainClient, StateChainRpcApi, StateChainRpcClient,
-	},
+	state_chain_observer::client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi},
 };
 
-async fn update_registered_peer_id<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
+async fn update_registered_peer_id<StateChainClient>(
 	node_key: &ed25519_dalek::Keypair,
-	state_chain_client: &Arc<StateChainClient<RpcClient>>,
+	state_chain_client: &Arc<StateChainClient>,
 	previous_registered_peer_info: &Option<PeerInfo>,
 	ip_address: Ipv6Addr,
 	cfe_port: Port,
 	logger: &slog::Logger,
-) -> Result<()> {
+) -> Result<()>
+where
+	StateChainClient: ExtrinsicApi,
+{
 	let extra_info = match previous_registered_peer_info.as_ref() {
 		Some(peer_info) => {
 			format!(
@@ -50,7 +51,7 @@ async fn update_registered_peer_id<RpcClient: 'static + StateChainRpcApi + Sync 
 
 	let signature = {
 		use ed25519_dalek::Signer;
-		let payload = &state_chain_client.our_account_id.encode();
+		let payload = &state_chain_client.account_id().encode();
 		node_key.sign(payload)
 	};
 
@@ -70,15 +71,18 @@ async fn update_registered_peer_id<RpcClient: 'static + StateChainRpcApi + Sync 
 	Ok(())
 }
 
-pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
+pub async fn start<StateChainClient>(
 	node_key: ed25519_dalek::Keypair,
-	state_chain_client: Arc<StateChainClient<RpcClient>>,
+	state_chain_client: Arc<StateChainClient>,
 	ip_address: IpAddr,
 	cfe_port: Port,
 	mut previous_registered_peer_info: Option<PeerInfo>,
 	mut own_peer_info_receiver: UnboundedReceiver<PeerInfo>,
 	logger: slog::Logger,
-) -> Result<()> {
+) -> Result<()>
+where
+	StateChainClient: StorageApi + ExtrinsicApi + Send + Sync,
+{
 	let logger = logger.new(o!(COMPONENT_KEY => "P2PClient"));
 
 	let ip_address = match ip_address {
@@ -120,14 +124,15 @@ pub async fn start<RpcClient: 'static + StateChainRpcApi + Sync + Send>(
 	Ok(())
 }
 
-pub async fn get_current_peer_infos(
-	state_chain_client: &Arc<
-		StateChainClient<StateChainRpcClient<impl ChainflipClient + Send + Sync>>,
-	>,
+pub async fn get_current_peer_infos<StateChainClient>(
+	state_chain_client: &Arc<StateChainClient>,
 	block_hash: H256,
-) -> anyhow::Result<Vec<PeerInfo>> {
+) -> anyhow::Result<Vec<PeerInfo>>
+where
+	StateChainClient: StorageApi,
+{
 	let peer_infos: Vec<_> = state_chain_client
-		.get_all_storage_pairs::<pallet_cf_validator::AccountPeerMapping<state_chain_runtime::Runtime>>(
+		.storage_map::<pallet_cf_validator::AccountPeerMapping<state_chain_runtime::Runtime>>(
 			block_hash,
 		)
 		.await?
