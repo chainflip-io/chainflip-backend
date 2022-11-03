@@ -104,15 +104,17 @@ jobs:
           variant: sccache
           save: false
       - run: sccache --show-stats
-      - run: |
-          echo COMMIT_HASH: $COMMIT_HASH
-          echo BRANCH_NAME: $BRANCH_NAME
-          COMMIT_HASH=$COMMIT_HASH BRANCH_NAME=$BRANCH_NAME cargo ci-build --locked
+      - name: cargo ci-build
+        run: |
+          export COMMIT_HASH=$COMMIT_HASH
+          export BRANCH_NAME=$BRANCH_NAME
+          cargo ci-build --locked
           sccache --show-stats
-      - run: |
-          echo COMMIT_HASH: $COMMIT_HASH
-          echo BRANCH_NAME: $BRANCH_NAME
-          COMMIT_HASH=$COMMIT_HASH BRANCH_NAME=$BRANCH_NAME cargo ci-test --locked
+      - name: cargo ci-test --locked
+        run: |
+          export COMMIT_HASH=$COMMIT_HASH
+          export BRANCH_NAME=$BRANCH_NAME
+          cargo ci-test --locked
           sccache --show-stats
       - name: Install cargo-deb
         run: cargo install cargo-deb
