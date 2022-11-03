@@ -134,7 +134,7 @@ pub mod common {
 	pub const SUPPLY_UPDATE_INTERVAL_DEFAULT: u32 = 14_400;
 
 	pub mod eth {
-		use cf_chains::{Chain, Ethereum};
+		use cf_chains::{eth::Ethereum, Chain};
 
 		/// Number of blocks to wait until we deem the block to be safe.
 		pub const BLOCK_SAFETY_MARGIN: <Ethereum as Chain>::ChainBlockNumber = 4;

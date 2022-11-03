@@ -12,7 +12,7 @@ mod mock;
 mod tests;
 mod weights;
 
-use cf_chains::{AllBatch, Ethereum, FetchAssetParams, TransferAssetParams};
+use cf_chains::{AllBatch, FetchAssetParams, TransferAssetParams};
 use cf_primitives::{
 	Asset, AssetAmount, EthereumAddress, ForeignChain, ForeignChainAddress, ForeignChainAsset,
 	IntentId, ETHEREUM_ETH_ADDRESS,
@@ -47,6 +47,7 @@ impl EthereumRequest {
 pub mod pallet {
 	use super::*;
 
+	use cf_chains::eth::Ethereum;
 	use cf_traits::{ApiCallDataProvider, Chainflip};
 	use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
 

@@ -2,6 +2,7 @@
 mod tests;
 
 use anyhow::{anyhow, Context};
+use cf_chains::eth::Ethereum;
 use cf_primitives::CeremonyId;
 use futures::{FutureExt, Stream, StreamExt};
 use pallet_cf_vaults::KeygenError;
@@ -20,7 +21,7 @@ use std::{
 use tokio::sync::{broadcast, mpsc::UnboundedSender, watch};
 
 use crate::{
-	eth::{rpc::EthRpcApi, EpochStart, EthBroadcaster},
+	eth::{rpc::EthRpcApi, EthBroadcaster},
 	logging::COMPONENT_KEY,
 	multisig::{
 		client::{KeygenFailureReason, MultisigClientApi},
@@ -31,6 +32,7 @@ use crate::{
 	p2p::{PeerInfo, PeerUpdate},
 	state_chain_observer::client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi},
 	task_scope::{with_task_scope, Scope},
+	witnesser::EpochStart,
 };
 
 #[cfg(feature = "ibiza")]
@@ -174,7 +176,7 @@ pub async fn start<
 	eth_multisig_client: Arc<EthMultisigClient>,
 	dot_multisig_client: Arc<PolkadotMultisigClient>,
 	peer_update_sender: UnboundedSender<PeerUpdate>,
-	epoch_start_sender: broadcast::Sender<EpochStart>,
+	eth_epoch_start_sender: broadcast::Sender<EpochStart<Ethereum>>,
 	#[cfg(feature = "ibiza")] eth_monitor_ingress_sender: tokio::sync::mpsc::UnboundedSender<H160>,
 	#[cfg(feature = "ibiza")] eth_monitor_flip_ingress_sender: tokio::sync::mpsc::UnboundedSender<
 		H160,
@@ -213,13 +215,13 @@ where
         );
 
         let start_epoch = |block_hash: H256, index: u32, current: bool, participant: bool| {
-            let epoch_start_sender = &epoch_start_sender;
+            let eth_epoch_start_sender = &eth_epoch_start_sender;
             let state_chain_client = &state_chain_client;
 
             async move {
-                epoch_start_sender.send(EpochStart {
+                eth_epoch_start_sender.send(EpochStart::<Ethereum> {
                     epoch_index: index,
-                    eth_block: state_chain_client
+                    block_number: state_chain_client
                         .storage_map_entry::<pallet_cf_vaults::Vaults<
                             state_chain_runtime::Runtime,
                             state_chain_runtime::EthereumInstance,

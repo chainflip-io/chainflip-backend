@@ -3,7 +3,7 @@ use crate::{
 	KeygenResolutionPendingSince, PalletOffence, PendingVaultRotation, SuccessVoters, Vault,
 	VaultRotationStatus, Vaults,
 };
-use cf_chains::Ethereum;
+use cf_chains::eth::Ethereum;
 use cf_test_utilities::last_event;
 use cf_traits::{
 	mocks::{ceremony_id_provider::MockCeremonyIdProvider, threshold_signer::MockThresholdSigner},

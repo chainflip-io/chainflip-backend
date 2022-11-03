@@ -1,5 +1,8 @@
 use crate as pallet_cf_staking;
-use cf_chains::{eth, eth::api::EthereumReplayProtection, ChainAbi, ChainCrypto, Ethereum};
+use cf_chains::{
+	eth::{self, api::EthereumReplayProtection, Ethereum},
+	ChainAbi, ChainCrypto,
+};
 use cf_primitives::{AuthorityCount, CeremonyId};
 use cf_traits::{
 	impl_mock_waived_fees, mocks::system_state_info::MockSystemStateInfo, AsyncResult,
