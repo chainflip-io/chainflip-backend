@@ -95,4 +95,4 @@ jobs:
           echo "apt install chainflip-engine" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           echo "### Usage in \`testnet-tools\`" >> $GITHUB_STEP_SUMMARY
-          echo "Use the full commit hash: \`$GITHUB_SHA\` for your network configuration. " >> $GITHUB_STEP_SUMMARY
+          echo "Use the full commit hash: \`${{ inputs.commit_sha }}\` for your network configuration. " >> $GITHUB_STEP_SUMMARY

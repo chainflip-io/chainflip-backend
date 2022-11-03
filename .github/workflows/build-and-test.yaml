@@ -17,9 +17,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
       - id: commit_sha
-        run: echo "commit_sha=$(git rev-parse --verify HEAD)" >> $GITHUB_OUTPUT
+        run: |
+          COMMIT_SHA=$(git rev-parse --verify HEAD)
+          echo "commit_sha=$COMMIT_SHA" >> $GITHUB_OUTPUT
       - id: branch_name
-        run: echo "branch_name=$(git rev-parse --abbrev-ref HEAD)" >> $GITHUB_OUTPUT
+        run: |
+          BRANCH_NAME=$(git rev-parse --abbrev-ref HEAD)
+          echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
 
   cargo-fmt:
     runs-on: [hetzner]
