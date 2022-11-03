@@ -1,10 +1,17 @@
-use std::pin::Pin;
+use std::{collections::BTreeSet, pin::Pin, sync::Arc};
 
+use cf_chains::dot::Polkadot;
 use futures::Stream;
+use subxt::{Config, PolkadotConfig};
+use tokio::sync::broadcast;
 
-use crate::witnesser::{block_head_stream_from::block_head_stream_from, BlockNumberable};
+use crate::witnesser::{
+	block_head_stream_from::block_head_stream_from, epoch_witnesser, BlockNumberable, EpochStart,
+};
 
 use anyhow::Result;
+
+type PolkadotAccount = <PolkadotConfig as Config>::AccountId;
 
 #[derive(Debug, Clone, Copy)]
 pub struct MiniHeader {
@@ -29,6 +36,28 @@ where
 		from_block,
 		safe_head_stream,
 		move |block_number| Box::pin(async move { Ok(MiniHeader { block_number }) }),
+		logger,
+	)
+	.await
+}
+
+pub async fn start<StateChainClient>(
+	epoch_starts_receiver: broadcast::Receiver<EpochStart<Polkadot>>,
+	dot_monitor_ingress_receiver: tokio::sync::mpsc::UnboundedReceiver<PolkadotAccount>,
+	_state_chain_client: Arc<StateChainClient>,
+	// on chain addresses that we need to monitor for inputs
+	monitored_addresses: BTreeSet<PolkadotAccount>,
+	logger: &slog::Logger,
+) -> Result<()> {
+	epoch_witnesser::start(
+		"DOT".to_string(),
+		epoch_starts_receiver,
+		|_epoch_start| true,
+		(monitored_addresses, dot_monitor_ingress_receiver),
+		move |_end_witnessing_signal,
+		      _epoch_start,
+		      (monitored_addresses, dot_monitor_ingress_receiver),
+		      _logger| { async move { Ok((monitored_addresses, dot_monitor_ingress_receiver)) } },
 		logger,
 	)
 	.await
