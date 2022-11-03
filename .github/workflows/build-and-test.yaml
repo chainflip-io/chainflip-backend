@@ -10,7 +10,21 @@ env:
   SCCACHE_CACHE_SIZE: 32G
   SCCACHE_REDIS: ${{ secrets.SCCACHE_REDIS }}
   CF_RUNNER_SUDO_PASSWORD: ${{ secrets.CF_RUNNER_SUDO_PASSWORD }}
+
 jobs:
+  set-variables:
+    runs-on: ubuntu-latest
+    outputs:
+      commit_sha: ${{ steps.step1.outputs.test }}
+      branch_name: ${{ steps.step2.outputs.test }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - id: commit_sha
+        run: echo "commit_sha=$(git rev-parse --verify HEAD)" >> $GITHUB_OUTPUT
+      - id: branch_name
+        run: echo "branch_name=$(git rev-parse --abbrev-ref HEAD)" >> $GITHUB_OUTPUT
+
   cargo-fmt:
     runs-on: [hetzner]
     container:
@@ -69,12 +83,15 @@ jobs:
 
   build-and-test:
     runs-on: [hetzner]
-    needs: [cargo-fmt]
+    needs: [set-variables, cargo-fmt]
     container:
       image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08'
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
+    env:
+      CHAINFLIP_COMMIT_SHA: ${{ needs.set-variables.outputs.commit_sha }}
+      CHAINFLIP_COMMIT_BRANCH_NAME: ${{ needs.set-variables.outputs.branch_name }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -123,12 +140,15 @@ jobs:
 
   build-ibiza:
     runs-on: [hetzner]
-    needs: [cargo-fmt]
+    needs: [set-variables, cargo-fmt]
     container:
       image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08'
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
+    env:
+      CHAINFLIP_COMMIT_SHA: ${{ needs.set-variables.outputs.commit_sha }}
+      CHAINFLIP_COMMIT_BRANCH_NAME: ${{ needs.set-variables.outputs.branch_name }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -267,18 +287,20 @@ jobs:
 
   deb-publish:
     name: Publish Packages to APT repo
-    needs: [build-and-test]
+    needs: [set-variables, build-and-test]
     uses: ./.github/workflows/.deb-publish.yaml
     with:
       s3-prefix: ci
       artifacts: chainflip-backend-packages
+      commit_sha: ${{ needs.set-variables.outputs.commit_sha }}
     secrets: inherit
 
   deb-publish-ibiza:
     name: Publish Ibiza Packages to APT repo
-    needs: [build-ibiza]
+    needs: [set-variables, build-ibiza]
     uses: ./.github/workflows/.deb-publish.yaml
     with:
       s3-prefix: ci/ibiza
       artifacts: chainflip-backend-packages-ibiza
+      commit_sha: ${{ needs.set-variables.outputs.commit_sha }}
     secrets: inherit
