@@ -16,13 +16,14 @@ use web3::types::{Bytes, SignedTransaction};
 use crate::{
 	eth::{
 		rpc::{EthWsRpcClient, MockEthRpcApi},
-		EpochStart, EthBroadcaster,
+		EthBroadcaster,
 	},
 	logging::test_utils::new_test_logger,
 	multisig::client::{mocks::MockMultisigClientApi, KeygenFailureReason, SigningFailureReason},
 	settings::Settings,
 	state_chain_observer::{client::mocks::MockStateChainClient, sc_observer},
 	task_scope::with_task_scope,
+	witnesser::EpochStart,
 };
 
 fn test_header(number: u32) -> Header {

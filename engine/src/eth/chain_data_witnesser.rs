@@ -1,8 +1,11 @@
 use std::{sync::Arc, time::Duration};
 
-use crate::state_chain_observer::client::extrinsic_api::ExtrinsicApi;
+use crate::{
+	state_chain_observer::client::extrinsic_api::ExtrinsicApi,
+	witnesser::{epoch_witnesser, EpochStart},
+};
 
-use super::{rpc::EthRpcApi, EpochStart};
+use super::rpc::EthRpcApi;
 
 use cf_chains::{eth::TrackedData, Ethereum};
 
@@ -25,7 +28,7 @@ where
 	EthRpcClient: 'static + EthRpcApi + Clone + Send + Sync,
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
 {
-	super::epoch_witnesser::start(
+	epoch_witnesser::start(
         "ETH-Chain-Data".to_string(),
         epoch_start_receiver,
         |epoch_start| epoch_start.current,

@@ -11,17 +11,20 @@ use tokio_stream::StreamExt;
 use web3::types::Transaction;
 
 use crate::{
-	eth::epoch_witnesser::should_end_witnessing,
 	state_chain_observer::client::extrinsic_api::ExtrinsicApi,
+	witnesser::{
+		epoch_witnesser::{self, should_end_witnessing},
+		EpochStart,
+	},
 };
 
 use super::{
-	epoch_witnesser, eth_block_head_stream_from,
+	eth_block_head_stream_from,
 	http_safe_stream::{safe_polling_http_head_stream, HTTP_POLL_INTERVAL},
 	merged_block_items_stream,
 	rpc::{EthDualRpcClient, EthRpcApi, EthWsRpcApi},
 	ws_safe_stream::safe_ws_head_stream,
-	BlockWithProcessedItems, EpochStart, EthNumberBloom,
+	BlockWithProcessedItems, EthNumberBloom,
 };
 
 use anyhow::Result;

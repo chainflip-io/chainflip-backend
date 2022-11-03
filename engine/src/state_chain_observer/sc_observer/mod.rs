@@ -20,7 +20,7 @@ use std::{
 use tokio::sync::{broadcast, mpsc::UnboundedSender, watch};
 
 use crate::{
-	eth::{rpc::EthRpcApi, EpochStart, EthBroadcaster},
+	eth::{rpc::EthRpcApi, EthBroadcaster},
 	logging::COMPONENT_KEY,
 	multisig::{
 		client::{KeygenFailureReason, MultisigClientApi},
@@ -31,6 +31,7 @@ use crate::{
 	p2p::{PeerInfo, PeerUpdate},
 	state_chain_observer::client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi},
 	task_scope::{with_task_scope, Scope},
+	witnesser::EpochStart,
 };
 
 #[cfg(feature = "ibiza")]
