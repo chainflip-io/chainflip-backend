@@ -292,7 +292,7 @@ jobs:
     with:
       s3-prefix: ci
       artifacts: chainflip-backend-packages
-      commit_sha: ${{ needs.set-variables.outputs.commit_hash }}
+      commit_hash: ${{ needs.set-variables.outputs.commit_hash }}
     secrets: inherit
 
   deb-publish-ibiza:
