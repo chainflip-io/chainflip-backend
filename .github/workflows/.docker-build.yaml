@@ -17,6 +17,7 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: '${{ github.repository }}/rust-base'
   TAG: ${{ github.event.inputs.image_tag }}
+  NIGHTLY_VERSION: ${{ github.event.inputs.nightly_version }}
 
 jobs:
   build:
@@ -59,4 +60,4 @@ jobs:
           cache-to: type=gha,mode=max
           file: rust-base.Dockerfile
           build-args: |
-            NIGHTLY=${{ env.TAG }}
+            NIGHTLY=${{ env.NIGHTLY_VERSION }}
