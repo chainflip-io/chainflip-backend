@@ -12,7 +12,7 @@ on:
         required: false
         type: string
         default: chainflip-backend-packages
-      commit_sha:
+      commit_hash:
         description: Commit SHA
         required: true
         type: string
@@ -70,7 +70,7 @@ jobs:
           aptly repo create local
           aptly repo add local packages/*.deb
           aptly snapshot create snap from repo local
-          aptly publish -gpg-key=${{ steps.import_gpg.outputs.keyid }} -distribution=${{ steps.vars.outputs.codename }} snapshot -force-overwrite snap "s3:chainflip-dev:${{ inputs.s3-prefix }}/${{ inputs.commit_sha }}/"
+          aptly publish -gpg-key=${{ steps.import_gpg.outputs.keyid }} -distribution=${{ steps.vars.outputs.codename }} snapshot -force-overwrite snap "s3:chainflip-dev:${{ inputs.s3-prefix }}/${{ inputs.commit_hash }}/"
       - name: Set Summary Title
         if: ${{ !contains(inputs.artifacts, 'ibiza') }}
         run: echo "### Packages Published! :rocket:" >> $GITHUB_STEP_SUMMARY
@@ -83,7 +83,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
           echo "sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys ${{ steps.import_gpg.outputs.keyid }}" >> $GITHUB_STEP_SUMMARY
-          echo "echo \"deb https://{user}:{password}@${REPO_BUCKET}/${{ inputs.s3-prefix }}/${{ inputs.commit_sha }}/ ${{ steps.vars.outputs.codename }} main\"  | sudo tee /etc/apt/sources.list.d/chainflip.list" >> $GITHUB_STEP_SUMMARY
+          echo "echo \"deb https://{user}:{password}@${REPO_BUCKET}/${{ inputs.s3-prefix }}/${{ inputs.commit_hash }}/ ${{ steps.vars.outputs.codename }} main\"  | sudo tee /etc/apt/sources.list.d/chainflip.list" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           echo "You can find the basic auth credentials in 1Password under \`apt repo basic auth\` secret" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -95,4 +95,4 @@ jobs:
           echo "apt install chainflip-engine" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           echo "### Usage in \`testnet-tools\`" >> $GITHUB_STEP_SUMMARY
-          echo "Use the full commit hash: \`${{ inputs.commit_sha }}\` for your network configuration. " >> $GITHUB_STEP_SUMMARY
+          echo "Use the full commit hash: \`${{ inputs.commit_hash }}\` for your network configuration. " >> $GITHUB_STEP_SUMMARY
