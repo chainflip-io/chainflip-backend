@@ -160,25 +160,20 @@ pub mod mockall_utilities {
 	}
 }
 
-#[macro_export]
-macro_rules! repository_link {
-	() => {
-		if let Some(commit_hash) = core::option_env!("CIRCLE_SHA1") {
-			Some(utilities::internal_lazy_format!(
-				"https://github.com/chainflip-io/chainflip-backend/tree/{commit_hash}"
-			))
-		} else {
-			None
-		}
-	};
+pub fn repository_link() -> Option<impl core::fmt::Display> {
+	// GITHUB_SHA is Github's environment variable exposing the git commit hash
+	core::option_env!("GITHUB_SHA").map(|commit_hash| {
+		lazy_format::lazy_format!(
+			"https://github.com/chainflip-io/chainflip-backend/tree/{commit_hash}"
+		)
+	})
 }
 
 #[macro_export]
 macro_rules! here {
 	() => {
 		utilities::internal_lazy_format!(
-			// CIRCLE_SHA1 is CircleCI's environment variable exposing the git commit hash
-			if let Some(repository_link) = utilities::repository_link!() => (
+			if let Some(repository_link) = utilities::repository_link() => (
 				"{}/{}#L{}#C{}",
 				repository_link,
 				file!(),
@@ -223,7 +218,7 @@ macro_rules! print_starting {
 			"Starting {} v{} ({})",
 			env!("CARGO_PKG_NAME"),
 			env!("CARGO_PKG_VERSION"),
-			utilities::internal_lazy_format!(if let Some(repository_link) = utilities::repository_link!() => ("CI Build: {}", repository_link) else => ("Non-CI Build"))
+			utilities::internal_lazy_format!(if let Some(repository_link) = utilities::repository_link() => ("CI Build: '{}'", repository_link) else => ("Non-CI Build"))
 		);
 		println!(
 			"
@@ -234,6 +229,6 @@ macro_rules! print_starting {
 			╚██████╗██║  ██║██║  ██║██║██║ ╚████║██║     ███████╗██║██║
 			 ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝╚═╝  ╚═══╝╚═╝     ╚══════╝╚═╝╚═╝
 			"
-		)
+		);
 	}
 }
