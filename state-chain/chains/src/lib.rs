@@ -51,7 +51,7 @@ pub trait Chain: Member + Parameter {
 
 	type TrackedData: Member + Parameter + MaxEncodedLen + Clone + Age<Self> + BenchmarkValue;
 
-	type ChainAsset: Member + Parameter + MaxEncodedLen;
+	type ChainAsset: Member + Parameter + MaxEncodedLen + Copy;
 
 	type ChainAccount: Member + Parameter + MaxEncodedLen + BenchmarkValue;
 }
@@ -123,16 +123,16 @@ where
 #[derive(
 	RuntimeDebug, Copy, Clone, Default, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo,
 )]
-pub struct FetchAssetParams<Asset> {
+struct FetchAssetParams<C: Chain> {
 	pub intent_id: IntentId,
-	pub asset: Asset,
+	pub asset: <C as Chain>::ChainAsset,
 }
 
 /// Contains all the parameters required for transferring an asset on an external chain.
 #[derive(RuntimeDebug, Clone, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
-pub struct TransferAssetParams<Asset, Address> {
-	pub asset: Asset,
-	pub to: Address,
+struct TransferAssetParams<C: Chain> {
+	pub asset: <C as Chain>::ChainAsset,
+	pub to: <C as Chain>::ChainAccount,
 	pub amount: AssetAmount,
 }
 
@@ -204,8 +204,8 @@ pub trait RegisterClaim<Abi: ChainAbi>: ApiCall<Abi> {
 pub trait AllBatch<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
 		replay_protection: Abi::ReplayProtection,
-		fetch_params: Vec<FetchAssetParams<Abi::ChainAsset>>,
-		transfer_params: Vec<TransferAssetParams<Abi::ChainAsset, Abi::ChainAccount>>,
+		fetch_params: Vec<FetchAssetParams<Abi>>,
+		transfer_params: Vec<TransferAssetParams<Abi>>,
 	) -> Self;
 }
 

@@ -125,26 +125,29 @@ where
 {
 	fn new_unsigned(
 		replay_protection: EthereumReplayProtection,
-		fetch_params: Vec<FetchAssetParams<assets::eth::Asset>>,
-		transfer_params: Vec<TransferAssetParams<assets::eth::Asset, Address>>,
+		fetch_params: Vec<FetchAssetParams<Ethereum>>,
+		transfer_params: Vec<TransferAssetParams<Ethereum>>,
 	) -> Self {
 		Self::AllBatch(all_batch::AllBatch::new_unsigned(
 			replay_protection,
 			fetch_params
 				.into_iter()
-				.filter_map(|p| {
-					E::lookup(p.asset)
-						.map(|address| FetchAssetParams { intent_id: p.intent_id, asset: address })
+				.filter_map(|FetchAssetParams { intent_id, asset }| {
+					E::lookup(asset)
+						.map(|address| all_batch::EncodableFetchAssetParams {
+							intent_id,
+							asset: address,
+						})
 						.ok()
 				})
 				.collect(),
 			transfer_params
 				.into_iter()
-				.filter_map(|p| {
-					E::lookup(p.asset)
-						.map(|address| TransferAssetParams {
-							to: p.to,
-							amount: p.amount,
+				.filter_map(|TransferAssetParams { asset, to, amount }| {
+					E::lookup(asset)
+						.map(|address| all_batch::EncodableTransferAssetParams {
+							to,
+							amount,
 							asset: address,
 						})
 						.ok()

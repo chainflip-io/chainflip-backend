@@ -30,8 +30,8 @@ where
 {
 	fn new_unsigned(
 		replay_protection: PolkadotReplayProtection,
-		fetch_params: Vec<FetchAssetParams<assets::dot::Asset>>,
-		transfer_params: Vec<TransferAssetParams<assets::dot::Asset, PolkadotAccountId>>,
+		fetch_params: Vec<FetchAssetParams<Polkadot>>,
+		transfer_params: Vec<TransferAssetParams<Polkadot>>,
 	) -> Self {
 		Self::BatchFetchAndTransfer(batch_fetch_and_transfer::BatchFetchAndTransfer::new_unsigned(
 			replay_protection,

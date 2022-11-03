@@ -12,11 +12,11 @@ mod mock;
 mod tests;
 mod weights;
 
-use cf_chains::{AllBatch, Chain, FetchAssetParams, TransferAssetParams};
-use cf_primitives::{
-	chains::{assets, Ethereum},
-	AssetAmount, ForeignChain, IntentId,
+use cf_chains::{
+	AllBatch, Chain RuntimeFetchAssetParams as FetchAssetParams,
+	RuntimeTransferAssetParams as TransferAssetParams,
 };
+use cf_primitives::{chains::{assets, Ethereum}, AssetAmount, ForeignChain, IntentId};
 use cf_traits::{Broadcaster, EgressApi, IngressFetchApi, ReplayProtectionProvider};
 use frame_support::pallet_prelude::*;
 pub use pallet::*;
@@ -83,17 +83,17 @@ pub mod pallet {
 	/// Stores the list of assets that are not allowed to be egressed.
 	#[pallet::storage]
 	pub(crate) type EthereumDisabledEgressAssets<T: Config> =
-		StorageMap<_, Twox64Concat, assets::eth::Asset, ()>;
+		StorageMap<_, Twox64Concat, <Ethereum as Chain>::ChainAsset, ()>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		AssetEgressDisabled {
-			asset: assets::eth::Asset,
+			asset: <Ethereum as Chain>::ChainAsset,
 			disabled: bool,
 		},
 		EgressScheduled {
-			asset: assets::eth::Asset,
+			asset: <Ethereum as Chain>::ChainAsset,
 			amount: AssetAmount,
 			egress_address: <Ethereum as Chain>::ChainAccount,
 		},
@@ -150,7 +150,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::disable_asset_egress())]
 		pub fn disable_asset_egress(
 			origin: OriginFor<T>,
-			asset: assets::eth::Asset,
+			asset: <Ethereum as Chain>::ChainAsset,
 			disabled: bool,
 		) -> DispatchResult {
 			let _ok = T::EnsureGovernance::ensure_origin(origin)?;
@@ -275,7 +275,7 @@ impl<T: Config> EgressApi<Ethereum> for Pallet<T> {
 }
 
 impl<T: Config> IngressFetchApi<Ethereum> for Pallet<T> {
-	fn schedule_ingress_fetch(fetch_details: Vec<(assets::eth::Asset, IntentId)>) {
+	fn schedule_ingress_fetch(fetch_details: Vec<(<Ethereum as Chain>::ChainAsset, IntentId)>) {
 		let fetches_added = fetch_details.len() as u32;
 		for (asset, intent_id) in fetch_details {
 			EthereumScheduledRequests::<T>::append(FetchOrTransfer::<Ethereum>::Fetch {

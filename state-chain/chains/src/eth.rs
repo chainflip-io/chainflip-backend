@@ -685,31 +685,6 @@ impl From<H256> for TransactionHash {
 	}
 }
 
-impl Tokenizable for FetchAssetParams<Address> {
-	fn tokenize(self) -> Token {
-		Token::Tuple(vec![
-			Token::FixedBytes(get_salt(self.intent_id).to_vec()),
-			Token::Address(self.asset),
-		])
-	}
-}
-
-impl<T: Tokenizable> Tokenizable for Vec<T> {
-	fn tokenize(self) -> Token {
-		Token::Array(self.into_iter().map(|t| t.tokenize()).collect())
-	}
-}
-
-impl Tokenizable for TransferAssetParams<Address, Address> {
-	fn tokenize(self) -> Token {
-		Token::Tuple(vec![
-			Token::Address(self.asset),
-			Token::Address(self.to),
-			Token::Uint(Uint::from(self.amount)),
-		])
-	}
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;

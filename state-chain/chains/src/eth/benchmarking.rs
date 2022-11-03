@@ -60,7 +60,7 @@ impl BenchmarkValue for AggKey {
 	}
 }
 
-impl BenchmarkValue for EthereumApi {
+impl<E> BenchmarkValue for EthereumApi<E> {
 	fn benchmark_value() -> Self {
 		EthereumApi::UpdateFlipSupply(UpdateFlipSupply::new_unsigned(
 			EthereumReplayProtection {
