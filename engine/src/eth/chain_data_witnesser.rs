@@ -7,7 +7,7 @@ use crate::{
 
 use super::rpc::EthRpcApi;
 
-use cf_chains::{eth::TrackedData, Ethereum};
+use cf_chains::eth::{Ethereum, TrackedData};
 
 use sp_core::U256;
 use state_chain_runtime::CfeSettings;

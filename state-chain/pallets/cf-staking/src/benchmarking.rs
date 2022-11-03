@@ -3,7 +3,7 @@
 
 use super::*;
 
-use cf_chains::{ApiCall, ChainCrypto, Ethereum};
+use cf_chains::{eth::Ethereum, ApiCall, ChainCrypto};
 use cf_primitives::AccountRole;
 use cf_traits::AccountRoleRegistry;
 use frame_benchmarking::{account, benchmarks, whitelisted_caller};

@@ -2,8 +2,6 @@
 use crate::benchmarking_value::BenchmarkValue;
 use cf_primitives::{EthAmount, IntentId};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
-use eth::SchnorrVerificationComponents;
-use ethereum_types::H256;
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
 	Blake2_256, Parameter, RuntimeDebug, StorageHasher,
@@ -223,41 +221,6 @@ pub trait FeeRefundCalculator<C: Chain> {
 		&self,
 		fee_paid: <C as Chain>::TransactionFee,
 	) -> <C as Chain>::ChainAmount;
-}
-
-#[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub struct Ethereum;
-
-impl Chain for Ethereum {
-	type ChainBlockNumber = u64;
-	type ChainAmount = EthAmount;
-	type TransactionFee = eth::TransactionFee;
-	type TrackedData = eth::TrackedData<Self>;
-	type ChainAccount = eth::Address;
-	type ChainAsset = eth::Address;
-}
-
-impl ChainCrypto for Ethereum {
-	type AggKey = eth::AggKey;
-	type Payload = eth::H256;
-	type ThresholdSignature = SchnorrVerificationComponents;
-	type TransactionHash = eth::H256;
-	type GovKey = eth::Address;
-
-	fn verify_threshold_signature(
-		agg_key: &Self::AggKey,
-		payload: &Self::Payload,
-		signature: &Self::ThresholdSignature,
-	) -> bool {
-		agg_key
-			.verify(payload.as_fixed_bytes(), signature)
-			.map_err(|e| log::debug!("Ethereum signature verification failed: {:?}.", e))
-			.is_ok()
-	}
-
-	fn agg_key_to_payload(agg_key: Self::AggKey) -> Self::Payload {
-		H256(Blake2_256::hash(&agg_key.to_pubkey_compressed()))
-	}
 }
 
 pub mod mocks {

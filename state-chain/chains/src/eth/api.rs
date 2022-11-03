@@ -2,6 +2,8 @@ use sp_runtime::traits::UniqueSaturatedInto;
 
 use crate::*;
 
+use super::Ethereum;
+
 pub mod all_batch;
 pub mod register_claim;
 pub mod set_agg_key_with_agg_key;
