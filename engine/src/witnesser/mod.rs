@@ -8,7 +8,7 @@ pub mod epoch_witnesser;
 pub type ChainBlockNumber<Chain> = <Chain as cf_chains::Chain>::ChainBlockNumber;
 
 #[derive(Clone, Debug)]
-#[cfg_attr(test, derive(PartialEq))]
+#[cfg_attr(test, derive(PartialEq, Eq))]
 pub struct EpochStart<Chain: cf_chains::Chain> {
 	pub epoch_index: EpochIndex,
 	pub block_number: ChainBlockNumber<Chain>,
