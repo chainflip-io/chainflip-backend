@@ -10,8 +10,8 @@ pub trait PalletInstanceAlias {
 	type Instance: 'static;
 }
 
-impl PalletInstanceAlias for cf_chains::Ethereum {
+impl PalletInstanceAlias for cf_chains::eth::Ethereum {
 	type Instance = Instance1;
 }
 
-pub type EthereumInstance = <cf_chains::Ethereum as PalletInstanceAlias>::Instance;
+pub type EthereumInstance = <cf_chains::eth::Ethereum as PalletInstanceAlias>::Instance;
