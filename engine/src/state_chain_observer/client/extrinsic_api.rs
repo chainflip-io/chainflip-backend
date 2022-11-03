@@ -23,7 +23,7 @@ use crate::constants::MAX_EXTRINSIC_RETRY_ATTEMPTS;
 
 use super::storage_api::StorageApi;
 
-// Note 'static on the generics in this trait are only required for mockall to mock it
+// Note 'static on the sgenerics in this trait are only required for mockall to mock it
 #[async_trait]
 pub trait ExtrinsicApi {
 	fn account_id(&self) -> AccountId;
