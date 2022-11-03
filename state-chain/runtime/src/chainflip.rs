@@ -129,9 +129,7 @@ impl cf_traits::WaivedFees for WaivedFees {
 
 pub struct EthEnvironment;
 
-impl ChainEnvironment<assets::eth::Asset> for EthEnvironment {
-	type LookupValue = EthereumAddress;
-
+impl ChainEnvironment<assets::eth::Asset, EthereumAddress> for EthEnvironment {
 	fn lookup(
 		asset: assets::eth::Asset,
 	) -> Result<Self::LookupValue, frame_support::error::LookupError> {

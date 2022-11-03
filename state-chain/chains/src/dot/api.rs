@@ -19,6 +19,7 @@ pub enum PolkadotApi<Environment: 'static> {
 	_Phantom(PhantomData<Environment>, Never),
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum SystemAccounts {
 	Proxy,
 	Vault,
@@ -26,7 +27,7 @@ pub enum SystemAccounts {
 
 impl<E> AllBatch<Polkadot> for PolkadotApi<E>
 where
-	E: ChainEnvironment<SystemAccounts, LookupValue = <Polkadot as Chain>::ChainAccount>,
+	E: ChainEnvironment<SystemAccounts, <Polkadot as Chain>::ChainAccount>,
 {
 	fn new_unsigned(
 		replay_protection: PolkadotReplayProtection,
@@ -45,7 +46,7 @@ where
 
 impl<E> SetAggKeyWithAggKey<Polkadot> for PolkadotApi<E>
 where
-	E: ChainEnvironment<SystemAccounts, LookupValue = <Polkadot as Chain>::ChainAccount>,
+	E: ChainEnvironment<SystemAccounts, <Polkadot as Chain>::ChainAccount>,
 {
 	fn new_unsigned(
 		replay_protection: PolkadotReplayProtection,

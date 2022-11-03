@@ -68,7 +68,7 @@ pub use cf_traits::{
 	BlockNumber, EpochInfo, EthEnvironmentProvider, FlipBalance, QualifyNode, SessionKeysRegistered,
 };
 pub use chainflip::chain_instances::*;
-use chainflip::{epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat};
+use chainflip::{epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat, EthEnvironment};
 use constants::common::{
 	eth::{BLOCK_SAFETY_MARGIN, CONSERVATIVE_BLOCK_TIME_SECS},
 	*,
@@ -206,7 +206,7 @@ impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 	type ThresholdSigner = EthereumThresholdSigner;
 	type Offence = chainflip::Offence;
 	type Chain = Ethereum;
-	type ApiCall = eth::api::EthereumApi;
+	type ApiCall = eth::api::EthereumApi<EthEnvironment>;
 	type Broadcaster = EthereumBroadcaster;
 	type OffenceReporter = Reputation;
 	type CeremonyIdProvider = pallet_cf_validator::CeremonyIdProvider<Self>;

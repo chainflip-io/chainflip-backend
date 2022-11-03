@@ -148,11 +148,13 @@ pub trait IngressAddress {
 /// This allows us to define multiple lookups on a single type.
 ///
 /// TODO: Consider making the lookup infallible.
-pub trait ChainEnvironment<LookupKey: codec::Codec + Clone + PartialEq + Debug + TypeInfo> {
-	type LookupValue;
-
+pub trait ChainEnvironment<
+	LookupKey: codec::Codec + Clone + PartialEq + Debug + TypeInfo,
+	LookupValue,
+>
+{
 	/// Attempt a lookup.
-	fn lookup(s: LookupKey) -> Result<Self::LookupValue, frame_support::error::LookupError>;
+	fn lookup(s: LookupKey) -> Result<LookupValue, frame_support::error::LookupError>;
 }
 
 /// Constructs the `SetAggKeyWithAggKey` api call.

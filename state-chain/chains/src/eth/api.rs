@@ -121,7 +121,7 @@ impl<E> UpdateFlipSupply<Ethereum> for EthereumApi<E> {
 
 impl<E> AllBatch<Ethereum> for EthereumApi<E>
 where
-	E: ChainEnvironment<assets::eth::Asset, LookupValue = Address>,
+	E: ChainEnvironment<assets::eth::Asset, Address>,
 {
 	fn new_unsigned(
 		replay_protection: EthereumReplayProtection,
