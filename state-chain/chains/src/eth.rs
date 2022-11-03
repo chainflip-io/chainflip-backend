@@ -34,6 +34,41 @@ pub const CHAIN_ID_ROPSTEN: u64 = 3;
 pub const CHAIN_ID_GOERLI: u64 = 5;
 pub const CHAIN_ID_KOVAN: u64 = 42;
 
+#[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub struct Ethereum;
+
+impl Chain for Ethereum {
+	type ChainBlockNumber = u64;
+	type ChainAmount = EthAmount;
+	type TransactionFee = eth::TransactionFee;
+	type TrackedData = eth::TrackedData<Self>;
+	type ChainAccount = eth::Address;
+	type ChainAsset = eth::Address;
+}
+
+impl ChainCrypto for Ethereum {
+	type AggKey = eth::AggKey;
+	type Payload = eth::H256;
+	type ThresholdSignature = SchnorrVerificationComponents;
+	type TransactionHash = eth::H256;
+	type GovKey = eth::Address;
+
+	fn verify_threshold_signature(
+		agg_key: &Self::AggKey,
+		payload: &Self::Payload,
+		signature: &Self::ThresholdSignature,
+	) -> bool {
+		agg_key
+			.verify(payload.as_fixed_bytes(), signature)
+			.map_err(|e| log::debug!("Ethereum signature verification failed: {:?}.", e))
+			.is_ok()
+	}
+
+	fn agg_key_to_payload(agg_key: Self::AggKey) -> Self::Payload {
+		H256(Blake2_256::hash(&agg_key.to_pubkey_compressed()))
+	}
+}
+
 //--------------------------//
 pub trait Tokenizable {
 	fn tokenize(self) -> Token;

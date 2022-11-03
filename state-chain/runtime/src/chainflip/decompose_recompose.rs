@@ -57,7 +57,10 @@ impl WitnessDataExtraction for Call {
 mod tests {
 	use super::*;
 	use crate::{Origin, Validator, Witnesser};
-	use cf_chains::{eth::TrackedData, Chain, Ethereum};
+	use cf_chains::{
+		eth::{Ethereum, TrackedData},
+		Chain,
+	};
 	use cf_primitives::AccountRole;
 	use cf_traits::EpochInfo;
 	use frame_support::{assert_ok, Hashable};

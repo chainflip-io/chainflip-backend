@@ -24,8 +24,9 @@ use cf_chains::{
 	eth::{
 		self,
 		api::{EthereumApi, EthereumReplayProtection},
+		Ethereum,
 	},
-	ApiCall, ChainAbi, Ethereum, TransactionBuilder,
+	ApiCall, ChainAbi, TransactionBuilder,
 };
 use cf_traits::{
 	ApiCallDataProvider, BlockEmissions, Chainflip, EmergencyRotation, EpochInfo,

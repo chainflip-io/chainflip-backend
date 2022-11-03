@@ -15,7 +15,10 @@ use crate::{
 		RuntimeApiPenalty, RuntimeApiPendingClaim,
 	},
 };
-use cf_chains::{eth, eth::api::register_claim::RegisterClaim, Ethereum};
+use cf_chains::{
+	eth,
+	eth::{api::register_claim::RegisterClaim, Ethereum},
+};
 
 pub use frame_support::{
 	construct_runtime, debug,

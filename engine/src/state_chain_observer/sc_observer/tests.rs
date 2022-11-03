@@ -1,6 +1,6 @@
 use std::{collections::BTreeSet, sync::Arc};
 
-use cf_chains::eth::UnsignedTransaction;
+use cf_chains::eth::{Ethereum, UnsignedTransaction};
 use frame_system::Phase;
 use futures::{FutureExt, TryStreamExt};
 use mockall::predicate::{self, eq};
@@ -16,13 +16,14 @@ use web3::types::{Bytes, SignedTransaction};
 use crate::{
 	eth::{
 		rpc::{EthWsRpcClient, MockEthRpcApi},
-		EpochStart, EthBroadcaster,
+		EthBroadcaster,
 	},
 	logging::test_utils::new_test_logger,
 	multisig::client::{mocks::MockMultisigClientApi, KeygenFailureReason, SigningFailureReason},
 	settings::Settings,
 	state_chain_observer::{client::mocks::MockStateChainClient, sc_observer},
 	task_scope::with_task_scope,
+	witnesser::EpochStart,
 };
 
 fn test_header(number: u32) -> Header {
@@ -127,9 +128,9 @@ async fn starts_witnessing_when_current_authority() {
 			.try_collect::<Vec<_>>()
 			.await
 			.unwrap(),
-		vec![EpochStart {
+		vec![EpochStart::<Ethereum> {
 			epoch_index: initial_epoch,
-			eth_block: initial_epoch_from_block,
+			block_number: initial_epoch_from_block,
 			current: true,
 			participant: true
 		}]
@@ -244,15 +245,15 @@ async fn starts_witnessing_when_historic_on_startup() {
 			.await
 			.unwrap(),
 		vec![
-			EpochStart {
+			EpochStart::<Ethereum> {
 				epoch_index: active_epoch,
-				eth_block: active_epoch_from_block,
+				block_number: active_epoch_from_block,
 				current: false,
 				participant: true
 			},
-			EpochStart {
+			EpochStart::<Ethereum> {
 				epoch_index: current_epoch,
-				eth_block: current_epoch_from_block,
+				block_number: current_epoch_from_block,
 				current: true,
 				participant: false
 			}
@@ -350,9 +351,9 @@ async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
 			.try_collect::<Vec<_>>()
 			.await
 			.unwrap(),
-		vec![EpochStart {
+		vec![EpochStart::<Ethereum> {
 			epoch_index: initial_epoch,
-			eth_block: initial_epoch_from_block,
+			block_number: initial_epoch_from_block,
 			current: true,
 			participant: false
 		}]
@@ -493,15 +494,15 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
 			.await
 			.unwrap(),
 		vec![
-			EpochStart {
+			EpochStart::<Ethereum> {
 				epoch_index: initial_epoch,
-				eth_block: initial_epoch_from_block,
+				block_number: initial_epoch_from_block,
 				current: true,
 				participant: true
 			},
-			EpochStart {
+			EpochStart::<Ethereum> {
 				epoch_index: new_epoch,
-				eth_block: new_epoch_from_block,
+				block_number: new_epoch_from_block,
 				current: true,
 				participant: true
 			}
@@ -645,15 +646,15 @@ async fn not_historical_to_authority_on_new_epoch() {
 			.await
 			.unwrap(),
 		vec![
-			EpochStart {
+			EpochStart::<Ethereum> {
 				epoch_index: initial_epoch,
-				eth_block: initial_epoch_from_block,
+				block_number: initial_epoch_from_block,
 				current: true,
 				participant: false
 			},
-			EpochStart {
+			EpochStart::<Ethereum> {
 				epoch_index: new_epoch,
-				eth_block: new_epoch_from_block,
+				block_number: new_epoch_from_block,
 				current: true,
 				participant: true
 			}
@@ -796,15 +797,15 @@ async fn current_authority_to_historical_on_new_epoch_event() {
 			.await
 			.unwrap(),
 		vec![
-			EpochStart {
+			EpochStart::<Ethereum> {
 				epoch_index: initial_epoch,
-				eth_block: initial_epoch_from_block,
+				block_number: initial_epoch_from_block,
 				current: true,
 				participant: true
 			},
-			EpochStart {
+			EpochStart::<Ethereum> {
 				epoch_index: new_epoch,
-				eth_block: new_epoch_from_block,
+				block_number: new_epoch_from_block,
 				current: true,
 				participant: false
 			}

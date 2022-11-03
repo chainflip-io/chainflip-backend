@@ -1,8 +1,8 @@
 //! Definitions for the "registerClaim" transaction.
 
 use crate::{
-	eth::{SigData, Tokenizable},
-	ApiCall, ChainAbi, ChainCrypto, Ethereum,
+	eth::{Ethereum, SigData, Tokenizable},
+	ApiCall, ChainAbi, ChainCrypto,
 };
 
 use codec::{Decode, Encode, MaxEncodedLen};
