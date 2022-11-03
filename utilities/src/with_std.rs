@@ -218,7 +218,7 @@ macro_rules! print_starting {
 			"Starting {} v{} ({})",
 			env!("CARGO_PKG_NAME"),
 			env!("CARGO_PKG_VERSION"),
-			utilities::internal_lazy_format!(if let Some(repository_link) = utilities::repository_link() => ("CI Build: '{}'", repository_link) else => ("Non-CI Build"))
+			utilities::internal_lazy_format!(if let Some(repository_link) = utilities::repository_link() => ("CI Build: \"{}\"", repository_link) else => ("Non-CI Build"))
 		);
 		println!(
 			"
