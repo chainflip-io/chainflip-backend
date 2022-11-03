@@ -28,7 +28,7 @@ jobs:
   cargo-fmt:
     runs-on: [hetzner]
     container:
-      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08'
+      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08-sccache-030'
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -41,7 +41,7 @@ jobs:
   cargo-clippy:
     runs-on: [hetzner]
     container:
-      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08'
+      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08-sccache-030'
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -54,7 +54,7 @@ jobs:
   cargo-doc:
     runs-on: [hetzner]
     container:
-      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08'
+      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08-sccache-030'
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -85,7 +85,7 @@ jobs:
     runs-on: [hetzner]
     needs: [set-variables, cargo-fmt]
     container:
-      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08'
+      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08-sccache-030'
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -148,7 +148,7 @@ jobs:
     runs-on: [hetzner]
     needs: [set-variables, cargo-fmt]
     container:
-      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08'
+      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08-sccache-030'
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
