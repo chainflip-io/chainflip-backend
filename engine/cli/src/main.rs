@@ -3,7 +3,7 @@ use cf_primitives::AccountRole;
 use chainflip_engine::{
 	eth::{rpc::EthDualRpcClient, EthBroadcaster},
 	state_chain_observer::client::{
-		base_rpc_api::{BaseRpcApi, BaseRpcClient},
+		base_rpc_api::{BaseRpcApi, BaseRpcClient, RawRpcApi},
 		connect_to_state_chain,
 		extrinsic_api::ExtrinsicApi,
 		storage_api::StorageApi,
@@ -90,9 +90,15 @@ trait AuctionPhaseApi {
 }
 
 #[async_trait]
-impl AuctionPhaseApi for StateChainClient {
+impl<RawRpcClient: RawRpcApi + Send + Sync + 'static> AuctionPhaseApi
+	for StateChainClient<BaseRpcClient<RawRpcClient>>
+{
 	async fn is_auction_phase(&self) -> Result<bool> {
-		self.base_rpc_client.is_auction_phase().await.map_err(Into::into)
+		self.base_rpc_client
+			.raw_rpc_client
+			.cf_is_auction_phase(None)
+			.await
+			.map_err(Into::into)
 	}
 }
 
@@ -259,9 +265,11 @@ trait RotateSessionKeysApi {
 }
 
 #[async_trait]
-impl RotateSessionKeysApi for StateChainClient {
+impl<RawRpcClient: RawRpcApi + Send + Sync + 'static> RotateSessionKeysApi
+	for StateChainClient<BaseRpcClient<RawRpcClient>>
+{
 	async fn rotate_session_keys(&self) -> Result<Bytes> {
-		let session_key_bytes: Bytes = self.base_rpc_client.rotate_keys().await?;
+		let session_key_bytes: Bytes = self.base_rpc_client.raw_rpc_client.rotate_keys().await?;
 		Ok(session_key_bytes)
 	}
 }
