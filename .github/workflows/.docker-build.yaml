@@ -7,6 +7,11 @@ on:
         default: nightly-2022-08-08
         description: Toolchain version you want to build
         required: true
+      image_tag:
+        type: string
+        default: nightly-2022-08-08
+        description: Docker Image Tag
+        required: true
 
 env:
   REGISTRY: ghcr.io
