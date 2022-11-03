@@ -215,7 +215,7 @@ macro_rules! context {
 macro_rules! print_starting {
 	() => {
 		println!(
-			"Starting {} v{} ({})",
+			"StartiTng {} v{} ({})",
 			env!("CARGO_PKG_NAME"),
 			env!("CARGO_PKG_VERSION"),
 			utilities::internal_lazy_format!(if let Some(repository_link) = utilities::repository_link() => ("CI Build: \"{}\"", repository_link) else => ("Non-CI Build"))
