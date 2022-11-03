@@ -1,10 +1,6 @@
 name: Checks
 on:
   push:
-    branches:
-      - develop
-      - release/*
-  pull_request:
 
 env:
   SCCACHE_CACHE_SIZE: 32G
