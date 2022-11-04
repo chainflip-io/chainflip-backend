@@ -161,7 +161,6 @@ pub mod mockall_utilities {
 }
 
 pub fn repository_link() -> Option<impl core::fmt::Display> {
-	// GITHUB_SHA is Github's environment variable exposing the git commit hash
 	core::option_env!("COMMIT_HASH").map(|commit_hash| {
 		lazy_format::lazy_format!(
 			"https://github.com/chainflip-io/chainflip-backend/tree/{commit_hash}"
