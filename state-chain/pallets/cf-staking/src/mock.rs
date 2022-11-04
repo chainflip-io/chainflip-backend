@@ -8,7 +8,7 @@ use cf_traits::{
 	impl_mock_waived_fees, mocks::system_state_info::MockSystemStateInfo, AsyncResult,
 	ThresholdSigner, WaivedFees,
 };
-use frame_support::{dispatch::DispatchResultWithPostInfo, parameter_types, traits::ConstU64};
+use frame_support::{dispatch::DispatchResultWithPostInfo, parameter_types};
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},

@@ -36,6 +36,8 @@ const ETH_DEPLOYMENT_BLOCK_DEFAULT: u64 = 0;
 const ETH_PRIORITY_FEE_PERCENTILE_DEFAULT: u8 = 50;
 
 const CLAIM_DELAY_BUFFER_SECS_DEFAULT: u64 = 40;
+const CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL_DEFAULT: u32 = 28;
+const BACKUP_NODE_EMISSION_INFLATION_PERBILL_DEFAULT: u32 = 6;
 
 /// Generate a crypto pair from seed.
 pub fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {
@@ -230,6 +232,8 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 				min_stake,
 				8 * HOURS,
 				CLAIM_DELAY_BUFFER_SECS_DEFAULT,
+				CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL_DEFAULT,
+				BACKUP_NODE_EMISSION_INFLATION_PERBILL_DEFAULT,
 			)
 		},
 		// Bootnodes
@@ -358,6 +362,8 @@ fn chainflip_three_node_testnet_config_from_env(
 				min_stake,
 				8 * HOURS,
 				CLAIM_DELAY_BUFFER_SECS_DEFAULT,
+				CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL_DEFAULT,
+				BACKUP_NODE_EMISSION_INFLATION_PERBILL_DEFAULT,
 			)
 		},
 		// Bootnodes
@@ -447,6 +453,8 @@ macro_rules! network_spec {
 							min_stake,
 							3 * HOURS,
 							CLAIM_DELAY_BUFFER_SECS,
+							CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL_DEFAULT,
+							BACKUP_NODE_EMISSION_INFLATION_PERBILL_DEFAULT,
 						)
 					},
 					// Bootnodes
@@ -486,6 +494,8 @@ fn testnet_genesis(
 	minimum_stake: u128,
 	blocks_per_epoch: BlockNumber,
 	claim_delay_buffer_seconds: u64,
+	current_authority_emission_inflation_perbill: u32,
+	backup_node_emission_inflation_perbill: u32,
 ) -> GenesisConfig {
 	let authority_ids: Vec<AccountId> =
 		initial_authorities.iter().map(|(id, ..)| id.clone()).collect();
@@ -559,8 +569,8 @@ fn testnet_genesis(
 			_instance: PhantomData,
 		},
 		emissions: EmissionsConfig {
-			current_authority_emission_inflation: CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL,
-			backup_node_emission_inflation: BACKUP_NODE_EMISSION_INFLATION_PERBILL,
+			current_authority_emission_inflation: current_authority_emission_inflation_perbill,
+			backup_node_emission_inflation: backup_node_emission_inflation_perbill,
 			supply_update_interval: SUPPLY_UPDATE_INTERVAL_DEFAULT,
 		},
 		transaction_payment: Default::default(),

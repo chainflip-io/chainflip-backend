@@ -8,6 +8,9 @@ use state_chain_runtime::{
 	StakingConfig, System, ValidatorConfig,
 };
 
+pub const CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL: u32 = 28;
+pub const BACKUP_NODE_EMISSION_INFLATION_PERBILL: u32 = 6;
+
 use crate::{get_from_seed, network, GENESIS_KEY};
 use cf_primitives::{AccountRole, AuthorityCount};
 use cf_traits::{BlockNumber, FlipBalance};
@@ -117,8 +120,8 @@ impl ExtBuilder {
 				keygen_response_timeout: 4,
 			},
 			emissions: EmissionsConfig {
-				current_authority_emission_inflation: CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL,
-				backup_node_emission_inflation: BACKUP_NODE_EMISSION_INFLATION_PERBILL,
+				current_authority_emission_inflation: 28,
+				backup_node_emission_inflation: 6,
 				supply_update_interval: SUPPLY_UPDATE_INTERVAL_DEFAULT,
 			},
 			account_roles: AccountRolesConfig {
