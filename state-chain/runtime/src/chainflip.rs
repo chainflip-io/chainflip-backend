@@ -162,7 +162,7 @@ impl TransactionBuilder<Ethereum, EthereumApi> for EthTransactionBuilder {
 pub struct DotTransactionBuilder;
 #[cfg(feature = "ibiza")]
 impl TransactionBuilder<Polkadot, PolkadotApi> for DotTransactionBuilder {
-	fn build_transaction(signed_call: &PolkadotApi) -> <Polkadot as ChainAbi>::UnsignedTransaction {
+	fn build_transaction(signed_call: &PolkadotApi) -> <Polkadot as ChainAbi>::Transaction {
 		PolkadotTransactionData { encoded_extrinsic: signed_call.chain_encoded() }
 	}
 
