@@ -5,7 +5,7 @@ use crate::{
 		to_ethereum_address, Address, AggKey, EthereumReplayProtection, RawSignedTransaction,
 		SchnorrVerificationComponents, TrackedData, UnsignedTransaction, H256, U256,
 	},
-	ApiCall, Ethereum,
+	ApiCall,
 };
 
 const SIG_NONCE: [u8; 32] = [1u8; 32];
@@ -14,7 +14,7 @@ const PRIVATE_KEY: [u8; 32] = [2u8; 32];
 use cf_primitives::EthAmount;
 use libsecp256k1::{PublicKey, SecretKey};
 
-use super::TransactionFee;
+use super::{Ethereum, TransactionFee};
 
 impl BenchmarkValue for SchnorrVerificationComponents {
 	fn benchmark_value() -> Self {

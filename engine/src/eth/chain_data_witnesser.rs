@@ -1,10 +1,13 @@
 use std::{sync::Arc, time::Duration};
 
-use crate::state_chain_observer::client::extrinsic_api::ExtrinsicApi;
+use crate::{
+	state_chain_observer::client::extrinsic_api::ExtrinsicApi,
+	witnesser::{epoch_witnesser, EpochStart},
+};
 
-use super::{rpc::EthRpcApi, EpochStart};
+use super::rpc::EthRpcApi;
 
-use cf_chains::{eth::TrackedData, Ethereum};
+use cf_chains::eth::{Ethereum, TrackedData};
 
 use sp_core::U256;
 use state_chain_runtime::CfeSettings;
@@ -17,7 +20,7 @@ const ETH_CHAIN_TRACKING_POLL_INTERVAL: Duration = Duration::from_secs(4);
 pub async fn start<StateChainClient, EthRpcClient>(
 	eth_rpc: EthRpcClient,
 	state_chain_client: Arc<StateChainClient>,
-	epoch_start_receiver: broadcast::Receiver<EpochStart>,
+	epoch_start_receiver: broadcast::Receiver<EpochStart<Ethereum>>,
 	cfe_settings_update_receiver: watch::Receiver<CfeSettings>,
 	logger: &slog::Logger,
 ) -> anyhow::Result<()>
@@ -25,7 +28,7 @@ where
 	EthRpcClient: 'static + EthRpcApi + Clone + Send + Sync,
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
 {
-	super::epoch_witnesser::start(
+	epoch_witnesser::start(
         "ETH-Chain-Data".to_string(),
         epoch_start_receiver,
         |epoch_start| epoch_start.current,

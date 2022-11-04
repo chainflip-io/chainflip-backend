@@ -4,8 +4,8 @@ use scale_info::TypeInfo;
 use sp_std::{boxed::Box, vec, vec::Vec};
 
 use crate::{
-	eth::{SigData, Tokenizable},
-	ApiCall, ChainAbi, ChainCrypto, Ethereum,
+	eth::{Ethereum, SigData, Tokenizable},
+	ApiCall, ChainAbi, ChainCrypto,
 };
 
 use crate::{FetchAssetParams, TransferAssetParams};

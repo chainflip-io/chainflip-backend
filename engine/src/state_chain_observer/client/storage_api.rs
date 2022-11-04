@@ -12,8 +12,6 @@ use jsonrpsee::core::RpcResult;
 use sp_core::storage::StorageKey;
 use utilities::context;
 
-use super::BaseRpcApi;
-
 /// This trait extracts otherwise private type information about Substrate storage double maps
 pub trait StorageDoubleMapAssociatedTypes {
 	type Key1;
@@ -168,7 +166,9 @@ pub trait StorageApi {
 }
 
 #[async_trait]
-impl StorageApi for super::StateChainClient {
+impl<BaseRpcApi: super::base_rpc_api::BaseRpcApi + Send + Sync + 'static> StorageApi
+	for super::StateChainClient<BaseRpcApi>
+{
 	async fn storage_item<
 		Value: codec::FullCodec + 'static,
 		OnEmpty: 'static,
