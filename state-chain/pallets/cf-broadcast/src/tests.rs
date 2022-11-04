@@ -7,8 +7,7 @@ use crate::{
 use cf_chains::FeeRefundCalculator;
 
 use cf_chains::mocks::{
-	MockApiCall, MockEthereum, MockThresholdSignature, MockUnsignedTransaction, Validity,
-	ETH_TX_FEE,
+	MockApiCall, MockEthereum, MockThresholdSignature, MockTransaction, Validity, ETH_TX_FEE,
 };
 use cf_traits::{
 	mocks::{
@@ -123,7 +122,7 @@ fn signature_accepted_results_in_refund_for_signer() {
 		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
 		let broadcast_attempt_id = Broadcaster::start_broadcast(
 			&MockThresholdSignature::default(),
-			MockUnsignedTransaction,
+			MockTransaction,
 			MockApiCall::default(),
 		);
 		let tx_sig_request =
@@ -157,7 +156,7 @@ fn test_abort_after_number_of_attempts_is_equal_to_the_number_of_authorities() {
 
 		let mut broadcast_attempt_id = Broadcaster::start_broadcast(
 			&MockThresholdSignature::default(),
-			MockUnsignedTransaction,
+			MockTransaction,
 			MockApiCall::default(),
 		);
 
@@ -189,7 +188,7 @@ fn on_idle_caps_broadcasts_when_not_enough_weight() {
 		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
 		let broadcast_attempt_id = Broadcaster::start_broadcast(
 			&MockThresholdSignature::default(),
-			MockUnsignedTransaction,
+			MockTransaction,
 			MockApiCall::default(),
 		);
 
@@ -197,7 +196,7 @@ fn on_idle_caps_broadcasts_when_not_enough_weight() {
 
 		let broadcast_attempt_id_2 = Broadcaster::start_broadcast(
 			&MockThresholdSignature::default(),
-			MockUnsignedTransaction,
+			MockTransaction,
 			MockApiCall::default(),
 		);
 
@@ -228,7 +227,7 @@ fn test_transaction_signing_failed() {
 		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
 		let broadcast_attempt_id = Broadcaster::start_broadcast(
 			&MockThresholdSignature::default(),
-			MockUnsignedTransaction,
+			MockTransaction,
 			MockApiCall::default(),
 		);
 		assert!(
@@ -296,7 +295,7 @@ fn signature_accepted_after_timeout_reports_failed_nodes() {
 		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
 		Broadcaster::start_broadcast(
 			&MockThresholdSignature::default(),
-			MockUnsignedTransaction,
+			MockTransaction,
 			MockApiCall::default(),
 		);
 
@@ -332,7 +331,7 @@ fn test_signature_request_expiry() {
 		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
 		let broadcast_attempt_id = Broadcaster::start_broadcast(
 			&MockThresholdSignature::default(),
-			MockUnsignedTransaction,
+			MockTransaction,
 			MockApiCall::default(),
 		);
 		let first_broadcast_id = broadcast_attempt_id.broadcast_id;
@@ -398,7 +397,7 @@ fn test_transmission_request_expiry() {
 		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
 		let broadcast_attempt_id = Broadcaster::start_broadcast(
 			&MockThresholdSignature::default(),
-			MockUnsignedTransaction,
+			MockTransaction,
 			MockApiCall::default(),
 		);
 		let first_broadcast_id = broadcast_attempt_id.broadcast_id;
@@ -446,7 +445,7 @@ fn re_request_threshold_signature() {
 		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
 		let broadcast_attempt_id = Broadcaster::start_broadcast(
 			&MockThresholdSignature::default(),
-			MockUnsignedTransaction,
+			MockTransaction,
 			MockApiCall::default(),
 		);
 		// Expect the threshold signature pipeline to be empty

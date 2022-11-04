@@ -128,8 +128,8 @@ impl cf_traits::WaivedFees for WaivedFees {
 pub struct EthTransactionBuilder;
 
 impl TransactionBuilder<Ethereum, EthereumApi> for EthTransactionBuilder {
-	fn build_transaction(signed_call: &EthereumApi) -> <Ethereum as ChainAbi>::UnsignedTransaction {
-		eth::UnsignedTransaction {
+	fn build_transaction(signed_call: &EthereumApi) -> <Ethereum as ChainAbi>::Transaction {
+		eth::Transaction {
 			chain_id: Environment::ethereum_chain_id(),
 			contract: match signed_call {
 				EthereumApi::SetAggKeyWithAggKey(_) => Environment::key_manager_address().into(),
@@ -144,7 +144,7 @@ impl TransactionBuilder<Ethereum, EthereumApi> for EthTransactionBuilder {
 		}
 	}
 
-	fn refresh_unsigned_transaction(unsigned_tx: &mut <Ethereum as ChainAbi>::UnsignedTransaction) {
+	fn refresh_unsigned_transaction(unsigned_tx: &mut <Ethereum as ChainAbi>::Transaction) {
 		if let Some(chain_state) = ChainState::<Runtime, EthereumInstance>::get() {
 			// double the last block's base fee. This way we know it'll be selectable for at least 6
 			// blocks (12.5% increase on each block)
@@ -161,16 +161,14 @@ impl TransactionBuilder<Ethereum, EthereumApi> for EthTransactionBuilder {
 pub struct DotTransactionBuilder;
 #[cfg(feature = "ibiza")]
 impl TransactionBuilder<Polkadot, PolkadotApi> for DotTransactionBuilder {
-	fn build_transaction(signed_call: &PolkadotApi) -> <Polkadot as ChainAbi>::UnsignedTransaction {
+	fn build_transaction(signed_call: &PolkadotApi) -> <Polkadot as ChainAbi>::Transaction {
 		PolkadotTransactionData {
 			chain: NetworkChoice::PolkadotMainnet,
 			encoded_extrinsic: signed_call.chain_encoded(),
 		}
 	}
 
-	fn refresh_unsigned_transaction(
-		_unsigned_tx: &mut <Polkadot as ChainAbi>::UnsignedTransaction,
-	) {
+	fn refresh_unsigned_transaction(_unsigned_tx: &mut <Polkadot as ChainAbi>::Transaction) {
 		todo!();
 	}
 }

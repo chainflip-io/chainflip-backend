@@ -544,7 +544,7 @@ pub struct TransactionFee {
 /// We assume the access_list (EIP-2930) is not required.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]
-pub struct UnsignedTransaction {
+pub struct Transaction {
 	pub chain_id: u64,
 	pub max_priority_fee_per_gas: Option<U256>, // EIP-1559
 	pub max_fee_per_gas: Option<U256>,
@@ -554,7 +554,7 @@ pub struct UnsignedTransaction {
 	pub data: Vec<u8>,
 }
 
-impl FeeRefundCalculator<Ethereum> for UnsignedTransaction {
+impl FeeRefundCalculator<Ethereum> for Transaction {
 	fn return_fee_refund(
 		&self,
 		fee_paid: <Ethereum as Chain>::TransactionFee,
@@ -564,7 +564,7 @@ impl FeeRefundCalculator<Ethereum> for UnsignedTransaction {
 	}
 }
 
-impl UnsignedTransaction {
+impl Transaction {
 	fn check_contract(
 		&self,
 		recovered: ethereum::TransactionAction,
@@ -632,7 +632,7 @@ impl UnsignedTransaction {
 	}
 
 	/// Returns an error if any of the recovered transactoin parameters do not match those specified
-	/// in the original [UnsignedTransaction].
+	/// in the original [Transaction].
 	///
 	/// See [CheckedTransactionParameter].
 	pub fn match_against_recovered(

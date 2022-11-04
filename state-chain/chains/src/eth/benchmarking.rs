@@ -3,7 +3,7 @@ use crate::{
 	eth::{
 		api::{update_flip_supply::UpdateFlipSupply, EthereumApi},
 		to_ethereum_address, Address, AggKey, EthereumReplayProtection,
-		SchnorrVerificationComponents, TrackedData, UnsignedTransaction, H256, U256,
+		SchnorrVerificationComponents, TrackedData, Transaction, H256, U256,
 	},
 	ApiCall, Vec,
 };
@@ -75,9 +75,9 @@ impl BenchmarkValue for EthereumApi {
 	}
 }
 
-impl BenchmarkValue for UnsignedTransaction {
+impl BenchmarkValue for Transaction {
 	fn benchmark_value() -> Self {
-		UnsignedTransaction {
+		Transaction {
 			chain_id: 31337,
 			max_fee_per_gas: U256::from(1_000_000_000u32).into(),
 			gas_limit: U256::from(21_000u32).into(),

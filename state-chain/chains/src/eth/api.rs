@@ -30,7 +30,7 @@ pub struct EthereumReplayProtection {
 }
 
 impl ChainAbi for Ethereum {
-	type UnsignedTransaction = eth::UnsignedTransaction;
+	type Transaction = eth::Transaction;
 	type ReplayProtection = EthereumReplayProtection;
 	type ApiCallExtraData = ();
 }

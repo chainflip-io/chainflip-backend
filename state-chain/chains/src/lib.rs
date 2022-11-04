@@ -82,11 +82,7 @@ pub trait ChainCrypto: Chain {
 
 /// Common abi-related types and operations for some external chain.
 pub trait ChainAbi: ChainCrypto {
-	type UnsignedTransaction: Member
-		+ Parameter
-		+ Default
-		+ BenchmarkValue
-		+ FeeRefundCalculator<Self>;
+	type Transaction: Member + Parameter + Default + BenchmarkValue + FeeRefundCalculator<Self>;
 	type ReplayProtection: Member + Parameter;
 	type ApiCallExtraData;
 }
@@ -116,10 +112,10 @@ where
 {
 	/// Construct the unsigned outbound transaction from the *signed* api call.
 	/// Doesn't include any time-sensitive data e.g. gas price.
-	fn build_transaction(signed_call: &Call) -> Abi::UnsignedTransaction;
+	fn build_transaction(signed_call: &Call) -> Abi::Transaction;
 
 	/// Refresh any time-sensitive data e.g. gas price.
-	fn refresh_unsigned_transaction(unsigned_tx: &mut Abi::UnsignedTransaction);
+	fn refresh_unsigned_transaction(unsigned_tx: &mut Abi::Transaction);
 }
 
 /// Contains all the parameters required to fetch incoming transactions on an external chain.
@@ -258,16 +254,16 @@ pub mod mocks {
 	}
 
 	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Default)]
-	pub struct MockUnsignedTransaction;
+	pub struct MockTransaction;
 
-	impl MockUnsignedTransaction {
+	impl MockTransaction {
 		/// Simulate a transaction signature.
 		pub fn signed(self, signature: Validity) -> MockSignedTransation<Self> {
 			MockSignedTransation::<Self> { transaction: self, signature }
 		}
 	}
 
-	impl FeeRefundCalculator<MockEthereum> for MockUnsignedTransaction {
+	impl FeeRefundCalculator<MockEthereum> for MockTransaction {
 		fn return_fee_refund(
 			&self,
 			_fee_paid: <MockEthereum as Chain>::TransactionFee,
@@ -277,10 +273,10 @@ pub mod mocks {
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	impl BenchmarkValue for MockSignedTransation<MockUnsignedTransaction> {
+	impl BenchmarkValue for MockSignedTransation<MockTransaction> {
 		fn benchmark_value() -> Self {
 			MockSignedTransation {
-				transaction: MockUnsignedTransaction::default(),
+				transaction: MockTransaction::default(),
 				signature: Validity::Valid,
 			}
 		}
@@ -340,7 +336,7 @@ pub mod mocks {
 	impl_default_benchmark_value!([u8; 4]);
 	impl_default_benchmark_value!(MockThresholdSignature<[u8; 4], [u8; 4]>);
 	impl_default_benchmark_value!(u32);
-	impl_default_benchmark_value!(MockUnsignedTransaction);
+	impl_default_benchmark_value!(MockTransaction);
 
 	pub const ETH_TX_HASH: <MockEthereum as ChainCrypto>::TransactionHash = [0xbc; 4];
 
@@ -348,7 +344,7 @@ pub mod mocks {
 		TransactionFee { effective_gas_price: 200, gas_used: 100 };
 
 	impl ChainAbi for MockEthereum {
-		type UnsignedTransaction = MockUnsignedTransaction;
+		type Transaction = MockTransaction;
 		type ReplayProtection = EthereumReplayProtection;
 		type ApiCallExtraData = ();
 	}
@@ -392,11 +388,11 @@ pub mod mocks {
 	impl<Abi: ChainAbi, Call: ApiCall<Abi>> TransactionBuilder<Abi, Call>
 		for MockTransactionBuilder<Abi, Call>
 	{
-		fn build_transaction(_signed_call: &Call) -> <Abi as ChainAbi>::UnsignedTransaction {
+		fn build_transaction(_signed_call: &Call) -> <Abi as ChainAbi>::Transaction {
 			Default::default()
 		}
 
-		fn refresh_unsigned_transaction(_unsigned_tx: &mut <Abi as ChainAbi>::UnsignedTransaction) {
+		fn refresh_unsigned_transaction(_unsigned_tx: &mut <Abi as ChainAbi>::Transaction) {
 			// refresh nothing
 		}
 	}

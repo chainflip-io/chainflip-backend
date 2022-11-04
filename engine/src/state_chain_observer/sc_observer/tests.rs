@@ -1,6 +1,6 @@
 use std::{collections::BTreeSet, sync::Arc};
 
-use cf_chains::eth::{Ethereum, UnsignedTransaction};
+use cf_chains::eth::{Ethereum, Transaction};
 use frame_system::Phase;
 use futures::{FutureExt, TryStreamExt};
 use mockall::predicate::{self, eq};
@@ -890,7 +890,7 @@ async fn only_encodes_and_signs_when_specified() {
 						pallet_cf_broadcast::Event::TransactionBroadcastRequest {
 							broadcast_attempt_id: BroadcastAttemptId::default(),
 							nominee: account_id,
-							unsigned_tx: UnsignedTransaction::default(),
+							unsigned_tx: Transaction::default(),
 						},
 					),
 					topics: vec![H256::default()],
@@ -901,7 +901,7 @@ async fn only_encodes_and_signs_when_specified() {
 						pallet_cf_broadcast::Event::TransactionBroadcastRequest {
 							broadcast_attempt_id: BroadcastAttemptId::default(),
 							nominee: AccountId32::new([1; 32]), // NOT OUR ACCOUNT ID
-							unsigned_tx: UnsignedTransaction::default(),
+							unsigned_tx: Transaction::default(),
 						},
 					),
 					topics: vec![H256::default()],

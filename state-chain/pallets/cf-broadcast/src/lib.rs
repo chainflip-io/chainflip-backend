@@ -72,9 +72,8 @@ pub mod pallet {
 	use frame_support::{ensure, pallet_prelude::*, traits::EnsureOrigin};
 	use frame_system::pallet_prelude::*;
 
-	/// Type alias for the instance's configured UnsignedTransaction.
-	pub type UnsignedTransactionFor<T, I> =
-		<<T as Config<I>>::TargetChain as ChainAbi>::UnsignedTransaction;
+	/// Type alias for the instance's configured Transaction.
+	pub type TransactionFor<T, I> = <<T as Config<I>>::TargetChain as ChainAbi>::Transaction;
 
 	/// Type alias for the instance's configured SignerId.
 	pub type SignerIdFor<T, I> = <<T as Config<I>>::TargetChain as Chain>::ChainAccount;
@@ -105,7 +104,7 @@ pub mod pallet {
 	#[scale_info(skip_type_params(T, I))]
 	pub struct BroadcastAttempt<T: Config<I>, I: 'static> {
 		pub broadcast_attempt_id: BroadcastAttemptId,
-		pub unsigned_tx: UnsignedTransactionFor<T, I>,
+		pub unsigned_tx: TransactionFor<T, I>,
 	}
 
 	// TODO: Rename
@@ -238,7 +237,7 @@ pub mod pallet {
 		TransactionBroadcastRequest {
 			broadcast_attempt_id: BroadcastAttemptId,
 			nominee: T::ValidatorId,
-			unsigned_tx: UnsignedTransactionFor<T, I>,
+			unsigned_tx: TransactionFor<T, I>,
 		},
 		/// A failed broadcast attempt has been scheduled for retry.
 		BroadcastRetryScheduled { broadcast_attempt_id: BroadcastAttemptId },
@@ -480,7 +479,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// - [TransactionBroadcastRequest](Event::TransactionBroadcastRequest)
 	fn start_broadcast(
 		signature: &ThresholdSignatureFor<T, I>,
-		unsigned_tx: UnsignedTransactionFor<T, I>,
+		unsigned_tx: TransactionFor<T, I>,
 		api_call: <T as Config<I>>::ApiCall,
 	) -> BroadcastAttemptId {
 		let broadcast_id = BroadcastIdCounter::<T, I>::mutate(|id| {

@@ -122,7 +122,7 @@ impl FeeRefundCalculator<Polkadot> for PolkadotTransactionData {
 }
 
 impl ChainAbi for Polkadot {
-	type UnsignedTransaction = PolkadotTransactionData;
+	type Transaction = PolkadotTransactionData;
 	type ReplayProtection = PolkadotReplayProtection;
 	type ApiCallExtraData = CurrentVaultAndProxy;
 }

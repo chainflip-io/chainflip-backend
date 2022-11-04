@@ -247,7 +247,7 @@ async fn register_claim(
 	eth_broadcaster
 		.send(
 			eth_broadcaster
-				.encode_and_sign_tx(cf_chains::eth::UnsignedTransaction {
+				.encode_and_sign_tx(cf_chains::eth::Transaction {
 					chain_id,
 					contract: stake_manager_address,
 					data: claim_cert,
