@@ -38,12 +38,15 @@ impl AddressDerivationApi for MockAddressDerivation {
 pub struct MockSwapIntentHandler;
 
 impl SwapIntentHandler for MockSwapIntentHandler {
+	type AccountId = AccountId;
+
 	fn schedule_swap(
 		_from: cf_primitives::Asset,
 		_to: ForeignChainAsset,
 		_amount: AssetAmount,
-		_ingress_address: ForeignChainAddress,
 		_egress_address: ForeignChainAddress,
+		_relayer_id: Self::AccountId,
+		_relayer_commission_bps: u16,
 	) {
 		todo!()
 	}
