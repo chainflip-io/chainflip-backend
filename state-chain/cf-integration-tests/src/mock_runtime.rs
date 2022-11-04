@@ -88,6 +88,7 @@ impl ExtBuilder {
 				genesis_stakers: self.accounts.clone(),
 				minimum_stake: DEFAULT_MIN_STAKE,
 				claim_ttl: core::time::Duration::from_secs(3 * CLAIM_DELAY_SECS),
+				claim_delay_buffer_seconds: 10,
 			},
 			reputation: ReputationConfig {
 				accrual_ratio: ACCRUAL_RATIO,

@@ -38,3 +38,5 @@ pub const DOPEY_ED25519: [u8; 32] =
 	hex_literal::hex!["7c937c229aa95b19732a4a2e306a8cefb480e7c671de8fc416ec01bb3eedb749"];
 pub const SNOW_WHITE_SR25519: [u8; 32] =
 	hex_literal::hex!["84f134a4cc6bf41d3239bbe097eac4c8f83e78b468e6c49ed5cd2ddc51a07a29"];
+
+pub const CLAIM_DELAY_BUFFER_SECS: u64 = 48;

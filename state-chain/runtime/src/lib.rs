@@ -447,7 +447,6 @@ impl pallet_cf_staking::Config for Runtime {
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, Instance1>;
 	type RegisterClaim = eth::api::EthereumApi;
-	type ClaimDelayBufferSeconds = ConstU64<{ BLOCK_SAFETY_MARGIN * CONSERVATIVE_BLOCK_TIME_SECS }>;
 	type TimeSource = Timestamp;
 	type WeightInfo = pallet_cf_staking::weights::PalletWeight<Runtime>;
 }
