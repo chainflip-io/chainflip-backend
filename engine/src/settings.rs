@@ -432,17 +432,17 @@ impl Settings {
 }
 
 /// Validate a websocket endpoint URL
-pub fn parse_websocket_endpoint(url: &str) -> Result<Url> {
+pub fn parse_websocket_endpoint(url: &str) -> Result<()> {
 	parse_endpoint(vec!["ws", "wss"], url)
 }
 
 /// Validate a http endpoint URL
-pub fn parse_http_endpoint(url: &str) -> Result<Url> {
+pub fn parse_http_endpoint(url: &str) -> Result<()> {
 	parse_endpoint(vec!["http", "https"], url)
 }
 
 /// Parse the URL to check that it is the correct scheme and a valid endpoint URL
-fn parse_endpoint(valid_schemes: Vec<&str>, url: &str) -> Result<Url> {
+fn parse_endpoint(valid_schemes: Vec<&str>, url: &str) -> Result<()> {
 	let parsed_url = Url::parse(url)?;
 	let scheme = parsed_url.scheme();
 	if !valid_schemes.contains(&scheme) {
@@ -458,7 +458,7 @@ fn parse_endpoint(valid_schemes: Vec<&str>, url: &str) -> Result<Url> {
 		bail!("Invalid URL data.");
 	}
 
-	Ok(parsed_url)
+	Ok(())
 }
 
 fn is_valid_db_path(db_file: &Path) -> Result<()> {
