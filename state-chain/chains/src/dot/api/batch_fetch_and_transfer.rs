@@ -121,7 +121,7 @@ impl ApiCall<Polkadot> for BatchFetchAndTransfer {
 mod test_batch_fetch {
 
 	use super::*;
-	use crate::dot::{sr25519::Pair, NetworkChoice};
+	use crate::dot::{sr25519::Pair, NONCE_1, RAW_SEED_1, RAW_SEED_2, WESTEND_CONFIG};
 	use sp_core::{
 		crypto::{AccountId32, Pair as TraitPair},
 		sr25519, Hasher,
@@ -130,18 +130,6 @@ mod test_batch_fetch {
 		traits::{BlakeTwo256, IdentifyAccount},
 		MultiSigner,
 	};
-
-	// test westend account 1 (CHAINFLIP-TEST)
-	// address: "5E2WfQFeafdktJ5AAF6ZGZ71Yj4fiJnHWRomVmeoStMNhoZe"
-	pub const RAW_SEED_1: [u8; 32] =
-		hex_literal::hex!("858c1ee915090a119d4cb0774b908fa585ef7882f4648c577606490cc94f6e15");
-	pub const NONCE_1: u32 = 4; //correct nonce has to be provided for this account (see/track onchain)
-
-	// test westend account 2 (CHAINFLIP-TEST-2)
-	// address: "5GNn92C9ngX4sNp3UjqGzPbdRfbbV8hyyVVNZaH2z9e5kzxA"
-	pub const RAW_SEED_2: [u8; 32] =
-		hex_literal::hex!("4b734882accd7a0e27b8b0d3cb7db79ab4da559d1d5f84f35fd218a1ee12ece4");
-	pub const _NONCE_2: u32 = 1; //correct nonce has to be provided for this account (see/track onchain)
 
 	#[ignore]
 	#[test]
@@ -179,7 +167,7 @@ mod test_batch_fetch {
 		];
 
 		let batch_fetch_api = BatchFetchAndTransfer::new_unsigned(
-			PolkadotReplayProtection::new(NONCE_1, 0, NetworkChoice::WestendTestnet),
+			PolkadotReplayProtection::new(NONCE_1, 0, WESTEND_CONFIG),
 			dummy_fetch_params,
 			dummy_transfer_params,
 			account_id_proxy,

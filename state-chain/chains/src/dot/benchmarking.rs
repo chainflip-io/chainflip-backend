@@ -1,7 +1,7 @@
 use crate::{
 	benchmarking_value::BenchmarkValue,
 	dot::{
-		BalancesCall, NetworkChoice, Polkadot, PolkadotAccountIdLookup, PolkadotAddress,
+		BalancesCall, Polkadot, PolkadotAccountIdLookup, PolkadotAddress,
 		PolkadotChargeTransactionPayment, PolkadotCheckMortality, PolkadotCheckNonce,
 		PolkadotPublicKey, PolkadotRuntimeCall, PolkadotSignature, PolkadotSignedExtra,
 		PolkadotTransactionData, PolkadotUncheckedExtrinsic,
@@ -71,10 +71,7 @@ impl BenchmarkValue for TrackedData<Polkadot> {
 
 impl BenchmarkValue for PolkadotTransactionData {
 	fn benchmark_value() -> Self {
-		Self {
-			chain: NetworkChoice::PolkadotMainnet,
-			encoded_extrinsic: ENCODED_EXTRINSIC.to_vec(),
-		}
+		Self { encoded_extrinsic: ENCODED_EXTRINSIC.to_vec() }
 	}
 }
 
