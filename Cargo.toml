@@ -3,6 +3,8 @@ panic = 'unwind'
 
 [workspace]
 members = [
+  'api/lib',
+  'api/bin/chainflip-cli',
   'state-chain/chains',
   'state-chain/node',
   'state-chain/pallets/cf-account-roles',
