@@ -31,19 +31,8 @@ pub struct EthereumReplayProtection {
 
 impl ChainAbi for Ethereum {
 	type UnsignedTransaction = eth::UnsignedTransaction;
-	type SignedTransaction = eth::RawSignedTransaction;
-	type SignerCredential = eth::Address;
 	type ReplayProtection = EthereumReplayProtection;
-	type ValidationError = eth::TransactionVerificationError;
 	type ApiCallExtraData = ();
-
-	fn verify_signed_transaction(
-		unsigned_tx: &Self::UnsignedTransaction,
-		signed_tx: &Self::SignedTransaction,
-		signer_credential: &Self::SignerCredential,
-	) -> Result<Self::TransactionHash, Self::ValidationError> {
-		eth::verify_transaction(unsigned_tx, signed_tx, signer_credential)
-	}
 }
 
 impl SetAggKeyWithAggKey<Ethereum> for EthereumApi {
@@ -202,7 +191,7 @@ impl ApiCall<Ethereum> for EthereumApi {
 		}
 	}
 
-	fn chain_encoded(&self) -> <Ethereum as ChainAbi>::SignedTransaction {
+	fn chain_encoded(&self) -> Vec<u8> {
 		match self {
 			EthereumApi::SetAggKeyWithAggKey(call) => call.chain_encoded(),
 			EthereumApi::RegisterClaim(call) => call.chain_encoded(),

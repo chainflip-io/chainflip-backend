@@ -10,7 +10,9 @@ use crate::{
 };
 
 use sp_core::{crypto::AccountId32, sr25519};
-use sp_runtime::{generic::Era, MultiSignature};
+use sp_runtime::{generic::Era, traits::IdentifyAccount, MultiSignature, MultiSigner};
+
+use super::PolkadotAccountId;
 
 const SIGNATURE: [u8; 64] = [1u8; 64];
 const ACCOUNT_ID_1: [u8; 32] = [2u8; 32];
@@ -73,5 +75,14 @@ impl BenchmarkValue for PolkadotTransactionData {
 			chain: NetworkChoice::PolkadotMainnet,
 			encoded_extrinsic: ENCODED_EXTRINSIC.to_vec(),
 		}
+	}
+}
+
+impl BenchmarkValue for PolkadotAccountId {
+	fn benchmark_value() -> Self {
+		MultiSigner::Sr25519(sr25519::Public(hex_literal::hex!(
+			"858c1ee915090a119d4cb0774b908fa585ef7882f4648c577606490cc94f6e15"
+		)))
+		.into_account()
 	}
 }

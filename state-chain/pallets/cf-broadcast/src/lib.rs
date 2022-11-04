@@ -12,7 +12,7 @@ mod tests;
 pub mod weights;
 pub use weights::WeightInfo;
 
-use cf_chains::{ApiCall, ChainAbi, ChainCrypto, FeeRefundCalculator, TransactionBuilder};
+use cf_chains::{ApiCall, Chain, ChainAbi, ChainCrypto, FeeRefundCalculator, TransactionBuilder};
 use cf_traits::{
 	offence_reporting::OffenceReporter, Broadcaster, Chainflip, EpochInfo, SingleSignerNomination,
 	ThresholdSigner,
@@ -72,20 +72,12 @@ pub mod pallet {
 	use frame_support::{ensure, pallet_prelude::*, traits::EnsureOrigin};
 	use frame_system::pallet_prelude::*;
 
-	/// Type alias for the instance's configured SignedTransaction.
-	pub type SignedTransactionFor<T, I> =
-		<<T as Config<I>>::TargetChain as ChainAbi>::SignedTransaction;
-
 	/// Type alias for the instance's configured UnsignedTransaction.
 	pub type UnsignedTransactionFor<T, I> =
 		<<T as Config<I>>::TargetChain as ChainAbi>::UnsignedTransaction;
 
-	/// Type alias for the instance's configured TransactionHash.
-	pub type TransactionHashFor<T, I> =
-		<<T as Config<I>>::TargetChain as ChainCrypto>::TransactionHash;
-
 	/// Type alias for the instance's configured SignerId.
-	pub type SignerIdFor<T, I> = <<T as Config<I>>::TargetChain as ChainAbi>::SignerCredential;
+	pub type SignerIdFor<T, I> = <<T as Config<I>>::TargetChain as Chain>::ChainAccount;
 
 	/// Type alias for the payload hash
 	pub type ThresholdSignatureFor<T, I> =

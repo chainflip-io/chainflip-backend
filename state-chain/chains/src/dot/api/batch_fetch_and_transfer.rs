@@ -7,7 +7,7 @@ use crate::dot::{
 	PolkadotProxyType, PolkadotReplayProtection, PolkadotRuntimeCall, ProxyCall, UtilityCall,
 };
 
-use crate::{ApiCall, ChainAbi, ChainCrypto, FetchAssetParams, TransferAssetParams};
+use crate::{ApiCall, ChainCrypto, FetchAssetParams, TransferAssetParams};
 
 use sp_runtime::RuntimeDebug;
 
@@ -108,7 +108,7 @@ impl ApiCall<Polkadot> for BatchFetchAndTransfer {
 		self
 	}
 
-	fn chain_encoded(&self) -> <Polkadot as ChainAbi>::SignedTransaction {
+	fn chain_encoded(&self) -> Vec<u8> {
 		self.extrinsic_handler.signed_extrinsic.clone().unwrap().encode()
 	}
 

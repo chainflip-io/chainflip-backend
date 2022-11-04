@@ -123,21 +123,8 @@ impl FeeRefundCalculator<Polkadot> for PolkadotTransactionData {
 
 impl ChainAbi for Polkadot {
 	type UnsignedTransaction = PolkadotTransactionData;
-	type SignedTransaction = Vec<u8>;
-	// Not needed in Polkadot since we can sign natively with the AggKey.
-	type SignerCredential = ();
 	type ReplayProtection = PolkadotReplayProtection;
 	type ApiCallExtraData = CurrentVaultAndProxy;
-	type ValidationError = ();
-
-	// This function is not needed in Polkadot.
-	fn verify_signed_transaction(
-		_unsigned_tx: &Self::UnsignedTransaction,
-		_signed_tx: &Self::SignedTransaction,
-		_signer_credential: &Self::SignerCredential,
-	) -> Result<Self::TransactionHash, Self::ValidationError> {
-		Err(())
-	}
 }
 
 pub struct CurrentVaultAndProxy {
