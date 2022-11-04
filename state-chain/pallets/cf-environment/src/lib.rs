@@ -2,6 +2,9 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
+#[cfg(feature = "ibiza")]
+use cf_chains::dot::{PolkadotAccountId, PolkadotConfig, PolkadotIndex};
+
 use cf_primitives::{Asset, EthereumAddress};
 pub use cf_traits::{EthEnvironmentProvider, EthereumAssetsAddressProvider};
 use cf_traits::{SystemStateInfo, SystemStateManager};
@@ -116,8 +119,31 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::getter(fn ethereum_chain_id)]
-	/// The address of the ETH chain id
+	/// The ETH chain id
 	pub type EthereumChainId<T> = StorageValue<_, u64, ValueQuery>;
+
+	#[cfg(feature = "ibiza")]
+	#[pallet::storage]
+	#[pallet::getter(fn polkadot_vault_account_id)]
+	/// The Polkadot Vault Anonymous Account
+	pub type PolkadotVaultAccountId<T> = StorageValue<_, PolkadotAccountId, OptionQuery>;
+
+	#[cfg(feature = "ibiza")]
+	#[pallet::storage]
+	#[pallet::getter(fn polkadot_current_proxy_account_id)]
+	/// The Polkadot Vault Anonymous Account
+	pub type PolkadotCurrentProxyAccountId<T> = StorageValue<_, PolkadotAccountId, OptionQuery>;
+
+	#[cfg(feature = "ibiza")]
+	#[pallet::storage]
+	/// Current Nonce of the current Polkadot Proxy Account
+	pub type PolkadotProxyAccountNonce<T> = StorageValue<_, PolkadotIndex, ValueQuery>;
+
+	#[cfg(feature = "ibiza")]
+	#[pallet::storage]
+	#[pallet::getter(fn get_polkadot_network_choice)]
+	/// The Polkadot Network Configuration
+	pub type PolkadotNetworkConfig<T> = StorageValue<_, PolkadotConfig, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn cfe_settings)]
@@ -226,6 +252,12 @@ pub mod pallet {
 		pub eth_vault_address: EthereumAddress,
 		pub ethereum_chain_id: u64,
 		pub cfe_settings: cfe::CfeSettings,
+		#[cfg(feature = "ibiza")]
+		pub polkadot_vault_account_id: Option<PolkadotAccountId>,
+		#[cfg(feature = "ibiza")]
+		pub polkadot_proxy_account_id: Option<PolkadotAccountId>,
+		#[cfg(feature = "ibiza")]
+		pub polkadot_network_config: PolkadotConfig,
 	}
 
 	/// Sets the genesis config
@@ -240,6 +272,14 @@ pub mod pallet {
 			CurrentSystemState::<T>::set(SystemState::Normal);
 			SupportedEthAssets::<T>::insert(Asset::Flip, self.flip_token_address);
 			SupportedEthAssets::<T>::insert(Asset::Usdc, self.eth_usdc_address);
+			#[cfg(feature = "ibiza")]
+			PolkadotVaultAccountId::<T>::set(self.polkadot_vault_account_id.clone());
+			#[cfg(feature = "ibiza")]
+			PolkadotCurrentProxyAccountId::<T>::set(self.polkadot_proxy_account_id.clone());
+			#[cfg(feature = "ibiza")]
+			PolkadotNetworkConfig::<T>::set(self.polkadot_network_config.clone());
+			#[cfg(feature = "ibiza")]
+			PolkadotProxyAccountNonce::<T>::set(0);
 		}
 	}
 }
@@ -299,6 +339,37 @@ impl<T: Config> Pallet<T> {
 		GlobalSignatureNonce::<T>::mutate(|nonce| {
 			*nonce += 1;
 			*nonce
+		})
+	}
+
+	#[cfg(feature = "ibiza")]
+	pub fn next_polkadot_proxy_account_nonce() -> PolkadotIndex {
+		PolkadotProxyAccountNonce::<T>::mutate(|nonce| {
+			*nonce += 1;
+			*nonce - 1
+		})
+	}
+
+	#[cfg(feature = "ibiza")]
+	pub fn get_polkadot_network_config() -> PolkadotConfig {
+		PolkadotNetworkConfig::<T>::get()
+	}
+
+	#[cfg(feature = "ibiza")]
+	pub fn get_vault_account() -> PolkadotAccountId {
+		PolkadotVaultAccountId::<T>::get().unwrap_or_else(|| {
+			PolkadotAccountId::new(hex_literal::hex!(
+				"56cc4af8ff9fb97c60320ae43d35bd831b14f0b7065f3385db0dbf4cb5d8766f"
+			)) // CHAINFLIP-TEST account
+		})
+	}
+
+	#[cfg(feature = "ibiza")]
+	pub fn get_current_proxy_account() -> PolkadotAccountId {
+		PolkadotCurrentProxyAccountId::<T>::get().unwrap_or_else(|| {
+			PolkadotAccountId::new(hex_literal::hex!(
+				"beb9c3f0ae5bda798dd3b65fe345fdf9031946849d8925ae7be73ee9407c6737"
+			)) // CHAINFLIP-TEST-2 account
 		})
 	}
 }
