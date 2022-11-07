@@ -6,6 +6,7 @@ use cf_chains::{
 	mocks::{MockApiCall, MockEthereum, MockTransactionBuilder},
 	ChainCrypto,
 };
+use cf_primitives::EpochIndex;
 use cf_traits::{
 	mocks::{
 		ensure_origin_mock::NeverFailingOriginCheck, epoch_info::MockEpochInfo,
@@ -122,6 +123,10 @@ impl cf_traits::KeyProvider<MockEthereum> for MockKeyProvider {
 		} else {
 			INVALID_AGG_KEY
 		}
+	}
+
+	fn vault_keyholders_epoch() -> EpochIndex {
+		Default::default()
 	}
 }
 

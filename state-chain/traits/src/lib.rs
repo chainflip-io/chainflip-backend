@@ -375,6 +375,9 @@ pub trait KeyProvider<C: ChainCrypto> {
 	/// Get the chain's current agg key.
 	fn current_key() -> C::AggKey;
 
+	/// Get the epoch of the chain's latest active key.
+	fn vault_keyholders_epoch() -> EpochIndex;
+
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_key(_key: C::AggKey) {
 		unimplemented!()
