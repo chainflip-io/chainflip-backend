@@ -351,7 +351,7 @@ pub mod pallet {
 	pub type Vaults<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Blake2_128Concat, EpochIndex, Vault<T::Chain>>;
 
-	/// The epoch number that this current was generated in. This allows us to lookup
+	/// The epoch number that this current key was generated in. This allows us to lookup
 	/// *who* controls the current vault key.
 	#[pallet::storage]
 	#[pallet::getter(fn current_keyholders_epoch)]
