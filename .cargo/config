@@ -12,8 +12,8 @@ ci-build-ibiza = "build --release --features ibiza"
 
 ci-check = "check --all-targets --all-features --release"
 ci-build = "build --release --features runtime-benchmarks"
-ci-test = "test --lib --all-features"
-ci-clippy = "clippy --all-targets --all-features -- -D warnings"
+ci-test = "test --lib --features runtime-benchmarks"
+ci-clippy = "clippy --all-targets -- -D warnings"
 
 # Run just the CFE unit tests
 cfe-test = "test --package chainflip-engine --lib"
