@@ -1,3 +1,5 @@
+#[cfg(feature = "ibiza")]
+use cf_chains::dot::{POLKADOT_PROXY_ACCOUNT, POLKADOT_VAULT_ACCOUNT, WESTEND_CONFIG}; /* TODO: move these constants into chainspec. */
 use cf_primitives::AccountRole;
 use sc_service::{ChainType, Properties};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
@@ -225,6 +227,12 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 						max_ceremony_stage_duration,
 						eth_priority_fee_percentile: ETH_PRIORITY_FEE_PERCENTILE_DEFAULT,
 					},
+					#[cfg(feature = "ibiza")]
+					polkadot_vault_account_id: POLKADOT_VAULT_ACCOUNT,
+					#[cfg(feature = "ibiza")]
+					polkadot_proxy_account_id: POLKADOT_PROXY_ACCOUNT,
+					#[cfg(feature = "ibiza")]
+					polkadot_network_config: WESTEND_CONFIG,
 				},
 				eth_init_agg_key,
 				ethereum_deployment_block,
@@ -355,6 +363,161 @@ fn chainflip_three_node_testnet_config_from_env(
 						max_ceremony_stage_duration,
 						eth_priority_fee_percentile: ETH_PRIORITY_FEE_PERCENTILE_DEFAULT,
 					},
+					#[cfg(feature = "ibiza")]
+					polkadot_vault_account_id: POLKADOT_VAULT_ACCOUNT,
+					#[cfg(feature = "ibiza")]
+					polkadot_proxy_account_id: POLKADOT_PROXY_ACCOUNT,
+					#[cfg(feature = "ibiza")]
+					polkadot_network_config: WESTEND_CONFIG,
+				},
+				eth_init_agg_key,
+				ethereum_deployment_block,
+				genesis_stake_amount,
+				min_stake,
+				8 * HOURS,
+				CLAIM_DELAY_BUFFER_SECS_DEFAULT,
+				CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL_DEFAULT,
+				BACKUP_NODE_EMISSION_INFLATION_PERBILL_DEFAULT,
+			)
+		},
+		// Bootnodes
+		vec![],
+		// Telemetry
+		None,
+		// Protocol ID
+		None,
+		// Fork ID
+		None,
+		// Properties
+		Some(chainflip_properties()),
+		// Extensions
+		None,
+	))
+}
+
+/// Initialise a Chainflip testnet
+pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
+	let wasm_binary =
+		WASM_BINARY.ok_or_else(|| "Development wasm binary not available".to_string())?;
+	let bashful_sr25519 =
+		hex_literal::hex!["36c0078af3894b8202b541ece6c5d8fb4a091f7e5812b688e703549040473911"];
+	let doc_sr25519 =
+		hex_literal::hex!["8898758bf88855615d459f552e36bfd14e8566c8b368f6a6448942759d5c7f04"];
+	let dopey_sr25519 =
+		hex_literal::hex!["ca58f2f4ae713dbb3b4db106640a3db150e38007940dfe29e6ebb870c4ccd47e"];
+	let grumpy_sr25519 =
+		hex_literal::hex!["28b5f5f1654393975f58e78cf06b6f3ab509b3629b0a4b08aaa3dce6bf6af805"];
+	let happy_sr25519 =
+		hex_literal::hex!["7e6eb0b15c1767360fdad63d6ff78a97374355b00b4d3511a522b1a8688a661d"];
+	let snow_white =
+		hex_literal::hex!["ced2e4db6ce71779ac40ccec60bf670f38abbf9e27a718b4412060688a9ad212"];
+	let StateChainEnvironment {
+		flip_token_address,
+		eth_usdc_address,
+		stake_manager_address,
+		key_manager_address,
+		eth_vault_address,
+		ethereum_chain_id,
+		eth_init_agg_key,
+		ethereum_deployment_block,
+		genesis_stake_amount,
+		eth_block_safety_margin,
+		max_ceremony_stage_duration,
+		min_stake,
+	} = get_environment();
+	Ok(ChainSpec::from_genesis(
+		"Internal testnet",
+		"test",
+		ChainType::Local,
+		move || {
+			testnet_genesis(
+				wasm_binary,
+				// Initial PoA authorities
+				vec![
+					(
+						// Bashful
+						bashful_sr25519.into(),
+						bashful_sr25519.unchecked_into(),
+						hex_literal::hex![
+							"971b584324592e9977f0ae407eb6b8a1aa5bcd1ca488e54ab49346566f060dd8"
+						]
+						.unchecked_into(),
+					),
+					(
+						// Doc
+						doc_sr25519.into(),
+						doc_sr25519.unchecked_into(),
+						hex_literal::hex![
+							"e4c4009bd437cba06a2f25cf02f4efc0cac4525193a88fe1d29196e5d0ff54e8"
+						]
+						.unchecked_into(),
+					),
+					(
+						// Dopey
+						dopey_sr25519.into(),
+						dopey_sr25519.unchecked_into(),
+						hex_literal::hex![
+							"5506333c28f3dd39095696362194f69893bc24e3ec553dbff106cdcbfe1beea4"
+						]
+						.unchecked_into(),
+					),
+					(
+						// Grumpy
+						grumpy_sr25519.into(),
+						grumpy_sr25519.unchecked_into(),
+						hex_literal::hex![
+							"b9036620f103cce552edbdd15e54810c6c3906975f042e3ff949af075636007f"
+						]
+						.unchecked_into(),
+					),
+					(
+						// Happy
+						happy_sr25519.into(),
+						happy_sr25519.unchecked_into(),
+						hex_literal::hex![
+							"0bb5e73112e716dc54541e87d2287f2252fd479f166969dc37c07a504000dae9"
+						]
+						.unchecked_into(),
+					),
+				],
+				// Governance account - Snow White
+				snow_white.into(),
+				// Stakers at genesis
+				vec![
+					// Bashful
+					bashful_sr25519.into(),
+					// Doc
+					doc_sr25519.into(),
+					// Dopey
+					dopey_sr25519.into(),
+					// Grumpy
+					grumpy_sr25519.into(),
+					// Happy
+					happy_sr25519.into(),
+					#[cfg(feature = "ibiza")]
+					get_account_id_from_seed::<sr25519::Public>("Alice"),
+					#[cfg(feature = "ibiza")]
+					get_account_id_from_seed::<sr25519::Public>("Bob"),
+				],
+				3,
+				EnvironmentConfig {
+					flip_token_address,
+					eth_usdc_address,
+					stake_manager_address,
+					key_manager_address,
+					eth_vault_address,
+					ethereum_chain_id,
+					cfe_settings: CfeSettings {
+						eth_block_safety_margin,
+						max_ceremony_stage_duration,
+						eth_priority_fee_percentile: ETH_PRIORITY_FEE_PERCENTILE_DEFAULT,
+					},
+					#[cfg(feature = "ibiza")]
+					polkadot_vault_account_id: POLKADOT_VAULT_ACCOUNT,
+					#[cfg(feature = "ibiza")]
+					polkadot_proxy_account_id: POLKADOT_PROXY_ACCOUNT,
+					#[cfg(feature = "ibiza")]
+					polkadot_network_config: WESTEND_CONFIG,
 				},
 				eth_init_agg_key,
 				ethereum_deployment_block,
@@ -446,6 +609,12 @@ macro_rules! network_spec {
 									eth_priority_fee_percentile:
 										ETH_PRIORITY_FEE_PERCENTILE_DEFAULT,
 								},
+								#[cfg(feature = "ibiza")]
+								polkadot_vault_account_id: POLKADOT_VAULT_ACCOUNT,
+								#[cfg(feature = "ibiza")]
+								polkadot_proxy_account_id: POLKADOT_PROXY_ACCOUNT,
+								#[cfg(feature = "ibiza")]
+								polkadot_network_config: WESTEND_CONFIG,
 							},
 							eth_init_agg_key,
 							ethereum_deployment_block,

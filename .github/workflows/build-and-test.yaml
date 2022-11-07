@@ -4,7 +4,7 @@ on:
 
 env:
   SCCACHE_CACHE_SIZE: 32G
-  SCCACHE_REDIS: ${{ secrets.SCCACHE_REDIS }}
+  # SCCACHE_REDIS: ${{ secrets.SCCACHE_REDIS }}
   CF_RUNNER_SUDO_PASSWORD: ${{ secrets.CF_RUNNER_SUDO_PASSWORD }}
 
 jobs:
@@ -28,7 +28,7 @@ jobs:
   cargo-fmt:
     runs-on: [hetzner]
     container:
-      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08'
+      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08-no-sccache'
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -41,7 +41,7 @@ jobs:
   cargo-clippy:
     runs-on: [hetzner]
     container:
-      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08'
+      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08-no-sccache'
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -54,7 +54,7 @@ jobs:
   cargo-doc:
     runs-on: [hetzner]
     container:
-      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08'
+      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08-no-sccache'
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -63,17 +63,17 @@ jobs:
         uses: actions/checkout@v3
       - name: Update APT
         run: apt update
-      - name: Setup sccache
-        uses: hendrikmuhs/ccache-action@v1.2
-        with:
-          max-size: ${{ env.SCCACHE_CACHE_SIZE }}
-          variant: sccache
-          save: false
-      - run: sccache --show-stats
+      # - name: Setup sccache
+      #   uses: hendrikmuhs/ccache-action@v1.2
+      #   with:
+      #     max-size: ${{ env.SCCACHE_CACHE_SIZE }}
+      #     variant: sccache
+      #     save: false
+      # - run: sccache --show-stats
       - name: Run cargo doc
         run: |
           cargo doc --workspace --document-private-items --no-deps
-      - run: sccache --show-stats
+      # - run: sccache --show-stats
       - name: Upload artifacts
         uses: actions/upload-artifact@v3
         with:
@@ -85,7 +85,7 @@ jobs:
     runs-on: [hetzner]
     needs: [set-variables, cargo-fmt]
     container:
-      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08'
+      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08-no-sccache'
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -97,19 +97,21 @@ jobs:
         uses: actions/checkout@v3
       - name: Update APT
         run: apt update
-      - name: Setup sccache
-        uses: hendrikmuhs/ccache-action@v1.2
-        with:
-          max-size: ${{ env.SCCACHE_CACHE_SIZE }}
-          variant: sccache
-          save: false
-      - run: sccache --show-stats
-      - run: |
+      # - name: Setup sccache
+      #   uses: hendrikmuhs/ccache-action@v1.2
+      #   with:
+      #     max-size: ${{ env.SCCACHE_CACHE_SIZE }}
+      #     variant: sccache
+      #     save: false
+      # - run: sccache --show-stats
+      - name: cargo ci-build
+        run: |
           cargo ci-build --locked
-          sccache --show-stats
-      - run: |
+          # sccache --show-stats
+      - name: cargo ci-test --locked
+        run: |
           cargo ci-test --locked
-          sccache --show-stats
+          # sccache --show-stats
       - name: Install cargo-deb
         run: cargo install cargo-deb
       - name: Get date
@@ -146,7 +148,7 @@ jobs:
     runs-on: [hetzner]
     needs: [set-variables, cargo-fmt]
     container:
-      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08'
+      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08-no-sccache'
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -158,16 +160,16 @@ jobs:
         uses: actions/checkout@v3
       - name: Update APT
         run: apt update
-      - name: Setup sccache
-        uses: hendrikmuhs/ccache-action@v1.2
-        with:
-          max-size: ${{ env.SCCACHE_CACHE_SIZE }}
-          variant: sccache
-          save: false
-      - run: sccache --show-stats
+      # - name: Setup sccache
+      #   uses: hendrikmuhs/ccache-action@v1.2
+      #   with:
+      #     max-size: ${{ env.SCCACHE_CACHE_SIZE }}
+      #     variant: sccache
+      #     save: false
+      # - run: sccache --show-stats
       - run: |
           cargo ci-build-ibiza --locked
-          sccache --show-stats
+          # sccache --show-stats
       - name: Install cargo-deb
         run: cargo install cargo-deb
       - name: Get date
