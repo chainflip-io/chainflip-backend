@@ -634,6 +634,7 @@ pub trait IngressApi {
 		egress_asset: ForeignChainAsset,
 		egress_address: ForeignChainAddress,
 		relayer_commission_bps: u16,
+		relayer_id: Self::AccountId,
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError>;
 }
 
