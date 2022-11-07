@@ -13,16 +13,18 @@ use super::{ethabi_function, ethabi_param, EthereumReplayProtection};
 
 use sp_runtime::RuntimeDebug;
 
-pub(crate) struct EncodableFetchAssetParams {
-	intent_id: IntentId,
-	asset: Address,
+#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]
+pub struct EncodableFetchAssetParams {
+	pub intent_id: IntentId,
+	pub asset: Address,
 }
 
-pub(crate) struct EncodableTransferAssetParams {
+#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]
+pub struct EncodableTransferAssetParams {
 	/// For Ethereum, the asset is encoded as a contract address.
-	asset: Address,
-	to: Address,
-	amount: AssetAmount,
+	pub asset: Address,
+	pub to: Address,
+	pub amount: AssetAmount,
 }
 
 impl Tokenizable for EncodableFetchAssetParams {
@@ -146,7 +148,7 @@ impl ApiCall<Ethereum> for AllBatch {
 
 #[cfg(test)]
 mod test_all_batch {
-	use crate::eth::{self, SchnorrVerificationComponents};
+	use crate::eth::SchnorrVerificationComponents;
 
 	use super::*;
 	use frame_support::assert_ok;

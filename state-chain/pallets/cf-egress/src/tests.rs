@@ -1,9 +1,9 @@
 use crate::{
-	mock::*, EthereumDisabledEgressAssets, EthereumRequest, EthereumScheduledRequests, WeightInfo,
+	mock::*, EthereumDisabledEgressAssets, EthereumScheduledRequests, FetchOrTransfer, WeightInfo,
 };
 
 use cf_primitives::{ForeignChain, ForeignChainAddress, ForeignChainAsset, ETHEREUM_ETH_ADDRESS};
-use cf_traits::{EgressApi, IngressFetchApi};
+use cf_traits::EgressApi;
 
 use frame_support::{assert_ok, traits::Hooks};
 const ALICE_ETH_ADDRESS: EthereumAddress = [100u8; 20];
@@ -17,8 +17,7 @@ const ETH_FLIP: ForeignChainAsset =
 fn disallowed_asset_will_not_be_batch_sent() {
 	new_test_ext().execute_with(|| {
 		let asset = ETH_ETH;
-		assert!(Egress::get_ethereum_asset_identifier(asset.asset).is_some());
-
+		
 		// Cannot egress assets that are blacklisted.
 		assert!(EthereumDisabledEgressAssets::<Test>::get(asset.asset).is_none());
 		assert_ok!(Egress::disable_asset_egress(Origin::root(), asset, true));
@@ -35,7 +34,7 @@ fn disallowed_asset_will_not_be_batch_sent() {
 		assert!(LastEgressSent::get().is_empty());
 		assert_eq!(
 			EthereumScheduledRequests::<Test>::get(),
-			vec![EthereumRequest::Transfer {
+			vec![FetchOrTransfer::<Ethereum>::Transfer {
 				asset: Asset::Eth,
 				amount: 1_000,
 				to: ALICE_ETH_ADDRESS,
@@ -81,22 +80,22 @@ fn can_schedule_egress_to_batch() {
 		assert_eq!(
 			EthereumScheduledRequests::<Test>::get(),
 			vec![
-				EthereumRequest::Transfer {
+				FetchOrTransfer::<Ethereum>::Transfer {
 					asset: Asset::Eth,
 					amount: 1_000,
 					to: ALICE_ETH_ADDRESS,
 				},
-				EthereumRequest::Transfer {
+				FetchOrTransfer::<Ethereum>::Transfer {
 					asset: Asset::Eth,
 					amount: 2_000,
 					to: ALICE_ETH_ADDRESS,
 				},
-				EthereumRequest::Transfer {
+				FetchOrTransfer::<Ethereum>::Transfer {
 					asset: Asset::Flip,
 					amount: 3_000,
 					to: BOB_ETH_ADDRESS,
 				},
-				EthereumRequest::Transfer {
+				FetchOrTransfer::<Ethereum>::Transfer {
 					asset: Asset::Flip,
 					amount: 4_000,
 					to: BOB_ETH_ADDRESS,
@@ -119,9 +118,9 @@ fn can_schedule_ethereum_ingress_fetch() {
 		assert_eq!(
 			EthereumScheduledRequests::<Test>::get(),
 			vec![
-				EthereumRequest::Fetch { intent_id: 1u64, asset: Asset::Eth },
-				EthereumRequest::Fetch { intent_id: 2u64, asset: Asset::Eth },
-				EthereumRequest::Fetch { intent_id: 3u64, asset: Asset::Flip },
+				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 1u64, asset: Asset::Eth },
+				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 2u64, asset: Asset::Eth },
+				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 3u64, asset: Asset::Flip },
 			]
 		);
 
@@ -134,10 +133,10 @@ fn can_schedule_ethereum_ingress_fetch() {
 		assert_eq!(
 			EthereumScheduledRequests::<Test>::get(),
 			vec![
-				EthereumRequest::Fetch { intent_id: 1u64, asset: Asset::Eth },
-				EthereumRequest::Fetch { intent_id: 2u64, asset: Asset::Eth },
-				EthereumRequest::Fetch { intent_id: 3u64, asset: Asset::Flip },
-				EthereumRequest::Fetch { intent_id: 4u64, asset: Asset::Eth },
+				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 1u64, asset: Asset::Eth },
+				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 2u64, asset: Asset::Eth },
+				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 3u64, asset: Asset::Flip },
+				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 4u64, asset: Asset::Eth },
 			]
 		);
 		System::assert_last_event(Event::Egress(crate::Event::IngressFetchesScheduled {
@@ -326,13 +325,13 @@ fn on_idle_batch_size_is_limited_by_weight() {
 		assert_eq!(
 			EthereumScheduledRequests::<Test>::get(),
 			vec![
-				EthereumRequest::Transfer {
+				FetchOrTransfer::<Ethereum>::Transfer {
 					asset: Asset::Flip,
 					amount: 5_000,
 					to: ALICE_ETH_ADDRESS,
 				},
-				EthereumRequest::Fetch { intent_id: 3u64, asset: Asset::Flip },
-				EthereumRequest::Fetch { intent_id: 4u64, asset: Asset::Flip },
+				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 3u64, asset: Asset::Flip },
+				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 4u64, asset: Asset::Flip },
 			]
 		);
 	});
@@ -369,8 +368,12 @@ fn unsupported_assets_should_not_panic() {
 	new_test_ext().execute_with(|| {
 		// Dot and Usdc are not supported in the `MockEthAssetAddressProvider`.
 		EthereumScheduledRequests::<Test>::set(vec![
-			EthereumRequest::Transfer { asset: Asset::Dot, amount: 1_000, to: ALICE_ETH_ADDRESS },
-			EthereumRequest::Fetch { intent_id: 0, asset: Asset::Usdc },
+			FetchOrTransfer::<Ethereum>::Transfer {
+				asset: Asset::Dot,
+				amount: 1_000,
+				to: ALICE_ETH_ADDRESS,
+			},
+			FetchOrTransfer::<Ethereum>::Fetch { intent_id: 0, asset: Asset::Usdc },
 		]);
 
 		// Unsupported items are ignored and does not panic

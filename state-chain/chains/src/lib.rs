@@ -62,6 +62,12 @@ pub trait Age<C: Chain> {
 	fn birth_block(&self) -> C::ChainBlockNumber;
 }
 
+impl<C: Chain> Age<C> for () {
+	fn birth_block(&self) -> C::ChainBlockNumber {
+		unimplemented!()
+	}
+}
+
 /// Common crypto-related types and operations for some external chain.
 pub trait ChainCrypto: Chain {
 	/// The chain's `AggKey` format. The AggKey is the threshold key that controls the vault.
@@ -120,17 +126,15 @@ where
 }
 
 /// Contains all the parameters required to fetch incoming transactions on an external chain.
-#[derive(
-	RuntimeDebug, Copy, Clone, Default, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo,
-)]
-struct FetchAssetParams<C: Chain> {
+#[derive(RuntimeDebug, Copy, Clone, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
+pub struct FetchAssetParams<C: Chain> {
 	pub intent_id: IntentId,
 	pub asset: <C as Chain>::ChainAsset,
 }
 
 /// Contains all the parameters required for transferring an asset on an external chain.
 #[derive(RuntimeDebug, Clone, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
-struct TransferAssetParams<C: Chain> {
+pub struct TransferAssetParams<C: Chain> {
 	pub asset: <C as Chain>::ChainAsset,
 	pub to: <C as Chain>::ChainAccount,
 	pub amount: AssetAmount,

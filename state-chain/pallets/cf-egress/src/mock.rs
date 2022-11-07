@@ -1,14 +1,13 @@
 pub use crate::{self as pallet_cf_egress};
 pub use cf_chains::{
-	eth::{
-		api::{EthereumApi, EthereumReplayProtection},
-		Ethereum,
-	},
-	ChainAbi,
+	eth::api::{EthereumApi, EthereumReplayProtection},
+	Chain, ChainAbi, ChainEnvironment,
 };
-pub use cf_primitives::{Asset, EthereumAddress, ExchangeRate};
+pub use cf_primitives::{
+	chains::{assets, Ethereum},
+	Asset, EthereumAddress, ExchangeRate, ETHEREUM_ETH_ADDRESS,
+};
 use cf_primitives::{EthAmount, IntentId};
-use cf_traits::ApiCallDataProvider;
 pub use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
 	Broadcaster, EthereumAssetsAddressProvider, ReplayProtectionProvider,
@@ -95,10 +94,6 @@ impl ReplayProtectionProvider<Ethereum> for Test {
 	}
 }
 
-impl ApiCallDataProvider<Ethereum> for Test {
-	fn chain_extra_data() -> <Ethereum as ChainAbi>::ApiCallExtraData {}
-}
-
 parameter_types! {
 	pub static LastEgressSent: Vec<(EthereumAddress, EthAmount, EthereumAddress)> = vec![];
 	pub static LastFetchesSent: Vec<(IntentId, EthereumAddress)> = vec![];
@@ -106,7 +101,7 @@ parameter_types! {
 
 pub struct MockBroadcast;
 impl Broadcaster<Ethereum> for MockBroadcast {
-	type ApiCall = EthereumApi;
+	type ApiCall = EthereumApi<MockEthEnvironment>;
 
 	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) {
 		if let EthereumApi::AllBatch(cf_chains::eth::api::all_batch::AllBatch {
@@ -138,13 +133,28 @@ impl EthereumAssetsAddressProvider for MockEthAssetAddressProvider {
 	}
 }
 
+pub struct MockEthEnvironment;
+
+impl ChainEnvironment<<Ethereum as Chain>::ChainAsset, <Ethereum as Chain>::ChainAccount>
+	for MockEthEnvironment
+{
+	fn lookup(
+		asset: <Ethereum as Chain>::ChainAsset,
+	) -> Result<<Ethereum as Chain>::ChainAccount, frame_support::error::LookupError> {
+		Ok(match asset {
+			assets::eth::Asset::Eth => ETHEREUM_ETH_ADDRESS.into(),
+			assets::eth::Asset::Flip => ETHEREUM_FLIP_ADDRESS.into(),
+			_ => todo!(),
+		})
+	}
+}
+
 impl crate::Config for Test {
 	type Event = Event;
-	type EthereumReplayProtection = Self;
-	type EthereumEgressTransaction = EthereumApi;
-	type EthereumBroadcaster = MockBroadcast;
+	type ReplayProtection = Self;
+	type AllBatch = EthereumApi<MockEthEnvironment>;
+	type Broadcaster = MockBroadcast;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
-	type EthereumAssetsAddressProvider = MockEthAssetAddressProvider;
 	type WeightInfo = ();
 }
 

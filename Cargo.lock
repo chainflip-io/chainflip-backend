@@ -5428,6 +5428,7 @@ dependencies = [
 name = "pallet-cf-lp"
 version = "0.1.0"
 dependencies = [
+ "cf-chains",
  "cf-primitives",
  "cf-traits",
  "frame-benchmarking",
@@ -5494,6 +5495,7 @@ dependencies = [
 name = "pallet-cf-swapping"
 version = "0.1.0"
 dependencies = [
+ "cf-chains",
  "cf-primitives",
  "cf-traits",
  "frame-benchmarking",

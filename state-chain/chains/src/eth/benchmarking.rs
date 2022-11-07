@@ -24,7 +24,8 @@ impl BenchmarkValue for SchnorrVerificationComponents {
 
 		let agg_key = AggKey::benchmark_value();
 
-		let payload: [u8; 32] = EthereumApi::benchmark_value().threshold_signature_payload().into();
+		let payload: [u8; 32] =
+			EthereumApi::<()>::benchmark_value().threshold_signature_payload().into();
 		let signature = agg_key.sign(&payload, &private_key, &sig_nonce);
 
 		Self { s: signature, k_times_g_address }
@@ -42,7 +43,7 @@ impl BenchmarkValue for Address {
 
 impl BenchmarkValue for H256 {
 	fn benchmark_value() -> Self {
-		EthereumApi::benchmark_value().threshold_signature_payload()
+		EthereumApi::<()>::benchmark_value().threshold_signature_payload()
 	}
 }
 

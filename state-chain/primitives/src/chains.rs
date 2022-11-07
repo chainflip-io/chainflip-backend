@@ -26,6 +26,8 @@ macro_rules! chains {
 }
 
 /// Can be any Chain.
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct AnyChain;
 
 chains! {

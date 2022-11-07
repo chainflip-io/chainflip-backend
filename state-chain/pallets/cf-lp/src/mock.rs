@@ -1,4 +1,5 @@
 use crate::{self as pallet_cf_lp};
+use cf_chains::{Chain, Ethereum};
 use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
 	AddressDerivationApi, EgressApi, SwapIntentHandler,
@@ -102,7 +103,7 @@ impl pallet_cf_ingress::Config for Test {
 	type Event = Event;
 	type AddressDerivation = MockAddressDerivation;
 	type LpAccountHandler = LiquidityProvider;
-	type IngressFetchApi = ();
+	type EthereumIngressFetchApi = ();
 	type SwapIntentHandler = MockSwapIntentHandler;
 	type WeightInfo = ();
 }
@@ -125,23 +126,16 @@ impl pallet_cf_account_roles::Config for Test {
 
 parameter_types! {
 	pub static IsValid: bool = false;
-	pub static LastEgress: Option<(ForeignChainAsset, AssetAmount, ForeignChainAddress)> = None;
+	pub static LastEgress: Option<(<Ethereum as Chain>::ChainAsset, AssetAmount, <Ethereum as Chain>::ChainAccount)> = None;
 }
 pub struct MockEgressApi;
-impl EgressApi for MockEgressApi {
+impl EgressApi<Ethereum> for MockEgressApi {
 	fn schedule_egress(
-		foreign_asset: ForeignChainAsset,
+		asset: <Ethereum as Chain>::ChainAsset,
 		amount: AssetAmount,
-		egress_address: ForeignChainAddress,
+		egress_address: <Ethereum as Chain>::ChainAccount,
 	) {
-		LastEgress::set(Some((foreign_asset, amount, egress_address)));
-	}
-
-	fn is_egress_valid(
-		_foreign_asset: &ForeignChainAsset,
-		_egress_address: &ForeignChainAddress,
-	) -> bool {
-		IsValid::get()
+		LastEgress::set(Some((asset, amount, egress_address)));
 	}
 }
 
@@ -149,7 +143,7 @@ impl crate::Config for Test {
 	type Event = Event;
 	type AccountRoleRegistry = AccountRoles;
 	type Ingress = Ingress;
-	type EgressApi = MockEgressApi;
+	type EthereumEgressApi = MockEgressApi;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 }
 

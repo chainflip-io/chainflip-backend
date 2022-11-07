@@ -7,7 +7,9 @@ use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use sp_runtime::DispatchResult;
 
+use cf_chains::Ethereum;
 use cf_primitives::{
+	chains::assets,
 	liquidity::{PoolId, PositionId, TradingPosition},
 	Asset, AssetAmount, ForeignChainAddress, ForeignChainAsset, IntentId,
 };
@@ -66,7 +68,7 @@ pub mod pallet {
 		type Ingress: IngressApi<AccountId = <Self as frame_system::Config>::AccountId>;
 
 		/// API used to withdraw foreign assets off the chain.
-		type EgressApi: EgressApi;
+		type EthereumEgressApi: EgressApi<Ethereum>;
 
 		/// For governance checks.
 		type EnsureGovernance: EnsureOrigin<Self::Origin>;
@@ -257,16 +259,23 @@ pub mod pallet {
 			T::SystemState::ensure_no_maintenance()?;
 			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
-			ensure!(
-				T::EgressApi::is_egress_valid(&foreign_asset, &egress_address,),
-				Error::<T>::InvalidEgressAddress
-			);
+			// Check validity of Chain and Asset
+			match egress_address {
+				ForeignChainAddress::Eth(eth_addr) => {
+					let eth_asset = assets::eth::Asset::try_from(foreign_asset.asset)
+						.map_err(|_| Error::<T>::InvalidEgressAddress)?;
+					T::EthereumEgressApi::schedule_egress(eth_asset, amount, eth_addr.into());
+				},
+				ForeignChainAddress::Dot(_dot_addr) => {
+					// TODO: Enable this arm when polkadot egress is supported.
+					let _dot_asset = assets::dot::Asset::try_from(foreign_asset.asset)
+						.map_err(|_| Error::<T>::InvalidEgressAddress)?;
+					// T::EthereumEgressApi::schedule_egress(dot_asset, amount, dot_addr);
+				},
+			}
 
 			// Debit the asset from the account.
 			Pallet::<T>::try_debit(&account_id, foreign_asset.asset, amount)?;
-
-			// Send the assets off-chain.
-			T::EgressApi::schedule_egress(foreign_asset, amount, egress_address);
 
 			Ok(().into())
 		}

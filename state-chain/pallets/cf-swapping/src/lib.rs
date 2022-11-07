@@ -31,6 +31,7 @@ pub struct Swap<AccountId> {
 #[frame_support::pallet]
 pub mod pallet {
 
+	use cf_chains::Ethereum;
 	use cf_primitives::{Asset, AssetAmount, IntentId};
 	use cf_traits::{AccountRoleRegistry, Chainflip, EgressApi, SwapIntentHandler};
 
@@ -46,7 +47,7 @@ pub mod pallet {
 		/// An interface to the ingress api implementation.
 		type Ingress: IngressApi<AccountId = <Self as frame_system::Config>::AccountId>;
 		/// An interface to the egress api implementation.
-		type Egress: EgressApi;
+		type EthereumEgress: EgressApi<Ethereum>;
 		/// An interface to the AMM api implementation.
 		type AmmPoolApi: AmmPoolApi<Balance = AssetAmount>;
 		/// The Weight information.
@@ -72,6 +73,10 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// An new swap intent has been registered.
 		NewSwapIntent { intent_id: IntentId, ingress_address: ForeignChainAddress },
+	}
+	#[pallet::error]
+	pub enum Error<T> {
+		InvalidAsset,
 	}
 
 	#[pallet::hooks]

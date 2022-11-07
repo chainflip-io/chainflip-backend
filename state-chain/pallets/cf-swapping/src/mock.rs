@@ -1,5 +1,6 @@
 use crate::{self as pallet_cf_swapping, Pallet};
-use cf_primitives::{AssetAmount, ForeignChainAddress, ForeignChainAsset};
+use cf_chains::{Chain, Ethereum};
+use cf_primitives::{chains::assets, AssetAmount, ForeignChainAddress, ForeignChainAsset};
 use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
 	AmmPoolApi, Chainflip, EgressApi, IngressApi,
@@ -25,9 +26,9 @@ type Balance = u128;
 /// A helper type for testing
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
 pub struct EgressTransaction {
-	pub foreign_asset: ForeignChainAsset,
+	pub foreign_asset: assets::eth::Asset,
 	pub amount: AssetAmount,
-	pub egress_address: ForeignChainAddress,
+	pub egress_address: <Ethereum as Chain>::ChainAccount,
 }
 
 #[storage_alias]
@@ -101,11 +102,11 @@ impl IngressApi for MockIngress {
 }
 
 pub struct MockEgressApi;
-impl EgressApi for MockEgressApi {
+impl EgressApi<Ethereum> for MockEgressApi {
 	fn schedule_egress(
-		foreign_asset: ForeignChainAsset,
+		foreign_asset: <Ethereum as Chain>::ChainAsset,
 		amount: AssetAmount,
-		egress_address: ForeignChainAddress,
+		egress_address: <Ethereum as Chain>::ChainAccount,
 	) {
 		if let Some(mut egresses) = EgressQueue::<Test>::get() {
 			egresses.push(EgressTransaction { foreign_asset, amount, egress_address });
@@ -117,13 +118,6 @@ impl EgressApi for MockEgressApi {
 				egress_address,
 			}]);
 		}
-	}
-
-	fn is_egress_valid(
-		_foreign_asset: &ForeignChainAsset,
-		_egress_address: &ForeignChainAddress,
-	) -> bool {
-		true
 	}
 }
 
@@ -188,9 +182,9 @@ impl Chainflip for Test {
 
 impl pallet_cf_swapping::Config for Test {
 	type Event = Event;
-	type Ingress = MockIngress;
 	type AccountRoleRegistry = ();
-	type Egress = MockEgressApi;
+	type Ingress = MockIngress;
+	type EthereumEgress = MockEgressApi;
 	type AmmPoolApi = MockAmmPoolApi;
 	type WeightInfo = ();
 }

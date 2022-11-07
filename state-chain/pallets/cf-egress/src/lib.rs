@@ -12,11 +12,8 @@ mod mock;
 mod tests;
 mod weights;
 
-use cf_chains::{
-	AllBatch, Chain RuntimeFetchAssetParams as FetchAssetParams,
-	RuntimeTransferAssetParams as TransferAssetParams,
-};
-use cf_primitives::{chains::{assets, Ethereum}, AssetAmount, ForeignChain, IntentId};
+use cf_chains::{AllBatch, Chain, FetchAssetParams, TransferAssetParams};
+use cf_primitives::{chains::Ethereum, AssetAmount, ForeignChain, IntentId};
 use cf_traits::{Broadcaster, EgressApi, IngressFetchApi, ReplayProtectionProvider};
 use frame_support::pallet_prelude::*;
 pub use pallet::*;
@@ -44,7 +41,6 @@ impl<C: Chain> FetchOrTransfer<C> {
 pub mod pallet {
 	use super::*;
 
-	use cf_primitives::chains::assets;
 	use cf_traits::Chainflip;
 	use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
 

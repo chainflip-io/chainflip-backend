@@ -2,8 +2,8 @@
 
 use super::*;
 
-use crate::{EthereumDisabledEgressAssets, EthereumRequest, EthereumScheduledRequests};
-use cf_primitives::{Asset, EthereumAddress, ForeignChain};
+use crate::{EthereumDisabledEgressAssets, EthereumScheduledRequests, FetchOrTransfer};
+use cf_primitives::{Asset, EthereumAddress, ForeignChain, ForeignChainAsset};
 use frame_benchmarking::benchmarks;
 use frame_support::traits::Hooks;
 
@@ -19,12 +19,12 @@ benchmarks! {
 		// We combine fetch and egress into a single variable, assuming the weight cost is similar.
 		for i in 0..n {
 			if i%2==0 {
-				batch.push(EthereumRequest::Fetch {
+				batch.push(FetchOrTransfer::<Ethereum>::Fetch {
 					intent_id: 1,
 					asset: Asset::Eth,
 				});
 			} else {
-				batch.push(EthereumRequest::Transfer {
+				batch.push(FetchOrTransfer::<Ethereum>::Transfer {
 					asset: Asset::Eth,
 					to: ALICE_ETH,
 					amount: 1_000,

@@ -1,7 +1,7 @@
 pub mod batch_fetch_and_transfer;
 pub mod rotate_vault_proxy;
 
-use super::{PolkadotAccountId, PolkadotPublicKey};
+use super::PolkadotPublicKey;
 use crate::{
 	dot::{Polkadot, PolkadotReplayProtection},
 	*,
@@ -27,7 +27,14 @@ pub enum SystemAccounts {
 
 impl<E> AllBatch<Polkadot> for PolkadotApi<E>
 where
-	E: ChainEnvironment<SystemAccounts, <Polkadot as Chain>::ChainAccount>,
+	E: ChainEnvironment<SystemAccounts, <Polkadot as Chain>::ChainAccount>
+		+ Clone
+		+ Debug
+		+ PartialEq
+		+ Eq
+		+ Encode
+		+ Decode
+		+ TypeInfo,
 {
 	fn new_unsigned(
 		replay_protection: PolkadotReplayProtection,
@@ -38,15 +45,22 @@ where
 			replay_protection,
 			fetch_params,
 			transfer_params,
-			E::lookup(SystemAccounts::Proxy),
-			E::lookup(SystemAccounts::Vault),
+			E::lookup(SystemAccounts::Proxy).expect("Proxy account lookup should never fail."),
+			E::lookup(SystemAccounts::Vault).expect("Vault account lookup should never fail."),
 		))
 	}
 }
 
 impl<E> SetAggKeyWithAggKey<Polkadot> for PolkadotApi<E>
 where
-	E: ChainEnvironment<SystemAccounts, <Polkadot as Chain>::ChainAccount>,
+	E: ChainEnvironment<SystemAccounts, <Polkadot as Chain>::ChainAccount>
+		+ Clone
+		+ Debug
+		+ PartialEq
+		+ Eq
+		+ Encode
+		+ Decode
+		+ TypeInfo,
 {
 	fn new_unsigned(
 		replay_protection: PolkadotReplayProtection,
@@ -57,8 +71,8 @@ where
 			replay_protection,
 			new_key,
 			old_key,
-			E::lookup(SystemAccounts::Proxy),
-			E::lookup(SystemAccounts::Vault),
+			E::lookup(SystemAccounts::Proxy).expect("Proxy account lookup should never fail."),
+			E::lookup(SystemAccounts::Vault).expect("Vault account lookup should never fail."),
 		))
 	}
 }
@@ -75,7 +89,10 @@ impl<E> From<rotate_vault_proxy::RotateVaultProxy> for PolkadotApi<E> {
 	}
 }
 
-impl<E> ApiCall<Polkadot> for PolkadotApi<E> {
+impl<E> ApiCall<Polkadot> for PolkadotApi<E>
+where
+	E: Clone + Debug + PartialEq + Eq + Encode + Decode + TypeInfo,
+{
 	fn threshold_signature_payload(&self) -> <Polkadot as ChainCrypto>::Payload {
 		match self {
 			PolkadotApi::BatchFetchAndTransfer(tx) => tx.threshold_signature_payload(),

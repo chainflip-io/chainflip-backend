@@ -27,7 +27,7 @@ use sp_std::{
 	str, vec,
 };
 
-use self::{api::EthereumReplayProtection, ingress_address::get_salt};
+use self::api::EthereumReplayProtection;
 
 // Reference constants for the chain spec
 pub const CHAIN_ID_MAINNET: u64 = 1;

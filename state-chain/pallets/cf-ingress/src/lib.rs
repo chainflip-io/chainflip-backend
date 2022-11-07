@@ -7,7 +7,8 @@
 // the respective address generation function.
 
 use cf_primitives::{
-	Asset, AssetAmount, ForeignChain, ForeignChainAddress, ForeignChainAsset, IntentId,
+	chains::assets, Asset, AssetAmount, ForeignChain, ForeignChainAddress, ForeignChainAsset,
+	IntentId,
 };
 use cf_traits::{liquidity::LpProvisioningApi, AddressDerivationApi, IngressApi, IngressFetchApi};
 
@@ -30,8 +31,9 @@ pub mod pallet {
 	use core::marker::PhantomData;
 
 	use super::*;
+	use cf_chains::Ethereum;
 	use cf_primitives::Asset;
-	use cf_traits::{IngressFetchApi, SwapIntentHandler};
+	use cf_traits::SwapIntentHandler;
 	use frame_support::{
 		pallet_prelude::{DispatchResultWithPostInfo, OptionQuery, ValueQuery},
 		traits::{EnsureOrigin, IsType},
@@ -102,7 +104,7 @@ pub mod pallet {
 		/// Pallet responsible for managing Liquidity Providers.
 		type LpAccountHandler: LpProvisioningApi<AccountId = Self::AccountId, Amount = AssetAmount>;
 		/// For scheduling fetch requests.
-		type IngressFetchApi: IngressFetchApi;
+		type EthereumIngressFetchApi: IngressFetchApi<Ethereum>;
 		/// For scheduling swaps.
 		type SwapIntentHandler: SwapIntentHandler<AccountId = Self::AccountId>;
 		/// Benchmark weights
@@ -178,7 +180,15 @@ impl<T: Config> Pallet<T> {
 		let ingress =
 			IntentIngressDetails::<T>::get(ingress_address).ok_or(Error::<T>::InvalidIntent)?;
 		ensure!(ingress.ingress_asset.asset == asset, Error::<T>::IngressMismatchWithIntent);
-		T::IngressFetchApi::schedule_ethereum_ingress_fetch(vec![(asset, ingress.intent_id)]);
+		// Ingress is called by witnessers, so asset/chain combination should always be valid.
+		if let (Ok(eth_asset), ForeignChainAddress::Eth(_)) =
+			(assets::eth::Asset::try_from(asset), ingress_address)
+		{
+			T::EthereumIngressFetchApi::schedule_ingress_fetch(vec![(
+				eth_asset,
+				ingress.intent_id,
+			)]);
+		}
 		// NB: Don't take here. We should continue witnessing this address
 		// even after an ingress to it has occurred.
 		// https://github.com/chainflip-io/chainflip-eth-contracts/pull/226
