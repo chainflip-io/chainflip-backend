@@ -8,6 +8,7 @@ use cf_chains::{
 	mocks::{MockEthereum, MockThresholdSignature},
 	ChainCrypto,
 };
+use cf_primitives::EpochIndex;
 use cf_traits::{
 	mocks::{
 		ceremony_id_provider::MockCeremonyIdProvider, signer_nomination::MockNominator,
@@ -150,6 +151,10 @@ impl cf_traits::KeyProvider<MockEthereum> for MockKeyProvider {
 
 	fn current_key() -> <MockEthereum as ChainCrypto>::AggKey {
 		MOCK_AGG_KEY
+	}
+
+	fn vault_keyholders_epoch() -> EpochIndex {
+		unimplemented!("Implement a custom mock if `vault_keyholders_epoch` is required.")
 	}
 }
 

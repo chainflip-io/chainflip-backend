@@ -351,6 +351,13 @@ pub mod pallet {
 	pub type Vaults<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Blake2_128Concat, EpochIndex, Vault<T::Chain>>;
 
+	/// The epoch number that this current was generated in. This allows us to lookup
+	/// *who* controls the current vault key.
+	#[pallet::storage]
+	#[pallet::getter(fn current_keyholders_epoch)]
+	pub type CurrentKeyholdersEpoch<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, EpochIndex, ValueQuery>;
+
 	/// Vault rotation statuses for the current epoch rotation.
 	#[pallet::storage]
 	#[pallet::getter(fn pending_vault_rotations)]
@@ -715,10 +722,12 @@ pub mod pallet {
 
 			KeygenResponseTimeout::<T, I>::put(self.keygen_response_timeout);
 
+			let current_epoch = CurrentEpochIndex::<T>::get();
 			Vaults::<T, I>::insert(
-				CurrentEpochIndex::<T>::get(),
+				current_epoch,
 				Vault { public_key, active_from_block: self.deployment_block },
 			);
+			CurrentKeyholdersEpoch::<T, I>::put(current_epoch);
 		}
 	}
 }
@@ -728,14 +737,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		new_public_key: AggKeyFor<T, I>,
 		rotated_at_block_number: ChainBlockNumberFor<T, I>,
 	) {
+		let next_epoch = CurrentEpochIndex::<T>::get().saturating_add(1);
 		Vaults::<T, I>::insert(
-			CurrentEpochIndex::<T>::get().saturating_add(1),
+			next_epoch,
 			Vault {
 				public_key: new_public_key,
 				active_from_block: rotated_at_block_number
 					.saturating_add(ChainBlockNumberFor::<T, I>::one()),
 			},
 		);
+		CurrentKeyholdersEpoch::<T, I>::put(next_epoch);
 	}
 
 	// Once we've successfully generated the key, we want to do a signing ceremony to verify that
@@ -859,16 +870,20 @@ impl<T: Config<I>, I: 'static> KeyProvider<T::Chain> for Pallet<T, I> {
 	type KeyId = Vec<u8>;
 
 	fn current_key_id() -> Self::KeyId {
-		Vaults::<T, I>::get(CurrentEpochIndex::<T>::get())
+		Vaults::<T, I>::get(Self::vault_keyholders_epoch())
 			.expect("We can't exist without a vault")
 			.public_key
 			.into()
 	}
 
 	fn current_key() -> <T::Chain as ChainCrypto>::AggKey {
-		Vaults::<T, I>::get(CurrentEpochIndex::<T>::get())
+		Vaults::<T, I>::get(Self::vault_keyholders_epoch())
 			.expect("We can't exist without a vault")
 			.public_key
+	}
+
+	fn vault_keyholders_epoch() -> EpochIndex {
+		CurrentKeyholdersEpoch::<T, I>::get()
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
