@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use futures::StreamExt;
-use tokio::sync::broadcast::{self};
 
 use crate::{
 	eth::rpc::EthDualRpcClient, state_chain_observer::client::extrinsic_api::ExtrinsicApi,
@@ -17,7 +16,7 @@ use super::{
 pub async fn start<StateChainClient, ContractWitnesser>(
 	contract_witnesser: ContractWitnesser,
 	eth_dual_rpc: EthDualRpcClient,
-	epoch_starts_receiver: broadcast::Receiver<EpochStart>,
+	epoch_starts_receiver: async_channel::Receiver<EpochStart>,
 	// In some cases there is no use witnessing older epochs since any actions that could be taken
 	// either have already been taken, or can no longer be taken.
 	witness_historical_epochs: bool,

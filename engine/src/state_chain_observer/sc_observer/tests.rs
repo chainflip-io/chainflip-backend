@@ -2,7 +2,7 @@ use std::{collections::BTreeSet, sync::Arc};
 
 use cf_chains::eth::UnsignedTransaction;
 use frame_system::Phase;
-use futures::{FutureExt, TryStreamExt};
+use futures::{FutureExt, StreamExt};
 use mockall::predicate::{self, eq};
 use pallet_cf_broadcast::BroadcastAttemptId;
 use pallet_cf_vaults::Vault;
@@ -10,7 +10,7 @@ use pallet_cf_vaults::Vault;
 use sp_core::{Hasher, H256, U256};
 use sp_runtime::{traits::Keccak256, AccountId32, Digest};
 use state_chain_runtime::{AccountId, CfeSettings, EthereumInstance, Header};
-use tokio::sync::{broadcast, watch};
+use tokio::sync::watch;
 use web3::types::{Bytes, SignedTransaction};
 
 use crate::{
@@ -87,7 +87,7 @@ async fn starts_witnessing_when_current_authority() {
 	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
-	let (epoch_start_sender, epoch_start_receiver) = broadcast::channel(10);
+	let (epoch_start_sender, epoch_start_receiver) = async_channel::bounded(10);
 
 	let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
@@ -123,10 +123,7 @@ async fn starts_witnessing_when_current_authority() {
 	.unwrap_err();
 
 	assert_eq!(
-		tokio_stream::wrappers::BroadcastStream::new(epoch_start_receiver)
-			.try_collect::<Vec<_>>()
-			.await
-			.unwrap(),
+		epoch_start_receiver.collect::<Vec<_>>().await,
 		vec![EpochStart {
 			epoch_index: initial_epoch,
 			eth_block: initial_epoch_from_block,
@@ -203,7 +200,7 @@ async fn starts_witnessing_when_historic_on_startup() {
 	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
-	let (epoch_start_sender, epoch_start_receiver) = broadcast::channel(10);
+	let (epoch_start_sender, epoch_start_receiver) = async_channel::bounded(10);
 
 	let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
@@ -239,10 +236,7 @@ async fn starts_witnessing_when_historic_on_startup() {
 	.unwrap_err();
 
 	assert_eq!(
-		tokio_stream::wrappers::BroadcastStream::new(epoch_start_receiver)
-			.try_collect::<Vec<_>>()
-			.await
-			.unwrap(),
+		epoch_start_receiver.collect::<Vec<_>>().await,
 		vec![
 			EpochStart {
 				epoch_index: active_epoch,
@@ -311,7 +305,7 @@ async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
 	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
-	let (epoch_start_sender, epoch_start_receiver) = broadcast::channel(10);
+	let (epoch_start_sender, epoch_start_receiver) = async_channel::bounded(10);
 	let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
 	#[cfg(feature = "ibiza")]
@@ -346,10 +340,7 @@ async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
 	.unwrap_err();
 
 	assert_eq!(
-		tokio_stream::wrappers::BroadcastStream::new(epoch_start_receiver)
-			.try_collect::<Vec<_>>()
-			.await
-			.unwrap(),
+		epoch_start_receiver.collect::<Vec<_>>().await,
 		vec![EpochStart {
 			epoch_index: initial_epoch,
 			eth_block: initial_epoch_from_block,
@@ -452,7 +443,7 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
 	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
-	let (epoch_start_sender, epoch_start_receiver) = broadcast::channel(10);
+	let (epoch_start_sender, epoch_start_receiver) = async_channel::bounded(10);
 
 	let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
@@ -488,10 +479,7 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
 	.unwrap_err();
 
 	assert_eq!(
-		tokio_stream::wrappers::BroadcastStream::new(epoch_start_receiver)
-			.try_collect::<Vec<_>>()
-			.await
-			.unwrap(),
+		epoch_start_receiver.collect::<Vec<_>>().await,
 		vec![
 			EpochStart {
 				epoch_index: initial_epoch,
@@ -604,7 +592,7 @@ async fn not_historical_to_authority_on_new_epoch() {
 	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
-	let (epoch_start_sender, epoch_start_receiver) = broadcast::channel(10);
+	let (epoch_start_sender, epoch_start_receiver) = async_channel::bounded(10);
 
 	let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
@@ -640,10 +628,7 @@ async fn not_historical_to_authority_on_new_epoch() {
 	.unwrap_err();
 
 	assert_eq!(
-		tokio_stream::wrappers::BroadcastStream::new(epoch_start_receiver)
-			.try_collect::<Vec<_>>()
-			.await
-			.unwrap(),
+		epoch_start_receiver.collect::<Vec<_>>().await,
 		vec![
 			EpochStart {
 				epoch_index: initial_epoch,
@@ -755,7 +740,7 @@ async fn current_authority_to_historical_on_new_epoch_event() {
 	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
-	let (epoch_start_sender, epoch_start_receiver) = broadcast::channel(10);
+	let (epoch_start_sender, epoch_start_receiver) = async_channel::bounded(10);
 
 	let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
@@ -791,10 +776,7 @@ async fn current_authority_to_historical_on_new_epoch_event() {
 	.unwrap_err();
 
 	assert_eq!(
-		tokio_stream::wrappers::BroadcastStream::new(epoch_start_receiver)
-			.try_collect::<Vec<_>>()
-			.await
-			.unwrap(),
+		epoch_start_receiver.collect::<Vec<_>>().await,
 		vec![
 			EpochStart {
 				epoch_index: initial_epoch,
@@ -918,7 +900,7 @@ async fn only_encodes_and_signs_when_specified() {
 	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
-	let (epoch_start_sender, _epoch_start_receiver) = broadcast::channel(10);
+	let (epoch_start_sender, _epoch_start_receiver) = async_channel::bounded(10);
 
 	let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
@@ -979,7 +961,7 @@ async fn run_the_sc_observer() {
 	let eth_multisig_client = Arc::new(MockMultisigClientApi::new());
 	let dot_multisig_client = Arc::new(MockMultisigClientApi::new());
 
-	let (epoch_start_sender, _) = broadcast::channel(10);
+	let (epoch_start_sender, _) = async_channel::bounded(10);
 
 	let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 

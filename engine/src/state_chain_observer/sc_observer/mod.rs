@@ -17,7 +17,7 @@ use std::{
 	},
 	time::Duration,
 };
-use tokio::sync::{broadcast, mpsc::UnboundedSender, watch};
+use tokio::sync::{mpsc::UnboundedSender, watch};
 
 use crate::{
 	eth::{rpc::EthRpcApi, EpochStart, EthBroadcaster},
@@ -174,7 +174,7 @@ pub async fn start<
 	eth_multisig_client: Arc<EthMultisigClient>,
 	dot_multisig_client: Arc<PolkadotMultisigClient>,
 	peer_update_sender: UnboundedSender<PeerUpdate>,
-	epoch_start_sender: broadcast::Sender<EpochStart>,
+	epoch_start_sender: async_channel::Sender<EpochStart>,
 	#[cfg(feature = "ibiza")] eth_monitor_ingress_sender: tokio::sync::mpsc::UnboundedSender<H160>,
 	#[cfg(feature = "ibiza")] eth_monitor_flip_ingress_sender: tokio::sync::mpsc::UnboundedSender<
 		H160,
@@ -230,7 +230,7 @@ where
                         .active_from_block,
                     current,
                     participant,
-                }).unwrap();
+                }).await.unwrap();
             }
         };
 
