@@ -17,9 +17,12 @@ use crate::{
 	Environment, EthereumInstance, Flip, FlipBalance, Reputation, Runtime, System, Validator,
 };
 #[cfg(feature = "ibiza")]
-use cf_chains::dot::{
-	api::PolkadotApi, CurrentVaultAndProxy, Polkadot, PolkadotReplayProtection,
-	PolkadotTransactionData,
+use cf_chains::{
+	dot::{
+		api::PolkadotApi, CurrentVaultAndProxy, Polkadot, PolkadotReplayProtection,
+		PolkadotTransactionData,
+	},
+	ChainCrypto,
 };
 use cf_chains::{
 	eth::{
@@ -32,7 +35,7 @@ use cf_chains::{
 use cf_traits::{
 	ApiCallDataProvider, BlockEmissions, Chainflip, EmergencyRotation, EpochInfo,
 	EthEnvironmentProvider, Heartbeat, Issuance, NetworkState, ReplayProtectionProvider,
-	RewardsDistribution, RuntimeUpgrade,
+	RewardsDistribution, RuntimeUpgrade, VaultTransitionHandler,
 };
 use frame_support::traits::Get;
 use pallet_cf_chain_tracking::ChainState;
@@ -239,5 +242,17 @@ impl ApiCallDataProvider<Polkadot> for DotApiCallDataProvider {
 			vault_account: Environment::get_vault_account(),
 			proxy_account: Environment::get_current_proxy_account(),
 		}
+	}
+}
+
+pub struct EthVaultTransitionHandler;
+impl VaultTransitionHandler<Ethereum> for EthVaultTransitionHandler {}
+
+#[cfg(feature = "ibiza")]
+pub struct DotVaultTransitionHandler;
+#[cfg(feature = "ibiza")]
+impl VaultTransitionHandler<Polkadot> for DotVaultTransitionHandler {
+	fn on_new_vault(new_key: <Polkadot as ChainCrypto>::AggKey) {
+		Environment::set_new_proxy_account(new_key);
 	}
 }
