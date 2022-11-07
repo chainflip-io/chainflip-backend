@@ -14,13 +14,13 @@ use super::{ethabi_function, ethabi_param, EthereumReplayProtection};
 use sp_runtime::RuntimeDebug;
 
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]
-pub struct EncodableFetchAssetParams {
+pub(crate) struct EncodableFetchAssetParams {
 	pub intent_id: IntentId,
 	pub asset: Address,
 }
 
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]
-pub struct EncodableTransferAssetParams {
+pub(crate) struct EncodableTransferAssetParams {
 	/// For Ethereum, the asset is encoded as a contract address.
 	pub asset: Address,
 	pub to: Address,
@@ -57,15 +57,15 @@ impl Tokenizable for EncodableTransferAssetParams {
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]
 pub struct AllBatch {
 	/// The signature data for validation and replay protection.
-	pub sig_data: SigData,
+	sig_data: SigData,
 	/// The list of all inbound deposits that are to be fetched in this batch call.
-	pub fetch_params: Vec<EncodableFetchAssetParams>,
+	fetch_params: Vec<EncodableFetchAssetParams>,
 	/// The list of all outbound transfers that need to be made to given addresses.
-	pub transfer_params: Vec<EncodableTransferAssetParams>,
+	transfer_params: Vec<EncodableTransferAssetParams>,
 }
 
 impl AllBatch {
-	pub fn new_unsigned(
+	pub(crate) fn new_unsigned(
 		replay_protection: EthereumReplayProtection,
 		fetch_params: Vec<EncodableFetchAssetParams>,
 		transfer_params: Vec<EncodableTransferAssetParams>,
