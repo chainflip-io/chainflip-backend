@@ -435,18 +435,10 @@ pub mod pallet {
 	pub enum Error<T, I = ()> {
 		/// An invalid ceremony id
 		InvalidCeremonyId,
-		/// We have an empty authority set
-		EmptyAuthoritySet,
-		/// The rotation has not been confirmed
-		NotConfirmed,
 		/// There is currently no vault rotation in progress for this chain.
 		NoActiveRotation,
 		/// The requested call is invalid based on the current rotation state.
 		InvalidRotationStatus,
-		/// The generated key is not a valid public key.
-		InvalidPublicKey,
-		/// A rotation for the requested ChainId is already underway.
-		DuplicateRotationRequest,
 		/// An authority sent a response for a ceremony in which they weren't involved, or to which
 		/// they have already submitted a response.
 		InvalidRespondent,
@@ -471,7 +463,6 @@ pub mod pallet {
 		/// - [NoActiveRotation](Error::NoActiveRotation)
 		/// - [InvalidRotationStatus](Error::InvalidRotationStatus)
 		/// - [InvalidCeremonyId](Error::InvalidCeremonyId)
-		/// - [InvalidPublicKey](Error::InvalidPublicKey)
 		///
 		/// ## Dependencies
 		///
@@ -595,7 +586,6 @@ pub mod pallet {
 		///
 		/// - [NoActiveRotation](Error::NoActiveRotation)
 		/// - [InvalidRotationStatus](Error::InvalidRotationStatus)
-		/// - [InvalidPublicKey](Error::InvalidPublicKey)
 		///
 		/// ## Dependencies
 		///
