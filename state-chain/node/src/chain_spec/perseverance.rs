@@ -8,16 +8,16 @@ pub struct Config;
 pub const NETWORK_NAME: &str = "Chainflip-Perseverance";
 
 pub const ENV: StateChainEnvironment = StateChainEnvironment {
-	flip_token_address: hex_literal::hex!("0E1D4594cB44D3E929dc0fb32F1c35A26D6e8e7f"),
-	eth_usdc_address: hex_literal::hex!("07865c6E87B9F70255377e024ace6630C1Eaa37F"),
-	stake_manager_address: hex_literal::hex!("A599338c8D71ff516854DA954937330aAA25CC44"),
-	key_manager_address: hex_literal::hex!("624Ab0aB5334aEAb7853d33503c5553Dfb937499"),
-	eth_vault_address: hex_literal::hex!("f2f5D8b18573721361540087A52C05f5FB6d02c1"),
+	flip_token_address: hex_literal::hex!("8e71CEe1679bceFE1D426C7f23EAdE9d68e62650"),
+	eth_usdc_address: hex_literal::hex!("07865c6e87b9f70255377e024ace6630c1eaa37f"),
+	stake_manager_address: hex_literal::hex!("ff99F65D0042393079442f68F47C7AE984C3F930"),
+	key_manager_address: hex_literal::hex!("d654BBBd3416C65e9B9Cf8E6618907679Ef840A9"),
+	eth_vault_address: hex_literal::hex!("77a8c6dF73117E72548a1E63e0Bf15D29D283ceE"),
 	ethereum_chain_id: CHAIN_ID_GOERLI,
 	eth_init_agg_key: hex_literal::hex!(
-		"035217961720cf058f447afaebf25e7c14bc44b069ebda50f44dbf25db31b8944c"
+		"026015128a0b2e09b4a241e4e14ece67bfd0dad1c978b10d317785d82046c1f9b2"
 	),
-	ethereum_deployment_block: 7755959u64,
+	ethereum_deployment_block: 7909675u64,
 	genesis_stake_amount: 5_000 * FLIPPERINOS_PER_FLIP,
 	min_stake: 10 * FLIPPERINOS_PER_FLIP,
 	eth_block_safety_margin: 4,
