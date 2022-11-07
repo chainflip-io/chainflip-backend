@@ -948,10 +948,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "chainflip-cli-new"
-version = "0.1.0"
-
-[[package]]
 name = "chainflip-engine"
 version = "0.5.0"
 dependencies = [
