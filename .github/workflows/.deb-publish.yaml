@@ -36,7 +36,7 @@ jobs:
       - name: Download packages
         uses: actions/download-artifact@v3
         with:
-          name: chainflip-backend-packages
+          name: ${{ inputs.artifacts }}
           path: packages
       - name: Get commit SHA, distribution codename
         id: vars
@@ -79,7 +79,6 @@ jobs:
         run: echo "### Ibiza Packages Published! :rocket:" >> $GITHUB_STEP_SUMMARY
       - name: Summary
         run: |
-          echo "### Packages published! :rocket:" >> $GITHUB_STEP_SUMMARY
           echo "Packages can be installed with the following commands: " >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
