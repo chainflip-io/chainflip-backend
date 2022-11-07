@@ -607,7 +607,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			participants.or_else(|| {
 				T::ThresholdSignerNomination::threshold_nomination_with_seed(
 					(ceremony_id, attempt_count),
-					T::EpochInfo::epoch_index(),
+					T::KeyProvider::vault_keyholders_epoch(),
 				)
 			}) {
 			(

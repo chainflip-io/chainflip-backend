@@ -154,7 +154,7 @@ impl cf_traits::KeyProvider<MockEthereum> for MockKeyProvider {
 	}
 
 	fn vault_keyholders_epoch() -> EpochIndex {
-		unimplemented!("Implement a custom mock if `vault_keyholders_epoch` is required.")
+		Default::default()
 	}
 }
 
