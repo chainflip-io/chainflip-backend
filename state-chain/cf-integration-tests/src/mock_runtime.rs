@@ -10,6 +10,7 @@ use state_chain_runtime::{
 
 pub const CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL: u32 = 28;
 pub const BACKUP_NODE_EMISSION_INFLATION_PERBILL: u32 = 6;
+pub const CLAIM_DELAY_BUFFER_SECS: u64 = 10;
 
 use crate::{get_from_seed, network, GENESIS_KEY};
 use cf_primitives::{AccountRole, AuthorityCount};
@@ -91,7 +92,7 @@ impl ExtBuilder {
 				genesis_stakers: self.accounts.clone(),
 				minimum_stake: DEFAULT_MIN_STAKE,
 				claim_ttl: core::time::Duration::from_secs(3 * CLAIM_DELAY_SECS),
-				claim_delay_buffer_seconds: 10,
+				claim_delay_buffer_seconds: CLAIM_DELAY_BUFFER_SECS,
 			},
 			reputation: ReputationConfig {
 				accrual_ratio: ACCRUAL_RATIO,
@@ -120,8 +121,8 @@ impl ExtBuilder {
 				keygen_response_timeout: 4,
 			},
 			emissions: EmissionsConfig {
-				current_authority_emission_inflation: 28,
-				backup_node_emission_inflation: 6,
+				current_authority_emission_inflation: CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL,
+				backup_node_emission_inflation: BACKUP_NODE_EMISSION_INFLATION_PERBILL,
 				supply_update_interval: SUPPLY_UPDATE_INTERVAL_DEFAULT,
 			},
 			account_roles: AccountRolesConfig {
