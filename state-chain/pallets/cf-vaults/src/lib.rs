@@ -394,8 +394,6 @@ pub mod pallet {
 		VaultRotationCompleted,
 		/// The Keygen ceremony has been aborted \[ceremony_id\]
 		KeygenAborted(CeremonyId),
-		/// The vault has been rotated
-		VaultsRotated,
 		/// The vault's key has been rotated externally \[new_public_key\]
 		VaultRotatedExternally(<T::Chain as ChainCrypto>::AggKey),
 		/// The new public key witnessed externally was not the expected one \[key\]
