@@ -34,7 +34,7 @@ pub struct StateChain {
 
 impl StateChain {
 	pub fn validate_settings(&self) -> Result<(), ConfigError> {
-		parse_websocket_endpoint(&self.ws_endpoint)
+		validate_websocket_endpoint(&self.ws_endpoint)
 			.map_err(|e| ConfigError::Message(e.to_string()))?;
 		Ok(())
 	}
@@ -48,11 +48,26 @@ pub struct Eth {
 	pub private_key_file: PathBuf,
 }
 
+#[cfg(feature = "ibiza")]
+#[derive(Debug, Deserialize, Clone, Default)]
+pub struct Dot {
+	pub ws_node_endpoint: String,
+}
+
+#[cfg(feature = "ibiza")]
+impl Dot {
+	pub fn validate_settings(&self) -> Result<(), ConfigError> {
+		validate_websocket_endpoint(&self.ws_node_endpoint)
+			.map_err(|e| ConfigError::Message(e.to_string()))?;
+		Ok(())
+	}
+}
+
 impl Eth {
 	pub fn validate_settings(&self) -> Result<(), ConfigError> {
-		parse_websocket_endpoint(&self.ws_node_endpoint)
+		validate_websocket_endpoint(&self.ws_node_endpoint)
 			.map_err(|e| ConfigError::Message(e.to_string()))?;
-		parse_http_endpoint(&self.http_node_endpoint)
+		validate_http_endpoint(&self.http_node_endpoint)
 			.map_err(|e| ConfigError::Message(e.to_string()))?;
 		Ok(())
 	}
@@ -389,17 +404,17 @@ impl Settings {
 }
 
 /// Validate a websocket endpoint URL
-pub fn parse_websocket_endpoint(url: &str) -> Result<Url> {
-	parse_endpoint(vec!["ws", "wss"], url)
+pub fn validate_websocket_endpoint(url: &str) -> Result<()> {
+	validate_endpoint(vec!["ws", "wss"], url)
 }
 
 /// Validate a http endpoint URL
-pub fn parse_http_endpoint(url: &str) -> Result<Url> {
-	parse_endpoint(vec!["http", "https"], url)
+pub fn validate_http_endpoint(url: &str) -> Result<()> {
+	validate_endpoint(vec!["http", "https"], url)
 }
 
 /// Parse the URL to check that it is the correct scheme and a valid endpoint URL
-fn parse_endpoint(valid_schemes: Vec<&str>, url: &str) -> Result<Url> {
+fn validate_endpoint(valid_schemes: Vec<&str>, url: &str) -> Result<()> {
 	let parsed_url = Url::parse(url)?;
 	let scheme = parsed_url.scheme();
 	if !valid_schemes.contains(&scheme) {
@@ -415,7 +430,7 @@ fn parse_endpoint(valid_schemes: Vec<&str>, url: &str) -> Result<Url> {
 		bail!("Invalid URL data.");
 	}
 
-	Ok(parsed_url)
+	Ok(())
 }
 
 fn is_valid_db_path(db_file: &Path) -> Result<()> {
@@ -462,24 +477,26 @@ mod tests {
 
 	#[test]
 	fn test_websocket_endpoint_url_parsing() {
-		assert_ok!(parse_websocket_endpoint("wss://network.my_eth_node:80/d2er2easdfasdfasdf2e"));
-		assert_ok!(parse_websocket_endpoint("wss://network.my_eth_node:80/<secret_key>"));
-		assert_ok!(parse_websocket_endpoint("wss://network.my_eth_node/<secret_key>"));
-		assert_ok!(parse_websocket_endpoint("ws://network.my_eth_node/<secret_key>"));
-		assert_ok!(parse_websocket_endpoint("wss://network.my_eth_node"));
-		assert!(parse_websocket_endpoint("https://wrong_scheme.com").is_err());
-		assert!(parse_websocket_endpoint("").is_err());
+		assert_ok!(validate_websocket_endpoint(
+			"wss://network.my_eth_node:80/d2er2easdfasdfasdf2e"
+		));
+		assert_ok!(validate_websocket_endpoint("wss://network.my_eth_node:80/<secret_key>"));
+		assert_ok!(validate_websocket_endpoint("wss://network.my_eth_node/<secret_key>"));
+		assert_ok!(validate_websocket_endpoint("ws://network.my_eth_node/<secret_key>"));
+		assert_ok!(validate_websocket_endpoint("wss://network.my_eth_node"));
+		assert!(validate_websocket_endpoint("https://wrong_scheme.com").is_err());
+		assert!(validate_websocket_endpoint("").is_err());
 	}
 
 	#[test]
 	fn test_http_endpoint_url_parsing() {
-		assert_ok!(parse_http_endpoint("http://network.my_eth_node:80/d2er2easdfasdfasdf2e"));
-		assert_ok!(parse_http_endpoint("http://network.my_eth_node:80/<secret_key>"));
-		assert_ok!(parse_http_endpoint("http://network.my_eth_node/<secret_key>"));
-		assert_ok!(parse_http_endpoint("https://network.my_eth_node/<secret_key>"));
-		assert_ok!(parse_http_endpoint("http://network.my_eth_node"));
-		assert!(parse_http_endpoint("wss://wrong_scheme.com").is_err());
-		assert!(parse_http_endpoint("").is_err());
+		assert_ok!(validate_http_endpoint("http://network.my_eth_node:80/d2er2easdfasdfasdf2e"));
+		assert_ok!(validate_http_endpoint("http://network.my_eth_node:80/<secret_key>"));
+		assert_ok!(validate_http_endpoint("http://network.my_eth_node/<secret_key>"));
+		assert_ok!(validate_http_endpoint("https://network.my_eth_node/<secret_key>"));
+		assert_ok!(validate_http_endpoint("http://network.my_eth_node"));
+		assert!(validate_http_endpoint("wss://wrong_scheme.com").is_err());
+		assert!(validate_http_endpoint("").is_err());
 	}
 
 	#[test]
