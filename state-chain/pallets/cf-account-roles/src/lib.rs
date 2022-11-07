@@ -26,6 +26,7 @@ use sp_std::marker::PhantomData;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use cf_traits::StakeTransfer;
 	use frame_support::pallet_prelude::*;
 
 	#[pallet::config]
@@ -33,6 +34,16 @@ pub mod pallet {
 	pub trait Config: Chainflip {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+
+		/// The Flip token implementation.
+		type StakeManager: StakeTransfer<
+			AccountId = <Self as frame_system::Config>::AccountId,
+			Balance = Self::Amount,
+		>;
+
+		/// The minimum required stake for the validator role.
+		#[pallet::constant]
+		type MinimumStake: Get<Self::Amount>;
 
 		/// Weights.
 		type WeightInfo: WeightInfo;
@@ -57,6 +68,7 @@ pub mod pallet {
 		AccountNotInitialised,
 		/// Accounts can only be upgraded from the initial [AccountRole::Undefined] state.
 		AccountRoleAlreadyRegistered,
+		NotEnoughStake,
 	}
 
 	#[pallet::genesis_config]
@@ -85,6 +97,12 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::register_account_role())]
 		pub fn register_account_role(origin: OriginFor<T>, role: AccountRole) -> DispatchResult {
 			let who: T::AccountId = ensure_signed(origin)?;
+			if role == AccountRole::Validator {
+				ensure!(
+					T::StakeManager::staked_balance(&who) >= T::MinimumStake::get(),
+					Error::<T>::NotEnoughStake
+				);
+			}
 			<Self as AccountRoleRegistry<T>>::register_account_role(&who, role)?;
 			Ok(())
 		}

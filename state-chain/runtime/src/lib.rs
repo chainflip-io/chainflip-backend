@@ -251,6 +251,8 @@ impl pallet_cf_egress::Config for Runtime {
 
 impl pallet_cf_account_roles::Config for Runtime {
 	type Event = Event;
+	type StakeManager = Flip;
+	type MinimumStake = ConstU128<500>;
 	type WeightInfo = pallet_cf_account_roles::weights::PalletWeight<Runtime>;
 }
 
