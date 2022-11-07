@@ -16,6 +16,8 @@ use sp_std::{
 	prelude::*,
 };
 
+pub use cf_primitives::chains::*;
+
 pub mod benchmarking_value;
 
 #[cfg(feature = "ibiza")]
