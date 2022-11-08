@@ -46,11 +46,11 @@ jobs:
         run: |
           if [[ '${{ inputs.environment }}' == 'prod' ]]; then
             echo "REPO_BUCKET=repo.chainflip.io" >> $GITHUB_ENV
-            echo "GPG_KEY=${{ secrets.CF_PROD_PGP_KEY }}" >> $GITHUB_ENV
+            echo "GPG_KEY='${{ secrets.CF_PROD_PGP_KEY }}'" >> $GITHUB_ENV
             echo "USER_PASS_PREFIX=" >> $GITHUB_ENV
           else
             echo "REPO_BUCKET=apt.aws.chainflip.xyz" >> $GITHUB_ENV
-            echo "GPG_KEY=${{ secrets.CF_DEV_PGP_KEY }}" >> $GITHUB_ENV
+            echo "GPG_KEY='${{ secrets.CF_DEV_PGP_KEY }}'" >> $GITHUB_ENV
             echo "USER_PASS_PREFIX='{user}:{pass}'" >> $GITHUB_ENV
           fi
 
