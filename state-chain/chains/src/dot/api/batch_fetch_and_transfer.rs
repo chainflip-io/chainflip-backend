@@ -188,7 +188,7 @@ mod test_batch_fetch {
 
 		let batch_fetch_api = batch_fetch_api
 			.clone()
-			.signed(&keypair_proxy.sign(&batch_fetch_api.threshold_signature_payload()));
+			.signed(&keypair_proxy.sign(&batch_fetch_api.threshold_signature_payload().0));
 		assert!(batch_fetch_api.is_signed());
 
 		println!("encoded extrinsic: 0x{}", hex::encode(batch_fetch_api.chain_encoded()));

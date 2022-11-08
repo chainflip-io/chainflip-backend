@@ -170,9 +170,9 @@ mod test_rotate_vault_proxy {
 			)
 		);
 
-		let rotate_vault_proxy_api = rotate_vault_proxy_api
-			.clone()
-			.signed(&keypair_old_proxy.sign(&rotate_vault_proxy_api.threshold_signature_payload()));
+		let rotate_vault_proxy_api = rotate_vault_proxy_api.clone().signed(
+			&keypair_old_proxy.sign(&rotate_vault_proxy_api.threshold_signature_payload().0),
+		);
 		assert!(rotate_vault_proxy_api.is_signed());
 
 		println!("encoded extrinsic: 0x{}", hex::encode(rotate_vault_proxy_api.chain_encoded()));
