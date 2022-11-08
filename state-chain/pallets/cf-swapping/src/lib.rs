@@ -1,5 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-use cf_primitives::{Asset, AssetAmount, ForeignChainAddress, ForeignChainAsset};
+use cf_primitives::{chains::assets::eth, Asset, AssetAmount, ForeignChainAddress};
 use cf_traits::{liquidity::AmmPoolApi, IngressApi};
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
@@ -21,7 +21,7 @@ pub use weights::WeightInfo;
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
 pub struct Swap<AccountId> {
 	pub from: Asset,
-	pub to: ForeignChainAsset,
+	pub to: Asset,
 	pub amount: AssetAmount,
 	pub egress_address: ForeignChainAddress,
 	pub relayer_id: AccountId,
@@ -47,7 +47,7 @@ pub mod pallet {
 		/// An interface to the ingress api implementation.
 		type Ingress: IngressApi<AccountId = <Self as frame_system::Config>::AccountId>;
 		/// An interface to the egress api implementation.
-		type EthereumEgress: EgressApi<Ethereum>;
+		type Egress: EgressApi<Ethereum>;
 		/// An interface to the AMM api implementation.
 		type AmmPoolApi: AmmPoolApi<Balance = AssetAmount>;
 		/// The Weight information.
@@ -114,8 +114,8 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::register_swap_intent())]
 		pub fn register_swap_intent(
 			origin: OriginFor<T>,
-			ingress_asset: ForeignChainAsset,
-			egress_asset: ForeignChainAsset,
+			ingress_asset: Asset,
+			egress_asset: Asset,
 			egress_address: ForeignChainAddress,
 			relayer_commission_bps: u16,
 		) -> DispatchResultWithPostInfo {
@@ -164,7 +164,7 @@ pub mod pallet {
 		/// Callback function to kick of the swapping process after a successful ingress.
 		fn schedule_swap(
 			from: Asset,
-			to: ForeignChainAsset,
+			to: Asset,
 			amount: AssetAmount,
 			egress_address: ForeignChainAddress,
 			relayer_id: Self::AccountId,

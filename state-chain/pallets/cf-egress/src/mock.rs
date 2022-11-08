@@ -7,7 +7,7 @@ pub use cf_primitives::{
 	chains::{assets, Ethereum},
 	Asset, EthereumAddress, ExchangeRate, ETHEREUM_ETH_ADDRESS,
 };
-use cf_primitives::{EthAmount, IntentId};
+
 pub use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
 	Broadcaster, EthereumAssetsAddressProvider, ReplayProtectionProvider,
@@ -94,43 +94,11 @@ impl ReplayProtectionProvider<Ethereum> for Test {
 	}
 }
 
-parameter_types! {
-	pub static LastEgressSent: Vec<(EthereumAddress, EthAmount, EthereumAddress)> = vec![];
-	pub static LastFetchesSent: Vec<(IntentId, EthereumAddress)> = vec![];
-}
-
 pub struct MockBroadcast;
 impl Broadcaster<Ethereum> for MockBroadcast {
 	type ApiCall = EthereumApi<MockEthEnvironment>;
 
-	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) {
-		if let EthereumApi::AllBatch(cf_chains::eth::api::all_batch::AllBatch {
-			sig_data: _,
-			fetch_params: fetches,
-			transfer_params: transfers,
-		}) = api_call
-		{
-			LastEgressSent::set(
-				transfers
-					.into_iter()
-					.map(|transfer| (transfer.asset.into(), transfer.amount, transfer.to.into()))
-					.collect(),
-			);
-			LastFetchesSent::set(
-				fetches.into_iter().map(|fetch| (fetch.intent_id, fetch.asset.into())).collect(),
-			);
-		}
-	}
-}
-
-pub struct MockEthAssetAddressProvider;
-impl EthereumAssetsAddressProvider for MockEthAssetAddressProvider {
-	fn try_get_asset_address(asset: Asset) -> Option<EthereumAddress> {
-		match asset {
-			Asset::Flip => Some(ETHEREUM_FLIP_ADDRESS),
-			_ => None,
-		}
-	}
+	fn threshold_sign_and_broadcast(_api_call: Self::ApiCall) {}
 }
 
 pub struct MockEthEnvironment;

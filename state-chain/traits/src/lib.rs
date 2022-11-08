@@ -14,7 +14,7 @@ use sp_std::collections::btree_set::BTreeSet;
 use cf_chains::{benchmarking_value::BenchmarkValue, ApiCall, ChainAbi, ChainCrypto};
 use cf_primitives::{
 	AccountRole, Asset, AssetAmount, AuthorityCount, CeremonyId, EpochIndex, EthereumAddress,
-	ForeignChainAddress, ForeignChainAsset, IntentId,
+	ForeignChainAddress, IntentId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -621,13 +621,13 @@ pub trait IngressApi {
 	/// Issues an intent id and ingress address for a new liquidity deposit.
 	fn register_liquidity_ingress_intent(
 		lp_account: Self::AccountId,
-		ingress_asset: ForeignChainAsset,
+		ingress_asset: Asset,
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError>;
 
 	/// Issues an intent id and ingress address for a new swap.
 	fn register_swap_intent(
-		ingress_asset: ForeignChainAsset,
-		egress_asset: ForeignChainAsset,
+		ingress_asset: Asset,
+		egress_asset: Asset,
 		egress_address: ForeignChainAddress,
 		relayer_commission_bps: u16,
 		relayer_id: Self::AccountId,
@@ -637,7 +637,7 @@ pub trait IngressApi {
 /// Generates a deterministic ingress address for some combination of asset, chain and intent id.
 pub trait AddressDerivationApi {
 	fn generate_address(
-		ingress_asset: ForeignChainAsset,
+		ingress_asset: Asset,
 		intent_id: IntentId,
 	) -> Result<ForeignChainAddress, DispatchError>;
 }

@@ -1,5 +1,5 @@
 use crate::{mock::*, EarnedRelayerFees, Pallet, Swap, SwapQueue, WeightInfo};
-use cf_primitives::{Asset, ForeignChain, ForeignChainAddress, ForeignChainAsset};
+use cf_primitives::{chains::assets::eth, ForeignChain, ForeignChainAddress, ForeignChainAsset};
 use cf_traits::SwapIntentHandler;
 use frame_support::assert_ok;
 
@@ -9,48 +9,48 @@ use frame_support::traits::Hooks;
 fn generate_test_swaps() -> Vec<Swap<u64>> {
 	vec![
 		Swap {
-			from: Asset::Flip,
-			to: ForeignChainAsset { chain: ForeignChain::Ethereum, asset: Asset::Usdc },
+			from: ChainAsset::Eth(eth::Asset::Flip),
+			to: ChainAsset::Eth(eth::Asset::Usdc),
 			amount: 10,
 			egress_address: ForeignChainAddress::Eth([2; 20]),
 			relayer_id: 2_u64,
 			relayer_commission_bps: 2,
 		},
 		Swap {
-			from: Asset::Usdc,
-			to: ForeignChainAsset { chain: ForeignChain::Ethereum, asset: Asset::Flip },
+			from: ChainAsset::Eth(eth::Asset::Usdc),
+			to: ChainAsset::Eth(eth::Asset::Flip),
 			amount: 20,
 			egress_address: ForeignChainAddress::Eth([4; 20]),
 			relayer_id: 3_u64,
 			relayer_commission_bps: 2,
 		},
 		Swap {
-			from: Asset::Eth,
-			to: ForeignChainAsset { chain: ForeignChain::Ethereum, asset: Asset::Usdc },
+			from: ChainAsset::Eth(eth::Asset::Eth),
+			to: ChainAsset::Eth(eth::Asset::Usdc),
 			amount: 30,
 			egress_address: ForeignChainAddress::Eth([7; 20]),
 			relayer_id: 4_u64,
 			relayer_commission_bps: 2,
 		},
 		Swap {
-			from: Asset::Flip,
-			to: ForeignChainAsset { chain: ForeignChain::Ethereum, asset: Asset::Usdc },
+			from: ChainAsset::Eth(eth::Asset::Flip),
+			to: ChainAsset::Eth(eth::Asset::Usdc),
 			amount: 40,
 			egress_address: ForeignChainAddress::Eth([9; 20]),
 			relayer_id: 5_u64,
 			relayer_commission_bps: 2,
 		},
 		Swap {
-			from: Asset::Flip,
-			to: ForeignChainAsset { chain: ForeignChain::Ethereum, asset: Asset::Usdc },
+			from: ChainAsset::Eth(eth::Asset::Flip),
+			to: ChainAsset::Eth(eth::Asset::Usdc),
 			amount: 50,
 			egress_address: ForeignChainAddress::Eth([2; 20]),
 			relayer_id: 6_u64,
 			relayer_commission_bps: 2,
 		},
 		Swap {
-			from: Asset::Flip,
-			to: ForeignChainAsset { chain: ForeignChain::Ethereum, asset: Asset::Usdc },
+			from: ChainAsset::Eth(eth::Asset::Flip),
+			to: ChainAsset::Eth(eth::Asset::Usdc),
 			amount: 60,
 			egress_address: ForeignChainAddress::Eth([4; 20]),
 			relayer_id: 7_u64,
@@ -77,8 +77,8 @@ fn register_swap_intent_success_with_valid_parameters() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Swapping::register_swap_intent(
 			Origin::signed(ALICE),
-			ForeignChainAsset { chain: ForeignChain::Ethereum, asset: Asset::Eth },
-			ForeignChainAsset { chain: ForeignChain::Ethereum, asset: Asset::Usdc },
+			ForeignChainAsset { chain: ForeignChain::Ethereum, asset: eth::Asset::Eth },
+			ForeignChainAsset { chain: ForeignChain::Ethereum, asset: eth::Asset::Usdc },
 			ForeignChainAddress::Eth(Default::default()),
 			0,
 		));
@@ -99,7 +99,7 @@ fn process_all_swaps() {
 				.map(|swap: &Swap<u64>| EgressTransaction {
 					foreign_asset: swap.to,
 					amount: swap.amount,
-					egress_address: swap.egress_address,
+					egress_address: swap.egress_address.into(),
 				})
 				.collect::<Vec<EgressTransaction>>()
 		);
@@ -120,7 +120,7 @@ fn number_of_swaps_processed_limited_by_weight() {
 				.map(|swap: &Swap<u64>| EgressTransaction {
 					foreign_asset: swap.to,
 					amount: swap.amount,
-					egress_address: swap.egress_address,
+					egress_address: swap.egress_address.into(),
 				})
 				.collect::<Vec<EgressTransaction>>()
 		);

@@ -3,12 +3,10 @@
 use super::*;
 
 use crate::{EthereumDisabledEgressAssets, EthereumScheduledRequests, FetchOrTransfer};
-use cf_primitives::{Asset, EthereumAddress, ForeignChain, ForeignChainAsset};
+use cf_primitives::{chains::assets::eth, EthereumAddress};
 use frame_benchmarking::benchmarks;
 use frame_support::traits::Hooks;
 
-const ETH_ETH: ForeignChainAsset =
-	ForeignChainAsset { chain: ForeignChain::Ethereum, asset: Asset::Eth };
 const ALICE_ETH: EthereumAddress = [100u8; 20];
 
 benchmarks! {
@@ -21,12 +19,12 @@ benchmarks! {
 			if i%2==0 {
 				batch.push(FetchOrTransfer::<Ethereum>::Fetch {
 					intent_id: 1,
-					asset: Asset::Eth,
+					asset: eth::Asset::Eth,
 				});
 			} else {
 				batch.push(FetchOrTransfer::<Ethereum>::Transfer {
-					asset: Asset::Eth,
-					to: ALICE_ETH,
+					asset: eth::Asset::Eth,
+					to: ALICE_ETH.into(),
 					amount: 1_000,
 				});
 			}
@@ -40,10 +38,10 @@ benchmarks! {
 
 	disable_asset_egress {
 		let origin = T::EnsureGovernance::successful_origin();
-	} : { let _ = Pallet::<T>::disable_asset_egress(origin, ETH_ETH, true); }
+	} : { let _ = Pallet::<T>::disable_asset_egress(origin, eth::Asset::Eth, true); }
 	verify {
 		assert!(EthereumDisabledEgressAssets::<T>::get(
-			Asset::Eth,
+			eth::Asset::Eth,
 		).is_some());
 	}
 

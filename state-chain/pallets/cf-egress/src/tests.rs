@@ -2,58 +2,52 @@ use crate::{
 	mock::*, EthereumDisabledEgressAssets, EthereumScheduledRequests, FetchOrTransfer, WeightInfo,
 };
 
-use cf_primitives::{ForeignChain, ForeignChainAddress, ForeignChainAsset, ETHEREUM_ETH_ADDRESS};
-use cf_traits::EgressApi;
+use cf_primitives::{chains::assets::eth, ForeignChain};
+use cf_traits::{EgressApi, IngressFetchApi};
 
 use frame_support::{assert_ok, traits::Hooks};
 const ALICE_ETH_ADDRESS: EthereumAddress = [100u8; 20];
 const BOB_ETH_ADDRESS: EthereumAddress = [101u8; 20];
-const ETH_ETH: ForeignChainAsset =
-	ForeignChainAsset { chain: ForeignChain::Ethereum, asset: Asset::Eth };
-const ETH_FLIP: ForeignChainAsset =
-	ForeignChainAsset { chain: ForeignChain::Ethereum, asset: Asset::Flip };
+const ETH_ETH: eth::Asset = eth::Asset::Eth;
+const ETH_FLIP: eth::Asset = eth::Asset::Flip;
 
 #[test]
 fn disallowed_asset_will_not_be_batch_sent() {
 	new_test_ext().execute_with(|| {
 		let asset = ETH_ETH;
-		
+
 		// Cannot egress assets that are blacklisted.
-		assert!(EthereumDisabledEgressAssets::<Test>::get(asset.asset).is_none());
+		assert!(EthereumDisabledEgressAssets::<Test>::get(asset).is_none());
 		assert_ok!(Egress::disable_asset_egress(Origin::root(), asset, true));
-		assert!(EthereumDisabledEgressAssets::<Test>::get(asset.asset).is_some());
+		assert!(EthereumDisabledEgressAssets::<Test>::get(asset).is_some());
 		System::assert_last_event(Event::Egress(crate::Event::AssetEgressDisabled {
-			foreign_asset: asset,
+			asset,
 			disabled: true,
 		}));
-		Egress::schedule_egress(asset, 1_000, ForeignChainAddress::Eth(ALICE_ETH_ADDRESS));
-		LastEgressSent::set(vec![]);
+		Egress::schedule_egress(asset, 1_000, ALICE_ETH_ADDRESS.into());
 		Egress::on_idle(1, 1_000_000_000_000u64);
 
 		// The egress has not been sent
-		assert!(LastEgressSent::get().is_empty());
 		assert_eq!(
 			EthereumScheduledRequests::<Test>::get(),
 			vec![FetchOrTransfer::<Ethereum>::Transfer {
-				asset: Asset::Eth,
+				asset,
 				amount: 1_000,
-				to: ALICE_ETH_ADDRESS,
+				to: ALICE_ETH_ADDRESS.into(),
 			}]
 		);
 
 		// re-enable the asset for Egress
 		assert_ok!(Egress::disable_asset_egress(Origin::root(), asset, false));
-		assert!(EthereumDisabledEgressAssets::<Test>::get(Asset::Eth).is_none());
+		assert!(EthereumDisabledEgressAssets::<Test>::get(asset).is_none());
 		System::assert_last_event(Event::Egress(crate::Event::AssetEgressDisabled {
-			foreign_asset: asset,
+			asset,
 			disabled: false,
 		}));
 
-		LastEgressSent::set(vec![]);
 		Egress::on_idle(1, 1_000_000_000_000u64);
 
 		// The egress should be sent now
-		assert_eq!(LastEgressSent::get(), vec![(ETHEREUM_ETH_ADDRESS, 1_000, ALICE_ETH_ADDRESS)]);
 		assert!(EthereumScheduledRequests::<Test>::get().is_empty());
 	});
 }
@@ -61,44 +55,44 @@ fn disallowed_asset_will_not_be_batch_sent() {
 #[test]
 fn can_schedule_egress_to_batch() {
 	new_test_ext().execute_with(|| {
-		Egress::schedule_egress(ETH_ETH, 1_000, ForeignChainAddress::Eth(ALICE_ETH_ADDRESS));
-		Egress::schedule_egress(ETH_ETH, 2_000, ForeignChainAddress::Eth(ALICE_ETH_ADDRESS));
+		Egress::schedule_egress(ETH_ETH, 1_000, ALICE_ETH_ADDRESS.into());
+		Egress::schedule_egress(ETH_ETH, 2_000, ALICE_ETH_ADDRESS.into());
 		System::assert_last_event(Event::Egress(crate::Event::EgressScheduled {
-			foreign_asset: ETH_ETH,
+			asset: ETH_ETH,
 			amount: 2_000,
-			egress_address: ForeignChainAddress::Eth(ALICE_ETH_ADDRESS),
+			egress_address: ALICE_ETH_ADDRESS.into(),
 		}));
 
-		Egress::schedule_egress(ETH_FLIP, 3_000, ForeignChainAddress::Eth(BOB_ETH_ADDRESS));
-		Egress::schedule_egress(ETH_FLIP, 4_000, ForeignChainAddress::Eth(BOB_ETH_ADDRESS));
+		Egress::schedule_egress(ETH_FLIP, 3_000, BOB_ETH_ADDRESS.into());
+		Egress::schedule_egress(ETH_FLIP, 4_000, BOB_ETH_ADDRESS.into());
 		System::assert_last_event(Event::Egress(crate::Event::EgressScheduled {
-			foreign_asset: ETH_FLIP,
+			asset: ETH_FLIP,
 			amount: 4_000,
-			egress_address: ForeignChainAddress::Eth(BOB_ETH_ADDRESS),
+			egress_address: BOB_ETH_ADDRESS.into(),
 		}));
 
 		assert_eq!(
 			EthereumScheduledRequests::<Test>::get(),
 			vec![
 				FetchOrTransfer::<Ethereum>::Transfer {
-					asset: Asset::Eth,
+					asset: ETH_ETH,
 					amount: 1_000,
-					to: ALICE_ETH_ADDRESS,
+					to: ALICE_ETH_ADDRESS.into(),
 				},
 				FetchOrTransfer::<Ethereum>::Transfer {
-					asset: Asset::Eth,
+					asset: ETH_ETH,
 					amount: 2_000,
-					to: ALICE_ETH_ADDRESS,
+					to: ALICE_ETH_ADDRESS.into(),
 				},
 				FetchOrTransfer::<Ethereum>::Transfer {
-					asset: Asset::Flip,
+					asset: ETH_FLIP,
 					amount: 3_000,
-					to: BOB_ETH_ADDRESS,
+					to: BOB_ETH_ADDRESS.into(),
 				},
 				FetchOrTransfer::<Ethereum>::Transfer {
-					asset: Asset::Flip,
+					asset: ETH_FLIP,
 					amount: 4_000,
-					to: BOB_ETH_ADDRESS,
+					to: BOB_ETH_ADDRESS.into(),
 				},
 			]
 		);
@@ -106,21 +100,17 @@ fn can_schedule_egress_to_batch() {
 }
 
 #[test]
-fn can_schedule_ethereum_ingress_fetch() {
+fn can_schedule_ingress_fetch() {
 	new_test_ext().execute_with(|| {
 		assert!(EthereumScheduledRequests::<Test>::get().is_empty());
 
-		Egress::schedule_ethereum_ingress_fetch(vec![
-			(Asset::Eth, 1u64),
-			(Asset::Eth, 2u64),
-			(Asset::Flip, 3u64),
-		]);
+		Egress::schedule_ingress_fetch(vec![(ETH_ETH, 1u64), (ETH_ETH, 2u64), (ETH_FLIP, 3u64)]);
 		assert_eq!(
 			EthereumScheduledRequests::<Test>::get(),
 			vec![
-				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 1u64, asset: Asset::Eth },
-				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 2u64, asset: Asset::Eth },
-				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 3u64, asset: Asset::Flip },
+				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 1u64, asset: ETH_ETH },
+				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 2u64, asset: ETH_ETH },
+				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 3u64, asset: ETH_FLIP },
 			]
 		);
 
@@ -128,15 +118,15 @@ fn can_schedule_ethereum_ingress_fetch() {
 			fetches_added: 3u32,
 		}));
 
-		Egress::schedule_ethereum_ingress_fetch(vec![(Asset::Eth, 4u64)]);
+		Egress::schedule_ingress_fetch(vec![(ETH_ETH, 4u64)]);
 
 		assert_eq!(
 			EthereumScheduledRequests::<Test>::get(),
 			vec![
-				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 1u64, asset: Asset::Eth },
-				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 2u64, asset: Asset::Eth },
-				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 3u64, asset: Asset::Flip },
-				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 4u64, asset: Asset::Eth },
+				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 1u64, asset: ETH_ETH },
+				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 2u64, asset: ETH_ETH },
+				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 3u64, asset: ETH_FLIP },
+				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 4u64, asset: ETH_ETH },
 			]
 		);
 		System::assert_last_event(Event::Egress(crate::Event::IngressFetchesScheduled {
@@ -148,53 +138,25 @@ fn can_schedule_ethereum_ingress_fetch() {
 #[test]
 fn on_idle_can_send_batch_all() {
 	new_test_ext().execute_with(|| {
-		Egress::schedule_egress(ETH_ETH, 1_000, ForeignChainAddress::Eth(ALICE_ETH_ADDRESS));
-		Egress::schedule_egress(ETH_ETH, 2_000, ForeignChainAddress::Eth(ALICE_ETH_ADDRESS));
-		Egress::schedule_egress(ETH_ETH, 3_000, ForeignChainAddress::Eth(BOB_ETH_ADDRESS));
-		Egress::schedule_egress(ETH_ETH, 4_000, ForeignChainAddress::Eth(BOB_ETH_ADDRESS));
-		Egress::schedule_ethereum_ingress_fetch(vec![
-			(Asset::Eth, 1),
-			(Asset::Eth, 2),
-			(Asset::Eth, 3),
-			(Asset::Eth, 4),
+		Egress::schedule_egress(ETH_ETH, 1_000, ALICE_ETH_ADDRESS.into());
+		Egress::schedule_egress(ETH_ETH, 2_000, ALICE_ETH_ADDRESS.into());
+		Egress::schedule_egress(ETH_ETH, 3_000, BOB_ETH_ADDRESS.into());
+		Egress::schedule_egress(ETH_ETH, 4_000, BOB_ETH_ADDRESS.into());
+		Egress::schedule_ingress_fetch(vec![
+			(ETH_ETH, 1),
+			(ETH_ETH, 2),
+			(ETH_ETH, 3),
+			(ETH_ETH, 4),
 		]);
 
-		Egress::schedule_egress(ETH_FLIP, 5_000, ForeignChainAddress::Eth(ALICE_ETH_ADDRESS));
-		Egress::schedule_egress(ETH_FLIP, 6_000, ForeignChainAddress::Eth(ALICE_ETH_ADDRESS));
-		Egress::schedule_egress(ETH_FLIP, 7_000, ForeignChainAddress::Eth(BOB_ETH_ADDRESS));
-		Egress::schedule_egress(ETH_FLIP, 8_000, ForeignChainAddress::Eth(BOB_ETH_ADDRESS));
-		Egress::schedule_ethereum_ingress_fetch(vec![(Asset::Flip, 5)]);
-
-		assert!(LastEgressSent::get().is_empty());
+		Egress::schedule_egress(ETH_FLIP, 5_000, ALICE_ETH_ADDRESS.into());
+		Egress::schedule_egress(ETH_FLIP, 6_000, ALICE_ETH_ADDRESS.into());
+		Egress::schedule_egress(ETH_FLIP, 7_000, BOB_ETH_ADDRESS.into());
+		Egress::schedule_egress(ETH_FLIP, 8_000, BOB_ETH_ADDRESS.into());
+		Egress::schedule_ingress_fetch(vec![(ETH_FLIP, 5)]);
 
 		// Take all scheduled Egress and Broadcast as batch
 		Egress::on_idle(1, 1_000_000_000_000u64);
-
-		// The requests are processed FIFO
-		assert_eq!(
-			LastEgressSent::get(),
-			vec![
-				(ETHEREUM_ETH_ADDRESS, 1_000u128, ALICE_ETH_ADDRESS),
-				(ETHEREUM_ETH_ADDRESS, 2_000u128, ALICE_ETH_ADDRESS),
-				(ETHEREUM_ETH_ADDRESS, 3_000u128, BOB_ETH_ADDRESS),
-				(ETHEREUM_ETH_ADDRESS, 4_000u128, BOB_ETH_ADDRESS),
-				(ETHEREUM_FLIP_ADDRESS, 5_000u128, ALICE_ETH_ADDRESS),
-				(ETHEREUM_FLIP_ADDRESS, 6_000u128, ALICE_ETH_ADDRESS),
-				(ETHEREUM_FLIP_ADDRESS, 7_000u128, BOB_ETH_ADDRESS),
-				(ETHEREUM_FLIP_ADDRESS, 8_000u128, BOB_ETH_ADDRESS),
-			]
-		);
-
-		assert_eq!(
-			LastFetchesSent::get(),
-			vec![
-				(1u64, ETHEREUM_ETH_ADDRESS),
-				(2u64, ETHEREUM_ETH_ADDRESS),
-				(3u64, ETHEREUM_ETH_ADDRESS),
-				(4u64, ETHEREUM_ETH_ADDRESS),
-				(5u64, ETHEREUM_FLIP_ADDRESS),
-			]
-		);
 
 		System::assert_has_event(Event::Egress(crate::Event::EthereumBatchBroadcastRequested {
 			fetch_batch_size: 5u32,
@@ -208,20 +170,17 @@ fn on_idle_can_send_batch_all() {
 #[test]
 fn can_manually_send_batch_all() {
 	new_test_ext().execute_with(|| {
-		Egress::schedule_egress(ETH_ETH, 1_000, ForeignChainAddress::Eth(ALICE_ETH_ADDRESS));
-		Egress::schedule_ethereum_ingress_fetch(vec![(Asset::Eth, 1), (Asset::Flip, 2)]);
-		Egress::schedule_egress(ETH_ETH, 2_000, ForeignChainAddress::Eth(ALICE_ETH_ADDRESS));
-		Egress::schedule_egress(ETH_ETH, 3_000, ForeignChainAddress::Eth(BOB_ETH_ADDRESS));
-		Egress::schedule_egress(ETH_ETH, 4_000, ForeignChainAddress::Eth(BOB_ETH_ADDRESS));
+		Egress::schedule_egress(ETH_ETH, 1_000, ALICE_ETH_ADDRESS.into());
+		Egress::schedule_ingress_fetch(vec![(ETH_ETH, 1), (ETH_FLIP, 2)]);
+		Egress::schedule_egress(ETH_ETH, 2_000, ALICE_ETH_ADDRESS.into());
+		Egress::schedule_egress(ETH_ETH, 3_000, BOB_ETH_ADDRESS.into());
+		Egress::schedule_egress(ETH_ETH, 4_000, BOB_ETH_ADDRESS.into());
 
-		Egress::schedule_egress(ETH_FLIP, 5_000, ForeignChainAddress::Eth(ALICE_ETH_ADDRESS));
-		Egress::schedule_egress(ETH_FLIP, 6_000, ForeignChainAddress::Eth(ALICE_ETH_ADDRESS));
-		Egress::schedule_egress(ETH_FLIP, 7_000, ForeignChainAddress::Eth(BOB_ETH_ADDRESS));
-		Egress::schedule_egress(ETH_FLIP, 8_000, ForeignChainAddress::Eth(BOB_ETH_ADDRESS));
-		Egress::schedule_ethereum_ingress_fetch(vec![(Asset::Eth, 3), (Asset::Flip, 4)]);
-
-		LastEgressSent::set(vec![]);
-		LastFetchesSent::set(vec![]);
+		Egress::schedule_egress(ETH_FLIP, 5_000, ALICE_ETH_ADDRESS.into());
+		Egress::schedule_egress(ETH_FLIP, 6_000, ALICE_ETH_ADDRESS.into());
+		Egress::schedule_egress(ETH_FLIP, 7_000, BOB_ETH_ADDRESS.into());
+		Egress::schedule_egress(ETH_FLIP, 8_000, BOB_ETH_ADDRESS.into());
+		Egress::schedule_ingress_fetch(vec![(ETH_ETH, 3), (ETH_FLIP, 4)]);
 
 		// Send only 2 requests
 		assert_ok!(Egress::send_scheduled_batch_for_chain(
@@ -229,11 +188,6 @@ fn can_manually_send_batch_all() {
 			ForeignChain::Ethereum,
 			Some(2)
 		));
-		assert_eq!(
-			LastEgressSent::get(),
-			vec![(ETHEREUM_ETH_ADDRESS, 1000u128, ALICE_ETH_ADDRESS),]
-		);
-		assert_eq!(LastFetchesSent::get(), vec![(1u64, ETHEREUM_ETH_ADDRESS)]);
 		System::assert_has_event(Event::Egress(crate::Event::EthereumBatchBroadcastRequested {
 			fetch_batch_size: 1u32,
 			egress_batch_size: 1u32,
@@ -246,26 +200,7 @@ fn can_manually_send_batch_all() {
 			ForeignChain::Ethereum,
 			None
 		));
-		assert_eq!(
-			LastEgressSent::get(),
-			vec![
-				(ETHEREUM_ETH_ADDRESS, 2000u128, ALICE_ETH_ADDRESS),
-				(ETHEREUM_ETH_ADDRESS, 3000u128, BOB_ETH_ADDRESS),
-				(ETHEREUM_ETH_ADDRESS, 4000u128, BOB_ETH_ADDRESS),
-				(ETHEREUM_FLIP_ADDRESS, 5000u128, ALICE_ETH_ADDRESS),
-				(ETHEREUM_FLIP_ADDRESS, 6000u128, ALICE_ETH_ADDRESS),
-				(ETHEREUM_FLIP_ADDRESS, 7000u128, BOB_ETH_ADDRESS),
-				(ETHEREUM_FLIP_ADDRESS, 8000u128, BOB_ETH_ADDRESS),
-			]
-		);
-		assert_eq!(
-			LastFetchesSent::get(),
-			vec![
-				(2u64, ETHEREUM_FLIP_ADDRESS),
-				(3u64, ETHEREUM_ETH_ADDRESS),
-				(4u64, ETHEREUM_FLIP_ADDRESS)
-			]
-		);
+
 		System::assert_has_event(Event::Egress(crate::Event::EthereumBatchBroadcastRequested {
 			fetch_batch_size: 3u32,
 			egress_batch_size: 7u32,
@@ -278,28 +213,16 @@ fn can_manually_send_batch_all() {
 #[test]
 fn on_idle_batch_size_is_limited_by_weight() {
 	new_test_ext().execute_with(|| {
-		Egress::schedule_egress(ETH_ETH, 1_000, ForeignChainAddress::Eth(ALICE_ETH_ADDRESS));
-		Egress::schedule_egress(ETH_ETH, 2_000, ForeignChainAddress::Eth(ALICE_ETH_ADDRESS));
-		Egress::schedule_ethereum_ingress_fetch(vec![(Asset::Eth, 1), (Asset::Eth, 2)]);
-		Egress::schedule_egress(ETH_FLIP, 3_000, ForeignChainAddress::Eth(ALICE_ETH_ADDRESS));
-		Egress::schedule_egress(ETH_FLIP, 4_000, ForeignChainAddress::Eth(ALICE_ETH_ADDRESS));
-		Egress::schedule_egress(ETH_FLIP, 5_000, ForeignChainAddress::Eth(ALICE_ETH_ADDRESS));
-		Egress::schedule_ethereum_ingress_fetch(vec![(Asset::Flip, 3), (Asset::Flip, 4)]);
-
-		LastEgressSent::set(vec![]);
-		LastFetchesSent::set(vec![]);
+		Egress::schedule_egress(ETH_ETH, 1_000, ALICE_ETH_ADDRESS.into());
+		Egress::schedule_egress(ETH_ETH, 2_000, ALICE_ETH_ADDRESS.into());
+		Egress::schedule_ingress_fetch(vec![(ETH_ETH, 1), (ETH_ETH, 2)]);
+		Egress::schedule_egress(ETH_FLIP, 3_000, ALICE_ETH_ADDRESS.into());
+		Egress::schedule_egress(ETH_FLIP, 4_000, ALICE_ETH_ADDRESS.into());
+		Egress::schedule_egress(ETH_FLIP, 5_000, ALICE_ETH_ADDRESS.into());
+		Egress::schedule_ingress_fetch(vec![(ETH_FLIP, 3), (ETH_FLIP, 4)]);
 
 		// There's enough weights for 3 transactions, which are taken in FIFO order.
 		Egress::on_idle(1, <Test as crate::Config>::WeightInfo::send_ethereum_batch(3) + 1);
-
-		assert_eq!(LastFetchesSent::get(), vec![(1, ETHEREUM_ETH_ADDRESS)]);
-		assert_eq!(
-			LastEgressSent::get(),
-			vec![
-				(ETHEREUM_ETH_ADDRESS, 1000u128, ALICE_ETH_ADDRESS),
-				(ETHEREUM_ETH_ADDRESS, 2000u128, ALICE_ETH_ADDRESS),
-			]
-		);
 
 		System::assert_has_event(Event::Egress(crate::Event::EthereumBatchBroadcastRequested {
 			fetch_batch_size: 1u32,
@@ -309,14 +232,6 @@ fn on_idle_batch_size_is_limited_by_weight() {
 		// Send another 3 requests.
 		Egress::on_idle(1, <Test as crate::Config>::WeightInfo::send_ethereum_batch(3) + 1);
 
-		assert_eq!(
-			LastEgressSent::get(),
-			vec![
-				(ETHEREUM_FLIP_ADDRESS, 3000u128, ALICE_ETH_ADDRESS),
-				(ETHEREUM_FLIP_ADDRESS, 4000u128, ALICE_ETH_ADDRESS),
-			]
-		);
-		assert_eq!(LastFetchesSent::get(), vec![(2, ETHEREUM_ETH_ADDRESS)]);
 		System::assert_has_event(Event::Egress(crate::Event::EthereumBatchBroadcastRequested {
 			fetch_batch_size: 1u32,
 			egress_batch_size: 2u32,
@@ -326,12 +241,12 @@ fn on_idle_batch_size_is_limited_by_weight() {
 			EthereumScheduledRequests::<Test>::get(),
 			vec![
 				FetchOrTransfer::<Ethereum>::Transfer {
-					asset: Asset::Flip,
+					asset: ETH_FLIP,
 					amount: 5_000,
-					to: ALICE_ETH_ADDRESS,
+					to: ALICE_ETH_ADDRESS.into(),
 				},
-				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 3u64, asset: Asset::Flip },
-				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 4u64, asset: Asset::Flip },
+				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 3u64, asset: ETH_FLIP },
+				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 4u64, asset: ETH_FLIP },
 			]
 		);
 	});
@@ -350,38 +265,15 @@ fn on_idle_does_nothing_if_nothing_to_send() {
 		let asset = ETH_ETH;
 		assert_ok!(Egress::disable_asset_egress(Origin::root(), asset, true));
 
-		Egress::schedule_egress(asset, 1_000, ForeignChainAddress::Eth(ALICE_ETH_ADDRESS));
-		Egress::schedule_egress(asset, 2_000, ForeignChainAddress::Eth(ALICE_ETH_ADDRESS));
-		Egress::schedule_egress(asset, 3_000, ForeignChainAddress::Eth(ALICE_ETH_ADDRESS));
-		Egress::schedule_egress(asset, 4_000, ForeignChainAddress::Eth(ALICE_ETH_ADDRESS));
+		Egress::schedule_egress(asset, 1_000, ALICE_ETH_ADDRESS.into());
+		Egress::schedule_egress(asset, 2_000, ALICE_ETH_ADDRESS.into());
+		Egress::schedule_egress(asset, 3_000, ALICE_ETH_ADDRESS.into());
+		Egress::schedule_egress(asset, 4_000, ALICE_ETH_ADDRESS.into());
 		assert_eq!(
 			Egress::on_idle(1, 1_000_000_000_000_000u64),
 			<Test as crate::Config>::WeightInfo::send_ethereum_batch(0)
 		);
 
 		assert_eq!(EthereumScheduledRequests::<Test>::decode_len(), Some(4));
-	});
-}
-
-#[test]
-fn unsupported_assets_should_not_panic() {
-	new_test_ext().execute_with(|| {
-		// Dot and Usdc are not supported in the `MockEthAssetAddressProvider`.
-		EthereumScheduledRequests::<Test>::set(vec![
-			FetchOrTransfer::<Ethereum>::Transfer {
-				asset: Asset::Dot,
-				amount: 1_000,
-				to: ALICE_ETH_ADDRESS,
-			},
-			FetchOrTransfer::<Ethereum>::Fetch { intent_id: 0, asset: Asset::Usdc },
-		]);
-
-		// Unsupported items are ignored and does not panic
-		assert_eq!(
-			Egress::on_idle(1, 1_000_000_000_000_000u64),
-			<Test as crate::Config>::WeightInfo::send_ethereum_batch(0)
-		);
-
-		assert_eq!(EthereumScheduledRequests::<Test>::decode_len(), Some(0));
 	});
 }

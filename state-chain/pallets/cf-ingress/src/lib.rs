@@ -7,8 +7,7 @@
 // the respective address generation function.
 
 use cf_primitives::{
-	chains::assets, Asset, AssetAmount, ForeignChain, ForeignChainAddress, ForeignChainAsset,
-	IntentId,
+	chains::assets::eth, Asset, AssetAmount, ForeignChain, ForeignChainAddress, IntentId,
 };
 use cf_traits::{liquidity::LpProvisioningApi, AddressDerivationApi, IngressApi, IngressFetchApi};
 
@@ -32,7 +31,6 @@ pub mod pallet {
 
 	use super::*;
 	use cf_chains::Ethereum;
-	use cf_primitives::Asset;
 	use cf_traits::SwapIntentHandler;
 	use frame_support::{
 		pallet_prelude::{DispatchResultWithPostInfo, OptionQuery, ValueQuery},
@@ -55,14 +53,14 @@ pub mod pallet {
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	pub struct IngressDetails {
 		pub intent_id: IntentId,
-		pub ingress_asset: ForeignChainAsset,
+		pub ingress_asset: Asset,
 	}
 
 	/// Contains information relevant to the action to commence once ingress succeeds.
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	pub enum IntentAction<AccountId> {
 		Swap {
-			egress_asset: ForeignChainAsset,
+			egress_asset: Asset,
 			egress_address: ForeignChainAddress,
 			relayer_id: AccountId,
 			relayer_commission_bps: u16,
@@ -104,7 +102,7 @@ pub mod pallet {
 		/// Pallet responsible for managing Liquidity Providers.
 		type LpAccountHandler: LpProvisioningApi<AccountId = Self::AccountId, Amount = AssetAmount>;
 		/// For scheduling fetch requests.
-		type EthereumIngressFetchApi: IngressFetchApi<Ethereum>;
+		type IngressFetchApi: IngressFetchApi<Ethereum>;
 		/// For scheduling swaps.
 		type SwapIntentHandler: SwapIntentHandler<AccountId = Self::AccountId>;
 		/// Benchmark weights
@@ -117,7 +115,7 @@ pub mod pallet {
 		// We only want to witness for one asset on a particular chain
 		StartWitnessing {
 			ingress_address: ForeignChainAddress,
-			ingress_asset: ForeignChainAsset,
+			ingress_asset: Asset,
 		},
 
 		IngressCompleted {
@@ -156,7 +154,7 @@ pub mod pallet {
 
 impl<T: Config> Pallet<T> {
 	fn generate_new_address(
-		ingress_asset: ForeignChainAsset,
+		ingress_asset: Asset,
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
 		let next_intent_id = IntentIdCounter::<T>::get()
 			.checked_add(1)
@@ -173,28 +171,21 @@ impl<T: Config> Pallet<T> {
 		amount: u128,
 		tx_hash: sp_core::H256,
 	) -> DispatchResult {
-		ensure!(
-			matches!(asset, Asset::Eth | Asset::Flip | Asset::Usdc),
-			Error::<T>::UnsupportedAsset
-		);
 		let ingress =
 			IntentIngressDetails::<T>::get(ingress_address).ok_or(Error::<T>::InvalidIntent)?;
-		ensure!(ingress.ingress_asset.asset == asset, Error::<T>::IngressMismatchWithIntent);
+		ensure!(ingress.ingress_asset == asset, Error::<T>::IngressMismatchWithIntent);
 		// Ingress is called by witnessers, so asset/chain combination should always be valid.
 		if let (Ok(eth_asset), ForeignChainAddress::Eth(_)) =
-			(assets::eth::Asset::try_from(asset), ingress_address)
+			(eth::Asset::try_from(asset), ingress_address)
 		{
-			T::EthereumIngressFetchApi::schedule_ingress_fetch(vec![(
-				eth_asset,
-				ingress.intent_id,
-			)]);
+			T::IngressFetchApi::schedule_ingress_fetch(vec![(eth_asset, ingress.intent_id)]);
 		}
 		// NB: Don't take here. We should continue witnessing this address
 		// even after an ingress to it has occurred.
 		// https://github.com/chainflip-io/chainflip-eth-contracts/pull/226
 		match IntentActions::<T>::get(ingress_address).ok_or(Error::<T>::InvalidIntent)? {
 			IntentAction::LiquidityProvision { lp_account, .. } => {
-				match (ingress_address, ingress.ingress_asset.chain) {
+				match (ingress_address, ingress.ingress_asset.into()) {
 					(ForeignChainAddress::Eth(_), ForeignChain::Ethereum) => {
 						T::LpAccountHandler::provision_account(&lp_account, asset, amount)?;
 						Ok(())
@@ -208,7 +199,7 @@ impl<T: Config> Pallet<T> {
 				relayer_id,
 				relayer_commission_bps,
 			} => {
-				match (ingress_address, ingress.ingress_asset.chain) {
+				match (ingress_address, ingress.ingress_asset.into()) {
 					(ForeignChainAddress::Eth(_), ForeignChain::Ethereum) => {
 						T::SwapIntentHandler::schedule_swap(
 							asset,
@@ -235,7 +226,7 @@ impl<T: Config> IngressApi for Pallet<T> {
 	// This should be callable by the LP pallet.
 	fn register_liquidity_ingress_intent(
 		lp_account: Self::AccountId,
-		ingress_asset: ForeignChainAsset,
+		ingress_asset: Asset,
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
 		let (intent_id, ingress_address) = Self::generate_new_address(ingress_asset)?;
 
@@ -255,8 +246,8 @@ impl<T: Config> IngressApi for Pallet<T> {
 
 	// This should only be callable by the relayer.
 	fn register_swap_intent(
-		ingress_asset: ForeignChainAsset,
-		egress_asset: ForeignChainAsset,
+		ingress_asset: Asset,
+		egress_asset: Asset,
 		egress_address: ForeignChainAddress,
 		relayer_commission_bps: u16,
 		relayer_id: T::AccountId,

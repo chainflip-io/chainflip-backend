@@ -12,7 +12,7 @@ pub trait SwapIntentHandler {
 	type AccountId;
 	fn schedule_swap(
 		from: Asset,
-		to: ForeignChainAsset,
+		to: Asset,
 		amount: AssetAmount,
 		egress_address: ForeignChainAddress,
 		relayer_id: Self::AccountId,
@@ -169,7 +169,7 @@ pub trait AmmPoolApi {
 
 	fn swap(
 		from: Asset,
-		to: ForeignChainAsset,
+		to: Asset,
 		swap_input: Self::Balance,
 		fee: u16,
 	) -> (Self::Balance, (Asset, Self::Balance));

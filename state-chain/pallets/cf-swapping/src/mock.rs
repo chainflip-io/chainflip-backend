@@ -85,7 +85,7 @@ impl IngressApi for MockIngress {
 
 	fn register_liquidity_ingress_intent(
 		_lp_account: Self::AccountId,
-		_ingress_asset: ForeignChainAsset,
+		_ingress_asset: Asset,
 	) -> Result<(u64, cf_primitives::ForeignChainAddress), sp_runtime::DispatchError> {
 		Ok((0, ForeignChainAddress::Eth(Default::default())))
 	}
@@ -184,7 +184,7 @@ impl pallet_cf_swapping::Config for Test {
 	type Event = Event;
 	type AccountRoleRegistry = ();
 	type Ingress = MockIngress;
-	type EthereumEgress = MockEgressApi;
+	type Egress = MockEgressApi;
 	type AmmPoolApi = MockAmmPoolApi;
 	type WeightInfo = ();
 }
