@@ -709,12 +709,11 @@ pub mod pallet {
 
 			KeygenResponseTimeout::<T, I>::put(self.keygen_response_timeout);
 
-			let current_epoch = CurrentEpochIndex::<T>::get();
-			Vaults::<T, I>::insert(
-				current_epoch,
-				Vault { public_key, active_from_block: self.deployment_block },
+			Pallet::<T, I>::set_vault_for_epoch(
+				CurrentEpochIndex::<T>::get(),
+				public_key,
+				self.deployment_block,
 			);
-			CurrentKeyholdersEpoch::<T, I>::put(current_epoch);
 		}
 	}
 }
@@ -724,16 +723,20 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		new_public_key: AggKeyFor<T, I>,
 		rotated_at_block_number: ChainBlockNumberFor<T, I>,
 	) {
-		let next_epoch = CurrentEpochIndex::<T>::get().saturating_add(1);
-		Vaults::<T, I>::insert(
-			next_epoch,
-			Vault {
-				public_key: new_public_key,
-				active_from_block: rotated_at_block_number
-					.saturating_add(ChainBlockNumberFor::<T, I>::one()),
-			},
+		Self::set_vault_for_epoch(
+			CurrentEpochIndex::<T>::get().saturating_add(1),
+			new_public_key,
+			rotated_at_block_number.saturating_add(ChainBlockNumberFor::<T, I>::one()),
 		);
-		CurrentKeyholdersEpoch::<T, I>::put(next_epoch);
+	}
+
+	fn set_vault_for_epoch(
+		epoch: EpochIndex,
+		new_public_key: AggKeyFor<T, I>,
+		active_from_block: ChainBlockNumberFor<T, I>,
+	) {
+		Vaults::<T, I>::insert(epoch, Vault { public_key: new_public_key, active_from_block });
+		CurrentKeyholdersEpoch::<T, I>::put(epoch);
 	}
 
 	// Once we've successfully generated the key, we want to do a signing ceremony to verify that
