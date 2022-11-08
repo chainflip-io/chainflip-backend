@@ -1,6 +1,10 @@
 use crate::{self as pallet_cf_lp};
 use cf_traits::{
-	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
+	impl_mock_stake_transfer,
+	mocks::{
+		bid_info::MockBidInfo, ensure_origin_mock::NeverFailingOriginCheck,
+		system_state_info::MockSystemStateInfo,
+	},
 	AddressDerivationApi, EgressApi, SwapIntentHandler,
 };
 use frame_support::{parameter_types, sp_runtime::app_crypto::sp_core::H160};
@@ -118,8 +122,12 @@ impl cf_traits::Chainflip for Test {
 	type SystemState = MockSystemStateInfo;
 }
 
+impl_mock_stake_transfer!(u64, u128);
+
 impl pallet_cf_account_roles::Config for Test {
 	type Event = Event;
+	type MinBidInfo = MockBidInfo;
+	type StakeManager = MockStakeHandler;
 	type WeightInfo = ();
 }
 

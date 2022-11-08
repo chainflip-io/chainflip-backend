@@ -709,3 +709,10 @@ pub trait IngressFetchApi {
 impl IngressFetchApi for () {
 	fn schedule_ethereum_ingress_fetch(_fetch_details: Vec<(Asset, IntentId)>) {}
 }
+
+/// Provides information about current bids.
+pub trait BidInfo {
+	type Balance;
+	/// Returns the smallest of all backup validator bids.
+	fn get_min_backup_bid() -> Self::Balance;
+}

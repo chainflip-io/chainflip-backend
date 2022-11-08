@@ -5,8 +5,9 @@ use cf_chains::{
 };
 use cf_primitives::{AuthorityCount, CeremonyId};
 use cf_traits::{
-	impl_mock_waived_fees, mocks::system_state_info::MockSystemStateInfo, AsyncResult,
-	ThresholdSigner, WaivedFees,
+	impl_mock_stake_transfer, impl_mock_waived_fees,
+	mocks::{bid_info::MockBidInfo, system_state_info::MockSystemStateInfo},
+	AsyncResult, ThresholdSigner, WaivedFees,
 };
 use frame_support::{dispatch::DispatchResultWithPostInfo, parameter_types, traits::ConstU64};
 use sp_runtime::{
@@ -32,6 +33,8 @@ use cf_traits::{
 
 impl pallet_cf_account_roles::Config for Test {
 	type Event = Event;
+	type MinBidInfo = MockBidInfo;
+	type StakeManager = MockStakeHandler;
 	type WeightInfo = ();
 }
 

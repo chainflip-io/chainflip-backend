@@ -13,10 +13,11 @@ pub mod weights;
 use weights::WeightInfo;
 
 use cf_primitives::AccountRole;
-use cf_traits::{AccountRoleRegistry, Chainflip, QualifyNode};
+use cf_traits::{AccountRoleRegistry, BidInfo, Chainflip, QualifyNode};
 use frame_support::{
 	error::BadOrigin,
 	pallet_prelude::DispatchResult,
+	sp_runtime::traits::CheckedDiv,
 	traits::{EnsureOrigin, IsType, OnKilledAccount, OnNewAccount},
 };
 use frame_system::{ensure_signed, pallet_prelude::OriginFor, RawOrigin};
@@ -36,14 +37,9 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// The Flip token implementation.
-		type StakeManager: StakeTransfer<
-			AccountId = <Self as frame_system::Config>::AccountId,
-			Balance = Self::Amount,
-		>;
+		type StakeManager: StakeTransfer<AccountId = Self::AccountId, Balance = Self::Amount>;
 
-		/// The minimum required stake for the validator role.
-		#[pallet::constant]
-		type MinimumStake: Get<Self::Amount>;
+		type MinBidInfo: BidInfo<Balance = Self::Amount>;
 
 		/// Weights.
 		type WeightInfo: WeightInfo;
@@ -99,7 +95,10 @@ pub mod pallet {
 			let who: T::AccountId = ensure_signed(origin)?;
 			if role == AccountRole::Validator {
 				ensure!(
-					T::StakeManager::staked_balance(&who) >= T::MinimumStake::get(),
+					T::StakeManager::staked_balance(&who) >=
+						T::MinBidInfo::get_min_backup_bid()
+							.checked_div(&T::Amount::from(2_u32))
+							.unwrap(),
 					Error::<T>::NotEnoughStake
 				);
 			}

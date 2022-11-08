@@ -19,6 +19,7 @@ use cf_chains::{
 	eth,
 	eth::{api::register_claim::RegisterClaim, Ethereum},
 };
+use pallet_cf_validator::BidInfoProvider;
 
 pub use frame_support::{
 	construct_runtime, debug,
@@ -252,7 +253,7 @@ impl pallet_cf_egress::Config for Runtime {
 impl pallet_cf_account_roles::Config for Runtime {
 	type Event = Event;
 	type StakeManager = Flip;
-	type MinimumStake = ConstU128<500>;
+	type MinBidInfo = BidInfoProvider<Runtime>;
 	type WeightInfo = pallet_cf_account_roles::weights::PalletWeight<Runtime>;
 }
 

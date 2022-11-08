@@ -20,8 +20,8 @@ mod rotation_state;
 pub use auction_resolver::*;
 use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex};
 use cf_traits::{
-	offence_reporting::OffenceReporter, AsyncResult, AuctionOutcome, Bid, BidderProvider, Bonding,
-	Chainflip, EmergencyRotation, EpochInfo, EpochTransitionHandler, ExecutionCondition,
+	offence_reporting::OffenceReporter, AsyncResult, AuctionOutcome, Bid, BidInfo, BidderProvider,
+	Bonding, Chainflip, EmergencyRotation, EpochInfo, EpochTransitionHandler, ExecutionCondition,
 	HistoricalEpoch, MissedAuthorshipSlots, QualifyNode, ReputationResetter, StakeHandler,
 	SystemStateInfo, VaultRotator,
 };
@@ -1189,6 +1189,17 @@ impl<T: Config> Pallet<T> {
 }
 
 pub struct EpochHistory<T>(PhantomData<T>);
+
+pub struct BidInfoProvider<T>(PhantomData<T>);
+
+impl<T: Config> BidInfo for BidInfoProvider<T> {
+	type Balance = T::Amount;
+	fn get_min_backup_bid() -> Self::Balance {
+		let backups = Backups::<T>::get();
+		let lowest_bid = backups.into_iter().map(|(_, amount)| amount).min();
+		lowest_bid.unwrap()
+	}
+}
 
 impl<T: Config> HistoricalEpoch for EpochHistory<T> {
 	type ValidatorId = ValidatorIdOf<T>;
