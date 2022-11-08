@@ -303,6 +303,7 @@ jobs:
       artifacts: chainflip-backend-packages-sandstorm
       version: ci/${{ needs.set-variables.outputs.commit_hash }}/
       environment: dev
+      commit_hash: ${{ needs.set-variables.outputs.commit_hash }}
     secrets: inherit
 
   deb-publish-ibiza:
@@ -313,4 +314,5 @@ jobs:
       artifacts: chainflip-backend-packages-ibiza
       version: ci/ibiza/${{ needs.set-variables.outputs.commit_hash }}/
       environment: dev
+      commit_hash: ${{ needs.set-variables.outputs.commit_hash }}
     secrets: inherit

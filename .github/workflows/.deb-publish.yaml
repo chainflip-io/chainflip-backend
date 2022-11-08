@@ -14,6 +14,10 @@ on:
         description: prod or dev repo
         required: true
         type: string
+      commit_hash:
+        description: prod or dev repo
+        required: true
+        type: string
 
 env:
   APTLY_VERSION: '1.5.0'
@@ -83,7 +87,7 @@ jobs:
             echo "GPG_KEY_ID=${{ steps.import_gpg_prod.outputs.keyid }}" >> $GITHUB_ENV
           else
             echo "REPO_BUCKET=apt.aws.chainflip.xyz" >> $GITHUB_ENV
-            echo "USER_PASS_PREFIX='{user}:{pass}@'" >> $GITHUB_ENV
+            echo "USER_PASS_PREFIX={user}:{pass}@" >> $GITHUB_ENV
             echo "GPG_KEY_ID=${{ steps.import_gpg_dev.outputs.keyid }}" >> $GITHUB_ENV
           fi
 
@@ -127,7 +131,7 @@ jobs:
           echo "sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys ${GPG_KEY_ID}" >> $GITHUB_STEP_SUMMARY
           echo "echo \"deb https://${USER_PASS_PREFIX}${REPO_BUCKET}/${{ inputs.version }} ${{ steps.vars.outputs.codename }} main\"  | sudo tee /etc/apt/sources.list.d/chainflip.list" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          echo "You can find the basic auth credentials in 1Password under \`apt repo basic auth\` secret" >> $GITHUB_STEP_SUMMARY
+          echo "When importing from the internal dev repo, you can find the basic auth credentials in 1Password under \`apt repo basic auth\` secret" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "After these steps, run *apt update* and install the desired packages" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
@@ -136,5 +140,9 @@ jobs:
           echo "apt install chainflip-node" >> $GITHUB_STEP_SUMMARY
           echo "apt install chainflip-engine" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+      - name: Testnet tools summary
+        if: inputs.environment == 'dev'
+        run: |
           echo "### Usage in \`testnet-tools\`" >> $GITHUB_STEP_SUMMARY
           echo "Use the full commit hash: \`${{ inputs.commit_hash }}\` for your network configuration. " >> $GITHUB_STEP_SUMMARY
