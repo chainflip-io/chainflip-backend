@@ -127,7 +127,7 @@ jobs:
       - name: Upload packages
         uses: actions/upload-artifact@v3
         with:
-          name: chainflip-backend-packages
+          name: chainflip-backend-packages-sandstorm
           path: target/debian/*.deb
       - name: Upload binary artifacts
         uses: actions/upload-artifact@v3
@@ -300,9 +300,9 @@ jobs:
     needs: [set-variables, build-and-test]
     uses: ./.github/workflows/.deb-publish.yaml
     with:
-      s3-prefix: ci
-      artifacts: chainflip-backend-packages
-      commit_hash: ${{ needs.set-variables.outputs.commit_hash }}
+      artifacts: chainflip-backend-packages-sandstorm
+      version: ci/${{ needs.set-variables.outputs.commit_hash }}/
+      environment: dev
     secrets: inherit
 
   deb-publish-ibiza:
@@ -310,7 +310,7 @@ jobs:
     needs: [set-variables, build-ibiza]
     uses: ./.github/workflows/.deb-publish.yaml
     with:
-      s3-prefix: ci/ibiza
       artifacts: chainflip-backend-packages-ibiza
-      commit_hash: ${{ needs.set-variables.outputs.commit_hash }}
+      version: ci/ibiza/${{ needs.set-variables.outputs.commit_hash }}/
+      environment: dev
     secrets: inherit

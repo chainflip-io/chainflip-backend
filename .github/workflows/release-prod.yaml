@@ -1,0 +1,90 @@
+name: Release production binaries
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        type: string
+        description: Semver release tag
+        required: true
+
+jobs:
+  set-variables:
+    runs-on: ubuntu-latest
+    outputs:
+      commit_hash: ${{ steps.commit_hash.outputs.commit_hash }}
+      branch_name: ${{ steps.branch_name.outputs.branch_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - id: commit_hash
+        run: |
+          COMMIT_HASH=$(git rev-parse --verify HEAD)
+          echo "commit_hash=$COMMIT_HASH" >> $GITHUB_OUTPUT
+      - id: branch_name
+        run: |
+          BRANCH_NAME=$(git rev-parse --abbrev-ref HEAD)
+          echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+
+  build-and-test:
+    name: Build and test production binaries
+    runs-on: [hetzner]
+    needs: [set-variables, cargo-fmt]
+    container:
+      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08-no-sccache'
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    env:
+      COMMIT_HASH: ${{ needs.set-variables.outputs.commit_hash }}
+      BRANCH_NAME: ${{ needs.set-variables.outputs.branch_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Update APT
+        run: apt update
+      - name: cargo ci-build
+        run: |
+          cargo ci-build --locked
+          # sccache --show-stats
+      - name: cargo ci-test --locked
+        run: |
+          cargo ci-test --locked
+          # sccache --show-stats
+      - name: Install cargo-deb
+        run: cargo install cargo-deb
+
+      - name: Build packages
+        run: |
+          cargo deb --no-build --no-strip -p chainflip-engine --deb-revision "${{ inputs.version }}"
+          cargo deb --no-build --no-strip -p chainflip-cli --deb-revision "${{ inputs.version }}"
+          cargo deb --no-build --no-strip -p chainflip-node --deb-revision "${{ inputs.version }}"
+          cargo deb --no-build --no-strip -p generate-genesis-keys --deb-revision "${{ inputs.version }}"
+      - name: Upload packages
+        uses: actions/upload-artifact@v3
+        with:
+          name: chainflip-backend-packages-prod
+          path: target/debian/*.deb
+      - name: Upload binary artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: chainflip-backend-bin
+          path: |
+            ./target/release/chainflip-node
+            ./target/release/chainflip-engine
+            ./target/release/chainflip-cli
+            ./target/release/generate-genesis-keys
+            ./target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm
+      - name: Check if building changes any files
+        run: |
+          git diff --exit-code
+          git diff --cached --exit-code
+
+  deb-publish-prod:
+    name: Publish Packages to APT repo
+    needs: [set-variables, build-and-test]
+    uses: ./.github/workflows/.deb-publish.yaml
+    with:
+      artifacts: chainflip-backend-packages-prod
+      version: ""
+      environment: prod
+    secrets: inherit

@@ -1,0 +1,18 @@
+{
+    "chainflip-prod": {
+      "region": "eu-central-1",
+      "bucket": "repo.chainflip.xyz",
+      "endpoint": "",
+      "awsAccessKeyID": "",
+      "awsSecretAccessKey": "",
+      "awsSessionToken": "",
+      "prefix": "",
+      "acl": "public-read",
+      "storageClass": "",
+      "encryptionMethod": "",
+      "plusWorkaround": false,
+      "disableMultiDel": false,
+      "forceSigV2": false,
+      "debug": false
+    }
+  }
