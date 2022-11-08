@@ -1,11 +1,9 @@
-use std::collections::HashMap;
-
-use cf_primitives::AccountRole;
+use chainflip_api::primitives::{AccountRole, Hash, ProposalId};
 use chainflip_engine::settings::{CfSettings, Eth, EthOptions, StateChain, StateChainOptions};
 use clap::Parser;
 use config::{ConfigError, Source, Value};
-use pallet_cf_governance::ProposalId;
 use serde::Deserialize;
+use std::collections::HashMap;
 
 #[derive(Parser, Clone, Debug)]
 pub struct CLICommandLineOptions {
@@ -82,7 +80,7 @@ pub enum CFCommand {
 	#[clap(about = "Submit a query to the State Chain")]
 	Query {
 		#[clap(help = "Block hash to be queried")]
-		block_hash: state_chain_runtime::Hash,
+		block_hash: Hash,
 	},
 	#[clap(
         // this is only useful for testing. No need to show to the end user.
