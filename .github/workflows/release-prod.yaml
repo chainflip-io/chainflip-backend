@@ -81,4 +81,5 @@ jobs:
       artifacts: chainflip-backend-packages-prod
       version: "perseverance/"
       environment: prod
+      commit_hash: ${{ needs.set-variables.outputs.commit_hash }}
     secrets: inherit
