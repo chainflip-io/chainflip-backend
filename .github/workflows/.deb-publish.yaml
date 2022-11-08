@@ -105,12 +105,12 @@ jobs:
       - name: Publish prod
         if: inputs.environment == 'prod'
         run: |
-          aptly publish -gpg-key=${{ steps.import_gpg_prod.outputs.keyid }} -distribution=${{ steps.vars.outputs.codename }} snapshot -force-overwrite snap "s3:chainflip-${{ inputs.environment }}:${{ inputs.version }}"
+          aptly publish -gpg-key=${{ steps.import_gpg_prod.outputs.keyid }} -passphrase=${{ secrets.CF_PROD_PGP_KEY_PASSPHRASE }} -distribution=${{ steps.vars.outputs.codename }} snapshot -force-overwrite snap "s3:chainflip-${{ inputs.environment }}:${{ inputs.version }}"
 
       - name: Publish dev
         if: inputs.environment == 'dev'
         run: |
-          aptly publish -gpg-key=${{ steps.import_gpg_dev.outputs.keyid }} -passphrase=${{ secrets.CF_PROD_PGP_KEY_PASSPHRASE }} -distribution=${{ steps.vars.outputs.codename }} snapshot -force-overwrite snap "s3:chainflip-${{ inputs.environment }}:${{ inputs.version }}"
+          aptly publish -gpg-key=${{ steps.import_gpg_dev.outputs.keyid }} -distribution=${{ steps.vars.outputs.codename }} snapshot -force-overwrite snap "s3:chainflip-${{ inputs.environment }}:${{ inputs.version }}"
 
       - name: Set Summary Title
         if: ${{ contains(inputs.artifacts, 'prod') }}
