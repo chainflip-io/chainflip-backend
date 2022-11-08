@@ -7,7 +7,7 @@ use crate::dot::{
 	PolkadotProxyType, PolkadotReplayProtection, PolkadotRuntimeCall, ProxyCall, UtilityCall,
 };
 
-use crate::{ApiCall, ChainAbi, ChainCrypto, FetchAssetParams, TransferAssetParams};
+use crate::{ApiCall, ChainCrypto, FetchAssetParams, TransferAssetParams};
 
 use sp_runtime::RuntimeDebug;
 
@@ -108,7 +108,7 @@ impl ApiCall<Polkadot> for BatchFetchAndTransfer {
 		self
 	}
 
-	fn chain_encoded(&self) -> <Polkadot as ChainAbi>::SignedTransaction {
+	fn chain_encoded(&self) -> Vec<u8> {
 		self.extrinsic_handler.signed_extrinsic.clone().unwrap().encode()
 	}
 
@@ -188,7 +188,7 @@ mod test_batch_fetch {
 
 		let batch_fetch_api = batch_fetch_api
 			.clone()
-			.signed(&keypair_proxy.sign(&batch_fetch_api.threshold_signature_payload()));
+			.signed(&keypair_proxy.sign(&batch_fetch_api.threshold_signature_payload().0));
 		assert!(batch_fetch_api.is_signed());
 
 		println!("encoded extrinsic: 0x{}", hex::encode(batch_fetch_api.chain_encoded()));
