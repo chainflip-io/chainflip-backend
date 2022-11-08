@@ -570,8 +570,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Initiate a new signature request, returning the request id.
 	fn inner_request_signature(
 		payload: PayloadFor<T, I>,
-		key_id: Option<<T as Chainflip>::KeyId>,
-		participants: Option<BTreeSet<T::ValidatorId>>,
+		key_and_participants: Option<(<T as Chainflip>::KeyId, BTreeSet<T::ValidatorId>)>,
 		retry_policy: RetryPolicy,
 	) -> (RequestId, CeremonyId) {
 		// Get a new request id.
@@ -579,6 +578,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			*id += 1;
 			*id
 		});
+
+		let (key_id, participants) = if let Some((key_id, participants)) = key_and_participants {
+			(Some(key_id), Some(participants))
+		} else {
+			(None, None)
+		};
 
 		// Start a ceremony.
 		let ceremony_id =
@@ -728,7 +733,7 @@ where
 	type ValidatorId = T::ValidatorId;
 
 	fn request_signature(payload: PayloadFor<T, I>) -> Self::RequestId {
-		Self::inner_request_signature(payload, None, None, RetryPolicy::Always).0
+		Self::inner_request_signature(payload, None, RetryPolicy::Always).0
 	}
 
 	fn register_callback(
@@ -760,6 +765,6 @@ where
 		payload: <T::TargetChain as ChainCrypto>::Payload,
 		retry_policy: RetryPolicy,
 	) -> (Self::RequestId, CeremonyId) {
-		Self::inner_request_signature(payload, Some(key_id), Some(participants), retry_policy)
+		Self::inner_request_signature(payload, Some((key_id, participants)), retry_policy)
 	}
 }
