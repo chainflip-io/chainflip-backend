@@ -82,7 +82,7 @@ pub async fn request_block(
 }
 
 pub async fn request_claim(
-	amount: f64,
+	atomic_amount: u128,
 	eth_address: [u8; 20],
 	state_chain_settings: &settings::StateChain,
 	eth_settings: &settings::Eth,
@@ -96,21 +96,6 @@ pub async fn request_claim(
 	if state_chain_client.is_auction_phase().await? {
 		bail!("We are currently in an auction phase. Please wait until the auction phase is over.");
 	}
-
-	let atomic_amount: u128 = (amount * 10_f64.powi(18)) as u128;
-
-	println!(
-		"Submitting claim with amount `{}` FLIP (`{}` Flipperinos) to ETH address `0x{}`.",
-		amount,
-		atomic_amount,
-		hex::encode(eth_address)
-	);
-
-	if !confirm_submit() {
-		return Ok(())
-	}
-
-	// Do the claim
 
 	let tx_hash = state_chain_client
 		.submit_signed_extrinsic(
@@ -234,15 +219,6 @@ pub async fn register_account_role(
 ) -> Result<()> {
 	let (_, _, state_chain_client) =
 		connect_to_state_chain(state_chain_settings, false, logger).await?;
-
-	println!(
-        "Submtting `register-account-role` with role: {:?}. This cannot be reversed for your account.",
-        role
-    );
-
-	if !confirm_submit() {
-		return Ok(())
-	}
 
 	let tx_hash = state_chain_client
 		.submit_signed_extrinsic(
@@ -386,29 +362,4 @@ pub async fn set_vanity_name(
 		.expect("Could not set vanity name for your account");
 	println!("Vanity name set at tx {:#x}.", tx_hash);
 	Ok(())
-}
-
-fn confirm_submit() -> bool {
-	use std::{io, io::*};
-
-	loop {
-		print!("Do you wish to proceed? [y/n] > ");
-		std::io::stdout().flush().unwrap();
-		let mut input = String::new();
-		io::stdin().read_line(&mut input).expect("Error: Failed to get user input");
-
-		let input = input.trim();
-
-		match input {
-			"y" | "yes" | "1" | "true" | "ofc" => {
-				println!("Submitting...");
-				return true
-			},
-			"n" | "no" | "0" | "false" | "nah" => {
-				println!("Ok, exiting...");
-				return false
-			},
-			_ => continue,
-		}
-	}
 }

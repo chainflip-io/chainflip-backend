@@ -1,3 +1,4 @@
+use api::primitives::AccountRole;
 use chainflip_api as api;
 use clap::Parser;
 use settings::{CLICommandLineOptions, CLISettings};
@@ -37,8 +38,7 @@ async fn run_cli() -> Result<()> {
 	match command_line_opts.cmd {
 		Claim { amount, eth_address, should_register_claim } =>
 			request_claim(amount, &eth_address, &cli_settings, should_register_claim, &logger).await,
-		RegisterAccountRole { role } =>
-			api::register_account_role(role, &cli_settings.state_chain, &logger).await,
+		RegisterAccountRole { role } => register_account_role(role, &cli_settings, &logger).await,
 		Rotate {} => api::rotate_keys(&cli_settings.state_chain, &logger).await,
 		Retire {} => api::retire_account(&cli_settings.state_chain, &logger).await,
 		Activate {} => api::activate_account(&cli_settings.state_chain, &logger).await,
@@ -46,6 +46,23 @@ async fn run_cli() -> Result<()> {
 		VanityName { name } => api::set_vanity_name(name, &cli_settings.state_chain, &logger).await,
 		ForceRotation { id } => api::force_rotation(id, &cli_settings.state_chain, &logger).await,
 	}
+}
+
+async fn register_account_role(
+	role: AccountRole,
+	settings: &settings::CLISettings,
+	logger: &slog::Logger,
+) -> Result<()> {
+	println!(
+        "Submitting `register-account-role` with role: {:?}. This cannot be reversed for your account.",
+        role
+    );
+
+	if !confirm_submit() {
+		return Ok(())
+	}
+
+	api::register_account_role(role, &settings.state_chain, &logger).await
 }
 
 async fn request_claim(
@@ -67,8 +84,21 @@ async fn request_claim(
 			}
 		)?;
 
-	api::request_claim(
+	let atomic_amount: u128 = (amount * 10_f64.powi(18)) as u128;
+
+	println!(
+		"Submitting claim with amount `{}` FLIP (`{}` Flipperinos) to ETH address `0x{}`.",
 		amount,
+		atomic_amount,
+		hex::encode(eth_address)
+	);
+
+	if !confirm_submit() {
+		return Ok(())
+	}
+
+	api::request_claim(
+		atomic_amount,
 		eth_address,
 		&settings.state_chain,
 		&settings.eth,
@@ -76,4 +106,29 @@ async fn request_claim(
 		logger,
 	)
 	.await
+}
+
+fn confirm_submit() -> bool {
+	use std::{io, io::*};
+
+	loop {
+		print!("Do you wish to proceed? [y/n] > ");
+		std::io::stdout().flush().unwrap();
+		let mut input = String::new();
+		io::stdin().read_line(&mut input).expect("Error: Failed to get user input");
+
+		let input = input.trim();
+
+		match input {
+			"y" | "yes" | "1" | "true" | "ofc" => {
+				println!("Submitting...");
+				return true
+			},
+			"n" | "no" | "0" | "false" | "nah" => {
+				println!("Ok, exiting...");
+				return false
+			},
+			_ => continue,
+		}
+	}
 }
