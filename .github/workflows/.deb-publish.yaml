@@ -71,6 +71,7 @@ jobs:
         uses: crazy-max/ghaction-import-gpg@v5
         with:
           gpg_private_key: ${{ secrets.CF_PROD_PGP_KEY }}
+          passphrase: ${{ secrets.CF_PROD_PGP_KEY_PASSPHRASE }}
 
       - name: Import dev GPG package signing key
         id: import_gpg_dev
