@@ -6,6 +6,10 @@ on:
         description: 'Which Commit SHA should we get the binaries from?'
         required: true
         type: string
+      base_branch_name:
+        description: 'Which Branch should the Results PR be opened against?'
+        required: true
+        type: string
       release:
         description: 'Which release to use? Sandstorm or Ibiza?'
         required: false
@@ -14,13 +18,13 @@ on:
       steps:
         description: 'How many steps should we run?'
         required: false
-        type: number
-        default: 20
+        type: string
+        default: "20"
       repetitions:
         description: 'How many times should we repeat each step?'
         required: false
-        type: number
-        default: 10
+        type: string
+        default: "10"
       benchmark_machine_spec:
         description: 'What machine Spec the benchmark will run on?'
         required: true
@@ -80,7 +84,7 @@ jobs:
       - name: Make a pull request with the changed weight files
         uses: peter-evans/create-pull-request@v4
         with:
-          base: develop
+          base: ${{ inputs.base_branch_name }}
           title: '[AUTOMATED] Benchmark results'
           commit-message: '[AUTOMATED] Benchmarking results.'
           body: 'This pull request was opened automatically. Close it if you think it was opened in error.'
