@@ -31,3 +31,10 @@ frame-system = {git = 'https://github.com/chainflip-io/substrate.git', tag = 'ch
 sp-consensus-aura = {git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2022-06+01'}
 sp-core = {git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2022-06+01'}
 sp-finality-grandpa = {git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2022-06+01'}
+
+[features]
+ibiza = [
+    'cf-chains/ibiza',
+    'chainflip-node/ibiza',
+	'chainflip-engine/ibiza',
+]
