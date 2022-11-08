@@ -42,15 +42,6 @@ jobs:
         run: |
           echo "codename=$(lsb_release -c -s)" >> $GITHUB_OUTPUT
 
-      - name: Set environment
-        run: |
-          if [[ '${{ inputs.environment }}' == 'prod' ]]; then
-            echo "REPO_BUCKET=repo.chainflip.io" >> $GITHUB_ENV
-            echo "USER_PASS_PREFIX=" >> $GITHUB_ENV
-          else
-            echo "REPO_BUCKET=apt.aws.chainflip.xyz" >> $GITHUB_ENV
-            echo "USER_PASS_PREFIX='{user}:{pass}@'" >> $GITHUB_ENV
-          fi
 
       - name: Install Aptly and dependencies
         run: |
@@ -83,6 +74,18 @@ jobs:
         uses: crazy-max/ghaction-import-gpg@v5
         with:
           gpg_private_key: ${{ secrets.CF_DEV_PGP_KEY }}
+
+      - name: Set environment
+        run: |
+          if [[ '${{ inputs.environment }}' == 'prod' ]]; then
+            echo "REPO_BUCKET=repo.chainflip.io" >> $GITHUB_ENV
+            echo "USER_PASS_PREFIX=" >> $GITHUB_ENV
+            echo "GPG_KEY_ID=${{ steps.import_gpg_prod.outputs.keyid }}" >> $GITHUB_ENV
+          else
+            echo "REPO_BUCKET=apt.aws.chainflip.xyz" >> $GITHUB_ENV
+            echo "USER_PASS_PREFIX='{user}:{pass}@'" >> $GITHUB_ENV
+            echo "GPG_KEY_ID=${{ steps.import_gpg_dev.outputs.keyid }}" >> $GITHUB_ENV
+          fi
 
       - name: List keys
         run: gpg -K
@@ -121,7 +124,7 @@ jobs:
           echo "Packages can be installed with the following commands: " >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-          echo "sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys ${{ steps.import_gpg.outputs.keyid }}" >> $GITHUB_STEP_SUMMARY
+          echo "sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys ${GPG_KEY_ID}" >> $GITHUB_STEP_SUMMARY
           echo "echo \"deb https://${USER_PASS_PREFIX}${REPO_BUCKET}/${{ inputs.version }} ${{ steps.vars.outputs.codename }} main\"  | sudo tee /etc/apt/sources.list.d/chainflip.list" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           echo "You can find the basic auth credentials in 1Password under \`apt repo basic auth\` secret" >> $GITHUB_STEP_SUMMARY
