@@ -23,7 +23,7 @@ jobs:
   build-and-test:
     name: Build and test production binaries
     runs-on: [hetzner]
-    needs: [set-variables, cargo-fmt]
+    needs: [set-variables]
     container:
       image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08-no-sccache'
       credentials:
@@ -81,4 +81,5 @@ jobs:
       artifacts: chainflip-backend-packages-prod
       version: "perseverance/"
       environment: prod
+      commit_hash: ${{ needs.set-variables.outputs.commit_hash }}
     secrets: inherit
