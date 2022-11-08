@@ -2,10 +2,15 @@ name: 'Run Benchmarks'
 on:
   workflow_dispatch:
     inputs:
-      circleCiArtifactUrl:
-        description: 'Which CircleCI job should we get the binaries from?'
+      commit_sha:
+        description: 'Which Commit SHA should we get the binaries from?'
         required: true
         type: string
+      release:
+        description: 'Which release to use? Sandstorm or Ibiza?'
+        required: false
+        type: string
+        default: sandstorm
       steps:
         description: 'How many steps should we run?'
         required: false
@@ -45,16 +50,29 @@ jobs:
         env:
           OP_CONNECT_HOST: ${{ secrets.CF_1PASSWORD_CONNECTOR_URL }}
           OP_CONNECT_TOKEN: ${{ secrets.CF_1PASSWORD_CONNECTOR_TOKEN_READ_ONLY }}
-          CF_CIRCLE_TOKEN: op://github-actions/CF_CIRCLE_TOKEN/password
+          CF_APT_REPO_BASIC_AUTH_USERNAME: op://github-actions/CF_APT_REPO_BASIC_AUTH/username
+          CF_APT_REPO_BASIC_AUTH_PASSWORD: op://github-actions/CF_APT_REPO_BASIC_AUTH/password
+
+      - name: Set Ibiza Apt Repo Path
+        if: ${{ github.event.inputs.release == 'ibiza' }}
+        run: |
+          echo "APT_REPO_PATH=ci/ibiza" >> $GITHUB_ENV
+
+      - name: Set Sandstorm Apt Repo Path
+        if: ${{ github.event.inputs.release == 'sandstorm' }}
+        run: |
+          echo "APT_REPO_PATH=ci" >> $GITHUB_ENV
 
       - name: Download binary to benchmark
         run: |
-          wget --header="Circle-Token: $CF_CIRCLE_TOKEN" $CIRCLE_CI_ARTIFACT_URL
-          chmod +x chainflip-node
+          sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 14DFB4CA9296F83A
+          echo "deb https://${{ env.CF_APT_REPO_BASIC_AUTH_USERNAME }}:${{ env.CF_APT_REPO_BASIC_AUTH_PASSWORD }}@apt.aws.chainflip.xyz/${{ env.APT_REPO_PATH }}/${{ inputs.commit_sha }}/ focal main"  | sudo tee /etc/apt/sources.list.d/chainflip.list
+          sudo apt update
+          sudo apt install chainflip-cli
 
       - name: Run benchmarks
         run: |
-          ./state-chain/scripts/benchmark-all.sh --binary ./chainflip-node --steps ${{ github.event.inputs.steps }} --repetitions ${{ github.event.inputs.repetitions }}
+          ./state-chain/scripts/benchmark-all.sh --binary /usr/bin/chainflip-node --steps ${{ github.event.inputs.steps }} --repetitions ${{ github.event.inputs.repetitions }}
           git status
 
       # So that we don't commit it in error
