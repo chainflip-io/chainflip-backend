@@ -16,6 +16,7 @@ chainflip-engine = {path = "../../engine/"}
 
 # State Chain
 state-chain-runtime = {path = "../../state-chain/runtime"}
+chainflip-node = {path = "../../state-chain/node"}
 cf-chains = {path = "../../state-chain/chains"}
 pallet-cf-environment = {path = "../../state-chain/pallets/cf-environment"}
 cf-primitives = {path = "../../state-chain/primitives"}

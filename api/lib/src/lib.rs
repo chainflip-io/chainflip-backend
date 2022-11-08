@@ -11,6 +11,14 @@ use sp_finality_grandpa::AuthorityId as GrandpaId;
 use state_chain_runtime::opaque::SessionKeys;
 use web3::types::H160;
 
+pub mod primitives {
+	pub use cf_primitives::*;
+	pub use pallet_cf_governance::ProposalId;
+	pub use state_chain_runtime::Hash;
+}
+
+pub use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
+
 use chainflip_engine::{
 	eth::{rpc::EthDualRpcClient, EthBroadcaster},
 	settings,

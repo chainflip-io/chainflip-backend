@@ -1,5 +1,4 @@
 use chainflip_api as api;
-use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use clap::Parser;
 use settings::{CLICommandLineOptions, CLISettings};
 
@@ -11,8 +10,8 @@ mod settings;
 
 #[tokio::main]
 async fn main() {
-	// TODO: move this to API
-	use_chainflip_account_id_encoding();
+	// TODO: call this implicitly from within the API?
+	api::use_chainflip_account_id_encoding();
 
 	std::process::exit(match run_cli().await {
 		Ok(_) => 0,
