@@ -80,8 +80,6 @@ pub mod pallet {
 		pub attempt_count: AttemptCount,
 		/// The payload to be signed over.
 		pub payload: PayloadFor<T, I>,
-		/// The key id that was requested, if any. If `None` the current epoch's key is used.
-		pub key_id: Option<T::KeyId>,
 		/// Determines how/if we deal with ceremony failure.
 		pub retry_policy: RetryPolicy,
 	}
@@ -354,13 +352,8 @@ pub mod pallet {
 					let offenders = failed_ceremony_context.offenders();
 					num_offenders += offenders.len();
 					num_retries += 1;
-					let RequestContext {
-						request_id,
-						attempt_count,
-						payload,
-						key_id: requested_key_id,
-						retry_policy,
-					} = failed_ceremony_context.request_context;
+					let RequestContext { request_id, attempt_count, payload, retry_policy } =
+						failed_ceremony_context.request_context;
 
 					Self::deposit_event(match retry_policy {
 						RetryPolicy::Always => {
@@ -368,11 +361,11 @@ pub mod pallet {
 								PalletOffence::ParticipateSigningFailed,
 								&offenders[..],
 							);
+
 							Self::new_ceremony_attempt(
 								request_id,
 								payload,
 								attempt_count.wrapping_add(1),
-								requested_key_id,
 								None,
 								RetryPolicy::Always,
 							);
@@ -579,15 +572,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			*id
 		});
 
-		let (key_id, participants) = if let Some((key_id, participants)) = key_and_participants {
-			(Some(key_id), Some(participants))
-		} else {
-			(None, None)
-		};
-
 		// Start a ceremony.
 		let ceremony_id =
-			Self::new_ceremony_attempt(request_id, payload, 0, key_id, participants, retry_policy);
+			Self::new_ceremony_attempt(request_id, payload, 0, key_and_participants, retry_policy);
 
 		Signature::<T, I>::insert(request_id, AsyncResult::Pending);
 
@@ -599,50 +586,57 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		request_id: RequestId,
 		payload: PayloadFor<T, I>,
 		attempt_count: AttemptCount,
-		requested_key_id: Option<<T as Chainflip>::KeyId>,
-		participants: Option<BTreeSet<T::ValidatorId>>,
+		// None reprsenets current key / threshold nomination
+		key_and_participants: Option<(<T as Chainflip>::KeyId, BTreeSet<T::ValidatorId>)>,
 		retry_policy: RetryPolicy,
 	) -> CeremonyId {
 		let ceremony_id = T::CeremonyIdProvider::next_ceremony_id();
 
-		let ceremony_key_id =
-			requested_key_id.clone().unwrap_or_else(T::KeyProvider::current_key_id);
+		let (key_id, participants) = if let Some((k, p)) = key_and_participants {
+			(k, Some(p))
+		} else {
+			let (current_key_id, current_epoch_index) =
+				T::KeyProvider::current_key_id_epoch_index();
 
-		let (event, log_message, ceremony_participants, retry_delay) = if let Some(nominees) =
-			participants.or_else(|| {
+			(
+				current_key_id,
 				T::ThresholdSignerNomination::threshold_nomination_with_seed(
 					(ceremony_id, attempt_count),
-					T::KeyProvider::vault_keyholders_epoch(),
-				)
-			}) {
-			(
-				Event::<T, I>::ThresholdSignatureRequest {
-					request_id,
-					ceremony_id,
-					key_id: ceremony_key_id.clone(),
-					signatories: nominees.clone(),
-					payload: payload.clone(),
-				},
-				scale_info::prelude::format!(
-					"Threshold set selected for request {}, requesting signature ceremony {}.",
-					request_id,
-					attempt_count
+					current_epoch_index,
 				),
-				nominees,
-				ThresholdSignatureResponseTimeout::<T, I>::get(),
-			)
-		} else {
-			(
-				Event::<T, I>::SignersUnavailable { request_id, ceremony_id },
-				scale_info::prelude::format!(
-					"Not enough signers for request {} at attempt {}, scheduling retry.",
-					request_id,
-					attempt_count
-				),
-				BTreeSet::default(),
-				T::CeremonyRetryDelay::get(),
 			)
 		};
+
+		let (event, log_message, ceremony_participants, retry_delay) =
+			if let Some(nominees) = participants {
+				(
+					Event::<T, I>::ThresholdSignatureRequest {
+						request_id,
+						ceremony_id,
+						key_id: key_id.clone(),
+						signatories: nominees.clone(),
+						payload: payload.clone(),
+					},
+					scale_info::prelude::format!(
+						"Threshold set selected for request {}, requesting signature ceremony {}.",
+						request_id,
+						attempt_count
+					),
+					nominees,
+					ThresholdSignatureResponseTimeout::<T, I>::get(),
+				)
+			} else {
+				(
+					Event::<T, I>::SignersUnavailable { request_id, ceremony_id },
+					scale_info::prelude::format!(
+						"Not enough signers for request {} at attempt {}, scheduling retry.",
+						request_id,
+						attempt_count
+					),
+					BTreeSet::default(),
+					T::CeremonyRetryDelay::get(),
+				)
+			};
 
 		Self::schedule_retry(ceremony_id, retry_delay);
 
@@ -659,13 +653,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					request_id,
 					attempt_count,
 					payload,
-					key_id: requested_key_id,
 					retry_policy,
 				},
 				blame_counts: BTreeMap::new(),
 				participant_count: remaining_respondents.len() as u32,
 				remaining_respondents,
-				key_id: ceremony_key_id,
+				key_id,
 				_phantom: PhantomData::default(),
 			}
 		});

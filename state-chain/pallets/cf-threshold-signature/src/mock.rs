@@ -145,16 +145,12 @@ pub struct MockKeyProvider;
 impl cf_traits::KeyProvider<MockEthereum> for MockKeyProvider {
 	type KeyId = Vec<u8>;
 
-	fn current_key_id() -> Self::KeyId {
-		MOCK_AGG_KEY.into()
+	fn current_key_id_epoch_index() -> (Self::KeyId, EpochIndex) {
+		(MOCK_AGG_KEY.into(), Default::default())
 	}
 
 	fn current_key() -> <MockEthereum as ChainCrypto>::AggKey {
 		MOCK_AGG_KEY
-	}
-
-	fn vault_keyholders_epoch() -> EpochIndex {
-		Default::default()
 	}
 }
 

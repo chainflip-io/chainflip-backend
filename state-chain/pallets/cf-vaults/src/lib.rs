@@ -857,21 +857,21 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 impl<T: Config<I>, I: 'static> KeyProvider<T::Chain> for Pallet<T, I> {
 	type KeyId = Vec<u8>;
 
-	fn current_key_id() -> Self::KeyId {
-		Vaults::<T, I>::get(Self::vault_keyholders_epoch())
-			.expect("We can't exist without a vault")
-			.public_key
-			.into()
+	fn current_key_id_epoch_index() -> (Self::KeyId, EpochIndex) {
+		let current_epoch = CurrentKeyholdersEpoch::<T, I>::get();
+		(
+			Vaults::<T, I>::get(current_epoch)
+				.expect("We can't exist without a vault")
+				.public_key
+				.into(),
+			current_epoch,
+		)
 	}
 
 	fn current_key() -> <T::Chain as ChainCrypto>::AggKey {
-		Vaults::<T, I>::get(Self::vault_keyholders_epoch())
+		Vaults::<T, I>::get(CurrentKeyholdersEpoch::<T, I>::get())
 			.expect("We can't exist without a vault")
 			.public_key
-	}
-
-	fn vault_keyholders_epoch() -> EpochIndex {
-		CurrentKeyholdersEpoch::<T, I>::get()
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]

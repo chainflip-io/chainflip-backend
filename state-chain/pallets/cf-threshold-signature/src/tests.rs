@@ -253,8 +253,9 @@ fn retry_policy_never_calls_callback_on_failure() {
 		.build()
 		.execute_with(|| {
 			const PAYLOAD: &[u8; 4] = b"OHAI";
+			let current_key_id = MockKeyProvider::current_key_id_epoch_index().0;
 			let (request_id, _) = EthereumThresholdSigner::request_signature_with(
-				MockKeyProvider::current_key_id(),
+				current_key_id,
 				NOMINEES.into_iter().collect(),
 				*PAYLOAD,
 				RetryPolicy::Never,
@@ -484,6 +485,7 @@ mod unsigned_validation {
 			let request_id =
 				<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(PAYLOAD);
 			let (ceremony_id, _) = LiveCeremonies::<Test, _>::get(request_id).unwrap();
+			let (current_key_id, _) = MockKeyProvider::current_key_id_epoch_index();
 			assert!(
 				Test::validate_unsigned(
 					TransactionSource::External,
@@ -492,8 +494,8 @@ mod unsigned_validation {
 				.is_ok(),
 				"Validation Failed: {:?} / {:?} / {:?}",
 				MockKeyProvider::current_key(),
-				MockKeyProvider::current_key_id(),
-				<[u8; 4]>::try_from(MockKeyProvider::current_key_id()).unwrap()
+				current_key_id.clone(),
+				<[u8; 4]>::try_from(current_key_id).unwrap()
 			);
 		});
 	}
@@ -561,15 +563,15 @@ mod failure_reporting {
 	) -> CeremonyContext<Test, Instance1> {
 		const PAYLOAD: <MockEthereum as ChainCrypto>::Payload = *b"OHAI";
 		MockEpochInfo::set_authorities(Vec::from_iter(validator_set));
+		let current_key_id = MockKeyProvider::current_key_id_epoch_index().0;
 		CeremonyContext::<Test, Instance1> {
 			request_context: RequestContext::<Test, Instance1> {
 				request_id: 1,
 				attempt_count: 0,
-				key_id: Some(MockKeyProvider::current_key_id()),
 				payload: PAYLOAD,
 				retry_policy: RetryPolicy::Always,
 			},
-			key_id: MockKeyProvider::current_key_id(),
+			key_id: current_key_id,
 			remaining_respondents: BTreeSet::from_iter(validator_set),
 			blame_counts: Default::default(),
 			participant_count: 5,

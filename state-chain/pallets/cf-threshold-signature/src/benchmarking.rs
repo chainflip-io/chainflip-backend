@@ -87,7 +87,6 @@ benchmarks_instance_pallet! {
 			request_context: RequestContext::<T, I> {
 				request_id: 1,
 				attempt_count: 0,
-				key_id: Some(<T as Chainflip>::KeyId::benchmark_value()),
 				payload: PayloadFor::<T, I>::benchmark_value(),
 				retry_policy: RetryPolicy::Always
 			},
@@ -122,7 +121,7 @@ benchmarks_instance_pallet! {
 
 		// These attempts will fail because there are no authorities to do the signing.
 		for _ in 0..r {
-			Pallet::<T, I>::new_ceremony_attempt(1, PayloadFor::<T, I>::benchmark_value(), 1, None, None, RetryPolicy::Always);
+			Pallet::<T, I>::new_ceremony_attempt(1, PayloadFor::<T, I>::benchmark_value(), 1, None, RetryPolicy::Always);
 		}
 
 		assert_eq!(

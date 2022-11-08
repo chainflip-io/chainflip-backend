@@ -369,14 +369,11 @@ pub trait KeyProvider<C: ChainCrypto> {
 	/// The type of the provided key_id.
 	type KeyId;
 
-	/// Gets the key id for the current key.
-	fn current_key_id() -> Self::KeyId;
+	/// Gets the key id and epoch index for the current vault key.
+	fn current_key_id_epoch_index() -> (Self::KeyId, EpochIndex);
 
 	/// Get the chain's current agg key.
 	fn current_key() -> C::AggKey;
-
-	/// Get the epoch of the chain's latest active key.
-	fn vault_keyholders_epoch() -> EpochIndex;
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_key(_key: C::AggKey) {

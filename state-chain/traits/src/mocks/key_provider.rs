@@ -16,15 +16,11 @@ impl<C: cf_chains::ChainCrypto, K: std::default::Default> crate::KeyProvider<C>
 {
 	type KeyId = K;
 
-	fn current_key_id() -> Self::KeyId {
+	fn current_key_id_epoch_index() -> (Self::KeyId, EpochIndex) {
 		Default::default()
 	}
 
 	fn current_key() -> C::AggKey {
 		unimplemented!("Implement a custom mock if `current_key()` is required.")
-	}
-
-	fn vault_keyholders_epoch() -> EpochIndex {
-		unimplemented!("Implement a custom mock if `vault_keyholders_epoch` is required.")
 	}
 }
