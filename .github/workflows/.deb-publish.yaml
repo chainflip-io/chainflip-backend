@@ -51,7 +51,7 @@ jobs:
           else
             echo "REPO_BUCKET=apt.aws.chainflip.xyz" >> $GITHUB_ENV
             echo "GPG_KEY='${{ secrets.CF_DEV_PGP_KEY }}'" >> $GITHUB_ENV
-            echo "USER_PASS_PREFIX='{user}:{pass}'" >> $GITHUB_ENV
+            echo "USER_PASS_PREFIX='{user}:{pass}@'" >> $GITHUB_ENV
           fi
 
       - name: Install Aptly and dependencies
