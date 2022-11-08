@@ -1,8 +1,24 @@
 [package]
-name = "chainflip-cli-new"
-version = "0.1.0"
-edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+authors = ["Chainflip team <https://github.com/chainflip-io>"]
+edition = '2021'
+name = "chainflip-cli"
+version = "0.5.0"
 
 [dependencies]
+anyhow = "1.0"
+chainflip-engine = {path = "../../../engine/"}
+chainflip-api = {path = "../../lib"}
+clap = {version = "3.1.18", features = ["derive"]}
+config = "0.13.1"
+futures = "0.3.14"
+hex = "0.4.3"
+serde = {version = "1.0", features = ["derive", "rc"]}
+slog = {version = "2.7.0", features = ["max_level_trace", "release_max_level_trace"]}
+tokio = {version = "1.13.1", features = ["full"]}
+utilities = {path = "../../../utilities"}
+
+# State chain
+chainflip-node = {path = "../../../state-chain/node"}
+cf-primitives = {path = "../../../state-chain/primitives"}
+pallet-cf-governance = {path = "../../../state-chain/pallets/cf-governance"}
+state-chain-runtime = {path = "../../../state-chain/runtime"}

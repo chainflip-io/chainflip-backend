@@ -913,43 +913,49 @@ dependencies = [
 [[package]]
 name = "chainflip-api"
 version = "0.1.0"
-
-[[package]]
-name = "chainflip-cli"
-version = "0.5.0"
 dependencies = [
  "anyhow",
  "async-trait",
  "cf-chains",
  "cf-primitives",
  "chainflip-engine",
- "chainflip-node",
- "clap",
- "config",
  "frame-system",
  "futures 0.3.21",
  "hex",
- "jsonrpsee 0.13.1",
  "pallet-cf-account-roles",
  "pallet-cf-environment",
  "pallet-cf-governance",
  "pallet-cf-staking",
  "pallet-cf-threshold-signature",
  "pallet-cf-validator",
- "serde",
  "slog",
  "sp-consensus-aura",
  "sp-core 6.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-06+01)",
  "sp-finality-grandpa",
  "state-chain-runtime",
- "tokio",
- "utilities",
  "web3",
 ]
 
 [[package]]
-name = "chainflip-cli-new"
-version = "0.1.0"
+name = "chainflip-cli"
+version = "0.5.0"
+dependencies = [
+ "anyhow",
+ "cf-primitives",
+ "chainflip-api",
+ "chainflip-engine",
+ "chainflip-node",
+ "clap",
+ "config",
+ "futures 0.3.21",
+ "hex",
+ "pallet-cf-governance",
+ "serde",
+ "slog",
+ "state-chain-runtime",
+ "tokio",
+ "utilities",
+]
 
 [[package]]
 name = "chainflip-engine"

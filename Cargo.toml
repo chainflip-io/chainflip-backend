@@ -34,7 +34,6 @@ members = [
   'state-chain/traits',
   'state-chain/primitives',
   'engine',
-  'engine/cli',
   'engine/generate-genesis-keys',
   'utilities',
   'state-chain/custom-rpc',
