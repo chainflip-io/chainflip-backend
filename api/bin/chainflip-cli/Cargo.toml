@@ -16,9 +16,3 @@ serde = {version = "1.0", features = ["derive", "rc"]}
 slog = {version = "2.7.0", features = ["max_level_trace", "release_max_level_trace"]}
 tokio = {version = "1.13.1", features = ["full"]}
 utilities = {path = "../../../utilities"}
-
-# State chain
-chainflip-node = {path = "../../../state-chain/node"}
-cf-primitives = {path = "../../../state-chain/primitives"}
-pallet-cf-governance = {path = "../../../state-chain/pallets/cf-governance"}
-state-chain-runtime = {path = "../../../state-chain/runtime"}

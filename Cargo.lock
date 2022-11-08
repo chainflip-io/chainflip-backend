@@ -919,6 +919,7 @@ dependencies = [
  "cf-chains",
  "cf-primitives",
  "chainflip-engine",
+ "chainflip-node",
  "frame-system",
  "futures 0.3.21",
  "hex",
@@ -941,18 +942,14 @@ name = "chainflip-cli"
 version = "0.5.0"
 dependencies = [
  "anyhow",
- "cf-primitives",
  "chainflip-api",
  "chainflip-engine",
- "chainflip-node",
  "clap",
  "config",
  "futures 0.3.21",
  "hex",
- "pallet-cf-governance",
  "serde",
  "slog",
- "state-chain-runtime",
  "tokio",
  "utilities",
 ]
