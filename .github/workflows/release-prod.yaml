@@ -1,11 +1,6 @@
 name: Release production binaries
 on:
   workflow_dispatch:
-    inputs:
-      version:
-        type: string
-        description: Semver release tag
-        required: true
 
 jobs:
   set-variables:
