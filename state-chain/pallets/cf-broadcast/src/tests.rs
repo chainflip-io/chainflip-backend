@@ -7,7 +7,7 @@ use crate::{
 use cf_chains::FeeRefundCalculator;
 
 use cf_chains::mocks::{
-	MockApiCall, MockEthereum, MockThresholdSignature, MockTransaction, Validity, ETH_TX_FEE,
+	MockApiCall, MockEthereum, MockThresholdSignature, MockTransaction, ETH_TX_FEE,
 };
 use cf_traits::{
 	mocks::{
@@ -128,12 +128,14 @@ fn signature_accepted_results_in_refund_for_signer() {
 		let tx_sig_request =
 			AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id).unwrap();
 
-		assert_eq!(TransactionFeeDeficit::<Test, Instance1>::get(Validity::Valid), 0);
+		let nominee = MockNominator::get_last_nominee().unwrap();
+
+		assert_eq!(TransactionFeeDeficit::<Test, Instance1>::get(nominee), 0);
 
 		assert_ok!(Broadcaster::signature_accepted(
 			Origin::root(),
 			MockThresholdSignature::default(),
-			Validity::Valid,
+			nominee,
 			ETH_TX_FEE,
 		));
 
@@ -142,8 +144,7 @@ fn signature_accepted_results_in_refund_for_signer() {
 
 		assert!(AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id).is_none());
 
-		assert_eq!(TransactionFeeDeficit::<Test, Instance1>::get(Validity::Valid), expected_refund);
-		assert_eq!(TransactionFeeDeficit::<Test, Instance1>::get(Validity::Invalid), 0);
+		assert_eq!(TransactionFeeDeficit::<Test, Instance1>::get(nominee), expected_refund);
 
 		assert_broadcast_storage_cleaned_up(broadcast_attempt_id.broadcast_id);
 	});
@@ -279,7 +280,7 @@ fn test_invalid_sigdata_is_noop() {
 			Broadcaster::signature_accepted(
 				RawOrigin::Signed(0).into(),
 				MockThresholdSignature::default(),
-				Validity::Valid,
+				Default::default(),
 				ETH_TX_FEE,
 			),
 			Error::<Test, Instance1>::InvalidPayload

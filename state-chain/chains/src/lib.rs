@@ -224,7 +224,7 @@ pub mod mocks {
 		type ChainAmount = EthAmount;
 		type TrackedData = MockTrackedData;
 		type TransactionFee = TransactionFee;
-		type ChainAccount = Validity; // Currently, we don't care about this since we don't use them in tests
+		type ChainAccount = u64; // Currently, we don't care about this since we don't use them in tests
 		type ChainAsset = (); // Currently, we don't care about this since we don't use them in tests
 	}
 
@@ -256,13 +256,6 @@ pub mod mocks {
 	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Default)]
 	pub struct MockTransaction;
 
-	impl MockTransaction {
-		/// Simulate a transaction signature.
-		pub fn signed(self, signature: Validity) -> MockSignedTransation<Self> {
-			MockSignedTransation::<Self> { transaction: self, signature }
-		}
-	}
-
 	impl FeeRefundCalculator<MockEthereum> for MockTransaction {
 		fn return_fee_refund(
 			&self,
@@ -270,40 +263,6 @@ pub mod mocks {
 		) -> <MockEthereum as Chain>::ChainAmount {
 			<MockEthereum as Chain>::ChainAmount::default()
 		}
-	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	impl BenchmarkValue for MockSignedTransation<MockTransaction> {
-		fn benchmark_value() -> Self {
-			MockSignedTransation {
-				transaction: MockTransaction::default(),
-				signature: Validity::Valid,
-			}
-		}
-	}
-
-	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-	pub struct MockSignedTransation<Unsigned> {
-		transaction: Unsigned,
-		signature: Validity,
-	}
-
-	impl Default for Validity {
-		fn default() -> Self {
-			Self::Invalid
-		}
-	}
-
-	impl Validity {
-		pub fn is_valid(&self) -> bool {
-			*self == Self::Valid
-		}
-	}
-
-	#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
-	pub enum Validity {
-		Valid,
-		Invalid,
 	}
 
 	#[derive(Copy, Clone, Debug, PartialEq, Eq, Default, Encode, Decode, TypeInfo)]
@@ -332,7 +291,6 @@ pub mod mocks {
 		}
 	}
 
-	impl_default_benchmark_value!(Validity);
 	impl_default_benchmark_value!([u8; 4]);
 	impl_default_benchmark_value!(MockThresholdSignature<[u8; 4], [u8; 4]>);
 	impl_default_benchmark_value!(u32);
