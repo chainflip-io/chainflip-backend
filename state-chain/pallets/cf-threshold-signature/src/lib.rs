@@ -56,6 +56,11 @@ pub enum PalletOffence {
 	ParticipateSigningFailed,
 }
 
+enum SignWithKey<KeyId, Participants> {
+	Current,
+	This { key_id: KeyId, participants: Participants },
+}
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -359,7 +364,7 @@ pub mod pallet {
 								request_id,
 								payload,
 								attempt_count.wrapping_add(1),
-								None,
+								SignWithKey::Current,
 								RetryPolicy::Always,
 							);
 							Event::<T, I>::RetryRequested { request_id, ceremony_id }
@@ -553,7 +558,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Initiate a new signature request, returning the request id.
 	fn inner_request_signature(
 		payload: PayloadFor<T, I>,
-		key_and_participants: Option<(<T as Chainflip>::KeyId, BTreeSet<T::ValidatorId>)>,
+		sign_with_key: SignWithKey<<T as Chainflip>::KeyId, BTreeSet<T::ValidatorId>>,
 		retry_policy: RetryPolicy,
 	) -> (RequestId, CeremonyId) {
 		// Get a new request id.
@@ -564,7 +569,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		// Start a ceremony.
 		let ceremony_id =
-			Self::new_ceremony_attempt(request_id, payload, 0, key_and_participants, retry_policy);
+			Self::new_ceremony_attempt(request_id, payload, 0, sign_with_key, retry_policy);
 
 		Signature::<T, I>::insert(request_id, AsyncResult::Pending);
 
@@ -576,26 +581,26 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		request_id: RequestId,
 		payload: PayloadFor<T, I>,
 		attempt_count: AttemptCount,
-		// None reprsenets current key / threshold nomination
-		key_and_participants: Option<(<T as Chainflip>::KeyId, BTreeSet<T::ValidatorId>)>,
+		sign_with_key: SignWithKey<<T as Chainflip>::KeyId, BTreeSet<T::ValidatorId>>,
 		retry_policy: RetryPolicy,
 	) -> CeremonyId {
 		let ceremony_id = T::CeremonyIdProvider::next_ceremony_id();
 
-		let (key_id, participants) = if let Some((k, p)) = key_and_participants {
-			(k, Some(p))
-		} else {
-			let (current_key_id, current_epoch_index) =
-				T::KeyProvider::current_key_id_epoch_index();
+		let (key_id, participants) =
+			if let SignWithKey::This { key_id, participants } = sign_with_key {
+				(key_id, Some(participants))
+			} else {
+				let (current_key_id, current_epoch_index) =
+					T::KeyProvider::current_key_id_epoch_index();
 
-			(
-				current_key_id,
-				T::ThresholdSignerNomination::threshold_nomination_with_seed(
-					(ceremony_id, attempt_count),
-					current_epoch_index,
-				),
-			)
-		};
+				(
+					current_key_id,
+					T::ThresholdSignerNomination::threshold_nomination_with_seed(
+						(ceremony_id, attempt_count),
+						current_epoch_index,
+					),
+				)
+			};
 
 		let (event, log_message, ceremony_participants, retry_delay) =
 			if let Some(nominees) = participants {
@@ -714,7 +719,7 @@ where
 	type ValidatorId = T::ValidatorId;
 
 	fn request_signature(payload: PayloadFor<T, I>) -> Self::RequestId {
-		Self::inner_request_signature(payload, None, RetryPolicy::Always).0
+		Self::inner_request_signature(payload, SignWithKey::Current, RetryPolicy::Always).0
 	}
 
 	fn register_callback(
@@ -746,6 +751,10 @@ where
 		payload: <T::TargetChain as ChainCrypto>::Payload,
 		retry_policy: RetryPolicy,
 	) -> (Self::RequestId, CeremonyId) {
-		Self::inner_request_signature(payload, Some((key_id, participants)), retry_policy)
+		Self::inner_request_signature(
+			payload,
+			SignWithKey::This { key_id, participants },
+			retry_policy,
+		)
 	}
 }
