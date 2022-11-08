@@ -55,10 +55,9 @@ jobs:
 
       - name: Build packages
         run: |
-          cargo deb --no-build --no-strip -p chainflip-engine --deb-revision "${{ inputs.version }}"
-          cargo deb --no-build --no-strip -p chainflip-cli --deb-revision "${{ inputs.version }}"
-          cargo deb --no-build --no-strip -p chainflip-node --deb-revision "${{ inputs.version }}"
-          cargo deb --no-build --no-strip -p generate-genesis-keys --deb-revision "${{ inputs.version }}"
+          cargo deb --no-build --no-strip -p chainflip-engine
+          cargo deb --no-build --no-strip -p chainflip-cli
+          cargo deb --no-build --no-strip -p chainflip-node
       - name: Upload packages
         uses: actions/upload-artifact@v3
         with:
@@ -85,6 +84,6 @@ jobs:
     uses: ./.github/workflows/.deb-publish.yaml
     with:
       artifacts: chainflip-backend-packages-prod
-      version: ""
+      version: "perseverance/"
       environment: prod
     secrets: inherit
