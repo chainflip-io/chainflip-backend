@@ -2,7 +2,6 @@ use std::sync::{Arc, Mutex};
 
 use futures::{Future, FutureExt};
 use slog::o;
-use tokio::sync::broadcast;
 
 use crate::{
 	logging::COMPONENT_KEY,
@@ -33,7 +32,7 @@ pub fn should_end_witnessing<Chain: cf_chains::Chain>(
 
 pub async fn start<G, F, Fut, State, Chain>(
 	log_key: String,
-	mut epoch_start_receiver: broadcast::Receiver<EpochStart<Chain>>,
+	epoch_start_receiver: async_channel::Receiver<EpochStart<Chain>>,
 	mut should_epoch_participant_witness: G,
 	initial_state: State,
 	mut epoch_witnesser_generator: F,

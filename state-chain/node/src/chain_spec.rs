@@ -1,3 +1,5 @@
+#[cfg(feature = "ibiza")]
+use cf_chains::dot::{POLKADOT_PROXY_ACCOUNT, POLKADOT_VAULT_ACCOUNT, WESTEND_CONFIG}; /* TODO: move these constants into chainspec. */
 use cf_primitives::AccountRole;
 use sc_service::{ChainType, Properties};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
@@ -206,6 +208,12 @@ pub fn development_config() -> Result<ChainSpec, String> {
 						max_ceremony_stage_duration,
 						eth_priority_fee_percentile: ETH_PRIORITY_FEE_PERCENTILE_DEFAULT,
 					},
+					#[cfg(feature = "ibiza")]
+					polkadot_vault_account_id: POLKADOT_VAULT_ACCOUNT,
+					#[cfg(feature = "ibiza")]
+					polkadot_proxy_account_id: POLKADOT_PROXY_ACCOUNT,
+					#[cfg(feature = "ibiza")]
+					polkadot_network_config: WESTEND_CONFIG,
 				},
 				eth_init_agg_key,
 				ethereum_deployment_block,
@@ -293,6 +301,12 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 						max_ceremony_stage_duration,
 						eth_priority_fee_percentile: ETH_PRIORITY_FEE_PERCENTILE_DEFAULT,
 					},
+					#[cfg(feature = "ibiza")]
+					polkadot_vault_account_id: POLKADOT_VAULT_ACCOUNT,
+					#[cfg(feature = "ibiza")]
+					polkadot_proxy_account_id: POLKADOT_PROXY_ACCOUNT,
+					#[cfg(feature = "ibiza")]
+					polkadot_network_config: WESTEND_CONFIG,
 				},
 				eth_init_agg_key,
 				ethereum_deployment_block,
@@ -420,6 +434,12 @@ fn chainflip_three_node_testnet_config_from_env(
 						max_ceremony_stage_duration,
 						eth_priority_fee_percentile: ETH_PRIORITY_FEE_PERCENTILE_DEFAULT,
 					},
+					#[cfg(feature = "ibiza")]
+					polkadot_vault_account_id: POLKADOT_VAULT_ACCOUNT,
+					#[cfg(feature = "ibiza")]
+					polkadot_proxy_account_id: POLKADOT_PROXY_ACCOUNT,
+					#[cfg(feature = "ibiza")]
+					polkadot_network_config: WESTEND_CONFIG,
 				},
 				eth_init_agg_key,
 				ethereum_deployment_block,
@@ -560,6 +580,12 @@ pub fn chainflip_testnet_config() -> Result<ChainSpec, String> {
 						max_ceremony_stage_duration,
 						eth_priority_fee_percentile: ETH_PRIORITY_FEE_PERCENTILE_DEFAULT,
 					},
+					#[cfg(feature = "ibiza")]
+					polkadot_vault_account_id: POLKADOT_VAULT_ACCOUNT,
+					#[cfg(feature = "ibiza")]
+					polkadot_proxy_account_id: POLKADOT_PROXY_ACCOUNT,
+					#[cfg(feature = "ibiza")]
+					polkadot_network_config: WESTEND_CONFIG,
 				},
 				eth_init_agg_key,
 				ethereum_deployment_block,
@@ -648,6 +674,12 @@ macro_rules! network_spec {
 									eth_priority_fee_percentile:
 										ETH_PRIORITY_FEE_PERCENTILE_DEFAULT,
 								},
+								#[cfg(feature = "ibiza")]
+								polkadot_vault_account_id: POLKADOT_VAULT_ACCOUNT,
+								#[cfg(feature = "ibiza")]
+								polkadot_proxy_account_id: POLKADOT_PROXY_ACCOUNT,
+								#[cfg(feature = "ibiza")]
+								polkadot_network_config: WESTEND_CONFIG,
 							},
 							eth_init_agg_key,
 							ethereum_deployment_block,
