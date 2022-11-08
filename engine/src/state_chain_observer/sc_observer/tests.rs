@@ -962,7 +962,7 @@ async fn run_the_sc_observer() {
 	let logger = new_test_logger();
 
 	let (initial_block_hash, block_stream, state_chain_client) =
-		crate::state_chain_observer::client::connect_to_state_chain(
+		crate::state_chain_observer::client::StateChainClient::new(
 			&settings.state_chain,
 			false,
 			&logger,
