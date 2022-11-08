@@ -71,14 +71,11 @@ jobs:
           sudo apt install chainflip-node
 
       - name: Run benchmarks
-        run: |
-          ./state-chain/scripts/benchmark-all.sh --binary /usr/bin/chainflip-node --steps ${{ github.event.inputs.steps }} --repetitions ${{ github.event.inputs.repetitions }}
-          git status
-
-      # So that we don't commit it in error
-      - name: Delete the binary
-        run: |
-          rm chainflip-node
+        run: >
+          ./state-chain/scripts/benchmark-all.sh
+          --binary /usr/bin/chainflip-node
+          --steps ${{ github.event.inputs.steps }}
+          --repetitions ${{ github.event.inputs.repetitions }}
 
       - name: Make a pull request with the changed weight files
         uses: peter-evans/create-pull-request@v4
