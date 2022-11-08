@@ -67,11 +67,10 @@ pub mod pallet {
 		Twox64Concat,
 	};
 	use frame_system::ensure_none;
-
-	/// Context for tracking the progress of a threshold signature request.
+	/// Context for tracking the progress of a threshold signature ceremony.
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	#[scale_info(skip_type_params(T, I))]
-	pub struct RequestContext<T: Config<I>, I: 'static> {
+	pub struct CeremonyContext<T: Config<I>, I: 'static> {
 		pub request_id: RequestId,
 		/// The number of ceremonies attempted so far, excluding the current one.
 		/// Currently we do not limit the number of retry attempts.
@@ -82,14 +81,7 @@ pub mod pallet {
 		pub payload: PayloadFor<T, I>,
 		/// Determines how/if we deal with ceremony failure.
 		pub retry_policy: RetryPolicy,
-	}
 
-	/// Context for tracking the progress of a threshold signature ceremony.
-	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-	#[scale_info(skip_type_params(T, I))]
-	pub struct CeremonyContext<T: Config<I>, I: 'static> {
-		/// The request context of this particular ceremony.
-		pub request_context: RequestContext<T, I>,
 		/// The respondents that have yet to reply.
 		pub remaining_respondents: BTreeSet<T::ValidatorId>,
 		/// The number of blame votes (accusations) each authority has received.
@@ -352,8 +344,9 @@ pub mod pallet {
 					let offenders = failed_ceremony_context.offenders();
 					num_offenders += offenders.len();
 					num_retries += 1;
-					let RequestContext { request_id, attempt_count, payload, retry_policy } =
-						failed_ceremony_context.request_context;
+					let CeremonyContext {
+						request_id, attempt_count, payload, retry_policy, ..
+					} = failed_ceremony_context;
 
 					Self::deposit_event(match retry_policy {
 						RetryPolicy::Always => {
@@ -410,9 +403,8 @@ pub mod pallet {
 
 		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
 			if let Call::<T, I>::signature_success { ceremony_id, signature } = call {
-				let CeremonyContext {
-					key_id, request_context: RequestContext { payload, .. }, ..
-				} = PendingCeremonies::<T, I>::get(ceremony_id).ok_or(InvalidTransaction::Stale)?;
+				let CeremonyContext { key_id, payload, .. } =
+					PendingCeremonies::<T, I>::get(ceremony_id).ok_or(InvalidTransaction::Stale)?;
 
 				let key = key_id.try_into().map_err(|_| InvalidTransaction::BadProof)?;
 				if <T::TargetChain as ChainCrypto>::verify_threshold_signature(
@@ -457,15 +449,13 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
 
-			let CeremonyContext {
-				request_context: RequestContext { request_id, attempt_count, .. },
-				..
-			} = PendingCeremonies::<T, I>::take(ceremony_id).ok_or_else(|| {
-				// We check the ceremony_id in the ValidateUnsigned transaction, so if this
-				// happens, there is something seriously wrong with our assumptions.
-				log::error!("Invalid ceremony_id received {}.", ceremony_id);
-				Error::<T, I>::InvalidCeremonyId
-			})?;
+			let CeremonyContext { request_id, attempt_count, .. } =
+				PendingCeremonies::<T, I>::take(ceremony_id).ok_or_else(|| {
+					// We check the ceremony_id in the ValidateUnsigned transaction, so if this
+					// happens, there is something seriously wrong with our assumptions.
+					log::error!("Invalid ceremony_id received {}.", ceremony_id);
+					Error::<T, I>::InvalidCeremonyId
+				})?;
 
 			LiveCeremonies::<T, I>::remove(request_id);
 
@@ -528,7 +518,7 @@ pub mod pallet {
 						}
 
 						Self::deposit_event(Event::<T, I>::FailureReportProcessed {
-							request_id: context.request_context.request_id,
+							request_id: context.request_id,
 							ceremony_id: id,
 							reporter_id,
 						});
@@ -649,12 +639,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			let remaining_respondents: BTreeSet<_> = ceremony_participants.into_iter().collect();
 
 			CeremonyContext {
-				request_context: RequestContext {
-					request_id,
-					attempt_count,
-					payload,
-					retry_policy,
-				},
+				request_id,
+				attempt_count,
+				payload,
+				retry_policy,
 				blame_counts: BTreeMap::new(),
 				participant_count: remaining_respondents.len() as u32,
 				remaining_respondents,

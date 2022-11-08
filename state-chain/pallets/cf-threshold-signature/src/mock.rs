@@ -2,7 +2,7 @@ use std::{collections::BTreeSet, marker::PhantomData};
 
 use crate::{
 	self as pallet_cf_threshold_signature, CeremonyContext, CeremonyId, EnsureThresholdSigned,
-	LiveCeremonies, PalletOffence, PendingCeremonies, RequestContext, RequestId, RetryQueues,
+	LiveCeremonies, PalletOffence, PendingCeremonies, RequestId, RetryQueues,
 };
 use cf_chains::{
 	mocks::{MockEthereum, MockThresholdSignature},
@@ -284,13 +284,7 @@ impl TestExternalitiesWithCheck {
 	pub fn do_consistency_check() {
 		let retries = BTreeSet::<_>::from_iter(RetryQueues::<Test, _>::iter_values().flatten());
 		PendingCeremonies::<Test, _>::iter().for_each(
-			|(
-				ceremony_id,
-				CeremonyContext {
-					request_context: RequestContext { request_id, attempt_count, .. },
-					..
-				},
-			)| {
+			|(ceremony_id, CeremonyContext { request_id, attempt_count, .. })| {
 				assert_eq!(
 					LiveCeremonies::<Test, _>::get(request_id).unwrap(),
 					(ceremony_id, attempt_count)
@@ -300,11 +294,8 @@ impl TestExternalitiesWithCheck {
 		);
 		LiveCeremonies::<Test, _>::iter().for_each(
 			|(live_request_id, (live_ceremony_id, live_attempt_count))| {
-				let CeremonyContext::<Test, Instance1> {
-					request_context:
-						RequestContext::<Test, Instance1> { request_id, attempt_count, .. },
-					..
-				} = EthereumThresholdSigner::pending_ceremonies(live_ceremony_id).unwrap();
+				let CeremonyContext::<Test, Instance1> { request_id, attempt_count, .. } =
+					EthereumThresholdSigner::pending_ceremonies(live_ceremony_id).unwrap();
 				assert!((request_id, attempt_count) == (live_request_id, live_attempt_count));
 			},
 		);

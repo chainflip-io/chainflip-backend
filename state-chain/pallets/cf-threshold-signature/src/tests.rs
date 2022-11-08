@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
 	self as pallet_cf_threshold_signature, mock::*, AttemptCount, CeremonyContext, CeremonyId,
-	Error, PalletOffence, RequestContext, RequestId,
+	Error, PalletOffence, RequestId,
 };
 use cf_chains::mocks::MockEthereum;
 use cf_traits::{
@@ -22,10 +22,8 @@ fn get_ceremony_context(
 	expected_request_id: RequestId,
 	expected_attempt: AttemptCount,
 ) -> CeremonyContext<Test, Instance1> {
-	let CeremonyContext::<Test, Instance1> {
-		request_context: RequestContext::<Test, Instance1> { request_id, attempt_count, .. },
-		..
-	} = EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
+	let CeremonyContext::<Test, Instance1> { request_id, attempt_count, .. } =
+		EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
 	assert_eq!(request_id, expected_request_id);
 	assert_eq!(attempt_count, expected_attempt);
 	EthereumThresholdSigner::pending_ceremonies(ceremony_id)
@@ -149,10 +147,8 @@ fn happy_path_no_callback() {
 		.build()
 		.execute_with(|| {
 			let ceremony_id = current_ceremony_id();
-			let CeremonyContext::<Test, Instance1> {
-				request_context: RequestContext::<Test, Instance1> { request_id, .. },
-				..
-			} = EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
+			let CeremonyContext::<Test, Instance1> { request_id, .. } =
+				EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
 			let cfe = MockCfe { id: 1, behaviour: CfeBehaviour::Success };
 
 			run_cfes_on_sc_events(&[cfe]);
@@ -182,10 +178,8 @@ fn happy_path_with_callback() {
 		.build()
 		.execute_with(|| {
 			let ceremony_id = current_ceremony_id();
-			let CeremonyContext::<Test, Instance1> {
-				request_context: RequestContext::<Test, Instance1> { request_id, .. },
-				..
-			} = EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
+			let CeremonyContext::<Test, Instance1> { request_id, .. } =
+				EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
 			let cfe = MockCfe { id: 1, behaviour: CfeBehaviour::Success };
 
 			run_cfes_on_sc_events(&[cfe]);
@@ -217,10 +211,8 @@ fn signature_success_can_only_succeed_once_per_request() {
 		.build()
 		.execute_with(|| {
 			let ceremony_id = current_ceremony_id();
-			let CeremonyContext::<Test, Instance1> {
-				request_context: RequestContext::<Test, Instance1> { request_id, .. },
-				..
-			} = EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
+			let CeremonyContext::<Test, Instance1> { request_id, .. } =
+				EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
 			assert_eq!(MockCallback::times_called(), 0);
 			// report signature success
 			run_cfes_on_sc_events(&[MockCfe { id: 1, behaviour: CfeBehaviour::Success }]);
@@ -295,10 +287,8 @@ fn fail_path_with_timeout() {
 		.build()
 		.execute_with(|| {
 			let ceremony_id = current_ceremony_id();
-			let CeremonyContext::<Test, Instance1> {
-				request_context: RequestContext::<Test, Instance1> { request_id, attempt_count, .. },
-				..
-			} = EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
+			let CeremonyContext::<Test, Instance1> { request_id, attempt_count, .. } =
+				EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
 			let cfes = [
 				MockCfe { id: 1, behaviour: CfeBehaviour::Timeout },
 				MockCfe { id: 2, behaviour: CfeBehaviour::ReportFailure(vec![1]) },
@@ -362,10 +352,8 @@ fn fail_path_due_to_report_signature_failed() {
 			// progress by one block *after* the initial request is inserted (in the ExtBuilder)
 			System::set_block_number(frame_system::Pallet::<Test>::current_block_number() + 1);
 			let ceremony_id = current_ceremony_id();
-			let CeremonyContext::<Test, Instance1> {
-				request_context: RequestContext::<Test, Instance1> { request_id, attempt_count, .. },
-				..
-			} = EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
+			let CeremonyContext::<Test, Instance1> { request_id, attempt_count, .. } =
+				EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
 			let cfes = [(1, vec![]), (2, vec![1]), (3, vec![1]), (4, vec![1]), (5, vec![1])]
 				.into_iter()
 				.map(|(id, report)| MockCfe { id, behaviour: CfeBehaviour::ReportFailure(report) })
@@ -565,12 +553,10 @@ mod failure_reporting {
 		MockEpochInfo::set_authorities(Vec::from_iter(validator_set));
 		let current_key_id = MockKeyProvider::current_key_id_epoch_index().0;
 		CeremonyContext::<Test, Instance1> {
-			request_context: RequestContext::<Test, Instance1> {
-				request_id: 1,
-				attempt_count: 0,
-				payload: PAYLOAD,
-				retry_policy: RetryPolicy::Always,
-			},
+			request_id: 1,
+			attempt_count: 0,
+			payload: PAYLOAD,
+			retry_policy: RetryPolicy::Always,
 			key_id: current_key_id,
 			remaining_respondents: BTreeSet::from_iter(validator_set),
 			blame_counts: Default::default(),
