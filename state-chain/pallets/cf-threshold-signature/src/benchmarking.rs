@@ -49,8 +49,7 @@ benchmarks_instance_pallet! {
 
 		add_authorities::<T, _>(all_accounts);
 
-		let request_id = <Pallet::<T, I> as ThresholdSigner<_>>::request_signature(PayloadFor::<T, I>::benchmark_value());
-		let (ceremony_id, _) = LiveCeremonies::<T, I>::get(request_id).unwrap();
+		let (request_id, ceremony_id) = <Pallet::<T, I> as ThresholdSigner<_>>::request_signature(PayloadFor::<T, I>::benchmark_value());
 		let signature = SignatureFor::<T, I>::benchmark_value();
 	} : _(RawOrigin::None, ceremony_id, signature)
 	verify {
@@ -64,8 +63,7 @@ benchmarks_instance_pallet! {
 
 		add_authorities::<T, _>(all_accounts);
 
-		let request_id = <Pallet::<T, I> as ThresholdSigner<_>>::request_signature(PayloadFor::<T, I>::benchmark_value());
-		let (ceremony_id, _) = LiveCeremonies::<T, I>::get(request_id).unwrap();
+		let (request_id, ceremony_id) = <Pallet::<T, I> as ThresholdSigner<_>>::request_signature(PayloadFor::<T, I>::benchmark_value());
 
 		let mut threshold_set = PendingCeremonies::<T, I>::get(ceremony_id).unwrap().remaining_respondents.into_iter();
 

@@ -433,7 +433,7 @@ fn test_not_enough_signers_for_threshold_schedules_retry() {
 #[cfg(test)]
 mod unsigned_validation {
 	use super::*;
-	use crate::{Call as PalletCall, LiveCeremonies, PendingCeremonies, RetryPolicy, RetryQueues};
+	use crate::{Call as PalletCall, PendingCeremonies, RetryPolicy, RetryQueues};
 	use cf_chains::ChainCrypto;
 	use cf_traits::{KeyProvider, ThresholdSigner};
 	use frame_support::{pallet_prelude::InvalidTransaction, unsigned::TransactionSource};
@@ -445,15 +445,12 @@ mod unsigned_validation {
 			const PAYLOAD: <MockEthereum as ChainCrypto>::Payload = *b"OHAI";
 			const CUSTOM_AGG_KEY: <MockEthereum as ChainCrypto>::AggKey = *b"AKEY";
 			let participants: BTreeSet<u64> = BTreeSet::from_iter([1, 2, 3, 4, 5, 6]);
-			let (request_id, ceremony_id_from_req) =
-				EthereumThresholdSigner::request_signature_with(
-					CUSTOM_AGG_KEY.into(),
-					participants,
-					PAYLOAD,
-					RetryPolicy::Never,
-				);
-			let (ceremony_id, _) = LiveCeremonies::<Test, _>::get(request_id).unwrap();
-			assert_eq!(ceremony_id, ceremony_id_from_req);
+			let (_request_id, ceremony_id) = EthereumThresholdSigner::request_signature_with(
+				CUSTOM_AGG_KEY.into(),
+				participants,
+				PAYLOAD,
+				RetryPolicy::Never,
+			);
 
 			let retry_block = frame_system::Pallet::<Test>::current_block_number() +
 				EthereumThresholdSigner::threshold_signature_response_timeout();
@@ -470,9 +467,8 @@ mod unsigned_validation {
 		new_test_ext().execute_with(|| {
 			const PAYLOAD: <MockEthereum as ChainCrypto>::Payload = *b"OHAI";
 			// Initiate request
-			let request_id =
+			let (_request_id, ceremony_id) =
 				<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(PAYLOAD);
-			let (ceremony_id, _) = LiveCeremonies::<Test, _>::get(request_id).unwrap();
 			let (current_key_id, _) = MockKeyProvider::current_key_id_epoch_index();
 			assert!(
 				Test::validate_unsigned(
@@ -509,9 +505,8 @@ mod unsigned_validation {
 		new_test_ext().execute_with(|| {
 			const PAYLOAD: <MockEthereum as ChainCrypto>::Payload = *b"OHAI";
 			// Initiate request
-			let request_id =
+			let (_request_id, ceremony_id) =
 				<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(PAYLOAD);
-			let (ceremony_id, _) = LiveCeremonies::<Test, _>::get(request_id).unwrap();
 			assert_eq!(
 				Test::validate_unsigned(
 					TransactionSource::External,

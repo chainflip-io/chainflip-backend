@@ -218,13 +218,6 @@ pub mod pallet {
 	pub type PendingCeremonies<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, CeremonyId, CeremonyContext<T, I>>;
 
-	/// A mapping from request id to to the live ceremony id for that request and what
-	/// and how many times we have attempted to sign this request.
-	#[pallet::storage]
-	#[pallet::getter(fn live_ceremonies)]
-	pub type LiveCeremonies<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, RequestId, (CeremonyId, AttemptCount)>;
-
 	/// Callbacks to be dispatched when a request is fulfilled.
 	#[pallet::storage]
 	#[pallet::getter(fn request_callback)]
@@ -374,7 +367,6 @@ pub mod pallet {
 								request_id,
 								AsyncResult::Ready(Err(offenders.clone())),
 							);
-							LiveCeremonies::<T, I>::remove(request_id);
 							Self::maybe_dispatch_callback(request_id, ceremony_id);
 							Event::<T, I>::ThresholdSignatureFailed {
 								request_id,
@@ -461,8 +453,6 @@ pub mod pallet {
 					log::error!("Invalid ceremony_id received {}.", ceremony_id);
 					Error::<T, I>::InvalidCeremonyId
 				})?;
-
-			LiveCeremonies::<T, I>::remove(request_id);
 
 			// Report the success once we know the CeremonyId is valid
 			Self::deposit_event(Event::<T, I>::ThresholdSignatureSuccess {
@@ -655,7 +645,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				_phantom: PhantomData::default(),
 			}
 		});
-		LiveCeremonies::<T, I>::insert(request_id, (ceremony_id, attempt_count));
 
 		Self::deposit_event(event);
 
@@ -718,15 +707,18 @@ where
 	type KeyId = T::KeyId;
 	type ValidatorId = T::ValidatorId;
 
-	fn request_signature(payload: PayloadFor<T, I>) -> Self::RequestId {
-		Self::inner_request_signature(payload, SignWithKey::Current, RetryPolicy::Always).0
+	fn request_signature(payload: PayloadFor<T, I>) -> (Self::RequestId, CeremonyId) {
+		Self::inner_request_signature(payload, SignWithKey::Current, RetryPolicy::Always)
 	}
 
 	fn register_callback(
 		request_id: Self::RequestId,
 		on_signature_ready: Self::Callback,
 	) -> Result<(), Self::Error> {
-		ensure!(LiveCeremonies::<T, I>::contains_key(request_id), Error::<T, I>::InvalidRequestId);
+		ensure!(
+			matches!(Signature::<T, I>::get(request_id), AsyncResult::Pending),
+			Error::<T, I>::InvalidRequestId
+		);
 		RequestCallback::<T, I>::insert(request_id, on_signature_ready);
 		Ok(())
 	}

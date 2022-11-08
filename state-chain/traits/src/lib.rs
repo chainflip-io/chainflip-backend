@@ -398,8 +398,8 @@ where
 	type KeyId: TryInto<C::AggKey> + From<Vec<u8>>;
 	type ValidatorId: Debug;
 
-	/// Initiate a signing request and return the request id.
-	fn request_signature(payload: C::Payload) -> Self::RequestId;
+	/// Initiate a signing request and return the request id and ceremony id.
+	fn request_signature(payload: C::Payload) -> (Self::RequestId, CeremonyId);
 
 	fn request_signature_with(
 		key_id: Self::KeyId,
@@ -429,15 +429,15 @@ where
 	fn request_signature_with_callback(
 		payload: C::Payload,
 		callback_generator: impl FnOnce(Self::RequestId) -> Self::Callback,
-	) -> Self::RequestId {
-		let id = Self::request_signature(payload);
-		Self::register_callback(id, callback_generator(id)).unwrap_or_else(|e| {
+	) -> (Self::RequestId, CeremonyId) {
+		let (request_id, ceremony_id) = Self::request_signature(payload);
+		Self::register_callback(request_id, callback_generator(request_id)).unwrap_or_else(|e| {
 			log::error!(
 				"Unable to register threshold signature callback. This should not be possible. Error: '{:?}'",
 				e.into()
 			);
 		});
-		id
+		(request_id, ceremony_id)
 	}
 
 	/// Helper function to enable benchmarking of the broadcast pallet
