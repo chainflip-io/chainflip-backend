@@ -1,7 +1,10 @@
 pub use crate::{self as pallet_cf_egress};
 pub use cf_chains::{
-	eth::api::{EthereumApi, EthereumReplayProtection},
-	ChainAbi, Ethereum,
+	eth::{
+		api::{EthereumApi, EthereumReplayProtection},
+		Ethereum,
+	},
+	ChainAbi,
 };
 pub use cf_primitives::{Asset, EthereumAddress, ExchangeRate};
 use cf_primitives::{EthAmount, IntentId};

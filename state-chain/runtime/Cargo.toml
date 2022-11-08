@@ -301,5 +301,6 @@ ibiza = [
   'pallet-cf-ingress',
   'pallet-cf-swapping',
   'pallet-cf-lp',
-  'cf-chains/ibiza'
+  'cf-chains/ibiza',
+  'pallet-cf-environment/ibiza'
 ]

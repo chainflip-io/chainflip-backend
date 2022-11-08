@@ -2,26 +2,29 @@
 
 use std::{collections::BTreeSet, pin::Pin, sync::Arc};
 
+use cf_chains::eth::Ethereum;
 use cf_primitives::{Asset, ForeignChainAddress};
 use futures::Stream;
 use pallet_cf_ingress::IngressWitness;
 use sp_core::H160;
-use tokio::sync::broadcast;
 use tokio_stream::StreamExt;
 use web3::types::Transaction;
 
 use crate::{
-	eth::epoch_witnesser::should_end_witnessing,
 	state_chain_observer::client::extrinsic_api::ExtrinsicApi,
+	witnesser::{
+		epoch_witnesser::{self, should_end_witnessing},
+		EpochStart,
+	},
 };
 
 use super::{
-	epoch_witnesser, eth_block_head_stream_from,
+	eth_block_head_stream_from,
 	http_safe_stream::{safe_polling_http_head_stream, HTTP_POLL_INTERVAL},
 	merged_block_items_stream,
 	rpc::{EthDualRpcClient, EthRpcApi, EthWsRpcApi},
 	ws_safe_stream::safe_ws_head_stream,
-	BlockWithProcessedItems, EpochStart, EthNumberBloom,
+	BlockWithProcessedItems, EthNumberBloom,
 };
 
 use anyhow::Result;
@@ -60,7 +63,7 @@ where
 // witnessing a window of blocks
 pub async fn start<StateChainClient>(
 	eth_dual_rpc: EthDualRpcClient,
-	epoch_starts_receiver: broadcast::Receiver<EpochStart>,
+	epoch_starts_receiver: async_channel::Receiver<EpochStart<Ethereum>>,
 	eth_monitor_ingress_receiver: tokio::sync::mpsc::UnboundedReceiver<H160>,
 	state_chain_client: Arc<StateChainClient>,
 	monitored_addresses: BTreeSet<H160>,
@@ -83,7 +86,7 @@ where
 			let state_chain_client = state_chain_client.clone();
 			async move {
 				let safe_ws_tx_stream = block_transactions_stream_from_head_stream(
-					epoch_start.eth_block,
+					epoch_start.block_number,
 					safe_ws_head_stream(
 						eth_ws_rpc.subscribe_new_heads().await?,
 						ETH_BLOCK_SAFETY_MARGIN,
@@ -95,7 +98,7 @@ where
 				.await?;
 
 				let safe_http_tx_stream = block_transactions_stream_from_head_stream(
-					epoch_start.eth_block,
+					epoch_start.block_number,
 					safe_polling_http_head_stream(
 						eth_http_rpc.clone(),
 						HTTP_POLL_INTERVAL,
@@ -125,7 +128,7 @@ where
 						},
 						Some(block_with_txs) = merged_stream.next() => {
 
-							if should_end_witnessing(end_witnessing_signal.clone(), block_with_txs.block_number, &logger) {
+							if should_end_witnessing::<Ethereum>(end_witnessing_signal.clone(), block_with_txs.block_number, &logger) {
 								break;
 							}
 

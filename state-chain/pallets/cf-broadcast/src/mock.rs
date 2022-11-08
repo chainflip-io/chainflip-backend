@@ -2,8 +2,9 @@ use std::cell::RefCell;
 
 use crate::{self as pallet_cf_broadcast, Instance1, PalletOffence};
 use cf_chains::{
+	eth::Ethereum,
 	mocks::{MockApiCall, MockEthereum, MockTransactionBuilder},
-	ChainCrypto, Ethereum,
+	ChainCrypto,
 };
 use cf_traits::{
 	mocks::{

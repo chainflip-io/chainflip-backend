@@ -1,6 +1,5 @@
 pub mod chain_data_witnesser;
 pub mod contract_witnesser;
-mod epoch_witnesser;
 pub mod erc20_witnesser;
 mod http_safe_stream;
 pub mod ingress_witnesser;
@@ -46,7 +45,6 @@ use std::{
 	sync::Arc,
 };
 use thiserror::Error;
-use tokio::sync::broadcast;
 use web3::{
 	ethabi::{self, Address, Contract},
 	signing::{Key, SecretKeyRef},
@@ -103,22 +101,12 @@ impl SignatureAndEvent {
 	}
 }
 
-#[derive(Clone, Debug)]
-#[cfg_attr(test, derive(PartialEq))]
-pub struct EpochStart {
-	pub epoch_index: EpochIndex,
-	pub eth_block: <cf_chains::Ethereum as cf_chains::Chain>::ChainBlockNumber,
-	pub current: bool,
-	pub participant: bool,
-}
-
 /// Helper that generates a broadcast channel with multiple receivers.
 pub fn build_broadcast_channel<T: Clone, const S: usize>(
 	capacity: usize,
-) -> (broadcast::Sender<T>, [broadcast::Receiver<T>; S]) {
-	let (sender, _) = broadcast::channel(capacity);
-	let receivers = [0; S].map(|_| sender.subscribe());
-	(sender, receivers)
+) -> (async_channel::Sender<T>, [async_channel::Receiver<T>; S]) {
+	let (sender, receiver) = async_channel::bounded(capacity);
+	(sender, [0; S].map(|_| receiver.clone()))
 }
 
 impl TryFrom<Block<H256>> for EthNumberBloom {

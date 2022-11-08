@@ -15,6 +15,8 @@ use sp_runtime::{
 	BuildStorage,
 };
 
+pub const RELAYER_FEE: u128 = 5;
+
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 type AccountId = u64;
@@ -92,6 +94,7 @@ impl IngressApi for MockIngress {
 		_schedule_egress: ForeignChainAsset,
 		_egress_address: ForeignChainAddress,
 		_relayer_commission_bps: u16,
+		_relayer_id: Self::AccountId,
 	) -> Result<(u64, cf_primitives::ForeignChainAddress), sp_runtime::DispatchError> {
 		Ok((0, ForeignChainAddress::Eth(Default::default())))
 	}
@@ -163,11 +166,12 @@ impl AmmPoolApi for MockAmmPoolApi {
 	}
 
 	fn swap(
-		_ingress_asset: cf_primitives::Asset,
-		_egress_asset: ForeignChainAsset,
-		ingress_amount: Self::Balance,
-	) -> Self::Balance {
-		ingress_amount
+		_from: cf_primitives::Asset,
+		_to: ForeignChainAsset,
+		swap_input: Self::Balance,
+		_fee: u16,
+	) -> (Self::Balance, (cf_primitives::Asset, Self::Balance)) {
+		(swap_input, (cf_primitives::Asset::Usdc, RELAYER_FEE))
 	}
 }
 

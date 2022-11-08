@@ -2,18 +2,17 @@ use std::sync::{Arc, Mutex};
 
 use futures::{Future, FutureExt};
 use slog::o;
-use tokio::sync::broadcast;
 
 use crate::{
 	logging::COMPONENT_KEY,
 	task_scope::{with_task_scope, ScopedJoinHandle},
 };
 
-use super::EpochStart;
+use super::{ChainBlockNumber, EpochStart};
 
-pub fn should_end_witnessing(
-	end_witnessing_signal: Arc<Mutex<Option<u64>>>,
-	current_block_number: u64,
+pub fn should_end_witnessing<Chain: cf_chains::Chain>(
+	end_witnessing_signal: Arc<Mutex<Option<ChainBlockNumber<Chain>>>>,
+	current_block_number: ChainBlockNumber<Chain>,
 	logger: &slog::Logger,
 ) -> bool {
 	if let Some(end_block) = *end_witnessing_signal.lock().unwrap() {
@@ -31,19 +30,27 @@ pub fn should_end_witnessing(
 	false
 }
 
-pub async fn start<G, F, Fut, State>(
+pub async fn start<G, F, Fut, State, Chain>(
 	log_key: String,
-	mut epoch_start_receiver: broadcast::Receiver<EpochStart>,
+	epoch_start_receiver: async_channel::Receiver<EpochStart<Chain>>,
 	mut should_epoch_participant_witness: G,
 	initial_state: State,
 	mut epoch_witnesser_generator: F,
 	logger: &slog::Logger,
 ) -> anyhow::Result<()>
 where
-	F: FnMut(Arc<Mutex<Option<u64>>>, EpochStart, State, slog::Logger) -> Fut + Send + 'static,
+	Chain: cf_chains::Chain,
+	F: FnMut(
+			Arc<Mutex<Option<ChainBlockNumber<Chain>>>>,
+			EpochStart<Chain>,
+			State,
+			slog::Logger,
+		) -> Fut
+		+ Send
+		+ 'static,
 	Fut: Future<Output = anyhow::Result<State>> + Send + 'static,
 	State: Send + 'static,
-	G: FnMut(&EpochStart) -> bool + Send + 'static,
+	G: FnMut(&EpochStart<Chain>) -> bool + Send + 'static,
 {
 	with_task_scope(|scope| {
 		{
@@ -53,7 +60,7 @@ where
 
 				let mut option_state = Some(initial_state);
 				let mut end_witnessing_signal_and_handle: Option<(
-					Arc<Mutex<Option<u64>>>,
+					Arc<Mutex<Option<ChainBlockNumber<Chain>>>>,
 					ScopedJoinHandle<State>,
 				)> = None;
 
@@ -63,7 +70,7 @@ where
 					if let Some((end_witnessing_signal, handle)) =
 						end_witnessing_signal_and_handle.take()
 					{
-						*end_witnessing_signal.lock().unwrap() = Some(epoch_start.eth_block);
+						*end_witnessing_signal.lock().unwrap() = Some(epoch_start.block_number);
 						option_state = Some(handle.await);
 					}
 
@@ -76,7 +83,7 @@ where
 							slog::info!(
 								logger,
 								"Start witnessing from ETH block: {}",
-								epoch_start.eth_block
+								epoch_start.block_number
 							);
 
 							(

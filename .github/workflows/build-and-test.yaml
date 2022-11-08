@@ -1,20 +1,34 @@
 name: Checks
 on:
   push:
-    branches:
-      - develop
-      - release/*
-  pull_request:
 
 env:
   SCCACHE_CACHE_SIZE: 32G
-  SCCACHE_REDIS: ${{ secrets.SCCACHE_REDIS }}
+  # SCCACHE_REDIS: ${{ secrets.SCCACHE_REDIS }}
   CF_RUNNER_SUDO_PASSWORD: ${{ secrets.CF_RUNNER_SUDO_PASSWORD }}
+
 jobs:
+  set-variables:
+    runs-on: ubuntu-latest
+    outputs:
+      commit_hash: ${{ steps.commit_hash.outputs.commit_hash }}
+      branch_name: ${{ steps.branch_name.outputs.branch_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - id: commit_hash
+        run: |
+          COMMIT_HASH=$(git rev-parse --verify HEAD)
+          echo "commit_hash=$COMMIT_HASH" >> $GITHUB_OUTPUT
+      - id: branch_name
+        run: |
+          BRANCH_NAME=$(git rev-parse --abbrev-ref HEAD)
+          echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+
   cargo-fmt:
     runs-on: [hetzner]
     container:
-      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08'
+      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08-no-sccache'
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -27,7 +41,7 @@ jobs:
   cargo-clippy:
     runs-on: [hetzner]
     container:
-      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08'
+      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08-no-sccache'
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -40,7 +54,7 @@ jobs:
   cargo-doc:
     runs-on: [hetzner]
     container:
-      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08'
+      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08-no-sccache'
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -49,17 +63,17 @@ jobs:
         uses: actions/checkout@v3
       - name: Update APT
         run: apt update
-      - name: Setup sccache
-        uses: hendrikmuhs/ccache-action@v1.2
-        with:
-          max-size: ${{ env.SCCACHE_CACHE_SIZE }}
-          variant: sccache
-          save: false
-      - run: sccache --show-stats
+      # - name: Setup sccache
+      #   uses: hendrikmuhs/ccache-action@v1.2
+      #   with:
+      #     max-size: ${{ env.SCCACHE_CACHE_SIZE }}
+      #     variant: sccache
+      #     save: false
+      # - run: sccache --show-stats
       - name: Run cargo doc
         run: |
           cargo doc --workspace --document-private-items --no-deps
-      - run: sccache --show-stats
+      # - run: sccache --show-stats
       - name: Upload artifacts
         uses: actions/upload-artifact@v3
         with:
@@ -69,30 +83,35 @@ jobs:
 
   build-and-test:
     runs-on: [hetzner]
-    needs: [cargo-fmt]
+    needs: [set-variables, cargo-fmt]
     container:
-      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08'
+      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08-no-sccache'
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
+    env:
+      COMMIT_HASH: ${{ needs.set-variables.outputs.commit_hash }}
+      BRANCH_NAME: ${{ needs.set-variables.outputs.branch_name }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
       - name: Update APT
         run: apt update
-      - name: Setup sccache
-        uses: hendrikmuhs/ccache-action@v1.2
-        with:
-          max-size: ${{ env.SCCACHE_CACHE_SIZE }}
-          variant: sccache
-          save: false
-      - run: sccache --show-stats
-      - run: |
+      # - name: Setup sccache
+      #   uses: hendrikmuhs/ccache-action@v1.2
+      #   with:
+      #     max-size: ${{ env.SCCACHE_CACHE_SIZE }}
+      #     variant: sccache
+      #     save: false
+      # - run: sccache --show-stats
+      - name: cargo ci-build
+        run: |
           cargo ci-build --locked
-          sccache --show-stats
-      - run: |
+          # sccache --show-stats
+      - name: cargo ci-test --locked
+        run: |
           cargo ci-test --locked
-          sccache --show-stats
+          # sccache --show-stats
       - name: Install cargo-deb
         run: cargo install cargo-deb
       - name: Get date
@@ -120,30 +139,37 @@ jobs:
             ./target/release/chainflip-cli
             ./target/release/generate-genesis-keys
             ./target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm
+      - name: Check if building changes any files
+        run: |
+          git diff --exit-code
+          git diff --cached --exit-code
 
   build-ibiza:
     runs-on: [hetzner]
-    needs: [cargo-fmt]
+    needs: [set-variables, cargo-fmt]
     container:
-      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08'
+      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08-no-sccache'
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
+    env:
+      COMMIT_HASH: ${{ needs.set-variables.outputs.commit_hash }}
+      BRANCH_NAME: ${{ needs.set-variables.outputs.branch_name }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
       - name: Update APT
         run: apt update
-      - name: Setup sccache
-        uses: hendrikmuhs/ccache-action@v1.2
-        with:
-          max-size: ${{ env.SCCACHE_CACHE_SIZE }}
-          variant: sccache
-          save: false
-      - run: sccache --show-stats
+      # - name: Setup sccache
+      #   uses: hendrikmuhs/ccache-action@v1.2
+      #   with:
+      #     max-size: ${{ env.SCCACHE_CACHE_SIZE }}
+      #     variant: sccache
+      #     save: false
+      # - run: sccache --show-stats
       - run: |
           cargo ci-build-ibiza --locked
-          sccache --show-stats
+          # sccache --show-stats
       - name: Install cargo-deb
         run: cargo install cargo-deb
       - name: Get date
@@ -171,6 +197,10 @@ jobs:
             ./target/release/chainflip-cli
             ./target/release/generate-genesis-keys
             ./target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm
+      - name: Check if building changes any files
+        run: |
+          git diff --exit-code
+          git diff --cached --exit-code
 
   run-benchmarks:
     runs-on: [hetzner]
@@ -267,18 +297,20 @@ jobs:
 
   deb-publish:
     name: Publish Packages to APT repo
-    needs: [build-and-test]
+    needs: [set-variables, build-and-test]
     uses: ./.github/workflows/.deb-publish.yaml
     with:
       s3-prefix: ci
       artifacts: chainflip-backend-packages
+      commit_hash: ${{ needs.set-variables.outputs.commit_hash }}
     secrets: inherit
 
   deb-publish-ibiza:
     name: Publish Ibiza Packages to APT repo
-    needs: [build-ibiza]
+    needs: [set-variables, build-ibiza]
     uses: ./.github/workflows/.deb-publish.yaml
     with:
       s3-prefix: ci/ibiza
       artifacts: chainflip-backend-packages-ibiza
+      commit_hash: ${{ needs.set-variables.outputs.commit_hash }}
     secrets: inherit
