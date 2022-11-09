@@ -2,7 +2,7 @@ use crate::{self as pallet_cf_lp};
 use cf_chains::{Chain, Ethereum};
 use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
-	AddressDerivationApi, EgressApi, SwapIntentHandler,
+	AddressDerivationApi, EgressApi,
 };
 use frame_support::{parameter_types, sp_runtime::app_crypto::sp_core::H160};
 use frame_system as system;
@@ -13,7 +13,7 @@ use sp_runtime::{
 	BuildStorage,
 };
 
-use cf_primitives::{AssetAmount, ForeignChainAddress, ForeignChainAsset, IntentId};
+use cf_primitives::{Asset, AssetAmount, ForeignChainAddress, IntentId};
 
 use sp_std::str::FromStr;
 
@@ -25,7 +25,7 @@ pub struct MockAddressDerivation;
 
 impl AddressDerivationApi for MockAddressDerivation {
 	fn generate_address(
-		_ingress_asset: ForeignChainAsset,
+		_ingress_asset: Asset,
 		_intent_id: IntentId,
 	) -> Result<cf_primitives::ForeignChainAddress, sp_runtime::DispatchError> {
 		Ok(ForeignChainAddress::Eth(
@@ -33,23 +33,6 @@ impl AddressDerivationApi for MockAddressDerivation {
 				.unwrap()
 				.to_fixed_bytes(),
 		))
-	}
-}
-
-pub struct MockSwapIntentHandler;
-
-impl SwapIntentHandler for MockSwapIntentHandler {
-	type AccountId = AccountId;
-
-	fn schedule_swap(
-		_from: cf_primitives::Asset,
-		_to: ForeignChainAsset,
-		_amount: AssetAmount,
-		_egress_address: ForeignChainAddress,
-		_relayer_id: Self::AccountId,
-		_relayer_commission_bps: u16,
-	) {
-		todo!()
 	}
 }
 
@@ -103,8 +86,8 @@ impl pallet_cf_ingress::Config for Test {
 	type Event = Event;
 	type AddressDerivation = MockAddressDerivation;
 	type LpAccountHandler = LiquidityProvider;
-	type EthereumIngressFetchApi = ();
-	type SwapIntentHandler = MockSwapIntentHandler;
+	type IngressFetchApi = ();
+	type SwapIntentHandler = ();
 	type WeightInfo = ();
 }
 
@@ -125,7 +108,6 @@ impl pallet_cf_account_roles::Config for Test {
 }
 
 parameter_types! {
-	pub static IsValid: bool = false;
 	pub static LastEgress: Option<(<Ethereum as Chain>::ChainAsset, AssetAmount, <Ethereum as Chain>::ChainAccount)> = None;
 }
 pub struct MockEgressApi;
@@ -143,7 +125,7 @@ impl crate::Config for Test {
 	type Event = Event;
 	type AccountRoleRegistry = AccountRoles;
 	type Ingress = Ingress;
-	type EthereumEgressApi = MockEgressApi;
+	type EgressApi = MockEgressApi;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 }
 

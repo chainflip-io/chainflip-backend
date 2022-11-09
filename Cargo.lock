@@ -9490,6 +9490,7 @@ dependencies = [
  "cf-primitives",
  "cf-session-benchmarking",
  "cf-traits",
+ "ethabi",
  "frame-benchmarking",
  "frame-executive",
  "frame-support",

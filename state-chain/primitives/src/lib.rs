@@ -82,6 +82,33 @@ pub enum ForeignChainAddress {
 	Dot([u8; 32]),
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum AddressError {
+	InvalidAddress,
+}
+
+impl TryFrom<ForeignChainAddress> for EthereumAddress {
+	type Error = AddressError;
+
+	fn try_from(address: ForeignChainAddress) -> Result<Self, Self::Error> {
+		match address {
+			ForeignChainAddress::Eth(addr) => Ok(addr),
+			_ => Err(AddressError::InvalidAddress),
+		}
+	}
+}
+
+impl TryFrom<ForeignChainAddress> for [u8; 32] {
+	type Error = AddressError;
+
+	fn try_from(address: ForeignChainAddress) -> Result<Self, Self::Error> {
+		match address {
+			ForeignChainAddress::Dot(addr) => Ok(addr),
+			_ => Err(AddressError::InvalidAddress),
+		}
+	}
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct ForeignChainAsset {

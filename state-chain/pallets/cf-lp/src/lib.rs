@@ -68,7 +68,7 @@ pub mod pallet {
 		type Ingress: IngressApi<AccountId = <Self as frame_system::Config>::AccountId>;
 
 		/// API used to withdraw foreign assets off the chain.
-		type EthereumEgressApi: EgressApi<Ethereum>;
+		type EgressApi: EgressApi<Ethereum>;
 
 		/// For governance checks.
 		type EnsureGovernance: EnsureOrigin<Self::Origin>;
@@ -264,13 +264,13 @@ pub mod pallet {
 				ForeignChainAddress::Eth(eth_addr) => {
 					let eth_asset = assets::eth::Asset::try_from(foreign_asset.asset)
 						.map_err(|_| Error::<T>::InvalidEgressAddress)?;
-					T::EthereumEgressApi::schedule_egress(eth_asset, amount, eth_addr.into());
+					T::EgressApi::schedule_egress(eth_asset, amount, eth_addr.into());
 				},
 				ForeignChainAddress::Dot(_dot_addr) => {
 					// TODO: Enable this arm when polkadot egress is supported.
 					let _dot_asset = assets::dot::Asset::try_from(foreign_asset.asset)
 						.map_err(|_| Error::<T>::InvalidEgressAddress)?;
-					// T::EthereumEgressApi::schedule_egress(dot_asset, amount, dot_addr);
+					// T::EgressApi::schedule_egress(dot_asset, amount, dot_addr);
 				},
 			}
 

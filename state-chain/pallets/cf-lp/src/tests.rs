@@ -1,8 +1,8 @@
 use crate::{mock::*, FreeBalances};
 
 use cf_primitives::{
-	liquidity::AmmRange, AccountRole, Asset, ForeignChain, ForeignChainAddress, ForeignChainAsset,
-	TradingPosition,
+	chains::assets, liquidity::AmmRange, AccountRole, Asset, ForeignChain, ForeignChainAddress,
+	ForeignChainAsset, TradingPosition,
 };
 use cf_traits::{
 	mocks::system_state_info::MockSystemStateInfo, AccountRoleRegistry, SystemStateInfo,
@@ -88,18 +88,16 @@ fn liquidity_providers_can_withdraw_liquidity() {
 		));
 		FreeBalances::<Test>::insert(ALICE, Asset::Eth, 1_000);
 
-		assert!(!IsValid::get());
 		assert_noop!(
 			LiquidityProvider::withdraw_liquidity(
 				Origin::signed(ALICE),
 				100,
-				ForeignChainAsset { chain: ForeignChain::Ethereum, asset: Asset::Eth },
+				ForeignChainAsset { chain: ForeignChain::Ethereum, asset: Asset::Dot },
 				ForeignChainAddress::Eth([0x00; 20]),
 			),
 			crate::Error::<Test>::InvalidEgressAddress
 		);
 
-		IsValid::set(true);
 		assert!(LastEgress::get().is_none());
 		assert_ok!(LiquidityProvider::withdraw_liquidity(
 			Origin::signed(ALICE),
@@ -107,14 +105,7 @@ fn liquidity_providers_can_withdraw_liquidity() {
 			ForeignChainAsset { chain: ForeignChain::Ethereum, asset: Asset::Eth },
 			ForeignChainAddress::Eth([0x00; 20]),
 		));
-		assert_eq!(
-			LastEgress::get(),
-			Some((
-				ForeignChainAsset { chain: ForeignChain::Ethereum, asset: Asset::Eth },
-				100,
-				ForeignChainAddress::Eth([0x00; 20])
-			))
-		);
+		assert_eq!(LastEgress::get(), Some((assets::eth::Asset::Eth, 100, [0x00; 20].into())));
 	});
 }
 
@@ -128,7 +119,6 @@ fn cannot_deposit_and_withdrawal_during_maintenance() {
 			AccountRole::LiquidityProvider
 		));
 		FreeBalances::<Test>::insert(ALICE, Asset::Eth, 1_000);
-		IsValid::set(true);
 
 		// Activate maintenance mode
 		MockSystemStateInfo::set_maintenance(true);
@@ -184,7 +174,6 @@ fn cannot_manage_liquidity_during_maintenance() {
 		));
 		FreeBalances::<Test>::insert(ALICE, Asset::Eth, 1_000_000);
 		FreeBalances::<Test>::insert(ALICE, Asset::Usdc, 1_000_000);
-		IsValid::set(true);
 
 		let position = TradingPosition::ClassicV3 {
 			range: AmmRange { lower: 0, upper: 0 },

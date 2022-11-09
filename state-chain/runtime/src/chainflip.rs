@@ -6,9 +6,10 @@ pub mod decompose_recompose;
 pub mod epoch_transition;
 mod missed_authorship_slots;
 mod offences;
-use cf_primitives::{chains::assets, EthereumAddress, ETHEREUM_ETH_ADDRESS};
+use cf_primitives::{chains::assets, ETHEREUM_ETH_ADDRESS};
 pub use offences::*;
 mod signer_nomination;
+use ethabi::Address as EthAbiAddress;
 pub use missed_authorship_slots::MissedAuraSlots;
 pub use signer_nomination::RandomSignerNomination;
 use sp_core::U256;
@@ -19,9 +20,13 @@ use crate::{
 };
 #[cfg(feature = "ibiza")]
 use cf_chains::dot::{
-	api::PolkadotApi, CurrentVaultAndProxy, Polkadot, PolkadotReplayProtection,
-	PolkadotTransactionData,
+	api::PolkadotApi, Polkadot, PolkadotReplayProtection, PolkadotTransactionData,
 };
+#[cfg(feature = "ibiza")]
+use codec::{Decode, Encode};
+#[cfg(feature = "ibiza")]
+use scale_info::TypeInfo;
+
 use cf_chains::{
 	eth::{
 		self,
@@ -31,9 +36,8 @@ use cf_chains::{
 	ApiCall, ChainAbi, ChainEnvironment, TransactionBuilder,
 };
 use cf_traits::{
-	ApiCallDataProvider, BlockEmissions, Chainflip, EmergencyRotation, EpochInfo,
-	EthEnvironmentProvider, Heartbeat, Issuance, NetworkState, ReplayProtectionProvider,
-	RewardsDistribution, RuntimeUpgrade,
+	BlockEmissions, Chainflip, EmergencyRotation, EpochInfo, EthEnvironmentProvider, Heartbeat,
+	Issuance, NetworkState, ReplayProtectionProvider, RewardsDistribution, RuntimeUpgrade,
 };
 use frame_support::traits::Get;
 use pallet_cf_chain_tracking::ChainState;
@@ -129,13 +133,13 @@ impl cf_traits::WaivedFees for WaivedFees {
 
 pub struct EthEnvironment;
 
-impl ChainEnvironment<assets::eth::Asset, EthereumAddress> for EthEnvironment {
+impl ChainEnvironment<assets::eth::Asset, EthAbiAddress> for EthEnvironment {
 	fn lookup(
 		asset: assets::eth::Asset,
-	) -> Result<Self::LookupValue, frame_support::error::LookupError> {
+	) -> Result<EthAbiAddress, frame_support::error::LookupError> {
 		Ok(match asset {
-			assets::eth::Asset::Eth => ETHEREUM_ETH_ADDRESS,
-			assets::eth::Asset::Flip => Environment::flip_token_address(),
+			assets::eth::Asset::Eth => ETHEREUM_ETH_ADDRESS.into(),
+			assets::eth::Asset::Flip => Environment::flip_token_address().into(),
 			assets::eth::Asset::Usdc => todo!(),
 		})
 	}
@@ -143,8 +147,10 @@ impl ChainEnvironment<assets::eth::Asset, EthereumAddress> for EthEnvironment {
 
 pub struct EthTransactionBuilder;
 
-impl TransactionBuilder<Ethereum, EthereumApi> for EthTransactionBuilder {
-	fn build_transaction(signed_call: &EthereumApi) -> <Ethereum as ChainAbi>::Transaction {
+impl TransactionBuilder<Ethereum, EthereumApi<EthEnvironment>> for EthTransactionBuilder {
+	fn build_transaction(
+		signed_call: &EthereumApi<EthEnvironment>,
+	) -> <Ethereum as ChainAbi>::Transaction {
 		eth::Transaction {
 			chain_id: Environment::ethereum_chain_id(),
 			contract: match signed_call {
@@ -177,8 +183,10 @@ impl TransactionBuilder<Ethereum, EthereumApi> for EthTransactionBuilder {
 #[cfg(feature = "ibiza")]
 pub struct DotTransactionBuilder;
 #[cfg(feature = "ibiza")]
-impl TransactionBuilder<Polkadot, PolkadotApi> for DotTransactionBuilder {
-	fn build_transaction(signed_call: &PolkadotApi) -> <Polkadot as ChainAbi>::Transaction {
+impl TransactionBuilder<Polkadot, PolkadotApi<DotEnvironment>> for DotTransactionBuilder {
+	fn build_transaction(
+		signed_call: &PolkadotApi<DotEnvironment>,
+	) -> <Polkadot as ChainAbi>::Transaction {
 		PolkadotTransactionData { encoded_extrinsic: signed_call.chain_encoded() }
 	}
 
@@ -224,7 +232,9 @@ impl ReplayProtectionProvider<Ethereum> for EthEnvironment {
 }
 
 #[cfg(feature = "ibiza")]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct DotEnvironment;
+
 #[cfg(feature = "ibiza")]
 impl ReplayProtectionProvider<Polkadot> for DotEnvironment {
 	// Get the Environment values for vault_account, NetworkChoice and the next nonce for the
@@ -241,14 +251,10 @@ impl ReplayProtectionProvider<Polkadot> for DotEnvironment {
 }
 
 #[cfg(feature = "ibiza")]
-impl ChainEnvironment<cf_chains::dot::api::SystemAccounts> for DotEnvironment {
-	type LookupValue;
-
+impl ChainEnvironment<cf_chains::dot::api::SystemAccounts, AccountId> for DotEnvironment {
 	fn lookup(
-		query: cf_chains::dot::api::SystemAccounts,
-	) -> Result<Self::LookupValue, frame_support::error::LookupError> {
-		match query {
-			_ => todo!(), //Pull from environment
-		}
+		_query: cf_chains::dot::api::SystemAccounts,
+	) -> Result<AccountId, frame_support::error::LookupError> {
+		todo!() //Pull from environment
 	}
 }

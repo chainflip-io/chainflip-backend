@@ -20,6 +20,17 @@ pub trait SwapIntentHandler {
 	);
 }
 
+impl SwapIntentHandler for () {
+	fn schedule_swap(
+		_from: Asset,
+		_to: Asset,
+		_amount: AssetAmount,
+		_ingress_address: ForeignChainAddress,
+		_egress_address: ForeignChainAddress,
+	) {
+	}
+}
+
 pub trait LpAccountHandler {
 	type AccountId;
 	type Amount;
