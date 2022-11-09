@@ -120,25 +120,28 @@ pub async fn request_claim(
 		) = event
 		{
 			println!("Your claim request is on chain.\nWaiting for signed claim data...");
-			while let Some(result_header) = block_stream.next().await {
-				let header = result_header.expect("Failed to get a valid block header");
-				let block_hash = header.hash();
-				let events = state_chain_client
-					.storage_value::<frame_system::Events<state_chain_runtime::Runtime>>(block_hash)
-					.await?;
-				for event_record in events {
-					if let state_chain_runtime::Event::Staking(
-						pallet_cf_staking::Event::ClaimSignatureIssued(validator_id, claim_cert),
-					) = event_record.event
-					{
-						if validator_id == state_chain_client.account_id() {
-							return Ok(claim_cert)
-						}
-					}
+			break
+		}
+	}
+
+	while let Some(result_header) = block_stream.next().await {
+		let header = result_header.expect("Failed to get a valid block header");
+		let block_hash = header.hash();
+		let events = state_chain_client
+			.storage_value::<frame_system::Events<state_chain_runtime::Runtime>>(block_hash)
+			.await?;
+		for event_record in events {
+			if let state_chain_runtime::Event::Staking(
+				pallet_cf_staking::Event::ClaimSignatureIssued(validator_id, claim_cert),
+			) = event_record.event
+			{
+				if validator_id == state_chain_client.account_id() {
+					return Ok(claim_cert)
 				}
 			}
 		}
 	}
+
 	Err(anyhow!("Block stream unexpectedly ended"))
 }
 
