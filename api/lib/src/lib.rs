@@ -2,7 +2,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
 use cf_chains::eth::H256;
 use cf_primitives::AccountRole;
-use futures::StreamExt;
+use futures::{Stream, StreamExt};
 use pallet_cf_governance::ProposalId;
 use pallet_cf_validator::MAX_LENGTH_FOR_VANITY_NAME;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
@@ -83,6 +83,33 @@ pub async fn request_block(
 
 pub type ClaimCertificate = Vec<u8>;
 
+async fn submit_and_ensure_success<Call, BlockStream>(
+	client: &StateChainClient,
+	block_stream: &mut BlockStream,
+	call: Call,
+) -> Result<H256>
+where
+	Call: Into<state_chain_runtime::Call> + Clone + std::fmt::Debug + Send + Sync + 'static,
+	BlockStream:
+		Stream<Item = anyhow::Result<state_chain_runtime::Header>> + Unpin + Send + 'static,
+{
+	let logger = new_discard_logger();
+	let tx_hash = client.submit_signed_extrinsic(call, &logger).await?;
+
+	let events = client.watch_submitted_extrinsic(tx_hash, block_stream).await?;
+
+	if let Some(_failure) = events.iter().find(|event| {
+		matches!(
+			event,
+			state_chain_runtime::Event::System(frame_system::Event::ExtrinsicFailed { .. })
+		)
+	}) {
+		Err(anyhow!("extrinsic execution failed"))
+	} else {
+		Ok(tx_hash)
+	}
+}
+
 pub async fn request_claim(
 	atomic_amount: u128,
 	eth_address: [u8; 20],
@@ -97,32 +124,23 @@ pub async fn request_claim(
 		bail!("We are currently in an auction phase. Please wait until the auction phase is over.");
 	}
 
-	let tx_hash = state_chain_client
-		.submit_signed_extrinsic(
-			pallet_cf_staking::Call::claim { amount: atomic_amount.into(), address: eth_address },
-			&logger,
-		)
-		.await?;
+	let mut block_stream = Box::new(block_stream);
+	let block_stream = block_stream.as_mut();
+
+	let tx_hash = submit_and_ensure_success(
+		&state_chain_client,
+		block_stream,
+		pallet_cf_staking::Call::claim { amount: atomic_amount.into(), address: eth_address },
+	)
+	.await
+	.map_err(|_| anyhow!("invalid claim"))?;
 
 	println!(
 		"Your claim has transaction hash: `{:#x}`. Waiting for your request to be confirmed...",
 		tx_hash
 	);
 
-	let mut block_stream = Box::new(block_stream);
-	let block_stream = block_stream.as_mut();
-
-	let events = state_chain_client.watch_submitted_extrinsic(tx_hash, block_stream).await?;
-
-	for event in events {
-		if let state_chain_runtime::Event::EthereumThresholdSigner(
-			pallet_cf_threshold_signature::Event::ThresholdSignatureRequest { .. },
-		) = event
-		{
-			println!("Your claim request is on chain.\nWaiting for signed claim data...");
-			break
-		}
-	}
+	println!("Your claim request is on chain.\nWaiting for signed claim data...");
 
 	while let Some(result_header) = block_stream.next().await {
 		let header = result_header.expect("Failed to get a valid block header");
