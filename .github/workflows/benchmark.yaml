@@ -90,3 +90,4 @@ jobs:
           body: 'This pull request was opened automatically. Close it if you think it was opened in error.'
           branch: auto/benchmark-results
           delete-branch: true
+          token: ${{ secrets.CF_GITHUB_BOT_TOKEN }}
