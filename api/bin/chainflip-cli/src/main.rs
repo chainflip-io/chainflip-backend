@@ -97,15 +97,24 @@ async fn request_claim(
 		return Ok(())
 	}
 
-	api::request_claim(
-		atomic_amount,
-		eth_address,
-		&settings.state_chain,
-		&settings.eth,
-		should_register_claim,
-		logger,
-	)
-	.await
+	let claim_cert =
+		api::request_claim(atomic_amount, eth_address, &settings.state_chain, logger).await?;
+
+	println!("Your claim certificate is: {:?}", hex::encode(claim_cert.clone()));
+
+	if should_register_claim {
+		let tx_hash = api::register_claim(&settings.eth, &settings.state_chain, claim_cert, logger)
+			.await
+			.expect("Failed to register claim on ETH");
+
+		println!("Submitted claim to Ethereum successfully with tx_hash: {:#x}", tx_hash);
+	} else {
+		println!(
+			"Your claim request has been successfully registered. Please proceed to the Staking UI to complete your claim."
+		);
+	}
+
+	Ok(())
 }
 
 fn confirm_submit() -> bool {

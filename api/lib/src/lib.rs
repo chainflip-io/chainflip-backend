@@ -81,14 +81,14 @@ pub async fn request_block(
 	Ok(())
 }
 
+pub type ClaimCertificate = Vec<u8>;
+
 pub async fn request_claim(
 	atomic_amount: u128,
 	eth_address: [u8; 20],
 	state_chain_settings: &settings::StateChain,
-	eth_settings: &settings::Eth,
-	should_register_claim: bool,
 	logger: &slog::Logger,
-) -> Result<()> {
+) -> Result<ClaimCertificate> {
 	let (_, block_stream, state_chain_client) =
 		connect_to_state_chain(state_chain_settings, false, logger).await?;
 
@@ -120,7 +120,7 @@ pub async fn request_claim(
 		) = event
 		{
 			println!("Your claim request is on chain.\nWaiting for signed claim data...");
-			'outer: while let Some(result_header) = block_stream.next().await {
+			while let Some(result_header) = block_stream.next().await {
 				let header = result_header.expect("Failed to get a valid block header");
 				let block_hash = header.hash();
 				let events = state_chain_client
@@ -132,58 +132,41 @@ pub async fn request_claim(
 					) = event_record.event
 					{
 						if validator_id == state_chain_client.account_id() {
-							if should_register_claim {
-								println!(
-									"Your claim certificate is: {:?}",
-									hex::encode(claim_cert.clone())
-								);
-								let chain_id = state_chain_client
-									.storage_value::<pallet_cf_environment::EthereumChainId<
-										state_chain_runtime::Runtime,
-									>>(block_hash)
-									.await
-									.expect("Failed to fetch EthereumChainId from the State Chain");
-								let stake_manager_address = state_chain_client
-									.storage_value::<pallet_cf_environment::StakeManagerAddress<
-										state_chain_runtime::Runtime,
-									>>(block_hash)
-									.await
-									.expect("Failed to fetch StakeManagerAddress from State Chain");
-								let tx_hash = register_claim(
-									eth_settings,
-									chain_id,
-									stake_manager_address.into(),
-									claim_cert,
-									logger,
-								)
-								.await
-								.expect("Failed to register claim on ETH");
-
-								println!(
-									"Submitted claim to Ethereum successfully with tx_hash: {:#x}",
-									tx_hash
-								);
-							} else {
-								println!("Your claim request has been successfully registered. Please proceed to the Staking UI to complete your claim.");
-							}
-							break 'outer
+							return Ok(claim_cert)
 						}
 					}
 				}
 			}
 		}
 	}
-	Ok(())
+	Err(anyhow!("Block stream unexpectedly ended"))
 }
 
 /// Register the claim certificate on Ethereum
-async fn register_claim(
+pub async fn register_claim(
 	eth_settings: &settings::Eth,
-	chain_id: u64,
-	stake_manager_address: H160,
-	claim_cert: Vec<u8>,
+	state_chain_settings: &settings::StateChain,
+	claim_cert: ClaimCertificate,
 	logger: &slog::Logger,
 ) -> Result<H256> {
+	let (_, _block_stream, state_chain_client) =
+		connect_to_state_chain(state_chain_settings, false, logger).await?;
+
+	let block_hash = state_chain_client.base_rpc_client.latest_finalized_block_hash().await?;
+
+	let chain_id = state_chain_client
+		.storage_value::<pallet_cf_environment::EthereumChainId<state_chain_runtime::Runtime>>(
+			block_hash,
+		)
+		.await
+		.expect("Failed to fetch EthereumChainId from the State Chain");
+	let stake_manager_address = state_chain_client
+		.storage_value::<pallet_cf_environment::StakeManagerAddress<state_chain_runtime::Runtime>>(
+			block_hash,
+		)
+		.await
+		.expect("Failed to fetch StakeManagerAddress from State Chain");
+
 	println!(
 		"Registering your claim on the Ethereum network, to StakeManager address: {:?}",
 		stake_manager_address
@@ -202,7 +185,7 @@ async fn register_claim(
 			eth_broadcaster
 				.encode_and_sign_tx(cf_chains::eth::Transaction {
 					chain_id,
-					contract: stake_manager_address,
+					contract: stake_manager_address.into(),
 					data: claim_cert,
 					..Default::default()
 				})
