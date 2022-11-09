@@ -24,7 +24,7 @@ fn insert_transaction_broadcast_attempt<T: pallet::Config<I>, I: 'static>(
 		broadcast_attempt_id,
 		TransactionSigningAttempt {
 			broadcast_attempt: BroadcastAttempt::<T, I> {
-				unsigned_tx: UnsignedTransactionFor::<T, I>::benchmark_value(),
+				unsigned_tx: TransactionFor::<T, I>::benchmark_value(),
 				broadcast_attempt_id,
 			},
 			nominee,
@@ -104,7 +104,7 @@ benchmarks_instance_pallet! {
 		let broadcast_attempt_id = Pallet::<T, I>::start_broadcast(&BenchmarkValue::benchmark_value(), BenchmarkValue::benchmark_value(), BenchmarkValue::benchmark_value());
 
 		T::KeyProvider::set_key(<<T as Config<I>>::TargetChain as ChainCrypto>::AggKey::benchmark_value());
-		let unsigned_tx = UnsignedTransactionFor::<T, I>::benchmark_value();
+		let unsigned_tx = TransactionFor::<T, I>::benchmark_value();
 
 	} : {
 		Pallet::<T, I>::start_next_broadcast_attempt( BroadcastAttempt::<T, I> {
