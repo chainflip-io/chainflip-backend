@@ -1,3 +1,16 @@
+//! Chainflip Asset types.
+//!
+//! Assets are defined on a per-chain basis and organised in a module structure so that the type for
+//! an asset is scoped to the chain the asset exists on. For example Flip is an Ethereum asset, its
+//! type is `eth::Asset` and its value is `eth::Asset::Flip`.
+//!
+//! The [any] module is special - it collects all asset from all chain. Importantly, each asset
+//! belongs to exactly one chain, so it's possible to uniquely convert an asset from another chain
+//! to its `any` equivalent:
+//!
+//! ```
+//! assert_eq!(any::Asset::Flip, any::Asset::from(eth::Asset::Flip));
+//! ```
 use super::*;
 
 #[cfg(feature = "std")]
@@ -34,6 +47,8 @@ pub enum AssetError {
 	Unsupported,
 }
 
+/// Defines the assets types for a chain and some useful conversion traits. See the module level
+/// docs for more detail.
 macro_rules! chain_assets {
 	( $mod:ident, $chain:ident, $( $asset:ident ),+ ) => {
         /// Chain-specific assets types.
