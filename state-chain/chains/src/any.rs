@@ -7,5 +7,5 @@ impl Chain for AnyChain {
 	type TransactionFee = Self::ChainAmount;
 	type TrackedData = ();
 	type ChainAsset = assets::any::Asset;
-	type ChainAccount = ();
+	type ChainAccount = [u8; 32];
 }

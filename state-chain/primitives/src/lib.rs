@@ -109,11 +109,4 @@ impl TryFrom<ForeignChainAddress> for [u8; 32] {
 	}
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub struct ForeignChainAsset {
-	pub chain: ForeignChain,
-	pub asset: Asset,
-}
-
 pub type EgressBatch<Amount, EgressAddress> = Vec<(Amount, EgressAddress)>;
