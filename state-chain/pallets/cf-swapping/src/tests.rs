@@ -1,5 +1,6 @@
 use crate::{mock::*, EarnedRelayerFees, Pallet, Swap, SwapQueue, WeightInfo};
-use cf_primitives::{Asset, ForeignChain, ForeignChainAddress};
+use cf_chains::eth::assets;
+use cf_primitives::{Asset, EthereumAddress, ForeignChainAddress};
 use cf_traits::SwapIntentHandler;
 use frame_support::assert_ok;
 
@@ -134,7 +135,7 @@ fn expect_earned_fees_to_be_recorded() {
 		const BOB: u64 = 3_u64;
 		<Pallet<Test> as SwapIntentHandler>::schedule_swap(
 			Asset::Flip,
-			ForeignChainAsset { chain: ForeignChain::Ethereum, asset: Asset::Usdc },
+			Asset::Usdc,
 			10,
 			ForeignChainAddress::Eth([2; 20]),
 			ALICE,
@@ -142,7 +143,7 @@ fn expect_earned_fees_to_be_recorded() {
 		);
 		<Pallet<Test> as SwapIntentHandler>::schedule_swap(
 			Asset::Flip,
-			ForeignChainAsset { chain: ForeignChain::Ethereum, asset: Asset::Usdc },
+			Asset::Usdc,
 			20,
 			ForeignChainAddress::Eth([2; 20]),
 			BOB,
@@ -159,7 +160,7 @@ fn expect_earned_fees_to_be_recorded() {
 		);
 		<Pallet<Test> as SwapIntentHandler>::schedule_swap(
 			Asset::Flip,
-			ForeignChainAsset { chain: ForeignChain::Ethereum, asset: Asset::Usdc },
+			Asset::Usdc,
 			10,
 			ForeignChainAddress::Eth([2; 20]),
 			ALICE,

@@ -1,5 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-use cf_primitives::{chains::assets::eth, Asset, AssetAmount, ForeignChainAddress};
+use cf_primitives::{Asset, AssetAmount, ForeignChainAddress};
 use cf_traits::{liquidity::AmmPoolApi, IngressApi};
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
@@ -31,8 +31,8 @@ pub struct Swap<AccountId> {
 #[frame_support::pallet]
 pub mod pallet {
 
-	use cf_chains::Ethereum;
-	use cf_primitives::{Asset, AssetAmount, IntentId};
+	use cf_chains::{eth::assets, Ethereum};
+	use cf_primitives::{Asset, AssetAmount, EthereumAddress, IntentId};
 	use cf_traits::{AccountRoleRegistry, Chainflip, EgressApi, SwapIntentHandler};
 
 	use super::*;
@@ -155,7 +155,14 @@ pub mod pallet {
 					*maybe_fees = Some(fee)
 				}
 			});
-			T::Egress::schedule_egress(swap.to, swap_output, swap.egress_address);
+			// TODO: remove the expects by using AnyChain.
+			T::Egress::schedule_egress(
+				assets::eth::Asset::try_from(swap.to).expect("Only eth assets supported"),
+				swap_output,
+				EthereumAddress::try_from(swap.egress_address)
+					.expect("On eth assets supported")
+					.into(),
+			);
 		}
 	}
 

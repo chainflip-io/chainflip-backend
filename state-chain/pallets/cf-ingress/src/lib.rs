@@ -174,12 +174,16 @@ impl<T: Config> Pallet<T> {
 		let ingress =
 			IntentIngressDetails::<T>::get(ingress_address).ok_or(Error::<T>::InvalidIntent)?;
 		ensure!(ingress.ingress_asset == asset, Error::<T>::IngressMismatchWithIntent);
+
 		// Ingress is called by witnessers, so asset/chain combination should always be valid.
-		if let (Ok(eth_asset), ForeignChainAddress::Eth(_)) =
-			(eth::Asset::try_from(asset), ingress_address)
-		{
-			T::IngressFetchApi::schedule_ingress_fetch(vec![(eth_asset, ingress.intent_id)]);
-		}
+		match (eth::Asset::try_from(asset), ingress_address) {
+			(Ok(eth_asset), ForeignChainAddress::Eth(_)) => {
+				T::IngressFetchApi::schedule_ingress_fetch(vec![(eth_asset, ingress.intent_id)]);
+				Ok(())
+			},
+			_ => Err(Error::<T>::UnsupportedAsset),
+		}?;
+
 		// NB: Don't take here. We should continue witnessing this address
 		// even after an ingress to it has occurred.
 		// https://github.com/chainflip-io/chainflip-eth-contracts/pull/226

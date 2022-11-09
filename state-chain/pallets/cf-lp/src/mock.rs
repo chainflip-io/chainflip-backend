@@ -87,7 +87,7 @@ impl pallet_cf_ingress::Config for Test {
 	type AddressDerivation = MockAddressDerivation;
 	type LpAccountHandler = LiquidityProvider;
 	type IngressFetchApi = ();
-	type SwapIntentHandler = ();
+	type SwapIntentHandler = Self;
 	type WeightInfo = ();
 }
 
