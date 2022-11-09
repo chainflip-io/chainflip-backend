@@ -1,6 +1,6 @@
 use crate::{
 	eth::{Ethereum, Tokenizable},
-	ApiCall, ChainAbi, ChainCrypto,
+	ApiCall, ChainCrypto,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use ethabi::{Address, ParamType, Token, Uint};
@@ -102,7 +102,7 @@ impl ApiCall<Ethereum> for UpdateFlipSupply {
 		self
 	}
 
-	fn chain_encoded(&self) -> <Ethereum as ChainAbi>::SignedTransaction {
+	fn chain_encoded(&self) -> Vec<u8> {
 		self.abi_encoded()
 	}
 

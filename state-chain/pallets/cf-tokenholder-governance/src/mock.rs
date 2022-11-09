@@ -123,7 +123,7 @@ impl ApiCall<MockEthereum> for MockApiCalls {
 		unimplemented!()
 	}
 
-	fn chain_encoded(&self) -> <MockEthereum as ChainAbi>::SignedTransaction {
+	fn chain_encoded(&self) -> Vec<u8> {
 		unimplemented!()
 	}
 
