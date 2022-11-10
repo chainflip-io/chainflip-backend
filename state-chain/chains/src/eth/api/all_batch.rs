@@ -5,7 +5,7 @@ use sp_std::{boxed::Box, vec, vec::Vec};
 
 use crate::{
 	eth::{Ethereum, SigData, Tokenizable},
-	ApiCall, ChainAbi, ChainCrypto,
+	ApiCall, ChainCrypto,
 };
 
 use crate::{FetchAssetParams, TransferAssetParams};
@@ -99,7 +99,7 @@ impl ApiCall<Ethereum> for AllBatch {
 		self
 	}
 
-	fn chain_encoded(&self) -> <Ethereum as ChainAbi>::SignedTransaction {
+	fn chain_encoded(&self) -> Vec<u8> {
 		self.abi_encoded()
 	}
 

@@ -8,7 +8,8 @@ use crate::dot::{
 	UtilityCall,
 };
 
-use crate::{ApiCall, ChainAbi, ChainCrypto};
+use crate::{ApiCall, ChainCrypto};
+use sp_std::vec::Vec;
 
 use sp_runtime::{traits::IdentifyAccount, MultiSigner, RuntimeDebug};
 
@@ -103,7 +104,7 @@ impl ApiCall<Polkadot> for RotateVaultProxy {
 		self
 	}
 
-	fn chain_encoded(&self) -> <Polkadot as ChainAbi>::SignedTransaction {
+	fn chain_encoded(&self) -> Vec<u8> {
 		self.extrinsic_handler.signed_extrinsic.clone().unwrap().encode()
 	}
 
@@ -169,9 +170,9 @@ mod test_rotate_vault_proxy {
 			)
 		);
 
-		let rotate_vault_proxy_api = rotate_vault_proxy_api
-			.clone()
-			.signed(&keypair_old_proxy.sign(&rotate_vault_proxy_api.threshold_signature_payload()));
+		let rotate_vault_proxy_api = rotate_vault_proxy_api.clone().signed(
+			&keypair_old_proxy.sign(&rotate_vault_proxy_api.threshold_signature_payload().0),
+		);
 		assert!(rotate_vault_proxy_api.is_signed());
 
 		println!("encoded extrinsic: 0x{}", hex::encode(rotate_vault_proxy_api.chain_encoded()));

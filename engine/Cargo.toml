@@ -169,5 +169,7 @@ rlp = "0.5"
 integration-test = []
 ibiza = [
     'pallet-cf-ingress',
-    'state-chain-runtime/ibiza'
+    'state-chain-runtime/ibiza',
+    'cf-chains/ibiza',
+    'chainflip-node/ibiza',
 ]

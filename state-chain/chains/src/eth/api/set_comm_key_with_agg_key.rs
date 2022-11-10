@@ -1,6 +1,6 @@
 use crate::{
 	eth::{self, Ethereum, Tokenizable},
-	ApiCall, ChainAbi, ChainCrypto,
+	ApiCall, ChainCrypto,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use ethabi::{ParamType, Token};
@@ -71,7 +71,7 @@ impl ApiCall<Ethereum> for SetCommKeyWithAggKey {
 		self
 	}
 
-	fn chain_encoded(&self) -> <Ethereum as ChainAbi>::SignedTransaction {
+	fn chain_encoded(&self) -> Vec<u8> {
 		self.abi_encoded()
 	}
 
