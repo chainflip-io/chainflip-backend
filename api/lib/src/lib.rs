@@ -87,7 +87,7 @@ async fn submit_and_ensure_success<Call, BlockStream>(
 	client: &StateChainClient,
 	block_stream: &mut BlockStream,
 	call: Call,
-) -> Result<H256>
+) -> Result<(H256, Vec<state_chain_runtime::Event>)>
 where
 	Call: Into<state_chain_runtime::Call> + Clone + std::fmt::Debug + Send + Sync + 'static,
 	BlockStream:
@@ -106,7 +106,7 @@ where
 	}) {
 		Err(anyhow!("extrinsic execution failed"))
 	} else {
-		Ok(tx_hash)
+		Ok((tx_hash, events))
 	}
 }
 
@@ -127,7 +127,7 @@ pub async fn request_claim(
 	let mut block_stream = Box::new(block_stream);
 	let block_stream = block_stream.as_mut();
 
-	let tx_hash = submit_and_ensure_success(
+	let (tx_hash, _) = submit_and_ensure_success(
 		&state_chain_client,
 		block_stream,
 		pallet_cf_staking::Call::claim { amount: atomic_amount.into(), address: eth_address },
