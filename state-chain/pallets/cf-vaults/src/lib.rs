@@ -9,6 +9,7 @@ use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, Broadcaster, CeremonyIdProvider, Chainflip,
 	CurrentEpochIndex, EpochTransitionHandler, EthEnvironmentProvider, KeyProvider,
 	ReplayProtectionProvider, RetryPolicy, SystemStateManager, ThresholdSigner, VaultRotator,
+	VaultTransitionHandler,
 };
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
@@ -205,7 +206,7 @@ pub enum PalletOffence {
 #[frame_support::pallet]
 pub mod pallet {
 
-	use cf_traits::{AccountRoleRegistry, ThresholdSigner};
+	use cf_traits::{AccountRoleRegistry, ThresholdSigner, VaultTransitionHandler};
 
 	use super::*;
 
@@ -237,6 +238,8 @@ pub mod pallet {
 
 		/// The supported api calls for the chain.
 		type ApiCall: SetAggKeyWithAggKey<Self::Chain>;
+
+		type VaultTransitionHandler: VaultTransitionHandler<Self::Chain>;
 
 		/// The pallet dispatches calls, so it depends on the runtime's aggregated Call type.
 		type Call: From<Call<Self, I>> + IsType<<Self as frame_system::Config>::Call>;
@@ -727,6 +730,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			new_public_key,
 			rotated_at_block_number.saturating_add(ChainBlockNumberFor::<T, I>::one()),
 		);
+		T::VaultTransitionHandler::on_new_vault(new_public_key);
 	}
 
 	fn set_vault_for_epoch(

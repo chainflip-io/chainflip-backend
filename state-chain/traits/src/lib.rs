@@ -700,3 +700,7 @@ pub trait IngressFetchApi<C: cf_chains::Chain> {
 impl<C: cf_chains::Chain> IngressFetchApi<C> for () {
 	fn schedule_ingress_fetch(_fetch_details: Vec<(C::ChainAsset, IntentId)>) {}
 }
+
+pub trait VaultTransitionHandler<C: ChainCrypto> {
+	fn on_new_vault(_new_key: C::AggKey) {}
+}
