@@ -9,7 +9,6 @@ use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{ed25519::Public as EdPublic, sr25519::Public as SrPublic, Bytes};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use state_chain_runtime::opaque::SessionKeys;
-use web3::types::H160;
 
 pub mod primitives {
 	pub use cf_primitives::*;
@@ -21,6 +20,7 @@ pub use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 
 use chainflip_engine::{
 	eth::{rpc::EthDualRpcClient, EthBroadcaster},
+	logging::utils::new_discard_logger,
 	settings,
 	state_chain_observer::client::{
 		base_rpc_api::{BaseRpcApi, BaseRpcClient, RawRpcApi},
@@ -81,41 +81,26 @@ pub async fn request_block(
 	Ok(())
 }
 
+pub type ClaimCertificate = Vec<u8>;
+
 pub async fn request_claim(
-	amount: f64,
+	atomic_amount: u128,
 	eth_address: [u8; 20],
 	state_chain_settings: &settings::StateChain,
-	eth_settings: &settings::Eth,
-	should_register_claim: bool,
-	logger: &slog::Logger,
-) -> Result<()> {
+) -> Result<ClaimCertificate> {
+	let logger = new_discard_logger();
 	let (_, block_stream, state_chain_client) =
-		connect_to_state_chain(state_chain_settings, false, logger).await?;
+		connect_to_state_chain(state_chain_settings, false, &logger).await?;
 
 	// Are we in a current auction phase
 	if state_chain_client.is_auction_phase().await? {
 		bail!("We are currently in an auction phase. Please wait until the auction phase is over.");
 	}
 
-	let atomic_amount: u128 = (amount * 10_f64.powi(18)) as u128;
-
-	println!(
-		"Submitting claim with amount `{}` FLIP (`{}` Flipperinos) to ETH address `0x{}`.",
-		amount,
-		atomic_amount,
-		hex::encode(eth_address)
-	);
-
-	if !confirm_submit() {
-		return Ok(())
-	}
-
-	// Do the claim
-
 	let tx_hash = state_chain_client
 		.submit_signed_extrinsic(
 			pallet_cf_staking::Call::claim { amount: atomic_amount.into(), address: eth_address },
-			logger,
+			&logger,
 		)
 		.await?;
 
@@ -135,7 +120,7 @@ pub async fn request_claim(
 		) = event
 		{
 			println!("Your claim request is on chain.\nWaiting for signed claim data...");
-			'outer: while let Some(result_header) = block_stream.next().await {
+			while let Some(result_header) = block_stream.next().await {
 				let header = result_header.expect("Failed to get a valid block header");
 				let block_hash = header.hash();
 				let events = state_chain_client
@@ -147,58 +132,41 @@ pub async fn request_claim(
 					) = event_record.event
 					{
 						if validator_id == state_chain_client.account_id() {
-							if should_register_claim {
-								println!(
-									"Your claim certificate is: {:?}",
-									hex::encode(claim_cert.clone())
-								);
-								let chain_id = state_chain_client
-									.storage_value::<pallet_cf_environment::EthereumChainId<
-										state_chain_runtime::Runtime,
-									>>(block_hash)
-									.await
-									.expect("Failed to fetch EthereumChainId from the State Chain");
-								let stake_manager_address = state_chain_client
-									.storage_value::<pallet_cf_environment::StakeManagerAddress<
-										state_chain_runtime::Runtime,
-									>>(block_hash)
-									.await
-									.expect("Failed to fetch StakeManagerAddress from State Chain");
-								let tx_hash = register_claim(
-									eth_settings,
-									chain_id,
-									stake_manager_address.into(),
-									claim_cert,
-									logger,
-								)
-								.await
-								.expect("Failed to register claim on ETH");
-
-								println!(
-									"Submitted claim to Ethereum successfully with tx_hash: {:#x}",
-									tx_hash
-								);
-							} else {
-								println!("Your claim request has been successfully registered. Please proceed to the Staking UI to complete your claim.");
-							}
-							break 'outer
+							return Ok(claim_cert)
 						}
 					}
 				}
 			}
 		}
 	}
-	Ok(())
+	Err(anyhow!("Block stream unexpectedly ended"))
 }
 
 /// Register the claim certificate on Ethereum
-async fn register_claim(
+pub async fn register_claim(
 	eth_settings: &settings::Eth,
-	chain_id: u64,
-	stake_manager_address: H160,
-	claim_cert: Vec<u8>,
-	logger: &slog::Logger,
+	state_chain_settings: &settings::StateChain,
+	claim_cert: ClaimCertificate,
 ) -> Result<H256> {
+	let logger = new_discard_logger();
+	let (_, _block_stream, state_chain_client) =
+		connect_to_state_chain(state_chain_settings, false, &logger).await?;
+
+	let block_hash = state_chain_client.base_rpc_client.latest_finalized_block_hash().await?;
+
+	let chain_id = state_chain_client
+		.storage_value::<pallet_cf_environment::EthereumChainId<state_chain_runtime::Runtime>>(
+			block_hash,
+		)
+		.await
+		.expect("Failed to fetch EthereumChainId from the State Chain");
+	let stake_manager_address = state_chain_client
+		.storage_value::<pallet_cf_environment::StakeManagerAddress<state_chain_runtime::Runtime>>(
+			block_hash,
+		)
+		.await
+		.expect("Failed to fetch StakeManagerAddress from State Chain");
+
 	println!(
 		"Registering your claim on the Ethereum network, to StakeManager address: {:?}",
 		stake_manager_address
@@ -206,10 +174,10 @@ async fn register_claim(
 
 	let eth_broadcaster = EthBroadcaster::new(
 		eth_settings,
-		EthDualRpcClient::new(eth_settings, chain_id.into(), logger)
+		EthDualRpcClient::new(eth_settings, chain_id.into(), &logger)
 			.await
 			.context("Could not create EthDualRpcClient")?,
-		logger,
+		&logger,
 	)?;
 
 	eth_broadcaster
@@ -217,7 +185,7 @@ async fn register_claim(
 			eth_broadcaster
 				.encode_and_sign_tx(cf_chains::eth::Transaction {
 					chain_id,
-					contract: stake_manager_address,
+					contract: stake_manager_address.into(),
 					data: claim_cert,
 					..Default::default()
 				})
@@ -230,24 +198,15 @@ async fn register_claim(
 pub async fn register_account_role(
 	role: AccountRole,
 	state_chain_settings: &settings::StateChain,
-	logger: &slog::Logger,
 ) -> Result<()> {
+	let logger = new_discard_logger();
 	let (_, _, state_chain_client) =
-		connect_to_state_chain(state_chain_settings, false, logger).await?;
-
-	println!(
-        "Submtting `register-account-role` with role: {:?}. This cannot be reversed for your account.",
-        role
-    );
-
-	if !confirm_submit() {
-		return Ok(())
-	}
+		connect_to_state_chain(state_chain_settings, false, &logger).await?;
 
 	let tx_hash = state_chain_client
 		.submit_signed_extrinsic(
 			pallet_cf_account_roles::Call::register_account_role { role },
-			logger,
+			&logger,
 		)
 		.await
 		.expect("Could not set register account role for account");
@@ -255,12 +214,10 @@ pub async fn register_account_role(
 	Ok(())
 }
 
-pub async fn rotate_keys(
-	state_chain_settings: &settings::StateChain,
-	logger: &slog::Logger,
-) -> Result<()> {
+pub async fn rotate_keys(state_chain_settings: &settings::StateChain) -> Result<()> {
+	let logger = new_discard_logger();
 	let (_, _, state_chain_client) =
-		connect_to_state_chain(state_chain_settings, false, logger).await?;
+		connect_to_state_chain(state_chain_settings, false, &logger).await?;
 	let seed = state_chain_client
 		.rotate_session_keys()
 		.await
@@ -277,7 +234,7 @@ pub async fn rotate_keys(
 	let tx_hash = state_chain_client
 		.submit_signed_extrinsic(
 			pallet_cf_validator::Call::set_keys { keys: new_session_key, proof: [0; 1].to_vec() },
-			logger,
+			&logger,
 		)
 		.await
 		.expect("Failed to submit set_keys extrinsic");
@@ -290,17 +247,17 @@ pub async fn rotate_keys(
 pub async fn force_rotation(
 	id: ProposalId,
 	state_chain_settings: &settings::StateChain,
-	logger: &slog::Logger,
 ) -> Result<()> {
+	let logger = new_discard_logger();
 	let (_, _, state_chain_client) =
-		connect_to_state_chain(state_chain_settings, false, logger).await?;
+		connect_to_state_chain(state_chain_settings, false, &logger).await?;
 
 	state_chain_client
 		.submit_signed_extrinsic(
 			pallet_cf_governance::Call::propose_governance_extrinsic {
 				call: Box::new(pallet_cf_validator::Call::force_rotation {}.into()),
 			},
-			logger,
+			&logger,
 		)
 		.await
 		.expect("Should submit sudo governance proposal");
@@ -308,7 +265,7 @@ pub async fn force_rotation(
 	println!("Submitting governance proposal for rotation.");
 
 	state_chain_client
-		.submit_signed_extrinsic(pallet_cf_governance::Call::approve { approved_id: id }, logger)
+		.submit_signed_extrinsic(pallet_cf_governance::Call::approve { approved_id: id }, &logger)
 		.await
 		.expect("Should submit approval, triggering execution of the forced rotation");
 
@@ -317,26 +274,22 @@ pub async fn force_rotation(
 	Ok(())
 }
 
-pub async fn retire_account(
-	state_chain_settings: &settings::StateChain,
-	logger: &slog::Logger,
-) -> Result<()> {
+pub async fn retire_account(state_chain_settings: &settings::StateChain) -> Result<()> {
+	let logger = new_discard_logger();
 	let (_, _, state_chain_client) =
-		connect_to_state_chain(state_chain_settings, false, logger).await?;
+		connect_to_state_chain(state_chain_settings, false, &logger).await?;
 	let tx_hash = state_chain_client
-		.submit_signed_extrinsic(pallet_cf_staking::Call::retire_account {}, logger)
+		.submit_signed_extrinsic(pallet_cf_staking::Call::retire_account {}, &logger)
 		.await
 		.expect("Could not retire account");
 	println!("Account retired at tx {:#x}.", tx_hash);
 	Ok(())
 }
 
-pub async fn activate_account(
-	state_chain_settings: &settings::StateChain,
-	logger: &slog::Logger,
-) -> Result<()> {
+pub async fn activate_account(state_chain_settings: &settings::StateChain) -> Result<()> {
+	let logger = new_discard_logger();
 	let (latest_block_hash, _, state_chain_client) =
-		connect_to_state_chain(state_chain_settings, false, logger).await?;
+		connect_to_state_chain(state_chain_settings, false, &logger).await?;
 
 	match state_chain_client
         .storage_map_entry::<pallet_cf_account_roles::AccountRoles<state_chain_runtime::Runtime>>(
@@ -349,7 +302,7 @@ pub async fn activate_account(
     {
         AccountRole::Validator => {
             let tx_hash = state_chain_client
-                .submit_signed_extrinsic(pallet_cf_staking::Call::activate_account {}, logger)
+                .submit_signed_extrinsic(pallet_cf_staking::Call::activate_account {}, &logger)
                 .await
                 .expect("Could not activate account");
             println!("Account activated at tx {:#x}.", tx_hash);
@@ -369,46 +322,21 @@ pub async fn activate_account(
 pub async fn set_vanity_name(
 	name: String,
 	state_chain_settings: &settings::StateChain,
-	logger: &slog::Logger,
 ) -> Result<()> {
+	let logger = new_discard_logger();
 	if name.len() > MAX_LENGTH_FOR_VANITY_NAME {
 		bail!("Name too long. Max length is {} characters.", MAX_LENGTH_FOR_VANITY_NAME,);
 	}
 
 	let (_, _, state_chain_client) =
-		connect_to_state_chain(state_chain_settings, false, logger).await?;
+		connect_to_state_chain(state_chain_settings, false, &logger).await?;
 	let tx_hash = state_chain_client
 		.submit_signed_extrinsic(
 			pallet_cf_validator::Call::set_vanity_name { name: name.as_bytes().to_vec() },
-			logger,
+			&logger,
 		)
 		.await
 		.expect("Could not set vanity name for your account");
 	println!("Vanity name set at tx {:#x}.", tx_hash);
 	Ok(())
-}
-
-fn confirm_submit() -> bool {
-	use std::{io, io::*};
-
-	loop {
-		print!("Do you wish to proceed? [y/n] > ");
-		std::io::stdout().flush().unwrap();
-		let mut input = String::new();
-		io::stdin().read_line(&mut input).expect("Error: Failed to get user input");
-
-		let input = input.trim();
-
-		match input {
-			"y" | "yes" | "1" | "true" | "ofc" => {
-				println!("Submitting...");
-				return true
-			},
-			"n" | "no" | "0" | "false" | "nah" => {
-				println!("Ok, exiting...");
-				return false
-			},
-			_ => continue,
-		}
-	}
 }
