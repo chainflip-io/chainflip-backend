@@ -49,8 +49,7 @@ benchmarks_instance_pallet! {
 
 		add_authorities::<T, _>(all_accounts);
 
-		let request_id = <Pallet::<T, I> as ThresholdSigner<_>>::request_signature(PayloadFor::<T, I>::benchmark_value());
-		let (ceremony_id, _) = LiveCeremonies::<T, I>::get(request_id).unwrap();
+		let (request_id, ceremony_id) = <Pallet::<T, I> as ThresholdSigner<_>>::request_signature(PayloadFor::<T, I>::benchmark_value());
 		let signature = SignatureFor::<T, I>::benchmark_value();
 	} : _(RawOrigin::None, ceremony_id, signature)
 	verify {
@@ -64,8 +63,7 @@ benchmarks_instance_pallet! {
 
 		add_authorities::<T, _>(all_accounts);
 
-		let request_id = <Pallet::<T, I> as ThresholdSigner<_>>::request_signature(PayloadFor::<T, I>::benchmark_value());
-		let (ceremony_id, _) = LiveCeremonies::<T, I>::get(request_id).unwrap();
+		let (request_id, ceremony_id) = <Pallet::<T, I> as ThresholdSigner<_>>::request_signature(PayloadFor::<T, I>::benchmark_value());
 
 		let mut threshold_set = PendingCeremonies::<T, I>::get(ceremony_id).unwrap().remaining_respondents.into_iter();
 
@@ -84,13 +82,10 @@ benchmarks_instance_pallet! {
 			.collect();
 
 		let completed_response_context = CeremonyContext::<T, I> {
-			request_context: RequestContext::<T, I> {
-				request_id: 1,
-				attempt_count: 0,
-				key_id: Some(<T as Chainflip>::KeyId::benchmark_value()),
-				payload: PayloadFor::<T, I>::benchmark_value(),
-				retry_policy: RetryPolicy::Always
-			},
+			request_id: 1,
+			attempt_count: 0,
+			payload: PayloadFor::<T, I>::benchmark_value(),
+			retry_policy: RetryPolicy::Always,
 			remaining_respondents:Default::default(),
 			blame_counts,
 			participant_count:a,
@@ -122,7 +117,7 @@ benchmarks_instance_pallet! {
 
 		// These attempts will fail because there are no authorities to do the signing.
 		for _ in 0..r {
-			Pallet::<T, I>::new_ceremony_attempt(1, PayloadFor::<T, I>::benchmark_value(), 1, None, None, RetryPolicy::Always);
+			Pallet::<T, I>::new_ceremony_attempt(1, PayloadFor::<T, I>::benchmark_value(), 1, SignWithKey::Current, RetryPolicy::Always);
 		}
 
 		assert_eq!(

@@ -351,6 +351,12 @@ pub mod pallet {
 	pub type Vaults<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Blake2_128Concat, EpochIndex, Vault<T::Chain>>;
 
+	/// The epoch whose authorities control the current vault key.
+	#[pallet::storage]
+	#[pallet::getter(fn current_keyholders_epoch)]
+	pub type CurrentKeyholdersEpoch<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, EpochIndex, ValueQuery>;
+
 	/// Vault rotation statuses for the current epoch rotation.
 	#[pallet::storage]
 	#[pallet::getter(fn pending_vault_rotations)]
@@ -392,10 +398,6 @@ pub mod pallet {
 		KeygenRequest(CeremonyId, BTreeSet<T::ValidatorId>),
 		/// The vault for the request has rotated
 		VaultRotationCompleted,
-		/// The Keygen ceremony has been aborted \[ceremony_id\]
-		KeygenAborted(CeremonyId),
-		/// The vault has been rotated
-		VaultsRotated,
 		/// The vault's key has been rotated externally \[new_public_key\]
 		VaultRotatedExternally(<T::Chain as ChainCrypto>::AggKey),
 		/// The new public key witnessed externally was not the expected one \[key\]
@@ -430,18 +432,10 @@ pub mod pallet {
 	pub enum Error<T, I = ()> {
 		/// An invalid ceremony id
 		InvalidCeremonyId,
-		/// We have an empty authority set
-		EmptyAuthoritySet,
-		/// The rotation has not been confirmed
-		NotConfirmed,
 		/// There is currently no vault rotation in progress for this chain.
 		NoActiveRotation,
 		/// The requested call is invalid based on the current rotation state.
 		InvalidRotationStatus,
-		/// The generated key is not a valid public key.
-		InvalidPublicKey,
-		/// A rotation for the requested ChainId is already underway.
-		DuplicateRotationRequest,
 		/// An authority sent a response for a ceremony in which they weren't involved, or to which
 		/// they have already submitted a response.
 		InvalidRespondent,
@@ -466,7 +460,6 @@ pub mod pallet {
 		/// - [NoActiveRotation](Error::NoActiveRotation)
 		/// - [InvalidRotationStatus](Error::InvalidRotationStatus)
 		/// - [InvalidCeremonyId](Error::InvalidCeremonyId)
-		/// - [InvalidPublicKey](Error::InvalidPublicKey)
 		///
 		/// ## Dependencies
 		///
@@ -590,7 +583,6 @@ pub mod pallet {
 		///
 		/// - [NoActiveRotation](Error::NoActiveRotation)
 		/// - [InvalidRotationStatus](Error::InvalidRotationStatus)
-		/// - [InvalidPublicKey](Error::InvalidPublicKey)
 		///
 		/// ## Dependencies
 		///
@@ -717,9 +709,10 @@ pub mod pallet {
 
 			KeygenResponseTimeout::<T, I>::put(self.keygen_response_timeout);
 
-			Vaults::<T, I>::insert(
+			Pallet::<T, I>::set_vault_for_epoch(
 				CurrentEpochIndex::<T>::get(),
-				Vault { public_key, active_from_block: self.deployment_block },
+				public_key,
+				self.deployment_block,
 			);
 		}
 	}
@@ -730,14 +723,20 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		new_public_key: AggKeyFor<T, I>,
 		rotated_at_block_number: ChainBlockNumberFor<T, I>,
 	) {
-		Vaults::<T, I>::insert(
+		Self::set_vault_for_epoch(
 			CurrentEpochIndex::<T>::get().saturating_add(1),
-			Vault {
-				public_key: new_public_key,
-				active_from_block: rotated_at_block_number
-					.saturating_add(ChainBlockNumberFor::<T, I>::one()),
-			},
+			new_public_key,
+			rotated_at_block_number.saturating_add(ChainBlockNumberFor::<T, I>::one()),
 		);
+	}
+
+	fn set_vault_for_epoch(
+		epoch: EpochIndex,
+		new_public_key: AggKeyFor<T, I>,
+		active_from_block: ChainBlockNumberFor<T, I>,
+	) {
+		Vaults::<T, I>::insert(epoch, Vault { public_key: new_public_key, active_from_block });
+		CurrentKeyholdersEpoch::<T, I>::put(epoch);
 	}
 
 	// Once we've successfully generated the key, we want to do a signing ceremony to verify that
@@ -860,15 +859,19 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 impl<T: Config<I>, I: 'static> KeyProvider<T::Chain> for Pallet<T, I> {
 	type KeyId = Vec<u8>;
 
-	fn current_key_id() -> Self::KeyId {
-		Vaults::<T, I>::get(CurrentEpochIndex::<T>::get())
-			.expect("We can't exist without a vault")
-			.public_key
-			.into()
+	fn current_key_id_epoch_index() -> (Self::KeyId, EpochIndex) {
+		let current_epoch = CurrentKeyholdersEpoch::<T, I>::get();
+		(
+			Vaults::<T, I>::get(current_epoch)
+				.expect("We can't exist without a vault")
+				.public_key
+				.into(),
+			current_epoch,
+		)
 	}
 
 	fn current_key() -> <T::Chain as ChainCrypto>::AggKey {
-		Vaults::<T, I>::get(CurrentEpochIndex::<T>::get())
+		Vaults::<T, I>::get(CurrentKeyholdersEpoch::<T, I>::get())
 			.expect("We can't exist without a vault")
 			.public_key
 	}

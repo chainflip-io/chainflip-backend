@@ -1,3 +1,4 @@
+use api::primitives::AccountRole;
 use chainflip_api as api;
 use clap::Parser;
 use settings::{CLICommandLineOptions, CLISettings};
@@ -26,8 +27,6 @@ async fn run_cli() -> Result<()> {
 	let command_line_opts = CLICommandLineOptions::parse();
 	let cli_settings = CLISettings::new(command_line_opts.clone()).map_err(|err| anyhow!("Please ensure your config file path is configured correctly and the file is valid. You can also just set all configurations required command line arguments.\n{}", err))?;
 
-	let logger = chainflip_engine::logging::utils::new_discard_logger();
-
 	println!(
 		"Connecting to state chain node at: `{}` and using private key located at: `{}`",
 		cli_settings.state_chain.ws_endpoint,
@@ -36,16 +35,28 @@ async fn run_cli() -> Result<()> {
 
 	match command_line_opts.cmd {
 		Claim { amount, eth_address, should_register_claim } =>
-			request_claim(amount, &eth_address, &cli_settings, should_register_claim, &logger).await,
-		RegisterAccountRole { role } =>
-			api::register_account_role(role, &cli_settings.state_chain, &logger).await,
-		Rotate {} => api::rotate_keys(&cli_settings.state_chain, &logger).await,
-		Retire {} => api::retire_account(&cli_settings.state_chain, &logger).await,
-		Activate {} => api::activate_account(&cli_settings.state_chain, &logger).await,
+			request_claim(amount, &eth_address, &cli_settings, should_register_claim).await,
+		RegisterAccountRole { role } => register_account_role(role, &cli_settings).await,
+		Rotate {} => api::rotate_keys(&cli_settings.state_chain).await,
+		Retire {} => api::retire_account(&cli_settings.state_chain).await,
+		Activate {} => api::activate_account(&cli_settings.state_chain).await,
 		Query { block_hash } => api::request_block(block_hash, &cli_settings.state_chain).await,
-		VanityName { name } => api::set_vanity_name(name, &cli_settings.state_chain, &logger).await,
-		ForceRotation { id } => api::force_rotation(id, &cli_settings.state_chain, &logger).await,
+		VanityName { name } => api::set_vanity_name(name, &cli_settings.state_chain).await,
+		ForceRotation { id } => api::force_rotation(id, &cli_settings.state_chain).await,
 	}
+}
+
+async fn register_account_role(role: AccountRole, settings: &settings::CLISettings) -> Result<()> {
+	println!(
+        "Submitting `register-account-role` with role: {:?}. This cannot be reversed for your account.",
+        role
+    );
+
+	if !confirm_submit() {
+		return Ok(())
+	}
+
+	api::register_account_role(role, &settings.state_chain).await
 }
 
 async fn request_claim(
@@ -53,7 +64,6 @@ async fn request_claim(
 	eth_address: &str,
 	settings: &CLISettings,
 	should_register_claim: bool,
-	logger: &slog::Logger,
 ) -> Result<()> {
 	// Sanitise data
 
@@ -67,13 +77,59 @@ async fn request_claim(
 			}
 		)?;
 
-	api::request_claim(
+	let atomic_amount: u128 = (amount * 10_f64.powi(18)) as u128;
+
+	println!(
+		"Submitting claim with amount `{}` FLIP (`{}` Flipperinos) to ETH address `0x{}`.",
 		amount,
-		eth_address,
-		&settings.state_chain,
-		&settings.eth,
-		should_register_claim,
-		logger,
-	)
-	.await
+		atomic_amount,
+		hex::encode(eth_address)
+	);
+
+	if !confirm_submit() {
+		return Ok(())
+	}
+
+	let claim_cert = api::request_claim(atomic_amount, eth_address, &settings.state_chain).await?;
+
+	println!("Your claim certificate is: {:?}", hex::encode(claim_cert.clone()));
+
+	if should_register_claim {
+		let tx_hash = api::register_claim(&settings.eth, &settings.state_chain, claim_cert)
+			.await
+			.expect("Failed to register claim on ETH");
+
+		println!("Submitted claim to Ethereum successfully with tx_hash: {:#x}", tx_hash);
+	} else {
+		println!(
+			"Your claim request has been successfully registered. Please proceed to the Staking UI to complete your claim."
+		);
+	}
+
+	Ok(())
+}
+
+fn confirm_submit() -> bool {
+	use std::{io, io::*};
+
+	loop {
+		print!("Do you wish to proceed? [y/n] > ");
+		std::io::stdout().flush().unwrap();
+		let mut input = String::new();
+		io::stdin().read_line(&mut input).expect("Error: Failed to get user input");
+
+		let input = input.trim();
+
+		match input {
+			"y" | "yes" | "1" | "true" | "ofc" => {
+				println!("Submitting...");
+				return true
+			},
+			"n" | "no" | "0" | "false" | "nah" => {
+				println!("Ok, exiting...");
+				return false
+			},
+			_ => continue,
+		}
+	}
 }
