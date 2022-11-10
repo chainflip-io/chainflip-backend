@@ -174,6 +174,11 @@ impl ApiCall<MockEthereum> for MockSetAggKeyWithAggKey {
 	}
 }
 
+pub struct MockVaultTransitionHandler;
+impl VaultTransitionHandler<MockEthereum> for MockVaultTransitionHandler {
+	fn on_new_vault(_new_key: <MockEthereum as ChainCrypto>::AggKey) {}
+}
+
 pub struct MockBroadcaster;
 
 impl MockBroadcaster {
@@ -212,6 +217,7 @@ impl pallet_cf_vaults::Config for MockRuntime {
 	type ThresholdSigner = MockThresholdSigner<MockEthereum, Call>;
 	type OffenceReporter = MockOffenceReporter;
 	type ApiCall = MockSetAggKeyWithAggKey;
+	type VaultTransitionHandler = MockVaultTransitionHandler;
 	type CeremonyIdProvider = MockCeremonyIdProvider<CeremonyId>;
 	type WeightInfo = ();
 	type Broadcaster = MockBroadcaster;
