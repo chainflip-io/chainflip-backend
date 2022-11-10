@@ -9,6 +9,8 @@
 //! to its `any` equivalent:
 //!
 //! ```
+//! use cf_primitives::chains::assets::*;
+//!
 //! assert_eq!(any::Asset::Flip, any::Asset::from(eth::Asset::Flip));
 //! ```
 use super::*;
@@ -16,8 +18,8 @@ use super::*;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 
-/// Defines all Assets, and the Chain each asset belongs to
-/// There's an unique 1:1 relationship between an Asset and a Chain
+/// Defines all Assets, and the Chain each asset belongs to.
+/// There's a unique 1:1 relationship between an Asset and a Chain.
 pub mod any {
 	use super::*;
 	pub type Chain = AnyChain;
@@ -100,6 +102,20 @@ macro_rules! chain_assets {
 					}
 				}
 			}
+
+			#[test]
+			fn consistency_check() {
+				$(
+					assert_eq!(
+						ForeignChain::from(any::Asset::from(Asset::$asset)),
+						ForeignChain::$chain,
+						"Inconsistent asset type definition. Asset {} defined in {}, but mapped to chain {:?}",
+						stringify!($asset),
+						stringify!($mod),
+						ForeignChain::from(any::Asset::from(Asset::$asset)),
+					);
+				)+
+			}
 		}
 	};
 }
@@ -129,7 +145,7 @@ mod test_assets {
 	#[test]
 	fn test_conversion() {
 		assert_conversion!(eth, Eth);
-		assert_conversion!(eth, Flip);
+		// assert_conversion!(eth, Flip);
 		assert_conversion!(eth, Usdc);
 		assert_conversion!(dot, Dot);
 
