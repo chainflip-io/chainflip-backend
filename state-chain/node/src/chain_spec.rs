@@ -14,10 +14,37 @@ use state_chain_runtime::{
 use std::{collections::BTreeSet, env, marker::PhantomData};
 use utilities::clean_eth_address;
 
+#[cfg(feature = "ibiza")]
+use sp_core::{sr25519, Pair, Public};
+#[cfg(feature = "ibiza")]
+use sp_runtime::traits::{IdentifyAccount, Verify};
+#[cfg(feature = "ibiza")]
+use state_chain_runtime::Signature;
+
 pub mod perseverance;
 pub mod sisyphos;
 
 pub mod common;
+
+#[cfg(feature = "ibiza")]
+/// Generate a crypto pair from seed.
+pub fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {
+	TPublic::Pair::from_string(&format!("//{}", seed), None)
+		.expect("static values are valid; qed")
+		.public()
+}
+
+#[cfg(feature = "ibiza")]
+type AccountPublic = <Signature as Verify>::Signer;
+
+#[cfg(feature = "ibiza")]
+/// Generate an account ID from seed.
+pub fn get_account_id_from_seed<TPublic: Public>(seed: &str) -> AccountId
+where
+	AccountPublic: From<<TPublic::Pair as Pair>::Public>,
+{
+	AccountPublic::from(get_from_seed::<TPublic>(seed)).into_account()
+}
 
 /// Specialized `ChainSpec`. This is a specialization of the general Substrate ChainSpec type.
 pub type ChainSpec = sc_service::GenericChainSpec<GenesisConfig>;
