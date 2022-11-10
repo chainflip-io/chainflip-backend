@@ -514,16 +514,15 @@ mod tests {
 		})
 		.unwrap();
 
-		#[cfg(not(feature = "ibiza"))]
 		let settings2 = Settings::new(CommandLineOptions {
-			config_path: Some("config/Default.toml".to_owned()),
-			..Default::default()
-		})
-		.unwrap();
-
-		#[cfg(feature = "ibiza")]
-		let settings2 = Settings::new(CommandLineOptions {
-			config_path: Some("config/IbizaDefault.toml".to_owned()),
+			config_path: Some(
+				if cfg!(feature = "ibiza") {
+					"config/IbizaDefault.toml"
+				} else {
+					"config/Default.toml"
+				}
+				.to_owned(),
+			),
 			..Default::default()
 		})
 		.unwrap();
