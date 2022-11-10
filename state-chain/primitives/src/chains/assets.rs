@@ -53,54 +53,54 @@ pub enum AssetError {
 /// docs for more detail.
 macro_rules! chain_assets {
 	( $mod:ident, $chain:ident, $( $asset:ident ),+ ) => {
-        /// Chain-specific assets types.
-        pub mod $mod {
-            use $crate::chains::*;
-            use $crate::chains::assets::*;
+		/// Chain-specific assets types.
+		pub mod $mod {
+			use $crate::chains::*;
+			use $crate::chains::assets::*;
 
-            pub type Chain = $chain;
+			pub type Chain = $chain;
 
-            #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy, Hash)]
-            #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-            pub enum Asset {
-                $(
-                    $asset,
-                )+
-            }
+			#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy, Hash)]
+			#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+			pub enum Asset {
+				$(
+					$asset,
+				)+
+			}
 
-            impl From<Asset> for any::Asset {
-                fn from(asset: Asset) -> Self {
-                    match asset {
-                        $(
-                            Asset::$asset => any::Asset::$asset,
-                        )+
-                    }
-                }
-            }
+			impl From<Asset> for any::Asset {
+				fn from(asset: Asset) -> Self {
+					match asset {
+						$(
+							Asset::$asset => any::Asset::$asset,
+						)+
+					}
+				}
+			}
 
-            impl AsRef<any::Asset> for Asset {
-                fn as_ref(&self) -> &any::Asset {
-                    match self {
-                        $(
-                            Asset::$asset => &any::Asset::$asset,
-                        )+
-                    }
-                }
-            }
+			impl AsRef<any::Asset> for Asset {
+				fn as_ref(&self) -> &any::Asset {
+					match self {
+						$(
+							Asset::$asset => &any::Asset::$asset,
+						)+
+					}
+				}
+			}
 
-            impl TryFrom<any::Asset> for Asset {
-                type Error = AssetError;
+			impl TryFrom<any::Asset> for Asset {
+				type Error = AssetError;
 
-                fn try_from(asset: any::Asset) -> Result<Self, Self::Error> {
-                    match asset {
-                        $(
-                            any::Asset::$asset => Ok(Asset::$asset),
-                        )+
-                        _ => Err(AssetError::Unsupported),
-                    }
-                }
-            }
-        }
+				fn try_from(asset: any::Asset) -> Result<Self, Self::Error> {
+					match asset {
+						$(
+							any::Asset::$asset => Ok(Asset::$asset),
+						)+
+						_ => Err(AssetError::Unsupported),
+					}
+				}
+			}
+		}
 	};
 }
 
