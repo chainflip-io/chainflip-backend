@@ -50,7 +50,6 @@ pub type PolkadotUncheckedExtrinsic =
 	UncheckedExtrinsic<PolkadotAddress, PolkadotRuntimeCall, MultiSignature, PolkadotSignedExtra>;
 /// The payload being signed in transactions.
 pub type PolkadotPayload = SignedPayload<PolkadotRuntimeCall, PolkadotSignedExtra>;
-pub type EncodedPolkadotPayload = Vec<u8>;
 
 // Westend testnet
 pub const WESTEND_CONFIG: PolkadotConfig = PolkadotConfig {
@@ -104,6 +103,9 @@ pub struct Polkadot;
 
 type DotAmount = u128;
 
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub struct EncodedPolkadotPayload(pub Vec<u8>);
+
 impl Chain for Polkadot {
 	type ChainBlockNumber = u64;
 	type ChainAmount = DotAmount;
@@ -125,11 +127,11 @@ impl ChainCrypto for Polkadot {
 		payload: &Self::Payload,
 		signature: &Self::ThresholdSignature,
 	) -> bool {
-		signature.verify(&payload[..], &agg_key.0)
+		signature.verify(&payload.0[..], &agg_key.0)
 	}
 
 	fn agg_key_to_payload(agg_key: Self::AggKey) -> Self::Payload {
-		Blake2_256::hash(&agg_key.0).to_vec()
+		EncodedPolkadotPayload(Blake2_256::hash(&agg_key.0).to_vec())
 	}
 }
 
@@ -148,22 +150,9 @@ impl FeeRefundCalculator<Polkadot> for PolkadotTransactionData {
 }
 
 impl ChainAbi for Polkadot {
-	type UnsignedTransaction = PolkadotTransactionData;
-	type SignedTransaction = Vec<u8>;
-	// Not needed in Polkadot since we can sign natively with the AggKey.
-	type SignerCredential = ();
+	type Transaction = PolkadotTransactionData;
 	type ReplayProtection = PolkadotReplayProtection;
 	type ApiCallExtraData = CurrentVaultAndProxy;
-	type ValidationError = ();
-
-	// This function is not needed in Polkadot.
-	fn verify_signed_transaction(
-		_unsigned_tx: &Self::UnsignedTransaction,
-		_signed_tx: &Self::SignedTransaction,
-		_signer_credential: &Self::SignerCredential,
-	) -> Result<Self::TransactionHash, Self::ValidationError> {
-		Err(())
-	}
 }
 
 pub struct CurrentVaultAndProxy {
@@ -230,8 +219,9 @@ impl PolkadotExtrinsicBuilder {
 		//assert_eq!(extra.additional_signed().unwrap().3, additional_signed.3);
 		let raw_payload =
 			PolkadotPayload::from_raw(self.extrinsic_call.clone()?, extra, additional_signed);
-		self.signature_payload =
-			raw_payload.using_encoded(|encoded_payload| Some(encoded_payload.to_vec()));
+		self.signature_payload = raw_payload.using_encoded(|encoded_payload| {
+			Some(EncodedPolkadotPayload(encoded_payload.to_vec()))
+		});
 		self.extra = Some(extra);
 
 		self.signature_payload.clone()
@@ -253,7 +243,7 @@ impl PolkadotExtrinsicBuilder {
 	pub fn is_signed(&self) -> Option<bool> {
 		match self.signed_extrinsic.clone()?.signature {
 			Some((_signed, signature, _extra)) => Some(signature.verify(
-				&self.signature_payload.clone().expect("Payload should exist")[..],
+				&self.signature_payload.clone().expect("Payload should exist").0[..],
 				&self.extrinsic_origin,
 			)),
 
@@ -829,11 +819,9 @@ mod test_polkadot_extrinsics {
 			.expect("This shouldn't fail");
 
 		let signed_extrinsic: Option<PolkadotUncheckedExtrinsic> = extrinsic_handler
-			.insert_signature_and_get_signed_unchecked_extrinsic(
-				keypair_1.sign(
-					&extrinsic_handler.signature_payload.clone().expect("This can't fail")[..],
-				),
-			);
+			.insert_signature_and_get_signed_unchecked_extrinsic(keypair_1.sign(
+				&extrinsic_handler.signature_payload.clone().expect("This can't fail").0[..],
+			));
 
 		assert!(extrinsic_handler.is_signed().unwrap_or(false));
 

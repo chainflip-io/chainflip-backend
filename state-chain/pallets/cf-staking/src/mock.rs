@@ -162,9 +162,11 @@ impl ThresholdSigner<Ethereum> for MockThresholdSigner {
 	type KeyId = <Test as Chainflip>::KeyId;
 	type ValidatorId = AccountId;
 
-	fn request_signature(payload: <Ethereum as ChainCrypto>::Payload) -> Self::RequestId {
+	fn request_signature(
+		payload: <Ethereum as ChainCrypto>::Payload,
+	) -> (Self::RequestId, CeremonyId) {
 		SIGNATURE_REQUESTS.with(|cell| cell.borrow_mut().push(payload));
-		0
+		(0, 1)
 	}
 
 	fn register_callback(_: Self::RequestId, _: Self::Callback) -> Result<(), Self::Error> {

@@ -3,6 +3,7 @@
 node_key_file = "/run/secrets/node_key_file"
 ip_address = "1.1.1.1"
 port = 8087
+allow_local_ip = true
 
 [state_chain]
 # 32 byte hex secret key - associated with the node's public id (public key)

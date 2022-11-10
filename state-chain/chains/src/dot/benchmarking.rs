@@ -10,7 +10,9 @@ use crate::{
 };
 
 use sp_core::{crypto::AccountId32, sr25519};
-use sp_runtime::{generic::Era, MultiSignature};
+use sp_runtime::{generic::Era, traits::IdentifyAccount, MultiSignature, MultiSigner};
+
+use super::{EncodedPolkadotPayload, PolkadotAccountId};
 
 const SIGNATURE: [u8; 64] = [1u8; 64];
 const ACCOUNT_ID_1: [u8; 32] = [2u8; 32];
@@ -70,5 +72,20 @@ impl BenchmarkValue for TrackedData<Polkadot> {
 impl BenchmarkValue for PolkadotTransactionData {
 	fn benchmark_value() -> Self {
 		Self { encoded_extrinsic: ENCODED_EXTRINSIC.to_vec() }
+	}
+}
+
+impl BenchmarkValue for PolkadotAccountId {
+	fn benchmark_value() -> Self {
+		MultiSigner::Sr25519(sr25519::Public(hex_literal::hex!(
+			"858c1ee915090a119d4cb0774b908fa585ef7882f4648c577606490cc94f6e15"
+		)))
+		.into_account()
+	}
+}
+
+impl BenchmarkValue for EncodedPolkadotPayload {
+	fn benchmark_value() -> Self {
+		Self(hex_literal::hex!("02f87a827a6980843b9aca00843b9aca0082520894cfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcf808e646f5f736f6d657468696e672829c080a0b796e0276d89b0e02634d2f0cd5820e4af4bc0fcb76ecfcc4a3842e90d4b1651a07ab40be70e801fcd1e33460bfe34f03b8f390911658d49e58b0356a77b9432c0").to_vec())
 	}
 }

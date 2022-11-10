@@ -73,7 +73,7 @@ impl ApiCall<Polkadot> for PolkadotApi {
 		}
 	}
 
-	fn chain_encoded(&self) -> <Polkadot as ChainAbi>::SignedTransaction {
+	fn chain_encoded(&self) -> Vec<u8> {
 		match self {
 			PolkadotApi::BatchFetchAndTransfer(call) => call.chain_encoded(),
 			PolkadotApi::RotateVaultProxy(call) => call.chain_encoded(),
