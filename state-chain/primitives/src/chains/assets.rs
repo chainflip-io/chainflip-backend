@@ -104,7 +104,7 @@ macro_rules! chain_assets {
 	};
 }
 
-// Defines each chain's Asset enum. 
+// Defines each chain's Asset enum.
 // Must be consistent with the mapping defined in any::Asset
 chain_assets!(eth, Ethereum, Eth, Flip, Usdc);
 chain_assets!(dot, Polkadot, Dot);
