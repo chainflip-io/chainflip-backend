@@ -6,11 +6,12 @@ use crate::{
 	dot::{Polkadot, PolkadotReplayProtection},
 	*,
 };
-use frame_support::Never;
+use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound};
 use sp_std::marker::PhantomData;
 
 /// Chainflip api calls available on Polkadot.
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, EqNoBound, Encode, Decode, TypeInfo)]
+#[scale_info(skip_type_params(Environment))]
 pub enum PolkadotApi<Environment: 'static> {
 	BatchFetchAndTransfer(batch_fetch_and_transfer::BatchFetchAndTransfer),
 	RotateVaultProxy(rotate_vault_proxy::RotateVaultProxy),
@@ -27,14 +28,7 @@ pub enum SystemAccounts {
 
 impl<E> AllBatch<Polkadot> for PolkadotApi<E>
 where
-	E: ChainEnvironment<SystemAccounts, <Polkadot as Chain>::ChainAccount>
-		+ Clone
-		+ Debug
-		+ PartialEq
-		+ Eq
-		+ Encode
-		+ Decode
-		+ TypeInfo,
+	E: ChainEnvironment<SystemAccounts, <Polkadot as Chain>::ChainAccount>,
 {
 	fn new_unsigned(
 		replay_protection: PolkadotReplayProtection,
@@ -53,14 +47,7 @@ where
 
 impl<E> SetAggKeyWithAggKey<Polkadot> for PolkadotApi<E>
 where
-	E: ChainEnvironment<SystemAccounts, <Polkadot as Chain>::ChainAccount>
-		+ Clone
-		+ Debug
-		+ PartialEq
-		+ Eq
-		+ Encode
-		+ Decode
-		+ TypeInfo,
+	E: ChainEnvironment<SystemAccounts, <Polkadot as Chain>::ChainAccount>,
 {
 	fn new_unsigned(
 		replay_protection: PolkadotReplayProtection,
@@ -89,10 +76,7 @@ impl<E> From<rotate_vault_proxy::RotateVaultProxy> for PolkadotApi<E> {
 	}
 }
 
-impl<E> ApiCall<Polkadot> for PolkadotApi<E>
-where
-	E: Clone + Debug + PartialEq + Eq + Encode + Decode + TypeInfo,
-{
+impl<E> ApiCall<Polkadot> for PolkadotApi<E> {
 	fn threshold_signature_payload(&self) -> <Polkadot as ChainCrypto>::Payload {
 		match self {
 			PolkadotApi::BatchFetchAndTransfer(tx) => tx.threshold_signature_payload(),
