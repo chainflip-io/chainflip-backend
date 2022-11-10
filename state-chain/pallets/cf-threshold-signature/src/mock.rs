@@ -14,7 +14,7 @@ use cf_traits::{
 		ceremony_id_provider::MockCeremonyIdProvider, signer_nomination::MockNominator,
 		system_state_info::MockSystemStateInfo,
 	},
-	AsyncResult, Chainflip, ThresholdSigner,
+	AsyncResult, CeremonyType, Chainflip, ThresholdSigner,
 };
 use codec::{Decode, Encode};
 use frame_support::{
@@ -220,7 +220,10 @@ impl ExtBuilder {
 		self.ext.execute_with(|| {
 			// Initiate request
 			let (request_id, ceremony_id) =
-				<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(*message);
+				<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(
+					*message,
+					CeremonyType::Standard,
+				);
 			let pending = EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
 			assert_eq!(
 				pending.remaining_respondents,

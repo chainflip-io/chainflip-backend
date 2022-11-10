@@ -6,7 +6,7 @@ use crate::{
 };
 use cf_chains::mocks::MockEthereum;
 use cf_traits::{
-	mocks::signer_nomination::MockNominator, AsyncResult, Chainflip, KeyProvider, RetryPolicy,
+	mocks::signer_nomination::MockNominator, AsyncResult, CeremonyType, Chainflip, KeyProvider,
 	ThresholdSigner,
 };
 use frame_support::{
@@ -236,7 +236,7 @@ fn signature_success_can_only_succeed_once_per_request() {
 // The assumption here is that when we don't want to retry, it's a special case, and the error will
 // be handled by the callback itself, allowing a more custom failure logic than simply "retrying".
 #[test]
-fn retry_policy_never_calls_callback_on_failure() {
+fn keygen_verification_ceremony_calls_callback_on_failure() {
 	const NOMINEES: [u64; 2] = [1, 2];
 	const AUTHORITIES: [u64; 3] = [1, 2, 3];
 	ExtBuilder::new()
@@ -246,11 +246,12 @@ fn retry_policy_never_calls_callback_on_failure() {
 		.execute_with(|| {
 			const PAYLOAD: &[u8; 4] = b"OHAI";
 			let current_key_id = MockKeyProvider::current_key_id_epoch_index().0;
-			let (request_id, _) = EthereumThresholdSigner::request_signature_with(
-				current_key_id,
-				NOMINEES.into_iter().collect(),
+			let (request_id, _) = EthereumThresholdSigner::request_signature(
 				*PAYLOAD,
-				RetryPolicy::Never,
+				CeremonyType::KeygenVerification {
+					key_id: current_key_id,
+					participants: NOMINEES.into_iter().collect(),
+				},
 			);
 			assert_ok!(EthereumThresholdSigner::register_callback(
 				request_id,
@@ -433,9 +434,9 @@ fn test_not_enough_signers_for_threshold_schedules_retry() {
 #[cfg(test)]
 mod unsigned_validation {
 	use super::*;
-	use crate::{Call as PalletCall, PendingCeremonies, RetryPolicy, RetryQueues};
+	use crate::{Call as PalletCall, PendingCeremonies, RetryQueues};
 	use cf_chains::ChainCrypto;
-	use cf_traits::{KeyProvider, ThresholdSigner};
+	use cf_traits::{CeremonyType, KeyProvider, ThresholdSigner};
 	use frame_support::{pallet_prelude::InvalidTransaction, unsigned::TransactionSource};
 	use sp_runtime::traits::ValidateUnsigned;
 
@@ -445,11 +446,9 @@ mod unsigned_validation {
 			const PAYLOAD: <MockEthereum as ChainCrypto>::Payload = *b"OHAI";
 			const CUSTOM_AGG_KEY: <MockEthereum as ChainCrypto>::AggKey = *b"AKEY";
 			let participants: BTreeSet<u64> = BTreeSet::from_iter([1, 2, 3, 4, 5, 6]);
-			let (_request_id, ceremony_id) = EthereumThresholdSigner::request_signature_with(
-				CUSTOM_AGG_KEY.into(),
-				participants,
+			let (_request_id, ceremony_id) = EthereumThresholdSigner::request_signature(
 				PAYLOAD,
-				RetryPolicy::Never,
+				CeremonyType::KeygenVerification { key_id: CUSTOM_AGG_KEY.into(), participants },
 			);
 
 			let retry_block = frame_system::Pallet::<Test>::current_block_number() +
@@ -468,7 +467,10 @@ mod unsigned_validation {
 			const PAYLOAD: <MockEthereum as ChainCrypto>::Payload = *b"OHAI";
 			// Initiate request
 			let (_request_id, ceremony_id) =
-				<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(PAYLOAD);
+				<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(
+					PAYLOAD,
+					CeremonyType::Standard,
+				);
 			let (current_key_id, _) = MockKeyProvider::current_key_id_epoch_index();
 			assert!(
 				Test::validate_unsigned(
@@ -506,7 +508,10 @@ mod unsigned_validation {
 			const PAYLOAD: <MockEthereum as ChainCrypto>::Payload = *b"OHAI";
 			// Initiate request
 			let (_request_id, ceremony_id) =
-				<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(PAYLOAD);
+				<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(
+					PAYLOAD,
+					CeremonyType::Standard,
+				);
 			assert_eq!(
 				Test::validate_unsigned(
 					TransactionSource::External,
@@ -539,7 +544,7 @@ mod failure_reporting {
 	use super::*;
 	use crate::CeremonyContext;
 	use cf_chains::ChainCrypto;
-	use cf_traits::{mocks::epoch_info::MockEpochInfo, KeyProvider, RetryPolicy};
+	use cf_traits::{mocks::epoch_info::MockEpochInfo, CeremonyType, KeyProvider};
 
 	fn init_context(
 		validator_set: impl IntoIterator<Item = <Test as Chainflip>::ValidatorId> + Copy,
@@ -551,7 +556,7 @@ mod failure_reporting {
 			request_id: 1,
 			attempt_count: 0,
 			payload: PAYLOAD,
-			retry_policy: RetryPolicy::Always,
+			ceremony_type: CeremonyType::Standard,
 			key_id: current_key_id,
 			remaining_respondents: BTreeSet::from_iter(validator_set),
 			blame_counts: Default::default(),

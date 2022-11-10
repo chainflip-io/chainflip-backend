@@ -6,7 +6,7 @@ use cf_chains::{
 use cf_primitives::{AuthorityCount, CeremonyId};
 use cf_traits::{
 	impl_mock_waived_fees, mocks::system_state_info::MockSystemStateInfo, AsyncResult,
-	ThresholdSigner, WaivedFees,
+	CeremonyType, ThresholdSigner, WaivedFees,
 };
 use frame_support::{dispatch::DispatchResultWithPostInfo, parameter_types, traits::ConstU64};
 use sp_runtime::{
@@ -161,6 +161,7 @@ impl ThresholdSigner<Ethereum> for MockThresholdSigner {
 
 	fn request_signature(
 		payload: <Ethereum as ChainCrypto>::Payload,
+		_ceremony_type: CeremonyType<Self::KeyId, BTreeSet<Self::ValidatorId>>,
 	) -> (Self::RequestId, CeremonyId) {
 		SIGNATURE_REQUESTS.with(|cell| cell.borrow_mut().push(payload));
 		(0, 1)
@@ -185,15 +186,6 @@ impl ThresholdSigner<Ethereum> for MockThresholdSigner {
 	) {
 		// do nothing, the mock impl of signature_result doesn't take from any storage
 		// so we don't need to insert any storage.
-	}
-
-	fn request_signature_with(
-		_key_id: Self::KeyId,
-		_participants: BTreeSet<Self::ValidatorId>,
-		_payload: <Ethereum as ChainCrypto>::Payload,
-		_retry_policy: cf_traits::RetryPolicy,
-	) -> (Self::RequestId, CeremonyId) {
-		unimplemented!()
 	}
 }
 
