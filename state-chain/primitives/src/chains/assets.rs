@@ -16,6 +16,8 @@ use super::*;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 
+/// Defines all Assets, and the Chain each asset belongs to
+/// There's an unique 1:1 relationship between an Asset and a Chain
 pub mod any {
 	use super::*;
 	pub type Chain = AnyChain;
@@ -102,6 +104,8 @@ macro_rules! chain_assets {
 	};
 }
 
+// Defines each chain's Asset enum. 
+// Must be consistent with the mapping defined in any::Asset
 chain_assets!(eth, Ethereum, Eth, Flip, Usdc);
 chain_assets!(dot, Polkadot, Dot);
 
