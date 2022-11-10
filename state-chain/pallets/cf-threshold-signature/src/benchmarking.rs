@@ -5,7 +5,7 @@ use super::*;
 
 use cf_chains::{benchmarking_value::BenchmarkValue, ChainCrypto};
 use cf_primitives::AccountRole;
-use cf_traits::{AccountRoleRegistry, Chainflip, ThresholdSigner};
+use cf_traits::{AccountRoleRegistry, Chainflip, RequestType, ThresholdSigner};
 use frame_benchmarking::{account, benchmarks_instance_pallet, whitelist_account};
 use frame_support::{
 	assert_ok,
@@ -49,7 +49,7 @@ benchmarks_instance_pallet! {
 
 		add_authorities::<T, _>(all_accounts);
 
-		let (request_id, ceremony_id) = <Pallet::<T, I> as ThresholdSigner<_>>::request_signature(PayloadFor::<T, I>::benchmark_value(), CeremonyType::Standard);
+		let (request_id, ceremony_id) = <Pallet::<T, I> as ThresholdSigner<_>>::request_signature(PayloadFor::<T, I>::benchmark_value(), RequestType::Standard);
 		let signature = SignatureFor::<T, I>::benchmark_value();
 	} : _(RawOrigin::None, ceremony_id, signature)
 	verify {
@@ -63,7 +63,7 @@ benchmarks_instance_pallet! {
 
 		add_authorities::<T, _>(all_accounts);
 
-		let (request_id, ceremony_id) = <Pallet::<T, I> as ThresholdSigner<_>>::request_signature(PayloadFor::<T, I>::benchmark_value(), CeremonyType::Standard);
+		let (request_id, ceremony_id) = <Pallet::<T, I> as ThresholdSigner<_>>::request_signature(PayloadFor::<T, I>::benchmark_value(), RequestType::Standard);
 
 		let mut threshold_set = PendingCeremonies::<T, I>::get(ceremony_id).unwrap().remaining_respondents.into_iter();
 
@@ -85,7 +85,7 @@ benchmarks_instance_pallet! {
 			request_id: 1,
 			attempt_count: 0,
 			payload: PayloadFor::<T, I>::benchmark_value(),
-			ceremony_type: CeremonyType::Standard,
+			request_type: RequestType::Standard,
 			remaining_respondents:Default::default(),
 			blame_counts,
 			participant_count:a,
@@ -117,7 +117,7 @@ benchmarks_instance_pallet! {
 
 		// These attempts will fail because there are no authorities to do the signing.
 		for _ in 0..r {
-			Pallet::<T, I>::new_ceremony_attempt(1, PayloadFor::<T, I>::benchmark_value(), 1, CeremonyType::Standard);
+			Pallet::<T, I>::new_ceremony_attempt(1, PayloadFor::<T, I>::benchmark_value(), 1, RequestType::Standard);
 		}
 
 		assert_eq!(

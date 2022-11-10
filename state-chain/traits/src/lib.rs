@@ -378,7 +378,7 @@ pub trait KeyProvider<C: ChainCrypto> {
 }
 
 #[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub enum CeremonyType<KeyId, Participants> {
+pub enum RequestType<KeyId, Participants> {
 	/// Will use the current key and current authority set.
 	Standard,
 	/// Uses the recently generated key and the participants used to generate that key.
@@ -399,7 +399,7 @@ where
 	/// Initiate a signing request and return the request id and ceremony id.
 	fn request_signature(
 		payload: C::Payload,
-		ceremony_type: CeremonyType<Self::KeyId, BTreeSet<Self::ValidatorId>>,
+		request_type: RequestType<Self::KeyId, BTreeSet<Self::ValidatorId>>,
 	) -> (Self::RequestId, CeremonyId);
 
 	/// Register a callback to be dispatched when the signature is available. Can fail if the
@@ -424,7 +424,7 @@ where
 		payload: C::Payload,
 		callback_generator: impl FnOnce(Self::RequestId) -> Self::Callback,
 	) -> (Self::RequestId, CeremonyId) {
-		let (request_id, ceremony_id) = Self::request_signature(payload, CeremonyType::Standard);
+		let (request_id, ceremony_id) = Self::request_signature(payload, RequestType::Standard);
 		Self::register_callback(request_id, callback_generator(request_id)).unwrap_or_else(|e| {
 			log::error!(
 				"Unable to register threshold signature callback. This should not be possible. Error: '{:?}'",

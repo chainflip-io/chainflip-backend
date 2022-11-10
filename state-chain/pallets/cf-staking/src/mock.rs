@@ -5,8 +5,8 @@ use cf_chains::{
 };
 use cf_primitives::{AuthorityCount, CeremonyId};
 use cf_traits::{
-	impl_mock_waived_fees, mocks::system_state_info::MockSystemStateInfo, AsyncResult,
-	CeremonyType, ThresholdSigner, WaivedFees,
+	impl_mock_waived_fees, mocks::system_state_info::MockSystemStateInfo, AsyncResult, RequestType,
+	ThresholdSigner, WaivedFees,
 };
 use frame_support::{dispatch::DispatchResultWithPostInfo, parameter_types, traits::ConstU64};
 use sp_runtime::{
@@ -161,7 +161,7 @@ impl ThresholdSigner<Ethereum> for MockThresholdSigner {
 
 	fn request_signature(
 		payload: <Ethereum as ChainCrypto>::Payload,
-		_ceremony_type: CeremonyType<Self::KeyId, BTreeSet<Self::ValidatorId>>,
+		_request_type: RequestType<Self::KeyId, BTreeSet<Self::ValidatorId>>,
 	) -> (Self::RequestId, CeremonyId) {
 		SIGNATURE_REQUESTS.with(|cell| cell.borrow_mut().push(payload));
 		(0, 1)

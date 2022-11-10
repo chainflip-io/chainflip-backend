@@ -1,4 +1,4 @@
-use crate::{AsyncResult, CeremonyId, CeremonyType};
+use crate::{AsyncResult, CeremonyId, RequestType};
 
 use super::{MockPallet, MockPalletStorage};
 use cf_chains::ChainCrypto;
@@ -73,7 +73,7 @@ where
 
 	fn request_signature(
 		payload: <C as ChainCrypto>::Payload,
-		_ceremony_type: CeremonyType<Self::KeyId, BTreeSet<Self::ValidatorId>>,
+		_request_type: RequestType<Self::KeyId, BTreeSet<Self::ValidatorId>>,
 	) -> (Self::RequestId, CeremonyId) {
 		let req_id = {
 			let payload = payload.clone();

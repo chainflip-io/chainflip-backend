@@ -6,7 +6,7 @@ use crate::{
 };
 use cf_chains::mocks::MockEthereum;
 use cf_traits::{
-	mocks::signer_nomination::MockNominator, AsyncResult, CeremonyType, Chainflip, KeyProvider,
+	mocks::signer_nomination::MockNominator, AsyncResult, Chainflip, KeyProvider, RequestType,
 	ThresholdSigner,
 };
 use frame_support::{
@@ -248,7 +248,7 @@ fn keygen_verification_ceremony_calls_callback_on_failure() {
 			let current_key_id = MockKeyProvider::current_key_id_epoch_index().0;
 			let (request_id, _) = EthereumThresholdSigner::request_signature(
 				*PAYLOAD,
-				CeremonyType::KeygenVerification {
+				RequestType::KeygenVerification {
 					key_id: current_key_id,
 					participants: NOMINEES.into_iter().collect(),
 				},
@@ -436,7 +436,7 @@ mod unsigned_validation {
 	use super::*;
 	use crate::{Call as PalletCall, PendingCeremonies, RetryQueues};
 	use cf_chains::ChainCrypto;
-	use cf_traits::{CeremonyType, KeyProvider, ThresholdSigner};
+	use cf_traits::{KeyProvider, RequestType, ThresholdSigner};
 	use frame_support::{pallet_prelude::InvalidTransaction, unsigned::TransactionSource};
 	use sp_runtime::traits::ValidateUnsigned;
 
@@ -448,7 +448,7 @@ mod unsigned_validation {
 			let participants: BTreeSet<u64> = BTreeSet::from_iter([1, 2, 3, 4, 5, 6]);
 			let (_request_id, ceremony_id) = EthereumThresholdSigner::request_signature(
 				PAYLOAD,
-				CeremonyType::KeygenVerification { key_id: CUSTOM_AGG_KEY.into(), participants },
+				RequestType::KeygenVerification { key_id: CUSTOM_AGG_KEY.into(), participants },
 			);
 
 			let retry_block = frame_system::Pallet::<Test>::current_block_number() +
@@ -469,7 +469,7 @@ mod unsigned_validation {
 			let (_request_id, ceremony_id) =
 				<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(
 					PAYLOAD,
-					CeremonyType::Standard,
+					RequestType::Standard,
 				);
 			let (current_key_id, _) = MockKeyProvider::current_key_id_epoch_index();
 			assert!(
@@ -510,7 +510,7 @@ mod unsigned_validation {
 			let (_request_id, ceremony_id) =
 				<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(
 					PAYLOAD,
-					CeremonyType::Standard,
+					RequestType::Standard,
 				);
 			assert_eq!(
 				Test::validate_unsigned(
@@ -544,7 +544,7 @@ mod failure_reporting {
 	use super::*;
 	use crate::CeremonyContext;
 	use cf_chains::ChainCrypto;
-	use cf_traits::{mocks::epoch_info::MockEpochInfo, CeremonyType, KeyProvider};
+	use cf_traits::{mocks::epoch_info::MockEpochInfo, KeyProvider, RequestType};
 
 	fn init_context(
 		validator_set: impl IntoIterator<Item = <Test as Chainflip>::ValidatorId> + Copy,
@@ -556,7 +556,7 @@ mod failure_reporting {
 			request_id: 1,
 			attempt_count: 0,
 			payload: PAYLOAD,
-			ceremony_type: CeremonyType::Standard,
+			request_type: RequestType::Standard,
 			key_id: current_key_id,
 			remaining_respondents: BTreeSet::from_iter(validator_set),
 			blame_counts: Default::default(),

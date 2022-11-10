@@ -19,8 +19,8 @@ use scale_info::TypeInfo;
 use cf_chains::ChainCrypto;
 use cf_primitives::{AuthorityCount, CeremonyId};
 use cf_traits::{
-	offence_reporting::OffenceReporter, AsyncResult, CeremonyIdProvider, CeremonyType, Chainflip,
-	EpochInfo, KeyProvider, ThresholdSignerNomination,
+	offence_reporting::OffenceReporter, AsyncResult, CeremonyIdProvider, Chainflip, EpochInfo,
+	KeyProvider, RequestType, ThresholdSignerNomination,
 };
 
 use frame_support::{
@@ -59,7 +59,7 @@ pub enum PalletOffence {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{AccountRoleRegistry, AsyncResult, CeremonyType, ThresholdSignerNomination};
+	use cf_traits::{AccountRoleRegistry, AsyncResult, RequestType, ThresholdSignerNomination};
 	use frame_support::{
 		dispatch::DispatchResultWithPostInfo,
 		pallet_prelude::{InvalidTransaction, *},
@@ -80,7 +80,7 @@ pub mod pallet {
 		/// The payload to be signed over.
 		pub payload: PayloadFor<T, I>,
 		/// Determines how/if we deal with ceremony failure.
-		pub ceremony_type: CeremonyType<<T as Chainflip>::KeyId, BTreeSet<T::ValidatorId>>,
+		pub request_type: RequestType<<T as Chainflip>::KeyId, BTreeSet<T::ValidatorId>>,
 		/// The respondents that have yet to reply.
 		pub remaining_respondents: BTreeSet<T::ValidatorId>,
 		/// The number of blame votes (accusations) each authority has received.
@@ -337,11 +337,11 @@ pub mod pallet {
 					num_offenders += offenders.len();
 					num_retries += 1;
 					let CeremonyContext {
-						request_id, attempt_count, payload, ceremony_type, ..
+						request_id, attempt_count, payload, request_type, ..
 					} = failed_ceremony_context;
 
-					Self::deposit_event(match ceremony_type {
-						CeremonyType::Standard => {
+					Self::deposit_event(match request_type {
+						RequestType::Standard => {
 							T::OffenceReporter::report_many(
 								PalletOffence::ParticipateSigningFailed,
 								&offenders[..],
@@ -351,11 +351,11 @@ pub mod pallet {
 								request_id,
 								payload,
 								attempt_count.wrapping_add(1),
-								CeremonyType::Standard,
+								RequestType::Standard,
 							);
 							Event::<T, I>::RetryRequested { request_id, ceremony_id }
 						},
-						CeremonyType::KeygenVerification { key_id, .. } => {
+						RequestType::KeygenVerification { key_id, .. } => {
 							Signature::<T, I>::insert(
 								request_id,
 								AsyncResult::Ready(Err(offenders.clone())),
@@ -541,7 +541,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Initiate a new signature request, returning the request id.
 	fn inner_request_signature(
 		payload: PayloadFor<T, I>,
-		ceremony_type: CeremonyType<<T as Chainflip>::KeyId, BTreeSet<T::ValidatorId>>,
+		request_type: RequestType<<T as Chainflip>::KeyId, BTreeSet<T::ValidatorId>>,
 	) -> (RequestId, CeremonyId) {
 		// Get a new request id.
 		let request_id = ThresholdSignatureRequestIdCounter::<T, I>::mutate(|id| {
@@ -550,7 +550,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		});
 
 		// Start a ceremony.
-		let ceremony_id = Self::new_ceremony_attempt(request_id, payload, 0, ceremony_type);
+		let ceremony_id = Self::new_ceremony_attempt(request_id, payload, 0, request_type);
 
 		Signature::<T, I>::insert(request_id, AsyncResult::Pending);
 
@@ -562,14 +562,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		request_id: RequestId,
 		payload: PayloadFor<T, I>,
 		attempt_count: AttemptCount,
-		ceremony_type: CeremonyType<<T as Chainflip>::KeyId, BTreeSet<T::ValidatorId>>,
+		request_type: RequestType<<T as Chainflip>::KeyId, BTreeSet<T::ValidatorId>>,
 	) -> CeremonyId {
 		let ceremony_id = T::CeremonyIdProvider::next_ceremony_id();
 
-		let (key_id, participants) = if let CeremonyType::KeygenVerification {
+		let (key_id, participants) = if let RequestType::KeygenVerification {
 			ref key_id,
 			ref participants,
-		} = ceremony_type
+		} = request_type
 		{
 			(key_id.clone(), Some(participants.clone()))
 		} else {
@@ -630,7 +630,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				request_id,
 				attempt_count,
 				payload,
-				ceremony_type,
+				request_type,
 				key_id,
 				blame_counts: BTreeMap::new(),
 				participant_count: remaining_respondents.len() as u32,
@@ -702,9 +702,9 @@ where
 
 	fn request_signature(
 		payload: PayloadFor<T, I>,
-		ceremony_type: CeremonyType<Self::KeyId, BTreeSet<Self::ValidatorId>>,
+		request_type: RequestType<Self::KeyId, BTreeSet<Self::ValidatorId>>,
 	) -> (Self::RequestId, CeremonyId) {
-		Self::inner_request_signature(payload, ceremony_type)
+		Self::inner_request_signature(payload, request_type)
 	}
 
 	fn register_callback(

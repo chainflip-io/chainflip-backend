@@ -752,7 +752,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let byte_key: Vec<u8> = new_public_key.into();
 		let (request_id, signing_ceremony_id) = T::ThresholdSigner::request_signature(
 			T::Chain::agg_key_to_payload(new_public_key),
-			CeremonyType::KeygenVerification { key_id: byte_key.into(), participants },
+			RequestType::KeygenVerification { key_id: byte_key.into(), participants },
 		);
 		T::ThresholdSigner::register_callback(request_id, {
 			Call::on_keygen_verification_result {
