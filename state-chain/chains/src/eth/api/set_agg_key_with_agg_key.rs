@@ -2,7 +2,7 @@
 
 use crate::{
 	eth::{AggKey, Ethereum, SigData, Tokenizable},
-	ApiCall, ChainAbi, ChainCrypto,
+	ApiCall, ChainCrypto,
 };
 
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -83,7 +83,7 @@ impl ApiCall<Ethereum> for SetAggKeyWithAggKey {
 		self
 	}
 
-	fn chain_encoded(&self) -> <Ethereum as ChainAbi>::SignedTransaction {
+	fn chain_encoded(&self) -> Vec<u8> {
 		self.abi_encoded()
 	}
 

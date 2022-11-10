@@ -23,6 +23,7 @@ pub struct P2P {
 	pub node_key_file: PathBuf,
 	pub ip_address: IpAddr,
 	pub port: Port,
+	pub allow_local_ip: bool,
 }
 
 #[derive(Debug, Deserialize, Clone, Default)]
@@ -34,7 +35,7 @@ pub struct StateChain {
 
 impl StateChain {
 	pub fn validate_settings(&self) -> Result<(), ConfigError> {
-		parse_websocket_endpoint(&self.ws_endpoint)
+		validate_websocket_endpoint(&self.ws_endpoint)
 			.map_err(|e| ConfigError::Message(e.to_string()))?;
 		Ok(())
 	}
@@ -57,7 +58,7 @@ pub struct Dot {
 #[cfg(feature = "ibiza")]
 impl Dot {
 	pub fn validate_settings(&self) -> Result<(), ConfigError> {
-		parse_websocket_endpoint(&self.ws_node_endpoint)
+		validate_websocket_endpoint(&self.ws_node_endpoint)
 			.map_err(|e| ConfigError::Message(e.to_string()))?;
 		Ok(())
 	}
@@ -65,9 +66,9 @@ impl Dot {
 
 impl Eth {
 	pub fn validate_settings(&self) -> Result<(), ConfigError> {
-		parse_websocket_endpoint(&self.ws_node_endpoint)
+		validate_websocket_endpoint(&self.ws_node_endpoint)
 			.map_err(|e| ConfigError::Message(e.to_string()))?;
-		parse_http_endpoint(&self.http_node_endpoint)
+		validate_http_endpoint(&self.http_node_endpoint)
 			.map_err(|e| ConfigError::Message(e.to_string()))?;
 		Ok(())
 	}
@@ -128,7 +129,19 @@ pub struct DotOptions {
 	pub dot_ws_node_endpoint: Option<String>,
 }
 
-#[derive(Parser, Debug, Clone)]
+#[derive(Parser, Debug, Clone, Default)]
+pub struct P2POptions {
+	#[clap(long = "p2p.node_key_file", parse(from_os_str))]
+	node_key_file: Option<PathBuf>,
+	#[clap(long = "p2p.ip_address")]
+	ip_address: Option<IpAddr>,
+	#[clap(long = "p2p.port")]
+	p2p_port: Option<Port>,
+	#[clap(long = "p2p.allow_local_ip")]
+	allow_local_ip: Option<bool>,
+}
+
+#[derive(Parser, Debug, Clone, Default)]
 pub struct CommandLineOptions {
 	// Misc Options
 	#[clap(short = 'c', long = "config-path")]
@@ -138,13 +151,8 @@ pub struct CommandLineOptions {
 	#[clap(short = 'b', long = "log-blacklist")]
 	log_blacklist: Option<Vec<String>>,
 
-	// P2P Settings
-	#[clap(long = "p2p.node_key_file", parse(from_os_str))]
-	node_key_file: Option<PathBuf>,
-	#[clap(long = "p2p.ip_address")]
-	ip_address: Option<IpAddr>,
-	#[clap(long = "p2p.port")]
-	p2p_port: Option<Port>,
+	#[clap(flatten)]
+	p2p_opts: P2POptions,
 
 	#[clap(flatten)]
 	state_chain_opts: StateChainOptions,
@@ -169,33 +177,7 @@ pub struct CommandLineOptions {
 
 const HEALTH_CHECK_HOSTNAME: &str = "health_check.hostname";
 const HEALTH_CHECK_PORT: &str = "health_check.port";
-
-impl CommandLineOptions {
-	/// Creates an empty CommandLineOptions with `None` for all fields
-	pub fn new() -> CommandLineOptions {
-		CommandLineOptions {
-			config_path: None,
-			log_whitelist: None,
-			log_blacklist: None,
-			node_key_file: None,
-			ip_address: None,
-			p2p_port: None,
-			state_chain_opts: StateChainOptions::default(),
-			eth_opts: EthOptions::default(),
-			#[cfg(feature = "ibiza")]
-			dot_opts: DotOptions::default(),
-			health_check_hostname: None,
-			health_check_port: None,
-			signing_db_file: None,
-		}
-	}
-}
-
-impl Default for CommandLineOptions {
-	fn default() -> Self {
-		Self::new()
-	}
-}
+const ALLOW_LOCAL_IP: &str = "node_p2p.allow_local_ip";
 
 // We use PathBuf because the value must be Sized, Path is not Sized
 fn deser_path<'de, D>(deserializer: D) -> std::result::Result<PathBuf, D::Error>
@@ -318,7 +300,8 @@ impl CfSettings for Settings {
 	) -> Result<ConfigBuilder<config::builder::DefaultState>, ConfigError> {
 		config_builder
 			.set_default(HEALTH_CHECK_HOSTNAME, HealthCheck::default().hostname)?
-			.set_default(HEALTH_CHECK_PORT, HealthCheck::default().port)
+			.set_default(HEALTH_CHECK_PORT, HealthCheck::default().port)?
+			.set_default(ALLOW_LOCAL_IP, false)
 	}
 }
 
@@ -330,15 +313,18 @@ impl Source for CommandLineOptions {
 	fn collect(&self) -> std::result::Result<Map<String, Value>, ConfigError> {
 		let mut map: HashMap<String, Value> = HashMap::new();
 
-		insert_command_line_option_path(&mut map, "node_p2p.node_key_file", &self.node_key_file);
+		self.p2p_opts.insert_all(&mut map);
 
+		self.state_chain_opts.insert_all(&mut map);
+
+		self.eth_opts.insert_all(&mut map);
+
+		#[cfg(feature = "ibiza")]
 		insert_command_line_option(
 			&mut map,
-			"node_p2p.ip_address",
-			&self.ip_address.map(|ip| ip.to_string()),
+			"dot.ws_node_endpoint",
+			&self.dot_opts.dot_ws_node_endpoint,
 		);
-
-		insert_command_line_option(&mut map, "node_p2p.port", &self.p2p_port);
 
 		self.state_chain_opts.insert_all(&mut map);
 
@@ -408,6 +394,20 @@ impl EthOptions {
 	}
 }
 
+impl P2POptions {
+	/// Inserts all the Eth Shared Options into the given map (if Some)
+	pub fn insert_all(&self, map: &mut HashMap<String, Value>) {
+		insert_command_line_option_path(map, "node_p2p.node_key_file", &self.node_key_file);
+		insert_command_line_option(
+			map,
+			"node_p2p.ip_address",
+			&self.ip_address.map(|ip| ip.to_string()),
+		);
+		insert_command_line_option(map, "node_p2p.port", &self.p2p_port);
+		insert_command_line_option(map, ALLOW_LOCAL_IP, &self.allow_local_ip);
+	}
+}
+
 impl Settings {
 	/// New settings loaded from the `config_path` in the `CommandLineOptions` or
 	/// "config/Default.toml" if none, with overridden values from the environment and
@@ -432,17 +432,17 @@ impl Settings {
 }
 
 /// Validate a websocket endpoint URL
-pub fn parse_websocket_endpoint(url: &str) -> Result<Url> {
-	parse_endpoint(vec!["ws", "wss"], url)
+pub fn validate_websocket_endpoint(url: &str) -> Result<()> {
+	validate_endpoint(vec!["ws", "wss"], url)
 }
 
 /// Validate a http endpoint URL
-pub fn parse_http_endpoint(url: &str) -> Result<Url> {
-	parse_endpoint(vec!["http", "https"], url)
+pub fn validate_http_endpoint(url: &str) -> Result<()> {
+	validate_endpoint(vec!["http", "https"], url)
 }
 
 /// Parse the URL to check that it is the correct scheme and a valid endpoint URL
-fn parse_endpoint(valid_schemes: Vec<&str>, url: &str) -> Result<Url> {
+fn validate_endpoint(valid_schemes: Vec<&str>, url: &str) -> Result<()> {
 	let parsed_url = Url::parse(url)?;
 	let scheme = parsed_url.scheme();
 	if !valid_schemes.contains(&scheme) {
@@ -458,7 +458,7 @@ fn parse_endpoint(valid_schemes: Vec<&str>, url: &str) -> Result<Url> {
 		bail!("Invalid URL data.");
 	}
 
-	Ok(parsed_url)
+	Ok(())
 }
 
 fn is_valid_db_path(db_file: &Path) -> Result<()> {
@@ -505,24 +505,26 @@ mod tests {
 
 	#[test]
 	fn test_websocket_endpoint_url_parsing() {
-		assert_ok!(parse_websocket_endpoint("wss://network.my_eth_node:80/d2er2easdfasdfasdf2e"));
-		assert_ok!(parse_websocket_endpoint("wss://network.my_eth_node:80/<secret_key>"));
-		assert_ok!(parse_websocket_endpoint("wss://network.my_eth_node/<secret_key>"));
-		assert_ok!(parse_websocket_endpoint("ws://network.my_eth_node/<secret_key>"));
-		assert_ok!(parse_websocket_endpoint("wss://network.my_eth_node"));
-		assert!(parse_websocket_endpoint("https://wrong_scheme.com").is_err());
-		assert!(parse_websocket_endpoint("").is_err());
+		assert_ok!(validate_websocket_endpoint(
+			"wss://network.my_eth_node:80/d2er2easdfasdfasdf2e"
+		));
+		assert_ok!(validate_websocket_endpoint("wss://network.my_eth_node:80/<secret_key>"));
+		assert_ok!(validate_websocket_endpoint("wss://network.my_eth_node/<secret_key>"));
+		assert_ok!(validate_websocket_endpoint("ws://network.my_eth_node/<secret_key>"));
+		assert_ok!(validate_websocket_endpoint("wss://network.my_eth_node"));
+		assert!(validate_websocket_endpoint("https://wrong_scheme.com").is_err());
+		assert!(validate_websocket_endpoint("").is_err());
 	}
 
 	#[test]
 	fn test_http_endpoint_url_parsing() {
-		assert_ok!(parse_http_endpoint("http://network.my_eth_node:80/d2er2easdfasdfasdf2e"));
-		assert_ok!(parse_http_endpoint("http://network.my_eth_node:80/<secret_key>"));
-		assert_ok!(parse_http_endpoint("http://network.my_eth_node/<secret_key>"));
-		assert_ok!(parse_http_endpoint("https://network.my_eth_node/<secret_key>"));
-		assert_ok!(parse_http_endpoint("http://network.my_eth_node"));
-		assert!(parse_http_endpoint("wss://wrong_scheme.com").is_err());
-		assert!(parse_http_endpoint("").is_err());
+		assert_ok!(validate_http_endpoint("http://network.my_eth_node:80/d2er2easdfasdfasdf2e"));
+		assert_ok!(validate_http_endpoint("http://network.my_eth_node:80/<secret_key>"));
+		assert_ok!(validate_http_endpoint("http://network.my_eth_node/<secret_key>"));
+		assert_ok!(validate_http_endpoint("https://network.my_eth_node/<secret_key>"));
+		assert_ok!(validate_http_endpoint("http://network.my_eth_node"));
+		assert!(validate_http_endpoint("wss://wrong_scheme.com").is_err());
+		assert!(validate_http_endpoint("").is_err());
 	}
 
 	#[test]
@@ -536,21 +538,24 @@ mod tests {
 	#[test]
 	fn test_config_command_line_option() {
 		// Load both the settings files using the --config command line option
-		let mut opts = CommandLineOptions::new();
-		opts.config_path = Some("config/Testing.toml".to_owned());
+		let settings1 = Settings::new(CommandLineOptions {
+			config_path: Some("config/Testing.toml".to_owned()),
+			..Default::default()
+		})
+		.unwrap();
 
-		let settings1 = Settings::new(opts).unwrap();
-
-		let mut opts = CommandLineOptions::new();
-
-		#[cfg(not(feature = "ibiza"))]
-		let default_file = "config/Default.toml";
-		#[cfg(feature = "ibiza")]
-		let default_file = "config/IbizaDefault.toml";
-
-		opts.config_path = Some(default_file.to_owned());
-
-		let settings2 = Settings::new(opts).unwrap();
+		let settings2 = Settings::new(CommandLineOptions {
+			config_path: Some(
+				if cfg!(feature = "ibiza") {
+					"config/IbizaDefault.toml"
+				} else {
+					"config/Default.toml"
+				}
+				.to_owned(),
+			),
+			..Default::default()
+		})
+		.unwrap();
 
 		// Now compare a value that should be different to confirm that both files loaded.
 		// Note: This test will break/fail if the Testing.toml and Default.toml have the same
@@ -569,9 +574,12 @@ mod tests {
 			config_path: None,
 			log_whitelist: Some(vec!["test1".to_owned()]),
 			log_blacklist: Some(vec!["test2".to_owned()]),
-			node_key_file: Some(PathBuf::from_str("node_key_file").unwrap()),
-			ip_address: Some("1.1.1.1".parse().unwrap()),
-			p2p_port: Some(8087),
+			p2p_opts: P2POptions {
+				node_key_file: Some(PathBuf::from_str("node_key_file").unwrap()),
+				ip_address: Some("1.1.1.1".parse().unwrap()),
+				p2p_port: Some(8087),
+				allow_local_ip: Some(false),
+			},
 			state_chain_opts: StateChainOptions {
 				state_chain_ws_endpoint: Some("ws://endpoint:1234".to_owned()),
 				state_chain_signing_key_file: Some(PathBuf::from_str("signing_key_file").unwrap()),
@@ -592,7 +600,10 @@ mod tests {
 		let settings = Settings::new(opts.clone()).unwrap();
 
 		// Compare the opts and the settings
-		assert_eq!(opts.node_key_file.unwrap(), settings.node_p2p.node_key_file);
+		assert_eq!(opts.p2p_opts.node_key_file.unwrap(), settings.node_p2p.node_key_file);
+		assert_eq!(opts.p2p_opts.p2p_port.unwrap(), settings.node_p2p.port);
+		assert_eq!(opts.p2p_opts.ip_address.unwrap(), settings.node_p2p.ip_address);
+		assert_eq!(opts.p2p_opts.allow_local_ip.unwrap(), settings.node_p2p.allow_local_ip);
 
 		assert_eq!(
 			opts.state_chain_opts.state_chain_ws_endpoint.unwrap(),
@@ -606,6 +617,9 @@ mod tests {
 		assert_eq!(opts.eth_opts.eth_ws_node_endpoint.unwrap(), settings.eth.ws_node_endpoint);
 		assert_eq!(opts.eth_opts.eth_http_node_endpoint.unwrap(), settings.eth.http_node_endpoint);
 		assert_eq!(opts.eth_opts.eth_private_key_file.unwrap(), settings.eth.private_key_file);
+
+		#[cfg(feature = "ibiza")]
+		assert_eq!(opts.dot_opts.dot_ws_node_endpoint.unwrap(), settings.dot.ws_node_endpoint);
 
 		assert_eq!(
 			opts.health_check_hostname.unwrap(),

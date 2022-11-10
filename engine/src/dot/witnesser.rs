@@ -3,7 +3,6 @@ use std::{collections::BTreeSet, pin::Pin, sync::Arc};
 use cf_chains::dot::Polkadot;
 use futures::Stream;
 use subxt::{Config, PolkadotConfig};
-use tokio::sync::broadcast;
 
 use crate::witnesser::{
 	block_head_stream_from::block_head_stream_from, epoch_witnesser, BlockNumberable, EpochStart,
@@ -42,7 +41,7 @@ where
 }
 
 pub async fn start<StateChainClient>(
-	epoch_starts_receiver: broadcast::Receiver<EpochStart<Polkadot>>,
+	epoch_starts_receiver: async_channel::Receiver<EpochStart<Polkadot>>,
 	dot_monitor_ingress_receiver: tokio::sync::mpsc::UnboundedReceiver<PolkadotAccount>,
 	_state_chain_client: Arc<StateChainClient>,
 	// on chain addresses that we need to monitor for inputs

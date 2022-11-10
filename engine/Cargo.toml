@@ -56,6 +56,7 @@ subxt = "0.24.0"
 thiserror = "1.0.26"
 tokio = {version = "1.13.1", features = ["full", "test-util"]}
 tokio-stream = {version = "0.1.5", features = ["sync"]}
+async-channel = "1.7.1"
 url = "1.7.2"
 num-bigint = "0.4"
 num-traits = "0.2"
@@ -168,5 +169,7 @@ rlp = "0.5"
 integration-test = []
 ibiza = [
     'pallet-cf-ingress',
-    'state-chain-runtime/ibiza'
+    'state-chain-runtime/ibiza',
+    'cf-chains/ibiza',
+    'chainflip-node/ibiza',
 ]
