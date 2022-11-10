@@ -163,8 +163,6 @@ pub struct CommandLineOptions {
 	signing_db_file: Option<PathBuf>,
 }
 
-const HEALTH_CHECK_HOSTNAME: &str = "health_check.hostname";
-const HEALTH_CHECK_PORT: &str = "health_check.port";
 const ALLOW_LOCAL_IP: &str = "node_p2p.allow_local_ip";
 
 // We use PathBuf because the value must be Sized, Path is not Sized
@@ -283,10 +281,7 @@ impl CfSettings for Settings {
 	fn set_defaults(
 		config_builder: ConfigBuilder<config::builder::DefaultState>,
 	) -> Result<ConfigBuilder<config::builder::DefaultState>, ConfigError> {
-		config_builder
-			.set_default(HEALTH_CHECK_HOSTNAME, HealthCheck::default().hostname)?
-			.set_default(HEALTH_CHECK_PORT, HealthCheck::default().port)?
-			.set_default(ALLOW_LOCAL_IP, false)
+		config_builder.set_default(ALLOW_LOCAL_IP, false)
 	}
 }
 
@@ -311,8 +306,8 @@ impl Source for CommandLineOptions {
 			&self.dot_opts.dot_ws_node_endpoint,
 		);
 
-		insert_command_line_option(&mut map, HEALTH_CHECK_HOSTNAME, &self.health_check_hostname);
-		insert_command_line_option(&mut map, HEALTH_CHECK_PORT, &self.health_check_port);
+		insert_command_line_option(&mut map, "health_check.hostname", &self.health_check_hostname);
+		insert_command_line_option(&mut map, "health_check.port", &self.health_check_port);
 		insert_command_line_option_path(&mut map, "signing.db_file", &self.signing_db_file);
 		insert_command_line_option(&mut map, "log.whitelist", &self.log_whitelist);
 		insert_command_line_option(&mut map, "log.blacklist", &self.log_blacklist);
