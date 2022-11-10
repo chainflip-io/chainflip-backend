@@ -454,8 +454,8 @@ where
                                             ) => {
                                                 use cf_primitives::{Asset, ForeignChain, ForeignChainAddress};
                                                 if let ForeignChainAddress::Eth(address) = ingress_address {
-                                                    assert_eq!(ingress_asset.chain, ForeignChain::Ethereum);
-                                                    match ingress_asset.asset {
+                                                    assert!(ForeignChain::Ethereum == ingress_asset.into());
+                                                    match ingress_asset {
                                                         Asset::Eth => {
                                                             eth_monitor_ingress_sender.send(H160::from(address)).unwrap();
                                                         }

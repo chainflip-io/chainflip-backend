@@ -14,7 +14,7 @@ use sp_std::collections::btree_set::BTreeSet;
 use cf_chains::{benchmarking_value::BenchmarkValue, ApiCall, ChainAbi, ChainCrypto};
 use cf_primitives::{
 	AccountRole, Asset, AssetAmount, AuthorityCount, CeremonyId, EpochIndex, EthereumAddress,
-	ForeignChainAddress, ForeignChainAsset, IntentId,
+	ForeignChainAddress, IntentId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -280,10 +280,6 @@ pub trait EmissionsTrigger {
 /// Provides chain-specific replay protection data.
 pub trait ReplayProtectionProvider<Abi: ChainAbi> {
 	fn replay_protection() -> Abi::ReplayProtection;
-}
-/// Provides chain-specific Extra data needed to build apicalls for that chain.
-pub trait ApiCallDataProvider<Abi: ChainAbi> {
-	fn chain_extra_data() -> Abi::ApiCallExtraData;
 }
 
 /// Provides the environment data for ethereum-like chains.
@@ -625,13 +621,13 @@ pub trait IngressApi {
 	/// Issues an intent id and ingress address for a new liquidity deposit.
 	fn register_liquidity_ingress_intent(
 		lp_account: Self::AccountId,
-		ingress_asset: ForeignChainAsset,
+		ingress_asset: Asset,
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError>;
 
 	/// Issues an intent id and ingress address for a new swap.
 	fn register_swap_intent(
-		ingress_asset: ForeignChainAsset,
-		egress_asset: ForeignChainAsset,
+		ingress_asset: Asset,
+		egress_asset: Asset,
 		egress_address: ForeignChainAddress,
 		relayer_commission_bps: u16,
 		relayer_id: Self::AccountId,
@@ -641,7 +637,7 @@ pub trait IngressApi {
 /// Generates a deterministic ingress address for some combination of asset, chain and intent id.
 pub trait AddressDerivationApi {
 	fn generate_address(
-		ingress_asset: ForeignChainAsset,
+		ingress_asset: Asset,
 		intent_id: IntentId,
 	) -> Result<ForeignChainAddress, DispatchError>;
 }
@@ -680,17 +676,12 @@ pub trait AccountRoleRegistry<T: frame_system::Config> {
 }
 
 /// API that allows other pallets to Egress assets out of the State Chain.
-pub trait EgressApi {
+pub trait EgressApi<C: cf_chains::Chain> {
 	fn schedule_egress(
-		foreign_asset: ForeignChainAsset,
+		foreign_asset: C::ChainAsset,
 		amount: AssetAmount,
-		egress_address: ForeignChainAddress,
+		egress_address: C::ChainAccount,
 	);
-
-	fn is_egress_valid(
-		foreign_asset: &ForeignChainAsset,
-		egress_address: &ForeignChainAddress,
-	) -> bool;
 }
 
 pub trait EthereumAssetsAddressProvider {
@@ -702,12 +693,12 @@ pub trait EthereumAssetsAddressProvider {
 /// valid.
 ///
 /// Schedule functions are chain specific, as each chain may require different data to do fetching.
-pub trait IngressFetchApi {
-	fn schedule_ethereum_ingress_fetch(fetch_details: Vec<(Asset, IntentId)>);
+pub trait IngressFetchApi<C: cf_chains::Chain> {
+	fn schedule_ingress_fetch(fetch_details: Vec<(C::ChainAsset, IntentId)>);
 }
 
-impl IngressFetchApi for () {
-	fn schedule_ethereum_ingress_fetch(_fetch_details: Vec<(Asset, IntentId)>) {}
+impl<C: cf_chains::Chain> IngressFetchApi<C> for () {
+	fn schedule_ingress_fetch(_fetch_details: Vec<(C::ChainAsset, IntentId)>) {}
 }
 
 pub trait VaultTransitionHandler<C: ChainCrypto> {

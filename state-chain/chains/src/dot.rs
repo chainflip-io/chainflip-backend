@@ -5,6 +5,8 @@ pub mod api;
 #[cfg(feature = "runtime-benchmarks")]
 pub mod benchmarking;
 
+pub use cf_primitives::chains::Polkadot;
+
 use sp_core::{sr25519, H256};
 use sp_runtime::{
 	generic::{Era, SignedPayload, UncheckedExtrinsic},
@@ -98,9 +100,6 @@ pub enum PolkadotProxyType {
 	Any = 0,
 }
 
-#[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub struct Polkadot;
-
 type DotAmount = u128;
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -112,7 +111,7 @@ impl Chain for Polkadot {
 	type TrackedData = eth::TrackedData<Self>;
 	type ChainAccount = PolkadotAccountId;
 	type TransactionFee = Self::ChainAmount;
-	type ChainAsset = ();
+	type ChainAsset = assets::dot::Asset;
 }
 
 impl ChainCrypto for Polkadot {
@@ -152,7 +151,6 @@ impl FeeRefundCalculator<Polkadot> for PolkadotTransactionData {
 impl ChainAbi for Polkadot {
 	type Transaction = PolkadotTransactionData;
 	type ReplayProtection = PolkadotReplayProtection;
-	type ApiCallExtraData = CurrentVaultAndProxy;
 }
 
 pub struct CurrentVaultAndProxy {

@@ -1,7 +1,7 @@
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
-use crate::Asset;
+use crate::chains::assets::any::Asset;
 
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};

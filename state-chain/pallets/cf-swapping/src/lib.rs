@@ -1,5 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-use cf_primitives::{Asset, AssetAmount, ForeignChainAddress, ForeignChainAsset};
+use cf_primitives::{Asset, AssetAmount, ForeignChainAddress};
 use cf_traits::{liquidity::AmmPoolApi, IngressApi};
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
@@ -21,7 +21,7 @@ pub use weights::WeightInfo;
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
 pub struct Swap<AccountId> {
 	pub from: Asset,
-	pub to: ForeignChainAsset,
+	pub to: Asset,
 	pub amount: AssetAmount,
 	pub egress_address: ForeignChainAddress,
 	pub relayer_id: AccountId,
@@ -31,7 +31,8 @@ pub struct Swap<AccountId> {
 #[frame_support::pallet]
 pub mod pallet {
 
-	use cf_primitives::{Asset, AssetAmount, IntentId};
+	use cf_chains::{eth::assets, Ethereum};
+	use cf_primitives::{Asset, AssetAmount, EthereumAddress, IntentId};
 	use cf_traits::{AccountRoleRegistry, Chainflip, EgressApi, SwapIntentHandler};
 
 	use super::*;
@@ -46,7 +47,7 @@ pub mod pallet {
 		/// An interface to the ingress api implementation.
 		type Ingress: IngressApi<AccountId = <Self as frame_system::Config>::AccountId>;
 		/// An interface to the egress api implementation.
-		type Egress: EgressApi;
+		type Egress: EgressApi<Ethereum>;
 		/// An interface to the AMM api implementation.
 		type AmmPoolApi: AmmPoolApi<Balance = AssetAmount>;
 		/// The Weight information.
@@ -72,6 +73,10 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// An new swap intent has been registered.
 		NewSwapIntent { intent_id: IntentId, ingress_address: ForeignChainAddress },
+	}
+	#[pallet::error]
+	pub enum Error<T> {
+		InvalidAsset,
 	}
 
 	#[pallet::hooks]
@@ -109,8 +114,8 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::register_swap_intent())]
 		pub fn register_swap_intent(
 			origin: OriginFor<T>,
-			ingress_asset: ForeignChainAsset,
-			egress_asset: ForeignChainAsset,
+			ingress_asset: Asset,
+			egress_asset: Asset,
 			egress_address: ForeignChainAddress,
 			relayer_commission_bps: u16,
 		) -> DispatchResultWithPostInfo {
@@ -150,7 +155,14 @@ pub mod pallet {
 					*maybe_fees = Some(fee)
 				}
 			});
-			T::Egress::schedule_egress(swap.to, swap_output, swap.egress_address);
+			// TODO: remove the expects by using AnyChain.
+			T::Egress::schedule_egress(
+				assets::eth::Asset::try_from(swap.to).expect("Only eth assets supported"),
+				swap_output,
+				EthereumAddress::try_from(swap.egress_address)
+					.expect("On eth assets supported")
+					.into(),
+			);
 		}
 	}
 
@@ -159,7 +171,7 @@ pub mod pallet {
 		/// Callback function to kick of the swapping process after a successful ingress.
 		fn schedule_swap(
 			from: Asset,
-			to: ForeignChainAsset,
+			to: Asset,
 			amount: AssetAmount,
 			egress_address: ForeignChainAddress,
 			relayer_id: Self::AccountId,
