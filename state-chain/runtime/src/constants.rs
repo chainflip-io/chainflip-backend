@@ -121,7 +121,6 @@ pub mod common {
 	pub const TX_FEE_MULTIPLIER: FlipBalance = 10_000;
 
 	/// Default supply update interval is 24 hours.
-	pub const SUPPLY_UPDATE_INTERVAL_DEFAULT: u32 = 14_400;
 
 	pub mod eth {
 		use cf_chains::{eth::Ethereum, Chain};

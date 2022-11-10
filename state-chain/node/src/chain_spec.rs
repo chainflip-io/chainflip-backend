@@ -17,6 +17,8 @@ use utilities::clean_eth_address;
 pub mod perseverance;
 pub mod sisyphos;
 
+pub mod common;
+
 /// Specialized `ChainSpec`. This is a specialization of the general Substrate ChainSpec type.
 pub type ChainSpec = sc_service::GenericChainSpec<GenesisConfig>;
 
@@ -32,22 +34,10 @@ const GENESIS_STAKE_AMOUNT_DEFAULT: FlipBalance = 5_000 * FLIPPERINOS_PER_FLIP;
 const ETH_DEPLOYMENT_BLOCK_DEFAULT: u64 = 0;
 const ETH_PRIORITY_FEE_PERCENTILE_DEFAULT: u8 = 50;
 
-const CLAIM_DELAY_BUFFER_SECS_DEFAULT: u64 = 40;
-const CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL_DEFAULT: u32 = 28;
-const BACKUP_NODE_EMISSION_INFLATION_PERBILL_DEFAULT: u32 = 6;
-const EXPIRY_SPAN_IN_SECONDS_DEFAULT: u64 = 80000;
-const ACCRUAL_RATIO_DEFAULT: (i32, u32) = (1, 2500);
-
-/// Percent of the epoch we are allowed to claim
-pub const PERCENT_OF_EPOCH_PERIOD_CLAIMABLE_DEFAULT: u8 = 50;
-/// Default supply update interval is 24 hours.
-pub const SUPPLY_UPDATE_INTERVAL_DEFAULT: u32 = 14_400;
-
 /// generate session keys from Aura and Grandpa keys
 pub fn session_keys(aura: AuraId, grandpa: GrandpaId) -> SessionKeys {
 	SessionKeys { aura, grandpa }
 }
-
 pub struct StateChainEnvironment {
 	flip_token_address: [u8; 20],
 	eth_usdc_address: [u8; 20],
@@ -215,13 +205,13 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 				genesis_stake_amount,
 				min_stake,
 				8 * HOURS,
-				CLAIM_DELAY_BUFFER_SECS_DEFAULT,
-				CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL_DEFAULT,
-				BACKUP_NODE_EMISSION_INFLATION_PERBILL_DEFAULT,
-				EXPIRY_SPAN_IN_SECONDS_DEFAULT,
-				ACCRUAL_RATIO_DEFAULT,
-				PERCENT_OF_EPOCH_PERIOD_CLAIMABLE_DEFAULT,
-				SUPPLY_UPDATE_INTERVAL_DEFAULT,
+				common::CLAIM_DELAY_BUFFER_SECS_DEFAULT,
+				common::CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL_DEFAULT,
+				common::BACKUP_NODE_EMISSION_INFLATION_PERBILL_DEFAULT,
+				common::EXPIRY_SPAN_IN_SECONDS_DEFAULT,
+				common::ACCRUAL_RATIO_DEFAULT,
+				common::PERCENT_OF_EPOCH_PERIOD_CLAIMABLE_DEFAULT,
+				common::SUPPLY_UPDATE_INTERVAL_DEFAULT,
 			)
 		},
 		// Bootnodes
@@ -355,13 +345,13 @@ fn chainflip_three_node_testnet_config_from_env(
 				genesis_stake_amount,
 				min_stake,
 				8 * HOURS,
-				CLAIM_DELAY_BUFFER_SECS_DEFAULT,
-				CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL_DEFAULT,
-				BACKUP_NODE_EMISSION_INFLATION_PERBILL_DEFAULT,
-				EXPIRY_SPAN_IN_SECONDS_DEFAULT,
-				ACCRUAL_RATIO_DEFAULT,
-				PERCENT_OF_EPOCH_PERIOD_CLAIMABLE_DEFAULT,
-				SUPPLY_UPDATE_INTERVAL_DEFAULT,
+				common::CLAIM_DELAY_BUFFER_SECS_DEFAULT,
+				common::CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL_DEFAULT,
+				common::BACKUP_NODE_EMISSION_INFLATION_PERBILL_DEFAULT,
+				common::EXPIRY_SPAN_IN_SECONDS_DEFAULT,
+				common::ACCRUAL_RATIO_DEFAULT,
+				common::PERCENT_OF_EPOCH_PERIOD_CLAIMABLE_DEFAULT,
+				common::SUPPLY_UPDATE_INTERVAL_DEFAULT,
 			)
 		},
 		// Bootnodes

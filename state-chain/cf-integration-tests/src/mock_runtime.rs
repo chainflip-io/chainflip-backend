@@ -11,6 +11,7 @@ use state_chain_runtime::{
 pub const CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL: u32 = 28;
 pub const BACKUP_NODE_EMISSION_INFLATION_PERBILL: u32 = 6;
 pub const CLAIM_DELAY_BUFFER_SECS: u64 = 10;
+pub const SUPPLY_UPDATE_INTERVAL_DEFAULT: u32 = 14_400;
 
 use crate::{get_from_seed, network, GENESIS_KEY};
 use cf_primitives::{AccountRole, AuthorityCount};
