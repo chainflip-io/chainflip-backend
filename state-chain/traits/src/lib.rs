@@ -380,8 +380,11 @@ pub trait KeyProvider<C: ChainCrypto> {
 #[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum RequestType<KeyId, Participants> {
 	/// Will use the current key and current authority set.
+	/// This signing request will be retried until success.
 	Standard,
 	/// Uses the recently generated key and the participants used to generate that key.
+	/// This signing request will only be attemped once, as failing this ought to result
+	/// in another Keygen ceremony.
 	KeygenVerification { key_id: KeyId, participants: Participants },
 }
 
