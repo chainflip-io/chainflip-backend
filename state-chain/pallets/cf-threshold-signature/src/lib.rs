@@ -121,6 +121,20 @@ pub mod pallet {
 		pub request_type: RequestType<<T as Chainflip>::KeyId, BTreeSet<T::ValidatorId>>,
 	}
 
+	impl<T: Config<I>, I: 'static> RequestInstruction<T, I> {
+		pub fn new(
+			request_id: RequestId,
+			attempt_count: AttemptCount,
+			payload: PayloadFor<T, I>,
+			request_type: RequestType<<T as Chainflip>::KeyId, BTreeSet<T::ValidatorId>>,
+		) -> Self {
+			Self {
+				request_context: RequestContext { request_id, attempt_count, payload },
+				request_type,
+			}
+		}
+	}
+
 	pub type SignatureResultFor<T, I> =
 		Result<SignatureFor<T, I>, Vec<<T as Chainflip>::ValidatorId>>;
 
@@ -389,12 +403,12 @@ pub mod pallet {
 								&offenders[..],
 							);
 
-							Self::new_ceremony_attempt(
+							Self::new_ceremony_attempt(RequestInstruction::new(
 								request_id,
-								payload,
 								attempt_count.wrapping_add(1),
+								payload,
 								RequestType::Standard,
-							);
+							));
 							Event::<T, I>::RetryRequested { request_id, ceremony_id }
 						},
 						ThresholdCeremonyType::KeygenVerification => {
@@ -417,18 +431,10 @@ pub mod pallet {
 			}
 
 			for request_id in RequestRetryQueue::<T, I>::take(current_block) {
-				if let Some(RequestInstruction {
-					request_context: RequestContext { request_id, payload, attempt_count },
-					request_type,
-				}) = PendingRequestInstructions::<T, I>::take(request_id)
+				if let Some(request_instruction) =
+					PendingRequestInstructions::<T, I>::take(request_id)
 				{
-					Self::new_ceremony_attempt(
-						request_id,
-						payload,
-						// NB: No increment on retries of this kind.
-						attempt_count,
-						request_type,
-					);
+					Self::new_ceremony_attempt(request_instruction);
 				}
 			}
 
@@ -612,7 +618,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		});
 
 		// Start a ceremony.
-		let ceremony_id = Self::new_ceremony_attempt(request_id, payload, 0, request_type);
+		let ceremony_id = Self::new_ceremony_attempt(RequestInstruction {
+			request_context: RequestContext { request_id, payload, attempt_count: 0 },
+			request_type,
+		});
 
 		Signature::<T, I>::insert(request_id, AsyncResult::Pending);
 
@@ -620,33 +629,35 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	/// Initiates a new ceremony request.
-	fn new_ceremony_attempt(
-		request_id: RequestId,
-		payload: PayloadFor<T, I>,
-		attempt_count: AttemptCount,
-		request_type: RequestType<<T as Chainflip>::KeyId, BTreeSet<T::ValidatorId>>,
-	) -> CeremonyId {
+	fn new_ceremony_attempt(request_instruction: RequestInstruction<T, I>) -> CeremonyId {
 		let ceremony_id = T::CeremonyIdProvider::next_ceremony_id();
 
-		let (key_id, participants, ceremony_type) = if let RequestType::KeygenVerification {
-			ref key_id,
-			ref participants,
-		} = request_type
-		{
-			(key_id.clone(), Some(participants.clone()), ThresholdCeremonyType::KeygenVerification)
-		} else {
-			let (current_key_id, current_epoch_index) =
-				T::KeyProvider::current_key_id_epoch_index();
+		let request_id = request_instruction.request_context.request_id;
+		let attempt_count = request_instruction.request_context.attempt_count;
+		let payload = request_instruction.request_context.payload.clone();
 
-			(
-				current_key_id,
-				T::ThresholdSignerNomination::threshold_nomination_with_seed(
-					(ceremony_id, attempt_count),
-					current_epoch_index,
-				),
-				ThresholdCeremonyType::Standard,
-			)
-		};
+		let (key_id, participants, ceremony_type) =
+			if let RequestType::KeygenVerification { ref key_id, ref participants } =
+				request_instruction.request_type
+			{
+				(
+					key_id.clone(),
+					Some(participants.clone()),
+					ThresholdCeremonyType::KeygenVerification,
+				)
+			} else {
+				let (current_key_id, current_epoch_index) =
+					T::KeyProvider::current_key_id_epoch_index();
+
+				(
+					current_key_id,
+					T::ThresholdSignerNomination::threshold_nomination_with_seed(
+						(ceremony_id, attempt_count),
+						current_epoch_index,
+					),
+					ThresholdCeremonyType::Standard,
+				)
+			};
 
 		let (event, log_message) = if let Some(nominees) = participants {
 			PendingCeremonies::<T, I>::insert(ceremony_id, {
@@ -683,13 +694,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				),
 			)
 		} else {
-			PendingRequestInstructions::<T, I>::insert(
-				request_id,
-				RequestInstruction {
-					request_context: RequestContext { request_id, attempt_count, payload },
-					request_type,
-				},
-			);
+			PendingRequestInstructions::<T, I>::insert(request_id, request_instruction);
 			RequestRetryQueue::<T, I>::append(
 				frame_system::Pallet::<T>::current_block_number()
 					.saturating_add(T::CeremonyRetryDelay::get()),

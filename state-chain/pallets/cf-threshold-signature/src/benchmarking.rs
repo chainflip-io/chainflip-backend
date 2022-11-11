@@ -118,7 +118,7 @@ benchmarks_instance_pallet! {
 
 		// These attempts will fail because there are no authorities to do the signing.
 		for _ in 0..r {
-			Pallet::<T, I>::new_ceremony_attempt(1, PayloadFor::<T, I>::benchmark_value(), 1, RequestType::Standard);
+			Pallet::<T, I>::new_ceremony_attempt(RequestInstruction::new(1, 1, PayloadFor::<T, I>::benchmark_value(), RequestType::Standard));
 		}
 
 		assert_eq!(
