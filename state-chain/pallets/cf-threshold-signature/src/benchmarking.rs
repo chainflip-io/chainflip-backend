@@ -82,15 +82,16 @@ benchmarks_instance_pallet! {
 			.collect();
 
 		let completed_response_context = CeremonyContext::<T, I> {
-			request_id: 1,
-			attempt_count: 0,
-			payload: PayloadFor::<T, I>::benchmark_value(),
-			request_type: RequestType::Standard,
+			request_context: RequestContext {
+				request_id: 1,
+				attempt_count: 0,
+				payload: PayloadFor::<T, I>::benchmark_value(),
+				request_type: RequestType::Standard,
+			},
 			remaining_respondents:Default::default(),
 			blame_counts,
 			participant_count:a,
 			key_id: <T as Chainflip>::KeyId::benchmark_value(),
-			_phantom: Default::default()
 		};
 	} : {
 		let _ = completed_response_context.offenders();
@@ -121,7 +122,7 @@ benchmarks_instance_pallet! {
 		}
 
 		assert_eq!(
-			RetryQueues::<T, I>::decode_len(ThresholdSignatureResponseTimeout::<T, I>::get()).unwrap_or_default(),
+			CeremonyRetryQueues::<T, I>::decode_len(ThresholdSignatureResponseTimeout::<T, I>::get()).unwrap_or_default(),
 			r as usize,
 		);
 
@@ -133,7 +134,7 @@ benchmarks_instance_pallet! {
 	}
 	verify {
 		assert_eq!(
-			RetryQueues::<T, I>::decode_len(ThresholdSignatureResponseTimeout::<T, I>::get()).unwrap_or_default(),
+			CeremonyRetryQueues::<T, I>::decode_len(ThresholdSignatureResponseTimeout::<T, I>::get()).unwrap_or_default(),
 			0_usize,
 		);
 	}
