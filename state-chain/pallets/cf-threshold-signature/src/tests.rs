@@ -562,7 +562,7 @@ mod unsigned_validation {
 #[cfg(test)]
 mod failure_reporting {
 	use super::*;
-	use crate::{CeremonyContext, RequestContext, RequestType};
+	use crate::{CeremonyContext, RequestContext, ThresholdCeremonyType};
 	use cf_chains::ChainCrypto;
 	use cf_traits::{mocks::epoch_info::MockEpochInfo, KeyProvider};
 
@@ -573,12 +573,8 @@ mod failure_reporting {
 		MockEpochInfo::set_authorities(Vec::from_iter(validator_set));
 		let current_key_id = MockKeyProvider::current_key_id_epoch_index().0;
 		CeremonyContext::<Test, Instance1> {
-			request_context: RequestContext {
-				request_id: 1,
-				attempt_count: 0,
-				payload: PAYLOAD,
-				request_type: RequestType::Standard,
-			},
+			request_context: RequestContext { request_id: 1, attempt_count: 0, payload: PAYLOAD },
+			threshold_ceremony_type: ThresholdCeremonyType::Standard,
 			key_id: current_key_id,
 			remaining_respondents: BTreeSet::from_iter(validator_set),
 			blame_counts: Default::default(),

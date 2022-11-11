@@ -86,8 +86,8 @@ benchmarks_instance_pallet! {
 				request_id: 1,
 				attempt_count: 0,
 				payload: PayloadFor::<T, I>::benchmark_value(),
-				request_type: RequestType::Standard,
 			},
+			threshold_ceremony_type: ThresholdCeremonyType::Standard,
 			remaining_respondents:Default::default(),
 			blame_counts,
 			participant_count:a,
@@ -118,7 +118,7 @@ benchmarks_instance_pallet! {
 
 		// These attempts will fail because there are no authorities to do the signing.
 		for _ in 0..r {
-			Pallet::<T, I>::new_ceremony_attempt(1, PayloadFor::<T, I>::benchmark_value(), 1, RequestType::Standard);
+			Pallet::<T, I>::new_ceremony_attempt(RequestInstruction::new(1, 1, PayloadFor::<T, I>::benchmark_value(), RequestType::Standard));
 		}
 
 		assert_eq!(
