@@ -93,9 +93,9 @@ pub mod pallet {
 		/// The respondents that have yet to reply.
 		pub remaining_respondents: BTreeSet<T::ValidatorId>,
 		/// The number of blame votes (accusations) each authority has received.
-		pub blame_counts: BTreeMap<T::ValidatorId, u32>,
+		pub blame_counts: BTreeMap<T::ValidatorId, AuthorityCount>,
 		/// The total number of signing participants (ie. the threshold set size).
-		pub participant_count: u32,
+		pub participant_count: AuthorityCount,
 		/// The key id being used for verification of this ceremony.
 		pub key_id: T::KeyId,
 		/// Determines how/if we deal with ceremony failure.
@@ -439,7 +439,7 @@ pub mod pallet {
 			}
 
 			T::Weights::on_initialize(T::EpochInfo::current_authority_count(), num_retries) +
-				T::Weights::report_offenders(num_offenders as u32)
+				T::Weights::report_offenders(num_offenders as AuthorityCount)
 		}
 	}
 
@@ -671,7 +671,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					threshold_ceremony_type: ceremony_type,
 					key_id: key_id.clone(),
 					blame_counts: BTreeMap::new(),
-					participant_count: remaining_respondents.len() as u32,
+					participant_count: remaining_respondents.len() as AuthorityCount,
 					remaining_respondents,
 				}
 			});
