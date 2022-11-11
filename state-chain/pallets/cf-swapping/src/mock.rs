@@ -80,18 +80,18 @@ impl system::Config for Test {
 
 pub struct MockIngress;
 
-impl IngressApi for MockIngress {
+impl IngressApi<Ethereum> for MockIngress {
 	type AccountId = AccountId;
 
 	fn register_liquidity_ingress_intent(
 		_lp_account: Self::AccountId,
-		_ingress_asset: Asset,
+		_ingress_asset: <Ethereum as Chain>::ChainAsset,
 	) -> Result<(u64, cf_primitives::ForeignChainAddress), sp_runtime::DispatchError> {
 		Ok((0, ForeignChainAddress::Eth(Default::default())))
 	}
 
 	fn register_swap_intent(
-		_ingress_asset: Asset,
+		_ingress_asset: <Ethereum as Chain>::ChainAsset,
 		_schedule_egress: Asset,
 		_egress_address: ForeignChainAddress,
 		_relayer_commission_bps: u16,

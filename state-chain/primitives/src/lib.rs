@@ -5,6 +5,7 @@
 //! Primitive types to be used across Chainflip's various crates
 
 use codec::{Decode, Encode, MaxEncodedLen};
+use ethabi::ethereum_types::H160;
 use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{IdentifyAccount, Verify},
@@ -98,6 +99,17 @@ impl TryFrom<ForeignChainAddress> for EthereumAddress {
 	}
 }
 
+impl TryFrom<ForeignChainAddress> for H160 {
+	type Error = AddressError;
+
+	fn try_from(address: ForeignChainAddress) -> Result<Self, Self::Error> {
+		match address {
+			ForeignChainAddress::Eth(addr) => Ok(addr.into()),
+			_ => Err(AddressError::InvalidAddress),
+		}
+	}
+}
+
 impl TryFrom<ForeignChainAddress> for [u8; 32] {
 	type Error = AddressError;
 
@@ -105,6 +117,33 @@ impl TryFrom<ForeignChainAddress> for [u8; 32] {
 		match address {
 			ForeignChainAddress::Dot(addr) => Ok(addr),
 			_ => Err(AddressError::InvalidAddress),
+		}
+	}
+}
+
+impl From<EthereumAddress> for ForeignChainAddress {
+	fn from(address: EthereumAddress) -> ForeignChainAddress {
+		ForeignChainAddress::Eth(address)
+	}
+}
+
+impl From<H160> for ForeignChainAddress {
+	fn from(address: H160) -> ForeignChainAddress {
+		ForeignChainAddress::Eth(address.to_fixed_bytes())
+	}
+}
+
+impl From<[u8; 32]> for ForeignChainAddress {
+	fn from(address: [u8; 32]) -> ForeignChainAddress {
+		ForeignChainAddress::Dot(address)
+	}
+}
+
+impl From<ForeignChainAddress> for ForeignChain {
+	fn from(address: ForeignChainAddress) -> ForeignChain {
+		match address {
+			ForeignChainAddress::Eth(_) => ForeignChain::Ethereum,
+			ForeignChainAddress::Dot(_) => ForeignChain::Polkadot,
 		}
 	}
 }

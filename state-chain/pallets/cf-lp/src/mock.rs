@@ -4,7 +4,7 @@ use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
 	AddressDerivationApi, EgressApi,
 };
-use frame_support::{parameter_types, sp_runtime::app_crypto::sp_core::H160};
+use frame_support::{instances::Instance1, parameter_types, sp_runtime::app_crypto::sp_core::H160};
 use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{
@@ -45,7 +45,7 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system,
 		AccountRoles: pallet_cf_account_roles,
-		Ingress: pallet_cf_ingress,
+		Ingress: pallet_cf_ingress::<Instance1>,
 		LiquidityProvider: pallet_cf_lp,
 	}
 );
@@ -82,8 +82,9 @@ impl system::Config for Test {
 	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
-impl pallet_cf_ingress::Config for Test {
+impl pallet_cf_ingress::Config<Instance1> for Test {
 	type Event = Event;
+	type TargetChain = Ethereum;
 	type AddressDerivation = MockAddressDerivation;
 	type LpAccountHandler = LiquidityProvider;
 	type IngressFetchApi = ();

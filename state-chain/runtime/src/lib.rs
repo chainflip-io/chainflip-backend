@@ -224,8 +224,9 @@ impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 use chainflip::address_derivation::AddressDerivation;
 
 #[cfg(feature = "ibiza")]
-impl pallet_cf_ingress::Config for Runtime {
+impl pallet_cf_ingress::Config<EthereumInstance> for Runtime {
 	type Event = Event;
+	type TargetChain = Ethereum;
 	type AddressDerivation = AddressDerivation;
 	type LpAccountHandler = LiquidityProvider;
 	type SwapIntentHandler = Swapping;
@@ -631,7 +632,7 @@ construct_runtime!(
 		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>,
 		EthereumBroadcaster: pallet_cf_broadcast::<Instance1>,
 		EthereumChainTracking: pallet_cf_chain_tracking::<Instance1>,
-		Ingress: pallet_cf_ingress,
+		Ingress: pallet_cf_ingress::<EthereumInstance>,
 		Egress: pallet_cf_egress,
 		Swapping: pallet_cf_swapping,
 		LiquidityProvider: pallet_cf_lp,

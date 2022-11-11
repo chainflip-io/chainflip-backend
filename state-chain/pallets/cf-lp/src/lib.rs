@@ -52,6 +52,8 @@ impl<AccountId, Amount> UserTradingPosition<AccountId, Amount> {
 
 #[frame_support::pallet]
 pub mod pallet {
+	use cf_chains::ForeignChain;
+
 	use super::*;
 
 	#[pallet::config]
@@ -65,7 +67,7 @@ pub mod pallet {
 		type AccountRoleRegistry: AccountRoleRegistry<Self>;
 
 		/// API used for requesting an ingress.
-		type Ingress: IngressApi<AccountId = <Self as frame_system::Config>::AccountId>;
+		type Ingress: IngressApi<AccountId = <Self as frame_system::Config>::AccountId, Ethereum>;
 
 		/// API used to withdraw foreign assets off the chain.
 		type EgressApi: EgressApi<Ethereum>;
@@ -181,7 +183,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			asset0: Asset,
 			asset1: Asset,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let _ok = T::EnsureGovernance::ensure_origin(origin)?;
 			let pool_id = (asset0, asset1);
 
@@ -194,7 +196,7 @@ pub mod pallet {
 
 			Self::deposit_event(Event::LiquidityPoolAdded { asset0, asset1 });
 
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Enable or disables an existing trading pool. Requires Governance.
@@ -213,7 +215,7 @@ pub mod pallet {
 			asset0: Asset,
 			asset1: Asset,
 			enabled: bool,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let _ok = T::EnsureGovernance::ensure_origin(origin)?;
 			let pool_id = (asset0, asset1);
 
@@ -230,23 +232,24 @@ pub mod pallet {
 
 			Self::deposit_event(Event::LiquidityPoolStatusSet { asset0, asset1, enabled });
 
-			Ok(().into())
+			Ok(())
 		}
 
 		#[pallet::weight(0)]
-		pub fn request_deposit_address(
-			origin: OriginFor<T>,
-			asset: Asset,
-		) -> DispatchResultWithPostInfo {
+		pub fn request_deposit_address(origin: OriginFor<T>, asset: Asset) -> DispatchResult {
 			T::SystemState::ensure_no_maintenance()?;
 			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
-
-			let (intent_id, ingress_address) =
-				T::Ingress::register_liquidity_ingress_intent(account_id, asset)?;
+			let (intent_id, ingress_address) = match asset.into() {
+				ForeignChain::Ethereum => T::Ingress::register_liquidity_ingress_intent(
+					account_id,
+					asset.try_into().unwrap(),
+				),
+				_ => todo!(),
+			}?;
 
 			Self::deposit_event(Event::DepositAddressReady { intent_id, ingress_address });
 
-			Ok(().into())
+			Ok(())
 		}
 
 		#[pallet::weight(0)]
@@ -255,7 +258,7 @@ pub mod pallet {
 			amount: AssetAmount,
 			asset: Asset,
 			egress_address: ForeignChainAddress,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			T::SystemState::ensure_no_maintenance()?;
 			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
@@ -277,16 +280,16 @@ pub mod pallet {
 			// Debit the asset from the account.
 			Pallet::<T>::try_debit(&account_id, asset, amount)?;
 
-			Ok(().into())
+			Ok(())
 		}
 
 		#[pallet::weight(0)]
-		pub fn register_lp_account(who: OriginFor<T>) -> DispatchResultWithPostInfo {
+		pub fn register_lp_account(who: OriginFor<T>) -> DispatchResult {
 			let account_id = ensure_signed(who)?;
 
 			T::AccountRoleRegistry::register_as_liquidity_provider(&account_id)?;
 
-			Ok(().into())
+			Ok(())
 		}
 
 		#[pallet::weight(0)]
@@ -345,7 +348,7 @@ pub mod pallet {
 			pool_id: PoolId,
 			id: PositionId,
 			new_position: TradingPosition<AssetAmount>,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			T::SystemState::ensure_no_maintenance()?;
 			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
@@ -408,7 +411,7 @@ pub mod pallet {
 				}
 			})?;
 
-			Ok(().into())
+			Ok(())
 		}
 
 		#[pallet::weight(0)]

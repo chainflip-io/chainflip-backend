@@ -25,7 +25,7 @@ pub mod any {
 	pub type Chain = AnyChain;
 
 	/// A token or currency that can be swapped natively in the Chainflip AMM.
-	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy, Hash)]
+	#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Hash)]
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Asset {
 		Eth,
@@ -62,7 +62,7 @@ macro_rules! chain_assets {
 
 			pub type Chain = $chain;
 
-			#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy, Hash)]
+			#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Hash)]
 			#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 			pub enum Asset {
 				$(

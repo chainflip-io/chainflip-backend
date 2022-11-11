@@ -11,7 +11,7 @@ use core::fmt::Debug;
 pub use async_result::AsyncResult;
 use sp_std::collections::btree_set::BTreeSet;
 
-use cf_chains::{benchmarking_value::BenchmarkValue, ApiCall, ChainAbi, ChainCrypto};
+use cf_chains::{benchmarking_value::BenchmarkValue, ApiCall, Chain, ChainAbi, ChainCrypto};
 use cf_primitives::{
 	AccountRole, Asset, AssetAmount, AuthorityCount, CeremonyId, EpochIndex, EthereumAddress,
 	ForeignChainAddress, IntentId,
@@ -615,18 +615,18 @@ pub trait StakingInfo {
 }
 
 /// Allow pallets to register `Intent`s in the Ingress pallet.
-pub trait IngressApi {
+pub trait IngressApi<C: Chain> {
 	type AccountId;
 
 	/// Issues an intent id and ingress address for a new liquidity deposit.
 	fn register_liquidity_ingress_intent(
 		lp_account: Self::AccountId,
-		ingress_asset: Asset,
+		ingress_asset: C::ChainAsset,
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError>;
 
 	/// Issues an intent id and ingress address for a new swap.
 	fn register_swap_intent(
-		ingress_asset: Asset,
+		ingress_asset: C::ChainAsset,
 		egress_asset: Asset,
 		egress_address: ForeignChainAddress,
 		relayer_commission_bps: u16,
@@ -676,7 +676,7 @@ pub trait AccountRoleRegistry<T: frame_system::Config> {
 }
 
 /// API that allows other pallets to Egress assets out of the State Chain.
-pub trait EgressApi<C: cf_chains::Chain> {
+pub trait EgressApi<C: Chain> {
 	fn schedule_egress(
 		foreign_asset: C::ChainAsset,
 		amount: AssetAmount,
@@ -693,11 +693,11 @@ pub trait EthereumAssetsAddressProvider {
 /// valid.
 ///
 /// Schedule functions are chain specific, as each chain may require different data to do fetching.
-pub trait IngressFetchApi<C: cf_chains::Chain> {
+pub trait IngressFetchApi<C: Chain> {
 	fn schedule_ingress_fetch(fetch_details: Vec<(C::ChainAsset, IntentId)>);
 }
 
-impl<C: cf_chains::Chain> IngressFetchApi<C> for () {
+impl<C: Chain> IngressFetchApi<C> for () {
 	fn schedule_ingress_fetch(_fetch_details: Vec<(C::ChainAsset, IntentId)>) {}
 }
 
