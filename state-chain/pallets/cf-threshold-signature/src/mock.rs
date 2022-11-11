@@ -1,8 +1,8 @@
 use std::{collections::BTreeSet, marker::PhantomData};
 
 use crate::{
-	self as pallet_cf_threshold_signature, CeremonyId, EnsureThresholdSigned, PalletOffence,
-	PendingCeremonies, RequestId, RetryQueues,
+	self as pallet_cf_threshold_signature, CeremonyId, CeremonyRetryQueues, EnsureThresholdSigned,
+	PalletOffence, PendingCeremonies, RequestId,
 };
 use cf_chains::{
 	mocks::{MockEthereum, MockThresholdSignature},
@@ -221,11 +221,20 @@ impl ExtBuilder {
 			// Initiate request
 			let (request_id, ceremony_id) =
 				<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(*message);
-			let pending = EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
-			assert_eq!(
-				pending.remaining_respondents,
-				BTreeSet::from_iter(MockNominator::get_nominees().unwrap_or_default())
+
+			let maybe_pending_ceremony = EthereumThresholdSigner::pending_ceremonies(ceremony_id);
+			assert!(
+				maybe_pending_ceremony.is_some() !=
+					EthereumThresholdSigner::pending_requests(request_id).is_some(),
+					"The request should be either a pending ceremony OR a pending request at this point"
 			);
+			if let Some(pending_ceremony) = maybe_pending_ceremony {
+				assert_eq!(
+					pending_ceremony.remaining_respondents,
+					BTreeSet::from_iter(MockNominator::get_nominees().unwrap_or_default())
+				);
+			}
+
 			assert!(matches!(EthereumThresholdSigner::signature(request_id), AsyncResult::Pending));
 		});
 		self
@@ -276,7 +285,8 @@ impl TestExternalitiesWithCheck {
 	/// Every ceremony in OpenRequests should always have a corresponding entry in LiveCeremonies.
 	/// Every ceremony should also have at least one retry scheduled.
 	pub fn do_consistency_check() {
-		let retries = BTreeSet::<_>::from_iter(RetryQueues::<Test, _>::iter_values().flatten());
+		let retries =
+			BTreeSet::<_>::from_iter(CeremonyRetryQueues::<Test, _>::iter_values().flatten());
 		PendingCeremonies::<Test, _>::iter().for_each(|(ceremony_id, _)| {
 			assert!(retries.contains(&ceremony_id));
 		});
