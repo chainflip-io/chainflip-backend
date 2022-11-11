@@ -5,7 +5,7 @@ use cf_chains::{
 };
 use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
-	AddressDerivationApi, Broadcaster, ReplayProtectionProvider,
+	AddressDerivationApi, Broadcaster, ReplayProtectionProvider, SwapIntentHandler,
 };
 use frame_support::{instances::Instance1, parameter_types, sp_runtime::app_crypto::sp_core::H160};
 use frame_system as system;
@@ -82,9 +82,25 @@ impl system::Config for Test {
 	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
+impl SwapIntentHandler for Test {
+	type AccountId = <Self as system::Config>::AccountId;
+
+	fn schedule_swap(
+		_from: Asset,
+		_to: Asset,
+		_amount: AssetAmount,
+		_egress_address: ForeignChainAddress,
+		_relayer_id: Self::AccountId,
+		_relayer_commission_bps: u16,
+	) {
+		unimplemented!()
+	}
+}
+
 pub const FAKE_KEYMAN_ADDR: [u8; 20] = [0xcf; 20];
 pub const CHAIN_ID: u64 = 31337;
 pub const COUNTER: u64 = 42;
+
 impl ReplayProtectionProvider<Ethereum> for Test {
 	fn replay_protection() -> <Ethereum as ChainAbi>::ReplayProtection {
 		EthereumReplayProtection {
