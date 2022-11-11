@@ -27,7 +27,7 @@ use sp_std::marker::PhantomData;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::StakeTransfer;
+	use cf_traits::StakingInfo;
 	use frame_support::pallet_prelude::*;
 
 	#[pallet::config]
@@ -37,9 +37,10 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// The Flip token implementation.
-		type StakeManager: StakeTransfer<AccountId = Self::AccountId, Balance = Self::Amount>;
+		type StakeInfo: StakingInfo<AccountId = Self::AccountId, Balance = Self::Amount>;
 
-		type MinBidInfo: BidInfo<Balance = Self::Amount>;
+		/// Infos about bids.
+		type BidInfo: BidInfo<Balance = Self::Amount>;
 
 		/// Weights.
 		type WeightInfo: WeightInfo;
@@ -95,8 +96,8 @@ pub mod pallet {
 			let who: T::AccountId = ensure_signed(origin)?;
 			if role == AccountRole::Validator {
 				ensure!(
-					T::StakeManager::staked_balance(&who) >=
-						T::MinBidInfo::get_min_backup_bid()
+					T::StakeInfo::total_stake_of(&who) >=
+						T::BidInfo::get_min_backup_bid()
 							.checked_div(&T::Amount::from(2_u32))
 							.unwrap(),
 					Error::<T>::NotEnoughStake

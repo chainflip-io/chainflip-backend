@@ -716,3 +716,11 @@ pub trait BidInfo {
 	/// Returns the smallest of all backup validator bids.
 	fn get_min_backup_bid() -> Self::Balance;
 }
+
+/// Provides information about stake.
+pub trait StakeInfo {
+	type Balance;
+	type AccountId;
+	/// An account's tokens that are free to be staked.
+	fn staked_balance(account_id: &Self::AccountId) -> Self::Balance;
+}

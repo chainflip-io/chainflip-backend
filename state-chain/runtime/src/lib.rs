@@ -252,8 +252,8 @@ impl pallet_cf_egress::Config for Runtime {
 
 impl pallet_cf_account_roles::Config for Runtime {
 	type Event = Event;
-	type StakeManager = Flip;
-	type MinBidInfo = BidInfoProvider<Runtime>;
+	type StakeInfo = Flip;
+	type BidInfo = BidInfoProvider<Runtime>;
 	type WeightInfo = pallet_cf_account_roles::weights::PalletWeight<Runtime>;
 }
 

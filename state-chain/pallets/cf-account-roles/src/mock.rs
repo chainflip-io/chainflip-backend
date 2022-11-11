@@ -1,14 +1,20 @@
 use crate::{self as pallet_cf_account_roles, Config};
 use cf_traits::{
-	impl_mock_stake_transfer,
+	impl_mock_stake_transfer, impl_mock_waived_fees,
 	mocks::{
 		bid_info::MockBidInfo, ensure_origin_mock::NeverFailingOriginCheck,
 		system_state_info::MockSystemStateInfo,
 	},
-	Chainflip,
+	Chainflip, StakingInfo,
 };
 
-use frame_support::traits::{ConstU16, ConstU64};
+use cf_traits::WaivedFees;
+
+use frame_support::{
+	parameter_types,
+	traits::{ConstU16, ConstU64},
+};
+use frame_system::pallet_prelude::BlockNumberFor;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -17,6 +23,8 @@ use sp_runtime::{
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
+type AccountId = u64;
+type Balance = u128;
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
@@ -27,8 +35,34 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system,
 		MockAccountRoles: pallet_cf_account_roles,
+		Flip: pallet_cf_flip,
 	}
 );
+
+parameter_types! {
+	pub const BlockHashCount: u64 = 250;
+	pub const SS58Prefix: u8 = 42;
+	pub const VotingPeriod: BlockNumberFor<Test> = 10;
+	pub const ProposalFee: u128 = 100;
+	pub const EnactmentDelay: BlockNumberFor<Test> = 20;
+	pub const BlocksPerDay: u64 = 14400;
+	pub const ExistentialDeposit: u128 = 10;
+}
+
+// Implement mock for RestrictionHandler
+impl_mock_waived_fees!(AccountId, Call);
+impl_mock_stake_transfer!(AccountId, u128);
+
+impl pallet_cf_flip::Config for Test {
+	type Event = Event;
+	type Balance = Balance;
+	type ExistentialDeposit = ExistentialDeposit;
+	type EnsureGovernance = NeverFailingOriginCheck<Self>;
+	type BlocksPerDay = BlocksPerDay;
+	type StakeHandler = MockStakeHandler;
+	type WeightInfo = ();
+	type WaivedFees = WaivedFeesMock;
+}
 
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
@@ -41,7 +75,7 @@ impl frame_system::Config for Test {
 	type BlockNumber = u64;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
-	type AccountId = u64;
+	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
@@ -59,8 +93,8 @@ impl frame_system::Config for Test {
 
 impl Chainflip for Test {
 	type KeyId = Vec<u8>;
-	type ValidatorId = u64;
-	type Amount = u128;
+	type ValidatorId = AccountId;
+	type Amount = Balance;
 	type Call = Call;
 	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
 	type EnsureWitnessedAtCurrentEpoch = NeverFailingOriginCheck<Self>;
@@ -68,12 +102,26 @@ impl Chainflip for Test {
 	type SystemState = MockSystemStateInfo;
 }
 
-impl_mock_stake_transfer!(u64, u128);
+pub struct MockStakingInfo;
+
+impl StakingInfo for MockStakingInfo {
+	type AccountId = AccountId;
+
+	type Balance = Balance;
+
+	fn total_stake_of(_: &Self::AccountId) -> Self::Balance {
+		todo!()
+	}
+
+	fn total_onchain_stake() -> Self::Balance {
+		todo!()
+	}
+}
 
 impl Config for Test {
 	type Event = Event;
-	type MinBidInfo = MockBidInfo;
-	type StakeManager = MockStakeHandler;
+	type BidInfo = MockBidInfo;
+	type StakeInfo = MockStakingInfo;
 	type WeightInfo = ();
 }
 

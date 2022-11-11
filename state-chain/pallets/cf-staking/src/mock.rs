@@ -33,8 +33,8 @@ use cf_traits::{
 
 impl pallet_cf_account_roles::Config for Test {
 	type Event = Event;
-	type MinBidInfo = MockBidInfo;
-	type StakeManager = MockStakeHandler;
+	type BidInfo = MockBidInfo;
+	type StakeInfo = MockStakeHandler;
 	type WeightInfo = ();
 }
 
