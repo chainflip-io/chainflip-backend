@@ -515,6 +515,8 @@ pub mod pallet {
 				Error::<T, I>::InvalidCeremonyId
 			})?;
 
+			PendingRequestInstructions::<T, I>::remove(request_id);
+
 			// Report the success once we know the CeremonyId is valid
 			Self::deposit_event(Event::<T, I>::ThresholdSignatureSuccess {
 				request_id,
