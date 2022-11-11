@@ -1,11 +1,11 @@
 use crate::{self as pallet_cf_lp};
 use cf_traits::{
-	impl_mock_stake_transfer,
+	impl_mock_stake_transfer, impl_mock_staking_info,
 	mocks::{
 		bid_info::MockBidInfo, ensure_origin_mock::NeverFailingOriginCheck,
 		system_state_info::MockSystemStateInfo,
 	},
-	AddressDerivationApi, EgressApi, SwapIntentHandler,
+	AddressDerivationApi, EgressApi, StakingInfo, SwapIntentHandler,
 };
 use frame_support::{parameter_types, sp_runtime::app_crypto::sp_core::H160};
 use frame_system as system;
@@ -23,6 +23,7 @@ use sp_std::str::FromStr;
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 type AccountId = u64;
+type Balance = u128;
 
 pub struct MockAddressDerivation;
 
@@ -124,10 +125,12 @@ impl cf_traits::Chainflip for Test {
 
 impl_mock_stake_transfer!(u64, u128);
 
+impl_mock_staking_info!(AccountId, Balance);
+
 impl pallet_cf_account_roles::Config for Test {
 	type Event = Event;
-	type MinBidInfo = MockBidInfo;
-	type StakeManager = MockStakeHandler;
+	type BidInfo = MockBidInfo;
+	type StakeInfo = MockStakingInfo;
 	type WeightInfo = ();
 }
 

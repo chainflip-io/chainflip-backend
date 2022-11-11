@@ -18,6 +18,7 @@ pub mod qualify_node;
 pub mod reputation_resetter;
 pub mod signer_nomination;
 pub mod stake_transfer;
+pub mod staking_info;
 pub mod system_state_info;
 pub mod threshold_signer;
 pub mod time_source;

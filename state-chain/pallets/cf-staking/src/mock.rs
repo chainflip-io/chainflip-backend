@@ -5,9 +5,9 @@ use cf_chains::{
 };
 use cf_primitives::{AuthorityCount, CeremonyId};
 use cf_traits::{
-	impl_mock_stake_transfer, impl_mock_waived_fees,
+	impl_mock_staking_info, impl_mock_waived_fees,
 	mocks::{bid_info::MockBidInfo, system_state_info::MockSystemStateInfo},
-	AsyncResult, ThresholdSigner, WaivedFees,
+	AsyncResult, StakingInfo, ThresholdSigner, WaivedFees,
 };
 use frame_support::{dispatch::DispatchResultWithPostInfo, parameter_types, traits::ConstU64};
 use sp_runtime::{
@@ -31,10 +31,14 @@ use cf_traits::{
 	Chainflip, ReplayProtectionProvider,
 };
 
+type Balance = u128;
+
+impl_mock_staking_info!(AccountId, Balance);
+
 impl pallet_cf_account_roles::Config for Test {
 	type Event = Event;
 	type BidInfo = MockBidInfo;
-	type StakeInfo = MockStakeHandler;
+	type StakeInfo = MockStakingInfo;
 	type WeightInfo = ();
 }
 
@@ -87,7 +91,7 @@ impl frame_system::Config for Test {
 impl Chainflip for Test {
 	type KeyId = Vec<u8>;
 	type ValidatorId = AccountId;
-	type Amount = u128;
+	type Amount = Balance;
 	type Call = Call;
 	type EnsureWitnessed = MockEnsureWitnessed;
 	type EnsureWitnessedAtCurrentEpoch = MockEnsureWitnessed;
@@ -100,7 +104,7 @@ parameter_types! {
 }
 
 parameter_types! {
-	pub const ExistentialDeposit: u128 = 10;
+	pub const ExistentialDeposit: Balance = 10;
 }
 
 parameter_types! {

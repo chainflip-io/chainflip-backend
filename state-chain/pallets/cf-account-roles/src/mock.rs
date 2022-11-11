@@ -1,6 +1,6 @@
 use crate::{self as pallet_cf_account_roles, Config};
 use cf_traits::{
-	impl_mock_stake_transfer, impl_mock_waived_fees,
+	impl_mock_stake_transfer, impl_mock_staking_info, impl_mock_waived_fees,
 	mocks::{
 		bid_info::MockBidInfo, ensure_origin_mock::NeverFailingOriginCheck,
 		system_state_info::MockSystemStateInfo,
@@ -35,7 +35,6 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system,
 		MockAccountRoles: pallet_cf_account_roles,
-		Flip: pallet_cf_flip,
 	}
 );
 
@@ -52,17 +51,6 @@ parameter_types! {
 // Implement mock for RestrictionHandler
 impl_mock_waived_fees!(AccountId, Call);
 impl_mock_stake_transfer!(AccountId, u128);
-
-impl pallet_cf_flip::Config for Test {
-	type Event = Event;
-	type Balance = Balance;
-	type ExistentialDeposit = ExistentialDeposit;
-	type EnsureGovernance = NeverFailingOriginCheck<Self>;
-	type BlocksPerDay = BlocksPerDay;
-	type StakeHandler = MockStakeHandler;
-	type WeightInfo = ();
-	type WaivedFees = WaivedFeesMock;
-}
 
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
@@ -102,21 +90,7 @@ impl Chainflip for Test {
 	type SystemState = MockSystemStateInfo;
 }
 
-pub struct MockStakingInfo;
-
-impl StakingInfo for MockStakingInfo {
-	type AccountId = AccountId;
-
-	type Balance = Balance;
-
-	fn total_stake_of(_: &Self::AccountId) -> Self::Balance {
-		todo!()
-	}
-
-	fn total_onchain_stake() -> Self::Balance {
-		todo!()
-	}
-}
+impl_mock_staking_info!(AccountId, Balance);
 
 impl Config for Test {
 	type Event = Event;
