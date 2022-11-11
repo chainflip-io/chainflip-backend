@@ -14,7 +14,7 @@ use cf_traits::{
 		ceremony_id_provider::MockCeremonyIdProvider, signer_nomination::MockNominator,
 		system_state_info::MockSystemStateInfo,
 	},
-	AsyncResult, Chainflip, RequestType, ThresholdSigner,
+	AsyncResult, Chainflip, ThresholdSigner,
 };
 use codec::{Decode, Encode};
 use frame_support::{
@@ -220,15 +220,12 @@ impl ExtBuilder {
 		self.ext.execute_with(|| {
 			// Initiate request
 			let (request_id, ceremony_id) =
-				<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(
-					*message,
-					RequestType::Standard,
-				);
+				<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(*message);
 
 			let maybe_pending_ceremony = EthereumThresholdSigner::pending_ceremonies(ceremony_id);
 			assert!(
 				maybe_pending_ceremony.is_some() !=
-					EthereumThresholdSigner::pending_requests(request_id).is_some(), 
+					EthereumThresholdSigner::pending_requests(request_id).is_some(),
 					"The request should be either a pending ceremony OR a pending request at this point"
 			);
 			if let Some(pending_ceremony) = maybe_pending_ceremony {

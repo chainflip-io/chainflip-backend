@@ -20,7 +20,7 @@ use cf_chains::ChainCrypto;
 use cf_primitives::{AuthorityCount, CeremonyId};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, CeremonyIdProvider, Chainflip, EpochInfo,
-	KeyProvider, RequestType, ThresholdSignerNomination,
+	KeyProvider, ThresholdSignerNomination,
 };
 
 use frame_support::{
@@ -56,10 +56,21 @@ pub enum PalletOffence {
 	ParticipateSigningFailed,
 }
 
+#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub enum RequestType<KeyId, Participants> {
+	/// Will use the current key and current authority set.
+	/// This signing request will be retried until success.
+	Standard,
+	/// Uses the recently generated key and the participants used to generate that key.
+	/// This signing request will only be attemped once, as failing this ought to result
+	/// in another Keygen ceremony.
+	KeygenVerification { key_id: KeyId, participants: Participants },
+}
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{AccountRoleRegistry, AsyncResult, RequestType, ThresholdSignerNomination};
+	use cf_traits::{AccountRoleRegistry, AsyncResult, ThresholdSignerNomination};
 	use frame_support::{
 		dispatch::DispatchResultWithPostInfo,
 		pallet_prelude::{InvalidTransaction, *},
@@ -738,11 +749,19 @@ where
 	type KeyId = T::KeyId;
 	type ValidatorId = T::ValidatorId;
 
-	fn request_signature(
-		payload: PayloadFor<T, I>,
-		request_type: RequestType<Self::KeyId, BTreeSet<Self::ValidatorId>>,
+	fn request_signature(payload: PayloadFor<T, I>) -> (Self::RequestId, CeremonyId) {
+		Self::inner_request_signature(payload, RequestType::Standard)
+	}
+
+	fn request_keygen_verification_signature(
+		payload: <T::TargetChain as ChainCrypto>::Payload,
+		key_id: Self::KeyId,
+		participants: BTreeSet<Self::ValidatorId>,
 	) -> (Self::RequestId, CeremonyId) {
-		Self::inner_request_signature(payload, request_type)
+		Self::inner_request_signature(
+			payload,
+			RequestType::KeygenVerification { key_id, participants },
+		)
 	}
 
 	fn register_callback(

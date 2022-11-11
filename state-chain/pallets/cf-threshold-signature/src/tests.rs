@@ -6,8 +6,7 @@ use crate::{
 };
 use cf_chains::mocks::MockEthereum;
 use cf_traits::{
-	mocks::signer_nomination::MockNominator, AsyncResult, Chainflip, KeyProvider, RequestType,
-	ThresholdSigner,
+	mocks::signer_nomination::MockNominator, AsyncResult, Chainflip, KeyProvider, ThresholdSigner,
 };
 use frame_support::{
 	assert_err, assert_noop, assert_ok,
@@ -251,12 +250,10 @@ fn keygen_verification_ceremony_calls_callback_on_failure() {
 		.execute_with(|| {
 			const PAYLOAD: &[u8; 4] = b"OHAI";
 			let current_key_id = MockKeyProvider::current_key_id_epoch_index().0;
-			let (request_id, _) = EthereumThresholdSigner::request_signature(
+			let (request_id, _) = EthereumThresholdSigner::request_keygen_verification_signature(
 				*PAYLOAD,
-				RequestType::KeygenVerification {
-					key_id: current_key_id,
-					participants: NOMINEES.into_iter().collect(),
-				},
+				current_key_id,
+				NOMINEES.into_iter().collect(),
 			);
 			assert_ok!(EthereumThresholdSigner::register_callback(
 				request_id,
@@ -446,7 +443,7 @@ mod unsigned_validation {
 	use super::*;
 	use crate::{Call as PalletCall, CeremonyRetryQueues, PendingCeremonies};
 	use cf_chains::ChainCrypto;
-	use cf_traits::{KeyProvider, RequestType, ThresholdSigner};
+	use cf_traits::{KeyProvider, ThresholdSigner};
 	use frame_support::{pallet_prelude::InvalidTransaction, unsigned::TransactionSource};
 	use sp_runtime::traits::ValidateUnsigned;
 
@@ -456,10 +453,12 @@ mod unsigned_validation {
 			const PAYLOAD: <MockEthereum as ChainCrypto>::Payload = *b"OHAI";
 			const CUSTOM_AGG_KEY: <MockEthereum as ChainCrypto>::AggKey = *b"AKEY";
 			let participants: BTreeSet<u64> = BTreeSet::from_iter([1, 2, 3, 4, 5, 6]);
-			let (_request_id, ceremony_id) = EthereumThresholdSigner::request_signature(
-				PAYLOAD,
-				RequestType::KeygenVerification { key_id: CUSTOM_AGG_KEY.into(), participants },
-			);
+			let (_request_id, ceremony_id) =
+				EthereumThresholdSigner::request_keygen_verification_signature(
+					PAYLOAD,
+					CUSTOM_AGG_KEY.into(),
+					participants,
+				);
 
 			let retry_block = frame_system::Pallet::<Test>::current_block_number() +
 				EthereumThresholdSigner::threshold_signature_response_timeout();
@@ -483,10 +482,7 @@ mod unsigned_validation {
 				const PAYLOAD: <MockEthereum as ChainCrypto>::Payload = *b"OHAI";
 
 				let (_request_id, ceremony_id) =
-					<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(
-						PAYLOAD,
-						RequestType::Standard,
-					);
+					<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(PAYLOAD);
 				let (current_key_id, _) = MockKeyProvider::current_key_id_epoch_index();
 
 				assert!(
@@ -532,10 +528,7 @@ mod unsigned_validation {
 				const PAYLOAD: <MockEthereum as ChainCrypto>::Payload = *b"OHAI";
 				// Initiate request
 				let (_request_id, ceremony_id) =
-					<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(
-						PAYLOAD,
-						RequestType::Standard,
-					);
+					<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(PAYLOAD);
 				assert_eq!(
 					Test::validate_unsigned(
 						TransactionSource::External,
@@ -569,9 +562,9 @@ mod unsigned_validation {
 #[cfg(test)]
 mod failure_reporting {
 	use super::*;
-	use crate::{CeremonyContext, RequestContext};
+	use crate::{CeremonyContext, RequestContext, RequestType};
 	use cf_chains::ChainCrypto;
-	use cf_traits::{mocks::epoch_info::MockEpochInfo, KeyProvider, RequestType};
+	use cf_traits::{mocks::epoch_info::MockEpochInfo, KeyProvider};
 
 	fn init_context(
 		validator_set: impl IntoIterator<Item = <Test as Chainflip>::ValidatorId> + Copy,

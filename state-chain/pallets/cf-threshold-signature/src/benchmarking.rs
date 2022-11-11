@@ -5,7 +5,7 @@ use super::*;
 
 use cf_chains::{benchmarking_value::BenchmarkValue, ChainCrypto};
 use cf_primitives::AccountRole;
-use cf_traits::{AccountRoleRegistry, Chainflip, RequestType, ThresholdSigner};
+use cf_traits::{AccountRoleRegistry, Chainflip, ThresholdSigner};
 use frame_benchmarking::{account, benchmarks_instance_pallet, whitelist_account};
 use frame_support::{
 	assert_ok,
@@ -49,7 +49,7 @@ benchmarks_instance_pallet! {
 
 		add_authorities::<T, _>(all_accounts);
 
-		let (request_id, ceremony_id) = <Pallet::<T, I> as ThresholdSigner<_>>::request_signature(PayloadFor::<T, I>::benchmark_value(), RequestType::Standard);
+		let (request_id, ceremony_id) = <Pallet::<T, I> as ThresholdSigner<_>>::request_signature(PayloadFor::<T, I>::benchmark_value());
 		let signature = SignatureFor::<T, I>::benchmark_value();
 	} : _(RawOrigin::None, ceremony_id, signature)
 	verify {
@@ -63,7 +63,7 @@ benchmarks_instance_pallet! {
 
 		add_authorities::<T, _>(all_accounts);
 
-		let (request_id, ceremony_id) = <Pallet::<T, I> as ThresholdSigner<_>>::request_signature(PayloadFor::<T, I>::benchmark_value(), RequestType::Standard);
+		let (request_id, ceremony_id) = <Pallet::<T, I> as ThresholdSigner<_>>::request_signature(PayloadFor::<T, I>::benchmark_value());
 
 		let mut threshold_set = PendingCeremonies::<T, I>::get(ceremony_id).unwrap().remaining_respondents.into_iter();
 
