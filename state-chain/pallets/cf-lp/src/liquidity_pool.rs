@@ -64,12 +64,7 @@ impl<Balance: FixedPointOperand + Default> AmmPoolApi for LiquidityPool<Balance>
 		Some((position.volume_0(), position.volume_0()))
 	}
 
-	fn swap(
-		_from: Asset,
-		_to: Asset,
-		_swap_input: Self::Balance,
-		_fee: u16,
-	) -> (Self::Balance, (Asset, Self::Balance)) {
+	fn swap(_swap_input: Self::Balance, _fee: u16) -> (Self::Balance, Self::Balance) {
 		todo!()
 	}
 }

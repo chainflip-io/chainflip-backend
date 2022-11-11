@@ -3,7 +3,7 @@ use cf_chains::{Chain, Ethereum};
 use cf_primitives::{chains::assets, Asset, AssetAmount, ForeignChainAddress};
 use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
-	AmmPoolApi, Chainflip, EgressApi, IngressApi,
+	Chainflip, EgressApi, IngressApi, SwappingApi,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{parameter_types, storage_alias};
@@ -123,37 +123,10 @@ impl MockEgressApi {
 	}
 }
 
-pub struct MockAmmPoolApi;
+pub struct MockSwappingApi;
 
-impl AmmPoolApi for MockAmmPoolApi {
+impl SwappingApi for MockSwappingApi {
 	type Balance = Balance;
-
-	fn asset_0(&self) -> cf_primitives::Asset {
-		todo!()
-	}
-
-	fn asset_1(&self) -> cf_primitives::Asset {
-		todo!()
-	}
-
-	fn liquidity_0(&self) -> Self::Balance {
-		todo!()
-	}
-
-	fn liquidity_1(&self) -> Self::Balance {
-		todo!()
-	}
-
-	fn get_exchange_rate(&self) -> cf_primitives::ExchangeRate {
-		todo!()
-	}
-
-	fn get_liquidity_requirement(
-		&self,
-		_position: &cf_primitives::TradingPosition<Self::Balance>,
-	) -> Option<(Self::Balance, Self::Balance)> {
-		todo!()
-	}
 
 	fn swap(
 		_from: Asset,
@@ -181,7 +154,7 @@ impl pallet_cf_swapping::Config for Test {
 	type AccountRoleRegistry = ();
 	type Ingress = MockIngress;
 	type Egress = MockEgressApi;
-	type AmmPoolApi = MockAmmPoolApi;
+	type SwappingApi = MockSwappingApi;
 	type WeightInfo = ();
 }
 

@@ -46,8 +46,32 @@ pub trait PositionManagementApi {
 	fn close_position(who: &Self::AccountId, id: PositionId) -> DispatchResult;
 }
 
-/// Base Amm pool api common to both LPs and swaps.
 pub trait SwappingApi {
+	type Balance;
+
+	fn swap(
+		from: Asset,
+		to: Asset,
+		swap_input: Self::Balance,
+		fee: u16,
+	) -> (Self::Balance, (Asset, Self::Balance));
+}
+
+// TODO: remove this.
+impl SwappingApi for () {
+	type Balance = u128;
+
+	fn swap(
+		_from: Asset,
+		_to: Asset,
+		_swap_input: Self::Balance,
+		_fee: u16,
+	) -> (Self::Balance, (Asset, Self::Balance)) {
+		unimplemented!()
+	}
+}
+
+pub trait AmmPoolApi {
 	type Balance;
 	fn asset_0(&self) -> Asset;
 	fn asset_1(&self) -> Asset;
@@ -65,10 +89,5 @@ pub trait SwappingApi {
 		position: &TradingPosition<Self::Balance>,
 	) -> Option<(Self::Balance, Self::Balance)>;
 
-	fn swap(
-		from: Asset,
-		to: Asset,
-		swap_input: Self::Balance,
-		fee: u16,
-	) -> (Self::Balance, (Asset, Self::Balance));
+	fn swap(swap_input: Self::Balance, fee: u16) -> (Self::Balance, Self::Balance);
 }
