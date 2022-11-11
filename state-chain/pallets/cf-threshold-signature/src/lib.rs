@@ -547,7 +547,7 @@ pub mod pallet {
 
 						if context.remaining_respondents.is_empty() {
 							// No more respondents waiting: we can retry on the next block.
-							Self::schedule_retry(id, 1u32.into());
+							Self::schedule_ceremony_retry(id, 1u32.into());
 						}
 
 						Self::deposit_event(Event::<T, I>::FailureReportProcessed {
@@ -647,7 +647,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					remaining_respondents,
 				}
 			});
-			Self::schedule_retry(ceremony_id, ThresholdSignatureResponseTimeout::<T, I>::get());
+			Self::schedule_ceremony_retry(
+				ceremony_id,
+				ThresholdSignatureResponseTimeout::<T, I>::get(),
+			);
 			(
 				Event::<T, I>::ThresholdSignatureRequest {
 					request_id,
@@ -693,7 +696,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	// We've kicked off a ceremony, now we start a timeout, where it'll retry after that point.
-	fn schedule_retry(id: CeremonyId, retry_delay: BlockNumberFor<T>) {
+	fn schedule_ceremony_retry(id: CeremonyId, retry_delay: BlockNumberFor<T>) {
 		CeremonyRetryQueues::<T, I>::append(
 			frame_system::Pallet::<T>::current_block_number().saturating_add(retry_delay),
 			id,
