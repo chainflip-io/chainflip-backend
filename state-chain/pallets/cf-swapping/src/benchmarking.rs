@@ -14,13 +14,13 @@ benchmarks! {
 		T::AccountRoleRegistry::register_account(caller.clone(), AccountRole::Relayer);
 	}: _(
 		RawOrigin::Signed(caller.clone()),
-		ForeignChainAsset { chain: ForeignChain::Ethereum, asset: Asset::Eth },
-		ForeignChainAsset { chain: ForeignChain::Ethereum, asset: Asset::Usdc },
+		Asset::Eth,
+		Asset::Usdc,
 		ForeignChainAddress::Eth(Default::default()),
 		0
 	)
 	execute_swap {
-		let swap = Swap { from: Asset::Eth, to: ForeignChainAsset { chain: ForeignChain::Ethereum, asset: Asset::Usdc }, amount: 10, egress_address: ForeignChainAddress::Eth(Default::default()), relayer_id: whitelisted_caller(), relayer_commission_bps: 2};
+		let swap = Swap { from: Asset::Eth, to: Asset::Usdc, amount: 10, egress_address: ForeignChainAddress::Eth(Default::default()), relayer_id: whitelisted_caller(), relayer_commission_bps: 2};
 	}: {
 		Pallet::<T>::execute_swap(swap);
 	}

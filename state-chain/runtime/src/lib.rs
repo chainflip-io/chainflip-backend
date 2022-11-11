@@ -68,7 +68,10 @@ pub use cf_traits::{
 	BlockNumber, EpochInfo, EthEnvironmentProvider, FlipBalance, QualifyNode, SessionKeysRegistered,
 };
 pub use chainflip::chain_instances::*;
-use chainflip::{epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat};
+use chainflip::{
+	epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat, EthEnvironment,
+	EthVaultTransitionHandler,
+};
 use constants::common::{
 	eth::{BLOCK_SAFETY_MARGIN, CONSERVATIVE_BLOCK_TIME_SECS},
 	*,
@@ -206,12 +209,13 @@ impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 	type ThresholdSigner = EthereumThresholdSigner;
 	type Offence = chainflip::Offence;
 	type Chain = Ethereum;
-	type ApiCall = eth::api::EthereumApi;
+	type ApiCall = eth::api::EthereumApi<EthEnvironment>;
+	type VaultTransitionHandler = EthVaultTransitionHandler;
 	type Broadcaster = EthereumBroadcaster;
 	type OffenceReporter = Reputation;
 	type CeremonyIdProvider = pallet_cf_validator::CeremonyIdProvider<Self>;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
-	type ReplayProtectionProvider = chainflip::EthApiCallDataProvider;
+	type ReplayProtectionProvider = chainflip::EthEnvironment;
 	type EthEnvironmentProvider = Environment;
 	type SystemStateManager = pallet_cf_environment::SystemStateProvider<Runtime>;
 }
@@ -241,11 +245,10 @@ impl pallet_cf_lp::Config for Runtime {
 #[cfg(feature = "ibiza")]
 impl pallet_cf_egress::Config for Runtime {
 	type Event = Event;
-	type EthereumReplayProtection = chainflip::EthApiCallDataProvider;
-	type EthereumEgressTransaction = eth::api::EthereumApi;
-	type EthereumBroadcaster = EthereumBroadcaster;
+	type ReplayProtection = chainflip::EthEnvironment;
+	type AllBatch = eth::api::EthereumApi<EthEnvironment>;
+	type Broadcaster = EthereumBroadcaster;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
-	type EthereumAssetsAddressProvider = Environment;
 	type WeightInfo = ();
 }
 
@@ -441,12 +444,12 @@ impl pallet_cf_staking::Config for Runtime {
 	type AccountRoleRegistry = AccountRoles;
 	type Balance = FlipBalance;
 	type Flip = Flip;
-	type ReplayProtectionProvider = chainflip::EthApiCallDataProvider;
+	type ReplayProtectionProvider = chainflip::EthEnvironment;
 	type EthEnvironmentProvider = Environment;
 	type ThresholdSigner = EthereumThresholdSigner;
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, Instance1>;
-	type RegisterClaim = eth::api::EthereumApi;
+	type RegisterClaim = eth::api::EthereumApi<EthEnvironment>;
 	type ClaimDelayBufferSeconds = ConstU64<{ BLOCK_SAFETY_MARGIN * CONSERVATIVE_BLOCK_TIME_SECS }>;
 	type TimeSource = Timestamp;
 	type WeightInfo = pallet_cf_staking::weights::PalletWeight<Runtime>;
@@ -456,9 +459,9 @@ impl pallet_cf_tokenholder_governance::Config for Runtime {
 	type Event = Event;
 	type FeePayment = Flip;
 	type Chain = Ethereum;
-	type ReplayProtectionProvider = chainflip::EthApiCallDataProvider;
+	type ReplayProtectionProvider = chainflip::EthEnvironment;
 	type StakingInfo = Flip;
-	type ApiCalls = eth::api::EthereumApi;
+	type ApiCalls = eth::api::EthereumApi<EthEnvironment>;
 	type Broadcaster = EthereumBroadcaster;
 	type WeightInfo = pallet_cf_tokenholder_governance::weights::PalletWeight<Runtime>;
 	type VotingPeriod = ConstU32<{ 14 * DAYS }>;
@@ -482,13 +485,13 @@ impl pallet_cf_emissions::Config for Runtime {
 	type Event = Event;
 	type HostChain = Ethereum;
 	type FlipBalance = FlipBalance;
-	type ApiCall = eth::api::EthereumApi;
+	type ApiCall = eth::api::EthereumApi<EthEnvironment>;
 	type Broadcaster = EthereumBroadcaster;
 	type Surplus = pallet_cf_flip::Surplus<Runtime>;
 	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
 	type RewardsDistribution = chainflip::BlockAuthorRewardDistribution;
 	type CompoundingInterval = ConstU32<COMPOUNDING_INTERVAL>;
-	type ReplayProtectionProvider = chainflip::EthApiCallDataProvider;
+	type ReplayProtectionProvider = chainflip::EthEnvironment;
 	type EthEnvironmentProvider = Environment;
 	type WeightInfo = pallet_cf_emissions::weights::PalletWeight<Runtime>;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
@@ -543,7 +546,7 @@ impl pallet_cf_broadcast::Config<EthereumInstance> for Runtime {
 	type Offence = chainflip::Offence;
 	type AccountRoleRegistry = AccountRoles;
 	type TargetChain = Ethereum;
-	type ApiCall = eth::api::EthereumApi;
+	type ApiCall = eth::api::EthereumApi<EthEnvironment>;
 	type ThresholdSigner = EthereumThresholdSigner;
 	type TransactionBuilder = chainflip::EthTransactionBuilder;
 	type BroadcastSignerNomination = chainflip::RandomSignerNomination;

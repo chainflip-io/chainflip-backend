@@ -217,7 +217,7 @@ impl pallet_cf_staking::Config for Test {
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type ClaimDelayBufferSeconds = ConstU64<CLAIM_DELAY_BUFFER_SECS>;
-	type RegisterClaim = eth::api::EthereumApi;
+	type RegisterClaim = eth::api::EthereumApi<()>;
 	type EthEnvironmentProvider = MockEthEnvironmentProvider;
 }
 

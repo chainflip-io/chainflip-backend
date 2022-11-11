@@ -9,6 +9,7 @@ use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, Broadcaster, CeremonyIdProvider, Chainflip,
 	CurrentEpochIndex, EpochTransitionHandler, EthEnvironmentProvider, KeyProvider,
 	ReplayProtectionProvider, RetryPolicy, SystemStateManager, ThresholdSigner, VaultRotator,
+	VaultTransitionHandler,
 };
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
@@ -205,7 +206,7 @@ pub enum PalletOffence {
 #[frame_support::pallet]
 pub mod pallet {
 
-	use cf_traits::{AccountRoleRegistry, ApiCallDataProvider, ThresholdSigner};
+	use cf_traits::{AccountRoleRegistry, ThresholdSigner, VaultTransitionHandler};
 
 	use super::*;
 
@@ -238,6 +239,8 @@ pub mod pallet {
 		/// The supported api calls for the chain.
 		type ApiCall: SetAggKeyWithAggKey<Self::Chain>;
 
+		type VaultTransitionHandler: VaultTransitionHandler<Self::Chain>;
+
 		/// The pallet dispatches calls, so it depends on the runtime's aggregated Call type.
 		type Call: From<Call<Self, I>> + IsType<<Self as frame_system::Config>::Call>;
 
@@ -263,8 +266,7 @@ pub mod pallet {
 		type EthEnvironmentProvider: EthEnvironmentProvider;
 
 		// Something that can give us the next nonce.
-		type ReplayProtectionProvider: ReplayProtectionProvider<Self::Chain>
-			+ ApiCallDataProvider<Self::Chain>;
+		type ReplayProtectionProvider: ReplayProtectionProvider<Self::Chain>;
 
 		// A trait which allows us to put the chain into maintenance mode.
 		type SystemStateManager: SystemStateManager;
@@ -548,7 +550,7 @@ pub mod pallet {
 					T::Broadcaster::threshold_sign_and_broadcast(
 						<T::ApiCall as SetAggKeyWithAggKey<_>>::new_unsigned(
 							<T::ReplayProtectionProvider>::replay_protection(),
-							<T::ReplayProtectionProvider>::chain_extra_data(),
+							<Self as KeyProvider<_>>::current_key(),
 							new_public_key,
 						),
 					);
@@ -728,6 +730,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			new_public_key,
 			rotated_at_block_number.saturating_add(ChainBlockNumberFor::<T, I>::one()),
 		);
+		T::VaultTransitionHandler::on_new_vault(new_public_key);
 	}
 
 	fn set_vault_for_epoch(

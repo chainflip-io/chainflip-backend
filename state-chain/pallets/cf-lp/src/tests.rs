@@ -1,8 +1,7 @@
 use crate::{mock::*, FreeBalances};
 
 use cf_primitives::{
-	liquidity::AmmRange, AccountRole, Asset, ForeignChain, ForeignChainAddress, ForeignChainAsset,
-	TradingPosition,
+	chains::assets, liquidity::AmmRange, AccountRole, Asset, ForeignChainAddress, TradingPosition,
 };
 use cf_traits::{
 	mocks::system_state_info::MockSystemStateInfo, AccountRoleRegistry, SystemStateInfo,
@@ -61,7 +60,7 @@ fn egress_chain_and_asset_must_match() {
 			LiquidityProvider::withdraw_liquidity(
 				Origin::signed(ALICE),
 				1,
-				ForeignChainAsset { chain: ForeignChain::Ethereum, asset: Asset::Eth },
+				Asset::Eth,
 				ForeignChainAddress::Dot([0x00; 32]),
 			),
 			crate::Error::<Test>::InvalidEgressAddress
@@ -70,7 +69,7 @@ fn egress_chain_and_asset_must_match() {
 			LiquidityProvider::withdraw_liquidity(
 				Origin::signed(ALICE),
 				1,
-				ForeignChainAsset { chain: ForeignChain::Polkadot, asset: Asset::Dot },
+				Asset::Dot,
 				ForeignChainAddress::Eth([0x00; 20]),
 			),
 			crate::Error::<Test>::InvalidEgressAddress
@@ -88,33 +87,24 @@ fn liquidity_providers_can_withdraw_liquidity() {
 		));
 		FreeBalances::<Test>::insert(ALICE, Asset::Eth, 1_000);
 
-		assert!(!IsValid::get());
 		assert_noop!(
 			LiquidityProvider::withdraw_liquidity(
 				Origin::signed(ALICE),
 				100,
-				ForeignChainAsset { chain: ForeignChain::Ethereum, asset: Asset::Eth },
+				Asset::Dot,
 				ForeignChainAddress::Eth([0x00; 20]),
 			),
 			crate::Error::<Test>::InvalidEgressAddress
 		);
 
-		IsValid::set(true);
 		assert!(LastEgress::get().is_none());
 		assert_ok!(LiquidityProvider::withdraw_liquidity(
 			Origin::signed(ALICE),
 			100,
-			ForeignChainAsset { chain: ForeignChain::Ethereum, asset: Asset::Eth },
+			Asset::Eth,
 			ForeignChainAddress::Eth([0x00; 20]),
 		));
-		assert_eq!(
-			LastEgress::get(),
-			Some((
-				ForeignChainAsset { chain: ForeignChain::Ethereum, asset: Asset::Eth },
-				100,
-				ForeignChainAddress::Eth([0x00; 20])
-			))
-		);
+		assert_eq!(LastEgress::get(), Some((assets::eth::Asset::Eth, 100, [0x00; 20].into())));
 	});
 }
 
@@ -128,7 +118,6 @@ fn cannot_deposit_and_withdrawal_during_maintenance() {
 			AccountRole::LiquidityProvider
 		));
 		FreeBalances::<Test>::insert(ALICE, Asset::Eth, 1_000);
-		IsValid::set(true);
 
 		// Activate maintenance mode
 		MockSystemStateInfo::set_maintenance(true);
@@ -136,10 +125,7 @@ fn cannot_deposit_and_withdrawal_during_maintenance() {
 
 		// Cannot request deposit address during maintenance.
 		assert_noop!(
-			LiquidityProvider::request_deposit_address(
-				Origin::signed(ALICE),
-				ForeignChainAsset { chain: ForeignChain::Ethereum, asset: Asset::Eth },
-			),
+			LiquidityProvider::request_deposit_address(Origin::signed(ALICE), Asset::Eth,),
 			"We are in maintenance!"
 		);
 
@@ -148,7 +134,7 @@ fn cannot_deposit_and_withdrawal_during_maintenance() {
 			LiquidityProvider::withdraw_liquidity(
 				Origin::signed(ALICE),
 				100,
-				ForeignChainAsset { chain: ForeignChain::Ethereum, asset: Asset::Eth },
+				Asset::Eth,
 				ForeignChainAddress::Eth([0x00; 20]),
 			),
 			"We are in maintenance!"
@@ -159,15 +145,12 @@ fn cannot_deposit_and_withdrawal_during_maintenance() {
 		assert!(!MockSystemStateInfo::is_maintenance_mode());
 
 		// Deposit and withdrawal can now work as per normal.
-		assert_ok!(LiquidityProvider::request_deposit_address(
-			Origin::signed(ALICE),
-			ForeignChainAsset { chain: ForeignChain::Ethereum, asset: Asset::Eth },
-		));
+		assert_ok!(LiquidityProvider::request_deposit_address(Origin::signed(ALICE), Asset::Eth,));
 
 		assert_ok!(LiquidityProvider::withdraw_liquidity(
 			Origin::signed(ALICE),
 			100,
-			ForeignChainAsset { chain: ForeignChain::Ethereum, asset: Asset::Eth },
+			Asset::Eth,
 			ForeignChainAddress::Eth([0x00; 20]),
 		));
 	});
@@ -184,7 +167,6 @@ fn cannot_manage_liquidity_during_maintenance() {
 		));
 		FreeBalances::<Test>::insert(ALICE, Asset::Eth, 1_000_000);
 		FreeBalances::<Test>::insert(ALICE, Asset::Usdc, 1_000_000);
-		IsValid::set(true);
 
 		let position = TradingPosition::ClassicV3 {
 			range: AmmRange { lower: 0, upper: 0 },

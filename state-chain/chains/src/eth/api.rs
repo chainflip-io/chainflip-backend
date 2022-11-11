@@ -1,4 +1,7 @@
+use ethabi::Address;
+use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound};
 use sp_runtime::traits::UniqueSaturatedInto;
+use sp_std::marker::PhantomData;
 
 use crate::*;
 
@@ -12,14 +15,18 @@ pub mod set_gov_key_with_agg_key;
 pub mod update_flip_supply;
 
 /// Chainflip api calls available on Ethereum.
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub enum EthereumApi {
+#[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, EqNoBound, Encode, Decode, TypeInfo)]
+#[scale_info(skip_type_params(Environment))]
+pub enum EthereumApi<Environment: 'static> {
 	SetAggKeyWithAggKey(set_agg_key_with_agg_key::SetAggKeyWithAggKey),
 	RegisterClaim(register_claim::RegisterClaim),
 	UpdateFlipSupply(update_flip_supply::UpdateFlipSupply),
 	SetGovKeyWithAggKey(set_gov_key_with_agg_key::SetGovKeyWithAggKey),
 	SetCommKeyWithAggKey(set_comm_key_with_agg_key::SetCommKeyWithAggKey),
 	AllBatch(all_batch::AllBatch),
+	#[doc(hidden)]
+	#[codec(skip)]
+	_Phantom(PhantomData<Environment>, Never),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Default)]
@@ -32,13 +39,12 @@ pub struct EthereumReplayProtection {
 impl ChainAbi for Ethereum {
 	type Transaction = eth::Transaction;
 	type ReplayProtection = EthereumReplayProtection;
-	type ApiCallExtraData = ();
 }
 
-impl SetAggKeyWithAggKey<Ethereum> for EthereumApi {
+impl<E> SetAggKeyWithAggKey<Ethereum> for EthereumApi<E> {
 	fn new_unsigned(
 		replay_protection: EthereumReplayProtection,
-		_chain_specific_data: (),
+		_old_key: <Ethereum as ChainCrypto>::AggKey,
 		new_key: <Ethereum as ChainCrypto>::AggKey,
 	) -> Self {
 		Self::SetAggKeyWithAggKey(set_agg_key_with_agg_key::SetAggKeyWithAggKey::new_unsigned(
@@ -48,7 +54,7 @@ impl SetAggKeyWithAggKey<Ethereum> for EthereumApi {
 	}
 }
 
-impl SetGovKeyWithAggKey<Ethereum> for EthereumApi {
+impl<E> SetGovKeyWithAggKey<Ethereum> for EthereumApi<E> {
 	fn new_unsigned(
 		replay_protection: EthereumReplayProtection,
 		new_gov_key: eth::Address,
@@ -60,7 +66,7 @@ impl SetGovKeyWithAggKey<Ethereum> for EthereumApi {
 	}
 }
 
-impl SetCommKeyWithAggKey<Ethereum> for EthereumApi {
+impl<E> SetCommKeyWithAggKey<Ethereum> for EthereumApi<E> {
 	fn new_unsigned(
 		replay_protection: EthereumReplayProtection,
 		new_comm_key: eth::Address,
@@ -72,7 +78,7 @@ impl SetCommKeyWithAggKey<Ethereum> for EthereumApi {
 	}
 }
 
-impl RegisterClaim<Ethereum> for EthereumApi {
+impl<E> RegisterClaim<Ethereum> for EthereumApi<E> {
 	fn new_unsigned(
 		replay_protection: EthereumReplayProtection,
 		node_id: &[u8; 32],
@@ -91,17 +97,13 @@ impl RegisterClaim<Ethereum> for EthereumApi {
 
 	fn amount(&self) -> u128 {
 		match self {
-			EthereumApi::SetAggKeyWithAggKey(_) => unreachable!(),
 			EthereumApi::RegisterClaim(call) => call.amount.unique_saturated_into(),
-			EthereumApi::UpdateFlipSupply(_) => unreachable!(),
-			EthereumApi::SetGovKeyWithAggKey(_) => unreachable!(),
-			EthereumApi::SetCommKeyWithAggKey(_) => unreachable!(),
-			EthereumApi::AllBatch(_) => unreachable!(),
+			_ => unreachable!(),
 		}
 	}
 }
 
-impl UpdateFlipSupply<Ethereum> for EthereumApi {
+impl<E> UpdateFlipSupply<Ethereum> for EthereumApi<E> {
 	fn new_unsigned(
 		replay_protection: EthereumReplayProtection,
 		new_total_supply: u128,
@@ -117,58 +119,81 @@ impl UpdateFlipSupply<Ethereum> for EthereumApi {
 	}
 }
 
-impl AllBatch<Ethereum> for EthereumApi {
+impl<E> AllBatch<Ethereum> for EthereumApi<E>
+where
+	E: ChainEnvironment<assets::eth::Asset, Address>,
+{
 	fn new_unsigned(
 		replay_protection: EthereumReplayProtection,
-		_chain_specific_data: (),
 		fetch_params: Vec<FetchAssetParams<Ethereum>>,
 		transfer_params: Vec<TransferAssetParams<Ethereum>>,
 	) -> Self {
 		Self::AllBatch(all_batch::AllBatch::new_unsigned(
 			replay_protection,
-			fetch_params,
-			transfer_params,
+			fetch_params
+				.into_iter()
+				.filter_map(|FetchAssetParams { intent_id, asset }| {
+					E::lookup(asset)
+						.map(|address| all_batch::EncodableFetchAssetParams {
+							intent_id,
+							asset: address,
+						})
+						.ok()
+				})
+				.collect(),
+			transfer_params
+				.into_iter()
+				.filter_map(|TransferAssetParams { asset, to, amount }| {
+					E::lookup(asset)
+						.map(|address| all_batch::EncodableTransferAssetParams {
+							to,
+							amount,
+							asset: address,
+						})
+						.ok()
+				})
+				.collect(),
 		))
 	}
 }
 
-impl From<set_agg_key_with_agg_key::SetAggKeyWithAggKey> for EthereumApi {
+impl<E> From<set_agg_key_with_agg_key::SetAggKeyWithAggKey> for EthereumApi<E> {
 	fn from(tx: set_agg_key_with_agg_key::SetAggKeyWithAggKey) -> Self {
 		Self::SetAggKeyWithAggKey(tx)
 	}
 }
 
-impl From<register_claim::RegisterClaim> for EthereumApi {
+impl<E> From<register_claim::RegisterClaim> for EthereumApi<E> {
 	fn from(tx: register_claim::RegisterClaim) -> Self {
 		Self::RegisterClaim(tx)
 	}
 }
 
-impl From<update_flip_supply::UpdateFlipSupply> for EthereumApi {
+impl<E> From<update_flip_supply::UpdateFlipSupply> for EthereumApi<E> {
 	fn from(tx: update_flip_supply::UpdateFlipSupply) -> Self {
 		Self::UpdateFlipSupply(tx)
 	}
 }
 
-impl From<set_gov_key_with_agg_key::SetGovKeyWithAggKey> for EthereumApi {
+impl<E> From<set_gov_key_with_agg_key::SetGovKeyWithAggKey> for EthereumApi<E> {
 	fn from(tx: set_gov_key_with_agg_key::SetGovKeyWithAggKey) -> Self {
 		Self::SetGovKeyWithAggKey(tx)
 	}
 }
 
-impl From<set_comm_key_with_agg_key::SetCommKeyWithAggKey> for EthereumApi {
+impl<E> From<set_comm_key_with_agg_key::SetCommKeyWithAggKey> for EthereumApi<E> {
 	fn from(tx: set_comm_key_with_agg_key::SetCommKeyWithAggKey) -> Self {
 		Self::SetCommKeyWithAggKey(tx)
 	}
 }
 
-impl From<all_batch::AllBatch> for EthereumApi {
+impl<E> From<all_batch::AllBatch> for EthereumApi<E> {
 	fn from(tx: all_batch::AllBatch) -> Self {
 		Self::AllBatch(tx)
 	}
 }
 
-impl ApiCall<Ethereum> for EthereumApi {
+impl<E> ApiCall<Ethereum> for EthereumApi<E> {
 	fn threshold_signature_payload(&self) -> <Ethereum as ChainCrypto>::Payload {
 		match self {
 			EthereumApi::SetAggKeyWithAggKey(tx) => tx.threshold_signature_payload(),
@@ -177,6 +202,7 @@ impl ApiCall<Ethereum> for EthereumApi {
 			EthereumApi::SetGovKeyWithAggKey(tx) => tx.threshold_signature_payload(),
 			EthereumApi::SetCommKeyWithAggKey(tx) => tx.threshold_signature_payload(),
 			EthereumApi::AllBatch(tx) => tx.threshold_signature_payload(),
+			EthereumApi::_Phantom(..) => unreachable!(),
 		}
 	}
 
@@ -188,6 +214,7 @@ impl ApiCall<Ethereum> for EthereumApi {
 			EthereumApi::SetGovKeyWithAggKey(call) => call.signed(threshold_signature).into(),
 			EthereumApi::SetCommKeyWithAggKey(call) => call.signed(threshold_signature).into(),
 			EthereumApi::AllBatch(call) => call.signed(threshold_signature).into(),
+			EthereumApi::_Phantom(..) => unreachable!(),
 		}
 	}
 
@@ -199,6 +226,7 @@ impl ApiCall<Ethereum> for EthereumApi {
 			EthereumApi::SetGovKeyWithAggKey(call) => call.chain_encoded(),
 			EthereumApi::SetCommKeyWithAggKey(call) => call.chain_encoded(),
 			EthereumApi::AllBatch(call) => call.chain_encoded(),
+			EthereumApi::_Phantom(..) => unreachable!(),
 		}
 	}
 
@@ -210,6 +238,7 @@ impl ApiCall<Ethereum> for EthereumApi {
 			EthereumApi::SetGovKeyWithAggKey(call) => call.is_signed(),
 			EthereumApi::SetCommKeyWithAggKey(call) => call.is_signed(),
 			EthereumApi::AllBatch(call) => call.is_signed(),
+			EthereumApi::_Phantom(..) => unreachable!(),
 		}
 	}
 }
