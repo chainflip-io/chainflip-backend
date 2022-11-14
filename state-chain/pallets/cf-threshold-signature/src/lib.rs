@@ -77,7 +77,7 @@ pub enum ThresholdCeremonyType {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{AccountRoleRegistry, AsyncResult, ThresholdSignerNomination};
+	use cf_traits::{AccountRoleRegistry, AsyncResult, KeyNotReady, ThresholdSignerNomination};
 	use frame_support::{
 		dispatch::DispatchResultWithPostInfo,
 		pallet_prelude::{InvalidTransaction, *},
@@ -356,6 +356,11 @@ pub mod pallet {
 		SignersUnavailable {
 			request_id: RequestId,
 			ceremony_id: CeremonyId,
+		},
+		/// We cannot sign because we've marked the key as unavailable.
+		CurrentKeyUnavailable {
+			request_id: RequestId,
+			reason: KeyNotReady,
 		},
 		/// The threshold signature response timeout has been updated
 		ThresholdSignatureResponseTimeoutUpdated {
@@ -638,78 +643,90 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let attempt_count = request_instruction.request_context.attempt_count;
 		let payload = request_instruction.request_context.payload.clone();
 
-		let (key_id, participants, ceremony_type) =
-			if let RequestType::KeygenVerification { ref key_id, ref participants } =
-				request_instruction.request_type
-			{
-				(
-					key_id.clone(),
-					Some(participants.clone()),
-					ThresholdCeremonyType::KeygenVerification,
-				)
-			} else {
-				let (current_key_id, current_epoch_index) =
-					T::KeyProvider::current_key_id_epoch_index();
-
-				(
-					current_key_id,
-					T::ThresholdSignerNomination::threshold_nomination_with_seed(
-						(ceremony_id, attempt_count),
-						current_epoch_index,
-					),
+		let (maybe_key_id_participants, ceremony_type) = if let RequestType::KeygenVerification {
+			ref key_id,
+			ref participants,
+		} = request_instruction.request_type
+		{
+			(Ok((key_id.clone(), participants.clone())), ThresholdCeremonyType::KeygenVerification)
+		} else {
+			(
+					match T::KeyProvider::current_key_id_epoch_index() {
+       					Ok((current_key_id, current_epoch_index)) => {
+						        if let Some(nominees) =
+							        T::ThresholdSignerNomination::threshold_nomination_with_seed(
+								        (ceremony_id, attempt_count),
+								        current_epoch_index,
+							        ) {
+							        Ok((current_key_id, nominees))
+						        } else {
+							        Err((Event::<T, I>::SignersUnavailable { request_id, ceremony_id }, scale_info::prelude::format!(
+								        "Not enough signers for request {} at attempt {}, scheduling retry.",
+								        request_id,
+								        attempt_count
+							        )))
+						        }
+					        }
+        				Err(reason) => {
+						    Err((Event::<T, I>::CurrentKeyUnavailable { request_id, reason }, scale_info::prelude::format!(
+							    "The key is not currently available for request {} at attempt {}. Reason: {:?}, scheduling retry.", 
+							    request_id,
+							    attempt_count,
+								reason
+						    )))
+					    }
+    				},
 					ThresholdCeremonyType::Standard,
 				)
-			};
+		};
 
-		let (event, log_message) = if let Some(nominees) = participants {
-			PendingCeremonies::<T, I>::insert(ceremony_id, {
-				let remaining_respondents: BTreeSet<_> = nominees.clone().into_iter().collect();
-				CeremonyContext {
-					request_context: RequestContext {
-						request_id,
-						attempt_count,
-						payload: payload.clone(),
-					},
-					threshold_ceremony_type: ceremony_type,
-					key_id: key_id.clone(),
-					blame_counts: BTreeMap::new(),
-					participant_count: remaining_respondents.len() as AuthorityCount,
-					remaining_respondents,
-				}
-			});
-			Self::schedule_ceremony_retry(
-				ceremony_id,
-				ThresholdSignatureResponseTimeout::<T, I>::get(),
-			);
-			(
-				Event::<T, I>::ThresholdSignatureRequest {
-					request_id,
+		let (event, log_message) = match maybe_key_id_participants {
+			Ok((key_id, participants)) => {
+				PendingCeremonies::<T, I>::insert(ceremony_id, {
+					let remaining_respondents: BTreeSet<_> =
+						participants.clone().into_iter().collect();
+					CeremonyContext {
+						request_context: RequestContext {
+							request_id,
+							attempt_count,
+							payload: payload.clone(),
+						},
+						threshold_ceremony_type: ceremony_type,
+						key_id: key_id.clone(),
+						blame_counts: BTreeMap::new(),
+						participant_count: remaining_respondents.len() as AuthorityCount,
+						remaining_respondents,
+					}
+				});
+				Self::schedule_ceremony_retry(
 					ceremony_id,
-					key_id,
-					signatories: nominees,
-					payload,
-				},
-				scale_info::prelude::format!(
-					"Threshold set selected for request {}, requesting signature ceremony {}.",
+					ThresholdSignatureResponseTimeout::<T, I>::get(),
+				);
+				(
+					Event::<T, I>::ThresholdSignatureRequest {
+						request_id,
+						ceremony_id,
+						key_id,
+						signatories: participants,
+						payload,
+					},
+					scale_info::prelude::format!(
+						"Threshold set selected for request {}, requesting signature ceremony {}.",
+						request_id,
+						attempt_count
+					),
+				)
+			},
+			Err((event, log)) => {
+				PendingRequestInstructions::<T, I>::insert(request_id, request_instruction);
+				RequestRetryQueue::<T, I>::append(
+					frame_system::Pallet::<T>::current_block_number()
+						.saturating_add(T::CeremonyRetryDelay::get()),
 					request_id,
-					attempt_count
-				),
-			)
-		} else {
-			PendingRequestInstructions::<T, I>::insert(request_id, request_instruction);
-			RequestRetryQueue::<T, I>::append(
-				frame_system::Pallet::<T>::current_block_number()
-					.saturating_add(T::CeremonyRetryDelay::get()),
-				request_id,
-			);
-			(
-				Event::<T, I>::SignersUnavailable { request_id, ceremony_id },
-				scale_info::prelude::format!(
-					"Not enough signers for request {} at attempt {}, scheduling retry.",
-					request_id,
-					attempt_count
-				),
-			)
+				);
+
+				(event, log)
+			},
 		};
 
 		log::trace!(

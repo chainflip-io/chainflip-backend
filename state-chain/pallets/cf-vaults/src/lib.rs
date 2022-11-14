@@ -7,8 +7,9 @@ use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex};
 use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, Broadcaster, CeremonyIdProvider, Chainflip,
-	CurrentEpochIndex, EpochTransitionHandler, KeyProvider, SystemStateManager, ThresholdSigner,
-	VaultRotator, VaultTransitionHandler,
+	CurrentEpochIndex, EpochTransitionHandler, KeyNotReady, KeyProvider,
+	ReplayProtectionProvider, SystemStateManager, ThresholdSigner, VaultRotator,
+	VaultTransitionHandler,
 };
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
@@ -202,6 +203,16 @@ pub enum PalletOffence {
 	FailedKeygen,
 }
 
+#[derive(Default, Encode, Decode, TypeInfo)]
+pub enum VaultState {
+	// We are ready to sign
+	Active,
+
+	// The key is in transition. This also applies to when we're in transition to the first key.
+	#[default]
+	InTransition,
+}
+
 #[frame_support::pallet]
 pub mod pallet {
 
@@ -351,6 +362,11 @@ pub mod pallet {
 	#[pallet::getter(fn current_keyholders_epoch)]
 	pub type CurrentKeyholdersEpoch<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, EpochIndex, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn current_vault_state)]
+	pub type CurrentVaultState<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, VaultState, ValueQuery>;
 
 	/// Vault rotation statuses for the current epoch rotation.
 	#[pallet::storage]
@@ -676,7 +692,7 @@ pub mod pallet {
 		///
 		/// GenesisConfig members require `Serialize` and `Deserialize` which isn't
 		/// implemented for the AggKey type, hence we use Vec<u8> and covert during genesis.
-		pub vault_key: Vec<u8>,
+		pub vault_key: Option<Vec<u8>>,
 		pub deployment_block: ChainBlockNumberFor<T, I>,
 		pub keygen_response_timeout: BlockNumberFor<T>,
 	}
@@ -686,7 +702,7 @@ pub mod pallet {
 		fn default() -> Self {
 			use sp_runtime::traits::Zero;
 			Self {
-				vault_key: Default::default(),
+				vault_key: None,
 				deployment_block: Zero::zero(),
 				keygen_response_timeout: KEYGEN_CEREMONY_RESPONSE_TIMEOUT_DEFAULT.into(),
 			}
@@ -696,18 +712,24 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
 		fn build(&self) {
-			let public_key = AggKeyFor::<T, I>::try_from(self.vault_key.clone())
-				// Note: Can't use expect() here without some type shenanigans, but would give
-				// clearer error messages.
-				.unwrap_or_else(|_| panic!("Can't build genesis without a valid vault key."));
-
-			KeygenResponseTimeout::<T, I>::put(self.keygen_response_timeout);
+			let public_key = if let Some(vault_key) = self.vault_key.clone() {
+				CurrentVaultState::<T, I>::put(VaultState::Active);
+				AggKeyFor::<T, I>::try_from(vault_key)
+					// Note: Can't use expect() here without some type shenanigans, but would give
+					// clearer error messages.
+					.unwrap_or_else(|_| panic!("Can't build genesis without a valid vault key."))
+			} else {
+				CurrentVaultState::<T, I>::put(VaultState::InTransition);
+				Default::default()
+			};
 
 			Pallet::<T, I>::set_vault_for_epoch(
 				CurrentEpochIndex::<T>::get(),
 				public_key,
 				self.deployment_block,
 			);
+
+			KeygenResponseTimeout::<T, I>::put(self.keygen_response_timeout);
 		}
 	}
 }
@@ -856,15 +878,20 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 impl<T: Config<I>, I: 'static> KeyProvider<T::Chain> for Pallet<T, I> {
 	type KeyId = Vec<u8>;
 
-	fn current_key_id_epoch_index() -> (Self::KeyId, EpochIndex) {
-		let current_epoch = CurrentKeyholdersEpoch::<T, I>::get();
-		(
-			Vaults::<T, I>::get(current_epoch)
-				.expect("We can't exist without a vault")
-				.public_key
-				.into(),
-			current_epoch,
-		)
+	fn current_key_id_epoch_index() -> Result<(Self::KeyId, EpochIndex), KeyNotReady> {
+		match CurrentVaultState::<T, I>::get() {
+			VaultState::Active => {
+				let current_epoch: EpochIndex = CurrentKeyholdersEpoch::<T, I>::get();
+				Ok((
+					Vaults::<T, I>::get(current_epoch)
+						.expect("We can't exist without a vault")
+						.public_key
+						.into(),
+					current_epoch,
+				))
+			},
+			VaultState::InTransition => Err(KeyNotReady::InTransition),
+		}
 	}
 
 	fn current_key() -> <T::Chain as ChainCrypto>::AggKey {

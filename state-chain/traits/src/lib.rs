@@ -354,13 +354,22 @@ pub trait ThresholdSignerNomination {
 	) -> Option<BTreeSet<Self::SignerId>>;
 }
 
+#[derive(Default, Debug, TypeInfo, Decode, Encode, Clone, Copy, PartialEq, Eq)]
+pub enum KeyNotReady {
+	// Key has not yet been initialised.
+	#[default]
+	NoKey,
+	// We are currently transitioning to a new key.
+	InTransition,
+}
+
 /// Provides the currently valid key for multisig ceremonies.
 pub trait KeyProvider<C: ChainCrypto> {
 	/// The type of the provided key_id.
 	type KeyId;
 
 	/// Gets the key id and epoch index for the current vault key.
-	fn current_key_id_epoch_index() -> (Self::KeyId, EpochIndex);
+	fn current_key_id_epoch_index() -> Result<(Self::KeyId, EpochIndex), KeyNotReady>;
 
 	/// Get the chain's current agg key.
 	fn current_key() -> C::AggKey;

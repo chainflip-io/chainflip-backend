@@ -727,6 +727,12 @@ impl SignedExtension for PolkadotSignedExtra {
 #[derive(Ord, PartialOrd, Debug, Encode, Decode, Copy, Clone, Eq, PartialEq, TypeInfo)]
 pub struct PolkadotPublicKey(pub sr25519::Public);
 
+impl Default for PolkadotPublicKey {
+	fn default() -> Self {
+		vec![0; 32].try_into().unwrap()
+	}
+}
+
 impl TryFrom<Vec<u8>> for PolkadotPublicKey {
 	type Error = ();
 

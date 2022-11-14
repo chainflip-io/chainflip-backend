@@ -234,7 +234,7 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
 		system: Default::default(),
 		vaults_pallet: VaultsPalletConfig {
-			vault_key: GENESIS_AGG_PUB_KEY.to_vec(),
+			vault_key: Some(GENESIS_AGG_PUB_KEY.to_vec()),
 			deployment_block: 0,
 			keygen_response_timeout: MOCK_KEYGEN_RESPONSE_TIMEOUT,
 		},
