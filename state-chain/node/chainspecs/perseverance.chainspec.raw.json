@@ -2,7 +2,9 @@
   "name": "Chainflip-Perseverance",
   "id": "Chainflip-Perseverance",
   "chainType": "Live",
-  "bootNodes": [],
+  "bootNodes": [
+    "/ip4/142.132.192.113/tcp/30333/p2p/12D3KooWPFZo5JzqiWASDSrAtbyKgW2kw4Rb5FruE29PAhJ1u4xL"
+  ],
   "telemetryEndpoints": null,
   "protocolId": null,
   "properties": {
