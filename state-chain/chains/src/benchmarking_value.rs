@@ -22,3 +22,4 @@ macro_rules! impl_default_benchmark_value {
 }
 
 impl_default_benchmark_value!(());
+impl_default_benchmark_value!(u64);

@@ -8,7 +8,8 @@ use crate::dot::{
 	UtilityCall,
 };
 
-use crate::{ApiCall, ChainAbi, ChainCrypto};
+use crate::{ApiCall, ChainCrypto};
+use sp_std::vec::Vec;
 
 use sp_runtime::{traits::IdentifyAccount, MultiSigner, RuntimeDebug};
 
@@ -21,7 +22,7 @@ pub struct RotateVaultProxy {
 	/// The new proxy account public key
 	pub new_proxy: PolkadotPublicKey,
 	/// The current proxy AccountId
-	pub old_proxy: PolkadotAccountId,
+	pub old_proxy: PolkadotPublicKey,
 	/// The vault anonymous Polkadot AccountId
 	pub vault_account: PolkadotAccountId,
 }
@@ -29,14 +30,15 @@ pub struct RotateVaultProxy {
 impl RotateVaultProxy {
 	pub fn new_unsigned(
 		replay_protection: PolkadotReplayProtection,
+		old_proxy: PolkadotPublicKey,
 		new_proxy: PolkadotPublicKey,
-		old_proxy: PolkadotAccountId,
+		proxy_account: PolkadotAccountId,
 		vault_account: PolkadotAccountId,
 	) -> Self {
 		let mut calldata = Self {
 			extrinsic_handler: PolkadotExtrinsicBuilder::new_empty(
 				replay_protection,
-				old_proxy.clone(),
+				proxy_account,
 			),
 			new_proxy,
 			old_proxy,
@@ -70,7 +72,9 @@ impl RotateVaultProxy {
 								delay: 0,
 							}),
 							PolkadotRuntimeCall::Proxy(ProxyCall::remove_proxy {
-								delegate: PolkadotAccountIdLookup::from(self.old_proxy.clone()),
+								delegate: PolkadotAccountIdLookup::from(
+									MultiSigner::Sr25519(self.old_proxy.0).into_account(),
+								),
 								proxy_type: PolkadotProxyType::Any,
 								delay: 0,
 							}),
@@ -103,7 +107,7 @@ impl ApiCall<Polkadot> for RotateVaultProxy {
 		self
 	}
 
-	fn chain_encoded(&self) -> <Polkadot as ChainAbi>::SignedTransaction {
+	fn chain_encoded(&self) -> Vec<u8> {
 		self.extrinsic_handler.signed_extrinsic.clone().unwrap().encode()
 	}
 
@@ -143,6 +147,7 @@ mod test_rotate_vault_proxy {
 
 		let rotate_vault_proxy_api = RotateVaultProxy::new_unsigned(
 			PolkadotReplayProtection::new(NONCE_2, 0, WESTEND_CONFIG),
+			PolkadotPublicKey(keypair_old_proxy.public()),
 			PolkadotPublicKey(keypair_new_proxy.public()),
 			account_id_old_proxy,
 			account_id_vault,
@@ -169,9 +174,9 @@ mod test_rotate_vault_proxy {
 			)
 		);
 
-		let rotate_vault_proxy_api = rotate_vault_proxy_api
-			.clone()
-			.signed(&keypair_old_proxy.sign(&rotate_vault_proxy_api.threshold_signature_payload()));
+		let rotate_vault_proxy_api = rotate_vault_proxy_api.clone().signed(
+			&keypair_old_proxy.sign(&rotate_vault_proxy_api.threshold_signature_payload().0),
+		);
 		assert!(rotate_vault_proxy_api.is_signed());
 
 		println!("encoded extrinsic: 0x{}", hex::encode(rotate_vault_proxy_api.chain_encoded()));

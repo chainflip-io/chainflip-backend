@@ -159,9 +159,19 @@ impl ThresholdSigner<Ethereum> for MockThresholdSigner {
 	type KeyId = <Test as Chainflip>::KeyId;
 	type ValidatorId = AccountId;
 
-	fn request_signature(payload: <Ethereum as ChainCrypto>::Payload) -> Self::RequestId {
+	fn request_signature(
+		payload: <Ethereum as ChainCrypto>::Payload,
+	) -> (Self::RequestId, CeremonyId) {
 		SIGNATURE_REQUESTS.with(|cell| cell.borrow_mut().push(payload));
-		0
+		(0, 1)
+	}
+
+	fn request_keygen_verification_signature(
+		payload: <Ethereum as ChainCrypto>::Payload,
+		_key_id: Self::KeyId,
+		_participants: BTreeSet<Self::ValidatorId>,
+	) -> (Self::RequestId, CeremonyId) {
+		Self::request_signature(payload)
 	}
 
 	fn register_callback(_: Self::RequestId, _: Self::Callback) -> Result<(), Self::Error> {
@@ -183,15 +193,6 @@ impl ThresholdSigner<Ethereum> for MockThresholdSigner {
 	) {
 		// do nothing, the mock impl of signature_result doesn't take from any storage
 		// so we don't need to insert any storage.
-	}
-
-	fn request_signature_with(
-		_key_id: Self::KeyId,
-		_participants: BTreeSet<Self::ValidatorId>,
-		_payload: <Ethereum as ChainCrypto>::Payload,
-		_retry_policy: cf_traits::RetryPolicy,
-	) -> (Self::RequestId, CeremonyId) {
-		unimplemented!()
 	}
 }
 
@@ -215,7 +216,7 @@ impl pallet_cf_staking::Config for Test {
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type ClaimDelayBufferSeconds = ConstU64<CLAIM_DELAY_BUFFER_SECS>;
-	type RegisterClaim = eth::api::EthereumApi;
+	type RegisterClaim = eth::api::EthereumApi<()>;
 	type EthEnvironmentProvider = MockEthEnvironmentProvider;
 }
 

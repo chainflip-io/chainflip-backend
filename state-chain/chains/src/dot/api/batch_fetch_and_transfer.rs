@@ -7,7 +7,7 @@ use crate::dot::{
 	PolkadotProxyType, PolkadotReplayProtection, PolkadotRuntimeCall, ProxyCall, UtilityCall,
 };
 
-use crate::{ApiCall, ChainAbi, ChainCrypto, FetchAssetParams, TransferAssetParams};
+use crate::{ApiCall, ChainCrypto, FetchAssetParams, TransferAssetParams};
 
 use sp_runtime::RuntimeDebug;
 
@@ -108,7 +108,7 @@ impl ApiCall<Polkadot> for BatchFetchAndTransfer {
 		self
 	}
 
-	fn chain_encoded(&self) -> <Polkadot as ChainAbi>::SignedTransaction {
+	fn chain_encoded(&self) -> Vec<u8> {
 		self.extrinsic_handler.signed_extrinsic.clone().unwrap().encode()
 	}
 
@@ -122,6 +122,7 @@ mod test_batch_fetch {
 
 	use super::*;
 	use crate::dot::{sr25519::Pair, NONCE_1, RAW_SEED_1, RAW_SEED_2, WESTEND_CONFIG};
+	use cf_primitives::chains::assets;
 	use sp_core::{
 		crypto::{AccountId32, Pair as TraitPair},
 		sr25519, Hasher,
@@ -143,26 +144,26 @@ mod test_batch_fetch {
 			MultiSigner::Sr25519(keypair_proxy.public()).into_account();
 
 		let dummy_fetch_params: Vec<FetchAssetParams<Polkadot>> = vec![
-			FetchAssetParams::<Polkadot> { intent_id: 1, asset: () },
-			FetchAssetParams::<Polkadot> { intent_id: 2, asset: () },
-			FetchAssetParams::<Polkadot> { intent_id: 3, asset: () },
+			FetchAssetParams::<Polkadot> { intent_id: 1, asset: assets::dot::Asset::Dot },
+			FetchAssetParams::<Polkadot> { intent_id: 2, asset: assets::dot::Asset::Dot },
+			FetchAssetParams::<Polkadot> { intent_id: 3, asset: assets::dot::Asset::Dot },
 		];
 
 		let dummy_transfer_params: Vec<TransferAssetParams<Polkadot>> = vec![
 			TransferAssetParams::<Polkadot> {
 				to: MultiSigner::Sr25519(sr25519::Public([7u8; 32])).into_account(),
 				amount: 4,
-				asset: (),
+				asset: assets::dot::Asset::Dot,
 			},
 			TransferAssetParams::<Polkadot> {
 				to: MultiSigner::Sr25519(sr25519::Public([8u8; 32])).into_account(),
 				amount: 5,
-				asset: (),
+				asset: assets::dot::Asset::Dot,
 			},
 			TransferAssetParams::<Polkadot> {
 				to: MultiSigner::Sr25519(sr25519::Public([9u8; 32])).into_account(),
 				amount: 6,
-				asset: (),
+				asset: assets::dot::Asset::Dot,
 			},
 		];
 
@@ -188,7 +189,7 @@ mod test_batch_fetch {
 
 		let batch_fetch_api = batch_fetch_api
 			.clone()
-			.signed(&keypair_proxy.sign(&batch_fetch_api.threshold_signature_payload()));
+			.signed(&keypair_proxy.sign(&batch_fetch_api.threshold_signature_payload().0));
 		assert!(batch_fetch_api.is_signed());
 
 		println!("encoded extrinsic: 0x{}", hex::encode(batch_fetch_api.chain_encoded()));

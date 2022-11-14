@@ -1,4 +1,4 @@
-use crate::{AsyncResult, CeremonyId, RetryPolicy};
+use crate::{AsyncResult, CeremonyId};
 
 use super::{MockPallet, MockPalletStorage};
 use cf_chains::ChainCrypto;
@@ -71,7 +71,7 @@ where
 
 	type ValidatorId = MockValidatorId;
 
-	fn request_signature(payload: <C as ChainCrypto>::Payload) -> Self::RequestId {
+	fn request_signature(payload: <C as ChainCrypto>::Payload) -> (Self::RequestId, CeremonyId) {
 		let req_id = {
 			let payload = payload.clone();
 			payload.using_encoded(|bytes| bytes[0]) as u32
@@ -83,7 +83,15 @@ where
 		);
 		Self::put_storage(REQUEST, req_id, payload);
 		Self::put_value(LAST_REQ_ID, req_id);
-		req_id
+		(req_id, 1)
+	}
+
+	fn request_keygen_verification_signature(
+		payload: <C as ChainCrypto>::Payload,
+		_key_id: Self::KeyId,
+		_participants: BTreeSet<Self::ValidatorId>,
+	) -> (Self::RequestId, CeremonyId) {
+		Self::request_signature(payload)
 	}
 
 	fn register_callback(
@@ -99,16 +107,6 @@ where
 	) -> crate::AsyncResult<Result<<C as ChainCrypto>::ThresholdSignature, Vec<Self::ValidatorId>>>
 	{
 		Self::take_storage::<_, AsyncResult<_>>(SIGNATURE, request_id).unwrap_or(AsyncResult::Void)
-	}
-
-	fn request_signature_with(
-		_key_id: Self::KeyId,
-		_participants: BTreeSet<Self::ValidatorId>,
-		payload: <C as ChainCrypto>::Payload,
-		_retry_policy: RetryPolicy,
-	) -> (Self::RequestId, CeremonyId) {
-		let req_id = Self::request_signature(payload);
-		(req_id, 1)
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]

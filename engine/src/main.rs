@@ -252,8 +252,8 @@ fn main() -> anyhow::Result<()> {
                     .into_iter()
                     .filter_map(|(foreign_chain_address, intent)| {
                         if let ForeignChainAddress::Eth(address) = foreign_chain_address {
-                            assert_eq!(intent.ingress_asset.chain, ForeignChain::Ethereum);
-                            Some((intent.ingress_asset.asset, H160::from(address)))
+                            assert!(ForeignChain::Ethereum == intent.ingress_asset.into());
+                            Some((intent.ingress_asset, H160::from(address)))
                         } else {
                             None
                     }}).into_group_map();

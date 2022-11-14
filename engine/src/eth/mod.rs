@@ -179,7 +179,7 @@ where
 	/// Encode and sign a transaction.
 	pub async fn encode_and_sign_tx(
 		&self,
-		unsigned_tx: cf_chains::eth::UnsignedTransaction,
+		unsigned_tx: cf_chains::eth::Transaction,
 	) -> Result<Bytes> {
 		let tx_params = TransactionParameters {
 			to: Some(unsigned_tx.contract),

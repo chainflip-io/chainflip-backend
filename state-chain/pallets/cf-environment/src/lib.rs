@@ -3,7 +3,7 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 #[cfg(feature = "ibiza")]
-use cf_chains::dot::{PolkadotAccountId, PolkadotConfig, PolkadotIndex};
+use cf_chains::dot::{PolkadotAccountId, PolkadotConfig, PolkadotIndex, PolkadotPublicKey};
 
 use cf_primitives::{Asset, EthereumAddress};
 pub use cf_traits::{EthEnvironmentProvider, EthereumAssetsAddressProvider};
@@ -169,6 +169,9 @@ pub mod pallet {
 		AddedNewEthAsset(Asset, EthereumAddress),
 		/// The address of an supported ETH asset was updated
 		UpdatedEthAsset(Asset, EthereumAddress),
+		#[cfg(feature = "ibiza")]
+		/// The AccountId of the new Polkadot Vault Proxy
+		PolkadotProxyAccountUpdated(PolkadotAccountId),
 	}
 
 	#[pallet::call]
@@ -371,6 +374,15 @@ impl<T: Config> Pallet<T> {
 				"beb9c3f0ae5bda798dd3b65fe345fdf9031946849d8925ae7be73ee9407c6737"
 			)) // CHAINFLIP-TEST-2 account
 		})
+	}
+	#[cfg(feature = "ibiza")]
+	pub fn set_new_proxy_account(new_polkadot_key: PolkadotPublicKey) {
+		use sp_runtime::{traits::IdentifyAccount, MultiSigner};
+
+		let new_account = MultiSigner::Sr25519(new_polkadot_key.0).into_account();
+		PolkadotCurrentProxyAccountId::<T>::set(Some(new_account.clone()));
+		PolkadotProxyAccountNonce::<T>::set(0);
+		Self::deposit_event(Event::<T>::PolkadotProxyAccountUpdated(new_account));
 	}
 }
 

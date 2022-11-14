@@ -2,7 +2,7 @@
 use core::fmt::Display;
 
 use crate::benchmarking_value::BenchmarkValue;
-use cf_primitives::{EthAmount, IntentId};
+use cf_primitives::{chains::assets, AssetAmount, EthAmount, IntentId};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
@@ -16,8 +16,12 @@ use sp_std::{
 	prelude::*,
 };
 
+pub use cf_primitives::chains::*;
+
 pub mod benchmarking_value;
 
+#[cfg(feature = "ibiza")]
+pub mod any;
 #[cfg(feature = "ibiza")]
 pub mod dot;
 pub mod eth;
@@ -49,15 +53,21 @@ pub trait Chain: Member + Parameter {
 
 	type TrackedData: Member + Parameter + MaxEncodedLen + Clone + Age<Self> + BenchmarkValue;
 
-	type ChainAsset: Member + Parameter + MaxEncodedLen;
+	type ChainAsset: Member + Parameter + MaxEncodedLen + Copy;
 
-	type ChainAccount: Member + Parameter + MaxEncodedLen;
+	type ChainAccount: Member + Parameter + MaxEncodedLen + BenchmarkValue;
 }
 
 /// Measures the age of items associated with the Chain.
 pub trait Age<C: Chain> {
 	/// The creation block of this item.
 	fn birth_block(&self) -> C::ChainBlockNumber;
+}
+
+impl<C: Chain> Age<C> for () {
+	fn birth_block(&self) -> C::ChainBlockNumber {
+		unimplemented!()
+	}
 }
 
 /// Common crypto-related types and operations for some external chain.
@@ -82,28 +92,8 @@ pub trait ChainCrypto: Chain {
 
 /// Common abi-related types and operations for some external chain.
 pub trait ChainAbi: ChainCrypto {
-	type UnsignedTransaction: Member
-		+ Parameter
-		+ Default
-		+ BenchmarkValue
-		+ FeeRefundCalculator<Self>;
-	type SignedTransaction: Member + Parameter + BenchmarkValue;
-	type SignerCredential: Member + Parameter + BenchmarkValue;
+	type Transaction: Member + Parameter + Default + BenchmarkValue + FeeRefundCalculator<Self>;
 	type ReplayProtection: Member + Parameter;
-	type ValidationError;
-	type ApiCallExtraData;
-
-	/// Verify the signed transaction when it is submitted to the state chain by the nominated
-	/// signer.
-	///
-	/// 'Verification' here is loosely defined as whatever is deemed necessary to accept the
-	/// validaty of the returned transaction for this `Chain` and can include verification of the
-	/// byte encoding, the transaction content, metadata, signer idenity, etc.
-	fn verify_signed_transaction(
-		unsigned_tx: &Self::UnsignedTransaction,
-		signed_tx: &Self::SignedTransaction,
-		signer_credential: &Self::SignerCredential,
-	) -> Result<Self::TransactionHash, Self::ValidationError>;
 }
 
 /// A call or collection of calls that can be made to the Chainflip api on an external chain.
@@ -117,7 +107,7 @@ pub trait ApiCall<Abi: ChainAbi>: Parameter {
 	fn signed(self, threshold_signature: &<Abi as ChainCrypto>::ThresholdSignature) -> Self;
 
 	/// The call, encoded according to the chain's native encoding.
-	fn chain_encoded(&self) -> <Abi as ChainAbi>::SignedTransaction;
+	fn chain_encoded(&self) -> Vec<u8>;
 
 	/// Checks we have updated the sig data to non-default values.
 	fn is_signed(&self) -> bool;
@@ -131,29 +121,25 @@ where
 {
 	/// Construct the unsigned outbound transaction from the *signed* api call.
 	/// Doesn't include any time-sensitive data e.g. gas price.
-	fn build_transaction(signed_call: &Call) -> Abi::UnsignedTransaction;
+	fn build_transaction(signed_call: &Call) -> Abi::Transaction;
 
 	/// Refresh any time-sensitive data e.g. gas price.
-	fn refresh_unsigned_transaction(unsigned_tx: &mut Abi::UnsignedTransaction);
+	fn refresh_unsigned_transaction(unsigned_tx: &mut Abi::Transaction);
 }
 
 /// Contains all the parameters required to fetch incoming transactions on an external chain.
-#[derive(
-	RuntimeDebug, Copy, Clone, Default, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo,
-)]
-pub struct FetchAssetParams<T: Chain> {
+#[derive(RuntimeDebug, Copy, Clone, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
+pub struct FetchAssetParams<C: Chain> {
 	pub intent_id: IntentId,
-	pub asset: T::ChainAsset,
+	pub asset: <C as Chain>::ChainAsset,
 }
 
 /// Contains all the parameters required for transferring an asset on an external chain.
-#[derive(
-	RuntimeDebug, Copy, Clone, Default, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo,
-)]
-pub struct TransferAssetParams<T: Chain> {
-	pub asset: T::ChainAsset,
-	pub to: T::ChainAccount,
-	pub amount: T::ChainAmount,
+#[derive(RuntimeDebug, Clone, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
+pub struct TransferAssetParams<C: Chain> {
+	pub asset: <C as Chain>::ChainAsset,
+	pub to: <C as Chain>::ChainAccount,
+	pub amount: AssetAmount,
 }
 
 pub trait IngressAddress {
@@ -161,11 +147,27 @@ pub trait IngressAddress {
 	/// Returns an ingress address
 	fn derive_address(self, vault_address: Self::AddressType, intent_id: u32) -> Self::AddressType;
 }
+
+/// Similar to [frame_support::StaticLookup] but with the `Key` as a type parameter instead of an
+/// associated type.
+///
+/// This allows us to define multiple lookups on a single type.
+///
+/// TODO: Consider making the lookup infallible.
+pub trait ChainEnvironment<
+	LookupKey: codec::Codec + Clone + PartialEq + Debug + TypeInfo,
+	LookupValue,
+>
+{
+	/// Attempt a lookup.
+	fn lookup(s: LookupKey) -> Result<LookupValue, frame_support::error::LookupError>;
+}
+
 /// Constructs the `SetAggKeyWithAggKey` api call.
 pub trait SetAggKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
 		replay_protection: Abi::ReplayProtection,
-		chain_specific_data: Abi::ApiCallExtraData,
+		old_key: <Abi as ChainCrypto>::AggKey,
 		new_key: <Abi as ChainCrypto>::AggKey,
 	) -> Self;
 }
@@ -210,7 +212,6 @@ pub trait RegisterClaim<Abi: ChainAbi>: ApiCall<Abi> {
 pub trait AllBatch<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
 		replay_protection: Abi::ReplayProtection,
-		chain_specific_data: Abi::ApiCallExtraData,
 		fetch_params: Vec<FetchAssetParams<Abi>>,
 		transfer_params: Vec<TransferAssetParams<Abi>>,
 	) -> Self;
@@ -243,8 +244,8 @@ pub mod mocks {
 		type ChainAmount = EthAmount;
 		type TrackedData = MockTrackedData;
 		type TransactionFee = TransactionFee;
-		type ChainAccount = (); // Currently, we don't care about this since we don't use them in tests
-		type ChainAsset = (); // Currently, we don't care about this since we don't use them in tests
+		type ChainAccount = u64; // Currently, we don't care about this since we don't use them in tests
+		type ChainAsset = assets::eth::Asset;
 	}
 
 	#[derive(
@@ -273,56 +274,15 @@ pub mod mocks {
 	}
 
 	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Default)]
-	pub struct MockUnsignedTransaction;
+	pub struct MockTransaction;
 
-	impl MockUnsignedTransaction {
-		/// Simulate a transaction signature.
-		pub fn signed(self, signature: Validity) -> MockSignedTransation<Self> {
-			MockSignedTransation::<Self> { transaction: self, signature }
-		}
-	}
-
-	impl FeeRefundCalculator<MockEthereum> for MockUnsignedTransaction {
+	impl FeeRefundCalculator<MockEthereum> for MockTransaction {
 		fn return_fee_refund(
 			&self,
 			_fee_paid: <MockEthereum as Chain>::TransactionFee,
 		) -> <MockEthereum as Chain>::ChainAmount {
 			<MockEthereum as Chain>::ChainAmount::default()
 		}
-	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	impl BenchmarkValue for MockSignedTransation<MockUnsignedTransaction> {
-		fn benchmark_value() -> Self {
-			MockSignedTransation {
-				transaction: MockUnsignedTransaction::default(),
-				signature: Validity::Valid,
-			}
-		}
-	}
-
-	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-	pub struct MockSignedTransation<Unsigned> {
-		transaction: Unsigned,
-		signature: Validity,
-	}
-
-	impl Default for Validity {
-		fn default() -> Self {
-			Self::Invalid
-		}
-	}
-
-	impl Validity {
-		pub fn is_valid(&self) -> bool {
-			*self == Self::Valid
-		}
-	}
-
-	#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-	pub enum Validity {
-		Valid,
-		Invalid,
 	}
 
 	#[derive(Copy, Clone, Debug, PartialEq, Eq, Default, Encode, Decode, TypeInfo)]
@@ -351,11 +311,10 @@ pub mod mocks {
 		}
 	}
 
-	impl_default_benchmark_value!(Validity);
 	impl_default_benchmark_value!([u8; 4]);
 	impl_default_benchmark_value!(MockThresholdSignature<[u8; 4], [u8; 4]>);
 	impl_default_benchmark_value!(u32);
-	impl_default_benchmark_value!(MockUnsignedTransaction);
+	impl_default_benchmark_value!(MockTransaction);
 
 	pub const ETH_TX_HASH: <MockEthereum as ChainCrypto>::TransactionHash = [0xbc; 4];
 
@@ -363,44 +322,17 @@ pub mod mocks {
 		TransactionFee { effective_gas_price: 200, gas_used: 100 };
 
 	impl ChainAbi for MockEthereum {
-		type UnsignedTransaction = MockUnsignedTransaction;
-		type SignedTransaction = MockSignedTransation<Self::UnsignedTransaction>;
-		type SignerCredential = Validity;
+		type Transaction = MockTransaction;
 		type ReplayProtection = EthereumReplayProtection;
-		type ValidationError = &'static str;
-		type ApiCallExtraData = ();
-
-		fn verify_signed_transaction(
-			unsigned_tx: &Self::UnsignedTransaction,
-			signed_tx: &Self::SignedTransaction,
-			signer_credential: &Self::SignerCredential,
-		) -> Result<Self::TransactionHash, Self::ValidationError> {
-			if *unsigned_tx == signed_tx.transaction &&
-				signed_tx.signature.is_valid() &&
-				signer_credential.is_valid()
-			{
-				Ok(ETH_TX_HASH)
-			} else {
-				Err("MockEthereum::ValidationError")
-			}
-		}
 	}
 
 	#[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
-	pub struct MockApiCall<C: ChainAbi>(
-		C::Payload,
-		Option<C::ThresholdSignature>,
-		Option<<C as ChainAbi>::SignedTransaction>,
-	);
+	pub struct MockApiCall<C: ChainAbi>(C::Payload, Option<C::ThresholdSignature>);
 
 	#[cfg(feature = "runtime-benchmarks")]
 	impl<C: ChainCrypto + ChainAbi> BenchmarkValue for MockApiCall<C> {
 		fn benchmark_value() -> Self {
-			Self(
-				C::Payload::benchmark_value(),
-				Some(C::ThresholdSignature::benchmark_value()),
-				Some(<C as ChainAbi>::SignedTransaction::benchmark_value()),
-			)
+			Self(C::Payload::benchmark_value(), Some(C::ThresholdSignature::benchmark_value()))
 		}
 	}
 
@@ -416,11 +348,11 @@ pub mod mocks {
 		}
 
 		fn signed(self, threshold_signature: &<C as ChainCrypto>::ThresholdSignature) -> Self {
-			Self(self.0, Some(threshold_signature.clone()), self.2)
+			Self(self.0, Some(threshold_signature.clone()))
 		}
 
-		fn chain_encoded(&self) -> <C as ChainAbi>::SignedTransaction {
-			self.2.clone().unwrap()
+		fn chain_encoded(&self) -> Vec<u8> {
+			vec![0, 1, 2]
 		}
 
 		fn is_signed(&self) -> bool {
@@ -433,11 +365,11 @@ pub mod mocks {
 	impl<Abi: ChainAbi, Call: ApiCall<Abi>> TransactionBuilder<Abi, Call>
 		for MockTransactionBuilder<Abi, Call>
 	{
-		fn build_transaction(_signed_call: &Call) -> <Abi as ChainAbi>::UnsignedTransaction {
+		fn build_transaction(_signed_call: &Call) -> <Abi as ChainAbi>::Transaction {
 			Default::default()
 		}
 
-		fn refresh_unsigned_transaction(_unsigned_tx: &mut <Abi as ChainAbi>::UnsignedTransaction) {
+		fn refresh_unsigned_transaction(_unsigned_tx: &mut <Abi as ChainAbi>::Transaction) {
 			// refresh nothing
 		}
 	}

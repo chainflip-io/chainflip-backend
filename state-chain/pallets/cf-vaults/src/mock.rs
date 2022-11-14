@@ -146,7 +146,7 @@ pub struct MockSetAggKeyWithAggKey {
 impl SetAggKeyWithAggKey<MockEthereum> for MockSetAggKeyWithAggKey {
 	fn new_unsigned(
 		nonce: <MockEthereum as ChainAbi>::ReplayProtection,
-		_chain_specific_data: <MockEthereum as ChainAbi>::ApiCallExtraData,
+		_old_key: <MockEthereum as ChainCrypto>::AggKey,
 		new_key: <MockEthereum as ChainCrypto>::AggKey,
 	) -> Self {
 		Self { nonce, new_key }
@@ -165,13 +165,18 @@ impl ApiCall<MockEthereum> for MockSetAggKeyWithAggKey {
 		unimplemented!()
 	}
 
-	fn chain_encoded(&self) -> <MockEthereum as ChainAbi>::SignedTransaction {
+	fn chain_encoded(&self) -> Vec<u8> {
 		unimplemented!()
 	}
 
 	fn is_signed(&self) -> bool {
 		unimplemented!()
 	}
+}
+
+pub struct MockVaultTransitionHandler;
+impl VaultTransitionHandler<MockEthereum> for MockVaultTransitionHandler {
+	fn on_new_vault(_new_key: <MockEthereum as ChainCrypto>::AggKey) {}
 }
 
 pub struct MockBroadcaster;
@@ -212,6 +217,7 @@ impl pallet_cf_vaults::Config for MockRuntime {
 	type ThresholdSigner = MockThresholdSigner<MockEthereum, Call>;
 	type OffenceReporter = MockOffenceReporter;
 	type ApiCall = MockSetAggKeyWithAggKey;
+	type VaultTransitionHandler = MockVaultTransitionHandler;
 	type CeremonyIdProvider = MockCeremonyIdProvider<CeremonyId>;
 	type WeightInfo = ();
 	type Broadcaster = MockBroadcaster;

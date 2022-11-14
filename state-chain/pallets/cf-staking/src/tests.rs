@@ -338,10 +338,11 @@ fn signature_is_inserted() {
 
 		// Check storage for the signature.
 		assert!(PendingClaims::<Test>::contains_key(ALICE));
-		let api_call = frame_support::storage::unhashed::get::<cf_chains::eth::api::EthereumApi>(
-			PendingClaims::<Test>::hashed_key_for(ALICE).as_slice(),
-		)
-		.expect("there should be a pending claim at this point");
+		let api_call =
+			frame_support::storage::unhashed::get::<cf_chains::eth::api::EthereumApi<()>>(
+				PendingClaims::<Test>::hashed_key_for(ALICE).as_slice(),
+			)
+			.expect("there should be a pending claim at this point");
 
 		let claim = match api_call {
 			cf_chains::eth::api::EthereumApi::RegisterClaim(inner) => inner,
