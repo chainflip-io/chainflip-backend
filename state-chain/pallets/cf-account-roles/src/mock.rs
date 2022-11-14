@@ -1,14 +1,12 @@
 use crate::{self as pallet_cf_account_roles, Config};
 use cf_traits::{
-	impl_mock_stake_transfer, impl_mock_staking_info, impl_mock_waived_fees,
+	impl_mock_staking_info,
 	mocks::{
 		bid_info::MockBidInfo, ensure_origin_mock::NeverFailingOriginCheck,
 		system_state_info::MockSystemStateInfo,
 	},
 	Chainflip, StakingInfo,
 };
-
-use cf_traits::WaivedFees;
 
 use frame_support::{
 	parameter_types,
@@ -47,10 +45,6 @@ parameter_types! {
 	pub const BlocksPerDay: u64 = 14400;
 	pub const ExistentialDeposit: u128 = 10;
 }
-
-// Implement mock for RestrictionHandler
-impl_mock_waived_fees!(AccountId, Call);
-impl_mock_stake_transfer!(AccountId, u128);
 
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;

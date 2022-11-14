@@ -22,6 +22,7 @@ type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 // Use a realistic account id for compatibility with `RegisterClaim`.
 type AccountId = AccountId32;
+type Balance = u128;
 
 use cf_traits::{
 	mocks::{
@@ -30,8 +31,6 @@ use cf_traits::{
 	},
 	Chainflip, ReplayProtectionProvider,
 };
-
-type Balance = u128;
 
 impl_mock_staking_info!(AccountId, Balance);
 

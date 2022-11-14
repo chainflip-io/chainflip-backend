@@ -1,6 +1,6 @@
 use crate::{self as pallet_cf_lp};
 use cf_traits::{
-	impl_mock_stake_transfer, impl_mock_staking_info,
+	impl_mock_staking_info,
 	mocks::{
 		bid_info::MockBidInfo, ensure_origin_mock::NeverFailingOriginCheck,
 		system_state_info::MockSystemStateInfo,
@@ -122,8 +122,6 @@ impl cf_traits::Chainflip for Test {
 	type EpochInfo = cf_traits::mocks::epoch_info::MockEpochInfo;
 	type SystemState = MockSystemStateInfo;
 }
-
-impl_mock_stake_transfer!(u64, u128);
 
 impl_mock_staking_info!(AccountId, Balance);
 
