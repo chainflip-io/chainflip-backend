@@ -29,7 +29,6 @@ use cf_traits::{
 	},
 	Chainflip, ReplayProtectionProvider,
 };
-use frame_support::traits::ConstU64;
 
 impl pallet_cf_account_roles::Config for Test {
 	type Event = Event;
