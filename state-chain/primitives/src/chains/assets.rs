@@ -44,6 +44,12 @@ pub mod any {
 			}
 		}
 	}
+
+	impl Default for Asset {
+		fn default() -> Self {
+			Self::Eth
+		}
+	}
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -118,6 +124,18 @@ macro_rules! chain_assets {
 			}
 		}
 	};
+}
+
+// Default value for benchmarking
+impl Default for eth::Asset {
+	fn default() -> Self {
+		eth::Asset::Eth
+	}
+}
+impl Default for dot::Asset {
+	fn default() -> Self {
+		dot::Asset::Dot
+	}
 }
 
 // Defines each chain's Asset enum.

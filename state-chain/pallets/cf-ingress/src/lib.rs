@@ -155,7 +155,7 @@ pub mod pallet {
 	where
 		<<T as Config<I>>::TargetChain as Chain>::ChainAsset: Into<cf_primitives::Asset>,
 		<<T as Config<I>>::TargetChain as Chain>::ChainAccount:
-			From<cf_primitives::ForeignChainAddress>,
+			TryFrom<cf_primitives::ForeignChainAddress>,
 	{
 		#[pallet::weight(T::WeightInfo::do_single_ingress().saturating_mul(ingress_witnesses.
 		len() as u64))]
@@ -177,7 +177,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I>
 where
 	<<T as Config<I>>::TargetChain as Chain>::ChainAsset: Into<cf_primitives::Asset>,
 	<<T as Config<I>>::TargetChain as Chain>::ChainAccount:
-		From<cf_primitives::ForeignChainAddress>,
+		TryFrom<cf_primitives::ForeignChainAddress>,
 {
 	fn generate_new_address(
 		ingress_asset: TargetChainAsset<T, I>,
@@ -234,7 +234,7 @@ impl<T: Config<I>, I: 'static> IngressApi<T::TargetChain> for Pallet<T, I>
 where
 	<<T as Config<I>>::TargetChain as Chain>::ChainAsset: Into<cf_primitives::Asset>,
 	<<T as Config<I>>::TargetChain as Chain>::ChainAccount:
-		From<cf_primitives::ForeignChainAddress>,
+		TryFrom<cf_primitives::ForeignChainAddress>,
 {
 	type AccountId = <T as frame_system::Config>::AccountId;
 
@@ -245,7 +245,8 @@ where
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
 		let (intent_id, ingress_address) = Self::generate_new_address(ingress_asset)?;
 
-		let chain_address = ingress_address.into();
+		// Generated address guarantees the right address type is returned.
+		let chain_address = ingress_address.try_into().ok().unwrap();
 		IntentIngressDetails::<T, I>::insert(
 			&chain_address,
 			IngressDetails { intent_id, ingress_asset },
@@ -273,7 +274,8 @@ where
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
 		let (intent_id, ingress_address) = Self::generate_new_address(ingress_asset)?;
 
-		let chain_address = ingress_address.into();
+		// Generated address guarantees the right address type is returned.
+		let chain_address = ingress_address.try_into().ok().unwrap();
 		IntentIngressDetails::<T, I>::insert(
 			&chain_address,
 			IngressDetails { intent_id, ingress_asset },

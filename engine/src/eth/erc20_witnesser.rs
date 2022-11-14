@@ -3,7 +3,7 @@
 use std::{collections::BTreeSet, sync::Arc};
 
 use async_trait::async_trait;
-use cf_primitives::{Asset, EpochIndex, EthAmount, ForeignChainAddress};
+use cf_primitives::{Asset, EpochIndex, EthAmount};
 use sp_core::H256;
 use web3::{
 	ethabi::{self, RawLog},
@@ -92,9 +92,12 @@ impl EthContractWitnesser for Erc20Witnesser {
 				Erc20Event::Transfer { to, value, from: _ }
 					if self.monitored_addresses.contains(&to) =>
 					Some(IngressWitness {
-						ingress_address: ForeignChainAddress::Eth(to.into()),
+						ingress_address: to,
 						amount: value,
-						asset: self.asset,
+						asset: self
+							.asset
+							.try_into()
+							.expect("Ingress Witness asset should always be correct."),
 						tx_hash: event.tx_hash,
 					}),
 				_ => None,

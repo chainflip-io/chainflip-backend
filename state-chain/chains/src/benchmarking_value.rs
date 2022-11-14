@@ -1,3 +1,5 @@
+use cf_primitives::chains::assets::{any, dot, eth};
+
 /// Ensure type specifies a value to be used for benchmarking purposes.
 pub trait BenchmarkValue {
 	/// Returns a value suitable for running against benchmarks.
@@ -23,3 +25,6 @@ macro_rules! impl_default_benchmark_value {
 
 impl_default_benchmark_value!(());
 impl_default_benchmark_value!(u64);
+impl_default_benchmark_value!(any::Asset);
+impl_default_benchmark_value!(eth::Asset);
+impl_default_benchmark_value!(dot::Asset);

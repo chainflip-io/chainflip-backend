@@ -5,8 +5,8 @@
 //! Primitive types to be used across Chainflip's various crates
 
 use codec::{Decode, Encode, MaxEncodedLen};
-use ethabi::ethereum_types::H160;
 use scale_info::TypeInfo;
+use sp_core::H160;
 use sp_runtime::{
 	traits::{IdentifyAccount, Verify},
 	FixedU128, MultiSignature, RuntimeDebug,

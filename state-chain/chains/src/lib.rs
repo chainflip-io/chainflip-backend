@@ -53,7 +53,7 @@ pub trait Chain: Member + Parameter {
 
 	type TrackedData: Member + Parameter + MaxEncodedLen + Clone + Age<Self> + BenchmarkValue;
 
-	type ChainAsset: Member + Parameter + MaxEncodedLen + Copy;
+	type ChainAsset: Member + Parameter + MaxEncodedLen + Copy + BenchmarkValue;
 
 	type ChainAccount: Member + Parameter + MaxEncodedLen + BenchmarkValue;
 }

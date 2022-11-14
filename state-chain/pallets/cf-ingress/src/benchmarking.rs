@@ -1,21 +1,28 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
-
-use cf_primitives::Asset;
+use cf_chains::benchmarking_value::BenchmarkValue;
 use frame_benchmarking::{account, benchmarks_instance_pallet};
 use frame_support::sp_runtime::app_crypto::sp_core;
 use sp_core::H256;
 
 benchmarks_instance_pallet! {
+	where_clause {
+		where
+		T: Config<I>,
+		<<T as Config<I>>::TargetChain as Chain>::ChainAsset: Into<cf_primitives::Asset>,
+		<<T as Config<I>>::TargetChain as Chain>::ChainAccount:
+			TryFrom<cf_primitives::ForeignChainAddress>,
+	}
+
 	do_single_ingress {
-		let ingress_address = ForeignChainAddress::Eth([0; 20]);
-		let ingress_asset = Asset::Eth;
-		IntentIngressDetails::<T, I>::insert(ingress_address, IngressDetails {
+		let ingress_address: <<T as Config<I>>::TargetChain as Chain>::ChainAccount = BenchmarkValue::benchmark_value();
+		let ingress_asset: <<T as Config<I>>::TargetChain as Chain>::ChainAsset = BenchmarkValue::benchmark_value();
+		IntentIngressDetails::<T, I>::insert(&ingress_address, IngressDetails {
 				intent_id: 1,
 				ingress_asset,
 			});
-		IntentActions::<T, I>::insert(ingress_address, IntentAction::<T::AccountId>::LiquidityProvision {
+		IntentActions::<T, I>::insert(&ingress_address, IntentAction::<T::AccountId>::LiquidityProvision {
 			lp_account: account("doogle", 0, 0)
 		});
 	}: {

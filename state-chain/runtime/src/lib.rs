@@ -192,7 +192,7 @@ use pallet_cf_lp::liquidity_pool::LiquidityPool;
 #[cfg(feature = "ibiza")]
 impl pallet_cf_swapping::Config for Runtime {
 	type Event = Event;
-	type Ingress = Ingress;
+	type Ingress = EthereumIngress;
 	type AmmPoolApi = LiquidityPool<Balance>;
 	type Egress = Egress;
 	type AccountRoleRegistry = AccountRoles;
@@ -238,7 +238,7 @@ impl pallet_cf_ingress::Config<EthereumInstance> for Runtime {
 impl pallet_cf_lp::Config for Runtime {
 	type Event = Event;
 	type AccountRoleRegistry = AccountRoles;
-	type Ingress = Ingress;
+	type Ingress = EthereumIngress;
 	type EgressApi = Egress;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 }
@@ -632,7 +632,7 @@ construct_runtime!(
 		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>,
 		EthereumBroadcaster: pallet_cf_broadcast::<Instance1>,
 		EthereumChainTracking: pallet_cf_chain_tracking::<Instance1>,
-		Ingress: pallet_cf_ingress::<EthereumInstance>,
+		EthereumIngress: pallet_cf_ingress::<Instance1>,
 		Egress: pallet_cf_egress,
 		Swapping: pallet_cf_swapping,
 		LiquidityProvider: pallet_cf_lp,
@@ -701,7 +701,7 @@ mod benches {
 		[pallet_cf_chain_tracking, EthereumChainTracking]
 		[pallet_cf_swapping, Swapping]
 		[pallet_cf_account_roles, AccountRoles]
-		[pallet_cf_ingress, Ingress]
+		[pallet_cf_ingress, EthereumIngress]
 		[pallet_cf_egress, Egress]
 	);
 }

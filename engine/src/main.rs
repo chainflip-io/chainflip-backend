@@ -227,7 +227,6 @@ fn main() -> anyhow::Result<()> {
                 use itertools::Itertools;
                 use sp_core::H160;
                 use chainflip_engine::eth::erc20_witnesser::Erc20Witnesser;
-                use cf_primitives::{ForeignChain, ForeignChainAddress};
                 use cf_primitives::Asset;
 
                 let flip_contract_address = state_chain_client
@@ -246,17 +245,13 @@ fn main() -> anyhow::Result<()> {
                     .context("Failed to get USDC address from SC")?
                     .expect("USDC address must exist at genesis");
 
-                let eth_chain_ingress_addresses = state_chain_client.storage_map::<pallet_cf_ingress::IntentIngressDetails<state_chain_runtime::Runtime>>(latest_block_hash)
+                let eth_chain_ingress_addresses = state_chain_client.storage_map::<pallet_cf_ingress::IntentIngressDetails<state_chain_runtime::Runtime, state_chain_runtime::EthereumInstance>>(latest_block_hash)
                     .await
                     .context("Failed to get initial ingress details")?
                     .into_iter()
-                    .filter_map(|(foreign_chain_address, intent)| {
-                        if let ForeignChainAddress::Eth(address) = foreign_chain_address {
-                            assert!(ForeignChain::Ethereum == intent.ingress_asset.into());
-                            Some((intent.ingress_asset, H160::from(address)))
-                        } else {
-                            None
-                    }}).into_group_map();
+                    .map(|(address, intent)| {
+                            (intent.ingress_asset.into(), address)
+                    }).into_group_map();
 
                 fn monitored_addresses_from_all_eth(eth_chain_ingress_addresses: &HashMap<Asset, Vec<H160>>, asset: Asset) -> BTreeSet<H160> {
                     if let Some(eth_ingress_addresses) = eth_chain_ingress_addresses.get(&asset) {
