@@ -8,11 +8,11 @@ macro_rules! impl_mock_staking_info {
 			type Balance = $balance;
 
 			fn total_stake_of(_: &Self::AccountId) -> Self::Balance {
-				todo!()
+				Self::Balance::from(10_u32)
 			}
 
 			fn total_onchain_stake() -> Self::Balance {
-				todo!()
+				Self::Balance::default()
 			}
 		}
 	};
