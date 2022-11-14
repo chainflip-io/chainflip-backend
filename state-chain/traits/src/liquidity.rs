@@ -1,8 +1,8 @@
 use sp_runtime::DispatchResult;
 
 use cf_primitives::{
-	liquidity::TradingPosition, AccountId, Asset, ExchangeRate, ForeignChainAddress,
-	ForeignChainAsset, PoolId, PositionId,
+	liquidity::TradingPosition, AccountId, Asset, ExchangeRate, ForeignChainAddress, PoolId,
+	PositionId,
 };
 
 use crate::FlipBalance;
@@ -12,12 +12,26 @@ pub trait SwapIntentHandler {
 	type AccountId;
 	fn schedule_swap(
 		from: Asset,
-		to: ForeignChainAsset,
+		to: Asset,
 		amount: AssetAmount,
 		egress_address: ForeignChainAddress,
 		relayer_id: Self::AccountId,
 		relayer_commission_bps: u16,
 	);
+}
+
+impl<T: frame_system::Config> SwapIntentHandler for T {
+	type AccountId = T::AccountId;
+
+	fn schedule_swap(
+		_from: Asset,
+		_to: Asset,
+		_amount: AssetAmount,
+		_egress_address: ForeignChainAddress,
+		_relayer_id: Self::AccountId,
+		_relayer_commission_bps: u16,
+	) {
+	}
 }
 
 pub trait LpAccountHandler {
@@ -84,7 +98,7 @@ pub trait LpWithdrawalApi {
 	fn withdraw_liquidity(
 		who: &Self::AccountId,
 		amount: Self::Amount,
-		foreign_asset: &ForeignChainAsset,
+		foreign_asset: &Asset,
 		egress_address: &Self::EgressAddress,
 	) -> DispatchResult;
 }
@@ -97,7 +111,7 @@ impl LpWithdrawalApi for () {
 	fn withdraw_liquidity(
 		_who: &Self::AccountId,
 		_amount: Self::Amount,
-		_foreign_asset: &ForeignChainAsset,
+		_foreign_asset: &Asset,
 		_egress_address: &Self::EgressAddress,
 	) -> DispatchResult {
 		Ok(())
@@ -169,7 +183,7 @@ pub trait AmmPoolApi {
 
 	fn swap(
 		from: Asset,
-		to: ForeignChainAsset,
+		to: Asset,
 		swap_input: Self::Balance,
 		fee: u16,
 	) -> (Self::Balance, (Asset, Self::Balance));

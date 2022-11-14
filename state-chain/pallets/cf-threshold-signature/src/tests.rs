@@ -2,12 +2,11 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
 	self as pallet_cf_threshold_signature, mock::*, AttemptCount, CeremonyContext, CeremonyId,
-	Error, PalletOffence, RequestId,
+	Error, PalletOffence, RequestContext, RequestId,
 };
 use cf_chains::mocks::MockEthereum;
 use cf_traits::{
-	mocks::signer_nomination::MockNominator, AsyncResult, Chainflip, KeyProvider, RetryPolicy,
-	ThresholdSigner,
+	mocks::signer_nomination::MockNominator, AsyncResult, Chainflip, KeyProvider, ThresholdSigner,
 };
 use frame_support::{
 	assert_err, assert_noop, assert_ok,
@@ -22,8 +21,10 @@ fn get_ceremony_context(
 	expected_request_id: RequestId,
 	expected_attempt: AttemptCount,
 ) -> CeremonyContext<Test, Instance1> {
-	let CeremonyContext::<Test, Instance1> { request_id, attempt_count, .. } =
-		EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
+	let CeremonyContext::<Test, Instance1> {
+		request_context: RequestContext { request_id, attempt_count, .. },
+		..
+	} = EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
 	assert_eq!(request_id, expected_request_id);
 	assert_eq!(attempt_count, expected_attempt);
 	EthereumThresholdSigner::pending_ceremonies(ceremony_id)
@@ -147,7 +148,7 @@ fn happy_path_no_callback() {
 		.build()
 		.execute_with(|| {
 			let ceremony_id = current_ceremony_id();
-			let CeremonyContext::<Test, Instance1> { request_id, .. } =
+			let CeremonyContext::<Test, Instance1> { request_context, .. } =
 				EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
 			let cfe = MockCfe { id: 1, behaviour: CfeBehaviour::Success };
 
@@ -158,12 +159,12 @@ fn happy_path_no_callback() {
 
 			// Signature is available
 			assert!(matches!(
-				EthereumThresholdSigner::signature(request_id),
+				EthereumThresholdSigner::signature(request_context.request_id),
 				AsyncResult::Ready(..)
 			));
 
 			// No callback was provided.
-			assert!(!MockCallback::has_executed(request_id));
+			assert!(!MockCallback::has_executed(request_context.request_id));
 		});
 }
 
@@ -178,7 +179,7 @@ fn happy_path_with_callback() {
 		.build()
 		.execute_with(|| {
 			let ceremony_id = current_ceremony_id();
-			let CeremonyContext::<Test, Instance1> { request_id, .. } =
+			let CeremonyContext::<Test, Instance1> { request_context, .. } =
 				EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
 			let cfe = MockCfe { id: 1, behaviour: CfeBehaviour::Success };
 
@@ -188,13 +189,16 @@ fn happy_path_with_callback() {
 			assert!(EthereumThresholdSigner::pending_ceremonies(ceremony_id).is_none());
 
 			// Callback has triggered.
-			assert!(MockCallback::has_executed(request_id));
+			assert!(MockCallback::has_executed(request_context.request_id));
 
 			// Signature has been consumed.
 			assert!(
-				matches!(EthereumThresholdSigner::signature(request_id), AsyncResult::Void),
+				matches!(
+					EthereumThresholdSigner::signature(request_context.request_id),
+					AsyncResult::Void
+				),
 				"Expected Void, got {:?}",
-				EthereumThresholdSigner::signature(request_id)
+				EthereumThresholdSigner::signature(request_context.request_id)
 			);
 		});
 }
@@ -211,13 +215,13 @@ fn signature_success_can_only_succeed_once_per_request() {
 		.build()
 		.execute_with(|| {
 			let ceremony_id = current_ceremony_id();
-			let CeremonyContext::<Test, Instance1> { request_id, .. } =
+			let CeremonyContext::<Test, Instance1> { request_context, .. } =
 				EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
 			assert_eq!(MockCallback::times_called(), 0);
 			// report signature success
 			run_cfes_on_sc_events(&[MockCfe { id: 1, behaviour: CfeBehaviour::Success }]);
 
-			assert!(MockCallback::has_executed(request_id));
+			assert!(MockCallback::has_executed(request_context.request_id));
 			assert_eq!(MockCallback::times_called(), 1);
 
 			// Submit the same success again
@@ -236,7 +240,7 @@ fn signature_success_can_only_succeed_once_per_request() {
 // The assumption here is that when we don't want to retry, it's a special case, and the error will
 // be handled by the callback itself, allowing a more custom failure logic than simply "retrying".
 #[test]
-fn retry_policy_never_calls_callback_on_failure() {
+fn keygen_verification_ceremony_calls_callback_on_failure() {
 	const NOMINEES: [u64; 2] = [1, 2];
 	const AUTHORITIES: [u64; 3] = [1, 2, 3];
 	ExtBuilder::new()
@@ -246,11 +250,10 @@ fn retry_policy_never_calls_callback_on_failure() {
 		.execute_with(|| {
 			const PAYLOAD: &[u8; 4] = b"OHAI";
 			let current_key_id = MockKeyProvider::current_key_id_epoch_index().0;
-			let (request_id, _) = EthereumThresholdSigner::request_signature_with(
+			let (request_id, _) = EthereumThresholdSigner::request_keygen_verification_signature(
+				*PAYLOAD,
 				current_key_id,
 				NOMINEES.into_iter().collect(),
-				*PAYLOAD,
-				RetryPolicy::Never,
 			);
 			assert_ok!(EthereumThresholdSigner::register_callback(
 				request_id,
@@ -287,8 +290,10 @@ fn fail_path_with_timeout() {
 		.build()
 		.execute_with(|| {
 			let ceremony_id = current_ceremony_id();
-			let CeremonyContext::<Test, Instance1> { request_id, attempt_count, .. } =
-				EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
+			let CeremonyContext::<Test, Instance1> {
+				request_context: RequestContext { request_id, attempt_count, .. },
+				..
+			} = EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
 			let cfes = [
 				MockCfe { id: 1, behaviour: CfeBehaviour::Timeout },
 				MockCfe { id: 2, behaviour: CfeBehaviour::ReportFailure(vec![1]) },
@@ -311,7 +316,7 @@ fn fail_path_with_timeout() {
 				EthereumThresholdSigner::threshold_signature_response_timeout() as u64;
 
 			assert!(!MockCallback::has_executed(request_id));
-			assert_eq!(EthereumThresholdSigner::retry_queues(retry_block).len(), 1);
+			assert_eq!(EthereumThresholdSigner::ceremony_retry_queues(retry_block).len(), 1);
 
 			// The offender has not yet been reported.
 			MockOffenceReporter::assert_reported(PalletOffence::ParticipateSigningFailed, vec![]);
@@ -321,11 +326,11 @@ fn fail_path_with_timeout() {
 			<AllPalletsWithSystem as OnInitialize<_>>::on_initialize(retry_block);
 
 			// Expect the retry queue for this block to be empty.
-			assert!(EthereumThresholdSigner::retry_queues(retry_block).is_empty());
+			assert!(EthereumThresholdSigner::ceremony_retry_queues(retry_block).is_empty());
 			// Another timeout should have been added for the new ceremony.
 			let retry_block = frame_system::Pallet::<Test>::current_block_number() +
 				EthereumThresholdSigner::threshold_signature_response_timeout() as u64;
-			assert!(!EthereumThresholdSigner::retry_queues(retry_block).is_empty());
+			assert!(!EthereumThresholdSigner::ceremony_retry_queues(retry_block).is_empty());
 
 			// Participant 1 was reported for not responding.
 			MockOffenceReporter::assert_reported(PalletOffence::ParticipateSigningFailed, vec![1]);
@@ -352,8 +357,10 @@ fn fail_path_due_to_report_signature_failed() {
 			// progress by one block *after* the initial request is inserted (in the ExtBuilder)
 			System::set_block_number(frame_system::Pallet::<Test>::current_block_number() + 1);
 			let ceremony_id = current_ceremony_id();
-			let CeremonyContext::<Test, Instance1> { request_id, attempt_count, .. } =
-				EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
+			let CeremonyContext::<Test, Instance1> {
+				request_context: RequestContext { request_id, attempt_count, .. },
+				..
+			} = EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
 			let cfes = [(1, vec![]), (2, vec![1]), (3, vec![1]), (4, vec![1]), (5, vec![1])]
 				.into_iter()
 				.map(|(id, report)| MockCfe { id, behaviour: CfeBehaviour::ReportFailure(report) })
@@ -365,7 +372,7 @@ fn fail_path_due_to_report_signature_failed() {
 			let timeout_block_for_next_retry = next_block_retry +
 				EthereumThresholdSigner::threshold_signature_response_timeout() as u64;
 
-			assert_eq!(EthereumThresholdSigner::retry_queues(next_block_retry).len(), 1);
+			assert_eq!(EthereumThresholdSigner::ceremony_retry_queues(next_block_retry).len(), 1);
 
 			// Account 1 has 4 blame votes against it. The other accounts have no votes against
 			// them.
@@ -384,10 +391,10 @@ fn fail_path_due_to_report_signature_failed() {
 			MockOffenceReporter::assert_reported(PalletOffence::ParticipateSigningFailed, vec![1]);
 
 			assert!(!MockCallback::has_executed(request_id));
-			assert!(EthereumThresholdSigner::retry_queues(next_block_retry).is_empty());
+			assert!(EthereumThresholdSigner::ceremony_retry_queues(next_block_retry).is_empty());
 
 			assert_eq!(
-				EthereumThresholdSigner::retry_queues(timeout_block_for_next_retry).len(),
+				EthereumThresholdSigner::ceremony_retry_queues(timeout_block_for_next_retry).len(),
 				1
 			);
 
@@ -401,10 +408,11 @@ fn fail_path_due_to_report_signature_failed() {
 			<EthereumThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(
 				timeout_block_for_next_retry,
 			);
-			assert!(EthereumThresholdSigner::retry_queues(timeout_block_for_next_retry).is_empty());
+			assert!(EthereumThresholdSigner::ceremony_retry_queues(timeout_block_for_next_retry)
+				.is_empty());
 
 			assert_eq!(
-				EthereumThresholdSigner::retry_queues(
+				EthereumThresholdSigner::ceremony_retry_queues(
 					timeout_block_for_next_retry +
 						EthereumThresholdSigner::threshold_signature_response_timeout()
 				)
@@ -426,14 +434,14 @@ fn test_not_enough_signers_for_threshold_schedules_retry() {
 		.execute_with(|| {
 			let retry_block = frame_system::Pallet::<Test>::current_block_number() +
 				<Test as crate::Config<Instance1>>::CeremonyRetryDelay::get();
-			assert_eq!(EthereumThresholdSigner::retry_queues(retry_block).len(), 1);
+			assert_eq!(EthereumThresholdSigner::request_retry_queues(retry_block).len(), 1);
 		});
 }
 
 #[cfg(test)]
 mod unsigned_validation {
 	use super::*;
-	use crate::{Call as PalletCall, PendingCeremonies, RetryPolicy, RetryQueues};
+	use crate::{Call as PalletCall, CeremonyRetryQueues, PendingCeremonies};
 	use cf_chains::ChainCrypto;
 	use cf_traits::{KeyProvider, ThresholdSigner};
 	use frame_support::{pallet_prelude::InvalidTransaction, unsigned::TransactionSource};
@@ -445,43 +453,51 @@ mod unsigned_validation {
 			const PAYLOAD: <MockEthereum as ChainCrypto>::Payload = *b"OHAI";
 			const CUSTOM_AGG_KEY: <MockEthereum as ChainCrypto>::AggKey = *b"AKEY";
 			let participants: BTreeSet<u64> = BTreeSet::from_iter([1, 2, 3, 4, 5, 6]);
-			let (_request_id, ceremony_id) = EthereumThresholdSigner::request_signature_with(
-				CUSTOM_AGG_KEY.into(),
-				participants,
-				PAYLOAD,
-				RetryPolicy::Never,
-			);
+			let (_request_id, ceremony_id) =
+				EthereumThresholdSigner::request_keygen_verification_signature(
+					PAYLOAD,
+					CUSTOM_AGG_KEY.into(),
+					participants,
+				);
 
 			let retry_block = frame_system::Pallet::<Test>::current_block_number() +
 				EthereumThresholdSigner::threshold_signature_response_timeout();
 
 			// Process retries.
 			<EthereumThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(retry_block);
-			assert!(RetryQueues::<Test, Instance1>::take(retry_block).is_empty());
+			assert!(CeremonyRetryQueues::<Test, Instance1>::take(retry_block).is_empty());
 			assert!(PendingCeremonies::<Test, Instance1>::take(ceremony_id).is_none());
 		});
 	}
 
 	#[test]
 	fn valid_unsigned_extrinsic() {
-		new_test_ext().execute_with(|| {
-			const PAYLOAD: <MockEthereum as ChainCrypto>::Payload = *b"OHAI";
-			// Initiate request
-			let (_request_id, ceremony_id) =
-				<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(PAYLOAD);
-			let (current_key_id, _) = MockKeyProvider::current_key_id_epoch_index();
-			assert!(
-				Test::validate_unsigned(
-					TransactionSource::External,
-					&PalletCall::signature_success { ceremony_id, signature: sign(PAYLOAD) }.into(),
-				)
-				.is_ok(),
-				"Validation Failed: {:?} / {:?} / {:?}",
-				MockKeyProvider::current_key(),
-				current_key_id.clone(),
-				<[u8; 4]>::try_from(current_key_id).unwrap()
-			);
-		});
+		const NOMINEES: [u64; 3] = [1, 2, 3];
+		const AUTHORITIES: [u64; 5] = [1, 2, 3, 4, 5];
+		ExtBuilder::new()
+			.with_authorities(AUTHORITIES)
+			.with_nominees(NOMINEES)
+			.build()
+			.execute_with(|| {
+				const PAYLOAD: <MockEthereum as ChainCrypto>::Payload = *b"OHAI";
+
+				let (_request_id, ceremony_id) =
+					<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(PAYLOAD);
+				let (current_key_id, _) = MockKeyProvider::current_key_id_epoch_index();
+
+				assert!(
+					Test::validate_unsigned(
+						TransactionSource::External,
+						&PalletCall::signature_success { ceremony_id, signature: sign(PAYLOAD) }
+							.into(),
+					)
+					.is_ok(),
+					"Validation Failed: {:?} / {:?} / {:?}",
+					MockKeyProvider::current_key(),
+					current_key_id.clone(),
+					<[u8; 4]>::try_from(current_key_id).unwrap()
+				);
+			});
 	}
 
 	#[test]
@@ -502,21 +518,30 @@ mod unsigned_validation {
 
 	#[test]
 	fn reject_invalid_signature() {
-		new_test_ext().execute_with(|| {
-			const PAYLOAD: <MockEthereum as ChainCrypto>::Payload = *b"OHAI";
-			// Initiate request
-			let (_request_id, ceremony_id) =
-				<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(PAYLOAD);
-			assert_eq!(
-				Test::validate_unsigned(
-					TransactionSource::External,
-					&PalletCall::signature_success { ceremony_id, signature: INVALID_SIGNATURE }
+		const NOMINEES: [u64; 3] = [1, 2, 3];
+		const AUTHORITIES: [u64; 5] = [1, 2, 3, 4, 5];
+		ExtBuilder::new()
+			.with_authorities(AUTHORITIES)
+			.with_nominees(NOMINEES)
+			.build()
+			.execute_with(|| {
+				const PAYLOAD: <MockEthereum as ChainCrypto>::Payload = *b"OHAI";
+				// Initiate request
+				let (_request_id, ceremony_id) =
+					<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(PAYLOAD);
+				assert_eq!(
+					Test::validate_unsigned(
+						TransactionSource::External,
+						&PalletCall::signature_success {
+							ceremony_id,
+							signature: INVALID_SIGNATURE
+						}
 						.into()
-				)
-				.unwrap_err(),
-				InvalidTransaction::BadProof.into()
-			);
-		});
+					)
+					.unwrap_err(),
+					InvalidTransaction::BadProof.into()
+				);
+			});
 	}
 
 	#[test]
@@ -537,9 +562,9 @@ mod unsigned_validation {
 #[cfg(test)]
 mod failure_reporting {
 	use super::*;
-	use crate::CeremonyContext;
+	use crate::{CeremonyContext, RequestContext, ThresholdCeremonyType};
 	use cf_chains::ChainCrypto;
-	use cf_traits::{mocks::epoch_info::MockEpochInfo, KeyProvider, RetryPolicy};
+	use cf_traits::{mocks::epoch_info::MockEpochInfo, KeyProvider};
 
 	fn init_context(
 		validator_set: impl IntoIterator<Item = <Test as Chainflip>::ValidatorId> + Copy,
@@ -548,15 +573,12 @@ mod failure_reporting {
 		MockEpochInfo::set_authorities(Vec::from_iter(validator_set));
 		let current_key_id = MockKeyProvider::current_key_id_epoch_index().0;
 		CeremonyContext::<Test, Instance1> {
-			request_id: 1,
-			attempt_count: 0,
-			payload: PAYLOAD,
-			retry_policy: RetryPolicy::Always,
+			request_context: RequestContext { request_id: 1, attempt_count: 0, payload: PAYLOAD },
+			threshold_ceremony_type: ThresholdCeremonyType::Standard,
 			key_id: current_key_id,
 			remaining_respondents: BTreeSet::from_iter(validator_set),
 			blame_counts: Default::default(),
 			participant_count: 5,
-			_phantom: Default::default(),
 		}
 	}
 

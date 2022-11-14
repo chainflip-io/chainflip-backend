@@ -16,6 +16,9 @@ use sp_std::vec::Vec;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 
+pub mod chains;
+
+pub use chains::{assets::any::Asset, ForeignChain};
 pub mod liquidity;
 pub use liquidity::*;
 
@@ -74,33 +77,36 @@ impl Default for AccountRole {
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub enum ForeignChain {
-	Ethereum,
-	Polkadot,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum ForeignChainAddress {
 	Eth(EthereumAddress),
 	Dot([u8; 32]),
 }
 
-/// An Asset is a token or currency that can be traded via the Chainflip AMM.
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy, Hash)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub enum Asset {
-	Eth,
-	Flip,
-	Usdc,
-	Dot,
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum AddressError {
+	InvalidAddress,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub struct ForeignChainAsset {
-	pub chain: ForeignChain,
-	pub asset: Asset,
+impl TryFrom<ForeignChainAddress> for EthereumAddress {
+	type Error = AddressError;
+
+	fn try_from(address: ForeignChainAddress) -> Result<Self, Self::Error> {
+		match address {
+			ForeignChainAddress::Eth(addr) => Ok(addr),
+			_ => Err(AddressError::InvalidAddress),
+		}
+	}
+}
+
+impl TryFrom<ForeignChainAddress> for [u8; 32] {
+	type Error = AddressError;
+
+	fn try_from(address: ForeignChainAddress) -> Result<Self, Self::Error> {
+		match address {
+			ForeignChainAddress::Dot(addr) => Ok(addr),
+			_ => Err(AddressError::InvalidAddress),
+		}
+	}
 }
 
 pub type EgressBatch<Amount, EgressAddress> = Vec<(Amount, EgressAddress)>;

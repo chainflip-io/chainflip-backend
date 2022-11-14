@@ -23,6 +23,7 @@ getrandom = { version = '0.2', features = ['js'], default-features = false }
 log = { version = '0.4.16', default-features = false }
 nanorand = { version = '0.6', default-features = false, features = ['wyrand']}
 serde = { version = '1.0.126', optional = true, features = ['derive'] }
+ethabi = {default-features = false, version = '17.0'}
 
 # Chainflip local dependencies
 cf-traits = { path = '../traits', default-features = false }

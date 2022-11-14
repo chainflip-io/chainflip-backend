@@ -2,7 +2,7 @@
 use core::fmt::Display;
 
 use crate::benchmarking_value::BenchmarkValue;
-use cf_primitives::{EthAmount, IntentId};
+use cf_primitives::{chains::assets, AssetAmount, EthAmount, IntentId};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
@@ -16,8 +16,12 @@ use sp_std::{
 	prelude::*,
 };
 
+pub use cf_primitives::chains::*;
+
 pub mod benchmarking_value;
 
+#[cfg(feature = "ibiza")]
+pub mod any;
 #[cfg(feature = "ibiza")]
 pub mod dot;
 pub mod eth;
@@ -49,7 +53,7 @@ pub trait Chain: Member + Parameter {
 
 	type TrackedData: Member + Parameter + MaxEncodedLen + Clone + Age<Self> + BenchmarkValue;
 
-	type ChainAsset: Member + Parameter + MaxEncodedLen;
+	type ChainAsset: Member + Parameter + MaxEncodedLen + Copy;
 
 	type ChainAccount: Member + Parameter + MaxEncodedLen + BenchmarkValue;
 }
@@ -58,6 +62,12 @@ pub trait Chain: Member + Parameter {
 pub trait Age<C: Chain> {
 	/// The creation block of this item.
 	fn birth_block(&self) -> C::ChainBlockNumber;
+}
+
+impl<C: Chain> Age<C> for () {
+	fn birth_block(&self) -> C::ChainBlockNumber {
+		unimplemented!()
+	}
 }
 
 /// Common crypto-related types and operations for some external chain.
@@ -84,7 +94,6 @@ pub trait ChainCrypto: Chain {
 pub trait ChainAbi: ChainCrypto {
 	type Transaction: Member + Parameter + Default + BenchmarkValue + FeeRefundCalculator<Self>;
 	type ReplayProtection: Member + Parameter;
-	type ApiCallExtraData;
 }
 
 /// A call or collection of calls that can be made to the Chainflip api on an external chain.
@@ -119,22 +128,18 @@ where
 }
 
 /// Contains all the parameters required to fetch incoming transactions on an external chain.
-#[derive(
-	RuntimeDebug, Copy, Clone, Default, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo,
-)]
-pub struct FetchAssetParams<T: Chain> {
+#[derive(RuntimeDebug, Copy, Clone, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
+pub struct FetchAssetParams<C: Chain> {
 	pub intent_id: IntentId,
-	pub asset: T::ChainAsset,
+	pub asset: <C as Chain>::ChainAsset,
 }
 
 /// Contains all the parameters required for transferring an asset on an external chain.
-#[derive(
-	RuntimeDebug, Copy, Clone, Default, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo,
-)]
-pub struct TransferAssetParams<T: Chain> {
-	pub asset: T::ChainAsset,
-	pub to: T::ChainAccount,
-	pub amount: T::ChainAmount,
+#[derive(RuntimeDebug, Clone, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
+pub struct TransferAssetParams<C: Chain> {
+	pub asset: <C as Chain>::ChainAsset,
+	pub to: <C as Chain>::ChainAccount,
+	pub amount: AssetAmount,
 }
 
 pub trait IngressAddress {
@@ -142,11 +147,27 @@ pub trait IngressAddress {
 	/// Returns an ingress address
 	fn derive_address(self, vault_address: Self::AddressType, intent_id: u32) -> Self::AddressType;
 }
+
+/// Similar to [frame_support::StaticLookup] but with the `Key` as a type parameter instead of an
+/// associated type.
+///
+/// This allows us to define multiple lookups on a single type.
+///
+/// TODO: Consider making the lookup infallible.
+pub trait ChainEnvironment<
+	LookupKey: codec::Codec + Clone + PartialEq + Debug + TypeInfo,
+	LookupValue,
+>
+{
+	/// Attempt a lookup.
+	fn lookup(s: LookupKey) -> Result<LookupValue, frame_support::error::LookupError>;
+}
+
 /// Constructs the `SetAggKeyWithAggKey` api call.
 pub trait SetAggKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
 		replay_protection: Abi::ReplayProtection,
-		chain_specific_data: Abi::ApiCallExtraData,
+		old_key: <Abi as ChainCrypto>::AggKey,
 		new_key: <Abi as ChainCrypto>::AggKey,
 	) -> Self;
 }
@@ -191,7 +212,6 @@ pub trait RegisterClaim<Abi: ChainAbi>: ApiCall<Abi> {
 pub trait AllBatch<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
 		replay_protection: Abi::ReplayProtection,
-		chain_specific_data: Abi::ApiCallExtraData,
 		fetch_params: Vec<FetchAssetParams<Abi>>,
 		transfer_params: Vec<TransferAssetParams<Abi>>,
 	) -> Self;
@@ -225,7 +245,7 @@ pub mod mocks {
 		type TrackedData = MockTrackedData;
 		type TransactionFee = TransactionFee;
 		type ChainAccount = u64; // Currently, we don't care about this since we don't use them in tests
-		type ChainAsset = (); // Currently, we don't care about this since we don't use them in tests
+		type ChainAsset = assets::eth::Asset;
 	}
 
 	#[derive(
@@ -304,7 +324,6 @@ pub mod mocks {
 	impl ChainAbi for MockEthereum {
 		type Transaction = MockTransaction;
 		type ReplayProtection = EthereumReplayProtection;
-		type ApiCallExtraData = ();
 	}
 
 	#[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]

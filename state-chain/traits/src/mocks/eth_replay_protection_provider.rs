@@ -12,9 +12,3 @@ impl<T: ChainAbi<ReplayProtection = EthereumReplayProtection>> crate::ReplayProt
 		EthereumReplayProtection { key_manager_address: [0xcf; 20], chain_id: 31337, nonce: 42 }
 	}
 }
-
-impl<T: ChainAbi<ApiCallExtraData = ()>> crate::ApiCallDataProvider<T>
-	for MockEthReplayProtectionProvider<T>
-{
-	fn chain_extra_data() -> <T as ChainAbi>::ApiCallExtraData {}
-}
