@@ -674,7 +674,6 @@ macro_rules! network_spec {
 	};
 }
 
-network_spec!(perseverance);
 network_spec!(sisyphos);
 
 /// Configure initial storage state for FRAME modules.
