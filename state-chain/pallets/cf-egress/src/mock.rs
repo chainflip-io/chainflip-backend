@@ -119,6 +119,7 @@ impl ChainEnvironment<<Ethereum as Chain>::ChainAsset, <Ethereum as Chain>::Chai
 
 impl crate::Config for Test {
 	type Event = Event;
+	type TargetChain = Ethereum;
 	type ReplayProtection = Self;
 	type AllBatch = EthereumApi<MockEthEnvironment>;
 	type Broadcaster = MockBroadcast;

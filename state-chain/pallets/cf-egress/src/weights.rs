@@ -30,7 +30,7 @@ use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_cf_egress.
 pub trait WeightInfo {
-	fn send_ethereum_batch(n: u32, ) -> Weight;
+	fn send_batch(n: u32, ) -> Weight;
 	fn disable_asset_egress() -> Weight;
 	fn on_idle_with_nothing_to_send() -> Weight;
 }
@@ -38,8 +38,8 @@ pub trait WeightInfo {
 /// Weights for pallet_cf_egress using the Substrate node and recommended hardware.
 pub struct PalletWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
-	// Storage: Egress EthereumScheduledRequests (r:1 w:1)
-	// Storage: Egress EthereumDisabledEgressAssets (r:1 w:0)
+	// Storage: Egress ScheduledRequests (r:1 w:1)
+	// Storage: Egress DisabledEgressAssets (r:1 w:0)
 	// Storage: Environment KeyManagerAddress (r:1 w:0)
 	// Storage: Environment EthereumChainId (r:1 w:0)
 	// Storage: Environment GlobalSignatureNonce (r:1 w:1)
@@ -56,7 +56,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumThresholdSigner PendingCeremonies (r:0 w:1)
 	// Storage: EthereumThresholdSigner LiveCeremonies (r:0 w:1)
 	// Storage: EthereumThresholdSigner RequestCallback (r:0 w:1)
-	fn send_ethereum_batch(n: u32, ) -> Weight {
+	fn send_batch(n: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
 		(80_283_000 as Weight)
 			// Standard Error: 4_000
@@ -64,13 +64,13 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(16 as Weight))
 			.saturating_add(T::DbWeight::get().writes(9 as Weight))
 	}
-	// Storage: Egress EthereumDisabledEgressAssets (r:0 w:1)
+	// Storage: Egress DisabledEgressAssets (r:0 w:1)
 	fn disable_asset_egress() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
 		(11_000_000 as Weight)
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
-	// Storage: Egress EthereumScheduledRequests (r:1 w:1)
+	// Storage: Egress ScheduledRequests (r:1 w:1)
 	fn on_idle_with_nothing_to_send() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
 		(3_000_000 as Weight)
@@ -81,8 +81,8 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
-	// Storage: Egress EthereumScheduledRequests (r:1 w:1)
-	// Storage: Egress EthereumDisabledEgressAssets (r:1 w:0)
+	// Storage: Egress ScheduledRequests (r:1 w:1)
+	// Storage: Egress DisabledEgressAssets (r:1 w:0)
 	// Storage: Environment KeyManagerAddress (r:1 w:0)
 	// Storage: Environment EthereumChainId (r:1 w:0)
 	// Storage: Environment GlobalSignatureNonce (r:1 w:1)
@@ -99,7 +99,7 @@ impl WeightInfo for () {
 	// Storage: EthereumThresholdSigner PendingCeremonies (r:0 w:1)
 	// Storage: EthereumThresholdSigner LiveCeremonies (r:0 w:1)
 	// Storage: EthereumThresholdSigner RequestCallback (r:0 w:1)
-	fn send_ethereum_batch(n: u32, ) -> Weight {
+	fn send_batch(n: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
 		(80_283_000 as Weight)
 			// Standard Error: 4_000
@@ -107,13 +107,13 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(16 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(9 as Weight))
 	}
-	// Storage: Egress EthereumDisabledEgressAssets (r:0 w:1)
+	// Storage: Egress DisabledEgressAssets (r:0 w:1)
 	fn disable_asset_egress() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
 		(11_000_000 as Weight)
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
-	// Storage: Egress EthereumScheduledRequests (r:1 w:1)
+	// Storage: Egress ScheduledRequests (r:1 w:1)
 	fn on_idle_with_nothing_to_send() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
 		(3_000_000 as Weight)

@@ -1,6 +1,4 @@
-use crate::{
-	mock::*, EthereumDisabledEgressAssets, EthereumScheduledRequests, FetchOrTransfer, WeightInfo,
-};
+use crate::{mock::*, DisabledEgressAssets, FetchOrTransfer, ScheduledRequests, WeightInfo};
 
 use cf_primitives::{chains::assets::eth, ForeignChain};
 use cf_traits::{EgressApi, IngressFetchApi};
@@ -17,9 +15,9 @@ fn disallowed_asset_will_not_be_batch_sent() {
 		let asset = ETH_ETH;
 
 		// Cannot egress assets that are blacklisted.
-		assert!(EthereumDisabledEgressAssets::<Test>::get(asset).is_none());
+		assert!(DisabledEgressAssets::<Test>::get(asset).is_none());
 		assert_ok!(Egress::disable_asset_egress(Origin::root(), asset, true));
-		assert!(EthereumDisabledEgressAssets::<Test>::get(asset).is_some());
+		assert!(DisabledEgressAssets::<Test>::get(asset).is_some());
 		System::assert_last_event(Event::Egress(crate::Event::AssetEgressDisabled {
 			asset,
 			disabled: true,
@@ -29,7 +27,7 @@ fn disallowed_asset_will_not_be_batch_sent() {
 
 		// The egress has not been sent
 		assert_eq!(
-			EthereumScheduledRequests::<Test>::get(),
+			ScheduledRequests::<Test>::get(),
 			vec![FetchOrTransfer::<Ethereum>::Transfer {
 				asset,
 				amount: 1_000,
@@ -39,7 +37,7 @@ fn disallowed_asset_will_not_be_batch_sent() {
 
 		// re-enable the asset for Egress
 		assert_ok!(Egress::disable_asset_egress(Origin::root(), asset, false));
-		assert!(EthereumDisabledEgressAssets::<Test>::get(asset).is_none());
+		assert!(DisabledEgressAssets::<Test>::get(asset).is_none());
 		System::assert_last_event(Event::Egress(crate::Event::AssetEgressDisabled {
 			asset,
 			disabled: false,
@@ -48,7 +46,7 @@ fn disallowed_asset_will_not_be_batch_sent() {
 		Egress::on_idle(1, 1_000_000_000_000u64);
 
 		// The egress should be sent now
-		assert!(EthereumScheduledRequests::<Test>::get().is_empty());
+		assert!(ScheduledRequests::<Test>::get().is_empty());
 	});
 }
 
@@ -72,7 +70,7 @@ fn can_schedule_egress_to_batch() {
 		}));
 
 		assert_eq!(
-			EthereumScheduledRequests::<Test>::get(),
+			ScheduledRequests::<Test>::get(),
 			vec![
 				FetchOrTransfer::<Ethereum>::Transfer {
 					asset: ETH_ETH,
@@ -102,11 +100,11 @@ fn can_schedule_egress_to_batch() {
 #[test]
 fn can_schedule_ingress_fetch() {
 	new_test_ext().execute_with(|| {
-		assert!(EthereumScheduledRequests::<Test>::get().is_empty());
+		assert!(ScheduledRequests::<Test>::get().is_empty());
 
 		Egress::schedule_ingress_fetch(vec![(ETH_ETH, 1u64), (ETH_ETH, 2u64), (ETH_FLIP, 3u64)]);
 		assert_eq!(
-			EthereumScheduledRequests::<Test>::get(),
+			ScheduledRequests::<Test>::get(),
 			vec![
 				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 1u64, asset: ETH_ETH },
 				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 2u64, asset: ETH_ETH },
@@ -121,7 +119,7 @@ fn can_schedule_ingress_fetch() {
 		Egress::schedule_ingress_fetch(vec![(ETH_ETH, 4u64)]);
 
 		assert_eq!(
-			EthereumScheduledRequests::<Test>::get(),
+			ScheduledRequests::<Test>::get(),
 			vec![
 				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 1u64, asset: ETH_ETH },
 				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 2u64, asset: ETH_ETH },
@@ -158,12 +156,12 @@ fn on_idle_can_send_batch_all() {
 		// Take all scheduled Egress and Broadcast as batch
 		Egress::on_idle(1, 1_000_000_000_000u64);
 
-		System::assert_has_event(Event::Egress(crate::Event::EthereumBatchBroadcastRequested {
+		System::assert_has_event(Event::Egress(crate::Event::BatchBroadcastRequested {
 			fetch_batch_size: 5u32,
 			egress_batch_size: 8u32,
 		}));
 
-		assert!(EthereumScheduledRequests::<Test>::get().is_empty());
+		assert!(ScheduledRequests::<Test>::get().is_empty());
 	});
 }
 
@@ -188,11 +186,11 @@ fn can_manually_send_batch_all() {
 			ForeignChain::Ethereum,
 			Some(2)
 		));
-		System::assert_has_event(Event::Egress(crate::Event::EthereumBatchBroadcastRequested {
+		System::assert_has_event(Event::Egress(crate::Event::BatchBroadcastRequested {
 			fetch_batch_size: 1u32,
 			egress_batch_size: 1u32,
 		}));
-		assert_eq!(EthereumScheduledRequests::<Test>::decode_len(), Some(10));
+		assert_eq!(ScheduledRequests::<Test>::decode_len(), Some(10));
 
 		// send all remaining requests
 		assert_ok!(Egress::send_scheduled_batch_for_chain(
@@ -201,12 +199,12 @@ fn can_manually_send_batch_all() {
 			None
 		));
 
-		System::assert_has_event(Event::Egress(crate::Event::EthereumBatchBroadcastRequested {
+		System::assert_has_event(Event::Egress(crate::Event::BatchBroadcastRequested {
 			fetch_batch_size: 3u32,
 			egress_batch_size: 7u32,
 		}));
 
-		assert!(EthereumScheduledRequests::<Test>::get().is_empty());
+		assert!(ScheduledRequests::<Test>::get().is_empty());
 	});
 }
 
@@ -222,23 +220,23 @@ fn on_idle_batch_size_is_limited_by_weight() {
 		Egress::schedule_ingress_fetch(vec![(ETH_FLIP, 3), (ETH_FLIP, 4)]);
 
 		// There's enough weights for 3 transactions, which are taken in FIFO order.
-		Egress::on_idle(1, <Test as crate::Config>::WeightInfo::send_ethereum_batch(3) + 1);
+		Egress::on_idle(1, <Test as crate::Config>::WeightInfo::send_batch(3) + 1);
 
-		System::assert_has_event(Event::Egress(crate::Event::EthereumBatchBroadcastRequested {
+		System::assert_has_event(Event::Egress(crate::Event::BatchBroadcastRequested {
 			fetch_batch_size: 1u32,
 			egress_batch_size: 2u32,
 		}));
 
 		// Send another 3 requests.
-		Egress::on_idle(1, <Test as crate::Config>::WeightInfo::send_ethereum_batch(3) + 1);
+		Egress::on_idle(1, <Test as crate::Config>::WeightInfo::send_batch(3) + 1);
 
-		System::assert_has_event(Event::Egress(crate::Event::EthereumBatchBroadcastRequested {
+		System::assert_has_event(Event::Egress(crate::Event::BatchBroadcastRequested {
 			fetch_batch_size: 1u32,
 			egress_batch_size: 2u32,
 		}));
 
 		assert_eq!(
-			EthereumScheduledRequests::<Test>::get(),
+			ScheduledRequests::<Test>::get(),
 			vec![
 				FetchOrTransfer::<Ethereum>::Transfer {
 					asset: ETH_FLIP,
@@ -258,7 +256,7 @@ fn on_idle_does_nothing_if_nothing_to_send() {
 		// Does not panic if request queue is empty.
 		assert_eq!(
 			Egress::on_idle(1, 1_000_000_000_000_000u64),
-			<Test as crate::Config>::WeightInfo::send_ethereum_batch(0)
+			<Test as crate::Config>::WeightInfo::send_batch(0)
 		);
 
 		// Blacklist Eth for Ethereum.
@@ -271,9 +269,9 @@ fn on_idle_does_nothing_if_nothing_to_send() {
 		Egress::schedule_egress(asset, 4_000, ALICE_ETH_ADDRESS.into());
 		assert_eq!(
 			Egress::on_idle(1, 1_000_000_000_000_000u64),
-			<Test as crate::Config>::WeightInfo::send_ethereum_batch(0)
+			<Test as crate::Config>::WeightInfo::send_batch(0)
 		);
 
-		assert_eq!(EthereumScheduledRequests::<Test>::decode_len(), Some(4));
+		assert_eq!(ScheduledRequests::<Test>::decode_len(), Some(4));
 	});
 }
