@@ -82,15 +82,16 @@ benchmarks_instance_pallet! {
 			.collect();
 
 		let completed_response_context = CeremonyContext::<T, I> {
-			request_id: 1,
-			attempt_count: 0,
-			payload: PayloadFor::<T, I>::benchmark_value(),
-			retry_policy: RetryPolicy::Always,
+			request_context: RequestContext {
+				request_id: 1,
+				attempt_count: 0,
+				payload: PayloadFor::<T, I>::benchmark_value(),
+			},
+			threshold_ceremony_type: ThresholdCeremonyType::Standard,
 			remaining_respondents:Default::default(),
 			blame_counts,
 			participant_count:a,
 			key_id: <T as Chainflip>::KeyId::benchmark_value(),
-			_phantom: Default::default()
 		};
 	} : {
 		let _ = completed_response_context.offenders();
@@ -117,11 +118,11 @@ benchmarks_instance_pallet! {
 
 		// These attempts will fail because there are no authorities to do the signing.
 		for _ in 0..r {
-			Pallet::<T, I>::new_ceremony_attempt(1, PayloadFor::<T, I>::benchmark_value(), 1, SignWithKey::Current, RetryPolicy::Always);
+			Pallet::<T, I>::new_ceremony_attempt(RequestInstruction::new(1, 1, PayloadFor::<T, I>::benchmark_value(), RequestType::Standard));
 		}
 
 		assert_eq!(
-			RetryQueues::<T, I>::decode_len(ThresholdSignatureResponseTimeout::<T, I>::get()).unwrap_or_default(),
+			CeremonyRetryQueues::<T, I>::decode_len(ThresholdSignatureResponseTimeout::<T, I>::get()).unwrap_or_default(),
 			r as usize,
 		);
 
@@ -133,7 +134,7 @@ benchmarks_instance_pallet! {
 	}
 	verify {
 		assert_eq!(
-			RetryQueues::<T, I>::decode_len(ThresholdSignatureResponseTimeout::<T, I>::get()).unwrap_or_default(),
+			CeremonyRetryQueues::<T, I>::decode_len(ThresholdSignatureResponseTimeout::<T, I>::get()).unwrap_or_default(),
 			0_usize,
 		);
 	}

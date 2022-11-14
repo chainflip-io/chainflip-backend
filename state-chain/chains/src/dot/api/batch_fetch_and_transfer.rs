@@ -122,6 +122,7 @@ mod test_batch_fetch {
 
 	use super::*;
 	use crate::dot::{sr25519::Pair, NONCE_1, RAW_SEED_1, RAW_SEED_2, WESTEND_CONFIG};
+	use cf_primitives::chains::assets;
 	use sp_core::{
 		crypto::{AccountId32, Pair as TraitPair},
 		sr25519, Hasher,
@@ -143,26 +144,26 @@ mod test_batch_fetch {
 			MultiSigner::Sr25519(keypair_proxy.public()).into_account();
 
 		let dummy_fetch_params: Vec<FetchAssetParams<Polkadot>> = vec![
-			FetchAssetParams::<Polkadot> { intent_id: 1, asset: () },
-			FetchAssetParams::<Polkadot> { intent_id: 2, asset: () },
-			FetchAssetParams::<Polkadot> { intent_id: 3, asset: () },
+			FetchAssetParams::<Polkadot> { intent_id: 1, asset: assets::dot::Asset::Dot },
+			FetchAssetParams::<Polkadot> { intent_id: 2, asset: assets::dot::Asset::Dot },
+			FetchAssetParams::<Polkadot> { intent_id: 3, asset: assets::dot::Asset::Dot },
 		];
 
 		let dummy_transfer_params: Vec<TransferAssetParams<Polkadot>> = vec![
 			TransferAssetParams::<Polkadot> {
 				to: MultiSigner::Sr25519(sr25519::Public([7u8; 32])).into_account(),
 				amount: 4,
-				asset: (),
+				asset: assets::dot::Asset::Dot,
 			},
 			TransferAssetParams::<Polkadot> {
 				to: MultiSigner::Sr25519(sr25519::Public([8u8; 32])).into_account(),
 				amount: 5,
-				asset: (),
+				asset: assets::dot::Asset::Dot,
 			},
 			TransferAssetParams::<Polkadot> {
 				to: MultiSigner::Sr25519(sr25519::Public([9u8; 32])).into_account(),
 				amount: 6,
-				asset: (),
+				asset: assets::dot::Asset::Dot,
 			},
 		];
 

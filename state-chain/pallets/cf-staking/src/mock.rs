@@ -29,6 +29,7 @@ use cf_traits::{
 	},
 	Chainflip, ReplayProtectionProvider,
 };
+use frame_support::traits::ConstU64;
 
 impl pallet_cf_account_roles::Config for Test {
 	type Event = Event;
@@ -166,6 +167,14 @@ impl ThresholdSigner<Ethereum> for MockThresholdSigner {
 		(0, 1)
 	}
 
+	fn request_keygen_verification_signature(
+		payload: <Ethereum as ChainCrypto>::Payload,
+		_key_id: Self::KeyId,
+		_participants: BTreeSet<Self::ValidatorId>,
+	) -> (Self::RequestId, CeremonyId) {
+		Self::request_signature(payload)
+	}
+
 	fn register_callback(_: Self::RequestId, _: Self::Callback) -> Result<(), Self::Error> {
 		Ok(())
 	}
@@ -185,15 +194,6 @@ impl ThresholdSigner<Ethereum> for MockThresholdSigner {
 	) {
 		// do nothing, the mock impl of signature_result doesn't take from any storage
 		// so we don't need to insert any storage.
-	}
-
-	fn request_signature_with(
-		_key_id: Self::KeyId,
-		_participants: BTreeSet<Self::ValidatorId>,
-		_payload: <Ethereum as ChainCrypto>::Payload,
-		_retry_policy: cf_traits::RetryPolicy,
-	) -> (Self::RequestId, CeremonyId) {
-		unimplemented!()
 	}
 }
 
@@ -216,7 +216,7 @@ impl pallet_cf_staking::Config for Test {
 	type ThresholdCallable = Call;
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
-	type RegisterClaim = eth::api::EthereumApi;
+	type RegisterClaim = eth::api::EthereumApi<()>;
 	type EthEnvironmentProvider = MockEthEnvironmentProvider;
 }
 
