@@ -21,7 +21,6 @@ pub const RELAYER_FEE: u128 = 5;
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 type AccountId = u64;
-type Balance = u128;
 
 /// A helper type for testing
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
@@ -126,14 +125,12 @@ impl MockEgressApi {
 pub struct MockSwappingApi;
 
 impl SwappingApi for MockSwappingApi {
-	type Balance = Balance;
-
 	fn swap(
 		_from: Asset,
 		_to: Asset,
-		swap_input: Self::Balance,
+		swap_input: AssetAmount,
 		_fee: u16,
-	) -> (Self::Balance, (cf_primitives::Asset, Self::Balance)) {
+	) -> (AssetAmount, (cf_primitives::Asset, AssetAmount)) {
 		(swap_input, (cf_primitives::Asset::Usdc, RELAYER_FEE))
 	}
 }

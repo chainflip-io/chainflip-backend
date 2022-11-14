@@ -1,11 +1,11 @@
-use crate::{self as pallet_cf_lp};
+use crate as pallet_cf_lp;
 use cf_chains::{
 	eth::api::{EthereumApi, EthereumReplayProtection},
 	Chain, ChainAbi, ChainEnvironment, Ethereum,
 };
 use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
-	AddressDerivationApi, Broadcaster, ReplayProtectionProvider, SwapIntentHandler,
+	AddressDerivationApi, Broadcaster, ReplayProtectionProvider,
 };
 use frame_support::{instances::Instance1, parameter_types, sp_runtime::app_crypto::sp_core::H160};
 use frame_system as system;
@@ -80,21 +80,6 @@ impl system::Config for Test {
 	type SS58Prefix = SS58Prefix;
 	type OnSetCode = ();
 	type MaxConsumers = frame_support::traits::ConstU32<5>;
-}
-
-impl SwapIntentHandler for Test {
-	type AccountId = <Self as system::Config>::AccountId;
-
-	fn schedule_swap(
-		_from: Asset,
-		_to: Asset,
-		_amount: AssetAmount,
-		_egress_address: ForeignChainAddress,
-		_relayer_id: Self::AccountId,
-		_relayer_commission_bps: u16,
-	) {
-		unimplemented!()
-	}
 }
 
 pub const FAKE_KEYMAN_ADDR: [u8; 20] = [0xcf; 20];

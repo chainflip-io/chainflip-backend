@@ -1,4 +1,4 @@
-use cf_primitives::{liquidity::TradingPosition, Asset, ExchangeRate};
+use cf_primitives::{liquidity::TradingPosition, Asset, AssetAmount, ExchangeRate};
 use cf_traits::liquidity::AmmPoolApi;
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
@@ -6,7 +6,7 @@ use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_runtime::{
 	traits::{One, Zero},
-	FixedPointNumber, FixedPointOperand,
+	FixedPointNumber,
 };
 
 #[derive(Copy, Clone, Debug, Encode, Decode, MaxEncodedLen, TypeInfo)]
@@ -32,18 +32,17 @@ impl<Balance: Default> LiquidityPool<Balance> {
 }
 
 /// Base Amm pool api common to both LPs and swaps.
-impl<Balance: FixedPointOperand + Default> AmmPoolApi for LiquidityPool<Balance> {
-	type Balance = Balance;
+impl AmmPoolApi for LiquidityPool<AssetAmount> {
 	fn asset_0(&self) -> Asset {
 		self.asset_0
 	}
 	fn asset_1(&self) -> Asset {
 		self.asset_1
 	}
-	fn liquidity_0(&self) -> Self::Balance {
+	fn liquidity_0(&self) -> AssetAmount {
 		self.liquidity_0
 	}
-	fn liquidity_1(&self) -> Self::Balance {
+	fn liquidity_1(&self) -> AssetAmount {
 		self.liquidity_1
 	}
 
@@ -58,13 +57,13 @@ impl<Balance: FixedPointOperand + Default> AmmPoolApi for LiquidityPool<Balance>
 
 	fn get_liquidity_requirement(
 		&self,
-		position: &TradingPosition<Self::Balance>,
-	) -> Option<(Self::Balance, Self::Balance)> {
+		position: &TradingPosition<AssetAmount>,
+	) -> Option<(AssetAmount, AssetAmount)> {
 		// TODO: Add calculation for liquidity requirement
 		Some((position.volume_0(), position.volume_0()))
 	}
 
-	fn swap(_swap_input: Self::Balance, _fee: u16) -> (Self::Balance, Self::Balance) {
+	fn swap(_swap_input: AssetAmount, _fee: u16) -> (AssetAmount, AssetAmount) {
 		todo!()
 	}
 }

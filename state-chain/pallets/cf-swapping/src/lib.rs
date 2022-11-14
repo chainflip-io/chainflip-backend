@@ -49,7 +49,7 @@ pub mod pallet {
 		/// An interface to the egress api implementation.
 		type Egress: EgressApi<Ethereum>;
 		/// An interface to the AMM api implementation.
-		type SwappingApi: SwappingApi<Balance = AssetAmount>;
+		type SwappingApi: SwappingApi;
 		/// The Weight information.
 		type WeightInfo: WeightInfo;
 	}
