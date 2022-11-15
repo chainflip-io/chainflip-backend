@@ -13,8 +13,8 @@ use sp_std::collections::btree_set::BTreeSet;
 
 use cf_chains::{benchmarking_value::BenchmarkValue, ApiCall, Chain, ChainAbi, ChainCrypto};
 use cf_primitives::{
-	AccountRole, Asset, AssetAmount, AuthorityCount, CeremonyId, EpochIndex, EthereumAddress,
-	ForeignChainAddress, IntentId,
+	AccountRole, Asset, AssetAmount, AuthorityCount, CeremonyId, EpochIndex, ForeignChainAddress,
+	IntentId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -642,6 +642,15 @@ pub trait AddressDerivationApi {
 	) -> Result<ForeignChainAddress, DispatchError>;
 }
 
+impl AddressDerivationApi for () {
+	fn generate_address(
+		_ingress_asset: Asset,
+		_intent_id: IntentId,
+	) -> Result<ForeignChainAddress, DispatchError> {
+		Ok(ForeignChainAddress::Eth(Default::default()))
+	}
+}
+
 pub trait AccountRoleRegistry<T: frame_system::Config> {
 	fn register_account_role(who: &T::AccountId, role: AccountRole) -> DispatchResult;
 
@@ -682,10 +691,6 @@ pub trait EgressApi<C: Chain> {
 		amount: AssetAmount,
 		egress_address: C::ChainAccount,
 	);
-}
-
-pub trait EthereumAssetsAddressProvider {
-	fn try_get_asset_address(asset: Asset) -> Option<EthereumAddress>;
 }
 
 /// API that Schedules funds to be fetched from an ingress address and transferred to the main vault

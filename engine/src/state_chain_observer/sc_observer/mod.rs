@@ -446,8 +446,8 @@ where
                                                 cfe_settings_update_sender.send(new_cfe_settings).unwrap();
                                             }
                                             #[cfg(feature = "ibiza")]
-                                            state_chain_runtime::Event::EthereumIngress(
-                                                pallet_cf_ingress::Event::StartWitnessing {
+                                            state_chain_runtime::Event::EthereumIngressEgress(
+                                                pallet_cf_ingress_egress::Event::StartWitnessing {
                                                     ingress_address,
                                                     ingress_asset
                                                 }

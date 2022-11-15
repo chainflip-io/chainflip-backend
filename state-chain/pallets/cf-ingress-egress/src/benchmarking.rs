@@ -1,13 +1,22 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
-use crate::{DisabledEgressAssets, FetchOrTransfer, ScheduledRequests};
+use crate::{DisabledEgressAssets, FetchOrTransfer, ScheduledEgressRequests};
 use cf_chains::benchmarking_value::BenchmarkValue;
-use frame_benchmarking::benchmarks_instance_pallet;
+use frame_benchmarking::{account, benchmarks_instance_pallet};
 use frame_support::traits::Hooks;
+use sp_core::H256;
 
 benchmarks_instance_pallet! {
-	send_batch {
+	where_clause {
+		where
+		T: Config<I>,
+		<<T as Config<I>>::TargetChain as Chain>::ChainAsset: Into<cf_primitives::Asset>,
+		<<T as Config<I>>::TargetChain as Chain>::ChainAccount:
+			TryFrom<cf_primitives::ForeignChainAddress>,
+	}
+
+	egress_assets {
 		let n in 1u32 .. 254u32;
 		let mut batch = vec![];
 
@@ -30,10 +39,10 @@ benchmarks_instance_pallet! {
 			}
 		}
 
-		ScheduledRequests::<T, I>::put(batch);
+		ScheduledEgressRequests::<T, I>::put(batch);
 	} : { let _ = Pallet::<T, I>::on_idle(Default::default(), 1_000_000_000_000_000); }
 	verify {
-		assert!(ScheduledRequests::<T, I>::get().is_empty());
+		assert!(ScheduledEgressRequests::<T, I>::get().is_empty());
 	}
 
 	disable_asset_egress {
@@ -47,7 +56,19 @@ benchmarks_instance_pallet! {
 	}
 
 	on_idle_with_nothing_to_send {
-	} : { let _ = crate::Pallet::<T, I>::on_idle(Default::default(), T::WeightInfo::send_batch(2u32)); }
+	} : { let _ = crate::Pallet::<T, I>::on_idle(Default::default(), T::WeightInfo::egress_assets(2u32)); }
 
-	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test);
+	do_single_ingress {
+		let ingress_address: <<T as Config<I>>::TargetChain as Chain>::ChainAccount = BenchmarkValue::benchmark_value();
+		let ingress_asset: <<T as Config<I>>::TargetChain as Chain>::ChainAsset = BenchmarkValue::benchmark_value();
+		IntentIngressDetails::<T, I>::insert(&ingress_address, IngressDetails {
+				intent_id: 1,
+				ingress_asset,
+			});
+		IntentActions::<T, I>::insert(&ingress_address, IntentAction::<T::AccountId>::LiquidityProvision {
+			lp_account: account("doogle", 0, 0)
+		});
+	}: {
+		Pallet::<T, I>::do_single_ingress(ingress_address, ingress_asset, 100, H256::from([0x01; 32])).unwrap()
+	}
 }

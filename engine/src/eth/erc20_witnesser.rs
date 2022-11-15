@@ -16,7 +16,7 @@ use super::{
 	event::Event, rpc::EthRpcApi, utils, BlockWithItems, DecodeLogClosure, EthContractWitnesser,
 	SignatureAndEvent,
 };
-use pallet_cf_ingress::IngressWitness;
+use pallet_cf_ingress_egress::IngressWitness;
 
 // These are the two events that must be supported as part of the ERC20 standard
 // https://eips.ethereum.org/EIPS/eip-20#events
@@ -108,7 +108,7 @@ impl EthContractWitnesser for Erc20Witnesser {
 			.submit_signed_extrinsic(
 				pallet_cf_witnesser::Call::witness_at_epoch {
 					call: Box::new(
-						pallet_cf_ingress::Call::do_ingress { ingress_witnesses }.into(),
+						pallet_cf_ingress_egress::Call::do_ingress { ingress_witnesses }.into(),
 					),
 					epoch_index: epoch,
 				},

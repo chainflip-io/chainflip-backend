@@ -192,9 +192,9 @@ use pallet_cf_lp::liquidity_pool::LiquidityPool;
 #[cfg(feature = "ibiza")]
 impl pallet_cf_swapping::Config for Runtime {
 	type Event = Event;
-	type Ingress = EthereumIngress;
+	type Ingress = EthereumIngressEgress;
 	type AmmPoolApi = LiquidityPool<Balance>;
-	type Egress = EthereumEgress;
+	type Egress = EthereumIngressEgress;
 	type AccountRoleRegistry = AccountRoles;
 	type WeightInfo = pallet_cf_swapping::weights::PalletWeight<Runtime>;
 }
@@ -224,34 +224,26 @@ impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 use chainflip::address_derivation::AddressDerivation;
 
 #[cfg(feature = "ibiza")]
-impl pallet_cf_ingress::Config<EthereumInstance> for Runtime {
+impl pallet_cf_ingress_egress::Config<EthereumInstance> for Runtime {
 	type Event = Event;
 	type TargetChain = Ethereum;
 	type AddressDerivation = AddressDerivation;
-	type LpAccountHandler = LiquidityProvider;
+	type LpProvisioning = LiquidityProvider;
 	type SwapIntentHandler = Swapping;
-	type IngressFetchApi = EthereumEgress;
-	type WeightInfo = pallet_cf_ingress::weights::PalletWeight<Runtime>;
+	type ReplayProtection = chainflip::EthEnvironment;
+	type AllBatch = eth::api::EthereumApi<EthEnvironment>;
+	type Broadcaster = EthereumBroadcaster;
+	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 }
 
 #[cfg(feature = "ibiza")]
 impl pallet_cf_lp::Config for Runtime {
 	type Event = Event;
 	type AccountRoleRegistry = AccountRoles;
-	type Ingress = EthereumIngress;
-	type EgressApi = EthereumEgress;
+	type Ingress = EthereumIngressEgress;
+	type EgressApi = EthereumIngressEgress;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
-}
-
-#[cfg(feature = "ibiza")]
-impl pallet_cf_egress::Config<EthereumInstance> for Runtime {
-	type Event = Event;
-	type TargetChain = Ethereum;
-	type ReplayProtection = chainflip::EthEnvironment;
-	type AllBatch = eth::api::EthereumApi<EthEnvironment>;
-	type Broadcaster = EthereumBroadcaster;
-	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
-	type WeightInfo = ();
 }
 
 impl pallet_cf_account_roles::Config for Runtime {
@@ -633,8 +625,7 @@ construct_runtime!(
 		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>,
 		EthereumBroadcaster: pallet_cf_broadcast::<Instance1>,
 		EthereumChainTracking: pallet_cf_chain_tracking::<Instance1>,
-		EthereumIngress: pallet_cf_ingress::<Instance1>,
-		EthereumEgress: pallet_cf_egress::<Instance1>,
+		EthereumIngressEgress: pallet_cf_ingress_egress::<Instance1>,
 		Swapping: pallet_cf_swapping,
 		LiquidityProvider: pallet_cf_lp,
 	}
@@ -702,8 +693,7 @@ mod benches {
 		[pallet_cf_chain_tracking, EthereumChainTracking]
 		[pallet_cf_swapping, Swapping]
 		[pallet_cf_account_roles, AccountRoles]
-		[pallet_cf_ingress, EthereumIngress]
-		[pallet_cf_egress, EthereumEgress]
+		[pallet_cf_ingress_egress, EthereumIngressEgress]
 	);
 }
 

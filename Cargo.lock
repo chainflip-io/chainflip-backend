@@ -1005,7 +1005,7 @@ dependencies = [
  "pallet-cf-environment",
  "pallet-cf-flip",
  "pallet-cf-governance",
- "pallet-cf-ingress",
+ "pallet-cf-ingress-egress",
  "pallet-cf-reputation",
  "pallet-cf-staking",
  "pallet-cf-threshold-signature",
@@ -5312,24 +5312,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-cf-egress"
-version = "0.1.0"
-dependencies = [
- "cf-chains",
- "cf-primitives",
- "cf-traits",
- "frame-benchmarking",
- "frame-support",
- "frame-system",
- "parity-scale-codec",
- "scale-info",
- "sp-core 6.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-06+01)",
- "sp-io 6.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-06+01)",
- "sp-runtime 6.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-06+01)",
- "sp-std 4.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-06+01)",
-]
-
-[[package]]
 name = "pallet-cf-emissions"
 version = "0.1.0"
 dependencies = [
@@ -5409,7 +5391,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-cf-ingress"
+name = "pallet-cf-ingress-egress"
 version = "0.1.0"
 dependencies = [
  "cf-chains",
@@ -5422,6 +5404,7 @@ dependencies = [
  "scale-info",
  "sp-core 6.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-06+01)",
  "sp-io 6.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-06+01)",
+ "sp-runtime 6.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-06+01)",
  "sp-std 4.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-06+01)",
 ]
 
@@ -5436,7 +5419,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "pallet-cf-account-roles",
- "pallet-cf-ingress",
+ "pallet-cf-ingress-egress",
  "parity-scale-codec",
  "quickcheck",
  "quickcheck_macros",
@@ -9508,12 +9491,11 @@ dependencies = [
  "pallet-cf-account-roles",
  "pallet-cf-broadcast",
  "pallet-cf-chain-tracking",
- "pallet-cf-egress",
  "pallet-cf-emissions",
  "pallet-cf-environment",
  "pallet-cf-flip",
  "pallet-cf-governance",
- "pallet-cf-ingress",
+ "pallet-cf-ingress-egress",
  "pallet-cf-lp",
  "pallet-cf-reputation",
  "pallet-cf-staking",

@@ -1,8 +1,11 @@
 use crate::{self as pallet_cf_lp};
-use cf_chains::{Chain, Ethereum};
+use cf_chains::{
+	eth::api::{EthereumApi, EthereumReplayProtection},
+	Chain, ChainAbi, ChainEnvironment, Ethereum,
+};
 use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
-	AddressDerivationApi, EgressApi,
+	AddressDerivationApi, Broadcaster, ReplayProtectionProvider,
 };
 use frame_support::{instances::Instance1, parameter_types, sp_runtime::app_crypto::sp_core::H160};
 use frame_system as system;
@@ -13,7 +16,9 @@ use sp_runtime::{
 	BuildStorage,
 };
 
-use cf_primitives::{Asset, AssetAmount, ForeignChainAddress, IntentId};
+use cf_primitives::{
+	chains::assets, Asset, EthereumAddress, ForeignChainAddress, IntentId, ETHEREUM_ETH_ADDRESS,
+};
 
 use sp_std::str::FromStr;
 
@@ -21,6 +26,7 @@ type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 type AccountId = u64;
 
+pub const ETHEREUM_FLIP_ADDRESS: EthereumAddress = [0x00; 20];
 pub struct MockAddressDerivation;
 
 impl AddressDerivationApi for MockAddressDerivation {
@@ -45,7 +51,7 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system,
 		AccountRoles: pallet_cf_account_roles,
-		Ingress: pallet_cf_ingress::<Instance1>,
+		EthereumIngressEgress: pallet_cf_ingress_egress::<Instance1>,
 		LiquidityProvider: pallet_cf_lp,
 	}
 );
@@ -82,13 +88,52 @@ impl system::Config for Test {
 	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
-impl pallet_cf_ingress::Config<Instance1> for Test {
+pub const FAKE_KEYMAN_ADDR: [u8; 20] = [0xcf; 20];
+pub const CHAIN_ID: u64 = 31337;
+pub const COUNTER: u64 = 42;
+impl ReplayProtectionProvider<Ethereum> for Test {
+	fn replay_protection() -> <Ethereum as ChainAbi>::ReplayProtection {
+		EthereumReplayProtection {
+			key_manager_address: FAKE_KEYMAN_ADDR,
+			chain_id: CHAIN_ID,
+			nonce: COUNTER,
+		}
+	}
+}
+
+pub struct MockBroadcast;
+impl Broadcaster<Ethereum> for MockBroadcast {
+	type ApiCall = EthereumApi<MockEthEnvironment>;
+
+	fn threshold_sign_and_broadcast(_api_call: Self::ApiCall) {}
+}
+
+pub struct MockEthEnvironment;
+
+impl ChainEnvironment<<Ethereum as Chain>::ChainAsset, <Ethereum as Chain>::ChainAccount>
+	for MockEthEnvironment
+{
+	fn lookup(
+		asset: <Ethereum as Chain>::ChainAsset,
+	) -> Result<<Ethereum as Chain>::ChainAccount, frame_support::error::LookupError> {
+		Ok(match asset {
+			assets::eth::Asset::Eth => ETHEREUM_ETH_ADDRESS.into(),
+			assets::eth::Asset::Flip => ETHEREUM_FLIP_ADDRESS.into(),
+			_ => todo!(),
+		})
+	}
+}
+
+impl pallet_cf_ingress_egress::Config<Instance1> for Test {
 	type Event = Event;
 	type TargetChain = Ethereum;
 	type AddressDerivation = MockAddressDerivation;
-	type LpAccountHandler = LiquidityProvider;
-	type IngressFetchApi = ();
+	type LpProvisioning = LiquidityProvider;
 	type SwapIntentHandler = Self;
+	type ReplayProtection = Self;
+	type AllBatch = EthereumApi<MockEthEnvironment>;
+	type Broadcaster = MockBroadcast;
+	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type WeightInfo = ();
 }
 
@@ -108,25 +153,11 @@ impl pallet_cf_account_roles::Config for Test {
 	type WeightInfo = ();
 }
 
-parameter_types! {
-	pub static LastEgress: Option<(<Ethereum as Chain>::ChainAsset, AssetAmount, <Ethereum as Chain>::ChainAccount)> = None;
-}
-pub struct MockEgressApi;
-impl EgressApi<Ethereum> for MockEgressApi {
-	fn schedule_egress(
-		asset: <Ethereum as Chain>::ChainAsset,
-		amount: AssetAmount,
-		egress_address: <Ethereum as Chain>::ChainAccount,
-	) {
-		LastEgress::set(Some((asset, amount, egress_address)));
-	}
-}
-
 impl crate::Config for Test {
 	type Event = Event;
 	type AccountRoleRegistry = AccountRoles;
-	type Ingress = Ingress;
-	type EgressApi = MockEgressApi;
+	type Ingress = EthereumIngressEgress;
+	type EgressApi = EthereumIngressEgress;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 }
 

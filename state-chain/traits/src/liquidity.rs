@@ -34,37 +34,6 @@ impl<T: frame_system::Config> SwapIntentHandler for T {
 	}
 }
 
-pub trait LpAccountHandler {
-	type AccountId;
-	type Amount;
-
-	// Register a new LP account.
-	fn register_lp_account(_account_id: &Self::AccountId) -> DispatchResult;
-
-	// Try to debit given asset from the account. WIll fail if the account has insufficient balance.
-	fn try_debit(who: &Self::AccountId, asset: Asset, amount: Self::Amount) -> DispatchResult;
-
-	// Credit given asset to the account.
-	fn credit(who: &Self::AccountId, asset: Asset, amount: Self::Amount) -> DispatchResult;
-}
-
-impl LpAccountHandler for () {
-	type AccountId = AccountId;
-	type Amount = FlipBalance;
-
-	fn register_lp_account(_account_id: &Self::AccountId) -> DispatchResult {
-		Ok(())
-	}
-
-	fn try_debit(_who: &Self::AccountId, _asset: Asset, _amount: Self::Amount) -> DispatchResult {
-		Ok(())
-	}
-
-	fn credit(_who: &Self::AccountId, _asset: Asset, _amount: Self::Amount) -> DispatchResult {
-		Ok(())
-	}
-}
-
 pub trait LpProvisioningApi {
 	type AccountId;
 	type Amount;
@@ -78,7 +47,7 @@ pub trait LpProvisioningApi {
 }
 
 impl LpProvisioningApi for () {
-	type AccountId = AccountId;
+	type AccountId = u64;
 	type Amount = FlipBalance;
 
 	fn provision_account(

@@ -1,3 +1,4 @@
+#[cfg(feature = "runtime-benchmarks")]
 use cf_primitives::chains::assets::{any, dot, eth};
 
 /// Ensure type specifies a value to be used for benchmarking purposes.

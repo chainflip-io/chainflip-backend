@@ -245,7 +245,7 @@ fn main() -> anyhow::Result<()> {
                     .context("Failed to get USDC address from SC")?
                     .expect("USDC address must exist at genesis");
 
-                let eth_chain_ingress_addresses = state_chain_client.storage_map::<pallet_cf_ingress::IntentIngressDetails<state_chain_runtime::Runtime, state_chain_runtime::EthereumInstance>>(latest_block_hash)
+                let eth_chain_ingress_addresses = state_chain_client.storage_map::<pallet_cf_ingress_egress::IntentIngressDetails<state_chain_runtime::Runtime, state_chain_runtime::EthereumInstance>>(latest_block_hash)
                     .await
                     .context("Failed to get initial ingress details")?
                     .into_iter()
