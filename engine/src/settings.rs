@@ -175,7 +175,16 @@ pub struct CommandLineOptions {
 	signing_db_file: Option<PathBuf>,
 }
 
-const ALLOW_LOCAL_IP: &str = "node_p2p.allow_local_ip";
+const NODE_P2P_KEY_FILE: &str = "node_p2p.node_key_file";
+const NODE_P2P_PORT: &str = "node_p2p.port";
+const NODE_P2P_ALLOW_LOCAL_IP: &str = "node_p2p.allow_local_ip";
+
+const STATE_CHAIN_WS_ENDPOINT: &str = "state_chain.ws_endpoint";
+const STATE_CHAIN_SIGNING_KEY_FILE: &str = "state_chain.signing_key_file";
+
+const ETH_PRIVATE_KEY_FILE: &str = "eth.private_key_file";
+
+const SIGNING_DB_FILE: &str = "signing.db_file";
 
 // We use PathBuf because the value must be Sized, Path is not Sized
 fn deser_path<'de, D>(deserializer: D) -> std::result::Result<PathBuf, D::Error>
@@ -216,6 +225,7 @@ where
 	/// 1 - Command line options
 	/// 2 - Environment
 	/// 3 - TOML file
+	/// 4 - Default value
 	fn load_settings_from_all_sources(
 		default_file: &str,
 		optional_file: Option<String>,
@@ -296,7 +306,14 @@ impl CfSettings for Settings {
 	fn set_defaults(
 		config_builder: ConfigBuilder<config::builder::DefaultState>,
 	) -> Result<ConfigBuilder<config::builder::DefaultState>, ConfigError> {
-		config_builder.set_default(ALLOW_LOCAL_IP, false)
+		config_builder
+			.set_default(NODE_P2P_ALLOW_LOCAL_IP, false)?
+			.set_default(NODE_P2P_KEY_FILE, "/etc/chainflip/keys/node_key_file")?
+			.set_default(NODE_P2P_PORT, 8078)?
+			.set_default(STATE_CHAIN_WS_ENDPOINT, "ws://localhost:9944")?
+			.set_default(STATE_CHAIN_SIGNING_KEY_FILE, "/etc/chainflip/keys/signing_key_file")?
+			.set_default(ETH_PRIVATE_KEY_FILE, "/etc/chainflip/keys/eth_private_key")?
+			.set_default(SIGNING_DB_FILE, "/etc/chainflip/data.db")
 	}
 }
 
@@ -321,20 +338,9 @@ impl Source for CommandLineOptions {
 			&self.dot_opts.dot_ws_node_endpoint,
 		);
 
-		self.state_chain_opts.insert_all(&mut map);
-
-		self.eth_opts.insert_all(&mut map);
-
-		#[cfg(feature = "ibiza")]
-		insert_command_line_option(
-			&mut map,
-			"dot.ws_node_endpoint",
-			&self.dot_opts.dot_ws_node_endpoint,
-		);
-
 		insert_command_line_option(&mut map, "health_check.hostname", &self.health_check_hostname);
 		insert_command_line_option(&mut map, "health_check.port", &self.health_check_port);
-		insert_command_line_option_path(&mut map, "signing.db_file", &self.signing_db_file);
+		insert_command_line_option_path(&mut map, SIGNING_DB_FILE, &self.signing_db_file);
 		insert_command_line_option(&mut map, "log.whitelist", &self.log_whitelist);
 		insert_command_line_option(&mut map, "log.blacklist", &self.log_blacklist);
 
@@ -371,48 +377,45 @@ pub fn insert_command_line_option_path(
 impl StateChainOptions {
 	/// Inserts all the State Chain Options into the given map (if Some)
 	pub fn insert_all(&self, map: &mut HashMap<String, Value>) {
-		insert_command_line_option(map, "state_chain.ws_endpoint", &self.state_chain_ws_endpoint);
+		insert_command_line_option(map, STATE_CHAIN_WS_ENDPOINT, &self.state_chain_ws_endpoint);
 		insert_command_line_option_path(
 			map,
-			"state_chain.signing_key_file",
+			STATE_CHAIN_SIGNING_KEY_FILE,
 			&self.state_chain_signing_key_file,
 		);
 	}
 }
 
 impl EthOptions {
-	/// Inserts all the Eth Shared Options into the given map (if Some)
+	/// Inserts all the Eth Options into the given map (if Some)
 	pub fn insert_all(&self, map: &mut HashMap<String, Value>) {
 		insert_command_line_option(map, "eth.ws_node_endpoint", &self.eth_ws_node_endpoint);
 		insert_command_line_option(map, "eth.http_node_endpoint", &self.eth_http_node_endpoint);
-		insert_command_line_option_path(map, "eth.private_key_file", &self.eth_private_key_file);
+		insert_command_line_option_path(map, ETH_PRIVATE_KEY_FILE, &self.eth_private_key_file);
 	}
 }
 
 impl P2POptions {
-	/// Inserts all the Eth Shared Options into the given map (if Some)
+	/// Inserts all the P2P Options into the given map (if Some)
 	pub fn insert_all(&self, map: &mut HashMap<String, Value>) {
-		insert_command_line_option_path(map, "node_p2p.node_key_file", &self.node_key_file);
+		insert_command_line_option_path(map, NODE_P2P_KEY_FILE, &self.node_key_file);
 		insert_command_line_option(
 			map,
 			"node_p2p.ip_address",
 			&self.ip_address.map(|ip| ip.to_string()),
 		);
-		insert_command_line_option(map, "node_p2p.port", &self.p2p_port);
-		insert_command_line_option(map, ALLOW_LOCAL_IP, &self.allow_local_ip);
+		insert_command_line_option(map, NODE_P2P_PORT, &self.p2p_port);
+		insert_command_line_option(map, NODE_P2P_ALLOW_LOCAL_IP, &self.allow_local_ip);
 	}
 }
 
 impl Settings {
 	/// New settings loaded from the `config_path` in the `CommandLineOptions` or
-	/// "config/Default.toml" if none, with overridden values from the environment and
-	/// `CommandLineOptions`
+	/// "/etc/chainflip/config/EngineSettings.toml" if none, with overridden values from the
+	/// environment and `CommandLineOptions`
 	pub fn new(opts: CommandLineOptions) -> Result<Self, ConfigError> {
-		#[cfg(not(feature = "ibiza"))]
-		let default_settings = "config/Default.toml";
-		#[cfg(feature = "ibiza")]
-		let default_settings = "config/IbizaDefault.toml";
-		Self::load_settings_from_all_sources(default_settings, opts.config_path.clone(), opts)
+		let engine_settings_file = "/etc/chainflip/config/EngineSettings.toml";
+		Self::load_settings_from_all_sources(engine_settings_file, opts.config_path.clone(), opts)
 	}
 
 	#[cfg(test)]
@@ -469,24 +472,30 @@ mod tests {
 	use utilities::assert_ok;
 
 	use super::*;
+	use std::env;
 
 	pub fn set_test_env() {
-		use std::env;
-
-		use crate::constants::{
-			ETH_HTTP_NODE_ENDPOINT, ETH_WS_NODE_ENDPOINT, NODE_P2P_IP_ADDRESS, NODE_P2P_PORT,
-		};
+		use crate::constants::{ETH_HTTP_NODE_ENDPOINT, ETH_WS_NODE_ENDPOINT, NODE_P2P_IP_ADDRESS};
 
 		env::set_var(ETH_HTTP_NODE_ENDPOINT, "http://localhost:8545");
 		env::set_var(ETH_WS_NODE_ENDPOINT, "ws://localhost:8545");
 		env::set_var(NODE_P2P_IP_ADDRESS, "1.1.1.1");
-		env::set_var(NODE_P2P_PORT, "8087");
+		#[cfg(feature = "ibiza")]
+		env::set_var("DOT__WS_NODE_ENDPOINT", "wss://my_fake_polkadot_rpc:443/<secret_key>");
 	}
 
 	#[test]
 	fn init_default_config() {
 		set_test_env();
-		let settings = Settings::new(CommandLineOptions::default()).unwrap();
+
+		let settings = Settings::new(CommandLineOptions {
+			state_chain_opts: StateChainOptions {
+				state_chain_ws_endpoint: None,
+				state_chain_signing_key_file: Some(PathBuf::from("")),
+			},
+			..Default::default()
+		})
+		.unwrap();
 		assert_eq!(settings.state_chain.ws_endpoint, "ws://localhost:9944");
 		assert_eq!(settings.eth.http_node_endpoint, "http://localhost:8545");
 	}
@@ -495,7 +504,10 @@ mod tests {
 	fn test_init_config_with_testing_config() {
 		let test_settings = Settings::new_test().unwrap();
 
-		assert_eq!(test_settings.state_chain.ws_endpoint, "ws://localhost:9944");
+		assert_eq!(
+			test_settings.state_chain.signing_key_file,
+			PathBuf::from("./tests/test_keystore/alice_key")
+		);
 	}
 
 	#[test]
@@ -532,6 +544,8 @@ mod tests {
 
 	#[test]
 	fn test_config_command_line_option() {
+		set_test_env();
+
 		// Load both the settings files using the --config command line option
 		let settings1 = Settings::new(CommandLineOptions {
 			config_path: Some("config/Testing.toml".to_owned()),
@@ -542,9 +556,9 @@ mod tests {
 		let settings2 = Settings::new(CommandLineOptions {
 			config_path: Some(
 				if cfg!(feature = "ibiza") {
-					"config/IbizaDefault.toml"
+					"config/IbizaDevelopment.toml"
 				} else {
-					"config/Default.toml"
+					"config/Development.toml"
 				}
 				.to_owned(),
 			),
@@ -553,7 +567,7 @@ mod tests {
 		.unwrap();
 
 		// Now compare a value that should be different to confirm that both files loaded.
-		// Note: This test will break/fail if the Testing.toml and Default.toml have the same
+		// Note: This test will break/fail if the Testing.toml and Development.toml have the same
 		// `signing_key_file` value
 		assert_ne!(settings1.state_chain.signing_key_file, settings2.state_chain.signing_key_file);
 	}
@@ -561,10 +575,10 @@ mod tests {
 	#[test]
 	fn test_all_command_line_options() {
 		use std::str::FromStr;
-
 		// Fill the options with test values that will pass the parsing/validation.
-		// The test values need to be different from the values in `Default.toml` for the test to
-		// work. Leave the `config_path` option out, it is covered in a separate test.
+		// The test values need to be different from the default values set during `set_defaults()`
+		// for the test to work. Leave the `config_path` option out, it is covered in a separate
+		// test.
 		let opts = CommandLineOptions {
 			config_path: None,
 			log_whitelist: Some(vec!["test1".to_owned()]),

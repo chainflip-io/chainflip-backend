@@ -1,6 +1,5 @@
 # Testing configurations for the CFE
 [node_p2p]
-node_key_file = "/run/secrets/node_key_file"
 ip_address = "1.1.1.1"
 port = 8087
 allow_local_ip = true
@@ -8,12 +7,10 @@ allow_local_ip = true
 [state_chain]
 # 32 byte hex secret key - associated with the node's public id (public key)
 signing_key_file = "./tests/test_keystore/alice_key"
-ws_endpoint = "ws://localhost:9944"
 
 [eth]
 # Ethereum private key file path. Default is the docker secrets path. This file should contain a hex-encoded private key.
 http_node_endpoint = "http://localhost:8545"
-private_key_file = "/run/secrets/eth_private_key"
 ws_node_endpoint = "ws://localhost:8545"
 
 [dot]
@@ -23,6 +20,3 @@ ws_node_endpoint = "wss://my_fake_polkadot_rpc:443/<secret_key>"
 [health_check]
 hostname = "127.0.0.1"
 port = 5555
-
-[signing]
-db_file = "data.db"
