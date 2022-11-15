@@ -113,7 +113,7 @@ pub async fn task_scope<
 	let (scope, mut task_result_stream) = Scope::new();
 
 	// try_join ensures if the top level task returns an error we immediately drop
-	// task_result_stream cancelling all tasks
+	// `task_result_stream`, which in turn cancels all the tasks
 	tokio::try_join!(
 		async move {
 			while let Some(task_result) = task_result_stream.next().await {
@@ -146,17 +146,28 @@ type TaskFuture<Error> = Pin<Box<dyn 'static + Future<Output = Result<(), Error>
 #[derive(Clone)]
 pub struct Scope<'env, Error: Send + 'static> {
 	sender: async_channel::Sender<TaskFuture<Error>>,
-	/// This PhantomData pattern "&'env mut &'env ()"" is required to stop multiple
-	/// spawned tasks capturing the same state and mutating it asynchronously
-	/// by making the type `Scope` invariant wrt `'env`. I.e. stopping the `Scope` type being [coerced](https://www.possiblerust.com/guide/what-can-coerce-and-where-in-rust)
-	/// implicitly when `spawn` is called.
+	/// Invariance over 'env, to make sure 'env cannot shrink,
+	/// which is necessary for soundness.
+	///
+	/// Without invariance, this would compile fine but be unsound:
+	///
+	/// ```compile_fail,E0373
+	/// let mut a = 1;
+	/// task_scope(|scope| {
+	///     scope.spawn(async {
+	///         a += 1;
+	///     });
+	///     scope.spawn(async {
+	///         a += 1; // might run concurrently to other spawn
+	///     });
+	/// });
+	/// ```
 	_phantom: std::marker::PhantomData<&'env mut &'env ()>,
 }
 impl<'env, Error: Send + 'static> Scope<'env, Error> {
 	fn new() -> (Self, ScopeResultStream<Error>) {
-		// Must be unbounded so that `try_send` in `spawn` will only fail if the receiver is dropped
-		// i.e. the channel is closed, meaning the scope is exiting/aborting all scoped tasks
-		// anyway.
+		// Must be unbounded so that `try_send` in `spawn` will only fail if the receiver is
+		// dropped, meaning the scope is exiting/aborting, and not when it is full
 		let (sender, receiver) = async_channel::unbounded();
 
 		(
@@ -240,10 +251,12 @@ impl<T> Future for ScopedJoinHandle<T> {
 		match Pin::new(&mut self.as_mut().receiver).poll(cx) {
 			Poll::Ready(result) => match result {
 				Ok(t) => Poll::Ready(t),
-				Err(_) => Poll::Pending, /* Wait forever. This is ok as this means the associated
-				                          * task returned an error, and so the task_scope is
-				                          * exiting/aborting, and so where we are await on this
-				                          * future is going to be cancelled (TODO: Add lifetime
+				Err(_) => Poll::Pending, /* Await forever. This is ok as this means the
+				                          * associated task returned an
+				                          * error, and so the task_scope is
+				                          * exiting/aborting, and so where we are awaiting on
+				                          * this future, it is going to
+				                          * be cancelled (TODO: Add lifetime
 				                          * to ScopedJoinHandle to guarantee ScopedJoinHandle
 				                          * cannot be await'ed on outside of its associated
 				                          * task_scope) */
