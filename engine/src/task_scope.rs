@@ -9,8 +9,8 @@
 //! A scope is designed to allow you to spawn asynchronous tasks, wait for all those tasks to
 //! finish, and handle errors/panics caused by those tasks.
 //!
-//! When you create a scope, you must provide a parent task/"async closure", which is passed a
-//! handle via which you can spawn further child tasks, which run asychronously to the parent task.
+//! When you create a scope, you must provide a top level task/"async closure", which is passed a
+//! handle via which you can spawn further tasks which run asychronously.
 //! The scope will not exit/return until all the tasks have completed. Iff any of the scope's tasks
 //! panic or return an error, the scope will cancel all remaining tasks, and end by respectively
 //! panicking or returning the error.
@@ -93,11 +93,11 @@ use std::{
 use futures::{
 	ready,
 	stream::{FusedStream, FuturesUnordered},
-	Future, Stream, StreamExt,
+	Future, FutureExt, Stream, StreamExt,
 };
 use tokio::sync::oneshot;
 
-/// This function allows a parent task to spawn child tasks such that if any tasks panic or error,
+/// This function allows a top level task to spawn tasks such that if any tasks panic or error,
 /// all other tasks will be cancelled, and the panic or error will be propagated by this function.
 /// It guarantees all tasks spawned using its scope object will finish before this function exits.
 /// Thereby making accessing data outside of this scope from inside this scope via a reference safe.
@@ -108,34 +108,34 @@ pub async fn task_scope<
 	Error: Send + 'static,
 	C: for<'b> FnOnce(&'b Scope<'a, Error>) -> futures::future::BoxFuture<'b, Result<T, Error>>,
 >(
-	parent_task: C,
+	top_level_task: C,
 ) -> Result<T, Error> {
-	let (scope, mut child_task_result_stream) = Scope::new();
+	let (scope, mut task_result_stream) = Scope::new();
 
-	// try_join ensures if the parent returns an error we immediately drop child_task_result_stream
-	// cancelling all children and vice versa
+	// try_join ensures if the top level task returns an error we immediately drop
+	// task_result_stream cancelling all tasks
 	tokio::try_join!(
 		async move {
-			while let Some(child_task_result) = child_task_result_stream.next().await {
-				match child_task_result {
+			while let Some(task_result) = task_result_stream.next().await {
+				match task_result {
 					Err(error) => {
-						// Note we drop the child_task_result_stream on unwind causing all tasks to
+						// Note we drop the task_result_stream on unwind causing all tasks to
 						// be cancelled/aborted
 						if let Ok(panic) = error.try_into_panic() {
 							std::panic::resume_unwind(panic);
 						} /* else: Can only occur if tokio's runtime is dropped during task
 						  * scope's lifetime, in this we are about to be cancelled ourselves */
 					},
-					Ok(child_future_result) => child_future_result?,
+					Ok(future_result) => future_result?,
 				}
 			}
-			// child_task_result_stream has ended meaning scope has been dropped and all children
-			// have finished running
+			// task_result_stream has ended meaning scope has been dropped and all tasks (excluding
+			// the top-level task) have finished running
 			Ok(())
 		},
-		// This async move scope ensures scope is dropped when parent_task and its returned future
-		// finish (Instead of when this function exits)
-		async move { parent_task(&scope).await }
+		// This async move scope ensures scope is dropped when top_level_task and its returned
+		// future finish (Instead of when this function exits)
+		async move { top_level_task(&scope).await }
 	)
 	.map(|(_, t)| t)
 }
@@ -148,11 +148,15 @@ pub struct Scope<'env, Error: Send + 'static> {
 	sender: async_channel::Sender<TaskFuture<Error>>,
 	/// This PhantomData pattern "&'env mut &'env ()"" is required to stop multiple
 	/// spawned tasks capturing the same state and mutating it asynchronously
-	/// by making the type Scope invariant wrt 'env
+	/// by making the type `Scope` invariant wrt `'env`. I.e. stopping the `Scope` type being [coerced](https://www.possiblerust.com/guide/what-can-coerce-and-where-in-rust)
+	/// implicitly when `spawn` is called.
 	_phantom: std::marker::PhantomData<&'env mut &'env ()>,
 }
 impl<'env, Error: Send + 'static> Scope<'env, Error> {
 	fn new() -> (Self, ScopeResultStream<Error>) {
+		// Must be unbounded so that `try_send` in `spawn` will only fail if the receiver is dropped
+		// i.e. the channel is closed, meaning the scope is exiting/aborting all scoped tasks
+		// anyway.
 		let (sender, receiver) = async_channel::unbounded();
 
 		(
@@ -160,9 +164,7 @@ impl<'env, Error: Send + 'static> Scope<'env, Error> {
 			ScopeResultStream {
 				receiver: Some(receiver),
 				no_more_tasks: false,
-				// Tokio has two flavors of internal runtime CurrentThread and MultiThread, I cannot
-				// use the same task_scope implementation for both flavors But currently there is
-				// not a nice way to detect which is being used. TODO: Once https://github.com/tokio-rs/tokio/pull/5138 is released we should use this function instead to determine the runtime variant
+				// Currently there is not a nice way to detect which tokio runtime flavor is being used. TODO: Once https://github.com/tokio-rs/tokio/pull/5138 is released we should use this function instead to determine this
 				#[cfg(test)]
 				tasks: ScopedTasks::CurrentThread(Default::default()),
 				#[cfg(not(test))]
@@ -210,23 +212,20 @@ impl<T> ScopedJoinHandle<T> {
 		let (abort_handle, abort_registration) = futures::future::AbortHandle::new_pair();
 		let f = futures::future::Abortable::new(f, abort_registration);
 
-		(Self { receiver, abort_handle }, async move {
-			let result_aborted = f.await;
-
-			match result_aborted {
-				Ok(result_future) => match result_future {
-					Ok(output) => {
-						let _result = sender.send(output);
+		(
+			Self { receiver, abort_handle },
+			f.map(move |result_aborted| {
+				match result_aborted {
+					Ok(result_future) => result_future.map(move |t| {
+						let _result = sender.send(t);
+					}),
+					Err(_) => {
+						// Spawned task was aborted
 						Ok(())
 					},
-					Err(error) => Err(error),
-				},
-				Err(_) => {
-					// Spawned task was aborted
-					Ok(())
-				},
-			}
-		})
+				}
+			}),
+		)
 	}
 }
 impl<T> Drop for ScopedJoinHandle<T> {
@@ -241,7 +240,13 @@ impl<T> Future for ScopedJoinHandle<T> {
 		match Pin::new(&mut self.as_mut().receiver).poll(cx) {
 			Poll::Ready(result) => match result {
 				Ok(t) => Poll::Ready(t),
-				Err(_) => Poll::Pending,
+				Err(_) => Poll::Pending, /* Wait forever. This is ok as this means the associated
+				                          * task returned an error, and so the task_scope is
+				                          * exiting/aborting, and so where we are await on this
+				                          * future is going to be cancelled (TODO: Add lifetime
+				                          * to ScopedJoinHandle to guarantee ScopedJoinHandle
+				                          * cannot be await'ed on outside of its associated
+				                          * task_scope) */
 			},
 			Poll::Pending => Poll::Pending,
 		}
@@ -279,6 +284,7 @@ impl<Error: Send + 'static> Stream for ScopeResultStream<Error> {
 							tasks.push(runtime.spawn(future)),
 					}
 				},
+				// Sender/`Scope` has been dropped
 				Poll::Ready(None) => self.no_more_tasks = true,
 				Poll::Pending => break,
 			}
@@ -291,7 +297,7 @@ impl<Error: Send + 'static> Stream for ScopeResultStream<Error> {
 		}) {
 			None =>
 				if self.no_more_tasks {
-					Poll::Ready(None)
+					Poll::Ready(None) // End stream
 				} else {
 					Poll::Pending
 				},
@@ -323,15 +329,22 @@ impl<Error: Send + 'static> Drop for ScopeResultStream<Error> {
 		self.receiver = None;
 		// cancel and wait for all scope's tasks to finish
 		match &mut self.tasks {
+			// Tokio has two flavors of internal runtime CurrentThread and MultiThread.
+			// tokio::task::block_in_place doesn't work in a CurrentThread runtime.
 			#[cfg(test)]
-			ScopedTasks::CurrentThread(_) => {},
+			ScopedTasks::CurrentThread(_) => {
+				// We don't need to wait for tasks to finish here as the tasks member contains all
+				// the futures, so once we drop `tasks` we know all the spawned futures are gone.
+				// Whereas in the MultiThread case calling abort() doesn't guarantee the spawned
+				// futures as gone.
+			},
 			ScopedTasks::MultiThread(runtime, tasks) =>
 				if !tasks.is_empty() {
 					for task in tasks.iter() {
 						task.abort();
 					}
 					tokio::task::block_in_place(|| {
-						runtime.block_on(async { while tasks.next().await.is_some() {} });
+						runtime.block_on(tasks.for_each(|_| async {}));
 					});
 				},
 		}
