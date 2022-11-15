@@ -1,0 +1,19 @@
+name: Release production packages
+on:
+  push:
+    branches:
+      - "ci/**"
+# on:
+#   release:
+#     types: [published]
+jobs:
+  call-external-release:
+    runs-on: ubuntu-latest
+    name: Call external release repository
+    steps:
+      - name: Repository Dispatch
+        uses: peter-evans/repository-dispatch@v2
+        with:
+          repository: chainflip-io/chainflip-backend-release-poc
+          event-type: release
+          client-payload: '{"ref": "${{ github.ref }}", "sha": "${{ github.sha }}"}'
