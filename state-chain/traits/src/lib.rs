@@ -159,7 +159,7 @@ impl<CandidateId, BidAmount: Default> Default for AuctionOutcome<CandidateId, Bi
 }
 
 pub trait VaultRotator {
-	type ValidatorId;
+	type ValidatorId: Ord + Clone;
 
 	/// Start a vault rotation with the provided `candidates`.
 	fn start_vault_rotation(candidates: BTreeSet<Self::ValidatorId>);
@@ -171,6 +171,12 @@ pub trait VaultRotator {
 	fn set_vault_rotation_outcome(_outcome: AsyncResult<Result<(), BTreeSet<Self::ValidatorId>>>) {
 		unimplemented!()
 	}
+}
+
+pub trait MultiVaultRotator {
+	type ValidatorId;
+	// Are we ready to tell the vaults they can commit to their shiny new key.
+	fn ready_to_commit_new_keys() -> AsyncResult<Result<(), BTreeSet<Self::ValidatorId>>>;
 }
 
 /// Handler for Epoch life cycle events.
