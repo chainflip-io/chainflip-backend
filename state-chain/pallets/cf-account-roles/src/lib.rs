@@ -99,7 +99,7 @@ pub mod pallet {
 					T::StakeInfo::total_stake_of(&who) >=
 						T::BidInfo::get_min_backup_bid()
 							.checked_div(&T::Amount::from(2_u32))
-							.unwrap(),
+							.expect("Division by 2 can't fail."),
 					Error::<T>::NotEnoughStake
 				);
 			}

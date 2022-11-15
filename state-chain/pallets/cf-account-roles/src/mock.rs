@@ -3,16 +3,14 @@ use cf_traits::{
 	impl_mock_staking_info,
 	mocks::{
 		bid_info::MockBidInfo, ensure_origin_mock::NeverFailingOriginCheck,
-		system_state_info::MockSystemStateInfo,
+		staking_info::MockStakingInfo, system_state_info::MockSystemStateInfo,
 	},
-	Chainflip, StakingInfo,
+	Chainflip,
 };
 
-use frame_support::{
-	parameter_types,
-	traits::{ConstU16, ConstU64},
-};
-use frame_system::pallet_prelude::BlockNumberFor;
+use cf_traits::StakingInfo;
+
+use frame_support::traits::{ConstU16, ConstU64};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -35,16 +33,6 @@ frame_support::construct_runtime!(
 		MockAccountRoles: pallet_cf_account_roles,
 	}
 );
-
-parameter_types! {
-	pub const BlockHashCount: u64 = 250;
-	pub const SS58Prefix: u8 = 42;
-	pub const VotingPeriod: BlockNumberFor<Test> = 10;
-	pub const ProposalFee: u128 = 100;
-	pub const EnactmentDelay: BlockNumberFor<Test> = 20;
-	pub const BlocksPerDay: u64 = 14400;
-	pub const ExistentialDeposit: u128 = 10;
-}
 
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
