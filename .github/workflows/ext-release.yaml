@@ -16,4 +16,5 @@ jobs:
         with:
           repository: chainflip-io/chainflip-backend-release-poc
           event-type: release
+          token: ${{ secrets.CF_GITHUB_BOT_TOKEN  }}
           client-payload: '{"ref": "${{ github.ref }}", "sha": "${{ github.sha }}"}'
