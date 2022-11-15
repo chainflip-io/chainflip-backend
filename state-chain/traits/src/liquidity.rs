@@ -48,7 +48,7 @@ pub trait SwappingApi {
 	fn swap(
 		from: Asset,
 		to: Asset,
-		swap_input: AssetAmount,
+		input_amount: AssetAmount,
 		fee: u16,
 	) -> (AssetAmount, (Asset, AssetAmount));
 }
@@ -70,7 +70,7 @@ pub trait AmmPoolApi {
 		position: &TradingPosition<AssetAmount>,
 	) -> Option<(AssetAmount, AssetAmount)>;
 
-	fn swap(swap_input: AssetAmount, fee: u16) -> (AssetAmount, AssetAmount);
+	fn swap(input_amount: AssetAmount, fee: u16) -> (AssetAmount, AssetAmount);
 }
 
 // TODO Remove these in favour of a real mocks.
@@ -105,7 +105,7 @@ impl SwappingApi for () {
 	fn swap(
 		_from: Asset,
 		_to: Asset,
-		_swap_input: AssetAmount,
+		_input_amount: AssetAmount,
 		_fee: u16,
 	) -> (AssetAmount, (Asset, AssetAmount)) {
 		unimplemented!()
