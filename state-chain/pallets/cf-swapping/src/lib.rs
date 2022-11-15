@@ -164,6 +164,42 @@ pub mod pallet {
 					.into(),
 			);
 		}
+
+		fn calc_prop_swap(
+			total_input: AssetAmount,
+			swap_amount: AssetAmount,
+			total_output: AssetAmount,
+		) -> AssetAmount {
+			(swap_amount * 100).saturating_div(total_input).saturating_mul(total_output) / 100
+		}
+
+		fn calc_and_save_fees(swaps: Swap<T::AccountId>) -> AssetAmount {
+			for swap in swaps {
+				let fee = 9;
+				EarnedRelayerFees::<T>::mutate(&swap.relayer_id, swap.from, |maybe_fees| {
+					if let Some(fees) = maybe_fees {
+						*maybe_fees = Some(fees.saturating_add(fee))
+					} else {
+						*maybe_fees = Some(fee)
+					}
+				});
+			}
+		}
+
+		pub fn execute_swaps(swaps: Swap<T::AccountId>, from: Asset, to: Asset) {
+			let total = swaps.into_iter().map(|swap| swap.amount).sum();
+			let (swap_output, (asset, fee)) = T::AmmPoolApi::swap(from, to, total, 1);
+			for swap in swaps {
+				let swap_amount = Self::calc_prop_swap(total, swap.amount, swap_output);
+				T::Egress::schedule_egress(
+					assets::eth::Asset::try_from(swap.to).expect("Only eth assets supported"),
+					swap_amount,
+					EthereumAddress::try_from(swap.egress_address)
+						.expect("On eth assets supported")
+						.into(),
+				);
+			}
+		}
 	}
 
 	impl<T: Config> SwapIntentHandler for Pallet<T> {
