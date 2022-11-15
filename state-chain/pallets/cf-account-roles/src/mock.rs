@@ -3,7 +3,7 @@ use cf_traits::{
 	impl_mock_staking_info,
 	mocks::{
 		bid_info::MockBidInfo, ensure_origin_mock::NeverFailingOriginCheck,
-		staking_info::MockStakingInfo, system_state_info::MockSystemStateInfo,
+		system_state_info::MockSystemStateInfo,
 	},
 	Chainflip,
 };
