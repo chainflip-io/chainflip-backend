@@ -1,4 +1,5 @@
-use super::{common::*, StateChainEnvironment};
+pub use super::common::*;
+use super::StateChainEnvironment;
 use cf_chains::eth::CHAIN_ID_GOERLI;
 
 pub struct Config;
@@ -18,7 +19,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	ethereum_deployment_block: 7826394u64,
 	genesis_stake_amount: 5_000 * FLIPPERINOS_PER_FLIP,
 	min_stake: 10 * FLIPPERINOS_PER_FLIP,
-	eth_block_safety_margin: ETH_BLOCK_SAFETY_MARGIN,
+	eth_block_safety_margin: eth::BLOCK_SAFETY_MARGIN as u32,
 	max_ceremony_stage_duration: 300,
 };
 
@@ -37,8 +38,6 @@ pub const DOPEY_ED25519: [u8; 32] =
 pub const SNOW_WHITE_SR25519: [u8; 32] =
 	hex_literal::hex!["84f134a4cc6bf41d3239bbe097eac4c8f83e78b468e6c49ed5cd2ddc51a07a29"];
 
-pub const CLAIM_DELAY_BUFFER_SECS: u64 =
-	CONSERVATIVE_BLOCK_TIME_SECS * ETH_BLOCK_SAFETY_MARGIN as u64;
 pub const CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL: u32 = 28;
 pub const BACKUP_NODE_EMISSION_INFLATION_PERBILL: u32 = 6;
 pub const EXPIRY_SPAN_IN_SECONDS: u64 = 80000;
@@ -53,6 +52,3 @@ pub const ACCRUAL_RATIO: (i32, u32) = (ACCRUAL_REPUTATION_POINTS, ACCRUAL_ONLINE
 pub const PERCENT_OF_EPOCH_PERIOD_CLAIMABLE: u8 = 50;
 /// Default supply update interval is 24 hours.
 pub const SUPPLY_UPDATE_INTERVAL_DEFAULT: u32 = 14_400;
-
-/// Number of blocks to wait until we deem the block to be safe.
-const ETH_BLOCK_SAFETY_MARGIN: u32 = 4;

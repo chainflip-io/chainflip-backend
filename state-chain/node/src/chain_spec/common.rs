@@ -13,3 +13,5 @@ pub const SUPPLY_UPDATE_INTERVAL_DEFAULT: u32 = 14_400;
 /// Most Ethereum blocks are validated in around 12 seconds. This is a conservative
 /// time, in case things go wrong.
 pub const CONSERVATIVE_BLOCK_TIME_SECS: u64 = 20;
+
+pub const CLAIM_DELAY_BUFFER_SECS: u64 = CONSERVATIVE_BLOCK_TIME_SECS * eth::BLOCK_SAFETY_MARGIN;
