@@ -1,7 +1,5 @@
+use super::{common::*, StateChainEnvironment};
 use cf_chains::eth::CHAIN_ID_GOERLI;
-use state_chain_runtime::constants::common::FLIPPERINOS_PER_FLIP;
-
-use super::StateChainEnvironment;
 
 pub struct Config;
 
@@ -55,10 +53,6 @@ pub const ACCRUAL_RATIO: (i32, u32) = (ACCRUAL_REPUTATION_POINTS, ACCRUAL_ONLINE
 pub const PERCENT_OF_EPOCH_PERIOD_CLAIMABLE: u8 = 50;
 /// Default supply update interval is 24 hours.
 pub const SUPPLY_UPDATE_INTERVAL_DEFAULT: u32 = 14_400;
-
-/// Most Ethereum blocks are validated in around 12 seconds. This is a conservative
-/// time, in case things go wrong.
-pub const CONSERVATIVE_BLOCK_TIME_SECS: u64 = 20;
 
 /// Number of blocks to wait until we deem the block to be safe.
 const ETH_BLOCK_SAFETY_MARGIN: u32 = 4;

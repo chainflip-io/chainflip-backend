@@ -127,9 +127,5 @@ pub mod common {
 
 		/// Number of blocks to wait until we deem the block to be safe.
 		pub const BLOCK_SAFETY_MARGIN: <Ethereum as Chain>::ChainBlockNumber = 4;
-
-		/// Most Ethereum blocks are validated in around 12 seconds. This is a conservative
-		/// time, in case things go wrong.
-		pub const CONSERVATIVE_BLOCK_TIME_SECS: u64 = 20;
 	}
 }
