@@ -38,10 +38,6 @@ pub const DOPEY_ED25519: [u8; 32] =
 pub const SNOW_WHITE_SR25519: [u8; 32] =
 	hex_literal::hex!["84f131a66e88e3e5f8dce20d413cab3fbb13769a14a4c7b640b7222863ef353d"];
 
-pub const CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL: u32 = 28;
-pub const BACKUP_NODE_EMISSION_INFLATION_PERBILL: u32 = 6;
-pub const EXPIRY_SPAN_IN_SECONDS: u64 = 80000;
-
 // Number of online credits required to get `ACCRUAL_REPUTATION_POINTS` of reputation
 const ACCRUAL_ONLINE_CREDITS: u32 = 2500;
 // Number of reputation points received for having `ACCRUAL_ONLINE_CREDITS`
