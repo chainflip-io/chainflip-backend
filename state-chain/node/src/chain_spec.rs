@@ -24,6 +24,7 @@ use state_chain_runtime::Signature;
 pub mod common;
 pub mod perseverance;
 pub mod sisyphos;
+pub mod testnet;
 
 #[cfg(feature = "ibiza")]
 /// Generate a crypto pair from seed.
@@ -258,156 +259,12 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 	))
 }
 
-/// Initialise a Chainflip three-node testnet from the environment.
-pub fn chainflip_three_node_testnet_config() -> Result<ChainSpec, String> {
-	chainflip_three_node_testnet_config_from_env(
-		"Three node testnet",
-		"three-node-testnet",
-		ChainType::Local,
-		get_environment(),
-	)
-}
-
-fn chainflip_three_node_testnet_config_from_env(
-	name: &str,
-	id: &str,
-	chain_type: ChainType,
-	environment: StateChainEnvironment,
-) -> Result<ChainSpec, String> {
-	let wasm_binary = WASM_BINARY.ok_or_else(|| "Wasm binary not available".to_string())?;
-	let bashful_sr25519 =
-		hex_literal::hex!["36c0078af3894b8202b541ece6c5d8fb4a091f7e5812b688e703549040473911"];
-	let doc_sr25519 =
-		hex_literal::hex!["8898758bf88855615d459f552e36bfd14e8566c8b368f6a6448942759d5c7f04"];
-	let dopey_sr25519 =
-		hex_literal::hex!["ca58f2f4ae713dbb3b4db106640a3db150e38007940dfe29e6ebb870c4ccd47e"];
-	let snow_white =
-		hex_literal::hex!["ced2e4db6ce71779ac40ccec60bf670f38abbf9e27a718b4412060688a9ad212"];
-	let StateChainEnvironment {
-		flip_token_address,
-		eth_usdc_address,
-		stake_manager_address,
-		key_manager_address,
-		eth_vault_address,
-		ethereum_chain_id,
-		eth_init_agg_key,
-		ethereum_deployment_block,
-		genesis_stake_amount,
-		eth_block_safety_margin,
-		max_ceremony_stage_duration,
-		min_stake,
-	} = environment;
-	Ok(ChainSpec::from_genesis(
-		name,
-		id,
-		chain_type,
-		move || {
-			testnet_genesis(
-				wasm_binary,
-				// Initial PoA authorities
-				vec![
-					(
-						// Bashful
-						bashful_sr25519.into(),
-						bashful_sr25519.unchecked_into(),
-						hex_literal::hex![
-							"971b584324592e9977f0ae407eb6b8a1aa5bcd1ca488e54ab49346566f060dd8"
-						]
-						.unchecked_into(),
-					),
-					(
-						// Doc
-						doc_sr25519.into(),
-						doc_sr25519.unchecked_into(),
-						hex_literal::hex![
-							"e4c4009bd437cba06a2f25cf02f4efc0cac4525193a88fe1d29196e5d0ff54e8"
-						]
-						.unchecked_into(),
-					),
-					(
-						// Dopey
-						dopey_sr25519.into(),
-						dopey_sr25519.unchecked_into(),
-						hex_literal::hex![
-							"5506333c28f3dd39095696362194f69893bc24e3ec553dbff106cdcbfe1beea4"
-						]
-						.unchecked_into(),
-					),
-				],
-				// Governance account - Snow White
-				snow_white.into(),
-				// Stakers at genesis
-				vec![
-					// Bashful
-					bashful_sr25519.into(),
-					// Doc
-					doc_sr25519.into(),
-					// Dopey
-					dopey_sr25519.into(),
-					#[cfg(feature = "ibiza")]
-					get_account_id_from_seed::<sr25519::Public>("Alice"),
-					#[cfg(feature = "ibiza")]
-					get_account_id_from_seed::<sr25519::Public>("Bob"),
-				],
-				common::MIN_AUTHORITIES,
-				common::MAX_AUTHORITIES,
-				EnvironmentConfig {
-					flip_token_address,
-					eth_usdc_address,
-					stake_manager_address,
-					key_manager_address,
-					eth_vault_address,
-					ethereum_chain_id,
-					cfe_settings: CfeSettings {
-						eth_block_safety_margin,
-						max_ceremony_stage_duration,
-						eth_priority_fee_percentile: common::ETH_PRIORITY_FEE_PERCENTILE,
-					},
-					#[cfg(feature = "ibiza")]
-					polkadot_vault_account_id: POLKADOT_VAULT_ACCOUNT,
-					#[cfg(feature = "ibiza")]
-					polkadot_proxy_account_id: POLKADOT_PROXY_ACCOUNT,
-					#[cfg(feature = "ibiza")]
-					polkadot_network_config: WESTEND_CONFIG,
-				},
-				eth_init_agg_key,
-				ethereum_deployment_block,
-				common::TOTAL_ISSUANCE,
-				genesis_stake_amount,
-				min_stake,
-				8 * common::HOURS,
-				common::CLAIM_DELAY_SECS,
-				common::CLAIM_DELAY_BUFFER_SECS,
-				common::CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL,
-				common::BACKUP_NODE_EMISSION_INFLATION_PERBILL,
-				common::EXPIRY_SPAN_IN_SECONDS,
-				common::ACCRUAL_RATIO,
-				common::PERCENT_OF_EPOCH_PERIOD_CLAIMABLE,
-				common::SUPPLY_UPDATE_INTERVAL,
-				common::PENALTIES.to_vec(),
-				common::KEYGEN_CEREMONY_TIMEOUT_BLOCKS,
-				common::THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS,
-			)
-		},
-		// Bootnodes
-		vec![],
-		// Telemetry
-		None,
-		// Protocol ID
-		None,
-		// Fork ID
-		None,
-		// Properties
-		Some(chainflip_properties()),
-		// Extensions
-		None,
-	))
-}
-
 macro_rules! network_spec {
 	( $network:ident ) => {
 		impl $network::Config {
-			pub fn build_spec() -> Result<ChainSpec, String> {
+			pub fn build_spec(
+				env_override: Option<StateChainEnvironment>,
+			) -> Result<ChainSpec, String> {
 				use $network::*;
 
 				let wasm_binary =
@@ -425,11 +282,11 @@ macro_rules! network_spec {
 					eth_block_safety_margin,
 					max_ceremony_stage_duration,
 					min_stake,
-				} = ENV;
+				} = env_override.unwrap_or(ENV);
 				Ok(ChainSpec::from_genesis(
 					NETWORK_NAME,
 					NETWORK_NAME,
-					ChainType::Live,
+					CHAIN_TYPE,
 					move || {
 						testnet_genesis(
 							wasm_binary,
@@ -513,6 +370,7 @@ macro_rules! network_spec {
 	};
 }
 
+network_spec!(testnet);
 network_spec!(perseverance);
 network_spec!(sisyphos);
 

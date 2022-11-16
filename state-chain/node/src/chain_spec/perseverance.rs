@@ -1,10 +1,12 @@
 pub use super::common::*;
 use super::StateChainEnvironment;
 use cf_chains::eth::CHAIN_ID_GOERLI;
+use sc_service::ChainType;
 
 pub struct Config;
 
 pub const NETWORK_NAME: &str = "Chainflip-Perseverance";
+pub const CHAIN_TYPE: ChainType = ChainType::Live;
 
 pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	flip_token_address: hex_literal::hex!("0E1D4594cB44D3E929dc0fb32F1c35A26D6e8e7f"),

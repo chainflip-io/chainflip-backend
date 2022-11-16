@@ -1,10 +1,12 @@
 pub use super::common::*;
 use super::StateChainEnvironment;
 use cf_chains::eth::CHAIN_ID_GOERLI;
+use sc_service::ChainType;
 
 pub struct Config;
 
 pub const NETWORK_NAME: &str = "Chainflip-Sisyphos";
+pub const CHAIN_TYPE: ChainType = ChainType::Live;
 
 pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	flip_token_address: hex_literal::hex!("d992EC2354E8A8c12e92372049aa4A7310Bd95eD"),
