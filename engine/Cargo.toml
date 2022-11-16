@@ -5,14 +5,18 @@ name = "chainflip-engine"
 version = "0.5.0"
 
 [package.metadata.deb]
-depends = "$auto"
+depends = "$auto, systemd"
 extended-description = """\
 Chainflip Validator Engine Package"""
 maintainer = "Chainflip Labs GmbH <dev@chainflip.io>"
 name = "chainflip-engine"
 priority = "required"
 section = "rust"
-
+maintainer-scripts = "package/"
+systemd-units = {enable = false}
+assets = [
+  ["target/release/chainflip-engine", "usr/bin/", "755"],
+]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
@@ -33,7 +37,6 @@ clap = { version = "3.1.18", features = ["derive"] }
 chrono = "0.4.19"
 # have to use the older version until secp256k1 updates its dependency (https://github.com/rust-bitcoin/rust-secp256k1/issues/328)
 rand_legacy = { package = "rand", version = "0.6" }
-ipc-channel = "0.16.0"
 
 # Same version of jsonrpsee as substrate
 jsonrpsee = { version = "0.13.0", features = ["full"] }

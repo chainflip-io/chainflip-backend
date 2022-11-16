@@ -376,12 +376,6 @@ pub trait KeyProvider<C: ChainCrypto> {
 	}
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub enum RetryPolicy {
-	Always,
-	Never,
-}
-
 /// Api trait for pallets that need to sign things.
 pub trait ThresholdSigner<C>
 where
@@ -396,11 +390,10 @@ where
 	/// Initiate a signing request and return the request id and ceremony id.
 	fn request_signature(payload: C::Payload) -> (Self::RequestId, CeremonyId);
 
-	fn request_signature_with(
+	fn request_keygen_verification_signature(
+		payload: C::Payload,
 		key_id: Self::KeyId,
 		participants: BTreeSet<Self::ValidatorId>,
-		payload: C::Payload,
-		retry_policy: RetryPolicy,
 	) -> (Self::RequestId, CeremonyId);
 
 	/// Register a callback to be dispatched when the signature is available. Can fail if the

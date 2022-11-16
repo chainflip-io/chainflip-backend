@@ -1,0 +1,16 @@
+[Unit]
+Description=Chainflip Validator Engine
+
+[Service]
+Restart=always
+RestartSec=30
+Type=simple
+
+ExecStart=/usr/bin/chainflip-engine \
+  --config-path /etc/chainflip/config/Default.toml
+
+StandardOutput=append:/var/log/chainflip-engine.log
+StandardError=append:/var/log/chainflip-engine.log
+
+[Install]
+WantedBy=multi-user.target
