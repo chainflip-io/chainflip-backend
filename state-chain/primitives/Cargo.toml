@@ -19,6 +19,11 @@ default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'chainflip-monthly-2022-06+01'
 
+[dependencies.sp-core]
+default-features = false
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'chainflip-monthly-2022-06+01'
+
 [dependencies.codec]
 default-features = false
 features = ['derive']
@@ -39,4 +44,5 @@ std = [
   'serde',
   'sp-runtime/std',
   'sp-std/std',
+  'sp-core/std',
 ]

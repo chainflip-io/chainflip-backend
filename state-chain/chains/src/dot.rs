@@ -5,7 +5,7 @@ pub mod api;
 #[cfg(feature = "runtime-benchmarks")]
 pub mod benchmarking;
 
-pub use cf_primitives::chains::Polkadot;
+pub use cf_primitives::{chains::Polkadot, PolkadotAccountId};
 
 use sp_core::{sr25519, H256};
 use sp_runtime::{
@@ -14,7 +14,6 @@ use sp_runtime::{
 	MultiAddress, MultiSignature,
 };
 
-use sp_core::crypto::AccountId32;
 use sp_runtime::{
 	traits::{AccountIdLookup, Verify},
 	transaction_validity::{TransactionValidity, TransactionValidityError, ValidTransaction},
@@ -32,10 +31,6 @@ pub type PolkadotBalance = u128;
 pub type PolkadotBlockNumber = u32;
 pub type PolkadotIndex = u32;
 pub type PolkadotHash = sp_core::H256;
-
-/// Alias to the opaque account ID type for this chain, actually a `AccountId32`. This is always
-/// 32 bytes.
-pub type PolkadotAccountId = AccountId32;
 
 pub type PolkadotAddress = MultiAddress<PolkadotAccountId, ()>;
 
@@ -783,7 +778,7 @@ mod test_polkadot_extrinsics {
 
 	use super::*;
 	use crate::dot::sr25519::Pair;
-	use sp_core::crypto::Pair as TraitPair;
+	use sp_core::crypto::{AccountId32, Pair as TraitPair};
 	use sp_runtime::{app_crypto::Ss58Codec, traits::IdentifyAccount, MultiSigner};
 
 	#[ignore]

@@ -1,7 +1,7 @@
 use super::*;
 use cf_chains::eth::{to_ethereum_address, AggKey, SchnorrVerificationComponents};
-use cf_primitives::{AccountRole, EpochIndex};
-use cf_traits::{AccountRoleRegistry, EpochInfo, FlipBalance};
+use cf_primitives::{AccountRole, EpochIndex, FlipBalance};
+use cf_traits::{AccountRoleRegistry, EpochInfo};
 use codec::Encode;
 use frame_support::traits::{OnFinalize, OnIdle};
 use libsecp256k1::PublicKey;

@@ -3,9 +3,9 @@
 use std::{collections::BTreeSet, pin::Pin, sync::Arc};
 
 use cf_chains::eth::Ethereum;
-use cf_primitives::{Asset, ForeignChainAddress};
+use cf_primitives::chains::assets::eth;
 use futures::Stream;
-use pallet_cf_ingress::IngressWitness;
+use pallet_cf_ingress_egress::IngressWitness;
 use sp_core::H160;
 use tokio_stream::StreamExt;
 use web3::types::Transaction;
@@ -143,21 +143,19 @@ where
 									}
 								}).map(|(tx, to_addr)| {
 									IngressWitness {
-										ingress_address: ForeignChainAddress::Eth(
-											to_addr.into(),
-										),
-										asset: Asset::Eth,
+										ingress_address: to_addr,
+										asset: eth::Asset::Eth,
 										amount: tx.value.as_u128(),
 										tx_hash: tx.hash
 									}
 								})
-								.collect::<Vec<IngressWitness>>();
+								.collect::<Vec<IngressWitness<Ethereum>>>();
 
 								let _result = state_chain_client
 									.submit_signed_extrinsic(
 										pallet_cf_witnesser::Call::witness_at_epoch {
 											call: Box::new(
-												pallet_cf_ingress::Call::do_ingress {
+												pallet_cf_ingress_egress::Call::do_ingress {
 													ingress_witnesses
 												}
 												.into(),

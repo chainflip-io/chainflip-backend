@@ -1,7 +1,7 @@
 [package]
-name = 'pallet-cf-ingress'
+name = 'pallet-cf-ingress-egress'
 version = '0.1.0'
-description = 'Chainflip ingress pallet'
+description = 'Chainflip ingress and egress pallet'
 authors = ['Chainflip Team <https://github.com/chainflip-io>']
 homepage = 'https://chainflip.io'
 edition = '2021'
@@ -13,7 +13,7 @@ repository = 'https://github.com/chainflip-io/chainflip-backend'
 [dependencies]
 cf-traits = {path = '../../traits', default-features = false}
 cf-primitives = {path = '../../primitives', default-features = false}
-cf-chains = {path = '../../chains', default-features = false, features = ["ibiza"]}
+cf-chains = { path ='../../chains', default-features = false, features = ["ibiza"] }
 
 # ==== Parity deps ====
 [dependencies.codec]
@@ -42,6 +42,11 @@ default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'chainflip-monthly-2022-06+01'
 
+[dependencies.sp-runtime]
+default-features = false
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'chainflip-monthly-2022-06+01'
+
 [dependencies.frame-benchmarking]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
@@ -56,7 +61,6 @@ tag = 'chainflip-monthly-2022-06+01'
 git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'chainflip-monthly-2022-06+01'
 
-
 [features]
 default = ['std']
 std = [
@@ -69,6 +73,7 @@ std = [
   'frame-system/std',
   'scale-info/std',
   'sp-std/std',
+  'sp-runtime/std',
 ]
 runtime-benchmarks = [
   'cf-traits/runtime-benchmarks',

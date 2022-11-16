@@ -1,18 +1,18 @@
-pub use crate::{self as pallet_cf_egress};
+pub use crate::{self as pallet_cf_ingress_egress};
 pub use cf_chains::{
 	eth::api::{EthereumApi, EthereumReplayProtection},
 	Chain, ChainAbi, ChainEnvironment,
 };
 pub use cf_primitives::{
 	chains::{assets, Ethereum},
-	Asset, EthereumAddress, ExchangeRate, ETHEREUM_ETH_ADDRESS,
+	Asset, AssetAmount, EthereumAddress, ExchangeRate, ETHEREUM_ETH_ADDRESS,
 };
 
 pub use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
-	Broadcaster, EthereumAssetsAddressProvider, ReplayProtectionProvider,
+	Broadcaster, ReplayProtectionProvider,
 };
-use frame_support::parameter_types;
+use frame_support::{instances::Instance1, parameter_types};
 use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{
@@ -34,7 +34,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system,
-		Egress: pallet_cf_egress,
+		IngressEgress: pallet_cf_ingress_egress::<Instance1>,
 	}
 );
 
@@ -117,8 +117,12 @@ impl ChainEnvironment<<Ethereum as Chain>::ChainAsset, <Ethereum as Chain>::Chai
 	}
 }
 
-impl crate::Config for Test {
+impl crate::Config<Instance1> for Test {
 	type Event = Event;
+	type TargetChain = Ethereum;
+	type AddressDerivation = ();
+	type LpProvisioning = ();
+	type SwapIntentHandler = Self;
 	type ReplayProtection = Self;
 	type AllBatch = EthereumApi<MockEthEnvironment>;
 	type Broadcaster = MockBroadcast;
