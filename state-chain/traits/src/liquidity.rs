@@ -85,7 +85,7 @@ impl<T: frame_system::Config> SwapIntentHandler for T {
 		_relayer_id: Self::AccountId,
 		_relayer_commission_bps: u16,
 	) {
-		unimplemented!()
+		// TODO
 	}
 }
 
@@ -97,7 +97,8 @@ impl<T: frame_system::Config> LpProvisioningApi for T {
 		_asset: Asset,
 		_amount: AssetAmount,
 	) -> DispatchResult {
-		unimplemented!()
+		// TODO
+		Ok(())
 	}
 }
 
@@ -108,6 +109,7 @@ impl SwappingApi for () {
 		_input_amount: AssetAmount,
 		_fee: u16,
 	) -> (AssetAmount, (Asset, AssetAmount)) {
-		unimplemented!()
+		// TODO
+		(0, (Asset::Usdc, 0))
 	}
 }
