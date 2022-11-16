@@ -1,7 +1,7 @@
 use crate::{mock::*, DisabledEgressAssets, FetchOrTransfer, ScheduledEgressRequests, WeightInfo};
 
-use cf_primitives::{chains::assets::eth, ForeignChain};
-use cf_traits::{EgressApi, IngressFetchApi};
+use cf_primitives::chains::assets::eth;
+use cf_traits::EgressApi;
 
 use frame_support::{assert_ok, instances::Instance1, traits::Hooks};
 const ALICE_ETH_ADDRESS: EthereumAddress = [100u8; 20];
@@ -185,11 +185,7 @@ fn can_manually_send_batch_all() {
 		IngressEgress::schedule_ingress_fetch(vec![(ETH_ETH, 3), (ETH_FLIP, 4)]);
 
 		// Send only 2 requests
-		assert_ok!(IngressEgress::egress_scheduled_assets_for_chain(
-			Origin::root(),
-			ForeignChain::Ethereum,
-			Some(2)
-		));
+		assert_ok!(IngressEgress::egress_scheduled_assets_for_chain(Origin::root(), Some(2)));
 		System::assert_has_event(Event::IngressEgress(crate::Event::BatchBroadcastRequested {
 			fetch_batch_size: 1u32,
 			egress_batch_size: 1u32,
@@ -197,11 +193,7 @@ fn can_manually_send_batch_all() {
 		assert_eq!(ScheduledEgressRequests::<Test, Instance1>::decode_len(), Some(10));
 
 		// send all remaining requests
-		assert_ok!(IngressEgress::egress_scheduled_assets_for_chain(
-			Origin::root(),
-			ForeignChain::Ethereum,
-			None
-		));
+		assert_ok!(IngressEgress::egress_scheduled_assets_for_chain(Origin::root(), None));
 
 		System::assert_has_event(Event::IngressEgress(crate::Event::BatchBroadcastRequested {
 			fetch_batch_size: 3u32,

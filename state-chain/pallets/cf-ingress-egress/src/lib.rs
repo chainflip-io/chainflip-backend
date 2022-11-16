@@ -13,16 +13,13 @@ mod tests;
 pub mod weights;
 pub use weights::WeightInfo;
 
-use cf_chains::{AllBatch, Chain, ChainAbi, FetchAssetParams, TransferAssetParams};
-use cf_primitives::{Asset, AssetAmount, ForeignChain, ForeignChainAddress, IntentId};
+use cf_chains::{AllBatch, Chain, ChainAbi, ChainCrypto, FetchAssetParams, TransferAssetParams};
+use cf_primitives::{Asset, AssetAmount, ForeignChainAddress, IntentId};
 use cf_traits::{
 	liquidity::LpProvisioningApi, AddressDerivationApi, Broadcaster, EgressApi, IngressApi,
-	IngressFetchApi, ReplayProtectionProvider, SwapIntentHandler,
+	ReplayProtectionProvider, SwapIntentHandler,
 };
-use frame_support::{
-	pallet_prelude::*,
-	sp_runtime::{app_crypto::sp_core, DispatchError},
-};
+use frame_support::{pallet_prelude::*, sp_runtime::DispatchError};
 pub use pallet::*;
 use sp_runtime::traits::Saturating;
 pub use sp_std::{vec, vec::Vec};
@@ -47,7 +44,6 @@ impl<C: Chain> FetchOrTransfer<C> {
 pub mod pallet {
 	use super::*;
 	use core::marker::PhantomData;
-	use sp_core::H256;
 	use sp_std::vec::Vec;
 
 	use cf_traits::{Chainflip, SwapIntentHandler};
@@ -63,11 +59,11 @@ pub mod pallet {
 		<<T as Config<I>>::TargetChain as Chain>::ChainAccount;
 
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-	pub struct IngressWitness<C: Chain> {
+	pub struct IngressWitness<C: Chain + ChainCrypto> {
 		pub ingress_address: C::ChainAccount,
 		pub asset: C::ChainAsset,
-		pub amount: u128,
-		pub tx_hash: H256,
+		pub amount: AssetAmount,
+		pub tx_hash: <C as ChainCrypto>::TransactionHash,
 	}
 
 	/// Details used to determine the ingress of funds.
@@ -106,7 +102,7 @@ pub mod pallet {
 		type TargetChain: Chain + ChainAbi;
 
 		/// Generates ingress addresses.
-		type AddressDerivation: AddressDerivationApi;
+		type AddressDerivation: AddressDerivationApi<Self::TargetChain>;
 
 		/// Pallet responsible for managing Liquidity Providers.
 		type LpProvisioning: LpProvisioningApi<AccountId = Self::AccountId, Amount = AssetAmount>;
@@ -173,8 +169,8 @@ pub mod pallet {
 		IngressCompleted {
 			ingress_address: TargetChainAccount<T, I>,
 			asset: TargetChainAsset<T, I>,
-			amount: u128,
-			tx_hash: H256,
+			amount: AssetAmount,
+			tx_hash: <T::TargetChain as ChainCrypto>::TransactionHash,
 		},
 		AssetEgressDisabled {
 			asset: TargetChainAsset<T, I>,
@@ -203,12 +199,7 @@ pub mod pallet {
 	}
 
 	#[pallet::hooks]
-	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I>
-	where
-		<<T as Config<I>>::TargetChain as Chain>::ChainAsset: Into<cf_primitives::Asset>,
-		<<T as Config<I>>::TargetChain as Chain>::ChainAccount:
-			TryFrom<cf_primitives::ForeignChainAddress>,
-	{
+	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
 		/// Take a batch of scheduled Egress and send them out
 		fn on_idle(_block_number: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
 			// Ensure we have enough weight to send an non-empty batch, and request queue isn't
@@ -239,12 +230,7 @@ pub mod pallet {
 	}
 
 	#[pallet::call]
-	impl<T: Config<I>, I: 'static> Pallet<T, I>
-	where
-		<<T as Config<I>>::TargetChain as Chain>::ChainAsset: Into<cf_primitives::Asset>,
-		<<T as Config<I>>::TargetChain as Chain>::ChainAccount:
-			TryFrom<cf_primitives::ForeignChainAddress>,
-	{
+	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Sets if an asset is not allowed to be sent out of the chain via Egress.
 		/// Requires Governance
 		///
@@ -280,15 +266,11 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn egress_scheduled_assets_for_chain(
 			origin: OriginFor<T>,
-			chain: ForeignChain,
 			maybe_size: Option<u32>,
 		) -> DispatchResult {
 			let _ok = T::EnsureGovernance::ensure_origin(origin)?;
 
-			// Currently we only support the Ethereum Chain
-			if chain == ForeignChain::Ethereum {
-				Self::egress_scheduled_assets(maybe_size);
-			}
+			Self::egress_scheduled_assets(maybe_size);
 
 			Ok(())
 		}
@@ -310,12 +292,7 @@ pub mod pallet {
 	}
 }
 
-impl<T: Config<I>, I: 'static> Pallet<T, I>
-where
-	<<T as Config<I>>::TargetChain as Chain>::ChainAsset: Into<cf_primitives::Asset>,
-	<<T as Config<I>>::TargetChain as Chain>::ChainAccount:
-		TryFrom<cf_primitives::ForeignChainAddress>,
-{
+impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Take up to `maybe_size` number of scheduled requests for the Ethereum chain and send them
 	/// out in an `AllBatch` call. If `maybe_size` is `None`, send all scheduled transactions.
 	///
@@ -385,12 +362,12 @@ where
 	/// Generate an `intent_id` and a chain-specific address.
 	fn generate_new_address(
 		ingress_asset: TargetChainAsset<T, I>,
-	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
+	) -> Result<(IntentId, TargetChainAccount<T, I>), DispatchError> {
 		let next_intent_id = IntentIdCounter::<T, I>::get()
 			.checked_add(1)
 			.ok_or(Error::<T, I>::IntentIdsExhausted)?;
 		let ingress_address =
-			T::AddressDerivation::generate_address(ingress_asset.into(), next_intent_id)?;
+			T::AddressDerivation::generate_address(ingress_asset, next_intent_id)?;
 		IntentIdCounter::<T, I>::put(next_intent_id);
 		Ok((next_intent_id, ingress_address))
 	}
@@ -399,8 +376,8 @@ where
 	fn do_single_ingress(
 		ingress_address: TargetChainAccount<T, I>,
 		asset: TargetChainAsset<T, I>,
-		amount: u128,
-		tx_hash: sp_core::H256,
+		amount: AssetAmount,
+		tx_hash: <T::TargetChain as ChainCrypto>::TransactionHash,
 	) -> DispatchResult {
 		let ingress = IntentIngressDetails::<T, I>::get(&ingress_address)
 			.ok_or(Error::<T, I>::InvalidIntent)?;
@@ -413,7 +390,7 @@ where
 		// even after an ingress to it has occurred.
 		// https://github.com/chainflip-io/chainflip-eth-contracts/pull/226
 		match IntentActions::<T, I>::get(&ingress_address).ok_or(Error::<T, I>::InvalidIntent)? {
-			IntentAction::LiquidityProvision { lp_account, .. } =>
+			IntentAction::LiquidityProvision { lp_account } =>
 				T::LpProvisioning::provision_account(&lp_account, asset.into(), amount)?,
 			IntentAction::Swap {
 				egress_address,
@@ -433,14 +410,20 @@ where
 		Self::deposit_event(Event::IngressCompleted { ingress_address, asset, amount, tx_hash });
 		Ok(())
 	}
+
+	fn schedule_ingress_fetch(fetch_details: Vec<(TargetChainAsset<T, I>, IntentId)>) {
+		let fetches_added = fetch_details.len() as u32;
+		for (asset, intent_id) in fetch_details {
+			ScheduledEgressRequests::<T, I>::append(FetchOrTransfer::<T::TargetChain>::Fetch {
+				intent_id,
+				asset,
+			});
+		}
+		Self::deposit_event(Event::<T, I>::IngressFetchesScheduled { fetches_added });
+	}
 }
 
-impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I>
-where
-	<<T as Config<I>>::TargetChain as Chain>::ChainAsset: Into<cf_primitives::Asset>,
-	<<T as Config<I>>::TargetChain as Chain>::ChainAccount:
-		TryFrom<cf_primitives::ForeignChainAddress>,
-{
+impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 	fn schedule_egress(
 		asset: TargetChainAsset<T, I>,
 		amount: AssetAmount,
@@ -456,30 +439,7 @@ where
 	}
 }
 
-impl<T: Config<I>, I: 'static> IngressFetchApi<T::TargetChain> for Pallet<T, I>
-where
-	<<T as Config<I>>::TargetChain as Chain>::ChainAsset: Into<cf_primitives::Asset>,
-	<<T as Config<I>>::TargetChain as Chain>::ChainAccount:
-		TryFrom<cf_primitives::ForeignChainAddress>,
-{
-	fn schedule_ingress_fetch(fetch_details: Vec<(TargetChainAsset<T, I>, IntentId)>) {
-		let fetches_added = fetch_details.len() as u32;
-		for (asset, intent_id) in fetch_details {
-			ScheduledEgressRequests::<T, I>::append(FetchOrTransfer::<T::TargetChain>::Fetch {
-				intent_id,
-				asset,
-			});
-		}
-		Self::deposit_event(Event::<T, I>::IngressFetchesScheduled { fetches_added });
-	}
-}
-
-impl<T: Config<I>, I: 'static> IngressApi<T::TargetChain> for Pallet<T, I>
-where
-	<<T as Config<I>>::TargetChain as Chain>::ChainAsset: Into<cf_primitives::Asset>,
-	<<T as Config<I>>::TargetChain as Chain>::ChainAccount:
-		TryFrom<cf_primitives::ForeignChainAddress>,
-{
+impl<T: Config<I>, I: 'static> IngressApi<T::TargetChain> for Pallet<T, I> {
 	type AccountId = <T as frame_system::Config>::AccountId;
 
 	// This should be callable by the LP pallet.
@@ -490,22 +450,21 @@ where
 		let (intent_id, ingress_address) = Self::generate_new_address(ingress_asset)?;
 
 		// Generated address guarantees the right address type is returned.
-		let chain_address = ingress_address.try_into().ok().unwrap();
 		IntentIngressDetails::<T, I>::insert(
-			&chain_address,
+			&ingress_address,
 			IngressDetails { intent_id, ingress_asset },
 		);
 		IntentActions::<T, I>::insert(
-			&chain_address,
+			&ingress_address,
 			IntentAction::LiquidityProvision { lp_account },
 		);
 
 		Self::deposit_event(Event::StartWitnessing {
-			ingress_address: chain_address,
+			ingress_address: ingress_address.clone(),
 			ingress_asset,
 		});
 
-		Ok((intent_id, ingress_address))
+		Ok((intent_id, ingress_address.into()))
 	}
 
 	// This should only be callable by the relayer.
@@ -519,21 +478,20 @@ where
 		let (intent_id, ingress_address) = Self::generate_new_address(ingress_asset)?;
 
 		// Generated address guarantees the right address type is returned.
-		let chain_address = ingress_address.try_into().ok().unwrap();
 		IntentIngressDetails::<T, I>::insert(
-			&chain_address,
+			&ingress_address,
 			IngressDetails { intent_id, ingress_asset },
 		);
 		IntentActions::<T, I>::insert(
-			&chain_address,
+			&ingress_address,
 			IntentAction::Swap { egress_address, egress_asset, relayer_commission_bps, relayer_id },
 		);
 
 		Self::deposit_event(Event::StartWitnessing {
-			ingress_address: chain_address,
+			ingress_address: ingress_address.clone(),
 			ingress_asset,
 		});
 
-		Ok((intent_id, ingress_address))
+		Ok((intent_id, ingress_address.into()))
 	}
 }

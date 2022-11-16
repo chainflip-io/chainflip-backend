@@ -6,7 +6,7 @@
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
-use sp_core::H160;
+use sp_core::{crypto::AccountId32, H160};
 use sp_runtime::{
 	traits::{IdentifyAccount, Verify},
 	FixedU128, MultiSignature, RuntimeDebug,
@@ -23,6 +23,11 @@ pub use chains::{assets::any::Asset, ForeignChain};
 pub mod liquidity;
 pub use liquidity::*;
 
+/// An index to a block.
+pub type BlockNumber = u32;
+
+pub type FlipBalance = u128;
+
 pub type CeremonyId = u64;
 
 pub type EpochIndex = u32;
@@ -38,6 +43,10 @@ pub type EthereumAddress = [u8; 20];
 pub type EthAmount = u128;
 
 pub type AssetAmount = u128;
+
+/// Alias to the opaque account ID type for this chain, actually a `AccountId32`. This is always
+/// 32 bytes.
+pub type PolkadotAccountId = AccountId32;
 
 pub const ETHEREUM_ETH_ADDRESS: EthereumAddress = [0xEE; 20];
 
@@ -121,6 +130,34 @@ impl TryFrom<ForeignChainAddress> for [u8; 32] {
 	}
 }
 
+impl TryFrom<ForeignChainAddress> for PolkadotAccountId {
+	type Error = AddressError;
+
+	fn try_from(address: ForeignChainAddress) -> Result<Self, Self::Error> {
+		match address {
+			ForeignChainAddress::Dot(addr) => Ok(addr.into()),
+			_ => Err(AddressError::InvalidAddress),
+		}
+	}
+}
+
+// For MockEthereum
+impl TryFrom<ForeignChainAddress> for u64 {
+	type Error = AddressError;
+
+	fn try_from(address: ForeignChainAddress) -> Result<Self, Self::Error> {
+		match address {
+			ForeignChainAddress::Eth(addr) => Ok(addr[0] as u64),
+			_ => Err(AddressError::InvalidAddress),
+		}
+	}
+}
+impl From<u64> for ForeignChainAddress {
+	fn from(address: u64) -> ForeignChainAddress {
+		ForeignChainAddress::Eth([address as u8; 20])
+	}
+}
+
 impl From<EthereumAddress> for ForeignChainAddress {
 	fn from(address: EthereumAddress) -> ForeignChainAddress {
 		ForeignChainAddress::Eth(address)
@@ -136,6 +173,12 @@ impl From<H160> for ForeignChainAddress {
 impl From<[u8; 32]> for ForeignChainAddress {
 	fn from(address: [u8; 32]) -> ForeignChainAddress {
 		ForeignChainAddress::Dot(address)
+	}
+}
+
+impl From<PolkadotAccountId> for ForeignChainAddress {
+	fn from(address: PolkadotAccountId) -> ForeignChainAddress {
+		ForeignChainAddress::Dot(address.into())
 	}
 }
 

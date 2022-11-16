@@ -5,7 +5,6 @@ use crate::{DisabledEgressAssets, FetchOrTransfer, ScheduledEgressRequests};
 use cf_chains::benchmarking_value::BenchmarkValue;
 use frame_benchmarking::{account, benchmarks_instance_pallet};
 use frame_support::traits::Hooks;
-use sp_core::H256;
 
 benchmarks_instance_pallet! {
 	where_clause {
@@ -69,6 +68,6 @@ benchmarks_instance_pallet! {
 			lp_account: account("doogle", 0, 0)
 		});
 	}: {
-		Pallet::<T, I>::do_single_ingress(ingress_address, ingress_asset, 100, H256::from([0x01; 32])).unwrap()
+		Pallet::<T, I>::do_single_ingress(ingress_address, ingress_asset, 100, BenchmarkValue::benchmark_value()).unwrap()
 	}
 }

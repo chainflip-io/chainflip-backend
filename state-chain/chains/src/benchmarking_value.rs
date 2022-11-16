@@ -1,5 +1,8 @@
 #[cfg(feature = "runtime-benchmarks")]
-use cf_primitives::chains::assets::{any, dot, eth};
+use cf_primitives::{
+	chains::assets::{dot, eth},
+	Asset,
+};
 
 /// Ensure type specifies a value to be used for benchmarking purposes.
 pub trait BenchmarkValue {
@@ -24,8 +27,26 @@ macro_rules! impl_default_benchmark_value {
 	};
 }
 
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue for Asset {
+	fn benchmark_value() -> Self {
+		Self::Eth
+	}
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue for eth::Asset {
+	fn benchmark_value() -> Self {
+		eth::Asset::Eth
+	}
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue for dot::Asset {
+	fn benchmark_value() -> Self {
+		dot::Asset::Dot
+	}
+}
+
 impl_default_benchmark_value!(());
 impl_default_benchmark_value!(u64);
-impl_default_benchmark_value!(any::Asset);
-impl_default_benchmark_value!(eth::Asset);
-impl_default_benchmark_value!(dot::Asset);

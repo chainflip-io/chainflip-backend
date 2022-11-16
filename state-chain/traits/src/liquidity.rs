@@ -1,11 +1,10 @@
 use sp_runtime::DispatchResult;
 
 use cf_primitives::{
-	liquidity::TradingPosition, AccountId, Asset, ExchangeRate, ForeignChainAddress, PoolId,
-	PositionId,
+	liquidity::TradingPosition, AccountId, Asset, ExchangeRate, FlipBalance, ForeignChainAddress,
+	PoolId, PositionId,
 };
 
-use crate::FlipBalance;
 use cf_primitives::AssetAmount;
 
 pub trait SwapIntentHandler {

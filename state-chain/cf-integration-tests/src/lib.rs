@@ -22,8 +22,8 @@ use state_chain_runtime::{
 	Reputation, Runtime, Staking, System, Timestamp, Validator, Witnesser,
 };
 
-use cf_primitives::{AuthorityCount, EpochIndex};
-use cf_traits::{BlockNumber, EpochInfo, FlipBalance};
+use cf_primitives::{AuthorityCount, BlockNumber, EpochIndex, FlipBalance};
+use cf_traits::EpochInfo;
 use libsecp256k1::SecretKey;
 use pallet_cf_staking::{EthTransactionHash, EthereumAddress};
 use rand::{prelude::*, SeedableRng};

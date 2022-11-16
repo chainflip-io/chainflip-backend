@@ -63,10 +63,8 @@ use sp_std::prelude::*;
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
-pub use cf_primitives::ForeignChainAddress;
-pub use cf_traits::{
-	BlockNumber, EpochInfo, EthEnvironmentProvider, FlipBalance, QualifyNode, SessionKeysRegistered,
-};
+pub use cf_primitives::{BlockNumber, FlipBalance, ForeignChainAddress};
+pub use cf_traits::{EpochInfo, EthEnvironmentProvider, QualifyNode, SessionKeysRegistered};
 pub use chainflip::chain_instances::*;
 use chainflip::{
 	epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat, EthEnvironment,

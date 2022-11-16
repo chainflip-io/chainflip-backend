@@ -227,7 +227,7 @@ fn main() -> anyhow::Result<()> {
                 use itertools::Itertools;
                 use sp_core::H160;
                 use chainflip_engine::eth::erc20_witnesser::Erc20Witnesser;
-                use cf_primitives::Asset;
+                use cf_primitives::{Asset, chains::assets};
 
                 let flip_contract_address = state_chain_client
                     .storage_map_entry::<pallet_cf_environment::SupportedEthAssets::<
@@ -250,10 +250,10 @@ fn main() -> anyhow::Result<()> {
                     .context("Failed to get initial ingress details")?
                     .into_iter()
                     .map(|(address, intent)| {
-                            (intent.ingress_asset.into(), address)
+                            (intent.ingress_asset, address)
                     }).into_group_map();
 
-                fn monitored_addresses_from_all_eth(eth_chain_ingress_addresses: &HashMap<Asset, Vec<H160>>, asset: Asset) -> BTreeSet<H160> {
+                fn monitored_addresses_from_all_eth(eth_chain_ingress_addresses: &HashMap<assets::eth::Asset, Vec<H160>>, asset: assets::eth::Asset) -> BTreeSet<H160> {
                     if let Some(eth_ingress_addresses) = eth_chain_ingress_addresses.get(&asset) {
                         eth_ingress_addresses.clone()
                     } else {
@@ -266,12 +266,12 @@ fn main() -> anyhow::Result<()> {
                     _epoch_start_receiver_4,
                     eth_monitor_ingress_receiver,
                     state_chain_client.clone(),
-                    monitored_addresses_from_all_eth(&eth_chain_ingress_addresses, Asset::Eth),
+                    monitored_addresses_from_all_eth(&eth_chain_ingress_addresses, assets::eth::Asset::Eth),
                     &root_logger
                 ));
                 scope.spawn(
                     eth::contract_witnesser::start(
-                        Erc20Witnesser::new(flip_contract_address.into(), Asset::Flip, monitored_addresses_from_all_eth(&eth_chain_ingress_addresses, Asset::Flip), eth_monitor_flip_ingress_receiver),
+                        Erc20Witnesser::new(flip_contract_address.into(), assets::eth::Asset::Flip, monitored_addresses_from_all_eth(&eth_chain_ingress_addresses, assets::eth::Asset::Flip), eth_monitor_flip_ingress_receiver),
                         eth_dual_rpc.clone(),
                         _epoch_start_receiver_5,
                         false,
@@ -281,7 +281,7 @@ fn main() -> anyhow::Result<()> {
                 );
                 scope.spawn(
                     eth::contract_witnesser::start(
-                        Erc20Witnesser::new(usdc_contract_address.into(), Asset::Usdc, monitored_addresses_from_all_eth(&eth_chain_ingress_addresses, Asset::Usdc), eth_monitor_usdc_ingress_receiver),
+                        Erc20Witnesser::new(usdc_contract_address.into(), assets::eth::Asset::Usdc, monitored_addresses_from_all_eth(&eth_chain_ingress_addresses, assets::eth::Asset::Usdc), eth_monitor_usdc_ingress_receiver),
                         eth_dual_rpc,
                         _epoch_start_receiver_6,
                         false,

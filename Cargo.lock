@@ -5357,6 +5357,7 @@ dependencies = [
 name = "pallet-cf-flip"
 version = "0.1.0"
 dependencies = [
+ "cf-primitives",
  "cf-traits",
  "frame-benchmarking",
  "frame-support",

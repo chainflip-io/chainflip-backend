@@ -16,9 +16,7 @@ use sp_runtime::{
 	BuildStorage,
 };
 
-use cf_primitives::{
-	chains::assets, Asset, EthereumAddress, ForeignChainAddress, IntentId, ETHEREUM_ETH_ADDRESS,
-};
+use cf_primitives::{chains::assets, EthereumAddress, IntentId, ETHEREUM_ETH_ADDRESS};
 
 use sp_std::str::FromStr;
 
@@ -29,16 +27,12 @@ type AccountId = u64;
 pub const ETHEREUM_FLIP_ADDRESS: EthereumAddress = [0x00; 20];
 pub struct MockAddressDerivation;
 
-impl AddressDerivationApi for MockAddressDerivation {
+impl AddressDerivationApi<Ethereum> for MockAddressDerivation {
 	fn generate_address(
-		_ingress_asset: Asset,
+		_ingress_asset: assets::eth::Asset,
 		_intent_id: IntentId,
-	) -> Result<cf_primitives::ForeignChainAddress, sp_runtime::DispatchError> {
-		Ok(ForeignChainAddress::Eth(
-			H160::from_str("F29aB9EbDb481BE48b80699758e6e9a3DBD609C6")
-				.unwrap()
-				.to_fixed_bytes(),
-		))
+	) -> Result<<Ethereum as Chain>::ChainAccount, sp_runtime::DispatchError> {
+		Ok(H160::from_str("F29aB9EbDb481BE48b80699758e6e9a3DBD609C6").unwrap())
 	}
 }
 

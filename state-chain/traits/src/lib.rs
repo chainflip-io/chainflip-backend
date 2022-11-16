@@ -11,7 +11,9 @@ use core::fmt::Debug;
 pub use async_result::AsyncResult;
 use sp_std::collections::btree_set::BTreeSet;
 
-use cf_chains::{benchmarking_value::BenchmarkValue, ApiCall, Chain, ChainAbi, ChainCrypto};
+use cf_chains::{
+	benchmarking_value::BenchmarkValue, ApiCall, Chain, ChainAbi, ChainCrypto, Ethereum, Polkadot,
+};
 use cf_primitives::{
 	AccountRole, Asset, AssetAmount, AuthorityCount, CeremonyId, EpochIndex, ForeignChainAddress,
 	IntentId,
@@ -30,9 +32,6 @@ use sp_runtime::{
 	DispatchError, DispatchResult, FixedPointOperand, RuntimeDebug,
 };
 use sp_std::{iter::Sum, marker::PhantomData, prelude::*};
-/// An index to a block.
-pub type BlockNumber = u32;
-pub type FlipBalance = u128;
 
 /// Common base config for Chainflip pallets.
 pub trait Chainflip: frame_system::Config {
@@ -635,19 +634,28 @@ pub trait IngressApi<C: Chain> {
 }
 
 /// Generates a deterministic ingress address for some combination of asset, chain and intent id.
-pub trait AddressDerivationApi {
+pub trait AddressDerivationApi<C: Chain> {
 	fn generate_address(
-		ingress_asset: Asset,
+		ingress_asset: C::ChainAsset,
 		intent_id: IntentId,
-	) -> Result<ForeignChainAddress, DispatchError>;
+	) -> Result<C::ChainAccount, DispatchError>;
 }
 
-impl AddressDerivationApi for () {
+impl AddressDerivationApi<Ethereum> for () {
 	fn generate_address(
-		_ingress_asset: Asset,
+		_ingress_asset: <Ethereum as Chain>::ChainAsset,
 		_intent_id: IntentId,
-	) -> Result<ForeignChainAddress, DispatchError> {
-		Ok(ForeignChainAddress::Eth(Default::default()))
+	) -> Result<<Ethereum as Chain>::ChainAccount, DispatchError> {
+		Ok(Default::default())
+	}
+}
+
+impl AddressDerivationApi<Polkadot> for () {
+	fn generate_address(
+		_ingress_asset: <Polkadot as Chain>::ChainAsset,
+		_intent_id: IntentId,
+	) -> Result<<Polkadot as Chain>::ChainAccount, DispatchError> {
+		Ok([0u8; 32].into())
 	}
 }
 
@@ -691,19 +699,6 @@ pub trait EgressApi<C: Chain> {
 		amount: AssetAmount,
 		egress_address: C::ChainAccount,
 	);
-}
-
-/// API that Schedules funds to be fetched from an ingress address and transferred to the main vault
-/// account. It's caller's responsibility to ensure that the asset/address combination are
-/// valid.
-///
-/// Schedule functions are chain specific, as each chain may require different data to do fetching.
-pub trait IngressFetchApi<C: Chain> {
-	fn schedule_ingress_fetch(fetch_details: Vec<(C::ChainAsset, IntentId)>);
-}
-
-impl<C: Chain> IngressFetchApi<C> for () {
-	fn schedule_ingress_fetch(_fetch_details: Vec<(C::ChainAsset, IntentId)>) {}
 }
 
 pub trait VaultTransitionHandler<C: ChainCrypto> {

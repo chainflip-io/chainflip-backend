@@ -53,9 +53,19 @@ pub trait Chain: Member + Parameter {
 
 	type TrackedData: Member + Parameter + MaxEncodedLen + Clone + Age<Self> + BenchmarkValue;
 
-	type ChainAsset: Member + Parameter + MaxEncodedLen + Copy + BenchmarkValue;
+	type ChainAsset: Member
+		+ Parameter
+		+ MaxEncodedLen
+		+ Copy
+		+ BenchmarkValue
+		+ Into<cf_primitives::Asset>;
 
-	type ChainAccount: Member + Parameter + MaxEncodedLen + BenchmarkValue;
+	type ChainAccount: Member
+		+ Parameter
+		+ MaxEncodedLen
+		+ BenchmarkValue
+		+ TryFrom<cf_primitives::ForeignChainAddress>
+		+ Into<cf_primitives::ForeignChainAddress>;
 }
 
 /// Measures the age of items associated with the Chain.
@@ -77,7 +87,14 @@ pub trait ChainCrypto: Chain {
 	type AggKey: TryFrom<Vec<u8>> + Into<Vec<u8>> + Member + Parameter + Copy + Ord + BenchmarkValue;
 	type Payload: Member + Parameter + BenchmarkValue;
 	type ThresholdSignature: Member + Parameter + BenchmarkValue;
-	type TransactionHash: Member + Parameter + Default;
+	type TransactionHash: Member
+		+ Parameter
+		+ Default
+		+ Encode
+		+ Decode
+		+ TypeInfo
+		+ Clone
+		+ BenchmarkValue;
 	type GovKey: Member + Parameter + Copy + BenchmarkValue;
 
 	fn verify_threshold_signature(
@@ -228,12 +245,11 @@ pub trait FeeRefundCalculator<C: Chain> {
 }
 
 pub mod mocks {
-	use sp_std::marker::PhantomData;
-
 	use crate::{
 		eth::{api::EthereumReplayProtection, TransactionFee},
 		*,
 	};
+	use sp_std::marker::PhantomData;
 
 	#[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	pub struct MockEthereum;
