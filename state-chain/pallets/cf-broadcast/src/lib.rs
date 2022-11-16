@@ -503,6 +503,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let broadcast_id = broadcast_attempt.broadcast_attempt_id.broadcast_id;
 		if let Some((api_call, signature)) = ThresholdSignatureData::<T, I>::get(broadcast_id) {
 			if <T::TargetChain as ChainCrypto>::verify_threshold_signature(
+				// current key to return "None"., which should trigger threshold retry
 				&T::KeyProvider::current_key(),
 				&api_call.threshold_signature_payload(),
 				&signature,

@@ -1,11 +1,11 @@
 //! Configuration, utilities and helpers for the Chainflip runtime.
 pub mod address_derivation;
+pub mod all_vaults_rotator;
 mod backup_node_rewards;
 pub mod chain_instances;
 pub mod decompose_recompose;
 pub mod epoch_transition;
 mod missed_authorship_slots;
-mod multi_vault_rotator;
 mod offences;
 use cf_primitives::{chains::assets, ETHEREUM_ETH_ADDRESS};
 pub use offences::*;

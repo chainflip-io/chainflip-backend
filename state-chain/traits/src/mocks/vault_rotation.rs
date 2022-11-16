@@ -1,5 +1,5 @@
 use super::{MockPallet, MockPalletStorage};
-use crate::{AsyncResult, VaultRotator};
+use crate::{AsyncResult, VaultRotator, VaultStatus};
 use sp_std::collections::btree_set::BTreeSet;
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
@@ -25,16 +25,18 @@ impl MockVaultRotator {
 
 	/// Call this to simulate the on_initialise pallet hook.
 	pub fn on_initialise() {
-		// default to success
-		let outcome = Self::get_storage(BEHAVIOUR, b"").unwrap_or(Ok(()));
-		Self::put_storage(
-			ROTATION_OUTCOME,
-			b"",
-			match Self::get_vault_rotation_outcome() {
-				AsyncResult::Pending => AsyncResult::Ready(outcome),
-				other => other,
-			},
-		)
+		// // default to success
+		// let outcome = Self::get_storage(BEHAVIOUR, b"").unwrap_or(Ok(()));
+
+		// idk wtf this is about.
+		// Self::put_storage(
+		// 	ROTATION_OUTCOME,
+		// 	b"",
+		// 	match Self::get_vault_rotation_outcome() {
+		// 		AsyncResult::Pending => AsyncResult::Ready(outcome),
+		// 		other => other,
+		// 	},
+		// )
 	}
 }
 
@@ -45,8 +47,12 @@ impl VaultRotator for MockVaultRotator {
 		Self::put_storage(ROTATION_OUTCOME, b"", AsyncResult::<MockVaultOutcome>::Pending);
 	}
 
-	fn get_vault_rotation_outcome() -> AsyncResult<MockVaultOutcome> {
+	fn get_vault_rotation_outcome() -> AsyncResult<VaultStatus<u64>> {
 		Self::get_storage(ROTATION_OUTCOME, b"").unwrap_or_default()
+	}
+
+	fn rotate_externally() {
+		todo!()
 	}
 }
 

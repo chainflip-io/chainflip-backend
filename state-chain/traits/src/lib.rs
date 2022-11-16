@@ -158,6 +158,13 @@ impl<CandidateId, BidAmount: Default> Default for AuctionOutcome<CandidateId, Bi
 	}
 }
 
+#[derive(PartialEq, Eq, Clone, Debug, Decode, Encode)]
+pub enum VaultStatus<ValidatorId> {
+	KeygenVerificationComplete,
+	RotationComplete,
+	Failed(BTreeSet<ValidatorId>),
+}
+
 pub trait VaultRotator {
 	type ValidatorId: Ord + Clone;
 
@@ -165,7 +172,11 @@ pub trait VaultRotator {
 	fn start_vault_rotation(candidates: BTreeSet<Self::ValidatorId>);
 
 	/// Poll for the vault rotation outcome.
-	fn get_vault_rotation_outcome() -> AsyncResult<Result<(), BTreeSet<Self::ValidatorId>>>;
+	fn get_vault_rotation_outcome() -> AsyncResult<VaultStatus<Self::ValidatorId>>;
+
+	/// Rotate the chain's keys "externally" e.g. on the contract.
+	/// For non-contract / proxy based chains, this is a noop
+	fn rotate_externally();
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_vault_rotation_outcome(_outcome: AsyncResult<Result<(), BTreeSet<Self::ValidatorId>>>) {
@@ -175,8 +186,14 @@ pub trait VaultRotator {
 
 pub trait MultiVaultRotator {
 	type ValidatorId;
+
+	/// Start a vault rotation with the provided `candidates`.
+	fn start_all_vault_rotations(candidates: BTreeSet<Self::ValidatorId>);
+
 	// Are we ready to tell the vaults they can commit to their shiny new key.
-	fn ready_to_commit_new_keys() -> AsyncResult<Result<(), BTreeSet<Self::ValidatorId>>>;
+	fn multi_vault_rotation_outcome() -> AsyncResult<VaultStatus<Self::ValidatorId>>;
+
+	fn rotate_all_externally();
 }
 
 /// Handler for Epoch life cycle events.

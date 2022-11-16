@@ -1,0 +1,63 @@
+//! Vault rotator to be used by the Validator pallet to control the rotation of multiple vaults
+
+use core::marker::PhantomData;
+
+use cf_traits::{AsyncResult, MultiVaultRotator, VaultRotator, VaultStatus};
+use sp_std::collections::btree_set::BTreeSet;
+
+pub struct AllVaultRotator<A> {
+	_phantom: PhantomData<A>,
+}
+
+// Do some type bounds here so the return
+impl<A> MultiVaultRotator for AllVaultRotator<A>
+where
+	A: VaultRotator,
+{
+	type ValidatorId = A::ValidatorId;
+
+	/// Start all vault rotations with the provided `candidates`.
+	fn start_all_vault_rotations(candidates: BTreeSet<Self::ValidatorId>) {
+		A::start_vault_rotation(candidates)
+	}
+
+	fn multi_vault_rotation_outcome() -> AsyncResult<VaultStatus<Self::ValidatorId>> {
+		let a_async_result = A::get_vault_rotation_outcome();
+
+		let all_ready = a_async_result.is_ready();
+
+		// We must wait until all of these are ready before we do any action
+		if all_ready {
+			let all_results = [a_async_result.unwrap()];
+			if all_results.iter().all(|x| matches!(x, VaultStatus::KeygenVerificationComplete)) {
+				AsyncResult::Ready(VaultStatus::KeygenVerificationComplete)
+			} else if all_results.iter().all(|x| matches!(x, VaultStatus::RotationComplete)) {
+				AsyncResult::Ready(VaultStatus::RotationComplete)
+			} else {
+				// We currently treat an offence in one vault rotation as bad as in all rotations.
+				// We may want to change it, but this is simplest for now.
+
+				AsyncResult::Ready(VaultStatus::Failed(
+					all_results
+						.into_iter()
+						.filter_map(|r| {
+							if let VaultStatus::Failed(offenders) = r {
+								Some(offenders)
+							} else {
+								None
+							}
+						})
+						.fold(BTreeSet::default(), |acc, x| {
+							acc.union(&x).into_iter().cloned().collect::<BTreeSet<_>>()
+						}),
+				))
+			}
+		} else {
+			AsyncResult::Pending
+		}
+	}
+
+	fn rotate_all_externally() {
+		A::rotate_externally()
+	}
+}

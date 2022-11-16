@@ -68,8 +68,8 @@ pub use cf_primitives::{BlockNumber, FlipBalance, ForeignChainAddress};
 pub use cf_traits::{EpochInfo, EthEnvironmentProvider, QualifyNode, SessionKeysRegistered};
 pub use chainflip::chain_instances::*;
 use chainflip::{
-	epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat, EthEnvironment,
-	EthVaultTransitionHandler,
+	all_vaults_rotator::AllVaultRotator, epoch_transition::ChainflipEpochTransitions,
+	ChainflipHeartbeat, EthEnvironment, EthVaultTransitionHandler,
 };
 use constants::common::*;
 use pallet_cf_flip::{Bonder, FlipSlasher};
@@ -156,7 +156,7 @@ impl pallet_cf_validator::Config for Runtime {
 	type EpochTransitionHandler = ChainflipEpochTransitions;
 	type MinEpoch = MinEpoch;
 	type ValidatorWeightInfo = pallet_cf_validator::weights::PalletWeight<Runtime>;
-	type VaultRotator = EthereumVault;
+	type MultiVaultRotator = AllVaultRotator<EthereumVault>;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type MissedAuthorshipSlots = chainflip::MissedAuraSlots;
 	type BidderProvider = pallet_cf_staking::Pallet<Self>;
