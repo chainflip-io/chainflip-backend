@@ -121,7 +121,7 @@ impl crate::Config<Instance1> for Test {
 	type Event = Event;
 	type TargetChain = Ethereum;
 	type AddressDerivation = ();
-	type LpProvisioning = ();
+	type LpProvisioning = Self;
 	type SwapIntentHandler = Self;
 	type ReplayProtection = Self;
 	type AllBatch = EthereumApi<MockEthEnvironment>;

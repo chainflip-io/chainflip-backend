@@ -492,12 +492,11 @@ impl<T: Config> Pallet<T> {
 
 impl<T: Config> LpProvisioningApi for Pallet<T> {
 	type AccountId = <T as frame_system::Config>::AccountId;
-	type Amount = AssetAmount;
 
 	fn provision_account(
 		account_id: &Self::AccountId,
 		asset: Asset,
-		amount: Self::Amount,
+		amount: AssetAmount,
 	) -> DispatchResult {
 		Pallet::<T>::credit(account_id, asset, amount).map_err(Into::into)
 	}
