@@ -7,7 +7,7 @@ use pallet_cf_staking::Config as StakingConfig;
 use pallet_session::Config as SessionConfig;
 
 use cf_primitives::AccountRole;
-use cf_traits::AccountRoleRegistry;
+use cf_traits::{AccountRoleRegistry, VaultStatus};
 
 use sp_application_crypto::RuntimeAppPublic;
 use sp_runtime::{Digest, DigestItem};
@@ -101,7 +101,7 @@ pub fn start_vault_rotation<T: RuntimeConfig>(
 		bond: 100u32.into(),
 	}));
 
-	assert!(matches!(CurrentRotationPhase::<T>::get(), RotationPhase::VaultsRotating(..)));
+	assert!(matches!(CurrentRotationPhase::<T>::get(), RotationPhase::KeygensInProgress(..)));
 }
 
 pub fn rotate_authorities<T: RuntimeConfig>(candidates: u32, epoch: u32) {
@@ -113,10 +113,12 @@ pub fn rotate_authorities<T: RuntimeConfig>(candidates: u32, epoch: u32) {
 	// Resolves the auction and starts the vault rotation.
 	Pallet::<T>::start_authority_rotation();
 
-	assert!(matches!(CurrentRotationPhase::<T>::get(), RotationPhase::VaultsRotating(..)));
+	assert!(matches!(CurrentRotationPhase::<T>::get(), RotationPhase::KeygensInProgress(..)));
 
 	// Simulate success.
-	T::VaultRotator::set_vault_rotation_outcome(AsyncResult::Ready(Ok(())));
+	T::MultiVaultRotator::set_all_vault_rotation_outcomes(AsyncResult::Ready(
+		VaultStatus::RotationComplete,
+	));
 
 	// The rest should take care of itself.
 	let mut iterations = 0;
@@ -272,7 +274,7 @@ benchmarks! {
 	verify {
 		assert!(matches!(
 			CurrentRotationPhase::<T>::get(),
-			RotationPhase::VaultsRotating(..)
+			RotationPhase::KeygensInProgress(..)
 		));
 	}
 
@@ -288,7 +290,7 @@ benchmarks! {
 		));
 	}
 
-	/**** 2. RotationPhase::VaultsRotating ****/
+	/**** 2. RotationPhase::KeygensInProgress ****/
 
 	rotation_phase_vaults_rotating_pending {
 		// a = authority set target size
@@ -301,20 +303,20 @@ benchmarks! {
 		// This assertion ensures we are using the correct weight parameter.
 		assert_eq!(
 			match CurrentRotationPhase::<T>::get() {
-				RotationPhase::VaultsRotating(rotation_state) => Some(rotation_state.num_primary_candidates()),
+				RotationPhase::KeygensInProgress(rotation_state) => Some(rotation_state.num_primary_candidates()),
 				_ => None,
-			}.expect("phase should be VaultsRotating"),
+			}.expect("phase should be KeygensInProgress"),
 			a
 		);
 		assert!(matches!(
 			CurrentRotationPhase::<T>::get(),
-			RotationPhase::VaultsRotating(..)
+			RotationPhase::KeygensInProgress(..)
 		));
 	}: {
 		Pallet::<T>::on_initialize(1u32.into());
 	}
 	verify {
-		assert_eq!(T::VaultRotator::get_vault_rotation_outcome(), AsyncResult::Pending);
+		assert_eq!(T::MultiVaultRotator::multi_vault_rotation_outcome(), AsyncResult::Pending);
 	}
 
 	rotation_phase_vaults_rotating_success {
@@ -326,14 +328,14 @@ benchmarks! {
 		start_vault_rotation::<T>(a, 50, 1);
 
 		// Simulate success.
-		T::VaultRotator::set_vault_rotation_outcome(AsyncResult::Ready(Ok(())));
+		T::MultiVaultRotator::set_all_vault_rotation_outcomes(AsyncResult::Ready(VaultStatus::KeygenVerificationComplete));
 
 		// This assertion ensures we are using the correct weight parameter.
 		assert_eq!(
 			match CurrentRotationPhase::<T>::get() {
-				RotationPhase::VaultsRotating(rotation_state) => Some(rotation_state.num_primary_candidates()),
+				RotationPhase::KeygensInProgress(rotation_state) => Some(rotation_state.num_primary_candidates()),
 				_ => None,
-			}.expect("phase should be VaultsRotating"),
+			}.expect("phase should be KeygensInProgress"),
 			a,
 			"Incorrect weight parameters."
 		);
@@ -343,7 +345,7 @@ benchmarks! {
 	verify {
 		assert!(matches!(
 			CurrentRotationPhase::<T>::get(),
-			RotationPhase::VaultsRotated(..)
+			RotationPhase::VaultsRotatedExternally(..)
 		));
 	}
 
@@ -356,7 +358,7 @@ benchmarks! {
 
 		// Simulate failure.
 		let offenders = bidder_set::<T, ValidatorIdOf<T>, _>(o, 1).collect::<BTreeSet<_>>();
-		T::VaultRotator::set_vault_rotation_outcome(AsyncResult::Ready(Err(offenders.clone())));
+		T::MultiVaultRotator::set_all_vault_rotation_outcomes(AsyncResult::Ready(VaultStatus::Failed(offenders.clone())));
 
 		// This assertion ensures we are using the correct weight parameters.
 		assert_eq!(offenders.len() as u32, o, "Incorrect weight parameters.");
@@ -367,7 +369,7 @@ benchmarks! {
 		assert!(
 			matches!(
 				CurrentRotationPhase::<T>::get(),
-				RotationPhase::VaultsRotating(rotation_state)
+				RotationPhase::KeygensInProgress(rotation_state)
 					if rotation_state.authority_candidates::<BTreeSet<_>>().is_disjoint(
 						&offenders
 					)
@@ -376,7 +378,7 @@ benchmarks! {
 		);
 	}
 
-	/**** 3. RotationPhase::VaultsRotated ****/
+	/**** 3. RotationPhase::VaultsRotatedExternally ****/
 	/**** 4. RotationPhase::SessionRotating ****/
 	/**** (Both phases have equal weight) ****/
 
@@ -387,17 +389,17 @@ benchmarks! {
 		// Set up a vault rotation.
 		start_vault_rotation::<T>(a, 50, 1);
 		match CurrentRotationPhase::<T>::get() {
-			RotationPhase::VaultsRotating(rotation_state) =>
-				CurrentRotationPhase::<T>::put(RotationPhase::VaultsRotated(rotation_state)),
-			_ => panic!("phase should be VaultsRotated"),
+			RotationPhase::KeygensInProgress(rotation_state) =>
+				CurrentRotationPhase::<T>::put(RotationPhase::VaultsRotatedExternally(rotation_state)),
+			_ => panic!("phase should be VaultsRotatedExternally"),
 		}
 
 		// This assertion ensures we are using the correct weight parameter.
 		assert_eq!(
 			match CurrentRotationPhase::<T>::get() {
-				RotationPhase::VaultsRotated(rotation_state) => Some(rotation_state.num_primary_candidates()),
+				RotationPhase::VaultsRotatedExternally(rotation_state) => Some(rotation_state.num_primary_candidates()),
 				_ => None,
-			}.expect("phase should be VaultsRotated"),
+			}.expect("phase should be VaultsRotatedExternally"),
 			a,
 			"Incorrect weight parameters."
 		);
@@ -408,7 +410,7 @@ benchmarks! {
 		assert!(
 			matches!(
 				CurrentRotationPhase::<T>::get(),
-				RotationPhase::VaultsRotated(..),
+				RotationPhase::VaultsRotatedExternally(..),
 			),
 		);
 	}

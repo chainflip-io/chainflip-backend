@@ -179,7 +179,7 @@ pub trait VaultRotator {
 	fn rotate_externally();
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn set_vault_rotation_outcome(_outcome: AsyncResult<Result<(), BTreeSet<Self::ValidatorId>>>) {
+	fn set_vault_rotation_outcome(_outcome: AsyncResult<VaultStatus<Self::ValidatorId>>) {
 		unimplemented!()
 	}
 }
@@ -194,6 +194,12 @@ pub trait MultiVaultRotator {
 	fn multi_vault_rotation_outcome() -> AsyncResult<VaultStatus<Self::ValidatorId>>;
 
 	fn rotate_all_externally();
+
+	// TODO: we could take an array of outcomes here instead.
+	#[cfg(feature = "runtime-benchmarks")]
+	fn set_all_vault_rotation_outcomes(_outcome: AsyncResult<VaultStatus<Self::ValidatorId>>) {
+		unimplemented!()
+	}
 }
 
 /// Handler for Epoch life cycle events.

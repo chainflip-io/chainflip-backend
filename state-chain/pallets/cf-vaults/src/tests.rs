@@ -7,7 +7,7 @@ use cf_chains::eth::Ethereum;
 use cf_test_utilities::last_event;
 use cf_traits::{
 	mocks::{ceremony_id_provider::MockCeremonyIdProvider, threshold_signer::MockThresholdSigner},
-	AsyncResult, Chainflip, EpochInfo, VaultRotator,
+	AsyncResult, Chainflip, EpochInfo, VaultRotator, VaultStatus,
 };
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
 use sp_std::collections::btree_set::BTreeSet;
@@ -91,9 +91,7 @@ fn keygen_failure() {
 	new_test_ext().execute_with(|| {
 		const BAD_CANDIDATES: &[<MockRuntime as Chainflip>::ValidatorId] = &[BOB, CHARLIE];
 
-		<VaultsPallet as VaultRotator>::start_vault_rotation(BTreeSet::from_iter(
-			ALL_CANDIDATES.iter().cloned(),
-		));
+		VaultsPallet::start_vault_rotation(BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()));
 
 		let ceremony_id = current_ceremony_id();
 
@@ -105,8 +103,8 @@ fn keygen_failure() {
 		assert_eq!(last_event::<MockRuntime>(), PalletEvent::KeygenFailure(ceremony_id).into());
 
 		assert_eq!(
-			<VaultsPallet as VaultRotator>::get_vault_rotation_outcome(),
-			AsyncResult::Ready(Err(BAD_CANDIDATES.iter().cloned().collect()))
+			VaultsPallet::get_vault_rotation_outcome(),
+			AsyncResult::Ready(VaultStatus::Failed(BAD_CANDIDATES.iter().cloned().collect()))
 		);
 
 		MockOffenceReporter::assert_reported(
@@ -451,8 +449,8 @@ fn keygen_report_failure() {
 		VaultsPallet::on_initialize(1);
 		assert!(!KeygenResolutionPendingSince::<MockRuntime, _>::exists());
 		assert_eq!(
-			<VaultsPallet as VaultRotator>::get_vault_rotation_outcome(),
-			AsyncResult::Ready(Err(BTreeSet::from([CHARLIE])))
+			VaultsPallet::get_vault_rotation_outcome(),
+			AsyncResult::Ready(VaultStatus::Failed(BTreeSet::from([CHARLIE])))
 		);
 
 		MockOffenceReporter::assert_reported(PalletOffence::FailedKeygen, vec![CHARLIE]);

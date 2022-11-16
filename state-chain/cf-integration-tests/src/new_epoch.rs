@@ -79,8 +79,11 @@ fn auction_repeats_after_failure_because_of_liveness() {
 
 			// We are still rotating, we have not completed a rotation
 			assert!(
-				matches!(Validator::current_rotation_phase(), RotationPhase::VaultsRotating { .. }),
-				"Expected RotationPhase::VaultsRotating, got: {:?}.",
+				matches!(
+					Validator::current_rotation_phase(),
+					RotationPhase::KeygensInProgress { .. }
+				),
+				"Expected RotationPhase::KeygensInProgress, got: {:?}.",
 				Validator::current_rotation_phase(),
 			);
 		});
@@ -156,7 +159,7 @@ fn epoch_rotates() {
 
 			assert!(matches!(
 				Validator::current_rotation_phase(),
-				RotationPhase::VaultsRotating(..)
+				RotationPhase::KeygensInProgress(..)
 			));
 
 			testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);

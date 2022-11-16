@@ -62,13 +62,13 @@ fn test_mock() {
 		<MockVaultRotator as VaultRotator>::start_vault_rotation(BTreeSet::default());
 		assert_eq!(
 			<MockVaultRotator as VaultRotator>::get_vault_rotation_outcome(),
-			AsyncResult::<MockVaultOutcome>::Pending
+			AsyncResult::Pending
 		);
 		MockVaultRotator::succeeding();
 		MockVaultRotator::on_initialise();
 		assert_eq!(
 			<MockVaultRotator as VaultRotator>::get_vault_rotation_outcome(),
-			AsyncResult::Ready(MockVaultOutcome::Ok(()))
+			AsyncResult::Ready(VaultStatus::KeygenVerificationComplete)
 		);
 		<MockVaultRotator as VaultRotator>::start_vault_rotation(BTreeSet::default());
 		let offenders = BTreeSet::from([42]);
@@ -76,7 +76,7 @@ fn test_mock() {
 		MockVaultRotator::on_initialise();
 		assert_eq!(
 			<MockVaultRotator as VaultRotator>::get_vault_rotation_outcome(),
-			AsyncResult::Ready(MockVaultOutcome::Err(offenders))
+			AsyncResult::Ready(VaultStatus::Failed(offenders))
 		);
 	})
 }

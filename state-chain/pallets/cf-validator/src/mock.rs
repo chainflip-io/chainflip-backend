@@ -3,8 +3,9 @@ use crate as pallet_cf_validator;
 use cf_traits::{
 	mocks::{
 		ensure_origin_mock::NeverFailingOriginCheck, epoch_info::MockEpochInfo,
-		qualify_node::QualifyAll, reputation_resetter::MockReputationResetter,
-		system_state_info::MockSystemStateInfo, vault_rotation::MockVaultRotator,
+		multi_vault_rotator::MockMultiVaultRotator, qualify_node::QualifyAll,
+		reputation_resetter::MockReputationResetter, system_state_info::MockSystemStateInfo,
+		vault_rotation::MockVaultRotator,
 	},
 	Bid, Chainflip, QualifyNode, RuntimeAuctionOutcome,
 };
@@ -231,7 +232,7 @@ impl Config for Test {
 	type AccountRoleRegistry = ();
 	type MinEpoch = MinEpoch;
 	type ValidatorWeightInfo = ();
-	type VaultRotator = MockVaultRotator;
+	type MultiVaultRotator = MockMultiVaultRotator;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type MissedAuthorshipSlots = MockMissedAuthorshipSlots;
 	type BidderProvider = MockBidderProvider;

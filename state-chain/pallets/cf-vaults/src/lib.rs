@@ -864,6 +864,8 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 		if let Some(VaultRotationStatus::<T, I>::KeygenVerificationComplete { new_public_key }) =
 			PendingVaultRotation::<T, I>::get()
 		{
+			// We want to mark the key as in transition here
+			// so we stop signing
 			T::Broadcaster::threshold_sign_and_broadcast(
 				<T::ApiCall as SetAggKeyWithAggKey<_>>::new_unsigned(
 					<T::ReplayProtectionProvider>::replay_protection(),
@@ -884,9 +886,8 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn set_vault_rotation_outcome(outcome: AsyncResult<Result<(), BTreeSet<Self::ValidatorId>>>) {
+	fn set_vault_rotation_outcome(outcome: AsyncResult<VaultStatus<Self::ValidatorId>>) {
 		use cf_chains::benchmarking_value::BenchmarkValue;
-
 		match outcome {
 			AsyncResult::Pending => {
 				PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingKeygen {
@@ -895,14 +896,21 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 					response_status: KeygenResponseStatus::new(Default::default()),
 				});
 			},
-			AsyncResult::Ready(Ok(())) => {
-				PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Complete {
-					tx_hash: BenchmarkValue::benchmark_value(),
-				});
+			AsyncResult::Ready(VaultStatus::KeygenVerificationComplete) => {
+				PendingVaultRotation::<T, I>::put(
+					VaultRotationStatus::<T, I>::KeygenVerificationComplete {
+						new_public_key: Default::default(),
+					},
+				);
 			},
-			AsyncResult::Ready(Err(offenders)) => {
+			AsyncResult::Ready(VaultStatus::Failed(offenders)) => {
 				PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Failed {
 					offenders,
+				});
+			},
+			AsyncResult::Ready(VaultStatus::RotationComplete) => {
+				PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Complete {
+					tx_hash: BenchmarkValue::benchmark_value(),
 				});
 			},
 			AsyncResult::Void => {
