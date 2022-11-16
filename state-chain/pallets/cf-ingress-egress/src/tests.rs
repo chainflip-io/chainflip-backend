@@ -1,7 +1,7 @@
 use crate::{mock::*, DisabledEgressAssets, FetchOrTransfer, ScheduledEgressRequests, WeightInfo};
 
 use cf_primitives::chains::assets::eth;
-use cf_traits::EgressApi;
+use cf_traits::{EgressApi, IngressApi};
 
 use frame_support::{assert_ok, instances::Instance1, traits::Hooks};
 const ALICE_ETH_ADDRESS: EthereumAddress = [100u8; 20];
@@ -97,16 +97,29 @@ fn can_schedule_egress_to_batch() {
 	});
 }
 
+fn schedule_ingress(who: u64, asset: eth::Asset) {
+	let res = IngressEgress::register_liquidity_ingress_intent(who, asset);
+	assert!(res.is_ok());
+
+	if let Ok((_, ingress_address)) = res {
+		assert_ok!(IngressEgress::do_single_ingress(
+			ingress_address.try_into().unwrap(),
+			asset,
+			1_000,
+			Default::default(),
+		));
+	}
+}
+
 #[test]
 fn can_schedule_ingress_fetch() {
 	new_test_ext().execute_with(|| {
 		assert!(ScheduledEgressRequests::<Test, Instance1>::get().is_empty());
 
-		IngressEgress::schedule_ingress_fetch(vec![
-			(ETH_ETH, 1u64),
-			(ETH_ETH, 2u64),
-			(ETH_FLIP, 3u64),
-		]);
+		schedule_ingress(1u64, eth::Asset::Eth);
+		schedule_ingress(2u64, eth::Asset::Eth);
+		schedule_ingress(3u64, eth::Asset::Flip);
+
 		assert_eq!(
 			ScheduledEgressRequests::<Test, Instance1>::get(),
 			vec![
@@ -116,11 +129,12 @@ fn can_schedule_ingress_fetch() {
 			]
 		);
 
-		System::assert_last_event(Event::IngressEgress(crate::Event::IngressFetchesScheduled {
-			fetches_added: 3u32,
+		System::assert_has_event(Event::IngressEgress(crate::Event::IngressFetchesScheduled {
+			intent_id: 2,
+			asset: eth::Asset::Eth,
 		}));
 
-		IngressEgress::schedule_ingress_fetch(vec![(ETH_ETH, 4u64)]);
+		schedule_ingress(4u64, eth::Asset::Eth);
 
 		assert_eq!(
 			ScheduledEgressRequests::<Test, Instance1>::get(),
@@ -131,9 +145,6 @@ fn can_schedule_ingress_fetch() {
 				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 4u64, asset: ETH_ETH },
 			]
 		);
-		System::assert_last_event(Event::IngressEgress(crate::Event::IngressFetchesScheduled {
-			fetches_added: 1u32,
-		}));
 	});
 }
 
@@ -144,18 +155,16 @@ fn on_idle_can_send_batch_all() {
 		IngressEgress::schedule_egress(ETH_ETH, 2_000, ALICE_ETH_ADDRESS.into());
 		IngressEgress::schedule_egress(ETH_ETH, 3_000, BOB_ETH_ADDRESS.into());
 		IngressEgress::schedule_egress(ETH_ETH, 4_000, BOB_ETH_ADDRESS.into());
-		IngressEgress::schedule_ingress_fetch(vec![
-			(ETH_ETH, 1),
-			(ETH_ETH, 2),
-			(ETH_ETH, 3),
-			(ETH_ETH, 4),
-		]);
+		schedule_ingress(1u64, eth::Asset::Eth);
+		schedule_ingress(2u64, eth::Asset::Eth);
+		schedule_ingress(3u64, eth::Asset::Eth);
+		schedule_ingress(4u64, eth::Asset::Eth);
 
 		IngressEgress::schedule_egress(ETH_FLIP, 5_000, ALICE_ETH_ADDRESS.into());
 		IngressEgress::schedule_egress(ETH_FLIP, 6_000, ALICE_ETH_ADDRESS.into());
 		IngressEgress::schedule_egress(ETH_FLIP, 7_000, BOB_ETH_ADDRESS.into());
 		IngressEgress::schedule_egress(ETH_FLIP, 8_000, BOB_ETH_ADDRESS.into());
-		IngressEgress::schedule_ingress_fetch(vec![(ETH_FLIP, 5)]);
+		schedule_ingress(5u64, eth::Asset::Flip);
 
 		// Take all scheduled Egress and Broadcast as batch
 		IngressEgress::on_idle(1, 1_000_000_000_000u64);
@@ -173,7 +182,8 @@ fn on_idle_can_send_batch_all() {
 fn can_manually_send_batch_all() {
 	new_test_ext().execute_with(|| {
 		IngressEgress::schedule_egress(ETH_ETH, 1_000, ALICE_ETH_ADDRESS.into());
-		IngressEgress::schedule_ingress_fetch(vec![(ETH_ETH, 1), (ETH_FLIP, 2)]);
+		schedule_ingress(1u64, eth::Asset::Eth);
+		schedule_ingress(2u64, eth::Asset::Flip);
 		IngressEgress::schedule_egress(ETH_ETH, 2_000, ALICE_ETH_ADDRESS.into());
 		IngressEgress::schedule_egress(ETH_ETH, 3_000, BOB_ETH_ADDRESS.into());
 		IngressEgress::schedule_egress(ETH_ETH, 4_000, BOB_ETH_ADDRESS.into());
@@ -182,7 +192,8 @@ fn can_manually_send_batch_all() {
 		IngressEgress::schedule_egress(ETH_FLIP, 6_000, ALICE_ETH_ADDRESS.into());
 		IngressEgress::schedule_egress(ETH_FLIP, 7_000, BOB_ETH_ADDRESS.into());
 		IngressEgress::schedule_egress(ETH_FLIP, 8_000, BOB_ETH_ADDRESS.into());
-		IngressEgress::schedule_ingress_fetch(vec![(ETH_ETH, 3), (ETH_FLIP, 4)]);
+		schedule_ingress(3u64, eth::Asset::Eth);
+		schedule_ingress(4u64, eth::Asset::Flip);
 
 		// Send only 2 requests
 		assert_ok!(IngressEgress::egress_scheduled_assets_for_chain(Origin::root(), Some(2)));
@@ -209,11 +220,13 @@ fn on_idle_batch_size_is_limited_by_weight() {
 	new_test_ext().execute_with(|| {
 		IngressEgress::schedule_egress(ETH_ETH, 1_000, ALICE_ETH_ADDRESS.into());
 		IngressEgress::schedule_egress(ETH_ETH, 2_000, ALICE_ETH_ADDRESS.into());
-		IngressEgress::schedule_ingress_fetch(vec![(ETH_ETH, 1), (ETH_ETH, 2)]);
+		schedule_ingress(1u64, eth::Asset::Eth);
+		schedule_ingress(2u64, eth::Asset::Eth);
 		IngressEgress::schedule_egress(ETH_FLIP, 3_000, ALICE_ETH_ADDRESS.into());
 		IngressEgress::schedule_egress(ETH_FLIP, 4_000, ALICE_ETH_ADDRESS.into());
 		IngressEgress::schedule_egress(ETH_FLIP, 5_000, ALICE_ETH_ADDRESS.into());
-		IngressEgress::schedule_ingress_fetch(vec![(ETH_FLIP, 3), (ETH_FLIP, 4)]);
+		schedule_ingress(3u64, eth::Asset::Flip);
+		schedule_ingress(4u64, eth::Asset::Flip);
 
 		// There's enough weights for 3 transactions, which are taken in FIFO order.
 		IngressEgress::on_idle(

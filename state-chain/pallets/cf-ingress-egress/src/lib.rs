@@ -182,7 +182,8 @@ pub mod pallet {
 			egress_address: TargetChainAccount<T, I>,
 		},
 		IngressFetchesScheduled {
-			fetches_added: u32,
+			intent_id: IntentId,
+			asset: TargetChainAsset<T, I>,
 		},
 		BatchBroadcastRequested {
 			fetch_batch_size: u32,
@@ -384,7 +385,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ensure!(ingress.ingress_asset == asset, Error::<T, I>::IngressMismatchWithIntent);
 
 		// Ingress is called by witnessers, so asset/chain combination should always be valid.
-		Self::schedule_ingress_fetch(vec![(asset, ingress.intent_id)]);
+		ScheduledEgressRequests::<T, I>::append(FetchOrTransfer::<T::TargetChain>::Fetch {
+			intent_id: ingress.intent_id,
+			asset,
+		});
+
+		Self::deposit_event(Event::<T, I>::IngressFetchesScheduled {
+			intent_id: ingress.intent_id,
+			asset,
+		});
 
 		// NB: Don't take here. We should continue witnessing this address
 		// even after an ingress to it has occurred.
@@ -409,17 +418,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		Self::deposit_event(Event::IngressCompleted { ingress_address, asset, amount, tx_hash });
 		Ok(())
-	}
-
-	fn schedule_ingress_fetch(fetch_details: Vec<(TargetChainAsset<T, I>, IntentId)>) {
-		let fetches_added = fetch_details.len() as u32;
-		for (asset, intent_id) in fetch_details {
-			ScheduledEgressRequests::<T, I>::append(FetchOrTransfer::<T::TargetChain>::Fetch {
-				intent_id,
-				asset,
-			});
-		}
-		Self::deposit_event(Event::<T, I>::IngressFetchesScheduled { fetches_added });
 	}
 }
 
