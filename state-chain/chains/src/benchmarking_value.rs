@@ -1,3 +1,4 @@
+#![allow(unused_imports)]
 use cf_primitives::{
 	chains::{
 		assets::{dot, eth},
@@ -29,29 +30,29 @@ macro_rules! impl_default_benchmark_value {
 	};
 }
 
+#[cfg(feature = "runtime-benchmarks")]
 impl BenchmarkValue for Asset {
-	#[cfg(feature = "runtime-benchmarks")]
 	fn benchmark_value() -> Self {
 		Self::Eth
 	}
 }
 
+#[cfg(feature = "runtime-benchmarks")]
 impl BenchmarkValue for eth::Asset {
-	#[cfg(feature = "runtime-benchmarks")]
 	fn benchmark_value() -> Self {
 		eth::Asset::Eth
 	}
 }
 
+#[cfg(feature = "runtime-benchmarks")]
 impl BenchmarkValue for dot::Asset {
-	#[cfg(feature = "runtime-benchmarks")]
 	fn benchmark_value() -> Self {
 		dot::Asset::Dot
 	}
 }
 
+#[cfg(feature = "runtime-benchmarks")]
 impl BenchmarkValue for AnyChainAccount {
-	#[cfg(feature = "runtime-benchmarks")]
 	fn benchmark_value() -> Self {
 		[0u8; 32].into()
 	}
