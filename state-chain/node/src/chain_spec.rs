@@ -57,9 +57,6 @@ const ETH_VAULT_ADDRESS_DEFAULT: &str = "e7f1725E7734CE288F8367e1Bb143E90bb3F051
 const ETHEREUM_CHAIN_ID_DEFAULT: u64 = cf_chains::eth::CHAIN_ID_GOERLI;
 const ETH_INIT_AGG_KEY_DEFAULT: &str =
 	"02e61afd677cdfbec838c6f309deff0b2c6056f8a27f2c783b68bba6b30f667be6";
-const GENESIS_STAKE_AMOUNT_DEFAULT: FlipBalance = 5_000 * FLIPPERINOS_PER_FLIP;
-const ETH_DEPLOYMENT_BLOCK_DEFAULT: u64 = 0;
-const ETH_PRIORITY_FEE_PERCENTILE_DEFAULT: u8 = 50;
 
 /// generate session keys from Aura and Grandpa keys
 pub fn session_keys(aura: AuraId, grandpa: GrandpaId) -> SessionKeys {
@@ -117,12 +114,12 @@ pub fn get_environment() -> StateChainEnvironment {
 	.try_into()
 	.expect("ETH_INIT_AGG_KEY cast to agg pub key failed");
 	let ethereum_deployment_block = env::var("ETH_DEPLOYMENT_BLOCK")
-		.unwrap_or_else(|_| ETH_DEPLOYMENT_BLOCK_DEFAULT.to_string())
+		.unwrap_or_else(|_| "0".into())
 		.parse::<u64>()
 		.expect("ETH_DEPLOYMENT_BLOCK env var could not be parsed to u64");
 
 	let genesis_stake_amount = env::var("GENESIS_STAKE")
-		.unwrap_or_else(|_| GENESIS_STAKE_AMOUNT_DEFAULT.to_string())
+		.unwrap_or_else(|_| common::GENESIS_STAKE_AMOUNT.to_string())
 		.parse::<u128>()
 		.expect("GENESIS_STAKE env var could not be parsed to u128");
 
@@ -218,7 +215,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 					cfe_settings: CfeSettings {
 						eth_block_safety_margin,
 						max_ceremony_stage_duration,
-						eth_priority_fee_percentile: ETH_PRIORITY_FEE_PERCENTILE_DEFAULT,
+						eth_priority_fee_percentile: common::ETH_PRIORITY_FEE_PERCENTILE,
 					},
 					#[cfg(feature = "ibiza")]
 					polkadot_vault_account_id: POLKADOT_VAULT_ACCOUNT,
@@ -232,13 +229,13 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 				genesis_stake_amount,
 				min_stake,
 				8 * HOURS,
-				common::CLAIM_DELAY_BUFFER_SECS_DEFAULT,
-				common::CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL_DEFAULT,
-				common::BACKUP_NODE_EMISSION_INFLATION_PERBILL_DEFAULT,
-				common::EXPIRY_SPAN_IN_SECONDS_DEFAULT,
-				common::ACCRUAL_RATIO_DEFAULT,
-				common::PERCENT_OF_EPOCH_PERIOD_CLAIMABLE_DEFAULT,
-				common::SUPPLY_UPDATE_INTERVAL_DEFAULT,
+				common::CLAIM_DELAY_BUFFER_SECS,
+				common::CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL,
+				common::BACKUP_NODE_EMISSION_INFLATION_PERBILL,
+				common::EXPIRY_SPAN_IN_SECONDS,
+				common::ACCRUAL_RATIO,
+				common::PERCENT_OF_EPOCH_PERIOD_CLAIMABLE,
+				common::SUPPLY_UPDATE_INTERVAL,
 			)
 		},
 		// Bootnodes
@@ -358,7 +355,7 @@ fn chainflip_three_node_testnet_config_from_env(
 					cfe_settings: CfeSettings {
 						eth_block_safety_margin,
 						max_ceremony_stage_duration,
-						eth_priority_fee_percentile: ETH_PRIORITY_FEE_PERCENTILE_DEFAULT,
+						eth_priority_fee_percentile: common::ETH_PRIORITY_FEE_PERCENTILE,
 					},
 					#[cfg(feature = "ibiza")]
 					polkadot_vault_account_id: POLKADOT_VAULT_ACCOUNT,
@@ -372,13 +369,13 @@ fn chainflip_three_node_testnet_config_from_env(
 				genesis_stake_amount,
 				min_stake,
 				8 * HOURS,
-				common::CLAIM_DELAY_BUFFER_SECS_DEFAULT,
-				common::CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL_DEFAULT,
-				common::BACKUP_NODE_EMISSION_INFLATION_PERBILL_DEFAULT,
-				common::EXPIRY_SPAN_IN_SECONDS_DEFAULT,
-				common::ACCRUAL_RATIO_DEFAULT,
-				common::PERCENT_OF_EPOCH_PERIOD_CLAIMABLE_DEFAULT,
-				common::SUPPLY_UPDATE_INTERVAL_DEFAULT,
+				common::CLAIM_DELAY_BUFFER_SECS,
+				common::CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL,
+				common::BACKUP_NODE_EMISSION_INFLATION_PERBILL,
+				common::EXPIRY_SPAN_IN_SECONDS,
+				common::ACCRUAL_RATIO,
+				common::PERCENT_OF_EPOCH_PERIOD_CLAIMABLE,
+				common::SUPPLY_UPDATE_INTERVAL,
 			)
 		},
 		// Bootnodes
@@ -458,8 +455,7 @@ macro_rules! network_spec {
 								cfe_settings: CfeSettings {
 									eth_block_safety_margin,
 									max_ceremony_stage_duration,
-									eth_priority_fee_percentile:
-										ETH_PRIORITY_FEE_PERCENTILE_DEFAULT,
+									eth_priority_fee_percentile: ETH_PRIORITY_FEE_PERCENTILE,
 								},
 								#[cfg(feature = "ibiza")]
 								polkadot_vault_account_id: POLKADOT_VAULT_ACCOUNT,
@@ -479,7 +475,7 @@ macro_rules! network_spec {
 							EXPIRY_SPAN_IN_SECONDS,
 							ACCRUAL_RATIO,
 							PERCENT_OF_EPOCH_PERIOD_CLAIMABLE,
-							SUPPLY_UPDATE_INTERVAL_DEFAULT,
+							SUPPLY_UPDATE_INTERVAL,
 						)
 					},
 					// Bootnodes

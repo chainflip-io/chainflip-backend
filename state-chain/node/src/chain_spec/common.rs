@@ -1,14 +1,12 @@
 pub use state_chain_runtime::constants::common::*;
+use state_chain_runtime::FlipBalance;
 
-pub const CLAIM_DELAY_BUFFER_SECS_DEFAULT: u64 = 40;
-pub const CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL_DEFAULT: u32 = 28;
-pub const BACKUP_NODE_EMISSION_INFLATION_PERBILL_DEFAULT: u32 = 6;
-pub const EXPIRY_SPAN_IN_SECONDS_DEFAULT: u64 = 80000;
-pub const ACCRUAL_RATIO_DEFAULT: (i32, u32) = (1, 2500);
+pub const GENESIS_STAKE_AMOUNT: FlipBalance = 5_000 * FLIPPERINOS_PER_FLIP;
+pub const MIN_STAKE: FlipBalance = 10 * FLIPPERINOS_PER_FLIP;
+pub const ETH_PRIORITY_FEE_PERCENTILE: u8 = 50;
+
 /// Percent of the epoch we are allowed to claim
-pub const PERCENT_OF_EPOCH_PERIOD_CLAIMABLE_DEFAULT: u8 = 50;
-/// Default supply update interval is 24 hours.
-pub const SUPPLY_UPDATE_INTERVAL_DEFAULT: u32 = 14_400;
+pub const PERCENT_OF_EPOCH_PERIOD_CLAIMABLE: u8 = 50;
 
 /// Most Ethereum blocks are validated in around 12 seconds. This is a conservative
 /// time, in case things go wrong.
