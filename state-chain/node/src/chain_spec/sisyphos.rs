@@ -37,14 +37,3 @@ pub const DOPEY_ED25519: [u8; 32] =
 	hex_literal::hex!["7c937c229aa95b19732a4a2e306a8cefb480e7c671de8fc416ec01bb3eedb749"];
 pub const SNOW_WHITE_SR25519: [u8; 32] =
 	hex_literal::hex!["84f134a4cc6bf41d3239bbe097eac4c8f83e78b468e6c49ed5cd2ddc51a07a29"];
-
-// Number of online credits required to get `ACCRUAL_REPUTATION_POINTS` of reputation
-const ACCRUAL_ONLINE_CREDITS: u32 = 2500;
-// Number of reputation points received for having `ACCRUAL_ONLINE_CREDITS`
-const ACCRUAL_REPUTATION_POINTS: i32 = 1;
-pub const ACCRUAL_RATIO: (i32, u32) = (ACCRUAL_REPUTATION_POINTS, ACCRUAL_ONLINE_CREDITS);
-
-/// Percent of the epoch we are allowed to claim
-pub const PERCENT_OF_EPOCH_PERIOD_CLAIMABLE: u8 = 50;
-/// Default supply update interval is 24 hours.
-pub const SUPPLY_UPDATE_INTERVAL_DEFAULT: u32 = 14_400;

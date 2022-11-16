@@ -25,4 +25,10 @@ pub const CLAIM_DELAY_BUFFER_SECS: u64 = CONSERVATIVE_BLOCK_TIME_SECS * eth::BLO
 // is taken as 0.1 percent for authority emissions and 0.02 percent for backup node emissions.
 pub const CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL: u32 = 28;
 pub const BACKUP_NODE_EMISSION_INFLATION_PERBILL: u32 = 6;
-pub const EXPIRY_SPAN_IN_SECONDS: u64 = 80000;
+pub const SUPPLY_UPDATE_INTERVAL: u32 = 24 * HOURS;
+
+// Number of online credits required to get `ACCRUAL_REPUTATION_POINTS` of reputation
+const ACCRUAL_ONLINE_CREDITS: u32 = 2500;
+// Number of reputation points received for having `ACCRUAL_ONLINE_CREDITS`
+const ACCRUAL_REPUTATION_POINTS: i32 = 1;
+pub const ACCRUAL_RATIO: (i32, u32) = (ACCRUAL_REPUTATION_POINTS, ACCRUAL_ONLINE_CREDITS);
