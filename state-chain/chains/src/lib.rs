@@ -87,14 +87,7 @@ pub trait ChainCrypto: Chain {
 	type AggKey: TryFrom<Vec<u8>> + Into<Vec<u8>> + Member + Parameter + Copy + Ord + BenchmarkValue;
 	type Payload: Member + Parameter + BenchmarkValue;
 	type ThresholdSignature: Member + Parameter + BenchmarkValue;
-	type TransactionHash: Member
-		+ Parameter
-		+ Default
-		+ Encode
-		+ Decode
-		+ TypeInfo
-		+ Clone
-		+ BenchmarkValue;
+	type TransactionHash: Member + Parameter + BenchmarkValue;
 	type GovKey: Member + Parameter + Copy + BenchmarkValue;
 
 	fn verify_threshold_signature(
