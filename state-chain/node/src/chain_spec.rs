@@ -1,12 +1,12 @@
 #[cfg(feature = "ibiza")]
 use cf_chains::dot::{POLKADOT_PROXY_ACCOUNT, POLKADOT_VAULT_ACCOUNT, WESTEND_CONFIG}; /* TODO: move these constants into chainspec. */
-use cf_primitives::AccountRole;
+use cf_primitives::{AccountRole, AuthorityCount};
 use sc_service::{ChainType, Properties};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::crypto::{set_default_ss58_version, Ss58AddressFormat, UncheckedInto};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use state_chain_runtime::{
-	constants::common::*, opaque::SessionKeys, AccountId, AccountRolesConfig, AuraConfig,
+	chainflip::Offence, opaque::SessionKeys, AccountId, AccountRolesConfig, AuraConfig,
 	BlockNumber, CfeSettings, EmissionsConfig, EnvironmentConfig, EthereumThresholdSignerConfig,
 	EthereumVaultConfig, FlipBalance, FlipConfig, GenesisConfig, GovernanceConfig, GrandpaConfig,
 	ReputationConfig, SessionConfig, StakingConfig, SystemConfig, ValidatorConfig, WASM_BINARY,
@@ -21,10 +21,9 @@ use sp_runtime::traits::{IdentifyAccount, Verify};
 #[cfg(feature = "ibiza")]
 use state_chain_runtime::Signature;
 
+pub mod common;
 pub mod perseverance;
 pub mod sisyphos;
-
-pub mod common;
 
 #[cfg(feature = "ibiza")]
 /// Generate a crypto pair from seed.
@@ -135,7 +134,7 @@ pub fn get_environment() -> StateChainEnvironment {
 
 	let min_stake: u128 = env::var("MIN_STAKE")
 		.map(|s| s.parse::<u128>().expect("MIN_STAKE env var could not be parsed to u128"))
-		.unwrap_or(DEFAULT_MIN_STAKE);
+		.unwrap_or(common::MIN_STAKE);
 
 	StateChainEnvironment {
 		flip_token_address,
@@ -205,6 +204,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 					get_account_id_from_seed::<sr25519::Public>("Bob"),
 				],
 				1,
+				common::MAX_AUTHORITIES,
 				EnvironmentConfig {
 					flip_token_address,
 					eth_usdc_address,
@@ -226,9 +226,11 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 				},
 				eth_init_agg_key,
 				ethereum_deployment_block,
+				common::TOTAL_ISSUANCE,
 				genesis_stake_amount,
 				min_stake,
-				8 * HOURS,
+				8 * common::HOURS,
+				common::CLAIM_DELAY_SECS,
 				common::CLAIM_DELAY_BUFFER_SECS,
 				common::CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL,
 				common::BACKUP_NODE_EMISSION_INFLATION_PERBILL,
@@ -236,6 +238,9 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 				common::ACCRUAL_RATIO,
 				common::PERCENT_OF_EPOCH_PERIOD_CLAIMABLE,
 				common::SUPPLY_UPDATE_INTERVAL,
+				common::PENALTIES.to_vec(),
+				common::KEYGEN_CEREMONY_TIMEOUT_BLOCKS,
+				common::THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS,
 			)
 		},
 		// Bootnodes
@@ -344,7 +349,8 @@ fn chainflip_three_node_testnet_config_from_env(
 					#[cfg(feature = "ibiza")]
 					get_account_id_from_seed::<sr25519::Public>("Bob"),
 				],
-				2,
+				common::MIN_AUTHORITIES,
+				common::MAX_AUTHORITIES,
 				EnvironmentConfig {
 					flip_token_address,
 					eth_usdc_address,
@@ -366,9 +372,11 @@ fn chainflip_three_node_testnet_config_from_env(
 				},
 				eth_init_agg_key,
 				ethereum_deployment_block,
+				common::TOTAL_ISSUANCE,
 				genesis_stake_amount,
 				min_stake,
-				8 * HOURS,
+				8 * common::HOURS,
+				common::CLAIM_DELAY_SECS,
 				common::CLAIM_DELAY_BUFFER_SECS,
 				common::CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL,
 				common::BACKUP_NODE_EMISSION_INFLATION_PERBILL,
@@ -376,6 +384,9 @@ fn chainflip_three_node_testnet_config_from_env(
 				common::ACCRUAL_RATIO,
 				common::PERCENT_OF_EPOCH_PERIOD_CLAIMABLE,
 				common::SUPPLY_UPDATE_INTERVAL,
+				common::PENALTIES.to_vec(),
+				common::KEYGEN_CEREMONY_TIMEOUT_BLOCKS,
+				common::THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS,
 			)
 		},
 		// Bootnodes
@@ -444,7 +455,8 @@ macro_rules! network_spec {
 							SNOW_WHITE_SR25519.into(),
 							// Stakers at genesis
 							vec![BASHFUL_SR25519.into(), DOC_SR25519.into(), DOPEY_SR25519.into()],
-							2,
+							MIN_AUTHORITIES,
+							MAX_AUTHORITIES,
 							EnvironmentConfig {
 								flip_token_address,
 								eth_usdc_address,
@@ -466,9 +478,11 @@ macro_rules! network_spec {
 							},
 							eth_init_agg_key,
 							ethereum_deployment_block,
+							TOTAL_ISSUANCE,
 							genesis_stake_amount,
 							min_stake,
 							3 * HOURS,
+							CLAIM_DELAY_SECS,
 							CLAIM_DELAY_BUFFER_SECS,
 							CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL,
 							BACKUP_NODE_EMISSION_INFLATION_PERBILL,
@@ -476,6 +490,9 @@ macro_rules! network_spec {
 							ACCRUAL_RATIO,
 							PERCENT_OF_EPOCH_PERIOD_CLAIMABLE,
 							SUPPLY_UPDATE_INTERVAL,
+							PENALTIES.to_vec(),
+							KEYGEN_CEREMONY_TIMEOUT_BLOCKS,
+							THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS,
 						)
 					},
 					// Bootnodes
@@ -507,13 +524,16 @@ fn testnet_genesis(
 	initial_authorities: Vec<(AccountId, AuraId, GrandpaId)>,
 	root_key: AccountId,
 	genesis_stakers: Vec<AccountId>,
-	min_authorities: u32,
+	min_authorities: AuthorityCount,
+	max_authorities: AuthorityCount,
 	config_set: EnvironmentConfig,
 	eth_init_agg_key: [u8; 33],
 	ethereum_deployment_block: u64,
+	total_issuance: FlipBalance,
 	genesis_stake_amount: u128,
 	minimum_stake: u128,
 	blocks_per_epoch: BlockNumber,
+	claim_delay: u64,
 	claim_delay_buffer_seconds: u64,
 	current_authority_emission_inflation_perbill: u32,
 	backup_node_emission_inflation_perbill: u32,
@@ -521,6 +541,9 @@ fn testnet_genesis(
 	accrual_ratio: (i32, u32),
 	percent_of_epoch_period_claimable: u8,
 	supply_update_interval: u32,
+	penalties: Vec<(Offence, (i32, BlockNumber))>,
+	keygen_ceremony_timeout_blocks: BlockNumber,
+	threshold_signature_ceremony_timeout_blocks: BlockNumber,
 ) -> GenesisConfig {
 	let authority_ids: Vec<AccountId> =
 		initial_authorities.iter().map(|(id, ..)| id.clone()).collect();
@@ -556,8 +579,8 @@ fn testnet_genesis(
 			bond: genesis_stake_amount,
 			authority_set_min_size: min_authorities,
 			min_size: min_authorities,
-			max_size: MAX_AUTHORITIES,
-			max_expansion: MAX_AUTHORITIES,
+			max_size: max_authorities,
+			max_expansion: max_authorities,
 		},
 		session: SessionConfig {
 			keys: initial_authorities
@@ -565,32 +588,28 @@ fn testnet_genesis(
 				.map(|x| (x.0.clone(), x.0.clone(), session_keys(x.1.clone(), x.2.clone())))
 				.collect::<Vec<_>>(),
 		},
-		flip: FlipConfig { total_issuance: TOTAL_ISSUANCE },
+		flip: FlipConfig { total_issuance },
 		staking: StakingConfig {
 			genesis_stakers: genesis_stakers
 				.iter()
 				.map(|acct| (acct.clone(), genesis_stake_amount))
 				.collect::<Vec<(AccountId, FlipBalance)>>(),
 			minimum_stake,
-			claim_ttl: core::time::Duration::from_secs(3 * CLAIM_DELAY_SECS),
+			claim_ttl: core::time::Duration::from_secs(3 * claim_delay),
 			claim_delay_buffer_seconds,
 		},
 		aura: AuraConfig { authorities: vec![] },
 		grandpa: GrandpaConfig { authorities: vec![] },
 		governance: GovernanceConfig { members: vec![root_key], expiry_span },
-		reputation: ReputationConfig {
-			accrual_ratio,
-			penalties: PENALTIES.to_vec(),
-			genesis_nodes: genesis_stakers,
-		},
+		reputation: ReputationConfig { accrual_ratio, penalties, genesis_nodes: genesis_stakers },
 		environment: config_set,
 		ethereum_vault: EthereumVaultConfig {
 			vault_key: eth_init_agg_key.to_vec(),
 			deployment_block: ethereum_deployment_block,
-			keygen_response_timeout: KEYGEN_CEREMONY_TIMEOUT_BLOCKS,
+			keygen_response_timeout: keygen_ceremony_timeout_blocks,
 		},
 		ethereum_threshold_signer: EthereumThresholdSignerConfig {
-			threshold_signature_response_timeout: THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS,
+			threshold_signature_response_timeout: threshold_signature_ceremony_timeout_blocks,
 			_instance: PhantomData,
 		},
 		emissions: EmissionsConfig {
@@ -617,5 +636,5 @@ pub fn chainflip_properties() -> Properties {
 
 /// Sets global that ensures SC AccountId's are printed correctly
 pub fn use_chainflip_account_id_encoding() {
-	set_default_ss58_version(Ss58AddressFormat::custom(CHAINFLIP_SS58_PREFIX));
+	set_default_ss58_version(Ss58AddressFormat::custom(common::CHAINFLIP_SS58_PREFIX));
 }
