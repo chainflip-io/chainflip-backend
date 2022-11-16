@@ -47,6 +47,7 @@ use std::{
 	sync::Arc,
 };
 use thiserror::Error;
+use tokio::sync::broadcast;
 use web3::{
 	ethabi::{self, Address, Contract},
 	signing::{Key, SecretKeyRef},
@@ -109,9 +110,10 @@ pub struct EpochStart {
 /// Helper that generates a broadcast channel with multiple receivers.
 pub fn build_broadcast_channel<T: Clone, const S: usize>(
 	capacity: usize,
-) -> (async_channel::Sender<T>, [async_channel::Receiver<T>; S]) {
-	let (sender, receiver) = async_channel::bounded(capacity);
-	(sender, [0; S].map(|_| receiver.clone()))
+) -> (broadcast::Sender<T>, [broadcast::Receiver<T>; S]) {
+	let (sender, _) = broadcast::channel(capacity);
+	let receivers = [0; S].map(|_| sender.subscribe());
+	(sender, receivers)
 }
 
 impl TryFrom<Block<H256>> for EthNumberBloom {
