@@ -1,11 +1,14 @@
 use crate::Chain;
-use cf_primitives::chains::{assets, AnyChain};
+use cf_primitives::{
+	chains::{assets, AnyChain, AnyChainAccount},
+	AssetAmount,
+};
 
 impl Chain for AnyChain {
 	type ChainBlockNumber = u64;
-	type ChainAmount = u128;
+	type ChainAmount = AssetAmount;
 	type TransactionFee = Self::ChainAmount;
 	type TrackedData = ();
 	type ChainAsset = assets::any::Asset;
-	type ChainAccount = [u8; 32];
+	type ChainAccount = AnyChainAccount;
 }

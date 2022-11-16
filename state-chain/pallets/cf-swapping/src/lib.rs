@@ -45,7 +45,7 @@ pub mod pallet {
 		/// For registering and verifying the account role.
 		type AccountRoleRegistry: AccountRoleRegistry<Self>;
 		/// An interface to the ingress api implementation.
-		type Ingress: IngressApi<AccountId = <Self as frame_system::Config>::AccountId, Ethereum>;
+		type Ingress: IngressApi<Ethereum, <Self as frame_system::Config>::AccountId>;
 		/// An interface to the egress api implementation.
 		type Egress: EgressApi<Ethereum>;
 		/// An interface to the AMM api implementation.

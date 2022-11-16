@@ -2,9 +2,13 @@
 
 mod async_result;
 pub mod liquidity;
+pub use liquidity::*;
+
 pub mod mocks;
 pub mod offence_reporting;
-pub use liquidity::*;
+
+pub mod chains;
+pub use chains::*;
 
 use core::fmt::Debug;
 
@@ -607,12 +611,10 @@ pub trait StakingInfo {
 }
 
 /// Allow pallets to register `Intent`s in the Ingress pallet.
-pub trait IngressApi<C: Chain> {
-	type AccountId;
-
+pub trait IngressApi<C: Chain, NativeAccountId> {
 	/// Issues an intent id and ingress address for a new liquidity deposit.
 	fn register_liquidity_ingress_intent(
-		lp_account: Self::AccountId,
+		lp_account: NativeAccountId,
 		ingress_asset: C::ChainAsset,
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError>;
 
@@ -622,7 +624,7 @@ pub trait IngressApi<C: Chain> {
 		egress_asset: Asset,
 		egress_address: ForeignChainAddress,
 		relayer_commission_bps: u16,
-		relayer_id: Self::AccountId,
+		relayer_id: NativeAccountId,
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError>;
 }
 

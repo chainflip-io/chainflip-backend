@@ -67,7 +67,7 @@ pub mod pallet {
 		type AccountRoleRegistry: AccountRoleRegistry<Self>;
 
 		/// API used for requesting an ingress.
-		type Ingress: IngressApi<AccountId = <Self as frame_system::Config>::AccountId, Ethereum>;
+		type Ingress: IngressApi<Ethereum, <Self as frame_system::Config>::AccountId>;
 
 		/// API used to withdraw foreign assets off the chain.
 		type EgressApi: EgressApi<Ethereum>;
