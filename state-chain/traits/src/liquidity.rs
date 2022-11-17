@@ -2,7 +2,6 @@ use sp_runtime::DispatchResult;
 
 use cf_primitives::{
 	liquidity::TradingPosition, Asset, AssetAmount, ExchangeRate, ForeignChainAddress, PoolId,
-	PositionId,
 };
 
 pub trait SwapIntentHandler {
