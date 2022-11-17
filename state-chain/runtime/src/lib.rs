@@ -64,7 +64,10 @@ use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
 pub use cf_primitives::{BlockNumber, FlipBalance, ForeignChainAddress};
-pub use cf_traits::{EpochInfo, EthEnvironmentProvider, QualifyNode, SessionKeysRegistered};
+pub use cf_traits::{
+	EpochInfo, EthEnvironmentProvider, ForeignChainIngressEgressHandler, QualifyNode,
+	SessionKeysRegistered,
+};
 pub use chainflip::chain_instances::*;
 use chainflip::{
 	epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat, EthEnvironment,
@@ -236,8 +239,7 @@ impl pallet_cf_ingress_egress::Config<EthereumInstance> for Runtime {
 impl pallet_cf_lp::Config for Runtime {
 	type Event = Event;
 	type AccountRoleRegistry = AccountRoles;
-	type Ingress = EthereumIngressEgress;
-	type EgressApi = EthereumIngressEgress;
+	type IngressEgressHandler = ForeignChainIngressEgressHandler<EthereumIngressEgress, Self>;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 }
 

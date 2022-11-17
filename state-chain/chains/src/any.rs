@@ -1,7 +1,7 @@
 use crate::Chain;
 use cf_primitives::{
-	chains::{assets, AnyChain, AnyChainAccount},
-	AssetAmount,
+	chains::{assets, AnyChain},
+	AssetAmount, ForeignChainAddress,
 };
 
 impl Chain for AnyChain {
@@ -10,5 +10,5 @@ impl Chain for AnyChain {
 	type TransactionFee = Self::ChainAmount;
 	type TrackedData = ();
 	type ChainAsset = assets::any::Asset;
-	type ChainAccount = AnyChainAccount;
+	type ChainAccount = ForeignChainAddress;
 }

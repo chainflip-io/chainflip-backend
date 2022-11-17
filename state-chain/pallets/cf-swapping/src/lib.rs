@@ -160,7 +160,7 @@ pub mod pallet {
 				assets::eth::Asset::try_from(swap.to).expect("Only eth assets supported"),
 				swap_output,
 				EthereumAddress::try_from(swap.egress_address)
-					.expect("On eth assets supported")
+					.expect("Only eth assets supported")
 					.into(),
 			);
 		}

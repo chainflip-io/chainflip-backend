@@ -19,8 +19,8 @@ use cf_chains::{
 	benchmarking_value::BenchmarkValue, ApiCall, Chain, ChainAbi, ChainCrypto, Ethereum, Polkadot,
 };
 use cf_primitives::{
-	AccountRole, Asset, AssetAmount, AuthorityCount, CeremonyId, EpochIndex, ForeignChainAddress,
-	IntentId,
+	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, CeremonyId, EpochIndex,
+	ForeignChainAddress, IntentId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -628,6 +628,42 @@ pub trait IngressApi<C: Chain, NativeAccountId> {
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError>;
 }
 
+impl<T: frame_system::Config> IngressApi<Ethereum, T::AccountId> for T {
+	fn register_liquidity_ingress_intent(
+		_lp_account: T::AccountId,
+		_ingress_asset: assets::eth::Asset,
+	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
+		Ok((0, ForeignChainAddress::Eth([0u8; 20])))
+	}
+	fn register_swap_intent(
+		_ingress_asset: assets::eth::Asset,
+		_egress_asset: Asset,
+		_egress_address: ForeignChainAddress,
+		_relayer_commission_bps: u16,
+		_relayer_id: T::AccountId,
+	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
+		Ok((0, ForeignChainAddress::Eth([0u8; 20])))
+	}
+}
+
+impl<T: frame_system::Config> IngressApi<Polkadot, T::AccountId> for T {
+	fn register_liquidity_ingress_intent(
+		_lp_account: T::AccountId,
+		_ingress_asset: assets::dot::Asset,
+	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
+		Ok((0, ForeignChainAddress::Dot([0u8; 32])))
+	}
+	fn register_swap_intent(
+		_ingress_asset: assets::dot::Asset,
+		_egress_asset: Asset,
+		_egress_address: ForeignChainAddress,
+		_relayer_commission_bps: u16,
+		_relayer_id: T::AccountId,
+	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
+		Ok((0, ForeignChainAddress::Dot([0u8; 32])))
+	}
+}
+
 /// Generates a deterministic ingress address for some combination of asset, chain and intent id.
 pub trait AddressDerivationApi<C: Chain> {
 	fn generate_address(
@@ -694,6 +730,22 @@ pub trait EgressApi<C: Chain> {
 		amount: AssetAmount,
 		egress_address: C::ChainAccount,
 	);
+}
+impl<T: frame_system::Config> EgressApi<Ethereum> for T {
+	fn schedule_egress(
+		_foreign_asset: assets::eth::Asset,
+		_amount: AssetAmount,
+		_egress_address: <Ethereum as Chain>::ChainAccount,
+	) {
+	}
+}
+impl<T: frame_system::Config> EgressApi<Polkadot> for T {
+	fn schedule_egress(
+		_foreign_asset: assets::dot::Asset,
+		_amount: AssetAmount,
+		_egress_address: <Polkadot as Chain>::ChainAccount,
+	) {
+	}
 }
 
 pub trait VaultTransitionHandler<C: ChainCrypto> {

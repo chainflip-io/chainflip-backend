@@ -19,14 +19,18 @@ where
 	) {
 		match asset.into() {
 			ForeignChain::Ethereum => EthereumHandler::schedule_egress(
-				asset.try_into().unwrap(),
+				asset.try_into().expect("Checked for asset compatibility"),
 				amount,
-				egress_address.into(),
+				egress_address
+					.try_into()
+					.expect("Caller must ensure for account is of the compatible type."),
 			),
 			ForeignChain::Polkadot => PolkadotHandler::schedule_egress(
-				asset.try_into().unwrap(),
+				asset.try_into().expect("Checked for asset compatibility"),
 				amount,
-				egress_address.into(),
+				egress_address
+					.try_into()
+					.expect("Caller must ensure for account is of the compatible type."),
 			),
 		}
 	}

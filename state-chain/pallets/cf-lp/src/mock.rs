@@ -5,7 +5,7 @@ use cf_chains::{
 };
 use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
-	AddressDerivationApi, Broadcaster, ReplayProtectionProvider,
+	AddressDerivationApi, Broadcaster, ForeignChainIngressEgressHandler, ReplayProtectionProvider,
 };
 use frame_support::{instances::Instance1, parameter_types, sp_runtime::app_crypto::sp_core::H160};
 use frame_system as system;
@@ -151,8 +151,7 @@ impl pallet_cf_account_roles::Config for Test {
 impl crate::Config for Test {
 	type Event = Event;
 	type AccountRoleRegistry = AccountRoles;
-	type Ingress = EthereumIngressEgress;
-	type EgressApi = EthereumIngressEgress;
+	type IngressEgressHandler = ForeignChainIngressEgressHandler<EthereumIngressEgress, Self>;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 }
 
