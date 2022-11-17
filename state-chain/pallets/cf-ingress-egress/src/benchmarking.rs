@@ -7,14 +7,6 @@ use frame_benchmarking::{account, benchmarks_instance_pallet};
 use frame_support::traits::Hooks;
 
 benchmarks_instance_pallet! {
-	where_clause {
-		where
-		T: Config<I>,
-		<<T as Config<I>>::TargetChain as Chain>::ChainAsset: Into<cf_primitives::Asset>,
-		<<T as Config<I>>::TargetChain as Chain>::ChainAccount:
-			TryFrom<cf_primitives::ForeignChainAddress>,
-	}
-
 	egress_assets {
 		let n in 1u32 .. 254u32;
 		let mut batch = vec![];

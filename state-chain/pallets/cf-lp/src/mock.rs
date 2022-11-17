@@ -1,4 +1,4 @@
-use crate::{self as pallet_cf_lp};
+use crate as pallet_cf_lp;
 use cf_chains::{
 	eth::api::{EthereumApi, EthereumReplayProtection},
 	Chain, ChainAbi, ChainEnvironment, Ethereum,
@@ -85,6 +85,7 @@ impl system::Config for Test {
 pub const FAKE_KEYMAN_ADDR: [u8; 20] = [0xcf; 20];
 pub const CHAIN_ID: u64 = 31337;
 pub const COUNTER: u64 = 42;
+
 impl ReplayProtectionProvider<Ethereum> for Test {
 	fn replay_protection() -> <Ethereum as ChainAbi>::ReplayProtection {
 		EthereumReplayProtection {

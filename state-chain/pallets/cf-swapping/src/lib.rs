@@ -1,6 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use cf_primitives::{Asset, AssetAmount, ForeignChain, ForeignChainAddress};
-use cf_traits::{liquidity::AmmPoolApi, IngressApi};
+use cf_traits::{liquidity::SwappingApi, IngressApi};
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
@@ -49,7 +49,7 @@ pub mod pallet {
 		/// An interface to the egress api implementation.
 		type Egress: EgressApi<Ethereum>;
 		/// An interface to the AMM api implementation.
-		type AmmPoolApi: AmmPoolApi<Balance = AssetAmount>;
+		type SwappingApi: SwappingApi;
 		/// The Weight information.
 		type WeightInfo: WeightInfo;
 	}
@@ -147,7 +147,7 @@ pub mod pallet {
 		/// how 'expensive' a swap is.
 		pub fn execute_swap(swap: Swap<T::AccountId>) {
 			let (swap_output, (asset, fee)) =
-				T::AmmPoolApi::swap(swap.from, swap.to, swap.amount, swap.relayer_commission_bps);
+				T::SwappingApi::swap(swap.from, swap.to, swap.amount, swap.relayer_commission_bps);
 			EarnedRelayerFees::<T>::mutate(&swap.relayer_id, asset, |maybe_fees| {
 				if let Some(fees) = maybe_fees {
 					*maybe_fees = Some(fees.saturating_add(fee))

@@ -105,7 +105,7 @@ pub mod pallet {
 		type AddressDerivation: AddressDerivationApi<Self::TargetChain>;
 
 		/// Pallet responsible for managing Liquidity Providers.
-		type LpProvisioning: LpProvisioningApi<AccountId = Self::AccountId, Amount = AssetAmount>;
+		type LpProvisioning: LpProvisioningApi<AccountId = Self::AccountId>;
 
 		/// For scheduling swaps.
 		type SwapIntentHandler: SwapIntentHandler<AccountId = Self::AccountId>;
