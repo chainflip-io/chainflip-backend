@@ -46,7 +46,7 @@ impl CreateAnonymousVault {
 	}
 
 	fn extrinsic_call_polkadot(&self) -> PolkadotRuntimeCall {
-		PolkadotRuntimeCall::Proxy(ProxyCall::anonymous {
+		PolkadotRuntimeCall::Proxy(ProxyCall::create_pure {
 			proxy_type: PolkadotProxyType::Any,
 			delay: 0,
 			index: 0,
