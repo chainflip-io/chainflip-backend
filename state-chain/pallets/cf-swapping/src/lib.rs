@@ -1,14 +1,19 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-use cf_primitives::{Asset, AssetAmount, ForeignChain, ForeignChainAddress};
+use cf_primitives::{
+	chains::assets::{dot, eth},
+	Asset, AssetAmount, ForeignChainAddress,
+};
 use cf_traits::{liquidity::SwappingApi, IngressApi};
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use sp_std::{cmp, vec::Vec};
 
+#[cfg(feature = "ibiza")]
 #[cfg(test)]
 mod mock;
 
+#[cfg(feature = "ibiza")]
 #[cfg(test)]
 mod tests;
 
@@ -31,8 +36,8 @@ pub struct Swap<AccountId> {
 #[frame_support::pallet]
 pub mod pallet {
 
-	use cf_chains::{eth::assets, Ethereum};
-	use cf_primitives::{Asset, AssetAmount, EthereumAddress, IntentId};
+	use cf_chains::AnyChain;
+	use cf_primitives::{Asset, AssetAmount, IntentId};
 	use cf_traits::{AccountRoleRegistry, Chainflip, EgressApi, SwapIntentHandler};
 
 	use super::*;
@@ -44,10 +49,9 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 		/// For registering and verifying the account role.
 		type AccountRoleRegistry: AccountRoleRegistry<Self>;
-		/// An interface to the ingress api implementation.
-		type Ingress: IngressApi<Ethereum, <Self as frame_system::Config>::AccountId>;
-		/// An interface to the egress api implementation.
-		type Egress: EgressApi<Ethereum>;
+		/// API for handling Ingressing and Egress assets into a foreign chain.
+		type IngressEgressHandler: IngressApi<AnyChain, <Self as frame_system::Config>::AccountId>
+			+ EgressApi<AnyChain>;
 		/// An interface to the AMM api implementation.
 		type SwappingApi: SwappingApi;
 		/// The Weight information.
@@ -76,7 +80,7 @@ pub mod pallet {
 	}
 	#[pallet::error]
 	pub enum Error<T> {
-		InvalidAsset,
+		IncompatibleAssetAndAddress,
 	}
 
 	#[pallet::hooks]
@@ -118,22 +122,23 @@ pub mod pallet {
 			egress_asset: Asset,
 			egress_address: ForeignChainAddress,
 			relayer_commission_bps: u16,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let relayer = T::AccountRoleRegistry::ensure_relayer(origin)?;
 
-			let (intent_id, ingress_address) = match ingress_asset.into() {
-				ForeignChain::Ethereum => T::Ingress::register_swap_intent(
-					ingress_asset.try_into().unwrap(),
-					egress_asset,
-					egress_address,
-					relayer_commission_bps,
-					relayer,
-				),
-				_ => todo!(),
-			}?;
+			// Ensure the Asset and address are compatible
+			Self::ensure_asset_and_address_compatible(egress_asset, egress_address)?;
+
+			let (intent_id, ingress_address) = T::IngressEgressHandler::register_swap_intent(
+				ingress_asset,
+				egress_asset,
+				egress_address,
+				relayer_commission_bps,
+				relayer,
+			)?;
+
 			Self::deposit_event(Event::<T>::NewSwapIntent { intent_id, ingress_address });
 
-			Ok(().into())
+			Ok(())
 		}
 	}
 
@@ -155,14 +160,23 @@ pub mod pallet {
 					*maybe_fees = Some(fee)
 				}
 			});
-			// TODO: remove the expects by using AnyChain.
-			T::Egress::schedule_egress(
-				assets::eth::Asset::try_from(swap.to).expect("Only eth assets supported"),
-				swap_output,
-				EthereumAddress::try_from(swap.egress_address)
-					.expect("Only eth assets supported")
-					.into(),
+
+			T::IngressEgressHandler::schedule_egress(swap.to, swap_output, swap.egress_address);
+		}
+
+		fn ensure_asset_and_address_compatible(
+			asset: Asset,
+			address: ForeignChainAddress,
+		) -> DispatchResult {
+			// Ensure the Asset and address are compatible
+			ensure!(
+				match address {
+					ForeignChainAddress::Eth(_) => eth::Asset::try_from(asset).is_ok(),
+					ForeignChainAddress::Dot(_) => dot::Asset::try_from(asset).is_ok(),
+				},
+				Error::<T>::IncompatibleAssetAndAddress
 			);
+			Ok(())
 		}
 	}
 
@@ -176,7 +190,10 @@ pub mod pallet {
 			egress_address: ForeignChainAddress,
 			relayer_id: Self::AccountId,
 			relayer_commission_bps: u16,
-		) {
+		) -> DispatchResult {
+			// Ensure the Asset and address are compatible
+			Self::ensure_asset_and_address_compatible(to, egress_address)?;
+
 			SwapQueue::<T>::append(Swap {
 				from,
 				to,
@@ -185,6 +202,7 @@ pub mod pallet {
 				relayer_id,
 				relayer_commission_bps,
 			});
+			Ok(())
 		}
 	}
 }

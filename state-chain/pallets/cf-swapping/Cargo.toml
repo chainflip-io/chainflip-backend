@@ -16,7 +16,7 @@ targets = ['x86_64-unknown-linux-gnu']
 # Internal dependencies
 cf-traits = {path = '../../traits', default-features = false}
 cf-primitives = {path = '../../primitives', default-features = false}
-cf-chains = {path = '../../chains', default-features = false}
+cf-chains = {path = '../../chains', default-features = false, features=["ibiza"]}
 
 
 log = { version = '0.4.16', default-features = false }
@@ -87,3 +87,4 @@ runtime-benchmarks = [
   'frame-system/runtime-benchmarks',
 ]
 try-runtime = ['frame-support/try-runtime']
+ibiza = []

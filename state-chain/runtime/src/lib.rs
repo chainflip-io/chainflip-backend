@@ -64,10 +64,11 @@ use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
 pub use cf_primitives::{BlockNumber, FlipBalance, ForeignChainAddress};
-pub use cf_traits::{
-	EpochInfo, EthEnvironmentProvider, ForeignChainIngressEgressHandler, QualifyNode,
-	SessionKeysRegistered,
-};
+pub use cf_traits::{EpochInfo, EthEnvironmentProvider, QualifyNode, SessionKeysRegistered};
+
+#[cfg(feature = "ibiza")]
+pub use cf_traits::chains::ForeignChainIngressEgressHandler;
+
 pub use chainflip::chain_instances::*;
 use chainflip::{
 	epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat, EthEnvironment,
@@ -190,9 +191,8 @@ impl pallet_cf_environment::Config for Runtime {
 #[cfg(feature = "ibiza")]
 impl pallet_cf_swapping::Config for Runtime {
 	type Event = Event;
-	type Ingress = EthereumIngressEgress;
+	type IngressEgressHandler = ForeignChainIngressEgressHandler<EthereumIngressEgress, Self>;
 	type SwappingApi = ();
-	type Egress = EthereumIngressEgress;
 	type AccountRoleRegistry = AccountRoles;
 	type WeightInfo = pallet_cf_swapping::weights::PalletWeight<Runtime>;
 }

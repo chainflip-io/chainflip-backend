@@ -7,7 +7,9 @@ pub use liquidity::*;
 pub mod mocks;
 pub mod offence_reporting;
 
+#[cfg(feature = "ibiza")]
 pub mod chains;
+#[cfg(feature = "ibiza")]
 pub use chains::*;
 
 use core::fmt::Debug;
@@ -15,9 +17,12 @@ use core::fmt::Debug;
 pub use async_result::AsyncResult;
 use sp_std::collections::btree_set::BTreeSet;
 
+#[cfg(feature = "ibiza")]
+use cf_chains::Polkadot;
 use cf_chains::{
-	benchmarking_value::BenchmarkValue, ApiCall, Chain, ChainAbi, ChainCrypto, Ethereum, Polkadot,
+	benchmarking_value::BenchmarkValue, ApiCall, Chain, ChainAbi, ChainCrypto, Ethereum,
 };
+
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, CeremonyId, EpochIndex,
 	ForeignChainAddress, IntentId,
@@ -646,6 +651,7 @@ impl<T: frame_system::Config> IngressApi<Ethereum, T::AccountId> for T {
 	}
 }
 
+#[cfg(feature = "ibiza")]
 impl<T: frame_system::Config> IngressApi<Polkadot, T::AccountId> for T {
 	fn register_liquidity_ingress_intent(
 		_lp_account: T::AccountId,
@@ -681,6 +687,7 @@ impl AddressDerivationApi<Ethereum> for () {
 	}
 }
 
+#[cfg(feature = "ibiza")]
 impl AddressDerivationApi<Polkadot> for () {
 	fn generate_address(
 		_ingress_asset: <Polkadot as Chain>::ChainAsset,
@@ -739,6 +746,8 @@ impl<T: frame_system::Config> EgressApi<Ethereum> for T {
 	) {
 	}
 }
+
+#[cfg(feature = "ibiza")]
 impl<T: frame_system::Config> EgressApi<Polkadot> for T {
 	fn schedule_egress(
 		_foreign_asset: assets::dot::Asset,

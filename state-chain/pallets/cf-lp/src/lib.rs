@@ -26,8 +26,10 @@ use serde::{Deserialize, Serialize};
 // #[cfg(feature = "runtime-benchmarks")]
 // mod benchmarking;
 
+#[cfg(feature = "ibiza")]
 #[cfg(test)]
 mod mock;
+#[cfg(feature = "ibiza")]
 #[cfg(test)]
 mod tests;
 

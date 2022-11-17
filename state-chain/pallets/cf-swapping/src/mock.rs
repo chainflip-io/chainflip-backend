@@ -3,7 +3,7 @@ use cf_chains::{Chain, Ethereum};
 use cf_primitives::{chains::assets, Asset, AssetAmount, ForeignChainAddress};
 use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
-	Chainflip, EgressApi, IngressApi, SwappingApi,
+	Chainflip, EgressApi, ForeignChainIngressEgressHandler, IngressApi, SwappingApi,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{parameter_types, storage_alias};
@@ -77,9 +77,9 @@ impl system::Config for Test {
 	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
-pub struct MockIngress;
+pub struct MockIngressEgressHandler;
 
-impl IngressApi<Ethereum, AccountId> for MockIngress {
+impl IngressApi<Ethereum, AccountId> for MockIngressEgressHandler {
 	fn register_liquidity_ingress_intent(
 		_lp_account: AccountId,
 		_ingress_asset: <Ethereum as Chain>::ChainAsset,
@@ -98,8 +98,7 @@ impl IngressApi<Ethereum, AccountId> for MockIngress {
 	}
 }
 
-pub struct MockEgressApi;
-impl EgressApi<Ethereum> for MockEgressApi {
+impl EgressApi<Ethereum> for MockIngressEgressHandler {
 	fn schedule_egress(
 		asset: <Ethereum as Chain>::ChainAsset,
 		amount: AssetAmount,
@@ -114,7 +113,7 @@ impl EgressApi<Ethereum> for MockEgressApi {
 	}
 }
 
-impl MockEgressApi {
+impl MockIngressEgressHandler {
 	pub fn clear() {
 		EgressQueue::<Test>::kill();
 	}
@@ -147,8 +146,7 @@ impl Chainflip for Test {
 impl pallet_cf_swapping::Config for Test {
 	type Event = Event;
 	type AccountRoleRegistry = ();
-	type Ingress = MockIngress;
-	type Egress = MockEgressApi;
+	type IngressEgressHandler = ForeignChainIngressEgressHandler<MockIngressEgressHandler, Self>;
 	type SwappingApi = MockSwappingApi;
 	type WeightInfo = ();
 }

@@ -13,7 +13,7 @@ pub trait SwapIntentHandler {
 		egress_address: ForeignChainAddress,
 		relayer_id: Self::AccountId,
 		relayer_commission_bps: u16,
-	);
+	) -> DispatchResult;
 }
 
 pub trait LpProvisioningApi {
@@ -67,8 +67,8 @@ impl<T: frame_system::Config> SwapIntentHandler for T {
 		_egress_address: ForeignChainAddress,
 		_relayer_id: Self::AccountId,
 		_relayer_commission_bps: u16,
-	) {
-		// TODO
+	) -> DispatchResult {
+		Ok(())
 	}
 }
 
