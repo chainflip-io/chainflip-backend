@@ -1,6 +1,5 @@
 pub mod common {
-	use cf_primitives::AuthorityCount;
-	use cf_traits::{BlockNumber, FlipBalance};
+	use cf_primitives::{AuthorityCount, BlockNumber, FlipBalance};
 
 	use crate::chainflip::Offence;
 

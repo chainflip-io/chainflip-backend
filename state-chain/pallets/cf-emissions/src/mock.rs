@@ -26,6 +26,8 @@ use cf_traits::{
 	Broadcaster, Issuance, WaivedFees,
 };
 
+use cf_primitives::FlipBalance;
+
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -232,7 +234,7 @@ impl Broadcaster<MockEthereum> for MockBroadcast {
 impl pallet_cf_emissions::Config for Test {
 	type Event = Event;
 	type HostChain = MockEthereum;
-	type FlipBalance = u128;
+	type FlipBalance = FlipBalance;
 	type ApiCall = MockUpdateFlipSupply;
 	type Surplus = pallet_cf_flip::Surplus<Test>;
 	type Issuance = pallet_cf_flip::FlipIssuance<Test>;

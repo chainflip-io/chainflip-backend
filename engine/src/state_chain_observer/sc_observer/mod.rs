@@ -446,31 +446,23 @@ where
                                                 cfe_settings_update_sender.send(new_cfe_settings).unwrap();
                                             }
                                             #[cfg(feature = "ibiza")]
-                                            state_chain_runtime::Event::Ingress(
-                                                pallet_cf_ingress::Event::StartWitnessing {
+                                            state_chain_runtime::Event::EthereumIngressEgress(
+                                                pallet_cf_ingress_egress::Event::StartWitnessing {
                                                     ingress_address,
                                                     ingress_asset
                                                 }
                                             ) => {
-                                                use cf_primitives::{Asset, ForeignChain, ForeignChainAddress};
-                                                if let ForeignChainAddress::Eth(address) = ingress_address {
-                                                    assert!(ForeignChain::Ethereum == ingress_asset.into());
-                                                    match ingress_asset {
-                                                        Asset::Eth => {
-                                                            eth_monitor_ingress_sender.send(H160::from(address)).unwrap();
-                                                        }
-                                                        Asset::Flip => {
-                                                            eth_monitor_flip_ingress_sender.send(H160::from(address)).unwrap();
-                                                        }
-                                                        Asset::Usdc => {
-                                                            eth_monitor_usdc_ingress_sender.send(H160::from(address)).unwrap();
-                                                        }
-                                                        _ => {
-                                                            slog::warn!(logger, "Not a supported asset: {:?}", ingress_asset);
-                                                        }
+                                                use cf_primitives::chains::assets::eth;
+                                                match ingress_asset {
+                                                    eth::Asset::Eth => {
+                                                        eth_monitor_ingress_sender.send(ingress_address).unwrap();
                                                     }
-                                                } else {
-                                                    slog::warn!(logger, "Unsupported addresss: {:?}", ingress_address);
+                                                    eth::Asset::Flip => {
+                                                        eth_monitor_flip_ingress_sender.send(ingress_address).unwrap();
+                                                    }
+                                                    eth::Asset::Usdc => {
+                                                        eth_monitor_usdc_ingress_sender.send(ingress_address).unwrap();
+                                                    }
                                                 }
                                             }
                                         }}
