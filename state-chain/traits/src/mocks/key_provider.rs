@@ -1,8 +1,6 @@
 use std::marker::PhantomData;
 
-use cf_primitives::EpochIndex;
-
-use crate::KeyNotReady;
+use crate::KeyState;
 
 /// A Mock that just returns KeyId::default().
 ///
@@ -18,8 +16,8 @@ impl<C: cf_chains::ChainCrypto, K: std::default::Default> crate::KeyProvider<C>
 {
 	type KeyId = K;
 
-	fn current_key_id_epoch_index() -> Result<(Self::KeyId, EpochIndex), KeyNotReady> {
-		Err(Default::default())
+	fn current_key_id_epoch_index() -> KeyState<Self::KeyId> {
+		KeyState::default()
 	}
 
 	fn current_key() -> C::AggKey {

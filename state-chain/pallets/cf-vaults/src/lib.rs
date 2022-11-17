@@ -7,7 +7,7 @@ use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex};
 use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, Broadcaster, CeremonyIdProvider, Chainflip,
-	CurrentEpochIndex, EpochTransitionHandler, KeyNotReady, KeyProvider,
+	CurrentEpochIndex, EpochTransitionHandler, KeyProvider, KeyState,
 	ReplayProtectionProvider, SystemStateManager, ThresholdSigner, VaultRotator, VaultStatus,
 	VaultTransitionHandler,
 };
@@ -923,19 +923,19 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 impl<T: Config<I>, I: 'static> KeyProvider<T::Chain> for Pallet<T, I> {
 	type KeyId = Vec<u8>;
 
-	fn current_key_id_epoch_index() -> Result<(Self::KeyId, EpochIndex), KeyNotReady> {
+	fn current_key_id_epoch_index() -> KeyState<Self::KeyId> {
 		match CurrentVaultState::<T, I>::get() {
 			VaultState::Active => {
 				let current_epoch: EpochIndex = CurrentKeyholdersEpoch::<T, I>::get();
-				Ok((
-					Vaults::<T, I>::get(current_epoch)
+				KeyState::Active {
+					key_id: Vaults::<T, I>::get(current_epoch)
 						.expect("We can't exist without a vault")
 						.public_key
 						.into(),
-					current_epoch,
-				))
+					epoch_index: current_epoch,
+				}
 			},
-			VaultState::InTransition => Err(KeyNotReady::InTransition),
+			VaultState::InTransition => KeyState::InTransition,
 		}
 	}
 

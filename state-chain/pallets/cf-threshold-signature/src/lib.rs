@@ -20,7 +20,7 @@ use cf_chains::ChainCrypto;
 use cf_primitives::{AuthorityCount, CeremonyId};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, CeremonyIdProvider, Chainflip, EpochInfo,
-	KeyProvider, ThresholdSignerNomination,
+	KeyProvider, KeyState, ThresholdSignerNomination,
 };
 
 use frame_support::{
@@ -77,7 +77,7 @@ pub enum ThresholdCeremonyType {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{AccountRoleRegistry, AsyncResult, KeyNotReady, ThresholdSignerNomination};
+	use cf_traits::{AccountRoleRegistry, AsyncResult, ThresholdSignerNomination};
 	use frame_support::{
 		dispatch::DispatchResultWithPostInfo,
 		pallet_prelude::{InvalidTransaction, *},
@@ -357,10 +357,9 @@ pub mod pallet {
 			request_id: RequestId,
 			ceremony_id: CeremonyId,
 		},
-		/// We cannot sign because we've marked the key as unavailable.
-		CurrentKeyUnavailable {
+		/// We cannot sign because the key is in transition.
+		CurrentKeyInTransition {
 			request_id: RequestId,
-			reason: KeyNotReady,
 		},
 		/// The threshold signature response timeout has been updated
 		ThresholdSignatureResponseTimeoutUpdated {
@@ -643,42 +642,50 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let attempt_count = request_instruction.request_context.attempt_count;
 		let payload = request_instruction.request_context.payload.clone();
 
-		let (maybe_key_id_participants, ceremony_type) = if let RequestType::KeygenVerification {
-			ref key_id,
-			ref participants,
-		} = request_instruction.request_type
-		{
-			(Ok((key_id.clone(), participants.clone())), ThresholdCeremonyType::KeygenVerification)
-		} else {
-			(
+		let (maybe_key_id_participants, ceremony_type) =
+			if let RequestType::KeygenVerification { ref key_id, ref participants } =
+				request_instruction.request_type
+			{
+				(
+					Ok((key_id.clone(), participants.clone())),
+					ThresholdCeremonyType::KeygenVerification,
+				)
+			} else {
+				(
 					match T::KeyProvider::current_key_id_epoch_index() {
-       					Ok((current_key_id, current_epoch_index)) => {
-						        if let Some(nominees) =
-							        T::ThresholdSignerNomination::threshold_nomination_with_seed(
-								        (ceremony_id, attempt_count),
-								        current_epoch_index,
-							        ) {
-							        Ok((current_key_id, nominees))
-						        } else {
-							        Err((Event::<T, I>::SignersUnavailable { request_id, ceremony_id }, scale_info::prelude::format!(
-								        "Not enough signers for request {} at attempt {}, scheduling retry.",
+						KeyState::Active {
+							key_id: current_key_id,
+							epoch_index: current_epoch_index,
+						} => {
+							if let Some(nominees) =
+								T::ThresholdSignerNomination::threshold_nomination_with_seed(
+									(ceremony_id, attempt_count),
+									current_epoch_index,
+								) {
+								Ok((current_key_id, nominees))
+							} else {
+								Err((
+									Event::<T, I>::SignersUnavailable { request_id, ceremony_id },
+									scale_info::prelude::format!(
+								        "Not enough signers for request {}, attempt {}. Scheduling retry.",
 								        request_id,
 								        attempt_count
-							        )))
-						        }
-					        }
-        				Err(reason) => {
-						    Err((Event::<T, I>::CurrentKeyUnavailable { request_id, reason }, scale_info::prelude::format!(
-							    "The key is not currently available for request {} at attempt {}. Reason: {:?}, scheduling retry.", 
+							        ),
+								))
+							}
+						},
+						KeyState::InTransition => Err((
+							Event::<T, I>::CurrentKeyInTransition { request_id },
+							scale_info::prelude::format!(
+							    "The current key is in transition for request {}, attempt {}. Scheduling retry.", 
 							    request_id,
 							    attempt_count,
-								reason
-						    )))
-					    }
-    				},
+						    ),
+						)),
+					},
 					ThresholdCeremonyType::Standard,
 				)
-		};
+			};
 
 		let (event, log_message) = match maybe_key_id_participants {
 			Ok((key_id, participants)) => {

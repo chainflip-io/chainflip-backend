@@ -384,12 +384,23 @@ pub trait ThresholdSignerNomination {
 }
 
 #[derive(Default, Debug, TypeInfo, Decode, Encode, Clone, Copy, PartialEq, Eq)]
-pub enum KeyNotReady {
-	// Key has not yet been initialised.
-	#[default]
-	NoKey,
+pub enum KeyState<KeyId> {
+	Active {
+		key_id: KeyId,
+		epoch_index: EpochIndex,
+	},
 	// We are currently transitioning to a new key.
+	#[default]
 	InTransition,
+}
+
+impl<KeyId> KeyState<KeyId> {
+	pub fn unwrap_key(self) -> KeyId {
+		match self {
+			Self::Active { key_id, epoch_index: _ } => key_id,
+			Self::InTransition => panic!("KeyState is InTransition!"),
+		}
+	}
 }
 
 /// Provides the currently valid key for multisig ceremonies.
@@ -398,7 +409,7 @@ pub trait KeyProvider<C: ChainCrypto> {
 	type KeyId;
 
 	/// Gets the key id and epoch index for the current vault key.
-	fn current_key_id_epoch_index() -> Result<(Self::KeyId, EpochIndex), KeyNotReady>;
+	fn current_key_id_epoch_index() -> KeyState<Self::KeyId>;
 
 	/// Get the chain's current agg key.
 	fn current_key() -> C::AggKey;

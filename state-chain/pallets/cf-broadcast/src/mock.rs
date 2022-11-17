@@ -6,14 +6,13 @@ use cf_chains::{
 	mocks::{MockApiCall, MockEthereum, MockTransactionBuilder},
 	ChainCrypto,
 };
-use cf_primitives::EpochIndex;
 use cf_traits::{
 	mocks::{
 		ensure_origin_mock::NeverFailingOriginCheck, epoch_info::MockEpochInfo,
 		signer_nomination::MockNominator, system_state_info::MockSystemStateInfo,
 		threshold_signer::MockThresholdSigner,
 	},
-	Chainflip, KeyNotReady,
+	Chainflip, KeyState,
 };
 use frame_support::parameter_types;
 use sp_core::H256;
@@ -109,15 +108,15 @@ pub struct MockKeyProvider;
 impl cf_traits::KeyProvider<MockEthereum> for MockKeyProvider {
 	type KeyId = Vec<u8>;
 
-	fn current_key_id_epoch_index() -> Result<(Self::KeyId, EpochIndex), KeyNotReady> {
-		Ok((
-			if VALIDKEY.with(|cell| *cell.borrow()) {
+	fn current_key_id_epoch_index() -> KeyState<Self::KeyId> {
+		KeyState::Active {
+			key_id: if VALIDKEY.with(|cell| *cell.borrow()) {
 				VALID_KEY_ID.to_vec()
 			} else {
 				INVALID_KEY_ID.to_vec()
 			},
-			Default::default(),
-		))
+			epoch_index: Default::default(),
+		}
 	}
 
 	fn current_key() -> <MockEthereum as ChainCrypto>::AggKey {
