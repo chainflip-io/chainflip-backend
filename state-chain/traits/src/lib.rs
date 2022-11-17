@@ -160,6 +160,7 @@ impl<CandidateId, BidAmount: Default> Default for AuctionOutcome<CandidateId, Bi
 
 #[derive(PartialEq, Eq, Clone, Debug, Decode, Encode)]
 pub enum VaultStatus<ValidatorId> {
+	// TODO: Change to "KeygenComplete"
 	KeygenVerificationComplete,
 	RotationComplete,
 	Failed(BTreeSet<ValidatorId>),

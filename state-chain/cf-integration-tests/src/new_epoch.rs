@@ -164,6 +164,8 @@ fn epoch_rotates() {
 
 			testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 
+			assert!(matches!(Validator::current_rotation_phase(), RotationPhase::Idle));
+
 			assert_eq!(
 				GENESIS_EPOCH + 1,
 				Validator::epoch_index(),

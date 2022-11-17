@@ -1,7 +1,10 @@
 use crate::{mock::*, Error, *};
 use cf_test_utilities::last_event;
 use cf_traits::{
-	mocks::{reputation_resetter::MockReputationResetter, system_state_info::MockSystemStateInfo},
+	mocks::{
+		multi_vault_rotator::MockMultiVaultRotator, reputation_resetter::MockReputationResetter,
+		system_state_info::MockSystemStateInfo,
+	},
 	AuctionOutcome, SystemStateInfo,
 };
 use frame_support::{assert_noop, assert_ok};
@@ -23,6 +26,7 @@ fn assert_epoch_index(n: EpochIndex) {
 
 macro_rules! assert_default_rotation_outcome {
 	() => {
+		assert!(matches!(CurrentRotationPhase::<Test>::get(), RotationPhase::<Test>::Idle));
 		assert_epoch_index(GENESIS_EPOCH + 1);
 		assert_eq!(Bond::<Test>::get(), BOND, "bond should be updated");
 		assert_eq!(ValidatorPallet::current_authorities(), AUCTION_WINNERS.to_vec());
@@ -97,6 +101,7 @@ fn should_retry_rotation_until_success_with_failing_auctions() {
 		run_to_block(EPOCH_DURATION);
 		// Move forward a few blocks, the auction will be failing
 		move_forward_blocks(100);
+		
 		assert_epoch_index(GENESIS_EPOCH);
 		assert_eq!(CurrentRotationPhase::<Test>::get(), RotationPhase::<Test>::Idle);
 
@@ -108,11 +113,17 @@ fn should_retry_rotation_until_success_with_failing_auctions() {
 			CurrentRotationPhase::<Test>::get(),
 			RotationPhase::<Test>::KeygensInProgress(..)
 		));
-
-		while CurrentRotationPhase::<Test>::get() != RotationPhase::<Test>::Idle {
-			move_forward_blocks(1);
-		}
-		assert_epoch_index(GENESIS_EPOCH + 1);
+		MockMultiVaultRotator::keygen_success();
+		// TODO: Needs to be clearer why this is 2 blocks and not 1
+		move_forward_blocks(2);
+		assert!(matches!(
+			CurrentRotationPhase::<Test>::get(),
+			RotationPhase::<Test>::RotatingExternally(..)
+		));
+		MockMultiVaultRotator::rotated_externally();
+		// TODO: Needs to be clearer why this is 2 blocks and not 1
+		move_forward_blocks(2);
+		assert_default_rotation_outcome!();
 	});
 }
 
@@ -165,10 +176,16 @@ fn auction_winners_should_be_the_new_authorities_on_new_epoch() {
 			CurrentRotationPhase::<Test>::get(),
 			RotationPhase::<Test>::KeygensInProgress(..)
 		));
-		while ValidatorPallet::epoch_index() == GENESIS_EPOCH {
-			move_forward_blocks(1);
-		}
-
+		MockMultiVaultRotator::keygen_success();
+		// TODO: Needs to be clearer why this is 2 blocks and not 1
+		move_forward_blocks(2);
+		assert!(matches!(
+			CurrentRotationPhase::<Test>::get(),
+			RotationPhase::<Test>::RotatingExternally(..)
+		));
+		MockMultiVaultRotator::rotated_externally();
+		// TODO: Needs to be clearer why this is 2 blocks and not 1
+		move_forward_blocks(2);
 		assert_default_rotation_outcome!();
 	});
 }

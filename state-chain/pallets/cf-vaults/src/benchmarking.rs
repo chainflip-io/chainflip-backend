@@ -142,7 +142,7 @@ benchmarks_instance_pallet! {
 	verify {
 		assert!(matches!(
 			PendingVaultRotation::<T, I>::get().unwrap(),
-			VaultRotationStatus::AwaitingRotation { new_public_key }
+			VaultRotationStatus::KeygenVerificationComplete { new_public_key }
 				if new_public_key == agg_key
 		))
 	}

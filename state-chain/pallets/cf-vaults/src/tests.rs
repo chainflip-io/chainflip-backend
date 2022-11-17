@@ -313,6 +313,8 @@ fn keygen_report_success() {
 		);
 
 		VaultsPallet::on_initialize(1);
+		// After on initialise we obviously still don't have enough votes.
+		// So nothing should have changed.
 		assert!(KeygenResolutionPendingSince::<MockRuntime, _>::exists());
 		assert_eq!(
 			<VaultsPallet as VaultRotator>::get_vault_rotation_outcome(),
@@ -363,7 +365,12 @@ fn keygen_report_success() {
 
 		assert!(matches!(PendingVaultRotation::<MockRuntime, _>::get().unwrap(), VaultRotationStatus::AwaitingKeygenVerification { .. }));
 
-		EthMockThresholdSigner::signature_result_last_requested(Ok(ETH_DUMMY_SIG));
+		EthMockThresholdSigner::execute_signature_result_against_last_request(Ok(ETH_DUMMY_SIG));
+
+		assert!(matches!(PendingVaultRotation::<MockRuntime, _>::get().unwrap(), VaultRotationStatus::KeygenVerificationComplete { .. }));
+
+		// Called by validator pallet
+		VaultsPallet::rotate_externally();
 
 		assert!(matches!(PendingVaultRotation::<MockRuntime, _>::get().unwrap(), VaultRotationStatus::AwaitingRotation { .. }));
 
@@ -514,7 +521,10 @@ fn vault_key_rotated() {
 		let ceremony_id = current_ceremony_id();
 		VaultsPallet::trigger_keygen_verification(ceremony_id, NEW_AGG_PUB_KEY, btree_candidates);
 
-		EthMockThresholdSigner::signature_result_last_requested(Ok(ETH_DUMMY_SIG));
+		EthMockThresholdSigner::execute_signature_result_against_last_request(Ok(ETH_DUMMY_SIG));
+
+		// validator pallet kicks this off
+		VaultsPallet::rotate_externally();
 
 		assert_ok!(VaultsPallet::vault_key_rotated(
 			Origin::root(),
