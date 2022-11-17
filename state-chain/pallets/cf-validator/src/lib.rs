@@ -1195,11 +1195,10 @@ pub struct BidInfoProvider<T>(PhantomData<T>);
 impl<T: Config> BidInfo for BidInfoProvider<T> {
 	type Balance = T::Amount;
 	fn get_min_backup_bid() -> Self::Balance {
-		if let Some(maybe_bid) = Backups::<T>::get().values().min() {
-			*maybe_bid
-		} else {
-			Self::Balance::from(0_u32)
-		}
+		Backups::<T>::get()
+			.into_values()
+			.min()
+			.unwrap_or_else(|| Self::Balance::from(0_u32))
 	}
 }
 
