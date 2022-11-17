@@ -29,8 +29,8 @@ where
 		// We must wait until all of these are ready before we do any action
 		if all_ready {
 			let all_results = [a_async_result.unwrap()];
-			if all_results.iter().all(|x| matches!(x, VaultStatus::KeygenVerificationComplete)) {
-				AsyncResult::Ready(VaultStatus::KeygenVerificationComplete)
+			if all_results.iter().all(|x| matches!(x, VaultStatus::KeygenComplete)) {
+				AsyncResult::Ready(VaultStatus::KeygenComplete)
 			} else if all_results.iter().all(|x| matches!(x, VaultStatus::RotationComplete)) {
 				AsyncResult::Ready(VaultStatus::RotationComplete)
 			} else {

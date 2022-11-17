@@ -403,7 +403,7 @@ pub mod pallet {
 						// We need to differentiate keygen verif and other states.
 						// We can do this with an enum instead of Result<()>
 						// We have successfully done keygen verification
-						AsyncResult::Ready(VaultStatus::KeygenVerificationComplete) => {
+						AsyncResult::Ready(VaultStatus::KeygenComplete) => {
 							Self::set_rotation_phase(RotationPhase::KeygensComplete(
 								rotation_state,
 							));

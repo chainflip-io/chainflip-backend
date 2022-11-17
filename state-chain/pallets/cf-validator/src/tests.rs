@@ -101,7 +101,7 @@ fn should_retry_rotation_until_success_with_failing_auctions() {
 		run_to_block(EPOCH_DURATION);
 		// Move forward a few blocks, the auction will be failing
 		move_forward_blocks(100);
-		
+
 		assert_epoch_index(GENESIS_EPOCH);
 		assert_eq!(CurrentRotationPhase::<Test>::get(), RotationPhase::<Test>::Idle);
 

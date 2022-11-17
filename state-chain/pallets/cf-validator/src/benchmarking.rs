@@ -328,7 +328,7 @@ benchmarks! {
 		start_vault_rotation::<T>(a, 50, 1);
 
 		// Simulate success.
-		T::MultiVaultRotator::set_all_vault_rotation_outcomes(AsyncResult::Ready(VaultStatus::KeygenVerificationComplete));
+		T::MultiVaultRotator::set_all_vault_rotation_outcomes(AsyncResult::Ready(VaultStatus::KeygenComplete));
 
 		// This assertion ensures we are using the correct weight parameter.
 		assert_eq!(

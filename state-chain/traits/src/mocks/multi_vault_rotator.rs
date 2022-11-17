@@ -16,7 +16,7 @@ impl MockMultiVaultRotator {
 	pub fn keygen_success() {
 		Self::put_value(
 			ROTATION_OUTCOME,
-			AsyncResult::<VaultStatus<u64>>::Ready(VaultStatus::KeygenVerificationComplete),
+			AsyncResult::<VaultStatus<u64>>::Ready(VaultStatus::KeygenComplete),
 		);
 	}
 

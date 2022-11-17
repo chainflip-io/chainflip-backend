@@ -846,7 +846,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 			// It's at this point we want the vault to be considered ready to commit to. We don't
 			// want to commit until the other vaults are ready
 			Some(VaultRotationStatusVariant::KeygenVerificationComplete) =>
-				AsyncResult::Ready(VaultStatus::KeygenVerificationComplete),
+				AsyncResult::Ready(VaultStatus::KeygenComplete),
 			Some(VaultRotationStatusVariant::AwaitingRotation) => AsyncResult::Pending,
 			Some(VaultRotationStatusVariant::Complete) =>
 				AsyncResult::Ready(VaultStatus::RotationComplete),
@@ -896,7 +896,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 					response_status: KeygenResponseStatus::new(Default::default()),
 				});
 			},
-			AsyncResult::Ready(VaultStatus::KeygenVerificationComplete) => {
+			AsyncResult::Ready(VaultStatus::KeygenComplete) => {
 				PendingVaultRotation::<T, I>::put(
 					VaultRotationStatus::<T, I>::KeygenVerificationComplete {
 						new_public_key: Default::default(),
