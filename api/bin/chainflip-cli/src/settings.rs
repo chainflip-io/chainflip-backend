@@ -128,7 +128,12 @@ impl CLISettings {
 	/// "config/Default.toml" if none, with overridden values from the environment and
 	/// `CommandLineOptions`
 	pub fn new(opts: CLICommandLineOptions) -> Result<Self, ConfigError> {
-		Self::load_settings_from_all_sources("config/Default.toml", opts.config_path.clone(), opts)
+		Self::load_settings_from_all_sources(
+			"",
+			"config/Default.toml",
+			opts.config_path.clone(),
+			opts,
+		)
 	}
 }
 
@@ -153,6 +158,7 @@ mod tests {
 		set_test_env();
 
 		let settings = CLISettings::load_settings_from_all_sources(
+			"",
 			"../config/Default.toml",
 			None,
 			CLICommandLineOptions::default(),

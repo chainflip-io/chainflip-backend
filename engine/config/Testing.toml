@@ -1,7 +1,6 @@
 # Testing configurations for the CFE
 [node_p2p]
 ip_address = "1.1.1.1"
-port = 8087
 allow_local_ip = true
 
 [state_chain]

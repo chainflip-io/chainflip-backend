@@ -43,3 +43,6 @@ pub const ETH_WS_NODE_ENDPOINT: &str = "ETH__WS_NODE_ENDPOINT";
 /// IP Address and port on which we listen for incoming p2p connections
 pub const NODE_P2P_IP_ADDRESS: &str = "NODE_P2P__IP_ADDRESS";
 pub const NODE_P2P_PORT: &str = "NODE_P2P__PORT";
+
+/// Base path for all files (default: "/etc/chainflip")
+pub const BASE_CONFIG_PATH: &str = "CF_CONFIG_ROOT";

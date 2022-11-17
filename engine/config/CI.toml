@@ -5,11 +5,6 @@
 [node_p2p]
 allow_local_ip = true
 ip_address = "1.1.1.1"
-node_key_file = "node_key_file"
-
-[state_chain]
-# 32 byte hex secret key - associated with the node's public id (public key)
-signing_key_file = "signing_key_file"
 
 [eth]
 # Ethereum private key file path. Default is the docker secrets path. This file should contain a hex-encoded private key.
