@@ -809,7 +809,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 }
 
-// TODO: Implement this on Runtime instead of pallet so that we can rotate multiple vaults.
 impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 	type ValidatorId = T::ValidatorId;
 
@@ -823,7 +822,6 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 
 		let ceremony_id = T::CeremonyIdProvider::next_ceremony_id();
 
-		// TODO: Check whether we need to store this state
 		PendingVaultRotation::<T, I>::put(VaultRotationStatus::AwaitingKeygen {
 			keygen_ceremony_id: ceremony_id,
 			keygen_participants: candidates.clone(),
@@ -842,7 +840,6 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 		match PendingVaultRotation::<T, I>::decode_variant() {
 			Some(VaultRotationStatusVariant::AwaitingKeygen) => AsyncResult::Pending,
 			Some(VaultRotationStatusVariant::AwaitingKeygenVerification) => AsyncResult::Pending,
-
 			// It's at this point we want the vault to be considered ready to commit to. We don't
 			// want to commit until the other vaults are ready
 			Some(VaultRotationStatusVariant::KeygenVerificationComplete) =>
