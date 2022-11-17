@@ -1,14 +1,11 @@
 use crate::{self as pallet_cf_account_roles, Config};
 use cf_traits::{
-	impl_mock_staking_info,
 	mocks::{
 		bid_info::MockBidInfo, ensure_origin_mock::NeverFailingOriginCheck,
-		system_state_info::MockSystemStateInfo,
+		staking_info::MockStakingInfo, system_state_info::MockSystemStateInfo,
 	},
 	Chainflip,
 };
-
-use cf_traits::StakingInfo;
 
 use frame_support::traits::{ConstU16, ConstU64};
 use sp_core::H256;
@@ -72,12 +69,10 @@ impl Chainflip for Test {
 	type SystemState = MockSystemStateInfo;
 }
 
-impl_mock_staking_info!(AccountId, Balance);
-
 impl Config for Test {
 	type Event = Event;
 	type BidInfo = MockBidInfo;
-	type StakeInfo = MockStakingInfo;
+	type StakeInfo = MockStakingInfo<Self>;
 	type WeightInfo = ();
 }
 

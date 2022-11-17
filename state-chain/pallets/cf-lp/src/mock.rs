@@ -1,12 +1,12 @@
 use crate::{self as pallet_cf_lp};
 use cf_chains::{Chain, Ethereum};
+use cf_primitives::{Asset, AssetAmount, ForeignChainAddress, IntentId};
 use cf_traits::{
-	impl_mock_staking_info,
 	mocks::{
 		bid_info::MockBidInfo, ensure_origin_mock::NeverFailingOriginCheck,
-		system_state_info::MockSystemStateInfo,
+		staking_info::MockStakingInfo, system_state_info::MockSystemStateInfo,
 	},
-	AddressDerivationApi, EgressApi, StakingInfo,
+	AddressDerivationApi, EgressApi,
 };
 use frame_support::{parameter_types, sp_runtime::app_crypto::sp_core::H160};
 use frame_system as system;
@@ -16,15 +16,11 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage,
 };
-
-use cf_primitives::{Asset, AssetAmount, ForeignChainAddress, IntentId};
-
 use sp_std::str::FromStr;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 type AccountId = u64;
-type Balance = u128;
 
 pub struct MockAddressDerivation;
 
@@ -107,12 +103,10 @@ impl cf_traits::Chainflip for Test {
 	type SystemState = MockSystemStateInfo;
 }
 
-impl_mock_staking_info!(AccountId, Balance);
-
 impl pallet_cf_account_roles::Config for Test {
 	type Event = Event;
 	type BidInfo = MockBidInfo;
-	type StakeInfo = MockStakingInfo;
+	type StakeInfo = MockStakingInfo<Self>;
 	type WeightInfo = ();
 }
 
