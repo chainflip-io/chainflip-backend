@@ -9,7 +9,7 @@ use sp_runtime::AccountId32;
 use state_chain_runtime::{
 	chainflip::Offence,
 	constants::common::TX_FEE_MULTIPLIER,
-	runtime_apis::{ChainflipAccountStateWithPassive, CustomRuntimeApi},
+	runtime_apis::{ChainflipAccountStateWithPassive, CustomRuntimeApi, RuntimeApiPendingClaim},
 };
 use std::{marker::PhantomData, sync::Arc};
 
@@ -26,12 +26,13 @@ pub struct RpcAccountInfo {
 	pub state: ChainflipAccountStateWithPassive,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct RpcPendingClaim {
 	amount: NumberOrHex,
 	address: String,
 	expiry: NumberOrHex,
 	sig_data: SigData,
+	pub encoded_cert: Option<Vec<u8>>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -323,7 +324,7 @@ where
 		account_id: AccountId32,
 		at: Option<<B as BlockT>::Hash>,
 	) -> RpcResult<Option<RpcPendingClaim>> {
-		let pending_claim = match self
+		let pending_claim: RuntimeApiPendingClaim = match self
 			.client
 			.runtime_api()
 			.cf_pending_claim(&self.query_block_id(at), account_id)
@@ -338,6 +339,7 @@ where
 			expiry: pending_claim.expiry.into(),
 			address: hex::encode(pending_claim.address),
 			sig_data: pending_claim.sig_data,
+			encoded_cert: pending_claim.encoded_cert,
 		}))
 	}
 	fn cf_penalties(

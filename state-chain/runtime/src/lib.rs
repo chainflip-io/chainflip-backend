@@ -809,11 +809,20 @@ impl_runtime_apis! {
 				eth::api::EthereumApi::RegisterClaim(tx) => tx,
 				_ => unreachable!(),
 			};
+
+			let encoded_cert = if pending_claim.sig_data.is_signed() {
+				use cf_chains::ApiCall;
+				Some(pending_claim.chain_encoded())
+			} else {
+				None
+			};
+
 			Some(RuntimeApiPendingClaim {
 				amount: pending_claim.amount,
 				address: pending_claim.address.into(),
 				expiry: pending_claim.expiry,
 				sig_data: pending_claim.sig_data,
+				encoded_cert
 			})
 		}
 		fn cf_penalties() -> Vec<(Offence, RuntimeApiPenalty)> {

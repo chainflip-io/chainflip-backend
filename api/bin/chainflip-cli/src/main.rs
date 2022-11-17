@@ -1,4 +1,4 @@
-use api::primitives::AccountRole;
+use api::primitives::{AccountRole, Hash};
 use chainflip_api as api;
 use clap::Parser;
 use settings::{CLICommandLineOptions, CLISettings};
@@ -36,13 +36,30 @@ async fn run_cli() -> Result<()> {
 	match command_line_opts.cmd {
 		Claim { amount, eth_address, should_register_claim } =>
 			request_claim(amount, &eth_address, &cli_settings, should_register_claim).await,
+		CheckClaim => check_claim(&cli_settings.state_chain).await,
 		RegisterAccountRole { role } => register_account_role(role, &cli_settings).await,
-		Rotate {} => api::rotate_keys(&cli_settings.state_chain).await,
+		Rotate {} => rotate_keys(&cli_settings.state_chain).await,
 		Retire {} => api::retire_account(&cli_settings.state_chain).await,
 		Activate {} => api::activate_account(&cli_settings.state_chain).await,
-		Query { block_hash } => api::request_block(block_hash, &cli_settings.state_chain).await,
+		Query { block_hash } => request_block(block_hash, &cli_settings.state_chain).await,
 		VanityName { name } => api::set_vanity_name(name, &cli_settings.state_chain).await,
 		ForceRotation { id } => api::force_rotation(id, &cli_settings.state_chain).await,
+	}
+}
+
+pub async fn request_block(
+	block_hash: Hash,
+	state_chain_settings: &settings::StateChain,
+) -> Result<()> {
+	match api::request_block(block_hash, state_chain_settings).await {
+		Ok(block) => {
+			println!("{:#?}", block);
+			Ok(())
+		},
+		Err(err) => {
+			println!("Could not find block with block hash {:x?}", block_hash);
+			Err(err)
+		},
 	}
 }
 
@@ -57,6 +74,19 @@ async fn register_account_role(role: AccountRole, settings: &settings::CLISettin
 	}
 
 	api::register_account_role(role, &settings.state_chain).await
+}
+
+pub async fn rotate_keys(state_chain_settings: &settings::StateChain) -> Result<()> {
+	let tx_hash = api::rotate_keys(state_chain_settings).await?;
+	println!("Session key rotated at tx {:#x}.", tx_hash);
+
+	Ok(())
+}
+
+async fn check_claim(state_chain_settings: &settings::StateChain) -> Result<()> {
+	let certificate = api::wait_for_claim_certificate(state_chain_settings).await?;
+	println!("Claim certificate found: {:?}", certificate);
+	Ok(())
 }
 
 async fn request_claim(
@@ -90,7 +120,11 @@ async fn request_claim(
 		return Ok(())
 	}
 
-	let claim_cert = api::request_claim(atomic_amount, eth_address, &settings.state_chain).await?;
+	let tx_hash = api::request_claim(atomic_amount, eth_address, &settings.state_chain).await?;
+
+	println!("Your claim has transaction hash: `{:#x}`. Waiting for signed claim data...", tx_hash);
+
+	let claim_cert = api::wait_for_claim_certificate(&settings.state_chain).await?;
 
 	println!("Your claim certificate is: {:?}", hex::encode(claim_cert.clone()));
 

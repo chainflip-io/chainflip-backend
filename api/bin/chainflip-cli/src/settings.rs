@@ -1,5 +1,6 @@
 use chainflip_api::primitives::{AccountRole, Hash, ProposalId};
-use chainflip_engine::settings::{CfSettings, Eth, EthOptions, StateChain, StateChainOptions};
+pub use chainflip_engine::settings::StateChain;
+use chainflip_engine::settings::{CfSettings, Eth, EthOptions, StateChainOptions};
 use clap::Parser;
 use config::{ConfigError, Source, Value};
 use serde::Deserialize;
@@ -61,6 +62,7 @@ pub enum CFCommand {
 		#[clap(long = "register", hide = true)]
 		should_register_claim: bool,
 	},
+	CheckClaim,
 	#[clap(about = "Set your account role to the Validator, Relayer, Liquidity Provider")]
 	RegisterAccountRole {
 		#[clap(help = "Validator (v), Liquidity Provider (lp), Relayer (r)", value_parser = account_role_parser)]

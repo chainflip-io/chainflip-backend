@@ -45,6 +45,7 @@ pub struct RuntimeApiPendingClaim {
 	pub address: [u8; 20],
 	pub expiry: U256,
 	pub sig_data: SigData,
+	pub encoded_cert: Option<Vec<u8>>,
 }
 
 #[derive(Encode, Decode, Eq, PartialEq)]
