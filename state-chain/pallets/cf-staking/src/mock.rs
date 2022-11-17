@@ -5,8 +5,12 @@ use cf_chains::{
 };
 use cf_primitives::{AuthorityCount, CeremonyId};
 use cf_traits::{
-	impl_mock_waived_fees, mocks::system_state_info::MockSystemStateInfo, AsyncResult,
-	ThresholdSigner, WaivedFees,
+	impl_mock_waived_fees,
+	mocks::{
+		bid_info::MockBidInfo, staking_info::MockStakingInfo,
+		system_state_info::MockSystemStateInfo,
+	},
+	AsyncResult, ThresholdSigner, WaivedFees,
 };
 use frame_support::{dispatch::DispatchResultWithPostInfo, parameter_types, traits::ConstU64};
 use sp_runtime::{
@@ -21,6 +25,7 @@ type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 // Use a realistic account id for compatibility with `RegisterClaim`.
 type AccountId = AccountId32;
+type Balance = u128;
 
 use cf_traits::{
 	mocks::{
@@ -32,6 +37,8 @@ use cf_traits::{
 
 impl pallet_cf_account_roles::Config for Test {
 	type Event = Event;
+	type BidInfo = MockBidInfo;
+	type StakeInfo = MockStakingInfo<Self>;
 	type WeightInfo = ();
 }
 
@@ -84,7 +91,7 @@ impl frame_system::Config for Test {
 impl Chainflip for Test {
 	type KeyId = Vec<u8>;
 	type ValidatorId = AccountId;
-	type Amount = u128;
+	type Amount = Balance;
 	type Call = Call;
 	type EnsureWitnessed = MockEnsureWitnessed;
 	type EnsureWitnessedAtCurrentEpoch = MockEnsureWitnessed;
@@ -97,7 +104,7 @@ parameter_types! {
 }
 
 parameter_types! {
-	pub const ExistentialDeposit: u128 = 10;
+	pub const ExistentialDeposit: Balance = 10;
 }
 
 parameter_types! {

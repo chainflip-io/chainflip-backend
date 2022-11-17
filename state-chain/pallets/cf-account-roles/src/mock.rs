@@ -1,8 +1,12 @@
 use crate::{self as pallet_cf_account_roles, Config};
 use cf_traits::{
-	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
+	mocks::{
+		bid_info::MockBidInfo, ensure_origin_mock::NeverFailingOriginCheck,
+		staking_info::MockStakingInfo, system_state_info::MockSystemStateInfo,
+	},
 	Chainflip,
 };
+
 use frame_support::traits::{ConstU16, ConstU64};
 use sp_core::H256;
 use sp_runtime::{
@@ -12,6 +16,8 @@ use sp_runtime::{
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
+type AccountId = u64;
+type Balance = u128;
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
@@ -36,7 +42,7 @@ impl frame_system::Config for Test {
 	type BlockNumber = u64;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
-	type AccountId = u64;
+	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
@@ -54,8 +60,8 @@ impl frame_system::Config for Test {
 
 impl Chainflip for Test {
 	type KeyId = Vec<u8>;
-	type ValidatorId = u64;
-	type Amount = u128;
+	type ValidatorId = AccountId;
+	type Amount = Balance;
 	type Call = Call;
 	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
 	type EnsureWitnessedAtCurrentEpoch = NeverFailingOriginCheck<Self>;
@@ -65,6 +71,8 @@ impl Chainflip for Test {
 
 impl Config for Test {
 	type Event = Event;
+	type BidInfo = MockBidInfo;
+	type StakeInfo = MockStakingInfo<Self>;
 	type WeightInfo = ();
 }
 

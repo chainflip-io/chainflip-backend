@@ -1,10 +1,17 @@
 use crate as pallet_cf_lp;
 use cf_chains::{
-	eth::api::{EthereumApi, EthereumReplayProtection},
+	eth::{
+		api::{EthereumApi, EthereumReplayProtection},
+		assets,
+	},
 	Chain, ChainAbi, ChainEnvironment, Ethereum,
 };
+use cf_primitives::{EthereumAddress, IntentId, ETHEREUM_ETH_ADDRESS};
 use cf_traits::{
-	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
+	mocks::{
+		bid_info::MockBidInfo, ensure_origin_mock::NeverFailingOriginCheck,
+		staking_info::MockStakingInfo, system_state_info::MockSystemStateInfo,
+	},
 	AddressDerivationApi, Broadcaster, ReplayProtectionProvider,
 };
 use frame_support::{instances::Instance1, parameter_types, sp_runtime::app_crypto::sp_core::H160};
@@ -15,9 +22,6 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage,
 };
-
-use cf_primitives::{chains::assets, EthereumAddress, IntentId, ETHEREUM_ETH_ADDRESS};
-
 use sp_std::str::FromStr;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -145,6 +149,8 @@ impl cf_traits::Chainflip for Test {
 
 impl pallet_cf_account_roles::Config for Test {
 	type Event = Event;
+	type BidInfo = MockBidInfo;
+	type StakeInfo = MockStakingInfo<Self>;
 	type WeightInfo = ();
 }
 
