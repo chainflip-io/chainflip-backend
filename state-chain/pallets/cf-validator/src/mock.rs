@@ -5,7 +5,6 @@ use cf_traits::{
 		ensure_origin_mock::NeverFailingOriginCheck, epoch_info::MockEpochInfo,
 		multi_vault_rotator::MockMultiVaultRotator, qualify_node::QualifyAll,
 		reputation_resetter::MockReputationResetter, system_state_info::MockSystemStateInfo,
-		vault_rotation::MockVaultRotator,
 	},
 	Bid, Chainflip, QualifyNode, RuntimeAuctionOutcome,
 };
@@ -347,7 +346,6 @@ pub fn run_to_block(n: u64) {
 		log::debug!("Test::on_initialise({:?})", System::block_number());
 		System::set_block_number(System::block_number() + 1);
 		AllPalletsWithoutSystem::on_initialize(System::block_number());
-		MockVaultRotator::on_initialise();
 		assert_invariants!();
 	}
 }
