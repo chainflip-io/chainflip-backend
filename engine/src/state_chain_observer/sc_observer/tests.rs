@@ -22,7 +22,7 @@ use crate::{
 	multisig::client::{mocks::MockMultisigClientApi, KeygenFailureReason, SigningFailureReason},
 	settings::Settings,
 	state_chain_observer::{client::mocks::MockStateChainClient, sc_observer},
-	task_scope::with_task_scope,
+	task_scope::task_scope,
 	witnesser::EpochStart,
 };
 
@@ -874,11 +874,6 @@ async fn only_encodes_and_signs_when_specified() {
 		.return_once(|tx| Ok(Keccak256::hash(&tx.0[..])));
 
 	state_chain_client
-		.expect_submit_signed_extrinsic::<state_chain_runtime::Call>()
-		.once()
-		.return_once(|_, _| Ok(H256::default()));
-
-	state_chain_client
 		.expect_storage_value::<frame_system::Events<state_chain_runtime::Runtime>>()
 		.with(eq(block_header.hash()))
 		.once()
@@ -1061,7 +1056,7 @@ async fn should_handle_signing_request() {
 
 	let multisig_client = Arc::new(multisig_client);
 
-	with_task_scope(|scope| {
+	task_scope(|scope| {
 		async {
 			// Handle a signing request that we are not participating in
 			sc_observer::handle_signing_request(
@@ -1136,7 +1131,7 @@ async fn should_handle_keygen_request() {
 
 	let multisig_client = Arc::new(multisig_client);
 
-	with_task_scope(|scope| {
+	task_scope(|scope| {
 		async {
 			// Handle a keygen request that we are not participating in
 			sc_observer::handle_keygen_request(

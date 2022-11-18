@@ -116,7 +116,7 @@ pub async fn request_claim(
 ) -> Result<ClaimCertificate> {
 	let logger = new_discard_logger();
 	let (_, block_stream, state_chain_client) =
-		StateChainClient::new(state_chain_settings, false, logger).await?;
+		StateChainClient::new(state_chain_settings, false, &logger).await?;
 
 	// Are we in a current auction phase
 	if state_chain_client.is_auction_phase().await? {
@@ -170,7 +170,7 @@ pub async fn register_claim(
 ) -> Result<H256> {
 	let logger = new_discard_logger();
 	let (_, _block_stream, state_chain_client) =
-		connect_to_state_chain(state_chain_settings, false, &logger).await?;
+		StateChainClient::new(state_chain_settings, false, &logger).await?;
 
 	let block_hash = state_chain_client.base_rpc_client.latest_finalized_block_hash().await?;
 
@@ -221,7 +221,7 @@ pub async fn register_account_role(
 ) -> Result<()> {
 	let logger = new_discard_logger();
 	let (_, _, state_chain_client) =
-		StateChainClient::new(state_chain_settings, false, logger).await?;
+		StateChainClient::new(state_chain_settings, false, &logger).await?;
 
 	let tx_hash = state_chain_client
 		.submit_signed_extrinsic(
@@ -237,7 +237,7 @@ pub async fn register_account_role(
 pub async fn rotate_keys(state_chain_settings: &settings::StateChain) -> Result<()> {
 	let logger = new_discard_logger();
 	let (_, _, state_chain_client) =
-		StateChainClient::new(state_chain_settings, false, logger).await?;
+		StateChainClient::new(state_chain_settings, false, &logger).await?;
 	let seed = state_chain_client
 		.rotate_session_keys()
 		.await
@@ -270,7 +270,7 @@ pub async fn force_rotation(
 ) -> Result<()> {
 	let logger = new_discard_logger();
 	let (_, _, state_chain_client) =
-		StateChainClient::new(state_chain_settings, false, logger).await?;
+		StateChainClient::new(state_chain_settings, false, &logger).await?;
 
 	state_chain_client
 		.submit_signed_extrinsic(
@@ -297,7 +297,7 @@ pub async fn force_rotation(
 pub async fn retire_account(state_chain_settings: &settings::StateChain) -> Result<()> {
 	let logger = new_discard_logger();
 	let (_, _, state_chain_client) =
-		StateChainClient::new(state_chain_settings, false, logger).await?;
+		StateChainClient::new(state_chain_settings, false, &logger).await?;
 	let tx_hash = state_chain_client
 		.submit_signed_extrinsic(pallet_cf_staking::Call::retire_account {}, &logger)
 		.await
@@ -309,7 +309,7 @@ pub async fn retire_account(state_chain_settings: &settings::StateChain) -> Resu
 pub async fn activate_account(state_chain_settings: &settings::StateChain) -> Result<()> {
 	let logger = new_discard_logger();
 	let (latest_block_hash, _, state_chain_client) =
-		StateChainClient::new(state_chain_settings, false, logger).await?;
+		StateChainClient::new(state_chain_settings, false, &logger).await?;
 
 	match state_chain_client
         .storage_map_entry::<pallet_cf_account_roles::AccountRoles<state_chain_runtime::Runtime>>(
@@ -349,7 +349,7 @@ pub async fn set_vanity_name(
 	}
 
 	let (_, _, state_chain_client) =
-		StateChainClient::new(state_chain_settings, false, logger).await?;
+		StateChainClient::new(state_chain_settings, false, &logger).await?;
 	let tx_hash = state_chain_client
 		.submit_signed_extrinsic(
 			pallet_cf_validator::Call::set_vanity_name { name: name.as_bytes().to_vec() },
