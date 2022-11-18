@@ -62,6 +62,7 @@ pub enum CFCommand {
 		#[clap(long = "register", hide = true)]
 		should_register_claim: bool,
 	},
+	#[clap(about = "Get claim certificate for a recently submitted claim")]
 	CheckClaim,
 	#[clap(about = "Set your account role to the Validator, Relayer, Liquidity Provider")]
 	RegisterAccountRole {
