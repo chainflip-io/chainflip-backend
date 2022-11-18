@@ -936,7 +936,7 @@ impl<T: Config<I>, I: 'static> KeyProvider<T::Chain> for Pallet<T, I> {
 		}
 	}
 
-	// could return Option to indicate in transition
+	// TODO: return Option to indicate in transition
 	fn current_key() -> <T::Chain as ChainCrypto>::AggKey {
 		Vaults::<T, I>::get(CurrentKeyholdersEpoch::<T, I>::get())
 			.expect("We can't exist without a vault")
