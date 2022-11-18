@@ -31,7 +31,7 @@ use crate::{
 	},
 	p2p::{PeerInfo, PeerUpdate},
 	state_chain_observer::client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi},
-	task_scope::{with_task_scope, Scope},
+	task_scope::{task_scope, Scope},
 	witnesser::EpochStart,
 };
 
@@ -39,7 +39,7 @@ use crate::{
 use sp_core::H160;
 
 async fn handle_keygen_request<'a, StateChainClient, MultisigClient>(
-	scope: &Scope<'a, anyhow::Result<()>, true>,
+	scope: &Scope<'a, anyhow::Error>,
 	multisig_client: Arc<MultisigClient>,
 	state_chain_client: Arc<StateChainClient>,
 	ceremony_id: CeremonyId,
@@ -84,7 +84,7 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient>(
 }
 
 async fn handle_signing_request<'a, StateChainClient, MultisigClient>(
-	scope: &Scope<'a, anyhow::Result<()>, true>,
+	scope: &Scope<'a, anyhow::Error>,
 	multisig_client: Arc<MultisigClient>,
 	state_chain_client: Arc<StateChainClient>,
 	ceremony_id: CeremonyId,
@@ -195,7 +195,7 @@ where
 	PolkadotMultisigClient: MultisigClientApi<PolkadotSigning> + Send + Sync + 'static,
 	StateChainClient: StorageApi + ExtrinsicApi + 'static + Send + Sync,
 {
-	with_task_scope(|scope| async {
+	task_scope(|scope| async {
         let logger = logger.new(o!(COMPONENT_KEY => "SCObserver"));
 
         let account_id = state_chain_client.account_id();

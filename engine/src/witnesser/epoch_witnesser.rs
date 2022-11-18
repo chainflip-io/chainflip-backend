@@ -6,7 +6,7 @@ use tokio::sync::broadcast;
 
 use crate::{
 	logging::COMPONENT_KEY,
-	task_scope::{with_task_scope, ScopedJoinHandle},
+	task_scope::{task_scope, ScopedJoinHandle},
 };
 
 use super::{ChainBlockNumber, EpochStart};
@@ -53,7 +53,7 @@ where
 	State: Send + 'static,
 	G: FnMut(&EpochStart<Chain>) -> bool + Send + 'static,
 {
-	with_task_scope(|scope| {
+	task_scope(|scope| {
 		{
 			async {
 				let logger = logger.new(o!(COMPONENT_KEY => format!("{}-Witnesser", log_key)));
