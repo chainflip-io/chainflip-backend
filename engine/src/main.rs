@@ -17,7 +17,7 @@ use chainflip_engine::{
 		self,
 		client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi},
 	},
-	task_scope::with_main_task_scope,
+	task_scope::task_scope,
 };
 
 use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
@@ -26,7 +26,8 @@ use futures::FutureExt;
 use pallet_cf_validator::SemVer;
 use sp_core::U256;
 
-fn main() -> anyhow::Result<()> {
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
 	use_chainflip_account_id_encoding();
 	utilities::print_starting!();
 
@@ -37,7 +38,7 @@ fn main() -> anyhow::Result<()> {
 		settings.log.blacklist.clone(),
 	);
 
-	with_main_task_scope(|scope| {
+	task_scope(|scope| {
 		async {
 
             if let Some(health_check_settings) = &settings.health_check {
@@ -45,7 +46,7 @@ fn main() -> anyhow::Result<()> {
             }
 
             let (latest_block_hash, state_chain_block_stream, state_chain_client) =
-                state_chain_observer::client::connect_to_state_chain(&settings.state_chain, true, &root_logger)
+                state_chain_observer::client::StateChainClient::new(&settings.state_chain, true, &root_logger)
                     .await?;
 
             let eth_dual_rpc =
@@ -293,5 +294,5 @@ fn main() -> anyhow::Result<()> {
 
             Ok(())
         }.boxed()
-	})
+	}).await
 }

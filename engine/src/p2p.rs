@@ -24,7 +24,7 @@ use sp_core::H256;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use zeroize::Zeroizing;
 
-use crate::task_scope::with_task_scope;
+use crate::task_scope::task_scope;
 
 // TODO: Consider if this should be removed, particularly once we no longer use Substrate for
 // peering
@@ -118,7 +118,7 @@ where
 
 	let logger = logger.clone();
 
-	let fut = with_task_scope(move |scope| {
+	let fut = task_scope(move |scope| {
 		async move {
 			scope.spawn(async {
 				p2p_fut.await;
