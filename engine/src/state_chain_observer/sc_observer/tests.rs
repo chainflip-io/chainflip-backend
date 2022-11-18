@@ -88,7 +88,7 @@ async fn starts_witnessing_when_current_authority() {
 	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
-	let (epoch_start_sender, epoch_start_receiver) = async_channel::bounded(10);
+	let (epoch_start_sender, epoch_start_receiver) = async_broadcast::broadcast(10);
 
 	let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
@@ -201,7 +201,7 @@ async fn starts_witnessing_when_historic_on_startup() {
 	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
-	let (epoch_start_sender, epoch_start_receiver) = async_channel::bounded(10);
+	let (epoch_start_sender, epoch_start_receiver) = async_broadcast::broadcast(10);
 
 	let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
@@ -306,7 +306,7 @@ async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
 	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
-	let (epoch_start_sender, epoch_start_receiver) = async_channel::bounded(10);
+	let (epoch_start_sender, epoch_start_receiver) = async_broadcast::broadcast(10);
 	let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
 	#[cfg(feature = "ibiza")]
@@ -444,7 +444,7 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
 	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
-	let (epoch_start_sender, epoch_start_receiver) = async_channel::bounded(10);
+	let (epoch_start_sender, epoch_start_receiver) = async_broadcast::broadcast(10);
 
 	let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
@@ -593,7 +593,7 @@ async fn not_historical_to_authority_on_new_epoch() {
 	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
-	let (epoch_start_sender, epoch_start_receiver) = async_channel::bounded(10);
+	let (epoch_start_sender, epoch_start_receiver) = async_broadcast::broadcast(10);
 
 	let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
@@ -741,7 +741,7 @@ async fn current_authority_to_historical_on_new_epoch_event() {
 	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
-	let (epoch_start_sender, epoch_start_receiver) = async_channel::bounded(10);
+	let (epoch_start_sender, epoch_start_receiver) = async_broadcast::broadcast(10);
 
 	let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
@@ -896,7 +896,7 @@ async fn only_encodes_and_signs_when_specified() {
 	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
-	let (epoch_start_sender, _epoch_start_receiver) = async_channel::bounded(10);
+	let (epoch_start_sender, _epoch_start_receiver) = async_broadcast::broadcast(10);
 
 	let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
@@ -957,7 +957,7 @@ async fn run_the_sc_observer() {
 	let eth_multisig_client = Arc::new(MockMultisigClientApi::new());
 	let dot_multisig_client = Arc::new(MockMultisigClientApi::new());
 
-	let (epoch_start_sender, _) = async_channel::bounded(10);
+	let (epoch_start_sender, _epoch_start_receiver) = async_broadcast::broadcast(10);
 
 	let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 

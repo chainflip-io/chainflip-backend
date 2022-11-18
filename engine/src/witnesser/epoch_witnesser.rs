@@ -32,7 +32,7 @@ pub fn should_end_witnessing<Chain: cf_chains::Chain>(
 
 pub async fn start<G, F, Fut, State, Chain>(
 	log_key: String,
-	epoch_start_receiver: async_channel::Receiver<EpochStart<Chain>>,
+	mut epoch_start_receiver: async_broadcast::Receiver<EpochStart<Chain>>,
 	mut should_epoch_participant_witness: G,
 	initial_state: State,
 	mut epoch_witnesser_generator: F,
