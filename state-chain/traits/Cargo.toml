@@ -9,7 +9,7 @@ description = 'Common traits used in the Chainflip runtime'
 log = { version = '0.4.16', default-features = false }
 
 # Internal
-cf-chains = { path ='../chains', default-features = false, features=["ibiza"] }
+cf-chains = { path ='../chains', default-features = false }
 cf-primitives = { path ='../primitives', default-features = false }
 
 # Parity deps
@@ -77,4 +77,4 @@ runtime-benchmarks = [
   'frame-system/runtime-benchmarks',
   'cf-chains/runtime-benchmarks',
 ]
-ibiza = []
+ibiza = ["cf-chains/ibiza"]

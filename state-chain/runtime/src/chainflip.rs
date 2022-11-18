@@ -317,12 +317,14 @@ where
 }
 
 #[cfg(feature = "ibiza")]
-impl<EthereumHandler, PolkadotHandler, NativeAccountId> IngressApi<AnyChain, NativeAccountId>
+impl<EthereumHandler, PolkadotHandler, NativeAccountId> IngressApi<AnyChain>
 	for ForeignChainIngressEgressHandler<EthereumHandler, PolkadotHandler>
 where
-	EthereumHandler: IngressApi<Ethereum, NativeAccountId>,
-	PolkadotHandler: IngressApi<Polkadot, NativeAccountId>,
+	EthereumHandler: IngressApi<Ethereum, AccountId = NativeAccountId>,
+	PolkadotHandler: IngressApi<Polkadot, AccountId = NativeAccountId>,
 {
+	type AccountId = NativeAccountId;
+
 	// This should be callable by the LP pallet.
 	fn register_liquidity_ingress_intent(
 		lp_account: NativeAccountId,

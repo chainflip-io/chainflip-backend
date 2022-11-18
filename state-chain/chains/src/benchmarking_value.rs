@@ -1,4 +1,4 @@
-#![allow(unused_imports)]
+#[cfg(feature = "runtime-benchmarks")]
 use cf_primitives::{
 	chains::assets::{dot, eth},
 	Asset, ForeignChainAddress,

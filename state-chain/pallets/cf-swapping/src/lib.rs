@@ -1,8 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-use cf_primitives::{
-	chains::assets::{dot, eth},
-	Asset, AssetAmount, ForeignChainAddress,
-};
+use cf_primitives::{Asset, AssetAmount, ForeignChain, ForeignChainAddress};
 use cf_traits::{liquidity::SwappingApi, IngressApi};
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
@@ -50,7 +47,7 @@ pub mod pallet {
 		/// For registering and verifying the account role.
 		type AccountRoleRegistry: AccountRoleRegistry<Self>;
 		/// API for handling Ingressing and Egress assets into a foreign chain.
-		type IngressEgressHandler: IngressApi<AnyChain, <Self as frame_system::Config>::AccountId>
+		type IngressEgressHandler: IngressApi<AnyChain, AccountId = <Self as frame_system::Config>::AccountId>
 			+ EgressApi<AnyChain>;
 		/// An interface to the AMM api implementation.
 		type SwappingApi: SwappingApi;
@@ -170,10 +167,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			// Ensure the Asset and address are compatible
 			ensure!(
-				match address {
-					ForeignChainAddress::Eth(_) => eth::Asset::try_from(asset).is_ok(),
-					ForeignChainAddress::Dot(_) => dot::Asset::try_from(asset).is_ok(),
-				},
+				ForeignChain::from(address) == ForeignChain::from(asset),
 				Error::<T>::IncompatibleAssetAndAddress
 			);
 			Ok(())

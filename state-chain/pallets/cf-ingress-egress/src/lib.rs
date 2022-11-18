@@ -437,9 +437,8 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 	}
 }
 
-impl<T: Config<I>, I: 'static> IngressApi<T::TargetChain, <T as frame_system::Config>::AccountId>
-	for Pallet<T, I>
-{
+impl<T: Config<I>, I: 'static> IngressApi<T::TargetChain> for Pallet<T, I> {
+	type AccountId = <T as frame_system::Config>::AccountId;
 	// This should be callable by the LP pallet.
 	fn register_liquidity_ingress_intent(
 		lp_account: T::AccountId,

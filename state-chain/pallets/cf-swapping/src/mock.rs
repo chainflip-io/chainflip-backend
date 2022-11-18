@@ -81,7 +81,9 @@ impl system::Config for Test {
 
 pub struct MockIngressEgressHandler;
 
-impl IngressApi<Ethereum, AccountId> for MockIngressEgressHandler {
+impl IngressApi<Ethereum> for MockIngressEgressHandler {
+	type AccountId = AccountId;
+
 	fn register_liquidity_ingress_intent(
 		_lp_account: AccountId,
 		_ingress_asset: <Ethereum as Chain>::ChainAsset,

@@ -611,10 +611,11 @@ pub trait StakingInfo {
 }
 
 /// Allow pallets to register `Intent`s in the Ingress pallet.
-pub trait IngressApi<C: Chain, NativeAccountId> {
+pub trait IngressApi<C: Chain> {
+	type AccountId;
 	/// Issues an intent id and ingress address for a new liquidity deposit.
 	fn register_liquidity_ingress_intent(
-		lp_account: NativeAccountId,
+		lp_account: Self::AccountId,
 		ingress_asset: C::ChainAsset,
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError>;
 
@@ -624,11 +625,12 @@ pub trait IngressApi<C: Chain, NativeAccountId> {
 		egress_asset: Asset,
 		egress_address: ForeignChainAddress,
 		relayer_commission_bps: u16,
-		relayer_id: NativeAccountId,
+		relayer_id: Self::AccountId,
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError>;
 }
 
-impl<T: frame_system::Config> IngressApi<Ethereum, T::AccountId> for T {
+impl<T: frame_system::Config> IngressApi<Ethereum> for T {
+	type AccountId = T::AccountId;
 	fn register_liquidity_ingress_intent(
 		_lp_account: T::AccountId,
 		_ingress_asset: assets::eth::Asset,
@@ -647,7 +649,8 @@ impl<T: frame_system::Config> IngressApi<Ethereum, T::AccountId> for T {
 }
 
 #[cfg(feature = "ibiza")]
-impl<T: frame_system::Config> IngressApi<Polkadot, T::AccountId> for T {
+impl<T: frame_system::Config> IngressApi<Polkadot> for T {
+	type AccountId = T::AccountId;
 	fn register_liquidity_ingress_intent(
 		_lp_account: T::AccountId,
 		_ingress_asset: assets::dot::Asset,

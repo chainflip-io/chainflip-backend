@@ -9,9 +9,8 @@ use sp_runtime::DispatchResult;
 
 use cf_chains::AnyChain;
 use cf_primitives::{
-	chains::assets,
 	liquidity::{PoolId, PositionId, TradingPosition},
-	Asset, AssetAmount, ForeignChainAddress, IntentId,
+	Asset, AssetAmount, ForeignChain, ForeignChainAddress, IntentId,
 };
 use cf_traits::{
 	liquidity::{AmmPoolApi, LpProvisioningApi},
@@ -54,7 +53,6 @@ impl<AccountId, Amount> UserTradingPosition<AccountId, Amount> {
 
 #[frame_support::pallet]
 pub mod pallet {
-	use cf_chains::ForeignChain;
 
 	use super::*;
 
@@ -69,7 +67,7 @@ pub mod pallet {
 		type AccountRoleRegistry: AccountRoleRegistry<Self>;
 
 		/// API for handling Ingressing and Egress assets into a foreign chain.
-		type IngressEgressHandler: IngressApi<AnyChain, <Self as frame_system::Config>::AccountId>
+		type IngressEgressHandler: IngressApi<AnyChain, AccountId = <Self as frame_system::Config>::AccountId>
 			+ EgressApi<AnyChain>;
 
 		/// For governance checks.
@@ -239,11 +237,8 @@ pub mod pallet {
 		pub fn request_deposit_address(origin: OriginFor<T>, asset: Asset) -> DispatchResult {
 			T::SystemState::ensure_no_maintenance()?;
 			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
-			let (intent_id, ingress_address) = match asset.into() {
-				ForeignChain::Ethereum =>
-					T::IngressEgressHandler::register_liquidity_ingress_intent(account_id, asset),
-				_ => todo!(),
-			}?;
+			let (intent_id, ingress_address) =
+				T::IngressEgressHandler::register_liquidity_ingress_intent(account_id, asset)?;
 
 			Self::deposit_event(Event::DepositAddressReady { intent_id, ingress_address });
 
@@ -262,10 +257,7 @@ pub mod pallet {
 
 			// Check validity of Chain and Asset
 			ensure!(
-				match egress_address {
-					ForeignChainAddress::Eth(_) => assets::eth::Asset::try_from(asset).is_ok(),
-					ForeignChainAddress::Dot(_) => assets::dot::Asset::try_from(asset).is_ok(),
-				},
+				ForeignChain::from(egress_address) == ForeignChain::from(asset),
 				Error::<T>::InvalidEgressAddress
 			);
 
