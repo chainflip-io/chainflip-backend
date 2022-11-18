@@ -73,8 +73,8 @@ async fn starts_witnessing_when_current_authority() {
 			}))
 		});
 
-	let eth_multisig_client = Arc::new(MockMultisigClientApi::new());
-	let dot_multisig_client = Arc::new(MockMultisigClientApi::new());
+	let eth_multisig_client = MockMultisigClientApi::new();
+	let dot_multisig_client = MockMultisigClientApi::new();
 
 	// No blocks in the stream
 	let sc_block_stream = tokio_stream::iter(vec![]);
@@ -198,8 +198,8 @@ async fn starts_witnessing_when_historic_on_startup() {
 
 	let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
 
-	let eth_multisig_client = Arc::new(MockMultisigClientApi::new());
-	let dot_multisig_client = Arc::new(MockMultisigClientApi::new());
+	let eth_multisig_client = MockMultisigClientApi::new();
+	let dot_multisig_client = MockMultisigClientApi::new();
 
 	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
@@ -306,8 +306,8 @@ async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
 
 	let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
 
-	let eth_multisig_client = Arc::new(MockMultisigClientApi::new());
-	let dot_multisig_client = Arc::new(MockMultisigClientApi::new());
+	let eth_multisig_client = MockMultisigClientApi::new();
+	let dot_multisig_client = MockMultisigClientApi::new();
 
 	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
@@ -447,8 +447,8 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
 
 	let eth_broadcaster = EthBroadcaster::new_test(MockEthRpcApi::new(), &logger);
 
-	let eth_multisig_client = Arc::new(MockMultisigClientApi::new());
-	let dot_multisig_client = Arc::new(MockMultisigClientApi::new());
+	let eth_multisig_client = MockMultisigClientApi::new();
+	let dot_multisig_client = MockMultisigClientApi::new();
 
 	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
@@ -599,8 +599,8 @@ async fn not_historical_to_authority_on_new_epoch() {
 
 	let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
 
-	let eth_multisig_client = Arc::new(MockMultisigClientApi::new());
-	let dot_multisig_client = Arc::new(MockMultisigClientApi::new());
+	let eth_multisig_client = MockMultisigClientApi::new();
+	let dot_multisig_client = MockMultisigClientApi::new();
 
 	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
@@ -750,8 +750,8 @@ async fn current_authority_to_historical_on_new_epoch_event() {
 
 	let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
 
-	let eth_multisig_client = Arc::new(MockMultisigClientApi::new());
-	let dot_multisig_client = Arc::new(MockMultisigClientApi::new());
+	let eth_multisig_client = MockMultisigClientApi::new();
+	let dot_multisig_client = MockMultisigClientApi::new();
 
 	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
@@ -908,8 +908,8 @@ async fn only_encodes_and_signs_when_specified() {
 
 	let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
 
-	let eth_multisig_client = Arc::new(MockMultisigClientApi::new());
-	let dot_multisig_client = Arc::new(MockMultisigClientApi::new());
+	let eth_multisig_client = MockMultisigClientApi::new();
+	let dot_multisig_client = MockMultisigClientApi::new();
 
 	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
@@ -972,8 +972,8 @@ async fn run_the_sc_observer() {
 	let eth_broadcaster =
 		EthBroadcaster::new(&settings.eth, eth_ws_rpc_client.clone(), &logger).unwrap();
 
-	let eth_multisig_client = Arc::new(MockMultisigClientApi::new());
-	let dot_multisig_client = Arc::new(MockMultisigClientApi::new());
+	let eth_multisig_client = MockMultisigClientApi::new();
+	let dot_multisig_client = MockMultisigClientApi::new();
 
 	let (epoch_start_sender, _) = broadcast::channel(10);
 
@@ -1042,7 +1042,7 @@ async fn should_handle_signing_request() {
 
 	let next_ceremony_id = first_ceremony_id + 1;
 	multisig_client
-		.expect_sign()
+		.expect_initiate_sign()
 		.with(
 			predicate::eq(next_ceremony_id),
 			predicate::eq(key_id.clone()),
@@ -1051,17 +1051,19 @@ async fn should_handle_signing_request() {
 		)
 		.once()
 		.return_once(|_, _, _, _| {
-			Err((BTreeSet::new(), SigningFailureReason::InvalidParticipants))
+			futures::future::ready(Err((
+				BTreeSet::new(),
+				SigningFailureReason::InvalidParticipants,
+			)))
+			.boxed()
 		});
-
-	let multisig_client = Arc::new(multisig_client);
 
 	task_scope(|scope| {
 		async {
 			// Handle a signing request that we are not participating in
 			sc_observer::handle_signing_request(
 				scope,
-				multisig_client.clone(),
+				&multisig_client,
 				state_chain_client.clone(),
 				first_ceremony_id,
 				key_id.clone(),
@@ -1074,7 +1076,7 @@ async fn should_handle_signing_request() {
 			// Handle a signing request that we are participating in
 			sc_observer::handle_signing_request(
 				scope,
-				multisig_client,
+				&multisig_client,
 				state_chain_client.clone(),
 				next_ceremony_id,
 				key_id,
@@ -1121,22 +1123,23 @@ async fn should_handle_keygen_request() {
 	// Set up the mock api to expect the keygen and sign calls for the ceremonies we are
 	// participating in. It doesn't matter what failure reasons they return.
 	multisig_client
-		.expect_keygen()
+		.expect_initiate_keygen()
 		.with(
 			predicate::eq(next_ceremony_id),
 			predicate::eq(BTreeSet::from_iter([our_account_id.clone()])),
 		)
 		.once()
-		.return_once(|_, _| Err((BTreeSet::new(), KeygenFailureReason::InvalidParticipants)));
-
-	let multisig_client = Arc::new(multisig_client);
+		.return_once(|_, _| {
+			futures::future::ready(Err((BTreeSet::new(), KeygenFailureReason::InvalidParticipants)))
+				.boxed()
+		});
 
 	task_scope(|scope| {
 		async {
 			// Handle a keygen request that we are not participating in
 			sc_observer::handle_keygen_request(
 				scope,
-				multisig_client.clone(),
+				&multisig_client,
 				state_chain_client.clone(),
 				first_ceremony_id,
 				BTreeSet::from_iter([not_our_account_id.clone()]),
@@ -1147,7 +1150,7 @@ async fn should_handle_keygen_request() {
 			// Handle a keygen request that we are participating in
 			sc_observer::handle_keygen_request(
 				scope,
-				multisig_client.clone(),
+				&multisig_client,
 				state_chain_client.clone(),
 				next_ceremony_id,
 				BTreeSet::from_iter([our_account_id]),

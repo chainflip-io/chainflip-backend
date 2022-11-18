@@ -40,7 +40,7 @@ use sp_core::H160;
 
 async fn handle_keygen_request<'a, StateChainClient, MultisigClient>(
 	scope: &Scope<'a, anyhow::Error>,
-	multisig_client: Arc<MultisigClient>,
+	multisig_client: &'a MultisigClient,
 	state_chain_client: Arc<StateChainClient>,
 	ceremony_id: CeremonyId,
 	keygen_participants: BTreeSet<AccountId32>,
@@ -50,13 +50,13 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient>(
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
 {
 	if keygen_participants.contains(&state_chain_client.account_id()) {
+		let keygen_result = multisig_client.initiate_keygen(ceremony_id, keygen_participants);
 		scope.spawn(async move {
 			let _result = state_chain_client
 				.submit_signed_extrinsic(
 					pallet_cf_vaults::Call::report_keygen_outcome {
 						ceremony_id,
-						reported_outcome: multisig_client
-							.keygen(ceremony_id, keygen_participants.clone())
+						reported_outcome: keygen_result
 							.await
 							.map(|point| {
 								cf_chains::eth::AggKey::from_pubkey_compressed(
@@ -85,7 +85,7 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient>(
 
 async fn handle_signing_request<'a, StateChainClient, MultisigClient>(
 	scope: &Scope<'a, anyhow::Error>,
-	multisig_client: Arc<MultisigClient>,
+	multisig_client: &'a MultisigClient,
 	state_chain_client: Arc<StateChainClient>,
 	ceremony_id: CeremonyId,
 	key_id: KeyId,
@@ -98,8 +98,9 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient>(
 {
 	if signers.contains(&state_chain_client.account_id()) {
 		// Send a signing request and wait to submit the result to the SC
+		let sign_result = multisig_client.initiate_sign(ceremony_id, key_id, signers, data);
 		scope.spawn(async move {
-			match multisig_client.sign(ceremony_id, key_id, signers, data).await {
+			match sign_result.await {
 				Ok(signature) => {
 					let _result = state_chain_client
 						.submit_unsigned_extrinsic(
@@ -173,8 +174,8 @@ pub async fn start<
 	state_chain_client: Arc<StateChainClient>,
 	sc_block_stream: BlockStream,
 	eth_broadcaster: EthBroadcaster<EthRpc>,
-	eth_multisig_client: Arc<EthMultisigClient>,
-	dot_multisig_client: Arc<PolkadotMultisigClient>,
+	eth_multisig_client: EthMultisigClient,
+	dot_multisig_client: PolkadotMultisigClient,
 	peer_update_sender: UnboundedSender<PeerUpdate>,
 	eth_epoch_start_sender: broadcast::Sender<EpochStart<Ethereum>>,
 	#[cfg(feature = "ibiza")] eth_monitor_ingress_sender: tokio::sync::mpsc::UnboundedSender<H160>,
@@ -341,7 +342,7 @@ where
 
                                                 handle_keygen_request(
                                                     scope,
-                                                    eth_multisig_client.clone(),
+                                                    &eth_multisig_client,
                                                     state_chain_client.clone(),
                                                     ceremony_id,
                                                     keygen_participants,
@@ -361,8 +362,8 @@ where
                                                 dot_multisig_client.update_latest_ceremony_id(ceremony_id);
 
                                                 handle_signing_request(
-                                                        scope,
-                                                        eth_multisig_client.clone(),
+                                                    scope,
+                                                    &eth_multisig_client,
                                                     state_chain_client.clone(),
                                                     ceremony_id,
                                                     KeyId(key_id),

@@ -18,9 +18,8 @@ use std::collections::BTreeSet;
 
 use crate::{common::format_iterator, logging::CEREMONY_ID_KEY, multisig::KeyId};
 
-use async_trait::async_trait;
 use cf_primitives::{AuthorityCount, CeremonyId};
-use futures::Future;
+use futures::{future::BoxFuture, FutureExt};
 use state_chain_runtime::AccountId;
 
 use serde::{Deserialize, Serialize};
@@ -104,21 +103,20 @@ pub struct MultisigMessage<P: ECPoint> {
 }
 
 /// The public interface to the multi-signature code
-#[async_trait]
 pub trait MultisigClientApi<C: CryptoScheme> {
-	async fn keygen(
+	fn initiate_keygen(
 		&self,
 		ceremony_id: CeremonyId,
 		participants: BTreeSet<AccountId>,
-	) -> Result<C::Point, (BTreeSet<AccountId>, KeygenFailureReason)>;
+	) -> BoxFuture<'_, Result<C::Point, (BTreeSet<AccountId>, KeygenFailureReason)>>;
 
-	async fn sign(
+	fn initiate_sign(
 		&self,
 		ceremony_id: CeremonyId,
 		key_id: KeyId,
 		signers: BTreeSet<AccountId>,
 		data: MessageHash,
-	) -> Result<C::Signature, (BTreeSet<AccountId>, SigningFailureReason)>;
+	) -> BoxFuture<'_, Result<C::Signature, (BTreeSet<AccountId>, SigningFailureReason)>>;
 
 	fn update_latest_ceremony_id(&self, ceremony_id: CeremonyId);
 }
@@ -141,20 +139,19 @@ pub mod mocks {
 	mock! {
 		pub MultisigClientApi<C: CryptoScheme + Send + Sync> {}
 
-		#[async_trait]
 		impl<C: CryptoScheme + Send + Sync> MultisigClientApi<C> for MultisigClientApi<C> {
-			async fn keygen(
+			fn initiate_keygen(
 				&self,
 				_ceremony_id: CeremonyId,
 				_participants: BTreeSet<AccountId>,
-			) -> Result<C::Point, (BTreeSet<AccountId>, KeygenFailureReason)>;
-			async fn sign(
+			) -> BoxFuture<'_, Result<C::Point, (BTreeSet<AccountId>, KeygenFailureReason)>>;
+			fn initiate_sign(
 				&self,
 				_ceremony_id: CeremonyId,
 				_key_id: KeyId,
 				_signers: BTreeSet<AccountId>,
 				_data: MessageHash,
-			) -> Result<<C as CryptoScheme>::Signature, (BTreeSet<AccountId>, SigningFailureReason)>;
+			) -> BoxFuture<'_, Result<C::Signature, (BTreeSet<AccountId>, SigningFailureReason)>>;
 			fn update_latest_ceremony_id(&self, ceremony_id: CeremonyId);
 		}
 	}
@@ -228,7 +225,7 @@ where
 		&self,
 		ceremony_id: CeremonyId,
 		participants: BTreeSet<AccountId>,
-	) -> impl '_ + Future<Output = Result<C::Point, (BTreeSet<AccountId>, KeygenFailureReason)>> {
+	) -> BoxFuture<'_, Result<C::Point, (BTreeSet<AccountId>, KeygenFailureReason)>> {
 		assert!(participants.contains(&self.my_account_id));
 
 		slog::info!(
@@ -278,6 +275,7 @@ where
 				},
 			}
 		}
+		.boxed()
 	}
 
 	// Similarly to initiate_keygen this function is structured to simplify the writing of tests
@@ -291,8 +289,7 @@ where
 		key_id: KeyId,
 		signers: BTreeSet<AccountId>,
 		data: MessageHash,
-	) -> impl '_ + Future<Output = Result<C::Signature, (BTreeSet<AccountId>, SigningFailureReason)>>
-	{
+	) -> BoxFuture<'_, Result<C::Signature, (BTreeSet<AccountId>, SigningFailureReason)>> {
 		assert!(signers.contains(&self.my_account_id));
 
 		slog::debug!(
@@ -331,7 +328,7 @@ where
 					result_receiver
 				});
 
-		Box::pin(async move {
+		async move {
 			// Wait for the request to return a result, then log and return the result
 			if let Some(result_receiver) = request {
 				let result = result_receiver
@@ -356,28 +353,28 @@ where
 				);
 				Err((reported_parties, failure_reason))
 			}
-		})
+		}
+		.boxed()
 	}
 }
 
-#[async_trait]
 impl<C: CryptoScheme> MultisigClientApi<C> for MultisigClient<C> {
-	async fn keygen(
+	fn initiate_keygen(
 		&self,
 		ceremony_id: CeremonyId,
 		participants: BTreeSet<AccountId>,
-	) -> Result<C::Point, (BTreeSet<AccountId>, KeygenFailureReason)> {
-		self.initiate_keygen(ceremony_id, participants).await
+	) -> BoxFuture<'_, Result<C::Point, (BTreeSet<AccountId>, KeygenFailureReason)>> {
+		self.initiate_keygen(ceremony_id, participants)
 	}
 
-	async fn sign(
+	fn initiate_sign(
 		&self,
 		ceremony_id: CeremonyId,
 		key_id: KeyId,
 		signers: BTreeSet<AccountId>,
 		data: MessageHash,
-	) -> Result<C::Signature, (BTreeSet<AccountId>, SigningFailureReason)> {
-		self.initiate_signing(ceremony_id, key_id, signers, data).await
+	) -> BoxFuture<'_, Result<C::Signature, (BTreeSet<AccountId>, SigningFailureReason)>> {
+		self.initiate_signing(ceremony_id, key_id, signers, data)
 	}
 
 	fn update_latest_ceremony_id(&self, ceremony_id: CeremonyId) {
