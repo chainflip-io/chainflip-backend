@@ -25,7 +25,20 @@ pub mod any {
 	pub type Chain = AnyChain;
 
 	/// A token or currency that can be swapped natively in the Chainflip AMM.
-	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy, Hash)]
+	#[derive(
+		Clone,
+		Debug,
+		PartialEq,
+		Eq,
+		Encode,
+		Decode,
+		TypeInfo,
+		MaxEncodedLen,
+		Copy,
+		Hash,
+		PartialOrd,
+		Ord,
+	)]
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Asset {
 		Eth,

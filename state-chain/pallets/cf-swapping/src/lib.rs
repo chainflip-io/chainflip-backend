@@ -6,6 +6,10 @@ use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use sp_std::{cmp, vec::Vec};
 
+use sp_std::collections::btree_map::BTreeMap;
+
+use sp_std::vec;
+
 #[cfg(test)]
 mod mock;
 
@@ -67,6 +71,15 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(super) type EarnedRelayerFees<T: Config> =
 		StorageDoubleMap<_, Identity, T::AccountId, Twox64Concat, Asset, AssetAmount>;
+
+	/// Grouped map of swaps
+	#[pallet::storage]
+	pub(super) type Swaps<T: Config> =
+		StorageDoubleMap<_, Twox64Concat, Asset, Twox64Concat, Asset, Vec<Swap<T::AccountId>>>;
+
+	/// Counter of how many swaps are currently in storage
+	#[pallet::storage]
+	pub(super) type SwapsInProcess<T> = StorageValue<_, u32, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -165,17 +178,32 @@ pub mod pallet {
 			);
 		}
 
-		fn calc_prop_swap(
-			total_input: AssetAmount,
-			swap_amount: AssetAmount,
-			total_output: AssetAmount,
-		) -> AssetAmount {
-			(swap_amount * 100).saturating_div(total_input).saturating_mul(total_output) / 100
+		fn calc_prop_swap(from: AssetAmount, to: AssetAmount, amount: AssetAmount) -> AssetAmount {
+			if to > from {
+				from.saturating_mul(amount).saturating_div(to)
+			} else {
+				to.saturating_mul(amount).saturating_div(from)
+			}
 		}
 
-		fn calc_and_save_fees(swaps: Swap<T::AccountId>) -> AssetAmount {
-			for swap in swaps {
-				let fee = 9;
+		fn calc_fee(amount: AssetAmount, bps: u16) -> AssetAmount {
+			amount.saturating_div(100).saturating_mul(bps.saturating_mul(100) as u128)
+		}
+
+		fn calc_netto_swap_amount(swaps: Vec<Swap<T::AccountId>>) -> AssetAmount {
+			let mut total_fee = 0;
+			let mut total_swap_amount = 0;
+			for swap in swaps.into_iter() {
+				let fee = Self::calc_fee(swap.amount, swap.relayer_commission_bps);
+				total_fee = total_fee + fee;
+				total_swap_amount = total_swap_amount + swap.amount;
+			}
+			total_swap_amount.saturating_sub(total_fee)
+		}
+
+		fn store_relayer_fees(swaps: Vec<Swap<T::AccountId>>) {
+			for swap in swaps.into_iter() {
+				let fee = Self::calc_fee(swap.amount, swap.relayer_commission_bps);
 				EarnedRelayerFees::<T>::mutate(&swap.relayer_id, swap.from, |maybe_fees| {
 					if let Some(fees) = maybe_fees {
 						*maybe_fees = Some(fees.saturating_add(fee))
@@ -186,11 +214,13 @@ pub mod pallet {
 			}
 		}
 
-		pub fn execute_swaps(swaps: Swap<T::AccountId>, from: Asset, to: Asset) {
-			let total = swaps.into_iter().map(|swap| swap.amount).sum();
-			let (swap_output, (asset, fee)) = T::AmmPoolApi::swap(from, to, total, 1);
+		pub fn execute_group_of_swaps(swaps: Vec<Swap<T::AccountId>>, from: Asset, to: Asset) {
+			let total_funds_to_swap = Self::calc_netto_swap_amount(swaps.clone());
+			Self::store_relayer_fees(swaps.clone());
+			let (swap_output, (_, _)) = T::AmmPoolApi::swap(from, to, total_funds_to_swap, 1);
 			for swap in swaps {
-				let swap_amount = Self::calc_prop_swap(total, swap.amount, swap_output);
+				let swap_amount =
+					Self::calc_prop_swap(total_funds_to_swap, swap_output, swap.amount);
 				T::Egress::schedule_egress(
 					assets::eth::Asset::try_from(swap.to).expect("Only eth assets supported"),
 					swap_amount,
@@ -198,6 +228,38 @@ pub mod pallet {
 						.expect("On eth assets supported")
 						.into(),
 				);
+			}
+		}
+
+		pub fn group_swaps(
+			swaps: Vec<Swap<T::AccountId>>,
+		) -> BTreeMap<(Asset, Asset), Vec<Swap<<T as frame_system::Config>::AccountId>>> {
+			let mut grouped_swaps: BTreeMap<
+				(Asset, Asset),
+				Vec<Swap<<T as frame_system::Config>::AccountId>>,
+			> = BTreeMap::new();
+			for swap in swaps {
+				grouped_swaps
+					.entry((swap.from, swap.to))
+					.and_modify(|swaps| swaps.push(swap.clone()))
+					.or_insert(vec![swap]);
+			}
+			grouped_swaps
+		}
+
+		pub fn process_as_group_of_swaps() {
+			let mut grouped_swaps: BTreeMap<
+				(Asset, Asset),
+				Vec<Swap<<T as frame_system::Config>::AccountId>>,
+			> = BTreeMap::new();
+			for swap in SwapQueue::<T>::get() {
+				grouped_swaps
+					.entry((swap.from, swap.to))
+					.and_modify(|swaps| swaps.push(swap.clone()))
+					.or_insert(vec![swap]);
+			}
+			for (group, swaps) in grouped_swaps {
+				Self::execute_group_of_swaps(swaps, group.0, group.1);
 			}
 		}
 	}
