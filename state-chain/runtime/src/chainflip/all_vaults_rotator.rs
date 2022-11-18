@@ -9,7 +9,6 @@ pub struct AllVaultRotator<A> {
 	_phantom: PhantomData<A>,
 }
 
-// Do some type bounds here so the return
 impl<A> MultiVaultRotator for AllVaultRotator<A>
 where
 	A: VaultRotator,

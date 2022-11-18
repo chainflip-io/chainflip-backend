@@ -355,16 +355,12 @@ pub mod pallet {
 		}
 	}
 
-	// An optional / active / inactive that may
 	/// A map of vaults by epoch.
 	#[pallet::storage]
 	#[pallet::getter(fn vaults)]
 	pub type Vaults<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Blake2_128Concat, EpochIndex, Vault<T::Chain>>;
 
-	// A vec of the active keys
-	// we take the latest in `current_key()` to get a single key
-	// or if empty, returns None
 	/// The epoch whose authorities control the current vault key.
 	#[pallet::storage]
 	#[pallet::getter(fn current_keyholders_epoch)]
@@ -861,8 +857,8 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 		if let Some(VaultRotationStatus::<T, I>::KeygenVerificationComplete { new_public_key }) =
 			PendingVaultRotation::<T, I>::get()
 		{
-			// We want to mark the key as in transition here
-			// so we stop signing
+			// TODO: We want to mark the key as in transition here
+			// so we stop signing once we have polkadot
 			T::Broadcaster::threshold_sign_and_broadcast(
 				<T::ApiCall as SetAggKeyWithAggKey<_>>::new_unsigned(
 					<T::ReplayProtectionProvider>::replay_protection(),
