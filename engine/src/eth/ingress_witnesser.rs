@@ -7,7 +7,6 @@ use cf_primitives::chains::assets::eth;
 use futures::Stream;
 use pallet_cf_ingress_egress::IngressWitness;
 use sp_core::H160;
-use tokio::sync::broadcast;
 use tokio_stream::StreamExt;
 use web3::types::Transaction;
 
@@ -64,7 +63,7 @@ where
 // witnessing a window of blocks
 pub async fn start<StateChainClient>(
 	eth_dual_rpc: EthDualRpcClient,
-	epoch_starts_receiver: broadcast::Receiver<EpochStart<Ethereum>>,
+	epoch_starts_receiver: async_channel::Receiver<EpochStart<Ethereum>>,
 	eth_monitor_ingress_receiver: tokio::sync::mpsc::UnboundedReceiver<H160>,
 	state_chain_client: Arc<StateChainClient>,
 	monitored_addresses: BTreeSet<H160>,
