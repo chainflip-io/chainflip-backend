@@ -23,7 +23,7 @@ use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, AuctionOutcome, Bid, BidInfo, BidderProvider,
 	Bonding, Chainflip, EmergencyRotation, EpochInfo, EpochTransitionHandler, ExecutionCondition,
 	HistoricalEpoch, MissedAuthorshipSlots, MultiVaultRotator, QualifyNode, ReputationResetter,
-    StakeHandler, SystemStateInfo,
+	StakeHandler, SystemStateInfo,
 };
 use cf_utilities::Port;
 use frame_support::{
