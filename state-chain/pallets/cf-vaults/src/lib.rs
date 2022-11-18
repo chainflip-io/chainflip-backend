@@ -288,7 +288,7 @@ pub mod pallet {
 			let mut weight = T::DbWeight::get().reads(1);
 
 			// We don't need self, we can get our own data.
-			if Self::get_vault_rotation_outcome() != AsyncResult::Pending {
+			if Self::vault_rotation_outcome() != AsyncResult::Pending {
 				return weight
 			}
 
@@ -814,7 +814,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 	fn start_vault_rotation(candidates: BTreeSet<Self::ValidatorId>) {
 		assert!(!candidates.is_empty());
 
-		assert_ne!(Self::get_vault_rotation_outcome(), AsyncResult::Pending);
+		assert_ne!(Self::vault_rotation_outcome(), AsyncResult::Pending);
 
 		let ceremony_id = T::CeremonyIdProvider::next_ceremony_id();
 
@@ -832,7 +832,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 	}
 
 	/// Get the status of the current key generation
-	fn get_vault_rotation_outcome() -> AsyncResult<VaultStatus<T::ValidatorId>> {
+	fn vault_rotation_outcome() -> AsyncResult<VaultStatus<T::ValidatorId>> {
 		match PendingVaultRotation::<T, I>::decode_variant() {
 			Some(VaultRotationStatusVariant::AwaitingKeygen) => AsyncResult::Pending,
 			Some(VaultRotationStatusVariant::AwaitingKeygenVerification) => AsyncResult::Pending,

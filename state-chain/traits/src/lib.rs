@@ -172,7 +172,7 @@ pub trait VaultRotator {
 	fn start_vault_rotation(candidates: BTreeSet<Self::ValidatorId>);
 
 	/// Poll for the vault rotation outcome.
-	fn get_vault_rotation_outcome() -> AsyncResult<VaultStatus<Self::ValidatorId>>;
+	fn vault_rotation_outcome() -> AsyncResult<VaultStatus<Self::ValidatorId>>;
 
 	/// Rotate the chain's keys "externally" e.g. on the contract.
 	/// For non-contract / proxy based chains, this is a noop

@@ -21,7 +21,7 @@ where
 	}
 
 	fn multi_vault_rotation_outcome() -> AsyncResult<VaultStatus<Self::ValidatorId>> {
-		let a_async_result = A::get_vault_rotation_outcome();
+		let a_async_result = A::vault_rotation_outcome();
 
 		// if any of the inner rotations are void, then the overall vault rotation result is void.
 		if matches!(a_async_result, AsyncResult::Void) {

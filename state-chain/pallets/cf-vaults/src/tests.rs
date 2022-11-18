@@ -46,10 +46,7 @@ fn keygen_request_emitted() {
 	new_test_ext().execute_with(|| {
 		<VaultsPallet as VaultRotator>::start_vault_rotation(btree_candidates.clone());
 		// Confirm we have a new vault rotation process running
-		assert_eq!(
-			<VaultsPallet as VaultRotator>::get_vault_rotation_outcome(),
-			AsyncResult::Pending
-		);
+		assert_eq!(<VaultsPallet as VaultRotator>::vault_rotation_outcome(), AsyncResult::Pending);
 		assert_eq!(
 			last_event::<MockRuntime>(),
 			PalletEvent::<MockRuntime, _>::KeygenRequest(current_ceremony_id(), btree_candidates)
@@ -103,7 +100,7 @@ fn keygen_failure() {
 		assert_eq!(last_event::<MockRuntime>(), PalletEvent::KeygenFailure(ceremony_id).into());
 
 		assert_eq!(
-			VaultsPallet::get_vault_rotation_outcome(),
+			VaultsPallet::vault_rotation_outcome(),
 			AsyncResult::Ready(VaultStatus::Failed(BAD_CANDIDATES.iter().cloned().collect()))
 		);
 
@@ -180,10 +177,7 @@ fn cannot_report_keygen_success_twice() {
 			),
 			Error::<MockRuntime, _>::InvalidRespondent
 		);
-		assert_eq!(
-			<VaultsPallet as VaultRotator>::get_vault_rotation_outcome(),
-			AsyncResult::Pending
-		);
+		assert_eq!(<VaultsPallet as VaultRotator>::vault_rotation_outcome(), AsyncResult::Pending);
 	});
 }
 
@@ -210,10 +204,7 @@ fn cannot_report_two_different_keygen_outcomes() {
 			),
 			Error::<MockRuntime, _>::InvalidRespondent
 		);
-		assert_eq!(
-			<VaultsPallet as VaultRotator>::get_vault_rotation_outcome(),
-			AsyncResult::Pending
-		);
+		assert_eq!(<VaultsPallet as VaultRotator>::vault_rotation_outcome(), AsyncResult::Pending);
 	});
 }
 
@@ -242,10 +233,7 @@ fn only_participants_can_report_keygen_outcome() {
 			),
 			Error::<MockRuntime, _>::InvalidRespondent
 		);
-		assert_eq!(
-			<VaultsPallet as VaultRotator>::get_vault_rotation_outcome(),
-			AsyncResult::Pending
-		);
+		assert_eq!(<VaultsPallet as VaultRotator>::vault_rotation_outcome(), AsyncResult::Pending);
 	});
 }
 
@@ -272,10 +260,7 @@ fn reporting_keygen_outcome_must_be_for_pending_ceremony_id() {
 			),
 			Error::<MockRuntime, _>::InvalidCeremonyId
 		);
-		assert_eq!(
-			<VaultsPallet as VaultRotator>::get_vault_rotation_outcome(),
-			AsyncResult::Pending
-		);
+		assert_eq!(<VaultsPallet as VaultRotator>::vault_rotation_outcome(), AsyncResult::Pending);
 
 		// Ceremony id in the future
 		assert_noop!(
@@ -286,10 +271,7 @@ fn reporting_keygen_outcome_must_be_for_pending_ceremony_id() {
 			),
 			Error::<MockRuntime, _>::InvalidCeremonyId
 		);
-		assert_eq!(
-			<VaultsPallet as VaultRotator>::get_vault_rotation_outcome(),
-			AsyncResult::Pending
-		);
+		assert_eq!(<VaultsPallet as VaultRotator>::vault_rotation_outcome(), AsyncResult::Pending);
 	});
 }
 
@@ -308,7 +290,7 @@ fn keygen_report_success() {
 		));
 
 		assert_eq!(
-			<VaultsPallet as VaultRotator>::get_vault_rotation_outcome(),
+			<VaultsPallet as VaultRotator>::vault_rotation_outcome(),
 			AsyncResult::Pending
 		);
 
@@ -317,7 +299,7 @@ fn keygen_report_success() {
 		// So nothing should have changed.
 		assert!(KeygenResolutionPendingSince::<MockRuntime, _>::exists());
 		assert_eq!(
-			<VaultsPallet as VaultRotator>::get_vault_rotation_outcome(),
+			<VaultsPallet as VaultRotator>::vault_rotation_outcome(),
 			AsyncResult::Pending
 		);
 
@@ -331,13 +313,13 @@ fn keygen_report_success() {
 		// A resolution is still pending - we require 100% response rate.
 		assert!(KeygenResolutionPendingSince::<MockRuntime, _>::exists());
 		assert_eq!(
-			<VaultsPallet as VaultRotator>::get_vault_rotation_outcome(),
+			<VaultsPallet as VaultRotator>::vault_rotation_outcome(),
 			AsyncResult::Pending
 		);
 		VaultsPallet::on_initialize(1);
 		assert!(KeygenResolutionPendingSince::<MockRuntime, _>::exists());
 		assert_eq!(
-			<VaultsPallet as VaultRotator>::get_vault_rotation_outcome(),
+			<VaultsPallet as VaultRotator>::vault_rotation_outcome(),
 			AsyncResult::Pending
 		);
 
@@ -351,7 +333,7 @@ fn keygen_report_success() {
 		// This time we should have enough votes for consensus.
 		assert!(KeygenResolutionPendingSince::<MockRuntime, _>::exists());
 		assert_eq!(
-			<VaultsPallet as VaultRotator>::get_vault_rotation_outcome(),
+			<VaultsPallet as VaultRotator>::vault_rotation_outcome(),
 			AsyncResult::Pending
 		);
 		if let VaultRotationStatus::AwaitingKeygen { keygen_ceremony_id: keygen_ceremony_id_from_status, response_status, keygen_participants } = PendingVaultRotation::<MockRuntime, _>::get().unwrap() {
@@ -376,7 +358,7 @@ fn keygen_report_success() {
 
 		assert!(!KeygenResolutionPendingSince::<MockRuntime, _>::exists());
 		assert_eq!(
-			<VaultsPallet as VaultRotator>::get_vault_rotation_outcome(),
+			<VaultsPallet as VaultRotator>::vault_rotation_outcome(),
 			AsyncResult::Pending
 		);
 
@@ -408,17 +390,11 @@ fn keygen_report_failure() {
 			ceremony_id,
 			Err(KeygenError::Failure(BTreeSet::from_iter([CHARLIE])))
 		));
-		assert_eq!(
-			<VaultsPallet as VaultRotator>::get_vault_rotation_outcome(),
-			AsyncResult::Pending
-		);
+		assert_eq!(<VaultsPallet as VaultRotator>::vault_rotation_outcome(), AsyncResult::Pending);
 
 		VaultsPallet::on_initialize(1);
 		assert!(KeygenResolutionPendingSince::<MockRuntime, _>::exists());
-		assert_eq!(
-			<VaultsPallet as VaultRotator>::get_vault_rotation_outcome(),
-			AsyncResult::Pending
-		);
+		assert_eq!(<VaultsPallet as VaultRotator>::vault_rotation_outcome(), AsyncResult::Pending);
 
 		// Bob agrees.
 		assert_ok!(VaultsPallet::report_keygen_outcome(
@@ -429,16 +405,10 @@ fn keygen_report_failure() {
 
 		// A resolution is still pending - we expect 100% response rate.
 		assert!(KeygenResolutionPendingSince::<MockRuntime, _>::exists());
-		assert_eq!(
-			<VaultsPallet as VaultRotator>::get_vault_rotation_outcome(),
-			AsyncResult::Pending
-		);
+		assert_eq!(<VaultsPallet as VaultRotator>::vault_rotation_outcome(), AsyncResult::Pending);
 		VaultsPallet::on_initialize(1);
 		assert!(KeygenResolutionPendingSince::<MockRuntime, _>::exists());
-		assert_eq!(
-			<VaultsPallet as VaultRotator>::get_vault_rotation_outcome(),
-			AsyncResult::Pending
-		);
+		assert_eq!(<VaultsPallet as VaultRotator>::vault_rotation_outcome(), AsyncResult::Pending);
 
 		// Charlie agrees.
 		assert_ok!(VaultsPallet::report_keygen_outcome(
@@ -449,14 +419,11 @@ fn keygen_report_failure() {
 
 		// This time we should have enough votes for consensus.
 		assert!(KeygenResolutionPendingSince::<MockRuntime, _>::exists());
-		assert_eq!(
-			<VaultsPallet as VaultRotator>::get_vault_rotation_outcome(),
-			AsyncResult::Pending
-		);
+		assert_eq!(<VaultsPallet as VaultRotator>::vault_rotation_outcome(), AsyncResult::Pending);
 		VaultsPallet::on_initialize(1);
 		assert!(!KeygenResolutionPendingSince::<MockRuntime, _>::exists());
 		assert_eq!(
-			VaultsPallet::get_vault_rotation_outcome(),
+			VaultsPallet::vault_rotation_outcome(),
 			AsyncResult::Ready(VaultStatus::Failed(BTreeSet::from([CHARLIE])))
 		);
 

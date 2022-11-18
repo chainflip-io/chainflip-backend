@@ -61,7 +61,7 @@ benchmarks_instance_pallet! {
 	}
 	verify {
 		assert!(matches!(
-			<Pallet::<T, I> as VaultRotator>::get_vault_rotation_outcome(),
+			<Pallet::<T, I> as VaultRotator>::vault_rotation_outcome(),
 			AsyncResult::Ready(VaultStatus::Failed(..))
 		));
 	}
