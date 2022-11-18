@@ -7,7 +7,7 @@ use base_rpc_api::BaseRpcApi;
 
 use anyhow::{anyhow, bail, Context, Result};
 use codec::Decode;
-use futures::{Stream, StreamExt, TryStreamExt};
+use futures::{Stream, StreamExt, TryFutureExt, TryStreamExt};
 
 use slog::o;
 use sp_core::{storage::StorageKey, Pair, H256};
@@ -18,6 +18,7 @@ use crate::{
 	common::{read_clean_and_decode_hex_str_file, EngineTryStreamExt},
 	logging::COMPONENT_KEY,
 	settings,
+	task_scope::{Scope, ScopedJoinHandle},
 };
 use utilities::context;
 
@@ -28,6 +29,7 @@ pub struct StateChainClient<
 	runtime_version: RwLock<sp_version::RuntimeVersion>,
 	genesis_hash: state_chain_runtime::Hash,
 	signer: signer::PairSigner<sp_core::sr25519::Pair>,
+	_task_handle: ScopedJoinHandle<()>,
 	pub base_rpc_client: Arc<BaseRpcClient>,
 }
 
@@ -38,29 +40,23 @@ impl<BaseRpcClient> StateChainClient<BaseRpcClient> {
 }
 
 impl StateChainClient {
-	pub async fn new(
+	pub async fn new<'a>(
+		scope: &Scope<'a, anyhow::Error>,
 		state_chain_settings: &settings::StateChain,
 		wait_for_staking: bool,
 		logger: &slog::Logger,
-	) -> Result<(
-		H256,
-		impl Stream<Item = Result<state_chain_runtime::Header>>,
-		Arc<StateChainClient>,
-	)> {
-		Self::inner_new(state_chain_settings, wait_for_staking, logger)
+	) -> Result<(H256, impl Stream<Item = state_chain_runtime::Header>, Arc<StateChainClient>)> {
+		Self::inner_new(scope, state_chain_settings, wait_for_staking, logger)
 			.await
 			.context("Failed to initialize StateChainClient")
 	}
 
-	async fn inner_new(
+	async fn inner_new<'a>(
+		scope: &Scope<'a, anyhow::Error>,
 		state_chain_settings: &settings::StateChain,
 		wait_for_staking: bool,
 		logger: &slog::Logger,
-	) -> Result<(
-		H256,
-		impl Stream<Item = Result<state_chain_runtime::Header>>,
-		Arc<StateChainClient>,
-	)> {
+	) -> Result<(H256, impl Stream<Item = state_chain_runtime::Header>, Arc<StateChainClient>)> {
 		let logger = logger.new(o!(COMPONENT_KEY => "StateChainClient"));
 		let signer = signer::PairSigner::<sp_core::sr25519::Pair>::new(
 			sp_core::sr25519::Pair::from_seed(&read_clean_and_decode_hex_str_file(
@@ -235,11 +231,23 @@ impl StateChainClient {
 			(latest_block_hash, latest_block_number, account_nonce)
 		};
 
+		const BLOCK_CAPACITY: usize = 10;
+
+		let (block_sender, block_receiver) = async_channel::bounded(BLOCK_CAPACITY);
+		let task_handle = scope.spawn_with_handle(async move {
+			finalized_block_header_stream
+				.try_for_each(|block_header| {
+					block_sender.send(block_header).map_err(anyhow::Error::new)
+				})
+				.await
+		});
+
 		let state_chain_client = Arc::new(StateChainClient {
 			nonce: AtomicU32::new(account_nonce),
 			runtime_version: RwLock::new(base_rpc_client.runtime_version().await?),
 			genesis_hash: base_rpc_client.block_hash(0).await?.unwrap(),
 			signer: signer.clone(),
+			_task_handle: task_handle,
 			base_rpc_client,
 		});
 
@@ -250,7 +258,7 @@ impl StateChainClient {
 			latest_block_hash
 		);
 
-		Ok((latest_block_hash, finalized_block_header_stream, state_chain_client))
+		Ok((latest_block_hash, block_receiver, state_chain_client))
 	}
 }
 
@@ -301,7 +309,7 @@ pub mod mocks {
 			) -> Result<Vec<state_chain_runtime::Event>>
 			where
 				BlockStream:
-					Stream<Item = anyhow::Result<state_chain_runtime::Header>> + Unpin + Send + 'static;
+					Stream<Item = state_chain_runtime::Header> + Unpin + Send + 'static;
 		}
 		#[async_trait]
 		impl StorageApi for StateChainClient {
