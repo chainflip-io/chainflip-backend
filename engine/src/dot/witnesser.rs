@@ -79,9 +79,7 @@ mod tests {
 	#[ignore = "requires connecting to a live dotsama network"]
 	async fn block_head_stream_from_test_dot() {
 		let settings = Settings::load_settings_from_all_sources(
-			"",
-			"./config/Local.toml",
-			None,
+			Some("/etc/chainflip_local_custom/".to_owned()),
 			CommandLineOptions::default(),
 		)
 		.unwrap();

@@ -149,8 +149,6 @@ pub struct CommandLineOptions {
 	// Misc Options
 	#[clap(short = 'c', long = "base-config-path")]
 	base_config_path: Option<String>,
-	#[clap(short = 's', long = "engine-settings-file")]
-	engine_settings_file: Option<String>,
 	#[clap(short = 'w', long = "log-whitelist")]
 	log_whitelist: Option<Vec<String>>,
 	#[clap(short = 'b', long = "log-blacklist")]
@@ -224,41 +222,46 @@ where
 {
 	type CommandLineOptions: Source + Send + Sync + 'static;
 
-	/// Uses the `default_file` unless the `optional_file` is Some.
 	/// Merges settings from a TOML file, environment and provided command line options.
 	/// Merge priority is:
 	/// 1 - Command line options
 	/// 2 - Environment
-	/// 3 - TOML file
+	/// 3 - TOML file (if found)
 	/// 4 - Default value
+	/// If no custom_base_config_path is provided, then the default of "/etc/chainflip/" will be
+	/// used for all files.
 	fn load_settings_from_all_sources(
-		base_config_path: &str,
-		default_file: &str,
-		optional_file: Option<String>,
+		custom_base_config_path: Option<String>,
 		opts: Self::CommandLineOptions,
 	) -> Result<Self, ConfigError> {
-		// Set the custom default settings
-		let mut builder = Self::set_defaults(Config::builder(), base_config_path)?;
+		// Get the base config path from:
+		// 1) command line option
+		// 2) environment var
+		// 3) use default value
+		let base_config_path = custom_base_config_path
+			.clone()
+			.or_else(|| {
+				env::var(BASE_CONFIG_PATH).ok().or_else(|| Some("/etc/chainflip/".to_owned()))
+			})
+			.unwrap();
 
-		// Choose what file to use
-		let file = match &optional_file {
-			Some(path) => {
-				if Path::new(path).is_file() {
-					path
-				} else {
-					// If the user has set the config file path, then error if its missing.
-					return Err(ConfigError::Message(format!("File not found: {}", path)))
-				}
-			},
-			None => default_file,
-		};
+		// Set the default settings
+		let mut builder = Self::set_defaults(Config::builder(), &base_config_path)?;
 
 		// If the file does not exist we will try and continue anyway.
 		// Because if all of the settings are covered in the environment and cli options, then we
 		// don't need it.
-		let file_present = Path::new(file).is_file();
+		let settings_file = PathBuf::from(base_config_path).join("config/Settings.toml");
+		let file_present = settings_file.is_file();
 		if file_present {
-			builder = builder.add_source(File::with_name(file));
+			builder = builder.add_source(File::from(settings_file.clone()));
+		} else if custom_base_config_path.is_some() {
+			// If the user has set a custom base config path but the settings file is missing, then
+			// error.
+			return Err(ConfigError::Message(format!(
+				"File not found: {}",
+				settings_file.to_string_lossy()
+			)))
 		}
 
 		let settings: Self = builder
@@ -267,11 +270,11 @@ where
 			.build()?
 			.try_deserialize()
 			.map_err(|e| {
-				// Add context to the error message if the file was missing.
+				// Add context to the error message if the settings file was missing.
 				ConfigError::Message(if file_present {
 					e.to_string()
 				} else {
-					format!("Default config file is missing {}: {}", file, e)
+					format!("Config file is missing {}: {}", settings_file.to_string_lossy(), e)
 				})
 			})?;
 
@@ -282,7 +285,7 @@ where
 
 	/// Set the default values of any settings. These values will be overridden by all other
 	/// sources. Any set this way will become optional (If no other source contains the settings, it
-	/// will NOT panic).
+	/// will NOT error).
 	fn set_defaults(
 		config_builder: ConfigBuilder<config::builder::DefaultState>,
 		_base_config_path: &str,
@@ -442,40 +445,17 @@ impl P2POptions {
 }
 
 impl Settings {
-	/// New settings loaded from the `engine_settings_file` in the `CommandLineOptions` or
-	/// "/etc/chainflip/config/EngineSettings.toml" if none, with overridden values from the
+	/// New settings loaded from "$base_config_path/config/Settings.toml",
 	/// environment and `CommandLineOptions`
 	pub fn new(opts: CommandLineOptions) -> Result<Self, ConfigError> {
-		// Get the base config path from:
-		// 1) command line option
-		// 2) environment var
-		// 3) use default value
-		let base_config_path = opts
-			.base_config_path
-			.clone()
-			.or_else(|| {
-				env::var(BASE_CONFIG_PATH).ok().or_else(|| Some("/etc/chainflip/".to_owned()))
-			})
-			.unwrap();
-
-		let engine_settings_file =
-			PathBuf::from(base_config_path.clone()).join("config/EngineSettings.toml");
-
-		Self::load_settings_from_all_sources(
-			&base_config_path,
-			engine_settings_file.to_str().expect("Invalid engine_settings_file path"),
-			opts.engine_settings_file.clone(),
-			opts,
-		)
+		Self::load_settings_from_all_sources(opts.base_config_path.clone(), opts)
 	}
 
 	#[cfg(test)]
 	pub fn new_test() -> Result<Self, ConfigError> {
 		tests::set_test_env();
 		Settings::load_settings_from_all_sources(
-			"",
-			"config/Testing.toml",
-			None,
+			Some("config/testing/".to_owned()),
 			CommandLineOptions::default(),
 		)
 	}
@@ -595,41 +575,34 @@ mod tests {
 	}
 
 	#[test]
-	fn test_engine_settings_command_line_option() {
-		set_test_env();
-
-		// Load the settings from the Testing.toml file using the command line option
-		let settings1 = Settings::new(CommandLineOptions {
-			engine_settings_file: Some("config/Testing.toml".to_owned()),
-			..Default::default()
-		})
-		.unwrap();
-
-		// Load Settings from the default file (which wont exist), so default values are used
-		let settings2 = Settings::new(CommandLineOptions::default()).unwrap();
-
-		// Now compare a value that should be different to confirm that the file loaded.
-		// Note: This test will break/fail if the Testing.toml uses same value as the default
-		// `signing_key_file` value
-		assert_ne!(settings1.state_chain.signing_key_file, settings2.state_chain.signing_key_file);
-	}
-
-	#[test]
 	fn test_base_config_path_command_line_option() {
 		set_test_env();
 
 		// Load the settings using a custom base config path.
-		let test_base_config_path = "test_base_path";
-		let settings = Settings::new(CommandLineOptions {
+		let test_base_config_path = "config/testing/";
+		let custom_base_path_settings = Settings::new(CommandLineOptions {
 			base_config_path: Some(test_base_config_path.to_owned()),
 			..Default::default()
 		})
 		.unwrap();
 
-		// Check that the signing key file is a child of the custom base path
-		assert!(settings
-			.state_chain
-			.signing_key_file
+		let default_settings = Settings::new(CommandLineOptions::default()).unwrap();
+
+		// Check that the settings file at "config/testing/config/Settings.toml" was loaded by
+		// looking at one of the custom settings and compare it with the default. Note: This test
+		// will break if the `state_chain.signing_key_file` setting in
+		// "config/testing/config/Settings.toml" is the same as the default value.
+		assert_ne!(
+			custom_base_path_settings.state_chain.signing_key_file,
+			default_settings.state_chain.signing_key_file
+		);
+
+		// Check that a key file is a child of the custom base path.
+		// Note: This check will break if the `node_p2p.node_key_file` settings is set in
+		// "config/testing/config/Settings.toml"
+		assert!(custom_base_path_settings
+			.node_p2p
+			.node_key_file
 			.to_string_lossy()
 			.contains(test_base_config_path));
 	}
@@ -639,11 +612,10 @@ mod tests {
 		use std::str::FromStr;
 		// Fill the options with test values that will pass the parsing/validation.
 		// The test values need to be different from the default values set during `set_defaults()`
-		// for the test to work. Leave the `engine_settings_file` & `base_config_path` option out,
-		// they are covered in a separate test.
+		// for the test to work. Leave the `base_config_path` option out,
+		// it is covered in a separate test.
 		let opts = CommandLineOptions {
 			base_config_path: None,
-			engine_settings_file: None,
 			log_whitelist: Some(vec!["test1".to_owned()]),
 			log_blacklist: Some(vec!["test2".to_owned()]),
 			p2p_opts: P2POptions {

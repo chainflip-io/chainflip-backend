@@ -41,8 +41,7 @@ where
 {
 	let eth_dual_rpc = EthDualRpcClient::new_test(
 		&<Settings as CfSettings>::load_settings_from_all_sources(
-			"config/Testing.toml",
-			None,
+			Some("config/testing/".to_owned()),
 			CommandLineOptions::default(),
 		)
 		.unwrap()

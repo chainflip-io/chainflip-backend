@@ -7,8 +7,8 @@ use std::collections::HashMap;
 
 #[derive(Parser, Clone, Debug)]
 pub struct CLICommandLineOptions {
-	#[clap(short = 'c', long = "config-path")]
-	config_path: Option<String>,
+	#[clap(short = 'c', long = "base-config-path")]
+	base_config_path: Option<String>,
 
 	#[clap(flatten)]
 	state_chain_opts: StateChainOptions,
@@ -40,7 +40,7 @@ impl Source for CLICommandLineOptions {
 impl Default for CLICommandLineOptions {
 	fn default() -> Self {
 		Self {
-			config_path: None,
+			base_config_path: None,
 			state_chain_opts: StateChainOptions::default(),
 			eth_opts: EthOptions::default(),
 			// an arbitrary simple command
@@ -124,16 +124,10 @@ impl CfSettings for CLISettings {
 }
 
 impl CLISettings {
-	/// New settings loaded from the `config_path` in the `CommandLineOptions` or
-	/// "config/Default.toml" if none, with overridden values from the environment and
-	/// `CommandLineOptions`
+	/// New settings loaded from "$base_config_path/config/Settings.toml",
+	/// environment and `CommandLineOptions`
 	pub fn new(opts: CLICommandLineOptions) -> Result<Self, ConfigError> {
-		Self::load_settings_from_all_sources(
-			"",
-			"config/Default.toml",
-			opts.config_path.clone(),
-			opts,
-		)
+		Self::load_settings_from_all_sources(opts.base_config_path.clone(), opts)
 	}
 }
 
@@ -157,13 +151,9 @@ mod tests {
 	fn init_default_config() {
 		set_test_env();
 
-		let settings = CLISettings::load_settings_from_all_sources(
-			"",
-			"../config/Default.toml",
-			None,
-			CLICommandLineOptions::default(),
-		)
-		.unwrap();
+		let settings =
+			CLISettings::load_settings_from_all_sources(None, CLICommandLineOptions::default())
+				.unwrap();
 
 		assert_eq!(settings.state_chain.ws_endpoint, "ws://localhost:9944");
 		assert_eq!(settings.eth.ws_node_endpoint, "ws://localhost:8545");
@@ -173,7 +163,7 @@ mod tests {
 	fn test_all_command_line_options() {
 		// Fill the command line options with test data that is different for that in `Default.toml`
 		let opts = CLICommandLineOptions {
-			config_path: None, // Not used in this test
+			base_config_path: None, // Not used in this test
 
 			state_chain_opts: StateChainOptions {
 				state_chain_ws_endpoint: Some("ws://endpoint:1234".to_owned()),
