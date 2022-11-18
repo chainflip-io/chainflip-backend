@@ -61,6 +61,16 @@ pub enum CFCommand {
 		#[clap(long = "register", hide = true)]
 		should_register_claim: bool,
 	},
+	#[clap(
+		about = "Submit an extrinsic to request generation of a claim certificate (claiming all available FLIP)"
+	)]
+	ClaimAll {
+		#[clap(help = "The Ethereum address you wish to claim your FLIP to")]
+		eth_address: String,
+
+		#[clap(long = "register", hide = true)]
+		should_register_claim: bool,
+	},
 	#[clap(about = "Set your account role to the Validator, Relayer, Liquidity Provider")]
 	RegisterAccountRole {
 		#[clap(help = "Validator (v), Liquidity Provider (lp), Relayer (r)", value_parser = account_role_parser)]

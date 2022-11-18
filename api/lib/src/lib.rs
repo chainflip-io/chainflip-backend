@@ -14,6 +14,7 @@ pub mod primitives {
 	pub use cf_primitives::*;
 	pub use pallet_cf_governance::ProposalId;
 	pub use state_chain_runtime::Hash;
+	pub type ClaimAmount = pallet_cf_staking::ClaimAmount<FlipBalance>;
 }
 
 pub use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
@@ -111,7 +112,7 @@ where
 }
 
 pub async fn request_claim(
-	atomic_amount: u128,
+	amount: primitives::ClaimAmount,
 	eth_address: [u8; 20],
 	state_chain_settings: &settings::StateChain,
 ) -> Result<ClaimCertificate> {
@@ -130,7 +131,7 @@ pub async fn request_claim(
 	let (tx_hash, _) = submit_and_ensure_success(
 		&state_chain_client,
 		block_stream,
-		pallet_cf_staking::Call::claim { amount: atomic_amount.into(), address: eth_address },
+		pallet_cf_staking::Call::claim { amount, address: eth_address },
 	)
 	.await
 	.map_err(|_| anyhow!("invalid claim"))?;

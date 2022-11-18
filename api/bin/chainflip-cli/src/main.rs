@@ -1,4 +1,4 @@
-use api::primitives::AccountRole;
+use api::primitives::{AccountRole, ClaimAmount};
 use chainflip_api as api;
 use clap::Parser;
 use settings::{CLICommandLineOptions, CLISettings};
@@ -35,7 +35,9 @@ async fn run_cli() -> Result<()> {
 
 	match command_line_opts.cmd {
 		Claim { amount, eth_address, should_register_claim } =>
-			request_claim(amount, &eth_address, &cli_settings, should_register_claim).await,
+			request_claim(Some(amount), &eth_address, &cli_settings, should_register_claim).await,
+		ClaimAll { eth_address, should_register_claim } =>
+			request_claim(None, &eth_address, &cli_settings, should_register_claim).await,
 		RegisterAccountRole { role } => register_account_role(role, &cli_settings).await,
 		Rotate {} => api::rotate_keys(&cli_settings.state_chain).await,
 		Retire {} => api::retire_account(&cli_settings.state_chain).await,
@@ -60,7 +62,7 @@ async fn register_account_role(role: AccountRole, settings: &settings::CLISettin
 }
 
 async fn request_claim(
-	amount: f64,
+	amount: Option<f64>,
 	eth_address: &str,
 	settings: &CLISettings,
 	should_register_claim: bool,
@@ -77,20 +79,34 @@ async fn request_claim(
 			}
 		)?;
 
-	let atomic_amount: u128 = (amount * 10_f64.powi(18)) as u128;
+	let amount = match amount {
+		Some(amount_float) => {
+			let atomic_amount = (amount_float * 10_f64.powi(18)) as u128;
 
-	println!(
-		"Submitting claim with amount `{}` FLIP (`{}` Flipperinos) to ETH address `0x{}`.",
-		amount,
-		atomic_amount,
-		hex::encode(eth_address)
-	);
+			println!(
+				"Submitting claim with amount `{}` FLIP (`{}` Flipperinos) to ETH address `0x{}`.",
+				amount_float,
+				atomic_amount,
+				hex::encode(eth_address)
+			);
+
+			ClaimAmount::Exact(atomic_amount)
+		},
+		None => {
+			println!(
+				"Submitting claim with MAX amount to ETH address `0x{}`.",
+				hex::encode(eth_address)
+			);
+
+			ClaimAmount::Max
+		},
+	};
 
 	if !confirm_submit() {
 		return Ok(())
 	}
 
-	let claim_cert = api::request_claim(atomic_amount, eth_address, &settings.state_chain).await?;
+	let claim_cert = api::request_claim(amount, eth_address, &settings.state_chain).await?;
 
 	println!("Your claim certificate is: {:?}", hex::encode(claim_cert.clone()));
 
