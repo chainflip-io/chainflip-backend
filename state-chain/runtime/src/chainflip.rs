@@ -21,12 +21,20 @@ use crate::{
 #[cfg(feature = "ibiza")]
 use cf_chains::{
 	dot::{api::PolkadotApi, Polkadot, PolkadotReplayProtection, PolkadotTransactionData},
-	ChainCrypto,
+	AnyChain, Chain, ChainCrypto,
 };
+#[cfg(feature = "ibiza")]
+use cf_primitives::{Asset, AssetAmount, ForeignChain, ForeignChainAddress, IntentId};
+#[cfg(feature = "ibiza")]
+use cf_traits::{EgressApi, IngressApi};
 #[cfg(feature = "ibiza")]
 use codec::{Decode, Encode};
 #[cfg(feature = "ibiza")]
+use frame_support::dispatch::DispatchError;
+#[cfg(feature = "ibiza")]
 use scale_info::TypeInfo;
+#[cfg(feature = "ibiza")]
+use sp_std::marker::PhantomData;
 
 use cf_chains::{
 	eth::{
@@ -41,10 +49,9 @@ use cf_traits::{
 	Issuance, NetworkState, ReplayProtectionProvider, RewardsDistribution, RuntimeUpgrade,
 	VaultTransitionHandler,
 };
-use frame_support::traits::Get;
 use pallet_cf_chain_tracking::ChainState;
 
-use frame_support::{dispatch::DispatchErrorWithPostInfo, weights::PostDispatchInfo};
+use frame_support::{dispatch::DispatchErrorWithPostInfo, traits::Get, weights::PostDispatchInfo};
 
 use pallet_cf_validator::PercentageRange;
 use sp_runtime::traits::{UniqueSaturatedFrom, UniqueSaturatedInto};
@@ -270,5 +277,92 @@ pub struct DotVaultTransitionHandler;
 impl VaultTransitionHandler<Polkadot> for DotVaultTransitionHandler {
 	fn on_new_vault(new_key: <Polkadot as ChainCrypto>::AggKey) {
 		Environment::set_new_proxy_account(new_key);
+	}
+}
+
+#[cfg(feature = "ibiza")]
+pub struct ForeignChainIngressEgressHandler<EthereumHandler, PolkadotHandler>(
+	PhantomData<(EthereumHandler, PolkadotHandler)>,
+);
+
+#[cfg(feature = "ibiza")]
+impl<EthereumHandler, PolkadotHandler> EgressApi<AnyChain>
+	for ForeignChainIngressEgressHandler<EthereumHandler, PolkadotHandler>
+where
+	EthereumHandler: EgressApi<Ethereum>,
+	PolkadotHandler: EgressApi<Polkadot>,
+{
+	fn schedule_egress(
+		asset: Asset,
+		amount: AssetAmount,
+		egress_address: <AnyChain as Chain>::ChainAccount,
+	) {
+		match asset.into() {
+			ForeignChain::Ethereum => EthereumHandler::schedule_egress(
+				asset.try_into().expect("Checked for asset compatibility"),
+				amount,
+				egress_address
+					.try_into()
+					.expect("Caller must ensure for account is of the compatible type."),
+			),
+			ForeignChain::Polkadot => PolkadotHandler::schedule_egress(
+				asset.try_into().expect("Checked for asset compatibility"),
+				amount,
+				egress_address
+					.try_into()
+					.expect("Caller must ensure for account is of the compatible type."),
+			),
+		}
+	}
+}
+
+#[cfg(feature = "ibiza")]
+impl<EthereumHandler, PolkadotHandler, NativeAccountId> IngressApi<AnyChain, NativeAccountId>
+	for ForeignChainIngressEgressHandler<EthereumHandler, PolkadotHandler>
+where
+	EthereumHandler: IngressApi<Ethereum, NativeAccountId>,
+	PolkadotHandler: IngressApi<Polkadot, NativeAccountId>,
+{
+	// This should be callable by the LP pallet.
+	fn register_liquidity_ingress_intent(
+		lp_account: NativeAccountId,
+		ingress_asset: Asset,
+	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
+		match ingress_asset.into() {
+			ForeignChain::Ethereum => EthereumHandler::register_liquidity_ingress_intent(
+				lp_account,
+				ingress_asset.try_into().unwrap(),
+			),
+			ForeignChain::Polkadot => PolkadotHandler::register_liquidity_ingress_intent(
+				lp_account,
+				ingress_asset.try_into().unwrap(),
+			),
+		}
+	}
+
+	// This should only be callable by the relayer.
+	fn register_swap_intent(
+		ingress_asset: Asset,
+		egress_asset: Asset,
+		egress_address: ForeignChainAddress,
+		relayer_commission_bps: u16,
+		relayer_id: NativeAccountId,
+	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
+		match ingress_asset.into() {
+			ForeignChain::Ethereum => EthereumHandler::register_swap_intent(
+				ingress_asset.try_into().unwrap(),
+				egress_asset,
+				egress_address,
+				relayer_commission_bps,
+				relayer_id,
+			),
+			ForeignChain::Polkadot => PolkadotHandler::register_swap_intent(
+				ingress_asset.try_into().unwrap(),
+				egress_asset,
+				egress_address,
+				relayer_commission_bps,
+				relayer_id,
+			),
+		}
 	}
 }

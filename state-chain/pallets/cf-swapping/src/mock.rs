@@ -3,8 +3,9 @@ use cf_chains::{Chain, Ethereum};
 use cf_primitives::{chains::assets, Asset, AssetAmount, ForeignChainAddress};
 use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
-	Chainflip, EgressApi, ForeignChainIngressEgressHandler, IngressApi, SwappingApi,
+	Chainflip, EgressApi, IngressApi, SwappingApi,
 };
+
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{parameter_types, storage_alias};
 use frame_system as system;
@@ -15,6 +16,7 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage,
 };
+use state_chain_runtime::chainflip::ForeignChainIngressEgressHandler;
 
 pub const RELAYER_FEE: u128 = 5;
 

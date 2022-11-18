@@ -63,6 +63,7 @@ quickcheck = '1'
 quickcheck_macros = '1'
 pallet-cf-ingress-egress = {path = '../cf-ingress-egress'}
 pallet-cf-account-roles = {path = '../cf-account-roles'}
+state-chain-runtime = {path = '../../runtime'}
 
 [features]
 default = ['std']

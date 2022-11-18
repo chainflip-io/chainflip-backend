@@ -7,11 +7,6 @@ pub use liquidity::*;
 pub mod mocks;
 pub mod offence_reporting;
 
-#[cfg(feature = "ibiza")]
-pub mod chains;
-#[cfg(feature = "ibiza")]
-pub use chains::*;
-
 use core::fmt::Debug;
 
 pub use async_result::AsyncResult;

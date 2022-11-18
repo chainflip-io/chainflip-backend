@@ -5,7 +5,7 @@ use cf_chains::{
 };
 use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
-	AddressDerivationApi, Broadcaster, ForeignChainIngressEgressHandler, ReplayProtectionProvider,
+	AddressDerivationApi, Broadcaster, ReplayProtectionProvider,
 };
 use frame_support::{instances::Instance1, parameter_types, sp_runtime::app_crypto::sp_core::H160};
 use frame_system as system;
@@ -15,6 +15,7 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage,
 };
+use state_chain_runtime::chainflip::ForeignChainIngressEgressHandler;
 
 use cf_primitives::{chains::assets, EthereumAddress, IntentId, ETHEREUM_ETH_ADDRESS};
 

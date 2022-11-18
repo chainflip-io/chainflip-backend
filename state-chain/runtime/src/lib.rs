@@ -67,7 +67,7 @@ pub use cf_primitives::{BlockNumber, FlipBalance, ForeignChainAddress};
 pub use cf_traits::{EpochInfo, EthEnvironmentProvider, QualifyNode, SessionKeysRegistered};
 
 #[cfg(feature = "ibiza")]
-pub use cf_traits::chains::ForeignChainIngressEgressHandler;
+pub use chainflip::ForeignChainIngressEgressHandler;
 
 pub use chainflip::chain_instances::*;
 use chainflip::{
