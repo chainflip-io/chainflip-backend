@@ -758,3 +758,10 @@ impl<T: frame_system::Config> EgressApi<Polkadot> for T {
 pub trait VaultTransitionHandler<C: ChainCrypto> {
 	fn on_new_vault(_new_key: C::AggKey) {}
 }
+
+/// Provides information about current bids.
+pub trait BidInfo {
+	type Balance;
+	/// Returns the smallest of all backup validator bids.
+	fn get_min_backup_bid() -> Self::Balance;
+}
