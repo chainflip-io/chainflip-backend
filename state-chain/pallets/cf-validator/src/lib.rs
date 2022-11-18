@@ -413,19 +413,9 @@ pub mod pallet {
 							// 	T::ValidatorWeightInfo::rotation_phase_vaults_rotating_failure(
 							// 		offenders.len() as u32,
 							// 	);
-							// Banning to be done in the respective vault
 							rotation_state.ban(offenders);
 							Self::start_vault_rotation(rotation_state);
 							// weight
-						},
-						AsyncResult::Void => {
-							debug_assert!(false, "Void state should be unreachable.");
-							log::error!(target: "cf-validator", "no vault rotation pending");
-							Self::set_rotation_phase(RotationPhase::Idle);
-							// Use the weight of the pending phase.
-							// T::ValidatorWeightInfo::rotation_phase_vaults_rotating_pending(
-							// 	rotation_state.num_primary_candidates(),
-							// )
 						},
 						AsyncResult::Pending => {
 							log::debug!(target: "cf-validator", "awaiting keygen completion");
@@ -433,11 +423,18 @@ pub mod pallet {
 							// 	rotation_state.num_primary_candidates(),
 							// )
 						},
-						AsyncResult::Ready(VaultStatus::RotationComplete) => {
-							// The rotation cannot be complete until after we've rotated externally.
-							todo!(
-								"This is not possible. Look into how to remove this case entirely"
+						async_result => {
+							debug_assert!(
+								false,
+								"Ready(KeygenComplete), Ready(Failed), Pending possible. Got: {:?}",
+								async_result
 							);
+							log::error!(target: "cf-validator", "Ready(KeygenComplete), Ready(Failed), Pending possible. Got: {:?}", async_result);
+							Self::set_rotation_phase(RotationPhase::Idle);
+							// Use the weight of the pending phase.
+							// T::ValidatorWeightInfo::rotation_phase_vaults_rotating_pending(
+							// 	rotation_state.num_primary_candidates(),
+							// )
 						},
 					};
 					// TODO: Use actual weights
@@ -458,13 +455,14 @@ pub mod pallet {
 						AsyncResult::Pending => {
 							log::debug!(target: "cf-validator", "awaiting vault rotations");
 						},
-						AsyncResult::Void => {
-							debug_assert!(false, "Void state should be unreachable.");
-							log::error!(target: "cf-validator", "no vault rotation pending");
+						async_result => {
+							debug_assert!(
+								false,
+								"Pending, or Ready(RotationComplete) possible. Got: {:?}",
+								async_result
+							);
+							log::error!(target: "cf-validator", "Pending and Ready(RotationComplete) possible. Got {:?}", async_result);
 							Self::set_rotation_phase(RotationPhase::Idle);
-						},
-						_ => {
-							log::error!("We just shouldn't be here. RIP")
 						},
 					}
 					0 as Weight
