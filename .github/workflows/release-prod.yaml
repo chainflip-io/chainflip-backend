@@ -3,8 +3,12 @@ on:
   workflow_dispatch:
     inputs:
       bump_revision:
-        required: false
-        type: boolean
+        required: true
+        default: 'no'
+        type: choice
+        options:
+          - 'yes'
+          - 'no'
         description: Bump the revision
 
 
@@ -54,19 +58,19 @@ jobs:
       - name: Install cargo-deb
         run: cargo install cargo-deb
       - name: Get date
-        if: inputs.bump_revision
+        if: inputs.bump_revision == 'yes'
         id: vars
         run: |
           echo "date=$(date +'%Y%m%d%H%M')" >> $GITHUB_OUTPUT
       - name: Build packages
-        if: inputs.bump_revision
+        if: inputs.bump_revision == 'yes'
         run: |
           cargo deb --no-build --no-strip -p chainflip-engine --deb-revision "${{ steps.vars.outputs.date }}"
           cargo deb --no-build --no-strip -p chainflip-cli --deb-revision "${{ steps.vars.outputs.date }}"
           cargo deb --no-build --no-strip -p chainflip-node --deb-revision "${{ steps.vars.outputs.date }}"
           cargo deb --no-build --no-strip -p generate-genesis-keys --deb-revision "${{ steps.vars.outputs.date }}"
       - name: Build packages
-        if: ! inputs.bump_revision
+        if: inputs.bump_revision == 'no'
         run: |
           cargo deb --no-build --no-strip -p chainflip-engine
           cargo deb --no-build --no-strip -p chainflip-cli
