@@ -8,7 +8,7 @@ use cf_chains::{eth::TrackedData, Ethereum};
 
 use sp_core::U256;
 use state_chain_runtime::CfeSettings;
-use tokio::sync::watch;
+use tokio::sync::{broadcast, watch};
 use utilities::{context, make_periodic_tick};
 use web3::types::BlockNumber;
 
@@ -17,7 +17,7 @@ const ETH_CHAIN_TRACKING_POLL_INTERVAL: Duration = Duration::from_secs(4);
 pub async fn start<StateChainClient, EthRpcClient>(
 	eth_rpc: EthRpcClient,
 	state_chain_client: Arc<StateChainClient>,
-	epoch_start_receiver: async_channel::Receiver<EpochStart>,
+	epoch_start_receiver: broadcast::Receiver<EpochStart>,
 	cfe_settings_update_receiver: watch::Receiver<CfeSettings>,
 	logger: &slog::Logger,
 ) -> anyhow::Result<()>
