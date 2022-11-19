@@ -1,6 +1,12 @@
 name: Release production binaries
 on:
   workflow_dispatch:
+    inputs:
+      bump_revision:
+        required: false
+        type: boolean
+        description: Bump the revision
+
 
 jobs:
   set-variables:
@@ -47,8 +53,20 @@ jobs:
           # sccache --show-stats
       - name: Install cargo-deb
         run: cargo install cargo-deb
-
+      - name: Get date
+        if: inputs.bump_revision
+        id: vars
+        run: |
+          echo "date=$(date +'%Y%m%d%H%M')" >> $GITHUB_OUTPUT
       - name: Build packages
+        if: inputs.bump_revision
+        run: |
+          cargo deb --no-build --no-strip -p chainflip-engine --deb-revision "${{ steps.vars.outputs.date }}"
+          cargo deb --no-build --no-strip -p chainflip-cli --deb-revision "${{ steps.vars.outputs.date }}"
+          cargo deb --no-build --no-strip -p chainflip-node --deb-revision "${{ steps.vars.outputs.date }}"
+          cargo deb --no-build --no-strip -p generate-genesis-keys --deb-revision "${{ steps.vars.outputs.date }}"
+      - name: Build packages
+        if: ! inputs.bump_revision
         run: |
           cargo deb --no-build --no-strip -p chainflip-engine
           cargo deb --no-build --no-strip -p chainflip-cli
