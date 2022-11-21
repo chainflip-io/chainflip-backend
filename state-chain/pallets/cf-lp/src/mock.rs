@@ -1,21 +1,19 @@
 use crate as pallet_cf_lp;
 use cf_chains::{
 	eth::{api::EthereumReplayProtection, assets},
-	AllBatch, ApiCall, Chain, ChainAbi, ChainCrypto, ChainEnvironment, Ethereum, FetchAssetParams,
-	ReplayProtectionProvider, TransferAssetParams,
+	Chain, ChainAbi, ChainEnvironment, Ethereum, ReplayProtectionProvider,
 };
 use cf_primitives::{EthereumAddress, IntentId, ETHEREUM_ETH_ADDRESS};
 use cf_traits::{
 	mocks::{
-		bid_info::MockBidInfo, ensure_origin_mock::NeverFailingOriginCheck,
-		staking_info::MockStakingInfo, system_state_info::MockSystemStateInfo,
+		all_batch::MockAllBatch, bid_info::MockBidInfo,
+		ensure_origin_mock::NeverFailingOriginCheck, staking_info::MockStakingInfo,
+		system_state_info::MockSystemStateInfo,
 	},
 	AddressDerivationApi, Broadcaster,
 };
-use codec::{Decode, Encode};
 use frame_support::{instances::Instance1, parameter_types, sp_runtime::app_crypto::sp_core::H160};
 use frame_system as system;
-use scale_info::TypeInfo;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -120,42 +118,6 @@ impl ChainEnvironment<<Ethereum as Chain>::ChainAsset, <Ethereum as Chain>::Chai
 			assets::eth::Asset::Flip => ETHEREUM_FLIP_ADDRESS.into(),
 			_ => todo!(),
 		})
-	}
-}
-
-// TODO: Deduplicate with ingress pallet mocks
-#[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub struct MockAllBatch {
-	nonce: <Ethereum as ChainAbi>::ReplayProtection,
-	fetch_params: Vec<FetchAssetParams<Ethereum>>,
-	transfer_params: Vec<TransferAssetParams<Ethereum>>,
-}
-
-impl AllBatch<Ethereum> for MockAllBatch {
-	fn new_unsigned(
-		fetch_params: Vec<FetchAssetParams<Ethereum>>,
-		transfer_params: Vec<TransferAssetParams<Ethereum>>,
-	) -> Self {
-		// TODO: Give it a nonce
-		Self { nonce: Default::default(), fetch_params, transfer_params }
-	}
-}
-
-impl ApiCall<Ethereum> for MockAllBatch {
-	fn threshold_signature_payload(&self) -> <Ethereum as ChainCrypto>::Payload {
-		unimplemented!()
-	}
-
-	fn signed(self, _threshold_signature: &<Ethereum as ChainCrypto>::ThresholdSignature) -> Self {
-		unimplemented!()
-	}
-
-	fn chain_encoded(&self) -> Vec<u8> {
-		unimplemented!()
-	}
-
-	fn is_signed(&self) -> bool {
-		unimplemented!()
 	}
 }
 
