@@ -5,6 +5,7 @@ use frame_support::{storage, StorageHasher, Twox64Concat};
 
 // pub mod broadcaster;
 pub mod account_role_registry;
+pub mod all_batch;
 pub mod bid_info;
 pub mod ceremony_id_provider;
 pub mod ensure_origin_mock;

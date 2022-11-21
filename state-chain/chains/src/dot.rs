@@ -50,7 +50,7 @@ pub type PolkadotPayload = SignedPayload<PolkadotRuntimeCall, PolkadotSignedExtr
 
 // Westend testnet
 pub const WESTEND_CONFIG: PolkadotConfig = PolkadotConfig {
-	spec_version: 9310,
+	spec_version: 9320,
 	transaction_version: 14,
 	genesis_hash: hex_literal::hex!(
 		"e143f23803ac50e8f6f8e62695d1ce9e4e1d68aa36c1cd2cfd15340213f3423e"
@@ -78,7 +78,7 @@ pub const NONCE_1: u32 = 11; //correct nonce has to be provided for this account
 // address: "5GNn92C9ngX4sNp3UjqGzPbdRfbbV8hyyVVNZaH2z9e5kzxA"
 pub const RAW_SEED_2: [u8; 32] =
 	hex_literal::hex!("4b734882accd7a0e27b8b0d3cb7db79ab4da559d1d5f84f35fd218a1ee12ece4");
-pub const NONCE_2: u32 = 0; //correct nonce has to be provided for this account (see/track onchain)
+pub const NONCE_2: u32 = 4; //correct nonce has to be provided for this account (see/track onchain)
 
 // test westend account 3 (CHAINFLIP-TEST-3)
 // address: "5CLpD6DBg2hFToBJYKDB7bPVAf4TKw2F1Q2xbnzdHSikH3uK"
@@ -495,7 +495,7 @@ pub enum ProxyCall {
 	/// # </weight>
 	/// TODO: Might be over counting 1 read
 	#[codec(index = 4u8)]
-	anonymous {
+	create_pure {
 		#[allow(missing_docs)]
 		proxy_type: PolkadotProxyType,
 		#[allow(missing_docs)]
@@ -524,7 +524,7 @@ pub enum ProxyCall {
 	/// Weight is a function of the number of proxies the user has (P).
 	/// # </weight>
 	#[codec(index = 5u8)]
-	kill_anonymous {
+	kill_pure {
 		#[allow(missing_docs)]
 		spawner: PolkadotAccountIdLookup,
 		#[allow(missing_docs)]

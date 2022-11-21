@@ -1,6 +1,9 @@
 use sp_std::collections::btree_set::BTreeSet;
 
-use crate::mock_runtime::ExtBuilder;
+use crate::mock_runtime::{
+	ExtBuilder, BACKUP_NODE_EMISSION_INFLATION_PERBILL,
+	CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL,
+};
 
 use super::*;
 use cf_primitives::AccountRole;
