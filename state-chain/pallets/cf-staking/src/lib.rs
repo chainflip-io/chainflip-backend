@@ -124,12 +124,6 @@ pub mod pallet {
 		/// The implementation of the register claim transaction.
 		type RegisterClaim: RegisterClaim<Ethereum> + Member + Parameter;
 
-		/// We must ensure the claim expires on the chain *after* it expires on the contract.
-		/// We should be extra sure that this is the case, else it opens the possibility for double
-		/// claiming.
-		#[pallet::constant]
-		type ClaimDelayBufferSeconds: Get<u64>;
-
 		/// Something that provides the current time.
 		type TimeSource: UnixTime;
 
@@ -178,6 +172,12 @@ pub mod pallet {
 	/// TTL for a claim from the moment of issue.
 	#[pallet::storage]
 	pub type ClaimTTLSeconds<T: Config> = StorageValue<_, u64, ValueQuery>;
+
+	/// We must ensure the claim expires on the chain *after* it expires on the contract.
+	/// We should be extra sure that this is the case, else it opens the possibility for double
+	/// claiming.
+	#[pallet::storage]
+	pub type ClaimDelayBufferSeconds<T: Config> = StorageValue<_, u64, ValueQuery>;
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
@@ -378,7 +378,7 @@ pub mod pallet {
 			// on Ethereum, and the SC will revert the pending claim, giving them back their funds.
 			Self::register_claim_expiry(
 				account_id.clone(),
-				contract_expiry + T::ClaimDelayBufferSeconds::get(),
+				contract_expiry + ClaimDelayBufferSeconds::<T>::get(),
 			);
 
 			let call = T::RegisterClaim::new_unsigned(
@@ -574,6 +574,7 @@ pub mod pallet {
 		pub genesis_stakers: Vec<(AccountId<T>, T::Balance)>,
 		pub minimum_stake: T::Balance,
 		pub claim_ttl: Duration,
+		pub claim_delay_buffer_seconds: u64,
 	}
 
 	#[cfg(feature = "std")]
@@ -583,6 +584,7 @@ pub mod pallet {
 				genesis_stakers: vec![],
 				minimum_stake: Default::default(),
 				claim_ttl: Default::default(),
+				claim_delay_buffer_seconds: Default::default(),
 			}
 		}
 	}
@@ -592,6 +594,7 @@ pub mod pallet {
 		fn build(&self) {
 			MinimumStake::<T>::set(self.minimum_stake);
 			ClaimTTLSeconds::<T>::set(self.claim_ttl.as_secs());
+			ClaimDelayBufferSeconds::<T>::set(self.claim_delay_buffer_seconds);
 			for (staker, amount) in self.genesis_stakers.iter() {
 				Pallet::<T>::stake_account(staker, *amount);
 				Pallet::<T>::activate(staker)

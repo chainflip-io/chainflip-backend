@@ -12,7 +12,7 @@ use cf_traits::{
 	},
 	AsyncResult, ThresholdSigner, WaivedFees,
 };
-use frame_support::{dispatch::DispatchResultWithPostInfo, parameter_types, traits::ConstU64};
+use frame_support::{dispatch::DispatchResultWithPostInfo, parameter_types};
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
@@ -222,7 +222,6 @@ impl pallet_cf_staking::Config for Test {
 	type ThresholdCallable = Call;
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
-	type ClaimDelayBufferSeconds = ConstU64<CLAIM_DELAY_BUFFER_SECS>;
 	type RegisterClaim = eth::api::EthereumApi<()>;
 	type EthEnvironmentProvider = MockEthEnvironmentProvider;
 }
@@ -245,6 +244,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			genesis_stakers: vec![(CHARLIE, MIN_STAKE)],
 			minimum_stake: MIN_STAKE,
 			claim_ttl: Duration::from_secs(CLAIM_TTL_SECS),
+			claim_delay_buffer_seconds: CLAIM_DELAY_BUFFER_SECS,
 		},
 	};
 
