@@ -1,10 +1,8 @@
 use crate as pallet_cf_lp;
 use cf_chains::{
-	eth::{
-		api::{EthereumApi, EthereumReplayProtection},
-		assets,
-	},
-	Chain, ChainAbi, ChainEnvironment, Ethereum, ReplayProtectionProvider,
+	eth::{api::EthereumReplayProtection, assets},
+	AllBatch, ApiCall, Chain, ChainAbi, ChainCrypto, ChainEnvironment, Ethereum, FetchAssetParams,
+	ReplayProtectionProvider, TransferAssetParams,
 };
 use cf_primitives::{EthereumAddress, IntentId, ETHEREUM_ETH_ADDRESS};
 use cf_traits::{
@@ -14,8 +12,10 @@ use cf_traits::{
 	},
 	AddressDerivationApi, Broadcaster,
 };
+use codec::{Decode, Encode};
 use frame_support::{instances::Instance1, parameter_types, sp_runtime::app_crypto::sp_core::H160};
 use frame_system as system;
+use scale_info::TypeInfo;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -102,7 +102,7 @@ impl ReplayProtectionProvider<Ethereum> for Test {
 
 pub struct MockBroadcast;
 impl Broadcaster<Ethereum> for MockBroadcast {
-	type ApiCall = EthereumApi<MockEthEnvironment>;
+	type ApiCall = MockAllBatch;
 
 	fn threshold_sign_and_broadcast(_api_call: Self::ApiCall) {}
 }
@@ -123,14 +123,49 @@ impl ChainEnvironment<<Ethereum as Chain>::ChainAsset, <Ethereum as Chain>::Chai
 	}
 }
 
+// TODO: Deduplicate with ingress pallet mocks
+#[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub struct MockAllBatch {
+	nonce: <Ethereum as ChainAbi>::ReplayProtection,
+	fetch_params: Vec<FetchAssetParams<Ethereum>>,
+	transfer_params: Vec<TransferAssetParams<Ethereum>>,
+}
+
+impl AllBatch<Ethereum> for MockAllBatch {
+	fn new_unsigned(
+		fetch_params: Vec<FetchAssetParams<Ethereum>>,
+		transfer_params: Vec<TransferAssetParams<Ethereum>>,
+	) -> Self {
+		// TODO: Give it a nonce
+		Self { nonce: Default::default(), fetch_params, transfer_params }
+	}
+}
+
+impl ApiCall<Ethereum> for MockAllBatch {
+	fn threshold_signature_payload(&self) -> <Ethereum as ChainCrypto>::Payload {
+		unimplemented!()
+	}
+
+	fn signed(self, _threshold_signature: &<Ethereum as ChainCrypto>::ThresholdSignature) -> Self {
+		unimplemented!()
+	}
+
+	fn chain_encoded(&self) -> Vec<u8> {
+		unimplemented!()
+	}
+
+	fn is_signed(&self) -> bool {
+		unimplemented!()
+	}
+}
+
 impl pallet_cf_ingress_egress::Config<Instance1> for Test {
 	type Event = Event;
 	type TargetChain = Ethereum;
 	type AddressDerivation = MockAddressDerivation;
 	type LpProvisioning = LiquidityProvider;
 	type SwapIntentHandler = Self;
-	type ReplayProtection = Self;
-	type AllBatch = EthereumApi<MockEthEnvironment>;
+	type AllBatch = MockAllBatch;
 	type Broadcaster = MockBroadcast;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type WeightInfo = ();

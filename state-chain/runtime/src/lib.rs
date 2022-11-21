@@ -221,7 +221,6 @@ impl pallet_cf_ingress_egress::Config<EthereumInstance> for Runtime {
 	type AddressDerivation = AddressDerivation;
 	type LpProvisioning = LiquidityProvider;
 	type SwapIntentHandler = Swapping;
-	type ReplayProtection = chainflip::EthEnvironment;
 	type AllBatch = eth::api::EthereumApi<EthEnvironment>;
 	type Broadcaster = EthereumBroadcaster;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;

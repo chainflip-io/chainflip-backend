@@ -236,6 +236,7 @@ pub mod pallet {
 		/// The chain that is managed by this vault must implement the api types.
 		type Chain: ChainAbi;
 
+		// TODO: Rename this
 		/// The supported api calls for the chain.
 		type ApiCall: SetAggKeyWithAggKey<Self::Chain>;
 

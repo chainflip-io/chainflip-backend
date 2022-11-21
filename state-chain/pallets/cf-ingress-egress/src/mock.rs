@@ -1,8 +1,10 @@
 pub use crate::{self as pallet_cf_ingress_egress};
-use cf_chains::ReplayProtectionProvider;
 pub use cf_chains::{
 	eth::api::{EthereumApi, EthereumReplayProtection},
 	Chain, ChainAbi, ChainEnvironment,
+};
+use cf_chains::{
+	AllBatch, ApiCall, ChainCrypto, FetchAssetParams, ReplayProtectionProvider, TransferAssetParams,
 };
 pub use cf_primitives::{
 	chains::{assets, Ethereum},
@@ -13,8 +15,10 @@ pub use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
 	Broadcaster,
 };
+use codec::{Decode, Encode};
 use frame_support::{instances::Instance1, parameter_types};
 use frame_system as system;
+use scale_info::TypeInfo;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -97,7 +101,7 @@ impl ReplayProtectionProvider<Ethereum> for Test {
 
 pub struct MockBroadcast;
 impl Broadcaster<Ethereum> for MockBroadcast {
-	type ApiCall = EthereumApi<MockEthEnvironment>;
+	type ApiCall = MockAllBatch;
 
 	fn threshold_sign_and_broadcast(_api_call: Self::ApiCall) {}
 }
@@ -118,14 +122,48 @@ impl ChainEnvironment<<Ethereum as Chain>::ChainAsset, <Ethereum as Chain>::Chai
 	}
 }
 
+#[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub struct MockAllBatch {
+	nonce: <Ethereum as ChainAbi>::ReplayProtection,
+	fetch_params: Vec<FetchAssetParams<Ethereum>>,
+	transfer_params: Vec<TransferAssetParams<Ethereum>>,
+}
+
+impl AllBatch<Ethereum> for MockAllBatch {
+	fn new_unsigned(
+		fetch_params: Vec<FetchAssetParams<Ethereum>>,
+		transfer_params: Vec<TransferAssetParams<Ethereum>>,
+	) -> Self {
+		// TODO: Give it a nonce
+		Self { nonce: Default::default(), fetch_params, transfer_params }
+	}
+}
+
+impl ApiCall<Ethereum> for MockAllBatch {
+	fn threshold_signature_payload(&self) -> <Ethereum as ChainCrypto>::Payload {
+		unimplemented!()
+	}
+
+	fn signed(self, _threshold_signature: &<Ethereum as ChainCrypto>::ThresholdSignature) -> Self {
+		unimplemented!()
+	}
+
+	fn chain_encoded(&self) -> Vec<u8> {
+		unimplemented!()
+	}
+
+	fn is_signed(&self) -> bool {
+		unimplemented!()
+	}
+}
+
 impl crate::Config<Instance1> for Test {
 	type Event = Event;
 	type TargetChain = Ethereum;
 	type AddressDerivation = ();
 	type LpProvisioning = Self;
 	type SwapIntentHandler = Self;
-	type ReplayProtection = Self;
-	type AllBatch = EthereumApi<MockEthEnvironment>;
+	type AllBatch = MockAllBatch;
 	type Broadcaster = MockBroadcast;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type WeightInfo = ();
