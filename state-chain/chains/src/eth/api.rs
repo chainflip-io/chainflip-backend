@@ -53,25 +53,19 @@ impl<E: ReplayProtectionProvider<Ethereum>> SetAggKeyWithAggKey<Ethereum> for Et
 	}
 }
 
-impl<E> SetGovKeyWithAggKey<Ethereum> for EthereumApi<E> {
-	fn new_unsigned(
-		replay_protection: EthereumReplayProtection,
-		new_gov_key: eth::Address,
-	) -> Self {
+impl<E: ReplayProtectionProvider<Ethereum>> SetGovKeyWithAggKey<Ethereum> for EthereumApi<E> {
+	fn new_unsigned(new_gov_key: eth::Address) -> Self {
 		Self::SetGovKeyWithAggKey(set_gov_key_with_agg_key::SetGovKeyWithAggKey::new_unsigned(
-			replay_protection,
+			E::replay_protection(),
 			new_gov_key,
 		))
 	}
 }
 
-impl<E> SetCommKeyWithAggKey<Ethereum> for EthereumApi<E> {
-	fn new_unsigned(
-		replay_protection: EthereumReplayProtection,
-		new_comm_key: eth::Address,
-	) -> Self {
+impl<E: ReplayProtectionProvider<Ethereum>> SetCommKeyWithAggKey<Ethereum> for EthereumApi<E> {
+	fn new_unsigned(new_comm_key: eth::Address) -> Self {
 		Self::SetCommKeyWithAggKey(set_comm_key_with_agg_key::SetCommKeyWithAggKey::new_unsigned(
-			replay_protection,
+			E::replay_protection(),
 			new_comm_key,
 		))
 	}

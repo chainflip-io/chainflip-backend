@@ -445,7 +445,6 @@ impl pallet_cf_tokenholder_governance::Config for Runtime {
 	type Event = Event;
 	type FeePayment = Flip;
 	type Chain = Ethereum;
-	type ReplayProtectionProvider = chainflip::EthEnvironment;
 	type StakingInfo = Flip;
 	type ApiCalls = eth::api::EthereumApi<EthEnvironment>;
 	type Broadcaster = EthereumBroadcaster;

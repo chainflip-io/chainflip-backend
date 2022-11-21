@@ -104,11 +104,8 @@ pub struct MockApiCalls {
 }
 
 impl SetGovKeyWithAggKey<MockEthereum> for MockApiCalls {
-	fn new_unsigned(
-		nonce: <MockEthereum as ChainAbi>::ReplayProtection,
-		new_key: <MockEthereum as ChainCrypto>::GovKey,
-	) -> Self {
-		Self { nonce, new_key }
+	fn new_unsigned(new_key: <MockEthereum as ChainCrypto>::GovKey) -> Self {
+		Self { nonce: Default::default(), new_key }
 	}
 }
 
@@ -137,11 +134,8 @@ impl ApiCall<MockEthereum> for MockApiCalls {
 pub struct MockBroadcaster;
 
 impl SetCommKeyWithAggKey<MockEthereum> for MockApiCalls {
-	fn new_unsigned(
-		nonce: <MockEthereum as ChainAbi>::ReplayProtection,
-		new_key: <MockEthereum as ChainCrypto>::GovKey,
-	) -> Self {
-		Self { nonce, new_key }
+	fn new_unsigned(new_key: <MockEthereum as ChainCrypto>::GovKey) -> Self {
+		Self { nonce: Default::default(), new_key }
 	}
 }
 
@@ -197,7 +191,6 @@ impl pallet_cf_tokenholder_governance::Config for Test {
 	type Event = Event;
 	type FeePayment = Flip;
 	type Chain = MockEthereum;
-	type ReplayProtectionProvider = MockReplayProvider;
 	type StakingInfo = Flip;
 	type ApiCalls = MockApiCalls;
 	type Broadcaster = MockBroadcaster;

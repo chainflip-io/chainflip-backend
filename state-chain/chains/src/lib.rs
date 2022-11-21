@@ -187,17 +187,11 @@ pub trait SetAggKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
 }
 
 pub trait SetGovKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
-	fn new_unsigned(
-		replay_protection: Abi::ReplayProtection,
-		new_gov_key: <Abi as ChainCrypto>::GovKey,
-	) -> Self;
+	fn new_unsigned(new_gov_key: <Abi as ChainCrypto>::GovKey) -> Self;
 }
 
 pub trait SetCommKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
-	fn new_unsigned(
-		replay_protection: Abi::ReplayProtection,
-		new_comm_key: <Abi as ChainCrypto>::GovKey,
-	) -> Self;
+	fn new_unsigned(new_comm_key: <Abi as ChainCrypto>::GovKey) -> Self;
 }
 
 /// Constructs the `UpdateFlipSupply` api call.

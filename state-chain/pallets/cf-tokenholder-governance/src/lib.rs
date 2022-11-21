@@ -25,7 +25,7 @@ pub enum Proposal<T: Config> {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_chains::{ChainAbi, ReplayProtectionProvider};
+	use cf_chains::ChainAbi;
 	use cf_traits::{Broadcaster, Chainflip, FeePayment, StakingInfo};
 
 	use cf_chains::{
@@ -51,8 +51,6 @@ pub mod pallet {
 		type Chain: ChainAbi;
 		/// Smart contract calls.
 		type ApiCalls: SetGovKeyApiCall<Self::Chain> + SetCommunityKeyApiCall<Self::Chain>;
-		/// Provided replay protection.
-		type ReplayProtectionProvider: ReplayProtectionProvider<Self::Chain>;
 		/// Provides information about the current distribution of on-chain stake.
 		type StakingInfo: StakingInfo<
 			AccountId = <Self as frame_system::Config>::AccountId,
@@ -138,10 +136,7 @@ pub mod pallet {
 			if let Some((enactment_block, gov_key)) = GovKeyUpdateAwaitingEnactment::<T>::get() {
 				if enactment_block == current_block {
 					T::Broadcaster::threshold_sign_and_broadcast(
-						<T::ApiCalls as SetGovKeyApiCall<T::Chain>>::new_unsigned(
-							T::ReplayProtectionProvider::replay_protection(),
-							gov_key,
-						),
+						<T::ApiCalls as SetGovKeyApiCall<T::Chain>>::new_unsigned(gov_key),
 					);
 					Self::deposit_event(Event::<T>::ProposalEnacted {
 						proposal: Proposal::<T>::SetGovernanceKey(gov_key),
@@ -153,10 +148,7 @@ pub mod pallet {
 			if let Some((enactment_block, comm_key)) = CommKeyUpdateAwaitingEnactment::<T>::get() {
 				if enactment_block == current_block {
 					T::Broadcaster::threshold_sign_and_broadcast(
-						<T::ApiCalls as SetCommunityKeyApiCall<T::Chain>>::new_unsigned(
-							T::ReplayProtectionProvider::replay_protection(),
-							comm_key,
-						),
+						<T::ApiCalls as SetCommunityKeyApiCall<T::Chain>>::new_unsigned(comm_key),
 					);
 					Self::deposit_event(Event::<T>::ProposalEnacted {
 						proposal: Proposal::<T>::SetCommunityKey(comm_key),
