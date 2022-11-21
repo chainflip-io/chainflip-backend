@@ -113,5 +113,8 @@ async fn connect_two_nodes() {
 		)]))
 		.unwrap();
 
+	// Give the node some time to connect
+	tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
 	let _ = expect_recv_with_timeout(&mut node2.msg_receiver).await;
 }
