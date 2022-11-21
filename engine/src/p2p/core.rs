@@ -258,7 +258,7 @@ impl P2PContext {
 		match self.active_connections.get(&account_id) {
 			Some(connection_state) => match connection_state {
 				ConnectionState::Pending(peer) => {
-					let socket = self.connect_to_peer2(peer.clone());
+					let socket = self.connect_to_peer(peer.clone());
 					socket.send(payload);
 				},
 				ConnectionState::Connected(socket) => {
@@ -334,13 +334,13 @@ impl P2PContext {
 			.remove(&account_id)
 			.expect("Can only reconnect to existing peers")
 		{
-			self.connect_to_peer2(existing_socket.peer().clone());
+			self.connect_to_peer(existing_socket.peer().clone());
 		} else {
 			panic!("Must be in a connected state to reconnect");
 		}
 	}
 
-	fn connect_to_peer2(&mut self, peer: PeerInfo) -> &mut ConnectedOutgoingSocket {
+	fn connect_to_peer(&mut self, peer: PeerInfo) -> &mut ConnectedOutgoingSocket {
 		slog::debug!(self.logger, "Connecting to: {}", peer.account_id);
 
 		let account_id = peer.account_id.clone();
