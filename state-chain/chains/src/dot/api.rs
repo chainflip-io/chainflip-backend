@@ -2,7 +2,7 @@ pub mod batch_fetch_and_transfer;
 pub mod create_anonymous_vault;
 pub mod rotate_vault_proxy;
 
-use super::PolkadotPublicKey;
+use super::{PolkadotPublicKey, PolkadotReplayProtection};
 use crate::{dot::Polkadot, *};
 use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound};
 use sp_std::marker::PhantomData;

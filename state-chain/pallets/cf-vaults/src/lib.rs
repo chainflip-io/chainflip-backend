@@ -7,9 +7,8 @@ use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex};
 use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, Broadcaster, CeremonyIdProvider, Chainflip,
-	CurrentEpochIndex, EpochTransitionHandler, EthEnvironmentProvider, KeyProvider,
-	ReplayProtectionProvider, SystemStateManager, ThresholdSigner, VaultRotator,
-	VaultTransitionHandler,
+	CurrentEpochIndex, EpochTransitionHandler, KeyProvider, SystemStateManager, ThresholdSigner,
+	VaultRotator, VaultTransitionHandler,
 };
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
@@ -261,12 +260,6 @@ pub mod pallet {
 
 		/// Ceremony Id source for keygen ceremonies.
 		type CeremonyIdProvider: CeremonyIdProvider<CeremonyId = CeremonyId>;
-
-		/// Something that can provide the key manager address and chain id.
-		type EthEnvironmentProvider: EthEnvironmentProvider;
-
-		// Something that can give us the next nonce.
-		type ReplayProtectionProvider: ReplayProtectionProvider<Self::Chain>;
 
 		// A trait which allows us to put the chain into maintenance mode.
 		type SystemStateManager: SystemStateManager;
