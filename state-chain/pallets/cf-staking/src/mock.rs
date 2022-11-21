@@ -1,7 +1,7 @@
 use crate as pallet_cf_staking;
 use cf_chains::{
 	eth::{self, api::EthereumReplayProtection, Ethereum},
-	ChainAbi, ChainCrypto,
+	ChainAbi, ChainCrypto, ReplayProtectionProvider,
 };
 use cf_primitives::{AuthorityCount, CeremonyId};
 use cf_traits::{
@@ -32,7 +32,7 @@ use cf_traits::{
 		ensure_origin_mock::NeverFailingOriginCheck,
 		eth_environment_provider::MockEthEnvironmentProvider, time_source,
 	},
-	Chainflip, ReplayProtectionProvider,
+	Chainflip,
 };
 
 impl pallet_cf_account_roles::Config for Test {

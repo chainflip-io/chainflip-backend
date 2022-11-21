@@ -208,7 +208,6 @@ impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 	type OffenceReporter = Reputation;
 	type CeremonyIdProvider = pallet_cf_validator::CeremonyIdProvider<Self>;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
-	type ReplayProtectionProvider = chainflip::EthEnvironment;
 	type SystemStateManager = pallet_cf_environment::SystemStateProvider<Runtime>;
 }
 

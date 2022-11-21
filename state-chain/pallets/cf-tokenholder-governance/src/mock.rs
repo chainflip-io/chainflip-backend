@@ -1,6 +1,7 @@
 use crate::{self as pallet_cf_tokenholder_governance};
 use cf_chains::{
 	eth::api::EthereumReplayProtection, mocks::MockEthereum, ApiCall, ChainAbi, ChainCrypto,
+	ReplayProtectionProvider,
 };
 use cf_traits::{
 	impl_mock_stake_transfer, impl_mock_waived_fees,
@@ -8,7 +9,7 @@ use cf_traits::{
 		ensure_origin_mock::NeverFailingOriginCheck, epoch_info::MockEpochInfo,
 		system_state_info::MockSystemStateInfo,
 	},
-	Broadcaster, Chainflip, ReplayProtectionProvider, StakeTransfer, WaivedFees,
+	Broadcaster, Chainflip, StakeTransfer, WaivedFees,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{

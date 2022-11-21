@@ -1,7 +1,7 @@
 use crate as pallet_cf_emissions;
 use cf_chains::{
 	eth::api::EthereumReplayProtection, mocks::MockEthereum, ApiCall, ChainAbi, ChainCrypto,
-	UpdateFlipSupply,
+	ReplayProtectionProvider, UpdateFlipSupply,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -34,7 +34,7 @@ type Block = frame_system::mocking::MockBlock<Test>;
 use cf_traits::{
 	impl_mock_waived_fees,
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, epoch_info},
-	Chainflip, ReplayProtectionProvider, RewardsDistribution,
+	Chainflip, RewardsDistribution,
 };
 
 pub type AccountId = u64;

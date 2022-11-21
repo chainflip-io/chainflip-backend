@@ -13,11 +13,14 @@ mod tests;
 pub mod weights;
 pub use weights::WeightInfo;
 
-use cf_chains::{AllBatch, Chain, ChainAbi, ChainCrypto, FetchAssetParams, TransferAssetParams};
+use cf_chains::{
+	AllBatch, Chain, ChainAbi, ChainCrypto, FetchAssetParams, ReplayProtectionProvider,
+	TransferAssetParams,
+};
 use cf_primitives::{Asset, AssetAmount, ForeignChainAddress, IntentId};
 use cf_traits::{
 	liquidity::LpProvisioningApi, AddressDerivationApi, Broadcaster, EgressApi, IngressApi,
-	ReplayProtectionProvider, SwapIntentHandler,
+	SwapIntentHandler,
 };
 use frame_support::{pallet_prelude::*, sp_runtime::DispatchError};
 pub use pallet::*;

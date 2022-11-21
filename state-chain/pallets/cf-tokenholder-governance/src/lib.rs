@@ -25,8 +25,8 @@ pub enum Proposal<T: Config> {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_chains::ChainAbi;
-	use cf_traits::{Broadcaster, Chainflip, FeePayment, ReplayProtectionProvider, StakingInfo};
+	use cf_chains::{ChainAbi, ReplayProtectionProvider};
+	use cf_traits::{Broadcaster, Chainflip, FeePayment, StakingInfo};
 
 	use cf_chains::{
 		SetCommKeyWithAggKey as SetCommunityKeyApiCall, SetGovKeyWithAggKey as SetGovKeyApiCall,

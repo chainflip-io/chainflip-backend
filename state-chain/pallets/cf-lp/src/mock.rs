@@ -4,7 +4,7 @@ use cf_chains::{
 		api::{EthereumApi, EthereumReplayProtection},
 		assets,
 	},
-	Chain, ChainAbi, ChainEnvironment, Ethereum,
+	Chain, ChainAbi, ChainEnvironment, Ethereum, ReplayProtectionProvider,
 };
 use cf_primitives::{EthereumAddress, IntentId, ETHEREUM_ETH_ADDRESS};
 use cf_traits::{
@@ -12,7 +12,7 @@ use cf_traits::{
 		bid_info::MockBidInfo, ensure_origin_mock::NeverFailingOriginCheck,
 		staking_info::MockStakingInfo, system_state_info::MockSystemStateInfo,
 	},
-	AddressDerivationApi, Broadcaster, ReplayProtectionProvider,
+	AddressDerivationApi, Broadcaster,
 };
 use frame_support::{instances::Instance1, parameter_types, sp_runtime::app_crypto::sp_core::H160};
 use frame_system as system;

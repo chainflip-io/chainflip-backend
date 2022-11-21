@@ -49,15 +49,12 @@ where
 
 impl<E> SetAggKeyWithAggKey<Polkadot> for PolkadotApi<E>
 where
-	E: ChainEnvironment<SystemAccounts, <Polkadot as Chain>::ChainAccount>,
+	E: ChainEnvironment<SystemAccounts, <Polkadot as Chain>::ChainAccount>
+		+ ReplayProtectionProvider<Polkadot>,
 {
-	fn new_unsigned(
-		replay_protection: PolkadotReplayProtection,
-		old_key: PolkadotPublicKey,
-		new_key: PolkadotPublicKey,
-	) -> Self {
+	fn new_unsigned(old_key: PolkadotPublicKey, new_key: PolkadotPublicKey) -> Self {
 		Self::RotateVaultProxy(rotate_vault_proxy::RotateVaultProxy::new_unsigned(
-			replay_protection,
+			E::replay_protection(),
 			new_key,
 			old_key,
 			E::lookup(SystemAccounts::Proxy).expect("Proxy account lookup should never fail."),

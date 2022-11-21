@@ -2,8 +2,8 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-use cf_chains::UpdateFlipSupply;
-use cf_traits::{Broadcaster, EthEnvironmentProvider, ReplayProtectionProvider};
+use cf_chains::{ReplayProtectionProvider, UpdateFlipSupply};
+use cf_traits::{Broadcaster, EthEnvironmentProvider};
 use frame_support::dispatch::Weight;
 use frame_system::pallet_prelude::BlockNumberFor;
 pub use pallet::*;

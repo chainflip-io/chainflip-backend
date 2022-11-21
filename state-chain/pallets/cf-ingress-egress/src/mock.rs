@@ -1,4 +1,5 @@
 pub use crate::{self as pallet_cf_ingress_egress};
+use cf_chains::ReplayProtectionProvider;
 pub use cf_chains::{
 	eth::api::{EthereumApi, EthereumReplayProtection},
 	Chain, ChainAbi, ChainEnvironment,
@@ -10,7 +11,7 @@ pub use cf_primitives::{
 
 pub use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
-	Broadcaster, ReplayProtectionProvider,
+	Broadcaster,
 };
 use frame_support::{instances::Instance1, parameter_types};
 use frame_system as system;
