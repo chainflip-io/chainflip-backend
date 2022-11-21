@@ -75,8 +75,6 @@ type RuntimeRotationState<T> =
 pub enum RotationPhase<T: Config> {
 	Idle,
 	KeygensInProgress(RuntimeRotationState<T>),
-	// Keygen complete includes the keygen verification step.
-	KeygensComplete(RuntimeRotationState<T>),
 	ActivatingKeys(RuntimeRotationState<T>),
 	NewKeyActivated(RuntimeRotationState<T>),
 	SessionRotating(RuntimeRotationState<T>),
@@ -404,9 +402,8 @@ pub mod pallet {
 						// We can do this with an enum instead of Result<()>
 						// We have successfully done keygen verification
 						AsyncResult::Ready(VaultStatus::KeygenComplete) => {
-							Self::set_rotation_phase(RotationPhase::KeygensComplete(
-								rotation_state,
-							));
+							T::MultiVaultRotator::activate_all_keys();
+							Self::set_rotation_phase(RotationPhase::ActivatingKeys(rotation_state));
 						},
 						AsyncResult::Ready(VaultStatus::Failed(offenders)) => {
 							// let weight =
@@ -438,11 +435,6 @@ pub mod pallet {
 						},
 					};
 					// TODO: Use actual weights
-					0 as Weight
-				},
-				RotationPhase::KeygensComplete(rotation_state) => {
-					T::MultiVaultRotator::activate_all_keys();
-					Self::set_rotation_phase(RotationPhase::ActivatingKeys(rotation_state));
 					0 as Weight
 				},
 				RotationPhase::ActivatingKeys(rotation_state) => {
