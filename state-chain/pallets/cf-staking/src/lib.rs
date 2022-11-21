@@ -46,7 +46,7 @@ pub const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
 pub mod pallet {
 
 	use super::*;
-	use cf_chains::{eth::Ethereum, ApiCall, ReplayProtectionProvider};
+	use cf_chains::{eth::Ethereum, ApiCall};
 	use cf_traits::AccountRoleRegistry;
 	use frame_support::{pallet_prelude::*, Parameter};
 	use frame_system::pallet_prelude::*;
@@ -107,9 +107,6 @@ pub mod pallet {
 			AccountId = <Self as frame_system::Config>::AccountId,
 			Balance = Self::Balance,
 		>;
-
-		/// Something that can provide a nonce for the threshold signature.
-		type ReplayProtectionProvider: ReplayProtectionProvider<Ethereum>;
 
 		/// Something that can provide the key manager address and chain id.
 		type EthEnvironmentProvider: EthEnvironmentProvider;
@@ -381,7 +378,6 @@ pub mod pallet {
 			);
 
 			let call = T::RegisterClaim::new_unsigned(
-				T::ReplayProtectionProvider::replay_protection(),
 				<T as Config>::StakerId::from_ref(&account_id).as_ref(),
 				amount.into(),
 				&address,

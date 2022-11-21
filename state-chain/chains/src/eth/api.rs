@@ -71,16 +71,10 @@ impl<E: ReplayProtectionProvider<Ethereum>> SetCommKeyWithAggKey<Ethereum> for E
 	}
 }
 
-impl<E> RegisterClaim<Ethereum> for EthereumApi<E> {
-	fn new_unsigned(
-		replay_protection: EthereumReplayProtection,
-		node_id: &[u8; 32],
-		amount: u128,
-		address: &[u8; 20],
-		expiry: u64,
-	) -> Self {
+impl<E: ReplayProtectionProvider<Ethereum>> RegisterClaim<Ethereum> for EthereumApi<E> {
+	fn new_unsigned(node_id: &[u8; 32], amount: u128, address: &[u8; 20], expiry: u64) -> Self {
 		Self::RegisterClaim(register_claim::RegisterClaim::new_unsigned(
-			replay_protection,
+			E::replay_protection(),
 			node_id,
 			amount,
 			address,

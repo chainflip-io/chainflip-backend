@@ -217,12 +217,11 @@ impl pallet_cf_staking::Config for Test {
 	type Flip = Flip;
 	type WeightInfo = ();
 	type StakerId = AccountId;
-	type ReplayProtectionProvider = Self;
 	type ThresholdSigner = MockThresholdSigner;
 	type ThresholdCallable = Call;
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
-	type RegisterClaim = eth::api::EthereumApi<()>;
+	type RegisterClaim = eth::api::EthereumApi<Self>;
 	type EthEnvironmentProvider = MockEthEnvironmentProvider;
 }
 
