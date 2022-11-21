@@ -131,7 +131,7 @@ pub mod pallet {
 	#[cfg(feature = "ibiza")]
 	#[pallet::storage]
 	#[pallet::getter(fn polkadot_current_proxy_account_id)]
-	/// The Polkadot Vault Anonymous Account
+	/// The current proxy Account for polkadot vault
 	pub type PolkadotCurrentProxyAccountId<T> = StorageValue<_, PolkadotAccountId, OptionQuery>;
 
 	#[cfg(feature = "ibiza")]
