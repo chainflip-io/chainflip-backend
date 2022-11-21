@@ -77,17 +77,6 @@ impl std::fmt::Display for PeerInfo {
 	}
 }
 
-/// Used to track "registration" status on the network
-enum RegistrationStatus {
-	/// The node is not yet known to the network (its peer info
-	/// may not be known to the network yet)
-	/// (Stores future peers to connect to when then node is registered)
-	Pending(Vec<PeerInfo>),
-	/// The node is registered, i.e. its peer info has been
-	/// recorded/updated
-	Registered,
-}
-
 fn ed25519_secret_key_to_x25519_secret_key(
 	ed25519_sk: &ed25519_dalek::SecretKey,
 ) -> x25519_dalek::StaticSecret {
@@ -116,6 +105,12 @@ pub fn ed25519_public_key_to_x25519_public_key(
 fn to_string(pk: &XPublicKey) -> String {
 	hex::encode(pk.as_bytes())
 }
+
+enum ConnectionState {
+	Pending(PeerInfo),
+	Connected(ConnectedOutgoingSocket),
+}
+
 /// The state a nodes needs for p2p
 struct P2PContext {
 	/// Our own key, used for initiating and accepting secure connections
@@ -125,7 +120,7 @@ struct P2PContext {
 	authenticator: Arc<Authenticator>,
 	/// NOTE: The mapping is from AccountId because we want to optimise for message
 	/// sending, which uses AccountId
-	active_connections: BTreeMap<AccountId, ConnectedOutgoingSocket>,
+	active_connections: BTreeMap<AccountId, ConnectionState>,
 	/// NOTE: this is used for incoming messages when we want to map them to account_id
 	/// NOTE: we don't use BTreeMap here because XPublicKey doesn't implement Ord.
 	x25519_to_account_id: HashMap<XPublicKey, AccountId>,
@@ -134,8 +129,6 @@ struct P2PContext {
 	own_peer_info_sender: UnboundedSender<PeerInfo>,
 	/// This is how we communicate with the "monitor" thread
 	monitor_handle: monitor::MonitorHandle,
-	/// Our own "registration" status on the network
-	status: RegistrationStatus,
 	our_account_id: AccountId,
 	/// NOTE: zmq context is intentionally declared at the bottom of the struct
 	/// to ensure its destructor is called after that of any zmq sockets
@@ -197,7 +190,6 @@ pub fn start(
 		incoming_message_sender,
 		own_peer_info_sender,
 		our_account_id,
-		status: RegistrationStatus::Pending(vec![]),
 		logger,
 	};
 
@@ -248,7 +240,7 @@ impl P2PContext {
 		}
 	}
 
-	fn send_messages(&self, messages: OutgoingMultisigStageMessages) {
+	fn send_messages(&mut self, messages: OutgoingMultisigStageMessages) {
 		match messages {
 			OutgoingMultisigStageMessages::Broadcast(account_ids, payload) => {
 				for acc_id in account_ids {
@@ -262,10 +254,16 @@ impl P2PContext {
 		}
 	}
 
-	fn send_message(&self, account_id: AccountId, payload: Vec<u8>) {
+	fn send_message(&mut self, account_id: AccountId, payload: Vec<u8>) {
 		match self.active_connections.get(&account_id) {
-			Some(socket) => {
-				socket.send(payload);
+			Some(connection_state) => match connection_state {
+				ConnectionState::Pending(peer) => {
+					let socket = self.connect_to_peer2(peer.clone());
+					socket.send(payload);
+				},
+				ConnectionState::Connected(socket) => {
+					socket.send(payload);
+				},
 			},
 			None => {
 				slog::warn!(
@@ -297,11 +295,15 @@ impl P2PContext {
 		}
 	}
 
-	fn remove_peer_and_disconnect_socket(&mut self, socket: ConnectedOutgoingSocket) {
-		let pubkey = &socket.peer().pubkey;
-		self.authenticator.remove_peer(pubkey);
+	fn remove_peer_and_disconnect_socket(&mut self, connection_state: ConnectionState) {
+		let pubkey = match connection_state {
+			ConnectionState::Pending(peer_info) => peer_info.pubkey,
+			ConnectionState::Connected(socket) => socket.peer().pubkey,
+		};
+
+		self.authenticator.remove_peer(&pubkey);
 		assert!(
-			self.x25519_to_account_id.remove(pubkey).is_some(),
+			self.x25519_to_account_id.remove(&pubkey).is_some(),
 			"Invariant violation: pubkey must be present"
 		);
 	}
@@ -316,8 +318,8 @@ impl P2PContext {
 		// on peer from disconnecting from "client side".
 		// TODO: ensure that stale/inactive connections are terminated
 
-		if let Some(existing_socket) = self.active_connections.remove(&account_id) {
-			self.remove_peer_and_disconnect_socket(existing_socket);
+		if let Some(existing_connection_state) = self.active_connections.remove(&account_id) {
+			self.remove_peer_and_disconnect_socket(existing_connection_state);
 		} else {
 			slog::error!(self.logger, "Failed remove unknown peer: {}", account_id);
 		}
@@ -327,15 +329,18 @@ impl P2PContext {
 	fn reconnect_to_peer(&mut self, account_id: AccountId) {
 		slog::info!(self.logger, "Reconnecting to peer: {}", account_id);
 
-		let existing_socket = self
+		if let ConnectionState::Connected(existing_socket) = self
 			.active_connections
 			.remove(&account_id)
-			.expect("Can only reconnect to existing peers");
-
-		self.connect_to_peer(existing_socket.peer().clone());
+			.expect("Can only reconnect to existing peers")
+		{
+			self.connect_to_peer2(existing_socket.peer().clone());
+		} else {
+			panic!("Must be in a connected state to reconnect");
+		}
 	}
 
-	fn connect_to_peer(&mut self, peer: PeerInfo) {
+	fn connect_to_peer2(&mut self, peer: PeerInfo) -> &mut ConnectedOutgoingSocket {
 		slog::debug!(self.logger, "Connecting to: {}", peer.account_id);
 
 		let account_id = peer.account_id.clone();
@@ -346,7 +351,19 @@ impl P2PContext {
 
 		let connected_socket = socket.connect(peer, &self.logger);
 
-		assert!(self.active_connections.insert(account_id, connected_socket).is_none());
+		*self
+			.active_connections
+			.get_mut(&account_id)
+			.expect("Connect is only called on existing entries") =
+			ConnectionState::Connected(connected_socket);
+
+		if let Some(ConnectionState::Connected(socket)) =
+			self.active_connections.get_mut(&account_id)
+		{
+			return socket
+		} else {
+			panic!("By construction");
+		}
 	}
 
 	fn handle_own_registration(&mut self, own_info: PeerInfo) {
@@ -356,15 +373,6 @@ impl P2PContext {
 		);
 
 		self.own_peer_info_sender.send(own_info).unwrap();
-
-		if let RegistrationStatus::Pending(peers) = &mut self.status {
-			let peers = std::mem::take(peers);
-			// Connect to all outstanding peers
-			for peer in peers {
-				self.connect_to_peer(peer)
-			}
-			self.status = RegistrationStatus::Registered;
-		};
 	}
 
 	fn add_or_update_peer(&mut self, peer: PeerInfo) {
@@ -392,16 +400,8 @@ impl P2PContext {
 
 		self.x25519_to_account_id.insert(*peer_pubkey, peer.account_id.clone());
 
-		match &mut self.status {
-			RegistrationStatus::Pending(peers) => {
-				// Not ready to start connecting to peers yet
-				slog::info!(self.logger, "Delaying connecting to {}", peer.account_id);
-				peers.push(peer);
-			},
-			RegistrationStatus::Registered => {
-				self.connect_to_peer(peer);
-			},
-		}
+		self.active_connections
+			.insert(peer.account_id.clone(), ConnectionState::Pending(peer));
 	}
 
 	fn handle_peer_update(&mut self, peer: PeerInfo) {
