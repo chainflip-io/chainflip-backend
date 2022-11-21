@@ -4,7 +4,10 @@ use super::{PeerInfo, PeerUpdate};
 use crate::p2p::OutgoingMultisigStageMessages;
 use sp_core::ed25519::Public;
 use state_chain_runtime::AccountId;
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tokio::sync::{
+	broadcast,
+	mpsc::{UnboundedReceiver, UnboundedSender},
+};
 use utilities::Port;
 
 fn create_node_info(id: AccountId, node_key: &ed25519_dalek::Keypair, port: Port) -> PeerInfo {
@@ -28,11 +31,13 @@ fn spawn_node(
 	logger: &slog::Logger,
 ) -> Node {
 	let account_id = AccountId::new([idx as u8 + 1; 32]);
+	let (epoch_start_sender, epoch_start_receiver) = broadcast::channel(1);
 	let (msg_sender, peer_update_sender, msg_receiver, _, fut) = super::start(
 		key,
 		our_peer_info.port,
 		peer_infos.to_vec(),
 		account_id,
+		epoch_start_receiver,
 		&logger.new(slog::o!("node" => idx)),
 	);
 

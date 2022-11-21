@@ -15,11 +15,14 @@ use auth::Authenticator;
 use serde::{Deserialize, Serialize};
 use sp_core::ed25519;
 use state_chain_runtime::AccountId;
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tokio::sync::{
+	broadcast,
+	mpsc::{UnboundedReceiver, UnboundedSender},
+};
 use utilities::Port;
 use x25519_dalek::StaticSecret;
 
-use crate::{logging::COMPONENT_KEY, p2p::OutgoingMultisigStageMessages};
+use crate::{eth::EpochStart, logging::COMPONENT_KEY, p2p::OutgoingMultisigStageMessages};
 use socket::OutgoingSocket;
 
 use self::socket::ConnectedOutgoingSocket;
@@ -141,6 +144,7 @@ pub fn start(
 	port: Port,
 	current_peers: Vec<PeerInfo>,
 	our_account_id: AccountId,
+	epoch_start_receiver: broadcast::Receiver<EpochStart>,
 	logger: &slog::Logger,
 ) -> (
 	UnboundedSender<OutgoingMultisigStageMessages>,
@@ -207,6 +211,7 @@ pub fn start(
 		incoming_message_receiver_ed25519,
 		peer_update_receiver,
 		reconnect_receiver,
+		epoch_start_receiver,
 	);
 
 	(out_msg_sender, peer_update_sender, incoming_message_receiver, own_peer_info_receiver, fut)
@@ -219,6 +224,7 @@ impl P2PContext {
 		mut incoming_message_receiver: UnboundedReceiver<(XPublicKey, Vec<u8>)>,
 		mut peer_update_receiver: UnboundedReceiver<PeerUpdate>,
 		mut reconnect_receiver: UnboundedReceiver<AccountId>,
+		mut epoch_start_receiver: broadcast::Receiver<EpochStart>,
 	) {
 		loop {
 			tokio::select! {
@@ -235,6 +241,13 @@ impl P2PContext {
 				}
 				Some(account_id) = reconnect_receiver.recv() => {
 					self.reconnect_to_peer(account_id);
+				}
+				Ok(_) = epoch_start_receiver.recv() => {
+					for (_, connection_state) in &mut self.active_connections {
+						if let ConnectionState::Connected(socket) = connection_state {
+							*connection_state = ConnectionState::Pending(socket.peer().clone());
+						}
+					}
 				}
 			}
 		}
