@@ -102,15 +102,14 @@ impl<E> RegisterClaim<Ethereum> for EthereumApi<E> {
 	}
 }
 
-impl<E> UpdateFlipSupply<Ethereum> for EthereumApi<E> {
+impl<E: ReplayProtectionProvider<Ethereum>> UpdateFlipSupply<Ethereum> for EthereumApi<E> {
 	fn new_unsigned(
-		replay_protection: EthereumReplayProtection,
 		new_total_supply: u128,
 		block_number: u64,
 		stake_manager_address: &[u8; 20],
 	) -> Self {
 		Self::UpdateFlipSupply(update_flip_supply::UpdateFlipSupply::new_unsigned(
-			replay_protection,
+			E::replay_protection(),
 			new_total_supply,
 			block_number,
 			stake_manager_address,

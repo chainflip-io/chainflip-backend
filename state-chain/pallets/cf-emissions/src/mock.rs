@@ -175,13 +175,13 @@ pub struct MockUpdateFlipSupply {
 
 impl UpdateFlipSupply<MockEthereum> for MockUpdateFlipSupply {
 	fn new_unsigned(
-		nonce: <MockEthereum as ChainAbi>::ReplayProtection,
 		new_total_supply: u128,
 		block_number: u64,
 		stake_manager_address: &[u8; 20],
 	) -> Self {
 		Self {
-			nonce,
+			// TODO: Use test nonce
+			nonce: Default::default(),
 			new_total_supply,
 			block_number,
 			stake_manager_address: *stake_manager_address,
@@ -240,7 +240,6 @@ impl pallet_cf_emissions::Config for Test {
 	type Issuance = pallet_cf_flip::FlipIssuance<Test>;
 	type RewardsDistribution = MockRewardsDistribution;
 	type CompoundingInterval = HeartbeatBlockInterval;
-	type ReplayProtectionProvider = Self;
 	type EthEnvironmentProvider = MockEthEnvironmentProvider;
 	type Broadcaster = MockBroadcast;
 	type WeightInfo = ();
