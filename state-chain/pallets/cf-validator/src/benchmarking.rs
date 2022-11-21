@@ -345,7 +345,7 @@ benchmarks! {
 	verify {
 		assert!(matches!(
 			CurrentRotationPhase::<T>::get(),
-			RotationPhase::NewKeyActivated(..)
+			RotationPhase::NewKeysActivated(..)
 		));
 	}
 
@@ -378,7 +378,7 @@ benchmarks! {
 		);
 	}
 
-	/**** 3. RotationPhase::NewKeyActivated ****/
+	/**** 3. RotationPhase::NewKeysActivated ****/
 	/**** 4. RotationPhase::SessionRotating ****/
 	/**** (Both phases have equal weight) ****/
 
@@ -390,16 +390,16 @@ benchmarks! {
 		start_vault_rotation::<T>(a, 50, 1);
 		match CurrentRotationPhase::<T>::get() {
 			RotationPhase::KeygensInProgress(rotation_state) =>
-				CurrentRotationPhase::<T>::put(RotationPhase::NewKeyActivated(rotation_state)),
-			_ => panic!("phase should be NewKeyActivated"),
+				CurrentRotationPhase::<T>::put(RotationPhase::NewKeysActivated(rotation_state)),
+			_ => panic!("phase should be NewKeysActivated"),
 		}
 
 		// This assertion ensures we are using the correct weight parameter.
 		assert_eq!(
 			match CurrentRotationPhase::<T>::get() {
-				RotationPhase::NewKeyActivated(rotation_state) => Some(rotation_state.num_primary_candidates()),
+				RotationPhase::NewKeysActivated(rotation_state) => Some(rotation_state.num_primary_candidates()),
 				_ => None,
-			}.expect("phase should be NewKeyActivated"),
+			}.expect("phase should be NewKeysActivated"),
 			a,
 			"Incorrect weight parameters."
 		);
@@ -410,7 +410,7 @@ benchmarks! {
 		assert!(
 			matches!(
 				CurrentRotationPhase::<T>::get(),
-				RotationPhase::NewKeyActivated(..),
+				RotationPhase::NewKeysActivated(..),
 			),
 		);
 	}

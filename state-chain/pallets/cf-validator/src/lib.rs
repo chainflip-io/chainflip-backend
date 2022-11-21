@@ -76,7 +76,7 @@ pub enum RotationPhase<T: Config> {
 	Idle,
 	KeygensInProgress(RuntimeRotationState<T>),
 	ActivatingKeys(RuntimeRotationState<T>),
-	NewKeyActivated(RuntimeRotationState<T>),
+	NewKeysActivated(RuntimeRotationState<T>),
 	SessionRotating(RuntimeRotationState<T>),
 }
 
@@ -440,7 +440,7 @@ pub mod pallet {
 				RotationPhase::ActivatingKeys(rotation_state) => {
 					match T::MultiVaultRotator::multi_vault_rotation_outcome() {
 						AsyncResult::Ready(VaultStatus::RotationComplete) => {
-							Self::set_rotation_phase(RotationPhase::NewKeyActivated(
+							Self::set_rotation_phase(RotationPhase::NewKeysActivated(
 								rotation_state,
 							));
 						},
@@ -461,7 +461,7 @@ pub mod pallet {
 				},
 				// The new session will kick off the new epoch now that we've reached
 				// VaultsRotatedExternally
-				RotationPhase::NewKeyActivated(rotation_state) =>
+				RotationPhase::NewKeysActivated(rotation_state) =>
 					T::ValidatorWeightInfo::rotation_phase_vaults_rotated(
 						rotation_state.num_primary_candidates(),
 					),
@@ -958,7 +958,7 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 	fn should_end_session(_now: T::BlockNumber) -> bool {
 		matches!(
 			CurrentRotationPhase::<T>::get(),
-			RotationPhase::NewKeyActivated(_) | RotationPhase::SessionRotating(_)
+			RotationPhase::NewKeysActivated(_) | RotationPhase::SessionRotating(_)
 		)
 	}
 }
@@ -1281,7 +1281,7 @@ impl<T: Config> pallet_session::SessionManager<ValidatorIdOf<T>> for Pallet<T> {
 	// TODO: Write a note of when exactly this is called.
 	fn new_session(_new_index: SessionIndex) -> Option<Vec<ValidatorIdOf<T>>> {
 		match CurrentRotationPhase::<T>::get() {
-			RotationPhase::NewKeyActivated(rotation_state) => {
+			RotationPhase::NewKeysActivated(rotation_state) => {
 				let next_authorities = rotation_state.authority_candidates();
 				Self::set_rotation_phase(RotationPhase::SessionRotating(rotation_state));
 				Some(next_authorities)

@@ -84,7 +84,7 @@ fn should_request_emergency_rotation() {
 		// effect on the rotation status.
 		for status in [
 			RotationPhase::<Test>::KeygensInProgress(Default::default()),
-			RotationPhase::<Test>::NewKeyActivated(Default::default()),
+			RotationPhase::<Test>::NewKeysActivated(Default::default()),
 			RotationPhase::<Test>::SessionRotating(Default::default()),
 		] {
 			CurrentRotationPhase::<Test>::put(&status);
