@@ -44,5 +44,6 @@ pub const ETH_WS_NODE_ENDPOINT: &str = "ETH__WS_NODE_ENDPOINT";
 pub const NODE_P2P_IP_ADDRESS: &str = "NODE_P2P__IP_ADDRESS";
 pub const NODE_P2P_PORT: &str = "NODE_P2P__PORT";
 
-/// Base path for all files (default: "/etc/chainflip")
-pub const BASE_CONFIG_PATH: &str = "CF_CONFIG_ROOT";
+/// Base path for all files
+pub const CONFIG_ROOT: &str = "CF_CONFIG_ROOT";
+pub const DEFAULT_CONFIG_ROOT: &str = "/etc/chainflip";

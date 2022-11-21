@@ -1,5 +1,8 @@
 use chainflip_api::primitives::{AccountRole, Hash, ProposalId};
-use chainflip_engine::settings::{CfSettings, Eth, EthOptions, StateChain, StateChainOptions};
+use chainflip_engine::{
+	constants::{CONFIG_ROOT, DEFAULT_CONFIG_ROOT},
+	settings::{CfSettings, Eth, EthOptions, StateChain, StateChainOptions},
+};
 use clap::Parser;
 use config::{ConfigError, Source, Value};
 use serde::Deserialize;
@@ -7,8 +10,8 @@ use std::collections::HashMap;
 
 #[derive(Parser, Clone, Debug)]
 pub struct CLICommandLineOptions {
-	#[clap(short = 'c', long = "base-config-path")]
-	base_config_path: Option<String>,
+	#[clap(short = 'c', long = "config-root", env = CONFIG_ROOT, default_value = DEFAULT_CONFIG_ROOT)]
+	config_root: String,
 
 	#[clap(flatten)]
 	state_chain_opts: StateChainOptions,
@@ -40,7 +43,7 @@ impl Source for CLICommandLineOptions {
 impl Default for CLICommandLineOptions {
 	fn default() -> Self {
 		Self {
-			base_config_path: None,
+			config_root: DEFAULT_CONFIG_ROOT.to_owned(),
 			state_chain_opts: StateChainOptions::default(),
 			eth_opts: EthOptions::default(),
 			// an arbitrary simple command
@@ -127,7 +130,7 @@ impl CLISettings {
 	/// New settings loaded from "$base_config_path/config/Settings.toml",
 	/// environment and `CommandLineOptions`
 	pub fn new(opts: CLICommandLineOptions) -> Result<Self, ConfigError> {
-		Self::load_settings_from_all_sources(opts.base_config_path.clone(), opts)
+		Self::load_settings_from_all_sources(opts.config_root.clone(), opts)
 	}
 }
 
@@ -151,9 +154,11 @@ mod tests {
 	fn init_default_config() {
 		set_test_env();
 
-		let settings =
-			CLISettings::load_settings_from_all_sources(None, CLICommandLineOptions::default())
-				.unwrap();
+		let settings = CLISettings::load_settings_from_all_sources(
+			DEFAULT_CONFIG_ROOT.to_owned(),
+			CLICommandLineOptions::default(),
+		)
+		.unwrap();
 
 		assert_eq!(settings.state_chain.ws_endpoint, "ws://localhost:9944");
 		assert_eq!(settings.eth.ws_node_endpoint, "ws://localhost:8545");
@@ -161,9 +166,12 @@ mod tests {
 
 	#[test]
 	fn test_all_command_line_options() {
-		// Fill the command line options with test data that is different for that in `Default.toml`
+		// Fill the options with test values that will pass the parsing/validation.
+		// The test values need to be different from the default values set during `set_defaults()`
+		// for the test to work. `config_root` and `cmd` are not used in this test because they are
+		// not settings.
 		let opts = CLICommandLineOptions {
-			base_config_path: None, // Not used in this test
+			config_root: CLICommandLineOptions::default().config_root,
 
 			state_chain_opts: StateChainOptions {
 				state_chain_ws_endpoint: Some("ws://endpoint:1234".to_owned()),
@@ -176,7 +184,7 @@ mod tests {
 				eth_private_key_file: Some(PathBuf::from_str("eth_key_file").unwrap()),
 			},
 
-			cmd: CFCommand::Rotate {}, // Not used in this test
+			cmd: CFCommand::Rotate {},
 		};
 
 		// Load the test opts into the settings
