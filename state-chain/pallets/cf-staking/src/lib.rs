@@ -17,8 +17,7 @@ mod tests;
 
 use cf_chains::RegisterClaim;
 use cf_traits::{
-	Bid, BidderProvider, EpochInfo, EthEnvironmentProvider, ReplayProtectionProvider,
-	StakeTransfer, ThresholdSigner,
+	Bid, BidderProvider, EpochInfo, EthEnvironmentProvider, StakeTransfer, ThresholdSigner,
 };
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
@@ -108,9 +107,6 @@ pub mod pallet {
 			AccountId = <Self as frame_system::Config>::AccountId,
 			Balance = Self::Balance,
 		>;
-
-		/// Something that can provide a nonce for the threshold signature.
-		type ReplayProtectionProvider: ReplayProtectionProvider<Ethereum>;
 
 		/// Something that can provide the key manager address and chain id.
 		type EthEnvironmentProvider: EthEnvironmentProvider;
@@ -382,7 +378,6 @@ pub mod pallet {
 			);
 
 			let call = T::RegisterClaim::new_unsigned(
-				T::ReplayProtectionProvider::replay_protection(),
 				<T as Config>::StakerId::from_ref(&account_id).as_ref(),
 				amount.into(),
 				&address,

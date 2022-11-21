@@ -1,18 +1,13 @@
 use crate as pallet_cf_lp;
-use cf_chains::{
-	eth::{
-		api::{EthereumApi, EthereumReplayProtection},
-		assets,
-	},
-	Chain, ChainAbi, ChainEnvironment, Ethereum,
-};
+use cf_chains::{eth::assets, Chain, ChainEnvironment, Ethereum};
 use cf_primitives::{EthereumAddress, IntentId, ETHEREUM_ETH_ADDRESS};
 use cf_traits::{
 	mocks::{
-		bid_info::MockBidInfo, ensure_origin_mock::NeverFailingOriginCheck,
-		staking_info::MockStakingInfo, system_state_info::MockSystemStateInfo,
+		all_batch::MockAllBatch, bid_info::MockBidInfo,
+		ensure_origin_mock::NeverFailingOriginCheck, staking_info::MockStakingInfo,
+		system_state_info::MockSystemStateInfo,
 	},
-	AddressDerivationApi, Broadcaster, ReplayProtectionProvider,
+	AddressDerivationApi, Broadcaster,
 };
 use frame_support::{instances::Instance1, parameter_types, sp_runtime::app_crypto::sp_core::H160};
 use frame_system as system;
@@ -86,23 +81,9 @@ impl system::Config for Test {
 	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
-pub const FAKE_KEYMAN_ADDR: [u8; 20] = [0xcf; 20];
-pub const CHAIN_ID: u64 = 31337;
-pub const COUNTER: u64 = 42;
-
-impl ReplayProtectionProvider<Ethereum> for Test {
-	fn replay_protection() -> <Ethereum as ChainAbi>::ReplayProtection {
-		EthereumReplayProtection {
-			key_manager_address: FAKE_KEYMAN_ADDR,
-			chain_id: CHAIN_ID,
-			nonce: COUNTER,
-		}
-	}
-}
-
 pub struct MockBroadcast;
 impl Broadcaster<Ethereum> for MockBroadcast {
-	type ApiCall = EthereumApi<MockEthEnvironment>;
+	type ApiCall = MockAllBatch;
 
 	fn threshold_sign_and_broadcast(_api_call: Self::ApiCall) {}
 }
@@ -129,8 +110,7 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Test {
 	type AddressDerivation = MockAddressDerivation;
 	type LpProvisioning = LiquidityProvider;
 	type SwapIntentHandler = Self;
-	type ReplayProtection = Self;
-	type AllBatch = EthereumApi<MockEthEnvironment>;
+	type AllBatch = MockAllBatch;
 	type Broadcaster = MockBroadcast;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type WeightInfo = ();

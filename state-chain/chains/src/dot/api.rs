@@ -2,11 +2,8 @@ pub mod batch_fetch_and_transfer;
 pub mod create_anonymous_vault;
 pub mod rotate_vault_proxy;
 
-use super::PolkadotPublicKey;
-use crate::{
-	dot::{Polkadot, PolkadotReplayProtection},
-	*,
-};
+use super::{PolkadotPublicKey, PolkadotReplayProtection};
+use crate::{dot::Polkadot, *};
 use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound};
 use sp_std::marker::PhantomData;
 
@@ -31,14 +28,14 @@ pub enum SystemAccounts {
 impl<E> AllBatch<Polkadot> for PolkadotApi<E>
 where
 	E: ChainEnvironment<SystemAccounts, <Polkadot as Chain>::ChainAccount>,
+	E: ReplayProtectionProvider<Polkadot>,
 {
 	fn new_unsigned(
-		replay_protection: PolkadotReplayProtection,
 		fetch_params: Vec<FetchAssetParams<Polkadot>>,
 		transfer_params: Vec<TransferAssetParams<Polkadot>>,
 	) -> Self {
 		Self::BatchFetchAndTransfer(batch_fetch_and_transfer::BatchFetchAndTransfer::new_unsigned(
-			replay_protection,
+			E::replay_protection(),
 			fetch_params,
 			transfer_params,
 			E::lookup(SystemAccounts::Proxy).expect("Proxy account lookup should never fail."),
@@ -49,15 +46,12 @@ where
 
 impl<E> SetAggKeyWithAggKey<Polkadot> for PolkadotApi<E>
 where
-	E: ChainEnvironment<SystemAccounts, <Polkadot as Chain>::ChainAccount>,
+	E: ChainEnvironment<SystemAccounts, <Polkadot as Chain>::ChainAccount>
+		+ ReplayProtectionProvider<Polkadot>,
 {
-	fn new_unsigned(
-		replay_protection: PolkadotReplayProtection,
-		old_key: PolkadotPublicKey,
-		new_key: PolkadotPublicKey,
-	) -> Self {
+	fn new_unsigned(old_key: PolkadotPublicKey, new_key: PolkadotPublicKey) -> Self {
 		Self::RotateVaultProxy(rotate_vault_proxy::RotateVaultProxy::new_unsigned(
-			replay_protection,
+			E::replay_protection(),
 			new_key,
 			old_key,
 			E::lookup(SystemAccounts::Proxy).expect("Proxy account lookup should never fail."),
