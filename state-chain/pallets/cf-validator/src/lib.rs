@@ -77,8 +77,8 @@ pub enum RotationPhase<T: Config> {
 	KeygensInProgress(RuntimeRotationState<T>),
 	// Keygen complete includes the keygen verification step.
 	KeygensComplete(RuntimeRotationState<T>),
-	RotatingExternally(RuntimeRotationState<T>),
-	VaultsRotatedExternally(RuntimeRotationState<T>),
+	ActivatingKeys(RuntimeRotationState<T>),
+	NewKeyActivated(RuntimeRotationState<T>),
 	SessionRotating(RuntimeRotationState<T>),
 }
 
@@ -441,14 +441,14 @@ pub mod pallet {
 					0 as Weight
 				},
 				RotationPhase::KeygensComplete(rotation_state) => {
-					T::MultiVaultRotator::rotate_all_externally();
-					Self::set_rotation_phase(RotationPhase::RotatingExternally(rotation_state));
+					T::MultiVaultRotator::activate_all_keys();
+					Self::set_rotation_phase(RotationPhase::ActivatingKeys(rotation_state));
 					0 as Weight
 				},
-				RotationPhase::RotatingExternally(rotation_state) => {
+				RotationPhase::ActivatingKeys(rotation_state) => {
 					match T::MultiVaultRotator::multi_vault_rotation_outcome() {
 						AsyncResult::Ready(VaultStatus::RotationComplete) => {
-							Self::set_rotation_phase(RotationPhase::VaultsRotatedExternally(
+							Self::set_rotation_phase(RotationPhase::NewKeyActivated(
 								rotation_state,
 							));
 						},
@@ -469,7 +469,7 @@ pub mod pallet {
 				},
 				// The new session will kick off the new epoch now that we've reached
 				// VaultsRotatedExternally
-				RotationPhase::VaultsRotatedExternally(rotation_state) =>
+				RotationPhase::NewKeyActivated(rotation_state) =>
 					T::ValidatorWeightInfo::rotation_phase_vaults_rotated(
 						rotation_state.num_primary_candidates(),
 					),
@@ -966,7 +966,7 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 	fn should_end_session(_now: T::BlockNumber) -> bool {
 		matches!(
 			CurrentRotationPhase::<T>::get(),
-			RotationPhase::VaultsRotatedExternally(_) | RotationPhase::SessionRotating(_)
+			RotationPhase::NewKeyActivated(_) | RotationPhase::SessionRotating(_)
 		)
 	}
 }
@@ -1289,7 +1289,7 @@ impl<T: Config> pallet_session::SessionManager<ValidatorIdOf<T>> for Pallet<T> {
 	// TODO: Write a note of when exactly this is called.
 	fn new_session(_new_index: SessionIndex) -> Option<Vec<ValidatorIdOf<T>>> {
 		match CurrentRotationPhase::<T>::get() {
-			RotationPhase::VaultsRotatedExternally(rotation_state) => {
+			RotationPhase::NewKeyActivated(rotation_state) => {
 				let next_authorities = rotation_state.authority_candidates();
 				Self::set_rotation_phase(RotationPhase::SessionRotating(rotation_state));
 				Some(next_authorities)

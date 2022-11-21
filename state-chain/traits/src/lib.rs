@@ -174,9 +174,9 @@ pub trait VaultRotator {
 	/// Poll for the vault rotation outcome.
 	fn vault_rotation_outcome() -> AsyncResult<VaultStatus<Self::ValidatorId>>;
 
-	/// Rotate the chain's keys "externally" e.g. on the contract.
-	/// For non-contract / proxy based chains, this is a noop
-	fn rotate_externally();
+	/// Activate a chain's new key on the chain, particular for smart contract/proxy chains.
+	/// For non contract/proxy chains this is a noop.
+	fn activate_key();
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_vault_rotation_outcome(_outcome: AsyncResult<VaultStatus<Self::ValidatorId>>) {
@@ -193,7 +193,7 @@ pub trait MultiVaultRotator {
 	// Are we ready to tell the vaults they can commit to their shiny new key.
 	fn multi_vault_rotation_outcome() -> AsyncResult<VaultStatus<Self::ValidatorId>>;
 
-	fn rotate_all_externally();
+	fn activate_all_keys();
 
 	// TODO: we could take an array of outcomes here instead.
 	#[cfg(feature = "runtime-benchmarks")]

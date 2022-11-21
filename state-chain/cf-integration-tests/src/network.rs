@@ -297,7 +297,7 @@ impl Engine {
 						);
 					},
 					Event::Validator(
-						pallet_cf_validator::Event::RotationPhaseUpdated { new_phase: RotationPhase::RotatingExternally(_) }) => {
+						pallet_cf_validator::Event::RotationPhaseUpdated { new_phase: RotationPhase::ActivatingKeys(_) }) => {
 							if let EngineState::Rotation = self.engine_state {
 								// If we rotating let's witness the keys being rotated on the contract
 								let _result = state_chain_runtime::Witnesser::witness_at_epoch(

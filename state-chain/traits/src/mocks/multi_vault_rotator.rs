@@ -20,7 +20,7 @@ impl MockMultiVaultRotator {
 		);
 	}
 
-	pub fn rotated_externally() {
+	pub fn keys_activated() {
 		Self::put_value(
 			ROTATION_OUTCOME,
 			AsyncResult::<VaultStatus<u64>>::Ready(VaultStatus::RotationComplete),
@@ -48,7 +48,7 @@ impl MultiVaultRotator for MockMultiVaultRotator {
 		Self::get_value(ROTATION_OUTCOME).unwrap_or_default()
 	}
 
-	fn rotate_all_externally() {
+	fn activate_all_keys() {
 		Self::put_value(ROTATION_OUTCOME, AsyncResult::<VaultStatus<u64>>::Pending);
 	}
 

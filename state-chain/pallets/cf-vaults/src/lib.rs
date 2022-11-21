@@ -853,7 +853,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 		}
 	}
 
-	fn rotate_externally() {
+	fn activate_key() {
 		if let Some(VaultRotationStatus::<T, I>::KeygenVerificationComplete { new_public_key }) =
 			PendingVaultRotation::<T, I>::get()
 		{
@@ -872,9 +872,9 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 			});
 		} else {
 			#[cfg(not(test))]
-			log::error!("Rotate externally called before keygen verification completed");
+			log::error!("activate key called before keygen verification completed");
 			#[cfg(test)]
-			panic!("Rotate externally called before keygen verification completed");
+			panic!("activate key called before keygen verification completed");
 		}
 	}
 

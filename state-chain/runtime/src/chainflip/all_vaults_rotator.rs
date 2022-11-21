@@ -61,7 +61,7 @@ where
 		}
 	}
 
-	fn rotate_all_externally() {
-		A::rotate_externally()
+	fn activate_all_keys() {
+		A::activate_key()
 	}
 }

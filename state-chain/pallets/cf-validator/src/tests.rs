@@ -84,7 +84,7 @@ fn should_request_emergency_rotation() {
 		// effect on the rotation status.
 		for status in [
 			RotationPhase::<Test>::KeygensInProgress(Default::default()),
-			RotationPhase::<Test>::VaultsRotatedExternally(Default::default()),
+			RotationPhase::<Test>::NewKeyActivated(Default::default()),
 			RotationPhase::<Test>::SessionRotating(Default::default()),
 		] {
 			CurrentRotationPhase::<Test>::put(&status);
@@ -118,9 +118,9 @@ fn should_retry_rotation_until_success_with_failing_auctions() {
 		move_forward_blocks(2);
 		assert!(matches!(
 			CurrentRotationPhase::<Test>::get(),
-			RotationPhase::<Test>::RotatingExternally(..)
+			RotationPhase::<Test>::ActivatingKeys(..)
 		));
-		MockMultiVaultRotator::rotated_externally();
+		MockMultiVaultRotator::keys_activated();
 		// TODO: Needs to be clearer why this is 2 blocks and not 1
 		move_forward_blocks(2);
 		assert_default_rotation_outcome!();
@@ -181,9 +181,9 @@ fn auction_winners_should_be_the_new_authorities_on_new_epoch() {
 		move_forward_blocks(2);
 		assert!(matches!(
 			CurrentRotationPhase::<Test>::get(),
-			RotationPhase::<Test>::RotatingExternally(..)
+			RotationPhase::<Test>::ActivatingKeys(..)
 		));
-		MockMultiVaultRotator::rotated_externally();
+		MockMultiVaultRotator::keys_activated();
 		// TODO: Needs to be clearer why this is 2 blocks and not 1
 		move_forward_blocks(2);
 		assert_default_rotation_outcome!();

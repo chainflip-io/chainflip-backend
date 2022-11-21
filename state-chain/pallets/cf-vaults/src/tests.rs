@@ -352,7 +352,7 @@ fn keygen_report_success() {
 		assert!(matches!(PendingVaultRotation::<MockRuntime, _>::get().unwrap(), VaultRotationStatus::KeygenVerificationComplete { .. }));
 
 		// Called by validator pallet
-		VaultsPallet::rotate_externally();
+		VaultsPallet::activate_key();
 
 		assert!(matches!(PendingVaultRotation::<MockRuntime, _>::get().unwrap(), VaultRotationStatus::AwaitingRotation { .. }));
 
@@ -491,7 +491,7 @@ fn vault_key_rotated() {
 		EthMockThresholdSigner::execute_signature_result_against_last_request(Ok(ETH_DUMMY_SIG));
 
 		// validator pallet kicks this off
-		VaultsPallet::rotate_externally();
+		VaultsPallet::activate_key();
 
 		assert_ok!(VaultsPallet::vault_key_rotated(
 			Origin::root(),
