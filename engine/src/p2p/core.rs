@@ -360,7 +360,7 @@ impl P2PContext {
 		if let Some(ConnectionState::Connected(socket)) =
 			self.active_connections.get_mut(&account_id)
 		{
-			return socket
+			socket
 		} else {
 			panic!("By construction");
 		}
