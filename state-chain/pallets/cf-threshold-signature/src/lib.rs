@@ -680,7 +680,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				)
 			};
 
-		let event = match maybe_key_id_participants {
+		Self::deposit_event(match maybe_key_id_participants {
 			Ok((key_id, participants)) => {
 				PendingCeremonies::<T, I>::insert(ceremony_id, {
 					let remaining_respondents: BTreeSet<_> =
@@ -731,9 +731,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 				event
 			},
-		};
-
-		Self::deposit_event(event);
+		});
 
 		ceremony_id
 	}
