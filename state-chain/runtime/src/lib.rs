@@ -179,7 +179,6 @@ impl pallet_cf_environment::Config for Runtime {
 	type Event = Event;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type WeightInfo = pallet_cf_environment::weights::PalletWeight<Runtime>;
-	type EthEnvironmentProvider = Environment;
 }
 
 #[cfg(feature = "ibiza")]
