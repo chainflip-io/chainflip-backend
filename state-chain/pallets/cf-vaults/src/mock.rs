@@ -215,7 +215,7 @@ impl pallet_cf_vaults::Config for MockRuntime {
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
 	type ThresholdSigner = MockThresholdSigner<MockEthereum, Call>;
 	type OffenceReporter = MockOffenceReporter;
-	type ApiCall = MockSetAggKeyWithAggKey;
+	type SetAggKeyWithAggKey = MockSetAggKeyWithAggKey;
 	type VaultTransitionHandler = MockVaultTransitionHandler;
 	type CeremonyIdProvider = MockCeremonyIdProvider<CeremonyId>;
 	type WeightInfo = ();

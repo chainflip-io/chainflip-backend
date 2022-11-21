@@ -236,9 +236,8 @@ pub mod pallet {
 		/// The chain that is managed by this vault must implement the api types.
 		type Chain: ChainAbi;
 
-		// TODO: Rename this
 		/// The supported api calls for the chain.
-		type ApiCall: SetAggKeyWithAggKey<Self::Chain>;
+		type SetAggKeyWithAggKey: SetAggKeyWithAggKey<Self::Chain>;
 
 		type VaultTransitionHandler: VaultTransitionHandler<Self::Chain>;
 
@@ -252,7 +251,7 @@ pub mod pallet {
 		>;
 
 		/// A broadcaster for the target chain.
-		type Broadcaster: Broadcaster<Self::Chain, ApiCall = Self::ApiCall>;
+		type Broadcaster: Broadcaster<Self::Chain, ApiCall = Self::SetAggKeyWithAggKey>;
 
 		/// For reporting misbehaviour
 		type OffenceReporter: OffenceReporter<
@@ -549,7 +548,7 @@ pub mod pallet {
 			})? {
 				Ok(_) => {
 					T::Broadcaster::threshold_sign_and_broadcast(
-						<T::ApiCall as SetAggKeyWithAggKey<_>>::new_unsigned(
+						<T::SetAggKeyWithAggKey as SetAggKeyWithAggKey<_>>::new_unsigned(
 							<Self as KeyProvider<_>>::current_key(),
 							new_public_key,
 						),

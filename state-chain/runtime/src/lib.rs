@@ -202,7 +202,7 @@ impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 	type ThresholdSigner = EthereumThresholdSigner;
 	type Offence = chainflip::Offence;
 	type Chain = Ethereum;
-	type ApiCall = eth::api::EthereumApi<EthEnvironment>;
+	type SetAggKeyWithAggKey = eth::api::EthereumApi<EthEnvironment>;
 	type VaultTransitionHandler = EthVaultTransitionHandler;
 	type Broadcaster = EthereumBroadcaster;
 	type OffenceReporter = Reputation;
