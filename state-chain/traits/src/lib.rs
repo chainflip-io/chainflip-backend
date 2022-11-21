@@ -175,8 +175,8 @@ pub trait VaultRotator {
 	/// Poll for the vault rotation outcome.
 	fn vault_rotation_outcome() -> AsyncResult<VaultStatus<Self::ValidatorId>>;
 
-	/// Activate a chain's new key on the chain, particular for smart contract/proxy chains.
-	/// For non contract/proxy chains this is a noop.
+	/// Activate a chain's new key on that particular chain. For example, setting the new key
+	/// on the contract for a smart contract chain.
 	fn activate_key();
 
 	#[cfg(feature = "runtime-benchmarks")]
