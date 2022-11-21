@@ -664,14 +664,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 								) {
 								Ok((current_key_id, nominees))
 							} else {
-								Err((
-									Event::<T, I>::SignersUnavailable { request_id, ceremony_id },
-									scale_info::prelude::format!(
-								        "Not enough signers for request {}, attempt {}. Scheduling retry.",
-								        request_id,
-								        attempt_count
-							        ),
-								))
+								Err(Event::<T, I>::SignersUnavailable { request_id, ceremony_id })
 							}
 						},
 						KeyState::InTransition => Err((
@@ -687,7 +680,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				)
 			};
 
-		let (event, log_message) = match maybe_key_id_participants {
+		let event = match maybe_key_id_participants {
 			Ok((key_id, participants)) => {
 				PendingCeremonies::<T, I>::insert(ceremony_id, {
 					let remaining_respondents: BTreeSet<_> =
@@ -709,22 +702,21 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					ceremony_id,
 					ThresholdSignatureResponseTimeout::<T, I>::get(),
 				);
-				(
-					Event::<T, I>::ThresholdSignatureRequest {
-						request_id,
-						ceremony_id,
-						key_id,
-						signatories: participants,
-						payload,
-					},
-					scale_info::prelude::format!(
-						"Threshold set selected for request {}, requesting signature ceremony {}.",
-						request_id,
-						attempt_count
-					),
-				)
+				log::trace!(
+					target: "threshold-signing",
+					"Threshold set selected for request {}, requesting signature ceremony {}.",
+					request_id,
+					attempt_count
+				);
+				Event::<T, I>::ThresholdSignatureRequest {
+					request_id,
+					ceremony_id,
+					key_id,
+					signatories: participants,
+					payload,
+				}
 			},
-			Err((event, log)) => {
+			Err(event) => {
 				PendingRequestInstructions::<T, I>::insert(request_id, request_instruction);
 				RequestRetryQueue::<T, I>::append(
 					frame_system::Pallet::<T>::current_block_number()
@@ -732,14 +724,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					request_id,
 				);
 
-				(event, log)
+				log::trace!(
+					target: "threshold-signing",
+					"Scheduling retry: {:?}", event
+				);
+
+				event
 			},
 		};
-
-		log::trace!(
-			target: "threshold-signing",
-			"{}", log_message
-		);
 
 		Self::deposit_event(event);
 
