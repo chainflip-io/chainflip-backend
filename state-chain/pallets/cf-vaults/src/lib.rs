@@ -834,6 +834,8 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_vault_rotation_outcome(outcome: AsyncResult<Result<(), BTreeSet<Self::ValidatorId>>>) {
+		use cf_chains::benchmarking_value::BenchmarkValue;
+
 		match outcome {
 			AsyncResult::Pending => {
 				PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingKeygen {
@@ -844,7 +846,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 			},
 			AsyncResult::Ready(Ok(())) => {
 				PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Complete {
-					tx_hash: Default::default(),
+					tx_hash: BenchmarkValue::benchmark_value(),
 				});
 			},
 			AsyncResult::Ready(Err(offenders)) => {

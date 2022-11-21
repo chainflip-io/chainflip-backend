@@ -17,7 +17,7 @@ use chainflip_engine::{
 		self,
 		client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi},
 	},
-	task_scope::with_main_task_scope,
+	task_scope::task_scope,
 };
 
 use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
@@ -26,7 +26,8 @@ use futures::FutureExt;
 use pallet_cf_validator::SemVer;
 use sp_core::U256;
 
-fn main() -> anyhow::Result<()> {
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
 	use_chainflip_account_id_encoding();
 	utilities::print_starting!();
 
@@ -37,7 +38,7 @@ fn main() -> anyhow::Result<()> {
 		settings.log.blacklist.clone(),
 	);
 
-	with_main_task_scope(|scope| {
+	task_scope(|scope| {
 		async {
 
             if let Some(health_check_settings) = &settings.health_check {
@@ -45,7 +46,7 @@ fn main() -> anyhow::Result<()> {
             }
 
             let (latest_block_hash, state_chain_block_stream, state_chain_client) =
-                state_chain_observer::client::connect_to_state_chain(&settings.state_chain, true, &root_logger)
+                state_chain_observer::client::StateChainClient::new(&settings.state_chain, true, &root_logger)
                     .await?;
 
             let eth_dual_rpc =
@@ -227,8 +228,7 @@ fn main() -> anyhow::Result<()> {
                 use itertools::Itertools;
                 use sp_core::H160;
                 use chainflip_engine::eth::erc20_witnesser::Erc20Witnesser;
-                use cf_primitives::{ForeignChain, ForeignChainAddress};
-                use cf_primitives::Asset;
+                use cf_primitives::{Asset, chains::assets};
 
                 let flip_contract_address = state_chain_client
                     .storage_map_entry::<pallet_cf_environment::SupportedEthAssets::<
@@ -246,19 +246,15 @@ fn main() -> anyhow::Result<()> {
                     .context("Failed to get USDC address from SC")?
                     .expect("USDC address must exist at genesis");
 
-                let eth_chain_ingress_addresses = state_chain_client.storage_map::<pallet_cf_ingress::IntentIngressDetails<state_chain_runtime::Runtime>>(latest_block_hash)
+                let eth_chain_ingress_addresses = state_chain_client.storage_map::<pallet_cf_ingress_egress::IntentIngressDetails<state_chain_runtime::Runtime, state_chain_runtime::EthereumInstance>>(latest_block_hash)
                     .await
                     .context("Failed to get initial ingress details")?
                     .into_iter()
-                    .filter_map(|(foreign_chain_address, intent)| {
-                        if let ForeignChainAddress::Eth(address) = foreign_chain_address {
-                            assert!(ForeignChain::Ethereum == intent.ingress_asset.into());
-                            Some((intent.ingress_asset, H160::from(address)))
-                        } else {
-                            None
-                    }}).into_group_map();
+                    .map(|(address, intent)| {
+                            (intent.ingress_asset, address)
+                    }).into_group_map();
 
-                fn monitored_addresses_from_all_eth(eth_chain_ingress_addresses: &HashMap<Asset, Vec<H160>>, asset: Asset) -> BTreeSet<H160> {
+                fn monitored_addresses_from_all_eth(eth_chain_ingress_addresses: &HashMap<assets::eth::Asset, Vec<H160>>, asset: assets::eth::Asset) -> BTreeSet<H160> {
                     if let Some(eth_ingress_addresses) = eth_chain_ingress_addresses.get(&asset) {
                         eth_ingress_addresses.clone()
                     } else {
@@ -271,12 +267,12 @@ fn main() -> anyhow::Result<()> {
                     _epoch_start_receiver_4,
                     eth_monitor_ingress_receiver,
                     state_chain_client.clone(),
-                    monitored_addresses_from_all_eth(&eth_chain_ingress_addresses, Asset::Eth),
+                    monitored_addresses_from_all_eth(&eth_chain_ingress_addresses, assets::eth::Asset::Eth),
                     &root_logger
                 ));
                 scope.spawn(
                     eth::contract_witnesser::start(
-                        Erc20Witnesser::new(flip_contract_address.into(), Asset::Flip, monitored_addresses_from_all_eth(&eth_chain_ingress_addresses, Asset::Flip), eth_monitor_flip_ingress_receiver),
+                        Erc20Witnesser::new(flip_contract_address.into(), assets::eth::Asset::Flip, monitored_addresses_from_all_eth(&eth_chain_ingress_addresses, assets::eth::Asset::Flip), eth_monitor_flip_ingress_receiver),
                         eth_dual_rpc.clone(),
                         _epoch_start_receiver_5,
                         false,
@@ -286,7 +282,7 @@ fn main() -> anyhow::Result<()> {
                 );
                 scope.spawn(
                     eth::contract_witnesser::start(
-                        Erc20Witnesser::new(usdc_contract_address.into(), Asset::Usdc, monitored_addresses_from_all_eth(&eth_chain_ingress_addresses, Asset::Usdc), eth_monitor_usdc_ingress_receiver),
+                        Erc20Witnesser::new(usdc_contract_address.into(), assets::eth::Asset::Usdc, monitored_addresses_from_all_eth(&eth_chain_ingress_addresses, assets::eth::Asset::Usdc), eth_monitor_usdc_ingress_receiver),
                         eth_dual_rpc,
                         _epoch_start_receiver_6,
                         false,
@@ -298,5 +294,5 @@ fn main() -> anyhow::Result<()> {
 
             Ok(())
         }.boxed()
-	})
+	}).await
 }

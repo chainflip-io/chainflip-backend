@@ -6,7 +6,7 @@
 use cf_chains::dot::{PolkadotAccountId, PolkadotConfig, PolkadotIndex, PolkadotPublicKey};
 
 use cf_primitives::{Asset, EthereumAddress};
-pub use cf_traits::{EthEnvironmentProvider, EthereumAssetsAddressProvider};
+pub use cf_traits::EthEnvironmentProvider;
 use cf_traits::{SystemStateInfo, SystemStateManager};
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
@@ -383,11 +383,5 @@ impl<T: Config> Pallet<T> {
 		PolkadotCurrentProxyAccountId::<T>::set(Some(new_account.clone()));
 		PolkadotProxyAccountNonce::<T>::set(0);
 		Self::deposit_event(Event::<T>::PolkadotProxyAccountUpdated(new_account));
-	}
-}
-
-impl<T: Config> EthereumAssetsAddressProvider for Pallet<T> {
-	fn try_get_asset_address(asset: Asset) -> Option<EthereumAddress> {
-		Pallet::<T>::supported_eth_assets(asset)
 	}
 }

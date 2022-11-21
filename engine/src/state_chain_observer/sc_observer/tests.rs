@@ -2,7 +2,7 @@ use std::{collections::BTreeSet, sync::Arc};
 
 use cf_chains::eth::{Ethereum, Transaction};
 use frame_system::Phase;
-use futures::{FutureExt, StreamExt};
+use futures::{FutureExt, TryStreamExt};
 use mockall::predicate::{self, eq};
 use pallet_cf_broadcast::BroadcastAttemptId;
 use pallet_cf_vaults::Vault;
@@ -10,7 +10,7 @@ use pallet_cf_vaults::Vault;
 use sp_core::{Hasher, H256, U256};
 use sp_runtime::{traits::Keccak256, AccountId32, Digest};
 use state_chain_runtime::{AccountId, CfeSettings, EthereumInstance, Header};
-use tokio::sync::watch;
+use tokio::sync::{broadcast, watch};
 use web3::types::{Bytes, SignedTransaction};
 
 use crate::{
@@ -22,7 +22,7 @@ use crate::{
 	multisig::client::{mocks::MockMultisigClientApi, KeygenFailureReason, SigningFailureReason},
 	settings::Settings,
 	state_chain_observer::{client::mocks::MockStateChainClient, sc_observer},
-	task_scope::with_task_scope,
+	task_scope::task_scope,
 	witnesser::EpochStart,
 };
 
@@ -88,7 +88,7 @@ async fn starts_witnessing_when_current_authority() {
 	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
-	let (epoch_start_sender, epoch_start_receiver) = async_channel::bounded(10);
+	let (epoch_start_sender, epoch_start_receiver) = broadcast::channel(10);
 
 	let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
@@ -124,7 +124,10 @@ async fn starts_witnessing_when_current_authority() {
 	.unwrap_err();
 
 	assert_eq!(
-		epoch_start_receiver.collect::<Vec<_>>().await,
+		tokio_stream::wrappers::BroadcastStream::new(epoch_start_receiver)
+			.try_collect::<Vec<_>>()
+			.await
+			.unwrap(),
 		vec![EpochStart::<Ethereum> {
 			epoch_index: initial_epoch,
 			block_number: initial_epoch_from_block,
@@ -201,7 +204,7 @@ async fn starts_witnessing_when_historic_on_startup() {
 	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
-	let (epoch_start_sender, epoch_start_receiver) = async_channel::bounded(10);
+	let (epoch_start_sender, epoch_start_receiver) = broadcast::channel(10);
 
 	let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
@@ -237,7 +240,10 @@ async fn starts_witnessing_when_historic_on_startup() {
 	.unwrap_err();
 
 	assert_eq!(
-		epoch_start_receiver.collect::<Vec<_>>().await,
+		tokio_stream::wrappers::BroadcastStream::new(epoch_start_receiver)
+			.try_collect::<Vec<_>>()
+			.await
+			.unwrap(),
 		vec![
 			EpochStart::<Ethereum> {
 				epoch_index: active_epoch,
@@ -306,7 +312,7 @@ async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
 	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
-	let (epoch_start_sender, epoch_start_receiver) = async_channel::bounded(10);
+	let (epoch_start_sender, epoch_start_receiver) = broadcast::channel(10);
 	let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
 	#[cfg(feature = "ibiza")]
@@ -341,7 +347,10 @@ async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
 	.unwrap_err();
 
 	assert_eq!(
-		epoch_start_receiver.collect::<Vec<_>>().await,
+		tokio_stream::wrappers::BroadcastStream::new(epoch_start_receiver)
+			.try_collect::<Vec<_>>()
+			.await
+			.unwrap(),
 		vec![EpochStart::<Ethereum> {
 			epoch_index: initial_epoch,
 			block_number: initial_epoch_from_block,
@@ -444,7 +453,7 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
 	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
-	let (epoch_start_sender, epoch_start_receiver) = async_channel::bounded(10);
+	let (epoch_start_sender, epoch_start_receiver) = broadcast::channel(10);
 
 	let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
@@ -480,7 +489,10 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
 	.unwrap_err();
 
 	assert_eq!(
-		epoch_start_receiver.collect::<Vec<_>>().await,
+		tokio_stream::wrappers::BroadcastStream::new(epoch_start_receiver)
+			.try_collect::<Vec<_>>()
+			.await
+			.unwrap(),
 		vec![
 			EpochStart::<Ethereum> {
 				epoch_index: initial_epoch,
@@ -593,7 +605,7 @@ async fn not_historical_to_authority_on_new_epoch() {
 	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
-	let (epoch_start_sender, epoch_start_receiver) = async_channel::bounded(10);
+	let (epoch_start_sender, epoch_start_receiver) = broadcast::channel(10);
 
 	let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
@@ -629,7 +641,10 @@ async fn not_historical_to_authority_on_new_epoch() {
 	.unwrap_err();
 
 	assert_eq!(
-		epoch_start_receiver.collect::<Vec<_>>().await,
+		tokio_stream::wrappers::BroadcastStream::new(epoch_start_receiver)
+			.try_collect::<Vec<_>>()
+			.await
+			.unwrap(),
 		vec![
 			EpochStart::<Ethereum> {
 				epoch_index: initial_epoch,
@@ -741,7 +756,7 @@ async fn current_authority_to_historical_on_new_epoch_event() {
 	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
-	let (epoch_start_sender, epoch_start_receiver) = async_channel::bounded(10);
+	let (epoch_start_sender, epoch_start_receiver) = broadcast::channel(10);
 
 	let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
@@ -777,7 +792,10 @@ async fn current_authority_to_historical_on_new_epoch_event() {
 	.unwrap_err();
 
 	assert_eq!(
-		epoch_start_receiver.collect::<Vec<_>>().await,
+		tokio_stream::wrappers::BroadcastStream::new(epoch_start_receiver)
+			.try_collect::<Vec<_>>()
+			.await
+			.unwrap(),
 		vec![
 			EpochStart::<Ethereum> {
 				epoch_index: initial_epoch,
@@ -856,11 +874,6 @@ async fn only_encodes_and_signs_when_specified() {
 		.return_once(|tx| Ok(Keccak256::hash(&tx.0[..])));
 
 	state_chain_client
-		.expect_submit_signed_extrinsic::<state_chain_runtime::Call>()
-		.once()
-		.return_once(|_, _| Ok(H256::default()));
-
-	state_chain_client
 		.expect_storage_value::<frame_system::Events<state_chain_runtime::Runtime>>()
 		.with(eq(block_header.hash()))
 		.once()
@@ -901,7 +914,7 @@ async fn only_encodes_and_signs_when_specified() {
 	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
-	let (epoch_start_sender, _epoch_start_receiver) = async_channel::bounded(10);
+	let (epoch_start_sender, _epoch_start_receiver) = broadcast::channel(10);
 
 	let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
@@ -944,7 +957,7 @@ async fn run_the_sc_observer() {
 	let logger = new_test_logger();
 
 	let (initial_block_hash, block_stream, state_chain_client) =
-		crate::state_chain_observer::client::connect_to_state_chain(
+		crate::state_chain_observer::client::StateChainClient::new(
 			&settings.state_chain,
 			false,
 			&logger,
@@ -962,7 +975,7 @@ async fn run_the_sc_observer() {
 	let eth_multisig_client = Arc::new(MockMultisigClientApi::new());
 	let dot_multisig_client = Arc::new(MockMultisigClientApi::new());
 
-	let (epoch_start_sender, _) = async_channel::bounded(10);
+	let (epoch_start_sender, _) = broadcast::channel(10);
 
 	let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
@@ -1043,7 +1056,7 @@ async fn should_handle_signing_request() {
 
 	let multisig_client = Arc::new(multisig_client);
 
-	with_task_scope(|scope| {
+	task_scope(|scope| {
 		async {
 			// Handle a signing request that we are not participating in
 			sc_observer::handle_signing_request(
@@ -1118,7 +1131,7 @@ async fn should_handle_keygen_request() {
 
 	let multisig_client = Arc::new(multisig_client);
 
-	with_task_scope(|scope| {
+	task_scope(|scope| {
 		async {
 			// Handle a keygen request that we are not participating in
 			sc_observer::handle_keygen_request(

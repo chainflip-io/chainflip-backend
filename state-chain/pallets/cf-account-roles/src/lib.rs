@@ -13,10 +13,11 @@ pub mod weights;
 use weights::WeightInfo;
 
 use cf_primitives::AccountRole;
-use cf_traits::{AccountRoleRegistry, Chainflip, QualifyNode};
+use cf_traits::{AccountRoleRegistry, BidInfo, Chainflip, QualifyNode};
 use frame_support::{
 	error::BadOrigin,
 	pallet_prelude::DispatchResult,
+	sp_runtime::traits::CheckedDiv,
 	traits::{EnsureOrigin, IsType, OnKilledAccount, OnNewAccount},
 };
 use frame_system::{ensure_signed, pallet_prelude::OriginFor, RawOrigin};
@@ -26,6 +27,7 @@ use sp_std::marker::PhantomData;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use cf_traits::StakingInfo;
 	use frame_support::pallet_prelude::*;
 
 	#[pallet::config]
@@ -33,6 +35,12 @@ pub mod pallet {
 	pub trait Config: Chainflip {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+
+		/// The Flip token implementation.
+		type StakeInfo: StakingInfo<AccountId = Self::AccountId, Balance = Self::Amount>;
+
+		/// Infos about bids.
+		type BidInfo: BidInfo<Balance = Self::Amount>;
 
 		/// Weights.
 		type WeightInfo: WeightInfo;
@@ -57,6 +65,7 @@ pub mod pallet {
 		AccountNotInitialised,
 		/// Accounts can only be upgraded from the initial [AccountRole::Undefined] state.
 		AccountRoleAlreadyRegistered,
+		NotEnoughStake,
 	}
 
 	#[pallet::genesis_config]
@@ -85,6 +94,15 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::register_account_role())]
 		pub fn register_account_role(origin: OriginFor<T>, role: AccountRole) -> DispatchResult {
 			let who: T::AccountId = ensure_signed(origin)?;
+			if role == AccountRole::Validator {
+				ensure!(
+					T::StakeInfo::total_stake_of(&who) >=
+						T::BidInfo::get_min_backup_bid()
+							.checked_div(&T::Amount::from(2_u32))
+							.expect("Division by 2 can't fail."),
+					Error::<T>::NotEnoughStake
+				);
+			}
 			<Self as AccountRoleRegistry<T>>::register_account_role(&who, role)?;
 			Ok(())
 		}

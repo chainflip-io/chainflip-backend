@@ -61,7 +61,7 @@ tag = 'chainflip-monthly-2022-06+01'
 [dev-dependencies]
 quickcheck = '1'
 quickcheck_macros = '1'
-pallet-cf-ingress = {path = '../cf-ingress'}
+pallet-cf-ingress-egress = {path = '../cf-ingress-egress'}
 pallet-cf-account-roles = {path = '../cf-account-roles'}
 
 [features]

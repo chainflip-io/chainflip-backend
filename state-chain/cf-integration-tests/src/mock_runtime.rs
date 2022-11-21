@@ -28,8 +28,7 @@ pub const PENALTIES: &[(Offence, (i32, BlockNumber))] = &[
 ];
 
 use crate::{get_from_seed, network, GENESIS_KEY};
-use cf_primitives::{AccountRole, AuthorityCount};
-use cf_traits::{BlockNumber, FlipBalance};
+use cf_primitives::{AccountRole, AuthorityCount, BlockNumber, FlipBalance};
 
 pub struct ExtBuilder {
 	pub accounts: Vec<(AccountId, FlipBalance)>,
