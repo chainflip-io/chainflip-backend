@@ -13,7 +13,7 @@ use sp_runtime::{
 use crate as pallet_cf_vaults;
 
 use super::*;
-use cf_chains::{eth, mocks::MockEthereum, ApiCall, ChainCrypto};
+use cf_chains::{eth, mocks::MockEthereum, ApiCall, ChainCrypto, ReplayProtectionProvider};
 use cf_traits::{
 	mocks::{
 		ceremony_id_provider::MockCeremonyIdProvider, ensure_origin_mock::NeverFailingOriginCheck,
@@ -148,8 +148,7 @@ impl SetAggKeyWithAggKey<MockEthereum> for MockSetAggKeyWithAggKey {
 		_old_key: <MockEthereum as ChainCrypto>::AggKey,
 		new_key: <MockEthereum as ChainCrypto>::AggKey,
 	) -> Self {
-		// TODO: Give it a nonce
-		Self { nonce: Default::default(), new_key }
+		Self { nonce: MockEthReplayProtectionProvider::replay_protection(), new_key }
 	}
 }
 
