@@ -79,7 +79,7 @@ fn main() -> anyhow::Result<()> {
 
             let (
                 epoch_start_sender,
-                [epoch_start_receiver_1, epoch_start_receiver_2, epoch_start_receiver_3, _epoch_start_receiver_4, _epoch_start_receiver_5, _epoch_start_receiver_6]
+                [epoch_start_receiver_1, epoch_start_receiver_2, epoch_start_receiver_3, _epoch_start_receiver_4, _epoch_start_receiver_5, _epoch_start_receiver_6, epoch_start_receiver_7]
             ) = build_broadcast_channel(10);
 
             let cfe_settings = state_chain_client
@@ -133,7 +133,7 @@ fn main() -> anyhow::Result<()> {
                 dot_incoming_receiver,
                 peer_update_sender,
                 p2p_fut,
-            ) = p2p::start(state_chain_client.clone(), settings.node_p2p, latest_block_hash, &root_logger).await.context("Failed to start p2p module")?;
+            ) = p2p::start(state_chain_client.clone(), settings.node_p2p, latest_block_hash, epoch_start_receiver_7, &root_logger).await.context("Failed to start p2p module")?;
 
             scope.spawn(p2p_fut);
 

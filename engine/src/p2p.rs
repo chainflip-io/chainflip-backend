@@ -10,6 +10,7 @@ use std::{
 
 use crate::{
 	common::read_clean_and_decode_hex_str_file,
+	eth::EpochStart,
 	multisig::{eth::EthSigning, polkadot::PolkadotSigning, CryptoScheme},
 	settings::P2P as P2PSettings,
 	state_chain_observer::client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi},
@@ -21,7 +22,10 @@ use cf_primitives::AccountId;
 use futures::{Future, FutureExt};
 use muxer::P2PMuxer;
 use sp_core::H256;
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tokio::sync::{
+	broadcast,
+	mpsc::{UnboundedReceiver, UnboundedSender},
+};
 use zeroize::Zeroizing;
 
 use crate::task_scope::with_task_scope;
@@ -59,6 +63,7 @@ pub async fn start<StateChainClient>(
 	state_chain_client: Arc<StateChainClient>,
 	settings: P2PSettings,
 	latest_block_hash: H256,
+	epoch_start_receiver: broadcast::Receiver<EpochStart>,
 	logger: &slog::Logger,
 ) -> anyhow::Result<(
 	MultisigMessageSender<EthSigning>,
@@ -106,7 +111,14 @@ where
 		incoming_message_receiver,
 		own_peer_info_receiver,
 		p2p_fut,
-	) = core::start(&node_key, settings.port, current_peers, our_account_id, logger);
+	) = core::start(
+		&node_key,
+		settings.port,
+		current_peers,
+		our_account_id,
+		epoch_start_receiver,
+		logger,
+	);
 
 	let (
 		eth_outgoing_sender,
