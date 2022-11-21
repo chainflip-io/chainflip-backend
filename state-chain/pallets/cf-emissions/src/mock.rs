@@ -1,7 +1,6 @@
 use crate as pallet_cf_emissions;
 use cf_chains::{
-	eth::api::EthereumReplayProtection, mocks::MockEthereum, ApiCall, ChainAbi, ChainCrypto,
-	ReplayProtectionProvider, UpdateFlipSupply,
+	mocks::MockEthereum, ApiCall, ChainAbi, ChainCrypto, ReplayProtectionProvider, UpdateFlipSupply,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -21,6 +20,7 @@ use sp_runtime::{
 use cf_traits::{
 	mocks::{
 		eth_environment_provider::MockEthEnvironmentProvider,
+		eth_replay_protection_provider::MockEthReplayProtectionProvider,
 		system_state_info::MockSystemStateInfo,
 	},
 	Broadcaster, Issuance, WaivedFees,
@@ -136,22 +136,6 @@ impl pallet_cf_flip::Config for Test {
 	type WaivedFees = WaivedFeesMock;
 }
 
-pub const FAKE_KEYMAN_ADDR: [u8; 20] = [0xcf; 20];
-pub const CHAIN_ID: u64 = 31337;
-pub const COUNTER: u64 = 42;
-
-pub struct MockReplayProtectionProvider;
-
-impl ReplayProtectionProvider<MockEthereum> for MockReplayProtectionProvider {
-	fn replay_protection() -> <MockEthereum as ChainAbi>::ReplayProtection {
-		EthereumReplayProtection {
-			key_manager_address: FAKE_KEYMAN_ADDR,
-			chain_id: CHAIN_ID,
-			nonce: COUNTER,
-		}
-	}
-}
-
 pub const EMISSION_RATE: u128 = 10;
 pub struct MockRewardsDistribution;
 
@@ -182,7 +166,7 @@ impl UpdateFlipSupply<MockEthereum> for MockUpdateFlipSupply {
 		stake_manager_address: &[u8; 20],
 	) -> Self {
 		Self {
-			nonce: MockReplayProtectionProvider::replay_protection(),
+			nonce: MockEthReplayProtectionProvider::replay_protection(),
 			new_total_supply,
 			block_number,
 			stake_manager_address: *stake_manager_address,

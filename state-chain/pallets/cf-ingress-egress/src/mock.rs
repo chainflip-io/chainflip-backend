@@ -1,5 +1,4 @@
 pub use crate::{self as pallet_cf_ingress_egress};
-use cf_chains::ReplayProtectionProvider;
 pub use cf_chains::{
 	eth::api::{EthereumApi, EthereumReplayProtection},
 	Chain, ChainAbi, ChainEnvironment,
@@ -81,19 +80,6 @@ impl cf_traits::Chainflip for Test {
 	type EnsureWitnessedAtCurrentEpoch = NeverFailingOriginCheck<Self>;
 	type EpochInfo = cf_traits::mocks::epoch_info::MockEpochInfo;
 	type SystemState = MockSystemStateInfo;
-}
-
-pub const FAKE_KEYMAN_ADDR: [u8; 20] = [0xcf; 20];
-pub const CHAIN_ID: u64 = 31337;
-pub const COUNTER: u64 = 42;
-impl ReplayProtectionProvider<Ethereum> for Test {
-	fn replay_protection() -> <Ethereum as ChainAbi>::ReplayProtection {
-		EthereumReplayProtection {
-			key_manager_address: FAKE_KEYMAN_ADDR,
-			chain_id: CHAIN_ID,
-			nonce: COUNTER,
-		}
-	}
 }
 
 pub struct MockBroadcast;

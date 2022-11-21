@@ -1,8 +1,5 @@
 use crate::{self as pallet_cf_tokenholder_governance};
-use cf_chains::{
-	eth::api::EthereumReplayProtection, mocks::MockEthereum, ApiCall, ChainAbi, ChainCrypto,
-	ReplayProtectionProvider,
-};
+use cf_chains::{mocks::MockEthereum, ApiCall, ChainAbi, ChainCrypto};
 use cf_traits::{
 	impl_mock_stake_transfer, impl_mock_waived_fees,
 	mocks::{
@@ -51,21 +48,6 @@ parameter_types! {
 	pub const VotingPeriod: BlockNumberFor<Test> = 10;
 	pub const ProposalFee: Balance = 100;
 	pub const EnactmentDelay: BlockNumberFor<Test> = 20;
-}
-
-pub const FAKE_KEYMAN_ADDR: [u8; 20] = [0xcf; 20];
-pub const CHAIN_ID: u64 = 31337;
-pub const COUNTER: u64 = 42;
-pub struct MockReplayProvider;
-
-impl ReplayProtectionProvider<MockEthereum> for MockReplayProvider {
-	fn replay_protection() -> <MockEthereum as ChainAbi>::ReplayProtection {
-		EthereumReplayProtection {
-			key_manager_address: FAKE_KEYMAN_ADDR,
-			chain_id: CHAIN_ID,
-			nonce: COUNTER,
-		}
-	}
 }
 
 impl system::Config for Test {
