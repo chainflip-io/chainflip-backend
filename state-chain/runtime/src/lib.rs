@@ -71,10 +71,7 @@ use chainflip::{
 	epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat, EthEnvironment,
 	EthVaultTransitionHandler,
 };
-use constants::common::{
-	eth::{BLOCK_SAFETY_MARGIN, CONSERVATIVE_BLOCK_TIME_SECS},
-	*,
-};
+use constants::common::*;
 use pallet_cf_flip::{Bonder, FlipSlasher};
 pub use pallet_cf_staking::WithdrawalAddresses;
 use pallet_cf_validator::PercentageRange;
@@ -442,7 +439,6 @@ impl pallet_cf_staking::Config for Runtime {
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, Instance1>;
 	type RegisterClaim = eth::api::EthereumApi<EthEnvironment>;
-	type ClaimDelayBufferSeconds = ConstU64<{ BLOCK_SAFETY_MARGIN * CONSERVATIVE_BLOCK_TIME_SECS }>;
 	type TimeSource = Timestamp;
 	type WeightInfo = pallet_cf_staking::weights::PalletWeight<Runtime>;
 }
