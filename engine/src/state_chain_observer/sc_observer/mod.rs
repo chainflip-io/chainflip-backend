@@ -18,7 +18,7 @@ use std::{
 	},
 	time::Duration,
 };
-use tokio::sync::{broadcast, mpsc::UnboundedSender, watch};
+use tokio::sync::{mpsc::UnboundedSender, watch};
 
 use crate::{
 	eth::{rpc::EthRpcApi, EthBroadcaster},
@@ -176,7 +176,7 @@ pub async fn start<
 	eth_multisig_client: Arc<EthMultisigClient>,
 	dot_multisig_client: Arc<PolkadotMultisigClient>,
 	peer_update_sender: UnboundedSender<PeerUpdate>,
-	eth_epoch_start_sender: broadcast::Sender<EpochStart<Ethereum>>,
+	eth_epoch_start_sender: async_broadcast::Sender<EpochStart<Ethereum>>,
 	#[cfg(feature = "ibiza")] eth_monitor_ingress_sender: tokio::sync::mpsc::UnboundedSender<H160>,
 	#[cfg(feature = "ibiza")] eth_monitor_flip_ingress_sender: tokio::sync::mpsc::UnboundedSender<
 		H160,
@@ -219,7 +219,7 @@ where
             let state_chain_client = &state_chain_client;
 
             async move {
-                eth_epoch_start_sender.send(EpochStart::<Ethereum> {
+                eth_epoch_start_sender.broadcast(EpochStart::<Ethereum> {
                     epoch_index: index,
                     block_number: state_chain_client
                         .storage_map_entry::<pallet_cf_vaults::Vaults<
@@ -232,7 +232,7 @@ where
                         .active_from_block,
                     current,
                     participant,
-                }).unwrap();
+                }).await.unwrap();
             }
         };
 
