@@ -25,9 +25,10 @@ pub enum SystemAccounts {
 	Vault,
 }
 
-impl<E: ReplayProtectionProvider<Polkadot>> AllBatch<Polkadot> for PolkadotApi<E>
+impl<E> AllBatch<Polkadot> for PolkadotApi<E>
 where
 	E: ChainEnvironment<SystemAccounts, <Polkadot as Chain>::ChainAccount>,
+	E: ReplayProtectionProvider<Polkadot>,
 {
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<Polkadot>>,

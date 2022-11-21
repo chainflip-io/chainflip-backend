@@ -105,9 +105,10 @@ impl<E: ReplayProtectionProvider<Ethereum>> UpdateFlipSupply<Ethereum> for Ether
 	}
 }
 
-impl<E: ReplayProtectionProvider<Ethereum>> AllBatch<Ethereum> for EthereumApi<E>
+impl<E> AllBatch<Ethereum> for EthereumApi<E>
 where
 	E: ChainEnvironment<assets::eth::Asset, Address>,
+	E: ReplayProtectionProvider<Ethereum>,
 {
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<Ethereum>>,
