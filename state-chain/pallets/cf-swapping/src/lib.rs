@@ -4,7 +4,7 @@ use cf_traits::{liquidity::AmmPoolApi, IngressApi};
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
-use sp_std::{cmp, vec::Vec};
+use sp_std::vec::Vec;
 
 use sp_std::collections::btree_map::BTreeMap;
 
@@ -97,23 +97,31 @@ pub mod pallet {
 		/// Do swapping with remaining weight in this block
 		fn on_idle(_block_number: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
 			// The computational cost for a swap.
-			let swap_weight = T::WeightInfo::execute_swap();
-			let mut swaps = SwapQueue::<T>::get();
-			// We split the array in what we can process during this block and the rest. If we could
-			// do more we just process all. We calculate the index based on the available weight and
-			// the weight we need for performing a single swap.
-			let remaining_swaps = swaps.split_off(cmp::min(
-				swaps.len(),
-				(remaining_weight.saturating_div(swap_weight)) as usize,
-			));
-			let swaps_executed = swaps.len();
-			for swap in swaps {
-				Self::execute_swap(swap);
+			let swap_weight = 100;
+			let swaps = SwapQueue::<T>::get();
+			let mut available_weight = remaining_weight;
+			let mut used_weight = 0;
+
+			let mut swap_groups = Self::group_swaps(swaps);
+
+			for (asset_pair, swaps) in swap_groups.clone() {
+				if available_weight < swap_weight {
+					break
+				}
+				Self::execute_group_of_swaps(swaps, asset_pair.0, asset_pair.1);
+				swap_groups.remove(&(asset_pair.0, asset_pair.1));
+				available_weight = available_weight - swap_weight;
+				used_weight = used_weight + swap_weight;
 			}
-			// Write the rest back (potentially an empty vector).
+
+			let mut remaining_swaps: Vec<Swap<<T as frame_system::Config>::AccountId>> = vec![];
+
+			for (_, swaps) in swap_groups {
+				remaining_swaps.append(&mut swaps.clone());
+			}
+
 			SwapQueue::<T>::put(remaining_swaps);
-			// return the weight we used during the execution of this function.
-			swap_weight * swaps_executed as u64 + T::WeightInfo::on_idle()
+			used_weight
 		}
 	}
 
@@ -245,22 +253,6 @@ pub mod pallet {
 					.or_insert(vec![swap]);
 			}
 			grouped_swaps
-		}
-
-		pub fn process_as_group_of_swaps() {
-			let mut grouped_swaps: BTreeMap<
-				(Asset, Asset),
-				Vec<Swap<<T as frame_system::Config>::AccountId>>,
-			> = BTreeMap::new();
-			for swap in SwapQueue::<T>::get() {
-				grouped_swaps
-					.entry((swap.from, swap.to))
-					.and_modify(|swaps| swaps.push(swap.clone()))
-					.or_insert(vec![swap]);
-			}
-			for (group, swaps) in grouped_swaps {
-				Self::execute_group_of_swaps(swaps, group.0, group.1);
-			}
 		}
 	}
 

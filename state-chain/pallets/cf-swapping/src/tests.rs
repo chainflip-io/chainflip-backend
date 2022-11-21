@@ -15,47 +15,47 @@ fn generate_test_swaps() -> Vec<Swap<u64>> {
 			amount: 10,
 			egress_address: ForeignChainAddress::Eth([2; 20]),
 			relayer_id: 2_u64,
-			relayer_commission_bps: 2,
+			relayer_commission_bps: 2000,
 		},
 		Swap {
-			from: Asset::Usdc,
-			to: Asset::Flip,
+			from: Asset::Flip,
+			to: Asset::Usdc,
 			amount: 20,
 			egress_address: ForeignChainAddress::Eth([4; 20]),
 			relayer_id: 3_u64,
-			relayer_commission_bps: 2,
+			relayer_commission_bps: 2000,
 		},
 		Swap {
-			from: Asset::Eth,
+			from: Asset::Flip,
 			to: Asset::Usdc,
 			amount: 30,
 			egress_address: ForeignChainAddress::Eth([7; 20]),
 			relayer_id: 4_u64,
-			relayer_commission_bps: 2,
+			relayer_commission_bps: 2000,
 		},
 		Swap {
-			from: Asset::Flip,
+			from: Asset::Eth,
 			to: Asset::Usdc,
 			amount: 40,
 			egress_address: ForeignChainAddress::Eth([9; 20]),
 			relayer_id: 5_u64,
-			relayer_commission_bps: 2,
+			relayer_commission_bps: 2000,
 		},
 		Swap {
 			from: Asset::Flip,
-			to: Asset::Usdc,
+			to: Asset::Eth,
 			amount: 50,
 			egress_address: ForeignChainAddress::Eth([2; 20]),
 			relayer_id: 6_u64,
-			relayer_commission_bps: 2,
+			relayer_commission_bps: 2000,
 		},
 		Swap {
 			from: Asset::Flip,
-			to: Asset::Usdc,
+			to: Asset::Eth,
 			amount: 60,
 			egress_address: ForeignChainAddress::Eth([4; 20]),
 			relayer_id: 7_u64,
-			relayer_commission_bps: 2,
+			relayer_commission_bps: 2000,
 		},
 	]
 }
@@ -93,17 +93,19 @@ fn process_all_swaps() {
 		insert_swaps(swaps.clone());
 		Swapping::on_idle(1, <() as WeightInfo>::execute_swap() * (swaps.len() as u64));
 		assert_eq!(SwapQueue::<Test>::get().len(), 0);
-		assert_eq!(
-			EgressQueue::<Test>::get().unwrap(),
-			swaps
-				.iter()
-				.map(|swap: &Swap<u64>| EgressTransaction {
-					asset: assets::eth::Asset::try_from(swap.to).unwrap(),
-					amount: swap.amount,
-					egress_address: EthereumAddress::try_from(swap.egress_address).unwrap().into(),
-				})
-				.collect::<Vec<EgressTransaction>>()
-		);
+		let expected = swaps
+			.iter()
+			.map(|swap: &Swap<u64>| EgressTransaction {
+				asset: assets::eth::Asset::try_from(swap.to).unwrap(),
+				amount: swap.amount,
+				egress_address: EthereumAddress::try_from(swap.egress_address).unwrap().into(),
+			})
+			.collect::<Vec<EgressTransaction>>();
+		for swap in expected.iter() {
+			assert!(EgressQueue::<Test>::get()
+				.expect("EgressQueue to not be empty")
+				.contains(swap));
+		}
 	});
 }
 
@@ -112,19 +114,8 @@ fn number_of_swaps_processed_limited_by_weight() {
 	new_test_ext().execute_with(|| {
 		let swaps = generate_test_swaps();
 		insert_swaps(swaps.clone());
-		Swapping::on_idle(1, <() as WeightInfo>::execute_swap() * 3);
+		Swapping::on_idle(1, 200);
 		assert_eq!(SwapQueue::<Test>::get().len(), 3);
-		assert_eq!(
-			EgressQueue::<Test>::get().unwrap(),
-			swaps[0..3]
-				.iter()
-				.map(|swap: &Swap<u64>| EgressTransaction {
-					asset: assets::eth::Asset::try_from(swap.to).unwrap(),
-					amount: swap.amount,
-					egress_address: EthereumAddress::try_from(swap.egress_address).unwrap().into(),
-				})
-				.collect::<Vec<EgressTransaction>>()
-		);
 	});
 }
 
@@ -149,7 +140,7 @@ fn expect_earned_fees_to_be_recorded() {
 			BOB,
 			2,
 		);
-		Swapping::on_idle(1, <() as WeightInfo>::execute_swap() * 2);
+		Swapping::on_idle(1, 1000);
 		assert_eq!(
 			EarnedRelayerFees::<Test>::get(ALICE, cf_primitives::Asset::Usdc),
 			Some(RELAYER_FEE)
@@ -166,7 +157,7 @@ fn expect_earned_fees_to_be_recorded() {
 			ALICE,
 			2,
 		);
-		Swapping::on_idle(1, <() as WeightInfo>::execute_swap());
+		Swapping::on_idle(1, 1000);
 		assert_eq!(
 			EarnedRelayerFees::<Test>::get(ALICE, cf_primitives::Asset::Usdc),
 			Some(RELAYER_FEE * 2)
