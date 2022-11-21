@@ -17,8 +17,7 @@ use cf_chains::{eth, mocks::MockEthereum, ApiCall, ChainCrypto};
 use cf_traits::{
 	mocks::{
 		ceremony_id_provider::MockCeremonyIdProvider, ensure_origin_mock::NeverFailingOriginCheck,
-		epoch_info::MockEpochInfo, eth_environment_provider::MockEthEnvironmentProvider,
-		eth_replay_protection_provider::MockEthReplayProtectionProvider,
+		epoch_info::MockEpochInfo, eth_replay_protection_provider::MockEthReplayProtectionProvider,
 		system_state_info::MockSystemStateInfo, threshold_signer::MockThresholdSigner,
 	},
 	Chainflip,
@@ -221,7 +220,6 @@ impl pallet_cf_vaults::Config for MockRuntime {
 	type CeremonyIdProvider = MockCeremonyIdProvider<CeremonyId>;
 	type WeightInfo = ();
 	type Broadcaster = MockBroadcaster;
-	type EthEnvironmentProvider = MockEthEnvironmentProvider;
 	type ReplayProtectionProvider = MockEthReplayProtectionProvider<MockEthereum>;
 	type SystemStateManager = MockSystemStateManager;
 }
