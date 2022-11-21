@@ -34,11 +34,6 @@ benchmarks! {
 		ForeignChainAddress::Eth(Default::default()),
 		0
 	)
-	execute_swap {
-		let swap = Swap { from: Asset::Eth, to: Asset::Usdc, amount: 10, egress_address: ForeignChainAddress::Eth(Default::default()), relayer_id: whitelisted_caller(), relayer_commission_bps: 2};
-	}: {
-		Pallet::<T>::execute_swap(swap);
-	}
 	on_idle {}: {
 		Pallet::<T>::on_idle(T::BlockNumber::from(1u32), 1);
 	}
@@ -48,10 +43,5 @@ benchmarks! {
 		let swaps = generate_swaps::<T>(a, Asset::Eth, Asset::Dot);
 	} : {
 		Pallet::<T>::execute_group_of_swaps(swaps, Asset::Eth, Asset::Dot);
-	}
-	group_swaps {
-
-	} : {
-
 	}
 }
