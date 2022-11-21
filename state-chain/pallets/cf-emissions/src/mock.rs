@@ -140,7 +140,9 @@ pub const FAKE_KEYMAN_ADDR: [u8; 20] = [0xcf; 20];
 pub const CHAIN_ID: u64 = 31337;
 pub const COUNTER: u64 = 42;
 
-impl ReplayProtectionProvider<MockEthereum> for Test {
+pub struct MockReplayProtectionProvider;
+
+impl ReplayProtectionProvider<MockEthereum> for MockReplayProtectionProvider {
 	fn replay_protection() -> <MockEthereum as ChainAbi>::ReplayProtection {
 		EthereumReplayProtection {
 			key_manager_address: FAKE_KEYMAN_ADDR,
@@ -180,8 +182,7 @@ impl UpdateFlipSupply<MockEthereum> for MockUpdateFlipSupply {
 		stake_manager_address: &[u8; 20],
 	) -> Self {
 		Self {
-			// TODO: Use test nonce
-			nonce: Default::default(),
+			nonce: MockReplayProtectionProvider::replay_protection(),
 			new_total_supply,
 			block_number,
 			stake_manager_address: *stake_manager_address,
