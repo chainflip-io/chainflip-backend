@@ -1,8 +1,5 @@
 use crate as pallet_cf_lp;
-use cf_chains::{
-	eth::{api::EthereumReplayProtection, assets},
-	Chain, ChainAbi, ChainEnvironment, Ethereum, ReplayProtectionProvider,
-};
+use cf_chains::{eth::assets, Chain, ChainEnvironment, Ethereum};
 use cf_primitives::{EthereumAddress, IntentId, ETHEREUM_ETH_ADDRESS};
 use cf_traits::{
 	mocks::{
@@ -82,20 +79,6 @@ impl system::Config for Test {
 	type SS58Prefix = SS58Prefix;
 	type OnSetCode = ();
 	type MaxConsumers = frame_support::traits::ConstU32<5>;
-}
-
-pub const FAKE_KEYMAN_ADDR: [u8; 20] = [0xcf; 20];
-pub const CHAIN_ID: u64 = 31337;
-pub const COUNTER: u64 = 42;
-
-impl ReplayProtectionProvider<Ethereum> for Test {
-	fn replay_protection() -> <Ethereum as ChainAbi>::ReplayProtection {
-		EthereumReplayProtection {
-			key_manager_address: FAKE_KEYMAN_ADDR,
-			chain_id: CHAIN_ID,
-			nonce: COUNTER,
-		}
-	}
 }
 
 pub struct MockBroadcast;

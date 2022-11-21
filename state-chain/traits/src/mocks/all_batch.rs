@@ -1,8 +1,11 @@
 use cf_chains::{
-	AllBatch, ApiCall, ChainAbi, ChainCrypto, Ethereum, FetchAssetParams, TransferAssetParams,
+	AllBatch, ApiCall, ChainAbi, ChainCrypto, Ethereum, FetchAssetParams, ReplayProtectionProvider,
+	TransferAssetParams,
 };
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
+
+use super::eth_replay_protection_provider::MockEthReplayProtectionProvider;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct MockAllBatch {
@@ -16,8 +19,11 @@ impl AllBatch<Ethereum> for MockAllBatch {
 		fetch_params: Vec<FetchAssetParams<Ethereum>>,
 		transfer_params: Vec<TransferAssetParams<Ethereum>>,
 	) -> Self {
-		// TODO: Give it a nonce
-		Self { nonce: Default::default(), fetch_params, transfer_params }
+		Self {
+			nonce: MockEthReplayProtectionProvider::replay_protection(),
+			fetch_params,
+			transfer_params,
+		}
 	}
 }
 
