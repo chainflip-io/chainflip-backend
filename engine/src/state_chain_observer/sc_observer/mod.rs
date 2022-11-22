@@ -98,7 +98,7 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient>(
 {
 	if signers.contains(&state_chain_client.account_id()) {
 		// Send a signing request and wait to submit the result to the SC
-		let sign_result = multisig_client.initiate_sign(ceremony_id, key_id, signers, data);
+		let sign_result = multisig_client.initiate_signing(ceremony_id, key_id, signers, data);
 		scope.spawn(async move {
 			match sign_result.await {
 				Ok(signature) => {

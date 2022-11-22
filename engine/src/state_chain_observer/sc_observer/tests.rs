@@ -1042,7 +1042,7 @@ async fn should_handle_signing_request() {
 
 	let next_ceremony_id = first_ceremony_id + 1;
 	multisig_client
-		.expect_initiate_sign()
+		.expect_initiate_signing()
 		.with(
 			predicate::eq(next_ceremony_id),
 			predicate::eq(key_id.clone()),

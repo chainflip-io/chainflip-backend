@@ -110,7 +110,7 @@ pub trait MultisigClientApi<C: CryptoScheme> {
 		participants: BTreeSet<AccountId>,
 	) -> BoxFuture<'_, Result<C::Point, (BTreeSet<AccountId>, KeygenFailureReason)>>;
 
-	fn initiate_sign(
+	fn initiate_signing(
 		&self,
 		ceremony_id: CeremonyId,
 		key_id: KeyId,
@@ -145,7 +145,7 @@ pub mod mocks {
 				_ceremony_id: CeremonyId,
 				_participants: BTreeSet<AccountId>,
 			) -> BoxFuture<'_, Result<C::Point, (BTreeSet<AccountId>, KeygenFailureReason)>>;
-			fn initiate_sign(
+			fn initiate_signing(
 				&self,
 				_ceremony_id: CeremonyId,
 				_key_id: KeyId,
@@ -285,7 +285,7 @@ impl<C: CryptoScheme> MultisigClientApi<C> for MultisigClient<C> {
 	// request to the CeremonyManager/Backend and outputs a second future that will complete only
 	// once the CeremonyManager has finished the ceremony. This allows tests to split making the
 	// request and waiting for the result.
-	fn initiate_sign(
+	fn initiate_signing(
 		&self,
 		ceremony_id: CeremonyId,
 		key_id: KeyId,
