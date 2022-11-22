@@ -46,7 +46,7 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient>(
 	keygen_participants: BTreeSet<AccountId32>,
 	logger: slog::Logger,
 ) where
-	MultisigClient: MultisigClientApi<EthSigning> + Send + Sync + 'static,
+	MultisigClient: MultisigClientApi<EthSigning>,
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
 {
 	if keygen_participants.contains(&state_chain_client.account_id()) {
@@ -93,7 +93,7 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient>(
 	data: MessageHash,
 	logger: slog::Logger,
 ) where
-	MultisigClient: MultisigClientApi<EthSigning> + Send + Sync + 'static,
+	MultisigClient: MultisigClientApi<EthSigning>,
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
 {
 	if signers.contains(&state_chain_client.account_id()) {
