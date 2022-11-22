@@ -262,8 +262,9 @@ impl ChainEnvironment<cf_chains::dot::api::SystemAccounts, PolkadotAccountId> fo
 	) -> Result<PolkadotAccountId, frame_support::error::LookupError> {
 		match query {
 			cf_chains::dot::api::SystemAccounts::Proxy =>
-				Ok(Environment::get_current_proxy_account()),
-			cf_chains::dot::api::SystemAccounts::Vault => Ok(Environment::get_vault_account()),
+				Ok(Environment::get_current_polkadot_proxy_account()),
+			cf_chains::dot::api::SystemAccounts::Vault =>
+				Ok(Environment::get_polkadot_vault_account()),
 		}
 	}
 }

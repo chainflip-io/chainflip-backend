@@ -359,7 +359,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	#[cfg(feature = "ibiza")]
-	pub fn get_vault_account() -> PolkadotAccountId {
+	pub fn get_polkadot_vault_account() -> PolkadotAccountId {
 		PolkadotVaultAccountId::<T>::get().unwrap_or_else(|| {
 			PolkadotAccountId::new(hex_literal::hex!(
 				"56cc4af8ff9fb97c60320ae43d35bd831b14f0b7065f3385db0dbf4cb5d8766f"
@@ -368,7 +368,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	#[cfg(feature = "ibiza")]
-	pub fn get_current_proxy_account() -> PolkadotAccountId {
+	pub fn get_current_polkadot_proxy_account() -> PolkadotAccountId {
 		PolkadotCurrentProxyAccountId::<T>::get().unwrap_or_else(|| {
 			PolkadotAccountId::new(hex_literal::hex!(
 				"beb9c3f0ae5bda798dd3b65fe345fdf9031946849d8925ae7be73ee9407c6737"
