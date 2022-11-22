@@ -1,7 +1,7 @@
-use std::{io::Write, sync::Arc};
+use std::{io::Write, sync::Arc, time::Duration};
 
 use cf_primitives::EpochIndex;
-use futures::StreamExt;
+use futures::{FutureExt, StreamExt};
 use tokio::sync::broadcast::{self};
 
 use crate::{
@@ -66,25 +66,34 @@ where
 
 				let (witnessed_until_sender, witnessed_until_receiver) =
 					tokio::sync::watch::channel(witnessed_until.clone());
-				let write_witnessed_until = scopeguard::guard((), {
+
+				tokio::task::spawn_blocking({
 					let contract_name = contract_name.clone();
-					move |_| {
-						atomicwrites::AtomicFile::new(
-							&contract_name,
-							atomicwrites::OverwriteBehavior::AllowOverwrite,
-						)
-						.write(|file| {
-							write!(
-								file,
-								"{}",
-								serde_json::to_string::<WitnessedUntil>(
-									&witnessed_until_receiver.borrow()
+					move || loop {
+						std::thread::sleep(Duration::from_secs(4));
+						if let Ok(changed) = witnessed_until_receiver.has_changed() {
+							if changed {
+								atomicwrites::AtomicFile::new(
+									&contract_name,
+									atomicwrites::OverwriteBehavior::AllowOverwrite,
 								)
-								.unwrap()
-							)
-						});
+								.write(|file| {
+									write!(
+										file,
+										"{}",
+										serde_json::to_string::<WitnessedUntil>(
+											&witnessed_until_receiver.borrow()
+										)
+										.unwrap()
+									)
+								});
+							}
+						} else {
+							break
+						}
 					}
 				});
+
 				if epoch_start.epoch_index >= witnessed_until.epoch_index {
 					let mut block_stream = block_events_stream_for_contract_from(
 						epoch_start.eth_block,
