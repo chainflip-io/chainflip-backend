@@ -1,7 +1,7 @@
 use std::{io::Write, sync::Arc, time::Duration};
 
 use cf_primitives::EpochIndex;
-use futures::{FutureExt, StreamExt};
+use futures::StreamExt;
 use tokio::sync::broadcast::{self};
 
 use crate::{
@@ -49,9 +49,12 @@ where
 			async move {
 				let contract_name = contract_witnesser.contract_name();
 
+				let mut file_path = std::env::current_dir().unwrap();
+				file_path.push(contract_name);
+
 				let witnessed_until = tokio::task::spawn_blocking({
-					let contract_name = contract_name.clone();
-					move || match std::fs::read_to_string(&contract_name)
+					let file_path = file_path.clone();
+					move || match std::fs::read_to_string(&file_path)
 						.map_err(anyhow::Error::new)
 						.and_then(|string| {
 							serde_json::from_str::<WitnessedUntil>(&string)
@@ -64,17 +67,19 @@ where
 				.await
 				.unwrap();
 
+				slog::info!(logger, "Witnessing Until: {:?}", witnessed_until,);
+
 				let (witnessed_until_sender, witnessed_until_receiver) =
 					tokio::sync::watch::channel(witnessed_until.clone());
 
 				tokio::task::spawn_blocking({
-					let contract_name = contract_name.clone();
+					let file_path = file_path.clone();
 					move || loop {
 						std::thread::sleep(Duration::from_secs(4));
 						if let Ok(changed) = witnessed_until_receiver.has_changed() {
 							if changed {
-								atomicwrites::AtomicFile::new(
-									&contract_name,
+								let _result = atomicwrites::AtomicFile::new(
+									&file_path,
 									atomicwrites::OverwriteBehavior::AllowOverwrite,
 								)
 								.write(|file| {

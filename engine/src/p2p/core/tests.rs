@@ -31,7 +31,7 @@ fn spawn_node(
 	logger: &slog::Logger,
 ) -> Node {
 	let account_id = AccountId::new([idx as u8 + 1; 32]);
-	let (epoch_start_sender, epoch_start_receiver) = broadcast::channel(1);
+	let (_epoch_start_sender, epoch_start_receiver) = broadcast::channel(1);
 	let (msg_sender, peer_update_sender, msg_receiver, _, fut) = super::start(
 		key,
 		our_peer_info.port,
