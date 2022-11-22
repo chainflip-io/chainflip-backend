@@ -47,6 +47,9 @@ pub use signing::{gen_signing_data_stage1, gen_signing_data_stage4};
 #[cfg(test)]
 pub use keygen::{gen_keygen_data_hash_comm1, gen_keygen_data_verify_hash_comm2};
 
+#[cfg(test)]
+use mockall::automock;
+
 use self::{
 	ceremony_manager::{CeremonyResultSender, KeygenCeremony, SigningCeremony},
 	key_store::KeyStore,
@@ -103,6 +106,7 @@ pub struct MultisigMessage<P: ECPoint> {
 }
 
 /// The public interface to the multi-signature code
+#[cfg_attr(test, automock)]
 pub trait MultisigClientApi<C: CryptoScheme> {
 	fn initiate_keygen(
 		&self,
@@ -119,42 +123,6 @@ pub trait MultisigClientApi<C: CryptoScheme> {
 	) -> BoxFuture<'_, Result<C::Signature, (BTreeSet<AccountId>, SigningFailureReason)>>;
 
 	fn update_latest_ceremony_id(&self, ceremony_id: CeremonyId);
-}
-
-// This is constructed by hand since mockall
-// fails to parse complex generic parameters
-// (and none of mockall's features were used
-// anyway)
-// NOTE: the fact that this mock is needed in tests but
-// its methods are never called is a bit of a red flag
-
-#[cfg(test)]
-pub mod mocks {
-
-	use super::*;
-	use mockall::mock;
-
-	use crate::multisig::crypto::CryptoScheme;
-
-	mock! {
-		pub MultisigClientApi<C: CryptoScheme + Send + Sync> {}
-
-		impl<C: CryptoScheme + Send + Sync> MultisigClientApi<C> for MultisigClientApi<C> {
-			fn initiate_keygen(
-				&self,
-				_ceremony_id: CeremonyId,
-				_participants: BTreeSet<AccountId>,
-			) -> BoxFuture<'_, Result<C::Point, (BTreeSet<AccountId>, KeygenFailureReason)>>;
-			fn initiate_signing(
-				&self,
-				_ceremony_id: CeremonyId,
-				_key_id: KeyId,
-				_signers: BTreeSet<AccountId>,
-				_data: MessageHash,
-			) -> BoxFuture<'_, Result<C::Signature, (BTreeSet<AccountId>, SigningFailureReason)>>;
-			fn update_latest_ceremony_id(&self, ceremony_id: CeremonyId);
-		}
-	}
 }
 
 /// The ceremony details are optional to alow the updating of the ceremony id tracking

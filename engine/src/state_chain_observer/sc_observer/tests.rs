@@ -19,7 +19,7 @@ use crate::{
 		EthBroadcaster,
 	},
 	logging::test_utils::new_test_logger,
-	multisig::client::{mocks::MockMultisigClientApi, KeygenFailureReason, SigningFailureReason},
+	multisig::client::{KeygenFailureReason, MockMultisigClientApi, SigningFailureReason},
 	settings::Settings,
 	state_chain_observer::{client::mocks::MockStateChainClient, sc_observer},
 	task_scope::task_scope,
