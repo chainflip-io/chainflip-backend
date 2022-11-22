@@ -46,7 +46,7 @@ async fn main() -> anyhow::Result<()> {
             }
 
             let (latest_block_hash, state_chain_block_stream, state_chain_client) =
-                state_chain_observer::client::StateChainClient::new(&settings.state_chain, true, &root_logger)
+                state_chain_observer::client::StateChainClient::new(scope, &settings.state_chain, true, &root_logger)
                     .await?;
 
             let eth_dual_rpc =

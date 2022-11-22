@@ -16,9 +16,7 @@ pub use weights::WeightInfo;
 mod tests;
 
 use cf_chains::RegisterClaim;
-use cf_traits::{
-	Bid, BidderProvider, EpochInfo, ReplayProtectionProvider, StakeTransfer, ThresholdSigner,
-};
+use cf_traits::{Bid, BidderProvider, EpochInfo, StakeTransfer, ThresholdSigner};
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
@@ -107,9 +105,6 @@ pub mod pallet {
 			AccountId = <Self as frame_system::Config>::AccountId,
 			Balance = Self::Balance,
 		>;
-
-		/// Something that can provide a nonce for the threshold signature.
-		type ReplayProtectionProvider: ReplayProtectionProvider<Ethereum>;
 
 		/// Threshold signer.
 		type ThresholdSigner: ThresholdSigner<Ethereum, Callback = Self::ThresholdCallable>;
@@ -378,7 +373,6 @@ pub mod pallet {
 			);
 
 			let call = T::RegisterClaim::new_unsigned(
-				T::ReplayProtectionProvider::replay_protection(),
 				<T as Config>::StakerId::from_ref(&account_id).as_ref(),
 				amount.into(),
 				&address,
