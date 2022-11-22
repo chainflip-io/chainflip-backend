@@ -17,7 +17,7 @@ use cf_chains::{AllBatch, Chain, ChainAbi, ChainCrypto, FetchAssetParams, Transf
 use cf_primitives::{Asset, AssetAmount, ForeignChainAddress, IntentId};
 use cf_traits::{
 	liquidity::LpProvisioningApi, AddressDerivationApi, Broadcaster, EgressApi, IngressApi,
-	ReplayProtectionProvider, SwapIntentHandler,
+	SwapIntentHandler,
 };
 use frame_support::{pallet_prelude::*, sp_runtime::DispatchError};
 pub use pallet::*;
@@ -109,9 +109,6 @@ pub mod pallet {
 
 		/// For scheduling swaps.
 		type SwapIntentHandler: SwapIntentHandler<AccountId = Self::AccountId>;
-
-		/// Replay protection.
-		type ReplayProtection: ReplayProtectionProvider<Self::TargetChain>;
 
 		/// The type of the chain-native transaction.
 		type AllBatch: AllBatch<Self::TargetChain>;
@@ -346,11 +343,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		// Construct and send the transaction.
 		#[allow(clippy::unit_arg)]
-		let egress_transaction = T::AllBatch::new_unsigned(
-			T::ReplayProtection::replay_protection(),
-			fetch_params,
-			egress_params,
-		);
+		let egress_transaction = T::AllBatch::new_unsigned(fetch_params, egress_params);
 		T::Broadcaster::threshold_sign_and_broadcast(egress_transaction);
 		Self::deposit_event(Event::<T, I>::BatchBroadcastRequested {
 			fetch_batch_size,
