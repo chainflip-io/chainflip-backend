@@ -50,6 +50,7 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient>(
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
 {
 	if keygen_participants.contains(&state_chain_client.account_id()) {
+		// We initiate keygen outside of the spawn to avoid requesting ceremonies out of order
 		let keygen_result = multisig_client.initiate_keygen(ceremony_id, keygen_participants);
 		scope.spawn(async move {
 			let _result = state_chain_client
@@ -97,7 +98,7 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient>(
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
 {
 	if signers.contains(&state_chain_client.account_id()) {
-		// Send a signing request and wait to submit the result to the SC
+		// We initiate signing outside of the spawn to avoid requesting ceremonies out of order
 		let sign_result = multisig_client.initiate_signing(ceremony_id, key_id, signers, data);
 		scope.spawn(async move {
 			match sign_result.await {
