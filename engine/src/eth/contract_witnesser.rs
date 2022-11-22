@@ -67,18 +67,21 @@ where
 				.await
 				.unwrap();
 
-				slog::info!(logger, "Witnessing Until: {:?}", witnessed_until,);
+				slog::info!(logger, "WitnessingUntil: {:?}", witnessed_until);
 
 				let (witnessed_until_sender, witnessed_until_receiver) =
 					tokio::sync::watch::channel(witnessed_until.clone());
 
 				tokio::task::spawn_blocking({
 					let file_path = file_path.clone();
+					let logger = logger.clone();
 					move || loop {
 						std::thread::sleep(Duration::from_secs(4));
 						if let Ok(changed) = witnessed_until_receiver.has_changed() {
 							if changed {
-								let _result = atomicwrites::AtomicFile::new(
+								let witnessed_until = witnessed_until_receiver.borrow().clone();
+
+								if let Err(error) = atomicwrites::AtomicFile::new(
 									&file_path,
 									atomicwrites::OverwriteBehavior::AllowOverwrite,
 								)
@@ -86,12 +89,22 @@ where
 									write!(
 										file,
 										"{}",
-										serde_json::to_string::<WitnessedUntil>(
-											&witnessed_until_receiver.borrow()
-										)
-										.unwrap()
+										serde_json::to_string::<WitnessedUntil>(&witnessed_until)
+											.unwrap()
 									)
-								});
+								}) {
+									slog::info!(
+										logger,
+										"Failed to record WitnessingUntil: {:?}",
+										error
+									);
+								} else {
+									slog::info!(
+										logger,
+										"Recorded WitnessingUntil: {:?}",
+										witnessed_until
+									);
+								}
 							}
 						} else {
 							break
