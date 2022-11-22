@@ -1,10 +1,7 @@
 use crate::{self as pallet_cf_environment, cfe};
 #[cfg(feature = "ibiza")]
 use cf_chains::dot::POLKADOT_CONFIG;
-use cf_traits::mocks::{
-	ensure_origin_mock::NeverFailingOriginCheck,
-	eth_environment_provider::MockEthEnvironmentProvider,
-};
+use cf_traits::mocks::ensure_origin_mock::NeverFailingOriginCheck;
 use frame_support::parameter_types;
 use frame_system as system;
 use sp_core::H256;
@@ -66,7 +63,6 @@ impl pallet_cf_environment::Config for Test {
 	type Event = Event;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type WeightInfo = ();
-	type EthEnvironmentProvider = MockEthEnvironmentProvider;
 }
 
 pub const STAKE_MANAGER_ADDRESS: [u8; 20] = [0u8; 20];

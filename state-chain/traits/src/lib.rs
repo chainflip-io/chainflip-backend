@@ -280,11 +280,6 @@ pub trait EmissionsTrigger {
 	fn trigger_emissions();
 }
 
-/// Provides chain-specific replay protection data.
-pub trait ReplayProtectionProvider<Abi: ChainAbi> {
-	fn replay_protection() -> Abi::ReplayProtection;
-}
-
 /// Provides the environment data for ethereum-like chains.
 pub trait EthEnvironmentProvider {
 	fn flip_token_address() -> [u8; 20];

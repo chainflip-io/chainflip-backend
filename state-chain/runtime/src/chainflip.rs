@@ -30,14 +30,13 @@ use cf_chains::{
 		api::{EthereumApi, EthereumReplayProtection},
 		Ethereum,
 	},
-	ApiCall, ChainAbi, ChainEnvironment, TransactionBuilder,
+	ApiCall, ChainAbi, ChainEnvironment, ReplayProtectionProvider, TransactionBuilder,
 };
 #[cfg(feature = "ibiza")]
 use cf_primitives::{Asset, AssetAmount, ForeignChain, ForeignChainAddress, IntentId};
 use cf_traits::{
 	BlockEmissions, Chainflip, EmergencyRotation, EpochInfo, EthEnvironmentProvider, Heartbeat,
-	Issuance, NetworkState, ReplayProtectionProvider, RewardsDistribution, RuntimeUpgrade,
-	VaultTransitionHandler,
+	Issuance, NetworkState, RewardsDistribution, RuntimeUpgrade, VaultTransitionHandler,
 };
 #[cfg(feature = "ibiza")]
 use cf_traits::{EgressApi, IngressApi};
