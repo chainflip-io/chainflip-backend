@@ -169,8 +169,8 @@ pub enum VaultStatus<ValidatorId> {
 pub trait VaultRotator {
 	type ValidatorId: Ord + Clone;
 
-	/// Start the rotation with provided candidates.
-	fn start(candidates: BTreeSet<Self::ValidatorId>);
+	/// Start the rotation by kicking off keygen with provided candidates.
+	fn keygen(candidates: BTreeSet<Self::ValidatorId>);
 
 	/// Get the current rotation status.
 	fn status() -> AsyncResult<VaultStatus<Self::ValidatorId>>;

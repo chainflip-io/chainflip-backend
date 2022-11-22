@@ -40,7 +40,7 @@ impl MockVaultRotator {
 impl VaultRotator for MockVaultRotator {
 	type ValidatorId = u64;
 
-	fn start(_candidates: BTreeSet<Self::ValidatorId>) {
+	fn keygen(_candidates: BTreeSet<Self::ValidatorId>) {
 		Self::put_value(ROTATION_OUTCOME, AsyncResult::<VaultStatus<u64>>::Pending);
 	}
 

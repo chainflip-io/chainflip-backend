@@ -17,9 +17,9 @@ where
 	type ValidatorId = A::ValidatorId;
 
 	/// Start all vault rotations with the provided `candidates`.
-	fn start(candidates: BTreeSet<Self::ValidatorId>) {
-		A::start(candidates.clone());
-		B::start(candidates);
+	fn keygen(candidates: BTreeSet<Self::ValidatorId>) {
+		A::keygen(candidates.clone());
+		B::keygen(candidates);
 	}
 
 	fn status() -> AsyncResult<VaultStatus<Self::ValidatorId>> {

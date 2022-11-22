@@ -822,7 +822,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 	/// # Panics
 	/// - If an empty BTreeSet of candidates is provided
 	/// - If a vault rotation outcome is already Pending (i.e. there's one already in progress)
-	fn start(candidates: BTreeSet<Self::ValidatorId>) {
+	fn keygen(candidates: BTreeSet<Self::ValidatorId>) {
 		assert!(!candidates.is_empty());
 
 		assert_ne!(Self::status(), AsyncResult::Pending);
