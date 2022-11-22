@@ -96,7 +96,11 @@ where
 
 				if epoch_start.epoch_index >= witnessed_until.epoch_index {
 					let mut block_stream = block_events_stream_for_contract_from(
-						epoch_start.eth_block,
+						if witnessed_until.epoch_index == epoch_start.epoch_index {
+							std::cmp::max(epoch_start.eth_block, witnessed_until.block_number)
+						} else {
+							epoch_start.eth_block
+						},
 						&contract_witnesser,
 						eth_dual_rpc.clone(),
 						&logger,
@@ -115,11 +119,7 @@ where
 						contract_witnesser
 							.handle_block_events(
 								epoch_start.epoch_index,
-								if witnessed_until.epoch_index == epoch_start.epoch_index {
-									std::cmp::max(block.block_number, witnessed_until.block_number)
-								} else {
-									block.block_number
-								},
+								block.block_number,
 								block,
 								state_chain_client.clone(),
 								&eth_dual_rpc,
