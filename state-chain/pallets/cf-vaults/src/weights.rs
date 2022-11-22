@@ -84,9 +84,9 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
 	// Storage: EthereumThresholdSigner Signatures (r:1 w:2)
-	// Storage: Environment KeyManagerAddress (r:1 w:0)
+	// Storage: Environment EthereumKeyManagerAddress (r:1 w:0)
 	// Storage: Environment EthereumChainId (r:1 w:0)
-	// Storage: Environment GlobalSignatureNonce (r:1 w:1)
+	// Storage: Environment EthereumSignatureNonce (r:1 w:1)
 	// Storage: EthereumThresholdSigner ThresholdSignatureRequestIdCounter (r:1 w:1)
 	// Storage: Validator CeremonyIdCounter (r:1 w:1)
 	// Storage: Validator CurrentEpoch (r:1 w:0)
@@ -177,9 +177,9 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
 	// Storage: EthereumThresholdSigner Signatures (r:1 w:2)
-	// Storage: Environment KeyManagerAddress (r:1 w:0)
+	// Storage: Environment EthereumKeyManagerAddress (r:1 w:0)
 	// Storage: Environment EthereumChainId (r:1 w:0)
-	// Storage: Environment GlobalSignatureNonce (r:1 w:1)
+	// Storage: Environment EthereumSignatureNonce (r:1 w:1)
 	// Storage: EthereumThresholdSigner ThresholdSignatureRequestIdCounter (r:1 w:1)
 	// Storage: Validator CeremonyIdCounter (r:1 w:1)
 	// Storage: Validator CurrentEpoch (r:1 w:0)

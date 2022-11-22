@@ -94,7 +94,7 @@ async fn main() -> anyhow::Result<()> {
                 tokio::sync::watch::channel(cfe_settings);
 
             let stake_manager_address = state_chain_client
-                .storage_value::<pallet_cf_environment::StakeManagerAddress::<
+                .storage_value::<pallet_cf_environment::EthereumStakeManagerAddress::<
                     state_chain_runtime::Runtime,
                 >>(latest_block_hash)
                 .await
@@ -102,7 +102,7 @@ async fn main() -> anyhow::Result<()> {
             let stake_manager_contract = StakeManager::new(stake_manager_address.into());
 
             let key_manager_address = state_chain_client
-                .storage_value::<pallet_cf_environment::KeyManagerAddress::<
+                .storage_value::<pallet_cf_environment::EthereumKeyManagerAddress::<
                     state_chain_runtime::Runtime,
                 >>(latest_block_hash)
                 .await
@@ -231,7 +231,7 @@ async fn main() -> anyhow::Result<()> {
                 use cf_primitives::{Asset, chains::assets};
 
                 let flip_contract_address = state_chain_client
-                    .storage_map_entry::<pallet_cf_environment::SupportedEthAssets::<
+                    .storage_map_entry::<pallet_cf_environment::EthereumSupportedAssets::<
                         state_chain_runtime::Runtime,
                     >>(latest_block_hash, &Asset::Flip)
                     .await
@@ -239,7 +239,7 @@ async fn main() -> anyhow::Result<()> {
                     .expect("FLIP address must exist at genesis");
 
                 let usdc_contract_address = state_chain_client
-                    .storage_map_entry::<pallet_cf_environment::SupportedEthAssets::<
+                    .storage_map_entry::<pallet_cf_environment::EthereumSupportedAssets::<
                         state_chain_runtime::Runtime,
                     >>(latest_block_hash, &Asset::Usdc)
                     .await
