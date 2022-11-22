@@ -142,14 +142,8 @@ pub const MOCK_AGG_KEY: [u8; 4] = *b"AKEY";
 pub struct MockKeyProvider;
 
 impl cf_traits::KeyProvider<MockEthereum> for MockKeyProvider {
-	type KeyId = Vec<u8>;
-
-	fn current_key_id_epoch_index() -> KeyState<Self::KeyId> {
-		KeyState::Active { key_id: MOCK_AGG_KEY.into(), epoch_index: Default::default() }
-	}
-
-	fn current_key() -> KeyState<<MockEthereum as ChainCrypto>::AggKey> {
-		KeyState::Active { key_id: MOCK_AGG_KEY, epoch_index: Default::default() }
+	fn current_key_epoch_index() -> KeyState<<MockEthereum as ChainCrypto>::AggKey> {
+		KeyState::Active { key: MOCK_AGG_KEY, epoch_index: Default::default() }
 	}
 }
 

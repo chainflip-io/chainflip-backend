@@ -53,6 +53,8 @@ pub const ETHEREUM_ETH_ADDRESS: EthereumAddress = [0xEE; 20];
 /// The very first epoch number
 pub const GENESIS_EPOCH: u32 = 1;
 
+pub type KeyId = Vec<u8>;
+
 /// Alias to 512-bit hash when used in the context of a transaction signature on the chain.
 pub type Signature = MultiSignature;
 

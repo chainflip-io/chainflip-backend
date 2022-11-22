@@ -2,25 +2,11 @@ use std::marker::PhantomData;
 
 use crate::KeyState;
 
-/// A Mock that just returns KeyId::default().
-///
-/// Note: the `current_key()` method is unimplemented. If required, implement a custom mock for this
-/// trait.
 #[derive(Default)]
-pub struct MockKeyProvider<Chain: cf_chains::Chain, KeyId: std::default::Default>(
-	PhantomData<(Chain, KeyId)>,
-);
+pub struct MockKeyProvider<Chain: cf_chains::Chain>(PhantomData<Chain>);
 
-impl<C: cf_chains::ChainCrypto, K: std::default::Default> crate::KeyProvider<C>
-	for MockKeyProvider<C, K>
-{
-	type KeyId = K;
-
-	fn current_key_id_epoch_index() -> KeyState<Self::KeyId> {
+impl<C: cf_chains::ChainCrypto> crate::KeyProvider<C> for MockKeyProvider<C> {
+	fn current_key_epoch_index() -> KeyState<C::AggKey> {
 		KeyState::default()
-	}
-
-	fn current_key() -> KeyState<C::AggKey> {
-		unimplemented!("Implement a custom mock if `current_key()` is required.")
 	}
 }

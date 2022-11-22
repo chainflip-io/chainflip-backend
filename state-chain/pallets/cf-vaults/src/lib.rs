@@ -260,7 +260,7 @@ pub mod pallet {
 		type Offence: From<PalletOffence>;
 
 		/// The chain that is managed by this vault must implement the api types.
-		type Chain: ChainAbi;
+		type Chain: ChainAbi<KeyId = Self::KeyId>;
 
 		/// The supported api calls for the chain.
 		type SetAggKeyWithAggKey: SetAggKeyWithAggKey<Self::Chain>;
@@ -274,6 +274,7 @@ pub mod pallet {
 			Self::Chain,
 			Callback = <Self as Config<I>>::Call,
 			ValidatorId = Self::ValidatorId,
+			KeyId = <Self as Chainflip>::KeyId,
 		>;
 
 		/// A broadcaster for the target chain.
@@ -778,11 +779,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		new_public_key: AggKeyFor<T, I>,
 		participants: BTreeSet<T::ValidatorId>,
 	) -> (<T::ThresholdSigner as ThresholdSigner<T::Chain>>::RequestId, CeremonyId) {
-		let byte_key: Vec<u8> = new_public_key.into();
 		let (request_id, signing_ceremony_id) =
 			T::ThresholdSigner::request_keygen_verification_signature(
 				T::Chain::agg_key_to_payload(new_public_key),
-				byte_key.into(),
+				new_public_key.into(),
 				participants,
 			);
 		T::ThresholdSigner::register_callback(request_id, {
@@ -869,8 +869,8 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 		if let Some(VaultRotationStatus::<T, I>::KeygenVerificationComplete { new_public_key }) =
 			PendingVaultRotation::<T, I>::get()
 		{
-			match <Self as KeyProvider<_>>::current_key() {
-				KeyState::Active { key_id, epoch_index: _ } => {
+			match <Self as KeyProvider<_>>::current_key_epoch_index() {
+				KeyState::Active { key: key_id, epoch_index: _ } => {
 					T::Broadcaster::threshold_sign_and_broadcast(
 						<T::ApiCall as SetAggKeyWithAggKey<_>>::new_unsigned(
 							<T::ReplayProtectionProvider>::replay_protection(),
@@ -937,25 +937,10 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 }
 
 impl<T: Config<I>, I: 'static> KeyProvider<T::Chain> for Pallet<T, I> {
-	type KeyId = Vec<u8>;
-
-	fn current_key_id_epoch_index() -> KeyState<Self::KeyId> {
+	fn current_key_epoch_index() -> KeyState<<T::Chain as ChainCrypto>::AggKey> {
 		match CurrentKeyholdersEpoch::<T, I>::get() {
 			VaultState::Active(epoch_index) => KeyState::Active {
-				key_id: Vaults::<T, I>::get(epoch_index)
-					.expect("We can't exist without a vault")
-					.public_key
-					.into(),
-				epoch_index,
-			},
-			VaultState::Unavailable(_) => KeyState::Unavailable,
-		}
-	}
-
-	fn current_key() -> KeyState<<T::Chain as ChainCrypto>::AggKey> {
-		match CurrentKeyholdersEpoch::<T, I>::get() {
-			VaultState::Active(epoch_index) => KeyState::Active {
-				key_id: Vaults::<T, I>::get(epoch_index)
+				key: Vaults::<T, I>::get(epoch_index)
 					.expect("We can't exist without a vault")
 					.public_key,
 				epoch_index,

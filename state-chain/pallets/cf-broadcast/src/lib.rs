@@ -164,7 +164,7 @@ pub mod pallet {
 		type BroadcastTimeout: Get<BlockNumberFor<Self>>;
 
 		/// Something that provides the current key for signing.
-		type KeyProvider: KeyProvider<Self::TargetChain, KeyId = Self::KeyId>;
+		type KeyProvider: KeyProvider<Self::TargetChain>;
 
 		/// The weights for the pallet
 		type WeightInfo: WeightInfo;
@@ -502,8 +502,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn start_next_broadcast_attempt(broadcast_attempt: BroadcastAttempt<T, I>) {
 		let broadcast_id = broadcast_attempt.broadcast_attempt_id.broadcast_id;
 		if let Some((api_call, signature)) = ThresholdSignatureData::<T, I>::get(broadcast_id) {
-			match T::KeyProvider::current_key() {
-				KeyState::Active { key_id, epoch_index: _ }
+			match T::KeyProvider::current_key_epoch_index() {
+				KeyState::Active { key: key_id, epoch_index: _ }
 					if <T::TargetChain as ChainCrypto>::verify_threshold_signature(
 						&key_id,
 						&api_call.threshold_signature_payload(),

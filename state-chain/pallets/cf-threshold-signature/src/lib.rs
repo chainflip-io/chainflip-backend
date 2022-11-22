@@ -212,13 +212,13 @@ pub mod pallet {
 			+ UnfilteredDispatchable<Origin = Self::RuntimeOrigin>;
 
 		/// A marker trait identifying the chain that we are signing for.
-		type TargetChain: ChainCrypto;
+		type TargetChain: ChainCrypto<KeyId = <Self as Chainflip>::KeyId>;
 
 		/// Signer nomination.
 		type ThresholdSignerNomination: ThresholdSignerNomination<SignerId = Self::ValidatorId>;
 
 		/// Something that provides the current key for signing.
-		type KeyProvider: KeyProvider<Self::TargetChain, KeyId = Self::KeyId>;
+		type KeyProvider: KeyProvider<Self::TargetChain>;
 
 		/// For reporting bad actors.
 		type OffenceReporter: OffenceReporter<
@@ -652,21 +652,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				)
 			} else {
 				(
-					match T::KeyProvider::current_key_id_epoch_index() {
-						KeyState::Active {
-							key_id: current_key_id,
-							epoch_index: current_epoch_index,
-						} => {
+					match T::KeyProvider::current_key_epoch_index() {
+						KeyState::Active { key, epoch_index: current_epoch_index } =>
 							if let Some(nominees) =
 								T::ThresholdSignerNomination::threshold_nomination_with_seed(
 									(ceremony_id, attempt_count),
 									current_epoch_index,
 								) {
-								Ok((current_key_id, nominees))
+								Ok((key.into(), nominees))
 							} else {
 								Err(Event::<T, I>::SignersUnavailable { request_id, ceremony_id })
-							}
-						},
+							},
 						KeyState::Unavailable =>
 							Err(Event::<T, I>::CurrentKeyUnavailable { request_id }),
 					},

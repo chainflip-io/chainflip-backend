@@ -5,6 +5,7 @@ pub mod api;
 #[cfg(feature = "runtime-benchmarks")]
 pub mod benchmarking;
 
+use cf_primitives::KeyId;
 pub use cf_primitives::{chains::Polkadot, PolkadotAccountId};
 
 use sp_core::{sr25519, H256};
@@ -110,6 +111,7 @@ impl Chain for Polkadot {
 }
 
 impl ChainCrypto for Polkadot {
+	type KeyId = KeyId;
 	type AggKey = PolkadotPublicKey;
 	type Payload = EncodedPolkadotPayload;
 	type ThresholdSignature = PolkadotSignature;

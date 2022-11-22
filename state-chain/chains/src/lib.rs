@@ -82,10 +82,11 @@ impl<C: Chain> Age<C> for () {
 
 /// Common crypto-related types and operations for some external chain.
 pub trait ChainCrypto: Chain {
+	type KeyId: Member + Parameter;
 	/// The chain's `AggKey` format. The AggKey is the threshold key that controls the vault.
 	/// TODO: Consider if Encode / Decode bounds are sufficient rather than To/From Vec<u8>
 	type AggKey: TryFrom<Vec<u8>>
-		+ Into<Vec<u8>>
+		+ Into<Self::KeyId>
 		+ Member
 		+ Parameter
 		+ Copy
@@ -298,6 +299,7 @@ pub mod mocks {
 	}
 
 	impl ChainCrypto for MockEthereum {
+		type KeyId = Vec<u8>;
 		type AggKey = [u8; 4];
 		type Payload = [u8; 4];
 		type ThresholdSignature = MockThresholdSignature<Self::AggKey, Self::Payload>;

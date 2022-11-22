@@ -7,7 +7,7 @@ pub mod decompose_recompose;
 pub mod epoch_transition;
 mod missed_authorship_slots;
 mod offences;
-use cf_primitives::{chains::assets, ETHEREUM_ETH_ADDRESS};
+use cf_primitives::{chains::assets, KeyId, ETHEREUM_ETH_ADDRESS};
 pub use offences::*;
 mod signer_nomination;
 use ethabi::Address as EthAbiAddress;
@@ -56,7 +56,7 @@ impl Chainflip for Runtime {
 	type Call = Call;
 	type Amount = FlipBalance;
 	type ValidatorId = <Self as frame_system::Config>::AccountId;
-	type KeyId = Vec<u8>;
+	type KeyId = KeyId;
 	type EnsureWitnessed = pallet_cf_witnesser::EnsureWitnessed;
 	type EnsureWitnessedAtCurrentEpoch = pallet_cf_witnesser::EnsureWitnessedAtCurrentEpoch;
 	type EpochInfo = Validator;

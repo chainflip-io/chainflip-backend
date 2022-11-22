@@ -93,10 +93,8 @@ pub type MockOffenceReporter =
 	cf_traits::mocks::offence_reporting::MockOffenceReporter<u64, PalletOffence>;
 
 // Mock KeyProvider
-pub const VALID_KEY_ID: &[u8] = &[0, 0, 0, 0];
 pub const VALID_AGG_KEY: [u8; 4] = [0, 0, 0, 0];
 
-pub const INVALID_KEY_ID: &[u8] = &[1, 1, 1, 1];
 pub const INVALID_AGG_KEY: [u8; 4] = [1, 1, 1, 1];
 
 thread_local! {
@@ -106,26 +104,9 @@ thread_local! {
 pub struct MockKeyProvider;
 
 impl cf_traits::KeyProvider<MockEthereum> for MockKeyProvider {
-	type KeyId = Vec<u8>;
-
-	fn current_key_id_epoch_index() -> KeyState<Self::KeyId> {
+	fn current_key_epoch_index() -> KeyState<<MockEthereum as ChainCrypto>::AggKey> {
 		KeyState::Active {
-			key_id: if VALIDKEY.with(|cell| *cell.borrow()) {
-				VALID_KEY_ID.to_vec()
-			} else {
-				INVALID_KEY_ID.to_vec()
-			},
-			epoch_index: Default::default(),
-		}
-	}
-
-	fn current_key() -> KeyState<<MockEthereum as ChainCrypto>::AggKey> {
-		KeyState::Active {
-			key_id: if VALIDKEY.with(|cell| *cell.borrow()) {
-				VALID_AGG_KEY
-			} else {
-				INVALID_AGG_KEY
-			},
+			key: if VALIDKEY.with(|cell| *cell.borrow()) { VALID_AGG_KEY } else { INVALID_AGG_KEY },
 			epoch_index: Default::default(),
 		}
 	}
