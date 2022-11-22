@@ -58,7 +58,8 @@ pub trait Chain: Member + Parameter {
 		+ MaxEncodedLen
 		+ Copy
 		+ BenchmarkValue
-		+ Into<cf_primitives::Asset>;
+		+ Into<cf_primitives::Asset>
+		+ Into<cf_primitives::ForeignChain>;
 
 	type ChainAccount: Member
 		+ Parameter
