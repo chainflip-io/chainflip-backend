@@ -80,7 +80,7 @@ use chainflip::{
 };
 
 #[cfg(feature = "ibiza")]
-use chainflip::{DotEnvironment, DotVaultTransitionHandler};
+use chainflip::{all_vaults_rotator::AllVaultRotator, DotEnvironment, DotVaultTransitionHandler};
 use constants::common::*;
 use pallet_cf_flip::{Bonder, FlipSlasher};
 pub use pallet_cf_staking::WithdrawalAddresses;
@@ -159,6 +159,7 @@ parameter_types! {
 	};
 }
 
+#[cfg(not(feature = "ibiza"))]
 impl pallet_cf_validator::Config for Runtime {
 	type Event = Event;
 	type Offence = chainflip::Offence;
@@ -167,6 +168,34 @@ impl pallet_cf_validator::Config for Runtime {
 	type MinEpoch = MinEpoch;
 	type ValidatorWeightInfo = pallet_cf_validator::weights::PalletWeight<Runtime>;
 	type VaultRotator = EthereumVault;
+	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+	type MissedAuthorshipSlots = chainflip::MissedAuraSlots;
+	type BidderProvider = pallet_cf_staking::Pallet<Self>;
+	type AuctionQualification = (
+		Reputation,
+		pallet_cf_validator::PeerMapping<Self>,
+		SessionKeysRegistered<
+			<Self as frame_system::Config>::AccountId,
+			pallet_session::Pallet<Self>,
+		>,
+		AccountRoles,
+	);
+	type OffenceReporter = Reputation;
+	type EmergencyRotationPercentageRange = EmergencyRotationPercentageRange;
+	type Bonder = Bonder<Runtime>;
+	type ReputationResetter = Reputation;
+}
+
+// Only difference here is that we use the AllVaultRotator
+#[cfg(feature = "ibiza")]
+impl pallet_cf_validator::Config for Runtime {
+	type Event = Event;
+	type Offence = chainflip::Offence;
+	type AccountRoleRegistry = AccountRoles;
+	type EpochTransitionHandler = ChainflipEpochTransitions;
+	type MinEpoch = MinEpoch;
+	type ValidatorWeightInfo = pallet_cf_validator::weights::PalletWeight<Runtime>;
+	type VaultRotator = AllVaultRotator<EthereumVault, PolkadotVault>;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type MissedAuthorshipSlots = chainflip::MissedAuraSlots;
 	type BidderProvider = pallet_cf_staking::Pallet<Self>;
