@@ -1,4 +1,4 @@
-use crate::{self as pallet_cf_swapping, Pallet};
+use crate::{self as pallet_cf_swapping, Pallet, WeightInfo};
 use cf_chains::{Chain, Ethereum};
 use cf_primitives::{chains::assets, Asset, AssetAmount, ForeignChainAddress};
 use cf_traits::{
@@ -176,13 +176,29 @@ impl Chainflip for Test {
 	type SystemState = MockSystemStateInfo;
 }
 
+pub struct MockWeightInfo;
+
+impl WeightInfo for MockWeightInfo {
+	fn register_swap_intent() -> frame_support::weights::Weight {
+		100
+	}
+
+	fn on_idle() -> frame_support::weights::Weight {
+		100
+	}
+
+	fn execute_group_of_swaps(_a: u32) -> frame_support::weights::Weight {
+		100
+	}
+}
+
 impl pallet_cf_swapping::Config for Test {
 	type Event = Event;
 	type AccountRoleRegistry = ();
 	type Ingress = MockIngress;
 	type Egress = MockEgressApi;
 	type AmmPoolApi = MockAmmPoolApi;
-	type WeightInfo = ();
+	type WeightInfo = MockWeightInfo;
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;

@@ -96,22 +96,23 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		/// Do swapping with remaining weight in this block
 		fn on_idle(_block_number: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
-			let swap_weight = 100;
 			let swaps = SwapQueue::<T>::get();
-			let mut available_weight = remaining_weight;
-			let mut used_weight = 0;
+			let base_weight =
+				T::DbWeight::get().reads(1 as Weight) + T::DbWeight::get().writes(1 as Weight);
 
+			let mut available_weight = remaining_weight - base_weight;
+			let mut used_weight = base_weight;
 			let mut swap_groups = Self::group_swaps(swaps);
 
 			for (asset_pair, swaps) in swap_groups.clone() {
-				if available_weight < swap_weight {
+				let swap_group_weight = T::WeightInfo::execute_group_of_swaps(swaps.len() as u32);
+				if available_weight < swap_group_weight {
 					break
 				}
 				Self::execute_group_of_swaps(swaps.clone(), asset_pair.0, asset_pair.1);
 				swap_groups.remove(&(asset_pair.0, asset_pair.1));
-				available_weight =
-					available_weight - T::WeightInfo::execute_group_of_swaps(swaps.len() as u32);
-				used_weight = used_weight + swap_weight;
+				available_weight = available_weight - swap_group_weight;
+				used_weight = used_weight + swap_group_weight;
 			}
 
 			let mut remaining_swaps: Vec<Swap<<T as frame_system::Config>::AccountId>> = vec![];
@@ -159,33 +160,6 @@ pub mod pallet {
 	}
 
 	impl<T: Config> Pallet<T> {
-		/// Executes a swap. This includes the whole process of:
-		///
-		/// - Doing the Swap inside the AMM
-		/// - Doing the egress
-		///
-		/// We are going to benchmark this function individually to have a approximation of
-		/// how 'expensive' a swap is.
-		pub fn execute_swap(swap: Swap<T::AccountId>) {
-			let (swap_output, (asset, fee)) =
-				T::AmmPoolApi::swap(swap.from, swap.to, swap.amount, swap.relayer_commission_bps);
-			EarnedRelayerFees::<T>::mutate(&swap.relayer_id, asset, |maybe_fees| {
-				if let Some(fees) = maybe_fees {
-					*maybe_fees = Some(fees.saturating_add(fee))
-				} else {
-					*maybe_fees = Some(fee)
-				}
-			});
-			// TODO: remove the expects by using AnyChain.
-			T::Egress::schedule_egress(
-				assets::eth::Asset::try_from(swap.to).expect("Only eth assets supported"),
-				swap_output,
-				EthereumAddress::try_from(swap.egress_address)
-					.expect("On eth assets supported")
-					.into(),
-			);
-		}
-
 		fn calc_prop_swap(from: AssetAmount, to: AssetAmount, amount: AssetAmount) -> AssetAmount {
 			if to > from {
 				from.saturating_mul(amount).saturating_div(to)
@@ -195,7 +169,8 @@ pub mod pallet {
 		}
 
 		fn calc_fee(amount: AssetAmount, bps: u16) -> AssetAmount {
-			amount.saturating_div(100).saturating_mul(bps.saturating_mul(100) as u128)
+			// TODO: figure out how to deal with integer math properly if bps is below 100
+			amount.saturating_div(100) * bps.saturating_div(100) as u128
 		}
 
 		fn calc_netto_swap_amount(swaps: Vec<Swap<T::AccountId>>) -> AssetAmount {
