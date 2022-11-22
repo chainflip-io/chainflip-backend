@@ -215,13 +215,15 @@ where
 			logger: logger.clone(),
 		}
 	}
+}
 
+impl<C: CryptoScheme> MultisigClientApi<C> for MultisigClient<C> {
 	// This function is structured to simplify the writing of tests (i.e.
 	// should_delay_rts_until_key_is_ready). When the function is called it will send the request to
 	// the CeremonyManager/Backend immediately The function returns a future that will complete only
 	// once the CeremonyManager has finished the ceremony. This allows tests to split making the
 	// request and waiting for the result.
-	pub fn initiate_keygen(
+	fn initiate_keygen(
 		&self,
 		ceremony_id: CeremonyId,
 		participants: BTreeSet<AccountId>,
@@ -283,7 +285,7 @@ where
 	// request to the CeremonyManager/Backend and outputs a second future that will complete only
 	// once the CeremonyManager has finished the ceremony. This allows tests to split making the
 	// request and waiting for the result.
-	pub fn initiate_signing(
+	fn initiate_sign(
 		&self,
 		ceremony_id: CeremonyId,
 		key_id: KeyId,
@@ -355,26 +357,6 @@ where
 			}
 		}
 		.boxed()
-	}
-}
-
-impl<C: CryptoScheme> MultisigClientApi<C> for MultisigClient<C> {
-	fn initiate_keygen(
-		&self,
-		ceremony_id: CeremonyId,
-		participants: BTreeSet<AccountId>,
-	) -> BoxFuture<'_, Result<C::Point, (BTreeSet<AccountId>, KeygenFailureReason)>> {
-		self.initiate_keygen(ceremony_id, participants)
-	}
-
-	fn initiate_sign(
-		&self,
-		ceremony_id: CeremonyId,
-		key_id: KeyId,
-		signers: BTreeSet<AccountId>,
-		data: MessageHash,
-	) -> BoxFuture<'_, Result<C::Signature, (BTreeSet<AccountId>, SigningFailureReason)>> {
-		self.initiate_signing(ceremony_id, key_id, signers, data)
 	}
 
 	fn update_latest_ceremony_id(&self, ceremony_id: CeremonyId) {

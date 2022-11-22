@@ -47,7 +47,7 @@ async fn should_ignore_rts_for_unknown_key() {
 	);
 
 	// Send Sign Request
-	let signing_request_fut = client.initiate_signing(
+	let signing_request_fut = client.initiate_sign(
 		DEFAULT_SIGNING_CEREMONY_ID,
 		key_id,
 		BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
