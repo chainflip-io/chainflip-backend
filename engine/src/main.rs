@@ -29,9 +29,10 @@ use sp_core::U256;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
 	use_chainflip_account_id_encoding();
-	utilities::print_starting!();
 
 	let settings = Settings::new(CommandLineOptions::parse()).context("Error reading settings")?;
+
+	utilities::print_starting!();
 
 	let root_logger = logging::utils::new_json_logger_with_tag_filter(
 		settings.log.whitelist.clone(),
