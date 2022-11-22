@@ -72,15 +72,6 @@ pub mod pallet {
 	pub(super) type EarnedRelayerFees<T: Config> =
 		StorageDoubleMap<_, Identity, T::AccountId, Twox64Concat, Asset, AssetAmount>;
 
-	/// Grouped map of swaps
-	#[pallet::storage]
-	pub(super) type Swaps<T: Config> =
-		StorageDoubleMap<_, Twox64Concat, Asset, Twox64Concat, Asset, Vec<Swap<T::AccountId>>>;
-
-	/// Counter of how many swaps are currently in storage
-	#[pallet::storage]
-	pub(super) type SwapsInProcess<T> = StorageValue<_, u32, ValueQuery>;
-
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
