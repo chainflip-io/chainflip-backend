@@ -51,13 +51,14 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient>(
 {
 	if keygen_participants.contains(&state_chain_client.account_id()) {
 		// We initiate keygen outside of the spawn to avoid requesting ceremonies out of order
-		let keygen_result = multisig_client.initiate_keygen(ceremony_id, keygen_participants);
+		let keygen_result_future =
+			multisig_client.initiate_keygen(ceremony_id, keygen_participants);
 		scope.spawn(async move {
 			let _result = state_chain_client
 				.submit_signed_extrinsic(
 					pallet_cf_vaults::Call::report_keygen_outcome {
 						ceremony_id,
-						reported_outcome: keygen_result
+						reported_outcome: keygen_result_future
 							.await
 							.map(|point| {
 								cf_chains::eth::AggKey::from_pubkey_compressed(
@@ -99,9 +100,10 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient>(
 {
 	if signers.contains(&state_chain_client.account_id()) {
 		// We initiate signing outside of the spawn to avoid requesting ceremonies out of order
-		let sign_result = multisig_client.initiate_signing(ceremony_id, key_id, signers, data);
+		let signing_result_future =
+			multisig_client.initiate_signing(ceremony_id, key_id, signers, data);
 		scope.spawn(async move {
-			match sign_result.await {
+			match signing_result_future.await {
 				Ok(signature) => {
 					let _result = state_chain_client
 						.submit_unsigned_extrinsic(
