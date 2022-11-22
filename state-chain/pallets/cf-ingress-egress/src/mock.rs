@@ -1,18 +1,19 @@
-pub use crate::{self as pallet_cf_egress};
+pub use crate::{self as pallet_cf_ingress_egress};
 pub use cf_chains::{
 	eth::api::{EthereumApi, EthereumReplayProtection},
 	Chain, ChainAbi, ChainEnvironment,
 };
 pub use cf_primitives::{
 	chains::{assets, Ethereum},
-	Asset, EthereumAddress, ExchangeRate, ETHEREUM_ETH_ADDRESS,
+	Asset, AssetAmount, EthereumAddress, ExchangeRate, ETHEREUM_ETH_ADDRESS,
 };
 
+use cf_traits::mocks::all_batch::MockAllBatch;
 pub use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
-	Broadcaster, EthereumAssetsAddressProvider, ReplayProtectionProvider,
+	Broadcaster,
 };
-use frame_support::parameter_types;
+use frame_support::{instances::Instance1, parameter_types};
 use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{
@@ -34,7 +35,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system,
-		Egress: pallet_cf_egress,
+		IngressEgress: pallet_cf_ingress_egress::<Instance1>,
 	}
 );
 
@@ -81,22 +82,9 @@ impl cf_traits::Chainflip for Test {
 	type SystemState = MockSystemStateInfo;
 }
 
-pub const FAKE_KEYMAN_ADDR: [u8; 20] = [0xcf; 20];
-pub const CHAIN_ID: u64 = 31337;
-pub const COUNTER: u64 = 42;
-impl ReplayProtectionProvider<Ethereum> for Test {
-	fn replay_protection() -> <Ethereum as ChainAbi>::ReplayProtection {
-		EthereumReplayProtection {
-			key_manager_address: FAKE_KEYMAN_ADDR,
-			chain_id: CHAIN_ID,
-			nonce: COUNTER,
-		}
-	}
-}
-
 pub struct MockBroadcast;
 impl Broadcaster<Ethereum> for MockBroadcast {
-	type ApiCall = EthereumApi<MockEthEnvironment>;
+	type ApiCall = MockAllBatch;
 
 	fn threshold_sign_and_broadcast(_api_call: Self::ApiCall) {}
 }
@@ -117,10 +105,13 @@ impl ChainEnvironment<<Ethereum as Chain>::ChainAsset, <Ethereum as Chain>::Chai
 	}
 }
 
-impl crate::Config for Test {
+impl crate::Config<Instance1> for Test {
 	type Event = Event;
-	type ReplayProtection = Self;
-	type AllBatch = EthereumApi<MockEthEnvironment>;
+	type TargetChain = Ethereum;
+	type AddressDerivation = ();
+	type LpProvisioning = Self;
+	type SwapIntentHandler = Self;
+	type AllBatch = MockAllBatch;
 	type Broadcaster = MockBroadcast;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type WeightInfo = ();

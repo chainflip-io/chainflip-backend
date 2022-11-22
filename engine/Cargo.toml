@@ -22,6 +22,8 @@ assets = [
 [dependencies]
 anyhow = "1.0"
 async-trait = "0.1.49"
+async-channel = "1.7.1"
+async-broadcast = "0.4.1"
 bincode = "1.3.3"
 bs58 = "0.4"
 config = "0.13.1"
@@ -59,7 +61,6 @@ subxt = "0.24.0"
 thiserror = "1.0.26"
 tokio = {version = "1.13.1", features = ["full", "test-util"]}
 tokio-stream = {version = "0.1.5", features = ["sync"]}
-async-channel = "1.7.1"
 url = "1.7.2"
 num-bigint = "0.4"
 num-traits = "0.2"
@@ -98,7 +99,7 @@ pallet-cf-chain-tracking = {path = "../state-chain/pallets/cf-chain-tracking"}
 pallet-cf-environment = {path = "../state-chain/pallets/cf-environment"}
 pallet-cf-flip = {path = "../state-chain/pallets/cf-flip"}
 pallet-cf-governance = {path = "../state-chain/pallets/cf-governance"}
-pallet-cf-ingress = {path = "../state-chain/pallets/cf-ingress", optional = true }
+pallet-cf-ingress-egress = {path = "../state-chain/pallets/cf-ingress-egress", optional = true }
 pallet-cf-reputation = {path = "../state-chain/pallets/cf-reputation"}
 pallet-cf-staking = {path = "../state-chain/pallets/cf-staking"}
 pallet-cf-threshold-signature = {path = "../state-chain/pallets/cf-threshold-signature"}
@@ -171,7 +172,7 @@ rlp = "0.5"
 [features]
 integration-test = []
 ibiza = [
-    'pallet-cf-ingress',
+    'pallet-cf-ingress-egress',
     'state-chain-runtime/ibiza',
     'cf-chains/ibiza',
     'chainflip-node/ibiza',

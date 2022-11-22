@@ -31,7 +31,7 @@ use crate::{
 	},
 	p2p::{PeerInfo, PeerUpdate},
 	state_chain_observer::client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi},
-	task_scope::{with_task_scope, Scope},
+	task_scope::{task_scope, Scope},
 	witnesser::EpochStart,
 };
 
@@ -39,7 +39,7 @@ use crate::{
 use sp_core::H160;
 
 async fn handle_keygen_request<'a, StateChainClient, MultisigClient>(
-	scope: &Scope<'a, anyhow::Result<()>, true>,
+	scope: &Scope<'a, anyhow::Error>,
 	multisig_client: Arc<MultisigClient>,
 	state_chain_client: Arc<StateChainClient>,
 	ceremony_id: CeremonyId,
@@ -84,7 +84,7 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient>(
 }
 
 async fn handle_signing_request<'a, StateChainClient, MultisigClient>(
-	scope: &Scope<'a, anyhow::Result<()>, true>,
+	scope: &Scope<'a, anyhow::Error>,
 	multisig_client: Arc<MultisigClient>,
 	state_chain_client: Arc<StateChainClient>,
 	ceremony_id: CeremonyId,
@@ -176,7 +176,7 @@ pub async fn start<
 	eth_multisig_client: Arc<EthMultisigClient>,
 	dot_multisig_client: Arc<PolkadotMultisigClient>,
 	peer_update_sender: UnboundedSender<PeerUpdate>,
-	eth_epoch_start_sender: async_channel::Sender<EpochStart<Ethereum>>,
+	eth_epoch_start_sender: async_broadcast::Sender<EpochStart<Ethereum>>,
 	#[cfg(feature = "ibiza")] eth_monitor_ingress_sender: tokio::sync::mpsc::UnboundedSender<H160>,
 	#[cfg(feature = "ibiza")] eth_monitor_flip_ingress_sender: tokio::sync::mpsc::UnboundedSender<
 		H160,
@@ -195,7 +195,7 @@ where
 	PolkadotMultisigClient: MultisigClientApi<PolkadotSigning> + Send + Sync + 'static,
 	StateChainClient: StorageApi + ExtrinsicApi + 'static + Send + Sync,
 {
-	with_task_scope(|scope| async {
+	task_scope(|scope| async {
         let logger = logger.new(o!(COMPONENT_KEY => "SCObserver"));
 
         let account_id = state_chain_client.account_id();
@@ -219,7 +219,7 @@ where
             let state_chain_client = &state_chain_client;
 
             async move {
-                eth_epoch_start_sender.send(EpochStart::<Ethereum> {
+                eth_epoch_start_sender.broadcast(EpochStart::<Ethereum> {
                     epoch_index: index,
                     block_number: state_chain_client
                         .storage_map_entry::<pallet_cf_vaults::Vaults<
@@ -446,31 +446,23 @@ where
                                                 cfe_settings_update_sender.send(new_cfe_settings).unwrap();
                                             }
                                             #[cfg(feature = "ibiza")]
-                                            state_chain_runtime::Event::Ingress(
-                                                pallet_cf_ingress::Event::StartWitnessing {
+                                            state_chain_runtime::Event::EthereumIngressEgress(
+                                                pallet_cf_ingress_egress::Event::StartWitnessing {
                                                     ingress_address,
                                                     ingress_asset
                                                 }
                                             ) => {
-                                                use cf_primitives::{Asset, ForeignChain, ForeignChainAddress};
-                                                if let ForeignChainAddress::Eth(address) = ingress_address {
-                                                    assert!(ForeignChain::Ethereum == ingress_asset.into());
-                                                    match ingress_asset {
-                                                        Asset::Eth => {
-                                                            eth_monitor_ingress_sender.send(H160::from(address)).unwrap();
-                                                        }
-                                                        Asset::Flip => {
-                                                            eth_monitor_flip_ingress_sender.send(H160::from(address)).unwrap();
-                                                        }
-                                                        Asset::Usdc => {
-                                                            eth_monitor_usdc_ingress_sender.send(H160::from(address)).unwrap();
-                                                        }
-                                                        _ => {
-                                                            slog::warn!(logger, "Not a supported asset: {:?}", ingress_asset);
-                                                        }
+                                                use cf_primitives::chains::assets::eth;
+                                                match ingress_asset {
+                                                    eth::Asset::Eth => {
+                                                        eth_monitor_ingress_sender.send(ingress_address).unwrap();
                                                     }
-                                                } else {
-                                                    slog::warn!(logger, "Unsupported addresss: {:?}", ingress_address);
+                                                    eth::Asset::Flip => {
+                                                        eth_monitor_flip_ingress_sender.send(ingress_address).unwrap();
+                                                    }
+                                                    eth::Asset::Usdc => {
+                                                        eth_monitor_usdc_ingress_sender.send(ingress_address).unwrap();
+                                                    }
                                                 }
                                             }
                                         }}

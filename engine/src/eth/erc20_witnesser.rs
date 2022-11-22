@@ -3,7 +3,7 @@
 use std::{collections::BTreeSet, sync::Arc};
 
 use async_trait::async_trait;
-use cf_primitives::{Asset, EpochIndex, EthAmount, ForeignChainAddress};
+use cf_primitives::{chains::assets::eth, EpochIndex, EthAmount};
 use sp_core::H256;
 use web3::{
 	ethabi::{self, RawLog},
@@ -16,7 +16,7 @@ use super::{
 	event::Event, rpc::EthRpcApi, utils, BlockWithItems, DecodeLogClosure, EthContractWitnesser,
 	SignatureAndEvent,
 };
-use pallet_cf_ingress::IngressWitness;
+use pallet_cf_ingress_egress::IngressWitness;
 
 // These are the two events that must be supported as part of the ERC20 standard
 // https://eips.ethereum.org/EIPS/eip-20#events
@@ -35,7 +35,7 @@ use anyhow::Result;
 /// NB: Any tokens watched by this must *strictly* adhere to the ERC20 standard: https://eips.ethereum.org/EIPS/eip-20
 pub struct Erc20Witnesser {
 	pub deployed_address: H160,
-	asset: Asset,
+	asset: eth::Asset,
 	contract: ethabi::Contract,
 	monitored_addresses: BTreeSet<H160>,
 	monitored_address_receiver: tokio::sync::mpsc::UnboundedReceiver<H160>,
@@ -45,7 +45,7 @@ impl Erc20Witnesser {
 	/// Loads the contract abi to get the event definitions
 	pub fn new(
 		deployed_address: H160,
-		asset: Asset,
+		asset: eth::Asset,
 		monitored_addresses: BTreeSet<H160>,
 		monitored_address_receiver: tokio::sync::mpsc::UnboundedReceiver<H160>,
 	) -> Self {
@@ -92,7 +92,7 @@ impl EthContractWitnesser for Erc20Witnesser {
 				Erc20Event::Transfer { to, value, from: _ }
 					if self.monitored_addresses.contains(&to) =>
 					Some(IngressWitness {
-						ingress_address: ForeignChainAddress::Eth(to.into()),
+						ingress_address: to,
 						amount: value,
 						asset: self.asset,
 						tx_hash: event.tx_hash,
@@ -105,7 +105,7 @@ impl EthContractWitnesser for Erc20Witnesser {
 			.submit_signed_extrinsic(
 				pallet_cf_witnesser::Call::witness_at_epoch {
 					call: Box::new(
-						pallet_cf_ingress::Call::do_ingress { ingress_witnesses }.into(),
+						pallet_cf_ingress_egress::Call::do_ingress { ingress_witnesses }.into(),
 					),
 					epoch_index: epoch,
 				},
@@ -165,7 +165,7 @@ mod tests {
 			tokio::sync::mpsc::unbounded_channel();
 		let contract = Erc20Witnesser::new(
 			H160::default(),
-			Asset::Flip,
+			eth::Asset::Flip,
 			Default::default(),
 			eth_monitor_erc20_ingress_receiver,
 		)
@@ -183,7 +183,7 @@ mod tests {
 			tokio::sync::mpsc::unbounded_channel();
 		Erc20Witnesser::new(
 			H160::default(),
-			Asset::Flip,
+			eth::Asset::Flip,
 			Default::default(),
 			eth_monitor_erc20_ingress_receiver,
 		);
@@ -195,7 +195,7 @@ mod tests {
 			tokio::sync::mpsc::unbounded_channel();
 		let erc20_witnesser = Erc20Witnesser::new(
 			H160::default(),
-			Asset::Flip,
+			eth::Asset::Flip,
 			Default::default(),
 			eth_monitor_erc20_ingress_receiver,
 		);
@@ -253,7 +253,7 @@ mod tests {
 			tokio::sync::mpsc::unbounded_channel();
 		let erc20_witnesser = Erc20Witnesser::new(
 			H160::default(),
-			Asset::Flip,
+			eth::Asset::Flip,
 			Default::default(),
 			eth_monitor_erc20_ingress_receiver,
 		);
