@@ -251,7 +251,6 @@ impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
 	type AddressDerivation = AddressDerivation;
 	type LpProvisioning = LiquidityProvider;
 	type SwapIntentHandler = Swapping;
-	type ReplayProtection = chainflip::DotEnvironment;
 	type AllBatch = dot::api::PolkadotApi<DotEnvironment>;
 	type Broadcaster = polkdadot_dummy::DummyBroadcaster;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
