@@ -6,7 +6,7 @@ use cf_chains::{
 	},
 	AnyChain, Chain, ChainAbi, ChainEnvironment, Ethereum,
 };
-use cf_primitives::{EthereumAddress, IntentId, ETHEREUM_ETH_ADDRESS};
+use cf_primitives::{AccountRole, EthereumAddress, IntentId, ETHEREUM_ETH_ADDRESS};
 use cf_traits::{
 	mocks::{
 		bid_info::MockBidInfo, egress_handler::MockEgressHandler,
@@ -150,9 +150,20 @@ impl crate::Config for Test {
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 }
 
+pub const LP_ACCOUNT: u64 = 1;
+pub const NON_LP_ACCOUNT: u64 = 2;
+
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let config = GenesisConfig { system: Default::default(), account_roles: Default::default() };
+	let config = GenesisConfig {
+		system: Default::default(),
+		account_roles: AccountRolesConfig {
+			initial_account_roles: vec![
+				(LP_ACCOUNT, AccountRole::LiquidityProvider),
+				(NON_LP_ACCOUNT, AccountRole::Validator),
+			],
+		},
+	};
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 
