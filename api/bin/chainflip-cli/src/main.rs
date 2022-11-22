@@ -3,7 +3,7 @@ use chainflip_api as api;
 use clap::Parser;
 use settings::{CLICommandLineOptions, CLISettings};
 
-use crate::settings::CFCommand::*;
+use crate::settings::{CFCommand::*, Claim};
 use anyhow::{anyhow, Result};
 use utilities::clean_eth_address;
 
@@ -34,9 +34,9 @@ async fn run_cli() -> Result<()> {
 	);
 
 	match command_line_opts.cmd {
-		Claim { amount, eth_address, should_register_claim } =>
+		Claim(Claim::Request { amount, eth_address, should_register_claim }) =>
 			request_claim(amount, &eth_address, &cli_settings, should_register_claim).await,
-		CheckClaim => check_claim(&cli_settings.state_chain).await,
+		Claim(Claim::Check {}) => check_claim(&cli_settings.state_chain).await,
 		RegisterAccountRole { role } => register_account_role(role, &cli_settings).await,
 		Rotate {} => rotate_keys(&cli_settings.state_chain).await,
 		Retire {} => api::retire_account(&cli_settings.state_chain).await,

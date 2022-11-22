@@ -50,10 +50,10 @@ impl Default for CLICommandLineOptions {
 	}
 }
 
-#[derive(Parser, Clone, Debug)]
-pub enum CFCommand {
+#[derive(clap::Subcommand, Clone, Debug)]
+pub enum Claim {
 	#[clap(about = "Submit an extrinsic to request generation of a claim certificate")]
-	Claim {
+	Request {
 		#[clap(help = "Amount to claim in FLIP")]
 		amount: f64,
 		#[clap(help = "The Ethereum address you wish to claim your FLIP to")]
@@ -63,7 +63,14 @@ pub enum CFCommand {
 		should_register_claim: bool,
 	},
 	#[clap(about = "Get claim certificate for a recently submitted claim")]
-	CheckClaim,
+	Check,
+}
+
+#[derive(Parser, Clone, Debug)]
+pub enum CFCommand {
+	#[clap(about = "Requesting and checking claims")]
+	#[clap(subcommand)]
+	Claim(Claim),
 	#[clap(about = "Set your account role to the Validator, Relayer, Liquidity Provider")]
 	RegisterAccountRole {
 		#[clap(help = "Validator (v), Liquidity Provider (lp), Relayer (r)", value_parser = account_role_parser)]
