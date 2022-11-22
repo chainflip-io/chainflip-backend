@@ -40,8 +40,8 @@ benchmarks! {
 	execute_group_of_swaps {
 		// Generate swaps
 		let a in 1..150;
-		let swaps = generate_swaps::<T>(a, Asset::Eth, Asset::Dot);
+		let swaps = generate_swaps::<T>(a, Asset::Eth, Asset::Flip);
 	} : {
-		Pallet::<T>::execute_group_of_swaps(swaps, Asset::Eth, Asset::Dot);
+		Pallet::<T>::execute_group_of_swaps(swaps, Asset::Eth, Asset::Flip);
 	}
 }

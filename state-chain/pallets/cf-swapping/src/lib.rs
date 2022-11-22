@@ -96,7 +96,6 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		/// Do swapping with remaining weight in this block
 		fn on_idle(_block_number: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
-			// The computational cost for a swap.
 			let swap_weight = 100;
 			let swaps = SwapQueue::<T>::get();
 			let mut available_weight = remaining_weight;
@@ -108,9 +107,10 @@ pub mod pallet {
 				if available_weight < swap_weight {
 					break
 				}
-				Self::execute_group_of_swaps(swaps, asset_pair.0, asset_pair.1);
+				Self::execute_group_of_swaps(swaps.clone(), asset_pair.0, asset_pair.1);
 				swap_groups.remove(&(asset_pair.0, asset_pair.1));
-				available_weight = available_weight - swap_weight;
+				available_weight =
+					available_weight - T::WeightInfo::execute_group_of_swaps(swaps.len() as u32);
 				used_weight = used_weight + swap_weight;
 			}
 
@@ -239,7 +239,7 @@ pub mod pallet {
 			}
 		}
 
-		pub fn group_swaps(
+		fn group_swaps(
 			swaps: Vec<Swap<T::AccountId>>,
 		) -> BTreeMap<(Asset, Asset), Vec<Swap<<T as frame_system::Config>::AccountId>>> {
 			let mut grouped_swaps: BTreeMap<
