@@ -26,13 +26,12 @@ pub struct RpcAccountInfo {
 	pub state: ChainflipAccountStateWithPassive,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize)]
 pub struct RpcPendingClaim {
 	amount: NumberOrHex,
 	address: String,
 	expiry: NumberOrHex,
 	sig_data: SigData,
-	pub encoded_cert: Option<Vec<u8>>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -122,6 +121,14 @@ pub trait CustomApi {
 		account_id: AccountId32,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Option<RpcPendingClaim>>;
+
+	#[method(name = "get_claim_certificate")]
+	fn cf_get_claim_certificate(
+		&self,
+		account_id: AccountId32,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Option<Vec<u8>>>;
+
 	#[method(name = "penalties")]
 	fn cf_penalties(
 		&self,
@@ -339,9 +346,27 @@ where
 			expiry: pending_claim.expiry.into(),
 			address: hex::encode(pending_claim.address),
 			sig_data: pending_claim.sig_data,
-			encoded_cert: pending_claim.encoded_cert,
 		}))
 	}
+
+	fn cf_get_claim_certificate(
+		&self,
+		account_id: AccountId32,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Option<Vec<u8>>> {
+		let certificate = match self
+			.client
+			.runtime_api()
+			.cf_get_claim_certificate(&self.query_block_id(at), account_id)
+			.map_err(to_rpc_error)?
+		{
+			Some(cert) => cert,
+			None => return Ok(None),
+		};
+
+		Ok(Some(certificate))
+	}
+
 	fn cf_penalties(
 		&self,
 		at: Option<<B as BlockT>::Hash>,

@@ -810,21 +810,29 @@ impl_runtime_apis! {
 				_ => unreachable!(),
 			};
 
-			let encoded_cert = if pending_claim.sig_data.is_signed() {
-				use cf_chains::ApiCall;
-				Some(pending_claim.chain_encoded())
-			} else {
-				None
-			};
-
 			Some(RuntimeApiPendingClaim {
 				amount: pending_claim.amount,
 				address: pending_claim.address.into(),
 				expiry: pending_claim.expiry,
 				sig_data: pending_claim.sig_data,
-				encoded_cert
 			})
 		}
+
+		fn cf_get_claim_certificate(account_id: AccountId) -> Option<Vec<u8>> {
+			let api_call = pallet_cf_staking::PendingClaims::<Runtime>::get(&account_id)?;
+			let pending_claim: RegisterClaim = match api_call {
+				eth::api::EthereumApi::RegisterClaim(tx) => tx,
+				_ => unreachable!(),
+			};
+
+			if pending_claim.sig_data.is_signed() {
+				use cf_chains::ApiCall;
+				Some(pending_claim.chain_encoded())
+			} else {
+				None
+			}
+		}
+
 		fn cf_penalties() -> Vec<(Offence, RuntimeApiPenalty)> {
 			pallet_cf_reputation::Penalties::<Runtime>::iter_keys()
 				.map(|offence| {

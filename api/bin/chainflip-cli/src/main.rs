@@ -83,9 +83,16 @@ pub async fn rotate_keys(state_chain_settings: &settings::StateChain) -> Result<
 	Ok(())
 }
 
+const POLL_LIMIT_BLOCKS: usize = 10;
+
 async fn check_claim(state_chain_settings: &settings::StateChain) -> Result<()> {
-	let certificate = api::wait_for_claim_certificate(state_chain_settings).await?;
-	println!("Claim certificate found: {:?}", certificate);
+	if let Some(certificate) =
+		api::poll_for_claim_certificate(state_chain_settings, POLL_LIMIT_BLOCKS).await?
+	{
+		println!("Claim certificate found: {:?}", hex::encode(certificate));
+	} else {
+		println!("No claim certificate found. Try again later.");
+	}
 	Ok(())
 }
 
@@ -124,21 +131,26 @@ async fn request_claim(
 
 	println!("Your claim has transaction hash: `{:#x}`. Waiting for signed claim data...", tx_hash);
 
-	let claim_cert = api::wait_for_claim_certificate(&settings.state_chain).await?;
+	match api::poll_for_claim_certificate(&settings.state_chain, POLL_LIMIT_BLOCKS).await? {
+		Some(claim_cert) => {
+			println!("Your claim certificate is: {:?}", hex::encode(claim_cert.clone()));
 
-	println!("Your claim certificate is: {:?}", hex::encode(claim_cert.clone()));
+			if should_register_claim {
+				let tx_hash = api::register_claim(&settings.eth, &settings.state_chain, claim_cert)
+					.await
+					.expect("Failed to register claim on ETH");
 
-	if should_register_claim {
-		let tx_hash = api::register_claim(&settings.eth, &settings.state_chain, claim_cert)
-			.await
-			.expect("Failed to register claim on ETH");
-
-		println!("Submitted claim to Ethereum successfully with tx_hash: {:#x}", tx_hash);
-	} else {
-		println!(
-			"Your claim request has been successfully registered. Please proceed to the Staking UI to complete your claim."
-		);
-	}
+				println!("Submitted claim to Ethereum successfully with tx_hash: {:#x}", tx_hash);
+			} else {
+				println!(
+					"Your claim request has been successfully registered. Please proceed to the Staking UI to complete your claim."
+				);
+			}
+		},
+		None => {
+			println!("Certificate takes longer to generate than expected. Please check claim certificate later.")
+		},
+	};
 
 	Ok(())
 }

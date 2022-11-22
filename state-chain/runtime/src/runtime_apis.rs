@@ -45,7 +45,6 @@ pub struct RuntimeApiPendingClaim {
 	pub address: [u8; 20],
 	pub expiry: U256,
 	pub sig_data: SigData,
-	pub encoded_cert: Option<Vec<u8>>,
 }
 
 #[derive(Encode, Decode, Eq, PartialEq)]
@@ -87,6 +86,7 @@ decl_runtime_apis!(
 		fn cf_accounts() -> Vec<(AccountId32, VanityName)>;
 		fn cf_account_info(account_id: AccountId32) -> RuntimeApiAccountInfo;
 		fn cf_pending_claim(account_id: AccountId32) -> Option<RuntimeApiPendingClaim>;
+		fn cf_get_claim_certificate(account_id: AccountId32) -> Option<Vec<u8>>;
 		fn cf_penalties() -> Vec<(Offence, RuntimeApiPenalty)>;
 		fn cf_suspensions() -> Vec<(Offence, Vec<(u32, AccountId32)>)>;
 		fn cf_generate_gov_key_call_hash(call: Vec<u8>) -> GovCallHash;

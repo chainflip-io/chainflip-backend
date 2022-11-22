@@ -137,44 +137,34 @@ pub async fn request_claim(
 	Ok(tx_hash)
 }
 
-pub async fn wait_for_claim_certificate(
+/// Get claim certificate by polling the State Chain.
+/// Returns `None` if no certificate is detected after polling
+/// for `blocks_to_poll_limit` blocks.
+pub async fn poll_for_claim_certificate(
 	state_chain_settings: &settings::StateChain,
-) -> Result<ClaimCertificate> {
+	blocks_to_poll_limit: usize,
+) -> Result<Option<ClaimCertificate>> {
 	let logger = new_discard_logger();
 	let (_block_hash, mut block_stream, state_chain_client) =
 		connect_to_state_chain(state_chain_settings, false, &logger).await?;
 
 	let account_id = state_chain_client.account_id();
 
-	if let Some(pending_claim) = state_chain_client
-		.base_rpc_client
-		.raw_rpc_client
-		.cf_pending_claim(account_id, None)
-		.await?
-	{
-		if let Some(cert) = pending_claim.encoded_cert {
-			return Ok(cert)
-		}
-	}
+	let mut blocks_polled = 0;
 
-	// Note that we subscribe to block stream before we check storage to
-	// avoid a race condition where the event is emitted in between the two
-	// actions
-	while let Some(result_header) = block_stream.next().await {
-		let header = result_header.expect("Failed to get a valid block header");
-		let block_hash = header.hash();
-		let events = state_chain_client
-			.storage_value::<frame_system::Events<state_chain_runtime::Runtime>>(block_hash)
-			.await?;
-		for event_record in events {
-			if let state_chain_runtime::Event::Staking(
-				pallet_cf_staking::Event::ClaimSignatureIssued(validator_id, claim_cert),
-			) = event_record.event
-			{
-				if validator_id == state_chain_client.account_id() {
-					return Ok(claim_cert)
-				}
-			}
+	while let Some(_result_header) = block_stream.next().await {
+		if let Some(certificate) = state_chain_client
+			.base_rpc_client
+			.raw_rpc_client
+			.cf_get_claim_certificate(account_id.clone(), None)
+			.await?
+		{
+			return Ok(Some(certificate))
+		}
+
+		blocks_polled += 1;
+		if blocks_polled >= blocks_to_poll_limit {
+			return Ok(None)
 		}
 	}
 
