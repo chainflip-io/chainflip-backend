@@ -116,7 +116,7 @@ fn process_all_swaps() {
 fn number_of_swaps_processed_limited_by_weight() {
 	new_test_ext().execute_with(|| {
 		let swaps = generate_test_swaps();
-		insert_swaps(swaps.clone());
+		insert_swaps(swaps);
 		Swapping::on_idle(1, 200);
 		assert_eq!(SwapQueue::<Test>::get().len(), 3);
 	});
