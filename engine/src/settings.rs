@@ -292,7 +292,7 @@ where
 	/// will NOT error).
 	fn set_defaults(
 		config_builder: ConfigBuilder<config::builder::DefaultState>,
-		_base_config_path: &str,
+		_config_root: &str,
 	) -> Result<ConfigBuilder<config::builder::DefaultState>, ConfigError> {
 		// This function is optional, so just pass it through.
 		Ok(config_builder)
@@ -319,13 +319,13 @@ impl CfSettings for Settings {
 
 	fn set_defaults(
 		config_builder: ConfigBuilder<config::builder::DefaultState>,
-		base_config_path: &str,
+		config_root: &str,
 	) -> Result<ConfigBuilder<config::builder::DefaultState>, ConfigError> {
 		config_builder
 			.set_default(NODE_P2P_ALLOW_LOCAL_IP, false)?
 			.set_default(
 				NODE_P2P_KEY_FILE,
-				PathBuf::from(base_config_path)
+				PathBuf::from(config_root)
 					.join("keys/node_key_file")
 					.to_str()
 					.expect("Invalid node_key_file path"),
@@ -334,21 +334,21 @@ impl CfSettings for Settings {
 			.set_default(STATE_CHAIN_WS_ENDPOINT, "ws://localhost:9944")?
 			.set_default(
 				STATE_CHAIN_SIGNING_KEY_FILE,
-				PathBuf::from(base_config_path)
+				PathBuf::from(config_root)
 					.join("keys/signing_key_file")
 					.to_str()
 					.expect("Invalid signing_key_file path"),
 			)?
 			.set_default(
 				ETH_PRIVATE_KEY_FILE,
-				PathBuf::from(base_config_path)
+				PathBuf::from(config_root)
 					.join("keys/eth_private_key")
 					.to_str()
 					.expect("Invalid eth_private_key path"),
 			)?
 			.set_default(
 				SIGNING_DB_FILE,
-				PathBuf::from(base_config_path)
+				PathBuf::from(config_root)
 					.join("data.db")
 					.to_str()
 					.expect("Invalid signing_db_file path"),

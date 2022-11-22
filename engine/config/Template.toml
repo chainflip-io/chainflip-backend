@@ -1,0 +1,35 @@
+# Every setting available, filled with default or example data.
+
+[node_p2p]
+allow_local_ip = false
+ip_address = "1.1.1.1"
+node_key_file = "/etc/chainflip/keys/node_key_file"
+port = 8078
+
+[state_chain]
+ws_endpoint = "ws://localhost:9944"
+# 32 byte hex secret key - associated with the node's public id (public key)
+signing_key_file = "/etc/chainflip/keys/signing_key_fale"
+
+[eth]
+http_node_endpoint = "http://localhost:8545"
+ws_node_endpoint = "ws://localhost:8545"
+# Ethereum private key file path. This file should contain a hex-encoded private key.
+private_key_file = "/etc/chainflip/keys/eth_private_key_file"
+
+[dot]
+# NB: You will need to manually add :443 to the url provided by the provider, as jsonrpsee wants one.
+ws_node_endpoint = "wss://my_fake_polkadot_rpc:443/<secret_key>"
+
+[signing]
+db_file = "/etc/chainflip/data.db"
+
+# Optional log filtering
+[log]
+blacklist = "fake_tag001, fake_tag002"
+whitelist = ""
+
+# Only used for development. Please remove otherwise.
+[health_check]
+hostname = "127.0.0.1"
+port = 5555
