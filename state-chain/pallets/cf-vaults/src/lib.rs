@@ -869,10 +869,10 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 			PendingVaultRotation::<T, I>::get()
 		{
 			match <Self as KeyProvider<_>>::current_key_epoch_index() {
-				KeyState::Active { key: key_id, epoch_index: _ } => {
+				KeyState::Active { key, epoch_index: _ } => {
 					T::Broadcaster::threshold_sign_and_broadcast(
 						<T::SetAggKeyWithAggKey as SetAggKeyWithAggKey<_>>::new_unsigned(
-							key_id,
+							key,
 							new_public_key,
 						),
 					);
