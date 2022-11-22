@@ -233,11 +233,11 @@ impl StateChainClient {
 
 		const BLOCK_CAPACITY: usize = 10;
 
-		let (block_sender, block_receiver) = async_channel::bounded(BLOCK_CAPACITY);
+		let (block_sender, block_receiver) = async_broadcast::broadcast(BLOCK_CAPACITY);
 		let task_handle = scope.spawn_with_handle(async move {
 			finalized_block_header_stream
 				.try_for_each(|block_header| {
-					block_sender.send(block_header).map_err(anyhow::Error::new)
+					block_sender.broadcast(block_header).map_err(anyhow::Error::new).map_ok(|_| ())
 				})
 				.await
 		});
