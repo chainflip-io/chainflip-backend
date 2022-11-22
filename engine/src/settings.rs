@@ -299,13 +299,6 @@ impl Source for CommandLineOptions {
 
 		self.eth_opts.insert_all(&mut map);
 
-		#[cfg(feature = "ibiza")]
-		insert_command_line_option(
-			&mut map,
-			"dot.ws_node_endpoint",
-			&self.dot_opts.dot_ws_node_endpoint,
-		);
-
 		insert_command_line_option(&mut map, "health_check.hostname", &self.health_check_hostname);
 		insert_command_line_option(&mut map, "health_check.port", &self.health_check_port);
 		insert_command_line_option_path(&mut map, "signing.db_file", &self.signing_db_file);
@@ -580,10 +573,6 @@ mod tests {
 		assert_eq!(opts.eth_opts.eth_ws_node_endpoint.unwrap(), settings.eth.ws_node_endpoint);
 		assert_eq!(opts.eth_opts.eth_http_node_endpoint.unwrap(), settings.eth.http_node_endpoint);
 		assert_eq!(opts.eth_opts.eth_private_key_file.unwrap(), settings.eth.private_key_file);
-
-		#[cfg(feature = "ibiza")]
-		assert_eq!(opts.dot_opts.dot_ws_node_endpoint.unwrap(), settings.dot.ws_node_endpoint);
-
 		assert_eq!(
 			opts.health_check_hostname.unwrap(),
 			settings.health_check.as_ref().unwrap().hostname

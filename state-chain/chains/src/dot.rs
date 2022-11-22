@@ -113,6 +113,9 @@ impl ChainCrypto for Polkadot {
 	}
 }
 
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub struct PolkadotTransactionData;
+
 impl FeeRefundCalculator<Polkadot> for PolkadotTransactionData {
 	fn return_fee_refund(
 		&self,
@@ -123,7 +126,7 @@ impl FeeRefundCalculator<Polkadot> for PolkadotTransactionData {
 }
 
 impl ChainAbi for Polkadot {
-	type UnsignedTransaction = ();
+	type UnsignedTransaction = PolkadotTransactionData;
 	type SignedTransaction = Vec<u8>;
 	// Not needed in Polkadot since we can sign natively with the AggKey.
 	type SignerCredential = ();

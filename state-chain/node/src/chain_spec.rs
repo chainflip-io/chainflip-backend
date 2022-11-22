@@ -17,7 +17,6 @@ use state_chain_runtime::{
 use std::{collections::BTreeSet, env, marker::PhantomData};
 use utilities::clean_eth_address;
 
-pub mod perseverance;
 pub mod sisyphos;
 
 /// Specialized `ChainSpec`. This is a specialization of the general Substrate ChainSpec type.

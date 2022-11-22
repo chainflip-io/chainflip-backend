@@ -243,7 +243,7 @@ impl P2PContext {
 					self.reconnect_to_peer(account_id);
 				}
 				Ok(_) = epoch_start_receiver.recv() => {
-					for (_, connection_state) in &mut self.active_connections {
+					for connection_state in &mut self.active_connections.values_mut() {
 						if let ConnectionState::Connected(socket) = connection_state {
 							*connection_state = ConnectionState::Pending(socket.peer().clone());
 						}
