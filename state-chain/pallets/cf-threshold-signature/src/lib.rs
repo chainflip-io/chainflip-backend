@@ -357,8 +357,8 @@ pub mod pallet {
 			request_id: RequestId,
 			ceremony_id: CeremonyId,
 		},
-		/// We cannot sign because the key is in transition.
-		CurrentKeyInTransition {
+		/// We cannot sign because the key is unavailable.
+		CurrentKeyUnavailable {
 			request_id: RequestId,
 		},
 		/// The threshold signature response timeout has been updated
@@ -667,8 +667,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 								Err(Event::<T, I>::SignersUnavailable { request_id, ceremony_id })
 							}
 						},
-						KeyState::InTransition =>
-							Err(Event::<T, I>::CurrentKeyInTransition { request_id }),
+						KeyState::Unavailable =>
+							Err(Event::<T, I>::CurrentKeyUnavailable { request_id }),
 					},
 					ThresholdCeremonyType::Standard,
 				)

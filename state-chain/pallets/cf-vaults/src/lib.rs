@@ -212,7 +212,7 @@ pub enum VaultState {
 
 	// The key is in transition. This also applies to when we're in transition to the first key.
 	#[default]
-	InTransition,
+	Unavailable,
 }
 
 #[frame_support::pallet]
@@ -720,7 +720,7 @@ pub mod pallet {
 					// clearer error messages.
 					.unwrap_or_else(|_| panic!("Can't build genesis without a valid vault key."))
 			} else {
-				CurrentVaultState::<T, I>::put(VaultState::InTransition);
+				CurrentVaultState::<T, I>::put(VaultState::Unavailable);
 				Default::default()
 			};
 
@@ -928,7 +928,7 @@ impl<T: Config<I>, I: 'static> KeyProvider<T::Chain> for Pallet<T, I> {
 					epoch_index: current_epoch,
 				}
 			},
-			VaultState::InTransition => KeyState::InTransition,
+			VaultState::Unavailable => KeyState::Unavailable,
 		}
 	}
 

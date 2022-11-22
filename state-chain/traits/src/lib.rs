@@ -372,16 +372,16 @@ pub enum KeyState<KeyId> {
 		key_id: KeyId,
 		epoch_index: EpochIndex,
 	},
-	// We are currently transitioning to a new key.
+	// We are currently transitioning to a new key or the key doesn't yet exist.
 	#[default]
-	InTransition,
+	Unavailable,
 }
 
 impl<KeyId> KeyState<KeyId> {
 	pub fn unwrap_key(self) -> KeyId {
 		match self {
 			Self::Active { key_id, epoch_index: _ } => key_id,
-			Self::InTransition => panic!("KeyState is InTransition!"),
+			Self::Unavailable => panic!("KeyState is Unavailable!"),
 		}
 	}
 }
