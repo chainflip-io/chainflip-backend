@@ -106,6 +106,10 @@ pub struct MultisigMessage<P: ECPoint> {
 }
 
 /// The public interface to the multi-signature code
+/// The initiate functions of this trait when called send a ceremony request and return a future
+/// that can be await'ed on for the result of that ceremony. Splitting requesting and waiting for a
+/// ceremony to complete allows the requests to all be sent synchronously which is required as we
+/// expect the requests to be ordered by ceremony_id
 #[cfg_attr(test, automock)]
 pub trait MultisigClientApi<C: CryptoScheme> {
 	fn initiate_keygen(
@@ -186,11 +190,6 @@ where
 }
 
 impl<C: CryptoScheme> MultisigClientApi<C> for MultisigClient<C> {
-	// This function is structured to simplify the writing of tests (i.e.
-	// should_delay_rts_until_key_is_ready). When the function is called it will send the request to
-	// the CeremonyManager/Backend immediately The function returns a future that will complete only
-	// once the CeremonyManager has finished the ceremony. This allows tests to split making the
-	// request and waiting for the result.
 	fn initiate_keygen(
 		&self,
 		ceremony_id: CeremonyId,
@@ -248,11 +247,6 @@ impl<C: CryptoScheme> MultisigClientApi<C> for MultisigClient<C> {
 		.boxed()
 	}
 
-	// Similarly to initiate_keygen this function is structured to simplify the writing of tests
-	// (i.e. should_delay_rts_until_key_is_ready). Once the async function returns it has sent the
-	// request to the CeremonyManager/Backend and outputs a second future that will complete only
-	// once the CeremonyManager has finished the ceremony. This allows tests to split making the
-	// request and waiting for the result.
 	fn initiate_signing(
 		&self,
 		ceremony_id: CeremonyId,
