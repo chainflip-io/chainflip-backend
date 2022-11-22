@@ -7,9 +7,8 @@ use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex, GENESIS_EPOCH};
 use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, Broadcaster, CeremonyIdProvider, Chainflip,
-	CurrentEpochIndex, EpochTransitionHandler, KeyProvider, KeyState,
-	ReplayProtectionProvider, SystemStateManager, ThresholdSigner, VaultRotator, VaultStatus,
-	VaultTransitionHandler,
+	CurrentEpochIndex, EpochTransitionHandler, KeyProvider, KeyState, SystemStateManager,
+	ThresholdSigner, VaultRotator, VaultStatus, VaultTransitionHandler,
 };
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
@@ -872,8 +871,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 			match <Self as KeyProvider<_>>::current_key_epoch_index() {
 				KeyState::Active { key: key_id, epoch_index: _ } => {
 					T::Broadcaster::threshold_sign_and_broadcast(
-						<T::ApiCall as SetAggKeyWithAggKey<_>>::new_unsigned(
-							<T::ReplayProtectionProvider>::replay_protection(),
+						<T::SetAggKeyWithAggKey as SetAggKeyWithAggKey<_>>::new_unsigned(
 							key_id,
 							new_public_key,
 						),
