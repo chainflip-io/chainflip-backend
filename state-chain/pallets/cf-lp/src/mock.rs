@@ -4,17 +4,18 @@ use cf_chains::{
 		api::{EthereumApi, EthereumReplayProtection},
 		assets,
 	},
-	Chain, ChainAbi, ChainEnvironment, Ethereum,
+	AnyChain, Chain, ChainAbi, ChainEnvironment, Ethereum,
 };
 use cf_primitives::{EthereumAddress, IntentId, ETHEREUM_ETH_ADDRESS};
 use cf_traits::{
 	mocks::{
-		bid_info::MockBidInfo, ensure_origin_mock::NeverFailingOriginCheck,
+		bid_info::MockBidInfo, egress_handler::MockEgressHandler,
+		ensure_origin_mock::NeverFailingOriginCheck, ingress_handler::MockIngressHandler,
 		staking_info::MockStakingInfo, system_state_info::MockSystemStateInfo,
 	},
 	AddressDerivationApi, Broadcaster, ReplayProtectionProvider,
 };
-use frame_support::{instances::Instance1, parameter_types, sp_runtime::app_crypto::sp_core::H160};
+use frame_support::{parameter_types, sp_runtime::app_crypto::sp_core::H160};
 use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{
@@ -22,7 +23,6 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage,
 };
-use state_chain_runtime::chainflip::ForeignChainIngressEgressHandler;
 
 use sp_std::str::FromStr;
 
@@ -51,7 +51,6 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system,
 		AccountRoles: pallet_cf_account_roles,
-		EthereumIngressEgress: pallet_cf_ingress_egress::<Instance1>,
 		LiquidityProvider: pallet_cf_lp,
 	}
 );
@@ -125,19 +124,6 @@ impl ChainEnvironment<<Ethereum as Chain>::ChainAsset, <Ethereum as Chain>::Chai
 	}
 }
 
-impl pallet_cf_ingress_egress::Config<Instance1> for Test {
-	type Event = Event;
-	type TargetChain = Ethereum;
-	type AddressDerivation = MockAddressDerivation;
-	type LpProvisioning = LiquidityProvider;
-	type SwapIntentHandler = Self;
-	type ReplayProtection = Self;
-	type AllBatch = EthereumApi<MockEthEnvironment>;
-	type Broadcaster = MockBroadcast;
-	type EnsureGovernance = NeverFailingOriginCheck<Self>;
-	type WeightInfo = ();
-}
-
 impl cf_traits::Chainflip for Test {
 	type KeyId = Vec<u8>;
 	type ValidatorId = u64;
@@ -159,7 +145,8 @@ impl pallet_cf_account_roles::Config for Test {
 impl crate::Config for Test {
 	type Event = Event;
 	type AccountRoleRegistry = AccountRoles;
-	type IngressEgressHandler = ForeignChainIngressEgressHandler<EthereumIngressEgress, Self>;
+	type IngressHandler = MockIngressHandler<AnyChain, Self>;
+	type EgressHandler = MockEgressHandler<AnyChain>;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 }
 

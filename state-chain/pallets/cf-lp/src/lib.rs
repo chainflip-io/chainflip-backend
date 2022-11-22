@@ -66,9 +66,14 @@ pub mod pallet {
 		/// For registering and verifying the account role.
 		type AccountRoleRegistry: AccountRoleRegistry<Self>;
 
-		/// API for handling Ingressing and Egress assets into a foreign chain.
-		type IngressEgressHandler: IngressApi<AnyChain, AccountId = <Self as frame_system::Config>::AccountId>
-			+ EgressApi<AnyChain>;
+		/// API for handling asset ingress.
+		type IngressHandler: IngressApi<
+			AnyChain,
+			AccountId = <Self as frame_system::Config>::AccountId,
+		>;
+
+		/// API for handling asset egress.
+		type EgressHandler: EgressApi<AnyChain>;
 
 		/// For governance checks.
 		type EnsureGovernance: EnsureOrigin<Self::Origin>;
@@ -238,7 +243,7 @@ pub mod pallet {
 			T::SystemState::ensure_no_maintenance()?;
 			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			let (intent_id, ingress_address) =
-				T::IngressEgressHandler::register_liquidity_ingress_intent(account_id, asset)?;
+				T::IngressHandler::register_liquidity_ingress_intent(account_id, asset)?;
 
 			Self::deposit_event(Event::DepositAddressReady { intent_id, ingress_address });
 
@@ -261,7 +266,7 @@ pub mod pallet {
 				Error::<T>::InvalidEgressAddress
 			);
 
-			T::IngressEgressHandler::schedule_egress(asset, amount, egress_address);
+			T::EgressHandler::schedule_egress(asset, amount, egress_address);
 			// Debit the asset from the account.
 			Pallet::<T>::try_debit(&account_id, asset, amount)?;
 

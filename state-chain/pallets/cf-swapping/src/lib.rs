@@ -46,9 +46,13 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 		/// For registering and verifying the account role.
 		type AccountRoleRegistry: AccountRoleRegistry<Self>;
-		/// API for handling Ingressing and Egress assets into a foreign chain.
-		type IngressEgressHandler: IngressApi<AnyChain, AccountId = <Self as frame_system::Config>::AccountId>
-			+ EgressApi<AnyChain>;
+		/// API for handling asset ingress.
+		type IngressHandler: IngressApi<
+			AnyChain,
+			AccountId = <Self as frame_system::Config>::AccountId,
+		>;
+		/// API for handling asset egress.
+		type EgressHandler: EgressApi<AnyChain>;
 		/// An interface to the AMM api implementation.
 		type SwappingApi: SwappingApi;
 		/// The Weight information.
@@ -125,7 +129,7 @@ pub mod pallet {
 			// Ensure the Asset and address are compatible
 			Self::ensure_asset_and_address_compatible(egress_asset, egress_address)?;
 
-			let (intent_id, ingress_address) = T::IngressEgressHandler::register_swap_intent(
+			let (intent_id, ingress_address) = T::IngressHandler::register_swap_intent(
 				ingress_asset,
 				egress_asset,
 				egress_address,
@@ -158,7 +162,7 @@ pub mod pallet {
 				}
 			});
 
-			T::IngressEgressHandler::schedule_egress(swap.to, swap_output, swap.egress_address);
+			T::EgressHandler::schedule_egress(swap.to, swap_output, swap.egress_address);
 		}
 
 		fn ensure_asset_and_address_compatible(

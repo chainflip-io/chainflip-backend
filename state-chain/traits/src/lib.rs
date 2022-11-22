@@ -736,6 +736,7 @@ pub trait EgressApi<C: Chain> {
 		egress_address: C::ChainAccount,
 	);
 }
+
 impl<T: frame_system::Config> EgressApi<Ethereum> for T {
 	fn schedule_egress(
 		_foreign_asset: assets::eth::Asset,

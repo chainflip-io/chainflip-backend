@@ -16,7 +16,6 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage,
 };
-use state_chain_runtime::chainflip::ForeignChainIngressEgressHandler;
 
 pub const RELAYER_FEE: u128 = 5;
 
@@ -150,7 +149,8 @@ impl Chainflip for Test {
 impl pallet_cf_swapping::Config for Test {
 	type Event = Event;
 	type AccountRoleRegistry = ();
-	type IngressEgressHandler = ForeignChainIngressEgressHandler<MockIngressEgressHandler, Self>;
+	type IngressHandler = MockIngressHandler<AnyChain, Self>;
+	type EgressHandler = MockEgressHandler<AnyChain, Self>;
 	type SwappingApi = MockSwappingApi;
 	type WeightInfo = ();
 }
