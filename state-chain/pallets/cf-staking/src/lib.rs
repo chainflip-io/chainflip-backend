@@ -17,8 +17,7 @@ mod tests;
 
 use cf_chains::RegisterClaim;
 use cf_traits::{
-	Bid, BidderProvider, EpochInfo, EthEnvironmentProvider, ReplayProtectionProvider,
-	StakeTransfer, ThresholdSigner,
+	Bid, BidderProvider, EpochInfo, ReplayProtectionProvider, StakeTransfer, ThresholdSigner,
 };
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
@@ -111,9 +110,6 @@ pub mod pallet {
 
 		/// Something that can provide a nonce for the threshold signature.
 		type ReplayProtectionProvider: ReplayProtectionProvider<Ethereum>;
-
-		/// Something that can provide the key manager address and chain id.
-		type EthEnvironmentProvider: EthEnvironmentProvider;
 
 		/// Threshold signer.
 		type ThresholdSigner: ThresholdSigner<Ethereum, Callback = Self::ThresholdCallable>;

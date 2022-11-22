@@ -78,8 +78,6 @@ pub mod pallet {
 		type EnsureGovernance: EnsureOrigin<Self::Origin>;
 		/// Weight information
 		type WeightInfo: WeightInfo;
-		/// Eth Environment provider
-		type EthEnvironmentProvider: EthEnvironmentProvider;
 	}
 
 	#[pallet::error]
@@ -347,7 +345,7 @@ impl<T: Config> EthEnvironmentProvider for Pallet<T> {
 }
 
 impl<T: Config> Pallet<T> {
-	pub fn next_global_signature_nonce() -> SignatureNonce {
+	pub fn next_ethereum_signature_nonce() -> SignatureNonce {
 		EthereumSignatureNonce::<T>::mutate(|nonce| {
 			*nonce += 1;
 			*nonce

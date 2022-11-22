@@ -28,10 +28,7 @@ type AccountId = AccountId32;
 type Balance = u128;
 
 use cf_traits::{
-	mocks::{
-		ensure_origin_mock::NeverFailingOriginCheck,
-		eth_environment_provider::MockEthEnvironmentProvider, time_source,
-	},
+	mocks::{ensure_origin_mock::NeverFailingOriginCheck, time_source},
 	Chainflip, ReplayProtectionProvider,
 };
 
@@ -223,7 +220,6 @@ impl pallet_cf_staking::Config for Test {
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type RegisterClaim = eth::api::EthereumApi<()>;
-	type EthEnvironmentProvider = MockEthEnvironmentProvider;
 }
 
 pub const CLAIM_TTL_SECS: u64 = 10;

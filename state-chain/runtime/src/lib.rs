@@ -179,7 +179,6 @@ impl pallet_cf_environment::Config for Runtime {
 	type Event = Event;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type WeightInfo = pallet_cf_environment::weights::PalletWeight<Runtime>;
-	type EthEnvironmentProvider = Environment;
 }
 
 #[cfg(feature = "ibiza")]
@@ -433,7 +432,6 @@ impl pallet_cf_staking::Config for Runtime {
 	type Balance = FlipBalance;
 	type Flip = Flip;
 	type ReplayProtectionProvider = chainflip::EthEnvironment;
-	type EthEnvironmentProvider = Environment;
 	type ThresholdSigner = EthereumThresholdSigner;
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, Instance1>;

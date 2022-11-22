@@ -231,7 +231,7 @@ impl ReplayProtectionProvider<Ethereum> for EthEnvironment {
 		EthereumReplayProtection {
 			key_manager_address: Environment::key_manager_address(),
 			chain_id: Environment::ethereum_chain_id(),
-			nonce: Environment::next_global_signature_nonce(),
+			nonce: Environment::next_ethereum_signature_nonce(),
 		}
 	}
 }
