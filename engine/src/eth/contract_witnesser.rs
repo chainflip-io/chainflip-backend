@@ -134,10 +134,12 @@ where
 							break
 						}
 
+						let block_number = block.block_number;
+
 						contract_witnesser
 							.handle_block_events(
 								epoch_start.epoch_index,
-								block.block_number,
+								block_number,
 								block,
 								state_chain_client.clone(),
 								&eth_dual_rpc,
@@ -148,7 +150,7 @@ where
 						witnessed_until_sender
 							.send(WitnessedUntil {
 								epoch_index: epoch_start.epoch_index,
-								block_number: epoch_start.eth_block,
+								block_number,
 							})
 							.unwrap();
 					}
