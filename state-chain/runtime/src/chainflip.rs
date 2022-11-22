@@ -24,18 +24,6 @@ use cf_chains::{
 	AnyChain, Chain, ChainCrypto,
 };
 #[cfg(feature = "ibiza")]
-use cf_primitives::{Asset, AssetAmount, ForeignChain, ForeignChainAddress, IntentId};
-#[cfg(feature = "ibiza")]
-use cf_traits::{EgressApi, IngressApi};
-#[cfg(feature = "ibiza")]
-use codec::{Decode, Encode};
-#[cfg(feature = "ibiza")]
-use frame_support::dispatch::DispatchError;
-#[cfg(feature = "ibiza")]
-use scale_info::TypeInfo;
-#[cfg(feature = "ibiza")]
-use sp_std::marker::PhantomData;
-
 use cf_chains::{
 	eth::{
 		self,
@@ -44,12 +32,22 @@ use cf_chains::{
 	},
 	ApiCall, ChainAbi, ChainEnvironment, TransactionBuilder,
 };
+#[cfg(feature = "ibiza")]
+use cf_primitives::{Asset, AssetAmount, ForeignChain, ForeignChainAddress, IntentId};
 use cf_traits::{
 	BlockEmissions, Chainflip, EmergencyRotation, EpochInfo, EthEnvironmentProvider, Heartbeat,
 	Issuance, NetworkState, ReplayProtectionProvider, RewardsDistribution, RuntimeUpgrade,
 	VaultTransitionHandler,
 };
+#[cfg(feature = "ibiza")]
+use cf_traits::{EgressApi, IngressApi};
+#[cfg(feature = "ibiza")]
+use codec::{Decode, Encode};
+#[cfg(feature = "ibiza")]
+use frame_support::dispatch::DispatchError;
 use pallet_cf_chain_tracking::ChainState;
+#[cfg(feature = "ibiza")]
+use scale_info::TypeInfo;
 
 use frame_support::{dispatch::DispatchErrorWithPostInfo, traits::Get, weights::PostDispatchInfo};
 
@@ -280,32 +278,24 @@ impl VaultTransitionHandler<Polkadot> for DotVaultTransitionHandler {
 	}
 }
 
-#[cfg(feature = "ibiza")]
-pub struct ForeignChainIngressEgressHandler<EthereumHandler, PolkadotHandler>(
-	PhantomData<(EthereumHandler, PolkadotHandler)>,
-);
+pub struct AnyChainIngressEgressHandler;
 
 #[cfg(feature = "ibiza")]
-impl<EthereumHandler, PolkadotHandler> EgressApi<AnyChain>
-	for ForeignChainIngressEgressHandler<EthereumHandler, PolkadotHandler>
-where
-	EthereumHandler: EgressApi<Ethereum>,
-	PolkadotHandler: EgressApi<Polkadot>,
-{
+impl EgressApi<AnyChain> for AnyChainIngressEgressHandler {
 	fn schedule_egress(
 		asset: Asset,
 		amount: AssetAmount,
 		egress_address: <AnyChain as Chain>::ChainAccount,
 	) {
 		match asset.into() {
-			ForeignChain::Ethereum => EthereumHandler::schedule_egress(
+			ForeignChain::Ethereum => crate::EthereumIngressEgress::schedule_egress(
 				asset.try_into().expect("Checked for asset compatibility"),
 				amount,
 				egress_address
 					.try_into()
 					.expect("Caller must ensure for account is of the compatible type."),
 			),
-			ForeignChain::Polkadot => PolkadotHandler::schedule_egress(
+			ForeignChain::Polkadot => crate::PolkadotIngressEgress::schedule_egress(
 				asset.try_into().expect("Checked for asset compatibility"),
 				amount,
 				egress_address
@@ -317,48 +307,43 @@ where
 }
 
 #[cfg(feature = "ibiza")]
-impl<EthereumHandler, PolkadotHandler, NativeAccountId> IngressApi<AnyChain>
-	for ForeignChainIngressEgressHandler<EthereumHandler, PolkadotHandler>
-where
-	EthereumHandler: IngressApi<Ethereum, AccountId = NativeAccountId>,
-	PolkadotHandler: IngressApi<Polkadot, AccountId = NativeAccountId>,
-{
-	type AccountId = NativeAccountId;
+impl IngressApi<AnyChain> for AnyChainIngressEgressHandler {
+	type AccountId = <Runtime as frame_system::Config>::AccountId;
 
-	// This should be callable by the LP pallet.
 	fn register_liquidity_ingress_intent(
-		lp_account: NativeAccountId,
+		lp_account: Self::AccountId,
 		ingress_asset: Asset,
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
 		match ingress_asset.into() {
-			ForeignChain::Ethereum => EthereumHandler::register_liquidity_ingress_intent(
-				lp_account,
-				ingress_asset.try_into().unwrap(),
-			),
-			ForeignChain::Polkadot => PolkadotHandler::register_liquidity_ingress_intent(
-				lp_account,
-				ingress_asset.try_into().unwrap(),
-			),
+			ForeignChain::Ethereum =>
+				crate::EthereumIngressEgress::register_liquidity_ingress_intent(
+					lp_account,
+					ingress_asset.try_into().unwrap(),
+				),
+			ForeignChain::Polkadot =>
+				crate::PolkadotIngressEgress::register_liquidity_ingress_intent(
+					lp_account,
+					ingress_asset.try_into().unwrap(),
+				),
 		}
 	}
 
-	// This should only be callable by the relayer.
 	fn register_swap_intent(
 		ingress_asset: Asset,
 		egress_asset: Asset,
 		egress_address: ForeignChainAddress,
 		relayer_commission_bps: u16,
-		relayer_id: NativeAccountId,
+		relayer_id: Self::AccountId,
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
 		match ingress_asset.into() {
-			ForeignChain::Ethereum => EthereumHandler::register_swap_intent(
+			ForeignChain::Ethereum => crate::EthereumIngressEgress::register_swap_intent(
 				ingress_asset.try_into().unwrap(),
 				egress_asset,
 				egress_address,
 				relayer_commission_bps,
 				relayer_id,
 			),
-			ForeignChain::Polkadot => PolkadotHandler::register_swap_intent(
+			ForeignChain::Polkadot => crate::PolkadotIngressEgress::register_swap_intent(
 				ingress_asset.try_into().unwrap(),
 				egress_asset,
 				egress_address,
