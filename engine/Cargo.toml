@@ -35,6 +35,8 @@ httparse = "1.4.1"
 itertools = "0.10"
 clap = { version = "3.1.18", features = ["derive"] }
 chrono = "0.4.19"
+atomicwrites = "0.3.1"
+scopeguard = "1.1.0"
 # have to use the older version until secp256k1 updates its dependency (https://github.com/rust-bitcoin/rust-secp256k1/issues/328)
 rand_legacy = { package = "rand", version = "0.6" }
 
