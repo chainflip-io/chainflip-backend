@@ -47,9 +47,8 @@ pallet-cf-threshold-signature = { path = '../pallets/cf-threshold-signature', de
 pallet-cf-broadcast = { path = '../pallets/cf-broadcast', default-features = false }
 pallet-cf-environment = { path = '../pallets/cf-environment', default-features = false }
 pallet-cf-chain-tracking = { path = '../pallets/cf-chain-tracking', default-features = false }
-pallet-cf-ingress = { path = '../pallets/cf-ingress', default-features = false, optional = true }
 pallet-cf-lp =  { path = '../pallets/cf-lp', default-features = false, optional = true }
-pallet-cf-egress = { path = '../pallets/cf-egress', default-features = false, optional = true }
+pallet-cf-ingress-egress = { path = '../pallets/cf-ingress-egress', default-features = false, optional = true }
 
 # SCALE
 codec = { package = 'parity-scale-codec', version = '3.0.0', default-features = false, features = ['derive'] }
@@ -214,8 +213,7 @@ runtime-benchmarks = [
   'pallet-cf-environment/runtime-benchmarks',
   'pallet-cf-flip/runtime-benchmarks',
   'pallet-cf-governance/runtime-benchmarks',
-  'pallet-cf-ingress/runtime-benchmarks',
-  'pallet-cf-egress/runtime-benchmarks',
+  'pallet-cf-ingress-egress/runtime-benchmarks',
   'pallet-cf-swapping/runtime-benchmarks',
   'pallet-cf-reputation/runtime-benchmarks',
   'pallet-cf-staking/runtime-benchmarks',
@@ -245,12 +243,11 @@ std = [
   'pallet-cf-account-roles/std',
   'pallet-cf-broadcast/std',
   'pallet-cf-chain-tracking/std',
-  'pallet-cf-egress/std',
+  'pallet-cf-ingress-egress/std',
   'pallet-cf-emissions/std',
   'pallet-cf-environment/std',
   'pallet-cf-flip/std',
   'pallet-cf-governance/std',
-  'pallet-cf-ingress/std',
   'pallet-cf-lp/std',
   'pallet-cf-swapping/std',
   'pallet-cf-reputation/std',
@@ -288,18 +285,16 @@ try-runtime = [
   'pallet-grandpa/try-runtime',
   'pallet-timestamp/try-runtime',
   'pallet-transaction-payment/try-runtime',
-  'pallet-cf-egress/try-runtime',
+  'pallet-cf-ingress-egress/try-runtime',
   'pallet-cf-emissions/try-runtime',
   'pallet-cf-environment/try-runtime',
-  'pallet-cf-ingress/try-runtime',
   'pallet-cf-swapping/try-runtime',
   'pallet-cf-reputation/try-runtime',
   'pallet-cf-validator/try-runtime',
   'pallet-cf-vaults/try-runtime',
 ]
 ibiza = [
-  'pallet-cf-egress',
-  'pallet-cf-ingress',
+  'pallet-cf-ingress-egress',
   'pallet-cf-swapping',
   'pallet-cf-lp',
   'cf-chains/ibiza',

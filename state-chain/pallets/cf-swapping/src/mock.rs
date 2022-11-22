@@ -3,7 +3,7 @@ use cf_chains::{Chain, Ethereum};
 use cf_primitives::{chains::assets, Asset, AssetAmount, ForeignChainAddress};
 use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
-	AmmPoolApi, Chainflip, EgressApi, IngressApi,
+	Chainflip, EgressApi, IngressApi, SwappingApi,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{parameter_types, storage_alias};
@@ -21,7 +21,6 @@ pub const RELAYER_FEE: u128 = 5;
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 type AccountId = u64;
-type Balance = u128;
 
 /// A helper type for testing
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
@@ -80,18 +79,18 @@ impl system::Config for Test {
 
 pub struct MockIngress;
 
-impl IngressApi for MockIngress {
+impl IngressApi<Ethereum> for MockIngress {
 	type AccountId = AccountId;
 
 	fn register_liquidity_ingress_intent(
 		_lp_account: Self::AccountId,
-		_ingress_asset: Asset,
+		_ingress_asset: <Ethereum as Chain>::ChainAsset,
 	) -> Result<(u64, cf_primitives::ForeignChainAddress), sp_runtime::DispatchError> {
 		Ok((0, ForeignChainAddress::Eth(Default::default())))
 	}
 
 	fn register_swap_intent(
-		_ingress_asset: Asset,
+		_ingress_asset: <Ethereum as Chain>::ChainAsset,
 		_schedule_egress: Asset,
 		_egress_address: ForeignChainAddress,
 		_relayer_commission_bps: u16,
@@ -123,44 +122,15 @@ impl MockEgressApi {
 	}
 }
 
-pub struct MockAmmPoolApi;
+pub struct MockSwappingApi;
 
-impl AmmPoolApi for MockAmmPoolApi {
-	type Balance = Balance;
-
-	fn asset_0(&self) -> cf_primitives::Asset {
-		todo!()
-	}
-
-	fn asset_1(&self) -> cf_primitives::Asset {
-		todo!()
-	}
-
-	fn liquidity_0(&self) -> Self::Balance {
-		todo!()
-	}
-
-	fn liquidity_1(&self) -> Self::Balance {
-		todo!()
-	}
-
-	fn get_exchange_rate(&self) -> cf_primitives::ExchangeRate {
-		todo!()
-	}
-
-	fn get_liquidity_requirement(
-		&self,
-		_position: &cf_primitives::TradingPosition<Self::Balance>,
-	) -> Option<(Self::Balance, Self::Balance)> {
-		todo!()
-	}
-
+impl SwappingApi for MockSwappingApi {
 	fn swap(
 		_from: Asset,
 		_to: Asset,
-		swap_input: Self::Balance,
+		swap_input: AssetAmount,
 		_fee: u16,
-	) -> (Self::Balance, (cf_primitives::Asset, Self::Balance)) {
+	) -> (AssetAmount, (cf_primitives::Asset, AssetAmount)) {
 		(swap_input, (cf_primitives::Asset::Usdc, RELAYER_FEE))
 	}
 }
@@ -197,8 +167,8 @@ impl pallet_cf_swapping::Config for Test {
 	type AccountRoleRegistry = ();
 	type Ingress = MockIngress;
 	type Egress = MockEgressApi;
-	type AmmPoolApi = MockAmmPoolApi;
 	type WeightInfo = MockWeightInfo;
+	type SwappingApi = MockSwappingApi;
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;

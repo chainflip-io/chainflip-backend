@@ -1,4 +1,5 @@
 use crate::{self as pallet_cf_flip, BurnFlipAccount};
+use cf_primitives::FlipBalance;
 use cf_traits::{
 	impl_mock_waived_fees, mocks::ensure_origin_mock::NeverFailingOriginCheck, StakeTransfer,
 	WaivedFees,
@@ -65,8 +66,6 @@ impl frame_system::Config for Test {
 	type OnSetCode = ();
 	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
-
-pub type FlipBalance = u128;
 
 parameter_types! {
 	pub const ExistentialDeposit: FlipBalance = 10;

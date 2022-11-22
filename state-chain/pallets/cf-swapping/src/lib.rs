@@ -1,6 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-use cf_primitives::{Asset, AssetAmount, ForeignChainAddress};
-use cf_traits::{liquidity::AmmPoolApi, IngressApi};
+use cf_primitives::{Asset, AssetAmount, ForeignChain, ForeignChainAddress};
+use cf_traits::{liquidity::SwappingApi, IngressApi};
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
@@ -49,11 +49,11 @@ pub mod pallet {
 		/// For registering and verifying the account role.
 		type AccountRoleRegistry: AccountRoleRegistry<Self>;
 		/// An interface to the ingress api implementation.
-		type Ingress: IngressApi<AccountId = <Self as frame_system::Config>::AccountId>;
+		type Ingress: IngressApi<AccountId = <Self as frame_system::Config>::AccountId, Ethereum>;
 		/// An interface to the egress api implementation.
 		type Egress: EgressApi<Ethereum>;
 		/// An interface to the AMM api implementation.
-		type AmmPoolApi: AmmPoolApi<Balance = AssetAmount>;
+		type SwappingApi: SwappingApi;
 		/// The Weight information.
 		type WeightInfo: WeightInfo;
 	}
@@ -143,16 +143,16 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let relayer = T::AccountRoleRegistry::ensure_relayer(origin)?;
 
-			// TODO: ensure egress address chain matches egress asset chain
-			// (or consider if we can merge both into one struct / derive one from the other)
-			let (intent_id, ingress_address) = T::Ingress::register_swap_intent(
-				ingress_asset,
-				egress_asset,
-				egress_address,
-				relayer_commission_bps,
-				relayer,
-			)?;
-
+			let (intent_id, ingress_address) = match ingress_asset.into() {
+				ForeignChain::Ethereum => T::Ingress::register_swap_intent(
+					ingress_asset.try_into().unwrap(),
+					egress_asset,
+					egress_address,
+					relayer_commission_bps,
+					relayer,
+				),
+				_ => todo!(),
+			}?;
 			Self::deposit_event(Event::<T>::NewSwapIntent { intent_id, ingress_address });
 
 			Ok(().into())
@@ -200,7 +200,7 @@ pub mod pallet {
 		pub fn execute_group_of_swaps(swaps: Vec<Swap<T::AccountId>>, from: Asset, to: Asset) {
 			let total_funds_to_swap = Self::calc_netto_swap_amount(swaps.clone());
 			Self::store_relayer_fees(swaps.clone());
-			let (swap_output, (_, _)) = T::AmmPoolApi::swap(from, to, total_funds_to_swap, 1);
+			let (swap_output, (_, _)) = T::SwappingApi::swap(from, to, total_funds_to_swap, 1);
 			for swap in swaps {
 				let swap_amount =
 					Self::calc_prop_swap(total_funds_to_swap, swap_output, swap.amount);

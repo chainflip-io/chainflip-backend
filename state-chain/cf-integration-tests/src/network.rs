@@ -1,7 +1,7 @@
 use super::*;
 use cf_chains::eth::{to_ethereum_address, AggKey, SchnorrVerificationComponents};
-use cf_primitives::{AccountRole, EpochIndex};
-use cf_traits::{AccountRoleRegistry, EpochInfo, FlipBalance};
+use cf_primitives::{AccountRole, EpochIndex, FlipBalance};
+use cf_traits::{AccountRoleRegistry, EpochInfo};
 use codec::Encode;
 use frame_support::traits::{OnFinalize, OnIdle};
 use libsecp256k1::PublicKey;
@@ -29,7 +29,7 @@ macro_rules! on_events {
 	}
 }
 
-pub const NEW_STAKE_AMOUNT: FlipBalance = DEFAULT_MIN_STAKE + 1;
+pub const NEW_STAKE_AMOUNT: FlipBalance = mock_runtime::MIN_STAKE + 1;
 
 pub fn create_testnet_with_new_staker() -> (Network, AccountId32) {
 	let (mut testnet, backup_nodes) = Network::create(1, &Validator::current_authorities());

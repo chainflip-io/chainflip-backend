@@ -23,7 +23,7 @@ use crate::{
 		crypto::{CryptoScheme, ECPoint, ECScalar, Rng},
 	},
 	p2p::OutgoingMultisigStageMessages,
-	task_scope::{with_task_scope, Scope, ScopedJoinHandle},
+	task_scope::{task_scope, Scope, ScopedJoinHandle},
 };
 use cf_primitives::{AuthorityCount, CeremonyId};
 use state_chain_runtime::AccountId;
@@ -265,11 +265,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 		}
 	}
 
-	async fn on_request(
-		&mut self,
-		request: CeremonyRequest<C>,
-		scope: &Scope<'_, anyhow::Result<()>, true>,
-	) {
+	async fn on_request(&mut self, request: CeremonyRequest<C>, scope: &Scope<'_, anyhow::Error>) {
 		// Always update the latest ceremony id, even if we are not participating
 		self.update_latest_ceremony_id(request.ceremony_id);
 
@@ -313,7 +309,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 		mut ceremony_request_receiver: UnboundedReceiver<CeremonyRequest<C>>,
 		mut incoming_p2p_message_receiver: UnboundedReceiver<(AccountId, Vec<u8>)>,
 	) -> Result<()> {
-		with_task_scope::<_, ()>(|scope| {
+		task_scope(|scope| {
 			async {
 				loop {
 					tokio::select! {
@@ -352,7 +348,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 		participants: BTreeSet<AccountId>,
 		rng: Rng,
 		result_sender: CeremonyResultSender<KeygenCeremony<C>>,
-		scope: &Scope<'_, anyhow::Result<()>, true>,
+		scope: &Scope<'_, anyhow::Error>,
 	) {
 		assert!(!participants.is_empty(), "Keygen request has no participants");
 
@@ -406,7 +402,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 		key_info: KeygenResultInfo<C::Point>,
 		rng: Rng,
 		result_sender: CeremonyResultSender<SigningCeremony<C>>,
-		scope: &Scope<'_, anyhow::Result<()>, true>,
+		scope: &Scope<'_, anyhow::Error>,
 	) {
 		assert!(!signers.is_empty(), "Request to sign has no signers");
 
@@ -458,7 +454,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 		&mut self,
 		sender_id: AccountId,
 		message: MultisigMessage<C::Point>,
-		scope: &Scope<'_, anyhow::Result<()>, true>,
+		scope: &Scope<'_, anyhow::Error>,
 	) {
 		match message {
 			MultisigMessage { ceremony_id, data: MultisigData::Keygen(data) } =>
@@ -564,7 +560,7 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
 		ceremony_id: CeremonyId,
 		data: Ceremony::Data,
 		latest_ceremony_id: CeremonyId,
-		scope: &Scope<'_, anyhow::Result<()>, true>,
+		scope: &Scope<'_, anyhow::Error>,
 		logger: &slog::Logger,
 	) {
 		slog::debug!(logger, "Received data {}", &data);
@@ -599,7 +595,7 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
 	fn get_state_or_create_unauthorized(
 		&mut self,
 		ceremony_id: CeremonyId,
-		scope: &Scope<'_, anyhow::Result<()>, true>,
+		scope: &Scope<'_, anyhow::Error>,
 		logger: &slog::Logger,
 	) -> &mut CeremonyHandle<Ceremony> {
 		self.ceremony_handles.entry(ceremony_id).or_insert_with(|| {
@@ -664,7 +660,7 @@ impl<Ceremony: CeremonyTrait> CeremonyHandle<Ceremony> {
 	fn spawn(
 		ceremony_id: CeremonyId,
 		outcome_sender: UnboundedSender<(CeremonyId, CeremonyOutcome<Ceremony>)>,
-		scope: &Scope<'_, anyhow::Result<()>, true>,
+		scope: &Scope<'_, anyhow::Error>,
 		logger: &slog::Logger,
 	) -> Self {
 		let (message_sender, message_receiver) = mpsc::unbounded_channel();
