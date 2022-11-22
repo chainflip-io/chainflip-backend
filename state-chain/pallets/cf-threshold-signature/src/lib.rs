@@ -667,14 +667,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 								Err(Event::<T, I>::SignersUnavailable { request_id, ceremony_id })
 							}
 						},
-						KeyState::InTransition => Err((
-							Event::<T, I>::CurrentKeyInTransition { request_id },
-							scale_info::prelude::format!(
-							    "The current key is in transition for request {}, attempt {}. Scheduling retry.", 
-							    request_id,
-							    attempt_count,
-						    ),
-						)),
+						KeyState::InTransition =>
+							Err(Event::<T, I>::CurrentKeyInTransition { request_id }),
 					},
 					ThresholdCeremonyType::Standard,
 				)
