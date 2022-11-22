@@ -116,9 +116,7 @@ pub fn rotate_authorities<T: RuntimeConfig>(candidates: u32, epoch: u32) {
 	assert!(matches!(CurrentRotationPhase::<T>::get(), RotationPhase::KeygensInProgress(..)));
 
 	// Simulate success.
-	T::MultiVaultRotator::set_all_vault_rotation_outcomes(AsyncResult::Ready(
-		VaultStatus::RotationComplete,
-	));
+	T::VaultRotator::set_status(AsyncResult::Ready(VaultStatus::RotationComplete));
 
 	// The rest should take care of itself.
 	let mut iterations = 0;
@@ -316,7 +314,7 @@ benchmarks! {
 		Pallet::<T>::on_initialize(1u32.into());
 	}
 	verify {
-		assert_eq!(T::MultiVaultRotator::multi_vault_rotation_outcome(), AsyncResult::Pending);
+		assert_eq!(T::VaultRotator::status(), AsyncResult::Pending);
 	}
 
 	rotation_phase_vaults_rotating_success {
@@ -328,7 +326,7 @@ benchmarks! {
 		start_vault_rotation::<T>(a, 50, 1);
 
 		// Simulate success.
-		T::MultiVaultRotator::set_all_vault_rotation_outcomes(AsyncResult::Ready(VaultStatus::KeygenComplete));
+		T::VaultRotator::set_status(AsyncResult::Ready(VaultStatus::KeygenComplete));
 
 		// This assertion ensures we are using the correct weight parameter.
 		assert_eq!(
@@ -358,7 +356,7 @@ benchmarks! {
 
 		// Simulate failure.
 		let offenders = bidder_set::<T, ValidatorIdOf<T>, _>(o, 1).collect::<BTreeSet<_>>();
-		T::MultiVaultRotator::set_all_vault_rotation_outcomes(AsyncResult::Ready(VaultStatus::Failed(offenders.clone())));
+		T::VaultRotator::set_status(AsyncResult::Ready(VaultStatus::Failed(offenders.clone())));
 
 		// This assertion ensures we are using the correct weight parameters.
 		assert_eq!(offenders.len() as u32, o, "Incorrect weight parameters.");

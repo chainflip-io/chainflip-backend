@@ -288,7 +288,7 @@ pub mod pallet {
 			let mut weight = T::DbWeight::get().reads(1);
 
 			// We don't need self, we can get our own data.
-			if Self::vault_rotation_outcome() != AsyncResult::Pending {
+			if Self::status() != AsyncResult::Pending {
 				return weight
 			}
 
@@ -811,10 +811,10 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 	/// # Panics
 	/// - If an empty BTreeSet of candidates is provided
 	/// - If a vault rotation outcome is already Pending (i.e. there's one already in progress)
-	fn start_vault_rotation(candidates: BTreeSet<Self::ValidatorId>) {
+	fn start(candidates: BTreeSet<Self::ValidatorId>) {
 		assert!(!candidates.is_empty());
 
-		assert_ne!(Self::vault_rotation_outcome(), AsyncResult::Pending);
+		assert_ne!(Self::status(), AsyncResult::Pending);
 
 		let ceremony_id = T::CeremonyIdProvider::next_ceremony_id();
 
@@ -832,7 +832,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 	}
 
 	/// Get the status of the current key generation
-	fn vault_rotation_outcome() -> AsyncResult<VaultStatus<T::ValidatorId>> {
+	fn status() -> AsyncResult<VaultStatus<T::ValidatorId>> {
 		match PendingVaultRotation::<T, I>::decode_variant() {
 			Some(VaultRotationStatusVariant::AwaitingKeygen) => AsyncResult::Pending,
 			Some(VaultRotationStatusVariant::AwaitingKeygenVerification) => AsyncResult::Pending,
@@ -853,7 +853,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 		}
 	}
 
-	fn activate_key() {
+	fn activate() {
 		if let Some(VaultRotationStatus::<T, I>::KeygenVerificationComplete { new_public_key }) =
 			PendingVaultRotation::<T, I>::get()
 		{
@@ -879,7 +879,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn set_vault_rotation_outcome(outcome: AsyncResult<VaultStatus<Self::ValidatorId>>) {
+	fn set_status(outcome: AsyncResult<VaultStatus<Self::ValidatorId>>) {
 		use cf_chains::benchmarking_value::BenchmarkValue;
 		match outcome {
 			AsyncResult::Pending => {

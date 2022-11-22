@@ -156,7 +156,7 @@ impl pallet_cf_validator::Config for Runtime {
 	type EpochTransitionHandler = ChainflipEpochTransitions;
 	type MinEpoch = MinEpoch;
 	type ValidatorWeightInfo = pallet_cf_validator::weights::PalletWeight<Runtime>;
-	type MultiVaultRotator = AllVaultRotator<EthereumVault>;
+	type VaultRotator = AllVaultRotator<EthereumVault>;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type MissedAuthorshipSlots = chainflip::MissedAuraSlots;
 	type BidderProvider = pallet_cf_staking::Pallet<Self>;

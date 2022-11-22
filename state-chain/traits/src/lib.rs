@@ -169,36 +169,18 @@ pub enum VaultStatus<ValidatorId> {
 pub trait VaultRotator {
 	type ValidatorId: Ord + Clone;
 
-	/// Start a vault rotation with the provided `candidates`.
-	fn start_vault_rotation(candidates: BTreeSet<Self::ValidatorId>);
+	/// Start the rotation with provided candidates.
+	fn start(candidates: BTreeSet<Self::ValidatorId>);
 
-	/// Poll for the vault rotation outcome.
-	fn vault_rotation_outcome() -> AsyncResult<VaultStatus<Self::ValidatorId>>;
+	/// Get the current rotation status.
+	fn status() -> AsyncResult<VaultStatus<Self::ValidatorId>>;
 
-	/// Activate a chain's new key on that particular chain. For example, setting the new key
+	/// Activate key/s on particular chain/s. For example, setting the new key
 	/// on the contract for a smart contract chain.
-	fn activate_key();
+	fn activate();
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn set_vault_rotation_outcome(_outcome: AsyncResult<VaultStatus<Self::ValidatorId>>) {
-		unimplemented!()
-	}
-}
-
-pub trait MultiVaultRotator {
-	type ValidatorId;
-
-	/// Start a vault rotation with the provided `candidates`.
-	fn start_all_vault_rotations(candidates: BTreeSet<Self::ValidatorId>);
-
-	// Are we ready to tell the vaults they can commit to their shiny new key.
-	fn multi_vault_rotation_outcome() -> AsyncResult<VaultStatus<Self::ValidatorId>>;
-
-	fn activate_all_keys();
-
-	// TODO: we could take an array of outcomes here instead.
-	#[cfg(feature = "runtime-benchmarks")]
-	fn set_all_vault_rotation_outcomes(_outcome: AsyncResult<VaultStatus<Self::ValidatorId>>) {
+	fn set_status(_outcome: AsyncResult<VaultStatus<Self::ValidatorId>>) {
 		unimplemented!()
 	}
 }

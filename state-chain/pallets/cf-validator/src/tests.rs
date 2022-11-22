@@ -2,8 +2,8 @@ use crate::{mock::*, Error, *};
 use cf_test_utilities::last_event;
 use cf_traits::{
 	mocks::{
-		multi_vault_rotator::MockMultiVaultRotator, reputation_resetter::MockReputationResetter,
-		system_state_info::MockSystemStateInfo,
+		reputation_resetter::MockReputationResetter, system_state_info::MockSystemStateInfo,
+		vault_rotator::MockVaultRotator,
 	},
 	AuctionOutcome, SystemStateInfo,
 };
@@ -20,7 +20,7 @@ fn assert_epoch_index(n: EpochIndex) {
 		n,
 		"we should be in epoch {n:?}. VaultRotator says {:?} / {:?}",
 		CurrentRotationPhase::<Test>::get(),
-		<Test as crate::Config>::MultiVaultRotator::multi_vault_rotation_outcome()
+		<Test as crate::Config>::VaultRotator::status()
 	);
 }
 
@@ -113,14 +113,14 @@ fn should_retry_rotation_until_success_with_failing_auctions() {
 			CurrentRotationPhase::<Test>::get(),
 			RotationPhase::<Test>::KeygensInProgress(..)
 		));
-		MockMultiVaultRotator::keygen_success();
+		MockVaultRotator::keygen_success();
 		// TODO: Needs to be clearer why this is 2 blocks and not 1
 		move_forward_blocks(2);
 		assert!(matches!(
 			CurrentRotationPhase::<Test>::get(),
 			RotationPhase::<Test>::ActivatingKeys(..)
 		));
-		MockMultiVaultRotator::keys_activated();
+		MockVaultRotator::keys_activated();
 		// TODO: Needs to be clearer why this is 2 blocks and not 1
 		move_forward_blocks(2);
 		assert_default_rotation_outcome!();
@@ -176,14 +176,14 @@ fn auction_winners_should_be_the_new_authorities_on_new_epoch() {
 			CurrentRotationPhase::<Test>::get(),
 			RotationPhase::<Test>::KeygensInProgress(..)
 		));
-		MockMultiVaultRotator::keygen_success();
+		MockVaultRotator::keygen_success();
 		// TODO: Needs to be clearer why this is 2 blocks and not 1
 		move_forward_blocks(2);
 		assert!(matches!(
 			CurrentRotationPhase::<Test>::get(),
 			RotationPhase::<Test>::ActivatingKeys(..)
 		));
-		MockMultiVaultRotator::keys_activated();
+		MockVaultRotator::keys_activated();
 		// TODO: Needs to be clearer why this is 2 blocks and not 1
 		move_forward_blocks(2);
 		assert_default_rotation_outcome!();

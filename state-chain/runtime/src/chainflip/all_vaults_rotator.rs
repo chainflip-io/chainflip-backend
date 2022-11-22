@@ -2,26 +2,26 @@
 
 use core::marker::PhantomData;
 
-use cf_traits::{AsyncResult, MultiVaultRotator, VaultRotator, VaultStatus};
+use cf_traits::{AsyncResult, VaultRotator, VaultStatus};
 use sp_std::collections::btree_set::BTreeSet;
 
 pub struct AllVaultRotator<A> {
 	_phantom: PhantomData<A>,
 }
 
-impl<A> MultiVaultRotator for AllVaultRotator<A>
+impl<A> VaultRotator for AllVaultRotator<A>
 where
 	A: VaultRotator,
 {
 	type ValidatorId = A::ValidatorId;
 
 	/// Start all vault rotations with the provided `candidates`.
-	fn start_all_vault_rotations(candidates: BTreeSet<Self::ValidatorId>) {
-		A::start_vault_rotation(candidates)
+	fn start(candidates: BTreeSet<Self::ValidatorId>) {
+		A::start(candidates)
 	}
 
-	fn multi_vault_rotation_outcome() -> AsyncResult<VaultStatus<Self::ValidatorId>> {
-		let a_async_result = A::vault_rotation_outcome();
+	fn status() -> AsyncResult<VaultStatus<Self::ValidatorId>> {
+		let a_async_result = A::status();
 
 		// if any of the inner rotations are void, then the overall vault rotation result is void.
 		if matches!(a_async_result, AsyncResult::Void) {
@@ -61,7 +61,7 @@ where
 		}
 	}
 
-	fn activate_all_keys() {
-		A::activate_key()
+	fn activate() {
+		A::activate()
 	}
 }

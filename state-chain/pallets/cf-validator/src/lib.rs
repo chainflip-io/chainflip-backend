@@ -22,8 +22,8 @@ use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, AuctionOutcome, Bid, BidInfo, BidderProvider,
 	Bonding, Chainflip, EmergencyRotation, EpochInfo, EpochTransitionHandler, ExecutionCondition,
-	HistoricalEpoch, MissedAuthorshipSlots, MultiVaultRotator, QualifyNode, ReputationResetter,
-	StakeHandler, SystemStateInfo,
+	HistoricalEpoch, MissedAuthorshipSlots, QualifyNode, ReputationResetter, StakeHandler,
+	SystemStateInfo, VaultRotator,
 };
 use cf_utilities::Port;
 use frame_support::{
@@ -115,7 +115,7 @@ pub type Percentage = u8;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{AccountRoleRegistry, MultiVaultRotator, VaultStatus};
+	use cf_traits::{AccountRoleRegistry, VaultStatus};
 	use frame_system::pallet_prelude::*;
 	use pallet_session::WeightInfo as SessionWeightInfo;
 	use sp_runtime::app_crypto::RuntimePublic;
@@ -145,7 +145,7 @@ pub mod pallet {
 		#[pallet::constant]
 		type MinEpoch: Get<<Self as frame_system::Config>::BlockNumber>;
 
-		type MultiVaultRotator: MultiVaultRotator<ValidatorId = ValidatorIdOf<Self>>;
+		type VaultRotator: VaultRotator<ValidatorId = ValidatorIdOf<Self>>;
 
 		/// Implementation of EnsureOrigin trait for governance
 		type EnsureGovernance: EnsureOrigin<Self::Origin>;
@@ -397,12 +397,12 @@ pub mod pallet {
 					}
 				},
 				RotationPhase::KeygensInProgress(mut rotation_state) => {
-					match T::MultiVaultRotator::multi_vault_rotation_outcome() {
+					match T::VaultRotator::status() {
 						// We need to differentiate keygen verif and other states.
 						// We can do this with an enum instead of Result<()>
 						// We have successfully done keygen verification
 						AsyncResult::Ready(VaultStatus::KeygenComplete) => {
-							T::MultiVaultRotator::activate_all_keys();
+							T::VaultRotator::activate();
 							Self::set_rotation_phase(RotationPhase::ActivatingKeys(rotation_state));
 						},
 						AsyncResult::Ready(VaultStatus::Failed(offenders)) => {
@@ -438,7 +438,7 @@ pub mod pallet {
 					0 as Weight
 				},
 				RotationPhase::ActivatingKeys(rotation_state) => {
-					match T::MultiVaultRotator::multi_vault_rotation_outcome() {
+					match T::VaultRotator::status() {
 						AsyncResult::Ready(VaultStatus::RotationComplete) => {
 							Self::set_rotation_phase(RotationPhase::NewKeysActivated(
 								rotation_state,
@@ -1144,7 +1144,7 @@ impl<T: Config> Pallet<T> {
 			);
 			RotationPhase::Idle
 		} else {
-			T::MultiVaultRotator::start_all_vault_rotations(candidates);
+			T::VaultRotator::start(candidates);
 			log::info!(target: "cf-validator", "Vault rotation initiated.");
 			RotationPhase::KeygensInProgress(rotation_state)
 		})

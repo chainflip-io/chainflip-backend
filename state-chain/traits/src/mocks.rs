@@ -14,7 +14,6 @@ pub mod epoch_info;
 pub mod eth_environment_provider;
 pub mod eth_replay_protection_provider;
 pub mod key_provider;
-pub mod multi_vault_rotator;
 pub mod offence_reporting;
 pub mod qualify_node;
 pub mod reputation_resetter;
@@ -24,6 +23,7 @@ pub mod staking_info;
 pub mod system_state_info;
 pub mod threshold_signer;
 pub mod time_source;
+pub mod vault_rotator;
 pub mod waived_fees_mock;
 
 trait MockPallet {
