@@ -115,6 +115,7 @@ pub type Percentage = u8;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use cf_primitives::GENESIS_EPOCH;
 	use cf_traits::{AccountRoleRegistry, VaultStatus};
 	use frame_system::pallet_prelude::*;
 	use pallet_session::WeightInfo as SessionWeightInfo;
@@ -864,7 +865,6 @@ pub mod pallet {
 			BackupRewardNodePercentage::<T>::set(self.backup_reward_node_percentage);
 			AuthoritySetMinSize::<T>::set(self.authority_set_min_size);
 
-			const GENESIS_EPOCH: u32 = 1;
 			CurrentEpoch::<T>::set(GENESIS_EPOCH);
 
 			Pallet::<T>::try_update_auction_parameters(SetSizeParameters {

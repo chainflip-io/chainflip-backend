@@ -20,7 +20,7 @@ impl<C: cf_chains::ChainCrypto, K: std::default::Default> crate::KeyProvider<C>
 		KeyState::default()
 	}
 
-	fn current_key() -> C::AggKey {
+	fn current_key() -> KeyState<C::AggKey> {
 		unimplemented!("Implement a custom mock if `current_key()` is required.")
 	}
 }

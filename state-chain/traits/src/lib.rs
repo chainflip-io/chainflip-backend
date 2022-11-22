@@ -395,7 +395,7 @@ pub trait KeyProvider<C: ChainCrypto> {
 	fn current_key_id_epoch_index() -> KeyState<Self::KeyId>;
 
 	/// Get the chain's current agg key.
-	fn current_key() -> C::AggKey;
+	fn current_key() -> KeyState<C::AggKey>;
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_key(_key: C::AggKey) {

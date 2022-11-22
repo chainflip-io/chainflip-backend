@@ -14,8 +14,8 @@ pub use weights::WeightInfo;
 
 use cf_chains::{ApiCall, Chain, ChainAbi, ChainCrypto, FeeRefundCalculator, TransactionBuilder};
 use cf_traits::{
-	offence_reporting::OffenceReporter, Broadcaster, Chainflip, EpochInfo, SingleSignerNomination,
-	ThresholdSigner,
+	offence_reporting::OffenceReporter, Broadcaster, Chainflip, EpochInfo, KeyState,
+	SingleSignerNomination, ThresholdSigner,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -502,32 +502,38 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn start_next_broadcast_attempt(broadcast_attempt: BroadcastAttempt<T, I>) {
 		let broadcast_id = broadcast_attempt.broadcast_attempt_id.broadcast_id;
 		if let Some((api_call, signature)) = ThresholdSignatureData::<T, I>::get(broadcast_id) {
-			if <T::TargetChain as ChainCrypto>::verify_threshold_signature(
-				// TODO: current key to return Unavailable, which should trigger threshold retry
-				&T::KeyProvider::current_key(),
-				&api_call.threshold_signature_payload(),
-				&signature,
-			) {
-				let next_broadcast_attempt_id =
-					broadcast_attempt.broadcast_attempt_id.next_attempt();
+			match T::KeyProvider::current_key() {
+				KeyState::Active { key_id, epoch_index: _ }
+					if <T::TargetChain as ChainCrypto>::verify_threshold_signature(
+						&key_id,
+						&api_call.threshold_signature_payload(),
+						&signature,
+					) =>
+				{
+					let next_broadcast_attempt_id =
+						broadcast_attempt.broadcast_attempt_id.next_attempt();
 
-				BroadcastAttemptCount::<T, I>::mutate(broadcast_id, |attempt_count| {
-					*attempt_count += 1;
-					*attempt_count
-				});
+					BroadcastAttemptCount::<T, I>::mutate(broadcast_id, |attempt_count| {
+						*attempt_count += 1;
+						*attempt_count
+					});
 
-				Self::start_broadcast_attempt(BroadcastAttempt::<T, I> {
-					broadcast_attempt_id: next_broadcast_attempt_id,
-					..broadcast_attempt
-				});
-			} else {
-				Self::clean_up_broadcast_storage(broadcast_id);
-				Self::threshold_sign_and_broadcast(api_call);
-				log::info!(
-					"Signature is invalid -> rescheduled threshold signature for broadcast id {}.",
-					broadcast_id
-				);
-				Self::deposit_event(Event::<T, I>::ThresholdSignatureInvalid { broadcast_id });
+					Self::start_broadcast_attempt(BroadcastAttempt::<T, I> {
+						broadcast_attempt_id: next_broadcast_attempt_id,
+						..broadcast_attempt
+					});
+				},
+				// If the key is unavailable, or the signature verification fails, we want
+				// to retry from the threshold signing stage.
+				_ => {
+					Self::clean_up_broadcast_storage(broadcast_id);
+					Self::threshold_sign_and_broadcast(api_call);
+					log::info!(
+						"Signature is invalid -> rescheduled threshold signature for broadcast id {}.",
+						broadcast_id
+					);
+					Self::deposit_event(Event::<T, I>::ThresholdSignatureInvalid { broadcast_id });
+				},
 			}
 		} else {
 			log::error!("No threshold signature data is available.");

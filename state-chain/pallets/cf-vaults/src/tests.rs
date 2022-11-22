@@ -552,6 +552,21 @@ fn test_vault_key_rotated_externally() {
 	});
 }
 
+#[test]
+fn key_unavailabe_on_activate_returns_governance_event() {
+	new_test_ext_no_key().execute_with(|| {
+		PendingVaultRotation::put(
+			VaultRotationStatus::<MockRuntime, _>::KeygenVerificationComplete {
+				new_public_key: NEW_AGG_PUB_KEY,
+			},
+		);
+
+		VaultsPallet::activate();
+
+		assert_last_event!(crate::Event::AwaitingGovernanceActivation { .. });
+	})
+}
+
 mod keygen_reporting {
 	use super::*;
 	use crate::{AggKeyFor, KeygenError, KeygenOutcome, KeygenOutcomeFor, KeygenResponseStatus};

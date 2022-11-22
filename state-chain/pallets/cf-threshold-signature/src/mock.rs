@@ -148,8 +148,8 @@ impl cf_traits::KeyProvider<MockEthereum> for MockKeyProvider {
 		KeyState::Active { key_id: MOCK_AGG_KEY.into(), epoch_index: Default::default() }
 	}
 
-	fn current_key() -> <MockEthereum as ChainCrypto>::AggKey {
-		MOCK_AGG_KEY
+	fn current_key() -> KeyState<<MockEthereum as ChainCrypto>::AggKey> {
+		KeyState::Active { key_id: MOCK_AGG_KEY, epoch_index: Default::default() }
 	}
 }
 

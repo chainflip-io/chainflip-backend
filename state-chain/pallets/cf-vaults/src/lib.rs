@@ -3,7 +3,7 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use cf_chains::{Chain, ChainAbi, ChainCrypto, SetAggKeyWithAggKey};
-use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex};
+use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex, GENESIS_EPOCH};
 use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, Broadcaster, CeremonyIdProvider, Chainflip,
@@ -205,14 +205,28 @@ pub enum PalletOffence {
 	FailedKeygen,
 }
 
-#[derive(Default, Encode, Decode, TypeInfo)]
+#[derive(Encode, Decode, TypeInfo)]
 pub enum VaultState {
 	// We are ready to sign
-	Active,
+	Active(EpochIndex),
 
 	// The key is in transition. This also applies to when we're in transition to the first key.
-	#[default]
-	Unavailable,
+	Unavailable(EpochIndex),
+}
+
+impl VaultState {
+	fn epoch_index(&self) -> EpochIndex {
+		match self {
+			Self::Active(epoch) => *epoch,
+			Self::Unavailable(epoch) => *epoch,
+		}
+	}
+}
+
+impl Default for VaultState {
+	fn default() -> Self {
+		Self::Unavailable(GENESIS_EPOCH)
+	}
 }
 
 #[frame_support::pallet]
@@ -365,11 +379,6 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn current_keyholders_epoch)]
 	pub type CurrentKeyholdersEpoch<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, EpochIndex, ValueQuery>;
-
-	#[pallet::storage]
-	#[pallet::getter(fn current_vault_state)]
-	pub type CurrentVaultState<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, VaultState, ValueQuery>;
 
 	/// Vault rotation statuses for the current epoch rotation.
@@ -441,6 +450,9 @@ pub mod pallet {
 		KeygenResponseTimeout(CeremonyId),
 		/// Keygen response timeout was updated \[new_timeout\]
 		KeygenResponseTimeoutUpdated { new_timeout: BlockNumberFor<T> },
+		/// The new key has been generated, we must activate the new key on the external
+		/// chain via governance.
+		AwaitingGovernanceActivation { new_public_key: <T::Chain as ChainCrypto>::AggKey },
 	}
 
 	#[pallet::error]
@@ -713,22 +725,21 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
 		fn build(&self) {
-			let public_key = if let Some(vault_key) = self.vault_key.clone() {
-				CurrentVaultState::<T, I>::put(VaultState::Active);
-				AggKeyFor::<T, I>::try_from(vault_key)
-					// Note: Can't use expect() here without some type shenanigans, but would give
-					// clearer error messages.
-					.unwrap_or_else(|_| panic!("Can't build genesis without a valid vault key."))
+			let (public_key, vault_state) = if let Some(vault_key) = self.vault_key.clone() {
+				(
+					AggKeyFor::<T, I>::try_from(vault_key)
+						// Note: Can't use expect() here without some type shenanigans, but would
+						// give clearer error messages.
+						.unwrap_or_else(|_| {
+							panic!("Can't build genesis without a valid vault key.")
+						}),
+					VaultState::Active(GENESIS_EPOCH),
+				)
 			} else {
-				CurrentVaultState::<T, I>::put(VaultState::Unavailable);
-				Default::default()
+				(Default::default(), VaultState::Unavailable(GENESIS_EPOCH))
 			};
 
-			Pallet::<T, I>::set_vault_for_epoch(
-				CurrentEpochIndex::<T>::get(),
-				public_key,
-				self.deployment_block,
-			);
+			Pallet::<T, I>::set_vault_for_epoch(vault_state, public_key, self.deployment_block);
 
 			KeygenResponseTimeout::<T, I>::put(self.keygen_response_timeout);
 		}
@@ -741,9 +752,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		rotated_at_block_number: ChainBlockNumberFor<T, I>,
 	) {
 		Self::set_vault_for_epoch(
-			// TODO: Pass in the epoch index from the validator pallet.
-			// A little dangerous if syncing between the pallets.
-			CurrentEpochIndex::<T>::get().saturating_add(1),
+			VaultState::Active(CurrentEpochIndex::<T>::get().saturating_add(1)),
 			new_public_key,
 			rotated_at_block_number.saturating_add(ChainBlockNumberFor::<T, I>::one()),
 		);
@@ -751,12 +760,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	fn set_vault_for_epoch(
-		epoch: EpochIndex,
+		vault_state: VaultState,
 		new_public_key: AggKeyFor<T, I>,
 		active_from_block: ChainBlockNumberFor<T, I>,
 	) {
-		Vaults::<T, I>::insert(epoch, Vault { public_key: new_public_key, active_from_block });
-		CurrentKeyholdersEpoch::<T, I>::put(epoch);
+		Vaults::<T, I>::insert(
+			vault_state.epoch_index(),
+			Vault { public_key: new_public_key, active_from_block },
+		);
+		CurrentKeyholdersEpoch::<T, I>::put(vault_state);
 	}
 
 	// Once we've successfully generated the key, we want to do a signing ceremony to verify that
@@ -857,16 +869,27 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 		if let Some(VaultRotationStatus::<T, I>::KeygenVerificationComplete { new_public_key }) =
 			PendingVaultRotation::<T, I>::get()
 		{
-			// TODO: We want to mark the key as in transition here
-			// so we stop signing once we have polkadot
-			T::Broadcaster::threshold_sign_and_broadcast(
-				<T::ApiCall as SetAggKeyWithAggKey<_>>::new_unsigned(
-					<T::ReplayProtectionProvider>::replay_protection(),
-					<Self as KeyProvider<_>>::current_key(),
-					new_public_key,
-				),
-			);
-
+			match <Self as KeyProvider<_>>::current_key() {
+				KeyState::Active { key_id, epoch_index: _ } => {
+					T::Broadcaster::threshold_sign_and_broadcast(
+						<T::ApiCall as SetAggKeyWithAggKey<_>>::new_unsigned(
+							<T::ReplayProtectionProvider>::replay_protection(),
+							key_id,
+							new_public_key,
+						),
+					);
+					if let VaultState::Active(curr_key_epoch) =
+						CurrentKeyholdersEpoch::<T, I>::get()
+					{
+						CurrentKeyholdersEpoch::<T, I>::put(VaultState::Unavailable(curr_key_epoch))
+					}
+				},
+				// This branch should only run once, for the first key for a particular chain.
+				KeyState::Unavailable =>
+					Self::deposit_event(Event::<T, I>::AwaitingGovernanceActivation {
+						new_public_key,
+					}),
+			}
 			PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingRotation {
 				new_public_key,
 			});
@@ -917,26 +940,28 @@ impl<T: Config<I>, I: 'static> KeyProvider<T::Chain> for Pallet<T, I> {
 	type KeyId = Vec<u8>;
 
 	fn current_key_id_epoch_index() -> KeyState<Self::KeyId> {
-		match CurrentVaultState::<T, I>::get() {
-			VaultState::Active => {
-				let current_epoch: EpochIndex = CurrentKeyholdersEpoch::<T, I>::get();
-				KeyState::Active {
-					key_id: Vaults::<T, I>::get(current_epoch)
-						.expect("We can't exist without a vault")
-						.public_key
-						.into(),
-					epoch_index: current_epoch,
-				}
+		match CurrentKeyholdersEpoch::<T, I>::get() {
+			VaultState::Active(epoch_index) => KeyState::Active {
+				key_id: Vaults::<T, I>::get(epoch_index)
+					.expect("We can't exist without a vault")
+					.public_key
+					.into(),
+				epoch_index,
 			},
-			VaultState::Unavailable => KeyState::Unavailable,
+			VaultState::Unavailable(_) => KeyState::Unavailable,
 		}
 	}
 
-	// TODO: return Option to indicate in transition
-	fn current_key() -> <T::Chain as ChainCrypto>::AggKey {
-		Vaults::<T, I>::get(CurrentKeyholdersEpoch::<T, I>::get())
-			.expect("We can't exist without a vault")
-			.public_key
+	fn current_key() -> KeyState<<T::Chain as ChainCrypto>::AggKey> {
+		match CurrentKeyholdersEpoch::<T, I>::get() {
+			VaultState::Active(epoch_index) => KeyState::Active {
+				key_id: Vaults::<T, I>::get(epoch_index)
+					.expect("We can't exist without a vault")
+					.public_key,
+				epoch_index,
+			},
+			VaultState::Unavailable(_) => KeyState::Unavailable,
+		}
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
