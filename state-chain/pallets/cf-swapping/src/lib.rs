@@ -102,8 +102,8 @@ pub mod pallet {
 				}
 				Self::execute_group_of_swaps(swaps.clone(), asset_pair.0, asset_pair.1);
 				swap_groups.remove(&(asset_pair.0, asset_pair.1));
-				available_weight = available_weight - swap_group_weight;
-				used_weight = used_weight + swap_group_weight;
+				available_weight -= swap_group_weight;
+				used_weight += swap_group_weight;
 			}
 
 			let mut remaining_swaps: Vec<Swap<<T as frame_system::Config>::AccountId>> = vec![];
@@ -169,8 +169,8 @@ pub mod pallet {
 			let mut total_swap_amount = 0;
 			for swap in swaps.into_iter() {
 				let fee = Self::calc_fee(swap.amount, swap.relayer_commission_bps);
-				total_fee = total_fee + fee;
-				total_swap_amount = total_swap_amount + swap.amount;
+				total_fee += fee;
+				total_swap_amount += swap.amount;
 			}
 			total_swap_amount.saturating_sub(total_fee)
 		}
@@ -216,7 +216,7 @@ pub mod pallet {
 				grouped_swaps
 					.entry((swap.from, swap.to))
 					.and_modify(|swaps| swaps.push(swap.clone()))
-					.or_insert(vec![swap]);
+					.or_insert_with(|| vec![swap]);
 			}
 			grouped_swaps
 		}
