@@ -34,7 +34,7 @@ const ETH_DUMMY_ADDR: EthereumAddress = [42u8; 20];
 const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
 const TX_HASH: EthTransactionHash = [211u8; 32];
 
-pub const GENESIS_KEY: u64 = 42;
+pub const GENESIS_KEY_SEED: u64 = 42;
 
 // TODO - remove collision of account numbers
 pub const ALICE: [u8; 32] = [0xaa; 32];
