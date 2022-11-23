@@ -97,14 +97,20 @@ fn liquidity_providers_can_withdraw_liquidity() {
 			crate::Error::<Test>::InvalidEgressAddress
 		);
 
-		assert!(LastEgress::get().is_none());
+		System::reset_events();
 		assert_ok!(LiquidityProvider::withdraw_liquidity(
 			Origin::signed(ALICE),
 			100,
 			Asset::Eth,
 			ForeignChainAddress::Eth([0x00; 20]),
 		));
-		assert_eq!(LastEgress::get(), Some((assets::eth::Asset::Eth, 100, [0x00; 20].into())));
+		System::assert_has_event(Event::EthereumIngressEgress(
+			pallet_cf_ingress_egress::Event::EgressScheduled {
+				asset: assets::eth::Asset::Eth,
+				amount: 100,
+				egress_address: [0x00; 20].into(),
+			},
+		));
 	});
 }
 

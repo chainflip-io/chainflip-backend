@@ -4,6 +4,7 @@ use crate::{
 	mock::*, Account, Bonder, Config, Error, FlipAccount, FlipIssuance, FlipSlasher, OffchainFunds,
 	Reserve, SlashingRate, TotalIssuance,
 };
+use cf_primitives::FlipBalance;
 use cf_traits::{Bonding, Issuance, Slashing, StakeTransfer};
 use frame_support::{
 	assert_noop,

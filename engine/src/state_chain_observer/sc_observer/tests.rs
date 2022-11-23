@@ -22,7 +22,7 @@ use crate::{
 	multisig::client::{mocks::MockMultisigClientApi, KeygenFailureReason, SigningFailureReason},
 	settings::Settings,
 	state_chain_observer::{client::mocks::MockStateChainClient, sc_observer},
-	task_scope::with_task_scope,
+	task_scope::task_scope,
 	witnesser::EpochStart,
 };
 
@@ -88,7 +88,7 @@ async fn starts_witnessing_when_current_authority() {
 	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
-	let (epoch_start_sender, epoch_start_receiver) = async_channel::bounded(10);
+	let (epoch_start_sender, epoch_start_receiver) = async_broadcast::broadcast(10);
 
 	let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
@@ -201,7 +201,7 @@ async fn starts_witnessing_when_historic_on_startup() {
 	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
-	let (epoch_start_sender, epoch_start_receiver) = async_channel::bounded(10);
+	let (epoch_start_sender, epoch_start_receiver) = async_broadcast::broadcast(10);
 
 	let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
@@ -306,7 +306,7 @@ async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
 	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
-	let (epoch_start_sender, epoch_start_receiver) = async_channel::bounded(10);
+	let (epoch_start_sender, epoch_start_receiver) = async_broadcast::broadcast(10);
 	let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
 	#[cfg(feature = "ibiza")]
@@ -393,10 +393,8 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
 	let empty_block_header = test_header(20);
 	let new_epoch_block_header = test_header(21);
 	let new_epoch_block_header_hash = new_epoch_block_header.hash();
-	let sc_block_stream = tokio_stream::iter(vec![
-		Ok(empty_block_header.clone()),
-		Ok(new_epoch_block_header.clone()),
-	]);
+	let sc_block_stream =
+		tokio_stream::iter(vec![empty_block_header.clone(), new_epoch_block_header.clone()]);
 	state_chain_client
 		.expect_storage_value::<frame_system::Events<state_chain_runtime::Runtime>>()
 		.with(eq(empty_block_header.hash()))
@@ -444,7 +442,7 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
 	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
-	let (epoch_start_sender, epoch_start_receiver) = async_channel::bounded(10);
+	let (epoch_start_sender, epoch_start_receiver) = async_broadcast::broadcast(10);
 
 	let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
@@ -540,10 +538,8 @@ async fn not_historical_to_authority_on_new_epoch() {
 	let empty_block_header = test_header(20);
 	let new_epoch_block_header = test_header(21);
 	let new_epoch_block_header_hash = new_epoch_block_header.hash();
-	let sc_block_stream = tokio_stream::iter(vec![
-		Ok(empty_block_header.clone()),
-		Ok(new_epoch_block_header.clone()),
-	]);
+	let sc_block_stream =
+		tokio_stream::iter(vec![empty_block_header.clone(), new_epoch_block_header.clone()]);
 	state_chain_client
 		.expect_storage_value::<frame_system::Events<state_chain_runtime::Runtime>>()
 		.with(eq(empty_block_header.hash()))
@@ -593,7 +589,7 @@ async fn not_historical_to_authority_on_new_epoch() {
 	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
-	let (epoch_start_sender, epoch_start_receiver) = async_channel::bounded(10);
+	let (epoch_start_sender, epoch_start_receiver) = async_broadcast::broadcast(10);
 
 	let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
@@ -690,7 +686,7 @@ async fn current_authority_to_historical_on_new_epoch_event() {
 	let new_epoch_block_header = test_header(21);
 	let new_epoch_block_header_hash = new_epoch_block_header.hash();
 	let sc_block_stream =
-		tokio_stream::iter([Ok(empty_block_header.clone()), Ok(new_epoch_block_header.clone())]);
+		tokio_stream::iter([empty_block_header.clone(), new_epoch_block_header.clone()]);
 
 	state_chain_client
 		.expect_storage_value::<frame_system::Events<state_chain_runtime::Runtime>>()
@@ -741,7 +737,7 @@ async fn current_authority_to_historical_on_new_epoch_event() {
 	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
-	let (epoch_start_sender, epoch_start_receiver) = async_channel::bounded(10);
+	let (epoch_start_sender, epoch_start_receiver) = async_broadcast::broadcast(10);
 
 	let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
@@ -830,7 +826,7 @@ async fn only_encodes_and_signs_when_specified() {
 		});
 
 	let block_header = test_header(21);
-	let sc_block_stream = tokio_stream::iter([Ok(block_header.clone())]);
+	let sc_block_stream = tokio_stream::iter([block_header.clone()]);
 
 	let mut eth_rpc_mock = MockEthRpcApi::new();
 
@@ -854,11 +850,6 @@ async fn only_encodes_and_signs_when_specified() {
 		.expect_send_raw_transaction()
 		.once()
 		.return_once(|tx| Ok(Keccak256::hash(&tx.0[..])));
-
-	state_chain_client
-		.expect_submit_signed_extrinsic::<state_chain_runtime::Call>()
-		.once()
-		.return_once(|_, _| Ok(H256::default()));
 
 	state_chain_client
 		.expect_storage_value::<frame_system::Events<state_chain_runtime::Runtime>>()
@@ -901,7 +892,7 @@ async fn only_encodes_and_signs_when_specified() {
 	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
-	let (epoch_start_sender, _epoch_start_receiver) = async_channel::bounded(10);
+	let (epoch_start_sender, _epoch_start_receiver) = async_broadcast::broadcast(10);
 
 	let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
@@ -940,62 +931,73 @@ async fn only_encodes_and_signs_when_specified() {
 #[tokio::test]
 #[ignore = "runs forever, useful for testing without having to start the whole CFE"]
 async fn run_the_sc_observer() {
-	let settings = Settings::new_test().unwrap();
-	let logger = new_test_logger();
+	task_scope(|scope| {
+		async {
+			let settings = Settings::new_test().unwrap();
+			let logger = new_test_logger();
 
-	let (initial_block_hash, block_stream, state_chain_client) =
-		crate::state_chain_observer::client::connect_to_state_chain(
-			&settings.state_chain,
-			false,
-			&logger,
-		)
-		.await
-		.unwrap();
+			let (initial_block_hash, block_stream, state_chain_client) =
+				crate::state_chain_observer::client::StateChainClient::new(
+					scope,
+					&settings.state_chain,
+					false,
+					&logger,
+				)
+				.await
+				.unwrap();
 
-	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
-		tokio::sync::mpsc::unbounded_channel();
+			let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
+				tokio::sync::mpsc::unbounded_channel();
 
-	let eth_ws_rpc_client = EthWsRpcClient::new(&settings.eth, &logger).await.unwrap();
-	let eth_broadcaster =
-		EthBroadcaster::new(&settings.eth, eth_ws_rpc_client.clone(), &logger).unwrap();
+			let eth_ws_rpc_client = EthWsRpcClient::new(&settings.eth, &logger).await.unwrap();
+			let eth_broadcaster =
+				EthBroadcaster::new(&settings.eth, eth_ws_rpc_client.clone(), &logger).unwrap();
 
-	let eth_multisig_client = Arc::new(MockMultisigClientApi::new());
-	let dot_multisig_client = Arc::new(MockMultisigClientApi::new());
+			let eth_multisig_client = Arc::new(MockMultisigClientApi::new());
+			let dot_multisig_client = Arc::new(MockMultisigClientApi::new());
 
-	let (epoch_start_sender, _) = async_channel::bounded(10);
+			let (epoch_start_sender, _epoch_start_receiver) = async_broadcast::broadcast(10);
 
-	let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
+			let (cfe_settings_update_sender, _) =
+				watch::channel::<CfeSettings>(CfeSettings::default());
 
-	#[cfg(feature = "ibiza")]
-	let (eth_monitor_ingress_sender, _eth_monitor_ingress_receiver) =
-		tokio::sync::mpsc::unbounded_channel();
-	#[cfg(feature = "ibiza")]
-	let (eth_monitor_flip_ingress_sender, _eth_monitor_flip_ingress_receiver) =
-		tokio::sync::mpsc::unbounded_channel();
-	#[cfg(feature = "ibiza")]
-	let (eth_monitor_usdc_ingress_sender, _eth_monitor_usdc_ingress_receiver) =
-		tokio::sync::mpsc::unbounded_channel();
+			#[cfg(feature = "ibiza")]
+			let (eth_monitor_ingress_sender, _eth_monitor_ingress_receiver) =
+				tokio::sync::mpsc::unbounded_channel();
+			#[cfg(feature = "ibiza")]
+			let (eth_monitor_flip_ingress_sender, _eth_monitor_flip_ingress_receiver) =
+				tokio::sync::mpsc::unbounded_channel();
+			#[cfg(feature = "ibiza")]
+			let (eth_monitor_usdc_ingress_sender, _eth_monitor_usdc_ingress_receiver) =
+				tokio::sync::mpsc::unbounded_channel();
 
-	sc_observer::start(
-		state_chain_client,
-		block_stream,
-		eth_broadcaster,
-		eth_multisig_client,
-		dot_multisig_client,
-		account_peer_mapping_change_sender,
-		epoch_start_sender,
-		#[cfg(feature = "ibiza")]
-		eth_monitor_ingress_sender,
-		#[cfg(feature = "ibiza")]
-		eth_monitor_flip_ingress_sender,
-		#[cfg(feature = "ibiza")]
-		eth_monitor_usdc_ingress_sender,
-		cfe_settings_update_sender,
-		initial_block_hash,
-		logger,
-	)
+			sc_observer::start(
+				state_chain_client,
+				block_stream,
+				eth_broadcaster,
+				eth_multisig_client,
+				dot_multisig_client,
+				account_peer_mapping_change_sender,
+				epoch_start_sender,
+				#[cfg(feature = "ibiza")]
+				eth_monitor_ingress_sender,
+				#[cfg(feature = "ibiza")]
+				eth_monitor_flip_ingress_sender,
+				#[cfg(feature = "ibiza")]
+				eth_monitor_usdc_ingress_sender,
+				cfe_settings_update_sender,
+				initial_block_hash,
+				logger,
+			)
+			.await
+			.unwrap_err();
+
+			Ok(())
+		}
+		.boxed()
+	})
 	.await
-	.unwrap_err();
+	.unwrap();
 }
 
 // Test that the ceremony requests are calling the correct MultisigClientApi functions
@@ -1043,7 +1045,7 @@ async fn should_handle_signing_request() {
 
 	let multisig_client = Arc::new(multisig_client);
 
-	with_task_scope(|scope| {
+	task_scope(|scope| {
 		async {
 			// Handle a signing request that we are not participating in
 			sc_observer::handle_signing_request(
@@ -1118,7 +1120,7 @@ async fn should_handle_keygen_request() {
 
 	let multisig_client = Arc::new(multisig_client);
 
-	with_task_scope(|scope| {
+	task_scope(|scope| {
 		async {
 			// Handle a keygen request that we are not participating in
 			sc_observer::handle_keygen_request(

@@ -1,11 +1,12 @@
-use cf_chains::eth::CHAIN_ID_GOERLI;
-use state_chain_runtime::constants::common::FLIPPERINOS_PER_FLIP;
-
+pub use super::common::*;
 use super::StateChainEnvironment;
+use cf_chains::eth::CHAIN_ID_GOERLI;
+use sc_service::ChainType;
 
 pub struct Config;
 
 pub const NETWORK_NAME: &str = "Chainflip-Sisyphos";
+pub const CHAIN_TYPE: ChainType = ChainType::Live;
 
 pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	flip_token_address: hex_literal::hex!("d992EC2354E8A8c12e92372049aa4A7310Bd95eD"),
@@ -18,9 +19,9 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 		"03670db192abdc18af6cbc42b8c09f3974fd6ba6fa5d2a957c279c91fece270690"
 	),
 	ethereum_deployment_block: 7826394u64,
-	genesis_stake_amount: 5_000 * FLIPPERINOS_PER_FLIP,
-	min_stake: 10 * FLIPPERINOS_PER_FLIP,
-	eth_block_safety_margin: 4,
+	genesis_stake_amount: GENESIS_STAKE_AMOUNT,
+	min_stake: MIN_STAKE,
+	eth_block_safety_margin: eth::BLOCK_SAFETY_MARGIN as u32,
 	max_ceremony_stage_duration: 300,
 };
 

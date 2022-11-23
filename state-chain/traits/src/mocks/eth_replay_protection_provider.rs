@@ -1,14 +1,17 @@
-use std::marker::PhantomData;
+use cf_chains::{eth::api::EthereumReplayProtection, ChainAbi, Ethereum, ReplayProtectionProvider};
 
-use cf_chains::{eth::api::EthereumReplayProtection, ChainAbi};
+pub struct MockEthReplayProtectionProvider;
 
-/// A mock that just returns some constants for the EthereumReplayProtection.
-pub struct MockEthReplayProtectionProvider<T>(PhantomData<T>);
+pub const FAKE_KEYMAN_ADDR: [u8; 20] = [0xcf; 20];
+pub const CHAIN_ID: u64 = 31337;
+pub const COUNTER: u64 = 42;
 
-impl<T: ChainAbi<ReplayProtection = EthereumReplayProtection>> crate::ReplayProtectionProvider<T>
-	for MockEthReplayProtectionProvider<T>
-{
-	fn replay_protection() -> <T as ChainAbi>::ReplayProtection {
-		EthereumReplayProtection { key_manager_address: [0xcf; 20], chain_id: 31337, nonce: 42 }
+impl ReplayProtectionProvider<Ethereum> for MockEthReplayProtectionProvider {
+	fn replay_protection() -> <Ethereum as ChainAbi>::ReplayProtection {
+		EthereumReplayProtection {
+			key_manager_address: FAKE_KEYMAN_ADDR,
+			chain_id: CHAIN_ID,
+			nonce: COUNTER,
+		}
 	}
 }

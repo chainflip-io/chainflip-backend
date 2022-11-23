@@ -1,11 +1,12 @@
-use cf_chains::eth::CHAIN_ID_GOERLI;
-use state_chain_runtime::constants::common::FLIPPERINOS_PER_FLIP;
-
+pub use super::common::*;
 use super::StateChainEnvironment;
+use cf_chains::eth::CHAIN_ID_GOERLI;
+use sc_service::ChainType;
 
 pub struct Config;
 
 pub const NETWORK_NAME: &str = "Chainflip-Perseverance";
+pub const CHAIN_TYPE: ChainType = ChainType::Live;
 
 pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	flip_token_address: hex_literal::hex!("0E1D4594cB44D3E929dc0fb32F1c35A26D6e8e7f"),
@@ -18,10 +19,10 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 		"035217961720cf058f447afaebf25e7c14bc44b069ebda50f44dbf25db31b8944c"
 	),
 	ethereum_deployment_block: 7755959u64,
-	genesis_stake_amount: 5_000 * FLIPPERINOS_PER_FLIP,
-	min_stake: 10 * FLIPPERINOS_PER_FLIP,
-	eth_block_safety_margin: 4,
-	max_ceremony_stage_duration: 300,
+	genesis_stake_amount: GENESIS_STAKE_AMOUNT,
+	min_stake: MIN_STAKE,
+	eth_block_safety_margin: eth::BLOCK_SAFETY_MARGIN as u32,
+	max_ceremony_stage_duration: KEYGEN_CEREMONY_TIMEOUT_BLOCKS,
 };
 
 pub const BASHFUL_SR25519: [u8; 32] =

@@ -41,7 +41,7 @@ where
 }
 
 pub async fn start<StateChainClient>(
-	epoch_starts_receiver: async_channel::Receiver<EpochStart<Polkadot>>,
+	epoch_starts_receiver: async_broadcast::Receiver<EpochStart<Polkadot>>,
 	dot_monitor_ingress_receiver: tokio::sync::mpsc::UnboundedReceiver<PolkadotAccount>,
 	_state_chain_client: Arc<StateChainClient>,
 	// on chain addresses that we need to monitor for inputs
