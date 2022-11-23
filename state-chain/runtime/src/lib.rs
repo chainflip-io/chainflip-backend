@@ -5,7 +5,6 @@ pub mod chainflip;
 pub mod constants;
 pub mod runtime_apis;
 mod weights;
-use cf_traits::Broadcaster;
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
 
@@ -16,10 +15,11 @@ use crate::{
 		RuntimeApiPenalty, RuntimeApiPendingClaim,
 	},
 };
+#[cfg(feature = "ibiza")]
+use cf_chains::{dot, Polkadot};
 use cf_chains::{
-	dot, eth,
+	eth,
 	eth::{api::register_claim::RegisterClaim, Ethereum},
-	Polkadot,
 };
 use pallet_cf_validator::BidInfoProvider;
 
@@ -71,8 +71,8 @@ pub use cf_traits::{EpochInfo, EthEnvironmentProvider, QualifyNode, SessionKeysR
 
 pub use chainflip::chain_instances::*;
 use chainflip::{
-	epoch_transition::ChainflipEpochTransitions, AnyChainIngressEgressHandler, ChainflipHeartbeat,
-	DotEnvironment, EthEnvironment, EthVaultTransitionHandler,
+	epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat, EthEnvironment,
+	EthVaultTransitionHandler,
 };
 use constants::common::*;
 use pallet_cf_flip::{Bonder, FlipSlasher};
@@ -236,7 +236,7 @@ mod polkdadot_dummy {
 	pub struct DummyBroadcaster;
 
 	impl Broadcaster<Polkadot> for DummyBroadcaster {
-		type ApiCall = dot::api::PolkadotApi<DotEnvironment>;
+		type ApiCall = dot::api::PolkadotApi<chainflip::DotEnvironment>;
 
 		fn threshold_sign_and_broadcast(_api_call: Self::ApiCall) {
 			todo!("Configure a real broadcaster for polkadot.")
@@ -251,7 +251,7 @@ impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
 	type AddressDerivation = AddressDerivation;
 	type LpProvisioning = LiquidityProvider;
 	type SwapIntentHandler = Swapping;
-	type AllBatch = dot::api::PolkadotApi<DotEnvironment>;
+	type AllBatch = dot::api::PolkadotApi<chainflip::DotEnvironment>;
 	type Broadcaster = polkdadot_dummy::DummyBroadcaster;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;

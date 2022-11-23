@@ -21,9 +21,8 @@ use crate::{
 #[cfg(feature = "ibiza")]
 use cf_chains::{
 	dot::{api::PolkadotApi, Polkadot, PolkadotReplayProtection, PolkadotTransactionData},
-	AnyChain, Chain, ChainCrypto,
+	AnyChain, Chain, ChainAbi, ChainCrypto,
 };
-#[cfg(feature = "ibiza")]
 use cf_chains::{
 	eth::{
 		self,
