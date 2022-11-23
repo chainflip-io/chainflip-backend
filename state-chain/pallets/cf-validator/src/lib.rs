@@ -460,8 +460,7 @@ pub mod pallet {
 					}
 					0 as Weight
 				},
-				// The new session will kick off the new epoch now that we've reached
-				// VaultsRotatedExternally
+				// The new session will kick off the new epoch
 				RotationPhase::NewKeysActivated(rotation_state) =>
 					T::ValidatorWeightInfo::rotation_phase_vaults_rotated(
 						rotation_state.num_primary_candidates(),
