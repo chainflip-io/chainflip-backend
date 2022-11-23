@@ -23,6 +23,7 @@ cf-primitives = {path = "../../state-chain/primitives"}
 pallet-cf-staking = {path = "../../state-chain/pallets/cf-staking"}
 pallet-cf-validator = {path = "../../state-chain/pallets/cf-validator"}
 pallet-cf-governance = {path = "../../state-chain/pallets/cf-governance"}
+custom-rpc = {path = "../../state-chain/custom-rpc"}
 pallet-cf-threshold-signature = {path = "../../state-chain/pallets/cf-threshold-signature"}
 pallet-cf-account-roles = { path = '../../state-chain/pallets/cf-account-roles' }
 frame-system = {git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2022-06+01'}
