@@ -938,9 +938,7 @@ impl<T: Config<I>, I: 'static> KeyProvider<T::Chain> for Pallet<T, I> {
 	fn current_key_epoch_index() -> KeyState<<T::Chain as ChainCrypto>::AggKey> {
 		match CurrentKeyholdersEpoch::<T, I>::get() {
 			VaultState::Active(epoch_index) => KeyState::Active {
-				key: Vaults::<T, I>::get(epoch_index)
-					.expect("We can't exist without a vault")
-					.public_key,
+				key: Vaults::<T, I>::get(epoch_index).expect("Key must exist if active").public_key,
 				epoch_index,
 			},
 			VaultState::Unavailable(_) => KeyState::Unavailable,
