@@ -18,7 +18,7 @@ pub struct CLICommandLineOptions {
 	eth_opts: EthOptions,
 
 	#[clap(subcommand)]
-	pub cmd: CFCommand,
+	pub cmd: CliCommand,
 }
 
 impl Source for CLICommandLineOptions {
@@ -45,7 +45,7 @@ impl Default for CLICommandLineOptions {
 			state_chain_opts: StateChainOptions::default(),
 			eth_opts: EthOptions::default(),
 			// an arbitrary simple command
-			cmd: CFCommand::Retire {},
+			cmd: CliCommand::Retire {},
 		}
 	}
 }
@@ -67,7 +67,7 @@ pub enum Claim {
 }
 
 #[derive(Parser, Clone, Debug)]
-pub enum CFCommand {
+pub enum CliCommand {
 	#[clap(about = "Requesting and checking claims")]
 	#[clap(subcommand)]
 	Claim(Claim),
@@ -190,7 +190,7 @@ mod tests {
 				eth_private_key_file: Some(PathBuf::from_str("eth_key_file").unwrap()),
 			},
 
-			cmd: CFCommand::Rotate {}, // Not used in this test
+			cmd: CliCommand::Rotate {}, // Not used in this test
 		};
 
 		// Load the test opts into the settings

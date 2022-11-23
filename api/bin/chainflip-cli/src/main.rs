@@ -3,7 +3,7 @@ use chainflip_api as api;
 use clap::Parser;
 use settings::{CLICommandLineOptions, CLISettings};
 
-use crate::settings::{CFCommand::*, Claim};
+use crate::settings::{Claim, CliCommand::*};
 use anyhow::{anyhow, Result};
 use utilities::clean_eth_address;
 
