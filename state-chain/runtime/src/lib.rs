@@ -187,8 +187,8 @@ impl pallet_cf_environment::Config for Runtime {
 #[cfg(feature = "ibiza")]
 impl pallet_cf_swapping::Config for Runtime {
 	type Event = Event;
-	type IngressHandler = AnyChainIngressEgressHandler;
-	type EgressHandler = AnyChainIngressEgressHandler;
+	type IngressHandler = chainflip::AnyChainIngressEgressHandler;
+	type EgressHandler = chainflip::AnyChainIngressEgressHandler;
 	type SwappingApi = ();
 	type AccountRoleRegistry = AccountRoles;
 	type WeightInfo = pallet_cf_swapping::weights::PalletWeight<Runtime>;
@@ -231,12 +231,14 @@ impl pallet_cf_ingress_egress::Config<EthereumInstance> for Runtime {
 
 #[cfg(feature = "ibiza")]
 mod polkdadot_dummy {
+	use cf_chains::dot::api::PolkadotApi;
+
 	use super::*;
 
 	pub struct DummyBroadcaster;
 
-	impl Broadcaster<Polkadot> for DummyBroadcaster {
-		type ApiCall = dot::api::PolkadotApi<chainflip::DotEnvironment>;
+	impl cf_traits::Broadcaster<Polkadot> for DummyBroadcaster {
+		type ApiCall = PolkadotApi<chainflip::DotEnvironment>;
 
 		fn threshold_sign_and_broadcast(_api_call: Self::ApiCall) {
 			todo!("Configure a real broadcaster for polkadot.")
@@ -261,8 +263,8 @@ impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
 impl pallet_cf_lp::Config for Runtime {
 	type Event = Event;
 	type AccountRoleRegistry = AccountRoles;
-	type IngressHandler = AnyChainIngressEgressHandler;
-	type EgressHandler = AnyChainIngressEgressHandler;
+	type IngressHandler = chainflip::AnyChainIngressEgressHandler;
+	type EgressHandler = chainflip::AnyChainIngressEgressHandler;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 }
 
