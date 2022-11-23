@@ -112,6 +112,7 @@ impl Cli {
 
 #[derive(Clone)]
 pub struct KeyComponents {
+	pub seed: u64,
 	pub secret: SecretKey,
 	pub agg_key: AggKey,
 }
@@ -131,19 +132,15 @@ impl KeyComponents {
 }
 
 pub struct ThresholdSigner {
-	key_seed: u64,
 	key_components: KeyComponents,
-	proposed_seed: Option<u64>,
 	proposed_key_components: Option<KeyComponents>,
 }
 
 impl Default for ThresholdSigner {
 	fn default() -> Self {
-		let (secret, _pub_key, agg_key) = Self::generate_keypair(GENESIS_KEY);
+		let (secret, _pub_key, agg_key) = Self::generate_keypair(GENESIS_KEY_SEED);
 		ThresholdSigner {
-			key_seed: GENESIS_KEY,
-			key_components: KeyComponents { secret, agg_key },
-			proposed_seed: None,
+			key_components: KeyComponents { secret, agg_key, seed: GENESIS_KEY_SEED },
 			proposed_key_components: None,
 		}
 	}
@@ -183,20 +180,17 @@ impl ThresholdSigner {
 	}
 
 	pub fn propose_new_public_key(&mut self) -> AggKey {
-		let proposed_seed = self.key_seed + 1;
+		let proposed_seed = self.key_components.seed + 1;
 		let (secret, _pub_key, agg_key) = Self::generate_keypair(proposed_seed);
-		self.proposed_seed = Some(proposed_seed);
-		self.proposed_key_components = Some(KeyComponents { secret, agg_key });
+		self.proposed_key_components = Some(KeyComponents { secret, agg_key, seed: proposed_seed });
 		self.proposed_public_key()
 	}
 
 	// Rotate to the current proposed key and clear the proposed key
 	pub fn use_proposed_key(&mut self) {
-		if self.proposed_seed.is_some() {
-			self.key_seed = self.proposed_seed.expect("No key has been proposed");
+		if self.proposed_key_components.is_some() {
 			self.key_components =
 				self.proposed_key_components.as_ref().expect("No key has been proposed").clone();
-			self.proposed_seed = None;
 			self.proposed_key_components = None;
 		}
 	}
