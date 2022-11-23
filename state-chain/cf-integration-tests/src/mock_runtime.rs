@@ -27,7 +27,11 @@ pub const PENALTIES: &[(Offence, (i32, BlockNumber))] = &[
 	(Offence::GrandpaEquivocation, (50, HEARTBEAT_BLOCK_INTERVAL * 5)),
 ];
 
-use crate::{get_from_seed, network, GENESIS_KEY_SEED};
+use crate::{
+	get_from_seed,
+	network::{EthKeyComponents, KeyComponents, KeyUtils},
+	GENESIS_KEY_SEED,
+};
 use cf_primitives::{AccountRole, AuthorityCount, BlockNumber, FlipBalance};
 
 pub struct ExtBuilder {
@@ -81,7 +85,9 @@ impl ExtBuilder {
 		let mut storage =
 			frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 
-		let (_, public_key, _) = network::ThresholdSigner::generate_keypair(GENESIS_KEY_SEED);
+		// TODO: Look at pubkey compressed and why we do this, vs. just using the agg key or public
+		// key
+		let KeyComponents { public_key, .. } = EthKeyComponents::generate_keypair(GENESIS_KEY_SEED);
 		let ethereum_vault_key = public_key.serialize_compressed().to_vec();
 
 		state_chain_runtime::GenesisConfig {
