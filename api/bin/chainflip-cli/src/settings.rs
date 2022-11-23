@@ -1,7 +1,8 @@
 use chainflip_api::primitives::{AccountRole, Hash, ProposalId};
+pub use chainflip_engine::settings::StateChain;
 use chainflip_engine::{
 	constants::{CONFIG_ROOT, DEFAULT_CONFIG_ROOT},
-	settings::{CfSettings, Eth, EthOptions, StateChain, StateChainOptions},
+	settings::{CfSettings, Eth, EthOptions, StateChainOptions},
 };
 use clap::Parser;
 use config::{ConfigError, Source, Value};
@@ -20,7 +21,7 @@ pub struct CLICommandLineOptions {
 	eth_opts: EthOptions,
 
 	#[clap(subcommand)]
-	pub cmd: CFCommand,
+	pub cmd: CliCommand,
 }
 
 impl Source for CLICommandLineOptions {
@@ -47,15 +48,15 @@ impl Default for CLICommandLineOptions {
 			state_chain_opts: StateChainOptions::default(),
 			eth_opts: EthOptions::default(),
 			// an arbitrary simple command
-			cmd: CFCommand::Retire {},
+			cmd: CliCommand::Retire {},
 		}
 	}
 }
 
-#[derive(Parser, Clone, Debug)]
-pub enum CFCommand {
+#[derive(clap::Subcommand, Clone, Debug)]
+pub enum Claim {
 	#[clap(about = "Submit an extrinsic to request generation of a claim certificate")]
-	Claim {
+	Request {
 		#[clap(help = "Amount to claim in FLIP")]
 		amount: f64,
 		#[clap(help = "The Ethereum address you wish to claim your FLIP to")]
@@ -64,6 +65,15 @@ pub enum CFCommand {
 		#[clap(long = "register", hide = true)]
 		should_register_claim: bool,
 	},
+	#[clap(about = "Get claim certificate for your recently submitted claim")]
+	Check,
+}
+
+#[derive(Parser, Clone, Debug)]
+pub enum CliCommand {
+	#[clap(about = "Requesting and checking claims")]
+	#[clap(subcommand)]
+	Claim(Claim),
 	#[clap(about = "Set your account role to the Validator, Relayer, Liquidity Provider")]
 	RegisterAccountRole {
 		#[clap(help = "Validator (v), Liquidity Provider (lp), Relayer (r)", value_parser = account_role_parser)]
@@ -184,7 +194,7 @@ mod tests {
 				eth_private_key_file: Some(PathBuf::from_str("eth_key_file").unwrap()),
 			},
 
-			cmd: CFCommand::Rotate {},
+			cmd: CliCommand::Rotate {}, // Not used in this test
 		};
 
 		// Load the test opts into the settings
