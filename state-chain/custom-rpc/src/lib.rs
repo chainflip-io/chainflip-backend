@@ -9,7 +9,7 @@ use sp_runtime::AccountId32;
 use state_chain_runtime::{
 	chainflip::Offence,
 	constants::common::TX_FEE_MULTIPLIER,
-	runtime_apis::{ChainflipAccountStateWithPassive, CustomRuntimeApi},
+	runtime_apis::{ChainflipAccountStateWithPassive, CustomRuntimeApi, RuntimeApiPendingClaim},
 };
 use std::{marker::PhantomData, sync::Arc};
 
@@ -121,6 +121,14 @@ pub trait CustomApi {
 		account_id: AccountId32,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Option<RpcPendingClaim>>;
+
+	#[method(name = "get_claim_certificate")]
+	fn cf_get_claim_certificate(
+		&self,
+		account_id: AccountId32,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Option<Vec<u8>>>;
+
 	#[method(name = "penalties")]
 	fn cf_penalties(
 		&self,
@@ -323,7 +331,7 @@ where
 		account_id: AccountId32,
 		at: Option<<B as BlockT>::Hash>,
 	) -> RpcResult<Option<RpcPendingClaim>> {
-		let pending_claim = match self
+		let pending_claim: RuntimeApiPendingClaim = match self
 			.client
 			.runtime_api()
 			.cf_pending_claim(&self.query_block_id(at), account_id)
@@ -340,6 +348,25 @@ where
 			sig_data: pending_claim.sig_data,
 		}))
 	}
+
+	fn cf_get_claim_certificate(
+		&self,
+		account_id: AccountId32,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Option<Vec<u8>>> {
+		let certificate = match self
+			.client
+			.runtime_api()
+			.cf_get_claim_certificate(&self.query_block_id(at), account_id)
+			.map_err(to_rpc_error)?
+		{
+			Some(cert) => cert,
+			None => return Ok(None),
+		};
+
+		Ok(Some(certificate))
+	}
+
 	fn cf_penalties(
 		&self,
 		at: Option<<B as BlockT>::Hash>,
