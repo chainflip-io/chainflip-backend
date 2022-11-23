@@ -256,8 +256,8 @@ impl<Balance: AtLeast32BitUnsigned + Copy> FlipAccount<Balance> {
 	}
 
 	/// Account can only be slashed if its balance is higher than 20% of the bond.
-	pub fn can_be_slashed(&self) -> bool {
-		self.stake > self.bond / 5u32.into()
+	pub fn can_be_slashed(&self, slash_amount: Balance) -> bool {
+		self.stake.saturating_sub(slash_amount) > self.bond / 5u32.into()
 	}
 }
 
@@ -377,10 +377,6 @@ impl<T: Config> Pallet<T> {
 				remaining_imbalance: remainder,
 			});
 		}
-	}
-
-	pub fn settle_imbalance<I: Into<FlipImbalance<T>>>(account_id: &T::AccountId, imbalance: I) {
-		Self::settle(account_id, imbalance.into())
 	}
 
 	/// Decreases total issuance and returns a corresponding imbalance that must be reconciled.
@@ -591,8 +587,8 @@ where
 
 	fn slash(account_id: &Self::AccountId) {
 		let account = Account::<T>::get(account_id);
-		if account.can_be_slashed() {
-			let slash_amount = SlashingRate::<T>::get() * account.bond;
+		let slash_amount = SlashingRate::<T>::get() * account.bond;
+		if account.can_be_slashed(slash_amount) {
 			Pallet::<T>::settle(account_id, Pallet::<T>::burn(slash_amount).into());
 			Pallet::<T>::deposit_event(Event::<T>::SlashingPerformed {
 				who: account_id.clone(),
