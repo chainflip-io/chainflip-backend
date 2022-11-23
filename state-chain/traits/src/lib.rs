@@ -276,11 +276,6 @@ pub trait EmissionsTrigger {
 	fn trigger_emissions();
 }
 
-/// Provides chain-specific replay protection data.
-pub trait ReplayProtectionProvider<Abi: ChainAbi> {
-	fn replay_protection() -> Abi::ReplayProtection;
-}
-
 /// Provides the environment data for ethereum-like chains.
 pub trait EthEnvironmentProvider {
 	fn flip_token_address() -> [u8; 20];
@@ -696,4 +691,11 @@ pub trait EgressApi<C: Chain> {
 
 pub trait VaultTransitionHandler<C: ChainCrypto> {
 	fn on_new_vault(_new_key: C::AggKey) {}
+}
+
+/// Provides information about current bids.
+pub trait BidInfo {
+	type Balance;
+	/// Returns the smallest of all backup validator bids.
+	fn get_min_backup_bid() -> Self::Balance;
 }

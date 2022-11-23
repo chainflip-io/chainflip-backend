@@ -1,10 +1,34 @@
 use crate::{mock::*, *};
-use frame_support::traits::HandleLifetime;
+use cf_traits::mocks::bid_info::MockBidInfo;
+use frame_support::{assert_noop, assert_ok, traits::HandleLifetime};
 use frame_system::Provider;
 
 const ALICE: u64 = 1;
 const BOB: u64 = 2;
 const CHARLIE: u64 = 3;
+
+#[test]
+fn test_ensure_stake_of_validator() {
+	new_test_ext().execute_with(|| {
+		AccountRoles::<Test>::insert(ALICE, AccountRole::None);
+		assert_ok!(Pallet::<Test>::register_account_role(
+			Origin::signed(ALICE),
+			AccountRole::Validator
+		));
+	});
+}
+
+#[test]
+fn test_expect_validator_register_fails() {
+	new_test_ext().execute_with(|| {
+		MockBidInfo::set_min_bid(35);
+		AccountRoles::<Test>::insert(ALICE, AccountRole::None);
+		assert_noop!(
+			Pallet::<Test>::register_account_role(Origin::signed(ALICE), AccountRole::Validator),
+			crate::Error::<Test>::NotEnoughStake
+		);
+	});
+}
 
 #[test]
 fn test_ensure_origin_struct() {

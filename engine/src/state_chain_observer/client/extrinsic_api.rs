@@ -50,8 +50,7 @@ pub trait ExtrinsicApi {
 		block_stream: &mut BlockStream,
 	) -> Result<Vec<state_chain_runtime::Event>>
 	where
-		BlockStream:
-			Stream<Item = anyhow::Result<state_chain_runtime::Header>> + Unpin + Send + 'static;
+		BlockStream: Stream<Item = state_chain_runtime::Header> + Unpin + Send + 'static;
 }
 
 fn invalid_err_obj(invalid_reason: InvalidTransaction) -> ErrorObjectOwned {
@@ -280,11 +279,9 @@ impl<BaseRpcApi: super::base_rpc_api::BaseRpcApi + Send + Sync + 'static> Extrin
 		block_stream: &mut BlockStream,
 	) -> Result<Vec<state_chain_runtime::Event>>
 	where
-		BlockStream:
-			Stream<Item = anyhow::Result<state_chain_runtime::Header>> + Unpin + Send + 'static,
+		BlockStream: Stream<Item = state_chain_runtime::Header> + Unpin + Send + 'static,
 	{
-		while let Some(result_header) = block_stream.next().await {
-			let header = result_header?;
+		while let Some(header) = block_stream.next().await {
 			let block_hash = header.hash();
 			if let Some(signed_block) = self.base_rpc_client.block(block_hash).await? {
 				match signed_block.block.extrinsics.iter().position(|ext| {

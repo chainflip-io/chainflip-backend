@@ -242,7 +242,7 @@ jobs:
           chmod +x ./target/release/chainflip*
       - name: Run node in background
         run: |
-          ./target/release/chainflip-node --chain cf-dev --node-key-file=node_key_file &
+          ./target/release/chainflip-node --chain dev --node-key-file=node_key_file &
           sleep 2
       - name: Check node health
         run: >

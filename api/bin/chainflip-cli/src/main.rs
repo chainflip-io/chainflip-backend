@@ -1,9 +1,9 @@
-use api::primitives::{AccountRole, ClaimAmount};
+use api::primitives::{AccountRole, ClaimAmount, Hash};
 use chainflip_api as api;
 use clap::Parser;
 use settings::{CLICommandLineOptions, CLISettings};
 
-use crate::settings::CFCommand::*;
+use crate::settings::{Claim, CliCommand::*};
 use anyhow::{anyhow, Result};
 use utilities::clean_eth_address;
 
@@ -34,17 +34,34 @@ async fn run_cli() -> Result<()> {
 	);
 
 	match command_line_opts.cmd {
-		Claim { amount, eth_address, should_register_claim } =>
-			request_claim(Some(amount), &eth_address, &cli_settings, should_register_claim).await,
 		ClaimAll { eth_address, should_register_claim } =>
 			request_claim(None, &eth_address, &cli_settings, should_register_claim).await,
+		Claim(Claim::Request { amount, eth_address, should_register_claim }) =>
+			request_claim(Some(amount), &eth_address, &cli_settings, should_register_claim).await,
+		Claim(Claim::Check {}) => check_claim(&cli_settings.state_chain).await,
 		RegisterAccountRole { role } => register_account_role(role, &cli_settings).await,
-		Rotate {} => api::rotate_keys(&cli_settings.state_chain).await,
+		Rotate {} => rotate_keys(&cli_settings.state_chain).await,
 		Retire {} => api::retire_account(&cli_settings.state_chain).await,
 		Activate {} => api::activate_account(&cli_settings.state_chain).await,
-		Query { block_hash } => api::request_block(block_hash, &cli_settings.state_chain).await,
+		Query { block_hash } => request_block(block_hash, &cli_settings.state_chain).await,
 		VanityName { name } => api::set_vanity_name(name, &cli_settings.state_chain).await,
 		ForceRotation { id } => api::force_rotation(id, &cli_settings.state_chain).await,
+	}
+}
+
+pub async fn request_block(
+	block_hash: Hash,
+	state_chain_settings: &settings::StateChain,
+) -> Result<()> {
+	match api::request_block(block_hash, state_chain_settings).await {
+		Ok(block) => {
+			println!("{:#?}", block);
+			Ok(())
+		},
+		Err(err) => {
+			println!("Could not find block with block hash {:x?}", block_hash);
+			Err(err)
+		},
 	}
 }
 
@@ -59,6 +76,26 @@ async fn register_account_role(role: AccountRole, settings: &settings::CLISettin
 	}
 
 	api::register_account_role(role, &settings.state_chain).await
+}
+
+pub async fn rotate_keys(state_chain_settings: &settings::StateChain) -> Result<()> {
+	let tx_hash = api::rotate_keys(state_chain_settings).await?;
+	println!("Session key rotated at tx {:#x}.", tx_hash);
+
+	Ok(())
+}
+
+async fn check_claim(state_chain_settings: &settings::StateChain) -> Result<()> {
+	const POLL_LIMIT_BLOCKS: usize = 10;
+
+	if let Some(certificate) =
+		api::poll_for_claim_certificate(state_chain_settings, POLL_LIMIT_BLOCKS).await?
+	{
+		println!("Claim certificate found: {:?}", hex::encode(certificate));
+	} else {
+		println!("No claim certificate found. Try again later.");
+	}
+	Ok(())
 }
 
 async fn request_claim(
@@ -106,21 +143,32 @@ async fn request_claim(
 		return Ok(())
 	}
 
-	let claim_cert = api::request_claim(amount, eth_address, &settings.state_chain).await?;
+	let tx_hash = api::request_claim(amount, eth_address, &settings.state_chain).await?;
 
-	println!("Your claim certificate is: {:?}", hex::encode(claim_cert.clone()));
+	println!("Your claim has transaction hash: `{:#x}`. Waiting for signed claim data...", tx_hash);
 
-	if should_register_claim {
-		let tx_hash = api::register_claim(&settings.eth, &settings.state_chain, claim_cert)
-			.await
-			.expect("Failed to register claim on ETH");
+	const POLL_LIMIT_BLOCKS: usize = 20;
 
-		println!("Submitted claim to Ethereum successfully with tx_hash: {:#x}", tx_hash);
-	} else {
-		println!(
-			"Your claim request has been successfully registered. Please proceed to the Staking UI to complete your claim."
-		);
-	}
+	match api::poll_for_claim_certificate(&settings.state_chain, POLL_LIMIT_BLOCKS).await? {
+		Some(claim_cert) => {
+			println!("Your claim certificate is: {:?}", hex::encode(claim_cert.clone()));
+
+			if should_register_claim {
+				let tx_hash = api::register_claim(&settings.eth, &settings.state_chain, claim_cert)
+					.await
+					.expect("Failed to register claim on ETH");
+
+				println!("Submitted claim to Ethereum successfully with tx_hash: {:#x}", tx_hash);
+			} else {
+				println!(
+					"Your claim request has been successfully registered. Please proceed to the Staking UI to complete your claim."
+				);
+			}
+		},
+		None => {
+			println!("Certificate takes longer to generate than expected. Please check claim certificate later.")
+		},
+	};
 
 	Ok(())
 }

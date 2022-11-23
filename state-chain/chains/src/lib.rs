@@ -106,6 +106,11 @@ pub trait ChainAbi: ChainCrypto {
 	type ReplayProtection: Member + Parameter;
 }
 
+/// Provides chain-specific replay protection data.
+pub trait ReplayProtectionProvider<Abi: ChainAbi> {
+	fn replay_protection() -> Abi::ReplayProtection;
+}
+
 /// A call or collection of calls that can be made to the Chainflip api on an external chain.
 ///
 /// See [eth::api::EthereumApi] for an example implementation.
@@ -176,30 +181,22 @@ pub trait ChainEnvironment<
 /// Constructs the `SetAggKeyWithAggKey` api call.
 pub trait SetAggKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
-		replay_protection: Abi::ReplayProtection,
 		old_key: <Abi as ChainCrypto>::AggKey,
 		new_key: <Abi as ChainCrypto>::AggKey,
 	) -> Self;
 }
 
 pub trait SetGovKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
-	fn new_unsigned(
-		replay_protection: Abi::ReplayProtection,
-		new_gov_key: <Abi as ChainCrypto>::GovKey,
-	) -> Self;
+	fn new_unsigned(new_gov_key: <Abi as ChainCrypto>::GovKey) -> Self;
 }
 
 pub trait SetCommKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
-	fn new_unsigned(
-		replay_protection: Abi::ReplayProtection,
-		new_comm_key: <Abi as ChainCrypto>::GovKey,
-	) -> Self;
+	fn new_unsigned(new_comm_key: <Abi as ChainCrypto>::GovKey) -> Self;
 }
 
 /// Constructs the `UpdateFlipSupply` api call.
 pub trait UpdateFlipSupply<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
-		replay_protection: Abi::ReplayProtection,
 		new_total_supply: u128,
 		block_number: u64,
 		stake_manager_address: &[u8; 20],
@@ -208,20 +205,13 @@ pub trait UpdateFlipSupply<Abi: ChainAbi>: ApiCall<Abi> {
 
 /// Constructs the `RegisterClaim` api call.
 pub trait RegisterClaim<Abi: ChainAbi>: ApiCall<Abi> {
-	fn new_unsigned(
-		replay_protection: Abi::ReplayProtection,
-		node_id: &[u8; 32],
-		amount: u128,
-		address: &[u8; 20],
-		expiry: u64,
-	) -> Self;
+	fn new_unsigned(node_id: &[u8; 32], amount: u128, address: &[u8; 20], expiry: u64) -> Self;
 
 	fn amount(&self) -> u128;
 }
 
 pub trait AllBatch<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
-		replay_protection: Abi::ReplayProtection,
 		fetch_params: Vec<FetchAssetParams<Abi>>,
 		transfer_params: Vec<TransferAssetParams<Abi>>,
 	) -> Self;
