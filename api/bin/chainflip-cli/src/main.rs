@@ -34,10 +34,8 @@ async fn run_cli() -> Result<()> {
 	);
 
 	match command_line_opts.cmd {
-		ClaimAll { eth_address, should_register_claim } =>
-			request_claim(None, &eth_address, &cli_settings, should_register_claim).await,
 		Claim(Claim::Request { amount, eth_address, should_register_claim }) =>
-			request_claim(Some(amount), &eth_address, &cli_settings, should_register_claim).await,
+			request_claim(amount, &eth_address, &cli_settings, should_register_claim).await,
 		Claim(Claim::Check {}) => check_claim(&cli_settings.state_chain).await,
 		RegisterAccountRole { role } => register_account_role(role, &cli_settings).await,
 		Rotate {} => rotate_keys(&cli_settings.state_chain).await,
