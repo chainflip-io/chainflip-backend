@@ -314,7 +314,7 @@ mod reporting_adapter_test {
 				ReputationPallet::reputation(OFFENDER.0).reputation_points,
 				-GRANDPA_EQUIVOCATION_PENALTY_POINTS
 			);
-			assert_eq!(MockSlasher::slash_count(OFFENDER.0), 1);
+			assert_eq!(MockSlasher::slash_count(OFFENDER.0), 0);
 
 			// Once an offence has been reported, it's not possible to report an offence for a
 			// previous time slot.
@@ -334,7 +334,7 @@ mod reporting_adapter_test {
 			assert_ok!(GrandpaOffenceReporter::report_offence(Default::default(), FUTURE_OFFENCE,));
 			assert!(GrandpaOffenceReporter::is_known_offence(&[OFFENDER], &NEXT_TIME_SLOT));
 			assert!(GrandpaOffenceReporter::is_known_offence(&[OFFENDER], &FUTURE_TIME_SLOT));
-			assert_eq!(MockSlasher::slash_count(OFFENDER.0), 2);
+			assert_eq!(MockSlasher::slash_count(OFFENDER.0), 0);
 		});
 	}
 }
