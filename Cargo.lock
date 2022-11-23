@@ -963,6 +963,7 @@ dependencies = [
  "hex",
  "serde",
  "slog",
+ "substrate-build-script-utils",
  "tokio",
  "utilities",
 ]
