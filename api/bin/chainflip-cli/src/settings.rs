@@ -62,7 +62,7 @@ pub enum Claim {
 		#[clap(long = "register", hide = true)]
 		should_register_claim: bool,
 	},
-	#[clap(about = "Get claim certificate for a recently submitted claim")]
+	#[clap(about = "Get claim certificate for your recently submitted claim")]
 	Check,
 }
 
