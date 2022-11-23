@@ -15,7 +15,7 @@ use sp_std::collections::btree_set::BTreeSet;
 #[cfg(feature = "ibiza")]
 use cf_chains::Polkadot;
 use cf_chains::{
-	benchmarking_value::BenchmarkValue, ApiCall, Chain, ChainAbi, ChainCrypto, Ethereum, Polkadot,
+	benchmarking_value::BenchmarkValue, ApiCall, Chain, ChainAbi, ChainCrypto, Ethereum,
 };
 
 use cf_primitives::{
