@@ -4,6 +4,10 @@
 [node_p2p]
 allow_local_ip = true
 ip_address = "1.1.1.1"
+node_key_file = "node_key_file"
+
+[state_chain]
+signing_key_file = "signing_key_file"
 
 [eth]
 private_key_file = "eth_private_key_file"
