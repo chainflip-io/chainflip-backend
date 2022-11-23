@@ -292,11 +292,6 @@ impl<T: Config> Pallet<T> {
 		Reserve::<T>::get(reserve_id)
 	}
 
-	/// Slashable funds for an account.
-	pub fn slashable_funds(account_id: &T::AccountId) -> T::Balance {
-		Account::<T>::get(account_id).total()
-	}
-
 	/// Debits an account's staked balance.
 	///
 	/// *Warning:* Creates the flip account if it doesn't exist already, but *doesn't* ensure that
