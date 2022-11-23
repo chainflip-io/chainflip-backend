@@ -83,9 +83,9 @@ pub async fn rotate_keys(state_chain_settings: &settings::StateChain) -> Result<
 	Ok(())
 }
 
-const POLL_LIMIT_BLOCKS: usize = 10;
-
 async fn check_claim(state_chain_settings: &settings::StateChain) -> Result<()> {
+	const POLL_LIMIT_BLOCKS: usize = 10;
+
 	if let Some(certificate) =
 		api::poll_for_claim_certificate(state_chain_settings, POLL_LIMIT_BLOCKS).await?
 	{
@@ -130,6 +130,8 @@ async fn request_claim(
 	let tx_hash = api::request_claim(atomic_amount, eth_address, &settings.state_chain).await?;
 
 	println!("Your claim has transaction hash: `{:#x}`. Waiting for signed claim data...", tx_hash);
+
+	const POLL_LIMIT_BLOCKS: usize = 20;
 
 	match api::poll_for_claim_certificate(&settings.state_chain, POLL_LIMIT_BLOCKS).await? {
 		Some(claim_cert) => {
