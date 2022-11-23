@@ -41,53 +41,40 @@ impl ChainAbi for Ethereum {
 	type ReplayProtection = EthereumReplayProtection;
 }
 
-impl<E> SetAggKeyWithAggKey<Ethereum> for EthereumApi<E> {
+impl<E: ReplayProtectionProvider<Ethereum>> SetAggKeyWithAggKey<Ethereum> for EthereumApi<E> {
 	fn new_unsigned(
-		replay_protection: EthereumReplayProtection,
 		_old_key: <Ethereum as ChainCrypto>::AggKey,
 		new_key: <Ethereum as ChainCrypto>::AggKey,
 	) -> Self {
 		Self::SetAggKeyWithAggKey(set_agg_key_with_agg_key::SetAggKeyWithAggKey::new_unsigned(
-			replay_protection,
+			E::replay_protection(),
 			new_key,
 		))
 	}
 }
 
-impl<E> SetGovKeyWithAggKey<Ethereum> for EthereumApi<E> {
-	fn new_unsigned(
-		replay_protection: EthereumReplayProtection,
-		new_gov_key: eth::Address,
-	) -> Self {
+impl<E: ReplayProtectionProvider<Ethereum>> SetGovKeyWithAggKey<Ethereum> for EthereumApi<E> {
+	fn new_unsigned(new_gov_key: eth::Address) -> Self {
 		Self::SetGovKeyWithAggKey(set_gov_key_with_agg_key::SetGovKeyWithAggKey::new_unsigned(
-			replay_protection,
+			E::replay_protection(),
 			new_gov_key,
 		))
 	}
 }
 
-impl<E> SetCommKeyWithAggKey<Ethereum> for EthereumApi<E> {
-	fn new_unsigned(
-		replay_protection: EthereumReplayProtection,
-		new_comm_key: eth::Address,
-	) -> Self {
+impl<E: ReplayProtectionProvider<Ethereum>> SetCommKeyWithAggKey<Ethereum> for EthereumApi<E> {
+	fn new_unsigned(new_comm_key: eth::Address) -> Self {
 		Self::SetCommKeyWithAggKey(set_comm_key_with_agg_key::SetCommKeyWithAggKey::new_unsigned(
-			replay_protection,
+			E::replay_protection(),
 			new_comm_key,
 		))
 	}
 }
 
-impl<E> RegisterClaim<Ethereum> for EthereumApi<E> {
-	fn new_unsigned(
-		replay_protection: EthereumReplayProtection,
-		node_id: &[u8; 32],
-		amount: u128,
-		address: &[u8; 20],
-		expiry: u64,
-	) -> Self {
+impl<E: ReplayProtectionProvider<Ethereum>> RegisterClaim<Ethereum> for EthereumApi<E> {
+	fn new_unsigned(node_id: &[u8; 32], amount: u128, address: &[u8; 20], expiry: u64) -> Self {
 		Self::RegisterClaim(register_claim::RegisterClaim::new_unsigned(
-			replay_protection,
+			E::replay_protection(),
 			node_id,
 			amount,
 			address,
@@ -103,15 +90,14 @@ impl<E> RegisterClaim<Ethereum> for EthereumApi<E> {
 	}
 }
 
-impl<E> UpdateFlipSupply<Ethereum> for EthereumApi<E> {
+impl<E: ReplayProtectionProvider<Ethereum>> UpdateFlipSupply<Ethereum> for EthereumApi<E> {
 	fn new_unsigned(
-		replay_protection: EthereumReplayProtection,
 		new_total_supply: u128,
 		block_number: u64,
 		stake_manager_address: &[u8; 20],
 	) -> Self {
 		Self::UpdateFlipSupply(update_flip_supply::UpdateFlipSupply::new_unsigned(
-			replay_protection,
+			E::replay_protection(),
 			new_total_supply,
 			block_number,
 			stake_manager_address,
@@ -122,14 +108,14 @@ impl<E> UpdateFlipSupply<Ethereum> for EthereumApi<E> {
 impl<E> AllBatch<Ethereum> for EthereumApi<E>
 where
 	E: ChainEnvironment<assets::eth::Asset, Address>,
+	E: ReplayProtectionProvider<Ethereum>,
 {
 	fn new_unsigned(
-		replay_protection: EthereumReplayProtection,
 		fetch_params: Vec<FetchAssetParams<Ethereum>>,
 		transfer_params: Vec<TransferAssetParams<Ethereum>>,
 	) -> Self {
 		Self::AllBatch(all_batch::AllBatch::new_unsigned(
-			replay_protection,
+			E::replay_protection(),
 			fetch_params
 				.into_iter()
 				.filter_map(|FetchAssetParams { intent_id, asset }| {

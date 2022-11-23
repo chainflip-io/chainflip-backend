@@ -8,9 +8,10 @@ pub use cf_primitives::{
 	Asset, AssetAmount, EthereumAddress, ExchangeRate, ETHEREUM_ETH_ADDRESS,
 };
 
+use cf_traits::mocks::all_batch::MockAllBatch;
 pub use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
-	Broadcaster, ReplayProtectionProvider,
+	Broadcaster,
 };
 use frame_support::{instances::Instance1, parameter_types};
 use frame_system as system;
@@ -81,22 +82,9 @@ impl cf_traits::Chainflip for Test {
 	type SystemState = MockSystemStateInfo;
 }
 
-pub const FAKE_KEYMAN_ADDR: [u8; 20] = [0xcf; 20];
-pub const CHAIN_ID: u64 = 31337;
-pub const COUNTER: u64 = 42;
-impl ReplayProtectionProvider<Ethereum> for Test {
-	fn replay_protection() -> <Ethereum as ChainAbi>::ReplayProtection {
-		EthereumReplayProtection {
-			key_manager_address: FAKE_KEYMAN_ADDR,
-			chain_id: CHAIN_ID,
-			nonce: COUNTER,
-		}
-	}
-}
-
 pub struct MockBroadcast;
 impl Broadcaster<Ethereum> for MockBroadcast {
-	type ApiCall = EthereumApi<MockEthEnvironment>;
+	type ApiCall = MockAllBatch;
 
 	fn threshold_sign_and_broadcast(_api_call: Self::ApiCall) {}
 }
@@ -123,8 +111,7 @@ impl crate::Config<Instance1> for Test {
 	type AddressDerivation = ();
 	type LpProvisioning = Self;
 	type SwapIntentHandler = Self;
-	type ReplayProtection = Self;
-	type AllBatch = EthereumApi<MockEthEnvironment>;
+	type AllBatch = MockAllBatch;
 	type Broadcaster = MockBroadcast;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type WeightInfo = ();

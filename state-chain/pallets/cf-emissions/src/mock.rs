@@ -1,7 +1,6 @@
 use crate as pallet_cf_emissions;
 use cf_chains::{
-	eth::api::EthereumReplayProtection, mocks::MockEthereum, ApiCall, ChainAbi, ChainCrypto,
-	UpdateFlipSupply,
+	mocks::MockEthereum, ApiCall, ChainAbi, ChainCrypto, ReplayProtectionProvider, UpdateFlipSupply,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -21,6 +20,7 @@ use sp_runtime::{
 use cf_traits::{
 	mocks::{
 		eth_environment_provider::MockEthEnvironmentProvider,
+		eth_replay_protection_provider::MockEthReplayProtectionProvider,
 		system_state_info::MockSystemStateInfo,
 	},
 	Broadcaster, Issuance, WaivedFees,
@@ -34,7 +34,7 @@ type Block = frame_system::mocking::MockBlock<Test>;
 use cf_traits::{
 	impl_mock_waived_fees,
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, epoch_info},
-	Chainflip, ReplayProtectionProvider, RewardsDistribution,
+	Chainflip, RewardsDistribution,
 };
 
 pub type AccountId = u64;
@@ -136,20 +136,6 @@ impl pallet_cf_flip::Config for Test {
 	type WaivedFees = WaivedFeesMock;
 }
 
-pub const FAKE_KEYMAN_ADDR: [u8; 20] = [0xcf; 20];
-pub const CHAIN_ID: u64 = 31337;
-pub const COUNTER: u64 = 42;
-
-impl ReplayProtectionProvider<MockEthereum> for Test {
-	fn replay_protection() -> <MockEthereum as ChainAbi>::ReplayProtection {
-		EthereumReplayProtection {
-			key_manager_address: FAKE_KEYMAN_ADDR,
-			chain_id: CHAIN_ID,
-			nonce: COUNTER,
-		}
-	}
-}
-
 pub const EMISSION_RATE: u128 = 10;
 pub struct MockRewardsDistribution;
 
@@ -175,13 +161,12 @@ pub struct MockUpdateFlipSupply {
 
 impl UpdateFlipSupply<MockEthereum> for MockUpdateFlipSupply {
 	fn new_unsigned(
-		nonce: <MockEthereum as ChainAbi>::ReplayProtection,
 		new_total_supply: u128,
 		block_number: u64,
 		stake_manager_address: &[u8; 20],
 	) -> Self {
 		Self {
-			nonce,
+			nonce: MockEthReplayProtectionProvider::replay_protection(),
 			new_total_supply,
 			block_number,
 			stake_manager_address: *stake_manager_address,
@@ -240,7 +225,6 @@ impl pallet_cf_emissions::Config for Test {
 	type Issuance = pallet_cf_flip::FlipIssuance<Test>;
 	type RewardsDistribution = MockRewardsDistribution;
 	type CompoundingInterval = HeartbeatBlockInterval;
-	type ReplayProtectionProvider = Self;
 	type EthEnvironmentProvider = MockEthEnvironmentProvider;
 	type Broadcaster = MockBroadcast;
 	type WeightInfo = ();

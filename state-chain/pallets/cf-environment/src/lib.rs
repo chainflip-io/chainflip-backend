@@ -78,8 +78,6 @@ pub mod pallet {
 		type EnsureGovernance: EnsureOrigin<Self::Origin>;
 		/// Weight information
 		type WeightInfo: WeightInfo;
-		/// Eth Environment provider
-		type EthEnvironmentProvider: EthEnvironmentProvider;
 	}
 
 	#[pallet::error]
