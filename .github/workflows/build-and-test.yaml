@@ -250,7 +250,7 @@ jobs:
           'http://localhost:9933' --connect-timeout 5 --max-time 10 --retry 3 --retry-delay 1 --retry-max-time 20 --retry-connrefused -vv
       - name: Run engine in background
         run: |
-          ./target/release/chainflip-engine --config-path engine/config/CI.toml &
+          ./target/release/chainflip-engine --config-root engine/config/CI &
           sleep 2
         env:
           ETH__NODE_ENDPOINT: ${{ secrets.ETH__NODE_ENDPOINT }}
