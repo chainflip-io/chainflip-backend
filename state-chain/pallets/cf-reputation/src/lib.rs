@@ -455,8 +455,7 @@ impl<T: Config> Pallet<T> {
 			});
 
 			if reputation_points < 0 {
-				// At this point we slash the node by the amount of blocks offline
-				T::Slasher::slash(&validator_id, T::HeartbeatBlockInterval::get());
+				T::Slasher::slash(&validator_id);
 			}
 		}
 	}

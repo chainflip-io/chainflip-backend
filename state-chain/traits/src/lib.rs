@@ -325,14 +325,11 @@ pub trait EmergencyRotation {
 	fn request_emergency_rotation();
 }
 
-/// Slashing a node
 pub trait Slashing {
-	/// An identifier for our node
 	type AccountId;
-	/// Block number
 	type BlockNumber;
-	/// Function which implements the slashing logic
-	fn slash(validator_id: &Self::AccountId, blocks_offline: Self::BlockNumber);
+	/// Slashes a validator for being offline for the duration of one Heartbeat interval.
+	fn slash(validator_id: &Self::AccountId);
 }
 
 /// Can nominate a single account.

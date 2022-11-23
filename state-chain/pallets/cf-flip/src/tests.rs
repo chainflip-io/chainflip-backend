@@ -288,7 +288,7 @@ impl FlipOperation {
 				Bonder::<Test>::update_bond(account_id, *bond);
 
 				SlashingRate::<Test>::set(*slashing_rate);
-				FlipSlasher::<Test>::slash(account_id, *blocks_offline);
+				FlipSlasher::<Test>::slash(account_id);
 				let balance_after = Flip::total_balance_of(account_id);
 				// Check if the diff between the balances is the expected slash
 				if initial_balance.saturating_sub(expected_slash) != balance_after {

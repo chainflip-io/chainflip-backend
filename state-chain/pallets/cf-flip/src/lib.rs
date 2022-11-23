@@ -29,7 +29,7 @@ use frame_support::{
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use sp_runtime::{
-	traits::{AtLeast32BitUnsigned, MaybeSerializeDeserialize, Saturating, UniqueSaturatedInto},
+	traits::{AtLeast32BitUnsigned, MaybeSerializeDeserialize, UniqueSaturatedInto},
 	DispatchError, Permill, RuntimeDebug,
 };
 use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
@@ -136,6 +136,9 @@ pub mod pallet {
 			who: T::AccountId,
 			dust_burned: T::Balance,
 		},
+		SlashingRateUpdated {
+			slashing_rate: Permill,
+		},
 	}
 
 	#[pallet::error]
@@ -182,7 +185,7 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - None
+		/// - [SlashingRateUpdated]
 		///
 		/// ## Errors
 		///
@@ -197,6 +200,7 @@ pub mod pallet {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			// Set the slashing rate
 			SlashingRate::<T>::set(slashing_rate);
+			Self::deposit_event(Event::SlashingRateUpdated { slashing_rate });
 			Ok(())
 		}
 	}
@@ -235,7 +239,7 @@ pub struct FlipAccount<Amount> {
 	bond: Amount,
 }
 
-impl<Balance: Saturating + Copy + Ord> FlipAccount<Balance> {
+impl<Balance: AtLeast32BitUnsigned + Copy> FlipAccount<Balance> {
 	/// The total balance excludes any funds that are in a pending claim request.
 	pub fn total(&self) -> Balance {
 		self.stake
@@ -249,6 +253,11 @@ impl<Balance: Saturating + Copy + Ord> FlipAccount<Balance> {
 	/// The current bond
 	pub fn bond(&self) -> Balance {
 		self.bond
+	}
+
+	/// Account can only be slashed if its balance is higher than 20% of the bond.
+	pub fn can_be_slashed(&self) -> bool {
+		self.stake > self.bond / 5u32.into()
 	}
 }
 
@@ -580,24 +589,15 @@ where
 	type AccountId = T::AccountId;
 	type BlockNumber = B;
 
-	fn slash(account_id: &Self::AccountId, blocks_offline: Self::BlockNumber) {
-		// Get the slashing rate
-		let slashing_rate: Permill = SlashingRate::<T>::get();
-		// Get the MAB aka the bond
-		let bond = Account::<T>::get(account_id).bond;
-		// Get blocks_offline as Balance
-		let blocks_offline: T::Balance = blocks_offline.unique_saturated_into();
-		// slash per day = n % of MAB
-		let slash_per_day = slashing_rate * bond;
-		// Burn per block
-		let burn_per_block = slash_per_day / T::BlocksPerDay::get().unique_saturated_into();
-		// Total amount of burn
-		let total_burn = burn_per_block.saturating_mul(blocks_offline);
-		// Burn the slashing fee
-		Pallet::<T>::settle(account_id, Pallet::<T>::burn(total_burn).into());
-		Pallet::<T>::deposit_event(Event::<T>::SlashingPerformed {
-			who: account_id.clone(),
-			amount: total_burn,
-		});
+	fn slash(account_id: &Self::AccountId) {
+		let account = Account::<T>::get(account_id);
+		if account.can_be_slashed() {
+			let slash_amount = SlashingRate::<T>::get() * account.bond;
+			Pallet::<T>::settle(account_id, Pallet::<T>::burn(slash_amount).into());
+			Pallet::<T>::deposit_event(Event::<T>::SlashingPerformed {
+				who: account_id.clone(),
+				amount: slash_amount,
+			});
+		}
 	}
 }

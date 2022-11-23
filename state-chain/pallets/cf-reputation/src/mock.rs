@@ -24,7 +24,7 @@ use cf_traits::{
 type ValidatorId = u64;
 
 thread_local! {
-	pub static SLASHES: RefCell<Vec<(u64, u64)>> = RefCell::new(Default::default());
+	pub static SLASHES: RefCell<Vec<u64>> = RefCell::new(Default::default());
 }
 
 construct_runtime!(
@@ -92,8 +92,7 @@ pub struct MockSlasher;
 
 impl MockSlasher {
 	pub fn slash_count(validator_id: ValidatorId) -> usize {
-		SLASHES
-			.with(|slashes| slashes.borrow().iter().filter(|(id, _)| *id == validator_id).count())
+		SLASHES.with(|slashes| slashes.borrow().iter().filter(|id| **id == validator_id).count())
 	}
 }
 
@@ -101,10 +100,10 @@ impl Slashing for MockSlasher {
 	type AccountId = ValidatorId;
 	type BlockNumber = u64;
 
-	fn slash(validator_id: &Self::AccountId, blocks_offline: Self::BlockNumber) {
+	fn slash(validator_id: &Self::AccountId) {
 		// Count those slashes
 		SLASHES.with(|count| {
-			count.borrow_mut().push((*validator_id, blocks_offline));
+			count.borrow_mut().push(*validator_id);
 		});
 	}
 }
