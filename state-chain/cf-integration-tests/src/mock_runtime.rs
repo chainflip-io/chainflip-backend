@@ -29,7 +29,7 @@ pub const PENALTIES: &[(Offence, (i32, BlockNumber))] = &[
 
 use crate::{
 	get_from_seed,
-	network::{EthKeyComponents, KeyComponents, KeyUtils},
+	threshold_signing::{EthKeyComponents, KeyComponents, KeyUtils},
 	GENESIS_KEY_SEED,
 };
 use cf_primitives::{AccountRole, AuthorityCount, BlockNumber, FlipBalance};

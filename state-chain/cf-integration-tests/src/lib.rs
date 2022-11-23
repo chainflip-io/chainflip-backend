@@ -6,6 +6,8 @@ mod signer_nomination;
 
 mod mock_runtime;
 
+mod threshold_signing;
+
 mod account;
 mod authorities;
 mod genesis;
@@ -24,9 +26,7 @@ use state_chain_runtime::{
 
 use cf_primitives::{AuthorityCount, BlockNumber, EpochIndex, FlipBalance};
 use cf_traits::EpochInfo;
-use libsecp256k1::SecretKey;
 use pallet_cf_staking::{EthTransactionHash, EthereumAddress};
-use rand::{prelude::*, SeedableRng};
 use sp_runtime::AccountId32;
 
 type NodeId = AccountId32;
