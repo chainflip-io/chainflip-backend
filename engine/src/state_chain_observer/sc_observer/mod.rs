@@ -9,7 +9,7 @@ use pallet_cf_vaults::KeygenError;
 use slog::o;
 use sp_core::{Hasher, H256};
 use sp_runtime::{traits::Keccak256, AccountId32};
-use state_chain_runtime::{AccountId, CfeSettings};
+use state_chain_runtime::{AccountId, CfeSettings, EthereumInstance};
 use std::{
 	collections::BTreeSet,
 	sync::{
@@ -53,7 +53,7 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient>(
 		scope.spawn(async move {
 			let _result = state_chain_client
 				.submit_signed_extrinsic(
-					pallet_cf_vaults::Call::report_keygen_outcome {
+					pallet_cf_vaults::Call::<_, EthereumInstance>::report_keygen_outcome {
 						ceremony_id,
 						reported_outcome: multisig_client
 							.keygen(ceremony_id, keygen_participants.clone())
@@ -103,7 +103,7 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient>(
 				Ok(signature) => {
 					let _result = state_chain_client
 						.submit_unsigned_extrinsic(
-							pallet_cf_threshold_signature::Call::signature_success {
+							pallet_cf_threshold_signature::Call::<_, EthereumInstance>::signature_success {
 								ceremony_id,
 								signature: signature.into(),
 							},
@@ -114,7 +114,7 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient>(
 				Err((bad_account_ids, _reason)) => {
 					let _result = state_chain_client
 						.submit_signed_extrinsic(
-							pallet_cf_threshold_signature::Call::report_signature_failed {
+							pallet_cf_threshold_signature::Call::<_, EthereumInstance>::report_signature_failed {
 								id: ceremony_id,
 								offenders: BTreeSet::from_iter(bad_account_ids),
 							},

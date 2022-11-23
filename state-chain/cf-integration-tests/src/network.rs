@@ -7,7 +7,7 @@ use frame_support::traits::{OnFinalize, OnIdle};
 use libsecp256k1::PublicKey;
 use pallet_cf_staking::{ClaimAmount, MinimumStake};
 use pallet_cf_validator::RotationPhase;
-use state_chain_runtime::{AccountRoles, Authorship, Event, Origin};
+use state_chain_runtime::{AccountRoles, Authorship, EthereumInstance, Event, Origin};
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 // arbitrary units of block time
@@ -302,7 +302,7 @@ impl Engine {
 								// If we rotating let's witness the keys being rotated on the contract
 								let _result = state_chain_runtime::Witnesser::witness_at_epoch(
 									Origin::signed(self.node_id.clone()),
-									Box::new(pallet_cf_vaults::Call::vault_key_rotated {
+									Box::new(pallet_cf_vaults::Call::<_, EthereumInstance>::vault_key_rotated {
 										new_public_key: self.threshold_signer.borrow_mut().proposed_public_key(),
 										block_number: 100,
 										tx_hash: [1u8; 32].into(),
