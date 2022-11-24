@@ -9,7 +9,7 @@ port = 8078
 [state_chain]
 ws_endpoint = "ws://localhost:9944"
 # 32 byte hex secret key - associated with the node's public id (public key)
-signing_key_file = "/etc/chainflip/keys/signing_key_fale"
+signing_key_file = "/etc/chainflip/keys/signing_key_file"
 
 [eth]
 http_node_endpoint = "http://localhost:8545"
