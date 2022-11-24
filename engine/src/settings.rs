@@ -142,6 +142,7 @@ pub struct P2POptions {
 }
 
 #[derive(Parser, Debug, Clone, Default)]
+#[clap(version = env!("SUBSTRATE_CLI_IMPL_VERSION"))]
 pub struct CommandLineOptions {
 	// Misc Options
 	#[clap(short = 'c', long = "config-path")]

@@ -29,9 +29,12 @@ use sp_core::U256;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
 	use_chainflip_account_id_encoding();
-	utilities::print_starting!();
 
 	let settings = Settings::new(CommandLineOptions::parse()).context("Error reading settings")?;
+
+	// Note: the greeting should only be printed in normal mode (i.e. not for short-lived commands
+	// like `--version`), so we execute it only after the settings have been parsed.
+	utilities::print_starting!();
 
 	let root_logger = logging::utils::new_json_logger_with_tag_filter(
 		settings.log.whitelist.clone(),

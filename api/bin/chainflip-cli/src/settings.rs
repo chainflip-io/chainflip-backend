@@ -7,6 +7,7 @@ use serde::Deserialize;
 use std::collections::HashMap;
 
 #[derive(Parser, Clone, Debug)]
+#[clap(version = env!("SUBSTRATE_CLI_IMPL_VERSION"))]
 pub struct CLICommandLineOptions {
 	#[clap(short = 'c', long = "config-path")]
 	config_path: Option<String>,
@@ -54,8 +55,11 @@ impl Default for CLICommandLineOptions {
 pub enum Claim {
 	#[clap(about = "Submit an extrinsic to request generation of a claim certificate")]
 	Request {
-		#[clap(help = "Amount to claim in FLIP")]
-		amount: f64,
+		#[clap(
+			help = "Amount to claim in FLIP (omit this option to claim all available FLIP)",
+			long = "exact"
+		)]
+		amount: Option<f64>,
 		#[clap(help = "The Ethereum address you wish to claim your FLIP to")]
 		eth_address: String,
 
@@ -71,6 +75,9 @@ pub enum CliCommand {
 	#[clap(about = "Requesting and checking claims")]
 	#[clap(subcommand)]
 	Claim(Claim),
+	#[clap(
+		about = "Submit an extrinsic to request generation of a claim certificate (claiming all available FLIP)"
+	)]
 	#[clap(about = "Set your account role to the Validator, Relayer, Liquidity Provider")]
 	RegisterAccountRole {
 		#[clap(help = "Validator (v), Liquidity Provider (lp), Relayer (r)", value_parser = account_role_parser)]
