@@ -8,13 +8,12 @@ use cf_chains::{
 	mocks::{MockEthereum, MockThresholdSignature},
 	ChainCrypto,
 };
-use cf_primitives::EpochIndex;
 use cf_traits::{
 	mocks::{
 		ceremony_id_provider::MockCeremonyIdProvider, signer_nomination::MockNominator,
 		system_state_info::MockSystemStateInfo,
 	},
-	AsyncResult, Chainflip, ThresholdSigner,
+	AsyncResult, Chainflip, KeyState, ThresholdSigner,
 };
 use codec::{Decode, Encode};
 use frame_support::{
@@ -143,14 +142,8 @@ pub const MOCK_AGG_KEY: [u8; 4] = *b"AKEY";
 pub struct MockKeyProvider;
 
 impl cf_traits::KeyProvider<MockEthereum> for MockKeyProvider {
-	type KeyId = Vec<u8>;
-
-	fn current_key_id_epoch_index() -> (Self::KeyId, EpochIndex) {
-		(MOCK_AGG_KEY.into(), Default::default())
-	}
-
-	fn current_key() -> <MockEthereum as ChainCrypto>::AggKey {
-		MOCK_AGG_KEY
+	fn current_key_epoch_index() -> KeyState<<MockEthereum as ChainCrypto>::AggKey> {
+		KeyState::Active { key: MOCK_AGG_KEY, epoch_index: Default::default() }
 	}
 }
 

@@ -1,4 +1,4 @@
-use api::primitives::{AccountRole, Hash};
+use api::primitives::{AccountRole, ClaimAmount, Hash};
 use chainflip_api as api;
 use clap::Parser;
 use settings::{CLICommandLineOptions, CLISettings};
@@ -97,7 +97,7 @@ async fn check_claim(state_chain_settings: &settings::StateChain) -> Result<()> 
 }
 
 async fn request_claim(
-	amount: f64,
+	amount: Option<f64>,
 	eth_address: &str,
 	settings: &CLISettings,
 	should_register_claim: bool,
@@ -114,20 +114,34 @@ async fn request_claim(
 			}
 		)?;
 
-	let atomic_amount: u128 = (amount * 10_f64.powi(18)) as u128;
+	let amount = match amount {
+		Some(amount_float) => {
+			let atomic_amount = (amount_float * 10_f64.powi(18)) as u128;
 
-	println!(
-		"Submitting claim with amount `{}` FLIP (`{}` Flipperinos) to ETH address `0x{}`.",
-		amount,
-		atomic_amount,
-		hex::encode(eth_address)
-	);
+			println!(
+				"Submitting claim with amount `{}` FLIP (`{}` Flipperinos) to ETH address `0x{}`.",
+				amount_float,
+				atomic_amount,
+				hex::encode(eth_address)
+			);
+
+			ClaimAmount::Exact(atomic_amount)
+		},
+		None => {
+			println!(
+				"Submitting claim with MAX amount to ETH address `0x{}`.",
+				hex::encode(eth_address)
+			);
+
+			ClaimAmount::Max
+		},
+	};
 
 	if !confirm_submit() {
 		return Ok(())
 	}
 
-	let tx_hash = api::request_claim(atomic_amount, eth_address, &settings.state_chain).await?;
+	let tx_hash = api::request_claim(amount, eth_address, &settings.state_chain).await?;
 
 	println!("Your claim has transaction hash: `{:#x}`. Waiting for signed claim data...", tx_hash);
 
