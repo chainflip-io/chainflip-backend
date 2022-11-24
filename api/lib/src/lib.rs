@@ -205,11 +205,11 @@ pub async fn register_claim(
 				.await
 				.expect("Failed to fetch EthereumChainId from the State Chain");
 			let stake_manager_address = state_chain_client
-				.storage_value::<pallet_cf_environment::StakeManagerAddress<state_chain_runtime::Runtime>>(
+				.storage_value::<pallet_cf_environment::EthereumStakeManagerAddress<state_chain_runtime::Runtime>>(
 					block_hash,
 				)
 				.await
-				.expect("Failed to fetch StakeManagerAddress from State Chain");
+				.expect("Failed to fetch EthereumStakeManagerAddress from State Chain");
 
 			println!(
 				"Registering your claim on the Ethereum network, to StakeManager address: {:?}",

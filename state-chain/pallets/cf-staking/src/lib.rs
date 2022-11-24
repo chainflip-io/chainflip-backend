@@ -16,9 +16,7 @@ pub use weights::WeightInfo;
 mod tests;
 
 use cf_chains::RegisterClaim;
-use cf_traits::{
-	Bid, BidderProvider, EpochInfo, EthEnvironmentProvider, StakeTransfer, ThresholdSigner,
-};
+use cf_traits::{Bid, BidderProvider, EpochInfo, StakeTransfer, ThresholdSigner};
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
@@ -107,9 +105,6 @@ pub mod pallet {
 			AccountId = <Self as frame_system::Config>::AccountId,
 			Balance = Self::Balance,
 		>;
-
-		/// Something that can provide the key manager address and chain id.
-		type EthEnvironmentProvider: EthEnvironmentProvider;
 
 		/// Threshold signer.
 		type ThresholdSigner: ThresholdSigner<Ethereum, Callback = Self::ThresholdCallable>;

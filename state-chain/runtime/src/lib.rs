@@ -429,7 +429,6 @@ impl pallet_cf_staking::Config for Runtime {
 	type AccountRoleRegistry = AccountRoles;
 	type Balance = FlipBalance;
 	type Flip = Flip;
-	type EthEnvironmentProvider = Environment;
 	type ThresholdSigner = EthereumThresholdSigner;
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, Instance1>;

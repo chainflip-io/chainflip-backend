@@ -40,7 +40,7 @@ pub struct PalletWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: AccountTypes AccountRoles (r:1 w:0)
 	// Storage: Ingress IntentIdCounter (r:1 w:1)
-	// Storage: Environment EthVaultAddress (r:1 w:0)
+	// Storage: Environment EthereumVaultAddress (r:1 w:0)
 	// Storage: Egress EthereumScheduledIngressFetch (r:1 w:1)
 	// Storage: Ingress IntentActions (r:0 w:1)
 	// Storage: Ingress IntentIngressDetails (r:0 w:1)
@@ -71,7 +71,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 impl WeightInfo for () {
 	// Storage: AccountTypes AccountRoles (r:1 w:0)
 	// Storage: Ingress IntentIdCounter (r:1 w:1)
-	// Storage: Environment EthVaultAddress (r:1 w:0)
+	// Storage: Environment EthereumVaultAddress (r:1 w:0)
 	// Storage: Egress EthereumScheduledIngressFetch (r:1 w:1)
 	// Storage: Ingress IntentActions (r:0 w:1)
 	// Storage: Ingress IntentIngressDetails (r:0 w:1)
