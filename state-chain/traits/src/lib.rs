@@ -340,7 +340,8 @@ pub trait Slashing {
 	type AccountId;
 	/// Block number
 	type BlockNumber;
-	/// Function which implements the slashing logic
+
+	/// Slashes a validator for the equivalent of some number of blocks offline.
 	fn slash(validator_id: &Self::AccountId, blocks_offline: Self::BlockNumber);
 }
 

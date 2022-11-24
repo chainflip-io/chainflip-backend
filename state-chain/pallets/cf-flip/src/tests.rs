@@ -279,17 +279,24 @@ impl FlipOperation {
 					return false
 				}
 			},
-			FlipOperation::SlashAccount(account_id, slashing_rate, bond, blocks_offline, mint) => {
-				let blocks_per_day: u128 = <Test as Config>::BlocksPerDay::get() as u128;
-				let expected_slash: u128 = (*slashing_rate * (*bond as u128) / blocks_per_day)
-					.saturating_mul(*blocks_offline as u128);
+			FlipOperation::SlashAccount(account_id, slashing_rate, bond, mint, blocks) => {
 				// Mint some Flip for testing - 100 is not enough and unrealistic for this usecase
 				Flip::settle(account_id, Flip::mint(*mint).into());
 				let initial_balance: u128 = Flip::total_balance_of(account_id);
 				Bonder::<Test>::update_bond(account_id, *bond);
 
 				SlashingRate::<Test>::set(*slashing_rate);
-				FlipSlasher::<Test>::slash(account_id, *blocks_offline);
+
+				let attempted_slash: u128 =
+					(*slashing_rate * *bond as u128).saturating_mul((*blocks).into());
+				let expected_slash =
+					if Account::<Test>::get(account_id).can_be_slashed(attempted_slash) {
+						attempted_slash
+					} else {
+						0
+					};
+
+				FlipSlasher::<Test>::slash(account_id, *blocks);
 				let balance_after = Flip::total_balance_of(account_id);
 				// Check if the diff between the balances is the expected slash
 				if initial_balance.saturating_sub(expected_slash) != balance_after {
@@ -381,6 +388,7 @@ impl Arbitrary for FlipOperation {
 				Bond::arbitrary(g),
 				BlocksOffline::arbitrary(g),
 				Mint::arbitrary(g),
+				(u16::arbitrary(g) as u32).into(), // random number of blocks up to u16::MAX
 			),
 			16 => FlipOperation::AccountToAccount(
 				random_account(g),

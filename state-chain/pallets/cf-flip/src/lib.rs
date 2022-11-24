@@ -175,8 +175,7 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Set the Slashing Rate. Slashing Rate is a percentage. It, therefore, has to be between 0
-		/// and 100.
+		/// Set the PER BLOCK slashing rate.
 		///
 		/// The dispatch origin of this function must be governance
 		///
@@ -571,33 +570,24 @@ impl<T: Config> OnKilledAccount<T::AccountId> for BurnFlipAccount<T> {
 }
 
 pub struct FlipSlasher<T: Config>(PhantomData<T>);
-/// An implementation of `Slashing` for Flip
+
 impl<T, B> Slashing for FlipSlasher<T>
 where
 	T: Config<BlockNumber = B>,
-	B: UniqueSaturatedInto<T::Balance>,
+	B: UniqueSaturatedInto<T::Balance> + Into<T::Balance>,
 {
 	type AccountId = T::AccountId;
 	type BlockNumber = B;
 
-	fn slash(account_id: &Self::AccountId, blocks_offline: Self::BlockNumber) {
-		// Get the slashing rate
-		let slashing_rate: Permill = SlashingRate::<T>::get();
-		// Get the MAB aka the bond
-		let bond = Account::<T>::get(account_id).bond;
-		// Get blocks_offline as Balance
-		let blocks_offline: T::Balance = blocks_offline.unique_saturated_into();
-		// slash per day = n % of MAB
-		let slash_per_day = slashing_rate * bond;
-		// Burn per block
-		let burn_per_block = slash_per_day / T::BlocksPerDay::get().unique_saturated_into();
-		// Total amount of burn
-		let total_burn = burn_per_block.saturating_mul(blocks_offline);
-		// Burn the slashing fee
-		Pallet::<T>::settle(account_id, Pallet::<T>::burn(total_burn).into());
-		Pallet::<T>::deposit_event(Event::<T>::SlashingPerformed {
-			who: account_id.clone(),
-			amount: total_burn,
-		});
+	fn slash(account_id: &Self::AccountId, blocks: Self::BlockNumber) {
+		let account = Account::<T>::get(account_id);
+		let slash_amount = (SlashingRate::<T>::get() * account.bond).saturating_mul(blocks.into());
+		if account.can_be_slashed(slash_amount) {
+			Pallet::<T>::settle(account_id, Pallet::<T>::burn(slash_amount).into());
+			Pallet::<T>::deposit_event(Event::<T>::SlashingPerformed {
+				who: account_id.clone(),
+				amount: slash_amount,
+			});
+		}
 	}
 }
