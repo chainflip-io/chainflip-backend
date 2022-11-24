@@ -14,4 +14,9 @@ impl PalletInstanceAlias for cf_chains::eth::Ethereum {
 	type Instance = Instance1;
 }
 
+impl PalletInstanceAlias for cf_chains::dot::Polkadot {
+	type Instance = Instance2;
+}
+
 pub type EthereumInstance = <cf_chains::eth::Ethereum as PalletInstanceAlias>::Instance;
+pub type PolkadotInstance = <cf_chains::dot::Polkadot as PalletInstanceAlias>::Instance;

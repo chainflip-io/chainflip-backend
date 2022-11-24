@@ -15,6 +15,8 @@ use crate::{
 		RuntimeApiPenalty, RuntimeApiPendingClaim,
 	},
 };
+#[cfg(feature = "ibiza")]
+use cf_chains::{dot, Polkadot};
 use cf_chains::{
 	eth,
 	eth::{api::register_claim::RegisterClaim, Ethereum},
@@ -66,6 +68,7 @@ use sp_version::RuntimeVersion;
 
 pub use cf_primitives::{BlockNumber, FlipBalance, ForeignChainAddress};
 pub use cf_traits::{EpochInfo, EthEnvironmentProvider, QualifyNode, SessionKeysRegistered};
+
 pub use chainflip::chain_instances::*;
 use chainflip::{
 	epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat, EthEnvironment,
@@ -184,9 +187,9 @@ impl pallet_cf_environment::Config for Runtime {
 #[cfg(feature = "ibiza")]
 impl pallet_cf_swapping::Config for Runtime {
 	type Event = Event;
-	type Ingress = EthereumIngressEgress;
+	type IngressHandler = chainflip::AnyChainIngressEgressHandler;
+	type EgressHandler = chainflip::AnyChainIngressEgressHandler;
 	type SwappingApi = ();
-	type Egress = EthereumIngressEgress;
 	type AccountRoleRegistry = AccountRoles;
 	type WeightInfo = pallet_cf_swapping::weights::PalletWeight<Runtime>;
 }
@@ -227,11 +230,41 @@ impl pallet_cf_ingress_egress::Config<EthereumInstance> for Runtime {
 }
 
 #[cfg(feature = "ibiza")]
+mod polkdadot_dummy {
+	use cf_chains::dot::api::PolkadotApi;
+
+	use super::*;
+
+	pub struct DummyBroadcaster;
+
+	impl cf_traits::Broadcaster<Polkadot> for DummyBroadcaster {
+		type ApiCall = PolkadotApi<chainflip::DotEnvironment>;
+
+		fn threshold_sign_and_broadcast(_api_call: Self::ApiCall) {
+			todo!("Configure a real broadcaster for polkadot.")
+		}
+	}
+}
+
+#[cfg(feature = "ibiza")]
+impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
+	type Event = Event;
+	type TargetChain = Polkadot;
+	type AddressDerivation = AddressDerivation;
+	type LpProvisioning = LiquidityProvider;
+	type SwapIntentHandler = Swapping;
+	type AllBatch = dot::api::PolkadotApi<chainflip::DotEnvironment>;
+	type Broadcaster = polkdadot_dummy::DummyBroadcaster;
+	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
+}
+
+#[cfg(feature = "ibiza")]
 impl pallet_cf_lp::Config for Runtime {
 	type Event = Event;
 	type AccountRoleRegistry = AccountRoles;
-	type Ingress = EthereumIngressEgress;
-	type EgressApi = EthereumIngressEgress;
+	type IngressHandler = chainflip::AnyChainIngressEgressHandler;
+	type EgressHandler = chainflip::AnyChainIngressEgressHandler;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 }
 
@@ -612,6 +645,7 @@ construct_runtime!(
 		EthereumBroadcaster: pallet_cf_broadcast::<Instance1>,
 		EthereumChainTracking: pallet_cf_chain_tracking::<Instance1>,
 		EthereumIngressEgress: pallet_cf_ingress_egress::<Instance1>,
+		PolkadotIngressEgress: pallet_cf_ingress_egress::<Instance2>,
 		Swapping: pallet_cf_swapping,
 		LiquidityProvider: pallet_cf_lp,
 	}

@@ -1,7 +1,7 @@
 #[cfg(feature = "runtime-benchmarks")]
 use cf_primitives::{
 	chains::assets::{dot, eth},
-	Asset,
+	Asset, ForeignChainAddress,
 };
 
 /// Ensure type specifies a value to be used for benchmarking purposes.
@@ -45,6 +45,13 @@ impl BenchmarkValue for eth::Asset {
 impl BenchmarkValue for dot::Asset {
 	fn benchmark_value() -> Self {
 		dot::Asset::Dot
+	}
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue for ForeignChainAddress {
+	fn benchmark_value() -> Self {
+		ForeignChainAddress::Eth(Default::default())
 	}
 }
 
