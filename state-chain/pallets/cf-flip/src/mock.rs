@@ -8,6 +8,7 @@ use frame_support::{
 	traits::{ConstU128, ConstU8, HandleLifetime},
 	weights::{ConstantMultiplier, IdentityFee},
 };
+use frame_system::pallet_prelude::BlockNumberFor;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -149,7 +150,6 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 
 pub type SlashingRateType = Permill;
 pub type Bond = u128;
-pub type BlocksOffline = u64;
 pub type Mint = u128;
 
 #[derive(Clone, Debug)]
@@ -169,6 +169,6 @@ pub enum FlipOperation {
 	ExternalTransferOut(AccountId, FlipBalance),
 	ExternalTransferIn(AccountId, FlipBalance),
 	UpdateStakeAndBond(AccountId, FlipBalance, FlipBalance),
-	SlashAccount(AccountId, SlashingRateType, Bond, BlocksOffline, Mint),
+	SlashAccount(AccountId, SlashingRateType, Bond, Mint, BlockNumberFor<Test>),
 	AccountToAccount(AccountId, AccountId, FlipBalance, FlipBalance),
 }
