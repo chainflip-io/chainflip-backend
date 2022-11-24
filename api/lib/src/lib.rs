@@ -10,6 +10,8 @@ use sp_core::{ed25519::Public as EdPublic, sr25519::Public as SrPublic, Bytes};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use state_chain_runtime::opaque::SessionKeys;
 
+use custom_rpc::CustomApiClient;
+
 pub mod primitives {
 	pub use cf_primitives::*;
 	pub use pallet_cf_governance::ProposalId;
@@ -67,18 +69,15 @@ impl<RawRpcClient: RawRpcApi + Send + Sync + 'static> RotateSessionKeysApi
 pub async fn request_block(
 	block_hash: state_chain_runtime::Hash,
 	state_chain_settings: &settings::StateChain,
-) -> Result<()> {
+) -> Result<state_chain_runtime::SignedBlock> {
 	println!("Querying the state chain for the block with hash {:x?}.", block_hash);
 
 	let state_chain_rpc_client = BaseRpcClient::new(state_chain_settings).await?;
 
-	match state_chain_rpc_client.block(block_hash).await? {
-		Some(block) => {
-			println!("{:#?}", block);
-		},
-		None => println!("Could not find block with block hash {:x?}", block_hash),
-	}
-	Ok(())
+	state_chain_rpc_client
+		.block(block_hash)
+		.await?
+		.ok_or_else(|| anyhow!("unknown block hash"))
 }
 
 pub type ClaimCertificate = Vec<u8>;
@@ -113,7 +112,7 @@ pub async fn request_claim(
 	atomic_amount: u128,
 	eth_address: [u8; 20],
 	state_chain_settings: &settings::StateChain,
-) -> Result<ClaimCertificate> {
+) -> Result<H256> {
 	task_scope(|scope| {
 		async {
 			let logger = new_discard_logger();
@@ -139,27 +138,43 @@ pub async fn request_claim(
 			.await
 			.map_err(|_| anyhow!("invalid claim"))?;
 
-			println!(
-			"Your claim has transaction hash: `{:#x}`. Waiting for your request to be confirmed...",
-			tx_hash
-		);
+			Ok(tx_hash)
+		}
+		.boxed()
+	})
+	.await
+}
 
-			println!("Your claim request is on chain.\nWaiting for signed claim data...");
+/// Get claim certificate by polling the State Chain.
+/// Returns `None` if no certificate is detected after polling
+/// for `blocks_to_poll_limit` blocks.
+pub async fn poll_for_claim_certificate(
+	state_chain_settings: &settings::StateChain,
+	blocks_to_poll_limit: usize,
+) -> Result<Option<ClaimCertificate>> {
+	task_scope(|scope| {
+		async {
+			let logger = new_discard_logger();
+			let (_block_hash, mut block_stream, state_chain_client) =
+				StateChainClient::new(scope, state_chain_settings, false, &logger).await?;
 
-			while let Some(header) = block_stream.next().await {
-				let block_hash = header.hash();
-				let events = state_chain_client
-					.storage_value::<frame_system::Events<state_chain_runtime::Runtime>>(block_hash)
-					.await?;
-				for event_record in events {
-					if let state_chain_runtime::Event::Staking(
-						pallet_cf_staking::Event::ClaimSignatureIssued(validator_id, claim_cert),
-					) = event_record.event
-					{
-						if validator_id == state_chain_client.account_id() {
-							return Ok(claim_cert)
-						}
-					}
+			let account_id = state_chain_client.account_id();
+
+			let mut blocks_polled = 0;
+
+			while let Some(_result_header) = block_stream.next().await {
+				if let Some(certificate) = state_chain_client
+					.base_rpc_client
+					.raw_rpc_client
+					.cf_get_claim_certificate(account_id.clone(), None)
+					.await?
+				{
+					return Ok(Some(certificate))
+				}
+
+				blocks_polled += 1;
+				if blocks_polled >= blocks_to_poll_limit {
+					return Ok(None)
 				}
 			}
 
@@ -255,7 +270,7 @@ pub async fn register_account_role(
 	.await
 }
 
-pub async fn rotate_keys(state_chain_settings: &settings::StateChain) -> Result<()> {
+pub async fn rotate_keys(state_chain_settings: &settings::StateChain) -> Result<H256> {
 	task_scope(|scope| {
 		async {
 			let logger = new_discard_logger();
@@ -285,8 +300,7 @@ pub async fn rotate_keys(state_chain_settings: &settings::StateChain) -> Result<
 				.await
 				.expect("Failed to submit set_keys extrinsic");
 
-			println!("Session key rotated at tx {:#x}.", tx_hash);
-			Ok(())
+			Ok(tx_hash)
 		}
 		.boxed()
 	})

@@ -5,6 +5,7 @@ pub mod api;
 #[cfg(feature = "runtime-benchmarks")]
 pub mod benchmarking;
 
+use cf_primitives::KeyId;
 pub use cf_primitives::{chains::Polkadot, PolkadotAccountId};
 
 use sp_core::{sr25519, H256};
@@ -110,6 +111,7 @@ impl Chain for Polkadot {
 }
 
 impl ChainCrypto for Polkadot {
+	type KeyId = KeyId;
 	type AggKey = PolkadotPublicKey;
 	type Payload = EncodedPolkadotPayload;
 	type ThresholdSignature = PolkadotSignature;
@@ -726,6 +728,12 @@ impl SignedExtension for PolkadotSignedExtra {
 
 #[derive(Ord, PartialOrd, Debug, Encode, Decode, Copy, Clone, Eq, PartialEq, TypeInfo)]
 pub struct PolkadotPublicKey(pub sr25519::Public);
+
+impl Default for PolkadotPublicKey {
+	fn default() -> Self {
+		vec![0; 32].try_into().unwrap()
+	}
+}
 
 impl TryFrom<Vec<u8>> for PolkadotPublicKey {
 	type Error = ();

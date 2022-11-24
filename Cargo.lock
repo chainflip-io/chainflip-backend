@@ -932,6 +932,7 @@ dependencies = [
  "cf-primitives",
  "chainflip-engine",
  "chainflip-node",
+ "custom-rpc",
  "frame-system",
  "futures 0.3.21",
  "hex",

@@ -30,7 +30,7 @@ where
 		Self::get_value(LAST_REQ_ID)
 	}
 
-	pub fn signature_result_last_requested(
+	pub fn execute_signature_result_against_last_request(
 		signature_result: Result<<C as ChainCrypto>::ThresholdSignature, Vec<MockValidatorId>>,
 	) {
 		let last_request_id = Self::last_request_id().unwrap();
