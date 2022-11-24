@@ -328,8 +328,9 @@ pub trait EmergencyRotation {
 pub trait Slashing {
 	type AccountId;
 	type BlockNumber;
-	/// Slashes a validator for being offline for the duration of one Heartbeat interval.
-	fn slash(validator_id: &Self::AccountId);
+
+	/// Slashes a validator for the equivalent of some number of blocks offline.
+	fn slash(validator_id: &Self::AccountId, blocks_offline: Self::BlockNumber);
 }
 
 /// Can nominate a single account.

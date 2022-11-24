@@ -8,6 +8,7 @@ use frame_support::{
 	traits::{ConstU128, ConstU8, HandleLifetime},
 	weights::{ConstantMultiplier, IdentityFee},
 };
+use frame_system::pallet_prelude::BlockNumberFor;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -168,6 +169,6 @@ pub enum FlipOperation {
 	ExternalTransferOut(AccountId, FlipBalance),
 	ExternalTransferIn(AccountId, FlipBalance),
 	UpdateStakeAndBond(AccountId, FlipBalance, FlipBalance),
-	SlashAccount(AccountId, SlashingRateType, Bond, Mint),
+	SlashAccount(AccountId, SlashingRateType, Bond, Mint, BlockNumberFor<Test>),
 	AccountToAccount(AccountId, AccountId, FlipBalance, FlipBalance),
 }

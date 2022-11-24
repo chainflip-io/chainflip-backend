@@ -95,9 +95,9 @@ where
 			offence.time_slot().encode(),
 		);
 
-		// TODO: Consider if we want to slash immediately here, or whether we want to use the
-		// reputation system.
-		// T::Slasher::slash(&offender);
+		// TODO: Reconsider the slashing rate here. For now we assume we are reporting the node
+		// for equivocation, and that each report corresponds to equivocation on a single block.
+		T::Slasher::slash(&offender, 1u32.into());
 
 		Pallet::<T>::report(offence, offender);
 		Ok(())

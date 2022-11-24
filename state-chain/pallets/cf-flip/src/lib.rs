@@ -29,7 +29,7 @@ use frame_support::{
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use sp_runtime::{
-	traits::{AtLeast32BitUnsigned, MaybeSerializeDeserialize, UniqueSaturatedInto},
+	traits::{AtLeast32BitUnsigned, MaybeSerializeDeserialize, Saturating, UniqueSaturatedInto},
 	DispatchError, Permill, RuntimeDebug,
 };
 use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
@@ -178,8 +178,7 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Set the Slashing Rate. Slashing Rate is a percentage. It, therefore, has to be between 0
-		/// and 100.
+		/// Set the PER BLOCK slashing rate.
 		///
 		/// The dispatch origin of this function must be governance
 		///
@@ -571,18 +570,18 @@ impl<T: Config> OnKilledAccount<T::AccountId> for BurnFlipAccount<T> {
 }
 
 pub struct FlipSlasher<T: Config>(PhantomData<T>);
-/// An implementation of `Slashing` for Flip
+
 impl<T, B> Slashing for FlipSlasher<T>
 where
 	T: Config<BlockNumber = B>,
-	B: UniqueSaturatedInto<T::Balance>,
+	B: UniqueSaturatedInto<T::Balance> + Into<T::Balance>,
 {
 	type AccountId = T::AccountId;
 	type BlockNumber = B;
 
-	fn slash(account_id: &Self::AccountId) {
+	fn slash(account_id: &Self::AccountId, blocks: Self::BlockNumber) {
 		let account = Account::<T>::get(account_id);
-		let slash_amount = SlashingRate::<T>::get() * account.bond;
+		let slash_amount = (SlashingRate::<T>::get() * account.bond).saturating_mul(blocks.into());
 		if account.can_be_slashed(slash_amount) {
 			Pallet::<T>::settle(account_id, Pallet::<T>::burn(slash_amount).into());
 			Pallet::<T>::deposit_event(Event::<T>::SlashingPerformed {

@@ -100,7 +100,7 @@ impl Slashing for MockSlasher {
 	type AccountId = ValidatorId;
 	type BlockNumber = u64;
 
-	fn slash(validator_id: &Self::AccountId) {
+	fn slash(validator_id: &Self::AccountId, _blocks: Self::BlockNumber) {
 		// Count those slashes
 		SLASHES.with(|count| {
 			count.borrow_mut().push(*validator_id);

@@ -455,7 +455,7 @@ impl<T: Config> Pallet<T> {
 			});
 
 			if reputation_points < 0 {
-				T::Slasher::slash(&validator_id);
+				T::Slasher::slash(&validator_id, T::HeartbeatBlockInterval::get());
 			}
 		}
 	}
