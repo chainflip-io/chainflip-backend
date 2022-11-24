@@ -8,14 +8,13 @@ use rand::{rngs::StdRng, Rng, SeedableRng};
 use crate::GENESIS_KEY_SEED;
 
 #[derive(Clone)]
-pub struct KeyComponents<SecretKey, PublicKey, AggKey> {
+pub struct KeyComponents<SecretKey, AggKey> {
 	pub seed: u64,
 	pub secret: SecretKey,
-	pub public_key: PublicKey,
 	pub agg_key: AggKey,
 }
 
-pub type EthKeyComponents = KeyComponents<SecretKey, PublicKey, AggKey>;
+pub type EthKeyComponents = KeyComponents<SecretKey, AggKey>;
 
 pub trait KeyUtils {
 	type SigVerification;
@@ -56,12 +55,12 @@ impl KeyUtils for EthKeyComponents {
 	fn generate_keypair(seed: u64) -> Self {
 		let agg_key_priv: [u8; 32] = StdRng::seed_from_u64(seed).gen();
 		let secret = SecretKey::parse(&agg_key_priv).unwrap();
-		let public_key = PublicKey::from_secret_key(&secret);
 		KeyComponents {
 			seed,
 			secret,
-			public_key,
-			agg_key: AggKey::from_pubkey_compressed(public_key.serialize_compressed()),
+			agg_key: AggKey::from_pubkey_compressed(
+				PublicKey::from_secret_key(&secret).serialize_compressed(),
+			),
 		}
 	}
 
