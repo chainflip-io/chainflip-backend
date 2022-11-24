@@ -3,9 +3,9 @@ use cf_test_utilities::last_event;
 use cf_traits::{
 	mocks::{
 		reputation_resetter::MockReputationResetter, system_state_info::MockSystemStateInfo,
-		vault_rotation::MockVaultRotator,
+		vault_rotator::MockVaultRotator,
 	},
-	AuctionOutcome, SystemStateInfo, VaultRotator,
+	AuctionOutcome, SystemStateInfo,
 };
 use frame_support::{assert_noop, assert_ok};
 use frame_system::RawOrigin;
@@ -18,15 +18,15 @@ fn assert_epoch_index(n: EpochIndex) {
 	assert_eq!(
 		ValidatorPallet::epoch_index(),
 		n,
-		"we should be in epoch {n:?}. Rotation status is {:?}, VaultRotator says {:?} / {:?}",
+		"we should be in epoch {n:?}. VaultRotator says {:?} / {:?}",
 		CurrentRotationPhase::<Test>::get(),
-		MockVaultRotator::get_vault_rotation_outcome(),
-		<Test as crate::Config>::VaultRotator::get_vault_rotation_outcome()
+		<Test as crate::Config>::VaultRotator::status()
 	);
 }
 
 macro_rules! assert_default_rotation_outcome {
 	() => {
+		assert!(matches!(CurrentRotationPhase::<Test>::get(), RotationPhase::<Test>::Idle));
 		assert_epoch_index(GENESIS_EPOCH + 1);
 		assert_eq!(Bond::<Test>::get(), BOND, "bond should be updated");
 		assert_eq!(ValidatorPallet::current_authorities(), AUCTION_WINNERS.to_vec());
@@ -77,14 +77,14 @@ fn should_request_emergency_rotation() {
 		<ValidatorPallet as EmergencyRotation>::request_emergency_rotation();
 		assert!(matches!(
 			CurrentRotationPhase::<Test>::get(),
-			RotationPhase::<Test>::VaultsRotating(..)
+			RotationPhase::<Test>::KeygensInProgress(..)
 		));
 
 		// Once we've passed the Idle phase, requesting an emergency rotation should have no
 		// effect on the rotation status.
 		for status in [
-			RotationPhase::<Test>::VaultsRotating(Default::default()),
-			RotationPhase::<Test>::VaultsRotated(Default::default()),
+			RotationPhase::<Test>::KeygensInProgress(Default::default()),
+			RotationPhase::<Test>::NewKeysActivated(Default::default()),
 			RotationPhase::<Test>::SessionRotating(Default::default()),
 		] {
 			CurrentRotationPhase::<Test>::put(&status);
@@ -101,6 +101,7 @@ fn should_retry_rotation_until_success_with_failing_auctions() {
 		run_to_block(EPOCH_DURATION);
 		// Move forward a few blocks, the auction will be failing
 		move_forward_blocks(100);
+
 		assert_epoch_index(GENESIS_EPOCH);
 		assert_eq!(CurrentRotationPhase::<Test>::get(), RotationPhase::<Test>::Idle);
 
@@ -110,13 +111,19 @@ fn should_retry_rotation_until_success_with_failing_auctions() {
 		move_forward_blocks(1);
 		assert!(matches!(
 			CurrentRotationPhase::<Test>::get(),
-			RotationPhase::<Test>::VaultsRotating(..)
+			RotationPhase::<Test>::KeygensInProgress(..)
 		));
-
-		while CurrentRotationPhase::<Test>::get() != RotationPhase::<Test>::Idle {
-			move_forward_blocks(1);
-		}
-		assert_epoch_index(GENESIS_EPOCH + 1);
+		MockVaultRotator::keygen_success();
+		// TODO: Needs to be clearer why this is 2 blocks and not 1
+		move_forward_blocks(2);
+		assert!(matches!(
+			CurrentRotationPhase::<Test>::get(),
+			RotationPhase::<Test>::ActivatingKeys(..)
+		));
+		MockVaultRotator::keys_activated();
+		// TODO: Needs to be clearer why this is 2 blocks and not 1
+		move_forward_blocks(2);
+		assert_default_rotation_outcome!();
 	});
 }
 
@@ -139,7 +146,7 @@ fn should_rotate_when_forced() {
 		assert_ok!(ValidatorPallet::force_rotation(Origin::root()));
 		assert!(matches!(
 			CurrentRotationPhase::<Test>::get(),
-			RotationPhase::<Test>::VaultsRotating(..)
+			RotationPhase::<Test>::KeygensInProgress(..)
 		));
 		assert_noop!(
 			ValidatorPallet::force_rotation(Origin::root()),
@@ -167,12 +174,18 @@ fn auction_winners_should_be_the_new_authorities_on_new_epoch() {
 
 		assert!(matches!(
 			CurrentRotationPhase::<Test>::get(),
-			RotationPhase::<Test>::VaultsRotating(..)
+			RotationPhase::<Test>::KeygensInProgress(..)
 		));
-		while ValidatorPallet::epoch_index() == GENESIS_EPOCH {
-			move_forward_blocks(1);
-		}
-
+		MockVaultRotator::keygen_success();
+		// TODO: Needs to be clearer why this is 2 blocks and not 1
+		move_forward_blocks(2);
+		assert!(matches!(
+			CurrentRotationPhase::<Test>::get(),
+			RotationPhase::<Test>::ActivatingKeys(..)
+		));
+		MockVaultRotator::keys_activated();
+		// TODO: Needs to be clearer why this is 2 blocks and not 1
+		move_forward_blocks(2);
 		assert_default_rotation_outcome!();
 	});
 }
@@ -496,7 +509,7 @@ fn no_auction_during_maintenance() {
 		ValidatorPallet::start_authority_rotation();
 		assert!(matches!(
 			CurrentRotationPhase::<Test>::get(),
-			RotationPhase::<Test>::VaultsRotating(..)
+			RotationPhase::<Test>::KeygensInProgress(..)
 		));
 	});
 }
@@ -509,14 +522,14 @@ fn rotating_during_rotation_is_noop() {
 		// We attempt an auction when we force a rotation
 		assert!(matches!(
 			CurrentRotationPhase::<Test>::get(),
-			RotationPhase::<Test>::VaultsRotating(..)
+			RotationPhase::<Test>::KeygensInProgress(..)
 		));
 
 		// We don't attempt the auction again, because we're already in a rotation
 		ValidatorPallet::request_emergency_rotation();
 		assert!(matches!(
 			CurrentRotationPhase::<Test>::get(),
-			RotationPhase::<Test>::VaultsRotating(..)
+			RotationPhase::<Test>::KeygensInProgress(..)
 		));
 	});
 }

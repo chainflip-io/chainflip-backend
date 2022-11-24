@@ -12,8 +12,9 @@ pub use async_result::AsyncResult;
 use sp_std::collections::btree_set::BTreeSet;
 
 use cf_chains::{
-	benchmarking_value::BenchmarkValue, ApiCall, Chain, ChainAbi, ChainCrypto, Ethereum, Polkadot,
+	benchmarking_value::BenchmarkValue, ApiCall, Chain, ChainAbi, ChainCrypto, Ethereum,
 };
+
 use cf_primitives::{
 	AccountRole, Asset, AssetAmount, AuthorityCount, CeremonyId, EpochIndex, ForeignChainAddress,
 	IntentId,
@@ -158,17 +159,28 @@ impl<CandidateId, BidAmount: Default> Default for AuctionOutcome<CandidateId, Bi
 	}
 }
 
+#[derive(PartialEq, Eq, Clone, Debug, Decode, Encode)]
+pub enum VaultStatus<ValidatorId> {
+	KeygenComplete,
+	RotationComplete,
+	Failed(BTreeSet<ValidatorId>),
+}
+
 pub trait VaultRotator {
-	type ValidatorId;
+	type ValidatorId: Ord + Clone;
 
-	/// Start a vault rotation with the provided `candidates`.
-	fn start_vault_rotation(candidates: BTreeSet<Self::ValidatorId>);
+	/// Start the rotation by kicking off keygen with provided candidates.
+	fn keygen(candidates: BTreeSet<Self::ValidatorId>);
 
-	/// Poll for the vault rotation outcome.
-	fn get_vault_rotation_outcome() -> AsyncResult<Result<(), BTreeSet<Self::ValidatorId>>>;
+	/// Get the current rotation status.
+	fn status() -> AsyncResult<VaultStatus<Self::ValidatorId>>;
+
+	/// Activate key/s on particular chain/s. For example, setting the new key
+	/// on the contract for a smart contract chain.
+	fn activate();
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn set_vault_rotation_outcome(_outcome: AsyncResult<Result<(), BTreeSet<Self::ValidatorId>>>) {
+	fn set_status(_outcome: AsyncResult<VaultStatus<Self::ValidatorId>>) {
 		unimplemented!()
 	}
 }
@@ -354,16 +366,30 @@ pub trait ThresholdSignerNomination {
 	) -> Option<BTreeSet<Self::SignerId>>;
 }
 
+#[derive(Default, Debug, TypeInfo, Decode, Encode, Clone, Copy, PartialEq, Eq)]
+pub enum KeyState<Key> {
+	Active {
+		key: Key,
+		epoch_index: EpochIndex,
+	},
+	// We are currently transitioning to a new key or the key doesn't yet exist.
+	#[default]
+	Unavailable,
+}
+
+impl<Key> KeyState<Key> {
+	pub fn unwrap_key(self) -> Key {
+		match self {
+			Self::Active { key: key_id, epoch_index: _ } => key_id,
+			Self::Unavailable => panic!("KeyState is Unavailable!"),
+		}
+	}
+}
+
 /// Provides the currently valid key for multisig ceremonies.
 pub trait KeyProvider<C: ChainCrypto> {
-	/// The type of the provided key_id.
-	type KeyId;
-
-	/// Gets the key id and epoch index for the current vault key.
-	fn current_key_id_epoch_index() -> (Self::KeyId, EpochIndex);
-
-	/// Get the chain's current agg key.
-	fn current_key() -> C::AggKey;
+	/// Get the chain's current agg key and the epoch index for the current key.
+	fn current_key_epoch_index() -> KeyState<C::AggKey>;
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_key(_key: C::AggKey) {
@@ -638,6 +664,10 @@ impl AddressDerivationApi<Ethereum> for () {
 	}
 }
 
+#[cfg(feature = "ibiza")]
+use cf_chains::Polkadot;
+
+#[cfg(feature = "ibiza")]
 impl AddressDerivationApi<Polkadot> for () {
 	fn generate_address(
 		_ingress_asset: <Polkadot as Chain>::ChainAsset,
