@@ -7,6 +7,7 @@ use serde::Deserialize;
 use std::collections::HashMap;
 
 #[derive(Parser, Clone, Debug)]
+#[clap(version = env!("SUBSTRATE_CLI_IMPL_VERSION"))]
 pub struct CLICommandLineOptions {
 	#[clap(short = 'c', long = "config-path")]
 	config_path: Option<String>,

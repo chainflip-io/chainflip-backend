@@ -23,7 +23,7 @@ pub mod staking_info;
 pub mod system_state_info;
 pub mod threshold_signer;
 pub mod time_source;
-pub mod vault_rotation;
+pub mod vault_rotator;
 pub mod waived_fees_mock;
 
 trait MockPallet {

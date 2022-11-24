@@ -130,7 +130,7 @@ impl ExtBuilder {
 				max_expansion: self.max_authorities,
 			},
 			ethereum_vault: EthereumVaultConfig {
-				vault_key: ethereum_vault_key,
+				vault_key: Some(ethereum_vault_key),
 				deployment_block: 0,
 				keygen_response_timeout: 4,
 			},
