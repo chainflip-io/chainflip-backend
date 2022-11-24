@@ -1,0 +1,93 @@
+version: "3.8"
+
+services:
+  node:
+    container_name: chainflip-node
+    healthcheck:
+      test: ["CMD-SHELL", "netcat -z localhost 9615"]
+      retries: 10
+      interval: 5s
+      timeout: 5s
+    build:
+      dockerfile: validator.Dockerfile
+      context: .
+      args:
+        - COMMIT_HASH
+        - REPO_USERNAME
+        - REPO_PASSWORD
+    platform: linux/amd64
+    ports:
+      - "9944:9944"
+    env_file:
+      - init/env/eth.env
+      - init/env/secrets.env
+    volumes:
+      - ./init/keys:/etc/chainflip/keys
+      - ./init/start.sh:/start.sh
+    command:
+      - /start.sh
+  engine:
+    container_name: chainflip-engine
+    env_file:
+      - init/env/secrets.env
+    build:
+      dockerfile: validator.Dockerfile
+      context: .
+      args:
+        - COMMIT_HASH
+        - REPO_USERNAME
+        - REPO_PASSWORD
+    platform: linux/amd64
+    restart: unless-stopped
+    depends_on:
+      node:
+        condition: service_healthy
+      geth:
+        condition: service_healthy
+    volumes:
+      - ./init/keys:/etc/chainflip/keys
+      - ./init/config:/etc/chainflip/
+    command:
+      - chainflip-engine
+      - -c=/etc/chainflip/config/Docker.toml
+  geth:
+    image: ghcr.io/chainflip-io/geth:perseverance-rc2
+    pull_policy: always
+    container_name: geth
+    restart: unless-stopped
+    env_file:
+      - init/env/secrets.env
+    ports:
+      - 30303:30303
+      - 30303:30303/udp
+      - 8545:8545
+      - 8546:8546
+      - 8551:8551
+    stop_signal: SIGINT
+    stop_grace_period: 2m
+    healthcheck:
+      test: ["CMD-SHELL", "echo hi"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command:
+      - --datadir=/geth/data
+      - --networkid=10997
+      - --allow-insecure-unlock
+      - --unlock=0xa994738936572Fb88564d69134F67Aaa7C7d4A6E
+      - --password=$$GETH_PASSWORD
+      - --mine
+      - --miner.threads=1
+      - --nodiscover
+      - --gcmode=archive
+      - --http
+      - --http.addr=0.0.0.0
+      - --http.vhosts=*
+      - --http.corsdomain=*
+      - --http.api="web3,eth,debug"
+      - --rpc.allow-unprotected-txs
+      - --nodiscover
+      - --ws
+      - --ws.addr=0.0.0.0
+      - --ws.origins=*
+      - --ws.api="web3,eth,debug"
