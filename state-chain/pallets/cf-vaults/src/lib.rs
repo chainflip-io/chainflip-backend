@@ -8,7 +8,8 @@ use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, Broadcaster, CeremonyIdProvider, Chainflip,
 	CurrentEpochIndex, EpochTransitionHandler, EthEnvironmentProvider, KeyProvider,
-	ReplayProtectionProvider, RetryPolicy, SystemStateManager, ThresholdSigner, VaultRotator,
+	ReplayProtectionProvider, RetryPolicy, Slashing, SystemStateManager, ThresholdSigner,
+	VaultRotator,
 };
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
@@ -206,6 +207,7 @@ pub enum PalletOffence {
 pub mod pallet {
 
 	use cf_traits::{AccountRoleRegistry, ThresholdSigner};
+	use sp_runtime::Percent;
 
 	use super::*;
 
@@ -255,6 +257,8 @@ pub mod pallet {
 			ValidatorId = Self::ValidatorId,
 			Offence = Self::Offence,
 		>;
+
+		type Slasher: Slashing<AccountId = Self::ValidatorId, BlockNumber = Self::BlockNumber>;
 
 		/// Ceremony Id source for keygen ceremonies.
 		type CeremonyIdProvider: CeremonyIdProvider<CeremonyId = CeremonyId>;
@@ -383,6 +387,11 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(super) type KeygenResponseTimeout<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, BlockNumberFor<T>, ValueQuery>;
+
+	// START PERSEVERANCE-ONLY *****
+	#[pallet::storage]
+	pub(super) type KeygenSlashRate<T, I = ()> = StorageValue<_, Percent, ValueQuery>;
+	// END PERSEVERANCE-ONLY *****
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
@@ -680,6 +689,17 @@ pub mod pallet {
 
 			Ok(().into())
 		}
+		#[pallet::weight(T::WeightInfo::set_keygen_timeout())]
+		pub fn set_keygen_slash_rate(
+			origin: OriginFor<T>,
+			percent_of_stake: Percent,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			KeygenSlashRate::<T, I>::put(percent_of_stake);
+
+			Ok(().into())
+		}
 	}
 
 	#[pallet::genesis_config]
@@ -777,6 +797,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	fn terminate_keygen_procedure(offenders: &[T::ValidatorId], event: Event<T, I>) {
 		T::OffenceReporter::report_many(PalletOffence::FailedKeygen, offenders);
+		// *** START Perseverance Only ***
+		for offender in offenders {
+			T::Slasher::slash_stake(offender, KeygenSlashRate::<T, I>::get());
+		}
+		// *** END Perseverance Only ***
 		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Failed {
 			offenders: offenders.iter().cloned().collect(),
 		});

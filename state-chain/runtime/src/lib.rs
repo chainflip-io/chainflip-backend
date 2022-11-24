@@ -206,6 +206,8 @@ impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 	type ReplayProtectionProvider = chainflip::EthReplayProtectionProvider;
 	type EthEnvironmentProvider = Environment;
 	type SystemStateManager = pallet_cf_environment::SystemStateProvider<Runtime>;
+	// Perseverance only //
+	type Slasher = FlipSlasher<Self>;
 }
 
 #[cfg(feature = "ibiza")]
