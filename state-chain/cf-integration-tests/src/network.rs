@@ -110,11 +110,6 @@ impl Cli {
 	}
 }
 
-pub enum EngineState {
-	None,
-	Rotation,
-}
-
 // Engine monitoring contract
 pub struct Engine {
 	pub node_id: NodeId,
@@ -122,12 +117,16 @@ pub struct Engine {
 	// conveniently creates a threshold "signature" (not really)
 	// all engines have the same one, so they create the same sig
 	pub eth_threshold_signer: Rc<RefCell<EthThresholdSigner>>,
-	pub engine_state: EngineState,
+	pub dot_threshold_signer: Rc<RefCell<DotThresholdSigner>>,
 }
 
 impl Engine {
-	fn new(node_id: NodeId, eth_threshold_signer: Rc<RefCell<EthThresholdSigner>>) -> Self {
-		Engine { node_id, live: true, eth_threshold_signer, engine_state: EngineState::None }
+	fn new(
+		node_id: NodeId,
+		eth_threshold_signer: Rc<RefCell<EthThresholdSigner>>,
+		dot_threshold_signer: Rc<RefCell<DotThresholdSigner>>,
+	) -> Self {
+		Engine { node_id, live: true, eth_threshold_signer, dot_threshold_signer }
 	}
 
 	fn state(&self) -> ChainflipAccountState {
@@ -206,7 +205,6 @@ impl Engine {
 					},
 					Event::Validator(
 						pallet_cf_validator::Event::RotationPhaseUpdated { new_phase: RotationPhase::ActivatingKeys(_) }) => {
-							if let EngineState::Rotation = self.engine_state {
 								// If we rotating let's witness the keys being rotated on the contract
 								let _result = state_chain_runtime::Witnesser::witness_at_epoch(
 									Origin::signed(self.node_id.clone()),
@@ -217,13 +215,6 @@ impl Engine {
 									}.into()),
 									Validator::epoch_index()
 								);
-							}
-					},
-					Event::EthereumVault(pallet_cf_vaults::Event::KeygenSuccess(..)) => {
-						self.engine_state = EngineState::Rotation;
-					},
-					Event::EthereumVault(pallet_cf_vaults::Event::VaultRotationCompleted) => {
-						self.engine_state = EngineState::None;
 					},
 				);
 			}
