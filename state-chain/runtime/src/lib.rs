@@ -22,9 +22,6 @@ use cf_chains::{
 	eth::{api::register_claim::RegisterClaim, Ethereum},
 };
 
-#[cfg(feature = "ibiza")]
-use cf_chains::{dot, Polkadot};
-
 use pallet_cf_validator::BidInfoProvider;
 
 pub use frame_support::{

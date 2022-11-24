@@ -359,7 +359,7 @@ pub mod pallet {
 		pub fn on_signature_ready(
 			origin: OriginFor<T>,
 			threshold_request_id: <T::ThresholdSigner as ThresholdSigner<T::TargetChain>>::RequestId,
-			api_call: <T as Config<I>>::ApiCall,
+			api_call: Box<<T as Config<I>>::ApiCall>,
 		) -> DispatchResultWithPostInfo {
 			let _ = T::EnsureThresholdSigned::ensure_origin(origin)?;
 
@@ -377,7 +377,7 @@ pub mod pallet {
 			Self::start_broadcast(
 				&signature,
 				T::TransactionBuilder::build_transaction(&api_call.clone().signed(&signature)),
-				api_call,
+				*api_call,
 			);
 			Ok(().into())
 		}
@@ -468,7 +468,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn threshold_sign_and_broadcast(api_call: <T as Config<I>>::ApiCall) {
 		T::ThresholdSigner::request_signature_with_callback(
 			api_call.threshold_signature_payload(),
-			|id| Call::on_signature_ready { threshold_request_id: id, api_call }.into(),
+			|id| {
+				Call::on_signature_ready { threshold_request_id: id, api_call: Box::new(api_call) }
+					.into()
+			},
 		);
 	}
 
