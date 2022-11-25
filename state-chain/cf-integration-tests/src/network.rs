@@ -297,7 +297,6 @@ impl Engine {
 			on_events!(
 				events,
 				Event::EthereumVault(
-					// A keygen request has been made
 					pallet_cf_vaults::Event::KeygenRequest(ceremony_id, participants)) => {
 						report_keygen_outcome_for_chain::<EthKeyComponents, SchnorrVerificationComponents, state_chain_runtime::Runtime, EthereumInstance>(*ceremony_id, participants, self.eth_threshold_signer.clone(), self.node_id.clone());
 				}
