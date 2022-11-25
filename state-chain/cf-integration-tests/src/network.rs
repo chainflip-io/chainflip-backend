@@ -276,16 +276,10 @@ impl Engine {
 				<T as frame_system::Config>::Origin: From<state_chain_runtime::Origin>,
 			{
 				if authorities.contains(&node_id) {
-					threshold_signer.borrow_mut().propose_new_public_key();
-					let threshold_signer = threshold_signer.borrow();
-					let proposed_key_components = threshold_signer
-						.proposed_key_components
-						.as_ref()
-						.expect("should have propposed key");
 					pallet_cf_vaults::Pallet::<T, I>::report_keygen_outcome(
 						Origin::signed(node_id.clone()).into(),
 						ceremony_id,
-						Ok(proposed_key_components.agg_key()),
+						Ok(threshold_signer.borrow_mut().propose_new_public_key()),
 					)
 					.unwrap_or_else(|_| {
 						panic!("should be able to report keygen outcome from node: {}", node_id)

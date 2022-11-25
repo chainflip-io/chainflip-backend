@@ -82,8 +82,8 @@ impl KeyUtils for EthKeyComponents {
 }
 
 pub struct ThresholdSigner<KeyComponents, SigVerification> {
-	pub key_components: KeyComponents,
-	pub proposed_key_components: Option<KeyComponents>,
+	key_components: KeyComponents,
+	proposed_key_components: Option<KeyComponents>,
 	_phantom: PhantomData<SigVerification>,
 }
 
@@ -112,8 +112,10 @@ where
 	}
 
 	pub fn propose_new_public_key(&mut self) -> AggKey {
-		self.proposed_key_components = Some(KeyComponents::generate_next(&self.key_components));
-		self.proposed_public_key()
+		let new_key = KeyComponents::generate_next(&self.key_components);
+		let agg_key = new_key.agg_key();
+		self.proposed_key_components = Some(new_key);
+		agg_key
 	}
 
 	// Rotate to the current proposed key and clear the proposed key
