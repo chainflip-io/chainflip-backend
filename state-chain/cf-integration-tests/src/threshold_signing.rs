@@ -31,9 +31,9 @@ pub trait KeyUtils {
 
 	fn key_id(&self) -> KeyId;
 
-	fn generate_keypair(seed: u64) -> Self;
+	fn generate(seed: u64) -> Self;
 
-	fn generate_next_key_pair(&self) -> Self;
+	fn generate_next(&self) -> Self;
 
 	fn agg_key(&self) -> Self::AggKey;
 }
@@ -59,8 +59,7 @@ impl KeyUtils for EthKeyComponents {
 		self.agg_key.to_pubkey_compressed().to_vec()
 	}
 
-	// Generate a keypair with seed
-	fn generate_keypair(seed: u64) -> Self {
+	fn generate(seed: u64) -> Self {
 		let agg_key_priv: [u8; 32] = StdRng::seed_from_u64(seed).gen();
 		let secret = SecretKey::parse(&agg_key_priv).unwrap();
 		KeyComponents {
@@ -72,9 +71,9 @@ impl KeyUtils for EthKeyComponents {
 		}
 	}
 
-	fn generate_next_key_pair(&self) -> Self {
+	fn generate_next(&self) -> Self {
 		let next_seed = self.seed + 1;
-		Self::generate_keypair(next_seed)
+		Self::generate(next_seed)
 	}
 
 	fn agg_key(&self) -> Self::AggKey {
@@ -113,8 +112,7 @@ where
 	}
 
 	pub fn propose_new_public_key(&mut self) -> AggKey {
-		self.proposed_key_components =
-			Some(KeyComponents::generate_next_key_pair(&self.key_components));
+		self.proposed_key_components = Some(KeyComponents::generate_next(&self.key_components));
 		self.proposed_public_key()
 	}
 
@@ -133,7 +131,7 @@ pub type EthThresholdSigner = ThresholdSigner<EthKeyComponents, SchnorrVerificat
 impl Default for EthThresholdSigner {
 	fn default() -> Self {
 		ThresholdSigner {
-			key_components: EthKeyComponents::generate_keypair(GENESIS_KEY_SEED),
+			key_components: EthKeyComponents::generate(GENESIS_KEY_SEED),
 			proposed_key_components: None,
 			_phantom: PhantomData,
 		}
@@ -147,7 +145,7 @@ pub type DotThresholdSigner = ThresholdSigner<DotKeyComponents, PolkadotSignatur
 impl Default for DotThresholdSigner {
 	fn default() -> Self {
 		Self {
-			key_components: DotKeyComponents::generate_keypair(GENESIS_KEY_SEED),
+			key_components: DotKeyComponents::generate(GENESIS_KEY_SEED),
 			proposed_key_components: None,
 			_phantom: PhantomData,
 		}
@@ -167,7 +165,7 @@ impl KeyUtils for DotKeyComponents {
 		self.agg_key().0.to_vec()
 	}
 
-	fn generate_keypair(seed: u64) -> Self {
+	fn generate(seed: u64) -> Self {
 		let priv_seed: [u8; 32] = StdRng::seed_from_u64(seed).gen();
 		let keypair: Pair = <Pair as TraitPair>::from_seed(&priv_seed);
 		let agg_key = keypair.public();
@@ -175,9 +173,9 @@ impl KeyUtils for DotKeyComponents {
 		KeyComponents { seed, secret: keypair, agg_key }
 	}
 
-	fn generate_next_key_pair(&self) -> Self {
+	fn generate_next(&self) -> Self {
 		let next_seed = self.seed + 1;
-		Self::generate_keypair(next_seed)
+		Self::generate(next_seed)
 	}
 
 	fn agg_key(&self) -> Self::AggKey {

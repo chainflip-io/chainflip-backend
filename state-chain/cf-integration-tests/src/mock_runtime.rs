@@ -85,7 +85,7 @@ impl ExtBuilder {
 		let mut storage =
 			frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 
-		let key_components = EthKeyComponents::generate_keypair(GENESIS_KEY_SEED);
+		let key_components = EthKeyComponents::generate(GENESIS_KEY_SEED);
 		let ethereum_vault_key = key_components.key_id();
 
 		state_chain_runtime::GenesisConfig {
