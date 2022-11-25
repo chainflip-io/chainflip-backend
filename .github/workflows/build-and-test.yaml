@@ -144,7 +144,7 @@ jobs:
           git diff --exit-code
           git diff --cached --exit-code
 
-  build-ibiza:
+  build-and-test-ibiza:
     runs-on: [hetzner]
     needs: [set-variables, cargo-fmt]
     container:
@@ -167,8 +167,13 @@ jobs:
       #     variant: sccache
       #     save: false
       # - run: sccache --show-stats
-      - run: |
+      - name: cargo ci-build-ibiza
+        run: |
           cargo ci-build-ibiza --locked
+          # sccache --show-stats
+      - name: cargo ci-test-ibiza --locked
+        run: |
+          cargo ci-test-ibiza --locked
           # sccache --show-stats
       - name: Install cargo-deb
         run: cargo install cargo-deb
@@ -308,7 +313,7 @@ jobs:
 
   deb-publish-ibiza:
     name: Publish Ibiza Packages to APT repo
-    needs: [set-variables, build-ibiza]
+    needs: [set-variables, build-and-test-ibiza]
     uses: ./.github/workflows/.deb-publish.yaml
     with:
       artifacts: chainflip-backend-packages-ibiza
