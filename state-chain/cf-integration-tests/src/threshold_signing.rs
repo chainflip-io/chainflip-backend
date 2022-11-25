@@ -16,9 +16,9 @@ use crate::GENESIS_KEY_SEED;
 
 #[derive(Clone)]
 pub struct KeyComponents<SecretKey, AggKey> {
-	pub seed: u64,
-	pub secret: SecretKey,
-	pub agg_key: AggKey,
+	seed: u64,
+	secret: SecretKey,
+	agg_key: AggKey,
 }
 
 pub type EthKeyComponents = KeyComponents<SecretKey, AggKey>;
