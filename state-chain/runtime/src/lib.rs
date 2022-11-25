@@ -737,21 +737,19 @@ construct_runtime!(
 		Grandpa: pallet_grandpa,
 		Governance: pallet_cf_governance,
 		TokenholderGovernance: pallet_cf_tokenholder_governance,
-		EthereumVault: pallet_cf_vaults::<Instance1>,
 		Reputation: pallet_cf_reputation,
-		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>,
-		EthereumBroadcaster: pallet_cf_broadcast::<Instance1>,
 		EthereumChainTracking: pallet_cf_chain_tracking::<Instance1>,
-		EthereumIngressEgress: pallet_cf_ingress_egress::<Instance1>,
-		PolkadotIngressEgress: pallet_cf_ingress_egress::<Instance2>,
+		PolkadotChainTracking: pallet_cf_chain_tracking::<Instance2>,
+		EthereumVault: pallet_cf_vaults::<Instance1>,
+		PolkadotVault: pallet_cf_vaults::<Instance2>,
+		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>,
+		PolkadotThresholdSigner: pallet_cf_threshold_signature::<Instance2>,
+		EthereumBroadcaster: pallet_cf_broadcast::<Instance1>,
+		PolkadotBroadcaster: pallet_cf_broadcast::<Instance2>,
 		Swapping: pallet_cf_swapping,
 		LiquidityProvider: pallet_cf_lp,
-
-		// Polkadot
-		PolkadotVault: pallet_cf_vaults::<Instance2>,
-		PolkadotThresholdSigner: pallet_cf_threshold_signature::<Instance2>,
-		PolkadotBroadcaster: pallet_cf_broadcast::<Instance2>,
-		PolkadotChainTracking: pallet_cf_chain_tracking::<Instance2>,
+		EthereumIngressEgress: pallet_cf_ingress_egress::<Instance1>,
+		PolkadotIngressEgress: pallet_cf_ingress_egress::<Instance2>,
 	}
 );
 
