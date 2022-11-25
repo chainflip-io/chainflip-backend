@@ -228,6 +228,11 @@ impl Engine {
 								);
 					}
 					Event::Validator(
+						// NOTE: This is a little inaccurate a representation of how it actually works. An event is emitted
+						// which contains the transaction to broadcast for the rotation tx, which the CFE then broadcasts.
+						// This is a simpler way to represent this in the tests. Representing in this way in the tests also means
+						// that for dot, given we don't have a key to sign with initially, it will work without extra test boilerplate.
+
 						pallet_cf_validator::Event::RotationPhaseUpdated { new_phase: RotationPhase::ActivatingKeys(_) }) => {
 								// If we rotating let's witness the keys being rotated on the contract
 								let _result = state_chain_runtime::Witnesser::witness_at_epoch(
