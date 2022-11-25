@@ -1,15 +1,22 @@
-use crate::threshold_signing::EthThresholdSigner;
+use crate::threshold_signing::{
+	DotKeyComponents, DotThresholdSigner, EthKeyComponents, EthThresholdSigner, ThresholdSigner,
+};
 
 use super::*;
-use cf_primitives::{AccountRole, EpochIndex, FlipBalance};
+use cf_chains::{dot::PolkadotSignature, eth::SchnorrVerificationComponents, ChainCrypto};
+use cf_primitives::{AccountRole, CeremonyId, EpochIndex, FlipBalance};
 use cf_traits::{AccountRoleRegistry, EpochInfo};
 use codec::Encode;
 use frame_support::traits::{OnFinalize, OnIdle};
 use pallet_cf_staking::{ClaimAmount, MinimumStake};
 use pallet_cf_validator::RotationPhase;
-use state_chain_runtime::{AccountRoles, Authorship, EthereumInstance, Event, Origin};
+use sp_std::collections::btree_set::BTreeSet;
+use state_chain_runtime::{
+	AccountRoles, Authorship, EthereumInstance, Event, Origin, PolkadotInstance,
+};
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
+use crate::threshold_signing::KeyUtils;
 // arbitrary units of block time
 pub const BLOCK_TIME: u64 = 1000;
 
@@ -23,9 +30,12 @@ pub enum ContractEvent {
 }
 
 macro_rules! on_events {
-	($events:expr, $( $p:pat => $b:block ),* $(,)?) => {
+	($events:expr, $($(#[$cfg_param:meta])? $p:pat => $b:block)+) => {
 		for event in $events {
-			$(if let $p = event { $b })*
+			$(
+				$(#[$cfg_param])?
+				if let $p = event { $b }
+			)*
 		}
 	}
 }
@@ -185,7 +195,7 @@ impl Engine {
 						// A new epoch
 						pallet_cf_validator::Event::NewEpoch(_epoch_index)) => {
 							self.eth_threshold_signer.borrow_mut().use_proposed_key();
-					},
+					}
 					Event::EthereumThresholdSigner(
 						// A signature request
 						pallet_cf_threshold_signature::Event::ThresholdSignatureRequest{
@@ -202,7 +212,21 @@ impl Engine {
 							*ceremony_id,
 							self.eth_threshold_signer.borrow().sign_with_key(key_id.clone(), payload.as_fixed_bytes()),
 						);
-					},
+					}
+					#[cfg(feature = "ibiza")]
+					Event::PolkadotThresholdSigner(
+						pallet_cf_threshold_signature::Event::ThresholdSignatureRequest {
+							request_id: _,
+							ceremony_id,
+							key_id,
+							signatories: _signatories,
+							payload}) => {
+								let _result = state_chain_runtime::PolkadotThresholdSigner::signature_success(
+									Origin::none(),
+									*ceremony_id,
+									self.dot_threshold_signer.borrow().sign_with_key(key_id.clone(), &(payload.clone().0)),
+								);
+					}
 					Event::Validator(
 						pallet_cf_validator::Event::RotationPhaseUpdated { new_phase: RotationPhase::ActivatingKeys(_) }) => {
 								// If we rotating let's witness the keys being rotated on the contract
@@ -215,8 +239,53 @@ impl Engine {
 									}.into()),
 									Validator::epoch_index()
 								);
-					},
+
+								#[cfg(feature = "ibiza")]
+								let _result = state_chain_runtime::Witnesser::witness_at_epoch(
+									Origin::signed(self.node_id.clone()),
+									Box::new(pallet_cf_vaults::Call::<_, PolkadotInstance>::vault_key_rotated {
+										new_public_key: self.dot_threshold_signer.borrow_mut().proposed_public_key(),
+										block_number: 100,
+										tx_hash: [1u8; 32].into(),
+									}.into()),
+									Validator::epoch_index()
+								);
+					}
 				);
+			}
+
+			fn report_keygen_outcome_for_chain<
+				K: KeyUtils<
+						SigVerification = S,
+						AggKey = <<T as pallet_cf_vaults::Config<I>>::Chain as ChainCrypto>::AggKey,
+					> + Clone,
+				S,
+				T: pallet_cf_vaults::Config<I>,
+				I: 'static,
+			>(
+				ceremony_id: CeremonyId,
+				authorities: &BTreeSet<NodeId>,
+				threshold_signer: Rc<RefCell<ThresholdSigner<K, S>>>,
+				node_id: NodeId,
+			) where
+				<T as frame_system::Config>::Origin: From<state_chain_runtime::Origin>,
+			{
+				if authorities.contains(&node_id) {
+					threshold_signer.borrow_mut().propose_new_public_key();
+					let threshold_signer = threshold_signer.borrow();
+					let proposed_key_components = threshold_signer
+						.proposed_key_components
+						.as_ref()
+						.expect("should have propposed key");
+					pallet_cf_vaults::Pallet::<T, I>::report_keygen_outcome(
+						Origin::signed(node_id.clone()).into(),
+						ceremony_id,
+						Ok(proposed_key_components.agg_key()),
+					)
+					.unwrap_or_else(|_| {
+						panic!("should be able to report keygen outcome from node: {}", node_id)
+					});
+				}
 			}
 
 			// Being staked we would be required to respond to keygen requests
@@ -224,18 +293,14 @@ impl Engine {
 				events,
 				Event::EthereumVault(
 					// A keygen request has been made
-					pallet_cf_vaults::Event::KeygenRequest(ceremony_id, authorities)) => {
-						if authorities.contains(&self.node_id) {
-							self.eth_threshold_signer.borrow_mut().propose_new_public_key();
-							let threshold_signer = self.eth_threshold_signer.borrow();
-							let proposed_key_components = threshold_signer.proposed_key_components.as_ref().expect("should have propposed key");
-							state_chain_runtime::EthereumVault::report_keygen_outcome(
-								Origin::signed(self.node_id.clone()),
-								*ceremony_id,
-								Ok(proposed_key_components.agg_key),
-							).unwrap_or_else(|_| panic!("should be able to report keygen outcome from node: {}", self.node_id));
-						}
-				},
+					pallet_cf_vaults::Event::KeygenRequest(ceremony_id, participants)) => {
+						report_keygen_outcome_for_chain::<EthKeyComponents, SchnorrVerificationComponents, state_chain_runtime::Runtime, EthereumInstance>(*ceremony_id, participants, self.eth_threshold_signer.clone(), self.node_id.clone());
+				}
+				#[cfg(feature = "ibiza")]
+				Event::PolkadotVault(
+					pallet_cf_vaults::Event::KeygenRequest(ceremony_id, participants)) => {
+						report_keygen_outcome_for_chain::<DotKeyComponents, PolkadotSignature, state_chain_runtime::Runtime, PolkadotInstance>(*ceremony_id, participants, self.dot_threshold_signer.clone(), self.node_id.clone());
+				}
 			);
 		}
 	}
@@ -283,6 +348,7 @@ pub struct Network {
 
 	// Used to initialised the threshold signers of the engines added
 	pub eth_threshold_signer: Rc<RefCell<EthThresholdSigner>>,
+	pub dot_threshold_signer: Rc<RefCell<DotThresholdSigner>>,
 }
 
 impl Network {
@@ -333,7 +399,11 @@ impl Network {
 	pub fn add_engine(&mut self, node_id: &NodeId) {
 		self.engines.insert(
 			node_id.clone(),
-			Engine::new(node_id.clone(), self.eth_threshold_signer.clone()),
+			Engine::new(
+				node_id.clone(),
+				self.eth_threshold_signer.clone(),
+				self.dot_threshold_signer.clone(),
+			),
 		);
 	}
 

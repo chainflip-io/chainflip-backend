@@ -1,9 +1,16 @@
 use std::marker::PhantomData;
 
-use cf_chains::eth::{to_ethereum_address, AggKey, SchnorrVerificationComponents};
+use cf_chains::{
+	dot::{PolkadotPublicKey, PolkadotSignature},
+	eth::{to_ethereum_address, AggKey, SchnorrVerificationComponents},
+};
 use cf_primitives::KeyId;
 use libsecp256k1::{PublicKey, SecretKey};
 use rand::{rngs::StdRng, Rng, SeedableRng};
+use sp_core::{
+	crypto::Pair as TraitPair,
+	sr25519::{self, Pair},
+};
 
 use crate::GENESIS_KEY_SEED;
 
@@ -20,7 +27,7 @@ pub trait KeyUtils {
 	type SigVerification;
 	type AggKey;
 
-	fn sign(&self, message: &[u8; 32]) -> Self::SigVerification;
+	fn sign(&self, message: &[u8]) -> Self::SigVerification;
 
 	fn key_id(&self) -> KeyId;
 
@@ -35,7 +42,8 @@ impl KeyUtils for EthKeyComponents {
 	type SigVerification = SchnorrVerificationComponents;
 	type AggKey = AggKey;
 
-	fn sign(&self, message: &[u8; 32]) -> Self::SigVerification {
+	fn sign(&self, message: &[u8]) -> Self::SigVerification {
+		let message: &[u8; 32] = message.try_into().expect("Message for Ethereum is not 32 bytes");
 		assert_eq!(self.agg_key, AggKey::from_private_key_bytes(self.secret.serialize()));
 
 		// just use the same signature nonce for every ceremony in tests
@@ -84,15 +92,13 @@ impl<KeyComponents, SigVerification, AggKey> ThresholdSigner<KeyComponents, SigV
 where
 	KeyComponents: KeyUtils<SigVerification = SigVerification, AggKey = AggKey> + Clone,
 {
-	pub fn sign_with_key(&self, key_id: KeyId, message: &[u8; 32]) -> SigVerification {
+	pub fn sign_with_key(&self, key_id: KeyId, message: &[u8]) -> SigVerification {
 		let curr_key_id = self.key_components.key_id();
 		if key_id == curr_key_id {
-			println!("Signing with current key");
 			return self.key_components.sign(message)
 		}
 		let next_key_id = self.proposed_key_components.as_ref().unwrap().key_id();
 		if key_id == next_key_id {
-			println!("Signing with proposed key");
 			self.proposed_key_components.as_ref().unwrap().sign(message)
 		} else {
 			panic!("Unknown key");
@@ -131,5 +137,50 @@ impl Default for EthThresholdSigner {
 			proposed_key_components: None,
 			_phantom: PhantomData,
 		}
+	}
+}
+
+pub type DotKeyComponents = KeyComponents<Pair, sr25519::Public>;
+
+pub type DotThresholdSigner = ThresholdSigner<DotKeyComponents, PolkadotSignature>;
+
+impl Default for DotThresholdSigner {
+	fn default() -> Self {
+		Self {
+			key_components: DotKeyComponents::generate_keypair(GENESIS_KEY_SEED),
+			proposed_key_components: None,
+			_phantom: PhantomData,
+		}
+	}
+}
+
+impl KeyUtils for DotKeyComponents {
+	type SigVerification = PolkadotSignature;
+
+	type AggKey = PolkadotPublicKey;
+
+	fn sign(&self, message: &[u8]) -> Self::SigVerification {
+		self.secret.sign(message)
+	}
+
+	fn key_id(&self) -> KeyId {
+		self.agg_key().0.to_vec()
+	}
+
+	fn generate_keypair(seed: u64) -> Self {
+		let priv_seed: [u8; 32] = StdRng::seed_from_u64(seed).gen();
+		let keypair: Pair = <Pair as TraitPair>::from_seed(&priv_seed);
+		let agg_key = keypair.public();
+
+		KeyComponents { seed, secret: keypair, agg_key }
+	}
+
+	fn generate_next_key_pair(&self) -> Self {
+		let next_seed = self.seed + 1;
+		Self::generate_keypair(next_seed)
+	}
+
+	fn agg_key(&self) -> Self::AggKey {
+		cf_chains::dot::PolkadotPublicKey(self.agg_key)
 	}
 }
