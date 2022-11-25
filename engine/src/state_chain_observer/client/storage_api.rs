@@ -167,7 +167,7 @@ pub trait StorageApi {
 
 #[async_trait]
 impl<BaseRpcApi: super::base_rpc_api::BaseRpcApi + Send + Sync + 'static> StorageApi
-	for super::StateChainClient<BaseRpcApi>
+	for BaseRpcApi
 {
 	async fn storage_item<
 		Value: codec::FullCodec + 'static,
@@ -179,8 +179,7 @@ impl<BaseRpcApi: super::base_rpc_api::BaseRpcApi + Send + Sync + 'static> Storag
 		block_hash: state_chain_runtime::Hash,
 	) -> RpcResult<<QueryKind as QueryKindTrait<Value, OnEmpty>>::Query> {
 		Ok(QueryKind::from_optional_value_to_query(
-			self.base_rpc_client
-				.storage(block_hash, storage_key.clone())
+			self.storage(block_hash, storage_key.clone())
 				.await?
 				.map(|data| context!(Value::decode(&mut &data.0[..])).unwrap()),
 		))
@@ -240,7 +239,6 @@ impl<BaseRpcApi: super::base_rpc_api::BaseRpcApi + Send + Sync + 'static> Storag
 		block_hash: state_chain_runtime::Hash,
 	) -> RpcResult<Vec<(<StorageMap as StorageMapAssociatedTypes>::Key, StorageMap::Value)>> {
 		Ok(self
-			.base_rpc_client
 			.storage_pairs(block_hash, StorageMap::_prefix_hash())
 			.await?
 			.into_iter()
@@ -251,6 +249,72 @@ impl<BaseRpcApi: super::base_rpc_api::BaseRpcApi + Send + Sync + 'static> Storag
 				)
 			})
 			.collect())
+	}
+}
+
+#[async_trait]
+impl<BaseRpcApi: super::base_rpc_api::BaseRpcApi + Send + Sync + 'static> StorageApi
+	for super::StateChainClient<BaseRpcApi>
+{
+	async fn storage_item<
+		Value: codec::FullCodec + 'static,
+		OnEmpty: 'static,
+		QueryKind: QueryKindTrait<Value, OnEmpty> + 'static,
+	>(
+		&self,
+		storage_key: StorageKey,
+		block_hash: state_chain_runtime::Hash,
+	) -> RpcResult<<QueryKind as QueryKindTrait<Value, OnEmpty>>::Query> {
+		self.base_rpc_client
+			.storage_item::<Value, OnEmpty, QueryKind>(storage_key, block_hash)
+			.await
+	}
+
+	async fn storage_value<StorageValue: StorageValueAssociatedTypes + 'static>(
+		&self,
+		block_hash: state_chain_runtime::Hash,
+	) -> RpcResult<<StorageValue::QueryKind as QueryKindTrait<StorageValue::Value, StorageValue::OnEmpty>>::Query>{
+		self.base_rpc_client.storage_value::<StorageValue>(block_hash).await
+	}
+
+	async fn storage_map_entry<StorageMap: StorageMapAssociatedTypes + 'static>(
+		&self,
+		block_hash: state_chain_runtime::Hash,
+		key: &StorageMap::Key,
+	) -> RpcResult<
+		<StorageMap::QueryKind as QueryKindTrait<StorageMap::Value, StorageMap::OnEmpty>>::Query,
+	>
+	where
+		StorageMap::Key: Sync,
+	{
+		self.base_rpc_client.storage_map_entry::<StorageMap>(block_hash, key).await
+	}
+
+	async fn storage_double_map_entry<StorageDoubleMap: StorageDoubleMapAssociatedTypes + 'static>(
+		&self,
+		block_hash: state_chain_runtime::Hash,
+		key1: &StorageDoubleMap::Key1,
+		key2: &StorageDoubleMap::Key2,
+	) -> RpcResult<
+		<StorageDoubleMap::QueryKind as QueryKindTrait<
+			StorageDoubleMap::Value,
+			StorageDoubleMap::OnEmpty,
+		>>::Query,
+	>
+	where
+		StorageDoubleMap::Key1: Sync,
+		StorageDoubleMap::Key2: Sync,
+	{
+		self.base_rpc_client
+			.storage_double_map_entry::<StorageDoubleMap>(block_hash, key1, key2)
+			.await
+	}
+
+	async fn storage_map<StorageMap: StorageMapAssociatedTypes + 'static>(
+		&self,
+		block_hash: state_chain_runtime::Hash,
+	) -> RpcResult<Vec<(<StorageMap as StorageMapAssociatedTypes>::Key, StorageMap::Value)>> {
+		self.base_rpc_client.storage_map::<StorageMap>(block_hash).await
 	}
 }
 

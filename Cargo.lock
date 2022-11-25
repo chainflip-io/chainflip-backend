@@ -1013,6 +1013,7 @@ dependencies = [
  "num-bigint 0.4.3",
  "num-derive",
  "num-traits",
+ "pallet-cf-account-roles",
  "pallet-cf-broadcast",
  "pallet-cf-chain-tracking",
  "pallet-cf-environment",

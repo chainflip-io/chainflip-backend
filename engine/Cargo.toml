@@ -95,6 +95,7 @@ rand = "0.8.4"
 # Local deps
 cf-chains = {path = "../state-chain/chains"}
 cf-primitives = {path = "../state-chain/primitives"}
+pallet-cf-account-roles = {path = "../state-chain/pallets/cf-account-roles"}
 pallet-cf-broadcast = {path = "../state-chain/pallets/cf-broadcast"}
 pallet-cf-chain-tracking = {path = "../state-chain/pallets/cf-chain-tracking"}
 pallet-cf-environment = {path = "../state-chain/pallets/cf-environment"}
