@@ -21,18 +21,30 @@ setup() {
     exit 1
   fi
 
-  echo "🤫 Creating secrets file. Don't worry, this won't be committed to the repo."
-  if ! op inject -i $LOCALNET_INIT_DIR/env/example.secrets.env -o $LOCALNET_INIT_DIR/env/secrets.env -f; then
-    echo "❌  Couldn't generate the required secrets file."
-    echo "🧑🏻‍🦰 Ask Tom what's up"
-    exit 1
-  fi
+  echo "🐳 Logging in to our Docker Registry. You'll need to create a PAT, https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token"
+  docker login ghcr.io
 
+  ONEPASSWORD_FILES=$(ls $LOCALNET_INIT_DIR/onepassword)
+  mkdir -p "$LOCALNET_INIT_DIR/secrets"
+  for file in $ONEPASSWORD_FILES; do
+    if [ -f $LOCALNET_INIT_DIR/secrets/$file ]; then
+      echo "$file exists, skipping"
+      continue
+    else
+      echo "🤫 Loading $file from OnePassword. Don't worry, this won't be committed to the repo."
+      if ! op inject -i $LOCALNET_INIT_DIR/onepassword/$file -o $LOCALNET_INIT_DIR/secrets/$file -f; then
+        echo "❌  Couldn't generate the required secrets file."
+        echo "🧑🏻‍🦰 Ask Tom what's up"
+        exit 1
+      fi
+    fi
+  done
+  touch $LOCALNET_INIT_DIR/secrets/.setup_complete
 }
 
 workflow() {
-  echo "❓ Would you like to build, recreate or destroy your Localnet?"
-  select WORKFLOW in build recreate destroy
+  echo "❓ Would you like to build, restart, recreate or destroy your Localnet? (Type 1, 2, 3 or 4)"
+  select WORKFLOW in build restart recreate destroy
   do
   echo "You have chosen $WORKFLOW"
   break
@@ -40,23 +52,36 @@ workflow() {
 }
 
 build() {
-  source $LOCALNET_INIT_DIR/env/secrets.env
+  source $LOCALNET_INIT_DIR/secrets/secrets.env
 
-  echo "#️⃣ Enter the commit # you'd like to build from?"
+  echo "#️ Enter the commit # you'd like to build from?"
   echo "Write 'latest' to get the latest commit hash."
+  echo "Write 'same' to use the last commit hash you used."
   read COMMIT_HASH
   if [ $COMMIT_HASH == "latest" ]; then
     COMMIT_HASH=$(git rev-parse HEAD |tr -d '\n')
   fi
+  if [ $COMMIT_HASH == "same" ]; then
+    COMMIT_HASH=$(cat $LOCALNET_INIT_DIR/secrets/.hash)
+  fi
+  echo $COMMIT_HASH > $LOCALNET_INIT_DIR/secrets/.hash
 
-  echo $COMMIT_HASH $REPO_USERNAME
   COMMIT_HASH=$COMMIT_HASH REPO_USERNAME=$REPO_USERNAME REPO_PASSWORD=$REPO_PASSWORD\
    docker-compose -f localnet/docker-compose.yml up --build
 
   echo "🏗 Building network"
 }
 
-if [ ! -f ./localnet/init/env/secrets.env ]; then
+destroy() {
+  echo "💣 Destroying network"
+  docker-compose -f localnet/docker-compose.yml down
+}
+restart() {
+  echo "🚀 Restarting network"
+  docker-compose -f localnet/docker-compose.yml up
+}
+
+if [ ! -f ./$LOCALNET_INIT_DIR/secrets/.setup_complete ]; then
   setup
 else
   echo "✅ Set up already complete"
@@ -67,8 +92,11 @@ workflow
 if [ $WORKFLOW == "build" ]; then
   build
 elif [ $WORKFLOW == "recreate" ]; then
-  echo "🪛 Recreating network"
+  destroy
+  build
 elif [ $WORKFLOW == "destroy" ]; then
-  echo "💣 Destroying network"
+  destroy
+elif [ $WORKFLOW == "restart" ]; then
+  restart
 fi
 

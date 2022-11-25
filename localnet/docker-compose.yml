@@ -20,16 +20,16 @@ services:
       - "9944:9944"
     env_file:
       - init/env/eth.env
-      - init/env/secrets.env
+      - init/secrets/secrets.env
     volumes:
-      - ./init/keys:/etc/chainflip/keys
-      - ./init/start.sh:/start.sh
+      - ./init/secrets:/etc/chainflip/keys
+      - ./init/scripts/start.sh:/start.sh
     command:
       - /start.sh
   engine:
     container_name: chainflip-engine
     env_file:
-      - init/env/secrets.env
+      - init/secrets/secrets.env
     build:
       dockerfile: validator.Dockerfile
       context: .
@@ -45,8 +45,8 @@ services:
       geth:
         condition: service_healthy
     volumes:
-      - ./init/keys:/etc/chainflip/keys
-      - ./init/config:/etc/chainflip/
+      - ./init/secrets:/etc/chainflip/keys
+      - ./init/config:/etc/chainflip/config
     command:
       - chainflip-engine
       - -c=/etc/chainflip/config/Docker.toml
@@ -56,7 +56,7 @@ services:
     container_name: geth
     restart: unless-stopped
     env_file:
-      - init/env/secrets.env
+      - init/secrets/secrets.env
     ports:
       - 30303:30303
       - 30303:30303/udp
@@ -70,12 +70,14 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    volumes:
+      - ./init/secrets/geth_password:/geth/password
     command:
       - --datadir=/geth/data
       - --networkid=10997
       - --allow-insecure-unlock
       - --unlock=0xa994738936572Fb88564d69134F67Aaa7C7d4A6E
-      - --password=$$GETH_PASSWORD
+      - --password=/geth/password
       - --mine
       - --miner.threads=1
       - --nodiscover
