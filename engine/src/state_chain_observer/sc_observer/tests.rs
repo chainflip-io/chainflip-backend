@@ -1,6 +1,7 @@
 use std::{collections::BTreeSet, sync::Arc};
 
 use cf_chains::eth::{Ethereum, Transaction};
+use cf_primitives::AccountRole;
 use frame_system::Phase;
 use futures::{FutureExt, StreamExt};
 use mockall::predicate::{self, eq};
@@ -940,6 +941,7 @@ async fn run_the_sc_observer() {
 				crate::state_chain_observer::client::StateChainClient::new(
 					scope,
 					&settings.state_chain,
+					AccountRole::None,
 					false,
 					&logger,
 				)
