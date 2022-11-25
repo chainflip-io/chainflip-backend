@@ -279,7 +279,7 @@ impl Engine {
 					pallet_cf_vaults::Pallet::<T, I>::report_keygen_outcome(
 						Origin::signed(node_id.clone()).into(),
 						ceremony_id,
-						Ok(threshold_signer.borrow_mut().propose_new_public_key()),
+						Ok(threshold_signer.borrow_mut().propose_new_key()),
 					)
 					.unwrap_or_else(|_| {
 						panic!("should be able to report keygen outcome from node: {}", node_id)

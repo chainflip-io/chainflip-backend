@@ -111,7 +111,7 @@ where
 			.agg_key()
 	}
 
-	pub fn propose_new_public_key(&mut self) -> AggKey {
+	pub fn propose_new_key(&mut self) -> AggKey {
 		let new_key = KeyComponents::generate_next(&self.key_components);
 		let agg_key = new_key.agg_key();
 		self.proposed_key_components = Some(new_key);
