@@ -146,8 +146,8 @@ impl SetAggKeyWithAggKey<MockEthereum> for MockSetAggKeyWithAggKey {
 	fn new_unsigned(
 		_old_key: <MockEthereum as ChainCrypto>::AggKey,
 		new_key: <MockEthereum as ChainCrypto>::AggKey,
-	) -> Self {
-		Self { nonce: MockEthReplayProtectionProvider::replay_protection(), new_key }
+	) -> Result<Self, ()> {
+		Ok(Self { nonce: MockEthReplayProtectionProvider::replay_protection(), new_key })
 	}
 }
 

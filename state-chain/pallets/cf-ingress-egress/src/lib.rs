@@ -19,7 +19,7 @@ use cf_traits::{
 	liquidity::LpProvisioningApi, AddressDerivationApi, Broadcaster, EgressApi, IngressApi,
 	SwapIntentHandler,
 };
-use frame_support::{pallet_prelude::*, sp_runtime::DispatchError};
+use frame_support::{pallet_prelude::*, sp_runtime::DispatchError, storage::transactional};
 pub use pallet::*;
 use sp_runtime::traits::Saturating;
 pub use sp_std::{vec, vec::Vec};
@@ -43,6 +43,7 @@ impl<C: Chain> FetchOrTransfer<C> {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use cf_chains::ApiCallErrorHandler;
 	use core::marker::PhantomData;
 	use sp_std::vec::Vec;
 
@@ -99,7 +100,7 @@ pub mod pallet {
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// Marks which chain this pallet is interacting with.
-		type TargetChain: Chain + ChainAbi;
+		type TargetChain: ChainAbi;
 
 		/// Generates ingress addresses.
 		type AddressDerivation: AddressDerivationApi<Self::TargetChain>;
@@ -111,7 +112,7 @@ pub mod pallet {
 		type SwapIntentHandler: SwapIntentHandler<AccountId = Self::AccountId>;
 
 		/// The type of the chain-native transaction.
-		type AllBatch: AllBatch<Self::TargetChain>;
+		type AllBatch: AllBatch<Self::TargetChain> + ApiCallErrorHandler<Self::TargetChain>;
 
 		/// A broadcaster instance.
 		type Broadcaster: Broadcaster<Self::TargetChain, ApiCall = Self::AllBatch>;
@@ -215,9 +216,20 @@ pub mod pallet {
 				.saturating_sub(T::WeightInfo::egress_assets(0u32))
 				.saturating_div(single_request_cost) as u32;
 
-			let actual_requests_sent = Self::egress_scheduled_assets(Some(request_count));
-
-			T::WeightInfo::egress_assets(actual_requests_sent)
+			match Self::egress_scheduled_assets(Some(request_count)) {
+				Ok((egress_transaction, fetch_batch_size, egress_batch_size)) => {
+					T::Broadcaster::threshold_sign_and_broadcast(egress_transaction);
+					Self::deposit_event(Event::<T, I>::BatchBroadcastRequested {
+						fetch_batch_size,
+						egress_batch_size,
+					});
+					T::WeightInfo::egress_assets(fetch_batch_size.saturating_add(egress_batch_size))
+				},
+				Err(err) => {
+					T::AllBatch::handle_apicall_error(err);
+					T::WeightInfo::egress_assets(0)
+				},
+			}
 		}
 
 		fn integrity_test() {
@@ -297,7 +309,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Returns the actual number of transactions sent.
 	///
 	/// Egress transactions with Blacklisted assets are not sent, and kept in storage.
-	fn egress_scheduled_assets(maybe_size: Option<u32>) -> u32 {
+	//#[transactional]
+	fn egress_scheduled_assets(
+		maybe_size: Option<u32>,
+	) -> Result<(T::AllBatch, u32, u32), <T::TargetChain as ChainAbi>::ApiCallError> {
 		if maybe_size == Some(0) {
 			return 0
 		}
@@ -343,13 +358,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		// Construct and send the transaction.
 		#[allow(clippy::unit_arg)]
-		let egress_transaction = T::AllBatch::new_unsigned(fetch_params, egress_params);
-		T::Broadcaster::threshold_sign_and_broadcast(egress_transaction);
-		Self::deposit_event(Event::<T, I>::BatchBroadcastRequested {
-			fetch_batch_size,
-			egress_batch_size,
-		});
-		fetch_batch_size.saturating_add(egress_batch_size)
+		match T::AllBatch::new_unsigned(fetch_params, egress_params) {
+			Ok(egress_transaction) => Ok((egress_transaction, fetch_batch_size, egress_batch_size)),
+			Err(err) => Err(err),
+		}
 	}
 
 	/// Generate a new address for the user to deposit assets into.

@@ -113,6 +113,7 @@ pub trait ChainCrypto: Chain {
 pub trait ChainAbi: ChainCrypto {
 	type Transaction: Member + Parameter + Default + BenchmarkValue + FeeRefundCalculator<Self>;
 	type ReplayProtection: Member + Parameter;
+	type ApiCallError;
 }
 
 /// Provides chain-specific replay protection data.
@@ -192,7 +193,7 @@ pub trait SetAggKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
 		old_key: <Abi as ChainCrypto>::AggKey,
 		new_key: <Abi as ChainCrypto>::AggKey,
-	) -> Self;
+	) -> Result<Self, Abi::ApiCallError>;
 }
 
 pub trait SetGovKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
@@ -223,7 +224,7 @@ pub trait AllBatch<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<Abi>>,
 		transfer_params: Vec<TransferAssetParams<Abi>>,
-	) -> Self;
+	) -> Result<Self, Abi::ApiCallError>;
 }
 
 pub trait FeeRefundCalculator<C: Chain> {
@@ -234,6 +235,10 @@ pub trait FeeRefundCalculator<C: Chain> {
 		&self,
 		fee_paid: <C as Chain>::TransactionFee,
 	) -> <C as Chain>::ChainAmount;
+}
+
+pub trait ApiCallErrorHandler<Abi: ChainAbi>: ApiCall<Abi> {
+	fn handle_apicall_error(_error: Abi::ApiCallError) {}
 }
 
 pub mod mocks {
@@ -333,6 +338,7 @@ pub mod mocks {
 	impl ChainAbi for MockEthereum {
 		type Transaction = MockTransaction;
 		type ReplayProtection = EthereumReplayProtection;
+		type ApiCallError = ();
 	}
 
 	#[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]

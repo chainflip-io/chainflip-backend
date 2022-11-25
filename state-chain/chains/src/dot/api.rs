@@ -19,6 +19,15 @@ pub enum PolkadotApi<Environment: 'static> {
 	_Phantom(PhantomData<Environment>, Never),
 }
 
+pub enum PolkadotEnvironmentError {
+	/// Polkadot vault not found in the environment pallet. This means that the vault has not been
+	/// created yet.
+	VaultNotFound,
+	/// Polkadot vault is currently unavailable. This is because the vault is currently in rotation
+	/// phase and therefore, is unusable
+	VaultUnavailable,
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum SystemAccounts {
 	Proxy,
@@ -27,36 +36,53 @@ pub enum SystemAccounts {
 
 impl<E> AllBatch<Polkadot> for PolkadotApi<E>
 where
-	E: ChainEnvironment<SystemAccounts, <Polkadot as Chain>::ChainAccount>,
+	E: ChainEnvironment<SystemAccounts, Option<<Polkadot as Chain>::ChainAccount>>,
 	E: ReplayProtectionProvider<Polkadot>,
 {
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<Polkadot>>,
 		transfer_params: Vec<TransferAssetParams<Polkadot>>,
-	) -> Self {
-		Self::BatchFetchAndTransfer(batch_fetch_and_transfer::BatchFetchAndTransfer::new_unsigned(
-			E::replay_protection(),
-			fetch_params,
-			transfer_params,
-			E::lookup(SystemAccounts::Proxy).expect("Proxy account lookup should never fail."),
-			E::lookup(SystemAccounts::Vault).expect("Vault account lookup should never fail."),
+	) -> Result<Self, PolkadotEnvironmentError> {
+		let vault = E::lookup(SystemAccounts::Vault)
+			.expect("Vault account lookup should never fail.")
+			.ok_or_else(|| PolkadotEnvironmentError::VaultNotFound)?;
+		let proxy = E::lookup(SystemAccounts::Proxy)
+			.expect("Proxy account lookup should never fail.")
+			.ok_or_else(|| PolkadotEnvironmentError::VaultUnavailable)?;
+		Ok(Self::BatchFetchAndTransfer(
+			batch_fetch_and_transfer::BatchFetchAndTransfer::new_unsigned(
+				E::replay_protection(),
+				fetch_params,
+				transfer_params,
+				proxy,
+				vault,
+			),
 		))
 	}
 }
 
 impl<E> SetAggKeyWithAggKey<Polkadot> for PolkadotApi<E>
 where
-	E: ChainEnvironment<SystemAccounts, <Polkadot as Chain>::ChainAccount>
+	E: ChainEnvironment<SystemAccounts, Option<<Polkadot as Chain>::ChainAccount>>
 		+ ReplayProtectionProvider<Polkadot>,
 {
-	fn new_unsigned(old_key: PolkadotPublicKey, new_key: PolkadotPublicKey) -> Self {
-		Self::RotateVaultProxy(rotate_vault_proxy::RotateVaultProxy::new_unsigned(
+	fn new_unsigned(
+		old_key: PolkadotPublicKey,
+		new_key: PolkadotPublicKey,
+	) -> Result<Self, PolkadotEnvironmentError> {
+		let vault = E::lookup(SystemAccounts::Vault)
+			.expect("Vault account lookup should never fail.")
+			.ok_or_else(|| PolkadotEnvironmentError::VaultNotFound)?;
+		let proxy = E::lookup(SystemAccounts::Proxy)
+			.expect("Proxy account lookup should never fail.")
+			.ok_or_else(|| PolkadotEnvironmentError::VaultUnavailable)?;
+		Ok(Self::RotateVaultProxy(rotate_vault_proxy::RotateVaultProxy::new_unsigned(
 			E::replay_protection(),
 			new_key,
 			old_key,
-			E::lookup(SystemAccounts::Proxy).expect("Proxy account lookup should never fail."),
-			E::lookup(SystemAccounts::Vault).expect("Vault account lookup should never fail."),
-		))
+			proxy,
+			vault,
+		)))
 	}
 }
 
@@ -130,4 +156,10 @@ impl<E> ApiCall<Polkadot> for PolkadotApi<E> {
 
 pub trait CreatePolkadotVault: ApiCall<Polkadot> {
 	fn new_unsigned(proxy_key: PolkadotPublicKey) -> Self;
+}
+
+impl<E> ApiCallErrorHandler<Polkadot> for PolkadotApi<E> {
+	fn handle_apicall_error(_error: <Polkadot as ChainAbi>::ApiCallError) {
+		todo!()
+	}
 }

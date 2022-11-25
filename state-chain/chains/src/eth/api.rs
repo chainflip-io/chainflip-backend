@@ -39,17 +39,18 @@ pub struct EthereumReplayProtection {
 impl ChainAbi for Ethereum {
 	type Transaction = eth::Transaction;
 	type ReplayProtection = EthereumReplayProtection;
+	type ApiCallError = ();
 }
 
 impl<E: ReplayProtectionProvider<Ethereum>> SetAggKeyWithAggKey<Ethereum> for EthereumApi<E> {
 	fn new_unsigned(
 		_old_key: <Ethereum as ChainCrypto>::AggKey,
 		new_key: <Ethereum as ChainCrypto>::AggKey,
-	) -> Self {
-		Self::SetAggKeyWithAggKey(set_agg_key_with_agg_key::SetAggKeyWithAggKey::new_unsigned(
+	) -> Result<Self, ()> {
+		Ok(Self::SetAggKeyWithAggKey(set_agg_key_with_agg_key::SetAggKeyWithAggKey::new_unsigned(
 			E::replay_protection(),
 			new_key,
-		))
+		)))
 	}
 }
 
@@ -113,8 +114,8 @@ where
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<Ethereum>>,
 		transfer_params: Vec<TransferAssetParams<Ethereum>>,
-	) -> Self {
-		Self::AllBatch(all_batch::AllBatch::new_unsigned(
+	) -> Result<Self, ()> {
+		Ok(Self::AllBatch(all_batch::AllBatch::new_unsigned(
 			E::replay_protection(),
 			fetch_params
 				.into_iter()
@@ -139,7 +140,7 @@ where
 						.ok()
 				})
 				.collect(),
-		))
+		)))
 	}
 }
 
@@ -243,3 +244,5 @@ fn ethabi_function(name: &'static str, params: Vec<ethabi::Param>) -> ethabi::Fu
 fn ethabi_param(name: &'static str, param_type: ethabi::ParamType) -> ethabi::Param {
 	ethabi::Param { name: name.into(), kind: param_type, internal_type: None }
 }
+
+impl<E> ApiCallErrorHandler<Ethereum> for EthereumApi<E> {}
