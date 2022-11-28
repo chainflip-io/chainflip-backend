@@ -1,9 +1,5 @@
 use crate::{
 	benchmarking_value::BenchmarkValue,
-	dot::{
-		api::{create_anonymous_vault::CreateAnonymousVault, PolkadotApi},
-		PolkadotPublicKey, PolkadotReplayProtection,
-	},
 	eth::{
 		api::{update_flip_supply::UpdateFlipSupply, EthereumApi},
 		to_ethereum_address, Address, AggKey, EthereumReplayProtection,
@@ -76,19 +72,6 @@ impl<E> BenchmarkValue for EthereumApi<E> {
 			1000000u128,
 			1u64,
 			&Address::benchmark_value().into(),
-		))
-	}
-}
-
-impl<E> BenchmarkValue for PolkadotApi<E> {
-	fn benchmark_value() -> Self {
-		PolkadotApi::CreateAnonymousVault(CreateAnonymousVault::new_unsigned(
-			PolkadotReplayProtection {
-				polkadot_config: Default::default(),
-				nonce: Default::default(),
-				tip: Default::default(),
-			},
-			PolkadotPublicKey::benchmark_value(),
 		))
 	}
 }
