@@ -1,8 +1,12 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use cf_primitives::{Asset, AssetAmount, ForeignChain, ForeignChainAddress};
 use cf_traits::{liquidity::SwappingApi, IngressApi};
-use frame_support::{pallet_prelude::*, sp_runtime::traits::Saturating};
+use frame_support::{
+	pallet_prelude::*,
+	sp_runtime::{traits::Saturating, Permill},
+};
 use frame_system::pallet_prelude::*;
+use sp_arithmetic::{helpers_128bit::multiply_by_rational_with_rounding, Rounding};
 use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
 
 pub use pallet::*;
@@ -27,6 +31,14 @@ pub struct Swap<AccountId> {
 	pub egress_address: ForeignChainAddress,
 	pub relayer_id: AccountId,
 	pub relayer_commission_bps: u16,
+}
+
+impl<AccountId> Swap<AccountId> {
+	pub fn relayer_fee(&self) -> AssetAmount {
+		const BASIS_POINTS_PER_MILLION: u32 = 100;
+		Permill::from_parts(self.relayer_commission_bps as u32 * BASIS_POINTS_PER_MILLION) *
+			self.amount
+	}
 }
 
 #[frame_support::pallet]
@@ -67,7 +79,7 @@ pub mod pallet {
 	/// Earned Fees by Relayers
 	#[pallet::storage]
 	pub(super) type EarnedRelayerFees<T: Config> =
-		StorageDoubleMap<_, Identity, T::AccountId, Twox64Concat, Asset, AssetAmount>;
+		StorageDoubleMap<_, Identity, T::AccountId, Twox64Concat, Asset, AssetAmount, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -88,25 +100,20 @@ pub mod pallet {
 			let mut used_weight =
 				T::DbWeight::get().reads(1 as Weight) + T::DbWeight::get().writes(1 as Weight);
 
-			let mut swap_groups = Self::group_swaps(swaps);
+			let swap_groups = Self::group_swaps(swaps);
+			let mut unexecuted = vec![];
 
-			for (asset_pair, swaps) in swap_groups.clone() {
+			for (asset_pair, swaps) in swap_groups {
 				let swap_group_weight = T::WeightInfo::execute_group_of_swaps(swaps.len() as u32);
 				if used_weight.saturating_add(swap_group_weight) > available_weight {
-					break
+					unexecuted.extend(swaps)
+				} else {
+					used_weight.saturating_accrue(swap_group_weight);
+					Self::execute_group_of_swaps(swaps, asset_pair.0, asset_pair.1);
 				}
-				used_weight.saturating_accrue(swap_group_weight);
-				Self::execute_group_of_swaps(swaps, asset_pair.0, asset_pair.1);
-				swap_groups.remove(&(asset_pair.0, asset_pair.1));
 			}
 
-			let mut remaining_swaps: Vec<Swap<<T as frame_system::Config>::AccountId>> = vec![];
-
-			for (_, swaps) in swap_groups {
-				remaining_swaps.append(&mut swaps.clone());
-			}
-
-			SwapQueue::<T>::put(remaining_swaps);
+			SwapQueue::<T>::put(unexecuted);
 			used_weight
 		}
 	}
@@ -145,57 +152,46 @@ pub mod pallet {
 	}
 
 	impl<T: Config> Pallet<T> {
-		fn calc_prop_swap(from: AssetAmount, to: AssetAmount, amount: AssetAmount) -> AssetAmount {
-			if to > from {
-				from.saturating_mul(amount).saturating_div(to)
-			} else {
-				to.saturating_mul(amount).saturating_div(from)
-			}
-		}
-
-		fn calc_fee(amount: AssetAmount, bps: u16) -> AssetAmount {
-			// TODO: figure out how to deal with integer math properly if bps is below 100
-			amount.saturating_div(100) * bps.saturating_div(100) as u128
-		}
-
-		fn calc_netto_swap_amount(swaps: Vec<Swap<T::AccountId>>) -> AssetAmount {
-			let mut total_fee = 0;
-			let mut total_swap_amount = 0;
-			for swap in swaps {
-				let fee = Self::calc_fee(swap.amount, swap.relayer_commission_bps);
-				total_fee += fee;
-				total_swap_amount += swap.amount;
-			}
-			total_swap_amount.saturating_sub(total_fee)
-		}
-
-		fn store_relayer_fees(swaps: Vec<Swap<T::AccountId>>) {
-			for swap in swaps {
-				let fee = Self::calc_fee(swap.amount, swap.relayer_commission_bps);
-				EarnedRelayerFees::<T>::mutate(&swap.relayer_id, swap.from, |maybe_fees| {
-					if let Some(fees) = maybe_fees {
-						*maybe_fees = Some(fees.saturating_add(fee))
-					} else {
-						*maybe_fees = Some(fee)
-					}
-				});
-			}
-		}
-
 		pub fn execute_group_of_swaps(swaps: Vec<Swap<T::AccountId>>, from: Asset, to: Asset) {
-			let total_funds_to_swap = Self::calc_netto_swap_amount(swaps.clone());
-			Self::store_relayer_fees(swaps.clone());
-			let (swap_output, (_, _)) = T::SwappingApi::swap(from, to, total_funds_to_swap, 1);
-			for swap in swaps {
-				let swap_amount =
-					Self::calc_prop_swap(total_funds_to_swap, swap_output, swap.amount);
-				T::Egress::schedule_egress(
-					assets::eth::Asset::try_from(swap.to).expect("Only eth assets supported"),
-					swap_amount,
-					EthereumAddress::try_from(swap.egress_address)
-						.expect("On eth assets supported")
-						.into(),
-				);
+			let mut bundle_input = 0;
+			let mut bundle_inputs = vec![];
+
+			for swap in &swaps {
+				debug_assert_eq!((swap.from, swap.to), (from, to));
+				let fee = swap.relayer_fee();
+				let net_amount = swap.amount.saturating_sub(fee);
+				EarnedRelayerFees::<T>::mutate(&swap.relayer_id, swap.from, |earned_fees| {
+					earned_fees.saturating_accrue(fee)
+				});
+				// TODO: use a struct instead of tuple.
+				bundle_inputs.push((net_amount, swap.to, swap.egress_address));
+				bundle_input.saturating_accrue(net_amount);
+			}
+
+			let (bundle_output, _) = T::SwappingApi::swap(from, to, bundle_input, 1);
+
+			for (input_amount, egress_asset, egress_address) in bundle_inputs {
+				if let Some(swap_output) = multiply_by_rational_with_rounding(
+					input_amount,
+					bundle_output,
+					bundle_input,
+					Rounding::Down,
+				) {
+					// TODO merge with AnyChain PR.
+					T::Egress::schedule_egress(
+						assets::eth::Asset::try_from(egress_asset)
+							.expect("Only eth assets supported"),
+						swap_output,
+						EthereumAddress::try_from(egress_address)
+							.expect("On eth assets supported")
+							.into(),
+					);
+				} else {
+					log::error!(
+						"Unable to calculate valid swap output for swap {:?}!",
+						&(input_amount, bundle_input, bundle_output)
+					);
+				}
 			}
 		}
 
