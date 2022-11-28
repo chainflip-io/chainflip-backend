@@ -21,6 +21,8 @@ use serde::{Deserialize, Serialize};
 /// Defines all Assets, and the Chain each asset belongs to.
 /// There's a unique 1:1 relationship between an Asset and a Chain.
 pub mod any {
+	use core::str::FromStr;
+
 	use super::*;
 	pub type Chain = AnyChain;
 
@@ -41,6 +43,20 @@ pub mod any {
 				Asset::Flip => Self::Ethereum,
 				Asset::Usdc => Self::Ethereum,
 				Asset::Dot => Self::Polkadot,
+			}
+		}
+	}
+
+	impl FromStr for Asset {
+		type Err = &'static str;
+
+		fn from_str(s: &str) -> Result<Self, Self::Err> {
+			match s {
+				"eth" | "Eth" | "ETH" => Ok(Asset::Eth),
+				"flip" | "Flip" | "FLIP" => Ok(Asset::Flip),
+				"usdc" | "Usdc" | "USDC" => Ok(Asset::Usdc),
+				"dot" | "Dot" | "DOT" => Ok(Asset::Dot),
+				_ => Err("Unrecognized asset"),
 			}
 		}
 	}

@@ -3,6 +3,8 @@ use chainflip_api as api;
 use clap::Parser;
 use settings::{CLICommandLineOptions, CLISettings};
 
+#[cfg(feature = "ibiza")]
+use crate::settings::RelayerSubcommands;
 use crate::settings::{Claim, CliCommand::*};
 use anyhow::{anyhow, Result};
 use utilities::clean_eth_address;
@@ -34,6 +36,9 @@ async fn run_cli() -> Result<()> {
 	);
 
 	match command_line_opts.cmd {
+		#[cfg(feature = "ibiza")]
+		Relayer(RelayerSubcommands::SwapIntent(params)) =>
+			swap_intent(&cli_settings.state_chain, params).await,
 		Claim(Claim::Request { amount, eth_address, should_register_claim }) =>
 			request_claim(amount, &eth_address, &cli_settings, should_register_claim).await,
 		Claim(Claim::Check {}) => check_claim(&cli_settings.state_chain).await,
@@ -45,6 +50,42 @@ async fn run_cli() -> Result<()> {
 		VanityName { name } => api::set_vanity_name(name, &cli_settings.state_chain).await,
 		ForceRotation { id } => api::force_rotation(id, &cli_settings.state_chain).await,
 	}
+}
+
+#[cfg(feature = "ibiza")]
+pub async fn swap_intent(
+	state_chain_settings: &settings::StateChain,
+	params: settings::SwapIntentParams,
+) -> Result<()> {
+	use anyhow::bail;
+	use api::primitives::{Asset, ForeignChainAddress};
+	use utilities::clean_dot_address;
+
+	let egress_address = match params.egress_asset {
+		Asset::Eth => {
+			let addr = clean_eth_address(&params.egress_address)
+				.map_err(|err| anyhow!("Failed to parse address: {}", err))?;
+			ForeignChainAddress::Eth(addr)
+		},
+		Asset::Flip => bail!("unsupported asset"),
+		Asset::Usdc => bail!("unsupported asset"),
+		Asset::Dot => {
+			let addr = clean_dot_address(&params.egress_address)
+				.map_err(|err| anyhow!("Failed to parse address: {}", err))?;
+			ForeignChainAddress::Dot(addr)
+		},
+	};
+
+	let address = api::register_swap_intent(
+		state_chain_settings,
+		params.ingress_asset,
+		params.egress_asset,
+		egress_address,
+		params.relayer_commission,
+	)
+	.await?;
+	println!("Ingress address: {}", address);
+	Ok(())
 }
 
 pub async fn request_block(
