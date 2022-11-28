@@ -90,16 +90,29 @@ pub const NONCE_3: u32 = 0; //correct nonce has to be provided for this account 
 pub const POLKADOT_VAULT_ACCOUNT: Option<PolkadotAccountId> = None;
 pub const POLKADOT_PROXY_ACCOUNT: Option<PolkadotAccountId> = None;
 
+// FROM: https://github.com/paritytech/polkadot/blob/v0.9.33/runtime/polkadot/src/lib.rs
 #[allow(clippy::unnecessary_cast)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum PolkadotProxyType {
 	Any = 0,
+	NonTransfer = 1,
+	Governance = 2,
+	Staking = 3,
+	// Skip 4 as it is now removed (was SudoBalances)
+	IdentityJudgement = 5,
+	CancelProxy = 6,
+	Auction = 7,
 }
 
 type DotAmount = u128;
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct EncodedPolkadotPayload(pub Vec<u8>);
+
+#[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]
+pub struct EpochStartData {
+	pub vault_account: PolkadotAccountId,
+}
 
 impl Chain for Polkadot {
 	type ChainBlockNumber = u64;
@@ -108,6 +121,7 @@ impl Chain for Polkadot {
 	type ChainAccount = PolkadotAccountId;
 	type TransactionFee = Self::ChainAmount;
 	type ChainAsset = assets::dot::Asset;
+	type EpochStartData = EpochStartData;
 }
 
 impl ChainCrypto for Polkadot {
