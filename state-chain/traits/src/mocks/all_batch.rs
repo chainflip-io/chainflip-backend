@@ -1,6 +1,6 @@
 use cf_chains::{
-	AllBatch, ApiCall, ChainAbi, ChainCrypto, Ethereum, FetchAssetParams, ReplayProtectionProvider,
-	TransferAssetParams,
+	AllBatch, ApiCall, ApiCallErrorHandler, ChainAbi, ChainCrypto, Ethereum, FetchAssetParams,
+	ReplayProtectionProvider, TransferAssetParams,
 };
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
@@ -44,3 +44,5 @@ impl ApiCall<Ethereum> for MockAllBatch {
 		unimplemented!()
 	}
 }
+
+impl ApiCallErrorHandler<Ethereum> for MockAllBatch {}

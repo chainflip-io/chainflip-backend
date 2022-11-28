@@ -2,7 +2,7 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-use cf_chains::{Chain, ChainAbi, ChainCrypto, SetAggKeyWithAggKey};
+use cf_chains::{ApiCallErrorHandler, Chain, ChainAbi, ChainCrypto, SetAggKeyWithAggKey};
 use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex, GENESIS_EPOCH};
 use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
@@ -262,7 +262,8 @@ pub mod pallet {
 		type Chain: ChainAbi<KeyId = Self::KeyId>;
 
 		/// The supported api calls for the chain.
-		type SetAggKeyWithAggKey: SetAggKeyWithAggKey<Self::Chain>;
+		type SetAggKeyWithAggKey: SetAggKeyWithAggKey<Self::Chain>
+			+ ApiCallErrorHandler<Self::Chain>;
 
 		type VaultTransitionHandler: VaultTransitionHandler<Self::Chain>;
 
@@ -869,19 +870,23 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 			PendingVaultRotation::<T, I>::get()
 		{
 			match <Self as KeyProvider<_>>::current_key_epoch_index() {
-				KeyState::Active { key, epoch_index: _ } => {
-					T::Broadcaster::threshold_sign_and_broadcast(
-						<T::SetAggKeyWithAggKey as SetAggKeyWithAggKey<_>>::new_unsigned(
-							key,
-							new_public_key,
-						),
-					);
-					if let VaultState::Active(curr_key_epoch) =
-						CurrentKeyholdersEpoch::<T, I>::get()
-					{
-						CurrentKeyholdersEpoch::<T, I>::put(VaultState::Unavailable(curr_key_epoch))
-					}
-				},
+				KeyState::Active { key, epoch_index: _ } =>
+					match <T::SetAggKeyWithAggKey as SetAggKeyWithAggKey<_>>::new_unsigned(
+						key,
+						new_public_key,
+					) {
+						Ok(rotate_tx) => {
+							T::Broadcaster::threshold_sign_and_broadcast(rotate_tx);
+							if let VaultState::Active(curr_key_epoch) =
+								CurrentKeyholdersEpoch::<T, I>::get()
+							{
+								CurrentKeyholdersEpoch::<T, I>::put(VaultState::Unavailable(
+									curr_key_epoch,
+								))
+							}
+						},
+						Err(err) => T::SetAggKeyWithAggKey::handle_apicall_error(err),
+					},
 				// This branch should only run once, for the first key for a particular chain.
 				KeyState::Unavailable =>
 					Self::deposit_event(Event::<T, I>::AwaitingGovernanceActivation {

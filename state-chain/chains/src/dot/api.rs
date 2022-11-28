@@ -45,10 +45,10 @@ where
 	) -> Result<Self, PolkadotEnvironmentError> {
 		let vault = E::lookup(SystemAccounts::Vault)
 			.expect("Vault account lookup should never fail.")
-			.ok_or_else(|| PolkadotEnvironmentError::VaultNotFound)?;
+			.ok_or(PolkadotEnvironmentError::VaultNotFound)?;
 		let proxy = E::lookup(SystemAccounts::Proxy)
 			.expect("Proxy account lookup should never fail.")
-			.ok_or_else(|| PolkadotEnvironmentError::VaultUnavailable)?;
+			.ok_or(PolkadotEnvironmentError::VaultUnavailable)?;
 		Ok(Self::BatchFetchAndTransfer(
 			batch_fetch_and_transfer::BatchFetchAndTransfer::new_unsigned(
 				E::replay_protection(),
@@ -72,10 +72,10 @@ where
 	) -> Result<Self, PolkadotEnvironmentError> {
 		let vault = E::lookup(SystemAccounts::Vault)
 			.expect("Vault account lookup should never fail.")
-			.ok_or_else(|| PolkadotEnvironmentError::VaultNotFound)?;
+			.ok_or(PolkadotEnvironmentError::VaultNotFound)?;
 		let proxy = E::lookup(SystemAccounts::Proxy)
 			.expect("Proxy account lookup should never fail.")
-			.ok_or_else(|| PolkadotEnvironmentError::VaultUnavailable)?;
+			.ok_or(PolkadotEnvironmentError::VaultUnavailable)?;
 		Ok(Self::RotateVaultProxy(rotate_vault_proxy::RotateVaultProxy::new_unsigned(
 			E::replay_protection(),
 			new_key,

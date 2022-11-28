@@ -13,13 +13,16 @@ mod tests;
 pub mod weights;
 pub use weights::WeightInfo;
 
-use cf_chains::{AllBatch, Chain, ChainAbi, ChainCrypto, FetchAssetParams, TransferAssetParams};
+use cf_chains::{
+	AllBatch, ApiCallErrorHandler, Chain, ChainAbi, ChainCrypto, FetchAssetParams,
+	TransferAssetParams,
+};
 use cf_primitives::{Asset, AssetAmount, ForeignChainAddress, IntentId};
 use cf_traits::{
 	liquidity::LpProvisioningApi, AddressDerivationApi, Broadcaster, EgressApi, IngressApi,
 	SwapIntentHandler,
 };
-use frame_support::{pallet_prelude::*, sp_runtime::DispatchError, storage::transactional};
+use frame_support::{pallet_prelude::*, sp_runtime::DispatchError};
 pub use pallet::*;
 use sp_runtime::traits::Saturating;
 pub use sp_std::{vec, vec::Vec};
@@ -216,20 +219,7 @@ pub mod pallet {
 				.saturating_sub(T::WeightInfo::egress_assets(0u32))
 				.saturating_div(single_request_cost) as u32;
 
-			match Self::egress_scheduled_assets(Some(request_count)) {
-				Ok((egress_transaction, fetch_batch_size, egress_batch_size)) => {
-					T::Broadcaster::threshold_sign_and_broadcast(egress_transaction);
-					Self::deposit_event(Event::<T, I>::BatchBroadcastRequested {
-						fetch_batch_size,
-						egress_batch_size,
-					});
-					T::WeightInfo::egress_assets(fetch_batch_size.saturating_add(egress_batch_size))
-				},
-				Err(err) => {
-					T::AllBatch::handle_apicall_error(err);
-					T::WeightInfo::egress_assets(0)
-				},
-			}
+			T::WeightInfo::egress_assets(Self::egress_scheduled_assets(Some(request_count)))
 		}
 
 		fn integrity_test() {
@@ -309,13 +299,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Returns the actual number of transactions sent.
 	///
 	/// Egress transactions with Blacklisted assets are not sent, and kept in storage.
-	//#[transactional]
-	fn egress_scheduled_assets(
-		maybe_size: Option<u32>,
-	) -> Result<(T::AllBatch, u32, u32), <T::TargetChain as ChainAbi>::ApiCallError> {
+	fn egress_scheduled_assets(maybe_size: Option<u32>) -> u32 {
 		if maybe_size == Some(0) {
 			return 0
 		}
+
+		let scheduled_egress_requests = ScheduledEgressRequests::<T, I>::get();
 
 		let batch_to_send: Vec<_> =
 			ScheduledEgressRequests::<T, I>::mutate(|requests: &mut Vec<_>| {
@@ -359,8 +348,19 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		// Construct and send the transaction.
 		#[allow(clippy::unit_arg)]
 		match T::AllBatch::new_unsigned(fetch_params, egress_params) {
-			Ok(egress_transaction) => Ok((egress_transaction, fetch_batch_size, egress_batch_size)),
-			Err(err) => Err(err),
+			Ok(egress_transaction) => {
+				T::Broadcaster::threshold_sign_and_broadcast(egress_transaction);
+				Self::deposit_event(Event::<T, I>::BatchBroadcastRequested {
+					fetch_batch_size,
+					egress_batch_size,
+				});
+				fetch_batch_size.saturating_add(egress_batch_size)
+			},
+			Err(err) => {
+				ScheduledEgressRequests::<T, I>::put(scheduled_egress_requests);
+				T::AllBatch::handle_apicall_error(err);
+				2
+			},
 		}
 	}
 
