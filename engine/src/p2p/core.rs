@@ -5,7 +5,7 @@ mod socket;
 mod tests;
 
 use std::{
-	collections::{BTreeMap, HashMap},
+	collections::{btree_map::Entry, BTreeMap, HashMap},
 	future::Future,
 	net::Ipv6Addr,
 	sync::Arc,
@@ -364,11 +364,14 @@ impl P2PContext {
 
 		let connected_socket = socket.connect(peer, &self.logger);
 
-		*self
-			.active_connections
-			.get_mut(&account_id)
-			.expect("Connect is only called on existing entries") =
-			ConnectionState::Connected(connected_socket);
+		match self.active_connections.entry(account_id.clone()) {
+			Entry::Vacant(entry) => {
+				entry.insert(ConnectionState::Connected(connected_socket));
+			},
+			Entry::Occupied(mut entry) => {
+				*entry.get_mut() = ConnectionState::Connected(connected_socket);
+			},
+		};
 
 		if let Some(ConnectionState::Connected(socket)) =
 			self.active_connections.get_mut(&account_id)
