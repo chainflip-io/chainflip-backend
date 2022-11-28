@@ -6,11 +6,11 @@ pub mod storage_api;
 use base_rpc_api::BaseRpcApi;
 
 use anyhow::{anyhow, bail, Context, Result};
-use codec::Decode;
+use cf_primitives::AccountRole;
 use futures::{Stream, StreamExt, TryFutureExt, TryStreamExt};
 
 use slog::o;
-use sp_core::{storage::StorageKey, Pair, H256};
+use sp_core::{Pair, H256};
 use std::sync::{atomic::AtomicU32, Arc};
 use tokio::sync::RwLock;
 
@@ -18,9 +18,9 @@ use crate::{
 	common::{read_clean_and_decode_hex_str_file, EngineTryStreamExt},
 	logging::COMPONENT_KEY,
 	settings,
+	state_chain_observer::client::storage_api::StorageApi,
 	task_scope::{Scope, ScopedJoinHandle},
 };
-use utilities::context;
 
 pub struct StateChainClient<
 	BaseRpcClient = base_rpc_api::BaseRpcClient<jsonrpsee::ws_client::WsClient>,
@@ -43,10 +43,11 @@ impl StateChainClient {
 	pub async fn new<'a>(
 		scope: &Scope<'a, anyhow::Error>,
 		state_chain_settings: &settings::StateChain,
-		wait_for_staking: bool,
+		required_role: AccountRole,
+		wait_for_required_role: bool,
 		logger: &slog::Logger,
 	) -> Result<(H256, impl Stream<Item = state_chain_runtime::Header>, Arc<StateChainClient>)> {
-		Self::inner_new(scope, state_chain_settings, wait_for_staking, logger)
+		Self::inner_new(scope, state_chain_settings, required_role, wait_for_required_role, logger)
 			.await
 			.context("Failed to initialize StateChainClient")
 	}
@@ -54,7 +55,8 @@ impl StateChainClient {
 	async fn inner_new<'a>(
 		scope: &Scope<'a, anyhow::Error>,
 		state_chain_settings: &settings::StateChain,
-		wait_for_staking: bool,
+		required_role: AccountRole,
+		wait_for_required_role: bool,
 		logger: &slog::Logger,
 	) -> Result<(H256, impl Stream<Item = state_chain_runtime::Header>, Arc<StateChainClient>)> {
 		let logger = logger.new(o!(COMPONENT_KEY => "StateChainClient"));
@@ -68,11 +70,6 @@ impl StateChainClient {
 				},
 			)?),
 		);
-
-		let account_storage_key =
-			StorageKey(frame_system::Account::<state_chain_runtime::Runtime>::hashed_key_for(
-				&signer.account_id,
-			));
 
 		let base_rpc_client =
 			Arc::new(base_rpc_api::BaseRpcClient::new(state_chain_settings).await?);
@@ -171,64 +168,47 @@ impl StateChainClient {
 		};
 
 		let (latest_block_hash, latest_block_number, account_nonce) = {
-			async fn get_account_nonce<
-				StateChainRpcClient: base_rpc_api::BaseRpcApi + Send + Sync,
-			>(
-				state_rpc_client: &StateChainRpcClient,
-				account_storage_key: &StorageKey,
-				block_hash: state_chain_runtime::Hash,
-			) -> Result<Option<u32>> {
-				Ok(
-					if let Some(encoded_account_info) =
-						state_rpc_client.storage(block_hash, account_storage_key.clone()).await?
-					{
-						let account_info: frame_system::AccountInfo<
-							state_chain_runtime::Index,
-							<state_chain_runtime::Runtime as frame_system::Config>::AccountData,
-						> = context!(Decode::decode(&mut &encoded_account_info.0[..])).unwrap();
-						Some(account_info.nonce)
-					} else {
-						None
-					},
-				)
+			loop {
+				match base_rpc_client
+					.storage_map_entry::<pallet_cf_account_roles::AccountRoles<state_chain_runtime::Runtime>>(
+						latest_block_hash,
+						&signer.account_id,
+					)
+					.await?
+				{
+					Some(role) =>
+						if required_role == AccountRole::None || required_role == role {
+							break
+						} else if wait_for_required_role && role == AccountRole::None {
+							slog::warn!(logger, "Your Chainflip account {} does not have an assigned account role. WAITING for the account role to be set to '{:?}' at block: {}", signer.account_id, required_role, latest_block_number);
+						} else {
+							bail!("Your Chainflip account {} has the wrong account role '{:?}'. The '{:?}' account role is required", signer.account_id, role, required_role);
+						},
+					None =>
+						if wait_for_required_role {
+							slog::warn!(logger, "Your Chainflip account {} is not staked. Note, if you have already staked, it may take some time for your stake to be detected. WAITING for your account to be staked at block: {}", signer.account_id, latest_block_number);
+						} else {
+							bail!("Your Chainflip account {} is not staked", signer.account_id);
+						},
+				}
+
+				let block_header = finalized_block_header_stream.next().await.unwrap()?;
+				latest_block_hash = block_header.hash();
+				latest_block_number += 1;
+				assert_eq!(latest_block_number, block_header.number);
 			}
 
-			let base_rpc_client = base_rpc_client.as_ref();
-
-			let account_nonce = match get_account_nonce(
-				base_rpc_client,
-				&account_storage_key,
+			(
 				latest_block_hash,
+				latest_block_number,
+				base_rpc_client
+					.storage_map_entry::<frame_system::Account<state_chain_runtime::Runtime>>(
+						latest_block_hash,
+						&signer.account_id,
+					)
+					.await?
+					.nonce,
 			)
-			.await?
-			{
-				Some(nonce) => nonce,
-				None =>
-					if wait_for_staking {
-						loop {
-							if let Some(nonce) = get_account_nonce(
-								base_rpc_client,
-								&account_storage_key,
-								latest_block_hash,
-							)
-							.await?
-							{
-								break nonce
-							} else {
-								slog::warn!(logger, "Your Chainflip account {} is not staked. WAITING for account to be staked at block: {}", signer.account_id, latest_block_number);
-								let block_header =
-									finalized_block_header_stream.next().await.unwrap()?;
-								latest_block_hash = block_header.hash();
-								latest_block_number += 1;
-								assert_eq!(latest_block_number, block_header.number);
-							}
-						}
-					} else {
-						bail!("Your Chainflip account {} is not staked", signer.account_id);
-					},
-			};
-
-			(latest_block_hash, latest_block_number, account_nonce)
 		};
 
 		const BLOCK_CAPACITY: usize = 10;
