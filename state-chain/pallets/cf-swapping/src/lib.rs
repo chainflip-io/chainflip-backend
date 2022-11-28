@@ -201,11 +201,8 @@ pub mod pallet {
 
 		fn group_swaps(
 			swaps: Vec<Swap<T::AccountId>>,
-		) -> BTreeMap<(Asset, Asset), Vec<Swap<<T as frame_system::Config>::AccountId>>> {
-			let mut grouped_swaps: BTreeMap<
-				(Asset, Asset),
-				Vec<Swap<<T as frame_system::Config>::AccountId>>,
-			> = BTreeMap::new();
+		) -> BTreeMap<(Asset, Asset), Vec<Swap<T::AccountId>>> {
+			let mut grouped_swaps = BTreeMap::new();
 			for swap in swaps {
 				grouped_swaps.entry((swap.from, swap.to)).or_insert(vec![]).push(swap)
 			}
