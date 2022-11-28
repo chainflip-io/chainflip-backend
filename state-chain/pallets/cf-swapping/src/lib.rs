@@ -96,7 +96,7 @@ pub mod pallet {
 					break
 				}
 				used_weight.saturating_accrue(swap_group_weight);
-				Self::execute_group_of_swaps(swaps.clone(), asset_pair.0, asset_pair.1);
+				Self::execute_group_of_swaps(swaps, asset_pair.0, asset_pair.1);
 				swap_groups.remove(&(asset_pair.0, asset_pair.1));
 			}
 
@@ -161,7 +161,7 @@ pub mod pallet {
 		fn calc_netto_swap_amount(swaps: Vec<Swap<T::AccountId>>) -> AssetAmount {
 			let mut total_fee = 0;
 			let mut total_swap_amount = 0;
-			for swap in swaps.into_iter() {
+			for swap in swaps {
 				let fee = Self::calc_fee(swap.amount, swap.relayer_commission_bps);
 				total_fee += fee;
 				total_swap_amount += swap.amount;
@@ -170,7 +170,7 @@ pub mod pallet {
 		}
 
 		fn store_relayer_fees(swaps: Vec<Swap<T::AccountId>>) {
-			for swap in swaps.into_iter() {
+			for swap in swaps {
 				let fee = Self::calc_fee(swap.amount, swap.relayer_commission_bps);
 				EarnedRelayerFees::<T>::mutate(&swap.relayer_id, swap.from, |maybe_fees| {
 					if let Some(fees) = maybe_fees {
@@ -207,10 +207,7 @@ pub mod pallet {
 				Vec<Swap<<T as frame_system::Config>::AccountId>>,
 			> = BTreeMap::new();
 			for swap in swaps {
-				grouped_swaps
-					.entry((swap.from, swap.to))
-					.and_modify(|swaps| swaps.push(swap.clone()))
-					.or_insert_with(|| vec![swap]);
+				grouped_swaps.entry((swap.from, swap.to)).or_insert(vec![]).push(swap)
 			}
 			grouped_swaps
 		}
