@@ -1,0 +1,17 @@
+# PLEASE READ
+# Any changes made to this file must be first approved by a member of the Platform team.
+
+[node_p2p]
+allow_local_ip = true
+ip_address = "1.1.1.1"
+node_key_file = "node_key_file"
+
+[state_chain]
+signing_key_file = "signing_key_file"
+
+[eth]
+private_key_file = "eth_private_key_file"
+
+[health_check]
+hostname = "0.0.0.0"
+port = 5555
