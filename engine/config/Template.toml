@@ -2,7 +2,7 @@
 
 [node_p2p]
 allow_local_ip = false
-ip_address = "1.1.1.1"
+ip_address = "0.0.0.0"
 node_key_file = "/etc/chainflip/keys/node_key_file"
 port = 8078
 
