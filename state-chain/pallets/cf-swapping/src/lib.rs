@@ -1,7 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use cf_primitives::{Asset, AssetAmount, ForeignChain, ForeignChainAddress};
 use cf_traits::{liquidity::SwappingApi, IngressApi};
-use frame_support::pallet_prelude::*;
+use frame_support::{pallet_prelude::*, sp_runtime::traits::Saturating};
 use frame_system::pallet_prelude::*;
 use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
 
@@ -83,24 +83,21 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		/// Do swapping with remaining weight in this block
-		fn on_idle(_block_number: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
+		fn on_idle(_block_number: BlockNumberFor<T>, available_weight: Weight) -> Weight {
 			let swaps = SwapQueue::<T>::get();
-			let base_weight =
+			let mut used_weight =
 				T::DbWeight::get().reads(1 as Weight) + T::DbWeight::get().writes(1 as Weight);
 
-			let mut available_weight = remaining_weight - base_weight;
-			let mut used_weight = base_weight;
 			let mut swap_groups = Self::group_swaps(swaps);
 
 			for (asset_pair, swaps) in swap_groups.clone() {
 				let swap_group_weight = T::WeightInfo::execute_group_of_swaps(swaps.len() as u32);
-				if available_weight < swap_group_weight {
+				if used_weight.saturating_add(swap_group_weight) > available_weight {
 					break
 				}
+				used_weight.saturating_accrue(swap_group_weight);
 				Self::execute_group_of_swaps(swaps.clone(), asset_pair.0, asset_pair.1);
 				swap_groups.remove(&(asset_pair.0, asset_pair.1));
-				available_weight -= swap_group_weight;
-				used_weight += swap_group_weight;
 			}
 
 			let mut remaining_swaps: Vec<Swap<<T as frame_system::Config>::AccountId>> = vec![];
