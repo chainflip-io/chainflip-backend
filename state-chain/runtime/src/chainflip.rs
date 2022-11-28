@@ -25,13 +25,8 @@ use cf_chains::{
 		api::PolkadotApi, Polkadot, PolkadotAccountId, PolkadotReplayProtection,
 		PolkadotTransactionData,
 	},
-	ChainCrypto,
+	AnyChain, Chain, ChainCrypto,
 };
-#[cfg(feature = "ibiza")]
-use codec::{Decode, Encode};
-#[cfg(feature = "ibiza")]
-use scale_info::TypeInfo;
-
 use cf_chains::{
 	eth::{
 		self,
@@ -40,14 +35,23 @@ use cf_chains::{
 	},
 	ApiCall, ChainAbi, ChainEnvironment, ReplayProtectionProvider, TransactionBuilder,
 };
+#[cfg(feature = "ibiza")]
+use cf_primitives::{Asset, AssetAmount, ForeignChain, ForeignChainAddress, IntentId};
 use cf_traits::{
 	BlockEmissions, Chainflip, EmergencyRotation, EpochInfo, EthEnvironmentProvider, Heartbeat,
 	Issuance, NetworkState, RewardsDistribution, RuntimeUpgrade, VaultTransitionHandler,
 };
-use frame_support::traits::Get;
+#[cfg(feature = "ibiza")]
+use cf_traits::{EgressApi, IngressApi};
+#[cfg(feature = "ibiza")]
+use codec::{Decode, Encode};
+#[cfg(feature = "ibiza")]
+use frame_support::dispatch::DispatchError;
 use pallet_cf_chain_tracking::ChainState;
+#[cfg(feature = "ibiza")]
+use scale_info::TypeInfo;
 
-use frame_support::{dispatch::DispatchErrorWithPostInfo, weights::PostDispatchInfo};
+use frame_support::{dispatch::DispatchErrorWithPostInfo, traits::Get, weights::PostDispatchInfo};
 
 use pallet_cf_validator::PercentageRange;
 use sp_runtime::traits::{UniqueSaturatedFrom, UniqueSaturatedInto};
@@ -278,5 +282,81 @@ pub struct DotVaultTransitionHandler;
 impl VaultTransitionHandler<Polkadot> for DotVaultTransitionHandler {
 	fn on_new_vault(new_key: <Polkadot as ChainCrypto>::AggKey) {
 		Environment::set_new_proxy_account(new_key);
+	}
+}
+
+pub struct AnyChainIngressEgressHandler;
+
+#[cfg(feature = "ibiza")]
+impl EgressApi<AnyChain> for AnyChainIngressEgressHandler {
+	fn schedule_egress(
+		asset: Asset,
+		amount: AssetAmount,
+		egress_address: <AnyChain as Chain>::ChainAccount,
+	) {
+		match asset.into() {
+			ForeignChain::Ethereum => crate::EthereumIngressEgress::schedule_egress(
+				asset.try_into().expect("Checked for asset compatibility"),
+				amount,
+				egress_address
+					.try_into()
+					.expect("Caller must ensure for account is of the compatible type."),
+			),
+			ForeignChain::Polkadot => crate::PolkadotIngressEgress::schedule_egress(
+				asset.try_into().expect("Checked for asset compatibility"),
+				amount,
+				egress_address
+					.try_into()
+					.expect("Caller must ensure for account is of the compatible type."),
+			),
+		}
+	}
+}
+
+#[cfg(feature = "ibiza")]
+impl IngressApi<AnyChain> for AnyChainIngressEgressHandler {
+	type AccountId = <Runtime as frame_system::Config>::AccountId;
+
+	fn register_liquidity_ingress_intent(
+		lp_account: Self::AccountId,
+		ingress_asset: Asset,
+	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
+		match ingress_asset.into() {
+			ForeignChain::Ethereum =>
+				crate::EthereumIngressEgress::register_liquidity_ingress_intent(
+					lp_account,
+					ingress_asset.try_into().unwrap(),
+				),
+			ForeignChain::Polkadot =>
+				crate::PolkadotIngressEgress::register_liquidity_ingress_intent(
+					lp_account,
+					ingress_asset.try_into().unwrap(),
+				),
+		}
+	}
+
+	fn register_swap_intent(
+		ingress_asset: Asset,
+		egress_asset: Asset,
+		egress_address: ForeignChainAddress,
+		relayer_commission_bps: u16,
+		relayer_id: Self::AccountId,
+	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
+		match ingress_asset.into() {
+			ForeignChain::Ethereum => crate::EthereumIngressEgress::register_swap_intent(
+				ingress_asset.try_into().unwrap(),
+				egress_asset,
+				egress_address,
+				relayer_commission_bps,
+				relayer_id,
+			),
+			ForeignChain::Polkadot => crate::PolkadotIngressEgress::register_swap_intent(
+				ingress_asset.try_into().unwrap(),
+				egress_asset,
+				egress_address,
+				relayer_commission_bps,
+				relayer_id,
+			),
+		}
 	}
 }

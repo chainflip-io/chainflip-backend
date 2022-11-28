@@ -138,7 +138,7 @@ jobs:
             ./target/release/chainflip-engine
             ./target/release/chainflip-cli
             ./target/release/generate-genesis-keys
-            ./target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm
+            ./target/release/wbuild/state-chain-runtime/state_chain_runtime*.wasm
       - name: Check if building changes any files
         run: |
           git diff --exit-code

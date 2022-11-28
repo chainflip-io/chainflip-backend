@@ -1013,6 +1013,7 @@ dependencies = [
  "num-bigint 0.4.3",
  "num-derive",
  "num-traits",
+ "pallet-cf-account-roles",
  "pallet-cf-broadcast",
  "pallet-cf-chain-tracking",
  "pallet-cf-environment",
@@ -5405,7 +5406,6 @@ dependencies = [
  "frame-support",
  "frame-system",
  "pallet-cf-account-roles",
- "pallet-cf-ingress-egress",
  "parity-scale-codec",
  "quickcheck",
  "quickcheck_macros",
@@ -5478,6 +5478,7 @@ dependencies = [
  "sp-io 6.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-06+01)",
  "sp-runtime 6.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-06+01)",
  "sp-std 4.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-06+01)",
+ "state-chain-runtime",
 ]
 
 [[package]]

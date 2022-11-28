@@ -2,22 +2,25 @@
 
 mod async_result;
 pub mod liquidity;
+pub use liquidity::*;
+
 pub mod mocks;
 pub mod offence_reporting;
-pub use liquidity::*;
 
 use core::fmt::Debug;
 
 pub use async_result::AsyncResult;
 use sp_std::collections::btree_set::BTreeSet;
 
+#[cfg(feature = "ibiza")]
+use cf_chains::Polkadot;
 use cf_chains::{
 	benchmarking_value::BenchmarkValue, ApiCall, Chain, ChainAbi, ChainCrypto, Ethereum,
 };
 
 use cf_primitives::{
-	AccountRole, Asset, AssetAmount, AuthorityCount, CeremonyId, EpochIndex, ForeignChainAddress,
-	IntentId,
+	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, CeremonyId, EpochIndex,
+	ForeignChainAddress, IntentId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -630,7 +633,6 @@ pub trait StakingInfo {
 /// Allow pallets to register `Intent`s in the Ingress pallet.
 pub trait IngressApi<C: Chain> {
 	type AccountId;
-
 	/// Issues an intent id and ingress address for a new liquidity deposit.
 	fn register_liquidity_ingress_intent(
 		lp_account: Self::AccountId,
@@ -645,6 +647,45 @@ pub trait IngressApi<C: Chain> {
 		relayer_commission_bps: u16,
 		relayer_id: Self::AccountId,
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError>;
+}
+
+impl<T: frame_system::Config> IngressApi<Ethereum> for T {
+	type AccountId = T::AccountId;
+	fn register_liquidity_ingress_intent(
+		_lp_account: T::AccountId,
+		_ingress_asset: assets::eth::Asset,
+	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
+		Ok((0, ForeignChainAddress::Eth([0u8; 20])))
+	}
+	fn register_swap_intent(
+		_ingress_asset: assets::eth::Asset,
+		_egress_asset: Asset,
+		_egress_address: ForeignChainAddress,
+		_relayer_commission_bps: u16,
+		_relayer_id: T::AccountId,
+	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
+		Ok((0, ForeignChainAddress::Eth([0u8; 20])))
+	}
+}
+
+#[cfg(feature = "ibiza")]
+impl<T: frame_system::Config> IngressApi<Polkadot> for T {
+	type AccountId = T::AccountId;
+	fn register_liquidity_ingress_intent(
+		_lp_account: T::AccountId,
+		_ingress_asset: assets::dot::Asset,
+	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
+		Ok((0, ForeignChainAddress::Dot([0u8; 32])))
+	}
+	fn register_swap_intent(
+		_ingress_asset: assets::dot::Asset,
+		_egress_asset: Asset,
+		_egress_address: ForeignChainAddress,
+		_relayer_commission_bps: u16,
+		_relayer_id: T::AccountId,
+	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
+		Ok((0, ForeignChainAddress::Dot([0u8; 32])))
+	}
 }
 
 /// Generates a deterministic ingress address for some combination of asset, chain and intent id.
@@ -663,9 +704,6 @@ impl AddressDerivationApi<Ethereum> for () {
 		Ok(Default::default())
 	}
 }
-
-#[cfg(feature = "ibiza")]
-use cf_chains::Polkadot;
 
 #[cfg(feature = "ibiza")]
 impl AddressDerivationApi<Polkadot> for () {
@@ -717,6 +755,25 @@ pub trait EgressApi<C: Chain> {
 		amount: AssetAmount,
 		egress_address: C::ChainAccount,
 	);
+}
+
+impl<T: frame_system::Config> EgressApi<Ethereum> for T {
+	fn schedule_egress(
+		_foreign_asset: assets::eth::Asset,
+		_amount: AssetAmount,
+		_egress_address: <Ethereum as Chain>::ChainAccount,
+	) {
+	}
+}
+
+#[cfg(feature = "ibiza")]
+impl<T: frame_system::Config> EgressApi<Polkadot> for T {
+	fn schedule_egress(
+		_foreign_asset: assets::dot::Asset,
+		_amount: AssetAmount,
+		_egress_address: <Polkadot as Chain>::ChainAccount,
+	) {
+	}
 }
 
 pub trait VaultTransitionHandler<C: ChainCrypto> {

@@ -3,6 +3,7 @@ use std::sync::Arc;
 use crate::multisig::{eth::EthSigning, polkadot::PolkadotSigning};
 use anyhow::Context;
 
+use cf_primitives::AccountRole;
 use chainflip_engine::{
 	eth::{
 		self, build_broadcast_channel, key_manager::KeyManager, rpc::EthDualRpcClient,
@@ -49,7 +50,7 @@ async fn main() -> anyhow::Result<()> {
             }
 
             let (latest_block_hash, state_chain_block_stream, state_chain_client) =
-                state_chain_observer::client::StateChainClient::new(scope, &settings.state_chain, true, &root_logger)
+                state_chain_observer::client::StateChainClient::new(scope, &settings.state_chain, AccountRole::Validator, true, &root_logger)
                     .await?;
 
             let eth_dual_rpc =
