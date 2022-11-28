@@ -26,6 +26,7 @@ pub mod any {
 
 	/// A token or currency that can be swapped natively in the Chainflip AMM.
 	#[derive(
+		Copy,
 		Clone,
 		Debug,
 		PartialEq,
@@ -34,7 +35,6 @@ pub mod any {
 		Decode,
 		TypeInfo,
 		MaxEncodedLen,
-		Copy,
 		Hash,
 		PartialOrd,
 		Ord,

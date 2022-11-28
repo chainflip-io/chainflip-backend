@@ -3,12 +3,9 @@ use cf_primitives::{Asset, AssetAmount, ForeignChain, ForeignChainAddress};
 use cf_traits::{liquidity::SwappingApi, IngressApi};
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
+use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
+
 pub use pallet::*;
-use sp_std::vec::Vec;
-
-use sp_std::collections::btree_map::BTreeMap;
-
-use sp_std::vec;
 
 #[cfg(test)]
 mod mock;
