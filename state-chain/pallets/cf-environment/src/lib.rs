@@ -3,7 +3,13 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 #[cfg(feature = "ibiza")]
-use cf_chains::dot::{PolkadotAccountId, PolkadotConfig, PolkadotIndex, PolkadotPublicKey};
+use cf_chains::{
+	dot::{
+		api::CreatePolkadotVault, Polkadot, PolkadotAccountId, PolkadotConfig, PolkadotIndex,
+		PolkadotPublicKey,
+	},
+	ChainCrypto,
+};
 
 use cf_primitives::{Asset, EthereumAddress};
 pub use cf_traits::EthEnvironmentProvider;
@@ -66,6 +72,8 @@ pub mod cfe {
 #[frame_support::pallet]
 pub mod pallet {
 	use cf_primitives::Asset;
+	#[cfg(feature = "ibiza")]
+	use cf_traits::Broadcaster;
 
 	use super::*;
 
@@ -76,6 +84,12 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 		/// Governance origin to secure extrinsic
 		type EnsureGovernance: EnsureOrigin<Self::Origin>;
+		/// Polkadot Vault Creation Apicall
+		#[cfg(feature = "ibiza")]
+		type CreatePolkadotVault: CreatePolkadotVault;
+		/// Polakdot broadcaster
+		#[cfg(feature = "ibiza")]
+		type PolkadotBroadcaster: Broadcaster<Polkadot, ApiCall = Self::CreatePolkadotVault>;
 		/// Weight information
 		type WeightInfo: WeightInfo;
 	}
@@ -173,9 +187,12 @@ pub mod pallet {
 		AddedNewEthAsset(Asset, EthereumAddress),
 		/// The address of an supported ETH asset was updated
 		UpdatedEthAsset(Asset, EthereumAddress),
-		#[cfg(feature = "ibiza")]
 		/// The AccountId of the new Polkadot Vault Proxy
+		#[cfg(feature = "ibiza")]
 		PolkadotProxyAccountUpdated(PolkadotAccountId),
+		/// Polkadot Vault Creation Call was initiated
+		#[cfg(feature = "ibiza")]
+		PolkadotVaultCreationCallInitiated { agg_key: <Polkadot as ChainCrypto>::AggKey },
 	}
 
 	#[pallet::call]
@@ -247,6 +264,23 @@ pub mod pallet {
 			);
 			CfeSettings::<T>::put(cfe_settings);
 			Self::deposit_event(Event::<T>::CfeSettingsUpdated { new_cfe_settings: cfe_settings });
+			Ok(().into())
+		}
+
+		#[cfg(feature = "ibiza")]
+		#[pallet::weight(0)]
+		pub fn create_polkadot_vault(
+			origin: OriginFor<T>,
+			dot_aggkey: <Polkadot as ChainCrypto>::AggKey,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			T::PolkadotBroadcaster::threshold_sign_and_broadcast(
+				T::CreatePolkadotVault::new_unsigned(dot_aggkey),
+			);
+			Self::deposit_event(Event::<T>::PolkadotVaultCreationCallInitiated {
+				agg_key: dot_aggkey,
+			});
 			Ok(().into())
 		}
 	}

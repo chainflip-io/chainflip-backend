@@ -1,7 +1,8 @@
 use crate::{self as pallet_cf_environment, cfe};
 #[cfg(feature = "ibiza")]
 use cf_chains::dot::POLKADOT_CONFIG;
-use cf_traits::mocks::ensure_origin_mock::NeverFailingOriginCheck;
+use cf_chains::{dot::api::CreatePolkadotVault, ApiCall, Polkadot};
+use cf_traits::{mocks::ensure_origin_mock::NeverFailingOriginCheck, Broadcaster};
 use frame_support::parameter_types;
 use frame_system as system;
 use sp_core::H256;
@@ -10,6 +11,8 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage,
 };
+
+use crate::{Decode, Encode, MaxEncodedLen, TypeInfo};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -59,9 +62,53 @@ impl system::Config for Test {
 	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
+#[cfg(feature = "ibiza")]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub struct MockCreatePolkadotVault {
+	agg_key: cf_chains::dot::PolkadotPublicKey,
+}
+#[cfg(feature = "ibiza")]
+impl CreatePolkadotVault for MockCreatePolkadotVault {
+	fn new_unsigned(proxy_key: cf_chains::dot::PolkadotPublicKey) -> Self {
+		Self { agg_key: proxy_key }
+	}
+}
+#[cfg(feature = "ibiza")]
+impl ApiCall<Polkadot> for MockCreatePolkadotVault {
+	fn threshold_signature_payload(&self) -> <Polkadot as cf_chains::ChainCrypto>::Payload {
+		unimplemented!()
+	}
+	fn chain_encoded(&self) -> Vec<u8> {
+		unimplemented!()
+	}
+	fn signed(
+		self,
+		threshold_signature: &<Polkadot as cf_chains::ChainCrypto>::ThresholdSignature,
+	) -> Self {
+		unimplemented!()
+	}
+	fn is_signed(&self) -> bool {
+		unimplemented!()
+	}
+}
+#[cfg(feature = "ibiza")]
+pub struct MockPolkadotBroadcaster;
+#[cfg(feature = "ibiza")]
+impl Broadcaster<Polkadot> for MockPolkadotBroadcaster {
+	type ApiCall = MockCreatePolkadotVault;
+
+	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) {
+		unimplemented!()
+	}
+}
+
 impl pallet_cf_environment::Config for Test {
 	type Event = Event;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
+	#[cfg(feature = "ibiza")]
+	type CreatePolkadotVault = MockCreatePolkadotVault;
+	#[cfg(feature = "ibiza")]
+	type PolkadotBroadcaster = MockPolkadotBroadcaster;
 	type WeightInfo = ();
 }
 

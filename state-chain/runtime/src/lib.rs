@@ -18,6 +18,7 @@ use crate::{
 #[cfg(feature = "ibiza")]
 use cf_chains::{dot, Polkadot};
 use cf_chains::{
+	dot::api::PolkadotApi,
 	eth,
 	eth::{api::register_claim::RegisterClaim, Ethereum},
 };
@@ -72,8 +73,8 @@ pub use cf_traits::{EpochInfo, EthEnvironmentProvider, QualifyNode, SessionKeysR
 
 pub use chainflip::chain_instances::*;
 use chainflip::{
-	epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat, EthEnvironment,
-	EthVaultTransitionHandler,
+	epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat, DotEnvironment,
+	EthEnvironment, EthVaultTransitionHandler,
 };
 
 #[cfg(feature = "ibiza")]
@@ -214,6 +215,10 @@ impl pallet_cf_validator::Config for Runtime {
 impl pallet_cf_environment::Config for Runtime {
 	type Event = Event;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+	#[cfg(feature = "ibiza")]
+	type CreatePolkadotVault = PolkadotApi<DotEnvironment>;
+	#[cfg(feature = "ibiza")]
+	type PolkadotBroadcaster = PolkadotBroadcaster;
 	type WeightInfo = pallet_cf_environment::weights::PalletWeight<Runtime>;
 }
 
