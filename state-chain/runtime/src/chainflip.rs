@@ -200,7 +200,7 @@ impl TransactionBuilder<Polkadot, PolkadotApi<DotEnvironment>> for DotTransactio
 	}
 
 	fn refresh_unsigned_transaction(_unsigned_tx: &mut <Polkadot as ChainAbi>::Transaction) {
-		todo!();
+		// TODO: For now this is a noop until we actually have dot chain tracking
 	}
 }
 
