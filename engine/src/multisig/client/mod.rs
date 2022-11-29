@@ -18,9 +18,8 @@ use std::collections::BTreeSet;
 
 use crate::{common::format_iterator, logging::CEREMONY_ID_KEY, multisig::KeyId};
 
-use async_trait::async_trait;
 use cf_primitives::{AuthorityCount, CeremonyId};
-use futures::Future;
+use futures::{future::BoxFuture, FutureExt};
 use state_chain_runtime::AccountId;
 
 use serde::{Deserialize, Serialize};
@@ -47,6 +46,9 @@ pub use signing::{gen_signing_data_stage1, gen_signing_data_stage4};
 
 #[cfg(test)]
 pub use keygen::{gen_keygen_data_hash_comm1, gen_keygen_data_verify_hash_comm2};
+
+#[cfg(test)]
+use mockall::automock;
 
 use self::{
 	ceremony_manager::{CeremonyResultSender, KeygenCeremony, SigningCeremony},
@@ -104,60 +106,27 @@ pub struct MultisigMessage<P: ECPoint> {
 }
 
 /// The public interface to the multi-signature code
-#[async_trait]
+/// The initiate functions of this trait when called send a ceremony request and return a future
+/// that can be await'ed on for the result of that ceremony. Splitting requesting and waiting for a
+/// ceremony to complete allows the requests to all be sent synchronously which is required as we
+/// expect the requests to be ordered by ceremony_id
+#[cfg_attr(test, automock)]
 pub trait MultisigClientApi<C: CryptoScheme> {
-	async fn keygen(
+	fn initiate_keygen(
 		&self,
 		ceremony_id: CeremonyId,
 		participants: BTreeSet<AccountId>,
-	) -> Result<C::Point, (BTreeSet<AccountId>, KeygenFailureReason)>;
+	) -> BoxFuture<'_, Result<C::Point, (BTreeSet<AccountId>, KeygenFailureReason)>>;
 
-	async fn sign(
+	fn initiate_signing(
 		&self,
 		ceremony_id: CeremonyId,
 		key_id: KeyId,
 		signers: BTreeSet<AccountId>,
 		data: MessageHash,
-	) -> Result<C::Signature, (BTreeSet<AccountId>, SigningFailureReason)>;
+	) -> BoxFuture<'_, Result<C::Signature, (BTreeSet<AccountId>, SigningFailureReason)>>;
 
 	fn update_latest_ceremony_id(&self, ceremony_id: CeremonyId);
-}
-
-// This is constructed by hand since mockall
-// fails to parse complex generic parameters
-// (and none of mockall's features were used
-// anyway)
-// NOTE: the fact that this mock is needed in tests but
-// its methods are never called is a bit of a red flag
-
-#[cfg(test)]
-pub mod mocks {
-
-	use super::*;
-	use mockall::mock;
-
-	use crate::multisig::crypto::CryptoScheme;
-
-	mock! {
-		pub MultisigClientApi<C: CryptoScheme + Send + Sync> {}
-
-		#[async_trait]
-		impl<C: CryptoScheme + Send + Sync> MultisigClientApi<C> for MultisigClientApi<C> {
-			async fn keygen(
-				&self,
-				_ceremony_id: CeremonyId,
-				_participants: BTreeSet<AccountId>,
-			) -> Result<C::Point, (BTreeSet<AccountId>, KeygenFailureReason)>;
-			async fn sign(
-				&self,
-				_ceremony_id: CeremonyId,
-				_key_id: KeyId,
-				_signers: BTreeSet<AccountId>,
-				_data: MessageHash,
-			) -> Result<<C as CryptoScheme>::Signature, (BTreeSet<AccountId>, SigningFailureReason)>;
-			fn update_latest_ceremony_id(&self, ceremony_id: CeremonyId);
-		}
-	}
 }
 
 /// The ceremony details are optional to alow the updating of the ceremony id tracking
@@ -218,17 +187,14 @@ where
 			logger: logger.clone(),
 		}
 	}
+}
 
-	// This function is structured to simplify the writing of tests (i.e.
-	// should_delay_rts_until_key_is_ready). When the function is called it will send the request to
-	// the CeremonyManager/Backend immediately The function returns a future that will complete only
-	// once the CeremonyManager has finished the ceremony. This allows tests to split making the
-	// request and waiting for the result.
-	pub fn initiate_keygen(
+impl<C: CryptoScheme> MultisigClientApi<C> for MultisigClient<C> {
+	fn initiate_keygen(
 		&self,
 		ceremony_id: CeremonyId,
 		participants: BTreeSet<AccountId>,
-	) -> impl '_ + Future<Output = Result<C::Point, (BTreeSet<AccountId>, KeygenFailureReason)>> {
+	) -> BoxFuture<'_, Result<C::Point, (BTreeSet<AccountId>, KeygenFailureReason)>> {
 		assert!(participants.contains(&self.my_account_id));
 
 		slog::info!(
@@ -278,21 +244,16 @@ where
 				},
 			}
 		}
+		.boxed()
 	}
 
-	// Similarly to initiate_keygen this function is structured to simplify the writing of tests
-	// (i.e. should_delay_rts_until_key_is_ready). Once the async function returns it has sent the
-	// request to the CeremonyManager/Backend and outputs a second future that will complete only
-	// once the CeremonyManager has finished the ceremony. This allows tests to split making the
-	// request and waiting for the result.
-	pub fn initiate_signing(
+	fn initiate_signing(
 		&self,
 		ceremony_id: CeremonyId,
 		key_id: KeyId,
 		signers: BTreeSet<AccountId>,
 		data: MessageHash,
-	) -> impl '_ + Future<Output = Result<C::Signature, (BTreeSet<AccountId>, SigningFailureReason)>>
-	{
+	) -> BoxFuture<'_, Result<C::Signature, (BTreeSet<AccountId>, SigningFailureReason)>> {
 		assert!(signers.contains(&self.my_account_id));
 
 		slog::debug!(
@@ -331,7 +292,7 @@ where
 					result_receiver
 				});
 
-		Box::pin(async move {
+		async move {
 			// Wait for the request to return a result, then log and return the result
 			if let Some(result_receiver) = request {
 				let result = result_receiver
@@ -356,28 +317,8 @@ where
 				);
 				Err((reported_parties, failure_reason))
 			}
-		})
-	}
-}
-
-#[async_trait]
-impl<C: CryptoScheme> MultisigClientApi<C> for MultisigClient<C> {
-	async fn keygen(
-		&self,
-		ceremony_id: CeremonyId,
-		participants: BTreeSet<AccountId>,
-	) -> Result<C::Point, (BTreeSet<AccountId>, KeygenFailureReason)> {
-		self.initiate_keygen(ceremony_id, participants).await
-	}
-
-	async fn sign(
-		&self,
-		ceremony_id: CeremonyId,
-		key_id: KeyId,
-		signers: BTreeSet<AccountId>,
-		data: MessageHash,
-	) -> Result<C::Signature, (BTreeSet<AccountId>, SigningFailureReason)> {
-		self.initiate_signing(ceremony_id, key_id, signers, data).await
+		}
+		.boxed()
 	}
 
 	fn update_latest_ceremony_id(&self, ceremony_id: CeremonyId) {
