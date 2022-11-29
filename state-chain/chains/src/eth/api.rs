@@ -44,7 +44,7 @@ impl ChainAbi for Ethereum {
 
 impl<E: ReplayProtectionProvider<Ethereum>> SetAggKeyWithAggKey<Ethereum> for EthereumApi<E> {
 	fn new_unsigned(
-		_old_key: <Ethereum as ChainCrypto>::AggKey,
+		_old_key: Option<<Ethereum as ChainCrypto>::AggKey>,
 		new_key: <Ethereum as ChainCrypto>::AggKey,
 	) -> Result<Self, ()> {
 		Ok(Self::SetAggKeyWithAggKey(set_agg_key_with_agg_key::SetAggKeyWithAggKey::new_unsigned(

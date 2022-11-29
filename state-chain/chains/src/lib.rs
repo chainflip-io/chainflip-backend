@@ -191,7 +191,7 @@ pub trait ChainEnvironment<
 /// Constructs the `SetAggKeyWithAggKey` api call.
 pub trait SetAggKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
-		old_key: <Abi as ChainCrypto>::AggKey,
+		maybe_old_key: Option<<Abi as ChainCrypto>::AggKey>,
 		new_key: <Abi as ChainCrypto>::AggKey,
 	) -> Result<Self, Abi::ApiCallError>;
 }

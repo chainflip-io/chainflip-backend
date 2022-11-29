@@ -19,10 +19,10 @@ use sp_runtime::{traits::IdentifyAccount, MultiSigner, RuntimeDebug};
 pub struct RotateVaultProxy {
 	/// The handler for creating and signing polkadot extrinsics
 	pub extrinsic_handler: PolkadotExtrinsicBuilder,
-	/// The new proxy account public key
-	pub new_proxy: PolkadotPublicKey,
 	/// The current proxy AccountId
 	pub old_proxy: PolkadotPublicKey,
+	/// The new proxy account public key
+	pub new_proxy: PolkadotPublicKey,
 	/// The vault anonymous Polkadot AccountId
 	pub vault_account: PolkadotAccountId,
 }
@@ -32,16 +32,15 @@ impl RotateVaultProxy {
 		replay_protection: PolkadotReplayProtection,
 		old_proxy: PolkadotPublicKey,
 		new_proxy: PolkadotPublicKey,
-		proxy_account: PolkadotAccountId,
 		vault_account: PolkadotAccountId,
 	) -> Self {
 		let mut calldata = Self {
 			extrinsic_handler: PolkadotExtrinsicBuilder::new_empty(
 				replay_protection,
-				proxy_account,
+				MultiSigner::Sr25519(old_proxy.clone().0).into_account(),
 			),
-			new_proxy,
 			old_proxy,
+			new_proxy,
 			vault_account,
 		};
 		// create and insert polkadot runtime call
@@ -138,7 +137,7 @@ mod test_rotate_vault_proxy {
 			MultiSigner::Sr25519(keypair_vault.public()).into_account();
 
 		let keypair_old_proxy: Pair = <Pair as TraitPair>::from_seed(&RAW_SEED_2);
-		let account_id_old_proxy: AccountId32 =
+		let _account_id_old_proxy: AccountId32 =
 			MultiSigner::Sr25519(keypair_old_proxy.public()).into_account();
 
 		let keypair_new_proxy: Pair = <Pair as TraitPair>::from_seed(&RAW_SEED_3);
@@ -149,7 +148,6 @@ mod test_rotate_vault_proxy {
 			PolkadotReplayProtection::new(NONCE_2, 0, WESTEND_CONFIG),
 			PolkadotPublicKey(keypair_old_proxy.public()),
 			PolkadotPublicKey(keypair_new_proxy.public()),
-			account_id_old_proxy,
 			account_id_vault,
 		);
 

@@ -67,20 +67,17 @@ where
 		+ ReplayProtectionProvider<Polkadot>,
 {
 	fn new_unsigned(
-		old_key: PolkadotPublicKey,
+		old_key: Option<PolkadotPublicKey>,
 		new_key: PolkadotPublicKey,
 	) -> Result<Self, PolkadotEnvironmentError> {
 		let vault = E::lookup(SystemAccounts::Vault)
 			.expect("Vault account lookup should never fail.")
 			.ok_or(PolkadotEnvironmentError::VaultNotFound)?;
-		let proxy = E::lookup(SystemAccounts::Proxy)
-			.expect("Proxy account lookup should never fail.")
-			.ok_or(PolkadotEnvironmentError::VaultUnavailable)?;
+
 		Ok(Self::RotateVaultProxy(rotate_vault_proxy::RotateVaultProxy::new_unsigned(
 			E::replay_protection(),
+			old_key.ok_or(PolkadotEnvironmentError::VaultUnavailable)?,
 			new_key,
-			old_key,
-			proxy,
 			vault,
 		)))
 	}

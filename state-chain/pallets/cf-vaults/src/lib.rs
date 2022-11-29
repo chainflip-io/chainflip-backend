@@ -206,25 +206,15 @@ pub enum PalletOffence {
 
 #[derive(Encode, Decode, TypeInfo)]
 pub enum VaultState {
-	// We are ready to sign
-	Active(EpochIndex),
-
-	// The key is in transition. This also applies to when we're in transition to the first key.
-	Unavailable(EpochIndex),
+	Active,
+	Unavailable,
 }
+#[derive(Encode, Decode, TypeInfo)]
+pub struct VaultEpochAndState(pub EpochIndex, pub VaultState);
 
-impl VaultState {
-	fn epoch_index(&self) -> EpochIndex {
-		match self {
-			Self::Active(epoch) => *epoch,
-			Self::Unavailable(epoch) => *epoch,
-		}
-	}
-}
-
-impl Default for VaultState {
+impl Default for VaultEpochAndState {
 	fn default() -> Self {
-		Self::Unavailable(GENESIS_EPOCH)
+		Self(GENESIS_EPOCH, VaultState::Unavailable)
 	}
 }
 
@@ -379,8 +369,8 @@ pub mod pallet {
 	/// The epoch whose authorities control the current vault key.
 	#[pallet::storage]
 	#[pallet::getter(fn current_keyholders_epoch)]
-	pub type CurrentKeyholdersEpoch<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, VaultState, ValueQuery>;
+	pub type CurrentVaultEpochAndState<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, VaultEpochAndState, ValueQuery>;
 
 	/// Vault rotation statuses for the current epoch rotation.
 	#[pallet::storage]
@@ -734,10 +724,10 @@ pub mod pallet {
 						.unwrap_or_else(|_| {
 							panic!("Can't build genesis without a valid vault key.")
 						}),
-					VaultState::Active(GENESIS_EPOCH),
+					VaultEpochAndState(GENESIS_EPOCH, VaultState::Active),
 				)
 			} else {
-				(Default::default(), VaultState::Unavailable(GENESIS_EPOCH))
+				(Default::default(), VaultEpochAndState(GENESIS_EPOCH, VaultState::Unavailable))
 			};
 
 			Pallet::<T, I>::set_vault_for_epoch(vault_state, public_key, self.deployment_block);
@@ -753,7 +743,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		rotated_at_block_number: ChainBlockNumberFor<T, I>,
 	) {
 		Self::set_vault_for_epoch(
-			VaultState::Active(CurrentEpochIndex::<T>::get().saturating_add(1)),
+			VaultEpochAndState(CurrentEpochIndex::<T>::get().saturating_add(1), VaultState::Active),
 			new_public_key,
 			rotated_at_block_number.saturating_add(ChainBlockNumberFor::<T, I>::one()),
 		);
@@ -761,15 +751,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	fn set_vault_for_epoch(
-		vault_state: VaultState,
+		current_vault_and_state: VaultEpochAndState,
 		new_public_key: AggKeyFor<T, I>,
 		active_from_block: ChainBlockNumberFor<T, I>,
 	) {
 		Vaults::<T, I>::insert(
-			vault_state.epoch_index(),
+			current_vault_and_state.0,
 			Vault { public_key: new_public_key, active_from_block },
 		);
-		CurrentKeyholdersEpoch::<T, I>::put(vault_state);
+		CurrentVaultEpochAndState::<T, I>::put(current_vault_and_state);
 	}
 
 	// Once we've successfully generated the key, we want to do a signing ceremony to verify that
@@ -869,30 +859,27 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 		if let Some(VaultRotationStatus::<T, I>::KeygenVerificationComplete { new_public_key }) =
 			PendingVaultRotation::<T, I>::get()
 		{
-			match <Self as KeyProvider<_>>::current_key_epoch_index() {
-				KeyState::Active { key, epoch_index: _ } =>
-					match <T::SetAggKeyWithAggKey as SetAggKeyWithAggKey<_>>::new_unsigned(
-						key,
-						new_public_key,
-					) {
-						Ok(rotate_tx) => {
-							T::Broadcaster::threshold_sign_and_broadcast(rotate_tx);
-							if let VaultState::Active(curr_key_epoch) =
-								CurrentKeyholdersEpoch::<T, I>::get()
-							{
-								CurrentKeyholdersEpoch::<T, I>::put(VaultState::Unavailable(
-									curr_key_epoch,
-								))
-							}
-						},
-						Err(err) => T::SetAggKeyWithAggKey::handle_apicall_error(err),
-					},
-				// This branch should only run once, for the first key for a particular chain.
-				KeyState::Unavailable =>
-					Self::deposit_event(Event::<T, I>::AwaitingGovernanceActivation {
-						new_public_key,
-					}),
+			let current_vault_epoch_and_state = CurrentVaultEpochAndState::<T, I>::get();
+			match <T::SetAggKeyWithAggKey as SetAggKeyWithAggKey<_>>::new_unsigned(
+				Vaults::<T, I>::try_get(current_vault_epoch_and_state.0)
+					.map(|vault| vault.public_key)
+					.ok(),
+				new_public_key,
+			) {
+				Ok(rotate_tx) => {
+					T::Broadcaster::threshold_sign_and_broadcast(rotate_tx);
+					if let VaultState::Active = current_vault_epoch_and_state.1 {
+						CurrentVaultEpochAndState::<T, I>::put(VaultEpochAndState(
+							current_vault_epoch_and_state.0,
+							VaultState::Unavailable,
+						))
+					}
+				},
+				Err(_) => Self::deposit_event(Event::<T, I>::AwaitingGovernanceActivation {
+					new_public_key,
+				}),
 			}
+
 			PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingRotation {
 				new_public_key,
 			});
@@ -941,12 +928,13 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 
 impl<T: Config<I>, I: 'static> KeyProvider<T::Chain> for Pallet<T, I> {
 	fn current_key_epoch_index() -> KeyState<<T::Chain as ChainCrypto>::AggKey> {
-		match CurrentKeyholdersEpoch::<T, I>::get() {
-			VaultState::Active(epoch_index) => KeyState::Active {
-				key: Vaults::<T, I>::get(epoch_index).expect("Key must exist if active").public_key,
-				epoch_index,
+		let current_vault_epoch_and_state = CurrentVaultEpochAndState::<T, I>::get();
+		match current_vault_epoch_and_state.1 {
+			VaultState::Active => KeyState::Active {
+				key: Vaults::<T, I>::get(current_vault_epoch_and_state.0).expect("Key must exist if CurrentVaultEpochAndState exists since they get set at the same place: set_next_vault()").public_key,
+				epoch_index: current_vault_epoch_and_state.0,
 			},
-			VaultState::Unavailable(_) => KeyState::Unavailable,
+			VaultState::Unavailable => KeyState::Unavailable,
 		}
 	}
 
