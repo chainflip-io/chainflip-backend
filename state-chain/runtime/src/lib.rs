@@ -15,6 +15,8 @@ use crate::{
 		RuntimeApiPenalty, RuntimeApiPendingClaim,
 	},
 };
+#[cfg(feature = "ibiza")]
+use cf_chains::{dot, Polkadot};
 use cf_chains::{
 	eth,
 	eth::{api::register_claim::RegisterClaim, Ethereum},
@@ -66,6 +68,7 @@ use sp_version::RuntimeVersion;
 
 pub use cf_primitives::{BlockNumber, FlipBalance, ForeignChainAddress};
 pub use cf_traits::{EpochInfo, EthEnvironmentProvider, QualifyNode, SessionKeysRegistered};
+
 pub use chainflip::chain_instances::*;
 use chainflip::{
 	epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat, EthEnvironment,
@@ -184,9 +187,9 @@ impl pallet_cf_environment::Config for Runtime {
 #[cfg(feature = "ibiza")]
 impl pallet_cf_swapping::Config for Runtime {
 	type Event = Event;
-	type Ingress = EthereumIngressEgress;
+	type IngressHandler = chainflip::AnyChainIngressEgressHandler;
+	type EgressHandler = chainflip::AnyChainIngressEgressHandler;
 	type SwappingApi = ();
-	type Egress = EthereumIngressEgress;
 	type AccountRoleRegistry = AccountRoles;
 	type WeightInfo = pallet_cf_swapping::weights::PalletWeight<Runtime>;
 }
@@ -227,11 +230,41 @@ impl pallet_cf_ingress_egress::Config<EthereumInstance> for Runtime {
 }
 
 #[cfg(feature = "ibiza")]
+mod polkdadot_dummy {
+	use cf_chains::dot::api::PolkadotApi;
+
+	use super::*;
+
+	pub struct DummyBroadcaster;
+
+	impl cf_traits::Broadcaster<Polkadot> for DummyBroadcaster {
+		type ApiCall = PolkadotApi<chainflip::DotEnvironment>;
+
+		fn threshold_sign_and_broadcast(_api_call: Self::ApiCall) {
+			todo!("Configure a real broadcaster for polkadot.")
+		}
+	}
+}
+
+#[cfg(feature = "ibiza")]
+impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
+	type Event = Event;
+	type TargetChain = Polkadot;
+	type AddressDerivation = AddressDerivation;
+	type LpProvisioning = LiquidityProvider;
+	type SwapIntentHandler = Swapping;
+	type AllBatch = dot::api::PolkadotApi<chainflip::DotEnvironment>;
+	type Broadcaster = polkdadot_dummy::DummyBroadcaster;
+	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
+}
+
+#[cfg(feature = "ibiza")]
 impl pallet_cf_lp::Config for Runtime {
 	type Event = Event;
 	type AccountRoleRegistry = AccountRoles;
-	type Ingress = EthereumIngressEgress;
-	type EgressApi = EthereumIngressEgress;
+	type IngressHandler = chainflip::AnyChainIngressEgressHandler;
+	type EgressHandler = chainflip::AnyChainIngressEgressHandler;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 }
 
@@ -429,7 +462,6 @@ impl pallet_cf_staking::Config for Runtime {
 	type AccountRoleRegistry = AccountRoles;
 	type Balance = FlipBalance;
 	type Flip = Flip;
-	type EthEnvironmentProvider = Environment;
 	type ThresholdSigner = EthereumThresholdSigner;
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, Instance1>;
@@ -613,6 +645,7 @@ construct_runtime!(
 		EthereumBroadcaster: pallet_cf_broadcast::<Instance1>,
 		EthereumChainTracking: pallet_cf_chain_tracking::<Instance1>,
 		EthereumIngressEgress: pallet_cf_ingress_egress::<Instance1>,
+		PolkadotIngressEgress: pallet_cf_ingress_egress::<Instance2>,
 		Swapping: pallet_cf_swapping,
 		LiquidityProvider: pallet_cf_lp,
 	}
@@ -801,6 +834,7 @@ impl_runtime_apis! {
 				eth::api::EthereumApi::RegisterClaim(tx) => tx,
 				_ => unreachable!(),
 			};
+
 			Some(RuntimeApiPendingClaim {
 				amount: pending_claim.amount,
 				address: pending_claim.address.into(),
@@ -808,6 +842,22 @@ impl_runtime_apis! {
 				sig_data: pending_claim.sig_data,
 			})
 		}
+
+		fn cf_get_claim_certificate(account_id: AccountId) -> Option<Vec<u8>> {
+			let api_call = pallet_cf_staking::PendingClaims::<Runtime>::get(&account_id)?;
+			let pending_claim: RegisterClaim = match api_call {
+				eth::api::EthereumApi::RegisterClaim(tx) => tx,
+				_ => unreachable!(),
+			};
+
+			if pending_claim.sig_data.is_signed() {
+				use cf_chains::ApiCall;
+				Some(pending_claim.chain_encoded())
+			} else {
+				None
+			}
+		}
+
 		fn cf_penalties() -> Vec<(Offence, RuntimeApiPenalty)> {
 			pallet_cf_reputation::Penalties::<Runtime>::iter_keys()
 				.map(|offence| {

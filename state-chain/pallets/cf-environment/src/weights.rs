@@ -51,7 +51,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		(23_000_000 as Weight)
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
-	// Storage: Environment SupportedEthAssets (r:0 w:1)
+	// Storage: Environment EthereumSupportedAssets (r:0 w:1)
 	fn update_supported_eth_assets() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
 		(24_000_000 as Weight)
@@ -74,7 +74,7 @@ impl WeightInfo for () {
 		(23_000_000 as Weight)
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
-	// Storage: Environment SupportedEthAssets (r:0 w:1)
+	// Storage: Environment EthereumSupportedAssets (r:0 w:1)
 	fn update_supported_eth_assets() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
 		(24_000_000 as Weight)

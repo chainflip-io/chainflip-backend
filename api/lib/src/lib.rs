@@ -10,10 +10,13 @@ use sp_core::{ed25519::Public as EdPublic, sr25519::Public as SrPublic, Bytes};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use state_chain_runtime::opaque::SessionKeys;
 
+use custom_rpc::CustomApiClient;
+
 pub mod primitives {
 	pub use cf_primitives::*;
 	pub use pallet_cf_governance::ProposalId;
 	pub use state_chain_runtime::Hash;
+	pub type ClaimAmount = pallet_cf_staking::ClaimAmount<FlipBalance>;
 }
 
 pub use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
@@ -67,18 +70,15 @@ impl<RawRpcClient: RawRpcApi + Send + Sync + 'static> RotateSessionKeysApi
 pub async fn request_block(
 	block_hash: state_chain_runtime::Hash,
 	state_chain_settings: &settings::StateChain,
-) -> Result<()> {
+) -> Result<state_chain_runtime::SignedBlock> {
 	println!("Querying the state chain for the block with hash {:x?}.", block_hash);
 
 	let state_chain_rpc_client = BaseRpcClient::new(state_chain_settings).await?;
 
-	match state_chain_rpc_client.block(block_hash).await? {
-		Some(block) => {
-			println!("{:#?}", block);
-		},
-		None => println!("Could not find block with block hash {:x?}", block_hash),
-	}
-	Ok(())
+	state_chain_rpc_client
+		.block(block_hash)
+		.await?
+		.ok_or_else(|| anyhow!("unknown block hash"))
 }
 
 pub type ClaimCertificate = Vec<u8>;
@@ -110,15 +110,21 @@ where
 }
 
 pub async fn request_claim(
-	atomic_amount: u128,
+	amount: primitives::ClaimAmount,
 	eth_address: [u8; 20],
 	state_chain_settings: &settings::StateChain,
-) -> Result<ClaimCertificate> {
+) -> Result<H256> {
 	task_scope(|scope| {
 		async {
 			let logger = new_discard_logger();
-			let (_, block_stream, state_chain_client) =
-				StateChainClient::new(scope, state_chain_settings, false, &logger).await?;
+			let (_, block_stream, state_chain_client) = StateChainClient::new(
+				scope,
+				state_chain_settings,
+				AccountRole::None,
+				false,
+				&logger,
+			)
+			.await?;
 
 			// Are we in a current auction phase
 			if state_chain_client.is_auction_phase().await? {
@@ -131,35 +137,54 @@ pub async fn request_claim(
 			let (tx_hash, _) = submit_and_ensure_success(
 				&state_chain_client,
 				block_stream,
-				pallet_cf_staking::Call::claim {
-					amount: atomic_amount.into(),
-					address: eth_address,
-				},
+				pallet_cf_staking::Call::claim { amount, address: eth_address },
 			)
 			.await
 			.map_err(|_| anyhow!("invalid claim"))?;
 
-			println!(
-			"Your claim has transaction hash: `{:#x}`. Waiting for your request to be confirmed...",
-			tx_hash
-		);
+			Ok(tx_hash)
+		}
+		.boxed()
+	})
+	.await
+}
 
-			println!("Your claim request is on chain.\nWaiting for signed claim data...");
+/// Get claim certificate by polling the State Chain.
+/// Returns `None` if no certificate is detected after polling
+/// for `blocks_to_poll_limit` blocks.
+pub async fn poll_for_claim_certificate(
+	state_chain_settings: &settings::StateChain,
+	blocks_to_poll_limit: usize,
+) -> Result<Option<ClaimCertificate>> {
+	task_scope(|scope| {
+		async {
+			let logger = new_discard_logger();
+			let (_block_hash, mut block_stream, state_chain_client) = StateChainClient::new(
+				scope,
+				state_chain_settings,
+				AccountRole::None,
+				false,
+				&logger,
+			)
+			.await?;
 
-			while let Some(header) = block_stream.next().await {
-				let block_hash = header.hash();
-				let events = state_chain_client
-					.storage_value::<frame_system::Events<state_chain_runtime::Runtime>>(block_hash)
-					.await?;
-				for event_record in events {
-					if let state_chain_runtime::Event::Staking(
-						pallet_cf_staking::Event::ClaimSignatureIssued(validator_id, claim_cert),
-					) = event_record.event
-					{
-						if validator_id == state_chain_client.account_id() {
-							return Ok(claim_cert)
-						}
-					}
+			let account_id = state_chain_client.account_id();
+
+			let mut blocks_polled = 0;
+
+			while let Some(_result_header) = block_stream.next().await {
+				if let Some(certificate) = state_chain_client
+					.base_rpc_client
+					.raw_rpc_client
+					.cf_get_claim_certificate(account_id.clone(), None)
+					.await?
+				{
+					return Ok(Some(certificate))
+				}
+
+				blocks_polled += 1;
+				if blocks_polled >= blocks_to_poll_limit {
+					return Ok(None)
 				}
 			}
 
@@ -179,8 +204,14 @@ pub async fn register_claim(
 	task_scope(|scope| {
 		async {
 			let logger = new_discard_logger();
-			let (_, _block_stream, state_chain_client) =
-				StateChainClient::new(scope, state_chain_settings, false, &logger).await?;
+			let (_, _block_stream, state_chain_client) = StateChainClient::new(
+				scope,
+				state_chain_settings,
+				AccountRole::None,
+				false,
+				&logger,
+			)
+			.await?;
 
 			let block_hash =
 				state_chain_client.base_rpc_client.latest_finalized_block_hash().await?;
@@ -192,11 +223,11 @@ pub async fn register_claim(
 				.await
 				.expect("Failed to fetch EthereumChainId from the State Chain");
 			let stake_manager_address = state_chain_client
-				.storage_value::<pallet_cf_environment::StakeManagerAddress<state_chain_runtime::Runtime>>(
+				.storage_value::<pallet_cf_environment::EthereumStakeManagerAddress<state_chain_runtime::Runtime>>(
 					block_hash,
 				)
 				.await
-				.expect("Failed to fetch StakeManagerAddress from State Chain");
+				.expect("Failed to fetch EthereumStakeManagerAddress from State Chain");
 
 			println!(
 				"Registering your claim on the Ethereum network, to StakeManager address: {:?}",
@@ -237,8 +268,14 @@ pub async fn register_account_role(
 	task_scope(|scope| {
 		async {
 			let logger = new_discard_logger();
-			let (_, _, state_chain_client) =
-				StateChainClient::new(scope, state_chain_settings, false, &logger).await?;
+			let (_, _, state_chain_client) = StateChainClient::new(
+				scope,
+				state_chain_settings,
+				AccountRole::None,
+				false,
+				&logger,
+			)
+			.await?;
 
 			let tx_hash = state_chain_client
 				.submit_signed_extrinsic(
@@ -255,12 +292,18 @@ pub async fn register_account_role(
 	.await
 }
 
-pub async fn rotate_keys(state_chain_settings: &settings::StateChain) -> Result<()> {
+pub async fn rotate_keys(state_chain_settings: &settings::StateChain) -> Result<H256> {
 	task_scope(|scope| {
 		async {
 			let logger = new_discard_logger();
-			let (_, _, state_chain_client) =
-				StateChainClient::new(scope, state_chain_settings, false, &logger).await?;
+			let (_, _, state_chain_client) = StateChainClient::new(
+				scope,
+				state_chain_settings,
+				AccountRole::None,
+				false,
+				&logger,
+			)
+			.await?;
 			let seed = state_chain_client
 				.rotate_session_keys()
 				.await
@@ -285,8 +328,7 @@ pub async fn rotate_keys(state_chain_settings: &settings::StateChain) -> Result<
 				.await
 				.expect("Failed to submit set_keys extrinsic");
 
-			println!("Session key rotated at tx {:#x}.", tx_hash);
-			Ok(())
+			Ok(tx_hash)
 		}
 		.boxed()
 	})
@@ -301,7 +343,7 @@ pub async fn force_rotation(
 	task_scope(|scope| async {
 		let logger = new_discard_logger();
 		let (_, _, state_chain_client) =
-			StateChainClient::new(scope, state_chain_settings, false, &logger).await?;
+			StateChainClient::new(scope, state_chain_settings, AccountRole::None, false, &logger).await?;
 
 		state_chain_client
 			.submit_signed_extrinsic(
@@ -330,8 +372,14 @@ pub async fn retire_account(state_chain_settings: &settings::StateChain) -> Resu
 	task_scope(|scope| {
 		async {
 			let logger = new_discard_logger();
-			let (_, _, state_chain_client) =
-				StateChainClient::new(scope, state_chain_settings, false, &logger).await?;
+			let (_, _, state_chain_client) = StateChainClient::new(
+				scope,
+				state_chain_settings,
+				AccountRole::None,
+				false,
+				&logger,
+			)
+			.await?;
 			let tx_hash = state_chain_client
 				.submit_signed_extrinsic(pallet_cf_staking::Call::retire_account {}, &logger)
 				.await
@@ -348,7 +396,7 @@ pub async fn activate_account(state_chain_settings: &settings::StateChain) -> Re
 	task_scope(|scope| async {
 		let logger = new_discard_logger();
 		let (latest_block_hash, _, state_chain_client) =
-			StateChainClient::new(scope, state_chain_settings, false, &logger).await?;
+			StateChainClient::new(scope, state_chain_settings, AccountRole::None, false, &logger).await?;
 
 		match state_chain_client
 			.storage_map_entry::<pallet_cf_account_roles::AccountRoles<state_chain_runtime::Runtime>>(
@@ -390,8 +438,14 @@ pub async fn set_vanity_name(
 				bail!("Name too long. Max length is {} characters.", MAX_LENGTH_FOR_VANITY_NAME,);
 			}
 
-			let (_, _, state_chain_client) =
-				StateChainClient::new(scope, state_chain_settings, false, &logger).await?;
+			let (_, _, state_chain_client) = StateChainClient::new(
+				scope,
+				state_chain_settings,
+				AccountRole::None,
+				false,
+				&logger,
+			)
+			.await?;
 			let tx_hash = state_chain_client
 				.submit_signed_extrinsic(
 					pallet_cf_validator::Call::set_vanity_name { name: name.as_bytes().to_vec() },
