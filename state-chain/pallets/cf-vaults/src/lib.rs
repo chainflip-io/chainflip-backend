@@ -716,21 +716,23 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
 		fn build(&self) {
-			let (public_key, vault_state) = if let Some(vault_key) = self.vault_key.clone() {
-				(
-					AggKeyFor::<T, I>::try_from(vault_key)
+			if self.vault_key.is_some() {
+				Pallet::<T, I>::set_vault_for_epoch(
+					VaultEpochAndState(GENESIS_EPOCH, VaultState::Active),
+					AggKeyFor::<T, I>::try_from(self.vault_key.clone().unwrap())
 						// Note: Can't use expect() here without some type shenanigans, but would
 						// give clearer error messages.
 						.unwrap_or_else(|_| {
 							panic!("Can't build genesis without a valid vault key.")
 						}),
-					VaultEpochAndState(GENESIS_EPOCH, VaultState::Active),
-				)
+					self.deployment_block,
+				);
 			} else {
-				(Default::default(), VaultEpochAndState(GENESIS_EPOCH, VaultState::Unavailable))
-			};
-
-			Pallet::<T, I>::set_vault_for_epoch(vault_state, public_key, self.deployment_block);
+				CurrentVaultEpochAndState::<T, I>::put(VaultEpochAndState(
+					GENESIS_EPOCH,
+					VaultState::Unavailable,
+				));
+			}
 
 			KeygenResponseTimeout::<T, I>::put(self.keygen_response_timeout);
 		}
