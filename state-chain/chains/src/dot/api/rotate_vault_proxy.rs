@@ -37,7 +37,7 @@ impl RotateVaultProxy {
 		let mut calldata = Self {
 			extrinsic_handler: PolkadotExtrinsicBuilder::new_empty(
 				replay_protection,
-				MultiSigner::Sr25519(old_proxy.clone().0).into_account(),
+				MultiSigner::Sr25519(old_proxy.0).into_account(),
 			),
 			old_proxy,
 			new_proxy,
