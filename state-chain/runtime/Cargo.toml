@@ -298,5 +298,6 @@ ibiza = [
   'pallet-cf-swapping',
   'pallet-cf-lp',
   'cf-chains/ibiza',
+  'cf-traits/ibiza',
   'pallet-cf-environment/ibiza'
 ]

@@ -116,12 +116,18 @@ macro_rules! chain_assets {
 				}
 			}
 
+			impl From<Asset> for ForeignChain {
+				fn from(_asset: Asset) -> Self {
+					ForeignChain::$chain
+				}
+			}
+
 			#[test]
 			fn consistency_check() {
 				$(
 					assert_eq!(
 						ForeignChain::from(any::Asset::from(Asset::$asset)),
-						ForeignChain::$chain,
+						ForeignChain::from(Asset::$asset),
 						"Inconsistent asset type definition. Asset {} defined in {}, but mapped to chain {:?}",
 						stringify!($asset),
 						stringify!($mod),

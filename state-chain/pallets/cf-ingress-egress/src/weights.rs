@@ -41,9 +41,9 @@ pub struct PalletWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumIngressEgress ScheduledEgressRequests (r:1 w:1)
 	// Storage: EthereumIngressEgress DisabledEgressAssets (r:1 w:0)
-	// Storage: Environment KeyManagerAddress (r:1 w:0)
+	// Storage: Environment EthereumKeyManagerAddress (r:1 w:0)
 	// Storage: Environment EthereumChainId (r:1 w:0)
-	// Storage: Environment GlobalSignatureNonce (r:1 w:1)
+	// Storage: Environment EthereumSignatureNonce (r:1 w:1)
 	// Storage: EthereumThresholdSigner ThresholdSignatureRequestIdCounter (r:1 w:1)
 	// Storage: Validator CeremonyIdCounter (r:1 w:1)
 	// Storage: EthereumVault CurrentKeyholdersEpoch (r:1 w:0)
@@ -93,9 +93,9 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 impl WeightInfo for () {
 	// Storage: EthereumIngressEgress ScheduledEgressRequests (r:1 w:1)
 	// Storage: EthereumIngressEgress DisabledEgressAssets (r:1 w:0)
-	// Storage: Environment KeyManagerAddress (r:1 w:0)
+	// Storage: Environment EthereumKeyManagerAddress (r:1 w:0)
 	// Storage: Environment EthereumChainId (r:1 w:0)
-	// Storage: Environment GlobalSignatureNonce (r:1 w:1)
+	// Storage: Environment EthereumSignatureNonce (r:1 w:1)
 	// Storage: EthereumThresholdSigner ThresholdSignatureRequestIdCounter (r:1 w:1)
 	// Storage: Validator CeremonyIdCounter (r:1 w:1)
 	// Storage: EthereumVault CurrentKeyholdersEpoch (r:1 w:0)

@@ -462,7 +462,7 @@ fn testnet_genesis(
 		reputation: ReputationConfig { accrual_ratio, penalties, genesis_nodes: genesis_stakers },
 		environment: config_set,
 		ethereum_vault: EthereumVaultConfig {
-			vault_key: eth_init_agg_key.to_vec(),
+			vault_key: Some(eth_init_agg_key.to_vec()),
 			deployment_block: ethereum_deployment_block,
 			keygen_response_timeout: keygen_ceremony_timeout_blocks,
 		},

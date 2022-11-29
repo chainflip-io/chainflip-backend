@@ -77,51 +77,6 @@ impl system::Config for Test {
 	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
-pub struct MockIngress;
-
-impl IngressApi<Ethereum> for MockIngress {
-	type AccountId = AccountId;
-
-	fn register_liquidity_ingress_intent(
-		_lp_account: Self::AccountId,
-		_ingress_asset: <Ethereum as Chain>::ChainAsset,
-	) -> Result<(u64, cf_primitives::ForeignChainAddress), sp_runtime::DispatchError> {
-		Ok((0, ForeignChainAddress::Eth(Default::default())))
-	}
-
-	fn register_swap_intent(
-		_ingress_asset: <Ethereum as Chain>::ChainAsset,
-		_schedule_egress: Asset,
-		_egress_address: ForeignChainAddress,
-		_relayer_commission_bps: u16,
-		_relayer_id: Self::AccountId,
-	) -> Result<(u64, cf_primitives::ForeignChainAddress), sp_runtime::DispatchError> {
-		Ok((0, ForeignChainAddress::Eth(Default::default())))
-	}
-}
-
-pub struct MockEgressApi;
-impl EgressApi<Ethereum> for MockEgressApi {
-	fn schedule_egress(
-		asset: <Ethereum as Chain>::ChainAsset,
-		amount: AssetAmount,
-		egress_address: <Ethereum as Chain>::ChainAccount,
-	) {
-		if let Some(mut egresses) = EgressQueue::<Test>::get() {
-			egresses.push(EgressTransaction { asset, amount, egress_address });
-			EgressQueue::<Test>::put(egresses);
-		} else {
-			EgressQueue::<Test>::put(vec![EgressTransaction { asset, amount, egress_address }]);
-		}
-	}
-}
-
-impl MockEgressApi {
-	pub fn clear() {
-		EgressQueue::<Test>::kill();
-	}
-}
-
 pub struct MockSwappingApi;
 
 impl SwappingApi for MockSwappingApi {
@@ -165,8 +120,8 @@ impl WeightInfo for MockWeightInfo {
 impl pallet_cf_swapping::Config for Test {
 	type Event = Event;
 	type AccountRoleRegistry = ();
-	type Ingress = MockIngress;
-	type Egress = MockEgressApi;
+	type IngressHandler = MockIngressHandler<AnyChain, Self>;
+	type EgressHandler = MockEgressHandler<AnyChain, Self>;
 	type WeightInfo = MockWeightInfo;
 	type SwappingApi = MockSwappingApi;
 }

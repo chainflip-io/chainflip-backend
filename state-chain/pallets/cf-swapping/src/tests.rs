@@ -2,7 +2,7 @@ use crate::{mock::*, EarnedRelayerFees, Pallet, Swap, SwapQueue, WeightInfo};
 use cf_chains::eth::assets;
 use cf_primitives::{Asset, EthereumAddress, ForeignChainAddress};
 use cf_traits::SwapIntentHandler;
-use frame_support::assert_ok;
+use frame_support::{assert_noop, assert_ok};
 
 use frame_support::traits::Hooks;
 
@@ -62,14 +62,14 @@ fn generate_test_swaps() -> Vec<Swap<u64>> {
 
 fn insert_swaps(swaps: Vec<Swap<u64>>) {
 	for swap in swaps.iter() {
-		<Pallet<Test> as SwapIntentHandler>::schedule_swap(
+		assert_ok!(<Pallet<Test> as SwapIntentHandler>::schedule_swap(
 			swap.from,
 			swap.to,
 			swap.amount,
 			swap.egress_address,
 			swap.relayer_id,
 			2,
-		);
+		));
 	}
 }
 
@@ -127,34 +127,85 @@ fn expect_earned_fees_to_be_recorded() {
 	new_test_ext().execute_with(|| {
 		const ALICE: u64 = 2_u64;
 		const BOB: u64 = 3_u64;
-		<Pallet<Test> as SwapIntentHandler>::schedule_swap(
+		assert_ok!(<Pallet<Test> as SwapIntentHandler>::schedule_swap(
 			Asset::Flip,
 			Asset::Usdc,
 			100,
 			ForeignChainAddress::Eth([2; 20]),
 			ALICE,
 			200,
-		);
-		<Pallet<Test> as SwapIntentHandler>::schedule_swap(
+		));
+		assert_ok!(<Pallet<Test> as SwapIntentHandler>::schedule_swap(
 			Asset::Flip,
 			Asset::Usdc,
 			500,
 			ForeignChainAddress::Eth([2; 20]),
 			BOB,
 			100,
-		);
+		));
 		Swapping::on_idle(1, 1000);
 		assert_eq!(EarnedRelayerFees::<Test>::get(ALICE, cf_primitives::Asset::Flip), 2);
 		assert_eq!(EarnedRelayerFees::<Test>::get(BOB, cf_primitives::Asset::Flip), 5);
-		<Pallet<Test> as SwapIntentHandler>::schedule_swap(
+		assert_ok!(<Pallet<Test> as SwapIntentHandler>::schedule_swap(
 			Asset::Flip,
 			Asset::Usdc,
 			100,
 			ForeignChainAddress::Eth([2; 20]),
 			ALICE,
 			200,
-		);
+		));
 		Swapping::on_idle(1, 1000);
 		assert_eq!(EarnedRelayerFees::<Test>::get(ALICE, cf_primitives::Asset::Flip), 4);
+	});
+}
+
+#[test]
+fn cannot_swap_with_incorrect_egress_address_type() {
+	new_test_ext().execute_with(|| {
+		const ALICE: u64 = 1_u64;
+		assert_noop!(
+			<Pallet<Test> as SwapIntentHandler>::schedule_swap(
+				Asset::Flip,
+				Asset::Usdc,
+				10,
+				ForeignChainAddress::Dot([2; 32]),
+				ALICE,
+				2,
+			),
+			crate::Error::<Test>::IncompatibleAssetAndAddress,
+		);
+		assert_noop!(
+			<Pallet<Test> as SwapIntentHandler>::schedule_swap(
+				Asset::Flip,
+				Asset::Eth,
+				10,
+				ForeignChainAddress::Dot([2; 32]),
+				ALICE,
+				2,
+			),
+			crate::Error::<Test>::IncompatibleAssetAndAddress,
+		);
+		assert_noop!(
+			<Pallet<Test> as SwapIntentHandler>::schedule_swap(
+				Asset::Eth,
+				Asset::Flip,
+				10,
+				ForeignChainAddress::Dot([2; 32]),
+				ALICE,
+				2,
+			),
+			crate::Error::<Test>::IncompatibleAssetAndAddress,
+		);
+		assert_noop!(
+			<Pallet<Test> as SwapIntentHandler>::schedule_swap(
+				Asset::Flip,
+				Asset::Dot,
+				10,
+				ForeignChainAddress::Eth([2; 20]),
+				ALICE,
+				2,
+			),
+			crate::Error::<Test>::IncompatibleAssetAndAddress,
+		);
 	});
 }

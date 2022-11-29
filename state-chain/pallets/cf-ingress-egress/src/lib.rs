@@ -406,7 +406,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				egress_address,
 				relayer_id,
 				relayer_commission_bps,
-			),
+			)?,
 		};
 
 		Self::deposit_event(Event::IngressCompleted { ingress_address, asset, amount, tx_hash });
@@ -432,10 +432,9 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 
 impl<T: Config<I>, I: 'static> IngressApi<T::TargetChain> for Pallet<T, I> {
 	type AccountId = <T as frame_system::Config>::AccountId;
-
 	// This should be callable by the LP pallet.
 	fn register_liquidity_ingress_intent(
-		lp_account: Self::AccountId,
+		lp_account: T::AccountId,
 		ingress_asset: TargetChainAsset<T, I>,
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
 		let (intent_id, ingress_address) = Self::generate_new_address(ingress_asset)?;

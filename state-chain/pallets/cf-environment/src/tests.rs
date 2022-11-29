@@ -2,7 +2,7 @@ use cf_primitives::Asset;
 use cf_traits::SystemStateInfo;
 use frame_support::{assert_noop, assert_ok};
 
-use crate::SupportedEthAssets;
+use crate::EthereumSupportedAssets;
 
 use crate::{mock::*, Error, SystemState, SystemStateProvider};
 
@@ -72,16 +72,16 @@ fn ensure_no_maintenance() {
 fn update_supported_eth_assets() {
 	new_test_ext().execute_with(|| {
 		// Expect the FLIP token address to be set after genesis
-		assert!(SupportedEthAssets::<Test>::contains_key(Asset::Flip));
+		assert!(EthereumSupportedAssets::<Test>::contains_key(Asset::Flip));
 		// Add an ETH address for the Dot token
 		let dot_address = [4; 20];
-		assert_eq!(SupportedEthAssets::<Test>::get(Asset::Dot), None);
+		assert_eq!(EthereumSupportedAssets::<Test>::get(Asset::Dot), None);
 		assert_ok!(Environment::update_supported_eth_assets(
 			Origin::root(),
 			Asset::Dot,
 			dot_address
 		));
-		assert_eq!(SupportedEthAssets::<Test>::get(Asset::Dot), Some(dot_address));
+		assert_eq!(EthereumSupportedAssets::<Test>::get(Asset::Dot), Some(dot_address));
 		assert_eq!(
 			frame_system::Pallet::<Test>::events()
 				.pop()
@@ -94,7 +94,7 @@ fn update_supported_eth_assets() {
 		);
 		// Update the address for Usdc
 		assert_ok!(Environment::update_supported_eth_assets(Origin::root(), Asset::Usdc, [2; 20]));
-		assert_eq!(SupportedEthAssets::<Test>::get(Asset::Usdc), Some([2; 20]));
+		assert_eq!(EthereumSupportedAssets::<Test>::get(Asset::Usdc), Some([2; 20]));
 		assert_eq!(
 			frame_system::Pallet::<Test>::events()
 				.pop()

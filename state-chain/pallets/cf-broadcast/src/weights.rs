@@ -60,7 +60,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	}
 	// Storage: EthereumThresholdSigner Signature (r:1 w:1)
 	// Storage: Environment EthereumChainId (r:1 w:0)
-	// Storage: Environment SupportedEthAssets (r:1 w:0)
+	// Storage: Environment EthereumSupportedAssets (r:1 w:0)
 	// Storage: EthereumBroadcaster BroadcastIdCounter (r:1 w:1)
 	// Storage: EthereumChainTracking ChainState (r:1 w:0)
 	// Storage: EthereumBroadcaster FailedBroadcasters (r:1 w:0)
@@ -130,7 +130,7 @@ impl WeightInfo for () {
 	}
 	// Storage: EthereumThresholdSigner Signature (r:1 w:1)
 	// Storage: Environment EthereumChainId (r:1 w:0)
-	// Storage: Environment SupportedEthAssets (r:1 w:0)
+	// Storage: Environment EthereumSupportedAssets (r:1 w:0)
 	// Storage: EthereumBroadcaster BroadcastIdCounter (r:1 w:1)
 	// Storage: EthereumChainTracking ChainState (r:1 w:0)
 	// Storage: EthereumBroadcaster FailedBroadcasters (r:1 w:0)
