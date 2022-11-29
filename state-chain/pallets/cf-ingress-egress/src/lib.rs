@@ -359,7 +359,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Err(err) => {
 				ScheduledEgressRequests::<T, I>::put(scheduled_egress_requests);
 				T::AllBatch::handle_apicall_error(err);
-				2
+				0
 			},
 		}
 	}
