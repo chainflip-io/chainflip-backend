@@ -115,7 +115,6 @@ pub type Percentage = u8;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_primitives::GENESIS_EPOCH;
 	use cf_traits::{AccountRoleRegistry, VaultStatus};
 	use frame_system::pallet_prelude::*;
 	use pallet_session::WeightInfo as SessionWeightInfo;
@@ -857,6 +856,7 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
+			use cf_primitives::GENESIS_EPOCH;
 			LastExpiredEpoch::<T>::set(Default::default());
 			BlocksPerEpoch::<T>::set(self.blocks_per_epoch);
 			CurrentRotationPhase::<T>::set(RotationPhase::Idle);
