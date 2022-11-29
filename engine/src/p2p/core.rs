@@ -164,8 +164,7 @@ pub fn start(
 
 	let zmq_context = zmq::Context::new();
 
-	// TODO: consider if we need to change the default limit for open sockets
-	// (the default is 1024)
+	zmq_context.set_max_sockets(65536).expect("should update socket limit");
 
 	// TODO: consider keeping track of "last activity" on any outgoing
 	// socket connection and disconnecting inactive peers (see proxy_expire_idle_peers
