@@ -144,8 +144,8 @@ fn expect_earned_fees_to_be_recorded() {
 			100,
 		);
 		Swapping::on_idle(1, 1000);
-		assert_eq!(EarnedRelayerFees::<Test>::get(ALICE, cf_primitives::Asset::Flip), Some(2));
-		assert_eq!(EarnedRelayerFees::<Test>::get(BOB, cf_primitives::Asset::Flip), Some(5));
+		assert_eq!(EarnedRelayerFees::<Test>::get(ALICE, cf_primitives::Asset::Flip), 2);
+		assert_eq!(EarnedRelayerFees::<Test>::get(BOB, cf_primitives::Asset::Flip), 5);
 		<Pallet<Test> as SwapIntentHandler>::schedule_swap(
 			Asset::Flip,
 			Asset::Usdc,
@@ -155,6 +155,6 @@ fn expect_earned_fees_to_be_recorded() {
 			200,
 		);
 		Swapping::on_idle(1, 1000);
-		assert_eq!(EarnedRelayerFees::<Test>::get(ALICE, cf_primitives::Asset::Flip), Some(4));
+		assert_eq!(EarnedRelayerFees::<Test>::get(ALICE, cf_primitives::Asset::Flip), 4);
 	});
 }
