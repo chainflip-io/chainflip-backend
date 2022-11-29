@@ -36,7 +36,7 @@ futures-util = "0.3.14"
 hex = "0.4.3"
 httparse = "1.4.1"
 itertools = "0.10"
-clap = { version = "3.1.18", features = ["derive"] }
+clap = { version = "3.2.16", features = ["derive", "env"] }
 chrono = "0.4.19"
 # have to use the older version until secp256k1 updates its dependency (https://github.com/rust-bitcoin/rust-secp256k1/issues/328)
 rand_legacy = { package = "rand", version = "0.6" }
