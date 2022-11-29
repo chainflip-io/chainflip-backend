@@ -220,22 +220,23 @@ impl StateChainClient {
 		};
 
 		const BLOCK_CAPACITY: usize = 10;
-
 		let (block_sender, block_receiver) = async_broadcast::broadcast(BLOCK_CAPACITY);
-		let task_handle = scope.spawn_with_handle(async move {
-			finalized_block_header_stream
-				.try_for_each(|block_header| {
-					block_sender.broadcast(block_header).map_err(anyhow::Error::new).map_ok(|_| ())
-				})
-				.await
-		});
 
 		let state_chain_client = Arc::new(StateChainClient {
 			nonce: AtomicU32::new(account_nonce),
 			runtime_version: RwLock::new(base_rpc_client.runtime_version().await?),
 			genesis_hash: base_rpc_client.block_hash(0).await?.unwrap(),
 			signer: signer.clone(),
-			_task_handle: task_handle,
+			_task_handle: scope.spawn_with_handle(async move {
+				finalized_block_header_stream
+					.try_for_each(|block_header| {
+						block_sender
+							.broadcast(block_header)
+							.map_err(anyhow::Error::new)
+							.map_ok(|_| ())
+					})
+					.await
+			}),
 			base_rpc_client,
 		});
 
