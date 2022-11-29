@@ -61,8 +61,8 @@ benchmarks_instance_pallet! {
 	}
 	verify {
 		assert!(matches!(
-			<Pallet::<T, I> as VaultRotator>::get_vault_rotation_outcome(),
-			AsyncResult::Ready(Err(..))
+			<Pallet::<T, I> as VaultRotator>::status(),
+			AsyncResult::Ready(VaultStatus::Failed(..))
 		));
 	}
 	on_initialize_success {
@@ -142,7 +142,7 @@ benchmarks_instance_pallet! {
 	verify {
 		assert!(matches!(
 			PendingVaultRotation::<T, I>::get().unwrap(),
-			VaultRotationStatus::AwaitingRotation { new_public_key }
+			VaultRotationStatus::KeygenVerificationComplete { new_public_key }
 				if new_public_key == agg_key
 		))
 	}

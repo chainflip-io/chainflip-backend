@@ -57,9 +57,9 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	}
 	// Storage: TokenholderGovernance Proposals (r:1 w:0)
 	// Storage: TokenholderGovernance GovKeyUpdateAwaitingEnactment (r:1 w:1)
-	// Storage: Environment KeyManagerAddress (r:1 w:0)
+	// Storage: Environment EthereumKeyManagerAddress (r:1 w:0)
 	// Storage: Environment EthereumChainId (r:1 w:0)
-	// Storage: Environment GlobalSignatureNonce (r:1 w:1)
+	// Storage: Environment EthereumSignatureNonce (r:1 w:1)
 	// Storage: EthereumThresholdSigner ThresholdSignatureRequestIdCounter (r:1 w:1)
 	// Storage: Validator CeremonyIdCounter (r:1 w:1)
 	// Storage: Validator CurrentEpoch (r:1 w:0)
@@ -122,9 +122,9 @@ impl WeightInfo for () {
 	}
 	// Storage: TokenholderGovernance Proposals (r:1 w:0)
 	// Storage: TokenholderGovernance GovKeyUpdateAwaitingEnactment (r:1 w:1)
-	// Storage: Environment KeyManagerAddress (r:1 w:0)
+	// Storage: Environment EthereumKeyManagerAddress (r:1 w:0)
 	// Storage: Environment EthereumChainId (r:1 w:0)
-	// Storage: Environment GlobalSignatureNonce (r:1 w:1)
+	// Storage: Environment EthereumSignatureNonce (r:1 w:1)
 	// Storage: EthereumThresholdSigner ThresholdSignatureRequestIdCounter (r:1 w:1)
 	// Storage: Validator CeremonyIdCounter (r:1 w:1)
 	// Storage: Validator CurrentEpoch (r:1 w:0)

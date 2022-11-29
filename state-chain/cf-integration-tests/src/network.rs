@@ -6,6 +6,7 @@ use codec::Encode;
 use frame_support::traits::{OnFinalize, OnIdle};
 use libsecp256k1::PublicKey;
 use pallet_cf_staking::{ClaimAmount, MinimumStake};
+use pallet_cf_validator::RotationPhase;
 use state_chain_runtime::{AccountRoles, Authorship, Event, Origin};
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
@@ -295,9 +296,8 @@ impl Engine {
 							self.threshold_signer.borrow().sign_with_key(key_id, payload),
 						);
 					},
-					Event::EthereumThresholdSigner(
-						// A threshold has been met for this signature
-						pallet_cf_threshold_signature::Event::ThresholdDispatchComplete{..}) => {
+					Event::Validator(
+						pallet_cf_validator::Event::RotationPhaseUpdated { new_phase: RotationPhase::ActivatingKeys(_) }) => {
 							if let EngineState::Rotation = self.engine_state {
 								// If we rotating let's witness the keys being rotated on the contract
 								let _result = state_chain_runtime::Witnesser::witness_at_epoch(

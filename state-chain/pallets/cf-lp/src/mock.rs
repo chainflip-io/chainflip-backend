@@ -1,15 +1,21 @@
 use crate as pallet_cf_lp;
-use cf_chains::{eth::assets, Chain, ChainEnvironment, Ethereum};
-use cf_primitives::{EthereumAddress, IntentId, ETHEREUM_ETH_ADDRESS};
+use cf_chains::{
+	eth::{
+		api::{EthereumApi, EthereumReplayProtection},
+		assets,
+	},
+	AnyChain, Chain, ChainAbi, ChainEnvironment, Ethereum,
+};
+use cf_primitives::{AccountRole, EthereumAddress, IntentId, ETHEREUM_ETH_ADDRESS};
 use cf_traits::{
 	mocks::{
-		all_batch::MockAllBatch, bid_info::MockBidInfo,
-		ensure_origin_mock::NeverFailingOriginCheck, staking_info::MockStakingInfo,
-		system_state_info::MockSystemStateInfo,
+		all_batch::MockAllBatch, bid_info::MockBidInfo, egress_handler::MockEgressHandler,
+		ensure_origin_mock::NeverFailingOriginCheck, ingress_handler::MockIngressHandler,
+		staking_info::MockStakingInfo, system_state_info::MockSystemStateInfo,
 	},
 	AddressDerivationApi, Broadcaster,
 };
-use frame_support::{instances::Instance1, parameter_types, sp_runtime::app_crypto::sp_core::H160};
+use frame_support::{parameter_types, sp_runtime::app_crypto::sp_core::H160};
 use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{
@@ -17,6 +23,7 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage,
 };
+
 use sp_std::str::FromStr;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -44,7 +51,6 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system,
 		AccountRoles: pallet_cf_account_roles,
-		EthereumIngressEgress: pallet_cf_ingress_egress::<Instance1>,
 		LiquidityProvider: pallet_cf_lp,
 	}
 );
@@ -137,14 +143,25 @@ impl pallet_cf_account_roles::Config for Test {
 impl crate::Config for Test {
 	type Event = Event;
 	type AccountRoleRegistry = AccountRoles;
-	type Ingress = EthereumIngressEgress;
-	type EgressApi = EthereumIngressEgress;
+	type IngressHandler = MockIngressHandler<AnyChain, Self>;
+	type EgressHandler = MockEgressHandler<AnyChain>;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 }
 
+pub const LP_ACCOUNT: u64 = 1;
+pub const NON_LP_ACCOUNT: u64 = 2;
+
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let config = GenesisConfig { system: Default::default(), account_roles: Default::default() };
+	let config = GenesisConfig {
+		system: Default::default(),
+		account_roles: AccountRolesConfig {
+			initial_account_roles: vec![
+				(LP_ACCOUNT, AccountRole::LiquidityProvider),
+				(NON_LP_ACCOUNT, AccountRole::Validator),
+			],
+		},
+	};
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 

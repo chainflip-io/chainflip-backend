@@ -3,6 +3,7 @@ use std::sync::Arc;
 use crate::multisig::{eth::EthSigning, polkadot::PolkadotSigning};
 use anyhow::Context;
 
+use cf_primitives::AccountRole;
 use chainflip_engine::{
 	eth::{
 		self, build_broadcast_channel, key_manager::KeyManager, rpc::EthDualRpcClient,
@@ -29,9 +30,12 @@ use sp_core::U256;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
 	use_chainflip_account_id_encoding();
-	utilities::print_starting!();
 
 	let settings = Settings::new(CommandLineOptions::parse()).context("Error reading settings")?;
+
+	// Note: the greeting should only be printed in normal mode (i.e. not for short-lived commands
+	// like `--version`), so we execute it only after the settings have been parsed.
+	utilities::print_starting!();
 
 	let root_logger = logging::utils::new_json_logger_with_tag_filter(
 		settings.log.whitelist.clone(),
@@ -46,7 +50,7 @@ async fn main() -> anyhow::Result<()> {
             }
 
             let (latest_block_hash, state_chain_block_stream, state_chain_client) =
-                state_chain_observer::client::StateChainClient::new(&settings.state_chain, true, &root_logger)
+                state_chain_observer::client::StateChainClient::new(scope, &settings.state_chain, AccountRole::Validator, true, &root_logger)
                     .await?;
 
             let eth_dual_rpc =
@@ -94,7 +98,7 @@ async fn main() -> anyhow::Result<()> {
                 tokio::sync::watch::channel(cfe_settings);
 
             let stake_manager_address = state_chain_client
-                .storage_value::<pallet_cf_environment::StakeManagerAddress::<
+                .storage_value::<pallet_cf_environment::EthereumStakeManagerAddress::<
                     state_chain_runtime::Runtime,
                 >>(latest_block_hash)
                 .await
@@ -102,7 +106,7 @@ async fn main() -> anyhow::Result<()> {
             let stake_manager_contract = StakeManager::new(stake_manager_address.into());
 
             let key_manager_address = state_chain_client
-                .storage_value::<pallet_cf_environment::KeyManagerAddress::<
+                .storage_value::<pallet_cf_environment::EthereumKeyManagerAddress::<
                     state_chain_runtime::Runtime,
                 >>(latest_block_hash)
                 .await
@@ -231,7 +235,7 @@ async fn main() -> anyhow::Result<()> {
                 use cf_primitives::{Asset, chains::assets};
 
                 let flip_contract_address = state_chain_client
-                    .storage_map_entry::<pallet_cf_environment::SupportedEthAssets::<
+                    .storage_map_entry::<pallet_cf_environment::EthereumSupportedAssets::<
                         state_chain_runtime::Runtime,
                     >>(latest_block_hash, &Asset::Flip)
                     .await
@@ -239,7 +243,7 @@ async fn main() -> anyhow::Result<()> {
                     .expect("FLIP address must exist at genesis");
 
                 let usdc_contract_address = state_chain_client
-                    .storage_map_entry::<pallet_cf_environment::SupportedEthAssets::<
+                    .storage_map_entry::<pallet_cf_environment::EthereumSupportedAssets::<
                         state_chain_runtime::Runtime,
                     >>(latest_block_hash, &Asset::Usdc)
                     .await

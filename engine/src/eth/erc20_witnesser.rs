@@ -5,6 +5,7 @@ use std::{collections::BTreeSet, sync::Arc};
 use async_trait::async_trait;
 use cf_primitives::{chains::assets::eth, EpochIndex, EthAmount};
 use sp_core::H256;
+use state_chain_runtime::EthereumInstance;
 use web3::{
 	ethabi::{self, RawLog},
 	types::H160,
@@ -105,7 +106,10 @@ impl EthContractWitnesser for Erc20Witnesser {
 			.submit_signed_extrinsic(
 				pallet_cf_witnesser::Call::witness_at_epoch {
 					call: Box::new(
-						pallet_cf_ingress_egress::Call::do_ingress { ingress_witnesses }.into(),
+						pallet_cf_ingress_egress::Call::<_, EthereumInstance>::do_ingress {
+							ingress_witnesses,
+						}
+						.into(),
 					),
 					epoch_index: epoch,
 				},
