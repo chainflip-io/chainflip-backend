@@ -52,6 +52,7 @@ pub struct EthSigning {}
 impl CryptoScheme for EthSigning {
 	type Point = Point;
 	type Signature = EthSchnorrSignature;
+	type AggKey = cf_chains::eth::AggKey;
 
 	const NAME: &'static str = "Ethereum";
 	const CHAIN_TAG: ChainTag = ChainTag::Ethereum;
@@ -95,11 +96,15 @@ impl CryptoScheme for EthSigning {
 		Point::from_scalar(signature_response) == *commitment - (*y_i) * challenge * lambda_i
 	}
 
-	fn is_pubkey_compatible(pubkey: &Self::Point) -> bool {
+	fn agg_key(pubkey: &Self::Point) -> Self::AggKey {
 		// Check if the public key's x coordinate is smaller than "half secp256k1's order",
 		// which is a requirement imposed by the Key Manager contract
 		let pk = pubkey.get_element();
-		let pubkey = cf_chains::eth::AggKey::from_pubkey_compressed(pk.serialize());
+		cf_chains::eth::AggKey::from_pubkey_compressed(pk.serialize())
+	}
+
+	fn is_pubkey_compatible(pubkey: &Self::Point) -> bool {
+		let pubkey = Self::agg_key(pubkey);
 
 		let x = BigUint::from_bytes_be(&pubkey.pub_key_x);
 		let half_order = BigUint::from_bytes_be(&CURVE_ORDER) / 2u32 + 1u32;

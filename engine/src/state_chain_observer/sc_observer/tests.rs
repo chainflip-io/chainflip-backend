@@ -23,7 +23,10 @@ use crate::{
 		EthBroadcaster,
 	},
 	logging::test_utils::new_test_logger,
-	multisig::client::{KeygenFailureReason, MockMultisigClientApi, SigningFailureReason},
+	multisig::{
+		client::{KeygenFailureReason, MockMultisigClientApi, SigningFailureReason},
+		eth::EthSigning,
+	},
 	settings::Settings,
 	state_chain_observer::{client::mocks::MockStateChainClient, sc_observer},
 	task_scope::task_scope,
@@ -1467,7 +1470,7 @@ EthereumInstance>>() 		.once()
 		.return_once(|_, _| Ok(H256::default()));
 	let state_chain_client = Arc::new(state_chain_client);
 
-	let mut multisig_client = MockMultisigClientApi::new();
+	let mut multisig_client = MockMultisigClientApi::<EthSigning>::new();
 	multisig_client
 		.expect_update_latest_ceremony_id()
 		.with(predicate::eq(first_ceremony_id))
@@ -1492,7 +1495,7 @@ EthereumInstance>>() 		.once()
 	task_scope(|scope| {
 		async {
 			// Handle a keygen request that we are not participating in
-			sc_observer::handle_keygen_request(
+			sc_observer::handle_keygen_request::<_, _, _, _, EthereumInstance>(
 				scope,
 				&multisig_client,
 				state_chain_client.clone(),
@@ -1503,7 +1506,7 @@ EthereumInstance>>() 		.once()
 			.await;
 
 			// Handle a keygen request that we are participating in
-			sc_observer::handle_keygen_request(
+			sc_observer::handle_keygen_request::<_, _, _, _, EthereumInstance>(
 				scope,
 				&multisig_client,
 				state_chain_client.clone(),

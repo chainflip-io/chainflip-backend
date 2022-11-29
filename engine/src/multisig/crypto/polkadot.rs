@@ -1,8 +1,10 @@
 use crate::multisig::SigningPayload;
 
 use super::{curve25519_ristretto::Point, ChainTag, CryptoScheme, ECPoint, Verifiable};
+use cf_chains::dot::PolkadotPublicKey;
 use schnorrkel::context::{SigningContext, SigningTranscript};
 use serde::{Deserialize, Serialize};
+use sp_runtime::app_crypto::UncheckedFrom;
 
 pub struct PolkadotSigning {}
 
@@ -53,6 +55,7 @@ impl Verifiable for PolkadotSignature {
 impl CryptoScheme for PolkadotSigning {
 	type Point = Point;
 	type Signature = PolkadotSignature;
+	type AggKey = cf_chains::dot::PolkadotPublicKey;
 
 	const NAME: &'static str = "Polkadot";
 	const CHAIN_TAG: ChainTag = ChainTag::Polkadot;
@@ -101,6 +104,12 @@ impl CryptoScheme for PolkadotSigning {
 		signature_response: &<Self::Point as ECPoint>::Scalar,
 	) -> bool {
 		Point::from_scalar(signature_response) == *commitment + (*y_i) * challenge * lambda_i
+	}
+
+	fn agg_key(pubkey: &Self::Point) -> Self::AggKey {
+		PolkadotPublicKey(sp_core::sr25519::Public::unchecked_from(
+			pubkey.get_element().compress().to_bytes(),
+		))
 	}
 
 	fn build_response(

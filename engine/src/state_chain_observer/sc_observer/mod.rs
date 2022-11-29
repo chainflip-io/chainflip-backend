@@ -2,7 +2,7 @@
 mod tests;
 
 use anyhow::{anyhow, Context};
-use cf_chains::eth::Ethereum;
+use cf_chains::{eth::Ethereum, ChainCrypto};
 use cf_primitives::CeremonyId;
 use futures::{FutureExt, Stream, StreamExt};
 use pallet_cf_vaults::KeygenError;
@@ -23,6 +23,9 @@ use tokio::sync::{mpsc::UnboundedSender, watch};
 #[cfg(feature = "ibiza")]
 use cf_chains::{dot, Polkadot};
 
+#[cfg(feature = "ibiza")]
+use state_chain_runtime::PolkadotInstance;
+
 use crate::{
 	eth::{rpc::EthRpcApi, EthBroadcaster},
 	logging::COMPONENT_KEY,
@@ -30,7 +33,7 @@ use crate::{
 		client::{KeygenFailureReason, MultisigClientApi},
 		eth::EthSigning,
 		polkadot::PolkadotSigning,
-		KeyId, SigningPayload,
+		CryptoScheme, KeyId, SigningPayload,
 	},
 	p2p::{PeerInfo, PeerUpdate},
 	state_chain_observer::client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi},
@@ -44,7 +47,7 @@ use crate::dot::{rpc::DotRpcApi, DotBroadcaster};
 #[cfg(feature = "ibiza")]
 use sp_core::H160;
 
-async fn handle_keygen_request<'a, StateChainClient, MultisigClient>(
+async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, T, I>(
 	scope: &Scope<'a, anyhow::Error>,
 	multisig_client: &'a MultisigClient,
 	state_chain_client: Arc<StateChainClient>,
@@ -52,8 +55,12 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient>(
 	keygen_participants: BTreeSet<AccountId32>,
 	logger: slog::Logger,
 ) where
-	MultisigClient: MultisigClientApi<EthSigning>,
+	MultisigClient: MultisigClientApi<C>,
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
+	C: CryptoScheme<AggKey = <T::Chain as ChainCrypto>::AggKey>,
+	T: pallet_cf_vaults::Config<I, ValidatorId = AccountId32> + Sync + Send,
+	I: 'static + Sync + Send,
+	state_chain_runtime::Call: std::convert::From<pallet_cf_vaults::Call<T, I>>,
 {
 	if keygen_participants.contains(&state_chain_client.account_id()) {
 		// We initiate keygen outside of the spawn to avoid requesting ceremonies out of order
@@ -62,15 +69,11 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient>(
 		scope.spawn(async move {
 			let _result = state_chain_client
 				.submit_signed_extrinsic(
-					pallet_cf_vaults::Call::<_, EthereumInstance>::report_keygen_outcome {
+					pallet_cf_vaults::Call::<T, I>::report_keygen_outcome {
 						ceremony_id,
 						reported_outcome: keygen_result_future
 							.await
-							.map(|point| {
-								cf_chains::eth::AggKey::from_pubkey_compressed(
-									point.get_element().serialize(),
-								)
-							})
+							.map(|point| C::agg_key(&point))
 							.map_err(|(bad_account_ids, reason)| {
 								if let KeygenFailureReason::KeyNotCompatible = reason {
 									KeygenError::Incompatible
@@ -380,9 +383,28 @@ where
                                         // Ceremony id tracking is global, so update all other clients
                                         dot_multisig_client.update_latest_ceremony_id(ceremony_id);
 
-                                        handle_keygen_request(
+                                        handle_keygen_request::<_, _, _, state_chain_runtime::Runtime, EthereumInstance>(
                                             scope,
                                             &eth_multisig_client,
+                                            state_chain_client.clone(),
+                                            ceremony_id,
+                                            keygen_participants,
+                                            logger.clone()
+                                        ).await;
+                                    }
+                                    #[cfg(feature = "ibiza")]
+                                    state_chain_runtime::Event::PolkadotVault(
+                                        pallet_cf_vaults::Event::KeygenRequest(
+                                            ceremony_id,
+                                            keygen_participants,
+                                        ),
+                                    ) => {
+                                        // Ceremony id tracking is global, so update all other clients
+                                        eth_multisig_client.update_latest_ceremony_id(ceremony_id);
+
+                                        handle_keygen_request::<_, _, _, state_chain_runtime::Runtime, PolkadotInstance>(
+                                            scope,
+                                            &dot_multisig_client,
                                             state_chain_client.clone(),
                                             ceremony_id,
                                             keygen_participants,
