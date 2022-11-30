@@ -12,8 +12,11 @@ pub mod witnesser;
 
 #[macro_use]
 mod testing;
+
 // Blockchains
-pub mod dot;
 pub mod eth;
+
+#[cfg(feature = "ibiza")]
+pub mod dot;
 
 pub mod logging;
