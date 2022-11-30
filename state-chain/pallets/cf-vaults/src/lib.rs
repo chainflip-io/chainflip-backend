@@ -204,7 +204,7 @@ pub enum PalletOffence {
 	FailedKeygen,
 }
 
-#[derive(Encode, Decode, TypeInfo)]
+#[derive(Encode, Decode, TypeInfo, Eq, PartialEq)]
 pub enum VaultState {
 	Active,
 	Unavailable,
@@ -718,13 +718,13 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
 		fn build(&self) {
-			if self.vault_key.is_some() {
+			if let Some(vault_key) = self.vault_key.clone() {
 				Pallet::<T, I>::set_vault_for_epoch(
 					VaultEpochAndState {
 						epoch_index: GENESIS_EPOCH,
 						vault_state: VaultState::Active,
 					},
-					AggKeyFor::<T, I>::try_from(self.vault_key.clone().unwrap())
+					AggKeyFor::<T, I>::try_from(vault_key)
 						// Note: Can't use expect() here without some type shenanigans, but would
 						// give clearer error messages.
 						.unwrap_or_else(|_| {
@@ -878,7 +878,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 			) {
 				Ok(rotate_tx) => {
 					T::Broadcaster::threshold_sign_and_broadcast(rotate_tx);
-					if let VaultState::Active = current_vault_epoch_and_state.vault_state {
+					if VaultState::Active == current_vault_epoch_and_state.vault_state {
 						CurrentVaultEpochAndState::<T, I>::put(VaultEpochAndState {
 							epoch_index: current_vault_epoch_and_state.epoch_index,
 							vault_state: VaultState::Unavailable,
