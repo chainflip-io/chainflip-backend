@@ -336,6 +336,7 @@ impl IngressApi<AnyChain> for AnyChainIngressEgressHandler {
 	}
 
 	fn register_swap_intent(
+		swap_id: u128,
 		ingress_asset: Asset,
 		egress_asset: Asset,
 		egress_address: ForeignChainAddress,
@@ -344,6 +345,7 @@ impl IngressApi<AnyChain> for AnyChainIngressEgressHandler {
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
 		match ingress_asset.into() {
 			ForeignChain::Ethereum => crate::EthereumIngressEgress::register_swap_intent(
+				swap_id,
 				ingress_asset.try_into().unwrap(),
 				egress_asset,
 				egress_address,
@@ -351,6 +353,7 @@ impl IngressApi<AnyChain> for AnyChainIngressEgressHandler {
 				relayer_id,
 			),
 			ForeignChain::Polkadot => crate::PolkadotIngressEgress::register_swap_intent(
+				swap_id,
 				ingress_asset.try_into().unwrap(),
 				egress_asset,
 				egress_address,

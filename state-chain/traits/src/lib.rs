@@ -641,6 +641,7 @@ pub trait IngressApi<C: Chain> {
 
 	/// Issues an intent id and ingress address for a new swap.
 	fn register_swap_intent(
+		swap_id: u128,
 		ingress_asset: C::ChainAsset,
 		egress_asset: Asset,
 		egress_address: ForeignChainAddress,
@@ -658,6 +659,7 @@ impl<T: frame_system::Config> IngressApi<Ethereum> for T {
 		Ok((0, ForeignChainAddress::Eth([0u8; 20])))
 	}
 	fn register_swap_intent(
+		_swap_id: u128,
 		_ingress_asset: assets::eth::Asset,
 		_egress_asset: Asset,
 		_egress_address: ForeignChainAddress,
@@ -678,6 +680,7 @@ impl<T: frame_system::Config> IngressApi<Polkadot> for T {
 		Ok((0, ForeignChainAddress::Dot([0u8; 32])))
 	}
 	fn register_swap_intent(
+		_swap_id: u128,
 		_ingress_asset: assets::dot::Asset,
 		_egress_asset: Asset,
 		_egress_address: ForeignChainAddress,

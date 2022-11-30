@@ -77,6 +77,7 @@ pub mod pallet {
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	pub enum IntentAction<AccountId> {
 		Swap {
+			swap_id: u128,
 			egress_asset: Asset,
 			egress_address: ForeignChainAddress,
 			relayer_id: AccountId,
@@ -395,11 +396,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			IntentAction::LiquidityProvision { lp_account } =>
 				T::LpProvisioning::provision_account(&lp_account, asset.into(), amount)?,
 			IntentAction::Swap {
+				swap_id,
 				egress_address,
 				egress_asset,
 				relayer_id,
 				relayer_commission_bps,
 			} => T::SwapIntentHandler::schedule_swap(
+				swap_id,
 				asset.into(),
 				egress_asset,
 				amount,
@@ -459,6 +462,7 @@ impl<T: Config<I>, I: 'static> IngressApi<T::TargetChain> for Pallet<T, I> {
 
 	// This should only be callable by the relayer.
 	fn register_swap_intent(
+		swap_id: u128,
 		ingress_asset: TargetChainAsset<T, I>,
 		egress_asset: Asset,
 		egress_address: ForeignChainAddress,
@@ -474,7 +478,13 @@ impl<T: Config<I>, I: 'static> IngressApi<T::TargetChain> for Pallet<T, I> {
 		);
 		IntentActions::<T, I>::insert(
 			&ingress_address,
-			IntentAction::Swap { egress_address, egress_asset, relayer_commission_bps, relayer_id },
+			IntentAction::Swap {
+				swap_id,
+				egress_address,
+				egress_asset,
+				relayer_commission_bps,
+				relayer_id,
+			},
 		);
 
 		Self::deposit_event(Event::StartWitnessing {
