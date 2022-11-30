@@ -6,6 +6,8 @@ mod signer_nomination;
 
 mod mock_runtime;
 
+mod threshold_signing;
+
 mod account;
 mod authorities;
 mod genesis;
@@ -24,9 +26,7 @@ use state_chain_runtime::{
 
 use cf_primitives::{AuthorityCount, BlockNumber, EpochIndex, FlipBalance};
 use cf_traits::EpochInfo;
-use libsecp256k1::SecretKey;
 use pallet_cf_staking::{EthTransactionHash, EthereumAddress};
-use rand::{prelude::*, SeedableRng};
 use sp_runtime::AccountId32;
 
 type NodeId = AccountId32;
@@ -34,7 +34,7 @@ const ETH_DUMMY_ADDR: EthereumAddress = [42u8; 20];
 const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
 const TX_HASH: EthTransactionHash = [211u8; 32];
 
-pub const GENESIS_KEY: u64 = 42;
+pub const GENESIS_KEY_SEED: u64 = 42;
 
 // TODO - remove collision of account numbers
 pub const ALICE: [u8; 32] = [0xaa; 32];
