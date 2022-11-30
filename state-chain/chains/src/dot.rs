@@ -148,7 +148,6 @@ impl FeeRefundCalculator<Polkadot> for PolkadotTransactionData {
 impl ChainAbi for Polkadot {
 	type Transaction = PolkadotTransactionData;
 	type ReplayProtection = PolkadotReplayProtection;
-	type ApiCallError = api::PolkadotEnvironmentError;
 }
 
 pub struct CurrentVaultAndProxy {

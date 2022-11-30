@@ -113,7 +113,6 @@ pub trait ChainCrypto: Chain {
 pub trait ChainAbi: ChainCrypto {
 	type Transaction: Member + Parameter + Default + BenchmarkValue + FeeRefundCalculator<Self>;
 	type ReplayProtection: Member + Parameter;
-	type ApiCallError;
 }
 
 /// Provides chain-specific replay protection data.
@@ -187,13 +186,13 @@ pub trait ChainEnvironment<
 	/// Attempt a lookup.
 	fn lookup(s: LookupKey) -> Option<LookupValue>;
 }
-
+#[allow(clippy::result_unit_err)]
 /// Constructs the `SetAggKeyWithAggKey` api call.
 pub trait SetAggKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
 		maybe_old_key: Option<<Abi as ChainCrypto>::AggKey>,
 		new_key: <Abi as ChainCrypto>::AggKey,
-	) -> Result<Self, Abi::ApiCallError>;
+	) -> Result<Self, ()>;
 }
 
 pub trait SetGovKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
@@ -220,11 +219,12 @@ pub trait RegisterClaim<Abi: ChainAbi>: ApiCall<Abi> {
 	fn amount(&self) -> u128;
 }
 
+#[allow(clippy::result_unit_err)]
 pub trait AllBatch<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<Abi>>,
 		transfer_params: Vec<TransferAssetParams<Abi>>,
-	) -> Result<Self, Abi::ApiCallError>;
+	) -> Result<Self, ()>;
 }
 
 pub trait FeeRefundCalculator<C: Chain> {
@@ -235,10 +235,6 @@ pub trait FeeRefundCalculator<C: Chain> {
 		&self,
 		fee_paid: <C as Chain>::TransactionFee,
 	) -> <C as Chain>::ChainAmount;
-}
-
-pub trait ApiCallErrorHandler<Abi: ChainAbi>: ApiCall<Abi> {
-	fn handle_apicall_error(_error: Abi::ApiCallError) {}
 }
 
 pub mod mocks {
@@ -338,7 +334,6 @@ pub mod mocks {
 	impl ChainAbi for MockEthereum {
 		type Transaction = MockTransaction;
 		type ReplayProtection = EthereumReplayProtection;
-		type ApiCallError = ();
 	}
 
 	#[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]

@@ -2,7 +2,7 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-use cf_chains::{ApiCallErrorHandler, Chain, ChainAbi, ChainCrypto, SetAggKeyWithAggKey};
+use cf_chains::{Chain, ChainAbi, ChainCrypto, SetAggKeyWithAggKey};
 use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex, GENESIS_EPOCH};
 use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
@@ -252,8 +252,7 @@ pub mod pallet {
 		type Chain: ChainAbi<KeyId = Self::KeyId>;
 
 		/// The supported api calls for the chain.
-		type SetAggKeyWithAggKey: SetAggKeyWithAggKey<Self::Chain>
-			+ ApiCallErrorHandler<Self::Chain>;
+		type SetAggKeyWithAggKey: SetAggKeyWithAggKey<Self::Chain>;
 
 		type VaultTransitionHandler: VaultTransitionHandler<Self::Chain>;
 

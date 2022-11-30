@@ -13,10 +13,7 @@ mod tests;
 pub mod weights;
 pub use weights::WeightInfo;
 
-use cf_chains::{
-	AllBatch, ApiCallErrorHandler, Chain, ChainAbi, ChainCrypto, FetchAssetParams,
-	TransferAssetParams,
-};
+use cf_chains::{AllBatch, Chain, ChainAbi, ChainCrypto, FetchAssetParams, TransferAssetParams};
 use cf_primitives::{Asset, AssetAmount, ForeignChainAddress, IntentId};
 use cf_traits::{
 	liquidity::LpProvisioningApi, AddressDerivationApi, Broadcaster, EgressApi, IngressApi,
@@ -46,7 +43,6 @@ impl<C: Chain> FetchOrTransfer<C> {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_chains::ApiCallErrorHandler;
 	use core::marker::PhantomData;
 	use sp_std::vec::Vec;
 
@@ -115,7 +111,7 @@ pub mod pallet {
 		type SwapIntentHandler: SwapIntentHandler<AccountId = Self::AccountId>;
 
 		/// The type of the chain-native transaction.
-		type AllBatch: AllBatch<Self::TargetChain> + ApiCallErrorHandler<Self::TargetChain>;
+		type AllBatch: AllBatch<Self::TargetChain>;
 
 		/// A broadcaster instance.
 		type Broadcaster: Broadcaster<Self::TargetChain, ApiCall = Self::AllBatch>;
@@ -356,9 +352,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				});
 				fetch_batch_size.saturating_add(egress_batch_size)
 			},
-			Err(err) => {
+			Err(_) => {
 				ScheduledEgressRequests::<T, I>::put(scheduled_egress_requests);
-				T::AllBatch::handle_apicall_error(err);
 				0
 			},
 		}

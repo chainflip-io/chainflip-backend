@@ -19,15 +19,6 @@ pub enum PolkadotApi<Environment: 'static> {
 	_Phantom(PhantomData<Environment>, Never),
 }
 
-pub enum PolkadotEnvironmentError {
-	/// Polkadot vault not found in the environment pallet. This means that the vault has not been
-	/// created yet.
-	VaultNotFound,
-	/// Polkadot vault is currently unavailable. This is because the vault is currently in rotation
-	/// phase and therefore, is unusable
-	VaultUnavailable,
-}
-
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum SystemAccounts {
 	Proxy,
@@ -42,11 +33,9 @@ where
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<Polkadot>>,
 		transfer_params: Vec<TransferAssetParams<Polkadot>>,
-	) -> Result<Self, PolkadotEnvironmentError> {
-		let vault =
-			E::lookup(SystemAccounts::Vault).ok_or(PolkadotEnvironmentError::VaultNotFound)?;
-		let proxy =
-			E::lookup(SystemAccounts::Proxy).ok_or(PolkadotEnvironmentError::VaultUnavailable)?;
+	) -> Result<Self, ()> {
+		let vault = E::lookup(SystemAccounts::Vault).ok_or(())?;
+		let proxy = E::lookup(SystemAccounts::Proxy).ok_or(())?;
 		Ok(Self::BatchFetchAndTransfer(
 			batch_fetch_and_transfer::BatchFetchAndTransfer::new_unsigned(
 				E::replay_protection(),
@@ -67,13 +56,12 @@ where
 	fn new_unsigned(
 		old_key: Option<PolkadotPublicKey>,
 		new_key: PolkadotPublicKey,
-	) -> Result<Self, PolkadotEnvironmentError> {
-		let vault =
-			E::lookup(SystemAccounts::Vault).ok_or(PolkadotEnvironmentError::VaultNotFound)?;
+	) -> Result<Self, ()> {
+		let vault = E::lookup(SystemAccounts::Vault).ok_or(())?;
 
 		Ok(Self::RotateVaultProxy(rotate_vault_proxy::RotateVaultProxy::new_unsigned(
 			E::replay_protection(),
-			old_key.ok_or(PolkadotEnvironmentError::VaultUnavailable)?,
+			old_key.ok_or(())?,
 			new_key,
 			vault,
 		)))
@@ -150,10 +138,4 @@ impl<E> ApiCall<Polkadot> for PolkadotApi<E> {
 
 pub trait CreatePolkadotVault: ApiCall<Polkadot> {
 	fn new_unsigned(proxy_key: PolkadotPublicKey) -> Self;
-}
-
-impl<E> ApiCallErrorHandler<Polkadot> for PolkadotApi<E> {
-	fn handle_apicall_error(_error: <Polkadot as ChainAbi>::ApiCallError) {
-		todo!()
-	}
 }

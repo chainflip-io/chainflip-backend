@@ -39,7 +39,6 @@ pub struct EthereumReplayProtection {
 impl ChainAbi for Ethereum {
 	type Transaction = eth::Transaction;
 	type ReplayProtection = EthereumReplayProtection;
-	type ApiCallError = ();
 }
 
 impl<E: ReplayProtectionProvider<Ethereum>> SetAggKeyWithAggKey<Ethereum> for EthereumApi<E> {
@@ -259,5 +258,3 @@ fn ethabi_function(name: &'static str, params: Vec<ethabi::Param>) -> ethabi::Fu
 fn ethabi_param(name: &'static str, param_type: ethabi::ParamType) -> ethabi::Param {
 	ethabi::Param { name: name.into(), kind: param_type, internal_type: None }
 }
-
-impl<E> ApiCallErrorHandler<Ethereum> for EthereumApi<E> {}
