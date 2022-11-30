@@ -807,6 +807,7 @@ name = "cf-primitives"
 version = "0.1.0"
 dependencies = [
  "ethabi",
+ "hex",
  "parity-scale-codec",
  "scale-info",
  "serde",
@@ -940,6 +941,7 @@ dependencies = [
  "pallet-cf-environment",
  "pallet-cf-governance",
  "pallet-cf-staking",
+ "pallet-cf-swapping",
  "pallet-cf-threshold-signature",
  "pallet-cf-validator",
  "slog",

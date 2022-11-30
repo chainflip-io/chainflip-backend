@@ -1,4 +1,4 @@
-use chainflip_api::primitives::{AccountRole, Hash, ProposalId};
+use chainflip_api::primitives::{AccountRole, Asset, Hash, ProposalId};
 pub use chainflip_engine::settings::StateChain;
 use chainflip_engine::{
 	constants::{CONFIG_ROOT, DEFAULT_CONFIG_ROOT},
@@ -54,6 +54,27 @@ impl Default for CLICommandLineOptions {
 	}
 }
 
+#[derive(Parser, Clone, Debug)]
+pub struct SwapIntentParams {
+	/// Ingress asset ("eth"|"dot")
+	pub ingress_asset: Asset,
+	/// Egress asset ("eth"|"dot")
+	pub egress_asset: Asset,
+	// Note: we delay parsing this into `ForeignChainAddress`
+	// until we know which kind of address to expect (based
+	// on egress_asset)
+	/// Egress asset address to receive funds after the swap
+	pub egress_address: String,
+	/// Commission to the relayer in base points
+	pub relayer_commission: u16,
+}
+
+#[derive(clap::Subcommand, Clone, Debug)]
+pub enum RelayerSubcommands {
+	/// Register a new swap intent
+	SwapIntent(SwapIntentParams),
+}
+
 #[derive(clap::Subcommand, Clone, Debug)]
 pub enum Claim {
 	#[clap(about = "Submit an extrinsic to request generation of a claim certificate")]
@@ -75,6 +96,10 @@ pub enum Claim {
 
 #[derive(Parser, Clone, Debug)]
 pub enum CliCommand {
+	/// Relayer specific commands
+	#[cfg(feature = "ibiza")]
+	#[clap(subcommand)]
+	Relayer(RelayerSubcommands),
 	#[clap(about = "Requesting and checking claims")]
 	#[clap(subcommand)]
 	Claim(Claim),
