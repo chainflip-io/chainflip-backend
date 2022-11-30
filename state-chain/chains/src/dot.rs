@@ -51,8 +51,8 @@ pub type PolkadotPayload = SignedPayload<PolkadotRuntimeCall, PolkadotSignedExtr
 
 // Westend testnet
 pub const WESTEND_CONFIG: PolkadotConfig = PolkadotConfig {
-	spec_version: 9320,
-	transaction_version: 14,
+	spec_version: 9330,
+	transaction_version: 15,
 	genesis_hash: hex_literal::hex!(
 		"e143f23803ac50e8f6f8e62695d1ce9e4e1d68aa36c1cd2cfd15340213f3423e"
 	),
@@ -804,6 +804,8 @@ mod test_polkadot_extrinsics {
 				value: 35_000_000_000u128, //0.035 WND
 			});
 
+		println!("Account id 1: {:?}", account_id_1);
+
 		println!(
 			"CallHash: 0x{}",
 			test_runtime_call.using_encoded(|encoded| hex::encode(Blake2_256::hash(encoded)))
@@ -811,7 +813,7 @@ mod test_polkadot_extrinsics {
 		println!("Encoded Call: 0x{}", hex::encode(test_runtime_call.encode()));
 
 		let mut extrinsic_handler = PolkadotExtrinsicBuilder::new_empty(
-			PolkadotReplayProtection::new(NONCE_1, 0, WESTEND_CONFIG),
+			PolkadotReplayProtection::new(12, 0, WESTEND_CONFIG),
 			account_id_1,
 		);
 		extrinsic_handler.insert_extrinsic_call(test_runtime_call);
@@ -826,7 +828,7 @@ mod test_polkadot_extrinsics {
 
 		assert!(extrinsic_handler.is_signed().unwrap_or(false));
 
-		println!("encoded extrinsic: 0x{}", hex::encode(signed_extrinsic.unwrap().encode()));
+		println!("encoded extrinsic: {:?}", signed_extrinsic.unwrap().encode());
 	}
 
 	#[ignore]
