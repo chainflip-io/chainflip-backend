@@ -18,12 +18,12 @@ impl AllBatch<Ethereum> for MockAllBatch {
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<Ethereum>>,
 		transfer_params: Vec<TransferAssetParams<Ethereum>>,
-	) -> Self {
-		Self {
+	) -> Result<Self, ()> {
+		Ok(Self {
 			nonce: MockEthReplayProtectionProvider::replay_protection(),
 			fetch_params,
 			transfer_params,
-		}
+		})
 	}
 }
 
