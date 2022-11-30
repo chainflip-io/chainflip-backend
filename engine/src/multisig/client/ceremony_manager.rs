@@ -587,7 +587,12 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
 			hash_map::Entry::Occupied(entry) => entry.into_mut(),
 		};
 
-		ceremony_handle.message_sender.send((sender_id, data)).unwrap();
+		// NOTE: There is a short delay between dropping the ceremony runner (and any channels
+		// associated with it) and dropping the corresponding ceremony handle, which makes it
+		// possible for the following `send` to fail
+		if ceremony_handle.message_sender.send((sender_id, data)).is_err() {
+			slog::debug!(logger, "Could not send message: ceremony runner has been dropped");
+		}
 	}
 
 	/// Returns the state for the given ceremony id if it exists,
