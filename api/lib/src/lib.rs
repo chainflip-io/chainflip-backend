@@ -12,6 +12,9 @@ use state_chain_runtime::opaque::SessionKeys;
 
 use custom_rpc::CustomApiClient;
 
+#[cfg(feature = "ibiza")]
+use cf_primitives::{Asset, ForeignChainAddress};
+
 pub mod primitives {
 	pub use cf_primitives::*;
 	pub use pallet_cf_governance::ProposalId;
@@ -24,7 +27,7 @@ pub use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use chainflip_engine::{
 	eth::{rpc::EthDualRpcClient, EthBroadcaster},
 	logging::utils::new_discard_logger,
-	settings,
+	settings::{self},
 	state_chain_observer::client::{
 		base_rpc_api::{BaseRpcApi, BaseRpcClient, RawRpcApi},
 		extrinsic_api::ExtrinsicApi,
@@ -455,6 +458,60 @@ pub async fn set_vanity_name(
 				.expect("Could not set vanity name for your account");
 			println!("Vanity name set at tx {:#x}.", tx_hash);
 			Ok(())
+		}
+		.boxed()
+	})
+	.await
+}
+
+#[cfg(feature = "ibiza")]
+pub async fn register_swap_intent(
+	state_chain_settings: &settings::StateChain,
+	ingress_asset: Asset,
+	egress_asset: Asset,
+	egress_address: ForeignChainAddress,
+	relayer_commission_bps: u16,
+) -> Result<ForeignChainAddress> {
+	task_scope(|scope| {
+		async {
+			let logger = new_discard_logger();
+			let (_, block_stream, state_chain_client) = StateChainClient::new(
+				scope,
+				state_chain_settings,
+				AccountRole::Relayer,
+				false,
+				&logger,
+			)
+			.await?;
+
+			let mut block_stream = Box::new(block_stream);
+
+			let (_tx_hash, events) = submit_and_ensure_success(
+				&state_chain_client,
+				block_stream.as_mut(),
+				pallet_cf_swapping::Call::register_swap_intent {
+					ingress_asset,
+					egress_asset,
+					egress_address,
+					relayer_commission_bps,
+				},
+			)
+			.await?;
+
+			if let Some(state_chain_runtime::Event::Swapping(
+				pallet_cf_swapping::Event::NewSwapIntent { ingress_address, .. },
+			)) = events.iter().find(|event| {
+				matches!(
+					event,
+					state_chain_runtime::Event::Swapping(
+						pallet_cf_swapping::Event::NewSwapIntent { .. }
+					)
+				)
+			}) {
+				Ok(*ingress_address)
+			} else {
+				panic!("NewSwapIntent must have been generated");
+			}
 		}
 		.boxed()
 	})

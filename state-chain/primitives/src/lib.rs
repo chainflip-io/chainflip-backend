@@ -97,6 +97,20 @@ pub enum ForeignChainAddress {
 	Dot([u8; 32]),
 }
 
+#[cfg(feature = "std")]
+impl core::fmt::Display for ForeignChainAddress {
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+		match self {
+			ForeignChainAddress::Eth(addr) => {
+				write!(f, "Eth(0x{})", hex::encode(addr))
+			},
+			ForeignChainAddress::Dot(addr) => {
+				write!(f, "Dot(0x{})", hex::encode(addr))
+			},
+		}
+	}
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum AddressError {
 	InvalidAddress,
