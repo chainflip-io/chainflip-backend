@@ -51,11 +51,11 @@ pub mod any {
 		type Err = &'static str;
 
 		fn from_str(s: &str) -> Result<Self, Self::Err> {
-			match s {
-				"eth" | "Eth" | "ETH" => Ok(Asset::Eth),
-				"flip" | "Flip" | "FLIP" => Ok(Asset::Flip),
-				"usdc" | "Usdc" | "USDC" => Ok(Asset::Usdc),
-				"dot" | "Dot" | "DOT" => Ok(Asset::Dot),
+			match s.to_lowercase().as_str() {
+				"eth" => Ok(Asset::Eth),
+				"flip" => Ok(Asset::Flip),
+				"usdc" => Ok(Asset::Usdc),
+				"dot" => Ok(Asset::Dot),
 				_ => Err("Unrecognized asset"),
 			}
 		}
