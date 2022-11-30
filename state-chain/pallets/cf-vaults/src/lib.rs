@@ -210,11 +210,14 @@ pub enum VaultState {
 	Unavailable,
 }
 #[derive(Encode, Decode, TypeInfo)]
-pub struct VaultEpochAndState(pub EpochIndex, pub VaultState);
+pub struct VaultEpochAndState {
+	pub epoch_index: EpochIndex,
+	pub vault_state: VaultState,
+}
 
 impl Default for VaultEpochAndState {
 	fn default() -> Self {
-		Self(GENESIS_EPOCH, VaultState::Unavailable)
+		Self { epoch_index: GENESIS_EPOCH, vault_state: VaultState::Unavailable }
 	}
 }
 
@@ -717,7 +720,10 @@ pub mod pallet {
 		fn build(&self) {
 			if self.vault_key.is_some() {
 				Pallet::<T, I>::set_vault_for_epoch(
-					VaultEpochAndState(GENESIS_EPOCH, VaultState::Active),
+					VaultEpochAndState {
+						epoch_index: GENESIS_EPOCH,
+						vault_state: VaultState::Active,
+					},
 					AggKeyFor::<T, I>::try_from(self.vault_key.clone().unwrap())
 						// Note: Can't use expect() here without some type shenanigans, but would
 						// give clearer error messages.
@@ -727,10 +733,10 @@ pub mod pallet {
 					self.deployment_block,
 				);
 			} else {
-				CurrentVaultEpochAndState::<T, I>::put(VaultEpochAndState(
-					GENESIS_EPOCH,
-					VaultState::Unavailable,
-				));
+				CurrentVaultEpochAndState::<T, I>::put(VaultEpochAndState {
+					epoch_index: GENESIS_EPOCH,
+					vault_state: VaultState::Unavailable,
+				});
 			}
 
 			KeygenResponseTimeout::<T, I>::put(self.keygen_response_timeout);
@@ -744,7 +750,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		rotated_at_block_number: ChainBlockNumberFor<T, I>,
 	) {
 		Self::set_vault_for_epoch(
-			VaultEpochAndState(CurrentEpochIndex::<T>::get().saturating_add(1), VaultState::Active),
+			VaultEpochAndState {
+				epoch_index: CurrentEpochIndex::<T>::get().saturating_add(1),
+				vault_state: VaultState::Active,
+			},
 			new_public_key,
 			rotated_at_block_number.saturating_add(ChainBlockNumberFor::<T, I>::one()),
 		);
@@ -757,7 +766,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		active_from_block: ChainBlockNumberFor<T, I>,
 	) {
 		Vaults::<T, I>::insert(
-			current_vault_and_state.0,
+			current_vault_and_state.epoch_index,
 			Vault { public_key: new_public_key, active_from_block },
 		);
 		CurrentVaultEpochAndState::<T, I>::put(current_vault_and_state);
@@ -862,18 +871,18 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 		{
 			let current_vault_epoch_and_state = CurrentVaultEpochAndState::<T, I>::get();
 			match <T::SetAggKeyWithAggKey as SetAggKeyWithAggKey<_>>::new_unsigned(
-				Vaults::<T, I>::try_get(current_vault_epoch_and_state.0)
+				Vaults::<T, I>::try_get(current_vault_epoch_and_state.epoch_index)
 					.map(|vault| vault.public_key)
 					.ok(),
 				new_public_key,
 			) {
 				Ok(rotate_tx) => {
 					T::Broadcaster::threshold_sign_and_broadcast(rotate_tx);
-					if let VaultState::Active = current_vault_epoch_and_state.1 {
-						CurrentVaultEpochAndState::<T, I>::put(VaultEpochAndState(
-							current_vault_epoch_and_state.0,
-							VaultState::Unavailable,
-						))
+					if let VaultState::Active = current_vault_epoch_and_state.vault_state {
+						CurrentVaultEpochAndState::<T, I>::put(VaultEpochAndState {
+							epoch_index: current_vault_epoch_and_state.epoch_index,
+							vault_state: VaultState::Unavailable,
+						})
 					}
 				},
 				Err(_) => Self::deposit_event(Event::<T, I>::AwaitingGovernanceActivation {
@@ -930,10 +939,10 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 impl<T: Config<I>, I: 'static> KeyProvider<T::Chain> for Pallet<T, I> {
 	fn current_key_epoch_index() -> KeyState<<T::Chain as ChainCrypto>::AggKey> {
 		let current_vault_epoch_and_state = CurrentVaultEpochAndState::<T, I>::get();
-		match current_vault_epoch_and_state.1 {
+		match current_vault_epoch_and_state.vault_state {
 			VaultState::Active => KeyState::Active {
-				key: Vaults::<T, I>::get(current_vault_epoch_and_state.0).expect("Key must exist if CurrentVaultEpochAndState exists since they get set at the same place: set_next_vault()").public_key,
-				epoch_index: current_vault_epoch_and_state.0,
+				key: Vaults::<T, I>::get(current_vault_epoch_and_state.epoch_index).expect("Key must exist if CurrentVaultEpochAndState exists since they get set at the same place: set_next_vault()").public_key,
+				epoch_index: current_vault_epoch_and_state.epoch_index,
 			},
 			VaultState::Unavailable => KeyState::Unavailable,
 		}
