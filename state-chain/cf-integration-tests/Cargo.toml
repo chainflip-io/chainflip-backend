@@ -138,3 +138,9 @@ tag = 'chainflip-monthly-2022-06+01'
 [dev-dependencies.sp-finality-grandpa]
 git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'chainflip-monthly-2022-06+01'
+
+[features]
+ibiza = [
+    "state-chain-runtime/ibiza",
+    "cf-chains/ibiza"
+]

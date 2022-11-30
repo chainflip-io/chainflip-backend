@@ -11,6 +11,10 @@ use state_chain_runtime::{
 	EthereumVaultConfig, FlipBalance, FlipConfig, GenesisConfig, GovernanceConfig, GrandpaConfig,
 	ReputationConfig, SessionConfig, StakingConfig, SystemConfig, ValidatorConfig, WASM_BINARY,
 };
+
+#[cfg(feature = "ibiza")]
+use state_chain_runtime::{PolkadotThresholdSignerConfig, PolkadotVaultConfig};
+
 use std::{collections::BTreeSet, env, marker::PhantomData};
 use utilities::clean_eth_address;
 
@@ -466,7 +470,18 @@ fn testnet_genesis(
 			deployment_block: ethereum_deployment_block,
 			keygen_response_timeout: keygen_ceremony_timeout_blocks,
 		},
+		#[cfg(feature = "ibiza")]
+		polkadot_vault: PolkadotVaultConfig {
+			vault_key: None,
+			deployment_block: 0,
+			keygen_response_timeout: keygen_ceremony_timeout_blocks,
+		},
 		ethereum_threshold_signer: EthereumThresholdSignerConfig {
+			threshold_signature_response_timeout: threshold_signature_ceremony_timeout_blocks,
+			_instance: PhantomData,
+		},
+		#[cfg(feature = "ibiza")]
+		polkadot_threshold_signer: PolkadotThresholdSignerConfig {
 			threshold_signature_response_timeout: threshold_signature_ceremony_timeout_blocks,
 			_instance: PhantomData,
 		},

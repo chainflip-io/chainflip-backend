@@ -486,7 +486,6 @@ fn validate_endpoint(valid_schemes: Vec<&str>, url: &str) -> Result<()> {
 	if parsed_url.host() == None ||
 		parsed_url.username() != "" ||
 		parsed_url.password() != None ||
-		parsed_url.query() != None ||
 		parsed_url.fragment() != None ||
 		parsed_url.cannot_be_a_base()
 	{
@@ -556,6 +555,9 @@ mod tests {
 		assert_ok!(validate_websocket_endpoint("wss://network.my_eth_node/<secret_key>"));
 		assert_ok!(validate_websocket_endpoint("ws://network.my_eth_node/<secret_key>"));
 		assert_ok!(validate_websocket_endpoint("wss://network.my_eth_node"));
+		assert_ok!(validate_websocket_endpoint(
+			"wss://polkadot.api.onfinality.io:443/ws?apikey=00000000-0000-0000-0000-000000000000"
+		));
 		assert!(validate_websocket_endpoint("https://wrong_scheme.com").is_err());
 		assert!(validate_websocket_endpoint("").is_err());
 	}
