@@ -36,19 +36,17 @@ pub enum SystemAccounts {
 
 impl<E> AllBatch<Polkadot> for PolkadotApi<E>
 where
-	E: ChainEnvironment<SystemAccounts, Option<<Polkadot as Chain>::ChainAccount>>,
-	E: ReplayProtectionProvider<Polkadot>,
+	E: ChainEnvironment<SystemAccounts, <Polkadot as Chain>::ChainAccount>
+		+ ReplayProtectionProvider<Polkadot>,
 {
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<Polkadot>>,
 		transfer_params: Vec<TransferAssetParams<Polkadot>>,
 	) -> Result<Self, PolkadotEnvironmentError> {
-		let vault = E::lookup(SystemAccounts::Vault)
-			.expect("Vault account lookup should never fail.")
-			.ok_or(PolkadotEnvironmentError::VaultNotFound)?;
-		let proxy = E::lookup(SystemAccounts::Proxy)
-			.expect("Proxy account lookup should never fail.")
-			.ok_or(PolkadotEnvironmentError::VaultUnavailable)?;
+		let vault =
+			E::lookup(SystemAccounts::Vault).ok_or(PolkadotEnvironmentError::VaultNotFound)?;
+		let proxy =
+			E::lookup(SystemAccounts::Proxy).ok_or(PolkadotEnvironmentError::VaultUnavailable)?;
 		Ok(Self::BatchFetchAndTransfer(
 			batch_fetch_and_transfer::BatchFetchAndTransfer::new_unsigned(
 				E::replay_protection(),
@@ -63,16 +61,15 @@ where
 
 impl<E> SetAggKeyWithAggKey<Polkadot> for PolkadotApi<E>
 where
-	E: ChainEnvironment<SystemAccounts, Option<<Polkadot as Chain>::ChainAccount>>
+	E: ChainEnvironment<SystemAccounts, <Polkadot as Chain>::ChainAccount>
 		+ ReplayProtectionProvider<Polkadot>,
 {
 	fn new_unsigned(
 		old_key: Option<PolkadotPublicKey>,
 		new_key: PolkadotPublicKey,
 	) -> Result<Self, PolkadotEnvironmentError> {
-		let vault = E::lookup(SystemAccounts::Vault)
-			.expect("Vault account lookup should never fail.")
-			.ok_or(PolkadotEnvironmentError::VaultNotFound)?;
+		let vault =
+			E::lookup(SystemAccounts::Vault).ok_or(PolkadotEnvironmentError::VaultNotFound)?;
 
 		Ok(Self::RotateVaultProxy(rotate_vault_proxy::RotateVaultProxy::new_unsigned(
 			E::replay_protection(),

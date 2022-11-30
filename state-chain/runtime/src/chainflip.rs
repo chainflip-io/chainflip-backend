@@ -228,10 +228,8 @@ impl ReplayProtectionProvider<Ethereum> for EthEnvironment {
 }
 
 impl ChainEnvironment<assets::eth::Asset, EthAbiAddress> for EthEnvironment {
-	fn lookup(
-		asset: assets::eth::Asset,
-	) -> Result<EthAbiAddress, frame_support::error::LookupError> {
-		Ok(match asset {
+	fn lookup(asset: assets::eth::Asset) -> Option<EthAbiAddress> {
+		Some(match asset {
 			assets::eth::Asset::Eth => ETHEREUM_ETH_ADDRESS.into(),
 			assets::eth::Asset::Flip => Environment::flip_token_address().into(),
 			assets::eth::Asset::Usdc => todo!(),
@@ -259,17 +257,12 @@ impl ReplayProtectionProvider<Polkadot> for DotEnvironment {
 }
 
 #[cfg(feature = "ibiza")]
-impl ChainEnvironment<cf_chains::dot::api::SystemAccounts, Option<PolkadotAccountId>>
-	for DotEnvironment
-{
-	fn lookup(
-		query: cf_chains::dot::api::SystemAccounts,
-	) -> Result<Option<PolkadotAccountId>, frame_support::error::LookupError> {
+impl ChainEnvironment<cf_chains::dot::api::SystemAccounts, PolkadotAccountId> for DotEnvironment {
+	fn lookup(query: cf_chains::dot::api::SystemAccounts) -> Option<PolkadotAccountId> {
 		match query {
 			cf_chains::dot::api::SystemAccounts::Proxy =>
-				Ok(Environment::get_current_polkadot_proxy_account()),
-			cf_chains::dot::api::SystemAccounts::Vault =>
-				Ok(Environment::get_polkadot_vault_account()),
+				Environment::get_current_polkadot_proxy_account(),
+			cf_chains::dot::api::SystemAccounts::Vault => Environment::get_polkadot_vault_account(),
 		}
 	}
 }

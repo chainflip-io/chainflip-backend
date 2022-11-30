@@ -119,25 +119,23 @@ where
 			E::replay_protection(),
 			fetch_params
 				.into_iter()
-				.filter_map(|FetchAssetParams { intent_id, asset }| {
-					E::lookup(asset)
-						.map(|address| all_batch::EncodableFetchAssetParams {
-							intent_id,
-							asset: address,
-						})
-						.ok()
+				.map(|FetchAssetParams { intent_id, asset }| {
+					E::lookup(asset).map(|address| all_batch::EncodableFetchAssetParams {
+						intent_id,
+						asset: address,
+					}).expect("This lookup should never fail otherwise this ingress will be lost forever")
 				})
 				.collect(),
 			transfer_params
 				.into_iter()
-				.filter_map(|TransferAssetParams { asset, to, amount }| {
+				.map(|TransferAssetParams { asset, to, amount }| {
 					E::lookup(asset)
 						.map(|address| all_batch::EncodableTransferAssetParams {
 							to,
 							amount,
 							asset: address,
 						})
-						.ok()
+						.expect("This lookup should never fail otherwise this egress will be lost forever")
 				})
 				.collect(),
 		)))

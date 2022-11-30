@@ -185,7 +185,7 @@ pub trait ChainEnvironment<
 >
 {
 	/// Attempt a lookup.
-	fn lookup(s: LookupKey) -> Result<LookupValue, frame_support::error::LookupError>;
+	fn lookup(s: LookupKey) -> Option<LookupValue>;
 }
 
 /// Constructs the `SetAggKeyWithAggKey` api call.
