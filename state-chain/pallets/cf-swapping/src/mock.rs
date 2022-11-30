@@ -1,9 +1,12 @@
 use crate::{self as pallet_cf_swapping, Pallet, WeightInfo};
-use cf_chains::{Chain, Ethereum};
-use cf_primitives::{chains::assets, Asset, AssetAmount, ForeignChainAddress};
+use cf_chains::{AnyChain, Chain, Ethereum};
+use cf_primitives::{chains::assets, Asset, AssetAmount};
 use cf_traits::{
-	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
-	Chainflip, EgressApi, IngressApi, SwappingApi,
+	mocks::{
+		egress_handler::MockEgressHandler, ensure_origin_mock::NeverFailingOriginCheck,
+		ingress_handler::MockIngressHandler, system_state_info::MockSystemStateInfo,
+	},
+	Chainflip, SwappingApi,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{parameter_types, storage_alias};
@@ -121,7 +124,7 @@ impl pallet_cf_swapping::Config for Test {
 	type Event = Event;
 	type AccountRoleRegistry = ();
 	type IngressHandler = MockIngressHandler<AnyChain, Self>;
-	type EgressHandler = MockEgressHandler<AnyChain, Self>;
+	type EgressHandler = MockEgressHandler<AnyChain>;
 	type WeightInfo = MockWeightInfo;
 	type SwappingApi = MockSwappingApi;
 }

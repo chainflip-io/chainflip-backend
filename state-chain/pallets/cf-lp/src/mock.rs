@@ -1,11 +1,5 @@
 use crate as pallet_cf_lp;
-use cf_chains::{
-	eth::{
-		api::{EthereumApi, EthereumReplayProtection},
-		assets,
-	},
-	AnyChain, Chain, ChainAbi, ChainEnvironment, Ethereum,
-};
+use cf_chains::{eth::assets, AnyChain, Chain, ChainEnvironment, Ethereum};
 use cf_primitives::{AccountRole, EthereumAddress, IntentId, ETHEREUM_ETH_ADDRESS};
 use cf_traits::{
 	mocks::{
@@ -108,18 +102,6 @@ impl ChainEnvironment<<Ethereum as Chain>::ChainAsset, <Ethereum as Chain>::Chai
 			_ => todo!(),
 		})
 	}
-}
-
-impl pallet_cf_ingress_egress::Config<Instance1> for Test {
-	type Event = Event;
-	type TargetChain = Ethereum;
-	type AddressDerivation = MockAddressDerivation;
-	type LpProvisioning = LiquidityProvider;
-	type SwapIntentHandler = Self;
-	type AllBatch = MockAllBatch;
-	type Broadcaster = MockBroadcast;
-	type EnsureGovernance = NeverFailingOriginCheck<Self>;
-	type WeightInfo = ();
 }
 
 impl cf_traits::Chainflip for Test {
