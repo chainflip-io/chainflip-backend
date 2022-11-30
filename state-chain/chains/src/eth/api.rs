@@ -114,47 +114,32 @@ where
 		fetch_params: Vec<FetchAssetParams<Ethereum>>,
 		transfer_params: Vec<TransferAssetParams<Ethereum>>,
 	) -> Result<Self, ()> {
-		let mut maybe_error = false;
-
-		let apicall = Self::AllBatch(all_batch::AllBatch::new_unsigned(
+		Ok(Self::AllBatch(all_batch::AllBatch::new_unsigned(
 			E::replay_protection(),
 			fetch_params
 				.into_iter()
 				.map(|FetchAssetParams { intent_id, asset }| {
-					E::lookup(asset).map_or_else(
-						|| {
-							maybe_error = true;
-							Default::default()
-						},
-						|address| all_batch::EncodableFetchAssetParams {
+					E::lookup(asset)
+						.map(|address| all_batch::EncodableFetchAssetParams {
 							intent_id,
 							asset: address,
-						},
-					)
+						})
+						.ok_or(())
 				})
-				.collect(),
+				.collect::<Result<Vec<_>, ()>>()?,
 			transfer_params
 				.into_iter()
 				.map(|TransferAssetParams { asset, to, amount }| {
-					E::lookup(asset).map_or_else(
-						|| {
-							maybe_error = true;
-							Default::default()
-						},
-						|address| all_batch::EncodableTransferAssetParams {
+					E::lookup(asset)
+						.map(|address| all_batch::EncodableTransferAssetParams {
 							to,
 							amount,
 							asset: address,
-						},
-					)
+						})
+						.ok_or(())
 				})
-				.collect(),
-		));
-		if maybe_error {
-			Err(())
-		} else {
-			Ok(apicall)
-		}
+				.collect::<Result<Vec<_>, ()>>()?,
+		)))
 	}
 }
 
