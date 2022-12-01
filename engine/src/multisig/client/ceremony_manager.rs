@@ -514,7 +514,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 		let r = C::Point::from_scalar(&nonce);
 
 		let sigma =
-			client::signing::generate_schnorr_response::<C>(&key.x_i, key.y, r, nonce, &data.0);
+			client::signing::generate_schnorr_response::<C>(&key.x_i, key.y, r, nonce, &data);
 
 		C::build_signature(sigma, r)
 	}

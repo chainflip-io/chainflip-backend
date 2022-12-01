@@ -98,6 +98,8 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient>(
 	MultisigClient: MultisigClientApi<EthSigning>,
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
 {
+	assert_eq!(data.0.len(), 32, "Incorrect payload size");
+
 	if signers.contains(&state_chain_client.account_id()) {
 		// We initiate signing outside of the spawn to avoid requesting ceremonies out of order
 		let signing_result_future =
@@ -369,7 +371,7 @@ where
                                             ceremony_id,
                                             KeyId(key_id),
                                             signatories,
-                                            MessageHash(payload.to_fixed_bytes()),
+                                            MessageHash(payload.0.to_vec()),
                                             logger.clone(),
                                         ).await;
                                     }

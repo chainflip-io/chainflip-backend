@@ -637,7 +637,7 @@ impl<C: CryptoScheme> CeremonyRunnerStrategy for SigningCeremonyRunner<C> {
 			.expect("Signatures don't match");
 
 		signature
-			.verify(&self.ceremony_runner_data.key_id, &MESSAGE_HASH.0)
+			.verify(&self.ceremony_runner_data.key_id, &MESSAGE_HASH)
 			.expect("Should be valid signature");
 
 		signature

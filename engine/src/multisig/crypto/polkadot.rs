@@ -1,3 +1,5 @@
+use crate::multisig::MessageHash;
+
 use super::{curve25519_ristretto::Point, ChainTag, CryptoScheme, ECPoint, Verifiable};
 use schnorrkel::context::{SigningContext, SigningTranscript};
 use serde::{Deserialize, Serialize};
@@ -33,12 +35,14 @@ impl<'de> Deserialize<'de> for PolkadotSignature {
 }
 
 impl Verifiable for PolkadotSignature {
-	fn verify(&self, key_id: &crate::multisig::KeyId, message: &[u8; 32]) -> anyhow::Result<()> {
+	fn verify(&self, key_id: &crate::multisig::KeyId, message: &MessageHash) -> anyhow::Result<()> {
 		let public_key = schnorrkel::PublicKey::from_bytes(&key_id.0).expect("invalid public key");
 
 		let context = schnorrkel::signing_context(SIGNING_CTX);
 
-		public_key.verify(context.bytes(message), &self.0).map_err(anyhow::Error::msg)
+		public_key
+			.verify(context.bytes(message.0.as_slice()), &self.0)
+			.map_err(anyhow::Error::msg)
 	}
 }
 
@@ -68,14 +72,14 @@ impl CryptoScheme for PolkadotSigning {
 	fn build_challenge(
 		pubkey: Self::Point,
 		nonce_commitment: Self::Point,
-		msg_hash: &[u8; 32],
+		msg_hash: &MessageHash,
 	) -> <Self::Point as super::ECPoint>::Scalar {
 		// NOTE: This computation is copied from schnorrkel's
 		// source code (since it is the "source of truth")
 		// (see https://docs.rs/schnorrkel/0.9.1/src/schnorrkel/sign.rs.html#171)
 
 		// Is the message not expected to be already hashed?
-		let mut t = SigningContext::new(SIGNING_CTX).bytes(msg_hash);
+		let mut t = SigningContext::new(SIGNING_CTX).bytes(&msg_hash.0);
 		t.proto_name(b"Schnorr-sig");
 		// TODO: see how expensive this compression is and whether we should
 		// always keep both compressed and uncompressed in memory the way schnorrkel does
@@ -121,7 +125,7 @@ fn signature_should_be_valid() {
 	let public_key = Point::from_scalar(&secret_key);
 
 	// Message to sign
-	let message_hash = [b't'; 32];
+	let message_hash = MessageHash(vec![b't'; 32]);
 
 	let signature = {
 		// Pick random nonce and commit to it
@@ -138,7 +142,7 @@ fn signature_should_be_valid() {
 
 	assert_ok!(schnorrkel::PublicKey::from_point(public_key.get_element()).verify_simple(
 		SIGNING_CTX,
-		&message_hash,
+		&message_hash.0,
 		&signature.0
 	));
 }

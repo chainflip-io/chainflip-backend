@@ -8,7 +8,10 @@ use cf_primitives::AuthorityCount;
 
 use zeroize::Zeroize;
 
-use crate::multisig::crypto::{CryptoScheme, ECPoint, ECScalar, KeyShare, Rng};
+use crate::multisig::{
+	crypto::{CryptoScheme, ECPoint, ECScalar, KeyShare, Rng},
+	MessageHash,
+};
 
 use sha2::{Digest, Sha256};
 
@@ -115,19 +118,19 @@ type SigningResponse<P> = LocalSig3<P>;
 
 /// Generate binding values for each party given their previously broadcast commitments
 fn generate_bindings<P: ECPoint>(
-	msg: &[u8],
+	msg: &MessageHash,
 	commitments: &BTreeMap<AuthorityCount, SigningCommitment<P>>,
 	all_idxs: &BTreeSet<AuthorityCount>,
 ) -> BTreeMap<AuthorityCount, P::Scalar> {
 	all_idxs
 		.iter()
-		.map(|idx| (*idx, gen_rho_i(*idx, msg, commitments, all_idxs)))
+		.map(|idx| (*idx, gen_rho_i(*idx, &msg.0, commitments, all_idxs)))
 		.collect()
 }
 
 /// Generate local signature/response (shard). See step 5 in Figure 3 (page 15).
 pub fn generate_local_sig<C: CryptoScheme>(
-	msg_hash: &[u8; 32],
+	msg_hash: &MessageHash,
 	key: &KeyShare<C::Point>,
 	nonces: &SecretNoncePair<C::Point>,
 	commitments: &BTreeMap<AuthorityCount, SigningCommitment<C::Point>>,
@@ -160,7 +163,7 @@ pub fn generate_schnorr_response<C: CryptoScheme>(
 	pubkey: C::Point,
 	nonce_commitment: C::Point,
 	nonce: <C::Point as ECPoint>::Scalar,
-	msg_hash: &[u8; 32],
+	msg_hash: &MessageHash,
 ) -> <C::Point as ECPoint>::Scalar {
 	let challenge = C::build_challenge(pubkey, nonce_commitment, msg_hash);
 
@@ -171,7 +174,7 @@ pub fn generate_schnorr_response<C: CryptoScheme>(
 /// (aggregate) signature given that no party misbehaved. Otherwise
 /// return the misbehaving parties.
 pub fn aggregate_signature<C: CryptoScheme>(
-	msg_hash: &[u8; 32],
+	msg_hash: &MessageHash,
 	signer_idxs: &BTreeSet<AuthorityCount>,
 	agg_pubkey: C::Point,
 	pubkeys: &BTreeMap<AuthorityCount, C::Point>,
@@ -240,8 +243,7 @@ mod tests {
 		// Given the signing key, nonce and message hash, check that
 		// sigma (signature response) is correct and matches the expected
 		// (by the KeyManager contract) value
-		let msg_hash: [u8; 32] =
-			hex::decode(MESSAGE_HASH).unwrap().try_into().expect("invalid hash size");
+		let msg_hash = MessageHash(hex::decode(MESSAGE_HASH).unwrap().to_vec());
 
 		let nonce = Scalar::from_hex(NONCE_KEY);
 		let commitment = Point::from_scalar(&nonce);

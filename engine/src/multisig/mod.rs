@@ -31,11 +31,11 @@ pub use db::PersistentKeyDB;
 use self::client::key_store::KeyStore;
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Hash, Eq)]
-pub struct MessageHash(pub [u8; 32]);
+pub struct MessageHash(pub Vec<u8>);
 
 impl std::fmt::Display for MessageHash {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{}", hex::encode(self.0))
+		write!(f, "{}", hex::encode(&self.0))
 	}
 }
 

@@ -1009,7 +1009,7 @@ async fn should_handle_signing_request() {
 	let logger = new_test_logger();
 	let first_ceremony_id = 1;
 	let key_id = crate::multisig::KeyId(vec![0u8; 32]);
-	let sign_data = crate::multisig::MessageHash([0u8; 32]);
+	let sign_data = crate::multisig::MessageHash(vec![0u8; 32]);
 	let our_account_id = AccountId32::new([0; 32]);
 	let not_our_account_id = AccountId32::new([1u8; 32]);
 	assert_ne!(our_account_id, not_our_account_id);
