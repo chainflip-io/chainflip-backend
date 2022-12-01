@@ -6,7 +6,7 @@ use cf_chains::{
 	},
 	AnyChain, Chain, ChainAbi, ChainEnvironment, Ethereum,
 };
-use cf_primitives::{AccountRole, EthereumAddress, IntentId, ETHEREUM_ETH_ADDRESS};
+use cf_primitives::{AccountRole, EthereumAddress, IntentId};
 use cf_traits::{
 	mocks::{
 		all_batch::MockAllBatch, bid_info::MockBidInfo, egress_handler::MockEgressHandler,
@@ -92,22 +92,6 @@ impl Broadcaster<Ethereum> for MockBroadcast {
 	type ApiCall = MockAllBatch;
 
 	fn threshold_sign_and_broadcast(_api_call: Self::ApiCall) {}
-}
-
-pub struct MockEthEnvironment;
-
-impl ChainEnvironment<<Ethereum as Chain>::ChainAsset, <Ethereum as Chain>::ChainAccount>
-	for MockEthEnvironment
-{
-	fn lookup(
-		asset: <Ethereum as Chain>::ChainAsset,
-	) -> Result<<Ethereum as Chain>::ChainAccount, frame_support::error::LookupError> {
-		Ok(match asset {
-			assets::eth::Asset::Eth => ETHEREUM_ETH_ADDRESS.into(),
-			assets::eth::Asset::Flip => ETHEREUM_FLIP_ADDRESS.into(),
-			_ => todo!(),
-		})
-	}
 }
 
 impl pallet_cf_ingress_egress::Config<Instance1> for Test {
