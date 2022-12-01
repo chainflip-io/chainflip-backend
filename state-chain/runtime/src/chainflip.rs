@@ -140,20 +140,6 @@ impl cf_traits::WaivedFees for WaivedFees {
 	}
 }
 
-pub struct EthEnvironment;
-
-impl ChainEnvironment<assets::eth::Asset, EthAbiAddress> for EthEnvironment {
-	fn lookup(
-		asset: assets::eth::Asset,
-	) -> Result<EthAbiAddress, frame_support::error::LookupError> {
-		Ok(match asset {
-			assets::eth::Asset::Eth => ETHEREUM_ETH_ADDRESS.into(),
-			assets::eth::Asset::Flip => Environment::flip_token_address().into(),
-			assets::eth::Asset::Usdc => todo!(),
-		})
-	}
-}
-
 pub struct EthTransactionBuilder;
 
 impl TransactionBuilder<Ethereum, EthereumApi<EthEnvironment>> for EthTransactionBuilder {
@@ -227,6 +213,7 @@ impl RuntimeUpgrade for RuntimeUpgradeManager {
 		System::set_code(frame_system::RawOrigin::Root.into(), code)
 	}
 }
+pub struct EthEnvironment;
 
 impl ReplayProtectionProvider<Ethereum> for EthEnvironment {
 	// Get the Environment values for key_manager_address and chain_id, then use
@@ -237,6 +224,16 @@ impl ReplayProtectionProvider<Ethereum> for EthEnvironment {
 			chain_id: Environment::ethereum_chain_id(),
 			nonce: Environment::next_ethereum_signature_nonce(),
 		}
+	}
+}
+
+impl ChainEnvironment<assets::eth::Asset, EthAbiAddress> for EthEnvironment {
+	fn lookup(asset: assets::eth::Asset) -> Option<EthAbiAddress> {
+		Some(match asset {
+			assets::eth::Asset::Eth => ETHEREUM_ETH_ADDRESS.into(),
+			assets::eth::Asset::Flip => Environment::flip_token_address().into(),
+			assets::eth::Asset::Usdc => todo!(),
+		})
 	}
 }
 
@@ -261,14 +258,11 @@ impl ReplayProtectionProvider<Polkadot> for DotEnvironment {
 
 #[cfg(feature = "ibiza")]
 impl ChainEnvironment<cf_chains::dot::api::SystemAccounts, PolkadotAccountId> for DotEnvironment {
-	fn lookup(
-		query: cf_chains::dot::api::SystemAccounts,
-	) -> Result<PolkadotAccountId, frame_support::error::LookupError> {
+	fn lookup(query: cf_chains::dot::api::SystemAccounts) -> Option<PolkadotAccountId> {
 		match query {
 			cf_chains::dot::api::SystemAccounts::Proxy =>
-				Ok(Environment::get_current_polkadot_proxy_account()),
-			cf_chains::dot::api::SystemAccounts::Vault =>
-				Ok(Environment::get_polkadot_vault_account()),
+				Environment::get_current_polkadot_proxy_account(),
+			cf_chains::dot::api::SystemAccounts::Vault => Environment::get_polkadot_vault_account(),
 		}
 	}
 }
