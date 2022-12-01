@@ -202,7 +202,8 @@ fn all_batch_apicall_creation_failure_should_rollback_storage() {
 
 		let scheduled_requests = ScheduledEgressRequests::<Test, Instance1>::get();
 
-		// Take all scheduled Egress and Broadcast as batch
+		// Try to send the scheduled egresses via Allbatch apicall. Will fail and so should rollback
+		// the ScheduledEgressRequests
 		IngressEgress::on_idle(1, 1_000_000_000_000u64);
 
 		assert_eq!(ScheduledEgressRequests::<Test, Instance1>::get(), scheduled_requests);

@@ -361,10 +361,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		// Construct and send the transaction.
 		#[allow(clippy::unit_arg)]
-		match T::AllBatch::new_unsigned(fetch_params, egress_params)
-			.map(|egress_transaction| (egress_transaction, fetch_batch_size, egress_batch_size))
-		{
-			Ok(res) => TransactionOutcome::Commit(Ok(res)),
+		match T::AllBatch::new_unsigned(fetch_params, egress_params) {
+			Ok(egress_transaction) => TransactionOutcome::Commit(Ok((
+				egress_transaction,
+				fetch_batch_size,
+				egress_batch_size,
+			))),
 			Err(_) => TransactionOutcome::Rollback(Err(DispatchError::Other(
 				"AllBatch Apicall creation failed, rolling back",
 			))),
