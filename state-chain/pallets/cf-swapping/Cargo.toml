@@ -22,6 +22,7 @@ log = { version = '0.4.16', default-features = false }
 
 [dev-dependencies]
 state-chain-runtime = {path = '../../runtime'}
+cf-test-utilities = { path = '../../test-utilities'}
 
 # Parity deps
 [dependencies.codec]

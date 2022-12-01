@@ -209,3 +209,12 @@ fn cannot_swap_with_incorrect_egress_address_type() {
 		);
 	});
 }
+
+#[test]
+fn expect_swap_id_to_be_emitted() {
+	new_test_ext().execute_with(|| {
+		// 1. Register a swap intent -> NewSwapIntent
+		// 2. Schedule the swap -> SwapIngressReceived
+		// 3. Process swaps -> SwapEgressScheduled
+	});
+}
