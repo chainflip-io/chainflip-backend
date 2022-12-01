@@ -314,6 +314,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Returns the actual number of transactions sent.
 	///
 	/// Egress transactions with Blacklisted assets are not sent, and kept in storage.
+	#[allow(clippy::type_complexity)]
 	fn egress_scheduled_assets(
 		maybe_size: Option<u32>,
 	) -> TransactionOutcome<Result<(T::AllBatch, u32, u32), DispatchError>> {
