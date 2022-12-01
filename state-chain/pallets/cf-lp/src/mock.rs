@@ -93,10 +93,8 @@ pub struct MockEthEnvironment;
 impl ChainEnvironment<<Ethereum as Chain>::ChainAsset, <Ethereum as Chain>::ChainAccount>
 	for MockEthEnvironment
 {
-	fn lookup(
-		asset: <Ethereum as Chain>::ChainAsset,
-	) -> Result<<Ethereum as Chain>::ChainAccount, frame_support::error::LookupError> {
-		Ok(match asset {
+	fn lookup(asset: <Ethereum as Chain>::ChainAsset) -> Option<<Ethereum as Chain>::ChainAccount> {
+		Some(match asset {
 			assets::eth::Asset::Eth => ETHEREUM_ETH_ADDRESS.into(),
 			assets::eth::Asset::Flip => ETHEREUM_FLIP_ADDRESS.into(),
 			_ => todo!(),
