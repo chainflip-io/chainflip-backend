@@ -12,7 +12,7 @@ use sp_runtime::{
 	BuildStorage,
 };
 
-use crate::{Decode, Encode, MaxEncodedLen, TypeInfo};
+use crate::{Decode, Encode, TypeInfo};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -83,7 +83,7 @@ impl ApiCall<Polkadot> for MockCreatePolkadotVault {
 	}
 	fn signed(
 		self,
-		threshold_signature: &<Polkadot as cf_chains::ChainCrypto>::ThresholdSignature,
+		_threshold_signature: &<Polkadot as cf_chains::ChainCrypto>::ThresholdSignature,
 	) -> Self {
 		unimplemented!()
 	}
@@ -97,7 +97,7 @@ pub struct MockPolkadotBroadcaster;
 impl Broadcaster<Polkadot> for MockPolkadotBroadcaster {
 	type ApiCall = MockCreatePolkadotVault;
 
-	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) {
+	fn threshold_sign_and_broadcast(_api_call: Self::ApiCall) {
 		unimplemented!()
 	}
 }

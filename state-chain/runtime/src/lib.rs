@@ -73,8 +73,8 @@ pub use cf_traits::{EpochInfo, EthEnvironmentProvider, QualifyNode, SessionKeysR
 
 pub use chainflip::chain_instances::*;
 use chainflip::{
-	epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat, DotEnvironment,
-	EthEnvironment, EthVaultTransitionHandler,
+	epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat, EthEnvironment,
+	EthVaultTransitionHandler,
 };
 
 #[cfg(feature = "ibiza")]
