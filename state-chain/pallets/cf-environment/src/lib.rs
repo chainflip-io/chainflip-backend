@@ -8,7 +8,7 @@ use cf_chains::{
 		api::CreatePolkadotVault, Polkadot, PolkadotAccountId, PolkadotConfig, PolkadotIndex,
 		PolkadotPublicKey,
 	},
-	ChainCrypto,
+	Chain, ChainCrypto,
 };
 
 use cf_primitives::{Asset, EthereumAddress};
@@ -73,7 +73,7 @@ pub mod cfe {
 pub mod pallet {
 	use cf_primitives::Asset;
 	#[cfg(feature = "ibiza")]
-	use cf_traits::Broadcaster;
+	use cf_traits::{Broadcaster, VaultKeyWitnessedHandler};
 
 	use super::*;
 
@@ -87,9 +87,12 @@ pub mod pallet {
 		/// Polkadot Vault Creation Apicall
 		#[cfg(feature = "ibiza")]
 		type CreatePolkadotVault: CreatePolkadotVault;
-		/// Polakdot broadcaster
+		/// Polkadot broadcaster
 		#[cfg(feature = "ibiza")]
 		type PolkadotBroadcaster: Broadcaster<Polkadot, ApiCall = Self::CreatePolkadotVault>;
+		/// On new key witnessed handler for Polkadot
+		#[cfg(feature = "ibiza")]
+		type PolkadotVaultKeyWitnessedHandler: VaultKeyWitnessedHandler<Polkadot>;
 		/// Weight information
 		type WeightInfo: WeightInfo;
 	}
@@ -282,6 +285,33 @@ pub mod pallet {
 				agg_key: dot_aggkey,
 			});
 			Ok(().into())
+		}
+
+		#[cfg(feature = "ibiza")]
+		#[pallet::weight(0)]
+		pub fn witness_polkadot_vault_creation(
+			origin: OriginFor<T>,
+			dot_pure_proxy_vault_key: <Polkadot as ChainCrypto>::AggKey,
+			dot_witnessed_aggkey: <Polkadot as ChainCrypto>::AggKey,
+			block_number: <Polkadot as Chain>::ChainBlockNumber,
+			tx_hash: <Polkadot as ChainCrypto>::TransactionHash,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			use cf_traits::VaultKeyWitnessedHandler;
+			use sp_runtime::{traits::IdentifyAccount, MultiSigner};
+
+			// Set Polkadot Pure Proxy Vault Account
+			PolkadotVaultAccountId::<T>::set(Some(
+				MultiSigner::Sr25519(dot_pure_proxy_vault_key.0).into_account(),
+			));
+
+			// Witness the agg_key rotation manually in the vaults pallet for polkadot
+			T::PolkadotVaultKeyWitnessedHandler::on_new_key_witnessed(
+				dot_witnessed_aggkey,
+				block_number,
+				tx_hash,
+			)
 		}
 	}
 
