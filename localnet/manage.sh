@@ -22,7 +22,8 @@ setup() {
     exit 1
   fi
 
-  echo "🐳 Logging in to our Docker Registry. You'll need to create a PAT, https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token"
+  echo "🐳 Logging in to our Docker Registry. You'll need to create a Classic PAT with packages:read permissions"
+  echo "https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token"
   docker login ghcr.io
 
   ONEPASSWORD_FILES=$(ls $LOCALNET_INIT_DIR/onepassword)
