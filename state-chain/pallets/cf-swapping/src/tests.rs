@@ -214,7 +214,45 @@ fn cannot_swap_with_incorrect_egress_address_type() {
 fn expect_swap_id_to_be_emitted() {
 	new_test_ext().execute_with(|| {
 		// 1. Register a swap intent -> NewSwapIntent
+		assert_ok!(Swapping::register_swap_intent(
+			Origin::signed(ALICE),
+			Asset::Eth,
+			Asset::Usdc,
+			ForeignChainAddress::Eth(Default::default()),
+			0,
+		));
+		assert_eq!(
+			last_event::<Test>(),
+			mock::Event::Pallet(crate::Event::NewSwapIntent(
+				1,
+				1,
+				ForeignChainAddress::Eth(Default::default()),
+			)),
+			"should emit event on request swap intent"
+		);
 		// 2. Schedule the swap -> SwapIngressReceived
-		// 3. Process swaps -> SwapEgressScheduled
+		assert_ok!(<Pallet<Test> as SwapIntentHandler>::schedule_swap(
+			Asset::Flip,
+			Asset::Usdc,
+			500,
+			ForeignChainAddress::Eth(Default::default()),
+			ALICE,
+			0,
+		));
+		assert_eq!(
+			last_event::<Test>(),
+			mock::Event::Pallet(crate::Event::SwapIngressReceived(1, 500)),
+			"should emit event on swap ingress received"
+		);
+		// 3. Process swaps -> SwapExecuted, SwapEgressScheduled
+		Swapping::on_idle(1, 100);
+		assert_event_sequence!(
+			Test,
+			Event::SwapExecuted(crate::Event::SwapExecuted(swap_id: 1)),
+			Event::SwapEgressScheduled(crate::Event::SwapEgressScheduled {
+				swap_id: 1,
+				egress_amount: 500
+			}),
+		);
 	});
 }

@@ -104,6 +104,9 @@ pub mod pallet {
 			swap_id: u128,
 			ingress_amount: AssetAmount,
 		},
+		SwapExecuted {
+			swap_id: u128,
+		},
 		SwapEgressScheduled {
 			swap_id: u128,
 			egress_amount: AssetAmount,
@@ -199,6 +202,10 @@ pub mod pallet {
 			}
 
 			let (bundle_output, _) = T::SwappingApi::swap(from, to, bundle_input, 1);
+
+			for swap in &swaps {
+				Self::deposit_event(Event::<T>::SwapExecuted { swap_id: swap.swap_id });
+			}
 
 			for (input_amount, egress_asset, egress_address, id) in bundle_inputs {
 				if let Some(swap_output) = multiply_by_rational_with_rounding(
