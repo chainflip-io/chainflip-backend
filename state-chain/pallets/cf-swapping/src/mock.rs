@@ -1,14 +1,15 @@
-use crate::{self as pallet_cf_swapping, Pallet, WeightInfo};
-use cf_chains::{Chain, Ethereum};
-use cf_primitives::{chains::assets, Asset, AssetAmount, ForeignChainAddress};
+use crate::{self as pallet_cf_swapping, WeightInfo};
+use cf_chains::AnyChain;
+use cf_primitives::{Asset, AssetAmount};
 use cf_traits::{
-	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
-	Chainflip, EgressApi, IngressApi, SwappingApi,
+	mocks::{
+		egress_handler::MockEgressHandler, ensure_origin_mock::NeverFailingOriginCheck,
+		ingress_handler::MockIngressHandler, system_state_info::MockSystemStateInfo,
+	},
+	Chainflip, SwappingApi,
 };
-use codec::{Decode, Encode, MaxEncodedLen};
-use frame_support::{parameter_types, storage_alias};
+use frame_support::parameter_types;
 use frame_system as system;
-use scale_info::TypeInfo;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -21,17 +22,6 @@ pub const RELAYER_FEE: u128 = 5;
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 type AccountId = u64;
-
-/// A helper type for testing
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
-pub struct EgressTransaction {
-	pub asset: assets::eth::Asset,
-	pub amount: AssetAmount,
-	pub egress_address: <Ethereum as Chain>::ChainAccount,
-}
-
-#[storage_alias]
-pub type EgressQueue<T: crate::pallet::Config> = StorageValue<Pallet<T>, Vec<EgressTransaction>>;
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
@@ -121,7 +111,7 @@ impl pallet_cf_swapping::Config for Test {
 	type Event = Event;
 	type AccountRoleRegistry = ();
 	type IngressHandler = MockIngressHandler<AnyChain, Self>;
-	type EgressHandler = MockEgressHandler<AnyChain, Self>;
+	type EgressHandler = MockEgressHandler<AnyChain>;
 	type WeightInfo = MockWeightInfo;
 	type SwappingApi = MockSwappingApi;
 }
