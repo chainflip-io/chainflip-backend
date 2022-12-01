@@ -196,6 +196,9 @@ pub mod pallet {
 		/// Polkadot Vault Creation Call was initiated
 		#[cfg(feature = "ibiza")]
 		PolkadotVaultCreationCallInitiated { agg_key: <Polkadot as ChainCrypto>::AggKey },
+		/// Polkadot Vault Account is successfully set
+		#[cfg(feature = "ibiza")]
+		PolkadotVaultAccountSet { polkadot_vault_account_id: PolkadotAccountId },
 	}
 
 	#[pallet::call]
@@ -269,7 +272,15 @@ pub mod pallet {
 			Self::deposit_event(Event::<T>::CfeSettingsUpdated { new_cfe_settings: cfe_settings });
 			Ok(().into())
 		}
-
+		/// Initiates the Polkadot Vault Creation Apicall
+		///
+		/// ## Events
+		///
+		/// - [PolkadotVaultCreationCallInitiated](Event::PolkadotVaultCreationCallInitiated)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[cfg(feature = "ibiza")]
 		#[pallet::weight(0)]
 		pub fn create_polkadot_vault(
@@ -286,7 +297,16 @@ pub mod pallet {
 			});
 			Ok(().into())
 		}
-
+		/// Manually initiates Polkadot vault key rotation completion steps so Epoch rotation can be
+		/// continued and sets the Polkadot Pure Proxy Vault in environment pallet
+		///
+		/// ## Events
+		///
+		/// - [PolkadotVaultCreationCallInitiated](Event::PolkadotVaultCreationCallInitiated)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[cfg(feature = "ibiza")]
 		#[pallet::weight(0)]
 		pub fn witness_polkadot_vault_creation(
@@ -302,9 +322,10 @@ pub mod pallet {
 			use sp_runtime::{traits::IdentifyAccount, MultiSigner};
 
 			// Set Polkadot Pure Proxy Vault Account
-			PolkadotVaultAccountId::<T>::set(Some(
-				MultiSigner::Sr25519(dot_pure_proxy_vault_key.0).into_account(),
-			));
+			let polkadot_vault_account_id =
+				MultiSigner::Sr25519(dot_pure_proxy_vault_key.0).into_account();
+			PolkadotVaultAccountId::<T>::set(Some(polkadot_vault_account_id.clone()));
+			Self::deposit_event(Event::<T>::PolkadotVaultAccountSet { polkadot_vault_account_id });
 
 			// Witness the agg_key rotation manually in the vaults pallet for polkadot
 			T::PolkadotVaultKeyWitnessedHandler::on_new_key_witnessed(
