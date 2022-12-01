@@ -340,7 +340,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		if batch_to_send.is_empty() {
 			return TransactionOutcome::Rollback(Err(DispatchError::Other(
-				"Nothing to send, batch to send is empty, rolling back",
+				"Nothing to send, batch to send is empty, rolled back storage",
 			)))
 		}
 
@@ -368,7 +368,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				egress_batch_size,
 			))),
 			Err(_) => TransactionOutcome::Rollback(Err(DispatchError::Other(
-				"AllBatch Apicall creation failed, rolling back",
+				"AllBatch Apicall creation failed, rolled back storage",
 			))),
 		}
 	}
