@@ -42,7 +42,7 @@ fn generate_on_signature_ready_call<T: pallet::Config<I>, I>() -> pallet::Call<T
 	);
 	Call::<T, I>::on_signature_ready {
 		threshold_request_id,
-		api_call: ApiCallFor::<T, I>::benchmark_value(),
+		api_call: Box::new(ApiCallFor::<T, I>::benchmark_value()),
 	}
 }
 

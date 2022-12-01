@@ -12,7 +12,10 @@ use crate::{
 use sp_core::{crypto::AccountId32, sr25519};
 use sp_runtime::{generic::Era, traits::IdentifyAccount, MultiSignature, MultiSigner};
 
-use super::{EncodedPolkadotPayload, PolkadotAccountId};
+use super::{
+	api::{create_anonymous_vault::CreateAnonymousVault, PolkadotApi},
+	EncodedPolkadotPayload, PolkadotAccountId, PolkadotReplayProtection,
+};
 
 const SIGNATURE: [u8; 64] = [1u8; 64];
 const ACCOUNT_ID_1: [u8; 32] = [2u8; 32];
@@ -81,6 +84,19 @@ impl BenchmarkValue for PolkadotAccountId {
 			"858c1ee915090a119d4cb0774b908fa585ef7882f4648c577606490cc94f6e15"
 		)))
 		.into_account()
+	}
+}
+
+impl<E> BenchmarkValue for PolkadotApi<E> {
+	fn benchmark_value() -> Self {
+		PolkadotApi::CreateAnonymousVault(CreateAnonymousVault::new_unsigned(
+			PolkadotReplayProtection {
+				polkadot_config: Default::default(),
+				nonce: Default::default(),
+				tip: Default::default(),
+			},
+			PolkadotPublicKey::benchmark_value(),
+		))
 	}
 }
 

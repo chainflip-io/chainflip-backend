@@ -1,8 +1,8 @@
 use crate::{mock::*, EarnedRelayerFees, Pallet, Swap, SwapQueue, WeightInfo};
-use cf_chains::eth::assets;
-use cf_primitives::{Asset, EthereumAddress, ForeignChainAddress};
-use cf_traits::SwapIntentHandler;
-use frame_support::{assert_noop, assert_ok};
+use cf_chains::AnyChain;
+use cf_primitives::{Asset, ForeignChainAddress};
+use cf_traits::{mocks::egress_handler::MockEgressHandler, SwapIntentHandler};
+use frame_support::{assert_ok, sp_std::iter};
 
 use frame_support::traits::Hooks;
 
@@ -51,17 +51,17 @@ fn generate_test_swaps() -> Vec<Swap<u64>> {
 		},
 		Swap {
 			from: Asset::Flip,
-			to: Asset::Eth,
+			to: Asset::Dot,
 			amount: 600,
-			egress_address: ForeignChainAddress::Eth([4; 20]),
+			egress_address: ForeignChainAddress::Dot([4; 32]),
 			relayer_id: 7_u64,
 			relayer_commission_bps: 2000,
 		},
 	]
 }
 
-fn insert_swaps(swaps: Vec<Swap<u64>>) {
-	for swap in swaps.iter() {
+fn insert_swaps(swaps: &Vec<Swap<u64>>) {
+	for swap in swaps {
 		assert_ok!(<Pallet<Test> as SwapIntentHandler>::schedule_swap(
 			swap.from,
 			swap.to,
@@ -90,24 +90,22 @@ fn register_swap_intent_success_with_valid_parameters() {
 fn process_all_swaps() {
 	new_test_ext().execute_with(|| {
 		let swaps = generate_test_swaps();
-		insert_swaps(swaps.clone());
+		insert_swaps(&swaps);
 		Swapping::on_idle(
 			1,
 			<() as WeightInfo>::execute_group_of_swaps(swaps.len() as u32) * (swaps.len() as u64),
 		);
-		assert_eq!(SwapQueue::<Test>::get().len(), 0);
-		let expected = swaps
+		assert!(SwapQueue::<Test>::get().is_empty());
+		let mut expected = swaps
 			.iter()
-			.map(|swap: &Swap<u64>| EgressTransaction {
-				asset: assets::eth::Asset::try_from(swap.to).unwrap(),
-				amount: swap.amount,
-				egress_address: EthereumAddress::try_from(swap.egress_address).unwrap().into(),
-			})
-			.collect::<Vec<EgressTransaction>>();
-		for swap in expected.iter() {
-			assert!(EgressQueue::<Test>::get()
-				.expect("EgressQueue to not be empty")
-				.contains(swap));
+			.cloned()
+			.map(|swap| (swap.to, swap.amount, swap.egress_address))
+			.collect::<Vec<_>>();
+		expected.sort();
+		let mut egresses = MockEgressHandler::<AnyChain>::get_scheduled_egresses();
+		egresses.sort();
+		for (input, output) in iter::zip(expected, egresses) {
+			assert_eq!(input, output);
 		}
 	});
 }
@@ -116,9 +114,9 @@ fn process_all_swaps() {
 fn number_of_swaps_processed_limited_by_weight() {
 	new_test_ext().execute_with(|| {
 		let swaps = generate_test_swaps();
-		insert_swaps(swaps);
-		Swapping::on_idle(1, 200);
-		assert_eq!(SwapQueue::<Test>::get().len(), 3);
+		insert_swaps(&swaps);
+		Swapping::on_idle(1, 0);
+		assert_eq!(SwapQueue::<Test>::get().len(), swaps.len());
 	});
 }
 
@@ -160,52 +158,17 @@ fn expect_earned_fees_to_be_recorded() {
 }
 
 #[test]
+#[should_panic]
 fn cannot_swap_with_incorrect_egress_address_type() {
 	new_test_ext().execute_with(|| {
 		const ALICE: u64 = 1_u64;
-		assert_noop!(
-			<Pallet<Test> as SwapIntentHandler>::schedule_swap(
-				Asset::Flip,
-				Asset::Usdc,
-				10,
-				ForeignChainAddress::Dot([2; 32]),
-				ALICE,
-				2,
-			),
-			crate::Error::<Test>::IncompatibleAssetAndAddress,
-		);
-		assert_noop!(
-			<Pallet<Test> as SwapIntentHandler>::schedule_swap(
-				Asset::Flip,
-				Asset::Eth,
-				10,
-				ForeignChainAddress::Dot([2; 32]),
-				ALICE,
-				2,
-			),
-			crate::Error::<Test>::IncompatibleAssetAndAddress,
-		);
-		assert_noop!(
-			<Pallet<Test> as SwapIntentHandler>::schedule_swap(
-				Asset::Eth,
-				Asset::Flip,
-				10,
-				ForeignChainAddress::Dot([2; 32]),
-				ALICE,
-				2,
-			),
-			crate::Error::<Test>::IncompatibleAssetAndAddress,
-		);
-		assert_noop!(
-			<Pallet<Test> as SwapIntentHandler>::schedule_swap(
-				Asset::Flip,
-				Asset::Dot,
-				10,
-				ForeignChainAddress::Eth([2; 20]),
-				ALICE,
-				2,
-			),
-			crate::Error::<Test>::IncompatibleAssetAndAddress,
+		let _ = <Pallet<Test> as SwapIntentHandler>::schedule_swap(
+			Asset::Eth,
+			Asset::Dot,
+			10,
+			ForeignChainAddress::Eth([2; 20]),
+			ALICE,
+			2,
 		);
 	});
 }

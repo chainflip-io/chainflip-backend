@@ -21,11 +21,12 @@ use cf_chains::{
 	eth,
 	eth::{api::register_claim::RegisterClaim, Ethereum},
 };
+
 use pallet_cf_validator::BidInfoProvider;
 
 pub use frame_support::{
 	construct_runtime, debug,
-	instances::Instance1,
+	instances::{Instance1, Instance2},
 	parameter_types,
 	traits::{
 		ConstU128, ConstU16, ConstU32, ConstU64, ConstU8, KeyOwnerProofSystem, Randomness,
@@ -74,6 +75,9 @@ use chainflip::{
 	epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat, EthEnvironment,
 	EthVaultTransitionHandler,
 };
+
+#[cfg(feature = "ibiza")]
+use chainflip::{all_vaults_rotator::AllVaultRotator, DotEnvironment, DotVaultTransitionHandler};
 use constants::common::*;
 use pallet_cf_flip::{Bonder, FlipSlasher};
 pub use pallet_cf_staking::WithdrawalAddresses;
@@ -152,6 +156,7 @@ parameter_types! {
 	};
 }
 
+#[cfg(not(feature = "ibiza"))]
 impl pallet_cf_validator::Config for Runtime {
 	type Event = Event;
 	type Offence = chainflip::Offence;
@@ -160,6 +165,34 @@ impl pallet_cf_validator::Config for Runtime {
 	type MinEpoch = MinEpoch;
 	type ValidatorWeightInfo = pallet_cf_validator::weights::PalletWeight<Runtime>;
 	type VaultRotator = EthereumVault;
+	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+	type MissedAuthorshipSlots = chainflip::MissedAuraSlots;
+	type BidderProvider = pallet_cf_staking::Pallet<Self>;
+	type AuctionQualification = (
+		Reputation,
+		pallet_cf_validator::PeerMapping<Self>,
+		SessionKeysRegistered<
+			<Self as frame_system::Config>::AccountId,
+			pallet_session::Pallet<Self>,
+		>,
+		AccountRoles,
+	);
+	type OffenceReporter = Reputation;
+	type EmergencyRotationPercentageRange = EmergencyRotationPercentageRange;
+	type Bonder = Bonder<Runtime>;
+	type ReputationResetter = Reputation;
+}
+
+// Only difference here is that we use the AllVaultRotator
+#[cfg(feature = "ibiza")]
+impl pallet_cf_validator::Config for Runtime {
+	type Event = Event;
+	type Offence = chainflip::Offence;
+	type AccountRoleRegistry = AccountRoles;
+	type EpochTransitionHandler = ChainflipEpochTransitions;
+	type MinEpoch = MinEpoch;
+	type ValidatorWeightInfo = pallet_cf_validator::weights::PalletWeight<Runtime>;
+	type VaultRotator = AllVaultRotator<EthereumVault, PolkadotVault>;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type MissedAuthorshipSlots = chainflip::MissedAuraSlots;
 	type BidderProvider = pallet_cf_staking::Pallet<Self>;
@@ -207,6 +240,26 @@ impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 	type SetAggKeyWithAggKey = eth::api::EthereumApi<EthEnvironment>;
 	type VaultTransitionHandler = EthVaultTransitionHandler;
 	type Broadcaster = EthereumBroadcaster;
+	type OffenceReporter = Reputation;
+	type CeremonyIdProvider = pallet_cf_validator::CeremonyIdProvider<Self>;
+	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
+	type SystemStateManager = pallet_cf_environment::SystemStateProvider<Runtime>;
+}
+
+#[cfg(feature = "ibiza")]
+impl pallet_cf_vaults::Config<PolkadotInstance> for Runtime {
+	type Event = Event;
+	type Call = Call;
+	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+	type EnsureThresholdSigned =
+		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, PolkadotInstance>;
+	type AccountRoleRegistry = AccountRoles;
+	type ThresholdSigner = PolkadotThresholdSigner;
+	type Offence = chainflip::Offence;
+	type Chain = Polkadot;
+	type SetAggKeyWithAggKey = dot::api::PolkadotApi<DotEnvironment>;
+	type VaultTransitionHandler = DotVaultTransitionHandler;
+	type Broadcaster = PolkadotBroadcaster;
 	type OffenceReporter = Reputation;
 	type CeremonyIdProvider = pallet_cf_validator::CeremonyIdProvider<Self>;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
@@ -553,6 +606,23 @@ impl pallet_cf_threshold_signature::Config<EthereumInstance> for Runtime {
 	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
 }
 
+#[cfg(feature = "ibiza")]
+impl pallet_cf_threshold_signature::Config<PolkadotInstance> for Runtime {
+	type Event = Event;
+	type Offence = chainflip::Offence;
+	type RuntimeOrigin = Origin;
+	type AccountRoleRegistry = AccountRoles;
+	type ThresholdCallable = Call;
+	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+	type ThresholdSignerNomination = chainflip::RandomSignerNomination;
+	type TargetChain = Polkadot;
+	type KeyProvider = PolkadotVault;
+	type OffenceReporter = Reputation;
+	type CeremonyIdProvider = pallet_cf_validator::CeremonyIdProvider<Self>;
+	type CeremonyRetryDelay = ConstU32<1>;
+	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
+}
+
 impl pallet_cf_broadcast::Config<EthereumInstance> for Runtime {
 	type Event = Event;
 	type Call = Call;
@@ -565,10 +635,29 @@ impl pallet_cf_broadcast::Config<EthereumInstance> for Runtime {
 	type BroadcastSignerNomination = chainflip::RandomSignerNomination;
 	type OffenceReporter = Reputation;
 	type EnsureThresholdSigned =
-		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, Instance1>;
+		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, EthereumInstance>;
 	type BroadcastTimeout = ConstU32<{ 10 * MINUTES }>;
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type KeyProvider = EthereumVault;
+}
+
+#[cfg(feature = "ibiza")]
+impl pallet_cf_broadcast::Config<PolkadotInstance> for Runtime {
+	type Event = Event;
+	type Call = Call;
+	type Offence = chainflip::Offence;
+	type AccountRoleRegistry = AccountRoles;
+	type TargetChain = Polkadot;
+	type ApiCall = dot::api::PolkadotApi<DotEnvironment>;
+	type ThresholdSigner = PolkadotThresholdSigner;
+	type TransactionBuilder = chainflip::DotTransactionBuilder;
+	type BroadcastSignerNomination = chainflip::RandomSignerNomination;
+	type OffenceReporter = Reputation;
+	type EnsureThresholdSigned =
+		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, PolkadotInstance>;
+	type BroadcastTimeout = ConstU32<{ 10 * MINUTES }>;
+	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
+	type KeyProvider = PolkadotVault;
 }
 
 impl pallet_cf_chain_tracking::Config<EthereumInstance> for Runtime {
@@ -576,6 +665,15 @@ impl pallet_cf_chain_tracking::Config<EthereumInstance> for Runtime {
 	type TargetChain = Ethereum;
 	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
 	type AgeLimit = ConstU64<{ constants::common::eth::BLOCK_SAFETY_MARGIN }>;
+}
+
+#[cfg(feature = "ibiza")]
+impl pallet_cf_chain_tracking::Config<PolkadotInstance> for Runtime {
+	type Event = Event;
+	type TargetChain = Polkadot;
+	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
+	// TODO: Set good limit
+	type AgeLimit = ConstU64<1>;
 }
 
 // The latest release runtime
@@ -639,15 +737,19 @@ construct_runtime!(
 		Grandpa: pallet_grandpa,
 		Governance: pallet_cf_governance,
 		TokenholderGovernance: pallet_cf_tokenholder_governance,
-		EthereumVault: pallet_cf_vaults::<Instance1>,
 		Reputation: pallet_cf_reputation,
-		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>,
-		EthereumBroadcaster: pallet_cf_broadcast::<Instance1>,
 		EthereumChainTracking: pallet_cf_chain_tracking::<Instance1>,
-		EthereumIngressEgress: pallet_cf_ingress_egress::<Instance1>,
-		PolkadotIngressEgress: pallet_cf_ingress_egress::<Instance2>,
+		PolkadotChainTracking: pallet_cf_chain_tracking::<Instance2>,
+		EthereumVault: pallet_cf_vaults::<Instance1>,
+		PolkadotVault: pallet_cf_vaults::<Instance2>,
+		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>,
+		PolkadotThresholdSigner: pallet_cf_threshold_signature::<Instance2>,
+		EthereumBroadcaster: pallet_cf_broadcast::<Instance1>,
+		PolkadotBroadcaster: pallet_cf_broadcast::<Instance2>,
 		Swapping: pallet_cf_swapping,
 		LiquidityProvider: pallet_cf_lp,
+		EthereumIngressEgress: pallet_cf_ingress_egress::<Instance1>,
+		PolkadotIngressEgress: pallet_cf_ingress_egress::<Instance2>,
 	}
 );
 

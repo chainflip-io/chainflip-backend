@@ -2,7 +2,7 @@ pub mod batch_fetch_and_transfer;
 pub mod create_anonymous_vault;
 pub mod rotate_vault_proxy;
 
-use super::{PolkadotPublicKey, PolkadotReplayProtection};
+use super::PolkadotPublicKey;
 use crate::{dot::Polkadot, *};
 use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound};
 use sp_std::marker::PhantomData;
@@ -27,19 +27,23 @@ pub enum SystemAccounts {
 
 impl<E> AllBatch<Polkadot> for PolkadotApi<E>
 where
-	E: ChainEnvironment<SystemAccounts, <Polkadot as Chain>::ChainAccount>,
-	E: ReplayProtectionProvider<Polkadot>,
+	E: ChainEnvironment<SystemAccounts, <Polkadot as Chain>::ChainAccount>
+		+ ReplayProtectionProvider<Polkadot>,
 {
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<Polkadot>>,
 		transfer_params: Vec<TransferAssetParams<Polkadot>>,
-	) -> Self {
-		Self::BatchFetchAndTransfer(batch_fetch_and_transfer::BatchFetchAndTransfer::new_unsigned(
-			E::replay_protection(),
-			fetch_params,
-			transfer_params,
-			E::lookup(SystemAccounts::Proxy).expect("Proxy account lookup should never fail."),
-			E::lookup(SystemAccounts::Vault).expect("Vault account lookup should never fail."),
+	) -> Result<Self, ()> {
+		let vault = E::lookup(SystemAccounts::Vault).ok_or(())?;
+		let proxy = E::lookup(SystemAccounts::Proxy).ok_or(())?;
+		Ok(Self::BatchFetchAndTransfer(
+			batch_fetch_and_transfer::BatchFetchAndTransfer::new_unsigned(
+				E::replay_protection(),
+				fetch_params,
+				transfer_params,
+				proxy,
+				vault,
+			),
 		))
 	}
 }
@@ -49,24 +53,28 @@ where
 	E: ChainEnvironment<SystemAccounts, <Polkadot as Chain>::ChainAccount>
 		+ ReplayProtectionProvider<Polkadot>,
 {
-	fn new_unsigned(old_key: PolkadotPublicKey, new_key: PolkadotPublicKey) -> Self {
-		Self::RotateVaultProxy(rotate_vault_proxy::RotateVaultProxy::new_unsigned(
+	fn new_unsigned(
+		old_key: Option<PolkadotPublicKey>,
+		new_key: PolkadotPublicKey,
+	) -> Result<Self, ()> {
+		let vault = E::lookup(SystemAccounts::Vault).ok_or(())?;
+
+		Ok(Self::RotateVaultProxy(rotate_vault_proxy::RotateVaultProxy::new_unsigned(
 			E::replay_protection(),
+			old_key.ok_or(())?,
 			new_key,
-			old_key,
-			E::lookup(SystemAccounts::Proxy).expect("Proxy account lookup should never fail."),
-			E::lookup(SystemAccounts::Vault).expect("Vault account lookup should never fail."),
-		))
+			vault,
+		)))
 	}
 }
 
-impl<E> CreatePolkadotVault for PolkadotApi<E> {
-	fn new_unsigned(
-		replay_protection: PolkadotReplayProtection,
-		proxy_key: PolkadotPublicKey,
-	) -> Self {
+impl<E> CreatePolkadotVault for PolkadotApi<E>
+where
+	E: ReplayProtectionProvider<Polkadot>,
+{
+	fn new_unsigned(proxy_key: PolkadotPublicKey) -> Self {
 		Self::CreateAnonymousVault(create_anonymous_vault::CreateAnonymousVault::new_unsigned(
-			replay_protection,
+			E::replay_protection(),
 			proxy_key,
 		))
 	}
@@ -129,8 +137,5 @@ impl<E> ApiCall<Polkadot> for PolkadotApi<E> {
 }
 
 pub trait CreatePolkadotVault: ApiCall<Polkadot> {
-	fn new_unsigned(
-		replay_protection: PolkadotReplayProtection,
-		proxy_key: PolkadotPublicKey,
-	) -> Self;
+	fn new_unsigned(proxy_key: PolkadotPublicKey) -> Self;
 }

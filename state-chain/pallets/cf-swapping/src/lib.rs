@@ -11,11 +11,9 @@ use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
 
 pub use pallet::*;
 
-#[cfg(feature = "ibiza")]
 #[cfg(test)]
 mod mock;
 
-#[cfg(feature = "ibiza")]
 #[cfg(test)]
 mod tests;
 

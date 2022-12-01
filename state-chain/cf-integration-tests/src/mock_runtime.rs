@@ -27,7 +27,11 @@ pub const PENALTIES: &[(Offence, (i32, BlockNumber))] = &[
 	(Offence::GrandpaEquivocation, (50, HEARTBEAT_BLOCK_INTERVAL * 5)),
 ];
 
-use crate::{get_from_seed, network, GENESIS_KEY};
+use crate::{
+	get_from_seed,
+	threshold_signing::{EthKeyComponents, KeyUtils},
+	GENESIS_KEY_SEED,
+};
 use cf_primitives::{AccountRole, AuthorityCount, BlockNumber, FlipBalance};
 
 pub struct ExtBuilder {
@@ -81,8 +85,8 @@ impl ExtBuilder {
 		let mut storage =
 			frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 
-		let (_, public_key, _) = network::ThresholdSigner::generate_keypair(GENESIS_KEY);
-		let ethereum_vault_key = public_key.serialize_compressed().to_vec();
+		let key_components = EthKeyComponents::generate(GENESIS_KEY_SEED);
+		let ethereum_vault_key = key_components.key_id();
 
 		state_chain_runtime::GenesisConfig {
 			session: SessionConfig {
