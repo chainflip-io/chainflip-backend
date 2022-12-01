@@ -1,5 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-use cf_primitives::{chains::assets::any, AssetAmount};
+use cf_primitives::{chains::assets::any, AssetAmount, PoolAsset, TradingPosition};
 use cf_traits::Chainflip;
 use frame_support::{pallet_prelude::*, sp_runtime::traits::Saturating};
 
@@ -23,6 +23,11 @@ pub(crate) mod mini_pool {
 	}
 
 	impl AmmPool {
+		pub fn add_liquidity(&mut self, volume_0: AssetAmount, volume_1: AssetAmount) {
+			self.asset_0.saturating_accrue(volume_0);
+			self.asset_1.saturating_accrue(volume_1);
+		}
+
 		pub fn swap_rate(&self, input_amount: AssetAmount) -> AssetAmount {
 			self.asset_1 / (self.asset_0 + input_amount)
 		}
@@ -91,5 +96,21 @@ impl<T: Config> cf_traits::SwappingApi for Pallet<T> {
 			},
 			(any::Asset::Usdc, 0),
 		)
+	}
+}
+
+impl<T: Config> cf_traits::LiquidityApi for Pallet<T> {
+	fn deploy(asset: any::Asset, position: cf_primitives::TradingPosition<AssetAmount>) {
+		match position {
+			TradingPosition::ClassicV3 { volume_0, volume_1, .. } => {
+				Pools::<T>::mutate(asset, |pool| pool.add_liquidity(volume_0, volume_1));
+			},
+			TradingPosition::VolatileV3 { side, volume, .. } => {
+				Pools::<T>::mutate(asset, |pool| match side {
+					PoolAsset::Asset0 => pool.add_liquidity(volume, 0),
+					PoolAsset::Asset1 => pool.add_liquidity(0, volume),
+				});
+			},
+		}
 	}
 }

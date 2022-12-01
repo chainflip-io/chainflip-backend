@@ -36,6 +36,10 @@ pub trait SwappingApi {
 	) -> (AssetAmount, (Asset, AssetAmount));
 }
 
+pub trait LiquidityApi {
+	fn deploy(asset: Asset, position: TradingPosition<AssetAmount>);
+}
+
 pub trait AmmPoolApi {
 	fn asset_0(&self) -> Asset;
 	fn asset_1(&self) -> Asset;
