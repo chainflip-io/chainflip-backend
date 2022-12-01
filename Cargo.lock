@@ -5420,6 +5420,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-cf-pools"
+version = "0.1.0"
+dependencies = [
+ "cf-primitives",
+ "cf-traits",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "log 0.4.17",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-arithmetic 5.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-06+01)",
+ "sp-core 6.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-06+01)",
+ "sp-io 6.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-06+01)",
+ "sp-runtime 6.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-06+01)",
+ "sp-std 4.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-06+01)",
+]
+
+[[package]]
 name = "pallet-cf-reputation"
 version = "0.1.0"
 dependencies = [
