@@ -1,11 +1,15 @@
 use crate as pallet_cf_lp;
-use cf_chains::{eth::assets, AnyChain, Chain, ChainEnvironment, Ethereum};
-use cf_primitives::{AccountRole, EthereumAddress, IntentId};
+use cf_chains::{eth::assets, AnyChain, Chain, Ethereum};
+use cf_primitives::{AccountRole, IntentId};
 use cf_traits::{
 	mocks::{
-		all_batch::MockAllBatch, bid_info::MockBidInfo, egress_handler::MockEgressHandler,
-		ensure_origin_mock::NeverFailingOriginCheck, ingress_handler::MockIngressHandler,
-		staking_info::MockStakingInfo, system_state_info::MockSystemStateInfo,
+		all_batch::{MockAllBatch, MockEthEnvironment},
+		bid_info::MockBidInfo,
+		egress_handler::MockEgressHandler,
+		ensure_origin_mock::NeverFailingOriginCheck,
+		ingress_handler::MockIngressHandler,
+		staking_info::MockStakingInfo,
+		system_state_info::MockSystemStateInfo,
 	},
 	AddressDerivationApi, Broadcaster,
 };
@@ -24,7 +28,6 @@ type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 type AccountId = u64;
 
-pub const ETHEREUM_FLIP_ADDRESS: EthereumAddress = [0x00; 20];
 pub struct MockAddressDerivation;
 
 impl AddressDerivationApi<Ethereum> for MockAddressDerivation {
@@ -83,7 +86,7 @@ impl system::Config for Test {
 
 pub struct MockBroadcast;
 impl Broadcaster<Ethereum> for MockBroadcast {
-	type ApiCall = MockAllBatch;
+	type ApiCall = MockAllBatch<MockEthEnvironment>;
 
 	fn threshold_sign_and_broadcast(_api_call: Self::ApiCall) {}
 }
