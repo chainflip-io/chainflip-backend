@@ -3,6 +3,7 @@
 LOCALNET_INIT_DIR=localnet/init
 WORKFLOW=build
 
+set -euo pipefail
 setup() {
   echo "🤗 Welcome to Localnet manager"
   sleep 2
@@ -43,8 +44,8 @@ setup() {
 }
 
 workflow() {
-  echo "❓ Would you like to build, restart, recreate or destroy your Localnet? (Type 1, 2, 3 or 4)"
-  select WORKFLOW in build restart recreate destroy
+  echo "❓ Would you like to build, recreate or destroy your Localnet? (Type 1, 2, 3, or 4)"
+  select WORKFLOW in build recreate destroy logs
   do
   echo "You have chosen $WORKFLOW"
   break
@@ -66,19 +67,29 @@ build() {
   fi
   echo $COMMIT_HASH > $LOCALNET_INIT_DIR/secrets/.hash
 
-  COMMIT_HASH=$COMMIT_HASH REPO_USERNAME=$REPO_USERNAME REPO_PASSWORD=$REPO_PASSWORD\
-   docker-compose -f localnet/docker-compose.yml up --build
-
   echo "🏗 Building network"
+
+  COMMIT_HASH=$COMMIT_HASH REPO_USERNAME=$REPO_USERNAME REPO_PASSWORD=$REPO_PASSWORD \
+  docker-compose -f localnet/docker-compose.yml up --build -d
+
+  echo "🚀 Network is live"
+  echo "🪵 To get logs type"
+  echo
+  echo "./localnet/manage"
+  echo
+  echo "👆 Then select logs (4)"
+  echo
+  echo "🧡 Head to http://localhost to access PolkadotJS"
+
 }
 
 destroy() {
   echo "💣 Destroying network"
   docker-compose -f localnet/docker-compose.yml down
 }
-restart() {
-  echo "🚀 Restarting network"
-  docker-compose -f localnet/docker-compose.yml up
+
+logs (){
+  docker-compose -f localnet/docker-compose.yml logs --follow
 }
 
 if [ ! -f ./$LOCALNET_INIT_DIR/secrets/.setup_complete ]; then
@@ -96,7 +107,7 @@ elif [ $WORKFLOW == "recreate" ]; then
   build
 elif [ $WORKFLOW == "destroy" ]; then
   destroy
-elif [ $WORKFLOW == "restart" ]; then
-  restart
+elif [ $WORKFLOW == "logs" ]; then
+  logs
 fi
 

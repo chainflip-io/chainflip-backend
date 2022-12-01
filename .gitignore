@@ -13,7 +13,7 @@ localnet/init/secrets
 .local
 
 # docker-compose is generated dynamically
-./docker-compose.yml
+localnet/init/polkadot/docker-compose.yml
 ./docker-compose.yaml
 
 # Logs and test artifacts

@@ -1,6 +1,15 @@
 version: "3.8"
 
 services:
+  polkadotui:
+    container_name: polkadotui
+    image: jacogr/polkadot-js-apps
+    depends_on:
+      - node
+    environment:
+      - WS_URL=ws://chainflip-node:9944
+    ports:
+      - "80:80"
   node:
     container_name: chainflip-node
     healthcheck:
@@ -49,7 +58,7 @@ services:
       - ./init/config:/etc/chainflip/config
     command:
       - chainflip-engine
-      - -c=/etc/chainflip/config/Docker.toml
+      - --config-root=/etc/chainflip/
   geth:
     image: ghcr.io/chainflip-io/geth:perseverance-rc2
     pull_policy: always
