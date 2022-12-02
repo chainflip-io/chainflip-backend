@@ -93,22 +93,13 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// An new swap intent has been registered.
-		NewSwapIntent {
-			swap_id: u128,
-			intent_id: IntentId,
-			ingress_address: ForeignChainAddress,
-		},
-		SwapIngressReceived {
-			swap_id: u128,
-			ingress_amount: AssetAmount,
-		},
-		SwapExecuted {
-			swap_id: u128,
-		},
-		SwapEgressScheduled {
-			swap_id: u128,
-			egress_amount: AssetAmount,
-		},
+		NewSwapIntent { swap_id: u128, intent_id: IntentId, ingress_address: ForeignChainAddress },
+		/// The swap ingress was received.
+		SwapIngressReceived { swap_id: u128, ingress_amount: AssetAmount },
+		/// A swap was executed.
+		SwapExecuted { swap_id: u128 },
+		/// A swap egress was scheduled.
+		SwapEgressScheduled { swap_id: u128, egress_amount: AssetAmount },
 	}
 	#[pallet::error]
 	pub enum Error<T> {
