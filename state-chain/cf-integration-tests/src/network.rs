@@ -2,6 +2,13 @@ use crate::threshold_signing::{
 	DotThresholdSigner, EthKeyComponents, EthThresholdSigner, ThresholdSigner,
 };
 
+#[cfg(feature = "ibiza")]
+use crate::threshold_signing::DotKeyComponents;
+#[cfg(feature = "ibiza")]
+use cf_chains::dot::PolkadotSignature;
+#[cfg(feature = "ibiza")]
+use state_chain_runtime::PolkadotInstance;
+
 use super::*;
 use cf_chains::{eth::SchnorrVerificationComponents, ChainCrypto};
 use cf_primitives::{AccountRole, CeremonyId, EpochIndex, FlipBalance};

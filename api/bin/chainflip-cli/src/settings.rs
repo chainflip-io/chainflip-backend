@@ -76,6 +76,15 @@ pub enum RelayerSubcommands {
 }
 
 #[derive(clap::Subcommand, Clone, Debug)]
+pub enum LiquidityProviderSubcommands {
+	/// Deposit asset
+	Deposit {
+		/// Asset to deposit
+		asset: Asset,
+	},
+}
+
+#[derive(clap::Subcommand, Clone, Debug)]
 pub enum Claim {
 	#[clap(about = "Submit an extrinsic to request generation of a claim certificate")]
 	Request {
@@ -100,6 +109,10 @@ pub enum CliCommand {
 	#[cfg(feature = "ibiza")]
 	#[clap(subcommand)]
 	Relayer(RelayerSubcommands),
+	/// Liquidity provider specific commands
+	#[cfg(feature = "ibiza")]
+	#[clap(subcommand, name = "lp")]
+	LiquidityProvider(LiquidityProviderSubcommands),
 	#[clap(about = "Requesting and checking claims")]
 	#[clap(subcommand)]
 	Claim(Claim),
