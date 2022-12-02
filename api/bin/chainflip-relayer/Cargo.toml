@@ -1,0 +1,15 @@
+[package]
+name = "chainflip-relayer"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+chainflip-api = {path = "../../lib", features = ["ibiza"]}
+
+anyhow = "1.0.66"
+jsonrpsee = { version = "0.16.2", features = ["full"]}
+tokio = "1.22.0"
+tracing = "0.1.34"
+tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
