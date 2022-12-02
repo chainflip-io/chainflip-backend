@@ -8,6 +8,9 @@ use mockall::predicate::{self, eq};
 use pallet_cf_broadcast::BroadcastAttemptId;
 use pallet_cf_vaults::Vault;
 
+#[cfg(feature = "ibiza")]
+use cf_primitives::PolkadotAccountId;
+
 use sp_core::{Hasher, H256, U256};
 use sp_runtime::{traits::Keccak256, AccountId32, Digest};
 use state_chain_runtime::{AccountId, CfeSettings, EthereumInstance, Header};
@@ -78,6 +81,31 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 			}))
 		});
 
+	#[cfg(feature = "ibiza")]
+	{
+		state_chain_client
+			.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
+				state_chain_runtime::Runtime,
+				state_chain_runtime::PolkadotInstance,
+			>>()
+			.with(eq(initial_block_hash), eq(initial_epoch))
+			.once()
+			.return_once(move |_, _| {
+				Ok(Some(Vault {
+					public_key: Default::default(),
+					active_from_block: initial_epoch_from_block,
+				}))
+			});
+
+		state_chain_client
+			.expect_storage_value::<pallet_cf_environment::PolkadotVaultAccountId<
+				state_chain_runtime::Runtime,
+			>>()
+			.with(eq(initial_block_hash))
+			.once()
+			.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
+	}
+
 	let eth_multisig_client = MockMultisigClientApi::new();
 	let dot_multisig_client = MockMultisigClientApi::new();
 
@@ -107,6 +135,9 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 	let (eth_monitor_usdc_ingress_sender, _eth_monitor_usdc_ingress_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
+	#[cfg(feature = "ibiza")]
+	let (dot_epoch_start_sender, _dot_epoch_start_receiver_1) = async_broadcast::broadcast(10);
+
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
@@ -123,6 +154,8 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		eth_monitor_flip_ingress_sender,
 		#[cfg(feature = "ibiza")]
 		eth_monitor_usdc_ingress_sender,
+		#[cfg(feature = "ibiza")]
+		dot_epoch_start_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
 		logger,
@@ -136,7 +169,8 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 			epoch_index: initial_epoch,
 			block_number: initial_epoch_from_block,
 			current: true,
-			participant: true
+			participant: true,
+			data: ()
 		}]
 	);
 }
@@ -180,6 +214,32 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 				active_from_block: active_epoch_from_block,
 			}))
 		});
+
+	#[cfg(feature = "ibiza")]
+	{
+		state_chain_client
+			.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
+				state_chain_runtime::Runtime,
+				state_chain_runtime::PolkadotInstance,
+			>>()
+			.with(eq(initial_block_hash), eq(active_epoch))
+			.once()
+			.return_once(move |_, _| {
+				Ok(Some(Vault {
+					public_key: Default::default(),
+					active_from_block: current_epoch_from_block,
+				}))
+			});
+
+		state_chain_client
+				.expect_storage_value::<pallet_cf_environment::PolkadotVaultAccountId<
+					state_chain_runtime::Runtime,
+				>>()
+				.with(eq(initial_block_hash))
+				.once()
+				.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
+	}
+
 	state_chain_client
 		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
 			state_chain_runtime::Runtime,
@@ -193,6 +253,31 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 				active_from_block: current_epoch_from_block,
 			}))
 		});
+
+	#[cfg(feature = "ibiza")]
+	{
+		state_chain_client
+			.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
+				state_chain_runtime::Runtime,
+				state_chain_runtime::PolkadotInstance,
+			>>()
+			.with(eq(initial_block_hash), eq(current_epoch))
+			.once()
+			.return_once(move |_, _| {
+				Ok(Some(Vault {
+					public_key: Default::default(),
+					active_from_block: current_epoch_from_block,
+				}))
+			});
+
+		state_chain_client
+			.expect_storage_value::<pallet_cf_environment::PolkadotVaultAccountId<
+				state_chain_runtime::Runtime,
+			>>()
+			.with(eq(initial_block_hash))
+			.once()
+			.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
+	}
 
 	// No blocks in the stream
 	let sc_block_stream = tokio_stream::iter(vec![]);
@@ -222,6 +307,9 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 	let (eth_monitor_usdc_ingress_sender, _eth_monitor_usdc_ingress_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
+	#[cfg(feature = "ibiza")]
+	let (dot_epoch_start_sender, _dot_epoch_start_receiver_1) = async_broadcast::broadcast(10);
+
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
@@ -238,6 +326,8 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		eth_monitor_flip_ingress_sender,
 		#[cfg(feature = "ibiza")]
 		eth_monitor_usdc_ingress_sender,
+		#[cfg(feature = "ibiza")]
+		dot_epoch_start_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
 		logger,
@@ -252,13 +342,15 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 				epoch_index: active_epoch,
 				block_number: active_epoch_from_block,
 				current: false,
-				participant: true
+				participant: true,
+				data: ()
 			},
 			EpochStart::<Ethereum> {
 				epoch_index: current_epoch,
 				block_number: current_epoch_from_block,
 				current: true,
-				participant: false
+				participant: false,
+				data: ()
 			}
 		]
 	);
@@ -301,6 +393,31 @@ async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
 			}))
 		});
 
+	#[cfg(feature = "ibiza")]
+	{
+		state_chain_client
+			.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
+				state_chain_runtime::Runtime,
+				state_chain_runtime::PolkadotInstance,
+			>>()
+			.with(eq(initial_block_hash), eq(3))
+			.once()
+			.return_once(move |_, _| {
+				Ok(Some(Vault {
+					public_key: Default::default(),
+					active_from_block: initial_epoch_from_block,
+				}))
+			});
+
+		state_chain_client
+			.expect_storage_value::<pallet_cf_environment::PolkadotVaultAccountId<
+				state_chain_runtime::Runtime,
+			>>()
+			.with(eq(initial_block_hash))
+			.once()
+			.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
+	}
+
 	let sc_block_stream = tokio_stream::iter(vec![]);
 
 	let logger = new_test_logger();
@@ -327,6 +444,9 @@ async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
 	let (eth_monitor_usdc_ingress_sender, _eth_monitor_usdc_ingress_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
+	#[cfg(feature = "ibiza")]
+	let (dot_epoch_start_sender, _dot_epoch_start_receiver_1) = async_broadcast::broadcast(10);
+
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
@@ -343,6 +463,8 @@ async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
 		eth_monitor_flip_ingress_sender,
 		#[cfg(feature = "ibiza")]
 		eth_monitor_usdc_ingress_sender,
+		#[cfg(feature = "ibiza")]
+		dot_epoch_start_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
 		logger,
@@ -356,7 +478,8 @@ async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
 			epoch_index: initial_epoch,
 			block_number: initial_epoch_from_block,
 			current: true,
-			participant: false
+			participant: false,
+			data: (),
 		}]
 	);
 }
@@ -401,6 +524,31 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 			}))
 		});
 
+	#[cfg(feature = "ibiza")]
+	{
+		state_chain_client
+			.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
+				state_chain_runtime::Runtime,
+				state_chain_runtime::PolkadotInstance,
+			>>()
+			.with(eq(initial_block_hash), eq(initial_epoch))
+			.once()
+			.return_once(move |_, _| {
+				Ok(Some(Vault {
+					public_key: Default::default(),
+					active_from_block: initial_epoch_from_block,
+				}))
+			});
+
+		state_chain_client
+			.expect_storage_value::<pallet_cf_environment::PolkadotVaultAccountId<
+				state_chain_runtime::Runtime,
+			>>()
+			.with(eq(initial_block_hash))
+			.once()
+			.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
+	}
+
 	let empty_block_header = test_header(20);
 	let new_epoch_block_header = test_header(21);
 	let new_epoch_block_header_hash = new_epoch_block_header.hash();
@@ -438,8 +586,32 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 				active_from_block: new_epoch_from_block,
 			}))
 		});
-	state_chain_client.
-expect_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<state_chain_runtime::Runtime>>()
+
+	#[cfg(feature = "ibiza")]
+	{
+		state_chain_client
+			.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
+				state_chain_runtime::Runtime,
+				state_chain_runtime::PolkadotInstance,
+			>>()
+			.with(eq(new_epoch_block_header_hash), eq(new_epoch))
+			.once()
+			.return_once(move |_, _| {
+				Ok(Some(Vault {
+					public_key: Default::default(),
+					active_from_block: initial_epoch_from_block,
+				}))
+			});
+		state_chain_client
+		.expect_storage_value::<pallet_cf_environment::PolkadotVaultAccountId<
+			state_chain_runtime::Runtime,
+		>>()
+		.with(eq(new_epoch_block_header_hash))
+		.once()
+		.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
+	}
+
+	state_chain_client.expect_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<state_chain_runtime::Runtime>>()
 		.with(eq(new_epoch_block_header_hash), eq(5), eq(account_id.clone()))
 		.once()
 		.return_once(move |_, _, _| Ok(Some(1)));
@@ -468,6 +640,9 @@ expect_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<state_chai
 	let (eth_monitor_usdc_ingress_sender, _eth_monitor_usdc_ingress_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
+	#[cfg(feature = "ibiza")]
+	let (dot_epoch_start_sender, _dot_epoch_start_receiver_1) = async_broadcast::broadcast(10);
+
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
@@ -484,6 +659,8 @@ expect_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<state_chai
 		eth_monitor_flip_ingress_sender,
 		#[cfg(feature = "ibiza")]
 		eth_monitor_usdc_ingress_sender,
+		#[cfg(feature = "ibiza")]
+		dot_epoch_start_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
 		logger,
@@ -498,13 +675,15 @@ expect_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<state_chai
 				epoch_index: initial_epoch,
 				block_number: initial_epoch_from_block,
 				current: true,
-				participant: true
+				participant: true,
+				data: ()
 			},
 			EpochStart::<Ethereum> {
 				epoch_index: new_epoch,
 				block_number: new_epoch_from_block,
 				current: true,
-				participant: true
+				participant: true,
+				data: ()
 			}
 		]
 	);
@@ -550,6 +729,31 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 			}))
 		});
 
+	#[cfg(feature = "ibiza")]
+	{
+		state_chain_client
+			.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
+				state_chain_runtime::Runtime,
+				state_chain_runtime::PolkadotInstance,
+			>>()
+			.with(eq(initial_block_hash), eq(initial_epoch))
+			.once()
+			.return_once(move |_, _| {
+				Ok(Some(Vault {
+					public_key: Default::default(),
+					active_from_block: initial_epoch_from_block,
+				}))
+			});
+
+		state_chain_client
+			.expect_storage_value::<pallet_cf_environment::PolkadotVaultAccountId<
+				state_chain_runtime::Runtime,
+			>>()
+			.with(eq(initial_block_hash))
+			.once()
+			.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
+	}
+
 	let empty_block_header = test_header(20);
 	let new_epoch_block_header = test_header(21);
 	let new_epoch_block_header_hash = new_epoch_block_header.hash();
@@ -587,8 +791,33 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 				active_from_block: new_epoch_from_block,
 			}))
 		});
-	state_chain_client.
-expect_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<state_chain_runtime::Runtime>>()
+
+	#[cfg(feature = "ibiza")]
+	{
+		state_chain_client
+			.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
+				state_chain_runtime::Runtime,
+				state_chain_runtime::PolkadotInstance,
+			>>()
+			.with(eq(new_epoch_block_header_hash), eq(new_epoch))
+			.once()
+			.return_once(move |_, _| {
+				Ok(Some(Vault {
+					public_key: Default::default(),
+					active_from_block: new_epoch_from_block,
+				}))
+			});
+
+		state_chain_client
+			.expect_storage_value::<pallet_cf_environment::PolkadotVaultAccountId<
+				state_chain_runtime::Runtime,
+			>>()
+			.with(eq(new_epoch_block_header_hash))
+			.once()
+			.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
+	}
+
+	state_chain_client.expect_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<state_chain_runtime::Runtime>>()
 		.with(eq(new_epoch_block_header_hash), eq(new_epoch), eq(account_id.clone()))
 		.once()
 		.return_once(move |_, _, _| Ok(Some(1)));
@@ -619,6 +848,9 @@ expect_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<state_chai
 	let (eth_monitor_usdc_ingress_sender, _eth_monitor_usdc_ingress_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
+	#[cfg(feature = "ibiza")]
+	let (dot_epoch_start_sender, _dot_epoch_start_receiver_1) = async_broadcast::broadcast(10);
+
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
@@ -635,6 +867,8 @@ expect_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<state_chai
 		eth_monitor_flip_ingress_sender,
 		#[cfg(feature = "ibiza")]
 		eth_monitor_usdc_ingress_sender,
+		#[cfg(feature = "ibiza")]
+		dot_epoch_start_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
 		logger,
@@ -649,13 +883,15 @@ expect_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<state_chai
 				epoch_index: initial_epoch,
 				block_number: initial_epoch_from_block,
 				current: true,
-				participant: false
+				participant: false,
+				data: ()
 			},
 			EpochStart::<Ethereum> {
 				epoch_index: new_epoch,
 				block_number: new_epoch_from_block,
 				current: true,
-				participant: true
+				participant: true,
+				data: ()
 			}
 		]
 	);
@@ -701,6 +937,31 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 			}))
 		});
 
+	#[cfg(feature = "ibiza")]
+	{
+		state_chain_client
+			.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
+				state_chain_runtime::Runtime,
+				state_chain_runtime::PolkadotInstance,
+			>>()
+			.with(eq(initial_block_hash), eq(initial_epoch))
+			.once()
+			.return_once(move |_, _| {
+				Ok(Some(Vault {
+					public_key: Default::default(),
+					active_from_block: initial_epoch_from_block,
+				}))
+			});
+
+		state_chain_client
+			.expect_storage_value::<pallet_cf_environment::PolkadotVaultAccountId<
+				state_chain_runtime::Runtime,
+			>>()
+			.with(eq(initial_block_hash))
+			.once()
+			.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
+	}
+
 	let empty_block_header = test_header(20);
 	let new_epoch_block_header = test_header(21);
 	let new_epoch_block_header_hash = new_epoch_block_header.hash();
@@ -739,8 +1000,33 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 				active_from_block: new_epoch_from_block,
 			}))
 		});
-	state_chain_client.
-expect_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<state_chain_runtime::Runtime>>()
+
+	#[cfg(feature = "ibiza")]
+	{
+		state_chain_client
+			.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
+				state_chain_runtime::Runtime,
+				state_chain_runtime::PolkadotInstance,
+			>>()
+			.with(eq(new_epoch_block_header_hash), eq(new_epoch))
+			.once()
+			.return_once(move |_, _| {
+				Ok(Some(Vault {
+					public_key: Default::default(),
+					active_from_block: new_epoch_from_block,
+				}))
+			});
+
+		state_chain_client
+				.expect_storage_value::<pallet_cf_environment::PolkadotVaultAccountId<
+					state_chain_runtime::Runtime,
+				>>()
+				.with(eq(new_epoch_block_header_hash))
+				.once()
+				.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
+	}
+
+	state_chain_client.expect_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<state_chain_runtime::Runtime>>()
 		.with(eq(new_epoch_block_header_hash), eq(4), eq(account_id.clone()))
 		.once()
 		.return_once(move |_, _, _| Ok(None));
@@ -771,6 +1057,9 @@ expect_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<state_chai
 	let (eth_monitor_usdc_ingress_sender, _eth_monitor_usdc_ingress_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
+	#[cfg(feature = "ibiza")]
+	let (dot_epoch_start_sender, _dot_epoch_start_receiver_1) = async_broadcast::broadcast(10);
+
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
@@ -787,6 +1076,8 @@ expect_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<state_chai
 		eth_monitor_flip_ingress_sender,
 		#[cfg(feature = "ibiza")]
 		eth_monitor_usdc_ingress_sender,
+		#[cfg(feature = "ibiza")]
+		dot_epoch_start_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
 		logger,
@@ -801,13 +1092,15 @@ expect_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<state_chai
 				epoch_index: initial_epoch,
 				block_number: initial_epoch_from_block,
 				current: true,
-				participant: true
+				participant: true,
+				data: ()
 			},
 			EpochStart::<Ethereum> {
 				epoch_index: new_epoch,
 				block_number: new_epoch_from_block,
 				current: true,
-				participant: false
+				participant: false,
+				data: ()
 			}
 		]
 	);
@@ -827,26 +1120,56 @@ async fn only_encodes_and_signs_when_specified() {
 		|| account_id
 	});
 
-	state_chain_client.
-expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>()
+	let initial_epoch = 3;
+	let initial_epoch_from_block = 30;
+
+	state_chain_client.expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>()
 		.with(eq(initial_block_hash), eq(account_id.clone()))
 		.once()
-		.return_once(move |_, _| Ok(vec![3]));
+		.return_once(move |_, _| Ok(vec![initial_epoch]));
 	state_chain_client
 		.expect_storage_value::<pallet_cf_validator::CurrentEpoch<state_chain_runtime::Runtime>>()
 		.with(eq(initial_block_hash))
 		.once()
-		.return_once(move |_| Ok(3));
+		.return_once(move |_| Ok(initial_epoch));
 	state_chain_client
 		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
 			state_chain_runtime::Runtime,
 			state_chain_runtime::EthereumInstance,
 		>>()
-		.with(eq(initial_block_hash), eq(3))
+		.with(eq(initial_block_hash), eq(initial_epoch))
 		.once()
 		.return_once(move |_, _| {
-			Ok(Some(Vault { public_key: Default::default(), active_from_block: 30 }))
+			Ok(Some(Vault {
+				public_key: Default::default(),
+				active_from_block: initial_epoch_from_block,
+			}))
 		});
+
+	#[cfg(feature = "ibiza")]
+	{
+		state_chain_client
+			.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
+				state_chain_runtime::Runtime,
+				state_chain_runtime::PolkadotInstance,
+			>>()
+			.with(eq(initial_block_hash), eq(initial_epoch))
+			.once()
+			.return_once(move |_, _| {
+				Ok(Some(Vault {
+					public_key: Default::default(),
+					active_from_block: initial_epoch_from_block,
+				}))
+			});
+
+		state_chain_client
+			.expect_storage_value::<pallet_cf_environment::PolkadotVaultAccountId<
+				state_chain_runtime::Runtime,
+			>>()
+			.with(eq(initial_block_hash))
+			.once()
+			.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
+	}
 
 	let block_header = test_header(21);
 	let sc_block_stream = tokio_stream::iter([block_header.clone()]);
@@ -929,6 +1252,9 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 	let (eth_monitor_usdc_ingress_sender, _eth_monitor_usdc_ingress_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
+	#[cfg(feature = "ibiza")]
+	let (dot_epoch_start_sender, _dot_epoch_start_receiver_1) = async_broadcast::broadcast(10);
+
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
@@ -945,6 +1271,8 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		eth_monitor_flip_ingress_sender,
 		#[cfg(feature = "ibiza")]
 		eth_monitor_usdc_ingress_sender,
+		#[cfg(feature = "ibiza")]
+		dot_epoch_start_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
 		logger,
@@ -961,7 +1289,7 @@ async fn run_the_sc_observer() {
 			let settings = Settings::new_test().unwrap();
 			let logger = new_test_logger();
 
-			let (initial_block_hash, block_stream, state_chain_client) =
+			let (initial_block_hash, sc_block_stream, state_chain_client) =
 				crate::state_chain_observer::client::StateChainClient::new(
 					scope,
 					&settings.state_chain,
@@ -997,9 +1325,12 @@ async fn run_the_sc_observer() {
 			let (eth_monitor_usdc_ingress_sender, _eth_monitor_usdc_ingress_receiver) =
 				tokio::sync::mpsc::unbounded_channel();
 
+			#[cfg(feature = "ibiza")]
+			let (dot_epoch_start_sender, _dot_epoch_start_receiver_1) = async_broadcast::broadcast(10);
+
 			sc_observer::start(
 				state_chain_client,
-				block_stream,
+				sc_block_stream,
 				eth_broadcaster,
 				#[cfg(feature = "ibiza")]
 				DotBroadcaster::new(MockDotRpcApi::new()),
@@ -1013,6 +1344,8 @@ async fn run_the_sc_observer() {
 				eth_monitor_flip_ingress_sender,
 				#[cfg(feature = "ibiza")]
 				eth_monitor_usdc_ingress_sender,
+				#[cfg(feature = "ibiza")]
+				dot_epoch_start_sender,
 				cfe_settings_update_sender,
 				initial_block_hash,
 				logger,
@@ -1027,6 +1360,9 @@ async fn run_the_sc_observer() {
 	.await
 	.unwrap();
 }
+
+// TODO: Test that when we return None for polkadot vault
+// witnessing isn't started for dot, but is started for ETH
 
 // Test that the ceremony requests are calling the correct MultisigClientApi functions
 // depending on whether we are participating in the ceremony or not.

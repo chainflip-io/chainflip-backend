@@ -20,6 +20,9 @@ use std::{
 };
 use tokio::sync::{mpsc::UnboundedSender, watch};
 
+#[cfg(feature = "ibiza")]
+use cf_chains::{dot, Polkadot};
+
 use crate::{
 	eth::{rpc::EthRpcApi, EthBroadcaster},
 	logging::COMPONENT_KEY,
@@ -195,6 +198,7 @@ pub async fn start<
 	#[cfg(feature = "ibiza")] eth_monitor_usdc_ingress_sender: tokio::sync::mpsc::UnboundedSender<
 		H160,
 	>,
+	#[cfg(feature = "ibiza")] dot_epoch_start_sender: async_broadcast::Sender<EpochStart<Polkadot>>,
 	cfe_settings_update_sender: watch::Sender<CfeSettings>,
 	initial_block_hash: H256,
 	logger: slog::Logger,
@@ -227,6 +231,8 @@ where
 
         let start_epoch = |block_hash: H256, index: u32, current: bool, participant: bool| {
             let eth_epoch_start_sender = &eth_epoch_start_sender;
+            #[cfg(feature = "ibiza")]
+            let dot_epoch_start_sender = &dot_epoch_start_sender;
             let state_chain_client = &state_chain_client;
 
             async move {
@@ -243,7 +249,33 @@ where
                         .active_from_block,
                     current,
                     participant,
+                    data: (),
                 }).await.unwrap();
+
+                #[cfg(feature = "ibiza")]
+                {
+                    // It is possible for there not to be a Polkadot vault.
+                    // At genesis there is no Polkadot vault, so we want to check that the vault exists
+                    // before we start witnessing.
+                    if let Some(vault) = state_chain_client
+                    .storage_map_entry::<pallet_cf_vaults::Vaults<
+                        state_chain_runtime::Runtime,
+                        state_chain_runtime::PolkadotInstance,
+                    >>(block_hash, &index)
+                    .await
+                    .unwrap() {
+                        dot_epoch_start_sender.broadcast(EpochStart::<Polkadot> {
+                            epoch_index: index,
+                            block_number: vault.active_from_block,
+                            current,
+                            participant,
+                            data: dot::EpochStartData {
+                                vault_account: state_chain_client.storage_value::<pallet_cf_environment::PolkadotVaultAccountId<state_chain_runtime::Runtime>>(block_hash).await.unwrap().unwrap()
+                            }
+                        }).await.unwrap();
+                    }
+                }
+
             }
         };
 
