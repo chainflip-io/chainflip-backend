@@ -940,6 +940,7 @@ dependencies = [
  "pallet-cf-account-roles",
  "pallet-cf-environment",
  "pallet-cf-governance",
+ "pallet-cf-lp",
  "pallet-cf-staking",
  "pallet-cf-swapping",
  "pallet-cf-threshold-signature",

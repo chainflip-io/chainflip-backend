@@ -4,7 +4,10 @@ use clap::Parser;
 use settings::{CLICommandLineOptions, CLISettings};
 
 #[cfg(feature = "ibiza")]
-use crate::settings::RelayerSubcommands;
+use crate::settings::{LiquidityProviderSubcommands, RelayerSubcommands};
+#[cfg(feature = "ibiza")]
+use api::primitives::Asset;
+
 use crate::settings::{Claim, CliCommand::*};
 use anyhow::{anyhow, Result};
 use utilities::clean_eth_address;
@@ -39,6 +42,9 @@ async fn run_cli() -> Result<()> {
 		#[cfg(feature = "ibiza")]
 		Relayer(RelayerSubcommands::SwapIntent(params)) =>
 			swap_intent(&cli_settings.state_chain, params).await,
+		#[cfg(feature = "ibiza")]
+		LiquidityProvider(LiquidityProviderSubcommands::Deposit { asset }) =>
+			liquidity_deposit(&cli_settings.state_chain, asset).await,
 		Claim(Claim::Request { amount, eth_address, should_register_claim }) =>
 			request_claim(amount, &eth_address, &cli_settings, should_register_claim).await,
 		Claim(Claim::Check {}) => check_claim(&cli_settings.state_chain).await,
@@ -81,6 +87,16 @@ pub async fn swap_intent(
 		params.relayer_commission,
 	)
 	.await?;
+	println!("Ingress address: {}", address);
+	Ok(())
+}
+
+#[cfg(feature = "ibiza")]
+pub async fn liquidity_deposit(
+	state_chain_settings: &settings::StateChain,
+	asset: Asset,
+) -> Result<()> {
+	let address = api::liquidity_deposit(state_chain_settings, asset).await?;
 	println!("Ingress address: {}", address);
 	Ok(())
 }
