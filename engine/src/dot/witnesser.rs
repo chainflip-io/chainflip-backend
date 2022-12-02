@@ -140,12 +140,7 @@ where
 
 						let ProxyAdded { delegator, .. } = event_details.event;
 
-						let delegator: sp_runtime::AccountId32 =
-							(*<subxt::ext::sp_runtime::AccountId32 as AsRef<[u8; 32]>>::as_ref(
-								&delegator,
-							))
-							.into();
-						if delegator != our_vault {
+						if AsRef::<[u8; 32]>::as_ref(&delegator) != AsRef::<[u8; 32]>::as_ref(&our_vault) {
 							continue
 						}
 
