@@ -22,7 +22,7 @@ use crate::{
 		},
 		crypto::{CryptoScheme, Rng},
 		eth::{EthSchnorrSignature, EthSigning},
-		tests::fixtures::MESSAGE_HASH,
+		tests::fixtures::SIGNING_PAYLOAD,
 	},
 	p2p::OutgoingMultisigStageMessages,
 	task_scope::task_scope,
@@ -50,7 +50,7 @@ async fn run_on_request_to_sign<C: CryptoScheme>(
 			ceremony_manager.on_request_to_sign(
 				ceremony_id,
 				participants,
-				MESSAGE_HASH.clone(),
+				SIGNING_PAYLOAD.clone(),
 				get_key_data_for_test::<C>(BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned())),
 				Rng::from_seed(DEFAULT_SIGNING_SEED),
 				result_sender,
@@ -93,7 +93,7 @@ fn send_signing_request(
 		ceremony_id,
 		details: Some(CeremonyRequestDetails::Sign(SigningRequestDetails::<EthSigning> {
 			participants,
-			data: MESSAGE_HASH.clone(),
+			payload: SIGNING_PAYLOAD.clone(),
 			keygen_result_info: get_key_data_for_test::<EthSigning>(BTreeSet::from_iter(
 				ACCOUNT_IDS.iter().cloned(),
 			)),

@@ -58,7 +58,7 @@ use self::{
 
 use super::{
 	crypto::{CryptoScheme, ECPoint},
-	MessageHash, Rng,
+	Rng, SigningPayload,
 };
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -123,7 +123,7 @@ pub trait MultisigClientApi<C: CryptoScheme> {
 		ceremony_id: CeremonyId,
 		key_id: KeyId,
 		signers: BTreeSet<AccountId>,
-		data: MessageHash,
+		payload: SigningPayload,
 	) -> BoxFuture<'_, Result<C::Signature, (BTreeSet<AccountId>, SigningFailureReason)>>;
 
 	fn update_latest_ceremony_id(&self, ceremony_id: CeremonyId);
@@ -154,7 +154,7 @@ where
 	C: CryptoScheme,
 {
 	pub participants: BTreeSet<AccountId>,
-	pub data: MessageHash,
+	pub payload: SigningPayload,
 	pub keygen_result_info: KeygenResultInfo<<C as CryptoScheme>::Point>,
 	pub rng: Rng,
 	pub result_sender: CeremonyResultSender<SigningCeremony<C>>,
@@ -252,14 +252,14 @@ impl<C: CryptoScheme> MultisigClientApi<C> for MultisigClient<C> {
 		ceremony_id: CeremonyId,
 		key_id: KeyId,
 		signers: BTreeSet<AccountId>,
-		data: MessageHash,
+		payload: SigningPayload,
 	) -> BoxFuture<'_, Result<C::Signature, (BTreeSet<AccountId>, SigningFailureReason)>> {
 		assert!(signers.contains(&self.my_account_id));
 
 		slog::debug!(
 			self.logger,
 			"Received a request to sign";
-			"message_hash" => data.to_string(),
+			"message_hash" => payload.to_string(),
 			"signers" => format_iterator(&signers).to_string(),
 			CEREMONY_ID_KEY => ceremony_id
 		);
@@ -281,7 +281,7 @@ impl<C: CryptoScheme> MultisigClientApi<C> for MultisigClient<C> {
 							ceremony_id,
 							details: Some(CeremonyRequestDetails::Sign(SigningRequestDetails {
 								participants: signers,
-								data,
+								payload,
 								keygen_result_info,
 								rng,
 								result_sender,
