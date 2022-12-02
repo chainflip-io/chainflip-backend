@@ -27,7 +27,7 @@ use crate::{
 		client::{KeygenFailureReason, MultisigClientApi},
 		eth::EthSigning,
 		polkadot::PolkadotSigning,
-		KeyId, MessageHash,
+		KeyId, SigningPayload,
 	},
 	p2p::{PeerInfo, PeerUpdate},
 	state_chain_observer::client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi},
@@ -92,18 +92,18 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient>(
 	ceremony_id: CeremonyId,
 	key_id: KeyId,
 	signers: BTreeSet<AccountId>,
-	data: MessageHash,
+	payload: SigningPayload,
 	logger: slog::Logger,
 ) where
 	MultisigClient: MultisigClientApi<EthSigning>,
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
 {
-	assert_eq!(data.0.len(), 32, "Incorrect payload size");
+	assert_eq!(payload.0.len(), 32, "Incorrect payload size");
 
 	if signers.contains(&state_chain_client.account_id()) {
 		// We initiate signing outside of the spawn to avoid requesting ceremonies out of order
 		let signing_result_future =
-			multisig_client.initiate_signing(ceremony_id, key_id, signers, data);
+			multisig_client.initiate_signing(ceremony_id, key_id, signers, payload);
 		scope.spawn(async move {
 			match signing_result_future.await {
 				Ok(signature) => {
@@ -371,7 +371,7 @@ where
                                             ceremony_id,
                                             KeyId(key_id),
                                             signatories,
-                                            MessageHash(payload.0.to_vec()),
+                                            SigningPayload(payload.0.to_vec()),
                                             logger.clone(),
                                         ).await;
                                     }

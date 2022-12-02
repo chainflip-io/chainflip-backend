@@ -36,7 +36,7 @@ use crate::{
 			signing, KeygenResultInfo, PartyIdxMapping, ThresholdParameters,
 		},
 		crypto::{ECPoint, Rng, Verifiable},
-		CryptoScheme, KeyId, MessageHash,
+		CryptoScheme, KeyId, SigningPayload,
 	},
 	p2p::OutgoingMultisigStageMessages,
 };
@@ -51,7 +51,7 @@ use crate::{
 		// This determines which crypto scheme will be used in tests
 		// (we make arbitrary choice to use eth)
 		crypto::eth::{EthSigning, Point},
-		tests::fixtures::MESSAGE_HASH,
+		tests::fixtures::SIGNING_PAYLOAD,
 	},
 	testing::expect_recv_with_timeout,
 };
@@ -117,7 +117,7 @@ pub struct SigningCeremonyDetails<C: CryptoScheme> {
 	pub rng: Rng,
 	pub ceremony_id: CeremonyId,
 	pub signers: BTreeSet<AccountId>,
-	pub message_hash: MessageHash,
+	pub payload: SigningPayload,
 	pub keygen_result_info: KeygenResultInfo<C::Point>,
 }
 
@@ -153,8 +153,13 @@ impl<C: CeremonyTrait> Node<C> {
 
 impl<C: CryptoScheme> Node<SigningCeremony<C>> {
 	pub async fn request_signing(&mut self, signing_ceremony_details: SigningCeremonyDetails<C>) {
-		let SigningCeremonyDetails { rng, ceremony_id, signers, message_hash, keygen_result_info } =
-			signing_ceremony_details;
+		let SigningCeremonyDetails {
+			rng,
+			ceremony_id,
+			signers,
+			payload: message_hash,
+			keygen_result_info,
+		} = signing_ceremony_details;
 
 		let request = prepare_signing_request::<C>(
 			ceremony_id,
@@ -618,7 +623,7 @@ impl KeygenCeremonyRunner {
 pub struct SigningCeremonyRunnerData<C: CryptoScheme> {
 	pub key_id: KeyId,
 	pub key_data: HashMap<AccountId, KeygenResultInfo<C::Point>>,
-	pub message_hash: MessageHash,
+	pub payload: SigningPayload,
 }
 pub type SigningCeremonyRunner<C> =
 	CeremonyTestRunner<SigningCeremonyRunnerData<C>, SigningCeremony<C>>;
@@ -637,7 +642,7 @@ impl<C: CryptoScheme> CeremonyRunnerStrategy for SigningCeremonyRunner<C> {
 			.expect("Signatures don't match");
 
 		signature
-			.verify(&self.ceremony_runner_data.key_id, &MESSAGE_HASH)
+			.verify(&self.ceremony_runner_data.key_id, &SIGNING_PAYLOAD)
 			.expect("Should be valid signature");
 
 		signature
@@ -660,13 +665,13 @@ impl<C: CryptoScheme> SigningCeremonyRunner<C> {
 		ceremony_id: CeremonyId,
 		key_id: KeyId,
 		key_data: HashMap<AccountId, KeygenResultInfo<C::Point>>,
-		message_hash: MessageHash,
+		payload: SigningPayload,
 		rng: Rng,
 	) -> Self {
 		Self::inner_new(
 			nodes,
 			ceremony_id,
-			SigningCeremonyRunnerData { key_id, key_data, message_hash },
+			SigningCeremonyRunnerData { key_id, key_data, payload },
 			rng,
 		)
 	}
@@ -676,7 +681,7 @@ impl<C: CryptoScheme> SigningCeremonyRunner<C> {
 		ceremony_id: CeremonyId,
 		key_id: KeyId,
 		key_data: HashMap<AccountId, KeygenResultInfo<C::Point>>,
-		message_hash: MessageHash,
+		payload: SigningPayload,
 		rng: Rng,
 	) -> (Self, HashMap<AccountId, Node<SigningCeremony<C>>>) {
 		let nodes_len = nodes.len();
@@ -686,7 +691,7 @@ impl<C: CryptoScheme> SigningCeremonyRunner<C> {
 		);
 
 		(
-			Self::new_with_all_signers(signers, ceremony_id, key_id, key_data, message_hash, rng),
+			Self::new_with_all_signers(signers, ceremony_id, key_id, key_data, payload, rng),
 			non_signers,
 		)
 	}
@@ -701,7 +706,7 @@ impl<C: CryptoScheme> SigningCeremonyRunner<C> {
 			ceremony_id: self.ceremony_id,
 			rng: Rng::from_seed(self.rng.gen()),
 			signers: self.nodes.keys().cloned().collect(),
-			message_hash: self.ceremony_runner_data.message_hash.clone(),
+			payload: self.ceremony_runner_data.payload.clone(),
 			keygen_result_info: self.ceremony_runner_data.key_data[account_id].clone(),
 		}
 	}
@@ -721,7 +726,7 @@ pub async fn new_signing_ceremony<C: CryptoScheme>(
 		DEFAULT_SIGNING_CEREMONY_ID,
 		key_id,
 		key_data,
-		MESSAGE_HASH.clone(),
+		SIGNING_PAYLOAD.clone(),
 		Rng::from_seed(DEFAULT_SIGNING_SEED),
 	)
 }

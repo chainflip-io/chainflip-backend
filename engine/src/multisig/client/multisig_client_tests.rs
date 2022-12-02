@@ -17,7 +17,7 @@ use crate::{
 			CeremonyRequestDetails,
 		},
 		eth::EthSigning,
-		KeyId, MessageHash, PersistentKeyDB,
+		KeyId, PersistentKeyDB, SigningPayload,
 	},
 	testing::{assert_future_can_complete, new_temp_directory_with_nonexistent_file},
 };
@@ -51,7 +51,7 @@ async fn should_ignore_rts_for_unknown_key() {
 		DEFAULT_SIGNING_CEREMONY_ID,
 		key_id,
 		BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
-		MessageHash(vec![0; 32]),
+		SigningPayload(vec![0; 32]),
 	);
 
 	// Check sign request fails immediately with "unknown key" error

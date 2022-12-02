@@ -10,7 +10,7 @@ use zeroize::Zeroize;
 
 use crate::multisig::{
 	crypto::{CryptoScheme, ECPoint, ECScalar, KeyShare, Rng},
-	MessageHash,
+	SigningPayload,
 };
 
 use sha2::{Digest, Sha256};
@@ -118,26 +118,26 @@ type SigningResponse<P> = LocalSig3<P>;
 
 /// Generate binding values for each party given their previously broadcast commitments
 fn generate_bindings<P: ECPoint>(
-	msg: &MessageHash,
+	payload: &SigningPayload,
 	commitments: &BTreeMap<AuthorityCount, SigningCommitment<P>>,
 	all_idxs: &BTreeSet<AuthorityCount>,
 ) -> BTreeMap<AuthorityCount, P::Scalar> {
 	all_idxs
 		.iter()
-		.map(|idx| (*idx, gen_rho_i(*idx, &msg.0, commitments, all_idxs)))
+		.map(|idx| (*idx, gen_rho_i(*idx, &payload.0, commitments, all_idxs)))
 		.collect()
 }
 
 /// Generate local signature/response (shard). See step 5 in Figure 3 (page 15).
 pub fn generate_local_sig<C: CryptoScheme>(
-	msg_hash: &MessageHash,
+	payload: &SigningPayload,
 	key: &KeyShare<C::Point>,
 	nonces: &SecretNoncePair<C::Point>,
 	commitments: &BTreeMap<AuthorityCount, SigningCommitment<C::Point>>,
 	own_idx: AuthorityCount,
 	all_idxs: &BTreeSet<AuthorityCount>,
 ) -> SigningResponse<C::Point> {
-	let bindings = generate_bindings(msg_hash, commitments, all_idxs);
+	let bindings = generate_bindings(payload, commitments, all_idxs);
 
 	// This is `R` in a Schnorr signature
 	let group_commitment = gen_group_commitment(commitments, &bindings);
@@ -153,7 +153,7 @@ pub fn generate_local_sig<C: CryptoScheme>(
 	let key_share = lambda_i * &key.x_i;
 
 	let response =
-		generate_schnorr_response::<C>(&key_share, key.y, group_commitment, nonce_share, msg_hash);
+		generate_schnorr_response::<C>(&key_share, key.y, group_commitment, nonce_share, payload);
 
 	SigningResponse { response }
 }
@@ -163,9 +163,9 @@ pub fn generate_schnorr_response<C: CryptoScheme>(
 	pubkey: C::Point,
 	nonce_commitment: C::Point,
 	nonce: <C::Point as ECPoint>::Scalar,
-	msg_hash: &MessageHash,
+	payload: &SigningPayload,
 ) -> <C::Point as ECPoint>::Scalar {
-	let challenge = C::build_challenge(pubkey, nonce_commitment, msg_hash);
+	let challenge = C::build_challenge(pubkey, nonce_commitment, payload);
 
 	C::build_response(nonce, private_key, challenge)
 }
@@ -174,18 +174,18 @@ pub fn generate_schnorr_response<C: CryptoScheme>(
 /// (aggregate) signature given that no party misbehaved. Otherwise
 /// return the misbehaving parties.
 pub fn aggregate_signature<C: CryptoScheme>(
-	msg_hash: &MessageHash,
+	payload: &SigningPayload,
 	signer_idxs: &BTreeSet<AuthorityCount>,
 	agg_pubkey: C::Point,
 	pubkeys: &BTreeMap<AuthorityCount, C::Point>,
 	commitments: &BTreeMap<AuthorityCount, SigningCommitment<C::Point>>,
 	responses: &BTreeMap<AuthorityCount, SigningResponse<C::Point>>,
 ) -> Result<C::Signature, BTreeSet<AuthorityCount>> {
-	let bindings = generate_bindings(msg_hash, commitments, signer_idxs);
+	let bindings = generate_bindings(payload, commitments, signer_idxs);
 
 	let group_commitment = gen_group_commitment(commitments, &bindings);
 
-	let challenge = C::build_challenge(agg_pubkey, group_commitment, msg_hash);
+	let challenge = C::build_challenge(agg_pubkey, group_commitment, payload);
 
 	let invalid_idxs: BTreeSet<AuthorityCount> = signer_idxs
 		.iter()
@@ -243,7 +243,7 @@ mod tests {
 		// Given the signing key, nonce and message hash, check that
 		// sigma (signature response) is correct and matches the expected
 		// (by the KeyManager contract) value
-		let msg_hash = MessageHash(hex::decode(MESSAGE_HASH).unwrap().to_vec());
+		let payload = SigningPayload(hex::decode(MESSAGE_HASH).unwrap().to_vec());
 
 		let nonce = Scalar::from_hex(NONCE_KEY);
 		let commitment = Point::from_scalar(&nonce);
@@ -256,13 +256,13 @@ mod tests {
 			public_key,
 			commitment,
 			nonce,
-			&msg_hash,
+			&payload,
 		);
 
 		assert_eq!(hex::encode(response.as_bytes()), EXPECTED_SIGMA);
 
 		// Build the challenge again to match how it is done on the receiving side
-		let challenge = EthSigning::build_challenge(public_key, commitment, &msg_hash);
+		let challenge = EthSigning::build_challenge(public_key, commitment, &payload);
 
 		// A lambda that has no effect on the computation (as a way to adapt multi-party
 		// signing to work for a single party)

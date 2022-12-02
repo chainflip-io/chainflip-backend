@@ -38,7 +38,7 @@ use client::common::{
 	broadcast::BroadcastStage, CeremonyCommon, CeremonyFailureReason, KeygenResultInfo,
 };
 
-use crate::multisig::MessageHash;
+use crate::multisig::SigningPayload;
 
 use super::{
 	common::{CeremonyStage, KeygenStageName, PreProcessStageDataCheck, SigningStageName},
@@ -128,7 +128,7 @@ pub fn prepare_signing_request<Crypto: CryptoScheme>(
 	own_account_id: &AccountId,
 	signers: BTreeSet<AccountId>,
 	key_info: KeygenResultInfo<Crypto::Point>,
-	data: MessageHash,
+	payload: SigningPayload,
 	outgoing_p2p_message_sender: &UnboundedSender<OutgoingMultisigStageMessages>,
 	rng: Rng,
 	logger: &slog::Logger,
@@ -173,7 +173,7 @@ pub fn prepare_signing_request<Crypto: CryptoScheme>(
 
 		let processor = AwaitCommitments1::<Crypto>::new(
 			common.clone(),
-			SigningStateCommonInfo { data, key: key_info.key },
+			SigningStateCommonInfo { payload, key: key_info.key },
 		);
 
 		Box::new(BroadcastStage::new(processor, common))
@@ -281,7 +281,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 				self.on_request_to_sign(
 					request.ceremony_id,
 					details.participants,
-					details.data,
+					details.payload,
 					details.keygen_result_info,
 					details.rng,
 					details.result_sender,
@@ -398,7 +398,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 		&mut self,
 		ceremony_id: CeremonyId,
 		signers: BTreeSet<AccountId>,
-		data: MessageHash,
+		payload: SigningPayload,
 		key_info: KeygenResultInfo<C::Point>,
 		rng: Rng,
 		result_sender: CeremonyResultSender<SigningCeremony<C>>,
@@ -411,7 +411,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 		slog::debug!(logger_with_ceremony_id, "Processing a request to sign");
 
 		if signers.len() == 1 {
-			let _result = result_sender.send(Ok(self.single_party_signing(data, key_info, rng)));
+			let _result = result_sender.send(Ok(self.single_party_signing(payload, key_info, rng)));
 			return
 		}
 
@@ -420,7 +420,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 			&self.my_account_id,
 			signers,
 			key_info,
-			data,
+			payload,
 			&self.outgoing_p2p_message_sender,
 			rng,
 			&logger_with_ceremony_id,
@@ -501,7 +501,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 
 	fn single_party_signing(
 		&self,
-		data: MessageHash,
+		payload: SigningPayload,
 		keygen_result_info: KeygenResultInfo<C::Point>,
 		mut rng: Rng,
 	) -> C::Signature {
@@ -514,7 +514,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 		let r = C::Point::from_scalar(&nonce);
 
 		let sigma =
-			client::signing::generate_schnorr_response::<C>(&key.x_i, key.y, r, nonce, &data);
+			client::signing::generate_schnorr_response::<C>(&key.x_i, key.y, r, nonce, &payload);
 
 		C::build_signature(sigma, r)
 	}

@@ -31,9 +31,9 @@ pub use db::PersistentKeyDB;
 use self::client::key_store::KeyStore;
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Hash, Eq)]
-pub struct MessageHash(pub Vec<u8>);
+pub struct SigningPayload(pub Vec<u8>);
 
-impl std::fmt::Display for MessageHash {
+impl std::fmt::Display for SigningPayload {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "{}", hex::encode(&self.0))
 	}

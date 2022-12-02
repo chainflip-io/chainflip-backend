@@ -1009,7 +1009,7 @@ async fn should_handle_signing_request() {
 	let logger = new_test_logger();
 	let first_ceremony_id = 1;
 	let key_id = crate::multisig::KeyId(vec![0u8; 32]);
-	let sign_data = crate::multisig::MessageHash(vec![0u8; 32]);
+	let payload = crate::multisig::SigningPayload(vec![0u8; 32]);
 	let our_account_id = AccountId32::new([0; 32]);
 	let not_our_account_id = AccountId32::new([1u8; 32]);
 	assert_ne!(our_account_id, not_our_account_id);
@@ -1038,7 +1038,7 @@ async fn should_handle_signing_request() {
 			predicate::eq(next_ceremony_id),
 			predicate::eq(key_id.clone()),
 			predicate::eq(BTreeSet::from_iter([our_account_id.clone()])),
-			predicate::eq(sign_data.clone()),
+			predicate::eq(payload.clone()),
 		)
 		.once()
 		.return_once(|_, _, _, _| {
@@ -1059,7 +1059,7 @@ async fn should_handle_signing_request() {
 				first_ceremony_id,
 				key_id.clone(),
 				BTreeSet::from_iter([not_our_account_id.clone()]),
-				sign_data.clone(),
+				payload.clone(),
 				logger.clone(),
 			)
 			.await;
@@ -1072,7 +1072,7 @@ async fn should_handle_signing_request() {
 				next_ceremony_id,
 				key_id,
 				BTreeSet::from_iter([our_account_id]),
-				sign_data,
+				payload,
 				logger,
 			)
 			.await;
