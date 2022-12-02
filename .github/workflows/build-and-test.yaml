@@ -283,6 +283,7 @@ jobs:
           npm run generate
       - name: Install graphviz
         run: |
+          echo ${{ secrets.CF_RUNNER_SUDO_PASSWORD }} | sudo -S apt-get clean
           echo ${{ secrets.CF_RUNNER_SUDO_PASSWORD }} | sudo -S apt-get update
           echo ${{ secrets.CF_RUNNER_SUDO_PASSWORD }} | sudo -S apt-get install -y graphviz
       - uses: actions/setup-java@v3

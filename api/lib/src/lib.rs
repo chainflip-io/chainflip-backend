@@ -12,6 +12,9 @@ use state_chain_runtime::opaque::SessionKeys;
 
 use custom_rpc::CustomApiClient;
 
+#[cfg(feature = "ibiza")]
+use cf_primitives::{Asset, ForeignChainAddress};
+
 pub mod primitives {
 	pub use cf_primitives::*;
 	pub use pallet_cf_governance::ProposalId;
@@ -107,6 +110,37 @@ where
 	} else {
 		Ok((tx_hash, events))
 	}
+}
+
+async fn connect_submit_and_get_events<Call>(
+	state_chain_settings: &settings::StateChain,
+	call: Call,
+) -> Result<Vec<state_chain_runtime::Event>>
+where
+	Call: Into<state_chain_runtime::Call> + Clone + std::fmt::Debug + Send + Sync + 'static,
+{
+	task_scope(|scope| {
+		async {
+			let logger = new_discard_logger();
+			let (_, block_stream, state_chain_client) = StateChainClient::new(
+				scope,
+				state_chain_settings,
+				AccountRole::None,
+				false,
+				&logger,
+			)
+			.await?;
+
+			let mut block_stream = Box::new(block_stream);
+
+			let (_tx_hash, events) =
+				submit_and_ensure_success(&state_chain_client, block_stream.as_mut(), call).await?;
+
+			Ok(events)
+		}
+		.boxed()
+	})
+	.await
 }
 
 pub async fn request_claim(
@@ -459,4 +493,65 @@ pub async fn set_vanity_name(
 		.boxed()
 	})
 	.await
+}
+
+#[cfg(feature = "ibiza")]
+pub async fn register_swap_intent(
+	state_chain_settings: &settings::StateChain,
+	ingress_asset: Asset,
+	egress_asset: Asset,
+	egress_address: ForeignChainAddress,
+	relayer_commission_bps: u16,
+) -> Result<ForeignChainAddress> {
+	let events = connect_submit_and_get_events(
+		state_chain_settings,
+		pallet_cf_swapping::Call::register_swap_intent {
+			ingress_asset,
+			egress_asset,
+			egress_address,
+			relayer_commission_bps,
+		},
+	)
+	.await?;
+
+	if let Some(state_chain_runtime::Event::Swapping(pallet_cf_swapping::Event::NewSwapIntent {
+		ingress_address,
+		..
+	})) = events.iter().find(|event| {
+		matches!(
+			event,
+			state_chain_runtime::Event::Swapping(pallet_cf_swapping::Event::NewSwapIntent { .. })
+		)
+	}) {
+		Ok(*ingress_address)
+	} else {
+		panic!("NewSwapIntent must have been generated");
+	}
+}
+
+#[cfg(feature = "ibiza")]
+pub async fn liquidity_deposit(
+	state_chain_settings: &settings::StateChain,
+	asset: Asset,
+) -> Result<ForeignChainAddress> {
+	let events = connect_submit_and_get_events(
+		state_chain_settings,
+		pallet_cf_lp::Call::request_deposit_address { asset },
+	)
+	.await?;
+
+	if let Some(state_chain_runtime::Event::LiquidityProvider(
+		pallet_cf_lp::Event::DepositAddressReady { ingress_address, intent_id: _ },
+	)) = events.iter().find(|event| {
+		matches!(
+			event,
+			state_chain_runtime::Event::LiquidityProvider(
+				pallet_cf_lp::Event::DepositAddressReady { .. }
+			)
+		)
+	}) {
+		Ok(*ingress_address)
+	} else {
+		panic!("DepositAddressReady must have been generated");
+	}
 }

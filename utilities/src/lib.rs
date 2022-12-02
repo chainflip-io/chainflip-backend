@@ -90,18 +90,26 @@ fn check_threshold_calculation() {
 	assert_eq!(failure_threshold_from_share_count(4), 2);
 }
 
-pub fn clean_eth_address(dirty_eth_address: &str) -> Result<[u8; 20], &str> {
-	let eth_address_hex_str = match dirty_eth_address.strip_prefix("0x") {
-		Some(eth_address_stripped) => eth_address_stripped,
-		None => dirty_eth_address,
+pub fn clean_hex_address<const LEN: usize>(address_str: &str) -> Result<[u8; LEN], &str> {
+	let address_hex_str = match address_str.strip_prefix("0x") {
+		Some(address_stripped) => address_stripped,
+		None => address_str,
 	};
 
-	let eth_address: [u8; 20] = hex::decode(eth_address_hex_str)
+	let address: [u8; LEN] = hex::decode(address_hex_str)
 		.map_err(|_| "Invalid hex")?
 		.try_into()
-		.map_err(|_| "Could not create a [u8; 20]")?;
+		.map_err(|_| "Invalid address length")?;
 
-	Ok(eth_address)
+	Ok(address)
+}
+
+pub fn clean_eth_address(dirty_eth_address: &str) -> Result<[u8; 20], &str> {
+	clean_hex_address(dirty_eth_address)
+}
+
+pub fn clean_dot_address(dirty_dot_address: &str) -> Result<[u8; 32], &str> {
+	clean_hex_address(dirty_dot_address)
 }
 
 #[test]
