@@ -216,17 +216,8 @@ pub mod pallet {
 				.saturating_sub(T::WeightInfo::egress_assets(0u32))
 				.saturating_div(single_request_cost) as u32;
 
-			match with_transaction(|| Self::egress_scheduled_assets(Some(request_count))) {
-				Ok((egress_transaction, fetch_batch_size, egress_batch_size)) => {
-					T::Broadcaster::threshold_sign_and_broadcast(egress_transaction);
-					Self::deposit_event(Event::<T, I>::BatchBroadcastRequested {
-						fetch_batch_size,
-						egress_batch_size,
-					});
-					T::WeightInfo::egress_assets(fetch_batch_size.saturating_add(egress_batch_size))
-				},
-				Err(_) => T::WeightInfo::egress_assets(0),
-			}
+			with_transaction(|| Self::egress_scheduled_assets(Some(request_count)))
+				.unwrap_or_else(|_| T::WeightInfo::egress_assets(0))
 		}
 
 		fn integrity_test() {
@@ -276,17 +267,7 @@ pub mod pallet {
 			maybe_size: Option<u32>,
 		) -> DispatchResult {
 			let _ok = T::EnsureGovernance::ensure_origin(origin)?;
-
-			if let Ok((egress_transaction, fetch_batch_size, egress_batch_size)) =
-				with_transaction(|| Self::egress_scheduled_assets(maybe_size))
-			{
-				T::Broadcaster::threshold_sign_and_broadcast(egress_transaction);
-				Self::deposit_event(Event::<T, I>::BatchBroadcastRequested {
-					fetch_batch_size,
-					egress_batch_size,
-				});
-			}
-
+			with_transaction(|| Self::egress_scheduled_assets(maybe_size))?;
 			Ok(())
 		}
 
@@ -317,7 +298,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	#[allow(clippy::type_complexity)]
 	fn egress_scheduled_assets(
 		maybe_size: Option<u32>,
-	) -> TransactionOutcome<Result<(T::AllBatch, u32, u32), DispatchError>> {
+	) -> TransactionOutcome<Result<u64, DispatchError>> {
 		let batch_to_send: Vec<_> =
 			ScheduledEgressRequests::<T, I>::mutate(|requests: &mut Vec<_>| {
 				// Take up to batch_size requests to be sent
@@ -362,11 +343,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		// Construct and send the transaction.
 		#[allow(clippy::unit_arg)]
 		match T::AllBatch::new_unsigned(fetch_params, egress_params) {
-			Ok(egress_transaction) => TransactionOutcome::Commit(Ok((
-				egress_transaction,
-				fetch_batch_size,
-				egress_batch_size,
-			))),
+			Ok(egress_transaction) => {
+				T::Broadcaster::threshold_sign_and_broadcast(egress_transaction);
+				Self::deposit_event(Event::<T, I>::BatchBroadcastRequested {
+					fetch_batch_size,
+					egress_batch_size,
+				});
+				TransactionOutcome::Commit(Ok(T::WeightInfo::egress_assets(
+					fetch_batch_size.saturating_add(egress_batch_size),
+				)))
+			},
 			Err(_) => TransactionOutcome::Rollback(Err(DispatchError::Other(
 				"AllBatch Apicall creation failed, rolled back storage",
 			))),
