@@ -8,8 +8,10 @@ use cf_chains::{
 		api::CreatePolkadotVault, Polkadot, PolkadotAccountId, PolkadotConfig, PolkadotIndex,
 		PolkadotPublicKey,
 	},
-	Chain, ChainCrypto,
+	ChainCrypto,
 };
+#[cfg(feature = "ibiza")]
+use sp_core::sr25519;
 
 use cf_primitives::{Asset, EthereumAddress};
 pub use cf_traits::EthEnvironmentProvider;
@@ -281,20 +283,27 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
-		#[cfg(feature = "ibiza")]
+		#[allow(unused_variables)]
 		#[pallet::weight(0)]
 		pub fn create_polkadot_vault(
 			origin: OriginFor<T>,
-			dot_aggkey: <Polkadot as ChainCrypto>::AggKey,
+			dot_aggkey: [u8; 32],
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
-			T::PolkadotBroadcaster::threshold_sign_and_broadcast(
-				T::CreatePolkadotVault::new_unsigned(dot_aggkey),
-			);
-			Self::deposit_event(Event::<T>::PolkadotVaultCreationCallInitiated {
-				agg_key: dot_aggkey,
-			});
+			#[cfg(feature = "ibiza")]
+			{
+				let key = dot_aggkey
+					.to_vec()
+					.try_into()
+					.expect("This should not fail since the size of vec is guaranteed to be 32");
+				T::PolkadotBroadcaster::threshold_sign_and_broadcast(
+					T::CreatePolkadotVault::new_unsigned(key),
+				);
+				Self::deposit_event(Event::<T>::PolkadotVaultCreationCallInitiated {
+					agg_key: key,
+				});
+			}
 			Ok(().into())
 		}
 		/// Manually initiates Polkadot vault key rotation completion steps so Epoch rotation can be
@@ -307,32 +316,40 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
-		#[cfg(feature = "ibiza")]
+		#[allow(unused_variables)]
 		#[pallet::weight(0)]
 		pub fn witness_polkadot_vault_creation(
 			origin: OriginFor<T>,
-			dot_pure_proxy_vault_key: <Polkadot as ChainCrypto>::AggKey,
-			dot_witnessed_aggkey: <Polkadot as ChainCrypto>::AggKey,
-			block_number: <Polkadot as Chain>::ChainBlockNumber,
-			tx_hash: <Polkadot as ChainCrypto>::TransactionHash,
+			dot_pure_proxy_vault_key: [u8; 32],
+			dot_witnessed_aggkey: [u8; 32],
+			block_number: u64,
+			tx_hash: sp_core::H256,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
+			#[cfg(feature = "ibiza")]
+			{
+				use cf_traits::VaultKeyWitnessedHandler;
+				use sp_runtime::{traits::IdentifyAccount, MultiSigner};
 
-			use cf_traits::VaultKeyWitnessedHandler;
-			use sp_runtime::{traits::IdentifyAccount, MultiSigner};
+				// Set Polkadot Pure Proxy Vault Account
+				let polkadot_vault_account_id =
+					MultiSigner::Sr25519(sr25519::Public(dot_pure_proxy_vault_key)).into_account();
+				PolkadotVaultAccountId::<T>::set(Some(polkadot_vault_account_id.clone()));
+				Self::deposit_event(Event::<T>::PolkadotVaultAccountSet {
+					polkadot_vault_account_id,
+				});
 
-			// Set Polkadot Pure Proxy Vault Account
-			let polkadot_vault_account_id =
-				MultiSigner::Sr25519(dot_pure_proxy_vault_key.0).into_account();
-			PolkadotVaultAccountId::<T>::set(Some(polkadot_vault_account_id.clone()));
-			Self::deposit_event(Event::<T>::PolkadotVaultAccountSet { polkadot_vault_account_id });
-
-			// Witness the agg_key rotation manually in the vaults pallet for polkadot
-			T::PolkadotVaultKeyWitnessedHandler::on_new_key_witnessed(
-				dot_witnessed_aggkey,
-				block_number,
-				tx_hash,
-			)
+				// Witness the agg_key rotation manually in the vaults pallet for polkadot
+				T::PolkadotVaultKeyWitnessedHandler::on_new_key_witnessed(
+					dot_witnessed_aggkey.to_vec().try_into().expect(
+						"This should not fail since the size of vec is guaranteed to be 32",
+					),
+					block_number,
+					tx_hash,
+				)
+			}
+			#[cfg(not(feature = "ibiza"))]
+			Ok(().into())
 		}
 	}
 

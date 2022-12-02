@@ -16,9 +16,8 @@ use crate::{
 	},
 };
 #[cfg(feature = "ibiza")]
-use cf_chains::{dot, Polkadot};
+use cf_chains::{dot, dot::api::PolkadotApi, Polkadot};
 use cf_chains::{
-	dot::api::PolkadotApi,
 	eth,
 	eth::{api::register_claim::RegisterClaim, Ethereum},
 };
