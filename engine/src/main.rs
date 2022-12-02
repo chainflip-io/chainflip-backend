@@ -27,6 +27,11 @@ use futures::FutureExt;
 use pallet_cf_validator::SemVer;
 use sp_core::U256;
 
+#[cfg(feature = "ibiza")]
+use chainflip_engine::dot::{rpc::DotRpcClient, DotBroadcaster};
+#[cfg(feature = "ibiza")]
+use subxt::{OnlineClient, PolkadotConfig};
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
 	use_chainflip_account_id_encoding();
@@ -213,6 +218,9 @@ async fn main() -> anyhow::Result<()> {
                 state_chain_client.clone(),
                 state_chain_block_stream,
                 eth_broadcaster,
+                #[cfg(feature = "ibiza")] DotBroadcaster::new(DotRpcClient::new(OnlineClient::<PolkadotConfig>::from_url(settings.dot.ws_node_endpoint)
+			    .await
+			    .context("Failed to create DOT client")?)),
                 eth_multisig_client,
                 dot_multisig_client,
                 peer_update_sender,

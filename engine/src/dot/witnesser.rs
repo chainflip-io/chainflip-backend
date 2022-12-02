@@ -70,31 +70,19 @@ mod tests {
 	use futures::StreamExt;
 	use subxt::{OnlineClient, PolkadotConfig};
 
-	use crate::{
-		logging::test_utils::new_test_logger,
-		settings::{CfSettings, CommandLineOptions, Settings},
-	};
+	use crate::logging::test_utils::new_test_logger;
 
 	#[tokio::test]
 	#[ignore = "requires connecting to a live dotsama network"]
 	async fn block_head_stream_from_test_dot() {
-		let settings = Settings::load_settings_from_all_sources(
-			"/etc/chainflip_local_custom/".to_owned(),
-			CommandLineOptions::default(),
-		)
-		.unwrap();
-
-		println!("Connecting to: {}", settings.dot.ws_node_endpoint);
-
-		let safe_head_stream =
-			OnlineClient::<PolkadotConfig>::from_url(settings.dot.ws_node_endpoint)
-				.await
-				.unwrap()
-				.rpc()
-				.subscribe_finalized_blocks()
-				.await
-				.unwrap()
-				.map(|header| MiniHeader { block_number: header.unwrap().number.into() });
+		let safe_head_stream = OnlineClient::<PolkadotConfig>::from_url("URL")
+			.await
+			.unwrap()
+			.rpc()
+			.subscribe_finalized_blocks()
+			.await
+			.unwrap()
+			.map(|header| MiniHeader { block_number: header.unwrap().number.into() });
 
 		let mut block_head_stream_from =
 			dot_block_head_stream_from(13141870, safe_head_stream, &new_test_logger())

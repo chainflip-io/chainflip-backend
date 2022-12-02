@@ -21,6 +21,13 @@ use sp_std::collections::btree_set::BTreeSet;
 use state_chain_runtime::{AccountRoles, Authorship, EthereumInstance, Event, Origin};
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
+#[cfg(feature = "ibiza")]
+use crate::threshold_signing::DotKeyComponents;
+#[cfg(feature = "ibiza")]
+use cf_chains::dot::PolkadotSignature;
+#[cfg(feature = "ibiza")]
+use state_chain_runtime::PolkadotInstance;
+
 use crate::threshold_signing::KeyUtils;
 // arbitrary units of block time
 pub const BLOCK_TIME: u64 = 1000;
