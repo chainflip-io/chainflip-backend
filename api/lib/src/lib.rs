@@ -552,6 +552,6 @@ pub async fn liquidity_deposit(
 	}) {
 		Ok(*ingress_address)
 	} else {
-		panic!("NewSwapIntent must have been generated");
+		panic!("DepositAddressReady must have been generated");
 	}
 }
