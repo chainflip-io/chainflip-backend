@@ -247,7 +247,6 @@ mod tests {
 
 	use cf_chains::dot;
 	use cf_primitives::PolkadotAccountId;
-	use futures::StreamExt;
 	use subxt::PolkadotConfig;
 
 	use crate::{
@@ -255,7 +254,6 @@ mod tests {
 		settings::{CfSettings, CommandLineOptions, Settings},
 		state_chain_observer::client::mocks::MockStateChainClient,
 	};
-	use crate::logging::test_utils::new_test_logger;
 
 	#[ignore = "This test is helpful for local testing. Requires connection to westend"]
 	#[tokio::test]
@@ -322,27 +320,5 @@ mod tests {
 		start(epoch_starts_receiver, dot_client, state_chain_client, &logger)
 			.await
 			.unwrap();
-	}
-
-	#[tokio::test]
-	#[ignore = "requires connecting to a live dotsama network"]
-	async fn block_head_stream_from_test_dot() {
-		let safe_head_stream = OnlineClient::<PolkadotConfig>::from_url("URL")
-			.await
-			.unwrap()
-			.rpc()
-			.subscribe_finalized_blocks()
-			.await
-			.unwrap()
-			.map(|header| MiniHeader { block_number: header.unwrap().number.into() });
-
-		let mut block_head_stream_from =
-			dot_block_head_stream_from(13141870, safe_head_stream, dot_client, &new_test_logger())
-				.await
-				.unwrap();
-
-		while let Some(mini_blockhead) = block_head_stream_from.next().await {
-			println!("Here's the mini_blockhead number: {:?}", mini_blockhead.block_number);
-		}
 	}
 }

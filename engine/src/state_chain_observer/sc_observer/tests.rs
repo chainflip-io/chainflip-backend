@@ -1,12 +1,15 @@
 use std::{collections::BTreeSet, sync::Arc};
 
 use cf_chains::eth::{Ethereum, Transaction};
-use cf_primitives::{AccountRole, PolkadotAccountId};
+use cf_primitives::AccountRole;
 use frame_system::Phase;
 use futures::{FutureExt, StreamExt};
 use mockall::predicate::{self, eq};
 use pallet_cf_broadcast::BroadcastAttemptId;
 use pallet_cf_vaults::Vault;
+
+#[cfg(feature = "ibiza")]
+use cf_primitives::PolkadotAccountId;
 
 use sp_core::{Hasher, H256, U256};
 use sp_runtime::{traits::Keccak256, AccountId32, Digest};
