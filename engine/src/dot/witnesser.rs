@@ -3,7 +3,7 @@ use std::{pin::Pin, sync::Arc};
 use cf_chains::dot::{Polkadot, PolkadotProxyType, PolkadotUncheckedExtrinsic};
 use codec::{Decode, Encode};
 use frame_support::scale_info::TypeInfo;
-use futures::{Stream, StreamExt};
+use futures::{stream, Stream, StreamExt};
 use sp_runtime::MultiSignature;
 use state_chain_runtime::PolkadotInstance;
 use subxt::{
@@ -78,6 +78,36 @@ where
 	.await
 }
 
+fn take_while_ok<InStream, T, E>(
+	inner_stream: InStream,
+	logger: &slog::Logger,
+) -> impl Stream<Item = T>
+where
+	InStream: Stream<Item = std::result::Result<T, E>>,
+	E: std::fmt::Debug,
+{
+	struct StreamState<FromStream, T, E>
+	where
+		FromStream: Stream<Item = std::result::Result<T, E>>,
+	{
+		stream: FromStream,
+		logger: slog::Logger,
+	}
+
+	let init_state = StreamState { stream: Box::pin(inner_stream), logger: logger.clone() };
+
+	stream::unfold(init_state, move |mut state| async move {
+		match state.stream.next().await {
+			Some(Ok(item)) => Some((item, state)),
+			Some(Err(err)) => {
+				slog::error!(&state.logger, "Error on stream: {:?}", err);
+				None
+			},
+			None => None,
+		}
+	})
+}
+
 pub async fn start<StateChainClient>(
 	epoch_starts_receiver: async_broadcast::Receiver<EpochStart<Polkadot>>,
 	dot_client: OnlineClient<PolkadotConfig>,
@@ -96,13 +126,12 @@ where
 			let dot_client = dot_client.clone();
 			let state_chain_client = state_chain_client.clone();
 			async move {
-				let safe_head_stream = dot_client
+				let safe_head_stream = take_while_ok(dot_client
 					.rpc()
 					.subscribe_finalized_blocks()
-					.await?
-					.take_while(|header| futures::future::ready(header.is_ok()))
+					.await?,
+					&logger)
 					.map(|header| {
-						let header = header.expect("Stream already terminated if Err()");
 						MiniHeader { block_number: header.number.into(), block_hash: header.hash() }
 					});
 
@@ -119,7 +148,7 @@ where
 				// Stream of Events objects. Each `Events` contains the events for a particular
 				// block
 				let mut filtered_events_stream = Box::pin(
-					block_head_stream_from
+					take_while_ok(block_head_stream_from
 						.then(|mini_header| {
 							let dot_client = dot_client.clone();
 							// TODO: This will not work if the block we are querying metadata has
@@ -127,10 +156,8 @@ where
 							// the latest metadata and always uses it.
 							// https://github.com/chainflip-io/chainflip-backend/issues/2542
 							EventsClient::new(dot_client).at(Some(mini_header.block_hash))
-						})
-						.take_while(|events| futures::future::ready(events.is_ok()))
+						}), &logger)
 						.map(|events| {
-							let events = events.expect("Stream already terminated if Err()");
 							<(ProxyAdded,)>::filter(events)
 						}),
 				);
