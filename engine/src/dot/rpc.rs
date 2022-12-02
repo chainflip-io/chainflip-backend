@@ -51,26 +51,13 @@ impl DotRpcApi for DotRpcClient {
 mod tests {
 	use subxt::{OnlineClient, PolkadotConfig};
 
-	use crate::{
-		dot::{rpc::DotRpcClient, DotBroadcaster},
-		settings::{CfSettings, CommandLineOptions, Settings},
-	};
+	use crate::dot::{rpc::DotRpcClient, DotBroadcaster};
 
 	#[tokio::test]
 	#[ignore = "Testing raw broadcast to live network"]
 	async fn broadcast_tx() {
-		// Must set the absolute config path in here to a local config path.
-		let settings = Settings::load_settings_from_all_sources(
-			".".to_string(),
-			CommandLineOptions::default(),
-		)
-		.unwrap();
-
-		println!("Connecting to: {}", settings.dot.ws_node_endpoint);
 		let dot_broadcaster = DotBroadcaster::new(DotRpcClient::new(
-			OnlineClient::<PolkadotConfig>::from_url(settings.dot.ws_node_endpoint)
-				.await
-				.unwrap(),
+			OnlineClient::<PolkadotConfig>::from_url("URL").await.unwrap(),
 		));
 
 		// Can get these bytes from the `create_test_extrinsic()` in state-chain/chains/src/dot.rs
