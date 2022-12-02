@@ -99,7 +99,7 @@ pub mod pallet {
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// Marks which chain this pallet is interacting with.
-		type TargetChain: Chain + ChainAbi;
+		type TargetChain: ChainAbi;
 
 		/// Generates ingress addresses.
 		type AddressDerivation: AddressDerivationApi<Self::TargetChain>;
@@ -215,9 +215,7 @@ pub mod pallet {
 				.saturating_sub(T::WeightInfo::egress_assets(0u32))
 				.saturating_div(single_request_cost) as u32;
 
-			let actual_requests_sent = Self::egress_scheduled_assets(Some(request_count));
-
-			T::WeightInfo::egress_assets(actual_requests_sent)
+			T::WeightInfo::egress_assets(Self::egress_scheduled_assets(Some(request_count)))
 		}
 
 		fn integrity_test() {
@@ -302,6 +300,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			return 0
 		}
 
+		let scheduled_egress_requests = ScheduledEgressRequests::<T, I>::get();
+
 		let batch_to_send: Vec<_> =
 			ScheduledEgressRequests::<T, I>::mutate(|requests: &mut Vec<_>| {
 				// Take up to batch_size requests to be sent
@@ -343,13 +343,20 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		// Construct and send the transaction.
 		#[allow(clippy::unit_arg)]
-		let egress_transaction = T::AllBatch::new_unsigned(fetch_params, egress_params);
-		T::Broadcaster::threshold_sign_and_broadcast(egress_transaction);
-		Self::deposit_event(Event::<T, I>::BatchBroadcastRequested {
-			fetch_batch_size,
-			egress_batch_size,
-		});
-		fetch_batch_size.saturating_add(egress_batch_size)
+		match T::AllBatch::new_unsigned(fetch_params, egress_params) {
+			Ok(egress_transaction) => {
+				T::Broadcaster::threshold_sign_and_broadcast(egress_transaction);
+				Self::deposit_event(Event::<T, I>::BatchBroadcastRequested {
+					fetch_batch_size,
+					egress_batch_size,
+				});
+				fetch_batch_size.saturating_add(egress_batch_size)
+			},
+			Err(_) => {
+				ScheduledEgressRequests::<T, I>::put(scheduled_egress_requests);
+				0
+			},
+		}
 	}
 
 	/// Generate a new address for the user to deposit assets into.

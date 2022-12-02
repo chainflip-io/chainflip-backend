@@ -36,6 +36,9 @@ use crate::{
 };
 
 #[cfg(feature = "ibiza")]
+use crate::dot::{rpc::DotRpcApi, DotBroadcaster};
+
+#[cfg(feature = "ibiza")]
 use sp_core::H160;
 
 async fn handle_keygen_request<'a, StateChainClient, MultisigClient>(
@@ -173,12 +176,14 @@ pub async fn start<
 	StateChainClient,
 	BlockStream,
 	EthRpc,
+	#[cfg(feature = "ibiza")] DotRpc: DotRpcApi + Send + Sync + 'static,
 	EthMultisigClient,
 	PolkadotMultisigClient,
 >(
 	state_chain_client: Arc<StateChainClient>,
 	sc_block_stream: BlockStream,
 	eth_broadcaster: EthBroadcaster<EthRpc>,
+	#[cfg(feature = "ibiza")] dot_broadcaster: DotBroadcaster<DotRpc>,
 	eth_multisig_client: EthMultisigClient,
 	dot_multisig_client: PolkadotMultisigClient,
 	peer_update_sender: UnboundedSender<PeerUpdate>,
@@ -441,6 +446,16 @@ where
                                                 ).await;
                                             }
                                         }
+                                    }
+                                    #[cfg(feature = "ibiza")]
+                                    state_chain_runtime::Event::PolkadotBroadcaster(
+                                        pallet_cf_broadcast::Event::TransactionBroadcastRequest {
+                                            broadcast_attempt_id: _,
+                                            nominee,
+                                            unsigned_tx,
+                                        },
+                                    ) if nominee == account_id => {
+                                        let _result = dot_broadcaster.send(unsigned_tx.encoded_extrinsic).await;
                                     }
                                     state_chain_runtime::Event::Environment(
                                         pallet_cf_environment::Event::CfeSettingsUpdated {

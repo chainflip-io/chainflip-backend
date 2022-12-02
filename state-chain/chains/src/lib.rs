@@ -184,15 +184,15 @@ pub trait ChainEnvironment<
 >
 {
 	/// Attempt a lookup.
-	fn lookup(s: LookupKey) -> Result<LookupValue, frame_support::error::LookupError>;
+	fn lookup(s: LookupKey) -> Option<LookupValue>;
 }
-
+#[allow(clippy::result_unit_err)]
 /// Constructs the `SetAggKeyWithAggKey` api call.
 pub trait SetAggKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
-		old_key: <Abi as ChainCrypto>::AggKey,
+		maybe_old_key: Option<<Abi as ChainCrypto>::AggKey>,
 		new_key: <Abi as ChainCrypto>::AggKey,
-	) -> Self;
+	) -> Result<Self, ()>;
 }
 
 pub trait SetGovKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
@@ -219,11 +219,12 @@ pub trait RegisterClaim<Abi: ChainAbi>: ApiCall<Abi> {
 	fn amount(&self) -> u128;
 }
 
+#[allow(clippy::result_unit_err)]
 pub trait AllBatch<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<Abi>>,
 		transfer_params: Vec<TransferAssetParams<Abi>>,
-	) -> Self;
+	) -> Result<Self, ()>;
 }
 
 pub trait FeeRefundCalculator<C: Chain> {

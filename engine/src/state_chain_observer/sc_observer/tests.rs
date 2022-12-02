@@ -27,6 +27,9 @@ use crate::{
 	witnesser::EpochStart,
 };
 
+#[cfg(feature = "ibiza")]
+use crate::dot::{rpc::MockDotRpcApi, DotBroadcaster};
+
 fn test_header(number: u32) -> Header {
 	Header {
 		number,
@@ -51,7 +54,8 @@ async fn starts_witnessing_when_current_authority() {
 		|| account_id
 	});
 
-	state_chain_client.expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>()
+	state_chain_client.
+expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>()
 		.with(eq(initial_block_hash), eq(account_id))
 		.once()
 		.return_once(move |_, _| Ok(vec![initial_epoch]));
@@ -107,6 +111,8 @@ async fn starts_witnessing_when_current_authority() {
 		Arc::new(state_chain_client),
 		sc_block_stream,
 		eth_broadcaster,
+		#[cfg(feature = "ibiza")]
+		DotBroadcaster::new(MockDotRpcApi::new()),
 		eth_multisig_client,
 		dot_multisig_client,
 		account_peer_mapping_change_sender,
@@ -151,7 +157,8 @@ async fn starts_witnessing_when_historic_on_startup() {
 		|| account_id
 	});
 
-	state_chain_client.expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>()
+	state_chain_client.
+expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>()
 		.with(eq(initial_block_hash), eq(account_id))
 		.once()
 		.return_once(move |_, _| Ok(vec![active_epoch]));
@@ -193,7 +200,6 @@ async fn starts_witnessing_when_historic_on_startup() {
 	let logger = new_test_logger();
 
 	let eth_rpc_mock = MockEthRpcApi::new();
-
 	let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
 
 	let eth_multisig_client = MockMultisigClientApi::new();
@@ -220,6 +226,8 @@ async fn starts_witnessing_when_historic_on_startup() {
 		Arc::new(state_chain_client),
 		sc_block_stream,
 		eth_broadcaster,
+		#[cfg(feature = "ibiza")]
+		DotBroadcaster::new(MockDotRpcApi::new()),
 		eth_multisig_client,
 		dot_multisig_client,
 		account_peer_mapping_change_sender,
@@ -298,7 +306,6 @@ async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
 	let logger = new_test_logger();
 
 	let eth_rpc_mock = MockEthRpcApi::new();
-
 	let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
 
 	let eth_multisig_client = MockMultisigClientApi::new();
@@ -324,6 +331,8 @@ async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
 		Arc::new(state_chain_client),
 		sc_block_stream,
 		eth_broadcaster,
+		#[cfg(feature = "ibiza")]
+		DotBroadcaster::new(MockDotRpcApi::new()),
 		eth_multisig_client,
 		dot_multisig_client,
 		account_peer_mapping_change_sender,
@@ -368,7 +377,8 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
 		|| account_id
 	});
 
-	state_chain_client.expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>()
+	state_chain_client.
+expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>()
 		.with(eq(initial_block_hash), eq(account_id.clone()))
 		.once()
 		.return_once(move |_, _| Ok(vec![initial_epoch]));
@@ -428,7 +438,8 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
 				active_from_block: new_epoch_from_block,
 			}))
 		});
-	state_chain_client.expect_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<state_chain_runtime::Runtime>>()
+	state_chain_client.
+expect_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<state_chain_runtime::Runtime>>()
 		.with(eq(new_epoch_block_header_hash), eq(5), eq(account_id.clone()))
 		.once()
 		.return_once(move |_, _, _| Ok(Some(1)));
@@ -461,6 +472,8 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
 		Arc::new(state_chain_client),
 		sc_block_stream,
 		eth_broadcaster,
+		#[cfg(feature = "ibiza")]
+		DotBroadcaster::new(MockDotRpcApi::new()),
 		eth_multisig_client,
 		dot_multisig_client,
 		account_peer_mapping_change_sender,
@@ -513,7 +526,8 @@ async fn not_historical_to_authority_on_new_epoch() {
 		|| account_id
 	});
 
-	state_chain_client.expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>()
+	state_chain_client.
+expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>()
 		.with(eq(initial_block_hash), eq(account_id.clone()))
 		.once()
 		.return_once(move |_, _| Ok(vec![]));
@@ -573,7 +587,8 @@ async fn not_historical_to_authority_on_new_epoch() {
 				active_from_block: new_epoch_from_block,
 			}))
 		});
-	state_chain_client.expect_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<state_chain_runtime::Runtime>>()
+	state_chain_client.
+expect_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<state_chain_runtime::Runtime>>()
 		.with(eq(new_epoch_block_header_hash), eq(new_epoch), eq(account_id.clone()))
 		.once()
 		.return_once(move |_, _, _| Ok(Some(1)));
@@ -608,6 +623,8 @@ async fn not_historical_to_authority_on_new_epoch() {
 		Arc::new(state_chain_client),
 		sc_block_stream,
 		eth_broadcaster,
+		#[cfg(feature = "ibiza")]
+		DotBroadcaster::new(MockDotRpcApi::new()),
 		eth_multisig_client,
 		dot_multisig_client,
 		account_peer_mapping_change_sender,
@@ -660,7 +677,8 @@ async fn current_authority_to_historical_on_new_epoch_event() {
 		|| account_id
 	});
 
-	state_chain_client.expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>()
+	state_chain_client.
+expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>()
 		.with(eq(initial_block_hash), eq(account_id.clone()))
 		.once()
 		.return_once(move |_, _| Ok(vec![initial_epoch]));
@@ -721,7 +739,8 @@ async fn current_authority_to_historical_on_new_epoch_event() {
 				active_from_block: new_epoch_from_block,
 			}))
 		});
-	state_chain_client.expect_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<state_chain_runtime::Runtime>>()
+	state_chain_client.
+expect_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<state_chain_runtime::Runtime>>()
 		.with(eq(new_epoch_block_header_hash), eq(4), eq(account_id.clone()))
 		.once()
 		.return_once(move |_, _, _| Ok(None));
@@ -756,6 +775,8 @@ async fn current_authority_to_historical_on_new_epoch_event() {
 		Arc::new(state_chain_client),
 		sc_block_stream,
 		eth_broadcaster,
+		#[cfg(feature = "ibiza")]
+		DotBroadcaster::new(MockDotRpcApi::new()),
 		eth_multisig_client,
 		dot_multisig_client,
 		account_peer_mapping_change_sender,
@@ -806,7 +827,8 @@ async fn only_encodes_and_signs_when_specified() {
 		|| account_id
 	});
 
-	state_chain_client.expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>()
+	state_chain_client.
+expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>()
 		.with(eq(initial_block_hash), eq(account_id.clone()))
 		.once()
 		.return_once(move |_, _| Ok(vec![3]));
@@ -911,6 +933,8 @@ async fn only_encodes_and_signs_when_specified() {
 		Arc::new(state_chain_client),
 		sc_block_stream,
 		eth_broadcaster,
+		#[cfg(feature = "ibiza")]
+		DotBroadcaster::new(MockDotRpcApi::new()),
 		eth_multisig_client,
 		dot_multisig_client,
 		account_peer_mapping_change_sender,
@@ -977,6 +1001,8 @@ async fn run_the_sc_observer() {
 				state_chain_client,
 				block_stream,
 				eth_broadcaster,
+				#[cfg(feature = "ibiza")]
+				DotBroadcaster::new(MockDotRpcApi::new()),
 				eth_multisig_client,
 				dot_multisig_client,
 				account_peer_mapping_change_sender,
@@ -1019,8 +1045,9 @@ async fn should_handle_signing_request() {
 		.expect_account_id()
 		.times(2)
 		.return_const(our_account_id.clone());
-	state_chain_client.expect_submit_signed_extrinsic::<pallet_cf_threshold_signature::Call<state_chain_runtime::Runtime, EthereumInstance>>()
-		.once()
+	state_chain_client.
+expect_submit_signed_extrinsic::<pallet_cf_threshold_signature::Call<state_chain_runtime::Runtime,
+EthereumInstance>>() 		.once()
 		.return_once(|_, _| Ok(H256::default()));
 	let state_chain_client = Arc::new(state_chain_client);
 
@@ -1098,8 +1125,9 @@ async fn should_handle_keygen_request() {
 		.expect_account_id()
 		.times(2)
 		.return_const(our_account_id.clone());
-	state_chain_client.expect_submit_signed_extrinsic::<pallet_cf_vaults::Call<state_chain_runtime::Runtime, EthereumInstance>>()
-		.once()
+	state_chain_client.
+expect_submit_signed_extrinsic::<pallet_cf_vaults::Call<state_chain_runtime::Runtime,
+EthereumInstance>>() 		.once()
 		.return_once(|_, _| Ok(H256::default()));
 	let state_chain_client = Arc::new(state_chain_client);
 
