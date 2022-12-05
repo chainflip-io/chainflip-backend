@@ -43,6 +43,7 @@ impl Chain for Ethereum {
 	type TrackedData = eth::TrackedData<Self>;
 	type ChainAccount = eth::Address;
 	type ChainAsset = assets::eth::Asset;
+	type EpochStartData = ();
 }
 
 impl ChainCrypto for Ethereum {
