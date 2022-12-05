@@ -15,7 +15,7 @@ use std::fmt::Debug;
 use generic_array::GenericArray;
 use serde::{Deserialize, Serialize};
 
-use super::KeyId;
+use super::{KeyId, SigningPayload};
 
 /// The db uses a static length prefix, that must include the keygen data prefix and the chain tag
 pub const CHAIN_TAG_SIZE: usize = std::mem::size_of::<ChainTag>();
@@ -82,7 +82,7 @@ pub trait ECPoint:
 }
 
 pub trait Verifiable {
-	fn verify(&self, key_id: &KeyId, message: &[u8; 32]) -> anyhow::Result<()>;
+	fn verify(&self, key_id: &KeyId, payload: &SigningPayload) -> anyhow::Result<()>;
 }
 
 pub trait CryptoScheme: 'static {
@@ -112,7 +112,7 @@ pub trait CryptoScheme: 'static {
 	fn build_challenge(
 		pubkey: Self::Point,
 		nonce_commitment: Self::Point,
-		msg_hash: &[u8; 32],
+		payload: &SigningPayload,
 	) -> <Self::Point as ECPoint>::Scalar;
 
 	/// Build challenge response using our key share

@@ -51,8 +51,8 @@ pub type PolkadotPayload = SignedPayload<PolkadotRuntimeCall, PolkadotSignedExtr
 
 // Westend testnet
 pub const WESTEND_CONFIG: PolkadotConfig = PolkadotConfig {
-	spec_version: 9320,
-	transaction_version: 14,
+	spec_version: 9330,
+	transaction_version: 15,
 	genesis_hash: hex_literal::hex!(
 		"e143f23803ac50e8f6f8e62695d1ce9e4e1d68aa36c1cd2cfd15340213f3423e"
 	),
@@ -90,16 +90,29 @@ pub const NONCE_3: u32 = 0; //correct nonce has to be provided for this account 
 pub const POLKADOT_VAULT_ACCOUNT: Option<PolkadotAccountId> = None;
 pub const POLKADOT_PROXY_ACCOUNT: Option<PolkadotAccountId> = None;
 
+// FROM: https://github.com/paritytech/polkadot/blob/v0.9.33/runtime/polkadot/src/lib.rs
 #[allow(clippy::unnecessary_cast)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum PolkadotProxyType {
 	Any = 0,
+	NonTransfer = 1,
+	Governance = 2,
+	Staking = 3,
+	// Skip 4 as it is now removed (was SudoBalances)
+	IdentityJudgement = 5,
+	CancelProxy = 6,
+	Auction = 7,
 }
 
 type DotAmount = u128;
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct EncodedPolkadotPayload(pub Vec<u8>);
+
+#[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]
+pub struct EpochStartData {
+	pub vault_account: PolkadotAccountId,
+}
 
 impl Chain for Polkadot {
 	type ChainBlockNumber = u64;
@@ -108,6 +121,7 @@ impl Chain for Polkadot {
 	type ChainAccount = PolkadotAccountId;
 	type TransactionFee = Self::ChainAmount;
 	type ChainAsset = assets::dot::Asset;
+	type EpochStartData = EpochStartData;
 }
 
 impl ChainCrypto for Polkadot {
@@ -804,6 +818,8 @@ mod test_polkadot_extrinsics {
 				value: 35_000_000_000u128, //0.035 WND
 			});
 
+		println!("Account id 1: {:?}", account_id_1);
+
 		println!(
 			"CallHash: 0x{}",
 			test_runtime_call.using_encoded(|encoded| hex::encode(Blake2_256::hash(encoded)))
@@ -811,7 +827,7 @@ mod test_polkadot_extrinsics {
 		println!("Encoded Call: 0x{}", hex::encode(test_runtime_call.encode()));
 
 		let mut extrinsic_handler = PolkadotExtrinsicBuilder::new_empty(
-			PolkadotReplayProtection::new(NONCE_1, 0, WESTEND_CONFIG),
+			PolkadotReplayProtection::new(12, 0, WESTEND_CONFIG),
 			account_id_1,
 		);
 		extrinsic_handler.insert_extrinsic_call(test_runtime_call);
@@ -826,7 +842,7 @@ mod test_polkadot_extrinsics {
 
 		assert!(extrinsic_handler.is_signed().unwrap_or(false));
 
-		println!("encoded extrinsic: 0x{}", hex::encode(signed_extrinsic.unwrap().encode()));
+		println!("encoded extrinsic: {:?}", signed_extrinsic.unwrap().encode());
 	}
 
 	#[ignore]

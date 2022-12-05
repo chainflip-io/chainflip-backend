@@ -90,7 +90,9 @@ impl Default for AccountRole {
 	}
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
+#[derive(
+	Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy, PartialOrd, Ord,
+)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum ForeignChainAddress {
 	Eth(EthereumAddress),

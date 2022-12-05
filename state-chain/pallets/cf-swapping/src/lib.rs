@@ -11,11 +11,9 @@ use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
 
 pub use pallet::*;
 
-#[cfg(feature = "ibiza")]
 #[cfg(test)]
 mod mock;
 
-#[cfg(feature = "ibiza")]
 #[cfg(test)]
 mod tests;
 
@@ -25,6 +23,8 @@ mod benchmarking;
 pub mod weights;
 pub use weights::WeightInfo;
 
+const BASIS_POINTS_PER_MILLION: u32 = 100;
+
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
 pub struct Swap<AccountId> {
 	pub from: Asset,
@@ -33,14 +33,6 @@ pub struct Swap<AccountId> {
 	pub egress_address: ForeignChainAddress,
 	pub relayer_id: AccountId,
 	pub relayer_commission_bps: u16,
-}
-
-impl<AccountId> Swap<AccountId> {
-	pub fn relayer_fee(&self) -> AssetAmount {
-		const BASIS_POINTS_PER_MILLION: u32 = 100;
-		Permill::from_parts(self.relayer_commission_bps as u32 * BASIS_POINTS_PER_MILLION) *
-			self.amount
-	}
 }
 
 #[frame_support::pallet]
@@ -166,14 +158,9 @@ pub mod pallet {
 
 			for swap in &swaps {
 				debug_assert_eq!((swap.from, swap.to), (from, to));
-				let fee = swap.relayer_fee();
-				let net_amount = swap.amount.saturating_sub(fee);
-				EarnedRelayerFees::<T>::mutate(&swap.relayer_id, swap.from, |earned_fees| {
-					earned_fees.saturating_accrue(fee)
-				});
 				// TODO: use a struct instead of tuple.
-				bundle_inputs.push((net_amount, swap.to, swap.egress_address));
-				bundle_input.saturating_accrue(net_amount);
+				bundle_inputs.push((swap.amount, swap.to, swap.egress_address));
+				bundle_input.saturating_accrue(swap.amount);
 			}
 
 			let (bundle_output, _) = T::SwappingApi::swap(from, to, bundle_input, 1);
@@ -220,10 +207,17 @@ pub mod pallet {
 			// The caller should ensure that the egress details are consistent.
 			debug_assert_eq!(ForeignChain::from(egress_address), ForeignChain::from(to));
 
+			let fee = Permill::from_parts(relayer_commission_bps as u32 * BASIS_POINTS_PER_MILLION) *
+				amount;
+
+			EarnedRelayerFees::<T>::mutate(&relayer_id, from, |earned_fees| {
+				earned_fees.saturating_accrue(fee)
+			});
+
 			SwapQueue::<T>::append(Swap {
 				from,
 				to,
-				amount,
+				amount: amount.saturating_sub(fee),
 				egress_address,
 				relayer_id,
 				relayer_commission_bps,
