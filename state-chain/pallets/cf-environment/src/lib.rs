@@ -308,7 +308,7 @@ pub mod pallet {
 				});
 			}
 			#[cfg(not(feature = "ibiza"))]
-			log!(Level::Warn, "create_polkadot_vault needs ibiza flag to be enabled");
+			log::warn!("create_polkadot_vault needs ibiza flag to be enabled");
 			Ok(().into())
 		}
 
