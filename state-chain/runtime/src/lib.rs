@@ -283,23 +283,6 @@ impl pallet_cf_ingress_egress::Config<EthereumInstance> for Runtime {
 }
 
 #[cfg(feature = "ibiza")]
-mod polkdadot_dummy {
-	use cf_chains::dot::api::PolkadotApi;
-
-	use super::*;
-
-	pub struct DummyBroadcaster;
-
-	impl cf_traits::Broadcaster<Polkadot> for DummyBroadcaster {
-		type ApiCall = PolkadotApi<chainflip::DotEnvironment>;
-
-		fn threshold_sign_and_broadcast(_api_call: Self::ApiCall) {
-			todo!("Configure a real broadcaster for polkadot.")
-		}
-	}
-}
-
-#[cfg(feature = "ibiza")]
 impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
 	type Event = Event;
 	type TargetChain = Polkadot;
@@ -307,7 +290,7 @@ impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
 	type LpProvisioning = LiquidityProvider;
 	type SwapIntentHandler = Swapping;
 	type AllBatch = dot::api::PolkadotApi<chainflip::DotEnvironment>;
-	type Broadcaster = polkdadot_dummy::DummyBroadcaster;
+	type Broadcaster = PolkadotBroadcaster;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 }
