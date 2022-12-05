@@ -79,18 +79,10 @@ pub mod pallet {
 	pub enum Error<T> {
 		// The user does not have enough fund.
 		InsufficientBalance,
-		// The liquidity pool is not available for trade.
-		InvalidLiquidityPool,
 		// The TradingPosition provided is invalid for the liquidity pool.
 		InvalidTradingPosition,
 		// The caller is not authorized to modify the trading position.
 		UnauthorisedToModify,
-		// The liquidity pool already exists.
-		LiquidityPoolAlreadyExists,
-		// The liquidity pool does not exist.
-		LiquidityPoolDoesNotExist,
-		// The liquidity pool is currently disabled.
-		LiquidityPoolDisabled,
 		// The Asset cannot be egressed to the destination chain.
 		InvalidEgressAddress,
 	}
@@ -98,10 +90,6 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		AccountRegistered {
-			account_id: T::AccountId,
-			asset: Asset,
-		},
 		AccountDebited {
 			account_id: T::AccountId,
 			asset: Asset,
