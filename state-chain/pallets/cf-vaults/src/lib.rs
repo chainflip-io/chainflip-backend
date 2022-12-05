@@ -863,9 +863,12 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 						})
 					}
 				},
-				Err(_) => Self::deposit_event(Event::<T, I>::AwaitingGovernanceActivation {
-					new_public_key,
-				}),
+				Err(_) => {
+					Self::set_next_vault(new_public_key, 1_u64.into());
+					Self::deposit_event(Event::<T, I>::AwaitingGovernanceActivation {
+						new_public_key,
+					})
+				},
 			}
 
 			PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingRotation {
