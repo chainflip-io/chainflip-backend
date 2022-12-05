@@ -1,20 +1,15 @@
 use crate as pallet_cf_lp;
 use cf_chains::{eth::assets, AnyChain, Chain, ChainEnvironment, Ethereum};
-use cf_primitives::{
-	AccountRole, Asset, AssetAmount, EthereumAddress, ExchangeRate, IntentId, TradingPosition,
-	ETHEREUM_ETH_ADDRESS,
-};
+use cf_primitives::{AccountRole, EthereumAddress, IntentId, ETHEREUM_ETH_ADDRESS};
 use cf_traits::{
 	mocks::{
 		all_batch::MockAllBatch, bid_info::MockBidInfo, egress_handler::MockEgressHandler,
 		ensure_origin_mock::NeverFailingOriginCheck, ingress_handler::MockIngressHandler,
 		staking_info::MockStakingInfo, system_state_info::MockSystemStateInfo,
 	},
-	AddressDerivationApi, Broadcaster, LiquidityPoolApi,
+	AddressDerivationApi, Broadcaster,
 };
-use frame_support::{
-	dispatch::DispatchResult, parameter_types, sp_runtime::app_crypto::sp_core::H160,
-};
+use frame_support::{parameter_types, sp_runtime::app_crypto::sp_core::H160};
 use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{
