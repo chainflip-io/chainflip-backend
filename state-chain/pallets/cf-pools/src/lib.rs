@@ -1,8 +1,10 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use cf_primitives::{chains::assets::any, AssetAmount, ExchangeRate, PoolAsset, TradingPosition};
 use cf_traits::Chainflip;
-use frame_support::{pallet_prelude::*, sp_runtime::traits::Saturating};
-
+use frame_support::{
+	pallet_prelude::*,
+	sp_runtime::{traits::Saturating, FixedPointNumber},
+};
 pub use pallet::*;
 
 #[cfg(test)]
@@ -23,17 +25,26 @@ pub(crate) mod mini_pool {
 	}
 
 	impl AmmPool {
+		pub fn get_liquidity(&self) -> (AssetAmount, AssetAmount) {
+			(self.asset_0, self.asset_1)
+		}
+
 		pub fn add_liquidity(&mut self, volume_0: AssetAmount, volume_1: AssetAmount) {
 			self.asset_0.saturating_accrue(volume_0);
 			self.asset_1.saturating_accrue(volume_1);
 		}
 
-		pub fn swap_rate(&self, input_amount: AssetAmount) -> AssetAmount {
-			self.asset_1 / (self.asset_0 + input_amount)
+		pub fn remove_liquidity(&mut self, volume_0: AssetAmount, volume_1: AssetAmount) {
+			self.asset_0.saturating_reduce(volume_0);
+			self.asset_1.saturating_reduce(volume_1);
+		}
+
+		pub fn swap_rate(&self, input_amount: AssetAmount) -> ExchangeRate {
+			ExchangeRate::from_rational(self.asset_1, self.asset_0 + input_amount)
 		}
 
 		pub fn swap(&mut self, input_amount: AssetAmount) -> AssetAmount {
-			let output_amount = self.swap_rate(input_amount) * input_amount;
+			let output_amount = self.swap_rate(input_amount).saturating_mul_int(input_amount);
 			self.asset_0.saturating_accrue(input_amount);
 			self.asset_1.saturating_reduce(output_amount);
 			output_amount
@@ -43,7 +54,7 @@ pub(crate) mod mini_pool {
 			self.in_reverse(|reversed| reversed.swap(input_amount))
 		}
 
-		fn reversed(self) -> Self {
+		pub fn reversed(self) -> Self {
 			Self { asset_0: self.asset_1, asset_1: self.asset_0 }
 		}
 
@@ -115,34 +126,54 @@ impl<T: Config> cf_traits::LiquidityPoolApi for Pallet<T> {
 	}
 
 	fn add_liquidity(
-		_asset: &any::Asset,
-		_amount: AssetAmount,
-		_stable_amount: AssetAmount,
+		asset: &any::Asset,
+		amount: AssetAmount,
+		stable_amount: AssetAmount,
 	) -> DispatchResult {
+		Pools::<T>::mutate(asset, |pool| pool.add_liquidity(amount, stable_amount));
 		Ok(())
 	}
 
 	fn remove_liquidity(
-		_asset: &any::Asset,
-		_amount: AssetAmount,
-		_stable_amount: AssetAmount,
+		asset: &any::Asset,
+		amount: AssetAmount,
+		stable_amount: AssetAmount,
 	) -> DispatchResult {
+		Pools::<T>::mutate(asset, |pool| pool.remove_liquidity(amount, stable_amount));
 		Ok(())
 	}
 
-	fn get_liquidity(_asset: &any::Asset) -> (AssetAmount, AssetAmount) {
-		(0, 0)
+	fn get_liquidity(asset: &any::Asset) -> (AssetAmount, AssetAmount) {
+		Pools::<T>::get(asset).get_liquidity()
 	}
 
-	fn get_exchange_rate(_asset: &any::Asset) -> ExchangeRate {
-		Default::default()
+	fn swap_rate(asset: &any::Asset, input_amount: AssetAmount) -> ExchangeRate {
+		Pools::<T>::get(asset).swap_rate(input_amount)
 	}
 
 	fn get_liquidity_requirement(
-		_asset: &any::Asset,
-		_position: &TradingPosition<AssetAmount>,
+		asset: &any::Asset,
+		position: &TradingPosition<AssetAmount>,
 	) -> Option<(AssetAmount, AssetAmount)> {
-		None
+		let pool = Pools::<T>::get(asset);
+		if pool.get_liquidity() == (0, 0) {
+			None
+		} else {
+			// Placeholder liquidity requirement calculation.
+			// TODO: implement proper calculation when the proper pool is implemented.
+			match position {
+				TradingPosition::ClassicV3 { volume_0, volume_1, .. } =>
+					Some((*volume_0, *volume_1)),
+				TradingPosition::VolatileV3 { side, volume, .. } => match side {
+					PoolAsset::Asset0 =>
+						Some((*volume, pool.swap_rate(*volume).saturating_mul_int(*volume))),
+					PoolAsset::Asset1 => Some((
+						pool.reversed().swap_rate(*volume).saturating_mul_int(*volume),
+						*volume,
+					)),
+				},
+			}
+		}
 	}
 
 	fn get_stable_asset() -> any::Asset {

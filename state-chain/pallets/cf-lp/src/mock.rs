@@ -51,6 +51,7 @@ frame_support::construct_runtime!(
 		System: frame_system,
 		AccountRoles: pallet_cf_account_roles,
 		LiquidityProvider: pallet_cf_lp,
+		LiquidityPools: pallet_cf_pools,
 	}
 );
 
@@ -124,50 +125,14 @@ impl pallet_cf_account_roles::Config for Test {
 	type WeightInfo = ();
 }
 
-pub struct MockLiquidityPool;
-impl LiquidityPoolApi for MockLiquidityPool {
-	fn deploy(_asset: &Asset, _position: TradingPosition<AssetAmount>) {}
-
-	fn add_liquidity(
-		_asset: &Asset,
-		_amount: AssetAmount,
-		_stable_amount: AssetAmount,
-	) -> DispatchResult {
-		Ok(())
-	}
-
-	fn remove_liquidity(
-		_asset: &Asset,
-		_amount: AssetAmount,
-		_stable_amount: AssetAmount,
-	) -> DispatchResult {
-		Ok(())
-	}
-
-	fn get_liquidity(_asset: &Asset) -> (AssetAmount, AssetAmount) {
-		(0, 0)
-	}
-	fn get_exchange_rate(_asset: &Asset) -> ExchangeRate {
-		Default::default()
-	}
-	fn get_liquidity_requirement(
-		_asset: &Asset,
-		_position: &TradingPosition<AssetAmount>,
-	) -> Option<(AssetAmount, AssetAmount)> {
-		Some((0, 0))
-	}
-
-	fn get_stable_asset() -> Asset {
-		Asset::Usdc
-	}
-}
+impl pallet_cf_pools::Config for Test {}
 
 impl crate::Config for Test {
 	type Event = Event;
 	type AccountRoleRegistry = AccountRoles;
 	type IngressHandler = MockIngressHandler<AnyChain, Self>;
 	type EgressHandler = MockEgressHandler<AnyChain>;
-	type LiquidityPoolApi = MockLiquidityPool;
+	type LiquidityPoolApi = LiquidityPools;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 }
 

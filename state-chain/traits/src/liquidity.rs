@@ -51,7 +51,7 @@ pub trait LiquidityPoolApi {
 		stable_amount: AssetAmount,
 	) -> DispatchResult;
 	fn get_liquidity(asset: &Asset) -> (AssetAmount, AssetAmount);
-	fn get_exchange_rate(asset: &Asset) -> ExchangeRate;
+	fn swap_rate(asset: &Asset, input_amount: AssetAmount) -> ExchangeRate;
 	fn get_liquidity_requirement(
 		asset: &Asset,
 		position: &TradingPosition<AssetAmount>,

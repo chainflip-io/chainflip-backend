@@ -61,7 +61,8 @@ tag = 'chainflip-monthly-2022-06+01'
 [dev-dependencies]
 quickcheck = '1'
 quickcheck_macros = '1'
-pallet-cf-account-roles = {path = '../cf-account-roles'}
+pallet-cf-account-roles = { path = '../cf-account-roles' }
+pallet-cf-pools = { path = '../cf-pools' }
 
 [features]
 default = ['std']

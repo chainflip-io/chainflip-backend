@@ -5408,6 +5408,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "pallet-cf-account-roles",
+ "pallet-cf-pools",
  "parity-scale-codec",
  "quickcheck",
  "quickcheck_macros",

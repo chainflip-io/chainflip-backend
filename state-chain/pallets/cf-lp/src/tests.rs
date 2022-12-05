@@ -1,7 +1,7 @@
 use crate::{mock::*, FreeBalances};
 
-use cf_primitives::{liquidity::AmmRange, Asset, ForeignChainAddress, TradingPosition};
-use cf_traits::{mocks::system_state_info::MockSystemStateInfo, SystemStateInfo};
+use cf_primitives::{liquidity::AmmRange, Asset, ForeignChainAddress, TradingPosition, ExchangeRate};
+use cf_traits::{mocks::system_state_info::MockSystemStateInfo, SystemStateInfo, LiquidityPoolApi};
 use frame_support::{assert_noop, assert_ok, error::BadOrigin};
 
 #[test]
@@ -70,14 +70,14 @@ fn liquidity_providers_can_withdraw_liquidity() {
 			crate::Error::<Test>::InvalidEgressAddress
 		);
 
-		System::reset_events();
 		assert_ok!(LiquidityProvider::withdraw_liquidity(
 			Origin::signed(LP_ACCOUNT),
 			100,
 			Asset::Eth,
 			ForeignChainAddress::Eth([0x00; 20]),
 		));
-		// TODO Check balance.
+		
+		assert_eq!(FreeBalances::<Test>::get(LP_ACCOUNT, Asset::Eth), Some(900));
 	});
 }
 
@@ -168,5 +168,44 @@ fn cannot_manage_liquidity_during_maintenance() {
 			position,
 		),);
 		assert_ok!(LiquidityProvider::close_position(Origin::signed(LP_ACCOUNT), 0,),);
+	});
+}
+
+#[test]
+fn can_open_and_close_liquidity() {
+	new_test_ext().execute_with(|| {
+		let asset = Asset::Flip;
+		LiquidityPools::deploy(&asset, TradingPosition::ClassicV3 { range: Default::default(), volume_0: 1_000_000, volume_1: 5_000_000 });
+		assert_eq!(LiquidityPools::swap_rate(&asset, 0), ExchangeRate::from_rational(5_000_000, 1_000_000));
+
+		FreeBalances::<Test>::insert(LP_ACCOUNT, asset, 1_000_000);
+		FreeBalances::<Test>::insert(LP_ACCOUNT, Asset::Usdc, 1_000_000);
+
+		// Can open position
+		let position = TradingPosition::ClassicV3 { range: Default::default(), volume_0: 1_000, volume_1: 2_000 };
+		assert_ok!(LiquidityProvider::open_position(
+			Origin::signed(LP_ACCOUNT),
+			asset,
+			position,
+		));
+		
+		assert_eq!(LiquidityPools::swap_rate(&asset, 0), ExchangeRate::from_rational(5_002_000, 1_001_000));
+		
+		System::assert_has_event(Event::LiquidityProvider(crate::Event::<Test>::TradingPositionOpened {
+			account_id: LP_ACCOUNT,
+			position_id: 0,
+			asset,
+			position,
+		}));
+
+		// Test close position
+		assert_ok!(LiquidityProvider::close_position(
+			Origin::signed(LP_ACCOUNT),
+			0,
+		));
+
+		assert_eq!(FreeBalances::<Test>::get(LP_ACCOUNT, asset), Some(1_000_000));
+		assert_eq!(FreeBalances::<Test>::get(LP_ACCOUNT, Asset::Usdc), Some(1_000_000));
+		assert_eq!(LiquidityPools::swap_rate(&asset, 0), ExchangeRate::from_rational(5_000_000, 1_000_000));
 	});
 }
