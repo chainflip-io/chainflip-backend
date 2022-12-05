@@ -3,9 +3,10 @@ use crate::{self as pallet_cf_environment, cfe};
 use cf_chains::dot::POLKADOT_METADATA;
 #[cfg(feature = "ibiza")]
 use cf_chains::{dot::api::CreatePolkadotVault, ApiCall, Chain, ChainCrypto, Polkadot};
-use cf_traits::{
-	mocks::ensure_origin_mock::NeverFailingOriginCheck, Broadcaster, VaultKeyWitnessedHandler,
-};
+use cf_traits::mocks::ensure_origin_mock::NeverFailingOriginCheck;
+#[cfg(feature = "ibiza")]
+use cf_traits::{Broadcaster, VaultKeyWitnessedHandler};
+
 use frame_support::parameter_types;
 use frame_system as system;
 use sp_core::H256;
@@ -15,6 +16,7 @@ use sp_runtime::{
 	BuildStorage,
 };
 
+#[cfg(feature = "ibiza")]
 use crate::{Decode, Encode, TypeInfo};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
