@@ -196,19 +196,16 @@ pub mod pallet {
 			T::SystemState::ensure_no_maintenance()?;
 			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
-			let maybe_liquidity = T::LiquidityPoolApi::get_liquidity_requirement(&asset, &position);
+			let maybe_liquidity =
+				T::LiquidityPoolApi::get_liquidity_amount_by_position(&asset, &position);
 			ensure!(maybe_liquidity.is_some(), Error::<T>::InvalidTradingPosition);
 			let (liquidity_0, liquidity_1) = maybe_liquidity.unwrap();
 
 			// Debit the user's asset from their account.
 			Pallet::<T>::try_debit(&account_id, asset, liquidity_0)?;
-			Pallet::<T>::try_debit(
-				&account_id,
-				T::LiquidityPoolApi::get_stable_asset(),
-				liquidity_1,
-			)?;
+			Pallet::<T>::try_debit(&account_id, T::LiquidityPoolApi::STABLE_ASSET, liquidity_1)?;
 
-			T::LiquidityPoolApi::add_liquidity(&asset, liquidity_0, liquidity_1)?;
+			T::LiquidityPoolApi::deploy(&asset, position);
 
 			let position_id = NextTradingPositionId::<T>::get();
 			NextTradingPositionId::<T>::put(position_id.saturating_add(1u64));
@@ -252,7 +249,7 @@ pub mod pallet {
 					Error::<T>::UnauthorisedToModify
 				);
 
-				let maybe_liquidity = T::LiquidityPoolApi::get_liquidity_requirement(
+				let maybe_liquidity = T::LiquidityPoolApi::get_liquidity_amount_by_position(
 					&asset,
 					&current_position.position,
 				);
@@ -263,29 +260,29 @@ pub mod pallet {
 				Pallet::<T>::credit(&account_id, asset, old_liquidity_0)?;
 				Pallet::<T>::credit(
 					&account_id,
-					T::LiquidityPoolApi::get_stable_asset(),
+					T::LiquidityPoolApi::STABLE_ASSET,
 					old_liquidity_1,
 				)?;
 
-				// Update the Position storage
-				current_position.position = new_position;
-
 				// Debit the user's account for the new position.
 				let maybe_new_liquidity =
-					T::LiquidityPoolApi::get_liquidity_requirement(&asset, &new_position);
+					T::LiquidityPoolApi::get_liquidity_amount_by_position(&asset, &new_position);
 				ensure!(maybe_new_liquidity.is_some(), Error::<T>::InvalidTradingPosition);
 				let (new_liquidity_0, new_liquidity_1) = maybe_new_liquidity.unwrap();
 
 				Pallet::<T>::try_debit(&account_id, asset, new_liquidity_0)?;
 				Pallet::<T>::try_debit(
 					&account_id,
-					T::LiquidityPoolApi::get_stable_asset(),
+					T::LiquidityPoolApi::STABLE_ASSET,
 					new_liquidity_1,
 				)?;
 
 				// Update the pool's liquidity amount
-				T::LiquidityPoolApi::add_liquidity(&asset, new_liquidity_0, new_liquidity_1)?;
-				T::LiquidityPoolApi::remove_liquidity(&asset, old_liquidity_0, old_liquidity_1)?;
+				T::LiquidityPoolApi::retract(&asset, current_position.position);
+				T::LiquidityPoolApi::deploy(&asset, new_position);
+
+				// Update the Position storage
+				current_position.position = new_position;
 
 				Self::deposit_event(Event::<T>::TradingPositionUpdated {
 					account_id,
@@ -311,7 +308,7 @@ pub mod pallet {
 			let current_position = maybe_position.unwrap();
 			ensure!(current_position.account_id == account_id, Error::<T>::UnauthorisedToModify);
 
-			let maybe_liquidity = T::LiquidityPoolApi::get_liquidity_requirement(
+			let maybe_liquidity = T::LiquidityPoolApi::get_liquidity_amount_by_position(
 				&current_position.asset,
 				&current_position.position,
 			);
@@ -320,14 +317,10 @@ pub mod pallet {
 
 			// Refund the debited assets for the previous position
 			Pallet::<T>::credit(&account_id, current_position.asset, liquidity_0)?;
-			Pallet::<T>::credit(&account_id, T::LiquidityPoolApi::get_stable_asset(), liquidity_1)?;
+			Pallet::<T>::credit(&account_id, T::LiquidityPoolApi::STABLE_ASSET, liquidity_1)?;
 
 			// Update the pool's liquidity amount
-			T::LiquidityPoolApi::remove_liquidity(
-				&current_position.asset,
-				liquidity_0,
-				liquidity_1,
-			)?;
+			T::LiquidityPoolApi::retract(&current_position.asset, current_position.position);
 
 			Self::deposit_event(Event::<T>::TradingPositionClosed { account_id, position_id });
 			Ok(())

@@ -111,6 +111,8 @@ impl<T: Config> cf_traits::SwappingApi for Pallet<T> {
 }
 
 impl<T: Config> cf_traits::LiquidityPoolApi for Pallet<T> {
+	const STABLE_ASSET: any::Asset = any::Asset::Usdc;
+
 	fn deploy(asset: &any::Asset, position: cf_primitives::TradingPosition<AssetAmount>) {
 		match position {
 			TradingPosition::ClassicV3 { volume_0, volume_1, .. } => {
@@ -125,22 +127,18 @@ impl<T: Config> cf_traits::LiquidityPoolApi for Pallet<T> {
 		}
 	}
 
-	fn add_liquidity(
-		asset: &any::Asset,
-		amount: AssetAmount,
-		stable_amount: AssetAmount,
-	) -> DispatchResult {
-		Pools::<T>::mutate(asset, |pool| pool.add_liquidity(amount, stable_amount));
-		Ok(())
-	}
-
-	fn remove_liquidity(
-		asset: &any::Asset,
-		amount: AssetAmount,
-		stable_amount: AssetAmount,
-	) -> DispatchResult {
-		Pools::<T>::mutate(asset, |pool| pool.remove_liquidity(amount, stable_amount));
-		Ok(())
+	fn retract(asset: &any::Asset, position: cf_primitives::TradingPosition<AssetAmount>) {
+		match position {
+			TradingPosition::ClassicV3 { volume_0, volume_1, .. } => {
+				Pools::<T>::mutate(asset, |pool| pool.remove_liquidity(volume_0, volume_1));
+			},
+			TradingPosition::VolatileV3 { side, volume, .. } => {
+				Pools::<T>::mutate(asset, |pool| match side {
+					PoolAsset::Asset0 => pool.remove_liquidity(volume, 0),
+					PoolAsset::Asset1 => pool.remove_liquidity(0, volume),
+				});
+			},
+		}
 	}
 
 	fn get_liquidity(asset: &any::Asset) -> (AssetAmount, AssetAmount) {
@@ -151,32 +149,18 @@ impl<T: Config> cf_traits::LiquidityPoolApi for Pallet<T> {
 		Pools::<T>::get(asset).swap_rate(input_amount)
 	}
 
-	fn get_liquidity_requirement(
-		asset: &any::Asset,
+	fn get_liquidity_amount_by_position(
+		_asset: &any::Asset,
 		position: &TradingPosition<AssetAmount>,
 	) -> Option<(AssetAmount, AssetAmount)> {
-		let pool = Pools::<T>::get(asset);
-		if pool.get_liquidity() == (0, 0) {
-			None
-		} else {
-			// Placeholder liquidity requirement calculation.
-			// TODO: implement proper calculation when the proper pool is implemented.
-			match position {
-				TradingPosition::ClassicV3 { volume_0, volume_1, .. } =>
-					Some((*volume_0, *volume_1)),
-				TradingPosition::VolatileV3 { side, volume, .. } => match side {
-					PoolAsset::Asset0 =>
-						Some((*volume, pool.swap_rate(*volume).saturating_mul_int(*volume))),
-					PoolAsset::Asset1 => Some((
-						pool.reversed().swap_rate(*volume).saturating_mul_int(*volume),
-						*volume,
-					)),
-				},
-			}
-		}
-	}
-
-	fn get_stable_asset() -> any::Asset {
-		any::Asset::Usdc
+		/// Naive placeholder implementation. Does not take account into existing liquidity in the
+		/// pool.
+		Some(match position {
+			TradingPosition::ClassicV3 { volume_0, volume_1, .. } => (*volume_0, *volume_1),
+			TradingPosition::VolatileV3 { side, volume, .. } => match side {
+				PoolAsset::Asset0 => (*volume, 0u128),
+				PoolAsset::Asset1 => (0u128, *volume),
+			},
+		})
 	}
 }

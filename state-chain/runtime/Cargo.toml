@@ -299,6 +299,7 @@ ibiza = [
   'pallet-cf-ingress-egress',
   'pallet-cf-swapping',
   'pallet-cf-lp',
+  'pallet-cf-pools',
   'cf-chains/ibiza',
   'cf-traits/ibiza',
   'pallet-cf-environment/ibiza'

@@ -97,8 +97,7 @@ pub mod pallet {
 			let mut used_weight =
 				T::DbWeight::get().reads(1 as Weight) + T::DbWeight::get().writes(1 as Weight);
 
-			// Group the queued swap requests by assets
-			let swap_groups = Self::group_swaps_by_asset(swaps);
+			let swap_groups = Self::group_swaps_by_asset_pair(swaps);
 			let mut unexecuted = vec![];
 
 			for (asset_pair, swaps) in swap_groups {
@@ -185,7 +184,7 @@ pub mod pallet {
 			}
 		}
 
-		fn group_swaps_by_asset(
+		fn group_swaps_by_asset_pair(
 			swaps: Vec<Swap<T::AccountId>>,
 		) -> BTreeMap<(Asset, Asset), Vec<Swap<T::AccountId>>> {
 			let mut grouped_swaps = BTreeMap::new();

@@ -39,24 +39,25 @@ pub trait SwappingApi {
 /// API to interface with Exchange Pools.
 /// All pools are Asset <-> USDC
 pub trait LiquidityPoolApi {
+	const STABLE_ASSET: Asset;
+
+	/// Deploy a liquidity position into a pool.
 	fn deploy(asset: &Asset, position: TradingPosition<AssetAmount>);
-	fn add_liquidity(
-		asset: &Asset,
-		amount: AssetAmount,
-		stable_amount: AssetAmount,
-	) -> DispatchResult;
-	fn remove_liquidity(
-		asset: &Asset,
-		amount: AssetAmount,
-		stable_amount: AssetAmount,
-	) -> DispatchResult;
+
+	/// Retract a liquidity position from a pool.
+	fn retract(asset: &Asset, position: TradingPosition<AssetAmount>);
+
+	/// Gets the current liquidity amount from a pool
 	fn get_liquidity(asset: &Asset) -> (AssetAmount, AssetAmount);
+
+	/// Gets the current swap rate for an pool
 	fn swap_rate(asset: &Asset, input_amount: AssetAmount) -> ExchangeRate;
-	fn get_liquidity_requirement(
+
+	/// Calculates the liquidity that corresponds to a given trading position.
+	fn get_liquidity_amount_by_position(
 		asset: &Asset,
 		position: &TradingPosition<AssetAmount>,
 	) -> Option<(AssetAmount, AssetAmount)>;
-	fn get_stable_asset() -> Asset;
 }
 
 // TODO Remove these in favour of a real mocks.
