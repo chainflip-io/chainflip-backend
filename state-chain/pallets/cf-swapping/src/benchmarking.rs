@@ -12,7 +12,7 @@ fn generate_swaps<T: Config>(amount: u32, from: Asset, to: Asset) -> Vec<Swap<T:
 	let mut swaps: Vec<Swap<T::AccountId>> = vec![];
 	for i in 1..amount {
 		swaps.push(Swap {
-			swap_id: i as u128,
+			swap_id: i as u64,
 			from,
 			to,
 			amount: 3,

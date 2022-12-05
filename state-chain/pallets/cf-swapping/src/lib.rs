@@ -25,7 +25,7 @@ pub use weights::WeightInfo;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
 pub struct Swap<AccountId> {
-	pub swap_id: u128,
+	pub swap_id: u64,
 	pub from: Asset,
 	pub to: Asset,
 	pub amount: AssetAmount,
@@ -82,7 +82,7 @@ pub mod pallet {
 
 	/// SwapId Counter
 	#[pallet::storage]
-	pub type SwapIdCounter<T: Config> = StorageValue<_, u128, ValueQuery>;
+	pub type SwapIdCounter<T: Config> = StorageValue<_, u64, ValueQuery>;
 
 	/// Earned Fees by Relayers
 	#[pallet::storage]
@@ -93,13 +93,13 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// An new swap intent has been registered.
-		NewSwapIntent { swap_id: u128, intent_id: IntentId, ingress_address: ForeignChainAddress },
+		NewSwapIntent { intent_id: IntentId, ingress_address: ForeignChainAddress },
 		/// The swap ingress was received.
-		SwapIngressReceived { swap_id: u128, ingress_amount: AssetAmount },
+		SwapIngressReceived { swap_id: u64, ingress_amount: AssetAmount },
 		/// A swap was executed.
-		SwapExecuted { swap_id: u128 },
+		SwapExecuted { swap_id: u64 },
 		/// A swap egress was scheduled.
-		SwapEgressScheduled { swap_id: u128, egress_amount: AssetAmount },
+		SwapEgressScheduled { swap_id: u64, egress_amount: AssetAmount },
 	}
 	#[pallet::error]
 	pub enum Error<T> {
@@ -157,7 +157,6 @@ pub mod pallet {
 			let swap_id = SwapIdCounter::<T>::get().saturating_add(1);
 
 			let (intent_id, ingress_address) = T::IngressHandler::register_swap_intent(
-				swap_id,
 				ingress_asset,
 				egress_asset,
 				egress_address,
@@ -167,7 +166,7 @@ pub mod pallet {
 
 			SwapIdCounter::<T>::put(swap_id);
 
-			Self::deposit_event(Event::<T>::NewSwapIntent { swap_id, intent_id, ingress_address });
+			Self::deposit_event(Event::<T>::NewSwapIntent { intent_id, ingress_address });
 
 			Ok(())
 		}
@@ -232,7 +231,6 @@ pub mod pallet {
 		type AccountId = T::AccountId;
 		/// Callback function to kick of the swapping process after a successful ingress.
 		fn schedule_swap(
-			swap_id: u128,
 			from: Asset,
 			to: Asset,
 			amount: AssetAmount,
@@ -242,6 +240,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			// The caller should ensure that the egress details are consistent.
 			debug_assert_eq!(ForeignChain::from(egress_address), ForeignChain::from(to));
+			let swap_id = SwapIdCounter::<T>::get().saturating_add(1);
 			SwapQueue::<T>::append(Swap {
 				swap_id,
 				from,
@@ -255,6 +254,7 @@ pub mod pallet {
 				swap_id,
 				ingress_amount: amount,
 			});
+			SwapIdCounter::<T>::put(swap_id);
 			Ok(())
 		}
 	}
