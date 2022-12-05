@@ -249,7 +249,7 @@ impl ReplayProtectionProvider<Polkadot> for DotEnvironment {
 		PolkadotReplayProtection::new(
 			Environment::next_polkadot_proxy_account_nonce(),
 			0,
-			Environment::get_polkadot_network_config(),
+			Environment::polkadot_network_metadata(),
 		) //Todo: Instead
 		 // of 0, tip needs
 		 // to be set here

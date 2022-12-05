@@ -1,6 +1,6 @@
 use crate::{self as pallet_cf_environment, cfe};
 #[cfg(feature = "ibiza")]
-use cf_chains::dot::POLKADOT_CONFIG;
+use cf_chains::dot::POLKADOT_METADATA;
 use cf_traits::mocks::ensure_origin_mock::NeverFailingOriginCheck;
 use frame_support::parameter_types;
 use frame_system as system;
@@ -93,7 +93,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			#[cfg(feature = "ibiza")]
 			polkadot_proxy_account_id: None,
 			#[cfg(feature = "ibiza")]
-			polkadot_network_config: POLKADOT_CONFIG,
+			polkadot_network_metadata: POLKADOT_METADATA,
 		},
 	};
 
