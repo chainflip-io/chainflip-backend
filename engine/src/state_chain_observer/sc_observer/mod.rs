@@ -94,7 +94,7 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, T, I>(
 	}
 }
 
-async fn handle_signing_request<'a, StateChainClient, MultisigClient>(
+async fn handle_signing_request<'a, StateChainClient, MultisigClient, C, T, I>(
 	scope: &Scope<'a, anyhow::Error>,
 	multisig_client: &'a MultisigClient,
 	state_chain_client: Arc<StateChainClient>,
@@ -104,8 +104,13 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient>(
 	payload: SigningPayload,
 	logger: slog::Logger,
 ) where
-	MultisigClient: MultisigClientApi<EthSigning>,
+	MultisigClient: MultisigClientApi<C>,
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
+	C: CryptoScheme,
+	T: pallet_cf_threshold_signature::Config<I, ValidatorId = AccountId32> + Sync + Send,
+	I: 'static + Sync + Send,
+	state_chain_runtime::Call: std::convert::From<pallet_cf_threshold_signature::Call<T, I>>,
+	<T::TargetChain as ChainCrypto>::ThresholdSignature: From<C::Signature>,
 {
 	assert_eq!(payload.0.len(), 32, "Incorrect payload size");
 
@@ -118,7 +123,7 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient>(
 				Ok(signature) => {
 					let _result = state_chain_client
 						.submit_unsigned_extrinsic(
-							pallet_cf_threshold_signature::Call::<_, EthereumInstance>::signature_success {
+							pallet_cf_threshold_signature::Call::<_, I>::signature_success {
 								ceremony_id,
 								signature: signature.into(),
 							},
@@ -129,7 +134,7 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient>(
 				Err((bad_account_ids, _reason)) => {
 					let _result = state_chain_client
 						.submit_signed_extrinsic(
-							pallet_cf_threshold_signature::Call::<_, EthereumInstance>::report_signature_failed {
+							pallet_cf_threshold_signature::Call::<_, I>::report_signature_failed {
 								id: ceremony_id,
 								offenders: BTreeSet::from_iter(bad_account_ids),
 							},
@@ -423,9 +428,33 @@ where
                                         // Ceremony id tracking is global, so update all other clients
                                         dot_multisig_client.update_latest_ceremony_id(ceremony_id);
 
-                                        handle_signing_request(
+                                        handle_signing_request::<_, _, _, state_chain_runtime::Runtime, EthereumInstance>(
                                                 scope,
                                                 &eth_multisig_client,
+                                            state_chain_client.clone(),
+                                            ceremony_id,
+                                            KeyId(key_id),
+                                            signatories,
+                                            SigningPayload(payload.0.to_vec()),
+                                            logger.clone(),
+                                        ).await;
+                                    }
+                                    #[cfg(feature = "ibiza")]
+                                    state_chain_runtime::Event::PolkadotThresholdSigner(
+                                        pallet_cf_threshold_signature::Event::ThresholdSignatureRequest{
+                                            request_id: _,
+                                            ceremony_id,
+                                            key_id,
+                                            signatories,
+                                            payload,
+                                        },
+                                    ) => {
+                                        // Ceremony id tracking is global, so update all other clients
+                                        eth_multisig_client.update_latest_ceremony_id(ceremony_id);
+
+                                        handle_signing_request::<_, _, PolkadotSigning, state_chain_runtime::Runtime, PolkadotInstance>(
+                                                scope,
+                                                &dot_multisig_client,
                                             state_chain_client.clone(),
                                             ceremony_id,
                                             KeyId(key_id),

@@ -14,6 +14,12 @@ const SIGNING_CTX: &[u8] = b"substrate";
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PolkadotSignature(schnorrkel::Signature);
 
+impl From<PolkadotSignature> for cf_chains::dot::PolkadotSignature {
+	fn from(cfe_sig: PolkadotSignature) -> Self {
+		sp_core::sr25519::Signature(cfe_sig.0.to_bytes())
+	}
+}
+
 impl Serialize for PolkadotSignature {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where
