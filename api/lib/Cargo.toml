@@ -13,6 +13,11 @@ web3 = {git = 'https://github.com/tomusdrw/rust-web3.git', rev = '8796c88'}
 futures = "0.3.14"
 async-trait = "0.1.49"
 chainflip-engine = {path = "../../engine/"}
+ed25519-dalek = "1.0"
+rand = "0.7"
+tiny-bip39 = "1.0.0"
+secp256k1 = {version = "0.20"}
+rand_legacy = { package = "rand", version = "0.6" }
 
 # State Chain
 state-chain-runtime = {path = "../../state-chain/runtime"}

@@ -5,8 +5,9 @@ use cf_primitives::AccountRole;
 use futures::{FutureExt, Stream, StreamExt};
 use pallet_cf_governance::ProposalId;
 use pallet_cf_validator::MAX_LENGTH_FOR_VANITY_NAME;
+use rand_legacy::FromEntropy;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use sp_core::{ed25519::Public as EdPublic, sr25519::Public as SrPublic, Bytes};
+use sp_core::{ed25519::Public as EdPublic, sr25519::Public as SrPublic, Bytes, Pair};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use state_chain_runtime::opaque::SessionKeys;
 
@@ -555,4 +556,66 @@ pub async fn liquidity_deposit(
 	} else {
 		panic!("DepositAddressReady must have been generated");
 	}
+}
+
+pub fn generate_node_key() -> String {
+	use rand::SeedableRng;
+
+	let mut rng = rand::rngs::StdRng::from_entropy();
+	let keypair = ed25519_dalek::Keypair::generate(&mut rng);
+
+	println!("🔑 Your Node public key is: 0x{}", hex::encode(keypair.public.to_bytes()));
+
+	hex::encode(keypair.secret.as_ref())
+}
+
+pub fn generate_signing_key(seed_phrase: Option<&str>) -> Result<([u8; 32])> {
+	use bip39::{Language, Mnemonic, MnemonicType};
+
+	let mnemonic = Mnemonic::new(MnemonicType::Words12, Language::English);
+	let seed_phrase = seed_phrase.unwrap_or_else(|| {
+		let new_phrase = mnemonic.phrase();
+		println!("🌱 Your Validator key seed phrase is: {}", new_phrase);
+		new_phrase
+	});
+
+	if let Ok((pair, seed)) = sp_core::Pair::from_phrase(seed_phrase, None) {
+		let pair: sp_core::sr25519::Pair = pair;
+		let public_key = pair.public();
+
+		println!("🔑 Your Validator key is: 0x{}", hex::encode(public_key));
+
+		Ok(seed)
+	} else {
+		anyhow::bail!("Invalid seed phrase")
+	}
+}
+
+pub fn generate_ethereum_key() -> String {
+	use chainflip_engine::eth::utils::pubkey_to_eth_addr;
+	use secp256k1::Secp256k1;
+
+	let mut rng = rand_legacy::rngs::StdRng::from_entropy();
+
+	let (secret_key, public_key) = Secp256k1::new().generate_keypair(&mut rng);
+
+	println!("🔑 Your Ethereum public keys is: 0x{}", hex::encode(public_key.serialize()));
+	println!("🏠 Your Ethereum address is: 0x{}", hex::encode(pubkey_to_eth_addr(public_key)));
+
+	secret_key.to_string()
+}
+
+#[test]
+fn test_generate_signing_key_with_known_seed() {
+	const SEED_PHRASE: &str =
+		"essay awesome afraid movie wish save genius eyebrow tonight milk agree pretty alcohol three whale";
+
+	let generate_key = generate_signing_key(Some(SEED_PHRASE)).unwrap();
+
+	// Compare the generated key with a known key generated using the `chainflip-node key generate`
+	// command
+	assert_eq!(
+		hex::encode(generate_key),
+		"afabf42a9a99910cdd64795ef05ed71acfa2238f5682d26ae62028df3cc59727"
+	);
 }

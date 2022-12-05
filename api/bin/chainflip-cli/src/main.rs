@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use api::primitives::{AccountRole, ClaimAmount, Hash};
 use chainflip_api as api;
 use clap::Parser;
@@ -55,6 +57,7 @@ async fn run_cli() -> Result<()> {
 		Query { block_hash } => request_block(block_hash, &cli_settings.state_chain).await,
 		VanityName { name } => api::set_vanity_name(name, &cli_settings.state_chain).await,
 		ForceRotation { id } => api::force_rotation(id, &cli_settings.state_chain).await,
+		GenerateKeys {} => generate_keys(),
 	}
 }
 
@@ -248,4 +251,42 @@ fn confirm_submit() -> bool {
 			_ => continue,
 		}
 	}
+}
+
+fn generate_keys() -> Result<()> {
+	use std::fs;
+
+	// TODO: Support the custom key path/file settings.
+	const NODE_KEY_FILE_NAME: &str = "node_key_file";
+	const SIGNING_KEY_FILE_NAME: &str = "signing_key_file";
+	const ETHEREUM_KEY_FILE_NAME: &str = "ethereum_key_file";
+	const OUTPUT_PATH: &str = "/etc/chainflip/keys";
+
+	let output_path = PathBuf::from(OUTPUT_PATH);
+
+	if output_path.is_file() {
+		anyhow::bail!("Invalid keys path {}", output_path.to_string_lossy());
+	}
+	if !output_path.exists() {
+		std::fs::create_dir_all(output_path.clone())?
+	}
+	if output_path.join(NODE_KEY_FILE_NAME).exists() ||
+		output_path.join(SIGNING_KEY_FILE_NAME).exists() ||
+		output_path.join(ETHEREUM_KEY_FILE_NAME).exists()
+	{
+		anyhow::bail!(
+			"Key file(s) already exist, please delete them manually from {}",
+			output_path.to_string_lossy()
+		);
+	}
+
+	println!("Generating fresh keys for you Chainflip Node!");
+
+	fs::write(output_path.join("node_key_file"), api::generate_node_key())?;
+	fs::write(output_path.join("ethereum_key_file"), api::generate_ethereum_key())?;
+	fs::write(output_path.join("signing_key_file"), api::generate_signing_key(None)?)?;
+
+	println!("Saved all secret keys to {}", output_path.to_string_lossy());
+
+	Ok(())
 }
