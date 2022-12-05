@@ -2,13 +2,15 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-use cf_chains::{Chain, ChainAbi, ChainCrypto, SetAggKeyWithAggKey};
+use cf_chains::{
+	benchmarking_value::BenchmarkValue, Chain, ChainAbi, ChainCrypto, SetAggKeyWithAggKey,
+};
 use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex, GENESIS_EPOCH};
 use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, Broadcaster, CeremonyIdProvider, Chainflip,
 	CurrentEpochIndex, EpochTransitionHandler, KeyProvider, KeyState, SystemStateManager,
-	ThresholdSigner, VaultKeyWitnessedHandler, VaultRotator, VaultStatus, VaultTransitionHandler,
+	ThresholdSigner, VaultRotator, VaultStatus, VaultTransitionHandler,
 };
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
@@ -612,11 +614,33 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
 
-			<Self as VaultKeyWitnessedHandler<T::Chain>>::on_new_key_witnessed(
-				new_public_key,
-				block_number,
-				tx_hash,
-			)
+			let rotation =
+				PendingVaultRotation::<T, I>::get().ok_or(Error::<T, I>::NoActiveRotation)?;
+
+			let expected_new_key = ensure_variant!(
+				VaultRotationStatus::<T, I>::AwaitingRotation { new_public_key } => new_public_key,
+				rotation,
+				Error::<T, I>::InvalidRotationStatus
+			);
+
+			// If the keys don't match, we don't have much choice but to trust the witnessed one
+			// over the one we expected, but we should log the issue nonetheless.
+			if new_public_key != expected_new_key {
+				log::error!(
+					"Unexpected new agg key witnessed. Expected {:?}, got {:?}.",
+					expected_new_key,
+					new_public_key,
+				);
+				Self::deposit_event(Event::<T, I>::UnexpectedPubkeyWitnessed(new_public_key));
+			}
+
+			PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Complete { tx_hash });
+
+			Self::set_next_vault(new_public_key, block_number);
+
+			Pallet::<T, I>::deposit_event(Event::VaultRotationCompleted);
+
+			Ok(().into())
 		}
 
 		/// The vault's key has been updated externally, outside of the rotation
@@ -863,9 +887,18 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 						})
 					}
 				},
-				Err(_) => Self::deposit_event(Event::<T, I>::AwaitingGovernanceActivation {
-					new_public_key,
-				}),
+				Err(_) => {
+					PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Complete {
+						tx_hash: BenchmarkValue::benchmark_value(),
+					});
+
+					Self::set_next_vault(new_public_key, 1_u64.into()); // We assume that the first key is valid from block number 1.
+
+					Pallet::<T, I>::deposit_event(Event::VaultRotationCompleted);
+					Self::deposit_event(Event::<T, I>::AwaitingGovernanceActivation {
+						new_public_key,
+					});
+				},
 			}
 
 			PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingRotation {
@@ -881,7 +914,6 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_status(outcome: AsyncResult<VaultStatus<Self::ValidatorId>>) {
-		use cf_chains::benchmarking_value::BenchmarkValue;
 		match outcome {
 			AsyncResult::Pending => {
 				PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingKeygen {
@@ -940,42 +972,6 @@ impl<T: Config<I>, I: 'static> EpochTransitionHandler for Pallet<T, I> {
 
 	fn on_new_epoch(_epoch_authorities: &[Self::ValidatorId]) {
 		PendingVaultRotation::<T, I>::kill();
-	}
-}
-
-impl<T: Config<I>, I: 'static> VaultKeyWitnessedHandler<T::Chain> for Pallet<T, I> {
-	fn on_new_key_witnessed(
-		new_public_key: AggKeyFor<T, I>,
-		block_number: ChainBlockNumberFor<T, I>,
-		tx_hash: TransactionHashFor<T, I>,
-	) -> DispatchResultWithPostInfo {
-		let rotation =
-			PendingVaultRotation::<T, I>::get().ok_or(Error::<T, I>::NoActiveRotation)?;
-
-		let expected_new_key = ensure_variant!(
-			VaultRotationStatus::<T, I>::AwaitingRotation { new_public_key } => new_public_key,
-			rotation,
-			Error::<T, I>::InvalidRotationStatus
-		);
-
-		// If the keys don't match, we don't have much choice but to trust the witnessed one
-		// over the one we expected, but we should log the issue nonetheless.
-		if new_public_key != expected_new_key {
-			log::error!(
-				"Unexpected new agg key witnessed. Expected {:?}, got {:?}.",
-				expected_new_key,
-				new_public_key,
-			);
-			Self::deposit_event(Event::<T, I>::UnexpectedPubkeyWitnessed(new_public_key));
-		}
-
-		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Complete { tx_hash });
-
-		Self::set_next_vault(new_public_key, block_number);
-
-		Pallet::<T, I>::deposit_event(Event::VaultRotationCompleted);
-
-		Ok(().into())
 	}
 }
 

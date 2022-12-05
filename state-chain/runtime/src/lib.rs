@@ -218,8 +218,6 @@ impl pallet_cf_environment::Config for Runtime {
 	type CreatePolkadotVault = PolkadotApi<DotEnvironment>;
 	#[cfg(feature = "ibiza")]
 	type PolkadotBroadcaster = PolkadotBroadcaster;
-	#[cfg(feature = "ibiza")]
-	type PolkadotVaultKeyWitnessedHandler = PolkadotVault;
 	type WeightInfo = pallet_cf_environment::weights::PalletWeight<Runtime>;
 }
 

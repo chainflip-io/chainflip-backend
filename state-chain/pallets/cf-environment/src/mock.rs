@@ -2,10 +2,8 @@ use crate::{self as pallet_cf_environment, cfe};
 #[cfg(feature = "ibiza")]
 use cf_chains::dot::POLKADOT_CONFIG;
 #[cfg(feature = "ibiza")]
-use cf_chains::{dot::api::CreatePolkadotVault, ApiCall, Chain, ChainCrypto, Polkadot};
-use cf_traits::{
-	mocks::ensure_origin_mock::NeverFailingOriginCheck, Broadcaster, VaultKeyWitnessedHandler,
-};
+use cf_chains::{dot::api::CreatePolkadotVault, ApiCall, Polkadot};
+use cf_traits::{mocks::ensure_origin_mock::NeverFailingOriginCheck, Broadcaster};
 use frame_support::parameter_types;
 use frame_system as system;
 use sp_core::H256;
@@ -104,18 +102,6 @@ impl Broadcaster<Polkadot> for MockPolkadotBroadcaster {
 		unimplemented!()
 	}
 }
-#[cfg(feature = "ibiza")]
-pub struct MockPolkadotVaultKeyWitnessedHandler;
-#[cfg(feature = "ibiza")]
-impl VaultKeyWitnessedHandler<Polkadot> for MockPolkadotVaultKeyWitnessedHandler {
-	fn on_new_key_witnessed(
-		_new_public_key: <Polkadot as ChainCrypto>::AggKey,
-		_block_number: <Polkadot as Chain>::ChainBlockNumber,
-		_tx_hash: <Polkadot as ChainCrypto>::TransactionHash,
-	) -> frame_support::pallet_prelude::DispatchResultWithPostInfo {
-		unimplemented!()
-	}
-}
 
 impl pallet_cf_environment::Config for Test {
 	type Event = Event;
@@ -124,8 +110,6 @@ impl pallet_cf_environment::Config for Test {
 	type CreatePolkadotVault = MockCreatePolkadotVault;
 	#[cfg(feature = "ibiza")]
 	type PolkadotBroadcaster = MockPolkadotBroadcaster;
-	#[cfg(feature = "ibiza")]
-	type PolkadotVaultKeyWitnessedHandler = MockPolkadotVaultKeyWitnessedHandler;
 	type WeightInfo = ();
 }
 

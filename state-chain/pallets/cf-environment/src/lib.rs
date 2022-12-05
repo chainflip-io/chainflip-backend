@@ -75,7 +75,7 @@ pub mod cfe {
 pub mod pallet {
 	use cf_primitives::Asset;
 	#[cfg(feature = "ibiza")]
-	use cf_traits::{Broadcaster, VaultKeyWitnessedHandler};
+	use cf_traits::Broadcaster;
 
 	use super::*;
 
@@ -92,9 +92,6 @@ pub mod pallet {
 		/// Polkadot broadcaster
 		#[cfg(feature = "ibiza")]
 		type PolkadotBroadcaster: Broadcaster<Polkadot, ApiCall = Self::CreatePolkadotVault>;
-		/// On new key witnessed handler for Polkadot
-		#[cfg(feature = "ibiza")]
-		type PolkadotVaultKeyWitnessedHandler: VaultKeyWitnessedHandler<Polkadot>;
 		/// Weight information
 		type WeightInfo: WeightInfo;
 	}
@@ -321,14 +318,10 @@ pub mod pallet {
 		pub fn witness_polkadot_vault_creation(
 			origin: OriginFor<T>,
 			dot_pure_proxy_vault_key: [u8; 32],
-			dot_witnessed_aggkey: [u8; 32],
-			block_number: u64,
-			tx_hash: sp_core::H256,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			#[cfg(feature = "ibiza")]
 			{
-				use cf_traits::VaultKeyWitnessedHandler;
 				use sp_runtime::{traits::IdentifyAccount, MultiSigner};
 
 				// Set Polkadot Pure Proxy Vault Account
@@ -338,17 +331,7 @@ pub mod pallet {
 				Self::deposit_event(Event::<T>::PolkadotVaultAccountSet {
 					polkadot_vault_account_id,
 				});
-
-				// Witness the agg_key rotation manually in the vaults pallet for polkadot
-				T::PolkadotVaultKeyWitnessedHandler::on_new_key_witnessed(
-					dot_witnessed_aggkey.to_vec().try_into().expect(
-						"This should not fail since the size of vec is guaranteed to be 32",
-					),
-					block_number,
-					tx_hash,
-				)
 			}
-			#[cfg(not(feature = "ibiza"))]
 			Ok(().into())
 		}
 	}
