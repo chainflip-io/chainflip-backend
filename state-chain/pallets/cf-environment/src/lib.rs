@@ -36,7 +36,7 @@ pub enum SystemState {
 	Normal,
 	Maintenance,
 }
-//
+
 impl Default for SystemState {
 	fn default() -> Self {
 		SystemState::Normal
@@ -223,6 +223,7 @@ pub mod pallet {
 			SystemStateProvider::<T>::set_system_state(state);
 			Ok(().into())
 		}
+
 		/// Adds or updates an asset address in the map of supported ETH assets.
 		///
 		/// ## Events
@@ -251,6 +252,7 @@ pub mod pallet {
 			});
 			Ok(().into())
 		}
+
 		/// Sets the current on-chain CFE settings
 		///
 		/// ## Events
@@ -274,6 +276,7 @@ pub mod pallet {
 			Self::deposit_event(Event::<T>::CfeSettingsUpdated { new_cfe_settings: cfe_settings });
 			Ok(().into())
 		}
+
 		/// Initiates the Polkadot Vault Creation Apicall
 		///
 		/// ## Events
@@ -304,8 +307,11 @@ pub mod pallet {
 					agg_key: key,
 				});
 			}
+			#[cfg(not(feature = "ibiza"))]
+			log!(Level::Warn, "create_polkadot_vault needs ibiza flag to be enabled");
 			Ok(().into())
 		}
+
 		/// Manually initiates Polkadot vault key rotation completion steps so Epoch rotation can be
 		/// continued and sets the Polkadot Pure Proxy Vault in environment pallet
 		///
