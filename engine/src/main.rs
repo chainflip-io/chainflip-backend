@@ -27,6 +27,11 @@ use futures::FutureExt;
 use pallet_cf_validator::SemVer;
 use sp_core::U256;
 
+#[cfg(feature = "ibiza")]
+use chainflip_engine::dot::{rpc::DotRpcClient, DotBroadcaster};
+#[cfg(feature = "ibiza")]
+use subxt::{OnlineClient, PolkadotConfig};
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
 	use_chainflip_account_id_encoding();
@@ -68,6 +73,11 @@ async fn main() -> anyhow::Result<()> {
             let eth_broadcaster = EthBroadcaster::new(&settings.eth, eth_dual_rpc.clone(), &root_logger)
                 .context("Failed to create ETH broadcaster")?;
 
+            #[cfg(feature = "ibiza")]
+            let dot_client = OnlineClient::<PolkadotConfig>::from_url(&settings.dot.ws_node_endpoint)
+                .await
+                .context("Failed to create Polkadot Client")?;
+
             state_chain_client
                 .submit_signed_extrinsic(
                     pallet_cf_validator::Call::cfe_version {
@@ -85,6 +95,12 @@ async fn main() -> anyhow::Result<()> {
             let (
                 epoch_start_sender,
                 [epoch_start_receiver_1, epoch_start_receiver_2, epoch_start_receiver_3, _epoch_start_receiver_4, _epoch_start_receiver_5, _epoch_start_receiver_6]
+            ) = build_broadcast_channel(10);
+
+            #[cfg(feature = "ibiza")]
+            let (
+                dot_epoch_start_sender,
+                [dot_epoch_start_receiver_1]
             ) = build_broadcast_channel(10);
 
             let cfe_settings = state_chain_client
@@ -208,11 +224,13 @@ async fn main() -> anyhow::Result<()> {
             #[cfg(feature = "ibiza")]
             let (eth_monitor_usdc_ingress_sender, eth_monitor_usdc_ingress_receiver) = tokio::sync::mpsc::unbounded_channel();
 
+
             // Start state chain components
             scope.spawn(state_chain_observer::start(
                 state_chain_client.clone(),
                 state_chain_block_stream,
                 eth_broadcaster,
+                #[cfg(feature = "ibiza")] DotBroadcaster::new(DotRpcClient::new(dot_client.clone())),
                 eth_multisig_client,
                 dot_multisig_client,
                 peer_update_sender,
@@ -220,6 +238,7 @@ async fn main() -> anyhow::Result<()> {
                 #[cfg(feature = "ibiza")] eth_monitor_ingress_sender,
                 #[cfg(feature = "ibiza")] eth_monitor_flip_ingress_sender,
                 #[cfg(feature = "ibiza")] eth_monitor_usdc_ingress_sender,
+                #[cfg(feature = "ibiza")] dot_epoch_start_sender,
                 cfe_settings_update_sender,
                 latest_block_hash,
                 root_logger.clone()
@@ -231,7 +250,7 @@ async fn main() -> anyhow::Result<()> {
                 use std::collections::{BTreeSet, HashMap};
                 use itertools::Itertools;
                 use sp_core::H160;
-                use chainflip_engine::eth::erc20_witnesser::Erc20Witnesser;
+                use chainflip_engine::{eth::erc20_witnesser::Erc20Witnesser, dot};
                 use cf_primitives::{Asset, chains::assets};
 
                 let flip_contract_address = state_chain_client
@@ -290,10 +309,13 @@ async fn main() -> anyhow::Result<()> {
                         eth_dual_rpc,
                         _epoch_start_receiver_6,
                         false,
-                        state_chain_client,
+                        state_chain_client.clone(),
                         &root_logger,
                     )
                 );
+                scope.spawn(
+                    dot::witnesser::start(dot_epoch_start_receiver_1, dot_client, state_chain_client, &root_logger)
+                )
             }
 
             Ok(())

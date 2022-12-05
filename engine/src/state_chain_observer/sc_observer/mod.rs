@@ -20,6 +20,9 @@ use std::{
 };
 use tokio::sync::{mpsc::UnboundedSender, watch};
 
+#[cfg(feature = "ibiza")]
+use cf_chains::{dot, Polkadot};
+
 use crate::{
 	eth::{rpc::EthRpcApi, EthBroadcaster},
 	logging::COMPONENT_KEY,
@@ -27,13 +30,16 @@ use crate::{
 		client::{KeygenFailureReason, MultisigClientApi},
 		eth::EthSigning,
 		polkadot::PolkadotSigning,
-		KeyId, MessageHash,
+		KeyId, SigningPayload,
 	},
 	p2p::{PeerInfo, PeerUpdate},
 	state_chain_observer::client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi},
 	task_scope::{task_scope, Scope},
 	witnesser::EpochStart,
 };
+
+#[cfg(feature = "ibiza")]
+use crate::dot::{rpc::DotRpcApi, DotBroadcaster};
 
 #[cfg(feature = "ibiza")]
 use sp_core::H160;
@@ -92,16 +98,18 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient>(
 	ceremony_id: CeremonyId,
 	key_id: KeyId,
 	signers: BTreeSet<AccountId>,
-	data: MessageHash,
+	payload: SigningPayload,
 	logger: slog::Logger,
 ) where
 	MultisigClient: MultisigClientApi<EthSigning>,
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
 {
+	assert_eq!(payload.0.len(), 32, "Incorrect payload size");
+
 	if signers.contains(&state_chain_client.account_id()) {
 		// We initiate signing outside of the spawn to avoid requesting ceremonies out of order
 		let signing_result_future =
-			multisig_client.initiate_signing(ceremony_id, key_id, signers, data);
+			multisig_client.initiate_signing(ceremony_id, key_id, signers, payload);
 		scope.spawn(async move {
 			match signing_result_future.await {
 				Ok(signature) => {
@@ -171,12 +179,14 @@ pub async fn start<
 	StateChainClient,
 	BlockStream,
 	EthRpc,
+	#[cfg(feature = "ibiza")] DotRpc: DotRpcApi + Send + Sync + 'static,
 	EthMultisigClient,
 	PolkadotMultisigClient,
 >(
 	state_chain_client: Arc<StateChainClient>,
 	sc_block_stream: BlockStream,
 	eth_broadcaster: EthBroadcaster<EthRpc>,
+	#[cfg(feature = "ibiza")] dot_broadcaster: DotBroadcaster<DotRpc>,
 	eth_multisig_client: EthMultisigClient,
 	dot_multisig_client: PolkadotMultisigClient,
 	peer_update_sender: UnboundedSender<PeerUpdate>,
@@ -188,6 +198,7 @@ pub async fn start<
 	#[cfg(feature = "ibiza")] eth_monitor_usdc_ingress_sender: tokio::sync::mpsc::UnboundedSender<
 		H160,
 	>,
+	#[cfg(feature = "ibiza")] dot_epoch_start_sender: async_broadcast::Sender<EpochStart<Polkadot>>,
 	cfe_settings_update_sender: watch::Sender<CfeSettings>,
 	initial_block_hash: H256,
 	logger: slog::Logger,
@@ -220,6 +231,8 @@ where
 
         let start_epoch = |block_hash: H256, index: u32, current: bool, participant: bool| {
             let eth_epoch_start_sender = &eth_epoch_start_sender;
+            #[cfg(feature = "ibiza")]
+            let dot_epoch_start_sender = &dot_epoch_start_sender;
             let state_chain_client = &state_chain_client;
 
             async move {
@@ -236,7 +249,33 @@ where
                         .active_from_block,
                     current,
                     participant,
+                    data: (),
                 }).await.unwrap();
+
+                #[cfg(feature = "ibiza")]
+                {
+                    // It is possible for there not to be a Polkadot vault.
+                    // At genesis there is no Polkadot vault, so we want to check that the vault exists
+                    // before we start witnessing.
+                    if let Some(vault) = state_chain_client
+                    .storage_map_entry::<pallet_cf_vaults::Vaults<
+                        state_chain_runtime::Runtime,
+                        state_chain_runtime::PolkadotInstance,
+                    >>(block_hash, &index)
+                    .await
+                    .unwrap() {
+                        dot_epoch_start_sender.broadcast(EpochStart::<Polkadot> {
+                            epoch_index: index,
+                            block_number: vault.active_from_block,
+                            current,
+                            participant,
+                            data: dot::EpochStartData {
+                                vault_account: state_chain_client.storage_value::<pallet_cf_environment::PolkadotVaultAccountId<state_chain_runtime::Runtime>>(block_hash).await.unwrap().unwrap()
+                            }
+                        }).await.unwrap();
+                    }
+                }
+
             }
         };
 
@@ -369,7 +408,7 @@ where
                                             ceremony_id,
                                             KeyId(key_id),
                                             signatories,
-                                            MessageHash(payload.to_fixed_bytes()),
+                                            SigningPayload(payload.0.to_vec()),
                                             logger.clone(),
                                         ).await;
                                     }
@@ -439,6 +478,16 @@ where
                                                 ).await;
                                             }
                                         }
+                                    }
+                                    #[cfg(feature = "ibiza")]
+                                    state_chain_runtime::Event::PolkadotBroadcaster(
+                                        pallet_cf_broadcast::Event::TransactionBroadcastRequest {
+                                            broadcast_attempt_id: _,
+                                            nominee,
+                                            unsigned_tx,
+                                        },
+                                    ) if nominee == account_id => {
+                                        let _result = dot_broadcaster.send(unsigned_tx.encoded_extrinsic).await;
                                     }
                                     state_chain_runtime::Event::Environment(
                                         pallet_cf_environment::Event::CfeSettingsUpdated {

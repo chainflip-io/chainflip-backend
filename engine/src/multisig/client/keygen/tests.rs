@@ -886,7 +886,7 @@ mod timeout {
 
 #[tokio::test]
 async fn genesis_keys_can_sign() {
-	use crate::multisig::{crypto::eth::EthSigning, tests::fixtures::MESSAGE_HASH};
+	use crate::multisig::{crypto::eth::EthSigning, tests::fixtures::SIGNING_PAYLOAD};
 
 	let account_ids: BTreeSet<_> = [1, 2, 3, 4].iter().map(|i| AccountId::new([*i; 32])).collect();
 
@@ -900,7 +900,7 @@ async fn genesis_keys_can_sign() {
 			DEFAULT_SIGNING_CEREMONY_ID,
 			key_id.clone(),
 			key_data.clone(),
-			MESSAGE_HASH.clone(),
+			SIGNING_PAYLOAD.clone(),
 			Rng::from_entropy(),
 		);
 	standard_signing(&mut signing_ceremony).await;

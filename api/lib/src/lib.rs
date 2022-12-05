@@ -112,6 +112,7 @@ where
 	}
 }
 
+#[cfg(feature = "ibiza")]
 async fn connect_submit_and_get_events<Call>(
 	state_chain_settings: &settings::StateChain,
 	call: Call,

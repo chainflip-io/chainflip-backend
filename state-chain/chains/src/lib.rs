@@ -67,6 +67,8 @@ pub trait Chain: Member + Parameter {
 		+ BenchmarkValue
 		+ TryFrom<cf_primitives::ForeignChainAddress>
 		+ Into<cf_primitives::ForeignChainAddress>;
+
+	type EpochStartData: Member + Parameter + MaxEncodedLen;
 }
 
 /// Measures the age of items associated with the Chain.
@@ -255,6 +257,7 @@ pub mod mocks {
 		type TransactionFee = TransactionFee;
 		type ChainAccount = u64; // Currently, we don't care about this since we don't use them in tests
 		type ChainAsset = assets::eth::Asset;
+		type EpochStartData = ();
 	}
 
 	#[derive(
