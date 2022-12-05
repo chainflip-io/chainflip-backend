@@ -50,7 +50,7 @@ pub type PolkadotUncheckedExtrinsic =
 pub type PolkadotPayload = SignedPayload<PolkadotRuntimeCall, PolkadotSignedExtra>;
 
 // Westend testnet
-pub const WESTEND_CONFIG: PolkadotConfig = PolkadotConfig {
+pub const WESTEND_METADATA: PolkadotMetadata = PolkadotMetadata {
 	spec_version: 9330,
 	transaction_version: 15,
 	genesis_hash: hex_literal::hex!(
@@ -60,7 +60,7 @@ pub const WESTEND_CONFIG: PolkadotConfig = PolkadotConfig {
 };
 
 // Polkadot mainnet
-pub const POLKADOT_CONFIG: PolkadotConfig = PolkadotConfig {
+pub const POLKADOT_METADATA: PolkadotMetadata = PolkadotMetadata {
 	spec_version: 9300,
 	transaction_version: 15,
 	genesis_hash: hex_literal::hex!(
@@ -765,22 +765,22 @@ impl From<PolkadotPublicKey> for Vec<u8> {
 
 #[derive(Debug, Encode, Decode, TypeInfo, Eq, PartialEq, Clone)]
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-pub struct PolkadotConfig {
+pub struct PolkadotMetadata {
 	pub spec_version: PolkadotSpecVersion,
 	pub transaction_version: PolkadotTransactionVersion,
 	pub genesis_hash: [u8; 32],
 	pub block_hash_count: PolkadotBlockNumber,
 }
 
-impl Default for PolkadotConfig {
+impl Default for PolkadotMetadata {
 	fn default() -> Self {
-		POLKADOT_CONFIG
+		POLKADOT_METADATA
 	}
 }
 
 #[derive(Debug, Encode, Decode, TypeInfo, Eq, PartialEq, Clone)]
 pub struct PolkadotReplayProtection {
-	pub polkadot_config: PolkadotConfig,
+	pub polkadot_config: PolkadotMetadata,
 	pub nonce: PolkadotIndex,
 	pub tip: PolkadotBalance,
 }
@@ -789,7 +789,7 @@ impl PolkadotReplayProtection {
 	pub fn new(
 		nonce: PolkadotIndex,
 		tip: PolkadotBalance,
-		polkadot_config: PolkadotConfig,
+		polkadot_config: PolkadotMetadata,
 	) -> Self {
 		Self { polkadot_config, nonce, tip }
 	}
@@ -827,7 +827,7 @@ mod test_polkadot_extrinsics {
 		println!("Encoded Call: 0x{}", hex::encode(test_runtime_call.encode()));
 
 		let mut extrinsic_handler = PolkadotExtrinsicBuilder::new_empty(
-			PolkadotReplayProtection::new(12, 0, WESTEND_CONFIG),
+			PolkadotReplayProtection::new(12, 0, WESTEND_METADATA),
 			account_id_1,
 		);
 		extrinsic_handler.insert_extrinsic_call(test_runtime_call);
