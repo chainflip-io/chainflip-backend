@@ -119,7 +119,9 @@ impl ApiCall<Polkadot> for RotateVaultProxy {
 mod test_rotate_vault_proxy {
 
 	use super::*;
-	use crate::dot::{sr25519::Pair, NONCE_2, RAW_SEED_1, RAW_SEED_2, RAW_SEED_3, WESTEND_CONFIG};
+	use crate::dot::{
+		sr25519::Pair, NONCE_2, RAW_SEED_1, RAW_SEED_2, RAW_SEED_3, WESTEND_METADATA,
+	};
 	use sp_core::{
 		crypto::{AccountId32, Pair as TraitPair},
 		Hasher,
@@ -145,7 +147,7 @@ mod test_rotate_vault_proxy {
 			MultiSigner::Sr25519(keypair_new_proxy.public()).into_account();
 
 		let rotate_vault_proxy_api = RotateVaultProxy::new_unsigned(
-			PolkadotReplayProtection::new(NONCE_2, 0, WESTEND_CONFIG),
+			PolkadotReplayProtection::new(NONCE_2, 0, WESTEND_METADATA),
 			PolkadotPublicKey(keypair_old_proxy.public()),
 			PolkadotPublicKey(keypair_new_proxy.public()),
 			account_id_vault,

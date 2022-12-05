@@ -7,7 +7,7 @@ mod tests;
 
 use std::sync::Arc;
 
-use crate::multisig::{crypto::ECPoint, MessageHash};
+use crate::multisig::{crypto::ECPoint, SigningPayload};
 
 use super::common::KeygenResult;
 
@@ -28,6 +28,6 @@ pub use signing_detail::get_lagrange_coeff;
 /// Data common for signing stages
 #[derive(Clone)]
 pub struct SigningStateCommonInfo<P: ECPoint> {
-	pub data: MessageHash,
+	pub payload: SigningPayload,
 	pub key: Arc<KeygenResult<P>>,
 }
