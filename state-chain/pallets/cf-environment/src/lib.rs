@@ -5,7 +5,7 @@
 #[cfg(feature = "ibiza")]
 use cf_chains::{
 	dot::{
-		api::CreatePolkadotVault, Polkadot, PolkadotAccountId, PolkadotMetadata, PolkadotIndex,
+		api::CreatePolkadotVault, Polkadot, PolkadotAccountId, PolkadotIndex, PolkadotMetadata,
 		PolkadotPublicKey,
 	},
 	ChainCrypto,
