@@ -46,7 +46,7 @@ impl<AccountId> Swap<AccountId> {
 pub mod pallet {
 
 	use cf_chains::AnyChain;
-	use cf_primitives::{Asset, AssetAmount, IntentId};
+	use cf_primitives::{Asset, AssetAmount};
 	use cf_traits::{AccountRoleRegistry, Chainflip, EgressApi, SwapIntentHandler};
 
 	use super::*;
@@ -93,9 +93,13 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// An new swap intent has been registered.
-		NewSwapIntent { intent_id: IntentId, ingress_address: ForeignChainAddress },
+		NewSwapIntent { ingress_address: ForeignChainAddress },
 		/// The swap ingress was received.
-		SwapIngressReceived { swap_id: u64, ingress_amount: AssetAmount },
+		SwapIngressReceived {
+			ingress_address: ForeignChainAddress,
+			swap_id: u64,
+			ingress_amount: AssetAmount,
+		},
 		/// A swap was executed.
 		SwapExecuted { swap_id: u64 },
 		/// A swap egress was scheduled.
@@ -156,7 +160,7 @@ pub mod pallet {
 
 			let swap_id = SwapIdCounter::<T>::get().saturating_add(1);
 
-			let (intent_id, ingress_address) = T::IngressHandler::register_swap_intent(
+			let (_, ingress_address) = T::IngressHandler::register_swap_intent(
 				ingress_asset,
 				egress_asset,
 				egress_address,
@@ -166,7 +170,7 @@ pub mod pallet {
 
 			SwapIdCounter::<T>::put(swap_id);
 
-			Self::deposit_event(Event::<T>::NewSwapIntent { intent_id, ingress_address });
+			Self::deposit_event(Event::<T>::NewSwapIntent { ingress_address });
 
 			Ok(())
 		}
@@ -231,6 +235,7 @@ pub mod pallet {
 		type AccountId = T::AccountId;
 		/// Callback function to kick of the swapping process after a successful ingress.
 		fn schedule_swap(
+			ingress_address: ForeignChainAddress,
 			from: Asset,
 			to: Asset,
 			amount: AssetAmount,
@@ -251,6 +256,7 @@ pub mod pallet {
 				relayer_commission_bps,
 			});
 			Self::deposit_event(Event::<T>::SwapIngressReceived {
+				ingress_address,
 				swap_id,
 				ingress_amount: amount,
 			});
