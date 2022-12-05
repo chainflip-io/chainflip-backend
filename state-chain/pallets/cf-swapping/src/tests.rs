@@ -1,6 +1,7 @@
 use crate::{mock::*, EarnedRelayerFees, Pallet, Swap, SwapQueue, WeightInfo};
 use cf_chains::AnyChain;
 use cf_primitives::{Asset, ForeignChainAddress};
+use cf_test_utilities::assert_event_sequence;
 use cf_traits::{mocks::egress_handler::MockEgressHandler, SwapIntentHandler};
 use frame_support::{assert_ok, sp_std::iter};
 
@@ -180,6 +181,48 @@ fn cannot_swap_with_incorrect_egress_address_type() {
 			ForeignChainAddress::Eth([2; 20]),
 			ALICE,
 			2,
+		);
+	});
+}
+
+#[test]
+fn expect_swap_id_to_be_emitted() {
+	new_test_ext().execute_with(|| {
+		// 1. Register a swap intent -> NewSwapIntent
+		assert_ok!(Swapping::register_swap_intent(
+			Origin::signed(ALICE),
+			Asset::Eth,
+			Asset::Usdc,
+			ForeignChainAddress::Eth(Default::default()),
+			0,
+		));
+		// 2. Schedule the swap -> SwapIngressReceived
+		assert_ok!(<Pallet<Test> as SwapIntentHandler>::schedule_swap(
+			ForeignChainAddress::Eth(Default::default()),
+			Asset::Flip,
+			Asset::Usdc,
+			500,
+			ForeignChainAddress::Eth(Default::default()),
+			ALICE,
+			0,
+		));
+		// 3. Process swaps -> SwapExecuted, SwapEgressScheduled
+		Swapping::on_idle(1, 100);
+		assert_event_sequence!(
+			Test,
+			crate::mock::Event::Swapping(crate::Event::NewSwapIntent {
+				ingress_address: ForeignChainAddress::Eth(Default::default()),
+			}),
+			crate::mock::Event::Swapping(crate::Event::SwapIngressReceived {
+				ingress_address: ForeignChainAddress::Eth(Default::default()),
+				swap_id: 1,
+				ingress_amount: 500
+			}),
+			crate::mock::Event::Swapping(crate::Event::SwapExecuted { swap_id: 1 }),
+			crate::mock::Event::Swapping(crate::Event::SwapEgressScheduled {
+				swap_id: 1,
+				egress_amount: 500
+			})
 		);
 	});
 }

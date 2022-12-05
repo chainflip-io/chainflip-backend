@@ -152,8 +152,6 @@ pub mod pallet {
 				Error::<T>::IncompatibleAssetAndAddress
 			);
 
-			let swap_id = SwapIdCounter::<T>::get().saturating_add(1);
-
 			let (_, ingress_address) = T::IngressHandler::register_swap_intent(
 				ingress_asset,
 				egress_asset,
@@ -161,8 +159,6 @@ pub mod pallet {
 				relayer_commission_bps,
 				relayer,
 			)?;
-
-			SwapIdCounter::<T>::put(swap_id);
 
 			Self::deposit_event(Event::<T>::NewSwapIntent { ingress_address });
 
