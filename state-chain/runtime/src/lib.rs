@@ -222,7 +222,7 @@ impl pallet_cf_swapping::Config for Runtime {
 	type Event = Event;
 	type IngressHandler = chainflip::AnyChainIngressEgressHandler;
 	type EgressHandler = chainflip::AnyChainIngressEgressHandler;
-	type SwappingApi = ();
+	type SwappingApi = LiquidityPools;
 	type AccountRoleRegistry = AccountRoles;
 	type WeightInfo = pallet_cf_swapping::weights::PalletWeight<Runtime>;
 }
@@ -311,6 +311,8 @@ impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 }
+#[cfg(feature = "ibiza")]
+impl pallet_cf_pools::Config for Runtime {}
 
 #[cfg(feature = "ibiza")]
 impl pallet_cf_lp::Config for Runtime {
@@ -318,6 +320,7 @@ impl pallet_cf_lp::Config for Runtime {
 	type AccountRoleRegistry = AccountRoles;
 	type IngressHandler = chainflip::AnyChainIngressEgressHandler;
 	type EgressHandler = chainflip::AnyChainIngressEgressHandler;
+	type LiquidityPoolApi = LiquidityPools;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 }
 
@@ -750,6 +753,7 @@ construct_runtime!(
 		LiquidityProvider: pallet_cf_lp,
 		EthereumIngressEgress: pallet_cf_ingress_egress::<Instance1>,
 		PolkadotIngressEgress: pallet_cf_ingress_egress::<Instance2>,
+		LiquidityPools: pallet_cf_pools,
 	}
 );
 

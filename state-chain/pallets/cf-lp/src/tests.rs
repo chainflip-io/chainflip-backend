@@ -12,28 +12,15 @@ fn only_liquidity_provider_can_manage_positions() {
 			volume_0: 100,
 			volume_1: 1000,
 		};
-		let pool_id = (Asset::Eth, Asset::Usdc);
-
-		assert_ok!(LiquidityProvider::add_liquidity_pool(Origin::root(), pool_id.0, pool_id.1));
-		assert_ok!(LiquidityProvider::set_liquidity_pool_status(
-			Origin::root(),
-			pool_id.0,
-			pool_id.1,
-			true
-		));
+		let asset = Asset::Eth;
 
 		assert_noop!(
-			LiquidityProvider::open_position(Origin::signed(NON_LP_ACCOUNT), pool_id, position,),
+			LiquidityProvider::open_position(Origin::signed(NON_LP_ACCOUNT), asset, position,),
 			BadOrigin,
 		);
 
 		assert_noop!(
-			LiquidityProvider::update_position(
-				Origin::signed(NON_LP_ACCOUNT),
-				pool_id,
-				0,
-				position,
-			),
+			LiquidityProvider::update_position(Origin::signed(NON_LP_ACCOUNT), asset, 0, position,),
 			BadOrigin,
 		);
 
@@ -150,26 +137,18 @@ fn cannot_manage_liquidity_during_maintenance() {
 			volume_0: 100,
 			volume_1: 1000,
 		};
-		let pool_id = (Asset::Eth, Asset::Usdc);
-
-		assert_ok!(LiquidityProvider::add_liquidity_pool(Origin::root(), pool_id.0, pool_id.1));
-		assert_ok!(LiquidityProvider::set_liquidity_pool_status(
-			Origin::root(),
-			pool_id.0,
-			pool_id.1,
-			true
-		));
+		let asset = Asset::Eth;
 
 		// Activate maintenance mode
 		MockSystemStateInfo::set_maintenance(true);
 		assert!(MockSystemStateInfo::is_maintenance_mode());
 
 		assert_noop!(
-			LiquidityProvider::open_position(Origin::signed(LP_ACCOUNT), pool_id, position,),
+			LiquidityProvider::open_position(Origin::signed(LP_ACCOUNT), asset, position,),
 			"We are in maintenance!"
 		);
 		assert_noop!(
-			LiquidityProvider::update_position(Origin::signed(LP_ACCOUNT), pool_id, 0, position,),
+			LiquidityProvider::update_position(Origin::signed(LP_ACCOUNT), asset, 0, position,),
 			"We are in maintenance!"
 		);
 		assert_noop!(
@@ -181,12 +160,10 @@ fn cannot_manage_liquidity_during_maintenance() {
 		MockSystemStateInfo::set_maintenance(false);
 		assert!(!MockSystemStateInfo::is_maintenance_mode());
 
-		assert_ok!(
-			LiquidityProvider::open_position(Origin::signed(LP_ACCOUNT), pool_id, position,),
-		);
+		assert_ok!(LiquidityProvider::open_position(Origin::signed(LP_ACCOUNT), asset, position,),);
 		assert_ok!(LiquidityProvider::update_position(
 			Origin::signed(LP_ACCOUNT),
-			pool_id,
+			asset,
 			0,
 			position,
 		),);

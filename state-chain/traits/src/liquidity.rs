@@ -1,7 +1,7 @@
 use sp_runtime::DispatchResult;
 
 use cf_primitives::{
-	liquidity::TradingPosition, Asset, AssetAmount, ExchangeRate, ForeignChainAddress, PoolId,
+	liquidity::TradingPosition, Asset, AssetAmount, ExchangeRate, ForeignChainAddress,
 };
 
 pub trait SwapIntentHandler {
@@ -36,28 +36,27 @@ pub trait SwappingApi {
 	) -> (AssetAmount, (Asset, AssetAmount));
 }
 
-pub trait LiquidityApi {
-	fn deploy(asset: Asset, position: TradingPosition<AssetAmount>);
-}
-
-pub trait AmmPoolApi {
-	fn asset_0(&self) -> Asset;
-	fn asset_1(&self) -> Asset;
-	fn liquidity_0(&self) -> AssetAmount;
-	fn liquidity_1(&self) -> AssetAmount;
-
-	fn pool_id(&self) -> PoolId {
-		(self.asset_0(), self.asset_1())
-	}
-
-	fn get_exchange_rate(&self) -> ExchangeRate;
-
+/// API to interface with Exchange Pools.
+/// All pools are Asset <-> USDC
+pub trait LiquidityPoolApi {
+	fn deploy(asset: &Asset, position: TradingPosition<AssetAmount>);
+	fn add_liquidity(
+		asset: &Asset,
+		amount: AssetAmount,
+		stable_amount: AssetAmount,
+	) -> DispatchResult;
+	fn remove_liquidity(
+		asset: &Asset,
+		amount: AssetAmount,
+		stable_amount: AssetAmount,
+	) -> DispatchResult;
+	fn get_liquidity(asset: &Asset) -> (AssetAmount, AssetAmount);
+	fn get_exchange_rate(asset: &Asset) -> ExchangeRate;
 	fn get_liquidity_requirement(
-		&self,
+		asset: &Asset,
 		position: &TradingPosition<AssetAmount>,
 	) -> Option<(AssetAmount, AssetAmount)>;
-
-	fn swap(input_amount: AssetAmount, fee: u16) -> (AssetAmount, AssetAmount);
+	fn get_stable_asset() -> Asset;
 }
 
 // TODO Remove these in favour of a real mocks.

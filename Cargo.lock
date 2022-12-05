@@ -9505,6 +9505,7 @@ dependencies = [
  "pallet-cf-governance",
  "pallet-cf-ingress-egress",
  "pallet-cf-lp",
+ "pallet-cf-pools",
  "pallet-cf-reputation",
  "pallet-cf-staking",
  "pallet-cf-swapping",

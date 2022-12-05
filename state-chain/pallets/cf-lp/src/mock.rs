@@ -1,15 +1,20 @@
 use crate as pallet_cf_lp;
 use cf_chains::{eth::assets, AnyChain, Chain, ChainEnvironment, Ethereum};
-use cf_primitives::{AccountRole, EthereumAddress, IntentId, ETHEREUM_ETH_ADDRESS};
+use cf_primitives::{
+	AccountRole, Asset, AssetAmount, EthereumAddress, ExchangeRate, IntentId, TradingPosition,
+	ETHEREUM_ETH_ADDRESS,
+};
 use cf_traits::{
 	mocks::{
 		all_batch::MockAllBatch, bid_info::MockBidInfo, egress_handler::MockEgressHandler,
 		ensure_origin_mock::NeverFailingOriginCheck, ingress_handler::MockIngressHandler,
 		staking_info::MockStakingInfo, system_state_info::MockSystemStateInfo,
 	},
-	AddressDerivationApi, Broadcaster,
+	AddressDerivationApi, Broadcaster, LiquidityPoolApi,
 };
-use frame_support::{parameter_types, sp_runtime::app_crypto::sp_core::H160};
+use frame_support::{
+	dispatch::DispatchResult, parameter_types, sp_runtime::app_crypto::sp_core::H160,
+};
 use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{
@@ -89,7 +94,6 @@ impl Broadcaster<Ethereum> for MockBroadcast {
 }
 
 pub struct MockEthEnvironment;
-
 impl ChainEnvironment<<Ethereum as Chain>::ChainAsset, <Ethereum as Chain>::ChainAccount>
 	for MockEthEnvironment
 {
@@ -120,11 +124,50 @@ impl pallet_cf_account_roles::Config for Test {
 	type WeightInfo = ();
 }
 
+pub struct MockLiquidityPool;
+impl LiquidityPoolApi for MockLiquidityPool {
+	fn deploy(_asset: &Asset, _position: TradingPosition<AssetAmount>) {}
+
+	fn add_liquidity(
+		_asset: &Asset,
+		_amount: AssetAmount,
+		_stable_amount: AssetAmount,
+	) -> DispatchResult {
+		Ok(())
+	}
+
+	fn remove_liquidity(
+		_asset: &Asset,
+		_amount: AssetAmount,
+		_stable_amount: AssetAmount,
+	) -> DispatchResult {
+		Ok(())
+	}
+
+	fn get_liquidity(_asset: &Asset) -> (AssetAmount, AssetAmount) {
+		(0, 0)
+	}
+	fn get_exchange_rate(_asset: &Asset) -> ExchangeRate {
+		Default::default()
+	}
+	fn get_liquidity_requirement(
+		_asset: &Asset,
+		_position: &TradingPosition<AssetAmount>,
+	) -> Option<(AssetAmount, AssetAmount)> {
+		Some((0, 0))
+	}
+
+	fn get_stable_asset() -> Asset {
+		Asset::Usdc
+	}
+}
+
 impl crate::Config for Test {
 	type Event = Event;
 	type AccountRoleRegistry = AccountRoles;
 	type IngressHandler = MockIngressHandler<AnyChain, Self>;
 	type EgressHandler = MockEgressHandler<AnyChain>;
+	type LiquidityPoolApi = MockLiquidityPool;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 }
 

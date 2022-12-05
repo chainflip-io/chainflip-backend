@@ -103,14 +103,17 @@ pub mod pallet {
 			let mut used_weight =
 				T::DbWeight::get().reads(1 as Weight) + T::DbWeight::get().writes(1 as Weight);
 
-			let swap_groups = Self::group_swaps(swaps);
+			// Group the queued swap requests by assets
+			let swap_groups = Self::group_swaps_by_asset(swaps);
 			let mut unexecuted = vec![];
 
 			for (asset_pair, swaps) in swap_groups {
 				let swap_group_weight = T::WeightInfo::execute_group_of_swaps(swaps.len() as u32);
 				if used_weight.saturating_add(swap_group_weight) > available_weight {
+					// Add un-excecuted swaps back to storage
 					unexecuted.extend(swaps)
 				} else {
+					// Execute the swaps and add the weights.
 					used_weight.saturating_accrue(swap_group_weight);
 					Self::execute_group_of_swaps(swaps, asset_pair.0, asset_pair.1);
 				}
@@ -193,7 +196,7 @@ pub mod pallet {
 			}
 		}
 
-		fn group_swaps(
+		fn group_swaps_by_asset(
 			swaps: Vec<Swap<T::AccountId>>,
 		) -> BTreeMap<(Asset, Asset), Vec<Swap<T::AccountId>>> {
 			let mut grouped_swaps = BTreeMap::new();
@@ -206,7 +209,7 @@ pub mod pallet {
 
 	impl<T: Config> SwapIntentHandler for Pallet<T> {
 		type AccountId = T::AccountId;
-		/// Callback function to kick of the swapping process after a successful ingress.
+		/// Callback function to kick off the swapping process after a successful ingress.
 		fn schedule_swap(
 			from: Asset,
 			to: Asset,

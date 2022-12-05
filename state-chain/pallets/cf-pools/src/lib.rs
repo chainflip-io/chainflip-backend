@@ -1,5 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-use cf_primitives::{chains::assets::any, AssetAmount, PoolAsset, TradingPosition};
+use cf_primitives::{chains::assets::any, AssetAmount, ExchangeRate, PoolAsset, TradingPosition};
 use cf_traits::Chainflip;
 use frame_support::{pallet_prelude::*, sp_runtime::traits::Saturating};
 
@@ -99,8 +99,8 @@ impl<T: Config> cf_traits::SwappingApi for Pallet<T> {
 	}
 }
 
-impl<T: Config> cf_traits::LiquidityApi for Pallet<T> {
-	fn deploy(asset: any::Asset, position: cf_primitives::TradingPosition<AssetAmount>) {
+impl<T: Config> cf_traits::LiquidityPoolApi for Pallet<T> {
+	fn deploy(asset: &any::Asset, position: cf_primitives::TradingPosition<AssetAmount>) {
 		match position {
 			TradingPosition::ClassicV3 { volume_0, volume_1, .. } => {
 				Pools::<T>::mutate(asset, |pool| pool.add_liquidity(volume_0, volume_1));
@@ -112,5 +112,40 @@ impl<T: Config> cf_traits::LiquidityApi for Pallet<T> {
 				});
 			},
 		}
+	}
+
+	fn add_liquidity(
+		_asset: &any::Asset,
+		_amount: AssetAmount,
+		_stable_amount: AssetAmount,
+	) -> DispatchResult {
+		Ok(())
+	}
+
+	fn remove_liquidity(
+		_asset: &any::Asset,
+		_amount: AssetAmount,
+		_stable_amount: AssetAmount,
+	) -> DispatchResult {
+		Ok(())
+	}
+
+	fn get_liquidity(_asset: &any::Asset) -> (AssetAmount, AssetAmount) {
+		(0, 0)
+	}
+
+	fn get_exchange_rate(_asset: &any::Asset) -> ExchangeRate {
+		Default::default()
+	}
+
+	fn get_liquidity_requirement(
+		_asset: &any::Asset,
+		_position: &TradingPosition<AssetAmount>,
+	) -> Option<(AssetAmount, AssetAmount)> {
+		None
+	}
+
+	fn get_stable_asset() -> any::Asset {
+		any::Asset::Usdc
 	}
 }
