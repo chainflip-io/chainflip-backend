@@ -5,7 +5,7 @@
 #[cfg(feature = "ibiza")]
 use cf_chains::{
 	dot::{
-		api::CreatePolkadotVault, Polkadot, PolkadotAccountId, PolkadotConfig, PolkadotIndex,
+		api::CreatePolkadotVault, Polkadot, PolkadotAccountId, PolkadotMetadata, PolkadotIndex,
 		PolkadotPublicKey,
 	},
 	ChainCrypto,
@@ -174,9 +174,9 @@ pub mod pallet {
 
 	#[cfg(feature = "ibiza")]
 	#[pallet::storage]
-	#[pallet::getter(fn get_polkadot_network_choice)]
-	/// The Polkadot Network Configuration
-	pub type PolkadotNetworkConfig<T> = StorageValue<_, PolkadotConfig, ValueQuery>;
+	#[pallet::getter(fn polkadot_network_metadata)]
+	/// The Polkadot Network Metadata
+	pub type PolkadotNetworkMetadata<T> = StorageValue<_, PolkadotMetadata, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -357,7 +357,7 @@ pub mod pallet {
 		#[cfg(feature = "ibiza")]
 		pub polkadot_proxy_account_id: Option<PolkadotAccountId>,
 		#[cfg(feature = "ibiza")]
-		pub polkadot_network_config: PolkadotConfig,
+		pub polkadot_network_metadata: PolkadotMetadata,
 	}
 
 	/// Sets the genesis config
@@ -377,7 +377,7 @@ pub mod pallet {
 			#[cfg(feature = "ibiza")]
 			PolkadotCurrentProxyAccountId::<T>::set(self.polkadot_proxy_account_id.clone());
 			#[cfg(feature = "ibiza")]
-			PolkadotNetworkConfig::<T>::set(self.polkadot_network_config.clone());
+			PolkadotNetworkMetadata::<T>::set(self.polkadot_network_metadata.clone());
 			#[cfg(feature = "ibiza")]
 			PolkadotProxyAccountNonce::<T>::set(0);
 		}
@@ -452,8 +452,8 @@ impl<T: Config> Pallet<T> {
 	}
 
 	#[cfg(feature = "ibiza")]
-	pub fn get_polkadot_network_config() -> PolkadotConfig {
-		PolkadotNetworkConfig::<T>::get()
+	pub fn get_polkadot_network_metadata() -> PolkadotMetadata {
+		PolkadotNetworkMetadata::<T>::get()
 	}
 
 	#[cfg(feature = "ibiza")]
