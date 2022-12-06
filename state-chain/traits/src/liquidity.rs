@@ -7,6 +7,7 @@ use cf_primitives::{
 pub trait SwapIntentHandler {
 	type AccountId;
 	fn schedule_swap(
+		ingress_address: ForeignChainAddress,
 		from: Asset,
 		to: Asset,
 		amount: AssetAmount,
@@ -66,6 +67,7 @@ impl<T: frame_system::Config> SwapIntentHandler for T {
 	type AccountId = T::AccountId;
 
 	fn schedule_swap(
+		_ingress_address: ForeignChainAddress,
 		_from: Asset,
 		_to: Asset,
 		_amount: AssetAmount,

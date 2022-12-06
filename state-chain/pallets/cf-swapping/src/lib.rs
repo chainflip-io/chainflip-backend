@@ -27,6 +27,7 @@ const BASIS_POINTS_PER_MILLION: u32 = 100;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
 pub struct Swap<AccountId> {
+	pub swap_id: u64,
 	pub from: Asset,
 	pub to: Asset,
 	pub amount: AssetAmount,
@@ -39,7 +40,7 @@ pub struct Swap<AccountId> {
 pub mod pallet {
 
 	use cf_chains::AnyChain;
-	use cf_primitives::{Asset, AssetAmount, IntentId};
+	use cf_primitives::{Asset, AssetAmount};
 	use cf_traits::{AccountRoleRegistry, Chainflip, EgressApi, SwapIntentHandler};
 
 	use super::*;
@@ -73,6 +74,10 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(super) type SwapQueue<T: Config> = StorageValue<_, Vec<Swap<T::AccountId>>, ValueQuery>;
 
+	/// SwapId Counter
+	#[pallet::storage]
+	pub type SwapIdCounter<T: Config> = StorageValue<_, u64, ValueQuery>;
+
 	/// Earned Fees by Relayers
 	#[pallet::storage]
 	pub(super) type EarnedRelayerFees<T: Config> =
@@ -82,15 +87,17 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// An new swap intent has been registered.
-		NewSwapIntent { intent_id: IntentId, ingress_address: ForeignChainAddress },
-		SwapScheduled {
-			from: Asset,
-			to: Asset,
-			amount: AssetAmount,
-			egress_address: ForeignChainAddress,
-			relayer_id: T::AccountId,
-			relayer_commission_bps: u16,
+		NewSwapIntent { ingress_address: ForeignChainAddress },
+		/// The swap ingress was received.
+		SwapIngressReceived {
+			ingress_address: ForeignChainAddress,
+			swap_id: u64,
+			ingress_amount: AssetAmount,
 		},
+		/// A swap was executed.
+		SwapExecuted { swap_id: u64 },
+		/// A swap egress was scheduled.
+		SwapEgressScheduled { swap_id: u64, egress_amount: AssetAmount },
 	}
 	#[pallet::error]
 	pub enum Error<T> {
@@ -147,7 +154,7 @@ pub mod pallet {
 				Error::<T>::IncompatibleAssetAndAddress
 			);
 
-			let (intent_id, ingress_address) = T::IngressHandler::register_swap_intent(
+			let (_, ingress_address) = T::IngressHandler::register_swap_intent(
 				ingress_asset,
 				egress_asset,
 				egress_address,
@@ -155,7 +162,7 @@ pub mod pallet {
 				relayer,
 			)?;
 
-			Self::deposit_event(Event::<T>::NewSwapIntent { intent_id, ingress_address });
+			Self::deposit_event(Event::<T>::NewSwapIntent { ingress_address });
 
 			Ok(())
 		}
@@ -169,19 +176,27 @@ pub mod pallet {
 			for swap in &swaps {
 				debug_assert_eq!((swap.from, swap.to), (from, to));
 				// TODO: use a struct instead of tuple.
-				bundle_inputs.push((swap.amount, swap.to, swap.egress_address));
+				bundle_inputs.push((swap.amount, swap.to, swap.egress_address, swap.swap_id));
 				bundle_input.saturating_accrue(swap.amount);
 			}
 
 			let (bundle_output, _) = T::SwappingApi::swap(from, to, bundle_input, 1);
 
-			for (input_amount, egress_asset, egress_address) in bundle_inputs {
+			for swap in &swaps {
+				Self::deposit_event(Event::<T>::SwapExecuted { swap_id: swap.swap_id });
+			}
+
+			for (input_amount, egress_asset, egress_address, id) in bundle_inputs {
 				if let Some(swap_output) = multiply_by_rational_with_rounding(
 					input_amount,
 					bundle_output,
 					bundle_input,
 					Rounding::Down,
 				) {
+					Self::deposit_event(Event::<T>::SwapEgressScheduled {
+						swap_id: id,
+						egress_amount: swap_output,
+					});
 					T::EgressHandler::schedule_egress(egress_asset, swap_output, egress_address);
 				} else {
 					log::error!(
@@ -208,6 +223,7 @@ pub mod pallet {
 
 		/// Callback function to kick off the swapping process after a successful ingress.
 		fn schedule_swap(
+			ingress_address: ForeignChainAddress,
 			from: Asset,
 			to: Asset,
 			amount: AssetAmount,
@@ -217,6 +233,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			// The caller should ensure that the egress details are consistent.
 			debug_assert_eq!(ForeignChain::from(egress_address), ForeignChain::from(to));
+			let swap_id = SwapIdCounter::<T>::get().saturating_add(1);
 
 			let fee = Permill::from_parts(relayer_commission_bps as u32 * BASIS_POINTS_PER_MILLION) *
 				amount;
@@ -226,6 +243,7 @@ pub mod pallet {
 			});
 
 			SwapQueue::<T>::append(Swap {
+				swap_id,
 				from,
 				to,
 				amount: amount.saturating_sub(fee),
@@ -234,15 +252,12 @@ pub mod pallet {
 				relayer_commission_bps,
 			});
 
-			Self::deposit_event(Event::<T>::SwapScheduled {
-				from,
-				to,
-				amount,
-				egress_address,
-				relayer_id,
-				relayer_commission_bps,
+			Self::deposit_event(Event::<T>::SwapIngressReceived {
+				ingress_address,
+				swap_id,
+				ingress_amount: amount,
 			});
-
+			SwapIdCounter::<T>::put(swap_id);
 			Ok(())
 		}
 	}

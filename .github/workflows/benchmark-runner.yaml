@@ -27,7 +27,7 @@ env:
 jobs:
   terraform-benchmarks-runner:
     name: Terrafrom ${{ github.event.inputs.command }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - name: Setup Tailscale 🪡 ⚙️
         id: tailscale
