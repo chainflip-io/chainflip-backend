@@ -43,13 +43,13 @@ impl ChainAbi for Ethereum {
 
 impl<E: ReplayProtectionProvider<Ethereum>> SetAggKeyWithAggKey<Ethereum> for EthereumApi<E> {
 	fn new_unsigned(
-		_old_key: <Ethereum as ChainCrypto>::AggKey,
+		_old_key: Option<<Ethereum as ChainCrypto>::AggKey>,
 		new_key: <Ethereum as ChainCrypto>::AggKey,
-	) -> Self {
-		Self::SetAggKeyWithAggKey(set_agg_key_with_agg_key::SetAggKeyWithAggKey::new_unsigned(
+	) -> Result<Self, ()> {
+		Ok(Self::SetAggKeyWithAggKey(set_agg_key_with_agg_key::SetAggKeyWithAggKey::new_unsigned(
 			E::replay_protection(),
 			new_key,
-		))
+		)))
 	}
 }
 
@@ -113,33 +113,33 @@ where
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<Ethereum>>,
 		transfer_params: Vec<TransferAssetParams<Ethereum>>,
-	) -> Self {
-		Self::AllBatch(all_batch::AllBatch::new_unsigned(
+	) -> Result<Self, ()> {
+		Ok(Self::AllBatch(all_batch::AllBatch::new_unsigned(
 			E::replay_protection(),
 			fetch_params
 				.into_iter()
-				.filter_map(|FetchAssetParams { intent_id, asset }| {
+				.map(|FetchAssetParams { intent_id, asset }| {
 					E::lookup(asset)
 						.map(|address| all_batch::EncodableFetchAssetParams {
 							intent_id,
 							asset: address,
 						})
-						.ok()
+						.ok_or(())
 				})
-				.collect(),
+				.collect::<Result<Vec<_>, ()>>()?,
 			transfer_params
 				.into_iter()
-				.filter_map(|TransferAssetParams { asset, to, amount }| {
+				.map(|TransferAssetParams { asset, to, amount }| {
 					E::lookup(asset)
 						.map(|address| all_batch::EncodableTransferAssetParams {
 							to,
 							amount,
 							asset: address,
 						})
-						.ok()
+						.ok_or(())
 				})
-				.collect(),
-		))
+				.collect::<Result<Vec<_>, ()>>()?,
+		)))
 	}
 }
 

@@ -144,10 +144,11 @@ pub struct MockSetAggKeyWithAggKey {
 
 impl SetAggKeyWithAggKey<MockEthereum> for MockSetAggKeyWithAggKey {
 	fn new_unsigned(
-		_old_key: <MockEthereum as ChainCrypto>::AggKey,
+		old_key: Option<<MockEthereum as ChainCrypto>::AggKey>,
 		new_key: <MockEthereum as ChainCrypto>::AggKey,
-	) -> Self {
-		Self { nonce: MockEthReplayProtectionProvider::replay_protection(), new_key }
+	) -> Result<Self, ()> {
+		old_key.ok_or(())?;
+		Ok(Self { nonce: MockEthReplayProtectionProvider::replay_protection(), new_key })
 	}
 }
 
@@ -230,18 +231,19 @@ pub const NEW_AGG_PUB_KEY: [u8; 4] = *b"next";
 
 pub const MOCK_KEYGEN_RESPONSE_TIMEOUT: u64 = 25;
 
-pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
+fn test_ext_inner(key: Option<Vec<u8>>) -> sp_io::TestExternalities {
 	let config = GenesisConfig {
 		system: Default::default(),
 		vaults_pallet: VaultsPalletConfig {
-			vault_key: GENESIS_AGG_PUB_KEY.to_vec(),
+			vault_key: key,
 			deployment_block: 0,
 			keygen_response_timeout: MOCK_KEYGEN_RESPONSE_TIMEOUT,
 		},
 	};
 
 	let authorities = vec![ALICE, BOB, CHARLIE];
-	MockEpochInfo::set_epoch_authority_count(0, authorities.len() as AuthorityCount);
+	MockEpochInfo::set_epoch(GENESIS_EPOCH);
+	MockEpochInfo::set_epoch_authority_count(GENESIS_EPOCH, authorities.len() as AuthorityCount);
 	MockEpochInfo::set_authorities(authorities);
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
@@ -251,4 +253,12 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	});
 
 	ext
+}
+
+pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
+	test_ext_inner(Some(GENESIS_AGG_PUB_KEY.to_vec()))
+}
+
+pub(crate) fn new_test_ext_no_key() -> sp_io::TestExternalities {
+	test_ext_inner(None)
 }

@@ -58,7 +58,8 @@ pub trait Chain: Member + Parameter {
 		+ MaxEncodedLen
 		+ Copy
 		+ BenchmarkValue
-		+ Into<cf_primitives::Asset>;
+		+ Into<cf_primitives::Asset>
+		+ Into<cf_primitives::ForeignChain>;
 
 	type ChainAccount: Member
 		+ Parameter
@@ -66,6 +67,8 @@ pub trait Chain: Member + Parameter {
 		+ BenchmarkValue
 		+ TryFrom<cf_primitives::ForeignChainAddress>
 		+ Into<cf_primitives::ForeignChainAddress>;
+
+	type EpochStartData: Member + Parameter + MaxEncodedLen;
 }
 
 /// Measures the age of items associated with the Chain.
@@ -82,9 +85,17 @@ impl<C: Chain> Age<C> for () {
 
 /// Common crypto-related types and operations for some external chain.
 pub trait ChainCrypto: Chain {
+	type KeyId: Member + Parameter;
 	/// The chain's `AggKey` format. The AggKey is the threshold key that controls the vault.
 	/// TODO: Consider if Encode / Decode bounds are sufficient rather than To/From Vec<u8>
-	type AggKey: TryFrom<Vec<u8>> + Into<Vec<u8>> + Member + Parameter + Copy + Ord + BenchmarkValue;
+	type AggKey: TryFrom<Vec<u8>>
+		+ Into<Self::KeyId>
+		+ Member
+		+ Parameter
+		+ Copy
+		+ Ord
+		+ Default // the "zero" address
+		+ BenchmarkValue;
 	type Payload: Member + Parameter + BenchmarkValue;
 	type ThresholdSignature: Member + Parameter + BenchmarkValue;
 	type TransactionHash: Member + Parameter + BenchmarkValue;
@@ -175,15 +186,15 @@ pub trait ChainEnvironment<
 >
 {
 	/// Attempt a lookup.
-	fn lookup(s: LookupKey) -> Result<LookupValue, frame_support::error::LookupError>;
+	fn lookup(s: LookupKey) -> Option<LookupValue>;
 }
-
+#[allow(clippy::result_unit_err)]
 /// Constructs the `SetAggKeyWithAggKey` api call.
 pub trait SetAggKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
-		old_key: <Abi as ChainCrypto>::AggKey,
+		maybe_old_key: Option<<Abi as ChainCrypto>::AggKey>,
 		new_key: <Abi as ChainCrypto>::AggKey,
-	) -> Self;
+	) -> Result<Self, ()>;
 }
 
 pub trait SetGovKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
@@ -210,11 +221,12 @@ pub trait RegisterClaim<Abi: ChainAbi>: ApiCall<Abi> {
 	fn amount(&self) -> u128;
 }
 
+#[allow(clippy::result_unit_err)]
 pub trait AllBatch<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<Abi>>,
 		transfer_params: Vec<TransferAssetParams<Abi>>,
-	) -> Self;
+	) -> Result<Self, ()>;
 }
 
 pub trait FeeRefundCalculator<C: Chain> {
@@ -245,6 +257,7 @@ pub mod mocks {
 		type TransactionFee = TransactionFee;
 		type ChainAccount = u64; // Currently, we don't care about this since we don't use them in tests
 		type ChainAsset = assets::eth::Asset;
+		type EpochStartData = ();
 	}
 
 	#[derive(
@@ -291,6 +304,7 @@ pub mod mocks {
 	}
 
 	impl ChainCrypto for MockEthereum {
+		type KeyId = Vec<u8>;
 		type AggKey = [u8; 4];
 		type Payload = [u8; 4];
 		type ThresholdSignature = MockThresholdSignature<Self::AggKey, Self::Payload>;

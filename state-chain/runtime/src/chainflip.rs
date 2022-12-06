@@ -1,12 +1,13 @@
 //! Configuration, utilities and helpers for the Chainflip runtime.
 pub mod address_derivation;
+pub mod all_vaults_rotator;
 mod backup_node_rewards;
 pub mod chain_instances;
 pub mod decompose_recompose;
 pub mod epoch_transition;
 mod missed_authorship_slots;
 mod offences;
-use cf_primitives::{chains::assets, ETHEREUM_ETH_ADDRESS};
+use cf_primitives::{chains::assets, KeyId, ETHEREUM_ETH_ADDRESS};
 pub use offences::*;
 mod signer_nomination;
 use ethabi::Address as EthAbiAddress;
@@ -20,14 +21,12 @@ use crate::{
 };
 #[cfg(feature = "ibiza")]
 use cf_chains::{
-	dot::{api::PolkadotApi, Polkadot, PolkadotReplayProtection, PolkadotTransactionData},
-	ChainCrypto,
+	dot::{
+		api::PolkadotApi, Polkadot, PolkadotAccountId, PolkadotReplayProtection,
+		PolkadotTransactionData,
+	},
+	AnyChain, Chain, ChainCrypto,
 };
-#[cfg(feature = "ibiza")]
-use codec::{Decode, Encode};
-#[cfg(feature = "ibiza")]
-use scale_info::TypeInfo;
-
 use cf_chains::{
 	eth::{
 		self,
@@ -36,14 +35,23 @@ use cf_chains::{
 	},
 	ApiCall, ChainAbi, ChainEnvironment, ReplayProtectionProvider, TransactionBuilder,
 };
+#[cfg(feature = "ibiza")]
+use cf_primitives::{Asset, AssetAmount, ForeignChain, ForeignChainAddress, IntentId};
 use cf_traits::{
 	BlockEmissions, Chainflip, EmergencyRotation, EpochInfo, EthEnvironmentProvider, Heartbeat,
 	Issuance, NetworkState, RewardsDistribution, RuntimeUpgrade, VaultTransitionHandler,
 };
-use frame_support::traits::Get;
+#[cfg(feature = "ibiza")]
+use cf_traits::{EgressApi, IngressApi};
+#[cfg(feature = "ibiza")]
+use codec::{Decode, Encode};
+#[cfg(feature = "ibiza")]
+use frame_support::dispatch::DispatchError;
 use pallet_cf_chain_tracking::ChainState;
+#[cfg(feature = "ibiza")]
+use scale_info::TypeInfo;
 
-use frame_support::{dispatch::DispatchErrorWithPostInfo, weights::PostDispatchInfo};
+use frame_support::{dispatch::DispatchErrorWithPostInfo, traits::Get, weights::PostDispatchInfo};
 
 use pallet_cf_validator::PercentageRange;
 use sp_runtime::traits::{UniqueSaturatedFrom, UniqueSaturatedInto};
@@ -55,7 +63,7 @@ impl Chainflip for Runtime {
 	type Call = Call;
 	type Amount = FlipBalance;
 	type ValidatorId = <Self as frame_system::Config>::AccountId;
-	type KeyId = Vec<u8>;
+	type KeyId = KeyId;
 	type EnsureWitnessed = pallet_cf_witnesser::EnsureWitnessed;
 	type EnsureWitnessedAtCurrentEpoch = pallet_cf_witnesser::EnsureWitnessedAtCurrentEpoch;
 	type EpochInfo = Validator;
@@ -132,20 +140,6 @@ impl cf_traits::WaivedFees for WaivedFees {
 	}
 }
 
-pub struct EthEnvironment;
-
-impl ChainEnvironment<assets::eth::Asset, EthAbiAddress> for EthEnvironment {
-	fn lookup(
-		asset: assets::eth::Asset,
-	) -> Result<EthAbiAddress, frame_support::error::LookupError> {
-		Ok(match asset {
-			assets::eth::Asset::Eth => ETHEREUM_ETH_ADDRESS.into(),
-			assets::eth::Asset::Flip => Environment::flip_token_address().into(),
-			assets::eth::Asset::Usdc => todo!(),
-		})
-	}
-}
-
 pub struct EthTransactionBuilder;
 
 impl TransactionBuilder<Ethereum, EthereumApi<EthEnvironment>> for EthTransactionBuilder {
@@ -192,7 +186,7 @@ impl TransactionBuilder<Polkadot, PolkadotApi<DotEnvironment>> for DotTransactio
 	}
 
 	fn refresh_unsigned_transaction(_unsigned_tx: &mut <Polkadot as ChainAbi>::Transaction) {
-		todo!();
+		// TODO: For now this is a noop until we actually have dot chain tracking
 	}
 }
 
@@ -219,6 +213,7 @@ impl RuntimeUpgrade for RuntimeUpgradeManager {
 		System::set_code(frame_system::RawOrigin::Root.into(), code)
 	}
 }
+pub struct EthEnvironment;
 
 impl ReplayProtectionProvider<Ethereum> for EthEnvironment {
 	// Get the Environment values for key_manager_address and chain_id, then use
@@ -227,8 +222,18 @@ impl ReplayProtectionProvider<Ethereum> for EthEnvironment {
 		EthereumReplayProtection {
 			key_manager_address: Environment::key_manager_address(),
 			chain_id: Environment::ethereum_chain_id(),
-			nonce: Environment::next_global_signature_nonce(),
+			nonce: Environment::next_ethereum_signature_nonce(),
 		}
+	}
+}
+
+impl ChainEnvironment<assets::eth::Asset, EthAbiAddress> for EthEnvironment {
+	fn lookup(asset: assets::eth::Asset) -> Option<EthAbiAddress> {
+		Some(match asset {
+			assets::eth::Asset::Eth => ETHEREUM_ETH_ADDRESS.into(),
+			assets::eth::Asset::Flip => Environment::flip_token_address().into(),
+			assets::eth::Asset::Usdc => todo!(),
+		})
 	}
 }
 
@@ -244,7 +249,7 @@ impl ReplayProtectionProvider<Polkadot> for DotEnvironment {
 		PolkadotReplayProtection::new(
 			Environment::next_polkadot_proxy_account_nonce(),
 			0,
-			Environment::get_polkadot_network_config(),
+			Environment::polkadot_network_metadata(),
 		) //Todo: Instead
 		 // of 0, tip needs
 		 // to be set here
@@ -252,11 +257,13 @@ impl ReplayProtectionProvider<Polkadot> for DotEnvironment {
 }
 
 #[cfg(feature = "ibiza")]
-impl ChainEnvironment<cf_chains::dot::api::SystemAccounts, AccountId> for DotEnvironment {
-	fn lookup(
-		_query: cf_chains::dot::api::SystemAccounts,
-	) -> Result<AccountId, frame_support::error::LookupError> {
-		todo!() //Pull from environment
+impl ChainEnvironment<cf_chains::dot::api::SystemAccounts, PolkadotAccountId> for DotEnvironment {
+	fn lookup(query: cf_chains::dot::api::SystemAccounts) -> Option<PolkadotAccountId> {
+		match query {
+			cf_chains::dot::api::SystemAccounts::Proxy =>
+				Environment::get_current_polkadot_proxy_account(),
+			cf_chains::dot::api::SystemAccounts::Vault => Environment::get_polkadot_vault_account(),
+		}
 	}
 }
 
@@ -269,5 +276,81 @@ pub struct DotVaultTransitionHandler;
 impl VaultTransitionHandler<Polkadot> for DotVaultTransitionHandler {
 	fn on_new_vault(new_key: <Polkadot as ChainCrypto>::AggKey) {
 		Environment::set_new_proxy_account(new_key);
+	}
+}
+
+pub struct AnyChainIngressEgressHandler;
+
+#[cfg(feature = "ibiza")]
+impl EgressApi<AnyChain> for AnyChainIngressEgressHandler {
+	fn schedule_egress(
+		asset: Asset,
+		amount: AssetAmount,
+		egress_address: <AnyChain as Chain>::ChainAccount,
+	) {
+		match asset.into() {
+			ForeignChain::Ethereum => crate::EthereumIngressEgress::schedule_egress(
+				asset.try_into().expect("Checked for asset compatibility"),
+				amount,
+				egress_address
+					.try_into()
+					.expect("Caller must ensure for account is of the compatible type."),
+			),
+			ForeignChain::Polkadot => crate::PolkadotIngressEgress::schedule_egress(
+				asset.try_into().expect("Checked for asset compatibility"),
+				amount,
+				egress_address
+					.try_into()
+					.expect("Caller must ensure for account is of the compatible type."),
+			),
+		}
+	}
+}
+
+#[cfg(feature = "ibiza")]
+impl IngressApi<AnyChain> for AnyChainIngressEgressHandler {
+	type AccountId = <Runtime as frame_system::Config>::AccountId;
+
+	fn register_liquidity_ingress_intent(
+		lp_account: Self::AccountId,
+		ingress_asset: Asset,
+	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
+		match ingress_asset.into() {
+			ForeignChain::Ethereum =>
+				crate::EthereumIngressEgress::register_liquidity_ingress_intent(
+					lp_account,
+					ingress_asset.try_into().unwrap(),
+				),
+			ForeignChain::Polkadot =>
+				crate::PolkadotIngressEgress::register_liquidity_ingress_intent(
+					lp_account,
+					ingress_asset.try_into().unwrap(),
+				),
+		}
+	}
+
+	fn register_swap_intent(
+		ingress_asset: Asset,
+		egress_asset: Asset,
+		egress_address: ForeignChainAddress,
+		relayer_commission_bps: u16,
+		relayer_id: Self::AccountId,
+	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
+		match ingress_asset.into() {
+			ForeignChain::Ethereum => crate::EthereumIngressEgress::register_swap_intent(
+				ingress_asset.try_into().unwrap(),
+				egress_asset,
+				egress_address,
+				relayer_commission_bps,
+				relayer_id,
+			),
+			ForeignChain::Polkadot => crate::PolkadotIngressEgress::register_swap_intent(
+				ingress_asset.try_into().unwrap(),
+				egress_asset,
+				egress_address,
+				relayer_commission_bps,
+				relayer_id,
+			),
+		}
 	}
 }

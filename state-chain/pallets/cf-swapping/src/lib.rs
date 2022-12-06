@@ -1,10 +1,15 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use cf_primitives::{Asset, AssetAmount, ForeignChain, ForeignChainAddress};
 use cf_traits::{liquidity::SwappingApi, IngressApi};
-use frame_support::pallet_prelude::*;
+use frame_support::{
+	pallet_prelude::*,
+	sp_runtime::{traits::Saturating, Permill},
+};
 use frame_system::pallet_prelude::*;
+use sp_arithmetic::{helpers_128bit::multiply_by_rational_with_rounding, Rounding};
+use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
+
 pub use pallet::*;
-use sp_std::{cmp, vec::Vec};
 
 #[cfg(test)]
 mod mock;
@@ -18,8 +23,11 @@ mod benchmarking;
 pub mod weights;
 pub use weights::WeightInfo;
 
+const BASIS_POINTS_PER_MILLION: u32 = 100;
+
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
 pub struct Swap<AccountId> {
+	pub swap_id: u64,
 	pub from: Asset,
 	pub to: Asset,
 	pub amount: AssetAmount,
@@ -31,8 +39,8 @@ pub struct Swap<AccountId> {
 #[frame_support::pallet]
 pub mod pallet {
 
-	use cf_chains::{eth::assets, Ethereum};
-	use cf_primitives::{Asset, AssetAmount, EthereumAddress, IntentId};
+	use cf_chains::AnyChain;
+	use cf_primitives::{Asset, AssetAmount};
 	use cf_traits::{AccountRoleRegistry, Chainflip, EgressApi, SwapIntentHandler};
 
 	use super::*;
@@ -44,10 +52,13 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 		/// For registering and verifying the account role.
 		type AccountRoleRegistry: AccountRoleRegistry<Self>;
-		/// An interface to the ingress api implementation.
-		type Ingress: IngressApi<AccountId = <Self as frame_system::Config>::AccountId, Ethereum>;
-		/// An interface to the egress api implementation.
-		type Egress: EgressApi<Ethereum>;
+		/// API for handling asset ingress.
+		type IngressHandler: IngressApi<
+			AnyChain,
+			AccountId = <Self as frame_system::Config>::AccountId,
+		>;
+		/// API for handling asset egress.
+		type EgressHandler: EgressApi<AnyChain>;
 		/// An interface to the AMM api implementation.
 		type SwappingApi: SwappingApi;
 		/// The Weight information.
@@ -63,44 +74,59 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(super) type SwapQueue<T: Config> = StorageValue<_, Vec<Swap<T::AccountId>>, ValueQuery>;
 
+	/// SwapId Counter
+	#[pallet::storage]
+	pub type SwapIdCounter<T: Config> = StorageValue<_, u64, ValueQuery>;
+
 	/// Earned Fees by Relayers
 	#[pallet::storage]
 	pub(super) type EarnedRelayerFees<T: Config> =
-		StorageDoubleMap<_, Identity, T::AccountId, Twox64Concat, Asset, AssetAmount>;
+		StorageDoubleMap<_, Identity, T::AccountId, Twox64Concat, Asset, AssetAmount, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// An new swap intent has been registered.
-		NewSwapIntent { intent_id: IntentId, ingress_address: ForeignChainAddress },
+		NewSwapIntent { ingress_address: ForeignChainAddress },
+		/// The swap ingress was received.
+		SwapIngressReceived {
+			ingress_address: ForeignChainAddress,
+			swap_id: u64,
+			ingress_amount: AssetAmount,
+		},
+		/// A swap was executed.
+		SwapExecuted { swap_id: u64 },
+		/// A swap egress was scheduled.
+		SwapEgressScheduled { swap_id: u64, egress_amount: AssetAmount },
 	}
 	#[pallet::error]
 	pub enum Error<T> {
-		InvalidAsset,
+		IncompatibleAssetAndAddress,
 	}
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		/// Do swapping with remaining weight in this block
-		fn on_idle(_block_number: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
-			// The computational cost for a swap.
-			let swap_weight = T::WeightInfo::execute_swap();
-			let mut swaps = SwapQueue::<T>::get();
-			// We split the array in what we can process during this block and the rest. If we could
-			// do more we just process all. We calculate the index based on the available weight and
-			// the weight we need for performing a single swap.
-			let remaining_swaps = swaps.split_off(cmp::min(
-				swaps.len(),
-				(remaining_weight.saturating_div(swap_weight)) as usize,
-			));
-			let swaps_executed = swaps.len();
-			for swap in swaps {
-				Self::execute_swap(swap);
+		fn on_idle(_block_number: BlockNumberFor<T>, available_weight: Weight) -> Weight {
+			let swaps = SwapQueue::<T>::get();
+			let mut used_weight =
+				T::DbWeight::get().reads(1 as Weight) + T::DbWeight::get().writes(1 as Weight);
+
+			let swap_groups = Self::group_swaps(swaps);
+			let mut unexecuted = vec![];
+
+			for (asset_pair, swaps) in swap_groups {
+				let swap_group_weight = T::WeightInfo::execute_group_of_swaps(swaps.len() as u32);
+				if used_weight.saturating_add(swap_group_weight) > available_weight {
+					unexecuted.extend(swaps)
+				} else {
+					used_weight.saturating_accrue(swap_group_weight);
+					Self::execute_group_of_swaps(swaps, asset_pair.0, asset_pair.1);
+				}
 			}
-			// Write the rest back (potentially an empty vector).
-			SwapQueue::<T>::put(remaining_swaps);
-			// return the weight we used during the execution of this function.
-			swap_weight * swaps_executed as u64 + T::WeightInfo::on_idle()
+
+			SwapQueue::<T>::put(unexecuted);
+			used_weight
 		}
 	}
 
@@ -118,51 +144,75 @@ pub mod pallet {
 			egress_asset: Asset,
 			egress_address: ForeignChainAddress,
 			relayer_commission_bps: u16,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let relayer = T::AccountRoleRegistry::ensure_relayer(origin)?;
 
-			let (intent_id, ingress_address) = match ingress_asset.into() {
-				ForeignChain::Ethereum => T::Ingress::register_swap_intent(
-					ingress_asset.try_into().unwrap(),
-					egress_asset,
-					egress_address,
-					relayer_commission_bps,
-					relayer,
-				),
-				_ => todo!(),
-			}?;
-			Self::deposit_event(Event::<T>::NewSwapIntent { intent_id, ingress_address });
+			ensure!(
+				ForeignChain::from(egress_address) == ForeignChain::from(egress_asset),
+				Error::<T>::IncompatibleAssetAndAddress
+			);
 
-			Ok(().into())
+			let (_, ingress_address) = T::IngressHandler::register_swap_intent(
+				ingress_asset,
+				egress_asset,
+				egress_address,
+				relayer_commission_bps,
+				relayer,
+			)?;
+
+			Self::deposit_event(Event::<T>::NewSwapIntent { ingress_address });
+
+			Ok(())
 		}
 	}
 
 	impl<T: Config> Pallet<T> {
-		/// Executes a swap. This includes the whole process of:
-		///
-		/// - Doing the Swap inside the AMM
-		/// - Doing the egress
-		///
-		/// We are going to benchmark this function individually to have a approximation of
-		/// how 'expensive' a swap is.
-		pub fn execute_swap(swap: Swap<T::AccountId>) {
-			let (swap_output, (asset, fee)) =
-				T::SwappingApi::swap(swap.from, swap.to, swap.amount, swap.relayer_commission_bps);
-			EarnedRelayerFees::<T>::mutate(&swap.relayer_id, asset, |maybe_fees| {
-				if let Some(fees) = maybe_fees {
-					*maybe_fees = Some(fees.saturating_add(fee))
+		pub fn execute_group_of_swaps(swaps: Vec<Swap<T::AccountId>>, from: Asset, to: Asset) {
+			let mut bundle_input = 0;
+			let mut bundle_inputs = vec![];
+
+			for swap in &swaps {
+				debug_assert_eq!((swap.from, swap.to), (from, to));
+				// TODO: use a struct instead of tuple.
+				bundle_inputs.push((swap.amount, swap.to, swap.egress_address, swap.swap_id));
+				bundle_input.saturating_accrue(swap.amount);
+			}
+
+			let (bundle_output, _) = T::SwappingApi::swap(from, to, bundle_input, 1);
+
+			for swap in &swaps {
+				Self::deposit_event(Event::<T>::SwapExecuted { swap_id: swap.swap_id });
+			}
+
+			for (input_amount, egress_asset, egress_address, id) in bundle_inputs {
+				if let Some(swap_output) = multiply_by_rational_with_rounding(
+					input_amount,
+					bundle_output,
+					bundle_input,
+					Rounding::Down,
+				) {
+					Self::deposit_event(Event::<T>::SwapEgressScheduled {
+						swap_id: id,
+						egress_amount: swap_output,
+					});
+					T::EgressHandler::schedule_egress(egress_asset, swap_output, egress_address);
 				} else {
-					*maybe_fees = Some(fee)
+					log::error!(
+						"Unable to calculate valid swap output for swap {:?}!",
+						&(input_amount, bundle_input, bundle_output)
+					);
 				}
-			});
-			// TODO: remove the expects by using AnyChain.
-			T::Egress::schedule_egress(
-				assets::eth::Asset::try_from(swap.to).expect("Only eth assets supported"),
-				swap_output,
-				EthereumAddress::try_from(swap.egress_address)
-					.expect("On eth assets supported")
-					.into(),
-			);
+			}
+		}
+
+		fn group_swaps(
+			swaps: Vec<Swap<T::AccountId>>,
+		) -> BTreeMap<(Asset, Asset), Vec<Swap<T::AccountId>>> {
+			let mut grouped_swaps = BTreeMap::new();
+			for swap in swaps {
+				grouped_swaps.entry((swap.from, swap.to)).or_insert(vec![]).push(swap)
+			}
+			grouped_swaps
 		}
 	}
 
@@ -170,21 +220,41 @@ pub mod pallet {
 		type AccountId = T::AccountId;
 		/// Callback function to kick of the swapping process after a successful ingress.
 		fn schedule_swap(
+			ingress_address: ForeignChainAddress,
 			from: Asset,
 			to: Asset,
 			amount: AssetAmount,
 			egress_address: ForeignChainAddress,
 			relayer_id: Self::AccountId,
 			relayer_commission_bps: u16,
-		) {
+		) -> DispatchResult {
+			// The caller should ensure that the egress details are consistent.
+			debug_assert_eq!(ForeignChain::from(egress_address), ForeignChain::from(to));
+			let swap_id = SwapIdCounter::<T>::get().saturating_add(1);
+
+			let fee = Permill::from_parts(relayer_commission_bps as u32 * BASIS_POINTS_PER_MILLION) *
+				amount;
+
+			EarnedRelayerFees::<T>::mutate(&relayer_id, from, |earned_fees| {
+				earned_fees.saturating_accrue(fee)
+			});
+
 			SwapQueue::<T>::append(Swap {
+				swap_id,
 				from,
 				to,
-				amount,
+				amount: amount.saturating_sub(fee),
 				egress_address,
 				relayer_id,
 				relayer_commission_bps,
 			});
+			Self::deposit_event(Event::<T>::SwapIngressReceived {
+				ingress_address,
+				swap_id,
+				ingress_amount: amount,
+			});
+			SwapIdCounter::<T>::put(swap_id);
+			Ok(())
 		}
 	}
 }

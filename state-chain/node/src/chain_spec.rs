@@ -1,5 +1,5 @@
 #[cfg(feature = "ibiza")]
-use cf_chains::dot::{POLKADOT_PROXY_ACCOUNT, POLKADOT_VAULT_ACCOUNT, WESTEND_CONFIG}; /* TODO: move these constants into chainspec. */
+use cf_chains::dot::{POLKADOT_PROXY_ACCOUNT, POLKADOT_VAULT_ACCOUNT, WESTEND_METADATA}; /* TODO: move these constants into chainspec. */
 use cf_primitives::{AccountRole, AuthorityCount};
 use sc_service::{ChainType, Properties};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
@@ -11,6 +11,10 @@ use state_chain_runtime::{
 	EthereumVaultConfig, FlipBalance, FlipConfig, GenesisConfig, GovernanceConfig, GrandpaConfig,
 	ReputationConfig, SessionConfig, StakingConfig, SystemConfig, ValidatorConfig, WASM_BINARY,
 };
+
+#[cfg(feature = "ibiza")]
+use state_chain_runtime::{PolkadotThresholdSignerConfig, PolkadotVaultConfig};
+
 use std::{collections::BTreeSet, env, marker::PhantomData};
 use utilities::clean_eth_address;
 
@@ -223,7 +227,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 					#[cfg(feature = "ibiza")]
 					polkadot_proxy_account_id: POLKADOT_PROXY_ACCOUNT,
 					#[cfg(feature = "ibiza")]
-					polkadot_network_config: WESTEND_CONFIG,
+					polkadot_network_metadata: WESTEND_METADATA,
 				},
 				eth_init_agg_key,
 				ethereum_deployment_block,
@@ -331,7 +335,7 @@ macro_rules! network_spec {
 								#[cfg(feature = "ibiza")]
 								polkadot_proxy_account_id: POLKADOT_PROXY_ACCOUNT,
 								#[cfg(feature = "ibiza")]
-								polkadot_network_config: WESTEND_CONFIG,
+								polkadot_network_metadata: WESTEND_METADATA,
 							},
 							eth_init_agg_key,
 							ethereum_deployment_block,
@@ -462,11 +466,22 @@ fn testnet_genesis(
 		reputation: ReputationConfig { accrual_ratio, penalties, genesis_nodes: genesis_stakers },
 		environment: config_set,
 		ethereum_vault: EthereumVaultConfig {
-			vault_key: eth_init_agg_key.to_vec(),
+			vault_key: Some(eth_init_agg_key.to_vec()),
 			deployment_block: ethereum_deployment_block,
 			keygen_response_timeout: keygen_ceremony_timeout_blocks,
 		},
+		#[cfg(feature = "ibiza")]
+		polkadot_vault: PolkadotVaultConfig {
+			vault_key: None,
+			deployment_block: 0,
+			keygen_response_timeout: keygen_ceremony_timeout_blocks,
+		},
 		ethereum_threshold_signer: EthereumThresholdSignerConfig {
+			threshold_signature_response_timeout: threshold_signature_ceremony_timeout_blocks,
+			_instance: PhantomData,
+		},
+		#[cfg(feature = "ibiza")]
+		polkadot_threshold_signer: PolkadotThresholdSignerConfig {
 			threshold_signature_response_timeout: threshold_signature_ceremony_timeout_blocks,
 			_instance: PhantomData,
 		},

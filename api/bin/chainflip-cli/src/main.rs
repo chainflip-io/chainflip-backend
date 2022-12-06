@@ -1,7 +1,12 @@
-use api::primitives::{AccountRole, Hash};
+use api::primitives::{AccountRole, ClaimAmount, Hash};
 use chainflip_api as api;
 use clap::Parser;
 use settings::{CLICommandLineOptions, CLISettings};
+
+#[cfg(feature = "ibiza")]
+use crate::settings::{LiquidityProviderSubcommands, RelayerSubcommands};
+#[cfg(feature = "ibiza")]
+use api::primitives::Asset;
 
 use crate::settings::{Claim, CliCommand::*};
 use anyhow::{anyhow, Result};
@@ -34,6 +39,12 @@ async fn run_cli() -> Result<()> {
 	);
 
 	match command_line_opts.cmd {
+		#[cfg(feature = "ibiza")]
+		Relayer(RelayerSubcommands::SwapIntent(params)) =>
+			swap_intent(&cli_settings.state_chain, params).await,
+		#[cfg(feature = "ibiza")]
+		LiquidityProvider(LiquidityProviderSubcommands::Deposit { asset }) =>
+			liquidity_deposit(&cli_settings.state_chain, asset).await,
 		Claim(Claim::Request { amount, eth_address, should_register_claim }) =>
 			request_claim(amount, &eth_address, &cli_settings, should_register_claim).await,
 		Claim(Claim::Check {}) => check_claim(&cli_settings.state_chain).await,
@@ -45,6 +56,49 @@ async fn run_cli() -> Result<()> {
 		VanityName { name } => api::set_vanity_name(name, &cli_settings.state_chain).await,
 		ForceRotation { id } => api::force_rotation(id, &cli_settings.state_chain).await,
 	}
+}
+
+#[cfg(feature = "ibiza")]
+pub async fn swap_intent(
+	state_chain_settings: &settings::StateChain,
+	params: settings::SwapIntentParams,
+) -> Result<()> {
+	use api::primitives::{ForeignChain, ForeignChainAddress};
+	use utilities::clean_dot_address;
+
+	let egress_address = match ForeignChain::from(params.egress_asset) {
+		ForeignChain::Ethereum => {
+			let addr = clean_eth_address(&params.egress_address)
+				.map_err(|err| anyhow!("Failed to parse address: {}", err))?;
+			ForeignChainAddress::Eth(addr)
+		},
+		ForeignChain::Polkadot => {
+			let addr = clean_dot_address(&params.egress_address)
+				.map_err(|err| anyhow!("Failed to parse address: {}", err))?;
+			ForeignChainAddress::Dot(addr)
+		},
+	};
+
+	let address = api::register_swap_intent(
+		state_chain_settings,
+		params.ingress_asset,
+		params.egress_asset,
+		egress_address,
+		params.relayer_commission,
+	)
+	.await?;
+	println!("Ingress address: {}", address);
+	Ok(())
+}
+
+#[cfg(feature = "ibiza")]
+pub async fn liquidity_deposit(
+	state_chain_settings: &settings::StateChain,
+	asset: Asset,
+) -> Result<()> {
+	let address = api::liquidity_deposit(state_chain_settings, asset).await?;
+	println!("Ingress address: {}", address);
+	Ok(())
 }
 
 pub async fn request_block(
@@ -97,7 +151,7 @@ async fn check_claim(state_chain_settings: &settings::StateChain) -> Result<()> 
 }
 
 async fn request_claim(
-	amount: f64,
+	amount: Option<f64>,
 	eth_address: &str,
 	settings: &CLISettings,
 	should_register_claim: bool,
@@ -114,20 +168,34 @@ async fn request_claim(
 			}
 		)?;
 
-	let atomic_amount: u128 = (amount * 10_f64.powi(18)) as u128;
+	let amount = match amount {
+		Some(amount_float) => {
+			let atomic_amount = (amount_float * 10_f64.powi(18)) as u128;
 
-	println!(
-		"Submitting claim with amount `{}` FLIP (`{}` Flipperinos) to ETH address `0x{}`.",
-		amount,
-		atomic_amount,
-		hex::encode(eth_address)
-	);
+			println!(
+				"Submitting claim with amount `{}` FLIP (`{}` Flipperinos) to ETH address `0x{}`.",
+				amount_float,
+				atomic_amount,
+				hex::encode(eth_address)
+			);
+
+			ClaimAmount::Exact(atomic_amount)
+		},
+		None => {
+			println!(
+				"Submitting claim with MAX amount to ETH address `0x{}`.",
+				hex::encode(eth_address)
+			);
+
+			ClaimAmount::Max
+		},
+	};
 
 	if !confirm_submit() {
 		return Ok(())
 	}
 
-	let tx_hash = api::request_claim(atomic_amount, eth_address, &settings.state_chain).await?;
+	let tx_hash = api::request_claim(amount, eth_address, &settings.state_chain).await?;
 
 	println!("Your claim has transaction hash: `{:#x}`. Waiting for signed claim data...", tx_hash);
 

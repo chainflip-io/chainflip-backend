@@ -17,7 +17,9 @@ use url::Url;
 use clap::Parser;
 use utilities::Port;
 
-#[derive(Debug, Deserialize, Clone)]
+use crate::constants::{CONFIG_ROOT, DEFAULT_CONFIG_ROOT};
+
+#[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
 pub struct P2P {
 	#[serde(deserialize_with = "deser_path")]
 	pub node_key_file: PathBuf,
@@ -26,7 +28,7 @@ pub struct P2P {
 	pub allow_local_ip: bool,
 }
 
-#[derive(Debug, Deserialize, Clone, Default)]
+#[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
 pub struct StateChain {
 	pub ws_endpoint: String,
 	#[serde(deserialize_with = "deser_path")]
@@ -41,7 +43,7 @@ impl StateChain {
 	}
 }
 
-#[derive(Debug, Deserialize, Clone, Default)]
+#[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
 pub struct Eth {
 	pub ws_node_endpoint: String,
 	pub http_node_endpoint: String,
@@ -50,7 +52,7 @@ pub struct Eth {
 }
 
 #[cfg(feature = "ibiza")]
-#[derive(Debug, Deserialize, Clone, Default)]
+#[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
 pub struct Dot {
 	pub ws_node_endpoint: String,
 }
@@ -80,19 +82,19 @@ pub struct HealthCheck {
 	pub port: Port,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
 pub struct Signing {
 	#[serde(deserialize_with = "deser_path")]
 	pub db_file: PathBuf,
 }
 
-#[derive(Debug, Deserialize, Clone, Default)]
+#[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
 pub struct Log {
 	pub whitelist: Vec<String>,
 	pub blacklist: Vec<String>,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
 pub struct Settings {
 	pub node_p2p: P2P,
 	pub state_chain: StateChain,
@@ -141,11 +143,12 @@ pub struct P2POptions {
 	allow_local_ip: Option<bool>,
 }
 
-#[derive(Parser, Debug, Clone, Default)]
+#[derive(Parser, Debug, Clone)]
+#[clap(version = env!("SUBSTRATE_CLI_IMPL_VERSION"))]
 pub struct CommandLineOptions {
 	// Misc Options
-	#[clap(short = 'c', long = "config-path")]
-	config_path: Option<String>,
+	#[clap(short = 'c', long = "config-root", env = CONFIG_ROOT, default_value = DEFAULT_CONFIG_ROOT)]
+	config_root: String,
 	#[clap(short = 'w', long = "log-whitelist")]
 	log_whitelist: Option<Vec<String>>,
 	#[clap(short = 'b', long = "log-blacklist")]
@@ -175,7 +178,34 @@ pub struct CommandLineOptions {
 	signing_db_file: Option<PathBuf>,
 }
 
-const ALLOW_LOCAL_IP: &str = "node_p2p.allow_local_ip";
+impl Default for CommandLineOptions {
+	fn default() -> Self {
+		Self {
+			config_root: DEFAULT_CONFIG_ROOT.to_owned(),
+			log_whitelist: None,
+			log_blacklist: None,
+			p2p_opts: P2POptions::default(),
+			state_chain_opts: StateChainOptions::default(),
+			eth_opts: EthOptions::default(),
+			#[cfg(feature = "ibiza")]
+			dot_opts: DotOptions::default(),
+			health_check_hostname: None,
+			health_check_port: None,
+			signing_db_file: None,
+		}
+	}
+}
+
+const NODE_P2P_KEY_FILE: &str = "node_p2p.node_key_file";
+const NODE_P2P_PORT: &str = "node_p2p.port";
+const NODE_P2P_ALLOW_LOCAL_IP: &str = "node_p2p.allow_local_ip";
+
+const STATE_CHAIN_WS_ENDPOINT: &str = "state_chain.ws_endpoint";
+const STATE_CHAIN_SIGNING_KEY_FILE: &str = "state_chain.signing_key_file";
+
+const ETH_PRIVATE_KEY_FILE: &str = "eth.private_key_file";
+
+const SIGNING_DB_FILE: &str = "signing.db_file";
 
 // We use PathBuf because the value must be Sized, Path is not Sized
 fn deser_path<'de, D>(deserializer: D) -> std::result::Result<PathBuf, D::Error>
@@ -210,39 +240,33 @@ where
 {
 	type CommandLineOptions: Source + Send + Sync + 'static;
 
-	/// Uses the `default_file` unless the `optional_file` is Some.
 	/// Merges settings from a TOML file, environment and provided command line options.
 	/// Merge priority is:
 	/// 1 - Command line options
 	/// 2 - Environment
-	/// 3 - TOML file
+	/// 3 - TOML file (if found)
+	/// 4 - Default value
 	fn load_settings_from_all_sources(
-		default_file: &str,
-		optional_file: Option<String>,
+		config_root: String,
 		opts: Self::CommandLineOptions,
 	) -> Result<Self, ConfigError> {
-		// Set the custom default settings
-		let mut builder = Self::set_defaults(Config::builder())?;
-
-		// Choose what file to use
-		let file = match &optional_file {
-			Some(path) => {
-				if Path::new(path).is_file() {
-					path
-				} else {
-					// If the user has set the config file path, then error if its missing.
-					return Err(ConfigError::Message(format!("File not found: {}", path)))
-				}
-			},
-			None => default_file,
-		};
+		// Set the default settings
+		let mut builder = Self::set_defaults(Config::builder(), &config_root)?;
 
 		// If the file does not exist we will try and continue anyway.
-		// Because if all of the settings are covered in the environment and cli options, then we
-		// don't need it.
-		let file_present = Path::new(file).is_file();
+		// Because if all of the settings are covered in the environment, cli options and defaults,
+		// then we don't need it.
+		let settings_file = PathBuf::from(config_root.clone()).join("config/Settings.toml");
+		let file_present = settings_file.is_file();
 		if file_present {
-			builder = builder.add_source(File::with_name(file));
+			builder = builder.add_source(File::from(settings_file.clone()));
+		} else if config_root != DEFAULT_CONFIG_ROOT {
+			// If the user has set a custom base config path but the settings file is missing, then
+			// error.
+			return Err(ConfigError::Message(format!(
+				"File not found: {}",
+				settings_file.to_string_lossy()
+			)))
 		}
 
 		let settings: Self = builder
@@ -251,11 +275,11 @@ where
 			.build()?
 			.try_deserialize()
 			.map_err(|e| {
-				// Add context to the error message if the file was missing.
+				// Add context to the error message if the settings file was missing.
 				ConfigError::Message(if file_present {
 					e.to_string()
 				} else {
-					format!("Default config file is missing {}: {}", file, e)
+					format!("Config file is missing {}: {}", settings_file.to_string_lossy(), e)
 				})
 			})?;
 
@@ -266,9 +290,10 @@ where
 
 	/// Set the default values of any settings. These values will be overridden by all other
 	/// sources. Any set this way will become optional (If no other source contains the settings, it
-	/// will NOT panic).
+	/// will NOT error).
 	fn set_defaults(
 		config_builder: ConfigBuilder<config::builder::DefaultState>,
+		_config_root: &str,
 	) -> Result<ConfigBuilder<config::builder::DefaultState>, ConfigError> {
 		// This function is optional, so just pass it through.
 		Ok(config_builder)
@@ -295,8 +320,40 @@ impl CfSettings for Settings {
 
 	fn set_defaults(
 		config_builder: ConfigBuilder<config::builder::DefaultState>,
+		config_root: &str,
 	) -> Result<ConfigBuilder<config::builder::DefaultState>, ConfigError> {
-		config_builder.set_default(ALLOW_LOCAL_IP, false)
+		config_builder
+			.set_default(NODE_P2P_ALLOW_LOCAL_IP, false)?
+			.set_default(
+				NODE_P2P_KEY_FILE,
+				PathBuf::from(config_root)
+					.join("keys/node_key_file")
+					.to_str()
+					.expect("Invalid node_key_file path"),
+			)?
+			.set_default(NODE_P2P_PORT, 8078)?
+			.set_default(STATE_CHAIN_WS_ENDPOINT, "ws://localhost:9944")?
+			.set_default(
+				STATE_CHAIN_SIGNING_KEY_FILE,
+				PathBuf::from(config_root)
+					.join("keys/signing_key_file")
+					.to_str()
+					.expect("Invalid signing_key_file path"),
+			)?
+			.set_default(
+				ETH_PRIVATE_KEY_FILE,
+				PathBuf::from(config_root)
+					.join("keys/eth_private_key")
+					.to_str()
+					.expect("Invalid eth_private_key path"),
+			)?
+			.set_default(
+				SIGNING_DB_FILE,
+				PathBuf::from(config_root)
+					.join("data.db")
+					.to_str()
+					.expect("Invalid signing_db_file path"),
+			)
 	}
 }
 
@@ -321,20 +378,9 @@ impl Source for CommandLineOptions {
 			&self.dot_opts.dot_ws_node_endpoint,
 		);
 
-		self.state_chain_opts.insert_all(&mut map);
-
-		self.eth_opts.insert_all(&mut map);
-
-		#[cfg(feature = "ibiza")]
-		insert_command_line_option(
-			&mut map,
-			"dot.ws_node_endpoint",
-			&self.dot_opts.dot_ws_node_endpoint,
-		);
-
 		insert_command_line_option(&mut map, "health_check.hostname", &self.health_check_hostname);
 		insert_command_line_option(&mut map, "health_check.port", &self.health_check_port);
-		insert_command_line_option_path(&mut map, "signing.db_file", &self.signing_db_file);
+		insert_command_line_option_path(&mut map, SIGNING_DB_FILE, &self.signing_db_file);
 		insert_command_line_option(&mut map, "log.whitelist", &self.log_whitelist);
 		insert_command_line_option(&mut map, "log.blacklist", &self.log_blacklist);
 
@@ -371,56 +417,50 @@ pub fn insert_command_line_option_path(
 impl StateChainOptions {
 	/// Inserts all the State Chain Options into the given map (if Some)
 	pub fn insert_all(&self, map: &mut HashMap<String, Value>) {
-		insert_command_line_option(map, "state_chain.ws_endpoint", &self.state_chain_ws_endpoint);
+		insert_command_line_option(map, STATE_CHAIN_WS_ENDPOINT, &self.state_chain_ws_endpoint);
 		insert_command_line_option_path(
 			map,
-			"state_chain.signing_key_file",
+			STATE_CHAIN_SIGNING_KEY_FILE,
 			&self.state_chain_signing_key_file,
 		);
 	}
 }
 
 impl EthOptions {
-	/// Inserts all the Eth Shared Options into the given map (if Some)
+	/// Inserts all the Eth Options into the given map (if Some)
 	pub fn insert_all(&self, map: &mut HashMap<String, Value>) {
 		insert_command_line_option(map, "eth.ws_node_endpoint", &self.eth_ws_node_endpoint);
 		insert_command_line_option(map, "eth.http_node_endpoint", &self.eth_http_node_endpoint);
-		insert_command_line_option_path(map, "eth.private_key_file", &self.eth_private_key_file);
+		insert_command_line_option_path(map, ETH_PRIVATE_KEY_FILE, &self.eth_private_key_file);
 	}
 }
 
 impl P2POptions {
-	/// Inserts all the Eth Shared Options into the given map (if Some)
+	/// Inserts all the P2P Options into the given map (if Some)
 	pub fn insert_all(&self, map: &mut HashMap<String, Value>) {
-		insert_command_line_option_path(map, "node_p2p.node_key_file", &self.node_key_file);
+		insert_command_line_option_path(map, NODE_P2P_KEY_FILE, &self.node_key_file);
 		insert_command_line_option(
 			map,
 			"node_p2p.ip_address",
 			&self.ip_address.map(|ip| ip.to_string()),
 		);
-		insert_command_line_option(map, "node_p2p.port", &self.p2p_port);
-		insert_command_line_option(map, ALLOW_LOCAL_IP, &self.allow_local_ip);
+		insert_command_line_option(map, NODE_P2P_PORT, &self.p2p_port);
+		insert_command_line_option(map, NODE_P2P_ALLOW_LOCAL_IP, &self.allow_local_ip);
 	}
 }
 
 impl Settings {
-	/// New settings loaded from the `config_path` in the `CommandLineOptions` or
-	/// "config/Default.toml" if none, with overridden values from the environment and
-	/// `CommandLineOptions`
+	/// New settings loaded from "$base_config_path/config/Settings.toml",
+	/// environment and `CommandLineOptions`
 	pub fn new(opts: CommandLineOptions) -> Result<Self, ConfigError> {
-		#[cfg(not(feature = "ibiza"))]
-		let default_settings = "config/Default.toml";
-		#[cfg(feature = "ibiza")]
-		let default_settings = "config/IbizaDefault.toml";
-		Self::load_settings_from_all_sources(default_settings, opts.config_path.clone(), opts)
+		Self::load_settings_from_all_sources(opts.config_root.clone(), opts)
 	}
 
 	#[cfg(test)]
 	pub fn new_test() -> Result<Self, ConfigError> {
 		tests::set_test_env();
 		Settings::load_settings_from_all_sources(
-			"config/Testing.toml",
-			None,
+			"config/testing/".to_owned(),
 			CommandLineOptions::default(),
 		)
 	}
@@ -446,7 +486,6 @@ fn validate_endpoint(valid_schemes: Vec<&str>, url: &str) -> Result<()> {
 	if parsed_url.host() == None ||
 		parsed_url.username() != "" ||
 		parsed_url.password() != None ||
-		parsed_url.query() != None ||
 		parsed_url.fragment() != None ||
 		parsed_url.cannot_be_a_base()
 	{
@@ -469,24 +508,30 @@ mod tests {
 	use utilities::assert_ok;
 
 	use super::*;
+	use std::env;
 
 	pub fn set_test_env() {
-		use std::env;
-
-		use crate::constants::{
-			ETH_HTTP_NODE_ENDPOINT, ETH_WS_NODE_ENDPOINT, NODE_P2P_IP_ADDRESS, NODE_P2P_PORT,
-		};
+		use crate::constants::{ETH_HTTP_NODE_ENDPOINT, ETH_WS_NODE_ENDPOINT, NODE_P2P_IP_ADDRESS};
 
 		env::set_var(ETH_HTTP_NODE_ENDPOINT, "http://localhost:8545");
 		env::set_var(ETH_WS_NODE_ENDPOINT, "ws://localhost:8545");
 		env::set_var(NODE_P2P_IP_ADDRESS, "1.1.1.1");
-		env::set_var(NODE_P2P_PORT, "8087");
+		#[cfg(feature = "ibiza")]
+		env::set_var("DOT__WS_NODE_ENDPOINT", "wss://my_fake_polkadot_rpc:443/<secret_key>");
 	}
 
 	#[test]
 	fn init_default_config() {
 		set_test_env();
-		let settings = Settings::new(CommandLineOptions::default()).unwrap();
+
+		let settings = Settings::new(CommandLineOptions {
+			state_chain_opts: StateChainOptions {
+				state_chain_ws_endpoint: None,
+				state_chain_signing_key_file: Some(PathBuf::from("")),
+			},
+			..Default::default()
+		})
+		.unwrap();
 		assert_eq!(settings.state_chain.ws_endpoint, "ws://localhost:9944");
 		assert_eq!(settings.eth.http_node_endpoint, "http://localhost:8545");
 	}
@@ -495,7 +540,10 @@ mod tests {
 	fn test_init_config_with_testing_config() {
 		let test_settings = Settings::new_test().unwrap();
 
-		assert_eq!(test_settings.state_chain.ws_endpoint, "ws://localhost:9944");
+		assert_eq!(
+			test_settings.state_chain.signing_key_file,
+			PathBuf::from("./tests/test_keystore/alice_key")
+		);
 	}
 
 	#[test]
@@ -507,6 +555,9 @@ mod tests {
 		assert_ok!(validate_websocket_endpoint("wss://network.my_eth_node/<secret_key>"));
 		assert_ok!(validate_websocket_endpoint("ws://network.my_eth_node/<secret_key>"));
 		assert_ok!(validate_websocket_endpoint("wss://network.my_eth_node"));
+		assert_ok!(validate_websocket_endpoint(
+			"wss://polkadot.api.onfinality.io:443/ws?apikey=00000000-0000-0000-0000-000000000000"
+		));
 		assert!(validate_websocket_endpoint("https://wrong_scheme.com").is_err());
 		assert!(validate_websocket_endpoint("").is_err());
 	}
@@ -531,42 +582,42 @@ mod tests {
 	}
 
 	#[test]
-	fn test_config_command_line_option() {
-		// Load both the settings files using the --config command line option
-		let settings1 = Settings::new(CommandLineOptions {
-			config_path: Some("config/Testing.toml".to_owned()),
+	fn test_base_config_path_command_line_option() {
+		set_test_env();
+
+		// Load the settings using a custom base config path.
+		let test_base_config_path = "config/testing/";
+		let custom_base_path_settings = Settings::new(CommandLineOptions {
+			config_root: test_base_config_path.to_owned(),
 			..Default::default()
 		})
 		.unwrap();
 
-		let settings2 = Settings::new(CommandLineOptions {
-			config_path: Some(
-				if cfg!(feature = "ibiza") {
-					"config/IbizaDefault.toml"
-				} else {
-					"config/Default.toml"
-				}
-				.to_owned(),
-			),
-			..Default::default()
-		})
-		.unwrap();
+		let default_settings = Settings::new(CommandLineOptions::default()).unwrap();
 
-		// Now compare a value that should be different to confirm that both files loaded.
-		// Note: This test will break/fail if the Testing.toml and Default.toml have the same
-		// `signing_key_file` value
-		assert_ne!(settings1.state_chain.signing_key_file, settings2.state_chain.signing_key_file);
+		// Check that the settings file at "config/testing/config/Settings.toml" was loaded by
+		// by comparing it to the default settings. Note: This check will fail if the
+		// Settings.toml contains only default or no values.
+		assert_ne!(custom_base_path_settings, default_settings);
+
+		// Check that a key file is a child of the custom base path.
+		// Note: This check will break if the `node_p2p.node_key_file` settings is set in
+		// "config/testing/config/Settings.toml".
+		assert!(custom_base_path_settings
+			.node_p2p
+			.node_key_file
+			.to_string_lossy()
+			.contains(test_base_config_path));
 	}
 
 	#[test]
 	fn test_all_command_line_options() {
 		use std::str::FromStr;
-
 		// Fill the options with test values that will pass the parsing/validation.
-		// The test values need to be different from the values in `Default.toml` for the test to
-		// work. Leave the `config_path` option out, it is covered in a separate test.
+		// The test values need to be different from the default values set during `set_defaults()`
+		// for the test to work. The `config_root` option is covered in a separate test.
 		let opts = CommandLineOptions {
-			config_path: None,
+			config_root: CommandLineOptions::default().config_root,
 			log_whitelist: Some(vec!["test1".to_owned()]),
 			log_blacklist: Some(vec!["test2".to_owned()]),
 			p2p_opts: P2POptions {

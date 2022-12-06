@@ -8,6 +8,7 @@ pub mod ingress_address;
 
 use crate::*;
 pub use cf_primitives::chains::{assets, Ethereum};
+use cf_primitives::KeyId;
 use codec::{Decode, Encode, MaxEncodedLen};
 pub use ethabi::{
 	ethereum_types::{H256, U256},
@@ -42,9 +43,11 @@ impl Chain for Ethereum {
 	type TrackedData = eth::TrackedData<Self>;
 	type ChainAccount = eth::Address;
 	type ChainAsset = assets::eth::Asset;
+	type EpochStartData = ();
 }
 
 impl ChainCrypto for Ethereum {
+	type KeyId = KeyId;
 	type AggKey = eth::AggKey;
 	type Payload = eth::H256;
 	type ThresholdSignature = SchnorrVerificationComponents;

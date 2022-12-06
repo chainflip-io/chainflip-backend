@@ -8,7 +8,7 @@ pub use cf_primitives::{
 	Asset, AssetAmount, EthereumAddress, ExchangeRate, ETHEREUM_ETH_ADDRESS,
 };
 
-use cf_traits::mocks::all_batch::MockAllBatch;
+use cf_traits::mocks::all_batch::{MockAllBatch, MockEthEnvironment};
 pub use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
 	Broadcaster,
@@ -26,7 +26,6 @@ type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 type AccountId = u64;
 
-pub const ETHEREUM_FLIP_ADDRESS: EthereumAddress = [0x00; 20];
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
 	pub enum Test where
@@ -84,25 +83,9 @@ impl cf_traits::Chainflip for Test {
 
 pub struct MockBroadcast;
 impl Broadcaster<Ethereum> for MockBroadcast {
-	type ApiCall = MockAllBatch;
+	type ApiCall = MockAllBatch<MockEthEnvironment>;
 
 	fn threshold_sign_and_broadcast(_api_call: Self::ApiCall) {}
-}
-
-pub struct MockEthEnvironment;
-
-impl ChainEnvironment<<Ethereum as Chain>::ChainAsset, <Ethereum as Chain>::ChainAccount>
-	for MockEthEnvironment
-{
-	fn lookup(
-		asset: <Ethereum as Chain>::ChainAsset,
-	) -> Result<<Ethereum as Chain>::ChainAccount, frame_support::error::LookupError> {
-		Ok(match asset {
-			assets::eth::Asset::Eth => ETHEREUM_ETH_ADDRESS.into(),
-			assets::eth::Asset::Flip => ETHEREUM_FLIP_ADDRESS.into(),
-			_ => todo!(),
-		})
-	}
 }
 
 impl crate::Config<Instance1> for Test {
@@ -111,7 +94,7 @@ impl crate::Config<Instance1> for Test {
 	type AddressDerivation = ();
 	type LpProvisioning = Self;
 	type SwapIntentHandler = Self;
-	type AllBatch = MockAllBatch;
+	type AllBatch = MockAllBatch<MockEthEnvironment>;
 	type Broadcaster = MockBroadcast;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type WeightInfo = ();

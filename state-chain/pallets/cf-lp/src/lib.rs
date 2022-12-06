@@ -7,11 +7,10 @@ use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use sp_runtime::DispatchResult;
 
-use cf_chains::Ethereum;
+use cf_chains::AnyChain;
 use cf_primitives::{
-	chains::assets,
 	liquidity::{PoolId, PositionId, TradingPosition},
-	Asset, AssetAmount, ForeignChainAddress, IntentId,
+	Asset, AssetAmount, ForeignChain, ForeignChainAddress, IntentId,
 };
 use cf_traits::{
 	liquidity::{AmmPoolApi, LpProvisioningApi},
@@ -28,6 +27,7 @@ use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
 mod mock;
+
 #[cfg(test)]
 mod tests;
 
@@ -52,7 +52,6 @@ impl<AccountId, Amount> UserTradingPosition<AccountId, Amount> {
 
 #[frame_support::pallet]
 pub mod pallet {
-	use cf_chains::ForeignChain;
 
 	use super::*;
 
@@ -66,11 +65,14 @@ pub mod pallet {
 		/// For registering and verifying the account role.
 		type AccountRoleRegistry: AccountRoleRegistry<Self>;
 
-		/// API used for requesting an ingress.
-		type Ingress: IngressApi<AccountId = <Self as frame_system::Config>::AccountId, Ethereum>;
+		/// API for handling asset ingress.
+		type IngressHandler: IngressApi<
+			AnyChain,
+			AccountId = <Self as frame_system::Config>::AccountId,
+		>;
 
-		/// API used to withdraw foreign assets off the chain.
-		type EgressApi: EgressApi<Ethereum>;
+		/// API for handling asset egress.
+		type EgressHandler: EgressApi<AnyChain>;
 
 		/// For governance checks.
 		type EnsureGovernance: EnsureOrigin<Self::Origin>;
@@ -239,13 +241,8 @@ pub mod pallet {
 		pub fn request_deposit_address(origin: OriginFor<T>, asset: Asset) -> DispatchResult {
 			T::SystemState::ensure_no_maintenance()?;
 			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
-			let (intent_id, ingress_address) = match asset.into() {
-				ForeignChain::Ethereum => T::Ingress::register_liquidity_ingress_intent(
-					account_id,
-					asset.try_into().unwrap(),
-				),
-				_ => todo!(),
-			}?;
+			let (intent_id, ingress_address) =
+				T::IngressHandler::register_liquidity_ingress_intent(account_id, asset)?;
 
 			Self::deposit_event(Event::DepositAddressReady { intent_id, ingress_address });
 
@@ -263,20 +260,12 @@ pub mod pallet {
 			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
 			// Check validity of Chain and Asset
-			match egress_address {
-				ForeignChainAddress::Eth(eth_addr) => {
-					let eth_asset = assets::eth::Asset::try_from(asset)
-						.map_err(|_| Error::<T>::InvalidEgressAddress)?;
-					T::EgressApi::schedule_egress(eth_asset, amount, eth_addr.into());
-				},
-				ForeignChainAddress::Dot(_dot_addr) => {
-					// TODO: Enable this arm when polkadot egress is supported.
-					let _dot_asset = assets::dot::Asset::try_from(asset)
-						.map_err(|_| Error::<T>::InvalidEgressAddress)?;
-					// T::EgressApi::schedule_egress(dot_asset, amount, dot_addr);
-				},
-			}
+			ensure!(
+				ForeignChain::from(egress_address) == ForeignChain::from(asset),
+				Error::<T>::InvalidEgressAddress
+			);
 
+			T::EgressHandler::schedule_egress(asset, amount, egress_address);
 			// Debit the asset from the account.
 			Pallet::<T>::try_debit(&account_id, asset, amount)?;
 

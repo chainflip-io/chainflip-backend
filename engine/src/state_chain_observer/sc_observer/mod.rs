@@ -9,7 +9,7 @@ use pallet_cf_vaults::KeygenError;
 use slog::o;
 use sp_core::{Hasher, H256};
 use sp_runtime::{traits::Keccak256, AccountId32};
-use state_chain_runtime::{AccountId, CfeSettings};
+use state_chain_runtime::{AccountId, CfeSettings, EthereumInstance};
 use std::{
 	collections::BTreeSet,
 	sync::{
@@ -20,6 +20,9 @@ use std::{
 };
 use tokio::sync::{mpsc::UnboundedSender, watch};
 
+#[cfg(feature = "ibiza")]
+use cf_chains::{dot, Polkadot};
+
 use crate::{
 	eth::{rpc::EthRpcApi, EthBroadcaster},
 	logging::COMPONENT_KEY,
@@ -27,7 +30,7 @@ use crate::{
 		client::{KeygenFailureReason, MultisigClientApi},
 		eth::EthSigning,
 		polkadot::PolkadotSigning,
-		KeyId, MessageHash,
+		KeyId, SigningPayload,
 	},
 	p2p::{PeerInfo, PeerUpdate},
 	state_chain_observer::client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi},
@@ -36,27 +39,32 @@ use crate::{
 };
 
 #[cfg(feature = "ibiza")]
+use crate::dot::{rpc::DotRpcApi, DotBroadcaster};
+
+#[cfg(feature = "ibiza")]
 use sp_core::H160;
 
 async fn handle_keygen_request<'a, StateChainClient, MultisigClient>(
 	scope: &Scope<'a, anyhow::Error>,
-	multisig_client: Arc<MultisigClient>,
+	multisig_client: &'a MultisigClient,
 	state_chain_client: Arc<StateChainClient>,
 	ceremony_id: CeremonyId,
 	keygen_participants: BTreeSet<AccountId32>,
 	logger: slog::Logger,
 ) where
-	MultisigClient: MultisigClientApi<EthSigning> + Send + Sync + 'static,
+	MultisigClient: MultisigClientApi<EthSigning>,
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
 {
 	if keygen_participants.contains(&state_chain_client.account_id()) {
+		// We initiate keygen outside of the spawn to avoid requesting ceremonies out of order
+		let keygen_result_future =
+			multisig_client.initiate_keygen(ceremony_id, keygen_participants);
 		scope.spawn(async move {
 			let _result = state_chain_client
 				.submit_signed_extrinsic(
-					pallet_cf_vaults::Call::report_keygen_outcome {
+					pallet_cf_vaults::Call::<_, EthereumInstance>::report_keygen_outcome {
 						ceremony_id,
-						reported_outcome: multisig_client
-							.keygen(ceremony_id, keygen_participants.clone())
+						reported_outcome: keygen_result_future
 							.await
 							.map(|point| {
 								cf_chains::eth::AggKey::from_pubkey_compressed(
@@ -85,25 +93,29 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient>(
 
 async fn handle_signing_request<'a, StateChainClient, MultisigClient>(
 	scope: &Scope<'a, anyhow::Error>,
-	multisig_client: Arc<MultisigClient>,
+	multisig_client: &'a MultisigClient,
 	state_chain_client: Arc<StateChainClient>,
 	ceremony_id: CeremonyId,
 	key_id: KeyId,
 	signers: BTreeSet<AccountId>,
-	data: MessageHash,
+	payload: SigningPayload,
 	logger: slog::Logger,
 ) where
-	MultisigClient: MultisigClientApi<EthSigning> + Send + Sync + 'static,
+	MultisigClient: MultisigClientApi<EthSigning>,
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
 {
+	assert_eq!(payload.0.len(), 32, "Incorrect payload size");
+
 	if signers.contains(&state_chain_client.account_id()) {
-		// Send a signing request and wait to submit the result to the SC
+		// We initiate signing outside of the spawn to avoid requesting ceremonies out of order
+		let signing_result_future =
+			multisig_client.initiate_signing(ceremony_id, key_id, signers, payload);
 		scope.spawn(async move {
-			match multisig_client.sign(ceremony_id, key_id, signers, data).await {
+			match signing_result_future.await {
 				Ok(signature) => {
 					let _result = state_chain_client
 						.submit_unsigned_extrinsic(
-							pallet_cf_threshold_signature::Call::signature_success {
+							pallet_cf_threshold_signature::Call::<_, EthereumInstance>::signature_success {
 								ceremony_id,
 								signature: signature.into(),
 							},
@@ -114,7 +126,7 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient>(
 				Err((bad_account_ids, _reason)) => {
 					let _result = state_chain_client
 						.submit_signed_extrinsic(
-							pallet_cf_threshold_signature::Call::report_signature_failed {
+							pallet_cf_threshold_signature::Call::<_, EthereumInstance>::report_signature_failed {
 								id: ceremony_id,
 								offenders: BTreeSet::from_iter(bad_account_ids),
 							},
@@ -167,14 +179,16 @@ pub async fn start<
 	StateChainClient,
 	BlockStream,
 	EthRpc,
+	#[cfg(feature = "ibiza")] DotRpc: DotRpcApi + Send + Sync + 'static,
 	EthMultisigClient,
 	PolkadotMultisigClient,
 >(
 	state_chain_client: Arc<StateChainClient>,
 	sc_block_stream: BlockStream,
 	eth_broadcaster: EthBroadcaster<EthRpc>,
-	eth_multisig_client: Arc<EthMultisigClient>,
-	dot_multisig_client: Arc<PolkadotMultisigClient>,
+	#[cfg(feature = "ibiza")] dot_broadcaster: DotBroadcaster<DotRpc>,
+	eth_multisig_client: EthMultisigClient,
+	dot_multisig_client: PolkadotMultisigClient,
 	peer_update_sender: UnboundedSender<PeerUpdate>,
 	eth_epoch_start_sender: async_broadcast::Sender<EpochStart<Ethereum>>,
 	#[cfg(feature = "ibiza")] eth_monitor_ingress_sender: tokio::sync::mpsc::UnboundedSender<H160>,
@@ -184,6 +198,7 @@ pub async fn start<
 	#[cfg(feature = "ibiza")] eth_monitor_usdc_ingress_sender: tokio::sync::mpsc::UnboundedSender<
 		H160,
 	>,
+	#[cfg(feature = "ibiza")] dot_epoch_start_sender: async_broadcast::Sender<EpochStart<Polkadot>>,
 	cfe_settings_update_sender: watch::Sender<CfeSettings>,
 	initial_block_hash: H256,
 	logger: slog::Logger,
@@ -216,6 +231,8 @@ where
 
         let start_epoch = |block_hash: H256, index: u32, current: bool, participant: bool| {
             let eth_epoch_start_sender = &eth_epoch_start_sender;
+            #[cfg(feature = "ibiza")]
+            let dot_epoch_start_sender = &dot_epoch_start_sender;
             let state_chain_client = &state_chain_client;
 
             async move {
@@ -232,7 +249,33 @@ where
                         .active_from_block,
                     current,
                     participant,
+                    data: (),
                 }).await.unwrap();
+
+                #[cfg(feature = "ibiza")]
+                {
+                    // It is possible for there not to be a Polkadot vault.
+                    // At genesis there is no Polkadot vault, so we want to check that the vault exists
+                    // before we start witnessing.
+                    if let Some(vault) = state_chain_client
+                    .storage_map_entry::<pallet_cf_vaults::Vaults<
+                        state_chain_runtime::Runtime,
+                        state_chain_runtime::PolkadotInstance,
+                    >>(block_hash, &index)
+                    .await
+                    .unwrap() {
+                        dot_epoch_start_sender.broadcast(EpochStart::<Polkadot> {
+                            epoch_index: index,
+                            block_number: vault.active_from_block,
+                            current,
+                            participant,
+                            data: dot::EpochStartData {
+                                vault_account: state_chain_client.storage_value::<pallet_cf_environment::PolkadotVaultAccountId<state_chain_runtime::Runtime>>(block_hash).await.unwrap().unwrap()
+                            }
+                        }).await.unwrap();
+                    }
+                }
+
             }
         };
 
@@ -339,7 +382,7 @@ where
 
                                         handle_keygen_request(
                                             scope,
-                                            eth_multisig_client.clone(),
+                                            &eth_multisig_client,
                                             state_chain_client.clone(),
                                             ceremony_id,
                                             keygen_participants,
@@ -360,12 +403,12 @@ where
 
                                         handle_signing_request(
                                                 scope,
-                                                eth_multisig_client.clone(),
+                                                &eth_multisig_client,
                                             state_chain_client.clone(),
                                             ceremony_id,
                                             KeyId(key_id),
                                             signatories,
-                                            MessageHash(payload.to_fixed_bytes()),
+                                            SigningPayload(payload.0.to_vec()),
                                             logger.clone(),
                                         ).await;
                                     }
@@ -435,6 +478,16 @@ where
                                                 ).await;
                                             }
                                         }
+                                    }
+                                    #[cfg(feature = "ibiza")]
+                                    state_chain_runtime::Event::PolkadotBroadcaster(
+                                        pallet_cf_broadcast::Event::TransactionBroadcastRequest {
+                                            broadcast_attempt_id: _,
+                                            nominee,
+                                            unsigned_tx,
+                                        },
+                                    ) if nominee == account_id => {
+                                        let _result = dot_broadcaster.send(unsigned_tx.encoded_extrinsic).await;
                                     }
                                     state_chain_runtime::Event::Environment(
                                         pallet_cf_environment::Event::CfeSettingsUpdated {

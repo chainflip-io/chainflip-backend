@@ -2,21 +2,25 @@
 
 mod async_result;
 pub mod liquidity;
+pub use liquidity::*;
+
 pub mod mocks;
 pub mod offence_reporting;
-pub use liquidity::*;
 
 use core::fmt::Debug;
 
 pub use async_result::AsyncResult;
 use sp_std::collections::btree_set::BTreeSet;
 
+#[cfg(feature = "ibiza")]
+use cf_chains::Polkadot;
 use cf_chains::{
-	benchmarking_value::BenchmarkValue, ApiCall, Chain, ChainAbi, ChainCrypto, Ethereum, Polkadot,
+	benchmarking_value::BenchmarkValue, ApiCall, Chain, ChainAbi, ChainCrypto, Ethereum,
 };
+
 use cf_primitives::{
-	AccountRole, Asset, AssetAmount, AuthorityCount, CeremonyId, EpochIndex, ForeignChainAddress,
-	IntentId,
+	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, CeremonyId, EpochIndex,
+	ForeignChainAddress, IntentId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -158,17 +162,28 @@ impl<CandidateId, BidAmount: Default> Default for AuctionOutcome<CandidateId, Bi
 	}
 }
 
+#[derive(PartialEq, Eq, Clone, Debug, Decode, Encode)]
+pub enum VaultStatus<ValidatorId> {
+	KeygenComplete,
+	RotationComplete,
+	Failed(BTreeSet<ValidatorId>),
+}
+
 pub trait VaultRotator {
-	type ValidatorId;
+	type ValidatorId: Ord + Clone;
 
-	/// Start a vault rotation with the provided `candidates`.
-	fn start_vault_rotation(candidates: BTreeSet<Self::ValidatorId>);
+	/// Start the rotation by kicking off keygen with provided candidates.
+	fn keygen(candidates: BTreeSet<Self::ValidatorId>);
 
-	/// Poll for the vault rotation outcome.
-	fn get_vault_rotation_outcome() -> AsyncResult<Result<(), BTreeSet<Self::ValidatorId>>>;
+	/// Get the current rotation status.
+	fn status() -> AsyncResult<VaultStatus<Self::ValidatorId>>;
+
+	/// Activate key/s on particular chain/s. For example, setting the new key
+	/// on the contract for a smart contract chain.
+	fn activate();
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn set_vault_rotation_outcome(_outcome: AsyncResult<Result<(), BTreeSet<Self::ValidatorId>>>) {
+	fn set_status(_outcome: AsyncResult<VaultStatus<Self::ValidatorId>>) {
 		unimplemented!()
 	}
 }
@@ -354,16 +369,30 @@ pub trait ThresholdSignerNomination {
 	) -> Option<BTreeSet<Self::SignerId>>;
 }
 
+#[derive(Default, Debug, TypeInfo, Decode, Encode, Clone, Copy, PartialEq, Eq)]
+pub enum KeyState<Key> {
+	Active {
+		key: Key,
+		epoch_index: EpochIndex,
+	},
+	// We are currently transitioning to a new key or the key doesn't yet exist.
+	#[default]
+	Unavailable,
+}
+
+impl<Key> KeyState<Key> {
+	pub fn unwrap_key(self) -> Key {
+		match self {
+			Self::Active { key: key_id, epoch_index: _ } => key_id,
+			Self::Unavailable => panic!("KeyState is Unavailable!"),
+		}
+	}
+}
+
 /// Provides the currently valid key for multisig ceremonies.
 pub trait KeyProvider<C: ChainCrypto> {
-	/// The type of the provided key_id.
-	type KeyId;
-
-	/// Gets the key id and epoch index for the current vault key.
-	fn current_key_id_epoch_index() -> (Self::KeyId, EpochIndex);
-
-	/// Get the chain's current agg key.
-	fn current_key() -> C::AggKey;
+	/// Get the chain's current agg key and the epoch index for the current key.
+	fn current_key_epoch_index() -> KeyState<C::AggKey>;
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_key(_key: C::AggKey) {
@@ -604,7 +633,6 @@ pub trait StakingInfo {
 /// Allow pallets to register `Intent`s in the Ingress pallet.
 pub trait IngressApi<C: Chain> {
 	type AccountId;
-
 	/// Issues an intent id and ingress address for a new liquidity deposit.
 	fn register_liquidity_ingress_intent(
 		lp_account: Self::AccountId,
@@ -619,6 +647,45 @@ pub trait IngressApi<C: Chain> {
 		relayer_commission_bps: u16,
 		relayer_id: Self::AccountId,
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError>;
+}
+
+impl<T: frame_system::Config> IngressApi<Ethereum> for T {
+	type AccountId = T::AccountId;
+	fn register_liquidity_ingress_intent(
+		_lp_account: T::AccountId,
+		_ingress_asset: assets::eth::Asset,
+	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
+		Ok((0, ForeignChainAddress::Eth([0u8; 20])))
+	}
+	fn register_swap_intent(
+		_ingress_asset: assets::eth::Asset,
+		_egress_asset: Asset,
+		_egress_address: ForeignChainAddress,
+		_relayer_commission_bps: u16,
+		_relayer_id: T::AccountId,
+	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
+		Ok((0, ForeignChainAddress::Eth([0u8; 20])))
+	}
+}
+
+#[cfg(feature = "ibiza")]
+impl<T: frame_system::Config> IngressApi<Polkadot> for T {
+	type AccountId = T::AccountId;
+	fn register_liquidity_ingress_intent(
+		_lp_account: T::AccountId,
+		_ingress_asset: assets::dot::Asset,
+	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
+		Ok((0, ForeignChainAddress::Dot([0u8; 32])))
+	}
+	fn register_swap_intent(
+		_ingress_asset: assets::dot::Asset,
+		_egress_asset: Asset,
+		_egress_address: ForeignChainAddress,
+		_relayer_commission_bps: u16,
+		_relayer_id: T::AccountId,
+	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
+		Ok((0, ForeignChainAddress::Dot([0u8; 32])))
+	}
 }
 
 /// Generates a deterministic ingress address for some combination of asset, chain and intent id.
@@ -638,6 +705,7 @@ impl AddressDerivationApi<Ethereum> for () {
 	}
 }
 
+#[cfg(feature = "ibiza")]
 impl AddressDerivationApi<Polkadot> for () {
 	fn generate_address(
 		_ingress_asset: <Polkadot as Chain>::ChainAsset,
@@ -687,6 +755,25 @@ pub trait EgressApi<C: Chain> {
 		amount: AssetAmount,
 		egress_address: C::ChainAccount,
 	);
+}
+
+impl<T: frame_system::Config> EgressApi<Ethereum> for T {
+	fn schedule_egress(
+		_foreign_asset: assets::eth::Asset,
+		_amount: AssetAmount,
+		_egress_address: <Ethereum as Chain>::ChainAccount,
+	) {
+	}
+}
+
+#[cfg(feature = "ibiza")]
+impl<T: frame_system::Config> EgressApi<Polkadot> for T {
+	fn schedule_egress(
+		_foreign_asset: assets::dot::Asset,
+		_amount: AssetAmount,
+		_egress_address: <Polkadot as Chain>::ChainAccount,
+	) {
+	}
 }
 
 pub trait VaultTransitionHandler<C: ChainCrypto> {

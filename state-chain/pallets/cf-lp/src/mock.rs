@@ -1,15 +1,19 @@
 use crate as pallet_cf_lp;
-use cf_chains::{eth::assets, Chain, ChainEnvironment, Ethereum};
-use cf_primitives::{EthereumAddress, IntentId, ETHEREUM_ETH_ADDRESS};
+use cf_chains::{eth::assets, AnyChain, Chain, Ethereum};
+use cf_primitives::{AccountRole, IntentId};
 use cf_traits::{
 	mocks::{
-		all_batch::MockAllBatch, bid_info::MockBidInfo,
-		ensure_origin_mock::NeverFailingOriginCheck, staking_info::MockStakingInfo,
+		all_batch::{MockAllBatch, MockEthEnvironment},
+		bid_info::MockBidInfo,
+		egress_handler::MockEgressHandler,
+		ensure_origin_mock::NeverFailingOriginCheck,
+		ingress_handler::MockIngressHandler,
+		staking_info::MockStakingInfo,
 		system_state_info::MockSystemStateInfo,
 	},
 	AddressDerivationApi, Broadcaster,
 };
-use frame_support::{instances::Instance1, parameter_types, sp_runtime::app_crypto::sp_core::H160};
+use frame_support::{parameter_types, sp_runtime::app_crypto::sp_core::H160};
 use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{
@@ -17,13 +21,13 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage,
 };
+
 use sp_std::str::FromStr;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 type AccountId = u64;
 
-pub const ETHEREUM_FLIP_ADDRESS: EthereumAddress = [0x00; 20];
 pub struct MockAddressDerivation;
 
 impl AddressDerivationApi<Ethereum> for MockAddressDerivation {
@@ -44,7 +48,6 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system,
 		AccountRoles: pallet_cf_account_roles,
-		EthereumIngressEgress: pallet_cf_ingress_egress::<Instance1>,
 		LiquidityProvider: pallet_cf_lp,
 	}
 );
@@ -83,37 +86,9 @@ impl system::Config for Test {
 
 pub struct MockBroadcast;
 impl Broadcaster<Ethereum> for MockBroadcast {
-	type ApiCall = MockAllBatch;
+	type ApiCall = MockAllBatch<MockEthEnvironment>;
 
 	fn threshold_sign_and_broadcast(_api_call: Self::ApiCall) {}
-}
-
-pub struct MockEthEnvironment;
-
-impl ChainEnvironment<<Ethereum as Chain>::ChainAsset, <Ethereum as Chain>::ChainAccount>
-	for MockEthEnvironment
-{
-	fn lookup(
-		asset: <Ethereum as Chain>::ChainAsset,
-	) -> Result<<Ethereum as Chain>::ChainAccount, frame_support::error::LookupError> {
-		Ok(match asset {
-			assets::eth::Asset::Eth => ETHEREUM_ETH_ADDRESS.into(),
-			assets::eth::Asset::Flip => ETHEREUM_FLIP_ADDRESS.into(),
-			_ => todo!(),
-		})
-	}
-}
-
-impl pallet_cf_ingress_egress::Config<Instance1> for Test {
-	type Event = Event;
-	type TargetChain = Ethereum;
-	type AddressDerivation = MockAddressDerivation;
-	type LpProvisioning = LiquidityProvider;
-	type SwapIntentHandler = Self;
-	type AllBatch = MockAllBatch;
-	type Broadcaster = MockBroadcast;
-	type EnsureGovernance = NeverFailingOriginCheck<Self>;
-	type WeightInfo = ();
 }
 
 impl cf_traits::Chainflip for Test {
@@ -137,14 +112,25 @@ impl pallet_cf_account_roles::Config for Test {
 impl crate::Config for Test {
 	type Event = Event;
 	type AccountRoleRegistry = AccountRoles;
-	type Ingress = EthereumIngressEgress;
-	type EgressApi = EthereumIngressEgress;
+	type IngressHandler = MockIngressHandler<AnyChain, Self>;
+	type EgressHandler = MockEgressHandler<AnyChain>;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 }
 
+pub const LP_ACCOUNT: u64 = 1;
+pub const NON_LP_ACCOUNT: u64 = 2;
+
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let config = GenesisConfig { system: Default::default(), account_roles: Default::default() };
+	let config = GenesisConfig {
+		system: Default::default(),
+		account_roles: AccountRolesConfig {
+			initial_account_roles: vec![
+				(LP_ACCOUNT, AccountRole::LiquidityProvider),
+				(NON_LP_ACCOUNT, AccountRole::Validator),
+			],
+		},
+	};
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 

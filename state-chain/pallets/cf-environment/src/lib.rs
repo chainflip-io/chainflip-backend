@@ -3,7 +3,7 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 #[cfg(feature = "ibiza")]
-use cf_chains::dot::{PolkadotAccountId, PolkadotConfig, PolkadotIndex, PolkadotPublicKey};
+use cf_chains::dot::{PolkadotAccountId, PolkadotIndex, PolkadotMetadata, PolkadotPublicKey};
 
 use cf_primitives::{Asset, EthereumAddress};
 pub use cf_traits::EthEnvironmentProvider;
@@ -94,54 +94,7 @@ pub mod pallet {
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
 
-	#[pallet::storage]
-	#[pallet::getter(fn supported_eth_assets)]
-	/// Map of supported assets for ETH
-	pub type SupportedEthAssets<T: Config> =
-		StorageMap<_, Blake2_128Concat, Asset, EthereumAddress>;
-
-	#[pallet::storage]
-	#[pallet::getter(fn stake_manager_address)]
-	/// The address of the ETH stake manager contract
-	pub type StakeManagerAddress<T> = StorageValue<_, EthereumAddress, ValueQuery>;
-
-	#[pallet::storage]
-	#[pallet::getter(fn key_manager_address)]
-	/// The address of the ETH key manager contract
-	pub type KeyManagerAddress<T> = StorageValue<_, EthereumAddress, ValueQuery>;
-
-	#[pallet::storage]
-	#[pallet::getter(fn eth_vault_address)]
-	/// The address of the ETH vault contract
-	pub type EthVaultAddress<T> = StorageValue<_, EthereumAddress, ValueQuery>;
-
-	#[pallet::storage]
-	#[pallet::getter(fn ethereum_chain_id)]
-	/// The ETH chain id
-	pub type EthereumChainId<T> = StorageValue<_, u64, ValueQuery>;
-
-	#[cfg(feature = "ibiza")]
-	#[pallet::storage]
-	#[pallet::getter(fn polkadot_vault_account_id)]
-	/// The Polkadot Vault Anonymous Account
-	pub type PolkadotVaultAccountId<T> = StorageValue<_, PolkadotAccountId, OptionQuery>;
-
-	#[cfg(feature = "ibiza")]
-	#[pallet::storage]
-	#[pallet::getter(fn polkadot_current_proxy_account_id)]
-	/// The Polkadot Vault Anonymous Account
-	pub type PolkadotCurrentProxyAccountId<T> = StorageValue<_, PolkadotAccountId, OptionQuery>;
-
-	#[cfg(feature = "ibiza")]
-	#[pallet::storage]
-	/// Current Nonce of the current Polkadot Proxy Account
-	pub type PolkadotProxyAccountNonce<T> = StorageValue<_, PolkadotIndex, ValueQuery>;
-
-	#[cfg(feature = "ibiza")]
-	#[pallet::storage]
-	#[pallet::getter(fn get_polkadot_network_choice)]
-	/// The Polkadot Network Configuration
-	pub type PolkadotNetworkConfig<T> = StorageValue<_, PolkadotConfig, ValueQuery>;
+	//              CHAINFLIP RELATED ENVIRONMENT ITEMS
 
 	#[pallet::storage]
 	#[pallet::getter(fn cfe_settings)]
@@ -153,8 +106,61 @@ pub mod pallet {
 	/// The current state the system is in (normal, maintenance).
 	pub type CurrentSystemState<T> = StorageValue<_, SystemState, ValueQuery>;
 
+	//              ETHEREUM CHAIN RELATED ENVIRONMENT ITEMS
+
 	#[pallet::storage]
-	pub type GlobalSignatureNonce<T> = StorageValue<_, SignatureNonce, ValueQuery>;
+	#[pallet::getter(fn supported_eth_assets)]
+	/// Map of supported assets for ETH
+	pub type EthereumSupportedAssets<T: Config> =
+		StorageMap<_, Blake2_128Concat, Asset, EthereumAddress>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn stake_manager_address)]
+	/// The address of the ETH stake manager contract
+	pub type EthereumStakeManagerAddress<T> = StorageValue<_, EthereumAddress, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn key_manager_address)]
+	/// The address of the ETH key manager contract
+	pub type EthereumKeyManagerAddress<T> = StorageValue<_, EthereumAddress, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn eth_vault_address)]
+	/// The address of the ETH vault contract
+	pub type EthereumVaultAddress<T> = StorageValue<_, EthereumAddress, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn ethereum_chain_id)]
+	/// The ETH chain id
+	pub type EthereumChainId<T> = StorageValue<_, u64, ValueQuery>;
+
+	#[pallet::storage]
+	pub type EthereumSignatureNonce<T> = StorageValue<_, SignatureNonce, ValueQuery>;
+
+	//              POLKADOT CHAIN RELATED ENVIRONMENT ITEMS
+
+	#[cfg(feature = "ibiza")]
+	#[pallet::storage]
+	#[pallet::getter(fn polkadot_vault_account_id)]
+	/// The Polkadot Vault Anonymous Account
+	pub type PolkadotVaultAccountId<T> = StorageValue<_, PolkadotAccountId, OptionQuery>;
+
+	#[cfg(feature = "ibiza")]
+	#[pallet::storage]
+	#[pallet::getter(fn polkadot_current_proxy_account_id)]
+	/// The current proxy Account for polkadot vault
+	pub type PolkadotCurrentProxyAccountId<T> = StorageValue<_, PolkadotAccountId, OptionQuery>;
+
+	#[cfg(feature = "ibiza")]
+	#[pallet::storage]
+	/// Current Nonce of the current Polkadot Proxy Account
+	pub type PolkadotProxyAccountNonce<T> = StorageValue<_, PolkadotIndex, ValueQuery>;
+
+	#[cfg(feature = "ibiza")]
+	#[pallet::storage]
+	#[pallet::getter(fn polkadot_network_metadata)]
+	/// The Polkadot Network Metadata
+	pub type PolkadotNetworkMetadata<T> = StorageValue<_, PolkadotMetadata, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -196,7 +202,7 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [SupportedEthAssetsUpdated](Event::SupportedEthAssetsUpdated)
+		/// - [EthereumSupportedAssetsUpdated](Event::EthereumSupportedAssetsUpdated)
 		///
 		/// ## Errors
 		///
@@ -209,11 +215,13 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			ensure!(asset != Asset::Eth, Error::<T>::EthAddressNotUpdateable);
-			Self::deposit_event(if SupportedEthAssets::<T>::contains_key(asset) {
-				SupportedEthAssets::<T>::mutate(asset, |new_address| *new_address = Some(address));
+			Self::deposit_event(if EthereumSupportedAssets::<T>::contains_key(asset) {
+				EthereumSupportedAssets::<T>::mutate(asset, |new_address| {
+					*new_address = Some(address)
+				});
 				Event::UpdatedEthAsset(asset, address)
 			} else {
-				SupportedEthAssets::<T>::insert(asset, address);
+				EthereumSupportedAssets::<T>::insert(asset, address);
 				Event::AddedNewEthAsset(asset, address)
 			});
 			Ok(().into())
@@ -258,27 +266,27 @@ pub mod pallet {
 		#[cfg(feature = "ibiza")]
 		pub polkadot_proxy_account_id: Option<PolkadotAccountId>,
 		#[cfg(feature = "ibiza")]
-		pub polkadot_network_config: PolkadotConfig,
+		pub polkadot_network_metadata: PolkadotMetadata,
 	}
 
 	/// Sets the genesis config
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
 		fn build(&self) {
-			StakeManagerAddress::<T>::set(self.stake_manager_address);
-			KeyManagerAddress::<T>::set(self.key_manager_address);
-			EthVaultAddress::<T>::set(self.eth_vault_address);
+			EthereumStakeManagerAddress::<T>::set(self.stake_manager_address);
+			EthereumKeyManagerAddress::<T>::set(self.key_manager_address);
+			EthereumVaultAddress::<T>::set(self.eth_vault_address);
 			EthereumChainId::<T>::set(self.ethereum_chain_id);
 			CfeSettings::<T>::set(self.cfe_settings);
 			CurrentSystemState::<T>::set(SystemState::Normal);
-			SupportedEthAssets::<T>::insert(Asset::Flip, self.flip_token_address);
-			SupportedEthAssets::<T>::insert(Asset::Usdc, self.eth_usdc_address);
+			EthereumSupportedAssets::<T>::insert(Asset::Flip, self.flip_token_address);
+			EthereumSupportedAssets::<T>::insert(Asset::Usdc, self.eth_usdc_address);
 			#[cfg(feature = "ibiza")]
 			PolkadotVaultAccountId::<T>::set(self.polkadot_vault_account_id.clone());
 			#[cfg(feature = "ibiza")]
 			PolkadotCurrentProxyAccountId::<T>::set(self.polkadot_proxy_account_id.clone());
 			#[cfg(feature = "ibiza")]
-			PolkadotNetworkConfig::<T>::set(self.polkadot_network_config.clone());
+			PolkadotNetworkMetadata::<T>::set(self.polkadot_network_metadata.clone());
 			#[cfg(feature = "ibiza")]
 			PolkadotProxyAccountNonce::<T>::set(0);
 		}
@@ -319,16 +327,17 @@ impl<T: Config> SystemStateManager for SystemStateProvider<T> {
 
 impl<T: Config> EthEnvironmentProvider for Pallet<T> {
 	fn flip_token_address() -> EthereumAddress {
-		SupportedEthAssets::<T>::get(Asset::Flip).expect("FLIP address should be added at genesis")
+		EthereumSupportedAssets::<T>::get(Asset::Flip)
+			.expect("FLIP address should be added at genesis")
 	}
 	fn key_manager_address() -> EthereumAddress {
-		KeyManagerAddress::<T>::get()
+		EthereumKeyManagerAddress::<T>::get()
 	}
 	fn eth_vault_address() -> EthereumAddress {
-		EthVaultAddress::<T>::get()
+		EthereumVaultAddress::<T>::get()
 	}
 	fn stake_manager_address() -> EthereumAddress {
-		StakeManagerAddress::<T>::get()
+		EthereumStakeManagerAddress::<T>::get()
 	}
 	fn chain_id() -> u64 {
 		EthereumChainId::<T>::get()
@@ -336,8 +345,8 @@ impl<T: Config> EthEnvironmentProvider for Pallet<T> {
 }
 
 impl<T: Config> Pallet<T> {
-	pub fn next_global_signature_nonce() -> SignatureNonce {
-		GlobalSignatureNonce::<T>::mutate(|nonce| {
+	pub fn next_ethereum_signature_nonce() -> SignatureNonce {
+		EthereumSignatureNonce::<T>::mutate(|nonce| {
 			*nonce += 1;
 			*nonce
 		})
@@ -352,26 +361,18 @@ impl<T: Config> Pallet<T> {
 	}
 
 	#[cfg(feature = "ibiza")]
-	pub fn get_polkadot_network_config() -> PolkadotConfig {
-		PolkadotNetworkConfig::<T>::get()
+	pub fn get_polkadot_network_metadata() -> PolkadotMetadata {
+		PolkadotNetworkMetadata::<T>::get()
 	}
 
 	#[cfg(feature = "ibiza")]
-	pub fn get_vault_account() -> PolkadotAccountId {
-		PolkadotVaultAccountId::<T>::get().unwrap_or_else(|| {
-			PolkadotAccountId::new(hex_literal::hex!(
-				"56cc4af8ff9fb97c60320ae43d35bd831b14f0b7065f3385db0dbf4cb5d8766f"
-			)) // CHAINFLIP-TEST account
-		})
+	pub fn get_polkadot_vault_account() -> Option<PolkadotAccountId> {
+		PolkadotVaultAccountId::<T>::get()
 	}
 
 	#[cfg(feature = "ibiza")]
-	pub fn get_current_proxy_account() -> PolkadotAccountId {
-		PolkadotCurrentProxyAccountId::<T>::get().unwrap_or_else(|| {
-			PolkadotAccountId::new(hex_literal::hex!(
-				"beb9c3f0ae5bda798dd3b65fe345fdf9031946849d8925ae7be73ee9407c6737"
-			)) // CHAINFLIP-TEST-2 account
-		})
+	pub fn get_current_polkadot_proxy_account() -> Option<PolkadotAccountId> {
+		PolkadotCurrentProxyAccountId::<T>::get()
 	}
 	#[cfg(feature = "ibiza")]
 	pub fn set_new_proxy_account(new_polkadot_key: PolkadotPublicKey) {

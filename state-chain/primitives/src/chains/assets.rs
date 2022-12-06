@@ -21,11 +21,26 @@ use serde::{Deserialize, Serialize};
 /// Defines all Assets, and the Chain each asset belongs to.
 /// There's a unique 1:1 relationship between an Asset and a Chain.
 pub mod any {
+	use core::str::FromStr;
+
 	use super::*;
 	pub type Chain = AnyChain;
 
 	/// A token or currency that can be swapped natively in the Chainflip AMM.
-	#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Hash)]
+	#[derive(
+		Copy,
+		Clone,
+		Debug,
+		PartialEq,
+		Eq,
+		Encode,
+		Decode,
+		TypeInfo,
+		MaxEncodedLen,
+		Hash,
+		PartialOrd,
+		Ord,
+	)]
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Asset {
 		Eth,
@@ -41,6 +56,20 @@ pub mod any {
 				Asset::Flip => Self::Ethereum,
 				Asset::Usdc => Self::Ethereum,
 				Asset::Dot => Self::Polkadot,
+			}
+		}
+	}
+
+	impl FromStr for Asset {
+		type Err = &'static str;
+
+		fn from_str(s: &str) -> Result<Self, Self::Err> {
+			match s.to_lowercase().as_str() {
+				"eth" => Ok(Asset::Eth),
+				"flip" => Ok(Asset::Flip),
+				"usdc" => Ok(Asset::Usdc),
+				"dot" => Ok(Asset::Dot),
+				_ => Err("Unrecognized asset"),
 			}
 		}
 	}
@@ -103,12 +132,18 @@ macro_rules! chain_assets {
 				}
 			}
 
+			impl From<Asset> for ForeignChain {
+				fn from(_asset: Asset) -> Self {
+					ForeignChain::$chain
+				}
+			}
+
 			#[test]
 			fn consistency_check() {
 				$(
 					assert_eq!(
 						ForeignChain::from(any::Asset::from(Asset::$asset)),
-						ForeignChain::$chain,
+						ForeignChain::from(Asset::$asset),
 						"Inconsistent asset type definition. Asset {} defined in {}, but mapped to chain {:?}",
 						stringify!($asset),
 						stringify!($mod),

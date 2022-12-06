@@ -15,7 +15,7 @@ use crate::multisig::{
 	},
 	crypto::polkadot::PolkadotSigning,
 	eth::EthSigning,
-	tests::fixtures::MESSAGE_HASH,
+	tests::fixtures::SIGNING_PAYLOAD,
 	CryptoScheme, Rng,
 };
 
@@ -111,7 +111,7 @@ async fn should_sign_with_all_parties<C: CryptoScheme>() {
 		DEFAULT_SIGNING_CEREMONY_ID,
 		key_id,
 		key_data,
-		MESSAGE_HASH.clone(),
+		SIGNING_PAYLOAD.clone(),
 		Rng::from_seed(DEFAULT_SIGNING_SEED),
 	);
 

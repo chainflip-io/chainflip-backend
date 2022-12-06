@@ -48,7 +48,7 @@ fn test_address_generation() {
 	use crate::Runtime;
 	use cf_chains::Ethereum;
 	use cf_primitives::Asset;
-	use pallet_cf_environment::SupportedEthAssets;
+	use pallet_cf_environment::EthereumSupportedAssets;
 
 	frame_support::sp_io::TestExternalities::new_empty().execute_with(|| {
 		// Expect address generation to be successfully for native ETH
@@ -58,7 +58,7 @@ fn test_address_generation() {
 		)
 		.is_ok());
 		// The genesis build is not running, so we have to add it manually
-		SupportedEthAssets::<Runtime>::insert(Asset::Flip, [0; 20]);
+		EthereumSupportedAssets::<Runtime>::insert(Asset::Flip, [0; 20]);
 		// Expect address generation to be successfully for ERC20 Flip token
 		assert!(<AddressDerivation as AddressDerivationApi<Ethereum>>::generate_address(
 			eth::Asset::Flip,

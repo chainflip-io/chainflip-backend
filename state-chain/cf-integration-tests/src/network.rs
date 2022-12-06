@@ -1,14 +1,27 @@
+use crate::threshold_signing::{
+	DotThresholdSigner, EthKeyComponents, EthThresholdSigner, ThresholdSigner,
+};
+
+#[cfg(feature = "ibiza")]
+use crate::threshold_signing::DotKeyComponents;
+#[cfg(feature = "ibiza")]
+use cf_chains::dot::PolkadotSignature;
+#[cfg(feature = "ibiza")]
+use state_chain_runtime::PolkadotInstance;
+
 use super::*;
-use cf_chains::eth::{to_ethereum_address, AggKey, SchnorrVerificationComponents};
-use cf_primitives::{AccountRole, EpochIndex, FlipBalance};
+use cf_chains::{eth::SchnorrVerificationComponents, ChainCrypto};
+use cf_primitives::{AccountRole, CeremonyId, EpochIndex, FlipBalance};
 use cf_traits::{AccountRoleRegistry, EpochInfo};
 use codec::Encode;
 use frame_support::traits::{OnFinalize, OnIdle};
-use libsecp256k1::PublicKey;
 use pallet_cf_staking::{ClaimAmount, MinimumStake};
-use state_chain_runtime::{AccountRoles, Authorship, Event, Origin};
+use pallet_cf_validator::RotationPhase;
+use sp_std::collections::btree_set::BTreeSet;
+use state_chain_runtime::{AccountRoles, Authorship, EthereumInstance, Event, Origin};
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
+use crate::threshold_signing::KeyUtils;
 // arbitrary units of block time
 pub const BLOCK_TIME: u64 = 1000;
 
@@ -22,9 +35,12 @@ pub enum ContractEvent {
 }
 
 macro_rules! on_events {
-	($events:expr, $( $p:pat => $b:block ),* $(,)?) => {
+	($events:expr, $($(#[$cfg_param:meta])? $p:pat => $b:block)+) => {
 		for event in $events {
-			$(if let $p = event { $b })*
+			$(
+				$(#[$cfg_param])?
+				if let $p = event { $b }
+			)*
 		}
 	}
 }
@@ -109,116 +125,23 @@ impl Cli {
 	}
 }
 
-#[derive(Clone)]
-pub struct KeyComponents {
-	pub secret: SecretKey,
-	pub agg_key: AggKey,
-}
-
-impl KeyComponents {
-	fn sign(&self, message: &cf_chains::eth::H256) -> SchnorrVerificationComponents {
-		assert_eq!(self.agg_key, AggKey::from_private_key_bytes(self.secret.serialize()));
-
-		// just use the same signature nonce for every ceremony in tests
-		let k: [u8; 32] = StdRng::seed_from_u64(200).gen();
-		let k = SecretKey::parse(&k).unwrap();
-		let signature = self.agg_key.sign(message.as_fixed_bytes(), &self.secret, &k);
-
-		let k_times_g_address = to_ethereum_address(PublicKey::from_secret_key(&k));
-		SchnorrVerificationComponents { s: signature, k_times_g_address }
-	}
-}
-
-pub struct ThresholdSigner {
-	key_seed: u64,
-	key_components: KeyComponents,
-	proposed_seed: Option<u64>,
-	proposed_key_components: Option<KeyComponents>,
-}
-
-impl Default for ThresholdSigner {
-	fn default() -> Self {
-		let (secret, _pub_key, agg_key) = Self::generate_keypair(GENESIS_KEY);
-		ThresholdSigner {
-			key_seed: GENESIS_KEY,
-			key_components: KeyComponents { secret, agg_key },
-			proposed_seed: None,
-			proposed_key_components: None,
-		}
-	}
-}
-
-impl ThresholdSigner {
-	pub fn sign_with_key(
-		&self,
-		key_id: &[u8],
-		message: &cf_chains::eth::H256,
-	) -> SchnorrVerificationComponents {
-		let curr_key_id = self.key_components.agg_key.to_pubkey_compressed();
-		if key_id == curr_key_id {
-			println!("Signing with current key");
-			return self.key_components.sign(message)
-		}
-		let next_key_id =
-			self.proposed_key_components.as_ref().unwrap().agg_key.to_pubkey_compressed();
-		if key_id == next_key_id {
-			println!("Signing with proposed key");
-			self.proposed_key_components.as_ref().unwrap().sign(message)
-		} else {
-			panic!("Unknown key");
-		}
-	}
-
-	// Generate a keypair with seed
-	pub fn generate_keypair(seed: u64) -> (SecretKey, PublicKey, AggKey) {
-		let agg_key_priv: [u8; 32] = StdRng::seed_from_u64(seed).gen();
-		let secret_key = SecretKey::parse(&agg_key_priv).unwrap();
-		let pub_key = PublicKey::from_secret_key(&secret_key);
-		(secret_key, pub_key, AggKey::from_pubkey_compressed(pub_key.serialize_compressed()))
-	}
-
-	pub fn proposed_public_key(&self) -> AggKey {
-		self.proposed_key_components.as_ref().expect("should have proposed key").agg_key
-	}
-
-	pub fn propose_new_public_key(&mut self) -> AggKey {
-		let proposed_seed = self.key_seed + 1;
-		let (secret, _pub_key, agg_key) = Self::generate_keypair(proposed_seed);
-		self.proposed_seed = Some(proposed_seed);
-		self.proposed_key_components = Some(KeyComponents { secret, agg_key });
-		self.proposed_public_key()
-	}
-
-	// Rotate to the current proposed key and clear the proposed key
-	pub fn use_proposed_key(&mut self) {
-		if self.proposed_seed.is_some() {
-			self.key_seed = self.proposed_seed.expect("No key has been proposed");
-			self.key_components =
-				self.proposed_key_components.as_ref().expect("No key has been proposed").clone();
-			self.proposed_seed = None;
-			self.proposed_key_components = None;
-		}
-	}
-}
-
-pub enum EngineState {
-	None,
-	Rotation,
-}
-
 // Engine monitoring contract
 pub struct Engine {
 	pub node_id: NodeId,
 	pub live: bool,
 	// conveniently creates a threshold "signature" (not really)
 	// all engines have the same one, so they create the same sig
-	pub threshold_signer: Rc<RefCell<ThresholdSigner>>,
-	pub engine_state: EngineState,
+	pub eth_threshold_signer: Rc<RefCell<EthThresholdSigner>>,
+	pub dot_threshold_signer: Rc<RefCell<DotThresholdSigner>>,
 }
 
 impl Engine {
-	fn new(node_id: NodeId, signer: Rc<RefCell<ThresholdSigner>>) -> Self {
-		Engine { node_id, live: true, threshold_signer: signer, engine_state: EngineState::None }
+	fn new(
+		node_id: NodeId,
+		eth_threshold_signer: Rc<RefCell<EthThresholdSigner>>,
+		dot_threshold_signer: Rc<RefCell<DotThresholdSigner>>,
+	) -> Self {
+		Engine { node_id, live: true, eth_threshold_signer, dot_threshold_signer }
 	}
 
 	fn state(&self) -> ChainflipAccountState {
@@ -276,8 +199,8 @@ impl Engine {
 					Event::Validator(
 						// A new epoch
 						pallet_cf_validator::Event::NewEpoch(_epoch_index)) => {
-							self.threshold_signer.borrow_mut().use_proposed_key();
-					},
+							self.eth_threshold_signer.borrow_mut().use_proposed_key();
+					}
 					Event::EthereumThresholdSigner(
 						// A signature request
 						pallet_cf_threshold_signature::Event::ThresholdSignatureRequest{
@@ -292,51 +215,95 @@ impl Engine {
 						let _result = state_chain_runtime::EthereumThresholdSigner::signature_success(
 							Origin::none(),
 							*ceremony_id,
-							self.threshold_signer.borrow().sign_with_key(key_id, payload),
+							self.eth_threshold_signer.borrow().sign_with_key(key_id.clone(), payload.as_fixed_bytes()),
 						);
-					},
-					Event::EthereumThresholdSigner(
-						// A threshold has been met for this signature
-						pallet_cf_threshold_signature::Event::ThresholdDispatchComplete{..}) => {
-							if let EngineState::Rotation = self.engine_state {
+					}
+					#[cfg(feature = "ibiza")]
+					Event::PolkadotThresholdSigner(
+						pallet_cf_threshold_signature::Event::ThresholdSignatureRequest {
+							request_id: _,
+							ceremony_id,
+							key_id,
+							signatories: _signatories,
+							payload}) => {
+								let _result = state_chain_runtime::PolkadotThresholdSigner::signature_success(
+									Origin::none(),
+									*ceremony_id,
+									self.dot_threshold_signer.borrow().sign_with_key(key_id.clone(), &(payload.clone().0)),
+								);
+					}
+					Event::Validator(
+						// NOTE: This is a little inaccurate a representation of how it actually works. An event is emitted
+						// which contains the transaction to broadcast for the rotation tx, which the CFE then broadcasts.
+						// This is a simpler way to represent this in the tests. Representing in this way in the tests also means
+						// that for dot, given we don't have a key to sign with initially, it will work without extra test boilerplate.
+
+						pallet_cf_validator::Event::RotationPhaseUpdated { new_phase: RotationPhase::ActivatingKeys(_) }) => {
 								// If we rotating let's witness the keys being rotated on the contract
 								let _result = state_chain_runtime::Witnesser::witness_at_epoch(
 									Origin::signed(self.node_id.clone()),
-									Box::new(pallet_cf_vaults::Call::vault_key_rotated {
-										new_public_key: self.threshold_signer.borrow_mut().proposed_public_key(),
+									Box::new(pallet_cf_vaults::Call::<_, EthereumInstance>::vault_key_rotated {
+										new_public_key: self.eth_threshold_signer.borrow_mut().proposed_public_key(),
 										block_number: 100,
 										tx_hash: [1u8; 32].into(),
 									}.into()),
 									Validator::epoch_index()
 								);
-							}
-					},
-					Event::EthereumVault(pallet_cf_vaults::Event::KeygenSuccess(..)) => {
-						self.engine_state = EngineState::Rotation;
-					},
-					Event::EthereumVault(pallet_cf_vaults::Event::VaultRotationCompleted) => {
-						self.engine_state = EngineState::None;
-					},
+
+								#[cfg(feature = "ibiza")]
+								let _result = state_chain_runtime::Witnesser::witness_at_epoch(
+									Origin::signed(self.node_id.clone()),
+									Box::new(pallet_cf_vaults::Call::<_, PolkadotInstance>::vault_key_rotated {
+										new_public_key: self.dot_threshold_signer.borrow_mut().proposed_public_key(),
+										block_number: 100,
+										tx_hash: [1u8; 32].into(),
+									}.into()),
+									Validator::epoch_index()
+								);
+					}
 				);
+			}
+
+			fn report_keygen_outcome_for_chain<
+				K: KeyUtils<
+						SigVerification = S,
+						AggKey = <<T as pallet_cf_vaults::Config<I>>::Chain as ChainCrypto>::AggKey,
+					> + Clone,
+				S,
+				T: pallet_cf_vaults::Config<I>,
+				I: 'static,
+			>(
+				ceremony_id: CeremonyId,
+				authorities: &BTreeSet<NodeId>,
+				threshold_signer: Rc<RefCell<ThresholdSigner<K, S>>>,
+				node_id: NodeId,
+			) where
+				<T as frame_system::Config>::Origin: From<state_chain_runtime::Origin>,
+			{
+				if authorities.contains(&node_id) {
+					pallet_cf_vaults::Pallet::<T, I>::report_keygen_outcome(
+						Origin::signed(node_id.clone()).into(),
+						ceremony_id,
+						Ok(threshold_signer.borrow_mut().propose_new_key()),
+					)
+					.unwrap_or_else(|_| {
+						panic!("should be able to report keygen outcome from node: {}", node_id)
+					});
+				}
 			}
 
 			// Being staked we would be required to respond to keygen requests
 			on_events!(
 				events,
 				Event::EthereumVault(
-					// A keygen request has been made
-					pallet_cf_vaults::Event::KeygenRequest(ceremony_id, authorities)) => {
-						if authorities.contains(&self.node_id) {
-							self.threshold_signer.borrow_mut().propose_new_public_key();
-							let threshold_signer = self.threshold_signer.borrow();
-							let proposed_key_components = threshold_signer.proposed_key_components.as_ref().expect("should have propposed key");
-							state_chain_runtime::EthereumVault::report_keygen_outcome(
-								Origin::signed(self.node_id.clone()),
-								*ceremony_id,
-								Ok(proposed_key_components.agg_key),
-							).unwrap_or_else(|_| panic!("should be able to report keygen outcome from node: {}", self.node_id));
-						}
-				},
+					pallet_cf_vaults::Event::KeygenRequest(ceremony_id, participants)) => {
+						report_keygen_outcome_for_chain::<EthKeyComponents, SchnorrVerificationComponents, state_chain_runtime::Runtime, EthereumInstance>(*ceremony_id, participants, self.eth_threshold_signer.clone(), self.node_id.clone());
+				}
+				#[cfg(feature = "ibiza")]
+				Event::PolkadotVault(
+					pallet_cf_vaults::Event::KeygenRequest(ceremony_id, participants)) => {
+						report_keygen_outcome_for_chain::<DotKeyComponents, PolkadotSignature, state_chain_runtime::Runtime, PolkadotInstance>(*ceremony_id, participants, self.dot_threshold_signer.clone(), self.node_id.clone());
+				}
 			);
 		}
 	}
@@ -383,7 +350,8 @@ pub struct Network {
 	node_counter: u32,
 
 	// Used to initialised the threshold signers of the engines added
-	pub threshold_signer: Rc<RefCell<ThresholdSigner>>,
+	pub eth_threshold_signer: Rc<RefCell<EthThresholdSigner>>,
+	pub dot_threshold_signer: Rc<RefCell<DotThresholdSigner>>,
 }
 
 impl Network {
@@ -432,8 +400,14 @@ impl Network {
 
 	// Adds an engine to the test network
 	pub fn add_engine(&mut self, node_id: &NodeId) {
-		self.engines
-			.insert(node_id.clone(), Engine::new(node_id.clone(), self.threshold_signer.clone()));
+		self.engines.insert(
+			node_id.clone(),
+			Engine::new(
+				node_id.clone(),
+				self.eth_threshold_signer.clone(),
+				self.dot_threshold_signer.clone(),
+			),
+		);
 	}
 
 	pub fn move_to_next_epoch(&mut self) {

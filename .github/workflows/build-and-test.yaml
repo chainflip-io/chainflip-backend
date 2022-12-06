@@ -138,13 +138,13 @@ jobs:
             ./target/release/chainflip-engine
             ./target/release/chainflip-cli
             ./target/release/generate-genesis-keys
-            ./target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm
+            ./target/release/wbuild/state-chain-runtime/state_chain_runtime*.wasm
       - name: Check if building changes any files
         run: |
           git diff --exit-code
           git diff --cached --exit-code
 
-  build-ibiza:
+  build-and-test-ibiza:
     runs-on: [hetzner]
     needs: [set-variables, cargo-fmt]
     container:
@@ -167,8 +167,13 @@ jobs:
       #     variant: sccache
       #     save: false
       # - run: sccache --show-stats
-      - run: |
+      - name: cargo ci-build-ibiza
+        run: |
           cargo ci-build-ibiza --locked
+          # sccache --show-stats
+      - name: cargo ci-test-ibiza --locked
+        run: |
+          cargo ci-test-ibiza --locked
           # sccache --show-stats
       - name: Install cargo-deb
         run: cargo install cargo-deb
@@ -250,7 +255,7 @@ jobs:
           'http://localhost:9933' --connect-timeout 5 --max-time 10 --retry 3 --retry-delay 1 --retry-max-time 20 --retry-connrefused -vv
       - name: Run engine in background
         run: |
-          ./target/release/chainflip-engine --config-path engine/config/CI.toml &
+          ./target/release/chainflip-engine --config-root engine/config/CI &
           sleep 2
         env:
           ETH__NODE_ENDPOINT: ${{ secrets.ETH__NODE_ENDPOINT }}
@@ -278,6 +283,7 @@ jobs:
           npm run generate
       - name: Install graphviz
         run: |
+          echo ${{ secrets.CF_RUNNER_SUDO_PASSWORD }} | sudo -S apt-get clean
           echo ${{ secrets.CF_RUNNER_SUDO_PASSWORD }} | sudo -S apt-get update
           echo ${{ secrets.CF_RUNNER_SUDO_PASSWORD }} | sudo -S apt-get install -y graphviz
       - uses: actions/setup-java@v3
@@ -308,7 +314,7 @@ jobs:
 
   deb-publish-ibiza:
     name: Publish Ibiza Packages to APT repo
-    needs: [set-variables, build-ibiza]
+    needs: [set-variables, build-and-test-ibiza]
     uses: ./.github/workflows/.deb-publish.yaml
     with:
       artifacts: chainflip-backend-packages-ibiza

@@ -1,4 +1,4 @@
-use crate::multisig::crypto::ECScalar;
+use crate::multisig::{crypto::ECScalar, SigningPayload};
 
 use super::{ChainTag, CryptoScheme, ECPoint, Verifiable};
 
@@ -28,14 +28,18 @@ impl From<EthSchnorrSignature> for cf_chains::eth::SchnorrVerificationComponents
 }
 
 impl Verifiable for EthSchnorrSignature {
-	fn verify(&self, key_id: &crate::multisig::KeyId, message: &[u8; 32]) -> anyhow::Result<()> {
+	fn verify(
+		&self,
+		key_id: &crate::multisig::KeyId,
+		payload: &SigningPayload,
+	) -> anyhow::Result<()> {
 		// Get the aggkey
 		let pk_ser: &[u8; 33] = key_id.0[..].try_into().unwrap();
 		let agg_key = cf_chains::eth::AggKey::from_pubkey_compressed(*pk_ser);
 
 		// Verify the signature with the aggkey
 		agg_key
-			.verify(message, &self.clone().into())
+			.verify(payload.0.as_slice().try_into().unwrap(), &self.clone().into())
 			.map_err(|e| anyhow::anyhow!("Failed to verify signature: {:?}", e))?;
 
 		Ok(())
@@ -60,10 +64,12 @@ impl CryptoScheme for EthSigning {
 	fn build_challenge(
 		pubkey: Self::Point,
 		nonce_commitment: Self::Point,
-		msg_hash: &[u8; 32],
+		payload: &SigningPayload,
 	) -> Scalar {
 		use crate::eth::utils::pubkey_to_eth_addr;
 		use cf_chains::eth::AggKey;
+
+		let msg_hash: &[u8; 32] = payload.0.as_slice().try_into().unwrap();
 
 		let e = AggKey::from_pubkey_compressed(pubkey.get_element().serialize())
 			.message_challenge(msg_hash, &pubkey_to_eth_addr(nonce_commitment.get_element()));
