@@ -1330,93 +1330,7 @@ async fn only_encodes_and_signs_when_specified() {
 	.unwrap_err();
 }
 
-#[tokio::test]
-#[ignore = "runs forever, useful for testing without having to start the whole CFE"]
-async fn run_the_sc_observer() {
-	task_scope(|scope| {
-		async {
-			let settings = Settings::new_test().unwrap();
-			let logger = new_test_logger();
-
-			let (initial_block_hash, sc_block_stream, state_chain_client) =
-				crate::state_chain_observer::client::StateChainClient::new(
-					scope,
-					&settings.state_chain,
-					AccountRole::None,
-					false,
-					&logger,
-				)
-				.await
-				.unwrap();
-
-			let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
-				tokio::sync::mpsc::unbounded_channel();
-
-			let eth_ws_rpc_client = EthWsRpcClient::new(&settings.eth, &logger).await.unwrap();
-			let eth_broadcaster =
-				EthBroadcaster::new(&settings.eth, eth_ws_rpc_client.clone(), &logger).unwrap();
-
-			let eth_multisig_client = MockMultisigClientApi::new();
-			let dot_multisig_client = MockMultisigClientApi::new();
-
-			let (epoch_start_sender, _epoch_start_receiver) = async_broadcast::broadcast(10);
-
-			let (cfe_settings_update_sender, _) =
-				watch::channel::<CfeSettings>(CfeSettings::default());
-
-			#[cfg(feature = "ibiza")]
-			let (eth_monitor_ingress_sender, _eth_monitor_ingress_receiver) =
-				tokio::sync::mpsc::unbounded_channel();
-			#[cfg(feature = "ibiza")]
-			let (eth_monitor_flip_ingress_sender, _eth_monitor_flip_ingress_receiver) =
-				tokio::sync::mpsc::unbounded_channel();
-			#[cfg(feature = "ibiza")]
-			let (eth_monitor_usdc_ingress_sender, _eth_monitor_usdc_ingress_receiver) =
-				tokio::sync::mpsc::unbounded_channel();
-
-			#[cfg(feature = "ibiza")]
-			let (dot_epoch_start_sender, _dot_epoch_start_receiver_1) = async_broadcast::broadcast(10);
-
-			#[cfg(feature = "ibiza")]
-			let (dot_monitor_ingress_sender, _dot_monitor_ingress_receiver) =
-				tokio::sync::mpsc::unbounded_channel();
-
-			sc_observer::start(
-				state_chain_client,
-				sc_block_stream,
-				eth_broadcaster,
-				#[cfg(feature = "ibiza")]
-				DotBroadcaster::new(MockDotRpcApi::new()),
-				eth_multisig_client,
-				dot_multisig_client,
-				account_peer_mapping_change_sender,
-				epoch_start_sender,
-				#[cfg(feature = "ibiza")]
-				eth_monitor_ingress_sender,
-				#[cfg(feature = "ibiza")]
-				eth_monitor_flip_ingress_sender,
-				#[cfg(feature = "ibiza")]
-				eth_monitor_usdc_ingress_sender,
-				#[cfg(feature = "ibiza")]
-				dot_epoch_start_sender,
-				#[cfg(feature = "ibiza")]
-				dot_monitor_ingress_sender,
-				cfe_settings_update_sender,
-				initial_block_hash,
-				logger,
-			)
-			.await
-			.unwrap_err();
-
-			Ok(())
-		}
-		.boxed()
-	})
-	.await
-	.unwrap();
-}
-
-// TODO: Test that when we return None for polkadot vault when fetched from environment pallet
+// TODO: Test that when we return None for polkadot vault
 // witnessing isn't started for dot, but is started for ETH
 
 async fn should_handle_signing_request<C, I>()
@@ -1622,4 +1536,90 @@ mod dot_keygen {
 	async fn should_handle_keygen_request_dot() {
 		should_handle_keygen_request::<PolkadotSigning, PolkadotInstance>().await;
 	}
+}
+
+#[tokio::test]
+#[ignore = "runs forever, useful for testing without having to start the whole CFE"]
+async fn run_the_sc_observer() {
+	task_scope(|scope| {
+		async {
+			let settings = Settings::new_test().unwrap();
+			let logger = new_test_logger();
+
+			let (initial_block_hash, sc_block_stream, state_chain_client) =
+				crate::state_chain_observer::client::StateChainClient::new(
+					scope,
+					&settings.state_chain,
+					AccountRole::None,
+					false,
+					&logger,
+				)
+				.await
+				.unwrap();
+
+			let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
+				tokio::sync::mpsc::unbounded_channel();
+
+			let eth_ws_rpc_client = EthWsRpcClient::new(&settings.eth, &logger).await.unwrap();
+			let eth_broadcaster =
+				EthBroadcaster::new(&settings.eth, eth_ws_rpc_client.clone(), &logger).unwrap();
+
+			let eth_multisig_client = MockMultisigClientApi::new();
+			let dot_multisig_client = MockMultisigClientApi::new();
+
+			let (epoch_start_sender, _epoch_start_receiver) = async_broadcast::broadcast(10);
+
+			let (cfe_settings_update_sender, _) =
+				watch::channel::<CfeSettings>(CfeSettings::default());
+
+			#[cfg(feature = "ibiza")]
+			let (eth_monitor_ingress_sender, _eth_monitor_ingress_receiver) =
+				tokio::sync::mpsc::unbounded_channel();
+			#[cfg(feature = "ibiza")]
+			let (eth_monitor_flip_ingress_sender, _eth_monitor_flip_ingress_receiver) =
+				tokio::sync::mpsc::unbounded_channel();
+			#[cfg(feature = "ibiza")]
+			let (eth_monitor_usdc_ingress_sender, _eth_monitor_usdc_ingress_receiver) =
+				tokio::sync::mpsc::unbounded_channel();
+
+			#[cfg(feature = "ibiza")]
+			let (dot_epoch_start_sender, _dot_epoch_start_receiver_1) = async_broadcast::broadcast(10);
+
+			#[cfg(feature = "ibiza")]
+			let (dot_monitor_ingress_sender, _dot_monitor_ingress_receiver) =
+				tokio::sync::mpsc::unbounded_channel();
+
+			sc_observer::start(
+				state_chain_client,
+				sc_block_stream,
+				eth_broadcaster,
+				#[cfg(feature = "ibiza")]
+				DotBroadcaster::new(MockDotRpcApi::new()),
+				eth_multisig_client,
+				dot_multisig_client,
+				account_peer_mapping_change_sender,
+				epoch_start_sender,
+				#[cfg(feature = "ibiza")]
+				eth_monitor_ingress_sender,
+				#[cfg(feature = "ibiza")]
+				eth_monitor_flip_ingress_sender,
+				#[cfg(feature = "ibiza")]
+				eth_monitor_usdc_ingress_sender,
+				#[cfg(feature = "ibiza")]
+				dot_epoch_start_sender,
+				#[cfg(feature = "ibiza")]
+				dot_monitor_ingress_sender,
+				cfe_settings_update_sender,
+				initial_block_hash,
+				logger,
+			)
+			.await
+			.unwrap_err();
+
+			Ok(())
+		}
+		.boxed()
+	})
+	.await
+	.unwrap();
 }
