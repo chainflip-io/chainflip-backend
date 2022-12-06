@@ -860,6 +860,9 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 					}
 				},
 				Err(_) => {
+					// The block number value 1, which the vault is being set with is a dummy value
+					// and doesn't mean anything. It will be later modified to the real value when
+					// we witness the vault rotation manually via governance
 					Self::set_next_vault(new_public_key, 1_u64.into());
 					Self::deposit_event(Event::<T, I>::AwaitingGovernanceActivation {
 						new_public_key,

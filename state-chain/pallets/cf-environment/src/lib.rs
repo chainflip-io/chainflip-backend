@@ -313,7 +313,13 @@ pub mod pallet {
 		}
 
 		/// Manually initiates Polkadot vault key rotation completion steps so Epoch rotation can be
-		/// continued and sets the Polkadot Pure Proxy Vault in environment pallet
+		/// continued and sets the Polkadot Pure Proxy Vault in environment pallet. The extrinsic
+		/// takes in the dot_pure_proxy_vault_key, which is obtained from the Polkadot blockchain as
+		/// a result of creating a polkadot vault which is done by executing the extrinsic above,
+		/// dot_witnessed_aggkey, the aggkey which initiated the polkadot creation transaction and
+		/// the tx hash and the block number of the Polkadot block the vault creation transaction
+		/// was witnessed in. This extrinsic should complete the Polkadot initiation process and the
+		/// vault should rotate successfully.
 		///
 		/// ## Events
 		///
@@ -340,7 +346,7 @@ pub mod pallet {
 				// Set Polkadot Pure Proxy Vault Account
 				let polkadot_vault_account_id =
 					MultiSigner::Sr25519(sr25519::Public(dot_pure_proxy_vault_key)).into_account();
-				PolkadotVaultAccountId::<T>::set(Some(polkadot_vault_account_id.clone()));
+				PolkadotVaultAccountId::<T>::put(polkadot_vault_account_id.clone());
 				Self::deposit_event(Event::<T>::PolkadotVaultAccountSet {
 					polkadot_vault_account_id,
 				});
@@ -355,7 +361,10 @@ pub mod pallet {
 				)
 			}
 			#[cfg(not(feature = "ibiza"))]
-			Ok(().into())
+			{
+				log::warn!("witnessing polkadot vault creation needs ibiza flag to be enabled");
+				Ok(().into())
+			}
 		}
 	}
 
