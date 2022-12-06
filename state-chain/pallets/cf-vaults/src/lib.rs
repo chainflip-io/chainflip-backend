@@ -417,8 +417,6 @@ pub mod pallet {
 		VaultRotationCompleted,
 		/// The vault's key has been rotated externally \[new_public_key\]
 		VaultRotatedExternally(<T::Chain as ChainCrypto>::AggKey),
-		/// The new public key witnessed externally was not the expected one \[key\]
-		UnexpectedPubkeyWitnessed(<T::Chain as ChainCrypto>::AggKey),
 		/// A keygen participant has reported that keygen was successful \[validator_id\]
 		KeygenSuccessReported(T::ValidatorId),
 		/// A keygen participant has reported that an incompatible key was generated
@@ -592,7 +590,6 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [UnexpectedPubkeyWitnessed](Event::UnexpectedPubkeyWitnessed)
 		/// - [VaultRotationCompleted](Event::VaultRotationCompleted)
 		///
 		/// ## Errors
@@ -960,16 +957,8 @@ impl<T: Config<I>, I: 'static> VaultKeyWitnessedHandler<T::Chain> for Pallet<T, 
 			Error::<T, I>::InvalidRotationStatus
 		);
 
-		// If the keys don't match, we don't have much choice but to trust the witnessed one
-		// over the one we expected, but we should log the issue nonetheless.
-		if new_public_key != expected_new_key {
-			log::error!(
-				"Unexpected new agg key witnessed. Expected {:?}, got {:?}.",
-				expected_new_key,
-				new_public_key,
-			);
-			Self::deposit_event(Event::<T, I>::UnexpectedPubkeyWitnessed(new_public_key));
-		}
+		// The expected new key should match the new key witnessed
+		debug_assert_eq!(new_public_key, expected_new_key);
 
 		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Complete { tx_hash });
 
