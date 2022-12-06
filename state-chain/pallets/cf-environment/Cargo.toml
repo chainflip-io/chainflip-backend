@@ -18,6 +18,7 @@ cf-primitives = {path = '../../primitives', default-features = false}
 cf-chains = {optional = true, path = '../../chains', default-features = false}
 serde = {optional = true, version = '1.0.126', features = ['derive']}
 hex-literal = {version = '0.3'}
+log = { version = '0.4.16', default-features = false }
 
 # Parity deps
 [dependencies.codec]
@@ -57,6 +58,11 @@ git = 'https://github.com/chainflip-io/substrate.git'
 optional = true
 tag = 'chainflip-monthly-2022-06+01'
 
+[dependencies.sp-core]
+default-features = false
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'chainflip-monthly-2022-06+01'
+
 # Dev dependencies
 [dev-dependencies.sp-io]
 git = 'https://github.com/chainflip-io/substrate.git'
@@ -78,6 +84,8 @@ std = [
   'serde',
   'sp-std/std',
   'sp-runtime/std',
+  'sp-core/std',
+  'log/std'
 ]
 runtime-benchmarks = [
   'cf-traits/runtime-benchmarks',
