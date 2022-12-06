@@ -346,7 +346,7 @@ pub mod pallet {
 				});
 
 				// Witness the agg_key rotation manually in the vaults pallet for polkadot
-				T::PolkadotVaultKeyWitnessedHandler::on_new_key_witnessed(
+				T::PolkadotVaultKeyWitnessedHandler::on_new_key_activated(
 					dot_witnessed_aggkey.to_vec().try_into().expect(
 						"This should not fail since the size of vec is guaranteed to be 32",
 					),

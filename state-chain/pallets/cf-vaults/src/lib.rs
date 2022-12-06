@@ -612,11 +612,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
 
-			<Self as VaultKeyWitnessedHandler<T::Chain>>::on_new_key_witnessed(
-				new_public_key,
-				block_number,
-				tx_hash,
-			)
+			Self::on_new_key_activated(new_public_key, block_number, tx_hash)
 		}
 
 		/// The vault's key has been updated externally, outside of the rotation
@@ -947,7 +943,7 @@ impl<T: Config<I>, I: 'static> EpochTransitionHandler for Pallet<T, I> {
 }
 
 impl<T: Config<I>, I: 'static> VaultKeyWitnessedHandler<T::Chain> for Pallet<T, I> {
-	fn on_new_key_witnessed(
+	fn on_new_key_activated(
 		new_public_key: AggKeyFor<T, I>,
 		block_number: ChainBlockNumberFor<T, I>,
 		tx_hash: TransactionHashFor<T, I>,
