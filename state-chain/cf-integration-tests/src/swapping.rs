@@ -7,12 +7,12 @@ use frame_support::{
 use state_chain_runtime::{
 	chainflip::address_derivation::AddressDerivation, AccountRoles, Call, EpochInfo,
 	EthereumIngressEgress, EthereumInstance, Event, LiquidityPools, LiquidityProvider, Origin,
-	Swapping, System, Validator, Witnesser,
+	Runtime, Swapping, System, Validator, Witnesser,
 };
 
 use cf_primitives::{
-	chains::assets::eth, AccountId, AccountRole, Asset, AssetAmount, ExchangeRate,
-	ForeignChainAddress, TradingPosition,
+	chains::{assets::eth, Ethereum},
+	AccountId, AccountRole, Asset, AssetAmount, ExchangeRate, ForeignChainAddress, TradingPosition,
 };
 use cf_traits::{AddressDerivationApi, LiquidityPoolApi, LpProvisioningApi};
 use pallet_cf_ingress_egress::IngressWitness;
@@ -87,7 +87,7 @@ fn can_swap_assets() {
 		System::reset_events();
 		// Test swap
 		assert_ok!(Swapping::register_swap_intent(
-			Origin::signed(relayer.clone()),
+			Origin::signed(relayer),
 			Asset::Eth,
 			Asset::Flip,
 			ForeignChainAddress::Eth(egress_address),
@@ -95,25 +95,28 @@ fn can_swap_assets() {
 		));
 
 		// Note the ingress address here
-		let ingress_address = <AddressDerivation as AddressDerivationApi>::generate_address(
-			Asset::Eth.into(),
-			pallet_cf_ingress_egress::IntentIdCounter::<Runtime, EthereumInstance>::get() - 1,
-		)
-		.expect("Should be able to generate a valid eth address.");
+		let ingress_address =
+			<AddressDerivation as AddressDerivationApi<Ethereum>>::generate_address(
+				eth::Asset::Eth,
+				pallet_cf_ingress_egress::IntentIdCounter::<Runtime, EthereumInstance>::get(),
+			)
+			.expect("Should be able to generate a valid eth address.");
+
 		System::assert_has_event(Event::EthereumIngressEgress(
 			pallet_cf_ingress_egress::Event::StartWitnessing {
-				ingress_address: ingress_address.into(),
+				ingress_address,
 				ingress_asset: eth::Asset::Eth,
 			},
 		));
 
+		const SWAP_AMOUNT: AssetAmount = 10_000;
 		// Define the ingress call
 		let ingress_call =
 			Box::new(Call::EthereumIngressEgress(pallet_cf_ingress_egress::Call::do_ingress {
 				ingress_witnesses: vec![IngressWitness {
-					ingress_address: ingress_address.into(),
+					ingress_address,
 					asset: eth::Asset::Eth,
-					amount: 10_000,
+					amount: SWAP_AMOUNT,
 					tx_hash: Default::default(),
 				}],
 			}));
@@ -131,21 +134,17 @@ fn can_swap_assets() {
 
 		System::assert_has_event(Event::EthereumIngressEgress(
 			pallet_cf_ingress_egress::Event::IngressCompleted {
-				ingress_address: ingress_address.into(),
+				ingress_address,
 				asset: eth::Asset::Eth,
-				amount: 10_000,
+				amount: SWAP_AMOUNT,
 				tx_hash: Default::default(),
 			},
 		));
 
-		const SWAP_AMOUNT: AssetAmount = 10_000;
-		System::assert_has_event(Event::Swapping(pallet_cf_swapping::Event::SwapScheduled {
-			from: Asset::Eth,
-			to: Asset::Flip,
-			SWAP_AMOUNT,
-			egress_address: ForeignChainAddress::Eth(egress_address),
-			relayer_id: relayer,
-			relayer_commission_bps: 0u16,
+		System::assert_has_event(Event::Swapping(pallet_cf_swapping::Event::SwapIngressReceived {
+			ingress_address: ForeignChainAddress::Eth(ingress_address.to_fixed_bytes()),
+			swap_id: pallet_cf_swapping::SwapIdCounter::<Runtime>::get(),
+			ingress_amount: SWAP_AMOUNT,
 		}));
 
 		// Performs the actual swap during on_idle hooks.
