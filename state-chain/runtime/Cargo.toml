@@ -49,6 +49,7 @@ pallet-cf-environment = { path = '../pallets/cf-environment', default-features =
 pallet-cf-chain-tracking = { path = '../pallets/cf-chain-tracking', default-features = false }
 pallet-cf-lp =  { path = '../pallets/cf-lp', default-features = false, optional = true }
 pallet-cf-ingress-egress = { path = '../pallets/cf-ingress-egress', default-features = false, optional = true }
+pallet-cf-pools = { path = '../pallets/cf-pools', default-features = false, optional = true }
 
 # SCALE
 codec = { package = 'parity-scale-codec', version = '3.0.0', default-features = false, features = ['derive'] }
@@ -249,6 +250,7 @@ std = [
   'pallet-cf-flip/std',
   'pallet-cf-governance/std',
   'pallet-cf-lp/std',
+  'pallet-cf-pools/std',
   'pallet-cf-swapping/std',
   'pallet-cf-reputation/std',
   'pallet-cf-staking/std',
@@ -297,6 +299,7 @@ ibiza = [
   'pallet-cf-ingress-egress',
   'pallet-cf-swapping',
   'pallet-cf-lp',
+  'pallet-cf-pools',
   'cf-chains/ibiza',
   'cf-traits/ibiza',
   'pallet-cf-environment/ibiza'
