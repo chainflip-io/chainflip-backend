@@ -97,12 +97,12 @@ impl CryptoScheme for EthSigning {
 	}
 
 	fn agg_key(pubkey: &Self::Point) -> Self::AggKey {
-		// Check if the public key's x coordinate is smaller than "half secp256k1's order",
-		// which is a requirement imposed by the Key Manager contract
 		let pk = pubkey.get_element();
 		cf_chains::eth::AggKey::from_pubkey_compressed(pk.serialize())
 	}
 
+	/// Check if the public key's x coordinate is smaller than "half secp256k1's order",
+	/// which is a requirement imposed by the Key Manager contract.
 	fn is_pubkey_compatible(pubkey: &Self::Point) -> bool {
 		let pubkey = Self::agg_key(pubkey);
 
