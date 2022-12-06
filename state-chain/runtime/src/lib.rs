@@ -16,7 +16,7 @@ use crate::{
 	},
 };
 #[cfg(feature = "ibiza")]
-use cf_chains::{dot, Polkadot};
+use cf_chains::{dot, dot::api::PolkadotApi, Polkadot};
 use cf_chains::{
 	eth,
 	eth::{api::register_claim::RegisterClaim, Ethereum},
@@ -214,6 +214,12 @@ impl pallet_cf_validator::Config for Runtime {
 impl pallet_cf_environment::Config for Runtime {
 	type Event = Event;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+	#[cfg(feature = "ibiza")]
+	type CreatePolkadotVault = PolkadotApi<DotEnvironment>;
+	#[cfg(feature = "ibiza")]
+	type PolkadotBroadcaster = PolkadotBroadcaster;
+	#[cfg(feature = "ibiza")]
+	type PolkadotVaultKeyWitnessedHandler = PolkadotVault;
 	type WeightInfo = pallet_cf_environment::weights::PalletWeight<Runtime>;
 }
 

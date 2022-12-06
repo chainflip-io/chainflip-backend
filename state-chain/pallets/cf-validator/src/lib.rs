@@ -402,6 +402,13 @@ pub mod pallet {
 						// We can do this with an enum instead of Result<()>
 						// We have successfully done keygen verification
 						AsyncResult::Ready(VaultStatus::KeygenComplete) => {
+							let new_epoch = CurrentEpoch::<T>::get() + 1;
+							let new_authorities = rotation_state.authority_candidates::<Vec<_>>();
+							HistoricalAuthorities::<T>::insert(new_epoch, new_authorities.clone());
+							EpochAuthorityCount::<T>::insert(
+								new_epoch,
+								new_authorities.len() as AuthorityCount,
+							);
 							T::VaultRotator::activate();
 							Self::set_rotation_phase(RotationPhase::ActivatingKeys(rotation_state));
 						},

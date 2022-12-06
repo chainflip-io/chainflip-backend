@@ -786,3 +786,11 @@ pub trait BidInfo {
 	/// Returns the smallest of all backup validator bids.
 	fn get_min_backup_bid() -> Self::Balance;
 }
+
+pub trait VaultKeyWitnessedHandler<C: ChainAbi> {
+	fn on_new_key_activated(
+		new_public_key: C::AggKey,
+		block_number: C::ChainBlockNumber,
+		tx_hash: C::TransactionHash,
+	) -> DispatchResultWithPostInfo;
+}
