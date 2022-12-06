@@ -97,6 +97,8 @@ pub trait CryptoScheme: 'static {
 		+ Sync
 		+ Send;
 
+	type AggKey;
+
 	/// Friendly name of the scheme used for logging
 	const NAME: &'static str;
 
@@ -132,6 +134,8 @@ pub trait CryptoScheme: 'static {
 		challenge: &<Self::Point as ECPoint>::Scalar,
 		signature_response: &<Self::Point as ECPoint>::Scalar,
 	) -> bool;
+
+	fn agg_key(pubkey: &Self::Point) -> Self::AggKey;
 
 	// Only relevant for ETH contract keys, which is the only
 	// implementation that is expected to overwrite this
