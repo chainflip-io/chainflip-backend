@@ -37,6 +37,8 @@ impl BlockNumberable for MiniHeader {
 	}
 }
 
+/// This event represents a rotation of the agg key. We have handed over control of the vault
+/// to the new aggregrate at this event.
 #[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 pub struct ProxyAdded {
 	delegator: PolkadotAccount,
