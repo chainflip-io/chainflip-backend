@@ -97,3 +97,30 @@ fn test_address_generation() {
 		// assert!(AddressDerivation::generate_address(Asset::Dot, 1).is_err());
 	});
 }
+
+#[cfg(feature = "ibiza")]
+#[test]
+fn test_dot_derive() {
+	use crate::Runtime;
+	use pallet_cf_environment::PolkadotVaultAccountId;
+	use sp_runtime::app_crypto::Ss58Codec;
+
+	frame_support::sp_io::TestExternalities::new_empty().execute_with(|| {
+		let (account_id, address_format) = AccountId32::from_ss58check_with_version(
+			"15uPkKV7SsNXxw5VCu3LgnuaR5uSZ4QMyzxnLfDFE9J5nni9",
+		)
+		.unwrap();
+		PolkadotVaultAccountId::<Runtime>::put(account_id);
+
+		assert_eq!(
+			"12AeXofJkQErqQuiJmJapqwS4KiAZXBhAYoj9HZ2sYo36mRg",
+			<AddressDerivation as AddressDerivationApi<Polkadot>>::generate_address(
+				dot::Asset::Dot,
+				6259
+			)
+			.unwrap()
+			.to_ss58check_with_version(address_format),
+		);
+		println!("Derivation worked for DOT! 🚀");
+	});
+}
