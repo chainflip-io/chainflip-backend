@@ -20,6 +20,10 @@ cf-chains = {path = '../../chains', default-features = false, features=["ibiza"]
 
 log = { version = '0.4.16', default-features = false }
 
+[dev-dependencies]
+state-chain-runtime = {path = '../../runtime'}
+cf-test-utilities = { path = '../../test-utilities'}
+
 # Parity deps
 [dependencies.codec]
 default-features = false
