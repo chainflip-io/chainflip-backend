@@ -334,7 +334,10 @@ pub mod pallet {
 
 			ensure!(address != ETH_ZERO_ADDRESS, Error::<T>::InvalidClaim);
 
-			ensure!(!T::EpochInfo::is_auction_phase(), Error::<T>::AuctionPhase);
+			// Not allowed to claim if we are an active bidder in the auction phase
+			if T::EpochInfo::is_auction_phase() && let Ok(active_bidder_status) = ActiveBidder::<T>::try_get(&account_id) {
+				ensure!(!active_bidder_status, Error::<T>::AuctionPhase);
+			}
 
 			// The staker must either execute their claim voucher or wait until expiry before
 			// creating a new claim.
@@ -682,9 +685,11 @@ impl<T: Config> Pallet<T> {
 	/// Sets the `active` flag associated with the account to false, signalling that the account no
 	/// longer wishes to participate in auctions.
 	///
-	/// Returns an error if the account has already been retired, or if the account has no stake
-	/// associated.
+	/// Returns an error if the account has already been retired, if the account has no stake
+	/// associated, or if the epoch is currently in the auction phase.
 	fn retire(account_id: &AccountId<T>) -> Result<(), Error<T>> {
+		ensure!(!T::EpochInfo::is_auction_phase(), Error::<T>::AuctionPhase);
+
 		ActiveBidder::<T>::try_mutate_exists(account_id, |maybe_status| {
 			match maybe_status.as_mut() {
 				Some(active) => {
