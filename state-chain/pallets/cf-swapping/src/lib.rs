@@ -248,7 +248,7 @@ pub mod pallet {
 				to,
 				amount: amount.saturating_sub(fee),
 				egress_address,
-				relayer_id: relayer_id.clone(),
+				relayer_id,
 				relayer_commission_bps,
 			});
 
