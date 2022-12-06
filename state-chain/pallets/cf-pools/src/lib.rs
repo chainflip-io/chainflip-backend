@@ -153,8 +153,8 @@ impl<T: Config> cf_traits::LiquidityPoolApi for Pallet<T> {
 		_asset: &any::Asset,
 		position: &TradingPosition<AssetAmount>,
 	) -> Option<(AssetAmount, AssetAmount)> {
-		/// Naive placeholder implementation. Does not take account into existing liquidity in the
-		/// pool.
+		// Naive placeholder implementation. Does not take account into existing liquidity in the
+		// pool.
 		Some(match position {
 			TradingPosition::ClassicV3 { volume_0, volume_1, .. } => (*volume_0, *volume_1),
 			TradingPosition::VolatileV3 { side, volume, .. } => match side {
