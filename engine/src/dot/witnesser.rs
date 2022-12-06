@@ -79,6 +79,8 @@ where
 	.await
 }
 
+/// Takes a stream of Results and terminates when it hits an error, logging the error before
+/// terminating.
 fn take_while_ok<InStream, T, E>(
 	inner_stream: InStream,
 	logger: &slog::Logger,
