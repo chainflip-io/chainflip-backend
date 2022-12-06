@@ -21,7 +21,7 @@ use cf_traits::{
 };
 use frame_support::{pallet_prelude::*, sp_runtime::DispatchError};
 pub use pallet::*;
-use sp_runtime::traits::Saturating;
+use sp_runtime::{traits::Saturating, TransactionOutcome};
 pub use sp_std::{vec, vec::Vec};
 
 /// Enum wrapper for fetch and egress requests.
@@ -50,6 +50,7 @@ pub mod pallet {
 
 	use frame_support::{
 		pallet_prelude::{DispatchResultWithPostInfo, OptionQuery, ValueQuery},
+		storage::with_transaction,
 		traits::{EnsureOrigin, IsType},
 	};
 	use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
@@ -215,7 +216,8 @@ pub mod pallet {
 				.saturating_sub(T::WeightInfo::egress_assets(0u32))
 				.saturating_div(single_request_cost) as u32;
 
-			T::WeightInfo::egress_assets(Self::egress_scheduled_assets(Some(request_count)))
+			with_transaction(|| Self::egress_scheduled_assets(Some(request_count)))
+				.unwrap_or_else(|_| T::WeightInfo::egress_assets(0))
 		}
 
 		fn integrity_test() {
@@ -265,9 +267,7 @@ pub mod pallet {
 			maybe_size: Option<u32>,
 		) -> DispatchResult {
 			let _ok = T::EnsureGovernance::ensure_origin(origin)?;
-
-			Self::egress_scheduled_assets(maybe_size);
-
+			with_transaction(|| Self::egress_scheduled_assets(maybe_size))?;
 			Ok(())
 		}
 
@@ -295,13 +295,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Returns the actual number of transactions sent.
 	///
 	/// Egress transactions with Blacklisted assets are not sent, and kept in storage.
-	fn egress_scheduled_assets(maybe_size: Option<u32>) -> u32 {
-		if maybe_size == Some(0) {
-			return 0
-		}
-
-		let scheduled_egress_requests = ScheduledEgressRequests::<T, I>::get();
-
+	#[allow(clippy::type_complexity)]
+	fn egress_scheduled_assets(
+		maybe_size: Option<u32>,
+	) -> TransactionOutcome<Result<u64, DispatchError>> {
 		let batch_to_send: Vec<_> =
 			ScheduledEgressRequests::<T, I>::mutate(|requests: &mut Vec<_>| {
 				// Take up to batch_size requests to be sent
@@ -323,7 +320,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			});
 
 		if batch_to_send.is_empty() {
-			return 0
+			return TransactionOutcome::Rollback(Err(DispatchError::Other(
+				"Nothing to send, batch to send is empty, rolled back storage",
+			)))
 		}
 
 		let mut fetch_params = vec![];
@@ -350,12 +349,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					fetch_batch_size,
 					egress_batch_size,
 				});
-				fetch_batch_size.saturating_add(egress_batch_size)
+				TransactionOutcome::Commit(Ok(T::WeightInfo::egress_assets(
+					fetch_batch_size.saturating_add(egress_batch_size),
+				)))
 			},
-			Err(_) => {
-				ScheduledEgressRequests::<T, I>::put(scheduled_egress_requests);
-				0
-			},
+			Err(_) => TransactionOutcome::Rollback(Err(DispatchError::Other(
+				"AllBatch Apicall creation failed, rolled back storage",
+			))),
 		}
 	}
 

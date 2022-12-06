@@ -179,6 +179,38 @@ fn on_idle_can_send_batch_all() {
 }
 
 #[test]
+fn all_batch_apicall_creation_failure_should_rollback_storage() {
+	new_test_ext().execute_with(|| {
+		IngressEgress::schedule_egress(ETH_ETH, 1_000, ALICE_ETH_ADDRESS.into());
+		IngressEgress::schedule_egress(ETH_ETH, 2_000, ALICE_ETH_ADDRESS.into());
+		IngressEgress::schedule_egress(ETH_ETH, 3_000, BOB_ETH_ADDRESS.into());
+		IngressEgress::schedule_egress(ETH_ETH, 4_000, BOB_ETH_ADDRESS.into());
+		schedule_ingress(1u64, eth::Asset::Eth);
+		schedule_ingress(2u64, eth::Asset::Eth);
+		schedule_ingress(3u64, eth::Asset::Eth);
+		schedule_ingress(4u64, eth::Asset::Eth);
+
+		IngressEgress::schedule_egress(ETH_FLIP, 5_000, ALICE_ETH_ADDRESS.into());
+		IngressEgress::schedule_egress(ETH_FLIP, 6_000, ALICE_ETH_ADDRESS.into());
+		IngressEgress::schedule_egress(ETH_FLIP, 7_000, BOB_ETH_ADDRESS.into());
+		IngressEgress::schedule_egress(ETH_FLIP, 8_000, BOB_ETH_ADDRESS.into());
+		schedule_ingress(5u64, eth::Asset::Flip);
+
+		// This should create a failure since the environment of eth does not have any address
+		// stored for USDC
+		schedule_ingress(4u64, eth::Asset::Usdc);
+
+		let scheduled_requests = ScheduledEgressRequests::<Test, Instance1>::get();
+
+		// Try to send the scheduled egresses via Allbatch apicall. Will fail and so should rollback
+		// the ScheduledEgressRequests
+		IngressEgress::on_idle(1, 1_000_000_000_000u64);
+
+		assert_eq!(ScheduledEgressRequests::<Test, Instance1>::get(), scheduled_requests);
+	});
+}
+
+#[test]
 fn can_manually_send_batch_all() {
 	new_test_ext().execute_with(|| {
 		IngressEgress::schedule_egress(ETH_ETH, 1_000, ALICE_ETH_ADDRESS.into());
