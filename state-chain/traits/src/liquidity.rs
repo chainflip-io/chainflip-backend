@@ -45,7 +45,8 @@ pub trait LiquidityPoolApi {
 	fn deploy(asset: &Asset, position: TradingPosition<AssetAmount>);
 
 	/// Retract a liquidity position from a pool.
-	fn retract(asset: &Asset, position: TradingPosition<AssetAmount>);
+	fn retract(asset: &Asset, position: TradingPosition<AssetAmount>)
+		-> (AssetAmount, AssetAmount);
 
 	/// Gets the current liquidity amount from a pool
 	fn get_liquidity(asset: &Asset) -> (AssetAmount, AssetAmount);

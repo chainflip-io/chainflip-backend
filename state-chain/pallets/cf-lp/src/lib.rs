@@ -249,12 +249,8 @@ pub mod pallet {
 					Error::<T>::UnauthorisedToModify
 				);
 
-				let maybe_liquidity = T::LiquidityPoolApi::get_liquidity_amount_by_position(
-					&asset,
-					&current_position.position,
-				);
-				ensure!(maybe_liquidity.is_some(), Error::<T>::InvalidTradingPosition);
-				let (old_liquidity_0, old_liquidity_1) = maybe_liquidity.unwrap();
+				let (old_liquidity_0, old_liquidity_1) =
+					T::LiquidityPoolApi::retract(&asset, current_position.position);
 
 				// Refund the debited assets for the previous position
 				Pallet::<T>::credit(&account_id, asset, old_liquidity_0)?;
@@ -278,7 +274,6 @@ pub mod pallet {
 				)?;
 
 				// Update the pool's liquidity amount
-				T::LiquidityPoolApi::retract(&asset, current_position.position);
 				T::LiquidityPoolApi::deploy(&asset, new_position);
 
 				// Update the Position storage
@@ -308,19 +303,13 @@ pub mod pallet {
 			let current_position = maybe_position.unwrap();
 			ensure!(current_position.account_id == account_id, Error::<T>::UnauthorisedToModify);
 
-			let maybe_liquidity = T::LiquidityPoolApi::get_liquidity_amount_by_position(
-				&current_position.asset,
-				&current_position.position,
-			);
-			ensure!(maybe_liquidity.is_some(), Error::<T>::InvalidTradingPosition);
-			let (liquidity_0, liquidity_1) = maybe_liquidity.unwrap();
+			// Update the pool's liquidity amount
+			let (asset_0_credit, asset_1_credit) =
+				T::LiquidityPoolApi::retract(&current_position.asset, current_position.position);
 
 			// Refund the debited assets for the previous position
-			Pallet::<T>::credit(&account_id, current_position.asset, liquidity_0)?;
-			Pallet::<T>::credit(&account_id, T::LiquidityPoolApi::STABLE_ASSET, liquidity_1)?;
-
-			// Update the pool's liquidity amount
-			T::LiquidityPoolApi::retract(&current_position.asset, current_position.position);
+			Pallet::<T>::credit(&account_id, current_position.asset, asset_0_credit)?;
+			Pallet::<T>::credit(&account_id, T::LiquidityPoolApi::STABLE_ASSET, asset_1_credit)?;
 
 			Self::deposit_event(Event::<T>::TradingPositionClosed { account_id, position_id });
 			Ok(())

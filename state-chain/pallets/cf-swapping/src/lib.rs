@@ -83,6 +83,14 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// An new swap intent has been registered.
 		NewSwapIntent { intent_id: IntentId, ingress_address: ForeignChainAddress },
+		SwapScheduled {
+			from: Asset,
+			to: Asset,
+			amount: AssetAmount,
+			egress_address: ForeignChainAddress,
+			relayer_id: T::AccountId,
+			relayer_commission_bps: u16,
+		},
 	}
 	#[pallet::error]
 	pub enum Error<T> {
@@ -197,6 +205,7 @@ pub mod pallet {
 
 	impl<T: Config> SwapIntentHandler for Pallet<T> {
 		type AccountId = T::AccountId;
+
 		/// Callback function to kick off the swapping process after a successful ingress.
 		fn schedule_swap(
 			from: Asset,
@@ -221,9 +230,19 @@ pub mod pallet {
 				to,
 				amount: amount.saturating_sub(fee),
 				egress_address,
+				relayer_id: relayer_id.clone(),
+				relayer_commission_bps,
+			});
+
+			Self::deposit_event(Event::<T>::SwapScheduled {
+				from,
+				to,
+				amount,
+				egress_address,
 				relayer_id,
 				relayer_commission_bps,
 			});
+
 			Ok(())
 		}
 	}

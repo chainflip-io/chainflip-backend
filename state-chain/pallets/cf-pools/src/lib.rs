@@ -34,9 +34,18 @@ pub(crate) mod mini_pool {
 			self.asset_1.saturating_accrue(volume_1);
 		}
 
-		pub fn remove_liquidity(&mut self, volume_0: AssetAmount, volume_1: AssetAmount) {
+		pub fn remove_liquidity(
+			&mut self,
+			volume_0: AssetAmount,
+			volume_1: AssetAmount,
+		) -> (AssetAmount, AssetAmount) {
+			let (asset_0_liquidity, asset_1_liquidity) = self.get_liquidity();
 			self.asset_0.saturating_reduce(volume_0);
 			self.asset_1.saturating_reduce(volume_1);
+			(
+				asset_0_liquidity.saturating_sub(self.asset_0),
+				asset_1_liquidity.saturating_sub(self.asset_1),
+			)
 		}
 
 		pub fn swap_rate(&self, input_amount: AssetAmount) -> ExchangeRate {
@@ -127,17 +136,18 @@ impl<T: Config> cf_traits::LiquidityPoolApi for Pallet<T> {
 		}
 	}
 
-	fn retract(asset: &any::Asset, position: cf_primitives::TradingPosition<AssetAmount>) {
+	fn retract(
+		asset: &any::Asset,
+		position: cf_primitives::TradingPosition<AssetAmount>,
+	) -> (AssetAmount, AssetAmount) {
 		match position {
-			TradingPosition::ClassicV3 { volume_0, volume_1, .. } => {
-				Pools::<T>::mutate(asset, |pool| pool.remove_liquidity(volume_0, volume_1));
-			},
-			TradingPosition::VolatileV3 { side, volume, .. } => {
+			TradingPosition::ClassicV3 { volume_0, volume_1, .. } =>
+				Pools::<T>::mutate(asset, |pool| pool.remove_liquidity(volume_0, volume_1)),
+			TradingPosition::VolatileV3 { side, volume, .. } =>
 				Pools::<T>::mutate(asset, |pool| match side {
 					PoolAsset::Asset0 => pool.remove_liquidity(volume, 0),
 					PoolAsset::Asset1 => pool.remove_liquidity(0, volume),
-				});
-			},
+				}),
 		}
 	}
 
