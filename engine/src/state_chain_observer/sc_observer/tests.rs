@@ -1427,7 +1427,7 @@ I>>() 		.once()
 	task_scope(|scope| {
 		async {
 			// Handle a signing request that we are not participating in
-			sc_observer::handle_signing_request::<_, _, C, state_chain_runtime::Runtime, I>(
+			sc_observer::handle_signing_request::<_, _, C, I>(
 				scope,
 				&multisig_client,
 				state_chain_client.clone(),
@@ -1440,7 +1440,7 @@ I>>() 		.once()
 			.await;
 
 			// Handle a signing request that we are participating in
-			sc_observer::handle_signing_request::<_, _, C, state_chain_runtime::Runtime, I>(
+			sc_observer::handle_signing_request::<_, _, C, I>(
 				scope,
 				&multisig_client,
 				state_chain_client.clone(),
@@ -1517,7 +1517,7 @@ where
 	task_scope(|scope| {
 		async {
 			// Handle a keygen request that we are not participating in
-			sc_observer::handle_keygen_request::<_, _, _, _, I>(
+			sc_observer::handle_keygen_request::<_, _, _, I>(
 				scope,
 				&multisig_client,
 				state_chain_client.clone(),
@@ -1528,7 +1528,7 @@ where
 			.await;
 
 			// Handle a keygen request that we are participating in
-			sc_observer::handle_keygen_request::<_, _, _, _, I>(
+			sc_observer::handle_keygen_request::<_, _, _, I>(
 				scope,
 				&multisig_client,
 				state_chain_client.clone(),

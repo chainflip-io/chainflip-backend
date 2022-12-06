@@ -47,7 +47,7 @@ use crate::dot::{rpc::DotRpcApi, DotBroadcaster};
 #[cfg(feature = "ibiza")]
 use sp_core::H160;
 
-async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, T, I>(
+async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 	scope: &Scope<'a, anyhow::Error>,
 	multisig_client: &'a MultisigClient,
 	state_chain_client: Arc<StateChainClient>,
@@ -57,10 +57,10 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, T, I>(
 ) where
 	MultisigClient: MultisigClientApi<C>,
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
-	C: CryptoScheme<AggKey = <T::Chain as ChainCrypto>::AggKey>,
-	T: pallet_cf_vaults::Config<I, ValidatorId = AccountId32> + Sync + Send,
+    state_chain_runtime::Runtime: pallet_cf_vaults::Config<I>,
+	C: CryptoScheme<AggKey = <<state_chain_runtime::Runtime as pallet_cf_vaults::Config<I>>::Chain as ChainCrypto>::AggKey>,
 	I: 'static + Sync + Send,
-	state_chain_runtime::Call: std::convert::From<pallet_cf_vaults::Call<T, I>>,
+	state_chain_runtime::Call: std::convert::From<pallet_cf_vaults::Call<state_chain_runtime::Runtime, I>>,
 {
 	if keygen_participants.contains(&state_chain_client.account_id()) {
 		// We initiate keygen outside of the spawn to avoid requesting ceremonies out of order
@@ -69,7 +69,7 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, T, I>(
 		scope.spawn(async move {
 			let _result = state_chain_client
 				.submit_signed_extrinsic(
-					pallet_cf_vaults::Call::<T, I>::report_keygen_outcome {
+					pallet_cf_vaults::Call::<state_chain_runtime::Runtime, I>::report_keygen_outcome {
 						ceremony_id,
 						reported_outcome: keygen_result_future
 							.await
@@ -94,7 +94,7 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, T, I>(
 	}
 }
 
-async fn handle_signing_request<'a, StateChainClient, MultisigClient, C, T, I>(
+async fn handle_signing_request<'a, StateChainClient, MultisigClient, C, I>(
 	scope: &Scope<'a, anyhow::Error>,
 	multisig_client: &'a MultisigClient,
 	state_chain_client: Arc<StateChainClient>,
@@ -107,10 +107,10 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient, C, T, I>(
 	MultisigClient: MultisigClientApi<C>,
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
 	C: CryptoScheme,
-	T: pallet_cf_threshold_signature::Config<I, ValidatorId = AccountId32> + Sync + Send,
 	I: 'static + Sync + Send,
-	state_chain_runtime::Call: std::convert::From<pallet_cf_threshold_signature::Call<T, I>>,
-	<T::TargetChain as ChainCrypto>::ThresholdSignature: From<C::Signature>,
+    state_chain_runtime::Runtime: pallet_cf_threshold_signature::Config<I>,
+	state_chain_runtime::Call: std::convert::From<pallet_cf_threshold_signature::Call<state_chain_runtime::Runtime, I>>,
+	<<state_chain_runtime::Runtime as pallet_cf_threshold_signature::Config<I>>::TargetChain as ChainCrypto>::ThresholdSignature: From<C::Signature>,
 {
 	assert_eq!(payload.0.len(), 32, "Incorrect payload size");
 
@@ -121,26 +121,34 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient, C, T, I>(
 		scope.spawn(async move {
 			match signing_result_future.await {
 				Ok(signature) => {
-					let _result = state_chain_client
-						.submit_unsigned_extrinsic(
-							pallet_cf_threshold_signature::Call::<_, I>::signature_success {
-								ceremony_id,
-								signature: signature.into(),
-							},
-							&logger,
-						)
-						.await;
+					let _result =
+						state_chain_client
+							.submit_unsigned_extrinsic(
+								pallet_cf_threshold_signature::Call::<
+									state_chain_runtime::Runtime,
+									I,
+								>::signature_success {
+									ceremony_id,
+									signature: signature.into(),
+								},
+								&logger,
+							)
+							.await;
 				},
 				Err((bad_account_ids, _reason)) => {
-					let _result = state_chain_client
-						.submit_signed_extrinsic(
-							pallet_cf_threshold_signature::Call::<_, I>::report_signature_failed {
-								id: ceremony_id,
-								offenders: BTreeSet::from_iter(bad_account_ids),
-							},
-							&logger,
-						)
-						.await;
+					let _result =
+						state_chain_client
+							.submit_signed_extrinsic(
+								pallet_cf_threshold_signature::Call::<
+									state_chain_runtime::Runtime,
+									I,
+								>::report_signature_failed {
+									id: ceremony_id,
+									offenders: BTreeSet::from_iter(bad_account_ids),
+								},
+								&logger,
+							)
+							.await;
 				},
 			}
 			Ok(())
@@ -388,7 +396,7 @@ where
                                         // Ceremony id tracking is global, so update all other clients
                                         dot_multisig_client.update_latest_ceremony_id(ceremony_id);
 
-                                        handle_keygen_request::<_, _, _, state_chain_runtime::Runtime, EthereumInstance>(
+                                        handle_keygen_request::<_, _, _, EthereumInstance>(
                                             scope,
                                             &eth_multisig_client,
                                             state_chain_client.clone(),
@@ -407,7 +415,7 @@ where
                                         // Ceremony id tracking is global, so update all other clients
                                         eth_multisig_client.update_latest_ceremony_id(ceremony_id);
 
-                                        handle_keygen_request::<_, _, _, state_chain_runtime::Runtime, PolkadotInstance>(
+                                        handle_keygen_request::<_, _, _, PolkadotInstance>(
                                             scope,
                                             &dot_multisig_client,
                                             state_chain_client.clone(),
@@ -428,7 +436,7 @@ where
                                         // Ceremony id tracking is global, so update all other clients
                                         dot_multisig_client.update_latest_ceremony_id(ceremony_id);
 
-                                        handle_signing_request::<_, _, _, state_chain_runtime::Runtime, EthereumInstance>(
+                                        handle_signing_request::<_, _, _, EthereumInstance>(
                                                 scope,
                                                 &eth_multisig_client,
                                             state_chain_client.clone(),
@@ -452,7 +460,7 @@ where
                                         // Ceremony id tracking is global, so update all other clients
                                         eth_multisig_client.update_latest_ceremony_id(ceremony_id);
 
-                                        handle_signing_request::<_, _, PolkadotSigning, state_chain_runtime::Runtime, PolkadotInstance>(
+                                        handle_signing_request::<_, _, PolkadotSigning, PolkadotInstance>(
                                                 scope,
                                                 &dot_multisig_client,
                                             state_chain_client.clone(),
