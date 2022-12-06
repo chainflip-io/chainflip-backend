@@ -113,6 +113,14 @@ pub struct EpochStartData {
 	pub vault_account: PolkadotAccountId,
 }
 
+// Polkadot extrinsics are uniquely identified by <block number>-<extrinsic index>
+// https://wiki.polkadot.network/docs/build-protocol-info
+#[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]
+pub struct TxId {
+	pub block_number: PolkadotBlockNumber,
+	pub extrinsic_index: u32,
+}
+
 impl Chain for Polkadot {
 	type ChainBlockNumber = u64;
 	type ChainAmount = DotAmount;
@@ -128,7 +136,7 @@ impl ChainCrypto for Polkadot {
 	type AggKey = PolkadotPublicKey;
 	type Payload = EncodedPolkadotPayload;
 	type ThresholdSignature = PolkadotSignature;
-	type TransactionHash = PolkadotHash;
+	type TransactionId = TxId;
 	type GovKey = PolkadotGovKey;
 
 	fn verify_threshold_signature(

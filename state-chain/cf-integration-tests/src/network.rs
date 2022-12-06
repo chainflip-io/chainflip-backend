@@ -5,7 +5,7 @@ use crate::threshold_signing::{
 #[cfg(feature = "ibiza")]
 use crate::threshold_signing::DotKeyComponents;
 #[cfg(feature = "ibiza")]
-use cf_chains::dot::PolkadotSignature;
+use cf_chains::dot::{PolkadotSignature, TxId};
 #[cfg(feature = "ibiza")]
 use state_chain_runtime::PolkadotInstance;
 
@@ -256,7 +256,10 @@ impl Engine {
 									Box::new(pallet_cf_vaults::Call::<_, PolkadotInstance>::vault_key_rotated {
 										new_public_key: self.dot_threshold_signer.borrow_mut().proposed_public_key(),
 										block_number: 100,
-										tx_hash: [1u8; 32].into(),
+										tx_hash: TxId {
+											block_number: 2,
+											extrinsic_index: 1,
+										},
 									}.into()),
 									Validator::epoch_index()
 								);
