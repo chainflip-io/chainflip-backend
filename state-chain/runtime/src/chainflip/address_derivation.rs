@@ -1,13 +1,20 @@
+#[cfg(feature = "ibiza")]
+use crate::Vec;
 use crate::{Environment, EthEnvironment};
-use cf_chains::{
-	eth::ingress_address::get_create_2_address, Chain, ChainEnvironment, Ethereum, Polkadot,
-};
-use cf_primitives::{
-	chains::assets::{dot, eth},
-	IntentId,
-};
+#[cfg(feature = "ibiza")]
+use cf_chains::Polkadot;
+use cf_chains::{eth::ingress_address::get_create_2_address, Chain, ChainEnvironment, Ethereum};
+#[cfg(feature = "ibiza")]
+use cf_primitives::chains::assets::dot;
+use cf_primitives::{chains::assets::eth, IntentId};
 use cf_traits::AddressDerivationApi;
+#[cfg(feature = "ibiza")]
+use sp_core::crypto::{AccountId32, ByteArray};
+#[cfg(feature = "ibiza")]
+use sp_runtime::traits::{BlakeTwo256, Hash};
 use sp_runtime::DispatchError;
+#[cfg(feature = "ibiza")]
+use sp_std::mem::size_of;
 
 pub struct AddressDerivation;
 
@@ -34,12 +41,30 @@ impl AddressDerivationApi<Ethereum> for AddressDerivation {
 	}
 }
 
+#[cfg(feature = "ibiza")]
 impl AddressDerivationApi<Polkadot> for AddressDerivation {
 	fn generate_address(
 		_ingress_asset: dot::Asset,
-		_intent_id: IntentId,
+		intent_id: IntentId,
 	) -> Result<<Polkadot as Chain>::ChainAccount, DispatchError> {
-		todo!()
+		const PREFIX: &[u8; 16] = b"modlpy/utilisuba";
+		const PAYLOAD_LENGTH: usize = PREFIX.len() + 32 + size_of::<u16>();
+
+		let master_account = Environment::get_polkadot_vault_account()
+			.ok_or(DispatchError::Other("Vault Account does not exist."))?;
+
+		let mut payload = Vec::with_capacity(PAYLOAD_LENGTH);
+		// Fill the first slots with the derivation prefix.
+		payload.extend(PREFIX);
+		// Then add the 32-byte public key.
+		payload.extend(master_account.as_slice());
+		// Finally, add the index to the end of the payload.
+		payload.extend(&(intent_id as u16).to_le_bytes());
+
+		// Hash the whole thing
+		let payload_hash = BlakeTwo256::hash(&payload);
+
+		Ok(AccountId32::from(*payload_hash.as_fixed_bytes()))
 	}
 }
 
