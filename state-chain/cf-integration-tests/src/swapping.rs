@@ -5,15 +5,16 @@ use frame_support::{
 	traits::{Hooks, OnNewAccount},
 };
 use state_chain_runtime::{
-	AccountRoles, Call, EpochInfo, EthereumIngressEgress, Event, LiquidityPools, LiquidityProvider,
-	Origin, Swapping, System, Validator, Witnesser,
+	chainflip::address_derivation::AddressDerivation, AccountRoles, Call, EpochInfo,
+	EthereumIngressEgress, EthereumInstance, Event, LiquidityPools, LiquidityProvider, Origin,
+	Swapping, System, Validator, Witnesser,
 };
 
 use cf_primitives::{
-	chains::assets::eth, AccountId, AccountRole, Asset, ExchangeRate, ForeignChainAddress,
-	TradingPosition,
+	chains::assets::eth, AccountId, AccountRole, Asset, AssetAmount, ExchangeRate,
+	ForeignChainAddress, TradingPosition,
 };
-use cf_traits::{LiquidityPoolApi, LpProvisioningApi};
+use cf_traits::{AddressDerivationApi, LiquidityPoolApi, LpProvisioningApi};
 use pallet_cf_ingress_egress::IngressWitness;
 
 #[test]
@@ -94,10 +95,11 @@ fn can_swap_assets() {
 		));
 
 		// Note the ingress address here
-		let ingress_address: [u8; 20] = [
-			75, 162, 158, 137, 119, 148, 142, 137, 101, 189, 190, 32, 208, 79, 204, 37, 186, 134,
-			90, 62,
-		];
+		let ingress_address = <AddressDerivation as AddressDerivationApi>::generate_address(
+			Asset::Eth.into(),
+			pallet_cf_ingress_egress::IntentIdCounter::<Runtime, EthereumInstance>::get() - 1,
+		)
+		.expect("Should be able to generate a valid eth address.");
 		System::assert_has_event(Event::EthereumIngressEgress(
 			pallet_cf_ingress_egress::Event::StartWitnessing {
 				ingress_address: ingress_address.into(),
@@ -136,10 +138,11 @@ fn can_swap_assets() {
 			},
 		));
 
+		const SWAP_AMOUNT: AssetAmount = 10_000;
 		System::assert_has_event(Event::Swapping(pallet_cf_swapping::Event::SwapScheduled {
 			from: Asset::Eth,
 			to: Asset::Flip,
-			amount: 10_000,
+			SWAP_AMOUNT,
 			egress_address: ForeignChainAddress::Eth(egress_address),
 			relayer_id: relayer,
 			relayer_commission_bps: 0u16,
@@ -150,18 +153,24 @@ fn can_swap_assets() {
 
 		// Flip: $10, Eth: $5
 		// 10_000 Eth = about 5_000 Flips - slippage
+		// TODO: Calculate this using the exchange rate.
+		const EXPECTED_OUTPUT: AssetAmount = 4545;
 		System::assert_has_event(Event::EthereumIngressEgress(
 			pallet_cf_ingress_egress::Event::EgressScheduled {
 				asset: eth::Asset::Flip,
-				amount: 4545,
+				amount: EXPECTED_OUTPUT,
 				egress_address: egress_address.into(),
 			},
 		));
 		// Flip: 100_000 -> 95_455: -4545, USDC: 1_000_000 -> 1_047_619: +47_619
-		assert_eq!(LiquidityPools::get_liquidity(&Asset::Flip), (95_455, 1_047_619));
+		// TODO: Use exchange rates instead of magic numbers.
+		assert_eq!(
+			LiquidityPools::get_liquidity(&Asset::Flip),
+			(100_000 - EXPECTED_OUTPUT, 1_047_619)
+		);
 
 		// Eth: 200_000 -> 210_000: +10_000, USDC: 1_000_000 -> 952_381: -47_619
-		assert_eq!(LiquidityPools::get_liquidity(&Asset::Eth), (210_000, 952_381));
+		assert_eq!(LiquidityPools::get_liquidity(&Asset::Eth), (200_000 + SWAP_AMOUNT, 952_381));
 
 		// Egress the asset out during on_idle.
 		let _ = EthereumIngressEgress::on_idle(1, 1_000_000_000_000);
