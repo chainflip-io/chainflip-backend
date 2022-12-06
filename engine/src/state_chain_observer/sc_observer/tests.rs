@@ -1,6 +1,9 @@
 use std::{collections::BTreeSet, sync::Arc};
 
-use cf_chains::eth::{Ethereum, Transaction};
+use cf_chains::{
+	eth::{Ethereum, Transaction},
+	ChainCrypto,
+};
 use cf_primitives::AccountRole;
 use frame_system::Phase;
 use futures::{FutureExt, StreamExt};
@@ -26,6 +29,7 @@ use crate::{
 	multisig::{
 		client::{KeygenFailureReason, MockMultisigClientApi, SigningFailureReason},
 		eth::EthSigning,
+		CryptoScheme,
 	},
 	settings::Settings,
 	state_chain_observer::{client::mocks::MockStateChainClient, sc_observer},
@@ -1364,13 +1368,18 @@ async fn run_the_sc_observer() {
 	.unwrap();
 }
 
-// TODO: Test that when we return None for polkadot vault
+// TODO: Test that when we return None for polkadot vault when fetched from environment pallet
 // witnessing isn't started for dot, but is started for ETH
 
-// Test that the ceremony requests are calling the correct MultisigClientApi functions
-// depending on whether we are participating in the ceremony or not.
-#[tokio::test]
-async fn should_handle_signing_request() {
+async fn should_handle_signing_request<C, I>()
+where
+	C: CryptoScheme + Send + Sync,
+	I: 'static + Send + Sync,
+	state_chain_runtime::Runtime: pallet_cf_threshold_signature::Config<I>,
+	state_chain_runtime::Call:
+		std::convert::From<pallet_cf_threshold_signature::Call<state_chain_runtime::Runtime, I>>,
+	<<state_chain_runtime::Runtime as pallet_cf_threshold_signature::Config<I>>::TargetChain as ChainCrypto>::ThresholdSignature: std::convert::From<<C as CryptoScheme>::Signature>,
+{
 	let logger = new_test_logger();
 	let first_ceremony_id = 1;
 	let key_id = crate::multisig::KeyId(vec![0u8; 32]);
@@ -1386,11 +1395,11 @@ async fn should_handle_signing_request() {
 		.return_const(our_account_id.clone());
 	state_chain_client.
 expect_submit_signed_extrinsic::<pallet_cf_threshold_signature::Call<state_chain_runtime::Runtime,
-EthereumInstance>>() 		.once()
+I>>() 		.once()
 		.return_once(|_, _| Ok(H256::default()));
 	let state_chain_client = Arc::new(state_chain_client);
 
-	let mut multisig_client = MockMultisigClientApi::<EthSigning>::new();
+	let mut multisig_client = MockMultisigClientApi::<C>::new();
 	multisig_client
 		.expect_update_latest_ceremony_id()
 		.with(predicate::eq(first_ceremony_id))
@@ -1418,13 +1427,7 @@ EthereumInstance>>() 		.once()
 	task_scope(|scope| {
 		async {
 			// Handle a signing request that we are not participating in
-			sc_observer::handle_signing_request::<
-				_,
-				_,
-				EthSigning,
-				state_chain_runtime::Runtime,
-				EthereumInstance,
-			>(
+			sc_observer::handle_signing_request::<_, _, C, state_chain_runtime::Runtime, I>(
 				scope,
 				&multisig_client,
 				state_chain_client.clone(),
@@ -1437,13 +1440,7 @@ EthereumInstance>>() 		.once()
 			.await;
 
 			// Handle a signing request that we are participating in
-			sc_observer::handle_signing_request::<
-				_,
-				_,
-				EthSigning,
-				state_chain_runtime::Runtime,
-				EthereumInstance,
-			>(
+			sc_observer::handle_signing_request::<_, _, C, state_chain_runtime::Runtime, I>(
 				scope,
 				&multisig_client,
 				state_chain_client.clone(),
@@ -1463,8 +1460,21 @@ EthereumInstance>>() 		.once()
 	.unwrap();
 }
 
+// Test that the ceremony requests are calling the correct MultisigClientApi functions
+// depending on whether we are participating in the ceremony or not.
 #[tokio::test]
-async fn should_handle_keygen_request() {
+async fn should_handle_signing_request_all() {
+	should_handle_signing_request::<EthSigning, EthereumInstance>().await;
+}
+
+async fn should_handle_keygen_request<C, I>()
+where
+	C: CryptoScheme<AggKey = <<state_chain_runtime::Runtime as pallet_cf_vaults::Config<I>>::Chain as ChainCrypto>::AggKey> + Send + Sync,
+	I: 'static + Send + Sync,
+	state_chain_runtime::Runtime: pallet_cf_vaults::Config<I>,
+	state_chain_runtime::Call:
+		std::convert::From<pallet_cf_vaults::Call<state_chain_runtime::Runtime, I>>,
+{
 	let logger = new_test_logger();
 	let first_ceremony_id = 1;
 	let our_account_id = AccountId32::new([0; 32]);
@@ -1476,13 +1486,13 @@ async fn should_handle_keygen_request() {
 		.expect_account_id()
 		.times(2)
 		.return_const(our_account_id.clone());
-	state_chain_client.
-expect_submit_signed_extrinsic::<pallet_cf_vaults::Call<state_chain_runtime::Runtime,
-EthereumInstance>>() 		.once()
+	state_chain_client
+		.expect_submit_signed_extrinsic::<pallet_cf_vaults::Call<state_chain_runtime::Runtime, I>>()
+		.once()
 		.return_once(|_, _| Ok(H256::default()));
 	let state_chain_client = Arc::new(state_chain_client);
 
-	let mut multisig_client = MockMultisigClientApi::<EthSigning>::new();
+	let mut multisig_client = MockMultisigClientApi::<C>::new();
 	multisig_client
 		.expect_update_latest_ceremony_id()
 		.with(predicate::eq(first_ceremony_id))
@@ -1507,7 +1517,7 @@ EthereumInstance>>() 		.once()
 	task_scope(|scope| {
 		async {
 			// Handle a keygen request that we are not participating in
-			sc_observer::handle_keygen_request::<_, _, _, _, EthereumInstance>(
+			sc_observer::handle_keygen_request::<_, _, _, _, I>(
 				scope,
 				&multisig_client,
 				state_chain_client.clone(),
@@ -1518,7 +1528,7 @@ EthereumInstance>>() 		.once()
 			.await;
 
 			// Handle a keygen request that we are participating in
-			sc_observer::handle_keygen_request::<_, _, _, _, EthereumInstance>(
+			sc_observer::handle_keygen_request::<_, _, _, _, I>(
 				scope,
 				&multisig_client,
 				state_chain_client.clone(),
@@ -1533,4 +1543,27 @@ EthereumInstance>>() 		.once()
 	})
 	.await
 	.unwrap();
+}
+
+#[tokio::test]
+async fn should_handle_keygen_request_eth() {
+	should_handle_keygen_request::<EthSigning, EthereumInstance>().await;
+}
+
+#[cfg(feature = "ibiza")]
+mod dot_tests {
+	use crate::multisig::polkadot::PolkadotSigning;
+
+	use super::*;
+	use state_chain_runtime::PolkadotInstance;
+
+	#[tokio::test]
+	async fn should_handle_signing_request_dot() {
+		should_handle_signing_request::<PolkadotSigning, PolkadotInstance>().await;
+	}
+
+	#[tokio::test]
+	async fn should_handle_keygen_request_dot() {
+		should_handle_keygen_request::<PolkadotSigning, PolkadotInstance>().await;
+	}
 }

@@ -4,7 +4,6 @@ use super::{curve25519_ristretto::Point, ChainTag, CryptoScheme, ECPoint, Verifi
 use cf_chains::dot::PolkadotPublicKey;
 use schnorrkel::context::{SigningContext, SigningTranscript};
 use serde::{Deserialize, Serialize};
-use sp_runtime::app_crypto::UncheckedFrom;
 
 pub struct PolkadotSigning {}
 
@@ -113,7 +112,7 @@ impl CryptoScheme for PolkadotSigning {
 	}
 
 	fn agg_key(pubkey: &Self::Point) -> Self::AggKey {
-		PolkadotPublicKey(sp_core::sr25519::Public::unchecked_from(
+		PolkadotPublicKey(sp_core::sr25519::Public::from_raw(
 			pubkey.get_element().compress().to_bytes(),
 		))
 	}
