@@ -116,7 +116,7 @@ pub trait MultisigClientApi<C: CryptoScheme> {
 		&self,
 		ceremony_id: CeremonyId,
 		participants: BTreeSet<AccountId>,
-	) -> BoxFuture<'_, Result<C::Point, (BTreeSet<AccountId>, KeygenFailureReason)>>;
+	) -> BoxFuture<'_, Result<C::AggKey, (BTreeSet<AccountId>, KeygenFailureReason)>>;
 
 	fn initiate_signing(
 		&self,
@@ -194,7 +194,7 @@ impl<C: CryptoScheme> MultisigClientApi<C> for MultisigClient<C> {
 		&self,
 		ceremony_id: CeremonyId,
 		participants: BTreeSet<AccountId>,
-	) -> BoxFuture<'_, Result<C::Point, (BTreeSet<AccountId>, KeygenFailureReason)>> {
+	) -> BoxFuture<'_, Result<C::AggKey, (BTreeSet<AccountId>, KeygenFailureReason)>> {
 		assert!(participants.contains(&self.my_account_id));
 
 		slog::info!(
@@ -232,7 +232,7 @@ impl<C: CryptoScheme> MultisigClientApi<C> for MultisigClient<C> {
 
 					self.key_store.lock().unwrap().set_key(key_id, keygen_result_info.clone());
 
-					Ok(keygen_result_info.key.get_public_key())
+					Ok(C::agg_key(&keygen_result_info.key.get_public_key()))
 				},
 				Err((reported_parties, failure_reason)) => {
 					failure_reason.log(

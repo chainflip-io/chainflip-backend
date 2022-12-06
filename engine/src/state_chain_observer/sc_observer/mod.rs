@@ -73,7 +73,6 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 						ceremony_id,
 						reported_outcome: keygen_result_future
 							.await
-							.map(|point| C::agg_key(&point))
 							.map_err(|(bad_account_ids, reason)| {
 								if let KeygenFailureReason::KeyNotCompatible = reason {
 									KeygenError::Incompatible
