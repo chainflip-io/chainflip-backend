@@ -1463,8 +1463,22 @@ I>>() 		.once()
 // Test that the ceremony requests are calling the correct MultisigClientApi functions
 // depending on whether we are participating in the ceremony or not.
 #[tokio::test]
-async fn should_handle_signing_request_all() {
+async fn should_handle_signing_request_eth() {
 	should_handle_signing_request::<EthSigning, EthereumInstance>().await;
+}
+
+#[cfg(feature = "ibiza")]
+mod dot_signing {
+
+	use crate::multisig::polkadot::PolkadotSigning;
+
+	use super::*;
+	use state_chain_runtime::PolkadotInstance;
+
+	#[tokio::test]
+	async fn should_handle_signing_request_dot() {
+		should_handle_signing_request::<PolkadotSigning, PolkadotInstance>().await;
+	}
 }
 
 async fn should_handle_keygen_request<C, I>()
@@ -1551,17 +1565,11 @@ async fn should_handle_keygen_request_eth() {
 }
 
 #[cfg(feature = "ibiza")]
-mod dot_tests {
+mod dot_keygen {
 	use crate::multisig::polkadot::PolkadotSigning;
 
 	use super::*;
 	use state_chain_runtime::PolkadotInstance;
-
-	#[tokio::test]
-	async fn should_handle_signing_request_dot() {
-		should_handle_signing_request::<PolkadotSigning, PolkadotInstance>().await;
-	}
-
 	#[tokio::test]
 	async fn should_handle_keygen_request_dot() {
 		should_handle_keygen_request::<PolkadotSigning, PolkadotInstance>().await;
