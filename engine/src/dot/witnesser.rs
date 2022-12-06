@@ -1,6 +1,9 @@
 use std::{pin::Pin, sync::Arc};
 
-use cf_chains::dot::{Polkadot, PolkadotProxyType, PolkadotUncheckedExtrinsic};
+use cf_chains::dot::{
+	Polkadot, PolkadotBlockNumber, PolkadotHash, PolkadotProxyType, PolkadotUncheckedExtrinsic,
+};
+use cf_primitives::PolkadotAccountId;
 use codec::{Decode, Encode};
 use frame_support::scale_info::TypeInfo;
 use futures::{stream, Stream, StreamExt};
@@ -8,7 +11,7 @@ use sp_runtime::MultiSignature;
 use state_chain_runtime::PolkadotInstance;
 use subxt::{
 	events::{EventFilter, EventsClient, Phase, StaticEvent},
-	Config, OnlineClient, PolkadotConfig,
+	OnlineClient, PolkadotConfig,
 };
 
 use crate::{
@@ -21,14 +24,10 @@ use crate::{
 
 use anyhow::{Context, Result};
 
-type PolkadotAccount = <PolkadotConfig as Config>::AccountId;
-type PolkadotBlockNumber = <PolkadotConfig as Config>::BlockNumber;
-type PolkadotBlockHash = <PolkadotConfig as Config>::Hash;
-
 #[derive(Debug, Clone, Copy)]
 pub struct MiniHeader {
 	pub block_number: u64,
-	block_hash: PolkadotBlockHash,
+	block_hash: PolkadotHash,
 }
 
 impl BlockNumberable for MiniHeader {
@@ -41,8 +40,8 @@ impl BlockNumberable for MiniHeader {
 /// to the new aggregrate at this event.
 #[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 pub struct ProxyAdded {
-	delegator: PolkadotAccount,
-	delegatee: PolkadotAccount,
+	delegator: PolkadotAccountId,
+	delegatee: PolkadotAccountId,
 	proxy_type: PolkadotProxyType,
 	delay: PolkadotBlockNumber,
 }
