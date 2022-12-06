@@ -277,7 +277,10 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Initiates the Polkadot Vault Creation Apicall
+		/// Initiates the Polkadot Vault Creation Apicall. This governance action needs to be called
+		/// when the first rotation is initiated after polkadot activation. The rotation will stall
+		/// after keygen is completed and emit the event AwaitingGovernanceAction after which this
+		/// governance extrinsic needs to be called
 		///
 		/// ## Events
 		///
@@ -315,11 +318,11 @@ pub mod pallet {
 		/// Manually initiates Polkadot vault key rotation completion steps so Epoch rotation can be
 		/// continued and sets the Polkadot Pure Proxy Vault in environment pallet. The extrinsic
 		/// takes in the dot_pure_proxy_vault_key, which is obtained from the Polkadot blockchain as
-		/// a result of creating a polkadot vault which is done by executing the extrinsic above,
-		/// dot_witnessed_aggkey, the aggkey which initiated the polkadot creation transaction and
-		/// the tx hash and the block number of the Polkadot block the vault creation transaction
-		/// was witnessed in. This extrinsic should complete the Polkadot initiation process and the
-		/// vault should rotate successfully.
+		/// a result of creating a polkadot vault which is done by executing the extrinsic
+		/// create_polkadot_vault(), dot_witnessed_aggkey, the aggkey which initiated the polkadot
+		/// creation transaction and the tx hash and block number of the Polkadot block the
+		/// vault creation transaction was witnessed in. This extrinsic should complete the Polkadot
+		/// initiation process and the vault should rotate successfully.
 		///
 		/// ## Events
 		///
