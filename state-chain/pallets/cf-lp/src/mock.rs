@@ -49,6 +49,7 @@ frame_support::construct_runtime!(
 		System: frame_system,
 		AccountRoles: pallet_cf_account_roles,
 		LiquidityProvider: pallet_cf_lp,
+		LiquidityPools: pallet_cf_pools,
 	}
 );
 
@@ -109,11 +110,14 @@ impl pallet_cf_account_roles::Config for Test {
 	type WeightInfo = ();
 }
 
+impl pallet_cf_pools::Config for Test {}
+
 impl crate::Config for Test {
 	type Event = Event;
 	type AccountRoleRegistry = AccountRoles;
 	type IngressHandler = MockIngressHandler<AnyChain, Self>;
 	type EgressHandler = MockEgressHandler<AnyChain>;
+	type LiquidityPoolApi = LiquidityPools;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 }
 

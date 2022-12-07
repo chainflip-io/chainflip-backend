@@ -1,8 +1,8 @@
 [package]
-name = 'pallet-cf-swapping'
+name = 'pallet-cf-pools'
 version = '0.1.0'
 authors = ['Chainflip Team <https://github.com/chainflip-io>']
-description = 'The swapping pallet.'
+description = 'The Chainflip pools pallet.'
 edition = '2021'
 homepage = 'https://chainflip.io'
 license = '<TODO>'
@@ -16,13 +16,8 @@ targets = ['x86_64-unknown-linux-gnu']
 # Internal dependencies
 cf-traits = {path = '../../traits', default-features = false}
 cf-primitives = {path = '../../primitives', default-features = false}
-cf-chains = {path = '../../chains', default-features = false, features=["ibiza"]}
 
 log = { version = '0.4.16', default-features = false }
-
-[dev-dependencies]
-state-chain-runtime = {path = '../../runtime'}
-cf-test-utilities = { path = '../../test-utilities'}
 
 # Parity deps
 [dependencies.codec]
@@ -79,17 +74,16 @@ default = ['std']
 std = [
   'cf-traits/std',
   'cf-primitives/std',
-  'cf-chains/std',
   'codec/std',
   'scale-info/std',
   'frame-benchmarking/std',
   'frame-support/std',
   'frame-system/std',
   'sp-std/std',
+  'log/std',
 ]
 runtime-benchmarks = [
   'cf-traits/runtime-benchmarks',
-  'cf-chains/runtime-benchmarks',
   'frame-benchmarking/runtime-benchmarks',
   'frame-support/runtime-benchmarks',
   'frame-system/runtime-benchmarks',

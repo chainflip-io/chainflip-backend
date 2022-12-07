@@ -1,12 +1,13 @@
 use sp_runtime::DispatchResult;
 
 use cf_primitives::{
-	liquidity::TradingPosition, Asset, AssetAmount, ExchangeRate, ForeignChainAddress, PoolId,
+	liquidity::TradingPosition, Asset, AssetAmount, ExchangeRate, ForeignChainAddress,
 };
 
 pub trait SwapIntentHandler {
 	type AccountId;
 	fn schedule_swap(
+		ingress_address: ForeignChainAddress,
 		from: Asset,
 		to: Asset,
 		amount: AssetAmount,
@@ -36,24 +37,29 @@ pub trait SwappingApi {
 	) -> (AssetAmount, (Asset, AssetAmount));
 }
 
-pub trait AmmPoolApi {
-	fn asset_0(&self) -> Asset;
-	fn asset_1(&self) -> Asset;
-	fn liquidity_0(&self) -> AssetAmount;
-	fn liquidity_1(&self) -> AssetAmount;
+/// API to interface with Exchange Pools.
+/// All pools are Asset <-> USDC
+pub trait LiquidityPoolApi {
+	const STABLE_ASSET: Asset;
 
-	fn pool_id(&self) -> PoolId {
-		(self.asset_0(), self.asset_1())
-	}
+	/// Deploy a liquidity position into a pool.
+	fn deploy(asset: &Asset, position: TradingPosition<AssetAmount>);
 
-	fn get_exchange_rate(&self) -> ExchangeRate;
+	/// Retract a liquidity position from a pool.
+	fn retract(asset: &Asset, position: TradingPosition<AssetAmount>)
+		-> (AssetAmount, AssetAmount);
 
-	fn get_liquidity_requirement(
-		&self,
+	/// Gets the current liquidity amount from a pool
+	fn get_liquidity(asset: &Asset) -> (AssetAmount, AssetAmount);
+
+	/// Gets the current swap rate for an pool
+	fn swap_rate(asset: &Asset, input_amount: AssetAmount) -> ExchangeRate;
+
+	/// Calculates the liquidity that corresponds to a given trading position.
+	fn get_liquidity_amount_by_position(
+		asset: &Asset,
 		position: &TradingPosition<AssetAmount>,
 	) -> Option<(AssetAmount, AssetAmount)>;
-
-	fn swap(input_amount: AssetAmount, fee: u16) -> (AssetAmount, AssetAmount);
 }
 
 // TODO Remove these in favour of a real mocks.
@@ -61,6 +67,7 @@ impl<T: frame_system::Config> SwapIntentHandler for T {
 	type AccountId = T::AccountId;
 
 	fn schedule_swap(
+		_ingress_address: ForeignChainAddress,
 		_from: Asset,
 		_to: Asset,
 		_amount: AssetAmount,
