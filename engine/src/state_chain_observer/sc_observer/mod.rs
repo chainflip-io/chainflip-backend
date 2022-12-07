@@ -111,8 +111,6 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient, C, I>(
 	state_chain_runtime::Call: std::convert::From<pallet_cf_threshold_signature::Call<state_chain_runtime::Runtime, I>>,
 	<<state_chain_runtime::Runtime as pallet_cf_threshold_signature::Config<I>>::TargetChain as ChainCrypto>::ThresholdSignature: From<C::Signature>,
 {
-	assert_eq!(payload.0.len(), 32, "Incorrect payload size");
-
 	if signers.contains(&state_chain_client.account_id()) {
 		// We initiate signing outside of the spawn to avoid requesting ceremonies out of order
 		let signing_result_future =
