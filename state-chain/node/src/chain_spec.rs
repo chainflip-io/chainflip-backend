@@ -315,7 +315,17 @@ macro_rules! network_spec {
 							// Governance account - Snow White
 							SNOW_WHITE_SR25519.into(),
 							// Stakers at genesis
-							vec![BASHFUL_SR25519.into(), DOC_SR25519.into(), DOPEY_SR25519.into()],
+							vec![
+								BASHFUL_SR25519.into(),
+								DOC_SR25519.into(),
+								DOPEY_SR25519.into(),
+								#[cfg(feature = "ibiza")]
+								get_account_id_from_seed::<sr25519::Public>("Alice"),
+								#[cfg(feature = "ibiza")]
+								get_account_id_from_seed::<sr25519::Public>("Bob"),
+								#[cfg(feature = "ibiza")]
+								get_account_id_from_seed::<sr25519::Public>("Charlie"),
+							],
 							MIN_AUTHORITIES,
 							MAX_AUTHORITIES,
 							EnvironmentConfig {
