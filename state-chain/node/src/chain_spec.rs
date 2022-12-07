@@ -201,8 +201,9 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 				snow_white.into(),
 				// Stakers at genesis
 				vec![
-					// Bashful
 					bashful_sr25519.into(),
+					// TODO: This creates discrepencies between the SC and the contract for Flip
+					// issuance. This should be used for testing only.
 					#[cfg(feature = "ibiza")]
 					get_account_id_from_seed::<sr25519::Public>("Alice"),
 					#[cfg(feature = "ibiza")]
@@ -321,6 +322,8 @@ macro_rules! network_spec {
 								BASHFUL_SR25519.into(),
 								DOC_SR25519.into(),
 								DOPEY_SR25519.into(),
+								// TODO: This creates discrepencies between the SC and the contract
+								// for Flip issuance. This should be used for testing only.
 								#[cfg(feature = "ibiza")]
 								get_account_id_from_seed::<sr25519::Public>("Alice"),
 								#[cfg(feature = "ibiza")]
