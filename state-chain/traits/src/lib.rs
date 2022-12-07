@@ -20,7 +20,7 @@ use cf_chains::{
 
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, CeremonyId, EpochIndex,
-	ForeignChainAddress, IntentId,
+	EthereumAddress, ForeignChainAddress, IntentId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -293,10 +293,11 @@ pub trait EmissionsTrigger {
 
 /// Provides the environment data for ethereum-like chains.
 pub trait EthEnvironmentProvider {
-	fn flip_token_address() -> [u8; 20];
-	fn key_manager_address() -> [u8; 20];
-	fn stake_manager_address() -> [u8; 20];
-	fn eth_vault_address() -> [u8; 20];
+	fn flip_token_address() -> EthereumAddress;
+	fn usdc_token_address() -> EthereumAddress;
+	fn key_manager_address() -> EthereumAddress;
+	fn stake_manager_address() -> EthereumAddress;
+	fn eth_vault_address() -> EthereumAddress;
 	fn chain_id() -> u64;
 }
 

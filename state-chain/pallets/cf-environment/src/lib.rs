@@ -450,6 +450,10 @@ impl<T: Config> EthEnvironmentProvider for Pallet<T> {
 		EthereumSupportedAssets::<T>::get(Asset::Flip)
 			.expect("FLIP address should be added at genesis")
 	}
+	fn usdc_token_address() -> EthereumAddress {
+		EthereumSupportedAssets::<T>::get(Asset::Usdc)
+			.expect("USDC address should be added at genesis/runtime upgrade")
+	}
 	fn key_manager_address() -> EthereumAddress {
 		EthereumKeyManagerAddress::<T>::get()
 	}

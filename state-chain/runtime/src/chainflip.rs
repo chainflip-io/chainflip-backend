@@ -232,7 +232,7 @@ impl ChainEnvironment<assets::eth::Asset, EthAbiAddress> for EthEnvironment {
 		Some(match asset {
 			assets::eth::Asset::Eth => ETHEREUM_ETH_ADDRESS.into(),
 			assets::eth::Asset::Flip => Environment::flip_token_address().into(),
-			assets::eth::Asset::Usdc => todo!(),
+			assets::eth::Asset::Usdc => Environment::usdc_token_address().into(),
 		})
 	}
 }
