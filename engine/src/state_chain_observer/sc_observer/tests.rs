@@ -145,6 +145,10 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 	#[cfg(feature = "ibiza")]
 	let (dot_epoch_start_sender, _dot_epoch_start_receiver_1) = async_broadcast::broadcast(10);
 
+	#[cfg(feature = "ibiza")]
+	let (dot_monitor_ingress_sender, _dot_monitor_ingress_receiver) =
+		tokio::sync::mpsc::unbounded_channel();
+
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
@@ -163,6 +167,8 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		eth_monitor_usdc_ingress_sender,
 		#[cfg(feature = "ibiza")]
 		dot_epoch_start_sender,
+		#[cfg(feature = "ibiza")]
+		dot_monitor_ingress_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
 		logger,
@@ -317,6 +323,10 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 	#[cfg(feature = "ibiza")]
 	let (dot_epoch_start_sender, _dot_epoch_start_receiver_1) = async_broadcast::broadcast(10);
 
+	#[cfg(feature = "ibiza")]
+	let (dot_monitor_ingress_sender, _dot_monitor_ingress_receiver) =
+		tokio::sync::mpsc::unbounded_channel();
+
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
@@ -335,6 +345,8 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		eth_monitor_usdc_ingress_sender,
 		#[cfg(feature = "ibiza")]
 		dot_epoch_start_sender,
+		#[cfg(feature = "ibiza")]
+		dot_monitor_ingress_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
 		logger,
@@ -454,6 +466,10 @@ async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
 	#[cfg(feature = "ibiza")]
 	let (dot_epoch_start_sender, _dot_epoch_start_receiver_1) = async_broadcast::broadcast(10);
 
+	#[cfg(feature = "ibiza")]
+	let (dot_monitor_ingress_sender, _dot_monitor_ingress_receiver) =
+		tokio::sync::mpsc::unbounded_channel();
+
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
@@ -472,6 +488,8 @@ async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
 		eth_monitor_usdc_ingress_sender,
 		#[cfg(feature = "ibiza")]
 		dot_epoch_start_sender,
+		#[cfg(feature = "ibiza")]
+		dot_monitor_ingress_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
 		logger,
@@ -650,6 +668,10 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 	#[cfg(feature = "ibiza")]
 	let (dot_epoch_start_sender, _dot_epoch_start_receiver_1) = async_broadcast::broadcast(10);
 
+	#[cfg(feature = "ibiza")]
+	let (dot_monitor_ingress_sender, _dot_monitor_ingress_receiver) =
+		tokio::sync::mpsc::unbounded_channel();
+
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
@@ -668,6 +690,8 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		eth_monitor_usdc_ingress_sender,
 		#[cfg(feature = "ibiza")]
 		dot_epoch_start_sender,
+		#[cfg(feature = "ibiza")]
+		dot_monitor_ingress_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
 		logger,
@@ -858,6 +882,10 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 	#[cfg(feature = "ibiza")]
 	let (dot_epoch_start_sender, _dot_epoch_start_receiver_1) = async_broadcast::broadcast(10);
 
+	#[cfg(feature = "ibiza")]
+	let (dot_monitor_ingress_sender, _dot_monitor_ingress_receiver) =
+		tokio::sync::mpsc::unbounded_channel();
+
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
@@ -876,6 +904,8 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		eth_monitor_usdc_ingress_sender,
 		#[cfg(feature = "ibiza")]
 		dot_epoch_start_sender,
+		#[cfg(feature = "ibiza")]
+		dot_monitor_ingress_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
 		logger,
@@ -1067,6 +1097,10 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 	#[cfg(feature = "ibiza")]
 	let (dot_epoch_start_sender, _dot_epoch_start_receiver_1) = async_broadcast::broadcast(10);
 
+	#[cfg(feature = "ibiza")]
+	let (dot_monitor_ingress_sender, _dot_monitor_ingress_receiver) =
+		tokio::sync::mpsc::unbounded_channel();
+
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
@@ -1085,6 +1119,8 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		eth_monitor_usdc_ingress_sender,
 		#[cfg(feature = "ibiza")]
 		dot_epoch_start_sender,
+		#[cfg(feature = "ibiza")]
+		dot_monitor_ingress_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
 		logger,
@@ -1262,6 +1298,10 @@ async fn only_encodes_and_signs_when_specified() {
 	#[cfg(feature = "ibiza")]
 	let (dot_epoch_start_sender, _dot_epoch_start_receiver_1) = async_broadcast::broadcast(10);
 
+	#[cfg(feature = "ibiza")]
+	let (dot_monitor_ingress_sender, _dot_monitor_ingress_receiver) =
+		tokio::sync::mpsc::unbounded_channel();
+
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
@@ -1280,6 +1320,8 @@ async fn only_encodes_and_signs_when_specified() {
 		eth_monitor_usdc_ingress_sender,
 		#[cfg(feature = "ibiza")]
 		dot_epoch_start_sender,
+		#[cfg(feature = "ibiza")]
+		dot_monitor_ingress_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
 		logger,
@@ -1335,6 +1377,10 @@ async fn run_the_sc_observer() {
 			#[cfg(feature = "ibiza")]
 			let (dot_epoch_start_sender, _dot_epoch_start_receiver_1) = async_broadcast::broadcast(10);
 
+			#[cfg(feature = "ibiza")]
+			let (dot_monitor_ingress_sender, _dot_monitor_ingress_receiver) =
+				tokio::sync::mpsc::unbounded_channel();
+
 			sc_observer::start(
 				state_chain_client,
 				sc_block_stream,
@@ -1353,6 +1399,8 @@ async fn run_the_sc_observer() {
 				eth_monitor_usdc_ingress_sender,
 				#[cfg(feature = "ibiza")]
 				dot_epoch_start_sender,
+				#[cfg(feature = "ibiza")]
+				dot_monitor_ingress_sender,
 				cfe_settings_update_sender,
 				initial_block_hash,
 				logger,

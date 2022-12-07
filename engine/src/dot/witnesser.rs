@@ -1,14 +1,17 @@
-use std::{pin::Pin, sync::Arc};
+use std::{collections::BTreeSet, pin::Pin, sync::Arc};
 
-use cf_chains::{dot::{
-	Polkadot, PolkadotBalance, PolkadotBlockNumber, PolkadotHash, PolkadotProxyType,
-	PolkadotUncheckedExtrinsic, TxId,
-}, eth::assets};
-use pallet_cf_ingress_egress::IngressWitness;
+use cf_chains::{
+	dot::{
+		Polkadot, PolkadotBalance, PolkadotBlockNumber, PolkadotHash, PolkadotProxyType,
+		PolkadotUncheckedExtrinsic, TxId,
+	},
+	eth::assets,
+};
 use cf_primitives::PolkadotAccountId;
 use codec::{Decode, Encode};
 use frame_support::scale_info::TypeInfo;
 use futures::{stream, Stream, StreamExt};
+use pallet_cf_ingress_egress::IngressWitness;
 use sp_runtime::MultiSignature;
 use state_chain_runtime::PolkadotInstance;
 use subxt::{
@@ -128,6 +131,8 @@ where
 pub async fn start<StateChainClient>(
 	epoch_starts_receiver: async_broadcast::Receiver<EpochStart<Polkadot>>,
 	dot_client: OnlineClient<PolkadotConfig>,
+	dot_monitor_ingress_receiver: tokio::sync::mpsc::UnboundedReceiver<PolkadotAccountId>,
+	monitored_addresses: BTreeSet<PolkadotAccountId>,
 	state_chain_client: Arc<StateChainClient>,
 	logger: &slog::Logger,
 ) -> Result<()>
@@ -138,8 +143,8 @@ where
 		"DOT".to_string(),
 		epoch_starts_receiver,
 		|_epoch_start| true,
-		(),
-		move |_end_witnessing_signal, epoch_start, (), logger| {
+		(monitored_addresses, dot_monitor_ingress_receiver),
+		move |_end_witnessing_signal, epoch_start, (mut monitored_addresses, mut dot_monitor_ingress_receiver), logger| {
 			let dot_client = dot_client.clone();
 			let state_chain_client = state_chain_client.clone();
 			async move {
@@ -193,7 +198,7 @@ where
 								if AsRef::<[u8; 32]>::as_ref(&delegator) != AsRef::<[u8; 32]>::as_ref(&our_vault) {
 									continue
 								}
-		
+
 								if let Phase::ApplyExtrinsic(extrinsic_index) = event_details.phase {
 									let block = dot_client
 										.rpc()
@@ -204,7 +209,7 @@ where
 											"Polkadot block does not exist for block hash: {:?}",
 											event_details.block_hash,
 										))?;
-		
+
 									let xt = block.block.extrinsics.get(extrinsic_index as usize).expect("We know this exists since we got this index from the event, from the block we are querying.");
 									let xt_encoded = xt.encode();
 									let mut xt_bytes = xt_encoded.as_slice();
@@ -252,21 +257,26 @@ where
 									}
 								}
 							},
-							// TODO: This currently sends them for *all* transfers
 							(None, Some(Transfer { to, amount, .. })) => {
 
-								// Check if this transfer is to us
+								// When we get a transfer event, we want to check that we have pulled the latest addresses to monitor from the chain first
+								while let Ok(address) = dot_monitor_ingress_receiver.try_recv() {
+									monitored_addresses.insert(address);
+								}
 
-								if let Phase::ApplyExtrinsic(extrinsic_index) = event_details.phase {
-									ingress_witnesses.push(IngressWitness {
-										ingress_address: to,
-										asset: assets::dot::Asset::Dot,
-										amount: amount,
-										tx_id: TxId {
-											block_number: block_number.try_into().unwrap(),
-											extrinsic_index
-										}
-									})
+								if monitored_addresses.contains(&to) {
+									if let Phase::ApplyExtrinsic(extrinsic_index) = event_details.phase {
+										slog::info!(logger, "Witnessing DOT Transfer {{ amount: {amount:?}, to: {to:?}");
+										ingress_witnesses.push(IngressWitness {
+											ingress_address: to,
+											asset: assets::dot::Asset::Dot,
+											amount,
+											tx_id: TxId {
+												block_number: block_number.try_into().unwrap(),
+												extrinsic_index
+											}
+										})
+									}
 								}
 							},
 							(Some(_), Some(_)) => unreachable!("An event can only be one event at once."),
@@ -276,22 +286,24 @@ where
 						}
 					}
 					// We've finished iterating the events for this block
-					let _result = state_chain_client
-					.submit_signed_extrinsic(
-						pallet_cf_witnesser::Call::witness_at_epoch {
-							call: Box::new(
-								pallet_cf_ingress_egress::Call::<_, PolkadotInstance>::do_ingress {
-									ingress_witnesses
-								}
-								.into(),
-							),
-							epoch_index: epoch_start.epoch_index,
-						},
-						&logger,
-					)
-					.await;
+					if !ingress_witnesses.is_empty() {
+						let _result = state_chain_client
+							.submit_signed_extrinsic(
+								pallet_cf_witnesser::Call::witness_at_epoch {
+									call: Box::new(
+										pallet_cf_ingress_egress::Call::<_, PolkadotInstance>::do_ingress {
+											ingress_witnesses
+										}
+										.into(),
+									),
+									epoch_index: epoch_start.epoch_index,
+								},
+								&logger,
+							)
+							.await;
+					}
 				}
-				Ok(())
+				Ok((monitored_addresses, dot_monitor_ingress_receiver))
 			}
 		},
 		logger,
@@ -312,25 +324,18 @@ mod tests {
 
 	use crate::{
 		logging::test_utils::new_test_logger,
-		settings::{CfSettings, CommandLineOptions, Settings},
 		state_chain_observer::client::mocks::MockStateChainClient,
 	};
 
 	#[ignore = "This test is helpful for local testing. Requires connection to westend"]
 	#[tokio::test]
 	async fn start_witnessing() {
-		let settings = Settings::load_settings_from_all_sources(
-			".".to_string(),
-			CommandLineOptions::default(),
-		)
-		.unwrap();
+		let url = "url";
 
 		let logger = new_test_logger();
 
-		println!("Connecting to: {}", settings.dot.ws_node_endpoint);
-		let dot_client = OnlineClient::<PolkadotConfig>::from_url(settings.dot.ws_node_endpoint)
-			.await
-			.unwrap();
+		println!("Connecting to: {}", url);
+		let dot_client = OnlineClient::<PolkadotConfig>::from_url(url).await.unwrap();
 
 		let client_metadata = dot_client.metadata();
 		let client_types = client_metadata.types();
@@ -341,6 +346,9 @@ mod tests {
 		assert_eq!(client_types, current_types);
 
 		let (epoch_starts_sender, epoch_starts_receiver) = async_broadcast::broadcast(10);
+
+		let (dot_monitor_ingress_sender, dot_monitor_ingress_receiver) =
+			tokio::sync::mpsc::unbounded_channel();
 
 		let state_chain_client = Arc::new(MockStateChainClient::new());
 
@@ -361,11 +369,19 @@ mod tests {
 		// 	.await
 		// 	.unwrap();
 
+		// Monitor for transfers
+		dot_monitor_ingress_sender
+			.send(
+				PolkadotAccountId::from_str("5DJVVEYPDFZjj9JtJRE2vGvpeSnzBAUA74VXPSpkGKhJSHbN")
+					.unwrap(),
+			)
+			.unwrap();
+
 		// proxy type governance
 		epoch_starts_sender
 			.broadcast(EpochStart {
 				epoch_index: 3,
-				block_number: 13544709,
+				block_number: 13658900,
 				current: true,
 				participant: true,
 				data: dot::EpochStartData {
@@ -378,8 +394,15 @@ mod tests {
 			.await
 			.unwrap();
 
-		start(epoch_starts_receiver, dot_client, state_chain_client, &logger)
-			.await
-			.unwrap();
+		start(
+			epoch_starts_receiver,
+			dot_client,
+			dot_monitor_ingress_receiver,
+			BTreeSet::default(),
+			state_chain_client,
+			&logger,
+		)
+		.await
+		.unwrap();
 	}
 }
