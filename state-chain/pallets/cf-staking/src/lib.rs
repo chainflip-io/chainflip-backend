@@ -335,8 +335,8 @@ pub mod pallet {
 			ensure!(address != ETH_ZERO_ADDRESS, Error::<T>::InvalidClaim);
 
 			// Not allowed to claim if we are an active bidder in the auction phase
-			if T::EpochInfo::is_auction_phase() && let Ok(active_bidder_status) = ActiveBidder::<T>::try_get(&account_id) {
-				ensure!(!active_bidder_status, Error::<T>::AuctionPhase);
+			if T::EpochInfo::is_auction_phase() {
+				ensure!(!ActiveBidder::<T>::get(&account_id), Error::<T>::AuctionPhase);
 			}
 
 			// The staker must either execute their claim voucher or wait until expiry before
