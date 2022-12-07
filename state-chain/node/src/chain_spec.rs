@@ -207,6 +207,8 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 					get_account_id_from_seed::<sr25519::Public>("Alice"),
 					#[cfg(feature = "ibiza")]
 					get_account_id_from_seed::<sr25519::Public>("Bob"),
+					#[cfg(feature = "ibiza")]
+					get_account_id_from_seed::<sr25519::Public>("Charlie"),
 				],
 				1,
 				common::MAX_AUTHORITIES,
