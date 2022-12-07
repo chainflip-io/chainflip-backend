@@ -26,14 +26,12 @@ pub use weights::WeightInfo;
 const BASIS_POINTS_PER_MILLION: u32 = 100;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
-pub struct Swap<AccountId> {
+pub struct Swap {
 	pub swap_id: u64,
 	pub from: Asset,
 	pub to: Asset,
 	pub amount: AssetAmount,
 	pub egress_address: ForeignChainAddress,
-	pub relayer_id: AccountId,
-	pub relayer_commission_bps: u16,
 }
 
 #[frame_support::pallet]
@@ -72,7 +70,7 @@ pub mod pallet {
 
 	/// Scheduled Swaps
 	#[pallet::storage]
-	pub(super) type SwapQueue<T: Config> = StorageValue<_, Vec<Swap<T::AccountId>>, ValueQuery>;
+	pub(super) type SwapQueue<T: Config> = StorageValue<_, Vec<Swap>, ValueQuery>;
 
 	/// SwapId Counter
 	#[pallet::storage]
@@ -169,7 +167,7 @@ pub mod pallet {
 	}
 
 	impl<T: Config> Pallet<T> {
-		pub fn execute_group_of_swaps(swaps: Vec<Swap<T::AccountId>>, from: Asset, to: Asset) {
+		pub fn execute_group_of_swaps(swaps: Vec<Swap>, from: Asset, to: Asset) {
 			let mut bundle_input = 0;
 			let mut bundle_inputs = vec![];
 
@@ -207,9 +205,7 @@ pub mod pallet {
 			}
 		}
 
-		fn group_swaps_by_asset_pair(
-			swaps: Vec<Swap<T::AccountId>>,
-		) -> BTreeMap<(Asset, Asset), Vec<Swap<T::AccountId>>> {
+		fn group_swaps_by_asset_pair(swaps: Vec<Swap>) -> BTreeMap<(Asset, Asset), Vec<Swap>> {
 			let mut grouped_swaps = BTreeMap::new();
 			for swap in swaps {
 				grouped_swaps.entry((swap.from, swap.to)).or_insert(vec![]).push(swap)
@@ -248,8 +244,6 @@ pub mod pallet {
 				to,
 				amount: amount.saturating_sub(fee),
 				egress_address,
-				relayer_id,
-				relayer_commission_bps,
 			});
 
 			Self::deposit_event(Event::<T>::SwapIngressReceived {
