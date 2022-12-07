@@ -153,7 +153,7 @@ benchmarks_instance_pallet! {
 		);
 		let call = Call::<T, I>::vault_key_rotated {
 			new_public_key,
-			block_number: 5u64.into(),
+			block_number: 5u32.into(),
 			tx_id: Decode::decode(&mut &TX_HASH[..]).unwrap()
 		};
 		let origin = T::EnsureWitnessedAtCurrentEpoch::successful_origin();
@@ -165,7 +165,7 @@ benchmarks_instance_pallet! {
 		let origin = T::EnsureWitnessedAtCurrentEpoch::successful_origin();
 		let call = Call::<T, I>::vault_key_rotated_externally {
 			new_public_key: AggKeyFor::<T, I>::benchmark_value(),
-			block_number: 5u64.into(),
+			block_number: 5u32.into(),
 			tx_hash: Decode::decode(&mut &TX_HASH[..]).unwrap()
 		};
 	} : { call.dispatch_bypass_filter(origin)? }

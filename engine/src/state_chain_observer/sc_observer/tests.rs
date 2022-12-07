@@ -53,7 +53,7 @@ fn test_header(number: u32) -> Header {
 #[tokio::test]
 async fn starts_witnessing_when_current_authority() {
 	let initial_epoch = 3;
-	let initial_epoch_from_block = 30;
+	let initial_epoch_from_block_eth = 30;
 	let initial_block_hash = H256::default();
 	let account_id = AccountId::new([0; 32]);
 
@@ -84,7 +84,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		.return_once(move |_, _| {
 			Ok(Some(Vault {
 				public_key: Default::default(),
-				active_from_block: initial_epoch_from_block,
+				active_from_block: initial_epoch_from_block_eth,
 			}))
 		});
 
@@ -98,10 +98,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 			.with(eq(initial_block_hash), eq(initial_epoch))
 			.once()
 			.return_once(move |_, _| {
-				Ok(Some(Vault {
-					public_key: Default::default(),
-					active_from_block: initial_epoch_from_block,
-				}))
+				Ok(Some(Vault { public_key: Default::default(), active_from_block: 80 }))
 			});
 
 		state_chain_client
@@ -180,7 +177,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		epoch_start_receiver.collect::<Vec<_>>().await,
 		vec![EpochStart::<Ethereum> {
 			epoch_index: initial_epoch,
-			block_number: initial_epoch_from_block,
+			block_number: initial_epoch_from_block_eth,
 			current: true,
 			participant: true,
 			data: ()
@@ -191,9 +188,11 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 #[tokio::test]
 async fn starts_witnessing_when_historic_on_startup() {
 	let active_epoch = 3;
-	let active_epoch_from_block = 30;
+	let active_epoch_from_block_eth = 30;
 	let current_epoch = 4;
-	let current_epoch_from_block = 40;
+	let current_epoch_from_block_eth = 40;
+	#[cfg(feature = "ibiza")]
+	let current_epoch_from_block_dot = 80;
 	let initial_block_hash = H256::default();
 	let account_id = AccountId::new([0; 32]);
 
@@ -224,7 +223,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		.return_once(move |_, _| {
 			Ok(Some(Vault {
 				public_key: Default::default(),
-				active_from_block: active_epoch_from_block,
+				active_from_block: active_epoch_from_block_eth,
 			}))
 		});
 
@@ -240,7 +239,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 			.return_once(move |_, _| {
 				Ok(Some(Vault {
 					public_key: Default::default(),
-					active_from_block: current_epoch_from_block,
+					active_from_block: current_epoch_from_block_dot,
 				}))
 			});
 
@@ -263,7 +262,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		.return_once(move |_, _| {
 			Ok(Some(Vault {
 				public_key: Default::default(),
-				active_from_block: current_epoch_from_block,
+				active_from_block: current_epoch_from_block_eth,
 			}))
 		});
 
@@ -279,7 +278,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 			.return_once(move |_, _| {
 				Ok(Some(Vault {
 					public_key: Default::default(),
-					active_from_block: current_epoch_from_block,
+					active_from_block: current_epoch_from_block_dot,
 				}))
 			});
 
@@ -359,14 +358,14 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		vec![
 			EpochStart::<Ethereum> {
 				epoch_index: active_epoch,
-				block_number: active_epoch_from_block,
+				block_number: active_epoch_from_block_eth,
 				current: false,
 				participant: true,
 				data: ()
 			},
 			EpochStart::<Ethereum> {
 				epoch_index: current_epoch,
-				block_number: current_epoch_from_block,
+				block_number: current_epoch_from_block_eth,
 				current: true,
 				participant: false,
 				data: ()
@@ -378,7 +377,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 #[tokio::test]
 async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
 	let initial_epoch = 3;
-	let initial_epoch_from_block = 30;
+	let initial_epoch_from_block_eth = 30;
 	let initial_block_hash = H256::default();
 	let account_id = AccountId::new([0; 32]);
 
@@ -408,7 +407,7 @@ async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
 		.return_once(move |_, _| {
 			Ok(Some(Vault {
 				public_key: Default::default(),
-				active_from_block: initial_epoch_from_block,
+				active_from_block: initial_epoch_from_block_eth,
 			}))
 		});
 
@@ -422,10 +421,7 @@ async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
 			.with(eq(initial_block_hash), eq(3))
 			.once()
 			.return_once(move |_, _| {
-				Ok(Some(Vault {
-					public_key: Default::default(),
-					active_from_block: initial_epoch_from_block,
-				}))
+				Ok(Some(Vault { public_key: Default::default(), active_from_block: 80 }))
 			});
 
 		state_chain_client
@@ -501,7 +497,7 @@ async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
 		epoch_start_receiver.collect::<Vec<_>>().await,
 		vec![EpochStart::<Ethereum> {
 			epoch_index: initial_epoch,
-			block_number: initial_epoch_from_block,
+			block_number: initial_epoch_from_block_eth,
 			current: true,
 			participant: false,
 			data: (),
@@ -512,7 +508,9 @@ async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
 #[tokio::test]
 async fn current_authority_to_current_authority_on_new_epoch_event() {
 	let initial_epoch = 4;
-	let initial_epoch_from_block = 40;
+	let initial_epoch_from_block_eth = 40;
+	#[cfg(feature = "ibiza")]
+	let initial_epoch_from_block_dot = 72;
 	let new_epoch = 5;
 	let new_epoch_from_block = 50;
 	let initial_block_hash = H256::default();
@@ -545,7 +543,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		.return_once(move |_, _| {
 			Ok(Some(Vault {
 				public_key: Default::default(),
-				active_from_block: initial_epoch_from_block,
+				active_from_block: initial_epoch_from_block_eth,
 			}))
 		});
 
@@ -561,7 +559,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 			.return_once(move |_, _| {
 				Ok(Some(Vault {
 					public_key: Default::default(),
-					active_from_block: initial_epoch_from_block,
+					active_from_block: initial_epoch_from_block_dot,
 				}))
 			});
 
@@ -624,7 +622,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 			.return_once(move |_, _| {
 				Ok(Some(Vault {
 					public_key: Default::default(),
-					active_from_block: initial_epoch_from_block,
+					active_from_block: initial_epoch_from_block_dot,
 				}))
 			});
 		state_chain_client
@@ -704,7 +702,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		vec![
 			EpochStart::<Ethereum> {
 				epoch_index: initial_epoch,
-				block_number: initial_epoch_from_block,
+				block_number: initial_epoch_from_block_eth,
 				current: true,
 				participant: true,
 				data: ()
@@ -723,7 +721,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 #[tokio::test]
 async fn not_historical_to_authority_on_new_epoch() {
 	let initial_epoch = 3;
-	let initial_epoch_from_block = 30;
+	let initial_epoch_from_block_eth = 30;
 	let new_epoch = 4;
 	let new_epoch_from_block = 40;
 	let initial_block_hash = H256::default();
@@ -756,7 +754,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		.return_once(move |_, _| {
 			Ok(Some(Vault {
 				public_key: Default::default(),
-				active_from_block: initial_epoch_from_block,
+				active_from_block: initial_epoch_from_block_eth,
 			}))
 		});
 
@@ -770,10 +768,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 			.with(eq(initial_block_hash), eq(initial_epoch))
 			.once()
 			.return_once(move |_, _| {
-				Ok(Some(Vault {
-					public_key: Default::default(),
-					active_from_block: initial_epoch_from_block,
-				}))
+				Ok(Some(Vault { public_key: Default::default(), active_from_block: 20 }))
 			});
 
 		state_chain_client
@@ -833,10 +828,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 			.with(eq(new_epoch_block_header_hash), eq(new_epoch))
 			.once()
 			.return_once(move |_, _| {
-				Ok(Some(Vault {
-					public_key: Default::default(),
-					active_from_block: new_epoch_from_block,
-				}))
+				Ok(Some(Vault { public_key: Default::default(), active_from_block: 80 }))
 			});
 
 		state_chain_client
@@ -918,7 +910,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		vec![
 			EpochStart::<Ethereum> {
 				epoch_index: initial_epoch,
-				block_number: initial_epoch_from_block,
+				block_number: initial_epoch_from_block_eth,
 				current: true,
 				participant: false,
 				data: ()
@@ -937,7 +929,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 #[tokio::test]
 async fn current_authority_to_historical_on_new_epoch_event() {
 	let initial_epoch = 3;
-	let initial_epoch_from_block = 30;
+	let initial_epoch_from_block_eth = 30;
 	let new_epoch = 4;
 	let new_epoch_from_block = 40;
 	let initial_block_hash = H256::default();
@@ -970,7 +962,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		.return_once(move |_, _| {
 			Ok(Some(Vault {
 				public_key: Default::default(),
-				active_from_block: initial_epoch_from_block,
+				active_from_block: initial_epoch_from_block_eth,
 			}))
 		});
 
@@ -984,10 +976,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 			.with(eq(initial_block_hash), eq(initial_epoch))
 			.once()
 			.return_once(move |_, _| {
-				Ok(Some(Vault {
-					public_key: Default::default(),
-					active_from_block: initial_epoch_from_block,
-				}))
+				Ok(Some(Vault { public_key: Default::default(), active_from_block: 20 }))
 			});
 
 		state_chain_client
@@ -1048,10 +1037,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 			.with(eq(new_epoch_block_header_hash), eq(new_epoch))
 			.once()
 			.return_once(move |_, _| {
-				Ok(Some(Vault {
-					public_key: Default::default(),
-					active_from_block: new_epoch_from_block,
-				}))
+				Ok(Some(Vault { public_key: Default::default(), active_from_block: 80 }))
 			});
 
 		state_chain_client
@@ -1133,7 +1119,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		vec![
 			EpochStart::<Ethereum> {
 				epoch_index: initial_epoch,
-				block_number: initial_epoch_from_block,
+				block_number: initial_epoch_from_block_eth,
 				current: true,
 				participant: true,
 				data: ()
@@ -1164,7 +1150,7 @@ async fn only_encodes_and_signs_when_specified() {
 	});
 
 	let initial_epoch = 3;
-	let initial_epoch_from_block = 30;
+	let initial_epoch_from_block_eth = 30;
 
 	state_chain_client.expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>()
 		.with(eq(initial_block_hash), eq(account_id.clone()))
@@ -1185,7 +1171,7 @@ async fn only_encodes_and_signs_when_specified() {
 		.return_once(move |_, _| {
 			Ok(Some(Vault {
 				public_key: Default::default(),
-				active_from_block: initial_epoch_from_block,
+				active_from_block: initial_epoch_from_block_eth,
 			}))
 		});
 
@@ -1199,10 +1185,7 @@ async fn only_encodes_and_signs_when_specified() {
 			.with(eq(initial_block_hash), eq(initial_epoch))
 			.once()
 			.return_once(move |_, _| {
-				Ok(Some(Vault {
-					public_key: Default::default(),
-					active_from_block: initial_epoch_from_block,
-				}))
+				Ok(Some(Vault { public_key: Default::default(), active_from_block: 80 }))
 			});
 
 		state_chain_client

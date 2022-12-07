@@ -35,7 +35,9 @@ pub trait Chain: Member + Parameter {
 		+ Copy
 		+ MaybeSerializeDeserialize
 		+ AtLeast32BitUnsigned
-		+ From<u64>
+		// this is used primarily for tests. We use u32 because it's the smallest block number we
+		// use (and so we can always .into() into a larger type)
+		+ From<u32>
 		+ MaxEncodedLen
 		+ Display;
 

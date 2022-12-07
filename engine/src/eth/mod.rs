@@ -69,7 +69,9 @@ pub struct EthNumberBloom {
 }
 
 impl BlockNumberable for EthNumberBloom {
-	fn block_number(&self) -> u64 {
+	type BlockNumber = u64;
+
+	fn block_number(&self) -> Self::BlockNumber {
 		self.block_number.as_u64()
 	}
 }

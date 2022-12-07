@@ -75,6 +75,8 @@ pub mod pallet {
 	#[cfg(feature = "ibiza")]
 	use cf_traits::{Broadcaster, VaultKeyWitnessedHandler};
 
+	use cf_chains::dot::PolkadotBlockNumber;
+
 	use super::*;
 
 	#[pallet::config]
@@ -326,7 +328,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			dot_pure_proxy_vault_key: [u8; 32],
 			dot_witnessed_aggkey: [u8; 32],
-			block_number: u64,
+			block_number: PolkadotBlockNumber,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			#[cfg(feature = "ibiza")]

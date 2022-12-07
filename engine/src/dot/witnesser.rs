@@ -31,12 +31,14 @@ use anyhow::{Context, Result};
 
 #[derive(Debug, Clone, Copy)]
 pub struct MiniHeader {
-	pub block_number: u64,
+	pub block_number: PolkadotBlockNumber,
 	block_hash: PolkadotHash,
 }
 
 impl BlockNumberable for MiniHeader {
-	fn block_number(&self) -> u64 {
+	type BlockNumber = PolkadotBlockNumber;
+
+	fn block_number(&self) -> Self::BlockNumber {
 		self.block_number
 	}
 }
@@ -69,7 +71,7 @@ impl StaticEvent for Transfer {
 }
 
 pub async fn dot_block_head_stream_from<BlockHeaderStream>(
-	from_block: u64,
+	from_block: PolkadotBlockNumber,
 	safe_head_stream: BlockHeaderStream,
 	dot_client: OnlineClient<PolkadotConfig>,
 	logger: &slog::Logger,
@@ -154,7 +156,7 @@ where
 					.await?,
 					&logger)
 					.map(|header| {
-						MiniHeader { block_number: header.number.into(), block_hash: header.hash() }
+						MiniHeader { block_number: header.number, block_hash: header.hash() }
 					});
 
 				let block_head_stream_from = dot_block_head_stream_from(
@@ -272,7 +274,7 @@ where
 											asset: assets::dot::Asset::Dot,
 											amount,
 											tx_id: TxId {
-												block_number: block_number.try_into().unwrap(),
+												block_number,
 												extrinsic_index
 											}
 										})

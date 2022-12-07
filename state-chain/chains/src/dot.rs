@@ -122,7 +122,7 @@ pub struct TxId {
 }
 
 impl Chain for Polkadot {
-	type ChainBlockNumber = u64;
+	type ChainBlockNumber = PolkadotBlockNumber;
 	type ChainAmount = DotAmount;
 	type TrackedData = eth::TrackedData<Self>;
 	type ChainAccount = PolkadotAccountId;

@@ -667,7 +667,7 @@ impl pallet_cf_chain_tracking::Config<PolkadotInstance> for Runtime {
 	type TargetChain = Polkadot;
 	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
 	// TODO: Set good limit
-	type AgeLimit = ConstU64<1>;
+	type AgeLimit = ConstU32<1>;
 }
 
 // The latest release runtime
