@@ -789,6 +789,5 @@ pub trait VaultKeyWitnessedHandler<C: ChainAbi> {
 	fn on_new_key_activated(
 		new_public_key: C::AggKey,
 		block_number: C::ChainBlockNumber,
-		tx_hash: C::TransactionHash,
 	) -> DispatchResultWithPostInfo;
 }

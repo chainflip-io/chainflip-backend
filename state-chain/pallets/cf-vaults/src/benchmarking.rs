@@ -154,7 +154,7 @@ benchmarks_instance_pallet! {
 		let call = Call::<T, I>::vault_key_rotated {
 			new_public_key,
 			block_number: 5u64.into(),
-			tx_hash: Decode::decode(&mut &TX_HASH[..]).unwrap()
+			tx_id: Decode::decode(&mut &TX_HASH[..]).unwrap()
 		};
 		let origin = T::EnsureWitnessedAtCurrentEpoch::successful_origin();
 	} : { call.dispatch_bypass_filter(origin)? }

@@ -117,7 +117,7 @@ fn can_swap_assets() {
 					ingress_address,
 					asset: eth::Asset::Eth,
 					amount: SWAP_AMOUNT,
-					tx_hash: Default::default(),
+					tx_id: Default::default(),
 				}],
 			}));
 
@@ -137,7 +137,7 @@ fn can_swap_assets() {
 				ingress_address,
 				asset: eth::Asset::Eth,
 				amount: SWAP_AMOUNT,
-				tx_hash: Default::default(),
+				tx_id: Default::default(),
 			},
 		));
 

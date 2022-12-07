@@ -70,6 +70,7 @@ pub mod cfe {
 
 #[frame_support::pallet]
 pub mod pallet {
+
 	use cf_primitives::Asset;
 	#[cfg(feature = "ibiza")]
 	use cf_traits::{Broadcaster, VaultKeyWitnessedHandler};
@@ -326,7 +327,6 @@ pub mod pallet {
 			dot_pure_proxy_vault_key: [u8; 32],
 			dot_witnessed_aggkey: [u8; 32],
 			block_number: u64,
-			tx_hash: sp_core::H256,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			#[cfg(feature = "ibiza")]

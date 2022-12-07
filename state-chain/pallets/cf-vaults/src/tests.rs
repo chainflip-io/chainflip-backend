@@ -556,7 +556,7 @@ fn vault_key_rotated() {
 		// Status is complete.
 		assert_eq!(
 			PendingVaultRotation::<MockRuntime, _>::get(),
-			Some(VaultRotationStatus::Complete { tx_hash: TX_HASH }),
+			Some(VaultRotationStatus::Complete),
 		);
 	});
 }

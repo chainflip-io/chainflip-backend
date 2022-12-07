@@ -245,7 +245,7 @@ impl Engine {
 									Box::new(pallet_cf_vaults::Call::<_, EthereumInstance>::vault_key_rotated {
 										new_public_key: self.eth_threshold_signer.borrow_mut().proposed_public_key(),
 										block_number: 100,
-										tx_hash: [1u8; 32].into(),
+										tx_id: [1u8; 32].into(),
 									}.into()),
 									Validator::epoch_index()
 								);
@@ -256,7 +256,7 @@ impl Engine {
 									Box::new(pallet_cf_vaults::Call::<_, PolkadotInstance>::vault_key_rotated {
 										new_public_key: self.dot_threshold_signer.borrow_mut().proposed_public_key(),
 										block_number: 100,
-										tx_hash: TxId {
+										tx_id: TxId {
 											block_number: 2,
 											extrinsic_index: 1,
 										},

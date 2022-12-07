@@ -185,7 +185,7 @@ pub enum VaultRotationStatus<T: Config<I>, I: 'static = ()> {
 	/// We are waiting for the key to be updated on the contract, and witnessed by the network.
 	AwaitingRotation { new_public_key: AggKeyFor<T, I> },
 	/// The key has been successfully updated on the contract.
-	Complete { tx_hash: <T::Chain as ChainCrypto>::TransactionId },
+	Complete,
 	/// The rotation has failed at one of the above stages.
 	Failed { offenders: BTreeSet<T::ValidatorId> },
 }
@@ -601,11 +601,14 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			new_public_key: AggKeyFor<T, I>,
 			block_number: ChainBlockNumberFor<T, I>,
-			tx_hash: TransactionIdFor<T, I>,
+
+			// This unused field is required to ensure the witness calls are unique per transaction
+			// (on the external chain)
+			_tx_id: TransactionIdFor<T, I>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
 
-			Self::on_new_key_activated(new_public_key, block_number, tx_hash)
+			Self::on_new_key_activated(new_public_key, block_number)
 		}
 
 		/// The vault's key has been updated externally, outside of the rotation
@@ -880,7 +883,6 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_status(outcome: AsyncResult<VaultStatus<Self::ValidatorId>>) {
-		use cf_chains::benchmarking_value::BenchmarkValue;
 		match outcome {
 			AsyncResult::Pending => {
 				PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingKeygen {
@@ -902,9 +904,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 				});
 			},
 			AsyncResult::Ready(VaultStatus::RotationComplete) => {
-				PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Complete {
-					tx_hash: BenchmarkValue::benchmark_value(),
-				});
+				PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Complete);
 			},
 			AsyncResult::Void => {
 				PendingVaultRotation::<T, I>::kill();
@@ -945,7 +945,6 @@ impl<T: Config<I>, I: 'static> VaultKeyWitnessedHandler<T::Chain> for Pallet<T, 
 	fn on_new_key_activated(
 		new_public_key: AggKeyFor<T, I>,
 		block_number: ChainBlockNumberFor<T, I>,
-		tx_hash: TransactionHashFor<T, I>,
 	) -> DispatchResultWithPostInfo {
 		let rotation =
 			PendingVaultRotation::<T, I>::get().ok_or(Error::<T, I>::NoActiveRotation)?;
@@ -959,7 +958,7 @@ impl<T: Config<I>, I: 'static> VaultKeyWitnessedHandler<T::Chain> for Pallet<T, 
 		// The expected new key should match the new key witnessed
 		debug_assert_eq!(new_public_key, expected_new_key);
 
-		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Complete { tx_hash });
+		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Complete);
 
 		Self::set_next_vault(new_public_key, block_number);
 

@@ -114,7 +114,6 @@ impl VaultKeyWitnessedHandler<Polkadot> for MockPolkadotVaultKeyWitnessedHandler
 	fn on_new_key_activated(
 		_new_public_key: <Polkadot as ChainCrypto>::AggKey,
 		_block_number: <Polkadot as Chain>::ChainBlockNumber,
-		_tx_hash: <Polkadot as ChainCrypto>::TransactionHash,
 	) -> frame_support::pallet_prelude::DispatchResultWithPostInfo {
 		unimplemented!()
 	}
