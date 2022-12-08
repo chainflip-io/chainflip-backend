@@ -8,7 +8,7 @@ use frame_support::{assert_ok, sp_std::iter};
 use frame_support::traits::Hooks;
 
 // Returns some test data
-fn generate_test_swaps() -> Vec<Swap<u64>> {
+fn generate_test_swaps() -> Vec<Swap> {
 	vec![
 		Swap {
 			swap_id: 1,
@@ -16,8 +16,6 @@ fn generate_test_swaps() -> Vec<Swap<u64>> {
 			to: Asset::Usdc,
 			amount: 100,
 			egress_address: ForeignChainAddress::Eth([2; 20]),
-			relayer_id: 2_u64,
-			relayer_commission_bps: 2000,
 		},
 		Swap {
 			swap_id: 2,
@@ -25,8 +23,6 @@ fn generate_test_swaps() -> Vec<Swap<u64>> {
 			to: Asset::Usdc,
 			amount: 200,
 			egress_address: ForeignChainAddress::Eth([4; 20]),
-			relayer_id: 3_u64,
-			relayer_commission_bps: 2000,
 		},
 		Swap {
 			swap_id: 3,
@@ -34,8 +30,6 @@ fn generate_test_swaps() -> Vec<Swap<u64>> {
 			to: Asset::Usdc,
 			amount: 300,
 			egress_address: ForeignChainAddress::Eth([7; 20]),
-			relayer_id: 4_u64,
-			relayer_commission_bps: 2000,
 		},
 		Swap {
 			swap_id: 4,
@@ -43,8 +37,6 @@ fn generate_test_swaps() -> Vec<Swap<u64>> {
 			to: Asset::Usdc,
 			amount: 40,
 			egress_address: ForeignChainAddress::Eth([9; 20]),
-			relayer_id: 5_u64,
-			relayer_commission_bps: 2000,
 		},
 		Swap {
 			swap_id: 5,
@@ -52,8 +44,6 @@ fn generate_test_swaps() -> Vec<Swap<u64>> {
 			to: Asset::Eth,
 			amount: 500,
 			egress_address: ForeignChainAddress::Eth([2; 20]),
-			relayer_id: 6_u64,
-			relayer_commission_bps: 2000,
 		},
 		Swap {
 			swap_id: 6,
@@ -61,21 +51,19 @@ fn generate_test_swaps() -> Vec<Swap<u64>> {
 			to: Asset::Dot,
 			amount: 600,
 			egress_address: ForeignChainAddress::Dot([4; 32]),
-			relayer_id: 7_u64,
-			relayer_commission_bps: 2000,
 		},
 	]
 }
 
-fn insert_swaps(swaps: &Vec<Swap<u64>>) {
-	for swap in swaps {
+fn insert_swaps(swaps: &[Swap]) {
+	for (relayer_id, swap) in swaps.iter().enumerate() {
 		assert_ok!(<Pallet<Test> as SwapIntentHandler>::schedule_swap(
 			ForeignChainAddress::Eth([2; 20]),
 			swap.from,
 			swap.to,
 			swap.amount,
 			swap.egress_address,
-			swap.relayer_id,
+			relayer_id as u64,
 			2,
 		));
 	}
