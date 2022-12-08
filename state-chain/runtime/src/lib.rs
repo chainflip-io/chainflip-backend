@@ -67,7 +67,9 @@ use sp_std::prelude::*;
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
-pub use cf_primitives::{Asset, BlockNumber, FlipBalance, ForeignChainAddress, ExchangeRate, AssetAmount};
+pub use cf_primitives::{
+	Asset, AssetAmount, BlockNumber, ExchangeRate, FlipBalance, ForeignChainAddress,
+};
 pub use cf_traits::{EpochInfo, EthEnvironmentProvider, QualifyNode, SessionKeysRegistered};
 
 pub use chainflip::chain_instances::*;
