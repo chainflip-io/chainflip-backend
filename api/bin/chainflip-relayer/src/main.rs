@@ -17,14 +17,14 @@ pub trait Rpc {
 	#[method(name = "registerAccount")]
 	async fn register_account(&self) -> Result<(), Error>;
 
-	#[method(name = "requestSwap")]
-	async fn request_swap(
+	#[method(name = "getNewIngressAddress")]
+	async fn request_swap_ingress_address(
 		&self,
 		ingress_asset: Asset,
 		egress_asset: Asset,
-		egress_address: Vec<u8>,
-		relayer_commission_bps: Option<u16>,
-	) -> Result<ForeignChainAddress, Error>;
+		egress_address: String,
+		relayer_commission_bps: u16,
+	) -> Result<String, Error>;
 }
 
 pub struct RpcServerImpl {
@@ -43,33 +43,30 @@ impl RpcServer for RpcServerImpl {
 		Ok(chainflip_api::register_account_role(AccountRole::Relayer, &self.state_chain_settings)
 			.await?)
 	}
-	async fn request_swap(
+	async fn request_swap_ingress_address(
 		&self,
 		ingress_asset: Asset,
 		egress_asset: Asset,
-		egress_address: Vec<u8>,
-		relayer_commission_bps: Option<u16>,
-	) -> Result<ForeignChainAddress, Error> {
-		let egress_address = match ForeignChain::from(egress_asset) {
+		egress_address: String,
+		relayer_commission_bps: u16,
+	) -> Result<String, Error> {
+		let clean_egress_address = match ForeignChain::from(egress_asset) {
 			ForeignChain::Ethereum => ForeignChainAddress::Eth(
-				egress_address
-					.try_into()
-					.map_err(|_| anyhow!("Invalid address format for Ethereum"))?,
+				utilities::clean_eth_address(&egress_address).map_err(|e| anyhow!(e))?,
 			),
 			ForeignChain::Polkadot => ForeignChainAddress::Dot(
-				egress_address
-					.try_into()
-					.map_err(|_| anyhow!("Invalid address format for Polkadot"))?,
+				utilities::clean_dot_address(&egress_address).map_err(|e| anyhow!(e))?,
 			),
 		};
 		Ok(chainflip_api::register_swap_intent(
 			&self.state_chain_settings,
 			ingress_asset,
 			egress_asset,
-			egress_address,
-			relayer_commission_bps.unwrap_or_default(),
+			clean_egress_address,
+			relayer_commission_bps,
 		)
-		.await?)
+		.await
+		.map(|address| hex::encode(address.as_ref()))?)
 	}
 }
 

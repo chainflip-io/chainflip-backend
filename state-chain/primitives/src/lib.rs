@@ -118,6 +118,15 @@ pub enum AddressError {
 	InvalidAddress,
 }
 
+impl AsRef<[u8]> for ForeignChainAddress {
+	fn as_ref(&self) -> &[u8] {
+		match self {
+			ForeignChainAddress::Eth(address) => address.as_slice(),
+			ForeignChainAddress::Dot(address) => address.as_slice(),
+		}
+	}
+}
+
 impl TryFrom<ForeignChainAddress> for EthereumAddress {
 	type Error = AddressError;
 

@@ -1132,10 +1132,12 @@ dependencies = [
  "anyhow",
  "chainflip-api",
  "clap",
+ "hex",
  "jsonrpsee 0.16.2",
  "tokio",
  "tracing",
  "tracing-subscriber 0.3.15",
+ "utilities",
 ]
 
 [[package]]
