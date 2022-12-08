@@ -38,7 +38,7 @@ pub struct Swap {
 pub mod pallet {
 
 	use cf_chains::AnyChain;
-	use cf_primitives::{Asset, AssetAmount};
+	use cf_primitives::{Asset, AssetAmount, BasisPoints};
 	use cf_traits::{AccountRoleRegistry, Chainflip, EgressApi, SwapIntentHandler};
 
 	use super::*;
@@ -143,7 +143,7 @@ pub mod pallet {
 			ingress_asset: Asset,
 			egress_asset: Asset,
 			egress_address: ForeignChainAddress,
-			relayer_commission_bps: u16,
+			relayer_commission_bps: BasisPoints,
 		) -> DispatchResult {
 			let relayer = T::AccountRoleRegistry::ensure_relayer(origin)?;
 
@@ -225,7 +225,7 @@ pub mod pallet {
 			amount: AssetAmount,
 			egress_address: ForeignChainAddress,
 			relayer_id: Self::AccountId,
-			relayer_commission_bps: u16,
+			relayer_commission_bps: BasisPoints,
 		) -> DispatchResult {
 			// The caller should ensure that the egress details are consistent.
 			debug_assert_eq!(ForeignChain::from(egress_address), ForeignChain::from(to));

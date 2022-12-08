@@ -22,12 +22,12 @@ pub mod primitives {
 	pub type ClaimAmount = pallet_cf_staking::ClaimAmount<FlipBalance>;
 }
 
+pub use chainflip_engine::settings;
 pub use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 
 use chainflip_engine::{
 	eth::{rpc::EthDualRpcClient, EthBroadcaster},
 	logging::utils::new_discard_logger,
-	settings,
 	state_chain_observer::client::{
 		base_rpc_api::{BaseRpcApi, BaseRpcClient, RawRpcApi},
 		extrinsic_api::ExtrinsicApi,

@@ -13,9 +13,9 @@ repository = 'https://github.com/chainflip-io/chainflip-backend'
 targets = ['x86_64-unknown-linux-gnu']
 
 [dependencies]
-cf-traits = { path = '../../traits', default-features = false }
-cf-primitives = {path = '../../primitives', default-features = false}
 cf-chains = {optional = true, path = '../../chains', default-features = false}
+cf-primitives = {path = '../../primitives', default-features = false}
+cf-traits = { path = '../../traits', default-features = false }
 serde = {optional = true, version = '1.0.126', features = ['derive']}
 hex-literal = {version = '0.3'}
 log = { version = '0.4.16', default-features = false }
@@ -75,6 +75,7 @@ tag = 'chainflip-monthly-2022-06+01'
 [features]
 default = ['std']
 std = [
+  "cf-chains/std",
   'cf-traits/std',
   'codec/std',
   'scale-info/std',
@@ -96,4 +97,5 @@ runtime-benchmarks = [
 try-runtime = ['frame-support/try-runtime']
 ibiza = [
   "cf-chains/ibiza",
+  "cf-traits/ibiza",
 ]
