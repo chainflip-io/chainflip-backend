@@ -197,20 +197,22 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 					]
 					.unchecked_into(),
 				)],
+				vec![
+					#[cfg(feature = "ibiza")]
+					get_account_id_from_seed::<sr25519::Public>("LP_1"),
+					#[cfg(feature = "ibiza")]
+					get_account_id_from_seed::<sr25519::Public>("LP_2"),
+				],
+				vec![
+					#[cfg(feature = "ibiza")]
+					get_account_id_from_seed::<sr25519::Public>("RELAYER_1"),
+					#[cfg(feature = "ibiza")]
+					get_account_id_from_seed::<sr25519::Public>("RELAYER_2"),
+				],
 				// Governance account - Snow White
 				snow_white.into(),
 				// Stakers at genesis
-				vec![
-					bashful_sr25519.into(),
-					// TODO: This creates discrepencies between the SC and the contract for Flip
-					// issuance. This should be used for testing only.
-					#[cfg(feature = "ibiza")]
-					get_account_id_from_seed::<sr25519::Public>("Alice"),
-					#[cfg(feature = "ibiza")]
-					get_account_id_from_seed::<sr25519::Public>("Bob"),
-					#[cfg(feature = "ibiza")]
-					get_account_id_from_seed::<sr25519::Public>("Charlie"),
-				],
+				vec![bashful_sr25519.into()],
 				1,
 				common::MAX_AUTHORITIES,
 				EnvironmentConfig {
@@ -315,22 +317,22 @@ macro_rules! network_spec {
 									DOPEY_ED25519.unchecked_into(),
 								),
 							],
+							vec![
+								#[cfg(feature = "ibiza")]
+								get_account_id_from_seed::<sr25519::Public>("LP_1"),
+								#[cfg(feature = "ibiza")]
+								get_account_id_from_seed::<sr25519::Public>("LP_2"),
+							],
+							vec![
+								#[cfg(feature = "ibiza")]
+								get_account_id_from_seed::<sr25519::Public>("RELAYER_1"),
+								#[cfg(feature = "ibiza")]
+								get_account_id_from_seed::<sr25519::Public>("RELAYER_2"),
+							],
 							// Governance account - Snow White
 							SNOW_WHITE_SR25519.into(),
 							// Stakers at genesis
-							vec![
-								BASHFUL_SR25519.into(),
-								DOC_SR25519.into(),
-								DOPEY_SR25519.into(),
-								// TODO: This creates discrepencies between the SC and the contract
-								// for Flip issuance. This should be used for testing only.
-								#[cfg(feature = "ibiza")]
-								get_account_id_from_seed::<sr25519::Public>("Alice"),
-								#[cfg(feature = "ibiza")]
-								get_account_id_from_seed::<sr25519::Public>("Bob"),
-								#[cfg(feature = "ibiza")]
-								get_account_id_from_seed::<sr25519::Public>("Charlie"),
-							],
+							vec![BASHFUL_SR25519.into(), DOC_SR25519.into(), DOPEY_SR25519.into()],
 							MIN_AUTHORITIES,
 							MAX_AUTHORITIES,
 							EnvironmentConfig {
@@ -398,7 +400,9 @@ network_spec!(sisyphos);
 #[allow(clippy::too_many_arguments)]
 fn testnet_genesis(
 	wasm_binary: &[u8],
-	initial_authorities: Vec<(AccountId, AuraId, GrandpaId)>,
+	initial_authorities: Vec<(AccountId, AuraId, GrandpaId)>, // initial validators
+	initial_liquidity_providers: Vec<AccountId>,
+	initial_relayer: Vec<AccountId>,
 	root_key: AccountId,
 	genesis_stakers: Vec<AccountId>,
 	min_authorities: AuthorityCount,
@@ -424,14 +428,32 @@ fn testnet_genesis(
 ) -> GenesisConfig {
 	let authority_ids: Vec<AccountId> =
 		initial_authorities.iter().map(|(id, ..)| id.clone()).collect();
+	let mut account_roles: Vec<(AccountId, AccountRole)> = authority_ids
+		.clone()
+		.into_iter()
+		.map(|account_id| (account_id, AccountRole::Validator))
+		.collect();
+	account_roles.extend(
+		initial_liquidity_providers
+			.clone()
+			.into_iter()
+			.map(|account_id| (account_id, AccountRole::LiquidityProvider))
+			.collect::<Vec<(AccountId, AccountRole)>>(),
+	);
+	account_roles.extend(
+		initial_relayer
+			.clone()
+			.into_iter()
+			.map(|account_id| (account_id, AccountRole::Relayer))
+			.collect::<Vec<(AccountId, AccountRole)>>(),
+	);
+
+	let mut initial_stakers: Vec<AccountId> = genesis_stakers.clone();
+	initial_stakers.extend(initial_liquidity_providers);
+	initial_stakers.extend(initial_relayer);
+
 	GenesisConfig {
-		account_roles: AccountRolesConfig {
-			initial_account_roles: authority_ids
-				.clone()
-				.into_iter()
-				.map(|account_id| (account_id, AccountRole::Validator))
-				.collect(),
-		},
+		account_roles: AccountRolesConfig { initial_account_roles: account_roles },
 		system: SystemConfig {
 			// Add Wasm runtime to storage.
 			code: wasm_binary.to_vec(),
@@ -467,7 +489,7 @@ fn testnet_genesis(
 		},
 		flip: FlipConfig { total_issuance },
 		staking: StakingConfig {
-			genesis_stakers: genesis_stakers
+			genesis_stakers: initial_stakers
 				.iter()
 				.map(|acct| (acct.clone(), genesis_stake_amount))
 				.collect::<Vec<(AccountId, FlipBalance)>>(),
