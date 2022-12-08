@@ -296,7 +296,7 @@ pub trait EthEnvironmentProvider {
 	fn token_address(asset: assets::any::Asset) -> Option<EthereumAddress>;
 	fn key_manager_address() -> EthereumAddress;
 	fn stake_manager_address() -> EthereumAddress;
-	fn eth_vault_address() -> EthereumAddress;
+	fn vault_address() -> EthereumAddress;
 	fn chain_id() -> u64;
 }
 

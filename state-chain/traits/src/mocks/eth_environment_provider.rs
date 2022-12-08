@@ -10,7 +10,7 @@ impl crate::EthEnvironmentProvider for MockEthEnvironmentProvider {
 	fn key_manager_address() -> EthereumAddress {
 		[0xcf; 20]
 	}
-	fn eth_vault_address() -> EthereumAddress {
+	fn vault_address() -> EthereumAddress {
 		[0xcf; 20]
 	}
 	fn stake_manager_address() -> EthereumAddress {
