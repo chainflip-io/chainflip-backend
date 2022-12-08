@@ -13,6 +13,6 @@ anyhow = "1.0.66"
 clap = { version = "3.2.23", features = ["derive"] }
 hex = "0.4.3"
 jsonrpsee = { version = "0.16.2", features = ["full"]}
-tokio = "1.22.0"
+tokio = "1.20.1"
 tracing = "0.1.34"
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
