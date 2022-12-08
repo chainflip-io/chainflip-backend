@@ -270,10 +270,12 @@ fn generate_keys() -> Result<()> {
 	if !output_path.exists() {
 		std::fs::create_dir_all(output_path.clone())?
 	}
-	if output_path.join(NODE_KEY_FILE_NAME).exists() ||
-		output_path.join(SIGNING_KEY_FILE_NAME).exists() ||
-		output_path.join(ETHEREUM_KEY_FILE_NAME).exists()
-	{
+
+	let node_key_file = output_path.join(NODE_KEY_FILE_NAME);
+	let signing_key_file = output_path.join(SIGNING_KEY_FILE_NAME);
+	let ethereum_key_file = output_path.join(ETHEREUM_KEY_FILE_NAME);
+
+	if node_key_file.exists() || signing_key_file.exists() || ethereum_key_file.exists() {
 		anyhow::bail!(
 			"Key file(s) already exist, please delete them manually from {}",
 			output_path.to_string_lossy()
@@ -282,9 +284,18 @@ fn generate_keys() -> Result<()> {
 
 	println!("Generating fresh keys for you Chainflip Node!");
 
-	fs::write(output_path.join("node_key_file"), api::generate_node_key())?;
-	fs::write(output_path.join("ethereum_key_file"), api::generate_ethereum_key())?;
-	fs::write(output_path.join("signing_key_file"), api::generate_signing_key(None)?)?;
+	let node_key = api::generate_node_key();
+	fs::write(node_key_file, node_key.secret_key)?;
+	println!("🔑 Your Node public key is: 0x{}", node_key.public_key);
+
+	let ethereum_key = api::generate_ethereum_key();
+	fs::write(ethereum_key_file, ethereum_key.secret_key)?;
+	println!("🔑 Your Ethereum public key is: 0x{}", ethereum_key.public_key);
+
+	let (signing_key, signing_key_seed) = api::generate_signing_key(None)?;
+	fs::write(signing_key_file, signing_key.secret_key)?;
+	println!("🔑 Your Validator key is: 0x{}", signing_key.public_key);
+	println!("🌱 Your Validator key seed phrase is: {}", signing_key_seed);
 
 	println!("Saved all secret keys to {}", output_path.to_string_lossy());
 

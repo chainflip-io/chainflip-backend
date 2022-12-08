@@ -558,51 +558,67 @@ pub async fn liquidity_deposit(
 	}
 }
 
-pub fn generate_node_key() -> String {
+use zeroize::Zeroize;
+
+#[derive(Debug, Zeroize)]
+/// Hex encoded keys without the `0x` prefix.
+pub struct KeyPairHex {
+	pub secret_key: Vec<u8>,
+	pub public_key: String,
+}
+
+/// Generate a new random node key.
+/// This key is used for secure communication between Validators.
+pub fn generate_node_key() -> KeyPairHex {
 	use rand::SeedableRng;
 
 	let mut rng = rand::rngs::StdRng::from_entropy();
 	let keypair = ed25519_dalek::Keypair::generate(&mut rng);
 
-	println!("🔑 Your Node public key is: 0x{}", hex::encode(keypair.public.to_bytes()));
-
-	hex::encode(keypair.secret.as_ref())
+	KeyPairHex {
+		secret_key: hex::encode(keypair.secret.as_bytes()).into_bytes().to_vec(),
+		public_key: hex::encode(keypair.public.to_bytes()),
+	}
 }
 
-pub fn generate_signing_key(seed_phrase: Option<&str>) -> Result<([u8; 32])> {
+/// Generate a signing key (aka validator key) using the seed phrase.
+/// If no seed phrase is provided, a new random seed phrase will be created.
+/// Returns the key and the seed phrase used to create it.
+/// This key is used to stake your node.
+pub fn generate_signing_key(seed_phrase: Option<&str>) -> Result<(KeyPairHex, String)> {
 	use bip39::{Language, Mnemonic, MnemonicType};
 
+	// Get a new random seed phrase if one was not provided
 	let mnemonic = Mnemonic::new(MnemonicType::Words12, Language::English);
-	let seed_phrase = seed_phrase.unwrap_or_else(|| {
-		let new_phrase = mnemonic.phrase();
-		println!("🌱 Your Validator key seed phrase is: {}", new_phrase);
-		new_phrase
-	});
+	let seed_phrase = seed_phrase.unwrap_or_else(|| mnemonic.phrase());
 
 	if let Ok((pair, seed)) = sp_core::Pair::from_phrase(seed_phrase, None) {
 		let pair: sp_core::sr25519::Pair = pair;
-		let public_key = pair.public();
 
-		println!("🔑 Your Validator key is: 0x{}", hex::encode(public_key));
-
-		Ok(seed)
+		Ok((
+			KeyPairHex { secret_key: seed.to_vec(), public_key: hex::encode(pair.public()) },
+			seed_phrase.to_string(),
+		))
 	} else {
 		anyhow::bail!("Invalid seed phrase")
 	}
 }
 
-pub fn generate_ethereum_key() -> String {
-	use chainflip_engine::eth::utils::pubkey_to_eth_addr;
+/// Generate a new random ethereum key.
+/// A chainflip validator must have their own Ethereum private keys and be capable of submitting
+/// transactions. We recommend importing the generated secret key into metamask for account
+/// management.
+pub fn generate_ethereum_key() -> KeyPairHex {
 	use secp256k1::Secp256k1;
 
 	let mut rng = rand_legacy::rngs::StdRng::from_entropy();
 
 	let (secret_key, public_key) = Secp256k1::new().generate_keypair(&mut rng);
 
-	println!("🔑 Your Ethereum public keys is: 0x{}", hex::encode(public_key.serialize()));
-	println!("🏠 Your Ethereum address is: 0x{}", hex::encode(pubkey_to_eth_addr(public_key)));
-
-	secret_key.to_string()
+	KeyPairHex {
+		secret_key: secret_key.to_string().as_bytes().to_vec(),
+		public_key: hex::encode(public_key.serialize()),
+	}
 }
 
 #[test]
@@ -610,12 +626,12 @@ fn test_generate_signing_key_with_known_seed() {
 	const SEED_PHRASE: &str =
 		"essay awesome afraid movie wish save genius eyebrow tonight milk agree pretty alcohol three whale";
 
-	let generate_key = generate_signing_key(Some(SEED_PHRASE)).unwrap();
+	let (generate_key, _) = generate_signing_key(Some(SEED_PHRASE)).unwrap();
 
-	// Compare the generated key with a known key generated using the `chainflip-node key generate`
-	// command
+	// Compare the generated secret key with a known secret key generated using the `chainflip-node
+	// key generate` command
 	assert_eq!(
-		hex::encode(generate_key),
+		hex::encode(generate_key.secret_key),
 		"afabf42a9a99910cdd64795ef05ed71acfa2238f5682d26ae62028df3cc59727"
 	);
 }

@@ -149,7 +149,9 @@ pub enum CliCommand {
 		#[clap(help = "The governance proposal id that will be associated with this rotation.")]
 		id: ProposalId,
 	},
-	#[clap(about = "Generate the 3 key files needed to run a chainflip node")]
+	#[clap(
+		about = "Generates the 3 key files needed to run a chainflip node (Node Key, Ethereum Key and Validator Key), then saves them to the filesystem."
+	)]
 	GenerateKeys {},
 }
 
