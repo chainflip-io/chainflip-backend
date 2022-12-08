@@ -1,7 +1,7 @@
 use anyhow::anyhow;
 use chainflip_api::{
 	self,
-	primitives::{AccountRole, Asset, ForeignChain, ForeignChainAddress},
+	primitives::{AccountRole, Asset, BasisPoints, ForeignChain, ForeignChainAddress},
 	settings::StateChain,
 };
 use clap::Parser;
@@ -23,7 +23,7 @@ pub trait Rpc {
 		ingress_asset: Asset,
 		egress_asset: Asset,
 		egress_address: String,
-		relayer_commission_bps: u16,
+		relayer_commission_bps: BasisPoints,
 	) -> Result<String, Error>;
 }
 
@@ -48,7 +48,7 @@ impl RpcServer for RpcServerImpl {
 		ingress_asset: Asset,
 		egress_asset: Asset,
 		egress_address: String,
-		relayer_commission_bps: u16,
+		relayer_commission_bps: BasisPoints,
 	) -> Result<String, Error> {
 		let clean_egress_address = match ForeignChain::from(egress_asset) {
 			ForeignChain::Ethereum => ForeignChainAddress::Eth(

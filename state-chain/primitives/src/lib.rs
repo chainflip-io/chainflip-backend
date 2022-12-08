@@ -44,6 +44,8 @@ pub type EthAmount = u128;
 
 pub type AssetAmount = u128;
 
+pub type BasisPoints = u16;
+
 /// Alias to the opaque account ID type for this chain, actually a `AccountId32`. This is always
 /// 32 bytes.
 pub type PolkadotAccountId = AccountId32;
