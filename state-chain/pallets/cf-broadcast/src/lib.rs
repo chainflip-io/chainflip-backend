@@ -389,14 +389,14 @@ pub mod pallet {
 				})?
 				.expect("signature can not be unavailable");
 
-			let id = Self::start_broadcast(
+			let broadcast_id = Self::start_broadcast(
 				&signature,
 				T::TransactionBuilder::build_transaction(&api_call.clone().signed(&signature)),
 				*api_call,
 			);
 
 			if let Some(event) = *callback_event {
-				BroadcastSuccessEvents::<T, I>::insert(id.broadcast_id, event);
+				BroadcastSuccessEvents::<T, I>::insert(broadcast_id.broadcast_id, event);
 			}
 
 			Ok(().into())
