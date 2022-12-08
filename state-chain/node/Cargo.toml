@@ -92,6 +92,7 @@ try-runtime = [
 ibiza = [
   "state-chain-runtime/ibiza",
   "cf-chains/ibiza",
+  'custom-rpc/ibiza',
 ]
 
 [package.metadata.deb]
