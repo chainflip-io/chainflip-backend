@@ -7,7 +7,7 @@ pub mod decompose_recompose;
 pub mod epoch_transition;
 mod missed_authorship_slots;
 mod offences;
-use cf_primitives::{chains::assets, KeyId, ETHEREUM_ETH_ADDRESS};
+use cf_primitives::{chains::assets, Asset, KeyId, ETHEREUM_ETH_ADDRESS};
 pub use offences::*;
 mod signer_nomination;
 use ethabi::Address as EthAbiAddress;
@@ -36,7 +36,7 @@ use cf_chains::{
 	ApiCall, ChainAbi, ChainEnvironment, ReplayProtectionProvider, TransactionBuilder,
 };
 #[cfg(feature = "ibiza")]
-use cf_primitives::{Asset, AssetAmount, ForeignChain, ForeignChainAddress, IntentId};
+use cf_primitives::{AssetAmount, ForeignChain, ForeignChainAddress, IntentId};
 use cf_traits::{
 	BlockEmissions, Chainflip, EmergencyRotation, EpochInfo, EthEnvironmentProvider, Heartbeat,
 	Issuance, NetworkState, RewardsDistribution, RuntimeUpgrade, VaultTransitionHandler,
@@ -151,7 +151,9 @@ impl TransactionBuilder<Ethereum, EthereumApi<EthEnvironment>> for EthTransactio
 			contract: match signed_call {
 				EthereumApi::SetAggKeyWithAggKey(_) => Environment::key_manager_address().into(),
 				EthereumApi::RegisterClaim(_) => Environment::stake_manager_address().into(),
-				EthereumApi::UpdateFlipSupply(_) => Environment::flip_token_address().into(),
+				EthereumApi::UpdateFlipSupply(_) => Environment::token_address(Asset::Flip)
+					.expect("FLIP token address should exist")
+					.into(),
 				EthereumApi::SetGovKeyWithAggKey(_) => Environment::key_manager_address().into(),
 				EthereumApi::SetCommKeyWithAggKey(_) => Environment::key_manager_address().into(),
 				EthereumApi::AllBatch(_) => Environment::eth_vault_address().into(),
@@ -231,8 +233,7 @@ impl ChainEnvironment<assets::eth::Asset, EthAbiAddress> for EthEnvironment {
 	fn lookup(asset: assets::eth::Asset) -> Option<EthAbiAddress> {
 		Some(match asset {
 			assets::eth::Asset::Eth => ETHEREUM_ETH_ADDRESS.into(),
-			assets::eth::Asset::Flip => Environment::flip_token_address().into(),
-			assets::eth::Asset::Usdc => todo!(),
+			erc20 => Environment::token_address(erc20.into())?.into(),
 		})
 	}
 }

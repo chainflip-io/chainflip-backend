@@ -49,7 +49,7 @@ pub mod pallet {
 	use cf_traits::{Chainflip, SwapIntentHandler};
 
 	use frame_support::{
-		pallet_prelude::{DispatchResultWithPostInfo, OptionQuery, ValueQuery},
+		pallet_prelude::{OptionQuery, ValueQuery},
 		storage::with_transaction,
 		traits::{EnsureOrigin, IsType},
 	};
@@ -277,13 +277,13 @@ pub mod pallet {
 		pub fn do_ingress(
 			origin: OriginFor<T>,
 			ingress_witnesses: Vec<IngressWitness<T::TargetChain>>,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
 			for IngressWitness { ingress_address, asset, amount, tx_hash } in ingress_witnesses {
 				Self::do_single_ingress(ingress_address, asset, amount, tx_hash)?;
 			}
-			Ok(().into())
+			Ok(())
 		}
 	}
 }

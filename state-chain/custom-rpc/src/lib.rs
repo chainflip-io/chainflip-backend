@@ -13,6 +13,9 @@ use state_chain_runtime::{
 };
 use std::{marker::PhantomData, sync::Arc};
 
+#[allow(unused)]
+use state_chain_runtime::{Asset, AssetAmount, ExchangeRate};
+
 #[derive(Serialize, Deserialize)]
 pub struct RpcAccountInfo {
 	pub stake: NumberOrHex,
@@ -420,5 +423,58 @@ where
 			min_stake: auction_state.min_stake.into(),
 			auction_size_range: auction_state.auction_size_range,
 		})
+	}
+}
+
+#[cfg(feature = "ibiza")]
+use pallet_cf_pools_runtime_api::PoolsApi;
+
+#[cfg(feature = "ibiza")]
+pub struct PoolsRpc<C, B> {
+	pub client: Arc<C>,
+	pub _phantom: PhantomData<B>,
+}
+
+#[cfg(feature = "ibiza")]
+impl<C, B> PoolsRpc<C, B>
+where
+	B: sp_runtime::traits::Block<Hash = state_chain_runtime::Hash>,
+	C: sp_api::ProvideRuntimeApi<B> + Send + Sync + 'static + HeaderBackend<B>,
+	C::Api: pallet_cf_pools_runtime_api::PoolsApi<B>,
+{
+	fn query_block_id(&self, from_rpc: Option<<B as BlockT>::Hash>) -> sp_api::BlockId<B> {
+		sp_api::BlockId::hash(from_rpc.unwrap_or_else(|| self.client.info().best_hash))
+	}
+}
+
+#[cfg(feature = "ibiza")]
+#[rpc(server, client, namespace = "cf")]
+pub trait PoolsApi {
+	#[method(name = "swap_rate")]
+	fn cf_swap_rate(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+		asset: Asset,
+		input_amount: AssetAmount,
+	) -> RpcResult<ExchangeRate>;
+}
+
+#[cfg(feature = "ibiza")]
+impl<C, B> PoolsApiServer for PoolsRpc<C, B>
+where
+	B: sp_runtime::traits::Block<Hash = state_chain_runtime::Hash>,
+	C: sp_api::ProvideRuntimeApi<B> + Send + Sync + 'static + HeaderBackend<B>,
+	C::Api: pallet_cf_pools_runtime_api::PoolsApi<B>,
+{
+	fn cf_swap_rate(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+		asset: Asset,
+		input_amount: AssetAmount,
+	) -> RpcResult<ExchangeRate> {
+		self.client
+			.runtime_api()
+			.cf_swap_rate(&self.query_block_id(at), &asset, input_amount)
+			.map_err(to_rpc_error)
 	}
 }
