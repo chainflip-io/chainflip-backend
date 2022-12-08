@@ -181,8 +181,10 @@ substrate-build-script-utils = { git = "https://github.com/chainflip-io/substrat
 [features]
 integration-test = []
 ibiza = [
-    'pallet-cf-ingress-egress',
-    'state-chain-runtime/ibiza',
     'cf-chains/ibiza',
     'chainflip-node/ibiza',
+    'pallet-cf-environment/ibiza',
+    'pallet-cf-ingress-egress',
+    'state-chain-runtime/ibiza',
+    "custom-rpc/ibiza",
 ]
