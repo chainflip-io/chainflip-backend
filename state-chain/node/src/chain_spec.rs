@@ -448,10 +448,12 @@ fn testnet_genesis(
 			.collect::<Vec<(AccountId, AccountRole)>>(),
 	);
 
+	// TODO: This creates discrepencies between the SC and the contract
+	// for Flip issuance. This should be used for testnets only.
 	let mut initial_stakers: Vec<AccountId> = genesis_stakers.clone();
 	initial_stakers.extend(initial_liquidity_providers);
 	initial_stakers.extend(initial_relayer);
-
+	
 	GenesisConfig {
 		account_roles: AccountRolesConfig { initial_account_roles: account_roles },
 		system: SystemConfig {
