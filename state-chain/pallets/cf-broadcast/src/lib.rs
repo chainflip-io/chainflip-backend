@@ -128,7 +128,8 @@ pub mod pallet {
 		type Event: From<Event<Self, I>>
 			+ IsType<<Self as frame_system::Config>::Event>
 			+ Member
-			+ Parameter;
+			+ Parameter
+			+ Into<<Self as frame_system::Config>::Event>;
 
 		/// The pallet dispatches calls, so it depends on the runtime's aggregated Call type.
 		type Call: From<Call<Self, I>> + IsType<<Self as frame_system::Config>::Call>;
@@ -215,7 +216,7 @@ pub mod pallet {
 	/// Storage of Broadcast success events
 	#[pallet::storage]
 	pub type BroadcastSuccessEvents<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, BroadcastId, pallet::Event<T, I>, OptionQuery>;
+		StorageMap<_, Twox64Concat, BroadcastId, <T as frame_system::Config>::Event, OptionQuery>;
 
 	/// The list of failed broadcasts pending retry.
 	#[pallet::storage]
@@ -373,7 +374,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			threshold_request_id: <T::ThresholdSigner as ThresholdSigner<T::TargetChain>>::RequestId,
 			api_call: Box<<T as Config<I>>::ApiCall>,
-			callback_event: Box<Option<pallet::Event<T, I>>>,
+			callback_event: Box<Option<<T as frame_system::Config>::Event>>,
 		) -> DispatchResultWithPostInfo {
 			let _ = T::EnsureThresholdSigned::ensure_origin(origin)?;
 
@@ -448,7 +449,7 @@ pub mod pallet {
 			}
 
 			if let Some(custom_event) = BroadcastSuccessEvents::<T, I>::take(broadcast_id) {
-				Self::deposit_event(custom_event.into());
+				<frame_system::Pallet<T>>::deposit_event(custom_event);
 			}
 
 			Self::clean_up_broadcast_storage(broadcast_id);
@@ -490,7 +491,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Request a threshold signature, providing [Call::on_signature_ready] as the callback.
 	pub fn threshold_sign_and_broadcast(
 		api_call: <T as Config<I>>::ApiCall,
-		callback_event: Option<pallet::Event<T, I>>,
+		callback_event: Option<<T as frame_system::Config>::Event>,
 	) {
 		T::ThresholdSigner::request_signature_with_callback(
 			api_call.threshold_signature_payload(),
@@ -647,7 +648,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 	type ApiCall = T::ApiCall;
-	type Event = pallet::Event<T, I>;
+	type Event = <T as frame_system::Config>::Event;
 	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) {
 		Self::threshold_sign_and_broadcast(api_call, None)
 	}

@@ -5,9 +5,11 @@ use crate::{
 	WeightInfo,
 };
 use cf_chains::FeeRefundCalculator;
+use cf_test_utilities::assert_event_sequence;
 
-use crate::BroadcastSuccessEvents;
+use crate::{BroadcastSuccessEvents, Event::TransactionBroadcastRequest};
 
+use crate::mock::Event;
 use cf_chains::mocks::{
 	MockApiCall, MockEthereum, MockThresholdSignature, MockTransaction, ETH_TX_FEE,
 };
@@ -493,23 +495,28 @@ fn broadcast_with_callback_event() {
 			1,
 			Ok(MockThresholdSignature::default()),
 		);
-		let passed_event = BroadcastEvent::<Test, Instance1>::BroadcastSuccess { broadcast_id: 1 };
 		assert_ok!(Broadcaster::on_signature_ready(
 			Origin::root(),
 			1,
 			Box::new(MockApiCall::default()),
-			Box::new(Some(passed_event)),
+			Box::new(Some(Event::System(frame_system::Event::CodeUpdated))),
 		));
-
 		assert!(BroadcastSuccessEvents::<Test, Instance1>::get(1).is_some());
-
 		assert_ok!(Broadcaster::signature_accepted(
 			Origin::root(),
 			MockThresholdSignature::default(),
 			Default::default(),
 			ETH_TX_FEE,
 		));
-
 		assert!(BroadcastSuccessEvents::<Test, Instance1>::get(1).is_none());
+		assert_event_sequence!(
+			Test,
+			Event::Broadcaster(TransactionBroadcastRequest {
+				broadcast_attempt_id: BroadcastAttemptId { broadcast_id: 1, attempt_count: 0 },
+				nominee: 1,
+				unsigned_tx: MockTransaction
+			}),
+			Event::System(frame_system::Event::CodeUpdated)
+		);
 	});
 }
