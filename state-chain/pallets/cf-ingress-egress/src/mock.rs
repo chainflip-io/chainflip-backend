@@ -84,8 +84,15 @@ impl cf_traits::Chainflip for Test {
 pub struct MockBroadcast;
 impl Broadcaster<Ethereum> for MockBroadcast {
 	type ApiCall = MockAllBatch<MockEthEnvironment>;
-
+	type Event = Event;
 	fn threshold_sign_and_broadcast(_api_call: Self::ApiCall) {}
+
+	fn threshold_sign_and_broadcast_with_custom_event(
+		_api_call: Self::ApiCall,
+		_callback_event: Self::Event,
+	) {
+		todo!()
+	}
 }
 
 impl crate::Config<Instance1> for Test {

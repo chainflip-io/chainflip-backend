@@ -210,9 +210,17 @@ impl MockBroadcast {
 
 impl Broadcaster<MockEthereum> for MockBroadcast {
 	type ApiCall = MockUpdateFlipSupply;
+	type Event = Event;
 
 	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) {
 		Self::call(api_call)
+	}
+
+	fn threshold_sign_and_broadcast_with_custom_event(
+		_api_call: Self::ApiCall,
+		_callback_event: Self::Event,
+	) {
+		todo!()
 	}
 }
 

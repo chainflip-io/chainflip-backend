@@ -69,7 +69,12 @@ pub mod pallet {
 	use super::*;
 	use cf_chains::benchmarking_value::BenchmarkValue;
 	use cf_traits::{AccountRoleRegistry, KeyProvider, SingleSignerNomination};
-	use frame_support::{ensure, pallet_prelude::*, traits::EnsureOrigin};
+	use frame_support::{
+		ensure,
+		pallet_prelude::{Member, *},
+		traits::EnsureOrigin,
+		Parameter,
+	};
 	use frame_system::pallet_prelude::*;
 
 	/// Type alias for the instance's configured Transaction.
@@ -120,7 +125,10 @@ pub mod pallet {
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config<I: 'static = ()>: Chainflip {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
-		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
+		type Event: From<Event<Self, I>>
+			+ IsType<<Self as frame_system::Config>::Event>
+			+ Member
+			+ Parameter;
 
 		/// The pallet dispatches calls, so it depends on the runtime's aggregated Call type.
 		type Call: From<Call<Self, I>> + IsType<<Self as frame_system::Config>::Call>;
@@ -204,6 +212,10 @@ pub mod pallet {
 	pub type SignatureToBroadcastIdLookup<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, ThresholdSignatureFor<T, I>, BroadcastId, OptionQuery>;
 
+	#[pallet::storage]
+	pub type BroadcastSuccessEvents<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, BroadcastId, pallet::Event<T, I>, OptionQuery>;
+
 	/// The list of failed broadcasts pending retry.
 	#[pallet::storage]
 	pub type BroadcastRetryQueue<T: Config<I>, I: 'static = ()> =
@@ -231,6 +243,7 @@ pub mod pallet {
 		StorageMap<_, Twox64Concat, SignerIdFor<T, I>, ChainAmountFor<T, I>, ValueQuery>;
 
 	#[pallet::event]
+	// #[derive(Clone, RuntimeDebug, PartialEq, Encode, Decode, TypeInfo)]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// A request to a specific authority to sign a transaction.
@@ -360,6 +373,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			threshold_request_id: <T::ThresholdSigner as ThresholdSigner<T::TargetChain>>::RequestId,
 			api_call: Box<<T as Config<I>>::ApiCall>,
+			callback_event: Box<Option<pallet::Event<T, I>>>,
 		) -> DispatchResultWithPostInfo {
 			let _ = T::EnsureThresholdSigned::ensure_origin(origin)?;
 
@@ -374,11 +388,17 @@ pub mod pallet {
 				})?
 				.expect("signature can not be unavailable");
 
-			Self::start_broadcast(
+			let id = Self::start_broadcast(
 				&signature,
 				T::TransactionBuilder::build_transaction(&api_call.clone().signed(&signature)),
 				*api_call,
 			);
+
+			// Store the callback event
+			if let Some(event) = *callback_event {
+				BroadcastSuccessEvents::<T, I>::insert(id.broadcast_id, event);
+			}
+
 			Ok(().into())
 		}
 
@@ -428,6 +448,11 @@ pub mod pallet {
 				);
 			}
 
+			// Fire the custom event
+			if let Some(custom_event) = BroadcastSuccessEvents::<T, I>::take(broadcast_id) {
+				Self::deposit_event(custom_event.into());
+			}
+
 			Self::clean_up_broadcast_storage(broadcast_id);
 			Self::deposit_event(Event::<T, I>::BroadcastSuccess { broadcast_id });
 			Ok(().into())
@@ -443,6 +468,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			AwaitingBroadcast::<T, I>::remove(BroadcastAttemptId { broadcast_id, attempt_count });
 		}
 		FailedBroadcasters::<T, I>::remove(broadcast_id);
+
+		// Cleanup custom events
 
 		if let Some((_, signature)) = ThresholdSignatureData::<T, I>::take(broadcast_id) {
 			SignatureToBroadcastIdLookup::<T, I>::remove(signature);
@@ -465,12 +492,20 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	/// Request a threshold signature, providing [Call::on_signature_ready] as the callback.
-	pub fn threshold_sign_and_broadcast(api_call: <T as Config<I>>::ApiCall) {
+	pub fn threshold_sign_and_broadcast(
+		api_call: <T as Config<I>>::ApiCall,
+		callback_event: Option<pallet::Event<T, I>>,
+	) {
 		T::ThresholdSigner::request_signature_with_callback(
 			api_call.threshold_signature_payload(),
 			|id| {
-				Call::on_signature_ready { threshold_request_id: id, api_call: Box::new(api_call) }
-					.into()
+				// Register the event id -> custom event
+				Call::on_signature_ready {
+					threshold_request_id: id,
+					api_call: Box::new(api_call),
+					callback_event: Box::new(callback_event),
+				}
+				.into()
 			},
 		);
 	}
@@ -530,7 +565,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				// to retry from the threshold signing stage.
 				_ => {
 					Self::clean_up_broadcast_storage(broadcast_id);
-					Self::threshold_sign_and_broadcast(api_call);
+					Self::threshold_sign_and_broadcast(api_call, None);
 					log::info!(
 						"Signature is invalid -> rescheduled threshold signature for broadcast id {}.",
 						broadcast_id
@@ -617,7 +652,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 	type ApiCall = T::ApiCall;
+	type Event = pallet::Event<T, I>;
 	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) {
-		Self::threshold_sign_and_broadcast(api_call)
+		Self::threshold_sign_and_broadcast(api_call, None)
+	}
+	fn threshold_sign_and_broadcast_with_custom_event(
+		api_call: Self::ApiCall,
+		callback_event: Self::Event,
+	) {
+		Self::threshold_sign_and_broadcast(api_call, Some(callback_event))
 	}
 }

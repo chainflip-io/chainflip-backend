@@ -464,9 +464,13 @@ where
 pub trait Broadcaster<Api: ChainAbi> {
 	/// Supported api calls for this chain.
 	type ApiCall: ApiCall<Api>;
-
+	type Event;
 	/// Request a threshold signature and then build and broadcast the outbound api call.
 	fn threshold_sign_and_broadcast(api_call: Self::ApiCall);
+	fn threshold_sign_and_broadcast_with_custom_event(
+		api_call: Self::ApiCall,
+		callback_event: Self::Event,
+	);
 }
 
 /// The heartbeat of the network
