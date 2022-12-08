@@ -1,6 +1,8 @@
 #!/bin/bash
 
-bashful_secret=`cat /Users/kylezs/Documents/test-keys/bashful-dev-suri`
+file="$1"
+
+bashful_secret=`cat $file`
 
 echo "Purging old dev chain data"
 
