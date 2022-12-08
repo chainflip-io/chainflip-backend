@@ -17,6 +17,7 @@ members = [
   'state-chain/pallets/cf-ingress-egress',
   'state-chain/pallets/cf-lp',
   'state-chain/pallets/cf-pools',
+  'state-chain/pallets/cf-pools/runtime-api',
   'state-chain/pallets/cf-reputation',
   'state-chain/pallets/cf-staking',
   'state-chain/pallets/cf-threshold-signature',
