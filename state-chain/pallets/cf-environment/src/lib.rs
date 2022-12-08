@@ -446,14 +446,13 @@ impl<T: Config> SystemStateManager for SystemStateProvider<T> {
 }
 
 impl<T: Config> EthEnvironmentProvider for Pallet<T> {
-	fn flip_token_address() -> EthereumAddress {
-		EthereumSupportedAssets::<T>::get(Asset::Flip)
-			.expect("FLIP address should be added at genesis")
+	fn token_address(asset: Asset) -> Option<EthereumAddress> {
+		EthereumSupportedAssets::<T>::get(asset)
 	}
 	fn key_manager_address() -> EthereumAddress {
 		EthereumKeyManagerAddress::<T>::get()
 	}
-	fn eth_vault_address() -> EthereumAddress {
+	fn vault_address() -> EthereumAddress {
 		EthereumVaultAddress::<T>::get()
 	}
 	fn stake_manager_address() -> EthereumAddress {
