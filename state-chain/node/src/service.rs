@@ -14,7 +14,7 @@ use state_chain_runtime::{self, opaque::Block, RuntimeApi};
 use std::{marker::PhantomData, sync::Arc, time::Duration};
 
 #[cfg(feature = "ibiza")]
-use custom_rpc::{IbizaCustomApiServer, IbizaCustomRpc};
+use custom_rpc::{PoolsApiServer, PoolsRpc};
 
 // Our native executor instance.
 pub struct ExecutorDispatch;
@@ -285,7 +285,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 				}))?;
 
 				#[cfg(feature = "ibiza")]
-				module.merge(IbizaCustomApiServer::into_rpc(IbizaCustomRpc {
+				module.merge(PoolsApiServer::into_rpc(PoolsRpc {
 					client: client.clone(),
 					_phantom: PhantomData::default(),
 				}))?;

@@ -430,13 +430,13 @@ where
 use pallet_cf_pools_runtime_api::PoolsApi;
 
 #[cfg(feature = "ibiza")]
-pub struct IbizaCustomRpc<C, B> {
+pub struct PoolsRpc<C, B> {
 	pub client: Arc<C>,
 	pub _phantom: PhantomData<B>,
 }
 
 #[cfg(feature = "ibiza")]
-impl<C, B> IbizaCustomRpc<C, B>
+impl<C, B> PoolsRpc<C, B>
 where
 	B: sp_runtime::traits::Block<Hash = state_chain_runtime::Hash>,
 	C: sp_api::ProvideRuntimeApi<B> + Send + Sync + 'static + HeaderBackend<B>,
@@ -449,7 +449,7 @@ where
 
 #[cfg(feature = "ibiza")]
 #[rpc(server, client, namespace = "cf")]
-pub trait IbizaCustomApi {
+pub trait PoolsApi {
 	#[method(name = "swap_rate")]
 	fn cf_swap_rate(
 		&self,
@@ -460,7 +460,7 @@ pub trait IbizaCustomApi {
 }
 
 #[cfg(feature = "ibiza")]
-impl<C, B> IbizaCustomApiServer for IbizaCustomRpc<C, B>
+impl<C, B> PoolsApiServer for PoolsRpc<C, B>
 where
 	B: sp_runtime::traits::Block<Hash = state_chain_runtime::Hash>,
 	C: sp_api::ProvideRuntimeApi<B> + Send + Sync + 'static + HeaderBackend<B>,
