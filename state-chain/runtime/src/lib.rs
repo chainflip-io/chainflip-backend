@@ -70,6 +70,8 @@ use sp_version::RuntimeVersion;
 pub use cf_primitives::{BlockNumber, FlipBalance, ForeignChainAddress};
 pub use cf_traits::{EpochInfo, EthEnvironmentProvider, QualifyNode, SessionKeysRegistered};
 
+pub use cf_primitives::{Asset, AssetAmount, ExchangeRate};
+
 pub use chainflip::chain_instances::*;
 use chainflip::{
 	epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat, EthEnvironment,
@@ -990,6 +992,16 @@ impl_runtime_apis! {
 			}
 		}
 	}
+
+	#[cfg(feature = "ibiza")]
+	impl pallet_cf_pools_runtime_api::PoolsApi<Block> for Runtime {
+		fn cf_swap_rate(asset: &Asset, input_amount: AssetAmount) -> ExchangeRate {
+			use cf_traits::LiquidityPoolApi;
+
+			LiquidityPools::swap_rate(asset, input_amount)
+		}
+	}
+
 	// END custom runtime APIs
 
 	impl sp_api::Core<Block> for Runtime {

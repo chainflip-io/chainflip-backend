@@ -1643,6 +1643,7 @@ dependencies = [
  "hex",
  "jsonrpsee 0.13.1",
  "pallet-cf-governance",
+ "pallet-cf-pools-runtime-api",
  "sc-client-api",
  "serde",
  "sp-api",
@@ -5442,6 +5443,14 @@ dependencies = [
  "sp-io 6.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-06+01)",
  "sp-runtime 6.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-06+01)",
  "sp-std 4.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-06+01)",
+]
+
+[[package]]
+name = "pallet-cf-pools-runtime-api"
+version = "0.1.0"
+dependencies = [
+ "cf-primitives",
+ "sp-api",
 ]
 
 [[package]]
@@ -9514,6 +9523,7 @@ dependencies = [
  "pallet-cf-ingress-egress",
  "pallet-cf-lp",
  "pallet-cf-pools",
+ "pallet-cf-pools-runtime-api",
  "pallet-cf-reputation",
  "pallet-cf-staking",
  "pallet-cf-swapping",
