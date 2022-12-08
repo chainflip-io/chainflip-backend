@@ -212,6 +212,7 @@ pub mod pallet {
 	pub type SignatureToBroadcastIdLookup<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, ThresholdSignatureFor<T, I>, BroadcastId, OptionQuery>;
 
+	/// Storage of Broadcast success events
 	#[pallet::storage]
 	pub type BroadcastSuccessEvents<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, BroadcastId, pallet::Event<T, I>, OptionQuery>;
@@ -243,7 +244,6 @@ pub mod pallet {
 		StorageMap<_, Twox64Concat, SignerIdFor<T, I>, ChainAmountFor<T, I>, ValueQuery>;
 
 	#[pallet::event]
-	// #[derive(Clone, RuntimeDebug, PartialEq, Encode, Decode, TypeInfo)]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// A request to a specific authority to sign a transaction.
@@ -394,7 +394,6 @@ pub mod pallet {
 				*api_call,
 			);
 
-			// Store the callback event
 			if let Some(event) = *callback_event {
 				BroadcastSuccessEvents::<T, I>::insert(id.broadcast_id, event);
 			}
@@ -448,7 +447,6 @@ pub mod pallet {
 				);
 			}
 
-			// Fire the custom event
 			if let Some(custom_event) = BroadcastSuccessEvents::<T, I>::take(broadcast_id) {
 				Self::deposit_event(custom_event.into());
 			}
@@ -468,8 +466,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			AwaitingBroadcast::<T, I>::remove(BroadcastAttemptId { broadcast_id, attempt_count });
 		}
 		FailedBroadcasters::<T, I>::remove(broadcast_id);
-
-		// Cleanup custom events
 
 		if let Some((_, signature)) = ThresholdSignatureData::<T, I>::take(broadcast_id) {
 			SignatureToBroadcastIdLookup::<T, I>::remove(signature);
@@ -499,7 +495,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		T::ThresholdSigner::request_signature_with_callback(
 			api_call.threshold_signature_payload(),
 			|id| {
-				// Register the event id -> custom event
 				Call::on_signature_ready {
 					threshold_request_id: id,
 					api_call: Box::new(api_call),

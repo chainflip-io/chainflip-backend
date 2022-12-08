@@ -6,6 +6,8 @@ use crate::{
 };
 use cf_chains::FeeRefundCalculator;
 
+use crate::BroadcastSuccessEvents;
+
 use cf_chains::mocks::{
 	MockApiCall, MockEthereum, MockThresholdSignature, MockTransaction, ETH_TX_FEE,
 };
@@ -480,5 +482,34 @@ fn re_request_threshold_signature() {
 			MockThresholdSigner::<MockEthereum, Call>::signature_result(0),
 			AsyncResult::Pending
 		);
+	});
+}
+
+#[test]
+fn broadcast_with_callback_event() {
+	new_test_ext().execute_with(|| {
+		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
+		MockThresholdSigner::<MockEthereum, Call>::set_signature_ready(
+			1,
+			Ok(MockThresholdSignature::default()),
+		);
+		let passed_event = BroadcastEvent::<Test, Instance1>::BroadcastSuccess { broadcast_id: 1 };
+		assert_ok!(Broadcaster::on_signature_ready(
+			Origin::root(),
+			1,
+			Box::new(MockApiCall::default()),
+			Box::new(Some(passed_event)),
+		));
+
+		assert!(BroadcastSuccessEvents::<Test, Instance1>::get(1).is_some());
+
+		assert_ok!(Broadcaster::signature_accepted(
+			Origin::root(),
+			MockThresholdSignature::default(),
+			Default::default(),
+			ETH_TX_FEE,
+		));
+
+		assert!(BroadcastSuccessEvents::<Test, Instance1>::get(1).is_none());
 	});
 }
