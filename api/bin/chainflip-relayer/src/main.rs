@@ -72,11 +72,16 @@ impl RpcServer for RpcServerImpl {
 
 #[derive(Parser, Debug, Clone, Default)]
 pub struct RelayerOptions {
-	#[clap(long = "state_chain.ws_endpoint", default_value = "ws://localhost:9944")]
+	#[clap(
+		long = "state_chain.ws_endpoint",
+		default_value = "ws://localhost:9944",
+		help = "The state chain node's rpc endpoint."
+	)]
 	pub ws_endpoint: String,
 	#[clap(
 		long = "state_chain.signing_key_file",
-		default_value = "/etc/chainflip/keys/signing_key_file"
+		default_value = "/etc/chainflip/keys/signing_key_file",
+		help = "A path to a file that contains the relayer's secret key for signing extrinsics."
 	)]
 	pub signing_key_file: PathBuf,
 }
