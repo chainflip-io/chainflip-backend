@@ -101,9 +101,13 @@ pub struct MockPolkadotBroadcaster;
 #[cfg(feature = "ibiza")]
 impl Broadcaster<Polkadot> for MockPolkadotBroadcaster {
 	type ApiCall = MockCreatePolkadotVault;
+	type Event = Event;
 
 	fn threshold_sign_and_broadcast(_api_call: Self::ApiCall) {
 		unimplemented!()
+	}
+	fn threshold_sign_and_broadcast_with_custom_event(_: Self::ApiCall, _: Self::Event) {
+		todo!()
 	}
 }
 #[cfg(feature = "ibiza")]
