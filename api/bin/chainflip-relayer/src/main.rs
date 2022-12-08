@@ -1,7 +1,7 @@
 use anyhow::anyhow;
 use chainflip_api::{
 	self,
-	primitives::{Asset, ForeignChain, ForeignChainAddress},
+	primitives::{AccountRole, Asset, ForeignChain, ForeignChainAddress},
 	settings::StateChain,
 };
 use clap::Parser;
@@ -9,12 +9,14 @@ use jsonrpsee::{
 	core::{async_trait, Error},
 	proc_macros::rpc,
 	server::ServerBuilder,
-	types::error::CallError,
 };
 use std::path::PathBuf;
 
 #[rpc(server, client, namespace = "relayer")]
 pub trait Rpc {
+	#[method(name = "registerAccount")]
+	async fn register_account(&self) -> Result<(), Error>;
+
 	#[method(name = "requestSwap")]
 	async fn request_swap(
 		&self,
@@ -37,6 +39,10 @@ impl RpcServerImpl {
 
 #[async_trait]
 impl RpcServer for RpcServerImpl {
+	async fn register_account(&self) -> Result<(), Error> {
+		Ok(chainflip_api::register_account_role(AccountRole::Relayer, &self.state_chain_settings)
+			.await?)
+	}
 	async fn request_swap(
 		&self,
 		ingress_asset: Asset,
@@ -56,15 +62,14 @@ impl RpcServer for RpcServerImpl {
 					.map_err(|_| anyhow!("Invalid address format for Polkadot"))?,
 			),
 		};
-		chainflip_api::register_swap_intent(
+		Ok(chainflip_api::register_swap_intent(
 			&self.state_chain_settings,
 			ingress_asset,
 			egress_asset,
 			egress_address,
 			relayer_commission_bps.unwrap_or_default(),
 		)
-		.await
-		.map_err(|e| Error::from(CallError::Failed(anyhow!(e.root_cause().to_string()))))
+		.await?)
 	}
 }
 
