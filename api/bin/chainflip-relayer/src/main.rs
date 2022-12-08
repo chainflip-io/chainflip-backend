@@ -17,7 +17,7 @@ pub trait Rpc {
 	#[method(name = "registerAccount")]
 	async fn register_account(&self) -> Result<(), Error>;
 
-	#[method(name = "getNewIngressAddress")]
+	#[method(name = "newSwapIngressAddress")]
 	async fn request_swap_ingress_address(
 		&self,
 		ingress_asset: Asset,
