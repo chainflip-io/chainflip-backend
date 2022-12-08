@@ -75,7 +75,6 @@ pub struct StateChainEnvironment {
 	ethereum_chain_id: u64,
 	eth_init_agg_key: [u8; 33],
 	ethereum_deployment_block: u64,
-	genesis_stake_amount: u128,
 	/// Note: Minimum stake should be expressed in Flipperinos.
 	min_stake: u128,
 	// CFE config values starts here
@@ -122,11 +121,6 @@ pub fn get_environment() -> StateChainEnvironment {
 		.parse::<u64>()
 		.expect("ETH_DEPLOYMENT_BLOCK env var could not be parsed to u64");
 
-	let genesis_stake_amount = env::var("GENESIS_STAKE")
-		.unwrap_or_else(|_| common::GENESIS_STAKE_AMOUNT.to_string())
-		.parse::<u128>()
-		.expect("GENESIS_STAKE env var could not be parsed to u128");
-
 	let eth_block_safety_margin = env::var("ETH_BLOCK_SAFETY_MARGIN")
 		.unwrap_or_else(|_| CfeSettings::default().eth_block_safety_margin.to_string())
 		.parse::<u32>()
@@ -150,7 +144,6 @@ pub fn get_environment() -> StateChainEnvironment {
 		ethereum_chain_id,
 		eth_init_agg_key,
 		ethereum_deployment_block,
-		genesis_stake_amount,
 		eth_block_safety_margin,
 		max_ceremony_stage_duration,
 		min_stake,
@@ -175,7 +168,6 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 		ethereum_chain_id,
 		eth_init_agg_key,
 		ethereum_deployment_block,
-		genesis_stake_amount,
 		eth_block_safety_margin,
 		max_ceremony_stage_duration,
 		min_stake,
@@ -237,7 +229,6 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 				eth_init_agg_key,
 				ethereum_deployment_block,
 				common::TOTAL_ISSUANCE,
-				genesis_stake_amount,
 				min_stake,
 				8 * common::HOURS,
 				common::CLAIM_DELAY_SECS,
@@ -287,7 +278,6 @@ macro_rules! network_spec {
 					ethereum_chain_id,
 					eth_init_agg_key,
 					ethereum_deployment_block,
-					genesis_stake_amount,
 					eth_block_safety_margin,
 					max_ceremony_stage_duration,
 					min_stake,
@@ -357,7 +347,6 @@ macro_rules! network_spec {
 							eth_init_agg_key,
 							ethereum_deployment_block,
 							TOTAL_ISSUANCE,
-							genesis_stake_amount,
 							min_stake,
 							3 * HOURS,
 							CLAIM_DELAY_SECS,
@@ -411,7 +400,6 @@ fn testnet_genesis(
 	eth_init_agg_key: [u8; 33],
 	ethereum_deployment_block: u64,
 	total_issuance: FlipBalance,
-	genesis_stake_amount: u128,
 	minimum_stake: u128,
 	blocks_per_epoch: BlockNumber,
 	claim_delay: u64,
@@ -453,7 +441,9 @@ fn testnet_genesis(
 	let mut initial_stakers: Vec<AccountId> = genesis_stakers.clone();
 	initial_stakers.extend(initial_liquidity_providers);
 	initial_stakers.extend(initial_relayer);
-	
+
+	let genesis_stake_amount = total_issuance.saturating_div(initial_stakers.len() as u128);
+
 	GenesisConfig {
 		account_roles: AccountRolesConfig { initial_account_roles: account_roles },
 		system: SystemConfig {

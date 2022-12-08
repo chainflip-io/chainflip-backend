@@ -19,7 +19,6 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 		"02e61afd677cdfbec838c6f309deff0b2c6056f8a27f2c783b68bba6b30f667be6"
 	),
 	ethereum_deployment_block: 0u64,
-	genesis_stake_amount: GENESIS_STAKE_AMOUNT,
 	min_stake: MIN_STAKE,
 	eth_block_safety_margin: eth::BLOCK_SAFETY_MARGIN as u32,
 	max_ceremony_stage_duration: 300,
