@@ -1,14 +1,11 @@
-use cf_primitives::EthereumAddress;
+use cf_primitives::{Asset, EthereumAddress};
 
 /// A mock that just returns some constants for the KeyManager and Chain ID.
 pub struct MockEthEnvironmentProvider;
 
 impl crate::EthEnvironmentProvider for MockEthEnvironmentProvider {
-	fn flip_token_address() -> EthereumAddress {
-		[0xcf; 20]
-	}
-	fn usdc_token_address() -> EthereumAddress {
-		[0xcd; 20]
+	fn token_address(_asset: Asset) -> Option<EthereumAddress> {
+		Some([0xcf; 20])
 	}
 	fn key_manager_address() -> EthereumAddress {
 		[0xcf; 20]
