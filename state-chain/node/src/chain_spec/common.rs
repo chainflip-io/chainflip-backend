@@ -2,6 +2,7 @@ use cf_primitives::AuthorityCount;
 pub use state_chain_runtime::constants::common::*;
 use state_chain_runtime::{chainflip::Offence, BlockNumber, FlipBalance};
 
+pub const GENESIS_STAKE_AMOUNT: FlipBalance = 5_000 * FLIPPERINOS_PER_FLIP;
 pub const MIN_STAKE: FlipBalance = 10 * FLIPPERINOS_PER_FLIP;
 pub const ETH_PRIORITY_FEE_PERCENTILE: u8 = 50;
 pub const MIN_AUTHORITIES: AuthorityCount = 2;

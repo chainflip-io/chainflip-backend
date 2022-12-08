@@ -115,7 +115,7 @@ impl ExtBuilder {
 			reputation: ReputationConfig {
 				accrual_ratio: ACCRUAL_RATIO,
 				penalties: PENALTIES.to_vec(),
-				genesis_nodes: self.accounts.iter().map(|(id, _)| id.clone()).collect(),
+				genesis_validators: self.accounts.iter().map(|(id, _)| id.clone()).collect(),
 			},
 			governance: GovernanceConfig {
 				members: self.root.iter().cloned().collect(),

@@ -15,7 +15,7 @@ use state_chain_runtime::{
 #[cfg(feature = "ibiza")]
 use state_chain_runtime::{PolkadotThresholdSignerConfig, PolkadotVaultConfig};
 
-use std::{collections::BTreeSet, env, marker::PhantomData};
+use std::{env, marker::PhantomData};
 use utilities::clean_eth_address;
 
 #[cfg(feature = "ibiza")]
@@ -75,6 +75,7 @@ pub struct StateChainEnvironment {
 	ethereum_chain_id: u64,
 	eth_init_agg_key: [u8; 33],
 	ethereum_deployment_block: u64,
+	genesis_stake_amount: u128,
 	/// Note: Minimum stake should be expressed in Flipperinos.
 	min_stake: u128,
 	// CFE config values starts here
@@ -121,6 +122,11 @@ pub fn get_environment() -> StateChainEnvironment {
 		.parse::<u64>()
 		.expect("ETH_DEPLOYMENT_BLOCK env var could not be parsed to u64");
 
+	let genesis_stake_amount = env::var("GENESIS_STAKE")
+		.unwrap_or_else(|_| common::GENESIS_STAKE_AMOUNT.to_string())
+		.parse::<u128>()
+		.expect("GENESIS_STAKE env var could not be parsed to u128");
+
 	let eth_block_safety_margin = env::var("ETH_BLOCK_SAFETY_MARGIN")
 		.unwrap_or_else(|_| CfeSettings::default().eth_block_safety_margin.to_string())
 		.parse::<u32>()
@@ -144,6 +150,7 @@ pub fn get_environment() -> StateChainEnvironment {
 		ethereum_chain_id,
 		eth_init_agg_key,
 		ethereum_deployment_block,
+		genesis_stake_amount,
 		eth_block_safety_margin,
 		max_ceremony_stage_duration,
 		min_stake,
@@ -168,6 +175,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 		ethereum_chain_id,
 		eth_init_agg_key,
 		ethereum_deployment_block,
+		genesis_stake_amount,
 		eth_block_safety_margin,
 		max_ceremony_stage_duration,
 		min_stake,
@@ -189,22 +197,34 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 					]
 					.unchecked_into(),
 				)],
+				// Extra accounts
+				#[cfg(feature = "ibiza")]
 				vec![
-					#[cfg(feature = "ibiza")]
-					get_account_id_from_seed::<sr25519::Public>("LP_1"),
-					#[cfg(feature = "ibiza")]
-					get_account_id_from_seed::<sr25519::Public>("LP_2"),
+					(
+						get_account_id_from_seed::<sr25519::Public>("LP_1"),
+						AccountRole::LiquidityProvider,
+						100,
+					),
+					(
+						get_account_id_from_seed::<sr25519::Public>("LP_2"),
+						AccountRole::LiquidityProvider,
+						100,
+					),
+					(
+						get_account_id_from_seed::<sr25519::Public>("RELAYER_1"),
+						AccountRole::Relayer,
+						100,
+					),
+					(
+						get_account_id_from_seed::<sr25519::Public>("RELAYER_2"),
+						AccountRole::Relayer,
+						100,
+					),
 				],
-				vec![
-					#[cfg(feature = "ibiza")]
-					get_account_id_from_seed::<sr25519::Public>("RELAYER_1"),
-					#[cfg(feature = "ibiza")]
-					get_account_id_from_seed::<sr25519::Public>("RELAYER_2"),
-				],
+				#[cfg(not(feature = "ibiza"))]
+				vec![],
 				// Governance account - Snow White
 				snow_white.into(),
-				// Stakers at genesis
-				vec![bashful_sr25519.into()],
 				1,
 				common::MAX_AUTHORITIES,
 				EnvironmentConfig {
@@ -229,6 +249,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 				eth_init_agg_key,
 				ethereum_deployment_block,
 				common::TOTAL_ISSUANCE,
+				genesis_stake_amount,
 				min_stake,
 				8 * common::HOURS,
 				common::CLAIM_DELAY_SECS,
@@ -278,6 +299,7 @@ macro_rules! network_spec {
 					ethereum_chain_id,
 					eth_init_agg_key,
 					ethereum_deployment_block,
+					genesis_stake_amount,
 					eth_block_safety_margin,
 					max_ceremony_stage_duration,
 					min_stake,
@@ -307,22 +329,34 @@ macro_rules! network_spec {
 									DOPEY_ED25519.unchecked_into(),
 								),
 							],
+							// Extra accounts
+							#[cfg(feature = "ibiza")]
 							vec![
-								#[cfg(feature = "ibiza")]
-								get_account_id_from_seed::<sr25519::Public>("LP_1"),
-								#[cfg(feature = "ibiza")]
-								get_account_id_from_seed::<sr25519::Public>("LP_2"),
+								(
+									get_account_id_from_seed::<sr25519::Public>("LP_1"),
+									AccountRole::LiquidityProvider,
+									100,
+								),
+								(
+									get_account_id_from_seed::<sr25519::Public>("LP_2"),
+									AccountRole::LiquidityProvider,
+									100,
+								),
+								(
+									get_account_id_from_seed::<sr25519::Public>("RELAYER_1"),
+									AccountRole::Relayer,
+									100,
+								),
+								(
+									get_account_id_from_seed::<sr25519::Public>("RELAYER_2"),
+									AccountRole::Relayer,
+									100,
+								),
 							],
-							vec![
-								#[cfg(feature = "ibiza")]
-								get_account_id_from_seed::<sr25519::Public>("RELAYER_1"),
-								#[cfg(feature = "ibiza")]
-								get_account_id_from_seed::<sr25519::Public>("RELAYER_2"),
-							],
+							#[cfg(not(feature = "ibiza"))]
+							vec![],
 							// Governance account - Snow White
 							SNOW_WHITE_SR25519.into(),
-							// Stakers at genesis
-							vec![BASHFUL_SR25519.into(), DOC_SR25519.into(), DOPEY_SR25519.into()],
 							MIN_AUTHORITIES,
 							MAX_AUTHORITIES,
 							EnvironmentConfig {
@@ -347,6 +381,7 @@ macro_rules! network_spec {
 							eth_init_agg_key,
 							ethereum_deployment_block,
 							TOTAL_ISSUANCE,
+							genesis_stake_amount,
 							min_stake,
 							3 * HOURS,
 							CLAIM_DELAY_SECS,
@@ -390,16 +425,15 @@ network_spec!(sisyphos);
 fn testnet_genesis(
 	wasm_binary: &[u8],
 	initial_authorities: Vec<(AccountId, AuraId, GrandpaId)>, // initial validators
-	initial_liquidity_providers: Vec<AccountId>,
-	initial_relayer: Vec<AccountId>,
+	extra_stakers: Vec<(AccountId, AccountRole, u128)>,
 	root_key: AccountId,
-	genesis_stakers: Vec<AccountId>,
 	min_authorities: AuthorityCount,
 	max_authorities: AuthorityCount,
 	config_set: EnvironmentConfig,
 	eth_init_agg_key: [u8; 33],
 	ethereum_deployment_block: u64,
 	total_issuance: FlipBalance,
+	genesis_stake_amount: u128,
 	minimum_stake: u128,
 	blocks_per_epoch: BlockNumber,
 	claim_delay: u64,
@@ -416,53 +450,36 @@ fn testnet_genesis(
 ) -> GenesisConfig {
 	let authority_ids: Vec<AccountId> =
 		initial_authorities.iter().map(|(id, ..)| id.clone()).collect();
-	let mut account_roles: Vec<(AccountId, AccountRole)> = authority_ids
-		.clone()
-		.into_iter()
-		.map(|account_id| (account_id, AccountRole::Validator))
+	let total_issuance =
+		total_issuance + extra_stakers.iter().map(|(_, _, stake)| *stake).sum::<u128>();
+	let all_accounts: Vec<_> = initial_authorities
+		.iter()
+		.map(|(account_id, ..)| (account_id.clone(), AccountRole::Validator, genesis_stake_amount))
+		.chain(extra_stakers.clone())
 		.collect();
-	account_roles.extend(
-		initial_liquidity_providers
-			.clone()
-			.into_iter()
-			.map(|account_id| (account_id, AccountRole::LiquidityProvider))
-			.collect::<Vec<(AccountId, AccountRole)>>(),
-	);
-	account_roles.extend(
-		initial_relayer
-			.clone()
-			.into_iter()
-			.map(|account_id| (account_id, AccountRole::Relayer))
-			.collect::<Vec<(AccountId, AccountRole)>>(),
-	);
-
-	// TODO: This creates discrepencies between the SC and the contract
-	// for Flip issuance. This should be used for testnets only.
-	let mut initial_stakers: Vec<AccountId> = genesis_stakers.clone();
-	initial_stakers.extend(initial_liquidity_providers);
-	initial_stakers.extend(initial_relayer);
-
-	let genesis_stake_amount = total_issuance.saturating_div(initial_stakers.len() as u128);
 
 	GenesisConfig {
-		account_roles: AccountRolesConfig { initial_account_roles: account_roles },
+		account_roles: AccountRolesConfig {
+			initial_account_roles: all_accounts
+				.iter()
+				.map(|(id, role, ..)| (id.clone(), *role))
+				.collect(),
+		},
 		system: SystemConfig {
 			// Add Wasm runtime to storage.
 			code: wasm_binary.to_vec(),
 		},
 		validator: ValidatorConfig {
 			genesis_authorities: authority_ids,
-			genesis_backups: genesis_stakers
+			genesis_backups: extra_stakers
 				.iter()
-				.cloned()
-				.collect::<BTreeSet<_>>()
-				.difference(
-					&initial_authorities
-						.iter()
-						.map(|(account_id, _, _)| account_id.clone())
-						.collect::<BTreeSet<_>>(),
-				)
-				.map(|account_id| (account_id.clone(), genesis_stake_amount))
+				.filter_map(|(id, role, stake)| {
+					if *role == AccountRole::Validator {
+						Some((id.clone(), *stake))
+					} else {
+						None
+					}
+				})
 				.collect(),
 			blocks_per_epoch,
 			claim_period_as_percentage: percent_of_epoch_period_claimable,
@@ -481,10 +498,10 @@ fn testnet_genesis(
 		},
 		flip: FlipConfig { total_issuance },
 		staking: StakingConfig {
-			genesis_stakers: initial_stakers
+			genesis_stakers: all_accounts
 				.iter()
-				.map(|acct| (acct.clone(), genesis_stake_amount))
-				.collect::<Vec<(AccountId, FlipBalance)>>(),
+				.map(|(acct, _role, stake)| (acct.clone(), *stake))
+				.collect(),
 			minimum_stake,
 			claim_ttl: core::time::Duration::from_secs(3 * claim_delay),
 			claim_delay_buffer_seconds,
@@ -492,7 +509,23 @@ fn testnet_genesis(
 		aura: AuraConfig { authorities: vec![] },
 		grandpa: GrandpaConfig { authorities: vec![] },
 		governance: GovernanceConfig { members: vec![root_key], expiry_span },
-		reputation: ReputationConfig { accrual_ratio, penalties, genesis_nodes: genesis_stakers },
+		reputation: ReputationConfig {
+			accrual_ratio,
+			penalties,
+			// Includes backups.
+			genesis_validators: all_accounts
+				.iter()
+				.filter_map(
+					|(id, role, _)| {
+						if *role == AccountRole::Validator {
+							Some(id.clone())
+						} else {
+							None
+						}
+					},
+				)
+				.collect(),
+		},
 		environment: config_set,
 		ethereum_vault: EthereumVaultConfig {
 			vault_key: Some(eth_init_agg_key.to_vec()),
