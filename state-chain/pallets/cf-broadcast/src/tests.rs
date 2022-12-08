@@ -499,7 +499,7 @@ fn broadcast_with_callback_event() {
 			Origin::root(),
 			1,
 			Box::new(MockApiCall::default()),
-			Box::new(Some(Event::System(frame_system::Event::CodeUpdated))),
+			Some(Event::System(frame_system::Event::CodeUpdated)),
 		));
 		assert!(BroadcastSuccessEvents::<Test, Instance1>::get(1).is_some());
 		assert_ok!(Broadcaster::signature_accepted(

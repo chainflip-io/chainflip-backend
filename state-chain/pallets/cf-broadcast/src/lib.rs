@@ -374,7 +374,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			threshold_request_id: <T::ThresholdSigner as ThresholdSigner<T::TargetChain>>::RequestId,
 			api_call: Box<<T as Config<I>>::ApiCall>,
-			callback_event: Box<Option<<T as frame_system::Config>::Event>>,
+			callback_event: Option<<T as frame_system::Config>::Event>,
 		) -> DispatchResultWithPostInfo {
 			let _ = T::EnsureThresholdSigned::ensure_origin(origin)?;
 
@@ -395,7 +395,7 @@ pub mod pallet {
 				*api_call,
 			);
 
-			if let Some(event) = *callback_event {
+			if let Some(event) = callback_event {
 				BroadcastSuccessEvents::<T, I>::insert(broadcast_id.broadcast_id, event);
 			}
 
@@ -499,7 +499,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				Call::on_signature_ready {
 					threshold_request_id: id,
 					api_call: Box::new(api_call),
-					callback_event: Box::new(callback_event),
+					callback_event,
 				}
 				.into()
 			},
