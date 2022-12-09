@@ -1,5 +1,5 @@
 #[cfg(feature = "ibiza")]
-use cf_chains::dot::{POLKADOT_VAULT_ACCOUNT, WESTEND_METADATA}; /* TODO: move these constants into chainspec. */
+use cf_chains::dot::{POLKADOT_METADATA, POLKADOT_VAULT_ACCOUNT};
 use cf_primitives::{AccountRole, AuthorityCount};
 use sc_service::{ChainType, Properties};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
@@ -242,7 +242,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 					#[cfg(feature = "ibiza")]
 					polkadot_vault_account_id: POLKADOT_VAULT_ACCOUNT,
 					#[cfg(feature = "ibiza")]
-					polkadot_network_metadata: WESTEND_METADATA,
+					polkadot_network_metadata: POLKADOT_METADATA,
 				},
 				eth_init_agg_key,
 				ethereum_deployment_block,
@@ -372,7 +372,7 @@ macro_rules! network_spec {
 								#[cfg(feature = "ibiza")]
 								polkadot_vault_account_id: POLKADOT_VAULT_ACCOUNT,
 								#[cfg(feature = "ibiza")]
-								polkadot_network_metadata: WESTEND_METADATA,
+								polkadot_network_metadata: POLKADOT_METADATA,
 							},
 							eth_init_agg_key,
 							ethereum_deployment_block,
