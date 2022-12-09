@@ -538,12 +538,16 @@ where
                                     #[cfg(feature = "ibiza")]
                                     state_chain_runtime::Event::PolkadotBroadcaster(
                                         pallet_cf_broadcast::Event::TransactionBroadcastRequest {
-                                            broadcast_attempt_id: _,
+                                            broadcast_attempt_id,
                                             nominee,
                                             unsigned_tx,
                                         },
                                     ) if nominee == account_id => {
-                                        let _result = dot_broadcaster.send(unsigned_tx.encoded_extrinsic).await;
+                                        let _result = dot_broadcaster.send(unsigned_tx.encoded_extrinsic).await
+                                        .map(|_| slog::info!(logger, "Polkadot transmission successful: {broadcast_attempt_id}"))
+                                        .map_err(|error| {
+                                            slog::error!(logger, "Error: {:?}", error);
+                                        });
                                     }
                                     state_chain_runtime::Event::Environment(
                                         pallet_cf_environment::Event::CfeSettingsUpdated {
