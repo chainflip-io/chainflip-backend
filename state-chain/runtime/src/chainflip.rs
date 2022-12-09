@@ -260,9 +260,16 @@ impl ReplayProtectionProvider<Polkadot> for DotEnvironment {
 #[cfg(feature = "ibiza")]
 impl ChainEnvironment<cf_chains::dot::api::SystemAccounts, PolkadotAccountId> for DotEnvironment {
 	fn lookup(query: cf_chains::dot::api::SystemAccounts) -> Option<PolkadotAccountId> {
+		use crate::PolkadotVault;
+		use cf_traits::{KeyProvider, KeyState};
+		use sp_runtime::{traits::IdentifyAccount, MultiSigner};
 		match query {
 			cf_chains::dot::api::SystemAccounts::Proxy =>
-				Environment::get_current_polkadot_proxy_account(),
+				match <PolkadotVault as KeyProvider<Polkadot>>::current_key_epoch_index() {
+					KeyState::Active { key, .. } =>
+						Some(MultiSigner::Sr25519(key.0).into_account()),
+					_ => None,
+				},
 			cf_chains::dot::api::SystemAccounts::Vault => Environment::get_polkadot_vault_account(),
 		}
 	}
@@ -275,8 +282,8 @@ impl VaultTransitionHandler<Ethereum> for EthVaultTransitionHandler {}
 pub struct DotVaultTransitionHandler;
 #[cfg(feature = "ibiza")]
 impl VaultTransitionHandler<Polkadot> for DotVaultTransitionHandler {
-	fn on_new_vault(new_key: <Polkadot as ChainCrypto>::AggKey) {
-		Environment::set_new_proxy_account(new_key);
+	fn on_new_vault(_new_key: <Polkadot as ChainCrypto>::AggKey) {
+		Environment::reset_polkadot_proxy_account_nonce();
 	}
 }
 

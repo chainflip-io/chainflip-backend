@@ -157,8 +157,6 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			#[cfg(feature = "ibiza")]
 			polkadot_vault_account_id: None,
 			#[cfg(feature = "ibiza")]
-			polkadot_proxy_account_id: None,
-			#[cfg(feature = "ibiza")]
 			polkadot_network_metadata: POLKADOT_METADATA,
 		},
 	};
