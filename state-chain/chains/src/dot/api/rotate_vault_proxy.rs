@@ -127,6 +127,7 @@ mod test_rotate_vault_proxy {
 		Hasher,
 	};
 	use sp_runtime::{
+		app_crypto::Ss58Codec,
 		traits::{BlakeTwo256, IdentifyAccount},
 		MultiSigner,
 	};
@@ -135,7 +136,7 @@ mod test_rotate_vault_proxy {
 	#[test]
 	fn create_test_api_call() {
 		let keypair_vault: Pair = <Pair as TraitPair>::from_seed(&RAW_SEED_1);
-		let account_id_vault: AccountId32 =
+		let _account_id_vault: AccountId32 =
 			MultiSigner::Sr25519(keypair_vault.public()).into_account();
 
 		let keypair_old_proxy: Pair = <Pair as TraitPair>::from_seed(&RAW_SEED_2);
@@ -150,7 +151,8 @@ mod test_rotate_vault_proxy {
 			PolkadotReplayProtection::new(NONCE_2, 0, WESTEND_METADATA),
 			PolkadotPublicKey(keypair_old_proxy.public()),
 			PolkadotPublicKey(keypair_new_proxy.public()),
-			account_id_vault,
+			AccountId32::from_ss58check("5D58KA25o2KcL9EiBJckjScGzvH5nUEiKJBrgAjsSfRuGJkc")
+				.unwrap(),
 		);
 
 		println!(

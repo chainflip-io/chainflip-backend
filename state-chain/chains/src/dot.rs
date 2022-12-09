@@ -51,8 +51,8 @@ pub type PolkadotPayload = SignedPayload<PolkadotRuntimeCall, PolkadotSignedExtr
 
 // Westend testnet
 pub const WESTEND_METADATA: PolkadotMetadata = PolkadotMetadata {
-	spec_version: 9330,
-	transaction_version: 15,
+	spec_version: 9340,
+	transaction_version: 16,
 	genesis_hash: hex_literal::hex!(
 		"e143f23803ac50e8f6f8e62695d1ce9e4e1d68aa36c1cd2cfd15340213f3423e"
 	),
@@ -61,8 +61,8 @@ pub const WESTEND_METADATA: PolkadotMetadata = PolkadotMetadata {
 
 // Polkadot mainnet
 pub const POLKADOT_METADATA: PolkadotMetadata = PolkadotMetadata {
-	spec_version: 9300,
-	transaction_version: 15,
+	spec_version: 9320,
+	transaction_version: 16,
 	genesis_hash: hex_literal::hex!(
 		"91b171bb158e2d3848fa23a9f1c25182fb8e20313b2c1eb49219da7a70ce90c3"
 	),
@@ -79,7 +79,7 @@ pub const NONCE_1: u32 = 11; //correct nonce has to be provided for this account
 // address: "5GNn92C9ngX4sNp3UjqGzPbdRfbbV8hyyVVNZaH2z9e5kzxA"
 pub const RAW_SEED_2: [u8; 32] =
 	hex_literal::hex!("4b734882accd7a0e27b8b0d3cb7db79ab4da559d1d5f84f35fd218a1ee12ece4");
-pub const NONCE_2: u32 = 4; //correct nonce has to be provided for this account (see/track onchain)
+pub const NONCE_2: u32 = 18; //correct nonce has to be provided for this account (see/track onchain)
 
 // test westend account 3 (CHAINFLIP-TEST-3)
 // address: "5CLpD6DBg2hFToBJYKDB7bPVAf4TKw2F1Q2xbnzdHSikH3uK"
