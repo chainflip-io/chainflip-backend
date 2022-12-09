@@ -266,11 +266,11 @@ impl PolkadotExtrinsicBuilder {
 pub enum PolkadotRuntimeCall {
 	#[codec(index = 0u8)]
 	System(SystemCall),
-	#[codec(index = 4u8)] // INDEX FOR WESTEND: 4, FOR POLKADOT: 5
+	#[codec(index = 5u8)] // INDEX FOR WESTEND: 4, FOR POLKADOT: 5
 	Balances(BalancesCall),
-	#[codec(index = 16u8)] // INDEX FOR WESTEND: 16, FOR POLKADOT: 26
+	#[codec(index = 26u8)] // INDEX FOR WESTEND: 16, FOR POLKADOT: 26
 	Utility(UtilityCall),
-	#[codec(index = 22u8)] // INDEX FOR WESTEND: 22, FOR POLKADOT: 29
+	#[codec(index = 29u8)] // INDEX FOR WESTEND: 22, FOR POLKADOT: 29
 	Proxy(ProxyCall),
 }
 
