@@ -203,22 +203,22 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 					(
 						get_account_id_from_seed::<sr25519::Public>("LP_1"),
 						AccountRole::LiquidityProvider,
-						100,
+						100 * FLIPPERINOS_PER_FLIP,
 					),
 					(
 						get_account_id_from_seed::<sr25519::Public>("LP_2"),
 						AccountRole::LiquidityProvider,
-						100,
+						100 * FLIPPERINOS_PER_FLIP,
 					),
 					(
 						get_account_id_from_seed::<sr25519::Public>("RELAYER_1"),
 						AccountRole::Relayer,
-						100,
+						100 * FLIPPERINOS_PER_FLIP,
 					),
 					(
 						get_account_id_from_seed::<sr25519::Public>("RELAYER_2"),
 						AccountRole::Relayer,
-						100,
+						100 * FLIPPERINOS_PER_FLIP,
 					),
 				],
 				#[cfg(not(feature = "ibiza"))]
@@ -335,22 +335,22 @@ macro_rules! network_spec {
 								(
 									get_account_id_from_seed::<sr25519::Public>("LP_1"),
 									AccountRole::LiquidityProvider,
-									100,
+									100 * FLIPPERINOS_PER_FLIP,
 								),
 								(
 									get_account_id_from_seed::<sr25519::Public>("LP_2"),
 									AccountRole::LiquidityProvider,
-									100,
+									100 * FLIPPERINOS_PER_FLIP,
 								),
 								(
 									get_account_id_from_seed::<sr25519::Public>("RELAYER_1"),
 									AccountRole::Relayer,
-									100,
+									100 * FLIPPERINOS_PER_FLIP,
 								),
 								(
 									get_account_id_from_seed::<sr25519::Public>("RELAYER_2"),
 									AccountRole::Relayer,
-									100,
+									100 * FLIPPERINOS_PER_FLIP,
 								),
 							],
 							#[cfg(not(feature = "ibiza"))]
