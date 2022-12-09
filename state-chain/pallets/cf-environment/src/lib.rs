@@ -408,8 +408,7 @@ pub mod pallet {
 			#[cfg(feature = "ibiza")]
 			PolkadotNetworkMetadata::<T>::set(self.polkadot_network_metadata.clone());
 			#[cfg(feature = "ibiza")]
-			PolkadotProxyAccountNonce::<T>::set(1); // The 0 nonce would have already been used up by Create
-			                            // Polkadot Vault transaction
+			PolkadotProxyAccountNonce::<T>::set(0);
 		}
 	}
 }
