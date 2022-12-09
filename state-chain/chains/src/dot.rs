@@ -64,7 +64,7 @@ pub const POLKADOT_METADATA: PolkadotMetadata = PolkadotMetadata {
 	spec_version: 9320,
 	transaction_version: 16,
 	genesis_hash: hex_literal::hex!(
-		"91b171bb158e2d3848fa23a9f1c25182fb8e20313b2c1eb49219da7a70ce90c3"
+		"5f551688012d25a98e729752169f509c6186af8079418c118844cc852b332bf5"
 	),
 	block_hash_count: 4096,
 };
