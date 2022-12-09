@@ -32,7 +32,7 @@ pub struct RpcServerImpl {
 }
 
 impl RpcServerImpl {
-	pub fn new(RelayerOptions { ws_endpoint, signing_key_file }: RelayerOptions) -> Self {
+	pub fn new(RelayerOptions { ws_endpoint, signing_key_file, .. }: RelayerOptions) -> Self {
 		Self { state_chain_settings: StateChain { ws_endpoint, signing_key_file } }
 	}
 }
@@ -90,6 +90,12 @@ impl RpcServer for RpcServerImpl {
 #[derive(Parser, Debug, Clone, Default)]
 pub struct RelayerOptions {
 	#[clap(
+		long = "port",
+		default_value = "80",
+		help = "The port number on which the relayer will listen for connections. Use 0 to assing a random port."
+	)]
+	pub port: u16,
+	#[clap(
 		long = "state_chain.ws_endpoint",
 		default_value = "ws://localhost:9944",
 		help = "The state chain node's rpc endpoint."
@@ -105,16 +111,16 @@ pub struct RelayerOptions {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+	let opts = RelayerOptions::parse();
 	chainflip_api::use_chainflip_account_id_encoding();
 	tracing_subscriber::FmtSubscriber::builder()
 		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
 		.try_init()
 		.expect("setting default subscriber failed");
 
-	let server = ServerBuilder::default().build("0.0.0.0:0").await?;
-
+	let server = ServerBuilder::default().build(format!("0.0.0.0:{}", opts.port)).await?;
 	let server_addr = server.local_addr()?;
-	let server = server.start(RpcServerImpl::new(RelayerOptions::parse()).into_rpc())?;
+	let server = server.start(RpcServerImpl::new(opts).into_rpc())?;
 
 	println!("🎙 Server is listening on {}.", server_addr);
 
