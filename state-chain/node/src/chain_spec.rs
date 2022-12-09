@@ -1,7 +1,7 @@
 #[cfg(feature = "ibiza")]
 use cf_chains::dot::{POLKADOT_PROXY_ACCOUNT, POLKADOT_VAULT_ACCOUNT, WESTEND_METADATA}; /* TODO: move these constants into chainspec. */
 use cf_primitives::{AccountRole, AuthorityCount};
-use chainflip_node::chain_spec::testnet::FLIPPERINOS_PER_FLIP;
+use common::FLIPPERINOS_PER_FLIP;
 use sc_service::{ChainType, Properties};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::crypto::{set_default_ss58_version, Ss58AddressFormat, UncheckedInto};
