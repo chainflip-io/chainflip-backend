@@ -1,6 +1,7 @@
 #[cfg(feature = "ibiza")]
 use cf_chains::dot::{POLKADOT_METADATA, POLKADOT_VAULT_ACCOUNT};
 use cf_primitives::{AccountRole, AuthorityCount};
+use common::FLIPPERINOS_PER_FLIP;
 use sc_service::{ChainType, Properties};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::crypto::{set_default_ss58_version, Ss58AddressFormat, UncheckedInto};
@@ -203,22 +204,22 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 					(
 						get_account_id_from_seed::<sr25519::Public>("LP_1"),
 						AccountRole::LiquidityProvider,
-						100,
+						100 * FLIPPERINOS_PER_FLIP,
 					),
 					(
 						get_account_id_from_seed::<sr25519::Public>("LP_2"),
 						AccountRole::LiquidityProvider,
-						100,
+						100 * FLIPPERINOS_PER_FLIP,
 					),
 					(
 						get_account_id_from_seed::<sr25519::Public>("RELAYER_1"),
 						AccountRole::Relayer,
-						100,
+						100 * FLIPPERINOS_PER_FLIP,
 					),
 					(
 						get_account_id_from_seed::<sr25519::Public>("RELAYER_2"),
 						AccountRole::Relayer,
-						100,
+						100 * FLIPPERINOS_PER_FLIP,
 					),
 				],
 				#[cfg(not(feature = "ibiza"))]
@@ -333,22 +334,22 @@ macro_rules! network_spec {
 								(
 									get_account_id_from_seed::<sr25519::Public>("LP_1"),
 									AccountRole::LiquidityProvider,
-									100,
+									100 * FLIPPERINOS_PER_FLIP,
 								),
 								(
 									get_account_id_from_seed::<sr25519::Public>("LP_2"),
 									AccountRole::LiquidityProvider,
-									100,
+									100 * FLIPPERINOS_PER_FLIP,
 								),
 								(
 									get_account_id_from_seed::<sr25519::Public>("RELAYER_1"),
 									AccountRole::Relayer,
-									100,
+									100 * FLIPPERINOS_PER_FLIP,
 								),
 								(
 									get_account_id_from_seed::<sr25519::Public>("RELAYER_2"),
 									AccountRole::Relayer,
-									100,
+									100 * FLIPPERINOS_PER_FLIP,
 								),
 							],
 							#[cfg(not(feature = "ibiza"))]
