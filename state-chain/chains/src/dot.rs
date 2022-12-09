@@ -88,7 +88,6 @@ pub const RAW_SEED_3: [u8; 32] =
 pub const NONCE_3: u32 = 0; //correct nonce has to be provided for this account (see/track onchain)
 
 pub const POLKADOT_VAULT_ACCOUNT: Option<PolkadotAccountId> = None;
-pub const POLKADOT_PROXY_ACCOUNT: Option<PolkadotAccountId> = None;
 
 // FROM: https://github.com/paritytech/polkadot/blob/v0.9.33/runtime/polkadot/src/lib.rs
 #[allow(clippy::unnecessary_cast)]
