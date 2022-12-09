@@ -4,10 +4,7 @@
 
 #[cfg(feature = "ibiza")]
 use cf_chains::{
-	dot::{
-		api::CreatePolkadotVault, Polkadot, PolkadotAccountId, PolkadotIndex, PolkadotMetadata,
-		PolkadotPublicKey,
-	},
+	dot::{api::CreatePolkadotVault, Polkadot, PolkadotAccountId, PolkadotIndex, PolkadotMetadata},
 	ChainCrypto,
 };
 #[cfg(feature = "ibiza")]
@@ -166,12 +163,6 @@ pub mod pallet {
 
 	#[cfg(feature = "ibiza")]
 	#[pallet::storage]
-	#[pallet::getter(fn polkadot_current_proxy_account_id)]
-	/// The current proxy Account for polkadot vault
-	pub type PolkadotCurrentProxyAccountId<T> = StorageValue<_, PolkadotAccountId, OptionQuery>;
-
-	#[cfg(feature = "ibiza")]
-	#[pallet::storage]
 	/// Current Nonce of the current Polkadot Proxy Account
 	pub type PolkadotProxyAccountNonce<T> = StorageValue<_, PolkadotIndex, ValueQuery>;
 
@@ -192,9 +183,6 @@ pub mod pallet {
 		AddedNewEthAsset(Asset, EthereumAddress),
 		/// The address of an supported ETH asset was updated
 		UpdatedEthAsset(Asset, EthereumAddress),
-		/// The AccountId of the new Polkadot Vault Proxy
-		#[cfg(feature = "ibiza")]
-		PolkadotProxyAccountUpdated(PolkadotAccountId),
 		/// Polkadot Vault Creation Call was initiated
 		#[cfg(feature = "ibiza")]
 		PolkadotVaultCreationCallInitiated { agg_key: <Polkadot as ChainCrypto>::AggKey },
@@ -384,8 +372,6 @@ pub mod pallet {
 		#[cfg(feature = "ibiza")]
 		pub polkadot_vault_account_id: Option<PolkadotAccountId>,
 		#[cfg(feature = "ibiza")]
-		pub polkadot_proxy_account_id: Option<PolkadotAccountId>,
-		#[cfg(feature = "ibiza")]
 		pub polkadot_network_metadata: PolkadotMetadata,
 	}
 
@@ -403,8 +389,6 @@ pub mod pallet {
 			EthereumSupportedAssets::<T>::insert(Asset::Usdc, self.eth_usdc_address);
 			#[cfg(feature = "ibiza")]
 			PolkadotVaultAccountId::<T>::set(self.polkadot_vault_account_id.clone());
-			#[cfg(feature = "ibiza")]
-			PolkadotCurrentProxyAccountId::<T>::set(self.polkadot_proxy_account_id.clone());
 			#[cfg(feature = "ibiza")]
 			PolkadotNetworkMetadata::<T>::set(self.polkadot_network_metadata.clone());
 			#[cfg(feature = "ibiza")]
@@ -490,16 +474,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	#[cfg(feature = "ibiza")]
-	pub fn get_current_polkadot_proxy_account() -> Option<PolkadotAccountId> {
-		PolkadotCurrentProxyAccountId::<T>::get()
-	}
-	#[cfg(feature = "ibiza")]
-	pub fn set_new_proxy_account(new_polkadot_key: PolkadotPublicKey) {
-		use sp_runtime::{traits::IdentifyAccount, MultiSigner};
-
-		let new_account = MultiSigner::Sr25519(new_polkadot_key.0).into_account();
-		PolkadotCurrentProxyAccountId::<T>::set(Some(new_account.clone()));
+	pub fn reset_polkadot_proxy_account_nonce() {
 		PolkadotProxyAccountNonce::<T>::set(0);
-		Self::deposit_event(Event::<T>::PolkadotProxyAccountUpdated(new_account));
 	}
 }
