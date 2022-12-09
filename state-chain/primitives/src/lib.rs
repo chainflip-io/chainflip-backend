@@ -44,6 +44,8 @@ pub type EthAmount = u128;
 
 pub type AssetAmount = u128;
 
+pub type BasisPoints = u16;
+
 /// Alias to the opaque account ID type for this chain, actually a `AccountId32`. This is always
 /// 32 bytes.
 pub type PolkadotAccountId = AccountId32;
@@ -116,6 +118,15 @@ impl core::fmt::Display for ForeignChainAddress {
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum AddressError {
 	InvalidAddress,
+}
+
+impl AsRef<[u8]> for ForeignChainAddress {
+	fn as_ref(&self) -> &[u8] {
+		match self {
+			ForeignChainAddress::Eth(address) => address.as_slice(),
+			ForeignChainAddress::Dot(address) => address.as_slice(),
+		}
+	}
 }
 
 impl TryFrom<ForeignChainAddress> for EthereumAddress {
