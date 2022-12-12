@@ -25,7 +25,7 @@ use cf_chains::{
 		api::PolkadotApi, Polkadot, PolkadotAccountId, PolkadotReplayProtection,
 		PolkadotTransactionData,
 	},
-	AnyChain, Chain, ChainCrypto,
+	AnyChain, Chain,
 };
 use cf_chains::{
 	eth::{
@@ -282,7 +282,7 @@ impl VaultTransitionHandler<Ethereum> for EthVaultTransitionHandler {}
 pub struct DotVaultTransitionHandler;
 #[cfg(feature = "ibiza")]
 impl VaultTransitionHandler<Polkadot> for DotVaultTransitionHandler {
-	fn on_new_vault(_new_key: <Polkadot as ChainCrypto>::AggKey) {
+	fn on_new_vault() {
 		Environment::reset_polkadot_proxy_account_nonce();
 	}
 }

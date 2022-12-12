@@ -777,7 +777,7 @@ impl<T: frame_system::Config> EgressApi<Polkadot> for T {
 }
 
 pub trait VaultTransitionHandler<C: ChainCrypto> {
-	fn on_new_vault(_new_key: C::AggKey) {}
+	fn on_new_vault() {}
 }
 
 /// Provides information about current bids.
