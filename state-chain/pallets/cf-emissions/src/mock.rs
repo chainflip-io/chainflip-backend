@@ -26,7 +26,7 @@ use cf_traits::{
 	Broadcaster, Issuance, WaivedFees,
 };
 
-use cf_primitives::FlipBalance;
+use cf_primitives::{BroadcastId, FlipBalance};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -212,7 +212,7 @@ impl MockBroadcast {
 impl Broadcaster<MockEthereum> for MockBroadcast {
 	type ApiCall = MockUpdateFlipSupply;
 
-	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) -> u32 {
+	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) -> BroadcastId {
 		Self::call(api_call)
 	}
 }

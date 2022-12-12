@@ -1,6 +1,6 @@
 use crate as pallet_cf_lp;
 use cf_chains::{eth::assets, AnyChain, Chain, Ethereum};
-use cf_primitives::{AccountRole, IntentId};
+use cf_primitives::{AccountRole, BroadcastId, IntentId};
 use cf_traits::{
 	mocks::{
 		all_batch::{MockAllBatch, MockEthEnvironment},
@@ -89,7 +89,7 @@ pub struct MockBroadcast;
 impl Broadcaster<Ethereum> for MockBroadcast {
 	type ApiCall = MockAllBatch<MockEthEnvironment>;
 
-	fn threshold_sign_and_broadcast(_api_call: Self::ApiCall) -> u32 {
+	fn threshold_sign_and_broadcast(_api_call: Self::ApiCall) -> BroadcastId {
 		1
 	}
 }

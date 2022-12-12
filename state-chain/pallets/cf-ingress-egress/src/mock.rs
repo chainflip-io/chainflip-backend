@@ -3,6 +3,7 @@ pub use cf_chains::{
 	eth::api::{EthereumApi, EthereumReplayProtection},
 	Chain, ChainAbi, ChainEnvironment,
 };
+use cf_primitives::BroadcastId;
 pub use cf_primitives::{
 	chains::{assets, Ethereum},
 	Asset, AssetAmount, EthereumAddress, ExchangeRate, ETHEREUM_ETH_ADDRESS,
@@ -85,7 +86,7 @@ pub struct MockBroadcast;
 impl Broadcaster<Ethereum> for MockBroadcast {
 	type ApiCall = MockAllBatch<MockEthEnvironment>;
 
-	fn threshold_sign_and_broadcast(_api_call: Self::ApiCall) -> u32 {
+	fn threshold_sign_and_broadcast(_api_call: Self::ApiCall) -> BroadcastId {
 		1
 	}
 }

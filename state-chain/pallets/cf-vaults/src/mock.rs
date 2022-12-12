@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 
+use cf_primitives::BroadcastId;
 use frame_support::{
 	construct_runtime, parameter_types, traits::UnfilteredDispatchable, StorageHasher,
 };
@@ -193,7 +194,7 @@ impl MockBroadcaster {
 impl Broadcaster<MockEthereum> for MockBroadcaster {
 	type ApiCall = MockSetAggKeyWithAggKey;
 
-	fn threshold_sign_and_broadcast(_api_call: Self::ApiCall) -> u32 {
+	fn threshold_sign_and_broadcast(_api_call: Self::ApiCall) -> BroadcastId {
 		Self::send_broadcast();
 		1
 	}

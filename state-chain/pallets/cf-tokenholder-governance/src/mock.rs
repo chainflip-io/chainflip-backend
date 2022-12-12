@@ -1,5 +1,6 @@
 use crate::{self as pallet_cf_tokenholder_governance};
 use cf_chains::{mocks::MockEthereum, ApiCall, ChainAbi, ChainCrypto};
+use cf_primitives::BroadcastId;
 use cf_traits::{
 	impl_mock_stake_transfer, impl_mock_waived_fees,
 	mocks::{
@@ -124,7 +125,7 @@ impl SetCommKeyWithAggKey<MockEthereum> for MockApiCalls {
 impl Broadcaster<MockEthereum> for MockBroadcaster {
 	type ApiCall = MockApiCalls;
 
-	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) -> u32 {
+	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) -> BroadcastId {
 		storage::hashed::put(&<Twox64Concat as StorageHasher>::hash, b"GOV", &api_call);
 		1
 	}
