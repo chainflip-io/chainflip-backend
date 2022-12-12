@@ -152,7 +152,10 @@ pub enum CliCommand {
 	#[clap(
 		about = "Generates the 3 key files needed to run a chainflip node (Node Key, Ethereum Key and Validator Key), then saves them to the filesystem."
 	)]
-	GenerateKeys {},
+	GenerateKeys {
+		#[clap(help = "Output path", parse(from_os_str))]
+		path: Option<PathBuf>,
+	},
 }
 
 fn account_role_parser(s: &str) -> Result<AccountRole, String> {

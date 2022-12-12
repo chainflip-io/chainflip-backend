@@ -57,7 +57,7 @@ async fn run_cli() -> Result<()> {
 		Query { block_hash } => request_block(block_hash, &cli_settings.state_chain).await,
 		VanityName { name } => api::set_vanity_name(name, &cli_settings.state_chain).await,
 		ForceRotation { id } => api::force_rotation(id, &cli_settings.state_chain).await,
-		GenerateKeys {} => generate_keys(),
+		GenerateKeys { path } => generate_keys(path),
 	}
 }
 
@@ -253,19 +253,27 @@ fn confirm_submit() -> bool {
 	}
 }
 
-fn generate_keys() -> Result<()> {
+fn generate_keys(path: Option<PathBuf>) -> Result<()> {
 	use std::fs;
 
-	// TODO: Support the custom key path/file settings.
 	const NODE_KEY_FILE_NAME: &str = "node_key_file";
 	const SIGNING_KEY_FILE_NAME: &str = "signing_key_file";
 	const ETHEREUM_KEY_FILE_NAME: &str = "ethereum_key_file";
-	const OUTPUT_PATH: &str = "/etc/chainflip/keys";
 
-	let output_path = PathBuf::from(OUTPUT_PATH);
+	let output_path = path.unwrap_or_else(|| PathBuf::from(""));
+
+	let absolute_path_string = if output_path.is_relative() {
+		std::env::current_dir()
+			.expect("Should get current directory")
+			.join(output_path.clone())
+			.to_string_lossy()
+			.to_string()
+	} else {
+		output_path.to_string_lossy().to_string()
+	};
 
 	if output_path.is_file() {
-		anyhow::bail!("Invalid keys path {}", output_path.to_string_lossy());
+		anyhow::bail!("Invalid keys path {}", absolute_path_string);
 	}
 	if !output_path.exists() {
 		std::fs::create_dir_all(output_path.clone())?
@@ -278,11 +286,11 @@ fn generate_keys() -> Result<()> {
 	if node_key_file.exists() || signing_key_file.exists() || ethereum_key_file.exists() {
 		anyhow::bail!(
 			"Key file(s) already exist, please delete them manually from {}",
-			output_path.to_string_lossy()
+			absolute_path_string
 		);
 	}
 
-	println!("Generating fresh keys for you Chainflip Node!");
+	println!("Generating fresh keys for your Chainflip Node!");
 
 	let node_key = api::generate_node_key();
 	fs::write(node_key_file, node_key.secret_key)?;
@@ -297,7 +305,7 @@ fn generate_keys() -> Result<()> {
 	println!("🔑 Your Validator key is: 0x{}", signing_key.public_key);
 	println!("🌱 Your Validator key seed phrase is: {}", signing_key_seed);
 
-	println!("Saved all secret keys to {}", output_path.to_string_lossy());
+	println!("Saved all secret keys to {}", absolute_path_string);
 
 	Ok(())
 }
