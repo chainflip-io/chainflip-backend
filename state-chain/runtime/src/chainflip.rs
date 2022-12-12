@@ -38,8 +38,8 @@ use cf_chains::{
 #[cfg(feature = "ibiza")]
 use cf_primitives::{AssetAmount, ForeignChain, ForeignChainAddress, IntentId};
 use cf_traits::{
-	BlockEmissions, Chainflip, EmergencyRotation, EpochInfo, EthEnvironmentProvider, Heartbeat,
-	Issuance, NetworkState, RewardsDistribution, RuntimeUpgrade, VaultTransitionHandler,
+	BlockEmissions, Chainflip, EmergencyRotation, EpochInfo, EpochKey, EthEnvironmentProvider,
+	Heartbeat, Issuance, NetworkState, RewardsDistribution, RuntimeUpgrade, VaultTransitionHandler,
 };
 #[cfg(feature = "ibiza")]
 use cf_traits::{EgressApi, IngressApi};
@@ -264,12 +264,15 @@ impl ChainEnvironment<cf_chains::dot::api::SystemAccounts, PolkadotAccountId> fo
 		use cf_traits::{KeyProvider, KeyState};
 		use sp_runtime::{traits::IdentifyAccount, MultiSigner};
 		match query {
-			cf_chains::dot::api::SystemAccounts::Proxy =>
-				match <PolkadotVault as KeyProvider<Polkadot>>::current_key_epoch_index() {
-					KeyState::Active { key, .. } =>
-						Some(MultiSigner::Sr25519(key.0).into_account()),
+			cf_chains::dot::api::SystemAccounts::Proxy => {
+				let EpochKey { key, key_state, .. } =
+					<PolkadotVault as KeyProvider<Polkadot>>::current_key_epoch_index();
+				match key_state {
+					KeyState::Active => Some(MultiSigner::Sr25519(key.0).into_account()),
 					_ => None,
-				},
+				}
+			},
+
 			cf_chains::dot::api::SystemAccounts::Vault => Environment::get_polkadot_vault_account(),
 		}
 	}

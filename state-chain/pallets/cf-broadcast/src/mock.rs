@@ -12,7 +12,7 @@ use cf_traits::{
 		signer_nomination::MockNominator, system_state_info::MockSystemStateInfo,
 		threshold_signer::MockThresholdSigner,
 	},
-	Chainflip, KeyState,
+	Chainflip, EpochKey, KeyState,
 };
 use frame_support::parameter_types;
 use sp_core::H256;
@@ -104,10 +104,11 @@ thread_local! {
 pub struct MockKeyProvider;
 
 impl cf_traits::KeyProvider<MockEthereum> for MockKeyProvider {
-	fn current_key_epoch_index() -> KeyState<<MockEthereum as ChainCrypto>::AggKey> {
-		KeyState::Active {
+	fn current_key_epoch_index() -> EpochKey<<MockEthereum as ChainCrypto>::AggKey> {
+		EpochKey {
 			key: if VALIDKEY.with(|cell| *cell.borrow()) { VALID_AGG_KEY } else { INVALID_AGG_KEY },
 			epoch_index: Default::default(),
+			key_state: KeyState::Active,
 		}
 	}
 }

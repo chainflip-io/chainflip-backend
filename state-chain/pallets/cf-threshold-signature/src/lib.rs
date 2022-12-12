@@ -20,7 +20,7 @@ use cf_chains::ChainCrypto;
 use cf_primitives::{AuthorityCount, CeremonyId};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, CeremonyIdProvider, Chainflip, EpochInfo,
-	KeyProvider, KeyState, ThresholdSignerNomination,
+	EpochKey, KeyProvider, KeyState, ThresholdSignerNomination,
 };
 
 use frame_support::{
@@ -651,13 +651,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					ThresholdCeremonyType::KeygenVerification,
 				)
 			} else {
+				let EpochKey { key, epoch_index, key_state } =
+					T::KeyProvider::current_key_epoch_index();
 				(
-					match T::KeyProvider::current_key_epoch_index() {
-						KeyState::Active { key, epoch_index: current_epoch_index } =>
+					match key_state {
+						KeyState::Active =>
 							if let Some(nominees) =
 								T::ThresholdSignerNomination::threshold_nomination_with_seed(
 									(ceremony_id, attempt_count),
-									current_epoch_index,
+									epoch_index,
 								) {
 								Ok((key.into(), nominees))
 							} else {

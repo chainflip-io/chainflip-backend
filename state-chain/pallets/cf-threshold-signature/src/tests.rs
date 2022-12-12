@@ -6,7 +6,8 @@ use crate::{
 };
 use cf_chains::mocks::MockEthereum;
 use cf_traits::{
-	mocks::signer_nomination::MockNominator, AsyncResult, Chainflip, KeyProvider, ThresholdSigner,
+	mocks::signer_nomination::MockNominator, AsyncResult, Chainflip, EpochKey, KeyProvider,
+	ThresholdSigner,
 };
 use frame_support::{
 	assert_err, assert_noop, assert_ok,
@@ -249,10 +250,10 @@ fn keygen_verification_ceremony_calls_callback_on_failure() {
 		.build()
 		.execute_with(|| {
 			const PAYLOAD: &[u8; 4] = b"OHAI";
-			let current_key_id = MockKeyProvider::current_key_epoch_index().unwrap_key().into();
+			let EpochKey { key: current_key_id, .. } = MockKeyProvider::current_key_epoch_index();
 			let (request_id, _) = EthereumThresholdSigner::request_keygen_verification_signature(
 				*PAYLOAD,
-				current_key_id,
+				current_key_id.into(),
 				NOMINEES.into_iter().collect(),
 			);
 			assert_ok!(EthereumThresholdSigner::register_callback(
@@ -483,7 +484,7 @@ mod unsigned_validation {
 
 				let (_request_id, ceremony_id) =
 					<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(PAYLOAD);
-				let current_key = MockKeyProvider::current_key_epoch_index().unwrap_key();
+				let EpochKey { key: current_key, .. } = MockKeyProvider::current_key_epoch_index();
 
 				assert!(
 					Test::validate_unsigned(
@@ -492,9 +493,8 @@ mod unsigned_validation {
 							.into(),
 					)
 					.is_ok(),
-					"Validation Failed: {:?} / {:?} / {:?}",
+					"Validation Failed: {:?} / {:?}",
 					MockKeyProvider::current_key_epoch_index(),
-					current_key.clone(),
 					current_key
 				);
 			});
@@ -571,7 +571,7 @@ mod failure_reporting {
 	) -> CeremonyContext<Test, Instance1> {
 		const PAYLOAD: <MockEthereum as ChainCrypto>::Payload = *b"OHAI";
 		MockEpochInfo::set_authorities(Vec::from_iter(validator_set));
-		let current_key_id = MockKeyProvider::current_key_epoch_index().unwrap_key();
+		let EpochKey { key: current_key_id, .. } = MockKeyProvider::current_key_epoch_index();
 		CeremonyContext::<Test, Instance1> {
 			request_context: RequestContext { request_id: 1, attempt_count: 0, payload: PAYLOAD },
 			threshold_ceremony_type: ThresholdCeremonyType::Standard,

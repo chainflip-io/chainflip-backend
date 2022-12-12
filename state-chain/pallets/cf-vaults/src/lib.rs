@@ -7,7 +7,7 @@ use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex, GENESIS_EPOCH};
 use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, Broadcaster, CeremonyIdProvider, Chainflip,
-	CurrentEpochIndex, EpochTransitionHandler, KeyProvider, KeyState, SystemStateManager,
+	CurrentEpochIndex, EpochKey, EpochTransitionHandler, KeyProvider, KeyState, SystemStateManager,
 	ThresholdSigner, VaultKeyWitnessedHandler, VaultRotator, VaultStatus, VaultTransitionHandler,
 };
 use frame_support::pallet_prelude::*;
@@ -921,15 +921,17 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 }
 
 impl<T: Config<I>, I: 'static> KeyProvider<T::Chain> for Pallet<T, I> {
-	fn current_key_epoch_index() -> KeyState<<T::Chain as ChainCrypto>::AggKey> {
+	fn current_key_epoch_index() -> EpochKey<<T::Chain as ChainCrypto>::AggKey> {
 		let current_vault_epoch_and_state = CurrentVaultEpochAndState::<T, I>::get();
-		match current_vault_epoch_and_state.vault_state {
-			VaultState::Active => KeyState::Active {
+
+		EpochKey {
 				key: Vaults::<T, I>::get(current_vault_epoch_and_state.epoch_index).expect("Key must exist if CurrentVaultEpochAndState exists since they get set at the same place: set_next_vault()").public_key,
 				epoch_index: current_vault_epoch_and_state.epoch_index,
-			},
-			VaultState::Unavailable => KeyState::Unavailable,
-		}
+				key_state: match current_vault_epoch_and_state.vault_state {
+					VaultState::Active => KeyState::Active,
+					VaultState::Unavailable => KeyState::Unavailable,
+				}
+			}
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]

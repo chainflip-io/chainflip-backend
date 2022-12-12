@@ -13,7 +13,7 @@ use cf_traits::{
 		ceremony_id_provider::MockCeremonyIdProvider, signer_nomination::MockNominator,
 		system_state_info::MockSystemStateInfo,
 	},
-	AsyncResult, Chainflip, KeyState, ThresholdSigner,
+	AsyncResult, Chainflip, EpochKey, KeyState, ThresholdSigner,
 };
 use codec::{Decode, Encode};
 use frame_support::{
@@ -142,8 +142,8 @@ pub const MOCK_AGG_KEY: [u8; 4] = *b"AKEY";
 pub struct MockKeyProvider;
 
 impl cf_traits::KeyProvider<MockEthereum> for MockKeyProvider {
-	fn current_key_epoch_index() -> KeyState<<MockEthereum as ChainCrypto>::AggKey> {
-		KeyState::Active { key: MOCK_AGG_KEY, epoch_index: Default::default() }
+	fn current_key_epoch_index() -> EpochKey<<MockEthereum as ChainCrypto>::AggKey> {
+		EpochKey { key: MOCK_AGG_KEY, epoch_index: Default::default(), key_state: KeyState::Active }
 	}
 }
 

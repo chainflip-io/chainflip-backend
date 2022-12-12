@@ -370,29 +370,24 @@ pub trait ThresholdSignerNomination {
 }
 
 #[derive(Default, Debug, TypeInfo, Decode, Encode, Clone, Copy, PartialEq, Eq)]
-pub enum KeyState<Key> {
-	Active {
-		key: Key,
-		epoch_index: EpochIndex,
-	},
+pub enum KeyState {
+	Active,
 	// We are currently transitioning to a new key or the key doesn't yet exist.
 	#[default]
 	Unavailable,
 }
 
-impl<Key> KeyState<Key> {
-	pub fn unwrap_key(self) -> Key {
-		match self {
-			Self::Active { key: key_id, epoch_index: _ } => key_id,
-			Self::Unavailable => panic!("KeyState is Unavailable!"),
-		}
-	}
+#[derive(Default, Debug, TypeInfo, Decode, Encode, Clone, Copy, PartialEq, Eq)]
+pub struct EpochKey<Key> {
+	pub key: Key,
+	pub epoch_index: EpochIndex,
+	pub key_state: KeyState,
 }
 
 /// Provides the currently valid key for multisig ceremonies.
 pub trait KeyProvider<C: ChainCrypto> {
 	/// Get the chain's current agg key and the epoch index for the current key.
-	fn current_key_epoch_index() -> KeyState<C::AggKey>;
+	fn current_key_epoch_index() -> EpochKey<C::AggKey>;
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_key(_key: C::AggKey) {
