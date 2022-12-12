@@ -1,11 +1,15 @@
 use crate as pallet_cf_lp;
-use cf_chains::{eth::assets, AnyChain, Chain, ChainEnvironment, Ethereum};
-use cf_primitives::{AccountRole, EthereumAddress, IntentId, ETHEREUM_ETH_ADDRESS};
+use cf_chains::{eth::assets, AnyChain, Chain, Ethereum};
+use cf_primitives::{AccountRole, IntentId};
 use cf_traits::{
 	mocks::{
-		all_batch::MockAllBatch, bid_info::MockBidInfo, egress_handler::MockEgressHandler,
-		ensure_origin_mock::NeverFailingOriginCheck, ingress_handler::MockIngressHandler,
-		staking_info::MockStakingInfo, system_state_info::MockSystemStateInfo,
+		all_batch::{MockAllBatch, MockEthEnvironment},
+		bid_info::MockBidInfo,
+		egress_handler::MockEgressHandler,
+		ensure_origin_mock::NeverFailingOriginCheck,
+		ingress_handler::MockIngressHandler,
+		staking_info::MockStakingInfo,
+		system_state_info::MockSystemStateInfo,
 	},
 	AddressDerivationApi, Broadcaster,
 };
@@ -24,7 +28,6 @@ type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 type AccountId = u64;
 
-pub const ETHEREUM_FLIP_ADDRESS: EthereumAddress = [0x00; 20];
 pub struct MockAddressDerivation;
 
 impl AddressDerivationApi<Ethereum> for MockAddressDerivation {
@@ -46,6 +49,7 @@ frame_support::construct_runtime!(
 		System: frame_system,
 		AccountRoles: pallet_cf_account_roles,
 		LiquidityProvider: pallet_cf_lp,
+		LiquidityPools: pallet_cf_pools,
 	}
 );
 
@@ -83,23 +87,9 @@ impl system::Config for Test {
 
 pub struct MockBroadcast;
 impl Broadcaster<Ethereum> for MockBroadcast {
-	type ApiCall = MockAllBatch;
+	type ApiCall = MockAllBatch<MockEthEnvironment>;
 
 	fn threshold_sign_and_broadcast(_api_call: Self::ApiCall) {}
-}
-
-pub struct MockEthEnvironment;
-
-impl ChainEnvironment<<Ethereum as Chain>::ChainAsset, <Ethereum as Chain>::ChainAccount>
-	for MockEthEnvironment
-{
-	fn lookup(asset: <Ethereum as Chain>::ChainAsset) -> Option<<Ethereum as Chain>::ChainAccount> {
-		Some(match asset {
-			assets::eth::Asset::Eth => ETHEREUM_ETH_ADDRESS.into(),
-			assets::eth::Asset::Flip => ETHEREUM_FLIP_ADDRESS.into(),
-			_ => todo!(),
-		})
-	}
 }
 
 impl cf_traits::Chainflip for Test {
@@ -120,11 +110,14 @@ impl pallet_cf_account_roles::Config for Test {
 	type WeightInfo = ();
 }
 
+impl pallet_cf_pools::Config for Test {}
+
 impl crate::Config for Test {
 	type Event = Event;
 	type AccountRoleRegistry = AccountRoles;
 	type IngressHandler = MockIngressHandler<AnyChain, Self>;
 	type EgressHandler = MockEgressHandler<AnyChain>;
+	type LiquidityPoolApi = LiquidityPools;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 }
 

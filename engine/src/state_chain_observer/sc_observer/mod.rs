@@ -2,7 +2,7 @@
 mod tests;
 
 use anyhow::{anyhow, Context};
-use cf_chains::eth::Ethereum;
+use cf_chains::{eth::Ethereum, ChainCrypto};
 use cf_primitives::CeremonyId;
 use futures::{FutureExt, Stream, StreamExt};
 use pallet_cf_vaults::KeygenError;
@@ -20,6 +20,12 @@ use std::{
 };
 use tokio::sync::{mpsc::UnboundedSender, watch};
 
+#[cfg(feature = "ibiza")]
+use cf_chains::{dot, Polkadot};
+
+#[cfg(feature = "ibiza")]
+use state_chain_runtime::PolkadotInstance;
+
 use crate::{
 	eth::{rpc::EthRpcApi, EthBroadcaster},
 	logging::COMPONENT_KEY,
@@ -27,7 +33,7 @@ use crate::{
 		client::{KeygenFailureReason, MultisigClientApi},
 		eth::EthSigning,
 		polkadot::PolkadotSigning,
-		KeyId, MessageHash,
+		CryptoScheme, KeyId, SigningPayload,
 	},
 	p2p::{PeerInfo, PeerUpdate},
 	state_chain_observer::client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi},
@@ -36,9 +42,12 @@ use crate::{
 };
 
 #[cfg(feature = "ibiza")]
+use crate::dot::{rpc::DotRpcApi, DotBroadcaster};
+
+#[cfg(feature = "ibiza")]
 use sp_core::H160;
 
-async fn handle_keygen_request<'a, StateChainClient, MultisigClient>(
+async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 	scope: &Scope<'a, anyhow::Error>,
 	multisig_client: &'a MultisigClient,
 	state_chain_client: Arc<StateChainClient>,
@@ -46,8 +55,12 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient>(
 	keygen_participants: BTreeSet<AccountId32>,
 	logger: slog::Logger,
 ) where
-	MultisigClient: MultisigClientApi<EthSigning>,
+	MultisigClient: MultisigClientApi<C>,
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
+    state_chain_runtime::Runtime: pallet_cf_vaults::Config<I>,
+	C: CryptoScheme<AggKey = <<state_chain_runtime::Runtime as pallet_cf_vaults::Config<I>>::Chain as ChainCrypto>::AggKey>,
+	I: 'static + Sync + Send,
+	state_chain_runtime::Call: std::convert::From<pallet_cf_vaults::Call<state_chain_runtime::Runtime, I>>,
 {
 	if keygen_participants.contains(&state_chain_client.account_id()) {
 		// We initiate keygen outside of the spawn to avoid requesting ceremonies out of order
@@ -56,15 +69,10 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient>(
 		scope.spawn(async move {
 			let _result = state_chain_client
 				.submit_signed_extrinsic(
-					pallet_cf_vaults::Call::<_, EthereumInstance>::report_keygen_outcome {
+					pallet_cf_vaults::Call::<state_chain_runtime::Runtime, I>::report_keygen_outcome {
 						ceremony_id,
 						reported_outcome: keygen_result_future
 							.await
-							.map(|point| {
-								cf_chains::eth::AggKey::from_pubkey_compressed(
-									point.get_element().serialize(),
-								)
-							})
 							.map_err(|(bad_account_ids, reason)| {
 								if let KeygenFailureReason::KeyNotCompatible = reason {
 									KeygenError::Incompatible
@@ -85,46 +93,59 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient>(
 	}
 }
 
-async fn handle_signing_request<'a, StateChainClient, MultisigClient>(
+async fn handle_signing_request<'a, StateChainClient, MultisigClient, C, I>(
 	scope: &Scope<'a, anyhow::Error>,
 	multisig_client: &'a MultisigClient,
 	state_chain_client: Arc<StateChainClient>,
 	ceremony_id: CeremonyId,
 	key_id: KeyId,
 	signers: BTreeSet<AccountId>,
-	data: MessageHash,
+	payload: SigningPayload,
 	logger: slog::Logger,
 ) where
-	MultisigClient: MultisigClientApi<EthSigning>,
+	MultisigClient: MultisigClientApi<C>,
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
+	C: CryptoScheme,
+	I: 'static + Sync + Send,
+    state_chain_runtime::Runtime: pallet_cf_threshold_signature::Config<I>,
+	state_chain_runtime::Call: std::convert::From<pallet_cf_threshold_signature::Call<state_chain_runtime::Runtime, I>>,
+	<<state_chain_runtime::Runtime as pallet_cf_threshold_signature::Config<I>>::TargetChain as ChainCrypto>::ThresholdSignature: From<C::Signature>,
 {
 	if signers.contains(&state_chain_client.account_id()) {
 		// We initiate signing outside of the spawn to avoid requesting ceremonies out of order
 		let signing_result_future =
-			multisig_client.initiate_signing(ceremony_id, key_id, signers, data);
+			multisig_client.initiate_signing(ceremony_id, key_id, signers, payload);
 		scope.spawn(async move {
 			match signing_result_future.await {
 				Ok(signature) => {
-					let _result = state_chain_client
-						.submit_unsigned_extrinsic(
-							pallet_cf_threshold_signature::Call::<_, EthereumInstance>::signature_success {
-								ceremony_id,
-								signature: signature.into(),
-							},
-							&logger,
-						)
-						.await;
+					let _result =
+						state_chain_client
+							.submit_unsigned_extrinsic(
+								pallet_cf_threshold_signature::Call::<
+									state_chain_runtime::Runtime,
+									I,
+								>::signature_success {
+									ceremony_id,
+									signature: signature.into(),
+								},
+								&logger,
+							)
+							.await;
 				},
 				Err((bad_account_ids, _reason)) => {
-					let _result = state_chain_client
-						.submit_signed_extrinsic(
-							pallet_cf_threshold_signature::Call::<_, EthereumInstance>::report_signature_failed {
-								id: ceremony_id,
-								offenders: BTreeSet::from_iter(bad_account_ids),
-							},
-							&logger,
-						)
-						.await;
+					let _result =
+						state_chain_client
+							.submit_signed_extrinsic(
+								pallet_cf_threshold_signature::Call::<
+									state_chain_runtime::Runtime,
+									I,
+								>::report_signature_failed {
+									id: ceremony_id,
+									offenders: BTreeSet::from_iter(bad_account_ids),
+								},
+								&logger,
+							)
+							.await;
 				},
 			}
 			Ok(())
@@ -171,12 +192,14 @@ pub async fn start<
 	StateChainClient,
 	BlockStream,
 	EthRpc,
+	#[cfg(feature = "ibiza")] DotRpc: DotRpcApi + Send + Sync + 'static,
 	EthMultisigClient,
 	PolkadotMultisigClient,
 >(
 	state_chain_client: Arc<StateChainClient>,
 	sc_block_stream: BlockStream,
 	eth_broadcaster: EthBroadcaster<EthRpc>,
+	#[cfg(feature = "ibiza")] dot_broadcaster: DotBroadcaster<DotRpc>,
 	eth_multisig_client: EthMultisigClient,
 	dot_multisig_client: PolkadotMultisigClient,
 	peer_update_sender: UnboundedSender<PeerUpdate>,
@@ -188,6 +211,7 @@ pub async fn start<
 	#[cfg(feature = "ibiza")] eth_monitor_usdc_ingress_sender: tokio::sync::mpsc::UnboundedSender<
 		H160,
 	>,
+	#[cfg(feature = "ibiza")] dot_epoch_start_sender: async_broadcast::Sender<EpochStart<Polkadot>>,
 	cfe_settings_update_sender: watch::Sender<CfeSettings>,
 	initial_block_hash: H256,
 	logger: slog::Logger,
@@ -220,6 +244,8 @@ where
 
         let start_epoch = |block_hash: H256, index: u32, current: bool, participant: bool| {
             let eth_epoch_start_sender = &eth_epoch_start_sender;
+            #[cfg(feature = "ibiza")]
+            let dot_epoch_start_sender = &dot_epoch_start_sender;
             let state_chain_client = &state_chain_client;
 
             async move {
@@ -236,7 +262,33 @@ where
                         .active_from_block,
                     current,
                     participant,
+                    data: (),
                 }).await.unwrap();
+
+                #[cfg(feature = "ibiza")]
+                {
+                    // It is possible for there not to be a Polkadot vault.
+                    // At genesis there is no Polkadot vault, so we want to check that the vault exists
+                    // before we start witnessing.
+                    if let Some(vault) = state_chain_client
+                    .storage_map_entry::<pallet_cf_vaults::Vaults<
+                        state_chain_runtime::Runtime,
+                        state_chain_runtime::PolkadotInstance,
+                    >>(block_hash, &index)
+                    .await
+                    .unwrap() {
+                        dot_epoch_start_sender.broadcast(EpochStart::<Polkadot> {
+                            epoch_index: index,
+                            block_number: vault.active_from_block,
+                            current,
+                            participant,
+                            data: dot::EpochStartData {
+                                vault_account: state_chain_client.storage_value::<pallet_cf_environment::PolkadotVaultAccountId<state_chain_runtime::Runtime>>(block_hash).await.unwrap().unwrap()
+                            }
+                        }).await.unwrap();
+                    }
+                }
+
             }
         };
 
@@ -341,9 +393,28 @@ where
                                         // Ceremony id tracking is global, so update all other clients
                                         dot_multisig_client.update_latest_ceremony_id(ceremony_id);
 
-                                        handle_keygen_request(
+                                        handle_keygen_request::<_, _, _, EthereumInstance>(
                                             scope,
                                             &eth_multisig_client,
+                                            state_chain_client.clone(),
+                                            ceremony_id,
+                                            keygen_participants,
+                                            logger.clone()
+                                        ).await;
+                                    }
+                                    #[cfg(feature = "ibiza")]
+                                    state_chain_runtime::Event::PolkadotVault(
+                                        pallet_cf_vaults::Event::KeygenRequest(
+                                            ceremony_id,
+                                            keygen_participants,
+                                        ),
+                                    ) => {
+                                        // Ceremony id tracking is global, so update all other clients
+                                        eth_multisig_client.update_latest_ceremony_id(ceremony_id);
+
+                                        handle_keygen_request::<_, _, _, PolkadotInstance>(
+                                            scope,
+                                            &dot_multisig_client,
                                             state_chain_client.clone(),
                                             ceremony_id,
                                             keygen_participants,
@@ -362,14 +433,38 @@ where
                                         // Ceremony id tracking is global, so update all other clients
                                         dot_multisig_client.update_latest_ceremony_id(ceremony_id);
 
-                                        handle_signing_request(
+                                        handle_signing_request::<_, _, _, EthereumInstance>(
                                                 scope,
                                                 &eth_multisig_client,
                                             state_chain_client.clone(),
                                             ceremony_id,
                                             KeyId(key_id),
                                             signatories,
-                                            MessageHash(payload.to_fixed_bytes()),
+                                            SigningPayload(payload.0.to_vec()),
+                                            logger.clone(),
+                                        ).await;
+                                    }
+                                    #[cfg(feature = "ibiza")]
+                                    state_chain_runtime::Event::PolkadotThresholdSigner(
+                                        pallet_cf_threshold_signature::Event::ThresholdSignatureRequest{
+                                            request_id: _,
+                                            ceremony_id,
+                                            key_id,
+                                            signatories,
+                                            payload,
+                                        },
+                                    ) => {
+                                        // Ceremony id tracking is global, so update all other clients
+                                        eth_multisig_client.update_latest_ceremony_id(ceremony_id);
+
+                                        handle_signing_request::<_, _, PolkadotSigning, PolkadotInstance>(
+                                                scope,
+                                                &dot_multisig_client,
+                                            state_chain_client.clone(),
+                                            ceremony_id,
+                                            KeyId(key_id),
+                                            signatories,
+                                            SigningPayload(payload.0.to_vec()),
                                             logger.clone(),
                                         ).await;
                                     }
@@ -439,6 +534,20 @@ where
                                                 ).await;
                                             }
                                         }
+                                    }
+                                    #[cfg(feature = "ibiza")]
+                                    state_chain_runtime::Event::PolkadotBroadcaster(
+                                        pallet_cf_broadcast::Event::TransactionBroadcastRequest {
+                                            broadcast_attempt_id,
+                                            nominee,
+                                            unsigned_tx,
+                                        },
+                                    ) if nominee == account_id => {
+                                        let _result = dot_broadcaster.send(unsigned_tx.encoded_extrinsic).await
+                                        .map(|_| slog::info!(logger, "Polkadot transmission successful: {broadcast_attempt_id}"))
+                                        .map_err(|error| {
+                                            slog::error!(logger, "Error: {:?}", error);
+                                        });
                                     }
                                     state_chain_runtime::Event::Environment(
                                         pallet_cf_environment::Event::CfeSettingsUpdated {

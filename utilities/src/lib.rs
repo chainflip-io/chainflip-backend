@@ -90,7 +90,7 @@ fn check_threshold_calculation() {
 	assert_eq!(failure_threshold_from_share_count(4), 2);
 }
 
-pub fn clean_hex_address<const LEN: usize>(address_str: &str) -> Result<[u8; LEN], &str> {
+pub fn clean_hex_address<const LEN: usize>(address_str: &str) -> Result<[u8; LEN], &'static str> {
 	let address_hex_str = match address_str.strip_prefix("0x") {
 		Some(address_stripped) => address_stripped,
 		None => address_str,
@@ -104,11 +104,11 @@ pub fn clean_hex_address<const LEN: usize>(address_str: &str) -> Result<[u8; LEN
 	Ok(address)
 }
 
-pub fn clean_eth_address(dirty_eth_address: &str) -> Result<[u8; 20], &str> {
+pub fn clean_eth_address(dirty_eth_address: &str) -> Result<[u8; 20], &'static str> {
 	clean_hex_address(dirty_eth_address)
 }
 
-pub fn clean_dot_address(dirty_dot_address: &str) -> Result<[u8; 32], &str> {
+pub fn clean_dot_address(dirty_dot_address: &str) -> Result<[u8; 32], &'static str> {
 	clean_hex_address(dirty_dot_address)
 }
 

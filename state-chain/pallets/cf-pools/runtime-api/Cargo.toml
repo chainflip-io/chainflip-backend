@@ -1,0 +1,25 @@
+[package]
+name = "pallet-cf-pools-runtime-api"
+version = '0.1.0'
+authors = ['Chainflip Team <https://github.com/chainflip-io>']
+description = 'Chainflip Pools Runtime Api.'
+edition = '2021'
+homepage = 'https://chainflip.io'
+license = '<TODO>'
+publish = false
+repository = 'https://github.com/chainflip-io/chainflip-backend'
+
+[dependencies]
+cf-primitives = {path = "../../../../state-chain/primitives", default-features = false}
+
+[dependencies.sp-api]
+default-features = false
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'chainflip-monthly-2022-06+01'
+
+[features]
+default = ["std"]
+std = [
+    'cf-primitives/std',
+	"sp-api/std",
+]

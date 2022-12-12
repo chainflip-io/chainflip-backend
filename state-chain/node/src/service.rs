@@ -13,6 +13,9 @@ use sp_consensus_aura::sr25519::AuthorityPair as AuraPair;
 use state_chain_runtime::{self, opaque::Block, RuntimeApi};
 use std::{marker::PhantomData, sync::Arc, time::Duration};
 
+#[cfg(feature = "ibiza")]
+use custom_rpc::{PoolsApiServer, PoolsRpc};
+
 // Our native executor instance.
 pub struct ExecutorDispatch;
 
@@ -277,6 +280,12 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 
 				// Implement custom RPC extensions
 				module.merge(CustomApiServer::into_rpc(CustomRpc {
+					client: client.clone(),
+					_phantom: PhantomData::default(),
+				}))?;
+
+				#[cfg(feature = "ibiza")]
+				module.merge(PoolsApiServer::into_rpc(PoolsRpc {
 					client: client.clone(),
 					_phantom: PhantomData::default(),
 				}))?;

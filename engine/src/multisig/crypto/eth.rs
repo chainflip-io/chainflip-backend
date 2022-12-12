@@ -1,4 +1,4 @@
-use crate::multisig::crypto::ECScalar;
+use crate::multisig::{crypto::ECScalar, SigningPayload};
 
 use super::{ChainTag, CryptoScheme, ECPoint, Verifiable};
 
@@ -28,14 +28,18 @@ impl From<EthSchnorrSignature> for cf_chains::eth::SchnorrVerificationComponents
 }
 
 impl Verifiable for EthSchnorrSignature {
-	fn verify(&self, key_id: &crate::multisig::KeyId, message: &[u8; 32]) -> anyhow::Result<()> {
+	fn verify(
+		&self,
+		key_id: &crate::multisig::KeyId,
+		payload: &SigningPayload,
+	) -> anyhow::Result<()> {
 		// Get the aggkey
 		let pk_ser: &[u8; 33] = key_id.0[..].try_into().unwrap();
 		let agg_key = cf_chains::eth::AggKey::from_pubkey_compressed(*pk_ser);
 
 		// Verify the signature with the aggkey
 		agg_key
-			.verify(message, &self.clone().into())
+			.verify(payload.0.as_slice().try_into().unwrap(), &self.clone().into())
 			.map_err(|e| anyhow::anyhow!("Failed to verify signature: {:?}", e))?;
 
 		Ok(())
@@ -48,6 +52,7 @@ pub struct EthSigning {}
 impl CryptoScheme for EthSigning {
 	type Point = Point;
 	type Signature = EthSchnorrSignature;
+	type AggKey = cf_chains::eth::AggKey;
 
 	const NAME: &'static str = "Ethereum";
 	const CHAIN_TAG: ChainTag = ChainTag::Ethereum;
@@ -60,10 +65,12 @@ impl CryptoScheme for EthSigning {
 	fn build_challenge(
 		pubkey: Self::Point,
 		nonce_commitment: Self::Point,
-		msg_hash: &[u8; 32],
+		payload: &SigningPayload,
 	) -> Scalar {
 		use crate::eth::utils::pubkey_to_eth_addr;
 		use cf_chains::eth::AggKey;
+
+		let msg_hash: &[u8; 32] = payload.0.as_slice().try_into().unwrap();
 
 		let e = AggKey::from_pubkey_compressed(pubkey.get_element().serialize())
 			.message_challenge(msg_hash, &pubkey_to_eth_addr(nonce_commitment.get_element()));
@@ -89,11 +96,15 @@ impl CryptoScheme for EthSigning {
 		Point::from_scalar(signature_response) == *commitment - (*y_i) * challenge * lambda_i
 	}
 
-	fn is_pubkey_compatible(pubkey: &Self::Point) -> bool {
-		// Check if the public key's x coordinate is smaller than "half secp256k1's order",
-		// which is a requirement imposed by the Key Manager contract
+	fn agg_key(pubkey: &Self::Point) -> Self::AggKey {
 		let pk = pubkey.get_element();
-		let pubkey = cf_chains::eth::AggKey::from_pubkey_compressed(pk.serialize());
+		cf_chains::eth::AggKey::from_pubkey_compressed(pk.serialize())
+	}
+
+	/// Check if the public key's x coordinate is smaller than "half secp256k1's order",
+	/// which is a requirement imposed by the Key Manager contract.
+	fn is_pubkey_compatible(pubkey: &Self::Point) -> bool {
+		let pubkey = Self::agg_key(pubkey);
 
 		let x = BigUint::from_bytes_be(&pubkey.pub_key_x);
 		let half_order = BigUint::from_bytes_be(&CURVE_ORDER) / 2u32 + 1u32;

@@ -16,7 +16,7 @@ use crate::{
 	},
 };
 #[cfg(feature = "ibiza")]
-use cf_chains::{dot, Polkadot};
+use cf_chains::{dot, dot::api::PolkadotApi, Polkadot};
 use cf_chains::{
 	eth,
 	eth::{api::register_claim::RegisterClaim, Ethereum},
@@ -67,7 +67,9 @@ use sp_std::prelude::*;
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
-pub use cf_primitives::{BlockNumber, FlipBalance, ForeignChainAddress};
+pub use cf_primitives::{
+	Asset, AssetAmount, BlockNumber, ExchangeRate, FlipBalance, ForeignChainAddress,
+};
 pub use cf_traits::{EpochInfo, EthEnvironmentProvider, QualifyNode, SessionKeysRegistered};
 
 pub use chainflip::chain_instances::*;
@@ -214,6 +216,12 @@ impl pallet_cf_validator::Config for Runtime {
 impl pallet_cf_environment::Config for Runtime {
 	type Event = Event;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+	#[cfg(feature = "ibiza")]
+	type CreatePolkadotVault = PolkadotApi<DotEnvironment>;
+	#[cfg(feature = "ibiza")]
+	type PolkadotBroadcaster = PolkadotBroadcaster;
+	#[cfg(feature = "ibiza")]
+	type PolkadotVaultKeyWitnessedHandler = PolkadotVault;
 	type WeightInfo = pallet_cf_environment::weights::PalletWeight<Runtime>;
 }
 
@@ -222,7 +230,7 @@ impl pallet_cf_swapping::Config for Runtime {
 	type Event = Event;
 	type IngressHandler = chainflip::AnyChainIngressEgressHandler;
 	type EgressHandler = chainflip::AnyChainIngressEgressHandler;
-	type SwappingApi = ();
+	type SwappingApi = LiquidityPools;
 	type AccountRoleRegistry = AccountRoles;
 	type WeightInfo = pallet_cf_swapping::weights::PalletWeight<Runtime>;
 }
@@ -283,23 +291,6 @@ impl pallet_cf_ingress_egress::Config<EthereumInstance> for Runtime {
 }
 
 #[cfg(feature = "ibiza")]
-mod polkdadot_dummy {
-	use cf_chains::dot::api::PolkadotApi;
-
-	use super::*;
-
-	pub struct DummyBroadcaster;
-
-	impl cf_traits::Broadcaster<Polkadot> for DummyBroadcaster {
-		type ApiCall = PolkadotApi<chainflip::DotEnvironment>;
-
-		fn threshold_sign_and_broadcast(_api_call: Self::ApiCall) {
-			todo!("Configure a real broadcaster for polkadot.")
-		}
-	}
-}
-
-#[cfg(feature = "ibiza")]
 impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
 	type Event = Event;
 	type TargetChain = Polkadot;
@@ -307,10 +298,12 @@ impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
 	type LpProvisioning = LiquidityProvider;
 	type SwapIntentHandler = Swapping;
 	type AllBatch = dot::api::PolkadotApi<chainflip::DotEnvironment>;
-	type Broadcaster = polkdadot_dummy::DummyBroadcaster;
+	type Broadcaster = PolkadotBroadcaster;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 }
+#[cfg(feature = "ibiza")]
+impl pallet_cf_pools::Config for Runtime {}
 
 #[cfg(feature = "ibiza")]
 impl pallet_cf_lp::Config for Runtime {
@@ -318,6 +311,7 @@ impl pallet_cf_lp::Config for Runtime {
 	type AccountRoleRegistry = AccountRoles;
 	type IngressHandler = chainflip::AnyChainIngressEgressHandler;
 	type EgressHandler = chainflip::AnyChainIngressEgressHandler;
+	type LiquidityPoolApi = LiquidityPools;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 }
 
@@ -750,6 +744,7 @@ construct_runtime!(
 		LiquidityProvider: pallet_cf_lp,
 		EthereumIngressEgress: pallet_cf_ingress_egress::<Instance1>,
 		PolkadotIngressEgress: pallet_cf_ingress_egress::<Instance2>,
+		LiquidityPools: pallet_cf_pools,
 	}
 );
 
@@ -850,7 +845,7 @@ impl_runtime_apis! {
 			Validator::is_auction_phase()
 		}
 		fn cf_eth_flip_token_address() -> [u8; 20] {
-			Environment::flip_token_address()
+			Environment::token_address(Asset::Flip).expect("FLIP token address should exist")
 		}
 		fn cf_eth_stake_manager_address() -> [u8; 20] {
 			Environment::stake_manager_address()
@@ -997,6 +992,16 @@ impl_runtime_apis! {
 			}
 		}
 	}
+
+	#[cfg(feature = "ibiza")]
+	impl pallet_cf_pools_runtime_api::PoolsApi<Block> for Runtime {
+		fn cf_swap_rate(asset: &Asset, input_amount: AssetAmount) -> ExchangeRate {
+			use cf_traits::LiquidityPoolApi;
+
+			LiquidityPools::swap_rate(asset, input_amount)
+		}
+	}
+
 	// END custom runtime APIs
 
 	impl sp_api::Core<Block> for Runtime {

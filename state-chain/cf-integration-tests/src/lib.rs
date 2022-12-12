@@ -15,6 +15,9 @@ mod governance;
 mod new_epoch;
 mod staking;
 
+#[cfg(feature = "ibiza")]
+mod swapping;
+
 use frame_support::{assert_noop, assert_ok, traits::OnInitialize};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::crypto::{Pair, Public};

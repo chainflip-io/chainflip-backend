@@ -127,6 +127,10 @@ features = ['derive', 'full']
 package = 'parity-scale-codec'
 version = '3.0.0'
 
+[dependencies.scale-info]
+features = ['derive']
+version = '2.1.1'
+
 [dependencies.frame-metadata]
 version = "15.0.0"
 
@@ -177,8 +181,10 @@ substrate-build-script-utils = { git = "https://github.com/chainflip-io/substrat
 [features]
 integration-test = []
 ibiza = [
-    'pallet-cf-ingress-egress',
-    'state-chain-runtime/ibiza',
     'cf-chains/ibiza',
     'chainflip-node/ibiza',
+    'pallet-cf-environment/ibiza',
+    'pallet-cf-ingress-egress',
+    'state-chain-runtime/ibiza',
+    "custom-rpc/ibiza",
 ]

@@ -159,7 +159,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 	/// and our share of signature response, which we broadcast to other parties.
 	fn init(&mut self) -> DataToSend<Self::Message> {
 		let data = DataToSend::Broadcast(signing_detail::generate_local_sig::<Crypto>(
-			&self.signing_common.data.0,
+			&self.signing_common.payload,
 			&self.signing_common.key.key_share,
 			&self.nonces,
 			&self.commitments,
@@ -246,7 +246,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 			.collect();
 
 		match signing_detail::aggregate_signature::<Crypto>(
-			&self.signing_common.data.0,
+			&self.signing_common.payload,
 			all_idxs,
 			self.signing_common.key.get_public_key(),
 			&pubkeys,
