@@ -10,6 +10,7 @@ mod mock;
 mod tests;
 
 pub mod weights;
+use cf_primitives::BroadcastId;
 pub use weights::WeightInfo;
 
 use cf_chains::{ApiCall, Chain, ChainAbi, ChainCrypto, FeeRefundCalculator, TransactionBuilder};
@@ -28,9 +29,6 @@ use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use scale_info::TypeInfo;
 use sp_std::{marker::PhantomData, prelude::*};
-
-/// A unique id for each broadcast.
-pub type BroadcastId = u32;
 
 /// The number of broadcast attempts that were made before this one.
 pub type AttemptCount = u32;

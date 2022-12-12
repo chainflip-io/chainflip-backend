@@ -146,7 +146,7 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type IntentIdCounter<T: Config<I>, I: 'static = ()> = StorageValue<_, IntentId, ValueQuery>;
 
-	/// Stores the latest intent id used to generate an address.
+	/// Stores the latest egress id used to generate an address.
 	#[pallet::storage]
 	pub type EgressIdCounter<T: Config<I>, I: 'static = ()> = StorageValue<_, IntentId, ValueQuery>;
 
