@@ -199,8 +199,9 @@ impl ApiCall<MockEthereum> for MockUpdateFlipSupply {
 pub struct MockBroadcast;
 
 impl MockBroadcast {
-	pub fn call(outgoing: MockUpdateFlipSupply) {
-		storage::hashed::put(&<Twox64Concat as StorageHasher>::hash, b"MockBroadcast", &outgoing)
+	pub fn call(outgoing: MockUpdateFlipSupply) -> u32 {
+		storage::hashed::put(&<Twox64Concat as StorageHasher>::hash, b"MockBroadcast", &outgoing);
+		1
 	}
 
 	pub fn get_called() -> Option<MockUpdateFlipSupply> {
@@ -211,7 +212,7 @@ impl MockBroadcast {
 impl Broadcaster<MockEthereum> for MockBroadcast {
 	type ApiCall = MockUpdateFlipSupply;
 
-	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) {
+	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) -> u32 {
 		Self::call(api_call)
 	}
 }

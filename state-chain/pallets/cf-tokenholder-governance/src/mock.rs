@@ -124,8 +124,9 @@ impl SetCommKeyWithAggKey<MockEthereum> for MockApiCalls {
 impl Broadcaster<MockEthereum> for MockBroadcaster {
 	type ApiCall = MockApiCalls;
 
-	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) {
+	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) -> u32 {
 		storage::hashed::put(&<Twox64Concat as StorageHasher>::hash, b"GOV", &api_call);
+		1
 	}
 }
 

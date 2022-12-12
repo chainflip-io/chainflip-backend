@@ -193,8 +193,9 @@ impl MockBroadcaster {
 impl Broadcaster<MockEthereum> for MockBroadcaster {
 	type ApiCall = MockSetAggKeyWithAggKey;
 
-	fn threshold_sign_and_broadcast(_api_call: Self::ApiCall) {
-		Self::send_broadcast()
+	fn threshold_sign_and_broadcast(_api_call: Self::ApiCall) -> u32 {
+		Self::send_broadcast();
+		1
 	}
 }
 

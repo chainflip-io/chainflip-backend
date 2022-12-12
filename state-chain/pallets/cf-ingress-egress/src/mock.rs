@@ -85,7 +85,9 @@ pub struct MockBroadcast;
 impl Broadcaster<Ethereum> for MockBroadcast {
 	type ApiCall = MockAllBatch<MockEthEnvironment>;
 
-	fn threshold_sign_and_broadcast(_api_call: Self::ApiCall) {}
+	fn threshold_sign_and_broadcast(_api_call: Self::ApiCall) -> u32 {
+		1
+	}
 }
 
 impl crate::Config<Instance1> for Test {
