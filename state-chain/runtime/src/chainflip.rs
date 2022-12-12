@@ -265,10 +265,9 @@ impl ChainEnvironment<cf_chains::dot::api::SystemAccounts, PolkadotAccountId> fo
 		use sp_runtime::{traits::IdentifyAccount, MultiSigner};
 		match query {
 			cf_chains::dot::api::SystemAccounts::Proxy => {
-				let EpochKey { key, key_state, .. } =
-					<PolkadotVault as KeyProvider<Polkadot>>::current_key_epoch_index();
-				match key_state {
-					KeyState::Active => Some(MultiSigner::Sr25519(key.0).into_account()),
+				match <PolkadotVault as KeyProvider<Polkadot>>::current_key_epoch_index() {
+					EpochKey { key, key_state, .. } if key_state == KeyState::Active =>
+						Some(MultiSigner::Sr25519(key.0).into_account()),
 					_ => None,
 				}
 			},
