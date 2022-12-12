@@ -65,7 +65,7 @@ fn can_swap_assets() {
 			}
 		));
 		assert_eq!(
-			LiquidityPools::swap_rate(&Asset::Flip, 0u128),
+			LiquidityPools::swap_rate(Asset::Flip, Asset::Usdc, 0u128),
 			ExchangeRate::from_rational(10, 1)
 		);
 
@@ -80,7 +80,7 @@ fn can_swap_assets() {
 			}
 		));
 		assert_eq!(
-			LiquidityPools::swap_rate(&Asset::Eth, 0u128),
+			LiquidityPools::swap_rate(Asset::Eth, Asset::Usdc, 0u128),
 			ExchangeRate::from_rational(5, 1)
 		);
 
