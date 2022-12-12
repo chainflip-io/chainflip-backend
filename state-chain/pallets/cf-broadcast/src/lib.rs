@@ -360,6 +360,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			threshold_request_id: <T::ThresholdSigner as ThresholdSigner<T::TargetChain>>::RequestId,
 			api_call: Box<<T as Config<I>>::ApiCall>,
+			broadcast_id: BroadcastId,
 		) -> DispatchResultWithPostInfo {
 			let _ = T::EnsureThresholdSigned::ensure_origin(origin)?;
 
@@ -378,6 +379,7 @@ pub mod pallet {
 				&signature,
 				T::TransactionBuilder::build_transaction(&api_call.clone().signed(&signature)),
 				*api_call,
+				broadcast_id,
 			);
 			Ok(().into())
 		}
@@ -465,14 +467,23 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	/// Request a threshold signature, providing [Call::on_signature_ready] as the callback.
-	pub fn threshold_sign_and_broadcast(api_call: <T as Config<I>>::ApiCall) {
+	pub fn threshold_sign_and_broadcast(api_call: <T as Config<I>>::ApiCall) -> BroadcastId {
+		let broadcast_id = BroadcastIdCounter::<T, I>::mutate(|id| {
+			*id += 1;
+			*id
+		});
 		T::ThresholdSigner::request_signature_with_callback(
 			api_call.threshold_signature_payload(),
 			|id| {
-				Call::on_signature_ready { threshold_request_id: id, api_call: Box::new(api_call) }
-					.into()
+				Call::on_signature_ready {
+					threshold_request_id: id,
+					api_call: Box::new(api_call),
+					broadcast_id,
+				}
+				.into()
 			},
 		);
+		broadcast_id
 	}
 
 	/// Begin the process of broadcasting a transaction.
@@ -484,12 +495,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		signature: &ThresholdSignatureFor<T, I>,
 		unsigned_tx: TransactionFor<T, I>,
 		api_call: <T as Config<I>>::ApiCall,
+		broadcast_id: BroadcastId,
 	) -> BroadcastAttemptId {
-		let broadcast_id = BroadcastIdCounter::<T, I>::mutate(|id| {
-			*id += 1;
-			*id
-		});
-
 		SignatureToBroadcastIdLookup::<T, I>::insert(signature, broadcast_id);
 
 		ThresholdSignatureData::<T, I>::insert(broadcast_id, (api_call, signature));
@@ -617,7 +624,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 	type ApiCall = T::ApiCall;
-	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) {
-		Self::threshold_sign_and_broadcast(api_call)
+	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) -> u32 {
+		let broadcast_id = Self::threshold_sign_and_broadcast(api_call);
+		broadcast_id
 	}
 }

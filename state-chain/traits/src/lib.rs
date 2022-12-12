@@ -466,7 +466,7 @@ pub trait Broadcaster<Api: ChainAbi> {
 	type ApiCall: ApiCall<Api>;
 
 	/// Request a threshold signature and then build and broadcast the outbound api call.
-	fn threshold_sign_and_broadcast(api_call: Self::ApiCall);
+	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) -> u32;
 }
 
 /// The heartbeat of the network
