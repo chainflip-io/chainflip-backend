@@ -86,7 +86,7 @@ impl EthContractWitnesser for Erc20Witnesser {
 			self.monitored_addresses.insert(address);
 		}
 
-		let ingress_witnesses = block
+		let ingress_witnesses: Vec<_> = block
 			.block_items
 			.into_iter()
 			.filter_map(|event| match event.event_parameters {
@@ -102,20 +102,22 @@ impl EthContractWitnesser for Erc20Witnesser {
 			})
 			.collect();
 
-		let _result = state_chain_client
-			.submit_signed_extrinsic(
-				pallet_cf_witnesser::Call::witness_at_epoch {
-					call: Box::new(
-						pallet_cf_ingress_egress::Call::<_, EthereumInstance>::do_ingress {
-							ingress_witnesses,
-						}
-						.into(),
-					),
-					epoch_index: epoch,
-				},
-				logger,
-			)
-			.await;
+		if !ingress_witnesses.is_empty() {
+			let _result = state_chain_client
+				.submit_signed_extrinsic(
+					pallet_cf_witnesser::Call::witness_at_epoch {
+						call: Box::new(
+							pallet_cf_ingress_egress::Call::<_, EthereumInstance>::do_ingress {
+								ingress_witnesses,
+							}
+							.into(),
+						),
+						epoch_index: epoch,
+					},
+					logger,
+				)
+				.await;
+		}
 
 		Ok(())
 	}

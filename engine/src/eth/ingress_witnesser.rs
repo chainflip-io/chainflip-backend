@@ -152,20 +152,22 @@ where
 								})
 								.collect::<Vec<IngressWitness<Ethereum>>>();
 
-								let _result = state_chain_client
-									.submit_signed_extrinsic(
-										pallet_cf_witnesser::Call::witness_at_epoch {
-											call: Box::new(
-												pallet_cf_ingress_egress::Call::<_, EthereumInstance>::do_ingress {
-													ingress_witnesses
-												}
-												.into(),
-											),
-											epoch_index: epoch_start.epoch_index,
-										},
-										&logger,
-									)
-									.await;
+								if !ingress_witnesses.is_empty() {
+									let _result = state_chain_client
+										.submit_signed_extrinsic(
+											pallet_cf_witnesser::Call::witness_at_epoch {
+												call: Box::new(
+													pallet_cf_ingress_egress::Call::<_, EthereumInstance>::do_ingress {
+														ingress_witnesses
+													}
+													.into(),
+												),
+												epoch_index: epoch_start.epoch_index,
+											},
+											&logger,
+										)
+										.await;
+								}
 						},
 						else => break,
 					};
