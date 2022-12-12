@@ -713,7 +713,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		rotated_at_block_number: ChainBlockNumberFor<T, I>,
 	) {
 		Self::set_vault_for_next_epoch(new_public_key, rotated_at_block_number);
-		T::VaultTransitionHandler::on_new_vault(new_public_key);
+		T::VaultTransitionHandler::on_new_vault();
 	}
 
 	fn set_vault_for_next_epoch(

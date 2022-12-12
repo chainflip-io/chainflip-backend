@@ -175,7 +175,7 @@ impl ApiCall<MockEthereum> for MockSetAggKeyWithAggKey {
 
 pub struct MockVaultTransitionHandler;
 impl VaultTransitionHandler<MockEthereum> for MockVaultTransitionHandler {
-	fn on_new_vault(_new_key: <MockEthereum as ChainCrypto>::AggKey) {}
+	fn on_new_vault() {}
 }
 
 pub struct MockBroadcaster;
