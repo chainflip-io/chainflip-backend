@@ -592,16 +592,18 @@ pub fn generate_signing_key(seed_phrase: Option<&str>) -> Result<(KeyPairHex, St
 	let mnemonic = Mnemonic::new(MnemonicType::Words12, Language::English);
 	let seed_phrase = seed_phrase.unwrap_or_else(|| mnemonic.phrase());
 
-	if let Ok((pair, seed)) = sp_core::Pair::from_phrase(seed_phrase, None) {
-		let pair: sp_core::sr25519::Pair = pair;
-
-		Ok((
-			KeyPairHex { secret_key: seed.to_vec(), public_key: hex::encode(pair.public()) },
-			seed_phrase.to_string(),
-		))
-	} else {
-		anyhow::bail!("Invalid seed phrase")
-	}
+	sp_core::Pair::from_phrase(seed_phrase, None)
+		.map(|(pair, seed)| {
+			let pair: sp_core::sr25519::Pair = pair;
+			(
+				KeyPairHex {
+					secret_key: hex::encode(seed).as_bytes().to_vec(),
+					public_key: hex::encode(pair.public()),
+				},
+				seed_phrase.to_string(),
+			)
+		})
+		.map_err(|_| anyhow::Error::msg("Invalid seed phrase"))
 }
 
 /// Generate a new random ethereum key.
@@ -631,7 +633,7 @@ fn test_generate_signing_key_with_known_seed() {
 	// Compare the generated secret key with a known secret key generated using the `chainflip-node
 	// key generate` command
 	assert_eq!(
-		hex::encode(generate_key.secret_key),
+		std::str::from_utf8(generate_key.secret_key.as_slice()).unwrap(),
 		"afabf42a9a99910cdd64795ef05ed71acfa2238f5682d26ae62028df3cc59727"
 	);
 }
