@@ -155,8 +155,32 @@ impl<T: Config> cf_traits::LiquidityPoolApi for Pallet<T> {
 		Pools::<T>::get(asset).get_liquidity()
 	}
 
-	fn swap_rate(asset: &any::Asset, input_amount: AssetAmount) -> ExchangeRate {
-		Pools::<T>::get(asset).swap_rate(input_amount)
+	fn swap_rate(
+		input_asset: any::Asset,
+		output_asset: any::Asset,
+		input_amount: AssetAmount,
+	) -> ExchangeRate {
+		if input_amount == 0 {
+			match (input_asset, output_asset) {
+				(input_asset, any::Asset::Usdc) => Pools::<T>::get(input_asset).swap_rate(0),
+				(any::Asset::Usdc, output_asset) =>
+					Pools::<T>::get(output_asset).reversed().swap_rate(0),
+				(input_asset, output_asset) => {
+					let rate_1 = Pools::<T>::get(input_asset).swap_rate(0);
+					let rate_2 = Pools::<T>::get(output_asset).reversed().swap_rate(0);
+					rate_1 * rate_2
+				},
+			}
+		} else {
+			let output_amount = match (input_asset, output_asset) {
+				(input_asset, any::Asset::Usdc) => Pools::<T>::get(input_asset).swap(input_amount),
+				(any::Asset::Usdc, output_asset) =>
+					Pools::<T>::get(output_asset).reverse_swap(input_amount),
+				(input_asset, output_asset) => Pools::<T>::get(output_asset)
+					.reverse_swap(Pools::<T>::get(input_asset).swap(input_amount)),
+			};
+			ExchangeRate::from_rational(output_amount, input_amount)
+		}
 	}
 
 	fn get_liquidity_amount_by_position(
