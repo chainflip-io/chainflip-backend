@@ -1,7 +1,22 @@
 [package]
+authors = ["Chainflip team <https://github.com/chainflip-io>"]
 name = "chainflip-relayer"
 version = "0.1.0"
 edition = "2021"
+
+[package.metadata.deb]
+depends = "$auto, systemd"
+extended-description = """\
+Chainflip Relayer Rpc Server"""
+maintainer = "Chainflip Labs GmbH <dev@chainflip.io>"
+name = "chainflip-relayer"
+priority = "required"
+section = "rust"
+maintainer-scripts = "package/"
+systemd-units = {enable = false}
+assets = [
+  ["target/release/chainflip-relayer", "usr/bin/", "755"],
+]
 
 [[bin]]
 name = "chainflip-relayer"
