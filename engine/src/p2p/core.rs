@@ -250,14 +250,17 @@ impl P2PContext {
 	fn send_messages(&self, messages: OutgoingMultisigStageMessages) {
 		match messages {
 			OutgoingMultisigStageMessages::Broadcast(account_ids, payload) => {
+				slog::trace!(self.logger, "Broadcasting a message to {} peers", account_ids.len());
 				for acc_id in account_ids {
 					self.send_message(acc_id, payload.clone());
 				}
 			},
-			OutgoingMultisigStageMessages::Private(messages) =>
+			OutgoingMultisigStageMessages::Private(messages) => {
+				slog::trace!(self.logger, "Sending a message to {} peers", messages.len());
 				for (acc_id, payload) in messages {
 					self.send_message(acc_id, payload);
-				},
+				}
+			},
 		}
 	}
 
