@@ -250,7 +250,7 @@ fn keygen_verification_ceremony_calls_callback_on_failure() {
 		.build()
 		.execute_with(|| {
 			const PAYLOAD: &[u8; 4] = b"OHAI";
-			let EpochKey { key: current_key_id, .. } = MockKeyProvider::current_key_epoch_index();
+			let EpochKey { key: current_key_id, .. } = MockKeyProvider::current_epoch_key();
 			let (request_id, _) = EthereumThresholdSigner::request_keygen_verification_signature(
 				*PAYLOAD,
 				current_key_id.into(),
@@ -484,7 +484,7 @@ mod unsigned_validation {
 
 				let (_request_id, ceremony_id) =
 					<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(PAYLOAD);
-				let EpochKey { key: current_key, .. } = MockKeyProvider::current_key_epoch_index();
+				let EpochKey { key: current_key, .. } = MockKeyProvider::current_epoch_key();
 
 				assert!(
 					Test::validate_unsigned(
@@ -494,7 +494,7 @@ mod unsigned_validation {
 					)
 					.is_ok(),
 					"Validation Failed: {:?} / {:?}",
-					MockKeyProvider::current_key_epoch_index(),
+					MockKeyProvider::current_epoch_key(),
 					current_key
 				);
 			});
@@ -571,7 +571,7 @@ mod failure_reporting {
 	) -> CeremonyContext<Test, Instance1> {
 		const PAYLOAD: <MockEthereum as ChainCrypto>::Payload = *b"OHAI";
 		MockEpochInfo::set_authorities(Vec::from_iter(validator_set));
-		let EpochKey { key: current_key_id, .. } = MockKeyProvider::current_key_epoch_index();
+		let EpochKey { key: current_key_id, .. } = MockKeyProvider::current_epoch_key();
 		CeremonyContext::<Test, Instance1> {
 			request_context: RequestContext { request_id: 1, attempt_count: 0, payload: PAYLOAD },
 			threshold_ceremony_type: ThresholdCeremonyType::Standard,

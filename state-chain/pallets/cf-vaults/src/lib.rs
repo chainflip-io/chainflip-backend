@@ -913,7 +913,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 }
 
 impl<T: Config<I>, I: 'static> KeyProvider<T::Chain> for Pallet<T, I> {
-	fn current_key_epoch_index() -> EpochKey<<T::Chain as ChainCrypto>::AggKey> {
+	fn current_epoch_key() -> EpochKey<<T::Chain as ChainCrypto>::AggKey> {
 		let current_vault_epoch_and_state = CurrentVaultEpochAndState::<T, I>::get();
 
 		EpochKey {

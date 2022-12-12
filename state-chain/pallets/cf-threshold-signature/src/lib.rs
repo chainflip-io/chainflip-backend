@@ -651,8 +651,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					ThresholdCeremonyType::KeygenVerification,
 				)
 			} else {
-				let EpochKey { key, epoch_index, key_state } =
-					T::KeyProvider::current_key_epoch_index();
+				let EpochKey { key, epoch_index, key_state } = T::KeyProvider::current_epoch_key();
 				(
 					match key_state {
 						KeyState::Active =>

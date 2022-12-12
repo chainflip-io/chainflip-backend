@@ -142,7 +142,7 @@ pub const MOCK_AGG_KEY: [u8; 4] = *b"AKEY";
 pub struct MockKeyProvider;
 
 impl cf_traits::KeyProvider<MockEthereum> for MockKeyProvider {
-	fn current_key_epoch_index() -> EpochKey<<MockEthereum as ChainCrypto>::AggKey> {
+	fn current_epoch_key() -> EpochKey<<MockEthereum as ChainCrypto>::AggKey> {
 		EpochKey { key: MOCK_AGG_KEY, epoch_index: Default::default(), key_state: KeyState::Active }
 	}
 }

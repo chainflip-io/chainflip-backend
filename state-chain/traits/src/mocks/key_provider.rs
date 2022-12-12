@@ -6,7 +6,7 @@ use crate::EpochKey;
 pub struct MockKeyProvider<Chain: cf_chains::Chain>(PhantomData<Chain>);
 
 impl<C: cf_chains::ChainCrypto> crate::KeyProvider<C> for MockKeyProvider<C> {
-	fn current_key_epoch_index() -> EpochKey<C::AggKey> {
+	fn current_epoch_key() -> EpochKey<C::AggKey> {
 		EpochKey::default()
 	}
 }

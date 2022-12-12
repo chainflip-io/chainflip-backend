@@ -386,8 +386,9 @@ pub struct EpochKey<Key> {
 
 /// Provides the currently valid key for multisig ceremonies.
 pub trait KeyProvider<C: ChainCrypto> {
-	/// Get the chain's current agg key and the epoch index for the current key.
-	fn current_key_epoch_index() -> EpochKey<C::AggKey>;
+	/// Get the chain's current agg key, the epoch index for the current key and the state of that
+	/// key.
+	fn current_epoch_key() -> EpochKey<C::AggKey>;
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_key(_key: C::AggKey) {
