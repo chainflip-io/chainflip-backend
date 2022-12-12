@@ -204,20 +204,15 @@ pub enum PalletOffence {
 	FailedKeygen,
 }
 
-#[derive(Encode, Decode, TypeInfo, Eq, PartialEq)]
-pub enum VaultState {
-	Active,
-	Unavailable,
-}
 #[derive(Encode, Decode, TypeInfo)]
 pub struct VaultEpochAndState {
 	pub epoch_index: EpochIndex,
-	pub vault_state: VaultState,
+	pub key_state: KeyState,
 }
 
 impl Default for VaultEpochAndState {
 	fn default() -> Self {
-		Self { epoch_index: GENESIS_EPOCH, vault_state: VaultState::Unavailable }
+		Self { epoch_index: GENESIS_EPOCH, key_state: KeyState::Unavailable }
 	}
 }
 
@@ -691,10 +686,7 @@ pub mod pallet {
 		fn build(&self) {
 			if let Some(vault_key) = self.vault_key.clone() {
 				Pallet::<T, I>::set_vault_for_epoch(
-					VaultEpochAndState {
-						epoch_index: GENESIS_EPOCH,
-						vault_state: VaultState::Active,
-					},
+					VaultEpochAndState { epoch_index: GENESIS_EPOCH, key_state: KeyState::Active },
 					AggKeyFor::<T, I>::try_from(vault_key)
 						// Note: Can't use expect() here without some type shenanigans, but would
 						// give clearer error messages.
@@ -706,7 +698,7 @@ pub mod pallet {
 			} else {
 				CurrentVaultEpochAndState::<T, I>::put(VaultEpochAndState {
 					epoch_index: GENESIS_EPOCH,
-					vault_state: VaultState::Unavailable,
+					key_state: KeyState::Unavailable,
 				});
 			}
 
@@ -731,7 +723,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Self::set_vault_for_epoch(
 			VaultEpochAndState {
 				epoch_index: CurrentEpochIndex::<T>::get().saturating_add(1),
-				vault_state: VaultState::Active,
+				key_state: KeyState::Active,
 			},
 			new_public_key,
 			rotated_at_block_number.saturating_add(ChainBlockNumberFor::<T, I>::one()),
@@ -856,10 +848,10 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 			) {
 				Ok(rotate_tx) => {
 					T::Broadcaster::threshold_sign_and_broadcast(rotate_tx);
-					if VaultState::Active == current_vault_epoch_and_state.vault_state {
+					if KeyState::Active == current_vault_epoch_and_state.key_state {
 						CurrentVaultEpochAndState::<T, I>::put(VaultEpochAndState {
 							epoch_index: current_vault_epoch_and_state.epoch_index,
-							vault_state: VaultState::Unavailable,
+							key_state: KeyState::Unavailable,
 						})
 					}
 				},
@@ -927,10 +919,7 @@ impl<T: Config<I>, I: 'static> KeyProvider<T::Chain> for Pallet<T, I> {
 		EpochKey {
 				key: Vaults::<T, I>::get(current_vault_epoch_and_state.epoch_index).expect("Key must exist if CurrentVaultEpochAndState exists since they get set at the same place: set_next_vault()").public_key,
 				epoch_index: current_vault_epoch_and_state.epoch_index,
-				key_state: match current_vault_epoch_and_state.vault_state {
-					VaultState::Active => KeyState::Active,
-					VaultState::Unavailable => KeyState::Unavailable,
-				}
+				key_state: current_vault_epoch_and_state.key_state,
 			}
 	}
 
