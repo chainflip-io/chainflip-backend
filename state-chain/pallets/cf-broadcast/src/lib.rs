@@ -623,7 +623,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 	type ApiCall = T::ApiCall;
 	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) -> u32 {
-		let broadcast_id = Self::threshold_sign_and_broadcast(api_call);
-		broadcast_id
+		Self::threshold_sign_and_broadcast(api_call)
 	}
 }

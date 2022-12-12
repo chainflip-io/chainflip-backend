@@ -195,6 +195,8 @@ fn can_swap_assets() {
 			pallet_cf_ingress_egress::Event::BatchBroadcastRequested {
 				fetch_batch_size: 1,
 				egress_batch_size: 1,
+				broadcast_id: 1,
+				egress_ids: vec![1],
 			},
 		));
 	});
