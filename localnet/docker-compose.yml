@@ -95,11 +95,10 @@ services:
       - ./init/testkeys:/etc/chainflip/keys
     command:
       - chainflip-relayer
-      - --port=9950
       - --state_chain.signing_key_file=/etc/chainflip/keys/RELAYER_1
       - --state_chain.ws_endpoint=ws://chainflip-node:9944
     ports:
-      - 9950:9950
+      - 9950:80
   geth:
     image: ghcr.io/chainflip-io/geth:perseverance-rc2
     pull_policy: always
