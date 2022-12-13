@@ -10,21 +10,22 @@ services:
       - 9945:9944 # ws port
     volumes:
       - ./init/polkadot/chainspec.json:/chainspec.json
-    command: [
-      "--name=PolkaDocker",
-      "--rpc-methods=unsafe",
-      "--ws-external",
-      "--rpc-external",
-      "--rpc-cors=all",
-      "--chain=/chainspec.json",
-      "--validator",
-      "--force-authoring",
-      "--alice"
-    ]
+    command:
+      [
+        "--name=PolkaDocker",
+        "--rpc-methods=unsafe",
+        "--ws-external",
+        "--rpc-external",
+        "--rpc-cors=all",
+        "--chain=/chainspec.json",
+        "--validator",
+        "--force-authoring",
+        "--alice"
+      ]
   node:
     container_name: chainflip-node
     healthcheck:
-      test: ["CMD-SHELL", "netcat -z localhost 9615"]
+      test: [ "CMD-SHELL", "netcat -z localhost 9615" ]
       retries: 10
       interval: 5s
       timeout: 5s
@@ -94,6 +95,7 @@ services:
       - ./init/testkeys:/etc/chainflip/keys
     command:
       - chainflip-relayer
+      - --port=9950
       - --state_chain.signing_key_file=/etc/chainflip/keys/RELAYER_1
       - --state_chain.ws_endpoint=ws://chainflip-node:9944
     ports:
@@ -114,7 +116,7 @@ services:
     stop_signal: SIGINT
     stop_grace_period: 2m
     healthcheck:
-      test: ["CMD-SHELL", "echo hi"]
+      test: [ "CMD-SHELL", "echo hi" ]
       interval: 10s
       timeout: 5s
       retries: 5
