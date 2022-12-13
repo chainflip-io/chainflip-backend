@@ -71,11 +71,9 @@ pub mod cfe {
 #[frame_support::pallet]
 pub mod pallet {
 
-	use cf_primitives::Asset;
+	use cf_primitives::{Asset, TxId};
 	#[cfg(feature = "ibiza")]
 	use cf_traits::{Broadcaster, VaultKeyWitnessedHandler};
-
-	use cf_chains::dot;
 
 	use super::*;
 
@@ -328,7 +326,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			dot_pure_proxy_vault_key: [u8; 32],
 			dot_witnessed_aggkey: [u8; 32],
-			tx_id: dot::TxId,
+			tx_id: TxId,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			#[cfg(feature = "ibiza")]

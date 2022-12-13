@@ -5,8 +5,8 @@ pub mod api;
 #[cfg(feature = "runtime-benchmarks")]
 pub mod benchmarking;
 
-use cf_primitives::KeyId;
 pub use cf_primitives::{chains::Polkadot, PolkadotAccountId};
+use cf_primitives::{KeyId, PolkadotBlockNumber, TxId};
 
 use sp_core::{sr25519, H256};
 use sp_runtime::{
@@ -29,7 +29,6 @@ pub type PolkadotSignature = sr25519::Signature;
 pub type PolkadotGovKey = (); // Todo
 
 pub type PolkadotBalance = u128;
-pub type PolkadotBlockNumber = u32;
 pub type PolkadotIndex = u32;
 pub type PolkadotHash = sp_core::H256;
 
@@ -111,14 +110,6 @@ pub struct EncodedPolkadotPayload(pub Vec<u8>);
 #[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]
 pub struct EpochStartData {
 	pub vault_account: PolkadotAccountId,
-}
-
-// Polkadot extrinsics are uniquely identified by <block number>-<extrinsic index>
-// https://wiki.polkadot.network/docs/build-protocol-info
-#[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]
-pub struct TxId {
-	pub block_number: PolkadotBlockNumber,
-	pub extrinsic_index: u32,
 }
 
 impl Chain for Polkadot {

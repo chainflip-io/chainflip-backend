@@ -1,13 +1,10 @@
 use std::{collections::BTreeSet, pin::Pin, sync::Arc};
 
 use cf_chains::{
-	dot::{
-		Polkadot, PolkadotBalance, PolkadotBlockNumber, PolkadotHash, PolkadotProxyType,
-		PolkadotUncheckedExtrinsic, TxId,
-	},
+	dot::{Polkadot, PolkadotBalance, PolkadotHash, PolkadotProxyType, PolkadotUncheckedExtrinsic},
 	eth::assets,
 };
-use cf_primitives::PolkadotAccountId;
+use cf_primitives::{PolkadotAccountId, PolkadotBlockNumber, TxId};
 use codec::{Decode, Encode};
 use frame_support::scale_info::TypeInfo;
 use futures::{stream, Stream, StreamExt};
