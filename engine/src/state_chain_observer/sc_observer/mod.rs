@@ -588,10 +588,8 @@ where
                                             ingress_asset
                                         }
                                     ) => {
-                                        use cf_primitives::chains::assets::dot;
-                                        if ingress_asset == dot::Asset::Dot {
-                                                dot_monitor_ingress_sender.send(ingress_address).unwrap();
-                                        }
+                                        assert_eq!(ingress_asset, cf_primitives::chains::assets::dot::Asset::Dot);
+                                        dot_monitor_ingress_sender.send(ingress_address).unwrap();
                                     }}
                                 }}}
                                 Err(error) => {
