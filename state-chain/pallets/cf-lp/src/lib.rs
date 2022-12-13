@@ -47,6 +47,8 @@ impl<AccountId, Amount> UserTradingPosition<AccountId, Amount> {
 
 #[frame_support::pallet]
 pub mod pallet {
+	use cf_primitives::EgressId;
+
 	use super::*;
 
 	#[pallet::config]
@@ -120,6 +122,12 @@ pub mod pallet {
 			intent_id: IntentId,
 			ingress_address: ForeignChainAddress,
 		},
+		WithdrawalEgressScheduled {
+			egress_id: EgressId,
+			asset: Asset,
+			amount: AssetAmount,
+			egress_address: ForeignChainAddress,
+		},
 	}
 
 	#[pallet::pallet]
@@ -170,10 +178,17 @@ pub mod pallet {
 				Error::<T>::InvalidEgressAddress
 			);
 
-			T::EgressHandler::schedule_egress(asset, amount, egress_address);
-
 			// Debit the asset from the account.
 			Pallet::<T>::try_debit(&account_id, asset, amount)?;
+
+			let egress_id = T::EgressHandler::schedule_egress(asset, amount, egress_address);
+
+			Self::deposit_event(Event::<T>::WithdrawalEgressScheduled {
+				egress_id,
+				asset,
+				amount,
+				egress_address,
+			});
 
 			Ok(())
 		}

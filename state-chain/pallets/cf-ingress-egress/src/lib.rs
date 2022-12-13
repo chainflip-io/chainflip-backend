@@ -182,6 +182,7 @@ pub mod pallet {
 			disabled: bool,
 		},
 		EgressScheduled {
+			id: EgressId,
 			asset: TargetChainAsset<T, I>,
 			amount: AssetAmount,
 			egress_address: TargetChainAccount<T, I>,
@@ -191,8 +192,6 @@ pub mod pallet {
 			asset: TargetChainAsset<T, I>,
 		},
 		BatchBroadcastRequested {
-			fetch_batch_size: u32,
-			egress_batch_size: u32,
 			broadcast_id: BroadcastId,
 			egress_ids: Vec<EgressId>,
 		},
@@ -358,8 +357,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Ok(egress_transaction) => {
 				let broadcast_id = T::Broadcaster::threshold_sign_and_broadcast(egress_transaction);
 				Self::deposit_event(Event::<T, I>::BatchBroadcastRequested {
-					fetch_batch_size,
-					egress_batch_size,
 					broadcast_id,
 					egress_ids,
 				});
@@ -441,7 +438,7 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 		asset: TargetChainAsset<T, I>,
 		amount: AssetAmount,
 		egress_address: TargetChainAccount<T, I>,
-	) {
+	) -> EgressId {
 		let egress_id = EgressIdCounter::<T, I>::get().saturating_add(1);
 		ScheduledEgressRequests::<T, I>::append(FetchOrTransfer::<T::TargetChain>::Transfer {
 			asset,
@@ -450,7 +447,13 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 			egress_id,
 		});
 		EgressIdCounter::<T, I>::put(egress_id);
-		Self::deposit_event(Event::<T, I>::EgressScheduled { asset, amount, egress_address });
+		Self::deposit_event(Event::<T, I>::EgressScheduled {
+			id: egress_id,
+			asset,
+			amount,
+			egress_address,
+		});
+		egress_id
 	}
 }
 

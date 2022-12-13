@@ -57,6 +57,7 @@ fn can_schedule_egress_to_batch() {
 		IngressEgress::schedule_egress(ETH_ETH, 1_000, ALICE_ETH_ADDRESS.into());
 		IngressEgress::schedule_egress(ETH_ETH, 2_000, ALICE_ETH_ADDRESS.into());
 		System::assert_last_event(Event::IngressEgress(crate::Event::EgressScheduled {
+			id: 2,
 			asset: ETH_ETH,
 			amount: 2_000,
 			egress_address: ALICE_ETH_ADDRESS.into(),
@@ -65,6 +66,7 @@ fn can_schedule_egress_to_batch() {
 		IngressEgress::schedule_egress(ETH_FLIP, 3_000, BOB_ETH_ADDRESS.into());
 		IngressEgress::schedule_egress(ETH_FLIP, 4_000, BOB_ETH_ADDRESS.into());
 		System::assert_last_event(Event::IngressEgress(crate::Event::EgressScheduled {
+			id: 4,
 			asset: ETH_FLIP,
 			amount: 4_000,
 			egress_address: BOB_ETH_ADDRESS.into(),
@@ -175,8 +177,6 @@ fn on_idle_can_send_batch_all() {
 		IngressEgress::on_idle(1, 1_000_000_000_000u64);
 
 		System::assert_has_event(Event::IngressEgress(crate::Event::BatchBroadcastRequested {
-			fetch_batch_size: 5u32,
-			egress_batch_size: 8u32,
 			broadcast_id: 1,
 			egress_ids: vec![1, 2, 3, 4, 5, 6, 7, 8],
 		}));
@@ -237,8 +237,6 @@ fn can_manually_send_batch_all() {
 		// Send only 2 requests
 		assert_ok!(IngressEgress::egress_scheduled_assets_for_chain(Origin::root(), Some(2)));
 		System::assert_has_event(Event::IngressEgress(crate::Event::BatchBroadcastRequested {
-			fetch_batch_size: 1u32,
-			egress_batch_size: 1u32,
 			broadcast_id: 1,
 			egress_ids: vec![1],
 		}));
@@ -248,8 +246,6 @@ fn can_manually_send_batch_all() {
 		assert_ok!(IngressEgress::egress_scheduled_assets_for_chain(Origin::root(), None));
 
 		System::assert_has_event(Event::IngressEgress(crate::Event::BatchBroadcastRequested {
-			fetch_batch_size: 3u32,
-			egress_batch_size: 7u32,
 			broadcast_id: 1,
 			egress_ids: vec![2, 3, 4, 5, 6, 7, 8],
 		}));
@@ -278,8 +274,6 @@ fn on_idle_batch_size_is_limited_by_weight() {
 		);
 
 		System::assert_has_event(Event::IngressEgress(crate::Event::BatchBroadcastRequested {
-			fetch_batch_size: 1u32,
-			egress_batch_size: 2u32,
 			broadcast_id: 1,
 			egress_ids: vec![1, 2],
 		}));
@@ -291,8 +285,6 @@ fn on_idle_batch_size_is_limited_by_weight() {
 		);
 
 		System::assert_has_event(Event::IngressEgress(crate::Event::BatchBroadcastRequested {
-			fetch_batch_size: 1u32,
-			egress_batch_size: 2u32,
 			broadcast_id: 1,
 			egress_ids: vec![3, 4],
 		}));

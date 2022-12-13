@@ -38,7 +38,7 @@ pub struct Swap {
 pub mod pallet {
 
 	use cf_chains::AnyChain;
-	use cf_primitives::{Asset, AssetAmount, BasisPoints};
+	use cf_primitives::{Asset, AssetAmount, BasisPoints, EgressId};
 	use cf_traits::{AccountRoleRegistry, Chainflip, EgressApi, SwapIntentHandler};
 
 	use super::*;
@@ -95,7 +95,7 @@ pub mod pallet {
 		/// A swap was executed.
 		SwapExecuted { swap_id: u64 },
 		/// A swap egress was scheduled.
-		SwapEgressScheduled { swap_id: u64, egress_amount: AssetAmount },
+		SwapEgressScheduled { swap_id: u64, egress_id: EgressId, egress_amount: AssetAmount },
 	}
 	#[pallet::error]
 	pub enum Error<T> {
@@ -191,11 +191,16 @@ pub mod pallet {
 					bundle_input,
 					Rounding::Down,
 				) {
+					let egress_id = T::EgressHandler::schedule_egress(
+						egress_asset,
+						swap_output,
+						egress_address,
+					);
 					Self::deposit_event(Event::<T>::SwapEgressScheduled {
 						swap_id: id,
+						egress_id,
 						egress_amount: swap_output,
 					});
-					T::EgressHandler::schedule_egress(egress_asset, swap_output, egress_address);
 				} else {
 					log::error!(
 						"Unable to calculate valid swap output for swap {:?}!",
