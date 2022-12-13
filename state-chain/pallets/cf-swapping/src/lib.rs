@@ -88,7 +88,7 @@ pub mod pallet {
 		NewSwapIntent { ingress_address: ForeignChainAddress },
 		/// The swap ingress was received.
 		SwapIngressReceived {
-			ingress_address: ForeignChainAddress,
+			ingress_address: Option<ForeignChainAddress>,
 			swap_id: u64,
 			ingress_amount: AssetAmount,
 		},
@@ -164,6 +164,37 @@ pub mod pallet {
 
 			Ok(())
 		}
+
+		/// Allow Witnessers to submit a Swap request on the behalf of someone else.
+		/// Requires Witnesser origin.
+		///
+		/// ## Events
+		///
+		/// - [SwapScheduled](Event::SwapIngressReceived)
+		#[pallet::weight(0)]
+		#[allow(clippy::too_many_arguments)]
+		pub fn schedule_swap_by_witnesser(
+			origin: OriginFor<T>,
+			ingress_address: Option<ForeignChainAddress>,
+			from: Asset,
+			to: Asset,
+			amount: AssetAmount,
+			egress_address: ForeignChainAddress,
+			relayer_id: T::AccountId,
+			relayer_commission_bps: BasisPoints,
+		) -> DispatchResult {
+			T::EnsureWitnessed::ensure_origin(origin)?;
+
+			Self::schedule_swap(
+				ingress_address,
+				from,
+				to,
+				amount,
+				egress_address,
+				relayer_id,
+				relayer_commission_bps,
+			)
+		}
 	}
 
 	impl<T: Config> Pallet<T> {
@@ -224,7 +255,7 @@ pub mod pallet {
 
 		/// Callback function to kick off the swapping process after a successful ingress.
 		fn schedule_swap(
-			ingress_address: ForeignChainAddress,
+			ingress_address: Option<ForeignChainAddress>,
 			from: Asset,
 			to: Asset,
 			amount: AssetAmount,
