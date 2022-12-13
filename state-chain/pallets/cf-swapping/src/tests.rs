@@ -209,6 +209,7 @@ fn expect_swap_id_to_be_emitted() {
 			crate::mock::Event::Swapping(crate::Event::SwapExecuted { swap_id: 1 }),
 			crate::mock::Event::Swapping(crate::Event::SwapEgressScheduled {
 				swap_id: 1,
+				egress_id: 1,
 				egress_amount: 500
 			})
 		);
