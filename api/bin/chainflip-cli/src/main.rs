@@ -1,3 +1,4 @@
+#![feature(absolute_path)]
 use std::path::PathBuf;
 
 use api::primitives::{AccountRole, ClaimAmount, Hash};
@@ -260,17 +261,12 @@ fn generate_keys(path: Option<PathBuf>) -> Result<()> {
 	const SIGNING_KEY_FILE_NAME: &str = "signing_key_file";
 	const ETHEREUM_KEY_FILE_NAME: &str = "ethereum_key_file";
 
-	let output_path = path.unwrap_or_else(|| PathBuf::from(""));
+	let output_path = path.unwrap_or_else(|| PathBuf::from("."));
 
-	let absolute_path_string = if output_path.is_relative() {
-		std::env::current_dir()
-			.expect("Should get current directory")
-			.join(output_path.clone())
-			.to_string_lossy()
-			.to_string()
-	} else {
-		output_path.to_string_lossy().to_string()
-	};
+	let absolute_path_string = std::path::absolute(&output_path)
+		.expect("Failed to get absolute path")
+		.to_string_lossy()
+		.into_owned();
 
 	if output_path.is_file() {
 		anyhow::bail!("Invalid keys path {}", absolute_path_string);
@@ -285,7 +281,7 @@ fn generate_keys(path: Option<PathBuf>) -> Result<()> {
 
 	if node_key_file.exists() || signing_key_file.exists() || ethereum_key_file.exists() {
 		anyhow::bail!(
-			"Key file(s) already exist, please delete them manually from {}",
+			"Key file(s) already exist, please move/delete them manually from {}",
 			absolute_path_string
 		);
 	}
@@ -308,4 +304,9 @@ fn generate_keys(path: Option<PathBuf>) -> Result<()> {
 	println!("Saved all secret keys to {}", absolute_path_string);
 
 	Ok(())
+}
+
+#[test]
+fn test_generate_keys() {
+	generate_keys(Some(PathBuf::from("/etc/chainflip/keys/test"))).unwrap();
 }
