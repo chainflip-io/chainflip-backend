@@ -15,6 +15,9 @@ pub use missed_authorship_slots::MissedAuraSlots;
 pub use signer_nomination::RandomSignerNomination;
 use sp_core::U256;
 
+#[cfg(feature = "ibiza")]
+use cf_traits::EpochKey;
+
 use crate::{
 	AccountId, Authorship, BlockNumber, Call, EmergencyRotationPercentageRange, Emissions,
 	Environment, EthereumInstance, Flip, FlipBalance, Reputation, Runtime, System, Validator,

@@ -43,4 +43,13 @@ benchmarks! {
 	} : {
 		Pallet::<T>::execute_group_of_swaps(swaps, Asset::Eth, Asset::Flip);
 	}
+	withdrawal {
+		let caller: T::AccountId = whitelisted_caller();
+		EarnedRelayerFees::<T>::insert(caller.clone(), Asset::Eth, 200);
+		T::AccountRoleRegistry::register_account(caller.clone(), AccountRole::Relayer);
+	} : _(
+		RawOrigin::Signed(caller.clone()),
+		Asset::Eth,
+		ForeignChainAddress::Eth(Default::default())
+	)
 }

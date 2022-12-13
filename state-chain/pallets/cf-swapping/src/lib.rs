@@ -99,9 +99,12 @@ pub mod pallet {
 	}
 	#[pallet::error]
 	pub enum Error<T> {
+		/// The provided asset and withdrawal address are incompatible.
 		IncompatibleAssetAndAddress,
 		// The Asset cannot be egressed to the destination chain.
 		InvalidEgressAddress,
+		// The withdrawal is not possible because not enough funds are available.
+		NoFundsAvailable,
 	}
 
 	#[pallet::hooks]
@@ -167,7 +170,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::weight(10_000)]
+		#[pallet::weight(0)]
 		pub fn withdrawal(
 			origin: OriginFor<T>,
 			asset: Asset,
@@ -182,12 +185,9 @@ pub mod pallet {
 				Error::<T>::InvalidEgressAddress
 			);
 
-			T::EgressHandler::schedule_egress(
-				asset,
-				EarnedRelayerFees::<T>::take(account_id, asset),
-				egress_address,
-			);
-
+			let amount = EarnedRelayerFees::<T>::take(account_id, asset);
+			ensure!(amount != 0, Error::<T>::NoFundsAvailable);
+			T::EgressHandler::schedule_egress(asset, amount, egress_address);
 			Ok(())
 		}
 	}
