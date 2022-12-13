@@ -100,6 +100,8 @@ pub mod pallet {
 	#[pallet::error]
 	pub enum Error<T> {
 		IncompatibleAssetAndAddress,
+		// The Asset cannot be egressed to the destination chain.
+		InvalidEgressAddress,
 	}
 
 	#[pallet::hooks]
@@ -166,9 +168,26 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(10_000)]
-		pub fn withdrawal(origin: OriginFor<T>, asset: Asset) -> DispatchResult {
+		pub fn withdrawal(
+			origin: OriginFor<T>,
+			asset: Asset,
+			egress_address: ForeignChainAddress,
+		) -> DispatchResult {
 			T::SystemState::ensure_no_maintenance()?;
 			let account_id = T::AccountRoleRegistry::ensure_relayer(origin)?;
+
+			// Check validity of Chain and Asset
+			ensure!(
+				ForeignChain::from(egress_address) == ForeignChain::from(asset),
+				Error::<T>::InvalidEgressAddress
+			);
+
+			T::EgressHandler::schedule_egress(
+				asset,
+				EarnedRelayerFees::<T>::take(account_id, asset),
+				egress_address,
+			);
+
 			Ok(())
 		}
 	}

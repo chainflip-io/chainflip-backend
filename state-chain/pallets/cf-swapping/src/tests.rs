@@ -214,3 +214,16 @@ fn expect_swap_id_to_be_emitted() {
 		);
 	});
 }
+
+#[test]
+fn withdrawal_relayer_fees() {
+	new_test_ext().execute_with(|| {
+		EarnedRelayerFees::<Test>::insert(ALICE, Asset::Eth, 200);
+		assert_ok!(Swapping::withdrawal(
+			Origin::signed(ALICE),
+			Asset::Eth,
+			ForeignChainAddress::Eth(Default::default()),
+		));
+		let egresses = MockEgressHandler::<AnyChain>::get_scheduled_egresses();
+	});
+}
