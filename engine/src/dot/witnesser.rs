@@ -195,14 +195,12 @@ where
 					// to contain all the ingress witnessse for this block
 					let mut ingress_witnesses = Vec::new();
 					while let Some(Ok(event_details)) = block_event_details.next() {
-
-						match event_details.event {
-							(Some(ProxyAdded { delegator, .. }), None) => {
-								if AsRef::<[u8; 32]>::as_ref(&delegator) != AsRef::<[u8; 32]>::as_ref(&our_vault) {
-									continue
-								}
-
-								if let Phase::ApplyExtrinsic(extrinsic_index) = event_details.phase {
+						if let Phase::ApplyExtrinsic(extrinsic_index) = event_details.phase {
+							match event_details.event {
+								(Some(ProxyAdded { delegator, .. }), None) => {
+									if AsRef::<[u8; 32]>::as_ref(&delegator) != AsRef::<[u8; 32]>::as_ref(&our_vault) {
+										continue
+									}
 									let block = dot_client
 										.rpc()
 										.block(Some(event_details.block_hash))
@@ -213,62 +211,60 @@ where
 											event_details.block_hash,
 										))?;
 
-									let xt = block.block.extrinsics.get(extrinsic_index as usize).expect("We know this exists since we got this index from the event, from the block we are querying.");
-									let xt_encoded = xt.encode();
-									let mut xt_bytes = xt_encoded.as_slice();
-									let unchecked = PolkadotUncheckedExtrinsic::decode(&mut xt_bytes);
-									if let Ok(unchecked) = unchecked {
-										let signature = unchecked.signature.unwrap().1;
-										if let MultiSignature::Sr25519(sig) = signature {
-											slog::info!(
-												logger,
-												"Witnessing ProxyAdded {{ signature: {sig:?}, signer: {our_vault:?} }}"
-											);
-											let _result = state_chain_client
-												.submit_signed_extrinsic(
-													pallet_cf_witnesser::Call::witness_at_epoch {
-														call: Box::new(
-															pallet_cf_broadcast::Call::<
-																_,
-																PolkadotInstance,
-															>::signature_accepted {
-																signature: sig,
-																signer_id: our_vault.clone(),
-																// TODO: https://github.com/chainflip-io/chainflip-backend/issues/2544
-																tx_fee: 1000,
-															}
-															.into(),
-														),
-														epoch_index: epoch_start.epoch_index,
-													},
-													&logger,
+										let xt = block.block.extrinsics.get(extrinsic_index as usize).expect("We know this exists since we got this index from the event, from the block we are querying.");
+										let xt_encoded = xt.encode();
+										let mut xt_bytes = xt_encoded.as_slice();
+										let unchecked = PolkadotUncheckedExtrinsic::decode(&mut xt_bytes);
+										if let Ok(unchecked) = unchecked {
+											let signature = unchecked.signature.unwrap().1;
+											if let MultiSignature::Sr25519(sig) = signature {
+												slog::info!(
+													logger,
+													"Witnessing ProxyAdded {{ signature: {sig:?}, signer: {our_vault:?} }}"
+												);
+												let _result = state_chain_client
+													.submit_signed_extrinsic(
+														pallet_cf_witnesser::Call::witness_at_epoch {
+															call: Box::new(
+																pallet_cf_broadcast::Call::<
+																	_,
+																	PolkadotInstance,
+																>::signature_accepted {
+																	signature: sig,
+																	signer_id: our_vault.clone(),
+																	// TODO: https://github.com/chainflip-io/chainflip-backend/issues/2544
+																	tx_fee: 1000,
+																}
+																.into(),
+															),
+															epoch_index: epoch_start.epoch_index,
+														},
+														&logger,
+													)
+													.await;
+											} else {
+												slog::error!(
+													logger,
+													"Signature not Sr25519. Got {:?} instead.",
+													signature
 												)
-												.await;
+											}
 										} else {
 											slog::error!(
 												logger,
-												"Signature not Sr25519. Got {:?} instead.",
-												signature
-											)
+												"Failed to decode UncheckedExtrinsic {:?}",
+												unchecked
+											);
 										}
-									} else {
-										slog::error!(
-											logger,
-											"Failed to decode UncheckedExtrinsic {:?}",
-											unchecked
-										);
+								},
+								(None, Some(Transfer { to, amount, .. })) => {
+
+									// When we get a transfer event, we want to check that we have pulled the latest addresses to monitor from the chain first
+									while let Ok(address) = dot_monitor_ingress_receiver.try_recv() {
+										monitored_addresses.insert(address);
 									}
-								}
-							},
-							(None, Some(Transfer { to, amount, .. })) => {
 
-								// When we get a transfer event, we want to check that we have pulled the latest addresses to monitor from the chain first
-								while let Ok(address) = dot_monitor_ingress_receiver.try_recv() {
-									monitored_addresses.insert(address);
-								}
-
-								if monitored_addresses.contains(&to) {
-									if let Phase::ApplyExtrinsic(extrinsic_index) = event_details.phase {
+									if monitored_addresses.contains(&to) {
 										slog::info!(logger, "Witnessing DOT Transfer {{ amount: {amount:?}, to: {to:?}");
 										ingress_witnesses.push(IngressWitness {
 											ingress_address: to,
@@ -280,11 +276,11 @@ where
 											}
 										})
 									}
+								},
+								(Some(_), Some(_)) => unreachable!("An event can only be one event at once."),
+								_ => {
+									// just not an interesting event
 								}
-							},
-							(Some(_), Some(_)) => unreachable!("An event can only be one event at once."),
-							_ => {
-								// just not an interesting event
 							}
 						}
 					}
