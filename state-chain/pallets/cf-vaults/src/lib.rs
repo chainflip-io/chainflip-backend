@@ -323,6 +323,7 @@ pub mod pallet {
 							"Can't have success unless all candidates responded"
 						);
 						weight += T::WeightInfo::on_initialize_success();
+						Self::deposit_event(Event::KeygenSuccess(keygen_ceremony_id));
 						Self::trigger_keygen_verification(
 							keygen_ceremony_id,
 							new_public_key,
@@ -713,7 +714,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		rotated_at_block_number: ChainBlockNumberFor<T, I>,
 	) {
 		Self::set_vault_for_next_epoch(new_public_key, rotated_at_block_number);
-		T::VaultTransitionHandler::on_new_vault(new_public_key);
+		T::VaultTransitionHandler::on_new_vault();
 	}
 
 	fn set_vault_for_next_epoch(
@@ -774,7 +775,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		PendingVaultRotation::<T, I>::put(
 			VaultRotationStatus::<T, I>::AwaitingKeygenVerification { new_public_key },
 		);
-		Self::deposit_event(Event::KeygenSuccess(keygen_ceremony_id));
+
 		(request_id, signing_ceremony_id)
 	}
 

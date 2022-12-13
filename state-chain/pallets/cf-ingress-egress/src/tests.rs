@@ -32,6 +32,7 @@ fn disallowed_asset_will_not_be_batch_sent() {
 				asset,
 				amount: 1_000,
 				to: ALICE_ETH_ADDRESS.into(),
+				egress_id: 1,
 			}]
 		);
 
@@ -76,21 +77,25 @@ fn can_schedule_egress_to_batch() {
 					asset: ETH_ETH,
 					amount: 1_000,
 					to: ALICE_ETH_ADDRESS.into(),
+					egress_id: 1,
 				},
 				FetchOrTransfer::<Ethereum>::Transfer {
 					asset: ETH_ETH,
 					amount: 2_000,
 					to: ALICE_ETH_ADDRESS.into(),
+					egress_id: 2,
 				},
 				FetchOrTransfer::<Ethereum>::Transfer {
 					asset: ETH_FLIP,
 					amount: 3_000,
 					to: BOB_ETH_ADDRESS.into(),
+					egress_id: 3,
 				},
 				FetchOrTransfer::<Ethereum>::Transfer {
 					asset: ETH_FLIP,
 					amount: 4_000,
 					to: BOB_ETH_ADDRESS.into(),
+					egress_id: 4,
 				},
 			]
 		);
@@ -172,6 +177,8 @@ fn on_idle_can_send_batch_all() {
 		System::assert_has_event(Event::IngressEgress(crate::Event::BatchBroadcastRequested {
 			fetch_batch_size: 5u32,
 			egress_batch_size: 8u32,
+			broadcast_id: 1,
+			egress_ids: vec![1, 2, 3, 4, 5, 6, 7, 8],
 		}));
 
 		assert!(ScheduledEgressRequests::<Test, Instance1>::get().is_empty());
@@ -232,6 +239,8 @@ fn can_manually_send_batch_all() {
 		System::assert_has_event(Event::IngressEgress(crate::Event::BatchBroadcastRequested {
 			fetch_batch_size: 1u32,
 			egress_batch_size: 1u32,
+			broadcast_id: 1,
+			egress_ids: vec![1],
 		}));
 		assert_eq!(ScheduledEgressRequests::<Test, Instance1>::decode_len(), Some(10));
 
@@ -241,6 +250,8 @@ fn can_manually_send_batch_all() {
 		System::assert_has_event(Event::IngressEgress(crate::Event::BatchBroadcastRequested {
 			fetch_batch_size: 3u32,
 			egress_batch_size: 7u32,
+			broadcast_id: 1,
+			egress_ids: vec![2, 3, 4, 5, 6, 7, 8],
 		}));
 
 		assert!(ScheduledEgressRequests::<Test, Instance1>::get().is_empty());
@@ -269,6 +280,8 @@ fn on_idle_batch_size_is_limited_by_weight() {
 		System::assert_has_event(Event::IngressEgress(crate::Event::BatchBroadcastRequested {
 			fetch_batch_size: 1u32,
 			egress_batch_size: 2u32,
+			broadcast_id: 1,
+			egress_ids: vec![1, 2],
 		}));
 
 		// Send another 3 requests.
@@ -280,6 +293,8 @@ fn on_idle_batch_size_is_limited_by_weight() {
 		System::assert_has_event(Event::IngressEgress(crate::Event::BatchBroadcastRequested {
 			fetch_batch_size: 1u32,
 			egress_batch_size: 2u32,
+			broadcast_id: 1,
+			egress_ids: vec![3, 4],
 		}));
 
 		assert_eq!(
@@ -289,6 +304,7 @@ fn on_idle_batch_size_is_limited_by_weight() {
 					asset: ETH_FLIP,
 					amount: 5_000,
 					to: ALICE_ETH_ADDRESS.into(),
+					egress_id: 5,
 				},
 				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 3u64, asset: ETH_FLIP },
 				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 4u64, asset: ETH_FLIP },

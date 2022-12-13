@@ -19,8 +19,8 @@ use cf_chains::{
 };
 
 use cf_primitives::{
-	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, CeremonyId, EpochIndex,
-	EthereumAddress, ForeignChainAddress, IntentId,
+	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BroadcastId, CeremonyId,
+	EpochIndex, EthereumAddress, ForeignChainAddress, IntentId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -462,7 +462,7 @@ pub trait Broadcaster<Api: ChainAbi> {
 	type ApiCall: ApiCall<Api>;
 
 	/// Request a threshold signature and then build and broadcast the outbound api call.
-	fn threshold_sign_and_broadcast(api_call: Self::ApiCall);
+	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) -> BroadcastId;
 }
 
 /// The heartbeat of the network
@@ -773,7 +773,7 @@ impl<T: frame_system::Config> EgressApi<Polkadot> for T {
 }
 
 pub trait VaultTransitionHandler<C: ChainCrypto> {
-	fn on_new_vault(_new_key: C::AggKey) {}
+	fn on_new_vault() {}
 }
 
 /// Provides information about current bids.

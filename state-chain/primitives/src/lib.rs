@@ -36,6 +36,8 @@ pub type AuthorityCount = u32;
 
 pub type IntentId = u64;
 
+pub type EgressId = u64;
+
 pub type ExchangeRate = FixedU128;
 
 pub type EthereumAddress = [u8; 20];
@@ -45,6 +47,8 @@ pub type EthAmount = u128;
 pub type AssetAmount = u128;
 
 pub type BasisPoints = u16;
+
+pub type BroadcastId = u32;
 
 /// Alias to the opaque account ID type for this chain, actually a `AccountId32`. This is always
 /// 32 bytes.
