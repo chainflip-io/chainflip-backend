@@ -926,6 +926,9 @@ impl PoolState {
 			let mut _bits_remaining = sqrt_price_q64f128;
 			let mut most_signifcant_bit = 0u8;
 
+			// rustfmt chokes when formatting this macro.
+			// See: https://github.com/rust-lang/rustfmt/issues/5404
+			#[rustfmt::skip]
 			macro_rules! add_integer_bit {
 				($bit:literal, $lower_bits_mask:literal) => {
 					if _bits_remaining > U256::from($lower_bits_mask) {
@@ -965,6 +968,9 @@ impl PoolState {
 			let mut log_2_q63f64 = (integer_log_2 as i128) << 64u8;
 			let mut _mantissa = mantissa;
 
+			// rustfmt chokes when formatting this macro.
+			// See: https://github.com/rust-lang/rustfmt/issues/5404
+			#[rustfmt::skip]
 			macro_rules! add_fractional_bit {
 				($bit:literal) => {
 					// Note squaring a number doubles its log
