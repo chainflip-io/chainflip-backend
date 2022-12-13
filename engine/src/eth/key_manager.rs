@@ -240,7 +240,7 @@ impl EthContractWitnesser for KeyManager {
 												new_agg_key.serialize(),
 											),
 										block_number,
-										tx_hash: event.tx_hash,
+										tx_id: event.tx_hash,
 									}
 									.into(),
 								),

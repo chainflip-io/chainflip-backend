@@ -1,7 +1,10 @@
 use std::{collections::BTreeSet, pin::Pin, sync::Arc};
 
 use cf_chains::{
-	dot::{Polkadot, PolkadotBalance, PolkadotHash, PolkadotProxyType, PolkadotUncheckedExtrinsic},
+	dot::{
+		Polkadot, PolkadotBalance, PolkadotHash, PolkadotProxyType, PolkadotPublicKey,
+		PolkadotUncheckedExtrinsic,
+	},
 	eth::assets,
 };
 use cf_primitives::{PolkadotAccountId, PolkadotBlockNumber, TxId};
@@ -194,7 +197,7 @@ where
 					while let Some(Ok(event_details)) = block_event_details.next() {
 						if let Phase::ApplyExtrinsic(extrinsic_index) = event_details.phase {
 							match event_details.event {
-								(Some(ProxyAdded { delegator, .. }), None) => {
+								(Some(ProxyAdded { delegator, delegatee, .. }), None) => {
 									if AsRef::<[u8; 32]>::as_ref(&delegator) != AsRef::<[u8; 32]>::as_ref(&our_vault) {
 										continue
 									}
@@ -231,6 +234,29 @@ where
 																	signer_id: our_vault.clone(),
 																	// TODO: https://github.com/chainflip-io/chainflip-backend/issues/2544
 																	tx_fee: 1000,
+																}
+																.into(),
+															),
+															epoch_index: epoch_start.epoch_index,
+														},
+														&logger,
+													)
+													.await;
+
+												let _result = state_chain_client
+													.submit_signed_extrinsic(
+														pallet_cf_witnesser::Call::witness_at_epoch {
+															call: Box::new(
+																pallet_cf_vaults::Call::<
+																	_,
+																	PolkadotInstance,
+																>::vault_key_rotated {
+																	new_public_key: PolkadotPublicKey::from(*AsRef::<[u8; 32]>::as_ref(&delegatee)),
+																	block_number,
+																	tx_id: TxId {
+																		block_number,
+																		extrinsic_index
+																	}
 																}
 																.into(),
 															),

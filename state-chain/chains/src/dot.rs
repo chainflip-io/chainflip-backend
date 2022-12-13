@@ -743,7 +743,13 @@ pub struct PolkadotPublicKey(pub sr25519::Public);
 
 impl Default for PolkadotPublicKey {
 	fn default() -> Self {
-		vec![0; 32].try_into().unwrap()
+		[0; 32].into()
+	}
+}
+
+impl From<[u8; 32]> for PolkadotPublicKey {
+	fn from(pub_key_bytes: [u8; 32]) -> Self {
+		PolkadotPublicKey(sr25519::Public(pub_key_bytes))
 	}
 }
 

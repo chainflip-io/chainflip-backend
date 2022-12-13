@@ -633,7 +633,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			new_public_key: AggKeyFor<T, I>,
 			block_number: ChainBlockNumberFor<T, I>,
-			_tx_hash: TransactionIdFor<T, I>,
+			_tx_id: TransactionIdFor<T, I>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
 
