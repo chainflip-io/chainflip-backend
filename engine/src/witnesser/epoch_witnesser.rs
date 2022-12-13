@@ -17,11 +17,7 @@ pub fn should_end_witnessing<Chain: cf_chains::Chain>(
 ) -> bool {
 	if let Some(end_block) = *end_witnessing_signal.lock().unwrap() {
 		if current_block_number >= end_block {
-			slog::info!(
-				logger,
-				"Finished witnessing events at ETH block: {}",
-				current_block_number
-			);
+			slog::info!(logger, "Finished witnessing events at block: {}", current_block_number);
 			// we have reached the block height we wanted to witness up to
 			// so can stop the witness process
 			return true
@@ -82,7 +78,7 @@ where
 
 							slog::info!(
 								logger,
-								"Start witnessing from ETH block: {}",
+								"Start witnessing from block: {}",
 								epoch_start.block_number
 							);
 

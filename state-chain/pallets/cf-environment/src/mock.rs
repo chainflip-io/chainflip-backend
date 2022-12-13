@@ -3,6 +3,8 @@ use crate::{self as pallet_cf_environment, cfe};
 use cf_chains::dot::POLKADOT_METADATA;
 #[cfg(feature = "ibiza")]
 use cf_chains::{dot::api::CreatePolkadotVault, ApiCall, Chain, ChainCrypto, Polkadot};
+
+#[cfg(feature = "ibiza")]
 use cf_primitives::BroadcastId;
 use cf_traits::mocks::ensure_origin_mock::NeverFailingOriginCheck;
 #[cfg(feature = "ibiza")]
@@ -114,7 +116,7 @@ impl VaultKeyWitnessedHandler<Polkadot> for MockPolkadotVaultKeyWitnessedHandler
 	fn on_new_key_activated(
 		_new_public_key: <Polkadot as ChainCrypto>::AggKey,
 		_block_number: <Polkadot as Chain>::ChainBlockNumber,
-		_tx_hash: <Polkadot as ChainCrypto>::TransactionHash,
+		_tx_id: <Polkadot as ChainCrypto>::TransactionId,
 	) -> frame_support::pallet_prelude::DispatchResultWithPostInfo {
 		unimplemented!()
 	}

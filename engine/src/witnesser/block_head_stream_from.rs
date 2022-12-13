@@ -1,4 +1,4 @@
-use std::pin::Pin;
+use std::{ops::RangeInclusive, pin::Pin};
 
 use futures::{stream, Future, Stream};
 
@@ -7,6 +7,7 @@ use crate::witnesser::BlockNumberable;
 use futures::StreamExt;
 
 use anyhow::{anyhow, Result};
+use core::fmt::Display;
 
 /// Takes a reorg-safe stream (strictly monotonically increasing block headers) and returns a stream
 /// of block headers that begin at the `from_block` specified. This is necessary because when
@@ -15,6 +16,7 @@ use anyhow::{anyhow, Result};
 /// block before taking any actions. If the latest block is *after* our `from_block` then we must
 /// query for the blocks before this one before yielding the "current" headers.
 pub async fn block_head_stream_from<
+	BlockNumber,
 	HeaderStream,
 	Header,
 	// A closure that will get or generate the custom header type that we use for a particular
@@ -22,15 +24,17 @@ pub async fn block_head_stream_from<
 	GetHeaderClosure,
 	HeaderFut,
 >(
-	from_block: u64,
+	from_block: BlockNumber,
 	safe_head_stream: HeaderStream,
 	get_header_fn: GetHeaderClosure,
 	logger: &slog::Logger,
 ) -> Result<Pin<Box<dyn Stream<Item = Header> + Send + 'static>>>
 where
+	BlockNumber: PartialOrd + Display + Clone + Copy + Send + 'static,
+	RangeInclusive<BlockNumber>: Iterator<Item = BlockNumber>,
 	HeaderStream: Stream<Item = Header> + 'static + Send,
-	Header: BlockNumberable + 'static + Send,
-	GetHeaderClosure: Fn(u64) -> HeaderFut + Send + 'static,
+	Header: BlockNumberable<BlockNumber = BlockNumber> + 'static + Send,
+	GetHeaderClosure: Fn(BlockNumber) -> HeaderFut + Send + 'static,
 	HeaderFut: Future<Output = Result<Header>> + Send + Unpin + 'static,
 {
 	let mut safe_head_stream = Box::pin(safe_head_stream);
@@ -40,7 +44,7 @@ where
 		if best_safe_block_number < from_block {
 			slog::trace!(
 				logger,
-				"Not witnessing until ETH block `{}` Received block `{}` from stream.",
+				"Not witnessing until block `{}` Received block `{}` from stream.",
 				from_block,
 				best_safe_block_number
 			);
@@ -75,7 +79,7 @@ where
 			))
 		}
 	}
-	Err(anyhow!("No events in ETH safe head stream"))
+	Err(anyhow!("No events in safe head stream"))
 }
 
 #[cfg(test)]
@@ -92,7 +96,9 @@ mod tests {
 	}
 
 	impl BlockNumberable for MockHeader {
-		fn block_number(&self) -> u64 {
+		type BlockNumber = u64;
+
+		fn block_number(&self) -> Self::BlockNumber {
 			self.block_number
 		}
 	}

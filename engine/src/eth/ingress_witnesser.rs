@@ -147,7 +147,7 @@ where
 										ingress_address: to_addr,
 										asset: eth::Asset::Eth,
 										amount: tx.value.as_u128(),
-										tx_hash: tx.hash
+										tx_id: tx.hash
 									}
 								})
 								.collect::<Vec<IngressWitness<Ethereum>>>();

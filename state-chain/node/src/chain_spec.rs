@@ -1,7 +1,7 @@
 #[cfg(feature = "ibiza")]
 use cf_chains::dot::{POLKADOT_METADATA, POLKADOT_VAULT_ACCOUNT};
 use cf_primitives::{AccountRole, AuthorityCount};
-use common::FLIPPERINOS_PER_FLIP;
+
 use sc_service::{ChainType, Properties};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::crypto::{set_default_ss58_version, Ss58AddressFormat, UncheckedInto};
@@ -12,6 +12,9 @@ use state_chain_runtime::{
 	EthereumVaultConfig, FlipBalance, FlipConfig, GenesisConfig, GovernanceConfig, GrandpaConfig,
 	ReputationConfig, SessionConfig, StakingConfig, SystemConfig, ValidatorConfig, WASM_BINARY,
 };
+
+#[cfg(feature = "ibiza")]
+use common::FLIPPERINOS_PER_FLIP;
 
 #[cfg(feature = "ibiza")]
 use state_chain_runtime::{PolkadotThresholdSignerConfig, PolkadotVaultConfig};

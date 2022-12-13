@@ -223,6 +223,8 @@ async fn main() -> anyhow::Result<()> {
             let (eth_monitor_flip_ingress_sender, eth_monitor_flip_ingress_receiver) = tokio::sync::mpsc::unbounded_channel();
             #[cfg(feature = "ibiza")]
             let (eth_monitor_usdc_ingress_sender, eth_monitor_usdc_ingress_receiver) = tokio::sync::mpsc::unbounded_channel();
+            #[cfg(feature = "ibiza")]
+            let (dot_monitor_ingress_sender, dot_monitor_ingress_receiver) = tokio::sync::mpsc::unbounded_channel();
 
 
             // Start state chain components
@@ -239,6 +241,7 @@ async fn main() -> anyhow::Result<()> {
                 #[cfg(feature = "ibiza")] eth_monitor_flip_ingress_sender,
                 #[cfg(feature = "ibiza")] eth_monitor_usdc_ingress_sender,
                 #[cfg(feature = "ibiza")] dot_epoch_start_sender,
+                #[cfg(feature = "ibiza")] dot_monitor_ingress_sender,
                 cfe_settings_update_sender,
                 latest_block_hash,
                 root_logger.clone()
@@ -314,7 +317,18 @@ async fn main() -> anyhow::Result<()> {
                     )
                 );
                 scope.spawn(
-                    dot::witnesser::start(dot_epoch_start_receiver_1, dot_client, state_chain_client, &root_logger)
+                    dot::witnesser::start(dot_epoch_start_receiver_1, dot_client, dot_monitor_ingress_receiver,
+                        state_chain_client.storage_map::<pallet_cf_ingress_egress::IntentIngressDetails<state_chain_runtime::Runtime, state_chain_runtime::PolkadotInstance>>(latest_block_hash)
+                        .await
+                        .context("Failed to get initial ingress details")?
+                        .into_iter()
+                        .filter_map(|(address, intent)| if intent.ingress_asset == cf_primitives::chains::assets::dot::Asset::Dot {
+                            Some(address)
+                        } else {
+                            None
+                        }).collect(),
+                        state_chain_client, &root_logger)
+
                 )
             }
 

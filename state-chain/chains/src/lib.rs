@@ -35,7 +35,9 @@ pub trait Chain: Member + Parameter {
 		+ Copy
 		+ MaybeSerializeDeserialize
 		+ AtLeast32BitUnsigned
-		+ From<u64>
+		// this is used primarily for tests. We use u32 because it's the smallest block number we
+		// use (and so we can always .into() into a larger type)
+		+ From<u32>
 		+ MaxEncodedLen
 		+ Display;
 
@@ -98,7 +100,10 @@ pub trait ChainCrypto: Chain {
 		+ BenchmarkValue;
 	type Payload: Member + Parameter + BenchmarkValue;
 	type ThresholdSignature: Member + Parameter + BenchmarkValue;
-	type TransactionHash: Member + Parameter + BenchmarkValue;
+	/// Must uniquely identify a transaction. On most chains this will be a transaction hash.
+	/// However, for example, in the case of Polkadot, the blocknumber-extrinsic-index is the unique
+	/// identifier.
+	type TransactionId: Member + Parameter + BenchmarkValue;
 	type GovKey: Member + Parameter + Copy + BenchmarkValue;
 
 	fn verify_threshold_signature(
@@ -308,7 +313,7 @@ pub mod mocks {
 		type AggKey = [u8; 4];
 		type Payload = [u8; 4];
 		type ThresholdSignature = MockThresholdSignature<Self::AggKey, Self::Payload>;
-		type TransactionHash = [u8; 4];
+		type TransactionId = [u8; 4];
 		type GovKey = [u8; 32];
 
 		fn verify_threshold_signature(
@@ -329,7 +334,7 @@ pub mod mocks {
 	impl_default_benchmark_value!(u32);
 	impl_default_benchmark_value!(MockTransaction);
 
-	pub const ETH_TX_HASH: <MockEthereum as ChainCrypto>::TransactionHash = [0xbc; 4];
+	pub const ETH_TX_HASH: <MockEthereum as ChainCrypto>::TransactionId = [0xbc; 4];
 
 	pub const ETH_TX_FEE: <MockEthereum as Chain>::TransactionFee =
 		TransactionFee { effective_gas_price: 200, gas_used: 100 };

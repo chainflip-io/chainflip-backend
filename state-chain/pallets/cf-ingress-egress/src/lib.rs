@@ -67,7 +67,7 @@ pub mod pallet {
 		pub ingress_address: C::ChainAccount,
 		pub asset: C::ChainAsset,
 		pub amount: AssetAmount,
-		pub tx_hash: <C as ChainCrypto>::TransactionHash,
+		pub tx_id: <C as ChainCrypto>::TransactionId,
 	}
 
 	/// Details used to determine the ingress of funds.
@@ -175,7 +175,7 @@ pub mod pallet {
 			ingress_address: TargetChainAccount<T, I>,
 			asset: TargetChainAsset<T, I>,
 			amount: AssetAmount,
-			tx_hash: <T::TargetChain as ChainCrypto>::TransactionHash,
+			tx_id: <T::TargetChain as ChainCrypto>::TransactionId,
 		},
 		AssetEgressDisabled {
 			asset: TargetChainAsset<T, I>,
@@ -288,8 +288,8 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
-			for IngressWitness { ingress_address, asset, amount, tx_hash } in ingress_witnesses {
-				Self::do_single_ingress(ingress_address, asset, amount, tx_hash)?;
+			for IngressWitness { ingress_address, asset, amount, tx_id } in ingress_witnesses {
+				Self::do_single_ingress(ingress_address, asset, amount, tx_id)?;
 			}
 			Ok(())
 		}
@@ -389,7 +389,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ingress_address: TargetChainAccount<T, I>,
 		asset: TargetChainAsset<T, I>,
 		amount: AssetAmount,
-		tx_hash: <T::TargetChain as ChainCrypto>::TransactionHash,
+		tx_id: <T::TargetChain as ChainCrypto>::TransactionId,
 	) -> DispatchResult {
 		let ingress = IntentIngressDetails::<T, I>::get(&ingress_address)
 			.ok_or(Error::<T, I>::InvalidIntent)?;
@@ -428,7 +428,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			)?,
 		};
 
-		Self::deposit_event(Event::IngressCompleted { ingress_address, asset, amount, tx_hash });
+		Self::deposit_event(Event::IngressCompleted { ingress_address, asset, amount, tx_id });
 		Ok(())
 	}
 }
