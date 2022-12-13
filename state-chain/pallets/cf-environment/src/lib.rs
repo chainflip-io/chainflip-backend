@@ -350,7 +350,6 @@ pub mod pallet {
 						"This should not fail since the size of vec is guaranteed to be 32",
 					),
 					block_number,
-					tx_hash,
 				)?;
 				Self::next_polkadot_proxy_account_nonce();
 				Ok(dispatch_result)
