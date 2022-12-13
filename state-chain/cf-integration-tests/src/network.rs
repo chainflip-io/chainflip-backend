@@ -11,7 +11,11 @@ use state_chain_runtime::PolkadotInstance;
 
 use super::*;
 use cf_chains::{eth::SchnorrVerificationComponents, ChainCrypto};
-use cf_primitives::{AccountRole, CeremonyId, EpochIndex, FlipBalance, TxId};
+use cf_primitives::{AccountRole, CeremonyId, EpochIndex, FlipBalance};
+
+#[cfg(feature = "ibiza")]
+use cf_primitives::TxId;
+
 use cf_traits::{AccountRoleRegistry, EpochInfo};
 use codec::Encode;
 use frame_support::traits::{OnFinalize, OnIdle};

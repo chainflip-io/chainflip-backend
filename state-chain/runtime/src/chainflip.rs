@@ -38,11 +38,11 @@ use cf_chains::{
 #[cfg(feature = "ibiza")]
 use cf_primitives::{AssetAmount, ForeignChain, ForeignChainAddress, IntentId};
 use cf_traits::{
-	BlockEmissions, Chainflip, EmergencyRotation, EpochInfo, EpochKey, EthEnvironmentProvider,
-	Heartbeat, Issuance, NetworkState, RewardsDistribution, RuntimeUpgrade, VaultTransitionHandler,
+	BlockEmissions, Chainflip, EmergencyRotation, EpochInfo, EthEnvironmentProvider, Heartbeat,
+	Issuance, NetworkState, RewardsDistribution, RuntimeUpgrade, VaultTransitionHandler,
 };
 #[cfg(feature = "ibiza")]
-use cf_traits::{EgressApi, IngressApi};
+use cf_traits::{EgressApi, EpochKey, IngressApi};
 #[cfg(feature = "ibiza")]
 use codec::{Decode, Encode};
 #[cfg(feature = "ibiza")]

@@ -3,6 +3,8 @@ use crate::{self as pallet_cf_environment, cfe};
 use cf_chains::dot::POLKADOT_METADATA;
 #[cfg(feature = "ibiza")]
 use cf_chains::{dot::api::CreatePolkadotVault, ApiCall, Chain, ChainCrypto, Polkadot};
+
+#[cfg(feature = "ibiza")]
 use cf_primitives::BroadcastId;
 use cf_traits::mocks::ensure_origin_mock::NeverFailingOriginCheck;
 #[cfg(feature = "ibiza")]
