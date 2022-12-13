@@ -19,8 +19,8 @@ use cf_chains::{
 };
 
 use cf_primitives::{
-	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, CeremonyId, EpochIndex,
-	EthereumAddress, ForeignChainAddress, IntentId,
+	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BroadcastId, CeremonyId,
+	EgressId, EpochIndex, EthereumAddress, ForeignChainAddress, IntentId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -370,29 +370,25 @@ pub trait ThresholdSignerNomination {
 }
 
 #[derive(Default, Debug, TypeInfo, Decode, Encode, Clone, Copy, PartialEq, Eq)]
-pub enum KeyState<Key> {
-	Active {
-		key: Key,
-		epoch_index: EpochIndex,
-	},
+pub enum KeyState {
+	Active,
 	// We are currently transitioning to a new key or the key doesn't yet exist.
 	#[default]
 	Unavailable,
 }
 
-impl<Key> KeyState<Key> {
-	pub fn unwrap_key(self) -> Key {
-		match self {
-			Self::Active { key: key_id, epoch_index: _ } => key_id,
-			Self::Unavailable => panic!("KeyState is Unavailable!"),
-		}
-	}
+#[derive(Default, Debug, TypeInfo, Decode, Encode, Clone, Copy, PartialEq, Eq)]
+pub struct EpochKey<Key> {
+	pub key: Key,
+	pub epoch_index: EpochIndex,
+	pub key_state: KeyState,
 }
 
 /// Provides the currently valid key for multisig ceremonies.
 pub trait KeyProvider<C: ChainCrypto> {
-	/// Get the chain's current agg key and the epoch index for the current key.
-	fn current_key_epoch_index() -> KeyState<C::AggKey>;
+	/// Get the chain's current agg key, the epoch index for the current key and the state of that
+	/// key.
+	fn current_epoch_key() -> EpochKey<C::AggKey>;
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_key(_key: C::AggKey) {
@@ -466,7 +462,7 @@ pub trait Broadcaster<Api: ChainAbi> {
 	type ApiCall: ApiCall<Api>;
 
 	/// Request a threshold signature and then build and broadcast the outbound api call.
-	fn threshold_sign_and_broadcast(api_call: Self::ApiCall);
+	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) -> BroadcastId;
 }
 
 /// The heartbeat of the network
@@ -754,7 +750,7 @@ pub trait EgressApi<C: Chain> {
 		foreign_asset: C::ChainAsset,
 		amount: AssetAmount,
 		egress_address: C::ChainAccount,
-	);
+	) -> EgressId;
 }
 
 impl<T: frame_system::Config> EgressApi<Ethereum> for T {
@@ -762,7 +758,8 @@ impl<T: frame_system::Config> EgressApi<Ethereum> for T {
 		_foreign_asset: assets::eth::Asset,
 		_amount: AssetAmount,
 		_egress_address: <Ethereum as Chain>::ChainAccount,
-	) {
+	) -> EgressId {
+		0
 	}
 }
 
@@ -772,12 +769,13 @@ impl<T: frame_system::Config> EgressApi<Polkadot> for T {
 		_foreign_asset: assets::dot::Asset,
 		_amount: AssetAmount,
 		_egress_address: <Polkadot as Chain>::ChainAccount,
-	) {
+	) -> EgressId {
+		0
 	}
 }
 
 pub trait VaultTransitionHandler<C: ChainCrypto> {
-	fn on_new_vault(_new_key: C::AggKey) {}
+	fn on_new_vault() {}
 }
 
 /// Provides information about current bids.

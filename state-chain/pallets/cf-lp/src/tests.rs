@@ -185,9 +185,9 @@ fn cannot_manage_liquidity_during_maintenance() {
 #[test]
 fn can_open_and_close_liquidity() {
 	new_test_ext().execute_with(|| {
-		let asset = Asset::Flip;
+		const ASSET: Asset = Asset::Flip;
 		LiquidityPools::deploy(
-			&asset,
+			&ASSET,
 			TradingPosition::ClassicV3 {
 				range: Default::default(),
 				volume_0: 1_000_000,
@@ -195,11 +195,11 @@ fn can_open_and_close_liquidity() {
 			},
 		);
 		assert_eq!(
-			LiquidityPools::swap_rate(&asset, 0),
+			LiquidityPools::swap_rate(ASSET, Asset::Usdc, 0),
 			ExchangeRate::from_rational(5_000_000, 1_000_000)
 		);
 
-		FreeBalances::<Test>::insert(LP_ACCOUNT, asset, 1_000_000);
+		FreeBalances::<Test>::insert(LP_ACCOUNT, ASSET, 1_000_000);
 		FreeBalances::<Test>::insert(LP_ACCOUNT, Asset::Usdc, 1_000_000);
 
 		// Can open position
@@ -208,10 +208,10 @@ fn can_open_and_close_liquidity() {
 			volume_0: 1_000,
 			volume_1: 2_000,
 		};
-		assert_ok!(LiquidityProvider::open_position(Origin::signed(LP_ACCOUNT), asset, position,));
+		assert_ok!(LiquidityProvider::open_position(Origin::signed(LP_ACCOUNT), ASSET, position,));
 
 		assert_eq!(
-			LiquidityPools::swap_rate(&asset, 0),
+			LiquidityPools::swap_rate(ASSET, Asset::Usdc, 0),
 			ExchangeRate::from_rational(5_002_000, 1_001_000)
 		);
 
@@ -219,7 +219,7 @@ fn can_open_and_close_liquidity() {
 			crate::Event::<Test>::TradingPositionOpened {
 				account_id: LP_ACCOUNT,
 				position_id: 0,
-				asset,
+				asset: ASSET,
 				position,
 			},
 		));
@@ -227,10 +227,10 @@ fn can_open_and_close_liquidity() {
 		// Test close position
 		assert_ok!(LiquidityProvider::close_position(Origin::signed(LP_ACCOUNT), 0,));
 
-		assert_eq!(FreeBalances::<Test>::get(LP_ACCOUNT, asset), Some(1_000_000));
+		assert_eq!(FreeBalances::<Test>::get(LP_ACCOUNT, ASSET), Some(1_000_000));
 		assert_eq!(FreeBalances::<Test>::get(LP_ACCOUNT, Asset::Usdc), Some(1_000_000));
 		assert_eq!(
-			LiquidityPools::swap_rate(&asset, 0),
+			LiquidityPools::swap_rate(ASSET, Asset::Usdc, 0),
 			ExchangeRate::from_rational(5_000_000, 1_000_000)
 		);
 	});

@@ -53,7 +53,11 @@ pub trait LiquidityPoolApi {
 	fn get_liquidity(asset: &Asset) -> (AssetAmount, AssetAmount);
 
 	/// Gets the current swap rate for an pool
-	fn swap_rate(asset: &Asset, input_amount: AssetAmount) -> ExchangeRate;
+	fn swap_rate(
+		input_asset: Asset,
+		output_asset: Asset,
+		input_amount: AssetAmount,
+	) -> ExchangeRate;
 
 	/// Calculates the liquidity that corresponds to a given trading position.
 	fn get_liquidity_amount_by_position(

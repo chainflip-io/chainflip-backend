@@ -25,7 +25,7 @@ use cf_chains::{
 		api::PolkadotApi, Polkadot, PolkadotAccountId, PolkadotReplayProtection,
 		PolkadotTransactionData,
 	},
-	AnyChain, Chain, ChainCrypto,
+	AnyChain, Chain,
 };
 use cf_chains::{
 	eth::{
@@ -38,8 +38,8 @@ use cf_chains::{
 #[cfg(feature = "ibiza")]
 use cf_primitives::{AssetAmount, ForeignChain, ForeignChainAddress, IntentId};
 use cf_traits::{
-	BlockEmissions, Chainflip, EmergencyRotation, EpochInfo, EthEnvironmentProvider, Heartbeat,
-	Issuance, NetworkState, RewardsDistribution, RuntimeUpgrade, VaultTransitionHandler,
+	BlockEmissions, Chainflip, EmergencyRotation, EpochInfo, EpochKey, EthEnvironmentProvider,
+	Heartbeat, Issuance, NetworkState, RewardsDistribution, RuntimeUpgrade, VaultTransitionHandler,
 };
 #[cfg(feature = "ibiza")]
 use cf_traits::{EgressApi, IngressApi};
@@ -264,12 +264,14 @@ impl ChainEnvironment<cf_chains::dot::api::SystemAccounts, PolkadotAccountId> fo
 		use cf_traits::{KeyProvider, KeyState};
 		use sp_runtime::{traits::IdentifyAccount, MultiSigner};
 		match query {
-			cf_chains::dot::api::SystemAccounts::Proxy =>
-				match <PolkadotVault as KeyProvider<Polkadot>>::current_key_epoch_index() {
-					KeyState::Active { key, .. } =>
+			cf_chains::dot::api::SystemAccounts::Proxy => {
+				match <PolkadotVault as KeyProvider<Polkadot>>::current_epoch_key() {
+					EpochKey { key, key_state, .. } if key_state == KeyState::Active =>
 						Some(MultiSigner::Sr25519(key.0).into_account()),
 					_ => None,
-				},
+				}
+			},
+
 			cf_chains::dot::api::SystemAccounts::Vault => Environment::get_polkadot_vault_account(),
 		}
 	}
@@ -282,7 +284,7 @@ impl VaultTransitionHandler<Ethereum> for EthVaultTransitionHandler {}
 pub struct DotVaultTransitionHandler;
 #[cfg(feature = "ibiza")]
 impl VaultTransitionHandler<Polkadot> for DotVaultTransitionHandler {
-	fn on_new_vault(_new_key: <Polkadot as ChainCrypto>::AggKey) {
+	fn on_new_vault() {
 		Environment::reset_polkadot_proxy_account_nonce();
 	}
 }
@@ -295,7 +297,7 @@ impl EgressApi<AnyChain> for AnyChainIngressEgressHandler {
 		asset: Asset,
 		amount: AssetAmount,
 		egress_address: <AnyChain as Chain>::ChainAccount,
-	) {
+	) -> cf_primitives::EgressId {
 		match asset.into() {
 			ForeignChain::Ethereum => crate::EthereumIngressEgress::schedule_egress(
 				asset.try_into().expect("Checked for asset compatibility"),

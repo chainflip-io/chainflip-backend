@@ -83,30 +83,55 @@ fn keygen_success_triggers_keygen_verification() {
 	});
 }
 
+fn keygen_failure(bad_candidates: &[<MockRuntime as Chainflip>::ValidatorId]) {
+	VaultsPallet::keygen(BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()));
+
+	let ceremony_id = current_ceremony_id();
+
+	VaultsPallet::terminate_keygen_procedure(
+		bad_candidates,
+		PalletEvent::KeygenFailure(ceremony_id),
+	);
+
+	assert_eq!(last_event::<MockRuntime>(), PalletEvent::KeygenFailure(ceremony_id).into());
+
+	assert_eq!(
+		VaultsPallet::status(),
+		AsyncResult::Ready(VaultStatus::Failed(bad_candidates.iter().cloned().collect()))
+	);
+
+	MockOffenceReporter::assert_reported(
+		PalletOffence::FailedKeygen,
+		bad_candidates.iter().cloned(),
+	);
+}
+
 #[test]
-fn keygen_failure() {
+fn test_keygen_failure() {
 	new_test_ext().execute_with(|| {
-		const BAD_CANDIDATES: &[<MockRuntime as Chainflip>::ValidatorId] = &[BOB, CHARLIE];
+		keygen_failure(&[BOB, CHARLIE]);
+	});
+}
+
+// This happens when the vault reports failure (through its status) to the validator pallet.
+// Once all vaults have reported some AsyncResul::Ready status (see all_vaults_rotator) then
+// the validator pallet will call keygen() again
+#[test]
+fn keygen_called_after_keygen_failure_restarts_rotation_at_keygen() {
+	new_test_ext().execute_with(|| {
+		keygen_failure(&[BOB, CHARLIE]);
 
 		VaultsPallet::keygen(BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()));
 
-		let ceremony_id = current_ceremony_id();
-
-		VaultsPallet::terminate_keygen_procedure(
-			BAD_CANDIDATES,
-			PalletEvent::KeygenFailure(ceremony_id),
-		);
-
-		assert_eq!(last_event::<MockRuntime>(), PalletEvent::KeygenFailure(ceremony_id).into());
+		assert_eq!(VaultsPallet::status(), AsyncResult::Pending);
 
 		assert_eq!(
-			VaultsPallet::status(),
-			AsyncResult::Ready(VaultStatus::Failed(BAD_CANDIDATES.iter().cloned().collect()))
-		);
-
-		MockOffenceReporter::assert_reported(
-			PalletOffence::FailedKeygen,
-			BAD_CANDIDATES.iter().cloned(),
+			last_event::<MockRuntime>(),
+			PalletEvent::KeygenRequest(
+				current_ceremony_id(),
+				ALL_CANDIDATES.iter().cloned().collect()
+			)
+			.into()
 		);
 	});
 }

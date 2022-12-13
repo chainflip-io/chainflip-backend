@@ -13,6 +13,8 @@ mod tests;
 pub mod weights;
 pub use weights::WeightInfo;
 
+use cf_primitives::EgressId;
+
 use cf_chains::{AllBatch, Chain, ChainAbi, ChainCrypto, FetchAssetParams, TransferAssetParams};
 use cf_primitives::{Asset, AssetAmount, ForeignChainAddress, IntentId};
 use cf_traits::{
@@ -28,7 +30,7 @@ pub use sp_std::{vec, vec::Vec};
 #[derive(RuntimeDebug, Eq, PartialEq, Copy, Clone, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub enum FetchOrTransfer<C: Chain> {
 	Fetch { intent_id: IntentId, asset: C::ChainAsset },
-	Transfer { asset: C::ChainAsset, to: C::ChainAccount, amount: AssetAmount },
+	Transfer { egress_id: EgressId, asset: C::ChainAsset, to: C::ChainAccount, amount: AssetAmount },
 }
 
 impl<C: Chain> FetchOrTransfer<C> {
@@ -43,6 +45,7 @@ impl<C: Chain> FetchOrTransfer<C> {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use cf_primitives::{BroadcastId, EgressId};
 	use core::marker::PhantomData;
 	use sp_std::vec::Vec;
 
@@ -146,6 +149,10 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type IntentIdCounter<T: Config<I>, I: 'static = ()> = StorageValue<_, IntentId, ValueQuery>;
 
+	/// Stores the latest egress id used to generate an address.
+	#[pallet::storage]
+	pub type EgressIdCounter<T: Config<I>, I: 'static = ()> = StorageValue<_, EgressId, ValueQuery>;
+
 	/// Scheduled fetch and egress for the Ethereum chain.
 	#[pallet::storage]
 	pub(crate) type ScheduledEgressRequests<T: Config<I>, I: 'static = ()> =
@@ -175,6 +182,7 @@ pub mod pallet {
 			disabled: bool,
 		},
 		EgressScheduled {
+			id: EgressId,
 			asset: TargetChainAsset<T, I>,
 			amount: AssetAmount,
 			egress_address: TargetChainAccount<T, I>,
@@ -184,8 +192,8 @@ pub mod pallet {
 			asset: TargetChainAsset<T, I>,
 		},
 		BatchBroadcastRequested {
-			fetch_batch_size: u32,
-			egress_batch_size: u32,
+			broadcast_id: BroadcastId,
+			egress_ids: Vec<EgressId>,
 		},
 	}
 
@@ -327,12 +335,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let mut fetch_params = vec![];
 		let mut egress_params = vec![];
+		let mut egress_ids = vec![];
+
 		for request in batch_to_send {
 			match request {
 				FetchOrTransfer::<T::TargetChain>::Fetch { intent_id, asset } => {
 					fetch_params.push(FetchAssetParams { intent_id, asset });
 				},
-				FetchOrTransfer::<T::TargetChain>::Transfer { asset, to, amount } => {
+				FetchOrTransfer::<T::TargetChain>::Transfer { asset, to, amount, egress_id } => {
+					egress_ids.push(egress_id);
 					egress_params.push(TransferAssetParams { asset, to, amount });
 				},
 			}
@@ -344,10 +355,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		#[allow(clippy::unit_arg)]
 		match T::AllBatch::new_unsigned(fetch_params, egress_params) {
 			Ok(egress_transaction) => {
-				T::Broadcaster::threshold_sign_and_broadcast(egress_transaction);
+				let broadcast_id = T::Broadcaster::threshold_sign_and_broadcast(egress_transaction);
 				Self::deposit_event(Event::<T, I>::BatchBroadcastRequested {
-					fetch_batch_size,
-					egress_batch_size,
+					broadcast_id,
+					egress_ids,
 				});
 				TransactionOutcome::Commit(Ok(T::WeightInfo::egress_assets(
 					fetch_batch_size.saturating_add(egress_batch_size),
@@ -427,14 +438,22 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 		asset: TargetChainAsset<T, I>,
 		amount: AssetAmount,
 		egress_address: TargetChainAccount<T, I>,
-	) {
+	) -> EgressId {
+		let egress_id = EgressIdCounter::<T, I>::get().saturating_add(1);
 		ScheduledEgressRequests::<T, I>::append(FetchOrTransfer::<T::TargetChain>::Transfer {
 			asset,
 			to: egress_address.clone(),
 			amount,
+			egress_id,
 		});
-
-		Self::deposit_event(Event::<T, I>::EgressScheduled { asset, amount, egress_address });
+		EgressIdCounter::<T, I>::put(egress_id);
+		Self::deposit_event(Event::<T, I>::EgressScheduled {
+			id: egress_id,
+			asset,
+			amount,
+			egress_address,
+		});
+		egress_id
 	}
 }
 

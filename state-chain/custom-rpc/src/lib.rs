@@ -454,7 +454,8 @@ pub trait PoolsApi {
 	fn cf_swap_rate(
 		&self,
 		at: Option<state_chain_runtime::Hash>,
-		asset: Asset,
+		input_asset: Asset,
+		output_asset: Asset,
 		input_amount: AssetAmount,
 	) -> RpcResult<ExchangeRate>;
 }
@@ -469,12 +470,13 @@ where
 	fn cf_swap_rate(
 		&self,
 		at: Option<state_chain_runtime::Hash>,
-		asset: Asset,
+		input_asset: Asset,
+		output_asset: Asset,
 		input_amount: AssetAmount,
 	) -> RpcResult<ExchangeRate> {
 		self.client
 			.runtime_api()
-			.cf_swap_rate(&self.query_block_id(at), &asset, input_amount)
+			.cf_swap_rate(&self.query_block_id(at), input_asset, output_asset, input_amount)
 			.map_err(to_rpc_error)
 	}
 }
