@@ -225,6 +225,8 @@ fn withdrawal_relayer_fees() {
 			Asset::Eth,
 			ForeignChainAddress::Eth(Default::default()),
 		));
-		let egresses = MockEgressHandler::<AnyChain>::get_scheduled_egresses();
+		let mut egresses = MockEgressHandler::<AnyChain>::get_scheduled_egresses();
+		assert!(egresses.len() == 1);
+		assert_eq!(egresses.pop().expect("to be exist").1, 200);
 	});
 }

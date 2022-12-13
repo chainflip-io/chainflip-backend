@@ -23,15 +23,13 @@ impl<C: Chain> EgressApi<C> for MockEgressHandler<C> {
 		egress_address: <C as Chain>::ChainAccount,
 	) -> EgressId {
 		<Self as MockPalletStorage>::mutate_value(b"SCHEDULED_EGRESSES", |storage| {
-			storage
-				.as_mut()
-				.or(Some(&mut vec![]))
-				.map(|v| {
-					let next_id = if let Some((id, _)) = v.last() { id + 1 } else { 1 };
-					v.push((next_id, (foreign_asset, amount, egress_address)));
-					next_id
-				})
-				.unwrap()
-		})
+			if storage.is_none() {
+				*storage = Some(vec![]);
+			}
+			storage.as_mut().map(|v| {
+				v.push((foreign_asset, amount, egress_address));
+			})
+		});
+		1
 	}
 }
