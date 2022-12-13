@@ -1,6 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use cf_primitives::{Asset, AssetAmount, ForeignChain, ForeignChainAddress};
-use cf_traits::{liquidity::SwappingApi, IngressApi};
+use cf_traits::{liquidity::SwappingApi, IngressApi, SystemStateInfo};
 use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{traits::Saturating, Permill},
@@ -162,6 +162,13 @@ pub mod pallet {
 
 			Self::deposit_event(Event::<T>::NewSwapIntent { ingress_address });
 
+			Ok(())
+		}
+
+		#[pallet::weight(10_000)]
+		pub fn withdrawal(origin: OriginFor<T>, asset: Asset) -> DispatchResult {
+			T::SystemState::ensure_no_maintenance()?;
+			let account_id = T::AccountRoleRegistry::ensure_relayer(origin)?;
 			Ok(())
 		}
 	}
