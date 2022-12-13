@@ -151,6 +151,7 @@ where
 					take_while_ok(block_head_stream_from
 						.then(|mini_header| {
 							let dot_client = dot_client.clone();
+							slog::info!(&logger, "Fetching Polkadot events for block: {}", mini_header.block_number);
 							// TODO: This will not work if the block we are querying metadata has
 							// different metadata than the latest block since this client fetches
 							// the latest metadata and always uses it.

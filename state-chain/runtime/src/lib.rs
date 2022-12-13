@@ -995,10 +995,10 @@ impl_runtime_apis! {
 
 	#[cfg(feature = "ibiza")]
 	impl pallet_cf_pools_runtime_api::PoolsApi<Block> for Runtime {
-		fn cf_swap_rate(asset: &Asset, input_amount: AssetAmount) -> ExchangeRate {
+		fn cf_swap_rate(input_asset: Asset, output_asset: Asset, input_amount: AssetAmount) -> ExchangeRate {
 			use cf_traits::LiquidityPoolApi;
 
-			LiquidityPools::swap_rate(asset, input_amount)
+			LiquidityPools::swap_rate(input_asset, output_asset, input_amount)
 		}
 	}
 

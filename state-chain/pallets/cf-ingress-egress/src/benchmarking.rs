@@ -23,6 +23,7 @@ benchmarks_instance_pallet! {
 				});
 			} else {
 				batch.push(FetchOrTransfer::Transfer {
+					egress_id: 1,
 					asset: egress_asset,
 					to: egress_address.clone(),
 					amount: 1_000,

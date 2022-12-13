@@ -1141,19 +1141,20 @@ impl<T: Config> Pallet<T> {
 	fn start_vault_rotation(rotation_state: RuntimeRotationState<T>) {
 		let candidates: BTreeSet<_> = rotation_state.authority_candidates();
 		let SetSizeParameters { min_size, .. } = AuctionParameters::<T>::get();
-		Self::set_rotation_phase(if (candidates.len() as u32) < min_size {
+		if (candidates.len() as u32) < min_size {
 			log::warn!(
 				target: "cf-validator",
 				"Only {:?} authority candidates available, not enough to satisfy the minimum set size of {:?}. - aborting rotation.",
 				candidates.len(),
 				min_size
 			);
-			RotationPhase::Idle
+			Self::set_rotation_phase(RotationPhase::Idle);
 		} else {
+			// Set rotation phase before kicking off keygen (for correct event ordering)
+			Self::set_rotation_phase(RotationPhase::KeygensInProgress(rotation_state));
 			T::VaultRotator::keygen(candidates);
 			log::info!(target: "cf-validator", "Vault rotation initiated.");
-			RotationPhase::KeygensInProgress(rotation_state)
-		})
+		}
 	}
 
 	/// Returns the number of backup nodes eligible for rewards

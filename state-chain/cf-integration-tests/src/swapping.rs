@@ -65,7 +65,7 @@ fn can_swap_assets() {
 			}
 		));
 		assert_eq!(
-			LiquidityPools::swap_rate(&Asset::Flip, 0u128),
+			LiquidityPools::swap_rate(Asset::Flip, Asset::Usdc, 0u128),
 			ExchangeRate::from_rational(10, 1)
 		);
 
@@ -80,7 +80,7 @@ fn can_swap_assets() {
 			}
 		));
 		assert_eq!(
-			LiquidityPools::swap_rate(&Asset::Eth, 0u128),
+			LiquidityPools::swap_rate(Asset::Eth, Asset::Usdc, 0u128),
 			ExchangeRate::from_rational(5, 1)
 		);
 
@@ -156,6 +156,7 @@ fn can_swap_assets() {
 		const EXPECTED_OUTPUT: AssetAmount = 4545;
 		System::assert_has_event(Event::EthereumIngressEgress(
 			pallet_cf_ingress_egress::Event::EgressScheduled {
+				id: 1,
 				asset: eth::Asset::Flip,
 				amount: EXPECTED_OUTPUT,
 				egress_address: egress_address.into(),
@@ -193,8 +194,8 @@ fn can_swap_assets() {
 
 		System::assert_has_event(Event::EthereumIngressEgress(
 			pallet_cf_ingress_egress::Event::BatchBroadcastRequested {
-				fetch_batch_size: 1,
-				egress_batch_size: 1,
+				broadcast_id: 1,
+				egress_ids: vec![1],
 			},
 		));
 	});

@@ -7,7 +7,7 @@ use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex, GENESIS_EPOCH};
 use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, Broadcaster, CeremonyIdProvider, Chainflip,
-	CurrentEpochIndex, EpochTransitionHandler, KeyProvider, KeyState, SystemStateManager,
+	CurrentEpochIndex, EpochKey, EpochTransitionHandler, KeyProvider, KeyState, SystemStateManager,
 	ThresholdSigner, VaultKeyWitnessedHandler, VaultRotator, VaultStatus, VaultTransitionHandler,
 };
 use frame_support::pallet_prelude::*;
@@ -204,20 +204,15 @@ pub enum PalletOffence {
 	FailedKeygen,
 }
 
-#[derive(Encode, Decode, TypeInfo, Eq, PartialEq)]
-pub enum VaultState {
-	Active,
-	Unavailable,
-}
 #[derive(Encode, Decode, TypeInfo)]
 pub struct VaultEpochAndState {
 	pub epoch_index: EpochIndex,
-	pub vault_state: VaultState,
+	pub key_state: KeyState,
 }
 
 impl Default for VaultEpochAndState {
 	fn default() -> Self {
-		Self { epoch_index: GENESIS_EPOCH, vault_state: VaultState::Unavailable }
+		Self { epoch_index: GENESIS_EPOCH, key_state: KeyState::Unavailable }
 	}
 }
 
@@ -328,6 +323,7 @@ pub mod pallet {
 							"Can't have success unless all candidates responded"
 						);
 						weight += T::WeightInfo::on_initialize_success();
+						Self::deposit_event(Event::KeygenSuccess(keygen_ceremony_id));
 						Self::trigger_keygen_verification(
 							keygen_ceremony_id,
 							new_public_key,
@@ -691,10 +687,7 @@ pub mod pallet {
 		fn build(&self) {
 			if let Some(vault_key) = self.vault_key.clone() {
 				Pallet::<T, I>::set_vault_for_epoch(
-					VaultEpochAndState {
-						epoch_index: GENESIS_EPOCH,
-						vault_state: VaultState::Active,
-					},
+					VaultEpochAndState { epoch_index: GENESIS_EPOCH, key_state: KeyState::Active },
 					AggKeyFor::<T, I>::try_from(vault_key)
 						// Note: Can't use expect() here without some type shenanigans, but would
 						// give clearer error messages.
@@ -706,7 +699,7 @@ pub mod pallet {
 			} else {
 				CurrentVaultEpochAndState::<T, I>::put(VaultEpochAndState {
 					epoch_index: GENESIS_EPOCH,
-					vault_state: VaultState::Unavailable,
+					key_state: KeyState::Unavailable,
 				});
 			}
 
@@ -721,7 +714,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		rotated_at_block_number: ChainBlockNumberFor<T, I>,
 	) {
 		Self::set_vault_for_next_epoch(new_public_key, rotated_at_block_number);
-		T::VaultTransitionHandler::on_new_vault(new_public_key);
+		T::VaultTransitionHandler::on_new_vault();
 	}
 
 	fn set_vault_for_next_epoch(
@@ -731,7 +724,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Self::set_vault_for_epoch(
 			VaultEpochAndState {
 				epoch_index: CurrentEpochIndex::<T>::get().saturating_add(1),
-				vault_state: VaultState::Active,
+				key_state: KeyState::Active,
 			},
 			new_public_key,
 			rotated_at_block_number.saturating_add(ChainBlockNumberFor::<T, I>::one()),
@@ -782,7 +775,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		PendingVaultRotation::<T, I>::put(
 			VaultRotationStatus::<T, I>::AwaitingKeygenVerification { new_public_key },
 		);
-		Self::deposit_event(Event::KeygenSuccess(keygen_ceremony_id));
+
 		(request_id, signing_ceremony_id)
 	}
 
@@ -856,10 +849,10 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 			) {
 				Ok(rotate_tx) => {
 					T::Broadcaster::threshold_sign_and_broadcast(rotate_tx);
-					if VaultState::Active == current_vault_epoch_and_state.vault_state {
+					if KeyState::Active == current_vault_epoch_and_state.key_state {
 						CurrentVaultEpochAndState::<T, I>::put(VaultEpochAndState {
 							epoch_index: current_vault_epoch_and_state.epoch_index,
-							vault_state: VaultState::Unavailable,
+							key_state: KeyState::Unavailable,
 						})
 					}
 				},
@@ -921,15 +914,14 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 }
 
 impl<T: Config<I>, I: 'static> KeyProvider<T::Chain> for Pallet<T, I> {
-	fn current_key_epoch_index() -> KeyState<<T::Chain as ChainCrypto>::AggKey> {
+	fn current_epoch_key() -> EpochKey<<T::Chain as ChainCrypto>::AggKey> {
 		let current_vault_epoch_and_state = CurrentVaultEpochAndState::<T, I>::get();
-		match current_vault_epoch_and_state.vault_state {
-			VaultState::Active => KeyState::Active {
+
+		EpochKey {
 				key: Vaults::<T, I>::get(current_vault_epoch_and_state.epoch_index).expect("Key must exist if CurrentVaultEpochAndState exists since they get set at the same place: set_next_vault()").public_key,
 				epoch_index: current_vault_epoch_and_state.epoch_index,
-			},
-			VaultState::Unavailable => KeyState::Unavailable,
-		}
+				key_state: current_vault_epoch_and_state.key_state,
+			}
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
