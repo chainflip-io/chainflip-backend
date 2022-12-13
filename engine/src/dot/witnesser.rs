@@ -58,6 +58,7 @@ impl StaticEvent for ProxyAdded {
 	const EVENT: &'static str = "ProxyAdded";
 }
 
+/// This event must match the Transfer event definition of the Polkadot chain.
 #[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 pub struct Transfer {
 	from: PolkadotAccountId,
