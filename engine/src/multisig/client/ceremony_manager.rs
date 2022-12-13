@@ -570,18 +570,23 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
 			hash_map::Entry::Vacant(entry) => {
 				// Only a ceremony id that is within the ceremony id window can create unauthorised
 				// ceremonies
-				if ceremony_id > latest_ceremony_id &&
-					ceremony_id <= latest_ceremony_id + CEREMONY_ID_WINDOW
-				{
+				if ceremony_id > latest_ceremony_id + CEREMONY_ID_WINDOW {
+					slog::warn!(
+						logger,
+						"Ignoring data: unexpected future ceremony id {}",
+						ceremony_id
+					);
+					return
+				} else if ceremony_id < latest_ceremony_id {
+					slog::trace!(logger, "Ignoring data: old ceremony id {}", ceremony_id);
+					return
+				} else {
 					entry.insert(CeremonyHandle::spawn(
 						ceremony_id,
 						self.outcome_sender.clone(),
 						scope,
 						logger,
 					))
-				} else {
-					slog::debug!(logger, "Ignoring data: unexpected ceremony id {}", ceremony_id);
-					return
 				}
 			},
 			hash_map::Entry::Occupied(entry) => entry.into_mut(),
