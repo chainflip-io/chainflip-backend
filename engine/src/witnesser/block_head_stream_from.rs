@@ -44,7 +44,7 @@ where
 		if best_safe_block_number < from_block {
 			slog::trace!(
 				logger,
-				"Not witnessing until ETH block `{}` Received block `{}` from stream.",
+				"Not witnessing until block `{}` Received block `{}` from stream.",
 				from_block,
 				best_safe_block_number
 			);
@@ -79,7 +79,7 @@ where
 			))
 		}
 	}
-	Err(anyhow!("No events in ETH safe head stream"))
+	Err(anyhow!("No events in safe head stream"))
 }
 
 #[cfg(test)]
