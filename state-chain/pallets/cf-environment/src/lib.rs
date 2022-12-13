@@ -475,6 +475,6 @@ impl<T: Config> Pallet<T> {
 
 	#[cfg(feature = "ibiza")]
 	pub fn reset_polkadot_proxy_account_nonce() {
-		PolkadotProxyAccountNonce::<T>::set(0);
+		PolkadotProxyAccountNonce::<T>::set(1);
 	}
 }
