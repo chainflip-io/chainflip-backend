@@ -323,6 +323,7 @@ pub mod pallet {
 							"Can't have success unless all candidates responded"
 						);
 						weight += T::WeightInfo::on_initialize_success();
+						Self::deposit_event(Event::KeygenSuccess(keygen_ceremony_id));
 						Self::trigger_keygen_verification(
 							keygen_ceremony_id,
 							new_public_key,
@@ -774,7 +775,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		PendingVaultRotation::<T, I>::put(
 			VaultRotationStatus::<T, I>::AwaitingKeygenVerification { new_public_key },
 		);
-		Self::deposit_event(Event::KeygenSuccess(keygen_ceremony_id));
+
 		(request_id, signing_ceremony_id)
 	}
 
