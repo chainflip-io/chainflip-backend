@@ -13,6 +13,8 @@ mod tests;
 pub mod weights;
 pub use weights::WeightInfo;
 
+use cf_primitives::EgressId;
+
 use cf_chains::{AllBatch, Chain, ChainAbi, ChainCrypto, FetchAssetParams, TransferAssetParams};
 use cf_primitives::{Asset, AssetAmount, ForeignChainAddress, IntentId};
 use cf_traits::{
