@@ -5732,6 +5732,7 @@ name = "pallet-cf-tokenholder-governance"
 version = "0.1.0"
 dependencies = [
  "cf-chains",
+ "cf-primitives",
  "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",

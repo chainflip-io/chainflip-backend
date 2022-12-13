@@ -124,6 +124,7 @@ fn signature_accepted_results_in_refund_for_signer() {
 			&MockThresholdSignature::default(),
 			MockTransaction,
 			MockApiCall::default(),
+			1,
 		);
 		let tx_sig_request =
 			AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id).unwrap();
@@ -159,6 +160,7 @@ fn test_abort_after_number_of_attempts_is_equal_to_the_number_of_authorities() {
 			&MockThresholdSignature::default(),
 			MockTransaction,
 			MockApiCall::default(),
+			1,
 		);
 
 		for _ in 0..MockEpochInfo::current_authority_count() {
@@ -191,6 +193,7 @@ fn on_idle_caps_broadcasts_when_not_enough_weight() {
 			&MockThresholdSignature::default(),
 			MockTransaction,
 			MockApiCall::default(),
+			1,
 		);
 
 		MockCfe::respond(Scenario::SigningFailure);
@@ -199,6 +202,7 @@ fn on_idle_caps_broadcasts_when_not_enough_weight() {
 			&MockThresholdSignature::default(),
 			MockTransaction,
 			MockApiCall::default(),
+			1,
 		);
 
 		MockCfe::respond(Scenario::SigningFailure);
@@ -230,6 +234,7 @@ fn test_transaction_signing_failed() {
 			&MockThresholdSignature::default(),
 			MockTransaction,
 			MockApiCall::default(),
+			1,
 		);
 		assert!(
 			AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id)
@@ -298,6 +303,7 @@ fn signature_accepted_after_timeout_reports_failed_nodes() {
 			&MockThresholdSignature::default(),
 			MockTransaction,
 			MockApiCall::default(),
+			1,
 		);
 
 		let mut failed_authorities = vec![];
@@ -334,6 +340,7 @@ fn test_signature_request_expiry() {
 			&MockThresholdSignature::default(),
 			MockTransaction,
 			MockApiCall::default(),
+			1,
 		);
 		let first_broadcast_id = broadcast_attempt_id.broadcast_id;
 		assert!(
@@ -400,6 +407,7 @@ fn test_transmission_request_expiry() {
 			&MockThresholdSignature::default(),
 			MockTransaction,
 			MockApiCall::default(),
+			1,
 		);
 		let first_broadcast_id = broadcast_attempt_id.broadcast_id;
 		MockCfe::respond(Scenario::HappyPath);
@@ -448,6 +456,7 @@ fn re_request_threshold_signature() {
 			&MockThresholdSignature::default(),
 			MockTransaction,
 			MockApiCall::default(),
+			1,
 		);
 		// Expect the threshold signature pipeline to be empty
 		assert_eq!(
