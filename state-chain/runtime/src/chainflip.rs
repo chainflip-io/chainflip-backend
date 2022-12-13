@@ -297,7 +297,7 @@ impl EgressApi<AnyChain> for AnyChainIngressEgressHandler {
 		asset: Asset,
 		amount: AssetAmount,
 		egress_address: <AnyChain as Chain>::ChainAccount,
-	) {
+	) -> cf_primitives::EgressId {
 		match asset.into() {
 			ForeignChain::Ethereum => crate::EthereumIngressEgress::schedule_egress(
 				asset.try_into().expect("Checked for asset compatibility"),

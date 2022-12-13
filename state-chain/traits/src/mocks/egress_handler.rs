@@ -1,7 +1,7 @@
 use super::{MockPallet, MockPalletStorage};
 use crate::EgressApi;
 use cf_chains::Chain;
-use cf_primitives::AssetAmount;
+use cf_primitives::{AssetAmount, EgressId};
 use sp_std::marker::PhantomData;
 
 pub struct MockEgressHandler<C>(PhantomData<C>);
@@ -21,11 +21,17 @@ impl<C: Chain> EgressApi<C> for MockEgressHandler<C> {
 		foreign_asset: <C as Chain>::ChainAsset,
 		amount: AssetAmount,
 		egress_address: <C as Chain>::ChainAccount,
-	) {
+	) -> EgressId {
 		<Self as MockPalletStorage>::mutate_value(b"SCHEDULED_EGRESSES", |storage| {
-			storage.as_mut().or(Some(&mut vec![])).map(|v| {
-				v.push((foreign_asset, amount, egress_address));
-			})
-		});
+			storage
+				.as_mut()
+				.or(Some(&mut vec![]))
+				.map(|v| {
+					let next_id = if let Some((id, _)) = v.last() { id + 1 } else { 1 };
+					v.push((next_id, (foreign_asset, amount, egress_address)));
+					next_id
+				})
+				.unwrap()
+		})
 	}
 }
