@@ -28,7 +28,7 @@ pub use sp_std::{vec, vec::Vec};
 #[derive(RuntimeDebug, Eq, PartialEq, Copy, Clone, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub enum FetchOrTransfer<C: Chain> {
 	Fetch { intent_id: IntentId, asset: C::ChainAsset },
-	Transfer { egress_id: IntentId, asset: C::ChainAsset, to: C::ChainAccount, amount: AssetAmount },
+	Transfer { egress_id: EgressId, asset: C::ChainAsset, to: C::ChainAccount, amount: AssetAmount },
 }
 
 impl<C: Chain> FetchOrTransfer<C> {
@@ -43,6 +43,7 @@ impl<C: Chain> FetchOrTransfer<C> {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use cf_primitives::{BroadcastId, EgressId};
 	use core::marker::PhantomData;
 	use sp_std::vec::Vec;
 
@@ -148,7 +149,7 @@ pub mod pallet {
 
 	/// Stores the latest egress id used to generate an address.
 	#[pallet::storage]
-	pub type EgressIdCounter<T: Config<I>, I: 'static = ()> = StorageValue<_, IntentId, ValueQuery>;
+	pub type EgressIdCounter<T: Config<I>, I: 'static = ()> = StorageValue<_, EgressId, ValueQuery>;
 
 	/// Scheduled fetch and egress for the Ethereum chain.
 	#[pallet::storage]
@@ -190,8 +191,8 @@ pub mod pallet {
 		BatchBroadcastRequested {
 			fetch_batch_size: u32,
 			egress_batch_size: u32,
-			broadcast_id: u32,
-			egress_ids: Vec<u64>,
+			broadcast_id: BroadcastId,
+			egress_ids: Vec<EgressId>,
 		},
 	}
 
