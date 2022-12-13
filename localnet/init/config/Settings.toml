@@ -22,3 +22,6 @@ port = 5555
 
 [signing]
 db_file = "/etc/chainflip/bashful.db"
+
+[dot]
+ws_node_endpoint = "ws://polkadot:9945"
