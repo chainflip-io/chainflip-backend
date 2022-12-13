@@ -289,16 +289,16 @@ fn generate_keys(path: Option<PathBuf>) -> Result<()> {
 	println!("Generating fresh keys for your Chainflip Node!");
 
 	let node_key = api::generate_node_key();
-	fs::write(node_key_file, node_key.secret_key)?;
-	println!("🔑 Your Node public key is: 0x{}", node_key.public_key);
+	fs::write(node_key_file, hex::encode(node_key.secret_key))?;
+	println!("🔑 Your Node public key is: 0x{}", hex::encode(node_key.public_key));
 
 	let ethereum_key = api::generate_ethereum_key();
-	fs::write(ethereum_key_file, ethereum_key.secret_key)?;
-	println!("🔑 Your Ethereum public key is: 0x{}", ethereum_key.public_key);
+	fs::write(ethereum_key_file, hex::encode(ethereum_key.secret_key))?;
+	println!("🔑 Your Ethereum public key is: 0x{}", hex::encode(ethereum_key.public_key));
 
 	let (signing_key, signing_key_seed) = api::generate_signing_key(None)?;
-	fs::write(signing_key_file, signing_key.secret_key)?;
-	println!("🔑 Your Validator key is: 0x{}", signing_key.public_key);
+	fs::write(signing_key_file, hex::encode(signing_key.secret_key))?;
+	println!("🔑 Your Validator key is: 0x{}", hex::encode(signing_key.public_key));
 	println!("🌱 Your Validator key seed phrase is: {}", signing_key_seed);
 
 	println!("Saved all secret keys to {}", absolute_path_string);
