@@ -10,13 +10,13 @@ setup() {
   echo "👽 We need to do some quick set up to get you ready!"
   sleep 3
 
-  if ! which op > /dev/null 2>&1; then
+  if ! which op >/dev/null 2>&1; then
     echo "❌  OnePassword CLI not installed."
     echo "https://developer.1password.com/docs/cli/get-started/#install"
     exit 1
   fi
 
-  if ! which docker-compose > /dev/null 2>&1; then
+  if ! which docker-compose >/dev/null 2>&1; then
     echo "❌  docker-compose CLI not installed."
     echo "https://docs.docker.com/desktop/install/mac-install/"
     exit 1
@@ -46,10 +46,9 @@ setup() {
 
 workflow() {
   echo "❓ Would you like to build, recreate or destroy your Localnet? (Type 1, 2, 3, or 4)"
-  select WORKFLOW in build recreate destroy logs
-  do
-  echo "You have chosen $WORKFLOW"
-  break
+  select WORKFLOW in build recreate destroy logs; do
+    echo "You have chosen $WORKFLOW"
+    break
   done
 }
 
@@ -61,24 +60,26 @@ build() {
   echo "Write 'same' to use the last commit hash you used."
   read COMMIT_HASH
   if [ $COMMIT_HASH == "latest" ]; then
-    COMMIT_HASH=$(git rev-parse HEAD |tr -d '\n')
+    COMMIT_HASH=$(git rev-parse HEAD | tr -d '\n')
   fi
   if [ $COMMIT_HASH == "same" ]; then
     COMMIT_HASH=$(cat $LOCALNET_INIT_DIR/secrets/.hash)
   fi
-  echo $COMMIT_HASH > $LOCALNET_INIT_DIR/secrets/.hash
+  echo $COMMIT_HASH >$LOCALNET_INIT_DIR/secrets/.hash
 
   echo "🏗 Building network"
 
   COMMIT_HASH=$COMMIT_HASH REPO_USERNAME=$REPO_USERNAME REPO_PASSWORD=$REPO_PASSWORD \
-  docker-compose -f localnet/docker-compose.yml up --build -d
+    docker-compose -f localnet/docker-compose.yml up --build -d
 
   echo "🚀 Network is live"
   echo "🪵 To get logs type"
   echo "$ ./localnet/manage"
   echo "👆 Then select logs (4)"
   echo
-  echo "🧡 Head to https://polkadot.js.org/apps/?rpc=ws%3A%2F%2F127.0.0.1%3A9944#/explorer to access PolkadotJS"
+  echo "💚 Head to https://polkadot.js.org/apps/?rpc=ws%3A%2F%2F127.0.0.1%3A9944#/explorer to access PolkadotJS of Chainflip Network"
+  echo
+  echo "🧡 Head to https://polkadot.js.org/apps/?rpc=ws%3A%2F%2F127.0.0.1%3A9945#/explorer to access PolkadotJS of the Private Polkadot Network"
 
 }
 
@@ -87,16 +88,15 @@ destroy() {
   docker-compose -f localnet/docker-compose.yml down
 }
 
-logs (){
+logs() {
   echo "🤖 Which service would you like to tail?"
-  select SERVICE in node engine relayer polkadot geth all
-  do
+  select SERVICE in node engine relayer polkadot geth all; do
     if [ $SERVICE == "all" ]; then
       docker-compose -f localnet/docker-compose.yml logs --follow
     else
       docker-compose -f localnet/docker-compose.yml logs --follow $SERVICE
     fi
-  break
+    break
   done
 }
 
@@ -118,4 +118,3 @@ elif [ $WORKFLOW == "destroy" ]; then
 elif [ $WORKFLOW == "logs" ]; then
   logs
 fi
-

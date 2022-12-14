@@ -19,13 +19,7 @@ services:
       "--chain=/chainspec.json",
       "--validator",
       "--force-authoring",
-      "--alice"
+      "--alice",
+      "--state-pruning=archive",
+      "--blocks-pruning=archive"
     ]
-
-  polkadotui:
-    container_name: polkadotui
-    image: jacogr/polkadot-js-apps
-    environment:
-      - WS_URL=ws://polkadot:9945
-    ports:
-      - 80:80
