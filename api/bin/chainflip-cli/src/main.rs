@@ -33,6 +33,12 @@ async fn main() {
 
 async fn run_cli() -> Result<()> {
 	let command_line_opts = CLICommandLineOptions::parse();
+
+	// Generating keys does not require the settings, so run it before them
+	if let GenerateKeys { path } = command_line_opts.cmd {
+		return generate_keys(path)
+	}
+
 	let cli_settings = CLISettings::new(command_line_opts.clone()).map_err(|err| anyhow!("Please ensure your config file path is configured correctly and the file is valid. You can also just set all configurations required command line arguments.\n{}", err))?;
 
 	println!(
@@ -58,7 +64,7 @@ async fn run_cli() -> Result<()> {
 		Query { block_hash } => request_block(block_hash, &cli_settings.state_chain).await,
 		VanityName { name } => api::set_vanity_name(name, &cli_settings.state_chain).await,
 		ForceRotation { id } => api::force_rotation(id, &cli_settings.state_chain).await,
-		GenerateKeys { path } => generate_keys(path),
+		GenerateKeys { path: _ } => panic!("GenerateKeys is handled above"),
 	}
 }
 
@@ -304,9 +310,4 @@ fn generate_keys(path: Option<PathBuf>) -> Result<()> {
 	println!("Saved all secret keys to {}", absolute_path_string);
 
 	Ok(())
-}
-
-#[test]
-fn test_generate_keys() {
-	generate_keys(Some(PathBuf::from("/etc/chainflip/keys/test"))).unwrap();
 }
