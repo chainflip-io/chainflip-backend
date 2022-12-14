@@ -91,14 +91,15 @@ destroy() {
 
 logs (){
   echo "🤖 Which service would you like to tail?"
-  select SERVICE in node engine geth all
+  select SERVICE in node engine geth relayer all
   do
     if [ $SERVICE == "all" ]; then
-        unset $SERVICE
+      docker-compose -f localnet/docker-compose.yml logs --follow
+    else
+      docker-compose -f localnet/docker-compose.yml logs --follow $SERVICE
     fi
   break
   done
-  docker-compose -f localnet/docker-compose.yml logs --follow $SERVICE
 }
 
 if [ ! -f ./$LOCALNET_INIT_DIR/secrets/.setup_complete ]; then
