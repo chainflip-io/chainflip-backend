@@ -32,11 +32,13 @@ pub struct AnyChain;
 
 chains! {
 	Ethereum,
-	Polkadot
+	Polkadot,
+	Any
 }
 
 #[test]
 fn test_chains() {
 	assert_eq!(Ethereum.as_ref(), &ForeignChain::Ethereum);
 	assert_eq!(Polkadot.as_ref(), &ForeignChain::Polkadot);
+	assert_eq!(Any.as_ref(), &ForeignChain::Any);
 }

@@ -29,6 +29,7 @@ pub mod eth;
 /// A trait representing all the types and constants that need to be implemented for supported
 /// blockchains.
 pub trait Chain: Member + Parameter {
+	const ID: ForeignChain;
 	type ChainBlockNumber: FullCodec
 		+ Member
 		+ Parameter
@@ -256,6 +257,7 @@ pub mod mocks {
 
 	// Chain implementation used for testing.
 	impl Chain for MockEthereum {
+		const ID: ForeignChain = ForeignChain::Ethereum;
 		type ChainBlockNumber = u64;
 		type ChainAmount = EthAmount;
 		type TrackedData = MockTrackedData;

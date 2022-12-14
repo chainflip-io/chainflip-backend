@@ -113,6 +113,7 @@ pub struct EpochStartData {
 }
 
 impl Chain for Polkadot {
+	const ID: ForeignChain = ForeignChain::Polkadot;
 	type ChainBlockNumber = PolkadotBlockNumber;
 	type ChainAmount = DotAmount;
 	type TrackedData = eth::TrackedData<Self>;

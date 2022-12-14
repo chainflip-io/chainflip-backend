@@ -1,10 +1,11 @@
 use crate::Chain;
 use cf_primitives::{
 	chains::{assets, AnyChain},
-	AssetAmount, ForeignChainAddress,
+	AssetAmount, ForeignChain, ForeignChainAddress,
 };
 
 impl Chain for AnyChain {
+	const ID: ForeignChain = ForeignChain::Any;
 	type ChainBlockNumber = u64;
 	type ChainAmount = AssetAmount;
 	type TransactionFee = Self::ChainAmount;

@@ -77,6 +77,7 @@ pub async fn swap_intent(
 				.map_err(|err| anyhow!("Failed to parse address: {}", err))?;
 			ForeignChainAddress::Dot(addr)
 		},
+		ForeignChain::Any => unreachable!(),
 	};
 
 	let address = api::register_swap_intent(

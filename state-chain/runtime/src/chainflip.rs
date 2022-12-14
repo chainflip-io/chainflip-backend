@@ -313,6 +313,7 @@ impl EgressApi<AnyChain> for AnyChainIngressEgressHandler {
 					.try_into()
 					.expect("Caller must ensure for account is of the compatible type."),
 			),
+			ForeignChain::Any => unreachable!(),
 		}
 	}
 }
@@ -336,6 +337,7 @@ impl IngressApi<AnyChain> for AnyChainIngressEgressHandler {
 					lp_account,
 					ingress_asset.try_into().unwrap(),
 				),
+			ForeignChain::Any => unreachable!(),
 		}
 	}
 
@@ -361,6 +363,7 @@ impl IngressApi<AnyChain> for AnyChainIngressEgressHandler {
 				relayer_commission_bps,
 				relayer_id,
 			),
+			ForeignChain::Any => unreachable!(),
 		}
 	}
 }
