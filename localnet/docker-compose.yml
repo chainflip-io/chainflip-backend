@@ -1,19 +1,31 @@
 version: "3.8"
 
 services:
-  polkadotui:
-    container_name: polkadotui
-    image: jacogr/polkadot-js-apps
-    depends_on:
-      - node
-    environment:
-      - WS_URL=ws://chainflip-node:9944
+  polkadot:
+    container_name: polkadot
+    image: parity/polkadot
     ports:
-      - "80:80"
+      - 30333:30333 # p2p port
+      - 9934:9933 # rpc port
+      - 9945:9944 # ws port
+    volumes:
+      - ./init/polkadot/chainspec.json:/chainspec.json
+    command:
+      [
+        "--name=PolkaDocker",
+        "--rpc-methods=unsafe",
+        "--ws-external",
+        "--rpc-external",
+        "--rpc-cors=all",
+        "--chain=/chainspec.json",
+        "--validator",
+        "--force-authoring",
+        "--alice"
+      ]
   node:
     container_name: chainflip-node
     healthcheck:
-      test: ["CMD-SHELL", "netcat -z localhost 9615"]
+      test: [ "CMD-SHELL", "netcat -z localhost 9615" ]
       retries: 10
       interval: 5s
       timeout: 5s
@@ -53,12 +65,40 @@ services:
         condition: service_healthy
       geth:
         condition: service_healthy
+      polkadot:
+        condition: service_started
     volumes:
       - ./init/secrets:/etc/chainflip/keys
       - ./init/config:/etc/chainflip/config
     command:
       - chainflip-engine
       - --config-root=/etc/chainflip/
+  relayer:
+    container_name: chainflip-relayer
+    env_file:
+      - init/secrets/secrets.env
+    build:
+      dockerfile: validator.Dockerfile
+      context: .
+      args:
+        - COMMIT_HASH
+        - REPO_USERNAME
+        - REPO_PASSWORD
+    platform: linux/amd64
+    restart: unless-stopped
+    depends_on:
+      node:
+        condition: service_healthy
+      geth:
+        condition: service_healthy
+    volumes:
+      - ./init/testkeys:/etc/chainflip/keys
+    command:
+      - chainflip-relayer
+      - --state_chain.signing_key_file=/etc/chainflip/keys/RELAYER_1
+      - --state_chain.ws_endpoint=ws://chainflip-node:9944
+    ports:
+      - 9950:80
   geth:
     image: ghcr.io/chainflip-io/geth:perseverance-rc2
     pull_policy: always
@@ -75,7 +115,7 @@ services:
     stop_signal: SIGINT
     stop_grace_period: 2m
     healthcheck:
-      test: ["CMD-SHELL", "echo hi"]
+      test: [ "CMD-SHELL", "echo hi" ]
       interval: 10s
       timeout: 5s
       retries: 5
