@@ -360,6 +360,7 @@ pub mod pallet {
 			}
 		}
 
+		///       TEMPORARY EXTRINSIC, ONLY FOR TESTING, REMOVE LATER
 		#[allow(unused_variables)]
 		#[pallet::weight(0)]
 		pub fn set_polkadot_nonce(origin: OriginFor<T>, nonce: u32) -> DispatchResultWithPostInfo {
