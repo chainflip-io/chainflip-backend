@@ -88,9 +88,14 @@ pub mod pallet {
 		NewSwapIntent { ingress_address: ForeignChainAddress },
 		/// The swap ingress was received.
 		SwapIngressReceived {
-			ingress_address: Option<ForeignChainAddress>,
+			ingress_address: ForeignChainAddress,
 			swap_id: u64,
 			ingress_amount: AssetAmount,
+		},
+		SwapScheduledByWitnesser {
+			swap_id: u64,
+			amount: AssetAmount,
+			egress_address: ForeignChainAddress,
 		},
 		/// A swap was executed.
 		SwapExecuted { swap_id: u64 },
@@ -172,28 +177,24 @@ pub mod pallet {
 		///
 		/// - [SwapScheduled](Event::SwapIngressReceived)
 		#[pallet::weight(0)]
-		#[allow(clippy::too_many_arguments)]
 		pub fn schedule_swap_by_witnesser(
 			origin: OriginFor<T>,
-			ingress_address: Option<ForeignChainAddress>,
 			from: Asset,
 			to: Asset,
 			amount: AssetAmount,
 			egress_address: ForeignChainAddress,
-			relayer_id: T::AccountId,
-			relayer_commission_bps: BasisPoints,
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
-			Self::schedule_swap(
-				ingress_address,
-				from,
-				to,
+			Self::schedule_swap(from, to, amount, egress_address)?;
+
+			Self::deposit_event(Event::<T>::SwapScheduledByWitnesser {
+				swap_id: SwapIdCounter::<T>::get(),
 				amount,
 				egress_address,
-				relayer_id,
-				relayer_commission_bps,
-			)
+			});
+
+			Ok(())
 		}
 	}
 
@@ -248,14 +249,30 @@ pub mod pallet {
 			}
 			grouped_swaps
 		}
+
+		fn schedule_swap(
+			from: Asset,
+			to: Asset,
+			amount: AssetAmount,
+			egress_address: ForeignChainAddress,
+		) -> DispatchResult {
+			// The caller should ensure that the egress details are consistent.
+			debug_assert_eq!(ForeignChain::from(egress_address), ForeignChain::from(to));
+			let swap_id = SwapIdCounter::<T>::get().saturating_add(1);
+
+			SwapQueue::<T>::append(Swap { swap_id, from, to, amount, egress_address });
+
+			SwapIdCounter::<T>::put(swap_id);
+			Ok(())
+		}
 	}
 
 	impl<T: Config> SwapIntentHandler for Pallet<T> {
 		type AccountId = T::AccountId;
 
 		/// Callback function to kick off the swapping process after a successful ingress.
-		fn schedule_swap(
-			ingress_address: Option<ForeignChainAddress>,
+		fn on_swap_ingress(
+			ingress_address: ForeignChainAddress,
 			from: Asset,
 			to: Asset,
 			amount: AssetAmount,
@@ -263,10 +280,6 @@ pub mod pallet {
 			relayer_id: Self::AccountId,
 			relayer_commission_bps: BasisPoints,
 		) -> DispatchResult {
-			// The caller should ensure that the egress details are consistent.
-			debug_assert_eq!(ForeignChain::from(egress_address), ForeignChain::from(to));
-			let swap_id = SwapIdCounter::<T>::get().saturating_add(1);
-
 			let fee = Permill::from_parts(relayer_commission_bps as u32 * BASIS_POINTS_PER_MILLION) *
 				amount;
 
@@ -274,20 +287,14 @@ pub mod pallet {
 				earned_fees.saturating_accrue(fee)
 			});
 
-			SwapQueue::<T>::append(Swap {
-				swap_id,
-				from,
-				to,
-				amount: amount.saturating_sub(fee),
-				egress_address,
-			});
+			Self::schedule_swap(from, to, amount.saturating_sub(fee), egress_address)?;
 
 			Self::deposit_event(Event::<T>::SwapIngressReceived {
 				ingress_address,
-				swap_id,
+				swap_id: SwapIdCounter::<T>::get(),
 				ingress_amount: amount,
 			});
-			SwapIdCounter::<T>::put(swap_id);
+
 			Ok(())
 		}
 	}

@@ -417,8 +417,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				egress_asset,
 				relayer_id,
 				relayer_commission_bps,
-			} => T::SwapIntentHandler::schedule_swap(
-				Some(ingress_address.clone().into()),
+			} => T::SwapIntentHandler::on_swap_ingress(
+				ingress_address.clone().into(),
 				asset.into(),
 				egress_asset,
 				amount,

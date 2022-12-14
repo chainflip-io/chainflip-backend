@@ -142,7 +142,7 @@ fn can_swap_assets() {
 		));
 
 		System::assert_has_event(Event::Swapping(pallet_cf_swapping::Event::SwapIngressReceived {
-			ingress_address: Some(ForeignChainAddress::Eth(ingress_address.to_fixed_bytes())),
+			ingress_address: ForeignChainAddress::Eth(ingress_address.to_fixed_bytes()),
 			swap_id: pallet_cf_swapping::SwapIdCounter::<Runtime>::get(),
 			ingress_amount: SWAP_AMOUNT,
 		}));
