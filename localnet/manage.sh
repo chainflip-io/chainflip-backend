@@ -36,7 +36,7 @@ setup() {
       echo "🤫 Loading $file from OnePassword. Don't worry, this won't be committed to the repo."
       if ! op inject -i $LOCALNET_INIT_DIR/onepassword/$file -o $LOCALNET_INIT_DIR/secrets/$file -f; then
         echo "❌  Couldn't generate the required secrets file."
-        echo "🧑🏻‍🦰 Ask Tom what's up"
+        echo "🧑🏻‍🦰 Ask Tom or Assem what's up"
         exit 1
       fi
     fi
