@@ -74,7 +74,7 @@ where
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
 {
 	epoch_witnesser::start(
-		"ETH-Ingress-".to_string(),
+		"ETH-Ingress".to_string(),
 		epoch_starts_receiver,
 		|_epoch_start| true,
 		(monitored_addresses, eth_monitor_ingress_receiver),
