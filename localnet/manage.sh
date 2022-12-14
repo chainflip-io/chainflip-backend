@@ -89,7 +89,7 @@ destroy() {
 
 logs (){
   echo "🤖 Which service would you like to tail?"
-  select SERVICE in node engine geth relayer all
+  select SERVICE in node engine relayer polkadot geth all
   do
     if [ $SERVICE == "all" ]; then
       docker-compose -f localnet/docker-compose.yml logs --follow

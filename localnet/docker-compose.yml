@@ -20,8 +20,8 @@ services:
         "--chain=/chainspec.json",
         "--validator",
         "--force-authoring",
-        "--alice"
-        "--state-pruning=archive"
+        "--alice",
+        "--state-pruning=archive",
         "--blocks-pruning=archive"
       ]
   node:
