@@ -64,7 +64,7 @@ async fn run_cli() -> Result<()> {
 		Query { block_hash } => request_block(block_hash, &cli_settings.state_chain).await,
 		VanityName { name } => api::set_vanity_name(name, &cli_settings.state_chain).await,
 		ForceRotation { id } => api::force_rotation(id, &cli_settings.state_chain).await,
-		GenerateKeys { path: _ } => panic!("GenerateKeys is handled above"),
+		GenerateKeys { path: _ } => unreachable!(), // GenerateKeys is handled above
 	}
 }
 
