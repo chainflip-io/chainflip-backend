@@ -1,5 +1,12 @@
 use cf_chains::eth::SigData;
-use jsonrpsee::{core::RpcResult, proc_macros::rpc, types::error::CallError};
+use jsonrpsee::{
+	core::RpcResult,
+	proc_macros::rpc,
+	types::{
+		error::{CallError, ErrorCode},
+		ErrorObject,
+	},
+};
 use pallet_cf_governance::GovCallHash;
 use sc_client_api::HeaderBackend;
 use serde::{Deserialize, Serialize};
@@ -453,10 +460,10 @@ pub trait PoolsApi {
 	#[method(name = "swap_rate")]
 	fn cf_swap_rate(
 		&self,
-		at: Option<state_chain_runtime::Hash>,
 		input_asset: Asset,
 		output_asset: Asset,
-		input_amount: AssetAmount,
+		input_amount: NumberOrHex,
+		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<ExchangeRate>;
 }
 
@@ -469,14 +476,20 @@ where
 {
 	fn cf_swap_rate(
 		&self,
-		at: Option<state_chain_runtime::Hash>,
 		input_asset: Asset,
 		output_asset: Asset,
-		input_amount: AssetAmount,
+		input_amount: NumberOrHex,
+		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<ExchangeRate> {
 		self.client
 			.runtime_api()
-			.cf_swap_rate(&self.query_block_id(at), input_asset, output_asset, input_amount)
+			.cf_swap_rate(
+				&self.query_block_id(at),
+				input_asset,
+				output_asset,
+				u128::try_from(input_amount)
+					.map_err(|_| CallError::Custom(ErrorCode::InvalidParams.into()))?,
+			)
 			.map_err(to_rpc_error)
 	}
 }
