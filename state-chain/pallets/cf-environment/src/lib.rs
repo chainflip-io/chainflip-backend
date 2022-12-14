@@ -359,6 +359,15 @@ pub mod pallet {
 				Ok(().into())
 			}
 		}
+
+		#[allow(unused_variables)]
+		#[pallet::weight(0)]
+		pub fn set_polkadot_nonce(origin: OriginFor<T>, nonce: u32) -> DispatchResultWithPostInfo {
+			T::EnsureGovernance::ensure_origin(origin)?;
+			#[cfg(feature = "ibiza")]
+			PolkadotProxyAccountNonce::<T>::set(nonce);
+			Ok(().into())
+		}
 	}
 
 	#[pallet::genesis_config]
