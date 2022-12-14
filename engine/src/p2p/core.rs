@@ -288,7 +288,6 @@ impl P2PContext {
 
 	fn forward_incoming_message(&mut self, pubkey: XPublicKey, payload: Vec<u8>) {
 		if let Some(acc_id) = self.x25519_to_account_id.get(&pubkey) {
-			slog::trace!(self.logger, "Received a message from {}", acc_id);
 			self.incoming_message_sender.send((acc_id.clone(), payload)).unwrap();
 		} else {
 			slog::warn!(

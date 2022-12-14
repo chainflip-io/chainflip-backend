@@ -153,6 +153,18 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 
 		let validator_mapping = stage.ceremony_common().validator_mapping.clone();
 
+		// Log the account ids of the missing messages
+		let missing_messages_from_accounts = validator_mapping.get_ids(stage.awaited_parties());
+		if !missing_messages_from_accounts.is_empty() {
+			slog::debug!(
+				self.logger,
+				"Stage {} finalizing with missing messages from {} parties",
+				stage.get_stage_name(),
+				missing_messages_from_accounts.len();
+				"missing_ids" => format_iterator(missing_messages_from_accounts).to_string()
+			);
+		}
+
 		match stage.finalize().await {
 			StageResult::NextStage(mut next_stage) => {
 				slog::debug!(
@@ -310,18 +322,8 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 
 			slog::warn!(
 				self.logger,
-				"Ceremony stage timed out before all messages collected; trying to finalize current stage anyway"
-			);
-
-			// Log the account ids of the missing messages
-			let missing_messages_from_accounts =
-				stage.ceremony_common().validator_mapping.get_ids(stage.awaited_parties());
-			slog::debug!(
-				self.logger,
-				"Stage `{}` is missing messages from {} parties",
-				stage.get_stage_name(),
-				missing_messages_from_accounts.len();
-				"missing_ids" => format_iterator(missing_messages_from_accounts).to_string()
+				"Ceremony stage {} timed out before all messages collected; trying to finalize current stage anyway.",
+				stage.get_stage_name()
 			);
 
 			self.finalize_current_stage().await
