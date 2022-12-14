@@ -1,0 +1,27 @@
+# Default configurations for the CFE
+[node_p2p]
+node_key_file = "/etc/chainflip/keys/node_key_file"
+ip_address = "127.0.0.1"
+port = 8078
+allow_local_ip = true
+
+[state_chain]
+# 32 byte hex secret key - associated with the node's public id (public key)
+signing_key_file = "/etc/chainflip/keys/signing_key_file"
+ws_endpoint = "ws://chainflip-node:9944"
+
+[eth]
+# Ethereum private key file path. Default is the docker secrets path. This file should contain a hex-encoded private key.
+private_key_file = "/etc/chainflip/keys/eth_private_key_file"
+ws_node_endpoint = "ws://geth:8546"
+http_node_endpoint = "http://geth:8545"
+
+[health_check]
+hostname = "0.0.0.0"
+port = 5555
+
+[signing]
+db_file = "/etc/chainflip/bashful.db"
+
+[dot]
+ws_node_endpoint = "ws://polkadot:9944"
