@@ -75,12 +75,10 @@ build() {
 
   echo "🚀 Network is live"
   echo "🪵 To get logs type"
-  echo
-  echo "./localnet/manage"
-  echo
+  echo "$ ./localnet/manage"
   echo "👆 Then select logs (4)"
   echo
-  echo "🧡 Head to http://localhost to access PolkadotJS"
+  echo "🧡 Head to https://polkadot.js.org/apps/?rpc=ws%3A%2F%2F127.0.0.1%3A9944#/explorer to access PolkadotJS"
 
 }
 
