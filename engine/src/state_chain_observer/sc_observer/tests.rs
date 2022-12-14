@@ -53,7 +53,7 @@ fn test_header(number: u32) -> Header {
 #[tokio::test]
 async fn starts_witnessing_when_current_authority() {
 	let initial_epoch = 3;
-	let initial_epoch_from_block = 30;
+	let initial_epoch_from_block_eth = 30;
 	let initial_block_hash = H256::default();
 	let account_id = AccountId::new([0; 32]);
 
@@ -84,7 +84,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		.return_once(move |_, _| {
 			Ok(Some(Vault {
 				public_key: Default::default(),
-				active_from_block: initial_epoch_from_block,
+				active_from_block: initial_epoch_from_block_eth,
 			}))
 		});
 
@@ -98,10 +98,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 			.with(eq(initial_block_hash), eq(initial_epoch))
 			.once()
 			.return_once(move |_, _| {
-				Ok(Some(Vault {
-					public_key: Default::default(),
-					active_from_block: initial_epoch_from_block,
-				}))
+				Ok(Some(Vault { public_key: Default::default(), active_from_block: 80 }))
 			});
 
 		state_chain_client
@@ -145,6 +142,10 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 	#[cfg(feature = "ibiza")]
 	let (dot_epoch_start_sender, _dot_epoch_start_receiver_1) = async_broadcast::broadcast(10);
 
+	#[cfg(feature = "ibiza")]
+	let (dot_monitor_ingress_sender, _dot_monitor_ingress_receiver) =
+		tokio::sync::mpsc::unbounded_channel();
+
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
@@ -163,6 +164,8 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		eth_monitor_usdc_ingress_sender,
 		#[cfg(feature = "ibiza")]
 		dot_epoch_start_sender,
+		#[cfg(feature = "ibiza")]
+		dot_monitor_ingress_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
 		logger,
@@ -174,7 +177,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		epoch_start_receiver.collect::<Vec<_>>().await,
 		vec![EpochStart::<Ethereum> {
 			epoch_index: initial_epoch,
-			block_number: initial_epoch_from_block,
+			block_number: initial_epoch_from_block_eth,
 			current: true,
 			participant: true,
 			data: ()
@@ -185,9 +188,11 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 #[tokio::test]
 async fn starts_witnessing_when_historic_on_startup() {
 	let active_epoch = 3;
-	let active_epoch_from_block = 30;
+	let active_epoch_from_block_eth = 30;
 	let current_epoch = 4;
-	let current_epoch_from_block = 40;
+	let current_epoch_from_block_eth = 40;
+	#[cfg(feature = "ibiza")]
+	let current_epoch_from_block_dot = 80;
 	let initial_block_hash = H256::default();
 	let account_id = AccountId::new([0; 32]);
 
@@ -218,7 +223,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		.return_once(move |_, _| {
 			Ok(Some(Vault {
 				public_key: Default::default(),
-				active_from_block: active_epoch_from_block,
+				active_from_block: active_epoch_from_block_eth,
 			}))
 		});
 
@@ -234,7 +239,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 			.return_once(move |_, _| {
 				Ok(Some(Vault {
 					public_key: Default::default(),
-					active_from_block: current_epoch_from_block,
+					active_from_block: current_epoch_from_block_dot,
 				}))
 			});
 
@@ -257,7 +262,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		.return_once(move |_, _| {
 			Ok(Some(Vault {
 				public_key: Default::default(),
-				active_from_block: current_epoch_from_block,
+				active_from_block: current_epoch_from_block_eth,
 			}))
 		});
 
@@ -273,7 +278,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 			.return_once(move |_, _| {
 				Ok(Some(Vault {
 					public_key: Default::default(),
-					active_from_block: current_epoch_from_block,
+					active_from_block: current_epoch_from_block_dot,
 				}))
 			});
 
@@ -317,6 +322,10 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 	#[cfg(feature = "ibiza")]
 	let (dot_epoch_start_sender, _dot_epoch_start_receiver_1) = async_broadcast::broadcast(10);
 
+	#[cfg(feature = "ibiza")]
+	let (dot_monitor_ingress_sender, _dot_monitor_ingress_receiver) =
+		tokio::sync::mpsc::unbounded_channel();
+
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
@@ -335,6 +344,8 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		eth_monitor_usdc_ingress_sender,
 		#[cfg(feature = "ibiza")]
 		dot_epoch_start_sender,
+		#[cfg(feature = "ibiza")]
+		dot_monitor_ingress_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
 		logger,
@@ -347,14 +358,14 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		vec![
 			EpochStart::<Ethereum> {
 				epoch_index: active_epoch,
-				block_number: active_epoch_from_block,
+				block_number: active_epoch_from_block_eth,
 				current: false,
 				participant: true,
 				data: ()
 			},
 			EpochStart::<Ethereum> {
 				epoch_index: current_epoch,
-				block_number: current_epoch_from_block,
+				block_number: current_epoch_from_block_eth,
 				current: true,
 				participant: false,
 				data: ()
@@ -366,7 +377,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 #[tokio::test]
 async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
 	let initial_epoch = 3;
-	let initial_epoch_from_block = 30;
+	let initial_epoch_from_block_eth = 30;
 	let initial_block_hash = H256::default();
 	let account_id = AccountId::new([0; 32]);
 
@@ -396,7 +407,7 @@ async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
 		.return_once(move |_, _| {
 			Ok(Some(Vault {
 				public_key: Default::default(),
-				active_from_block: initial_epoch_from_block,
+				active_from_block: initial_epoch_from_block_eth,
 			}))
 		});
 
@@ -410,10 +421,7 @@ async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
 			.with(eq(initial_block_hash), eq(3))
 			.once()
 			.return_once(move |_, _| {
-				Ok(Some(Vault {
-					public_key: Default::default(),
-					active_from_block: initial_epoch_from_block,
-				}))
+				Ok(Some(Vault { public_key: Default::default(), active_from_block: 80 }))
 			});
 
 		state_chain_client
@@ -454,6 +462,10 @@ async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
 	#[cfg(feature = "ibiza")]
 	let (dot_epoch_start_sender, _dot_epoch_start_receiver_1) = async_broadcast::broadcast(10);
 
+	#[cfg(feature = "ibiza")]
+	let (dot_monitor_ingress_sender, _dot_monitor_ingress_receiver) =
+		tokio::sync::mpsc::unbounded_channel();
+
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
@@ -472,6 +484,8 @@ async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
 		eth_monitor_usdc_ingress_sender,
 		#[cfg(feature = "ibiza")]
 		dot_epoch_start_sender,
+		#[cfg(feature = "ibiza")]
+		dot_monitor_ingress_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
 		logger,
@@ -483,7 +497,7 @@ async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
 		epoch_start_receiver.collect::<Vec<_>>().await,
 		vec![EpochStart::<Ethereum> {
 			epoch_index: initial_epoch,
-			block_number: initial_epoch_from_block,
+			block_number: initial_epoch_from_block_eth,
 			current: true,
 			participant: false,
 			data: (),
@@ -494,7 +508,9 @@ async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
 #[tokio::test]
 async fn current_authority_to_current_authority_on_new_epoch_event() {
 	let initial_epoch = 4;
-	let initial_epoch_from_block = 40;
+	let initial_epoch_from_block_eth = 40;
+	#[cfg(feature = "ibiza")]
+	let initial_epoch_from_block_dot = 72;
 	let new_epoch = 5;
 	let new_epoch_from_block = 50;
 	let initial_block_hash = H256::default();
@@ -527,7 +543,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		.return_once(move |_, _| {
 			Ok(Some(Vault {
 				public_key: Default::default(),
-				active_from_block: initial_epoch_from_block,
+				active_from_block: initial_epoch_from_block_eth,
 			}))
 		});
 
@@ -543,7 +559,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 			.return_once(move |_, _| {
 				Ok(Some(Vault {
 					public_key: Default::default(),
-					active_from_block: initial_epoch_from_block,
+					active_from_block: initial_epoch_from_block_dot,
 				}))
 			});
 
@@ -606,7 +622,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 			.return_once(move |_, _| {
 				Ok(Some(Vault {
 					public_key: Default::default(),
-					active_from_block: initial_epoch_from_block,
+					active_from_block: initial_epoch_from_block_dot,
 				}))
 			});
 		state_chain_client
@@ -650,6 +666,10 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 	#[cfg(feature = "ibiza")]
 	let (dot_epoch_start_sender, _dot_epoch_start_receiver_1) = async_broadcast::broadcast(10);
 
+	#[cfg(feature = "ibiza")]
+	let (dot_monitor_ingress_sender, _dot_monitor_ingress_receiver) =
+		tokio::sync::mpsc::unbounded_channel();
+
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
@@ -668,6 +688,8 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		eth_monitor_usdc_ingress_sender,
 		#[cfg(feature = "ibiza")]
 		dot_epoch_start_sender,
+		#[cfg(feature = "ibiza")]
+		dot_monitor_ingress_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
 		logger,
@@ -680,7 +702,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		vec![
 			EpochStart::<Ethereum> {
 				epoch_index: initial_epoch,
-				block_number: initial_epoch_from_block,
+				block_number: initial_epoch_from_block_eth,
 				current: true,
 				participant: true,
 				data: ()
@@ -699,7 +721,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 #[tokio::test]
 async fn not_historical_to_authority_on_new_epoch() {
 	let initial_epoch = 3;
-	let initial_epoch_from_block = 30;
+	let initial_epoch_from_block_eth = 30;
 	let new_epoch = 4;
 	let new_epoch_from_block = 40;
 	let initial_block_hash = H256::default();
@@ -732,7 +754,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		.return_once(move |_, _| {
 			Ok(Some(Vault {
 				public_key: Default::default(),
-				active_from_block: initial_epoch_from_block,
+				active_from_block: initial_epoch_from_block_eth,
 			}))
 		});
 
@@ -746,10 +768,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 			.with(eq(initial_block_hash), eq(initial_epoch))
 			.once()
 			.return_once(move |_, _| {
-				Ok(Some(Vault {
-					public_key: Default::default(),
-					active_from_block: initial_epoch_from_block,
-				}))
+				Ok(Some(Vault { public_key: Default::default(), active_from_block: 20 }))
 			});
 
 		state_chain_client
@@ -809,10 +828,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 			.with(eq(new_epoch_block_header_hash), eq(new_epoch))
 			.once()
 			.return_once(move |_, _| {
-				Ok(Some(Vault {
-					public_key: Default::default(),
-					active_from_block: new_epoch_from_block,
-				}))
+				Ok(Some(Vault { public_key: Default::default(), active_from_block: 80 }))
 			});
 
 		state_chain_client
@@ -858,6 +874,10 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 	#[cfg(feature = "ibiza")]
 	let (dot_epoch_start_sender, _dot_epoch_start_receiver_1) = async_broadcast::broadcast(10);
 
+	#[cfg(feature = "ibiza")]
+	let (dot_monitor_ingress_sender, _dot_monitor_ingress_receiver) =
+		tokio::sync::mpsc::unbounded_channel();
+
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
@@ -876,6 +896,8 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		eth_monitor_usdc_ingress_sender,
 		#[cfg(feature = "ibiza")]
 		dot_epoch_start_sender,
+		#[cfg(feature = "ibiza")]
+		dot_monitor_ingress_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
 		logger,
@@ -888,7 +910,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		vec![
 			EpochStart::<Ethereum> {
 				epoch_index: initial_epoch,
-				block_number: initial_epoch_from_block,
+				block_number: initial_epoch_from_block_eth,
 				current: true,
 				participant: false,
 				data: ()
@@ -907,7 +929,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 #[tokio::test]
 async fn current_authority_to_historical_on_new_epoch_event() {
 	let initial_epoch = 3;
-	let initial_epoch_from_block = 30;
+	let initial_epoch_from_block_eth = 30;
 	let new_epoch = 4;
 	let new_epoch_from_block = 40;
 	let initial_block_hash = H256::default();
@@ -940,7 +962,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		.return_once(move |_, _| {
 			Ok(Some(Vault {
 				public_key: Default::default(),
-				active_from_block: initial_epoch_from_block,
+				active_from_block: initial_epoch_from_block_eth,
 			}))
 		});
 
@@ -954,10 +976,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 			.with(eq(initial_block_hash), eq(initial_epoch))
 			.once()
 			.return_once(move |_, _| {
-				Ok(Some(Vault {
-					public_key: Default::default(),
-					active_from_block: initial_epoch_from_block,
-				}))
+				Ok(Some(Vault { public_key: Default::default(), active_from_block: 20 }))
 			});
 
 		state_chain_client
@@ -1018,10 +1037,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 			.with(eq(new_epoch_block_header_hash), eq(new_epoch))
 			.once()
 			.return_once(move |_, _| {
-				Ok(Some(Vault {
-					public_key: Default::default(),
-					active_from_block: new_epoch_from_block,
-				}))
+				Ok(Some(Vault { public_key: Default::default(), active_from_block: 80 }))
 			});
 
 		state_chain_client
@@ -1067,6 +1083,10 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 	#[cfg(feature = "ibiza")]
 	let (dot_epoch_start_sender, _dot_epoch_start_receiver_1) = async_broadcast::broadcast(10);
 
+	#[cfg(feature = "ibiza")]
+	let (dot_monitor_ingress_sender, _dot_monitor_ingress_receiver) =
+		tokio::sync::mpsc::unbounded_channel();
+
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
@@ -1085,6 +1105,8 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		eth_monitor_usdc_ingress_sender,
 		#[cfg(feature = "ibiza")]
 		dot_epoch_start_sender,
+		#[cfg(feature = "ibiza")]
+		dot_monitor_ingress_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
 		logger,
@@ -1097,7 +1119,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		vec![
 			EpochStart::<Ethereum> {
 				epoch_index: initial_epoch,
-				block_number: initial_epoch_from_block,
+				block_number: initial_epoch_from_block_eth,
 				current: true,
 				participant: true,
 				data: ()
@@ -1128,7 +1150,7 @@ async fn only_encodes_and_signs_when_specified() {
 	});
 
 	let initial_epoch = 3;
-	let initial_epoch_from_block = 30;
+	let initial_epoch_from_block_eth = 30;
 
 	state_chain_client.expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>()
 		.with(eq(initial_block_hash), eq(account_id.clone()))
@@ -1149,7 +1171,7 @@ async fn only_encodes_and_signs_when_specified() {
 		.return_once(move |_, _| {
 			Ok(Some(Vault {
 				public_key: Default::default(),
-				active_from_block: initial_epoch_from_block,
+				active_from_block: initial_epoch_from_block_eth,
 			}))
 		});
 
@@ -1163,10 +1185,7 @@ async fn only_encodes_and_signs_when_specified() {
 			.with(eq(initial_block_hash), eq(initial_epoch))
 			.once()
 			.return_once(move |_, _| {
-				Ok(Some(Vault {
-					public_key: Default::default(),
-					active_from_block: initial_epoch_from_block,
-				}))
+				Ok(Some(Vault { public_key: Default::default(), active_from_block: 80 }))
 			});
 
 		state_chain_client
@@ -1262,6 +1281,10 @@ async fn only_encodes_and_signs_when_specified() {
 	#[cfg(feature = "ibiza")]
 	let (dot_epoch_start_sender, _dot_epoch_start_receiver_1) = async_broadcast::broadcast(10);
 
+	#[cfg(feature = "ibiza")]
+	let (dot_monitor_ingress_sender, _dot_monitor_ingress_receiver) =
+		tokio::sync::mpsc::unbounded_channel();
+
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
@@ -1280,6 +1303,8 @@ async fn only_encodes_and_signs_when_specified() {
 		eth_monitor_usdc_ingress_sender,
 		#[cfg(feature = "ibiza")]
 		dot_epoch_start_sender,
+		#[cfg(feature = "ibiza")]
+		dot_monitor_ingress_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
 		logger,
@@ -1288,87 +1313,7 @@ async fn only_encodes_and_signs_when_specified() {
 	.unwrap_err();
 }
 
-#[tokio::test]
-#[ignore = "runs forever, useful for testing without having to start the whole CFE"]
-async fn run_the_sc_observer() {
-	task_scope(|scope| {
-		async {
-			let settings = Settings::new_test().unwrap();
-			let logger = new_test_logger();
-
-			let (initial_block_hash, sc_block_stream, state_chain_client) =
-				crate::state_chain_observer::client::StateChainClient::new(
-					scope,
-					&settings.state_chain,
-					AccountRole::None,
-					false,
-					&logger,
-				)
-				.await
-				.unwrap();
-
-			let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
-				tokio::sync::mpsc::unbounded_channel();
-
-			let eth_ws_rpc_client = EthWsRpcClient::new(&settings.eth, &logger).await.unwrap();
-			let eth_broadcaster =
-				EthBroadcaster::new(&settings.eth, eth_ws_rpc_client.clone(), &logger).unwrap();
-
-			let eth_multisig_client = MockMultisigClientApi::new();
-			let dot_multisig_client = MockMultisigClientApi::new();
-
-			let (epoch_start_sender, _epoch_start_receiver) = async_broadcast::broadcast(10);
-
-			let (cfe_settings_update_sender, _) =
-				watch::channel::<CfeSettings>(CfeSettings::default());
-
-			#[cfg(feature = "ibiza")]
-			let (eth_monitor_ingress_sender, _eth_monitor_ingress_receiver) =
-				tokio::sync::mpsc::unbounded_channel();
-			#[cfg(feature = "ibiza")]
-			let (eth_monitor_flip_ingress_sender, _eth_monitor_flip_ingress_receiver) =
-				tokio::sync::mpsc::unbounded_channel();
-			#[cfg(feature = "ibiza")]
-			let (eth_monitor_usdc_ingress_sender, _eth_monitor_usdc_ingress_receiver) =
-				tokio::sync::mpsc::unbounded_channel();
-
-			#[cfg(feature = "ibiza")]
-			let (dot_epoch_start_sender, _dot_epoch_start_receiver_1) = async_broadcast::broadcast(10);
-
-			sc_observer::start(
-				state_chain_client,
-				sc_block_stream,
-				eth_broadcaster,
-				#[cfg(feature = "ibiza")]
-				DotBroadcaster::new(MockDotRpcApi::new()),
-				eth_multisig_client,
-				dot_multisig_client,
-				account_peer_mapping_change_sender,
-				epoch_start_sender,
-				#[cfg(feature = "ibiza")]
-				eth_monitor_ingress_sender,
-				#[cfg(feature = "ibiza")]
-				eth_monitor_flip_ingress_sender,
-				#[cfg(feature = "ibiza")]
-				eth_monitor_usdc_ingress_sender,
-				#[cfg(feature = "ibiza")]
-				dot_epoch_start_sender,
-				cfe_settings_update_sender,
-				initial_block_hash,
-				logger,
-			)
-			.await
-			.unwrap_err();
-
-			Ok(())
-		}
-		.boxed()
-	})
-	.await
-	.unwrap();
-}
-
-// TODO: Test that when we return None for polkadot vault when fetched from environment pallet
+// TODO: Test that when we return None for polkadot vault
 // witnessing isn't started for dot, but is started for ETH
 
 async fn should_handle_signing_request<C, I>()
@@ -1574,4 +1519,90 @@ mod dot_keygen {
 	async fn should_handle_keygen_request_dot() {
 		should_handle_keygen_request::<PolkadotSigning, PolkadotInstance>().await;
 	}
+}
+
+#[tokio::test]
+#[ignore = "runs forever, useful for testing without having to start the whole CFE"]
+async fn run_the_sc_observer() {
+	task_scope(|scope| {
+		async {
+			let settings = Settings::new_test().unwrap();
+			let logger = new_test_logger();
+
+			let (initial_block_hash, sc_block_stream, state_chain_client) =
+				crate::state_chain_observer::client::StateChainClient::new(
+					scope,
+					&settings.state_chain,
+					AccountRole::None,
+					false,
+					&logger,
+				)
+				.await
+				.unwrap();
+
+			let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
+				tokio::sync::mpsc::unbounded_channel();
+
+			let eth_ws_rpc_client = EthWsRpcClient::new(&settings.eth, &logger).await.unwrap();
+			let eth_broadcaster =
+				EthBroadcaster::new(&settings.eth, eth_ws_rpc_client.clone(), &logger).unwrap();
+
+			let eth_multisig_client = MockMultisigClientApi::new();
+			let dot_multisig_client = MockMultisigClientApi::new();
+
+			let (epoch_start_sender, _epoch_start_receiver) = async_broadcast::broadcast(10);
+
+			let (cfe_settings_update_sender, _) =
+				watch::channel::<CfeSettings>(CfeSettings::default());
+
+			#[cfg(feature = "ibiza")]
+			let (eth_monitor_ingress_sender, _eth_monitor_ingress_receiver) =
+				tokio::sync::mpsc::unbounded_channel();
+			#[cfg(feature = "ibiza")]
+			let (eth_monitor_flip_ingress_sender, _eth_monitor_flip_ingress_receiver) =
+				tokio::sync::mpsc::unbounded_channel();
+			#[cfg(feature = "ibiza")]
+			let (eth_monitor_usdc_ingress_sender, _eth_monitor_usdc_ingress_receiver) =
+				tokio::sync::mpsc::unbounded_channel();
+
+			#[cfg(feature = "ibiza")]
+			let (dot_epoch_start_sender, _dot_epoch_start_receiver_1) = async_broadcast::broadcast(10);
+
+			#[cfg(feature = "ibiza")]
+			let (dot_monitor_ingress_sender, _dot_monitor_ingress_receiver) =
+				tokio::sync::mpsc::unbounded_channel();
+
+			sc_observer::start(
+				state_chain_client,
+				sc_block_stream,
+				eth_broadcaster,
+				#[cfg(feature = "ibiza")]
+				DotBroadcaster::new(MockDotRpcApi::new()),
+				eth_multisig_client,
+				dot_multisig_client,
+				account_peer_mapping_change_sender,
+				epoch_start_sender,
+				#[cfg(feature = "ibiza")]
+				eth_monitor_ingress_sender,
+				#[cfg(feature = "ibiza")]
+				eth_monitor_flip_ingress_sender,
+				#[cfg(feature = "ibiza")]
+				eth_monitor_usdc_ingress_sender,
+				#[cfg(feature = "ibiza")]
+				dot_epoch_start_sender,
+				#[cfg(feature = "ibiza")]
+				dot_monitor_ingress_sender,
+				cfe_settings_update_sender,
+				initial_block_hash,
+				logger,
+			)
+			.await
+			.unwrap_err();
+
+			Ok(())
+		}
+		.boxed()
+	})
+	.await
+	.unwrap();
 }

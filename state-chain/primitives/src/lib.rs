@@ -54,6 +54,16 @@ pub type BroadcastId = u32;
 /// 32 bytes.
 pub type PolkadotAccountId = AccountId32;
 
+pub type PolkadotBlockNumber = u32;
+
+// Polkadot extrinsics are uniquely identified by <block number>-<extrinsic index>
+// https://wiki.polkadot.network/docs/build-protocol-info
+#[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]
+pub struct TxId {
+	pub block_number: PolkadotBlockNumber,
+	pub extrinsic_index: u32,
+}
+
 pub const ETHEREUM_ETH_ADDRESS: EthereumAddress = [0xEE; 20];
 
 /// The very first epoch number

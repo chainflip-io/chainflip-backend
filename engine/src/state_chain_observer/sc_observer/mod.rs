@@ -47,6 +47,9 @@ use crate::dot::{rpc::DotRpcApi, DotBroadcaster};
 #[cfg(feature = "ibiza")]
 use sp_core::H160;
 
+#[cfg(feature = "ibiza")]
+use cf_primitives::PolkadotAccountId;
+
 async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 	scope: &Scope<'a, anyhow::Error>,
 	multisig_client: &'a MultisigClient,
@@ -212,6 +215,9 @@ pub async fn start<
 		H160,
 	>,
 	#[cfg(feature = "ibiza")] dot_epoch_start_sender: async_broadcast::Sender<EpochStart<Polkadot>>,
+	#[cfg(feature = "ibiza")] dot_monitor_ingress_sender: tokio::sync::mpsc::UnboundedSender<
+		PolkadotAccountId,
+	>,
 	cfe_settings_update_sender: watch::Sender<CfeSettings>,
 	initial_block_hash: H256,
 	logger: slog::Logger,
@@ -552,33 +558,40 @@ where
                                     state_chain_runtime::Event::Environment(
                                         pallet_cf_environment::Event::CfeSettingsUpdated {
                                             new_cfe_settings
-                                        }
-                                            ) => {
-                                                cfe_settings_update_sender.send(new_cfe_settings).unwrap();
-                                            }
-                                            #[cfg(feature = "ibiza")]
-                                            state_chain_runtime::Event::EthereumIngressEgress(
-                                                pallet_cf_ingress_egress::Event::StartWitnessing {
-                                                    ingress_address,
-                                                    ingress_asset
-                                                }
-                                            ) => {
-                                                use cf_primitives::chains::assets::eth;
-                                                match ingress_asset {
-                                                    eth::Asset::Eth => {
-                                                        eth_monitor_ingress_sender.send(ingress_address).unwrap();
-                                                    }
-                                                    eth::Asset::Flip => {
-                                                        eth_monitor_flip_ingress_sender.send(ingress_address).unwrap();
-                                                    }
-                                                    eth::Asset::Usdc => {
-                                                        eth_monitor_usdc_ingress_sender.send(ingress_address).unwrap();
-                                                    }
-                                                }
-                                            }
-                                        }}
+                                        }) => {
+                                            cfe_settings_update_sender.send(new_cfe_settings).unwrap();
                                     }
-                                }
+                                    #[cfg(feature = "ibiza")]
+                                    state_chain_runtime::Event::EthereumIngressEgress(
+                                        pallet_cf_ingress_egress::Event::StartWitnessing {
+                                            ingress_address,
+                                            ingress_asset
+                                        }
+                                    ) => {
+                                        use cf_primitives::chains::assets::eth;
+                                        match ingress_asset {
+                                            eth::Asset::Eth => {
+                                                eth_monitor_ingress_sender.send(ingress_address).unwrap();
+                                            }
+                                            eth::Asset::Flip => {
+                                                eth_monitor_flip_ingress_sender.send(ingress_address).unwrap();
+                                            }
+                                            eth::Asset::Usdc => {
+                                                eth_monitor_usdc_ingress_sender.send(ingress_address).unwrap();
+                                            }
+                                        }
+                                    }
+                                    #[cfg(feature = "ibiza")]
+                                    state_chain_runtime::Event::PolkadotIngressEgress(
+                                        pallet_cf_ingress_egress::Event::StartWitnessing {
+                                            ingress_address,
+                                            ingress_asset
+                                        }
+                                    ) => {
+                                        assert_eq!(ingress_asset, cf_primitives::chains::assets::dot::Asset::Dot);
+                                        dot_monitor_ingress_sender.send(ingress_address).unwrap();
+                                    }}
+                                }}}
                                 Err(error) => {
                                     slog::error!(
                                         logger,

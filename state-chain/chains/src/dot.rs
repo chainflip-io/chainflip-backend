@@ -5,8 +5,8 @@ pub mod api;
 #[cfg(feature = "runtime-benchmarks")]
 pub mod benchmarking;
 
-use cf_primitives::KeyId;
 pub use cf_primitives::{chains::Polkadot, PolkadotAccountId};
+use cf_primitives::{KeyId, PolkadotBlockNumber, TxId};
 
 use sp_core::{sr25519, H256};
 use sp_runtime::{
@@ -29,7 +29,6 @@ pub type PolkadotSignature = sr25519::Signature;
 pub type PolkadotGovKey = (); // Todo
 
 pub type PolkadotBalance = u128;
-pub type PolkadotBlockNumber = u32;
 pub type PolkadotIndex = u32;
 pub type PolkadotHash = sp_core::H256;
 
@@ -114,7 +113,7 @@ pub struct EpochStartData {
 }
 
 impl Chain for Polkadot {
-	type ChainBlockNumber = u64;
+	type ChainBlockNumber = PolkadotBlockNumber;
 	type ChainAmount = DotAmount;
 	type TrackedData = eth::TrackedData<Self>;
 	type ChainAccount = PolkadotAccountId;
@@ -128,7 +127,7 @@ impl ChainCrypto for Polkadot {
 	type AggKey = PolkadotPublicKey;
 	type Payload = EncodedPolkadotPayload;
 	type ThresholdSignature = PolkadotSignature;
-	type TransactionHash = PolkadotHash;
+	type TransactionId = TxId;
 	type GovKey = PolkadotGovKey;
 
 	fn verify_threshold_signature(
@@ -744,7 +743,13 @@ pub struct PolkadotPublicKey(pub sr25519::Public);
 
 impl Default for PolkadotPublicKey {
 	fn default() -> Self {
-		vec![0; 32].try_into().unwrap()
+		[0; 32].into()
+	}
+}
+
+impl From<[u8; 32]> for PolkadotPublicKey {
+	fn from(pub_key_bytes: [u8; 32]) -> Self {
+		PolkadotPublicKey(sr25519::Public(pub_key_bytes))
 	}
 }
 
