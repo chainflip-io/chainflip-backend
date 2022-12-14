@@ -271,9 +271,12 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 		async {
 			let messages = std::mem::take(&mut self.delayed_messages);
 
+			if !messages.is_empty() {
+				slog::debug!(self.logger, "Processing {} delayed messages",messages.len();
+					"from_ids" => format_iterator(messages.keys()).to_string()
+				);
+			}
 			for (id, m) in messages {
-				slog::debug!(self.logger, "Processing delayed message {} from party [{}]", m, id,);
-
 				if let Some(result) = self.process_or_delay_message(id, m).await {
 					return Some(result)
 				}
