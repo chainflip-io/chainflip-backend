@@ -21,11 +21,13 @@ services:
         "--validator",
         "--force-authoring",
         "--alice"
+        "--state-pruning=archive"
+        "--blocks-pruning=archive"
       ]
   node:
     container_name: chainflip-node
     healthcheck:
-      test: [ "CMD-SHELL", "netcat -z localhost 9615" ]
+      test: ["CMD-SHELL", "netcat -z localhost 9615"]
       retries: 10
       interval: 5s
       timeout: 5s
@@ -115,7 +117,7 @@ services:
     stop_signal: SIGINT
     stop_grace_period: 2m
     healthcheck:
-      test: [ "CMD-SHELL", "echo hi" ]
+      test: ["CMD-SHELL", "echo hi"]
       interval: 10s
       timeout: 5s
       retries: 5
