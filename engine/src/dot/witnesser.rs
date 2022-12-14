@@ -22,8 +22,9 @@ use subxt::{
 use crate::{
 	state_chain_observer::client::extrinsic_api::ExtrinsicApi,
 	witnesser::{
-		block_head_stream_from::block_head_stream_from, epoch_witnesser, BlockNumberable,
-		EpochStart,
+		block_head_stream_from::block_head_stream_from,
+		epoch_witnesser::{self, should_end_witnessing},
+		BlockNumberable, EpochStart,
 	},
 };
 
@@ -147,7 +148,7 @@ where
 		epoch_starts_receiver,
 		|_epoch_start| true,
 		(monitored_addresses, dot_monitor_ingress_receiver),
-		move |_end_witnessing_signal, epoch_start, (mut monitored_addresses, mut dot_monitor_ingress_receiver), logger| {
+		move |end_witnessing_signal, epoch_start, (mut monitored_addresses, mut dot_monitor_ingress_receiver), logger| {
 			let dot_client = dot_client.clone();
 			let state_chain_client = state_chain_client.clone();
 			async move {
@@ -192,6 +193,11 @@ where
 				);
 
 				while let Some((block_number, mut block_event_details)) = filtered_events_stream.next().await {
+
+					if should_end_witnessing::<Polkadot>(end_witnessing_signal.clone(), block_number, &logger) {
+						break;
+					}
+
 					// to contain all the ingress witnessse for this block
 					let mut ingress_witnesses = Vec::new();
 					while let Some(Ok(event_details)) = block_event_details.next() {
