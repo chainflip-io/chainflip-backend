@@ -161,7 +161,7 @@ fn expect_earned_fees_to_be_recorded() {
 fn cannot_swap_with_incorrect_egress_address_type() {
 	new_test_ext().execute_with(|| {
 		const ALICE: u64 = 1_u64;
-		let _ = <Pallet<Test> as SwapIntentHandler>::on_swap_ingress(
+		<Pallet<Test> as SwapIntentHandler>::on_swap_ingress(
 			ForeignChainAddress::Eth([2; 20]),
 			Asset::Eth,
 			Asset::Dot,
