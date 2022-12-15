@@ -54,10 +54,10 @@ workflow() {
 
 build() {
   source $LOCALNET_INIT_DIR/secrets/secrets.env
-
-  echo "#️ Enter the commit # you'd like to build from?"
-  echo "Write 'latest' to get the latest commit hash."
-  echo "Write 'same' to use the last commit hash you used."
+  echo
+  echo "Enter the commit # you'd like to build from?"
+  echo "Type 'latest' to get the latest commit hash."
+  echo "Type 'same' to use the last commit hash you used."
   read COMMIT_HASH
   if [ $COMMIT_HASH == "latest" ]; then
     COMMIT_HASH=$(git rev-parse HEAD | tr -d '\n')
@@ -67,9 +67,13 @@ build() {
   fi
   echo $COMMIT_HASH >$LOCALNET_INIT_DIR/secrets/.hash
 
+  read -p "🏖 What release would you like to use? [sandstorm / ibiza] (default: sandstorm)?: " RELEASE
+  RELEASE=${RELEASE:-"sandstorm"}
+
+  echo
   echo "🏗 Building network"
 
-  COMMIT_HASH=$COMMIT_HASH REPO_USERNAME=$REPO_USERNAME REPO_PASSWORD=$REPO_PASSWORD \
+  COMMIT_HASH=$COMMIT_HASH RELEASE=$RELEASE \
     docker-compose -f localnet/docker-compose.yml up --build -d
 
   echo "🚀 Network is live"

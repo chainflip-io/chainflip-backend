@@ -36,8 +36,7 @@ services:
       context: .
       args:
         - COMMIT_HASH
-        - REPO_USERNAME
-        - REPO_PASSWORD
+        - PREFIX
     platform: linux/amd64
     ports:
       - "9944:9944"
@@ -58,6 +57,7 @@ services:
       context: .
       args:
         - COMMIT_HASH
+        - PREFIX
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -82,8 +82,7 @@ services:
       context: .
       args:
         - COMMIT_HASH
-        - REPO_USERNAME
-        - REPO_PASSWORD
+        - PREFIX
     platform: linux/amd64
     restart: unless-stopped
     depends_on:

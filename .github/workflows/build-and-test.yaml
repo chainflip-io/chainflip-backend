@@ -308,6 +308,7 @@ jobs:
     uses: ./.github/workflows/.docker-build-validator.yaml
     with:
       artifacts: chainflip-backend-bin
+      image_prefix: sandstorm
     secrets: inherit
 
   build-ibiza-docker:
@@ -315,6 +316,7 @@ jobs:
     uses: ./.github/workflows/.docker-build-validator.yaml
     with:
       artifacts: chainflip-backend-bin-ibiza
+      image_prefix: ibiza
     secrets: inherit
 
   deb-publish:
