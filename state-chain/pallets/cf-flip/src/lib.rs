@@ -126,15 +126,16 @@ pub mod pallet {
 			who: ImbalanceSource<T::AccountId>,
 			remaining_imbalance: T::Balance,
 		},
-
 		SlashingPerformed {
 			who: T::AccountId,
 			amount: T::Balance,
 		},
-
 		AccountReaped {
 			who: T::AccountId,
 			dust_burned: T::Balance,
+		},
+		SlashingRateUpdated {
+			slashing_rate: Permill,
 		},
 	}
 
@@ -181,7 +182,7 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - None
+		/// - [SlashingRateUpdated]
 		///
 		/// ## Errors
 		///
@@ -196,6 +197,7 @@ pub mod pallet {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			// Set the slashing rate
 			SlashingRate::<T>::set(slashing_rate);
+			Self::deposit_event(Event::SlashingRateUpdated { slashing_rate });
 			Ok(())
 		}
 	}
@@ -234,7 +236,7 @@ pub struct FlipAccount<Amount> {
 	bond: Amount,
 }
 
-impl<Balance: Saturating + Copy + Ord> FlipAccount<Balance> {
+impl<Balance: AtLeast32BitUnsigned + Copy> FlipAccount<Balance> {
 	/// The total balance excludes any funds that are in a pending claim request.
 	pub fn total(&self) -> Balance {
 		self.stake
@@ -248,6 +250,11 @@ impl<Balance: Saturating + Copy + Ord> FlipAccount<Balance> {
 	/// The current bond
 	pub fn bond(&self) -> Balance {
 		self.bond
+	}
+
+	/// Account can only be slashed if its balance is higher than 20% of the bond.
+	pub fn can_be_slashed(&self, slash_amount: Balance) -> bool {
+		self.stake.saturating_sub(slash_amount) > self.bond / 5u32.into()
 	}
 }
 
@@ -280,11 +287,6 @@ impl<T: Config> Pallet<T> {
 	/// Amount of funds allocated to a [Reserve].
 	pub fn reserved_balance(reserve_id: ReserveId) -> T::Balance {
 		Reserve::<T>::get(reserve_id)
-	}
-
-	/// Slashable funds for an account.
-	pub fn slashable_funds(account_id: &T::AccountId) -> T::Balance {
-		Account::<T>::get(account_id).total()
 	}
 
 	/// Debits an account's staked balance.
@@ -367,10 +369,6 @@ impl<T: Config> Pallet<T> {
 				remaining_imbalance: remainder,
 			});
 		}
-	}
-
-	pub fn settle_imbalance<I: Into<FlipImbalance<T>>>(account_id: &T::AccountId, imbalance: I) {
-		Self::settle(account_id, imbalance.into())
 	}
 
 	/// Decreases total issuance and returns a corresponding imbalance that must be reconciled.

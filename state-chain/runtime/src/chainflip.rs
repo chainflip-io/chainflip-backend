@@ -204,7 +204,7 @@ impl RewardsDistribution for BlockAuthorRewardDistribution {
 			// TODO: Check if it's ok to panic here.
 			let current_block_author =
 				Authorship::author().expect("A block without an author is invalid.");
-			Flip::settle_imbalance(&current_block_author, Self::Issuance::mint(reward_amount));
+			Flip::settle(&current_block_author, Self::Issuance::mint(reward_amount).into());
 		}
 	}
 }

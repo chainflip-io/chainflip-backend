@@ -334,11 +334,8 @@ pub trait EmergencyRotation {
 	fn request_emergency_rotation();
 }
 
-/// Slashing a node
 pub trait Slashing {
-	/// An identifier for our node
 	type AccountId;
-	/// Block number
 	type BlockNumber;
 
 	/// Slashes a validator for the equivalent of some number of blocks offline.

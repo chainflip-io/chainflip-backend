@@ -1,7 +1,7 @@
 use std::mem;
 
 use crate::{
-	mock::*, Account, Bonder, Config, Error, FlipAccount, FlipIssuance, FlipSlasher, OffchainFunds,
+	mock::*, Account, Bonder, Error, FlipAccount, FlipIssuance, FlipSlasher, OffchainFunds,
 	Reserve, SlashingRate, TotalIssuance,
 };
 use cf_primitives::FlipBalance;
@@ -302,10 +302,14 @@ impl FlipOperation {
 				if initial_balance.saturating_sub(expected_slash) != balance_after {
 					return false
 				}
-				System::assert_last_event(Event::Flip(crate::Event::<Test>::SlashingPerformed {
-					who: *account_id,
-					amount: expected_slash,
-				}));
+				if expected_slash > 0 {
+					System::assert_last_event(Event::Flip(
+						crate::Event::<Test>::SlashingPerformed {
+							who: *account_id,
+							amount: expected_slash,
+						},
+					));
+				}
 			},
 			// Account to account transfer
 			FlipOperation::AccountToAccount(account_id_1, account_id_2, amount_1, amount_2) => {
@@ -386,7 +390,6 @@ impl Arbitrary for FlipOperation {
 				random_account(g),
 				Permill::from_rational(u32::arbitrary(g), u32::MAX),
 				Bond::arbitrary(g),
-				BlocksOffline::arbitrary(g),
 				Mint::arbitrary(g),
 				(u16::arbitrary(g) as u32).into(), // random number of blocks up to u16::MAX
 			),
