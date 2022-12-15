@@ -186,6 +186,7 @@ jobs:
           cargo deb --no-build --no-strip -p chainflip-engine --deb-revision "${{ steps.vars.outputs.date }}"
           cargo deb --no-build --no-strip -p chainflip-cli --deb-revision "${{ steps.vars.outputs.date }}"
           cargo deb --no-build --no-strip -p chainflip-node --deb-revision "${{ steps.vars.outputs.date }}"
+          cargo deb --no-build --no-strip -p chainflip-relayer --deb-revision "${{ steps.vars.outputs.date }}"
           cargo deb --no-build --no-strip -p generate-genesis-keys --deb-revision "${{ steps.vars.outputs.date }}"
       - name: Upload packages
         uses: actions/upload-artifact@v3
@@ -200,6 +201,7 @@ jobs:
             ./target/release/chainflip-node
             ./target/release/chainflip-engine
             ./target/release/chainflip-cli
+            ./target/release/chainflip-relayer
             ./target/release/generate-genesis-keys
             ./target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm
       - name: Check if building changes any files

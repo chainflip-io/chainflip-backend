@@ -20,7 +20,7 @@ use cf_chains::{
 
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BroadcastId, CeremonyId,
-	EgressId, EpochIndex, EthereumAddress, ForeignChainAddress, IntentId,
+	EgressId, EpochIndex, EthereumAddress, ForeignChain, ForeignChainAddress, IntentId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -759,7 +759,7 @@ impl<T: frame_system::Config> EgressApi<Ethereum> for T {
 		_amount: AssetAmount,
 		_egress_address: <Ethereum as Chain>::ChainAccount,
 	) -> EgressId {
-		0
+		(ForeignChain::Ethereum, 0)
 	}
 }
 
@@ -770,7 +770,7 @@ impl<T: frame_system::Config> EgressApi<Polkadot> for T {
 		_amount: AssetAmount,
 		_egress_address: <Polkadot as Chain>::ChainAccount,
 	) -> EgressId {
-		0
+		(ForeignChain::Ethereum, 0)
 	}
 }
 

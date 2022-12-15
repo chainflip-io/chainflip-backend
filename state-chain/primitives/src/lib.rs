@@ -36,7 +36,9 @@ pub type AuthorityCount = u32;
 
 pub type IntentId = u64;
 
-pub type EgressId = u64;
+pub type EgressCounter = u64;
+
+pub type EgressId = (ForeignChain, EgressCounter);
 
 pub type ExchangeRate = FixedU128;
 
