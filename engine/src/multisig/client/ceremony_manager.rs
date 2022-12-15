@@ -563,7 +563,9 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
 		scope: &Scope<'_, anyhow::Error>,
 		logger: &slog::Logger,
 	) {
-		slog::debug!(logger, "Received data {}", &data);
+		slog::debug!(logger, "Received data {} from [{}]", &data, sender_id;
+			CEREMONY_ID_KEY => ceremony_id
+		);
 
 		// Get the existing ceremony or create an unauthorised one (with ceremony id tracking check)
 		let ceremony_handle = match self.ceremony_handles.entry(ceremony_id) {
