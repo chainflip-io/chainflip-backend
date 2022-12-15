@@ -63,7 +63,7 @@ async fn run_cli() -> Result<()> {
 		Activate {} => api::activate_account(&cli_settings.state_chain).await,
 		Query { block_hash } => request_block(block_hash, &cli_settings.state_chain).await,
 		VanityName { name } => api::set_vanity_name(name, &cli_settings.state_chain).await,
-		ForceRotation { id } => api::force_rotation(id, &cli_settings.state_chain).await,
+		ForceRotation {} => api::force_rotation(&cli_settings.state_chain).await,
 		GenerateKeys { path: _ } => unreachable!(), // GenerateKeys is handled above
 	}
 }

@@ -5,9 +5,11 @@
 use codec::{Codec, Decode, Encode};
 use frame_support::{
 	dispatch::{GetDispatchInfo, UnfilteredDispatchable, Weight},
+	ensure,
 	traits::{EnsureOrigin, Get, UnixTime},
 };
 pub use pallet::*;
+use sp_runtime::DispatchError;
 use sp_std::{boxed::Box, ops::Add, vec::Vec};
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -23,9 +25,14 @@ pub type GovCallHash = [u8; 32];
 mod mock;
 #[cfg(test)]
 mod tests;
+
+pub type ProposalId = u32;
 /// Implements the functionality of the Chainflip governance.
 #[frame_support::pallet]
 pub mod pallet {
+
+	use super::*;
+
 	use cf_traits::{Chainflip, ExecutionCondition, RuntimeUpgrade};
 	use frame_support::{
 		dispatch::GetDispatchInfo,
@@ -65,7 +72,6 @@ pub mod pallet {
 	type AccountId<T> = <T as frame_system::Config>::AccountId;
 	type OpaqueCall = Vec<u8>;
 	type Timestamp = u64;
-	pub type ProposalId = u32;
 
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
@@ -216,6 +222,9 @@ pub mod pallet {
 			// Push proposal
 			let id = Self::push_proposal(call);
 			Self::deposit_event(Event::Proposed(id));
+
+			Self::inner_approve(who, id)?;
+
 			// Governance member don't pay fees
 			Ok(Pays::No.into())
 		}
@@ -289,27 +298,9 @@ pub mod pallet {
 			approved_id: ProposalId,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			let members = Members::<T>::get();
-			ensure!(members.contains(&who), Error::<T>::NotMember);
-			ensure!(Proposals::<T>::contains_key(approved_id), Error::<T>::ProposalNotFound);
-
-			// Try to approve the proposal
-			let proposal = Proposals::<T>::mutate(approved_id, |proposal| {
-				if !proposal.approved.insert(who) {
-					return Err(Error::<T>::AlreadyApproved)
-				}
-				Self::deposit_event(Event::Approved(approved_id));
-				Ok(proposal.clone())
-			})?;
-
-			if proposal.approved.len() > (members.len() / 2) {
-				ExecutionPipeline::<T>::append((proposal.call, approved_id));
-				Proposals::<T>::remove(approved_id);
-				ActiveProposals::<T>::mutate(|proposals| {
-					proposals
-						.retain(|ActiveProposal { proposal_id, .. }| *proposal_id != approved_id)
-				});
-			}
+			// Ensure origin is part of the governance
+			ensure!(Members::<T>::get().contains(&who), Error::<T>::NotMember);
+			Self::inner_approve(who, approved_id)?;
 			// Governance members don't pay transaction fees
 			Ok(Pays::No.into())
 		}
@@ -461,6 +452,28 @@ where
 }
 
 impl<T: Config> Pallet<T> {
+	pub fn inner_approve(who: T::AccountId, approved_id: ProposalId) -> Result<(), DispatchError> {
+		ensure!(Proposals::<T>::contains_key(approved_id), Error::<T>::ProposalNotFound);
+
+		// Try to approve the proposal
+		let proposal = Proposals::<T>::mutate(approved_id, |proposal| {
+			if !proposal.approved.insert(who) {
+				return Err(Error::<T>::AlreadyApproved)
+			}
+			Self::deposit_event(Event::Approved(approved_id));
+			Ok(proposal.clone())
+		})?;
+
+		if proposal.approved.len() > (Members::<T>::get().len() / 2) {
+			ExecutionPipeline::<T>::append((proposal.call, approved_id));
+			Proposals::<T>::remove(approved_id);
+			ActiveProposals::<T>::mutate(|proposals| {
+				proposals.retain(|ActiveProposal { proposal_id, .. }| *proposal_id != approved_id)
+			});
+		}
+		Ok(())
+	}
+
 	pub fn compute_gov_key_call_hash<CallData>(data: CallData) -> (GovCallHash, u32)
 	where
 		CallData: Clone + Codec,

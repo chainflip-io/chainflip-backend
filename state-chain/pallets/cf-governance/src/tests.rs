@@ -61,11 +61,9 @@ fn propose_a_governance_extrinsic_and_expect_execution() {
 			Origin::signed(ALICE),
 			mock_extrinsic()
 		));
-		// Assert the proposed event was fired
-		assert_eq!(last_event::<Test>(), crate::mock::Event::Governance(crate::Event::Proposed(1)),);
-		// Do the two needed approvals to reach majority
+		assert_eq!(last_event::<Test>(), crate::mock::Event::Governance(crate::Event::Approved(1)),);
+		// Do the second approval to reach majority
 		assert_ok!(Governance::approve(Origin::signed(BOB), 1));
-		assert_ok!(Governance::approve(Origin::signed(CHARLES), 1));
 		next_block();
 		// Expect the Executed event was fired
 		assert_eq!(last_event::<Test>(), crate::mock::Event::Governance(crate::Event::Executed(1)),);
@@ -88,10 +86,9 @@ fn already_executed() {
 			mock_extrinsic()
 		));
 		// Assert the proposed event was fired
-		assert_eq!(last_event::<Test>(), crate::mock::Event::Governance(crate::Event::Proposed(1)),);
-		// Do the two needed approvals to reach majority
+		assert_eq!(last_event::<Test>(), crate::mock::Event::Governance(crate::Event::Approved(1)),);
+		// Do the second approval to reach majority
 		assert_ok!(Governance::approve(Origin::signed(BOB), 1));
-		assert_ok!(Governance::approve(Origin::signed(CHARLES), 1));
 		// The third attempt in this block has to fail because the
 		// proposal is already in the execution pipeline
 		assert_noop!(
@@ -142,10 +139,8 @@ fn can_not_vote_twice() {
 			Origin::signed(ALICE),
 			mock_extrinsic()
 		));
-		// Approve the proposal
-		assert_ok!(Governance::approve(Origin::signed(BOB), 1));
-		// Try to approve it again and expect the extrinsic to fail
-		assert_noop!(Governance::approve(Origin::signed(BOB), 1), <Error<Test>>::AlreadyApproved);
+		// Try to approve it again. Proposing implies approving.
+		assert_noop!(Governance::approve(Origin::signed(ALICE), 1), <Error<Test>>::AlreadyApproved);
 	});
 }
 
@@ -156,9 +151,9 @@ fn several_open_proposals() {
 			Origin::signed(ALICE),
 			mock_extrinsic()
 		));
-		assert_eq!(last_event::<Test>(), crate::mock::Event::Governance(crate::Event::Proposed(1)),);
+		assert_eq!(last_event::<Test>(), crate::mock::Event::Governance(crate::Event::Approved(1)),);
 		assert_ok!(Governance::propose_governance_extrinsic(Origin::signed(BOB), mock_extrinsic()));
-		assert_eq!(last_event::<Test>(), crate::mock::Event::Governance(crate::Event::Proposed(2)),);
+		assert_eq!(last_event::<Test>(), crate::mock::Event::Governance(crate::Event::Approved(2)),);
 		assert_eq!(ProposalIdCounter::<Test>::get(), 2);
 	});
 }
@@ -181,10 +176,9 @@ fn sudo_extrinsic() {
 			Origin::signed(ALICE),
 			governance_extrinsic
 		));
-		assert_eq!(last_event::<Test>(), crate::mock::Event::Governance(crate::Event::Proposed(1)),);
-		// Do the two necessary approvals
+		assert_eq!(last_event::<Test>(), crate::mock::Event::Governance(crate::Event::Approved(1)),);
+		// Do the second necessary approval
 		assert_ok!(Governance::approve(Origin::signed(BOB), 1));
-		assert_ok!(Governance::approve(Origin::signed(CHARLES), 1));
 		next_block();
 		// Expect the sudo extrinsic to be executed successfully
 		assert_eq!(last_event::<Test>(), crate::mock::Event::Governance(crate::Event::Executed(1)),);
