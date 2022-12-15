@@ -1,4 +1,5 @@
 use super::*;
+use frame_support::traits::Get;
 
 pub mod assets;
 
@@ -11,6 +12,12 @@ macro_rules! chains {
 			impl AsRef<ForeignChain> for $chain {
 				fn as_ref(&self) -> &ForeignChain {
 					&ForeignChain::$chain
+				}
+			}
+
+			impl Get<ForeignChain> for $chain {
+				fn get() -> ForeignChain {
+					ForeignChain::$chain
 				}
 			}
 		)+
@@ -39,4 +46,10 @@ chains! {
 fn test_chains() {
 	assert_eq!(Ethereum.as_ref(), &ForeignChain::Ethereum);
 	assert_eq!(Polkadot.as_ref(), &ForeignChain::Polkadot);
+}
+
+#[test]
+fn test_get_chain_identifier() {
+	assert_eq!(Ethereum::get(), ForeignChain::Ethereum);
+	assert_eq!(Polkadot::get(), ForeignChain::Polkadot);
 }

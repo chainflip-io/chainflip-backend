@@ -1,6 +1,6 @@
 use crate::{mock::*, EarnedRelayerFees, Pallet, Swap, SwapQueue, WeightInfo};
 use cf_chains::AnyChain;
-use cf_primitives::{Asset, ForeignChainAddress};
+use cf_primitives::{Asset, ForeignChain, ForeignChainAddress};
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{mocks::egress_handler::MockEgressHandler, SwapIntentHandler};
 use frame_support::{assert_ok, sp_std::iter};
@@ -209,7 +209,7 @@ fn expect_swap_id_to_be_emitted() {
 			crate::mock::Event::Swapping(crate::Event::SwapExecuted { swap_id: 1 }),
 			crate::mock::Event::Swapping(crate::Event::SwapEgressScheduled {
 				swap_id: 1,
-				egress_id: 1,
+				egress_id: (ForeignChain::Ethereum, 1),
 				egress_amount: 500
 			})
 		);

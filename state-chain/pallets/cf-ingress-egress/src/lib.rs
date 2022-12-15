@@ -13,7 +13,7 @@ mod tests;
 pub mod weights;
 pub use weights::WeightInfo;
 
-use cf_primitives::EgressId;
+use cf_primitives::{EgressCounter, EgressId, ForeignChain};
 
 use cf_chains::{AllBatch, Chain, ChainAbi, ChainCrypto, FetchAssetParams, TransferAssetParams};
 use cf_primitives::{Asset, AssetAmount, ForeignChainAddress, IntentId};
@@ -45,7 +45,7 @@ impl<C: Chain> FetchOrTransfer<C> {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_primitives::{BroadcastId, EgressId};
+	use cf_primitives::BroadcastId;
 	use core::marker::PhantomData;
 	use sp_std::vec::Vec;
 
@@ -103,7 +103,7 @@ pub mod pallet {
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// Marks which chain this pallet is interacting with.
-		type TargetChain: ChainAbi;
+		type TargetChain: ChainAbi + Get<ForeignChain>;
 
 		/// Generates ingress addresses.
 		type AddressDerivation: AddressDerivationApi<Self::TargetChain>;
@@ -151,7 +151,8 @@ pub mod pallet {
 
 	/// Stores the latest egress id used to generate an address.
 	#[pallet::storage]
-	pub type EgressIdCounter<T: Config<I>, I: 'static = ()> = StorageValue<_, EgressId, ValueQuery>;
+	pub type EgressIdCounter<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, EgressCounter, ValueQuery>;
 
 	/// Scheduled fetch and egress for the Ethereum chain.
 	#[pallet::storage]
@@ -439,14 +440,15 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 		amount: AssetAmount,
 		egress_address: TargetChainAccount<T, I>,
 	) -> EgressId {
-		let egress_id = EgressIdCounter::<T, I>::get().saturating_add(1);
+		let egress_counter = EgressIdCounter::<T, I>::get().saturating_add(1);
+		let egress_id = (<T as Config<I>>::TargetChain::get(), egress_counter);
 		ScheduledEgressRequests::<T, I>::append(FetchOrTransfer::<T::TargetChain>::Transfer {
 			asset,
 			to: egress_address.clone(),
 			amount,
 			egress_id,
 		});
-		EgressIdCounter::<T, I>::put(egress_id);
+		EgressIdCounter::<T, I>::put(egress_counter);
 		Self::deposit_event(Event::<T, I>::EgressScheduled {
 			id: egress_id,
 			asset,
