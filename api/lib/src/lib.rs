@@ -3,7 +3,6 @@ use async_trait::async_trait;
 use cf_chains::eth::H256;
 use cf_primitives::AccountRole;
 use futures::{FutureExt, Stream, StreamExt};
-use pallet_cf_governance::ProposalId;
 use pallet_cf_validator::MAX_LENGTH_FOR_VANITY_NAME;
 use rand_legacy::FromEntropy;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
@@ -372,36 +371,37 @@ pub async fn rotate_keys(state_chain_settings: &settings::StateChain) -> Result<
 }
 
 // Account must be the governance dictator in order for this to work.
-pub async fn force_rotation(
-	id: ProposalId,
-	state_chain_settings: &settings::StateChain,
-) -> Result<()> {
-	task_scope(|scope| async {
-		let logger = new_discard_logger();
-		let (_, _, state_chain_client) =
-			StateChainClient::new(scope, state_chain_settings, AccountRole::None, false, &logger).await?;
-
-		state_chain_client
-			.submit_signed_extrinsic(
-				pallet_cf_governance::Call::propose_governance_extrinsic {
-					call: Box::new(pallet_cf_validator::Call::force_rotation {}.into()),
-				},
+pub async fn force_rotation(state_chain_settings: &settings::StateChain) -> Result<()> {
+	task_scope(|scope| {
+		async {
+			let logger = new_discard_logger();
+			let (_, _, state_chain_client) = StateChainClient::new(
+				scope,
+				state_chain_settings,
+				AccountRole::None,
+				false,
 				&logger,
 			)
-			.await
-			.expect("Should submit sudo governance proposal");
+			.await?;
 
-		println!("Submitting governance proposal for rotation.");
+			println!("Submitting governance proposal for rotation.");
+			state_chain_client
+				.submit_signed_extrinsic(
+					pallet_cf_governance::Call::propose_governance_extrinsic {
+						call: Box::new(pallet_cf_validator::Call::force_rotation {}.into()),
+					},
+					&logger,
+				)
+				.await
+				.expect("Should submit sudo governance proposal");
 
-		state_chain_client
-			.submit_signed_extrinsic(pallet_cf_governance::Call::approve { approved_id: id }, &logger)
-			.await
-			.expect("Should submit approval, triggering execution of the forced rotation");
+			println!("Rotation should begin soon :)");
 
-		println!("Approved governance proposal {}. Rotation should commence soon if you are the governance dictator", id);
-
-		Ok(())
-	}.boxed()).await
+			Ok(())
+		}
+		.boxed()
+	})
+	.await
 }
 
 pub async fn retire_account(state_chain_settings: &settings::StateChain) -> Result<()> {

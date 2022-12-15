@@ -1,4 +1,4 @@
-use chainflip_api::primitives::{AccountRole, Asset, Hash, ProposalId};
+use chainflip_api::primitives::{AccountRole, Asset, Hash};
 pub use chainflip_engine::settings::StateChain;
 use chainflip_engine::{
 	constants::{CONFIG_ROOT, DEFAULT_CONFIG_ROOT},
@@ -145,10 +145,7 @@ pub enum CliCommand {
         hide = true,
         about = "Force a key rotation. This can only be executed by the governance dictator"
     )]
-	ForceRotation {
-		#[clap(help = "The governance proposal id that will be associated with this rotation.")]
-		id: ProposalId,
-	},
+	ForceRotation {},
 	#[clap(
 		about = "Generates the 3 key files needed to run a chainflip node (Node Key, Ethereum Key and Validator Key), then saves them to the filesystem."
 	)]
