@@ -186,10 +186,10 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
-			Self::schedule_swap(from, to, amount, egress_address)?;
+			let swap_id = Self::schedule_swap(from, to, amount, egress_address);
 
 			Self::deposit_event(Event::<T>::SwapScheduledByWitnesser {
-				swap_id: SwapIdCounter::<T>::get(),
+				swap_id,
 				amount,
 				egress_address,
 			});
@@ -255,15 +255,18 @@ pub mod pallet {
 			to: Asset,
 			amount: AssetAmount,
 			egress_address: ForeignChainAddress,
-		) -> DispatchResult {
+		) -> u64 {
 			// The caller should ensure that the egress details are consistent.
 			debug_assert_eq!(ForeignChain::from(egress_address), ForeignChain::from(to));
-			let swap_id = SwapIdCounter::<T>::get().saturating_add(1);
+
+			let swap_id = SwapIdCounter::<T>::mutate(|id| {
+				id.saturating_accrue(1);
+				*id
+			});
 
 			SwapQueue::<T>::append(Swap { swap_id, from, to, amount, egress_address });
 
-			SwapIdCounter::<T>::put(swap_id);
-			Ok(())
+			swap_id
 		}
 	}
 
@@ -279,7 +282,7 @@ pub mod pallet {
 			egress_address: ForeignChainAddress,
 			relayer_id: Self::AccountId,
 			relayer_commission_bps: BasisPoints,
-		) -> DispatchResult {
+		) {
 			let fee = Permill::from_parts(relayer_commission_bps as u32 * BASIS_POINTS_PER_MILLION) *
 				amount;
 
@@ -287,15 +290,13 @@ pub mod pallet {
 				earned_fees.saturating_accrue(fee)
 			});
 
-			Self::schedule_swap(from, to, amount.saturating_sub(fee), egress_address)?;
+			let swap_id = Self::schedule_swap(from, to, amount.saturating_sub(fee), egress_address);
 
 			Self::deposit_event(Event::<T>::SwapIngressReceived {
 				ingress_address,
-				swap_id: SwapIdCounter::<T>::get(),
+				swap_id,
 				ingress_amount: amount,
 			});
-
-			Ok(())
 		}
 	}
 }

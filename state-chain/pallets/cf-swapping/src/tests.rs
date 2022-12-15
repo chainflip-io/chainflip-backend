@@ -57,7 +57,7 @@ fn generate_test_swaps() -> Vec<Swap> {
 
 fn insert_swaps(swaps: &[Swap]) {
 	for (relayer_id, swap) in swaps.iter().enumerate() {
-		assert_ok!(<Pallet<Test> as SwapIntentHandler>::on_swap_ingress(
+		<Pallet<Test> as SwapIntentHandler>::on_swap_ingress(
 			ForeignChainAddress::Eth([2; 20]),
 			swap.from,
 			swap.to,
@@ -65,7 +65,7 @@ fn insert_swaps(swaps: &[Swap]) {
 			swap.egress_address,
 			relayer_id as u64,
 			2,
-		));
+		);
 	}
 }
 
@@ -121,7 +121,7 @@ fn expect_earned_fees_to_be_recorded() {
 	new_test_ext().execute_with(|| {
 		const ALICE: u64 = 2_u64;
 		const BOB: u64 = 3_u64;
-		assert_ok!(<Pallet<Test> as SwapIntentHandler>::on_swap_ingress(
+		<Pallet<Test> as SwapIntentHandler>::on_swap_ingress(
 			ForeignChainAddress::Eth([2; 20]),
 			Asset::Flip,
 			Asset::Usdc,
@@ -129,8 +129,8 @@ fn expect_earned_fees_to_be_recorded() {
 			ForeignChainAddress::Eth([2; 20]),
 			ALICE,
 			200,
-		));
-		assert_ok!(<Pallet<Test> as SwapIntentHandler>::on_swap_ingress(
+		);
+		<Pallet<Test> as SwapIntentHandler>::on_swap_ingress(
 			ForeignChainAddress::Eth([2; 20]),
 			Asset::Flip,
 			Asset::Usdc,
@@ -138,11 +138,11 @@ fn expect_earned_fees_to_be_recorded() {
 			ForeignChainAddress::Eth([2; 20]),
 			BOB,
 			100,
-		));
+		);
 		Swapping::on_idle(1, 1000);
 		assert_eq!(EarnedRelayerFees::<Test>::get(ALICE, cf_primitives::Asset::Flip), 2);
 		assert_eq!(EarnedRelayerFees::<Test>::get(BOB, cf_primitives::Asset::Flip), 5);
-		assert_ok!(<Pallet<Test> as SwapIntentHandler>::on_swap_ingress(
+		<Pallet<Test> as SwapIntentHandler>::on_swap_ingress(
 			ForeignChainAddress::Eth([2; 20]),
 			Asset::Flip,
 			Asset::Usdc,
@@ -150,7 +150,7 @@ fn expect_earned_fees_to_be_recorded() {
 			ForeignChainAddress::Eth([2; 20]),
 			ALICE,
 			200,
-		));
+		);
 		Swapping::on_idle(1, 1000);
 		assert_eq!(EarnedRelayerFees::<Test>::get(ALICE, cf_primitives::Asset::Flip), 4);
 	});
@@ -185,7 +185,7 @@ fn expect_swap_id_to_be_emitted() {
 			0,
 		));
 		// 2. Schedule the swap -> SwapIngressReceived
-		assert_ok!(<Pallet<Test> as SwapIntentHandler>::on_swap_ingress(
+		<Pallet<Test> as SwapIntentHandler>::on_swap_ingress(
 			ForeignChainAddress::Eth(Default::default()),
 			Asset::Flip,
 			Asset::Usdc,
@@ -193,7 +193,7 @@ fn expect_swap_id_to_be_emitted() {
 			ForeignChainAddress::Eth(Default::default()),
 			ALICE,
 			0,
-		));
+		);
 		// 3. Process swaps -> SwapExecuted, SwapEgressScheduled
 		Swapping::on_idle(1, 100);
 		assert_event_sequence!(
