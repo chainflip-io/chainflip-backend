@@ -12,7 +12,8 @@ use state_chain_runtime::{
 
 use cf_primitives::{
 	chains::{assets::eth, Ethereum},
-	AccountId, AccountRole, Asset, AssetAmount, ExchangeRate, ForeignChainAddress, TradingPosition,
+	AccountId, AccountRole, Asset, AssetAmount, ExchangeRate, ForeignChain, ForeignChainAddress,
+	TradingPosition,
 };
 use cf_traits::{AddressDerivationApi, LiquidityPoolApi, LpProvisioningApi};
 use pallet_cf_ingress_egress::IngressWitness;
@@ -156,7 +157,7 @@ fn can_swap_assets() {
 		const EXPECTED_OUTPUT: AssetAmount = 4545;
 		System::assert_has_event(Event::EthereumIngressEgress(
 			pallet_cf_ingress_egress::Event::EgressScheduled {
-				id: 1,
+				id: (ForeignChain::Ethereum, 1),
 				asset: eth::Asset::Flip,
 				amount: EXPECTED_OUTPUT,
 				egress_address: egress_address.into(),
@@ -195,7 +196,7 @@ fn can_swap_assets() {
 		System::assert_has_event(Event::EthereumIngressEgress(
 			pallet_cf_ingress_egress::Event::BatchBroadcastRequested {
 				broadcast_id: 1,
-				egress_ids: vec![1],
+				egress_ids: vec![(ForeignChain::Ethereum, 1)],
 			},
 		));
 	});

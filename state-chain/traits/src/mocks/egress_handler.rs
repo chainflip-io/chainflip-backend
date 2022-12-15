@@ -1,7 +1,7 @@
 use super::{MockPallet, MockPalletStorage};
 use crate::EgressApi;
 use cf_chains::Chain;
-use cf_primitives::{AssetAmount, EgressId};
+use cf_primitives::{AssetAmount, EgressId, ForeignChain};
 use sp_std::marker::PhantomData;
 
 pub struct MockEgressHandler<C>(PhantomData<C>);
@@ -29,7 +29,7 @@ impl<C: Chain> EgressApi<C> for MockEgressHandler<C> {
 				.map(|v| {
 					let next_id = if let Some((id, _)) = v.last() { id + 1 } else { 1 };
 					v.push((next_id, (foreign_asset, amount, egress_address)));
-					next_id
+					(ForeignChain::Ethereum, next_id)
 				})
 				.unwrap()
 		})

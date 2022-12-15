@@ -809,6 +809,7 @@ name = "cf-primitives"
 version = "0.1.0"
 dependencies = [
  "ethabi",
+ "frame-support",
  "hex",
  "parity-scale-codec",
  "scale-info",
