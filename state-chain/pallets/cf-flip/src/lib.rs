@@ -108,7 +108,7 @@ pub mod pallet {
 	#[pallet::getter(fn total_issuance)]
 	pub type TotalIssuance<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
 
-	/// The slashing rate in percent - slash per day = n % of MBA.
+	/// The per-block slashing rate expressed as a proportion of a validator's bond.
 	#[pallet::storage]
 	#[pallet::getter(fn slashing_rate)]
 	pub type SlashingRate<T: Config> = StorageValue<_, Permill, ValueQuery>;
