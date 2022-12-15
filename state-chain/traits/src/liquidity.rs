@@ -6,7 +6,7 @@ use cf_primitives::{
 
 pub trait SwapIntentHandler {
 	type AccountId;
-	fn schedule_swap(
+	fn on_swap_ingress(
 		ingress_address: ForeignChainAddress,
 		from: Asset,
 		to: Asset,
@@ -14,7 +14,7 @@ pub trait SwapIntentHandler {
 		egress_address: ForeignChainAddress,
 		relayer_id: Self::AccountId,
 		relayer_commission_bps: u16,
-	) -> DispatchResult;
+	);
 }
 
 pub trait LpProvisioningApi {
@@ -70,7 +70,7 @@ pub trait LiquidityPoolApi {
 impl<T: frame_system::Config> SwapIntentHandler for T {
 	type AccountId = T::AccountId;
 
-	fn schedule_swap(
+	fn on_swap_ingress(
 		_ingress_address: ForeignChainAddress,
 		_from: Asset,
 		_to: Asset,
@@ -78,8 +78,7 @@ impl<T: frame_system::Config> SwapIntentHandler for T {
 		_egress_address: ForeignChainAddress,
 		_relayer_id: Self::AccountId,
 		_relayer_commission_bps: u16,
-	) -> DispatchResult {
-		Ok(())
+	) {
 	}
 }
 

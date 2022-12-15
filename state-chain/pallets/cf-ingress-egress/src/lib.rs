@@ -418,7 +418,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				egress_asset,
 				relayer_id,
 				relayer_commission_bps,
-			} => T::SwapIntentHandler::schedule_swap(
+			} => T::SwapIntentHandler::on_swap_ingress(
 				ingress_address.clone().into(),
 				asset.into(),
 				egress_asset,
@@ -426,7 +426,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				egress_address,
 				relayer_id,
 				relayer_commission_bps,
-			)?,
+			),
 		};
 
 		Self::deposit_event(Event::IngressCompleted { ingress_address, asset, amount, tx_id });
