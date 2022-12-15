@@ -153,18 +153,6 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 
 		let validator_mapping = stage.ceremony_common().validator_mapping.clone();
 
-		// Log the account ids of the missing messages
-		let missing_messages_from_accounts = validator_mapping.get_ids(stage.awaited_parties());
-		if !missing_messages_from_accounts.is_empty() {
-			slog::debug!(
-				self.logger,
-				"Stage {} finalizing with missing messages from {} parties",
-				stage.get_stage_name(),
-				missing_messages_from_accounts.len();
-				"missing_ids" => format_iterator(missing_messages_from_accounts).to_string()
-			);
-		}
-
 		match stage.finalize().await {
 			StageResult::NextStage(mut next_stage) => {
 				slog::debug!(
@@ -289,6 +277,7 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 
 	/// Delay message to be processed in the next stage
 	fn add_delayed(&mut self, id: AccountId, m: Ceremony::Data) {
+		let delayed_messages_count = self.delayed_messages.len() + 1;
 		match &self.stage {
 			Some(stage) => {
 				slog::debug!(
@@ -297,7 +286,7 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 					m,
 					id,
 					stage.get_stage_name(),
-					self.delayed_messages.len() + 1
+					delayed_messages_count
 				);
 			},
 			None => {
@@ -306,7 +295,7 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 					"Delaying message {} from party [{}] for unauthorised ceremony. (Total: {})",
 					m,
 					id,
-					self.delayed_messages.len() + 1
+					delayed_messages_count
 				)
 			},
 		}
@@ -323,10 +312,14 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 			// Instead, we delegate the responsibility to the concrete stage
 			// implementation to try to recover or agree on who to report.
 
+			let missing_messages_from_accounts =
+				stage.ceremony_common().validator_mapping.get_ids(stage.awaited_parties());
 			slog::warn!(
 				self.logger,
-				"Ceremony stage {} timed out before all messages collected; trying to finalize current stage anyway.",
-				stage.get_stage_name()
+				"Ceremony stage {} timed out before all messages collected ({} missing), trying to finalize current stage anyway.",
+				stage.get_stage_name(),
+				missing_messages_from_accounts.len();
+				"missing_ids" => format_iterator(missing_messages_from_accounts).to_string()
 			);
 
 			self.finalize_current_stage().await

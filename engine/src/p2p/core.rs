@@ -250,13 +250,21 @@ impl P2PContext {
 	fn send_messages(&self, messages: OutgoingMultisigStageMessages) {
 		match messages {
 			OutgoingMultisigStageMessages::Broadcast(account_ids, payload) => {
-				slog::trace!(self.logger, "Broadcasting a message to {} peers", account_ids.len());
+				slog::trace!(
+					self.logger,
+					"Broadcasting a message to all {} peers",
+					account_ids.len()
+				);
 				for acc_id in account_ids {
 					self.send_message(acc_id, payload.clone());
 				}
 			},
 			OutgoingMultisigStageMessages::Private(messages) => {
-				slog::trace!(self.logger, "Sending a message to {} peers", messages.len());
+				slog::trace!(
+					self.logger,
+					"Sending private messages to all {} peers",
+					messages.len()
+				);
 				for (acc_id, payload) in messages {
 					self.send_message(acc_id, payload);
 				}
@@ -288,6 +296,7 @@ impl P2PContext {
 
 	fn forward_incoming_message(&mut self, pubkey: XPublicKey, payload: Vec<u8>) {
 		if let Some(acc_id) = self.x25519_to_account_id.get(&pubkey) {
+			slog::trace!(self.logger, "Received a message from {}", acc_id);
 			self.incoming_message_sender.send((acc_id.clone(), payload)).unwrap();
 		} else {
 			slog::warn!(
