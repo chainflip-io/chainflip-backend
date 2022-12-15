@@ -311,7 +311,7 @@ jobs:
     secrets: inherit
 
   build-ibiza-docker:
-    needs: [set-variables, build-and-test]
+    needs: [set-variables, build-and-test-ibiza]
     uses: ./.github/workflows/.docker-build-validator.yaml
     with:
       artifacts: chainflip-backend-bin-ibiza
