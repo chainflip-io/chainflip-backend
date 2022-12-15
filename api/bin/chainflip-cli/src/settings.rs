@@ -5,15 +5,15 @@ use chainflip_engine::{
 	settings::{CfSettings, Eth, EthOptions, StateChainOptions},
 };
 use clap::Parser;
-use config::{ConfigError, Source, Value};
+use config::{ConfigBuilder, ConfigError, Source, Value};
 use serde::Deserialize;
-use std::collections::HashMap;
+use std::{collections::HashMap, path::PathBuf};
 
 #[derive(Parser, Clone, Debug)]
 #[clap(version = env!("SUBSTRATE_CLI_IMPL_VERSION"))]
 pub struct CLICommandLineOptions {
 	#[clap(short = 'c', long = "config-root", env = CONFIG_ROOT, default_value = DEFAULT_CONFIG_ROOT)]
-	config_root: String,
+	pub config_root: String,
 
 	#[clap(flatten)]
 	state_chain_opts: StateChainOptions,
@@ -149,6 +149,13 @@ pub enum CliCommand {
 		#[clap(help = "The governance proposal id that will be associated with this rotation.")]
 		id: ProposalId,
 	},
+	#[clap(
+		about = "Generates the 3 key files needed to run a chainflip node (Node Key, Ethereum Key and Validator Key), then saves them to the filesystem."
+	)]
+	GenerateKeys {
+		#[clap(help = "Output path", parse(from_os_str))]
+		path: Option<PathBuf>,
+	},
 }
 
 fn account_role_parser(s: &str) -> Result<AccountRole, String> {
@@ -178,6 +185,27 @@ impl CfSettings for CLISettings {
 		self.eth.validate_settings()?;
 
 		self.state_chain.validate_settings()
+	}
+
+	fn set_defaults(
+		config_builder: ConfigBuilder<config::builder::DefaultState>,
+		config_root: &str,
+	) -> Result<ConfigBuilder<config::builder::DefaultState>, ConfigError> {
+		config_builder
+			.set_default(
+				"state_chain.signing_key_file",
+				PathBuf::from(config_root)
+					.join("keys/signing_key_file")
+					.to_str()
+					.expect("Invalid signing_key_file path"),
+			)?
+			.set_default(
+				"eth.private_key_file",
+				PathBuf::from(config_root)
+					.join("keys/eth_private_key")
+					.to_str()
+					.expect("Invalid eth_private_key path"),
+			)
 	}
 }
 

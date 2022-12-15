@@ -14,6 +14,12 @@ slog = {version = "2.7.0", features = ["max_level_trace", "release_max_level_tra
 web3 = {git = 'https://github.com/tomusdrw/rust-web3.git', rev = '8796c88'}
 
 chainflip-engine = {path = "../../engine/"}
+ed25519-dalek = "1.0"
+rand = "0.7"
+tiny-bip39 = "1.0.0"
+secp256k1 = {version = "0.20"}
+rand_legacy = { package = "rand", version = "0.6" }
+zeroize = "1.5.4"
 
 # State Chain
 cf-chains = {path = "../../state-chain/chains"}
