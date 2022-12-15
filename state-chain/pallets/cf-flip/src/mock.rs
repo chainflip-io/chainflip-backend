@@ -149,7 +149,6 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 
 pub type SlashingRateType = Permill;
 pub type Bond = u128;
-pub type BlocksOffline = u64;
 pub type Mint = u128;
 
 #[derive(Clone, Debug)]
