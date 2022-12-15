@@ -293,25 +293,25 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 			Some(stage) => {
 				slog::debug!(
 					self.logger,
-					"Delaying message {} from party [{}] during stage: {}",
+					"Delaying message {} from party [{}] during stage {}. (Total: {})",
 					m,
 					id,
-					stage.get_stage_name()
+					stage.get_stage_name(),
+					self.delayed_messages.len() + 1
 				);
 			},
 			None => {
 				slog::debug!(
 					self.logger,
-					"Delaying message {} from party [{}] for unauthorised ceremony",
+					"Delaying message {} from party [{}] for unauthorised ceremony. (Total: {})",
 					m,
-					id
+					id,
+					self.delayed_messages.len() + 1
 				)
 			},
 		}
 
 		self.delayed_messages.insert(id, m);
-
-		slog::debug!(self.logger, "Total delayed: {}", self.delayed_messages.len());
 	}
 
 	async fn on_timeout(&mut self) -> OptionalCeremonyReturn<Ceremony> {
