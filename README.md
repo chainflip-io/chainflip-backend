@@ -78,7 +78,7 @@ commit.
 ### Prerequisits
 
 You will need to download [Docker](https://docs.docker.com/get-docker/), docker-compose and
-the [1Password CLI](https://1password.com/downloads/command-line/).
+the [1Password CLI 2](https://developer.1password.com/docs/cli/get-started/).
 
 #### Login to 1Password
 
