@@ -1,9 +1,5 @@
 use cf_chains::eth::SigData;
-use jsonrpsee::{
-	core::RpcResult,
-	proc_macros::rpc,
-	types::error::{CallError, ErrorCode},
-};
+use jsonrpsee::{core::RpcResult, proc_macros::rpc, types::error::CallError};
 use pallet_cf_governance::GovCallHash;
 use sc_client_api::HeaderBackend;
 use serde::{Deserialize, Serialize};
