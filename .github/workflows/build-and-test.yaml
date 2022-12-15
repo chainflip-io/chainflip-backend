@@ -303,6 +303,22 @@ jobs:
           path: |
             chainflip-docgen/generated
 
+  build-docker:
+    needs: [set-variables, build-and-test]
+    uses: ./.github/workflows/.docker-build-validator.yaml
+    with:
+      artifacts: chainflip-backend-bin
+      commit_hash: ${{ needs.set-variables.outputs.commit_hash }}
+    secrets: inherit
+
+  build-ibiza-docker:
+    needs: [set-variables, build-and-test]
+    uses: ./.github/workflows/.docker-build-validator.yaml
+    with:
+      artifacts: chainflip-backend-bin-ibiza
+      commit_hash: ${{ needs.set-variables.outputs.commit_hash }}
+    secrets: inherit
+
   deb-publish:
     name: Publish Packages to APT repo
     needs: [set-variables, build-and-test]

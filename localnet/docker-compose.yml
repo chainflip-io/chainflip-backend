@@ -58,8 +58,6 @@ services:
       context: .
       args:
         - COMMIT_HASH
-        - REPO_USERNAME
-        - REPO_PASSWORD
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
