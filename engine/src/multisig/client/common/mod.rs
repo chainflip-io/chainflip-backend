@@ -52,34 +52,34 @@ pub struct KeygenResultInfo<P: ECPoint> {
 
 #[derive(Error, Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub enum KeygenStageName {
-	#[error("Hash Commitments")]
+	#[error("`Hash Commitments 1`")]
 	HashCommitments1,
-	#[error("Verify Hash Commitments")]
+	#[error("`Verify Hash Commitments 2`")]
 	VerifyHashCommitmentsBroadcast2,
-	#[error("Coefficient Commitments")]
+	#[error("`Coefficient Commitments 3`")]
 	CoefficientCommitments3,
-	#[error("Verify Coefficient Commitments")]
+	#[error("`Verify Coefficient Commitments 4`")]
 	VerifyCommitmentsBroadcast4,
-	#[error("Secret Shares")]
+	#[error("`Secret Shares 5`")]
 	SecretSharesStage5,
-	#[error("Complaints")]
+	#[error("`Complaints 6`")]
 	ComplaintsStage6,
-	#[error("Verify Complaints")]
+	#[error("`Verify Complaints 7`")]
 	VerifyComplaintsBroadcastStage7,
-	#[error("Blame Responses")]
+	#[error("`Blame Responses 8`")]
 	BlameResponsesStage8,
-	#[error("Verify Blame Responses")]
+	#[error("`Verify Blame Responses 9`")]
 	VerifyBlameResponsesBroadcastStage9,
 }
 
 #[derive(Error, Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub enum SigningStageName {
-	#[error("Commitments")]
+	#[error("`Commitments 1`")]
 	AwaitCommitments1,
-	#[error("Verify Commitments")]
+	#[error("`Verify Commitments 2`")]
 	VerifyCommitmentsBroadcast2,
-	#[error("Local Signatures")]
+	#[error("`Local Signatures 3`")]
 	LocalSigStage3,
-	#[error("Verify Local Signatures")]
+	#[error("`Verify Local Signatures 4`")]
 	VerifyLocalSigsBroadcastStage4,
 }
