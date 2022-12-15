@@ -73,7 +73,7 @@ build() {
   echo
   echo "🏗 Building network"
 
-  COMMIT_HASH=$COMMIT_HASH RELEASE=$RELEASE \
+  COMMIT_HASH=$COMMIT_HASH PREFIX=$RELEASE \
     docker-compose -f localnet/docker-compose.yml up --build -d
 
   echo "🚀 Network is live"

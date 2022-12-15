@@ -6,3 +6,4 @@ RUN apt-get install -y netcat
 COPY ${binaries_location}/chainflip-* /usr/bin
 COPY ${binaries_location}/generate-genesis-keys /usr/bin
 RUN chmod +x /usr/bin/chainflip-* /usr/bin/generate-genesis-keys
+COPY init/keyshare/bashful.db /etc/chainflip/bashful.db
