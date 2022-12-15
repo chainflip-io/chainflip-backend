@@ -2,11 +2,10 @@ name: Build rust-base Docker image
 on:
   workflow_call:
     inputs:
-      release:
-        type: string
-        default: nightly
-        description: Release type [ibiza, sandstorm]
+      artifacts:
+        description: Artifacts to get binaries from
         required: true
+        type: string
       image:
         type: string
         default: validator
