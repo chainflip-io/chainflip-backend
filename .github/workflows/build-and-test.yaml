@@ -308,7 +308,6 @@ jobs:
     uses: ./.github/workflows/.docker-build-validator.yaml
     with:
       artifacts: chainflip-backend-bin
-      commit_hash: ${{ needs.set-variables.outputs.commit_hash }}
     secrets: inherit
 
   build-ibiza-docker:
@@ -316,7 +315,6 @@ jobs:
     uses: ./.github/workflows/.docker-build-validator.yaml
     with:
       artifacts: chainflip-backend-bin-ibiza
-      commit_hash: ${{ needs.set-variables.outputs.commit_hash }}
     secrets: inherit
 
   deb-publish:
