@@ -337,8 +337,6 @@ impl P2PContext {
 	}
 
 	fn connect_to_peer(&mut self, peer: PeerInfo) {
-		slog::debug!(self.logger, "Connecting to: {}", peer.account_id);
-
 		let account_id = peer.account_id.clone();
 
 		let socket = OutgoingSocket::new(&self.zmq_context, &self.key);
