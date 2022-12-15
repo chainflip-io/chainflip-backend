@@ -367,27 +367,25 @@ impl P2PContext {
 	}
 
 	fn add_or_update_peer(&mut self, peer: PeerInfo) {
-		slog::debug!(self.logger, "Received new peer info: {}", peer);
-
 		if let Some(existing_socket) = self.active_connections.remove(&peer.account_id) {
 			slog::debug!(
 				self.logger,
-				"Account id {} is already known, updating info and reconnecting",
+				"Received known peer info for account id {}, updating info and reconnecting",
 				&peer.account_id
 			);
 
 			self.remove_peer_and_disconnect_socket(existing_socket);
+		} else {
+			slog::debug!(
+				self.logger,
+				"Received new peer info for account id {}, adding to allowed peers and id mapping",
+				&peer.account_id;
+				"peer_pubkey" => to_string(&peer.pubkey),
+			);
 		}
 
 		let peer_pubkey = &peer.pubkey;
 		self.authenticator.add_peer(*peer_pubkey);
-
-		slog::trace!(
-			self.logger,
-			"Adding x25519 to account id mapping: {} -> {}",
-			&peer.account_id,
-			to_string(peer_pubkey)
-		);
 
 		self.x25519_to_account_id.insert(*peer_pubkey, peer.account_id.clone());
 
