@@ -58,6 +58,6 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          file: rust-base.Dockerfile
+          file: docker/rust-base.Dockerfile
           build-args: |
             NIGHTLY=${{ env.NIGHTLY_VERSION }}
