@@ -11,10 +11,6 @@ on:
         default: validator
         description: Image name
         required: false
-      image_prefix:
-        type: string
-        description: Image prefix
-        required: true
 
 env:
   REGISTRY: ghcr.io
@@ -65,7 +61,7 @@ jobs:
           flavor: |
             latest=true
           tags: |
-            type=sha,format=long,prefix=${{ inputs.image_prefix }},
+            type=sha,format=long,prefix=${{ inputs.release }}-,
 
       - name: Login to DockerHub
         uses: docker/login-action@v1
@@ -74,11 +70,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Download packages
-        uses: actions/download-artifact@v3
-        with:
-          name: ${{ inputs.artifacts }}
-          path: binaries
+      # - name: Download packages
+      #   uses: actions/download-artifact@v3
+      #   with:
+      #     name: ${{ inputs.artifacts }}
+      #     path: binaries
 
       - name: Build and push
         uses: docker/build-push-action@v3
@@ -90,7 +86,7 @@ jobs:
           cache-to: type=gha,mode=max
           file: docker/validator-apt.Dockerfile
           build-args: |
-            COMMIT_HASH=${{ github.sha }}
+            COMMIT_HASH=20b4c416481a0b72ef44830ec38dbeadb899afcc
             APT_REPO_USERNAME=${{ env.APT_REPO_USERNAME }}
             APT_REPO_PASSWORD=${{ env.APT_REPO_PASSWORD }}
             RELEASE=${{ inputs.release }}

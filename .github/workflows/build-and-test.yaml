@@ -8,335 +8,333 @@ env:
   CF_RUNNER_SUDO_PASSWORD: ${{ secrets.CF_RUNNER_SUDO_PASSWORD }}
 
 jobs:
-  set-variables:
-    runs-on: ubuntu-20.04
-    outputs:
-      commit_hash: ${{ steps.commit_hash.outputs.commit_hash }}
-      branch_name: ${{ steps.branch_name.outputs.branch_name }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-      - id: commit_hash
-        run: |
-          COMMIT_HASH=$(git rev-parse --verify HEAD)
-          echo "commit_hash=$COMMIT_HASH" >> $GITHUB_OUTPUT
-      - id: branch_name
-        run: |
-          BRANCH_NAME=$(git rev-parse --abbrev-ref HEAD)
-          echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+  # set-variables:
+  #   runs-on: ubuntu-20.04
+  #   outputs:
+  #     commit_hash: ${{ steps.commit_hash.outputs.commit_hash }}
+  #     branch_name: ${{ steps.branch_name.outputs.branch_name }}
+  #   steps:
+  #     - name: Checkout
+  #       uses: actions/checkout@v3
+  #     - id: commit_hash
+  #       run: |
+  #         COMMIT_HASH=$(git rev-parse --verify HEAD)
+  #         echo "commit_hash=$COMMIT_HASH" >> $GITHUB_OUTPUT
+  #     - id: branch_name
+  #       run: |
+  #         BRANCH_NAME=$(git rev-parse --abbrev-ref HEAD)
+  #         echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
 
-  cargo-fmt:
-    runs-on: [hetzner]
-    container:
-      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08-no-sccache'
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-      - name: Check Format
-        run: cargo fmt --all -- --check
+  # cargo-fmt:
+  #   runs-on: [hetzner]
+  #   container:
+  #     image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08-no-sccache'
+  #     credentials:
+  #       username: ${{ github.actor }}
+  #       password: ${{ secrets.GITHUB_TOKEN }}
+  #   steps:
+  #     - name: Checkout
+  #       uses: actions/checkout@v3
+  #     - name: Check Format
+  #       run: cargo fmt --all -- --check
 
-  cargo-clippy:
-    runs-on: [hetzner]
-    container:
-      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08-no-sccache'
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-      - name: Check Linting
-        run: cargo ci-clippy
+  # cargo-clippy:
+  #   runs-on: [hetzner]
+  #   container:
+  #     image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08-no-sccache'
+  #     credentials:
+  #       username: ${{ github.actor }}
+  #       password: ${{ secrets.GITHUB_TOKEN }}
+  #   steps:
+  #     - name: Checkout
+  #       uses: actions/checkout@v3
+  #     - name: Check Linting
+  #       run: cargo ci-clippy
 
-  cargo-doc:
-    runs-on: [hetzner]
-    container:
-      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08-no-sccache'
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-      - name: Update APT
-        run: apt update
-      # - name: Setup sccache
-      #   uses: hendrikmuhs/ccache-action@v1.2
-      #   with:
-      #     max-size: ${{ env.SCCACHE_CACHE_SIZE }}
-      #     variant: sccache
-      #     save: false
-      # - run: sccache --show-stats
-      - name: Run cargo doc
-        run: |
-          cargo doc --workspace --document-private-items --no-deps
-      # - run: sccache --show-stats
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v3
-        with:
-          name: chainflip-backend-doc
-          path: |
-            ./target/doc/
+  # cargo-doc:
+  #   runs-on: [hetzner]
+  #   container:
+  #     image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08-no-sccache'
+  #     credentials:
+  #       username: ${{ github.actor }}
+  #       password: ${{ secrets.GITHUB_TOKEN }}
+  #   steps:
+  #     - name: Checkout
+  #       uses: actions/checkout@v3
+  #     - name: Update APT
+  #       run: apt update
+  #     # - name: Setup sccache
+  #     #   uses: hendrikmuhs/ccache-action@v1.2
+  #     #   with:
+  #     #     max-size: ${{ env.SCCACHE_CACHE_SIZE }}
+  #     #     variant: sccache
+  #     #     save: false
+  #     # - run: sccache --show-stats
+  #     - name: Run cargo doc
+  #       run: |
+  #         cargo doc --workspace --document-private-items --no-deps
+  #     # - run: sccache --show-stats
+  #     - name: Upload artifacts
+  #       uses: actions/upload-artifact@v3
+  #       with:
+  #         name: chainflip-backend-doc
+  #         path: |
+  #           ./target/doc/
 
-  build-and-test:
-    runs-on: [hetzner]
-    needs: [set-variables, cargo-fmt]
-    container:
-      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08-no-sccache'
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-    env:
-      COMMIT_HASH: ${{ needs.set-variables.outputs.commit_hash }}
-      BRANCH_NAME: ${{ needs.set-variables.outputs.branch_name }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-      - name: Update APT
-        run: apt update
-      # - name: Setup sccache
-      #   uses: hendrikmuhs/ccache-action@v1.2
-      #   with:
-      #     max-size: ${{ env.SCCACHE_CACHE_SIZE }}
-      #     variant: sccache
-      #     save: false
-      # - run: sccache --show-stats
-      - name: cargo ci-build
-        run: |
-          cargo ci-build --locked
-          # sccache --show-stats
-      - name: cargo ci-test --locked
-        run: |
-          cargo ci-test --locked
-          # sccache --show-stats
-      - name: Install cargo-deb
-        run: cargo install cargo-deb
-      - name: Get date
-        id: vars
-        run: |
-          echo "date=$(date +'%Y%m%d%H%M')" >> $GITHUB_OUTPUT
-      - name: Build packages
-        run: |
-          cargo deb --no-build --no-strip -p chainflip-engine --deb-revision "${{ steps.vars.outputs.date }}"
-          cargo deb --no-build --no-strip -p chainflip-cli --deb-revision "${{ steps.vars.outputs.date }}"
-          cargo deb --no-build --no-strip -p chainflip-node --deb-revision "${{ steps.vars.outputs.date }}"
-          cargo deb --no-build --no-strip -p generate-genesis-keys --deb-revision "${{ steps.vars.outputs.date }}"
-      - name: Upload packages
-        uses: actions/upload-artifact@v3
-        with:
-          name: chainflip-backend-packages-sandstorm
-          path: target/debian/*.deb
-      - name: Upload binary artifacts
-        uses: actions/upload-artifact@v3
-        with:
-          name: chainflip-backend-bin
-          path: |
-            ./target/release/chainflip-node
-            ./target/release/chainflip-engine
-            ./target/release/chainflip-cli
-            ./target/release/generate-genesis-keys
-            ./target/release/wbuild/state-chain-runtime/state_chain_runtime*.wasm
-      - name: Check if building changes any files
-        run: |
-          git diff --exit-code
-          git diff --cached --exit-code
+  # build-and-test:
+  #   runs-on: [hetzner]
+  #   needs: [set-variables, cargo-fmt]
+  #   container:
+  #     image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08-no-sccache'
+  #     credentials:
+  #       username: ${{ github.actor }}
+  #       password: ${{ secrets.GITHUB_TOKEN }}
+  #   env:
+  #     COMMIT_HASH: ${{ needs.set-variables.outputs.commit_hash }}
+  #     BRANCH_NAME: ${{ needs.set-variables.outputs.branch_name }}
+  #   steps:
+  #     - name: Checkout
+  #       uses: actions/checkout@v3
+  #     - name: Update APT
+  #       run: apt update
+  #     # - name: Setup sccache
+  #     #   uses: hendrikmuhs/ccache-action@v1.2
+  #     #   with:
+  #     #     max-size: ${{ env.SCCACHE_CACHE_SIZE }}
+  #     #     variant: sccache
+  #     #     save: false
+  #     # - run: sccache --show-stats
+  #     - name: cargo ci-build
+  #       run: |
+  #         cargo ci-build --locked
+  #         # sccache --show-stats
+  #     - name: cargo ci-test --locked
+  #       run: |
+  #         cargo ci-test --locked
+  #         # sccache --show-stats
+  #     - name: Install cargo-deb
+  #       run: cargo install cargo-deb
+  #     - name: Get date
+  #       id: vars
+  #       run: |
+  #         echo "date=$(date +'%Y%m%d%H%M')" >> $GITHUB_OUTPUT
+  #     - name: Build packages
+  #       run: |
+  #         cargo deb --no-build --no-strip -p chainflip-engine --deb-revision "${{ steps.vars.outputs.date }}"
+  #         cargo deb --no-build --no-strip -p chainflip-cli --deb-revision "${{ steps.vars.outputs.date }}"
+  #         cargo deb --no-build --no-strip -p chainflip-node --deb-revision "${{ steps.vars.outputs.date }}"
+  #         cargo deb --no-build --no-strip -p generate-genesis-keys --deb-revision "${{ steps.vars.outputs.date }}"
+  #     - name: Upload packages
+  #       uses: actions/upload-artifact@v3
+  #       with:
+  #         name: chainflip-backend-packages-sandstorm
+  #         path: target/debian/*.deb
+  #     - name: Upload binary artifacts
+  #       uses: actions/upload-artifact@v3
+  #       with:
+  #         name: chainflip-backend-bin
+  #         path: |
+  #           ./target/release/chainflip-node
+  #           ./target/release/chainflip-engine
+  #           ./target/release/chainflip-cli
+  #           ./target/release/generate-genesis-keys
+  #           ./target/release/wbuild/state-chain-runtime/state_chain_runtime*.wasm
+  #     - name: Check if building changes any files
+  #       run: |
+  #         git diff --exit-code
+  #         git diff --cached --exit-code
 
-  build-and-test-ibiza:
-    runs-on: [hetzner]
-    needs: [set-variables, cargo-fmt]
-    container:
-      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08-no-sccache'
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-    env:
-      COMMIT_HASH: ${{ needs.set-variables.outputs.commit_hash }}
-      BRANCH_NAME: ${{ needs.set-variables.outputs.branch_name }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-      - name: Update APT
-        run: apt update
-      # - name: Setup sccache
-      #   uses: hendrikmuhs/ccache-action@v1.2
-      #   with:
-      #     max-size: ${{ env.SCCACHE_CACHE_SIZE }}
-      #     variant: sccache
-      #     save: false
-      # - run: sccache --show-stats
-      - name: cargo ci-build-ibiza
-        run: |
-          cargo ci-build-ibiza --locked
-          # sccache --show-stats
-      - name: cargo ci-test-ibiza --locked
-        run: |
-          cargo ci-test-ibiza --locked
-          # sccache --show-stats
-      - name: Install cargo-deb
-        run: cargo install cargo-deb
-      - name: Get date
-        id: vars
-        run: |
-          echo "date=$(date +'%Y%m%d%H%M')" >> $GITHUB_OUTPUT
-      - name: Build packages
-        run: |
-          cargo deb --no-build --no-strip -p chainflip-engine --deb-revision "${{ steps.vars.outputs.date }}"
-          cargo deb --no-build --no-strip -p chainflip-cli --deb-revision "${{ steps.vars.outputs.date }}"
-          cargo deb --no-build --no-strip -p chainflip-node --deb-revision "${{ steps.vars.outputs.date }}"
-          cargo deb --no-build --no-strip -p chainflip-relayer --deb-revision "${{ steps.vars.outputs.date }}"
-          cargo deb --no-build --no-strip -p generate-genesis-keys --deb-revision "${{ steps.vars.outputs.date }}"
-      - name: Upload packages
-        uses: actions/upload-artifact@v3
-        with:
-          name: chainflip-backend-packages-ibiza
-          path: target/debian/*.deb
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v3
-        with:
-          name: chainflip-backend-bin-ibiza
-          path: |
-            ./target/release/chainflip-node
-            ./target/release/chainflip-engine
-            ./target/release/chainflip-cli
-            ./target/release/chainflip-relayer
-            ./target/release/generate-genesis-keys
-            ./target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm
-      - name: Check if building changes any files
-        run: |
-          git diff --exit-code
-          git diff --cached --exit-code
+  # build-and-test-ibiza:
+  #   runs-on: [hetzner]
+  #   needs: [set-variables, cargo-fmt]
+  #   container:
+  #     image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08-no-sccache'
+  #     credentials:
+  #       username: ${{ github.actor }}
+  #       password: ${{ secrets.GITHUB_TOKEN }}
+  #   env:
+  #     COMMIT_HASH: ${{ needs.set-variables.outputs.commit_hash }}
+  #     BRANCH_NAME: ${{ needs.set-variables.outputs.branch_name }}
+  #   steps:
+  #     - name: Checkout
+  #       uses: actions/checkout@v3
+  #     - name: Update APT
+  #       run: apt update
+  #     # - name: Setup sccache
+  #     #   uses: hendrikmuhs/ccache-action@v1.2
+  #     #   with:
+  #     #     max-size: ${{ env.SCCACHE_CACHE_SIZE }}
+  #     #     variant: sccache
+  #     #     save: false
+  #     # - run: sccache --show-stats
+  #     - name: cargo ci-build-ibiza
+  #       run: |
+  #         cargo ci-build-ibiza --locked
+  #         # sccache --show-stats
+  #     - name: cargo ci-test-ibiza --locked
+  #       run: |
+  #         cargo ci-test-ibiza --locked
+  #         # sccache --show-stats
+  #     - name: Install cargo-deb
+  #       run: cargo install cargo-deb
+  #     - name: Get date
+  #       id: vars
+  #       run: |
+  #         echo "date=$(date +'%Y%m%d%H%M')" >> $GITHUB_OUTPUT
+  #     - name: Build packages
+  #       run: |
+  #         cargo deb --no-build --no-strip -p chainflip-engine --deb-revision "${{ steps.vars.outputs.date }}"
+  #         cargo deb --no-build --no-strip -p chainflip-cli --deb-revision "${{ steps.vars.outputs.date }}"
+  #         cargo deb --no-build --no-strip -p chainflip-node --deb-revision "${{ steps.vars.outputs.date }}"
+  #         cargo deb --no-build --no-strip -p chainflip-relayer --deb-revision "${{ steps.vars.outputs.date }}"
+  #         cargo deb --no-build --no-strip -p generate-genesis-keys --deb-revision "${{ steps.vars.outputs.date }}"
+  #     - name: Upload packages
+  #       uses: actions/upload-artifact@v3
+  #       with:
+  #         name: chainflip-backend-packages-ibiza
+  #         path: target/debian/*.deb
+  #     - name: Upload artifacts
+  #       uses: actions/upload-artifact@v3
+  #       with:
+  #         name: chainflip-backend-bin-ibiza
+  #         path: |
+  #           ./target/release/chainflip-node
+  #           ./target/release/chainflip-engine
+  #           ./target/release/chainflip-cli
+  #           ./target/release/chainflip-relayer
+  #           ./target/release/generate-genesis-keys
+  #           ./target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm
+  #     - name: Check if building changes any files
+  #       run: |
+  #         git diff --exit-code
+  #         git diff --cached --exit-code
 
-  run-benchmarks:
-    runs-on: [hetzner]
-    needs: [build-and-test]
-    if: github.ref_name == 'develop'
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-      - name: Download previously built binaries
-        uses: actions/download-artifact@v3
-        with:
-          name: chainflip-backend-bin
-          path: ./target/release
-      - name: Run benchmarks
-        run: |
-          chmod +x ./target/release/chainflip-node
-          ./state-chain/scripts/benchmark-all.sh --binary ./target/release/chainflip-node --steps 1 --repetitions 1
+  # run-benchmarks:
+  #   runs-on: [hetzner]
+  #   needs: [build-and-test]
+  #   if: github.ref_name == 'develop'
+  #   steps:
+  #     - name: Checkout
+  #       uses: actions/checkout@v3
+  #     - name: Download previously built binaries
+  #       uses: actions/download-artifact@v3
+  #       with:
+  #         name: chainflip-backend-bin
+  #         path: ./target/release
+  #     - name: Run benchmarks
+  #       run: |
+  #         chmod +x ./target/release/chainflip-node
+  #         ./state-chain/scripts/benchmark-all.sh --binary ./target/release/chainflip-node --steps 1 --repetitions 1
 
-  test-single-node:
-    runs-on: [hetzner]
-    needs: [build-and-test]
-    steps:
-      - uses: actions/setup-node@v3
-        with:
-          node-version: 17
-      - name: Checkout
-        uses: actions/checkout@v3
-      - name: Download previously built binaries
-        uses: actions/download-artifact@v3
-        with:
-          name: chainflip-backend-bin
-          path: ./target/release
-      - name: Setup config and give permissions
-        run: |
-          mkdir config
-          echo -n ${{ secrets.BASHFUL_SIGNING_KEY }} > signing_key_file
-          echo -n ${{ secrets.ETH_PRIVATE_KEY }} > eth_private_key_file
-          echo -n ${{ secrets.NODE_KEY }} > node_key_file
-          chmod +x ./target/release/chainflip*
-      - name: Run node in background
-        run: |
-          ./target/release/chainflip-node --chain dev --node-key-file=node_key_file &
-          sleep 2
-      - name: Check node health
-        run: >
-          curl --request POST -L -H "Content-Type:application/json;charset=utf-8" --data '{"id":1, "jsonrpc":"2.0", "method": "system_health"}' --url
-          'http://localhost:9933' --connect-timeout 5 --max-time 10 --retry 3 --retry-delay 1 --retry-max-time 20 --retry-connrefused -vv
-      - name: Run engine in background
-        run: |
-          ./target/release/chainflip-engine --config-root engine/config/CI &
-          sleep 2
-        env:
-          ETH__NODE_ENDPOINT: ${{ secrets.ETH__NODE_ENDPOINT }}
-          ETH__WS_NODE_ENDPOINT: ${{ secrets.ETH__WS_NODE_ENDPOINT }}
-          ETH__HTTP_NODE_ENDPOINT: ${{ secrets.ETH__HTTP_NODE_ENDPOINT }}
-      - name: Check engine health
-        run: >
-          curl --url 'http://localhost:5555/health' --connect-timeout 5 --max-time 10 --retry 5 --retry-delay 1 --retry-max-time 20 --retry-connrefused -vv
-      - name: Clone docgen
-        uses: actions/checkout@v3
-        with:
-          repository: chainflip-io/chainflip-docgen
-          ref: main
-          token: ${{ secrets.CF_GITHUB_BOT_TOKEN }}
-          path: chainflip-docgen
-      - name: npm install
-        run: |
-          cd chainflip-docgen
-          npm install
-      - name: Generate State Chain docs
-        run: |
-          export WS_ENDPOINT="ws://127.0.0.1:9944"
-          export TYPES_FILE="../state-chain/types.json"
-          cd chainflip-docgen/
-          npm run generate
-      - name: Install graphviz
-        run: |
-          echo ${{ secrets.CF_RUNNER_SUDO_PASSWORD }} | sudo -S apt-get clean
-          echo ${{ secrets.CF_RUNNER_SUDO_PASSWORD }} | sudo -S apt-get update
-          echo ${{ secrets.CF_RUNNER_SUDO_PASSWORD }} | sudo -S apt-get install -y graphviz
-      - uses: actions/setup-java@v3
-        with:
-          distribution: 'zulu'
-          java-version: '17'
-      - name: Generate class diagram
-        run: |
-          cd chainflip-docgen/
-          java -jar plantuml.jar generated/class.puml
-      - name: Upload diagram
-        uses: actions/upload-artifact@v3
-        with:
-          name: generated-diagram
-          path: |
-            chainflip-docgen/generated
+  # test-single-node:
+  #   runs-on: [hetzner]
+  #   needs: [build-and-test]
+  #   steps:
+  #     - uses: actions/setup-node@v3
+  #       with:
+  #         node-version: 17
+  #     - name: Checkout
+  #       uses: actions/checkout@v3
+  #     - name: Download previously built binaries
+  #       uses: actions/download-artifact@v3
+  #       with:
+  #         name: chainflip-backend-bin
+  #         path: ./target/release
+  #     - name: Setup config and give permissions
+  #       run: |
+  #         mkdir config
+  #         echo -n ${{ secrets.BASHFUL_SIGNING_KEY }} > signing_key_file
+  #         echo -n ${{ secrets.ETH_PRIVATE_KEY }} > eth_private_key_file
+  #         echo -n ${{ secrets.NODE_KEY }} > node_key_file
+  #         chmod +x ./target/release/chainflip*
+  #     - name: Run node in background
+  #       run: |
+  #         ./target/release/chainflip-node --chain dev --node-key-file=node_key_file &
+  #         sleep 2
+  #     - name: Check node health
+  #       run: >
+  #         curl --request POST -L -H "Content-Type:application/json;charset=utf-8" --data '{"id":1, "jsonrpc":"2.0", "method": "system_health"}' --url
+  #         'http://localhost:9933' --connect-timeout 5 --max-time 10 --retry 3 --retry-delay 1 --retry-max-time 20 --retry-connrefused -vv
+  #     - name: Run engine in background
+  #       run: |
+  #         ./target/release/chainflip-engine --config-root engine/config/CI &
+  #         sleep 2
+  #       env:
+  #         ETH__NODE_ENDPOINT: ${{ secrets.ETH__NODE_ENDPOINT }}
+  #         ETH__WS_NODE_ENDPOINT: ${{ secrets.ETH__WS_NODE_ENDPOINT }}
+  #         ETH__HTTP_NODE_ENDPOINT: ${{ secrets.ETH__HTTP_NODE_ENDPOINT }}
+  #     - name: Check engine health
+  #       run: >
+  #         curl --url 'http://localhost:5555/health' --connect-timeout 5 --max-time 10 --retry 5 --retry-delay 1 --retry-max-time 20 --retry-connrefused -vv
+  #     - name: Clone docgen
+  #       uses: actions/checkout@v3
+  #       with:
+  #         repository: chainflip-io/chainflip-docgen
+  #         ref: main
+  #         token: ${{ secrets.CF_GITHUB_BOT_TOKEN }}
+  #         path: chainflip-docgen
+  #     - name: npm install
+  #       run: |
+  #         cd chainflip-docgen
+  #         npm install
+  #     - name: Generate State Chain docs
+  #       run: |
+  #         export WS_ENDPOINT="ws://127.0.0.1:9944"
+  #         export TYPES_FILE="../state-chain/types.json"
+  #         cd chainflip-docgen/
+  #         npm run generate
+  #     - name: Install graphviz
+  #       run: |
+  #         echo ${{ secrets.CF_RUNNER_SUDO_PASSWORD }} | sudo -S apt-get clean
+  #         echo ${{ secrets.CF_RUNNER_SUDO_PASSWORD }} | sudo -S apt-get update
+  #         echo ${{ secrets.CF_RUNNER_SUDO_PASSWORD }} | sudo -S apt-get install -y graphviz
+  #     - uses: actions/setup-java@v3
+  #       with:
+  #         distribution: 'zulu'
+  #         java-version: '17'
+  #     - name: Generate class diagram
+  #       run: |
+  #         cd chainflip-docgen/
+  #         java -jar plantuml.jar generated/class.puml
+  #     - name: Upload diagram
+  #       uses: actions/upload-artifact@v3
+  #       with:
+  #         name: generated-diagram
+  #         path: |
+  #           chainflip-docgen/generated
 
   build-docker:
-    needs: [set-variables, build-and-test]
+    # needs: [set-variables, build-and-test]
     uses: ./.github/workflows/.docker-build-validator.yaml
     with:
       release: sandstorm
-      image_prefix: sandstorm-
     secrets: inherit
 
   build-ibiza-docker:
-    needs: [set-variables, build-and-test-ibiza]
+    # needs: [set-variables, build-and-test-ibiza]
     uses: ./.github/workflows/.docker-build-validator.yaml
     with:
       release: ibiza
-      image_prefix: ibiza-
     secrets: inherit
 
-  deb-publish:
-    name: Publish Packages to APT repo
-    needs: [set-variables, build-and-test]
-    uses: ./.github/workflows/.deb-publish.yaml
-    with:
-      artifacts: chainflip-backend-packages-sandstorm
-      version: ci/${{ needs.set-variables.outputs.commit_hash }}/
-      environment: dev
-      commit_hash: ${{ needs.set-variables.outputs.commit_hash }}
-    secrets: inherit
+  # deb-publish:
+  #   name: Publish Packages to APT repo
+  #   needs: [set-variables, build-and-test]
+  #   uses: ./.github/workflows/.deb-publish.yaml
+  #   with:
+  #     artifacts: chainflip-backend-packages-sandstorm
+  #     version: ci/${{ needs.set-variables.outputs.commit_hash }}/
+  #     environment: dev
+  #     commit_hash: ${{ needs.set-variables.outputs.commit_hash }}
+  #   secrets: inherit
 
-  deb-publish-ibiza:
-    name: Publish Ibiza Packages to APT repo
-    needs: [set-variables, build-and-test-ibiza]
-    uses: ./.github/workflows/.deb-publish.yaml
-    with:
-      artifacts: chainflip-backend-packages-ibiza
-      version: ci/ibiza/${{ needs.set-variables.outputs.commit_hash }}/
-      environment: dev
-      commit_hash: ${{ needs.set-variables.outputs.commit_hash }}
-    secrets: inherit
+  # deb-publish-ibiza:
+  #   name: Publish Ibiza Packages to APT repo
+  #   needs: [set-variables, build-and-test-ibiza]
+  #   uses: ./.github/workflows/.deb-publish.yaml
+  #   with:
+  #     artifacts: chainflip-backend-packages-ibiza
+  #     version: ci/ibiza/${{ needs.set-variables.outputs.commit_hash }}/
+  #     environment: dev
+  #     commit_hash: ${{ needs.set-variables.outputs.commit_hash }}
+  #   secrets: inherit
