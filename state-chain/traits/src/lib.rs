@@ -20,7 +20,7 @@ use cf_chains::{
 
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BroadcastId, CeremonyId,
-	EgressId, EpochIndex, EthereumAddress, ForeignChainAddress, IntentId,
+	EgressId, EpochIndex, EthereumAddress, ForeignChain, ForeignChainAddress, IntentId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -334,13 +334,11 @@ pub trait EmergencyRotation {
 	fn request_emergency_rotation();
 }
 
-/// Slashing a node
 pub trait Slashing {
-	/// An identifier for our node
 	type AccountId;
-	/// Block number
 	type BlockNumber;
-	/// Function which implements the slashing logic
+
+	/// Slashes a validator for the equivalent of some number of blocks offline.
 	fn slash(validator_id: &Self::AccountId, blocks_offline: Self::BlockNumber);
 }
 
@@ -759,7 +757,7 @@ impl<T: frame_system::Config> EgressApi<Ethereum> for T {
 		_amount: AssetAmount,
 		_egress_address: <Ethereum as Chain>::ChainAccount,
 	) -> EgressId {
-		0
+		(ForeignChain::Ethereum, 0)
 	}
 }
 
@@ -770,7 +768,7 @@ impl<T: frame_system::Config> EgressApi<Polkadot> for T {
 		_amount: AssetAmount,
 		_egress_address: <Polkadot as Chain>::ChainAccount,
 	) -> EgressId {
-		0
+		(ForeignChain::Ethereum, 0)
 	}
 }
 
@@ -789,6 +787,6 @@ pub trait VaultKeyWitnessedHandler<C: ChainAbi> {
 	fn on_new_key_activated(
 		new_public_key: C::AggKey,
 		block_number: C::ChainBlockNumber,
-		tx_hash: C::TransactionHash,
+		tx_id: C::TransactionId,
 	) -> DispatchResultWithPostInfo;
 }

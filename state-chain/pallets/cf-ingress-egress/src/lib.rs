@@ -13,7 +13,7 @@ mod tests;
 pub mod weights;
 pub use weights::WeightInfo;
 
-use cf_primitives::EgressId;
+use cf_primitives::{EgressCounter, EgressId, ForeignChain};
 
 use cf_chains::{AllBatch, Chain, ChainAbi, ChainCrypto, FetchAssetParams, TransferAssetParams};
 use cf_primitives::{Asset, AssetAmount, ForeignChainAddress, IntentId};
@@ -45,7 +45,7 @@ impl<C: Chain> FetchOrTransfer<C> {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_primitives::{BroadcastId, EgressId};
+	use cf_primitives::BroadcastId;
 	use core::marker::PhantomData;
 	use sp_std::vec::Vec;
 
@@ -67,7 +67,7 @@ pub mod pallet {
 		pub ingress_address: C::ChainAccount,
 		pub asset: C::ChainAsset,
 		pub amount: AssetAmount,
-		pub tx_hash: <C as ChainCrypto>::TransactionHash,
+		pub tx_id: <C as ChainCrypto>::TransactionId,
 	}
 
 	/// Details used to determine the ingress of funds.
@@ -103,7 +103,7 @@ pub mod pallet {
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// Marks which chain this pallet is interacting with.
-		type TargetChain: ChainAbi;
+		type TargetChain: ChainAbi + Get<ForeignChain>;
 
 		/// Generates ingress addresses.
 		type AddressDerivation: AddressDerivationApi<Self::TargetChain>;
@@ -151,7 +151,8 @@ pub mod pallet {
 
 	/// Stores the latest egress id used to generate an address.
 	#[pallet::storage]
-	pub type EgressIdCounter<T: Config<I>, I: 'static = ()> = StorageValue<_, EgressId, ValueQuery>;
+	pub type EgressIdCounter<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, EgressCounter, ValueQuery>;
 
 	/// Scheduled fetch and egress for the Ethereum chain.
 	#[pallet::storage]
@@ -175,7 +176,7 @@ pub mod pallet {
 			ingress_address: TargetChainAccount<T, I>,
 			asset: TargetChainAsset<T, I>,
 			amount: AssetAmount,
-			tx_hash: <T::TargetChain as ChainCrypto>::TransactionHash,
+			tx_id: <T::TargetChain as ChainCrypto>::TransactionId,
 		},
 		AssetEgressDisabled {
 			asset: TargetChainAsset<T, I>,
@@ -288,8 +289,8 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
-			for IngressWitness { ingress_address, asset, amount, tx_hash } in ingress_witnesses {
-				Self::do_single_ingress(ingress_address, asset, amount, tx_hash)?;
+			for IngressWitness { ingress_address, asset, amount, tx_id } in ingress_witnesses {
+				Self::do_single_ingress(ingress_address, asset, amount, tx_id)?;
 			}
 			Ok(())
 		}
@@ -389,7 +390,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ingress_address: TargetChainAccount<T, I>,
 		asset: TargetChainAsset<T, I>,
 		amount: AssetAmount,
-		tx_hash: <T::TargetChain as ChainCrypto>::TransactionHash,
+		tx_id: <T::TargetChain as ChainCrypto>::TransactionId,
 	) -> DispatchResult {
 		let ingress = IntentIngressDetails::<T, I>::get(&ingress_address)
 			.ok_or(Error::<T, I>::InvalidIntent)?;
@@ -417,7 +418,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				egress_asset,
 				relayer_id,
 				relayer_commission_bps,
-			} => T::SwapIntentHandler::schedule_swap(
+			} => T::SwapIntentHandler::on_swap_ingress(
 				ingress_address.clone().into(),
 				asset.into(),
 				egress_asset,
@@ -425,10 +426,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				egress_address,
 				relayer_id,
 				relayer_commission_bps,
-			)?,
+			),
 		};
 
-		Self::deposit_event(Event::IngressCompleted { ingress_address, asset, amount, tx_hash });
+		Self::deposit_event(Event::IngressCompleted { ingress_address, asset, amount, tx_id });
 		Ok(())
 	}
 }
@@ -439,14 +440,15 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 		amount: AssetAmount,
 		egress_address: TargetChainAccount<T, I>,
 	) -> EgressId {
-		let egress_id = EgressIdCounter::<T, I>::get().saturating_add(1);
+		let egress_counter = EgressIdCounter::<T, I>::get().saturating_add(1);
+		let egress_id = (<T as Config<I>>::TargetChain::get(), egress_counter);
 		ScheduledEgressRequests::<T, I>::append(FetchOrTransfer::<T::TargetChain>::Transfer {
 			asset,
 			to: egress_address.clone(),
 			amount,
 			egress_id,
 		});
-		EgressIdCounter::<T, I>::put(egress_id);
+		EgressIdCounter::<T, I>::put(egress_counter);
 		Self::deposit_event(Event::<T, I>::EgressScheduled {
 			id: egress_id,
 			asset,

@@ -96,7 +96,7 @@ impl EthContractWitnesser for Erc20Witnesser {
 						ingress_address: to,
 						amount: value,
 						asset: self.asset,
-						tx_hash: event.tx_hash,
+						tx_id: event.tx_hash,
 					}),
 				_ => None,
 			})

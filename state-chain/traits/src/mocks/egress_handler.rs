@@ -1,7 +1,7 @@
 use super::{MockPallet, MockPalletStorage};
 use crate::EgressApi;
 use cf_chains::Chain;
-use cf_primitives::{AssetAmount, EgressId};
+use cf_primitives::{AssetAmount, EgressId, ForeignChain};
 use sp_std::marker::PhantomData;
 
 pub struct MockEgressHandler<C>(PhantomData<C>);
@@ -30,6 +30,6 @@ impl<C: Chain> EgressApi<C> for MockEgressHandler<C> {
 				v.push((foreign_asset, amount, egress_address));
 			})
 		});
-		1
+		(ForeignChain::Ethereum, 1)
 	}
 }

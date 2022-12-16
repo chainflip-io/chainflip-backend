@@ -70,7 +70,8 @@ pub mod cfe {
 
 #[frame_support::pallet]
 pub mod pallet {
-	use cf_primitives::Asset;
+
+	use cf_primitives::{Asset, TxId};
 	#[cfg(feature = "ibiza")]
 	use cf_traits::{Broadcaster, VaultKeyWitnessedHandler};
 
@@ -325,8 +326,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			dot_pure_proxy_vault_key: [u8; 32],
 			dot_witnessed_aggkey: [u8; 32],
-			block_number: u64,
-			tx_hash: sp_core::H256,
+			tx_id: TxId,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			#[cfg(feature = "ibiza")]
@@ -347,8 +347,8 @@ pub mod pallet {
 					dot_witnessed_aggkey.to_vec().try_into().expect(
 						"This should not fail since the size of vec is guaranteed to be 32",
 					),
-					block_number,
-					tx_hash,
+					tx_id.block_number,
+					tx_id,
 				)?;
 				Self::next_polkadot_proxy_account_nonce();
 				Ok(dispatch_result)

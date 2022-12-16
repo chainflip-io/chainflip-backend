@@ -3,6 +3,7 @@
 use super::*;
 use crate::{DisabledEgressAssets, FetchOrTransfer, ScheduledEgressRequests};
 use cf_chains::benchmarking_value::BenchmarkValue;
+use cf_primitives::ForeignChain;
 use frame_benchmarking::{account, benchmarks_instance_pallet};
 use frame_support::traits::Hooks;
 
@@ -23,7 +24,7 @@ benchmarks_instance_pallet! {
 				});
 			} else {
 				batch.push(FetchOrTransfer::Transfer {
-					egress_id: 1,
+					egress_id: (ForeignChain::Ethereum, 1),
 					asset: egress_asset,
 					to: egress_address.clone(),
 					amount: 1_000,

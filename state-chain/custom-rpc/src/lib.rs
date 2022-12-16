@@ -16,6 +16,9 @@ use std::{marker::PhantomData, sync::Arc};
 #[allow(unused)]
 use state_chain_runtime::{Asset, AssetAmount, ExchangeRate};
 
+#[cfg(feature = "ibiza")]
+use jsonrpsee::types::error::ErrorCode;
+
 #[derive(Serialize, Deserialize)]
 pub struct RpcAccountInfo {
 	pub stake: NumberOrHex,
@@ -453,10 +456,10 @@ pub trait PoolsApi {
 	#[method(name = "swap_rate")]
 	fn cf_swap_rate(
 		&self,
-		at: Option<state_chain_runtime::Hash>,
 		input_asset: Asset,
 		output_asset: Asset,
-		input_amount: AssetAmount,
+		input_amount: NumberOrHex,
+		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<ExchangeRate>;
 }
 
@@ -469,14 +472,20 @@ where
 {
 	fn cf_swap_rate(
 		&self,
-		at: Option<state_chain_runtime::Hash>,
 		input_asset: Asset,
 		output_asset: Asset,
-		input_amount: AssetAmount,
+		input_amount: NumberOrHex,
+		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<ExchangeRate> {
 		self.client
 			.runtime_api()
-			.cf_swap_rate(&self.query_block_id(at), input_asset, output_asset, input_amount)
+			.cf_swap_rate(
+				&self.query_block_id(at),
+				input_asset,
+				output_asset,
+				u128::try_from(input_amount)
+					.map_err(|_| CallError::Custom(ErrorCode::InvalidParams.into()))?,
+			)
 			.map_err(to_rpc_error)
 	}
 }

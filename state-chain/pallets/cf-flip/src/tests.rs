@@ -1,7 +1,7 @@
 use std::mem;
 
 use crate::{
-	mock::*, Account, Bonder, Config, Error, FlipAccount, FlipIssuance, FlipSlasher, OffchainFunds,
+	mock::*, Account, Bonder, Error, FlipAccount, FlipIssuance, FlipSlasher, OffchainFunds,
 	Reserve, SlashingRate, TotalIssuance,
 };
 use cf_primitives::FlipBalance;
@@ -279,26 +279,37 @@ impl FlipOperation {
 					return false
 				}
 			},
-			FlipOperation::SlashAccount(account_id, slashing_rate, bond, blocks_offline, mint) => {
-				let blocks_per_day: u128 = <Test as Config>::BlocksPerDay::get() as u128;
-				let expected_slash: u128 = (*slashing_rate * (*bond as u128) / blocks_per_day)
-					.saturating_mul(*blocks_offline as u128);
+			FlipOperation::SlashAccount(account_id, slashing_rate, bond, mint, blocks) => {
 				// Mint some Flip for testing - 100 is not enough and unrealistic for this usecase
 				Flip::settle(account_id, Flip::mint(*mint).into());
 				let initial_balance: u128 = Flip::total_balance_of(account_id);
 				Bonder::<Test>::update_bond(account_id, *bond);
 
 				SlashingRate::<Test>::set(*slashing_rate);
-				FlipSlasher::<Test>::slash(account_id, *blocks_offline);
+
+				let attempted_slash: u128 =
+					(*slashing_rate * *bond as u128).saturating_mul((*blocks).into());
+				let expected_slash =
+					if Account::<Test>::get(account_id).can_be_slashed(attempted_slash) {
+						attempted_slash
+					} else {
+						0
+					};
+
+				FlipSlasher::<Test>::slash(account_id, *blocks);
 				let balance_after = Flip::total_balance_of(account_id);
 				// Check if the diff between the balances is the expected slash
 				if initial_balance.saturating_sub(expected_slash) != balance_after {
 					return false
 				}
-				System::assert_last_event(Event::Flip(crate::Event::<Test>::SlashingPerformed {
-					who: *account_id,
-					amount: expected_slash,
-				}));
+				if expected_slash > 0 {
+					System::assert_last_event(Event::Flip(
+						crate::Event::<Test>::SlashingPerformed {
+							who: *account_id,
+							amount: expected_slash,
+						},
+					));
+				}
 			},
 			// Account to account transfer
 			FlipOperation::AccountToAccount(account_id_1, account_id_2, amount_1, amount_2) => {
@@ -379,8 +390,8 @@ impl Arbitrary for FlipOperation {
 				random_account(g),
 				Permill::from_rational(u32::arbitrary(g), u32::MAX),
 				Bond::arbitrary(g),
-				BlocksOffline::arbitrary(g),
 				Mint::arbitrary(g),
+				(u16::arbitrary(g) as u32).into(), // random number of blocks up to u16::MAX
 			),
 			16 => FlipOperation::AccountToAccount(
 				random_account(g),

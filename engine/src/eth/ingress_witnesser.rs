@@ -74,7 +74,7 @@ where
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
 {
 	epoch_witnesser::start(
-		"ETH-Ingress-Witnesser".to_string(),
+		"ETH-Ingress".to_string(),
 		epoch_starts_receiver,
 		|_epoch_start| true,
 		(monitored_addresses, eth_monitor_ingress_receiver),
@@ -147,7 +147,7 @@ where
 										ingress_address: to_addr,
 										asset: eth::Asset::Eth,
 										amount: tx.value.as_u128(),
-										tx_hash: tx.hash
+										tx_id: tx.hash
 									}
 								})
 								.collect::<Vec<IngressWitness<Ethereum>>>();

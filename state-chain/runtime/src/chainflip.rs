@@ -15,9 +15,6 @@ pub use missed_authorship_slots::MissedAuraSlots;
 pub use signer_nomination::RandomSignerNomination;
 use sp_core::U256;
 
-#[cfg(feature = "ibiza")]
-use cf_traits::EpochKey;
-
 use crate::{
 	AccountId, Authorship, BlockNumber, Call, EmergencyRotationPercentageRange, Emissions,
 	Environment, EthereumInstance, Flip, FlipBalance, Reputation, Runtime, System, Validator,
@@ -45,7 +42,7 @@ use cf_traits::{
 	Issuance, NetworkState, RewardsDistribution, RuntimeUpgrade, VaultTransitionHandler,
 };
 #[cfg(feature = "ibiza")]
-use cf_traits::{EgressApi, IngressApi};
+use cf_traits::{EgressApi, EpochKey, IngressApi};
 #[cfg(feature = "ibiza")]
 use codec::{Decode, Encode};
 #[cfg(feature = "ibiza")]
@@ -207,7 +204,7 @@ impl RewardsDistribution for BlockAuthorRewardDistribution {
 			// TODO: Check if it's ok to panic here.
 			let current_block_author =
 				Authorship::author().expect("A block without an author is invalid.");
-			Flip::settle_imbalance(&current_block_author, Self::Issuance::mint(reward_amount));
+			Flip::settle(&current_block_author, Self::Issuance::mint(reward_amount).into());
 		}
 	}
 }

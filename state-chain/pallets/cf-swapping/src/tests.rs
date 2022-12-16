@@ -1,6 +1,6 @@
 use crate::{mock::*, EarnedRelayerFees, Error, Pallet, Swap, SwapQueue, WeightInfo};
 use cf_chains::AnyChain;
-use cf_primitives::{Asset, ForeignChainAddress};
+use cf_primitives::{Asset, ForeignChain, ForeignChainAddress};
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{mocks::egress_handler::MockEgressHandler, SwapIntentHandler};
 use frame_support::{assert_noop, assert_ok, sp_std::iter};
@@ -57,7 +57,7 @@ fn generate_test_swaps() -> Vec<Swap> {
 
 fn insert_swaps(swaps: &[Swap]) {
 	for (relayer_id, swap) in swaps.iter().enumerate() {
-		assert_ok!(<Pallet<Test> as SwapIntentHandler>::schedule_swap(
+		<Pallet<Test> as SwapIntentHandler>::on_swap_ingress(
 			ForeignChainAddress::Eth([2; 20]),
 			swap.from,
 			swap.to,
@@ -65,7 +65,7 @@ fn insert_swaps(swaps: &[Swap]) {
 			swap.egress_address,
 			relayer_id as u64,
 			2,
-		));
+		);
 	}
 }
 
@@ -121,7 +121,7 @@ fn expect_earned_fees_to_be_recorded() {
 	new_test_ext().execute_with(|| {
 		const ALICE: u64 = 2_u64;
 		const BOB: u64 = 3_u64;
-		assert_ok!(<Pallet<Test> as SwapIntentHandler>::schedule_swap(
+		<Pallet<Test> as SwapIntentHandler>::on_swap_ingress(
 			ForeignChainAddress::Eth([2; 20]),
 			Asset::Flip,
 			Asset::Usdc,
@@ -129,8 +129,8 @@ fn expect_earned_fees_to_be_recorded() {
 			ForeignChainAddress::Eth([2; 20]),
 			ALICE,
 			200,
-		));
-		assert_ok!(<Pallet<Test> as SwapIntentHandler>::schedule_swap(
+		);
+		<Pallet<Test> as SwapIntentHandler>::on_swap_ingress(
 			ForeignChainAddress::Eth([2; 20]),
 			Asset::Flip,
 			Asset::Usdc,
@@ -138,11 +138,11 @@ fn expect_earned_fees_to_be_recorded() {
 			ForeignChainAddress::Eth([2; 20]),
 			BOB,
 			100,
-		));
+		);
 		Swapping::on_idle(1, 1000);
 		assert_eq!(EarnedRelayerFees::<Test>::get(ALICE, cf_primitives::Asset::Flip), 2);
 		assert_eq!(EarnedRelayerFees::<Test>::get(BOB, cf_primitives::Asset::Flip), 5);
-		assert_ok!(<Pallet<Test> as SwapIntentHandler>::schedule_swap(
+		<Pallet<Test> as SwapIntentHandler>::on_swap_ingress(
 			ForeignChainAddress::Eth([2; 20]),
 			Asset::Flip,
 			Asset::Usdc,
@@ -150,7 +150,7 @@ fn expect_earned_fees_to_be_recorded() {
 			ForeignChainAddress::Eth([2; 20]),
 			ALICE,
 			200,
-		));
+		);
 		Swapping::on_idle(1, 1000);
 		assert_eq!(EarnedRelayerFees::<Test>::get(ALICE, cf_primitives::Asset::Flip), 4);
 	});
@@ -161,7 +161,7 @@ fn expect_earned_fees_to_be_recorded() {
 fn cannot_swap_with_incorrect_egress_address_type() {
 	new_test_ext().execute_with(|| {
 		const ALICE: u64 = 1_u64;
-		let _ = <Pallet<Test> as SwapIntentHandler>::schedule_swap(
+		<Pallet<Test> as SwapIntentHandler>::on_swap_ingress(
 			ForeignChainAddress::Eth([2; 20]),
 			Asset::Eth,
 			Asset::Dot,
@@ -185,7 +185,7 @@ fn expect_swap_id_to_be_emitted() {
 			0,
 		));
 		// 2. Schedule the swap -> SwapIngressReceived
-		assert_ok!(<Pallet<Test> as SwapIntentHandler>::schedule_swap(
+		<Pallet<Test> as SwapIntentHandler>::on_swap_ingress(
 			ForeignChainAddress::Eth(Default::default()),
 			Asset::Flip,
 			Asset::Usdc,
@@ -193,7 +193,7 @@ fn expect_swap_id_to_be_emitted() {
 			ForeignChainAddress::Eth(Default::default()),
 			ALICE,
 			0,
-		));
+		);
 		// 3. Process swaps -> SwapExecuted, SwapEgressScheduled
 		Swapping::on_idle(1, 100);
 		assert_event_sequence!(
@@ -209,7 +209,7 @@ fn expect_swap_id_to_be_emitted() {
 			crate::mock::Event::Swapping(crate::Event::SwapExecuted { swap_id: 1 }),
 			crate::mock::Event::Swapping(crate::Event::SwapEgressScheduled {
 				swap_id: 1,
-				egress_id: 1,
+				egress_id: (ForeignChain::Ethereum, 1),
 				egress_amount: 500
 			})
 		);
@@ -236,5 +236,26 @@ fn withdrawal_relayer_fees() {
 		let mut egresses = MockEgressHandler::<AnyChain>::get_scheduled_egresses();
 		assert!(egresses.len() == 1);
 		assert_eq!(egresses.pop().expect("to be exist").1, 200);
+	});
+}
+
+#[test]
+fn can_swap_using_witness_origin() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Swapping::schedule_swap_by_witnesser(
+			Origin::root(),
+			Asset::Eth,
+			Asset::Flip,
+			1_000,
+			ForeignChainAddress::Eth([0u8; 20]),
+		));
+
+		System::assert_last_event(Event::Swapping(
+			crate::Event::<Test>::SwapScheduledByWitnesser {
+				swap_id: 1,
+				amount: 1_000,
+				egress_address: ForeignChainAddress::Eth([0u8; 20]),
+			},
+		));
 	});
 }

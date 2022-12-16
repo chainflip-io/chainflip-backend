@@ -1,3 +1,6 @@
+#![feature(absolute_path)]
+use std::path::PathBuf;
+
 use api::primitives::{AccountRole, ClaimAmount, Hash};
 use chainflip_api as api;
 use clap::Parser;
@@ -30,6 +33,12 @@ async fn main() {
 
 async fn run_cli() -> Result<()> {
 	let command_line_opts = CLICommandLineOptions::parse();
+
+	// Generating keys does not require the settings, so run it before them
+	if let GenerateKeys { path } = command_line_opts.cmd {
+		return generate_keys(path)
+	}
+
 	let cli_settings = CLISettings::new(command_line_opts.clone()).map_err(|err| anyhow!("Please ensure your config file path is configured correctly and the file is valid. You can also just set all configurations required command line arguments.\n{}", err))?;
 
 	println!(
@@ -54,7 +63,8 @@ async fn run_cli() -> Result<()> {
 		Activate {} => api::activate_account(&cli_settings.state_chain).await,
 		Query { block_hash } => request_block(block_hash, &cli_settings.state_chain).await,
 		VanityName { name } => api::set_vanity_name(name, &cli_settings.state_chain).await,
-		ForceRotation { id } => api::force_rotation(id, &cli_settings.state_chain).await,
+		ForceRotation {} => api::force_rotation(&cli_settings.state_chain).await,
+		GenerateKeys { path: _ } => unreachable!(), // GenerateKeys is handled above
 	}
 }
 
@@ -248,4 +258,56 @@ fn confirm_submit() -> bool {
 			_ => continue,
 		}
 	}
+}
+
+fn generate_keys(path: Option<PathBuf>) -> Result<()> {
+	use std::fs;
+
+	const NODE_KEY_FILE_NAME: &str = "node_key_file";
+	const SIGNING_KEY_FILE_NAME: &str = "signing_key_file";
+	const ETHEREUM_KEY_FILE_NAME: &str = "ethereum_key_file";
+
+	let output_path = path.unwrap_or_else(|| PathBuf::from("."));
+
+	let absolute_path_string = std::path::absolute(&output_path)
+		.expect("Failed to get absolute path")
+		.to_string_lossy()
+		.into_owned();
+
+	if output_path.is_file() {
+		anyhow::bail!("Invalid keys path {}", absolute_path_string);
+	}
+	if !output_path.exists() {
+		std::fs::create_dir_all(output_path.clone())?
+	}
+
+	let node_key_file = output_path.join(NODE_KEY_FILE_NAME);
+	let signing_key_file = output_path.join(SIGNING_KEY_FILE_NAME);
+	let ethereum_key_file = output_path.join(ETHEREUM_KEY_FILE_NAME);
+
+	if node_key_file.exists() || signing_key_file.exists() || ethereum_key_file.exists() {
+		anyhow::bail!(
+			"Key file(s) already exist, please move/delete them manually from {}",
+			absolute_path_string
+		);
+	}
+
+	println!("Generating fresh keys for your Chainflip Node!");
+
+	let node_key = api::generate_node_key();
+	fs::write(node_key_file, hex::encode(node_key.secret_key))?;
+	println!("🔑 Your Node public key is: 0x{}", hex::encode(node_key.public_key));
+
+	let ethereum_key = api::generate_ethereum_key();
+	fs::write(ethereum_key_file, hex::encode(ethereum_key.secret_key))?;
+	println!("🔑 Your Ethereum public key is: 0x{}", hex::encode(ethereum_key.public_key));
+
+	let (signing_key, signing_key_seed) = api::generate_signing_key(None)?;
+	fs::write(signing_key_file, hex::encode(signing_key.secret_key))?;
+	println!("🔑 Your Validator key is: 0x{}", hex::encode(signing_key.public_key));
+	println!("🌱 Your Validator key seed phrase is: {}", signing_key_seed);
+
+	println!("Saved all secret keys to {}", absolute_path_string);
+
+	Ok(())
 }
