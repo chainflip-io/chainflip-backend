@@ -45,7 +45,14 @@ pub fn get_create_2_address(
 	// Note: For native ETH we don't need to add extra bytes because the constructor is empty
 	// see: https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/DepositEth.sol.
 	let deploy_transaction_bytes_hash = Keccak256::hash(
-		&[deploy_bytecode, &[0u8; 12], &erc20_constructor_argument.unwrap_or_default()].concat(),
+		&[
+			deploy_bytecode,
+			&erc20_constructor_argument.map_or(Default::default(), |mut token_addr| {
+				token_addr.splice(0..0, [0u8; 12]);
+				token_addr
+			}),
+		]
+		.concat(),
 	);
 
 	// Unique salt per intent.
