@@ -66,14 +66,18 @@ build() {
     COMMIT_HASH=$(cat $LOCALNET_INIT_DIR/secrets/.hash)
   fi
   echo $COMMIT_HASH >$LOCALNET_INIT_DIR/secrets/.hash
-
+  echo
   read -p "🏖 What release would you like to use? [sandstorm / ibiza] (default: sandstorm)?: " RELEASE
   RELEASE=${RELEASE:-"sandstorm"}
-
+  if [[ "$RELEASE" == "sandstorm" ]]; then
+    APT_REPO="deb https://${APT_REPO_USERNAME}:${APT_REPO_PASSWORD}@apt.aws.chainflip.xyz/ci/${COMMIT_HASH}/ focal main"
+  else
+    APT_REPO="deb https://${APT_REPO_USERNAME}:${APT_REPO_PASSWORD}@apt.aws.chainflip.xyz/ci/ibiza/${COMMIT_HASH}/ focal main"
+  fi
   echo
   echo "🏗 Building network"
 
-  COMMIT_HASH=$COMMIT_HASH PREFIX=$RELEASE \
+  APT_REPO=$APT_REPO \
     docker-compose -f localnet/docker-compose.yml up --build -d
 
   echo "🚀 Network is live"

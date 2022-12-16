@@ -31,7 +31,11 @@ services:
       retries: 10
       interval: 5s
       timeout: 5s
-    image: ghcr.io/chainflip-io/chainflip-backend/validator:${PREFIX}-${COMMIT_HASH}
+    build:
+      dockerfile: validator.Dockerfile
+      context: .
+      args:
+        - APT_REPO
     platform: linux/amd64
     ports:
       - "9944:9944"
@@ -47,7 +51,11 @@ services:
     container_name: chainflip-engine
     env_file:
       - init/secrets/secrets.env
-    image: ghcr.io/chainflip-io/chainflip-backend/validator:${PREFIX}-${COMMIT_HASH}
+    build:
+      dockerfile: validator.Dockerfile
+      context: .
+      args:
+        - COMMIT_HASH
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -67,7 +75,11 @@ services:
     container_name: chainflip-relayer
     env_file:
       - init/secrets/secrets.env
-    image: ghcr.io/chainflip-io/chainflip-backend/validator:${PREFIX}-${COMMIT_HASH}
+    build:
+      dockerfile: validator.Dockerfile
+      context: .
+      args:
+        - APT_REPO
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
