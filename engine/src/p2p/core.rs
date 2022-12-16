@@ -379,17 +379,18 @@ impl P2PContext {
 		if let Some(existing_socket) = self.active_connections.remove(&peer.account_id) {
 			slog::debug!(
 				self.logger,
-				"Received known peer info for account id {}, updating info and reconnecting",
-				&peer.account_id
+				"Received info for known peer with account id {}, updating info and reconnecting",
+				&peer.account_id;
+				"peer_info" => peer.to_string()
 			);
 
 			self.remove_peer_and_disconnect_socket(existing_socket);
 		} else {
 			slog::debug!(
 				self.logger,
-				"Received new peer info for account id {}, adding to allowed peers and id mapping",
+				"Received info for new peer with account id {}, adding to allowed peers and id mapping",
 				&peer.account_id;
-				"peer_pubkey" => to_string(&peer.pubkey),
+				"peer_info" => peer.to_string()
 			);
 		}
 
