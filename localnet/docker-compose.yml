@@ -55,7 +55,7 @@ services:
       dockerfile: validator.Dockerfile
       context: .
       args:
-        - COMMIT_HASH
+        - APT_REPO
     platform: linux/amd64
     restart: unless-stopped
     depends_on:

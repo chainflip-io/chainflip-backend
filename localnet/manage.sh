@@ -18,7 +18,7 @@ setup() {
 
   if ! which docker-compose >/dev/null 2>&1; then
     echo "❌  docker-compose CLI not installed."
-    echo "https://docs.docker.com/desktop/install/mac-install/"
+    echo "https://docs.docker.com/get-docker/"
     exit 1
   fi
 
@@ -55,20 +55,27 @@ workflow() {
 build() {
   source $LOCALNET_INIT_DIR/secrets/secrets.env
   echo
-  echo "Enter the commit # you'd like to build from?"
-  echo "Type 'latest' to get the latest commit hash."
-  echo "Type 'same' to use the last commit hash you used."
-  read COMMIT_HASH
+  echo "💻 What commit # you'd like to use?"
+  echo "Use 'latest' to get the latest commit hash."
+  echo "Use 'same' to use the last commit hash you used."
+  read -p "Enter your choice: " COMMIT_HASH
+  echo
   if [ $COMMIT_HASH == "latest" ]; then
     COMMIT_HASH=$(git rev-parse HEAD | tr -d '\n')
   fi
   if [ $COMMIT_HASH == "same" ]; then
-    COMMIT_HASH=$(cat $LOCALNET_INIT_DIR/secrets/.hash)
+    COMMIT_HASH_FILE="$LOCALNET_INIT_DIR/secrets/.hash"
+    if [ -f "$COMMIT_HASH_FILE" ]; then
+      COMMIT_HASH=$(cat $COMMIT_HASH_FILE | tr -d '\n')
+    else
+      echo "⚠️  No previous commit hash found. Using latest commit hash."
+      COMMIT_HASH=$(git rev-parse HEAD | tr -d '\n')
+    fi
   fi
   echo $COMMIT_HASH >$LOCALNET_INIT_DIR/secrets/.hash
   echo
-  read -p "🏖 What release would you like to use? [sandstorm / ibiza] (default: sandstorm)?: " RELEASE
-  RELEASE=${RELEASE:-"sandstorm"}
+  read -p "🏖  What release would you like to use? [sandstorm / ibiza] (default: ibiza)?: " RELEASE
+  RELEASE=${RELEASE:-"ibiza"}
   if [[ "$RELEASE" == "sandstorm" ]]; then
     APT_REPO="deb https://${APT_REPO_USERNAME}:${APT_REPO_PASSWORD}@apt.aws.chainflip.xyz/ci/${COMMIT_HASH}/ focal main"
   else
@@ -80,9 +87,9 @@ build() {
   APT_REPO=$APT_REPO \
     docker-compose -f localnet/docker-compose.yml up --build -d
 
+  echo
   echo "🚀 Network is live"
-  echo "🪵 To get logs type"
-  echo "$ ./localnet/manage"
+  echo "🪵 To get logs run: ./localnet/manage"
   echo "👆 Then select logs (4)"
   echo
   echo "💚 Head to https://polkadot.js.org/apps/?rpc=ws%3A%2F%2F127.0.0.1%3A9944#/explorer to access PolkadotJS of Chainflip Network"
