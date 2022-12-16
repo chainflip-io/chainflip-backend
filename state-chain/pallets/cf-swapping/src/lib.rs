@@ -88,8 +88,8 @@ pub mod pallet {
 		NewSwapIntent { ingress_address: ForeignChainAddress },
 		/// The swap ingress was received.
 		SwapIngressReceived {
-			ingress_address: ForeignChainAddress,
 			swap_id: u64,
+			ingress_address: ForeignChainAddress,
 			ingress_amount: AssetAmount,
 		},
 		SwapScheduledByWitnesser {
@@ -289,8 +289,8 @@ pub mod pallet {
 			let swap_id = Self::schedule_swap(from, to, amount.saturating_sub(fee), egress_address);
 
 			Self::deposit_event(Event::<T>::SwapIngressReceived {
-				ingress_address,
 				swap_id,
+				ingress_address,
 				ingress_amount: amount,
 			});
 		}
