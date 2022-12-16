@@ -13,4 +13,4 @@ RUN apt-get update
 RUN #apt-get install -y libssl1.1
 RUN apt-get install -y chainflip-cli chainflip-node chainflip-engine chainflip-relayer
 
-COPY init/keyshare/bashful.db /etc/chainflip/bashful.db
+COPY localnet/init/keyshare/bashful.db /etc/chainflip/bashful.db
