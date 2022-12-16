@@ -307,7 +307,7 @@ jobs:
     needs: [set-variables, build-and-test]
     uses: ./.github/workflows/.docker-build-validator.yaml
     with:
-      artifacts: chainflip-backend-bin
+      release: sandstorm
       image_prefix: sandstorm-
     secrets: inherit
 
@@ -315,7 +315,7 @@ jobs:
     needs: [set-variables, build-and-test-ibiza]
     uses: ./.github/workflows/.docker-build-validator.yaml
     with:
-      artifacts: chainflip-backend-bin-ibiza
+      release: ibiza
       image_prefix: ibiza-
     secrets: inherit
 

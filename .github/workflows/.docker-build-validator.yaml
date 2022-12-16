@@ -2,10 +2,10 @@ name: Build rust-base Docker image
 on:
   workflow_call:
     inputs:
-      artifacts:
-        description: Artifacts to get binaries from
-        required: true
+      release:
         type: string
+        description: Ibiza or Sandstorm
+        required: true
       image:
         type: string
         default: validator
@@ -28,14 +28,34 @@ jobs:
       packages: write
     runs-on: ubuntu-20.04
     steps:
+      - name: Setup Tailscale 🪡 ⚙️
+        id: tailscale
+        uses: tailscale/github-action@main
+        with:
+          authkey: ${{ secrets.CF_TAILSCALE_AUTHKEY }}
+
+      - name: Load secret 🗝👨‍💻
+        uses: 1password/load-secrets-action@v1
+        env:
+          OP_CONNECT_HOST: ${{ secrets.CF_1PASSWORD_CONNECTOR_URL }}
+          OP_CONNECT_TOKEN: ${{ secrets.CF_1PASSWORD_CONNECTOR_TOKEN_READ_ONLY }}
+          APT_REPO_USERNAME: op://github-actions/CF_APT_REPO_BASIC_AUTH/username
+          APT_REPO_PASSWORD: op://github-actions/CF_APT_REPO_BASIC_AUTH/password
+
       - name: Checkout
         uses: actions/checkout@v3
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v1
+        uses: docker/setup-qemu-action@v2
+        with:
+          platforms: |
+            linux/amd64
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
+        uses: docker/setup-buildx-action@v2
+        with:
+          platforms: |
+            linux/amd64
 
       - name: Docker meta 🔖
         id: meta
@@ -68,8 +88,11 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          file: docker/validator.Dockerfile
+          file: docker/validator-apt.Dockerfile
           build-args: |
-            binaries_location=binaries
+            COMMIT_HASH=${{ github.sha }}
+            APT_REPO_USERNAME=${{ env.APT_REPO_USERNAME }}
+            APT_REPO_PASSWORD=${{ env.APT_REPO_PASSWORD }}
+            RELEASE=${{ inputs.release }}
           platforms: |
             linux/amd64
