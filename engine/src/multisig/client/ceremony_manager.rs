@@ -591,7 +591,7 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
 		// associated with it) and dropping the corresponding ceremony handle, which makes it
 		// possible for the following `send` to fail
 		if ceremony_handle.message_sender.send((sender_id, data)).is_err() {
-			slog::debug!(logger, "Could not send message: ceremony runner has been dropped");
+			slog::debug!(logger, "Ignoring data: ceremony runner has been dropped");
 		}
 	}
 

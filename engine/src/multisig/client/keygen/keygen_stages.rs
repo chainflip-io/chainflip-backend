@@ -161,7 +161,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 		let hash_commitments = match verify_broadcasts(messages, &self.common.logger) {
 			Ok(hash_commitments) => hash_commitments,
 			Err((reported_parties, abort_reason)) => {
-				slog::debug!(
+				slog::warn!(
 					self.common.logger,
 					"Broadcast verification is not successful for {}",
 					Self::NAME
