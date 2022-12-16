@@ -3,7 +3,7 @@ ARG COMMIT_HASH
 ARG APT_APT_REPO_USERNAME
 ARG APT_APT_REPO_PASSWORD
 ARG RELEASE
-
+ENV SHELL=/bin/bash
 RUN apt-get update
 RUN apt-get install -y gnupg ca-certificates netcat
 RUN apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 14DFB4CA9296F83A
