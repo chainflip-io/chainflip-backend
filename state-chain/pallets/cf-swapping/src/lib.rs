@@ -216,7 +216,7 @@ pub mod pallet {
 				Self::deposit_event(Event::<T>::SwapExecuted { swap_id: swap.swap_id });
 			}
 
-			for (input_amount, egress_asset, egress_address, id) in bundle_inputs {
+			for (input_amount, egress_asset, egress_address, swap_id) in bundle_inputs {
 				if let Some(swap_output) = multiply_by_rational_with_rounding(
 					input_amount,
 					bundle_output,
@@ -228,7 +228,7 @@ pub mod pallet {
 						swap_output,
 						egress_address,
 					);
-					Self::deposit_event(Event::<T>::SwapEgressScheduled { swap_id: id, egress_id });
+					Self::deposit_event(Event::<T>::SwapEgressScheduled { swap_id, egress_id });
 				} else {
 					log::error!(
 						"Unable to calculate valid swap output for swap {:?}!",
