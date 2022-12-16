@@ -1,7 +1,7 @@
 FROM ubuntu:20.04
 ARG COMMIT_HASH
-ARG APT_APT_REPO_USERNAME
-ARG APT_APT_REPO_PASSWORD
+ARG APT_REPO_USERNAME
+ARG APT_REPO_PASSWORD
 ARG RELEASE
 RUN apt-get update
 RUN apt-get install -y gnupg ca-certificates netcat
