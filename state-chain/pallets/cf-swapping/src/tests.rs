@@ -236,6 +236,11 @@ fn withdrawal_relayer_fees() {
 		let mut egresses = MockEgressHandler::<AnyChain>::get_scheduled_egresses();
 		assert!(egresses.len() == 1);
 		assert_eq!(egresses.pop().expect("to be exist").1, 200);
+		System::assert_last_event(Event::Swapping(crate::Event::<Test>::WithdrawalRequested {
+			egress_id: (ForeignChain::Ethereum, 1),
+			amount: 200,
+			address: ForeignChainAddress::Eth(Default::default()),
+		}));
 	});
 }
 

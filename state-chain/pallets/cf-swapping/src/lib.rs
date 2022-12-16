@@ -101,14 +101,20 @@ pub mod pallet {
 		SwapExecuted { swap_id: u64 },
 		/// A swap egress was scheduled.
 		SwapEgressScheduled { swap_id: u64, egress_id: EgressId, egress_amount: AssetAmount },
+		/// A withdrawal was requested.
+		WithdrawalRequested {
+			amount: AssetAmount,
+			address: ForeignChainAddress,
+			egress_id: EgressId,
+		},
 	}
 	#[pallet::error]
 	pub enum Error<T> {
 		/// The provided asset and withdrawal address are incompatible.
 		IncompatibleAssetAndAddress,
-		// The Asset cannot be egressed to the destination chain.
+		/// The Asset cannot be egressed to the destination chain.
 		InvalidEgressAddress,
-		// The withdrawal is not possible because not enough funds are available.
+		/// The withdrawal is not possible because not enough funds are available.
 		NoFundsAvailable,
 	}
 
@@ -192,7 +198,13 @@ pub mod pallet {
 
 			let amount = EarnedRelayerFees::<T>::take(account_id, asset);
 			ensure!(amount != 0, Error::<T>::NoFundsAvailable);
-			T::EgressHandler::schedule_egress(asset, amount, egress_address);
+
+			Self::deposit_event(Event::<T>::WithdrawalRequested {
+				amount,
+				address: egress_address,
+				egress_id: T::EgressHandler::schedule_egress(asset, amount, egress_address),
+			});
+
 			Ok(())
 		}
 
