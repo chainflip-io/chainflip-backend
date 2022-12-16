@@ -94,7 +94,7 @@ pub mod pallet {
 		},
 		SwapScheduledByWitnesser {
 			swap_id: u64,
-			amount: AssetAmount,
+			ingress_amount: AssetAmount,
 			egress_address: ForeignChainAddress,
 		},
 		/// A swap was executed.
@@ -181,16 +181,16 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			from: Asset,
 			to: Asset,
-			amount: AssetAmount,
+			ingress_amount: AssetAmount,
 			egress_address: ForeignChainAddress,
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
-			let swap_id = Self::schedule_swap(from, to, amount, egress_address);
+			let swap_id = Self::schedule_swap(from, to, ingress_amount, egress_address);
 
 			Self::deposit_event(Event::<T>::SwapScheduledByWitnesser {
 				swap_id,
-				amount,
+				ingress_amount,
 				egress_address,
 			});
 

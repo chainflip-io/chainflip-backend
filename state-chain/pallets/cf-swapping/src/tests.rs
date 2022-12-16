@@ -229,7 +229,7 @@ fn can_swap_using_witness_origin() {
 		System::assert_last_event(Event::Swapping(
 			crate::Event::<Test>::SwapScheduledByWitnesser {
 				swap_id: 1,
-				amount: 1_000,
+				ingress_amount: 1_000,
 				egress_address: ForeignChainAddress::Eth([0u8; 20]),
 			},
 		));
