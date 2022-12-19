@@ -187,7 +187,7 @@ where
 					take_while_ok(
 						block_head_stream_from.then(|mini_header| {
 							let dot_client = dot_client.clone();
-							slog::info!(
+							slog::debug!(
 								&logger,
 								"Fetching Polkadot events for block: {}",
 								mini_header.block_number
