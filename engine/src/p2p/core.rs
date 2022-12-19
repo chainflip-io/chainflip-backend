@@ -378,10 +378,9 @@ impl P2PContext {
 			self.remove_peer_and_disconnect_socket(existing_socket);
 		}
 
-		let peer_pubkey = &peer.pubkey;
-		self.authenticator.add_peer(*peer_pubkey);
+		self.authenticator.add_peer(&peer);
 
-		self.x25519_to_account_id.insert(*peer_pubkey, peer.account_id.clone());
+		self.x25519_to_account_id.insert(peer.pubkey, peer.account_id.clone());
 
 		match &mut self.status {
 			RegistrationStatus::Pending(peers) => {
