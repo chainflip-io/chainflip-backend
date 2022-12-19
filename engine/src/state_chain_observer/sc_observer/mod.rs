@@ -553,9 +553,14 @@ where
                                         },
                                     ) => {
                                         // we want to monitor for this new broadcast
-                                        let signature = state_chain_client.storage_map_entry::<pallet_cf_broadcast::ThresholdSignatureData<state_chain_runtime::Runtime, PolkadotInstance>>(current_block_hash, &broadcast_attempt_id.broadcast_id).await.context(format!("Failed to fetch signature for broadcast_id: {}", broadcast_attempt_id.broadcast_id))?.expect("If we are broadcasting this tx, the signature must exist");
+                                        let (_api_call, signature) = state_chain_client
+                                            .storage_map_entry::<pallet_cf_broadcast::ThresholdSignatureData<state_chain_runtime::Runtime, PolkadotInstance>>(current_block_hash, &broadcast_attempt_id.broadcast_id)
+                                            .await
+                                            .context(format!("Failed to fetch signature for broadcast_id: {}", broadcast_attempt_id.broadcast_id))?
+                                            .expect("If we are broadcasting this tx, the signature must exist");
+
                                         // get the threhsold signature, and we want the raw bytes inside the signature
-                                        dot_monitor_signature_sender.send(signature.1.0).unwrap();
+                                        dot_monitor_signature_sender.send(signature.0).unwrap();
                                         if nominee == account_id {
                                             let _result = dot_broadcaster.send(unsigned_tx.encoded_extrinsic).await
                                             .map(|_| slog::info!(logger, "Polkadot transmission successful: {broadcast_attempt_id}"))
@@ -563,7 +568,6 @@ where
                                                 slog::error!(logger, "Error: {:?}", error);
                                             });
                                         }
-
                                     }
                                     state_chain_runtime::Event::Environment(
                                         pallet_cf_environment::Event::CfeSettingsUpdated {
