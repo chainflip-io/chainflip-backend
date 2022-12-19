@@ -348,4 +348,3 @@ jobs:
       environment: dev
       commit_hash: ${{ needs.set-variables.outputs.commit_hash }}
     secrets: inherit
-
