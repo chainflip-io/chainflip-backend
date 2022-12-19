@@ -10,6 +10,9 @@ env:
 jobs:
   set-variables:
     runs-on: ubuntu-20.04
+    concurrency:
+      group: ${{ github.ref }}
+      cancel-in-progress: true
     outputs:
       commit_hash: ${{ steps.commit_hash.outputs.commit_hash }}
       branch_name: ${{ steps.branch_name.outputs.branch_name }}
@@ -27,6 +30,9 @@ jobs:
 
   cargo-fmt:
     runs-on: [hetzner]
+    concurrency:
+      group: ${{ github.ref }}
+      cancel-in-progress: true
     container:
       image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08-no-sccache'
       credentials:
@@ -40,6 +46,9 @@ jobs:
 
   cargo-clippy:
     runs-on: [hetzner]
+    concurrency:
+      group: ${{ github.ref }}
+      cancel-in-progress: true
     container:
       image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08-no-sccache'
       credentials:
@@ -53,6 +62,9 @@ jobs:
 
   cargo-doc:
     runs-on: [hetzner]
+    concurrency:
+      group: ${{ github.ref }}
+      cancel-in-progress: true
     container:
       image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08-no-sccache'
       credentials:
@@ -83,6 +95,9 @@ jobs:
 
   build-and-test:
     runs-on: [hetzner]
+    concurrency:
+      group: ${{ github.ref }}
+      cancel-in-progress: true
     needs: [set-variables, cargo-fmt]
     container:
       image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08-no-sccache'
@@ -146,6 +161,9 @@ jobs:
 
   build-and-test-ibiza:
     runs-on: [hetzner]
+    concurrency:
+      group: ${{ github.ref }}
+      cancel-in-progress: true
     needs: [set-variables, cargo-fmt]
     container:
       image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08-no-sccache'
@@ -211,6 +229,9 @@ jobs:
 
   run-benchmarks:
     runs-on: [hetzner]
+    concurrency:
+      group: ${{ github.ref }}
+      cancel-in-progress: true
     needs: [build-and-test]
     if: github.ref_name == 'develop'
     steps:
@@ -228,6 +249,9 @@ jobs:
 
   test-single-node:
     runs-on: [hetzner]
+    concurrency:
+      group: ${{ github.ref }}
+      cancel-in-progress: true
     needs: [build-and-test]
     steps:
       - uses: actions/setup-node@v3
