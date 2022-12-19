@@ -3,9 +3,11 @@ use cf_primitives::{chains::assets::any, AssetAmount, ExchangeRate, PoolAsset, T
 use cf_traits::Chainflip;
 use frame_support::{
 	pallet_prelude::*,
-	sp_runtime::{traits::Saturating, FixedPointNumber},
+	sp_runtime::{traits::Saturating, FixedPointNumber, Permill},
 };
 pub use pallet::*;
+
+const BASIS_POINTS_PER_MILLION: u32 = 100;
 
 #[cfg(test)]
 mod mock;
@@ -82,7 +84,10 @@ pub mod pallet {
 
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
-	pub trait Config: Chainflip {}
+	pub trait Config: Chainflip {
+		#[pallet::constant]
+		type NetworkFee: Get<u64>;
+	}
 
 	#[pallet::pallet]
 	#[pallet::without_storage_info]
@@ -93,6 +98,10 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(super) type Pools<T: Config> =
 		StorageMap<_, Twox64Concat, any::Asset, mini_pool::AmmPool, ValueQuery>;
+
+	/// Network fee
+	#[pallet::storage]
+	pub type CollectedNetworkFee<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
 }
 
 impl<T: Config> cf_traits::SwappingApi for Pallet<T> {
@@ -104,13 +113,37 @@ impl<T: Config> cf_traits::SwappingApi for Pallet<T> {
 	) -> (AssetAmount, (cf_primitives::Asset, AssetAmount)) {
 		(
 			match (from, to) {
-				(input_asset, any::Asset::Usdc) =>
-					Pools::<T>::mutate(input_asset, |pool| pool.swap(input_amount)),
-				(any::Asset::Usdc, output_asset) =>
-					Pools::<T>::mutate(output_asset, |pool| pool.reverse_swap(input_amount)),
+				(input_asset, any::Asset::Usdc) => {
+					let swap_output =
+						Pools::<T>::mutate(input_asset, |pool| pool.swap(input_amount));
+					let network_fee = Permill::from_parts(
+						T::NetworkFee::get() as u32 * BASIS_POINTS_PER_MILLION,
+					) * swap_output;
+					CollectedNetworkFee::<T>::put(
+						CollectedNetworkFee::<T>::get().saturating_add(network_fee),
+					);
+					swap_output.saturating_sub(network_fee)
+				},
+				(any::Asset::Usdc, output_asset) => {
+					let network_fee = Permill::from_parts(
+						T::NetworkFee::get() as u32 * BASIS_POINTS_PER_MILLION,
+					) * input_amount;
+					CollectedNetworkFee::<T>::put(
+						CollectedNetworkFee::<T>::get().saturating_add(network_fee),
+					);
+					Pools::<T>::mutate(output_asset, |pool| {
+						pool.reverse_swap(input_amount.saturating_sub(network_fee))
+					})
+				},
 				(input_asset, output_asset) => Pools::<T>::mutate(output_asset, |pool| {
 					pool.reverse_swap(Pools::<T>::mutate(input_asset, |pool| {
-						pool.swap(input_amount)
+						let network_fee = Permill::from_parts(
+							T::NetworkFee::get() as u32 * BASIS_POINTS_PER_MILLION,
+						) * input_amount;
+						CollectedNetworkFee::<T>::put(
+							CollectedNetworkFee::<T>::get().saturating_add(network_fee),
+						);
+						pool.swap(Self::calc_and_store(input_amount.saturating_sub(network_fee)))
 					}))
 				}),
 			},
