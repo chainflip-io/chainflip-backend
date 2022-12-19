@@ -200,17 +200,17 @@ where
 								let events = EventsClient::new(dot_client)
 									.at(Some(mini_header.block_hash))
 									.await?;
-								Result::<_, anyhow::Error>::Ok((mini_header.block_number, events))
+								Result::<_, anyhow::Error>::Ok((mini_header.block_hash, mini_header.block_number, events))
 							}
 						}),
 						&logger,
 					)
-					.map(|(block_number, events)| {
-						(block_number, <(ProxyAdded, Transfer)>::filter(events))
+					.map(|(block_hash, block_number, events)| {
+						(block_hash, block_number, <(ProxyAdded, Transfer)>::filter(events))
 					}),
 				);
 
-				while let Some((block_number, mut block_event_details)) =
+				while let Some((block_hash, block_number, mut block_event_details)) =
 					filtered_events_stream.next().await
 				{
 					if should_end_witnessing::<Polkadot>(
@@ -221,7 +221,6 @@ where
 						break
 					}
 
-					let mut interesting_block = None;
 					// to contain all the ingress witnessse for this block
 					let mut ingress_witnesses = Vec::new();
 					// We only want to attempt to decode extrinsics that were sent by us. Since 
@@ -229,7 +228,6 @@ where
 					// b) these are the only extrinsics we are interested in
 					let mut interesting_indices = Vec::new();
 					while let Some(Ok(event_details)) = block_event_details.next() {
-						interesting_block = Some(event_details.block_hash);
 						if let Phase::ApplyExtrinsic(extrinsic_index) = event_details.phase {
 							match event_details.event {
 								(Some(ProxyAdded { delegator, delegatee, .. }), None) => {
@@ -309,18 +307,16 @@ where
 					} // === We've finished iterating the events for this block ===
 
 					if !interesting_indices.is_empty() {
-						let interesting_block = interesting_block.expect("If we got an interesting index then we definitely have an interesting block");
-
-						slog::info!(logger, "We got an interesting block at block: {block_number}, hash: {interesting_block:?}");
+						slog::info!(logger, "We got an interesting block at block: {block_number}, hash: {block_hash:?}");
 
 						let block = dot_client
 						.rpc()
-						.block(Some(interesting_block))
+						.block(Some(block_hash))
 						.await
 						.context("Failed fetching block from DOT RPC")?
 						.context(format!(
 							"Polkadot block does not exist for block hash: {:?}",
-							interesting_block
+							block_hash
 						))?;
 
 						while let Ok(sig) = monitor_signature_receiver.try_recv()
