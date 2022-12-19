@@ -11,7 +11,7 @@ jobs:
   set-variables:
     runs-on: ubuntu-20.04
     concurrency:
-      group: ${{ github.ref }}
+      group: ${{ github.ref }}-${{ github.job }}
       cancel-in-progress: true
     outputs:
       commit_hash: ${{ steps.commit_hash.outputs.commit_hash }}
@@ -31,7 +31,7 @@ jobs:
   cargo-fmt:
     runs-on: [hetzner]
     concurrency:
-      group: ${{ github.ref }}
+      group: ${{ github.ref }}-${{ github.job }}
       cancel-in-progress: true
     container:
       image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08-no-sccache'
@@ -47,7 +47,7 @@ jobs:
   cargo-clippy:
     runs-on: [hetzner]
     concurrency:
-      group: ${{ github.ref }}
+      group: ${{ github.ref }}-${{ github.job }}
       cancel-in-progress: true
     container:
       image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08-no-sccache'
@@ -63,7 +63,7 @@ jobs:
   cargo-doc:
     runs-on: [hetzner]
     concurrency:
-      group: ${{ github.ref }}
+      group: ${{ github.ref }}-${{ github.job }}
       cancel-in-progress: true
     container:
       image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08-no-sccache'
@@ -96,7 +96,7 @@ jobs:
   build-and-test:
     runs-on: [hetzner]
     concurrency:
-      group: ${{ github.ref }}
+      group: ${{ github.ref }}-${{ github.job }}
       cancel-in-progress: true
     needs: [set-variables, cargo-fmt]
     container:
@@ -162,7 +162,7 @@ jobs:
   build-and-test-ibiza:
     runs-on: [hetzner]
     concurrency:
-      group: ${{ github.ref }}
+      group: ${{ github.ref }}-${{ github.job }}
       cancel-in-progress: true
     needs: [set-variables, cargo-fmt]
     container:
@@ -230,7 +230,7 @@ jobs:
   run-benchmarks:
     runs-on: [hetzner]
     concurrency:
-      group: ${{ github.ref }}
+      group: ${{ github.ref }}-${{ github.job }}
       cancel-in-progress: true
     needs: [build-and-test]
     if: github.ref_name == 'develop'
@@ -250,7 +250,7 @@ jobs:
   test-single-node:
     runs-on: [hetzner]
     concurrency:
-      group: ${{ github.ref }}
+      group: ${{ github.ref }}-${{ github.job }}
       cancel-in-progress: true
     needs: [build-and-test]
     steps:
