@@ -5,6 +5,9 @@ pub mod api;
 #[cfg(feature = "runtime-benchmarks")]
 pub mod benchmarking;
 
+pub use cf_primitives::{chains::Polkadot, PolkadotAccountId};
+use cf_primitives::{KeyId, PolkadotBlockNumber, TxId};
+
 use sp_core::{sr25519, H256};
 use sp_runtime::{
 	generic::{Era, SignedPayload, UncheckedExtrinsic},
@@ -12,7 +15,6 @@ use sp_runtime::{
 	MultiAddress, MultiSignature,
 };
 
-use sp_core::crypto::AccountId32;
 use sp_runtime::{
 	traits::{AccountIdLookup, Verify},
 	transaction_validity::{TransactionValidity, TransactionValidityError, ValidTransaction},
@@ -27,13 +29,8 @@ pub type PolkadotSignature = sr25519::Signature;
 pub type PolkadotGovKey = (); // Todo
 
 pub type PolkadotBalance = u128;
-pub type PolkadotBlockNumber = u32;
 pub type PolkadotIndex = u32;
 pub type PolkadotHash = sp_core::H256;
-
-/// Alias to the opaque account ID type for this chain, actually a `AccountId32`. This is always
-/// 32 bytes.
-pub type PolkadotAccountId = AccountId32;
 
 pub type PolkadotAddress = MultiAddress<PolkadotAccountId, ()>;
 
@@ -52,9 +49,9 @@ pub type PolkadotUncheckedExtrinsic =
 pub type PolkadotPayload = SignedPayload<PolkadotRuntimeCall, PolkadotSignedExtra>;
 
 // Westend testnet
-pub const WESTEND_CONFIG: PolkadotConfig = PolkadotConfig {
-	spec_version: 9310,
-	transaction_version: 14,
+pub const WESTEND_METADATA: PolkadotMetadata = PolkadotMetadata {
+	spec_version: 9340,
+	transaction_version: 16,
 	genesis_hash: hex_literal::hex!(
 		"e143f23803ac50e8f6f8e62695d1ce9e4e1d68aa36c1cd2cfd15340213f3423e"
 	),
@@ -62,11 +59,11 @@ pub const WESTEND_CONFIG: PolkadotConfig = PolkadotConfig {
 };
 
 // Polkadot mainnet
-pub const POLKADOT_CONFIG: PolkadotConfig = PolkadotConfig {
-	spec_version: 9300,
-	transaction_version: 15,
+pub const POLKADOT_METADATA: PolkadotMetadata = PolkadotMetadata {
+	spec_version: 9320,
+	transaction_version: 16,
 	genesis_hash: hex_literal::hex!(
-		"91b171bb158e2d3848fa23a9f1c25182fb8e20313b2c1eb49219da7a70ce90c3"
+		"5f551688012d25a98e729752169f509c6186af8079418c118844cc852b332bf5"
 	),
 	block_hash_count: 4096,
 };
@@ -81,7 +78,7 @@ pub const NONCE_1: u32 = 11; //correct nonce has to be provided for this account
 // address: "5GNn92C9ngX4sNp3UjqGzPbdRfbbV8hyyVVNZaH2z9e5kzxA"
 pub const RAW_SEED_2: [u8; 32] =
 	hex_literal::hex!("4b734882accd7a0e27b8b0d3cb7db79ab4da559d1d5f84f35fd218a1ee12ece4");
-pub const NONCE_2: u32 = 0; //correct nonce has to be provided for this account (see/track onchain)
+pub const NONCE_2: u32 = 18; //correct nonce has to be provided for this account (see/track onchain)
 
 // test westend account 3 (CHAINFLIP-TEST-3)
 // address: "5CLpD6DBg2hFToBJYKDB7bPVAf4TKw2F1Q2xbnzdHSikH3uK"
@@ -90,36 +87,47 @@ pub const RAW_SEED_3: [u8; 32] =
 pub const NONCE_3: u32 = 0; //correct nonce has to be provided for this account (see/track onchain)
 
 pub const POLKADOT_VAULT_ACCOUNT: Option<PolkadotAccountId> = None;
-pub const POLKADOT_PROXY_ACCOUNT: Option<PolkadotAccountId> = None;
 
+// FROM: https://github.com/paritytech/polkadot/blob/v0.9.33/runtime/polkadot/src/lib.rs
 #[allow(clippy::unnecessary_cast)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum PolkadotProxyType {
 	Any = 0,
+	NonTransfer = 1,
+	Governance = 2,
+	Staking = 3,
+	// Skip 4 as it is now removed (was SudoBalances)
+	IdentityJudgement = 5,
+	CancelProxy = 6,
+	Auction = 7,
 }
-
-#[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub struct Polkadot;
 
 type DotAmount = u128;
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct EncodedPolkadotPayload(pub Vec<u8>);
 
+#[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]
+pub struct EpochStartData {
+	pub vault_account: PolkadotAccountId,
+}
+
 impl Chain for Polkadot {
-	type ChainBlockNumber = u64;
+	type ChainBlockNumber = PolkadotBlockNumber;
 	type ChainAmount = DotAmount;
 	type TrackedData = eth::TrackedData<Self>;
 	type ChainAccount = PolkadotAccountId;
 	type TransactionFee = Self::ChainAmount;
-	type ChainAsset = ();
+	type ChainAsset = assets::dot::Asset;
+	type EpochStartData = EpochStartData;
 }
 
 impl ChainCrypto for Polkadot {
+	type KeyId = KeyId;
 	type AggKey = PolkadotPublicKey;
 	type Payload = EncodedPolkadotPayload;
 	type ThresholdSignature = PolkadotSignature;
-	type TransactionHash = PolkadotHash;
+	type TransactionId = TxId;
 	type GovKey = PolkadotGovKey;
 
 	fn verify_threshold_signature(
@@ -152,7 +160,6 @@ impl FeeRefundCalculator<Polkadot> for PolkadotTransactionData {
 impl ChainAbi for Polkadot {
 	type Transaction = PolkadotTransactionData;
 	type ReplayProtection = PolkadotReplayProtection;
-	type ApiCallExtraData = CurrentVaultAndProxy;
 }
 
 pub struct CurrentVaultAndProxy {
@@ -257,11 +264,11 @@ impl PolkadotExtrinsicBuilder {
 pub enum PolkadotRuntimeCall {
 	#[codec(index = 0u8)]
 	System(SystemCall),
-	#[codec(index = 4u8)] // INDEX FOR WESTEND: 4, FOR POLKADOT: 5
+	#[codec(index = 5u8)] // INDEX FOR WESTEND: 4, FOR POLKADOT: 5
 	Balances(BalancesCall),
-	#[codec(index = 16u8)] // INDEX FOR WESTEND: 16, FOR POLKADOT: 26
+	#[codec(index = 26u8)] // INDEX FOR WESTEND: 16, FOR POLKADOT: 26
 	Utility(UtilityCall),
-	#[codec(index = 22u8)] // INDEX FOR WESTEND: 22, FOR POLKADOT: 29
+	#[codec(index = 29u8)] // INDEX FOR WESTEND: 22, FOR POLKADOT: 29
 	Proxy(ProxyCall),
 }
 
@@ -502,7 +509,7 @@ pub enum ProxyCall {
 	/// # </weight>
 	/// TODO: Might be over counting 1 read
 	#[codec(index = 4u8)]
-	anonymous {
+	create_pure {
 		#[allow(missing_docs)]
 		proxy_type: PolkadotProxyType,
 		#[allow(missing_docs)]
@@ -531,7 +538,7 @@ pub enum ProxyCall {
 	/// Weight is a function of the number of proxies the user has (P).
 	/// # </weight>
 	#[codec(index = 5u8)]
-	kill_anonymous {
+	kill_pure {
 		#[allow(missing_docs)]
 		spawner: PolkadotAccountIdLookup,
 		#[allow(missing_docs)]
@@ -734,6 +741,18 @@ impl SignedExtension for PolkadotSignedExtra {
 #[derive(Ord, PartialOrd, Debug, Encode, Decode, Copy, Clone, Eq, PartialEq, TypeInfo)]
 pub struct PolkadotPublicKey(pub sr25519::Public);
 
+impl Default for PolkadotPublicKey {
+	fn default() -> Self {
+		[0; 32].into()
+	}
+}
+
+impl From<[u8; 32]> for PolkadotPublicKey {
+	fn from(pub_key_bytes: [u8; 32]) -> Self {
+		PolkadotPublicKey(sr25519::Public(pub_key_bytes))
+	}
+}
+
 impl TryFrom<Vec<u8>> for PolkadotPublicKey {
 	type Error = ();
 
@@ -750,22 +769,22 @@ impl From<PolkadotPublicKey> for Vec<u8> {
 
 #[derive(Debug, Encode, Decode, TypeInfo, Eq, PartialEq, Clone)]
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-pub struct PolkadotConfig {
+pub struct PolkadotMetadata {
 	pub spec_version: PolkadotSpecVersion,
 	pub transaction_version: PolkadotTransactionVersion,
 	pub genesis_hash: [u8; 32],
 	pub block_hash_count: PolkadotBlockNumber,
 }
 
-impl Default for PolkadotConfig {
+impl Default for PolkadotMetadata {
 	fn default() -> Self {
-		POLKADOT_CONFIG
+		POLKADOT_METADATA
 	}
 }
 
 #[derive(Debug, Encode, Decode, TypeInfo, Eq, PartialEq, Clone)]
 pub struct PolkadotReplayProtection {
-	pub polkadot_config: PolkadotConfig,
+	pub polkadot_config: PolkadotMetadata,
 	pub nonce: PolkadotIndex,
 	pub tip: PolkadotBalance,
 }
@@ -774,7 +793,7 @@ impl PolkadotReplayProtection {
 	pub fn new(
 		nonce: PolkadotIndex,
 		tip: PolkadotBalance,
-		polkadot_config: PolkadotConfig,
+		polkadot_config: PolkadotMetadata,
 	) -> Self {
 		Self { polkadot_config, nonce, tip }
 	}
@@ -785,7 +804,7 @@ mod test_polkadot_extrinsics {
 
 	use super::*;
 	use crate::dot::sr25519::Pair;
-	use sp_core::crypto::Pair as TraitPair;
+	use sp_core::crypto::{AccountId32, Pair as TraitPair};
 	use sp_runtime::{app_crypto::Ss58Codec, traits::IdentifyAccount, MultiSigner};
 
 	#[ignore]
@@ -803,6 +822,8 @@ mod test_polkadot_extrinsics {
 				value: 35_000_000_000u128, //0.035 WND
 			});
 
+		println!("Account id 1: {:?}", account_id_1);
+
 		println!(
 			"CallHash: 0x{}",
 			test_runtime_call.using_encoded(|encoded| hex::encode(Blake2_256::hash(encoded)))
@@ -810,7 +831,7 @@ mod test_polkadot_extrinsics {
 		println!("Encoded Call: 0x{}", hex::encode(test_runtime_call.encode()));
 
 		let mut extrinsic_handler = PolkadotExtrinsicBuilder::new_empty(
-			PolkadotReplayProtection::new(NONCE_1, 0, WESTEND_CONFIG),
+			PolkadotReplayProtection::new(12, 0, WESTEND_METADATA),
 			account_id_1,
 		);
 		extrinsic_handler.insert_extrinsic_call(test_runtime_call);
@@ -825,7 +846,7 @@ mod test_polkadot_extrinsics {
 
 		assert!(extrinsic_handler.is_signed().unwrap_or(false));
 
-		println!("encoded extrinsic: 0x{}", hex::encode(signed_extrinsic.unwrap().encode()));
+		println!("encoded extrinsic: {:?}", signed_extrinsic.unwrap().encode());
 	}
 
 	#[ignore]

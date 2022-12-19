@@ -16,10 +16,7 @@ pub use weights::WeightInfo;
 mod tests;
 
 use cf_chains::RegisterClaim;
-use cf_traits::{
-	Bid, BidderProvider, EpochInfo, EthEnvironmentProvider, ReplayProtectionProvider,
-	StakeTransfer, ThresholdSigner,
-};
+use cf_traits::{Bid, BidderProvider, EpochInfo, StakeTransfer, ThresholdSigner};
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
@@ -27,7 +24,7 @@ use frame_support::{
 };
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
-use sp_std::{prelude::*, time::Duration};
+use sp_std::prelude::*;
 
 use cf_traits::SystemStateInfo;
 
@@ -51,6 +48,9 @@ pub mod pallet {
 	use cf_traits::AccountRoleRegistry;
 	use frame_support::{pallet_prelude::*, Parameter};
 	use frame_system::pallet_prelude::*;
+
+	#[allow(unused_imports)]
+	use sp_std::time::Duration;
 
 	pub type AccountId<T> = <T as frame_system::Config>::AccountId;
 
@@ -106,12 +106,6 @@ pub mod pallet {
 			Balance = Self::Balance,
 		>;
 
-		/// Something that can provide a nonce for the threshold signature.
-		type ReplayProtectionProvider: ReplayProtectionProvider<Ethereum>;
-
-		/// Something that can provide the key manager address and chain id.
-		type EthEnvironmentProvider: EthEnvironmentProvider;
-
 		/// Threshold signer.
 		type ThresholdSigner: ThresholdSigner<Ethereum, Callback = Self::ThresholdCallable>;
 
@@ -120,12 +114,6 @@ pub mod pallet {
 
 		/// The implementation of the register claim transaction.
 		type RegisterClaim: RegisterClaim<Ethereum> + Member + Parameter;
-
-		/// We must ensure the claim expires on the chain *after* it expires on the contract.
-		/// We should be extra sure that this is the case, else it opens the possibility for double
-		/// claiming.
-		#[pallet::constant]
-		type ClaimDelayBufferSeconds: Get<u64>;
 
 		/// Something that provides the current time.
 		type TimeSource: UnixTime;
@@ -175,6 +163,12 @@ pub mod pallet {
 	/// TTL for a claim from the moment of issue.
 	#[pallet::storage]
 	pub type ClaimTTLSeconds<T: Config> = StorageValue<_, u64, ValueQuery>;
+
+	/// We must ensure the claim expires on the chain *after* it expires on the contract.
+	/// We should be extra sure that this is the case, else it opens the possibility for double
+	/// claiming.
+	#[pallet::storage]
+	pub type ClaimDelayBufferSeconds<T: Config> = StorageValue<_, u64, ValueQuery>;
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
@@ -340,7 +334,10 @@ pub mod pallet {
 
 			ensure!(address != ETH_ZERO_ADDRESS, Error::<T>::InvalidClaim);
 
-			ensure!(!T::EpochInfo::is_auction_phase(), Error::<T>::AuctionPhase);
+			// Not allowed to claim if we are an active bidder in the auction phase
+			if T::EpochInfo::is_auction_phase() {
+				ensure!(!ActiveBidder::<T>::get(&account_id), Error::<T>::AuctionPhase);
+			}
 
 			// The staker must either execute their claim voucher or wait until expiry before
 			// creating a new claim.
@@ -375,11 +372,10 @@ pub mod pallet {
 			// on Ethereum, and the SC will revert the pending claim, giving them back their funds.
 			Self::register_claim_expiry(
 				account_id.clone(),
-				contract_expiry + T::ClaimDelayBufferSeconds::get(),
+				contract_expiry + ClaimDelayBufferSeconds::<T>::get(),
 			);
 
 			let call = T::RegisterClaim::new_unsigned(
-				T::ReplayProtectionProvider::replay_protection(),
 				<T as Config>::StakerId::from_ref(&account_id).as_ref(),
 				amount.into(),
 				&address,
@@ -571,6 +567,7 @@ pub mod pallet {
 		pub genesis_stakers: Vec<(AccountId<T>, T::Balance)>,
 		pub minimum_stake: T::Balance,
 		pub claim_ttl: Duration,
+		pub claim_delay_buffer_seconds: u64,
 	}
 
 	#[cfg(feature = "std")]
@@ -580,6 +577,7 @@ pub mod pallet {
 				genesis_stakers: vec![],
 				minimum_stake: Default::default(),
 				claim_ttl: Default::default(),
+				claim_delay_buffer_seconds: Default::default(),
 			}
 		}
 	}
@@ -589,6 +587,7 @@ pub mod pallet {
 		fn build(&self) {
 			MinimumStake::<T>::set(self.minimum_stake);
 			ClaimTTLSeconds::<T>::set(self.claim_ttl.as_secs());
+			ClaimDelayBufferSeconds::<T>::set(self.claim_delay_buffer_seconds);
 			for (staker, amount) in self.genesis_stakers.iter() {
 				Pallet::<T>::stake_account(staker, *amount);
 				Pallet::<T>::activate(staker)
@@ -686,9 +685,11 @@ impl<T: Config> Pallet<T> {
 	/// Sets the `active` flag associated with the account to false, signalling that the account no
 	/// longer wishes to participate in auctions.
 	///
-	/// Returns an error if the account has already been retired, or if the account has no stake
-	/// associated.
+	/// Returns an error if the account has already been retired, if the account has no stake
+	/// associated, or if the epoch is currently in the auction phase.
 	fn retire(account_id: &AccountId<T>) -> Result<(), Error<T>> {
+		ensure!(!T::EpochInfo::is_auction_phase(), Error::<T>::AuctionPhase);
+
 		ActiveBidder::<T>::try_mutate_exists(account_id, |maybe_status| {
 			match maybe_status.as_mut() {
 				Some(active) => {

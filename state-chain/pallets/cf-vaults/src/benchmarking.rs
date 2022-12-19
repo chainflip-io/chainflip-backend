@@ -61,8 +61,8 @@ benchmarks_instance_pallet! {
 	}
 	verify {
 		assert!(matches!(
-			<Pallet::<T, I> as VaultRotator>::get_vault_rotation_outcome(),
-			AsyncResult::Ready(Err(..))
+			<Pallet::<T, I> as VaultRotator>::status(),
+			AsyncResult::Ready(VaultStatus::Failed(..))
 		));
 	}
 	on_initialize_success {
@@ -142,7 +142,7 @@ benchmarks_instance_pallet! {
 	verify {
 		assert!(matches!(
 			PendingVaultRotation::<T, I>::get().unwrap(),
-			VaultRotationStatus::AwaitingRotation { new_public_key }
+			VaultRotationStatus::KeygenVerificationComplete { new_public_key }
 				if new_public_key == agg_key
 		))
 	}
@@ -153,8 +153,8 @@ benchmarks_instance_pallet! {
 		);
 		let call = Call::<T, I>::vault_key_rotated {
 			new_public_key,
-			block_number: 5u64.into(),
-			tx_hash: Decode::decode(&mut &TX_HASH[..]).unwrap()
+			block_number: 5u32.into(),
+			tx_id: Decode::decode(&mut &TX_HASH[..]).unwrap()
 		};
 		let origin = T::EnsureWitnessedAtCurrentEpoch::successful_origin();
 	} : { call.dispatch_bypass_filter(origin)? }
@@ -165,8 +165,8 @@ benchmarks_instance_pallet! {
 		let origin = T::EnsureWitnessedAtCurrentEpoch::successful_origin();
 		let call = Call::<T, I>::vault_key_rotated_externally {
 			new_public_key: AggKeyFor::<T, I>::benchmark_value(),
-			block_number: 5u64.into(),
-			tx_hash: Decode::decode(&mut &TX_HASH[..]).unwrap()
+			block_number: 5u32.into(),
+			tx_id: Decode::decode(&mut &TX_HASH[..]).unwrap()
 		};
 	} : { call.dispatch_bypass_filter(origin)? }
 	verify {

@@ -3,14 +3,36 @@ use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::{traits::Zero, BuildStorage};
 use state_chain_runtime::{
-	constants::common::*, opaque::SessionKeys, AccountId, AccountRolesConfig, EmissionsConfig,
-	EthereumVaultConfig, FlipConfig, GovernanceConfig, ReputationConfig, Runtime, SessionConfig,
-	StakingConfig, System, ValidatorConfig,
+	chainflip::Offence, constants::common::*, opaque::SessionKeys, AccountId, AccountRolesConfig,
+	EmissionsConfig, EthereumVaultConfig, FlipConfig, GovernanceConfig, ReputationConfig, Runtime,
+	SessionConfig, StakingConfig, System, ValidatorConfig,
 };
 
-use crate::{get_from_seed, network, GENESIS_KEY};
-use cf_primitives::{AccountRole, AuthorityCount};
-use cf_traits::{BlockNumber, FlipBalance};
+pub const CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL: u32 = 28;
+pub const BACKUP_NODE_EMISSION_INFLATION_PERBILL: u32 = 6;
+pub const CLAIM_DELAY_BUFFER_SECS: u64 = 10;
+pub const SUPPLY_UPDATE_INTERVAL_DEFAULT: u32 = 14_400;
+pub const MIN_STAKE: FlipBalance = 10 * FLIPPERINOS_PER_FLIP;
+
+/// The offences committable within the protocol and their respective reputation penalty and
+/// suspension durations.
+pub const PENALTIES: &[(Offence, (i32, BlockNumber))] = &[
+	(Offence::ParticipateKeygenFailed, (15, HEARTBEAT_BLOCK_INTERVAL)),
+	(Offence::ParticipateSigningFailed, (15, HEARTBEAT_BLOCK_INTERVAL)),
+	(Offence::MissedAuthorshipSlot, (15, HEARTBEAT_BLOCK_INTERVAL)),
+	(Offence::MissedHeartbeat, (15, HEARTBEAT_BLOCK_INTERVAL)),
+	// We exclude them from the nomination pool of the next attempt,
+	// so there is no need to suspend them further.
+	(Offence::FailedToBroadcastTransaction, (10, 0)),
+	(Offence::GrandpaEquivocation, (50, HEARTBEAT_BLOCK_INTERVAL * 5)),
+];
+
+use crate::{
+	get_from_seed,
+	threshold_signing::{EthKeyComponents, KeyUtils},
+	GENESIS_KEY_SEED,
+};
+use cf_primitives::{AccountRole, AuthorityCount, BlockNumber, FlipBalance};
 
 pub struct ExtBuilder {
 	pub accounts: Vec<(AccountId, FlipBalance)>,
@@ -63,8 +85,8 @@ impl ExtBuilder {
 		let mut storage =
 			frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 
-		let (_, public_key, _) = network::ThresholdSigner::generate_keypair(GENESIS_KEY);
-		let ethereum_vault_key = public_key.serialize_compressed().to_vec();
+		let key_components = EthKeyComponents::generate(GENESIS_KEY_SEED);
+		let ethereum_vault_key = key_components.key_id();
 
 		state_chain_runtime::GenesisConfig {
 			session: SessionConfig {
@@ -86,13 +108,14 @@ impl ExtBuilder {
 			flip: FlipConfig { total_issuance: TOTAL_ISSUANCE },
 			staking: StakingConfig {
 				genesis_stakers: self.accounts.clone(),
-				minimum_stake: DEFAULT_MIN_STAKE,
+				minimum_stake: MIN_STAKE,
 				claim_ttl: core::time::Duration::from_secs(3 * CLAIM_DELAY_SECS),
+				claim_delay_buffer_seconds: CLAIM_DELAY_BUFFER_SECS,
 			},
 			reputation: ReputationConfig {
 				accrual_ratio: ACCRUAL_RATIO,
 				penalties: PENALTIES.to_vec(),
-				genesis_nodes: self.accounts.iter().map(|(id, _)| id.clone()).collect(),
+				genesis_validators: self.accounts.iter().map(|(id, _)| id.clone()).collect(),
 			},
 			governance: GovernanceConfig {
 				members: self.root.iter().cloned().collect(),
@@ -111,7 +134,7 @@ impl ExtBuilder {
 				max_expansion: self.max_authorities,
 			},
 			ethereum_vault: EthereumVaultConfig {
-				vault_key: ethereum_vault_key,
+				vault_key: Some(ethereum_vault_key),
 				deployment_block: 0,
 				keygen_response_timeout: 4,
 			},

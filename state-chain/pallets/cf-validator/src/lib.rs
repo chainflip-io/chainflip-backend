@@ -20,8 +20,8 @@ mod rotation_state;
 pub use auction_resolver::*;
 use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex};
 use cf_traits::{
-	offence_reporting::OffenceReporter, AsyncResult, AuctionOutcome, Bid, BidderProvider, Bonding,
-	Chainflip, EmergencyRotation, EpochInfo, EpochTransitionHandler, ExecutionCondition,
+	offence_reporting::OffenceReporter, AsyncResult, AuctionOutcome, Bid, BidInfo, BidderProvider,
+	Bonding, Chainflip, EmergencyRotation, EpochInfo, EpochTransitionHandler, ExecutionCondition,
 	HistoricalEpoch, MissedAuthorshipSlots, QualifyNode, ReputationResetter, StakeHandler,
 	SystemStateInfo, VaultRotator,
 };
@@ -69,12 +69,14 @@ pub struct PercentageRange {
 type RuntimeRotationState<T> =
 	RotationState<<T as Chainflip>::ValidatorId, <T as Chainflip>::Amount>;
 
+// Might be better to add the enum inside a struct rather than struct inside enum
 #[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, RuntimeDebugNoBound)]
 #[scale_info(skip_type_params(T))]
 pub enum RotationPhase<T: Config> {
 	Idle,
-	VaultsRotating(RuntimeRotationState<T>),
-	VaultsRotated(RuntimeRotationState<T>),
+	KeygensInProgress(RuntimeRotationState<T>),
+	ActivatingKeys(RuntimeRotationState<T>),
+	NewKeysActivated(RuntimeRotationState<T>),
 	SessionRotating(RuntimeRotationState<T>),
 }
 
@@ -113,7 +115,7 @@ pub type Percentage = u8;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::AccountRoleRegistry;
+	use cf_traits::{AccountRoleRegistry, VaultStatus};
 	use frame_system::pallet_prelude::*;
 	use pallet_session::WeightInfo as SessionWeightInfo;
 	use sp_runtime::app_crypto::RuntimePublic;
@@ -143,7 +145,6 @@ pub mod pallet {
 		#[pallet::constant]
 		type MinEpoch: Get<<Self as frame_system::Config>::BlockNumber>;
 
-		/// The lifecycle of a vault rotation
 		type VaultRotator: VaultRotator<ValidatorId = ValidatorIdOf<Self>>;
 
 		/// Implementation of EnsureOrigin trait for governance
@@ -395,43 +396,78 @@ pub mod pallet {
 						T::ValidatorWeightInfo::rotation_phase_idle()
 					}
 				},
-				RotationPhase::VaultsRotating(mut rotation_state) => {
-					match T::VaultRotator::get_vault_rotation_outcome() {
-						AsyncResult::Ready(Ok(_)) => {
-							let weight =
-								T::ValidatorWeightInfo::rotation_phase_vaults_rotating_success(
-									rotation_state.num_primary_candidates(),
-								);
-							Self::set_rotation_phase(RotationPhase::VaultsRotated(rotation_state));
-							weight
+				RotationPhase::KeygensInProgress(mut rotation_state) => {
+					match T::VaultRotator::status() {
+						// We need to differentiate keygen verif and other states.
+						// We can do this with an enum instead of Result<()>
+						// We have successfully done keygen verification
+						AsyncResult::Ready(VaultStatus::KeygenComplete) => {
+							let new_epoch = CurrentEpoch::<T>::get() + 1;
+							let new_authorities = rotation_state.authority_candidates::<Vec<_>>();
+							HistoricalAuthorities::<T>::insert(new_epoch, new_authorities.clone());
+							EpochAuthorityCount::<T>::insert(
+								new_epoch,
+								new_authorities.len() as AuthorityCount,
+							);
+							T::VaultRotator::activate();
+							Self::set_rotation_phase(RotationPhase::ActivatingKeys(rotation_state));
 						},
-						AsyncResult::Ready(Err(offenders)) => {
-							let weight =
-								T::ValidatorWeightInfo::rotation_phase_vaults_rotating_failure(
-									offenders.len() as u32,
-								);
+						AsyncResult::Ready(VaultStatus::Failed(offenders)) => {
+							// let weight =
+							// 	T::ValidatorWeightInfo::rotation_phase_vaults_rotating_failure(
+							// 		offenders.len() as u32,
+							// 	);
 							rotation_state.ban(offenders);
 							Self::start_vault_rotation(rotation_state);
-							weight
+							// weight
 						},
-						AsyncResult::Void => {
-							debug_assert!(false, "Void state should be unreachable.");
-							log::error!(target: "cf-validator", "no vault rotation pending");
+						AsyncResult::Pending => {
+							log::debug!(target: "cf-validator", "awaiting keygen completion");
+							// T::ValidatorWeightInfo::rotation_phase_vaults_rotating_pending(
+							// 	rotation_state.num_primary_candidates(),
+							// )
+						},
+						async_result => {
+							debug_assert!(
+								false,
+								"Ready(KeygenComplete), Ready(Failed), Pending possible. Got: {:?}",
+								async_result
+							);
+							log::error!(target: "cf-validator", "Ready(KeygenComplete), Ready(Failed), Pending possible. Got: {:?}", async_result);
 							Self::set_rotation_phase(RotationPhase::Idle);
 							// Use the weight of the pending phase.
-							T::ValidatorWeightInfo::rotation_phase_vaults_rotating_pending(
-								rotation_state.num_primary_candidates(),
-							)
+							// T::ValidatorWeightInfo::rotation_phase_vaults_rotating_pending(
+							// 	rotation_state.num_primary_candidates(),
+							// )
+						},
+					};
+					// TODO: Use actual weights
+					0 as Weight
+				},
+				RotationPhase::ActivatingKeys(rotation_state) => {
+					match T::VaultRotator::status() {
+						AsyncResult::Ready(VaultStatus::RotationComplete) => {
+							Self::set_rotation_phase(RotationPhase::NewKeysActivated(
+								rotation_state,
+							));
 						},
 						AsyncResult::Pending => {
 							log::debug!(target: "cf-validator", "awaiting vault rotations");
-							T::ValidatorWeightInfo::rotation_phase_vaults_rotating_pending(
-								rotation_state.num_primary_candidates(),
-							)
+						},
+						async_result => {
+							debug_assert!(
+								false,
+								"Pending, or Ready(RotationComplete) possible. Got: {:?}",
+								async_result
+							);
+							log::error!(target: "cf-validator", "Pending and Ready(RotationComplete) possible. Got {:?}", async_result);
+							Self::set_rotation_phase(RotationPhase::Idle);
 						},
 					}
+					0 as Weight
 				},
-				RotationPhase::VaultsRotated(rotation_state) =>
+				// The new session will kick off the new epoch
+				RotationPhase::NewKeysActivated(rotation_state) =>
 					T::ValidatorWeightInfo::rotation_phase_vaults_rotated(
 						rotation_state.num_primary_candidates(),
 					),
@@ -827,6 +863,7 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
+			use cf_primitives::GENESIS_EPOCH;
 			LastExpiredEpoch::<T>::set(Default::default());
 			BlocksPerEpoch::<T>::set(self.blocks_per_epoch);
 			CurrentRotationPhase::<T>::set(RotationPhase::Idle);
@@ -834,7 +871,6 @@ pub mod pallet {
 			BackupRewardNodePercentage::<T>::set(self.backup_reward_node_percentage);
 			AuthoritySetMinSize::<T>::set(self.authority_set_min_size);
 
-			const GENESIS_EPOCH: u32 = 1;
 			CurrentEpoch::<T>::set(GENESIS_EPOCH);
 
 			Pallet::<T>::try_update_auction_parameters(SetSizeParameters {
@@ -928,7 +964,7 @@ impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Pallet<T> {
 	fn should_end_session(_now: T::BlockNumber) -> bool {
 		matches!(
 			CurrentRotationPhase::<T>::get(),
-			RotationPhase::VaultsRotated(_) | RotationPhase::SessionRotating(_)
+			RotationPhase::NewKeysActivated(_) | RotationPhase::SessionRotating(_)
 		)
 	}
 }
@@ -1105,19 +1141,20 @@ impl<T: Config> Pallet<T> {
 	fn start_vault_rotation(rotation_state: RuntimeRotationState<T>) {
 		let candidates: BTreeSet<_> = rotation_state.authority_candidates();
 		let SetSizeParameters { min_size, .. } = AuctionParameters::<T>::get();
-		Self::set_rotation_phase(if (candidates.len() as u32) < min_size {
+		if (candidates.len() as u32) < min_size {
 			log::warn!(
 				target: "cf-validator",
 				"Only {:?} authority candidates available, not enough to satisfy the minimum set size of {:?}. - aborting rotation.",
 				candidates.len(),
 				min_size
 			);
-			RotationPhase::Idle
+			Self::set_rotation_phase(RotationPhase::Idle);
 		} else {
-			T::VaultRotator::start_vault_rotation(candidates);
+			// Set rotation phase before kicking off keygen (for correct event ordering)
+			Self::set_rotation_phase(RotationPhase::KeygensInProgress(rotation_state));
+			T::VaultRotator::keygen(candidates);
 			log::info!(target: "cf-validator", "Vault rotation initiated.");
-			RotationPhase::VaultsRotating(rotation_state)
-		})
+		}
 	}
 
 	/// Returns the number of backup nodes eligible for rewards
@@ -1190,6 +1227,18 @@ impl<T: Config> Pallet<T> {
 
 pub struct EpochHistory<T>(PhantomData<T>);
 
+pub struct BidInfoProvider<T>(PhantomData<T>);
+
+impl<T: Config> BidInfo for BidInfoProvider<T> {
+	type Balance = T::Amount;
+	fn get_min_backup_bid() -> Self::Balance {
+		Backups::<T>::get()
+			.into_values()
+			.min()
+			.unwrap_or_else(|| Self::Balance::from(0_u32))
+	}
+}
+
 impl<T: Config> HistoricalEpoch for EpochHistory<T> {
 	type ValidatorId = ValidatorIdOf<T>;
 	type EpochIndex = EpochIndex;
@@ -1236,9 +1285,10 @@ impl<T: Config> pallet_session::SessionManager<ValidatorIdOf<T>> for Pallet<T> {
 	///
 	/// The first rotation queues the new validators, the next rotation queues `None`, and
 	/// activates the queued validators.
+	// TODO: Write a note of when exactly this is called.
 	fn new_session(_new_index: SessionIndex) -> Option<Vec<ValidatorIdOf<T>>> {
 		match CurrentRotationPhase::<T>::get() {
-			RotationPhase::VaultsRotated(rotation_state) => {
+			RotationPhase::NewKeysActivated(rotation_state) => {
 				let next_authorities = rotation_state.authority_candidates();
 				Self::set_rotation_phase(RotationPhase::SessionRotating(rotation_state));
 				Some(next_authorities)

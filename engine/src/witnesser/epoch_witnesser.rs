@@ -5,7 +5,7 @@ use slog::o;
 
 use crate::{
 	logging::COMPONENT_KEY,
-	task_scope::{with_task_scope, ScopedJoinHandle},
+	task_scope::{task_scope, ScopedJoinHandle},
 };
 
 use super::{ChainBlockNumber, EpochStart};
@@ -17,11 +17,7 @@ pub fn should_end_witnessing<Chain: cf_chains::Chain>(
 ) -> bool {
 	if let Some(end_block) = *end_witnessing_signal.lock().unwrap() {
 		if current_block_number >= end_block {
-			slog::info!(
-				logger,
-				"Finished witnessing events at ETH block: {}",
-				current_block_number
-			);
+			slog::info!(logger, "Finished witnessing events at block: {}", current_block_number);
 			// we have reached the block height we wanted to witness up to
 			// so can stop the witness process
 			return true
@@ -32,7 +28,7 @@ pub fn should_end_witnessing<Chain: cf_chains::Chain>(
 
 pub async fn start<G, F, Fut, State, Chain>(
 	log_key: String,
-	epoch_start_receiver: async_channel::Receiver<EpochStart<Chain>>,
+	mut epoch_start_receiver: async_broadcast::Receiver<EpochStart<Chain>>,
 	mut should_epoch_participant_witness: G,
 	initial_state: State,
 	mut epoch_witnesser_generator: F,
@@ -52,7 +48,7 @@ where
 	State: Send + 'static,
 	G: FnMut(&EpochStart<Chain>) -> bool + Send + 'static,
 {
-	with_task_scope(|scope| {
+	task_scope(|scope| {
 		{
 			async {
 				let logger = logger.new(o!(COMPONENT_KEY => format!("{}-Witnesser", log_key)));
@@ -82,7 +78,7 @@ where
 
 							slog::info!(
 								logger,
-								"Start witnessing from ETH block: {}",
+								"Start witnessing from block: {}",
 								epoch_start.block_number
 							);
 

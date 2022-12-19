@@ -15,14 +15,18 @@ use crate::{
 		RuntimeApiPenalty, RuntimeApiPendingClaim,
 	},
 };
+#[cfg(feature = "ibiza")]
+use cf_chains::{dot, dot::api::PolkadotApi, Polkadot};
 use cf_chains::{
 	eth,
 	eth::{api::register_claim::RegisterClaim, Ethereum},
 };
 
+use pallet_cf_validator::BidInfoProvider;
+
 pub use frame_support::{
 	construct_runtime, debug,
-	instances::Instance1,
+	instances::{Instance1, Instance2},
 	parameter_types,
 	traits::{
 		ConstU128, ConstU16, ConstU32, ConstU64, ConstU8, KeyOwnerProofSystem, Randomness,
@@ -63,16 +67,20 @@ use sp_std::prelude::*;
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
-pub use cf_primitives::ForeignChainAddress;
-pub use cf_traits::{
-	BlockNumber, EpochInfo, EthEnvironmentProvider, FlipBalance, QualifyNode, SessionKeysRegistered,
+pub use cf_primitives::{
+	Asset, AssetAmount, BlockNumber, ExchangeRate, FlipBalance, ForeignChainAddress,
 };
+pub use cf_traits::{EpochInfo, EthEnvironmentProvider, QualifyNode, SessionKeysRegistered};
+
 pub use chainflip::chain_instances::*;
-use chainflip::{epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat};
-use constants::common::{
-	eth::{BLOCK_SAFETY_MARGIN, CONSERVATIVE_BLOCK_TIME_SECS},
-	*,
+use chainflip::{
+	epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat, EthEnvironment,
+	EthVaultTransitionHandler,
 };
+
+#[cfg(feature = "ibiza")]
+use chainflip::{all_vaults_rotator::AllVaultRotator, DotEnvironment, DotVaultTransitionHandler};
+use constants::common::*;
 use pallet_cf_flip::{Bonder, FlipSlasher};
 pub use pallet_cf_staking::WithdrawalAddresses;
 use pallet_cf_validator::PercentageRange;
@@ -150,6 +158,7 @@ parameter_types! {
 	};
 }
 
+#[cfg(not(feature = "ibiza"))]
 impl pallet_cf_validator::Config for Runtime {
 	type Event = Event;
 	type Offence = chainflip::Offence;
@@ -176,22 +185,52 @@ impl pallet_cf_validator::Config for Runtime {
 	type ReputationResetter = Reputation;
 }
 
+// Only difference here is that we use the AllVaultRotator
+#[cfg(feature = "ibiza")]
+impl pallet_cf_validator::Config for Runtime {
+	type Event = Event;
+	type Offence = chainflip::Offence;
+	type AccountRoleRegistry = AccountRoles;
+	type EpochTransitionHandler = ChainflipEpochTransitions;
+	type MinEpoch = MinEpoch;
+	type ValidatorWeightInfo = pallet_cf_validator::weights::PalletWeight<Runtime>;
+	type VaultRotator = AllVaultRotator<EthereumVault, PolkadotVault>;
+	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+	type MissedAuthorshipSlots = chainflip::MissedAuraSlots;
+	type BidderProvider = pallet_cf_staking::Pallet<Self>;
+	type AuctionQualification = (
+		Reputation,
+		pallet_cf_validator::PeerMapping<Self>,
+		SessionKeysRegistered<
+			<Self as frame_system::Config>::AccountId,
+			pallet_session::Pallet<Self>,
+		>,
+		AccountRoles,
+	);
+	type OffenceReporter = Reputation;
+	type EmergencyRotationPercentageRange = EmergencyRotationPercentageRange;
+	type Bonder = Bonder<Runtime>;
+	type ReputationResetter = Reputation;
+}
+
 impl pallet_cf_environment::Config for Runtime {
 	type Event = Event;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+	#[cfg(feature = "ibiza")]
+	type CreatePolkadotVault = PolkadotApi<DotEnvironment>;
+	#[cfg(feature = "ibiza")]
+	type PolkadotBroadcaster = PolkadotBroadcaster;
+	#[cfg(feature = "ibiza")]
+	type PolkadotVaultKeyWitnessedHandler = PolkadotVault;
 	type WeightInfo = pallet_cf_environment::weights::PalletWeight<Runtime>;
-	type EthEnvironmentProvider = Environment;
 }
-
-#[cfg(feature = "ibiza")]
-use pallet_cf_lp::liquidity_pool::LiquidityPool;
 
 #[cfg(feature = "ibiza")]
 impl pallet_cf_swapping::Config for Runtime {
 	type Event = Event;
-	type Ingress = Ingress;
-	type AmmPoolApi = LiquidityPool<Balance>;
-	type Egress = Egress;
+	type IngressHandler = chainflip::AnyChainIngressEgressHandler;
+	type EgressHandler = chainflip::AnyChainIngressEgressHandler;
+	type SwappingApi = LiquidityPools;
 	type AccountRoleRegistry = AccountRoles;
 	type WeightInfo = pallet_cf_swapping::weights::PalletWeight<Runtime>;
 }
@@ -206,13 +245,32 @@ impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 	type ThresholdSigner = EthereumThresholdSigner;
 	type Offence = chainflip::Offence;
 	type Chain = Ethereum;
-	type ApiCall = eth::api::EthereumApi;
+	type SetAggKeyWithAggKey = eth::api::EthereumApi<EthEnvironment>;
+	type VaultTransitionHandler = EthVaultTransitionHandler;
 	type Broadcaster = EthereumBroadcaster;
 	type OffenceReporter = Reputation;
 	type CeremonyIdProvider = pallet_cf_validator::CeremonyIdProvider<Self>;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
-	type ReplayProtectionProvider = chainflip::EthApiCallDataProvider;
-	type EthEnvironmentProvider = Environment;
+	type SystemStateManager = pallet_cf_environment::SystemStateProvider<Runtime>;
+}
+
+#[cfg(feature = "ibiza")]
+impl pallet_cf_vaults::Config<PolkadotInstance> for Runtime {
+	type Event = Event;
+	type Call = Call;
+	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+	type EnsureThresholdSigned =
+		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, PolkadotInstance>;
+	type AccountRoleRegistry = AccountRoles;
+	type ThresholdSigner = PolkadotThresholdSigner;
+	type Offence = chainflip::Offence;
+	type Chain = Polkadot;
+	type SetAggKeyWithAggKey = dot::api::PolkadotApi<DotEnvironment>;
+	type VaultTransitionHandler = DotVaultTransitionHandler;
+	type Broadcaster = PolkadotBroadcaster;
+	type OffenceReporter = Reputation;
+	type CeremonyIdProvider = pallet_cf_validator::CeremonyIdProvider<Self>;
+	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
 	type SystemStateManager = pallet_cf_environment::SystemStateProvider<Runtime>;
 }
 
@@ -220,37 +278,47 @@ impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 use chainflip::address_derivation::AddressDerivation;
 
 #[cfg(feature = "ibiza")]
-impl pallet_cf_ingress::Config for Runtime {
+impl pallet_cf_ingress_egress::Config<EthereumInstance> for Runtime {
 	type Event = Event;
+	type TargetChain = Ethereum;
 	type AddressDerivation = AddressDerivation;
-	type LpAccountHandler = LiquidityProvider;
+	type LpProvisioning = LiquidityProvider;
 	type SwapIntentHandler = Swapping;
-	type IngressFetchApi = Egress;
-	type WeightInfo = pallet_cf_ingress::weights::PalletWeight<Runtime>;
+	type AllBatch = eth::api::EthereumApi<EthEnvironment>;
+	type Broadcaster = EthereumBroadcaster;
+	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 }
+
+#[cfg(feature = "ibiza")]
+impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
+	type Event = Event;
+	type TargetChain = Polkadot;
+	type AddressDerivation = AddressDerivation;
+	type LpProvisioning = LiquidityProvider;
+	type SwapIntentHandler = Swapping;
+	type AllBatch = dot::api::PolkadotApi<chainflip::DotEnvironment>;
+	type Broadcaster = PolkadotBroadcaster;
+	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
+}
+#[cfg(feature = "ibiza")]
+impl pallet_cf_pools::Config for Runtime {}
 
 #[cfg(feature = "ibiza")]
 impl pallet_cf_lp::Config for Runtime {
 	type Event = Event;
 	type AccountRoleRegistry = AccountRoles;
-	type Ingress = Ingress;
-	type EgressApi = Egress;
+	type IngressHandler = chainflip::AnyChainIngressEgressHandler;
+	type EgressHandler = chainflip::AnyChainIngressEgressHandler;
+	type LiquidityPoolApi = LiquidityPools;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
-}
-
-#[cfg(feature = "ibiza")]
-impl pallet_cf_egress::Config for Runtime {
-	type Event = Event;
-	type EthereumReplayProtection = chainflip::EthApiCallDataProvider;
-	type EthereumEgressTransaction = eth::api::EthereumApi;
-	type EthereumBroadcaster = EthereumBroadcaster;
-	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
-	type EthereumAssetsAddressProvider = Environment;
-	type WeightInfo = ();
 }
 
 impl pallet_cf_account_roles::Config for Runtime {
 	type Event = Event;
+	type StakeInfo = Flip;
+	type BidInfo = BidInfoProvider<Runtime>;
 	type WeightInfo = pallet_cf_account_roles::weights::PalletWeight<Runtime>;
 }
 
@@ -441,13 +509,10 @@ impl pallet_cf_staking::Config for Runtime {
 	type AccountRoleRegistry = AccountRoles;
 	type Balance = FlipBalance;
 	type Flip = Flip;
-	type ReplayProtectionProvider = chainflip::EthApiCallDataProvider;
-	type EthEnvironmentProvider = Environment;
 	type ThresholdSigner = EthereumThresholdSigner;
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, Instance1>;
-	type RegisterClaim = eth::api::EthereumApi;
-	type ClaimDelayBufferSeconds = ConstU64<{ BLOCK_SAFETY_MARGIN * CONSERVATIVE_BLOCK_TIME_SECS }>;
+	type RegisterClaim = eth::api::EthereumApi<EthEnvironment>;
 	type TimeSource = Timestamp;
 	type WeightInfo = pallet_cf_staking::weights::PalletWeight<Runtime>;
 }
@@ -456,9 +521,8 @@ impl pallet_cf_tokenholder_governance::Config for Runtime {
 	type Event = Event;
 	type FeePayment = Flip;
 	type Chain = Ethereum;
-	type ReplayProtectionProvider = chainflip::EthApiCallDataProvider;
 	type StakingInfo = Flip;
-	type ApiCalls = eth::api::EthereumApi;
+	type ApiCalls = eth::api::EthereumApi<EthEnvironment>;
 	type Broadcaster = EthereumBroadcaster;
 	type WeightInfo = pallet_cf_tokenholder_governance::weights::PalletWeight<Runtime>;
 	type VotingPeriod = ConstU32<{ 14 * DAYS }>;
@@ -482,13 +546,12 @@ impl pallet_cf_emissions::Config for Runtime {
 	type Event = Event;
 	type HostChain = Ethereum;
 	type FlipBalance = FlipBalance;
-	type ApiCall = eth::api::EthereumApi;
+	type ApiCall = eth::api::EthereumApi<EthEnvironment>;
 	type Broadcaster = EthereumBroadcaster;
 	type Surplus = pallet_cf_flip::Surplus<Runtime>;
 	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
 	type RewardsDistribution = chainflip::BlockAuthorRewardDistribution;
 	type CompoundingInterval = ConstU32<COMPOUNDING_INTERVAL>;
-	type ReplayProtectionProvider = chainflip::EthApiCallDataProvider;
 	type EthEnvironmentProvider = Environment;
 	type WeightInfo = pallet_cf_emissions::weights::PalletWeight<Runtime>;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
@@ -537,22 +600,58 @@ impl pallet_cf_threshold_signature::Config<EthereumInstance> for Runtime {
 	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
 }
 
+#[cfg(feature = "ibiza")]
+impl pallet_cf_threshold_signature::Config<PolkadotInstance> for Runtime {
+	type Event = Event;
+	type Offence = chainflip::Offence;
+	type RuntimeOrigin = Origin;
+	type AccountRoleRegistry = AccountRoles;
+	type ThresholdCallable = Call;
+	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+	type ThresholdSignerNomination = chainflip::RandomSignerNomination;
+	type TargetChain = Polkadot;
+	type KeyProvider = PolkadotVault;
+	type OffenceReporter = Reputation;
+	type CeremonyIdProvider = pallet_cf_validator::CeremonyIdProvider<Self>;
+	type CeremonyRetryDelay = ConstU32<1>;
+	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
+}
+
 impl pallet_cf_broadcast::Config<EthereumInstance> for Runtime {
 	type Event = Event;
 	type Call = Call;
 	type Offence = chainflip::Offence;
 	type AccountRoleRegistry = AccountRoles;
 	type TargetChain = Ethereum;
-	type ApiCall = eth::api::EthereumApi;
+	type ApiCall = eth::api::EthereumApi<EthEnvironment>;
 	type ThresholdSigner = EthereumThresholdSigner;
 	type TransactionBuilder = chainflip::EthTransactionBuilder;
 	type BroadcastSignerNomination = chainflip::RandomSignerNomination;
 	type OffenceReporter = Reputation;
 	type EnsureThresholdSigned =
-		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, Instance1>;
+		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, EthereumInstance>;
 	type BroadcastTimeout = ConstU32<{ 10 * MINUTES }>;
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type KeyProvider = EthereumVault;
+}
+
+#[cfg(feature = "ibiza")]
+impl pallet_cf_broadcast::Config<PolkadotInstance> for Runtime {
+	type Event = Event;
+	type Call = Call;
+	type Offence = chainflip::Offence;
+	type AccountRoleRegistry = AccountRoles;
+	type TargetChain = Polkadot;
+	type ApiCall = dot::api::PolkadotApi<DotEnvironment>;
+	type ThresholdSigner = PolkadotThresholdSigner;
+	type TransactionBuilder = chainflip::DotTransactionBuilder;
+	type BroadcastSignerNomination = chainflip::RandomSignerNomination;
+	type OffenceReporter = Reputation;
+	type EnsureThresholdSigned =
+		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, PolkadotInstance>;
+	type BroadcastTimeout = ConstU32<{ 10 * MINUTES }>;
+	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
+	type KeyProvider = PolkadotVault;
 }
 
 impl pallet_cf_chain_tracking::Config<EthereumInstance> for Runtime {
@@ -560,6 +659,15 @@ impl pallet_cf_chain_tracking::Config<EthereumInstance> for Runtime {
 	type TargetChain = Ethereum;
 	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
 	type AgeLimit = ConstU64<{ constants::common::eth::BLOCK_SAFETY_MARGIN }>;
+}
+
+#[cfg(feature = "ibiza")]
+impl pallet_cf_chain_tracking::Config<PolkadotInstance> for Runtime {
+	type Event = Event;
+	type TargetChain = Polkadot;
+	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
+	// TODO: Set good limit
+	type AgeLimit = ConstU32<1>;
 }
 
 // The latest release runtime
@@ -623,15 +731,20 @@ construct_runtime!(
 		Grandpa: pallet_grandpa,
 		Governance: pallet_cf_governance,
 		TokenholderGovernance: pallet_cf_tokenholder_governance,
-		EthereumVault: pallet_cf_vaults::<Instance1>,
 		Reputation: pallet_cf_reputation,
-		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>,
-		EthereumBroadcaster: pallet_cf_broadcast::<Instance1>,
 		EthereumChainTracking: pallet_cf_chain_tracking::<Instance1>,
-		Ingress: pallet_cf_ingress,
-		Egress: pallet_cf_egress,
+		PolkadotChainTracking: pallet_cf_chain_tracking::<Instance2>,
+		EthereumVault: pallet_cf_vaults::<Instance1>,
+		PolkadotVault: pallet_cf_vaults::<Instance2>,
+		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>,
+		PolkadotThresholdSigner: pallet_cf_threshold_signature::<Instance2>,
+		EthereumBroadcaster: pallet_cf_broadcast::<Instance1>,
+		PolkadotBroadcaster: pallet_cf_broadcast::<Instance2>,
 		Swapping: pallet_cf_swapping,
 		LiquidityProvider: pallet_cf_lp,
+		EthereumIngressEgress: pallet_cf_ingress_egress::<Instance1>,
+		PolkadotIngressEgress: pallet_cf_ingress_egress::<Instance2>,
+		LiquidityPools: pallet_cf_pools,
 	}
 );
 
@@ -697,8 +810,7 @@ mod benches {
 		[pallet_cf_chain_tracking, EthereumChainTracking]
 		[pallet_cf_swapping, Swapping]
 		[pallet_cf_account_roles, AccountRoles]
-		[pallet_cf_ingress, Ingress]
-		[pallet_cf_egress, Egress]
+		[pallet_cf_ingress_egress, EthereumIngressEgress]
 	);
 }
 
@@ -733,7 +845,7 @@ impl_runtime_apis! {
 			Validator::is_auction_phase()
 		}
 		fn cf_eth_flip_token_address() -> [u8; 20] {
-			Environment::flip_token_address()
+			Environment::token_address(Asset::Flip).expect("FLIP token address should exist")
 		}
 		fn cf_eth_stake_manager_address() -> [u8; 20] {
 			Environment::stake_manager_address()
@@ -819,6 +931,7 @@ impl_runtime_apis! {
 				eth::api::EthereumApi::RegisterClaim(tx) => tx,
 				_ => unreachable!(),
 			};
+
 			Some(RuntimeApiPendingClaim {
 				amount: pending_claim.amount,
 				address: pending_claim.address.into(),
@@ -826,6 +939,22 @@ impl_runtime_apis! {
 				sig_data: pending_claim.sig_data,
 			})
 		}
+
+		fn cf_get_claim_certificate(account_id: AccountId) -> Option<Vec<u8>> {
+			let api_call = pallet_cf_staking::PendingClaims::<Runtime>::get(&account_id)?;
+			let pending_claim: RegisterClaim = match api_call {
+				eth::api::EthereumApi::RegisterClaim(tx) => tx,
+				_ => unreachable!(),
+			};
+
+			if pending_claim.sig_data.is_signed() {
+				use cf_chains::ApiCall;
+				Some(pending_claim.chain_encoded())
+			} else {
+				None
+			}
+		}
+
 		fn cf_penalties() -> Vec<(Offence, RuntimeApiPenalty)> {
 			pallet_cf_reputation::Penalties::<Runtime>::iter_keys()
 				.map(|offence| {
@@ -863,6 +992,16 @@ impl_runtime_apis! {
 			}
 		}
 	}
+
+	#[cfg(feature = "ibiza")]
+	impl pallet_cf_pools_runtime_api::PoolsApi<Block> for Runtime {
+		fn cf_swap_rate(input_asset: Asset, output_asset: Asset, input_amount: AssetAmount) -> ExchangeRate {
+			use cf_traits::LiquidityPoolApi;
+
+			LiquidityPools::swap_rate(input_asset, output_asset, input_amount)
+		}
+	}
+
 	// END custom runtime APIs
 
 	impl sp_api::Core<Block> for Runtime {

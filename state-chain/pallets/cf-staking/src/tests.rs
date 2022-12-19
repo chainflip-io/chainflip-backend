@@ -338,10 +338,11 @@ fn signature_is_inserted() {
 
 		// Check storage for the signature.
 		assert!(PendingClaims::<Test>::contains_key(ALICE));
-		let api_call = frame_support::storage::unhashed::get::<cf_chains::eth::api::EthereumApi>(
-			PendingClaims::<Test>::hashed_key_for(ALICE).as_slice(),
-		)
-		.expect("there should be a pending claim at this point");
+		let api_call =
+			frame_support::storage::unhashed::get::<cf_chains::eth::api::EthereumApi<()>>(
+				PendingClaims::<Test>::hashed_key_for(ALICE).as_slice(),
+			)
+			.expect("there should be a pending claim at this point");
 
 		let claim = match api_call {
 			cf_chains::eth::api::EthereumApi::RegisterClaim(inner) => inner,
@@ -407,19 +408,30 @@ fn test_retirement() {
 		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
 
 		// Expect the account to be retired by default
-		assert!(!ActiveBidder::<Test>::try_get(ALICE).expect("we know ALICE as a bidder"));
+		assert!(!ActiveBidder::<Test>::try_get(ALICE).expect("staking adds bidder status"));
 
 		// Can't retire if retired
 		assert_noop!(Staking::retire_account(Origin::signed(ALICE)), <Error<Test>>::AlreadyRetired);
 
 		// Activate the account
 		assert_ok!(Staking::activate_account(Origin::signed(ALICE)));
+		assert!(ActiveBidder::<Test>::get(ALICE));
 
 		// Already activated, can't do so again
 		assert_noop!(
 			Staking::activate_account(Origin::signed(ALICE)),
 			<Error<Test>>::AlreadyActive
 		);
+
+		// Cannot retire if participating in in the auction phase
+		MockEpochInfo::set_is_auction_phase(true);
+		assert_noop!(Staking::retire_account(Origin::signed(ALICE)), <Error<Test>>::AuctionPhase);
+		assert!(ActiveBidder::<Test>::get(ALICE));
+
+		// Can retire outside of auction phase
+		MockEpochInfo::set_is_auction_phase(false);
+		assert_ok!(Staking::retire_account(Origin::signed(ALICE)));
+		assert!(!ActiveBidder::<Test>::get(ALICE));
 
 		assert_event_sequence!(
 			Test,
@@ -430,11 +442,9 @@ fn test_retirement() {
 				stake_added: STAKE,
 				total_stake: STAKE
 			}),
-			Event::Staking(crate::Event::AccountActivated(ALICE))
+			Event::Staking(crate::Event::AccountActivated(ALICE)),
+			Event::Staking(crate::Event::AccountRetired(ALICE))
 		);
-
-		assert_ok!(Staking::retire_account(Origin::signed(ALICE)));
-		assert!(!ActiveBidder::<Test>::get(ALICE));
 	});
 }
 
@@ -546,19 +556,30 @@ fn claim_expiry() {
 }
 
 #[test]
-fn no_claims_allowed_out_of_claim_period() {
+fn can_only_claim_during_auction_if_retired() {
 	new_test_ext().execute_with(|| {
-		let stake = 45u128;
+		const STAKE: u128 = 45;
 		MockEpochInfo::set_is_auction_phase(true);
 
-		// Staking during an auction is OK.
-		assert_ok!(Staking::staked(Origin::root(), ALICE, stake, ETH_ZERO_ADDRESS, TX_HASH));
+		// Stake and activate Alice
+		assert_ok!(Staking::staked(Origin::root(), ALICE, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
+		assert_ok!(Staking::activate_account(Origin::signed(ALICE)));
+		assert!(ActiveBidder::<Test>::get(ALICE));
 
-		// Claiming is not allowed.
+		// Claiming is not allowed because Alice is bidding in the auction phase.
 		assert_noop!(
-			Staking::claim(Origin::signed(ALICE), stake.into(), ETH_DUMMY_ADDR),
+			Staking::claim(Origin::signed(ALICE), STAKE.into(), ETH_DUMMY_ADDR),
 			<Error<Test>>::AuctionPhase
 		);
+
+		// Retire Alice (must be done outside of the auction phase)
+		MockEpochInfo::set_is_auction_phase(false);
+		assert_ok!(Staking::retire_account(Origin::signed(ALICE)));
+		assert!(!ActiveBidder::<Test>::get(ALICE));
+
+		// Alice should be able to claim while in the auction phase because she is not bidding
+		MockEpochInfo::set_is_auction_phase(true);
+		assert_ok!(Staking::claim(Origin::signed(ALICE), STAKE.into(), ETH_DUMMY_ADDR),);
 	});
 }
 

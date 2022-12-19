@@ -3,10 +3,11 @@
 use std::{collections::BTreeSet, pin::Pin, sync::Arc};
 
 use cf_chains::eth::Ethereum;
-use cf_primitives::{Asset, ForeignChainAddress};
+use cf_primitives::chains::assets::eth;
 use futures::Stream;
-use pallet_cf_ingress::IngressWitness;
+use pallet_cf_ingress_egress::IngressWitness;
 use sp_core::H160;
+use state_chain_runtime::EthereumInstance;
 use tokio_stream::StreamExt;
 use web3::types::Transaction;
 
@@ -63,7 +64,7 @@ where
 // witnessing a window of blocks
 pub async fn start<StateChainClient>(
 	eth_dual_rpc: EthDualRpcClient,
-	epoch_starts_receiver: async_channel::Receiver<EpochStart<Ethereum>>,
+	epoch_starts_receiver: async_broadcast::Receiver<EpochStart<Ethereum>>,
 	eth_monitor_ingress_receiver: tokio::sync::mpsc::UnboundedReceiver<H160>,
 	state_chain_client: Arc<StateChainClient>,
 	monitored_addresses: BTreeSet<H160>,
@@ -73,7 +74,7 @@ where
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
 {
 	epoch_witnesser::start(
-		"ETH-Ingress-Witnesser".to_string(),
+		"ETH-Ingress".to_string(),
 		epoch_starts_receiver,
 		|_epoch_start| true,
 		(monitored_addresses, eth_monitor_ingress_receiver),
@@ -143,30 +144,30 @@ where
 									}
 								}).map(|(tx, to_addr)| {
 									IngressWitness {
-										ingress_address: ForeignChainAddress::Eth(
-											to_addr.into(),
-										),
-										asset: Asset::Eth,
+										ingress_address: to_addr,
+										asset: eth::Asset::Eth,
 										amount: tx.value.as_u128(),
-										tx_hash: tx.hash
+										tx_id: tx.hash
 									}
 								})
-								.collect::<Vec<IngressWitness>>();
+								.collect::<Vec<IngressWitness<Ethereum>>>();
 
-								let _result = state_chain_client
-									.submit_signed_extrinsic(
-										pallet_cf_witnesser::Call::witness_at_epoch {
-											call: Box::new(
-												pallet_cf_ingress::Call::do_ingress {
-													ingress_witnesses
-												}
-												.into(),
-											),
-											epoch_index: epoch_start.epoch_index,
-										},
-										&logger,
-									)
-									.await;
+								if !ingress_witnesses.is_empty() {
+									let _result = state_chain_client
+										.submit_signed_extrinsic(
+											pallet_cf_witnesser::Call::witness_at_epoch {
+												call: Box::new(
+													pallet_cf_ingress_egress::Call::<_, EthereumInstance>::do_ingress {
+														ingress_witnesses
+													}
+													.into(),
+												),
+												epoch_index: epoch_start.epoch_index,
+											},
+											&logger,
+										)
+										.await;
+								}
 						},
 						else => break,
 					};

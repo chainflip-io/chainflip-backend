@@ -9,9 +9,15 @@ use sp_runtime::AccountId32;
 use state_chain_runtime::{
 	chainflip::Offence,
 	constants::common::TX_FEE_MULTIPLIER,
-	runtime_apis::{ChainflipAccountStateWithPassive, CustomRuntimeApi},
+	runtime_apis::{ChainflipAccountStateWithPassive, CustomRuntimeApi, RuntimeApiPendingClaim},
 };
 use std::{marker::PhantomData, sync::Arc};
+
+#[allow(unused)]
+use state_chain_runtime::{Asset, AssetAmount, ExchangeRate};
+
+#[cfg(feature = "ibiza")]
+use jsonrpsee::types::error::ErrorCode;
 
 #[derive(Serialize, Deserialize)]
 pub struct RpcAccountInfo {
@@ -121,6 +127,14 @@ pub trait CustomApi {
 		account_id: AccountId32,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Option<RpcPendingClaim>>;
+
+	#[method(name = "get_claim_certificate")]
+	fn cf_get_claim_certificate(
+		&self,
+		account_id: AccountId32,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Option<Vec<u8>>>;
+
 	#[method(name = "penalties")]
 	fn cf_penalties(
 		&self,
@@ -323,7 +337,7 @@ where
 		account_id: AccountId32,
 		at: Option<<B as BlockT>::Hash>,
 	) -> RpcResult<Option<RpcPendingClaim>> {
-		let pending_claim = match self
+		let pending_claim: RuntimeApiPendingClaim = match self
 			.client
 			.runtime_api()
 			.cf_pending_claim(&self.query_block_id(at), account_id)
@@ -340,6 +354,25 @@ where
 			sig_data: pending_claim.sig_data,
 		}))
 	}
+
+	fn cf_get_claim_certificate(
+		&self,
+		account_id: AccountId32,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Option<Vec<u8>>> {
+		let certificate = match self
+			.client
+			.runtime_api()
+			.cf_get_claim_certificate(&self.query_block_id(at), account_id)
+			.map_err(to_rpc_error)?
+		{
+			Some(cert) => cert,
+			None => return Ok(None),
+		};
+
+		Ok(Some(certificate))
+	}
+
 	fn cf_penalties(
 		&self,
 		at: Option<<B as BlockT>::Hash>,
@@ -393,5 +426,66 @@ where
 			min_stake: auction_state.min_stake.into(),
 			auction_size_range: auction_state.auction_size_range,
 		})
+	}
+}
+
+#[cfg(feature = "ibiza")]
+use pallet_cf_pools_runtime_api::PoolsApi;
+
+#[cfg(feature = "ibiza")]
+pub struct PoolsRpc<C, B> {
+	pub client: Arc<C>,
+	pub _phantom: PhantomData<B>,
+}
+
+#[cfg(feature = "ibiza")]
+impl<C, B> PoolsRpc<C, B>
+where
+	B: sp_runtime::traits::Block<Hash = state_chain_runtime::Hash>,
+	C: sp_api::ProvideRuntimeApi<B> + Send + Sync + 'static + HeaderBackend<B>,
+	C::Api: pallet_cf_pools_runtime_api::PoolsApi<B>,
+{
+	fn query_block_id(&self, from_rpc: Option<<B as BlockT>::Hash>) -> sp_api::BlockId<B> {
+		sp_api::BlockId::hash(from_rpc.unwrap_or_else(|| self.client.info().best_hash))
+	}
+}
+
+#[cfg(feature = "ibiza")]
+#[rpc(server, client, namespace = "cf")]
+pub trait PoolsApi {
+	#[method(name = "swap_rate")]
+	fn cf_swap_rate(
+		&self,
+		input_asset: Asset,
+		output_asset: Asset,
+		input_amount: NumberOrHex,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<ExchangeRate>;
+}
+
+#[cfg(feature = "ibiza")]
+impl<C, B> PoolsApiServer for PoolsRpc<C, B>
+where
+	B: sp_runtime::traits::Block<Hash = state_chain_runtime::Hash>,
+	C: sp_api::ProvideRuntimeApi<B> + Send + Sync + 'static + HeaderBackend<B>,
+	C::Api: pallet_cf_pools_runtime_api::PoolsApi<B>,
+{
+	fn cf_swap_rate(
+		&self,
+		input_asset: Asset,
+		output_asset: Asset,
+		input_amount: NumberOrHex,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<ExchangeRate> {
+		self.client
+			.runtime_api()
+			.cf_swap_rate(
+				&self.query_block_id(at),
+				input_asset,
+				output_asset,
+				u128::try_from(input_amount)
+					.map_err(|_| CallError::Custom(ErrorCode::InvalidParams.into()))?,
+			)
+			.map_err(to_rpc_error)
 	}
 }

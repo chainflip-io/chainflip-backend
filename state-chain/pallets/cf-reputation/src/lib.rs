@@ -359,7 +359,7 @@ pub mod pallet {
 		pub accrual_ratio: (ReputationPoints, T::BlockNumber),
 		#[allow(clippy::type_complexity)]
 		pub penalties: Vec<(T::Offence, (ReputationPoints, T::BlockNumber))>,
-		pub genesis_nodes: Vec<T::ValidatorId>,
+		pub genesis_validators: Vec<T::ValidatorId>,
 	}
 
 	#[cfg(feature = "std")]
@@ -368,7 +368,7 @@ pub mod pallet {
 			Self {
 				accrual_ratio: (Zero::zero(), Zero::zero()),
 				penalties: Default::default(),
-				genesis_nodes: Default::default(),
+				genesis_validators: Default::default(),
 			}
 		}
 	}
@@ -384,7 +384,7 @@ pub mod pallet {
 				);
 			}
 			let current_block_number = frame_system::Pallet::<T>::current_block_number();
-			for node in &self.genesis_nodes {
+			for node in &self.genesis_validators {
 				LastHeartbeat::<T>::insert(node, current_block_number);
 			}
 		}
@@ -455,7 +455,6 @@ impl<T: Config> Pallet<T> {
 			});
 
 			if reputation_points < 0 {
-				// At this point we slash the node by the amount of blocks offline
 				T::Slasher::slash(&validator_id, T::HeartbeatBlockInterval::get());
 			}
 		}

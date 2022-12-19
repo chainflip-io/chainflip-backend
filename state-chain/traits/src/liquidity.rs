@@ -1,18 +1,15 @@
 use sp_runtime::DispatchResult;
 
 use cf_primitives::{
-	liquidity::TradingPosition, AccountId, Asset, ExchangeRate, ForeignChainAddress,
-	ForeignChainAsset, PoolId, PositionId,
+	liquidity::TradingPosition, Asset, AssetAmount, ExchangeRate, ForeignChainAddress,
 };
-
-use crate::FlipBalance;
-use cf_primitives::AssetAmount;
 
 pub trait SwapIntentHandler {
 	type AccountId;
-	fn schedule_swap(
+	fn on_swap_ingress(
+		ingress_address: ForeignChainAddress,
 		from: Asset,
-		to: ForeignChainAsset,
+		to: Asset,
 		amount: AssetAmount,
 		egress_address: ForeignChainAddress,
 		relayer_id: Self::AccountId,
@@ -20,157 +17,92 @@ pub trait SwapIntentHandler {
 	);
 }
 
-pub trait LpAccountHandler {
-	type AccountId;
-	type Amount;
-
-	// Register a new LP account.
-	fn register_lp_account(_account_id: &Self::AccountId) -> DispatchResult;
-
-	// Try to debit given asset from the account. WIll fail if the account has insufficient balance.
-	fn try_debit(who: &Self::AccountId, asset: Asset, amount: Self::Amount) -> DispatchResult;
-
-	// Credit given asset to the account.
-	fn credit(who: &Self::AccountId, asset: Asset, amount: Self::Amount) -> DispatchResult;
-}
-
-impl LpAccountHandler for () {
-	type AccountId = AccountId;
-	type Amount = FlipBalance;
-
-	fn register_lp_account(_account_id: &Self::AccountId) -> DispatchResult {
-		Ok(())
-	}
-
-	fn try_debit(_who: &Self::AccountId, _asset: Asset, _amount: Self::Amount) -> DispatchResult {
-		Ok(())
-	}
-
-	fn credit(_who: &Self::AccountId, _asset: Asset, _amount: Self::Amount) -> DispatchResult {
-		Ok(())
-	}
-}
-
 pub trait LpProvisioningApi {
 	type AccountId;
-	type Amount;
 
-	/// Called from the vault when ingress is witnessed.
+	/// Called when ingress is witnessed.
 	fn provision_account(
 		who: &Self::AccountId,
 		asset: Asset,
-		amount: Self::Amount,
+		amount: AssetAmount,
 	) -> DispatchResult;
 }
 
-impl LpProvisioningApi for () {
-	type AccountId = AccountId;
-	type Amount = FlipBalance;
+pub trait SwappingApi {
+	fn swap(
+		from: Asset,
+		to: Asset,
+		input_amount: AssetAmount,
+		fee: u16,
+	) -> (AssetAmount, (Asset, AssetAmount));
+}
+
+/// API to interface with Exchange Pools.
+/// All pools are Asset <-> USDC
+pub trait LiquidityPoolApi {
+	const STABLE_ASSET: Asset;
+
+	/// Deploy a liquidity position into a pool.
+	fn deploy(asset: &Asset, position: TradingPosition<AssetAmount>);
+
+	/// Retract a liquidity position from a pool.
+	fn retract(asset: &Asset, position: TradingPosition<AssetAmount>)
+		-> (AssetAmount, AssetAmount);
+
+	/// Gets the current liquidity amount from a pool
+	fn get_liquidity(asset: &Asset) -> (AssetAmount, AssetAmount);
+
+	/// Gets the current swap rate for an pool
+	fn swap_rate(
+		input_asset: Asset,
+		output_asset: Asset,
+		input_amount: AssetAmount,
+	) -> ExchangeRate;
+
+	/// Calculates the liquidity that corresponds to a given trading position.
+	fn get_liquidity_amount_by_position(
+		asset: &Asset,
+		position: &TradingPosition<AssetAmount>,
+	) -> Option<(AssetAmount, AssetAmount)>;
+}
+
+// TODO Remove these in favour of a real mocks.
+impl<T: frame_system::Config> SwapIntentHandler for T {
+	type AccountId = T::AccountId;
+
+	fn on_swap_ingress(
+		_ingress_address: ForeignChainAddress,
+		_from: Asset,
+		_to: Asset,
+		_amount: AssetAmount,
+		_egress_address: ForeignChainAddress,
+		_relayer_id: Self::AccountId,
+		_relayer_commission_bps: u16,
+	) {
+	}
+}
+
+impl<T: frame_system::Config> LpProvisioningApi for T {
+	type AccountId = T::AccountId;
 
 	fn provision_account(
 		_who: &Self::AccountId,
 		_asset: Asset,
-		_amount: Self::Amount,
+		_amount: AssetAmount,
 	) -> DispatchResult {
+		// TODO
 		Ok(())
 	}
 }
 
-pub trait LpWithdrawalApi {
-	type AccountId;
-	type Amount;
-	type EgressAddress;
-
-	fn withdraw_liquidity(
-		who: &Self::AccountId,
-		amount: Self::Amount,
-		foreign_asset: &ForeignChainAsset,
-		egress_address: &Self::EgressAddress,
-	) -> DispatchResult;
-}
-
-impl LpWithdrawalApi for () {
-	type AccountId = AccountId;
-	type Amount = FlipBalance;
-	type EgressAddress = ForeignChainAddress;
-
-	fn withdraw_liquidity(
-		_who: &Self::AccountId,
-		_amount: Self::Amount,
-		_foreign_asset: &ForeignChainAsset,
-		_egress_address: &Self::EgressAddress,
-	) -> DispatchResult {
-		Ok(())
-	}
-}
-
-/// Trait used for to manage user's LP positions.
-pub trait LpPositionManagement {
-	type AccountId;
-	type Balance;
-	fn open_position(
-		who: &Self::AccountId,
-		pool_id: PoolId,
-		position: TradingPosition<Self::Balance>,
-	) -> DispatchResult;
-	fn update_position(
-		who: &Self::AccountId,
-		pool_id: PoolId,
-		id: PositionId,
-		new_position: TradingPosition<Self::Balance>,
-	) -> DispatchResult;
-	fn close_position(who: &Self::AccountId, id: PositionId) -> DispatchResult;
-}
-
-impl LpPositionManagement for () {
-	type AccountId = AccountId;
-	type Balance = FlipBalance;
-	fn open_position(
-		_who: &Self::AccountId,
-		_pool_id: PoolId,
-		_position: TradingPosition<Self::Balance>,
-	) -> DispatchResult {
-		Ok(())
-	}
-	fn update_position(
-		_who: &Self::AccountId,
-		_pool_id: PoolId,
-		_id: PositionId,
-		_new_position: TradingPosition<Self::Balance>,
-	) -> DispatchResult {
-		Ok(())
-	}
-	fn close_position(_who: &Self::AccountId, _id: PositionId) -> DispatchResult {
-		Ok(())
-	}
-}
-
-pub trait PalletLpApi: LpProvisioningApi + LpWithdrawalApi + LpPositionManagement {}
-impl PalletLpApi for () {}
-
-/// Base Amm pool api common to both LPs and swaps.
-pub trait AmmPoolApi {
-	type Balance;
-	fn asset_0(&self) -> Asset;
-	fn asset_1(&self) -> Asset;
-	fn liquidity_0(&self) -> Self::Balance;
-	fn liquidity_1(&self) -> Self::Balance;
-
-	fn pool_id(&self) -> PoolId {
-		(self.asset_0(), self.asset_1())
-	}
-
-	fn get_exchange_rate(&self) -> ExchangeRate;
-
-	fn get_liquidity_requirement(
-		&self,
-		position: &TradingPosition<Self::Balance>,
-	) -> Option<(Self::Balance, Self::Balance)>;
-
+impl SwappingApi for () {
 	fn swap(
-		from: Asset,
-		to: ForeignChainAsset,
-		swap_input: Self::Balance,
-		fee: u16,
-	) -> (Self::Balance, (Asset, Self::Balance));
+		_from: Asset,
+		_to: Asset,
+		_input_amount: AssetAmount,
+		_fee: u16,
+	) -> (AssetAmount, (Asset, AssetAmount)) {
+		// TODO
+		(0, (Asset::Usdc, 0))
+	}
 }

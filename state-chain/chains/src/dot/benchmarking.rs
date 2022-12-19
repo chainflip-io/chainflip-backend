@@ -12,7 +12,10 @@ use crate::{
 use sp_core::{crypto::AccountId32, sr25519};
 use sp_runtime::{generic::Era, traits::IdentifyAccount, MultiSignature, MultiSigner};
 
-use super::{EncodedPolkadotPayload, PolkadotAccountId};
+use super::{
+	api::{create_anonymous_vault::CreateAnonymousVault, PolkadotApi},
+	EncodedPolkadotPayload, PolkadotAccountId, PolkadotReplayProtection, TxId,
+};
 
 const SIGNATURE: [u8; 64] = [1u8; 64];
 const ACCOUNT_ID_1: [u8; 32] = [2u8; 32];
@@ -84,8 +87,27 @@ impl BenchmarkValue for PolkadotAccountId {
 	}
 }
 
+impl<E> BenchmarkValue for PolkadotApi<E> {
+	fn benchmark_value() -> Self {
+		PolkadotApi::CreateAnonymousVault(CreateAnonymousVault::new_unsigned(
+			PolkadotReplayProtection {
+				polkadot_config: Default::default(),
+				nonce: Default::default(),
+				tip: Default::default(),
+			},
+			PolkadotPublicKey::benchmark_value(),
+		))
+	}
+}
+
 impl BenchmarkValue for EncodedPolkadotPayload {
 	fn benchmark_value() -> Self {
 		Self(hex_literal::hex!("02f87a827a6980843b9aca00843b9aca0082520894cfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcf808e646f5f736f6d657468696e672829c080a0b796e0276d89b0e02634d2f0cd5820e4af4bc0fcb76ecfcc4a3842e90d4b1651a07ab40be70e801fcd1e33460bfe34f03b8f390911658d49e58b0356a77b9432c0").to_vec())
+	}
+}
+
+impl BenchmarkValue for TxId {
+	fn benchmark_value() -> Self {
+		Self { block_number: 32, extrinsic_index: 7 }
 	}
 }

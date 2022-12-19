@@ -3,12 +3,12 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use cf_chains::{Chain, ChainAbi, ChainCrypto, SetAggKeyWithAggKey};
-use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex};
+use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex, GENESIS_EPOCH};
 use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, Broadcaster, CeremonyIdProvider, Chainflip,
-	CurrentEpochIndex, EpochTransitionHandler, EthEnvironmentProvider, KeyProvider,
-	ReplayProtectionProvider, RetryPolicy, SystemStateManager, ThresholdSigner, VaultRotator,
+	CurrentEpochIndex, EpochKey, EpochTransitionHandler, KeyProvider, KeyState, SystemStateManager,
+	ThresholdSigner, VaultKeyWitnessedHandler, VaultRotator, VaultStatus, VaultTransitionHandler,
 };
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
@@ -51,7 +51,7 @@ pub type KeygenOutcomeFor<T, I = ()> =
 	KeygenOutcome<AggKeyFor<T, I>, <T as Chainflip>::ValidatorId>;
 pub type AggKeyFor<T, I = ()> = <<T as Config<I>>::Chain as ChainCrypto>::AggKey;
 pub type ChainBlockNumberFor<T, I = ()> = <<T as Config<I>>::Chain as Chain>::ChainBlockNumber;
-pub type TransactionHashFor<T, I = ()> = <<T as Config<I>>::Chain as ChainCrypto>::TransactionHash;
+pub type TransactionIdFor<T, I = ()> = <<T as Config<I>>::Chain as ChainCrypto>::TransactionId;
 pub type ThresholdSignatureFor<T, I = ()> =
 	<<T as Config<I>>::Chain as ChainCrypto>::ThresholdSignature;
 
@@ -180,10 +180,12 @@ pub enum VaultRotationStatus<T: Config<I>, I: 'static = ()> {
 	/// We are waiting for the nodes who generated the new key to complete a signing ceremony to
 	/// verify the new key.
 	AwaitingKeygenVerification { new_public_key: AggKeyFor<T, I> },
+	/// Keygen verification is complete for key
+	KeygenVerificationComplete { new_public_key: AggKeyFor<T, I> },
 	/// We are waiting for the key to be updated on the contract, and witnessed by the network.
 	AwaitingRotation { new_public_key: AggKeyFor<T, I> },
 	/// The key has been successfully updated on the contract.
-	Complete { tx_hash: <T::Chain as ChainCrypto>::TransactionHash },
+	Complete { tx_id: TransactionIdFor<T, I> },
 	/// The rotation has failed at one of the above stages.
 	Failed { offenders: BTreeSet<T::ValidatorId> },
 }
@@ -202,10 +204,22 @@ pub enum PalletOffence {
 	FailedKeygen,
 }
 
+#[derive(Encode, Decode, TypeInfo)]
+pub struct VaultEpochAndState {
+	pub epoch_index: EpochIndex,
+	pub key_state: KeyState,
+}
+
+impl Default for VaultEpochAndState {
+	fn default() -> Self {
+		Self { epoch_index: GENESIS_EPOCH, key_state: KeyState::Unavailable }
+	}
+}
+
 #[frame_support::pallet]
 pub mod pallet {
 
-	use cf_traits::{AccountRoleRegistry, ApiCallDataProvider, ThresholdSigner};
+	use cf_traits::{AccountRoleRegistry, ThresholdSigner, VaultTransitionHandler};
 
 	use super::*;
 
@@ -233,10 +247,12 @@ pub mod pallet {
 		type Offence: From<PalletOffence>;
 
 		/// The chain that is managed by this vault must implement the api types.
-		type Chain: ChainAbi;
+		type Chain: ChainAbi<KeyId = Self::KeyId>;
 
 		/// The supported api calls for the chain.
-		type ApiCall: SetAggKeyWithAggKey<Self::Chain>;
+		type SetAggKeyWithAggKey: SetAggKeyWithAggKey<Self::Chain>;
+
+		type VaultTransitionHandler: VaultTransitionHandler<Self::Chain>;
 
 		/// The pallet dispatches calls, so it depends on the runtime's aggregated Call type.
 		type Call: From<Call<Self, I>> + IsType<<Self as frame_system::Config>::Call>;
@@ -245,10 +261,11 @@ pub mod pallet {
 			Self::Chain,
 			Callback = <Self as Config<I>>::Call,
 			ValidatorId = Self::ValidatorId,
+			KeyId = <Self as Chainflip>::KeyId,
 		>;
 
 		/// A broadcaster for the target chain.
-		type Broadcaster: Broadcaster<Self::Chain, ApiCall = Self::ApiCall>;
+		type Broadcaster: Broadcaster<Self::Chain, ApiCall = Self::SetAggKeyWithAggKey>;
 
 		/// For reporting misbehaviour
 		type OffenceReporter: OffenceReporter<
@@ -258,13 +275,6 @@ pub mod pallet {
 
 		/// Ceremony Id source for keygen ceremonies.
 		type CeremonyIdProvider: CeremonyIdProvider<CeremonyId = CeremonyId>;
-
-		/// Something that can provide the key manager address and chain id.
-		type EthEnvironmentProvider: EthEnvironmentProvider;
-
-		// Something that can give us the next nonce.
-		type ReplayProtectionProvider: ReplayProtectionProvider<Self::Chain>
-			+ ApiCallDataProvider<Self::Chain>;
 
 		// A trait which allows us to put the chain into maintenance mode.
 		type SystemStateManager: SystemStateManager;
@@ -279,7 +289,8 @@ pub mod pallet {
 		fn on_initialize(current_block: BlockNumberFor<T>) -> frame_support::weights::Weight {
 			let mut weight = T::DbWeight::get().reads(1);
 
-			if Self::get_vault_rotation_outcome() != AsyncResult::Pending {
+			// We don't need self, we can get our own data.
+			if Self::status() != AsyncResult::Pending {
 				return weight
 			}
 
@@ -312,12 +323,14 @@ pub mod pallet {
 							"Can't have success unless all candidates responded"
 						);
 						weight += T::WeightInfo::on_initialize_success();
+						Self::deposit_event(Event::KeygenSuccess(keygen_ceremony_id));
 						Self::trigger_keygen_verification(
 							keygen_ceremony_id,
 							new_public_key,
 							keygen_participants,
 						);
 					},
+					// TODO: Return to this case. For now, handle as any other keygen failure
 					Err(KeygenError::Incompatible) => {
 						PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Failed {
 							offenders: Default::default(),
@@ -350,6 +363,12 @@ pub mod pallet {
 	#[pallet::getter(fn vaults)]
 	pub type Vaults<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Blake2_128Concat, EpochIndex, Vault<T::Chain>>;
+
+	/// The epoch whose authorities control the current vault key.
+	#[pallet::storage]
+	#[pallet::getter(fn current_keyholders_epoch)]
+	pub type CurrentVaultEpochAndState<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, VaultEpochAndState, ValueQuery>;
 
 	/// Vault rotation statuses for the current epoch rotation.
 	#[pallet::storage]
@@ -392,14 +411,8 @@ pub mod pallet {
 		KeygenRequest(CeremonyId, BTreeSet<T::ValidatorId>),
 		/// The vault for the request has rotated
 		VaultRotationCompleted,
-		/// The Keygen ceremony has been aborted \[ceremony_id\]
-		KeygenAborted(CeremonyId),
-		/// The vault has been rotated
-		VaultsRotated,
 		/// The vault's key has been rotated externally \[new_public_key\]
 		VaultRotatedExternally(<T::Chain as ChainCrypto>::AggKey),
-		/// The new public key witnessed externally was not the expected one \[key\]
-		UnexpectedPubkeyWitnessed(<T::Chain as ChainCrypto>::AggKey),
 		/// A keygen participant has reported that keygen was successful \[validator_id\]
 		KeygenSuccessReported(T::ValidatorId),
 		/// A keygen participant has reported that an incompatible key was generated
@@ -424,24 +437,19 @@ pub mod pallet {
 		KeygenResponseTimeout(CeremonyId),
 		/// Keygen response timeout was updated \[new_timeout\]
 		KeygenResponseTimeoutUpdated { new_timeout: BlockNumberFor<T> },
+		/// The new key has been generated, we must activate the new key on the external
+		/// chain via governance.
+		AwaitingGovernanceActivation { new_public_key: <T::Chain as ChainCrypto>::AggKey },
 	}
 
 	#[pallet::error]
 	pub enum Error<T, I = ()> {
 		/// An invalid ceremony id
 		InvalidCeremonyId,
-		/// We have an empty authority set
-		EmptyAuthoritySet,
-		/// The rotation has not been confirmed
-		NotConfirmed,
 		/// There is currently no vault rotation in progress for this chain.
 		NoActiveRotation,
 		/// The requested call is invalid based on the current rotation state.
 		InvalidRotationStatus,
-		/// The generated key is not a valid public key.
-		InvalidPublicKey,
-		/// A rotation for the requested ChainId is already underway.
-		DuplicateRotationRequest,
 		/// An authority sent a response for a ceremony in which they weren't involved, or to which
 		/// they have already submitted a response.
 		InvalidRespondent,
@@ -466,7 +474,6 @@ pub mod pallet {
 		/// - [NoActiveRotation](Error::NoActiveRotation)
 		/// - [InvalidRotationStatus](Error::InvalidRotationStatus)
 		/// - [InvalidCeremonyId](Error::InvalidCeremonyId)
-		/// - [InvalidPublicKey](Error::InvalidPublicKey)
 		///
 		/// ## Dependencies
 		///
@@ -552,21 +559,17 @@ pub mod pallet {
 				Error::<T, I>::ThresholdSignatureUnavailable
 			})? {
 				Ok(_) => {
-					T::Broadcaster::threshold_sign_and_broadcast(
-						<T::ApiCall as SetAggKeyWithAggKey<_>>::new_unsigned(
-							<T::ReplayProtectionProvider>::replay_protection(),
-							<T::ReplayProtectionProvider>::chain_extra_data(),
-							new_public_key,
-						),
-					);
-
+					// Now the validator pallet can use this to check for readiness.
 					PendingVaultRotation::<T, I>::put(
-						VaultRotationStatus::<T, I>::AwaitingRotation { new_public_key },
+						VaultRotationStatus::<T, I>::KeygenVerificationComplete { new_public_key },
 					);
 
 					Self::deposit_event(Event::KeygenVerificationSuccess {
 						agg_key: new_public_key,
-					})
+					});
+
+					// We don't do any more here. We wait for the validator pallet to
+					// let us know when we can start the external rotation.
 				},
 				Err(offenders) => Self::terminate_keygen_procedure(
 					&offenders[..],
@@ -583,14 +586,12 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [UnexpectedPubkeyWitnessed](Event::UnexpectedPubkeyWitnessed)
 		/// - [VaultRotationCompleted](Event::VaultRotationCompleted)
 		///
 		/// ## Errors
 		///
 		/// - [NoActiveRotation](Error::NoActiveRotation)
 		/// - [InvalidRotationStatus](Error::InvalidRotationStatus)
-		/// - [InvalidPublicKey](Error::InvalidPublicKey)
 		///
 		/// ## Dependencies
 		///
@@ -600,37 +601,14 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			new_public_key: AggKeyFor<T, I>,
 			block_number: ChainBlockNumberFor<T, I>,
-			tx_hash: TransactionHashFor<T, I>,
+
+			// This field is primarily required to ensure the witness calls are unique per
+			// transaction (on the external chain)
+			tx_id: TransactionIdFor<T, I>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
 
-			let rotation =
-				PendingVaultRotation::<T, I>::get().ok_or(Error::<T, I>::NoActiveRotation)?;
-
-			let expected_new_key = ensure_variant!(
-				VaultRotationStatus::<T, I>::AwaitingRotation { new_public_key } => new_public_key,
-				rotation,
-				Error::<T, I>::InvalidRotationStatus
-			);
-
-			// If the keys don't match, we don't have much choice but to trust the witnessed one
-			// over the one we expected, but we should log the issue nonetheless.
-			if new_public_key != expected_new_key {
-				log::error!(
-					"Unexpected new agg key witnessed. Expected {:?}, got {:?}.",
-					expected_new_key,
-					new_public_key,
-				);
-				Self::deposit_event(Event::<T, I>::UnexpectedPubkeyWitnessed(new_public_key));
-			}
-
-			PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Complete { tx_hash });
-
-			Self::set_next_vault(new_public_key, block_number);
-
-			Pallet::<T, I>::deposit_event(Event::VaultRotationCompleted);
-
-			Ok(().into())
+			Self::on_new_key_activated(new_public_key, block_number, tx_id)
 		}
 
 		/// The vault's key has been updated externally, outside of the rotation
@@ -655,7 +633,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			new_public_key: AggKeyFor<T, I>,
 			block_number: ChainBlockNumberFor<T, I>,
-			_tx_hash: TransactionHashFor<T, I>,
+			_tx_id: TransactionIdFor<T, I>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
 
@@ -690,7 +668,7 @@ pub mod pallet {
 		///
 		/// GenesisConfig members require `Serialize` and `Deserialize` which isn't
 		/// implemented for the AggKey type, hence we use Vec<u8> and covert during genesis.
-		pub vault_key: Vec<u8>,
+		pub vault_key: Option<Vec<u8>>,
 		pub deployment_block: ChainBlockNumberFor<T, I>,
 		pub keygen_response_timeout: BlockNumberFor<T>,
 	}
@@ -700,7 +678,7 @@ pub mod pallet {
 		fn default() -> Self {
 			use sp_runtime::traits::Zero;
 			Self {
-				vault_key: Default::default(),
+				vault_key: None,
 				deployment_block: Zero::zero(),
 				keygen_response_timeout: KEYGEN_CEREMONY_RESPONSE_TIMEOUT_DEFAULT.into(),
 			}
@@ -710,17 +688,25 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
 		fn build(&self) {
-			let public_key = AggKeyFor::<T, I>::try_from(self.vault_key.clone())
-				// Note: Can't use expect() here without some type shenanigans, but would give
-				// clearer error messages.
-				.unwrap_or_else(|_| panic!("Can't build genesis without a valid vault key."));
+			if let Some(vault_key) = self.vault_key.clone() {
+				Pallet::<T, I>::set_vault_for_epoch(
+					VaultEpochAndState { epoch_index: GENESIS_EPOCH, key_state: KeyState::Active },
+					AggKeyFor::<T, I>::try_from(vault_key)
+						// Note: Can't use expect() here without some type shenanigans, but would
+						// give clearer error messages.
+						.unwrap_or_else(|_| {
+							panic!("Can't build genesis without a valid vault key.")
+						}),
+					self.deployment_block,
+				);
+			} else {
+				CurrentVaultEpochAndState::<T, I>::put(VaultEpochAndState {
+					epoch_index: GENESIS_EPOCH,
+					key_state: KeyState::Unavailable,
+				});
+			}
 
 			KeygenResponseTimeout::<T, I>::put(self.keygen_response_timeout);
-
-			Vaults::<T, I>::insert(
-				CurrentEpochIndex::<T>::get(),
-				Vault { public_key, active_from_block: self.deployment_block },
-			);
 		}
 	}
 }
@@ -730,14 +716,34 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		new_public_key: AggKeyFor<T, I>,
 		rotated_at_block_number: ChainBlockNumberFor<T, I>,
 	) {
-		Vaults::<T, I>::insert(
-			CurrentEpochIndex::<T>::get().saturating_add(1),
-			Vault {
-				public_key: new_public_key,
-				active_from_block: rotated_at_block_number
-					.saturating_add(ChainBlockNumberFor::<T, I>::one()),
+		Self::set_vault_for_next_epoch(new_public_key, rotated_at_block_number);
+		T::VaultTransitionHandler::on_new_vault();
+	}
+
+	fn set_vault_for_next_epoch(
+		new_public_key: AggKeyFor<T, I>,
+		rotated_at_block_number: ChainBlockNumberFor<T, I>,
+	) {
+		Self::set_vault_for_epoch(
+			VaultEpochAndState {
+				epoch_index: CurrentEpochIndex::<T>::get().saturating_add(1),
+				key_state: KeyState::Active,
 			},
+			new_public_key,
+			rotated_at_block_number.saturating_add(ChainBlockNumberFor::<T, I>::one()),
 		);
+	}
+
+	fn set_vault_for_epoch(
+		current_vault_and_state: VaultEpochAndState,
+		new_public_key: AggKeyFor<T, I>,
+		active_from_block: ChainBlockNumberFor<T, I>,
+	) {
+		Vaults::<T, I>::insert(
+			current_vault_and_state.epoch_index,
+			Vault { public_key: new_public_key, active_from_block },
+		);
+		CurrentVaultEpochAndState::<T, I>::put(current_vault_and_state);
 	}
 
 	// Once we've successfully generated the key, we want to do a signing ceremony to verify that
@@ -747,13 +753,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		new_public_key: AggKeyFor<T, I>,
 		participants: BTreeSet<T::ValidatorId>,
 	) -> (<T::ThresholdSigner as ThresholdSigner<T::Chain>>::RequestId, CeremonyId) {
-		let byte_key: Vec<u8> = new_public_key.into();
-		let (request_id, signing_ceremony_id) = T::ThresholdSigner::request_signature_with(
-			byte_key.into(),
-			participants,
-			T::Chain::agg_key_to_payload(new_public_key),
-			RetryPolicy::Never,
-		);
+		let (request_id, signing_ceremony_id) =
+			T::ThresholdSigner::request_keygen_verification_signature(
+				T::Chain::agg_key_to_payload(new_public_key),
+				new_public_key.into(),
+				participants,
+			);
 		T::ThresholdSigner::register_callback(request_id, {
 			Call::on_keygen_verification_result {
 				keygen_ceremony_id,
@@ -773,7 +778,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		PendingVaultRotation::<T, I>::put(
 			VaultRotationStatus::<T, I>::AwaitingKeygenVerification { new_public_key },
 		);
-		Self::deposit_event(Event::KeygenSuccess(keygen_ceremony_id));
+
 		(request_id, signing_ceremony_id)
 	}
 
@@ -786,17 +791,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 }
 
-// TODO: Implement this on Runtime instead of pallet so that we can rotate multiple vaults.
 impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 	type ValidatorId = T::ValidatorId;
 
 	/// # Panics
 	/// - If an empty BTreeSet of candidates is provided
 	/// - If a vault rotation outcome is already Pending (i.e. there's one already in progress)
-	fn start_vault_rotation(candidates: BTreeSet<Self::ValidatorId>) {
+	fn keygen(candidates: BTreeSet<Self::ValidatorId>) {
 		assert!(!candidates.is_empty());
 
-		assert_ne!(Self::get_vault_rotation_outcome(), AsyncResult::Pending);
+		assert_ne!(Self::status(), AsyncResult::Pending);
 
 		let ceremony_id = T::CeremonyIdProvider::next_ceremony_id();
 
@@ -814,15 +818,20 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 	}
 
 	/// Get the status of the current key generation
-	fn get_vault_rotation_outcome() -> AsyncResult<Result<(), BTreeSet<T::ValidatorId>>> {
+	fn status() -> AsyncResult<VaultStatus<T::ValidatorId>> {
 		match PendingVaultRotation::<T, I>::decode_variant() {
 			Some(VaultRotationStatusVariant::AwaitingKeygen) => AsyncResult::Pending,
 			Some(VaultRotationStatusVariant::AwaitingKeygenVerification) => AsyncResult::Pending,
+			// It's at this point we want the vault to be considered ready to commit to. We don't
+			// want to commit until the other vaults are ready
+			Some(VaultRotationStatusVariant::KeygenVerificationComplete) =>
+				AsyncResult::Ready(VaultStatus::KeygenComplete),
 			Some(VaultRotationStatusVariant::AwaitingRotation) => AsyncResult::Pending,
-			Some(VaultRotationStatusVariant::Complete) => AsyncResult::Ready(Ok(())),
+			Some(VaultRotationStatusVariant::Complete) =>
+				AsyncResult::Ready(VaultStatus::RotationComplete),
 			Some(VaultRotationStatusVariant::Failed) => match PendingVaultRotation::<T, I>::get() {
 				Some(VaultRotationStatus::Failed { offenders }) =>
-					AsyncResult::Ready(Err(offenders)),
+					AsyncResult::Ready(VaultStatus::Failed(offenders)),
 				_ =>
 					unreachable!("Unreachable because we are in the branch for the Failed variant."),
 			},
@@ -830,8 +839,52 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 		}
 	}
 
+	fn activate() {
+		if let Some(VaultRotationStatus::<T, I>::KeygenVerificationComplete { new_public_key }) =
+			PendingVaultRotation::<T, I>::get()
+		{
+			let current_vault_epoch_and_state = CurrentVaultEpochAndState::<T, I>::get();
+			match <T::SetAggKeyWithAggKey as SetAggKeyWithAggKey<_>>::new_unsigned(
+				Vaults::<T, I>::try_get(current_vault_epoch_and_state.epoch_index)
+					.map(|vault| vault.public_key)
+					.ok(),
+				new_public_key,
+			) {
+				Ok(rotate_tx) => {
+					T::Broadcaster::threshold_sign_and_broadcast(rotate_tx);
+					if KeyState::Active == current_vault_epoch_and_state.key_state {
+						CurrentVaultEpochAndState::<T, I>::put(VaultEpochAndState {
+							epoch_index: current_vault_epoch_and_state.epoch_index,
+							key_state: KeyState::Unavailable,
+						})
+					}
+				},
+				Err(_) => {
+					// The block number value 1, which the vault is being set with is a dummy value
+					// and doesn't mean anything. It will be later modified to the real value when
+					// we witness the vault rotation manually via governance
+					Self::set_vault_for_next_epoch(new_public_key, 1_u32.into());
+					Self::deposit_event(Event::<T, I>::AwaitingGovernanceActivation {
+						new_public_key,
+					})
+				},
+			}
+
+			PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingRotation {
+				new_public_key,
+			});
+		} else {
+			#[cfg(not(test))]
+			log::error!("activate key called before keygen verification completed");
+			#[cfg(test)]
+			panic!("activate key called before keygen verification completed");
+		}
+	}
+
 	#[cfg(feature = "runtime-benchmarks")]
-	fn set_vault_rotation_outcome(outcome: AsyncResult<Result<(), BTreeSet<Self::ValidatorId>>>) {
+	fn set_status(outcome: AsyncResult<VaultStatus<Self::ValidatorId>>) {
+		use cf_chains::benchmarking_value::BenchmarkValue;
+
 		match outcome {
 			AsyncResult::Pending => {
 				PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingKeygen {
@@ -840,14 +893,21 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 					response_status: KeygenResponseStatus::new(Default::default()),
 				});
 			},
-			AsyncResult::Ready(Ok(())) => {
-				PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Complete {
-					tx_hash: Default::default(),
-				});
+			AsyncResult::Ready(VaultStatus::KeygenComplete) => {
+				PendingVaultRotation::<T, I>::put(
+					VaultRotationStatus::<T, I>::KeygenVerificationComplete {
+						new_public_key: Default::default(),
+					},
+				);
 			},
-			AsyncResult::Ready(Err(offenders)) => {
+			AsyncResult::Ready(VaultStatus::Failed(offenders)) => {
 				PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Failed {
 					offenders,
+				});
+			},
+			AsyncResult::Ready(VaultStatus::RotationComplete) => {
+				PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Complete {
+					tx_id: BenchmarkValue::benchmark_value(),
 				});
 			},
 			AsyncResult::Void => {
@@ -858,19 +918,14 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 }
 
 impl<T: Config<I>, I: 'static> KeyProvider<T::Chain> for Pallet<T, I> {
-	type KeyId = Vec<u8>;
+	fn current_epoch_key() -> EpochKey<<T::Chain as ChainCrypto>::AggKey> {
+		let current_vault_epoch_and_state = CurrentVaultEpochAndState::<T, I>::get();
 
-	fn current_key_id() -> Self::KeyId {
-		Vaults::<T, I>::get(CurrentEpochIndex::<T>::get())
-			.expect("We can't exist without a vault")
-			.public_key
-			.into()
-	}
-
-	fn current_key() -> <T::Chain as ChainCrypto>::AggKey {
-		Vaults::<T, I>::get(CurrentEpochIndex::<T>::get())
-			.expect("We can't exist without a vault")
-			.public_key
+		EpochKey {
+				key: Vaults::<T, I>::get(current_vault_epoch_and_state.epoch_index).expect("Key must exist if CurrentVaultEpochAndState exists since they get set at the same place: set_next_vault()").public_key,
+				epoch_index: current_vault_epoch_and_state.epoch_index,
+				key_state: current_vault_epoch_and_state.key_state,
+			}
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
@@ -887,6 +942,34 @@ impl<T: Config<I>, I: 'static> EpochTransitionHandler for Pallet<T, I> {
 
 	fn on_new_epoch(_epoch_authorities: &[Self::ValidatorId]) {
 		PendingVaultRotation::<T, I>::kill();
+	}
+}
+
+impl<T: Config<I>, I: 'static> VaultKeyWitnessedHandler<T::Chain> for Pallet<T, I> {
+	fn on_new_key_activated(
+		new_public_key: AggKeyFor<T, I>,
+		block_number: ChainBlockNumberFor<T, I>,
+		tx_id: TransactionIdFor<T, I>,
+	) -> DispatchResultWithPostInfo {
+		let rotation =
+			PendingVaultRotation::<T, I>::get().ok_or(Error::<T, I>::NoActiveRotation)?;
+
+		let expected_new_key = ensure_variant!(
+			VaultRotationStatus::<T, I>::AwaitingRotation { new_public_key } => new_public_key,
+			rotation,
+			Error::<T, I>::InvalidRotationStatus
+		);
+
+		// The expected new key should match the new key witnessed
+		debug_assert_eq!(new_public_key, expected_new_key);
+
+		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Complete { tx_id });
+
+		Self::set_next_vault(new_public_key, block_number);
+
+		Pallet::<T, I>::deposit_event(Event::VaultRotationCompleted);
+
+		Ok(().into())
 	}
 }
 

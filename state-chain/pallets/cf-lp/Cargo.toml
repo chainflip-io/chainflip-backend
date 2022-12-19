@@ -16,7 +16,7 @@ targets = ['x86_64-unknown-linux-gnu']
 # Internal dependencies
 cf-traits = { path = '../../traits', default-features = false }
 cf-primitives = {path = '../../primitives', default-features = false}
-
+cf-chains = {path = '../../chains', default-features = false, features = ["ibiza"]}
 # Parity deps
 codec = { package = 'parity-scale-codec', version = '3.0.0', default-features = false, features = ['derive'] }
 scale-info = { version = '2.0.1', default-features = false, features = ['derive'] }
@@ -61,14 +61,15 @@ tag = 'chainflip-monthly-2022-06+01'
 [dev-dependencies]
 quickcheck = '1'
 quickcheck_macros = '1'
-pallet-cf-ingress = {path = '../cf-ingress'}
-pallet-cf-account-roles = {path = '../cf-account-roles'}
+pallet-cf-account-roles = { path = '../cf-account-roles' }
+pallet-cf-pools = { path = '../cf-pools' }
 
 [features]
 default = ['std']
 std = [
   'cf-traits/std',
   'cf-primitives/std',
+  'cf-chains/std',
   'codec/std',
   'scale-info/std',
   'serde',
@@ -82,9 +83,9 @@ std = [
 ]
 runtime-benchmarks = [
   'cf-traits/runtime-benchmarks',
+  'cf-chains/runtime-benchmarks',
   'frame-benchmarking/runtime-benchmarks',
   'frame-support/runtime-benchmarks',
   'frame-system/runtime-benchmarks',
 ]
 try-runtime = ['frame-support/try-runtime']
-ibiza = []

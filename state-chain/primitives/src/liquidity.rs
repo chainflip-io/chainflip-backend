@@ -1,12 +1,8 @@
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
-use crate::Asset;
-
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
-
-pub type PoolId = (Asset, Asset);
 
 /// The id type for range orders.
 pub type PositionId = u64;

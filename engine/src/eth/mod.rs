@@ -69,7 +69,9 @@ pub struct EthNumberBloom {
 }
 
 impl BlockNumberable for EthNumberBloom {
-	fn block_number(&self) -> u64 {
+	type BlockNumber = u64;
+
+	fn block_number(&self) -> Self::BlockNumber {
 		self.block_number.as_u64()
 	}
 }
@@ -104,8 +106,8 @@ impl SignatureAndEvent {
 /// Helper that generates a broadcast channel with multiple receivers.
 pub fn build_broadcast_channel<T: Clone, const S: usize>(
 	capacity: usize,
-) -> (async_channel::Sender<T>, [async_channel::Receiver<T>; S]) {
-	let (sender, receiver) = async_channel::bounded(capacity);
+) -> (async_broadcast::Sender<T>, [async_broadcast::Receiver<T>; S]) {
+	let (sender, receiver) = async_broadcast::broadcast(capacity);
 	(sender, [0; S].map(|_| receiver.clone()))
 }
 

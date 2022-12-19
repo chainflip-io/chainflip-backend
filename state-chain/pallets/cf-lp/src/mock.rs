@@ -1,7 +1,17 @@
-use crate::{self as pallet_cf_lp};
+use crate as pallet_cf_lp;
+use cf_chains::{eth::assets, AnyChain, Chain, Ethereum};
+use cf_primitives::{AccountRole, BroadcastId, IntentId};
 use cf_traits::{
-	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
-	AddressDerivationApi, EgressApi, SwapIntentHandler,
+	mocks::{
+		all_batch::{MockAllBatch, MockEthEnvironment},
+		bid_info::MockBidInfo,
+		egress_handler::MockEgressHandler,
+		ensure_origin_mock::NeverFailingOriginCheck,
+		ingress_handler::MockIngressHandler,
+		staking_info::MockStakingInfo,
+		system_state_info::MockSystemStateInfo,
+	},
+	AddressDerivationApi, Broadcaster,
 };
 use frame_support::{parameter_types, sp_runtime::app_crypto::sp_core::H160};
 use frame_system as system;
@@ -12,8 +22,6 @@ use sp_runtime::{
 	BuildStorage,
 };
 
-use cf_primitives::{AssetAmount, ForeignChainAddress, ForeignChainAsset, IntentId};
-
 use sp_std::str::FromStr;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -22,33 +30,12 @@ type AccountId = u64;
 
 pub struct MockAddressDerivation;
 
-impl AddressDerivationApi for MockAddressDerivation {
+impl AddressDerivationApi<Ethereum> for MockAddressDerivation {
 	fn generate_address(
-		_ingress_asset: ForeignChainAsset,
+		_ingress_asset: assets::eth::Asset,
 		_intent_id: IntentId,
-	) -> Result<cf_primitives::ForeignChainAddress, sp_runtime::DispatchError> {
-		Ok(ForeignChainAddress::Eth(
-			H160::from_str("F29aB9EbDb481BE48b80699758e6e9a3DBD609C6")
-				.unwrap()
-				.to_fixed_bytes(),
-		))
-	}
-}
-
-pub struct MockSwapIntentHandler;
-
-impl SwapIntentHandler for MockSwapIntentHandler {
-	type AccountId = AccountId;
-
-	fn schedule_swap(
-		_from: cf_primitives::Asset,
-		_to: ForeignChainAsset,
-		_amount: AssetAmount,
-		_egress_address: ForeignChainAddress,
-		_relayer_id: Self::AccountId,
-		_relayer_commission_bps: u16,
-	) {
-		todo!()
+	) -> Result<<Ethereum as Chain>::ChainAccount, sp_runtime::DispatchError> {
+		Ok(H160::from_str("F29aB9EbDb481BE48b80699758e6e9a3DBD609C6").unwrap())
 	}
 }
 
@@ -61,8 +48,8 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system,
 		AccountRoles: pallet_cf_account_roles,
-		Ingress: pallet_cf_ingress,
 		LiquidityProvider: pallet_cf_lp,
+		LiquidityPools: pallet_cf_pools,
 	}
 );
 
@@ -98,13 +85,13 @@ impl system::Config for Test {
 	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
-impl pallet_cf_ingress::Config for Test {
-	type Event = Event;
-	type AddressDerivation = MockAddressDerivation;
-	type LpAccountHandler = LiquidityProvider;
-	type IngressFetchApi = ();
-	type SwapIntentHandler = MockSwapIntentHandler;
-	type WeightInfo = ();
+pub struct MockBroadcast;
+impl Broadcaster<Ethereum> for MockBroadcast {
+	type ApiCall = MockAllBatch<MockEthEnvironment>;
+
+	fn threshold_sign_and_broadcast(_api_call: Self::ApiCall) -> BroadcastId {
+		1
+	}
 }
 
 impl cf_traits::Chainflip for Test {
@@ -120,42 +107,36 @@ impl cf_traits::Chainflip for Test {
 
 impl pallet_cf_account_roles::Config for Test {
 	type Event = Event;
+	type BidInfo = MockBidInfo;
+	type StakeInfo = MockStakingInfo<Self>;
 	type WeightInfo = ();
 }
 
-parameter_types! {
-	pub static IsValid: bool = false;
-	pub static LastEgress: Option<(ForeignChainAsset, AssetAmount, ForeignChainAddress)> = None;
-}
-pub struct MockEgressApi;
-impl EgressApi for MockEgressApi {
-	fn schedule_egress(
-		foreign_asset: ForeignChainAsset,
-		amount: AssetAmount,
-		egress_address: ForeignChainAddress,
-	) {
-		LastEgress::set(Some((foreign_asset, amount, egress_address)));
-	}
-
-	fn is_egress_valid(
-		_foreign_asset: &ForeignChainAsset,
-		_egress_address: &ForeignChainAddress,
-	) -> bool {
-		IsValid::get()
-	}
-}
+impl pallet_cf_pools::Config for Test {}
 
 impl crate::Config for Test {
 	type Event = Event;
 	type AccountRoleRegistry = AccountRoles;
-	type Ingress = Ingress;
-	type EgressApi = MockEgressApi;
+	type IngressHandler = MockIngressHandler<AnyChain, Self>;
+	type EgressHandler = MockEgressHandler<AnyChain>;
+	type LiquidityPoolApi = LiquidityPools;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 }
 
+pub const LP_ACCOUNT: u64 = 1;
+pub const NON_LP_ACCOUNT: u64 = 2;
+
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let config = GenesisConfig { system: Default::default(), account_roles: Default::default() };
+	let config = GenesisConfig {
+		system: Default::default(),
+		account_roles: AccountRolesConfig {
+			initial_account_roles: vec![
+				(LP_ACCOUNT, AccountRole::LiquidityProvider),
+				(NON_LP_ACCOUNT, AccountRole::Validator),
+			],
+		},
+	};
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 

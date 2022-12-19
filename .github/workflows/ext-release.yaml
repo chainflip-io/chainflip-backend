@@ -1,0 +1,30 @@
+name: Release production packages
+on:
+  workflow_dispatch:
+    inputs:
+      codename:
+        description: "Select a codename to release"
+        required: true
+        default: "perseverance"
+        type: choice
+        options:
+          - "perseverance"
+          - "sandstorm"
+          - "ibiza"
+          - "sysiphos"
+          - "berghain"
+# on:
+#   release:
+#     types: [published]
+jobs:
+  call-external-release:
+    runs-on: ubuntu-20.04
+    name: Call external release repository
+    steps:
+      - name: Repository Dispatch
+        uses: peter-evans/repository-dispatch@v2
+        with:
+          repository: chainflip-io/chainflip-backend-release-poc
+          event-type: release
+          token: ${{ secrets.CF_GITHUB_BOT_TOKEN  }}
+          client-payload: '{"ref": "${{ github.ref }}", "sha": "${{ github.sha }}", "codename": "${{ github.event.inputs.codename }}" }'

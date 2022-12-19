@@ -16,8 +16,13 @@ targets = ['x86_64-unknown-linux-gnu']
 # Internal dependencies
 cf-traits = {path = '../../traits', default-features = false}
 cf-primitives = {path = '../../primitives', default-features = false}
+cf-chains = {path = '../../chains', default-features = false, features=["ibiza"]}
 
 log = { version = '0.4.16', default-features = false }
+
+[dev-dependencies]
+state-chain-runtime = {path = '../../runtime'}
+cf-test-utilities = { path = '../../test-utilities'}
 
 # Parity deps
 [dependencies.codec]
@@ -46,6 +51,11 @@ default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'chainflip-monthly-2022-06+01'
 
+[dependencies.sp-arithmetic]
+default-features = false
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'chainflip-monthly-2022-06+01'
+
 [dependencies.frame-benchmarking]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
@@ -69,6 +79,7 @@ default = ['std']
 std = [
   'cf-traits/std',
   'cf-primitives/std',
+  'cf-chains/std',
   'codec/std',
   'scale-info/std',
   'frame-benchmarking/std',
@@ -78,9 +89,9 @@ std = [
 ]
 runtime-benchmarks = [
   'cf-traits/runtime-benchmarks',
+  'cf-chains/runtime-benchmarks',
   'frame-benchmarking/runtime-benchmarks',
   'frame-support/runtime-benchmarks',
   'frame-system/runtime-benchmarks',
 ]
 try-runtime = ['frame-support/try-runtime']
-ibiza = []

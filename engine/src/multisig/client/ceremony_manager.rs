@@ -23,7 +23,7 @@ use crate::{
 		crypto::{CryptoScheme, ECPoint, ECScalar, Rng},
 	},
 	p2p::OutgoingMultisigStageMessages,
-	task_scope::{with_task_scope, Scope, ScopedJoinHandle},
+	task_scope::{task_scope, Scope, ScopedJoinHandle},
 };
 use cf_primitives::{AuthorityCount, CeremonyId};
 use state_chain_runtime::AccountId;
@@ -38,7 +38,7 @@ use client::common::{
 	broadcast::BroadcastStage, CeremonyCommon, CeremonyFailureReason, KeygenResultInfo,
 };
 
-use crate::multisig::MessageHash;
+use crate::multisig::SigningPayload;
 
 use super::{
 	common::{CeremonyStage, KeygenStageName, PreProcessStageDataCheck, SigningStageName},
@@ -128,7 +128,7 @@ pub fn prepare_signing_request<Crypto: CryptoScheme>(
 	own_account_id: &AccountId,
 	signers: BTreeSet<AccountId>,
 	key_info: KeygenResultInfo<Crypto::Point>,
-	data: MessageHash,
+	payload: SigningPayload,
 	outgoing_p2p_message_sender: &UnboundedSender<OutgoingMultisigStageMessages>,
 	rng: Rng,
 	logger: &slog::Logger,
@@ -173,7 +173,7 @@ pub fn prepare_signing_request<Crypto: CryptoScheme>(
 
 		let processor = AwaitCommitments1::<Crypto>::new(
 			common.clone(),
-			SigningStateCommonInfo { data, key: key_info.key },
+			SigningStateCommonInfo { payload, key: key_info.key },
 		);
 
 		Box::new(BroadcastStage::new(processor, common))
@@ -265,11 +265,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 		}
 	}
 
-	async fn on_request(
-		&mut self,
-		request: CeremonyRequest<C>,
-		scope: &Scope<'_, anyhow::Result<()>, true>,
-	) {
+	async fn on_request(&mut self, request: CeremonyRequest<C>, scope: &Scope<'_, anyhow::Error>) {
 		// Always update the latest ceremony id, even if we are not participating
 		self.update_latest_ceremony_id(request.ceremony_id);
 
@@ -285,7 +281,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 				self.on_request_to_sign(
 					request.ceremony_id,
 					details.participants,
-					details.data,
+					details.payload,
 					details.keygen_result_info,
 					details.rng,
 					details.result_sender,
@@ -313,7 +309,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 		mut ceremony_request_receiver: UnboundedReceiver<CeremonyRequest<C>>,
 		mut incoming_p2p_message_receiver: UnboundedReceiver<(AccountId, Vec<u8>)>,
 	) -> Result<()> {
-		with_task_scope::<_, ()>(|scope| {
+		task_scope(|scope| {
 			async {
 				loop {
 					tokio::select! {
@@ -352,7 +348,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 		participants: BTreeSet<AccountId>,
 		rng: Rng,
 		result_sender: CeremonyResultSender<KeygenCeremony<C>>,
-		scope: &Scope<'_, anyhow::Result<()>, true>,
+		scope: &Scope<'_, anyhow::Error>,
 	) {
 		assert!(!participants.is_empty(), "Keygen request has no participants");
 
@@ -402,11 +398,11 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 		&mut self,
 		ceremony_id: CeremonyId,
 		signers: BTreeSet<AccountId>,
-		data: MessageHash,
+		payload: SigningPayload,
 		key_info: KeygenResultInfo<C::Point>,
 		rng: Rng,
 		result_sender: CeremonyResultSender<SigningCeremony<C>>,
-		scope: &Scope<'_, anyhow::Result<()>, true>,
+		scope: &Scope<'_, anyhow::Error>,
 	) {
 		assert!(!signers.is_empty(), "Request to sign has no signers");
 
@@ -415,7 +411,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 		slog::debug!(logger_with_ceremony_id, "Processing a request to sign");
 
 		if signers.len() == 1 {
-			let _result = result_sender.send(Ok(self.single_party_signing(data, key_info, rng)));
+			let _result = result_sender.send(Ok(self.single_party_signing(payload, key_info, rng)));
 			return
 		}
 
@@ -424,7 +420,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 			&self.my_account_id,
 			signers,
 			key_info,
-			data,
+			payload,
 			&self.outgoing_p2p_message_sender,
 			rng,
 			&logger_with_ceremony_id,
@@ -458,7 +454,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 		&mut self,
 		sender_id: AccountId,
 		message: MultisigMessage<C::Point>,
-		scope: &Scope<'_, anyhow::Result<()>, true>,
+		scope: &Scope<'_, anyhow::Error>,
 	) {
 		match message {
 			MultisigMessage { ceremony_id, data: MultisigData::Keygen(data) } =>
@@ -505,7 +501,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 
 	fn single_party_signing(
 		&self,
-		data: MessageHash,
+		payload: SigningPayload,
 		keygen_result_info: KeygenResultInfo<C::Point>,
 		mut rng: Rng,
 	) -> C::Signature {
@@ -518,7 +514,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 		let r = C::Point::from_scalar(&nonce);
 
 		let sigma =
-			client::signing::generate_schnorr_response::<C>(&key.x_i, key.y, r, nonce, &data.0);
+			client::signing::generate_schnorr_response::<C>(&key.x_i, key.y, r, nonce, &payload);
 
 		C::build_signature(sigma, r)
 	}
@@ -564,7 +560,7 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
 		ceremony_id: CeremonyId,
 		data: Ceremony::Data,
 		latest_ceremony_id: CeremonyId,
-		scope: &Scope<'_, anyhow::Result<()>, true>,
+		scope: &Scope<'_, anyhow::Error>,
 		logger: &slog::Logger,
 	) {
 		slog::debug!(logger, "Received data {}", &data);
@@ -591,7 +587,12 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
 			hash_map::Entry::Occupied(entry) => entry.into_mut(),
 		};
 
-		ceremony_handle.message_sender.send((sender_id, data)).unwrap();
+		// NOTE: There is a short delay between dropping the ceremony runner (and any channels
+		// associated with it) and dropping the corresponding ceremony handle, which makes it
+		// possible for the following `send` to fail
+		if ceremony_handle.message_sender.send((sender_id, data)).is_err() {
+			slog::debug!(logger, "Ignoring data: ceremony runner has been dropped");
+		}
 	}
 
 	/// Returns the state for the given ceremony id if it exists,
@@ -599,7 +600,7 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
 	fn get_state_or_create_unauthorized(
 		&mut self,
 		ceremony_id: CeremonyId,
-		scope: &Scope<'_, anyhow::Result<()>, true>,
+		scope: &Scope<'_, anyhow::Error>,
 		logger: &slog::Logger,
 	) -> &mut CeremonyHandle<Ceremony> {
 		self.ceremony_handles.entry(ceremony_id).or_insert_with(|| {
@@ -664,7 +665,7 @@ impl<Ceremony: CeremonyTrait> CeremonyHandle<Ceremony> {
 	fn spawn(
 		ceremony_id: CeremonyId,
 		outcome_sender: UnboundedSender<(CeremonyId, CeremonyOutcome<Ceremony>)>,
-		scope: &Scope<'_, anyhow::Result<()>, true>,
+		scope: &Scope<'_, anyhow::Error>,
 		logger: &slog::Logger,
 	) -> Self {
 		let (message_sender, message_receiver) = mpsc::unbounded_channel();

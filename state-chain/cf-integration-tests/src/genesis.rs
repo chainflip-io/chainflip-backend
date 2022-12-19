@@ -1,6 +1,9 @@
 use sp_std::collections::btree_set::BTreeSet;
 
-use crate::mock_runtime::ExtBuilder;
+use crate::mock_runtime::{
+	ExtBuilder, BACKUP_NODE_EMISSION_INFLATION_PERBILL,
+	CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL,
+};
 
 use super::*;
 use cf_primitives::AccountRole;
@@ -63,7 +66,7 @@ fn state_of_genesis_is_as_expected() {
 		assert_eq!(Validator::ceremony_id_counter(), 0, "no key generation requests");
 
 		assert_eq!(
-			pallet_cf_environment::GlobalSignatureNonce::<Runtime>::get(),
+			pallet_cf_environment::EthereumSignatureNonce::<Runtime>::get(),
 			0,
 			"Global signature nonce should be 0"
 		);

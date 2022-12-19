@@ -167,8 +167,7 @@ pub fn start(
 
 	let zmq_context = zmq::Context::new();
 
-	// TODO: consider if we need to change the default limit for open sockets
-	// (the default is 1024)
+	zmq_context.set_max_sockets(65536).expect("should update socket limit");
 
 	// TODO: consider keeping track of "last activity" on any outgoing
 	// socket connection and disconnecting inactive peers (see proxy_expire_idle_peers
@@ -201,6 +200,7 @@ pub fn start(
 		logger,
 	};
 
+	slog::debug!(context.logger, "Registering peer info for {} peers", current_peers.len());
 	for peer_info in current_peers {
 		context.handle_peer_update(peer_info);
 	}
@@ -368,8 +368,6 @@ impl P2PContext {
 	}
 
 	fn add_or_update_peer(&mut self, peer: PeerInfo) {
-		slog::debug!(self.logger, "Received new peer info: {}", peer);
-
 		if let Some(existing_socket) = self.active_connections.remove(&peer.account_id) {
 			slog::debug!(
 				self.logger,
@@ -382,13 +380,6 @@ impl P2PContext {
 
 		let peer_pubkey = &peer.pubkey;
 		self.authenticator.add_peer(*peer_pubkey);
-
-		slog::trace!(
-			self.logger,
-			"Adding x25519 to account id mapping: {} -> {}",
-			&peer.account_id,
-			to_string(peer_pubkey)
-		);
 
 		self.x25519_to_account_id.insert(*peer_pubkey, peer.account_id.clone());
 

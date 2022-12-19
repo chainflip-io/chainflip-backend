@@ -4,15 +4,17 @@
 [alias]
 # Run unit tests but not integration tests
 cf-test = "test --lib --all-features"
-# TODO: add all-features and clean up benchmarks.
-cf-clippy = "clippy --all-targets --all-features"
-
-
-ci-build-ibiza = "build --release --features ibiza"
 
 ci-check = "check --all-targets --all-features --release"
+
+cf-clippy = "clippy --all-targets --all-features"
+
 ci-build = "build --release --features runtime-benchmarks"
-ci-test = "test --lib --all-features"
+ci-test = "test --lib --features runtime-benchmarks"
+
+ci-build-ibiza = "build --release --features ibiza"
+ci-test-ibiza = "test --lib --features ibiza runtime-benchmarks"
+
 ci-clippy = "clippy --all-targets --all-features -- -D warnings"
 
 # Run just the CFE unit tests

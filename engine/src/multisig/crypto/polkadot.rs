@@ -1,4 +1,7 @@
+use crate::multisig::SigningPayload;
+
 use super::{curve25519_ristretto::Point, ChainTag, CryptoScheme, ECPoint, Verifiable};
+use cf_chains::dot::PolkadotPublicKey;
 use schnorrkel::context::{SigningContext, SigningTranscript};
 use serde::{Deserialize, Serialize};
 
@@ -9,6 +12,12 @@ const SIGNING_CTX: &[u8] = b"substrate";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PolkadotSignature(schnorrkel::Signature);
+
+impl From<PolkadotSignature> for cf_chains::dot::PolkadotSignature {
+	fn from(cfe_sig: PolkadotSignature) -> Self {
+		sp_core::sr25519::Signature(cfe_sig.0.to_bytes())
+	}
+}
 
 impl Serialize for PolkadotSignature {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -33,18 +42,25 @@ impl<'de> Deserialize<'de> for PolkadotSignature {
 }
 
 impl Verifiable for PolkadotSignature {
-	fn verify(&self, key_id: &crate::multisig::KeyId, message: &[u8; 32]) -> anyhow::Result<()> {
+	fn verify(
+		&self,
+		key_id: &crate::multisig::KeyId,
+		payload: &SigningPayload,
+	) -> anyhow::Result<()> {
 		let public_key = schnorrkel::PublicKey::from_bytes(&key_id.0).expect("invalid public key");
 
 		let context = schnorrkel::signing_context(SIGNING_CTX);
 
-		public_key.verify(context.bytes(message), &self.0).map_err(anyhow::Error::msg)
+		public_key
+			.verify(context.bytes(payload.0.as_slice()), &self.0)
+			.map_err(anyhow::Error::msg)
 	}
 }
 
 impl CryptoScheme for PolkadotSigning {
 	type Point = Point;
 	type Signature = PolkadotSignature;
+	type AggKey = cf_chains::dot::PolkadotPublicKey;
 
 	const NAME: &'static str = "Polkadot";
 	const CHAIN_TAG: ChainTag = ChainTag::Polkadot;
@@ -68,14 +84,14 @@ impl CryptoScheme for PolkadotSigning {
 	fn build_challenge(
 		pubkey: Self::Point,
 		nonce_commitment: Self::Point,
-		msg_hash: &[u8; 32],
+		payload: &SigningPayload,
 	) -> <Self::Point as super::ECPoint>::Scalar {
 		// NOTE: This computation is copied from schnorrkel's
 		// source code (since it is the "source of truth")
 		// (see https://docs.rs/schnorrkel/0.9.1/src/schnorrkel/sign.rs.html#171)
 
 		// Is the message not expected to be already hashed?
-		let mut t = SigningContext::new(SIGNING_CTX).bytes(msg_hash);
+		let mut t = SigningContext::new(SIGNING_CTX).bytes(&payload.0);
 		t.proto_name(b"Schnorr-sig");
 		// TODO: see how expensive this compression is and whether we should
 		// always keep both compressed and uncompressed in memory the way schnorrkel does
@@ -93,6 +109,12 @@ impl CryptoScheme for PolkadotSigning {
 		signature_response: &<Self::Point as ECPoint>::Scalar,
 	) -> bool {
 		Point::from_scalar(signature_response) == *commitment + (*y_i) * challenge * lambda_i
+	}
+
+	fn agg_key(pubkey: &Self::Point) -> Self::AggKey {
+		PolkadotPublicKey(sp_core::sr25519::Public::from_raw(
+			pubkey.get_element().compress().to_bytes(),
+		))
 	}
 
 	fn build_response(
@@ -121,15 +143,14 @@ fn signature_should_be_valid() {
 	let public_key = Point::from_scalar(&secret_key);
 
 	// Message to sign
-	let message_hash = [b't'; 32];
+	let payload = SigningPayload(vec![b't'; 256]);
 
 	let signature = {
 		// Pick random nonce and commit to it
 		let nonce = Scalar::random(&mut rng);
 		let nonce_commitment = Point::from_scalar(&nonce);
 
-		let challenge =
-			PolkadotSigning::build_challenge(public_key, nonce_commitment, &message_hash);
+		let challenge = PolkadotSigning::build_challenge(public_key, nonce_commitment, &payload);
 
 		let response = PolkadotSigning::build_response(nonce, &secret_key, challenge);
 
@@ -138,7 +159,7 @@ fn signature_should_be_valid() {
 
 	assert_ok!(schnorrkel::PublicKey::from_point(public_key.get_element()).verify_simple(
 		SIGNING_CTX,
-		&message_hash,
+		&payload.0,
 		&signature.0
 	));
 }

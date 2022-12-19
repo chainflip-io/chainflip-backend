@@ -2,19 +2,25 @@
 
 mod async_result;
 pub mod liquidity;
+pub use liquidity::*;
+
 pub mod mocks;
 pub mod offence_reporting;
-pub use liquidity::*;
 
 use core::fmt::Debug;
 
 pub use async_result::AsyncResult;
 use sp_std::collections::btree_set::BTreeSet;
 
-use cf_chains::{benchmarking_value::BenchmarkValue, ApiCall, ChainAbi, ChainCrypto};
+#[cfg(feature = "ibiza")]
+use cf_chains::Polkadot;
+use cf_chains::{
+	benchmarking_value::BenchmarkValue, ApiCall, Chain, ChainAbi, ChainCrypto, Ethereum,
+};
+
 use cf_primitives::{
-	AccountRole, Asset, AssetAmount, AuthorityCount, CeremonyId, EpochIndex, EthereumAddress,
-	ForeignChainAddress, ForeignChainAsset, IntentId,
+	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BroadcastId, CeremonyId,
+	EgressId, EpochIndex, EthereumAddress, ForeignChain, ForeignChainAddress, IntentId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -30,9 +36,6 @@ use sp_runtime::{
 	DispatchError, DispatchResult, FixedPointOperand, RuntimeDebug,
 };
 use sp_std::{iter::Sum, marker::PhantomData, prelude::*};
-/// An index to a block.
-pub type BlockNumber = u32;
-pub type FlipBalance = u128;
 
 /// Common base config for Chainflip pallets.
 pub trait Chainflip: frame_system::Config {
@@ -159,17 +162,28 @@ impl<CandidateId, BidAmount: Default> Default for AuctionOutcome<CandidateId, Bi
 	}
 }
 
+#[derive(PartialEq, Eq, Clone, Debug, Decode, Encode)]
+pub enum VaultStatus<ValidatorId> {
+	KeygenComplete,
+	RotationComplete,
+	Failed(BTreeSet<ValidatorId>),
+}
+
 pub trait VaultRotator {
-	type ValidatorId;
+	type ValidatorId: Ord + Clone;
 
-	/// Start a vault rotation with the provided `candidates`.
-	fn start_vault_rotation(candidates: BTreeSet<Self::ValidatorId>);
+	/// Start the rotation by kicking off keygen with provided candidates.
+	fn keygen(candidates: BTreeSet<Self::ValidatorId>);
 
-	/// Poll for the vault rotation outcome.
-	fn get_vault_rotation_outcome() -> AsyncResult<Result<(), BTreeSet<Self::ValidatorId>>>;
+	/// Get the current rotation status.
+	fn status() -> AsyncResult<VaultStatus<Self::ValidatorId>>;
+
+	/// Activate key/s on particular chain/s. For example, setting the new key
+	/// on the contract for a smart contract chain.
+	fn activate();
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn set_vault_rotation_outcome(_outcome: AsyncResult<Result<(), BTreeSet<Self::ValidatorId>>>) {
+	fn set_status(_outcome: AsyncResult<VaultStatus<Self::ValidatorId>>) {
 		unimplemented!()
 	}
 }
@@ -277,21 +291,12 @@ pub trait EmissionsTrigger {
 	fn trigger_emissions();
 }
 
-/// Provides chain-specific replay protection data.
-pub trait ReplayProtectionProvider<Abi: ChainAbi> {
-	fn replay_protection() -> Abi::ReplayProtection;
-}
-/// Provides chain-specific Extra data needed to build apicalls for that chain.
-pub trait ApiCallDataProvider<Abi: ChainAbi> {
-	fn chain_extra_data() -> Abi::ApiCallExtraData;
-}
-
 /// Provides the environment data for ethereum-like chains.
 pub trait EthEnvironmentProvider {
-	fn flip_token_address() -> [u8; 20];
-	fn key_manager_address() -> [u8; 20];
-	fn stake_manager_address() -> [u8; 20];
-	fn eth_vault_address() -> [u8; 20];
+	fn token_address(asset: assets::any::Asset) -> Option<EthereumAddress>;
+	fn key_manager_address() -> EthereumAddress;
+	fn stake_manager_address() -> EthereumAddress;
+	fn vault_address() -> EthereumAddress;
 	fn chain_id() -> u64;
 }
 
@@ -329,13 +334,11 @@ pub trait EmergencyRotation {
 	fn request_emergency_rotation();
 }
 
-/// Slashing a node
 pub trait Slashing {
-	/// An identifier for our node
 	type AccountId;
-	/// Block number
 	type BlockNumber;
-	/// Function which implements the slashing logic
+
+	/// Slashes a validator for the equivalent of some number of blocks offline.
 	fn slash(validator_id: &Self::AccountId, blocks_offline: Self::BlockNumber);
 }
 
@@ -364,27 +367,31 @@ pub trait ThresholdSignerNomination {
 	) -> Option<BTreeSet<Self::SignerId>>;
 }
 
+#[derive(Default, Debug, TypeInfo, Decode, Encode, Clone, Copy, PartialEq, Eq)]
+pub enum KeyState {
+	Active,
+	// We are currently transitioning to a new key or the key doesn't yet exist.
+	#[default]
+	Unavailable,
+}
+
+#[derive(Default, Debug, TypeInfo, Decode, Encode, Clone, Copy, PartialEq, Eq)]
+pub struct EpochKey<Key> {
+	pub key: Key,
+	pub epoch_index: EpochIndex,
+	pub key_state: KeyState,
+}
+
 /// Provides the currently valid key for multisig ceremonies.
 pub trait KeyProvider<C: ChainCrypto> {
-	/// The type of the provided key_id.
-	type KeyId;
-
-	/// Gets the key id for the current key.
-	fn current_key_id() -> Self::KeyId;
-
-	/// Get the chain's current agg key.
-	fn current_key() -> C::AggKey;
+	/// Get the chain's current agg key, the epoch index for the current key and the state of that
+	/// key.
+	fn current_epoch_key() -> EpochKey<C::AggKey>;
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_key(_key: C::AggKey) {
 		unimplemented!()
 	}
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub enum RetryPolicy {
-	Always,
-	Never,
 }
 
 /// Api trait for pallets that need to sign things.
@@ -398,14 +405,13 @@ where
 	type KeyId: TryInto<C::AggKey> + From<Vec<u8>>;
 	type ValidatorId: Debug;
 
-	/// Initiate a signing request and return the request id.
-	fn request_signature(payload: C::Payload) -> Self::RequestId;
+	/// Initiate a signing request and return the request id and ceremony id.
+	fn request_signature(payload: C::Payload) -> (Self::RequestId, CeremonyId);
 
-	fn request_signature_with(
+	fn request_keygen_verification_signature(
+		payload: C::Payload,
 		key_id: Self::KeyId,
 		participants: BTreeSet<Self::ValidatorId>,
-		payload: C::Payload,
-		retry_policy: RetryPolicy,
 	) -> (Self::RequestId, CeremonyId);
 
 	/// Register a callback to be dispatched when the signature is available. Can fail if the
@@ -429,15 +435,15 @@ where
 	fn request_signature_with_callback(
 		payload: C::Payload,
 		callback_generator: impl FnOnce(Self::RequestId) -> Self::Callback,
-	) -> Self::RequestId {
-		let id = Self::request_signature(payload);
-		Self::register_callback(id, callback_generator(id)).unwrap_or_else(|e| {
+	) -> (Self::RequestId, CeremonyId) {
+		let (request_id, ceremony_id) = Self::request_signature(payload);
+		Self::register_callback(request_id, callback_generator(request_id)).unwrap_or_else(|e| {
 			log::error!(
 				"Unable to register threshold signature callback. This should not be possible. Error: '{:?}'",
 				e.into()
 			);
 		});
-		id
+		(request_id, ceremony_id)
 	}
 
 	/// Helper function to enable benchmarking of the broadcast pallet
@@ -454,7 +460,7 @@ pub trait Broadcaster<Api: ChainAbi> {
 	type ApiCall: ApiCall<Api>;
 
 	/// Request a threshold signature and then build and broadcast the outbound api call.
-	fn threshold_sign_and_broadcast(api_call: Self::ApiCall);
+	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) -> BroadcastId;
 }
 
 /// The heartbeat of the network
@@ -619,31 +625,88 @@ pub trait StakingInfo {
 }
 
 /// Allow pallets to register `Intent`s in the Ingress pallet.
-pub trait IngressApi {
+pub trait IngressApi<C: Chain> {
 	type AccountId;
-
 	/// Issues an intent id and ingress address for a new liquidity deposit.
 	fn register_liquidity_ingress_intent(
 		lp_account: Self::AccountId,
-		ingress_asset: ForeignChainAsset,
+		ingress_asset: C::ChainAsset,
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError>;
 
 	/// Issues an intent id and ingress address for a new swap.
 	fn register_swap_intent(
-		ingress_asset: ForeignChainAsset,
-		egress_asset: ForeignChainAsset,
+		ingress_asset: C::ChainAsset,
+		egress_asset: Asset,
 		egress_address: ForeignChainAddress,
 		relayer_commission_bps: u16,
 		relayer_id: Self::AccountId,
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError>;
 }
 
+impl<T: frame_system::Config> IngressApi<Ethereum> for T {
+	type AccountId = T::AccountId;
+	fn register_liquidity_ingress_intent(
+		_lp_account: T::AccountId,
+		_ingress_asset: assets::eth::Asset,
+	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
+		Ok((0, ForeignChainAddress::Eth([0u8; 20])))
+	}
+	fn register_swap_intent(
+		_ingress_asset: assets::eth::Asset,
+		_egress_asset: Asset,
+		_egress_address: ForeignChainAddress,
+		_relayer_commission_bps: u16,
+		_relayer_id: T::AccountId,
+	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
+		Ok((0, ForeignChainAddress::Eth([0u8; 20])))
+	}
+}
+
+#[cfg(feature = "ibiza")]
+impl<T: frame_system::Config> IngressApi<Polkadot> for T {
+	type AccountId = T::AccountId;
+	fn register_liquidity_ingress_intent(
+		_lp_account: T::AccountId,
+		_ingress_asset: assets::dot::Asset,
+	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
+		Ok((0, ForeignChainAddress::Dot([0u8; 32])))
+	}
+	fn register_swap_intent(
+		_ingress_asset: assets::dot::Asset,
+		_egress_asset: Asset,
+		_egress_address: ForeignChainAddress,
+		_relayer_commission_bps: u16,
+		_relayer_id: T::AccountId,
+	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
+		Ok((0, ForeignChainAddress::Dot([0u8; 32])))
+	}
+}
+
 /// Generates a deterministic ingress address for some combination of asset, chain and intent id.
-pub trait AddressDerivationApi {
+pub trait AddressDerivationApi<C: Chain> {
 	fn generate_address(
-		ingress_asset: ForeignChainAsset,
+		ingress_asset: C::ChainAsset,
 		intent_id: IntentId,
-	) -> Result<ForeignChainAddress, DispatchError>;
+	) -> Result<C::ChainAccount, DispatchError>;
+}
+
+impl AddressDerivationApi<Ethereum> for () {
+	fn generate_address(
+		_ingress_asset: <Ethereum as Chain>::ChainAsset,
+		_intent_id: IntentId,
+	) -> Result<<Ethereum as Chain>::ChainAccount, DispatchError> {
+		Ok(Default::default())
+	}
+}
+
+#[cfg(feature = "ibiza")]
+impl AddressDerivationApi<Polkadot> for () {
+	fn generate_address(
+		_ingress_asset: <Polkadot as Chain>::ChainAsset,
+		_intent_id: IntentId,
+	) -> Result<<Polkadot as Chain>::ChainAccount, DispatchError> {
+		Ok([0u8; 32].into())
+	}
 }
 
 pub trait AccountRoleRegistry<T: frame_system::Config> {
@@ -680,32 +743,50 @@ pub trait AccountRoleRegistry<T: frame_system::Config> {
 }
 
 /// API that allows other pallets to Egress assets out of the State Chain.
-pub trait EgressApi {
+pub trait EgressApi<C: Chain> {
 	fn schedule_egress(
-		foreign_asset: ForeignChainAsset,
+		foreign_asset: C::ChainAsset,
 		amount: AssetAmount,
-		egress_address: ForeignChainAddress,
-	);
-
-	fn is_egress_valid(
-		foreign_asset: &ForeignChainAsset,
-		egress_address: &ForeignChainAddress,
-	) -> bool;
+		egress_address: C::ChainAccount,
+	) -> EgressId;
 }
 
-pub trait EthereumAssetsAddressProvider {
-	fn try_get_asset_address(asset: Asset) -> Option<EthereumAddress>;
+impl<T: frame_system::Config> EgressApi<Ethereum> for T {
+	fn schedule_egress(
+		_foreign_asset: assets::eth::Asset,
+		_amount: AssetAmount,
+		_egress_address: <Ethereum as Chain>::ChainAccount,
+	) -> EgressId {
+		(ForeignChain::Ethereum, 0)
+	}
 }
 
-/// API that Schedules funds to be fetched from an ingress address and transferred to the main vault
-/// account. It's caller's responsibility to ensure that the asset/address combination are
-/// valid.
-///
-/// Schedule functions are chain specific, as each chain may require different data to do fetching.
-pub trait IngressFetchApi {
-	fn schedule_ethereum_ingress_fetch(fetch_details: Vec<(Asset, IntentId)>);
+#[cfg(feature = "ibiza")]
+impl<T: frame_system::Config> EgressApi<Polkadot> for T {
+	fn schedule_egress(
+		_foreign_asset: assets::dot::Asset,
+		_amount: AssetAmount,
+		_egress_address: <Polkadot as Chain>::ChainAccount,
+	) -> EgressId {
+		(ForeignChain::Ethereum, 0)
+	}
 }
 
-impl IngressFetchApi for () {
-	fn schedule_ethereum_ingress_fetch(_fetch_details: Vec<(Asset, IntentId)>) {}
+pub trait VaultTransitionHandler<C: ChainCrypto> {
+	fn on_new_vault() {}
+}
+
+/// Provides information about current bids.
+pub trait BidInfo {
+	type Balance;
+	/// Returns the smallest of all backup validator bids.
+	fn get_min_backup_bid() -> Self::Balance;
+}
+
+pub trait VaultKeyWitnessedHandler<C: ChainAbi> {
+	fn on_new_key_activated(
+		new_public_key: C::AggKey,
+		block_number: C::ChainBlockNumber,
+		tx_id: C::TransactionId,
+	) -> DispatchResultWithPostInfo;
 }

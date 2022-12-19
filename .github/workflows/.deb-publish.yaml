@@ -27,7 +27,7 @@ env:
 jobs:
   build-deb:
     name: Build Deb
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     permissions:
       id-token: write
       contents: read
@@ -139,6 +139,7 @@ jobs:
           echo "apt install chainflip-cli" >> $GITHUB_STEP_SUMMARY
           echo "apt install chainflip-node" >> $GITHUB_STEP_SUMMARY
           echo "apt install chainflip-engine" >> $GITHUB_STEP_SUMMARY
+          echo "apt install chainflip-relayer" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
 
       - name: Testnet tools summary

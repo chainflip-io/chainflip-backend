@@ -159,7 +159,8 @@ impl PersistentKeyDB {
 	}
 
 	pub fn load_keys<C: CryptoScheme>(&self) -> HashMap<KeyId, KeygenResultInfo<C::Point>> {
-		self.db
+		let keys: HashMap<KeyId, KeygenResultInfo<C::Point>> = self
+			.db
 			.prefix_iterator_cf(
 				get_data_column_handle(&self.db),
 				[&KEYGEN_DATA_PARTIAL_PREFIX[..], &(C::CHAIN_TAG.to_bytes())[..]].concat(),
@@ -170,28 +171,24 @@ impl PersistentKeyDB {
 
 				// deserialize the `KeygenResultInfo`
 				match bincode::deserialize::<KeygenResultInfo<C::Point>>(&key_info) {
-					Ok(keygen_result_info) => {
-						slog::debug!(
-							self.logger,
-							"Loaded {} key_info (key_id: {}) from database",
-							C::NAME,
-							key_id
-						);
-						Some((key_id, keygen_result_info))
-					},
+					Ok(keygen_result_info) => Some((key_id, keygen_result_info)),
 					Err(err) => {
 						slog::error!(
 							self.logger,
-							"Could not deserialize {} key_info (key_id: {}) from database: {}",
+							"Could not deserialize {} key from database: {}",
 							C::NAME,
-							key_id,
-							err
+							err;
+							"key_id" => key_id.to_string()
 						);
 						None
 					},
 				}
 			})
-			.collect()
+			.collect();
+		if !keys.is_empty() {
+			slog::debug!(self.logger, "Loaded {} {} keys from the database", keys.len(), C::NAME,);
+		}
+		keys
 	}
 }
 

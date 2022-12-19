@@ -6,12 +6,17 @@ mod signer_nomination;
 
 mod mock_runtime;
 
+mod threshold_signing;
+
 mod account;
 mod authorities;
 mod genesis;
 mod governance;
 mod new_epoch;
 mod staking;
+
+#[cfg(feature = "ibiza")]
+mod swapping;
 
 use frame_support::{assert_noop, assert_ok, traits::OnInitialize};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
@@ -22,11 +27,9 @@ use state_chain_runtime::{
 	Reputation, Runtime, Staking, System, Timestamp, Validator, Witnesser,
 };
 
-use cf_primitives::{AuthorityCount, EpochIndex};
-use cf_traits::{BlockNumber, EpochInfo, FlipBalance};
-use libsecp256k1::SecretKey;
+use cf_primitives::{AuthorityCount, BlockNumber, EpochIndex, FlipBalance};
+use cf_traits::EpochInfo;
 use pallet_cf_staking::{EthTransactionHash, EthereumAddress};
-use rand::{prelude::*, SeedableRng};
 use sp_runtime::AccountId32;
 
 type NodeId = AccountId32;
@@ -34,7 +37,7 @@ const ETH_DUMMY_ADDR: EthereumAddress = [42u8; 20];
 const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
 const TX_HASH: EthTransactionHash = [211u8; 32];
 
-pub const GENESIS_KEY: u64 = 42;
+pub const GENESIS_KEY_SEED: u64 = 42;
 
 // TODO - remove collision of account numbers
 pub const ALICE: [u8; 32] = [0xaa; 32];

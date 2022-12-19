@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 
+use cf_primitives::BroadcastId;
 use frame_support::{
 	construct_runtime, parameter_types, traits::UnfilteredDispatchable, StorageHasher,
 };
@@ -13,12 +14,11 @@ use sp_runtime::{
 use crate as pallet_cf_vaults;
 
 use super::*;
-use cf_chains::{eth, mocks::MockEthereum, ApiCall, ChainCrypto};
+use cf_chains::{eth, mocks::MockEthereum, ApiCall, ChainCrypto, ReplayProtectionProvider};
 use cf_traits::{
 	mocks::{
 		ceremony_id_provider::MockCeremonyIdProvider, ensure_origin_mock::NeverFailingOriginCheck,
-		epoch_info::MockEpochInfo, eth_environment_provider::MockEthEnvironmentProvider,
-		eth_replay_protection_provider::MockEthReplayProtectionProvider,
+		epoch_info::MockEpochInfo, eth_replay_protection_provider::MockEthReplayProtectionProvider,
 		system_state_info::MockSystemStateInfo, threshold_signer::MockThresholdSigner,
 	},
 	Chainflip,
@@ -145,11 +145,11 @@ pub struct MockSetAggKeyWithAggKey {
 
 impl SetAggKeyWithAggKey<MockEthereum> for MockSetAggKeyWithAggKey {
 	fn new_unsigned(
-		nonce: <MockEthereum as ChainAbi>::ReplayProtection,
-		_chain_specific_data: <MockEthereum as ChainAbi>::ApiCallExtraData,
+		old_key: Option<<MockEthereum as ChainCrypto>::AggKey>,
 		new_key: <MockEthereum as ChainCrypto>::AggKey,
-	) -> Self {
-		Self { nonce, new_key }
+	) -> Result<Self, ()> {
+		old_key.ok_or(())?;
+		Ok(Self { nonce: MockEthReplayProtectionProvider::replay_protection(), new_key })
 	}
 }
 
@@ -174,6 +174,11 @@ impl ApiCall<MockEthereum> for MockSetAggKeyWithAggKey {
 	}
 }
 
+pub struct MockVaultTransitionHandler;
+impl VaultTransitionHandler<MockEthereum> for MockVaultTransitionHandler {
+	fn on_new_vault() {}
+}
+
 pub struct MockBroadcaster;
 
 impl MockBroadcaster {
@@ -189,8 +194,9 @@ impl MockBroadcaster {
 impl Broadcaster<MockEthereum> for MockBroadcaster {
 	type ApiCall = MockSetAggKeyWithAggKey;
 
-	fn threshold_sign_and_broadcast(_api_call: Self::ApiCall) {
-		Self::send_broadcast()
+	fn threshold_sign_and_broadcast(_api_call: Self::ApiCall) -> BroadcastId {
+		Self::send_broadcast();
+		1
 	}
 }
 
@@ -211,12 +217,11 @@ impl pallet_cf_vaults::Config for MockRuntime {
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
 	type ThresholdSigner = MockThresholdSigner<MockEthereum, Call>;
 	type OffenceReporter = MockOffenceReporter;
-	type ApiCall = MockSetAggKeyWithAggKey;
+	type SetAggKeyWithAggKey = MockSetAggKeyWithAggKey;
+	type VaultTransitionHandler = MockVaultTransitionHandler;
 	type CeremonyIdProvider = MockCeremonyIdProvider<CeremonyId>;
 	type WeightInfo = ();
 	type Broadcaster = MockBroadcaster;
-	type EthEnvironmentProvider = MockEthEnvironmentProvider;
-	type ReplayProtectionProvider = MockEthReplayProtectionProvider<MockEthereum>;
 	type SystemStateManager = MockSystemStateManager;
 }
 
@@ -228,18 +233,19 @@ pub const NEW_AGG_PUB_KEY: [u8; 4] = *b"next";
 
 pub const MOCK_KEYGEN_RESPONSE_TIMEOUT: u64 = 25;
 
-pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
+fn test_ext_inner(key: Option<Vec<u8>>) -> sp_io::TestExternalities {
 	let config = GenesisConfig {
 		system: Default::default(),
 		vaults_pallet: VaultsPalletConfig {
-			vault_key: GENESIS_AGG_PUB_KEY.to_vec(),
+			vault_key: key,
 			deployment_block: 0,
 			keygen_response_timeout: MOCK_KEYGEN_RESPONSE_TIMEOUT,
 		},
 	};
 
 	let authorities = vec![ALICE, BOB, CHARLIE];
-	MockEpochInfo::set_epoch_authority_count(0, authorities.len() as AuthorityCount);
+	MockEpochInfo::set_epoch(GENESIS_EPOCH);
+	MockEpochInfo::set_epoch_authority_count(GENESIS_EPOCH, authorities.len() as AuthorityCount);
 	MockEpochInfo::set_authorities(authorities);
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
@@ -249,4 +255,12 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	});
 
 	ext
+}
+
+pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
+	test_ext_inner(Some(GENESIS_AGG_PUB_KEY.to_vec()))
+}
+
+pub(crate) fn new_test_ext_no_key() -> sp_io::TestExternalities {
+	test_ext_inner(None)
 }

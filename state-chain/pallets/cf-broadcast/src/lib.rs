@@ -10,12 +10,13 @@ mod mock;
 mod tests;
 
 pub mod weights;
+use cf_primitives::BroadcastId;
 pub use weights::WeightInfo;
 
 use cf_chains::{ApiCall, Chain, ChainAbi, ChainCrypto, FeeRefundCalculator, TransactionBuilder};
 use cf_traits::{
-	offence_reporting::OffenceReporter, Broadcaster, Chainflip, EpochInfo, SingleSignerNomination,
-	ThresholdSigner,
+	offence_reporting::OffenceReporter, Broadcaster, Chainflip, EpochInfo, EpochKey,
+	SingleSignerNomination, ThresholdSigner,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -28,9 +29,6 @@ use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use scale_info::TypeInfo;
 use sp_std::{marker::PhantomData, prelude::*};
-
-/// A unique id for each broadcast.
-pub type BroadcastId = u32;
 
 /// The number of broadcast attempts that were made before this one.
 pub type AttemptCount = u32;
@@ -164,7 +162,7 @@ pub mod pallet {
 		type BroadcastTimeout: Get<BlockNumberFor<Self>>;
 
 		/// Something that provides the current key for signing.
-		type KeyProvider: KeyProvider<Self::TargetChain, KeyId = Self::KeyId>;
+		type KeyProvider: KeyProvider<Self::TargetChain>;
 
 		/// The weights for the pallet
 		type WeightInfo: WeightInfo;
@@ -274,6 +272,11 @@ pub mod pallet {
 		///
 		/// - [BroadcastAttemptTimeout](Event::BroadcastAttemptTimeout)
 		fn on_initialize(block_number: BlockNumberFor<T>) -> frame_support::weights::Weight {
+			// NB: We don't want broadcasts that timeout to ever expire. We will keep retrying
+			// forever. It's possible that the reason for timeout could be something like a chain
+			// halt on the external chain. If the signature is valid then we expect it to succeed
+			// eventually. For outlying, unknown unknowns, these can be something governance can
+			// handle if absolutely necessary (though it likely never will be).
 			let expiries = Timeouts::<T, I>::take(block_number);
 			for attempt_id in expiries.iter() {
 				if let Some(attempt) = Self::take_awaiting_broadcast(*attempt_id) {
@@ -339,7 +342,35 @@ pub mod pallet {
 
 			Self::take_awaiting_broadcast(broadcast_attempt_id);
 
-			Self::schedule_retry(signing_attempt.broadcast_attempt, extrinsic_signer);
+			FailedBroadcasters::<T, I>::append(
+				signing_attempt.broadcast_attempt.broadcast_attempt_id.broadcast_id,
+				&extrinsic_signer,
+			);
+
+			// Schedule a failed attempt for retry when the next block is authored.
+			// We will abort the broadcast once all authorities have attempt to sign the
+			// transaction
+			if signing_attempt.broadcast_attempt.broadcast_attempt_id.attempt_count ==
+				T::EpochInfo::current_authority_count()
+					.checked_sub(1)
+					.expect("We must have at least one authority")
+			{
+				Self::clean_up_broadcast_storage(
+					signing_attempt.broadcast_attempt.broadcast_attempt_id.broadcast_id,
+				);
+
+				Self::deposit_event(Event::<T, I>::BroadcastAborted {
+					broadcast_id: signing_attempt
+						.broadcast_attempt
+						.broadcast_attempt_id
+						.broadcast_id,
+				});
+			} else {
+				BroadcastRetryQueue::<T, I>::append(&signing_attempt.broadcast_attempt);
+				Self::deposit_event(Event::<T, I>::BroadcastRetryScheduled {
+					broadcast_attempt_id: signing_attempt.broadcast_attempt.broadcast_attempt_id,
+				});
+			}
 
 			Ok(().into())
 		}
@@ -359,7 +390,8 @@ pub mod pallet {
 		pub fn on_signature_ready(
 			origin: OriginFor<T>,
 			threshold_request_id: <T::ThresholdSigner as ThresholdSigner<T::TargetChain>>::RequestId,
-			api_call: <T as Config<I>>::ApiCall,
+			api_call: Box<<T as Config<I>>::ApiCall>,
+			broadcast_id: BroadcastId,
 		) -> DispatchResultWithPostInfo {
 			let _ = T::EnsureThresholdSigned::ensure_origin(origin)?;
 
@@ -377,7 +409,8 @@ pub mod pallet {
 			Self::start_broadcast(
 				&signature,
 				T::TransactionBuilder::build_transaction(&api_call.clone().signed(&signature)),
-				api_call,
+				*api_call,
+				broadcast_id,
 			);
 			Ok(().into())
 		}
@@ -465,11 +498,23 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	/// Request a threshold signature, providing [Call::on_signature_ready] as the callback.
-	pub fn threshold_sign_and_broadcast(api_call: <T as Config<I>>::ApiCall) {
+	pub fn threshold_sign_and_broadcast(api_call: <T as Config<I>>::ApiCall) -> BroadcastId {
+		let broadcast_id = BroadcastIdCounter::<T, I>::mutate(|id| {
+			*id += 1;
+			*id
+		});
 		T::ThresholdSigner::request_signature_with_callback(
 			api_call.threshold_signature_payload(),
-			|id| Call::on_signature_ready { threshold_request_id: id, api_call }.into(),
+			|id| {
+				Call::on_signature_ready {
+					threshold_request_id: id,
+					api_call: Box::new(api_call),
+					broadcast_id,
+				}
+				.into()
+			},
 		);
+		broadcast_id
 	}
 
 	/// Begin the process of broadcasting a transaction.
@@ -481,12 +526,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		signature: &ThresholdSignatureFor<T, I>,
 		unsigned_tx: TransactionFor<T, I>,
 		api_call: <T as Config<I>>::ApiCall,
+		broadcast_id: BroadcastId,
 	) -> BroadcastAttemptId {
-		let broadcast_id = BroadcastIdCounter::<T, I>::mutate(|id| {
-			*id += 1;
-			*id
-		});
-
 		SignatureToBroadcastIdLookup::<T, I>::insert(signature, broadcast_id);
 
 		ThresholdSignatureData::<T, I>::insert(broadcast_id, (api_call, signature));
@@ -502,8 +543,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn start_next_broadcast_attempt(broadcast_attempt: BroadcastAttempt<T, I>) {
 		let broadcast_id = broadcast_attempt.broadcast_attempt_id.broadcast_id;
 		if let Some((api_call, signature)) = ThresholdSignatureData::<T, I>::get(broadcast_id) {
+			let EpochKey { key, .. } = T::KeyProvider::current_epoch_key();
 			if <T::TargetChain as ChainCrypto>::verify_threshold_signature(
-				&T::KeyProvider::current_key(),
+				&key,
 				&api_call.threshold_signature_payload(),
 				&signature,
 			) {
@@ -519,7 +561,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					broadcast_attempt_id: next_broadcast_attempt_id,
 					..broadcast_attempt
 				});
-			} else {
+			}
+			// If the signature verification fails, we want
+			// to retry from the threshold signing stage.
+			else {
 				Self::clean_up_broadcast_storage(broadcast_id);
 				Self::threshold_sign_and_broadcast(api_call);
 				log::info!(
@@ -572,42 +617,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			panic!("{FAILED_SIGNER_SELECTION}");
 		}
 	}
-
-	/// Schedule a failed attempt for retry when the next block is authored.
-	/// We will abort the broadcast once all authorities have attempt to sign the transaction
-	fn schedule_retry(
-		failed_broadcast_attempt: BroadcastAttempt<T, I>,
-		failed_signer: T::ValidatorId,
-	) {
-		FailedBroadcasters::<T, I>::append(
-			failed_broadcast_attempt.broadcast_attempt_id.broadcast_id,
-			&failed_signer,
-		);
-
-		if failed_broadcast_attempt.broadcast_attempt_id.attempt_count ==
-			T::EpochInfo::current_authority_count()
-				.checked_sub(1)
-				.expect("We must have at least one authority")
-		{
-			Self::clean_up_broadcast_storage(
-				failed_broadcast_attempt.broadcast_attempt_id.broadcast_id,
-			);
-
-			Self::deposit_event(Event::<T, I>::BroadcastAborted {
-				broadcast_id: failed_broadcast_attempt.broadcast_attempt_id.broadcast_id,
-			});
-		} else {
-			BroadcastRetryQueue::<T, I>::append(&failed_broadcast_attempt);
-			Self::deposit_event(Event::<T, I>::BroadcastRetryScheduled {
-				broadcast_attempt_id: failed_broadcast_attempt.broadcast_attempt_id,
-			});
-		}
-	}
 }
 
 impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 	type ApiCall = T::ApiCall;
-	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) {
+	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) -> BroadcastId {
 		Self::threshold_sign_and_broadcast(api_call)
 	}
 }

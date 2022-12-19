@@ -7,6 +7,8 @@ pub mod benchmarking;
 pub mod ingress_address;
 
 use crate::*;
+pub use cf_primitives::chains::{assets, Ethereum};
+use cf_primitives::KeyId;
 use codec::{Decode, Encode, MaxEncodedLen};
 pub use ethabi::{
 	ethereum_types::{H256, U256},
@@ -26,7 +28,7 @@ use sp_std::{
 	str, vec,
 };
 
-use self::{api::EthereumReplayProtection, ingress_address::get_salt};
+use self::api::EthereumReplayProtection;
 
 // Reference constants for the chain spec
 pub const CHAIN_ID_MAINNET: u64 = 1;
@@ -34,23 +36,22 @@ pub const CHAIN_ID_ROPSTEN: u64 = 3;
 pub const CHAIN_ID_GOERLI: u64 = 5;
 pub const CHAIN_ID_KOVAN: u64 = 42;
 
-#[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub struct Ethereum;
-
 impl Chain for Ethereum {
 	type ChainBlockNumber = u64;
 	type ChainAmount = EthAmount;
 	type TransactionFee = eth::TransactionFee;
 	type TrackedData = eth::TrackedData<Self>;
 	type ChainAccount = eth::Address;
-	type ChainAsset = eth::Address;
+	type ChainAsset = assets::eth::Asset;
+	type EpochStartData = ();
 }
 
 impl ChainCrypto for Ethereum {
+	type KeyId = KeyId;
 	type AggKey = eth::AggKey;
 	type Payload = eth::H256;
 	type ThresholdSignature = SchnorrVerificationComponents;
-	type TransactionHash = eth::H256;
+	type TransactionId = eth::H256;
 	type GovKey = eth::Address;
 
 	fn verify_threshold_signature(
@@ -684,36 +685,6 @@ impl core::fmt::Debug for TransactionHash {
 impl From<H256> for TransactionHash {
 	fn from(x: H256) -> Self {
 		Self(x)
-	}
-}
-
-impl Tokenizable for FetchAssetParams<Ethereum> {
-	fn tokenize(self) -> Token {
-		Token::Tuple(vec![
-			Token::FixedBytes(get_salt(self.intent_id).to_vec()),
-			Token::Address(self.asset),
-		])
-	}
-}
-
-impl Tokenizable for Vec<FetchAssetParams<Ethereum>> {
-	fn tokenize(self) -> Token {
-		Token::Array(self.iter().map(|fetch_params| fetch_params.tokenize()).collect())
-	}
-}
-
-impl Tokenizable for TransferAssetParams<Ethereum> {
-	fn tokenize(self) -> Token {
-		Token::Tuple(vec![
-			Token::Address(self.asset),
-			Token::Address(self.to),
-			Token::Uint(Uint::from(self.amount)),
-		])
-	}
-}
-impl Tokenizable for Vec<TransferAssetParams<Ethereum>> {
-	fn tokenize(self) -> Token {
-		Token::Array(self.iter().map(|transfer_params| transfer_params.tokenize()).collect())
 	}
 }
 

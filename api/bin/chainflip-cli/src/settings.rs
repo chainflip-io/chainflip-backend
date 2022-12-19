@@ -1,14 +1,19 @@
-use chainflip_api::primitives::{AccountRole, Hash, ProposalId};
-use chainflip_engine::settings::{CfSettings, Eth, EthOptions, StateChain, StateChainOptions};
+use chainflip_api::primitives::{AccountRole, Asset, Hash};
+pub use chainflip_engine::settings::StateChain;
+use chainflip_engine::{
+	constants::{CONFIG_ROOT, DEFAULT_CONFIG_ROOT},
+	settings::{CfSettings, Eth, EthOptions, StateChainOptions},
+};
 use clap::Parser;
-use config::{ConfigError, Source, Value};
+use config::{ConfigBuilder, ConfigError, Source, Value};
 use serde::Deserialize;
-use std::collections::HashMap;
+use std::{collections::HashMap, path::PathBuf};
 
 #[derive(Parser, Clone, Debug)]
+#[clap(version = env!("SUBSTRATE_CLI_IMPL_VERSION"))]
 pub struct CLICommandLineOptions {
-	#[clap(short = 'c', long = "config-path")]
-	config_path: Option<String>,
+	#[clap(short = 'c', long = "config-root", env = CONFIG_ROOT, default_value = DEFAULT_CONFIG_ROOT)]
+	pub config_root: String,
 
 	#[clap(flatten)]
 	state_chain_opts: StateChainOptions,
@@ -17,7 +22,7 @@ pub struct CLICommandLineOptions {
 	eth_opts: EthOptions,
 
 	#[clap(subcommand)]
-	pub cmd: CFCommand,
+	pub cmd: CliCommand,
 }
 
 impl Source for CLICommandLineOptions {
@@ -40,27 +45,80 @@ impl Source for CLICommandLineOptions {
 impl Default for CLICommandLineOptions {
 	fn default() -> Self {
 		Self {
-			config_path: None,
+			config_root: DEFAULT_CONFIG_ROOT.to_owned(),
 			state_chain_opts: StateChainOptions::default(),
 			eth_opts: EthOptions::default(),
 			// an arbitrary simple command
-			cmd: CFCommand::Retire {},
+			cmd: CliCommand::Retire {},
 		}
 	}
 }
 
 #[derive(Parser, Clone, Debug)]
-pub enum CFCommand {
+pub struct SwapIntentParams {
+	/// Ingress asset ("eth"|"dot")
+	pub ingress_asset: Asset,
+	/// Egress asset ("eth"|"dot")
+	pub egress_asset: Asset,
+	// Note: we delay parsing this into `ForeignChainAddress`
+	// until we know which kind of address to expect (based
+	// on egress_asset)
+	/// Egress asset address to receive funds after the swap
+	pub egress_address: String,
+	/// Commission to the relayer in base points
+	pub relayer_commission: u16,
+}
+
+#[derive(clap::Subcommand, Clone, Debug)]
+pub enum RelayerSubcommands {
+	/// Register a new swap intent
+	SwapIntent(SwapIntentParams),
+}
+
+#[derive(clap::Subcommand, Clone, Debug)]
+pub enum LiquidityProviderSubcommands {
+	/// Deposit asset
+	Deposit {
+		/// Asset to deposit
+		asset: Asset,
+	},
+}
+
+#[derive(clap::Subcommand, Clone, Debug)]
+pub enum Claim {
 	#[clap(about = "Submit an extrinsic to request generation of a claim certificate")]
-	Claim {
-		#[clap(help = "Amount to claim in FLIP")]
-		amount: f64,
+	Request {
+		#[clap(
+			help = "Amount to claim in FLIP (omit this option to claim all available FLIP)",
+			long = "exact"
+		)]
+		amount: Option<f64>,
 		#[clap(help = "The Ethereum address you wish to claim your FLIP to")]
 		eth_address: String,
 
 		#[clap(long = "register", hide = true)]
 		should_register_claim: bool,
 	},
+	#[clap(about = "Get claim certificate for your recently submitted claim")]
+	Check,
+}
+
+#[derive(Parser, Clone, Debug)]
+pub enum CliCommand {
+	/// Relayer specific commands
+	#[cfg(feature = "ibiza")]
+	#[clap(subcommand)]
+	Relayer(RelayerSubcommands),
+	/// Liquidity provider specific commands
+	#[cfg(feature = "ibiza")]
+	#[clap(subcommand, name = "lp")]
+	LiquidityProvider(LiquidityProviderSubcommands),
+	#[clap(about = "Requesting and checking claims")]
+	#[clap(subcommand)]
+	Claim(Claim),
+	#[clap(
+		about = "Submit an extrinsic to request generation of a claim certificate (claiming all available FLIP)"
+	)]
 	#[clap(about = "Set your account role to the Validator, Relayer, Liquidity Provider")]
 	RegisterAccountRole {
 		#[clap(help = "Validator (v), Liquidity Provider (lp), Relayer (r)", value_parser = account_role_parser)]
@@ -87,9 +145,13 @@ pub enum CFCommand {
         hide = true,
         about = "Force a key rotation. This can only be executed by the governance dictator"
     )]
-	ForceRotation {
-		#[clap(help = "The governance proposal id that will be associated with this rotation.")]
-		id: ProposalId,
+	ForceRotation {},
+	#[clap(
+		about = "Generates the 3 key files needed to run a chainflip node (Node Key, Ethereum Key and Validator Key), then saves them to the filesystem."
+	)]
+	GenerateKeys {
+		#[clap(help = "Output path", parse(from_os_str))]
+		path: Option<PathBuf>,
 	},
 }
 
@@ -121,14 +183,34 @@ impl CfSettings for CLISettings {
 
 		self.state_chain.validate_settings()
 	}
+
+	fn set_defaults(
+		config_builder: ConfigBuilder<config::builder::DefaultState>,
+		config_root: &str,
+	) -> Result<ConfigBuilder<config::builder::DefaultState>, ConfigError> {
+		config_builder
+			.set_default(
+				"state_chain.signing_key_file",
+				PathBuf::from(config_root)
+					.join("keys/signing_key_file")
+					.to_str()
+					.expect("Invalid signing_key_file path"),
+			)?
+			.set_default(
+				"eth.private_key_file",
+				PathBuf::from(config_root)
+					.join("keys/eth_private_key")
+					.to_str()
+					.expect("Invalid eth_private_key path"),
+			)
+	}
 }
 
 impl CLISettings {
-	/// New settings loaded from the `config_path` in the `CommandLineOptions` or
-	/// "config/Default.toml" if none, with overridden values from the environment and
-	/// `CommandLineOptions`
+	/// New settings loaded from "$base_config_path/config/Settings.toml",
+	/// environment and `CommandLineOptions`
 	pub fn new(opts: CLICommandLineOptions) -> Result<Self, ConfigError> {
-		Self::load_settings_from_all_sources("config/Default.toml", opts.config_path.clone(), opts)
+		Self::load_settings_from_all_sources(opts.config_root.clone(), opts)
 	}
 }
 
@@ -153,8 +235,7 @@ mod tests {
 		set_test_env();
 
 		let settings = CLISettings::load_settings_from_all_sources(
-			"../config/Default.toml",
-			None,
+			DEFAULT_CONFIG_ROOT.to_owned(),
 			CLICommandLineOptions::default(),
 		)
 		.unwrap();
@@ -165,9 +246,12 @@ mod tests {
 
 	#[test]
 	fn test_all_command_line_options() {
-		// Fill the command line options with test data that is different for that in `Default.toml`
+		// Fill the options with test values that will pass the parsing/validation.
+		// The test values need to be different from the default values set during `set_defaults()`
+		// for the test to work. `config_root` and `cmd` are not used in this test because they are
+		// not settings.
 		let opts = CLICommandLineOptions {
-			config_path: None, // Not used in this test
+			config_root: CLICommandLineOptions::default().config_root,
 
 			state_chain_opts: StateChainOptions {
 				state_chain_ws_endpoint: Some("ws://endpoint:1234".to_owned()),
@@ -180,7 +264,7 @@ mod tests {
 				eth_private_key_file: Some(PathBuf::from_str("eth_key_file").unwrap()),
 			},
 
-			cmd: CFCommand::Rotate {}, // Not used in this test
+			cmd: CliCommand::Rotate {}, // Not used in this test
 		};
 
 		// Load the test opts into the settings

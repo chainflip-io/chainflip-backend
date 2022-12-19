@@ -22,10 +22,10 @@ use crate::{
 		},
 		crypto::{CryptoScheme, Rng},
 		eth::{EthSchnorrSignature, EthSigning},
-		tests::fixtures::MESSAGE_HASH,
+		tests::fixtures::SIGNING_PAYLOAD,
 	},
 	p2p::OutgoingMultisigStageMessages,
-	task_scope::with_task_scope,
+	task_scope::task_scope,
 };
 use anyhow::Result;
 use cf_primitives::{AccountId, CeremonyId};
@@ -45,12 +45,12 @@ async fn run_on_request_to_sign<C: CryptoScheme>(
 	Result<<C as CryptoScheme>::Signature, (BTreeSet<AccountId32>, SigningFailureReason)>,
 > {
 	let (result_sender, result_receiver) = oneshot::channel();
-	with_task_scope(|scope| {
+	task_scope(|scope| {
 		let future: Pin<Box<dyn Future<Output = Result<()>> + Send>> = async {
 			ceremony_manager.on_request_to_sign(
 				ceremony_id,
 				participants,
-				MESSAGE_HASH.clone(),
+				SIGNING_PAYLOAD.clone(),
 				get_key_data_for_test::<C>(BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned())),
 				Rng::from_seed(DEFAULT_SIGNING_SEED),
 				result_sender,
@@ -93,7 +93,7 @@ fn send_signing_request(
 		ceremony_id,
 		details: Some(CeremonyRequestDetails::Sign(SigningRequestDetails::<EthSigning> {
 			participants,
-			data: MESSAGE_HASH.clone(),
+			payload: SIGNING_PAYLOAD.clone(),
 			keygen_result_info: get_key_data_for_test::<EthSigning>(BTreeSet::from_iter(
 				ACCOUNT_IDS.iter().cloned(),
 			)),
@@ -141,7 +141,7 @@ async fn should_panic_keygen_request_if_not_participating() {
 
 	// Send a keygen request where participants doesn't include non_participating_id
 	let (result_sender, _result_receiver) = oneshot::channel();
-	with_task_scope(|scope| {
+	task_scope(|scope| {
 		async {
 			ceremony_manager.on_keygen_request(
 				INITIAL_LATEST_CEREMONY_ID + 1,
@@ -257,7 +257,7 @@ async fn should_not_create_unauthorized_ceremony_with_invalid_ceremony_id() {
 		&new_test_logger(),
 	);
 
-	with_task_scope(|scope| {
+	task_scope(|scope| {
 		let future: Pin<Box<dyn Future<Output = Result<()>> + Send>> = async {
 			// Process a stage 1 message with a ceremony id that is in the past
 			ceremony_manager.process_p2p_message(
@@ -327,7 +327,7 @@ async fn should_send_outcome_of_authorised_ceremony() {
 
 #[tokio::test]
 async fn should_cleanup_unauthorised_ceremony_if_not_participating() {
-	with_task_scope(|scope| {
+	task_scope(|scope| {
 		async {
 			let our_account_id = ACCOUNT_IDS[0].clone();
 

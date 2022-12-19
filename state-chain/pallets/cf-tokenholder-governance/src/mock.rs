@@ -1,14 +1,13 @@
 use crate::{self as pallet_cf_tokenholder_governance};
-use cf_chains::{
-	eth::api::EthereumReplayProtection, mocks::MockEthereum, ApiCall, ChainAbi, ChainCrypto,
-};
+use cf_chains::{mocks::MockEthereum, ApiCall, ChainAbi, ChainCrypto};
+use cf_primitives::BroadcastId;
 use cf_traits::{
 	impl_mock_stake_transfer, impl_mock_waived_fees,
 	mocks::{
 		ensure_origin_mock::NeverFailingOriginCheck, epoch_info::MockEpochInfo,
 		system_state_info::MockSystemStateInfo,
 	},
-	Broadcaster, Chainflip, ReplayProtectionProvider, StakeTransfer, WaivedFees,
+	Broadcaster, Chainflip, StakeTransfer, WaivedFees,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -52,21 +51,6 @@ parameter_types! {
 	pub const EnactmentDelay: BlockNumberFor<Test> = 20;
 }
 
-pub const FAKE_KEYMAN_ADDR: [u8; 20] = [0xcf; 20];
-pub const CHAIN_ID: u64 = 31337;
-pub const COUNTER: u64 = 42;
-pub struct MockReplayProvider;
-
-impl ReplayProtectionProvider<MockEthereum> for MockReplayProvider {
-	fn replay_protection() -> <MockEthereum as ChainAbi>::ReplayProtection {
-		EthereumReplayProtection {
-			key_manager_address: FAKE_KEYMAN_ADDR,
-			chain_id: CHAIN_ID,
-			nonce: COUNTER,
-		}
-	}
-}
-
 impl system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
@@ -103,11 +87,8 @@ pub struct MockApiCalls {
 }
 
 impl SetGovKeyWithAggKey<MockEthereum> for MockApiCalls {
-	fn new_unsigned(
-		nonce: <MockEthereum as ChainAbi>::ReplayProtection,
-		new_key: <MockEthereum as ChainCrypto>::GovKey,
-	) -> Self {
-		Self { nonce, new_key }
+	fn new_unsigned(new_key: <MockEthereum as ChainCrypto>::GovKey) -> Self {
+		Self { nonce: Default::default(), new_key }
 	}
 }
 
@@ -136,19 +117,17 @@ impl ApiCall<MockEthereum> for MockApiCalls {
 pub struct MockBroadcaster;
 
 impl SetCommKeyWithAggKey<MockEthereum> for MockApiCalls {
-	fn new_unsigned(
-		nonce: <MockEthereum as ChainAbi>::ReplayProtection,
-		new_key: <MockEthereum as ChainCrypto>::GovKey,
-	) -> Self {
-		Self { nonce, new_key }
+	fn new_unsigned(new_key: <MockEthereum as ChainCrypto>::GovKey) -> Self {
+		Self { nonce: Default::default(), new_key }
 	}
 }
 
 impl Broadcaster<MockEthereum> for MockBroadcaster {
 	type ApiCall = MockApiCalls;
 
-	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) {
+	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) -> BroadcastId {
 		storage::hashed::put(&<Twox64Concat as StorageHasher>::hash, b"GOV", &api_call);
+		1
 	}
 }
 
@@ -196,7 +175,6 @@ impl pallet_cf_tokenholder_governance::Config for Test {
 	type Event = Event;
 	type FeePayment = Flip;
 	type Chain = MockEthereum;
-	type ReplayProtectionProvider = MockReplayProvider;
 	type StakingInfo = Flip;
 	type ApiCalls = MockApiCalls;
 	type Broadcaster = MockBroadcaster;

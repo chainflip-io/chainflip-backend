@@ -4,7 +4,7 @@ on:
 
 jobs:
   set-variables:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     outputs:
       commit_hash: ${{ steps.commit_hash.outputs.commit_hash }}
       branch_name: ${{ steps.branch_name.outputs.branch_name }}

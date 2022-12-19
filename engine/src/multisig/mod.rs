@@ -17,8 +17,6 @@ use cf_primitives::CeremonyId;
 
 use serde::{Deserialize, Serialize};
 
-use std::sync::Arc;
-
 use crate::{
 	logging::COMPONENT_KEY,
 	p2p::{MultisigMessageReceiver, MultisigMessageSender},
@@ -33,11 +31,11 @@ pub use db::PersistentKeyDB;
 use self::client::key_store::KeyStore;
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Hash, Eq)]
-pub struct MessageHash(pub [u8; 32]);
+pub struct SigningPayload(pub Vec<u8>);
 
-impl std::fmt::Display for MessageHash {
+impl std::fmt::Display for SigningPayload {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{}", hex::encode(self.0))
+		write!(f, "{}", hex::encode(&self.0))
 	}
 }
 
@@ -59,7 +57,7 @@ pub fn start_client<C>(
 	outgoing_p2p_message_sender: MultisigMessageSender<C>,
 	latest_ceremony_id: CeremonyId,
 	logger: &slog::Logger,
-) -> (Arc<MultisigClient<C>>, impl futures::Future<Output = Result<()>> + Send)
+) -> (MultisigClient<C>, impl futures::Future<Output = Result<()>> + Send)
 where
 	C: CryptoScheme,
 {
@@ -70,12 +68,8 @@ where
 	let (ceremony_request_sender, ceremony_request_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
-	let multisig_client = Arc::new(MultisigClient::new(
-		my_account_id.clone(),
-		key_store,
-		ceremony_request_sender,
-		&logger,
-	));
+	let multisig_client =
+		MultisigClient::new(my_account_id.clone(), key_store, ceremony_request_sender, &logger);
 
 	let multisig_client_backend_future = {
 		use crate::multisig::client::ceremony_manager::CeremonyManager;

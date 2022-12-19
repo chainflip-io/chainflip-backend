@@ -14,8 +14,11 @@ pub struct EpochStart<Chain: cf_chains::Chain> {
 	pub block_number: ChainBlockNumber<Chain>,
 	pub current: bool,
 	pub participant: bool,
+	pub data: Chain::EpochStartData,
 }
 
 pub trait BlockNumberable {
-	fn block_number(&self) -> u64;
+	type BlockNumber;
+
+	fn block_number(&self) -> Self::BlockNumber;
 }

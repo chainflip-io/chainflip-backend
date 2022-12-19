@@ -22,6 +22,17 @@ impl<R> AsyncResult<R> {
 			_ => Err(e(self)),
 		}
 	}
+
+	pub fn is_ready(&self) -> bool {
+		matches!(self, AsyncResult::Ready(_))
+	}
+
+	pub fn unwrap(self) -> R {
+		match self {
+			AsyncResult::Ready(r) => r,
+			_ => panic!("AsyncResult not Ready!"),
+		}
+	}
 }
 
 impl<R> Default for AsyncResult<R> {
