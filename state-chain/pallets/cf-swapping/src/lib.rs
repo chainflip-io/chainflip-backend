@@ -1,6 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use cf_primitives::{Asset, AssetAmount, ForeignChain, ForeignChainAddress};
-use cf_traits::{liquidity::SwappingApi, IngressApi};
+use cf_traits::{liquidity::SwappingApi, IngressApi, SystemStateInfo};
 use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{traits::Saturating, Permill},
@@ -101,10 +101,21 @@ pub mod pallet {
 		SwapExecuted { swap_id: u64 },
 		/// A swap egress was scheduled.
 		SwapEgressScheduled { swap_id: u64, egress_id: EgressId, egress_amount: AssetAmount },
+		/// A withdrawal was requested.
+		WithdrawalRequested {
+			amount: AssetAmount,
+			address: ForeignChainAddress,
+			egress_id: EgressId,
+		},
 	}
 	#[pallet::error]
 	pub enum Error<T> {
+		/// The provided asset and withdrawal address are incompatible.
 		IncompatibleAssetAndAddress,
+		/// The Asset cannot be egressed to the destination chain.
+		InvalidEgressAddress,
+		/// The withdrawal is not possible because not enough funds are available.
+		NoFundsAvailable,
 	}
 
 	#[pallet::hooks]
@@ -166,6 +177,33 @@ pub mod pallet {
 			)?;
 
 			Self::deposit_event(Event::<T>::NewSwapIntent { ingress_address });
+
+			Ok(())
+		}
+
+		#[pallet::weight(0)]
+		pub fn withdrawal(
+			origin: OriginFor<T>,
+			asset: Asset,
+			egress_address: ForeignChainAddress,
+		) -> DispatchResult {
+			T::SystemState::ensure_no_maintenance()?;
+			let account_id = T::AccountRoleRegistry::ensure_relayer(origin)?;
+
+			// Check validity of Chain and Asset
+			ensure!(
+				ForeignChain::from(egress_address) == ForeignChain::from(asset),
+				Error::<T>::InvalidEgressAddress
+			);
+
+			let amount = EarnedRelayerFees::<T>::take(account_id, asset);
+			ensure!(amount != 0, Error::<T>::NoFundsAvailable);
+
+			Self::deposit_event(Event::<T>::WithdrawalRequested {
+				amount,
+				address: egress_address,
+				egress_id: T::EgressHandler::schedule_egress(asset, amount, egress_address),
+			});
 
 			Ok(())
 		}
