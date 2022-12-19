@@ -10,9 +10,9 @@ env:
 jobs:
   set-variables:
     runs-on: ubuntu-20.04
-    concurrency:
-      group: ${{ github.ref }}-${{ github.job }}
-      cancel-in-progress: true
+    # concurrency:
+    #   group: ${{ github.ref }}-${{ github.job }}
+    #   cancel-in-progress: true
     outputs:
       commit_hash: ${{ steps.commit_hash.outputs.commit_hash }}
       branch_name: ${{ steps.branch_name.outputs.branch_name }}
@@ -29,21 +29,22 @@ jobs:
           BRANCH_NAME=$(git rev-parse --abbrev-ref HEAD)
           echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
 
-  # cargo-fmt:
-  #   runs-on: [hetzner]
-  #   concurrency:
-  #     group: ${{ github.ref }}-${{ github.job }}
-  #     cancel-in-progress: true
-  #   container:
-  #     image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08-no-sccache'
-  #     credentials:
-  #       username: ${{ github.actor }}
-  #       password: ${{ secrets.GITHUB_TOKEN }}
-  #   steps:
-  #     - name: Checkout
-  #       uses: actions/checkout@v3
-  #     - name: Check Format
-  #       run: cargo fmt --all -- --check
+  cargo-fmt:
+    runs-on: [hetzner]
+    # concurrency:
+    #   group: ${{ github.ref }}-${{ github.job }}
+    #   cancel-in-progress: true
+    container:
+      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08-no-sccache'
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - run: echo "${{ github.ref }}-${{ github.job }}"
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Check Format
+        run: cargo fmt --all -- --check
 
   # cargo-clippy:
   #   runs-on: [hetzner]
