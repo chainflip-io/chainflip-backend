@@ -142,10 +142,10 @@ where
 pub async fn start<StateChainClient>(
 	epoch_starts_receiver: async_broadcast::Receiver<EpochStart<Polkadot>>,
 	dot_client: OnlineClient<PolkadotConfig>,
-	dot_monitor_ingress_receiver: tokio::sync::mpsc::UnboundedReceiver<PolkadotAccountId>,
+	monitor_ingress_receiver: tokio::sync::mpsc::UnboundedReceiver<PolkadotAccountId>,
 	monitored_addresses: BTreeSet<PolkadotAccountId>,
-	dot_monitor_signature_receiver: tokio::sync::mpsc::UnboundedReceiver<[u8; 64]>,
-	dot_monitored_signatures: BTreeSet<[u8; 64]>,
+	monitor_signature_receiver: tokio::sync::mpsc::UnboundedReceiver<[u8; 64]>,
+	monitored_signatures: BTreeSet<[u8; 64]>,
 	state_chain_client: Arc<StateChainClient>,
 	logger: &slog::Logger,
 ) -> Result<()>
@@ -156,11 +156,11 @@ where
 		"DOT".to_string(),
 		epoch_starts_receiver,
 		|_epoch_start| true,
-		(monitored_addresses, dot_monitor_ingress_receiver, dot_monitored_signatures, dot_monitor_signature_receiver),
+		(monitored_addresses, monitor_ingress_receiver, monitored_signatures, monitor_signature_receiver),
 		move |end_witnessing_signal,
-		      epoch_start,
-		      (mut monitored_addresses, mut dot_monitor_ingress_receiver, mut dot_monitored_signatures, mut dot_monitor_signature_receiver),
-		      logger| {
+		    epoch_start,
+		    (mut monitored_addresses, mut monitor_ingress_receiver, mut monitored_signatures, mut monitor_signature_receiver),
+		    logger| {
 			let dot_client = dot_client.clone();
 			let state_chain_client = state_chain_client.clone();
 			async move {
@@ -277,7 +277,7 @@ where
 								(None, Some(Transfer { to, amount, from })) => {
 									// When we get a transfer event, we want to check that we have
 									// pulled the latest addresses to monitor from the chain first
-									while let Ok(address) = dot_monitor_ingress_receiver.try_recv()
+									while let Ok(address) = monitor_ingress_receiver.try_recv()
 									{
 										monitored_addresses.insert(address);
 									}
@@ -323,9 +323,9 @@ where
 							interesting_block
 						))?;
 
-						while let Ok(sig) = dot_monitor_signature_receiver.try_recv()
+						while let Ok(sig) = monitor_signature_receiver.try_recv()
 						{
-							dot_monitored_signatures.insert(sig);
+							monitored_signatures.insert(sig);
 						}
 						for extrinsic_index in interesting_indices {
 							let xt = block.block.extrinsics.get(extrinsic_index as usize).expect("We know this exists since we got this index from the event, from the block we are querying.");
@@ -335,7 +335,7 @@ where
 							if let Ok(unchecked) = unchecked {
 								let signature = unchecked.signature.unwrap().1;
 								if let MultiSignature::Sr25519(sig) = signature {
-									if dot_monitored_signatures.contains(&sig.0) {
+									if monitored_signatures.contains(&sig.0) {
 										slog::info!(
 											logger,
 											"Witnessing signature_accepted. signature: {sig:?}"
@@ -389,7 +389,7 @@ where
 								.await;
 					}
 				}
-				Ok((monitored_addresses, dot_monitor_ingress_receiver, dot_monitored_signatures, dot_monitor_signature_receiver))
+				Ok((monitored_addresses, monitor_ingress_receiver, monitored_signatures, monitor_signature_receiver))
 			}
 		},
 		logger,
@@ -433,10 +433,10 @@ mod tests {
 
 		let (epoch_starts_sender, epoch_starts_receiver) = async_broadcast::broadcast(10);
 
-		let (_dot_monitor_ingress_sender, dot_monitor_ingress_receiver) =
+		let (_dot_monitor_ingress_sender, monitor_ingress_receiver) =
 			tokio::sync::mpsc::unbounded_channel();
 
-		let (dot_monitor_signature_sender, dot_monitor_signature_receiver) =
+		let (dot_monitor_signature_sender, monitor_signature_receiver) =
 			tokio::sync::mpsc::unbounded_channel();
 
 		let state_chain_client = Arc::new(MockStateChainClient::new());
@@ -490,9 +490,9 @@ mod tests {
 		start(
 			epoch_starts_receiver,
 			dot_client,
-			dot_monitor_ingress_receiver,
+			monitor_ingress_receiver,
 			BTreeSet::default(),
-			dot_monitor_signature_receiver,
+			monitor_signature_receiver,
 			BTreeSet::default(),
 			state_chain_client,
 			&logger,
