@@ -272,6 +272,11 @@ pub mod pallet {
 		///
 		/// - [BroadcastAttemptTimeout](Event::BroadcastAttemptTimeout)
 		fn on_initialize(block_number: BlockNumberFor<T>) -> frame_support::weights::Weight {
+			// NB: We don't want broadcasts that timeout to ever expire. We will keep retrying
+			// forever. It's possible that the reason for timeout could be something like a chain
+			// halt on the external chain. If the signature is valid then we expect it to succeed
+			// eventually. For outlying, unknown unknowns, these can be something governance can
+			// handle if absolutely necessary (though it likely never will be).
 			let expiries = Timeouts::<T, I>::take(block_number);
 			for attempt_id in expiries.iter() {
 				if let Some(attempt) = Self::take_awaiting_broadcast(*attempt_id) {
