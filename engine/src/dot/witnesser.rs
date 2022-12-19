@@ -345,7 +345,7 @@ where
 												pallet_cf_witnesser::Call::witness_at_epoch {
 													call: Box::new(
 														pallet_cf_broadcast::Call::<_, PolkadotInstance>::signature_accepted {
-															signature: sig,
+															signature: sig.clone(),
 															signer_id: our_vault.clone(),
 															// TODO: https://github.com/chainflip-io/chainflip-backend/issues/2544
 															tx_fee: 1000,
@@ -357,6 +357,8 @@ where
 												&logger,
 											)
 											.await;
+
+										monitored_signatures.remove(&sig.0);
 									}
 								} else {
 									slog::error!(logger, "Signature not Sr25519. Got {:?} instead.", signature);
