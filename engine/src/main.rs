@@ -29,8 +29,6 @@ use sp_core::U256;
 
 #[cfg(feature = "ibiza")]
 use chainflip_engine::dot::{rpc::DotRpcClient, DotBroadcaster};
-#[cfg(feature = "ibiza")]
-use subxt::{OnlineClient, PolkadotConfig};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -74,7 +72,7 @@ async fn main() -> anyhow::Result<()> {
                 .context("Failed to create ETH broadcaster")?;
 
             #[cfg(feature = "ibiza")]
-            let dot_client = OnlineClient::<PolkadotConfig>::from_url(&settings.dot.ws_node_endpoint)
+            let dot_rpc_client = DotRpcClient::new(&settings.dot.ws_node_endpoint)
                 .await
                 .context("Failed to create Polkadot Client")?;
 
@@ -234,7 +232,7 @@ async fn main() -> anyhow::Result<()> {
                 state_chain_client.clone(),
                 state_chain_block_stream,
                 eth_broadcaster,
-                #[cfg(feature = "ibiza")] DotBroadcaster::new(DotRpcClient::new(dot_client.clone())),
+                #[cfg(feature = "ibiza")] DotBroadcaster::new(dot_rpc_client.clone()),
                 eth_multisig_client,
                 dot_multisig_client,
                 peer_update_sender,
@@ -320,7 +318,7 @@ async fn main() -> anyhow::Result<()> {
                     )
                 );
                 scope.spawn(
-                    dot::witnesser::start(dot_epoch_start_receiver_1, dot_client, dot_monitor_ingress_receiver,
+                    dot::witnesser::start(dot_epoch_start_receiver_1, dot_rpc_client, dot_monitor_ingress_receiver,
                         state_chain_client.storage_map::<pallet_cf_ingress_egress::IntentIngressDetails<state_chain_runtime::Runtime, state_chain_runtime::PolkadotInstance>>(latest_block_hash)
                         .await
                         .context("Failed to get initial ingress details")?

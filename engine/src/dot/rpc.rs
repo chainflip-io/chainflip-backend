@@ -1,7 +1,16 @@
+use std::pin::Pin;
+
 use async_trait::async_trait;
 use cf_chains::dot::{FeeDetails, InclusionFee, PolkadotBalance, PolkadotHash};
+use cf_primitives::PolkadotBlockNumber;
+use futures::{Stream, TryStreamExt};
 use sp_rpc::number::NumberOrHex;
-use subxt::{ext::sp_core::Bytes, rpc_params, OnlineClient, PolkadotConfig};
+use subxt::{
+	events::{Events, EventsClient},
+	ext::sp_core::Bytes,
+	rpc::ChainBlock,
+	rpc_params, Config, OnlineClient, PolkadotConfig,
+};
 
 use anyhow::{anyhow, Result};
 
@@ -10,23 +19,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(test)]
 use mockall::automock;
 
-#[cfg_attr(test, automock)]
-#[async_trait]
-pub trait DotRpcApi: Send + Sync {
-	async fn submit_raw_encoded_extrinsic(&self, encoded_bytes: Vec<u8>) -> Result<PolkadotHash>;
-
-	async fn query_fee_details(&self, extrinsic: Bytes, at: PolkadotHash) -> Result<FeeDetails>;
-}
-
-pub struct DotRpcClient {
-	online_client: OnlineClient<PolkadotConfig>,
-}
-
-impl DotRpcClient {
-	pub fn new(online_client: OnlineClient<PolkadotConfig>) -> Self {
-		Self { online_client }
-	}
-}
+type PolkadotHeader = <PolkadotConfig as Config>::Header;
 
 // Helper struct that we can deserialize the NumberOrHex fields into before
 // converting to `InclusionFee` which has `PolkadotBalance` fields.
@@ -72,8 +65,75 @@ impl From<FeeDetailsPre> for FeeDetails {
 	}
 }
 
+#[derive(Clone)]
+pub struct DotRpcClient {
+	online_client: OnlineClient<PolkadotConfig>,
+}
+
+impl DotRpcClient {
+	pub async fn new(polkadot_network_ws_url: &str) -> Result<Self> {
+		let online_client =
+			OnlineClient::<PolkadotConfig>::from_url(polkadot_network_ws_url).await?;
+		Ok(Self { online_client })
+	}
+}
+
+#[cfg_attr(test, automock)]
+#[async_trait]
+pub trait DotRpcApi: Send + Sync {
+	async fn block_hash(&self, block_number: PolkadotBlockNumber) -> Result<Option<PolkadotHash>>;
+
+	async fn block(&self, hash: PolkadotHash) -> Result<Option<ChainBlock<PolkadotConfig>>>;
+
+	async fn events(&self, block_hash: PolkadotHash) -> Result<Events<PolkadotConfig>>;
+
+	async fn subscribe_finalized_heads(
+		&self,
+	) -> Result<Pin<Box<dyn Stream<Item = Result<PolkadotHeader>> + Send>>>;
+
+	async fn submit_raw_encoded_extrinsic(&self, encoded_bytes: Vec<u8>) -> Result<PolkadotHash>;
+
+	async fn query_fee_details(&self, extrinsic: Bytes, at: PolkadotHash) -> Result<FeeDetails>;
+}
+
 #[async_trait]
 impl DotRpcApi for DotRpcClient {
+	async fn subscribe_finalized_heads(
+		&self,
+	) -> Result<Pin<Box<dyn Stream<Item = Result<PolkadotHeader>> + Send>>> {
+		Ok(Box::pin(
+			self.online_client
+				.rpc()
+				.subscribe_finalized_blocks()
+				.await
+				.map_err(|e| anyhow!("Error initialising finalised head stream {e}"))?
+				.map_err(|e| anyhow!("Error in finalised head stream {e}")),
+		))
+	}
+
+	async fn block_hash(&self, block_number: PolkadotBlockNumber) -> Result<Option<PolkadotHash>> {
+		self.online_client
+			.rpc()
+			.block_hash(Some(block_number.into()))
+			.await
+			.map_err(|error| anyhow!("Failed to query Polkadot block hash with error: {error}"))
+	}
+
+	async fn block(&self, hash: PolkadotHash) -> Result<Option<ChainBlock<PolkadotConfig>>> {
+		self.online_client
+			.rpc()
+			.block(Some(hash))
+			.await
+			.map_err(|e| anyhow!("Failed to query for block with error: {e}"))
+	}
+
+	async fn events(&self, block_hash: PolkadotHash) -> Result<Events<PolkadotConfig>> {
+		EventsClient::new(self.online_client.clone())
+			.at(Some(block_hash))
+			.await
+			.map_err(|e| anyhow!("Failed to query events for block {block_hash}, with error: {e}"))
+	}
+
 	async fn submit_raw_encoded_extrinsic(&self, encoded_bytes: Vec<u8>) -> Result<PolkadotHash> {
 		let encoded_bytes: Bytes = encoded_bytes.into();
 		self.online_client
@@ -81,10 +141,7 @@ impl DotRpcApi for DotRpcClient {
 			.request::<PolkadotHash>("author_submitExtrinsic", rpc_params![encoded_bytes])
 			.await
 			.map_err(|error| {
-				anyhow!(
-					"Raw Polkadot extrinsic submission failed with error: {:?}",
-					error.to_string()
-				)
+				anyhow!("Raw Polkadot extrinsic submission failed with error: {error}")
 			})
 	}
 
@@ -94,9 +151,7 @@ impl DotRpcApi for DotRpcClient {
 			.rpc()
 			.request::<FeeDetailsPre>("payment_queryFeeDetails", rpc_params![extrinsic, at])
 			.await
-			.map_err(|error| {
-				anyhow!("Querying fee details failed with error: {:?}", error.to_string())
-			})?
+			.map_err(|error| anyhow!("Querying fee details failed with error: {error}"))?
 			.into())
 	}
 }
@@ -106,7 +161,7 @@ mod tests {
 	use std::str::FromStr;
 
 	use cf_chains::dot::PolkadotHash;
-	use subxt::{ext::sp_core::Bytes, OnlineClient, PolkadotConfig};
+	use subxt::ext::sp_core::Bytes;
 
 	use crate::dot::{rpc::DotRpcClient, DotBroadcaster};
 
@@ -115,9 +170,7 @@ mod tests {
 	#[tokio::test]
 	#[ignore = "Testing raw broadcast to live network"]
 	async fn broadcast_tx() {
-		let dot_broadcaster = DotBroadcaster::new(DotRpcClient::new(
-			OnlineClient::<PolkadotConfig>::from_url("URL").await.unwrap(),
-		));
+		let dot_broadcaster = DotBroadcaster::new(DotRpcClient::new("URL").await.unwrap());
 
 		// Can get these bytes from the `create_test_extrinsic()` in state-chain/chains/src/dot.rs
 		// Will have to ensure the nonce for the account is correct and westend versions are correct
@@ -140,16 +193,9 @@ mod tests {
 	#[tokio::test]
 	#[ignore = "helpful for testing a query fee details to a live network"]
 	async fn fee_details_test() {
-		tracing_subscriber::FmtSubscriber::builder()
-			.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-			.try_init()
-			.expect("setting default subscriber failed");
-
 		let polkadot_network_ws_url = "url";
 
-		let dot_rpc = DotRpcClient::new(
-			OnlineClient::<PolkadotConfig>::from_url(polkadot_network_ws_url).await.unwrap(),
-		);
+		let dot_rpc = DotRpcClient::new(polkadot_network_ws_url).await.unwrap();
 
 		let extrinsic: Bytes = hex::decode("490284001cbd2d43530a44705ad088af313e18f80b53ef16b36177cd4b77b846f2a5f07c019ca0f159e74252a572f6d0556268bd7b813cbf3280758c461785b13d371b821011726e33b3a183071beb1e8f895ecf1214f73c79ca9578b36a2cac07eddd358325031c0005000090b5ab205c6974c9ea841be688864633dc9ca8a357843eeacf2314649965fe220f0080c6a47e8d03").unwrap().into();
 
