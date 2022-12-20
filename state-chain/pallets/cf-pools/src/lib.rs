@@ -86,7 +86,7 @@ pub mod pallet {
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config: Chainflip {
 		#[pallet::constant]
-		type NetworkFee: Get<u64>;
+		type NetworkFee: Get<u16>;
 	}
 
 	#[pallet::pallet]
