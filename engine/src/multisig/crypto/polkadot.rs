@@ -1,6 +1,6 @@
 use crate::multisig::SigningPayload;
 
-use super::{curve25519_ristretto::Point, ChainTag, CryptoScheme, ECPoint, Verifiable};
+use super::{curve25519_ristretto::Point, ChainTag, CryptoScheme, ECPoint};
 use cf_chains::dot::PolkadotPublicKey;
 use schnorrkel::context::{SigningContext, SigningTranscript};
 use serde::{Deserialize, Serialize};
@@ -41,26 +41,11 @@ impl<'de> Deserialize<'de> for PolkadotSignature {
 	}
 }
 
-impl Verifiable for PolkadotSignature {
-	fn verify(
-		&self,
-		key_id: &crate::multisig::KeyId,
-		payload: &SigningPayload,
-	) -> anyhow::Result<()> {
-		let public_key = schnorrkel::PublicKey::from_bytes(&key_id.0).expect("invalid public key");
-
-		let context = schnorrkel::signing_context(SIGNING_CTX);
-
-		public_key
-			.verify(context.bytes(payload.0.as_slice()), &self.0)
-			.map_err(anyhow::Error::msg)
-	}
-}
-
 impl CryptoScheme for PolkadotSigning {
 	type Point = Point;
 	type Signature = PolkadotSignature;
 	type AggKey = cf_chains::dot::PolkadotPublicKey;
+	type SigningPayload = Vec<u8>;
 
 	const NAME: &'static str = "Polkadot";
 	const CHAIN_TAG: ChainTag = ChainTag::Polkadot;
@@ -109,6 +94,20 @@ impl CryptoScheme for PolkadotSigning {
 		signature_response: &<Self::Point as ECPoint>::Scalar,
 	) -> bool {
 		Point::from_scalar(signature_response) == *commitment + (*y_i) * challenge * lambda_i
+	}
+
+	fn verify_signature(
+		signature: &Self::Signature,
+		key_id: &crate::multisig::KeyId,
+		payload: &SigningPayload,
+	) -> anyhow::Result<()> {
+		let public_key = schnorrkel::PublicKey::from_bytes(&key_id.0).expect("invalid public key");
+
+		let context = schnorrkel::signing_context(SIGNING_CTX);
+
+		public_key
+			.verify(context.bytes(payload.0.as_slice()), &signature.0)
+			.map_err(anyhow::Error::msg)
 	}
 
 	fn agg_key(pubkey: &Self::Point) -> Self::AggKey {

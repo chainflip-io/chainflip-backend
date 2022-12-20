@@ -27,25 +27,6 @@ impl From<EthSchnorrSignature> for cf_chains::eth::SchnorrVerificationComponents
 	}
 }
 
-impl Verifiable for EthSchnorrSignature {
-	fn verify(
-		&self,
-		key_id: &crate::multisig::KeyId,
-		payload: &SigningPayload,
-	) -> anyhow::Result<()> {
-		// Get the aggkey
-		let pk_ser: &[u8; 33] = key_id.0[..].try_into().unwrap();
-		let agg_key = cf_chains::eth::AggKey::from_pubkey_compressed(*pk_ser);
-
-		// Verify the signature with the aggkey
-		agg_key
-			.verify(payload.0.as_slice().try_into().unwrap(), &self.clone().into())
-			.map_err(|e| anyhow::anyhow!("Failed to verify signature: {:?}", e))?;
-
-		Ok(())
-	}
-}
-
 /// Ethereum crypto scheme (as defined by the Key Manager contract)
 pub struct EthSigning {}
 
@@ -94,6 +75,23 @@ impl CryptoScheme for EthSigning {
 		signature_response: &<Self::Point as ECPoint>::Scalar,
 	) -> bool {
 		Point::from_scalar(signature_response) == *commitment - (*y_i) * challenge * lambda_i
+	}
+
+	fn verify_signature(
+		signature: &Self::Signature,
+		key_id: &crate::multisig::KeyId,
+		payload: &SigningPayload,
+	) -> anyhow::Result<()> {
+		// Get the aggkey
+		let pk_ser: &[u8; 33] = key_id.0[..].try_into().unwrap();
+		let agg_key = cf_chains::eth::AggKey::from_pubkey_compressed(*pk_ser);
+
+		// Verify the signature with the aggkey
+		agg_key
+			.verify(payload.0.as_slice().try_into().unwrap(), &signature.clone().into())
+			.map_err(|e| anyhow::anyhow!("Failed to verify signature: {:?}", e))?;
+
+		Ok(())
 	}
 
 	fn agg_key(pubkey: &Self::Point) -> Self::AggKey {

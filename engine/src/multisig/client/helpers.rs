@@ -35,7 +35,7 @@ use crate::{
 			keygen::{generate_key_data, HashComm1, HashContext, VerifyHashCommitmentsBroadcast2},
 			signing, KeygenResultInfo, PartyIdxMapping, ThresholdParameters,
 		},
-		crypto::{ECPoint, Rng, Verifiable},
+		crypto::{ECPoint, Rng},
 		CryptoScheme, KeyId, SigningPayload,
 	},
 	p2p::OutgoingMultisigStageMessages,
@@ -641,8 +641,7 @@ impl<C: CryptoScheme> CeremonyRunnerStrategy for SigningCeremonyRunner<C> {
 		let signature = all_same(outputs.into_iter().map(|(_, signature)| signature))
 			.expect("Signatures don't match");
 
-		signature
-			.verify(&self.ceremony_runner_data.key_id, &SIGNING_PAYLOAD)
+		C::verify_signature(&signature, &self.ceremony_runner_data.key_id, &SIGNING_PAYLOAD)
 			.expect("Should be valid signature");
 
 		signature

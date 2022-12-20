@@ -81,15 +81,10 @@ pub trait ECPoint:
 	}
 }
 
-pub trait Verifiable {
-	fn verify(&self, key_id: &KeyId, payload: &SigningPayload) -> anyhow::Result<()>;
-}
-
 pub trait CryptoScheme: 'static {
 	type Point: ECPoint;
 
-	type Signature: Verifiable
-		+ Debug
+	type Signature: Debug
 		+ Clone
 		+ PartialEq
 		+ serde::Serialize
@@ -134,6 +129,12 @@ pub trait CryptoScheme: 'static {
 		challenge: &<Self::Point as ECPoint>::Scalar,
 		signature_response: &<Self::Point as ECPoint>::Scalar,
 	) -> bool;
+
+	fn verify_signature(
+		signature: &Self::Signature,
+		key_id: &KeyId,
+		payload: &SigningPayload,
+	) -> anyhow::Result<()>;
 
 	fn agg_key(pubkey: &Self::Point) -> Self::AggKey;
 
