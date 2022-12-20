@@ -1,4 +1,4 @@
-use crate::{mini_pool, mock::*};
+use crate::{mini_pool, mock::*, CollectedNetworkFee};
 use cf_primitives::{chains::assets::any, AmmRange, AssetAmount};
 use cf_traits::{LiquidityPoolApi, SwappingApi};
 
@@ -34,6 +34,7 @@ fn funds_are_conserved() {
 fn funds_are_conserved_via_api() {
 	const INITIAL_LIQUIDITY_0: AssetAmount = 200_000;
 	const INITIAL_LIQUIDITY_1: AssetAmount = 20_000;
+	const COLLECTED_NETWORK_FEE_PER_SWAP: AssetAmount = 3;
 	const INITIAL_LIQUIDITY_TOTAL: AssetAmount = INITIAL_LIQUIDITY_0 + INITIAL_LIQUIDITY_1;
 	const SWAP_AMOUNT: AssetAmount = 300;
 
@@ -58,13 +59,15 @@ fn funds_are_conserved_via_api() {
 		let (output, _) =
 			<Pools as SwappingApi>::swap(any::Asset::Eth, any::Asset::Usdc, SWAP_AMOUNT, 0);
 
+		assert_eq!(CollectedNetworkFee::<Test>::get(), COLLECTED_NETWORK_FEE_PER_SWAP);
+
 		<Pools as LiquidityPoolApi>::get_liquidity(&any::Asset::Eth);
 
 		// Swapping one way should not create or destroy funds.
 		assert!(output > 0);
 		assert_eq!(eth_liquidity(), INITIAL_LIQUIDITY_0 + SWAP_AMOUNT);
 		assert_eq!(
-			eth_liquidity() + usdc_liquidity() + output,
+			eth_liquidity() + usdc_liquidity() + output + COLLECTED_NETWORK_FEE_PER_SWAP,
 			INITIAL_LIQUIDITY_TOTAL + SWAP_AMOUNT
 		);
 
@@ -73,8 +76,9 @@ fn funds_are_conserved_via_api() {
 			<Pools as SwappingApi>::swap(any::Asset::Usdc, any::Asset::Eth, output, 0);
 		assert!(output > 0);
 		assert_eq!(
-			eth_liquidity() + usdc_liquidity() + output,
+			eth_liquidity() + usdc_liquidity() + output + COLLECTED_NETWORK_FEE_PER_SWAP * 2,
 			INITIAL_LIQUIDITY_TOTAL + SWAP_AMOUNT
 		);
+		assert_eq!(CollectedNetworkFee::<Test>::get(), COLLECTED_NETWORK_FEE_PER_SWAP * 2);
 	});
 }

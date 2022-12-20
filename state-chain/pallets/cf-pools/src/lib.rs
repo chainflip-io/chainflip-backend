@@ -143,7 +143,7 @@ impl<T: Config> cf_traits::SwappingApi for Pallet<T> {
 						CollectedNetworkFee::<T>::put(
 							CollectedNetworkFee::<T>::get().saturating_add(network_fee),
 						);
-						pool.swap(Self::calc_and_store(input_amount.saturating_sub(network_fee)))
+						pool.swap(input_amount.saturating_sub(network_fee))
 					}))
 				}),
 			},
