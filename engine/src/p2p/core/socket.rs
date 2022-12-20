@@ -95,8 +95,6 @@ impl ConnectedOutgoingSocket {
 				self.peer.account_id,
 				err
 			);
-		} else {
-			slog::trace!(self.logger, "Sent a message to: {}", self.peer.account_id);
 		}
 	}
 
