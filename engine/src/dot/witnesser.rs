@@ -1,4 +1,8 @@
-use std::{collections::BTreeSet, pin::Pin, sync::Arc};
+use std::{
+	collections::{BTreeSet, HashMap},
+	pin::Pin,
+	sync::Arc,
+};
 
 use cf_chains::{
 	dot::{
@@ -14,10 +18,7 @@ use futures::{stream, Stream, StreamExt};
 use pallet_cf_ingress_egress::IngressWitness;
 use sp_runtime::MultiSignature;
 use state_chain_runtime::PolkadotInstance;
-use subxt::{
-	events::{EventFilter, EventsClient, Phase, StaticEvent},
-	OnlineClient, PolkadotConfig,
-};
+use subxt::events::{EventFilter, Phase, StaticEvent};
 
 use crate::{
 	state_chain_observer::client::extrinsic_api::ExtrinsicApi,
@@ -29,6 +30,8 @@ use crate::{
 };
 
 use anyhow::{Context, Result};
+
+use super::rpc::DotRpcApi;
 
 #[derive(Debug, Clone, Copy)]
 pub struct MiniHeader {
@@ -72,14 +75,29 @@ impl StaticEvent for Transfer {
 	const EVENT: &'static str = "Transfer";
 }
 
-pub async fn dot_block_head_stream_from<BlockHeaderStream>(
+/// This event must match the TransactionFeePaid event definition of the Polkadot chain.
+#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+struct TransactionFeePaid {
+	who: PolkadotAccountId,
+	// includes the tip
+	actual_fee: PolkadotBalance,
+	tip: PolkadotBalance,
+}
+
+impl StaticEvent for TransactionFeePaid {
+	const PALLET: &'static str = "TransactionPayment";
+	const EVENT: &'static str = "TransactionFeePaid";
+}
+
+pub async fn dot_block_head_stream_from<BlockHeaderStream, DotRpc>(
 	from_block: PolkadotBlockNumber,
 	safe_head_stream: BlockHeaderStream,
-	dot_client: OnlineClient<PolkadotConfig>,
+	dot_client: DotRpc,
 	logger: &slog::Logger,
 ) -> Result<Pin<Box<dyn Stream<Item = MiniHeader> + Send + 'static>>>
 where
 	BlockHeaderStream: Stream<Item = MiniHeader> + 'static + Send,
+	DotRpc: DotRpcApi + 'static + Send + Clone,
 {
 	block_head_stream_from(
 		from_block,
@@ -88,8 +106,7 @@ where
 			let dot_client = dot_client.clone();
 			Box::pin(async move {
 				let block_hash = dot_client
-					.rpc()
-					.block_hash(Some(block_number.into()))
+					.block_hash(block_number)
 					.await?
 					.expect("Called on a finalised stream, so the block will exist");
 				Ok(MiniHeader { block_number, block_hash })
@@ -107,7 +124,7 @@ fn take_while_ok<InStream, T, E>(
 	logger: &slog::Logger,
 ) -> impl Stream<Item = T>
 where
-	InStream: Stream<Item = std::result::Result<T, E>>,
+	InStream: Stream<Item = std::result::Result<T, E>> + Send,
 	E: std::fmt::Debug,
 {
 	struct StreamState<FromStream, T, E>
@@ -139,9 +156,9 @@ where
 ///
 /// We use events for rotation and ingress witnessing but for broadcast/egress witnessing we use the
 /// signature of the extrinsic.
-pub async fn start<StateChainClient>(
+pub async fn start<StateChainClient, DotRpc>(
 	epoch_starts_receiver: async_broadcast::Receiver<EpochStart<Polkadot>>,
-	dot_client: OnlineClient<PolkadotConfig>,
+	dot_client: DotRpc,
 	ingress_address_receiver: tokio::sync::mpsc::UnboundedReceiver<PolkadotAccountId>,
 	monitored_ingress_addresses: BTreeSet<PolkadotAccountId>,
 	signature_receiver: tokio::sync::mpsc::UnboundedReceiver<[u8; 64]>,
@@ -151,6 +168,7 @@ pub async fn start<StateChainClient>(
 ) -> Result<()>
 where
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
+	DotRpc: DotRpcApi + 'static + Send + Sync + Clone,
 {
 	epoch_witnesser::start(
 		"DOT".to_string(),
@@ -165,7 +183,7 @@ where
 			let state_chain_client = state_chain_client.clone();
 			async move {
 				let safe_head_stream =
-					take_while_ok(dot_client.rpc().subscribe_finalized_blocks().await?, &logger)
+					take_while_ok(dot_client.subscribe_finalized_heads().await?, &logger)
 						.map(|header| MiniHeader {
 							block_number: header.number,
 							block_hash: header.hash(),
@@ -197,16 +215,13 @@ where
 							// the latest metadata and always uses it.
 							// https://github.com/chainflip-io/chainflip-backend/issues/2542
 							async move {
-								let events = EventsClient::new(dot_client)
-									.at(Some(mini_header.block_hash))
-									.await?;
-								Result::<_, anyhow::Error>::Ok((mini_header.block_hash, mini_header.block_number, events))
+								Result::<_, anyhow::Error>::Ok((mini_header.block_hash, mini_header.block_number, dot_client.events(mini_header.block_hash).await?))
 							}
 						}),
 						&logger,
 					)
 					.map(|(block_hash, block_number, events)| {
-						(block_hash, block_number, <(ProxyAdded, Transfer)>::filter(events))
+						(block_hash, block_number, <(ProxyAdded, Transfer, TransactionFeePaid)>::filter(events))
 					}),
 				);
 
@@ -227,10 +242,11 @@ where
 					// a) we know how to decode calls we create (but not necessarily all calls on Polkadot)
 					// b) these are the only extrinsics we are interested in
 					let mut interesting_indices = Vec::new();
+					let mut fee_paid_for_xt_at_index = HashMap::new();
 					while let Some(Ok(event_details)) = block_event_details.next() {
 						if let Phase::ApplyExtrinsic(extrinsic_index) = event_details.phase {
 							match event_details.event {
-								(Some(ProxyAdded { delegator, delegatee, .. }), None) => {
+								(Some(ProxyAdded { delegator, delegatee, .. }), None, None) => {
 									if AsRef::<[u8; 32]>::as_ref(&delegator) !=
 										AsRef::<[u8; 32]>::as_ref(&our_vault)
 									{
@@ -272,7 +288,7 @@ where
 										)
 										.await;
 								},
-								(None, Some(Transfer { to, amount, from })) => {
+								(None, Some(Transfer { to, amount, from }), None) => {
 									// When we get a transfer event, we want to check that we have
 									// pulled the latest addresses to monitor from the chain first
 									while let Ok(address) = ingress_address_receiver.try_recv()
@@ -297,8 +313,9 @@ where
 										interesting_indices.push(extrinsic_index);
 									}
 								},
-								(Some(_), Some(_)) =>
-									unreachable!("An event can only be one event at once."),
+								(None, None, Some(TransactionFeePaid { actual_fee, ..})) => {
+									fee_paid_for_xt_at_index.insert(extrinsic_index, actual_fee);
+								}
 								_ => {
 									// just not an interesting event
 								},
@@ -310,8 +327,7 @@ where
 						slog::info!(logger, "We got an interesting block at block: {block_number}, hash: {block_hash:?}");
 
 						let block = dot_client
-						.rpc()
-						.block(Some(block_hash))
+						.block(block_hash)
 						.await
 						.context("Failed fetching block from DOT RPC")?
 						.context(format!(
@@ -324,6 +340,7 @@ where
 							monitored_signatures.insert(sig);
 						}
 						for extrinsic_index in interesting_indices {
+
 							let xt = block.block.extrinsics.get(extrinsic_index as usize).expect("We know this exists since we got this index from the event, from the block we are querying.");
 							let xt_encoded = xt.encode();
 							let mut xt_bytes = xt_encoded.as_slice();
@@ -336,6 +353,7 @@ where
 											logger,
 											"Witnessing signature_accepted. signature: {sig:?}"
 										);
+
 										let _result = state_chain_client
 											.submit_signed_extrinsic(
 												pallet_cf_witnesser::Call::witness_at_epoch {
@@ -343,8 +361,7 @@ where
 														pallet_cf_broadcast::Call::<_, PolkadotInstance>::signature_accepted {
 															signature: sig.clone(),
 															signer_id: our_vault.clone(),
-															// TODO: https://github.com/chainflip-io/chainflip-backend/issues/2544
-															tx_fee: 1000,
+															tx_fee: *fee_paid_for_xt_at_index.get(&extrinsic_index).expect("We should have paid a fee to submit the extrinsic")
 														}
 														.into(),
 													),
@@ -404,10 +421,9 @@ mod tests {
 
 	use cf_chains::dot;
 	use cf_primitives::PolkadotAccountId;
-	use subxt::PolkadotConfig;
 
 	use crate::{
-		logging::test_utils::new_test_logger,
+		dot::rpc::DotRpcClient, logging::test_utils::new_test_logger,
 		state_chain_observer::client::mocks::MockStateChainClient,
 	};
 
@@ -419,15 +435,7 @@ mod tests {
 		let logger = new_test_logger();
 
 		println!("Connecting to: {}", url);
-		let dot_client = OnlineClient::<PolkadotConfig>::from_url(url).await.unwrap();
-
-		let client_metadata = dot_client.metadata();
-		let client_types = client_metadata.types();
-		// println!("Here's the current metadata: {:?}", client_metadata);
-
-		let current_metadata = dot_client.rpc().metadata().await.unwrap();
-		let current_types = current_metadata.types();
-		assert_eq!(client_types, current_types);
+		let dot_rpc_client = DotRpcClient::new(url).await.unwrap();
 
 		let (epoch_starts_sender, epoch_starts_receiver) = async_broadcast::broadcast(10);
 
@@ -487,7 +495,7 @@ mod tests {
 
 		start(
 			epoch_starts_receiver,
-			dot_client,
+			dot_rpc_client,
 			ingress_address_receiver,
 			BTreeSet::default(),
 			signature_receiver,
