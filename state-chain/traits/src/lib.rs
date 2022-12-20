@@ -1,6 +1,9 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod async_result;
+pub mod liquidity;
+pub use liquidity::*;
+
 pub mod mocks;
 pub mod offence_reporting;
 
@@ -9,27 +12,30 @@ use core::fmt::Debug;
 pub use async_result::AsyncResult;
 use sp_std::collections::btree_set::BTreeSet;
 
-use cf_chains::{benchmarking_value::BenchmarkValue, ApiCall, ChainAbi, ChainCrypto};
+#[cfg(feature = "ibiza")]
+use cf_chains::Polkadot;
+use cf_chains::{
+	benchmarking_value::BenchmarkValue, ApiCall, Chain, ChainAbi, ChainCrypto, Ethereum,
+};
+
 use cf_primitives::{
-	AuthorityCount, CeremonyId, ChainflipAccountData, ChainflipAccountState, EpochIndex,
+	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BroadcastId, CeremonyId,
+	EgressId, EpochIndex, EthereumAddress, ForeignChain, ForeignChainAddress, IntentId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable},
+	error::BadOrigin,
 	pallet_prelude::Member,
-	sp_runtime::traits::AtLeast32BitUnsigned,
-	traits::{EnsureOrigin, Get, Imbalance, IsType, StoredMap},
+	traits::{EnsureOrigin, Get, Imbalance, IsType},
 	Hashable, Parameter,
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
-	traits::{Bounded, MaybeSerializeDeserialize},
-	DispatchError, DispatchResult, RuntimeDebug,
+	traits::{AtLeast32BitUnsigned, Bounded, MaybeSerializeDeserialize},
+	DispatchError, DispatchResult, FixedPointOperand, RuntimeDebug,
 };
 use sp_std::{iter::Sum, marker::PhantomData, prelude::*};
-/// An index to a block.
-pub type BlockNumber = u32;
-pub type FlipBalance = u128;
 
 /// Common base config for Chainflip pallets.
 pub trait Chainflip: frame_system::Config {
@@ -42,6 +48,7 @@ pub trait Chainflip: frame_system::Config {
 		+ Ord
 		+ Copy
 		+ AtLeast32BitUnsigned
+		+ FixedPointOperand
 		+ MaybeSerializeDeserialize
 		+ Bounded
 		+ Sum<Self::Amount>;
@@ -155,23 +162,28 @@ impl<CandidateId, BidAmount: Default> Default for AuctionOutcome<CandidateId, Bi
 	}
 }
 
-pub trait Auctioneer<T: Chainflip> {
-	type Error: Into<DispatchError>;
-
-	fn resolve_auction() -> Result<RuntimeAuctionOutcome<T>, Self::Error>;
+#[derive(PartialEq, Eq, Clone, Debug, Decode, Encode)]
+pub enum VaultStatus<ValidatorId> {
+	KeygenComplete,
+	RotationComplete,
+	Failed(BTreeSet<ValidatorId>),
 }
 
 pub trait VaultRotator {
-	type ValidatorId;
+	type ValidatorId: Ord + Clone;
 
-	/// Start a vault rotation with the provided `candidates`.
-	fn start_vault_rotation(candidates: BTreeSet<Self::ValidatorId>);
+	/// Start the rotation by kicking off keygen with provided candidates.
+	fn keygen(candidates: BTreeSet<Self::ValidatorId>);
 
-	/// Poll for the vault rotation outcome.
-	fn get_vault_rotation_outcome() -> AsyncResult<Result<(), Vec<Self::ValidatorId>>>;
+	/// Get the current rotation status.
+	fn status() -> AsyncResult<VaultStatus<Self::ValidatorId>>;
+
+	/// Activate key/s on particular chain/s. For example, setting the new key
+	/// on the contract for a smart contract chain.
+	fn activate();
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn set_vault_rotation_outcome(_outcome: AsyncResult<Result<(), Vec<Self::ValidatorId>>>) {
+	fn set_status(_outcome: AsyncResult<VaultStatus<Self::ValidatorId>>) {
 		unimplemented!()
 	}
 }
@@ -279,16 +291,12 @@ pub trait EmissionsTrigger {
 	fn trigger_emissions();
 }
 
-/// Provides a unique nonce for some [Chain].
-pub trait ReplayProtectionProvider<Abi: ChainAbi> {
-	fn replay_protection() -> Abi::ReplayProtection;
-}
-
 /// Provides the environment data for ethereum-like chains.
 pub trait EthEnvironmentProvider {
-	fn flip_token_address() -> [u8; 20];
-	fn key_manager_address() -> [u8; 20];
-	fn stake_manager_address() -> [u8; 20];
+	fn token_address(asset: assets::any::Asset) -> Option<EthereumAddress>;
+	fn key_manager_address() -> EthereumAddress;
+	fn stake_manager_address() -> EthereumAddress;
+	fn vault_address() -> EthereumAddress;
 	fn chain_id() -> u64;
 }
 
@@ -326,76 +334,17 @@ pub trait EmergencyRotation {
 	fn request_emergency_rotation();
 }
 
-pub trait ChainflipAccount {
-	type AccountId;
-
-	/// Get the account data for the given account id.
-	fn get(account_id: &Self::AccountId) -> ChainflipAccountData;
-	/// Set the node to be a current authority
-	fn set_current_authority(account_id: &Self::AccountId);
-	/// Sets the authority state to historical
-	fn set_historical_authority(account_id: &Self::AccountId);
-	/// Sets the current authority to the historical authority, should be called
-	/// once the authority has no more active epochs
-	fn from_historical_to_backup(account_id: &Self::AccountId);
-}
-
-pub struct ChainflipAccountStore<T>(PhantomData<T>);
-
-impl<T: frame_system::Config<AccountData = ChainflipAccountData>> ChainflipAccount
-	for ChainflipAccountStore<T>
-{
-	type AccountId = T::AccountId;
-
-	fn get(account_id: &Self::AccountId) -> ChainflipAccountData {
-		frame_system::Pallet::<T>::get(account_id)
-	}
-
-	/// Set the last epoch number and set the account state to Validator
-	fn set_current_authority(account_id: &Self::AccountId) {
-		log::debug!("Setting current authority {:?}", account_id);
-		frame_system::Pallet::<T>::mutate(account_id, |account_data| {
-			account_data.state = ChainflipAccountState::CurrentAuthority;
-		})
-		.unwrap_or_else(|e| log::error!("Mutating account state failed {:?}", e));
-	}
-
-	fn set_historical_authority(account_id: &Self::AccountId) {
-		frame_system::Pallet::<T>::mutate(account_id, |account_data| {
-			account_data.state = ChainflipAccountState::HistoricalAuthority;
-		})
-		.unwrap_or_else(|e| log::error!("Mutating account state failed {:?}", e));
-	}
-
-	fn from_historical_to_backup(account_id: &Self::AccountId) {
-		frame_system::Pallet::<T>::mutate(account_id, |account_data| match account_data.state {
-			ChainflipAccountState::HistoricalAuthority => {
-				account_data.state = ChainflipAccountState::Backup;
-			},
-			_ => {
-				const ERROR_MESSAGE: &str = "Attempted to transition to backup from historical, on a non-historical authority";
-				log::error!("{}", ERROR_MESSAGE);
-				#[cfg(test)]
-				panic!("{}", ERROR_MESSAGE);
-			},
-		})
-		.unwrap_or_else(|e| log::error!("Mutating account state failed {:?}", e));
-	}
-}
-
-/// Slashing a node
 pub trait Slashing {
-	/// An identifier for our node
 	type AccountId;
-	/// Block number
 	type BlockNumber;
-	/// Function which implements the slashing logic
+
+	/// Slashes a validator for the equivalent of some number of blocks offline.
 	fn slash(validator_id: &Self::AccountId, blocks_offline: Self::BlockNumber);
 }
 
-/// Something that can nominate signers from the set of active validators.
-pub trait SignerNomination {
-	/// The id type of signers. Most likely the same as the runtime's `ValidatorId`.
+/// Can nominate a single account.
+pub trait SingleSignerNomination {
+	/// The id type of signer
 	type SignerId;
 
 	/// Returns a random live signer, excluding particular provided signers. The seed value is used
@@ -404,6 +353,11 @@ pub trait SignerNomination {
 		seed: H,
 		exclude_ids: &[Self::SignerId],
 	) -> Option<Self::SignerId>;
+}
+
+pub trait ThresholdSignerNomination {
+	/// The id type of signers
+	type SignerId;
 
 	/// Returns a list of live signers where the number of signers is sufficient to author a
 	/// threshold signature. The seed value is used as a source of randomness.
@@ -413,27 +367,31 @@ pub trait SignerNomination {
 	) -> Option<BTreeSet<Self::SignerId>>;
 }
 
+#[derive(Default, Debug, TypeInfo, Decode, Encode, Clone, Copy, PartialEq, Eq)]
+pub enum KeyState {
+	Active,
+	// We are currently transitioning to a new key or the key doesn't yet exist.
+	#[default]
+	Unavailable,
+}
+
+#[derive(Default, Debug, TypeInfo, Decode, Encode, Clone, Copy, PartialEq, Eq)]
+pub struct EpochKey<Key> {
+	pub key: Key,
+	pub epoch_index: EpochIndex,
+	pub key_state: KeyState,
+}
+
 /// Provides the currently valid key for multisig ceremonies.
 pub trait KeyProvider<C: ChainCrypto> {
-	/// The type of the provided key_id.
-	type KeyId;
-
-	/// Gets the key id for the current key.
-	fn current_key_id() -> Self::KeyId;
-
-	/// Get the chain's current agg key.
-	fn current_key() -> C::AggKey;
+	/// Get the chain's current agg key, the epoch index for the current key and the state of that
+	/// key.
+	fn current_epoch_key() -> EpochKey<C::AggKey>;
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_key(_key: C::AggKey) {
 		unimplemented!()
 	}
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub enum RetryPolicy {
-	Always,
-	Never,
 }
 
 /// Api trait for pallets that need to sign things.
@@ -447,14 +405,13 @@ where
 	type KeyId: TryInto<C::AggKey> + From<Vec<u8>>;
 	type ValidatorId: Debug;
 
-	/// Initiate a signing request and return the request id.
-	fn request_signature(payload: C::Payload) -> Self::RequestId;
+	/// Initiate a signing request and return the request id and ceremony id.
+	fn request_signature(payload: C::Payload) -> (Self::RequestId, CeremonyId);
 
-	fn request_signature_with(
+	fn request_keygen_verification_signature(
+		payload: C::Payload,
 		key_id: Self::KeyId,
 		participants: BTreeSet<Self::ValidatorId>,
-		payload: C::Payload,
-		retry_policy: RetryPolicy,
 	) -> (Self::RequestId, CeremonyId);
 
 	/// Register a callback to be dispatched when the signature is available. Can fail if the
@@ -478,15 +435,15 @@ where
 	fn request_signature_with_callback(
 		payload: C::Payload,
 		callback_generator: impl FnOnce(Self::RequestId) -> Self::Callback,
-	) -> Self::RequestId {
-		let id = Self::request_signature(payload);
-		Self::register_callback(id, callback_generator(id)).unwrap_or_else(|e| {
+	) -> (Self::RequestId, CeremonyId) {
+		let (request_id, ceremony_id) = Self::request_signature(payload);
+		Self::register_callback(request_id, callback_generator(request_id)).unwrap_or_else(|e| {
 			log::error!(
 				"Unable to register threshold signature callback. This should not be possible. Error: '{:?}'",
 				e.into()
 			);
 		});
-		id
+		(request_id, ceremony_id)
 	}
 
 	/// Helper function to enable benchmarking of the broadcast pallet
@@ -503,7 +460,7 @@ pub trait Broadcaster<Api: ChainAbi> {
 	type ApiCall: ApiCall<Api>;
 
 	/// Request a threshold signature and then build and broadcast the outbound api call.
-	fn threshold_sign_and_broadcast(api_call: Self::ApiCall);
+	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) -> BroadcastId;
 }
 
 /// The heartbeat of the network
@@ -551,11 +508,12 @@ impl<T, R: frame_support::traits::ValidatorRegistration<T>> QualifyNode
 	}
 }
 
-impl<A, B, C> QualifyNode for (A, B, C)
+impl<A, B, C, D> QualifyNode for (A, B, C, D)
 where
 	A: QualifyNode<ValidatorId = B::ValidatorId>,
 	B: QualifyNode,
 	C: QualifyNode<ValidatorId = B::ValidatorId>,
+	D: QualifyNode<ValidatorId = B::ValidatorId>,
 	B::ValidatorId: Debug,
 {
 	type ValidatorId = A::ValidatorId;
@@ -563,7 +521,8 @@ where
 	fn is_qualified(validator_id: &Self::ValidatorId) -> bool {
 		A::is_qualified(validator_id) &&
 			B::is_qualified(validator_id) &&
-			C::is_qualified(validator_id)
+			C::is_qualified(validator_id) &&
+			D::is_qualified(validator_id)
 	}
 }
 /// Handles the check of execution conditions
@@ -663,4 +622,171 @@ pub trait StakingInfo {
 	fn total_stake_of(account_id: &Self::AccountId) -> Self::Balance;
 	/// Returns the total stake held on-chain.
 	fn total_onchain_stake() -> Self::Balance;
+}
+
+/// Allow pallets to register `Intent`s in the Ingress pallet.
+pub trait IngressApi<C: Chain> {
+	type AccountId;
+	/// Issues an intent id and ingress address for a new liquidity deposit.
+	fn register_liquidity_ingress_intent(
+		lp_account: Self::AccountId,
+		ingress_asset: C::ChainAsset,
+	) -> Result<(IntentId, ForeignChainAddress), DispatchError>;
+
+	/// Issues an intent id and ingress address for a new swap.
+	fn register_swap_intent(
+		ingress_asset: C::ChainAsset,
+		egress_asset: Asset,
+		egress_address: ForeignChainAddress,
+		relayer_commission_bps: u16,
+		relayer_id: Self::AccountId,
+	) -> Result<(IntentId, ForeignChainAddress), DispatchError>;
+}
+
+impl<T: frame_system::Config> IngressApi<Ethereum> for T {
+	type AccountId = T::AccountId;
+	fn register_liquidity_ingress_intent(
+		_lp_account: T::AccountId,
+		_ingress_asset: assets::eth::Asset,
+	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
+		Ok((0, ForeignChainAddress::Eth([0u8; 20])))
+	}
+	fn register_swap_intent(
+		_ingress_asset: assets::eth::Asset,
+		_egress_asset: Asset,
+		_egress_address: ForeignChainAddress,
+		_relayer_commission_bps: u16,
+		_relayer_id: T::AccountId,
+	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
+		Ok((0, ForeignChainAddress::Eth([0u8; 20])))
+	}
+}
+
+#[cfg(feature = "ibiza")]
+impl<T: frame_system::Config> IngressApi<Polkadot> for T {
+	type AccountId = T::AccountId;
+	fn register_liquidity_ingress_intent(
+		_lp_account: T::AccountId,
+		_ingress_asset: assets::dot::Asset,
+	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
+		Ok((0, ForeignChainAddress::Dot([0u8; 32])))
+	}
+	fn register_swap_intent(
+		_ingress_asset: assets::dot::Asset,
+		_egress_asset: Asset,
+		_egress_address: ForeignChainAddress,
+		_relayer_commission_bps: u16,
+		_relayer_id: T::AccountId,
+	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
+		Ok((0, ForeignChainAddress::Dot([0u8; 32])))
+	}
+}
+
+/// Generates a deterministic ingress address for some combination of asset, chain and intent id.
+pub trait AddressDerivationApi<C: Chain> {
+	fn generate_address(
+		ingress_asset: C::ChainAsset,
+		intent_id: IntentId,
+	) -> Result<C::ChainAccount, DispatchError>;
+}
+
+impl AddressDerivationApi<Ethereum> for () {
+	fn generate_address(
+		_ingress_asset: <Ethereum as Chain>::ChainAsset,
+		_intent_id: IntentId,
+	) -> Result<<Ethereum as Chain>::ChainAccount, DispatchError> {
+		Ok(Default::default())
+	}
+}
+
+#[cfg(feature = "ibiza")]
+impl AddressDerivationApi<Polkadot> for () {
+	fn generate_address(
+		_ingress_asset: <Polkadot as Chain>::ChainAsset,
+		_intent_id: IntentId,
+	) -> Result<<Polkadot as Chain>::ChainAccount, DispatchError> {
+		Ok([0u8; 32].into())
+	}
+}
+
+pub trait AccountRoleRegistry<T: frame_system::Config> {
+	fn register_account_role(who: &T::AccountId, role: AccountRole) -> DispatchResult;
+
+	fn register_as_relayer(account_id: &T::AccountId) -> DispatchResult {
+		Self::register_account_role(account_id, AccountRole::Relayer)
+	}
+
+	fn register_as_liquidity_provider(account_id: &T::AccountId) -> DispatchResult {
+		Self::register_account_role(account_id, AccountRole::LiquidityProvider)
+	}
+
+	fn register_as_validator(account_id: &T::AccountId) -> DispatchResult {
+		Self::register_account_role(account_id, AccountRole::Validator)
+	}
+
+	fn ensure_account_role(origin: T::Origin, role: AccountRole)
+		-> Result<T::AccountId, BadOrigin>;
+
+	fn ensure_relayer(origin: T::Origin) -> Result<T::AccountId, BadOrigin> {
+		Self::ensure_account_role(origin, AccountRole::Relayer)
+	}
+
+	fn ensure_liquidity_provider(origin: T::Origin) -> Result<T::AccountId, BadOrigin> {
+		Self::ensure_account_role(origin, AccountRole::LiquidityProvider)
+	}
+
+	fn ensure_validator(origin: T::Origin) -> Result<T::AccountId, BadOrigin> {
+		Self::ensure_account_role(origin, AccountRole::Validator)
+	}
+	#[cfg(feature = "runtime-benchmarks")]
+	fn register_account(_account_id: T::AccountId, _role: AccountRole) {}
+}
+
+/// API that allows other pallets to Egress assets out of the State Chain.
+pub trait EgressApi<C: Chain> {
+	fn schedule_egress(
+		foreign_asset: C::ChainAsset,
+		amount: AssetAmount,
+		egress_address: C::ChainAccount,
+	) -> EgressId;
+}
+
+impl<T: frame_system::Config> EgressApi<Ethereum> for T {
+	fn schedule_egress(
+		_foreign_asset: assets::eth::Asset,
+		_amount: AssetAmount,
+		_egress_address: <Ethereum as Chain>::ChainAccount,
+	) -> EgressId {
+		(ForeignChain::Ethereum, 0)
+	}
+}
+
+#[cfg(feature = "ibiza")]
+impl<T: frame_system::Config> EgressApi<Polkadot> for T {
+	fn schedule_egress(
+		_foreign_asset: assets::dot::Asset,
+		_amount: AssetAmount,
+		_egress_address: <Polkadot as Chain>::ChainAccount,
+	) -> EgressId {
+		(ForeignChain::Ethereum, 0)
+	}
+}
+
+pub trait VaultTransitionHandler<C: ChainCrypto> {
+	fn on_new_vault() {}
+}
+
+/// Provides information about current bids.
+pub trait BidInfo {
+	type Balance;
+	/// Returns the smallest of all backup validator bids.
+	fn get_min_backup_bid() -> Self::Balance;
+}
+
+pub trait VaultKeyWitnessedHandler<C: ChainAbi> {
+	fn on_new_key_activated(
+		new_public_key: C::AggKey,
+		block_number: C::ChainBlockNumber,
+		tx_id: C::TransactionId,
+	) -> DispatchResultWithPostInfo;
 }

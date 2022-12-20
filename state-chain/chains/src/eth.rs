@@ -4,11 +4,15 @@ pub mod api;
 #[cfg(feature = "runtime-benchmarks")]
 pub mod benchmarking;
 
+pub mod ingress_address;
+
 use crate::*;
+pub use cf_primitives::chains::{assets, Ethereum};
+use cf_primitives::KeyId;
 use codec::{Decode, Encode, MaxEncodedLen};
 pub use ethabi::{
 	ethereum_types::{H256, U256},
-	Address, Hash as TxHash, Token, Uint,
+	Address, Hash as TxHash, Token, Uint, Word,
 };
 use libsecp256k1::{curve::Scalar, PublicKey, SecretKey};
 use scale_info::TypeInfo;
@@ -19,6 +23,7 @@ use sp_runtime::{
 	RuntimeDebug,
 };
 use sp_std::{
+	cmp::min,
 	convert::{TryFrom, TryInto},
 	str, vec,
 };
@@ -28,9 +33,42 @@ use self::api::EthereumReplayProtection;
 // Reference constants for the chain spec
 pub const CHAIN_ID_MAINNET: u64 = 1;
 pub const CHAIN_ID_ROPSTEN: u64 = 3;
-pub const CHAIN_ID_RINKEBY: u64 = 4;
 pub const CHAIN_ID_GOERLI: u64 = 5;
 pub const CHAIN_ID_KOVAN: u64 = 42;
+
+impl Chain for Ethereum {
+	type ChainBlockNumber = u64;
+	type ChainAmount = EthAmount;
+	type TransactionFee = eth::TransactionFee;
+	type TrackedData = eth::TrackedData<Self>;
+	type ChainAccount = eth::Address;
+	type ChainAsset = assets::eth::Asset;
+	type EpochStartData = ();
+}
+
+impl ChainCrypto for Ethereum {
+	type KeyId = KeyId;
+	type AggKey = eth::AggKey;
+	type Payload = eth::H256;
+	type ThresholdSignature = SchnorrVerificationComponents;
+	type TransactionId = eth::H256;
+	type GovKey = eth::Address;
+
+	fn verify_threshold_signature(
+		agg_key: &Self::AggKey,
+		payload: &Self::Payload,
+		signature: &Self::ThresholdSignature,
+	) -> bool {
+		agg_key
+			.verify(payload.as_fixed_bytes(), signature)
+			.map_err(|e| log::debug!("Ethereum signature verification failed: {:?}.", e))
+			.is_ok()
+	}
+
+	fn agg_key_to_payload(agg_key: Self::AggKey) -> Self::Payload {
+		H256(Blake2_256::hash(&agg_key.to_pubkey_compressed()))
+	}
+}
 
 //--------------------------//
 pub trait Tokenizable {
@@ -180,22 +218,6 @@ impl ParityBit {
 	/// Returns `true` if the parity bit is even, otherwise `false`.
 	pub fn is_even(&self) -> bool {
 		matches!(self, Self::Even)
-	}
-
-	/// Converts this parity bit to a recovery id for the provided chain_id as per EIP-155.
-	/// `v = y_parity + CHAIN_ID * 2 + 35` where y_parity is `0` or `1`.
-	///
-	/// Returns `None` if conversion was not possible for this chain id.
-	pub(super) fn eth_recovery_id(&self, chain_id: u64) -> Option<ethereum::TransactionRecoveryId> {
-		let offset = match self {
-			ParityBit::Odd => 36,
-			ParityBit::Even => 35,
-		};
-
-		chain_id
-			.checked_mul(2)
-			.and_then(|x| x.checked_add(offset))
-			.map(ethereum::TransactionRecoveryId)
 	}
 }
 
@@ -508,6 +530,13 @@ impl From<CheckedTransactionParameter> for TransactionVerificationError {
 	}
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
+pub struct TransactionFee {
+	// priority + base
+	pub effective_gas_price: EthAmount,
+	pub gas_used: u128,
+}
+
 /// Required information to construct and sign an ethereum transaction. Equivalent to
 /// [ethereum::EIP1559TransactionMessage] with the following fields omitted: nonce,
 ///
@@ -516,7 +545,7 @@ impl From<CheckedTransactionParameter> for TransactionVerificationError {
 /// We assume the access_list (EIP-2930) is not required.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]
-pub struct UnsignedTransaction {
+pub struct Transaction {
 	pub chain_id: u64,
 	pub max_priority_fee_per_gas: Option<U256>, // EIP-1559
 	pub max_fee_per_gas: Option<U256>,
@@ -526,7 +555,17 @@ pub struct UnsignedTransaction {
 	pub data: Vec<u8>,
 }
 
-impl UnsignedTransaction {
+impl FeeRefundCalculator<Ethereum> for Transaction {
+	fn return_fee_refund(
+		&self,
+		fee_paid: <Ethereum as Chain>::TransactionFee,
+	) -> <Ethereum as Chain>::ChainAmount {
+		min(self.max_fee_per_gas.unwrap_or_default().as_u128(), fee_paid.effective_gas_price)
+			.saturating_mul(fee_paid.gas_used)
+	}
+}
+
+impl Transaction {
 	fn check_contract(
 		&self,
 		recovered: ethereum::TransactionAction,
@@ -594,7 +633,7 @@ impl UnsignedTransaction {
 	}
 
 	/// Returns an error if any of the recovered transactoin parameters do not match those specified
-	/// in the original [UnsignedTransaction].
+	/// in the original [Transaction].
 	///
 	/// See [CheckedTransactionParameter].
 	pub fn match_against_recovered(
@@ -635,72 +674,6 @@ impl UnsignedTransaction {
 	}
 }
 
-/// Raw bytes of an rlp-encoded Ethereum transaction.
-pub type RawSignedTransaction = Vec<u8>;
-
-/// Checks that the raw transaction is a valid rlp-encoded transaction.
-///
-/// **TODO: In-depth review to ensure correctness.**
-pub fn verify_transaction(
-	unsigned: &UnsignedTransaction,
-	#[allow(clippy::ptr_arg)] signed: &RawSignedTransaction,
-	address: &Address,
-) -> Result<H256, TransactionVerificationError> {
-	let decoded_tx: ethereum::TransactionV2 = match signed.first() {
-		Some(0x01) => rlp::decode(&signed[1..]).map(ethereum::TransactionV2::EIP2930),
-		Some(0x02) => rlp::decode(&signed[1..]).map(ethereum::TransactionV2::EIP1559),
-		_ => rlp::decode(&signed[..]).map(ethereum::TransactionV2::Legacy),
-	}
-	.map_err(|_| TransactionVerificationError::InvalidRlp)?;
-
-	let tx_hash = decoded_tx.hash();
-
-	let message_hash = match decoded_tx {
-		ethereum::TransactionV2::Legacy(ref tx) =>
-			ethereum::LegacyTransactionMessage::from(tx.clone()).hash(),
-		ethereum::TransactionV2::EIP2930(ref tx) =>
-			ethereum::EIP2930TransactionMessage::from(tx.clone()).hash(),
-		ethereum::TransactionV2::EIP1559(ref tx) =>
-			ethereum::EIP1559TransactionMessage::from(tx.clone()).hash(),
-	};
-
-	let parity_to_recovery_id = |odd: bool, chain_id: u64| {
-		let parity = if odd { ParityBit::Odd } else { ParityBit::Even };
-		parity
-			.eth_recovery_id(chain_id)
-			.ok_or(TransactionVerificationError::InvalidChainId)
-	};
-	let (r, s, v) = match decoded_tx {
-		ethereum::TransactionV2::Legacy(ref tx) =>
-			(tx.signature.r(), tx.signature.s(), tx.signature.standard_v()),
-		ethereum::TransactionV2::EIP2930(ref tx) =>
-			(&tx.r, &tx.s, parity_to_recovery_id(tx.odd_y_parity, tx.chain_id)?.standard()),
-		ethereum::TransactionV2::EIP1559(ref tx) =>
-			(&tx.r, &tx.s, parity_to_recovery_id(tx.odd_y_parity, tx.chain_id)?.standard()),
-	};
-
-	let public_key = libsecp256k1::recover(
-		&libsecp256k1::Message::parse(message_hash.as_fixed_bytes()),
-		&libsecp256k1::Signature::parse_standard_slice(
-			[r.as_bytes(), s.as_bytes()].concat().as_slice(),
-		)
-		.map_err(|_| TransactionVerificationError::InvalidSignature)?,
-		&libsecp256k1::RecoveryId::parse(v)
-			.map_err(|_| TransactionVerificationError::InvalidRecoveryId)?,
-	)
-	.map_err(|_| TransactionVerificationError::InvalidSignature)?;
-
-	let expected_address = &Keccak256::hash(&public_key.serialize()[1..])[12..];
-
-	if expected_address != address.as_bytes() {
-		return Err(TransactionVerificationError::NoMatch)
-	}
-
-	unsigned.match_against_recovered(decoded_tx)?;
-
-	Ok(tx_hash)
-}
-
 #[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Default)]
 pub struct TransactionHash(H256);
 impl core::fmt::Debug for TransactionHash {
@@ -708,6 +681,7 @@ impl core::fmt::Debug for TransactionHash {
 		f.write_fmt(format_args!("{:#?}", self.0))
 	}
 }
+
 impl From<H256> for TransactionHash {
 	fn from(x: H256) -> Self {
 		Self(x)
@@ -789,6 +763,7 @@ mod verification_tests {
 	use Keccak256;
 
 	#[test]
+	#[cfg(feature = "runtime-integration-tests")]
 	fn test_signature() {
 		// Message to sign over
 		let msg: [u8; 32] = Keccak256::hash(b"Whats it going to be then, eh?")

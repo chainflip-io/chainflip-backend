@@ -1,7 +1,5 @@
 pub mod common {
-	use cf_primitives::AuthorityCount;
-	use cf_traits::{BlockNumber, FlipBalance};
-	use pallet_cf_broadcast::AttemptCount;
+	use cf_primitives::{AuthorityCount, BlockNumber, FlipBalance};
 
 	pub const CHAINFLIP_SS58_PREFIX: u16 = 2112;
 
@@ -65,11 +63,10 @@ pub mod common {
 		KEYGEN_TIMEOUT_BUFFER_SECONDS) /
 		SECONDS_PER_BLOCK as u32;
 
-	/// Claims go live 48 hours after registration, so we need to allow enough time beyond that.
-	pub const SECS_IN_AN_HOUR: u64 = 3600;
+	pub const SECS_PER_MINUTE: u64 = 60;
 	// This should be the same as the `CLAIM_DELAY` in:
 	// https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/StakeManager.sol
-	pub const CLAIM_DELAY: u64 = 48 * SECS_IN_AN_HOUR;
+	pub const CLAIM_DELAY_SECS: u64 = 5 * SECS_PER_MINUTE;
 
 	// NOTE: Currently it is not possible to change the slot duration after the chain has started.
 	//       Attempting to do so will brick block production.
@@ -82,21 +79,18 @@ pub mod common {
 
 	pub const EXPIRY_SPAN_IN_SECONDS: u64 = 80000;
 
-	pub const CURRENT_AUTHORITY_EMISSION_INFLATION_BPS: u32 = 1000;
-	pub const BACKUP_NODE_EMISSION_INFLATION_BPS: u32 = 100;
-
-	/// The maximum number of broadcast attempts
-	pub const MAXIMUM_BROADCAST_ATTEMPTS: AttemptCount = 100;
-
-	/// The default minimum stake, 1_000 x 10^18
-	pub const DEFAULT_MIN_STAKE: FlipBalance = 1_000 * 10u128.pow(18);
-
 	/// Percent of the epoch we are allowed to claim
 	pub const PERCENT_OF_EPOCH_PERIOD_CLAIMABLE: u8 = 50;
 
 	/// The duration of the heartbeat interval in blocks. 150 blocks at a 6 second block time is
 	/// equivalent to 15 minutes.
 	pub const HEARTBEAT_BLOCK_INTERVAL: BlockNumber = 150;
+
+	/// The interval at which we update the per-block emission rate.
+	///
+	/// **Important**: If this constant is changed, we must also change
+	/// [CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL] and [BACKUP_NODE_EMISSION_INFLATION_PERBILL].
+	pub const COMPOUNDING_INTERVAL: u32 = HEARTBEAT_BLOCK_INTERVAL;
 
 	/// The mutliplier used to convert transaction weight into fees paid by the validators.
 	///
@@ -108,10 +102,9 @@ pub mod common {
 	pub const TX_FEE_MULTIPLIER: FlipBalance = 10_000;
 
 	/// Default supply update interval is 24 hours.
-	pub const SUPPLY_UPDATE_INTERVAL_DEFAULT: u32 = 14_400;
 
 	pub mod eth {
-		use cf_chains::{Chain, Ethereum};
+		use cf_chains::{eth::Ethereum, Chain};
 
 		/// Number of blocks to wait until we deem the block to be safe.
 		pub const BLOCK_SAFETY_MARGIN: <Ethereum as Chain>::ChainBlockNumber = 4;

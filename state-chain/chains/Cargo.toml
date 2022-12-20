@@ -6,6 +6,8 @@ edition = '2021'
 description = 'Shared Chain-specific functionality for use in the substrate runtime.'
 
 [dependencies]
+cf-primitives = { path = '../primitives', default-features = false }
+
 # Cryptography
 libsecp256k1 = { default-features = false, version = '0.7', features = ['static-context'] }
 secp256k1 = {optional = true, version = '0.21'}
@@ -18,7 +20,7 @@ rlp = {default-features = false, version = '0.5'}
 
 # Other
 hex = {default-features = false, version = '0.4'}
-hex-literal = {optional = true, version = '0.3'}
+hex-literal = {version = '0.3'}
 serde = {optional = true, version = '1.0.126', features = ['derive']}
 log = { version = '0.4.16', default-features = false }
 
@@ -37,33 +39,37 @@ version = '2.1.1'
 [dependencies.sp-std]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06'
+tag = 'chainflip-monthly-2022-06+01'
 
 [dependencies.frame-support]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06'
+tag = 'chainflip-monthly-2022-06+01'
 
 [dependencies.frame-system]
 default-features = false
 optional = true
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06'
+tag = 'chainflip-monthly-2022-06+01'
 
 [dependencies.sp-runtime]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06'
+tag = 'chainflip-monthly-2022-06+01'
 
+[dependencies.sp-core]
+default-features = false
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'chainflip-monthly-2022-06+01'
 
 [dev-dependencies]
 cf-test-utilities = { path = '../test-utilities' }
-hex-literal = {version = '0.3'}
 rand = {version='0.8.4'}
 
 [features]
 default = ['std']
 std = [
+  'cf-primitives/std',
   'codec/std',
   'ethabi/full-serde',
   'ethereum/std',
@@ -76,11 +82,12 @@ std = [
   'serde',
   'sp-runtime/std',
   'sp-std/std',
-  'secp256k1'
+  'secp256k1',
+  'sp-core/std'
 ]
 runtime-benchmarks = [
   'frame-support/runtime-benchmarks',
   'frame-system/runtime-benchmarks',
-  'hex-literal',
 ]
 runtime-integration-tests = []
+ibiza = []

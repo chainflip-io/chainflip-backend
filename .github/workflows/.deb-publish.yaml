@@ -1,0 +1,149 @@
+name: Publish Packages
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Release version
+        required: true
+        type: string
+      artifacts:
+        description: Artifacts to publish
+        required: true
+        type: string
+      environment:
+        description: prod or dev repo
+        required: true
+        type: string
+      commit_hash:
+        description: prod or dev repo
+        required: true
+        type: string
+
+env:
+  APTLY_VERSION: '1.5.0'
+  REGISTRY: 'ghcr.io'
+  REPO_REGION: 'eu-central-1'
+
+jobs:
+  build-deb:
+    name: Build Deb
+    runs-on: ubuntu-20.04
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Download packages
+        uses: actions/download-artifact@v3
+        with:
+          name: ${{ inputs.artifacts }}
+          path: packages
+
+      - name: Get commit SHA, distribution codename
+        id: vars
+        run: |
+          echo "codename=$(lsb_release -c -s)" >> $GITHUB_OUTPUT
+
+
+      - name: Install Aptly and dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y --no-install-recommends moreutils
+          wget https://github.com/aptly-dev/aptly/releases/download/v${APTLY_VERSION}/aptly_${APTLY_VERSION}_amd64.deb -O /tmp/aptly_${APTLY_VERSION}_amd64.deb
+          sudo dpkg -i /tmp/aptly_${APTLY_VERSION}_amd64.deb
+
+      - name: Configure AWS credentials using OIDC
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-region: eu-central-1
+          role-to-assume: arn:aws:iam::962042992619:role/chainflip-github-bot
+
+      - name: Configure aptly
+        run: |
+          aptly config show
+          jq --argjson S3PublishEndpoints "$(<.github/workflows/aptly_${{ inputs.environment }}_s3.json)" '.S3PublishEndpoints += $S3PublishEndpoints' ~/.aptly.conf | sponge ~/.aptly.conf
+
+      - name: Import prod GPG package signing key
+        id: import_gpg_prod
+        if: inputs.environment == 'prod'
+        uses: crazy-max/ghaction-import-gpg@v5
+        with:
+          gpg_private_key: ${{ secrets.CF_PROD_PGP_KEY }}
+
+      - name: Import dev GPG package signing key
+        id: import_gpg_dev
+        if: inputs.environment == 'dev'
+        uses: crazy-max/ghaction-import-gpg@v5
+        with:
+          gpg_private_key: ${{ secrets.CF_DEV_PGP_KEY }}
+
+      - name: Set environment
+        run: |
+          if [[ '${{ inputs.environment }}' == 'prod' ]]; then
+            echo "REPO_BUCKET=repo.chainflip.io" >> $GITHUB_ENV
+            echo "USER_PASS_PREFIX=" >> $GITHUB_ENV
+            echo "GPG_KEY_ID=${{ steps.import_gpg_prod.outputs.keyid }}" >> $GITHUB_ENV
+          else
+            echo "REPO_BUCKET=apt.aws.chainflip.xyz" >> $GITHUB_ENV
+            echo "USER_PASS_PREFIX={user}:{pass}@" >> $GITHUB_ENV
+            echo "GPG_KEY_ID=${{ steps.import_gpg_dev.outputs.keyid }}" >> $GITHUB_ENV
+          fi
+
+      - name: List keys
+        run: gpg -K
+
+      - name: Setup aptly
+        run: |
+          export AWS_SDK_LOAD_CONFIG=1
+          aptly repo create local
+          aptly repo add local packages/*.deb
+          aptly snapshot create snap from repo local
+
+      - name: Publish prod
+        if: inputs.environment == 'prod'
+        run: |
+          aptly publish -gpg-key=${{ steps.import_gpg_prod.outputs.keyid }} -distribution=${{ steps.vars.outputs.codename }} snapshot -force-overwrite snap "s3:chainflip-${{ inputs.environment }}:${{ inputs.version }}"
+
+      - name: Publish dev
+        if: inputs.environment == 'dev'
+        run: |
+          aptly publish -gpg-key=${{ steps.import_gpg_dev.outputs.keyid }} -distribution=${{ steps.vars.outputs.codename }} snapshot -force-overwrite snap "s3:chainflip-${{ inputs.environment }}:${{ inputs.version }}"
+
+      - name: Set Summary Title
+        if: ${{ contains(inputs.artifacts, 'prod') }}
+        run: echo "### Production Packages Published! :rocket:" >> $GITHUB_STEP_SUMMARY
+
+      - name: Set Summary Title
+        if: ${{ contains(inputs.artifacts, 'sandstorm') }}
+        run: echo "### Sandstorm Packages Published! :rocket:" >> $GITHUB_STEP_SUMMARY
+
+      - name: Set Summary Title
+        if: contains(inputs.artifacts, 'ibiza')
+        run: echo "### Ibiza Packages Published! :rocket:" >> $GITHUB_STEP_SUMMARY
+
+      - name: Create Github Summary
+        run: |
+          echo "Packages can be installed with the following commands: " >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys ${GPG_KEY_ID}" >> $GITHUB_STEP_SUMMARY
+          echo "echo \"deb https://${USER_PASS_PREFIX}${REPO_BUCKET}/${{ inputs.version }} ${{ steps.vars.outputs.codename }} main\"  | sudo tee /etc/apt/sources.list.d/chainflip.list" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "When importing from the internal dev repo, you can find the basic auth credentials in 1Password under \`apt repo basic auth\` secret" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "After these steps, run *apt update* and install the desired packages" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "apt update" >> $GITHUB_STEP_SUMMARY
+          echo "apt install chainflip-cli" >> $GITHUB_STEP_SUMMARY
+          echo "apt install chainflip-node" >> $GITHUB_STEP_SUMMARY
+          echo "apt install chainflip-engine" >> $GITHUB_STEP_SUMMARY
+          echo "apt install chainflip-relayer" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+      - name: Testnet tools summary
+        if: inputs.environment == 'dev'
+        run: |
+          echo "### Usage in \`testnet-tools\`" >> $GITHUB_STEP_SUMMARY
+          echo "Use the full commit hash: \`${{ inputs.commit_hash }}\` for your network configuration. " >> $GITHUB_STEP_SUMMARY

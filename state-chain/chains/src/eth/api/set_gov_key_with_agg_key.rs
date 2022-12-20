@@ -1,9 +1,12 @@
-use crate::{eth::Tokenizable, ApiCall, ChainAbi, ChainCrypto, Ethereum};
+use crate::{
+	eth::{Ethereum, Tokenizable},
+	ApiCall, ChainCrypto,
+};
 use codec::{Decode, Encode, MaxEncodedLen};
 use ethabi::{Address, ParamType, Token};
 use frame_support::RuntimeDebug;
 use scale_info::TypeInfo;
-use sp_std::vec;
+use sp_std::{vec, vec::Vec};
 
 use crate::eth::SigData;
 
@@ -42,6 +45,17 @@ impl SetGovKeyWithAggKey {
 			],
 		)
 	}
+
+	fn abi_encoded(&self) -> Vec<u8> {
+		self.get_function()
+			.encode_input(&[self.sig_data.tokenize(), Token::Address(self.new_gov_key)])
+			.expect(
+				r#"
+						This can only fail if the parameter types don't match the function signature encoded below.
+						Therefore, as long as the tests pass, it can't fail at runtime.
+					"#,
+			)
+	}
 }
 
 impl ApiCall<Ethereum> for SetGovKeyWithAggKey {
@@ -54,15 +68,8 @@ impl ApiCall<Ethereum> for SetGovKeyWithAggKey {
 		self
 	}
 
-	fn abi_encoded(&self) -> <Ethereum as ChainAbi>::SignedTransaction {
-		self.get_function()
-			.encode_input(&[self.sig_data.tokenize(), Token::Address(self.new_gov_key)])
-			.expect(
-				r#"
-						This can only fail if the parameter types don't match the function signature encoded below.
-						Therefore, as long as the tests pass, it can't fail at runtime.
-					"#,
-			)
+	fn chain_encoded(&self) -> Vec<u8> {
+		self.abi_encoded()
 	}
 
 	fn is_signed(&self) -> bool {
@@ -116,7 +123,7 @@ mod test_set_gov_key_with_agg_key {
 				s: FAKE_SIG,
 				k_times_g_address: FAKE_NONCE_TIMES_G_ADDR,
 			})
-			.abi_encoded(),
+			.chain_encoded(),
 			// "Canonical" encoding based on the abi definition above and using the ethabi crate:
 			key_manager
 				.function("setGovKeyWithAggKey")

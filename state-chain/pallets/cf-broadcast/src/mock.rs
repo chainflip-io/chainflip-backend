@@ -1,9 +1,10 @@
 use std::cell::RefCell;
 
-use crate::{self as pallet_cf_broadcast, AttemptCount, Instance1, PalletOffence};
+use crate::{self as pallet_cf_broadcast, Instance1, PalletOffence};
 use cf_chains::{
+	eth::Ethereum,
 	mocks::{MockApiCall, MockEthereum, MockTransactionBuilder},
-	ChainCrypto, Ethereum,
+	ChainCrypto,
 };
 use cf_traits::{
 	mocks::{
@@ -11,7 +12,7 @@ use cf_traits::{
 		signer_nomination::MockNominator, system_state_info::MockSystemStateInfo,
 		threshold_signer::MockThresholdSigner,
 	},
-	Chainflip,
+	Chainflip, EpochKey, KeyState,
 };
 use frame_support::parameter_types;
 use sp_core::H256;
@@ -31,7 +32,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system,
-		MockBroadcast: pallet_cf_broadcast::<Instance1>,
+		Broadcaster: pallet_cf_broadcast::<Instance1>,
 	}
 );
 
@@ -82,24 +83,18 @@ impl Chainflip for Test {
 	type SystemState = MockSystemStateInfo;
 }
 
-pub const SIGNING_EXPIRY_BLOCKS: <Test as frame_system::Config>::BlockNumber = 2;
-pub const TRANSMISSION_EXPIRY_BLOCKS: <Test as frame_system::Config>::BlockNumber = 4;
-pub const MAXIMUM_BROADCAST_ATTEMPTS: AttemptCount = 3;
+pub const BROADCAST_EXPIRY_BLOCKS: <Test as frame_system::Config>::BlockNumber = 4;
 
 parameter_types! {
-	pub const SigningTimeout: <Test as frame_system::Config>::BlockNumber = SIGNING_EXPIRY_BLOCKS;
-	pub const TransmissionTimeout: <Test as frame_system::Config>::BlockNumber = TRANSMISSION_EXPIRY_BLOCKS;
-	pub const MaximumAttempts: AttemptCount = MAXIMUM_BROADCAST_ATTEMPTS;
+	pub const BroadcastTimeout: <Test as frame_system::Config>::BlockNumber = BROADCAST_EXPIRY_BLOCKS;
 }
 
 pub type MockOffenceReporter =
 	cf_traits::mocks::offence_reporting::MockOffenceReporter<u64, PalletOffence>;
 
 // Mock KeyProvider
-pub const VALID_KEY_ID: &[u8] = &[0, 0, 0, 0];
 pub const VALID_AGG_KEY: [u8; 4] = [0, 0, 0, 0];
 
-pub const INVALID_KEY_ID: &[u8] = &[1, 1, 1, 1];
 pub const INVALID_AGG_KEY: [u8; 4] = [1, 1, 1, 1];
 
 thread_local! {
@@ -109,21 +104,11 @@ thread_local! {
 pub struct MockKeyProvider;
 
 impl cf_traits::KeyProvider<MockEthereum> for MockKeyProvider {
-	type KeyId = Vec<u8>;
-
-	fn current_key_id() -> Self::KeyId {
-		if VALIDKEY.with(|cell| *cell.borrow()) {
-			VALID_KEY_ID.to_vec()
-		} else {
-			INVALID_KEY_ID.to_vec()
-		}
-	}
-
-	fn current_key() -> <MockEthereum as ChainCrypto>::AggKey {
-		if VALIDKEY.with(|cell| *cell.borrow()) {
-			VALID_AGG_KEY
-		} else {
-			INVALID_AGG_KEY
+	fn current_epoch_key() -> EpochKey<<MockEthereum as ChainCrypto>::AggKey> {
+		EpochKey {
+			key: if VALIDKEY.with(|cell| *cell.borrow()) { VALID_AGG_KEY } else { INVALID_AGG_KEY },
+			epoch_index: Default::default(),
+			key_state: KeyState::Active,
 		}
 	}
 }
@@ -138,15 +123,15 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type Event = Event;
 	type Call = Call;
 	type Offence = PalletOffence;
+	type AccountRoleRegistry = ();
 	type TargetChain = MockEthereum;
 	type ApiCall = MockApiCall<MockEthereum>;
 	type TransactionBuilder = MockTransactionBuilder<Self::TargetChain, Self::ApiCall>;
 	type ThresholdSigner = MockThresholdSigner<MockEthereum, Call>;
-	type SignerNomination = MockNominator;
+	type BroadcastSignerNomination = MockNominator;
 	type OffenceReporter = MockOffenceReporter;
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
-	type SigningTimeout = SigningTimeout;
-	type TransmissionTimeout = TransmissionTimeout;
+	type BroadcastTimeout = BroadcastTimeout;
 	type WeightInfo = ();
 	type KeyProvider = MockKeyProvider;
 }

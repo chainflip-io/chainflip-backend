@@ -1,10 +1,12 @@
-use crate::{Runtime, Validator};
+use crate::{Reputation, Runtime, Validator};
 use cf_primitives::EpochIndex;
 use cf_traits::{Chainflip, EpochInfo};
 use frame_support::Hashable;
 use nanorand::{Rng, WyRand};
 use pallet_cf_validator::HistoricalAuthorities;
 use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
+
+use super::Offence;
 
 /// Tries to select `n` items randomly from the provided BTreeSet.
 ///
@@ -47,31 +49,43 @@ fn seed_from_hashable<H: Hashable>(value: H) -> u64 {
 
 fn eligible_authorities(
 	at_epoch: EpochIndex,
-	exclude_ids: &[<Runtime as Chainflip>::ValidatorId],
+	exclude_ids: &BTreeSet<<Runtime as Chainflip>::ValidatorId>,
 ) -> BTreeSet<<Runtime as Chainflip>::ValidatorId> {
 	HistoricalAuthorities::<Runtime>::get(at_epoch)
 		.into_iter()
 		.collect::<BTreeSet<_>>()
-		.difference(&exclude_ids.iter().cloned().collect())
+		.difference(exclude_ids)
 		.cloned()
 		.collect()
 }
 
 /// Nominates pseudo-random signers based on the provided seed.
+///
+/// Signers serving a suspension for any of the offences in ExclusionOffences are
+/// excluded from being nominated.
 pub struct RandomSignerNomination;
 
-impl cf_traits::SignerNomination for RandomSignerNomination {
+impl cf_traits::SingleSignerNomination for RandomSignerNomination {
 	type SignerId = <Runtime as Chainflip>::ValidatorId;
 
 	fn nomination_with_seed<H: Hashable>(
 		seed: H,
 		exclude_ids: &[Self::SignerId],
 	) -> Option<Self::SignerId> {
+		let mut all_excludes = Reputation::validators_suspended_for(&[
+			Offence::MissedAuthorshipSlot,
+			Offence::MissedHeartbeat,
+		]);
+		all_excludes.extend(exclude_ids.iter().cloned());
 		select_one(
 			seed_from_hashable(seed),
-			eligible_authorities(<Validator as EpochInfo>::epoch_index(), exclude_ids),
+			eligible_authorities(Validator::epoch_index(), &all_excludes),
 		)
 	}
+}
+
+impl cf_traits::ThresholdSignerNomination for RandomSignerNomination {
+	type SignerId = <Runtime as Chainflip>::ValidatorId;
 
 	fn threshold_nomination_with_seed<H: Hashable>(
 		seed: H,
@@ -80,9 +94,16 @@ impl cf_traits::SignerNomination for RandomSignerNomination {
 		try_select_random_subset(
 			seed_from_hashable(seed),
 			cf_utilities::success_threshold_from_share_count(
-				<Validator as EpochInfo>::authority_count_at_epoch(epoch_index).unwrap_or_default(),
+				Validator::authority_count_at_epoch(epoch_index).unwrap_or_default(),
 			) as usize,
-			eligible_authorities(epoch_index, &[]),
+			eligible_authorities(
+				epoch_index,
+				&Reputation::validators_suspended_for(&[
+					Offence::ParticipateSigningFailed,
+					Offence::MissedAuthorshipSlot,
+					Offence::MissedHeartbeat,
+				]),
+			),
 		)
 	}
 }
@@ -115,8 +136,8 @@ mod tests {
 		threshold: usize,
 		set: BTreeSet<T>,
 	) {
-		let source = BTreeSet::from_iter(set.clone());
-		let result = BTreeSet::from_iter(try_select_random_subset(seed, threshold, set).unwrap());
+		let source = set.clone();
+		let result = try_select_random_subset(seed, threshold, set).unwrap();
 		assert!(result.len() == threshold);
 		assert!(source.is_superset(&result))
 	}
@@ -150,10 +171,8 @@ mod tests {
 			// Note: strictly speaking these don't have to be different but the chances of a
 			// collision should be quite low.
 			assert_ne!(
-				BTreeSet::from_iter(try_select_random_subset(seed, 100, set.clone()).unwrap()),
-				BTreeSet::from_iter(
-					try_select_random_subset(seed + 100, 100, set.clone()).unwrap()
-				),
+				try_select_random_subset(seed, 100, set.clone()).unwrap(),
+				try_select_random_subset(seed + 100, 100, set.clone()).unwrap(),
 			);
 		}
 	}
@@ -163,8 +182,8 @@ mod tests {
 		let set = (0..150).collect::<BTreeSet<_>>();
 		for seed in 0..100 {
 			assert_eq!(
-				BTreeSet::from_iter(try_select_random_subset(seed, 100, set.clone()).unwrap()),
-				BTreeSet::from_iter(try_select_random_subset(seed, 100, set.clone()).unwrap()),
+				try_select_random_subset(seed, 100, set.clone()).unwrap(),
+				try_select_random_subset(seed, 100, set.clone()).unwrap(),
 			);
 		}
 	}

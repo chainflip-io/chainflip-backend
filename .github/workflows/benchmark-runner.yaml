@@ -22,19 +22,32 @@ permissions:
   contents: read
 
 env:
-  RUNNERS_MANAGEMENT_GITHUB_TOKEN: ${{ secrets.RUNNERS_MANAGEMENT_GITHUB_TOKEN }}
+  CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN: ${{ secrets.CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN }}
 
 jobs:
   terraform-benchmarks-runner:
     name: Terrafrom ${{ github.event.inputs.command }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
+      - name: Setup Tailscale 🪡 ⚙️
+        id: tailscale
+        uses: tailscale/github-action@main
+        with:
+          authkey: ${{ secrets.CF_TAILSCALE_AUTHKEY }}
+
+      - name: Load secret 🗝👨‍💻
+        uses: 1password/load-secrets-action@v1
+        env:
+          OP_CONNECT_HOST: ${{ secrets.CF_1PASSWORD_CONNECTOR_URL }}
+          OP_CONNECT_TOKEN: ${{ secrets.CF_1PASSWORD_CONNECTOR_TOKEN_READ_ONLY }}
+          CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN: op://github-actions/CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN/password
+
       - name: Checkout chainflip-platform-monorepo
         uses: actions/checkout@v3
         with:
           repository: chainflip-io/chainflip-platform-monorepo
           ref: main
-          token: ${{ secrets.CHAINFLIP_BOT_GITHUB_TOKEN }}
+          token: ${{ secrets.CF_GITHUB_BOT_TOKEN }}
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v1
         with:
@@ -50,7 +63,7 @@ jobs:
       - name: Generate Terraform Variables
         id: tfvars
         run: |
-          runner_registration_token=$(curl -sX POST -H "Authorization: token ${RUNNERS_MANAGEMENT_GITHUB_TOKEN}" https://api.github.com/orgs/chainflip-io/actions/runners/registration-token | jq .token --raw-output)
+          runner_registration_token=$(curl -sX POST -H "Authorization: token ${{ env.CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN }}" https://api.github.com/orgs/chainflip-io/actions/runners/registration-token | jq .token --raw-output)
           instance_spec=${{ github.event.inputs.benchmark_machine_spec }}
           runner_custom_labels=${{ github.event.inputs.benchmark_machine_spec }}
 
@@ -67,7 +80,9 @@ jobs:
 
       - name: Terraform Workspace
         id: workspace
-        run: terraform workspace new ${{ github.event.inputs.benchmark_machine_spec }} || terraform workspace select ${{ github.event.inputs.benchmark_machine_spec }}
+        run:
+          terraform workspace new ${{ github.event.inputs.benchmark_machine_spec }} || terraform workspace select ${{ github.event.inputs.benchmark_machine_spec
+          }}
         working-directory: ./aws/Workloads/benchmarks-github-runner
 
       - name: Terraform Validate
@@ -80,19 +95,14 @@ jobs:
         if: github.event.inputs.command == 'apply'
         id: plan
         run: >
-          terraform plan
-          -no-color
-          -out tfplan
+          terraform plan -no-color -out tfplan
         working-directory: ./aws/Workloads/benchmarks-github-runner
 
       - name: Terraform Apply
         id: apply
         if: github.event.inputs.command == 'apply'
         run: >
-          terraform apply
-          -no-color
-          -auto-approve
-          "tfplan"
+          terraform apply -no-color -auto-approve "tfplan"
         working-directory: ./aws/Workloads/benchmarks-github-runner
 
       - name: Get EC2 Instance ID
@@ -105,9 +115,7 @@ jobs:
         id: destroy
         if: github.event.inputs.command == 'destroy'
         run: >
-          terraform destroy
-          -no-color
-          -auto-approve
+          terraform destroy -no-color -auto-approve
         working-directory: ./aws/Workloads/benchmarks-github-runner
 
       - name: Terraform Workspace
@@ -122,7 +130,7 @@ jobs:
         if: github.event.inputs.command == 'destroy'
         run: |
           echo Removing instance: ${{ steps.get-ec2-id.outputs.instance_id }}
-          ID=$(curl -s -H "Accept: application/vnd.github.v3+json" -H "Authorization: token ${RUNNERS_MANAGEMENT_GITHUB_TOKEN}" https://api.github.com/orgs/chainflip-io/actions/runners | jq -r --arg instance_id "${{ steps.get-ec2-id.outputs.instance_id }}" '.runners[] | select(.name==$instance_id).id')
+          ID=$(curl -s -H "Accept: application/vnd.github.v3+json" -H "Authorization: token ${{ env.CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN }}" https://api.github.com/orgs/chainflip-io/actions/runners | jq -r --arg instance_id "${{ steps.get-ec2-id.outputs.instance_id }}" '.runners[] | select(.name==$instance_id).id')
           echo GitHub Runner ID: $ID
-          curl -X DELETE -s -H "Accept: application/vnd.github.v3+json" -H "Authorization: token ${RUNNERS_MANAGEMENT_GITHUB_TOKEN}" https://api.github.com/orgs/chainflip-io/actions/runners/$ID
+          curl -X DELETE -s -H "Accept: application/vnd.github.v3+json" -H "Authorization: token ${{ env.CF_GITHUB_RUNNERS_MANAGEMENT_TOKEN }}" https://api.github.com/orgs/chainflip-io/actions/runners/$ID
         working-directory: ./aws/Workloads/benchmarks-github-runner

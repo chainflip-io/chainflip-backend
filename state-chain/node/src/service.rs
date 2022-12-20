@@ -12,9 +12,9 @@ use sc_telemetry::{Telemetry, TelemetryWorker};
 use sp_consensus_aura::sr25519::AuthorityPair as AuraPair;
 use state_chain_runtime::{self, opaque::Block, RuntimeApi};
 use std::{marker::PhantomData, sync::Arc, time::Duration};
-use utilities::print_chainflip_ascii_art;
 
-use crate::chain_spec::use_chainflip_account_id_encoding;
+#[cfg(feature = "ibiza")]
+use custom_rpc::{PoolsApiServer, PoolsRpc};
 
 // Our native executor instance.
 pub struct ExecutorDispatch;
@@ -67,9 +67,6 @@ pub fn new_partial(
 	if config.keystore_remote.is_some() {
 		return Err(ServiceError::Other("Remote Keystores are not supported.".to_string()))
 	}
-
-	print_chainflip_ascii_art();
-	use_chainflip_account_id_encoding();
 
 	let telemetry = config
 		.telemetry_endpoints
@@ -214,7 +211,6 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 		&config.chain_spec,
 	);
 
-	config.network.extra_sets.push(multisig_p2p_transport::p2p_peers_set_config());
 	config
 		.network
 		.extra_sets
@@ -252,13 +248,6 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 	let enable_grandpa = !config.disable_grandpa;
 	let prometheus_registry = config.prometheus_registry().cloned();
 
-	let (rpc_request_handler, p2p_message_handler_future) =
-		multisig_p2p_transport::new_p2p_network_node(
-			network.clone(),
-			task_manager.spawn_handle(),
-			multisig_p2p_transport::RETRY_SEND_INTERVAL,
-		);
-
 	let rpc_builder = {
 		let client = client.clone();
 		let pool = transaction_pool.clone();
@@ -266,11 +255,6 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 		Box::new(move |deny_unsafe, subscription_executor| {
 			let build = || {
 				let mut module = RpcModule::new(());
-				module.merge(
-					multisig_p2p_transport::P2PValidatorNetworkNodeRpcApiServer::into_rpc(
-						rpc_request_handler.clone(),
-					),
-				)?;
 
 				module.merge(substrate_frame_rpc_system::SystemApiServer::into_rpc(
 					substrate_frame_rpc_system::System::new(
@@ -296,6 +280,12 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 
 				// Implement custom RPC extensions
 				module.merge(CustomApiServer::into_rpc(CustomRpc {
+					client: client.clone(),
+					_phantom: PhantomData::default(),
+				}))?;
+
+				#[cfg(feature = "ibiza")]
+				module.merge(PoolsApiServer::into_rpc(PoolsRpc {
 					client: client.clone(),
 					_phantom: PhantomData::default(),
 				}))?;
@@ -386,12 +376,6 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 		telemetry: telemetry.as_ref().map(|x| x.handle()),
 		protocol_name: grandpa_protocol_name,
 	};
-
-	task_manager.spawn_essential_handle().spawn_blocking(
-		"cf-p2p",
-		"chainflip",
-		p2p_message_handler_future,
-	);
 
 	if enable_grandpa {
 		// start the full GRANDPA voter

@@ -24,7 +24,6 @@ pallet-cf-validator = { path = '../pallets/cf-validator'}
 pallet-cf-staking = { path = '../pallets/cf-staking'}
 pallet-cf-witnesser = { path = '../pallets/cf-witnesser', default-features = false}
 pallet-cf-flip = { path = '../pallets/cf-flip'}
-pallet-cf-auction = { path = '../pallets/cf-auction'}
 pallet-cf-emissions = { path = '../pallets/cf-emissions'}
 pallet-cf-governance = { path = '../pallets/cf-governance'}
 pallet-cf-reputation = { path = '../pallets/cf-reputation'}
@@ -32,16 +31,17 @@ pallet-cf-vaults = { path = '../pallets/cf-vaults'}
 pallet-cf-threshold-signature = { path = '../pallets/cf-threshold-signature'}
 pallet-cf-broadcast = { path = '../pallets/cf-broadcast'}
 pallet-cf-environment = { path = '../pallets/cf-environment'}
-
-
+pallet-cf-account-roles = { path = '../pallets/cf-account-roles'}
+pallet-cf-ingress-egress = { path = '../pallets/cf-ingress-egress' }
+pallet-cf-swapping ={ path = '../pallets/cf-swapping' }
 # Additional FRAME pallets
 [dev-dependencies.pallet-authorship]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06'
+tag = 'chainflip-monthly-2022-06+01'
 
 [dev-dependencies.pallet-session]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06'
+tag = 'chainflip-monthly-2022-06+01'
 features = ['historical']
 
 # Substrate dependencies
@@ -53,42 +53,42 @@ version = '3.0.0'
 
 [dev-dependencies.frame-executive]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06'
+tag = 'chainflip-monthly-2022-06+01'
 
 [dev-dependencies.frame-support]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06'
+tag = 'chainflip-monthly-2022-06+01'
 
 [dev-dependencies.frame-system]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06'
+tag = 'chainflip-monthly-2022-06+01'
 
 [dev-dependencies.frame-system-rpc-runtime-api]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06'
+tag = 'chainflip-monthly-2022-06+01'
 
 [dev-dependencies.hex-literal]
 version = '0.3.1'
 
 [dev-dependencies.pallet-aura]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06'
+tag = 'chainflip-monthly-2022-06+01'
 
 [dev-dependencies.pallet-grandpa]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06'
+tag = 'chainflip-monthly-2022-06+01'
 
 [dev-dependencies.pallet-randomness-collective-flip]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06'
+tag = 'chainflip-monthly-2022-06+01'
 
 [dev-dependencies.pallet-timestamp]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06'
+tag = 'chainflip-monthly-2022-06+01'
 
 [dev-dependencies.pallet-transaction-payment]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06'
+tag = 'chainflip-monthly-2022-06+01'
 
 [dev-dependencies.scale-info]
 features = ['derive']
@@ -96,45 +96,51 @@ version = '2.1.1'
 
 [dev-dependencies.sp-block-builder]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06'
+tag = 'chainflip-monthly-2022-06+01'
 
 [dev-dependencies.sp-consensus-aura]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06'
+tag = 'chainflip-monthly-2022-06+01'
 version = '0.10.0-dev'
 
 [dev-dependencies.sp-core]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06'
+tag = 'chainflip-monthly-2022-06+01'
 
 [dev-dependencies.sp-inherents]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06'
+tag = 'chainflip-monthly-2022-06+01'
 
 [dev-dependencies.sp-offchain]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06'
+tag = 'chainflip-monthly-2022-06+01'
 
 [dev-dependencies.sp-runtime]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06'
+tag = 'chainflip-monthly-2022-06+01'
 
 [dev-dependencies.sp-session]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06'
+tag = 'chainflip-monthly-2022-06+01'
 
 [dev-dependencies.sp-std]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06'
+tag = 'chainflip-monthly-2022-06+01'
 
 [dev-dependencies.sp-transaction-pool]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06'
+tag = 'chainflip-monthly-2022-06+01'
 
 [dev-dependencies.sp-version]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06'
+tag = 'chainflip-monthly-2022-06+01'
 
 [dev-dependencies.sp-finality-grandpa]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06'
+tag = 'chainflip-monthly-2022-06+01'
+
+[features]
+ibiza = [
+    "state-chain-runtime/ibiza",
+    "cf-chains/ibiza",
+]

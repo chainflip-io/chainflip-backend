@@ -6,12 +6,12 @@ use frame_support::{dispatch::UnfilteredDispatchable, traits::EnsureOrigin};
 
 benchmarks! {
 	set_slashing_rate {
-		let slashing_rate: T::Balance = T::Balance::from(100u32);
+		let slashing_rate: Permill = Permill::one();
 		let call = Call::<T>::set_slashing_rate { slashing_rate };
 		let origin = T::EnsureGovernance::successful_origin();
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
-		assert_eq!(Pallet::<T>::slashing_rate(), slashing_rate.into())
+		assert_eq!(Pallet::<T>::slashing_rate(), slashing_rate)
 	}
 
 	reap_one_account {

@@ -9,13 +9,16 @@ license = '<TODO>'
 publish = false
 repository = 'https://github.com/chainflip-io/chainflip-backend'
 
-
 [package.metadata.docs.rs]
 targets = ['x86_64-unknown-linux-gnu']
 
 [dependencies]
+cf-chains = {optional = true, path = '../../chains', default-features = false}
+cf-primitives = {path = '../../primitives', default-features = false}
 cf-traits = { path = '../../traits', default-features = false }
 serde = {optional = true, version = '1.0.126', features = ['derive']}
+hex-literal = {version = '0.3'}
+log = { version = '0.4.16', default-features = false }
 
 # Parity deps
 [dependencies.codec]
@@ -32,41 +35,47 @@ version = '2.1.1'
 [dependencies.frame-support]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06'
+tag = 'chainflip-monthly-2022-06+01'
 
 [dependencies.frame-system]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06'
+tag = 'chainflip-monthly-2022-06+01'
 
 [dependencies.sp-std]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06'
+tag = 'chainflip-monthly-2022-06+01'
 
 [dependencies.sp-runtime]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06'
+tag = 'chainflip-monthly-2022-06+01'
 
 [dependencies.frame-benchmarking]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 optional = true
-tag = 'chainflip-monthly-2022-06'
+tag = 'chainflip-monthly-2022-06+01'
+
+[dependencies.sp-core]
+default-features = false
+git = 'https://github.com/chainflip-io/substrate.git'
+tag = 'chainflip-monthly-2022-06+01'
 
 # Dev dependencies
 [dev-dependencies.sp-io]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06'
+tag = 'chainflip-monthly-2022-06+01'
 
 [dev-dependencies.sp-core]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06'
+tag = 'chainflip-monthly-2022-06+01'
 
 [features]
 default = ['std']
 std = [
+  "cf-chains/std",
   'cf-traits/std',
   'codec/std',
   'scale-info/std',
@@ -76,6 +85,8 @@ std = [
   'serde',
   'sp-std/std',
   'sp-runtime/std',
+  'sp-core/std',
+  'log/std'
 ]
 runtime-benchmarks = [
   'cf-traits/runtime-benchmarks',
@@ -84,3 +95,7 @@ runtime-benchmarks = [
   'frame-system/runtime-benchmarks',
 ]
 try-runtime = ['frame-support/try-runtime']
+ibiza = [
+  "cf-chains/ibiza",
+  "cf-traits/ibiza",
+]

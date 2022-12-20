@@ -1,75 +1,85 @@
 use std::sync::Arc;
 
-use crate::multisig::eth::EthSigning;
-use anyhow::{bail, Context};
+use crate::multisig::{eth::EthSigning, polkadot::PolkadotSigning};
+use anyhow::Context;
+
+use cf_primitives::AccountRole;
 use chainflip_engine::{
-    common::format_iterator,
-    eth::{
-        self, build_broadcast_channel,
-        key_manager::KeyManager,
-        rpc::{validate_client_chain_id, EthDualRpcClient, EthHttpRpcClient, EthWsRpcClient},
-        stake_manager::StakeManager,
-        EthBroadcaster,
-    },
-    health::HealthChecker,
-    logging,
-    multisig::{self, client::key_store::KeyStore, PersistentKeyDB},
-    multisig_p2p,
-    p2p_muxer::P2PMuxer,
-    settings::{CommandLineOptions, Settings},
-    state_chain_observer,
-    task_scope::with_main_task_scope,
+	eth::{
+		self, build_broadcast_channel, key_manager::KeyManager, rpc::EthDualRpcClient,
+		stake_manager::StakeManager, EthBroadcaster,
+	},
+	health::HealthChecker,
+	logging,
+	multisig::{self, client::key_store::KeyStore, PersistentKeyDB},
+	p2p,
+	settings::{CommandLineOptions, Settings},
+	state_chain_observer::{
+		self,
+		client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi},
+	},
+	task_scope::task_scope,
 };
+
 use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use clap::Parser;
 use futures::FutureExt;
 use pallet_cf_validator::SemVer;
 use sp_core::U256;
-use utilities::print_chainflip_ascii_art;
 
-fn main() -> anyhow::Result<()> {
-    print_chainflip_ascii_art();
-    use_chainflip_account_id_encoding();
+#[cfg(feature = "ibiza")]
+use chainflip_engine::dot::{rpc::DotRpcClient, DotBroadcaster};
 
-    let settings = Settings::new(CommandLineOptions::parse()).context("Error reading settings")?;
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+	use_chainflip_account_id_encoding();
 
-    let root_logger = logging::utils::new_json_logger_with_tag_filter(
-        settings.log.whitelist.clone(),
-        settings.log.blacklist.clone(),
-    );
+	let settings = Settings::new(CommandLineOptions::parse()).context("Error reading settings")?;
 
-    slog::info!(root_logger, "Start the engines! :broom: :broom: ");
+	// Note: the greeting should only be printed in normal mode (i.e. not for short-lived commands
+	// like `--version`), so we execute it only after the settings have been parsed.
+	utilities::print_starting!();
 
-    with_main_task_scope(|scope| {
-        async {
+	let root_logger = logging::utils::new_json_logger_with_tag_filter(
+		settings.log.whitelist.clone(),
+		settings.log.blacklist.clone(),
+	);
+
+	task_scope(|scope| {
+		async {
 
             if let Some(health_check_settings) = &settings.health_check {
                 scope.spawn(HealthChecker::new(health_check_settings, &root_logger).await?.run());
             }
 
-            // Init web3 and eth broadcaster before connecting to SC, so we can diagnose these config errors, before
-            // we connect to the SC (which requires the user to be staked)
-            let eth_ws_rpc_client = EthWsRpcClient::new(&settings.eth, &root_logger)
-                .await
-                .context("Failed to create EthWsRpcClient")?;
-
-            let eth_http_rpc_client =
-                EthHttpRpcClient::new(&settings.eth, &root_logger).context("Failed to create EthHttpRpcClient")?;
+            let (latest_block_hash, state_chain_block_stream, state_chain_client) =
+                state_chain_observer::client::StateChainClient::new(scope, &settings.state_chain, AccountRole::Validator, true, &root_logger)
+                    .await?;
 
             let eth_dual_rpc =
-                EthDualRpcClient::new(eth_ws_rpc_client.clone(), eth_http_rpc_client.clone(), &root_logger);
+                EthDualRpcClient::new(&settings.eth, U256::from(state_chain_client
+                    .storage_value::<pallet_cf_environment::EthereumChainId::<state_chain_runtime::Runtime>>(
+                        latest_block_hash,
+                    )
+                    .await
+                    .context("Failed to get EthereumChainId from state chain")?
+                ),
+                &root_logger)
+                .await
+                .context("Failed to create EthDualRpcClient")?;
 
             let eth_broadcaster = EthBroadcaster::new(&settings.eth, eth_dual_rpc.clone(), &root_logger)
                 .context("Failed to create ETH broadcaster")?;
 
-            let (latest_block_hash, state_chain_block_stream, state_chain_client) =
-                state_chain_observer::client::connect_to_state_chain(&settings.state_chain, true, &root_logger)
-                    .await?;
+            #[cfg(feature = "ibiza")]
+            let dot_rpc_client = DotRpcClient::new(&settings.dot.ws_node_endpoint)
+                .await
+                .context("Failed to create Polkadot Client")?;
 
             state_chain_client
                 .submit_signed_extrinsic(
                     pallet_cf_validator::Call::cfe_version {
-                        version: SemVer {
+                        new_version: SemVer {
                             major: env!("CARGO_PKG_VERSION_MAJOR").parse::<u8>().unwrap(),
                             minor: env!("CARGO_PKG_VERSION_MINOR").parse::<u8>().unwrap(),
                             patch: env!("CARGO_PKG_VERSION_PATCH").parse::<u8>().unwrap(),
@@ -80,44 +90,19 @@ fn main() -> anyhow::Result<()> {
                 .await
                 .context("Failed to submit version to state chain")?;
 
-            // TODO: Merge this into the MultisigClientApi
-            let (account_peer_mapping_change_sender, account_peer_mapping_change_receiver) =
-                tokio::sync::mpsc::unbounded_channel();
-
             let (
-                witnessing_instruction_sender,
-                [witnessing_instruction_receiver_1, witnessing_instruction_receiver_2, witnessing_instruction_receiver_3],
+                epoch_start_sender,
+                [epoch_start_receiver_1, epoch_start_receiver_2, epoch_start_receiver_3, _epoch_start_receiver_4, _epoch_start_receiver_5, _epoch_start_receiver_6]
             ) = build_broadcast_channel(10);
 
-            // validate chain ids
-            {
-                let expected_chain_id = U256::from(state_chain_client
-                    .get_storage_value::<pallet_cf_environment::EthereumChainId::<state_chain_runtime::Runtime>>(
-                        latest_block_hash,
-                    )
-                    .await
-                    .context("Failed to get EthereumChainId from state chain")?);
-
-                let mut errors = [
-                    validate_client_chain_id(
-                        &eth_ws_rpc_client,
-                        expected_chain_id,
-                    ).await,
-                    validate_client_chain_id(
-                        &eth_http_rpc_client,
-                        expected_chain_id,
-                    ).await]
-                    .into_iter()
-                    .filter_map(|res| res.err())
-                    .peekable();
-
-                if errors.peek().is_some() {
-                    bail!("Inconsistent chain configuration. Terminating.{}", format_iterator(errors));
-                }
-            }
+            #[cfg(feature = "ibiza")]
+            let (
+                dot_epoch_start_sender,
+                [dot_epoch_start_receiver_1]
+            ) = build_broadcast_channel(10);
 
             let cfe_settings = state_chain_client
-                .get_storage_value::<pallet_cf_environment::CfeSettings<state_chain_runtime::Runtime>>(
+                .storage_value::<pallet_cf_environment::CfeSettings<state_chain_runtime::Runtime>>(
                     latest_block_hash,
                 )
                 .await
@@ -127,7 +112,7 @@ fn main() -> anyhow::Result<()> {
                 tokio::sync::watch::channel(cfe_settings);
 
             let stake_manager_address = state_chain_client
-                .get_storage_value::<pallet_cf_environment::StakeManagerAddress::<
+                .storage_value::<pallet_cf_environment::EthereumStakeManagerAddress::<
                     state_chain_runtime::Runtime,
                 >>(latest_block_hash)
                 .await
@@ -135,7 +120,7 @@ fn main() -> anyhow::Result<()> {
             let stake_manager_contract = StakeManager::new(stake_manager_address.into());
 
             let key_manager_address = state_chain_client
-                .get_storage_value::<pallet_cf_environment::KeyManagerAddress::<
+                .storage_value::<pallet_cf_environment::EthereumKeyManagerAddress::<
                     state_chain_runtime::Runtime,
                 >>(latest_block_hash)
                 .await
@@ -145,7 +130,7 @@ fn main() -> anyhow::Result<()> {
                 KeyManager::new(key_manager_address.into());
 
             let latest_ceremony_id = state_chain_client
-            .get_storage_value::<pallet_cf_validator::CeremonyIdCounter<state_chain_runtime::Runtime>>(
+            .storage_value::<pallet_cf_validator::CeremonyIdCounter<state_chain_runtime::Runtime>>(
                 latest_block_hash,
             )
             .await
@@ -160,58 +145,51 @@ fn main() -> anyhow::Result<()> {
                 .context("Failed to open database")?,
             );
 
-            // p2p -> muxer
-            let (incoming_p2p_message_sender, incoming_p2p_message_receiver) =
-                tokio::sync::mpsc::unbounded_channel();
+            let (
+                eth_outgoing_sender,
+                eth_incoming_receiver,
+                dot_outgoing_sender,
+                dot_incoming_receiver,
+                peer_update_sender,
+                p2p_fut,
+            ) = p2p::start(state_chain_client.clone(), settings.node_p2p, latest_block_hash, &root_logger).await.context("Failed to start p2p module")?;
 
-            // muxer -> p2p
-            let (outgoing_p2p_message_sender, outgoing_p2p_message_receiver) =
-                tokio::sync::mpsc::unbounded_channel();
-
-            let (eth_outgoing_sender, eth_incoming_receiver, muxer_future) = P2PMuxer::start(
-                incoming_p2p_message_receiver,
-                outgoing_p2p_message_sender,
-                &root_logger,
-            );
-
-            scope.spawn(async move {
-                muxer_future.await;
-                Ok(())
-            });
+            scope.spawn(p2p_fut);
 
             let (eth_multisig_client, eth_multisig_client_backend_future) =
                 multisig::start_client::<EthSigning>(
-                    state_chain_client.our_account_id.clone(),
-                    KeyStore::new(db),
+                    state_chain_client.account_id(),
+                    KeyStore::new(db.clone()),
                     eth_incoming_receiver,
                     eth_outgoing_sender,
                     latest_ceremony_id,
                     &root_logger,
                 );
+
             scope.spawn(
-                multisig_p2p::start(
-                    &settings,
-                    state_chain_client.clone(),
-                    latest_block_hash,
-                    incoming_p2p_message_sender,
-                    outgoing_p2p_message_receiver,
-                    account_peer_mapping_change_receiver,
-                    &root_logger,
-                )
+                eth_multisig_client_backend_future
             );
-            // TODO Handle errors/panics from backend
-            scope.spawn(async move {
-                eth_multisig_client_backend_future.await;
-                Ok(())
-            });
+
+            let (dot_multisig_client, dot_multisig_client_backend_future) =
+                multisig::start_client::<PolkadotSigning>(
+                    state_chain_client.account_id(),
+                    KeyStore::new(db),
+                    dot_incoming_receiver,
+                    dot_outgoing_sender,
+                    latest_ceremony_id,
+                    &root_logger,
+                );
+
+            scope.spawn(
+                dot_multisig_client_backend_future
+            );
 
             // Start eth witnessers
             scope.spawn(
                 eth::contract_witnesser::start(
                     stake_manager_contract,
-                    eth_ws_rpc_client.clone(),
-                    eth_http_rpc_client.clone(),
-                    witnessing_instruction_receiver_1,
+                    eth_dual_rpc.clone(),
+                    epoch_start_receiver_1,
                     true,
                     state_chain_client.clone(),
                     &root_logger,
@@ -220,9 +198,8 @@ fn main() -> anyhow::Result<()> {
             scope.spawn(
                 eth::contract_witnesser::start(
                     key_manager_contract,
-                    eth_ws_rpc_client,
-                    eth_http_rpc_client,
-                    witnessing_instruction_receiver_2,
+                    eth_dual_rpc.clone(),
+                    epoch_start_receiver_2,
                     false,
                     state_chain_client.clone(),
                     &root_logger,
@@ -230,28 +207,137 @@ fn main() -> anyhow::Result<()> {
             );
             scope.spawn(
                 eth::chain_data_witnesser::start(
-                    eth_dual_rpc,
+                    eth_dual_rpc.clone(),
                     state_chain_client.clone(),
-                    witnessing_instruction_receiver_3,
+                    epoch_start_receiver_3,
                     cfe_settings_update_receiver,
                     &root_logger
                 )
             );
+
+            #[cfg(feature = "ibiza")]
+            let (eth_monitor_ingress_sender, eth_monitor_ingress_receiver) = tokio::sync::mpsc::unbounded_channel();
+            #[cfg(feature = "ibiza")]
+            let (eth_monitor_flip_ingress_sender, eth_monitor_flip_ingress_receiver) = tokio::sync::mpsc::unbounded_channel();
+            #[cfg(feature = "ibiza")]
+            let (eth_monitor_usdc_ingress_sender, eth_monitor_usdc_ingress_receiver) = tokio::sync::mpsc::unbounded_channel();
+            #[cfg(feature = "ibiza")]
+            let (dot_monitor_ingress_sender, dot_monitor_ingress_receiver) = tokio::sync::mpsc::unbounded_channel();
+            #[cfg(feature = "ibiza")]
+            let (dot_monitor_signature_sender, dot_monitor_signature_receiver) = tokio::sync::mpsc::unbounded_channel();
+
 
             // Start state chain components
             scope.spawn(state_chain_observer::start(
                 state_chain_client.clone(),
                 state_chain_block_stream,
                 eth_broadcaster,
+                #[cfg(feature = "ibiza")] DotBroadcaster::new(dot_rpc_client.clone()),
                 eth_multisig_client,
-                account_peer_mapping_change_sender,
-                witnessing_instruction_sender,
+                dot_multisig_client,
+                peer_update_sender,
+                epoch_start_sender,
+                #[cfg(feature = "ibiza")] eth_monitor_ingress_sender,
+                #[cfg(feature = "ibiza")] eth_monitor_flip_ingress_sender,
+                #[cfg(feature = "ibiza")] eth_monitor_usdc_ingress_sender,
+                #[cfg(feature = "ibiza")] dot_epoch_start_sender,
+                #[cfg(feature = "ibiza")] dot_monitor_ingress_sender,
+                #[cfg(feature = "ibiza")] dot_monitor_signature_sender,
                 cfe_settings_update_sender,
                 latest_block_hash,
                 root_logger.clone()
             ));
 
+            #[cfg(feature = "ibiza")]
+            {
+
+                use std::collections::{BTreeSet, HashMap};
+                use itertools::Itertools;
+                use sp_core::H160;
+                use chainflip_engine::{eth::erc20_witnesser::Erc20Witnesser, dot};
+                use cf_primitives::{Asset, chains::assets};
+
+                let flip_contract_address = state_chain_client
+                    .storage_map_entry::<pallet_cf_environment::EthereumSupportedAssets::<
+                        state_chain_runtime::Runtime,
+                    >>(latest_block_hash, &Asset::Flip)
+                    .await
+                    .context("Failed to get FLIP address from SC")?
+                    .expect("FLIP address must exist at genesis");
+
+                let usdc_contract_address = state_chain_client
+                    .storage_map_entry::<pallet_cf_environment::EthereumSupportedAssets::<
+                        state_chain_runtime::Runtime,
+                    >>(latest_block_hash, &Asset::Usdc)
+                    .await
+                    .context("Failed to get USDC address from SC")?
+                    .expect("USDC address must exist at genesis");
+
+                let eth_chain_ingress_addresses = state_chain_client.storage_map::<pallet_cf_ingress_egress::IntentIngressDetails<state_chain_runtime::Runtime, state_chain_runtime::EthereumInstance>>(latest_block_hash)
+                    .await
+                    .context("Failed to get initial ingress details")?
+                    .into_iter()
+                    .map(|(address, intent)| {
+                            (intent.ingress_asset, address)
+                    }).into_group_map();
+
+                fn monitored_addresses_from_all_eth(eth_chain_ingress_addresses: &HashMap<assets::eth::Asset, Vec<H160>>, asset: assets::eth::Asset) -> BTreeSet<H160> {
+                    if let Some(eth_ingress_addresses) = eth_chain_ingress_addresses.get(&asset) {
+                        eth_ingress_addresses.clone()
+                    } else {
+                        Default::default()
+                    }.iter().cloned().collect()
+                }
+
+                scope.spawn(eth::ingress_witnesser::start(
+                    eth_dual_rpc.clone(),
+                    _epoch_start_receiver_4,
+                    eth_monitor_ingress_receiver,
+                    state_chain_client.clone(),
+                    monitored_addresses_from_all_eth(&eth_chain_ingress_addresses, assets::eth::Asset::Eth),
+                    &root_logger
+                ));
+                scope.spawn(
+                    eth::contract_witnesser::start(
+                        Erc20Witnesser::new(flip_contract_address.into(), assets::eth::Asset::Flip, monitored_addresses_from_all_eth(&eth_chain_ingress_addresses, assets::eth::Asset::Flip), eth_monitor_flip_ingress_receiver),
+                        eth_dual_rpc.clone(),
+                        _epoch_start_receiver_5,
+                        false,
+                        state_chain_client.clone(),
+                        &root_logger,
+                    )
+                );
+                scope.spawn(
+                    eth::contract_witnesser::start(
+                        Erc20Witnesser::new(usdc_contract_address.into(), assets::eth::Asset::Usdc, monitored_addresses_from_all_eth(&eth_chain_ingress_addresses, assets::eth::Asset::Usdc), eth_monitor_usdc_ingress_receiver),
+                        eth_dual_rpc,
+                        _epoch_start_receiver_6,
+                        false,
+                        state_chain_client.clone(),
+                        &root_logger,
+                    )
+                );
+                scope.spawn(
+                    dot::witnesser::start(dot_epoch_start_receiver_1, dot_rpc_client, dot_monitor_ingress_receiver,
+                        state_chain_client.storage_map::<pallet_cf_ingress_egress::IntentIngressDetails<state_chain_runtime::Runtime, state_chain_runtime::PolkadotInstance>>(latest_block_hash)
+                        .await
+                        .context("Failed to get initial ingress details")?
+                        .into_iter()
+                        .filter_map(|(address, intent)| if intent.ingress_asset == cf_primitives::chains::assets::dot::Asset::Dot {
+                            Some(address)
+                        } else {
+                            None
+                        }).collect(),
+                        dot_monitor_signature_receiver,
+                        // NB: We don't need to monitor Ethereum signatures because we already monitor siganture accepted events from the KeyManager contract on Ethereum.
+                        state_chain_client.storage_map::<pallet_cf_broadcast::SignatureToBroadcastIdLookup<state_chain_runtime::Runtime, state_chain_runtime::PolkadotInstance>>(latest_block_hash)
+                        .await.context("Failed to get initial DOT signatures to monitor")?.into_iter().map(|(signature, _)| signature.0).collect(),
+                        state_chain_client, &root_logger)
+
+                )
+            }
+
             Ok(())
         }.boxed()
-    })
+	}).await
 }

@@ -4,7 +4,8 @@
 use super::*;
 
 use cf_chains::{benchmarking_value::BenchmarkValue, ChainCrypto};
-use cf_traits::{Chainflip, ThresholdSigner};
+use cf_primitives::AccountRole;
+use cf_traits::{AccountRoleRegistry, Chainflip, ThresholdSigner};
 use frame_benchmarking::{account, benchmarks_instance_pallet, whitelist_account};
 use frame_support::{
 	assert_ok,
@@ -48,13 +49,12 @@ benchmarks_instance_pallet! {
 
 		add_authorities::<T, _>(all_accounts);
 
-		let request_id = <Pallet::<T, I> as ThresholdSigner<_>>::request_signature(PayloadFor::<T, I>::benchmark_value());
-		let (ceremony_id, _) = LiveCeremonies::<T, I>::get(request_id).unwrap();
+		let (request_id, ceremony_id) = <Pallet::<T, I> as ThresholdSigner<_>>::request_signature(PayloadFor::<T, I>::benchmark_value());
 		let signature = SignatureFor::<T, I>::benchmark_value();
 	} : _(RawOrigin::None, ceremony_id, signature)
 	verify {
 		let last_event = frame_system::Pallet::<T>::events().pop().unwrap().event;
-		let expected: <T as crate::Config<I>>::Event = Event::<T, I>::ThresholdSignatureSuccess(ceremony_id).into();
+		let expected: <T as crate::Config<I>>::Event = Event::<T, I>::ThresholdSignatureSuccess{request_id, ceremony_id}.into();
 		assert_eq!(last_event, *expected.into_ref());
 	}
 	report_signature_failed {
@@ -63,15 +63,14 @@ benchmarks_instance_pallet! {
 
 		add_authorities::<T, _>(all_accounts);
 
-		let request_id = <Pallet::<T, I> as ThresholdSigner<_>>::request_signature(PayloadFor::<T, I>::benchmark_value());
-		let (ceremony_id, _) = LiveCeremonies::<T, I>::get(request_id).unwrap();
+		let (request_id, ceremony_id) = <Pallet::<T, I> as ThresholdSigner<_>>::request_signature(PayloadFor::<T, I>::benchmark_value());
 
 		let mut threshold_set = PendingCeremonies::<T, I>::get(ceremony_id).unwrap().remaining_respondents.into_iter();
 
 		let reporter = threshold_set.next().unwrap();
-		let offenders = BTreeSet::from_iter(threshold_set.take(a as usize))
-			.try_into()
-			.expect("Benchmark threshold should not exceed BTreeSet bounds");
+		let account: T::AccountId = reporter.clone().into();
+		<T as pallet::Config<I>>::AccountRoleRegistry::register_account(account, AccountRole::Validator);
+		let offenders = BTreeSet::from_iter(threshold_set.take(a as usize));
 	} : _(RawOrigin::Signed(reporter.into()), ceremony_id, offenders)
 	determine_offenders {
 		let a in 1 .. 200;
@@ -83,11 +82,16 @@ benchmarks_instance_pallet! {
 			.collect();
 
 		let completed_response_context = CeremonyContext::<T, I> {
+			request_context: RequestContext {
+				request_id: 1,
+				attempt_count: 0,
+				payload: PayloadFor::<T, I>::benchmark_value(),
+			},
+			threshold_ceremony_type: ThresholdCeremonyType::Standard,
 			remaining_respondents:Default::default(),
 			blame_counts,
 			participant_count:a,
 			key_id: <T as Chainflip>::KeyId::benchmark_value(),
-			_phantom: Default::default()
 		};
 	} : {
 		let _ = completed_response_context.offenders();
@@ -114,10 +118,11 @@ benchmarks_instance_pallet! {
 
 		// These attempts will fail because there are no authorities to do the signing.
 		for _ in 0..r {
-			Pallet::<T, I>::new_ceremony_attempt(1, PayloadFor::<T, I>::benchmark_value(), 1, None, None, RetryPolicy::Always);
+			Pallet::<T, I>::new_ceremony_attempt(RequestInstruction::new(1, 1, PayloadFor::<T, I>::benchmark_value(), RequestType::Standard));
 		}
+
 		assert_eq!(
-			RetryQueues::<T, I>::decode_len(T::CeremonyRetryDelay::get()).unwrap_or_default(),
+			CeremonyRetryQueues::<T, I>::decode_len(ThresholdSignatureResponseTimeout::<T, I>::get()).unwrap_or_default(),
 			r as usize,
 		);
 
@@ -125,12 +130,12 @@ benchmarks_instance_pallet! {
 		add_authorities::<T, _>((0..a).map(|i| account::<<T as Chainflip>::ValidatorId>("signers", i, SEED)));
 
 	}: {
-		Pallet::<T, I>::on_initialize(T::CeremonyRetryDelay::get())
+		Pallet::<T, I>::on_initialize(ThresholdSignatureResponseTimeout::<T, I>::get())
 	}
 	verify {
 		assert_eq!(
-			RetryQueues::<T, I>::decode_len(T::CeremonyRetryDelay::get()).unwrap_or_default(),
-			0 as usize,
+			CeremonyRetryQueues::<T, I>::decode_len(ThresholdSignatureResponseTimeout::<T, I>::get()).unwrap_or_default(),
+			0_usize,
 		);
 	}
 

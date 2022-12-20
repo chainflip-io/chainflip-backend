@@ -57,7 +57,11 @@ impl WitnessDataExtraction for Call {
 mod tests {
 	use super::*;
 	use crate::{Origin, Validator, Witnesser};
-	use cf_chains::{eth::TrackedData, Chain, Ethereum};
+	use cf_chains::{
+		eth::{Ethereum, TrackedData},
+		Chain,
+	};
+	use cf_primitives::AccountRole;
 	use cf_traits::EpochInfo;
 	use frame_support::{assert_ok, Hashable};
 	use pallet_cf_witnesser::CallHash;
@@ -120,6 +124,10 @@ mod tests {
 			);
 
 			for (index, authority_id) in authorities.into_iter().enumerate() {
+				pallet_cf_account_roles::AccountRoles::<Runtime>::insert(
+					&authority_id,
+					AccountRole::Validator,
+				);
 				pallet_cf_validator::AuthorityIndex::<Runtime>::insert(
 					<Validator as EpochInfo>::epoch_index(),
 					&authority_id,

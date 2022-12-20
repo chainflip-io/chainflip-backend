@@ -23,7 +23,6 @@ pub enum BackupOrPassive {
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum ChainflipAccountStateWithPassive {
 	CurrentAuthority,
-	HistoricalAuthority(BackupOrPassive),
 	BackupOrPassive(BackupOrPassive),
 }
 
@@ -54,6 +53,15 @@ pub struct RuntimeApiPenalty {
 	pub suspension_duration_blocks: u32,
 }
 
+#[derive(Encode, Decode, Eq, PartialEq)]
+pub struct AuctionState {
+	pub blocks_per_epoch: u32,
+	pub current_epoch_started_at: u32,
+	pub claim_period_as_percentage: u8,
+	pub min_stake: u128,
+	pub auction_size_range: (u32, u32),
+}
+
 decl_runtime_apis!(
 	/// Definition for all runtime API interfaces.
 	pub trait CustomRuntimeApi {
@@ -78,8 +86,10 @@ decl_runtime_apis!(
 		fn cf_accounts() -> Vec<(AccountId32, VanityName)>;
 		fn cf_account_info(account_id: AccountId32) -> RuntimeApiAccountInfo;
 		fn cf_pending_claim(account_id: AccountId32) -> Option<RuntimeApiPendingClaim>;
+		fn cf_get_claim_certificate(account_id: AccountId32) -> Option<Vec<u8>>;
 		fn cf_penalties() -> Vec<(Offence, RuntimeApiPenalty)>;
 		fn cf_suspensions() -> Vec<(Offence, Vec<(u32, AccountId32)>)>;
 		fn cf_generate_gov_key_call_hash(call: Vec<u8>) -> GovCallHash;
+		fn cf_auction_state() -> AuctionState;
 	}
 );

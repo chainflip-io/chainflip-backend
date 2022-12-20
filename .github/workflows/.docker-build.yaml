@@ -7,11 +7,17 @@ on:
         default: nightly-2022-08-08
         description: Toolchain version you want to build
         required: true
+      image_tag:
+        type: string
+        default: nightly-2022-08-08
+        description: Docker Image Tag
+        required: true
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: "${{ github.repository }}/rust-base"
-  TAG: ${{ github.event.inputs.nightly_version }}
+  IMAGE_NAME: '${{ github.repository }}/rust-base'
+  TAG: ${{ github.event.inputs.image_tag }}
+  NIGHTLY_VERSION: ${{ github.event.inputs.nightly_version }}
 
 jobs:
   build:
@@ -19,7 +25,7 @@ jobs:
     permissions:
       contents: read
       packages: write
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -52,6 +58,6 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          file: rust-base.Dockerfile
+          file: docker/rust-base.Dockerfile
           build-args: |
-            NIGHTLY=${{ env.TAG }}
+            NIGHTLY=${{ env.NIGHTLY_VERSION }}

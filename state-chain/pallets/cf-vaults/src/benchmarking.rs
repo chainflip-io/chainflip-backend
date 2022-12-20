@@ -11,6 +11,9 @@ use frame_benchmarking::{account, benchmarks_instance_pallet, whitelisted_caller
 use frame_support::dispatch::UnfilteredDispatchable;
 use frame_system::RawOrigin;
 
+use cf_primitives::AccountRole;
+use cf_traits::AccountRoleRegistry;
+
 // Note: Currently we only have one chain (ETH) - as soon we've
 // another chain we've to take this in account in our weight calculation benchmark.
 
@@ -39,11 +42,11 @@ benchmarks_instance_pallet! {
 		KeygenResolutionPendingSince::<T, I>::put(current_block);
 		let caller: T::AccountId = whitelisted_caller();
 		let keygen_participants: BTreeSet<T::ValidatorId> = generate_authority_set::<T, I>(150, caller.clone().into());
-		let blamed: BTreeSet<T::ValidatorId> = generate_authority_set::<T, I>(b, caller.clone().into());
+		let blamed: BTreeSet<T::ValidatorId> = generate_authority_set::<T, I>(b, caller.into());
 		let mut keygen_response_status = KeygenResponseStatus::<T, I>::new(keygen_participants.clone());
 
 		for validator_id in &keygen_participants {
-			let _result = keygen_response_status.add_failure_vote(validator_id, blamed.clone());
+			keygen_response_status.add_failure_vote(validator_id, blamed.clone());
 		}
 
 		PendingVaultRotation::<T, I>::put(
@@ -58,19 +61,19 @@ benchmarks_instance_pallet! {
 	}
 	verify {
 		assert!(matches!(
-			<Pallet::<T, I> as VaultRotator>::get_vault_rotation_outcome(),
-			AsyncResult::Ready(Err(..))
+			<Pallet::<T, I> as VaultRotator>::status(),
+			AsyncResult::Ready(VaultStatus::Failed(..))
 		));
 	}
 	on_initialize_success {
 		let current_block: T::BlockNumber = 0u32.into();
 		KeygenResolutionPendingSince::<T, I>::put(current_block);
 		let caller: T::AccountId = whitelisted_caller();
-		let keygen_participants: BTreeSet<T::ValidatorId> = generate_authority_set::<T, I>(150, caller.clone().into());
+		let keygen_participants: BTreeSet<T::ValidatorId> = generate_authority_set::<T, I>(150, caller.into());
 		let mut keygen_response_status = KeygenResponseStatus::<T, I>::new(keygen_participants.clone());
 
 		for validator_id in &keygen_participants {
-			let _result = keygen_response_status.add_success_vote(
+			keygen_response_status.add_success_vote(
 				validator_id,
 				AggKeyFor::<T, I>::benchmark_value()
 			);
@@ -94,6 +97,7 @@ benchmarks_instance_pallet! {
 	}
 	report_keygen_outcome {
 		let caller: T::AccountId = whitelisted_caller();
+		T::AccountRoleRegistry::register_account(caller.clone(), AccountRole::Validator);
 
 		let keygen_participants = generate_authority_set::<T, I>(150, caller.clone().into());
 		PendingVaultRotation::<T, I>::put(
@@ -121,7 +125,7 @@ benchmarks_instance_pallet! {
 	on_keygen_verification_result {
 		let caller: T::AccountId = whitelisted_caller();
 		let agg_key = AggKeyFor::<T, I>::benchmark_value();
-		let keygen_participants = generate_authority_set::<T, I>(150, caller.clone().into());
+		let keygen_participants = generate_authority_set::<T, I>(150, caller.into());
 		let (request_id, signing_ceremony_id) = Pallet::<T, I>::trigger_keygen_verification(CEREMONY_ID, agg_key, keygen_participants.into_iter().collect());
 		T::ThresholdSigner::insert_signature(
 			request_id,
@@ -138,7 +142,7 @@ benchmarks_instance_pallet! {
 	verify {
 		assert!(matches!(
 			PendingVaultRotation::<T, I>::get().unwrap(),
-			VaultRotationStatus::AwaitingRotation { new_public_key }
+			VaultRotationStatus::KeygenVerificationComplete { new_public_key }
 				if new_public_key == agg_key
 		))
 	}
@@ -148,9 +152,9 @@ benchmarks_instance_pallet! {
 			VaultRotationStatus::<T, I>::AwaitingRotation { new_public_key },
 		);
 		let call = Call::<T, I>::vault_key_rotated {
-			new_public_key: new_public_key,
-			block_number: 5u64.into(),
-			tx_hash: Decode::decode(&mut &TX_HASH[..]).unwrap()
+			new_public_key,
+			block_number: 5u32.into(),
+			tx_id: Decode::decode(&mut &TX_HASH[..]).unwrap()
 		};
 		let origin = T::EnsureWitnessedAtCurrentEpoch::successful_origin();
 	} : { call.dispatch_bypass_filter(origin)? }
@@ -161,8 +165,8 @@ benchmarks_instance_pallet! {
 		let origin = T::EnsureWitnessedAtCurrentEpoch::successful_origin();
 		let call = Call::<T, I>::vault_key_rotated_externally {
 			new_public_key: AggKeyFor::<T, I>::benchmark_value(),
-			block_number: 5u64.into(),
-			tx_hash: Decode::decode(&mut &TX_HASH[..]).unwrap()
+			block_number: 5u32.into(),
+			tx_id: Decode::decode(&mut &TX_HASH[..]).unwrap()
 		};
 	} : { call.dispatch_bypass_filter(origin)? }
 	verify {

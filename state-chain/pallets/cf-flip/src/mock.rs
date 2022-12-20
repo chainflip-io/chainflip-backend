@@ -1,4 +1,5 @@
 use crate::{self as pallet_cf_flip, BurnFlipAccount};
+use cf_primitives::FlipBalance;
 use cf_traits::{
 	impl_mock_waived_fees, mocks::ensure_origin_mock::NeverFailingOriginCheck, StakeTransfer,
 	WaivedFees,
@@ -8,11 +9,12 @@ use frame_support::{
 	traits::{ConstU128, ConstU8, HandleLifetime},
 	weights::{ConstantMultiplier, IdentityFee},
 };
+use frame_system::pallet_prelude::BlockNumberFor;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
-	BuildStorage,
+	BuildStorage, Permill,
 };
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -65,8 +67,6 @@ impl frame_system::Config for Test {
 	type OnSetCode = ();
 	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
-
-pub type FlipBalance = u128;
 
 parameter_types! {
 	pub const ExistentialDeposit: FlipBalance = 10;
@@ -147,9 +147,8 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	ext
 }
 
-pub type SlashingRateType = u128;
+pub type SlashingRateType = Permill;
 pub type Bond = u128;
-pub type BlocksOffline = u64;
 pub type Mint = u128;
 
 #[derive(Clone, Debug)]
@@ -169,6 +168,6 @@ pub enum FlipOperation {
 	ExternalTransferOut(AccountId, FlipBalance),
 	ExternalTransferIn(AccountId, FlipBalance),
 	UpdateStakeAndBond(AccountId, FlipBalance, FlipBalance),
-	SlashAccount(AccountId, SlashingRateType, Bond, BlocksOffline, Mint),
+	SlashAccount(AccountId, SlashingRateType, Bond, Mint, BlockNumberFor<Test>),
 	AccountToAccount(AccountId, AccountId, FlipBalance, FlipBalance),
 }

@@ -6,53 +6,52 @@ use web3::{contract::tokens::Tokenizable, ethabi::Log};
 
 /// Helper method to decode the parameters from an ETH log
 pub fn decode_log_param<T: Tokenizable>(log: &Log, param_name: &str) -> Result<T> {
-    let token = &log
-        .params
-        .iter()
-        .find(|&p| p.name == param_name)
-        .ok_or_else(|| EventParseError::MissingParam(String::from(param_name)))?
-        .value;
+	let token = &log
+		.params
+		.iter()
+		.find(|&p| p.name == param_name)
+		.ok_or_else(|| EventParseError::MissingParam(String::from(param_name)))?
+		.value;
 
-    Ok(Tokenizable::from_token(token.clone())?)
+	Ok(Tokenizable::from_token(token.clone())?)
 }
 
 /// Get a eth address from a public key
 pub fn pubkey_to_eth_addr(pubkey: secp256k1::PublicKey) -> [u8; 20] {
-    let pubkey_bytes: [u8; 64] = pubkey.serialize_uncompressed()[1..]
-        .try_into()
-        .expect("Should be a valid pubkey");
+	let pubkey_bytes: [u8; 64] = pubkey.serialize_uncompressed()[1..]
+		.try_into()
+		.expect("Should be a valid pubkey");
 
-    let pubkey_hash = Keccak256::hash(&pubkey_bytes);
+	let pubkey_hash = Keccak256::hash(&pubkey_bytes);
 
-    // take the last 160bits (20 bytes)
-    let addr: [u8; 20] = pubkey_hash[12..]
-        .try_into()
-        .expect("Should be exactly 20 bytes long");
+	// take the last 160bits (20 bytes)
+	let addr: [u8; 20] = pubkey_hash[12..].try_into().expect("Should be exactly 20 bytes long");
 
-    addr
+	addr
 }
 
 #[cfg(test)]
 mod utils_tests {
-    use super::*;
-    use secp256k1::PublicKey;
-    use std::str::FromStr;
+	use super::*;
+	use secp256k1::PublicKey;
+	use std::str::FromStr;
 
-    #[test]
-    fn test_pubkey_to_eth_addr() {
-        // The secret key and corresponding eth addr were taken from an example in the "Mastering Ethereum" Book.
-        let sk = secp256k1::SecretKey::from_str(
-            "f8f8a2f43c8376ccb0871305060d7b27b0554d2cc72bccf41b2705608452f315",
-        )
-        .unwrap();
+	#[test]
+	fn test_pubkey_to_eth_addr() {
+		// The secret key and corresponding eth addr were taken from an example in the "Mastering
+		// Ethereum" Book.
+		let sk = secp256k1::SecretKey::from_str(
+			"f8f8a2f43c8376ccb0871305060d7b27b0554d2cc72bccf41b2705608452f315",
+		)
+		.unwrap();
 
-        let pk = PublicKey::from_secret_key(&secp256k1::Secp256k1::signing_only(), &sk);
+		let pk = PublicKey::from_secret_key(&secp256k1::Secp256k1::signing_only(), &sk);
 
-        let expected: [u8; 20] = hex::decode("001d3f1ef827552ae1114027bd3ecf1f086ba0f9")
-            .unwrap()
-            .try_into()
-            .unwrap();
+		let expected: [u8; 20] = hex::decode("001d3f1ef827552ae1114027bd3ecf1f086ba0f9")
+			.unwrap()
+			.try_into()
+			.unwrap();
 
-        assert_eq!(pubkey_to_eth_addr(pk), expected);
-    }
+		assert_eq!(pubkey_to_eth_addr(pk), expected);
+	}
 }

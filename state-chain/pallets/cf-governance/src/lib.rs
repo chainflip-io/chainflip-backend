@@ -5,11 +5,12 @@
 use codec::{Codec, Decode, Encode};
 use frame_support::{
 	dispatch::{GetDispatchInfo, UnfilteredDispatchable, Weight},
+	ensure,
 	traits::{EnsureOrigin, Get, UnixTime},
 };
 pub use pallet::*;
 use sp_runtime::DispatchError;
-use sp_std::{boxed::Box, ops::Add, vec, vec::Vec};
+use sp_std::{boxed::Box, ops::Add, vec::Vec};
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
@@ -24,9 +25,14 @@ pub type GovCallHash = [u8; 32];
 mod mock;
 #[cfg(test)]
 mod tests;
+
+pub type ProposalId = u32;
 /// Implements the functionality of the Chainflip governance.
 #[frame_support::pallet]
 pub mod pallet {
+
+	use super::*;
+
 	use cf_traits::{Chainflip, ExecutionCondition, RuntimeUpgrade};
 	use frame_support::{
 		dispatch::GetDispatchInfo,
@@ -34,6 +40,7 @@ pub mod pallet {
 		pallet_prelude::*,
 		traits::{UnfilteredDispatchable, UnixTime},
 	};
+	use sp_std::collections::btree_set::BTreeSet;
 
 	use codec::Encode;
 	use frame_system::{pallet, pallet_prelude::*};
@@ -41,14 +48,19 @@ pub mod pallet {
 
 	use super::{GovCallHash, WeightInfo};
 
-	pub type ActiveProposal = (ProposalId, Timestamp);
+	#[derive(Encode, Decode, TypeInfo, Clone, Copy, RuntimeDebug, PartialEq, Eq)]
+	pub struct ActiveProposal {
+		pub proposal_id: ProposalId,
+		pub expiry_time: Timestamp,
+	}
+
 	/// Proposal struct
 	#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 	pub struct Proposal<AccountId> {
-		/// Encoded representation of a extrinsic
+		/// Encoded representation of a extrinsic.
 		pub call: OpaqueCall,
-		/// Array of accounts which already approved the proposal
-		pub approved: Vec<AccountId>,
+		/// Accounts who have already approved the proposal.
+		pub approved: BTreeSet<AccountId>,
 	}
 
 	impl<T> Default for Proposal<T> {
@@ -60,7 +72,6 @@ pub mod pallet {
 	type AccountId<T> = <T as frame_system::Config>::AccountId;
 	type OpaqueCall = Vec<u8>;
 	type Timestamp = u64;
-	pub type ProposalId = u32;
 
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
@@ -143,8 +154,7 @@ pub mod pallet {
 		fn on_initialize(_n: BlockNumberFor<T>) -> Weight {
 			// Check expiry and expire the proposals if needed
 			let active_proposal_weight = Self::check_expiry();
-			// Execute all proposals which reached threshold in the last block
-			let execution_weight = Self::execute_proposals();
+			let execution_weight = Self::execute_pending_proposals();
 			active_proposal_weight + execution_weight
 		}
 	}
@@ -184,12 +194,8 @@ pub mod pallet {
 		ProposalNotFound,
 		/// Decode of call failed
 		DecodeOfCallFailed,
-		/// The majority was not reached when the execution was triggered
-		MajorityNotReached,
 		/// A runtime upgrade has failed because the upgrade conditions were not satisfied
 		UpgradeConditionsNotMet,
-		/// A runtime upgrade was not successful
-		UpgradeHasFailed,
 		/// The call hash was not whitelisted
 		CallHashNotWhitelisted,
 	}
@@ -216,6 +222,9 @@ pub mod pallet {
 			// Push proposal
 			let id = Self::push_proposal(call);
 			Self::deposit_event(Event::Proposed(id));
+
+			Self::inner_approve(who, id)?;
+
 			// Governance member don't pay fees
 			Ok(Pays::No.into())
 		}
@@ -284,14 +293,14 @@ pub mod pallet {
 		/// - [ProposalNotFound](Error::ProposalNotFound)
 		/// - [AlreadyApproved](Error::AlreadyApproved)
 		#[pallet::weight(T::WeightInfo::approve())]
-		pub fn approve(origin: OriginFor<T>, id: ProposalId) -> DispatchResultWithPostInfo {
+		pub fn approve(
+			origin: OriginFor<T>,
+			approved_id: ProposalId,
+		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			// Ensure origin is part of the governance
 			ensure!(Members::<T>::get().contains(&who), Error::<T>::NotMember);
-			// Ensure that the proposal exists
-			ensure!(Proposals::<T>::contains_key(id), Error::<T>::ProposalNotFound);
-			// Try to approve the proposal
-			Self::try_approve(who, id)?;
+			Self::inner_approve(who, approved_id)?;
 			// Governance members don't pay transaction fees
 			Ok(Pays::No.into())
 		}
@@ -372,7 +381,7 @@ pub mod pallet {
 							Err(_) => Event::GovKeyCallExecutionFailed { call_hash },
 						},
 					);
-					NextGovKeyCallHashNonce::<T>::put(nonce + 1);
+					NextGovKeyCallHashNonce::<T>::put(nonce.wrapping_add(1));
 					GovKeyWhitelistedCallHash::<T>::kill();
 
 					Ok(Pays::No.into())
@@ -443,6 +452,28 @@ where
 }
 
 impl<T: Config> Pallet<T> {
+	pub fn inner_approve(who: T::AccountId, approved_id: ProposalId) -> Result<(), DispatchError> {
+		ensure!(Proposals::<T>::contains_key(approved_id), Error::<T>::ProposalNotFound);
+
+		// Try to approve the proposal
+		let proposal = Proposals::<T>::mutate(approved_id, |proposal| {
+			if !proposal.approved.insert(who) {
+				return Err(Error::<T>::AlreadyApproved)
+			}
+			Self::deposit_event(Event::Approved(approved_id));
+			Ok(proposal.clone())
+		})?;
+
+		if proposal.approved.len() > (Members::<T>::get().len() / 2) {
+			ExecutionPipeline::<T>::append((proposal.call, approved_id));
+			Proposals::<T>::remove(approved_id);
+			ActiveProposals::<T>::mutate(|proposals| {
+				proposals.retain(|ActiveProposal { proposal_id, .. }| *proposal_id != approved_id)
+			});
+		}
+		Ok(())
+	}
+
 	pub fn compute_gov_key_call_hash<CallData>(data: CallData) -> (GovCallHash, u32)
 	where
 		CallData: Clone + Codec,
@@ -451,113 +482,55 @@ impl<T: Config> Pallet<T> {
 		(frame_support::Hashable::blake2_256(&(data, nonce, T::Version::get())), nonce)
 	}
 
-	/// Checks the expiry state of the proposals
 	fn check_expiry() -> Weight {
-		match ActiveProposals::<T>::decode_len() {
-			Some(proposal_len) if proposal_len > 0 => {
-				// Separate the proposals into expired an active by partitioning
-				let (expired, active): (Vec<ActiveProposal>, Vec<ActiveProposal>) =
-					ActiveProposals::<T>::get()
-						.iter()
-						.partition(|p| p.1 <= T::TimeSource::now().as_secs());
-				// Remove expired proposals
-				let number_expired_proposals = expired.len() as u32;
-				Self::expire_proposals(expired);
-				ActiveProposals::<T>::set(active);
-				T::WeightInfo::on_initialize(proposal_len as u32) +
-					T::WeightInfo::expire_proposals(number_expired_proposals)
-			},
-			_ => T::WeightInfo::on_initialize_best_case(),
+		let active_proposals = ActiveProposals::<T>::get();
+		let num_proposals = active_proposals.len();
+		if num_proposals == 0 {
+			return T::WeightInfo::on_initialize_best_case()
 		}
+		let (expired, active): (Vec<ActiveProposal>, Vec<ActiveProposal>) =
+			active_proposals.iter().partition(|active_proposal| {
+				active_proposal.expiry_time <= T::TimeSource::now().as_secs()
+			});
+
+		ActiveProposals::<T>::set(active);
+		Self::expire_proposals(expired) + T::WeightInfo::on_initialize(num_proposals as u32)
 	}
-	/// Executes all proposals in the pipeline
-	fn execute_proposals() -> Weight {
+	fn execute_pending_proposals() -> Weight {
 		let mut execution_weight = 0;
-		// If there is something in the pipeline execute it
-		if ExecutionPipeline::<T>::decode_len() > Some(0) {
-			for (call, id) in ExecutionPipeline::<T>::get() {
-				Self::deposit_event(if let Some(call) = Self::decode_call(&call) {
-					execution_weight += call.get_dispatch_info().weight;
-					match call.dispatch_bypass_filter((RawOrigin::GovernanceApproval).into()) {
-						Ok(_) => Event::Executed(id),
-						Err(err) => Event::FailedExecution(err.error),
-					}
-				} else {
-					// Emit an error if the decode of a call failed
-					Event::DecodeOfCallFailed(id)
-				})
-			}
-			// Clean up execution pipeline
-			ExecutionPipeline::<T>::set(vec![]);
+		for (call, id) in ExecutionPipeline::<T>::take() {
+			Self::deposit_event(if let Ok(call) = <T as Config>::Call::decode(&mut &(*call)) {
+				execution_weight += call.get_dispatch_info().weight;
+				match call.dispatch_bypass_filter((RawOrigin::GovernanceApproval).into()) {
+					Ok(_) => Event::Executed(id),
+					Err(err) => Event::FailedExecution(err.error),
+				}
+			} else {
+				Event::DecodeOfCallFailed(id)
+			})
 		}
 		execution_weight
 	}
-	/// Expire proposals
-	fn expire_proposals(expired: Vec<ActiveProposal>) {
-		for expired_proposal in expired {
-			Proposals::<T>::remove(expired_proposal.0);
-			Self::deposit_event(Event::Expired(expired_proposal.0));
+
+	fn expire_proposals(expired: Vec<ActiveProposal>) -> Weight {
+		for ActiveProposal { proposal_id, .. } in &expired {
+			Proposals::<T>::remove(proposal_id);
+			Self::deposit_event(Event::Expired(*proposal_id));
 		}
+		T::WeightInfo::expire_proposals(expired.len() as u32)
 	}
-	/// Push a proposal
+
 	fn push_proposal(call: Box<<T as Config>::Call>) -> u32 {
-		// Generate the next proposal id
-		let id = Self::get_next_id();
-		// Insert a new proposal
-		Proposals::<T>::insert(id, Proposal { call: call.encode(), approved: vec![] });
-		// Update the proposal counter
-		ProposalIdCounter::<T>::put(id);
-		// Add the proposal to the active proposals array
-		ActiveProposals::<T>::append((id, T::TimeSource::now().as_secs() + ExpiryTime::<T>::get()));
-		id
-	}
-	/// Returns the next proposal id
-	fn get_next_id() -> ProposalId {
-		ProposalIdCounter::<T>::get().add(1)
-	}
-	/// Executes an proposal if the majority is reached
-	fn schedule_proposal_execution(id: ProposalId) -> Result<(), DispatchError> {
-		let proposal = Proposals::<T>::get(id);
-		// Try to decode the stored extrinsic
-		// Push the proposal to the execution pipeline
-		ExecutionPipeline::<T>::append((proposal.call, id));
-		// Remove the proposal from storage
-		Proposals::<T>::remove(id);
-		// Remove the proposal from active proposals
-		let mut active_proposals = ActiveProposals::<T>::get();
-		active_proposals.retain(|x| x.0 != id);
-		// Set the new active proposals
-		ActiveProposals::<T>::set(active_proposals);
-		Ok(())
-	}
-	/// Checks if the majority for a proposal is reached
-	fn majority_reached(approvals: usize) -> bool {
-		approvals > Members::<T>::decode_len().unwrap_or_default() / 2
-	}
-	/// Tries to approve a proposal
-	fn try_approve(account: T::AccountId, id: u32) -> Result<(), DispatchError> {
-		let mut votes = 0;
-		Proposals::<T>::mutate(id, |proposal| {
-			// Check already approved
-			if proposal.approved.contains(&account) {
-				return Err(Error::<T>::AlreadyApproved)
-			}
-			// Add account to approved array
-			proposal.approved.push(account);
-			votes = proposal.approved.len();
-			Self::deposit_event(Event::Approved(id));
-			Ok(())
-		})?;
-		// Check if the majority is reached
-		if Self::majority_reached(votes) {
-			// Schedule execution
-			Self::schedule_proposal_execution(id)?;
-		}
-		Ok(())
-	}
-	/// Decodes a encoded representation of a Call
-	/// Returns None if the encode of the extrinsic has failed
-	fn decode_call(call: &[u8]) -> Option<<T as Config>::Call> {
-		Decode::decode(&mut &(*call)).ok()
+		let proposal_id = ProposalIdCounter::<T>::get().add(1);
+		Proposals::<T>::insert(
+			proposal_id,
+			Proposal { call: call.encode(), approved: Default::default() },
+		);
+		ProposalIdCounter::<T>::put(proposal_id);
+		ActiveProposals::<T>::append(ActiveProposal {
+			proposal_id,
+			expiry_time: T::TimeSource::now().as_secs() + ExpiryTime::<T>::get(),
+		});
+		proposal_id
 	}
 }

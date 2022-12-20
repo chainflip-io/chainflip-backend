@@ -44,6 +44,7 @@ pub trait WitnessDataExtraction {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use cf_traits::AccountRoleRegistry;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
@@ -55,6 +56,9 @@ pub mod pallet {
 
 		/// The outer Origin needs to be compatible with this pallet's Origin
 		type Origin: From<RawOrigin>;
+
+		/// For registering and verifying the account role.
+		type AccountRoleRegistry: AccountRoleRegistry<Self>;
 
 		/// The overarching call type.
 		type Call: Member
@@ -117,14 +121,18 @@ pub mod pallet {
 		/// Clear stale data from expired epochs
 		fn on_idle(_block_number: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
 			let mut epochs_to_cull = EpochsToCull::<T>::get();
-			let epoch = if let Some(epoch) = epochs_to_cull.pop() { epoch } else { return 0 };
+			let epoch = if let Some(epoch) = epochs_to_cull.pop() {
+				epoch
+			} else {
+				return T::WeightInfo::on_idle_with_nothing_to_remove()
+			};
 
 			let max_deletions_count_remaining = remaining_weight
 				.checked_div(T::WeightInfo::remove_storage_items(1))
 				.unwrap_or_default();
 
 			if max_deletions_count_remaining == 0 {
-				return 0
+				return T::WeightInfo::on_idle_with_nothing_to_remove()
 			}
 
 			let mut deletions_count_remaining = max_deletions_count_remaining;
@@ -246,7 +254,7 @@ pub mod pallet {
 			mut call: Box<<T as Config>::Call>,
 			epoch_index: EpochIndex,
 		) -> DispatchResultWithPostInfo {
-			let who = ensure_signed(origin)?;
+			let who = T::AccountRoleRegistry::ensure_validator(origin)?;
 
 			let last_expired_epoch = T::EpochInfo::last_expired_epoch();
 			let current_epoch = T::EpochInfo::epoch_index();

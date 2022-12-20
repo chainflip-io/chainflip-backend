@@ -1,9 +1,16 @@
 use crate as pallet_cf_staking;
-use cf_chains::{eth, eth::api::EthereumReplayProtection, ChainAbi, ChainCrypto, Ethereum};
+use cf_chains::{
+	eth::{self, Ethereum},
+	ChainCrypto,
+};
 use cf_primitives::{AuthorityCount, CeremonyId};
 use cf_traits::{
-	impl_mock_waived_fees, mocks::system_state_info::MockSystemStateInfo, AsyncResult,
-	ThresholdSigner, WaivedFees,
+	impl_mock_waived_fees,
+	mocks::{
+		bid_info::MockBidInfo, eth_replay_protection_provider::MockEthReplayProtectionProvider,
+		staking_info::MockStakingInfo, system_state_info::MockSystemStateInfo,
+	},
+	AsyncResult, ThresholdSigner, WaivedFees,
 };
 use frame_support::{dispatch::DispatchResultWithPostInfo, parameter_types};
 use sp_runtime::{
@@ -18,14 +25,19 @@ type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 // Use a realistic account id for compatibility with `RegisterClaim`.
 type AccountId = AccountId32;
+type Balance = u128;
 
 use cf_traits::{
-	mocks::{
-		ensure_origin_mock::NeverFailingOriginCheck,
-		eth_environment_provider::MockEthEnvironmentProvider, time_source,
-	},
-	Chainflip, ReplayProtectionProvider,
+	mocks::{ensure_origin_mock::NeverFailingOriginCheck, time_source},
+	Chainflip,
 };
+
+impl pallet_cf_account_roles::Config for Test {
+	type Event = Event;
+	type BidInfo = MockBidInfo;
+	type StakeInfo = MockStakingInfo<Self>;
+	type WeightInfo = ();
+}
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
@@ -35,6 +47,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system,
+		AccountRoles: pallet_cf_account_roles,
 		Flip: pallet_cf_flip,
 		Staking: pallet_cf_staking,
 	}
@@ -75,7 +88,7 @@ impl frame_system::Config for Test {
 impl Chainflip for Test {
 	type KeyId = Vec<u8>;
 	type ValidatorId = AccountId;
-	type Amount = u128;
+	type Amount = Balance;
 	type Call = Call;
 	type EnsureWitnessed = MockEnsureWitnessed;
 	type EnsureWitnessedAtCurrentEpoch = MockEnsureWitnessed;
@@ -88,7 +101,7 @@ parameter_types! {
 }
 
 parameter_types! {
-	pub const ExistentialDeposit: u128 = 10;
+	pub const ExistentialDeposit: Balance = 10;
 }
 
 parameter_types! {
@@ -113,19 +126,6 @@ cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
 cf_traits::impl_mock_epoch_info!(AccountId, u128, u32, AuthorityCount);
 cf_traits::impl_mock_stake_transfer!(AccountId, u128);
 
-pub const FAKE_KEYMAN_ADDR: [u8; 20] = [0xcf; 20];
-pub const CHAIN_ID: u64 = 31337;
-pub const COUNTER: u64 = 42;
-
-impl ReplayProtectionProvider<Ethereum> for Test {
-	fn replay_protection() -> <Ethereum as ChainAbi>::ReplayProtection {
-		EthereumReplayProtection {
-			key_manager_address: FAKE_KEYMAN_ADDR,
-			chain_id: CHAIN_ID,
-			nonce: COUNTER,
-		}
-	}
-}
 pub struct MockThresholdSigner;
 
 thread_local! {
@@ -149,9 +149,19 @@ impl ThresholdSigner<Ethereum> for MockThresholdSigner {
 	type KeyId = <Test as Chainflip>::KeyId;
 	type ValidatorId = AccountId;
 
-	fn request_signature(payload: <Ethereum as ChainCrypto>::Payload) -> Self::RequestId {
+	fn request_signature(
+		payload: <Ethereum as ChainCrypto>::Payload,
+	) -> (Self::RequestId, CeremonyId) {
 		SIGNATURE_REQUESTS.with(|cell| cell.borrow_mut().push(payload));
-		0
+		(0, 1)
+	}
+
+	fn request_keygen_verification_signature(
+		payload: <Ethereum as ChainCrypto>::Payload,
+		_key_id: Self::KeyId,
+		_participants: BTreeSet<Self::ValidatorId>,
+	) -> (Self::RequestId, CeremonyId) {
+		Self::request_signature(payload)
 	}
 
 	fn register_callback(_: Self::RequestId, _: Self::Callback) -> Result<(), Self::Error> {
@@ -174,36 +184,30 @@ impl ThresholdSigner<Ethereum> for MockThresholdSigner {
 		// do nothing, the mock impl of signature_result doesn't take from any storage
 		// so we don't need to insert any storage.
 	}
-
-	fn request_signature_with(
-		_key_id: Self::KeyId,
-		_participants: BTreeSet<Self::ValidatorId>,
-		_payload: <Ethereum as ChainCrypto>::Payload,
-		_retry_policy: cf_traits::RetryPolicy,
-	) -> (Self::RequestId, CeremonyId) {
-		unimplemented!()
-	}
 }
 
 // The dummy signature can't be Default - this would be interpreted as no signature.
 pub const ETH_DUMMY_SIG: eth::SchnorrVerificationComponents =
 	eth::SchnorrVerificationComponents { s: [0xcf; 32], k_times_g_address: [0xcf; 20] };
 
+pub const CLAIM_DELAY_BUFFER_SECS: u64 = 10;
+
 impl pallet_cf_staking::Config for Test {
 	type Event = Event;
 	type TimeSource = time_source::Mock;
 	type Balance = u128;
+	type AccountRoleRegistry = ();
 	type Flip = Flip;
 	type WeightInfo = ();
 	type StakerId = AccountId;
-	type ReplayProtectionProvider = Self;
 	type ThresholdSigner = MockThresholdSigner;
 	type ThresholdCallable = Call;
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
-	type RegisterClaim = eth::api::EthereumApi;
-	type EthEnvironmentProvider = MockEthEnvironmentProvider;
+	type RegisterClaim = eth::api::EthereumApi<MockEthReplayProtectionProvider>;
 }
+
+pub const CLAIM_TTL_SECS: u64 = 10;
 
 pub const ALICE: AccountId = AccountId32::new([0xa1; 32]);
 pub const BOB: AccountId = AccountId32::new([0xb0; 32]);
@@ -214,12 +218,14 @@ pub const MIN_STAKE: u128 = 10;
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
+		account_roles: Default::default(),
 		system: Default::default(),
 		flip: FlipConfig { total_issuance: 1_000_000 },
 		staking: StakingConfig {
 			genesis_stakers: vec![(CHARLIE, MIN_STAKE)],
 			minimum_stake: MIN_STAKE,
-			claim_ttl: Duration::from_secs(10),
+			claim_ttl: Duration::from_secs(CLAIM_TTL_SECS),
+			claim_delay_buffer_seconds: CLAIM_DELAY_BUFFER_SECS,
 		},
 	};
 

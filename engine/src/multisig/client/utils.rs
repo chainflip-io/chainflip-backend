@@ -9,61 +9,53 @@ use serde::{Deserialize, Serialize};
 /// for the corresponding ceremony
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PartyIdxMapping {
-    id_to_idx: HashMap<AccountId, AuthorityCount>,
-    account_ids: BTreeSet<AccountId>,
+	id_to_idx: HashMap<AccountId, AuthorityCount>,
+	account_ids: BTreeSet<AccountId>,
 }
 
 impl PartyIdxMapping {
-    /// Get party index based on their account id
-    pub fn get_idx(&self, id: &AccountId) -> Option<AuthorityCount> {
-        self.id_to_idx.get(id).copied()
-    }
+	/// Get party index based on their account id
+	pub fn get_idx(&self, id: &AccountId) -> Option<AuthorityCount> {
+		self.id_to_idx.get(id).copied()
+	}
 
-    /// Get party account id based on their index
-    pub fn get_id(&self, idx: AuthorityCount) -> Option<&AccountId> {
-        let idx = idx.checked_sub(1)?;
-        self.account_ids.iter().nth(idx as usize)
-    }
+	/// Get party account id based on their index
+	pub fn get_id(&self, idx: AuthorityCount) -> &AccountId {
+		let idx_sub_one = idx.checked_sub(1).expect("Party mapping index must be larger than 0");
 
-    /// Map all signer ids to their corresponding signer idx
-    #[allow(clippy::result_unit_err)]
-    pub fn get_all_idxs(
-        &self,
-        signer_ids: &BTreeSet<AccountId>,
-    ) -> Result<BTreeSet<AuthorityCount>, ()> {
-        signer_ids
-            .iter()
-            .map(|id| self.get_idx(id).ok_or(()))
-            .collect()
-    }
+		self.account_ids
+			.iter()
+			.nth(idx_sub_one as usize)
+			.unwrap_or_else(|| panic!("Party index of [{}] is invalid", idx))
+	}
 
-    /// Convert all indexes to Account Ids. Precondition: the indexes must be
-    /// valid for the ceremony
-    pub fn get_ids(&self, idxs: BTreeSet<AuthorityCount>) -> BTreeSet<AccountId> {
-        idxs.iter()
-            .map(|idx| {
-                self.get_id(*idx)
-                    .expect("Precondition violation: unknown idx")
-                    .clone()
-            })
-            .collect()
-    }
+	/// Map all signer ids to their corresponding signer idx
+	#[allow(clippy::result_unit_err)]
+	pub fn get_all_idxs(
+		&self,
+		signer_ids: &BTreeSet<AccountId>,
+	) -> Result<BTreeSet<AuthorityCount>, ()> {
+		signer_ids.iter().map(|id| self.get_idx(id).ok_or(())).collect()
+	}
 
-    pub fn from_participants(participants: BTreeSet<AccountId>) -> Self {
-        assert!(participants.len() <= AuthorityCount::MAX as usize);
+	/// Convert all indexes to Account Ids. Precondition: the indexes must be
+	/// valid for the ceremony
+	pub fn get_ids(&self, idxs: BTreeSet<AuthorityCount>) -> BTreeSet<AccountId> {
+		idxs.iter().map(|idx| self.get_id(*idx).clone()).collect()
+	}
 
-        // The protocol requires that the indexes start at 1
-        let id_to_idx = participants
-            .iter()
-            .enumerate()
-            .map(|(i, account_id)| (account_id.clone(), i as AuthorityCount + 1))
-            .collect();
+	pub fn from_participants(participants: BTreeSet<AccountId>) -> Self {
+		assert!(participants.len() <= AuthorityCount::MAX as usize);
 
-        PartyIdxMapping {
-            id_to_idx,
-            account_ids: participants,
-        }
-    }
+		// The protocol requires that the indexes start at 1
+		let id_to_idx = participants
+			.iter()
+			.enumerate()
+			.map(|(i, account_id)| (account_id.clone(), i as AuthorityCount + 1))
+			.collect();
+
+		PartyIdxMapping { id_to_idx, account_ids: participants }
+	}
 }
 
 macro_rules! derive_from_enum {
@@ -113,38 +105,56 @@ macro_rules! derive_display_as_type_name {
 
 #[cfg(test)]
 mod utils_tests {
-    use super::*;
+	use utilities::assert_panics;
 
-    #[test]
-    fn get_index_mapping_works() {
-        let a = AccountId::new([b'A'; 32]);
-        let b = AccountId::new([b'B'; 32]);
-        let c = AccountId::new([b'C'; 32]);
+	use crate::multisig::client::helpers::ACCOUNT_IDS;
 
-        let signers = BTreeSet::from_iter([a, c.clone(), b]);
+	use super::*;
 
-        let map = PartyIdxMapping::from_participants(signers);
+	#[test]
+	fn get_index_mapping_works() {
+		let a = AccountId::new([b'A'; 32]);
+		let b = AccountId::new([b'B'; 32]);
+		let c = AccountId::new([b'C'; 32]);
 
-        assert_eq!(map.get_idx(&c), Some(3));
-        assert_eq!(map.get_id(3), Some(&c));
-    }
+		let map = PartyIdxMapping::from_participants(BTreeSet::from_iter([a, c.clone(), b]));
+
+		assert_eq!(map.get_idx(&c), Some(3));
+		assert_eq!(map.get_id(3), &c);
+	}
+
+	#[test]
+	fn get_id_panics_if_index_is_zero() {
+		let map =
+			PartyIdxMapping::from_participants(BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()));
+
+		assert_panics!(map.get_id(0));
+	}
+
+	#[test]
+	fn get_id_panics_if_index_is_too_large() {
+		let map =
+			PartyIdxMapping::from_participants(BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()));
+
+		assert_panics!(map.get_id((ACCOUNT_IDS.len() + 1) as u32));
+	}
 }
 
 #[cfg(test)]
 pub fn ensure_unsorted<T>(mut v: Vec<T>, seed: u64) -> Vec<T>
 where
-    T: Clone + Ord,
+	T: Clone + Ord,
 {
-    use itertools::Itertools;
-    use rand::prelude::*;
+	use itertools::Itertools;
+	use rand::prelude::*;
 
-    assert!(v.len() > 1);
-    let mut rng = StdRng::seed_from_u64(seed);
-    let sorted = v.iter().cloned().sorted().collect::<Vec<_>>();
+	assert!(v.len() > 1);
+	let mut rng = StdRng::seed_from_u64(seed);
+	let sorted = v.iter().cloned().sorted().collect::<Vec<_>>();
 
-    while v != sorted {
-        v.shuffle(&mut rng);
-    }
+	while v != sorted {
+		v.shuffle(&mut rng);
+	}
 
-    v
+	v
 }
