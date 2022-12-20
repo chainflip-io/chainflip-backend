@@ -59,7 +59,7 @@ pub struct InclusionFee {
 }
 
 impl InclusionFee {
-	fn inclusion_fee(&self) -> PolkadotBalance {
+	pub fn inclusion_fee(&self) -> PolkadotBalance {
 		self.base_fee
 			.saturating_add(self.len_fee)
 			.saturating_add(self.adjusted_weight_fee)

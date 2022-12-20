@@ -14,9 +14,7 @@ use futures::{stream, Stream, StreamExt};
 use pallet_cf_ingress_egress::IngressWitness;
 use sp_runtime::MultiSignature;
 use state_chain_runtime::PolkadotInstance;
-use subxt::{
-	events::{EventFilter, Phase, StaticEvent},
-};
+use subxt::events::{EventFilter, Phase, StaticEvent};
 
 use crate::{
 	state_chain_observer::client::extrinsic_api::ExtrinsicApi,
@@ -334,6 +332,9 @@ where
 											logger,
 											"Witnessing signature_accepted. signature: {sig:?}"
 										);
+
+										let tx_fee = dot_client.query_fee_details(xt_bytes.to_vec().into(), block_hash).await?.inclusion_fee.expect("Extrinsic producing an interesting Event should have paid a fee").inclusion_fee();
+
 										let _result = state_chain_client
 											.submit_signed_extrinsic(
 												pallet_cf_witnesser::Call::witness_at_epoch {
@@ -341,8 +342,7 @@ where
 														pallet_cf_broadcast::Call::<_, PolkadotInstance>::signature_accepted {
 															signature: sig.clone(),
 															signer_id: our_vault.clone(),
-															// TODO: https://github.com/chainflip-io/chainflip-backend/issues/2544
-															tx_fee: 1000,
+															tx_fee,
 														}
 														.into(),
 													),
@@ -404,8 +404,8 @@ mod tests {
 	use cf_primitives::PolkadotAccountId;
 
 	use crate::{
-		logging::test_utils::new_test_logger,
-		state_chain_observer::client::mocks::MockStateChainClient, dot::rpc::DotRpcClient,
+		dot::rpc::DotRpcClient, logging::test_utils::new_test_logger,
+		state_chain_observer::client::mocks::MockStateChainClient,
 	};
 
 	#[ignore = "This test is helpful for local testing. Requires connection to westend"]
