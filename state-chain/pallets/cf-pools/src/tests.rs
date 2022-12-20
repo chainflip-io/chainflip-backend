@@ -34,6 +34,7 @@ fn funds_are_conserved() {
 fn funds_are_conserved_via_api() {
 	const INITIAL_LIQUIDITY_0: AssetAmount = 200_000;
 	const INITIAL_LIQUIDITY_1: AssetAmount = 20_000;
+	// 10 bps = 0,1%; 0,1% of 300 = 3
 	const COLLECTED_NETWORK_FEE_PER_SWAP: AssetAmount = 3;
 	const INITIAL_LIQUIDITY_TOTAL: AssetAmount = INITIAL_LIQUIDITY_0 + INITIAL_LIQUIDITY_1;
 	const SWAP_AMOUNT: AssetAmount = 300;
@@ -80,5 +81,19 @@ fn funds_are_conserved_via_api() {
 			INITIAL_LIQUIDITY_TOTAL + SWAP_AMOUNT
 		);
 		assert_eq!(CollectedNetworkFee::<Test>::get(), COLLECTED_NETWORK_FEE_PER_SWAP * 2);
+	});
+}
+
+#[test]
+fn test_fee_calculation() {
+	new_test_ext().execute_with(|| {
+		// Show we can never overflow and panic
+		Pools::calculate_network_fee(u16::MAX, AssetAmount::MAX);
+		// 200 bps (2%) of 100 = 2
+		assert_eq!(Pools::calculate_network_fee(200, 100), 2);
+		// 2220 bps = 22 % of 199 = 43,78
+		assert_eq!(Pools::calculate_network_fee(2220, 199), 44);
+		// 2220 bps = 22 % von 234 = 51,26
+		assert_eq!(Pools::calculate_network_fee(2220, 233), 52);
 	});
 }
