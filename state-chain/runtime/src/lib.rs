@@ -304,6 +304,7 @@ impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
 }
 #[cfg(feature = "ibiza")]
 impl pallet_cf_pools::Config for Runtime {
+	// fee = 0,1%
 	type NetworkFee = ConstU16<10>;
 }
 
