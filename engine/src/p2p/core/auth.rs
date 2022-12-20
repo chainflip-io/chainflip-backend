@@ -37,7 +37,7 @@ impl Authenticator {
 	}
 
 	pub fn add_peer(&self, peer_pubkey: XPublicKey) {
-		slog::debug!(
+		slog::trace!(
 			self.logger,
 			"Adding to list of allowed peers pubkeys: {}",
 			to_string(&peer_pubkey)
@@ -47,7 +47,7 @@ impl Authenticator {
 
 	pub fn remove_peer(&self, peer_pubkey: &XPublicKey) {
 		if self.allowed_pubkeys.write().unwrap().remove(peer_pubkey) {
-			slog::debug!(
+			slog::trace!(
 				self.logger,
 				"Removed from the list of allowed pubkeys: {}",
 				to_string(peer_pubkey)
@@ -61,7 +61,7 @@ impl Authenticator {
 		let req = parse_request(socket);
 
 		if self.allowed_pubkeys.read().unwrap().contains(&req.pubkey) {
-			slog::debug!(
+			slog::trace!(
 				self.logger,
 				"Allowing an incoming connection for a known pubkey: {}",
 				to_string(&req.pubkey)

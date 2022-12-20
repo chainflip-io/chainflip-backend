@@ -251,14 +251,25 @@ impl P2PContext {
 	fn send_messages(&self, messages: OutgoingMultisigStageMessages) {
 		match messages {
 			OutgoingMultisigStageMessages::Broadcast(account_ids, payload) => {
+				slog::trace!(
+					self.logger,
+					"Broadcasting a message to all {} peers",
+					account_ids.len()
+				);
 				for acc_id in account_ids {
 					self.send_message(acc_id, payload.clone());
 				}
 			},
-			OutgoingMultisigStageMessages::Private(messages) =>
+			OutgoingMultisigStageMessages::Private(messages) => {
+				slog::trace!(
+					self.logger,
+					"Sending private messages to all {} peers",
+					messages.len()
+				);
 				for (acc_id, payload) in messages {
 					self.send_message(acc_id, payload);
-				},
+				}
+			},
 		}
 	}
 
@@ -336,8 +347,6 @@ impl P2PContext {
 	}
 
 	fn connect_to_peer(&mut self, peer: PeerInfo) {
-		slog::debug!(self.logger, "Connecting to: {}", peer.account_id);
-
 		let account_id = peer.account_id.clone();
 
 		let socket = OutgoingSocket::new(&self.zmq_context, &self.key);
@@ -371,11 +380,19 @@ impl P2PContext {
 		if let Some(existing_socket) = self.active_connections.remove(&peer.account_id) {
 			slog::debug!(
 				self.logger,
-				"Account id {} is already known, updating info and reconnecting",
-				&peer.account_id
+				"Received info for known peer with account id {}, updating info and reconnecting",
+				&peer.account_id;
+				"peer_info" => peer.to_string()
 			);
 
 			self.remove_peer_and_disconnect_socket(existing_socket);
+		} else {
+			slog::debug!(
+				self.logger,
+				"Received info for new peer with account id {}, adding to allowed peers and id mapping",
+				&peer.account_id;
+				"peer_info" => peer.to_string()
+			);
 		}
 
 		let peer_pubkey = &peer.pubkey;
