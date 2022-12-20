@@ -142,9 +142,9 @@ where
 pub async fn start<StateChainClient>(
 	epoch_starts_receiver: async_broadcast::Receiver<EpochStart<Polkadot>>,
 	dot_client: OnlineClient<PolkadotConfig>,
-	monitor_ingress_receiver: tokio::sync::mpsc::UnboundedReceiver<PolkadotAccountId>,
-	monitored_addresses: BTreeSet<PolkadotAccountId>,
-	monitor_signature_receiver: tokio::sync::mpsc::UnboundedReceiver<[u8; 64]>,
+	ingress_address_receiver: tokio::sync::mpsc::UnboundedReceiver<PolkadotAccountId>,
+	monitored_ingress_addresses: BTreeSet<PolkadotAccountId>,
+	signature_receiver: tokio::sync::mpsc::UnboundedReceiver<[u8; 64]>,
 	monitored_signatures: BTreeSet<[u8; 64]>,
 	state_chain_client: Arc<StateChainClient>,
 	logger: &slog::Logger,
@@ -156,10 +156,10 @@ where
 		"DOT".to_string(),
 		epoch_starts_receiver,
 		|_epoch_start| true,
-		(monitored_addresses, monitor_ingress_receiver, monitored_signatures, monitor_signature_receiver),
+		(monitored_ingress_addresses, ingress_address_receiver, monitored_signatures, signature_receiver),
 		move |end_witnessing_signal,
 		    epoch_start,
-		    (mut monitored_addresses, mut monitor_ingress_receiver, mut monitored_signatures, mut monitor_signature_receiver),
+		    (mut monitored_ingress_addresses, mut ingress_address_receiver, mut monitored_signatures, mut signature_receiver),
 		    logger| {
 			let dot_client = dot_client.clone();
 			let state_chain_client = state_chain_client.clone();
@@ -275,12 +275,12 @@ where
 								(None, Some(Transfer { to, amount, from })) => {
 									// When we get a transfer event, we want to check that we have
 									// pulled the latest addresses to monitor from the chain first
-									while let Ok(address) = monitor_ingress_receiver.try_recv()
+									while let Ok(address) = ingress_address_receiver.try_recv()
 									{
-										monitored_addresses.insert(address);
+										monitored_ingress_addresses.insert(address);
 									}
 
-									if monitored_addresses.contains(&to) {
+									if monitored_ingress_addresses.contains(&to) {
 										slog::info!(logger, "Witnessing DOT Ingress {{ amount: {amount:?}, to: {to:?}");
 										ingress_witnesses.push(IngressWitness {
 											ingress_address: to.clone(),
@@ -319,7 +319,7 @@ where
 							block_hash
 						))?;
 
-						while let Ok(sig) = monitor_signature_receiver.try_recv()
+						while let Ok(sig) = signature_receiver.try_recv()
 						{
 							monitored_signatures.insert(sig);
 						}
@@ -387,7 +387,7 @@ where
 								.await;
 					}
 				}
-				Ok((monitored_addresses, monitor_ingress_receiver, monitored_signatures, monitor_signature_receiver))
+				Ok((monitored_ingress_addresses, ingress_address_receiver, monitored_signatures, signature_receiver))
 			}
 		},
 		logger,
@@ -431,10 +431,10 @@ mod tests {
 
 		let (epoch_starts_sender, epoch_starts_receiver) = async_broadcast::broadcast(10);
 
-		let (_dot_monitor_ingress_sender, monitor_ingress_receiver) =
+		let (_dot_monitor_ingress_sender, ingress_address_receiver) =
 			tokio::sync::mpsc::unbounded_channel();
 
-		let (dot_monitor_signature_sender, monitor_signature_receiver) =
+		let (dot_monitor_signature_sender, signature_receiver) =
 			tokio::sync::mpsc::unbounded_channel();
 
 		let state_chain_client = Arc::new(MockStateChainClient::new());
@@ -488,9 +488,9 @@ mod tests {
 		start(
 			epoch_starts_receiver,
 			dot_client,
-			monitor_ingress_receiver,
+			ingress_address_receiver,
 			BTreeSet::default(),
-			monitor_signature_receiver,
+			signature_receiver,
 			BTreeSet::default(),
 			state_chain_client,
 			&logger,
