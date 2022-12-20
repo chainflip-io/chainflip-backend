@@ -259,9 +259,12 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 		async {
 			let messages = std::mem::take(&mut self.delayed_messages);
 
+			if !messages.is_empty() {
+				slog::debug!(self.logger, "Processing {} delayed messages",messages.len();
+					"from_ids" => format_iterator(messages.keys()).to_string()
+				);
+			}
 			for (id, m) in messages {
-				slog::debug!(self.logger, "Processing delayed message {} from party [{}]", m, id,);
-
 				if let Some(result) = self.process_or_delay_message(id, m).await {
 					return Some(result)
 				}
@@ -274,29 +277,30 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 
 	/// Delay message to be processed in the next stage
 	fn add_delayed(&mut self, id: AccountId, m: Ceremony::Data) {
+		let delayed_messages_count = self.delayed_messages.len() + 1;
 		match &self.stage {
 			Some(stage) => {
 				slog::debug!(
 					self.logger,
-					"Delaying message {} from party [{}] during stage: {}",
+					"Delaying message {} from party [{}] during stage {}. (Total: {})",
 					m,
 					id,
-					stage.get_stage_name()
+					stage.get_stage_name(),
+					delayed_messages_count
 				);
 			},
 			None => {
 				slog::debug!(
 					self.logger,
-					"Delaying message {} from party [{}] for unauthorised ceremony",
+					"Delaying message {} from party [{}] for unauthorised ceremony. (Total: {})",
 					m,
-					id
+					id,
+					delayed_messages_count
 				)
 			},
 		}
 
 		self.delayed_messages.insert(id, m);
-
-		slog::debug!(self.logger, "Total delayed: {}", self.delayed_messages.len());
 	}
 
 	async fn on_timeout(&mut self) -> OptionalCeremonyReturn<Ceremony> {
@@ -308,17 +312,11 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 			// Instead, we delegate the responsibility to the concrete stage
 			// implementation to try to recover or agree on who to report.
 
-			slog::warn!(
-				self.logger,
-				"Ceremony stage timed out before all messages collected; trying to finalize current stage anyway"
-			);
-
-			// Log the account ids of the missing messages
 			let missing_messages_from_accounts =
 				stage.ceremony_common().validator_mapping.get_ids(stage.awaited_parties());
-			slog::debug!(
+			slog::warn!(
 				self.logger,
-				"Stage `{}` is missing messages from {} parties",
+				"Ceremony stage {} timed out before all messages collected ({} missing), trying to finalize current stage anyway.",
 				stage.get_stage_name(),
 				missing_messages_from_accounts.len();
 				"missing_ids" => format_iterator(missing_messages_from_accounts).to_string()
