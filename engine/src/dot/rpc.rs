@@ -93,7 +93,7 @@ pub trait DotRpcApi: Send + Sync {
 
 	async fn submit_raw_encoded_extrinsic(&self, encoded_bytes: Vec<u8>) -> Result<PolkadotHash>;
 
-	async fn query_fee_details(&self, extrinsic: Bytes, at: PolkadotHash) -> Result<FeeDetails>;
+	async fn query_fee_paid(&self, extrinsic: Bytes, at: PolkadotHash) -> Result<PolkadotBalance>;
 }
 
 #[async_trait]
@@ -145,14 +145,19 @@ impl DotRpcApi for DotRpcClient {
 			})
 	}
 
-	async fn query_fee_details(&self, extrinsic: Bytes, at: PolkadotHash) -> Result<FeeDetails> {
-		Ok(self
+	async fn query_fee_paid(&self, extrinsic: Bytes, at: PolkadotHash) -> Result<PolkadotBalance> {
+		let fee_details: FeeDetails = self
 			.online_client
 			.rpc()
-			.request::<FeeDetailsPre>("payment_queryFeeDetails", rpc_params![extrinsic, at])
+			.request::<FeeDetailsPre>("payment_queryFeeDetails", rpc_params![extrinsic.clone(), at])
 			.await
 			.map_err(|error| anyhow!("Querying fee details failed with error: {error}"))?
-			.into())
+			.into();
+
+		Ok(fee_details
+			.inclusion_fee
+			.ok_or_else(|| anyhow!("Extrinsic {extrinsic:?} doesn't have inclusion fee"))?
+			.inclusion_fee())
 	}
 }
 
@@ -163,9 +168,9 @@ mod tests {
 	use cf_chains::dot::PolkadotHash;
 	use subxt::ext::sp_core::Bytes;
 
-	use crate::dot::{rpc::DotRpcClient, DotBroadcaster};
+	use crate::dot::DotBroadcaster;
 
-	use super::DotRpcApi;
+	use super::*;
 
 	#[tokio::test]
 	#[ignore = "Testing raw broadcast to live network"]
@@ -191,16 +196,16 @@ mod tests {
 	}
 
 	#[tokio::test]
-	#[ignore = "helpful for testing a query fee details to a live network"]
-	async fn fee_details_test() {
+	#[ignore = "helpful for testing a query fee paid on a live network"]
+	async fn fee_paid_test() {
 		let polkadot_network_ws_url = "url";
 
 		let dot_rpc = DotRpcClient::new(polkadot_network_ws_url).await.unwrap();
 
 		let extrinsic: Bytes = hex::decode("490284001cbd2d43530a44705ad088af313e18f80b53ef16b36177cd4b77b846f2a5f07c019ca0f159e74252a572f6d0556268bd7b813cbf3280758c461785b13d371b821011726e33b3a183071beb1e8f895ecf1214f73c79ca9578b36a2cac07eddd358325031c0005000090b5ab205c6974c9ea841be688864633dc9ca8a357843eeacf2314649965fe220f0080c6a47e8d03").unwrap().into();
 
-		let fee_details = dot_rpc
-			.query_fee_details(
+		let fee_paid = dot_rpc
+			.query_fee_paid(
 				extrinsic,
 				PolkadotHash::from_str(
 					"0xb77bb8efbf352c6d732f7191035a7aa6bddceb1b6075122fabd8a0eccf5a55dc",
@@ -210,6 +215,6 @@ mod tests {
 			.await
 			.unwrap();
 
-		println!("Fee details: {:?}", fee_details);
+		println!("Fee paid: {:?}", fee_paid);
 	}
 }

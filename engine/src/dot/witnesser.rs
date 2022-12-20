@@ -333,8 +333,6 @@ where
 											"Witnessing signature_accepted. signature: {sig:?}"
 										);
 
-										let tx_fee = dot_client.query_fee_details(xt_bytes.to_vec().into(), block_hash).await?.inclusion_fee.expect("Extrinsic producing an interesting Event should have paid a fee").inclusion_fee();
-
 										let _result = state_chain_client
 											.submit_signed_extrinsic(
 												pallet_cf_witnesser::Call::witness_at_epoch {
@@ -342,7 +340,7 @@ where
 														pallet_cf_broadcast::Call::<_, PolkadotInstance>::signature_accepted {
 															signature: sig.clone(),
 															signer_id: our_vault.clone(),
-															tx_fee,
+															tx_fee: dot_client.query_fee_paid(xt_bytes.to_vec().into(), block_hash).await?
 														}
 														.into(),
 													),
