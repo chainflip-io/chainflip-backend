@@ -1,4 +1,8 @@
-use std::{collections::BTreeSet, pin::Pin, sync::Arc};
+use std::{
+	collections::{BTreeSet, HashMap},
+	pin::Pin,
+	sync::Arc,
+};
 
 use cf_chains::{
 	dot::{
@@ -69,6 +73,20 @@ pub struct Transfer {
 impl StaticEvent for Transfer {
 	const PALLET: &'static str = "Balances";
 	const EVENT: &'static str = "Transfer";
+}
+
+/// This event must match the TransactionFeePaid event definition of the Polkadot chain.
+#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+struct TransactionFeePaid {
+	who: PolkadotAccountId,
+	// includes the tip
+	actual_fee: PolkadotBalance,
+	tip: PolkadotBalance,
+}
+
+impl StaticEvent for TransactionFeePaid {
+	const PALLET: &'static str = "TransactionPayment";
+	const EVENT: &'static str = "TransactionFeePaid";
 }
 
 pub async fn dot_block_head_stream_from<BlockHeaderStream, DotRpc>(
@@ -203,7 +221,7 @@ where
 						&logger,
 					)
 					.map(|(block_hash, block_number, events)| {
-						(block_hash, block_number, <(ProxyAdded, Transfer)>::filter(events))
+						(block_hash, block_number, <(ProxyAdded, Transfer, TransactionFeePaid)>::filter(events))
 					}),
 				);
 
@@ -224,10 +242,11 @@ where
 					// a) we know how to decode calls we create (but not necessarily all calls on Polkadot)
 					// b) these are the only extrinsics we are interested in
 					let mut interesting_indices = Vec::new();
+					let mut fee_paid_for_xt_at_index = HashMap::new();
 					while let Some(Ok(event_details)) = block_event_details.next() {
 						if let Phase::ApplyExtrinsic(extrinsic_index) = event_details.phase {
 							match event_details.event {
-								(Some(ProxyAdded { delegator, delegatee, .. }), None) => {
+								(Some(ProxyAdded { delegator, delegatee, .. }), None, None) => {
 									if AsRef::<[u8; 32]>::as_ref(&delegator) !=
 										AsRef::<[u8; 32]>::as_ref(&our_vault)
 									{
@@ -269,7 +288,7 @@ where
 										)
 										.await;
 								},
-								(None, Some(Transfer { to, amount, from })) => {
+								(None, Some(Transfer { to, amount, from }), None) => {
 									// When we get a transfer event, we want to check that we have
 									// pulled the latest addresses to monitor from the chain first
 									while let Ok(address) = ingress_address_receiver.try_recv()
@@ -294,8 +313,9 @@ where
 										interesting_indices.push(extrinsic_index);
 									}
 								},
-								(Some(_), Some(_)) =>
-									unreachable!("An event can only be one event at once."),
+								(None, None, Some(TransactionFeePaid { actual_fee, ..})) => {
+									fee_paid_for_xt_at_index.insert(extrinsic_index, actual_fee);
+								}
 								_ => {
 									// just not an interesting event
 								},
@@ -320,6 +340,7 @@ where
 							monitored_signatures.insert(sig);
 						}
 						for extrinsic_index in interesting_indices {
+
 							let xt = block.block.extrinsics.get(extrinsic_index as usize).expect("We know this exists since we got this index from the event, from the block we are querying.");
 							let xt_encoded = xt.encode();
 							let mut xt_bytes = xt_encoded.as_slice();
@@ -340,7 +361,7 @@ where
 														pallet_cf_broadcast::Call::<_, PolkadotInstance>::signature_accepted {
 															signature: sig.clone(),
 															signer_id: our_vault.clone(),
-															tx_fee: dot_client.query_fee_paid(xt_bytes.to_vec().into(), block_hash).await?
+															tx_fee: *fee_paid_for_xt_at_index.get(&extrinsic_index).expect("We should have paid a fee to submit the extrinsic")
 														}
 														.into(),
 													),

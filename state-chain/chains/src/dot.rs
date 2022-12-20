@@ -48,31 +48,6 @@ pub type PolkadotUncheckedExtrinsic =
 /// The payload being signed in transactions.
 pub type PolkadotPayload = SignedPayload<PolkadotRuntimeCall, PolkadotSignedExtra>;
 
-// ====== Copied from the Transaction Payment Pallet Definitions =======
-// Keeping only what we actually need.
-
-#[derive(Encode, Decode, TypeInfo, Copy, Clone, Default, PartialEq, Eq, Debug)]
-pub struct InclusionFee {
-	pub base_fee: PolkadotBalance,
-	pub len_fee: PolkadotBalance,
-	pub adjusted_weight_fee: PolkadotBalance,
-}
-
-impl InclusionFee {
-	pub fn inclusion_fee(&self) -> PolkadotBalance {
-		self.base_fee
-			.saturating_add(self.len_fee)
-			.saturating_add(self.adjusted_weight_fee)
-	}
-}
-
-#[derive(Encode, Decode, TypeInfo, Copy, Clone, Default, PartialEq, Eq, Debug)]
-pub struct FeeDetails {
-	pub inclusion_fee: Option<InclusionFee>,
-}
-
-// ====== Copied from the Transaction Payment Pallet Definitions =======
-
 // Westend testnet
 pub const WESTEND_METADATA: PolkadotMetadata = PolkadotMetadata {
 	spec_version: 9340,
