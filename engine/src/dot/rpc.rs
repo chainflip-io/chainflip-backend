@@ -37,7 +37,7 @@ struct InclusionFeePre {
 #[serde(rename_all = "camelCase")]
 struct FeeDetailsPre {
 	pub inclusion_fee: Option<InclusionFeePre>,
-	// // Do not serialize and deserialize `tip` as we actually can not pass any tip to the
+	// Do not serialize and deserialize `tip` as we actually can not pass any tip to the
 	// RPC.
 	#[serde(skip)]
 	pub tip: PolkadotBalance,
@@ -106,8 +106,8 @@ impl DotRpcApi for DotRpcClient {
 				.rpc()
 				.subscribe_finalized_blocks()
 				.await
-				.map_err(|e| anyhow!("Error initialising finalised head stream {e}"))?
-				.map_err(|e| anyhow!("Error in finalised head stream {e}")),
+				.map_err(|e| anyhow!("Error initialising finalised head stream: {e}"))?
+				.map_err(|e| anyhow!("Error in finalised head stream: {e}")),
 		))
 	}
 
@@ -116,7 +116,7 @@ impl DotRpcApi for DotRpcClient {
 			.rpc()
 			.block_hash(Some(block_number.into()))
 			.await
-			.map_err(|error| anyhow!("Failed to query Polkadot block hash with error: {error}"))
+			.map_err(|e| anyhow!("Failed to query Polkadot block hash with error: {e}"))
 	}
 
 	async fn block(&self, hash: PolkadotHash) -> Result<Option<ChainBlock<PolkadotConfig>>> {
@@ -140,9 +140,7 @@ impl DotRpcApi for DotRpcClient {
 			.rpc()
 			.request::<PolkadotHash>("author_submitExtrinsic", rpc_params![encoded_bytes])
 			.await
-			.map_err(|error| {
-				anyhow!("Raw Polkadot extrinsic submission failed with error: {error}")
-			})
+			.map_err(|e| anyhow!("Raw Polkadot extrinsic submission failed with error: {e}"))
 	}
 
 	async fn query_fee_paid(&self, extrinsic: Bytes, at: PolkadotHash) -> Result<PolkadotBalance> {
@@ -151,7 +149,7 @@ impl DotRpcApi for DotRpcClient {
 			.rpc()
 			.request::<FeeDetailsPre>("payment_queryFeeDetails", rpc_params![extrinsic.clone(), at])
 			.await
-			.map_err(|error| anyhow!("Querying fee details failed with error: {error}"))?
+			.map_err(|e| anyhow!("Querying fee details failed with error: {e}"))?
 			.into();
 
 		Ok(fee_details
