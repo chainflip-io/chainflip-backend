@@ -343,7 +343,8 @@ where
 						ingress_witnesses,
 						interesting_proxy_addeds,
 						fee_paid_for_xt_at_index
-					) = check_for_interesting_events_in_block(block_event_details,
+					) = check_for_interesting_events_in_block(
+							block_event_details,
 							block_number,
 							&our_vault,
 							&mut ingress_address_receiver,
@@ -468,7 +469,7 @@ mod tests {
 
 	enum EventWrapper {
 		ProxyAdded(ProxyAdded),
-		// Transfer(Transfer),
+		Transfer(Transfer),
 		TransactionFeePaid(TransactionFeePaid),
 	}
 
@@ -492,6 +493,14 @@ mod tests {
 		})
 	}
 
+	fn mock_transfer(
+		from: &PolkadotAccountId,
+		to: &PolkadotAccountId,
+		amount: PolkadotBalance,
+	) -> EventWrapper {
+		EventWrapper::Transfer(Transfer { from: from.clone(), to: to.clone(), amount })
+	}
+
 	fn block_event_details_from_events(
 		events: &[(u32, EventWrapper)],
 	) -> Vec<
@@ -513,8 +522,8 @@ mod tests {
 						match event {
 							EventWrapper::ProxyAdded(proxy_added) =>
 								(Some(proxy_added.clone()), None, None),
-							// EventWrapper::Transfer(transfer) =>
-							// 	(None, Some(transfer.clone()), None),
+							EventWrapper::Transfer(transfer) =>
+								(None, Some(transfer.clone()), None),
 							EventWrapper::TransactionFeePaid(tx_fee_paid) =>
 								(None, None, Some(tx_fee_paid.clone())),
 						}
@@ -526,7 +535,6 @@ mod tests {
 
 	#[test]
 	fn proxy_added_event_for_our_vault_witnessed() {
-		let logger = new_test_logger();
 		let our_vault = PolkadotAccountId::from([0; 32]);
 		let other_acct = PolkadotAccountId::from([1; 32]);
 		let our_proxy_added_index = 1u32;
@@ -540,8 +548,6 @@ mod tests {
 			(3u32, mock_tx_fee_paid(20000)),
 		]);
 
-		let block_number = 20;
-
 		let (_monitor_ingress_sender, mut monitor_ingress_receiver) =
 			tokio::sync::mpsc::unbounded_channel();
 
@@ -552,17 +558,88 @@ mod tests {
 			fee_paid_for_xt_at_index,
 		) = check_for_interesting_events_in_block(
 			block_event_details,
-			block_number,
+			20,
 			&our_vault,
 			&mut monitor_ingress_receiver,
 			&mut Default::default(),
-			&logger,
+			&new_test_logger(),
 		);
 
 		assert_eq!(interesting_proxy_addeds.len(), 1);
 		assert_eq!(interesting_indices.pop().unwrap(), our_proxy_added_index);
 		assert!(ingress_witnesses.is_empty());
 		assert_eq!(*fee_paid_for_xt_at_index.get(&our_proxy_added_index).unwrap(), fee_paid);
+	}
+
+	#[test]
+	fn witness_ingresses_for_addresses_we_monitor() {
+		// we want two monitors, one sent through at start, and one sent through channel
+		let transfer_1_index = 1;
+		let transfer_1_ingress_addr = PolkadotAccountId::from([1; 32]);
+		let transfer_1_amount = 10000;
+
+		let transfer_2_index = 2;
+		let transfer_2_ingress_addr = PolkadotAccountId::from([2; 32]);
+		let transfer_2_amount = 20000;
+
+		let block_event_details = block_event_details_from_events(&[
+			// we'll be witnessing this from the start
+			(
+				transfer_1_index,
+				mock_transfer(
+					&PolkadotAccountId::from([7; 32]),
+					&transfer_1_ingress_addr,
+					transfer_1_amount,
+				),
+			),
+			// we'll receive this address from the channel
+			(
+				transfer_2_index,
+				mock_transfer(
+					&PolkadotAccountId::from([7; 32]),
+					&transfer_2_ingress_addr,
+					transfer_2_amount,
+				),
+			),
+			// this one is not for us
+			(
+				19,
+				mock_transfer(
+					&PolkadotAccountId::from([7; 32]),
+					&PolkadotAccountId::from([9; 32]),
+					93232,
+				),
+			),
+		]);
+
+		let (monitor_ingress_sender, mut monitor_ingress_receiver) =
+			tokio::sync::mpsc::unbounded_channel();
+
+		monitor_ingress_sender.send(transfer_2_ingress_addr).unwrap();
+
+		let (
+			interesting_indices,
+			ingress_witnesses,
+			interesting_proxy_addeds,
+			_fee_paid_for_xt_at_index,
+		) = check_for_interesting_events_in_block(
+			block_event_details,
+			20,
+			// arbitrary, not focus of the test
+			&PolkadotAccountId::from([0xda; 32]),
+			&mut monitor_ingress_receiver,
+			&mut BTreeSet::from([transfer_1_ingress_addr]),
+			&new_test_logger(),
+		);
+
+		assert_eq!(ingress_witnesses.len(), 2);
+
+		assert_eq!(ingress_witnesses.get(0).unwrap().amount, transfer_1_amount);
+		assert_eq!(ingress_witnesses.get(1).unwrap().amount, transfer_2_amount);
+
+		// We don't need to submit signature accepted for ingress witnesses
+		assert_eq!(interesting_indices.len(), 0);
+		assert!(interesting_proxy_addeds.is_empty());
 	}
 
 	#[ignore = "This test is helpful for local testing. Requires connection to westend"]
