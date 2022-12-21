@@ -297,7 +297,7 @@ where
 									}
 
 									if monitored_ingress_addresses.contains(&to) {
-										slog::info!(logger, "Witnessing DOT Ingress {{ amount: {amount:?}, to: {to:?}");
+										slog::info!(logger, "Witnessing DOT Ingress {{ amount: {amount:?}, to: {to:?} }}");
 										ingress_witnesses.push(IngressWitness {
 											ingress_address: to.clone(),
 											asset: assets::dot::Asset::Dot,
@@ -309,7 +309,7 @@ where
 									// if from is our_vault then we're doing an egress
 									// if to is our_vault then we're doing an "ingress fetch"
 									if from == our_vault || to == our_vault {
-										slog::info!(logger, "Transfer from our_vault at block: {block_number}, extrinsic index: {extrinsic_index}");
+										slog::info!(logger, "Transfer from or to our_vault at block: {block_number}, extrinsic index: {extrinsic_index}");
 										interesting_indices.push(extrinsic_index);
 									}
 								},
