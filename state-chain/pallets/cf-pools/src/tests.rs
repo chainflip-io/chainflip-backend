@@ -34,7 +34,6 @@ fn funds_are_conserved() {
 fn funds_are_conserved_via_api() {
 	const INITIAL_LIQUIDITY_0: AssetAmount = 200_000;
 	const INITIAL_LIQUIDITY_1: AssetAmount = 20_000;
-	// 10 bps = 0,1%; 0,1% of 300 = 3
 	const COLLECTED_NETWORK_FEE_PER_SWAP: AssetAmount = 3;
 	const INITIAL_LIQUIDITY_TOTAL: AssetAmount = INITIAL_LIQUIDITY_0 + INITIAL_LIQUIDITY_1;
 	const SWAP_AMOUNT: AssetAmount = 300;

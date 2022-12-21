@@ -72,7 +72,7 @@ impl Chainflip for Test {
 }
 
 impl pallet_cf_pools::Config for Test {
-	type NetworkFee = ConstU16<100>;
+	type NetworkFee = ConstU16<1000>;
 }
 
 #[allow(unused)]
