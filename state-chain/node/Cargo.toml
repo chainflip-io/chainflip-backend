@@ -33,7 +33,7 @@ hex = "0.4"
 hex-literal = "0.3.1"
 
 # Substrate-node-template dependencies
-clap = { version = "3.1.18", features = ["derive"] }
+clap = { version = "4.0.9", features = ["derive"] }
 
 sc-cli = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2022-12' }
 sp-core = { version = "7.0.0", git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2022-12' }
@@ -51,15 +51,15 @@ sc-finality-grandpa = { git = "https://github.com/chainflip-io/substrate.git", t
 sc-finality-grandpa-rpc = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2022-12' }
 sp-finality-grandpa = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2022-12' }
 sc-client-api = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2022-12' }
-sp-runtime = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2022-12' }
+sp-runtime = { version = "7.0.0", git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2022-12' }
 sp-timestamp = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2022-12' }
 sp-inherents = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2022-12' }
-sp-keyring = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2022-12' }
+sp-keyring = { version = "7.0.0", git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2022-12' }
 frame-system = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2022-12' }
 pallet-transaction-payment = { default-features = false, git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2022-12' }
 
 # These dependencies are used for the node template's RPCs
-jsonrpsee = { version = "0.13.0", features = ["full"] }
+jsonrpsee = { version = "0.15.1", features = ["full"] }
 sc-rpc = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2022-12' }
 sp-api = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2022-12' }
 sc-rpc-api = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2022-12' }
@@ -81,13 +81,17 @@ substrate-build-script-utils = { git = "https://github.com/chainflip-io/substrat
 
 [features]
 default = []
-runtime-benchmarks = ['state-chain-runtime/runtime-benchmarks']
+runtime-benchmarks = [
+	"state-chain-runtime/runtime-benchmarks",
+	"frame-benchmarking/runtime-benchmarks",
+	"frame-benchmarking-cli/runtime-benchmarks",
+]
 cli = [
   'try-runtime-cli',
 ]
 try-runtime = [
   "state-chain-runtime/try-runtime",
-  "try-runtime-cli",
+  "try-runtime-cli/try-runtime",
 ]
 ibiza = [
   "state-chain-runtime/ibiza",

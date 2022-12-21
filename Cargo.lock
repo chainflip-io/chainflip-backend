@@ -1094,7 +1094,7 @@ version = "0.5.0"
 dependencies = [
  "cf-chains",
  "cf-primitives",
- "clap 3.2.23",
+ "clap 4.0.30",
  "custom-rpc",
  "frame-benchmarking",
  "frame-benchmarking-cli",
@@ -1102,7 +1102,7 @@ dependencies = [
  "futures 0.3.21",
  "hex",
  "hex-literal",
- "jsonrpsee 0.13.1",
+ "jsonrpsee 0.15.1",
  "pallet-transaction-payment",
  "pallet-transaction-payment-rpc",
  "sc-basic-authorship",
@@ -3679,10 +3679,13 @@ version = "0.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8bd0d559d5e679b1ab2f869b486a11182923863b1b3ee8b421763cdd707b783a"
 dependencies = [
+ "jsonrpsee-client-transport 0.15.1",
  "jsonrpsee-core 0.15.1",
+ "jsonrpsee-http-client 0.15.1",
  "jsonrpsee-http-server 0.15.1",
  "jsonrpsee-proc-macros 0.15.1",
  "jsonrpsee-types 0.15.1",
+ "jsonrpsee-wasm-client 0.15.1",
  "jsonrpsee-ws-client 0.15.1",
  "jsonrpsee-ws-server 0.15.1",
  "tracing",
@@ -3736,7 +3739,11 @@ version = "0.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8752740ecd374bcbf8b69f3e80b0327942df76f793f8d4e60d3355650c31fb74"
 dependencies = [
+ "anyhow",
+ "futures-channel",
+ "futures-timer",
  "futures-util",
+ "gloo-net",
  "http",
  "jsonrpsee-core 0.15.1",
  "jsonrpsee-types 0.15.1",
@@ -3834,6 +3841,7 @@ dependencies = [
  "tracing",
  "tracing-futures",
  "unicase 2.6.0",
+ "wasm-bindgen-futures",
 ]
 
 [[package]]
@@ -3882,6 +3890,26 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "jsonrpsee-http-client"
+version = "0.15.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "52f7c0e2333ab2115c302eeb4f137c8a4af5ab609762df68bbda8f06496677c9"
+dependencies = [
+ "async-trait",
+ "hyper 0.14.20",
+ "hyper-rustls",
+ "jsonrpsee-core 0.15.1",
+ "jsonrpsee-types 0.15.1",
+ "rustc-hash",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "tracing-futures",
 ]
 
 [[package]]
@@ -4050,6 +4078,17 @@ dependencies = [
  "jsonrpsee-client-transport 0.13.1",
  "jsonrpsee-core 0.13.1",
  "jsonrpsee-types 0.13.1",
+]
+
+[[package]]
+name = "jsonrpsee-wasm-client"
+version = "0.15.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "597b4eb94730e7695d0a2a429bc37a12e6e84d12680fdafb9b8f5f53652aab57"
+dependencies = [
+ "jsonrpsee-client-transport 0.15.1",
+ "jsonrpsee-core 0.15.1",
+ "jsonrpsee-types 0.15.1",
 ]
 
 [[package]]
@@ -10901,6 +10940,7 @@ version = "0.10.0-dev"
 source = "git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12#982f5998c59bd2bd455808345ae1bd2b1767f353"
 dependencies = [
  "clap 4.0.30",
+ "frame-try-runtime",
  "log 0.4.17",
  "parity-scale-codec",
  "remote-externalities",
