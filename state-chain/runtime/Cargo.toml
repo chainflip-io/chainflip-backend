@@ -81,9 +81,9 @@ sp-consensus-aura = { git = "https://github.com/chainflip-io/substrate.git", tag
 sp-core = { version = "7.0.0", git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
 sp-inherents = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
 sp-offchain = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
-sp-runtime = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
+sp-runtime = { version = "7.0.0", git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
 sp-session = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
-sp-std = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
+sp-std = { version = "5.0.0", git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
 sp-transaction-pool = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
 sp-version = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
 
@@ -100,9 +100,8 @@ runtime-benchmarks = [
   'cf-traits/runtime-benchmarks',
   'frame-benchmarking/runtime-benchmarks',
   'frame-support/runtime-benchmarks',
-  'frame-system-benchmarking',
+  'frame-system-benchmarking/runtime-benchmarks',
   'frame-system/runtime-benchmarks',
-  'hex-literal',
   'pallet-cf-account-roles/runtime-benchmarks',
   'pallet-cf-broadcast/runtime-benchmarks',
   'pallet-cf-chain-tracking/runtime-benchmarks',
@@ -124,6 +123,9 @@ runtime-benchmarks = [
   'cf-session-benchmarking',
 ]
 std = [
+	"frame-try-runtime?/std",
+	"frame-system-benchmarking?/std",
+	"frame-benchmarking?/std",
   'pallet-transaction-payment-rpc-runtime-api/std',
   'cf-chains/std',
   'cf-traits/std',
@@ -178,8 +180,9 @@ std = [
 ]
 try-runtime = [
   'frame-executive/try-runtime',
-  'frame-try-runtime',
+  'frame-try-runtime/try-runtime',
   'frame-system/try-runtime',
+  'frame-support/try-runtime',
   'pallet-aura/try-runtime',
   'pallet-grandpa/try-runtime',
   'pallet-timestamp/try-runtime',
