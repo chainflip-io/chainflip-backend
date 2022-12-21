@@ -501,19 +501,16 @@ mod tests {
 		EventWrapper::Transfer(Transfer { from: from.clone(), to: to.clone(), amount })
 	}
 
+	type FilteredEvents = FilteredEventDetails<
+		PolkadotHash,
+		(Option<ProxyAdded>, Option<Transfer>, Option<TransactionFeePaid>),
+	>;
+
 	fn block_event_details_from_events(
 		events: &[(u32, EventWrapper)],
-	) -> Vec<
-		Result<
-			FilteredEventDetails<
-				PolkadotHash,
-				(Option<ProxyAdded>, Option<Transfer>, Option<TransactionFeePaid>),
-			>,
-			subxt::Error,
-		>,
-	> {
+	) -> Vec<Result<FilteredEvents, subxt::Error>> {
 		events
-			.into_iter()
+			.iter()
 			.map(|(xt_index, event)| {
 				Result::<_, subxt::Error>::Ok(FilteredEventDetails {
 					phase: Phase::ApplyExtrinsic(*xt_index),
