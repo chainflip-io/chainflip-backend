@@ -243,6 +243,7 @@ where
 					// b) these are the only extrinsics we are interested in
 					let mut interesting_indices = Vec::new();
 					let mut fee_paid_for_xt_at_index = HashMap::new();
+					let mut interesting_proxy_addeds = Vec::new();
 					while let Some(Ok(event_details)) = block_event_details.next() {
 						if let Phase::ApplyExtrinsic(extrinsic_index) = event_details.phase {
 							match event_details.event {
@@ -264,29 +265,21 @@ where
 										logger,
 										"Witnessing ProxyAdded. new public key: {new_public_key:?} at block number {block_number} and extrinsic_index; {extrinsic_index}"
 									);
-									let _result = state_chain_client
-										.submit_signed_extrinsic(
-											pallet_cf_witnesser::Call::witness_at_epoch {
-												call:
-													Box::new(
-														pallet_cf_vaults::Call::<
-															_,
-															PolkadotInstance,
-														>::vault_key_rotated {
-															new_public_key,
-															block_number,
-															tx_id: TxId {
-																block_number,
-																extrinsic_index,
-															},
-														}
-														.into(),
-													),
-												epoch_index: epoch_start.epoch_index,
+
+									interesting_proxy_addeds.push(Box::new(
+										pallet_cf_vaults::Call::<
+											_,
+											PolkadotInstance,
+										>::vault_key_rotated {
+											new_public_key,
+											block_number,
+											tx_id: TxId {
+												block_number,
+												extrinsic_index,
 											},
-											&logger,
-										)
-										.await;
+										}
+										.into(),
+									));
 								},
 								(None, Some(Transfer { to, amount, from }), None) => {
 									// When we get a transfer event, we want to check that we have
@@ -322,6 +315,18 @@ where
 							}
 						}
 					} // === We've finished iterating the events for this block ===
+
+					for call in interesting_proxy_addeds {
+						let _result = state_chain_client
+								.submit_signed_extrinsic(
+									pallet_cf_witnesser::Call::witness_at_epoch {
+										call,
+										epoch_index: epoch_start.epoch_index,
+									},
+									&logger,
+								)
+								.await;
+					}
 
 					if !interesting_indices.is_empty() {
 						slog::info!(logger, "We got an interesting block at block: {block_number}, hash: {block_hash:?}");
