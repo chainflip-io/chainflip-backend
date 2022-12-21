@@ -1,3 +1,5 @@
+use anyhow::Result;
+
 use super::{curve25519_ristretto::Point, ChainTag, CryptoScheme, ECPoint};
 use cf_chains::dot::PolkadotPublicKey;
 use schnorrkel::context::{SigningContext, SigningTranscript};
@@ -12,10 +14,20 @@ const SIGNING_CTX: &[u8] = b"substrate";
 pub struct PolkadotSignature(schnorrkel::Signature);
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Hash, Eq)]
-pub struct PolkadotSigningPayload(pub Vec<u8>);
+pub struct PolkadotSigningPayload(Vec<u8>);
+
 impl std::fmt::Display for PolkadotSigningPayload {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "{}", hex::encode(&self.0))
+	}
+}
+
+impl PolkadotSigningPayload {
+	pub fn new(payload: Vec<u8>) -> Result<Self> {
+		if payload.is_empty() || payload.len() > 256 {
+			anyhow::bail!("Invalid payload size");
+		}
+		Ok(PolkadotSigningPayload(payload))
 	}
 }
 
@@ -133,7 +145,7 @@ impl CryptoScheme for PolkadotSigning {
 
 	#[cfg(test)]
 	fn get_signing_payload_for_test() -> Self::SigningPayload {
-		PolkadotSigningPayload(vec![1_u8; 256])
+		PolkadotSigningPayload::new(vec![1_u8; 256]).unwrap()
 	}
 }
 

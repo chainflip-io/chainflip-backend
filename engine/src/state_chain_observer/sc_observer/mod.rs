@@ -446,7 +446,7 @@ where
                                             ceremony_id,
                                             KeyId(key_id),
                                             signatories,
-                                            crate::multisig::eth::EthSigningPayload(payload.0.to_vec()),
+                                            crate::multisig::eth::EthSigningPayload(payload.0),
                                             logger.clone(),
                                         ).await;
                                     }
@@ -470,7 +470,8 @@ where
                                             ceremony_id,
                                             KeyId(key_id),
                                             signatories,
-                                            crate::multisig::polkadot::PolkadotSigningPayload(payload.0.to_vec()),
+                                            crate::multisig::polkadot::PolkadotSigningPayload::new(payload.0)
+                                                .expect("Payload should be correct size"),
                                             logger.clone(),
                                         ).await;
                                     }

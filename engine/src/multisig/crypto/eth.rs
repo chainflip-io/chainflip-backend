@@ -31,7 +31,8 @@ impl From<EthSchnorrSignature> for cf_chains::eth::SchnorrVerificationComponents
 pub struct EthSigning {}
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Hash, Eq)]
-pub struct EthSigningPayload(pub Vec<u8>);
+pub struct EthSigningPayload(pub [u8; 32]);
+
 impl std::fmt::Display for EthSigningPayload {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "{}", hex::encode(&self.0))
@@ -60,10 +61,8 @@ impl CryptoScheme for EthSigning {
 		use crate::eth::utils::pubkey_to_eth_addr;
 		use cf_chains::eth::AggKey;
 
-		let msg_hash: &[u8; 32] = payload.0.as_slice().try_into().unwrap();
-
 		let e = AggKey::from_pubkey_compressed(pubkey.get_element().serialize())
-			.message_challenge(msg_hash, &pubkey_to_eth_addr(nonce_commitment.get_element()));
+			.message_challenge(&payload.0, &pubkey_to_eth_addr(nonce_commitment.get_element()));
 
 		Scalar::from_bytes_mod_order(&e)
 	}
@@ -97,7 +96,7 @@ impl CryptoScheme for EthSigning {
 
 		// Verify the signature with the aggkey
 		agg_key
-			.verify(payload.0.as_slice().try_into().unwrap(), &signature.clone().into())
+			.verify(&payload.0, &signature.clone().into())
 			.map_err(|e| anyhow::anyhow!("Failed to verify signature: {:?}", e))?;
 
 		Ok(())
@@ -121,6 +120,6 @@ impl CryptoScheme for EthSigning {
 
 	#[cfg(test)]
 	fn get_signing_payload_for_test() -> Self::SigningPayload {
-		EthSigningPayload("Chainflip:Chainflip:Chainflip:01".as_bytes().to_vec())
+		EthSigningPayload("Chainflip:Chainflip:Chainflip:01".as_bytes().try_into().unwrap())
 	}
 }
