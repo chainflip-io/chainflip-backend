@@ -1,6 +1,6 @@
 use frame_system::Config;
 
-pub fn last_event<T: Config>() -> <T as Config>::Event {
+pub fn last_event<T: Config>() -> <T as Config>::RuntimeEvent {
 	maybe_last_event::<T>().expect("Event expected")
 }
 

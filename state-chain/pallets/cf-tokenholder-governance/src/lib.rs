@@ -44,7 +44,7 @@ pub mod pallet {
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config: Chainflip {
 		/// The event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 		/// Burns the proposal fee from the accounts.
 		type FeePayment: FeePayment<Amount = Self::Amount, AccountId = Self::AccountId>;
 		/// The chain instance.

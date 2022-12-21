@@ -56,7 +56,7 @@ pub mod pallet {
 	pub trait Config: Chainflip {
 		/// Because we want to emit events when there is a config change during
 		/// an runtime upgrade
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// For registering and verifying the account role.
 		type AccountRoleRegistry: AccountRoleRegistry<Self>;

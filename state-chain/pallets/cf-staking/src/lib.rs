@@ -78,7 +78,7 @@ pub mod pallet {
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config: cf_traits::Chainflip {
 		/// Standard Event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The type containing all calls that are dispatchable from the threshold source.
 		type ThresholdCallable: From<Call<Self>>;

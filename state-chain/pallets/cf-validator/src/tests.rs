@@ -51,20 +51,20 @@ fn changing_epoch_block_size() {
 		assert_eq!(min_duration, 1);
 		// Throw up an error if we supply anything less than this
 		assert_noop!(
-			ValidatorPallet::set_blocks_for_epoch(Origin::root(), min_duration - 1),
+			ValidatorPallet::set_blocks_for_epoch(RuntimeOrigin::root()(), min_duration - 1),
 			Error::<Test>::InvalidEpoch
 		);
-		assert_ok!(ValidatorPallet::set_blocks_for_epoch(Origin::root(), min_duration));
+		assert_ok!(ValidatorPallet::set_blocks_for_epoch(RuntimeOrigin::root()(), min_duration));
 		assert_eq!(
 			last_event::<Test>(),
-			mock::Event::ValidatorPallet(crate::Event::EpochDurationChanged(
+			mock::RuntimeEvent::ValidatorPallet(crate::Event::EpochDurationChanged(
 				EPOCH_DURATION,
 				min_duration
 			)),
 		);
 		// We throw up an error if we try to set it to the current
 		assert_noop!(
-			ValidatorPallet::set_blocks_for_epoch(Origin::root(), min_duration),
+			ValidatorPallet::set_blocks_for_epoch(RuntimeOrigin::root()(), min_duration),
 			Error::<Test>::InvalidEpoch
 		);
 	});
@@ -133,7 +133,7 @@ fn should_be_unable_to_force_rotation_during_a_rotation() {
 		MockBidderProvider::set_winning_bids();
 		ValidatorPallet::start_authority_rotation();
 		assert_noop!(
-			ValidatorPallet::force_rotation(Origin::root()),
+			ValidatorPallet::force_rotation(RuntimeOrigin::root()()),
 			Error::<Test>::RotationInProgress
 		);
 	});
@@ -143,13 +143,13 @@ fn should_be_unable_to_force_rotation_during_a_rotation() {
 fn should_rotate_when_forced() {
 	new_test_ext().execute_with(|| {
 		MockBidderProvider::set_winning_bids();
-		assert_ok!(ValidatorPallet::force_rotation(Origin::root()));
+		assert_ok!(ValidatorPallet::force_rotation(RuntimeOrigin::root()()));
 		assert!(matches!(
 			CurrentRotationPhase::<Test>::get(),
 			RotationPhase::<Test>::KeygensInProgress(..)
 		));
 		assert_noop!(
-			ValidatorPallet::force_rotation(Origin::root()),
+			ValidatorPallet::force_rotation(RuntimeOrigin::root()()),
 			Error::<Test>::RotationInProgress
 		);
 	});
@@ -211,11 +211,13 @@ fn send_cfe_version() {
 		let authority = GENESIS_AUTHORITIES[0];
 
 		let version = SemVer { major: 4, ..Default::default() };
-		assert_ok!(ValidatorPallet::cfe_version(Origin::signed(authority), version.clone(),));
+		assert_ok!(
+			ValidatorPallet::cfe_version(RuntimeOrigin::signed(authority), version.clone(),)
+		);
 
 		assert_eq!(
 			last_event::<Test>(),
-			mock::Event::ValidatorPallet(crate::Event::CFEVersionUpdated {
+			mock::RuntimeEvent::ValidatorPallet(crate::Event::CFEVersionUpdated {
 				account_id: authority,
 				old_version: SemVer::default(),
 				new_version: version.clone(),
@@ -231,11 +233,14 @@ fn send_cfe_version() {
 
 		// We submit a new version
 		let new_version = SemVer { major: 5, ..Default::default() };
-		assert_ok!(ValidatorPallet::cfe_version(Origin::signed(authority), new_version.clone()));
+		assert_ok!(ValidatorPallet::cfe_version(
+			RuntimeOrigin::signed(authority),
+			new_version.clone()
+		));
 
 		assert_eq!(
 			last_event::<Test>(),
-			mock::Event::ValidatorPallet(crate::Event::CFEVersionUpdated {
+			mock::RuntimeEvent::ValidatorPallet(crate::Event::CFEVersionUpdated {
 				account_id: authority,
 				old_version: version,
 				new_version: new_version.clone(),
@@ -251,7 +256,10 @@ fn send_cfe_version() {
 
 		// When we submit the same version we should see no `CFEVersionUpdated` event
 		frame_system::Pallet::<Test>::reset_events();
-		assert_ok!(ValidatorPallet::cfe_version(Origin::signed(authority), new_version.clone()));
+		assert_ok!(ValidatorPallet::cfe_version(
+			RuntimeOrigin::signed(authority),
+			new_version.clone()
+		));
 
 		assert_eq!(
 			0,
@@ -278,7 +286,7 @@ fn register_peer_id() {
 		// Don't allow invalid signatures
 		assert_noop!(
 			ValidatorPallet::register_peer_id(
-				Origin::signed(ALICE),
+				RuntimeOrigin::signed(ALICE),
 				alice_peer_public_key,
 				0,
 				0,
@@ -289,7 +297,7 @@ fn register_peer_id() {
 
 		// Non-overlaping peer ids and valid signatures
 		assert_ok!(ValidatorPallet::register_peer_id(
-			Origin::signed(ALICE),
+			RuntimeOrigin::signed(ALICE),
 			alice_peer_public_key,
 			40044,
 			10,
@@ -297,7 +305,7 @@ fn register_peer_id() {
 		));
 		assert_eq!(
 			last_event::<Test>(),
-			mock::Event::ValidatorPallet(crate::Event::PeerIdRegistered(
+			mock::RuntimeEvent::ValidatorPallet(crate::Event::PeerIdRegistered(
 				ALICE,
 				alice_peer_public_key,
 				40044,
@@ -311,7 +319,7 @@ fn register_peer_id() {
 		// New mappings to overlapping peer id are disallowed
 		assert_noop!(
 			ValidatorPallet::register_peer_id(
-				Origin::signed(BOB),
+				RuntimeOrigin::signed(BOB),
 				alice_peer_public_key,
 				0,
 				0,
@@ -324,7 +332,7 @@ fn register_peer_id() {
 		let bob_peer_keypair = sp_core::ed25519::Pair::from_legacy_string("bob", None);
 		let bob_peer_public_key = bob_peer_keypair.public();
 		assert_ok!(ValidatorPallet::register_peer_id(
-			Origin::signed(BOB),
+			RuntimeOrigin::signed(BOB),
 			bob_peer_public_key,
 			40043,
 			11,
@@ -332,7 +340,7 @@ fn register_peer_id() {
 		),);
 		assert_eq!(
 			last_event::<Test>(),
-			mock::Event::ValidatorPallet(crate::Event::PeerIdRegistered(
+			mock::RuntimeEvent::ValidatorPallet(crate::Event::PeerIdRegistered(
 				BOB,
 				bob_peer_public_key,
 				40043,
@@ -346,7 +354,7 @@ fn register_peer_id() {
 		// Changing existing mapping to overlapping peer id is disallowed
 		assert_noop!(
 			ValidatorPallet::register_peer_id(
-				Origin::signed(BOB),
+				RuntimeOrigin::signed(BOB),
 				alice_peer_public_key,
 				0,
 				0,
@@ -360,7 +368,7 @@ fn register_peer_id() {
 
 		// Changing to new peer id works
 		assert_ok!(ValidatorPallet::register_peer_id(
-			Origin::signed(BOB),
+			RuntimeOrigin::signed(BOB),
 			bob_peer_public_key,
 			40043,
 			11,
@@ -368,7 +376,7 @@ fn register_peer_id() {
 		));
 		assert_eq!(
 			last_event::<Test>(),
-			mock::Event::ValidatorPallet(crate::Event::PeerIdRegistered(
+			mock::RuntimeEvent::ValidatorPallet(crate::Event::PeerIdRegistered(
 				BOB,
 				bob_peer_public_key,
 				40043,
@@ -381,7 +389,7 @@ fn register_peer_id() {
 
 		// Updating only the ip address works
 		assert_ok!(ValidatorPallet::register_peer_id(
-			Origin::signed(BOB),
+			RuntimeOrigin::signed(BOB),
 			bob_peer_public_key,
 			40043,
 			12,
@@ -389,7 +397,7 @@ fn register_peer_id() {
 		));
 		assert_eq!(
 			last_event::<Test>(),
-			mock::Event::ValidatorPallet(crate::Event::PeerIdRegistered(
+			mock::RuntimeEvent::ValidatorPallet(crate::Event::PeerIdRegistered(
 				BOB,
 				bob_peer_public_key,
 				40043,
@@ -454,13 +462,13 @@ fn highest_bond() {
 fn test_setting_vanity_names_() {
 	new_test_ext().execute_with(|| {
 		let validators: &[u64] = &[123, 456, 789, 101112];
-		assert_ok!(ValidatorPallet::set_vanity_name(Origin::signed(validators[0]), "Test Validator 1".as_bytes().to_vec()));
-		assert_ok!(ValidatorPallet::set_vanity_name(Origin::signed(validators[2]), "Test Validator 2".as_bytes().to_vec()));
+		assert_ok!(ValidatorPallet::set_vanity_name(RuntimeOrigin::signed(validators[0]), "Test Validator 1".as_bytes().to_vec()));
+		assert_ok!(ValidatorPallet::set_vanity_name(RuntimeOrigin::signed(validators[2]), "Test Validator 2".as_bytes().to_vec()));
 		let vanity_names = crate::VanityNames::<Test>::get();
 		assert_eq!(sp_std::str::from_utf8(vanity_names.get(&validators[0]).unwrap()).unwrap(), "Test Validator 1");
 		assert_eq!(sp_std::str::from_utf8(vanity_names.get(&validators[2]).unwrap()).unwrap(), "Test Validator 2");
-		assert_noop!(ValidatorPallet::set_vanity_name(Origin::signed(validators[0]), [0xfe, 0xff].to_vec()), crate::Error::<Test>::InvalidCharactersInName);
-		assert_noop!(ValidatorPallet::set_vanity_name(Origin::signed(validators[0]), "Validator Name too longggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg".as_bytes().to_vec()), crate::Error::<Test>::NameTooLong);
+		assert_noop!(ValidatorPallet::set_vanity_name(RuntimeOrigin::signed(validators[0]), [0xfe, 0xff].to_vec()), crate::Error::<Test>::InvalidCharactersInName);
+		assert_noop!(ValidatorPallet::set_vanity_name(RuntimeOrigin::signed(validators[0]), "Validator Name too longggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg".as_bytes().to_vec()), crate::Error::<Test>::NameTooLong);
 	});
 }
 
@@ -597,18 +605,21 @@ mod bond_expiry {
 fn auction_params_must_be_valid_when_set() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			ValidatorPallet::set_auction_parameters(Origin::root(), SetSizeParameters::default()),
+			ValidatorPallet::set_auction_parameters(
+				RuntimeOrigin::root()(),
+				SetSizeParameters::default()
+			),
 			Error::<Test>::InvalidAuctionParameters
 		);
 
 		assert_ok!(ValidatorPallet::set_auction_parameters(
-			Origin::root(),
+			RuntimeOrigin::root()(),
 			SetSizeParameters { min_size: 3, max_size: 10, max_expansion: 10 }
 		));
 		// Confirm we have an event
 		assert!(matches!(
 			last_event::<Test>(),
-			mock::Event::ValidatorPallet(crate::Event::AuctionParametersChanged(..)),
+			mock::RuntimeEvent::ValidatorPallet(crate::Event::AuctionParametersChanged(..)),
 		));
 	});
 }

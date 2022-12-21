@@ -87,8 +87,8 @@ impl frame_system::Config for MockRuntime {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
-	type Origin = Origin;
-	type Call = Call;
+	type RuntimeOrigin = RuntimeOrigin;
+	type RuntimeCall = RuntimeCall;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
@@ -96,7 +96,7 @@ impl frame_system::Config for MockRuntime {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = BlockHashCount;
 	type DbWeight = ();
 	type Version = ();
@@ -116,7 +116,7 @@ impl Chainflip for MockRuntime {
 	type KeyId = Vec<u8>;
 	type ValidatorId = ValidatorId;
 	type Amount = u128;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type EnsureWitnessed = cf_traits::mocks::ensure_origin_mock::NeverFailingOriginCheck<Self>;
 	type EnsureWitnessedAtCurrentEpoch =
 		cf_traits::mocks::ensure_origin_mock::NeverFailingOriginCheck<Self>;
@@ -127,7 +127,7 @@ impl Chainflip for MockRuntime {
 pub struct MockCallback;
 
 impl UnfilteredDispatchable for MockCallback {
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 
 	fn dispatch_bypass_filter(
 		self,
@@ -208,10 +208,10 @@ pub type MockOffenceReporter =
 	cf_traits::mocks::offence_reporting::MockOffenceReporter<ValidatorId, PalletOffence>;
 
 impl pallet_cf_vaults::Config for MockRuntime {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type Offence = PalletOffence;
 	type Chain = MockEthereum;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type AccountRoleRegistry = ();
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;

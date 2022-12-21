@@ -11,7 +11,7 @@ use crate as pallet_cf_governance;
 const DUMMY_WASM_BLOB: Vec<u8> = vec![];
 
 fn mock_extrinsic() -> Box<Call> {
-	Box::new(Call::Governance(pallet_cf_governance::Call::<Test>::new_membership_set {
+	Box::new(RuntimeCall::Governance(pallet_cf_governance::Call::<Test>::new_membership_set {
 		accounts: vec![EVE, PETER, MAX],
 	}))
 }
@@ -37,7 +37,7 @@ fn genesis_config() {
 fn governance_restriction() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			Governance::new_membership_set(Origin::signed(ALICE), vec![EVE, PETER, MAX]),
+			Governance::new_membership_set(RuntimeOrigin::signed(ALICE), vec![EVE, PETER, MAX]),
 			frame_support::error::BadOrigin
 		);
 	});
@@ -47,7 +47,7 @@ fn governance_restriction() {
 fn not_a_member() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			Governance::propose_governance_extrinsic(Origin::signed(EVE), mock_extrinsic()),
+			Governance::propose_governance_extrinsic(RuntimeOrigin::signed(EVE), mock_extrinsic()),
 			<Error<Test>>::NotMember
 		);
 	});
@@ -58,15 +58,21 @@ fn propose_a_governance_extrinsic_and_expect_execution() {
 	new_test_ext().execute_with(|| {
 		// Propose a governance extrinsic
 		assert_ok!(Governance::propose_governance_extrinsic(
-			Origin::signed(ALICE),
+			RuntimeOrigin::signed(ALICE),
 			mock_extrinsic()
 		));
-		assert_eq!(last_event::<Test>(), crate::mock::Event::Governance(crate::Event::Approved(1)),);
+		assert_eq!(
+			last_event::<Test>(),
+			crate::mock::RuntimeEvent::Governance(crate::Event::Approved(1)),
+		);
 		// Do the second approval to reach majority
-		assert_ok!(Governance::approve(Origin::signed(BOB), 1));
+		assert_ok!(Governance::approve(RuntimeOrigin::signed(BOB), 1));
 		next_block();
 		// Expect the Executed event was fired
-		assert_eq!(last_event::<Test>(), crate::mock::Event::Governance(crate::Event::Executed(1)),);
+		assert_eq!(
+			last_event::<Test>(),
+			crate::mock::RuntimeEvent::Governance(crate::Event::Executed(1)),
+		);
 		// Check the new governance set
 		let genesis_members = Members::<Test>::get();
 		assert!(genesis_members.contains(&EVE));
@@ -82,17 +88,20 @@ fn already_executed() {
 	new_test_ext().execute_with(|| {
 		// Propose a governance extrinsic
 		assert_ok!(Governance::propose_governance_extrinsic(
-			Origin::signed(ALICE),
+			RuntimeOrigin::signed(ALICE),
 			mock_extrinsic()
 		));
 		// Assert the proposed event was fired
-		assert_eq!(last_event::<Test>(), crate::mock::Event::Governance(crate::Event::Approved(1)),);
+		assert_eq!(
+			last_event::<Test>(),
+			crate::mock::RuntimeEvent::Governance(crate::Event::Approved(1)),
+		);
 		// Do the second approval to reach majority
-		assert_ok!(Governance::approve(Origin::signed(BOB), 1));
+		assert_ok!(Governance::approve(RuntimeOrigin::signed(BOB), 1));
 		// The third attempt in this block has to fail because the
 		// proposal is already in the execution pipeline
 		assert_noop!(
-			Governance::approve(Origin::signed(ALICE), 1),
+			Governance::approve(RuntimeOrigin::signed(ALICE), 1),
 			<Error<Test>>::ProposalNotFound
 		);
 		assert_eq!(ExecutionPipeline::<Test>::decode_len().unwrap(), 1);
@@ -103,7 +112,7 @@ fn already_executed() {
 fn proposal_not_found() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			Governance::approve(Origin::signed(ALICE), 200),
+			Governance::approve(RuntimeOrigin::signed(ALICE), 200),
 			<Error<Test>>::ProposalNotFound
 		);
 	});
@@ -118,7 +127,7 @@ fn propose_a_governance_extrinsic_and_expect_it_to_expire() {
 		next_block();
 		// Propose governance extrinsic
 		assert_ok!(Governance::propose_governance_extrinsic(
-			Origin::signed(ALICE),
+			RuntimeOrigin::signed(ALICE),
 			mock_extrinsic()
 		));
 		next_block();
@@ -126,7 +135,10 @@ fn propose_a_governance_extrinsic_and_expect_it_to_expire() {
 		time_source::Mock::reset_to(END_TIME);
 		next_block();
 		// Expect the Expired event to be fired
-		assert_eq!(last_event::<Test>(), crate::mock::Event::Governance(crate::Event::Expired(1)),);
+		assert_eq!(
+			last_event::<Test>(),
+			crate::mock::RuntimeEvent::Governance(crate::Event::Expired(1)),
+		);
 		assert_eq!(ActiveProposals::<Test>::get().len(), 0);
 	});
 }
@@ -136,11 +148,14 @@ fn can_not_vote_twice() {
 	new_test_ext().execute_with(|| {
 		// Propose a governance extrinsic
 		assert_ok!(Governance::propose_governance_extrinsic(
-			Origin::signed(ALICE),
+			RuntimeOrigin::signed(ALICE),
 			mock_extrinsic()
 		));
 		// Try to approve it again. Proposing implies approving.
-		assert_noop!(Governance::approve(Origin::signed(ALICE), 1), <Error<Test>>::AlreadyApproved);
+		assert_noop!(
+			Governance::approve(RuntimeOrigin::signed(ALICE), 1),
+			<Error<Test>>::AlreadyApproved
+		);
 	});
 }
 
@@ -148,12 +163,21 @@ fn can_not_vote_twice() {
 fn several_open_proposals() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Governance::propose_governance_extrinsic(
-			Origin::signed(ALICE),
+			RuntimeOrigin::signed(ALICE),
 			mock_extrinsic()
 		));
-		assert_eq!(last_event::<Test>(), crate::mock::Event::Governance(crate::Event::Approved(1)),);
-		assert_ok!(Governance::propose_governance_extrinsic(Origin::signed(BOB), mock_extrinsic()));
-		assert_eq!(last_event::<Test>(), crate::mock::Event::Governance(crate::Event::Approved(2)),);
+		assert_eq!(
+			last_event::<Test>(),
+			crate::mock::RuntimeEvent::Governance(crate::Event::Approved(1)),
+		);
+		assert_ok!(Governance::propose_governance_extrinsic(
+			RuntimeOrigin::signed(BOB),
+			mock_extrinsic()
+		));
+		assert_eq!(
+			last_event::<Test>(),
+			crate::mock::RuntimeEvent::Governance(crate::Event::Approved(2)),
+		);
 		assert_eq!(ProposalIdCounter::<Test>::get(), 2);
 	});
 }
@@ -163,25 +187,31 @@ fn sudo_extrinsic() {
 	new_test_ext().execute_with(|| {
 		// Define a sudo call
 		let sudo_call =
-			Box::new(Call::System(frame_system::Call::<Test>::set_code_without_checks {
+			Box::new(RuntimeCall::System(frame_system::Call::<Test>::set_code_without_checks {
 				code: vec![1, 2, 3, 4],
 			}));
 		// Wrap the sudo call as governance extrinsic
 		let governance_extrinsic =
-			Box::new(Call::Governance(pallet_cf_governance::Call::<Test>::call_as_sudo {
+			Box::new(RuntimeCall::Governance(pallet_cf_governance::Call::<Test>::call_as_sudo {
 				call: sudo_call,
 			}));
 		// Propose the governance extrinsic
 		assert_ok!(Governance::propose_governance_extrinsic(
-			Origin::signed(ALICE),
+			RuntimeOrigin::signed(ALICE),
 			governance_extrinsic
 		));
-		assert_eq!(last_event::<Test>(), crate::mock::Event::Governance(crate::Event::Approved(1)),);
+		assert_eq!(
+			last_event::<Test>(),
+			crate::mock::RuntimeEvent::Governance(crate::Event::Approved(1)),
+		);
 		// Do the second necessary approval
-		assert_ok!(Governance::approve(Origin::signed(BOB), 1));
+		assert_ok!(Governance::approve(RuntimeOrigin::signed(BOB), 1));
 		next_block();
 		// Expect the sudo extrinsic to be executed successfully
-		assert_eq!(last_event::<Test>(), crate::mock::Event::Governance(crate::Event::Executed(1)),);
+		assert_eq!(
+			last_event::<Test>(),
+			crate::mock::RuntimeEvent::Governance(crate::Event::Executed(1)),
+		);
 	});
 }
 
@@ -194,7 +224,7 @@ fn upgrade_runtime_successfully() {
 		));
 		assert_eq!(
 			last_event::<Test>(),
-			crate::mock::Event::Governance(crate::Event::UpgradeConditionsSatisfied),
+			crate::mock::RuntimeEvent::Governance(crate::Event::UpgradeConditionsSatisfied),
 		);
 	});
 }
@@ -228,7 +258,7 @@ fn error_during_runtime_upgrade() {
 		assert_err!(result, frame_system::Error::<Test>::FailedToExtractRuntimeVersion);
 		assert_eq!(
 			last_event::<Test>(),
-			crate::mock::Event::Governance(crate::Event::UpgradeConditionsSatisfied),
+			crate::mock::RuntimeEvent::Governance(crate::Event::UpgradeConditionsSatisfied),
 		);
 	});
 }

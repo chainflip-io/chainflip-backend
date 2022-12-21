@@ -47,7 +47,7 @@ pub mod pallet {
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config: Chainflip {
 		/// Standard Event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 		/// For registering and verifying the account role.
 		type AccountRoleRegistry: AccountRoleRegistry<Self>;
 		/// API for handling asset ingress.

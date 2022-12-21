@@ -61,7 +61,7 @@ fn current_ceremony_id() -> CeremonyId {
 impl MockCfe {
 	fn process_event(&self, event: Event) {
 		match event {
-			Event::EthereumThresholdSigner(
+			RuntimeEvent::EthereumThresholdSigner(
 				pallet_cf_threshold_signature::Event::ThresholdSignatureRequest {
 					request_id: _,
 					ceremony_id,
@@ -95,7 +95,7 @@ impl MockCfe {
 						// Invalid ceremony id.
 						assert_noop!(
 							EthereumThresholdSigner::report_signature_failed(
-								Origin::signed(self.id),
+								RuntimeOrigin::signed(self.id),
 								ceremony_id * 2,
 								BTreeSet::from_iter(bad.clone()),
 							),
@@ -105,7 +105,7 @@ impl MockCfe {
 						// Unsolicited responses are rejected.
 						assert_noop!(
 							EthereumThresholdSigner::report_signature_failed(
-								Origin::signed(signatories.iter().max().unwrap() + 1),
+								RuntimeOrigin::signed(signatories.iter().max().unwrap() + 1),
 								ceremony_id,
 								BTreeSet::from_iter(bad.clone()),
 							),
@@ -113,7 +113,7 @@ impl MockCfe {
 						);
 
 						assert_ok!(EthereumThresholdSigner::report_signature_failed(
-							Origin::signed(self.id),
+							RuntimeOrigin::signed(self.id),
 							ceremony_id,
 							BTreeSet::from_iter(bad.clone()),
 						));
@@ -121,7 +121,7 @@ impl MockCfe {
 						// Can't respond twice.
 						assert_noop!(
 							EthereumThresholdSigner::report_signature_failed(
-								Origin::signed(self.id),
+								RuntimeOrigin::signed(self.id),
 								ceremony_id,
 								BTreeSet::from_iter(bad.clone()),
 							),

@@ -45,8 +45,8 @@ impl system::Config for Test {
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
-	type Origin = Origin;
-	type Call = Call;
+	type RuntimeOrigin = RuntimeOrigin;
+	type RuntimeCall = RuntimeCall;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
@@ -54,7 +54,7 @@ impl system::Config for Test {
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = BlockHashCount;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -105,7 +105,7 @@ impl Chainflip for Test {
 	type KeyId = Vec<u8>;
 	type ValidatorId = u64;
 	type Amount = u128;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type EnsureWitnessed = MockEnsureWitnessed;
 	type EnsureWitnessedAtCurrentEpoch = MockEnsureWitnessed;
 	type EpochInfo = MockEpochInfo;
@@ -113,9 +113,9 @@ impl Chainflip for Test {
 }
 
 impl pallet_cf_governance::Config for Test {
-	type Origin = Origin;
-	type Call = Call;
-	type Event = Event;
+	type RuntimeOrigin = RuntimeOrigin;
+	type RuntimeCall = RuntimeCall;
+	type RuntimeEvent = RuntimeEvent;
 	type TimeSource = time_source::Mock;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type WeightInfo = ();

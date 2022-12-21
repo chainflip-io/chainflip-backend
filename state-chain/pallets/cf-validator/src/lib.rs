@@ -130,7 +130,7 @@ pub mod pallet {
 		frame_system::Config + Chainflip + pallet_session::Config<ValidatorId = ValidatorIdOf<Self>>
 	{
 		/// The overarching event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The top-level offence type must support this pallet's offence type.
 		type Offence: From<PalletOffence>;

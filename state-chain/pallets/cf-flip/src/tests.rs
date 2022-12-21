@@ -303,7 +303,7 @@ impl FlipOperation {
 					return false
 				}
 				if expected_slash > 0 {
-					System::assert_last_event(Event::Flip(
+					System::assert_last_event(RuntimeEvent::Flip(
 						crate::Event::<Test>::SlashingPerformed {
 							who: *account_id,
 							amount: expected_slash,
@@ -487,7 +487,7 @@ mod test_tx_payments {
 
 	use super::*;
 
-	const CALL: &Call = &Call::System(frame_system::Call::remark { remark: vec![] }); // call doesn't matter
+	const CALL: &RuntimeCall = &RuntimeCall::System(frame_system::Call::remark { remark: vec![] }); // call doesn't matter
 
 	#[test]
 	fn test_zero_fee() {
@@ -647,11 +647,11 @@ fn can_reap_dust_account() {
 		assert_eq!(Account::<Test>::get(BOB), FlipAccount { stake: 10, bond: 0 });
 
 		assert_eq!(Account::<Test>::get(CHARLIE), FlipAccount { stake: 11, bond: 0 });
-		System::assert_has_event(Event::Flip(crate::Event::AccountReaped {
+		System::assert_has_event(RuntimeEvent::Flip(crate::Event::AccountReaped {
 			who: ALICE,
 			dust_burned: 9,
 		}));
-		System::assert_last_event(Event::System(frame_system::Event::KilledAccount {
+		System::assert_last_event(RuntimeEvent::System(frame_system::Event::KilledAccount {
 			account: ALICE,
 		}));
 	})

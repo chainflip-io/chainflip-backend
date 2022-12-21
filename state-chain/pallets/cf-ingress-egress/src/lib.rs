@@ -100,7 +100,8 @@ pub mod pallet {
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config<I: 'static = ()>: Chainflip {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
-		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self, I>>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Marks which chain this pallet is interacting with.
 		type TargetChain: ChainAbi + Get<ForeignChain>;

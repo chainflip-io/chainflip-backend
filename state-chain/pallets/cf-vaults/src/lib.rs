@@ -232,7 +232,8 @@ pub mod pallet {
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config<I: 'static = ()>: Chainflip {
 		/// The event type.
-		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self, I>>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Implementation of EnsureOrigin trait for governance
 		type EnsureGovernance: EnsureOrigin<Self::Origin>;

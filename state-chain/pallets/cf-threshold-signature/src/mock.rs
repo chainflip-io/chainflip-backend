@@ -55,8 +55,8 @@ impl frame_system::Config for Test {
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
-	type Origin = Origin;
-	type Call = Call;
+	type RuntimeOrigin = RuntimeOrigin;
+	type RuntimeCall = RuntimeCall;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
@@ -64,7 +64,7 @@ impl frame_system::Config for Test {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = BlockHashCount;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -83,7 +83,7 @@ impl Chainflip for Test {
 	type KeyId = Vec<u8>;
 	type ValidatorId = u64;
 	type Amount = u128;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
 	type EnsureWitnessedAtCurrentEpoch = NeverFailingOriginCheck<Self>;
 	type EpochInfo = MockEpochInfo;
@@ -124,7 +124,7 @@ impl MockCallback<MockEthereum> {
 }
 
 impl UnfilteredDispatchable for MockCallback<MockEthereum> {
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 
 	fn dispatch_bypass_filter(
 		self,
@@ -167,7 +167,7 @@ pub type MockOffenceReporter =
 	cf_traits::mocks::offence_reporting::MockOffenceReporter<u64, PalletOffence>;
 
 impl pallet_cf_threshold_signature::Config<Instance1> for Test {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type Offence = PalletOffence;
 	type RuntimeOrigin = Origin;
 	type AccountRoleRegistry = ();

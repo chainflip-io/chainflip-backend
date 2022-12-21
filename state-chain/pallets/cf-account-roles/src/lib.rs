@@ -34,7 +34,7 @@ pub mod pallet {
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config: Chainflip {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The Flip token implementation.
 		type StakeInfo: StakingInfo<AccountId = Self::AccountId, Balance = Self::Amount>;

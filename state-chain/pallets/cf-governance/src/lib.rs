@@ -77,7 +77,7 @@ pub mod pallet {
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config: Chainflip {
 		/// Standard Event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 		/// The outer Origin needs to be compatible with this pallet's Origin
 		type Origin: From<RawOrigin>
 			+ From<frame_system::RawOrigin<<Self as frame_system::Config>::AccountId>>;

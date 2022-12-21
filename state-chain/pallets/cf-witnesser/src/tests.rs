@@ -10,12 +10,12 @@ use frame_support::{assert_noop, assert_ok, traits::Hooks};
 #[test]
 fn call_on_threshold() {
 	new_test_ext().execute_with(|| {
-		let call = Box::new(Call::Dummy(pallet_dummy::Call::<Test>::increment_value {}));
+		let call = Box::new(RuntimeCall::Dummy(pallet_dummy::Call::<Test>::increment_value {}));
 		let current_epoch = MockEpochInfo::epoch_index();
 
 		// Only one vote, nothing should happen yet.
 		assert_ok!(Witnesser::witness_at_epoch(
-			Origin::signed(ALISSA),
+			RuntimeOrigin::signed(ALISSA),
 			call.clone(),
 			current_epoch
 		));
@@ -23,7 +23,7 @@ fn call_on_threshold() {
 
 		// Vote again, we should reach the threshold and dispatch the call.
 		assert_ok!(Witnesser::witness_at_epoch(
-			Origin::signed(BOBSON),
+			RuntimeOrigin::signed(BOBSON),
 			call.clone(),
 			current_epoch
 		));
@@ -32,7 +32,7 @@ fn call_on_threshold() {
 
 		// Vote again, should count the vote but the call should not be dispatched again.
 		assert_ok!(Witnesser::witness_at_epoch(
-			Origin::signed(CHARLEMAGNE),
+			RuntimeOrigin::signed(CHARLEMAGNE),
 			call.clone(),
 			current_epoch
 		));
@@ -45,45 +45,51 @@ fn call_on_threshold() {
 		let votes = VoteMask::from_slice(stored_vec.as_slice()).unwrap();
 		assert_eq!(votes.count_ones(), 3);
 
-		assert_event_sequence!(Test, Event::Dummy(dummy::Event::<Test>::ValueIncrementedTo(0u32)));
+		assert_event_sequence!(
+			Test,
+			RuntimeEvent::Dummy(dummy::Event::<Test>::ValueIncrementedTo(0u32))
+		);
 	});
 }
 
 #[test]
 fn no_double_call_on_epoch_boundary() {
 	new_test_ext().execute_with(|| {
-		let call = Box::new(Call::Dummy(pallet_dummy::Call::<Test>::increment_value {}));
+		let call = Box::new(RuntimeCall::Dummy(pallet_dummy::Call::<Test>::increment_value {}));
 
 		// Only one vote, nothing should happen yet.
-		assert_ok!(Witnesser::witness_at_epoch(Origin::signed(ALISSA), call.clone(), 1));
+		assert_ok!(Witnesser::witness_at_epoch(RuntimeOrigin::signed(ALISSA), call.clone(), 1));
 		assert_eq!(pallet_dummy::Something::<Test>::get(), None);
 		MockEpochInfo::next_epoch([ALISSA, BOBSON, CHARLEMAGNE].to_vec());
 		// Vote for the same call, this time in another epoch.
-		assert_ok!(Witnesser::witness_at_epoch(Origin::signed(ALISSA), call.clone(), 2));
+		assert_ok!(Witnesser::witness_at_epoch(RuntimeOrigin::signed(ALISSA), call.clone(), 2));
 		assert_eq!(pallet_dummy::Something::<Test>::get(), None);
 
 		// Vote again, we should reach the threshold and dispatch the call.
-		assert_ok!(Witnesser::witness_at_epoch(Origin::signed(BOBSON), call.clone(), 1));
+		assert_ok!(Witnesser::witness_at_epoch(RuntimeOrigin::signed(BOBSON), call.clone(), 1));
 		assert_eq!(pallet_dummy::Something::<Test>::get(), Some(0u32));
 
 		// Vote for the same call, this time in another epoch. Threshold for the same call should be
 		// reached but call shouldn't be dispatched again.
-		assert_ok!(Witnesser::witness_at_epoch(Origin::signed(BOBSON), call, 2));
+		assert_ok!(Witnesser::witness_at_epoch(RuntimeOrigin::signed(BOBSON), call, 2));
 		assert_eq!(pallet_dummy::Something::<Test>::get(), Some(0u32));
 
-		assert_event_sequence!(Test, Event::Dummy(dummy::Event::<Test>::ValueIncrementedTo(0u32)));
+		assert_event_sequence!(
+			Test,
+			RuntimeEvent::Dummy(dummy::Event::<Test>::ValueIncrementedTo(0u32))
+		);
 	});
 }
 
 #[test]
 fn cannot_double_witness() {
 	new_test_ext().execute_with(|| {
-		let call = Box::new(Call::Dummy(pallet_dummy::Call::<Test>::increment_value {}));
+		let call = Box::new(RuntimeCall::Dummy(pallet_dummy::Call::<Test>::increment_value {}));
 		let current_epoch = MockEpochInfo::epoch_index();
 
 		// Only one vote, nothing should happen yet.
 		assert_ok!(Witnesser::witness_at_epoch(
-			Origin::signed(ALISSA),
+			RuntimeOrigin::signed(ALISSA),
 			call.clone(),
 			current_epoch
 		));
@@ -91,7 +97,7 @@ fn cannot_double_witness() {
 
 		// Vote again with the same account, should error.
 		assert_noop!(
-			Witnesser::witness_at_epoch(Origin::signed(ALISSA), call, current_epoch),
+			Witnesser::witness_at_epoch(RuntimeOrigin::signed(ALISSA), call, current_epoch),
 			Error::<Test>::DuplicateWitness
 		);
 	});
@@ -100,29 +106,29 @@ fn cannot_double_witness() {
 #[test]
 fn only_authorities_can_witness() {
 	new_test_ext().execute_with(|| {
-		let call = Box::new(Call::Dummy(pallet_dummy::Call::<Test>::increment_value {}));
+		let call = Box::new(RuntimeCall::Dummy(pallet_dummy::Call::<Test>::increment_value {}));
 		let current_epoch = MockEpochInfo::epoch_index();
 
 		// Validators can witness
 		assert_ok!(Witnesser::witness_at_epoch(
-			Origin::signed(ALISSA),
+			RuntimeOrigin::signed(ALISSA),
 			call.clone(),
 			current_epoch
 		));
 		assert_ok!(Witnesser::witness_at_epoch(
-			Origin::signed(BOBSON),
+			RuntimeOrigin::signed(BOBSON),
 			call.clone(),
 			current_epoch
 		));
 		assert_ok!(Witnesser::witness_at_epoch(
-			Origin::signed(CHARLEMAGNE),
+			RuntimeOrigin::signed(CHARLEMAGNE),
 			call.clone(),
 			current_epoch
 		));
 
 		// Other accounts can't witness
 		assert_noop!(
-			Witnesser::witness_at_epoch(Origin::signed(DEIRDRE), call, current_epoch),
+			Witnesser::witness_at_epoch(RuntimeOrigin::signed(DEIRDRE), call, current_epoch),
 			Error::<Test>::UnauthorisedWitness
 		);
 	});
@@ -131,7 +137,7 @@ fn only_authorities_can_witness() {
 #[test]
 fn can_continue_to_witness_for_old_epochs() {
 	new_test_ext().execute_with(|| {
-		let call = Box::new(Call::Dummy(pallet_dummy::Call::<Test>::increment_value {}));
+		let call = Box::new(RuntimeCall::Dummy(pallet_dummy::Call::<Test>::increment_value {}));
 
 		// These are ALISSA, BOBSON, CHARLEMAGNE
 		let mut current_authorities = MockEpochInfo::current_authorities();
@@ -153,33 +159,37 @@ fn can_continue_to_witness_for_old_epochs() {
 
 		// Witness a call for one before the current epoch which has yet to expire
 		assert_ok!(Witnesser::witness_at_epoch(
-			Origin::signed(ALISSA),
+			RuntimeOrigin::signed(ALISSA),
 			call.clone(),
 			current_epoch - 1,
 		));
 
 		// Try to witness in an epoch that has expired
 		assert_noop!(
-			Witnesser::witness_at_epoch(Origin::signed(ALISSA), call.clone(), expired_epoch,),
+			Witnesser::witness_at_epoch(RuntimeOrigin::signed(ALISSA), call.clone(), expired_epoch,),
 			Error::<Test>::EpochExpired
 		);
 
 		// Try to witness in a past epoch, which has yet to expire, and that we weren't a member
 		assert_noop!(
-			Witnesser::witness_at_epoch(Origin::signed(DEIRDRE), call.clone(), current_epoch - 1,),
+			Witnesser::witness_at_epoch(
+				RuntimeOrigin::signed(DEIRDRE),
+				call.clone(),
+				current_epoch - 1,
+			),
 			Error::<Test>::UnauthorisedWitness
 		);
 
 		// But can witness in an epoch we are in
 		assert_ok!(Witnesser::witness_at_epoch(
-			Origin::signed(DEIRDRE),
+			RuntimeOrigin::signed(DEIRDRE),
 			call.clone(),
 			current_epoch,
 		));
 
 		// And cannot witness in an epoch that doesn't yet exist
 		assert_noop!(
-			Witnesser::witness_at_epoch(Origin::signed(ALISSA), call, current_epoch + 1,),
+			Witnesser::witness_at_epoch(RuntimeOrigin::signed(ALISSA), call, current_epoch + 1,),
 			Error::<Test>::InvalidEpoch
 		);
 	});
@@ -191,10 +201,10 @@ fn can_purge_stale_storage() {
 	let delete_weight = <Test as Config>::WeightInfo::remove_storage_items(1);
 	let mut ext = new_test_ext();
 	ext.execute_with(|| {
-		let call1 = CallHash(frame_support::Hashable::blake2_256(&*Box::new(Call::Dummy(
+		let call1 = CallHash(frame_support::Hashable::blake2_256(&*Box::new(RuntimeCall::Dummy(
 			pallet_dummy::Call::<Test>::increment_value {},
 		))));
-		let call2 = CallHash(frame_support::Hashable::blake2_256(&*Box::new(Call::System(
+		let call2 = CallHash(frame_support::Hashable::blake2_256(&*Box::new(RuntimeCall::System(
 			frame_system::Call::<Test>::remark { remark: vec![0] },
 		))));
 
@@ -214,10 +224,10 @@ fn can_purge_stale_storage() {
 	let _ = ext.commit_all();
 
 	ext.execute_with(|| {
-		let call1 = CallHash(frame_support::Hashable::blake2_256(&*Box::new(Call::Dummy(
+		let call1 = CallHash(frame_support::Hashable::blake2_256(&*Box::new(RuntimeCall::Dummy(
 			pallet_dummy::Call::<Test>::increment_value {},
 		))));
-		let call2 = CallHash(frame_support::Hashable::blake2_256(&*Box::new(Call::System(
+		let call2 = CallHash(frame_support::Hashable::blake2_256(&*Box::new(RuntimeCall::System(
 			frame_system::Call::<Test>::remark { remark: vec![0] },
 		))));
 
@@ -256,10 +266,10 @@ fn can_purge_stale_storage() {
 	let _ = ext.commit_all();
 
 	ext.execute_with(|| {
-		let call1 = CallHash(frame_support::Hashable::blake2_256(&*Box::new(Call::Dummy(
+		let call1 = CallHash(frame_support::Hashable::blake2_256(&*Box::new(RuntimeCall::Dummy(
 			pallet_dummy::Call::<Test>::increment_value {},
 		))));
-		let call2 = CallHash(frame_support::Hashable::blake2_256(&*Box::new(Call::System(
+		let call2 = CallHash(frame_support::Hashable::blake2_256(&*Box::new(RuntimeCall::System(
 			frame_system::Call::<Test>::remark { remark: vec![0] },
 		))));
 

@@ -63,8 +63,8 @@ impl system::Config for Test {
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
-	type Origin = Origin;
-	type Call = Call;
+	type RuntimeOrigin = RuntimeOrigin;
+	type RuntimeCall = RuntimeCall;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
@@ -72,7 +72,7 @@ impl system::Config for Test {
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = BlockHashCount;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -98,7 +98,7 @@ impl cf_traits::Chainflip for Test {
 	type KeyId = Vec<u8>;
 	type ValidatorId = u64;
 	type Amount = u128;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
 	type EnsureWitnessedAtCurrentEpoch = NeverFailingOriginCheck<Self>;
 	type EpochInfo = cf_traits::mocks::epoch_info::MockEpochInfo;
@@ -106,7 +106,7 @@ impl cf_traits::Chainflip for Test {
 }
 
 impl pallet_cf_account_roles::Config for Test {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BidInfo = MockBidInfo;
 	type StakeInfo = MockStakingInfo<Self>;
 	type WeightInfo = ();
@@ -117,7 +117,7 @@ impl pallet_cf_pools::Config for Test {
 }
 
 impl crate::Config for Test {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type AccountRoleRegistry = AccountRoles;
 	type IngressHandler = MockIngressHandler<AnyChain, Self>;
 	type EgressHandler = MockEgressHandler<AnyChain>;
