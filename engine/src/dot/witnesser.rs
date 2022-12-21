@@ -6,8 +6,8 @@ use std::{
 
 use cf_chains::{
 	dot::{
-		Polkadot, PolkadotBalance, PolkadotHash, PolkadotProxyType, PolkadotPublicKey,
-		PolkadotUncheckedExtrinsic,
+		Polkadot, PolkadotBalance, PolkadotExtrinsicIndex, PolkadotHash, PolkadotProxyType,
+		PolkadotPublicKey, PolkadotUncheckedExtrinsic,
 	},
 	eth::assets,
 };
@@ -149,7 +149,6 @@ where
 	})
 }
 
-// TODO: Use alias for extrinsic index
 #[allow(clippy::vec_box)]
 fn check_for_interesting_events_in_block<
 	BlockEventDetails: IntoIterator<
@@ -169,10 +168,10 @@ fn check_for_interesting_events_in_block<
 	monitored_ingress_addresses: &mut BTreeSet<PolkadotAccountId>,
 	logger: &slog::Logger,
 ) -> (
-	Vec<u32>,
+	Vec<PolkadotExtrinsicIndex>,
 	Vec<IngressWitness<Polkadot>>,
 	Vec<Box<state_chain_runtime::Call>>,
-	HashMap<u32, PolkadotBalance>,
+	HashMap<PolkadotExtrinsicIndex, PolkadotBalance>,
 ) {
 	// to contain all the ingress witnessse for this block
 	let mut ingress_witnesses = Vec::new();
@@ -507,7 +506,7 @@ mod tests {
 	>;
 
 	fn block_event_details_from_events(
-		events: &[(u32, EventWrapper)],
+		events: &[(PolkadotExtrinsicIndex, EventWrapper)],
 	) -> Vec<Result<FilteredEvents, subxt::Error>> {
 		events
 			.iter()
