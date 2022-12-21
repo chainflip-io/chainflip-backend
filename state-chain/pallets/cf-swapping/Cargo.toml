@@ -33,7 +33,7 @@ sp-arithmetic = { git = "https://github.com/chainflip-io/substrate.git", tag = "
 
 [dev-dependencies]
 cf-test-utilities = { path = '../../test-utilities'}
-sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12" }
+sp-core = { version = "7.0.0", git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12" }
 sp-runtime = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12" }
 sp-io = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12" }
 
@@ -45,7 +45,7 @@ std = [
   'cf-chains/std',
   'codec/std',
   'scale-info/std',
-  'frame-benchmarking/std',
+  'frame-benchmarking?/std',
   'frame-support/std',
   'frame-system/std',
   'sp-std/std',

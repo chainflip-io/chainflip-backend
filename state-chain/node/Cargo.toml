@@ -36,7 +36,7 @@ hex-literal = "0.3.1"
 clap = { version = "3.1.18", features = ["derive"] }
 
 sc-cli = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2022-12' }
-sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2022-12' }
+sp-core = { version = "7.0.0", git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2022-12' }
 sc-executor = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2022-12' }
 sc-service = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2022-12' }
 sc-telemetry = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2022-12' }

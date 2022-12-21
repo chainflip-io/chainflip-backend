@@ -13,10 +13,11 @@ ethabi = {default-features = false, version = '17.0'}
 frame-support = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
 sp-runtime = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
 sp-std = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
-sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
-codec = { package = 'parity-scale-codec', version = '3.0.0', default-features = false, features = ['derive'] }
+sp-core = { version = "7.0.0", git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
 
+codec = { package = 'parity-scale-codec', version = '3.1.1', default-features = false, features = ['derive'] }
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
+
 [features]
 default = ['std']
 std = [

@@ -33,7 +33,7 @@ scale-info = { version = '2.1.1', default-features = false, features = ['derive'
 
 sp-runtime = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
 sp-std = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
-sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
+sp-core = { version = "7.0.0", git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
 
 frame-benchmarking = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", optional = true, default-features = false }
 
@@ -53,7 +53,7 @@ std = [
   'codec/std',
   'scale-info/std',
   'log/std',
-  'frame-benchmarking/std',
+  'frame-benchmarking?/std',
   'frame-support/std',
   'frame-system/std',
   'sp-runtime/std',

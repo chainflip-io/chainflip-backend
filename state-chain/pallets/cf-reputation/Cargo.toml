@@ -33,7 +33,7 @@ sp-staking = { git = "https://github.com/chainflip-io/substrate.git", tag = "cha
 [dev-dependencies]
 serde = { version = '1.0.126', features = ['derive'] }
 
-sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12" }
+sp-core = { version = "7.0.0", git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12" }
 sp-io = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12" }
 pallet-grandpa = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12" }
 
@@ -44,7 +44,7 @@ std = [
   'cf-runtime-upgrade-utilities/std',
   'codec/std',
   'scale-info/std',
-  'frame-benchmarking/std',
+  'frame-benchmarking?/std',
   'frame-support/std',
   'frame-system/std',
   'sp-std/std',
