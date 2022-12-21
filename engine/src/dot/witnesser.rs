@@ -642,6 +642,75 @@ mod tests {
 		assert!(interesting_proxy_addeds.is_empty());
 	}
 
+	#[test]
+	fn ingress_fetch_and_egress_witnessed() {
+		let egress_index = 3;
+		let egress_amount = 30000;
+
+		let ingress_fetch_index = 4;
+		let ingress_fetch_amount = 40000;
+		let our_vault = PolkadotAccountId::from([3; 32]);
+
+		let block_event_details = block_event_details_from_events(&[
+			// we'll be witnessing this from the start
+			(
+				egress_index,
+				// egress, from our vault
+				mock_transfer(&our_vault, &PolkadotAccountId::from([6; 32]), egress_amount),
+			),
+			// fee same as amount for simpler testing
+			(egress_index, mock_tx_fee_paid(egress_amount)),
+			// we'll receive this address from the channel
+			(
+				ingress_fetch_index,
+				// ingress fetch, to our vault
+				mock_transfer(&PolkadotAccountId::from([7; 32]), &our_vault, ingress_fetch_amount),
+			),
+			(ingress_fetch_index, mock_tx_fee_paid(ingress_fetch_amount)),
+			// this one is not for us
+			(
+				19,
+				mock_transfer(
+					&PolkadotAccountId::from([7; 32]),
+					&PolkadotAccountId::from([9; 32]),
+					93232,
+				),
+			),
+		]);
+
+		let (_monitor_ingress_sender, mut monitor_ingress_receiver) =
+			tokio::sync::mpsc::unbounded_channel();
+
+		let (
+			interesting_indices,
+			ingress_witnesses,
+			interesting_proxy_addeds,
+			fee_paid_for_xt_at_index,
+		) = check_for_interesting_events_in_block(
+			block_event_details,
+			20,
+			// arbitrary, not focus of the test
+			&our_vault,
+			&mut monitor_ingress_receiver,
+			&mut BTreeSet::default(),
+			&new_test_logger(),
+		);
+
+		assert!(
+			interesting_indices.contains(&egress_index) &&
+				interesting_indices.contains(&ingress_fetch_index)
+		);
+
+		assert!(
+			*fee_paid_for_xt_at_index.get(&egress_index).unwrap() == egress_amount &&
+				*fee_paid_for_xt_at_index.get(&ingress_fetch_index).unwrap() ==
+					ingress_fetch_amount
+		);
+
+		assert!(interesting_proxy_addeds.is_empty());
+		assert!(ingress_witnesses.is_empty());
+	}
+
 	#[ignore = "This test is helpful for local testing. Requires connection to westend"]
 	#[tokio::test]
 	async fn start_witnessing() {
