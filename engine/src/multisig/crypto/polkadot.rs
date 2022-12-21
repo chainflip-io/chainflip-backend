@@ -1,5 +1,3 @@
-use crate::multisig::SigningPayload;
-
 use super::{curve25519_ristretto::Point, ChainTag, CryptoScheme, ECPoint};
 use cf_chains::dot::PolkadotPublicKey;
 use schnorrkel::context::{SigningContext, SigningTranscript};
@@ -12,6 +10,14 @@ const SIGNING_CTX: &[u8] = b"substrate";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PolkadotSignature(schnorrkel::Signature);
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Hash, Eq)]
+pub struct PolkadotSigningPayload(pub Vec<u8>);
+impl std::fmt::Display for PolkadotSigningPayload {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{}", hex::encode(&self.0))
+	}
+}
 
 impl From<PolkadotSignature> for cf_chains::dot::PolkadotSignature {
 	fn from(cfe_sig: PolkadotSignature) -> Self {
@@ -45,7 +51,7 @@ impl CryptoScheme for PolkadotSigning {
 	type Point = Point;
 	type Signature = PolkadotSignature;
 	type AggKey = cf_chains::dot::PolkadotPublicKey;
-	type SigningPayload = Vec<u8>;
+	type SigningPayload = PolkadotSigningPayload;
 
 	const NAME: &'static str = "Polkadot";
 	const CHAIN_TAG: ChainTag = ChainTag::Polkadot;
@@ -69,7 +75,7 @@ impl CryptoScheme for PolkadotSigning {
 	fn build_challenge(
 		pubkey: Self::Point,
 		nonce_commitment: Self::Point,
-		payload: &SigningPayload,
+		payload: &Self::SigningPayload,
 	) -> <Self::Point as super::ECPoint>::Scalar {
 		// NOTE: This computation is copied from schnorrkel's
 		// source code (since it is the "source of truth")
@@ -99,7 +105,7 @@ impl CryptoScheme for PolkadotSigning {
 	fn verify_signature(
 		signature: &Self::Signature,
 		key_id: &crate::multisig::KeyId,
-		payload: &SigningPayload,
+		payload: &Self::SigningPayload,
 	) -> anyhow::Result<()> {
 		let public_key = schnorrkel::PublicKey::from_bytes(&key_id.0).expect("invalid public key");
 
@@ -124,6 +130,11 @@ impl CryptoScheme for PolkadotSigning {
 		// "Response" is computed as done in schnorrkel
 		challenge * private_key + nonce
 	}
+
+	#[cfg(test)]
+	fn get_signing_payload_for_test() -> Self::SigningPayload {
+		PolkadotSigningPayload(vec![1_u8; 256])
+	}
 }
 
 // Check that our signature generation results in
@@ -142,7 +153,7 @@ fn signature_should_be_valid() {
 	let public_key = Point::from_scalar(&secret_key);
 
 	// Message to sign
-	let payload = SigningPayload(vec![b't'; 256]);
+	let payload = PolkadotSigning::get_signing_payload_for_test();
 
 	let signature = {
 		// Pick random nonce and commit to it

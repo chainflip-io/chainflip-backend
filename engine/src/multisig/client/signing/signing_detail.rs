@@ -8,10 +8,7 @@ use cf_primitives::AuthorityCount;
 
 use zeroize::Zeroize;
 
-use crate::multisig::{
-	crypto::{CryptoScheme, ECPoint, ECScalar, KeyShare, Rng},
-	SigningPayload,
-};
+use crate::multisig::crypto::{CryptoScheme, ECPoint, ECScalar, KeyShare, Rng};
 
 use sha2::{Digest, Sha256};
 
@@ -117,27 +114,37 @@ fn gen_rho_i<P: ECPoint>(
 type SigningResponse<P> = LocalSig3<P>;
 
 /// Generate binding values for each party given their previously broadcast commitments
-fn generate_bindings<P: ECPoint>(
-	payload: &SigningPayload,
-	commitments: &BTreeMap<AuthorityCount, SigningCommitment<P>>,
+fn generate_bindings<C: CryptoScheme>(
+	payload: &C::SigningPayload,
+	commitments: &BTreeMap<AuthorityCount, SigningCommitment<C::Point>>,
 	all_idxs: &BTreeSet<AuthorityCount>,
-) -> BTreeMap<AuthorityCount, P::Scalar> {
+) -> BTreeMap<AuthorityCount, <C::Point as ECPoint>::Scalar> {
 	all_idxs
 		.iter()
-		.map(|idx| (*idx, gen_rho_i(*idx, &payload.0, commitments, all_idxs)))
+		.map(|idx| {
+			(
+				*idx,
+				gen_rho_i(
+					*idx,
+					bincode::serialize(payload).expect("Should serialize payload").as_slice(),
+					commitments,
+					all_idxs,
+				),
+			)
+		})
 		.collect()
 }
 
 /// Generate local signature/response (shard). See step 5 in Figure 3 (page 15).
 pub fn generate_local_sig<C: CryptoScheme>(
-	payload: &SigningPayload,
+	payload: &C::SigningPayload,
 	key: &KeyShare<C::Point>,
 	nonces: &SecretNoncePair<C::Point>,
 	commitments: &BTreeMap<AuthorityCount, SigningCommitment<C::Point>>,
 	own_idx: AuthorityCount,
 	all_idxs: &BTreeSet<AuthorityCount>,
 ) -> SigningResponse<C::Point> {
-	let bindings = generate_bindings(payload, commitments, all_idxs);
+	let bindings = generate_bindings::<C>(payload, commitments, all_idxs);
 
 	// This is `R` in a Schnorr signature
 	let group_commitment = gen_group_commitment(commitments, &bindings);
@@ -163,7 +170,7 @@ pub fn generate_schnorr_response<C: CryptoScheme>(
 	pubkey: C::Point,
 	nonce_commitment: C::Point,
 	nonce: <C::Point as ECPoint>::Scalar,
-	payload: &SigningPayload,
+	payload: &C::SigningPayload,
 ) -> <C::Point as ECPoint>::Scalar {
 	let challenge = C::build_challenge(pubkey, nonce_commitment, payload);
 
@@ -174,14 +181,14 @@ pub fn generate_schnorr_response<C: CryptoScheme>(
 /// (aggregate) signature given that no party misbehaved. Otherwise
 /// return the misbehaving parties.
 pub fn aggregate_signature<C: CryptoScheme>(
-	payload: &SigningPayload,
+	payload: &C::SigningPayload,
 	signer_idxs: &BTreeSet<AuthorityCount>,
 	agg_pubkey: C::Point,
 	pubkeys: &BTreeMap<AuthorityCount, C::Point>,
 	commitments: &BTreeMap<AuthorityCount, SigningCommitment<C::Point>>,
 	responses: &BTreeMap<AuthorityCount, SigningResponse<C::Point>>,
 ) -> Result<C::Signature, BTreeSet<AuthorityCount>> {
-	let bindings = generate_bindings(payload, commitments, signer_idxs);
+	let bindings = generate_bindings::<C>(payload, commitments, signer_idxs);
 
 	let group_commitment = gen_group_commitment(commitments, &bindings);
 
@@ -228,7 +235,10 @@ mod tests {
 
 	use super::*;
 
-	use crate::multisig::crypto::eth::{EthSigning, Point, Scalar};
+	use crate::multisig::{
+		crypto::eth::{EthSigning, Point, Scalar},
+		eth::EthSigningPayload,
+	};
 
 	const SECRET_KEY: &str = "fbcb47bc85b881e0dfb31c872d4e06848f80530ccbd18fc016a27c4a744d0eba";
 	const NONCE_KEY: &str = "d51e13c68bf56155a83e50fd9bc840e2a1847fb9b49cd206a577ecd1cd15e285";
@@ -243,7 +253,7 @@ mod tests {
 		// Given the signing key, nonce and message hash, check that
 		// sigma (signature response) is correct and matches the expected
 		// (by the KeyManager contract) value
-		let payload = SigningPayload(hex::decode(MESSAGE_HASH).unwrap().to_vec());
+		let payload = EthSigningPayload(hex::decode(MESSAGE_HASH).unwrap().try_into().unwrap());
 
 		let nonce = Scalar::from_hex(NONCE_KEY);
 		let commitment = Point::from_scalar(&nonce);

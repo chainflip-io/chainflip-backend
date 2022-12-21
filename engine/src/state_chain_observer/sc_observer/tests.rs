@@ -1328,7 +1328,7 @@ where
 	let logger = new_test_logger();
 	let first_ceremony_id = 1;
 	let key_id = crate::multisig::KeyId(vec![0u8; 32]);
-	let payload = crate::multisig::SigningPayload(vec![0u8; 32]);
+	let payload = C::get_signing_payload_for_test();
 	let our_account_id = AccountId32::new([0; 32]);
 	let not_our_account_id = AccountId32::new([1u8; 32]);
 	assert_ne!(our_account_id, not_our_account_id);
