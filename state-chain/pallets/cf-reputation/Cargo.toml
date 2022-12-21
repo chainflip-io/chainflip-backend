@@ -27,12 +27,12 @@ version = '3.0.0'
 [dependencies.frame-support]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
+tag = 'chainflip-monthly-2022-12'
 
 [dependencies.frame-system]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
+tag = 'chainflip-monthly-2022-12'
 
 [dependencies.scale-info]
 default-features = false
@@ -43,22 +43,22 @@ version = '2.1.1'
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 optional = true
-tag = 'chainflip-monthly-2022-06+01'
+tag = 'chainflip-monthly-2022-12'
 
 [dependencies.sp-runtime]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
+tag = 'chainflip-monthly-2022-12'
 
 [dependencies.sp-std]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
+tag = 'chainflip-monthly-2022-12'
 
 [dependencies.sp-staking]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
+tag = 'chainflip-monthly-2022-12'
 
 # Dev dependencies
 [dev-dependencies]
@@ -66,15 +66,15 @@ serde = { version = '1.0.126', features = ['derive'] }
 
 [dev-dependencies.sp-core]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
+tag = 'chainflip-monthly-2022-12'
 
 [dev-dependencies.sp-io]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
+tag = 'chainflip-monthly-2022-12'
 
 [dev-dependencies.pallet-grandpa]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
+tag = 'chainflip-monthly-2022-12'
 
 
 [features]

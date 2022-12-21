@@ -30,12 +30,12 @@ version = '3.0.0'
 [dependencies.frame-support]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
+tag = 'chainflip-monthly-2022-12'
 
 [dependencies.frame-system]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
+tag = 'chainflip-monthly-2022-12'
 
 [dependencies.scale-info]
 default-features = false
@@ -45,28 +45,28 @@ version = '2.1.1'
 [dependencies.sp-std]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
+tag = 'chainflip-monthly-2022-12'
 
 [dependencies.sp-io]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
+tag = 'chainflip-monthly-2022-12'
 
 [dependencies.sp-runtime]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
+tag = 'chainflip-monthly-2022-12'
 
 [dependencies.frame-benchmarking]
 default-features = false
 optional = true
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
+tag = 'chainflip-monthly-2022-12'
 
 # Dev dependencies
 [dev-dependencies.sp-core]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
+tag = 'chainflip-monthly-2022-12'
 
 
 [features]

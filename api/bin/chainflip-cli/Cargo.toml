@@ -19,7 +19,7 @@ tokio = {version = "1.13.1", features = ["full"]}
 utilities = {path = "../../../utilities"}
 
 [build-dependencies]
-substrate-build-script-utils = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2022-06+01' }
+substrate-build-script-utils = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2022-12' }
 
 [features]
 ibiza = [

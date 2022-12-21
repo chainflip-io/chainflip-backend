@@ -27,12 +27,12 @@ version = '3.0.0'
 [dependencies.frame-support]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
+tag = 'chainflip-monthly-2022-12'
 
 [dependencies.frame-system]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
+tag = 'chainflip-monthly-2022-12'
 
 [dependencies.scale-info]
 default-features = false
@@ -42,23 +42,23 @@ version = '2.1.1'
 [dependencies.sp-runtime]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
+tag = 'chainflip-monthly-2022-12'
 
 [dependencies.sp-std]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
+tag = 'chainflip-monthly-2022-12'
 
 [dependencies.sp-core]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
+tag = 'chainflip-monthly-2022-12'
 
 [dependencies.frame-benchmarking]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 optional = true
-tag = 'chainflip-monthly-2022-06+01'
+tag = 'chainflip-monthly-2022-12'
 
 [dev-dependencies]
 cf-test-utilities = { path = '../../test-utilities'}
@@ -67,7 +67,7 @@ pallet-cf-flip = { path = '../cf-flip' }
 # Dev dependencies
 [dev-dependencies.sp-io]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
+tag = 'chainflip-monthly-2022-12'
 
 [features]
 default = ['std']
