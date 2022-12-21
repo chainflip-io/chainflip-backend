@@ -18,7 +18,7 @@ use futures::{stream, Stream, StreamExt};
 use pallet_cf_ingress_egress::IngressWitness;
 use sp_runtime::MultiSignature;
 use state_chain_runtime::PolkadotInstance;
-use subxt::events::{EventFilter, Phase, StaticEvent};
+use subxt::events::{EventFilter, FilteredEventDetails, Phase, StaticEvent};
 
 use crate::{
 	state_chain_observer::client::extrinsic_api::ExtrinsicApi,
@@ -149,6 +149,108 @@ where
 	})
 }
 
+// TODO: Use alias for extrinsic index
+
+fn check_for_interesting_events_in_block<
+	BlockEventDetails: IntoIterator<
+		Item = Result<
+			FilteredEventDetails<
+				PolkadotHash,
+				(Option<ProxyAdded>, Option<Transfer>, Option<TransactionFeePaid>),
+			>,
+			subxt::Error,
+		>,
+	>,
+>(
+	block_event_details: BlockEventDetails,
+	block_number: PolkadotBlockNumber,
+	our_vault: &PolkadotAccountId,
+	ingress_address_receiver: &mut tokio::sync::mpsc::UnboundedReceiver<PolkadotAccountId>,
+	monitored_ingress_addresses: &mut BTreeSet<PolkadotAccountId>,
+	logger: &slog::Logger,
+) -> (
+	Vec<u32>,
+	Vec<IngressWitness<Polkadot>>,
+	Vec<Box<state_chain_runtime::Call>>,
+	HashMap<u32, PolkadotBalance>,
+) {
+	// to contain all the ingress witnessse for this block
+	let mut ingress_witnesses = Vec::new();
+	// We only want to attempt to decode extrinsics that were sent by us. Since
+	// a) we know how to decode calls we create (but not necessarily all calls on Polkadot)
+	// b) these are the only extrinsics we are interested in
+	let mut interesting_indices = Vec::new();
+	let mut interesting_proxy_addeds: Vec<Box<_>> = Vec::new();
+	let mut fee_paid_for_xt_at_index = HashMap::new();
+	let mut events_iter = block_event_details.into_iter();
+	while let Some(Ok(event_details)) = events_iter.next() {
+		if let Phase::ApplyExtrinsic(extrinsic_index) = event_details.phase {
+			match event_details.event {
+				(Some(ProxyAdded { delegator, delegatee, .. }), None, None) => {
+					if AsRef::<[u8; 32]>::as_ref(&delegator) !=
+						AsRef::<[u8; 32]>::as_ref(&our_vault)
+					{
+						continue
+					}
+
+					interesting_indices.push(extrinsic_index);
+
+					let new_public_key =
+						PolkadotPublicKey::from(*AsRef::<[u8; 32]>::as_ref(&delegatee));
+					slog::info!(
+						logger,
+						"Witnessing ProxyAdded. new public key: {new_public_key:?} at block number {block_number} and extrinsic_index; {extrinsic_index}"
+					);
+
+					interesting_proxy_addeds.push(Box::new(
+						pallet_cf_vaults::Call::<_, PolkadotInstance>::vault_key_rotated {
+							new_public_key,
+							block_number,
+							tx_id: TxId { block_number, extrinsic_index },
+						}
+						.into(),
+					));
+				},
+				(None, Some(Transfer { to, amount, from }), None) => {
+					// When we get a transfer event, we want to check that we have
+					// pulled the latest addresses to monitor from the chain first
+					while let Ok(address) = ingress_address_receiver.try_recv() {
+						monitored_ingress_addresses.insert(address);
+					}
+
+					if monitored_ingress_addresses.contains(&to) {
+						slog::info!(
+							logger,
+							"Witnessing DOT Ingress {{ amount: {amount:?}, to: {to:?} }}"
+						);
+						ingress_witnesses.push(IngressWitness {
+							ingress_address: to.clone(),
+							asset: assets::dot::Asset::Dot,
+							amount,
+							tx_id: TxId { block_number, extrinsic_index },
+						});
+					}
+
+					// if from is our_vault then we're doing an egress
+					// if to is our_vault then we're doing an "ingress fetch"
+					if from == *our_vault || to == *our_vault {
+						slog::info!(logger, "Transfer from or to our_vault at block: {block_number}, extrinsic index: {extrinsic_index}");
+						interesting_indices.push(extrinsic_index);
+					}
+				},
+				(None, None, Some(TransactionFeePaid { actual_fee, .. })) => {
+					fee_paid_for_xt_at_index.insert(extrinsic_index, actual_fee);
+				},
+				_ => {
+					// just not an interesting event
+				},
+			}
+		}
+	}
+
+	(interesting_indices, ingress_witnesses, interesting_proxy_addeds, fee_paid_for_xt_at_index)
+}
+
 /// Polkadot witnesser
 ///
 /// This component does all witnessing activities for Polkadot. This includes rotation witnessing,
@@ -225,7 +327,7 @@ where
 					}),
 				);
 
-				while let Some((block_hash, block_number, mut block_event_details)) =
+				while let Some((block_hash, block_number, block_event_details)) =
 					filtered_events_stream.next().await
 				{
 					if should_end_witnessing::<Polkadot>(
@@ -236,91 +338,23 @@ where
 						break
 					}
 
-					// to contain all the ingress witnessse for this block
-					let mut ingress_witnesses = Vec::new();
-					// We only want to attempt to decode extrinsics that were sent by us. Since 
-					// a) we know how to decode calls we create (but not necessarily all calls on Polkadot)
-					// b) these are the only extrinsics we are interested in
-					let mut interesting_indices = Vec::new();
-					let mut fee_paid_for_xt_at_index = HashMap::new();
-					let mut interesting_proxy_addeds = Vec::new();
-					while let Some(Ok(event_details)) = block_event_details.next() {
-						if let Phase::ApplyExtrinsic(extrinsic_index) = event_details.phase {
-							match event_details.event {
-								(Some(ProxyAdded { delegator, delegatee, .. }), None, None) => {
-									if AsRef::<[u8; 32]>::as_ref(&delegator) !=
-										AsRef::<[u8; 32]>::as_ref(&our_vault)
-									{
-										continue
-									}
-
-									interesting_indices.push(extrinsic_index);
-
-									let new_public_key = PolkadotPublicKey::from(
-										*AsRef::<[u8; 32]>::as_ref(
-											&delegatee,
-										),
-									);
-									slog::info!(
-										logger,
-										"Witnessing ProxyAdded. new public key: {new_public_key:?} at block number {block_number} and extrinsic_index; {extrinsic_index}"
-									);
-
-									interesting_proxy_addeds.push(Box::new(
-										pallet_cf_vaults::Call::<
-											_,
-											PolkadotInstance,
-										>::vault_key_rotated {
-											new_public_key,
-											block_number,
-											tx_id: TxId {
-												block_number,
-												extrinsic_index,
-											},
-										}
-										.into(),
-									));
-								},
-								(None, Some(Transfer { to, amount, from }), None) => {
-									// When we get a transfer event, we want to check that we have
-									// pulled the latest addresses to monitor from the chain first
-									while let Ok(address) = ingress_address_receiver.try_recv()
-									{
-										monitored_ingress_addresses.insert(address);
-									}
-
-									if monitored_ingress_addresses.contains(&to) {
-										slog::info!(logger, "Witnessing DOT Ingress {{ amount: {amount:?}, to: {to:?} }}");
-										ingress_witnesses.push(IngressWitness {
-											ingress_address: to.clone(),
-											asset: assets::dot::Asset::Dot,
-											amount,
-											tx_id: TxId { block_number, extrinsic_index },
-										});
-									}
-
-									// if from is our_vault then we're doing an egress
-									// if to is our_vault then we're doing an "ingress fetch"
-									if from == our_vault || to == our_vault {
-										slog::info!(logger, "Transfer from or to our_vault at block: {block_number}, extrinsic index: {extrinsic_index}");
-										interesting_indices.push(extrinsic_index);
-									}
-								},
-								(None, None, Some(TransactionFeePaid { actual_fee, ..})) => {
-									fee_paid_for_xt_at_index.insert(extrinsic_index, actual_fee);
-								}
-								_ => {
-									// just not an interesting event
-								},
-							}
-						}
-					} // === We've finished iterating the events for this block ===
+					let (
+						interesting_indices,
+						ingress_witnesses,
+						interesting_proxy_addeds,
+						fee_paid_for_xt_at_index
+					) = check_for_interesting_events_in_block(block_event_details,
+							block_number,
+							&our_vault,
+							&mut ingress_address_receiver,
+							&mut monitored_ingress_addresses,
+							&logger);
 
 					for call in interesting_proxy_addeds {
 						let _result = state_chain_client
 								.submit_signed_extrinsic(
 									pallet_cf_witnesser::Call::witness_at_epoch {
-										call,
+										call: call.into(),
 										epoch_index: epoch_start.epoch_index,
 									},
 									&logger,
@@ -431,6 +465,105 @@ mod tests {
 		dot::rpc::DotRpcClient, logging::test_utils::new_test_logger,
 		state_chain_observer::client::mocks::MockStateChainClient,
 	};
+
+	enum EventWrapper {
+		ProxyAdded(ProxyAdded),
+		// Transfer(Transfer),
+		TransactionFeePaid(TransactionFeePaid),
+	}
+
+	fn mock_proxy_added(
+		delegator: &PolkadotAccountId,
+		delegatee: &PolkadotAccountId,
+	) -> EventWrapper {
+		EventWrapper::ProxyAdded(ProxyAdded {
+			delegator: delegator.clone(),
+			delegatee: delegatee.clone(),
+			proxy_type: PolkadotProxyType::Any,
+			delay: 0,
+		})
+	}
+
+	fn mock_tx_fee_paid(actual_fee: PolkadotBalance) -> EventWrapper {
+		EventWrapper::TransactionFeePaid(TransactionFeePaid {
+			actual_fee,
+			who: PolkadotAccountId::from([0xab; 32]),
+			tip: Default::default(),
+		})
+	}
+
+	fn block_event_details_from_events(
+		events: &[(u32, EventWrapper)],
+	) -> Vec<
+		Result<
+			FilteredEventDetails<
+				PolkadotHash,
+				(Option<ProxyAdded>, Option<Transfer>, Option<TransactionFeePaid>),
+			>,
+			subxt::Error,
+		>,
+	> {
+		events
+			.into_iter()
+			.map(|(xt_index, event)| {
+				Result::<_, subxt::Error>::Ok(FilteredEventDetails {
+					phase: Phase::ApplyExtrinsic(*xt_index),
+					block_hash: PolkadotHash::default(),
+					event: {
+						match event {
+							EventWrapper::ProxyAdded(proxy_added) =>
+								(Some(proxy_added.clone()), None, None),
+							// EventWrapper::Transfer(transfer) =>
+							// 	(None, Some(transfer.clone()), None),
+							EventWrapper::TransactionFeePaid(tx_fee_paid) =>
+								(None, None, Some(tx_fee_paid.clone())),
+						}
+					},
+				})
+			})
+			.collect::<Vec<Result<_, _>>>()
+	}
+
+	#[test]
+	fn proxy_added_event_for_our_vault_witnessed() {
+		let logger = new_test_logger();
+		let our_vault = PolkadotAccountId::from([0; 32]);
+		let other_acct = PolkadotAccountId::from([1; 32]);
+		let our_proxy_added_index = 1u32;
+		let fee_paid = 10000;
+		let block_event_details = block_event_details_from_events(&[
+			// we should witness this one
+			(our_proxy_added_index, mock_proxy_added(&our_vault, &other_acct)),
+			(our_proxy_added_index, mock_tx_fee_paid(fee_paid)),
+			// we should not witness this one
+			(3u32, mock_proxy_added(&other_acct, &our_vault)),
+			(3u32, mock_tx_fee_paid(20000)),
+		]);
+
+		let block_number = 20;
+
+		let (_monitor_ingress_sender, mut monitor_ingress_receiver) =
+			tokio::sync::mpsc::unbounded_channel();
+
+		let (
+			mut interesting_indices,
+			ingress_witnesses,
+			interesting_proxy_addeds,
+			fee_paid_for_xt_at_index,
+		) = check_for_interesting_events_in_block(
+			block_event_details,
+			block_number,
+			&our_vault,
+			&mut monitor_ingress_receiver,
+			&mut Default::default(),
+			&logger,
+		);
+
+		assert_eq!(interesting_proxy_addeds.len(), 1);
+		assert_eq!(interesting_indices.pop().unwrap(), our_proxy_added_index);
+		assert!(ingress_witnesses.is_empty());
+		assert_eq!(*fee_paid_for_xt_at_index.get(&our_proxy_added_index).unwrap(), fee_paid);
+	}
 
 	#[ignore = "This test is helpful for local testing. Requires connection to westend"]
 	#[tokio::test]
