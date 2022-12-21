@@ -150,7 +150,7 @@ where
 }
 
 // TODO: Use alias for extrinsic index
-
+#[allow(clippy::vec_box)]
 fn check_for_interesting_events_in_block<
 	BlockEventDetails: IntoIterator<
 		Item = Result<
@@ -355,7 +355,7 @@ where
 						let _result = state_chain_client
 								.submit_signed_extrinsic(
 									pallet_cf_witnesser::Call::witness_at_epoch {
-										call: call.into(),
+										call,
 										epoch_index: epoch_start.epoch_index,
 									},
 									&logger,
