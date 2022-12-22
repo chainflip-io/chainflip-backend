@@ -1,0 +1,10 @@
+[package]
+name = "chainflip-amm"
+version = "0.1.0"
+authors = ['Chainflip <https://chainflip.io>']
+edition = '2021'
+description = "Chainflip's AMM Logic"
+
+[dependencies]
+primitive-types = "0.11.1"
+enum-map = "2.1.0"
