@@ -122,7 +122,7 @@ pub mod pallet {
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The pallet dispatches calls, so it depends on the runtime's aggregated Call type.
-		type Call: From<Call<Self, I>> + IsType<<Self as frame_system::Config>::Call>;
+		type RuntimeCall: From<Call<Self, I>> + IsType<<Self as frame_system::Config>::RuntimeCall>;
 
 		/// For registering and verifying the account role.
 		type AccountRoleRegistry: AccountRoleRegistry<Self>;
@@ -143,7 +143,7 @@ pub mod pallet {
 		/// pallet.
 		type ThresholdSigner: ThresholdSigner<
 			Self::TargetChain,
-			Callback = <Self as Config<I>>::Call,
+			Callback = <Self as Config<I>>::RuntimeCall,
 		>;
 
 		/// Signer nomination.

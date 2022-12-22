@@ -83,7 +83,7 @@ pub mod pallet {
 		/// an runtime upgrade
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 		/// Governance origin to secure extrinsic
-		type EnsureGovernance: EnsureOrigin<Self::Origin>;
+		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
 		/// Polkadot Vault Creation Apicall
 		#[cfg(feature = "ibiza")]
 		type CreatePolkadotVault: CreatePolkadotVault;

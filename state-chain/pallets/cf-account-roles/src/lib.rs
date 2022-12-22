@@ -134,7 +134,7 @@ impl<T: Config> AccountRoleRegistry<T> for Pallet<T> {
 	}
 
 	fn ensure_account_role(
-		origin: T::Origin,
+		origin: T::RuntimeOrigin,
 		role: AccountRole,
 	) -> Result<T::AccountId, BadOrigin> {
 		match role {

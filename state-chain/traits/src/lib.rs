@@ -65,12 +65,12 @@ pub trait Chainflip: frame_system::Config {
 	/// An id type for keys used in threshold signature ceremonies.
 	type KeyId: Member + Parameter + From<Vec<u8>> + BenchmarkValue;
 	/// The overarching call type.
-	type Call: Member + Parameter + UnfilteredDispatchable<Origin = Self::Origin>;
+	type Call: Member + Parameter + UnfilteredDispatchable<RuntimeOrigin = Self::RuntimeOrigin>;
 	/// A type that allows us to check if a call was a result of witness consensus.
-	type EnsureWitnessed: EnsureOrigin<Self::Origin>;
+	type EnsureWitnessed: EnsureOrigin<Self::RuntimeOrigin>;
 	/// A type that allows us to check if a call was a result of witness consensus by the current
 	/// epoch.
-	type EnsureWitnessedAtCurrentEpoch: EnsureOrigin<Self::Origin>;
+	type EnsureWitnessedAtCurrentEpoch: EnsureOrigin<Self::RuntimeOrigin>;
 	/// Information about the current Epoch.
 	type EpochInfo: EpochInfo<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
 	/// Access to information about the current system state
@@ -724,18 +724,20 @@ pub trait AccountRoleRegistry<T: frame_system::Config> {
 		Self::register_account_role(account_id, AccountRole::Validator)
 	}
 
-	fn ensure_account_role(origin: T::Origin, role: AccountRole)
-		-> Result<T::AccountId, BadOrigin>;
+	fn ensure_account_role(
+		origin: T::RuntimeOrigin,
+		role: AccountRole,
+	) -> Result<T::AccountId, BadOrigin>;
 
-	fn ensure_relayer(origin: T::Origin) -> Result<T::AccountId, BadOrigin> {
+	fn ensure_relayer(origin: T::RuntimeOrigin) -> Result<T::AccountId, BadOrigin> {
 		Self::ensure_account_role(origin, AccountRole::Relayer)
 	}
 
-	fn ensure_liquidity_provider(origin: T::Origin) -> Result<T::AccountId, BadOrigin> {
+	fn ensure_liquidity_provider(origin: T::RuntimeOrigin) -> Result<T::AccountId, BadOrigin> {
 		Self::ensure_account_role(origin, AccountRole::LiquidityProvider)
 	}
 
-	fn ensure_validator(origin: T::Origin) -> Result<T::AccountId, BadOrigin> {
+	fn ensure_validator(origin: T::RuntimeOrigin) -> Result<T::AccountId, BadOrigin> {
 		Self::ensure_account_role(origin, AccountRole::Validator)
 	}
 	#[cfg(feature = "runtime-benchmarks")]

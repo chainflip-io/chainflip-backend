@@ -256,11 +256,11 @@ pub mod pallet {
 		type VaultTransitionHandler: VaultTransitionHandler<Self::Chain>;
 
 		/// The pallet dispatches calls, so it depends on the runtime's aggregated Call type.
-		type Call: From<Call<Self, I>> + IsType<<Self as frame_system::Config>::Call>;
+		type RuntimeCall: From<Call<Self, I>> + IsType<<Self as frame_system::Config>::RuntimeCall>;
 
 		type ThresholdSigner: ThresholdSigner<
 			Self::Chain,
-			Callback = <Self as Config<I>>::Call,
+			Callback = <Self as Config<I>>::RuntimeCall,
 			ValidatorId = Self::ValidatorId,
 			KeyId = <Self as Chainflip>::KeyId,
 		>;

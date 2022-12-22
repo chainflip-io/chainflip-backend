@@ -24,7 +24,7 @@ impl<C, O, Call> MockThresholdSigner<C, Call>
 where
 	C: ChainCrypto,
 	O: OriginTrait,
-	Call: UnfilteredDispatchable<Origin = O> + Encode + Decode,
+	Call: UnfilteredDispatchable<RuntimeOrigin = O> + Encode + Decode,
 {
 	pub fn last_request_id() -> Option<u32> {
 		Self::get_value(LAST_REQ_ID)
@@ -62,7 +62,7 @@ impl<C, O, Call> crate::ThresholdSigner<C> for MockThresholdSigner<C, Call>
 where
 	C: ChainCrypto,
 	O: OriginTrait,
-	Call: UnfilteredDispatchable<Origin = O> + Encode + Decode,
+	Call: UnfilteredDispatchable<RuntimeOrigin = O> + Encode + Decode,
 {
 	type RequestId = u32;
 	type Error = &'static str;
