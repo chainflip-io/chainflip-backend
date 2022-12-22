@@ -164,8 +164,10 @@ pub mod pallet {
 			T::RewardsDistribution::distribute();
 			if Self::should_update_supply_at(current_block) {
 				if T::SystemState::ensure_no_maintenance().is_ok() {
+					// Take the flip we want to burn
+					// Schedule the egress
 					Self::broadcast_update_total_supply(
-						T::Issuance::total_issuance(),
+						T::Issuance::total_issuance(), // + Flip we want to burn
 						current_block,
 					);
 					Self::deposit_event(Event::SupplyUpdateBroadcastRequested(current_block));

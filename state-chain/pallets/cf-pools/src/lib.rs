@@ -78,6 +78,8 @@ pub(crate) mod mini_pool {
 
 #[frame_support::pallet]
 pub mod pallet {
+	use frame_system::pallet_prelude::BlockNumberFor;
+
 	use super::*;
 
 	#[pallet::config]
@@ -93,6 +95,13 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(super) type Pools<T: Config> =
 		StorageMap<_, Twox64Concat, any::Asset, mini_pool::AmmPool, ValueQuery>;
+
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
+			0
+		}
+	}
 }
 
 impl<T: Config> cf_traits::SwappingApi for Pallet<T> {
