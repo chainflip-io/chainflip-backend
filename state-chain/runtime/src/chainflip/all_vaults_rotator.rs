@@ -66,3 +66,55 @@ where
 		B::activate();
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use cf_traits::{
+		mocks::vault_rotator::{MockVaultRotatorA, MockVaultRotatorB},
+		AsyncResult, VaultRotator,
+	};
+
+	use super::*;
+
+	#[test]
+	fn status_keygen_complete_when_all_complete() {
+		frame_support::sp_io::TestExternalities::new_empty().execute_with(|| {
+			MockVaultRotatorA::keygen_success();
+			MockVaultRotatorB::keygen_success();
+
+			assert_eq!(
+				AllVaultRotator::<MockVaultRotatorA, MockVaultRotatorB>::status(),
+				AsyncResult::Ready(VaultStatus::KeygenComplete)
+			);
+		});
+	}
+
+	#[test]
+	fn status_rotation_complete_when_all_complete() {
+		frame_support::sp_io::TestExternalities::new_empty().execute_with(|| {
+			MockVaultRotatorA::keys_activated();
+			MockVaultRotatorB::keys_activated();
+
+			assert_eq!(
+				AllVaultRotator::<MockVaultRotatorA, MockVaultRotatorB>::status(),
+				AsyncResult::Ready(VaultStatus::RotationComplete)
+			);
+		});
+	}
+
+	// If one vault is at keygens complete and the other is at rotation complete, this is considered
+	// failure. This should not be possible, since *all* vaults should move out of KeygenComplete at
+	// the same time - since the validator pallet should do this.
+	#[test]
+	fn all_ready_but_diff_statuses_is_failure() {
+		frame_support::sp_io::TestExternalities::new_empty().execute_with(|| {
+			MockVaultRotatorA::keys_activated();
+			MockVaultRotatorB::keygen_success();
+
+			assert_eq!(
+				AllVaultRotator::<MockVaultRotatorA, MockVaultRotatorB>::status(),
+				AsyncResult::Ready(VaultStatus::Failed(BTreeSet::default()))
+			);
+		});
+	}
+}

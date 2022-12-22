@@ -63,3 +63,4 @@ macro_rules! mock_vault_rotator {
 }
 
 mock_vault_rotator!(MockVaultRotatorA);
+mock_vault_rotator!(MockVaultRotatorB);
