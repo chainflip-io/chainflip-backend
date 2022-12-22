@@ -11,9 +11,8 @@ repository = 'https://github.com/chainflip-io/chainflip-backend'
 [package.metadata.docs.rs]
 targets = ['x86_64-unknown-linux-gnu']
 
-[build-dependencies.substrate-wasm-builder]
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-12'
+[build-dependencies]
+substrate-wasm-builder = { version = "5.0.0-dev", git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2022-12' }
 
 [dependencies]
 # Required to get wasm to compile.
