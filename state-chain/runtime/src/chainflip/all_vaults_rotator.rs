@@ -53,7 +53,7 @@ where
 							}
 						})
 						.fold(BTreeSet::default(), |acc, x| {
-							acc.union(&x).into_iter().cloned().collect::<BTreeSet<_>>()
+							acc.union(x).into_iter().cloned().collect::<BTreeSet<_>>()
 						}),
 				))
 			}
