@@ -80,8 +80,6 @@ use self::rpc::{EthDualRpcClient, EthRpcApi};
 
 const EIP1559_TX_ID: u64 = 2;
 
-// TODO: Not possible to fix the clippy warning here. At the moment we
-// need to ignore it on a global level.
 #[derive(Error, Debug)]
 pub enum EventParseError {
 	#[error("Unexpected event signature in log subscription: {0:?}")]
