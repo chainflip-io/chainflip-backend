@@ -168,10 +168,9 @@ fn check_for_interesting_events_in_block<
 	monitored_ingress_addresses: &mut BTreeSet<PolkadotAccountId>,
 	logger: &slog::Logger,
 ) -> (
-	Vec<PolkadotExtrinsicIndex>,
+	Vec<(PolkadotExtrinsicIndex, PolkadotBalance)>,
 	Vec<IngressWitness<Polkadot>>,
 	Vec<Box<state_chain_runtime::Call>>,
-	HashMap<PolkadotExtrinsicIndex, PolkadotBalance>,
 ) {
 	// to contain all the ingress witnessse for this block
 	let mut ingress_witnesses = Vec::new();
@@ -247,7 +246,14 @@ fn check_for_interesting_events_in_block<
 		}
 	}
 
-	(interesting_indices, ingress_witnesses, interesting_proxy_addeds, fee_paid_for_xt_at_index)
+	(
+		interesting_indices
+			.into_iter()
+			.map(|index| (index, *fee_paid_for_xt_at_index.get(&index).unwrap()))
+			.collect(),
+		ingress_witnesses,
+		interesting_proxy_addeds,
+	)
 }
 
 /// Polkadot witnesser
@@ -341,7 +347,6 @@ where
 						interesting_indices,
 						ingress_witnesses,
 						interesting_proxy_addeds,
-						fee_paid_for_xt_at_index
 					) = check_for_interesting_events_in_block(
 							block_event_details,
 							block_number,
@@ -378,8 +383,7 @@ where
 						{
 							monitored_signatures.insert(sig);
 						}
-						for extrinsic_index in interesting_indices {
-
+						for (extrinsic_index, tx_fee) in interesting_indices {
 							let xt = block.block.extrinsics.get(extrinsic_index as usize).expect("We know this exists since we got this index from the event, from the block we are querying.");
 							let xt_encoded = xt.encode();
 							let mut xt_bytes = xt_encoded.as_slice();
@@ -400,7 +404,7 @@ where
 														pallet_cf_broadcast::Call::<_, PolkadotInstance>::signature_accepted {
 															signature: sig.clone(),
 															signer_id: our_vault.clone(),
-															tx_fee: *fee_paid_for_xt_at_index.get(&extrinsic_index).expect("We should have paid a fee to submit the extrinsic")
+															tx_fee
 														}
 														.into(),
 													),
@@ -547,24 +551,19 @@ mod tests {
 		let (_monitor_ingress_sender, mut monitor_ingress_receiver) =
 			tokio::sync::mpsc::unbounded_channel();
 
-		let (
-			mut interesting_indices,
-			ingress_witnesses,
-			interesting_proxy_addeds,
-			fee_paid_for_xt_at_index,
-		) = check_for_interesting_events_in_block(
-			block_event_details,
-			Default::default(),
-			&our_vault,
-			&mut monitor_ingress_receiver,
-			&mut Default::default(),
-			&new_test_logger(),
-		);
+		let (mut interesting_indices, ingress_witnesses, interesting_proxy_addeds) =
+			check_for_interesting_events_in_block(
+				block_event_details,
+				Default::default(),
+				&our_vault,
+				&mut monitor_ingress_receiver,
+				&mut Default::default(),
+				&new_test_logger(),
+			);
 
 		assert_eq!(interesting_proxy_addeds.len(), 1);
-		assert_eq!(interesting_indices.pop().unwrap(), our_proxy_added_index);
+		assert_eq!(interesting_indices.pop().unwrap(), (our_proxy_added_index, fee_paid));
 		assert!(ingress_witnesses.is_empty());
-		assert_eq!(*fee_paid_for_xt_at_index.get(&our_proxy_added_index).unwrap(), fee_paid);
 	}
 
 	#[test]
@@ -613,20 +612,16 @@ mod tests {
 
 		monitor_ingress_sender.send(transfer_2_ingress_addr).unwrap();
 
-		let (
-			interesting_indices,
-			ingress_witnesses,
-			interesting_proxy_addeds,
-			_fee_paid_for_xt_at_index,
-		) = check_for_interesting_events_in_block(
-			block_event_details,
-			20,
-			// arbitrary, not focus of the test
-			&PolkadotAccountId::from([0xda; 32]),
-			&mut monitor_ingress_receiver,
-			&mut BTreeSet::from([transfer_1_ingress_addr]),
-			&new_test_logger(),
-		);
+		let (interesting_indices, ingress_witnesses, interesting_proxy_addeds) =
+			check_for_interesting_events_in_block(
+				block_event_details,
+				20,
+				// arbitrary, not focus of the test
+				&PolkadotAccountId::from([0xda; 32]),
+				&mut monitor_ingress_receiver,
+				&mut BTreeSet::from([transfer_1_ingress_addr]),
+				&new_test_logger(),
+			);
 
 		assert_eq!(ingress_witnesses.len(), 2);
 		assert_eq!(ingress_witnesses.get(0).unwrap().amount, TRANSFER_1_AMOUNT);
@@ -676,30 +671,20 @@ mod tests {
 		let (_monitor_ingress_sender, mut monitor_ingress_receiver) =
 			tokio::sync::mpsc::unbounded_channel();
 
-		let (
-			interesting_indices,
-			ingress_witnesses,
-			interesting_proxy_addeds,
-			fee_paid_for_xt_at_index,
-		) = check_for_interesting_events_in_block(
-			block_event_details,
-			20,
-			// arbitrary, not focus of the test
-			&our_vault,
-			&mut monitor_ingress_receiver,
-			&mut BTreeSet::default(),
-			&new_test_logger(),
-		);
+		let (interesting_indices, ingress_witnesses, interesting_proxy_addeds) =
+			check_for_interesting_events_in_block(
+				block_event_details,
+				20,
+				// arbitrary, not focus of the test
+				&our_vault,
+				&mut monitor_ingress_receiver,
+				&mut BTreeSet::default(),
+				&new_test_logger(),
+			);
 
 		assert!(
-			interesting_indices.contains(&egress_index) &&
-				interesting_indices.contains(&ingress_fetch_index)
-		);
-
-		assert!(
-			*fee_paid_for_xt_at_index.get(&egress_index).unwrap() == egress_amount &&
-				*fee_paid_for_xt_at_index.get(&ingress_fetch_index).unwrap() ==
-					ingress_fetch_amount
+			interesting_indices.contains(&(egress_index, egress_amount)) &&
+				interesting_indices.contains(&(ingress_fetch_index, ingress_fetch_amount))
 		);
 
 		assert!(interesting_proxy_addeds.is_empty());
