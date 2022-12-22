@@ -22,7 +22,7 @@ use frame_support::traits::{Get, Imbalance};
 use sp_arithmetic::traits::UniqueSaturatedFrom;
 use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, UniqueSaturatedInto, Zero},
-	SaturatedConversion,
+	Rounding, SaturatedConversion,
 };
 
 pub mod weights;
@@ -330,19 +330,22 @@ fn calculate_inflation_to_block_reward<T>(
 where
 	T: Into<u128> + From<u128>,
 {
-	use sp_runtime::helpers_128bit::multiply_by_rational;
+	use sp_runtime::helpers_128bit::multiply_by_rational_with_rounding;
 
-	multiply_by_rational(issuance.into(), inflation_per_bill.into(), 1_000_000_000u128)
-		.unwrap_or_else(|_e| {
-			log::error!(
-				"Error calculating block rewards, Either Issuance or inflation value too big",
-			);
-			0_u128
-		})
-		.checked_div(heartbeat_interval.into())
-		.unwrap_or_else(|| {
-			log::error!("Heartbeat Interval should be greater than zero");
-			Zero::zero()
-		})
-		.into()
+	multiply_by_rational_with_rounding(
+		issuance.into(),
+		inflation_per_bill.into(),
+		1_000_000_000u128,
+		Rounding::Down,
+	)
+	.unwrap_or_else(|_e| {
+		log::error!("Error calculating block rewards, Either Issuance or inflation value too big",);
+		0_u128
+	})
+	.checked_div(heartbeat_interval.into())
+	.unwrap_or_else(|| {
+		log::error!("Heartbeat Interval should be greater than zero");
+		Zero::zero()
+	})
+	.into()
 }
