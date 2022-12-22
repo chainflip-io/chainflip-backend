@@ -123,15 +123,14 @@ pub mod pallet {
 		/// Do swapping with remaining weight in this block
 		fn on_idle(_block_number: BlockNumberFor<T>, available_weight: Weight) -> Weight {
 			let swaps = SwapQueue::<T>::get();
-			let mut used_weight =
-				T::DbWeight::get().reads(1 as Weight) + T::DbWeight::get().writes(1 as Weight);
+			let mut used_weight = T::DbWeight::get().reads(1) + T::DbWeight::get().writes(1);
 
 			let swap_groups = Self::group_swaps_by_asset_pair(swaps);
 			let mut unexecuted = vec![];
 
 			for (asset_pair, swaps) in swap_groups {
 				let swap_group_weight = T::WeightInfo::execute_group_of_swaps(swaps.len() as u32);
-				if used_weight.saturating_add(swap_group_weight) > available_weight {
+				if used_weight.saturating_add(swap_group_weight).all_gt(available_weight) {
 					// Add un-excecuted swaps back to storage
 					unexecuted.extend(swaps)
 				} else {

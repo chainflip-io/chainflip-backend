@@ -376,17 +376,17 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(block_number: BlockNumberFor<T>) -> Weight {
 			log::trace!(target: "cf-validator", "on_initialize: {:?}",CurrentRotationPhase::<T>::get());
-			let mut weight = 0;
+			let mut weight = Weight::zero();
 
 			// Check expiry of epoch and store last expired.
 			if let Some(epoch_index) = EpochExpiries::<T>::take(block_number) {
-				weight += Self::expire_epoch(epoch_index);
+				weight.saturating_accrue(Self::expire_epoch(epoch_index));
 			}
 
-			weight += Self::punish_missed_authorship_slots();
+			weight.saturating_accrue(Self::punish_missed_authorship_slots());
 
 			// Progress the authority rotation if necessary.
-			weight += match CurrentRotationPhase::<T>::get() {
+			weight.saturating_accrue(match CurrentRotationPhase::<T>::get() {
 				RotationPhase::Idle => {
 					if block_number.saturating_sub(CurrentEpochStartedAt::<T>::get()) >=
 						BlocksPerEpoch::<T>::get()
@@ -475,7 +475,7 @@ pub mod pallet {
 					T::ValidatorWeightInfo::rotation_phase_vaults_rotated(
 						rotation_state.num_primary_candidates(),
 					),
-			};
+			});
 			weight
 		}
 	}

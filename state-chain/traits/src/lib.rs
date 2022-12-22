@@ -65,7 +65,9 @@ pub trait Chainflip: frame_system::Config {
 	/// An id type for keys used in threshold signature ceremonies.
 	type KeyId: Member + Parameter + From<Vec<u8>> + BenchmarkValue;
 	/// The overarching call type.
-	type Call: Member + Parameter + UnfilteredDispatchable<RuntimeOrigin = Self::RuntimeOrigin>;
+	type RuntimeCall: Member
+		+ Parameter
+		+ UnfilteredDispatchable<RuntimeOrigin = Self::RuntimeOrigin>;
 	/// A type that allows us to check if a call was a result of witness consensus.
 	type EnsureWitnessed: EnsureOrigin<Self::RuntimeOrigin>;
 	/// A type that allows us to check if a call was a result of witness consensus by the current
@@ -485,8 +487,8 @@ pub trait BlockEmissions {
 /// Checks if the caller can execute free transactions
 pub trait WaivedFees {
 	type AccountId;
-	type Call;
-	fn should_waive_fees(call: &Self::Call, caller: &Self::AccountId) -> bool;
+	type RuntimeCall;
+	fn should_waive_fees(call: &Self::RuntimeCall, caller: &Self::AccountId) -> bool;
 }
 
 /// Qualify what is considered as a potential authority for the network

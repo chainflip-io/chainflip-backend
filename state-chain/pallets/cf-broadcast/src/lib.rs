@@ -156,7 +156,7 @@ pub mod pallet {
 		>;
 
 		/// Ensure that only threshold signature consensus can trigger a broadcast.
-		type EnsureThresholdSigned: EnsureOrigin<Self::Origin>;
+		type EnsureThresholdSigned: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The timeout duration for the broadcast, measured in number of blocks.
 		#[pallet::constant]
@@ -296,7 +296,8 @@ pub mod pallet {
 			let next_broadcast_weight = T::WeightInfo::start_next_broadcast_attempt();
 
 			let num_retries_that_fit = remaining_weight
-				.checked_div(next_broadcast_weight)
+				.ref_time()
+				.checked_div(next_broadcast_weight.ref_time())
 				.expect("start_next_broadcast_attempt weight should not be 0")
 				as usize;
 

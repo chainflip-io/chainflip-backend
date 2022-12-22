@@ -74,7 +74,7 @@ pub mod pallet {
 		type LiquidityPoolApi: LiquidityPoolApi;
 
 		/// For governance checks.
-		type EnsureGovernance: EnsureOrigin<Self::Origin>;
+		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
 	}
 
 	#[pallet::error]

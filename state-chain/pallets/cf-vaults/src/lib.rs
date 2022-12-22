@@ -236,10 +236,10 @@ pub mod pallet {
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Implementation of EnsureOrigin trait for governance
-		type EnsureGovernance: EnsureOrigin<Self::Origin>;
+		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Ensure that only threshold signature consensus can trigger a key_verification success
-		type EnsureThresholdSigned: EnsureOrigin<Self::Origin>;
+		type EnsureThresholdSigned: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// For registering and verifying the account role.
 		type AccountRoleRegistry: AccountRoleRegistry<Self>;

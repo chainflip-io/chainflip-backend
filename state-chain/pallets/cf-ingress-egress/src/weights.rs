@@ -61,7 +61,8 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		Weight::from_ref_time(77_770_000)
 			// Standard Error: 2_000
 			.saturating_add(Weight::from_ref_time(1_182_000)
-.saturating_mul(n))
+.saturating_mul(n as u64)
+)
 			.saturating_add(T::DbWeight::get().reads(16))
 			.saturating_add(T::DbWeight::get().writes(8))
 	}
@@ -114,7 +115,8 @@ impl WeightInfo for () {
 		Weight::from_ref_time(77_770_000)
 			// Standard Error: 2_000
 			.saturating_add(Weight::from_ref_time(1_182_000)
-.saturating_mul(n))
+.saturating_mul(n as u64)
+)
 			.saturating_add(RocksDbWeight::get().reads(16))
 			.saturating_add(RocksDbWeight::get().writes(8))
 	}

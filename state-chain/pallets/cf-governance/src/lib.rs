@@ -79,14 +79,14 @@ pub mod pallet {
 		/// Standard Event type.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 		/// The outer Origin needs to be compatible with this pallet's Origin
-		type Origin: From<RawOrigin>
+		type RuntimeOrigin: From<RawOrigin>
 			+ From<frame_system::RawOrigin<<Self as frame_system::Config>::AccountId>>;
 		/// Implementation of EnsureOrigin trait for governance
-		type EnsureGovernance: EnsureOrigin<<Self as pallet::Config>::Origin>;
+		type EnsureGovernance: EnsureOrigin<<Self as pallet::Config>::RuntimeOrigin>;
 		/// The overarching call type.
-		type Call: Member
+		type RuntimeCall: Member
 			+ Parameter
-			+ UnfilteredDispatchable<Origin = <Self as Config>::Origin>
+			+ UnfilteredDispatchable<RuntimeOrigin = <Self as Config>::RuntimeOrigin>
 			+ From<frame_system::Call<Self>>
 			+ From<Call<Self>>
 			+ GetDispatchInfo;
@@ -214,7 +214,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::propose_governance_extrinsic())]
 		pub fn propose_governance_extrinsic(
 			origin: OriginFor<T>,
-			call: Box<<T as Config>::Call>,
+			call: Box<<T as Config>::RuntimeCall>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			// Ensure origin is part of the governance
@@ -320,7 +320,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::call_as_sudo().saturating_add(call.get_dispatch_info().weight))]
 		pub fn call_as_sudo(
 			origin: OriginFor<T>,
-			call: Box<<T as Config>::Call>,
+			call: Box<<T as Config>::RuntimeCall>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			// Execute the root call
@@ -365,7 +365,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::submit_govkey_call().saturating_add(call.get_dispatch_info().weight))]
 		pub fn submit_govkey_call(
 			origin: OriginFor<T>,
-			call: Box<<T as Config>::Call>,
+			call: Box<<T as Config>::RuntimeCall>,
 		) -> DispatchResultWithPostInfo {
 			ensure!(
 				(ensure_signed(origin.clone()).is_ok() ||
@@ -497,17 +497,19 @@ impl<T: Config> Pallet<T> {
 		Self::expire_proposals(expired) + T::WeightInfo::on_initialize(num_proposals as u32)
 	}
 	fn execute_pending_proposals() -> Weight {
-		let mut execution_weight = 0;
+		let mut execution_weight = Weight::zero();
 		for (call, id) in ExecutionPipeline::<T>::take() {
-			Self::deposit_event(if let Ok(call) = <T as Config>::Call::decode(&mut &(*call)) {
-				execution_weight += call.get_dispatch_info().weight;
-				match call.dispatch_bypass_filter((RawOrigin::GovernanceApproval).into()) {
-					Ok(_) => Event::Executed(id),
-					Err(err) => Event::FailedExecution(err.error),
-				}
-			} else {
-				Event::DecodeOfCallFailed(id)
-			})
+			Self::deposit_event(
+				if let Ok(call) = <T as Config>::RuntimeCall::decode(&mut &(*call)) {
+					execution_weight.saturating_accrue(call.get_dispatch_info().weight);
+					match call.dispatch_bypass_filter((RawOrigin::GovernanceApproval).into()) {
+						Ok(_) => Event::Executed(id),
+						Err(err) => Event::FailedExecution(err.error),
+					}
+				} else {
+					Event::DecodeOfCallFailed(id)
+				},
+			)
 		}
 		execution_weight
 	}
@@ -520,7 +522,7 @@ impl<T: Config> Pallet<T> {
 		T::WeightInfo::expire_proposals(expired.len() as u32)
 	}
 
-	fn push_proposal(call: Box<<T as Config>::Call>) -> u32 {
+	fn push_proposal(call: Box<<T as Config>::RuntimeCall>) -> u32 {
 		let proposal_id = ProposalIdCounter::<T>::get().add(1);
 		Proposals::<T>::insert(
 			proposal_id,

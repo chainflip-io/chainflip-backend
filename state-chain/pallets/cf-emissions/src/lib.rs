@@ -95,7 +95,7 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 
 		/// For governance checks.
-		type EnsureGovernance: EnsureOrigin<Self::Origin>;
+		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
 	}
 
 	#[pallet::pallet]
@@ -338,7 +338,7 @@ where
 		1_000_000_000u128,
 		Rounding::Down,
 	)
-	.unwrap_or_else(|_e| {
+	.unwrap_or_else(|| {
 		log::error!("Error calculating block rewards, Either Issuance or inflation value too big",);
 		0_u128
 	})

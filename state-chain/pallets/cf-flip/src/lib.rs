@@ -52,7 +52,7 @@ pub mod pallet {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Implementation of EnsureOrigin trait for governance
-		type EnsureGovernance: EnsureOrigin<Self::Origin>;
+		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The balance of an account.
 		type Balance: Member
@@ -80,7 +80,7 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 
 		/// Handles the access of governance extrinsic
-		type WaivedFees: WaivedFees<AccountId = Self::AccountId, Call = Self::Call>;
+		type WaivedFees: WaivedFees<AccountId = Self::AccountId, RuntimeCall = Self::RuntimeCall>;
 	}
 
 	#[pallet::pallet]
@@ -154,10 +154,11 @@ pub mod pallet {
 		/// Reap any accounts that are below `T::ExistentialDeposit`, and burn the dust.
 		fn on_idle(_block_number: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
 			let max_accounts_to_reap = remaining_weight
-				.checked_div(T::WeightInfo::reap_one_account())
+				.ref_time()
+				.checked_div(T::WeightInfo::reap_one_account().ref_time())
 				.unwrap_or_default();
 			if max_accounts_to_reap == 0 {
-				return 0
+				return Weight::zero()
 			}
 
 			let mut number_of_accounts_reaped = 0u64;
@@ -170,7 +171,7 @@ pub mod pallet {
 					let _reap_result = frame_system::Provider::<T>::killed(&account_id);
 					number_of_accounts_reaped += 1u64;
 				});
-			number_of_accounts_reaped.saturating_mul(T::WeightInfo::reap_one_account())
+			T::WeightInfo::reap_one_account().saturating_mul(number_of_accounts_reaped)
 		}
 	}
 

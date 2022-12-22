@@ -55,13 +55,13 @@ pub mod pallet {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The outer Origin needs to be compatible with this pallet's Origin
-		type Origin: From<RawOrigin>;
+		type RuntimeOrigin: From<RawOrigin>;
 
 		/// For registering and verifying the account role.
 		type AccountRoleRegistry: AccountRoleRegistry<Self>;
 
 		/// The overarching call type.
-		type Call: Member
+		type RuntimeCall: Member
 			+ Parameter
 			+ From<frame_system::Call<Self>>
 			+ UnfilteredDispatchable<RuntimeOrigin = <Self as Config>::RuntimeOrigin>
@@ -128,7 +128,8 @@ pub mod pallet {
 			};
 
 			let max_deletions_count_remaining = remaining_weight
-				.checked_div(T::WeightInfo::remove_storage_items(1))
+				.ref_time()
+				.checked_div(T::WeightInfo::remove_storage_items(1).ref_time())
 				.unwrap_or_default();
 
 			if max_deletions_count_remaining == 0 {
@@ -136,7 +137,7 @@ pub mod pallet {
 			}
 
 			let mut deletions_count_remaining = max_deletions_count_remaining;
-			let mut used_weight: Weight = 0;
+			let mut used_weight: Weight = Weight::zero();
 			let (mut cleared_votes, mut cleared_extra_call_data, mut cleared_call_hash) =
 				(false, false, false);
 
@@ -251,7 +252,7 @@ pub mod pallet {
 		)]
 		pub fn witness_at_epoch(
 			origin: OriginFor<T>,
-			mut call: Box<<T as Config>::Call>,
+			mut call: Box<<T as Config>::RuntimeCall>,
 			epoch_index: EpochIndex,
 		) -> DispatchResultWithPostInfo {
 			let who = T::AccountRoleRegistry::ensure_validator(origin)?;

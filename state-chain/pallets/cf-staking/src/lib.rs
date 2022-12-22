@@ -89,7 +89,7 @@ pub mod pallet {
 		type StakerId: AsRef<[u8; 32]> + IsType<<Self as frame_system::Config>::AccountId>;
 
 		/// Implementation of EnsureOrigin trait for governance
-		type EnsureGovernance: EnsureOrigin<Self::Origin>;
+		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
 
 		type Balance: Parameter
 			+ Member
@@ -110,7 +110,7 @@ pub mod pallet {
 		type ThresholdSigner: ThresholdSigner<Ethereum, Callback = Self::ThresholdCallable>;
 
 		/// Ensure that only threshold signature consensus can post a signature.
-		type EnsureThresholdSigned: EnsureOrigin<Self::Origin>;
+		type EnsureThresholdSigned: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The implementation of the register claim transaction.
 		type RegisterClaim: RegisterClaim<Ethereum> + Member + Parameter;

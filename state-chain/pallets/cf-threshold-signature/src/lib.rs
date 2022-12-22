@@ -194,7 +194,7 @@ pub mod pallet {
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Implementation of EnsureOrigin trait for governance
-		type EnsureGovernance: EnsureOrigin<Self::Origin>;
+		type EnsureGovernance: EnsureOrigin<<Self as frame_system::Config>::RuntimeOrigin>;
 
 		/// The top-level offence type must support this pallet's offence type.
 		type Offence: From<PalletOffence>;
@@ -204,13 +204,13 @@ pub mod pallet {
 
 		/// The top-level origin type of the runtime.
 		type RuntimeOrigin: From<Origin<Self, I>>
-			+ IsType<<Self as frame_system::Config>::Origin>
-			+ Into<Result<Origin<Self, I>, Self::RuntimeOrigin>>;
+			+ IsType<<Self as frame_system::Config>::RuntimeOrigin>
+			+ Into<Result<Origin<Self, I>, <Self as Config<I>>::RuntimeOrigin>>;
 
 		/// The calls that this pallet can dispatch after generating a signature.
 		type ThresholdCallable: Member
 			+ Parameter
-			+ UnfilteredDispatchable<Origin = Self::RuntimeOrigin>;
+			+ UnfilteredDispatchable<RuntimeOrigin = <Self as Config<I>>::RuntimeOrigin>;
 
 		/// A marker trait identifying the chain that we are signing for.
 		type TargetChain: ChainCrypto<KeyId = <Self as Chainflip>::KeyId>;
@@ -756,15 +756,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 pub struct EnsureThresholdSigned<T: Config<I>, I: 'static = ()>(PhantomData<(T, I)>);
 
-impl<T, I> EnsureOrigin<T::RuntimeOrigin> for EnsureThresholdSigned<T, I>
+impl<T, I> EnsureOrigin<<T as Config<I>>::RuntimeOrigin> for EnsureThresholdSigned<T, I>
 where
 	T: Config<I>,
 	I: 'static,
 {
 	type Success = ();
 
-	fn try_origin(o: T::RuntimeOrigin) -> Result<Self::Success, T::RuntimeOrigin> {
-		let res: Result<Origin<T, I>, T::RuntimeOrigin> = o.into();
+	fn try_origin(
+		o: <T as Config<I>>::RuntimeOrigin,
+	) -> Result<Self::Success, <T as Config<I>>::RuntimeOrigin> {
+		let res: Result<Origin<T, I>, <T as Config<I>>::RuntimeOrigin> = o.into();
 		res.map(|_| ())
 	}
 
