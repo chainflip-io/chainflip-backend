@@ -554,7 +554,7 @@ mod tests {
 			fee_paid_for_xt_at_index,
 		) = check_for_interesting_events_in_block(
 			block_event_details,
-			20,
+			Default::default(),
 			&our_vault,
 			&mut monitor_ingress_receiver,
 			&mut Default::default(),
