@@ -37,6 +37,10 @@ macro_rules! mock_vault_rotator {
 					)),
 				);
 			}
+
+			pub fn pending() {
+				Self::put_value(ROTATION_OUTCOME, AsyncResult::<VaultStatus<u64>>::Pending)
+			}
 		}
 
 		impl VaultRotator for $rotator_name {

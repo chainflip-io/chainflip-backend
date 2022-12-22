@@ -120,6 +120,19 @@ mod tests {
 	}
 
 	#[test]
+	fn all_ready_one_failed_is_failed() {
+		frame_support::sp_io::TestExternalities::new_empty().execute_with(|| {
+			MockVaultRotatorA::failed([1, 2, 3, 4]);
+			MockVaultRotatorB::keygen_success();
+
+			assert_eq!(
+				AllVaultRotator::<MockVaultRotatorA, MockVaultRotatorB>::status(),
+				AsyncResult::Ready(VaultStatus::Failed(BTreeSet::from([1, 2, 3, 4])))
+			);
+		});
+	}
+
+	#[test]
 	fn failed_statuses_combine_offenders() {
 		frame_support::sp_io::TestExternalities::new_empty().execute_with(|| {
 			MockVaultRotatorA::failed([1, 2, 3, 4]);
@@ -128,6 +141,48 @@ mod tests {
 			assert_eq!(
 				AllVaultRotator::<MockVaultRotatorA, MockVaultRotatorB>::status(),
 				AsyncResult::Ready(VaultStatus::Failed(BTreeSet::from([1, 2, 3, 4, 5])))
+			);
+		});
+	}
+
+	#[test]
+	fn all_pending_is_pending() {
+		frame_support::sp_io::TestExternalities::new_empty().execute_with(|| {
+			MockVaultRotatorA::pending();
+			MockVaultRotatorB::pending();
+
+			assert_eq!(
+				AllVaultRotator::<MockVaultRotatorA, MockVaultRotatorB>::status(),
+				AsyncResult::Pending
+			);
+		});
+	}
+
+	#[test]
+	fn one_pending_is_pending() {
+		frame_support::sp_io::TestExternalities::new_empty().execute_with(|| {
+			MockVaultRotatorA::keygen_success();
+			MockVaultRotatorB::pending();
+
+			assert_eq!(
+				AllVaultRotator::<MockVaultRotatorA, MockVaultRotatorB>::status(),
+				AsyncResult::Pending
+			);
+		});
+	}
+
+	// We want to wait for all results to be ready before failing. This is in case the other results
+	// we are waiting on also fail, in which case we want to punish the offenders for those failures
+	// too, before we continue.
+	#[test]
+	fn pending_if_one_pending_even_when_failure() {
+		frame_support::sp_io::TestExternalities::new_empty().execute_with(|| {
+			MockVaultRotatorA::failed([1, 2, 3]);
+			MockVaultRotatorB::pending();
+
+			assert_eq!(
+				AllVaultRotator::<MockVaultRotatorA, MockVaultRotatorB>::status(),
+				AsyncResult::Pending
 			);
 		});
 	}
