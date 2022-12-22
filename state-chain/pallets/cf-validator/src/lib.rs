@@ -442,7 +442,7 @@ pub mod pallet {
 						},
 					};
 					// TODO: Use actual weights
-					0 as Weight
+					Weight::from_ref_time(0)
 				},
 				RotationPhase::ActivatingKeys(rotation_state) => {
 					match T::VaultRotator::status() {
@@ -464,7 +464,7 @@ pub mod pallet {
 							Self::set_rotation_phase(RotationPhase::Idle);
 						},
 					}
-					0 as Weight
+					Weight::from_ref_time(0)
 				},
 				// The new session will kick off the new epoch
 				RotationPhase::NewKeysActivated(rotation_state) =>

@@ -47,30 +47,32 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumThresholdSigner LiveCeremonies (r:0 w:1)
 	fn signature_success() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(55_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes(3 as Weight))
+		Weight::from_ref_time(55_000_000)
+			.saturating_add(T::DbWeight::get().reads(2))
+			.saturating_add(T::DbWeight::get().writes(3))
 	}
 	// Storage: AccountTypes AccountRoles (r:1 w:0)
 	// Storage: EthereumThresholdSigner PendingCeremonies (r:1 w:1)
 	fn report_signature_failed(_a: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(41_020_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(41_020_000)
+			.saturating_add(T::DbWeight::get().reads(2))
+			.saturating_add(T::DbWeight::get().writes(1))
 	}
 	fn determine_offenders(a: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(1_609_000 as Weight)
+		Weight::from_ref_time(1_609_000)
 			// Standard Error: 0
-			.saturating_add((36_000 as Weight).saturating_mul(a as Weight))
+			.saturating_add(Weight::from_ref_time(36_000)
+.saturating_mul(a as u64)
+)
 	}
 	// Storage: EthereumThresholdSigner ThresholdSignatureResponseTimeout (r:1 w:1)
 	fn set_threshold_signature_timeout() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(26_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(26_000_000)
+			.saturating_add(T::DbWeight::get().reads(1))
+			.saturating_add(T::DbWeight::get().writes(1))
 	}
 	// Storage: EthereumThresholdSigner ThresholdSignatureResponseTimeout (r:1 w:0)
 	// Storage: EthereumThresholdSigner RetryQueues (r:2 w:2)
@@ -86,28 +88,34 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumThresholdSigner LiveCeremonies (r:0 w:1)
 	fn on_initialize(a: u32, r: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(16_564_000 as Weight)
+		Weight::from_ref_time(16_564_000)
 			// Standard Error: 27_000
-			.saturating_add((213_000 as Weight).saturating_mul(a as Weight))
+			.saturating_add(Weight::from_ref_time(213_000)
+.saturating_mul(a as u64)
+)
 			// Standard Error: 74_000
-			.saturating_add((49_928_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(T::DbWeight::get().reads(9 as Weight))
-			.saturating_add(T::DbWeight::get().reads((1 as Weight).saturating_mul(r as Weight)))
-			.saturating_add(T::DbWeight::get().writes(4 as Weight))
-			.saturating_add(T::DbWeight::get().writes((2 as Weight).saturating_mul(r as Weight)))
+			.saturating_add(Weight::from_ref_time(49_928_000)
+.saturating_mul(r as u64)
+)
+			.saturating_add(T::DbWeight::get().reads(9))
+			.saturating_add(T::DbWeight::get().reads(1).saturating_mul(r as u64))
+			.saturating_add(T::DbWeight::get().writes(4))
+			.saturating_add(T::DbWeight::get().writes(2).saturating_mul(r as u64))
 	}
 	// Storage: Reputation Penalties (r:1 w:0)
 	// Storage: Reputation Reputations (r:1 w:1)
 	// Storage: Reputation Suspensions (r:1 w:1)
 	fn report_offenders(o: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(20_828_000 as Weight)
+		Weight::from_ref_time(20_828_000)
 			// Standard Error: 21_000
-			.saturating_add((10_862_000 as Weight).saturating_mul(o as Weight))
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().reads((1 as Weight).saturating_mul(o as Weight)))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes((1 as Weight).saturating_mul(o as Weight)))
+			.saturating_add(Weight::from_ref_time(10_862_000)
+.saturating_mul(o as u64)
+)
+			.saturating_add(T::DbWeight::get().reads(2))
+			.saturating_add(T::DbWeight::get().reads(1).saturating_mul(o as u64))
+			.saturating_add(T::DbWeight::get().writes(1))
+			.saturating_add(T::DbWeight::get().writes(1).saturating_mul(o as u64))
 	}
 }
 
@@ -119,30 +127,32 @@ impl WeightInfo for () {
 	// Storage: EthereumThresholdSigner LiveCeremonies (r:0 w:1)
 	fn signature_success() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(55_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
+		Weight::from_ref_time(55_000_000)
+			.saturating_add(RocksDbWeight::get().reads(2))
+			.saturating_add(RocksDbWeight::get().writes(3))
 	}
 	// Storage: AccountTypes AccountRoles (r:1 w:0)
 	// Storage: EthereumThresholdSigner PendingCeremonies (r:1 w:1)
 	fn report_signature_failed(_a: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(41_020_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(41_020_000)
+			.saturating_add(RocksDbWeight::get().reads(2))
+			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 	fn determine_offenders(a: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(1_609_000 as Weight)
+		Weight::from_ref_time(1_609_000)
 			// Standard Error: 0
-			.saturating_add((36_000 as Weight).saturating_mul(a as Weight))
+			.saturating_add(Weight::from_ref_time(36_000)
+.saturating_mul(a as u64)
+)
 	}
 	// Storage: EthereumThresholdSigner ThresholdSignatureResponseTimeout (r:1 w:1)
 	fn set_threshold_signature_timeout() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(26_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(26_000_000)
+			.saturating_add(RocksDbWeight::get().reads(1))
+			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 	// Storage: EthereumThresholdSigner ThresholdSignatureResponseTimeout (r:1 w:0)
 	// Storage: EthereumThresholdSigner RetryQueues (r:2 w:2)
@@ -158,27 +168,33 @@ impl WeightInfo for () {
 	// Storage: EthereumThresholdSigner LiveCeremonies (r:0 w:1)
 	fn on_initialize(a: u32, r: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(16_564_000 as Weight)
+		Weight::from_ref_time(16_564_000)
 			// Standard Error: 27_000
-			.saturating_add((213_000 as Weight).saturating_mul(a as Weight))
+			.saturating_add(Weight::from_ref_time(213_000)
+.saturating_mul(a as u64)
+)
 			// Standard Error: 74_000
-			.saturating_add((49_928_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(RocksDbWeight::get().reads(9 as Weight))
-			.saturating_add(RocksDbWeight::get().reads((1 as Weight).saturating_mul(r as Weight)))
-			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
-			.saturating_add(RocksDbWeight::get().writes((2 as Weight).saturating_mul(r as Weight)))
+			.saturating_add(Weight::from_ref_time(49_928_000)
+.saturating_mul(r as u64)
+)
+			.saturating_add(RocksDbWeight::get().reads(9))
+			.saturating_add(RocksDbWeight::get().reads(1).saturating_mul(r as u64))
+			.saturating_add(RocksDbWeight::get().writes(4))
+			.saturating_add(RocksDbWeight::get().writes(2).saturating_mul(r as u64))
 	}
 	// Storage: Reputation Penalties (r:1 w:0)
 	// Storage: Reputation Reputations (r:1 w:1)
 	// Storage: Reputation Suspensions (r:1 w:1)
 	fn report_offenders(o: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(20_828_000 as Weight)
+		Weight::from_ref_time(20_828_000)
 			// Standard Error: 21_000
-			.saturating_add((10_862_000 as Weight).saturating_mul(o as Weight))
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().reads((1 as Weight).saturating_mul(o as Weight)))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
-			.saturating_add(RocksDbWeight::get().writes((1 as Weight).saturating_mul(o as Weight)))
+			.saturating_add(Weight::from_ref_time(10_862_000)
+.saturating_mul(o as u64)
+)
+			.saturating_add(RocksDbWeight::get().reads(2))
+			.saturating_add(RocksDbWeight::get().reads(1).saturating_mul(o as u64))
+			.saturating_add(RocksDbWeight::get().writes(1))
+			.saturating_add(RocksDbWeight::get().writes(1).saturating_mul(o as u64))
 	}
 }

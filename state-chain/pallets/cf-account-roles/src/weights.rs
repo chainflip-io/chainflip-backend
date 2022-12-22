@@ -37,9 +37,9 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: AccountRoles AccountRoles (r:1 w:1)
 	fn register_account_role() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(14_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(14_000_000)
+			.saturating_add(T::DbWeight::get().reads(1))
+			.saturating_add(T::DbWeight::get().writes(1))
 	}
 }
 
@@ -48,8 +48,8 @@ impl WeightInfo for () {
 	// Storage: AccountRoles AccountRoles (r:1 w:1)
 	fn register_account_role() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(14_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(14_000_000)
+			.saturating_add(RocksDbWeight::get().reads(1))
+			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 }

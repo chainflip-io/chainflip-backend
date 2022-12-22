@@ -43,9 +43,9 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumBroadcaster AwaitingBroadcast (r:999 w:0)
 	fn on_initialize(_x: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(1_426_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(1000 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(1_426_000_000)
+			.saturating_add(T::DbWeight::get().reads(1000))
+			.saturating_add(T::DbWeight::get().writes(1))
 	}
 	// Storage: AccountRoles AccountRoles (r:1 w:0)
 	// Storage: EthereumBroadcaster AwaitingBroadcast (r:1 w:1)
@@ -54,9 +54,9 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumBroadcaster BroadcastRetryQueue (r:1 w:1)
 	fn transaction_signing_failure() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(28_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(5 as Weight))
-			.saturating_add(T::DbWeight::get().writes(3 as Weight))
+		Weight::from_ref_time(28_000_000)
+			.saturating_add(T::DbWeight::get().reads(5))
+			.saturating_add(T::DbWeight::get().writes(3))
 	}
 	// Storage: EthereumThresholdSigner Signature (r:1 w:1)
 	// Storage: Environment EthereumChainId (r:1 w:0)
@@ -73,9 +73,9 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumBroadcaster AwaitingBroadcast (r:0 w:1)
 	fn on_signature_ready() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(50_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(11 as Weight))
-			.saturating_add(T::DbWeight::get().writes(6 as Weight))
+		Weight::from_ref_time(50_000_000)
+			.saturating_add(T::DbWeight::get().reads(11))
+			.saturating_add(T::DbWeight::get().writes(6))
 	}
 	// Storage: EthereumBroadcaster ThresholdSignatureData (r:1 w:0)
 	// Storage: Validator CurrentEpoch (r:1 w:0)
@@ -89,9 +89,9 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumBroadcaster AwaitingBroadcast (r:0 w:1)
 	fn start_next_broadcast_attempt() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(180_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(10 as Weight))
-			.saturating_add(T::DbWeight::get().writes(3 as Weight))
+		Weight::from_ref_time(180_000_000)
+			.saturating_add(T::DbWeight::get().reads(10))
+			.saturating_add(T::DbWeight::get().writes(3))
 	}
 	// Storage: EthereumBroadcaster SignatureToBroadcastIdLookup (r:1 w:1)
 	// Storage: EthereumBroadcaster BroadcastAttemptCount (r:1 w:0)
@@ -101,9 +101,9 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumBroadcaster ThresholdSignatureData (r:1 w:0)
 	fn signature_accepted() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(25_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(6 as Weight))
-			.saturating_add(T::DbWeight::get().writes(4 as Weight))
+		Weight::from_ref_time(25_000_000)
+			.saturating_add(T::DbWeight::get().reads(6))
+			.saturating_add(T::DbWeight::get().writes(4))
 	}
 }
 
@@ -113,9 +113,9 @@ impl WeightInfo for () {
 	// Storage: EthereumBroadcaster AwaitingBroadcast (r:999 w:0)
 	fn on_initialize(_x: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(1_426_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(1000 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(1_426_000_000)
+			.saturating_add(RocksDbWeight::get().reads(1000))
+			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 	// Storage: AccountRoles AccountRoles (r:1 w:0)
 	// Storage: EthereumBroadcaster AwaitingBroadcast (r:1 w:1)
@@ -124,9 +124,9 @@ impl WeightInfo for () {
 	// Storage: EthereumBroadcaster BroadcastRetryQueue (r:1 w:1)
 	fn transaction_signing_failure() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(28_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
+		Weight::from_ref_time(28_000_000)
+			.saturating_add(RocksDbWeight::get().reads(5))
+			.saturating_add(RocksDbWeight::get().writes(3))
 	}
 	// Storage: EthereumThresholdSigner Signature (r:1 w:1)
 	// Storage: Environment EthereumChainId (r:1 w:0)
@@ -143,9 +143,9 @@ impl WeightInfo for () {
 	// Storage: EthereumBroadcaster AwaitingBroadcast (r:0 w:1)
 	fn on_signature_ready() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(50_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(11 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(6 as Weight))
+		Weight::from_ref_time(50_000_000)
+			.saturating_add(RocksDbWeight::get().reads(11))
+			.saturating_add(RocksDbWeight::get().writes(6))
 	}
 	// Storage: EthereumBroadcaster ThresholdSignatureData (r:1 w:0)
 	// Storage: Validator CurrentEpoch (r:1 w:0)
@@ -159,9 +159,9 @@ impl WeightInfo for () {
 	// Storage: EthereumBroadcaster AwaitingBroadcast (r:0 w:1)
 	fn start_next_broadcast_attempt() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(180_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(10 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
+		Weight::from_ref_time(180_000_000)
+			.saturating_add(RocksDbWeight::get().reads(10))
+			.saturating_add(RocksDbWeight::get().writes(3))
 	}
 	// Storage: EthereumBroadcaster SignatureToBroadcastIdLookup (r:1 w:1)
 	// Storage: EthereumBroadcaster BroadcastAttemptCount (r:1 w:0)
@@ -171,8 +171,8 @@ impl WeightInfo for () {
 	// Storage: EthereumBroadcaster ThresholdSignatureData (r:1 w:0)
 	fn signature_accepted() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(25_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(6 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
+		Weight::from_ref_time(25_000_000)
+			.saturating_add(RocksDbWeight::get().reads(6))
+			.saturating_add(RocksDbWeight::get().writes(4))
 	}
 }

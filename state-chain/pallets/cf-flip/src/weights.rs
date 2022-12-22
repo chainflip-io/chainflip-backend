@@ -40,16 +40,16 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Flip SlashingRate (r:0 w:1)
 	fn set_slashing_rate() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(6_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(6_000_000)
+			.saturating_add(T::DbWeight::get().writes(1))
 	}
 	// Storage: Flip Account (r:1 w:1)
 	// Storage: Flip TotalIssuance (r:1 w:1)
 	fn reap_one_account() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(30_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
+		Weight::from_ref_time(30_000_000)
+			.saturating_add(T::DbWeight::get().reads(2))
+			.saturating_add(T::DbWeight::get().writes(2))
 	}
 }
 
@@ -58,15 +58,15 @@ impl WeightInfo for () {
 	// Storage: Flip SlashingRate (r:0 w:1)
 	fn set_slashing_rate() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(6_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(6_000_000)
+			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 	// Storage: Flip Account (r:1 w:1)
 	// Storage: Flip TotalIssuance (r:1 w:1)
 	fn reap_one_account() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(30_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+		Weight::from_ref_time(30_000_000)
+			.saturating_add(RocksDbWeight::get().reads(2))
+			.saturating_add(RocksDbWeight::get().writes(2))
 	}
 }

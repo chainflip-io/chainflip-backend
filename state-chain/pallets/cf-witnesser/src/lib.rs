@@ -64,7 +64,7 @@ pub mod pallet {
 		type Call: Member
 			+ Parameter
 			+ From<frame_system::Call<Self>>
-			+ UnfilteredDispatchable<Origin = <Self as Config>::Origin>
+			+ UnfilteredDispatchable<RuntimeOrigin = <Self as Config>::RuntimeOrigin>
 			+ GetDispatchInfo
 			+ WitnessDataExtraction;
 

@@ -58,24 +58,25 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumThresholdSigner RequestCallback (r:0 w:1)
 	fn egress_assets(n: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(77_770_000 as Weight)
+		Weight::from_ref_time(77_770_000)
 			// Standard Error: 2_000
-			.saturating_add((1_182_000 as Weight).saturating_mul(n as Weight))
-			.saturating_add(T::DbWeight::get().reads(16 as Weight))
-			.saturating_add(T::DbWeight::get().writes(8 as Weight))
+			.saturating_add(Weight::from_ref_time(1_182_000)
+.saturating_mul(n))
+			.saturating_add(T::DbWeight::get().reads(16))
+			.saturating_add(T::DbWeight::get().writes(8))
 	}
 	// Storage: EthereumIngressEgress DisabledEgressAssets (r:0 w:1)
 	fn disable_asset_egress() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(10_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(10_000_000)
+			.saturating_add(T::DbWeight::get().writes(1))
 	}
 	// Storage: EthereumIngressEgress ScheduledEgressRequests (r:1 w:1)
 	fn on_idle_with_nothing_to_send() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(3_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(3_000_000)
+			.saturating_add(T::DbWeight::get().reads(1))
+			.saturating_add(T::DbWeight::get().writes(1))
 	}
 	// Storage: EthereumIngressEgress IntentIngressDetails (r:1 w:0)
 	// Storage: EthereumIngressEgress ScheduledEgressRequests (r:1 w:1)
@@ -83,9 +84,9 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: LiquidityProvider FreeBalances (r:1 w:1)
 	fn do_single_ingress() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(27_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
+		Weight::from_ref_time(27_000_000)
+			.saturating_add(T::DbWeight::get().reads(4))
+			.saturating_add(T::DbWeight::get().writes(2))
 	}
 }
 
@@ -110,24 +111,25 @@ impl WeightInfo for () {
 	// Storage: EthereumThresholdSigner RequestCallback (r:0 w:1)
 	fn egress_assets(n: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(77_770_000 as Weight)
+		Weight::from_ref_time(77_770_000)
 			// Standard Error: 2_000
-			.saturating_add((1_182_000 as Weight).saturating_mul(n as Weight))
-			.saturating_add(RocksDbWeight::get().reads(16 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(8 as Weight))
+			.saturating_add(Weight::from_ref_time(1_182_000)
+.saturating_mul(n))
+			.saturating_add(RocksDbWeight::get().reads(16))
+			.saturating_add(RocksDbWeight::get().writes(8))
 	}
 	// Storage: EthereumIngressEgress DisabledEgressAssets (r:0 w:1)
 	fn disable_asset_egress() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(10_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(10_000_000)
+			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 	// Storage: EthereumIngressEgress ScheduledEgressRequests (r:1 w:1)
 	fn on_idle_with_nothing_to_send() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(3_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(3_000_000)
+			.saturating_add(RocksDbWeight::get().reads(1))
+			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 	// Storage: EthereumIngressEgress IntentIngressDetails (r:1 w:0)
 	// Storage: EthereumIngressEgress ScheduledEgressRequests (r:1 w:1)
@@ -135,8 +137,8 @@ impl WeightInfo for () {
 	// Storage: LiquidityProvider FreeBalances (r:1 w:1)
 	fn do_single_ingress() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(27_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+		Weight::from_ref_time(27_000_000)
+			.saturating_add(RocksDbWeight::get().reads(4))
+			.saturating_add(RocksDbWeight::get().writes(2))
 	}
 }
