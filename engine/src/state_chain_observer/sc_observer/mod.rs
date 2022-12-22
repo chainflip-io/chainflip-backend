@@ -242,15 +242,6 @@ where
             <state_chain_runtime::Runtime as pallet_cf_reputation::Config>::HeartbeatBlockInterval::get()
         };
 
-        let blocks_per_heartbeat =
-            std::cmp::max(1, heartbeat_block_interval / 2);
-
-        slog::info!(
-            logger,
-            "Sending heartbeat every {} blocks",
-            blocks_per_heartbeat
-        );
-
         let start_epoch = |block_hash: H256, index: u32, current: bool, participant: bool| {
             let eth_epoch_start_sender = &eth_epoch_start_sender;
             #[cfg(feature = "ibiza")]
@@ -343,11 +334,16 @@ where
             Ok(())
         }.boxed()});
 
+        let mut first_block_number = None;
+
         let mut sc_block_stream = Box::pin(sc_block_stream);
         loop {
             match sc_block_stream.next().await {
                 Some(current_block_header) => {
                     let current_block_hash = current_block_header.hash();
+                    if first_block_number.is_none() {
+                        first_block_number = Some(current_block_header.number);
+                    }
                     slog::debug!(
                         logger,
                         "Processing SC block {} with block hash: {:#x}",
@@ -616,12 +612,17 @@ where
                         }
                     }
 
+                    let blocks_per_heartbeat = std::cmp::max(1, heartbeat_block_interval / 2);
+
+                    slog::info!(
+                        logger,
+                        "Sending heartbeat every {} blocks",
+                        blocks_per_heartbeat
+                    );
+
                     // All nodes must send a heartbeat regardless of their validator status (at least for now).
-                    // We send it in the middle of the online interval (so any node sync issues don't
-                    // cause issues (if we tried to send on one of the interval boundaries)
-                    if ((current_block_header.number
-                        + (heartbeat_block_interval / 2))
-                        % blocks_per_heartbeat
+                    // We send it every `blocks_per_heartbeat` from the block they started up at.
+                    if ((current_block_header.number - first_block_number.expect("Will have been set on first iteration")) % blocks_per_heartbeat
                         // Submitting earlier than one minute in may falsely indicate liveness.
                         == 0) && has_submitted_init_heartbeat.load(Ordering::Relaxed)
                     {
