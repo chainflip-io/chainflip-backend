@@ -722,9 +722,9 @@ version = "0.1.0"
 dependencies = [
  "cf-primitives",
  "cf-test-utilities",
- "ethabi",
+ "ethabi 18.0.0",
  "ethereum",
- "ethereum-types",
+ "ethereum-types 0.14.1",
  "frame-support",
  "frame-system",
  "hex",
@@ -798,7 +798,7 @@ dependencies = [
 name = "cf-primitives"
 version = "0.1.0"
 dependencies = [
- "ethabi",
+ "ethabi 18.0.0",
  "frame-support",
  "hex",
  "parity-scale-codec",
@@ -1009,7 +1009,7 @@ dependencies = [
  "dyn-clone",
  "ed25519-dalek",
  "env_logger 0.9.0",
- "ethbloom",
+ "ethbloom 0.12.1",
  "ethereum",
  "frame-metadata",
  "frame-support",
@@ -2269,7 +2269,24 @@ version = "17.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f186de076b3e77b8e6d73c99d1b52edc2a229e604f4b5eb6992c06c11d79d537"
 dependencies = [
- "ethereum-types",
+ "ethereum-types 0.13.1",
+ "hex",
+ "once_cell",
+ "regex",
+ "serde",
+ "serde_json",
+ "sha3",
+ "thiserror",
+ "uint",
+]
+
+[[package]]
+name = "ethabi"
+version = "18.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7413c5f74cc903ea37386a8965a936cbeb334bd270862fdece542c1b2dcbc898"
+dependencies = [
+ "ethereum-types 0.14.1",
  "hex",
  "once_cell",
  "regex",
@@ -2288,26 +2305,38 @@ checksum = "11da94e443c60508eb62cf256243a64da87304c2802ac2528847f79d750007ef"
 dependencies = [
  "crunchy",
  "fixed-hash 0.7.0",
- "impl-codec",
  "impl-rlp",
  "impl-serde 0.3.2",
+ "tiny-keccak",
+]
+
+[[package]]
+name = "ethbloom"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c22d4b5885b6aa2fe5e8b9329fb8d232bf739e434e6b87347c63bdd00c120f60"
+dependencies = [
+ "crunchy",
+ "fixed-hash 0.8.0",
+ "impl-codec",
+ "impl-rlp",
+ "impl-serde 0.4.0",
  "scale-info",
  "tiny-keccak",
 ]
 
 [[package]]
 name = "ethereum"
-version = "0.12.0"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "23750149fe8834c0e24bb9adcbacbe06c45b9861f15df53e09f26cb7c4ab91ef"
+checksum = "6a89fb87a9e103f71b903b80b670200b54cc67a07578f070681f1fffb7396fb7"
 dependencies = [
  "bytes 1.2.1",
- "ethereum-types",
+ "ethereum-types 0.14.1",
  "hash-db",
  "hash256-std-hasher",
  "parity-scale-codec",
  "rlp",
- "rlp-derive",
  "scale-info",
  "serde",
  "sha3",
@@ -2320,12 +2349,26 @@ version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b2827b94c556145446fcce834ca86b7abf0c39a805883fe20e72c5bfdb5a0dc6"
 dependencies = [
- "ethbloom",
+ "ethbloom 0.12.1",
  "fixed-hash 0.7.0",
- "impl-codec",
  "impl-rlp",
  "impl-serde 0.3.2",
  "primitive-types 0.11.1",
+ "uint",
+]
+
+[[package]]
+name = "ethereum-types"
+version = "0.14.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "02d215cbf040552efcbe99a38372fe80ab9d00268e20012b79fcd0f073edd8ee"
+dependencies = [
+ "ethbloom 0.13.0",
+ "fixed-hash 0.8.0",
+ "impl-codec",
+ "impl-rlp",
+ "impl-serde 0.4.0",
+ "primitive-types 0.12.1",
  "scale-info",
  "uint",
 ]
@@ -5175,6 +5218,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "729eb334247daa1803e0a094d0a5c55711b85571179f5ec6e53eccfdf7008958"
 
 [[package]]
+name = "nanorand"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6a51313c5820b0b02bd422f4b44776fbf47961755c74ce64afc73bfad10226c3"
+
+[[package]]
 name = "native-tls"
 version = "0.2.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5852,7 +5901,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "log 0.4.17",
- "nanorand",
+ "nanorand 0.6.1",
  "pallet-cf-reputation",
  "pallet-cf-staking",
  "pallet-cf-vaults",
@@ -6461,7 +6510,6 @@ dependencies = [
  "impl-codec",
  "impl-rlp",
  "impl-serde 0.3.2",
- "scale-info",
  "uint",
 ]
 
@@ -6473,6 +6521,7 @@ checksum = "9f3486ccba82358b11a77516035647c34ba167dfa53312630de83b12bd4f3d66"
 dependencies = [
  "fixed-hash 0.8.0",
  "impl-codec",
+ "impl-rlp",
  "impl-serde 0.4.0",
  "scale-info",
  "uint",
@@ -7157,11 +7206,12 @@ dependencies = [
 
 [[package]]
 name = "rlp"
-version = "0.5.1"
+version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "999508abb0ae792aabed2460c45b89106d97fe4adac593bdaef433c2605847b5"
+checksum = "bb919243f34364b6bd2fc10ef797edbfa75f33c252e7998527479c6d6b47e1ec"
 dependencies = [
  "bytes 1.2.1",
+ "rlp-derive",
  "rustc-hex",
 ]
 
@@ -8368,9 +8418,9 @@ dependencies = [
 
 [[package]]
 name = "scale-info"
-version = "2.2.0"
+version = "2.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "333af15b02563b8182cd863f925bd31ef8fa86a0e095d30c091956057d436153"
+checksum = "001cf62ece89779fd16105b5f515ad0e5cedcd5440d3dd806bb067978e7c3608"
 dependencies = [
  "bitvec 1.0.1",
  "cfg-if 1.0.0",
@@ -8382,9 +8432,9 @@ dependencies = [
 
 [[package]]
 name = "scale-info-derive"
-version = "2.2.0"
+version = "2.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "53f56acbd0743d29ffa08f911ab5397def774ad01bab3786804cf6ee057fb5e1"
+checksum = "303959cf613a6f6efd19ed4b4ad5bf79966a13352716299ad532cfb115f4205c"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -9929,7 +9979,7 @@ dependencies = [
  "cf-primitives",
  "cf-session-benchmarking",
  "cf-traits",
- "ethabi",
+ "ethabi 18.0.0",
  "frame-benchmarking",
  "frame-executive",
  "frame-support",
@@ -9940,7 +9990,7 @@ dependencies = [
  "getrandom 0.2.7",
  "hex-literal",
  "log 0.4.17",
- "nanorand",
+ "nanorand 0.7.0",
  "pallet-aura",
  "pallet-authorship",
  "pallet-cf-account-roles",
@@ -11573,8 +11623,8 @@ dependencies = [
  "base64 0.13.0",
  "bytes 1.2.1",
  "derive_more",
- "ethabi",
- "ethereum-types",
+ "ethabi 17.1.0",
+ "ethereum-types 0.13.1",
  "futures 0.3.21",
  "futures-timer",
  "headers",

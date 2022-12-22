@@ -13,9 +13,9 @@ libsecp256k1 = { default-features = false, version = '0.7', features = ['static-
 secp256k1 = {optional = true, version = '0.21'}
 
 # Ethereum
-ethabi = {default-features = false, version = '17.0'}
-ethereum-types = {default-features = false, version = '0.13.1'}
-ethereum = {default-features = false, version = '0.12'}
+ethabi = {default-features = false, version = '18.0'}
+ethereum-types = {default-features = false, version = '0.14.1'}
+ethereum = {default-features = false, version = '0.14'}
 rlp = {default-features = false, version = '0.5'}
 
 # Other
