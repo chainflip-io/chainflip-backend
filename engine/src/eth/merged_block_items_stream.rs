@@ -106,7 +106,7 @@ where
 	) {
 		match yielding_stream_state.protocol {
 			TransportProtocol::Http => {
-				slog::info!(
+				slog::debug!(
 					merged_stream_state.logger,
 					#ETH_HTTP_STREAM_YIELDED,
 					"ETH block {} returning from {} stream",
@@ -115,7 +115,7 @@ where
 				);
 			},
 			TransportProtocol::Ws => {
-				slog::info!(
+				slog::debug!(
 					merged_stream_state.logger,
 					#ETH_WS_STREAM_YIELDED,
 					"ETH block {} returning from {} stream",

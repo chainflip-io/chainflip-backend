@@ -272,6 +272,11 @@ pub mod pallet {
 		///
 		/// - [BroadcastAttemptTimeout](Event::BroadcastAttemptTimeout)
 		fn on_initialize(block_number: BlockNumberFor<T>) -> frame_support::weights::Weight {
+			// NB: We don't want broadcasts that timeout to ever expire. We will keep retrying
+			// forever. It's possible that the reason for timeout could be something like a chain
+			// halt on the external chain. If the signature is valid then we expect it to succeed
+			// eventually. For outlying, unknown unknowns, these can be something governance can
+			// handle if absolutely necessary (though it likely never will be).
 			let expiries = Timeouts::<T, I>::take(block_number);
 			for attempt_id in expiries.iter() {
 				if let Some(attempt) = Self::take_awaiting_broadcast(*attempt_id) {
@@ -337,7 +342,35 @@ pub mod pallet {
 
 			Self::take_awaiting_broadcast(broadcast_attempt_id);
 
-			Self::schedule_retry(signing_attempt.broadcast_attempt, extrinsic_signer);
+			FailedBroadcasters::<T, I>::append(
+				signing_attempt.broadcast_attempt.broadcast_attempt_id.broadcast_id,
+				&extrinsic_signer,
+			);
+
+			// Schedule a failed attempt for retry when the next block is authored.
+			// We will abort the broadcast once all authorities have attempt to sign the
+			// transaction
+			if signing_attempt.broadcast_attempt.broadcast_attempt_id.attempt_count ==
+				T::EpochInfo::current_authority_count()
+					.checked_sub(1)
+					.expect("We must have at least one authority")
+			{
+				Self::clean_up_broadcast_storage(
+					signing_attempt.broadcast_attempt.broadcast_attempt_id.broadcast_id,
+				);
+
+				Self::deposit_event(Event::<T, I>::BroadcastAborted {
+					broadcast_id: signing_attempt
+						.broadcast_attempt
+						.broadcast_attempt_id
+						.broadcast_id,
+				});
+			} else {
+				BroadcastRetryQueue::<T, I>::append(&signing_attempt.broadcast_attempt);
+				Self::deposit_event(Event::<T, I>::BroadcastRetryScheduled {
+					broadcast_attempt_id: signing_attempt.broadcast_attempt.broadcast_attempt_id,
+				});
+			}
 
 			Ok(().into())
 		}
@@ -582,37 +615,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			log::error!("{FAILED_SIGNER_SELECTION}");
 			#[cfg(test)]
 			panic!("{FAILED_SIGNER_SELECTION}");
-		}
-	}
-
-	/// Schedule a failed attempt for retry when the next block is authored.
-	/// We will abort the broadcast once all authorities have attempt to sign the transaction
-	fn schedule_retry(
-		failed_broadcast_attempt: BroadcastAttempt<T, I>,
-		failed_signer: T::ValidatorId,
-	) {
-		FailedBroadcasters::<T, I>::append(
-			failed_broadcast_attempt.broadcast_attempt_id.broadcast_id,
-			&failed_signer,
-		);
-
-		if failed_broadcast_attempt.broadcast_attempt_id.attempt_count ==
-			T::EpochInfo::current_authority_count()
-				.checked_sub(1)
-				.expect("We must have at least one authority")
-		{
-			Self::clean_up_broadcast_storage(
-				failed_broadcast_attempt.broadcast_attempt_id.broadcast_id,
-			);
-
-			Self::deposit_event(Event::<T, I>::BroadcastAborted {
-				broadcast_id: failed_broadcast_attempt.broadcast_attempt_id.broadcast_id,
-			});
-		} else {
-			BroadcastRetryQueue::<T, I>::append(&failed_broadcast_attempt);
-			Self::deposit_event(Event::<T, I>::BroadcastRetryScheduled {
-				broadcast_attempt_id: failed_broadcast_attempt.broadcast_attempt_id,
-			});
 		}
 	}
 }

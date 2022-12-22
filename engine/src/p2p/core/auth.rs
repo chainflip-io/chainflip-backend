@@ -4,11 +4,13 @@
 //! run on a separate thread.
 
 use std::{
-	collections::HashSet,
+	collections::HashMap,
 	sync::{Arc, RwLock},
 };
 
-use super::socket::DO_NOT_LINGER;
+use cf_primitives::AccountId;
+
+use super::{socket::DO_NOT_LINGER, PeerInfo};
 
 use super::{to_string, XPublicKey};
 
@@ -27,7 +29,7 @@ pub struct Authenticator {
 	// require a mutex)
 
 	// We don't use BTreeSet because XPublicKey doesn't implement Ord
-	allowed_pubkeys: RwLock<HashSet<XPublicKey>>,
+	allowed_pubkeys: RwLock<HashMap<XPublicKey, AccountId>>,
 	logger: slog::Logger,
 }
 
@@ -36,20 +38,25 @@ impl Authenticator {
 		Authenticator { allowed_pubkeys: Default::default(), logger: logger.clone() }
 	}
 
-	pub fn add_peer(&self, peer_pubkey: XPublicKey) {
-		slog::debug!(
+	pub fn add_peer(&self, peer: &PeerInfo) {
+		slog::trace!(
 			self.logger,
-			"Adding to list of allowed peers pubkeys: {}",
-			to_string(&peer_pubkey)
+			"Adding to the list of allowed peers: {} (public key: {})",
+			peer.account_id,
+			to_string(&peer.pubkey)
 		);
-		self.allowed_pubkeys.write().unwrap().insert(peer_pubkey);
+		self.allowed_pubkeys
+			.write()
+			.unwrap()
+			.insert(peer.pubkey, peer.account_id.clone());
 	}
 
 	pub fn remove_peer(&self, peer_pubkey: &XPublicKey) {
-		if self.allowed_pubkeys.write().unwrap().remove(peer_pubkey) {
-			slog::debug!(
+		if let Some(account_id) = self.allowed_pubkeys.write().unwrap().remove(peer_pubkey) {
+			slog::trace!(
 				self.logger,
-				"Removed from the list of allowed pubkeys: {}",
+				"Removed from the list of allowed peers: {} (public key: {})",
+				account_id,
 				to_string(peer_pubkey)
 			);
 		}
@@ -60,11 +67,11 @@ impl Authenticator {
 	fn process_authentication_request(&self, socket: &zmq::Socket) {
 		let req = parse_request(socket);
 
-		if self.allowed_pubkeys.read().unwrap().contains(&req.pubkey) {
-			slog::debug!(
+		if let Some(account_id) = self.allowed_pubkeys.read().unwrap().get(&req.pubkey) {
+			slog::trace!(
 				self.logger,
-				"Allowing an incoming connection for a known pubkey: {}",
-				to_string(&req.pubkey)
+				"Allowing an incoming connection for account id: {}",
+				account_id
 			);
 			send_auth_response(socket, &req.request_id, ZAP_AUTH_SUCCESS, &req.pubkey)
 		} else {

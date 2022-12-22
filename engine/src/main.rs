@@ -29,8 +29,6 @@ use sp_core::U256;
 
 #[cfg(feature = "ibiza")]
 use chainflip_engine::dot::{rpc::DotRpcClient, DotBroadcaster};
-#[cfg(feature = "ibiza")]
-use subxt::{OnlineClient, PolkadotConfig};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -74,7 +72,7 @@ async fn main() -> anyhow::Result<()> {
                 .context("Failed to create ETH broadcaster")?;
 
             #[cfg(feature = "ibiza")]
-            let dot_client = OnlineClient::<PolkadotConfig>::from_url(&settings.dot.ws_node_endpoint)
+            let dot_rpc_client = DotRpcClient::new(&settings.dot.ws_node_endpoint)
                 .await
                 .context("Failed to create Polkadot Client")?;
 
@@ -225,6 +223,8 @@ async fn main() -> anyhow::Result<()> {
             let (eth_monitor_usdc_ingress_sender, eth_monitor_usdc_ingress_receiver) = tokio::sync::mpsc::unbounded_channel();
             #[cfg(feature = "ibiza")]
             let (dot_monitor_ingress_sender, dot_monitor_ingress_receiver) = tokio::sync::mpsc::unbounded_channel();
+            #[cfg(feature = "ibiza")]
+            let (dot_monitor_signature_sender, dot_monitor_signature_receiver) = tokio::sync::mpsc::unbounded_channel();
 
 
             // Start state chain components
@@ -232,7 +232,7 @@ async fn main() -> anyhow::Result<()> {
                 state_chain_client.clone(),
                 state_chain_block_stream,
                 eth_broadcaster,
-                #[cfg(feature = "ibiza")] DotBroadcaster::new(DotRpcClient::new(dot_client.clone())),
+                #[cfg(feature = "ibiza")] DotBroadcaster::new(dot_rpc_client.clone()),
                 eth_multisig_client,
                 dot_multisig_client,
                 peer_update_sender,
@@ -242,6 +242,7 @@ async fn main() -> anyhow::Result<()> {
                 #[cfg(feature = "ibiza")] eth_monitor_usdc_ingress_sender,
                 #[cfg(feature = "ibiza")] dot_epoch_start_sender,
                 #[cfg(feature = "ibiza")] dot_monitor_ingress_sender,
+                #[cfg(feature = "ibiza")] dot_monitor_signature_sender,
                 cfe_settings_update_sender,
                 latest_block_hash,
                 root_logger.clone()
@@ -317,7 +318,7 @@ async fn main() -> anyhow::Result<()> {
                     )
                 );
                 scope.spawn(
-                    dot::witnesser::start(dot_epoch_start_receiver_1, dot_client, dot_monitor_ingress_receiver,
+                    dot::witnesser::start(dot_epoch_start_receiver_1, dot_rpc_client, dot_monitor_ingress_receiver,
                         state_chain_client.storage_map::<pallet_cf_ingress_egress::IntentIngressDetails<state_chain_runtime::Runtime, state_chain_runtime::PolkadotInstance>>(latest_block_hash)
                         .await
                         .context("Failed to get initial ingress details")?
@@ -327,6 +328,10 @@ async fn main() -> anyhow::Result<()> {
                         } else {
                             None
                         }).collect(),
+                        dot_monitor_signature_receiver,
+                        // NB: We don't need to monitor Ethereum signatures because we already monitor siganture accepted events from the KeyManager contract on Ethereum.
+                        state_chain_client.storage_map::<pallet_cf_broadcast::SignatureToBroadcastIdLookup<state_chain_runtime::Runtime, state_chain_runtime::PolkadotInstance>>(latest_block_hash)
+                        .await.context("Failed to get initial DOT signatures to monitor")?.into_iter().map(|(signature, _)| signature.0).collect(),
                         state_chain_client, &root_logger)
 
                 )

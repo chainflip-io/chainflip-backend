@@ -35,9 +35,7 @@ services:
       dockerfile: validator.Dockerfile
       context: .
       args:
-        - COMMIT_HASH
-        - REPO_USERNAME
-        - REPO_PASSWORD
+        - APT_REPO
     platform: linux/amd64
     ports:
       - "9944:9944"
@@ -57,9 +55,7 @@ services:
       dockerfile: validator.Dockerfile
       context: .
       args:
-        - COMMIT_HASH
-        - REPO_USERNAME
-        - REPO_PASSWORD
+        - APT_REPO
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -83,9 +79,7 @@ services:
       dockerfile: validator.Dockerfile
       context: .
       args:
-        - COMMIT_HASH
-        - REPO_USERNAME
-        - REPO_PASSWORD
+        - APT_REPO
     platform: linux/amd64
     restart: unless-stopped
     depends_on:

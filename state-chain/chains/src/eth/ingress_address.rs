@@ -45,7 +45,14 @@ pub fn get_create_2_address(
 	// Note: For native ETH we don't need to add extra bytes because the constructor is empty
 	// see: https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/DepositEth.sol.
 	let deploy_transaction_bytes_hash = Keccak256::hash(
-		&[deploy_bytecode, &erc20_constructor_argument.unwrap_or_default()].concat(),
+		&[
+			deploy_bytecode,
+			&erc20_constructor_argument.map_or(Default::default(), |mut token_addr| {
+				token_addr.splice(0..0, [0u8; 12]);
+				token_addr
+			}),
+		]
+		.concat(),
 	);
 
 	// Unique salt per intent.
@@ -92,4 +99,17 @@ fn test_eth_eth() {
 		hex_literal::hex!("9AF943257C1dF03EA3EeD0dFa7B5328A2E4033bb")
 	);
 	println!("Derivation worked for ETH:ETH! 🚀");
+}
+
+#[test]
+fn test_eth_flip() {
+	// Based on previously verified values.
+	const VAULT_ADDRESS: [u8; 20] = hex_literal::hex!("e7f1725E7734CE288F8367e1Bb143E90bb3F0512");
+	const FLIP_ADDRESS: [u8; 20] = hex_literal::hex!("Cf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9");
+
+	assert_eq!(
+		get_create_2_address(eth::Asset::Flip, VAULT_ADDRESS, Some(FLIP_ADDRESS.to_vec()), 42069),
+		hex_literal::hex!("E93Ee798dE2dea25a8E8c49EE6e39e1c006b9188")
+	);
+	println!("Derivation worked for ETH:FLIP! 🚀");
 }

@@ -1,9 +1,9 @@
-use crate::{mock::*, EarnedRelayerFees, Pallet, Swap, SwapQueue, WeightInfo};
+use crate::{mock::*, EarnedRelayerFees, Error, Pallet, Swap, SwapQueue, WeightInfo};
 use cf_chains::AnyChain;
 use cf_primitives::{Asset, ForeignChain, ForeignChainAddress};
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{mocks::egress_handler::MockEgressHandler, SwapIntentHandler};
-use frame_support::{assert_ok, sp_std::iter};
+use frame_support::{assert_noop, assert_ok, sp_std::iter};
 
 use frame_support::traits::Hooks;
 
@@ -212,6 +212,34 @@ fn expect_swap_id_to_be_emitted() {
 				egress_id: (ForeignChain::Ethereum, 1),
 			})
 		);
+	});
+}
+
+#[test]
+fn withdrawal_relayer_fees() {
+	new_test_ext().execute_with(|| {
+		assert_noop!(
+			Swapping::withdrawal(
+				Origin::signed(ALICE),
+				Asset::Eth,
+				ForeignChainAddress::Eth(Default::default()),
+			),
+			<Error<Test>>::NoFundsAvailable
+		);
+		EarnedRelayerFees::<Test>::insert(ALICE, Asset::Eth, 200);
+		assert_ok!(Swapping::withdrawal(
+			Origin::signed(ALICE),
+			Asset::Eth,
+			ForeignChainAddress::Eth(Default::default()),
+		));
+		let mut egresses = MockEgressHandler::<AnyChain>::get_scheduled_egresses();
+		assert!(egresses.len() == 1);
+		assert_eq!(egresses.pop().expect("to be exist").1, 200);
+		System::assert_last_event(Event::Swapping(crate::Event::<Test>::WithdrawalRequested {
+			egress_id: (ForeignChain::Ethereum, 1),
+			amount: 200,
+			address: ForeignChainAddress::Eth(Default::default()),
+		}));
 	});
 }
 
