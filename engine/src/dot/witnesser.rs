@@ -570,31 +570,31 @@ mod tests {
 	#[test]
 	fn witness_ingresses_for_addresses_we_monitor() {
 		// we want two monitors, one sent through at start, and one sent through channel
-		let transfer_1_index = 1;
+		const TRANSFER_1_INDEX: u32 = 1;
 		let transfer_1_ingress_addr = PolkadotAccountId::from([1; 32]);
-		let transfer_1_amount = 10000;
+		const TRANSFER_1_AMOUNT: PolkadotBalance = 10000;
 
-		let transfer_2_index = 2;
+		const TRANSFER_2_INDEX: u32 = 2;
 		let transfer_2_ingress_addr = PolkadotAccountId::from([2; 32]);
-		let transfer_2_amount = 20000;
+		const TRANSFER_2_AMOUNT: PolkadotBalance = 20000;
 
 		let block_event_details = block_event_details_from_events(&[
 			// we'll be witnessing this from the start
 			(
-				transfer_1_index,
+				TRANSFER_1_INDEX,
 				mock_transfer(
 					&PolkadotAccountId::from([7; 32]),
 					&transfer_1_ingress_addr,
-					transfer_1_amount,
+					TRANSFER_1_AMOUNT,
 				),
 			),
 			// we'll receive this address from the channel
 			(
-				transfer_2_index,
+				TRANSFER_2_INDEX,
 				mock_transfer(
 					&PolkadotAccountId::from([7; 32]),
 					&transfer_2_ingress_addr,
-					transfer_2_amount,
+					TRANSFER_2_AMOUNT,
 				),
 			),
 			// this one is not for us
@@ -629,9 +629,8 @@ mod tests {
 		);
 
 		assert_eq!(ingress_witnesses.len(), 2);
-
-		assert_eq!(ingress_witnesses.get(0).unwrap().amount, transfer_1_amount);
-		assert_eq!(ingress_witnesses.get(1).unwrap().amount, transfer_2_amount);
+		assert_eq!(ingress_witnesses.get(0).unwrap().amount, TRANSFER_1_AMOUNT);
+		assert_eq!(ingress_witnesses.get(1).unwrap().amount, TRANSFER_2_AMOUNT);
 
 		// We don't need to submit signature accepted for ingress witnesses
 		assert_eq!(interesting_indices.len(), 0);
