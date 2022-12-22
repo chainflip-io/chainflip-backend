@@ -230,8 +230,8 @@ fn check_for_interesting_events_in_block<
 						});
 					}
 
-					// if from is our_vault then we're doing an egress
-					// if to is our_vault then we're doing an "ingress fetch"
+					// if `from` is our_vault then we're doing an egress
+					// if `to` is our_vault then we're doing an "ingress fetch"
 					if from == *our_vault || to == *our_vault {
 						slog::info!(logger, "Transfer from or to our_vault at block: {block_number}, extrinsic index: {extrinsic_index}");
 						interesting_indices.push(extrinsic_index);
