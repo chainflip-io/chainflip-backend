@@ -178,7 +178,7 @@ fn check_for_interesting_events_in_block<
 	// a) we know how to decode calls we create (but not necessarily all calls on Polkadot)
 	// b) these are the only extrinsics we are interested in
 	let mut interesting_indices = Vec::new();
-	let mut interesting_proxy_addeds: Vec<Box<_>> = Vec::new();
+	let mut vault_key_rotated_calls: Vec<Box<_>> = Vec::new();
 	let mut fee_paid_for_xt_at_index = HashMap::new();
 	let mut events_iter = block_event_details.into_iter();
 	while let Some(Ok(event_details)) = events_iter.next() {
@@ -200,7 +200,7 @@ fn check_for_interesting_events_in_block<
 						"Witnessing ProxyAdded. new public key: {new_public_key:?} at block number {block_number} and extrinsic_index; {extrinsic_index}"
 					);
 
-					interesting_proxy_addeds.push(Box::new(
+					vault_key_rotated_calls.push(Box::new(
 						pallet_cf_vaults::Call::<_, PolkadotInstance>::vault_key_rotated {
 							new_public_key,
 							block_number,
@@ -252,7 +252,7 @@ fn check_for_interesting_events_in_block<
 			.map(|index| (index, *fee_paid_for_xt_at_index.get(&index).unwrap()))
 			.collect(),
 		ingress_witnesses,
-		interesting_proxy_addeds,
+		vault_key_rotated_calls,
 	)
 }
 
@@ -346,7 +346,7 @@ where
 					let (
 						interesting_indices,
 						ingress_witnesses,
-						interesting_proxy_addeds,
+						vault_key_rotated_calls,
 					) = check_for_interesting_events_in_block(
 							block_event_details,
 							block_number,
@@ -355,7 +355,7 @@ where
 							&mut monitored_ingress_addresses,
 							&logger);
 
-					for call in interesting_proxy_addeds {
+					for call in vault_key_rotated_calls {
 						let _result = state_chain_client
 								.submit_signed_extrinsic(
 									pallet_cf_witnesser::Call::witness_at_epoch {
@@ -551,7 +551,7 @@ mod tests {
 		let (_monitor_ingress_sender, mut monitor_ingress_receiver) =
 			tokio::sync::mpsc::unbounded_channel();
 
-		let (mut interesting_indices, ingress_witnesses, interesting_proxy_addeds) =
+		let (mut interesting_indices, ingress_witnesses, vault_key_rotated_calls) =
 			check_for_interesting_events_in_block(
 				block_event_details,
 				Default::default(),
@@ -561,7 +561,7 @@ mod tests {
 				&new_test_logger(),
 			);
 
-		assert_eq!(interesting_proxy_addeds.len(), 1);
+		assert_eq!(vault_key_rotated_calls.len(), 1);
 		assert_eq!(interesting_indices.pop().unwrap(), (our_proxy_added_index, fee_paid));
 		assert!(ingress_witnesses.is_empty());
 	}
@@ -612,7 +612,7 @@ mod tests {
 
 		monitor_ingress_sender.send(transfer_2_ingress_addr).unwrap();
 
-		let (interesting_indices, ingress_witnesses, interesting_proxy_addeds) =
+		let (interesting_indices, ingress_witnesses, vault_key_rotated_calls) =
 			check_for_interesting_events_in_block(
 				block_event_details,
 				20,
@@ -629,7 +629,7 @@ mod tests {
 
 		// We don't need to submit signature accepted for ingress witnesses
 		assert_eq!(interesting_indices.len(), 0);
-		assert!(interesting_proxy_addeds.is_empty());
+		assert!(vault_key_rotated_calls.is_empty());
 	}
 
 	#[test]
@@ -671,7 +671,7 @@ mod tests {
 		let (_monitor_ingress_sender, mut monitor_ingress_receiver) =
 			tokio::sync::mpsc::unbounded_channel();
 
-		let (interesting_indices, ingress_witnesses, interesting_proxy_addeds) =
+		let (interesting_indices, ingress_witnesses, vault_key_rotated_calls) =
 			check_for_interesting_events_in_block(
 				block_event_details,
 				20,
@@ -687,7 +687,7 @@ mod tests {
 				interesting_indices.contains(&(ingress_fetch_index, ingress_fetch_amount))
 		);
 
-		assert!(interesting_proxy_addeds.is_empty());
+		assert!(vault_key_rotated_calls.is_empty());
 		assert!(ingress_witnesses.is_empty());
 	}
 
