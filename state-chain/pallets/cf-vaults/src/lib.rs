@@ -646,8 +646,8 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		#[pallet::weight(T::WeightInfo::set_keygen_timeout())]
-		pub fn set_keygen_timeout(
+		#[pallet::weight(T::WeightInfo::set_keygen_response_timeout())]
+		pub fn set_keygen_response_timeout(
 			origin: OriginFor<T>,
 			new_timeout: T::BlockNumber,
 		) -> DispatchResultWithPostInfo {
