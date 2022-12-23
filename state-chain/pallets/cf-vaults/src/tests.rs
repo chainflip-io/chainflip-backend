@@ -1,10 +1,10 @@
 use crate::{
 	mock::*, CeremonyId, Error, Event as PalletEvent, FailureVoters, KeygenError,
-	KeygenResolutionPendingSince, PalletOffence, PendingVaultRotation, SuccessVoters, Vault,
-	VaultRotationStatus, Vaults,
+	KeygenResolutionPendingSince, KeygenResponseTimeout, PalletOffence, PendingVaultRotation,
+	SuccessVoters, Vault, VaultRotationStatus, Vaults,
 };
 use cf_chains::eth::Ethereum;
-use cf_test_utilities::last_event;
+use cf_test_utilities::{last_event, maybe_last_event};
 use cf_traits::{
 	mocks::{ceremony_id_provider::MockCeremonyIdProvider, threshold_signer::MockThresholdSigner},
 	AsyncResult, Chainflip, EpochInfo, VaultRotator, VaultStatus,
@@ -589,6 +589,24 @@ fn key_unavailabe_on_activate_returns_governance_event() {
 		VaultsPallet::activate();
 
 		assert_last_event!(crate::Event::AwaitingGovernanceActivation { .. });
+	})
+}
+
+#[test]
+fn set_keygen_response_timeout_works() {
+	new_test_ext_no_key().execute_with(|| {
+		let init_timeout = KeygenResponseTimeout::<MockRuntime, _>::get();
+
+		VaultsPallet::set_keygen_response_timeout(Origin::root(), init_timeout).unwrap();
+
+		assert!(maybe_last_event::<MockRuntime>().is_none());
+
+		let new_timeout = init_timeout + 1;
+
+		VaultsPallet::set_keygen_response_timeout(Origin::root(), new_timeout).unwrap();
+
+		assert_last_event!(crate::Event::KeygenResponseTimeoutUpdated { .. });
+		assert_eq!(KeygenResponseTimeout::<MockRuntime, _>::get(), new_timeout)
 	})
 }
 
