@@ -3,7 +3,7 @@ mod tests;
 
 use anyhow::{anyhow, Context};
 use cf_chains::{eth::Ethereum, ChainCrypto};
-use cf_primitives::CeremonyId;
+use cf_primitives::{BlockNumber, CeremonyId};
 use futures::{FutureExt, Stream, StreamExt};
 use pallet_cf_vaults::KeygenError;
 use slog::o;
@@ -611,7 +611,9 @@ where
 
                     // We want to submit a little more frequently than the interval, just in case we submit
                     // close to the boundary, and our heartbeat ends up on the wrong side of the interval we're submitting for.
-                    let blocks_per_heartbeat =  heartbeat_block_interval - 10;
+                    // The assumption here is that `HEARTBEAT_SAFETY_MARGIN` >> `heartbeat_block_interval`
+                    const HEARTBEAT_SAFETY_MARGIN: BlockNumber = 10;
+                    let blocks_per_heartbeat =  heartbeat_block_interval - HEARTBEAT_SAFETY_MARGIN;
 
                     slog::info!(
                         logger,
@@ -621,7 +623,7 @@ where
 
                     // All nodes must send a heartbeat regardless of their validator status (at least for now).
                     // We send it every `blocks_per_heartbeat` from the block they started up at.
-                    if ((current_block_header.number - last_heartbeat_submitted_at) >= (blocks_per_heartbeat)
+                    if ((current_block_header.number - last_heartbeat_submitted_at) >= blocks_per_heartbeat
                         // Submitting earlier than one minute in may falsely indicate liveness.
                         ) && has_submitted_init_heartbeat.load(Ordering::Relaxed)
                     {
