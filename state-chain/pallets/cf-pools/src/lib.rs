@@ -78,6 +78,7 @@ pub(crate) mod mini_pool {
 
 #[frame_support::pallet]
 pub mod pallet {
+	use cf_primitives::Asset;
 	use frame_system::pallet_prelude::BlockNumberFor;
 
 	use super::*;
@@ -96,9 +97,20 @@ pub mod pallet {
 	pub(super) type Pools<T: Config> =
 		StorageMap<_, Twox64Concat, any::Asset, mini_pool::AmmPool, ValueQuery>;
 
+	/// Flip ready to get burned.
+	#[pallet::storage]
+	pub(super) type FlipToBurn<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
+
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
+		fn on_initialize(_: BlockNumberFor<T>) -> Weight {
+			let collected_usdc_fees: AssetAmount = 50;
+			// Buy back flip
+			let flip_to_burn =
+				Pools::<T>::mutate(Asset::Usdc, |pool| pool.swap(collected_usdc_fees));
+			FlipToBurn::<T>::mutate(|total| {
+				*total = total.saturating_add(flip_to_burn);
+			});
 			0
 		}
 	}

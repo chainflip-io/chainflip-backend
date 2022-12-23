@@ -790,3 +790,7 @@ pub trait VaultKeyWitnessedHandler<C: ChainAbi> {
 		tx_id: C::TransactionId,
 	) -> DispatchResultWithPostInfo;
 }
+
+pub trait FlipInfo {
+	fn take_flip_to_burn() -> AssetAmount;
+}

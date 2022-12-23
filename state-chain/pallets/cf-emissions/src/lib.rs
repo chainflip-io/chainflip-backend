@@ -25,6 +25,9 @@ use sp_runtime::{
 	SaturatedConversion,
 };
 
+use cf_primitives::chains::AnyChain;
+use cf_traits::EgressApi;
+
 pub mod weights;
 pub use weights::WeightInfo;
 
@@ -33,7 +36,8 @@ pub mod pallet {
 
 	use super::*;
 	use cf_chains::ChainAbi;
-	use cf_traits::SystemStateInfo;
+	use cf_primitives::Asset;
+	use cf_traits::{FlipInfo, SystemStateInfo};
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::OriginFor;
 
@@ -96,6 +100,11 @@ pub mod pallet {
 
 		/// For governance checks.
 		type EnsureGovernance: EnsureOrigin<Self::Origin>;
+
+		type FlipToBurn: FlipInfo;
+
+		/// API for handling asset egress.
+		type EgressHandler: EgressApi<AnyChain>;
 	}
 
 	#[pallet::pallet]
@@ -164,10 +173,17 @@ pub mod pallet {
 			T::RewardsDistribution::distribute();
 			if Self::should_update_supply_at(current_block) {
 				if T::SystemState::ensure_no_maintenance().is_ok() {
-					// Take the flip we want to burn
-					// Schedule the egress
+					let flip_to_burn = T::FlipToBurn::take_flip_to_burn();
+					T::EgressHandler::schedule_egress(
+						Asset::Flip,
+						flip_to_burn,
+						cf_primitives::ForeignChainAddress::Eth(
+							T::EthEnvironmentProvider::key_manager_address(),
+						),
+					);
+					T::Issuance::burn(flip_to_burn.into());
 					Self::broadcast_update_total_supply(
-						T::Issuance::total_issuance(), // + Flip we want to burn
+						T::Issuance::total_issuance(),
 						current_block,
 					);
 					Self::deposit_event(Event::SupplyUpdateBroadcastRequested(current_block));
