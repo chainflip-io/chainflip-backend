@@ -82,20 +82,20 @@ where
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<(), &'static str> {
+	fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
 		try_runtime_helpers::update_migration_bounds::<P, FROM, TO>();
-		U::pre_upgrade()?;
+		let state = U::pre_upgrade()?;
 		log::info!(
 			"✅ {}: Pre-upgrade checks for migration from version {:?} to {:?} ok.",
 			P::name(),
 			FROM,
 			TO
 		);
-		Ok(())
+		Ok(state)
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade() -> Result<(), &'static str> {
+	fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
 		let (_, expected_version) =
 			try_runtime_helpers::get_migration_bounds::<P>().ok_or_else(|| {
 				log::error!("💥 {}: Expected a runtime storage upgrade.", P::name(),);
@@ -103,7 +103,7 @@ where
 			})?;
 
 		if <P as GetStorageVersion>::on_chain_storage_version() == expected_version {
-			U::post_upgrade()?;
+			U::post_upgrade(state)?;
 			log::info!("✅ {}: Post-upgrade checks ok.", P::name());
 			Ok(())
 		} else {
@@ -290,14 +290,14 @@ mod test_versioned_upgrade {
 			assert_ok!(UpgradeFrom0To1::pre_upgrade());
 			assert_eq!(try_runtime_helpers::get_migration_bounds::<Pallet>(), Some((0, 1)));
 			UpgradeFrom0To1::on_runtime_upgrade();
-			assert_ok!(UpgradeFrom0To1::post_upgrade());
+			assert_ok!(UpgradeFrom0To1::post_upgrade(Default::default()));
 
 			// Post-migration runs even if upgrade is out of bounds.
 			DummyUpgrade::set_error_on_post_upgrade(true);
 			assert_ok!(UpgradeFrom2To3::pre_upgrade());
 			assert_eq!(try_runtime_helpers::get_migration_bounds::<Pallet>(), Some((0, 3)));
 			UpgradeFrom2To3::on_runtime_upgrade();
-			assert!(UpgradeFrom2To3::post_upgrade().is_err());
+			assert!(UpgradeFrom2To3::post_upgrade(Default::default()).is_err());
 		});
 
 		// Error on post-upgrade is propagated.
@@ -306,7 +306,7 @@ mod test_versioned_upgrade {
 			assert_ok!(UpgradeFrom0To1::pre_upgrade());
 			assert_eq!(try_runtime_helpers::get_migration_bounds::<Pallet>(), Some((0, 1)));
 			UpgradeFrom0To1::on_runtime_upgrade();
-			assert_err!(UpgradeFrom0To1::post_upgrade(), "err");
+			assert_err!(UpgradeFrom0To1::post_upgrade(Default::default()), "err");
 		});
 	}
 }
