@@ -345,7 +345,7 @@ impl PoolState {
 	/// with appropiate Error variant.
 	///
 	/// This function never panics
-	///
+	/// 
 	/// If this function returns an `Err(_)` no state changes have occurred
 	pub fn mint<F: FnOnce(PoolAssetMap<AmountU256>) -> bool>(
 		&mut self,
@@ -354,78 +354,83 @@ impl PoolState {
 		upper_tick: Tick,
 		minted_liquidity: Liquidity,
 		f: F,
-	) -> Result<(), MintError> {
+	) -> Result<PoolAssetMap<AmountU256>, MintError> {
 		if lower_tick < upper_tick && MIN_TICK <= lower_tick && upper_tick <= MAX_TICK {
-			if minted_liquidity > 0 {
-				let mut position = self
-					.positions
-					.get(&(lp.clone(), lower_tick, upper_tick))
-					.cloned()
-					.unwrap_or_else(|| Position {
-						liquidity: 0,
-						last_fee_growth_inside: Default::default(),
-						fees_owed: Default::default(),
-					});
-				let tick_info_with_updated_gross_liquidity = |tick| {
-					let mut tick_info =
-						self.liquidity_map.get(&tick).cloned().unwrap_or_else(|| {
-							TickInfo {
-								liquidity_delta: 0,
-								liquidity_gross: 0,
-								fee_growth_outside: if tick <= self.current_tick {
-									// by convention, we assume that all growth before a tick was
-									// initialized happened _below_ the tick
-									self.global_fee_growth
-								} else {
-									Default::default()
-								},
-							}
-						});
+			return Err(MintError::InvalidTickRange);
+		}
+			
+		if minted_liquidity > 0 {
+			return Ok(Default::default());
+		}
 
-					tick_info.liquidity_gross =
-						u128::saturating_add(tick_info.liquidity_gross, minted_liquidity);
-					if tick_info.liquidity_gross > MAX_TICK_GROSS_LIQUIDITY {
-						Err(MintError::MaximumGrossLiquidity)
-					} else {
-						Ok(tick_info)
+		let mut position = self
+			.positions
+			.get(&(lp.clone(), lower_tick, upper_tick))
+			.cloned()
+			.unwrap_or_else(|| Position {
+				liquidity: 0,
+				last_fee_growth_inside: Default::default(),
+				fees_owed: Default::default(),
+			});
+
+		let tick_info_with_updated_gross_liquidity = |tick| {
+			let mut tick_info =
+				self.liquidity_map.get(&tick).cloned().unwrap_or_else(|| {
+					TickInfo {
+						liquidity_delta: 0,
+						liquidity_gross: 0,
+						fee_growth_outside: if tick <= self.current_tick {
+							// by convention, we assume that all growth before a tick was
+							// initialized happened _below_ the tick
+							self.global_fee_growth
+						} else {
+							Default::default()
+						},
 					}
-				};
+				});
 
-				let mut lower_info = tick_info_with_updated_gross_liquidity(lower_tick)?;
-				// Cannot overflow as liquidity_delta.abs() is bounded to <=
-				// MAX_TICK_GROSS_LIQUIDITY
-				lower_info.liquidity_delta =
-					lower_info.liquidity_delta.checked_add_unsigned(minted_liquidity).unwrap();
-				let mut upper_info = tick_info_with_updated_gross_liquidity(upper_tick)?;
-				// Cannot underflow as liquidity_delta.abs() is bounded to <=
-				// MAX_TICK_GROSS_LIQUIDITY
-				upper_info.liquidity_delta =
-					upper_info.liquidity_delta.checked_sub_unsigned(minted_liquidity).unwrap();
-
-				position.set_liquidity(
-					self,
-					// Cannot overflow due to * MAX_TICK_GROSS_LIQUIDITY
-					position.liquidity + minted_liquidity,
-					lower_tick,
-					&lower_info,
-					upper_tick,
-					&upper_info,
-				);
-
-				let (amounts_required, current_liquidity_delta) =
-					self.liquidity_to_amounts::<true>(minted_liquidity, lower_tick, upper_tick);
-
-				if f(amounts_required) {
-					self.current_liquidity += current_liquidity_delta;
-					self.positions.insert((lp, lower_tick, upper_tick), position);
-					self.liquidity_map.insert(lower_tick, lower_info);
-					self.liquidity_map.insert(upper_tick, upper_info);
-				}
+			tick_info.liquidity_gross =
+				u128::saturating_add(tick_info.liquidity_gross, minted_liquidity);
+			if tick_info.liquidity_gross > MAX_TICK_GROSS_LIQUIDITY {
+				Err(MintError::MaximumGrossLiquidity)
+			} else {
+				Ok(tick_info)
 			}
+		};
 
-			Ok(())
+		let mut lower_info = tick_info_with_updated_gross_liquidity(lower_tick)?;
+		// Cannot overflow as liquidity_delta.abs() is bounded to <=
+		// MAX_TICK_GROSS_LIQUIDITY
+		lower_info.liquidity_delta =
+			lower_info.liquidity_delta.checked_add_unsigned(minted_liquidity).unwrap();
+		let mut upper_info = tick_info_with_updated_gross_liquidity(upper_tick)?;
+		// Cannot underflow as liquidity_delta.abs() is bounded to <=
+		// MAX_TICK_GROSS_LIQUIDITY
+		upper_info.liquidity_delta =
+			upper_info.liquidity_delta.checked_sub_unsigned(minted_liquidity).unwrap();
+
+		position.set_liquidity(
+			self,
+			// Cannot overflow due to * MAX_TICK_GROSS_LIQUIDITY
+			position.liquidity + minted_liquidity,
+			lower_tick,
+			&lower_info,
+			upper_tick,
+			&upper_info,
+		);
+
+		let (amounts_required, current_liquidity_delta) =
+			self.liquidity_to_amounts::<true>(minted_liquidity, lower_tick, upper_tick);
+
+		if f(amounts_required) {
+			self.current_liquidity += current_liquidity_delta;
+			self.positions.insert((lp, lower_tick, upper_tick), position);
+			self.liquidity_map.insert(lower_tick, lower_info);
+			self.liquidity_map.insert(upper_tick, upper_info);
+			
+			Ok(amounts_required)
 		} else {
-			Err(MintError::InvalidTickRange)
+			Ok(Default::default())
 		}
 	}
 
