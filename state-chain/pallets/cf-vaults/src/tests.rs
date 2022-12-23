@@ -558,6 +558,7 @@ fn vault_key_rotated() {
 			PendingVaultRotation::<MockRuntime, _>::get(),
 			Some(VaultRotationStatus::Complete { tx_id: TX_HASH }),
 		);
+		assert_last_event!(crate::Event::VaultRotationCompleted { .. });
 	});
 }
 
