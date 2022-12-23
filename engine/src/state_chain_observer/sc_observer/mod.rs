@@ -3,7 +3,7 @@ mod tests;
 
 use anyhow::{anyhow, Context};
 use cf_chains::{eth::Ethereum, ChainCrypto};
-use cf_primitives::CeremonyId;
+use cf_primitives::{BlockNumber, CeremonyId};
 use futures::{FutureExt, Stream, StreamExt};
 use pallet_cf_vaults::KeygenError;
 use slog::o;
@@ -242,15 +242,6 @@ where
             <state_chain_runtime::Runtime as pallet_cf_reputation::Config>::HeartbeatBlockInterval::get()
         };
 
-        let blocks_per_heartbeat =
-            std::cmp::max(1, heartbeat_block_interval / 2);
-
-        slog::info!(
-            logger,
-            "Sending heartbeat every {} blocks",
-            blocks_per_heartbeat
-        );
-
         let start_epoch = |block_hash: H256, index: u32, current: bool, participant: bool| {
             let eth_epoch_start_sender = &eth_epoch_start_sender;
             #[cfg(feature = "ibiza")]
@@ -342,6 +333,8 @@ where
                 has_submitted_init_heartbeat.store(true, Ordering::Relaxed);
             Ok(())
         }.boxed()});
+
+        let mut last_heartbeat_submitted_at = 0;
 
         let mut sc_block_stream = Box::pin(sc_block_stream);
         loop {
@@ -616,14 +609,23 @@ where
                         }
                     }
 
+                    // We want to submit a little more frequently than the interval, just in case we submit
+                    // close to the boundary, and our heartbeat ends up on the wrong side of the interval we're submitting for.
+                    // The assumption here is that `HEARTBEAT_SAFETY_MARGIN` >> `heartbeat_block_interval`
+                    const HEARTBEAT_SAFETY_MARGIN: BlockNumber = 10;
+                    let blocks_per_heartbeat =  heartbeat_block_interval - HEARTBEAT_SAFETY_MARGIN;
+
+                    slog::info!(
+                        logger,
+                        "Sending heartbeat every {} blocks",
+                        blocks_per_heartbeat
+                    );
+
                     // All nodes must send a heartbeat regardless of their validator status (at least for now).
-                    // We send it in the middle of the online interval (so any node sync issues don't
-                    // cause issues (if we tried to send on one of the interval boundaries)
-                    if ((current_block_header.number
-                        + (heartbeat_block_interval / 2))
-                        % blocks_per_heartbeat
+                    // We send it every `blocks_per_heartbeat` from the block they started up at.
+                    if ((current_block_header.number - last_heartbeat_submitted_at) >= blocks_per_heartbeat
                         // Submitting earlier than one minute in may falsely indicate liveness.
-                        == 0) && has_submitted_init_heartbeat.load(Ordering::Relaxed)
+                        ) && has_submitted_init_heartbeat.load(Ordering::Relaxed)
                     {
                         slog::info!(
                             logger,
@@ -636,6 +638,8 @@ where
                                 &logger,
                             )
                             .await;
+
+                        last_heartbeat_submitted_at = current_block_header.number;
                     }
                 }
                 None => {
