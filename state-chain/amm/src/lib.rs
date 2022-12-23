@@ -850,7 +850,7 @@ impl PoolState {
 	) -> SqrtPriceQ64F96 {
 		// Will not overflow as function is not called if amount >= amount_required_to_reach_target,
 		// therefore bounding the function output to approximately <= MAX_SQRT_PRICE
-		sqrt_ratio_current + amount / liquidity
+		sqrt_ratio_current + (amount << 96u32) / liquidity
 	}
 
 	fn sqrt_price_at_tick(tick: Tick) -> SqrtPriceQ64F96 {
