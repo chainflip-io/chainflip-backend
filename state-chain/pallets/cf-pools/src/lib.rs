@@ -3,9 +3,11 @@ use cf_primitives::{chains::assets::any, AssetAmount, ExchangeRate, PoolAsset, T
 use cf_traits::Chainflip;
 use frame_support::{
 	pallet_prelude::*,
-	sp_runtime::{traits::Saturating, FixedPointNumber},
+	sp_runtime::{traits::Saturating, FixedPointNumber, Permill},
 };
 pub use pallet::*;
+
+const BASIS_POINTS_PER_MILLION: u32 = 100;
 
 #[cfg(test)]
 mod mock;
@@ -82,7 +84,10 @@ pub mod pallet {
 
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
-	pub trait Config: Chainflip {}
+	pub trait Config: Chainflip {
+		#[pallet::constant]
+		type NetworkFee: Get<u16>;
+	}
 
 	#[pallet::pallet]
 	#[pallet::without_storage_info]
@@ -93,6 +98,10 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(super) type Pools<T: Config> =
 		StorageMap<_, Twox64Concat, any::Asset, mini_pool::AmmPool, ValueQuery>;
+
+	/// Network fee
+	#[pallet::storage]
+	pub type CollectedNetworkFee<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
 }
 
 impl<T: Config> cf_traits::SwappingApi for Pallet<T> {
@@ -104,14 +113,19 @@ impl<T: Config> cf_traits::SwappingApi for Pallet<T> {
 	) -> (AssetAmount, (cf_primitives::Asset, AssetAmount)) {
 		(
 			match (from, to) {
-				(input_asset, any::Asset::Usdc) =>
-					Pools::<T>::mutate(input_asset, |pool| pool.swap(input_amount)),
-				(any::Asset::Usdc, output_asset) =>
-					Pools::<T>::mutate(output_asset, |pool| pool.reverse_swap(input_amount)),
+				(input_asset, any::Asset::Usdc) => {
+					let swap_output =
+						Pools::<T>::mutate(input_asset, |pool| pool.swap(input_amount));
+					Self::take_network_fee(swap_output)
+				},
+				(any::Asset::Usdc, output_asset) => Pools::<T>::mutate(output_asset, |pool| {
+					pool.reverse_swap(Self::take_network_fee(input_amount))
+				}),
 				(input_asset, output_asset) => Pools::<T>::mutate(output_asset, |pool| {
-					pool.reverse_swap(Pools::<T>::mutate(input_asset, |pool| {
-						pool.swap(input_amount)
-					}))
+					pool.reverse_swap(Self::take_network_fee(Pools::<T>::mutate(
+						input_asset,
+						|pool| pool.swap(input_amount),
+					)))
 				}),
 			},
 			(any::Asset::Usdc, 0),
@@ -196,5 +210,19 @@ impl<T: Config> cf_traits::LiquidityPoolApi for Pallet<T> {
 				PoolAsset::Asset1 => (0u128, *volume),
 			},
 		})
+	}
+}
+
+impl<T: Config> Pallet<T> {
+	fn calc_fee(fee: u16, input: AssetAmount) -> AssetAmount {
+		Permill::from_parts(fee as u32 * BASIS_POINTS_PER_MILLION) * input
+	}
+
+	fn take_network_fee(input: AssetAmount) -> AssetAmount {
+		let fee = Self::calc_fee(T::NetworkFee::get(), input);
+		CollectedNetworkFee::<T>::mutate(|total| {
+			*total = total.saturating_add(fee);
+		});
+		input.saturating_sub(fee)
 	}
 }

@@ -303,7 +303,10 @@ impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 }
 #[cfg(feature = "ibiza")]
-impl pallet_cf_pools::Config for Runtime {}
+impl pallet_cf_pools::Config for Runtime {
+	// fee = 0,1%
+	type NetworkFee = ConstU16<10>;
+}
 
 #[cfg(feature = "ibiza")]
 impl pallet_cf_lp::Config for Runtime {
