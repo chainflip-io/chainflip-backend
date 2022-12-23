@@ -116,31 +116,14 @@ impl<T: Config> cf_traits::SwappingApi for Pallet<T> {
 				(input_asset, any::Asset::Usdc) => {
 					let swap_output =
 						Pools::<T>::mutate(input_asset, |pool| pool.swap(input_amount));
-					let network_fee =
-						Self::calculate_network_fee(T::NetworkFee::get(), swap_output);
-					CollectedNetworkFee::<T>::put(
-						CollectedNetworkFee::<T>::get().saturating_add(network_fee),
-					);
-					swap_output.saturating_sub(network_fee)
+					Self::take_network_fee(T::NetworkFee::get(), swap_output)
 				},
-				(any::Asset::Usdc, output_asset) => {
-					let network_fee =
-						Self::calculate_network_fee(T::NetworkFee::get(), input_amount);
-					CollectedNetworkFee::<T>::put(
-						CollectedNetworkFee::<T>::get().saturating_add(network_fee),
-					);
-					Pools::<T>::mutate(output_asset, |pool| {
-						pool.reverse_swap(input_amount.saturating_sub(network_fee))
-					})
-				},
+				(any::Asset::Usdc, output_asset) => Pools::<T>::mutate(output_asset, |pool| {
+					pool.reverse_swap(Self::take_network_fee(T::NetworkFee::get(), input_amount))
+				}),
 				(input_asset, output_asset) => Pools::<T>::mutate(output_asset, |pool| {
 					pool.reverse_swap(Pools::<T>::mutate(input_asset, |pool| {
-						let network_fee =
-							Self::calculate_network_fee(T::NetworkFee::get(), input_amount);
-						CollectedNetworkFee::<T>::put(
-							CollectedNetworkFee::<T>::get().saturating_add(network_fee),
-						);
-						pool.swap(input_amount.saturating_sub(network_fee))
+						pool.swap(Self::take_network_fee(T::NetworkFee::get(), input_amount))
 					}))
 				}),
 			},
@@ -230,7 +213,11 @@ impl<T: Config> cf_traits::LiquidityPoolApi for Pallet<T> {
 }
 
 impl<T: Config> Pallet<T> {
-	fn calculate_network_fee(fee: u16, input: AssetAmount) -> AssetAmount {
-		Permill::from_parts(fee as u32 * BASIS_POINTS_PER_MILLION) * input
+	fn take_network_fee(fee: u16, input: AssetAmount) -> AssetAmount {
+		let fee = Permill::from_parts(fee as u32 * BASIS_POINTS_PER_MILLION) * input;
+		CollectedNetworkFee::<T>::mutate(|total| {
+			*total = total.saturating_add(fee);
+		});
+		input.saturating_sub(fee)
 	}
 }

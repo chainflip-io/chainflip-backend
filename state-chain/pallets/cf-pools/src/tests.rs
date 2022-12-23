@@ -87,14 +87,14 @@ fn funds_are_conserved_via_api() {
 fn test_fee_calculation() {
 	new_test_ext().execute_with(|| {
 		// Show we can never overflow and panic
-		Pools::calculate_network_fee(u16::MAX, AssetAmount::MAX);
+		Pools::take_network_fee(u16::MAX, AssetAmount::MAX);
 		// 200 bps (2%) of 100 = 2
-		assert_eq!(Pools::calculate_network_fee(200, 100), 2);
+		assert_eq!(Pools::take_network_fee(200, 100), 98);
 		// 2220 bps = 22 % of 199 = 43,78
-		assert_eq!(Pools::calculate_network_fee(2220, 199), 44);
+		assert_eq!(Pools::take_network_fee(2220, 199), 155);
 		// 2220 bps = 22 % of 234 = 51,26
-		assert_eq!(Pools::calculate_network_fee(2220, 233), 52);
+		assert_eq!(Pools::take_network_fee(2220, 233), 181);
 		// 10 bps = 0,1% of 3000 = 3
-		assert_eq!(Pools::calculate_network_fee(10, 3000), 3);
+		assert_eq!(Pools::take_network_fee(10, 3000), 2997);
 	});
 }
