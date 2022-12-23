@@ -156,7 +156,11 @@ fn keygen_verification_failure() {
 		EthMockThresholdSigner::on_signature_ready(request_id);
 
 		assert_last_event!(PalletEvent::KeygenVerificationFailure { .. });
-		MockOffenceReporter::assert_reported(PalletOffence::FailedKeygen, blamed)
+		MockOffenceReporter::assert_reported(PalletOffence::FailedKeygen, blamed.clone());
+		assert_eq!(
+			VaultsPallet::status(),
+			AsyncResult::Ready(VaultStatus::Failed(blamed.into_iter().collect()))
+		)
 	});
 }
 
