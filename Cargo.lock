@@ -930,8 +930,12 @@ dependencies = [
 name = "chainflip-amm"
 version = "0.1.0"
 dependencies = [
- "enum-map",
- "primitive-types",
+ "cf-primitives",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sp-core 6.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-06+01)",
+ "sp-std 4.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-06+01)",
 ]
 
 [[package]]
@@ -2079,26 +2083,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "21cdad81446a7f7dc43f6a77409efeb9733d2fa65553efef6018ef257c959b73"
 dependencies = [
  "heck 0.4.0",
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
-name = "enum-map"
-version = "2.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0348b2a57c82f98b9dbd8098b1abb2416f221823d3e50cbe24eaebdd16896826"
-dependencies = [
- "enum-map-derive",
-]
-
-[[package]]
-name = "enum-map-derive"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a63b7a0ddec6f38dcec5e36257750b7a8fcaf4227e12ceb306e341d63634da05"
-dependencies = [
  "proc-macro2",
  "quote",
  "syn",

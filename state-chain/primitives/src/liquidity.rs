@@ -1,5 +1,7 @@
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
+use sp_core::U256;
+use sp_std::ops::{Index, IndexMut, Not};
 
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
@@ -7,9 +9,20 @@ use serde::{Deserialize, Serialize};
 /// The id type for range orders.
 pub type PositionId = u64;
 
-/// The type used for measuring price ticks. Note Uniswap uses i24 but this is not supported in
-/// rust.
+/// Representation of a price: p = 1.0001^Tick
 pub type Tick = i32;
+
+/// Representation of Liquidity in an exchange pool.
+pub type Liquidity = u128;
+
+/// Amount used to calculate exchange pool
+pub type AmountU256 = U256;
+
+/// sqrt(Price) in amm exchange Pool. Q64.96 numerical type.
+pub type SqrtPriceQ64F96 = U256;
+
+/// Q128.128 numerical type use to record Fee.
+pub type FeeGrowthQ128F128 = U256;
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
@@ -24,6 +37,17 @@ pub struct AmmRange {
 pub enum PoolAsset {
 	Asset0,
 	Asset1,
+}
+
+impl Not for PoolAsset {
+	type Output = Self;
+
+	fn not(self) -> Self::Output {
+		match self {
+			PoolAsset::Asset0 => PoolAsset::Asset1,
+			PoolAsset::Asset1 => PoolAsset::Asset0,
+		}
+	}
 }
 
 /// Represents the types of order that an LP can submit to the AMM.
@@ -57,4 +81,61 @@ impl<Volume: Default + Copy> TradingPosition<Volume> {
 			_ => Default::default(),
 		}
 	}
+}
+
+/// A costom type that contains two `Amount`s, one for each side of an exchange pool.
+#[derive(Copy, Clone, Debug, TypeInfo, PartialEq, Eq, Encode, Decode, MaxEncodedLen)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct PoolAssetMap<Amount> {
+	asset_0: Amount,
+	asset_1: Amount,
+}
+
+impl<Amount: Clone> PoolAssetMap<Amount> {
+	pub fn new(asset_0: Amount, asset_1: Amount) -> Self {
+		Self { asset_0, asset_1 }
+	}
+
+	/// Creates a new PooAssetMap from
+	pub fn new_from_fn(f: impl Fn(PoolAsset) -> Amount) -> Self {
+		Self { asset_0: f(PoolAsset::Asset0), asset_1: f(PoolAsset::Asset1) }
+	}
+
+	pub fn mutate(&mut self, f: impl Fn(PoolAsset, Amount) -> Amount) {
+		self.asset_0 = f(PoolAsset::Asset0, self.asset_0.clone());
+		self.asset_1 = f(PoolAsset::Asset1, self.asset_1.clone());
+	}
+}
+
+impl<Amount> Index<PoolAsset> for PoolAssetMap<Amount> {
+	type Output = Amount;
+	fn index(&self, side: PoolAsset) -> &Amount {
+		match side {
+			PoolAsset::Asset0 => &self.asset_0,
+			PoolAsset::Asset1 => &self.asset_1,
+		}
+	}
+}
+
+impl<Amount> IndexMut<PoolAsset> for PoolAssetMap<Amount> {
+	fn index_mut(&mut self, side: PoolAsset) -> &mut Amount {
+		match side {
+			PoolAsset::Asset0 => &mut self.asset_0,
+			PoolAsset::Asset1 => &mut self.asset_1,
+		}
+	}
+}
+
+impl<Amount: Default> Default for PoolAssetMap<Amount> {
+	fn default() -> Self {
+		Self { asset_0: Default::default(), asset_1: Default::default() }
+	}
+}
+
+#[derive(Copy, Clone, Debug, TypeInfo, PartialEq, Eq, Encode, Decode, MaxEncodedLen)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct TickInfo {
+	pub liquidity_delta: i128,
+	pub liquidity_gross: u128,
+	pub fee_growth_outside: PoolAssetMap<FeeGrowthQ128F128>,
 }

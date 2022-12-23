@@ -17,17 +17,20 @@
 
 #![feature(mixed_integer_ops)] // This has been stablized in a future version of rust
 
-use std::{collections::BTreeMap, u128};
+use sp_std::collections::btree_map::BTreeMap;
 
-use enum_map::Enum;
-use primitive_types::{H256, U256, U512};
+use codec::{Decode, Encode, MaxEncodedLen};
+use scale_info::TypeInfo;
+use serde::{Deserialize, Serialize};
 
-pub type Tick = i32;
-pub type Liquidity = u128;
-pub type LiquidityProvider = H256;
-pub type Amount = U256;
-type SqrtPriceQ64F96 = U256;
-type FeeGrowthQ128F128 = U256;
+use cf_primitives::{
+	liquidity::{
+		AmountU256, FeeGrowthQ128F128, Liquidity, PoolAsset, PoolAssetMap, SqrtPriceQ64F96, Tick,
+		TickInfo,
+	},
+	AccountId,
+};
+use sp_core::{U256, U512};
 
 /// The minimum tick that may be passed to `sqrt_price_at_tick` computed from log base 1.0001 of
 /// 2**-128
@@ -46,132 +49,11 @@ const MAX_SQRT_PRICE: SqrtPriceQ64F96 =
 
 const MAX_TICK_GROSS_LIQUIDITY: Liquidity = Liquidity::MAX / ((1 + MAX_TICK - MIN_TICK) as u128);
 
-const ONE_IN_PIPS: u32 = 100000;
-
-#[derive(Clone)]
-struct Position {
-	liquidity: Liquidity,
-	last_fee_growth_inside: enum_map::EnumMap<Ticker, FeeGrowthQ128F128>,
-	fees_owed: enum_map::EnumMap<Ticker, u128>,
-}
-impl Position {
-	fn update_fees_owed(
-		&mut self,
-		pool_state: &PoolState,
-		lower_tick: Tick,
-		lower_info: &TickInfo,
-		upper_tick: Tick,
-		upper_info: &TickInfo,
-	) {
-		let fee_growth_inside = enum_map::EnumMap::default().map(|ticker, ()| {
-			let fee_growth_below = if pool_state.current_tick < lower_tick {
-				pool_state.global_fee_growth[ticker] - lower_info.fee_growth_outside[ticker]
-			} else {
-				lower_info.fee_growth_outside[ticker]
-			};
-
-			let fee_growth_above = if pool_state.current_tick < upper_tick {
-				upper_info.fee_growth_outside[ticker]
-			} else {
-				pool_state.global_fee_growth[ticker] - upper_info.fee_growth_outside[ticker]
-			};
-
-			pool_state.global_fee_growth[ticker] - fee_growth_below - fee_growth_above
-		});
-		self.fees_owed = enum_map::EnumMap::default().map(|ticker, ()| {
-			// DIFF: This behaviour is different than Uniswap's. We saturate fees_owed instead of
-			// overflowing
-
-			/*
-				Proof that `mul_div` does not overflow:
-				Note position.liqiudity: u128
-				U512::one() << 128 > u128::MAX
-			*/
-			let fees_owed: u128 = mul_div_floor(
-				fee_growth_inside[ticker] - self.last_fee_growth_inside[ticker],
-				self.liquidity.into(),
-				U512::one() << 128,
-			)
-			.try_into()
-			.unwrap_or(u128::MAX);
-
-			// saturating is acceptable, it is on LPs to withdraw fees before you hit u128::MAX fees
-			self.fees_owed[ticker].saturating_add(fees_owed)
-		});
-		self.last_fee_growth_inside = fee_growth_inside;
-	}
-
-	fn set_liquidity(
-		&mut self,
-		pool_state: &PoolState,
-		new_liquidity: Liquidity,
-		lower_tick: Tick,
-		lower_info: &TickInfo,
-		upper_tick: Tick,
-		upper_info: &TickInfo,
-	) {
-		self.update_fees_owed(pool_state, lower_tick, lower_info, upper_tick, upper_info);
-		self.liquidity = new_liquidity;
-	}
-}
-
-#[derive(Clone)]
-struct TickInfo {
-	liquidity_delta: i128,
-	liquidity_gross: u128,
-	fee_growth_outside: enum_map::EnumMap<Ticker, FeeGrowthQ128F128>,
-}
-
-pub struct PoolState {
-	fee_pips: u32,
-	current_sqrt_price: SqrtPriceQ64F96,
-	current_tick: Tick,
-	current_liquidity: Liquidity,
-	global_fee_growth: enum_map::EnumMap<Ticker, FeeGrowthQ128F128>,
-	liquidity_map: BTreeMap<Tick, TickInfo>,
-	positions: BTreeMap<(LiquidityProvider, Tick, Tick), Position>,
-}
-
-#[derive(Enum, Clone, Copy)]
-pub enum Ticker {
-	Base,
-	Pair,
-}
-
-impl std::ops::Not for Ticker {
-	type Output = Self;
-
-	fn not(self) -> Self::Output {
-		match self {
-			Ticker::Base => Ticker::Pair,
-			Ticker::Pair => Ticker::Base,
-		}
-	}
-}
-
-fn mul_div_floor<C: Into<U512>>(a: U256, b: U256, c: C) -> U256 {
-	let c: U512 = c.into();
-	(U256::full_mul(a, b) / c).try_into().unwrap()
-}
-
-fn mul_div_ceil<C: Into<U512>>(a: U256, b: U256, c: C) -> U256 {
-	let c: U512 = c.into();
-
-	let (d, m) = U512::div_mod(U256::full_mul(a, b), c);
-
-	if m > U512::from(0) {
-		// cannot overflow as for m > 0, c must be > 1, and as (a*b) <= U512::MAX, therefore a*b/c <
-		// U512::MAX
-		d + 1
-	} else {
-		d
-	}
-	.try_into()
-	.unwrap()
-}
+/// Minimum resolution is 0.01 of a Basis Point: 0.0001%. Maximum is 100%.
+const ONE_IN_BIPS: u32 = 100000;
 
 trait SwapDirection {
-	const INPUT_TICKER: Ticker;
+	const INPUT_TICKER: PoolAsset;
 
 	/// The xy=k maths only works while the liquidity is constant, so this function returns the
 	/// closest (to the current) next tick/price where liquidity possibly changes. Note the
@@ -187,21 +69,21 @@ trait SwapDirection {
 		from: SqrtPriceQ64F96,
 		to: SqrtPriceQ64F96,
 		liquidity: Liquidity,
-	) -> Amount;
+	) -> AmountU256;
 	/// Calculates the swap output amount needed to move the current price given the specified
 	/// amount of liquidity
 	fn output_amount_delta_floor(
 		from: SqrtPriceQ64F96,
 		to: SqrtPriceQ64F96,
 		liquidity: Liquidity,
-	) -> Amount;
+	) -> AmountU256;
 
 	/// Calculates where the current price will be after a swap of amount given the current price
 	/// and a specific amount of liquidity
 	fn next_sqrt_price_from_input_amount(
 		sqrt_ratio_current: SqrtPriceQ64F96,
 		liquidity: Liquidity,
-		amount: Amount,
+		amount: AmountU256,
 	) -> SqrtPriceQ64F96;
 
 	/// For a given tick calculates the change in current liquidity when that tick is crossed
@@ -213,7 +95,7 @@ trait SwapDirection {
 
 pub struct BaseToPair {}
 impl SwapDirection for BaseToPair {
-	const INPUT_TICKER: Ticker = Ticker::Base;
+	const INPUT_TICKER: PoolAsset = PoolAsset::Asset0;
 
 	fn target_tick(
 		current_tick: Tick,
@@ -232,7 +114,7 @@ impl SwapDirection for BaseToPair {
 		current: SqrtPriceQ64F96,
 		target: SqrtPriceQ64F96,
 		liquidity: Liquidity,
-	) -> Amount {
+	) -> AmountU256 {
 		PoolState::base_amount_delta_ceil(target, current, liquidity)
 	}
 
@@ -240,14 +122,14 @@ impl SwapDirection for BaseToPair {
 		current: SqrtPriceQ64F96,
 		target: SqrtPriceQ64F96,
 		liquidity: Liquidity,
-	) -> Amount {
+	) -> AmountU256 {
 		PoolState::pair_amount_delta_floor(target, current, liquidity)
 	}
 
 	fn next_sqrt_price_from_input_amount(
 		sqrt_ratio_current: SqrtPriceQ64F96,
 		liquidity: Liquidity,
-		amount: Amount,
+		amount: AmountU256,
 	) -> SqrtPriceQ64F96 {
 		PoolState::next_sqrt_price_from_base_input(sqrt_ratio_current, liquidity, amount)
 	}
@@ -263,7 +145,7 @@ impl SwapDirection for BaseToPair {
 
 pub struct PairToBase {}
 impl SwapDirection for PairToBase {
-	const INPUT_TICKER: Ticker = Ticker::Pair;
+	const INPUT_TICKER: PoolAsset = PoolAsset::Asset1;
 
 	fn target_tick(
 		current_tick: Tick,
@@ -282,7 +164,7 @@ impl SwapDirection for PairToBase {
 		current: SqrtPriceQ64F96,
 		target: SqrtPriceQ64F96,
 		liquidity: Liquidity,
-	) -> Amount {
+	) -> AmountU256 {
 		PoolState::pair_amount_delta_ceil(current, target, liquidity)
 	}
 
@@ -290,14 +172,14 @@ impl SwapDirection for PairToBase {
 		current: SqrtPriceQ64F96,
 		target: SqrtPriceQ64F96,
 		liquidity: Liquidity,
-	) -> Amount {
+	) -> AmountU256 {
 		PoolState::base_amount_delta_floor(current, target, liquidity)
 	}
 
 	fn next_sqrt_price_from_input_amount(
 		sqrt_ratio_current: SqrtPriceQ64F96,
 		liquidity: Liquidity,
-		amount: Amount,
+		amount: AmountU256,
 	) -> SqrtPriceQ64F96 {
 		PoolState::next_sqrt_price_from_pair_input(sqrt_ratio_current, liquidity, amount)
 	}
@@ -331,13 +213,94 @@ pub enum BurnError {
 
 pub enum CollectError {}
 
+#[derive(Copy, Clone, Debug, TypeInfo, PartialEq, Eq, Encode, Decode, MaxEncodedLen)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+struct Position {
+	liquidity: Liquidity,
+	last_fee_growth_inside: PoolAssetMap<FeeGrowthQ128F128>,
+	fees_owed: PoolAssetMap<u128>,
+}
+
+impl Position {
+	fn update_fees_owed(
+		&mut self,
+		pool_state: &PoolState,
+		lower_tick: Tick,
+		lower_info: &TickInfo,
+		upper_tick: Tick,
+		upper_info: &TickInfo,
+	) {
+		let fee_growth_inside = PoolAssetMap::new_from_fn(|ticker| {
+			let fee_growth_below = if pool_state.current_tick < lower_tick {
+				pool_state.global_fee_growth[ticker] - lower_info.fee_growth_outside[ticker]
+			} else {
+				lower_info.fee_growth_outside[ticker]
+			};
+
+			let fee_growth_above = if pool_state.current_tick < upper_tick {
+				upper_info.fee_growth_outside[ticker]
+			} else {
+				pool_state.global_fee_growth[ticker] - upper_info.fee_growth_outside[ticker]
+			};
+
+			pool_state.global_fee_growth[ticker] - fee_growth_below - fee_growth_above
+		});
+		self.fees_owed.mutate(|ticker, current_fees_owned| {
+			// DIFF: This behaviour is different than Uniswap's. We saturate fees_owed instead of
+			// overflowing
+
+			/*
+				Proof that `mul_div` does not overflow:
+				Note position.liqiudity: u128
+				U512::one() << 128 > u128::MAX
+			*/
+			let new_fees_owed: u128 = mul_div_floor(
+				fee_growth_inside[ticker] - self.last_fee_growth_inside[ticker],
+				self.liquidity.into(),
+				U512::one() << 128,
+			)
+			.try_into()
+			.unwrap_or(u128::MAX);
+
+			// saturating is acceptable, it is on LPs to withdraw fees before you hit u128::MAX fees
+			current_fees_owned.saturating_add(new_fees_owed)
+		});
+		self.last_fee_growth_inside = fee_growth_inside;
+	}
+
+	fn set_liquidity(
+		&mut self,
+		pool_state: &PoolState,
+		new_liquidity: Liquidity,
+		lower_tick: Tick,
+		lower_info: &TickInfo,
+		upper_tick: Tick,
+		upper_info: &TickInfo,
+	) {
+		self.update_fees_owed(pool_state, lower_tick, lower_info, upper_tick, upper_info);
+		self.liquidity = new_liquidity;
+	}
+}
+
+#[derive(Clone, Debug, TypeInfo, PartialEq, Eq, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct PoolState {
+	fee_pips: u32,
+	current_sqrt_price: SqrtPriceQ64F96,
+	current_tick: Tick,
+	current_liquidity: Liquidity,
+	global_fee_growth: PoolAssetMap<FeeGrowthQ128F128>,
+	liquidity_map: BTreeMap<Tick, TickInfo>,
+	positions: BTreeMap<(AccountId, Tick, Tick), Position>,
+}
+
 impl PoolState {
 	/// Creates a new pool with the specified fee and initial price. The pool is created with no
 	/// liquidity, it must be added using the `PoolState::mint` function.
 	///
 	/// This function will panic if fee_pips or initial_sqrt_price are outside the allowed bounds
 	pub fn new(fee_pips: u32, initial_sqrt_price: SqrtPriceQ64F96) -> Self {
-		assert!(fee_pips <= ONE_IN_PIPS / 2);
+		assert!(fee_pips <= ONE_IN_BIPS / 2);
 		assert!(MIN_SQRT_PRICE <= initial_sqrt_price && initial_sqrt_price < MAX_SQRT_PRICE);
 		let initial_tick = Self::tick_at_sqrt_price(initial_sqrt_price);
 		Self {
@@ -384,9 +347,9 @@ impl PoolState {
 	/// This function never panics
 	///
 	/// If this function returns an `Err(_)` no state changes have occurred
-	pub fn mint<F: FnOnce(enum_map::EnumMap<Ticker, Amount>) -> bool>(
+	pub fn mint<F: FnOnce(PoolAssetMap<AmountU256>) -> bool>(
 		&mut self,
-		lp: LiquidityProvider,
+		lp: AccountId,
 		lower_tick: Tick,
 		upper_tick: Tick,
 		minted_liquidity: Liquidity,
@@ -394,14 +357,15 @@ impl PoolState {
 	) -> Result<(), MintError> {
 		if lower_tick < upper_tick && MIN_TICK <= lower_tick && upper_tick <= MAX_TICK {
 			if minted_liquidity > 0 {
-				let mut position =
-					self.positions.get(&(lp, lower_tick, upper_tick)).cloned().unwrap_or_else(
-						|| Position {
-							liquidity: 0,
-							last_fee_growth_inside: Default::default(),
-							fees_owed: Default::default(),
-						},
-					);
+				let mut position = self
+					.positions
+					.get(&(lp.clone(), lower_tick, upper_tick))
+					.cloned()
+					.unwrap_or_else(|| Position {
+						liquidity: 0,
+						last_fee_growth_inside: Default::default(),
+						fees_owed: Default::default(),
+					});
 				let tick_info_with_updated_gross_liquidity = |tick| {
 					let mut tick_info =
 						self.liquidity_map.get(&tick).cloned().unwrap_or_else(|| {
@@ -475,22 +439,21 @@ impl PoolState {
 	#[allow(clippy::type_complexity)]
 	pub fn burn(
 		&mut self,
-		lp: LiquidityProvider,
+		lp: AccountId,
 		lower_tick: Tick,
 		upper_tick: Tick,
 		burnt_liquidity: Liquidity,
-	) -> Result<
-		(enum_map::EnumMap<Ticker, Amount>, enum_map::EnumMap<Ticker, u128>),
-		PositionError<BurnError>,
-	> {
-		if let Some(mut position) = self.positions.get(&(lp, lower_tick, upper_tick)).cloned() {
+	) -> Result<(PoolAssetMap<AmountU256>, PoolAssetMap<u128>), PositionError<BurnError>> {
+		if let Some(mut position) =
+			self.positions.get(&(lp.clone(), lower_tick, upper_tick)).cloned()
+		{
 			assert!(position.liquidity != 0);
 			if burnt_liquidity <= position.liquidity {
-				let mut lower_info = self.liquidity_map.get(&lower_tick).unwrap().clone();
+				let mut lower_info = *self.liquidity_map.get(&lower_tick).unwrap();
 				lower_info.liquidity_gross -= burnt_liquidity;
 				lower_info.liquidity_delta =
 					lower_info.liquidity_delta.checked_sub_unsigned(burnt_liquidity).unwrap();
-				let mut upper_info = self.liquidity_map.get(&upper_tick).unwrap().clone();
+				let mut upper_info = *self.liquidity_map.get(&upper_tick).unwrap();
 				upper_info.liquidity_gross -= burnt_liquidity;
 				upper_info.liquidity_delta =
 					lower_info.liquidity_delta.checked_add_unsigned(burnt_liquidity).unwrap();
@@ -554,11 +517,13 @@ impl PoolState {
 	/// If this function returns an `Err(_)` no state changes have occurred
 	pub fn collect(
 		&mut self,
-		lp: LiquidityProvider,
+		lp: AccountId,
 		lower_tick: Tick,
 		upper_tick: Tick,
-	) -> Result<enum_map::EnumMap<Ticker, u128>, PositionError<CollectError>> {
-		if let Some(mut position) = self.positions.get(&(lp, lower_tick, upper_tick)).cloned() {
+	) -> Result<PoolAssetMap<u128>, PositionError<CollectError>> {
+		if let Some(mut position) =
+			self.positions.get(&(lp.clone(), lower_tick, upper_tick)).cloned()
+		{
 			assert!(position.liquidity != 0);
 			let lower_info = self.liquidity_map.get(&lower_tick).unwrap();
 			let upper_info = self.liquidity_map.get(&upper_tick).unwrap();
@@ -578,14 +543,14 @@ impl PoolState {
 	/// Swaps the specified Amount of Base into Pair, and returns the Pair Amount.
 	///
 	/// This function never panics
-	pub fn swap_from_base_to_pair(&mut self, amount: Amount) -> Amount {
+	pub fn swap_from_base_to_pair(&mut self, amount: AmountU256) -> AmountU256 {
 		self.swap::<BaseToPair>(amount)
 	}
 
 	/// Swaps the specified Amount of Pair into Base, and returns the Base Amount.
 	///
 	/// This function never panics
-	pub fn swap_from_pair_to_base(&mut self, amount: Amount) -> Amount {
+	pub fn swap_from_pair_to_base(&mut self, amount: AmountU256) -> AmountU256 {
 		self.swap::<PairToBase>(amount)
 	}
 
@@ -594,10 +559,10 @@ impl PoolState {
 	/// `PairToBase`.
 	///
 	/// This function never panics
-	fn swap<SD: SwapDirection>(&mut self, mut amount: Amount) -> Amount {
-		let mut total_amount_out = Amount::zero();
+	fn swap<SD: SwapDirection>(&mut self, mut amount: AmountU256) -> AmountU256 {
+		let mut total_amount_out = AmountU256::zero();
 
-		while let Some((target_tick, target_info)) = (Amount::zero() != amount)
+		while let Some((target_tick, target_info)) = (AmountU256::zero() != amount)
 			.then_some(())
 			.and_then(|()| SD::target_tick(self.current_tick, &mut self.liquidity_map))
 		{
@@ -605,9 +570,9 @@ impl PoolState {
 
 			let amount_minus_fees = mul_div_floor(
 				amount,
-				U256::from(ONE_IN_PIPS - self.fee_pips),
-				U256::from(ONE_IN_PIPS),
-			); // This cannot overflow as we bound fee_pips to <= ONE_IN_PIPS/2 (TODO)
+				U256::from(ONE_IN_BIPS - self.fee_pips),
+				U256::from(ONE_IN_BIPS),
+			); // This cannot overflow as we bound fee_pips to <= ONE_IN_BIPS/2 (TODO)
 
 			let amount_required_to_reach_target = SD::input_amount_delta_ceil(
 				self.current_sqrt_price,
@@ -646,11 +611,11 @@ impl PoolState {
 					.try_into()
 					.unwrap();
 
-				// Will not overflow as fee_pips <= ONE_IN_PIPS / 2
+				// Will not overflow as fee_pips <= ONE_IN_BIPS / 2
 				let fees = mul_div_ceil(
 					amount_required_to_reach_target,
 					U256::from(self.fee_pips),
-					U256::from(ONE_IN_PIPS - self.fee_pips),
+					U256::from(ONE_IN_BIPS - self.fee_pips),
 				);
 
 				// DIFF: This behaviour is different to Uniswap's, we saturate instead of
@@ -661,9 +626,9 @@ impl PoolState {
 				// chains.
 				self.global_fee_growth[SD::INPUT_TICKER] =
 					self.global_fee_growth[SD::INPUT_TICKER].saturating_add(fees);
-				target_info.fee_growth_outside = enum_map::EnumMap::default().map(|ticker, ()| {
-					self.global_fee_growth[ticker] - target_info.fee_growth_outside[ticker]
-				});
+				target_info
+					.fee_growth_outside
+					.mutate(|ticker, current| self.global_fee_growth[ticker] - current);
 				self.current_sqrt_price = sqrt_ratio_target;
 				self.current_tick = SD::current_tick_after_crossing_target_tick(*target_tick);
 
@@ -703,45 +668,53 @@ impl PoolState {
 		liquidity: Liquidity,
 		lower_tick: Tick,
 		upper_tick: Tick,
-	) -> (enum_map::EnumMap<Ticker, Amount>, Liquidity) {
+	) -> (PoolAssetMap<AmountU256>, Liquidity) {
 		if self.current_tick < lower_tick {
 			(
-				enum_map::enum_map! {
-					Ticker::Base => (if ROUND_UP { Self::base_amount_delta_ceil } else { Self::base_amount_delta_floor })(
+				PoolAssetMap::new(
+					(if ROUND_UP {
+						Self::base_amount_delta_ceil
+					} else {
+						Self::base_amount_delta_floor
+					})(
 						Self::sqrt_price_at_tick(lower_tick),
 						Self::sqrt_price_at_tick(upper_tick),
-						liquidity
+						liquidity,
 					),
-					Ticker::Pair => 0.into()
-				},
+					0.into(),
+				),
 				0,
 			)
 		} else if self.current_tick < upper_tick {
 			(
-				enum_map::enum_map! {
-					Ticker::Base => (if ROUND_UP { Self::base_amount_delta_ceil } else { Self::base_amount_delta_floor })(
-						self.current_sqrt_price,
-						Self::sqrt_price_at_tick(upper_tick),
-						liquidity
-					),
-					Ticker::Pair => (if ROUND_UP { Self::pair_amount_delta_ceil } else { Self::pair_amount_delta_floor })(
-						Self::sqrt_price_at_tick(lower_tick),
-						self.current_sqrt_price,
-						liquidity
-					)
-				},
+				PoolAssetMap::new(
+					(if ROUND_UP {
+						Self::base_amount_delta_ceil
+					} else {
+						Self::base_amount_delta_floor
+					})(self.current_sqrt_price, Self::sqrt_price_at_tick(upper_tick), liquidity),
+					(if ROUND_UP {
+						Self::pair_amount_delta_ceil
+					} else {
+						Self::pair_amount_delta_floor
+					})(Self::sqrt_price_at_tick(lower_tick), self.current_sqrt_price, liquidity),
+				),
 				liquidity,
 			)
 		} else {
 			(
-				enum_map::enum_map! {
-					Ticker::Base => 0.into(),
-					Ticker::Pair => (if ROUND_UP { Self::pair_amount_delta_ceil } else { Self::pair_amount_delta_floor })(
+				PoolAssetMap::new(
+					0.into(),
+					(if ROUND_UP {
+						Self::pair_amount_delta_ceil
+					} else {
+						Self::pair_amount_delta_floor
+					})(
 						Self::sqrt_price_at_tick(lower_tick),
 						Self::sqrt_price_at_tick(upper_tick),
-						liquidity
-					)
-				},
+						liquidity,
+					),
+				),
 				0,
 			)
 		}
@@ -751,7 +724,7 @@ impl PoolState {
 		from: SqrtPriceQ64F96,
 		to: SqrtPriceQ64F96,
 		liquidity: Liquidity,
-	) -> Amount {
+	) -> AmountU256 {
 		assert!(SqrtPriceQ64F96::zero() < from);
 		assert!(from <= to);
 
@@ -768,7 +741,7 @@ impl PoolState {
 		from: SqrtPriceQ64F96,
 		to: SqrtPriceQ64F96,
 		liquidity: Liquidity,
-	) -> Amount {
+	) -> AmountU256 {
 		assert!(SqrtPriceQ64F96::zero() < from);
 		assert!(from <= to);
 
@@ -785,7 +758,7 @@ impl PoolState {
 		from: SqrtPriceQ64F96,
 		to: SqrtPriceQ64F96,
 		liquidity: Liquidity,
-	) -> Amount {
+	) -> AmountU256 {
 		assert!(SqrtPriceQ64F96::zero() < from);
 		assert!(from < to);
 
@@ -803,7 +776,7 @@ impl PoolState {
 		from: SqrtPriceQ64F96,
 		to: SqrtPriceQ64F96,
 		liquidity: Liquidity,
-	) -> Amount {
+	) -> AmountU256 {
 		assert!(SqrtPriceQ64F96::zero() < from);
 		assert!(from < to);
 
@@ -820,7 +793,7 @@ impl PoolState {
 	fn next_sqrt_price_from_base_input(
 		sqrt_ratio_current: SqrtPriceQ64F96,
 		liquidity: Liquidity,
-		amount: Amount,
+		amount: AmountU256,
 	) -> SqrtPriceQ64F96 {
 		assert!(0 < liquidity);
 		assert!(SqrtPriceQ64F96::zero() < sqrt_ratio_current);
@@ -846,7 +819,7 @@ impl PoolState {
 	fn next_sqrt_price_from_pair_input(
 		sqrt_ratio_current: SqrtPriceQ64F96,
 		liquidity: Liquidity,
-		amount: Amount,
+		amount: AmountU256,
 	) -> SqrtPriceQ64F96 {
 		// Will not overflow as function is not called if amount >= amount_required_to_reach_target,
 		// therefore bounding the function output to approximately <= MAX_SQRT_PRICE
@@ -1040,6 +1013,27 @@ impl PoolState {
 			tick_low
 		}
 	}
+}
+
+fn mul_div_floor<C: Into<U512>>(a: U256, b: U256, c: C) -> U256 {
+	let c: U512 = c.into();
+	(U256::full_mul(a, b) / c).try_into().unwrap()
+}
+
+fn mul_div_ceil<C: Into<U512>>(a: U256, b: U256, c: C) -> U256 {
+	let c: U512 = c.into();
+
+	let (d, m) = U512::div_mod(U256::full_mul(a, b), c);
+
+	if m > U512::from(0) {
+		// cannot overflow as for m > 0, c must be > 1, and as (a*b) <= U512::MAX, therefore a*b/c <
+		// U512::MAX
+		d + 1
+	} else {
+		d
+	}
+	.try_into()
+	.unwrap()
 }
 
 #[cfg(test)]
@@ -1268,5 +1262,11 @@ mod test {
 			276324
 		);
 		assert_eq!(PoolState::tick_at_sqrt_price(MAX_SQRT_PRICE - 1), MAX_TICK - 1);
+	}
+
+	#[test]
+	fn test_limit() {
+		let min_price = MIN_SQRT_PRICE << 96u32;
+		println!("{}", min_price);
 	}
 }
