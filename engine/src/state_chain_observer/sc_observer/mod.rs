@@ -334,16 +334,13 @@ where
             Ok(())
         }.boxed()});
 
-        let mut first_block_number = None;
+        let mut last_heartbeat_submitted_at = 0;
 
         let mut sc_block_stream = Box::pin(sc_block_stream);
         loop {
             match sc_block_stream.next().await {
                 Some(current_block_header) => {
                     let current_block_hash = current_block_header.hash();
-                    if first_block_number.is_none() {
-                        first_block_number = Some(current_block_header.number);
-                    }
                     slog::debug!(
                         logger,
                         "Processing SC block {} with block hash: {:#x}",
@@ -612,7 +609,9 @@ where
                         }
                     }
 
-                    let blocks_per_heartbeat = std::cmp::max(1, heartbeat_block_interval / 2);
+                    // We want to submit a little more frequently than the interval, just in case we submit
+                    // close to the boundary, and our heartbeat ends up on the wrong side of the interval we're submitting for.
+                    let blocks_per_heartbeat =  heartbeat_block_interval - 10;
 
                     slog::info!(
                         logger,
@@ -622,9 +621,9 @@ where
 
                     // All nodes must send a heartbeat regardless of their validator status (at least for now).
                     // We send it every `blocks_per_heartbeat` from the block they started up at.
-                    if ((current_block_header.number - first_block_number.expect("Will have been set on first iteration")) % blocks_per_heartbeat
+                    if ((current_block_header.number - last_heartbeat_submitted_at) >= (blocks_per_heartbeat)
                         // Submitting earlier than one minute in may falsely indicate liveness.
-                        == 0) && has_submitted_init_heartbeat.load(Ordering::Relaxed)
+                        ) && has_submitted_init_heartbeat.load(Ordering::Relaxed)
                     {
                         slog::info!(
                             logger,
@@ -637,6 +636,8 @@ where
                                 &logger,
                             )
                             .await;
+
+                        last_heartbeat_submitted_at = current_block_header.number;
                     }
                 }
                 None => {
