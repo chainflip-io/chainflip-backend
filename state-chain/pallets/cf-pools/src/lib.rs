@@ -122,9 +122,10 @@ impl<T: Config> cf_traits::SwappingApi for Pallet<T> {
 					pool.reverse_swap(Self::take_network_fee(T::NetworkFee::get(), input_amount))
 				}),
 				(input_asset, output_asset) => Pools::<T>::mutate(output_asset, |pool| {
-					pool.reverse_swap(Pools::<T>::mutate(input_asset, |pool| {
-						pool.swap(Self::take_network_fee(T::NetworkFee::get(), input_amount))
-					}))
+					pool.swap(Self::take_network_fee(
+						T::NetworkFee::get(),
+						Pools::<T>::mutate(input_asset, |pool| pool.swap(input_amount)),
+					))
 				}),
 			},
 			(any::Asset::Usdc, 0),
