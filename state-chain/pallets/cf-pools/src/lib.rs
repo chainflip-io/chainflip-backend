@@ -116,16 +116,16 @@ impl<T: Config> cf_traits::SwappingApi for Pallet<T> {
 				(input_asset, any::Asset::Usdc) => {
 					let swap_output =
 						Pools::<T>::mutate(input_asset, |pool| pool.swap(input_amount));
-					Self::take_network_fee(T::NetworkFee::get(), swap_output)
+					Self::take_network_fee(swap_output)
 				},
 				(any::Asset::Usdc, output_asset) => Pools::<T>::mutate(output_asset, |pool| {
-					pool.reverse_swap(Self::take_network_fee(T::NetworkFee::get(), input_amount))
+					pool.reverse_swap(Self::take_network_fee(input_amount))
 				}),
 				(input_asset, output_asset) => Pools::<T>::mutate(output_asset, |pool| {
-					pool.reverse_swap(Self::take_network_fee(
-						T::NetworkFee::get(),
-						Pools::<T>::mutate(input_asset, |pool| pool.swap(input_amount)),
-					))
+					pool.reverse_swap(Self::take_network_fee(Pools::<T>::mutate(
+						input_asset,
+						|pool| pool.swap(input_amount),
+					)))
 				}),
 			},
 			(any::Asset::Usdc, 0),
@@ -214,8 +214,12 @@ impl<T: Config> cf_traits::LiquidityPoolApi for Pallet<T> {
 }
 
 impl<T: Config> Pallet<T> {
-	fn take_network_fee(fee: u16, input: AssetAmount) -> AssetAmount {
-		let fee = Permill::from_parts(fee as u32 * BASIS_POINTS_PER_MILLION) * input;
+	fn calc_fee(fee: u16, input: AssetAmount) -> AssetAmount {
+		Permill::from_parts(fee as u32 * BASIS_POINTS_PER_MILLION) * input
+	}
+
+	fn take_network_fee(input: AssetAmount) -> AssetAmount {
+		let fee = Self::calc_fee(T::NetworkFee::get(), input);
 		CollectedNetworkFee::<T>::mutate(|total| {
 			*total = total.saturating_add(fee);
 		});
