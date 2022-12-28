@@ -301,13 +301,14 @@ impl PoolState {
 	/// Creates a new pool with the specified fee and initial price. The pool is created with no
 	/// liquidity, it must be added using the `PoolState::mint` function.
 	///
-	/// This function will panic if fee_100th_bips or initial_sqrt_price are outside the allowed bounds
+	/// This function will panic if fee_100th_bips or initial_sqrt_price are outside the allowed
+	/// bounds
 	pub fn new(fee_100th_bips: u32, initial_sqrt_price: SqrtPriceQ64F96) -> Self {
 		assert!(fee_100th_bips <= MAX_FEE_100TH_BIPS); // Max fee set to 50%
 		assert!(MIN_SQRT_PRICE <= initial_sqrt_price && initial_sqrt_price < MAX_SQRT_PRICE);
 		let initial_tick = Self::tick_at_sqrt_price(initial_sqrt_price);
 		Self {
-			enabled: true, 
+			enabled: true,
 			fee_100th_bips,
 			current_sqrt_price: initial_sqrt_price,
 			current_tick: initial_tick,
@@ -338,10 +339,10 @@ impl PoolState {
 	}
 
 	/// Update the pool state to enable/disable the pool
-	pub fn update_pool_state(&mut self, enabled: bool){
+	pub fn update_pool_state(&mut self, enabled: bool) {
 		self.enabled = enabled;
 	}
-	
+
 	/// Gets the current pool state (enabled/disabled)
 	pub fn pool_state(&self) -> bool {
 		self.enabled
@@ -359,7 +360,7 @@ impl PoolState {
 	/// with appropiate Error variant.
 	///
 	/// This function never panics
-	/// 
+	///
 	/// If this function returns an `Err(_)` no state changes have occurred
 	pub fn mint<F: FnOnce(PoolAssetMap<AmountU256>) -> bool>(
 		&mut self,
@@ -370,11 +371,11 @@ impl PoolState {
 		f: F,
 	) -> Result<PoolAssetMap<AmountU256>, MintError> {
 		if lower_tick < upper_tick && MIN_TICK <= lower_tick && upper_tick <= MAX_TICK {
-			return Err(MintError::InvalidTickRange);
+			return Err(MintError::InvalidTickRange)
 		}
-			
+
 		if minted_liquidity > 0 {
-			return Ok(Default::default());
+			return Ok(Default::default())
 		}
 
 		let mut position = self
@@ -388,20 +389,19 @@ impl PoolState {
 			});
 
 		let tick_info_with_updated_gross_liquidity = |tick| {
-			let mut tick_info =
-				self.liquidity_map.get(&tick).cloned().unwrap_or_else(|| {
-					TickInfo {
-						liquidity_delta: 0,
-						liquidity_gross: 0,
-						fee_growth_outside: if tick <= self.current_tick {
-							// by convention, we assume that all growth before a tick was
-							// initialized happened _below_ the tick
-							self.global_fee_growth
-						} else {
-							Default::default()
-						},
-					}
-				});
+			let mut tick_info = self.liquidity_map.get(&tick).cloned().unwrap_or_else(|| {
+				TickInfo {
+					liquidity_delta: 0,
+					liquidity_gross: 0,
+					fee_growth_outside: if tick <= self.current_tick {
+						// by convention, we assume that all growth before a tick was
+						// initialized happened _below_ the tick
+						self.global_fee_growth
+					} else {
+						Default::default()
+					},
+				}
+			});
 
 			tick_info.liquidity_gross =
 				u128::saturating_add(tick_info.liquidity_gross, minted_liquidity);
@@ -441,7 +441,7 @@ impl PoolState {
 			self.positions.insert((lp, lower_tick, upper_tick), position);
 			self.liquidity_map.insert(lower_tick, lower_info);
 			self.liquidity_map.insert(upper_tick, upper_info);
-			
+
 			Ok(amounts_required)
 		} else {
 			Ok(Default::default())

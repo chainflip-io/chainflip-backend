@@ -6,10 +6,10 @@ use frame_support::{
 	sp_runtime::{traits::Saturating, Permill},
 };
 use frame_system::pallet_prelude::*;
-use sp_arithmetic::{helpers_128bit::multiply_by_rational_with_rounding, Rounding};
-use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
-
 pub use pallet::*;
+use sp_arithmetic::{helpers_128bit::multiply_by_rational_with_rounding, Rounding};
+use sp_core::U256;
+use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
 
 #[cfg(test)]
 mod mock;
@@ -248,7 +248,8 @@ pub mod pallet {
 				bundle_input.saturating_accrue(swap.amount);
 			}
 
-			let (bundle_output, _) = T::SwappingApi::swap(from, to, bundle_input, 1);
+			let (bundle_output, _, _) = T::SwappingApi::swap(from, to, bundle_input.into())
+				.unwrap_or((U256::zero(), U256::zero(), U256::zero()));
 
 			for swap in &swaps {
 				Self::deposit_event(Event::<T>::SwapExecuted { swap_id: swap.swap_id });
@@ -257,7 +258,7 @@ pub mod pallet {
 			for (input_amount, egress_asset, egress_address, swap_id) in bundle_inputs {
 				if let Some(swap_output) = multiply_by_rational_with_rounding(
 					input_amount,
-					bundle_output,
+					bundle_output.as_u128(),
 					bundle_input,
 					Rounding::Down,
 				) {

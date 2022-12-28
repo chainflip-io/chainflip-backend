@@ -58,7 +58,7 @@ git = 'https://github.com/chainflip-io/substrate.git'
 optional = true
 tag = 'chainflip-monthly-2022-06+01'
 
-[dev-dependencies.sp-core]
+[dependencies.sp-core]
 git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'chainflip-monthly-2022-06+01'
 
@@ -82,6 +82,7 @@ std = [
   'frame-support/std',
   'frame-system/std',
   'sp-std/std',
+  'sp-core/std',
   'log/std',
 ]
 runtime-benchmarks = [

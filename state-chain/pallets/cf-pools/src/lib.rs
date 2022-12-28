@@ -1,13 +1,11 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-use cf_primitives::{chains::assets::any, PoolAssetMap, AssetAmount, ExchangeRate, 
-	PoolAsset, TradingPosition, SqrtPriceQ64F96, AmountU256};
+use cf_primitives::{chains::assets::any, AmountU256, SqrtPriceQ64F96};
 use cf_traits::Chainflip;
-use codec::Output;
-use frame_support::{
-	pallet_prelude::*,
-};
+use chainflip_amm::{PoolState, MAX_FEE_100TH_BIPS};
+use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::OriginFor;
-use chainflip_amm::{MAX_FEE_100TH_BIPS, PoolState};
+use sp_core::U256;
+
 pub use pallet::*;
 
 // #[cfg(test)]
@@ -22,7 +20,7 @@ pub mod pallet {
 
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
-	pub trait Config: Chainflip { 
+	pub trait Config: Chainflip {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// Governance origin to manage allowed assets
@@ -38,7 +36,7 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(super) type Pools<T: Config> =
 		StorageMap<_, Twox64Concat, any::Asset, PoolState, OptionQuery>;
-	
+
 	#[pallet::error]
 	pub enum Error<T> {
 		/// The specified exchange pool does not exist.
@@ -62,7 +60,7 @@ pub mod pallet {
 			asset: any::Asset,
 			fee_100th_bips: u32,
 			initial_sqrt_price: SqrtPriceQ64F96,
-		}
+		},
 	}
 
 	#[pallet::call]
@@ -81,7 +79,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let _ok = T::EnsureGovernance::ensure_origin(origin)?;
 
-			Pools::<T>::mutate(asset, |maybe_pool|{
+			Pools::<T>::mutate(asset, |maybe_pool| {
 				if let Some(pool) = maybe_pool.as_mut() {
 					pool.update_pool_state(enabled);
 					Ok(())
@@ -99,20 +97,20 @@ pub mod pallet {
 		/// Requires Governance.
 		///
 		/// ## Events
-		/// 
+		///
 		/// - [On update](Event::PoolStateUpdated)
 		#[pallet::weight(0)]
 		pub fn new_pool(
 			origin: OriginFor<T>,
 			asset: any::Asset,
-			fee_100th_bips: u32, 
+			fee_100th_bips: u32,
 			initial_sqrt_price: SqrtPriceQ64F96,
 		) -> DispatchResult {
 			let _ok = T::EnsureGovernance::ensure_origin(origin)?;
 			// Fee amount must be <= 50%
 			ensure!(fee_100th_bips <= MAX_FEE_100TH_BIPS, Error::<T>::InvalidFeeAmount);
-			Pools::<T>::mutate(asset, |maybe_pool|{
-				if let Some(_) = maybe_pool.as_mut() {
+			Pools::<T>::mutate(asset, |maybe_pool| {
+				if maybe_pool.is_some() {
 					Err(Error::<T>::PoolAlreadyExists)
 				} else {
 					let pool = PoolState::new(fee_100th_bips, initial_sqrt_price);
@@ -121,7 +119,11 @@ pub mod pallet {
 				}
 			})?;
 
-			Self::deposit_event(Event::<T>::NewPoolCreated { asset, fee_100th_bips, initial_sqrt_price });
+			Self::deposit_event(Event::<T>::NewPoolCreated {
+				asset,
+				fee_100th_bips,
+				initial_sqrt_price,
+			});
 
 			Ok(())
 		}
@@ -135,53 +137,48 @@ impl<T: Config> cf_traits::SwappingApi for Pallet<T> {
 		input_amount: AmountU256,
 	) -> Result<(AmountU256, AmountU256, AmountU256), DispatchError> {
 		match (from, to) {
-			(input_asset, any::Asset::Usdc) =>
-				Pools::<T>::mutate(input_asset, |maybe_pool|{
-					if let Some(pool) = maybe_pool.as_mut() {
-						ensure!(pool.pool_state(), Error::<T>::PoolDisabled);
-						let (output_amount, asset_0_fee) = pool.swap_from_base_to_pair(input_amount);
-						Ok((output_amount, asset_0_fee, Default::default()))
-					}
-					else {
-						Err(Error::<T>::PoolDoesNotExist)
-					}
-				}),
-			(any::Asset::Usdc, output_asset) =>
-			Pools::<T>::mutate(output_asset, |maybe_pool|{
+			(input_asset, any::Asset::Usdc) => Pools::<T>::mutate(input_asset, |maybe_pool| {
+				if let Some(pool) = maybe_pool.as_mut() {
+					ensure!(pool.pool_state(), Error::<T>::PoolDisabled);
+					let (output_amount, asset_0_fee) = pool.swap_from_base_to_pair(input_amount);
+					Ok((output_amount, asset_0_fee, U256::zero()))
+				} else {
+					Err(Error::<T>::PoolDoesNotExist.into())
+				}
+			}),
+			(any::Asset::Usdc, output_asset) => Pools::<T>::mutate(output_asset, |maybe_pool| {
 				if let Some(pool) = maybe_pool.as_mut() {
 					ensure!(pool.pool_state(), Error::<T>::PoolDisabled);
 					let (output_amount, asset_1_fee) = pool.swap_from_pair_to_base(input_amount);
 					Ok((output_amount, Default::default(), asset_1_fee))
-				}
-				else {
-					Err(Error::<T>::PoolDoesNotExist)
+				} else {
+					Err(Error::<T>::PoolDoesNotExist.into())
 				}
 			}),
 			(input_asset, output_asset) => {
-				let (intermediate_amount, asset_0_fee) = 
-				Pools::<T>::mutate(input_asset, |maybe_pool| {
-					if let Some(pool) = maybe_pool.as_mut() {
-						ensure!(pool.pool_state(), Error::<T>::PoolDisabled);
-						Ok(pool.swap_from_base_to_pair(input_amount))
-					}
-					else {
-						Err(Error::<T>::PoolDoesNotExist)
-					}})?;
-				let (output_amount, asset_1_fee) = 
-				Pools::<T>::mutate(output_asset, |maybe_pool| {
-					if let Some(pool) = maybe_pool.as_mut() {
-						ensure!(pool.pool_state(), Error::<T>::PoolDisabled);
-						Ok(pool.swap_from_pair_to_base(intermediate_amount))
-					}
-					else {
-						Err(Error::<T>::PoolDoesNotExist)
-					}
-				})?;
+				let (intermediate_amount, asset_0_fee) =
+					Pools::<T>::mutate(input_asset, |maybe_pool| {
+						if let Some(pool) = maybe_pool.as_mut() {
+							ensure!(pool.pool_state(), Error::<T>::PoolDisabled);
+							Ok(pool.swap_from_base_to_pair(input_amount))
+						} else {
+							Err(Error::<T>::PoolDoesNotExist)
+						}
+					})?;
+				let (output_amount, asset_1_fee) =
+					Pools::<T>::mutate(output_asset, |maybe_pool| {
+						if let Some(pool) = maybe_pool.as_mut() {
+							ensure!(pool.pool_state(), Error::<T>::PoolDisabled);
+							Ok(pool.swap_from_pair_to_base(intermediate_amount))
+						} else {
+							Err(Error::<T>::PoolDoesNotExist)
+						}
+					})?;
 				Ok((output_amount, asset_0_fee, asset_1_fee))
 			},
 		}
 	}
-}  
+}
 
 // impl<T: Config> cf_traits::LiquidityPoolApi for Pallet<T> {
 // 	const STABLE_ASSET: any::Asset = any::Asset::Usdc;

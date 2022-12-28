@@ -112,7 +112,10 @@ impl pallet_cf_account_roles::Config for Test {
 	type WeightInfo = ();
 }
 
-impl pallet_cf_pools::Config for Test {}
+impl pallet_cf_pools::Config for Test {
+	type Event = Event;
+	type EnsureGovernance = NeverFailingOriginCheck<Self>;
+}
 
 impl crate::Config for Test {
 	type Event = Event;

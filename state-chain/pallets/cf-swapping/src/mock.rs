@@ -75,8 +75,8 @@ impl SwappingApi for MockSwappingApi {
 		_to: Asset,
 		swap_input: AssetAmount,
 		_fee: u16,
-	) -> (AssetAmount, (cf_primitives::Asset, AssetAmount)) {
-		(swap_input, (cf_primitives::Asset::Usdc, RELAYER_FEE))
+	) -> Result<(AssetAmount, AssetAmount, AssetAmount), DispatchError> {
+		Ok((swap_input, RELAYER_FEE, Default::default()))
 	}
 }
 

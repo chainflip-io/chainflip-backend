@@ -55,8 +55,8 @@ fn funds_are_conserved_via_api() {
 			},
 		);
 
-		let (output, _) =
-			<Pools as SwappingApi>::swap(any::Asset::Eth, any::Asset::Usdc, SWAP_AMOUNT, 0);
+		let (output, _, _) =
+			<Pools as SwappingApi>::swap(any::Asset::Eth, any::Asset::Usdc, SWAP_AMOUNT, 0).unwrap();
 
 		<Pools as LiquidityPoolApi>::get_liquidity(&any::Asset::Eth);
 
@@ -69,8 +69,8 @@ fn funds_are_conserved_via_api() {
 		);
 
 		// Swapping the other way should not create or destroy funds.
-		let (output, _) =
-			<Pools as SwappingApi>::swap(any::Asset::Usdc, any::Asset::Eth, output, 0);
+		let (output, _, _) =
+			<Pools as SwappingApi>::swap(any::Asset::Usdc, any::Asset::Eth, output, 0).unwrap();
 		assert!(output > 0);
 		assert_eq!(
 			eth_liquidity() + usdc_liquidity() + output,

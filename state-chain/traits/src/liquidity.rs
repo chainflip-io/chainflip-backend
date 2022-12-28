@@ -1,9 +1,9 @@
-use sp_runtime::DispatchResult;
-
 use cf_primitives::{
-	liquidity::TradingPosition, Asset, AssetAmount, ExchangeRate, ForeignChainAddress, AmountU256
+	liquidity::TradingPosition, AmountU256, Asset, AssetAmount, ExchangeRate, ForeignChainAddress,
 };
 use frame_support::dispatch::DispatchError;
+use sp_core::U256;
+use sp_runtime::DispatchResult;
 
 pub trait SwapIntentHandler {
 	type AccountId;
@@ -45,10 +45,9 @@ impl SwappingApi for () {
 		_to: Asset,
 		_input_amount: AmountU256,
 	) -> Result<(AmountU256, AmountU256, AmountU256), DispatchError> {
-		Ok((Default::default(), Default::default(), Default::default()))
+		Ok((U256::zero(), U256::zero(), U256::zero()))
 	}
 }
-
 
 /// API to interface with Exchange Pools.
 /// All pools are Asset <-> USDC
