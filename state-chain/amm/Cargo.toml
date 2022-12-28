@@ -1,0 +1,16 @@
+[package]
+name = "cf-amm"
+version = "0.1.0"
+authors = ['Chainflip <https://chainflip.io>']
+edition = '2021'
+description = "Chainflip's AMM Logic"
+
+[dependencies]
+primitive-types = { version = "0.12.1", default-features = false }
+enum-map = "2.1.0"
+
+[features]
+default = ["std"]
+std = [
+    "primitive-types/std",
+]

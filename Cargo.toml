@@ -8,6 +8,7 @@ members = [
   'api/bin/chainflip-relayer',
   'state-chain/chains',
   'state-chain/node',
+  'state-chain/amm',
   'state-chain/pallets/cf-account-roles',
   'state-chain/pallets/cf-broadcast',
   'state-chain/pallets/cf-chain-tracking',
