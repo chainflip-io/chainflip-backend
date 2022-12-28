@@ -15,7 +15,7 @@ benchmarks! {
 		let caller: T::AccountId = whitelisted_caller();
 		let validator_id: T::ValidatorId = caller.clone().into();
 		T::AccountRoleRegistry::register_account(caller.clone(), AccountRole::Validator);
-		let call: <T as Config>::Call = frame_system::Call::remark{ remark: vec![] }.into();
+		let call: <T as Config>::RuntimeCall = frame_system::Call::remark{ remark: vec![] }.into();
 		let epoch = T::EpochInfo::epoch_index();
 
 		T::EpochInfo::add_authority_info_for_epoch(epoch, vec![validator_id]);
@@ -34,7 +34,7 @@ benchmarks! {
 		let n in 1u32 .. 255u32;
 
 		for i in 0..n {
-			let call: <T as Config>::Call = frame_system::Call::remark{ remark: vec![i as u8] }.into();
+			let call: <T as Config>::RuntimeCall = frame_system::Call::remark{ remark: vec![i as u8] }.into();
 			let call_hash = CallHash(Hashable::blake2_256(&call));
 			Votes::<T>::insert(0, call_hash, vec![0]);
 		}

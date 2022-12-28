@@ -33,7 +33,7 @@ benchmarks_instance_pallet! {
 		}
 
 		ScheduledEgressRequests::<T, I>::put(batch);
-	} : { let _ = Pallet::<T, I>::on_idle(Default::default(), 1_000_000_000_000_000); }
+	} : { let _ = Pallet::<T, I>::on_idle(Default::default(), Weight::from_ref_time(1_000_000_000_000_000)); }
 	verify {
 		assert!(ScheduledEgressRequests::<T, I>::get().is_empty());
 	}
