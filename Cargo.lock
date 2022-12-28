@@ -5646,6 +5646,7 @@ version = "0.1.0"
 dependencies = [
  "cf-primitives",
  "cf-traits",
+ "chainflip-amm",
  "frame-benchmarking",
  "frame-support",
  "frame-system",

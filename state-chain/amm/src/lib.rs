@@ -49,8 +49,10 @@ const MAX_SQRT_PRICE: SqrtPriceQ64F96 =
 
 const MAX_TICK_GROSS_LIQUIDITY: Liquidity = Liquidity::MAX / ((1 + MAX_TICK - MIN_TICK) as u128);
 
-/// Minimum resolution is 0.01 of a Basis Point: 0.0001%. Maximum is 100%.
-const ONE_IN_BIPS: u32 = 100000;
+/// Minimum resolution for fee is 0.01 of a Basis Point: 0.0001%. Maximum is 100%.
+const ONE_IN_HUNDREDTH_BIPS: u32 = 1000000;
+
+pub const MAX_FEE_100TH_BIPS: u32 = ONE_IN_HUNDREDTH_BIPS / 2;
 
 trait SwapDirection {
 	const INPUT_TICKER: PoolAsset;
@@ -282,10 +284,11 @@ impl Position {
 	}
 }
 
-#[derive(Clone, Debug, TypeInfo, PartialEq, Eq, Encode, Decode)]
+#[derive(Debug, TypeInfo, PartialEq, Eq, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct PoolState {
-	fee_pips: u32,
+	enabled: bool,
+	fee_100th_bips: u32,
 	current_sqrt_price: SqrtPriceQ64F96,
 	current_tick: Tick,
 	current_liquidity: Liquidity,
@@ -298,13 +301,14 @@ impl PoolState {
 	/// Creates a new pool with the specified fee and initial price. The pool is created with no
 	/// liquidity, it must be added using the `PoolState::mint` function.
 	///
-	/// This function will panic if fee_pips or initial_sqrt_price are outside the allowed bounds
-	pub fn new(fee_pips: u32, initial_sqrt_price: SqrtPriceQ64F96) -> Self {
-		assert!(fee_pips <= ONE_IN_BIPS / 2);
+	/// This function will panic if fee_100th_bips or initial_sqrt_price are outside the allowed bounds
+	pub fn new(fee_100th_bips: u32, initial_sqrt_price: SqrtPriceQ64F96) -> Self {
+		assert!(fee_100th_bips <= MAX_FEE_100TH_BIPS); // Max fee set to 50%
 		assert!(MIN_SQRT_PRICE <= initial_sqrt_price && initial_sqrt_price < MAX_SQRT_PRICE);
 		let initial_tick = Self::tick_at_sqrt_price(initial_sqrt_price);
 		Self {
-			fee_pips,
+			enabled: true, 
+			fee_100th_bips,
 			current_sqrt_price: initial_sqrt_price,
 			current_tick: initial_tick,
 			current_liquidity: 0,
@@ -331,6 +335,16 @@ impl PoolState {
 			.into(),
 			positions: Default::default(),
 		}
+	}
+
+	/// Update the pool state to enable/disable the pool
+	pub fn update_pool_state(&mut self, enabled: bool){
+		self.enabled = enabled;
+	}
+	
+	/// Gets the current pool state (enabled/disabled)
+	pub fn pool_state(&self) -> bool {
+		self.enabled
 	}
 
 	/// Tries to add `minted_liquidity` to/create the specified position, if `minted_liqudity == 0`
@@ -548,14 +562,14 @@ impl PoolState {
 	/// Swaps the specified Amount of Base into Pair, and returns the Pair Amount.
 	///
 	/// This function never panics
-	pub fn swap_from_base_to_pair(&mut self, amount: AmountU256) -> AmountU256 {
+	pub fn swap_from_base_to_pair(&mut self, amount: AmountU256) -> (AmountU256, AmountU256) {
 		self.swap::<BaseToPair>(amount)
 	}
 
 	/// Swaps the specified Amount of Pair into Base, and returns the Base Amount.
 	///
 	/// This function never panics
-	pub fn swap_from_pair_to_base(&mut self, amount: AmountU256) -> AmountU256 {
+	pub fn swap_from_pair_to_base(&mut self, amount: AmountU256) -> (AmountU256, AmountU256) {
 		self.swap::<PairToBase>(amount)
 	}
 
@@ -564,8 +578,9 @@ impl PoolState {
 	/// `PairToBase`.
 	///
 	/// This function never panics
-	fn swap<SD: SwapDirection>(&mut self, mut amount: AmountU256) -> AmountU256 {
+	fn swap<SD: SwapDirection>(&mut self, mut amount: AmountU256) -> (AmountU256, AmountU256) {
 		let mut total_amount_out = AmountU256::zero();
+		let mut total_fee_paid = AmountU256::zero();
 
 		while let Some((target_tick, target_info)) = (AmountU256::zero() != amount)
 			.then_some(())
@@ -575,9 +590,9 @@ impl PoolState {
 
 			let amount_minus_fees = mul_div_floor(
 				amount,
-				U256::from(ONE_IN_BIPS - self.fee_pips),
-				U256::from(ONE_IN_BIPS),
-			); // This cannot overflow as we bound fee_pips to <= ONE_IN_BIPS/2 (TODO)
+				U256::from(ONE_IN_HUNDREDTH_BIPS - self.fee_100th_bips),
+				U256::from(ONE_IN_HUNDREDTH_BIPS),
+			); // This cannot overflow as we bound fee_100th_bips to <= ONE_IN_HUNDREDTH_BIPS/2 (TODO)
 
 			let amount_required_to_reach_target = SD::input_amount_delta_ceil(
 				self.current_sqrt_price,
@@ -616,11 +631,11 @@ impl PoolState {
 					.try_into()
 					.unwrap();
 
-				// Will not overflow as fee_pips <= ONE_IN_BIPS / 2
+				// Will not overflow as fee_100th_bips <= ONE_IN_HUNDREDTH_BIPS / 2
 				let fees = mul_div_ceil(
 					amount_required_to_reach_target,
-					U256::from(self.fee_pips),
-					U256::from(ONE_IN_BIPS - self.fee_pips),
+					U256::from(self.fee_100th_bips),
+					U256::from(ONE_IN_HUNDREDTH_BIPS - self.fee_100th_bips),
 				);
 
 				// DIFF: This behaviour is different to Uniswap's, we saturate instead of
@@ -640,6 +655,7 @@ impl PoolState {
 				// TODO: Prove these don't underflow
 				amount -= amount_required_to_reach_target;
 				amount -= fees;
+				total_fee_paid += fees;
 			} else {
 				let amount_in = SD::input_amount_delta_ceil(
 					self.current_sqrt_price,
@@ -649,6 +665,7 @@ impl PoolState {
 				// Will not underflow due to rounding in flavor of the pool of both sqrt_ratio_next
 				// and amount_in. (TODO: Prove)
 				let fees = amount - amount_in;
+				total_fee_paid += fees;
 
 				// DIFF: This behaviour is different to Uniswap's,
 				// we saturate instead of overflowing/bricking the pool. This means we just stop
@@ -665,7 +682,7 @@ impl PoolState {
 			};
 		}
 
-		total_amount_out
+		(total_amount_out, total_fee_paid)
 	}
 
 	fn liquidity_to_amounts<const ROUND_UP: bool>(

@@ -1,8 +1,9 @@
 use sp_runtime::DispatchResult;
 
 use cf_primitives::{
-	liquidity::TradingPosition, Asset, AssetAmount, ExchangeRate, ForeignChainAddress,
+	liquidity::TradingPosition, Asset, AssetAmount, ExchangeRate, ForeignChainAddress, AmountU256
 };
+use frame_support::dispatch::DispatchError;
 
 pub trait SwapIntentHandler {
 	type AccountId;
@@ -29,13 +30,25 @@ pub trait LpProvisioningApi {
 }
 
 pub trait SwappingApi {
+	// Attempt to swap `from` asset to `to` asset.
+	// If OK, return (output_amount, input_asset_fee, output_asset_fee)
 	fn swap(
 		from: Asset,
 		to: Asset,
-		input_amount: AssetAmount,
-		fee: u16,
-	) -> (AssetAmount, (Asset, AssetAmount));
+		input_amount: AmountU256,
+	) -> Result<(AmountU256, AmountU256, AmountU256), DispatchError>;
 }
+
+impl SwappingApi for () {
+	fn swap(
+		_from: Asset,
+		_to: Asset,
+		_input_amount: AmountU256,
+	) -> Result<(AmountU256, AmountU256, AmountU256), DispatchError> {
+		Ok((Default::default(), Default::default(), Default::default()))
+	}
+}
+
 
 /// API to interface with Exchange Pools.
 /// All pools are Asset <-> USDC
@@ -92,17 +105,5 @@ impl<T: frame_system::Config> LpProvisioningApi for T {
 	) -> DispatchResult {
 		// TODO
 		Ok(())
-	}
-}
-
-impl SwappingApi for () {
-	fn swap(
-		_from: Asset,
-		_to: Asset,
-		_input_amount: AssetAmount,
-		_fee: u16,
-	) -> (AssetAmount, (Asset, AssetAmount)) {
-		// TODO
-		(0, (Asset::Usdc, 0))
 	}
 }
