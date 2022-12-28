@@ -16,6 +16,7 @@ targets = ['x86_64-unknown-linux-gnu']
 # Internal dependencies
 cf-traits = {path = '../../traits', default-features = false}
 cf-primitives = {path = '../../primitives', default-features = false}
+cf-amm = { path = '../../amm', default-features = false }
 
 log = { version = '0.4.16', default-features = false }
 
@@ -72,8 +73,9 @@ tag = 'chainflip-monthly-2022-06+01'
 [features]
 default = ['std']
 std = [
-  'cf-traits/std',
+  'cf-amm/std',
   'cf-primitives/std',
+  'cf-traits/std',
   'codec/std',
   'scale-info/std',
   'frame-benchmarking/std',
