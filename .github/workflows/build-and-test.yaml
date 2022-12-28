@@ -57,8 +57,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-      - name: Install Protobug Compiler
-        run: apt-get install protobuf-compiler
+      - name: Install Protobuf Compiler
+        run: apt-get install -y protobuf-compiler
       - name: Check Linting
         run: cargo ci-clippy
 
