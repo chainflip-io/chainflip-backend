@@ -10,7 +10,7 @@ use sp_runtime::DispatchResult;
 use cf_chains::AnyChain;
 use cf_primitives::{
 	liquidity::{PositionId, TradingPosition},
-	Asset, AssetAmount, ForeignChain, ForeignChainAddress, IntentId, AmountU256
+	AmountU256, Asset, AssetAmount, ForeignChain, ForeignChainAddress, IntentId,
 };
 use cf_traits::{
 	liquidity::LpProvisioningApi, AccountRoleRegistry, Chainflip, EgressApi, IngressApi,

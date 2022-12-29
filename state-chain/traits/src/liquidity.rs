@@ -1,4 +1,6 @@
-use cf_primitives::{Liquidity, SqrtPriceQ64F96, AmountU256, AmmRange, Asset, AssetAmount, ForeignChainAddress,
+use cf_primitives::{
+	AmmRange, AmountU256, Asset, AssetAmount, ForeignChainAddress, Liquidity, PoolAssetMap,
+	SqrtPriceQ64F96,
 };
 use frame_support::dispatch::DispatchError;
 use sp_core::U256;
@@ -54,22 +56,25 @@ pub trait LiquidityPoolApi<Amount, AccountId> {
 	const STABLE_ASSET: Asset;
 
 	/// Deposit up to some amount of assets into an exchange pool. Minting some "Liquidity".
-	fn mint(lp: &AccountId, asset: &Asset, range: AmmRange, max_asset_amount: Amount, max_stable_amount: Amount) -> DispatchResult;
+	fn mint(
+		lp: AccountId,
+		asset: Asset,
+		range: AmmRange,
+		max_asset_amount: Amount,
+		max_stable_amount: Amount,
+		check_callback: impl FnOnce(PoolAssetMap<Amount>) -> bool,
+	) -> Result<(PoolAssetMap<Amount>, Liquidity), DispatchError>;
 
 	/// Burn some liquidity from an exchange pool to withdraw assets.
 	fn burn(
-		lp: &AccountId,
-		asset: &Asset,
+		lp: AccountId,
+		asset: Asset,
 		range: AmmRange,
 		burnt_liquidity: Liquidity,
 	) -> DispatchResult;
 
 	/// Collects fees yeilded by user's position into user's free balance.
-	fn collect(
-		lp: &AccountId,
-		asset: &Asset,
-		range: AmmRange,
-	) -> DispatchResult;
+	fn collect(lp: AccountId, asset: Asset, range: AmmRange) -> DispatchResult;
 
 	/// Returns the user's Minted liquidity for a specific pool.
 	fn minted_liqudity(lp: &AccountId, asset: &Asset) -> Vec<(AmmRange, Liquidity)>;

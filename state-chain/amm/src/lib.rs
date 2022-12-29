@@ -198,7 +198,7 @@ impl SwapDirection for PairToBase {
 pub enum MintError {
 	/// Invalid Tick range
 	InvalidTickRange,
-	/// One of the start/end ticks of the range reached its maximm gross liquidity
+	/// One of the start/end ticks of the range reached its maximum gross liquidity
 	MaximumGrossLiquidity,
 }
 
@@ -372,13 +372,13 @@ impl PoolState {
 	/// This function never panics
 	///
 	/// If this function returns an `Err(_)` no state changes have occurred
-	pub fn mint<F: FnOnce(PoolAssetMap<AmountU256>) -> bool>(
+	pub fn mint(
 		&mut self,
 		lp: AccountId,
 		lower_tick: Tick,
 		upper_tick: Tick,
 		minted_liquidity: Liquidity,
-		f: F,
+		f: impl FnOnce(PoolAssetMap<AmountU256>) -> bool,
 	) -> Result<PoolAssetMap<AmountU256>, MintError> {
 		if (lower_tick > upper_tick) || (lower_tick < MIN_TICK) && (upper_tick > MAX_TICK) {
 			return Err(MintError::InvalidTickRange)
@@ -1294,11 +1294,5 @@ mod test {
 			276324
 		);
 		assert_eq!(PoolState::tick_at_sqrt_price(MAX_SQRT_PRICE - 1), MAX_TICK - 1);
-	}
-
-	#[test]
-	fn test_limit() {
-		let min_price = MIN_SQRT_PRICE << 96u32;
-		println!("{}", min_price);
 	}
 }

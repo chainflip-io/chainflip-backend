@@ -1,7 +1,10 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-use cf_primitives::{chains::assets::any, AmountU256, SqrtPriceQ64F96, AmmRange, Liquidity};
+use cf_primitives::{
+	chains::assets::any, AccountId, AmmRange, AmountU256, Liquidity, PoolAsset, PoolAssetMap,
+	SqrtPriceQ64F96,
+};
 use cf_traits::{Chainflip, LiquidityPoolApi};
-use chainflip_amm::{PoolState, MAX_FEE_100TH_BIPS};
+use chainflip_amm::{MintError, PoolState, MAX_FEE_100TH_BIPS};
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::OriginFor;
 use sp_core::U256;
@@ -16,6 +19,8 @@ pub use pallet::*;
 
 #[frame_support::pallet]
 pub mod pallet {
+	use cf_primitives::AssetAmount;
+
 	use super::*;
 
 	#[pallet::config]
@@ -47,6 +52,10 @@ pub mod pallet {
 		InvalidFeeAmount,
 		/// The exchange pool is currently disabled.
 		PoolDisabled,
+		/// The Upper or Lower tick is invalid.
+		InvalidTickRange,
+		/// One of the start/end ticks of the range reached its maximum gross liquidity
+		MaximumGrossLiquidity,
 	}
 
 	#[pallet::event]
@@ -60,6 +69,14 @@ pub mod pallet {
 			asset: any::Asset,
 			fee_100th_bips: u32,
 			initial_sqrt_price: SqrtPriceQ64F96,
+		},
+		LiquidityMinted {
+			asset: any::Asset,
+			provider: AccountId,
+			range: AmmRange,
+			asset_amount: AssetAmount,
+			stable_amount: AssetAmount,
+			liquidity_amount: Liquidity,
 		},
 	}
 
@@ -180,18 +197,55 @@ impl<T: Config> cf_traits::SwappingApi<U256> for Pallet<T> {
 	}
 }
 
-impl<T: Config> LiquidityPoolApi<AmountU256, T::AccountId> for Pallet<T> {
+/// Implementation for Liquidity Pool API for chainflip-amm.
+/// `Amount` and `AccountId` are hard-coded type locked in by the amm code.
+impl<T: Config> LiquidityPoolApi<AmountU256, AccountId> for Pallet<T> {
 	const STABLE_ASSET: any::Asset = any::Asset::Usdc;
 
 	/// Deposit up to some amount of assets into an exchange pool. Minting some "Liquidity".
-	fn mint(lp: &T::AccountId, asset: &any::Asset, range: AmmRange, max_asset_amount: AmountU256, max_stable_amount: AmountU256) -> DispatchResult {
-		Ok(())
+	fn mint(
+		lp: AccountId,
+		asset: any::Asset,
+		range: AmmRange,
+		max_asset_amount: AmountU256,
+		max_stable_amount: AmountU256,
+		check_callback: impl FnOnce(PoolAssetMap<AmountU256>) -> bool,
+	) -> Result<(PoolAssetMap<AmountU256>, Liquidity), DispatchError> {
+		Pools::<T>::mutate(&asset, |maybe_pool| {
+			if let Some(pool) = maybe_pool.as_mut() {
+				ensure!(pool.pool_state(), Error::<T>::PoolDisabled);
+
+				// TODO: Calculate maximum liquidity from the given asset.
+				let liquidity_amount = 0;
+
+				// Mint the Liquidity from the pool.
+				let asset_spent: PoolAssetMap<AmountU256> = pool
+					.mint(lp.clone(), range.lower, range.upper, liquidity_amount, check_callback)
+					.map_err(|e| match e {
+						MintError::InvalidTickRange => Error::<T>::InvalidTickRange,
+						MintError::MaximumGrossLiquidity => Error::<T>::MaximumGrossLiquidity,
+					})?;
+
+				Self::deposit_event(Event::<T>::LiquidityMinted {
+					asset,
+					provider: lp,
+					range,
+					asset_amount: asset_spent[PoolAsset::Asset0].as_u128(),
+					stable_amount: asset_spent[PoolAsset::Asset1].as_u128(),
+					liquidity_amount,
+				});
+
+				Ok((asset_spent, liquidity_amount))
+			} else {
+				Err(Error::<T>::PoolDoesNotExist.into())
+			}
+		})
 	}
 
 	/// Burn some liquidity from an exchange pool to withdraw assets.
 	fn burn(
-		lp: &T::AccountId,
-		asset: &any::Asset,
+		lp: AccountId,
+		asset: any::Asset,
 		range: AmmRange,
 		burnt_liquidity: Liquidity,
 	) -> DispatchResult {
@@ -199,16 +253,12 @@ impl<T: Config> LiquidityPoolApi<AmountU256, T::AccountId> for Pallet<T> {
 	}
 
 	/// Collects fees yeilded by user's position into user's free balance.
-	fn collect(
-		lp: &T::AccountId,
-		asset: &any::Asset,
-		range: AmmRange,
-	) -> DispatchResult {
+	fn collect(lp: AccountId, asset: any::Asset, range: AmmRange) -> DispatchResult {
 		Ok(())
 	}
 
 	/// Returns the user's Minted liquidity for a specific pool.
-	fn minted_liqudity(lp: &T::AccountId, asset: &any::Asset) -> Vec<(AmmRange, Liquidity)> {
+	fn minted_liqudity(lp: &AccountId, asset: &any::Asset) -> Vec<(AmmRange, Liquidity)> {
 		vec![]
 	}
 
