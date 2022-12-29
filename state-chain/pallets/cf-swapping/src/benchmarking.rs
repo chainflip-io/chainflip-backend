@@ -34,7 +34,7 @@ benchmarks! {
 		0
 	)
 	on_idle {}: {
-		Pallet::<T>::on_idle(T::BlockNumber::from(1u32), Weight::from_time_ref(1));
+		Pallet::<T>::on_idle(T::BlockNumber::from(1u32), Weight::from_ref_time(1));
 	}
 	execute_group_of_swaps {
 		// Generate swaps

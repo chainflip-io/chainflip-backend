@@ -771,7 +771,7 @@ where
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> T::RuntimeOrigin {
+	fn successful_origin() -> <T as Config<I>>::RuntimeOrigin {
 		Origin::<T, I>(Default::default()).into()
 	}
 }
