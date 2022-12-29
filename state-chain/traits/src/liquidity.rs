@@ -1,5 +1,4 @@
-use cf_primitives::{
-	liquidity::TradingPosition, AmountU256, Asset, AssetAmount, ExchangeRate, ForeignChainAddress,
+use cf_primitives::{Liquidity, SqrtPriceQ64F96, AmountU256, AmmRange, Asset, AssetAmount, ForeignChainAddress,
 };
 use frame_support::dispatch::DispatchError;
 use sp_core::U256;
@@ -29,17 +28,17 @@ pub trait LpProvisioningApi {
 	) -> DispatchResult;
 }
 
-pub trait SwappingApi {
+pub trait SwappingApi<Amount> {
 	// Attempt to swap `from` asset to `to` asset.
-	// If OK, return (output_amount, input_asset_fee, output_asset_fee)
+	// If OK, return (output_amount, input_asset_fee, stable_asset_fee)
 	fn swap(
 		from: Asset,
 		to: Asset,
-		input_amount: AmountU256,
-	) -> Result<(AmountU256, AmountU256, AmountU256), DispatchError>;
+		input_amount: Amount,
+	) -> Result<(Amount, Amount, Amount), DispatchError>;
 }
 
-impl SwappingApi for () {
+impl SwappingApi<AmountU256> for () {
 	fn swap(
 		_from: Asset,
 		_to: Asset,
@@ -49,33 +48,34 @@ impl SwappingApi for () {
 	}
 }
 
-/// API to interface with Exchange Pools.
+/// API to interface with the Pools pallet to manage Uniswap v3 style Exchange Pools.
 /// All pools are Asset <-> USDC
-pub trait LiquidityPoolApi {
+pub trait LiquidityPoolApi<Amount, AccountId> {
 	const STABLE_ASSET: Asset;
 
-	/// Deploy a liquidity position into a pool.
-	fn deploy(asset: &Asset, position: TradingPosition<AssetAmount>);
+	/// Deposit up to some amount of assets into an exchange pool. Minting some "Liquidity".
+	fn mint(lp: &AccountId, asset: &Asset, range: AmmRange, max_asset_amount: Amount, max_stable_amount: Amount) -> DispatchResult;
 
-	/// Retract a liquidity position from a pool.
-	fn retract(asset: &Asset, position: TradingPosition<AssetAmount>)
-		-> (AssetAmount, AssetAmount);
-
-	/// Gets the current liquidity amount from a pool
-	fn get_liquidity(asset: &Asset) -> (AssetAmount, AssetAmount);
-
-	/// Gets the current swap rate for an pool
-	fn swap_rate(
-		input_asset: Asset,
-		output_asset: Asset,
-		input_amount: AssetAmount,
-	) -> ExchangeRate;
-
-	/// Calculates the liquidity that corresponds to a given trading position.
-	fn get_liquidity_amount_by_position(
+	/// Burn some liquidity from an exchange pool to withdraw assets.
+	fn burn(
+		lp: &AccountId,
 		asset: &Asset,
-		position: &TradingPosition<AssetAmount>,
-	) -> Option<(AssetAmount, AssetAmount)>;
+		range: AmmRange,
+		burnt_liquidity: Liquidity,
+	) -> DispatchResult;
+
+	/// Collects fees yeilded by user's position into user's free balance.
+	fn collect(
+		lp: &AccountId,
+		asset: &Asset,
+		range: AmmRange,
+	) -> DispatchResult;
+
+	/// Returns the user's Minted liquidity for a specific pool.
+	fn minted_liqudity(lp: &AccountId, asset: &Asset) -> Vec<(AmmRange, Liquidity)>;
+
+	/// Gets the current price of the pool in SqrtPrice
+	fn current_sqrt_price(asset: &Asset) -> Option<SqrtPriceQ64F96>;
 }
 
 // TODO Remove these in favour of a real mocks.

@@ -10,7 +10,7 @@ use sp_runtime::DispatchResult;
 use cf_chains::AnyChain;
 use cf_primitives::{
 	liquidity::{PositionId, TradingPosition},
-	Asset, AssetAmount, ForeignChain, ForeignChainAddress, IntentId,
+	Asset, AssetAmount, ForeignChain, ForeignChainAddress, IntentId, AmountU256
 };
 use cf_traits::{
 	liquidity::LpProvisioningApi, AccountRoleRegistry, Chainflip, EgressApi, IngressApi,
@@ -71,7 +71,7 @@ pub mod pallet {
 		type EgressHandler: EgressApi<AnyChain>;
 
 		/// API to interface with exchange Pools
-		type LiquidityPoolApi: LiquidityPoolApi;
+		type LiquidityPoolApi: LiquidityPoolApi<AmountU256>;
 
 		/// For governance checks.
 		type EnsureGovernance: EnsureOrigin<Self::Origin>;

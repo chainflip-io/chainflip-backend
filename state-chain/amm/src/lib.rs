@@ -348,6 +348,16 @@ impl PoolState {
 		self.enabled
 	}
 
+	/// Gets the current sqrt-price of the pool
+	pub fn current_sqrt_price(&self) -> SqrtPriceQ64F96 {
+		self.current_sqrt_price
+	}
+
+	/// Gets the current price of the pool in Tick
+	pub fn current_tick(&self) -> Tick {
+		self.current_tick
+	}
+
 	/// Tries to add `minted_liquidity` to/create the specified position, if `minted_liqudity == 0`
 	/// no position will be created or have liquidity added, the callback will not be called, and
 	/// the function will return `Ok(())`. Otherwise if the minting is possible the callback `f`
@@ -370,11 +380,11 @@ impl PoolState {
 		minted_liquidity: Liquidity,
 		f: F,
 	) -> Result<PoolAssetMap<AmountU256>, MintError> {
-		if lower_tick < upper_tick && MIN_TICK <= lower_tick && upper_tick <= MAX_TICK {
+		if (lower_tick > upper_tick) || (lower_tick < MIN_TICK) && (upper_tick > MAX_TICK) {
 			return Err(MintError::InvalidTickRange)
 		}
 
-		if minted_liquidity > 0 {
+		if minted_liquidity == 0 {
 			return Ok(Default::default())
 		}
 

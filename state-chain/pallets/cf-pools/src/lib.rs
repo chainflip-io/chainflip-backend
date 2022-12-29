@@ -1,6 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-use cf_primitives::{chains::assets::any, AmountU256, SqrtPriceQ64F96};
-use cf_traits::Chainflip;
+use cf_primitives::{chains::assets::any, AmountU256, SqrtPriceQ64F96, AmmRange, Liquidity};
+use cf_traits::{Chainflip, LiquidityPoolApi};
 use chainflip_amm::{PoolState, MAX_FEE_100TH_BIPS};
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::OriginFor;
@@ -130,7 +130,7 @@ pub mod pallet {
 	}
 }
 
-impl<T: Config> cf_traits::SwappingApi for Pallet<T> {
+impl<T: Config> cf_traits::SwappingApi<U256> for Pallet<T> {
 	fn swap(
 		from: any::Asset,
 		to: any::Asset,
@@ -165,7 +165,7 @@ impl<T: Config> cf_traits::SwappingApi for Pallet<T> {
 							Err(Error::<T>::PoolDoesNotExist)
 						}
 					})?;
-				let (output_amount, asset_1_fee) =
+				let (output_amount, stable_asset_fee) =
 					Pools::<T>::mutate(output_asset, |maybe_pool| {
 						if let Some(pool) = maybe_pool.as_mut() {
 							ensure!(pool.pool_state(), Error::<T>::PoolDisabled);
@@ -174,88 +174,46 @@ impl<T: Config> cf_traits::SwappingApi for Pallet<T> {
 							Err(Error::<T>::PoolDoesNotExist)
 						}
 					})?;
-				Ok((output_amount, asset_0_fee, asset_1_fee))
+				Ok((output_amount, asset_0_fee, stable_asset_fee))
 			},
 		}
 	}
 }
 
-// impl<T: Config> cf_traits::LiquidityPoolApi for Pallet<T> {
-// 	const STABLE_ASSET: any::Asset = any::Asset::Usdc;
+impl<T: Config> LiquidityPoolApi<AmountU256, T::AccountId> for Pallet<T> {
+	const STABLE_ASSET: any::Asset = any::Asset::Usdc;
 
-// 	fn deploy(asset: &any::Asset, position: cf_primitives::TradingPosition<AssetAmount>) {
-// 		match position {
-// 			TradingPosition::ClassicV3 { volume_0, volume_1, .. } => {
-// 				Pools::<T>::mutate(asset, |pool| pool.add_liquidity(volume_0, volume_1));
-// 			},
-// 			TradingPosition::VolatileV3 { side, volume, .. } => {
-// 				Pools::<T>::mutate(asset, |pool| match side {
-// 					PoolAsset::Asset0 => pool.add_liquidity(volume, 0),
-// 					PoolAsset::Asset1 => pool.add_liquidity(0, volume),
-// 				});
-// 			},
-// 		}
-// 	}
+	/// Deposit up to some amount of assets into an exchange pool. Minting some "Liquidity".
+	fn mint(lp: &T::AccountId, asset: &any::Asset, range: AmmRange, max_asset_amount: AmountU256, max_stable_amount: AmountU256) -> DispatchResult {
+		Ok(())
+	}
 
-// 	fn retract(
-// 		asset: &any::Asset,
-// 		position: cf_primitives::TradingPosition<AssetAmount>,
-// 	) -> (AssetAmount, AssetAmount) {
-// 		match position {
-// 			TradingPosition::ClassicV3 { volume_0, volume_1, .. } =>
-// 				Pools::<T>::mutate(asset, |pool| pool.remove_liquidity(volume_0, volume_1)),
-// 			TradingPosition::VolatileV3 { side, volume, .. } =>
-// 				Pools::<T>::mutate(asset, |pool| match side {
-// 					PoolAsset::Asset0 => pool.remove_liquidity(volume, 0),
-// 					PoolAsset::Asset1 => pool.remove_liquidity(0, volume),
-// 				}),
-// 		}
-// 	}
+	/// Burn some liquidity from an exchange pool to withdraw assets.
+	fn burn(
+		lp: &T::AccountId,
+		asset: &any::Asset,
+		range: AmmRange,
+		burnt_liquidity: Liquidity,
+	) -> DispatchResult {
+		Ok(())
+	}
 
-// 	fn get_liquidity(asset: &any::Asset) -> (AssetAmount, AssetAmount) {
-// 		Pools::<T>::get(asset).get_liquidity()
-// 	}
+	/// Collects fees yeilded by user's position into user's free balance.
+	fn collect(
+		lp: &T::AccountId,
+		asset: &any::Asset,
+		range: AmmRange,
+	) -> DispatchResult {
+		Ok(())
+	}
 
-// 	fn swap_rate(
-// 		input_asset: any::Asset,
-// 		output_asset: any::Asset,
-// 		input_amount: AssetAmount,
-// 	) -> ExchangeRate {
-// 		if input_amount == 0 {
-// 			match (input_asset, output_asset) {
-// 				(input_asset, any::Asset::Usdc) => Pools::<T>::get(input_asset).swap_rate(0),
-// 				(any::Asset::Usdc, output_asset) =>
-// 					Pools::<T>::get(output_asset).reversed().swap_rate(0),
-// 				(input_asset, output_asset) => {
-// 					let rate_1 = Pools::<T>::get(input_asset).swap_rate(0);
-// 					let rate_2 = Pools::<T>::get(output_asset).reversed().swap_rate(0);
-// 					rate_1 * rate_2
-// 				},
-// 			}
-// 		} else {
-// 			let output_amount = match (input_asset, output_asset) {
-// 				(input_asset, any::Asset::Usdc) => Pools::<T>::get(input_asset).swap(input_amount),
-// 				(any::Asset::Usdc, output_asset) =>
-// 					Pools::<T>::get(output_asset).reverse_swap(input_amount),
-// 				(input_asset, output_asset) => Pools::<T>::get(output_asset)
-// 					.reverse_swap(Pools::<T>::get(input_asset).swap(input_amount)),
-// 			};
-// 			ExchangeRate::from_rational(output_amount, input_amount)
-// 		}
-// 	}
+	/// Returns the user's Minted liquidity for a specific pool.
+	fn minted_liqudity(lp: &T::AccountId, asset: &any::Asset) -> Vec<(AmmRange, Liquidity)> {
+		vec![]
+	}
 
-// 	fn get_liquidity_amount_by_position(
-// 		_asset: &any::Asset,
-// 		position: &TradingPosition<AssetAmount>,
-// 	) -> Option<(AssetAmount, AssetAmount)> {
-// 		// Naive placeholder implementation. Does not take account into existing liquidity in the
-// 		// pool.
-// 		Some(match position {
-// 			TradingPosition::ClassicV3 { volume_0, volume_1, .. } => (*volume_0, *volume_1),
-// 			TradingPosition::VolatileV3 { side, volume, .. } => match side {
-// 				PoolAsset::Asset0 => (*volume, 0u128),
-// 				PoolAsset::Asset1 => (0u128, *volume),
-// 			},
-// 		})
-// 	}
-// }
+	/// Gets the current price of the pool in SqrtPrice
+	fn current_sqrt_price(asset: &any::Asset) -> Option<SqrtPriceQ64F96> {
+		None
+	}
+}

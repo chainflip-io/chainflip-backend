@@ -69,7 +69,7 @@ impl system::Config for Test {
 
 pub struct MockSwappingApi;
 
-impl SwappingApi for MockSwappingApi {
+impl SwappingApi<AssetAmount> for MockSwappingApi {
 	fn swap(
 		_from: Asset,
 		_to: Asset,

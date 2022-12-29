@@ -58,7 +58,7 @@ pub mod pallet {
 		/// API for handling asset egress.
 		type EgressHandler: EgressApi<AnyChain>;
 		/// An interface to the AMM api implementation.
-		type SwappingApi: SwappingApi;
+		type SwappingApi: SwappingApi<U256>;
 		/// The Weight information.
 		type WeightInfo: WeightInfo;
 	}
