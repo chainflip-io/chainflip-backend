@@ -121,6 +121,8 @@ jobs:
       #     variant: sccache
       #     save: false
       # - run: sccache --show-stats
+      - name: Install Protobuf Compiler
+        run: apt-get install -y protobuf-compiler
       - name: cargo ci-build
         run: |
           cargo ci-build --locked
