@@ -147,3 +147,14 @@ fn test_example_block_reward_calcaulation() {
 	let expected: u128 = 1_813_333_333_333_333_333;
 	assert_eq!(calculate_inflation_to_block_reward(issuance, inflation, 150u128), expected);
 }
+
+#[test]
+fn burn_flip() {
+	new_test_ext(vec![1, 2], None).execute_with(|| {
+		Emissions::on_initialize(SUPPLY_UPDATE_INTERVAL.into());
+		assert_eq!(
+			MockBroadcast::get_called().unwrap().new_total_supply,
+			TOTAL_ISSUANCE + FLIP_TO_BURN
+		);
+	});
+}

@@ -39,6 +39,10 @@ use cf_traits::{
 
 pub type AccountId = u64;
 
+pub const FLIP_TO_BURN: u128 = 10000;
+pub const SUPPLY_UPDATE_INTERVAL: u32 = 10;
+pub const TOTAL_ISSUANCE: u128 = 1_000_000_000;
+
 cf_traits::impl_mock_stake_transfer!(AccountId, u128);
 
 // Configure a mock runtime to test the pallet.
@@ -202,7 +206,7 @@ pub struct MockFlipToBurn;
 
 impl FlipInfo for MockFlipToBurn {
 	fn take_flip_to_burn() -> cf_primitives::AssetAmount {
-		todo!()
+		FLIP_TO_BURN
 	}
 }
 
@@ -238,15 +242,13 @@ impl pallet_cf_emissions::Config for Test {
 	type Broadcaster = MockBroadcast;
 	type WeightInfo = ();
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
-	#[cfg(feature = "ibiza")]
 	type FlipToBurn = MockFlipToBurn;
+	type EgressHandler = MockEgressHandler<AnyChain>;
 }
-
-pub const SUPPLY_UPDATE_INTERVAL: u32 = 10;
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext(validators: Vec<u64>, issuance: Option<u128>) -> sp_io::TestExternalities {
-	let total_issuance = issuance.unwrap_or(1_000_000_000u128);
+	let total_issuance = issuance.unwrap_or(TOTAL_ISSUANCE);
 	let config = GenesisConfig {
 		system: Default::default(),
 		flip: FlipConfig { total_issuance },
