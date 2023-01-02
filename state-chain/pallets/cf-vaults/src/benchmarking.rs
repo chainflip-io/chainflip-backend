@@ -172,12 +172,12 @@ benchmarks_instance_pallet! {
 	verify {
 		assert!(Vaults::<T, I>::contains_key(T::EpochInfo::epoch_index().saturating_add(1)));
 	}
-	set_keygen_timeout {
+	set_keygen_response_timeout {
 		let old_timeout: T::BlockNumber = 5u32.into();
 		KeygenResponseTimeout::<T, I>::put(old_timeout);
 		let new_timeout: T::BlockNumber = old_timeout + 1u32.into();
 		// ensure it's a different value for most expensive path.
-		let call = Call::<T, I>::set_keygen_timeout { new_timeout };
+		let call = Call::<T, I>::set_keygen_response_timeout { new_timeout };
 	} : { call.dispatch_bypass_filter(T::EnsureGovernance::successful_origin())? }
 	verify {
 		assert_eq!(KeygenResponseTimeout::<T, I>::get(), new_timeout);

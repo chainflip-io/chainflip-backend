@@ -30,6 +30,7 @@ pub type PolkadotGovKey = (); // Todo
 
 pub type PolkadotBalance = u128;
 pub type PolkadotIndex = u32;
+pub type PolkadotExtrinsicIndex = u32;
 pub type PolkadotHash = sp_core::H256;
 
 pub type PolkadotAddress = MultiAddress<PolkadotAccountId, ()>;

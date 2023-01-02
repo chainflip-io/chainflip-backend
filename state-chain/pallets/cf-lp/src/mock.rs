@@ -13,7 +13,7 @@ use cf_traits::{
 	},
 	AddressDerivationApi, Broadcaster,
 };
-use frame_support::{parameter_types, sp_runtime::app_crypto::sp_core::H160};
+use frame_support::{parameter_types, sp_runtime::app_crypto::sp_core::H160, traits::ConstU16};
 use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{
@@ -112,7 +112,9 @@ impl pallet_cf_account_roles::Config for Test {
 	type WeightInfo = ();
 }
 
-impl pallet_cf_pools::Config for Test {}
+impl pallet_cf_pools::Config for Test {
+	type NetworkFee = ConstU16<100>;
+}
 
 impl crate::Config for Test {
 	type Event = Event;

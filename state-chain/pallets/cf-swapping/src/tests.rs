@@ -210,7 +210,6 @@ fn expect_swap_id_to_be_emitted() {
 			crate::mock::Event::Swapping(crate::Event::SwapEgressScheduled {
 				swap_id: 1,
 				egress_id: (ForeignChain::Ethereum, 1),
-				egress_amount: 500
 			})
 		);
 	});
@@ -258,7 +257,7 @@ fn can_swap_using_witness_origin() {
 		System::assert_last_event(Event::Swapping(
 			crate::Event::<Test>::SwapScheduledByWitnesser {
 				swap_id: 1,
-				amount: 1_000,
+				ingress_amount: 1_000,
 				egress_address: ForeignChainAddress::Eth([0u8; 20]),
 			},
 		));

@@ -3,7 +3,7 @@ use cf_test_utilities::last_event;
 use cf_traits::{
 	mocks::{
 		reputation_resetter::MockReputationResetter, system_state_info::MockSystemStateInfo,
-		vault_rotator::MockVaultRotator,
+		vault_rotator::MockVaultRotatorA,
 	},
 	AuctionOutcome, SystemStateInfo,
 };
@@ -113,14 +113,14 @@ fn should_retry_rotation_until_success_with_failing_auctions() {
 			CurrentRotationPhase::<Test>::get(),
 			RotationPhase::<Test>::KeygensInProgress(..)
 		));
-		MockVaultRotator::keygen_success();
+		MockVaultRotatorA::keygen_success();
 		// TODO: Needs to be clearer why this is 2 blocks and not 1
 		move_forward_blocks(2);
 		assert!(matches!(
 			CurrentRotationPhase::<Test>::get(),
 			RotationPhase::<Test>::ActivatingKeys(..)
 		));
-		MockVaultRotator::keys_activated();
+		MockVaultRotatorA::keys_activated();
 		// TODO: Needs to be clearer why this is 2 blocks and not 1
 		move_forward_blocks(2);
 		assert_default_rotation_outcome!();
@@ -176,14 +176,14 @@ fn auction_winners_should_be_the_new_authorities_on_new_epoch() {
 			CurrentRotationPhase::<Test>::get(),
 			RotationPhase::<Test>::KeygensInProgress(..)
 		));
-		MockVaultRotator::keygen_success();
+		MockVaultRotatorA::keygen_success();
 		// TODO: Needs to be clearer why this is 2 blocks and not 1
 		move_forward_blocks(2);
 		assert!(matches!(
 			CurrentRotationPhase::<Test>::get(),
 			RotationPhase::<Test>::ActivatingKeys(..)
 		));
-		MockVaultRotator::keys_activated();
+		MockVaultRotatorA::keys_activated();
 		// TODO: Needs to be clearer why this is 2 blocks and not 1
 		move_forward_blocks(2);
 		assert_default_rotation_outcome!();
