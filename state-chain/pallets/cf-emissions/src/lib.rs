@@ -25,7 +25,9 @@ use sp_runtime::{
 	SaturatedConversion,
 };
 
+#[cfg(feature = "ibiza")]
 use cf_primitives::chains::AnyChain;
+#[cfg(feature = "ibiza")]
 use cf_traits::EgressApi;
 
 pub mod weights;
@@ -36,8 +38,11 @@ pub mod pallet {
 
 	use super::*;
 	use cf_chains::ChainAbi;
+	#[cfg(feature = "ibiza")]
 	use cf_primitives::Asset;
-	use cf_traits::{FlipInfo, SystemStateInfo};
+	#[cfg(feature = "ibiza")]
+	use cf_traits::FlipInfo;
+	use cf_traits::SystemStateInfo;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::OriginFor;
 
