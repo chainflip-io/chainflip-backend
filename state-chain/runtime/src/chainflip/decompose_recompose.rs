@@ -1,12 +1,12 @@
-use crate::{Call, EthereumInstance, Runtime};
+use crate::{EthereumInstance, Runtime, RuntimeCall};
 use codec::{Decode, Encode};
 use pallet_cf_witnesser::WitnessDataExtraction;
 use sp_std::{mem, prelude::*};
 
-impl WitnessDataExtraction for Call {
+impl WitnessDataExtraction for RuntimeCall {
 	fn extract(&mut self) -> Option<Vec<u8>> {
 		match self {
-			Call::EthereumChainTracking(pallet_cf_chain_tracking::Call::<
+			RuntimeCall::EthereumChainTracking(pallet_cf_chain_tracking::Call::<
 				Runtime,
 				EthereumInstance,
 			>::update_chain_state {
@@ -25,7 +25,7 @@ impl WitnessDataExtraction for Call {
 		}
 
 		match self {
-			Call::EthereumChainTracking(pallet_cf_chain_tracking::Call::<
+			RuntimeCall::EthereumChainTracking(pallet_cf_chain_tracking::Call::<
 				Runtime,
 				EthereumInstance,
 			>::update_chain_state {

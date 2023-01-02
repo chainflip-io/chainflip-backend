@@ -8,7 +8,7 @@ use cf_traits::{
 	},
 	Chainflip, SwappingApi,
 };
-use frame_support::parameter_types;
+use frame_support::{parameter_types, weights::Weight};
 use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{
@@ -94,16 +94,16 @@ impl Chainflip for Test {
 pub struct MockWeightInfo;
 
 impl WeightInfo for MockWeightInfo {
-	fn register_swap_intent() -> frame_support::weights::Weight {
-		100
+	fn register_swap_intent() -> Weight {
+		Weight::from_ref_time(100)
 	}
 
-	fn on_idle() -> frame_support::weights::Weight {
-		100
+	fn on_idle() -> Weight {
+		Weight::from_ref_time(100)
 	}
 
-	fn execute_group_of_swaps(_a: u32) -> frame_support::weights::Weight {
-		100
+	fn execute_group_of_swaps(_a: u32) -> Weight {
+		Weight::from_ref_time(100)
 	}
 }
 

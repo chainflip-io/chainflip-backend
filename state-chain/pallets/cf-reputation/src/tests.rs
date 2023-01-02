@@ -85,7 +85,7 @@ fn updating_accrual_rate_should_affect_reputation_points() {
 		// Fails due to too high a reputation points
 		assert_noop!(
 			ReputationPallet::update_accrual_ratio(
-				RuntimeOrigin::root()(),
+				RuntimeOrigin::root(),
 				MAX_ACCRUABLE_REPUTATION + 1,
 				20
 			),
@@ -95,7 +95,7 @@ fn updating_accrual_rate_should_affect_reputation_points() {
 		// Fails due to online points not being > 0
 		assert_noop!(
 			ReputationPallet::update_accrual_ratio(
-				RuntimeOrigin::root()(),
+				RuntimeOrigin::root(),
 				MAX_ACCRUABLE_REPUTATION,
 				0
 			),
@@ -103,7 +103,7 @@ fn updating_accrual_rate_should_affect_reputation_points() {
 		);
 
 		assert_ok!(ReputationPallet::update_accrual_ratio(
-			RuntimeOrigin::root()(),
+			RuntimeOrigin::root(),
 			ACCRUAL_RATIO.0,
 			ACCRUAL_RATIO.1,
 		));
@@ -115,7 +115,7 @@ fn updating_accrual_rate_should_affect_reputation_points() {
 
 		// Double the accrual rate.
 		assert_ok!(ReputationPallet::update_accrual_ratio(
-			RuntimeOrigin::root()(),
+			RuntimeOrigin::root(),
 			ACCRUAL_RATIO.0 * 2,
 			ACCRUAL_RATIO.1,
 		));
@@ -125,7 +125,7 @@ fn updating_accrual_rate_should_affect_reputation_points() {
 
 		// Halve the divisor, equivalent to double the initial rate.
 		assert_ok!(ReputationPallet::update_accrual_ratio(
-			RuntimeOrigin::root()(),
+			RuntimeOrigin::root(),
 			ACCRUAL_RATIO.0,
 			ACCRUAL_RATIO.1 / 2,
 		));

@@ -268,19 +268,22 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 					),
 				)?;
 
-				module.merge(GrandpaApiServer::into_rpc(Grandpa::new(
-					subscription_executor,
-					shared_authority_set.clone(),
-					shared_voter_state.clone(),
-					justification_stream.clone(),
-					finality_provider.clone(),
-				)))?;
+				module.merge(
+					Grandpa::new(
+						subscription_executor,
+						shared_authority_set.clone(),
+						shared_voter_state.clone(),
+						justification_stream.clone(),
+						finality_provider.clone(),
+					)
+					.into_rpc(),
+				)?;
 
 				// Implement custom RPC extensions
-				module.merge(CustomApiServer::into_rpc(CustomRpc {
-					client: client.clone(),
-					_phantom: PhantomData::default(),
-				}))?;
+				// module.merge(CustomApiServer::into_rpc(CustomRpc {
+				// 	client: client.clone(),
+				// 	_phantom: PhantomData::default(),
+				// }))?;
 
 				#[cfg(feature = "ibiza")]
 				module.merge(PoolsApiServer::into_rpc(PoolsRpc {
@@ -335,7 +338,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 							slot_duration,
 						);
 
-					Ok((timestamp, slot))
+					Ok((slot, timestamp))
 				},
 				force_authoring,
 				backoff_authoring_blocks,

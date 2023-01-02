@@ -51,10 +51,10 @@ fn changing_epoch_block_size() {
 		assert_eq!(min_duration, 1);
 		// Throw up an error if we supply anything less than this
 		assert_noop!(
-			ValidatorPallet::set_blocks_for_epoch(RuntimeOrigin::root()(), min_duration - 1),
+			ValidatorPallet::set_blocks_for_epoch(RuntimeOrigin::root(), min_duration - 1),
 			Error::<Test>::InvalidEpoch
 		);
-		assert_ok!(ValidatorPallet::set_blocks_for_epoch(RuntimeOrigin::root()(), min_duration));
+		assert_ok!(ValidatorPallet::set_blocks_for_epoch(RuntimeOrigin::root(), min_duration));
 		assert_eq!(
 			last_event::<Test>(),
 			mock::RuntimeEvent::ValidatorPallet(crate::Event::EpochDurationChanged(
@@ -64,7 +64,7 @@ fn changing_epoch_block_size() {
 		);
 		// We throw up an error if we try to set it to the current
 		assert_noop!(
-			ValidatorPallet::set_blocks_for_epoch(RuntimeOrigin::root()(), min_duration),
+			ValidatorPallet::set_blocks_for_epoch(RuntimeOrigin::root(), min_duration),
 			Error::<Test>::InvalidEpoch
 		);
 	});
@@ -133,7 +133,7 @@ fn should_be_unable_to_force_rotation_during_a_rotation() {
 		MockBidderProvider::set_winning_bids();
 		ValidatorPallet::start_authority_rotation();
 		assert_noop!(
-			ValidatorPallet::force_rotation(RuntimeOrigin::root()()),
+			ValidatorPallet::force_rotation(RuntimeOrigin::root()),
 			Error::<Test>::RotationInProgress
 		);
 	});
@@ -143,13 +143,13 @@ fn should_be_unable_to_force_rotation_during_a_rotation() {
 fn should_rotate_when_forced() {
 	new_test_ext().execute_with(|| {
 		MockBidderProvider::set_winning_bids();
-		assert_ok!(ValidatorPallet::force_rotation(RuntimeOrigin::root()()));
+		assert_ok!(ValidatorPallet::force_rotation(RuntimeOrigin::root()));
 		assert!(matches!(
 			CurrentRotationPhase::<Test>::get(),
 			RotationPhase::<Test>::KeygensInProgress(..)
 		));
 		assert_noop!(
-			ValidatorPallet::force_rotation(RuntimeOrigin::root()()),
+			ValidatorPallet::force_rotation(RuntimeOrigin::root()),
 			Error::<Test>::RotationInProgress
 		);
 	});
@@ -606,14 +606,14 @@ fn auction_params_must_be_valid_when_set() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
 			ValidatorPallet::set_auction_parameters(
-				RuntimeOrigin::root()(),
+				RuntimeOrigin::root(),
 				SetSizeParameters::default()
 			),
 			Error::<Test>::InvalidAuctionParameters
 		);
 
 		assert_ok!(ValidatorPallet::set_auction_parameters(
-			RuntimeOrigin::root()(),
+			RuntimeOrigin::root(),
 			SetSizeParameters { min_size: 3, max_size: 10, max_expansion: 10 }
 		));
 		// Confirm we have an event

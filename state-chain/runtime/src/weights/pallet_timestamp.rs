@@ -37,8 +37,8 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		#[allow(clippy::unnecessary_cast)]
 		(Weight::from_ref_time(11_000_000)
 )
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+			.saturating_add(T::DbWeight::get().reads(2u64))
+			.saturating_add(T::DbWeight::get().writes(1u64))
 	}
 	fn on_finalize() -> Weight {
 		#[allow(clippy::unnecessary_cast)]

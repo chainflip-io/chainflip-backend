@@ -109,7 +109,7 @@ parameter_types! {
 }
 
 // Implement mock for RestrictionHandler
-impl_mock_waived_fees!(AccountId, Call);
+impl_mock_waived_fees!(AccountId, RuntimeCall);
 
 impl pallet_cf_flip::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
@@ -122,7 +122,7 @@ impl pallet_cf_flip::Config for Test {
 	type WaivedFees = WaivedFeesMock;
 }
 
-cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
+cf_traits::impl_mock_ensure_witnessed_for_origin!(RuntimeOrigin);
 cf_traits::impl_mock_epoch_info!(AccountId, u128, u32, AuthorityCount);
 cf_traits::impl_mock_stake_transfer!(AccountId, u128);
 
@@ -138,14 +138,14 @@ impl MockThresholdSigner {
 	}
 
 	pub fn on_signature_ready(account_id: &AccountId) -> DispatchResultWithPostInfo {
-		Staking::post_claim_signature(Origin::root(), account_id.clone(), 0)
+		Staking::post_claim_signature(RuntimeOrigin::root(), account_id.clone(), 0)
 	}
 }
 
 impl ThresholdSigner<Ethereum> for MockThresholdSigner {
 	type RequestId = u32;
 	type Error = &'static str;
-	type Callback = Call;
+	type Callback = RuntimeCall;
 	type KeyId = <Test as Chainflip>::KeyId;
 	type ValidatorId = AccountId;
 
@@ -201,7 +201,7 @@ impl pallet_cf_staking::Config for Test {
 	type WeightInfo = ();
 	type StakerId = AccountId;
 	type ThresholdSigner = MockThresholdSigner;
-	type ThresholdCallable = Call;
+	type ThresholdCallable = RuntimeCall;
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type RegisterClaim = eth::api::EthereumApi<MockEthReplayProtectionProvider>;

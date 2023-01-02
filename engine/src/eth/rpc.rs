@@ -1,11 +1,11 @@
-use sp_core::{H256, U256};
 use utilities::{context, make_periodic_tick};
 use web3::{
 	api::SubscriptionStream,
 	signing::SecretKeyRef,
 	types::{
 		Block, BlockHeader, BlockNumber, Bytes, CallRequest, FeeHistory, Filter, Log,
-		SignedTransaction, SyncState, Transaction, TransactionParameters, TransactionReceipt, U64,
+		SignedTransaction, SyncState, Transaction, TransactionParameters, TransactionReceipt, H256,
+		U256, U64,
 	},
 	Web3,
 };

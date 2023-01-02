@@ -749,7 +749,6 @@ dependencies = [
  "rand 0.8.5",
  "rlp",
  "scale-info",
- "secp256k1 0.21.3",
  "serde",
  "sp-core 7.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12)",
  "sp-runtime 7.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12)",

@@ -22,6 +22,7 @@ use cf_chains::{
 	eth,
 	eth::{api::register_claim::RegisterClaim, Ethereum},
 };
+use pallet_transaction_payment::Multiplier;
 
 use pallet_cf_validator::BidInfoProvider;
 
@@ -51,7 +52,7 @@ use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
 use sp_runtime::traits::{
-	AccountIdLookup, BlakeTwo256, Block as BlockT, ConvertInto, IdentifyAccount, NumberFor,
+	AccountIdLookup, BlakeTwo256, Block as BlockT, ConvertInto, IdentifyAccount, NumberFor, One,
 	OpaqueKeys, UniqueSaturatedInto, Verify,
 };
 
@@ -328,10 +329,10 @@ impl pallet_cf_account_roles::Config for Runtime {
 
 impl<LocalCall> SendTransactionTypes<LocalCall> for Runtime
 where
-	Call: From<LocalCall>,
+	RuntimeCall: From<LocalCall>,
 {
 	type Extrinsic = UncheckedExtrinsic;
-	type OverarchingCall = Call;
+	type OverarchingCall = RuntimeCall;
 }
 
 impl pallet_session::Config for Runtime {
@@ -509,7 +510,7 @@ impl pallet_cf_witnesser::Config for Runtime {
 
 impl pallet_cf_staking::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type ThresholdCallable = Call;
+	type ThresholdCallable = RuntimeCall;
 	type StakerId = AccountId;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type AccountRoleRegistry = AccountRoles;
@@ -598,9 +599,9 @@ impl pallet_cf_reputation::Config for Runtime {
 impl pallet_cf_threshold_signature::Config<EthereumInstance> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Offence = chainflip::Offence;
-	type RuntimeOrigin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type AccountRoleRegistry = AccountRoles;
-	type ThresholdCallable = Call;
+	type ThresholdCallable = RuntimeCall;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type ThresholdSignerNomination = chainflip::RandomSignerNomination;
 	type TargetChain = Ethereum;
@@ -615,7 +616,7 @@ impl pallet_cf_threshold_signature::Config<EthereumInstance> for Runtime {
 impl pallet_cf_threshold_signature::Config<PolkadotInstance> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Offence = chainflip::Offence;
-	type RuntimeOrigin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type AccountRoleRegistry = AccountRoles;
 	type ThresholdCallable = Call;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;

@@ -3,7 +3,7 @@ use cf_chains::AnyChain;
 use cf_primitives::{Asset, ForeignChain, ForeignChainAddress};
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{mocks::egress_handler::MockEgressHandler, SwapIntentHandler};
-use frame_support::{assert_noop, assert_ok, sp_std::iter};
+use frame_support::{assert_noop, assert_ok, sp_std::iter, weights::Weight};
 
 use frame_support::traits::Hooks;
 
@@ -111,7 +111,7 @@ fn number_of_swaps_processed_limited_by_weight() {
 	new_test_ext().execute_with(|| {
 		let swaps = generate_test_swaps();
 		insert_swaps(&swaps);
-		Swapping::on_idle(1, 0);
+		Swapping::on_idle(1, Weight);
 		assert_eq!(SwapQueue::<Test>::get().len(), swaps.len());
 	});
 }
@@ -139,7 +139,7 @@ fn expect_earned_fees_to_be_recorded() {
 			BOB,
 			100,
 		);
-		Swapping::on_idle(1, 1000);
+		Swapping::on_idle(1, Weight::from_ref_time(1000));
 		assert_eq!(EarnedRelayerFees::<Test>::get(ALICE, cf_primitives::Asset::Flip), 2);
 		assert_eq!(EarnedRelayerFees::<Test>::get(BOB, cf_primitives::Asset::Flip), 5);
 		<Pallet<Test> as SwapIntentHandler>::on_swap_ingress(
@@ -151,7 +151,7 @@ fn expect_earned_fees_to_be_recorded() {
 			ALICE,
 			200,
 		);
-		Swapping::on_idle(1, 1000);
+		Swapping::on_idle(1, 1000u32);
 		assert_eq!(EarnedRelayerFees::<Test>::get(ALICE, cf_primitives::Asset::Flip), 4);
 	});
 }
@@ -249,7 +249,7 @@ fn withdrawal_relayer_fees() {
 fn can_swap_using_witness_origin() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Swapping::schedule_swap_by_witnesser(
-			RuntimeOrigin::root()(),
+			RuntimeOrigin::root(),
 			Asset::Eth,
 			Asset::Flip,
 			1_000,

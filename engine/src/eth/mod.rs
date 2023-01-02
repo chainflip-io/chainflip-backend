@@ -37,7 +37,6 @@ use crate::{
 use ethbloom::{Bloom, Input};
 use futures::StreamExt;
 use slog::o;
-use sp_core::{H160, U256};
 use std::{
 	fmt::{self, Debug},
 	pin::Pin,
@@ -49,8 +48,8 @@ use web3::{
 	ethabi::{self, Address, Contract},
 	signing::{Key, SecretKeyRef},
 	types::{
-		Block, BlockNumber, Bytes, CallRequest, FilterBuilder, TransactionParameters, H2048, H256,
-		U64,
+		Block, BlockNumber, Bytes, CallRequest, FilterBuilder, TransactionParameters, H160, H2048,
+		H256, U256, U64,
 	},
 };
 use web3_secp256k1::SecretKey;
