@@ -109,10 +109,9 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(_: BlockNumberFor<T>) -> Weight {
-			let collected_usdc_fees: AssetAmount = 50;
-			// Buy back flip
-			let flip_to_burn =
-				Pools::<T>::mutate(Asset::Usdc, |pool| pool.swap(collected_usdc_fees));
+			let flip_to_burn = Pools::<T>::mutate(Asset::Flip, |pool| {
+				pool.reverse_swap(CollectedNetworkFee::<T>::take())
+			});
 			FlipToBurn::<T>::mutate(|total| {
 				*total = total.saturating_add(flip_to_burn);
 			});
