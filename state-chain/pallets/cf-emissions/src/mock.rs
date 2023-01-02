@@ -17,9 +17,11 @@ use sp_runtime::{
 	BuildStorage,
 };
 
+use cf_chains::AnyChain;
+
 use cf_traits::{
 	mocks::{
-		eth_environment_provider::MockEthEnvironmentProvider,
+		egress_handler::MockEgressHandler, eth_environment_provider::MockEthEnvironmentProvider,
 		eth_replay_protection_provider::MockEthReplayProtectionProvider,
 		system_state_info::MockSystemStateInfo,
 	},
@@ -242,7 +244,9 @@ impl pallet_cf_emissions::Config for Test {
 	type Broadcaster = MockBroadcast;
 	type WeightInfo = ();
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
+	#[cfg(feature = "ibiza")]
 	type FlipToBurn = MockFlipToBurn;
+	#[cfg(feature = "ibiza")]
 	type EgressHandler = MockEgressHandler<AnyChain>;
 }
 

@@ -28,7 +28,11 @@ use sp_runtime::{
 #[cfg(feature = "ibiza")]
 use cf_primitives::chains::AnyChain;
 #[cfg(feature = "ibiza")]
+use cf_primitives::Asset;
+#[cfg(feature = "ibiza")]
 use cf_traits::EgressApi;
+#[cfg(feature = "ibiza")]
+use cf_traits::FlipInfo;
 
 pub mod weights;
 pub use weights::WeightInfo;
@@ -38,8 +42,6 @@ pub mod pallet {
 
 	use super::*;
 	use cf_chains::ChainAbi;
-	#[cfg(feature = "ibiza")]
-	use cf_primitives::Asset;
 	#[cfg(feature = "ibiza")]
 	use cf_traits::FlipInfo;
 	use cf_traits::SystemStateInfo;
