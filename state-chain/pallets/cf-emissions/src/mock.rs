@@ -23,7 +23,7 @@ use cf_traits::{
 		eth_replay_protection_provider::MockEthReplayProtectionProvider,
 		system_state_info::MockSystemStateInfo,
 	},
-	Broadcaster, Issuance, WaivedFees,
+	Broadcaster, FlipInfo, Issuance, WaivedFees,
 };
 
 use cf_primitives::{BroadcastId, FlipBalance};
@@ -198,6 +198,14 @@ impl ApiCall<MockEthereum> for MockUpdateFlipSupply {
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct MockBroadcast;
 
+pub struct MockFlipToBurn;
+
+impl FlipInfo for MockFlipToBurn {
+	fn take_flip_to_burn() -> cf_primitives::AssetAmount {
+		todo!()
+	}
+}
+
 impl MockBroadcast {
 	pub fn call(outgoing: MockUpdateFlipSupply) -> u32 {
 		storage::hashed::put(&<Twox64Concat as StorageHasher>::hash, b"MockBroadcast", &outgoing);
@@ -230,6 +238,8 @@ impl pallet_cf_emissions::Config for Test {
 	type Broadcaster = MockBroadcast;
 	type WeightInfo = ();
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
+	#[cfg(feature = "ibiza")]
+	type FlipToBurn = MockFlipToBurn;
 }
 
 pub const SUPPLY_UPDATE_INTERVAL: u32 = 10;

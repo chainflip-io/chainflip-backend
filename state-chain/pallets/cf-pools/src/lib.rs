@@ -219,3 +219,9 @@ impl<T: Config> cf_traits::LiquidityPoolApi for Pallet<T> {
 		})
 	}
 }
+
+impl<T: Config> cf_traits::FlipInfo for Pallet<T> {
+	fn take_flip_to_burn() -> AssetAmount {
+		todo!()
+	}
+}

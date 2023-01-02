@@ -101,9 +101,10 @@ pub mod pallet {
 		/// For governance checks.
 		type EnsureGovernance: EnsureOrigin<Self::Origin>;
 
+		#[cfg(feature = "ibiza")]
 		type FlipToBurn: FlipInfo;
 
-		/// API for handling asset egress.
+		#[cfg(feature = "ibiza")]
 		type EgressHandler: EgressApi<AnyChain>;
 	}
 
@@ -173,15 +174,9 @@ pub mod pallet {
 			T::RewardsDistribution::distribute();
 			if Self::should_update_supply_at(current_block) {
 				if T::SystemState::ensure_no_maintenance().is_ok() {
-					let flip_to_burn = T::FlipToBurn::take_flip_to_burn();
-					T::EgressHandler::schedule_egress(
-						Asset::Flip,
-						flip_to_burn,
-						cf_primitives::ForeignChainAddress::Eth(
-							T::EthEnvironmentProvider::key_manager_address(),
-						),
-					);
-					T::Issuance::burn(flip_to_burn.into());
+					#[cfg(feature = "ibiza")]
+					Self::burn_flip();
+
 					Self::broadcast_update_total_supply(
 						T::Issuance::total_issuance(),
 						current_block,
@@ -307,6 +302,19 @@ impl<T: Config> Pallet<T> {
 			block_number.saturated_into(),
 			&T::EthEnvironmentProvider::stake_manager_address(),
 		));
+	}
+
+	#[cfg(feature = "ibiza")]
+	fn burn_flip() {
+		let flip_to_burn = T::FlipToBurn::take_flip_to_burn();
+		T::EgressHandler::schedule_egress(
+			Asset::Flip,
+			flip_to_burn,
+			cf_primitives::ForeignChainAddress::Eth(
+				T::EthEnvironmentProvider::key_manager_address(),
+			),
+		);
+		T::Issuance::burn(flip_to_burn.into());
 	}
 }
 
