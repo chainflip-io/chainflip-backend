@@ -17,11 +17,15 @@ use sp_runtime::{
 	BuildStorage,
 };
 
+#[cfg(feature = "ibiza")]
 use cf_chains::AnyChain;
+
+#[cfg(feature = "ibiza")]
+use cf_traits::mocks::egress_handler::MockEgressHandler;
 
 use cf_traits::{
 	mocks::{
-		egress_handler::MockEgressHandler, eth_environment_provider::MockEthEnvironmentProvider,
+		eth_environment_provider::MockEthEnvironmentProvider,
 		eth_replay_protection_provider::MockEthReplayProtectionProvider,
 		system_state_info::MockSystemStateInfo,
 	},
