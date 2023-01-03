@@ -29,7 +29,7 @@ use cf_traits::{
 		eth_replay_protection_provider::MockEthReplayProtectionProvider,
 		system_state_info::MockSystemStateInfo,
 	},
-	Broadcaster, FlipInfo, Issuance, WaivedFees,
+	Broadcaster, FlipBurnInfo, Issuance, WaivedFees,
 };
 
 use cf_primitives::{BroadcastId, FlipBalance};
@@ -210,7 +210,7 @@ pub struct MockBroadcast;
 
 pub struct MockFlipToBurn;
 
-impl FlipInfo for MockFlipToBurn {
+impl FlipBurnInfo for MockFlipToBurn {
 	fn take_flip_to_burn() -> cf_primitives::AssetAmount {
 		FLIP_TO_BURN
 	}

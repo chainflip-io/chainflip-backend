@@ -124,7 +124,7 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(super) type FlipToBurn<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
 
-	/// Flip ready to get burned.
+	/// Interval in which we buy flip.
 	#[pallet::storage]
 	pub(super) type FlipBuyInterval<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
 
@@ -256,9 +256,9 @@ impl<T: Config> cf_traits::LiquidityPoolApi for Pallet<T> {
 	}
 }
 
-impl<T: Config> cf_traits::FlipInfo for Pallet<T> {
+impl<T: Config> cf_traits::FlipBurnInfo for Pallet<T> {
 	fn take_flip_to_burn() -> AssetAmount {
-		todo!()
+		FlipToBurn::<T>::take()
 	}
 }
 

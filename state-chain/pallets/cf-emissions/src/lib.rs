@@ -32,7 +32,7 @@ use cf_primitives::Asset;
 #[cfg(feature = "ibiza")]
 use cf_traits::EgressApi;
 #[cfg(feature = "ibiza")]
-use cf_traits::FlipInfo;
+use cf_traits::FlipBurnInfo;
 
 pub mod weights;
 pub use weights::WeightInfo;
@@ -43,7 +43,7 @@ pub mod pallet {
 	use super::*;
 	use cf_chains::ChainAbi;
 	#[cfg(feature = "ibiza")]
-	use cf_traits::FlipInfo;
+	use cf_traits::FlipBurnInfo;
 	use cf_traits::SystemStateInfo;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::OriginFor;
@@ -109,7 +109,7 @@ pub mod pallet {
 		type EnsureGovernance: EnsureOrigin<Self::Origin>;
 
 		#[cfg(feature = "ibiza")]
-		type FlipToBurn: FlipInfo;
+		type FlipToBurn: FlipBurnInfo;
 
 		#[cfg(feature = "ibiza")]
 		type EgressHandler: EgressApi<AnyChain>;
