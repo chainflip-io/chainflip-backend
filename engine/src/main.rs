@@ -90,10 +90,7 @@ async fn main() -> anyhow::Result<()> {
                 .await
                 .context("Failed to submit version to state chain")?;
 
-            let (
-                epoch_start_sender,
-                [epoch_start_receiver_1, epoch_start_receiver_2, epoch_start_receiver_3, _epoch_start_receiver_4, _epoch_start_receiver_5, _epoch_start_receiver_6]
-            ) = build_broadcast_channel(10);
+            let (epoch_start_sender, [epoch_start_receiver]) = build_broadcast_channel(10);
 
             #[cfg(feature = "ibiza")]
             let (
@@ -189,7 +186,7 @@ async fn main() -> anyhow::Result<()> {
                 eth::contract_witnesser::start(
                     stake_manager_contract,
                     eth_dual_rpc.clone(),
-                    epoch_start_receiver_1,
+                    epoch_start_receiver.clone(),
                     true,
                     state_chain_client.clone(),
                     &root_logger,
@@ -199,7 +196,7 @@ async fn main() -> anyhow::Result<()> {
                 eth::contract_witnesser::start(
                     key_manager_contract,
                     eth_dual_rpc.clone(),
-                    epoch_start_receiver_2,
+                    epoch_start_receiver.clone(),
                     false,
                     state_chain_client.clone(),
                     &root_logger,
@@ -209,7 +206,10 @@ async fn main() -> anyhow::Result<()> {
                 eth::chain_data_witnesser::start(
                     eth_dual_rpc.clone(),
                     state_chain_client.clone(),
-                    epoch_start_receiver_3,
+                    #[cfg(feature = "ibiza")]
+                    epoch_start_receiver.clone(),
+                    #[cfg(not(feature = "ibiza"))]
+                    epoch_start_receiver,
                     cfe_settings_update_receiver,
                     &root_logger
                 )
@@ -291,7 +291,7 @@ async fn main() -> anyhow::Result<()> {
 
                 scope.spawn(eth::ingress_witnesser::start(
                     eth_dual_rpc.clone(),
-                    _epoch_start_receiver_4,
+                    epoch_start_receiver.clone(),
                     eth_monitor_ingress_receiver,
                     state_chain_client.clone(),
                     monitored_addresses_from_all_eth(&eth_chain_ingress_addresses, assets::eth::Asset::Eth),
@@ -301,7 +301,7 @@ async fn main() -> anyhow::Result<()> {
                     eth::contract_witnesser::start(
                         Erc20Witnesser::new(flip_contract_address.into(), assets::eth::Asset::Flip, monitored_addresses_from_all_eth(&eth_chain_ingress_addresses, assets::eth::Asset::Flip), eth_monitor_flip_ingress_receiver),
                         eth_dual_rpc.clone(),
-                        _epoch_start_receiver_5,
+                        epoch_start_receiver.clone(),
                         false,
                         state_chain_client.clone(),
                         &root_logger,
@@ -311,7 +311,7 @@ async fn main() -> anyhow::Result<()> {
                     eth::contract_witnesser::start(
                         Erc20Witnesser::new(usdc_contract_address.into(), assets::eth::Asset::Usdc, monitored_addresses_from_all_eth(&eth_chain_ingress_addresses, assets::eth::Asset::Usdc), eth_monitor_usdc_ingress_receiver),
                         eth_dual_rpc,
-                        _epoch_start_receiver_6,
+                        epoch_start_receiver,
                         false,
                         state_chain_client.clone(),
                         &root_logger,
