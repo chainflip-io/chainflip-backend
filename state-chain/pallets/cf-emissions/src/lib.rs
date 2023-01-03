@@ -42,8 +42,6 @@ pub mod pallet {
 
 	use super::*;
 	use cf_chains::ChainAbi;
-	#[cfg(feature = "ibiza")]
-	use cf_traits::FlipBurnInfo;
 	use cf_traits::SystemStateInfo;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::OriginFor;
