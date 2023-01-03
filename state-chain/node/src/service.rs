@@ -280,10 +280,10 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 				)?;
 
 				// Implement custom RPC extensions
-				// module.merge(CustomApiServer::into_rpc(CustomRpc {
-				// 	client: client.clone(),
-				// 	_phantom: PhantomData::default(),
-				// }))?;
+				module.merge(CustomApiServer::into_rpc(CustomRpc {
+					client: client.clone(),
+					_phantom: PhantomData::default(),
+				}))?;
 
 				#[cfg(feature = "ibiza")]
 				module.merge(PoolsApiServer::into_rpc(PoolsRpc {

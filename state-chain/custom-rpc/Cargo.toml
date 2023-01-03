@@ -10,7 +10,7 @@ edition = '2021'
 # Chainflip Runtime
 state-chain-runtime = { path = '../runtime' }
 
-jsonrpsee = { version = "0.13.0", features = ["full"] }
+jsonrpsee = { version = "0.15.1", features = ["full"] }
 serde = { version = '1.0', features = ['derive'] }
 cf-chains = { path = '../chains' }
 cf-utilities = { package = 'utilities', path = '../../utilities' }
