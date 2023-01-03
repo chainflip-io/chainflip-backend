@@ -497,7 +497,7 @@ where
                                                             tx_hash
                                                         );
                                                         assert_eq!(
-                                                            tx_hash, expected_broadcast_tx_hash,
+                                                            tx_hash.0, expected_broadcast_tx_hash.0,
                                                             "tx_hash returned from `send` does not match expected hash"
                                                         );
                                                     },

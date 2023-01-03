@@ -9,11 +9,10 @@ use super::rpc::EthRpcApi;
 
 use cf_chains::eth::{Ethereum, TrackedData};
 
-use sp_core::U256;
 use state_chain_runtime::CfeSettings;
 use tokio::sync::watch;
 use utilities::{context, make_periodic_tick};
-use web3::types::BlockNumber;
+use web3::types::{BlockNumber, U256};
 
 const ETH_CHAIN_TRACKING_POLL_INTERVAL: Duration = Duration::from_secs(4);
 
