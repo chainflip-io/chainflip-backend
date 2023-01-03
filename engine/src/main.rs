@@ -6,8 +6,8 @@ use anyhow::Context;
 use cf_primitives::AccountRole;
 use chainflip_engine::{
 	eth::{
-		self, build_broadcast_channel, key_manager::KeyManager, rpc::EthDualRpcClient,
-		stake_manager::StakeManager, EthBroadcaster,
+		self, key_manager::KeyManager, rpc::EthDualRpcClient, stake_manager::StakeManager,
+		EthBroadcaster,
 	},
 	health::HealthChecker,
 	logging,
@@ -99,10 +99,10 @@ async fn main() -> anyhow::Result<()> {
 				.await
 				.context("Failed to submit version to state chain")?;
 
-			let (epoch_start_sender, [epoch_start_receiver]) = build_broadcast_channel(10);
+			let (epoch_start_sender, epoch_start_receiver) = async_broadcast::broadcast(10);
 
 			#[cfg(feature = "ibiza")]
-			let (dot_epoch_start_sender, [dot_epoch_start_receiver_1]) = build_broadcast_channel(10);
+			let (dot_epoch_start_sender, dot_epoch_start_receiver) = async_broadcast::broadcast(10);
 
 			let cfe_settings = state_chain_client
 				.storage_value::<pallet_cf_environment::CfeSettings<state_chain_runtime::Runtime>>(
@@ -356,7 +356,7 @@ async fn main() -> anyhow::Result<()> {
 					&root_logger,
 				));
 				scope.spawn(dot::witnesser::start(
-					dot_epoch_start_receiver_1,
+					dot_epoch_start_receiver,
 					dot_rpc_client,
 					dot_monitor_ingress_receiver,
 					state_chain_client
