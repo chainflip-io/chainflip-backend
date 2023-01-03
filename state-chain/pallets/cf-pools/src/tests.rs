@@ -105,6 +105,7 @@ fn test_fee_calculation() {
 #[test]
 fn test_buy_back_flip() {
 	new_test_ext().execute_with(|| {
+		// Deploy a Flip pool
 		<Pools as LiquidityPoolApi>::deploy(
 			&any::Asset::Flip,
 			cf_primitives::TradingPosition::ClassicV3 {
@@ -116,16 +117,18 @@ fn test_buy_back_flip() {
 		FlipBuyInterval::<Test>::set(5);
 		CollectedNetworkFee::<Test>::set(30);
 		Pools::on_initialize(8);
+		// Expect no funds to be available
 		assert_eq!(FlipToBurn::<Test>::get(), 0);
 		Pools::on_initialize(10);
-		let flip_to_burn = FlipToBurn::<Test>::get();
-		assert!(flip_to_burn != 0);
+		let initial_flip_to_burn = FlipToBurn::<Test>::get();
+		// Expect the some funds available to burn
+		assert!(initial_flip_to_burn != 0);
 		CollectedNetworkFee::<Test>::set(30);
 		Pools::on_initialize(14);
-		let new_flip_to_burn = FlipToBurn::<Test>::get();
-		assert_eq!(flip_to_burn, new_flip_to_burn);
+		// Expect nothing to change because we didn't passed the buy interval threshold
+		assert_eq!(initial_flip_to_burn, FlipToBurn::<Test>::get());
 		Pools::on_initialize(15);
-		let new_flip_to_burn = FlipToBurn::<Test>::get();
-		assert_ne!(flip_to_burn, new_flip_to_burn);
+		// Expect the amount of Flip we can burn to increase
+		assert!(initial_flip_to_burn < FlipToBurn::<Test>::get(), "flip to burn didn't increased!");
 	});
 }
