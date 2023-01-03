@@ -165,7 +165,7 @@ impl PersistentKeyDB {
 				get_data_column_handle(&self.db),
 				[&KEYGEN_DATA_PARTIAL_PREFIX[..], &(C::CHAIN_TAG.to_bytes())[..]].concat(),
 			)
-			.filter_map(|(key_id, key_info)| {
+			.filter_map(|Ok((key_id, key_info))| {
 				// Strip the prefix off the key_id
 				let key_id: KeyId = KeyId(key_id[PREFIX_SIZE..].into());
 
