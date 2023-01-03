@@ -100,17 +100,19 @@ pub mod pallet {
 		/// Something that can provide the stake manager address.
 		type EthEnvironmentProvider: EthEnvironmentProvider;
 
-		/// Benchmark stuff
-		type WeightInfo: WeightInfo;
-
 		/// For governance checks.
 		type EnsureGovernance: EnsureOrigin<Self::Origin>;
 
+		/// The interface for accessing the amount of Flip we want burn.
 		#[cfg(feature = "ibiza")]
 		type FlipToBurn: FlipBurnInfo;
 
+		/// API for handling asset egress.
 		#[cfg(feature = "ibiza")]
 		type EgressHandler: EgressApi<AnyChain>;
+
+		/// Benchmark stuff.
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::pallet]
