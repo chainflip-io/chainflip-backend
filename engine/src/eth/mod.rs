@@ -197,7 +197,7 @@ where
 		unsigned_tx: cf_chains::eth::Transaction,
 	) -> Result<Bytes> {
 		let tx_params = TransactionParameters {
-			to: Some(unsigned_tx.contract),
+			to: Some(web3_h160(unsigned_tx.contract)),
 			data: unsigned_tx.data.clone().into(),
 			chain_id: Some(unsigned_tx.chain_id),
 			value: web3_u256(unsigned_tx.value),
@@ -211,13 +211,13 @@ where
 						let zero = Some(U256::from(0u64));
 						let call_request = CallRequest {
 							from: None,
-							to: unsigned_tx.contract.into(),
+							to: Some(web3_h160(unsigned_tx.contract)),
 							// Set the gas really high (~half gas in a block) for the estimate,
 							// since the estimation call requires you to input at least as much gas
 							// as the estimate will return
 							gas: Some(U256::from(15_000_000u64)),
 							gas_price: None,
-							value: unsigned_tx.value.into(),
+							value: Some(web3_u256(unsigned_tx.value)),
 							data: Some(unsigned_tx.data.clone().into()),
 							transaction_type: Some(web3::types::U64::from(EIP1559_TX_ID)),
 							// Set the gas prices to zero for the estimate, so we don't get
