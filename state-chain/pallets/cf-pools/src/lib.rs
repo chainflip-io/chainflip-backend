@@ -5,6 +5,7 @@ use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{traits::Saturating, FixedPointNumber, Permill},
 };
+use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 
 const BASIS_POINTS_PER_MILLION: u32 = 100;
@@ -90,6 +91,23 @@ pub mod pallet {
 	pub trait Config: Chainflip {
 		#[pallet::constant]
 		type NetworkFee: Get<u16>;
+		/// Implementation of EnsureOrigin trait for governance
+		type EnsureGovernance: EnsureOrigin<Self::Origin>;
+	}
+
+	#[pallet::call]
+	impl<T: Config> Pallet<T> {
+		#[pallet::weight(10000)]
+		pub fn update_buy_interval(
+			origin: OriginFor<T>,
+			new_buy_interval: T::BlockNumber,
+		) -> DispatchResultWithPostInfo {
+			{
+				T::EnsureGovernance::ensure_origin(origin)?;
+				FlipBuyInterval::<T>::set(new_buy_interval);
+			}
+			Ok(().into())
+		}
 	}
 
 	#[pallet::pallet]
@@ -106,15 +124,21 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(super) type FlipToBurn<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
 
+	/// Flip ready to get burned.
+	#[pallet::storage]
+	pub(super) type FlipBuyInterval<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
+
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_initialize(_: BlockNumberFor<T>) -> Weight {
-			let flip_to_burn = Pools::<T>::mutate(Asset::Flip, |pool| {
-				pool.reverse_swap(CollectedNetworkFee::<T>::take())
-			});
-			FlipToBurn::<T>::mutate(|total| {
-				*total = total.saturating_add(flip_to_burn);
-			});
+		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
+			if current_block % FlipBuyInterval::<T>::get() == T::BlockNumber::from(0u32) {
+				let flip_to_burn = Pools::<T>::mutate(Asset::Flip, |pool| {
+					pool.reverse_swap(CollectedNetworkFee::<T>::take())
+				});
+				FlipToBurn::<T>::mutate(|total| {
+					*total = total.saturating_add(flip_to_burn);
+				});
+			}
 			0
 		}
 	}

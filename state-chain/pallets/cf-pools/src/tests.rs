@@ -1,6 +1,9 @@
-use crate::{mini_pool, mock::*, CollectedNetworkFee};
+use crate::{mini_pool, mock::*, CollectedNetworkFee, FlipBuyInterval};
 use cf_primitives::{chains::assets::any, AmmRange, AssetAmount};
 use cf_traits::{LiquidityPoolApi, SwappingApi};
+
+use crate::FlipToBurn;
+use frame_support::traits::Hooks;
 
 #[test]
 fn funds_are_conserved() {
@@ -96,5 +99,33 @@ fn test_fee_calculation() {
 		assert_eq!(Pools::calc_fee(2220, 233), 52);
 		// 10 bps = 0,1% of 3000 = 3
 		assert_eq!(Pools::calc_fee(10, 3000), 3);
+	});
+}
+
+#[test]
+fn test_buy_back_flip() {
+	new_test_ext().execute_with(|| {
+		<Pools as LiquidityPoolApi>::deploy(
+			&any::Asset::Flip,
+			cf_primitives::TradingPosition::ClassicV3 {
+				range: AmmRange::default(),
+				volume_0: 1000,
+				volume_1: 1000,
+			},
+		);
+		FlipBuyInterval::<Test>::set(5);
+		CollectedNetworkFee::<Test>::set(30);
+		Pools::on_initialize(8);
+		assert_eq!(FlipToBurn::<Test>::get(), 0);
+		Pools::on_initialize(10);
+		let flip_to_burn = FlipToBurn::<Test>::get();
+		assert!(flip_to_burn != 0);
+		CollectedNetworkFee::<Test>::set(30);
+		Pools::on_initialize(14);
+		let new_flip_to_burn = FlipToBurn::<Test>::get();
+		assert_eq!(flip_to_burn, new_flip_to_burn);
+		Pools::on_initialize(15);
+		let new_flip_to_burn = FlipToBurn::<Test>::get();
+		assert_ne!(flip_to_burn, new_flip_to_burn);
 	});
 }
