@@ -165,21 +165,29 @@ impl PersistentKeyDB {
 				get_data_column_handle(&self.db),
 				[&KEYGEN_DATA_PARTIAL_PREFIX[..], &(C::CHAIN_TAG.to_bytes())[..]].concat(),
 			)
-			.filter_map(|Ok((key_id, key_info))| {
-				// Strip the prefix off the key_id
-				let key_id: KeyId = KeyId(key_id[PREFIX_SIZE..].into());
+			.filter_map(|result| {
+				match result {
+					Ok((key_id, key_info)) => {
+						// Strip the prefix off the key_id
+						let key_id: KeyId = KeyId(key_id[PREFIX_SIZE..].into());
 
-				// deserialize the `KeygenResultInfo`
-				match bincode::deserialize::<KeygenResultInfo<C::Point>>(&key_info) {
-					Ok(keygen_result_info) => Some((key_id, keygen_result_info)),
-					Err(err) => {
-						slog::error!(
-							self.logger,
-							"Could not deserialize {} key from database: {}",
-							C::NAME,
-							err;
-							"key_id" => key_id.to_string()
-						);
+						// deserialize the `KeygenResultInfo`
+						match bincode::deserialize::<KeygenResultInfo<C::Point>>(&key_info) {
+							Ok(keygen_result_info) => Some((key_id, keygen_result_info)),
+							Err(err) => {
+								slog::error!(
+									self.logger,
+									"Could not deserialize {} key from database: {}",
+									C::NAME,
+									err;
+									"key_id" => key_id.to_string()
+								);
+								None
+							},
+						}
+					},
+					Err(e) => {
+						slog::error!(self.logger, "Error getting prefix iterator: {e}");
 						None
 					},
 				}

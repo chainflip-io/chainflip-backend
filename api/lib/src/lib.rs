@@ -90,9 +90,9 @@ async fn submit_and_ensure_success<Call, BlockStream>(
 	client: &StateChainClient,
 	block_stream: &mut BlockStream,
 	call: Call,
-) -> Result<(H256, Vec<state_chain_runtime::Event>)>
+) -> Result<(H256, Vec<state_chain_runtime::RuntimeEvent>)>
 where
-	Call: Into<state_chain_runtime::Call> + Clone + std::fmt::Debug + Send + Sync + 'static,
+	Call: Into<state_chain_runtime::RuntimeCall> + Clone + std::fmt::Debug + Send + Sync + 'static,
 	BlockStream: Stream<Item = state_chain_runtime::Header> + Unpin + Send + 'static,
 {
 	let logger = new_discard_logger();
@@ -103,7 +103,7 @@ where
 	if let Some(_failure) = events.iter().find(|event| {
 		matches!(
 			event,
-			state_chain_runtime::Event::System(frame_system::Event::ExtrinsicFailed { .. })
+			state_chain_runtime::RuntimeEvent::System(frame_system::Event::ExtrinsicFailed { .. })
 		)
 	}) {
 		Err(anyhow!("extrinsic execution failed"))
@@ -235,7 +235,7 @@ pub async fn register_claim(
 	eth_settings: &settings::Eth,
 	state_chain_settings: &settings::StateChain,
 	claim_cert: ClaimCertificate,
-) -> Result<H256> {
+) -> Result<web3::types::H256> {
 	task_scope(|scope| {
 		async {
 			let logger = new_discard_logger();
