@@ -41,7 +41,6 @@ where
 			let eth_dual_rpc = eth_dual_rpc.clone();
 
 			async move {
-				// check latest witnessed until
 				let contract_name = contract_witnesser.contract_name();
 
 				let (witnessed_until, witnessed_until_sender) =
