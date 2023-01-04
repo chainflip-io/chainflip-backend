@@ -99,7 +99,7 @@ async fn main() -> anyhow::Result<()> {
 				.await
 				.context("Failed to submit version to state chain")?;
 
-			// Rustfmt struggles with this
+			// Rustfmt breaks otherwise
 			#[rustfmt::skip]
 			let (
 				epoch_start_sender,
