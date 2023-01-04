@@ -6,8 +6,8 @@ use anyhow::Context;
 use cf_primitives::AccountRole;
 use chainflip_engine::{
 	eth::{
-		self, key_manager::KeyManager, rpc::EthDualRpcClient, stake_manager::StakeManager,
-		EthBroadcaster,
+		self, build_broadcast_channel, key_manager::KeyManager, rpc::EthDualRpcClient,
+		stake_manager::StakeManager, EthBroadcaster,
 	},
 	health::HealthChecker,
 	logging,
@@ -99,10 +99,16 @@ async fn main() -> anyhow::Result<()> {
 				.await
 				.context("Failed to submit version to state chain")?;
 
-			let (epoch_start_sender, epoch_start_receiver) = async_broadcast::broadcast(10);
+			// Rustfmt struggles with this
+			#[rustfmt::skip]
+			let (
+				epoch_start_sender,
+				[epoch_start_receiver_1, epoch_start_receiver_2, epoch_start_receiver_3,
+				_epoch_start_receiver_4, _epoch_start_receiver_5, _epoch_start_receiver_6],
+			) = build_broadcast_channel(10);
 
 			#[cfg(feature = "ibiza")]
-			let (dot_epoch_start_sender, dot_epoch_start_receiver) = async_broadcast::broadcast(10);
+			let (dot_epoch_start_sender, [dot_epoch_start_receiver]) = build_broadcast_channel(10);
 
 			let cfe_settings = state_chain_client
 				.storage_value::<pallet_cf_environment::CfeSettings<state_chain_runtime::Runtime>>(
@@ -193,7 +199,7 @@ async fn main() -> anyhow::Result<()> {
 			scope.spawn(eth::contract_witnesser::start(
 				stake_manager_contract,
 				eth_dual_rpc.clone(),
-				epoch_start_receiver.clone(),
+				epoch_start_receiver_1,
 				true,
 				state_chain_client.clone(),
 				&root_logger,
@@ -201,7 +207,7 @@ async fn main() -> anyhow::Result<()> {
 			scope.spawn(eth::contract_witnesser::start(
 				key_manager_contract,
 				eth_dual_rpc.clone(),
-				epoch_start_receiver.clone(),
+				epoch_start_receiver_2,
 				false,
 				state_chain_client.clone(),
 				&root_logger,
@@ -209,10 +215,7 @@ async fn main() -> anyhow::Result<()> {
 			scope.spawn(eth::chain_data_witnesser::start(
 				eth_dual_rpc.clone(),
 				state_chain_client.clone(),
-				#[cfg(feature = "ibiza")]
-				epoch_start_receiver.clone(),
-				#[cfg(not(feature = "ibiza"))]
-				epoch_start_receiver,
+				epoch_start_receiver_3,
 				cfe_settings_update_receiver,
 				&root_logger,
 			));
@@ -314,7 +317,7 @@ async fn main() -> anyhow::Result<()> {
 
 				scope.spawn(eth::ingress_witnesser::start(
 					eth_dual_rpc.clone(),
-					epoch_start_receiver.clone(),
+					_epoch_start_receiver_4,
 					eth_monitor_ingress_receiver,
 					state_chain_client.clone(),
 					monitored_addresses_from_all_eth(
@@ -334,7 +337,7 @@ async fn main() -> anyhow::Result<()> {
 						eth_monitor_flip_ingress_receiver,
 					),
 					eth_dual_rpc.clone(),
-					epoch_start_receiver.clone(),
+					_epoch_start_receiver_5,
 					false,
 					state_chain_client.clone(),
 					&root_logger,
@@ -350,7 +353,7 @@ async fn main() -> anyhow::Result<()> {
 						eth_monitor_usdc_ingress_receiver,
 					),
 					eth_dual_rpc,
-					epoch_start_receiver,
+					_epoch_start_receiver_6,
 					false,
 					state_chain_client.clone(),
 					&root_logger,
