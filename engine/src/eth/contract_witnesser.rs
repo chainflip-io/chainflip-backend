@@ -46,8 +46,6 @@ where
 				let (witnessed_until, witnessed_until_sender) =
 					start_checkpointing_for(&contract_name, &logger).await;
 
-				slog::info!(logger, "WitnessingUntil: {:?}", witnessed_until);
-
 				// Witnessing is only done for current or new epochs
 				if epoch_start.epoch_index >= witnessed_until.epoch_index {
 					let from_block = if witnessed_until.epoch_index == epoch_start.epoch_index {

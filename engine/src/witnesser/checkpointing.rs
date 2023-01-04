@@ -28,6 +28,13 @@ pub async fn start_checkpointing_for(
 	.await
 	.unwrap();
 
+	slog::info!(
+		logger,
+		"Previous {witnesser_name} witnesser instance witnessed until epoch {}, block {}",
+		witnessed_until.epoch_index,
+		witnessed_until.block_number
+	);
+
 	let (witnessed_until_sender, witnessed_until_receiver) =
 		tokio::sync::watch::channel(witnessed_until.clone());
 
