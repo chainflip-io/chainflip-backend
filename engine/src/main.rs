@@ -16,19 +16,84 @@ use chainflip_engine::{
 	settings::{CommandLineOptions, Settings},
 	state_chain_observer::{
 		self,
-		client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi},
+		client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi, StateChainClient},
 	},
 	task_scope::task_scope,
+	witnesser::EpochStart,
 };
 
 use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use clap::Parser;
 use futures::FutureExt;
 use pallet_cf_validator::SemVer;
-use sp_core::U256;
+use sp_core::{H256, U256};
 
 #[cfg(feature = "ibiza")]
 use chainflip_engine::dot::{rpc::DotRpcClient, DotBroadcaster};
+
+async fn run_eth_witnessers(
+	latest_block_hash: H256,
+	epoch_start_receiver: async_broadcast::Receiver<EpochStart<cf_chains::Ethereum>>,
+	state_chain_client: Arc<StateChainClient>,
+	eth_dual_rpc: EthDualRpcClient,
+	cfe_settings_update_receiver: tokio::sync::watch::Receiver<state_chain_runtime::CfeSettings>,
+	logger: &slog::Logger,
+) -> anyhow::Result<()> {
+	while let Err(err) = task_scope(|scope| {
+		async {
+			let stake_manager_address = state_chain_client
+				.storage_value::<pallet_cf_environment::EthereumStakeManagerAddress<state_chain_runtime::Runtime>>(
+					latest_block_hash,
+				)
+				.await
+				.context("Failed to get StakeManager address from SC")?;
+			let stake_manager_contract = StakeManager::new(stake_manager_address.into());
+
+			scope.spawn(eth::contract_witnesser::start(
+				stake_manager_contract,
+				eth_dual_rpc.clone(),
+				epoch_start_receiver.clone(),
+				true,
+				state_chain_client.clone(),
+				logger,
+			));
+
+			let key_manager_address = state_chain_client
+				.storage_value::<pallet_cf_environment::EthereumKeyManagerAddress<state_chain_runtime::Runtime>>(
+					latest_block_hash,
+				)
+				.await
+				.context("Failed to get KeyManager address from SC")?;
+
+			let key_manager_contract = KeyManager::new(key_manager_address.into());
+
+			scope.spawn(eth::contract_witnesser::start(
+				key_manager_contract,
+				eth_dual_rpc.clone(),
+				epoch_start_receiver.clone(),
+				false,
+				state_chain_client.clone(),
+				logger,
+			));
+			scope.spawn(eth::chain_data_witnesser::start(
+				eth_dual_rpc.clone(),
+				state_chain_client.clone(),
+				epoch_start_receiver.clone(),
+				cfe_settings_update_receiver.clone(),
+				logger,
+			));
+
+			Ok(())
+		}
+		.boxed()
+	})
+	.await
+	{
+		slog::error!(&logger, "ETH witnesser error: {err}. Restarting all witnessers.");
+	}
+
+	Ok(())
+}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -103,7 +168,7 @@ async fn main() -> anyhow::Result<()> {
 			#[rustfmt::skip]
 			let (
 				epoch_start_sender,
-				[epoch_start_receiver_1, epoch_start_receiver_2, epoch_start_receiver_3,
+				[epoch_start_receiver_1,
 				_epoch_start_receiver_4, _epoch_start_receiver_5, _epoch_start_receiver_6],
 			) = build_broadcast_channel(10);
 
@@ -119,23 +184,6 @@ async fn main() -> anyhow::Result<()> {
 
 			let (cfe_settings_update_sender, cfe_settings_update_receiver) =
 				tokio::sync::watch::channel(cfe_settings);
-
-			let stake_manager_address = state_chain_client
-				.storage_value::<pallet_cf_environment::EthereumStakeManagerAddress<state_chain_runtime::Runtime>>(
-					latest_block_hash,
-				)
-				.await
-				.context("Failed to get StakeManager address from SC")?;
-			let stake_manager_contract = StakeManager::new(stake_manager_address.into());
-
-			let key_manager_address = state_chain_client
-				.storage_value::<pallet_cf_environment::EthereumKeyManagerAddress<state_chain_runtime::Runtime>>(
-					latest_block_hash,
-				)
-				.await
-				.context("Failed to get KeyManager address from SC")?;
-
-			let key_manager_contract = KeyManager::new(key_manager_address.into());
 
 			let latest_ceremony_id = state_chain_client
 				.storage_value::<pallet_cf_validator::CeremonyIdCounter<state_chain_runtime::Runtime>>(
@@ -196,26 +244,11 @@ async fn main() -> anyhow::Result<()> {
 			scope.spawn(dot_multisig_client_backend_future);
 
 			// Start eth witnessers
-			scope.spawn(eth::contract_witnesser::start(
-				stake_manager_contract,
-				eth_dual_rpc.clone(),
+			scope.spawn(run_eth_witnessers(
+				latest_block_hash,
 				epoch_start_receiver_1,
-				true,
 				state_chain_client.clone(),
-				&root_logger,
-			));
-			scope.spawn(eth::contract_witnesser::start(
-				key_manager_contract,
 				eth_dual_rpc.clone(),
-				epoch_start_receiver_2,
-				false,
-				state_chain_client.clone(),
-				&root_logger,
-			));
-			scope.spawn(eth::chain_data_witnesser::start(
-				eth_dual_rpc.clone(),
-				state_chain_client.clone(),
-				epoch_start_receiver_3,
 				cfe_settings_update_receiver,
 				&root_logger,
 			));
