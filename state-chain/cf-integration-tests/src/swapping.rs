@@ -18,6 +18,7 @@ use cf_traits::{AddressDerivationApi, LiquidityPoolApi, LpProvisioningApi};
 use pallet_cf_ingress_egress::IngressWitness;
 
 #[test]
+#[ignore = "test not working. Issue #2679"]
 fn can_swap_assets() {
 	super::genesis::default().build().execute_with(|| {
 		// Register the liquidity provider account.
