@@ -791,7 +791,7 @@ pub trait VaultKeyWitnessedHandler<C: ChainAbi> {
 	) -> DispatchResultWithPostInfo;
 }
 
-/// Provides an interface to access the amount of Flip that is ready to get burned.
+/// Provides an interface to access the amount of Flip that is ready to be burned.
 pub trait FlipBurnInfo {
 	/// Takes the available Flip and returns it.
 	fn take_flip_to_burn() -> AssetAmount;

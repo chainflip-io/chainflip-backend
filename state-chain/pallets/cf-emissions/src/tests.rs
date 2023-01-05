@@ -162,8 +162,8 @@ fn burn_flip() {
 			MockBroadcast::get_called().unwrap().new_total_supply,
 			Flip::<Test>::total_issuance()
 		);
-		let mut egresses = MockEgressHandler::<AnyChain>::get_scheduled_egresses();
+		let egresses = MockEgressHandler::<AnyChain>::get_scheduled_egresses();
 		assert!(egresses.len() == 1);
-		assert_eq!(egresses.pop().expect("to be exist").1, FLIP_TO_BURN);
+		assert_eq!(egresses.first().expect("should exist").1, FLIP_TO_BURN);
 	});
 }

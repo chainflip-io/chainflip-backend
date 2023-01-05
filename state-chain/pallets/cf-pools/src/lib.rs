@@ -7,6 +7,7 @@ use frame_support::{
 };
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
+use sp_arithmetic::traits::Zero;
 
 const BASIS_POINTS_PER_MILLION: u32 = 100;
 
@@ -102,10 +103,8 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			new_buy_interval: T::BlockNumber,
 		) -> DispatchResultWithPostInfo {
-			{
-				T::EnsureGovernance::ensure_origin(origin)?;
-				FlipBuyInterval::<T>::set(new_buy_interval);
-			}
+			T::EnsureGovernance::ensure_origin(origin)?;
+			FlipBuyInterval::<T>::set(new_buy_interval);
 			Ok(().into())
 		}
 	}
@@ -131,7 +130,7 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
-			if current_block % FlipBuyInterval::<T>::get() == T::BlockNumber::from(0u32) {
+			if current_block % FlipBuyInterval::<T>::get() == Zero::zero() {
 				let flip_to_burn = Pools::<T>::mutate(Asset::Flip, |pool| {
 					pool.reverse_swap(CollectedNetworkFee::<T>::take())
 				});

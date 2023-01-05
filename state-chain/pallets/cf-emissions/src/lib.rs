@@ -26,13 +26,9 @@ use sp_runtime::{
 };
 
 #[cfg(feature = "ibiza")]
-use cf_primitives::chains::AnyChain;
+use cf_primitives::{chains::AnyChain, Asset};
 #[cfg(feature = "ibiza")]
-use cf_primitives::Asset;
-#[cfg(feature = "ibiza")]
-use cf_traits::EgressApi;
-#[cfg(feature = "ibiza")]
-use cf_traits::FlipBurnInfo;
+use cf_traits::{EgressApi, FlipBurnInfo};
 
 pub mod weights;
 pub use weights::WeightInfo;
@@ -183,12 +179,15 @@ pub mod pallet {
 				if T::SystemState::ensure_no_maintenance().is_ok() {
 					#[cfg(feature = "ibiza")]
 					{
+						// Note: There is a potential that we could have a delta between
+						// the total on-chain supply and the total amount of all flip on ETH for a
+						// short amount of time due to a falling broadcast and retry attempt.
 						let flip_to_burn = T::FlipToBurn::take_flip_to_burn();
 						T::EgressHandler::schedule_egress(
 							Asset::Flip,
 							flip_to_burn,
 							cf_primitives::ForeignChainAddress::Eth(
-								T::EthEnvironmentProvider::key_manager_address(),
+								T::EthEnvironmentProvider::stake_manager_address(),
 							),
 						);
 						T::Issuance::burn(flip_to_burn.into());
