@@ -24,6 +24,7 @@ std = [
   'sp-std/std',
   'sp-io/std',
   'sp-runtime/std',
+  'log/std',
 ]
 derive = [
   'cf-runtime-macros',

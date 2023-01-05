@@ -10,7 +10,7 @@ log = { version = '0.4.16', default-features = false }
 
 sp-std = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
 frame-support = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
-sp-io = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12" }
+sp-io = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
 
 [features]
 default = ['std']
@@ -18,5 +18,6 @@ std = [
   'frame-support/std',
   'log/std',
   'sp-std/std',
+  'sp-io/std'
 ]
 try-runtime = ['frame-support/try-runtime']

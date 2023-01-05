@@ -10316,6 +10316,30 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "95059e91184749cb66be6dc994f67f182b6d897cb3df74a5bf66b5e709295fd8"
 
 [[package]]
+name = "test-runtime"
+version = "0.4.2"
+dependencies = [
+ "cf-chains",
+ "cf-primitives",
+ "cf-session-benchmarking",
+ "cf-traits",
+ "frame-benchmarking",
+ "frame-executive",
+ "frame-support",
+ "frame-system",
+ "frame-system-benchmarking",
+ "frame-system-rpc-runtime-api",
+ "frame-try-runtime",
+ "getrandom 0.2.8",
+ "pallet-cf-staking",
+ "pallet-randomness-collective-flip",
+ "pallet-transaction-payment",
+ "pallet-transaction-payment-rpc-runtime-api",
+ "substrate-wasm-builder",
+ "utilities",
+]
+
+[[package]]
 name = "textwrap"
 version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

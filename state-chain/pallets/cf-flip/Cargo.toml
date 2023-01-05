@@ -31,8 +31,8 @@ frame-benchmarking = { git = "https://github.com/chainflip-io/substrate.git", ta
 pallet-transaction-payment = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
 
 # Dev dependencies
-sp-io = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12" }
-sp-core = { version = "7.0.0", git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12" }
+sp-io = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
+sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
 [dev-dependencies]
 quickcheck = '1'
 quickcheck_macros = '1'
@@ -50,6 +50,8 @@ std = [
   'pallet-transaction-payment/std',
   'sp-runtime/std',
   'sp-std/std',
+  'sp-io/std',
+  'sp-core/std',
 ]
 runtime-benchmarks = [
   'frame-benchmarking/runtime-benchmarks',

@@ -121,7 +121,7 @@ frame-metadata = { version = "15.0.0" }
 frame-support = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12" }
 frame-system = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12" }
 sc-rpc-api = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12" }
-sp-core = { version = "7.0.0", git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12" }
+sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12" }
 sp-keyring = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12" }
 sp-rpc = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12" }
 sp-runtime = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12" }

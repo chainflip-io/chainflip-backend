@@ -29,7 +29,7 @@ ethabi = {default-features = false, version = '18.0'}
 cf-traits = { path = '../traits', default-features = false }
 cf-primitives = { path = '../primitives', default-features = false }
 cf-chains = { path = '../chains', default-features = false }
-cf-session-benchmarking = { path = '../cf-session-benchmarking', default-features = false, optional = true }
+cf-session-benchmarking = { path = '../cf-session-benchmarking', optional = true }
 cf-utilities = { package = 'utilities', path = '../../utilities', default-features = false }
 
 pallet-cf-account-roles = { path = '../pallets/cf-account-roles', default-features = false }
@@ -76,12 +76,12 @@ pallet-transaction-payment = { git = "https://github.com/chainflip-io/substrate.
 sp-api = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
 sp-block-builder = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
 sp-consensus-aura = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
-sp-core = { version = "7.0.0", git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
+sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
 sp-inherents = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
 sp-offchain = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
 sp-runtime = { version = "7.0.0", git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
 sp-session = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
-sp-std = { version = "5.0.0", git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
+sp-std = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
 sp-transaction-pool = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
 sp-version = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
 
@@ -139,6 +139,7 @@ std = [
   'log/std',
   'nanorand/std',
   'pallet-aura/std',
+  'pallet-authorship/std',
   'pallet-cf-account-roles/std',
   'pallet-cf-broadcast/std',
   'pallet-cf-chain-tracking/std',

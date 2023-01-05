@@ -1,0 +1,96 @@
+[package]
+name = 'test-runtime'
+version = '0.4.2'
+authors = ['Chainflip Team <https://github.com/chainflip-io>']
+edition = '2021'
+homepage = 'https://chainflip.io'
+license = '<TODO>'
+publish = false
+repository = 'https://github.com/chainflip-io/chainflip-backend'
+
+[package.metadata.docs.rs]
+targets = ['x86_64-unknown-linux-gnu']
+
+[build-dependencies]
+substrate-wasm-builder = { version = "5.0.0-dev", git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2022-12' }
+
+[dependencies]
+# Required to get wasm to compile.
+# See https://docs.rs/getrandom/#webassembly-support
+getrandom = { version = '0.2.3', features = ['js'], default-features = false }
+
+frame-benchmarking = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", optional = true, default-features = false }
+frame-executive = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
+frame-support = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
+frame-system = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
+frame-system-benchmarking = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", optional = true, default-features = false }
+
+frame-system-rpc-runtime-api = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
+
+frame-try-runtime = { optional = true, tag = 'chainflip-monthly-2022-12', default-features = false, git = 'https://github.com/chainflip-io/substrate.git' }
+
+pallet-cf-staking = { path = '../pallets/cf-staking', default-features = false }
+
+pallet-randomness-collective-flip = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
+pallet-transaction-payment = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
+pallet-transaction-payment-rpc-runtime-api = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
+
+
+# Chainflip local dependencies
+cf-traits = { path = '../traits', default-features = false }
+cf-primitives = { path = '../primitives', default-features = false }
+cf-chains = { path = '../chains', default-features = false }
+cf-session-benchmarking = { path = '../cf-session-benchmarking', optional = true }
+cf-utilities = { package = 'utilities', path = '../../utilities', default-features = false }
+
+[features]
+default = ['std']
+runtime-benchmarks = [
+  'cf-chains/runtime-benchmarks',
+  'cf-traits/runtime-benchmarks',
+
+  'pallet-cf-staking/runtime-benchmarks',
+
+
+  'frame-benchmarking?/runtime-benchmarks',
+  'frame-support/runtime-benchmarks',
+  'frame-system-benchmarking?/runtime-benchmarks',
+  'frame-system/runtime-benchmarks',
+]
+std = [
+  'cf-chains/std',
+  'cf-primitives/std',
+  'cf-traits/std',
+  'cf-utilities/std',
+
+
+  'pallet-cf-staking/std',
+  'pallet-randomness-collective-flip/std',
+  'pallet-transaction-payment-rpc-runtime-api/std',
+  'pallet-transaction-payment-rpc-runtime-api/std',
+  'pallet-transaction-payment/std',
+
+
+'frame-try-runtime?/std',
+  'frame-executive/std',
+  'frame-support/std',
+  'frame-system-benchmarking?/std',
+  'frame-system-rpc-runtime-api/std',
+  'frame-system/std',
+
+]
+try-runtime = [
+  'pallet-transaction-payment/try-runtime',
+
+  'pallet-cf-staking/try-runtime',
+
+
+    'frame-executive/try-runtime',
+  'frame-try-runtime/try-runtime',
+  'frame-system/try-runtime',
+  'frame-support/try-runtime',
+]
+ibiza = [
+  'cf-chains/ibiza',
+  'cf-traits/ibiza',
+]
