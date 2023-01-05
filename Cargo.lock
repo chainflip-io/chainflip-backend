@@ -783,6 +783,7 @@ dependencies = [
  "pallet-cf-flip",
  "pallet-cf-governance",
  "pallet-cf-ingress-egress",
+ "pallet-cf-pools",
  "pallet-cf-reputation",
  "pallet-cf-staking",
  "pallet-cf-swapping",

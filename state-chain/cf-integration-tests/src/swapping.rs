@@ -16,6 +16,7 @@ use cf_primitives::{
 };
 use cf_traits::{AddressDerivationApi, LiquidityPoolApi, LpProvisioningApi};
 use pallet_cf_ingress_egress::IngressWitness;
+use pallet_cf_pools::CollectedNetworkFee;
 
 #[test]
 fn can_swap_assets() {
@@ -163,6 +164,14 @@ fn can_swap_assets() {
 		assert_eq!(
 			LiquidityPools::get_liquidity(&Asset::Flip),
 			(100_000 - EXPECTED_OUTPUT, 104_7571)
+		);
+
+		// 10 bps = 0,1% of $47_619 USDC = $48 USDC
+		const EXPECTED_NETWORK_FEE: AssetAmount = 48;
+		assert_eq!(
+			CollectedNetworkFee::<Runtime>::get(),
+			EXPECTED_NETWORK_FEE,
+			"unexpected network fee!"
 		);
 
 		// Eth: 200_000 -> 210_000: +10_000, USDC: 1_000_000 -> 952_381: -47_619
