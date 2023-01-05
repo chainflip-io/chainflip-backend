@@ -10,7 +10,6 @@ cf-primitives = { path = '../primitives', default-features = false }
 
 # Cryptography
 libsecp256k1 = { default-features = false, version = '0.7', features = ['static-context'] }
-# secp256k1 = {version = '0.21', default-features = false}
 
 # Ethereum
 ethabi = {default-features = false, version = '18.0'}
@@ -41,6 +40,7 @@ rand = {version='0.8.4'}
 default = ['std']
 std = [
   'cf-primitives/std',
+  'scale-info/std',
   'codec/std',
   'ethabi/full-serde',
   'ethereum/std',
