@@ -63,7 +63,7 @@ quickcheck = '1'
 quickcheck_macros = '1'
 pallet-cf-account-roles = { path = '../cf-account-roles' }
 pallet-cf-pools = { path = '../cf-pools' }
-chainflip-amm = { path = '../../amm' }
+cf-amm = { path = '../../amm' }
 
 [features]
 default = ['std']

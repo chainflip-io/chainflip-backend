@@ -1,21 +1,21 @@
 #![cfg_attr(not(feature = "std"), no_std)]
+use cf_amm::{MintError, PoolState, PositionError, MAX_FEE_100TH_BIPS};
 use cf_primitives::{
 	chains::assets::any, AccountId, AmmRange, AmountU256, Liquidity, PoolAssetMap, SqrtPriceQ64F96,
 	Tick,
 };
 use cf_traits::{Chainflip, LiquidityPoolApi};
-use chainflip_amm::{MintError, PoolState, PositionError, MAX_FEE_100TH_BIPS};
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::OriginFor;
 use sp_core::U256;
 
 pub use pallet::*;
 
-// #[cfg(test)]
-// mod mock;
+#[cfg(test)]
+mod mock;
 
-// #[cfg(test)]
-// mod tests;
+#[cfg(test)]
+mod tests;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -214,7 +214,7 @@ impl<T: Config> cf_traits::SwappingApi<U256> for Pallet<T> {
 	}
 }
 
-/// Implementation for Liquidity Pool API for chainflip-amm.
+/// Implementation for Liquidity Pool API for cf-amm.
 /// `Amount` and `AccountId` are hard-coded type locked in by the amm code.
 impl<T: Config> LiquidityPoolApi<AmountU256, AccountId> for Pallet<T> {
 	const STABLE_ASSET: any::Asset = any::Asset::Usdc;

@@ -4,7 +4,7 @@ use cf_traits::{
 	mocks::{
 		ensure_origin_mock::NeverFailingOriginCheck, epoch_info::MockEpochInfo,
 		qualify_node::QualifyAll, reputation_resetter::MockReputationResetter,
-		system_state_info::MockSystemStateInfo, vault_rotator::MockVaultRotator,
+		system_state_info::MockSystemStateInfo, vault_rotator::MockVaultRotatorA,
 	},
 	Bid, Chainflip, QualifyNode, RuntimeAuctionOutcome,
 };
@@ -231,7 +231,7 @@ impl Config for Test {
 	type AccountRoleRegistry = ();
 	type MinEpoch = MinEpoch;
 	type ValidatorWeightInfo = ();
-	type VaultRotator = MockVaultRotator;
+	type VaultRotator = MockVaultRotatorA;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type MissedAuthorshipSlots = MockMissedAuthorshipSlots;
 	type BidderProvider = MockBidderProvider;

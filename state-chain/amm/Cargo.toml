@@ -1,5 +1,5 @@
 [package]
-name = "chainflip-amm"
+name = "cf-amm"
 version = "0.1.0"
 authors = ['Chainflip <https://chainflip.io>']
 edition = '2021'

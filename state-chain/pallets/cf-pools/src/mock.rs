@@ -71,7 +71,10 @@ impl Chainflip for Test {
 	type SystemState = MockSystemStateInfo;
 }
 
-impl pallet_cf_pools::Config for Test {}
+impl pallet_cf_pools::Config for Test {
+	type Event = Event;
+	type EnsureGovernance = NeverFailingOriginCheck<Self>;
+}
 
 #[allow(unused)]
 // Build genesis storage according to the mock runtime.
