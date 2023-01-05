@@ -6,9 +6,6 @@ use sp_std::ops::{Index, IndexMut, Not};
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 
-/// The id type for range orders.
-pub type PositionId = u64;
-
 /// Representation of a price: p = 1.0001^Tick
 pub type Tick = i32;
 
@@ -129,6 +126,18 @@ impl<Amount> IndexMut<PoolAsset> for PoolAssetMap<Amount> {
 impl<Amount: Default> Default for PoolAssetMap<Amount> {
 	fn default() -> Self {
 		Self { asset_0: Default::default(), asset_1: Default::default() }
+	}
+}
+
+impl From<PoolAssetMap<u128>> for PoolAssetMap<U256> {
+	fn from(asset_map: PoolAssetMap<u128>) -> Self {
+		Self::new(asset_map[PoolAsset::Asset0].into(), asset_map[PoolAsset::Asset1].into())
+	}
+}
+
+impl From<PoolAssetMap<U256>> for PoolAssetMap<u128> {
+	fn from(asset_map: PoolAssetMap<U256>) -> Self {
+		Self::new(asset_map[PoolAsset::Asset0].as_u128(), asset_map[PoolAsset::Asset1].as_u128())
 	}
 }
 

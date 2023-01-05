@@ -202,13 +202,9 @@ pub enum MintError {
 	MaximumGrossLiquidity,
 }
 
-pub enum PositionError<T> {
+pub enum PositionError {
 	/// Position referenced does not exist
 	NonExistent,
-	Other(T),
-}
-
-pub enum BurnError {
 	/// Position referenced does not contain the requested liquidity
 	PositionLacksLiquidity,
 }
@@ -339,12 +335,12 @@ impl PoolState {
 	}
 
 	/// Update the pool state to enable/disable the pool
-	pub fn update_pool_state(&mut self, enabled: bool) {
+	pub fn update_pool_enabled(&mut self, enabled: bool) {
 		self.enabled = enabled;
 	}
 
 	/// Gets the current pool state (enabled/disabled)
-	pub fn pool_state(&self) -> bool {
+	pub fn pool_enabled(&self) -> bool {
 		self.enabled
 	}
 
@@ -472,7 +468,7 @@ impl PoolState {
 		lower_tick: Tick,
 		upper_tick: Tick,
 		burnt_liquidity: Liquidity,
-	) -> Result<(PoolAssetMap<AmountU256>, PoolAssetMap<u128>), PositionError<BurnError>> {
+	) -> Result<(PoolAssetMap<AmountU256>, PoolAssetMap<u128>), PositionError> {
 		if let Some(mut position) =
 			self.positions.get(&(lp.clone(), lower_tick, upper_tick)).cloned()
 		{
@@ -509,6 +505,9 @@ impl PoolState {
 
 					position.fees_owed
 				} else {
+					// Re-insert the leftover liquidity into storage.
+					self.positions.insert((lp, lower_tick, upper_tick), position);
+
 					Default::default()
 				};
 
@@ -531,7 +530,7 @@ impl PoolState {
 
 				Ok((amounts_owed, fees_owed))
 			} else {
-				Err(PositionError::Other(BurnError::PositionLacksLiquidity))
+				Err(PositionError::PositionLacksLiquidity)
 			}
 		} else {
 			Err(PositionError::NonExistent)
@@ -549,7 +548,7 @@ impl PoolState {
 		lp: AccountId,
 		lower_tick: Tick,
 		upper_tick: Tick,
-	) -> Result<PoolAssetMap<u128>, PositionError<CollectError>> {
+	) -> Result<PoolAssetMap<u128>, PositionError> {
 		if let Some(mut position) =
 			self.positions.get(&(lp.clone(), lower_tick, upper_tick)).cloned()
 		{
@@ -567,6 +566,23 @@ impl PoolState {
 		} else {
 			Err(PositionError::NonExistent)
 		}
+	}
+
+	/// Returns all postitions for a specific user.
+	pub fn minted_liqudity(
+		&self,
+		lp: AccountId,
+	) -> Vec<(Tick, Tick, Liquidity, PoolAssetMap<u128>)> {
+		self.positions
+			.iter()
+			.filter_map(|((account, lower, upper), position)| {
+				if *account == lp {
+					Some((*lower, *upper, position.liquidity, position.fees_owed))
+				} else {
+					None
+				}
+			})
+			.collect()
 	}
 
 	/// Swaps the specified Amount of Base into Pair, and returns the Pair Amount.
@@ -858,7 +874,7 @@ impl PoolState {
 		sqrt_ratio_current + amount / liquidity
 	}
 
-	fn sqrt_price_at_tick(tick: Tick) -> SqrtPriceQ64F96 {
+	pub fn sqrt_price_at_tick(tick: Tick) -> SqrtPriceQ64F96 {
 		assert!((MIN_TICK..=MAX_TICK).contains(&tick));
 
 		let abs_tick = tick.unsigned_abs();
@@ -921,7 +937,7 @@ impl PoolState {
 	}
 
 	/// Calculates the greatest tick value such that `sqrt_price_at_tick(tick) <= sqrt_price`
-	fn tick_at_sqrt_price(sqrt_price: SqrtPriceQ64F96) -> Tick {
+	pub fn tick_at_sqrt_price(sqrt_price: SqrtPriceQ64F96) -> Tick {
 		assert!(sqrt_price >= MIN_SQRT_PRICE);
 		// Note the price can never actually reach MAX_SQRT_PRICE
 		assert!(sqrt_price < MAX_SQRT_PRICE);

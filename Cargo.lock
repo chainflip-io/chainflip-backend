@@ -5624,6 +5624,7 @@ dependencies = [
  "cf-chains",
  "cf-primitives",
  "cf-traits",
+ "chainflip-amm",
  "frame-benchmarking",
  "frame-support",
  "frame-system",

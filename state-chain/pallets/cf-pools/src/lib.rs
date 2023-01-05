@@ -1,10 +1,10 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use cf_primitives::{
-	chains::assets::any, AccountId, AmmRange, AmountU256, Liquidity, PoolAsset, PoolAssetMap,
-	SqrtPriceQ64F96,
+	chains::assets::any, AccountId, AmmRange, AmountU256, Liquidity, PoolAssetMap, SqrtPriceQ64F96,
+	Tick,
 };
 use cf_traits::{Chainflip, LiquidityPoolApi};
-use chainflip_amm::{MintError, PoolState, MAX_FEE_100TH_BIPS};
+use chainflip_amm::{MintError, PoolState, PositionError, MAX_FEE_100TH_BIPS};
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::OriginFor;
 use sp_core::U256;
@@ -56,6 +56,10 @@ pub mod pallet {
 		InvalidTickRange,
 		/// One of the start/end ticks of the range reached its maximum gross liquidity
 		MaximumGrossLiquidity,
+		/// User's position does not have enough liquidity.
+		PositionLacksLiquidity,
+		/// The user's position does not exist.
+		PositionDoesNotExist,
 	}
 
 	#[pallet::event]
@@ -71,12 +75,25 @@ pub mod pallet {
 			initial_sqrt_price: SqrtPriceQ64F96,
 		},
 		LiquidityMinted {
+			lp: AccountId,
 			asset: any::Asset,
-			provider: AccountId,
 			range: AmmRange,
-			asset_amount: AssetAmount,
-			stable_amount: AssetAmount,
-			liquidity_amount: Liquidity,
+			minted_liquidity: Liquidity,
+			asset_debited: PoolAssetMap<AssetAmount>,
+		},
+		LiquidityBurned {
+			lp: AccountId,
+			asset: any::Asset,
+			range: AmmRange,
+			burnt_liquidity: Liquidity,
+			asset_credited: PoolAssetMap<AssetAmount>,
+			fee_yielded: PoolAssetMap<AssetAmount>,
+		},
+		FeeCollected {
+			lp: AccountId,
+			asset: any::Asset,
+			range: AmmRange,
+			fee_yielded: PoolAssetMap<AssetAmount>,
 		},
 	}
 
@@ -89,7 +106,7 @@ pub mod pallet {
 		///
 		/// - [On update](Event::PoolStateUpdated)
 		#[pallet::weight(0)]
-		pub fn update_pool_state(
+		pub fn update_pool_enabled(
 			origin: OriginFor<T>,
 			asset: any::Asset,
 			enabled: bool,
@@ -98,7 +115,7 @@ pub mod pallet {
 
 			Pools::<T>::mutate(asset, |maybe_pool| {
 				if let Some(pool) = maybe_pool.as_mut() {
-					pool.update_pool_state(enabled);
+					pool.update_pool_enabled(enabled);
 					Ok(())
 				} else {
 					Err(Error::<T>::PoolDoesNotExist)
@@ -156,7 +173,7 @@ impl<T: Config> cf_traits::SwappingApi<U256> for Pallet<T> {
 		match (from, to) {
 			(input_asset, any::Asset::Usdc) => Pools::<T>::mutate(input_asset, |maybe_pool| {
 				if let Some(pool) = maybe_pool.as_mut() {
-					ensure!(pool.pool_state(), Error::<T>::PoolDisabled);
+					ensure!(pool.pool_enabled(), Error::<T>::PoolDisabled);
 					let (output_amount, asset_0_fee) = pool.swap_from_base_to_pair(input_amount);
 					Ok((output_amount, asset_0_fee, U256::zero()))
 				} else {
@@ -165,7 +182,7 @@ impl<T: Config> cf_traits::SwappingApi<U256> for Pallet<T> {
 			}),
 			(any::Asset::Usdc, output_asset) => Pools::<T>::mutate(output_asset, |maybe_pool| {
 				if let Some(pool) = maybe_pool.as_mut() {
-					ensure!(pool.pool_state(), Error::<T>::PoolDisabled);
+					ensure!(pool.pool_enabled(), Error::<T>::PoolDisabled);
 					let (output_amount, asset_1_fee) = pool.swap_from_pair_to_base(input_amount);
 					Ok((output_amount, Default::default(), asset_1_fee))
 				} else {
@@ -176,7 +193,7 @@ impl<T: Config> cf_traits::SwappingApi<U256> for Pallet<T> {
 				let (intermediate_amount, asset_0_fee) =
 					Pools::<T>::mutate(input_asset, |maybe_pool| {
 						if let Some(pool) = maybe_pool.as_mut() {
-							ensure!(pool.pool_state(), Error::<T>::PoolDisabled);
+							ensure!(pool.pool_enabled(), Error::<T>::PoolDisabled);
 							Ok(pool.swap_from_base_to_pair(input_amount))
 						} else {
 							Err(Error::<T>::PoolDoesNotExist)
@@ -185,7 +202,7 @@ impl<T: Config> cf_traits::SwappingApi<U256> for Pallet<T> {
 				let (output_amount, stable_asset_fee) =
 					Pools::<T>::mutate(output_asset, |maybe_pool| {
 						if let Some(pool) = maybe_pool.as_mut() {
-							ensure!(pool.pool_state(), Error::<T>::PoolDisabled);
+							ensure!(pool.pool_enabled(), Error::<T>::PoolDisabled);
 							Ok(pool.swap_from_pair_to_base(intermediate_amount))
 						} else {
 							Err(Error::<T>::PoolDoesNotExist)
@@ -207,16 +224,12 @@ impl<T: Config> LiquidityPoolApi<AmountU256, AccountId> for Pallet<T> {
 		lp: AccountId,
 		asset: any::Asset,
 		range: AmmRange,
-		max_asset_amount: AmountU256,
-		max_stable_amount: AmountU256,
+		liquidity_amount: Liquidity,
 		check_callback: impl FnOnce(PoolAssetMap<AmountU256>) -> bool,
 	) -> Result<(PoolAssetMap<AmountU256>, Liquidity), DispatchError> {
 		Pools::<T>::mutate(&asset, |maybe_pool| {
 			if let Some(pool) = maybe_pool.as_mut() {
-				ensure!(pool.pool_state(), Error::<T>::PoolDisabled);
-
-				// TODO: Calculate maximum liquidity from the given asset.
-				let liquidity_amount = 0;
+				ensure!(pool.pool_enabled(), Error::<T>::PoolDisabled);
 
 				// Mint the Liquidity from the pool.
 				let asset_spent: PoolAssetMap<AmountU256> = pool
@@ -227,12 +240,11 @@ impl<T: Config> LiquidityPoolApi<AmountU256, AccountId> for Pallet<T> {
 					})?;
 
 				Self::deposit_event(Event::<T>::LiquidityMinted {
+					lp,
 					asset,
-					provider: lp,
 					range,
-					asset_amount: asset_spent[PoolAsset::Asset0].as_u128(),
-					stable_amount: asset_spent[PoolAsset::Asset1].as_u128(),
-					liquidity_amount,
+					minted_liquidity: liquidity_amount,
+					asset_debited: asset_spent.into(),
 				});
 
 				Ok((asset_spent, liquidity_amount))
@@ -248,22 +260,85 @@ impl<T: Config> LiquidityPoolApi<AmountU256, AccountId> for Pallet<T> {
 		asset: any::Asset,
 		range: AmmRange,
 		burnt_liquidity: Liquidity,
-	) -> DispatchResult {
-		Ok(())
+	) -> Result<(PoolAssetMap<AmountU256>, PoolAssetMap<u128>), DispatchError> {
+		Pools::<T>::mutate(&asset, |maybe_pool| {
+			if let Some(pool) = maybe_pool.as_mut() {
+				ensure!(pool.pool_enabled(), Error::<T>::PoolDisabled);
+
+				// Burn liquidity from the user's position.
+				let (asset_credited, fees): (PoolAssetMap<AmountU256>, PoolAssetMap<u128>) = pool
+					.burn(lp.clone(), range.lower, range.upper, burnt_liquidity)
+					.map_err(|e| match e {
+						PositionError::NonExistent => Error::<T>::PositionDoesNotExist,
+						PositionError::PositionLacksLiquidity => Error::<T>::PositionLacksLiquidity,
+					})?;
+
+				Self::deposit_event(Event::<T>::LiquidityBurned {
+					lp,
+					asset,
+					range,
+					burnt_liquidity,
+					asset_credited: asset_credited.into(),
+					fee_yielded: fees,
+				});
+
+				Ok((asset_credited, fees))
+			} else {
+				Err(Error::<T>::PoolDoesNotExist.into())
+			}
+		})
 	}
 
 	/// Collects fees yeilded by user's position into user's free balance.
-	fn collect(lp: AccountId, asset: any::Asset, range: AmmRange) -> DispatchResult {
-		Ok(())
+	fn collect(
+		lp: AccountId,
+		asset: any::Asset,
+		range: AmmRange,
+	) -> Result<PoolAssetMap<u128>, DispatchError> {
+		Pools::<T>::mutate(&asset, |maybe_pool| {
+			if let Some(pool) = maybe_pool.as_mut() {
+				ensure!(pool.pool_enabled(), Error::<T>::PoolDisabled);
+
+				// Collect fees acrued by user's position.
+				let fees: PoolAssetMap<u128> =
+					pool.collect(lp.clone(), range.lower, range.upper).map_err(|e| match e {
+						PositionError::NonExistent => Error::<T>::PositionDoesNotExist,
+						PositionError::PositionLacksLiquidity => Error::<T>::PositionLacksLiquidity,
+					})?;
+
+				Self::deposit_event(Event::<T>::FeeCollected {
+					lp,
+					asset,
+					range,
+					fee_yielded: fees,
+				});
+
+				Ok(fees)
+			} else {
+				Err(Error::<T>::PoolDoesNotExist.into())
+			}
+		})
 	}
 
-	/// Returns the user's Minted liquidity for a specific pool.
-	fn minted_liqudity(lp: &AccountId, asset: &any::Asset) -> Vec<(AmmRange, Liquidity)> {
-		vec![]
+	/// Returns the user's Minted liquidities and fees acrued for a specific pool.
+	fn minted_liqudity(
+		lp: &AccountId,
+		asset: &any::Asset,
+	) -> Vec<(Tick, Tick, Liquidity, PoolAssetMap<u128>)> {
+		if let Some(pool) = Pools::<T>::get(&asset) {
+			pool.minted_liqudity(lp.clone())
+		} else {
+			vec![]
+		}
 	}
 
 	/// Gets the current price of the pool in SqrtPrice
 	fn current_sqrt_price(asset: &any::Asset) -> Option<SqrtPriceQ64F96> {
-		None
+		Pools::<T>::get(&asset).map(|pool| pool.current_sqrt_price())
+	}
+
+	/// Gets the current price of the pool in Tick
+	fn current_tick(asset: &any::Asset) -> Option<Tick> {
+		Pools::<T>::get(&asset).map(|pool| pool.current_tick())
 	}
 }
