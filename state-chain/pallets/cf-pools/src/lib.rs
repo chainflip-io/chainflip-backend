@@ -119,11 +119,11 @@ pub mod pallet {
 	pub(super) type Pools<T: Config> =
 		StorageMap<_, Twox64Concat, any::Asset, mini_pool::AmmPool, ValueQuery>;
 
-	/// Flip ready to get burned.
+	/// FLIP ready to be burned.
 	#[pallet::storage]
 	pub(super) type FlipToBurn<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
 
-	/// Interval in which we buy flip.
+	/// Interval at which we buy FLIP in order to burn it.
 	#[pallet::storage]
 	pub(super) type FlipBuyInterval<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
 
