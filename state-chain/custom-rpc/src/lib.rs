@@ -453,14 +453,11 @@ where
 #[cfg(feature = "ibiza")]
 #[rpc(server, client, namespace = "cf")]
 pub trait PoolsApi {
-	#[method(name = "swap_rate")]
-	fn cf_swap_rate(
-		&self,
-		input_asset: Asset,
-		output_asset: Asset,
-		input_amount: NumberOrHex,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<ExchangeRate>;
+	#[method(name = "pool_sqrt_price")]
+	fn cf_pool_sqrt_price(asset: Asset) -> Option<SqrtPriceQ64F96>;
+
+	#[method(name = "pool_tick_price")]
+	fn cf_pool_tick_price(asset: Asset) -> Option<Tick>;
 }
 
 #[cfg(feature = "ibiza")]
@@ -470,22 +467,25 @@ where
 	C: sp_api::ProvideRuntimeApi<B> + Send + Sync + 'static + HeaderBackend<B>,
 	C::Api: pallet_cf_pools_runtime_api::PoolsApi<B>,
 {
-	fn cf_swap_rate(
+	fn cf_pool_sqrt_price(
 		&self,
-		input_asset: Asset,
-		output_asset: Asset,
-		input_amount: NumberOrHex,
+		asset: Asset,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<ExchangeRate> {
+	) -> RpcResult<SqrtPriceQ64F96> {
 		self.client
 			.runtime_api()
-			.cf_swap_rate(
-				&self.query_block_id(at),
-				input_asset,
-				output_asset,
-				u128::try_from(input_amount)
-					.map_err(|_| CallError::Custom(ErrorCode::InvalidParams.into()))?,
-			)
+			.cf_pool_sqrt_price(&self.query_block_id(at), asset)
+			.map_err(to_rpc_error)
+	}
+
+	fn cf_pool_tick_price(
+		&self,
+		asset: Asset,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Tick> {
+		self.client
+			.runtime_api()
+			.cf_pool_tick_price(&self.query_block_id(at), asset)
 			.map_err(to_rpc_error)
 	}
 }

@@ -31,6 +31,11 @@ features = ['derive']
 package = 'parity-scale-codec'
 version = '3.0.0'
 
+[dependencies.scale-info]
+default-features = false
+features = ['derive']
+version = '2.0.1'
+
 [dependencies.frame-support]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
@@ -41,10 +46,11 @@ default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'chainflip-monthly-2022-06+01'
 
-[dependencies.scale-info]
+[dependencies.frame-benchmarking]
 default-features = false
-features = ['derive']
-version = '2.0.1'
+git = 'https://github.com/chainflip-io/substrate.git'
+optional = true
+tag = 'chainflip-monthly-2022-06+01'
 
 [dependencies.sp-std]
 default-features = false
@@ -54,12 +60,6 @@ tag = 'chainflip-monthly-2022-06+01'
 [dependencies.sp-arithmetic]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
-
-[dependencies.frame-benchmarking]
-default-features = false
-git = 'https://github.com/chainflip-io/substrate.git'
-optional = true
 tag = 'chainflip-monthly-2022-06+01'
 
 [dependencies.sp-core]
@@ -80,12 +80,14 @@ std = [
   'cf-traits/std',
   'cf-primitives/std',
   'cf-chains/std',
+  'log/std',
   'codec/std',
   'scale-info/std',
   'frame-benchmarking/std',
   'frame-support/std',
   'frame-system/std',
   'sp-std/std',
+  'sp-arithmetic/std',
   'sp-core/std',
 ]
 runtime-benchmarks = [

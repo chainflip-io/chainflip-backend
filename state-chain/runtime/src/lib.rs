@@ -998,15 +998,22 @@ impl_runtime_apis! {
 
 	#[cfg(feature = "ibiza")]
 	impl pallet_cf_pools_runtime_api::PoolsApi<Block> for Runtime {
-		fn cf_swap_rate(input_asset: Asset, output_asset: Asset, input_amount: AssetAmount) -> ExchangeRate {
+		fn cf_pool_sqrt_price(
+			asset: Asset,
+		) -> Option<SqrtPriceQ64F96> {
 			use cf_traits::LiquidityPoolApi;
+			LiquidityPools::current_sqrt_price(asset)
+		}
 
-			LiquidityPools::swap_rate(input_asset, output_asset, input_amount)
+		fn cf_pool_tick_price(
+			asset: Asset,
+		) -> Option<Tick> {
+			use cf_traits::LiquidityPoolApi;
+			LiquidityPools::current_tick(asset)
 		}
 	}
 
 	// END custom runtime APIs
-
 	impl sp_api::Core<Block> for Runtime {
 		fn version() -> RuntimeVersion {
 			VERSION
