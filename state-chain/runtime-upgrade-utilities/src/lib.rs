@@ -9,6 +9,9 @@ use sp_std::marker::PhantomData;
 mod helper_functions;
 pub use helper_functions::*;
 
+#[cfg(feature = "try-runtime")]
+use sp_std::vec::Vec;
+
 /// A Runtime upgrade for a pallet that migrates the pallet from version `FROM` to version `TO`.
 ///
 /// In order for the runtime upgrade `U` to proceed, two conditions should be satisfied:

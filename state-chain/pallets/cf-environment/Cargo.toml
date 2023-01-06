@@ -41,6 +41,7 @@ default = ['std']
 std = [
   "cf-chains/std",
   'cf-traits/std',
+  'cf-primitives/std',
   'codec/std',
   'scale-info/std',
   'frame-benchmarking?/std',

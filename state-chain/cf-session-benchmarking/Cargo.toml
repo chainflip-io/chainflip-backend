@@ -27,11 +27,18 @@ sp-std = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainfl
 [features]
 default = ['std']
 std = [
-  'sp-std/std',
   'frame-benchmarking/std',
   'frame-support/std',
   'frame-system/std',
   'pallet-session/std',
   'sp-runtime/std',
-  'rand/std'
+  'rand/std',
+  'sp-std/std',
+]
+
+runtime-benchmarks = [
+  'frame-benchmarking/runtime-benchmarks',
+  'frame-support/runtime-benchmarks',
+  'frame-system/runtime-benchmarks',
+  "sp-runtime/runtime-benchmarks",
 ]

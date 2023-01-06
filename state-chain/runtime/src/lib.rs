@@ -618,7 +618,7 @@ impl pallet_cf_threshold_signature::Config<PolkadotInstance> for Runtime {
 	type Offence = chainflip::Offence;
 	type RuntimeOrigin = RuntimeOrigin;
 	type AccountRoleRegistry = AccountRoles;
-	type ThresholdCallable = Call;
+	type ThresholdCallable = RuntimeCall;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type ThresholdSignerNomination = chainflip::RandomSignerNomination;
 	type TargetChain = Polkadot;

@@ -49,6 +49,7 @@ std = [
   'sp-runtime/std',
   'sp-io/std',
   'sp-core/std',
+  'sp-arithmetic/std'
 ]
 runtime-benchmarks = [
   'cf-traits/runtime-benchmarks',

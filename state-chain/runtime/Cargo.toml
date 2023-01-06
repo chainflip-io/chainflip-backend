@@ -29,8 +29,8 @@ ethabi = {default-features = false, version = '18.0'}
 cf-traits = { path = '../traits', default-features = false }
 cf-primitives = { path = '../primitives', default-features = false }
 cf-chains = { path = '../chains', default-features = false }
-cf-session-benchmarking = { path = '../cf-session-benchmarking', optional = true }
 cf-utilities = { package = 'utilities', path = '../../utilities', default-features = false }
+cf-session-benchmarking = { path = '../cf-session-benchmarking', optional = true, default-features = false }
 
 pallet-cf-account-roles = { path = '../pallets/cf-account-roles', default-features = false }
 pallet-cf-broadcast = { path = '../pallets/cf-broadcast', default-features = false }
@@ -120,7 +120,7 @@ runtime-benchmarks = [
   'pallet-cf-witnesser/runtime-benchmarks',
   'pallet-timestamp/runtime-benchmarks',
   'sp-runtime/runtime-benchmarks',
-  'cf-session-benchmarking',
+  'cf-session-benchmarking/runtime-benchmarks',
 ]
 std = [
   'cf-chains/std',
@@ -185,17 +185,60 @@ try-runtime = [
   'frame-try-runtime/try-runtime',
   'frame-system/try-runtime',
   'frame-support/try-runtime',
-  'pallet-aura/try-runtime',
-  'pallet-grandpa/try-runtime',
-  'pallet-timestamp/try-runtime',
-  'pallet-transaction-payment/try-runtime',
-  'pallet-cf-ingress-egress/try-runtime',
-  'pallet-cf-emissions/try-runtime',
-  'pallet-cf-environment/try-runtime',
-  'pallet-cf-swapping/try-runtime',
-  'pallet-cf-reputation/try-runtime',
-  'pallet-cf-validator/try-runtime',
-  'pallet-cf-vaults/try-runtime',
+
+
+'pallet-cf-account-roles/try-runtime',
+'pallet-cf-broadcast/try-runtime',
+'pallet-cf-chain-tracking/try-runtime',
+'pallet-cf-emissions/try-runtime',
+'pallet-cf-environment/try-runtime',
+'pallet-cf-flip/try-runtime',
+'pallet-cf-governance/try-runtime',
+'pallet-cf-ingress-egress/try-runtime',
+'pallet-cf-lp/try-runtime',
+'pallet-cf-pools/try-runtime',
+# runtime api here?
+'pallet-cf-reputation/try-runtime',
+'pallet-cf-staking/try-runtime',
+'pallet-cf-swapping/try-runtime',
+'pallet-cf-threshold-signature/try-runtime',
+'pallet-cf-tokenholder-governance/try-runtime',
+'pallet-cf-validator/try-runtime',
+'pallet-cf-vaults/try-runtime',
+'pallet-cf-witnesser/try-runtime',
+'pallet-timestamp/try-runtime',
+'pallet-transaction-payment/try-runtime',
+'pallet-aura/try-runtime',
+'pallet-grandpa/try-runtime',
+'pallet-randomness-collective-flip/try-runtime',
+'pallet-session/try-runtime',
+'pallet-authorship/try-runtime',
+
+
+
+
+  # 'pallet-aura/try-runtime',
+  # 'pallet-grandpa/try-runtime',
+  # 'pallet-timestamp/try-runtime',
+  # 'pallet-transaction-payment/try-runtime',
+  # 'pallet-cf-ingress-egress/try-runtime',
+  # 'pallet-cf-emissions/try-runtime',
+  # 'pallet-cf-environment/try-runtime',
+  # 'pallet-cf-swapping/try-runtime',
+  # 'pallet-cf-reputation/try-runtime',
+  # 'pallet-cf-validator/try-runtime',
+  # 'pallet-cf-vaults/try-runtime',
+  # 'pallet-cf-witnesser/try-runtime',
+  # 'pallet-cf-chain-tracking/try-runtime',
+  # 'pallet-cf-flip/try-runtime',
+  # 'pallet-cf-governance/try-runtime',
+  
+  
+  # 'pallet-cf-staking/try-runtime',
+  # 'pallet-cf-tokenholder-governance/try-runtime',
+  # 'pallet-cf-threshold-signature/try-runtime',
+  # 'pallet-cf-pools/try-runtime',
+  # 'pallet-cf-lp/try-runtime',
 ]
 ibiza = [
   'cf-chains/ibiza',

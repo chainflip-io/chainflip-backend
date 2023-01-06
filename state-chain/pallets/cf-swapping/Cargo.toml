@@ -50,6 +50,7 @@ std = [
   'frame-system/std',
   'sp-std/std',
   'log/std',
+  'sp-arithmetic/std',
 ]
 runtime-benchmarks = [
   'cf-traits/runtime-benchmarks',
