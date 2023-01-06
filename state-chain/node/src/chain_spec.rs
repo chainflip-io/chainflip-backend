@@ -553,6 +553,7 @@ fn testnet_genesis(
 			supply_update_interval,
 		},
 		transaction_payment: Default::default(),
+		liquidity_pools: Default::default(),
 	}
 }
 

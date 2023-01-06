@@ -139,6 +139,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 				(NON_LP_ACCOUNT, AccountRole::Validator),
 			],
 		},
+		liquidity_pools: Default::default(),
 	};
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();

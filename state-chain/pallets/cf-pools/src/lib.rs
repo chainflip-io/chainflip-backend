@@ -114,6 +114,25 @@ pub mod pallet {
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(PhantomData<T>);
 
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config> {
+		pub flip_buy_interval: T::BlockNumber,
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+		fn build(&self) {
+			FlipBuyInterval::<T>::set(T::BlockNumber::from(1_u32));
+		}
+	}
+
+	#[cfg(feature = "std")]
+	impl<T: Config> Default for GenesisConfig<T> {
+		fn default() -> Self {
+			Self { flip_buy_interval: T::BlockNumber::from(1_u32) }
+		}
+	}
+
 	/// Pools are indexed by single asset since USDC is implicit.
 	#[pallet::storage]
 	pub(super) type Pools<T: Config> =
@@ -130,7 +149,9 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
-			if current_block % FlipBuyInterval::<T>::get() == Zero::zero() {
+			if current_block % FlipBuyInterval::<T>::get() == Zero::zero() &&
+				CollectedNetworkFee::<T>::get() != 0
+			{
 				let flip_to_burn = Pools::<T>::mutate(Asset::Flip, |pool| {
 					pool.reverse_swap(CollectedNetworkFee::<T>::take())
 				});

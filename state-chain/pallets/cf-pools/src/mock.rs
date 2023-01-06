@@ -79,7 +79,7 @@ impl pallet_cf_pools::Config for Test {
 #[allow(unused)]
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let config = GenesisConfig { system: Default::default() };
+	let config = GenesisConfig { system: Default::default(), pools: Default::default() };
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 
