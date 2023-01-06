@@ -75,7 +75,7 @@ impl dummy::Config for Test {
 	type EnsureWitnessed = pallet_cf_witness::EnsureWitnessed;
 }
 
-impl WitnessDataExtraction for Call {
+impl WitnessDataExtraction for RuntimeCall {
 	fn extract(&mut self) -> Option<Vec<u8>> {
 		None
 	}

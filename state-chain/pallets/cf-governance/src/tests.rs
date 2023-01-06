@@ -10,7 +10,7 @@ use crate as pallet_cf_governance;
 
 const DUMMY_WASM_BLOB: Vec<u8> = vec![];
 
-fn mock_extrinsic() -> Box<Call> {
+fn mock_extrinsic() -> Box<RuntimeCall> {
 	Box::new(RuntimeCall::Governance(pallet_cf_governance::Call::<Test>::new_membership_set {
 		accounts: vec![EVE, PETER, MAX],
 	}))

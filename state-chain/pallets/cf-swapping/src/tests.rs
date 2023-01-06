@@ -111,7 +111,7 @@ fn number_of_swaps_processed_limited_by_weight() {
 	new_test_ext().execute_with(|| {
 		let swaps = generate_test_swaps();
 		insert_swaps(&swaps);
-		Swapping::on_idle(1, Weight);
+		Swapping::on_idle(1, Weight::from_ref_time(1000));
 		assert_eq!(SwapQueue::<Test>::get().len(), swaps.len());
 	});
 }
@@ -151,7 +151,7 @@ fn expect_earned_fees_to_be_recorded() {
 			ALICE,
 			200,
 		);
-		Swapping::on_idle(1, 1000u32);
+		Swapping::on_idle(1, Weight::from_ref_time(1000));
 		assert_eq!(EarnedRelayerFees::<Test>::get(ALICE, cf_primitives::Asset::Flip), 4);
 	});
 }
@@ -195,7 +195,7 @@ fn expect_swap_id_to_be_emitted() {
 			0,
 		);
 		// 3. Process swaps -> SwapExecuted, SwapEgressScheduled
-		Swapping::on_idle(1, 100);
+		Swapping::on_idle(1, Weight::from_ref_time(100));
 		assert_event_sequence!(
 			Test,
 			crate::mock::RuntimeEvent::Swapping(crate::Event::NewSwapIntent {

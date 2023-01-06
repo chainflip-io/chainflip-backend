@@ -131,7 +131,7 @@ impl UnfilteredDispatchable for MockCallback {
 
 	fn dispatch_bypass_filter(
 		self,
-		_origin: Self::Origin,
+		_origin: Self::RuntimeOrigin,
 	) -> frame_support::dispatch::DispatchResultWithPostInfo {
 		Ok(().into())
 	}
@@ -215,7 +215,7 @@ impl pallet_cf_vaults::Config for MockRuntime {
 	type AccountRoleRegistry = ();
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
-	type ThresholdSigner = MockThresholdSigner<MockEthereum, Call>;
+	type ThresholdSigner = MockThresholdSigner<MockEthereum, RuntimeCall>;
 	type OffenceReporter = MockOffenceReporter;
 	type SetAggKeyWithAggKey = MockSetAggKeyWithAggKey;
 	type VaultTransitionHandler = MockVaultTransitionHandler;

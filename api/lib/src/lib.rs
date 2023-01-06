@@ -116,9 +116,9 @@ where
 async fn connect_submit_and_get_events<Call>(
 	state_chain_settings: &settings::StateChain,
 	call: Call,
-) -> Result<Vec<state_chain_runtime::Event>>
+) -> Result<Vec<state_chain_runtime::RuntimeEvent>>
 where
-	Call: Into<state_chain_runtime::Call> + Clone + std::fmt::Debug + Send + Sync + 'static,
+	Call: Into<state_chain_runtime::RuntimeCall> + Clone + std::fmt::Debug + Send + Sync + 'static,
 {
 	task_scope(|scope| {
 		async {
@@ -516,13 +516,14 @@ pub async fn register_swap_intent(
 	)
 	.await?;
 
-	if let Some(state_chain_runtime::Event::Swapping(pallet_cf_swapping::Event::NewSwapIntent {
-		ingress_address,
-		..
-	})) = events.iter().find(|event| {
+	if let Some(state_chain_runtime::RuntimeEvent::Swapping(
+		pallet_cf_swapping::Event::NewSwapIntent { ingress_address, .. },
+	)) = events.iter().find(|event| {
 		matches!(
 			event,
-			state_chain_runtime::Event::Swapping(pallet_cf_swapping::Event::NewSwapIntent { .. })
+			state_chain_runtime::RuntimeEvent::Swapping(
+				pallet_cf_swapping::Event::NewSwapIntent { .. }
+			)
 		)
 	}) {
 		Ok(*ingress_address)
@@ -542,12 +543,12 @@ pub async fn liquidity_deposit(
 	)
 	.await?;
 
-	if let Some(state_chain_runtime::Event::LiquidityProvider(
+	if let Some(state_chain_runtime::RuntimeEvent::LiquidityProvider(
 		pallet_cf_lp::Event::DepositAddressReady { ingress_address, intent_id: _ },
 	)) = events.iter().find(|event| {
 		matches!(
 			event,
-			state_chain_runtime::Event::LiquidityProvider(
+			state_chain_runtime::RuntimeEvent::LiquidityProvider(
 				pallet_cf_lp::Event::DepositAddressReady { .. }
 			)
 		)

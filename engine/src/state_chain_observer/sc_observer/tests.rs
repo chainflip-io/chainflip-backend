@@ -14,7 +14,7 @@ use pallet_cf_vaults::Vault;
 #[cfg(feature = "ibiza")]
 use cf_primitives::PolkadotAccountId;
 
-use sp_core::{Hasher, H256, U256};
+use sp_core::{Hasher, H256};
 use sp_runtime::{traits::Keccak256, AccountId32, Digest};
 use state_chain_runtime::{AccountId, CfeSettings, EthereumInstance, Header};
 use tokio::sync::watch;
@@ -606,9 +606,9 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		.return_once(move |_| {
 			Ok(vec![Box::new(frame_system::EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				event: state_chain_runtime::Event::Validator(pallet_cf_validator::Event::NewEpoch(
-					new_epoch,
-				)),
+				event: state_chain_runtime::RuntimeEvent::Validator(
+					pallet_cf_validator::Event::NewEpoch(new_epoch),
+				),
 				topics: vec![H256::default()],
 			})])
 		});
@@ -820,9 +820,9 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		.return_once(move |_| {
 			Ok(vec![Box::new(frame_system::EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				event: state_chain_runtime::Event::Validator(pallet_cf_validator::Event::NewEpoch(
-					new_epoch,
-				)),
+				event: state_chain_runtime::RuntimeEvent::Validator(
+					pallet_cf_validator::Event::NewEpoch(new_epoch),
+				),
 				topics: vec![H256::default()],
 			})])
 		});
@@ -1035,9 +1035,9 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		.return_once(move |_| {
 			Ok(vec![Box::new(frame_system::EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				event: state_chain_runtime::Event::Validator(pallet_cf_validator::Event::NewEpoch(
-					new_epoch,
-				)),
+				event: state_chain_runtime::RuntimeEvent::Validator(
+					pallet_cf_validator::Event::NewEpoch(new_epoch),
+				),
 				topics: vec![H256::default()],
 			})])
 		});
@@ -1239,24 +1239,27 @@ async fn only_encodes_and_signs_when_specified() {
 
 	// when we are selected to sign we must estimate gas and sign
 	// NB: We only do this once, since we are only selected to sign once
-	eth_rpc_mock.expect_estimate_gas().once().returning(|_| Ok(U256::from(100_000)));
+	eth_rpc_mock
+		.expect_estimate_gas()
+		.once()
+		.returning(|_| Ok(web3::types::U256::from(100_000)));
 
 	eth_rpc_mock.expect_sign_transaction().once().return_once(|_, _| {
 		// just a nothing signed transaction
 		Ok(SignedTransaction {
-			message_hash: H256::default(),
+			message_hash: web3::types::H256::default(),
 			v: 1,
-			r: H256::default(),
-			s: H256::default(),
+			r: web3::types::H256::default(),
+			s: web3::types::H256::default(),
 			raw_transaction: Bytes(Vec::new()),
-			transaction_hash: H256::default(),
+			transaction_hash: web3::types::H256::default(),
 		})
 	});
 
 	eth_rpc_mock
 		.expect_send_raw_transaction()
 		.once()
-		.return_once(|tx| Ok(Keccak256::hash(&tx.0[..])));
+		.return_once(|tx| Ok(Keccak256::hash(&tx.0[..]).0.into()));
 
 	state_chain_client
 		.expect_storage_value::<frame_system::Events<state_chain_runtime::Runtime>>()
@@ -1266,7 +1269,7 @@ async fn only_encodes_and_signs_when_specified() {
 			Ok(vec![
 				Box::new(frame_system::EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: state_chain_runtime::Event::EthereumBroadcaster(
+					event: state_chain_runtime::RuntimeEvent::EthereumBroadcaster(
 						pallet_cf_broadcast::Event::TransactionBroadcastRequest {
 							broadcast_attempt_id: BroadcastAttemptId::default(),
 							nominee: account_id,
@@ -1277,7 +1280,7 @@ async fn only_encodes_and_signs_when_specified() {
 				}),
 				Box::new(frame_system::EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
-					event: state_chain_runtime::Event::EthereumBroadcaster(
+					event: state_chain_runtime::RuntimeEvent::EthereumBroadcaster(
 						pallet_cf_broadcast::Event::TransactionBroadcastRequest {
 							broadcast_attempt_id: BroadcastAttemptId::default(),
 							nominee: AccountId32::new([1; 32]), // NOT OUR ACCOUNT ID
@@ -1362,7 +1365,7 @@ where
 	C: CryptoScheme + Send + Sync,
 	I: 'static + Send + Sync,
 	state_chain_runtime::Runtime: pallet_cf_threshold_signature::Config<I>,
-	state_chain_runtime::Call:
+	state_chain_runtime::RuntimeCall:
 		std::convert::From<pallet_cf_threshold_signature::Call<state_chain_runtime::Runtime, I>>,
 	<<state_chain_runtime::Runtime as pallet_cf_threshold_signature::Config<I>>::TargetChain as ChainCrypto>::ThresholdSignature: std::convert::From<<C as CryptoScheme>::Signature>,
 {
@@ -1382,7 +1385,7 @@ where
 	state_chain_client.
 expect_submit_signed_extrinsic::<pallet_cf_threshold_signature::Call<state_chain_runtime::Runtime,
 I>>() 		.once()
-		.return_once(|_, _| Ok(H256::default()));
+		.return_once(|_, _| Ok(sp_core::H256::default()));
 	let state_chain_client = Arc::new(state_chain_client);
 
 	let mut multisig_client = MockMultisigClientApi::<C>::new();
@@ -1472,7 +1475,7 @@ where
 	C: CryptoScheme<AggKey = <<state_chain_runtime::Runtime as pallet_cf_vaults::Config<I>>::Chain as ChainCrypto>::AggKey> + Send + Sync,
 	I: 'static + Send + Sync,
 	state_chain_runtime::Runtime: pallet_cf_vaults::Config<I>,
-	state_chain_runtime::Call:
+	state_chain_runtime::RuntimeCall:
 		std::convert::From<pallet_cf_vaults::Call<state_chain_runtime::Runtime, I>>,
 {
 	let logger = new_test_logger();

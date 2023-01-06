@@ -50,7 +50,7 @@ mod tests {
 
 	use std::str::FromStr;
 
-	use sp_core::H160;
+	use web3::types::H160;
 
 	use crate::eth::{key_manager::KeyManager, EthContractWitnesser};
 

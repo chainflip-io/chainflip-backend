@@ -9,6 +9,7 @@ use cf_traits::{Bonding, Issuance, Slashing, StakeTransfer};
 use frame_support::{
 	assert_noop,
 	traits::{HandleLifetime, Hooks, Imbalance},
+	weights::Weight,
 };
 use quickcheck::{Arbitrary, Gen, TestResult};
 use quickcheck_macros::quickcheck;
@@ -641,7 +642,7 @@ fn can_reap_dust_account() {
 		Account::<Test>::insert(CHARLIE, FlipAccount { stake: 11, bond: 0 });
 
 		// Dust accounts are reaped on_idle
-		Flip::on_idle(1, 1_000_000_000_000);
+		Flip::on_idle(1, Weight::from_ref_time(1_000_000_000_000));
 
 		assert!(!Account::<Test>::contains_key(ALICE));
 		assert_eq!(Account::<Test>::get(BOB), FlipAccount { stake: 10, bond: 0 });

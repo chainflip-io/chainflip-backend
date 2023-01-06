@@ -78,7 +78,7 @@ impl system::Config for Test {
 	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
-cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
+cf_traits::impl_mock_ensure_witnessed_for_origin!(RuntimeOrigin);
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct MockApiCalls {
@@ -157,7 +157,7 @@ parameter_types! {
 }
 
 // Implement mock for RestrictionHandler
-impl_mock_waived_fees!(AccountId, Call);
+impl_mock_waived_fees!(AccountId, RuntimeCall);
 impl_mock_stake_transfer!(AccountId, u128);
 
 impl pallet_cf_flip::Config for Test {

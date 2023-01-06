@@ -121,6 +121,7 @@ where
 #[cfg(test)]
 mod test_versioned_upgrade {
 	use super::*;
+	use frame_support::weights::Weight;
 	use sp_io::TestExternalities;
 	use sp_std::cell::RefCell;
 
@@ -182,16 +183,16 @@ mod test_versioned_upgrade {
 	impl OnRuntimeUpgrade for DummyUpgrade {
 		fn on_runtime_upgrade() -> frame_support::weights::Weight {
 			UPGRADES_COMPLETED.with(|cell| *cell.borrow_mut() += 1);
-			0
+			Weight::from_ref_time(0)
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<(), &'static str> {
-			Ok(())
+		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+			Ok(Default::default())
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade() -> Result<(), &'static str> {
+		fn post_upgrade(_data: Vec<u8>) -> Result<(), &'static str> {
 			if Self::is_error_on_post_upgrade() {
 				Err("err")
 			} else {

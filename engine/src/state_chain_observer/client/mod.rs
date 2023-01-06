@@ -278,7 +278,7 @@ pub mod mocks {
 				logger: &slog::Logger,
 			) -> Result<H256>
 			where
-				Call: Into<state_chain_runtime::Call> + Clone + std::fmt::Debug + Send + Sync + 'static;
+				Call: Into<state_chain_runtime::RuntimeCall> + Clone + std::fmt::Debug + Send + Sync + 'static;
 
 			async fn submit_unsigned_extrinsic<Call>(
 				&self,
@@ -286,13 +286,13 @@ pub mod mocks {
 				logger: &slog::Logger,
 			) -> Result<H256>
 			where
-				Call: Into<state_chain_runtime::Call> + Clone + std::fmt::Debug + Send + Sync + 'static;
+				Call: Into<state_chain_runtime::RuntimeCall> + Clone + std::fmt::Debug + Send + Sync + 'static;
 
 			async fn watch_submitted_extrinsic<BlockStream>(
 				&self,
 				extrinsic_hash: state_chain_runtime::Hash,
 				block_stream: &mut BlockStream,
-			) -> Result<Vec<state_chain_runtime::Event>>
+			) -> Result<Vec<state_chain_runtime::RuntimeEvent>>
 			where
 				BlockStream:
 					Stream<Item = state_chain_runtime::Header> + Unpin + Send + 'static;

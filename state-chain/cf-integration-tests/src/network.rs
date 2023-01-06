@@ -22,7 +22,9 @@ use frame_support::traits::{OnFinalize, OnIdle};
 use pallet_cf_staking::{ClaimAmount, MinimumStake};
 use pallet_cf_validator::RotationPhase;
 use sp_std::collections::btree_set::BTreeSet;
-use state_chain_runtime::{AccountRoles, Authorship, EthereumInstance, Event, Origin};
+use state_chain_runtime::{
+	AccountRoles, Authorship, EthereumInstance, RuntimeEvent, RuntimeOrigin, Weight,
+};
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::threshold_signing::KeyUtils;
@@ -105,16 +107,16 @@ pub struct Cli;
 
 impl Cli {
 	pub fn activate_account(account: &NodeId) {
-		assert_ok!(Staking::activate_account(Origin::signed(account.clone())));
+		assert_ok!(Staking::activate_account(RuntimeOrigin::signed(account.clone())));
 	}
 
 	pub fn claim(account: &NodeId, amount: ClaimAmount<FlipBalance>, eth_address: EthereumAddress) {
-		assert_ok!(Staking::claim(Origin::signed(account.clone()), amount, eth_address));
+		assert_ok!(Staking::claim(RuntimeOrigin::signed(account.clone()), amount, eth_address));
 	}
 
 	pub fn set_vanity_name(account: &NodeId, name: &str) {
 		assert_ok!(Validator::set_vanity_name(
-			Origin::signed(account.clone()),
+			RuntimeOrigin::signed(account.clone()),
 			name.as_bytes().to_vec()
 		));
 	}
@@ -158,7 +160,7 @@ impl Engine {
 			match event {
 				ContractEvent::Staked { node_id: validator_id, amount, epoch, .. } => {
 					state_chain_runtime::Witnesser::witness_at_epoch(
-						Origin::signed(self.node_id.clone()),
+						RuntimeOrigin::signed(self.node_id.clone()),
 						Box::new(
 							pallet_cf_staking::Call::staked {
 								account_id: validator_id.clone(),
@@ -174,7 +176,7 @@ impl Engine {
 				},
 				ContractEvent::Claimed { node_id, amount, epoch } => {
 					state_chain_runtime::Witnesser::witness_at_epoch(
-						Origin::signed(self.node_id.clone()),
+						RuntimeOrigin::signed(self.node_id.clone()),
 						Box::new(
 							pallet_cf_staking::Call::claimed {
 								account_id: node_id.clone(),
@@ -193,19 +195,19 @@ impl Engine {
 
 	// Handle events coming in from the state chain
 	// TODO have this abstracted out
-	fn handle_state_chain_events(&mut self, events: &[Event]) {
+	fn handle_state_chain_events(&mut self, events: &[RuntimeEvent]) {
 		// If active handle events
 		if self.live {
 			// Being a CurrentAuthority we would respond to certain events
 			if self.state() == ChainflipAccountState::CurrentAuthority {
 				on_events!(
 					events,
-					Event::Validator(
+					RuntimeEvent::Validator(
 						// A new epoch
 						pallet_cf_validator::Event::NewEpoch(_epoch_index)) => {
 							self.eth_threshold_signer.borrow_mut().use_proposed_key();
 					}
-					Event::EthereumThresholdSigner(
+					RuntimeEvent::EthereumThresholdSigner(
 						// A signature request
 						pallet_cf_threshold_signature::Event::ThresholdSignatureRequest{
 							request_id: _,
@@ -217,13 +219,13 @@ impl Engine {
 						// if we unwrap on this, we'll panic, because we will have already succeeded
 						// on a previous submission (all nodes submit this)
 						let _result = state_chain_runtime::EthereumThresholdSigner::signature_success(
-							Origin::none(),
+							RuntimeOrigin::none(),
 							*ceremony_id,
 							self.eth_threshold_signer.borrow().sign_with_key(key_id.clone(), payload.as_fixed_bytes()),
 						);
 					}
 					#[cfg(feature = "ibiza")]
-					Event::PolkadotThresholdSigner(
+					RuntimeEvent::PolkadotThresholdSigner(
 						pallet_cf_threshold_signature::Event::ThresholdSignatureRequest {
 							request_id: _,
 							ceremony_id,
@@ -236,7 +238,7 @@ impl Engine {
 									self.dot_threshold_signer.borrow().sign_with_key(key_id.clone(), &(payload.clone().0)),
 								);
 					}
-					Event::Validator(
+					RuntimeEvent::Validator(
 						// NOTE: This is a little inaccurate a representation of how it actually works. An event is emitted
 						// which contains the transaction to broadcast for the rotation tx, which the CFE then broadcasts.
 						// This is a simpler way to represent this in the tests. Representing in this way in the tests also means
@@ -245,7 +247,7 @@ impl Engine {
 						pallet_cf_validator::Event::RotationPhaseUpdated { new_phase: RotationPhase::ActivatingKeys(_) }) => {
 								// If we rotating let's witness the keys being rotated on the contract
 								let _result = state_chain_runtime::Witnesser::witness_at_epoch(
-									Origin::signed(self.node_id.clone()),
+									RuntimeOrigin::signed(self.node_id.clone()),
 									Box::new(pallet_cf_vaults::Call::<_, EthereumInstance>::vault_key_rotated {
 										new_public_key: self.eth_threshold_signer.borrow_mut().proposed_public_key(),
 										block_number: 100,
@@ -256,7 +258,7 @@ impl Engine {
 
 								#[cfg(feature = "ibiza")]
 								let _result = state_chain_runtime::Witnesser::witness_at_epoch(
-									Origin::signed(self.node_id.clone()),
+									RuntimeOrigin::signed(self.node_id.clone()),
 									Box::new(pallet_cf_vaults::Call::<_, PolkadotInstance>::vault_key_rotated {
 										new_public_key: self.dot_threshold_signer.borrow_mut().proposed_public_key(),
 										block_number: 100,
@@ -285,11 +287,12 @@ impl Engine {
 				threshold_signer: Rc<RefCell<ThresholdSigner<K, S>>>,
 				node_id: NodeId,
 			) where
-				<T as frame_system::Config>::Origin: From<state_chain_runtime::Origin>,
+				<T as frame_system::Config>::RuntimeOrigin:
+					From<state_chain_runtime::RuntimeOrigin>,
 			{
 				if authorities.contains(&node_id) {
 					pallet_cf_vaults::Pallet::<T, I>::report_keygen_outcome(
-						Origin::signed(node_id.clone()).into(),
+						RuntimeOrigin::signed(node_id.clone()).into(),
 						ceremony_id,
 						Ok(threshold_signer.borrow_mut().propose_new_key()),
 					)
@@ -302,14 +305,14 @@ impl Engine {
 			// Being staked we would be required to respond to keygen requests
 			on_events!(
 				events,
-				Event::EthereumVault(
+				RuntimeEvent::EthereumVault(
 					pallet_cf_vaults::Event::KeygenRequest(ceremony_id, participants)) => {
-						report_keygen_outcome_for_chain::<EthKeyComponents, SchnorrVerificationComponents, state_chain_runtime::Runtime, EthereumInstance>(*ceremony_id, participants, self.eth_threshold_signer.clone(), self.node_id.clone());
+						report_keygen_outcome_for_chain::<EthKeyComponents, SchnorrVerificationComponents, state_chain_runtime::Runtime, EthereumInstance>(*ceremony_id, &participants, self.eth_threshold_signer.clone(), self.node_id.clone());
 				}
 				#[cfg(feature = "ibiza")]
-				Event::PolkadotVault(
+				RuntimeEvent::PolkadotVault(
 					pallet_cf_vaults::Event::KeygenRequest(ceremony_id, participants)) => {
-						report_keygen_outcome_for_chain::<DotKeyComponents, PolkadotSignature, state_chain_runtime::Runtime, PolkadotInstance>(*ceremony_id, participants, self.dot_threshold_signer.clone(), self.node_id.clone());
+						report_keygen_outcome_for_chain::<DotKeyComponents, PolkadotSignature, state_chain_runtime::Runtime, PolkadotInstance>(*ceremony_id, &participants, self.dot_threshold_signer.clone(), self.node_id.clone());
 				}
 			);
 		}
@@ -327,7 +330,7 @@ pub(crate) fn setup_account(node_id: &NodeId) {
 	let seed = &node_id.clone().to_string();
 
 	assert_ok!(state_chain_runtime::Session::set_keys(
-		state_chain_runtime::Origin::signed(node_id.clone()),
+		state_chain_runtime::RuntimeOrigin::signed(node_id.clone()),
 		SessionKeys {
 			aura: get_from_seed::<AuraId>(seed),
 			grandpa: get_from_seed::<GrandpaId>(seed),
@@ -341,7 +344,7 @@ pub(crate) fn setup_peer_mapping(node_id: &NodeId) {
 	let peer_keypair = sp_core::ed25519::Pair::from_legacy_string(seed, None);
 
 	assert_ok!(state_chain_runtime::Validator::register_peer_id(
-		state_chain_runtime::Origin::signed(node_id.clone()),
+		state_chain_runtime::RuntimeOrigin::signed(node_id.clone()),
 		peer_keypair.public(),
 		0,
 		0,
@@ -425,8 +428,9 @@ impl Network {
 
 	pub fn submit_heartbeat_all_engines(&self) {
 		for engine in self.engines.values() {
-			let _result =
-				Reputation::heartbeat(state_chain_runtime::Origin::signed(engine.node_id.clone()));
+			let _result = Reputation::heartbeat(state_chain_runtime::RuntimeOrigin::signed(
+				engine.node_id.clone(),
+			));
 		}
 	}
 
@@ -451,7 +455,10 @@ impl Network {
 			Authorship::on_finalize(block_number);
 
 			// Provide very large weight to ensure all on_idle processing can occur
-			state_chain_runtime::AllPalletsWithoutSystem::on_idle(block_number, 1_000_000_000_000);
+			state_chain_runtime::AllPalletsWithoutSystem::on_idle(
+				block_number,
+				Weight::from_ref_time(1_000_000_000_000),
+			);
 
 			for event in self.stake_manager_contract.events() {
 				for engine in self.engines.values() {
@@ -465,7 +472,7 @@ impl Network {
 				.into_iter()
 				.map(|e| e.event)
 				.skip(self.last_event)
-				.collect::<Vec<Event>>();
+				.collect::<Vec<RuntimeEvent>>();
 
 			self.last_event += events.len();
 

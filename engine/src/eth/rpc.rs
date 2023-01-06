@@ -513,8 +513,7 @@ pub mod mocks {
 	use super::*;
 
 	use mockall::mock;
-	use sp_core::H256;
-	use web3::types::{Block, Bytes, Filter, Log};
+	// use web3::types::{Block, Bytes, Filter, Log, H256};
 
 	mock!(
 		// becomes MockEthHttpRpcClient

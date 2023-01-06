@@ -37,20 +37,17 @@ fn test_expect_validator_register_fails() {
 fn test_ensure_origin_struct() {
 	new_test_ext().execute_with(|| {
 		// Root and none should be invalid.
-		EnsureRelayer::<Test>::ensure_origin(RuntimeOriginFor::<Test>::root()).unwrap_err();
-		EnsureRelayer::<Test>::ensure_origin(RuntimeOriginFor::<Test>::none()).unwrap_err();
-		EnsureValidator::<Test>::ensure_origin(RuntimeOriginFor::<Test>::root()).unwrap_err();
-		EnsureValidator::<Test>::ensure_origin(RuntimeOriginFor::<Test>::none()).unwrap_err();
-		EnsureLiquidityProvider::<Test>::ensure_origin(RuntimeOriginFor::<Test>::root())
-			.unwrap_err();
-		EnsureLiquidityProvider::<Test>::ensure_origin(RuntimeOriginFor::<Test>::none())
-			.unwrap_err();
+		EnsureRelayer::<Test>::ensure_origin(OriginFor::<Test>::root()).unwrap_err();
+		EnsureRelayer::<Test>::ensure_origin(OriginFor::<Test>::none()).unwrap_err();
+		EnsureValidator::<Test>::ensure_origin(OriginFor::<Test>::root()).unwrap_err();
+		EnsureValidator::<Test>::ensure_origin(OriginFor::<Test>::none()).unwrap_err();
+		EnsureLiquidityProvider::<Test>::ensure_origin(OriginFor::<Test>::root()).unwrap_err();
+		EnsureLiquidityProvider::<Test>::ensure_origin(OriginFor::<Test>::none()).unwrap_err();
 
 		// Validation should fail for non-existent accounts.
-		EnsureRelayer::<Test>::ensure_origin(RuntimeOriginFor::<Test>::signed(ALICE)).unwrap_err();
-		EnsureRelayer::<Test>::ensure_origin(RuntimeOriginFor::<Test>::signed(BOB)).unwrap_err();
-		EnsureRelayer::<Test>::ensure_origin(RuntimeOriginFor::<Test>::signed(CHARLIE))
-			.unwrap_err();
+		EnsureRelayer::<Test>::ensure_origin(OriginFor::<Test>::signed(ALICE)).unwrap_err();
+		EnsureRelayer::<Test>::ensure_origin(OriginFor::<Test>::signed(BOB)).unwrap_err();
+		EnsureRelayer::<Test>::ensure_origin(OriginFor::<Test>::signed(CHARLIE)).unwrap_err();
 
 		// Create the accounts.
 		<Provider<Test> as HandleLifetime<u64>>::created(&ALICE).unwrap();
@@ -58,10 +55,9 @@ fn test_ensure_origin_struct() {
 		<Provider<Test> as HandleLifetime<u64>>::created(&CHARLIE).unwrap();
 
 		// Validation should fail for uninitalised accounts.
-		EnsureRelayer::<Test>::ensure_origin(RuntimeOriginFor::<Test>::signed(ALICE)).unwrap_err();
-		EnsureRelayer::<Test>::ensure_origin(RuntimeOriginFor::<Test>::signed(BOB)).unwrap_err();
-		EnsureRelayer::<Test>::ensure_origin(RuntimeOriginFor::<Test>::signed(CHARLIE))
-			.unwrap_err();
+		EnsureRelayer::<Test>::ensure_origin(OriginFor::<Test>::signed(ALICE)).unwrap_err();
+		EnsureRelayer::<Test>::ensure_origin(OriginFor::<Test>::signed(BOB)).unwrap_err();
+		EnsureRelayer::<Test>::ensure_origin(OriginFor::<Test>::signed(CHARLIE)).unwrap_err();
 
 		// Upgrade the accounts.
 		Pallet::<Test>::register_as_relayer(&ALICE).unwrap();
@@ -69,21 +65,16 @@ fn test_ensure_origin_struct() {
 		Pallet::<Test>::register_as_liquidity_provider(&CHARLIE).unwrap();
 
 		// Each account should validate as the correct account type and fail otherwise.
-		EnsureRelayer::<Test>::ensure_origin(RuntimeOriginFor::<Test>::signed(ALICE)).unwrap();
-		EnsureValidator::<Test>::ensure_origin(RuntimeOriginFor::<Test>::signed(ALICE))
+		EnsureRelayer::<Test>::ensure_origin(OriginFor::<Test>::signed(ALICE)).unwrap();
+		EnsureValidator::<Test>::ensure_origin(OriginFor::<Test>::signed(ALICE)).unwrap_err();
+		EnsureLiquidityProvider::<Test>::ensure_origin(OriginFor::<Test>::signed(ALICE))
 			.unwrap_err();
-		EnsureLiquidityProvider::<Test>::ensure_origin(RuntimeOriginFor::<Test>::signed(ALICE))
-			.unwrap_err();
-		EnsureRelayer::<Test>::ensure_origin(RuntimeOriginFor::<Test>::signed(BOB)).unwrap_err();
-		EnsureValidator::<Test>::ensure_origin(RuntimeOriginFor::<Test>::signed(BOB)).unwrap();
-		EnsureLiquidityProvider::<Test>::ensure_origin(RuntimeOriginFor::<Test>::signed(BOB))
-			.unwrap_err();
-		EnsureRelayer::<Test>::ensure_origin(RuntimeOriginFor::<Test>::signed(CHARLIE))
-			.unwrap_err();
-		EnsureValidator::<Test>::ensure_origin(RuntimeOriginFor::<Test>::signed(CHARLIE))
-			.unwrap_err();
-		EnsureLiquidityProvider::<Test>::ensure_origin(RuntimeOriginFor::<Test>::signed(CHARLIE))
-			.unwrap();
+		EnsureRelayer::<Test>::ensure_origin(OriginFor::<Test>::signed(BOB)).unwrap_err();
+		EnsureValidator::<Test>::ensure_origin(OriginFor::<Test>::signed(BOB)).unwrap();
+		EnsureLiquidityProvider::<Test>::ensure_origin(OriginFor::<Test>::signed(BOB)).unwrap_err();
+		EnsureRelayer::<Test>::ensure_origin(OriginFor::<Test>::signed(CHARLIE)).unwrap_err();
+		EnsureValidator::<Test>::ensure_origin(OriginFor::<Test>::signed(CHARLIE)).unwrap_err();
+		EnsureLiquidityProvider::<Test>::ensure_origin(OriginFor::<Test>::signed(CHARLIE)).unwrap();
 	});
 }
 
@@ -91,17 +82,17 @@ fn test_ensure_origin_struct() {
 fn test_ensure_origin_fn() {
 	new_test_ext().execute_with(|| {
 		// Root and none should be invalid.
-		ensure_relayer::<Test>(RuntimeOriginFor::<Test>::root()).unwrap_err();
-		ensure_relayer::<Test>(RuntimeOriginFor::<Test>::none()).unwrap_err();
-		ensure_validator::<Test>(RuntimeOriginFor::<Test>::root()).unwrap_err();
-		ensure_validator::<Test>(RuntimeOriginFor::<Test>::none()).unwrap_err();
-		ensure_liquidity_provider::<Test>(RuntimeOriginFor::<Test>::root()).unwrap_err();
-		ensure_liquidity_provider::<Test>(RuntimeOriginFor::<Test>::none()).unwrap_err();
+		ensure_relayer::<Test>(OriginFor::<Test>::root()).unwrap_err();
+		ensure_relayer::<Test>(OriginFor::<Test>::none()).unwrap_err();
+		ensure_validator::<Test>(OriginFor::<Test>::root()).unwrap_err();
+		ensure_validator::<Test>(OriginFor::<Test>::none()).unwrap_err();
+		ensure_liquidity_provider::<Test>(OriginFor::<Test>::root()).unwrap_err();
+		ensure_liquidity_provider::<Test>(OriginFor::<Test>::none()).unwrap_err();
 
 		// Validation should fail for non-existent accounts.
-		ensure_relayer::<Test>(RuntimeOriginFor::<Test>::signed(ALICE)).unwrap_err();
-		ensure_relayer::<Test>(RuntimeOriginFor::<Test>::signed(BOB)).unwrap_err();
-		ensure_relayer::<Test>(RuntimeOriginFor::<Test>::signed(CHARLIE)).unwrap_err();
+		ensure_relayer::<Test>(OriginFor::<Test>::signed(ALICE)).unwrap_err();
+		ensure_relayer::<Test>(OriginFor::<Test>::signed(BOB)).unwrap_err();
+		ensure_relayer::<Test>(OriginFor::<Test>::signed(CHARLIE)).unwrap_err();
 
 		// Create the accounts.
 		<Provider<Test> as HandleLifetime<u64>>::created(&ALICE).unwrap();
@@ -109,9 +100,9 @@ fn test_ensure_origin_fn() {
 		<Provider<Test> as HandleLifetime<u64>>::created(&CHARLIE).unwrap();
 
 		// Validation should fail for uninitalised accounts.
-		ensure_relayer::<Test>(RuntimeOriginFor::<Test>::signed(ALICE)).unwrap_err();
-		ensure_relayer::<Test>(RuntimeOriginFor::<Test>::signed(BOB)).unwrap_err();
-		ensure_relayer::<Test>(RuntimeOriginFor::<Test>::signed(CHARLIE)).unwrap_err();
+		ensure_relayer::<Test>(OriginFor::<Test>::signed(ALICE)).unwrap_err();
+		ensure_relayer::<Test>(OriginFor::<Test>::signed(BOB)).unwrap_err();
+		ensure_relayer::<Test>(OriginFor::<Test>::signed(CHARLIE)).unwrap_err();
 
 		// Upgrade the accounts.
 		Pallet::<Test>::register_as_relayer(&ALICE).unwrap();
@@ -119,41 +110,39 @@ fn test_ensure_origin_fn() {
 		Pallet::<Test>::register_as_liquidity_provider(&CHARLIE).unwrap();
 
 		// Each account should validate as the correct account type and fail otherwise.
-		<Pallet<Test> as AccountRoleRegistry<Test>>::ensure_relayer(
-			RuntimeOriginFor::<Test>::signed(ALICE),
-		)
+		<Pallet<Test> as AccountRoleRegistry<Test>>::ensure_relayer(OriginFor::<Test>::signed(
+			ALICE,
+		))
 		.unwrap();
-		<Pallet<Test> as AccountRoleRegistry<Test>>::ensure_validator(
-			RuntimeOriginFor::<Test>::signed(ALICE),
+		<Pallet<Test> as AccountRoleRegistry<Test>>::ensure_validator(OriginFor::<Test>::signed(
+			ALICE,
+		))
+		.unwrap_err();
+		<Pallet<Test> as AccountRoleRegistry<Test>>::ensure_liquidity_provider(
+			OriginFor::<Test>::signed(ALICE),
 		)
 		.unwrap_err();
-		<Pallet<Test> as AccountRoleRegistry<Test>>::ensure_liquidity_provider(RuntimeOriginFor::<
-			Test,
-		>::signed(ALICE))
-		.unwrap_err();
-		<Pallet<Test> as AccountRoleRegistry<Test>>::ensure_relayer(
-			RuntimeOriginFor::<Test>::signed(BOB),
-		)
-		.unwrap_err();
-		<Pallet<Test> as AccountRoleRegistry<Test>>::ensure_validator(
-			RuntimeOriginFor::<Test>::signed(BOB),
-		)
+		<Pallet<Test> as AccountRoleRegistry<Test>>::ensure_relayer(OriginFor::<Test>::signed(BOB))
+			.unwrap_err();
+		<Pallet<Test> as AccountRoleRegistry<Test>>::ensure_validator(OriginFor::<Test>::signed(
+			BOB,
+		))
 		.unwrap();
-		<Pallet<Test> as AccountRoleRegistry<Test>>::ensure_liquidity_provider(RuntimeOriginFor::<
-			Test,
-		>::signed(BOB))
-		.unwrap_err();
-		<Pallet<Test> as AccountRoleRegistry<Test>>::ensure_relayer(
-			RuntimeOriginFor::<Test>::signed(CHARLIE),
+		<Pallet<Test> as AccountRoleRegistry<Test>>::ensure_liquidity_provider(
+			OriginFor::<Test>::signed(BOB),
 		)
 		.unwrap_err();
-		<Pallet<Test> as AccountRoleRegistry<Test>>::ensure_validator(
-			RuntimeOriginFor::<Test>::signed(CHARLIE),
-		)
+		<Pallet<Test> as AccountRoleRegistry<Test>>::ensure_relayer(OriginFor::<Test>::signed(
+			CHARLIE,
+		))
 		.unwrap_err();
-		<Pallet<Test> as AccountRoleRegistry<Test>>::ensure_liquidity_provider(RuntimeOriginFor::<
-			Test,
-		>::signed(CHARLIE))
+		<Pallet<Test> as AccountRoleRegistry<Test>>::ensure_validator(OriginFor::<Test>::signed(
+			CHARLIE,
+		))
+		.unwrap_err();
+		<Pallet<Test> as AccountRoleRegistry<Test>>::ensure_liquidity_provider(
+			OriginFor::<Test>::signed(CHARLIE),
+		)
 		.unwrap();
 	});
 }

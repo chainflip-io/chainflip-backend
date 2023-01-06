@@ -128,7 +128,7 @@ impl UnfilteredDispatchable for MockCallback<MockEthereum> {
 
 	fn dispatch_bypass_filter(
 		self,
-		origin: Self::Origin,
+		origin: Self::RuntimeOrigin,
 	) -> frame_support::dispatch::DispatchResultWithPostInfo {
 		EnsureThresholdSigned::<Test, Instance1>::ensure_origin(origin)?;
 		self.call();
@@ -169,7 +169,7 @@ pub type MockOffenceReporter =
 impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Offence = PalletOffence;
-	type RuntimeOrigin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type AccountRoleRegistry = ();
 	type ThresholdCallable = MockCallback<MockEthereum>;
 	type TargetChain = MockEthereum;

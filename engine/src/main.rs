@@ -25,7 +25,6 @@ use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use clap::Parser;
 use futures::FutureExt;
 use pallet_cf_validator::SemVer;
-use sp_core::U256;
 
 #[cfg(feature = "ibiza")]
 use chainflip_engine::dot::{rpc::DotRpcClient, DotBroadcaster};

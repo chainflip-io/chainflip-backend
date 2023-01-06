@@ -99,7 +99,7 @@ impl RuntimeUpgradeMock {
 	}
 }
 
-cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
+cf_traits::impl_mock_ensure_witnessed_for_origin!(RuntimeOrigin);
 
 impl Chainflip for Test {
 	type KeyId = Vec<u8>;

@@ -21,7 +21,7 @@
 //! Should only be used for benchmarking as it may break in other contexts.
 
 use crate::service::FullClient;
-use runtime::{AccountId, Balance, SystemCall};
+use runtime::SystemCall;
 use sc_cli::Result;
 use sc_client_api::BlockBackend;
 use sp_core::{Encode, Pair};

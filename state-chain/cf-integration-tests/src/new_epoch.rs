@@ -5,7 +5,7 @@ use crate::{genesis::GENESIS_BALANCE, network::Network};
 use cf_traits::EpochInfo;
 use frame_support::traits::Hooks;
 use pallet_cf_validator::RotationPhase;
-use state_chain_runtime::Validator;
+use state_chain_runtime::{Validator, Weight};
 
 #[test]
 fn auction_repeats_after_failure_because_of_liveness() {
@@ -255,14 +255,14 @@ fn new_epoch_will_purge_stale_witnesser_storage() {
 		current_authorities_after_some_epochs.sort();
 		assert_eq!(nodes, current_authorities_after_some_epochs);
 
-		let call = Box::new(state_chain_runtime::Call::System(frame_system::Call::remark {
+		let call = Box::new(state_chain_runtime::RuntimeCall::System(frame_system::Call::remark {
 			remark: vec![],
 		}));
 		let call_hash = pallet_cf_witnesser::CallHash(frame_support::Hashable::blake2_256(&*call));
 
 		for node in &nodes {
 			assert_ok!(Witnesser::witness_at_epoch(
-				Origin::signed(node.clone()),
+				RuntimeOrigin::signed(node.clone()),
 				call.clone(),
 				storage_epoch
 			));
@@ -298,13 +298,13 @@ fn new_epoch_will_purge_stale_witnesser_storage() {
 	let _res = ext.commit_all();
 
 	ext.execute_with(|| {
-		let call = Box::new(state_chain_runtime::Call::System(frame_system::Call::remark {
+		let call = Box::new(state_chain_runtime::RuntimeCall::System(frame_system::Call::remark {
 			remark: vec![],
 		}));
 		let call_hash = pallet_cf_witnesser::CallHash(frame_support::Hashable::blake2_256(&*call));
 
 		// Call on_idle to purge stale storage
-		Witnesser::on_idle(0, 1_000_000_000_000);
+		Witnesser::on_idle(0, Weight::from_ref_time(1_000_000_000_000));
 
 		// Test that the storage has been purged.
 		assert!(pallet_cf_witnesser::Votes::<Runtime>::get(storage_epoch, &call_hash).is_none());

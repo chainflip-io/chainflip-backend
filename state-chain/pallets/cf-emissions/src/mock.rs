@@ -104,7 +104,7 @@ impl UnfilteredDispatchable for MockCallback {
 
 	fn dispatch_bypass_filter(
 		self,
-		_origin: Self::Origin,
+		_origin: Self::RuntimeOrigin,
 	) -> frame_support::dispatch::DispatchResultWithPostInfo {
 		Ok(().into())
 	}
@@ -123,7 +123,7 @@ parameter_types! {
 }
 
 // Implement mock for RestrictionHandler
-impl_mock_waived_fees!(AccountId, Call);
+impl_mock_waived_fees!(AccountId, RuntimeCall);
 
 impl pallet_cf_flip::Config for Test {
 	type RuntimeEvent = RuntimeEvent;

@@ -7,7 +7,6 @@ use crate::{
 use frame_benchmarking_cli::{BenchmarkCmd, ExtrinsicFactory, SUBSTRATE_REFERENCE_HARDWARE};
 use sc_cli::{ChainSpec, RuntimeVersion, SubstrateCli};
 use sc_service::PartialComponents;
-use sp_keyring::Sr25519Keyring;
 use state_chain_runtime::Block;
 
 impl SubstrateCli for Cli {

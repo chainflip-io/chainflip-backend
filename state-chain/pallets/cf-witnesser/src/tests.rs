@@ -5,7 +5,7 @@ use crate::{
 };
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{mocks::epoch_info::MockEpochInfo, EpochInfo, EpochTransitionHandler};
-use frame_support::{assert_noop, assert_ok, traits::Hooks};
+use frame_support::{assert_noop, assert_ok, traits::Hooks, weights::Weight};
 
 #[test]
 fn call_on_threshold() {
@@ -237,7 +237,7 @@ fn can_purge_stale_storage() {
 		assert_eq!(EpochsToCull::<Test>::get(), vec![2, 3, 4]);
 
 		// Nothing to clean up in epoch 4
-		Witnesser::on_idle(1, BLOCK_WEIGHT);
+		Witnesser::on_idle(1, Weight::from_ref_time(BLOCK_WEIGHT));
 		assert_eq!(EpochsToCull::<Test>::get(), vec![2, 3]);
 		for e in [2u32, 9, 10, 11] {
 			assert_eq!(Votes::<Test>::get(e, &call1), Some(vec![0, 0, e as u8]));
@@ -248,7 +248,7 @@ fn can_purge_stale_storage() {
 			assert_eq!(CallHashExecuted::<Test>::get(e, &call2), Some(()));
 		}
 
-		Witnesser::on_idle(2, BLOCK_WEIGHT);
+		Witnesser::on_idle(2, Weight::from_ref_time(BLOCK_WEIGHT));
 
 		// Partially clean data from epoch 2
 		Witnesser::on_idle(3, delete_weight * 4);
@@ -274,7 +274,7 @@ fn can_purge_stale_storage() {
 		))));
 
 		// Clean the remaining storage
-		Witnesser::on_idle(4, BLOCK_WEIGHT);
+		Witnesser::on_idle(4, Weight::from_ref_time(BLOCK_WEIGHT));
 
 		// Epoch 2's stale data should be fully cleaned.
 		assert_eq!(CallHashExecuted::<Test>::get(2u32, call1), None);
@@ -295,8 +295,8 @@ fn can_purge_stale_storage() {
 		Witnesser::on_expired_epoch(9);
 		Witnesser::on_expired_epoch(10);
 		assert_eq!(EpochsToCull::<Test>::get(), vec![9, 10]);
-		Witnesser::on_idle(4, BLOCK_WEIGHT);
-		Witnesser::on_idle(5, BLOCK_WEIGHT);
+		Witnesser::on_idle(4, Weight::from_ref_time(BLOCK_WEIGHT));
+		Witnesser::on_idle(5, Weight::from_ref_time(BLOCK_WEIGHT));
 		assert!(EpochsToCull::<Test>::get().is_empty());
 
 		for e in [9u32, 10] {

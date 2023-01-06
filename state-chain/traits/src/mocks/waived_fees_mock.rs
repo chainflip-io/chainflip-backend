@@ -5,8 +5,8 @@ macro_rules! impl_mock_waived_fees {
 
 		impl WaivedFees for WaivedFeesMock {
 			type AccountId = $account_id;
-			type Call = $call;
-			fn should_waive_fees(call: &Self::Call, caller: &Self::AccountId) -> bool {
+			type RuntimeCall = $call;
+			fn should_waive_fees(call: &Self::RuntimeCall, caller: &Self::AccountId) -> bool {
 				false
 			}
 		}

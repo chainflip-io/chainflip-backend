@@ -45,7 +45,7 @@ fn staked_amount_is_added_and_subtracted() {
 
 		// Dispatch a signed extrinsic to stake some FLIP.
 		assert_ok!(Staking::staked(
-			RuntimeOrigin::root()(),
+			RuntimeOrigin::root(),
 			ALICE,
 			STAKE_A1,
 			ETH_ZERO_ADDRESS,
@@ -56,19 +56,13 @@ fn staked_amount_is_added_and_subtracted() {
 
 		// Add some more
 		assert_ok!(Staking::staked(
-			RuntimeOrigin::root()(),
+			RuntimeOrigin::root(),
 			ALICE,
 			STAKE_A2,
 			ETH_ZERO_ADDRESS,
 			TX_HASH,
 		));
-		assert_ok!(Staking::staked(
-			RuntimeOrigin::root()(),
-			BOB,
-			STAKE_B,
-			ETH_ZERO_ADDRESS,
-			TX_HASH
-		));
+		assert_ok!(Staking::staked(RuntimeOrigin::root(), BOB, STAKE_B, ETH_ZERO_ADDRESS, TX_HASH));
 
 		// Both accounts should now be created.
 		assert!(frame_system::Pallet::<Test>::account_exists(&ALICE));
@@ -134,13 +128,7 @@ fn claiming_unclaimable_is_err() {
 		assert_eq!(Flip::total_balance_of(&ALICE), 0u128);
 
 		// Stake some FLIP.
-		assert_ok!(Staking::staked(
-			RuntimeOrigin::root()(),
-			ALICE,
-			STAKE,
-			ETH_ZERO_ADDRESS,
-			TX_HASH
-		));
+		assert_ok!(Staking::staked(RuntimeOrigin::root(), ALICE, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
 
 		// Try to, and fail, claim an amount that would leave the balance below the minimum stake
 		let excessive_claim = STAKE - MIN_STAKE + 1;
@@ -178,7 +166,7 @@ fn cannot_double_claim() {
 
 		// Stake some FLIP.
 		assert_ok!(Staking::staked(
-			RuntimeOrigin::root()(),
+			RuntimeOrigin::root(),
 			ALICE,
 			stake_a1 + stake_a2,
 			ETH_ZERO_ADDRESS,
@@ -199,7 +187,7 @@ fn cannot_double_claim() {
 			ALICE,
 			"Alice's claim should have an expiry set"
 		);
-		assert_ok!(Staking::claimed(RuntimeOrigin::root()(), ALICE, stake_a1, TX_HASH));
+		assert_ok!(Staking::claimed(RuntimeOrigin::root(), ALICE, stake_a1, TX_HASH));
 		assert_eq!(
 			ClaimExpiries::<Test>::get().len(),
 			0,
@@ -215,7 +203,7 @@ fn cannot_double_claim() {
 			ALICE,
 			"Alice's claim should have an expiry set"
 		);
-		assert_ok!(Staking::claimed(RuntimeOrigin::root()(), ALICE, stake_a2, TX_HASH));
+		assert_ok!(Staking::claimed(RuntimeOrigin::root(), ALICE, stake_a2, TX_HASH));
 		assert_eq!(
 			ClaimExpiries::<Test>::get().len(),
 			0,
@@ -237,13 +225,7 @@ fn staked_and_claimed_events_must_match() {
 		assert!(!frame_system::Pallet::<Test>::account_exists(&ALICE));
 
 		// Stake some FLIP.
-		assert_ok!(Staking::staked(
-			RuntimeOrigin::root()(),
-			ALICE,
-			STAKE,
-			ETH_ZERO_ADDRESS,
-			TX_HASH
-		));
+		assert_ok!(Staking::staked(RuntimeOrigin::root(), ALICE, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
 
 		// The act of staking creates the account.
 		assert!(frame_system::Pallet::<Test>::account_exists(&ALICE));
@@ -253,24 +235,24 @@ fn staked_and_claimed_events_must_match() {
 
 		// Invalid Claimed Event from Ethereum: wrong account.
 		assert_noop!(
-			Staking::claimed(RuntimeOrigin::root()(), BOB, STAKE, TX_HASH),
+			Staking::claimed(RuntimeOrigin::root(), BOB, STAKE, TX_HASH),
 			<Error<Test>>::NoPendingClaim
 		);
 
 		// Invalid Claimed Event from Ethereum: wrong amount.
 		assert_noop!(
-			Staking::claimed(RuntimeOrigin::root()(), ALICE, STAKE - 1, TX_HASH),
+			Staking::claimed(RuntimeOrigin::root(), ALICE, STAKE - 1, TX_HASH),
 			<Error<Test>>::InvalidClaimDetails
 		);
 
 		// Invalid Claimed Event from Ethereum: wrong nonce.
 		assert_noop!(
-			Staking::claimed(RuntimeOrigin::root()(), ALICE, STAKE - 1, TX_HASH),
+			Staking::claimed(RuntimeOrigin::root(), ALICE, STAKE - 1, TX_HASH),
 			<Error<Test>>::InvalidClaimDetails
 		);
 
 		// Valid Claimed Event from Ethereum.
-		assert_ok!(Staking::claimed(RuntimeOrigin::root()(), ALICE, STAKE, TX_HASH));
+		assert_ok!(Staking::claimed(RuntimeOrigin::root(), ALICE, STAKE, TX_HASH));
 
 		// The account balance is now zero, it should have been reaped.
 		assert!(!frame_system::Pallet::<Test>::account_exists(&ALICE));
@@ -299,7 +281,7 @@ fn multisig_endpoints_cant_be_called_from_invalid_origins() {
 		const STAKE: u128 = 45;
 
 		assert_noop!(
-			Staking::staked(Origin::none(), ALICE, STAKE, ETH_ZERO_ADDRESS, TX_HASH),
+			Staking::staked(RuntimeOrigin::none(), ALICE, STAKE, ETH_ZERO_ADDRESS, TX_HASH),
 			BadOrigin
 		);
 		assert_noop!(
@@ -307,7 +289,7 @@ fn multisig_endpoints_cant_be_called_from_invalid_origins() {
 			BadOrigin
 		);
 
-		assert_noop!(Staking::claimed(Origin::none(), ALICE, STAKE, TX_HASH), BadOrigin);
+		assert_noop!(Staking::claimed(RuntimeOrigin::none(), ALICE, STAKE, TX_HASH), BadOrigin);
 		assert_noop!(
 			Staking::claimed(RuntimeOrigin::signed(ALICE), ALICE, STAKE, TX_HASH),
 			BadOrigin
@@ -325,13 +307,7 @@ fn signature_is_inserted() {
 		time_source::Mock::reset_to(START_TIME);
 
 		// Stake some FLIP.
-		assert_ok!(Staking::staked(
-			RuntimeOrigin::root()(),
-			ALICE,
-			STAKE,
-			ETH_ZERO_ADDRESS,
-			TX_HASH
-		));
+		assert_ok!(Staking::staked(RuntimeOrigin::root(), ALICE, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
 
 		// Claim it.
 		assert_ok!(Staking::claim(RuntimeOrigin::signed(ALICE), STAKE.into(), ETH_DUMMY_ADDR));
@@ -401,14 +377,8 @@ fn cannot_claim_bond() {
 		MockEpochInfo::add_authorities(ALICE);
 
 		// Alice and Bob stake the same amount.
-		assert_ok!(Staking::staked(
-			RuntimeOrigin::root()(),
-			ALICE,
-			STAKE,
-			ETH_ZERO_ADDRESS,
-			TX_HASH
-		));
-		assert_ok!(Staking::staked(RuntimeOrigin::root()(), BOB, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
+		assert_ok!(Staking::staked(RuntimeOrigin::root(), ALICE, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
+		assert_ok!(Staking::staked(RuntimeOrigin::root(), BOB, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
 
 		// Alice becomes an authority
 		Bonder::<Test>::update_bond(&ALICE, BOND);
@@ -428,7 +398,7 @@ fn cannot_claim_bond() {
 		));
 
 		// Even if she claims, the remaining 100 are blocked
-		assert_ok!(Staking::claimed(RuntimeOrigin::root()(), ALICE, STAKE - BOND, TX_HASH));
+		assert_ok!(Staking::claimed(RuntimeOrigin::root(), ALICE, STAKE - BOND, TX_HASH));
 		assert_noop!(
 			Staking::claim(RuntimeOrigin::signed(ALICE), 1.into(), ETH_DUMMY_ADDR),
 			FlipError::InsufficientLiquidity
@@ -457,13 +427,7 @@ fn test_retirement() {
 		);
 
 		// Try again with some stake, should succeed this time.
-		assert_ok!(Staking::staked(
-			RuntimeOrigin::root()(),
-			ALICE,
-			STAKE,
-			ETH_ZERO_ADDRESS,
-			TX_HASH
-		));
+		assert_ok!(Staking::staked(RuntimeOrigin::root(), ALICE, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
 
 		// Expect the account to be retired by default
 		assert!(!ActiveBidder::<Test>::try_get(ALICE).expect("staking adds bidder status"));
@@ -522,14 +486,8 @@ fn claim_expiry() {
 		time_source::Mock::reset_to(START_TIME);
 
 		// Stake some FLIP.
-		assert_ok!(Staking::staked(
-			RuntimeOrigin::root()(),
-			ALICE,
-			STAKE,
-			ETH_ZERO_ADDRESS,
-			TX_HASH
-		));
-		assert_ok!(Staking::staked(RuntimeOrigin::root()(), BOB, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
+		assert_ok!(Staking::staked(RuntimeOrigin::root(), ALICE, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
+		assert_ok!(Staking::staked(RuntimeOrigin::root(), BOB, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
 
 		// Alice claims immediately.
 		assert_ok!(Staking::claim(RuntimeOrigin::signed(ALICE), STAKE.into(), ETH_DUMMY_ADDR));
@@ -542,7 +500,7 @@ fn claim_expiry() {
 		time_source::Mock::reset_to(START_TIME);
 		const INIT_TICK: u64 = 4;
 		time_source::Mock::tick(Duration::from_secs(INIT_TICK));
-		assert_ok!(Staking::post_claim_signature(RuntimeOrigin::root()(), ALICE, 0));
+		assert_ok!(Staking::post_claim_signature(RuntimeOrigin::root(), ALICE, 0));
 
 		// Trigger expiry.
 		Pallet::<Test>::on_initialize(0);
@@ -632,13 +590,7 @@ fn can_only_claim_during_auction_if_retired() {
 		MockEpochInfo::set_is_auction_phase(true);
 
 		// Stake and activate Alice
-		assert_ok!(Staking::staked(
-			RuntimeOrigin::root()(),
-			ALICE,
-			STAKE,
-			ETH_ZERO_ADDRESS,
-			TX_HASH
-		));
+		assert_ok!(Staking::staked(RuntimeOrigin::root(), ALICE, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
 		assert_ok!(Staking::activate_account(RuntimeOrigin::signed(ALICE)));
 		assert!(ActiveBidder::<Test>::get(ALICE));
 
@@ -666,13 +618,7 @@ fn test_claim_all() {
 		const BOND: u128 = 55;
 
 		// Stake some FLIP.
-		assert_ok!(Staking::staked(
-			RuntimeOrigin::root()(),
-			ALICE,
-			STAKE,
-			ETH_ZERO_ADDRESS,
-			TX_HASH
-		));
+		assert_ok!(Staking::staked(RuntimeOrigin::root(), ALICE, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
 
 		// Alice becomes an authority.
 		Bonder::<Test>::update_bond(&ALICE, BOND);
@@ -742,7 +688,7 @@ fn claim_with_withdrawal_address() {
 		const STAKE: u128 = 45;
 		const WRONG_ETH_ADDR: EthereumAddress = [45u8; 20];
 		// Stake some FLIP.
-		assert_ok!(Staking::staked(RuntimeOrigin::root()(), ALICE, STAKE, ETH_DUMMY_ADDR, TX_HASH));
+		assert_ok!(Staking::staked(RuntimeOrigin::root(), ALICE, STAKE, ETH_DUMMY_ADDR, TX_HASH));
 		// Claim it - expect to fail because the address is different
 		assert_noop!(
 			Staking::claim(RuntimeOrigin::signed(ALICE), STAKE.into(), WRONG_ETH_ADDR),
@@ -760,13 +706,7 @@ fn cannot_claim_to_zero_address() {
 		const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
 		// Stake some FLIP, we use the zero address here to denote that we should be
 		// able to claim to any address in future
-		assert_ok!(Staking::staked(
-			RuntimeOrigin::root()(),
-			ALICE,
-			STAKE,
-			ETH_ZERO_ADDRESS,
-			TX_HASH
-		));
+		assert_ok!(Staking::staked(RuntimeOrigin::root(), ALICE, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
 		// Claim it - expect to fail because the address is the zero address
 		assert_noop!(
 			Staking::claim(RuntimeOrigin::signed(ALICE), STAKE.into(), ETH_ZERO_ADDRESS),
@@ -783,15 +723,9 @@ fn stake_with_provided_withdrawal_only_on_first_attempt() {
 	new_test_ext().execute_with(|| {
 		const STAKE: u128 = 45;
 		// Stake some FLIP with no withdrawal address
-		assert_ok!(Staking::staked(
-			RuntimeOrigin::root()(),
-			ALICE,
-			STAKE,
-			ETH_ZERO_ADDRESS,
-			TX_HASH
-		));
+		assert_ok!(Staking::staked(RuntimeOrigin::root(), ALICE, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
 		// Stake some FLIP again with an provided withdrawal address
-		assert_ok!(Staking::staked(RuntimeOrigin::root()(), ALICE, STAKE, ETH_DUMMY_ADDR, TX_HASH));
+		assert_ok!(Staking::staked(RuntimeOrigin::root(), ALICE, STAKE, ETH_DUMMY_ADDR, TX_HASH));
 		// Expect an failed stake event to be fired but no stake event
 		assert_event_sequence!(
 			Test,

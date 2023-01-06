@@ -32,7 +32,7 @@ thread_local! {
 }
 
 // When calling on_idle, we should broadcast everything with this excess weight.
-const LARGE_EXCESS_WEIGHT: Weight = 20_000_000_000;
+const LARGE_EXCESS_WEIGHT: Weight = Weight::from_ref_time(20_000_000_000);
 
 struct MockCfe;
 

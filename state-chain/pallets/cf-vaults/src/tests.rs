@@ -12,7 +12,7 @@ use cf_traits::{
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
 use sp_std::collections::btree_set::BTreeSet;
 
-pub type EthMockThresholdSigner = MockThresholdSigner<Ethereum, crate::mock::Call>;
+pub type EthMockThresholdSigner = MockThresholdSigner<Ethereum, crate::mock::RuntimeCall>;
 
 macro_rules! assert_last_event {
 	($pat:pat) => {
@@ -497,7 +497,7 @@ fn vault_key_rotated() {
 
 		assert_noop!(
 			VaultsPallet::vault_key_rotated(
-				RuntimeOrigin::root()(),
+				RuntimeOrigin::root(),
 				NEW_AGG_PUB_KEY,
 				ROTATION_BLOCK_NUMBER,
 				TX_HASH,
@@ -515,7 +515,7 @@ fn vault_key_rotated() {
 		VaultsPallet::activate();
 
 		assert_ok!(VaultsPallet::vault_key_rotated(
-			RuntimeOrigin::root()(),
+			RuntimeOrigin::root(),
 			NEW_AGG_PUB_KEY,
 			ROTATION_BLOCK_NUMBER,
 			TX_HASH,
@@ -524,7 +524,7 @@ fn vault_key_rotated() {
 		// Can't repeat.
 		assert_noop!(
 			VaultsPallet::vault_key_rotated(
-				RuntimeOrigin::root()(),
+				RuntimeOrigin::root(),
 				NEW_AGG_PUB_KEY,
 				ROTATION_BLOCK_NUMBER,
 				TX_HASH,
@@ -576,7 +576,7 @@ fn test_vault_key_rotated_externally() {
 		const TX_HASH: [u8; 4] = [0xab; 4];
 		assert_eq!(MockSystemStateManager::get_current_system_state(), SystemState::Normal);
 		assert_ok!(VaultsPallet::vault_key_rotated_externally(
-			RuntimeOrigin::root()(),
+			RuntimeOrigin::root(),
 			NEW_AGG_PUB_KEY,
 			1,
 			TX_HASH,

@@ -59,7 +59,7 @@ fn current_ceremony_id() -> CeremonyId {
 }
 
 impl MockCfe {
-	fn process_event(&self, event: Event) {
+	fn process_event(&self, event: RuntimeEvent) {
 		match event {
 			RuntimeEvent::EthereumThresholdSigner(
 				pallet_cf_threshold_signature::Event::ThresholdSignatureRequest {
@@ -78,7 +78,7 @@ impl MockCfe {
 						// Wrong request id is a no-op
 						assert_noop!(
 							EthereumThresholdSigner::signature_success(
-								Origin::none(),
+								RuntimeOrigin::none(),
 								ceremony_id + 1,
 								sign(payload)
 							),
@@ -86,7 +86,7 @@ impl MockCfe {
 						);
 
 						assert_ok!(EthereumThresholdSigner::signature_success(
-							Origin::none(),
+							RuntimeOrigin::none(),
 							ceremony_id,
 							sign(payload),
 						));
@@ -228,7 +228,7 @@ fn signature_success_can_only_succeed_once_per_request() {
 			// Submit the same success again
 			assert_err!(
 				EthereumThresholdSigner::signature_success(
-					Origin::none(),
+					RuntimeOrigin::none(),
 					ceremony_id,
 					sign(*PAYLOAD)
 				),
