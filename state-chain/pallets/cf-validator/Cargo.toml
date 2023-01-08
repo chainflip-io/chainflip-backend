@@ -100,6 +100,7 @@ std = [
   'cf-primitives/std',
   'cf-runtime-upgrade-utilities/std',
   'cf-utilities/std',
+  'sp-application-crypto/std',
   'codec/std',
   'scale-info/std',
   'frame-benchmarking/std',
