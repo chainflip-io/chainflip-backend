@@ -240,6 +240,7 @@ std = [
   'frame-system-rpc-runtime-api/std',
   'frame-system/std',
   'frame-try-runtime/std',
+  'frame-benchmarking/std',
   'nanorand/std',
   'pallet-aura/std',
   'pallet-cf-account-roles/std',
