@@ -69,6 +69,7 @@ use sp_version::RuntimeVersion;
 
 pub use cf_primitives::{
 	Asset, AssetAmount, BlockNumber, ExchangeRate, FlipBalance, ForeignChainAddress,
+	SqrtPriceQ64F96, Tick,
 };
 pub use cf_traits::{EpochInfo, EthEnvironmentProvider, QualifyNode, SessionKeysRegistered};
 
@@ -304,8 +305,8 @@ impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
 }
 #[cfg(feature = "ibiza")]
 impl pallet_cf_pools::Config for Runtime {
-	// fee = 0,1%
-	type NetworkFee = ConstU16<10>;
+	type Event = Event;
+	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 }
 
 #[cfg(feature = "ibiza")]
@@ -1002,14 +1003,14 @@ impl_runtime_apis! {
 			asset: Asset,
 		) -> Option<SqrtPriceQ64F96> {
 			use cf_traits::LiquidityPoolApi;
-			LiquidityPools::current_sqrt_price(asset)
+			LiquidityPools::current_sqrt_price(&asset)
 		}
 
 		fn cf_pool_tick_price(
 			asset: Asset,
 		) -> Option<Tick> {
 			use cf_traits::LiquidityPoolApi;
-			LiquidityPools::current_tick(asset)
+			LiquidityPools::current_tick(&asset)
 		}
 	}
 

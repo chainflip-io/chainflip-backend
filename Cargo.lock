@@ -1674,6 +1674,7 @@ name = "custom-rpc"
 version = "0.1.0"
 dependencies = [
  "cf-chains",
+ "cf-primitives",
  "hex",
  "jsonrpsee 0.13.1",
  "pallet-cf-governance",

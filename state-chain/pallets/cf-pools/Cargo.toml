@@ -14,9 +14,9 @@ targets = ['x86_64-unknown-linux-gnu']
 
 [dependencies]
 # Internal dependencies
-cf-traits = {path = '../../traits', default-features = false}
-cf-primitives = {path = '../../primitives', default-features = false}
-cf-amm = {path = '../../amm', default-features = false}
+cf-traits = { path = '../../traits', default-features = false }
+cf-primitives = { path = '../../primitives', default-features = false }
+cf-amm = { path = '../../amm', default-features = false }
 
 log = { version = '0.4.16', default-features = false }
 
@@ -54,6 +54,7 @@ optional = true
 tag = 'chainflip-monthly-2022-06+01'
 
 [dependencies.sp-core]
+default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'chainflip-monthly-2022-06+01'
 

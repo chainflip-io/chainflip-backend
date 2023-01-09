@@ -1,6 +1,6 @@
 use crate::{self as pallet_cf_swapping, WeightInfo};
 use cf_chains::AnyChain;
-use cf_primitives::{Asset, AssetAmount};
+use cf_primitives::Asset;
 use cf_traits::{
 	mocks::{
 		egress_handler::MockEgressHandler, ensure_origin_mock::NeverFailingOriginCheck,
@@ -8,16 +8,14 @@ use cf_traits::{
 	},
 	Chainflip, SwappingApi,
 };
-use frame_support::parameter_types;
+use frame_support::{dispatch::DispatchError, parameter_types};
 use frame_system as system;
-use sp_core::H256;
+use sp_core::{H256, U256};
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage,
 };
-
-pub const RELAYER_FEE: u128 = 5;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -69,14 +67,13 @@ impl system::Config for Test {
 
 pub struct MockSwappingApi;
 
-impl SwappingApi<AssetAmount> for MockSwappingApi {
+impl SwappingApi<U256> for MockSwappingApi {
 	fn swap(
 		_from: Asset,
 		_to: Asset,
-		swap_input: AssetAmount,
-		_fee: u16,
-	) -> Result<(AssetAmount, AssetAmount, AssetAmount), DispatchError> {
-		Ok((swap_input, RELAYER_FEE, Default::default()))
+		swap_input: U256,
+	) -> Result<(U256, U256, U256), DispatchError> {
+		Ok((swap_input, Default::default(), Default::default()))
 	}
 }
 

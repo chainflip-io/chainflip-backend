@@ -14,13 +14,15 @@
 //!
 //! Note: There are a few yet to be proved safe maths operations, there are marked below with `TODO:
 //! Prove`. We should resolve these issues before using this code in release.
-
+#![cfg_attr(not(feature = "std"), no_std)]
 #![feature(mixed_integer_ops)] // This has been stablized in a future version of rust
 
-use sp_std::collections::btree_map::BTreeMap;
+use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
+
+#[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 
 use cf_primitives::{
@@ -558,7 +560,9 @@ impl PoolState {
 
 			position.update_fees_owed(self, lower_tick, lower_info, upper_tick, upper_info);
 
-			let fees_owed = std::mem::take(&mut position.fees_owed);
+			// Take the fee and reset the current record
+			let fees_owed = position.fees_owed;
+			position.fees_owed = Default::default();
 
 			self.positions.insert((lp, lower_tick, upper_tick), position);
 

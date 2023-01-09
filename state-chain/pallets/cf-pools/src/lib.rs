@@ -8,6 +8,7 @@ use cf_traits::{Chainflip, LiquidityPoolApi};
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::OriginFor;
 use sp_core::U256;
+use sp_std::{vec, vec::Vec};
 
 pub use pallet::*;
 

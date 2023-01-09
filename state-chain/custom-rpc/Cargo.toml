@@ -12,6 +12,7 @@ path = '../runtime'
 jsonrpsee = { version = "0.13.0", features = ["full"] }
 serde = { version = '1.0', features = ['derive'] }
 cf-chains = { path = '../chains' }
+cf-primitives = { path = '../primitives' }
 cf-utilities = { package = 'utilities', path = '../../utilities' }
 pallet-cf-governance = {path = "../pallets/cf-governance"}
 pallet-cf-pools-runtime-api = {path = "../pallets/cf-pools/runtime-api", optional = true}

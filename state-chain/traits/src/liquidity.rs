@@ -5,6 +5,7 @@ use cf_primitives::{
 use frame_support::dispatch::DispatchError;
 use sp_core::U256;
 use sp_runtime::DispatchResult;
+use sp_std::vec::Vec;
 
 pub trait SwapIntentHandler {
 	type AccountId;

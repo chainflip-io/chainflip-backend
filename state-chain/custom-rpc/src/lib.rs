@@ -17,7 +17,7 @@ use std::{marker::PhantomData, sync::Arc};
 use state_chain_runtime::{Asset, AssetAmount, ExchangeRate};
 
 #[cfg(feature = "ibiza")]
-use jsonrpsee::types::error::ErrorCode;
+use cf_primitives::{SqrtPriceQ64F96, Tick};
 
 #[derive(Serialize, Deserialize)]
 pub struct RpcAccountInfo {
@@ -454,10 +454,18 @@ where
 #[rpc(server, client, namespace = "cf")]
 pub trait PoolsApi {
 	#[method(name = "pool_sqrt_price")]
-	fn cf_pool_sqrt_price(asset: Asset) -> Option<SqrtPriceQ64F96>;
+	fn cf_pool_sqrt_price(
+		&self,
+		asset: Asset,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Option<SqrtPriceQ64F96>>;
 
 	#[method(name = "pool_tick_price")]
-	fn cf_pool_tick_price(asset: Asset) -> Option<Tick>;
+	fn cf_pool_tick_price(
+		&self,
+		asset: Asset,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Option<Tick>>;
 }
 
 #[cfg(feature = "ibiza")]
@@ -471,7 +479,7 @@ where
 		&self,
 		asset: Asset,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<SqrtPriceQ64F96> {
+	) -> RpcResult<Option<SqrtPriceQ64F96>> {
 		self.client
 			.runtime_api()
 			.cf_pool_sqrt_price(&self.query_block_id(at), asset)
@@ -482,7 +490,7 @@ where
 		&self,
 		asset: Asset,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Tick> {
+	) -> RpcResult<Option<Tick>> {
 		self.client
 			.runtime_api()
 			.cf_pool_tick_price(&self.query_block_id(at), asset)
