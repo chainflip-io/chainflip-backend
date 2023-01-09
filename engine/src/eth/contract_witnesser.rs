@@ -63,15 +63,15 @@ where
 					.await?;
 
 					while let Some(block) = block_stream.next().await {
+						let block_number = block.block_number;
+
 						if should_end_witnessing::<Ethereum>(
 							end_witnessing_signal.clone(),
-							block.block_number,
+							block_number,
 							&logger,
 						) {
 							break
 						}
-
-						let block_number = block.block_number;
 
 						contract_witnesser
 							.handle_block_events(
