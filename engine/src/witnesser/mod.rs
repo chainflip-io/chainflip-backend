@@ -3,6 +3,7 @@
 use cf_primitives::EpochIndex;
 
 pub mod block_head_stream_from;
+pub mod checkpointing;
 pub mod epoch_witnesser;
 
 pub type ChainBlockNumber<Chain> = <Chain as cf_chains::Chain>::ChainBlockNumber;
