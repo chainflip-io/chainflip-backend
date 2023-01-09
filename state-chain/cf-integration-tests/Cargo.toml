@@ -34,6 +34,7 @@ pallet-cf-environment = { path = '../pallets/cf-environment'}
 pallet-cf-account-roles = { path = '../pallets/cf-account-roles'}
 pallet-cf-ingress-egress = { path = '../pallets/cf-ingress-egress' }
 pallet-cf-swapping ={ path = '../pallets/cf-swapping' }
+pallet-cf-pools ={ path = '../pallets/cf-pools' }
 # Additional FRAME pallets
 [dev-dependencies.pallet-authorship]
 git = 'https://github.com/chainflip-io/substrate.git'

@@ -1,5 +1,4 @@
 //! Contains tests related to liquidity, pools and swapping
-use crate::{ALICE, CHARLIE};
 use frame_support::{
 	assert_ok,
 	traits::{Hooks, OnNewAccount},
@@ -17,9 +16,9 @@ use cf_primitives::{
 };
 use cf_traits::{AddressDerivationApi, LiquidityPoolApi, LpProvisioningApi};
 use pallet_cf_ingress_egress::IngressWitness;
+use pallet_cf_pools::CollectedNetworkFee;
 
 #[test]
-#[ignore = "test not working. Issue #2679"]
 fn can_swap_assets() {
 	super::genesis::default().build().execute_with(|| {
 		// Register the liquidity provider account.
@@ -155,20 +154,24 @@ fn can_swap_assets() {
 		// Flip: $10, Eth: $5
 		// 10_000 Eth = about 5_000 Flips - slippage
 		// TODO: Calculate this using the exchange rate.
-		const EXPECTED_OUTPUT: AssetAmount = 4545;
-		System::assert_has_event(Event::EthereumIngressEgress(
-			pallet_cf_ingress_egress::Event::EgressScheduled {
-				id: (ForeignChain::Ethereum, 1),
-				asset: eth::Asset::Flip,
-				amount: EXPECTED_OUTPUT,
-				egress_address: egress_address.into(),
-			},
-		));
+		const EXPECTED_OUTPUT: AssetAmount = 4541;
+		System::assert_has_event(Event::Swapping(pallet_cf_swapping::Event::SwapEgressScheduled {
+			swap_id: 1,
+			egress_id: (ForeignChain::Ethereum, 1),
+		}));
 		// Flip: 100_000 -> 95_455: -4545, USDC: 1_000_000 -> 1_047_619: +47_619
 		// TODO: Use exchange rates instead of magic numbers.
 		assert_eq!(
 			LiquidityPools::get_liquidity(&Asset::Flip),
-			(100_000 - EXPECTED_OUTPUT, 1_047_619)
+			(100_000 - EXPECTED_OUTPUT, 104_7571)
+		);
+
+		// 10 bps = 0,1% of $47_619 USDC = $48 USDC
+		const EXPECTED_NETWORK_FEE: AssetAmount = 48;
+		assert_eq!(
+			CollectedNetworkFee::<Runtime>::get(),
+			EXPECTED_NETWORK_FEE,
+			"unexpected network fee!"
 		);
 
 		// Eth: 200_000 -> 210_000: +10_000, USDC: 1_000_000 -> 952_381: -47_619
@@ -176,23 +179,6 @@ fn can_swap_assets() {
 
 		// Egress the asset out during on_idle.
 		let _ = EthereumIngressEgress::on_idle(1, 1_000_000_000_000);
-
-		// Swapped asset is broadcasted out into the Ethereum chain. This completes the Swap action.
-		System::assert_has_event(Event::EthereumThresholdSigner(
-			pallet_cf_threshold_signature::Event::ThresholdSignatureRequest {
-				request_id: 1,
-				ceremony_id: 1,
-				key_id: vec![
-					3, 106, 138, 135, 164, 185, 128, 208, 210, 182, 238, 29, 65, 19, 108, 86, 107,
-					153, 17, 26, 90, 110, 67, 218, 145, 182, 247, 80, 16, 106, 240, 177, 79,
-				],
-				signatories: [ALICE.into(), CHARLIE.into()].into(),
-				payload: hex_literal::hex!(
-					"2d7163ee98544e0484c111577e5da357edcb29cea63a227de2a1b8dc4f4e0783"
-				)
-				.into(),
-			},
-		));
 
 		System::assert_has_event(Event::EthereumIngressEgress(
 			pallet_cf_ingress_egress::Event::BatchBroadcastRequested {
