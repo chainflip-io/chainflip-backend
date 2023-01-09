@@ -203,7 +203,9 @@ pub trait SetAggKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
 }
 
 pub trait SetGovKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
-	fn new_unsigned(new_gov_key: <Abi as ChainCrypto>::GovKey) -> Self;
+	type AddressType;
+	fn new_unsigned(new_gov_key: Vec<u8>) -> Self;
+	fn from_u8(key: Vec<u8>) -> Self::AddressType;
 }
 
 pub trait SetCommKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {

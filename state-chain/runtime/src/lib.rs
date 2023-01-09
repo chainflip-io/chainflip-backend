@@ -525,8 +525,8 @@ impl pallet_cf_tokenholder_governance::Config for Runtime {
 	type FeePayment = Flip;
 	type Chain = Ethereum;
 	type StakingInfo = Flip;
-	type ApiCalls = eth::api::EthereumApi<EthEnvironment>;
-	type Broadcaster = EthereumBroadcaster;
+	type EthApiCalls = eth::api::EthereumApi<EthEnvironment>;
+	type EthBroadcaster = EthereumBroadcaster;
 	type WeightInfo = pallet_cf_tokenholder_governance::weights::PalletWeight<Runtime>;
 	type VotingPeriod = ConstU32<{ 14 * DAYS }>;
 	/// 1000 FLIP in FLIPPERINOS

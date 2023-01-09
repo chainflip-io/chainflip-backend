@@ -2,7 +2,7 @@
 use cf_chains::{ChainCrypto, ForeignChain};
 use codec::{Decode, Encode, EncodeLike};
 use frame_support::{dispatch::Weight, pallet_prelude::*, RuntimeDebugNoBound};
-use sp_std::{cmp::PartialEq, vec};
+use sp_std::{cmp::PartialEq, vec, vec::Vec};
 
 pub use pallet::*;
 #[cfg(feature = "runtime-benchmarks")]
@@ -42,7 +42,7 @@ pub mod pallet {
 	use sp_std::vec::Vec;
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
-	pub trait Config: Chainflip + EncodeLike<u8> {
+	pub trait Config: Chainflip {
 		/// The event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 		/// Burns the proposal fee from the accounts.
@@ -137,7 +137,7 @@ pub mod pallet {
 						cf_chains::ForeignChain::Ethereum => {
 							T::EthBroadcaster::threshold_sign_and_broadcast(
 								<T::EthApiCalls as SetGovKeyApiCall<T::Chain>>::new_unsigned(
-									Self::to_gov_key(key.clone()),
+									key.clone(),
 								),
 							);
 						},
@@ -226,8 +226,9 @@ pub mod pallet {
 		}
 	}
 
-	impl<T: Config + EncodeLike<u8>> Pallet<T> {
+	impl<T: Config> Pallet<T> {
 		fn to_gov_key(any_key: Vec<u8>) -> <<T as Config>::Chain as ChainCrypto>::GovKey {
+			// TODO: Transform vector u8 to eth address.
 			todo!()
 		}
 		pub fn resolve_vote(proposal: Proposal<T>) -> usize {
