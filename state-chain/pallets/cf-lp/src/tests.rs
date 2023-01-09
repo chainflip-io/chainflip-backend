@@ -2,8 +2,11 @@ use crate::{mock::*, FreeBalances};
 
 use cf_amm::PoolState;
 use cf_primitives::{liquidity::AmmRange, AccountId, Asset, ForeignChainAddress, PoolAssetMap};
-use cf_traits::{mocks::system_state_info::MockSystemStateInfo, LiquidityPoolApi, SystemStateInfo};
+use cf_traits::{
+	mocks::system_state_info::MockSystemStateInfo, LiquidityPoolApi, SwappingApi, SystemStateInfo,
+};
 use frame_support::{assert_noop, assert_ok, error::BadOrigin};
+use sp_core::U256;
 
 #[test]
 fn only_liquidity_provider_can_manage_positions() {
@@ -342,5 +345,94 @@ fn can_mint_and_burn_liquidity() {
 		}));
 
 		assert_eq!(LiquidityPools::minted_liqudity(&LP_ACCOUNT.into(), &asset), vec![]);
+	});
+}
+
+// TODO: Fees do not accumulate. This needs to be fixed.
+// https://github.com/chainflip-io/chainflip-backend/issues/2686
+#[test]
+fn can_collect_fee() {
+	new_test_ext().execute_with(|| {
+		FreeBalances::<Test>::insert(AccountId::from(LP_ACCOUNT), Asset::Eth, 1_000_000);
+		FreeBalances::<Test>::insert(AccountId::from(LP_ACCOUNT), Asset::Usdc, 1_000_000);
+
+		let range = AmmRange { lower: -100, upper: 100 };
+		let asset = Asset::Eth;
+
+		// 50% fee
+		assert_ok!(LiquidityPools::new_pool(
+			Origin::root(),
+			asset,
+			500_000u32,
+			PoolState::sqrt_price_at_tick(0),
+		));
+
+		// Can open a new position
+		assert_ok!(LiquidityProvider::update_position(
+			Origin::signed(LP_ACCOUNT.into()),
+			asset,
+			range,
+			1_000_000,
+		));
+
+		assert_eq!(
+			FreeBalances::<Test>::get(AccountId::from(LP_ACCOUNT), Asset::Eth),
+			Some(995_012)
+		);
+		assert_eq!(
+			FreeBalances::<Test>::get(AccountId::from(LP_ACCOUNT), Asset::Usdc),
+			Some(995_012)
+		);
+
+		System::reset_events();
+
+		// Trigger swap to acrue some fees
+		assert_eq!(
+			LiquidityPools::swap(Asset::Eth, Asset::Usdc, U256::from(1_000u128)),
+			Ok((U256::from(499u128), U256::from(500u128), U256::from(0u128)))
+		);
+		assert_eq!(
+			LiquidityPools::minted_liqudity(&LP_ACCOUNT.into(), &asset),
+			vec![(-100, 100, 1_000_000, PoolAssetMap::new(0, 0))]
+		);
+
+		// Balance before the collect.
+		assert_eq!(
+			FreeBalances::<Test>::get(AccountId::from(LP_ACCOUNT), Asset::Eth),
+			Some(995_012)
+		);
+		assert_eq!(
+			FreeBalances::<Test>::get(AccountId::from(LP_ACCOUNT), Asset::Usdc),
+			Some(995_012)
+		);
+
+		// Collect fees acrued for the Liquidity Position.
+		assert_ok!(LiquidityProvider::collect_fees(
+			Origin::signed(LP_ACCOUNT.into()),
+			asset,
+			range
+		));
+
+		System::assert_has_event(Event::LiquidityPools(pallet_cf_pools::Event::FeeCollected {
+			lp: LP_ACCOUNT.into(),
+			asset,
+			range,
+			fee_yielded: PoolAssetMap::new(0, 0),
+		}));
+
+		assert_eq!(
+			FreeBalances::<Test>::get(AccountId::from(LP_ACCOUNT), Asset::Eth),
+			Some(995_012)
+		);
+		assert_eq!(
+			FreeBalances::<Test>::get(AccountId::from(LP_ACCOUNT), Asset::Usdc),
+			Some(995_012)
+		);
+
+		// Fees has been reset.
+		assert_eq!(
+			LiquidityPools::minted_liqudity(&LP_ACCOUNT.into(), &asset),
+			vec![(-100, 100, 1_000_000, PoolAssetMap::new(0, 0))]
+		);
 	});
 }
