@@ -146,7 +146,7 @@ pub trait CryptoScheme: 'static {
 	}
 
 	#[cfg(test)]
-	fn get_signing_payload_for_test() -> Self::SigningPayload;
+	fn signing_payload_for_test() -> Self::SigningPayload;
 }
 
 pub trait ECScalar:

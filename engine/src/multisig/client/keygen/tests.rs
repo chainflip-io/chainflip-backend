@@ -901,7 +901,7 @@ async fn genesis_keys_can_sign() {
 			DEFAULT_SIGNING_CEREMONY_ID,
 			key_id.clone(),
 			key_data.clone(),
-			EthSigning::get_signing_payload_for_test(),
+			EthSigning::signing_payload_for_test(),
 			Rng::from_entropy(),
 		);
 	standard_signing(&mut signing_ceremony).await;

@@ -119,7 +119,7 @@ impl CryptoScheme for EthSigning {
 	}
 
 	#[cfg(test)]
-	fn get_signing_payload_for_test() -> Self::SigningPayload {
+	fn signing_payload_for_test() -> Self::SigningPayload {
 		EthSigningPayload("Chainflip:Chainflip:Chainflip:01".as_bytes().try_into().unwrap())
 	}
 }

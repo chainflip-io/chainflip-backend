@@ -643,7 +643,7 @@ impl<C: CryptoScheme> CeremonyRunnerStrategy for SigningCeremonyRunner<C> {
 		C::verify_signature(
 			&signature,
 			&self.ceremony_runner_data.key_id,
-			&C::get_signing_payload_for_test(),
+			&C::signing_payload_for_test(),
 		)
 		.expect("Should be valid signature");
 
@@ -728,7 +728,7 @@ pub async fn new_signing_ceremony<C: CryptoScheme>(
 		DEFAULT_SIGNING_CEREMONY_ID,
 		key_id,
 		key_data,
-		C::get_signing_payload_for_test(),
+		C::signing_payload_for_test(),
 		Rng::from_seed(DEFAULT_SIGNING_SEED),
 	)
 }

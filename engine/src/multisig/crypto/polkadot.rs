@@ -144,7 +144,7 @@ impl CryptoScheme for PolkadotSigning {
 	}
 
 	#[cfg(test)]
-	fn get_signing_payload_for_test() -> Self::SigningPayload {
+	fn signing_payload_for_test() -> Self::SigningPayload {
 		PolkadotSigningPayload::new(vec![1_u8; 256]).unwrap()
 	}
 }
@@ -165,7 +165,7 @@ fn signature_should_be_valid() {
 	let public_key = Point::from_scalar(&secret_key);
 
 	// Message to sign
-	let payload = PolkadotSigning::get_signing_payload_for_test();
+	let payload = PolkadotSigning::signing_payload_for_test();
 
 	let signature = {
 		// Pick random nonce and commit to it

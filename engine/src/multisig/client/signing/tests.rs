@@ -110,7 +110,7 @@ async fn should_sign_with_all_parties<C: CryptoScheme>() {
 		DEFAULT_SIGNING_CEREMONY_ID,
 		key_id,
 		key_data,
-		C::get_signing_payload_for_test(),
+		C::signing_payload_for_test(),
 		Rng::from_seed(DEFAULT_SIGNING_SEED),
 	);
 
