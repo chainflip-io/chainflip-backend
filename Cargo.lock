@@ -717,6 +717,7 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
+ "serde_json",
  "sp-core 7.0.0",
  "sp-std 5.0.0",
 ]
