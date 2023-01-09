@@ -91,11 +91,11 @@ pub struct SigningCeremony<C> {
 	_phantom: PhantomData<C>,
 }
 
-impl<Crypto: CryptoScheme> CeremonyTrait for SigningCeremony<Crypto> {
-	type Crypto = Crypto;
-	type Data = SigningData<<Crypto as CryptoScheme>::Point>;
-	type Request = CeremonyRequest<Crypto>;
-	type Output = <Crypto as CryptoScheme>::Signature;
+impl<C: CryptoScheme> CeremonyTrait for SigningCeremony<C> {
+	type Crypto = C;
+	type Data = SigningData<<C as CryptoScheme>::Point>;
+	type Request = CeremonyRequest<C>;
+	type Output = <C as CryptoScheme>::Signature;
 	type FailureReason = SigningFailureReason;
 	type CeremonyStageName = SigningStageName;
 }

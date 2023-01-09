@@ -22,6 +22,12 @@ impl std::fmt::Display for PolkadotSigningPayload {
 	}
 }
 
+impl AsRef<[u8]> for PolkadotSigningPayload {
+	fn as_ref(&self) -> &[u8] {
+		self.0.as_ref()
+	}
+}
+
 impl PolkadotSigningPayload {
 	pub fn new(payload: Vec<u8>) -> Result<Self> {
 		if payload.is_empty() || payload.len() > 256 {

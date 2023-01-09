@@ -39,6 +39,12 @@ impl std::fmt::Display for EthSigningPayload {
 	}
 }
 
+impl AsRef<[u8]> for EthSigningPayload {
+	fn as_ref(&self) -> &[u8] {
+		&self.0
+	}
+}
+
 impl CryptoScheme for EthSigning {
 	type Point = Point;
 	type Signature = EthSchnorrSignature;

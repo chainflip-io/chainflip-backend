@@ -93,7 +93,7 @@ pub trait CryptoScheme: 'static {
 		+ Send;
 
 	type AggKey;
-	type SigningPayload: Display + Debug + Sync + Send + Clone + Serialize + PartialEq + Eq;
+	type SigningPayload: Display + Debug + Sync + Send + Clone + PartialEq + Eq + AsRef<[u8]>;
 
 	/// Friendly name of the scheme used for logging
 	const NAME: &'static str;

@@ -121,17 +121,7 @@ fn generate_bindings<C: CryptoScheme>(
 ) -> BTreeMap<AuthorityCount, <C::Point as ECPoint>::Scalar> {
 	all_idxs
 		.iter()
-		.map(|idx| {
-			(
-				*idx,
-				gen_rho_i(
-					*idx,
-					bincode::serialize(payload).expect("Should serialize payload").as_slice(),
-					commitments,
-					all_idxs,
-				),
-			)
-		})
+		.map(|idx| (*idx, gen_rho_i(*idx, payload.as_ref(), commitments, all_idxs)))
 		.collect()
 }
 
