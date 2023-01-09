@@ -88,19 +88,19 @@ pub mod pallet {
 		NewSwapIntent { ingress_address: ForeignChainAddress },
 		/// The swap ingress was received.
 		SwapIngressReceived {
-			ingress_address: ForeignChainAddress,
 			swap_id: u64,
+			ingress_address: ForeignChainAddress,
 			ingress_amount: AssetAmount,
 		},
 		SwapScheduledByWitnesser {
 			swap_id: u64,
-			amount: AssetAmount,
+			ingress_amount: AssetAmount,
 			egress_address: ForeignChainAddress,
 		},
 		/// A swap was executed.
 		SwapExecuted { swap_id: u64 },
 		/// A swap egress was scheduled.
-		SwapEgressScheduled { swap_id: u64, egress_id: EgressId, egress_amount: AssetAmount },
+		SwapEgressScheduled { swap_id: u64, egress_id: EgressId },
 		/// A withdrawal was requested.
 		WithdrawalRequested {
 			amount: AssetAmount,
@@ -219,16 +219,16 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			from: Asset,
 			to: Asset,
-			amount: AssetAmount,
+			ingress_amount: AssetAmount,
 			egress_address: ForeignChainAddress,
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
-			let swap_id = Self::schedule_swap(from, to, amount, egress_address);
+			let swap_id = Self::schedule_swap(from, to, ingress_amount, egress_address);
 
 			Self::deposit_event(Event::<T>::SwapScheduledByWitnesser {
 				swap_id,
-				amount,
+				ingress_amount,
 				egress_address,
 			});
 
@@ -254,7 +254,7 @@ pub mod pallet {
 				Self::deposit_event(Event::<T>::SwapExecuted { swap_id: swap.swap_id });
 			}
 
-			for (input_amount, egress_asset, egress_address, id) in bundle_inputs {
+			for (input_amount, egress_asset, egress_address, swap_id) in bundle_inputs {
 				if let Some(swap_output) = multiply_by_rational_with_rounding(
 					input_amount,
 					bundle_output,
@@ -266,11 +266,7 @@ pub mod pallet {
 						swap_output,
 						egress_address,
 					);
-					Self::deposit_event(Event::<T>::SwapEgressScheduled {
-						swap_id: id,
-						egress_id,
-						egress_amount: swap_output,
-					});
+					Self::deposit_event(Event::<T>::SwapEgressScheduled { swap_id, egress_id });
 				} else {
 					log::error!(
 						"Unable to calculate valid swap output for swap {:?}!",
@@ -331,8 +327,8 @@ pub mod pallet {
 			let swap_id = Self::schedule_swap(from, to, amount.saturating_sub(fee), egress_address);
 
 			Self::deposit_event(Event::<T>::SwapIngressReceived {
-				ingress_address,
 				swap_id,
+				ingress_address,
 				ingress_amount: amount,
 			});
 		}

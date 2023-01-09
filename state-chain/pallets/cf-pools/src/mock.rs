@@ -3,7 +3,7 @@ use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
 	Chainflip,
 };
-use frame_support::parameter_types;
+use frame_support::{parameter_types, traits::ConstU16};
 use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{
@@ -71,7 +71,9 @@ impl Chainflip for Test {
 	type SystemState = MockSystemStateInfo;
 }
 
-impl pallet_cf_pools::Config for Test {}
+impl pallet_cf_pools::Config for Test {
+	type NetworkFee = ConstU16<1000>;
+}
 
 #[allow(unused)]
 // Build genesis storage according to the mock runtime.

@@ -47,7 +47,7 @@ Before requesting a review, developers are encouraged to conduct a thorough self
 
 ## Correctness
 
-The Chainflip network will be securing significant amounts of funds for its users. The protocol has been designed with security and token-economic incentives in mind, but none of this matters if the code does not implement the design correctly. Therefore, before merging any code to `develop` we should be able to reason about its correctness and demonstrate that our code meets requirements.
+The Chainflip network will be securing significant amounts of funds for its users. The protocol has been designed with security and token-economic incentives in mind, but none of this matters if the code does not implement the design correctly. Therefore, before merging any code to `main` we should be able to reason about its correctness and demonstrate that our code meets requirements.
 
 Correctness in this instance means that we know what the code should do; that it indeed fulfils its stated purpose; that we have considered all edge cases. In the spirit of readability, correctness should be as easy as possible to reason about by anyone reading, reviewing or auditing the code.
 
@@ -64,6 +64,18 @@ Maintainability is one of the main drivers of a team's success and ability to mo
 # Practices
 
 A set of practices we follow within the backend repo at Chainflip.
+
+## Prioritise Readability
+
+Developers spend most of their time reading existing code rather that adding new code. We should therefore put extra effort into ensuring that the code is clear (not just the implementation, but the code's intent too).
+
+Specifically, readability should be prioritised over code's performance where the performance does not matter (e.g. don't optimise prematurely, particularly if the optimisation makes the code more complex). Clever tricks should in general be avoided if it leads to code that takes a considerable amount of effort to parse (and there is a reasonable, if less perfect or clever, alternative).
+
+## Good over Perfect (aka 80/20 rule)
+
+As developers we tend to be perfectionists spending way more time than necessary trying to get it perfect, following the best practices etc. While it is important to maintain high standards (especially if there are big security or performance implications), we should always ask ourselves whether the potential benefits are worth the extra time and the increased complexity.
+
+Most importantly, code tends to get outdated as the system requirements change and our understanding of what we are building improves. Such code needs to be modified, rewritten or even deleted altogether, and the extra effort we spend trying to get it perfect is wasted.
 
 ## Commit names
 

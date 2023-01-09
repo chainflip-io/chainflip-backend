@@ -14,6 +14,7 @@ use web3::types::Transaction;
 use crate::{
 	state_chain_observer::client::extrinsic_api::ExtrinsicApi,
 	witnesser::{
+		checkpointing::{start_checkpointing_for, WitnessedUntil},
 		epoch_witnesser::{self, should_end_witnessing},
 		EpochStart,
 	},
@@ -86,8 +87,22 @@ where
 			let eth_http_rpc = eth_dual_rpc.http_client.clone();
 			let state_chain_client = state_chain_client.clone();
 			async move {
+
+				let (witnessed_until, witnessed_until_sender) = start_checkpointing_for("eth-ingress", &logger).await;
+
+				// Don't witness for past epochs
+				if epoch_start.epoch_index < witnessed_until.epoch_index {
+					return Ok((monitored_addresses, eth_monitor_ingress_receiver));
+				}
+
+				let from_block = if witnessed_until.epoch_index == epoch_start.epoch_index {
+					std::cmp::max(epoch_start.block_number, witnessed_until.block_number)
+				} else {
+					epoch_start.block_number
+				};
+
 				let safe_ws_tx_stream = block_transactions_stream_from_head_stream(
-					epoch_start.block_number,
+					from_block,
 					safe_ws_head_stream(
 						eth_ws_rpc.subscribe_new_heads().await?,
 						ETH_BLOCK_SAFETY_MARGIN,
@@ -99,7 +114,7 @@ where
 				.await?;
 
 				let safe_http_tx_stream = block_transactions_stream_from_head_stream(
-					epoch_start.block_number,
+					from_block,
 					safe_polling_http_head_stream(
 						eth_http_rpc.clone(),
 						HTTP_POLL_INTERVAL,
@@ -168,6 +183,14 @@ where
 										)
 										.await;
 								}
+
+								witnessed_until_sender
+									.send(WitnessedUntil {
+										epoch_index: epoch_start.epoch_index,
+										block_number: block_with_txs.block_number,
+									})
+									.unwrap();
+
 						},
 						else => break,
 					};

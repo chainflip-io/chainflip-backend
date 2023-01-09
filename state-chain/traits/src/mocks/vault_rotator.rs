@@ -6,54 +6,65 @@ use super::MockPallet;
 
 const ROTATION_OUTCOME: &[u8] = b"ROTATION_OUTCOME";
 
-pub struct MockVaultRotator;
+macro_rules! mock_vault_rotator {
+	($rotator_name:ident) => {
+		pub struct $rotator_name;
 
-impl MockPallet for MockVaultRotator {
-	const PREFIX: &'static [u8] = b"MockVaultRotator::";
+		impl MockPallet for $rotator_name {
+			const PREFIX: &'static [u8] = stringify!($rotator_name).as_bytes();
+		}
+
+		impl $rotator_name {
+			pub fn keygen_success() {
+				Self::put_value(
+					ROTATION_OUTCOME,
+					AsyncResult::<VaultStatus<u64>>::Ready(VaultStatus::KeygenComplete),
+				);
+			}
+
+			pub fn keys_activated() {
+				Self::put_value(
+					ROTATION_OUTCOME,
+					AsyncResult::<VaultStatus<u64>>::Ready(VaultStatus::RotationComplete),
+				);
+			}
+
+			pub fn failed<O: IntoIterator<Item = u64>>(offenders: O) {
+				Self::put_value(
+					ROTATION_OUTCOME,
+					AsyncResult::<VaultStatus<u64>>::Ready(VaultStatus::Failed(
+						offenders.into_iter().collect(),
+					)),
+				);
+			}
+
+			pub fn pending() {
+				Self::put_value(ROTATION_OUTCOME, AsyncResult::<VaultStatus<u64>>::Pending)
+			}
+		}
+
+		impl VaultRotator for $rotator_name {
+			type ValidatorId = u64;
+
+			fn keygen(_candidates: BTreeSet<Self::ValidatorId>) {
+				Self::put_value(ROTATION_OUTCOME, AsyncResult::<VaultStatus<u64>>::Pending);
+			}
+
+			fn status() -> AsyncResult<VaultStatus<Self::ValidatorId>> {
+				Self::get_value(ROTATION_OUTCOME).unwrap_or_default()
+			}
+
+			fn activate() {
+				Self::put_value(ROTATION_OUTCOME, AsyncResult::<VaultStatus<u64>>::Pending);
+			}
+
+			#[cfg(feature = "runtime-benchmarks")]
+			fn set_status(_outcome: AsyncResult<VaultStatus<Self::ValidatorId>>) {
+				unimplemented!()
+			}
+		}
+	};
 }
 
-impl MockVaultRotator {
-	pub fn keygen_success() {
-		Self::put_value(
-			ROTATION_OUTCOME,
-			AsyncResult::<VaultStatus<u64>>::Ready(VaultStatus::KeygenComplete),
-		);
-	}
-
-	pub fn keys_activated() {
-		Self::put_value(
-			ROTATION_OUTCOME,
-			AsyncResult::<VaultStatus<u64>>::Ready(VaultStatus::RotationComplete),
-		);
-	}
-
-	pub fn failed<O: IntoIterator<Item = u64>>(offenders: O) {
-		Self::put_value(
-			ROTATION_OUTCOME,
-			AsyncResult::<VaultStatus<u64>>::Ready(VaultStatus::Failed(
-				offenders.into_iter().collect(),
-			)),
-		);
-	}
-}
-
-impl VaultRotator for MockVaultRotator {
-	type ValidatorId = u64;
-
-	fn keygen(_candidates: BTreeSet<Self::ValidatorId>) {
-		Self::put_value(ROTATION_OUTCOME, AsyncResult::<VaultStatus<u64>>::Pending);
-	}
-
-	fn status() -> AsyncResult<VaultStatus<Self::ValidatorId>> {
-		Self::get_value(ROTATION_OUTCOME).unwrap_or_default()
-	}
-
-	fn activate() {
-		Self::put_value(ROTATION_OUTCOME, AsyncResult::<VaultStatus<u64>>::Pending);
-	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn set_status(_outcome: AsyncResult<VaultStatus<Self::ValidatorId>>) {
-		unimplemented!()
-	}
-}
+mock_vault_rotator!(MockVaultRotatorA);
+mock_vault_rotator!(MockVaultRotatorB);
