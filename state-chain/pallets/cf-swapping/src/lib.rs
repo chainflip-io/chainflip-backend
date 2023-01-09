@@ -238,6 +238,9 @@ pub mod pallet {
 
 	impl<T: Config> Pallet<T> {
 		pub fn execute_group_of_swaps(swaps: Vec<Swap>, from: Asset, to: Asset) {
+			if swaps.is_empty() {
+				return;
+			}
 			let mut bundle_input = 0;
 			let mut bundle_inputs = vec![];
 
@@ -254,25 +257,27 @@ pub mod pallet {
 			for swap in &swaps {
 				Self::deposit_event(Event::<T>::SwapExecuted { swap_id: swap.swap_id });
 			}
-
-			for (input_amount, egress_asset, egress_address, swap_id) in bundle_inputs {
-				if let Some(swap_output) = multiply_by_rational_with_rounding(
-					input_amount,
-					bundle_output.as_u128(),
-					bundle_input,
-					Rounding::Down,
-				) {
-					let egress_id = T::EgressHandler::schedule_egress(
-						egress_asset,
-						swap_output,
-						egress_address,
-					);
-					Self::deposit_event(Event::<T>::SwapEgressScheduled { swap_id, egress_id });
-				} else {
-					log::error!(
-						"Unable to calculate valid swap output for swap {:?}!",
-						&(input_amount, bundle_input, bundle_output)
-					);
+			
+			if bundle_input > 0 {
+				for (input_amount, egress_asset, egress_address, swap_id) in bundle_inputs {
+					if let Some(swap_output) = multiply_by_rational_with_rounding(
+						input_amount,
+						bundle_output.as_u128(),
+						bundle_input,
+						Rounding::Down,
+					) {
+						let egress_id = T::EgressHandler::schedule_egress(
+							egress_asset,
+							swap_output,
+							egress_address,
+						);
+						Self::deposit_event(Event::<T>::SwapEgressScheduled { swap_id, egress_id });
+					} else {
+						log::error!(
+							"Unable to calculate valid swap output for swap {:?}!",
+							&(input_amount, bundle_input, bundle_output)
+						);
+					}
 				}
 			}
 		}
