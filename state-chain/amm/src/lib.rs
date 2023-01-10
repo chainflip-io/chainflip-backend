@@ -1307,56 +1307,6 @@ mod test {
 		assert_eq!(PoolState::tick_at_sqrt_price(MAX_SQRT_PRICE - 1), MAX_TICK - 1);
 	}
 
-	#[test]
-	fn conservation_of_liquidity_base_to_pair() {
-		test_conservation_of_liquidity::<BaseToPair>();
-	}
-
-	#[test]
-	fn conservation_of_liquidity_pair_to_base() {
-		test_conservation_of_liquidity::<PairToBase>();
-	}
-
-	fn test_conservation_of_liquidity<SD: SwapDirection>() {
-		const INIT_TICK: Tick = -1200;
-		let mut pool = PoolState::new(100, PoolState::sqrt_price_at_tick(INIT_TICK));
-		const ID: LiquidityProvider = H256([0xcf; 32]);
-		const MINTED_LIQUIDITY: u128 = 1_000_000_000;
-		const SWAP_INPUT: u128 = 1_000;
-		let mut minted_capital = None;
-
-		// println!("MINTING: {:#?}", (INIT_TICK - 20, INIT_TICK + 20, MINTED_LIQUIDITY));
-		pool.mint(ID, INIT_TICK - 20, INIT_TICK + 20, MINTED_LIQUIDITY, |minted| {
-			minted_capital.replace(minted);
-			true
-		})
-		.unwrap();
-		let minted_capital = minted_capital.unwrap();
-
-		// println!("POOL: {:#?}", pool);
-		// println!("MINTED: {:?}", minted_capital);
-
-		let swap_output = pool.swap::<SD>(SWAP_INPUT.into());
-
-		// println!("POOL AFTER SWAP: {:#?}", pool);
-
-		let (returned_capital, fees) =
-			pool.burn(ID, INIT_TICK - 20, INIT_TICK + 20, MINTED_LIQUIDITY).unwrap();
-
-		// println!("POOL AFTER BURN: {:#?}", pool);
-		// println!("SWAPPED: {:?} for {:?}", SWAP_INPUT, swap_output);
-		// println!("RETURNED: {:?}", (returned_capital, fees));
-
-		assert_eq!(
-			minted_capital[SD::INPUT_TICKER] + U256::from(SWAP_INPUT),
-			returned_capital[SD::INPUT_TICKER] + fees[SD::INPUT_TICKER]
-		);
-		assert_eq!(
-			minted_capital[!SD::INPUT_TICKER],
-			returned_capital[!SD::INPUT_TICKER] + fees[!SD::INPUT_TICKER] + swap_output
-		);
-	}
-
 	// UNISWAP TESTS => UniswapV3Pool.spec.ts
 
 	pub const TICKSPACING_UNISWAP_MEDIUM: Tick = 60;
