@@ -34,7 +34,6 @@ members = [
   'state-chain/test-utilities',
   'state-chain/runtime-utilities/macros',
   'state-chain/runtime',
-  'state-chain/test-runtime',
   'state-chain/traits',
   'state-chain/primitives',
   'engine',
