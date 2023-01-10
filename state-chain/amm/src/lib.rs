@@ -15,8 +15,6 @@
 //! Note: There are a few yet to be proved safe maths operations, there are marked below with `TODO:
 //! Prove`. We should resolve these issues before using this code in release.
 
-#![feature(mixed_integer_ops)] // This has been stablized in a future version of rust
-
 use std::{collections::BTreeMap, u128};
 
 use enum_map::Enum;
