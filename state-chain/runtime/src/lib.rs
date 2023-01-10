@@ -875,7 +875,7 @@ impl_runtime_apis! {
 			let epoch_index = Self::cf_current_epoch();
 			// We should always have a Vault for the current epoch, but in case we do
 			// not, just return an empty Vault.
-			let vault: Vault<Ethereum> = EthereumVault::vaults(&epoch_index).unwrap_or_default();
+			let vault: Vault<Ethereum> = EthereumVault::vaults(epoch_index).unwrap_or_default();
 			(vault.public_key.to_pubkey_compressed(), vault.active_from_block.unique_saturated_into())
 		}
 		fn cf_auction_parameters() -> (u32, u32) {
@@ -941,7 +941,7 @@ impl_runtime_apis! {
 		}
 
 		fn cf_pending_claim(account_id: AccountId) -> Option<RuntimeApiPendingClaim> {
-			let api_call = pallet_cf_staking::PendingClaims::<Runtime>::get(&account_id)?;
+			let api_call = pallet_cf_staking::PendingClaims::<Runtime>::get(account_id)?;
 			let pending_claim: RegisterClaim = match api_call {
 				eth::api::EthereumApi::RegisterClaim(tx) => tx,
 				_ => unreachable!(),
@@ -956,7 +956,7 @@ impl_runtime_apis! {
 		}
 
 		fn cf_get_claim_certificate(account_id: AccountId) -> Option<Vec<u8>> {
-			let api_call = pallet_cf_staking::PendingClaims::<Runtime>::get(&account_id)?;
+			let api_call = pallet_cf_staking::PendingClaims::<Runtime>::get(account_id)?;
 			let pending_claim: RegisterClaim = match api_call {
 				eth::api::EthereumApi::RegisterClaim(tx) => tx,
 				_ => unreachable!(),

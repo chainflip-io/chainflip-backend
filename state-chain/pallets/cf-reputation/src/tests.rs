@@ -388,7 +388,7 @@ fn non_validators_should_not_appear_in_network_state() {
 		assert_ok!(ReputationPallet::heartbeat(RuntimeOrigin::signed(ALICE)));
 
 		let current_epoch = MockEpochInfo::epoch_index();
-		println!("The current epoch is: {}", current_epoch);
+		println!("The current epoch is: {current_epoch}");
 		assert!(
 			MockEpochInfo::authority_index(current_epoch, &BOB).is_none(),
 			"Bob should not be an authority"

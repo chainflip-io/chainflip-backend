@@ -649,7 +649,7 @@ impl<T: Config> Pallet<T> {
 		// If we reach here, the account already exists, so any provided withdrawal address
 		// *must* match the one that was added on the initial account-creating staking event,
 		// otherwise this staking event cannot be processed.
-		match WithdrawalAddresses::<T>::get(&account_id) {
+		match WithdrawalAddresses::<T>::get(account_id) {
 			Some(existing) if withdrawal_address == existing => Ok(()),
 			_ => {
 				// The staking event was invalid - this should only happen if someone bypasses
@@ -659,7 +659,7 @@ impl<T: Config> Pallet<T> {
 				//
 				// Instead, we keep a record of the failed attempt so that we can potentially
 				// investigate and / or consider refunding automatically or via governance.
-				FailedStakeAttempts::<T>::append(&account_id, (withdrawal_address, amount));
+				FailedStakeAttempts::<T>::append(account_id, (withdrawal_address, amount));
 				Self::deposit_event(Event::FailedStakeAttempt(
 					account_id.clone(),
 					withdrawal_address,
@@ -676,7 +676,7 @@ impl<T: Config> Pallet<T> {
 		if !frame_system::Pallet::<T>::account_exists(account_id) {
 			// Creates an account
 			let _ = frame_system::Provider::<T>::created(account_id);
-			ActiveBidder::<T>::insert(&account_id, false);
+			ActiveBidder::<T>::insert(account_id, false);
 		}
 
 		T::Flip::credit_stake(account_id, amount)

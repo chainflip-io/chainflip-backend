@@ -27,7 +27,7 @@ benchmarks! {
 	} : _(RawOrigin::Signed(caller.clone()), Box::new(call.clone()), epoch)
 	verify {
 		let call_hash = CallHash(Hashable::blake2_256(&call));
-		assert!(Votes::<T>::contains_key(&epoch, &call_hash));
+		assert!(Votes::<T>::contains_key(epoch, call_hash));
 	}
 
 	remove_storage_items {

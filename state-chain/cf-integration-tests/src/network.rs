@@ -297,7 +297,7 @@ impl Engine {
 						Ok(threshold_signer.borrow_mut().propose_new_key()),
 					)
 					.unwrap_or_else(|_| {
-						panic!("should be able to report keygen outcome from node: {}", node_id)
+						panic!("should be able to report keygen outcome from node: {node_id}")
 					});
 				}
 			}
@@ -307,12 +307,12 @@ impl Engine {
 				events,
 				RuntimeEvent::EthereumVault(
 					pallet_cf_vaults::Event::KeygenRequest(ceremony_id, participants)) => {
-						report_keygen_outcome_for_chain::<EthKeyComponents, SchnorrVerificationComponents, state_chain_runtime::Runtime, EthereumInstance>(*ceremony_id, &participants, self.eth_threshold_signer.clone(), self.node_id.clone());
+						report_keygen_outcome_for_chain::<EthKeyComponents, SchnorrVerificationComponents, state_chain_runtime::Runtime, EthereumInstance>(*ceremony_id, participants, self.eth_threshold_signer.clone(), self.node_id.clone());
 				}
 				#[cfg(feature = "ibiza")]
 				RuntimeEvent::PolkadotVault(
 					pallet_cf_vaults::Event::KeygenRequest(ceremony_id, participants)) => {
-						report_keygen_outcome_for_chain::<DotKeyComponents, PolkadotSignature, state_chain_runtime::Runtime, PolkadotInstance>(*ceremony_id, &participants, self.dot_threshold_signer.clone(), self.node_id.clone());
+						report_keygen_outcome_for_chain::<DotKeyComponents, PolkadotSignature, state_chain_runtime::Runtime, PolkadotInstance>(*ceremony_id, participants, self.dot_threshold_signer.clone(), self.node_id.clone());
 				}
 			);
 		}

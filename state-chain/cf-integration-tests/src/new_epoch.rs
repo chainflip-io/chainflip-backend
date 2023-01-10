@@ -269,7 +269,7 @@ fn new_epoch_will_purge_stale_witnesser_storage() {
 		}
 		pallet_cf_witnesser::ExtraCallData::<Runtime>::insert(
 			storage_epoch,
-			&call_hash,
+			call_hash,
 			vec![vec![0u8]],
 		);
 
@@ -277,11 +277,11 @@ fn new_epoch_will_purge_stale_witnesser_storage() {
 		testnet.move_forward_blocks(1);
 
 		// Ensure Votes and calldata are registered in storage.
-		assert!(pallet_cf_witnesser::Votes::<Runtime>::get(storage_epoch, &call_hash).is_some());
+		assert!(pallet_cf_witnesser::Votes::<Runtime>::get(storage_epoch, call_hash).is_some());
 		assert!(
-			pallet_cf_witnesser::ExtraCallData::<Runtime>::get(storage_epoch, &call_hash).is_some()
+			pallet_cf_witnesser::ExtraCallData::<Runtime>::get(storage_epoch, call_hash).is_some()
 		);
-		assert!(pallet_cf_witnesser::CallHashExecuted::<Runtime>::get(storage_epoch, &call_hash)
+		assert!(pallet_cf_witnesser::CallHashExecuted::<Runtime>::get(storage_epoch, call_hash)
 			.is_some());
 
 		// Move forward in time until Epoch 4 is expired.
@@ -307,11 +307,11 @@ fn new_epoch_will_purge_stale_witnesser_storage() {
 		Witnesser::on_idle(0, Weight::from_ref_time(1_000_000_000_000));
 
 		// Test that the storage has been purged.
-		assert!(pallet_cf_witnesser::Votes::<Runtime>::get(storage_epoch, &call_hash).is_none());
+		assert!(pallet_cf_witnesser::Votes::<Runtime>::get(storage_epoch, call_hash).is_none());
 		assert!(
-			pallet_cf_witnesser::ExtraCallData::<Runtime>::get(storage_epoch, &call_hash).is_none()
+			pallet_cf_witnesser::ExtraCallData::<Runtime>::get(storage_epoch, call_hash).is_none()
 		);
-		assert!(pallet_cf_witnesser::CallHashExecuted::<Runtime>::get(storage_epoch, &call_hash)
+		assert!(pallet_cf_witnesser::CallHashExecuted::<Runtime>::get(storage_epoch, call_hash)
 			.is_none());
 	});
 }

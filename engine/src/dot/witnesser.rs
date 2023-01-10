@@ -177,11 +177,9 @@ fn check_for_interesting_events_in_block(
 	let mut interesting_indices = Vec::new();
 	let mut vault_key_rotated_calls: Vec<Box<_>> = Vec::new();
 	let mut fee_paid_for_xt_at_index = HashMap::new();
-	let mut events_iter = block_events.iter();
-	while let Some((phase, wrapped_event)) = events_iter.next() {
+	let events_iter = block_events.iter();
+	for (phase, wrapped_event) in events_iter {
 		if let Phase::ApplyExtrinsic(extrinsic_index) = *phase {
-			// we want to match on just one of the events, no tuple.
-
 			match wrapped_event {
 				EventWrapper::ProxyAdded(ProxyAdded { delegator, delegatee, .. }) => {
 					if AsRef::<[u8; 32]>::as_ref(&delegator) !=
@@ -215,7 +213,7 @@ fn check_for_interesting_events_in_block(
 						monitored_ingress_addresses.insert(address);
 					}
 
-					if monitored_ingress_addresses.contains(&to) {
+					if monitored_ingress_addresses.contains(to) {
 						slog::info!(
 							logger,
 							"Witnessing DOT Ingress {{ amount: {amount:?}, to: {to:?} }}"
@@ -392,8 +390,7 @@ where
 						.await
 						.context("Failed fetching block from DOT RPC")?
 						.context(format!(
-							"Polkadot block does not exist for block hash: {:?}",
-							block_hash
+							"Polkadot block does not exist for block hash: {block_hash:?}",
 						))?;
 
 						while let Ok(sig) = signature_receiver.try_recv()
@@ -519,7 +516,7 @@ mod tests {
 		events: &[(PolkadotExtrinsicIndex, EventWrapper)],
 	) -> Vec<(Phase, EventWrapper)> {
 		events
-			.into_iter()
+			.iter()
 			.map(|(xt_index, event)| (Phase::ApplyExtrinsic(*xt_index), event.clone()))
 			.collect()
 	}
@@ -689,7 +686,7 @@ mod tests {
 
 		let logger = new_test_logger();
 
-		println!("Connecting to: {}", url);
+		println!("Connecting to: {url}");
 		let dot_rpc_client = DotRpcClient::new(url).await.unwrap();
 
 		let (epoch_starts_sender, epoch_starts_receiver) = async_broadcast::broadcast(10);

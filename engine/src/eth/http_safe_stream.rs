@@ -193,7 +193,7 @@ pub mod tests {
 			.times(1)
 			.in_sequence(&mut seq)
 			.returning(move |n| {
-				println!("{}", n);
+				println!("{n}");
 				dummy_block(n.as_u64())
 			});
 

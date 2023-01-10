@@ -389,7 +389,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 
 		ceremony_handle
 			.on_request(request, result_sender)
-			.with_context(|| format!("Invalid keygen request with ceremony id {}", ceremony_id))
+			.with_context(|| format!("Invalid keygen request with ceremony id {ceremony_id}"))
 			.unwrap();
 	}
 
@@ -445,7 +445,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 
 		ceremony_handle
 			.on_request(request, result_sender)
-			.with_context(|| format!("Invalid sign request with ceremony id {}", ceremony_id))
+			.with_context(|| format!("Invalid sign request with ceremony id {ceremony_id}"))
 			.unwrap();
 	}
 

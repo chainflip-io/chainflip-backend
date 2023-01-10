@@ -123,6 +123,6 @@ mod tests {
 		];
 
 		let tx_hash = dot_broadcaster.send(balances_signed_encoded_bytes).await.unwrap();
-		println!("Tx hash: {:?}", tx_hash);
+		println!("Tx hash: {tx_hash:?}");
 	}
 }

@@ -310,7 +310,7 @@ pub mod pallet {
 					*vote = true;
 
 					if let Some(extra_data) = extra_data {
-						ExtraCallData::<T>::append(epoch_index, &call_hash, extra_data);
+						ExtraCallData::<T>::append(epoch_index, call_hash, extra_data);
 					}
 
 					Ok(vote_count)
@@ -323,9 +323,9 @@ pub mod pallet {
 			// been witnessed in the past.
 			if num_votes == success_threshold_from_share_count(num_authorities) as usize &&
 				(last_expired_epoch..=current_epoch)
-					.all(|epoch| CallHashExecuted::<T>::get(epoch, &call_hash).is_none())
+					.all(|epoch| CallHashExecuted::<T>::get(epoch, call_hash).is_none())
 			{
-				if let Some(mut extra_data) = ExtraCallData::<T>::get(epoch_index, &call_hash) {
+				if let Some(mut extra_data) = ExtraCallData::<T>::get(epoch_index, call_hash) {
 					call.combine_and_inject(&mut extra_data)
 				}
 				let _result = call
@@ -343,7 +343,7 @@ pub mod pallet {
 							error: e.error,
 						});
 					});
-				CallHashExecuted::<T>::insert(epoch_index, &call_hash, ());
+				CallHashExecuted::<T>::insert(epoch_index, call_hash, ());
 			}
 			Ok(().into())
 		}

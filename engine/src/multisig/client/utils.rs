@@ -26,7 +26,7 @@ impl PartyIdxMapping {
 		self.account_ids
 			.iter()
 			.nth(idx_sub_one as usize)
-			.unwrap_or_else(|| panic!("Party index of [{}] is invalid", idx))
+			.unwrap_or_else(|| panic!("Party index of [{idx}] is invalid"))
 	}
 
 	/// Map all signer ids to their corresponding signer idx

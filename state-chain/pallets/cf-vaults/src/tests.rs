@@ -738,7 +738,7 @@ mod keygen_reporting {
 				'b' => ReportedOutcome::BadKey,
 				'f' => ReportedOutcome::Failure,
 				't' => ReportedOutcome::Timeout,
-				invalid => panic!("Invalid char {:?} in outcomes.", invalid),
+				invalid => panic!("Invalid char {invalid:?} in outcomes."),
 			})
 			.collect()
 	}
@@ -805,9 +805,7 @@ mod keygen_reporting {
 							outcome.clone(),
 							Err(KeygenError::Failure(blamed)) if blamed == BTreeSet::from_iter([n as u64])
 						),
-						"Expected Failure([{:?}]), got: {:?}.",
-						n,
-						outcome
+						"Expected Failure([{n:?}]), got: {outcome:?}."
 					);
 				}
 			}
@@ -841,8 +839,7 @@ mod keygen_reporting {
 					outcome.clone(),
 					Err(KeygenError::Failure(blamed)) if blamed.is_empty(),
 				),
-				"Got outcome: {:?}",
-				outcome
+				"Got outcome: {outcome:?}",
 			);
 
 			// A keygen where more than `threshold` nodes have reported failure, but there is no
@@ -895,8 +892,7 @@ mod keygen_reporting {
 					outcome.clone(),
 					Err(KeygenError::Failure(blamed)) if blamed == BTreeSet::from_iter([6])
 				),
-				"Got outcome: {:?}",
-				outcome
+				"Got outcome: {outcome:?}",
 			);
 
 			// First five candidates all report candidate 6, candidate 6 reports 1.

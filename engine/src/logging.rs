@@ -82,7 +82,7 @@ pub mod utils {
 	impl Serializer for PrintlnSerializer {
 		fn emit_arguments(&mut self, key: Key, val: &fmt::Arguments) -> Result<(), slog::Error> {
 			if key != COMPONENT_KEY {
-				println!("{} {} = {}", KV_LIST_INDENT, key, val);
+				println!("{KV_LIST_INDENT} {key} = {val}");
 			}
 			Ok(())
 		}

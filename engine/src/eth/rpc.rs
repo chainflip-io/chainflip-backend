@@ -51,7 +51,7 @@ impl<T: EthTransport> EthRpcClient<T> {
 			"Connecting new {} web3 client{}",
 			T::transport_protocol(),
 			match redact_secret_eth_node_endpoint(node_endpoint) {
-				Ok(redacted_node_endpoint) => format!(" to {}", redacted_node_endpoint),
+				Ok(redacted_node_endpoint) => format!(" to {redacted_node_endpoint}"),
 				Err(e) => {
 					slog::error!(
 						logger,

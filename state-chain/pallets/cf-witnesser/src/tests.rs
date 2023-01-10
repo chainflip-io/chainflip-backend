@@ -209,12 +209,12 @@ fn can_purge_stale_storage() {
 		))));
 
 		for e in [2u32, 9, 10, 11] {
-			Votes::<Test>::insert(e, &call1, vec![0, 0, e as u8]);
-			Votes::<Test>::insert(e, &call2, vec![0, 0, e as u8]);
-			ExtraCallData::<Test>::insert(e, &call1, vec![vec![0], vec![e as u8]]);
-			ExtraCallData::<Test>::insert(e, &call2, vec![vec![0], vec![e as u8]]);
-			CallHashExecuted::<Test>::insert(e, &call1, ());
-			CallHashExecuted::<Test>::insert(e, &call2, ());
+			Votes::<Test>::insert(e, call1, vec![0, 0, e as u8]);
+			Votes::<Test>::insert(e, call2, vec![0, 0, e as u8]);
+			ExtraCallData::<Test>::insert(e, call1, vec![vec![0], vec![e as u8]]);
+			ExtraCallData::<Test>::insert(e, call2, vec![vec![0], vec![e as u8]]);
+			CallHashExecuted::<Test>::insert(e, call1, ());
+			CallHashExecuted::<Test>::insert(e, call2, ());
 		}
 	});
 
@@ -240,12 +240,12 @@ fn can_purge_stale_storage() {
 		Witnesser::on_idle(1, Weight::from_ref_time(BLOCK_WEIGHT));
 		assert_eq!(EpochsToCull::<Test>::get(), vec![2, 3]);
 		for e in [2u32, 9, 10, 11] {
-			assert_eq!(Votes::<Test>::get(e, &call1), Some(vec![0, 0, e as u8]));
-			assert_eq!(Votes::<Test>::get(e, &call2), Some(vec![0, 0, e as u8]));
-			assert_eq!(ExtraCallData::<Test>::get(e, &call1), Some(vec![vec![0], vec![e as u8]]));
-			assert_eq!(ExtraCallData::<Test>::get(e, &call2), Some(vec![vec![0], vec![e as u8]]));
-			assert_eq!(CallHashExecuted::<Test>::get(e, &call1), Some(()));
-			assert_eq!(CallHashExecuted::<Test>::get(e, &call2), Some(()));
+			assert_eq!(Votes::<Test>::get(e, call1), Some(vec![0, 0, e as u8]));
+			assert_eq!(Votes::<Test>::get(e, call2), Some(vec![0, 0, e as u8]));
+			assert_eq!(ExtraCallData::<Test>::get(e, call1), Some(vec![vec![0], vec![e as u8]]));
+			assert_eq!(ExtraCallData::<Test>::get(e, call2), Some(vec![vec![0], vec![e as u8]]));
+			assert_eq!(CallHashExecuted::<Test>::get(e, call1), Some(()));
+			assert_eq!(CallHashExecuted::<Test>::get(e, call2), Some(()));
 		}
 
 		Witnesser::on_idle(2, Weight::from_ref_time(BLOCK_WEIGHT));
@@ -253,8 +253,8 @@ fn can_purge_stale_storage() {
 		// Partially clean data from epoch 2
 		Witnesser::on_idle(3, delete_weight * 4);
 
-		assert_eq!(Votes::<Test>::get(2u32, &call1), None);
-		assert_eq!(Votes::<Test>::get(2u32, &call2), None);
+		assert_eq!(Votes::<Test>::get(2u32, call1), None);
+		assert_eq!(Votes::<Test>::get(2u32, call2), None);
 		assert_eq!(ExtraCallData::<Test>::get(2u32, call1), None);
 		assert_eq!(ExtraCallData::<Test>::get(2u32, call2), None);
 		assert_eq!(CallHashExecuted::<Test>::get(2u32, call1), Some(()));
@@ -283,12 +283,12 @@ fn can_purge_stale_storage() {
 
 		// Future epoch items are unaffected.
 		for e in [9u32, 10, 11] {
-			assert_eq!(Votes::<Test>::get(e, &call1), Some(vec![0, 0, e as u8]));
-			assert_eq!(Votes::<Test>::get(e, &call2), Some(vec![0, 0, e as u8]));
-			assert_eq!(ExtraCallData::<Test>::get(e, &call1), Some(vec![vec![0], vec![e as u8]]));
-			assert_eq!(ExtraCallData::<Test>::get(e, &call2), Some(vec![vec![0], vec![e as u8]]));
-			assert_eq!(CallHashExecuted::<Test>::get(e, &call1), Some(()));
-			assert_eq!(CallHashExecuted::<Test>::get(e, &call2), Some(()));
+			assert_eq!(Votes::<Test>::get(e, call1), Some(vec![0, 0, e as u8]));
+			assert_eq!(Votes::<Test>::get(e, call2), Some(vec![0, 0, e as u8]));
+			assert_eq!(ExtraCallData::<Test>::get(e, call1), Some(vec![vec![0], vec![e as u8]]));
+			assert_eq!(ExtraCallData::<Test>::get(e, call2), Some(vec![vec![0], vec![e as u8]]));
+			assert_eq!(CallHashExecuted::<Test>::get(e, call1), Some(()));
+			assert_eq!(CallHashExecuted::<Test>::get(e, call2), Some(()));
 		}
 
 		// Remove storage items for epoch 9 and 10.
@@ -300,8 +300,8 @@ fn can_purge_stale_storage() {
 		assert!(EpochsToCull::<Test>::get().is_empty());
 
 		for e in [9u32, 10] {
-			assert_eq!(Votes::<Test>::get(e, &call1), None);
-			assert_eq!(Votes::<Test>::get(e, &call2), None);
+			assert_eq!(Votes::<Test>::get(e, call1), None);
+			assert_eq!(Votes::<Test>::get(e, call2), None);
 			assert_eq!(ExtraCallData::<Test>::get(e, call1), None);
 			assert_eq!(ExtraCallData::<Test>::get(e, call2), None);
 			assert_eq!(CallHashExecuted::<Test>::get(e, call1), None);
@@ -309,8 +309,8 @@ fn can_purge_stale_storage() {
 		}
 
 		// Epoch 11's storage items are unaffected.
-		assert_eq!(Votes::<Test>::get(11u32, &call1), Some(vec![0, 0, 11]));
-		assert_eq!(Votes::<Test>::get(11u32, &call2), Some(vec![0, 0, 11]));
+		assert_eq!(Votes::<Test>::get(11u32, call1), Some(vec![0, 0, 11]));
+		assert_eq!(Votes::<Test>::get(11u32, call2), Some(vec![0, 0, 11]));
 		assert_eq!(ExtraCallData::<Test>::get(11u32, call1), Some(vec![vec![0], vec![11]]));
 		assert_eq!(ExtraCallData::<Test>::get(11u32, call2), Some(vec![vec![0], vec![11]]));
 		assert_eq!(CallHashExecuted::<Test>::get(11u32, call1), Some(()));

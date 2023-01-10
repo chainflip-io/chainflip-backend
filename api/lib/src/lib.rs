@@ -74,7 +74,7 @@ pub async fn request_block(
 	block_hash: state_chain_runtime::Hash,
 	state_chain_settings: &settings::StateChain,
 ) -> Result<state_chain_runtime::SignedBlock> {
-	println!("Querying the state chain for the block with hash {:x?}.", block_hash);
+	println!("Querying the state chain for the block with hash {block_hash:x?}.");
 
 	let state_chain_rpc_client = BaseRpcClient::new(state_chain_settings).await?;
 
@@ -265,8 +265,7 @@ pub async fn register_claim(
 				.expect("Failed to fetch EthereumStakeManagerAddress from State Chain");
 
 			println!(
-				"Registering your claim on the Ethereum network, to StakeManager address: {:?}",
-				stake_manager_address
+				"Registering your claim on the Ethereum network, to StakeManager address: {stake_manager_address:?}",
 			);
 
 			let eth_broadcaster = EthBroadcaster::new(
@@ -319,7 +318,7 @@ pub async fn register_account_role(
 				)
 				.await
 				.expect("Could not set register account role for account");
-			println!("Account role set at tx {:#x}.", tx_hash);
+			println!("Account role set at tx {tx_hash:#x}.");
 			Ok(())
 		}
 		.boxed()
@@ -420,7 +419,7 @@ pub async fn retire_account(state_chain_settings: &settings::StateChain) -> Resu
 				.submit_signed_extrinsic(pallet_cf_staking::Call::retire_account {}, &logger)
 				.await
 				.expect("Could not retire account");
-			println!("Account retired at tx {:#x}.", tx_hash);
+			println!("Account retired at tx {tx_hash:#x}.");
 			Ok(())
 		}
 		.boxed()
@@ -448,7 +447,7 @@ pub async fn activate_account(state_chain_settings: &settings::StateChain) -> Re
 					.submit_signed_extrinsic(pallet_cf_staking::Call::activate_account {}, &logger)
 					.await
 					.expect("Could not activate account");
-				println!("Account activated at tx {:#x}.", tx_hash);
+				println!("Account activated at tx {tx_hash:#x}.");
 			}
 			AccountRole::None => {
 				println!("You have not yet registered an account role. If you wish to activate your account to gain a chance at becoming an authority on the Chainflip network
@@ -489,7 +488,7 @@ pub async fn set_vanity_name(
 				)
 				.await
 				.expect("Could not set vanity name for your account");
-			println!("Vanity name set at tx {:#x}.", tx_hash);
+			println!("Vanity name set at tx {tx_hash:#x}.");
 			Ok(())
 		}
 		.boxed()

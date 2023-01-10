@@ -666,7 +666,7 @@ fn test_check_withdrawal_address() {
 		assert_eq!(stake_attempt.unwrap().0, DIFFERENT_ETH_ADDR);
 		assert_eq!(stake_attempt.unwrap().1, STAKE);
 		for e in System::events().into_iter().map(|e| e.event) {
-			println!("{:?}", e);
+			println!("{e:?}");
 		}
 		assert_event_sequence!(
 			Test,

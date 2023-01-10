@@ -289,7 +289,7 @@ impl FlipOperation {
 				SlashingRate::<Test>::set(*slashing_rate);
 
 				let attempted_slash: u128 =
-					(*slashing_rate * *bond as u128).saturating_mul((*blocks).into());
+					(*slashing_rate * *bond).saturating_mul((*blocks).into());
 				let expected_slash =
 					if Account::<Test>::get(account_id).can_be_slashed(attempted_slash) {
 						attempted_slash
@@ -436,14 +436,14 @@ fn test_try_debit() {
 		// account.
 		assert!(Flip::try_debit(&CHARLIE, 1).is_none());
 		assert_eq!(Flip::total_balance_of(&CHARLIE), 0);
-		assert!(!Account::<Test>::contains_key(&CHARLIE));
+		assert!(!Account::<Test>::contains_key(CHARLIE));
 
 		// Using standard `debit` *does* create an account as a side-effect.
 		{
 			let zero_surplus = Flip::debit(&CHARLIE, 1);
 			assert_eq!(zero_surplus.peek(), 0);
 		}
-		assert!(Account::<Test>::contains_key(&CHARLIE));
+		assert!(Account::<Test>::contains_key(CHARLIE));
 	});
 }
 
