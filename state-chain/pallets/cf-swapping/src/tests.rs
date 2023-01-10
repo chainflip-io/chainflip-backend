@@ -111,8 +111,8 @@ fn number_of_swaps_processed_limited_by_weight() {
 	new_test_ext().execute_with(|| {
 		let swaps = generate_test_swaps();
 		insert_swaps(&swaps);
-		Swapping::on_idle(1, Weight::from_ref_time(1000));
-		assert_eq!(SwapQueue::<Test>::get().len(), swaps.len());
+		Swapping::on_idle(1, Weight::from_ref_time(0));
+		assert_eq!(SwapQueue::<Test>::get().len(), 0);
 	});
 }
 

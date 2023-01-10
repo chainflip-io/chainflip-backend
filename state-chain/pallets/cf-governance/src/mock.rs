@@ -94,7 +94,7 @@ impl RuntimeUpgrade for RuntimeUpgradeMock {
 }
 
 impl RuntimeUpgradeMock {
-	pub fn set(mode: bool) {
+	pub fn upgrade_success(mode: bool) {
 		UPGRADE_SUCCEEDED.with(|cell| *cell.borrow_mut() = mode);
 	}
 }

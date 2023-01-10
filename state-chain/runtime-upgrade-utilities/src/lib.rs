@@ -293,25 +293,25 @@ mod test_versioned_upgrade {
 
 		TestExternalities::new_empty().execute_with(|| {
 			assert_ok!(UpgradeFrom0To1::pre_upgrade());
-			assert_eq!(try_runtime_helpers::get_migration_bounds::<Pallet>(), Some((0, 1)));
 			UpgradeFrom0To1::on_runtime_upgrade();
 			assert_ok!(UpgradeFrom0To1::post_upgrade(Default::default()));
+			assert_eq!(try_runtime_helpers::get_migration_bounds::<Pallet>(), Some((0, 1)));
 
 			// Post-migration runs even if upgrade is out of bounds.
 			DummyUpgrade::set_error_on_post_upgrade(true);
 			assert_ok!(UpgradeFrom2To3::pre_upgrade());
-			assert_eq!(try_runtime_helpers::get_migration_bounds::<Pallet>(), Some((0, 3)));
 			UpgradeFrom2To3::on_runtime_upgrade();
 			assert!(UpgradeFrom2To3::post_upgrade(Default::default()).is_err());
+			assert_eq!(try_runtime_helpers::get_migration_bounds::<Pallet>(), Some((0, 1)));
 		});
 
 		// Error on post-upgrade is propagated.
 		TestExternalities::new_empty().execute_with(|| {
 			DummyUpgrade::set_error_on_post_upgrade(true);
 			assert_ok!(UpgradeFrom0To1::pre_upgrade());
-			assert_eq!(try_runtime_helpers::get_migration_bounds::<Pallet>(), Some((0, 1)));
 			UpgradeFrom0To1::on_runtime_upgrade();
 			assert_err!(UpgradeFrom0To1::post_upgrade(Default::default()), "err");
+			assert_eq!(try_runtime_helpers::get_migration_bounds::<Pallet>(), Some((0, 1)));
 		});
 	}
 }

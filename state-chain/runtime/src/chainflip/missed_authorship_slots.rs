@@ -170,10 +170,8 @@ mod test_missed_authorship_slots {
 			System::reset_events();
 			System::initialize(&block_number, &System::parent_hash(), &pre_digest);
 			System::on_initialize(block_number);
-			Timestamp::on_initialize(block_number);
 			assertions(<MissedAuraSlots as MissedAuthorshipSlots>::missed_slots().collect());
 			Aura::on_initialize(block_number);
-			Timestamp::set_timestamp(block_number);
 		}
 
 		new_test_ext(vec![0, 1, 2, 3, 4]).execute_with(|| {

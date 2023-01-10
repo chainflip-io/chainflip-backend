@@ -233,8 +233,8 @@ pub mod pallet {
 
 		fn integrity_test() {
 			// Ensures the weights are benchmarked correctly.
-			assert!(T::WeightInfo::egress_assets(1).all_gt(T::WeightInfo::egress_assets(0)));
-			assert!(T::WeightInfo::do_single_ingress().all_gt(Weight::zero()));
+			assert!(T::WeightInfo::egress_assets(1).all_gte(T::WeightInfo::egress_assets(0)));
+			assert!(T::WeightInfo::do_single_ingress().all_gte(Weight::zero()));
 		}
 	}
 

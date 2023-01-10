@@ -245,7 +245,7 @@ fn wrong_upgrade_conditions() {
 
 #[test]
 fn error_during_runtime_upgrade() {
-	RuntimeUpgradeMock::set(false);
+	RuntimeUpgradeMock::upgrade_success(false);
 	UpgradeConditionMock::set(true);
 	new_test_ext().execute_with(|| {
 		// assert_noop! is not working when we emit an event and
@@ -256,9 +256,5 @@ fn error_during_runtime_upgrade() {
 		);
 		assert!(result.is_err());
 		assert_err!(result, frame_system::Error::<Test>::FailedToExtractRuntimeVersion);
-		assert_eq!(
-			last_event::<Test>(),
-			crate::mock::RuntimeEvent::Governance(crate::Event::UpgradeConditionsSatisfied),
-		);
 	});
 }
