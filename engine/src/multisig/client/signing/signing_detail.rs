@@ -276,4 +276,37 @@ mod tests {
 			&response,
 		));
 	}
+
+	#[test]
+	fn bindings_are_backwards_compatible() {
+		use rand_legacy::SeedableRng;
+		// The seed must not change or the test will break.
+		let mut rng = Rng::from_seed([0; 32]);
+
+		let payload = EthSigningPayload(hex::decode(MESSAGE_HASH).unwrap().try_into().unwrap());
+		let idxs = BTreeSet::from_iter(vec![1u32, 2, 3]);
+		let commitments: BTreeMap<AuthorityCount, SigningCommitment<Point>> = idxs
+			.iter()
+			.map(|id| {
+				(*id, SigningCommitment { d: Point::random(&mut rng), e: Point::random(&mut rng) })
+			})
+			.collect();
+
+		let bindings = generate_bindings::<EthSigning>(&payload, &commitments, &idxs);
+
+		// Compare the generated bindings with existing bindings to confirm that the hashing in
+		// `gen_rho_i` has not changed.
+		assert_eq!(
+			hex::encode(bindings.get(&1u32).unwrap().as_bytes()),
+			"d21e9745014dedea06fc653b93845b17c20737ef9fe1bac189c70ffb2794250a"
+		);
+		assert_eq!(
+			hex::encode(bindings.get(&2u32).unwrap().as_bytes()),
+			"87c25a1056df0e55a359468f76822a7244232e8a339700d24293d7ea3547aad9"
+		);
+		assert_eq!(
+			hex::encode(bindings.get(&3u32).unwrap().as_bytes()),
+			"d74a3892851b2f4114fb58cd0a7813dec65a7b5c1bfe6c512091e627a92f512d"
+		);
+	}
 }
