@@ -523,7 +523,6 @@ impl pallet_cf_staking::Config for Runtime {
 impl pallet_cf_tokenholder_governance::Config for Runtime {
 	type Event = Event;
 	type FeePayment = Flip;
-	type Chain = Ethereum;
 	type StakingInfo = Flip;
 	type EthApiCalls = eth::api::EthereumApi<EthEnvironment>;
 	type EthBroadcaster = EthereumBroadcaster;

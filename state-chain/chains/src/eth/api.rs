@@ -63,7 +63,8 @@ impl<E: ReplayProtectionProvider<Ethereum>> SetGovKeyWithAggKey<Ethereum> for Et
 	}
 
 	fn from_u8(key: Vec<u8>) -> Self::AddressType {
-		todo!()
+		let slice: [u8; 20] = key.try_into().expect("to have a valid length");
+		slice.into()
 	}
 }
 

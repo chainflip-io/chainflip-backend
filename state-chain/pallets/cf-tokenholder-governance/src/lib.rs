@@ -145,7 +145,8 @@ pub mod pallet {
 							);
 						},
 						cf_chains::ForeignChain::Polkadot => {
-							todo!()
+							#[cfg(feature = "ibiza")]
+							Self::broadcast_dot_gov_key(key);
 						},
 					};
 					Self::deposit_event(Event::<T>::ProposalEnacted {
@@ -230,6 +231,13 @@ pub mod pallet {
 	}
 
 	impl<T: Config> Pallet<T> {
+		#[cfg(feature = "ibiza")]
+		pub fn broadcast_dot_gov_key(key: Vec<u8>) {
+			T::DotBroadcaster::threshold_sign_and_broadcast(<T::DotApiCalls as SetGovKeyApiCall<
+				Polkadot,
+			>>::new_unsigned(key.clone()));
+		}
+
 		pub fn resolve_vote(proposal: Proposal) -> usize {
 			let backers = Backers::<T>::take(&proposal);
 			Self::deposit_event(

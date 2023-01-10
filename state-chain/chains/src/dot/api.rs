@@ -1,8 +1,11 @@
 pub mod batch_fetch_and_transfer;
 pub mod create_anonymous_vault;
 pub mod rotate_vault_proxy;
+pub mod set_gov_key_with_agg_key;
 
-use super::{PolkadotPublicKey, PolkadotReplayProtection, PolkadotTransactionData};
+use super::{
+	PolkadotAddress, PolkadotPublicKey, PolkadotReplayProtection, PolkadotTransactionData,
+};
 use crate::{dot::Polkadot, *};
 use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound};
 use sp_std::marker::PhantomData;
@@ -49,13 +52,14 @@ where
 }
 
 impl<E: ReplayProtectionProvider<Polkadot>> SetGovKeyWithAggKey<Polkadot> for PolkadotApi<E> {
-	type AddressType = eth::Address;
+	type AddressType = PolkadotAddress;
 	fn new_unsigned(new_gov_key: Vec<u8>) -> Self {
 		todo!()
 	}
 
 	fn from_u8(key: Vec<u8>) -> Self::AddressType {
-		todo!()
+		let slice: [u8; 32] = key.try_into().expect("to have a valid length");
+		PolkadotAddress::Address32(slice)
 	}
 }
 
