@@ -2,9 +2,7 @@
   "name": "Chainflip-Sisyphos",
   "id": "Chainflip-Sisyphos",
   "chainType": "Live",
-  "bootNodes": [
-    "/ip4/127.0.0.1/tcp/30333/p2p/12D3KooWJqtDHzy9Ls7CsQT3xVMGbeePivCPRpGCUgxdvaWb71CS"
-  ],
+  "bootNodes": [],
   "telemetryEndpoints": null,
   "protocolId": null,
   "properties": {
