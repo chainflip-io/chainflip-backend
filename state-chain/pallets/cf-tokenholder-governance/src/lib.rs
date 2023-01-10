@@ -1,5 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-use cf_chains::{ChainCrypto, ForeignChain};
+use cf_chains::{eth::Address, ChainCrypto, ForeignChain};
 use codec::{Decode, Encode, EncodeLike};
 use frame_support::{dispatch::Weight, pallet_prelude::*, RuntimeDebugNoBound};
 use sp_std::{cmp::PartialEq, vec, vec::Vec};
@@ -17,15 +17,15 @@ pub use weights::WeightInfo;
 
 #[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, RuntimeDebugNoBound)]
 #[scale_info(skip_type_params(T))]
-pub enum Proposal<T: Config> {
+pub enum Proposal {
 	SetGovernanceKey((ForeignChain, Vec<u8>)),
-	SetCommunityKey(<<T as Config>::Chain as ChainCrypto>::GovKey),
+	SetCommunityKey(Address),
 }
 
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_chains::{ChainAbi, Ethereum};
+	use cf_chains::{ChainAbi, Ethereum, Polkadot};
 	use cf_traits::{Broadcaster, Chainflip, FeePayment, StakingInfo};
 
 	use cf_chains::{
@@ -48,9 +48,12 @@ pub mod pallet {
 		/// Burns the proposal fee from the accounts.
 		type FeePayment: FeePayment<Amount = Self::Amount, AccountId = Self::AccountId>;
 		/// The chain instance.
-		type Chain: ChainAbi;
+		// type Chain: ChainAbi;
 		/// Smart contract calls.
-		type EthApiCalls: SetGovKeyApiCall<Self::Chain> + SetCommunityKeyApiCall<Self::Chain>;
+		type EthApiCalls: SetGovKeyApiCall<Ethereum> + SetCommunityKeyApiCall<Ethereum>;
+		/// Dot calls
+		#[cfg(feature = "ibiza")]
+		type DotApiCalls: SetGovKeyApiCall<Polkadot>;
 		/// Provides information about the current distribution of on-chain stake.
 		type StakingInfo: StakingInfo<
 			AccountId = <Self as frame_system::Config>::AccountId,
@@ -58,6 +61,9 @@ pub mod pallet {
 		>;
 		/// Transaction broadcaster for configured destination chain.
 		type EthBroadcaster: Broadcaster<Ethereum, ApiCall = Self::EthApiCalls>;
+		/// Dot broadcaster
+		#[cfg(feature = "ibiza")]
+		type DotBroadcaster: Broadcaster<Polkadot, ApiCall = Self::DotApiCalls>;
 		/// Benchmarking weights.
 		type WeightInfo: WeightInfo;
 		/// Voting period of a proposal in blocks.
@@ -75,13 +81,13 @@ pub mod pallet {
 	/// will be resolved.
 	#[pallet::storage]
 	#[pallet::getter(fn proposals)]
-	pub type Proposals<T: Config> = StorageMap<_, Twox64Concat, BlockNumberFor<T>, Proposal<T>>;
+	pub type Proposals<T: Config> = StorageMap<_, Twox64Concat, BlockNumberFor<T>, Proposal>;
 
 	/// The accounts currently backing each proposal.
 	#[pallet::storage]
 	#[pallet::getter(fn backers)]
 	pub type Backers<T: Config> =
-		StorageMap<_, Twox64Concat, Proposal<T>, Vec<T::AccountId>, ValueQuery>;
+		StorageMap<_, Twox64Concat, Proposal, Vec<T::AccountId>, ValueQuery>;
 
 	/// The Government key proposal currently awaiting enactment, if any. Indexed by the block
 	/// number we will attempt to enact this update.
@@ -94,23 +100,20 @@ pub mod pallet {
 	/// we will attempt to enact this update.
 	#[pallet::storage]
 	#[pallet::getter(fn community_enactment)]
-	pub type CommKeyUpdateAwaitingEnactment<T> = StorageValue<
-		_,
-		(BlockNumberFor<T>, <<T as Config>::Chain as ChainCrypto>::GovKey),
-		OptionQuery,
-	>;
+	pub type CommKeyUpdateAwaitingEnactment<T> =
+		StorageValue<_, (BlockNumberFor<T>, Address), OptionQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// A proposal has been submitted.
-		ProposalSubmitted { proposal: Proposal<T> },
+		ProposalSubmitted { proposal: Proposal },
 		/// A proposal has passed.
-		ProposalPassed { proposal: Proposal<T> },
+		ProposalPassed { proposal: Proposal },
 		/// A proposal was rejected.
-		ProposalRejected { proposal: Proposal<T> },
+		ProposalRejected { proposal: Proposal },
 		/// A proposal was enacted.
-		ProposalEnacted { proposal: Proposal<T> },
+		ProposalEnacted { proposal: Proposal },
 	}
 
 	#[pallet::error]
@@ -136,7 +139,7 @@ pub mod pallet {
 					match chain {
 						cf_chains::ForeignChain::Ethereum => {
 							T::EthBroadcaster::threshold_sign_and_broadcast(
-								<T::EthApiCalls as SetGovKeyApiCall<T::Chain>>::new_unsigned(
+								<T::EthApiCalls as SetGovKeyApiCall<Ethereum>>::new_unsigned(
 									key.clone(),
 								),
 							);
@@ -146,7 +149,7 @@ pub mod pallet {
 						},
 					};
 					Self::deposit_event(Event::<T>::ProposalEnacted {
-						proposal: Proposal::<T>::SetGovernanceKey((chain, key)),
+						proposal: Proposal::SetGovernanceKey((chain, key)),
 					});
 					GovKeyUpdateAwaitingEnactment::<T>::kill();
 					weight += T::WeightInfo::on_initialize_execute_proposal();
@@ -155,12 +158,12 @@ pub mod pallet {
 			if let Some((enactment_block, key)) = CommKeyUpdateAwaitingEnactment::<T>::get() {
 				if enactment_block == current_block {
 					T::EthBroadcaster::threshold_sign_and_broadcast(
-						<T::EthApiCalls as SetCommunityKeyApiCall<T::Chain>>::new_unsigned(
+						<T::EthApiCalls as SetCommunityKeyApiCall<Ethereum>>::new_unsigned(
 							key.clone(),
 						),
 					);
 					Self::deposit_event(Event::<T>::ProposalEnacted {
-						proposal: Proposal::<T>::SetCommunityKey(key),
+						proposal: Proposal::SetCommunityKey(key),
 					});
 					CommKeyUpdateAwaitingEnactment::<T>::kill();
 					weight += T::WeightInfo::on_initialize_execute_proposal();
@@ -186,7 +189,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::submit_proposal())]
 		pub fn submit_proposal(
 			origin: OriginFor<T>,
-			proposal: Proposal<T>,
+			proposal: Proposal,
 		) -> DispatchResultWithPostInfo {
 			let proposer = ensure_signed(origin)?;
 			T::FeePayment::try_burn_fee(&proposer, T::ProposalFee::get())?;
@@ -209,7 +212,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::back_proposal(Backers::<T>::decode_len(proposal).unwrap_or_default() as u32))]
 		pub fn back_proposal(
 			origin: OriginFor<T>,
-			proposal: Proposal<T>,
+			proposal: Proposal,
 		) -> DispatchResultWithPostInfo {
 			let backer = ensure_signed(origin)?;
 			Backers::<T>::try_mutate_exists(proposal, |maybe_backers| match maybe_backers {
@@ -227,11 +230,7 @@ pub mod pallet {
 	}
 
 	impl<T: Config> Pallet<T> {
-		fn to_gov_key(any_key: Vec<u8>) -> <<T as Config>::Chain as ChainCrypto>::GovKey {
-			// TODO: Transform vector u8 to eth address.
-			todo!()
-		}
-		pub fn resolve_vote(proposal: Proposal<T>) -> usize {
+		pub fn resolve_vote(proposal: Proposal) -> usize {
 			let backers = Backers::<T>::take(&proposal);
 			Self::deposit_event(
 				if backers.iter().map(T::StakingInfo::total_stake_of).sum::<T::Amount>() >
