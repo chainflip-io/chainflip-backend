@@ -72,6 +72,8 @@ where
 			);
 			let w = U::on_runtime_upgrade();
 			StorageVersion::new(TO).put::<P>();
+			#[cfg(feature = "try-runtime")]
+			try_runtime_helpers::update_migration_bounds::<P, FROM, TO>();
 			w + RuntimeDbWeight::default().reads_writes(1, 1)
 		} else {
 			log::info!(
@@ -86,7 +88,6 @@ where
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
-		try_runtime_helpers::update_migration_bounds::<P, FROM, TO>();
 		let state = U::pre_upgrade()?;
 		log::info!(
 			"✅ {}: Pre-upgrade checks for migration from version {:?} to {:?} ok.",
