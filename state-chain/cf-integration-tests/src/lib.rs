@@ -24,7 +24,7 @@ use sp_core::crypto::{Pair, Public};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use state_chain_runtime::{
 	constants::common::*, opaque::SessionKeys, AccountId, Emissions, Flip, Governance, Reputation,
-	Runtime, RuntimeOrigin, Staking, System, Timestamp, Validator, Witnesser,
+	Runtime, RuntimeOrigin, Staking, System, Validator, Witnesser,
 };
 
 use cf_primitives::{AuthorityCount, BlockNumber, EpochIndex, FlipBalance};

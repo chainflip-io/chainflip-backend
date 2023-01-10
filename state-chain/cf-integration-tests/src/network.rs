@@ -28,8 +28,6 @@ use state_chain_runtime::{
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::threshold_signing::KeyUtils;
-// arbitrary units of block time
-pub const BLOCK_TIME: u64 = 1000;
 
 // TODO: Can we use the actual events here?
 // Events from ethereum contract
@@ -435,7 +433,6 @@ impl Network {
 	}
 
 	pub fn move_forward_blocks(&mut self, n: u32) {
-		const INIT_TIMESTAMP: u64 = 30_000;
 		let current_block_number = System::block_number();
 		while System::block_number() < current_block_number + n {
 			let block_number = System::block_number() + 1;
@@ -449,7 +446,6 @@ impl Network {
 				digest
 			});
 
-			Timestamp::set_timestamp((block_number as u64 * BLOCK_TIME) + INIT_TIMESTAMP);
 			state_chain_runtime::AllPalletsWithoutSystem::on_initialize(block_number);
 			// We must finalise this to clear the previous author which is otherwise cached
 			Authorship::on_finalize(block_number);
