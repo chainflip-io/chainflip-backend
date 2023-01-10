@@ -7,7 +7,7 @@ use frame_support::{assert_noop, assert_ok};
 #[test]
 fn can_create_new_trading_pool() {
 	new_test_ext().execute_with(|| {
-		let range = AmmRange { lower: -100, upper: 100 };
+		let range = AmmRange::new(-100, 100);
 		let asset = Asset::Eth;
 		let default_sqrt_price = PoolState::sqrt_price_at_tick(0);
 		// Pool does not exist.
@@ -59,7 +59,7 @@ fn can_create_new_trading_pool() {
 #[test]
 fn can_enable_disable_trading_pool() {
 	new_test_ext().execute_with(|| {
-		let range = AmmRange { lower: -100, upper: 100 };
+		let range = AmmRange::new(-100, 100);
 		let asset = Asset::Eth;
 		let default_sqrt_price = PoolState::sqrt_price_at_tick(0);
 

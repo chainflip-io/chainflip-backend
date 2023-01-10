@@ -28,6 +28,12 @@ pub struct AmmRange {
 	pub upper: Tick,
 }
 
+impl AmmRange {
+	pub fn new(lower: Tick, upper: Tick) -> Self {
+		Self { lower, upper }
+	}
+}
+
 /// Denotes the two assets contained in a pool.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
@@ -147,4 +153,12 @@ pub struct TickInfo {
 	pub liquidity_delta: i128,
 	pub liquidity_gross: u128,
 	pub fee_growth_outside: PoolAssetMap<FeeGrowthQ128F128>,
+}
+
+// Simple struct used to represent an minted Liquidity position.
+#[derive(Copy, Clone, Default, Eq, PartialEq, Debug)]
+pub struct MintedLiquidity {
+	pub range: AmmRange,
+	pub liquidity: Liquidity,
+	pub fees_acrued: PoolAssetMap<u128>,
 }

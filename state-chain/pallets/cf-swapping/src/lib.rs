@@ -239,43 +239,41 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		pub fn execute_group_of_swaps(swaps: Vec<Swap>, from: Asset, to: Asset) {
 			if swaps.is_empty() {
-				return;
+				return
 			}
-			let mut bundle_input = 0;
-			let mut bundle_inputs = vec![];
+			let bundle_total_input: AssetAmount = swaps
+				.iter()
+				.map(|swap| {
+					debug_assert_eq!((swap.from, swap.to), (from, to));
+					swap.amount
+				})
+				.sum();
 
-			for swap in &swaps {
-				debug_assert_eq!((swap.from, swap.to), (from, to));
-				// TODO: use a struct instead of tuple.
-				bundle_inputs.push((swap.amount, swap.to, swap.egress_address, swap.swap_id));
-				bundle_input.saturating_accrue(swap.amount);
-			}
-
-			let (bundle_output, _, _) = T::SwappingApi::swap(from, to, bundle_input.into())
+			let (bundle_output, _, _) = T::SwappingApi::swap(from, to, bundle_total_input.into())
 				.unwrap_or((U256::zero(), U256::zero(), U256::zero()));
 
-			for swap in &swaps {
-				Self::deposit_event(Event::<T>::SwapExecuted { swap_id: swap.swap_id });
-			}
-			
-			if bundle_input > 0 {
-				for (input_amount, egress_asset, egress_address, swap_id) in bundle_inputs {
+			if bundle_total_input > 0 {
+				for swap in swaps {
+					Self::deposit_event(Event::<T>::SwapExecuted { swap_id: swap.swap_id });
 					if let Some(swap_output) = multiply_by_rational_with_rounding(
-						input_amount,
+						swap.amount,
 						bundle_output.as_u128(),
-						bundle_input,
+						bundle_total_input,
 						Rounding::Down,
 					) {
 						let egress_id = T::EgressHandler::schedule_egress(
-							egress_asset,
+							swap.to,
 							swap_output,
-							egress_address,
+							swap.egress_address,
 						);
-						Self::deposit_event(Event::<T>::SwapEgressScheduled { swap_id, egress_id });
+						Self::deposit_event(Event::<T>::SwapEgressScheduled {
+							swap_id: swap.swap_id,
+							egress_id,
+						});
 					} else {
 						log::error!(
 							"Unable to calculate valid swap output for swap {:?}!",
-							&(input_amount, bundle_input, bundle_output)
+							&(swap.amount, bundle_total_input, bundle_output)
 						);
 					}
 				}

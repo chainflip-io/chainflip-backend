@@ -1,8 +1,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use cf_amm::{MintError, PoolState, PositionError, MAX_FEE_100TH_BIPS};
 use cf_primitives::{
-	chains::assets::any, AccountId, AmmRange, AmountU256, Liquidity, PoolAssetMap, SqrtPriceQ64F96,
-	Tick,
+	chains::assets::any, AccountId, AmmRange, AmountU256, Liquidity, MintedLiquidity, PoolAssetMap,
+	SqrtPriceQ64F96, Tick,
 };
 use cf_traits::{Chainflip, LiquidityPoolApi};
 use frame_support::pallet_prelude::*;
@@ -322,10 +322,7 @@ impl<T: Config> LiquidityPoolApi<AmountU256, AccountId> for Pallet<T> {
 	}
 
 	/// Returns the user's Minted liquidities and fees acrued for a specific pool.
-	fn minted_liqudity(
-		lp: &AccountId,
-		asset: &any::Asset,
-	) -> Vec<(Tick, Tick, Liquidity, PoolAssetMap<u128>)> {
+	fn minted_liqudity(lp: &AccountId, asset: &any::Asset) -> Vec<MintedLiquidity> {
 		if let Some(pool) = Pools::<T>::get(&asset) {
 			pool.minted_liqudity(lp.clone())
 		} else {

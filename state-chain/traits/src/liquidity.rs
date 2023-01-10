@@ -1,6 +1,6 @@
 use cf_primitives::{
-	AmmRange, AmountU256, Asset, AssetAmount, ForeignChainAddress, Liquidity, PoolAssetMap,
-	SqrtPriceQ64F96, Tick,
+	AmmRange, AmountU256, Asset, AssetAmount, ForeignChainAddress, Liquidity, MintedLiquidity,
+	PoolAssetMap, SqrtPriceQ64F96, Tick,
 };
 use frame_support::dispatch::DispatchError;
 use sp_core::U256;
@@ -81,10 +81,7 @@ pub trait LiquidityPoolApi<Amount, AccountId> {
 	) -> Result<PoolAssetMap<u128>, DispatchError>;
 
 	/// Returns the user's Minted liquidities and fees acrued for a specific pool.
-	fn minted_liqudity(
-		lp: &AccountId,
-		asset: &Asset,
-	) -> Vec<(Tick, Tick, Liquidity, PoolAssetMap<u128>)>;
+	fn minted_liqudity(lp: &AccountId, asset: &Asset) -> Vec<MintedLiquidity>;
 
 	/// Gets the current price of the pool in SqrtPrice
 	fn current_sqrt_price(asset: &Asset) -> Option<SqrtPriceQ64F96>;

@@ -27,10 +27,10 @@ use serde::{Deserialize, Serialize};
 
 use cf_primitives::{
 	liquidity::{
-		AmountU256, FeeGrowthQ128F128, Liquidity, PoolAsset, PoolAssetMap, SqrtPriceQ64F96, Tick,
-		TickInfo,
+		AmountU256, FeeGrowthQ128F128, Liquidity, MintedLiquidity, PoolAsset, PoolAssetMap,
+		SqrtPriceQ64F96, Tick, TickInfo,
 	},
-	AccountId,
+	AccountId, AmmRange,
 };
 use sp_core::{U256, U512};
 
@@ -573,15 +573,16 @@ impl PoolState {
 	}
 
 	/// Returns all postitions for a specific user.
-	pub fn minted_liqudity(
-		&self,
-		lp: AccountId,
-	) -> Vec<(Tick, Tick, Liquidity, PoolAssetMap<u128>)> {
+	pub fn minted_liqudity(&self, lp: AccountId) -> Vec<MintedLiquidity> {
 		self.positions
 			.iter()
 			.filter_map(|((account, lower, upper), position)| {
 				if *account == lp {
-					Some((*lower, *upper, position.liquidity, position.fees_owed))
+					Some(MintedLiquidity {
+						range: AmmRange::new(*lower, *upper),
+						liquidity: position.liquidity,
+						fees_acrued: position.fees_owed,
+					})
 				} else {
 					None
 				}

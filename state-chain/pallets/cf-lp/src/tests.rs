@@ -1,7 +1,9 @@
 use crate::{mock::*, FreeBalances};
 
 use cf_amm::PoolState;
-use cf_primitives::{liquidity::AmmRange, AccountId, Asset, ForeignChainAddress, PoolAssetMap};
+use cf_primitives::{
+	liquidity::AmmRange, AccountId, Asset, ForeignChainAddress, MintedLiquidity, PoolAssetMap,
+};
 use cf_traits::{
 	mocks::system_state_info::MockSystemStateInfo, LiquidityPoolApi, SwappingApi, SystemStateInfo,
 };
@@ -11,7 +13,7 @@ use sp_core::U256;
 #[test]
 fn only_liquidity_provider_can_manage_positions() {
 	new_test_ext().execute_with(|| {
-		let range = AmmRange { lower: -100, upper: 100 };
+		let range = AmmRange::new(-100, 100);
 		let asset = Asset::Eth;
 
 		assert_noop!(
@@ -130,7 +132,7 @@ fn cannot_manage_liquidity_during_maintenance() {
 		FreeBalances::<Test>::insert(AccountId::from(LP_ACCOUNT), Asset::Eth, 1_000_000);
 		FreeBalances::<Test>::insert(AccountId::from(LP_ACCOUNT), Asset::Usdc, 1_000_000);
 
-		let range = AmmRange { lower: -100, upper: 100 };
+		let range = AmmRange::new(-100, 100);
 		let asset = Asset::Eth;
 
 		assert_ok!(LiquidityPools::new_pool(
@@ -173,7 +175,7 @@ fn can_mint_and_burn_liquidity() {
 		FreeBalances::<Test>::insert(AccountId::from(LP_ACCOUNT), Asset::Eth, 1_000_000);
 		FreeBalances::<Test>::insert(AccountId::from(LP_ACCOUNT), Asset::Usdc, 1_000_000);
 
-		let range = AmmRange { lower: -100, upper: 100 };
+		let range = AmmRange::new(-100, 100);
 		let asset = Asset::Eth;
 
 		assert_ok!(LiquidityPools::new_pool(
@@ -221,7 +223,11 @@ fn can_mint_and_burn_liquidity() {
 
 		assert_eq!(
 			LiquidityPools::minted_liqudity(&LP_ACCOUNT.into(), &asset),
-			vec![(range.lower, range.upper, 1_000_000, PoolAssetMap::default())]
+			vec![MintedLiquidity {
+				range: AmmRange::new(range.lower, range.upper),
+				liquidity: 1_000_000,
+				fees_acrued: PoolAssetMap::default()
+			}]
 		);
 
 		// Can mint more liquidity (+1000)
@@ -262,7 +268,11 @@ fn can_mint_and_burn_liquidity() {
 
 		assert_eq!(
 			LiquidityPools::minted_liqudity(&LP_ACCOUNT.into(), &asset),
-			vec![(range.lower, range.upper, 1_001_000, PoolAssetMap::default())]
+			vec![MintedLiquidity {
+				range: AmmRange::new(range.lower, range.upper),
+				liquidity: 1_001_000,
+				fees_acrued: PoolAssetMap::default()
+			}]
 		);
 
 		// Can partially burn a liquidity position (-500_000)
@@ -304,7 +314,11 @@ fn can_mint_and_burn_liquidity() {
 
 		assert_eq!(
 			LiquidityPools::minted_liqudity(&LP_ACCOUNT.into(), &asset),
-			vec![(range.lower, range.upper, 501_000, PoolAssetMap::default())]
+			vec![MintedLiquidity {
+				range: AmmRange::new(range.lower, range.upper),
+				liquidity: 501_000,
+				fees_acrued: PoolAssetMap::default()
+			}]
 		);
 
 		// Can fully burn a position
@@ -356,7 +370,7 @@ fn can_collect_fee() {
 		FreeBalances::<Test>::insert(AccountId::from(LP_ACCOUNT), Asset::Eth, 1_000_000);
 		FreeBalances::<Test>::insert(AccountId::from(LP_ACCOUNT), Asset::Usdc, 1_000_000);
 
-		let range = AmmRange { lower: -100, upper: 100 };
+		let range = AmmRange::new(-100, 100);
 		let asset = Asset::Eth;
 
 		// 50% fee
@@ -393,7 +407,11 @@ fn can_collect_fee() {
 		);
 		assert_eq!(
 			LiquidityPools::minted_liqudity(&LP_ACCOUNT.into(), &asset),
-			vec![(-100, 100, 1_000_000, PoolAssetMap::new(0, 0))]
+			vec![MintedLiquidity {
+				range: AmmRange::new(range.lower, range.upper),
+				liquidity: 1_000_000,
+				fees_acrued: PoolAssetMap::default()
+			}]
 		);
 
 		// Balance before the collect.
@@ -432,7 +450,11 @@ fn can_collect_fee() {
 		// Fees has been reset.
 		assert_eq!(
 			LiquidityPools::minted_liqudity(&LP_ACCOUNT.into(), &asset),
-			vec![(-100, 100, 1_000_000, PoolAssetMap::new(0, 0))]
+			vec![MintedLiquidity {
+				range: AmmRange::new(range.lower, range.upper),
+				liquidity: 1_000_000,
+				fees_acrued: PoolAssetMap::default()
+			}]
 		);
 	});
 }
