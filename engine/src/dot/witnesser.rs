@@ -18,7 +18,7 @@ use futures::{stream, Stream, StreamExt};
 use pallet_cf_ingress_egress::IngressWitness;
 use sp_runtime::MultiSignature;
 use state_chain_runtime::PolkadotInstance;
-use subxt::events::{EventFilter, FilteredEventDetails, Phase, StaticEvent};
+use subxt::events::{Phase, StaticEvent};
 
 use crate::{
 	state_chain_observer::client::extrinsic_api::ExtrinsicApi,
@@ -89,6 +89,12 @@ impl StaticEvent for TransactionFeePaid {
 	const EVENT: &'static str = "TransactionFeePaid";
 }
 
+enum EventWrapper {
+	ProxyAdded(ProxyAdded),
+	Transfer(Transfer),
+	TransactionFeePaid(TransactionFeePaid),
+}
+
 pub async fn dot_block_head_stream_from<BlockHeaderStream, DotRpc>(
 	from_block: PolkadotBlockNumber,
 	safe_head_stream: BlockHeaderStream,
@@ -150,18 +156,8 @@ where
 }
 
 #[allow(clippy::vec_box)]
-fn check_for_interesting_events_in_block<
-	BlockEventDetails: IntoIterator<
-		Item = Result<
-			FilteredEventDetails<
-				PolkadotHash,
-				(Option<ProxyAdded>, Option<Transfer>, Option<TransactionFeePaid>),
-			>,
-			subxt::Error,
-		>,
-	>,
->(
-	block_event_details: BlockEventDetails,
+fn check_for_interesting_events_in_block(
+	block_events: Vec<(Phase, EventWrapper)>,
 	block_number: PolkadotBlockNumber,
 	our_vault: &PolkadotAccountId,
 	ingress_address_receiver: &mut tokio::sync::mpsc::UnboundedReceiver<PolkadotAccountId>,
@@ -170,7 +166,7 @@ fn check_for_interesting_events_in_block<
 ) -> (
 	Vec<(PolkadotExtrinsicIndex, PolkadotBalance)>,
 	Vec<IngressWitness<Polkadot>>,
-	Vec<Box<state_chain_runtime::Call>>,
+	Vec<Box<state_chain_runtime::RuntimeCall>>,
 ) {
 	// to contain all the ingress witnessse for this block
 	let mut ingress_witnesses = Vec::new();
@@ -180,11 +176,13 @@ fn check_for_interesting_events_in_block<
 	let mut interesting_indices = Vec::new();
 	let mut vault_key_rotated_calls: Vec<Box<_>> = Vec::new();
 	let mut fee_paid_for_xt_at_index = HashMap::new();
-	let mut events_iter = block_event_details.into_iter();
-	while let Some(Ok(event_details)) = events_iter.next() {
-		if let Phase::ApplyExtrinsic(extrinsic_index) = event_details.phase {
-			match event_details.event {
-				(Some(ProxyAdded { delegator, delegatee, .. }), None, None) => {
+	let mut events_iter = block_events.iter();
+	while let Some((phase, wrapped_event)) = events_iter.next() {
+		if let Phase::ApplyExtrinsic(extrinsic_index) = *phase {
+			// we want to match on just one of the events, no tuple.
+
+			match wrapped_event {
+				EventWrapper::ProxyAdded(ProxyAdded { delegator, delegatee, .. }) => {
 					if AsRef::<[u8; 32]>::as_ref(&delegator) !=
 						AsRef::<[u8; 32]>::as_ref(&our_vault)
 					{
@@ -209,7 +207,7 @@ fn check_for_interesting_events_in_block<
 						.into(),
 					));
 				},
-				(None, Some(Transfer { to, amount, from }), None) => {
+				EventWrapper::Transfer(Transfer { to, amount, from }) => {
 					// When we get a transfer event, we want to check that we have
 					// pulled the latest addresses to monitor from the chain first
 					while let Ok(address) = ingress_address_receiver.try_recv() {
@@ -224,23 +222,20 @@ fn check_for_interesting_events_in_block<
 						ingress_witnesses.push(IngressWitness {
 							ingress_address: to.clone(),
 							asset: assets::dot::Asset::Dot,
-							amount,
+							amount: *amount,
 							tx_id: TxId { block_number, extrinsic_index },
 						});
 					}
 
 					// if `from` is our_vault then we're doing an egress
 					// if `to` is our_vault then we're doing an "ingress fetch"
-					if from == *our_vault || to == *our_vault {
+					if from == our_vault || to == our_vault {
 						slog::info!(logger, "Transfer from or to our_vault at block: {block_number}, extrinsic index: {extrinsic_index}");
 						interesting_indices.push(extrinsic_index);
 					}
 				},
-				(None, None, Some(TransactionFeePaid { actual_fee, .. })) => {
-					fee_paid_for_xt_at_index.insert(extrinsic_index, actual_fee);
-				},
-				_ => {
-					// just not an interesting event
+				EventWrapper::TransactionFeePaid(TransactionFeePaid { actual_fee, .. }) => {
+					fee_paid_for_xt_at_index.insert(extrinsic_index, *actual_fee);
 				},
 			}
 		}
@@ -308,7 +303,7 @@ where
 
 				// Stream of Events objects. Each `Events` contains the events for a particular
 				// block
-				let mut filtered_events_stream = Box::pin(
+				let mut block_events_stream = Box::pin(
 					take_while_ok(
 						block_head_stream_from.then(|mini_header| {
 							let dot_client = dot_client.clone();
@@ -328,12 +323,33 @@ where
 						&logger,
 					)
 					.map(|(block_hash, block_number, events)| {
-						(block_hash, block_number, <(ProxyAdded, Transfer, TransactionFeePaid)>::filter(events))
+						(block_hash, block_number, events.iter().filter_map(|event_details| {
+							match event_details {
+								Ok(event_details) => {
+									if event_details.pallet_name() == ProxyAdded::PALLET && event_details.variant_name() == ProxyAdded::EVENT {
+										Some((event_details.phase(), EventWrapper::ProxyAdded(event_details.as_event::<ProxyAdded>().unwrap().unwrap())))
+									} else if event_details.pallet_name() == Transfer::PALLET && event_details.variant_name() == Transfer::EVENT {
+										Some((event_details.phase(), EventWrapper::Transfer(event_details.as_event::<Transfer>().unwrap().unwrap())))
+									} else if event_details.pallet_name() == TransactionFeePaid::PALLET && event_details.variant_name() == TransactionFeePaid::EVENT {
+										Some((event_details.phase(), EventWrapper::TransactionFeePaid(event_details.as_event::<TransactionFeePaid>().unwrap().unwrap())))
+									} else {
+										None
+									}
+								}
+								Err(err) => {
+									slog::error!(
+										&logger,
+										"Error while parsing event: {:?}", err
+									);
+									None
+								}
+							}
+						}).collect())
 					}),
 				);
 
 				while let Some((block_hash, block_number, block_event_details)) =
-					filtered_events_stream.next().await
+					block_events_stream.next().await
 				{
 					if should_end_witnessing::<Polkadot>(
 						end_witnessing_signal.clone(),
@@ -384,8 +400,8 @@ where
 							monitored_signatures.insert(sig);
 						}
 						for (extrinsic_index, tx_fee) in interesting_indices {
-							let xt = block.block.extrinsics.get(extrinsic_index as usize).expect("We know this exists since we got this index from the event, from the block we are querying.");
-							let xt_encoded = xt.encode();
+							let xt = block.extrinsics.get(extrinsic_index as usize).expect("We know this exists since we got this index from the event, from the block we are querying.");
+							let xt_encoded = xt.0.encode();
 							let mut xt_bytes = xt_encoded.as_slice();
 							let unchecked = PolkadotUncheckedExtrinsic::decode(&mut xt_bytes);
 							if let Ok(unchecked) = unchecked {
@@ -470,12 +486,6 @@ mod tests {
 		state_chain_observer::client::mocks::MockStateChainClient,
 	};
 
-	enum EventWrapper {
-		ProxyAdded(ProxyAdded),
-		Transfer(Transfer),
-		TransactionFeePaid(TransactionFeePaid),
-	}
-
 	fn mock_proxy_added(
 		delegator: &PolkadotAccountId,
 		delegatee: &PolkadotAccountId,
@@ -504,18 +514,18 @@ mod tests {
 		EventWrapper::Transfer(Transfer { from: from.clone(), to: to.clone(), amount })
 	}
 
-	type FilteredEvents = FilteredEventDetails<
-		PolkadotHash,
-		(Option<ProxyAdded>, Option<Transfer>, Option<TransactionFeePaid>),
-	>;
+	// type FilteredEvents = FilteredEventDetails<
+	// 	PolkadotHash,
+	// 	(Option<ProxyAdded>, Option<Transfer>, Option<TransactionFeePaid>),
+	// >;
 
 	fn block_event_details_from_events(
 		events: &[(PolkadotExtrinsicIndex, EventWrapper)],
-	) -> Vec<Result<FilteredEvents, subxt::Error>> {
+	) -> Vec<Result<Events<PolkadotConfig>, subxt::Error>> {
 		events
 			.iter()
 			.map(|(xt_index, event)| {
-				Result::<_, subxt::Error>::Ok(FilteredEventDetails {
+				Result::<_, subxt::Error>::Ok(Events {
 					phase: Phase::ApplyExtrinsic(*xt_index),
 					block_hash: PolkadotHash::default(),
 					event: {
