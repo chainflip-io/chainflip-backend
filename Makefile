@@ -49,3 +49,13 @@ purge-chain:
 .PHONY: purge-chain-debug
 purge-chain-debug:
 	./scripts/purge-chain-debug.sh
+
+.PHONY: build-chainspec-sisyphos
+build-chainspec-sisyphos:
+	./target/release/chainflip-node build-spec --chain sisyphos > state-chain/node/chainspecs/sisyphos.chainspec.json
+	./target/release/chainflip-node build-spec --chain sisyphos --raw > state-chain/node/chainspecs/sisyphos.chainspec.raw.json
+
+.PHONY: build-chainspec-perseverance
+build-chainspec-perseverance:
+	./target/release/chainflip-node build-spec --chain perseverance > state-chain/node/chainspecs/perseverance.chainspec.json
+	./target/release/chainflip-node build-spec --chain perseverance --raw > state-chain/node/chainspecs/perseverance.chainspec.raw.json
