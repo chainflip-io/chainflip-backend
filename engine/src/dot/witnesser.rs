@@ -89,6 +89,7 @@ impl StaticEvent for TransactionFeePaid {
 	const EVENT: &'static str = "TransactionFeePaid";
 }
 
+#[derive(Clone)]
 enum EventWrapper {
 	ProxyAdded(ProxyAdded),
 	Transfer(Transfer),
@@ -514,33 +515,13 @@ mod tests {
 		EventWrapper::Transfer(Transfer { from: from.clone(), to: to.clone(), amount })
 	}
 
-	// type FilteredEvents = FilteredEventDetails<
-	// 	PolkadotHash,
-	// 	(Option<ProxyAdded>, Option<Transfer>, Option<TransactionFeePaid>),
-	// >;
-
-	fn block_event_details_from_events(
+	fn phase_and_events(
 		events: &[(PolkadotExtrinsicIndex, EventWrapper)],
-	) -> Vec<Result<Events<PolkadotConfig>, subxt::Error>> {
+	) -> Vec<(Phase, EventWrapper)> {
 		events
-			.iter()
-			.map(|(xt_index, event)| {
-				Result::<_, subxt::Error>::Ok(Events {
-					phase: Phase::ApplyExtrinsic(*xt_index),
-					block_hash: PolkadotHash::default(),
-					event: {
-						match event {
-							EventWrapper::ProxyAdded(proxy_added) =>
-								(Some(proxy_added.clone()), None, None),
-							EventWrapper::Transfer(transfer) =>
-								(None, Some(transfer.clone()), None),
-							EventWrapper::TransactionFeePaid(tx_fee_paid) =>
-								(None, None, Some(tx_fee_paid.clone())),
-						}
-					},
-				})
-			})
-			.collect::<Vec<Result<_, _>>>()
+			.into_iter()
+			.map(|(xt_index, event)| (Phase::ApplyExtrinsic(*xt_index), event.clone()))
+			.collect()
 	}
 
 	#[test]
@@ -549,7 +530,7 @@ mod tests {
 		let other_acct = PolkadotAccountId::from([1; 32]);
 		let our_proxy_added_index = 1u32;
 		let fee_paid = 10000;
-		let block_event_details = block_event_details_from_events(&[
+		let block_event_details = phase_and_events(&[
 			// we should witness this one
 			(our_proxy_added_index, mock_proxy_added(&our_vault, &other_acct)),
 			(our_proxy_added_index, mock_tx_fee_paid(fee_paid)),
@@ -587,7 +568,7 @@ mod tests {
 		let transfer_2_ingress_addr = PolkadotAccountId::from([2; 32]);
 		const TRANSFER_2_AMOUNT: PolkadotBalance = 20000;
 
-		let block_event_details = block_event_details_from_events(&[
+		let block_event_details = phase_and_events(&[
 			// we'll be witnessing this from the start
 			(
 				TRANSFER_1_INDEX,
@@ -651,7 +632,7 @@ mod tests {
 		let ingress_fetch_amount = 40000;
 		let our_vault = PolkadotAccountId::from([3; 32]);
 
-		let block_event_details = block_event_details_from_events(&[
+		let block_event_details = phase_and_events(&[
 			// we'll be witnessing this from the start
 			(
 				egress_index,
