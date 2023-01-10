@@ -606,13 +606,13 @@ fn set_keygen_response_timeout_works() {
 	new_test_ext_no_key().execute_with(|| {
 		let init_timeout = KeygenResponseTimeout::<MockRuntime, _>::get();
 
-		VaultsPallet::set_keygen_response_timeout(Origin::root(), init_timeout).unwrap();
+		VaultsPallet::set_keygen_response_timeout(RuntimeOrigin::root(), init_timeout).unwrap();
 
 		assert!(maybe_last_event::<MockRuntime>().is_none());
 
 		let new_timeout = init_timeout + 1;
 
-		VaultsPallet::set_keygen_response_timeout(Origin::root(), new_timeout).unwrap();
+		VaultsPallet::set_keygen_response_timeout(RuntimeOrigin::root(), new_timeout).unwrap();
 
 		assert_last_event!(crate::Event::KeygenResponseTimeoutUpdated { .. });
 		assert_eq!(KeygenResponseTimeout::<MockRuntime, _>::get(), new_timeout)
