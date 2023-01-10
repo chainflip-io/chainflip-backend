@@ -17,6 +17,7 @@ pub enum PolkadotApi<Environment: 'static> {
 	BatchFetchAndTransfer(batch_fetch_and_transfer::BatchFetchAndTransfer),
 	RotateVaultProxy(rotate_vault_proxy::RotateVaultProxy),
 	CreateAnonymousVault(create_anonymous_vault::CreateAnonymousVault),
+	ChangeGovKey(set_gov_key_with_agg_key::ChangeGovKey),
 	#[doc(hidden)]
 	#[codec(skip)]
 	_Phantom(PhantomData<Environment>, Never),
@@ -26,6 +27,7 @@ pub enum PolkadotApi<Environment: 'static> {
 pub enum SystemAccounts {
 	Proxy,
 	Vault,
+	Gov,
 }
 
 impl<E> AllBatch<Polkadot> for PolkadotApi<E>
@@ -113,12 +115,19 @@ impl<E> From<create_anonymous_vault::CreateAnonymousVault> for PolkadotApi<E> {
 	}
 }
 
+impl<E> From<set_gov_key_with_agg_key::ChangeGovKey> for PolkadotApi<E> {
+	fn from(tx: set_gov_key_with_agg_key::ChangeGovKey) -> Self {
+		Self::ChangeGovKey(tx)
+	}
+}
+
 impl<E> ApiCall<Polkadot> for PolkadotApi<E> {
 	fn threshold_signature_payload(&self) -> <Polkadot as ChainCrypto>::Payload {
 		match self {
 			PolkadotApi::BatchFetchAndTransfer(tx) => tx.threshold_signature_payload(),
 			PolkadotApi::RotateVaultProxy(tx) => tx.threshold_signature_payload(),
 			PolkadotApi::CreateAnonymousVault(tx) => tx.threshold_signature_payload(),
+			PolkadotApi::ChangeGovKey(tx) => tx.threshold_signature_payload(),
 			PolkadotApi::_Phantom(..) => unreachable!(),
 		}
 	}
@@ -128,6 +137,7 @@ impl<E> ApiCall<Polkadot> for PolkadotApi<E> {
 			PolkadotApi::BatchFetchAndTransfer(call) => call.signed(threshold_signature).into(),
 			PolkadotApi::RotateVaultProxy(call) => call.signed(threshold_signature).into(),
 			PolkadotApi::CreateAnonymousVault(call) => call.signed(threshold_signature).into(),
+			PolkadotApi::ChangeGovKey(call) => call.signed(threshold_signature).into(),
 			PolkadotApi::_Phantom(..) => unreachable!(),
 		}
 	}
@@ -137,6 +147,7 @@ impl<E> ApiCall<Polkadot> for PolkadotApi<E> {
 			PolkadotApi::BatchFetchAndTransfer(call) => call.chain_encoded(),
 			PolkadotApi::RotateVaultProxy(call) => call.chain_encoded(),
 			PolkadotApi::CreateAnonymousVault(call) => call.chain_encoded(),
+			PolkadotApi::ChangeGovKey(call) => call.chain_encoded(),
 			PolkadotApi::_Phantom(..) => unreachable!(),
 		}
 	}
@@ -146,6 +157,7 @@ impl<E> ApiCall<Polkadot> for PolkadotApi<E> {
 			PolkadotApi::BatchFetchAndTransfer(call) => call.is_signed(),
 			PolkadotApi::RotateVaultProxy(call) => call.is_signed(),
 			PolkadotApi::CreateAnonymousVault(call) => call.is_signed(),
+			PolkadotApi::ChangeGovKey(call) => call.is_signed(),
 			PolkadotApi::_Phantom(..) => unreachable!(),
 		}
 	}
