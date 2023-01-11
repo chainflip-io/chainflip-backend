@@ -326,14 +326,14 @@ where
 							match event_details {
 								Ok(event_details) => {
 									if event_details.pallet_name() == ProxyAdded::PALLET && event_details.variant_name() == ProxyAdded::EVENT {
-										Some((event_details.phase(), EventWrapper::ProxyAdded(event_details.as_event::<ProxyAdded>().unwrap().unwrap())))
+										Some(EventWrapper::ProxyAdded(event_details.as_event::<ProxyAdded>().unwrap().unwrap()))
 									} else if event_details.pallet_name() == Transfer::PALLET && event_details.variant_name() == Transfer::EVENT {
-										Some((event_details.phase(), EventWrapper::Transfer(event_details.as_event::<Transfer>().unwrap().unwrap())))
+										Some(EventWrapper::Transfer(event_details.as_event::<Transfer>().unwrap().unwrap()))
 									} else if event_details.pallet_name() == TransactionFeePaid::PALLET && event_details.variant_name() == TransactionFeePaid::EVENT {
-										Some((event_details.phase(), EventWrapper::TransactionFeePaid(event_details.as_event::<TransactionFeePaid>().unwrap().unwrap())))
+										Some(EventWrapper::TransactionFeePaid(event_details.as_event::<TransactionFeePaid>().unwrap().unwrap()))
 									} else {
 										None
-									}
+									}.map(|event| (event_details.phase(), event))
 								}
 								Err(err) => {
 									slog::error!(
