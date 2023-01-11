@@ -19,8 +19,8 @@ rlp = {default-features = false, version = '0.5'}
 
 # Other
 hex = {default-features = false, version = '0.4'}
-hex-literal = {version = '0.3'}
-serde = {optional = true, version = '1.0.126', features = ['derive']}
+hex-literal = { version = '0.3', default-features = false }
+serde = { optional = true, version = '1.0.126', features = ['derive'], default-features = false }
 log = { version = '0.4.16', default-features = false }
 
 # Substrate packages

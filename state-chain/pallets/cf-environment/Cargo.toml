@@ -17,7 +17,7 @@ cf-chains = {optional = true, path = '../../chains', default-features = false}
 cf-primitives = {path = '../../primitives', default-features = false}
 cf-traits = { path = '../../traits', default-features = false }
 serde = {optional = true, version = '1.0.126', features = ['derive']}
-hex-literal = {version = '0.3'}
+hex-literal = { version = '0.3', default-features = false }
 log = { version = '0.4.16', default-features = false }
 
 # Parity deps
@@ -27,12 +27,10 @@ scale-info = { version = '2.1.1', default-features = false, features = ['derive'
 frame-benchmarking = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", optional = true, default-features = false }
 frame-support = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
 frame-system = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
-
 sp-std = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
 sp-runtime = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
 sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
 
-# Dev dependencies
 [dev-dependencies]
 sp-io = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12" }
 
