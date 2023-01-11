@@ -34,7 +34,7 @@ jobs:
       group: ${{ github.ref }}-cargo-fmt
       cancel-in-progress: true
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08-no-sccache"
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-12-16"
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -50,15 +50,13 @@ jobs:
       group: ${{ github.ref }}-cargo-clippy
       cancel-in-progress: true
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08-no-sccache"
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-12-16"
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-      - name: Install Protobuf Compiler
-        run: apt-get install -y protobuf-compiler
       - name: Check Linting
         run: cargo ci-clippy
 
@@ -68,7 +66,7 @@ jobs:
       group: ${{ github.ref }}-cargo-doc
       cancel-in-progress: true
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08-no-sccache"
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-12-16"
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -102,7 +100,7 @@ jobs:
       cancel-in-progress: true
     needs: [set-variables, cargo-fmt]
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08-no-sccache"
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-12-16"
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -121,8 +119,6 @@ jobs:
       #     variant: sccache
       #     save: false
       # - run: sccache --show-stats
-      - name: Install Protobuf Compiler
-        run: apt-get install -y protobuf-compiler
       - name: cargo ci-build
         run: |
           cargo ci-build --locked
@@ -170,7 +166,7 @@ jobs:
       cancel-in-progress: true
     needs: [set-variables, cargo-fmt]
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08-no-sccache"
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-12-16"
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -189,8 +185,6 @@ jobs:
       #     variant: sccache
       #     save: false
       # - run: sccache --show-stats
-      - name: Install Protobuf Compiler
-        run: apt-get install -y protobuf-compiler
       - name: cargo ci-build-ibiza
         run: |
           cargo ci-build-ibiza --locked
