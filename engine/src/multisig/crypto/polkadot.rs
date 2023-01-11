@@ -1,6 +1,6 @@
-use crate::multisig::SigningPayload;
+use anyhow::Result;
 
-use super::{curve25519_ristretto::Point, ChainTag, CryptoScheme, ECPoint, Verifiable};
+use super::{curve25519_ristretto::Point, ChainTag, CryptoScheme, ECPoint};
 use cf_chains::dot::PolkadotPublicKey;
 use schnorrkel::context::{SigningContext, SigningTranscript};
 use serde::{Deserialize, Serialize};
@@ -12,6 +12,30 @@ const SIGNING_CTX: &[u8] = b"substrate";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PolkadotSignature(schnorrkel::Signature);
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Hash, Eq)]
+pub struct PolkadotSigningPayload(Vec<u8>);
+
+impl std::fmt::Display for PolkadotSigningPayload {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{}", hex::encode(&self.0))
+	}
+}
+
+impl AsRef<[u8]> for PolkadotSigningPayload {
+	fn as_ref(&self) -> &[u8] {
+		self.0.as_ref()
+	}
+}
+
+impl PolkadotSigningPayload {
+	pub fn new(payload: Vec<u8>) -> Result<Self> {
+		if payload.is_empty() || payload.len() > 256 {
+			anyhow::bail!("Invalid payload size");
+		}
+		Ok(PolkadotSigningPayload(payload))
+	}
+}
 
 impl From<PolkadotSignature> for cf_chains::dot::PolkadotSignature {
 	fn from(cfe_sig: PolkadotSignature) -> Self {
@@ -41,26 +65,11 @@ impl<'de> Deserialize<'de> for PolkadotSignature {
 	}
 }
 
-impl Verifiable for PolkadotSignature {
-	fn verify(
-		&self,
-		key_id: &crate::multisig::KeyId,
-		payload: &SigningPayload,
-	) -> anyhow::Result<()> {
-		let public_key = schnorrkel::PublicKey::from_bytes(&key_id.0).expect("invalid public key");
-
-		let context = schnorrkel::signing_context(SIGNING_CTX);
-
-		public_key
-			.verify(context.bytes(payload.0.as_slice()), &self.0)
-			.map_err(anyhow::Error::msg)
-	}
-}
-
 impl CryptoScheme for PolkadotSigning {
 	type Point = Point;
 	type Signature = PolkadotSignature;
 	type AggKey = cf_chains::dot::PolkadotPublicKey;
+	type SigningPayload = PolkadotSigningPayload;
 
 	const NAME: &'static str = "Polkadot";
 	const CHAIN_TAG: ChainTag = ChainTag::Polkadot;
@@ -84,7 +93,7 @@ impl CryptoScheme for PolkadotSigning {
 	fn build_challenge(
 		pubkey: Self::Point,
 		nonce_commitment: Self::Point,
-		payload: &SigningPayload,
+		payload: &Self::SigningPayload,
 	) -> <Self::Point as super::ECPoint>::Scalar {
 		// NOTE: This computation is copied from schnorrkel's
 		// source code (since it is the "source of truth")
@@ -111,6 +120,20 @@ impl CryptoScheme for PolkadotSigning {
 		Point::from_scalar(signature_response) == *commitment + (*y_i) * challenge * lambda_i
 	}
 
+	fn verify_signature(
+		signature: &Self::Signature,
+		key_id: &crate::multisig::KeyId,
+		payload: &Self::SigningPayload,
+	) -> anyhow::Result<()> {
+		let public_key = schnorrkel::PublicKey::from_bytes(&key_id.0).expect("invalid public key");
+
+		let context = schnorrkel::signing_context(SIGNING_CTX);
+
+		public_key
+			.verify(context.bytes(payload.0.as_slice()), &signature.0)
+			.map_err(anyhow::Error::msg)
+	}
+
 	fn agg_key(pubkey: &Self::Point) -> Self::AggKey {
 		PolkadotPublicKey(sp_core::sr25519::Public::from_raw(
 			pubkey.get_element().compress().to_bytes(),
@@ -124,6 +147,11 @@ impl CryptoScheme for PolkadotSigning {
 	) -> <Self::Point as super::ECPoint>::Scalar {
 		// "Response" is computed as done in schnorrkel
 		challenge * private_key + nonce
+	}
+
+	#[cfg(test)]
+	fn signing_payload_for_test() -> Self::SigningPayload {
+		PolkadotSigningPayload::new(vec![1_u8; 256]).unwrap()
 	}
 }
 
@@ -143,7 +171,7 @@ fn signature_should_be_valid() {
 	let public_key = Point::from_scalar(&secret_key);
 
 	// Message to sign
-	let payload = SigningPayload(vec![b't'; 256]);
+	let payload = PolkadotSigning::signing_payload_for_test();
 
 	let signature = {
 		// Pick random nonce and commit to it

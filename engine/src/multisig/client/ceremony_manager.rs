@@ -38,8 +38,6 @@ use client::common::{
 	broadcast::BroadcastStage, CeremonyCommon, CeremonyFailureReason, KeygenResultInfo,
 };
 
-use crate::multisig::SigningPayload;
-
 use super::{
 	common::{CeremonyStage, KeygenStageName, PreProcessStageDataCheck, SigningStageName},
 	keygen::{HashCommitments1, HashContext, KeygenData},
@@ -93,11 +91,11 @@ pub struct SigningCeremony<C> {
 	_phantom: PhantomData<C>,
 }
 
-impl<Crypto: CryptoScheme> CeremonyTrait for SigningCeremony<Crypto> {
-	type Crypto = Crypto;
-	type Data = SigningData<<Crypto as CryptoScheme>::Point>;
-	type Request = CeremonyRequest<Crypto>;
-	type Output = <Crypto as CryptoScheme>::Signature;
+impl<C: CryptoScheme> CeremonyTrait for SigningCeremony<C> {
+	type Crypto = C;
+	type Data = SigningData<<C as CryptoScheme>::Point>;
+	type Request = CeremonyRequest<C>;
+	type Output = <C as CryptoScheme>::Signature;
 	type FailureReason = SigningFailureReason;
 	type CeremonyStageName = SigningStageName;
 }
@@ -128,7 +126,7 @@ pub fn prepare_signing_request<Crypto: CryptoScheme>(
 	own_account_id: &AccountId,
 	signers: BTreeSet<AccountId>,
 	key_info: KeygenResultInfo<Crypto::Point>,
-	payload: SigningPayload,
+	payload: Crypto::SigningPayload,
 	outgoing_p2p_message_sender: &UnboundedSender<OutgoingMultisigStageMessages>,
 	rng: Rng,
 	logger: &slog::Logger,
@@ -398,7 +396,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 		&mut self,
 		ceremony_id: CeremonyId,
 		signers: BTreeSet<AccountId>,
-		payload: SigningPayload,
+		payload: C::SigningPayload,
 		key_info: KeygenResultInfo<C::Point>,
 		rng: Rng,
 		result_sender: CeremonyResultSender<SigningCeremony<C>>,
@@ -501,7 +499,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 
 	fn single_party_signing(
 		&self,
-		payload: SigningPayload,
+		payload: C::SigningPayload,
 		keygen_result_info: KeygenResultInfo<C::Point>,
 		mut rng: Rng,
 	) -> C::Signature {

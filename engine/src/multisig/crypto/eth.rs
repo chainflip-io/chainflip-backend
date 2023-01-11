@@ -1,6 +1,6 @@
-use crate::multisig::{crypto::ECScalar, SigningPayload};
+use crate::multisig::crypto::ECScalar;
 
-use super::{ChainTag, CryptoScheme, ECPoint, Verifiable};
+use super::{ChainTag, CryptoScheme, ECPoint};
 
 // NOTE: for now, we re-export these to make it
 // clear that these a the primitives used by ethereum.
@@ -27,32 +27,29 @@ impl From<EthSchnorrSignature> for cf_chains::eth::SchnorrVerificationComponents
 	}
 }
 
-impl Verifiable for EthSchnorrSignature {
-	fn verify(
-		&self,
-		key_id: &crate::multisig::KeyId,
-		payload: &SigningPayload,
-	) -> anyhow::Result<()> {
-		// Get the aggkey
-		let pk_ser: &[u8; 33] = key_id.0[..].try_into().unwrap();
-		let agg_key = cf_chains::eth::AggKey::from_pubkey_compressed(*pk_ser);
+/// Ethereum crypto scheme (as defined by the Key Manager contract)
+pub struct EthSigning {}
 
-		// Verify the signature with the aggkey
-		agg_key
-			.verify(payload.0.as_slice().try_into().unwrap(), &self.clone().into())
-			.map_err(|e| anyhow::anyhow!("Failed to verify signature: {:?}", e))?;
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Hash, Eq)]
+pub struct EthSigningPayload(pub [u8; 32]);
 
-		Ok(())
+impl std::fmt::Display for EthSigningPayload {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{}", hex::encode(&self.0))
 	}
 }
 
-/// Ethereum crypto scheme (as defined by the Key Manager contract)
-pub struct EthSigning {}
+impl AsRef<[u8]> for EthSigningPayload {
+	fn as_ref(&self) -> &[u8] {
+		&self.0
+	}
+}
 
 impl CryptoScheme for EthSigning {
 	type Point = Point;
 	type Signature = EthSchnorrSignature;
 	type AggKey = cf_chains::eth::AggKey;
+	type SigningPayload = EthSigningPayload;
 
 	const NAME: &'static str = "Ethereum";
 	const CHAIN_TAG: ChainTag = ChainTag::Ethereum;
@@ -65,15 +62,13 @@ impl CryptoScheme for EthSigning {
 	fn build_challenge(
 		pubkey: Self::Point,
 		nonce_commitment: Self::Point,
-		payload: &SigningPayload,
+		payload: &Self::SigningPayload,
 	) -> Scalar {
 		use crate::eth::utils::pubkey_to_eth_addr;
 		use cf_chains::eth::AggKey;
 
-		let msg_hash: &[u8; 32] = payload.0.as_slice().try_into().unwrap();
-
 		let e = AggKey::from_pubkey_compressed(pubkey.get_element().serialize())
-			.message_challenge(msg_hash, &pubkey_to_eth_addr(nonce_commitment.get_element()));
+			.message_challenge(&payload.0, &pubkey_to_eth_addr(nonce_commitment.get_element()));
 
 		Scalar::from_bytes_mod_order(&e)
 	}
@@ -96,6 +91,23 @@ impl CryptoScheme for EthSigning {
 		Point::from_scalar(signature_response) == *commitment - (*y_i) * challenge * lambda_i
 	}
 
+	fn verify_signature(
+		signature: &Self::Signature,
+		key_id: &crate::multisig::KeyId,
+		payload: &Self::SigningPayload,
+	) -> anyhow::Result<()> {
+		// Get the aggkey
+		let pk_ser: &[u8; 33] = key_id.0[..].try_into().unwrap();
+		let agg_key = cf_chains::eth::AggKey::from_pubkey_compressed(*pk_ser);
+
+		// Verify the signature with the aggkey
+		agg_key
+			.verify(&payload.0, &signature.clone().into())
+			.map_err(|e| anyhow::anyhow!("Failed to verify signature: {:?}", e))?;
+
+		Ok(())
+	}
+
 	fn agg_key(pubkey: &Self::Point) -> Self::AggKey {
 		let pk = pubkey.get_element();
 		cf_chains::eth::AggKey::from_pubkey_compressed(pk.serialize())
@@ -110,5 +122,10 @@ impl CryptoScheme for EthSigning {
 		let half_order = BigUint::from_bytes_be(&CURVE_ORDER) / 2u32 + 1u32;
 
 		x < half_order
+	}
+
+	#[cfg(test)]
+	fn signing_payload_for_test() -> Self::SigningPayload {
+		EthSigningPayload("Chainflip:Chainflip:Chainflip:01".as_bytes().try_into().unwrap())
 	}
 }

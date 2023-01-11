@@ -33,7 +33,7 @@ use crate::{
 		client::{KeygenFailureReason, MultisigClientApi},
 		eth::EthSigning,
 		polkadot::PolkadotSigning,
-		CryptoScheme, KeyId, SigningPayload,
+		CryptoScheme, KeyId,
 	},
 	p2p::{PeerInfo, PeerUpdate},
 	state_chain_observer::client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi},
@@ -103,7 +103,7 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient, C, I>(
 	ceremony_id: CeremonyId,
 	key_id: KeyId,
 	signers: BTreeSet<AccountId>,
-	payload: SigningPayload,
+	payload: C::SigningPayload,
 	logger: slog::Logger,
 ) where
 	MultisigClient: MultisigClientApi<C>,
@@ -442,7 +442,7 @@ where
                                             ceremony_id,
                                             KeyId(key_id),
                                             signatories,
-                                            SigningPayload(payload.0.to_vec()),
+                                            crate::multisig::eth::EthSigningPayload(payload.0),
                                             logger.clone(),
                                         ).await;
                                     }
@@ -466,7 +466,8 @@ where
                                             ceremony_id,
                                             KeyId(key_id),
                                             signatories,
-                                            SigningPayload(payload.0.to_vec()),
+                                            crate::multisig::polkadot::PolkadotSigningPayload::new(payload.0)
+                                                .expect("Payload should be correct size"),
                                             logger.clone(),
                                         ).await;
                                     }
