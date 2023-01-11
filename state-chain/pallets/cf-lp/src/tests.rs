@@ -362,10 +362,9 @@ fn can_mint_and_burn_liquidity() {
 	});
 }
 
-
 #[test]
 fn mint_fails_with_insufficient_balance() {
-	new_test_ext().execute_with(|| {	
+	new_test_ext().execute_with(|| {
 		let range = AmmRange::new(-100, 100);
 		let asset = Asset::Eth;
 
@@ -378,17 +377,18 @@ fn mint_fails_with_insufficient_balance() {
 		System::reset_events();
 
 		// Can open a new position
-		assert_noop!(LiquidityProvider::update_position(
-			Origin::signed(LP_ACCOUNT.into()),
-			asset,
-			range,
-			1_000_000,
-		), pallet_cf_pools::Error::<Test>::InsufficientBalance);
+		assert_noop!(
+			LiquidityProvider::update_position(
+				Origin::signed(LP_ACCOUNT.into()),
+				asset,
+				range,
+				1_000_000,
+			),
+			pallet_cf_pools::Error::<Test>::InsufficientBalance
+		);
 	});
 }
 
-// TODO: Fees do not accumulate. This needs to be fixed.
-// https://github.com/chainflip-io/chainflip-backend/issues/2686
 #[test]
 fn can_collect_fee() {
 	new_test_ext().execute_with(|| {
@@ -455,17 +455,17 @@ fn can_collect_fee() {
 			asset,
 			range
 		));
-
+		
 		System::assert_has_event(Event::LiquidityPools(pallet_cf_pools::Event::FeeCollected {
 			lp: LP_ACCOUNT.into(),
 			asset,
 			range,
-			fee_yielded: PoolAssetMap::new(0, 0),
+			fee_yielded: PoolAssetMap::new(499, 0),
 		}));
 
 		assert_eq!(
 			FreeBalances::<Test>::get(AccountId::from(LP_ACCOUNT), Asset::Eth),
-			Some(995_012)
+			Some(995_511)
 		);
 		assert_eq!(
 			FreeBalances::<Test>::get(AccountId::from(LP_ACCOUNT), Asset::Usdc),

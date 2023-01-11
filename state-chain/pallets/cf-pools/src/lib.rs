@@ -236,7 +236,13 @@ impl<T: Config> LiquidityPoolApi<AmountU256, AccountId> for Pallet<T> {
 
 				// Mint the Liquidity from the pool.
 				let asset_spent: PoolAssetMap<AmountU256> = pool
-					.mint(lp.clone(), range.lower, range.upper, liquidity_amount, balance_check_callback)
+					.mint(
+						lp.clone(),
+						range.lower,
+						range.upper,
+						liquidity_amount,
+						balance_check_callback,
+					)
 					.map_err(|e| match e {
 						MintError::InvalidTickRange => Error::<T>::InvalidTickRange,
 						MintError::MaximumGrossLiquidity => Error::<T>::MaximumGrossLiquidity,

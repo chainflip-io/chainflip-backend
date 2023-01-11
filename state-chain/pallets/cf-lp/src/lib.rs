@@ -232,6 +232,10 @@ pub mod pallet {
 
 impl<T: Config> Pallet<T> {
 	fn try_debit(account_id: &T::AccountId, asset: Asset, amount: AssetAmount) -> DispatchResult {
+		if amount == 0 {
+			return Ok(())
+		}
+
 		let mut balance = FreeBalances::<T>::get(account_id, asset).unwrap_or_default();
 		ensure!(balance >= amount, Error::<T>::InsufficientBalance);
 		balance = balance.saturating_sub(amount);
@@ -246,6 +250,10 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn credit(account_id: &T::AccountId, asset: Asset, amount: AssetAmount) -> DispatchResult {
+		if amount == 0 {
+			return Ok(())
+		}
+		
 		FreeBalances::<T>::mutate(account_id, asset, |maybe_balance| {
 			let mut balance = maybe_balance.unwrap_or_default();
 			balance = balance.saturating_add(amount);

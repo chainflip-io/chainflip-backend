@@ -9,14 +9,16 @@ use state_chain_runtime::{
 	Runtime, Swapping, System, Validator, Witnesser,
 };
 
+use cf_amm::PoolState;
 use cf_primitives::{
-	chains::{assets::{eth, any}, Ethereum},
-	AccountId, AccountRole, Asset, AssetAmount, ExchangeRate, ForeignChain, ForeignChainAddress,
-	TradingPosition, AmmRange
+	chains::{
+		assets::{any, eth},
+		Ethereum,
+	},
+	AccountId, AccountRole, AmmRange, Asset, AssetAmount, ForeignChain, ForeignChainAddress,
 };
 use cf_traits::{AddressDerivationApi, LpProvisioningApi};
 use pallet_cf_ingress_egress::IngressWitness;
-use cf_amm::PoolState;
 
 #[test]
 fn can_provide_liquidity_and_swap_assets() {
@@ -26,12 +28,8 @@ fn can_provide_liquidity_and_swap_assets() {
 		let lp_2: AccountId = AccountId::from([0xF2; 32]);
 		AccountRoles::on_new_account(&lp_1);
 		AccountRoles::on_new_account(&lp_2);
-		assert_ok!(LiquidityProvider::register_lp_account(Origin::signed(
-			lp_1.clone()
-		)));
-		assert_ok!(LiquidityProvider::register_lp_account(Origin::signed(
-			lp_2.clone()
-		)));
+		assert_ok!(LiquidityProvider::register_lp_account(Origin::signed(lp_1.clone())));
+		assert_ok!(LiquidityProvider::register_lp_account(Origin::signed(lp_2.clone())));
 
 		// Register the relayer account.
 		let relayer: AccountId = AccountId::from([0xE0; 32]);
@@ -44,26 +42,10 @@ fn can_provide_liquidity_and_swap_assets() {
 		let egress_address = [1u8; 20];
 
 		// Provide liquidity to the exchange pool.
-		assert_ok!(LiquidityProvider::provision_account(
-			&lp_1,
-			Asset::Eth,
-			1_000_000
-		));
-		assert_ok!(LiquidityProvider::provision_account(
-			&lp_1,
-			Asset::Usdc,
-			10_000_000
-		));
-		assert_ok!(LiquidityProvider::provision_account(
-			&lp_2,
-			Asset::Flip,
-			1_000_000
-		));
-		assert_ok!(LiquidityProvider::provision_account(
-			&lp_2,
-			Asset::Usdc,
-			2_000_000
-		));
+		assert_ok!(LiquidityProvider::provision_account(&lp_1, Asset::Eth, 1_000_000));
+		assert_ok!(LiquidityProvider::provision_account(&lp_1, Asset::Usdc, 10_000_000));
+		assert_ok!(LiquidityProvider::provision_account(&lp_2, Asset::Flip, 1_000_000));
+		assert_ok!(LiquidityProvider::provision_account(&lp_2, Asset::Usdc, 2_000_000));
 
 		// Use governance to create a new Flip <-> USDC pool.
 		// Initialize exchange rate at 1:10 ratio. 1.0001^23028 = 10.001
@@ -97,11 +79,23 @@ fn can_provide_liquidity_and_swap_assets() {
 			1_200_000u128,
 		));
 
-		assert_eq!(pallet_cf_lp::FreeBalances::<Runtime>::get(&lp_1, any::Asset::Eth), Some(71_582));
-		assert_eq!(pallet_cf_lp::FreeBalances::<Runtime>::get(&lp_1, any::Asset::Usdc), Some(532_912));
-		assert_eq!(pallet_cf_lp::FreeBalances::<Runtime>::get(&lp_2, any::Asset::Flip), Some(159_567));
-		assert_eq!(pallet_cf_lp::FreeBalances::<Runtime>::get(&lp_2, any::Asset::Usdc), Some(311_015));
-		
+		assert_eq!(
+			pallet_cf_lp::FreeBalances::<Runtime>::get(&lp_1, any::Asset::Eth),
+			Some(71_582)
+		);
+		assert_eq!(
+			pallet_cf_lp::FreeBalances::<Runtime>::get(&lp_1, any::Asset::Usdc),
+			Some(532_912)
+		);
+		assert_eq!(
+			pallet_cf_lp::FreeBalances::<Runtime>::get(&lp_2, any::Asset::Flip),
+			Some(159_567)
+		);
+		assert_eq!(
+			pallet_cf_lp::FreeBalances::<Runtime>::get(&lp_2, any::Asset::Usdc),
+			Some(311_015)
+		);
+
 		// Test swap
 		assert_ok!(Swapping::register_swap_intent(
 			Origin::signed(relayer),
@@ -171,11 +165,12 @@ fn can_provide_liquidity_and_swap_assets() {
 		// 10_000 Eth = about 50_000 Flips - slippage
 		// TODO: Calculate this using the exchange rate.
 		const EXPECTED_OUTPUT: AssetAmount = 4541;
+		println!("{:?}", System::events());
 		System::assert_has_event(Event::Swapping(pallet_cf_swapping::Event::SwapEgressScheduled {
 			swap_id: 1,
 			egress_id: (ForeignChain::Ethereum, 1),
 			asset: Asset::Flip,
-			amount: 0
+			amount: 0,
 		}));
 
 		// Egress the asset out during on_idle.

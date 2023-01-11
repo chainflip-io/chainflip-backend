@@ -109,4 +109,3 @@ fn can_enable_disable_trading_pool() {
 		));
 	});
 }
-

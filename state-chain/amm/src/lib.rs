@@ -197,6 +197,7 @@ impl SwapDirection for PairToBase {
 	}
 }
 
+#[derive(Debug)]
 pub enum MintError {
 	/// Invalid Tick range
 	InvalidTickRange,
@@ -206,6 +207,7 @@ pub enum MintError {
 	MintCheckFunctionFailed,
 }
 
+#[derive(Debug)]
 pub enum PositionError {
 	/// Position referenced does not exist
 	NonExistent,
@@ -213,6 +215,7 @@ pub enum PositionError {
 	PositionLacksLiquidity,
 }
 
+#[derive(Debug)]
 pub enum CollectError {}
 
 #[derive(Copy, Clone, Debug, TypeInfo, PartialEq, Eq, Encode, Decode, MaxEncodedLen)]
@@ -495,7 +498,9 @@ impl PoolState {
 					upper_tick,
 					&upper_info,
 				);
-
+				// DIFF: This behaviour is different than Uniswap's. Burnt liquidity (amounts_owed)
+				// is not stored as tokensOwed in the position but it's only returned as a result of
+				// this function.
 				let (amounts_owed, current_liquidity_delta) =
 					self.liquidity_to_amounts::<false>(burnt_liquidity, lower_tick, upper_tick);
 				// Will not underflow as current_liquidity_delta must have previously been added to
@@ -504,7 +509,8 @@ impl PoolState {
 
 				let fees_owed = if position.liquidity == 0 {
 					// DIFF: This behaviour is different than Uniswap's to ensure if a position
-					// exists its ticks also exist in the liquidity_map
+					// exists its ticks also exist in the liquidity_map. Position will automatically
+					// be removed if all the liquidity has been burnt.
 					self.positions.remove(&(lp, lower_tick, upper_tick));
 
 					position.fees_owed
@@ -512,6 +518,9 @@ impl PoolState {
 					// Re-insert the leftover liquidity into storage.
 					self.positions.insert((lp, lower_tick, upper_tick), position);
 
+					// If the position is not fully burnt then the position fees are not updated
+					// and zero fees are returned. So basically fees are collected when
+					// the whole position is burnt or when we call collect.
 					Default::default()
 				};
 
@@ -656,14 +665,6 @@ impl PoolState {
 			// next_sqrt_price_from_input_amount rounds so this maybe true even though
 			// amount_minus_fees < amount_required_to_reach_target (TODO Prove)
 			if sqrt_ratio_next == sqrt_ratio_target {
-				// Note conversion to i128 and addition don't overflow (See test `max_liquidity`)
-				self.current_liquidity = i128::try_from(self.current_liquidity)
-					.unwrap()
-					.checked_add(SD::liquidity_delta_on_crossing_tick(target_info))
-					.unwrap()
-					.try_into()
-					.unwrap();
-
 				// Will not overflow as fee_100th_bips <= ONE_IN_HUNDREDTH_BIPS / 2
 				let fees = mul_div_ceil(
 					amount_required_to_reach_target,
@@ -677,11 +678,18 @@ impl PoolState {
 				// global_fee_growth value is. We also do this to avoid needing to consider the
 				// case of reverting an extrinsic's mutations which is expensive in Substrate based
 				// chains.
-				self.global_fee_growth[SD::INPUT_TICKER] =
-					self.global_fee_growth[SD::INPUT_TICKER].saturating_add(fees);
-				target_info
-					.fee_growth_outside
-					.mutate(|ticker, current| self.global_fee_growth[ticker] - current);
+				if self.current_liquidity > 0 {
+					self.global_fee_growth[SD::INPUT_TICKER] =
+						self.global_fee_growth[SD::INPUT_TICKER].saturating_add(mul_div_floor(
+							fees,
+							U256::from(1) << 128u32,
+							self.current_liquidity,
+						));
+					target_info.fee_growth_outside = PoolAssetMap::new_from_fn(|ticker| {
+						self.global_fee_growth[ticker] - target_info.fee_growth_outside[ticker]
+					});
+				}
+
 				self.current_sqrt_price = sqrt_ratio_target;
 				self.current_tick = SD::current_tick_after_crossing_target_tick(*target_tick);
 
@@ -689,6 +697,14 @@ impl PoolState {
 				amount -= amount_required_to_reach_target;
 				amount -= fees;
 				total_fee_paid += fees;
+
+				// Note conversion to i128 and addition don't overflow (See test `max_liquidity`)
+				self.current_liquidity = i128::try_from(self.current_liquidity)
+					.unwrap()
+					.checked_add(SD::liquidity_delta_on_crossing_tick(target_info))
+					.unwrap()
+					.try_into()
+					.unwrap();
 			} else {
 				let amount_in = SD::input_amount_delta_ceil(
 					self.current_sqrt_price,
@@ -706,10 +722,20 @@ impl PoolState {
 				// the maximum global_fee_growth value is. We also do this to avoid needing to
 				// consider the case of reverting an extrinsic's mutations which is expensive in
 				// Substrate based chains.
-				self.global_fee_growth[SD::INPUT_TICKER] =
-					self.global_fee_growth[SD::INPUT_TICKER].saturating_add(fees);
-				self.current_sqrt_price = sqrt_ratio_next;
-				self.current_tick = Self::tick_at_sqrt_price(self.current_sqrt_price);
+				if self.current_liquidity > 0 {
+					self.global_fee_growth[SD::INPUT_TICKER] =
+						self.global_fee_growth[SD::INPUT_TICKER].saturating_add(mul_div_floor(
+							fees,
+							U256::from(1) << 128u32,
+							self.current_liquidity,
+						));
+				}
+				// Recompute unless we're on a lower tick boundary (i.e. already
+				// transitioned ticks), and haven't moved.
+				if self.current_sqrt_price != sqrt_ratio_next {
+					self.current_sqrt_price = sqrt_ratio_next;
+					self.current_tick = Self::tick_at_sqrt_price(self.current_sqrt_price);
+				}
 
 				break
 			};
@@ -815,7 +841,9 @@ impl PoolState {
 		liquidity: Liquidity,
 	) -> AmountU256 {
 		assert!(SqrtPriceQ64F96::zero() < from);
-		assert!(from < to);
+		// NOTE: When minting/burning at lowertick == currenttick, from == to. When swapping only
+		// from < to. To refine the check?
+		assert!(from <= to);
 
 		/*
 			Proof that `mul_div` does not overflow:
@@ -833,7 +861,9 @@ impl PoolState {
 		liquidity: Liquidity,
 	) -> AmountU256 {
 		assert!(SqrtPriceQ64F96::zero() < from);
-		assert!(from < to);
+		// NOTE: When minting/burning at lowertick == currenttick, from == to. When swapping only
+		// from < to. To refine the check?
+		assert!(from <= to);
 
 		/*
 			Proof that `mul_div` does not overflow:
@@ -852,7 +882,7 @@ impl PoolState {
 	) -> SqrtPriceQ64F96 {
 		assert!(0 < liquidity);
 		assert!(SqrtPriceQ64F96::zero() < sqrt_ratio_current);
-		
+
 		let liquidity = U256::from(liquidity) << 96u32;
 
 		/*
