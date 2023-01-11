@@ -15,6 +15,13 @@ priority = "required"
 section = "rust"
 maintainer-scripts = "package/"
 systemd-units = {enable = false}
+
+[package.metadata.deb.variants.sisyphos]
+assets = [
+  ["target/release/chainflip-engine", "usr/bin/", "755"],
+]
+
+[package.metadata.deb.variants.perseverance]
 assets = [
   ["target/release/chainflip-engine", "usr/bin/", "755"],
 ]
