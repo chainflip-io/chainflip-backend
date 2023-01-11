@@ -455,7 +455,7 @@ fn can_collect_fee() {
 			asset,
 			range
 		));
-		
+
 		System::assert_has_event(Event::LiquidityPools(pallet_cf_pools::Event::FeeCollected {
 			lp: LP_ACCOUNT.into(),
 			asset,

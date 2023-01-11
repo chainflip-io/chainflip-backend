@@ -253,7 +253,7 @@ impl<T: Config> Pallet<T> {
 		if amount == 0 {
 			return Ok(())
 		}
-		
+
 		FreeBalances::<T>::mutate(account_id, asset, |maybe_balance| {
 			let mut balance = maybe_balance.unwrap_or_default();
 			balance = balance.saturating_add(amount);
