@@ -1,6 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-use cf_chains::{eth::Address, ChainCrypto, ForeignChain};
-use codec::{Decode, Encode, EncodeLike};
+use cf_chains::{eth::Address, ForeignChain};
+use codec::{Decode, Encode};
 use frame_support::{dispatch::Weight, pallet_prelude::*, RuntimeDebugNoBound};
 use sp_std::{cmp::PartialEq, vec, vec::Vec};
 
@@ -25,7 +25,7 @@ pub enum Proposal {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_chains::{ChainAbi, Ethereum, Polkadot};
+	use cf_chains::Ethereum;
 	use cf_traits::{Broadcaster, Chainflip, FeePayment, StakingInfo};
 
 	use cf_chains::{
@@ -103,6 +103,10 @@ pub mod pallet {
 	pub type CommKeyUpdateAwaitingEnactment<T> =
 		StorageValue<_, (BlockNumberFor<T>, Address), OptionQuery>;
 
+	/// The current Polkadot GOV key
+	#[pallet::storage]
+	pub type PolkadotGovKey<T> = StorageValue<_, (BlockNumberFor<T>, Vec<u8>), ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -140,8 +144,10 @@ pub mod pallet {
 						cf_chains::ForeignChain::Ethereum => {
 							T::EthBroadcaster::threshold_sign_and_broadcast(
 								<T::EthApiCalls as SetGovKeyApiCall<Ethereum>>::new_unsigned(
+									None,
 									key.clone(),
-								),
+								)
+								.unwrap(),
 							);
 						},
 						cf_chains::ForeignChain::Polkadot => {
@@ -233,9 +239,12 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		#[cfg(feature = "ibiza")]
 		pub fn broadcast_dot_gov_key(key: Vec<u8>) {
+			use cf_chains::dot::PolkadotGovKey;
+			let old_key = PolkadotGovKey::<T>::take();
 			T::DotBroadcaster::threshold_sign_and_broadcast(<T::DotApiCalls as SetGovKeyApiCall<
 				Polkadot,
-			>>::new_unsigned(key.clone()));
+			>>::new_unsigned(old_key, key.clone()));
+			PolkadotGovKey::<T>::put(key);
 		}
 
 		pub fn resolve_vote(proposal: Proposal) -> usize {

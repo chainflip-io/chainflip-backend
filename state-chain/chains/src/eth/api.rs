@@ -55,11 +55,11 @@ impl<E: ReplayProtectionProvider<Ethereum>> SetAggKeyWithAggKey<Ethereum> for Et
 
 impl<E: ReplayProtectionProvider<Ethereum>> SetGovKeyWithAggKey<Ethereum> for EthereumApi<E> {
 	type AddressType = eth::Address;
-	fn new_unsigned(new_gov_key: Vec<u8>) -> Self {
-		Self::SetGovKeyWithAggKey(set_gov_key_with_agg_key::SetGovKeyWithAggKey::new_unsigned(
+	fn new_unsigned(_maybe_old_key: Option<Vec<u8>>, new_gov_key: Vec<u8>) -> Result<Self, ()> {
+		Ok(Self::SetGovKeyWithAggKey(set_gov_key_with_agg_key::SetGovKeyWithAggKey::new_unsigned(
 			E::replay_protection(),
 			Self::from_u8(new_gov_key),
-		))
+		)))
 	}
 
 	fn from_u8(key: Vec<u8>) -> Self::AddressType {

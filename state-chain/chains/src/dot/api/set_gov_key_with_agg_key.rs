@@ -90,7 +90,7 @@ impl ApiCall<Polkadot> for ChangeGovKey {
 
 	fn signed(
 		self,
-		threshold_signature: &<Polkadot as crate::ChainCrypto>::ThresholdSignature,
+		_threshold_signature: &<Polkadot as crate::ChainCrypto>::ThresholdSignature,
 	) -> Self {
 		todo!()
 	}

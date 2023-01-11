@@ -3,9 +3,7 @@ pub mod create_anonymous_vault;
 pub mod rotate_vault_proxy;
 pub mod set_gov_key_with_agg_key;
 
-use super::{
-	PolkadotAddress, PolkadotPublicKey, PolkadotReplayProtection, PolkadotTransactionData,
-};
+use super::PolkadotPublicKey;
 use crate::{dot::Polkadot, *};
 use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound};
 use sp_std::marker::PhantomData;
@@ -27,7 +25,6 @@ pub enum PolkadotApi<Environment: 'static> {
 pub enum SystemAccounts {
 	Proxy,
 	Vault,
-	Gov,
 }
 
 impl<E> AllBatch<Polkadot> for PolkadotApi<E>
@@ -53,15 +50,25 @@ where
 	}
 }
 
-impl<E: ReplayProtectionProvider<Polkadot>> SetGovKeyWithAggKey<Polkadot> for PolkadotApi<E> {
-	type AddressType = PolkadotAddress;
-	fn new_unsigned(new_gov_key: Vec<u8>) -> Self {
-		todo!()
+impl<E: ReplayProtectionProvider<Polkadot>> SetGovKeyWithAggKey<Polkadot> for PolkadotApi<E>
+where
+	E: ChainEnvironment<SystemAccounts, <Polkadot as Chain>::ChainAccount>
+		+ ReplayProtectionProvider<Polkadot>,
+{
+	type AddressType = PolkadotPublicKey;
+	fn new_unsigned(maybe_old_key: Option<Vec<u8>>, new_key: Vec<u8>) -> Result<Self, ()> {
+		let vault = E::lookup(SystemAccounts::Vault).ok_or(())?;
+		Ok(Self::ChangeGovKey(set_gov_key_with_agg_key::ChangeGovKey::new_unsigned(
+			E::replay_protection(),
+			Self::from_u8(maybe_old_key.unwrap()),
+			Self::from_u8(new_key),
+			vault,
+		)))
 	}
 
 	fn from_u8(key: Vec<u8>) -> Self::AddressType {
 		let slice: [u8; 32] = key.try_into().expect("to have a valid length");
-		PolkadotAddress::Address32(slice)
+		slice.into()
 	}
 }
 
