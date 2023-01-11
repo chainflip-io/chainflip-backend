@@ -147,14 +147,6 @@ impl From<PoolAssetMap<U256>> for PoolAssetMap<u128> {
 	}
 }
 
-#[derive(Copy, Clone, Debug, TypeInfo, PartialEq, Eq, Encode, Decode, MaxEncodedLen)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub struct TickInfo {
-	pub liquidity_delta: i128,
-	pub liquidity_gross: u128,
-	pub fee_growth_outside: PoolAssetMap<FeeGrowthQ128F128>,
-}
-
 // Simple struct used to represent an minted Liquidity position.
 #[derive(Copy, Clone, Default, Eq, PartialEq, Debug)]
 pub struct MintedLiquidity {

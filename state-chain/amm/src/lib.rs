@@ -28,7 +28,7 @@ use serde::{Deserialize, Serialize};
 use cf_primitives::{
 	liquidity::{
 		AmountU256, FeeGrowthQ128F128, Liquidity, MintedLiquidity, PoolAsset, PoolAssetMap,
-		SqrtPriceQ64F96, Tick, TickInfo,
+		SqrtPriceQ64F96, Tick,
 	},
 	AccountId, AmmRange,
 };
@@ -51,10 +51,87 @@ const MAX_SQRT_PRICE: SqrtPriceQ64F96 =
 
 const MAX_TICK_GROSS_LIQUIDITY: Liquidity = Liquidity::MAX / ((1 + MAX_TICK - MIN_TICK) as u128);
 
-/// Minimum resolution for fee is 0.01 of a Basis Point: 0.0001%. Maximum is 100%.
+/// Minimum resolution for fee is 0.01 of a Basis Point: 0.0001%. Maximum is 50%.
 const ONE_IN_HUNDREDTH_BIPS: u32 = 1000000;
 
 pub const MAX_FEE_100TH_BIPS: u32 = ONE_IN_HUNDREDTH_BIPS / 2;
+
+#[derive(Copy, Clone, Debug, TypeInfo, PartialEq, Eq, Encode, Decode, MaxEncodedLen)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+struct Position {
+	liquidity: Liquidity,
+	last_fee_growth_inside: PoolAssetMap<FeeGrowthQ128F128>,
+	fees_owed: PoolAssetMap<u128>,
+}
+
+impl Position {
+	fn update_fees_owed(
+		&mut self,
+		pool_state: &PoolState,
+		lower_tick: Tick,
+		lower_info: &TickInfo,
+		upper_tick: Tick,
+		upper_info: &TickInfo,
+	) {
+		let fee_growth_inside = PoolAssetMap::new_from_fn(|ticker| {
+			let fee_growth_below = if pool_state.current_tick < lower_tick {
+				pool_state.global_fee_growth[ticker] - lower_info.fee_growth_outside[ticker]
+			} else {
+				lower_info.fee_growth_outside[ticker]
+			};
+
+			let fee_growth_above = if pool_state.current_tick < upper_tick {
+				upper_info.fee_growth_outside[ticker]
+			} else {
+				pool_state.global_fee_growth[ticker] - upper_info.fee_growth_outside[ticker]
+			};
+
+			pool_state.global_fee_growth[ticker] - fee_growth_below - fee_growth_above
+		});
+		self.fees_owed.mutate(|ticker, current_fees_owned| {
+			// DIFF: This behaviour is different than Uniswap's. We saturate fees_owed instead of
+			// overflowing
+
+			/*
+				Proof that `mul_div` does not overflow:
+				Note position.liqiudity: u128
+				U512::one() << 128 > u128::MAX
+			*/
+			let new_fees_owed: u128 = mul_div_floor(
+				fee_growth_inside[ticker] - self.last_fee_growth_inside[ticker],
+				self.liquidity.into(),
+				U512::one() << 128,
+			)
+			.try_into()
+			.unwrap_or(u128::MAX);
+
+			// saturating is acceptable, it is on LPs to withdraw fees before you hit u128::MAX fees
+			current_fees_owned.saturating_add(new_fees_owed)
+		});
+		self.last_fee_growth_inside = fee_growth_inside;
+	}
+
+	fn set_liquidity(
+		&mut self,
+		pool_state: &PoolState,
+		new_liquidity: Liquidity,
+		lower_tick: Tick,
+		lower_info: &TickInfo,
+		upper_tick: Tick,
+		upper_info: &TickInfo,
+	) {
+		self.update_fees_owed(pool_state, lower_tick, lower_info, upper_tick, upper_info);
+		self.liquidity = new_liquidity;
+	}
+}
+
+#[derive(Copy, Clone, Debug, TypeInfo, PartialEq, Eq, Encode, Decode, MaxEncodedLen)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct TickInfo {
+	liquidity_delta: i128,
+	liquidity_gross: u128,
+	fee_growth_outside: PoolAssetMap<FeeGrowthQ128F128>,
+}
 
 trait SwapDirection {
 	const INPUT_TICKER: PoolAsset;
@@ -217,75 +294,6 @@ pub enum PositionError {
 
 #[derive(Debug)]
 pub enum CollectError {}
-
-#[derive(Copy, Clone, Debug, TypeInfo, PartialEq, Eq, Encode, Decode, MaxEncodedLen)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-struct Position {
-	liquidity: Liquidity,
-	last_fee_growth_inside: PoolAssetMap<FeeGrowthQ128F128>,
-	fees_owed: PoolAssetMap<u128>,
-}
-
-impl Position {
-	fn update_fees_owed(
-		&mut self,
-		pool_state: &PoolState,
-		lower_tick: Tick,
-		lower_info: &TickInfo,
-		upper_tick: Tick,
-		upper_info: &TickInfo,
-	) {
-		let fee_growth_inside = PoolAssetMap::new_from_fn(|ticker| {
-			let fee_growth_below = if pool_state.current_tick < lower_tick {
-				pool_state.global_fee_growth[ticker] - lower_info.fee_growth_outside[ticker]
-			} else {
-				lower_info.fee_growth_outside[ticker]
-			};
-
-			let fee_growth_above = if pool_state.current_tick < upper_tick {
-				upper_info.fee_growth_outside[ticker]
-			} else {
-				pool_state.global_fee_growth[ticker] - upper_info.fee_growth_outside[ticker]
-			};
-
-			pool_state.global_fee_growth[ticker] - fee_growth_below - fee_growth_above
-		});
-		self.fees_owed.mutate(|ticker, current_fees_owned| {
-			// DIFF: This behaviour is different than Uniswap's. We saturate fees_owed instead of
-			// overflowing
-
-			/*
-				Proof that `mul_div` does not overflow:
-				Note position.liqiudity: u128
-				U512::one() << 128 > u128::MAX
-			*/
-			let new_fees_owed: u128 = mul_div_floor(
-				fee_growth_inside[ticker] - self.last_fee_growth_inside[ticker],
-				self.liquidity.into(),
-				U512::one() << 128,
-			)
-			.try_into()
-			.unwrap_or(u128::MAX);
-
-			// saturating is acceptable, it is on LPs to withdraw fees before you hit u128::MAX fees
-			current_fees_owned.saturating_add(new_fees_owed)
-		});
-		self.last_fee_growth_inside = fee_growth_inside;
-	}
-
-	fn set_liquidity(
-		&mut self,
-		pool_state: &PoolState,
-		new_liquidity: Liquidity,
-		lower_tick: Tick,
-		lower_info: &TickInfo,
-		upper_tick: Tick,
-		upper_info: &TickInfo,
-	) {
-		self.update_fees_owed(pool_state, lower_tick, lower_info, upper_tick, upper_info);
-		self.liquidity = new_liquidity;
-	}
-}
 
 #[derive(Debug, TypeInfo, PartialEq, Eq, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
@@ -807,7 +815,7 @@ impl PoolState {
 		liquidity: Liquidity,
 	) -> AmountU256 {
 		assert!(SqrtPriceQ64F96::zero() < from);
-		assert!(from < to);
+		assert!(from <= to);
 
 		/*
 			Proof that `mul_div` does not overflow:
@@ -908,7 +916,7 @@ impl PoolState {
 	) -> SqrtPriceQ64F96 {
 		// Will not overflow as function is not called if amount >= amount_required_to_reach_target,
 		// therefore bounding the function output to approximately <= MAX_SQRT_PRICE
-		sqrt_ratio_current + amount / liquidity
+		sqrt_ratio_current + (amount << 96u32) / liquidity
 	}
 
 	pub fn sqrt_price_at_tick(tick: Tick) -> SqrtPriceQ64F96 {
