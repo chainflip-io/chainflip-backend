@@ -85,21 +85,27 @@ impl ChangeGovKey {
 
 impl ApiCall<Polkadot> for ChangeGovKey {
 	fn threshold_signature_payload(&self) -> <Polkadot as crate::ChainCrypto>::Payload {
-		todo!()
+		self
+		.extrinsic_handler
+		.signature_payload
+		.clone()
+		.expect("This should never fail since the apicall created above with new_unsigned() ensures it exists")
 	}
 
 	fn signed(
-		self,
-		_threshold_signature: &<Polkadot as crate::ChainCrypto>::ThresholdSignature,
+		mut self,
+		threshold_signature: &<Polkadot as crate::ChainCrypto>::ThresholdSignature,
 	) -> Self {
-		todo!()
+		self.extrinsic_handler
+			.insert_signature_and_get_signed_unchecked_extrinsic(threshold_signature.clone());
+		self
 	}
 
 	fn chain_encoded(&self) -> Vec<u8> {
-		todo!()
+		self.extrinsic_handler.signed_extrinsic.clone().unwrap().encode()
 	}
 
 	fn is_signed(&self) -> bool {
-		todo!()
+		self.extrinsic_handler.is_signed().unwrap_or(false)
 	}
 }
