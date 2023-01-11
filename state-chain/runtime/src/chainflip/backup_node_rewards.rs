@@ -48,7 +48,7 @@ where
 					average_authority_reward.saturating_mul(backup_stake),
 					backup_stake,
 					bond,
-					Rounding::Up,
+					Rounding::Down,
 				)
 				.unwrap()
 				.checked_div(bond)
