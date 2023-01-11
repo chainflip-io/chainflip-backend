@@ -202,6 +202,8 @@ pub enum MintError {
 	InvalidTickRange,
 	/// One of the start/end ticks of the range reached its maximum gross liquidity
 	MaximumGrossLiquidity,
+	/// The checking function failed during mint.
+	MintCheckFunctionFailed,
 }
 
 pub enum PositionError {
@@ -452,7 +454,7 @@ impl PoolState {
 
 			Ok(amounts_required)
 		} else {
-			Ok(Default::default())
+			Err(MintError::MintCheckFunctionFailed)
 		}
 	}
 
@@ -779,7 +781,7 @@ impl PoolState {
 		liquidity: Liquidity,
 	) -> AmountU256 {
 		assert!(SqrtPriceQ64F96::zero() < from);
-		assert!(from <= to);
+		assert!(from < to);
 
 		/*
 			Proof that `mul_div` does not overflow:
@@ -850,7 +852,7 @@ impl PoolState {
 	) -> SqrtPriceQ64F96 {
 		assert!(0 < liquidity);
 		assert!(SqrtPriceQ64F96::zero() < sqrt_ratio_current);
-
+		
 		let liquidity = U256::from(liquidity) << 96u32;
 
 		/*

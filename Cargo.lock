@@ -779,6 +779,7 @@ dependencies = [
 name = "cf-integration-tests"
 version = "0.1.0"
 dependencies = [
+ "cf-amm",
  "cf-chains",
  "cf-primitives",
  "cf-traits",
@@ -797,6 +798,7 @@ dependencies = [
  "pallet-cf-flip",
  "pallet-cf-governance",
  "pallet-cf-ingress-egress",
+ "pallet-cf-lp",
  "pallet-cf-pools",
  "pallet-cf-reputation",
  "pallet-cf-staking",

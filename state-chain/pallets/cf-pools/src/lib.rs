@@ -61,6 +61,8 @@ pub mod pallet {
 		PositionLacksLiquidity,
 		/// The user's position does not exist.
 		PositionDoesNotExist,
+		/// The user does not have enough balance to mint liquidity.
+		InsufficientBalance,
 	}
 
 	#[pallet::event]
@@ -226,7 +228,7 @@ impl<T: Config> LiquidityPoolApi<AmountU256, AccountId> for Pallet<T> {
 		asset: any::Asset,
 		range: AmmRange,
 		liquidity_amount: Liquidity,
-		check_callback: impl FnOnce(PoolAssetMap<AmountU256>) -> bool,
+		balance_check_callback: impl FnOnce(PoolAssetMap<AmountU256>) -> bool,
 	) -> Result<(PoolAssetMap<AmountU256>, Liquidity), DispatchError> {
 		Pools::<T>::mutate(&asset, |maybe_pool| {
 			if let Some(pool) = maybe_pool.as_mut() {
@@ -234,10 +236,11 @@ impl<T: Config> LiquidityPoolApi<AmountU256, AccountId> for Pallet<T> {
 
 				// Mint the Liquidity from the pool.
 				let asset_spent: PoolAssetMap<AmountU256> = pool
-					.mint(lp.clone(), range.lower, range.upper, liquidity_amount, check_callback)
+					.mint(lp.clone(), range.lower, range.upper, liquidity_amount, balance_check_callback)
 					.map_err(|e| match e {
 						MintError::InvalidTickRange => Error::<T>::InvalidTickRange,
 						MintError::MaximumGrossLiquidity => Error::<T>::MaximumGrossLiquidity,
+						MintError::MintCheckFunctionFailed => Error::<T>::InsufficientBalance,
 					})?;
 
 				Self::deposit_event(Event::<T>::LiquidityMinted {

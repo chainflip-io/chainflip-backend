@@ -362,6 +362,31 @@ fn can_mint_and_burn_liquidity() {
 	});
 }
 
+
+#[test]
+fn mint_fails_with_insufficient_balance() {
+	new_test_ext().execute_with(|| {	
+		let range = AmmRange::new(-100, 100);
+		let asset = Asset::Eth;
+
+		assert_ok!(LiquidityPools::new_pool(
+			Origin::root(),
+			asset,
+			0,
+			PoolState::sqrt_price_at_tick(0),
+		));
+		System::reset_events();
+
+		// Can open a new position
+		assert_noop!(LiquidityProvider::update_position(
+			Origin::signed(LP_ACCOUNT.into()),
+			asset,
+			range,
+			1_000_000,
+		), pallet_cf_pools::Error::<Test>::InsufficientBalance);
+	});
+}
+
 // TODO: Fees do not accumulate. This needs to be fixed.
 // https://github.com/chainflip-io/chainflip-backend/issues/2686
 #[test]

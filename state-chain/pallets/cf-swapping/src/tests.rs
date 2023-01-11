@@ -210,6 +210,8 @@ fn expect_swap_id_to_be_emitted() {
 			crate::mock::Event::Swapping(crate::Event::SwapEgressScheduled {
 				swap_id: 1,
 				egress_id: (ForeignChain::Ethereum, 1),
+				asset: Asset::Usdc,
+				amount: 500,
 			})
 		);
 	});

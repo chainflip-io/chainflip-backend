@@ -20,6 +20,7 @@ state-chain-runtime = { path = '../runtime'}
 cf-traits = { path = '../traits'}
 cf-primitives = { path = '../primitives' }
 cf-chains = { path = '../chains', features = ['runtime-integration-tests']}
+cf-amm = { path = '../amm' }
 pallet-cf-validator = { path = '../pallets/cf-validator'}
 pallet-cf-staking = { path = '../pallets/cf-staking'}
 pallet-cf-witnesser = { path = '../pallets/cf-witnesser', default-features = false}
@@ -35,6 +36,7 @@ pallet-cf-account-roles = { path = '../pallets/cf-account-roles'}
 pallet-cf-ingress-egress = { path = '../pallets/cf-ingress-egress' }
 pallet-cf-swapping ={ path = '../pallets/cf-swapping' }
 pallet-cf-pools ={ path = '../pallets/cf-pools' }
+pallet-cf-lp ={ path = '../pallets/cf-lp' }
 # Additional FRAME pallets
 [dev-dependencies.pallet-authorship]
 git = 'https://github.com/chainflip-io/substrate.git'
@@ -141,6 +143,7 @@ git = 'https://github.com/chainflip-io/substrate.git'
 tag = 'chainflip-monthly-2022-06+01'
 
 [features]
+default = ["ibiza"]
 ibiza = [
     "state-chain-runtime/ibiza",
     "cf-chains/ibiza",

@@ -127,27 +127,28 @@ pub mod pallet {
 			asset: Asset,
 			egress_address: ForeignChainAddress,
 		) -> DispatchResult {
-			T::SystemState::ensure_no_maintenance()?;
-			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
+			if amount > 0 {
+				T::SystemState::ensure_no_maintenance()?;
+				let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
-			// Check validity of Chain and Asset
-			ensure!(
-				ForeignChain::from(egress_address) == ForeignChain::from(asset),
-				Error::<T>::InvalidEgressAddress
-			);
+				// Check validity of Chain and Asset
+				ensure!(
+					ForeignChain::from(egress_address) == ForeignChain::from(asset),
+					Error::<T>::InvalidEgressAddress
+				);
 
-			// Debit the asset from the account.
-			Pallet::<T>::try_debit(&account_id, asset, amount)?;
+				// Debit the asset from the account.
+				Pallet::<T>::try_debit(&account_id, asset, amount)?;
 
-			let egress_id = T::EgressHandler::schedule_egress(asset, amount, egress_address);
+				let egress_id = T::EgressHandler::schedule_egress(asset, amount, egress_address);
 
-			Self::deposit_event(Event::<T>::WithdrawalEgressScheduled {
-				egress_id,
-				asset,
-				amount,
-				egress_address,
-			});
-
+				Self::deposit_event(Event::<T>::WithdrawalEgressScheduled {
+					egress_id,
+					asset,
+					amount,
+					egress_address,
+				});
+			}
 			Ok(())
 		}
 

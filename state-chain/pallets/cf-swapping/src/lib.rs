@@ -100,7 +100,7 @@ pub mod pallet {
 		/// A swap was executed.
 		SwapExecuted { swap_id: u64 },
 		/// A swap egress was scheduled.
-		SwapEgressScheduled { swap_id: u64, egress_id: EgressId },
+		SwapEgressScheduled { swap_id: u64, egress_id: EgressId, asset: Asset, amount: AssetAmount },
 		/// A withdrawal was requested.
 		WithdrawalRequested {
 			amount: AssetAmount,
@@ -261,15 +261,19 @@ pub mod pallet {
 						bundle_total_input,
 						Rounding::Down,
 					) {
-						let egress_id = T::EgressHandler::schedule_egress(
-							swap.to,
-							swap_output,
-							swap.egress_address,
-						);
-						Self::deposit_event(Event::<T>::SwapEgressScheduled {
-							swap_id: swap.swap_id,
-							egress_id,
-						});
+						if swap_output > 0 {
+							let egress_id = T::EgressHandler::schedule_egress(
+								swap.to,
+								swap_output,
+								swap.egress_address,
+							);
+							Self::deposit_event(Event::<T>::SwapEgressScheduled {
+								swap_id: swap.swap_id,
+								egress_id,
+								asset: to,
+								amount: swap_output,
+							});
+						}
 					} else {
 						log::error!(
 							"Unable to calculate valid swap output for swap {:?}!",

@@ -62,7 +62,7 @@ pub trait LiquidityPoolApi<Amount, AccountId> {
 		asset: Asset,
 		range: AmmRange,
 		liquidity_amount: Liquidity,
-		check_callback: impl FnOnce(PoolAssetMap<Amount>) -> bool,
+		balance_check_callback: impl FnOnce(PoolAssetMap<Amount>) -> bool,
 	) -> Result<(PoolAssetMap<Amount>, Liquidity), DispatchError>;
 
 	/// Burn some liquidity from an exchange pool to withdraw assets.
