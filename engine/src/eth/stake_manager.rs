@@ -182,7 +182,9 @@ impl EthContractWitnesser for StakeManager {
 					let account_id = node_id_from_log(&log)?;
 					StakeManagerEvent::Staked {
 						account_id,
-						amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
+						amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?
+							.try_into()
+							.expect("Staked event amount should fit u128"),
 						staker: utils::decode_log_param(&log, "staker")?,
 						return_addr: utils::decode_log_param(&log, "returnAddr")?,
 					}
@@ -201,7 +203,9 @@ impl EthContractWitnesser for StakeManager {
 					let account_id = node_id_from_log(&log)?;
 					StakeManagerEvent::ClaimExecuted {
 						account_id,
-						amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
+						amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?
+							.try_into()
+							.expect("ClaimExecuted event amount should fit u128"),
 					}
 				} else if event_signature == min_stake_changed.signature {
 					let log = min_stake_changed.event.parse_log(raw_log)?;
@@ -213,7 +217,9 @@ impl EthContractWitnesser for StakeManager {
 					let log = gov_withdrawal.event.parse_log(raw_log)?;
 					StakeManagerEvent::GovernanceWithdrawal {
 						to: utils::decode_log_param(&log, "to")?,
-						amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?.as_u128(),
+						amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?
+							.try_into()
+							.expect("GovernanceWithdrawal event amount should fit u128"),
 					}
 				} else if event_signature == community_guard_disabled.signature {
 					let log = community_guard_disabled.event.parse_log(raw_log)?;
