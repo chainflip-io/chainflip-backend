@@ -1,5 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-use cf_amm::{MintError, PoolState, PositionError, MAX_FEE_100TH_BIPS};
+use cf_amm::{CreatePoolError, MintError, PoolState, PositionError, MAX_FEE_100TH_BIPS};
 use cf_primitives::{
 	chains::assets::any, AccountId, AmmRange, AmountU256, Liquidity, MintedLiquidity, PoolAssetMap,
 	SqrtPriceQ64F96, Tick,
@@ -53,6 +53,8 @@ pub mod pallet {
 		PoolAlreadyExists,
 		/// the Fee BIPs must be within the allowed range.
 		InvalidFeeAmount,
+		/// the initial price must be within the allowed range.
+		InvalidInitialPrice,
 		/// The exchange pool is currently disabled.
 		PoolDisabled,
 		/// The Upper or Lower tick is invalid.
@@ -158,7 +160,14 @@ pub mod pallet {
 				if maybe_pool.is_some() {
 					Err(Error::<T>::PoolAlreadyExists)
 				} else {
-					let pool = PoolState::new(fee_100th_bips, initial_sqrt_price);
+					let pool =
+						PoolState::new(fee_100th_bips, initial_sqrt_price).map_err(
+							|e| match e {
+								CreatePoolError::InvalidFeeAmount => Error::<T>::InvalidFeeAmount,
+								CreatePoolError::InvalidInitialPrice =>
+									Error::<T>::InvalidInitialPrice,
+							},
+						)?;
 					*maybe_pool = Some(pool);
 					Ok(())
 				}

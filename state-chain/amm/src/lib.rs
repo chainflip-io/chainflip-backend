@@ -182,11 +182,11 @@ impl SwapDirection for BaseToPair {
 		current_tick: Tick,
 		liquidity_map: &mut BTreeMap<Tick, TickInfo>,
 	) -> Option<(&Tick, &mut TickInfo)> {
-		assert!(liquidity_map.contains_key(&MIN_TICK));
+		debug_assert!(liquidity_map.contains_key(&MIN_TICK));
 		if current_tick >= MIN_TICK {
 			Some(liquidity_map.range_mut(..=current_tick).next_back().unwrap())
 		} else {
-			assert_eq!(current_tick, Self::current_tick_after_crossing_target_tick(MIN_TICK));
+			debug_assert_eq!(current_tick, Self::current_tick_after_crossing_target_tick(MIN_TICK));
 			None
 		}
 	}
@@ -232,11 +232,11 @@ impl SwapDirection for PairToBase {
 		current_tick: Tick,
 		liquidity_map: &mut BTreeMap<Tick, TickInfo>,
 	) -> Option<(&Tick, &mut TickInfo)> {
-		assert!(liquidity_map.contains_key(&MAX_TICK));
+		debug_assert!(liquidity_map.contains_key(&MAX_TICK));
 		if current_tick < MAX_TICK {
 			Some(liquidity_map.range_mut(current_tick + 1..).next().unwrap())
 		} else {
-			assert_eq!(current_tick, Self::current_tick_after_crossing_target_tick(MAX_TICK));
+			debug_assert_eq!(current_tick, Self::current_tick_after_crossing_target_tick(MAX_TICK));
 			None
 		}
 	}
@@ -285,6 +285,14 @@ pub enum MintError {
 }
 
 #[derive(Debug)]
+pub enum CreatePoolError {
+	/// Fee must be between 0 - 50%
+	InvalidFeeAmount,
+	/// The initial price is outside the allowed range.
+	InvalidInitialPrice,
+}
+
+#[derive(Debug)]
 pub enum PositionError {
 	/// Position referenced does not exist
 	NonExistent,
@@ -314,11 +322,18 @@ impl PoolState {
 	///
 	/// This function will panic if fee_100th_bips or initial_sqrt_price are outside the allowed
 	/// bounds
-	pub fn new(fee_100th_bips: u32, initial_sqrt_price: SqrtPriceQ64F96) -> Self {
-		assert!(fee_100th_bips <= MAX_FEE_100TH_BIPS); // Max fee set to 50%
-		assert!(MIN_SQRT_PRICE <= initial_sqrt_price && initial_sqrt_price < MAX_SQRT_PRICE);
+	pub fn new(
+		fee_100th_bips: u32,
+		initial_sqrt_price: SqrtPriceQ64F96,
+	) -> Result<Self, CreatePoolError> {
+		if fee_100th_bips > MAX_FEE_100TH_BIPS {
+			return Err(CreatePoolError::InvalidFeeAmount)
+		};
+		if initial_sqrt_price < MIN_SQRT_PRICE || initial_sqrt_price > MAX_SQRT_PRICE {
+			return Err(CreatePoolError::InvalidInitialPrice)
+		}
 		let initial_tick = Self::tick_at_sqrt_price(initial_sqrt_price);
-		Self {
+		Ok(Self {
 			enabled: true,
 			fee_100th_bips,
 			current_sqrt_price: initial_sqrt_price,
@@ -346,7 +361,7 @@ impl PoolState {
 			]
 			.into(),
 			positions: Default::default(),
-		}
+		})
 	}
 
 	/// Update the pool state to enable/disable the pool
@@ -484,10 +499,14 @@ impl PoolState {
 		upper_tick: Tick,
 		burnt_liquidity: Liquidity,
 	) -> Result<(PoolAssetMap<AmountU256>, PoolAssetMap<u128>), PositionError> {
+		if burnt_liquidity == 0 {
+			return Ok((Default::default(), Default::default()))
+		}
+
 		if let Some(mut position) =
 			self.positions.get(&(lp.clone(), lower_tick, upper_tick)).cloned()
 		{
-			assert!(position.liquidity != 0);
+			debug_assert!(position.liquidity != 0);
 			if burnt_liquidity <= position.liquidity {
 				let mut lower_info = *self.liquidity_map.get(&lower_tick).unwrap();
 				lower_info.liquidity_gross -= burnt_liquidity;
@@ -535,7 +554,7 @@ impl PoolState {
 				if lower_info.liquidity_gross == 0 && lower_tick != MIN_TICK
 				// Guarantee MIN_TICK is always in map to simplify swap logic
 				{
-					assert_eq!(position.liquidity, 0);
+					debug_assert_eq!(position.liquidity, 0);
 					self.liquidity_map.remove(&lower_tick);
 				} else {
 					*self.liquidity_map.get_mut(&lower_tick).unwrap() = lower_info;
@@ -543,7 +562,7 @@ impl PoolState {
 				if upper_info.liquidity_gross == 0 && upper_tick != MAX_TICK
 				// Guarantee MAX_TICK is always in map to simplify swap logic
 				{
-					assert_eq!(position.liquidity, 0);
+					debug_assert_eq!(position.liquidity, 0);
 					self.liquidity_map.remove(&upper_tick);
 				} else {
 					*self.liquidity_map.get_mut(&upper_tick).unwrap() = upper_info;
@@ -573,7 +592,7 @@ impl PoolState {
 		if let Some(mut position) =
 			self.positions.get(&(lp.clone(), lower_tick, upper_tick)).cloned()
 		{
-			assert!(position.liquidity != 0);
+			debug_assert!(position.liquidity != 0);
 			let lower_info = self.liquidity_map.get(&lower_tick).unwrap();
 			let upper_info = self.liquidity_map.get(&upper_tick).unwrap();
 
@@ -653,7 +672,7 @@ impl PoolState {
 			let sqrt_ratio_next = if amount_minus_fees >= amount_required_to_reach_target {
 				sqrt_ratio_target
 			} else {
-				assert!(self.current_liquidity != 0);
+				debug_assert!(self.current_liquidity != 0);
 				SD::next_sqrt_price_from_input_amount(
 					self.current_sqrt_price,
 					self.current_liquidity,
@@ -814,8 +833,8 @@ impl PoolState {
 		to: SqrtPriceQ64F96,
 		liquidity: Liquidity,
 	) -> AmountU256 {
-		assert!(SqrtPriceQ64F96::zero() < from);
-		assert!(from <= to);
+		debug_assert!(SqrtPriceQ64F96::zero() < from);
+		debug_assert!(from <= to);
 
 		/*
 			Proof that `mul_div` does not overflow:
@@ -831,8 +850,8 @@ impl PoolState {
 		to: SqrtPriceQ64F96,
 		liquidity: Liquidity,
 	) -> AmountU256 {
-		assert!(SqrtPriceQ64F96::zero() < from);
-		assert!(from <= to);
+		debug_assert!(SqrtPriceQ64F96::zero() < from);
+		debug_assert!(from <= to);
 
 		/*
 			Proof that `mul_div` does not overflow:
@@ -848,10 +867,10 @@ impl PoolState {
 		to: SqrtPriceQ64F96,
 		liquidity: Liquidity,
 	) -> AmountU256 {
-		assert!(SqrtPriceQ64F96::zero() < from);
+		debug_assert!(SqrtPriceQ64F96::zero() < from);
 		// NOTE: When minting/burning at lowertick == currenttick, from == to. When swapping only
 		// from < to. To refine the check?
-		assert!(from <= to);
+		debug_assert!(from <= to);
 
 		/*
 			Proof that `mul_div` does not overflow:
@@ -868,10 +887,10 @@ impl PoolState {
 		to: SqrtPriceQ64F96,
 		liquidity: Liquidity,
 	) -> AmountU256 {
-		assert!(SqrtPriceQ64F96::zero() < from);
+		debug_assert!(SqrtPriceQ64F96::zero() < from);
 		// NOTE: When minting/burning at lowertick == currenttick, from == to. When swapping only
 		// from < to. To refine the check?
-		assert!(from <= to);
+		debug_assert!(from <= to);
 
 		/*
 			Proof that `mul_div` does not overflow:
@@ -888,8 +907,8 @@ impl PoolState {
 		liquidity: Liquidity,
 		amount: AmountU256,
 	) -> SqrtPriceQ64F96 {
-		assert!(0 < liquidity);
-		assert!(SqrtPriceQ64F96::zero() < sqrt_ratio_current);
+		debug_assert!(0 < liquidity);
+		debug_assert!(SqrtPriceQ64F96::zero() < sqrt_ratio_current);
 
 		let liquidity = U256::from(liquidity) << 96u32;
 
@@ -920,7 +939,7 @@ impl PoolState {
 	}
 
 	pub fn sqrt_price_at_tick(tick: Tick) -> SqrtPriceQ64F96 {
-		assert!((MIN_TICK..=MAX_TICK).contains(&tick));
+		debug_assert!((MIN_TICK..=MAX_TICK).contains(&tick));
 
 		let abs_tick = tick.unsigned_abs();
 
@@ -983,9 +1002,9 @@ impl PoolState {
 
 	/// Calculates the greatest tick value such that `sqrt_price_at_tick(tick) <= sqrt_price`
 	pub fn tick_at_sqrt_price(sqrt_price: SqrtPriceQ64F96) -> Tick {
-		assert!(sqrt_price >= MIN_SQRT_PRICE);
+		debug_assert!(sqrt_price >= MIN_SQRT_PRICE);
 		// Note the price can never actually reach MAX_SQRT_PRICE
-		assert!(sqrt_price < MAX_SQRT_PRICE);
+		debug_assert!(sqrt_price < MAX_SQRT_PRICE);
 
 		let sqrt_price_q64f128 = sqrt_price << 32u128;
 

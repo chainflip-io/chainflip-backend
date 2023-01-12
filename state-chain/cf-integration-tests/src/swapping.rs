@@ -398,7 +398,7 @@ fn swap_can_acrue_fees() {
 			asset_credited: PoolAssetMap::new(414_088, 856_927),
 			fee_yielded: PoolAssetMap::new(0, 24_870),
 		}));
-		
+
 		// All vested assets are returned. Some swapped and with Fees added.
 		assert_eq!(
 			pallet_cf_lp::FreeBalances::<Runtime>::get(&lp_1, any::Asset::Eth),
