@@ -11,192 +11,85 @@ repository = 'https://github.com/chainflip-io/chainflip-backend'
 [package.metadata.docs.rs]
 targets = ['x86_64-unknown-linux-gnu']
 
-[build-dependencies.substrate-wasm-builder]
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
+[build-dependencies]
+substrate-wasm-builder = { version = "5.0.0-dev", git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2022-12' }
 
 [dependencies]
 # Required to get wasm to compile.
 # See https://docs.rs/getrandom/#webassembly-support
-getrandom = { version = '0.2', features = ['js'], default-features = false }
+getrandom = { version = '0.2.3', features = ['js'], default-features = false }
 
 log = { version = '0.4.16', default-features = false }
-nanorand = { version = '0.6', default-features = false, features = ['wyrand']}
+nanorand = { version = '0.7', default-features = false, features = ['wyrand']}
 serde = { version = '1.0.126', optional = true, features = ['derive'] }
-ethabi = {default-features = false, version = '17.0'}
+ethabi = {default-features = false, version = '18.0'}
+
 
 # Chainflip local dependencies
 cf-traits = { path = '../traits', default-features = false }
 cf-primitives = { path = '../primitives', default-features = false }
 cf-chains = { path = '../chains', default-features = false }
-cf-session-benchmarking = { path = '../cf-session-benchmarking', default-features = false, optional = true }
-
 cf-utilities = { package = 'utilities', path = '../../utilities', default-features = false }
+cf-session-benchmarking = { path = '../cf-session-benchmarking', optional = true, default-features = false }
+
 pallet-cf-account-roles = { path = '../pallets/cf-account-roles', default-features = false }
-pallet-cf-validator = { path = '../pallets/cf-validator', default-features = false }
-pallet-cf-staking = { path = '../pallets/cf-staking', default-features = false }
-pallet-cf-witnesser = { path = '../pallets/cf-witnesser', default-features = false}
-pallet-cf-flip = { path = '../pallets/cf-flip', default-features = false }
-pallet-cf-emissions = { path = '../pallets/cf-emissions', default-features = false }
-pallet-cf-swapping = { path = '../pallets/cf-swapping', default-features = false, optional = true }
-pallet-cf-governance = { path = '../pallets/cf-governance', default-features = false }
-pallet-cf-tokenholder-governance = { path = '../pallets/cf-tokenholder-governance', default-features = false }
-pallet-cf-reputation = { path = '../pallets/cf-reputation', default-features = false }
-pallet-cf-vaults = { path = '../pallets/cf-vaults', default-features = false }
-pallet-cf-threshold-signature = { path = '../pallets/cf-threshold-signature', default-features = false }
 pallet-cf-broadcast = { path = '../pallets/cf-broadcast', default-features = false }
-pallet-cf-environment = { path = '../pallets/cf-environment', default-features = false }
 pallet-cf-chain-tracking = { path = '../pallets/cf-chain-tracking', default-features = false }
-pallet-cf-lp =  { path = '../pallets/cf-lp', default-features = false, optional = true }
+pallet-cf-emissions = { path = '../pallets/cf-emissions', default-features = false }
+pallet-cf-environment = { path = '../pallets/cf-environment', default-features = false }
+pallet-cf-flip = { path = '../pallets/cf-flip', default-features = false }
+pallet-cf-governance = { path = '../pallets/cf-governance', default-features = false }
 pallet-cf-ingress-egress = { path = '../pallets/cf-ingress-egress', default-features = false, optional = true }
+pallet-cf-lp =  { path = '../pallets/cf-lp', default-features = false, optional = true }
 pallet-cf-pools = { path = '../pallets/cf-pools', default-features = false, optional = true }
 pallet-cf-pools-runtime-api = {path = "../pallets/cf-pools/runtime-api", default-features = false, optional = true}
+pallet-cf-reputation = { path = '../pallets/cf-reputation', default-features = false }
+pallet-cf-staking = { path = '../pallets/cf-staking', default-features = false }
+pallet-cf-swapping = { path = '../pallets/cf-swapping', default-features = false, optional = true }
+pallet-cf-threshold-signature = { path = '../pallets/cf-threshold-signature', default-features = false }
+pallet-cf-tokenholder-governance = { path = '../pallets/cf-tokenholder-governance', default-features = false }
+pallet-cf-validator = { path = '../pallets/cf-validator', default-features = false }
+pallet-cf-vaults = { path = '../pallets/cf-vaults', default-features = false }
+pallet-cf-witnesser = { path = '../pallets/cf-witnesser', default-features = false}
 
 # SCALE
 codec = { package = 'parity-scale-codec', version = '3.0.0', default-features = false, features = ['derive'] }
-scale-info = { version = '2.0.1', default-features = false, features = ['derive'] }
+scale-info = { version = '2.1.1', default-features = false, features = ['derive'] }
 
 # Additional FRAME pallets
-[dependencies.pallet-authorship]
-default-features = false
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
-
-[dependencies.pallet-session]
-default-features = false
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
-features = ['historical']
+pallet-authorship = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
+pallet-session = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false, features = ['historical'] }
 
 # Substrate dependencies
-[dependencies.frame-benchmarking]
-default-features = false
-git = 'https://github.com/chainflip-io/substrate.git'
-optional = true
-tag = 'chainflip-monthly-2022-06+01'
+frame-benchmarking = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", optional = true, default-features = false }
+frame-executive = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
+frame-support = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
+frame-system = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
+frame-system-benchmarking = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", optional = true, default-features = false }
 
-[dependencies.frame-executive]
-default-features = false
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
+pallet-aura = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
+pallet-grandpa = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
+pallet-randomness-collective-flip = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
+pallet-timestamp = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
+pallet-transaction-payment = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
 
-[dependencies.frame-support]
-default-features = false
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
+sp-api = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
+sp-block-builder = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
+sp-consensus-aura = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
+sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
+sp-inherents = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
+sp-offchain = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
+sp-runtime = { version = "7.0.0", git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
+sp-session = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
+sp-std = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
+sp-transaction-pool = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
+sp-version = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
 
-[dependencies.frame-system]
-default-features = false
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
-
-[dependencies.frame-system-benchmarking]
-default-features = false
-git = 'https://github.com/chainflip-io/substrate.git'
-optional = true
-tag = 'chainflip-monthly-2022-06+01'
-
-[dependencies.hex-literal]
-optional = true
-version = '0.3.4'
-
-[dependencies.pallet-aura]
-default-features = false
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
-
-[dependencies.pallet-grandpa]
-default-features = false
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
-
-[dependencies.pallet-randomness-collective-flip]
-default-features = false
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
-
-[dependencies.pallet-timestamp]
-default-features = false
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
-
-[dependencies.pallet-transaction-payment]
-default-features = false
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
-
-[dependencies.sp-api]
-default-features = false
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
-
-[dependencies.sp-block-builder]
-default-features = false
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
-
-[dependencies.sp-consensus-aura]
-default-features = false
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
-version = '0.10.0-dev'
-
-[dependencies.sp-core]
-default-features = false
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
-
-[dependencies.sp-inherents]
-default-features = false
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
-
-[dependencies.sp-offchain]
-default-features = false
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
-
-[dependencies.sp-runtime]
-default-features = false
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
-
-[dependencies.sp-session]
-default-features = false
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
-
-[dependencies.sp-std]
-default-features = false
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
-
-[dependencies.sp-transaction-pool]
-default-features = false
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
-
-[dependencies.sp-version]
-default-features = false
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
-
-[dependencies.frame-try-runtime]
-optional = true
-tag = 'chainflip-monthly-2022-06+01'
-default-features = false
-git = 'https://github.com/chainflip-io/substrate.git'
+frame-try-runtime = { optional = true, tag = 'chainflip-monthly-2022-12', default-features = false, git = 'https://github.com/chainflip-io/substrate.git' }
 
 # Used for RPCs
-[dependencies.frame-system-rpc-runtime-api]
-default-features = false
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
-
-[dependencies.pallet-transaction-payment-rpc-runtime-api]
-default-features = false
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
+frame-system-rpc-runtime-api = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
+pallet-transaction-payment-rpc-runtime-api = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
 
 [features]
 default = ['std']
@@ -205,9 +98,8 @@ runtime-benchmarks = [
   'cf-traits/runtime-benchmarks',
   'frame-benchmarking/runtime-benchmarks',
   'frame-support/runtime-benchmarks',
-  'frame-system-benchmarking',
+  'frame-system-benchmarking/runtime-benchmarks',
   'frame-system/runtime-benchmarks',
-  'hex-literal',
   'pallet-cf-account-roles/runtime-benchmarks',
   'pallet-cf-broadcast/runtime-benchmarks',
   'pallet-cf-chain-tracking/runtime-benchmarks',
@@ -215,10 +107,12 @@ runtime-benchmarks = [
   'pallet-cf-environment/runtime-benchmarks',
   'pallet-cf-flip/runtime-benchmarks',
   'pallet-cf-governance/runtime-benchmarks',
-  'pallet-cf-ingress-egress/runtime-benchmarks',
-  'pallet-cf-swapping/runtime-benchmarks',
+  'pallet-cf-ingress-egress?/runtime-benchmarks',
+  'pallet-cf-lp?/runtime-benchmarks',
+  'pallet-cf-pools?/runtime-benchmarks',
   'pallet-cf-reputation/runtime-benchmarks',
   'pallet-cf-staking/runtime-benchmarks',
+  'pallet-cf-swapping?/runtime-benchmarks',
   'pallet-cf-threshold-signature/runtime-benchmarks',
   'pallet-cf-tokenholder-governance/runtime-benchmarks',
   'pallet-cf-validator/runtime-benchmarks',
@@ -226,37 +120,42 @@ runtime-benchmarks = [
   'pallet-cf-witnesser/runtime-benchmarks',
   'pallet-timestamp/runtime-benchmarks',
   'sp-runtime/runtime-benchmarks',
-  'cf-session-benchmarking',
+  'cf-session-benchmarking/runtime-benchmarks',
 ]
 std = [
-  'pallet-transaction-payment-rpc-runtime-api/std',
   'cf-chains/std',
-  'cf-traits/std',
   'cf-primitives/std',
+  'cf-traits/std',
   'cf-utilities/std',
   'codec/std',
+  'ethabi/std',
+  'frame-benchmarking?/std',
   'frame-executive/std',
   'frame-support/std',
+  'frame-system-benchmarking?/std',
   'frame-system-rpc-runtime-api/std',
   'frame-system/std',
-  'frame-try-runtime/std',
+  'frame-try-runtime?/std',
+  'log/std',
   'nanorand/std',
   'pallet-aura/std',
+  'pallet-authorship/std',
   'pallet-cf-account-roles/std',
   'pallet-cf-broadcast/std',
   'pallet-cf-chain-tracking/std',
-  'pallet-cf-ingress-egress/std',
   'pallet-cf-emissions/std',
   'pallet-cf-environment/std',
   'pallet-cf-flip/std',
   'pallet-cf-governance/std',
-  'pallet-cf-lp/std',
-  'pallet-cf-pools/std',
-  'pallet-cf-pools-runtime-api/std',
-  'pallet-cf-swapping/std',
+  'pallet-cf-ingress-egress?/std',
+  'pallet-cf-lp?/std',
+  'pallet-cf-pools-runtime-api?/std',
+  'pallet-cf-pools?/std',
   'pallet-cf-reputation/std',
   'pallet-cf-staking/std',
+  'pallet-cf-swapping?/std',
   'pallet-cf-threshold-signature/std',
+  'pallet-cf-tokenholder-governance/std',
   'pallet-cf-validator/std',
   'pallet-cf-vaults/std',
   'pallet-cf-witnesser/std',
@@ -264,8 +163,9 @@ std = [
   'pallet-randomness-collective-flip/std',
   'pallet-session/std',
   'pallet-timestamp/std',
-  'pallet-transaction-payment/std',
   'pallet-transaction-payment-rpc-runtime-api/std',
+  'pallet-transaction-payment-rpc-runtime-api/std',
+  'pallet-transaction-payment/std',
   'scale-info/std',
   'serde',
   'sp-api/std',
@@ -279,31 +179,74 @@ std = [
   'sp-std/std',
   'sp-transaction-pool/std',
   'sp-version/std',
-  'pallet-cf-tokenholder-governance/std',
 ]
 try-runtime = [
   'frame-executive/try-runtime',
-  'frame-try-runtime',
+  'frame-try-runtime/try-runtime',
   'frame-system/try-runtime',
-  'pallet-aura/try-runtime',
-  'pallet-grandpa/try-runtime',
-  'pallet-timestamp/try-runtime',
-  'pallet-transaction-payment/try-runtime',
-  'pallet-cf-ingress-egress/try-runtime',
-  'pallet-cf-emissions/try-runtime',
-  'pallet-cf-environment/try-runtime',
-  'pallet-cf-swapping/try-runtime',
-  'pallet-cf-reputation/try-runtime',
-  'pallet-cf-validator/try-runtime',
-  'pallet-cf-vaults/try-runtime',
+  'frame-support/try-runtime',
+
+
+'pallet-cf-account-roles/try-runtime',
+'pallet-cf-broadcast/try-runtime',
+'pallet-cf-chain-tracking/try-runtime',
+'pallet-cf-emissions/try-runtime',
+'pallet-cf-environment/try-runtime',
+'pallet-cf-flip/try-runtime',
+'pallet-cf-governance/try-runtime',
+'pallet-cf-ingress-egress/try-runtime',
+'pallet-cf-lp/try-runtime',
+'pallet-cf-pools/try-runtime',
+# runtime api here?
+'pallet-cf-reputation/try-runtime',
+'pallet-cf-staking/try-runtime',
+'pallet-cf-swapping/try-runtime',
+'pallet-cf-threshold-signature/try-runtime',
+'pallet-cf-tokenholder-governance/try-runtime',
+'pallet-cf-validator/try-runtime',
+'pallet-cf-vaults/try-runtime',
+'pallet-cf-witnesser/try-runtime',
+'pallet-timestamp/try-runtime',
+'pallet-transaction-payment/try-runtime',
+'pallet-aura/try-runtime',
+'pallet-grandpa/try-runtime',
+'pallet-randomness-collective-flip/try-runtime',
+'pallet-session/try-runtime',
+'pallet-authorship/try-runtime',
+
+
+
+
+  # 'pallet-aura/try-runtime',
+  # 'pallet-grandpa/try-runtime',
+  # 'pallet-timestamp/try-runtime',
+  # 'pallet-transaction-payment/try-runtime',
+  # 'pallet-cf-ingress-egress/try-runtime',
+  # 'pallet-cf-emissions/try-runtime',
+  # 'pallet-cf-environment/try-runtime',
+  # 'pallet-cf-swapping/try-runtime',
+  # 'pallet-cf-reputation/try-runtime',
+  # 'pallet-cf-validator/try-runtime',
+  # 'pallet-cf-vaults/try-runtime',
+  # 'pallet-cf-witnesser/try-runtime',
+  # 'pallet-cf-chain-tracking/try-runtime',
+  # 'pallet-cf-flip/try-runtime',
+  # 'pallet-cf-governance/try-runtime',
+  
+  
+  # 'pallet-cf-staking/try-runtime',
+  # 'pallet-cf-tokenholder-governance/try-runtime',
+  # 'pallet-cf-threshold-signature/try-runtime',
+  # 'pallet-cf-pools/try-runtime',
+  # 'pallet-cf-lp/try-runtime',
 ]
 ibiza = [
-  'pallet-cf-ingress-egress',
-  'pallet-cf-swapping',
-  'pallet-cf-lp',
-  'pallet-cf-pools',
-  'pallet-cf-pools-runtime-api',
   'cf-chains/ibiza',
   'cf-traits/ibiza',
-  'pallet-cf-environment/ibiza'
+  'pallet-cf-environment/ibiza',
+  'pallet-cf-ingress-egress',
+  'pallet-cf-lp',
+  'pallet-cf-pools-runtime-api',
+  'pallet-cf-pools',
+  'pallet-cf-swapping',
 ]

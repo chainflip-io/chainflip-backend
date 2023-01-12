@@ -37,8 +37,8 @@ impl system::Config for Test {
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
-	type Origin = Origin;
-	type Call = Call;
+	type RuntimeOrigin = RuntimeOrigin;
+	type RuntimeCall = RuntimeCall;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
@@ -46,7 +46,7 @@ impl system::Config for Test {
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = BlockHashCount;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -60,10 +60,10 @@ impl system::Config for Test {
 }
 
 impl pallet_cf_witness::Config for Test {
-	type Event = Event;
-	type Origin = Origin;
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeOrigin = RuntimeOrigin;
 	type AccountRoleRegistry = ();
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type ValidatorId = AccountId;
 	type EpochInfo = mocks::epoch_info::Mock;
 	type Amount = u64;
@@ -71,11 +71,11 @@ impl pallet_cf_witness::Config for Test {
 }
 
 impl dummy::Config for Test {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type EnsureWitnessed = pallet_cf_witness::EnsureWitnessed;
 }
 
-impl WitnessDataExtraction for Call {
+impl WitnessDataExtraction for RuntimeCall {
 	fn extract(&mut self) -> Option<Vec<u8>> {
 		None
 	}

@@ -54,7 +54,7 @@ benchmarks_instance_pallet! {
 	} : _(RawOrigin::None, ceremony_id, signature)
 	verify {
 		let last_event = frame_system::Pallet::<T>::events().pop().unwrap().event;
-		let expected: <T as crate::Config<I>>::Event = Event::<T, I>::ThresholdSignatureSuccess{request_id, ceremony_id}.into();
+		let expected: <T as crate::Config<I>>::RuntimeEvent = Event::<T, I>::ThresholdSignatureSuccess{request_id, ceremony_id}.into();
 		assert_eq!(last_event, *expected.into_ref());
 	}
 	report_signature_failed {

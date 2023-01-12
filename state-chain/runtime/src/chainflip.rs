@@ -16,8 +16,8 @@ pub use signer_nomination::RandomSignerNomination;
 use sp_core::U256;
 
 use crate::{
-	AccountId, Authorship, BlockNumber, Call, EmergencyRotationPercentageRange, Emissions,
-	Environment, EthereumInstance, Flip, FlipBalance, Reputation, Runtime, System, Validator,
+	AccountId, Authorship, BlockNumber, EmergencyRotationPercentageRange, Emissions, Environment,
+	EthereumInstance, Flip, FlipBalance, Reputation, Runtime, RuntimeCall, System, Validator,
 };
 #[cfg(feature = "ibiza")]
 use cf_chains::{
@@ -51,7 +51,10 @@ use pallet_cf_chain_tracking::ChainState;
 #[cfg(feature = "ibiza")]
 use scale_info::TypeInfo;
 
-use frame_support::{dispatch::DispatchErrorWithPostInfo, traits::Get, weights::PostDispatchInfo};
+use frame_support::{
+	dispatch::{DispatchErrorWithPostInfo, PostDispatchInfo},
+	traits::Get,
+};
 
 use pallet_cf_validator::PercentageRange;
 use sp_runtime::traits::{UniqueSaturatedFrom, UniqueSaturatedInto};
@@ -60,7 +63,7 @@ use sp_std::prelude::*;
 use backup_node_rewards::calculate_backup_rewards;
 
 impl Chainflip for Runtime {
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type Amount = FlipBalance;
 	type ValidatorId = <Self as frame_system::Config>::AccountId;
 	type KeyId = KeyId;
@@ -130,10 +133,10 @@ pub struct WaivedFees;
 
 impl cf_traits::WaivedFees for WaivedFees {
 	type AccountId = AccountId;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 
-	fn should_waive_fees(call: &Self::Call, caller: &Self::AccountId) -> bool {
-		if matches!(call, Call::Governance(_)) {
+	fn should_waive_fees(call: &Self::RuntimeCall, caller: &Self::AccountId) -> bool {
+		if matches!(call, RuntimeCall::Governance(_)) {
 			return super::Governance::members().contains(caller)
 		}
 		false

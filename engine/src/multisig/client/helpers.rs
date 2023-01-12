@@ -266,8 +266,8 @@ where
 
 	pub fn select_account_ids<const COUNT: usize>(&self) -> [AccountId; COUNT] {
 		self.nodes
-			.iter()
-			.map(|(account_id, _)| account_id.clone())
+			.keys()
+			.cloned()
 			.sorted()
 			.take(COUNT)
 			.collect::<Vec<_>>()
@@ -338,8 +338,7 @@ where
 
 			assert_eq!(
 				ceremony_id, self_ceremony_id,
-				"Client output p2p message for ceremony_id {}, expected {}",
-				ceremony_id, self_ceremony_id
+				"Client output p2p message for ceremony_id {ceremony_id}, expected {self_ceremony_id}"
 			);
 
 			let ceremony_data =
@@ -482,8 +481,7 @@ where
 			assert_eq!(
 				failure_reasons.len(),
 				1,
-				"The ceremony failure reason was not the same for all nodes: {:?}",
-				failure_reasons
+				"The ceremony failure reason was not the same for all nodes: {failure_reasons:?}",
 			);
 			Some(Err((
 				all_reported_parties.into_iter().next().unwrap(),
@@ -572,7 +570,7 @@ impl CeremonyRunnerStrategy for KeygenCeremonyRunner {
 		&self,
 		outputs: HashMap<AccountId, <Self::CeremonyType as CeremonyTrait>::Output>,
 	) -> Self::CheckedOutput {
-		let (_, public_key) = all_same(outputs.iter().map(|(_, keygen_result_info)| {
+		let (_, public_key) = all_same(outputs.values().map(|keygen_result_info| {
 			(keygen_result_info.params, keygen_result_info.key.get_public_key().get_element())
 		}))
 		.expect("Generated keys don't match");
@@ -637,8 +635,7 @@ impl<C: CryptoScheme> CeremonyRunnerStrategy for SigningCeremonyRunner<C> {
 		&self,
 		outputs: HashMap<AccountId, <Self::CeremonyType as CeremonyTrait>::Output>,
 	) -> Self::CheckedOutput {
-		let signature = all_same(outputs.into_iter().map(|(_, signature)| signature))
-			.expect("Signatures don't match");
+		let signature = all_same(outputs.into_values()).expect("Signatures don't match");
 
 		C::verify_signature(
 			&signature,
@@ -852,7 +849,7 @@ pub fn gen_invalid_keygen_comm1<P: ECPoint>(
 		0,
 		ThresholdParameters {
 			share_count,
-			threshold: threshold_from_share_count(share_count as u32) as AuthorityCount,
+			threshold: threshold_from_share_count(share_count) as AuthorityCount,
 		},
 	);
 	fake_comm1

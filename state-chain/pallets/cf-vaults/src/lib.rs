@@ -232,13 +232,14 @@ pub mod pallet {
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config<I: 'static = ()>: Chainflip {
 		/// The event type.
-		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self, I>>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Implementation of EnsureOrigin trait for governance
-		type EnsureGovernance: EnsureOrigin<Self::Origin>;
+		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Ensure that only threshold signature consensus can trigger a key_verification success
-		type EnsureThresholdSigned: EnsureOrigin<Self::Origin>;
+		type EnsureThresholdSigned: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// For registering and verifying the account role.
 		type AccountRoleRegistry: AccountRoleRegistry<Self>;
@@ -255,11 +256,11 @@ pub mod pallet {
 		type VaultTransitionHandler: VaultTransitionHandler<Self::Chain>;
 
 		/// The pallet dispatches calls, so it depends on the runtime's aggregated Call type.
-		type Call: From<Call<Self, I>> + IsType<<Self as frame_system::Config>::Call>;
+		type RuntimeCall: From<Call<Self, I>> + IsType<<Self as frame_system::Config>::RuntimeCall>;
 
 		type ThresholdSigner: ThresholdSigner<
 			Self::Chain,
-			Callback = <Self as Config<I>>::Call,
+			Callback = <Self as Config<I>>::RuntimeCall,
 			ValidatorId = Self::ValidatorId,
 			KeyId = <Self as Chainflip>::KeyId,
 		>;

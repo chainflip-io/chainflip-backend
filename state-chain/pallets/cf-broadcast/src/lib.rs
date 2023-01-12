@@ -118,10 +118,11 @@ pub mod pallet {
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config<I: 'static = ()>: Chainflip {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
-		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self, I>>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The pallet dispatches calls, so it depends on the runtime's aggregated Call type.
-		type Call: From<Call<Self, I>> + IsType<<Self as frame_system::Config>::Call>;
+		type RuntimeCall: From<Call<Self, I>> + IsType<<Self as frame_system::Config>::RuntimeCall>;
 
 		/// For registering and verifying the account role.
 		type AccountRoleRegistry: AccountRoleRegistry<Self>;
@@ -142,7 +143,7 @@ pub mod pallet {
 		/// pallet.
 		type ThresholdSigner: ThresholdSigner<
 			Self::TargetChain,
-			Callback = <Self as Config<I>>::Call,
+			Callback = <Self as Config<I>>::RuntimeCall,
 		>;
 
 		/// Signer nomination.
@@ -155,7 +156,7 @@ pub mod pallet {
 		>;
 
 		/// Ensure that only threshold signature consensus can trigger a broadcast.
-		type EnsureThresholdSigned: EnsureOrigin<Self::Origin>;
+		type EnsureThresholdSigned: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The timeout duration for the broadcast, measured in number of blocks.
 		#[pallet::constant]
@@ -295,7 +296,8 @@ pub mod pallet {
 			let next_broadcast_weight = T::WeightInfo::start_next_broadcast_attempt();
 
 			let num_retries_that_fit = remaining_weight
-				.checked_div(next_broadcast_weight)
+				.ref_time()
+				.checked_div(next_broadcast_weight.ref_time())
 				.expect("start_next_broadcast_attempt weight should not be 0")
 				as usize;
 

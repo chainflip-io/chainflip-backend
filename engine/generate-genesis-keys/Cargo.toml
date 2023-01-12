@@ -27,7 +27,7 @@ chainflip-node = {path = "../../state-chain/node"}
 rand_legacy = { package = "rand", version = "0.6" }
 
 [dependencies.rocksdb]
-version = "0.18.0"
+version = "0.19.0"
 # Disabling of default features, and using lz4 compression is primarily to avoid linker issues
 # resulting from the default compression using libs that conflict with the system libs
 # https://github.com/rust-rocksdb/rust-rocksdb/pull/555

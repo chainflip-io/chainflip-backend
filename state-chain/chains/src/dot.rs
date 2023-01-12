@@ -823,7 +823,7 @@ mod test_polkadot_extrinsics {
 				value: 35_000_000_000u128, //0.035 WND
 			});
 
-		println!("Account id 1: {:?}", account_id_1);
+		println!("Account id 1: {account_id_1:?}");
 
 		println!(
 			"CallHash: 0x{}",

@@ -429,8 +429,8 @@ impl P2PContext {
 		socket.set_curve_secretkey(&self.key.secret_key.to_bytes()).unwrap();
 
 		// Listen on all interfaces
-		let endpoint = format!("tcp://0.0.0.0:{}", port);
-		slog::info!(self.logger, "Started listening for incoming p2p connections on: {}", endpoint);
+		let endpoint = format!("tcp://0.0.0.0:{port}");
+		slog::info!(self.logger, "Started listening for incoming p2p connections on: {endpoint}");
 
 		socket.bind(&endpoint).expect("invalid endpoint");
 

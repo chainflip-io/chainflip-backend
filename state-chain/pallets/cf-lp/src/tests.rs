@@ -17,17 +17,26 @@ fn only_liquidity_provider_can_manage_positions() {
 		let asset = Asset::Eth;
 
 		assert_noop!(
-			LiquidityProvider::open_position(Origin::signed(NON_LP_ACCOUNT), asset, position,),
+			LiquidityProvider::open_position(
+				RuntimeOrigin::signed(NON_LP_ACCOUNT),
+				asset,
+				position,
+			),
 			BadOrigin,
 		);
 
 		assert_noop!(
-			LiquidityProvider::update_position(Origin::signed(NON_LP_ACCOUNT), asset, 0, position,),
+			LiquidityProvider::update_position(
+				RuntimeOrigin::signed(NON_LP_ACCOUNT),
+				asset,
+				0,
+				position,
+			),
 			BadOrigin,
 		);
 
 		assert_noop!(
-			LiquidityProvider::close_position(Origin::signed(NON_LP_ACCOUNT), 0),
+			LiquidityProvider::close_position(RuntimeOrigin::signed(NON_LP_ACCOUNT), 0),
 			BadOrigin,
 		);
 	});
@@ -38,7 +47,7 @@ fn egress_chain_and_asset_must_match() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
 			LiquidityProvider::withdraw_liquidity(
-				Origin::signed(LP_ACCOUNT),
+				RuntimeOrigin::signed(LP_ACCOUNT),
 				1,
 				Asset::Eth,
 				ForeignChainAddress::Dot([0x00; 32]),
@@ -47,7 +56,7 @@ fn egress_chain_and_asset_must_match() {
 		);
 		assert_noop!(
 			LiquidityProvider::withdraw_liquidity(
-				Origin::signed(LP_ACCOUNT),
+				RuntimeOrigin::signed(LP_ACCOUNT),
 				1,
 				Asset::Dot,
 				ForeignChainAddress::Eth([0x00; 20]),
@@ -64,7 +73,7 @@ fn liquidity_providers_can_withdraw_liquidity() {
 
 		assert_noop!(
 			LiquidityProvider::withdraw_liquidity(
-				Origin::signed(LP_ACCOUNT),
+				RuntimeOrigin::signed(LP_ACCOUNT),
 				100,
 				Asset::Dot,
 				ForeignChainAddress::Eth([0x00; 20]),
@@ -73,7 +82,7 @@ fn liquidity_providers_can_withdraw_liquidity() {
 		);
 
 		assert_ok!(LiquidityProvider::withdraw_liquidity(
-			Origin::signed(LP_ACCOUNT),
+			RuntimeOrigin::signed(LP_ACCOUNT),
 			100,
 			Asset::Eth,
 			ForeignChainAddress::Eth([0x00; 20]),
@@ -94,14 +103,17 @@ fn cannot_deposit_and_withdrawal_during_maintenance() {
 
 		// Cannot request deposit address during maintenance.
 		assert_noop!(
-			LiquidityProvider::request_deposit_address(Origin::signed(LP_ACCOUNT), Asset::Eth,),
+			LiquidityProvider::request_deposit_address(
+				RuntimeOrigin::signed(LP_ACCOUNT),
+				Asset::Eth,
+			),
 			"We are in maintenance!"
 		);
 
 		// Cannot withdraw liquidity during maintenance.
 		assert_noop!(
 			LiquidityProvider::withdraw_liquidity(
-				Origin::signed(LP_ACCOUNT),
+				RuntimeOrigin::signed(LP_ACCOUNT),
 				100,
 				Asset::Eth,
 				ForeignChainAddress::Eth([0x00; 20]),
@@ -115,12 +127,12 @@ fn cannot_deposit_and_withdrawal_during_maintenance() {
 
 		// Deposit and withdrawal can now work as per normal.
 		assert_ok!(LiquidityProvider::request_deposit_address(
-			Origin::signed(LP_ACCOUNT),
+			RuntimeOrigin::signed(LP_ACCOUNT),
 			Asset::Eth,
 		));
 
 		assert_ok!(LiquidityProvider::withdraw_liquidity(
-			Origin::signed(LP_ACCOUNT),
+			RuntimeOrigin::signed(LP_ACCOUNT),
 			100,
 			Asset::Eth,
 			ForeignChainAddress::Eth([0x00; 20]),
@@ -155,15 +167,20 @@ fn cannot_manage_liquidity_during_maintenance() {
 		assert!(MockSystemStateInfo::is_maintenance_mode());
 
 		assert_noop!(
-			LiquidityProvider::open_position(Origin::signed(LP_ACCOUNT), asset, position,),
+			LiquidityProvider::open_position(RuntimeOrigin::signed(LP_ACCOUNT), asset, position,),
 			"We are in maintenance!"
 		);
 		assert_noop!(
-			LiquidityProvider::update_position(Origin::signed(LP_ACCOUNT), asset, 0, position,),
+			LiquidityProvider::update_position(
+				RuntimeOrigin::signed(LP_ACCOUNT),
+				asset,
+				0,
+				position,
+			),
 			"We are in maintenance!"
 		);
 		assert_noop!(
-			LiquidityProvider::close_position(Origin::signed(LP_ACCOUNT), 0,),
+			LiquidityProvider::close_position(RuntimeOrigin::signed(LP_ACCOUNT), 0,),
 			"We are in maintenance!"
 		);
 
@@ -171,14 +188,18 @@ fn cannot_manage_liquidity_during_maintenance() {
 		MockSystemStateInfo::set_maintenance(false);
 		assert!(!MockSystemStateInfo::is_maintenance_mode());
 
-		assert_ok!(LiquidityProvider::open_position(Origin::signed(LP_ACCOUNT), asset, position));
+		assert_ok!(LiquidityProvider::open_position(
+			RuntimeOrigin::signed(LP_ACCOUNT),
+			asset,
+			position
+		));
 		assert_ok!(LiquidityProvider::update_position(
-			Origin::signed(LP_ACCOUNT),
+			RuntimeOrigin::signed(LP_ACCOUNT),
 			asset,
 			0,
 			position,
 		));
-		assert_ok!(LiquidityProvider::close_position(Origin::signed(LP_ACCOUNT), 0,),);
+		assert_ok!(LiquidityProvider::close_position(RuntimeOrigin::signed(LP_ACCOUNT), 0,),);
 	});
 }
 
@@ -208,14 +229,18 @@ fn can_open_and_close_liquidity() {
 			volume_0: 1_000,
 			volume_1: 2_000,
 		};
-		assert_ok!(LiquidityProvider::open_position(Origin::signed(LP_ACCOUNT), ASSET, position,));
+		assert_ok!(LiquidityProvider::open_position(
+			RuntimeOrigin::signed(LP_ACCOUNT),
+			ASSET,
+			position,
+		));
 
 		assert_eq!(
 			LiquidityPools::swap_rate(ASSET, Asset::Usdc, 0),
 			ExchangeRate::from_rational(5_002_000, 1_001_000)
 		);
 
-		System::assert_has_event(Event::LiquidityProvider(
+		System::assert_has_event(RuntimeEvent::LiquidityProvider(
 			crate::Event::<Test>::TradingPositionOpened {
 				account_id: LP_ACCOUNT,
 				position_id: 0,
@@ -225,7 +250,7 @@ fn can_open_and_close_liquidity() {
 		));
 
 		// Test close position
-		assert_ok!(LiquidityProvider::close_position(Origin::signed(LP_ACCOUNT), 0,));
+		assert_ok!(LiquidityProvider::close_position(RuntimeOrigin::signed(LP_ACCOUNT), 0,));
 
 		assert_eq!(FreeBalances::<Test>::get(LP_ACCOUNT, ASSET), Some(1_000_000));
 		assert_eq!(FreeBalances::<Test>::get(LP_ACCOUNT, Asset::Usdc), Some(1_000_000));

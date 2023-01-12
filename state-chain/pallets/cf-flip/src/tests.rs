@@ -9,6 +9,7 @@ use cf_traits::{Bonding, Issuance, Slashing, StakeTransfer};
 use frame_support::{
 	assert_noop,
 	traits::{HandleLifetime, Hooks, Imbalance},
+	weights::Weight,
 };
 use quickcheck::{Arbitrary, Gen, TestResult};
 use quickcheck_macros::quickcheck;
@@ -288,7 +289,7 @@ impl FlipOperation {
 				SlashingRate::<Test>::set(*slashing_rate);
 
 				let attempted_slash: u128 =
-					(*slashing_rate * *bond as u128).saturating_mul((*blocks).into());
+					(*slashing_rate * *bond).saturating_mul((*blocks).into());
 				let expected_slash =
 					if Account::<Test>::get(account_id).can_be_slashed(attempted_slash) {
 						attempted_slash
@@ -303,7 +304,7 @@ impl FlipOperation {
 					return false
 				}
 				if expected_slash > 0 {
-					System::assert_last_event(Event::Flip(
+					System::assert_last_event(RuntimeEvent::Flip(
 						crate::Event::<Test>::SlashingPerformed {
 							who: *account_id,
 							amount: expected_slash,
@@ -435,14 +436,14 @@ fn test_try_debit() {
 		// account.
 		assert!(Flip::try_debit(&CHARLIE, 1).is_none());
 		assert_eq!(Flip::total_balance_of(&CHARLIE), 0);
-		assert!(!Account::<Test>::contains_key(&CHARLIE));
+		assert!(!Account::<Test>::contains_key(CHARLIE));
 
 		// Using standard `debit` *does* create an account as a side-effect.
 		{
 			let zero_surplus = Flip::debit(&CHARLIE, 1);
 			assert_eq!(zero_surplus.peek(), 0);
 		}
-		assert!(Account::<Test>::contains_key(&CHARLIE));
+		assert!(Account::<Test>::contains_key(CHARLIE));
 	});
 }
 
@@ -487,7 +488,7 @@ mod test_tx_payments {
 
 	use super::*;
 
-	const CALL: &Call = &Call::System(frame_system::Call::remark { remark: vec![] }); // call doesn't matter
+	const CALL: &RuntimeCall = &RuntimeCall::System(frame_system::Call::remark { remark: vec![] }); // call doesn't matter
 
 	#[test]
 	fn test_zero_fee() {
@@ -641,17 +642,17 @@ fn can_reap_dust_account() {
 		Account::<Test>::insert(CHARLIE, FlipAccount { stake: 11, bond: 0 });
 
 		// Dust accounts are reaped on_idle
-		Flip::on_idle(1, 1_000_000_000_000);
+		Flip::on_idle(1, Weight::from_ref_time(1_000_000_000_000));
 
 		assert!(!Account::<Test>::contains_key(ALICE));
 		assert_eq!(Account::<Test>::get(BOB), FlipAccount { stake: 10, bond: 0 });
 
 		assert_eq!(Account::<Test>::get(CHARLIE), FlipAccount { stake: 11, bond: 0 });
-		System::assert_has_event(Event::Flip(crate::Event::AccountReaped {
+		System::assert_has_event(RuntimeEvent::Flip(crate::Event::AccountReaped {
 			who: ALICE,
 			dust_burned: 9,
 		}));
-		System::assert_last_event(Event::System(frame_system::Event::KilledAccount {
+		System::assert_last_event(RuntimeEvent::System(frame_system::Event::KilledAccount {
 			account: ALICE,
 		}));
 	})

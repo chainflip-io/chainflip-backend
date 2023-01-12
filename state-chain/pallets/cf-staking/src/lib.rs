@@ -78,7 +78,7 @@ pub mod pallet {
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config: cf_traits::Chainflip {
 		/// Standard Event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The type containing all calls that are dispatchable from the threshold source.
 		type ThresholdCallable: From<Call<Self>>;
@@ -89,7 +89,7 @@ pub mod pallet {
 		type StakerId: AsRef<[u8; 32]> + IsType<<Self as frame_system::Config>::AccountId>;
 
 		/// Implementation of EnsureOrigin trait for governance
-		type EnsureGovernance: EnsureOrigin<Self::Origin>;
+		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
 
 		type Balance: Parameter
 			+ Member
@@ -110,7 +110,7 @@ pub mod pallet {
 		type ThresholdSigner: ThresholdSigner<Ethereum, Callback = Self::ThresholdCallable>;
 
 		/// Ensure that only threshold signature consensus can post a signature.
-		type EnsureThresholdSigned: EnsureOrigin<Self::Origin>;
+		type EnsureThresholdSigned: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The implementation of the register claim transaction.
 		type RegisterClaim: RegisterClaim<Ethereum> + Member + Parameter;
@@ -649,7 +649,7 @@ impl<T: Config> Pallet<T> {
 		// If we reach here, the account already exists, so any provided withdrawal address
 		// *must* match the one that was added on the initial account-creating staking event,
 		// otherwise this staking event cannot be processed.
-		match WithdrawalAddresses::<T>::get(&account_id) {
+		match WithdrawalAddresses::<T>::get(account_id) {
 			Some(existing) if withdrawal_address == existing => Ok(()),
 			_ => {
 				// The staking event was invalid - this should only happen if someone bypasses
@@ -659,7 +659,7 @@ impl<T: Config> Pallet<T> {
 				//
 				// Instead, we keep a record of the failed attempt so that we can potentially
 				// investigate and / or consider refunding automatically or via governance.
-				FailedStakeAttempts::<T>::append(&account_id, (withdrawal_address, amount));
+				FailedStakeAttempts::<T>::append(account_id, (withdrawal_address, amount));
 				Self::deposit_event(Event::FailedStakeAttempt(
 					account_id.clone(),
 					withdrawal_address,
@@ -676,7 +676,7 @@ impl<T: Config> Pallet<T> {
 		if !frame_system::Pallet::<T>::account_exists(account_id) {
 			// Creates an account
 			let _ = frame_system::Provider::<T>::created(account_id);
-			ActiveBidder::<T>::insert(&account_id, false);
+			ActiveBidder::<T>::insert(account_id, false);
 		}
 
 		T::Flip::credit_stake(account_id, amount)

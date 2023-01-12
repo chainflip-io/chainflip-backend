@@ -45,7 +45,11 @@ fn cannot_claim_stake_out_of_claim_period() {
 
 			// We should be able to claim stake out of an auction
 			for node in &nodes {
-				assert_ok!(Staking::claim(Origin::signed(node.clone()), 1.into(), ETH_DUMMY_ADDR));
+				assert_ok!(Staking::claim(
+					RuntimeOrigin::signed(node.clone()),
+					1.into(),
+					ETH_DUMMY_ADDR
+				));
 			}
 
 			let end_of_claim_period = EPOCH_BLOCKS * PERCENT_OF_EPOCH_PERIOD_CLAIMABLE as u32 / 100;
@@ -55,7 +59,7 @@ fn cannot_claim_stake_out_of_claim_period() {
 			for node in &nodes {
 				assert_noop!(
 					Staking::claim(
-						Origin::signed(node.clone()),
+						RuntimeOrigin::signed(node.clone()),
 						stake_amount.into(),
 						ETH_DUMMY_ADDR
 					),
@@ -78,7 +82,7 @@ fn cannot_claim_stake_out_of_claim_period() {
 			// TODO implement Claims in Contract/Network
 			for node in &nodes {
 				assert_noop!(
-					Staking::claim(Origin::signed(node.clone()), 1.into(), ETH_DUMMY_ADDR),
+					Staking::claim(RuntimeOrigin::signed(node.clone()), 1.into(), ETH_DUMMY_ADDR),
 					Error::<Runtime>::PendingClaim
 				);
 			}

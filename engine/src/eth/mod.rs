@@ -37,7 +37,6 @@ use crate::{
 use ethbloom::{Bloom, Input};
 use futures::StreamExt;
 use slog::o;
-use sp_core::{H160, U256};
 use std::{
 	fmt::{self, Debug},
 	pin::Pin,
@@ -49,8 +48,8 @@ use web3::{
 	ethabi::{self, Address, Contract},
 	signing::{Key, SecretKeyRef},
 	types::{
-		Block, BlockNumber, Bytes, CallRequest, FilterBuilder, TransactionParameters, H2048, H256,
-		U64,
+		Block, BlockNumber, Bytes, CallRequest, FilterBuilder, TransactionParameters, H160, H2048,
+		H256, U256, U64,
 	},
 };
 use web3_secp256k1::SecretKey;
@@ -74,6 +73,22 @@ impl BlockNumberable for EthNumberBloom {
 	fn block_number(&self) -> Self::BlockNumber {
 		self.block_number.as_u64()
 	}
+}
+
+fn web3_u256(x: sp_core::U256) -> web3::types::U256 {
+	web3::types::U256(x.0)
+}
+
+fn core_h256(h: web3::types::H256) -> sp_core::H256 {
+	h.0.into()
+}
+
+fn web3_h160(h: sp_core::H160) -> web3::types::H160 {
+	h.0.into()
+}
+
+fn core_h160(h: web3::types::H160) -> sp_core::H160 {
+	h.0.into()
 }
 
 use self::rpc::{EthDualRpcClient, EthRpcApi};
@@ -182,12 +197,12 @@ where
 		unsigned_tx: cf_chains::eth::Transaction,
 	) -> Result<Bytes> {
 		let tx_params = TransactionParameters {
-			to: Some(unsigned_tx.contract),
+			to: Some(web3_h160(unsigned_tx.contract)),
 			data: unsigned_tx.data.clone().into(),
 			chain_id: Some(unsigned_tx.chain_id),
-			value: unsigned_tx.value,
-			max_fee_per_gas: unsigned_tx.max_fee_per_gas,
-			max_priority_fee_per_gas: unsigned_tx.max_priority_fee_per_gas,
+			value: web3_u256(unsigned_tx.value),
+			max_fee_per_gas: unsigned_tx.max_fee_per_gas.map(web3_u256),
+			max_priority_fee_per_gas: unsigned_tx.max_priority_fee_per_gas.map(web3_u256),
 			transaction_type: Some(web3::types::U64::from(EIP1559_TX_ID)),
 			gas: {
 				let gas_estimate = match unsigned_tx.gas_limit {
@@ -196,13 +211,13 @@ where
 						let zero = Some(U256::from(0u64));
 						let call_request = CallRequest {
 							from: None,
-							to: unsigned_tx.contract.into(),
+							to: Some(web3_h160(unsigned_tx.contract)),
 							// Set the gas really high (~half gas in a block) for the estimate,
 							// since the estimation call requires you to input at least as much gas
 							// as the estimate will return
 							gas: Some(U256::from(15_000_000u64)),
 							gas_price: None,
-							value: unsigned_tx.value.into(),
+							value: Some(web3_u256(unsigned_tx.value)),
 							data: Some(unsigned_tx.data.clone().into()),
 							transaction_type: Some(web3::types::U64::from(EIP1559_TX_ID)),
 							// Set the gas prices to zero for the estimate, so we don't get
@@ -217,7 +232,7 @@ where
 							.await
 							.context("Failed to estimate gas")?
 					},
-					Some(gas_limit) => gas_limit,
+					Some(gas_limit) => web3_u256(gas_limit),
 				};
 				// increase the estimate by 50%
 				let gas = gas_estimate

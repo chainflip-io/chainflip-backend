@@ -45,26 +45,28 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Ingress IntentIngressDetails (r:0 w:1)
 	fn register_swap_intent() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(49_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(3 as Weight))
-			.saturating_add(T::DbWeight::get().writes(3 as Weight))
+		Weight::from_ref_time(49_000_000)
+			.saturating_add(T::DbWeight::get().reads(3))
+			.saturating_add(T::DbWeight::get().writes(3))
 	}
 	// Storage: Swapping SwapQueue (r:1 w:1)
 	fn on_idle() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(5_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(5_000_000)
+			.saturating_add(T::DbWeight::get().reads(1))
+			.saturating_add(T::DbWeight::get().writes(1))
 	}
 	// Storage: Swapping EarnedRelayerFees (r:1 w:1)
 	// Storage: Egress EthereumScheduledRequests (r:1 w:1)
 	fn execute_group_of_swaps(a: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(7_980_000 as Weight)
+		Weight::from_ref_time(7_980_000)
 			// Standard Error: 38_000
-			.saturating_add((8_830_000 as Weight).saturating_mul(a as Weight))
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
+			.saturating_add(Weight::from_ref_time(8_830_000)
+.saturating_mul(a as u64)
+)
+			.saturating_add(T::DbWeight::get().reads(2))
+			.saturating_add(T::DbWeight::get().writes(2))
 	}
 }
 
@@ -77,25 +79,27 @@ impl WeightInfo for () {
 	// Storage: Ingress IntentIngressDetails (r:0 w:1)
 	fn register_swap_intent() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(49_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
+		Weight::from_ref_time(49_000_000)
+			.saturating_add(RocksDbWeight::get().reads(3))
+			.saturating_add(RocksDbWeight::get().writes(3))
 	}
 	// Storage: Swapping SwapQueue (r:1 w:1)
 	fn on_idle() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(5_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(5_000_000)
+			.saturating_add(RocksDbWeight::get().reads(1))
+			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 	// Storage: Swapping EarnedRelayerFees (r:1 w:1)
 	// Storage: Egress EthereumScheduledRequests (r:1 w:1)
 	fn execute_group_of_swaps(a: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(7_980_000 as Weight)
+		Weight::from_ref_time(7_980_000)
 			// Standard Error: 38_000
-			.saturating_add((8_830_000 as Weight).saturating_mul(a as Weight))
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+			.saturating_add(Weight::from_ref_time(8_830_000)
+.saturating_mul(a as u64)
+)
+			.saturating_add(RocksDbWeight::get().reads(2))
+			.saturating_add(RocksDbWeight::get().writes(2))
 	}
 }

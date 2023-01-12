@@ -100,7 +100,8 @@ pub mod pallet {
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config<I: 'static = ()>: Chainflip {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
-		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self, I>>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Marks which chain this pallet is interacting with.
 		type TargetChain: ChainAbi + Get<ForeignChain>;
@@ -121,7 +122,7 @@ pub mod pallet {
 		type Broadcaster: Broadcaster<Self::TargetChain, ApiCall = Self::AllBatch>;
 
 		/// Governance origin to manage allowed assets
-		type EnsureGovernance: EnsureOrigin<Self::Origin>;
+		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;
@@ -212,7 +213,7 @@ pub mod pallet {
 		fn on_idle(_block_number: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
 			// Ensure we have enough weight to send an non-empty batch, and request queue isn't
 			// empty.
-			if remaining_weight <= T::WeightInfo::egress_assets(1u32) ||
+			if remaining_weight.all_lte(T::WeightInfo::egress_assets(1u32)) ||
 				ScheduledEgressRequests::<T, I>::decode_len() == Some(0)
 			{
 				return T::WeightInfo::on_idle_with_nothing_to_send()
@@ -223,7 +224,8 @@ pub mod pallet {
 				.saturating_sub(T::WeightInfo::egress_assets(0u32));
 			let request_count = remaining_weight
 				.saturating_sub(T::WeightInfo::egress_assets(0u32))
-				.saturating_div(single_request_cost) as u32;
+				.ref_time()
+				.saturating_div(single_request_cost.ref_time()) as u32;
 
 			with_transaction(|| Self::egress_scheduled_assets(Some(request_count)))
 				.unwrap_or_else(|_| T::WeightInfo::egress_assets(0))
@@ -231,8 +233,8 @@ pub mod pallet {
 
 		fn integrity_test() {
 			// Ensures the weights are benchmarked correctly.
-			assert!(T::WeightInfo::egress_assets(1) > T::WeightInfo::egress_assets(0));
-			assert!(T::WeightInfo::do_single_ingress() > 0);
+			assert!(T::WeightInfo::egress_assets(1).all_gte(T::WeightInfo::egress_assets(0)));
+			assert!(T::WeightInfo::do_single_ingress().all_gte(Weight::zero()));
 		}
 	}
 
@@ -307,7 +309,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	#[allow(clippy::type_complexity)]
 	fn egress_scheduled_assets(
 		maybe_size: Option<u32>,
-	) -> TransactionOutcome<Result<u64, DispatchError>> {
+	) -> TransactionOutcome<Result<Weight, DispatchError>> {
 		let batch_to_send: Vec<_> =
 			ScheduledEgressRequests::<T, I>::mutate(|requests: &mut Vec<_>| {
 				// Take up to batch_size requests to be sent

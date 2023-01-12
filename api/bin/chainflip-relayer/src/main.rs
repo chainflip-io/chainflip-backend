@@ -123,7 +123,7 @@ async fn main() -> anyhow::Result<()> {
 	let server_addr = server.local_addr()?;
 	let server = server.start(RpcServerImpl::new(opts).into_rpc())?;
 
-	println!("🎙 Server is listening on {}.", server_addr);
+	println!("🎙 Server is listening on {server_addr}.");
 
 	server.stopped().await;
 

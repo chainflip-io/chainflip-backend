@@ -119,8 +119,7 @@ pub mod tests {
 
 	use futures::StreamExt;
 	use mockall::{predicate::eq, Sequence};
-	use sp_core::{H256, U256};
-	use web3::types::{Block, H2048};
+	use web3::types::{Block, H2048, H256, U256};
 
 	use super::*;
 
@@ -194,7 +193,7 @@ pub mod tests {
 			.times(1)
 			.in_sequence(&mut seq)
 			.returning(move |n| {
-				println!("{}", n);
+				println!("{n}");
 				dummy_block(n.as_u64())
 			});
 
