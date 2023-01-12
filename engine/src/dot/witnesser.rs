@@ -325,14 +325,17 @@ where
 						(block_hash, block_number, events.iter().filter_map(|event_details| {
 							match event_details {
 								Ok(event_details) => {
-									if event_details.pallet_name() == ProxyAdded::PALLET && event_details.variant_name() == ProxyAdded::EVENT {
-										Some(EventWrapper::ProxyAdded(event_details.as_event::<ProxyAdded>().unwrap().unwrap()))
-									} else if event_details.pallet_name() == Transfer::PALLET && event_details.variant_name() == Transfer::EVENT {
-										Some(EventWrapper::Transfer(event_details.as_event::<Transfer>().unwrap().unwrap()))
-									} else if event_details.pallet_name() == TransactionFeePaid::PALLET && event_details.variant_name() == TransactionFeePaid::EVENT {
-										Some(EventWrapper::TransactionFeePaid(event_details.as_event::<TransactionFeePaid>().unwrap().unwrap()))
-									} else {
-										None
+									match (event_details.pallet_name(), event_details.variant_name()) {
+										(ProxyAdded::PALLET, ProxyAdded::EVENT) => {
+											Some(EventWrapper::ProxyAdded(event_details.as_event::<ProxyAdded>().unwrap().unwrap()))
+										},
+										(Transfer::PALLET, Transfer::EVENT) => {
+											Some(EventWrapper::Transfer(event_details.as_event::<Transfer>().unwrap().unwrap()))
+										},
+										(TransactionFeePaid::PALLET, TransactionFeePaid::EVENT) => {
+											Some(EventWrapper::TransactionFeePaid(event_details.as_event::<TransactionFeePaid>().unwrap().unwrap()))
+										},
+										_ => None,
 									}.map(|event| (event_details.phase(), event))
 								}
 								Err(err) => {
