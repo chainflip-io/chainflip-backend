@@ -24,6 +24,8 @@ pub mod pallet {
 
 	use super::*;
 
+	pub const STABLE_ASSET: any::Asset = any::Asset::Usdc;
+
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config: Chainflip {
@@ -97,6 +99,12 @@ pub mod pallet {
 			asset: any::Asset,
 			range: AmmRange,
 			fee_yielded: PoolAssetMap<AssetAmount>,
+		},
+		AssetSwaped {
+			from: any::Asset,
+			to: any::Asset,
+			input: AssetAmount,
+			output: AssetAmount,
 		},
 	}
 
@@ -178,6 +186,12 @@ impl<T: Config> cf_traits::SwappingApi<U256> for Pallet<T> {
 				if let Some(pool) = maybe_pool.as_mut() {
 					ensure!(pool.pool_enabled(), Error::<T>::PoolDisabled);
 					let (output_amount, asset_0_fee) = pool.swap_from_base_to_pair(input_amount);
+					Self::deposit_event(Event::<T>::AssetSwaped {
+						from,
+						to,
+						input: input_amount.as_u128(),
+						output: output_amount.as_u128(),
+					});
 					Ok((output_amount, asset_0_fee, U256::zero()))
 				} else {
 					Err(Error::<T>::PoolDoesNotExist.into())
@@ -187,6 +201,12 @@ impl<T: Config> cf_traits::SwappingApi<U256> for Pallet<T> {
 				if let Some(pool) = maybe_pool.as_mut() {
 					ensure!(pool.pool_enabled(), Error::<T>::PoolDisabled);
 					let (output_amount, asset_1_fee) = pool.swap_from_pair_to_base(input_amount);
+					Self::deposit_event(Event::<T>::AssetSwaped {
+						from,
+						to,
+						input: input_amount.as_u128(),
+						output: output_amount.as_u128(),
+					});
 					Ok((output_amount, Default::default(), asset_1_fee))
 				} else {
 					Err(Error::<T>::PoolDoesNotExist.into())
@@ -202,6 +222,13 @@ impl<T: Config> cf_traits::SwappingApi<U256> for Pallet<T> {
 							Err(Error::<T>::PoolDoesNotExist)
 						}
 					})?;
+				Self::deposit_event(Event::<T>::AssetSwaped {
+					from,
+					to: STABLE_ASSET,
+					input: input_amount.as_u128(),
+					output: intermediate_amount.as_u128(),
+				});
+
 				let (output_amount, stable_asset_fee) =
 					Pools::<T>::mutate(output_asset, |maybe_pool| {
 						if let Some(pool) = maybe_pool.as_mut() {
@@ -211,6 +238,13 @@ impl<T: Config> cf_traits::SwappingApi<U256> for Pallet<T> {
 							Err(Error::<T>::PoolDoesNotExist)
 						}
 					})?;
+
+				Self::deposit_event(Event::<T>::AssetSwaped {
+					from: STABLE_ASSET,
+					to,
+					input: intermediate_amount.as_u128(),
+					output: output_amount.as_u128(),
+				});
 				Ok((output_amount, asset_0_fee, stable_asset_fee))
 			},
 		}
@@ -220,7 +254,7 @@ impl<T: Config> cf_traits::SwappingApi<U256> for Pallet<T> {
 /// Implementation for Liquidity Pool API for cf-amm.
 /// `Amount` and `AccountId` are hard-coded type locked in by the amm code.
 impl<T: Config> LiquidityPoolApi<AmountU256, AccountId> for Pallet<T> {
-	const STABLE_ASSET: any::Asset = any::Asset::Usdc;
+	const STABLE_ASSET: any::Asset = STABLE_ASSET;
 
 	/// Deposit up to some amount of assets into an exchange pool. Minting some "Liquidity".
 	fn mint(
