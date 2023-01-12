@@ -48,7 +48,7 @@ const MAX_TICK_GROSS_LIQUIDITY: Liquidity = Liquidity::MAX / ((1 + MAX_TICK - MI
 
 const ONE_IN_PIPS: u32 = 100000;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct Position {
 	liquidity: Liquidity,
 	last_fee_growth_inside: enum_map::EnumMap<Ticker, FeeGrowthQ128F128>,
@@ -115,14 +115,14 @@ impl Position {
 	}
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct TickInfo {
 	liquidity_delta: i128,
 	liquidity_gross: u128,
 	fee_growth_outside: enum_map::EnumMap<Ticker, FeeGrowthQ128F128>,
 }
 
-#[derive(Clone)]
+#[derive(Debug)]
 pub struct PoolState {
 	fee_pips: u32,
 	current_sqrt_price: SqrtPriceQ64F96,
@@ -133,7 +133,7 @@ pub struct PoolState {
 	positions: BTreeMap<(LiquidityProvider, Tick, Tick), Position>,
 }
 
-#[derive(Enum, Clone, Copy)]
+#[derive(Enum, Clone, Copy, Debug)]
 pub enum Ticker {
 	Base,
 	Pair,
@@ -312,6 +312,7 @@ impl SwapDirection for PairToBase {
 	}
 }
 
+#[derive(Debug)]
 pub enum MintError {
 	/// Invalid Tick range
 	InvalidTickRange,
@@ -319,17 +320,20 @@ pub enum MintError {
 	MaximumGrossLiquidity,
 }
 
+#[derive(Debug)]
 pub enum PositionError<T> {
 	/// Position referenced does not exist
 	NonExistent,
 	Other(T),
 }
 
+#[derive(Debug)]
 pub enum BurnError {
 	/// Position referenced does not contain the requested liquidity
 	PositionLacksLiquidity,
 }
 
+#[derive(Debug)]
 pub enum CollectError {}
 
 impl PoolState {
@@ -504,7 +508,9 @@ impl PoolState {
 					upper_tick,
 					&upper_info,
 				);
-
+				// DIFF: This behaviour is different than Uniswap's. Burnt liquidity (amounts_owed)
+				// is not stored as tokensOwed in the position but it's only returned as a result of
+				// this function.
 				let (amounts_owed, current_liquidity_delta) =
 					self.liquidity_to_amounts::<false>(burnt_liquidity, lower_tick, upper_tick);
 				// Will not underflow as current_liquidity_delta must have previously been added to
@@ -514,10 +520,15 @@ impl PoolState {
 				let fees_owed = if position.liquidity == 0 {
 					// DIFF: This behaviour is different than Uniswap's to ensure if a position
 					// exists its ticks also exist in the liquidity_map
+					// In other words, the position will automatically be removed if all the
+					// liquidity has been burnt.
 					self.positions.remove(&(lp, lower_tick, upper_tick));
 
 					position.fees_owed
 				} else {
+					// If the position is not fully burnt then the position fees are not updated
+					// and zero fees are returned. So basically fees are collected when
+					// the whole position is burnt or when we call collect.
 					Default::default()
 				};
 
@@ -536,6 +547,15 @@ impl PoolState {
 					self.liquidity_map.remove(&upper_tick);
 				} else {
 					*self.liquidity_map.get_mut(&upper_tick).unwrap() = upper_info;
+				}
+
+				// BUGFIX: We must update the position's liquidity, otherwise the LP would
+				// effectively be able to burn liquidity from other position. This will also update
+				// the fees owed, which is not strictly necessary but it's a good idea (how Uniswap
+				// works). Could also be added as part of the if/else before but then we need to
+				// clone position to get ownership.
+				if position.liquidity != 0 {
+					self.positions.insert((lp, lower_tick, upper_tick), position);
 				}
 
 				Ok((amounts_owed, fees_owed))
@@ -639,14 +659,6 @@ impl PoolState {
 			// next_sqrt_price_from_input_amount rounds so this maybe true even though
 			// amount_minus_fees < amount_required_to_reach_target (TODO Prove)
 			if sqrt_ratio_next == sqrt_ratio_target {
-				// Note conversion to i128 and addition don't overflow (See test `max_liquidity`)
-				self.current_liquidity = i128::try_from(self.current_liquidity)
-					.unwrap()
-					.checked_add(SD::liquidity_delta_on_crossing_tick(target_info))
-					.unwrap()
-					.try_into()
-					.unwrap();
-
 				// Will not overflow as fee_pips <= ONE_IN_PIPS / 2
 				let fees = mul_div_ceil(
 					amount_required_to_reach_target,
@@ -660,17 +672,37 @@ impl PoolState {
 				// global_fee_growth value is. We also do this to avoid needing to consider the
 				// case of reverting an extrinsic's mutations which is expensive in Substrate based
 				// chains.
-				self.global_fee_growth[SD::INPUT_TICKER] =
-					self.global_fee_growth[SD::INPUT_TICKER].saturating_add(fees);
-				target_info.fee_growth_outside = enum_map::EnumMap::default().map(|ticker, ()| {
-					self.global_fee_growth[ticker] - target_info.fee_growth_outside[ticker]
-				});
+				// BUGFIX: fees need to be divided by the current_liquidity to get the fee growth
+				// BUGFIX2: Update only if currentliquditiy > 0 to avoid division by zero
+				if self.current_liquidity > 0 {
+					self.global_fee_growth[SD::INPUT_TICKER] =
+						self.global_fee_growth[SD::INPUT_TICKER].saturating_add(mul_div_floor(
+							fees,
+							U256::from(1) << 128u32,
+							self.current_liquidity,
+						));
+					target_info.fee_growth_outside =
+						enum_map::EnumMap::default().map(|ticker, ()| {
+							self.global_fee_growth[ticker] - target_info.fee_growth_outside[ticker]
+						});
+				}
+
 				self.current_sqrt_price = sqrt_ratio_target;
 				self.current_tick = SD::current_tick_after_crossing_target_tick(*target_tick);
 
 				// TODO: Prove these don't underflow
 				amount -= amount_required_to_reach_target;
 				amount -= fees;
+
+				// Since the liquidity value is used for the fee calculation, updating needs to be
+				// done at the end.
+				// Note conversion to i128 and addition don't overflow (See test `max_liquidity`)
+				self.current_liquidity = i128::try_from(self.current_liquidity)
+					.unwrap()
+					.checked_add(SD::liquidity_delta_on_crossing_tick(target_info))
+					.unwrap()
+					.try_into()
+					.unwrap();
 			} else {
 				let amount_in = SD::input_amount_delta_ceil(
 					self.current_sqrt_price,
@@ -687,10 +719,23 @@ impl PoolState {
 				// the maximum global_fee_growth value is. We also do this to avoid needing to
 				// consider the case of reverting an extrinsic's mutations which is expensive in
 				// Substrate based chains.
-				self.global_fee_growth[SD::INPUT_TICKER] =
-					self.global_fee_growth[SD::INPUT_TICKER].saturating_add(fees);
-				self.current_sqrt_price = sqrt_ratio_next;
-				self.current_tick = Self::tick_at_sqrt_price(self.current_sqrt_price);
+				// BUGFIX: fees need to be divided by the current_liquidity to get the fee growth
+				// BUGFIX2: Update only if currentliquditiy > 0 to avoid division by zero
+				if self.current_liquidity > 0 {
+					self.global_fee_growth[SD::INPUT_TICKER] =
+						self.global_fee_growth[SD::INPUT_TICKER].saturating_add(mul_div_floor(
+							fees,
+							U256::from(1) << 128u32,
+							self.current_liquidity,
+						));
+				}
+				// BUGFIXING: recompute unless we're on a lower tick boundary (i.e. already
+				// transitioned ticks), and haven't moved (test_updates_exiting &
+				// test_updates_entering)
+				if self.current_sqrt_price != sqrt_ratio_next {
+					self.current_sqrt_price = sqrt_ratio_next;
+					self.current_tick = Self::tick_at_sqrt_price(self.current_sqrt_price);
+				}
 
 				break
 			};
@@ -788,7 +833,9 @@ impl PoolState {
 		liquidity: Liquidity,
 	) -> Amount {
 		assert!(SqrtPriceQ64F96::zero() < from);
-		assert!(from < to);
+		// BUGFIX: When minting/burning at lowertick == currenttick, from == to. When swapping only
+		// from < to. To refine the check?
+		assert!(from <= to);
 
 		/*
 			Proof that `mul_div` does not overflow:
@@ -806,7 +853,9 @@ impl PoolState {
 		liquidity: Liquidity,
 	) -> Amount {
 		assert!(SqrtPriceQ64F96::zero() < from);
-		assert!(from < to);
+		// BUGFIX: When minting/burning at lowertick == currenttick, from == to. When swapping only
+		// from < to. To refine the check?
+		assert!(from <= to);
 
 		/*
 			Proof that `mul_div` does not overflow:
@@ -1276,15 +1325,45 @@ mod test {
 	#[test]
 	fn test_swaps_with_pool_configs() {
 		use serde::{Deserialize, Serialize};
-		use serde_json;
+		use serde_json::{self, from_str, Value};
+
 		let file = std::fs::read_to_string("pruned_snapshot.json").expect("Unable to read file");
-		let expected_output: Vec<OutputFormat> =
-			serde_json::from_str(&file).expect("JSON was not well-formatted");
+		let json_data: Value = serde_json::from_str(&file).expect("JSON was not well-formatted");
 
 		//let expected_vec = expected_output.as_array().unwrap();
 		//let des = expected_vec.iter().for_each(|value| value.deserialize_tuple_struct(name, len,
 		// visitor))
-		println!("{:?}", expected_output[0]);
+		let mut expected_output: Vec<OutputFormats> = vec![];
+
+		match json_data {
+			Value::Array(arr) =>
+				for value in arr {
+					if let Value::Object(map) = value {
+						// Workaround to detect which type it is
+						if map.contains_key("amount0Before") {
+							let output: OutputFormat = serde_json::from_value(Value::Object(map))
+								.expect("Failed to deserialize as OutputFormat");
+							expected_output.push(OutputFormats::Format(output));
+						} else if map.contains_key("swapError") {
+							let output: OutputFormatErrors =
+								serde_json::from_value(Value::Object(map))
+									.expect("Failed to deserialize as OutputFormatErrors");
+							expected_output.push(OutputFormats::FormatErrors(output));
+						} else {
+							panic!("Failed to parse one of the pool's expected outputs");
+						}
+					}
+				},
+			_ => panic!("Unexpected JSON format"),
+		};
+
+		// println!("{:?}", expected_output);
+
+		#[derive(Serialize, Deserialize, Debug)]
+		pub enum OutputFormats {
+			Format(OutputFormat),
+			FormatErrors(OutputFormatErrors),
+		}
 
 		#[derive(Serialize, Deserialize, Debug)]
 		pub struct OutputFormat {
@@ -1298,6 +1377,15 @@ mod test {
 			poolPriceAfter: String,
 			poolPriceBefore: String,
 			tickAfter: i32,
+			tickBefore: i32,
+		}
+
+		#[derive(Serialize, Deserialize, Debug)]
+		pub struct OutputFormatErrors {
+			poolBalance0: String,
+			poolBalance1: String,
+			poolPriceBefore: String,
+			swapError: String,
 			tickBefore: i32,
 		}
 
@@ -1497,6 +1585,7 @@ mod test {
 				liquidity: 11505743598341114571880798222544994,
 			}],
 		);
+		println!("MAX_TICK_GROSS_LIQUIDITY: {}", MAX_TICK_GROSS_LIQUIDITY);
 		let pool_13 = setup_pool(
 			"1461446703485210103287273052203988822378723970341", // MaxSqrtRatio - 1
 			pool_configs[PoolType::Medium].clone().fee_amount,
@@ -1520,37 +1609,42 @@ mod test {
 			pool_10, pool_11, pool_2, pool_13, pool_14, pool_0, pool_7, pool_12, pool_5, pool_1,
 			pool_6, pool_4, pool_3, pool_8, pool_9,
 		];
+		let mut i = 0;
+		// let pools_after = pools
+		// 	.iter()
+		// 	.map(|pool| {
+		// 		println!("iter {}", i);
+		// 		i = i + 1;
+		// 		// test number 0 (according to order in the snapshots file)
+		// 		let mut pool_after_swap_test_0 = pool.clone();
+		// 		let amount_out_swap_test_0 = pool_after_swap_test_0
+		// 			.swap_from_base_to_pair(U256::from_dec_str("1000").unwrap());
 
-		let pools_after = pools
-			.iter()
-			.map(|pool| {
-				// test number 0 (according to order in the snapshots file)
-				let mut pool_after_swap_test_0 = pool.clone();
-				let amount_out_swap_test_0 = pool_after_swap_test_0
-					.swap_from_base_to_pair(U256::from_dec_str("1000").unwrap());
+		// 		// test number 1 (according to order in the snapshots file)
+		// 		let mut pool_after_swap_test_1 = pool.clone();
+		// 		let amount_out_swap_test_1 = pool_after_swap_test_1
+		// 			.swap_from_pair_to_base(U256::from_dec_str("1000").unwrap());
 
-				// test number 1 (according to order in the snapshots file)
-				let mut pool_after_swap_test_1 = pool.clone();
-				let amount_out_swap_test_1 = pool_after_swap_test_1
-					.swap_from_pair_to_base(U256::from_dec_str("1000").unwrap());
+		// 		// test number 2 (according to order in the snapshots file)
+		// 		let mut pool_after_swap_test_2 = pool.clone();
+		// 		let amount_out_swap_test_2 = pool_after_swap_test_2
+		// 			.swap_from_base_to_pair(U256::from_dec_str("1000000000000000000").unwrap());
 
-				// test number 2 (according to order in the snapshots file)
-				let mut pool_after_swap_test_2 = pool.clone();
-				let amount_out_swap_test_2 = pool_after_swap_test_2
-					.swap_from_base_to_pair(U256::from_dec_str("1000000000000000000").unwrap());
+		// 		// test number 4 (according to order in the snapshots file)
+		// 		let mut pool_after_swap_test_4 = pool.clone();
+		// 		let amount_out_swap_test_4 = pool_after_swap_test_4
+		// 			.swap_from_pair_to_base(U256::from_dec_str("1000000000000000000").unwrap());
 
-				// test number 4 (according to order in the snapshots file)
-				let mut pool_after_swap_test_4 = pool.clone();
-				let amount_out_swap_test_4 = pool_after_swap_test_4
-					.swap_from_pair_to_base(U256::from_dec_str("1000000000000000000").unwrap());
+		// 		vec![
+		// 			(pool.clone(), pool_after_swap_test_0, amount_out_swap_test_0),
+		// 			(pool.clone(), pool_after_swap_test_1, amount_out_swap_test_1),
+		// 			(pool.clone(), pool_after_swap_test_2, amount_out_swap_test_2),
+		// 			(pool.clone(), pool_after_swap_test_4, amount_out_swap_test_4),
+		// 		]
+		// 	})
+		// 	.collect::<Vec<_>>();
 
-				vec![
-					(pool.clone(), pool_after_swap_test_0, amount_out_swap_test_0),
-					(pool.clone(), pool_after_swap_test_1, amount_out_swap_test_1),
-					(pool.clone(), pool_after_swap_test_2, amount_out_swap_test_2),
-					(pool.clone(), pool_after_swap_test_4, amount_out_swap_test_4),
-				]
-			})
-			.collect::<Vec<_>>();
+		// To check pools_after Vec<Vec<Pool10Swap0, Pool10Swap1, ..>, <Pool11Swap0, Pool11Swap1,
+		// Pool11Swap2, Pool11Swap4>, ...]
 	}
 }
