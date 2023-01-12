@@ -122,7 +122,7 @@ struct TickInfo {
 	fee_growth_outside: enum_map::EnumMap<Ticker, FeeGrowthQ128F128>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PoolState {
 	fee_pips: u32,
 	current_sqrt_price: SqrtPriceQ64F96,
@@ -1582,10 +1582,9 @@ mod test {
 			vec![PositionParams {
 				lower_tick: MIN_TICK_MEDIUM,
 				upper_tick: MAX_TICK_MEDIUM,
-				liquidity: 11505743598341114571880798222544994,
+				liquidity: MAX_TICK_GROSS_LIQUIDITY,
 			}],
 		);
-		println!("MAX_TICK_GROSS_LIQUIDITY: {}", MAX_TICK_GROSS_LIQUIDITY);
 		let pool_13 = setup_pool(
 			"1461446703485210103287273052203988822378723970341", // MaxSqrtRatio - 1
 			pool_configs[PoolType::Medium].clone().fee_amount,
@@ -1610,39 +1609,39 @@ mod test {
 			pool_6, pool_4, pool_3, pool_8, pool_9,
 		];
 		let mut i = 0;
-		// let pools_after = pools
-		// 	.iter()
-		// 	.map(|pool| {
-		// 		println!("iter {}", i);
-		// 		i = i + 1;
-		// 		// test number 0 (according to order in the snapshots file)
-		// 		let mut pool_after_swap_test_0 = pool.clone();
-		// 		let amount_out_swap_test_0 = pool_after_swap_test_0
-		// 			.swap_from_base_to_pair(U256::from_dec_str("1000").unwrap());
+		let pools_after = pools
+			.iter()
+			.map(|pool| {
+				println!("iter {}", i);
+				i = i + 1;
+				// test number 0 (according to order in the snapshots file)
+				let mut pool_after_swap_test_0 = pool.clone();
+				let amount_out_swap_test_0 = pool_after_swap_test_0
+					.swap_from_base_to_pair(U256::from_dec_str("1000").unwrap());
 
-		// 		// test number 1 (according to order in the snapshots file)
-		// 		let mut pool_after_swap_test_1 = pool.clone();
-		// 		let amount_out_swap_test_1 = pool_after_swap_test_1
-		// 			.swap_from_pair_to_base(U256::from_dec_str("1000").unwrap());
+				// test number 1 (according to order in the snapshots file)
+				let mut pool_after_swap_test_1 = pool.clone();
+				let amount_out_swap_test_1 = pool_after_swap_test_1
+					.swap_from_pair_to_base(U256::from_dec_str("1000").unwrap());
 
-		// 		// test number 2 (according to order in the snapshots file)
-		// 		let mut pool_after_swap_test_2 = pool.clone();
-		// 		let amount_out_swap_test_2 = pool_after_swap_test_2
-		// 			.swap_from_base_to_pair(U256::from_dec_str("1000000000000000000").unwrap());
+				// test number 2 (according to order in the snapshots file)
+				let mut pool_after_swap_test_2 = pool.clone();
+				let amount_out_swap_test_2 = pool_after_swap_test_2
+					.swap_from_base_to_pair(U256::from_dec_str("1000000000000000000").unwrap());
 
-		// 		// test number 4 (according to order in the snapshots file)
-		// 		let mut pool_after_swap_test_4 = pool.clone();
-		// 		let amount_out_swap_test_4 = pool_after_swap_test_4
-		// 			.swap_from_pair_to_base(U256::from_dec_str("1000000000000000000").unwrap());
+				// test number 4 (according to order in the snapshots file)
+				let mut pool_after_swap_test_4 = pool.clone();
+				let amount_out_swap_test_4 = pool_after_swap_test_4
+					.swap_from_pair_to_base(U256::from_dec_str("1000000000000000000").unwrap());
 
-		// 		vec![
-		// 			(pool.clone(), pool_after_swap_test_0, amount_out_swap_test_0),
-		// 			(pool.clone(), pool_after_swap_test_1, amount_out_swap_test_1),
-		// 			(pool.clone(), pool_after_swap_test_2, amount_out_swap_test_2),
-		// 			(pool.clone(), pool_after_swap_test_4, amount_out_swap_test_4),
-		// 		]
-		// 	})
-		// 	.collect::<Vec<_>>();
+				vec![
+					(pool.clone(), pool_after_swap_test_0, amount_out_swap_test_0),
+					(pool.clone(), pool_after_swap_test_1, amount_out_swap_test_1),
+					(pool.clone(), pool_after_swap_test_2, amount_out_swap_test_2),
+					(pool.clone(), pool_after_swap_test_4, amount_out_swap_test_4),
+				]
+			})
+			.collect::<Vec<_>>();
 
 		// To check pools_after Vec<Vec<Pool10Swap0, Pool10Swap1, ..>, <Pool11Swap0, Pool11Swap1,
 		// Pool11Swap2, Pool11Swap4>, ...]
