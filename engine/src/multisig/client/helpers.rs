@@ -35,8 +35,8 @@ use crate::{
 			keygen::{generate_key_data, HashComm1, HashContext, VerifyHashCommitmentsBroadcast2},
 			signing, KeygenResultInfo, PartyIdxMapping, ThresholdParameters,
 		},
-		crypto::{ECPoint, Rng, Verifiable},
-		CryptoScheme, KeyId, SigningPayload,
+		crypto::{ECPoint, Rng},
+		CryptoScheme, KeyId,
 	},
 	p2p::OutgoingMultisigStageMessages,
 };
@@ -51,7 +51,6 @@ use crate::{
 		// This determines which crypto scheme will be used in tests
 		// (we make arbitrary choice to use eth)
 		crypto::eth::{EthSigning, Point},
-		tests::fixtures::SIGNING_PAYLOAD,
 	},
 	testing::expect_recv_with_timeout,
 };
@@ -117,7 +116,7 @@ pub struct SigningCeremonyDetails<C: CryptoScheme> {
 	pub rng: Rng,
 	pub ceremony_id: CeremonyId,
 	pub signers: BTreeSet<AccountId>,
-	pub payload: SigningPayload,
+	pub payload: C::SigningPayload,
 	pub keygen_result_info: KeygenResultInfo<C::Point>,
 }
 
@@ -267,8 +266,8 @@ where
 
 	pub fn select_account_ids<const COUNT: usize>(&self) -> [AccountId; COUNT] {
 		self.nodes
-			.iter()
-			.map(|(account_id, _)| account_id.clone())
+			.keys()
+			.cloned()
 			.sorted()
 			.take(COUNT)
 			.collect::<Vec<_>>()
@@ -339,8 +338,7 @@ where
 
 			assert_eq!(
 				ceremony_id, self_ceremony_id,
-				"Client output p2p message for ceremony_id {}, expected {}",
-				ceremony_id, self_ceremony_id
+				"Client output p2p message for ceremony_id {ceremony_id}, expected {self_ceremony_id}"
 			);
 
 			let ceremony_data =
@@ -483,8 +481,7 @@ where
 			assert_eq!(
 				failure_reasons.len(),
 				1,
-				"The ceremony failure reason was not the same for all nodes: {:?}",
-				failure_reasons
+				"The ceremony failure reason was not the same for all nodes: {failure_reasons:?}",
 			);
 			Some(Err((
 				all_reported_parties.into_iter().next().unwrap(),
@@ -573,7 +570,7 @@ impl CeremonyRunnerStrategy for KeygenCeremonyRunner {
 		&self,
 		outputs: HashMap<AccountId, <Self::CeremonyType as CeremonyTrait>::Output>,
 	) -> Self::CheckedOutput {
-		let (_, public_key) = all_same(outputs.iter().map(|(_, keygen_result_info)| {
+		let (_, public_key) = all_same(outputs.values().map(|keygen_result_info| {
 			(keygen_result_info.params, keygen_result_info.key.get_public_key().get_element())
 		}))
 		.expect("Generated keys don't match");
@@ -623,7 +620,7 @@ impl KeygenCeremonyRunner {
 pub struct SigningCeremonyRunnerData<C: CryptoScheme> {
 	pub key_id: KeyId,
 	pub key_data: HashMap<AccountId, KeygenResultInfo<C::Point>>,
-	pub payload: SigningPayload,
+	pub payload: C::SigningPayload,
 }
 pub type SigningCeremonyRunner<C> =
 	CeremonyTestRunner<SigningCeremonyRunnerData<C>, SigningCeremony<C>>;
@@ -638,12 +635,14 @@ impl<C: CryptoScheme> CeremonyRunnerStrategy for SigningCeremonyRunner<C> {
 		&self,
 		outputs: HashMap<AccountId, <Self::CeremonyType as CeremonyTrait>::Output>,
 	) -> Self::CheckedOutput {
-		let signature = all_same(outputs.into_iter().map(|(_, signature)| signature))
-			.expect("Signatures don't match");
+		let signature = all_same(outputs.into_values()).expect("Signatures don't match");
 
-		signature
-			.verify(&self.ceremony_runner_data.key_id, &SIGNING_PAYLOAD)
-			.expect("Should be valid signature");
+		C::verify_signature(
+			&signature,
+			&self.ceremony_runner_data.key_id,
+			&C::signing_payload_for_test(),
+		)
+		.expect("Should be valid signature");
 
 		signature
 	}
@@ -665,7 +664,7 @@ impl<C: CryptoScheme> SigningCeremonyRunner<C> {
 		ceremony_id: CeremonyId,
 		key_id: KeyId,
 		key_data: HashMap<AccountId, KeygenResultInfo<C::Point>>,
-		payload: SigningPayload,
+		payload: C::SigningPayload,
 		rng: Rng,
 	) -> Self {
 		Self::inner_new(
@@ -681,7 +680,7 @@ impl<C: CryptoScheme> SigningCeremonyRunner<C> {
 		ceremony_id: CeremonyId,
 		key_id: KeyId,
 		key_data: HashMap<AccountId, KeygenResultInfo<C::Point>>,
-		payload: SigningPayload,
+		payload: C::SigningPayload,
 		rng: Rng,
 	) -> (Self, HashMap<AccountId, Node<SigningCeremony<C>>>) {
 		let nodes_len = nodes.len();
@@ -726,7 +725,7 @@ pub async fn new_signing_ceremony<C: CryptoScheme>(
 		DEFAULT_SIGNING_CEREMONY_ID,
 		key_id,
 		key_data,
-		SIGNING_PAYLOAD.clone(),
+		C::signing_payload_for_test(),
 		Rng::from_seed(DEFAULT_SIGNING_SEED),
 	)
 }
@@ -850,7 +849,7 @@ pub fn gen_invalid_keygen_comm1<P: ECPoint>(
 		0,
 		ThresholdParameters {
 			share_count,
-			threshold: threshold_from_share_count(share_count as u32) as AuthorityCount,
+			threshold: threshold_from_share_count(share_count) as AuthorityCount,
 		},
 	);
 	fake_comm1

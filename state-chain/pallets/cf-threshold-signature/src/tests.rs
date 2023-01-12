@@ -29,7 +29,7 @@ fn get_ceremony_context(
 	assert_eq!(request_id, expected_request_id);
 	assert_eq!(attempt_count, expected_attempt);
 	EthereumThresholdSigner::pending_ceremonies(ceremony_id)
-		.unwrap_or_else(|| panic!("Expected a ceremony with id {:?}", ceremony_id))
+		.unwrap_or_else(|| panic!("Expected a ceremony with id {ceremony_id:?}"))
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -59,9 +59,9 @@ fn current_ceremony_id() -> CeremonyId {
 }
 
 impl MockCfe {
-	fn process_event(&self, event: Event) {
+	fn process_event(&self, event: RuntimeEvent) {
 		match event {
-			Event::EthereumThresholdSigner(
+			RuntimeEvent::EthereumThresholdSigner(
 				pallet_cf_threshold_signature::Event::ThresholdSignatureRequest {
 					request_id: _,
 					ceremony_id,
@@ -78,7 +78,7 @@ impl MockCfe {
 						// Wrong request id is a no-op
 						assert_noop!(
 							EthereumThresholdSigner::signature_success(
-								Origin::none(),
+								RuntimeOrigin::none(),
 								ceremony_id + 1,
 								sign(payload)
 							),
@@ -86,7 +86,7 @@ impl MockCfe {
 						);
 
 						assert_ok!(EthereumThresholdSigner::signature_success(
-							Origin::none(),
+							RuntimeOrigin::none(),
 							ceremony_id,
 							sign(payload),
 						));
@@ -95,7 +95,7 @@ impl MockCfe {
 						// Invalid ceremony id.
 						assert_noop!(
 							EthereumThresholdSigner::report_signature_failed(
-								Origin::signed(self.id),
+								RuntimeOrigin::signed(self.id),
 								ceremony_id * 2,
 								BTreeSet::from_iter(bad.clone()),
 							),
@@ -105,7 +105,7 @@ impl MockCfe {
 						// Unsolicited responses are rejected.
 						assert_noop!(
 							EthereumThresholdSigner::report_signature_failed(
-								Origin::signed(signatories.iter().max().unwrap() + 1),
+								RuntimeOrigin::signed(signatories.iter().max().unwrap() + 1),
 								ceremony_id,
 								BTreeSet::from_iter(bad.clone()),
 							),
@@ -113,7 +113,7 @@ impl MockCfe {
 						);
 
 						assert_ok!(EthereumThresholdSigner::report_signature_failed(
-							Origin::signed(self.id),
+							RuntimeOrigin::signed(self.id),
 							ceremony_id,
 							BTreeSet::from_iter(bad.clone()),
 						));
@@ -121,7 +121,7 @@ impl MockCfe {
 						// Can't respond twice.
 						assert_noop!(
 							EthereumThresholdSigner::report_signature_failed(
-								Origin::signed(self.id),
+								RuntimeOrigin::signed(self.id),
 								ceremony_id,
 								BTreeSet::from_iter(bad.clone()),
 							),
@@ -228,7 +228,7 @@ fn signature_success_can_only_succeed_once_per_request() {
 			// Submit the same success again
 			assert_err!(
 				EthereumThresholdSigner::signature_success(
-					Origin::none(),
+					RuntimeOrigin::none(),
 					ceremony_id,
 					sign(*PAYLOAD)
 				),
@@ -314,7 +314,7 @@ fn fail_path_with_timeout() {
 			// Callback has *not* executed but is scheduled for a retry after the timeout has
 			// elapsed.
 			let retry_block = frame_system::Pallet::<Test>::current_block_number() +
-				EthereumThresholdSigner::threshold_signature_response_timeout() as u64;
+				EthereumThresholdSigner::threshold_signature_response_timeout();
 
 			assert!(!MockCallback::has_executed(request_id));
 			assert_eq!(EthereumThresholdSigner::ceremony_retry_queues(retry_block).len(), 1);
@@ -330,7 +330,7 @@ fn fail_path_with_timeout() {
 			assert!(EthereumThresholdSigner::ceremony_retry_queues(retry_block).is_empty());
 			// Another timeout should have been added for the new ceremony.
 			let retry_block = frame_system::Pallet::<Test>::current_block_number() +
-				EthereumThresholdSigner::threshold_signature_response_timeout() as u64;
+				EthereumThresholdSigner::threshold_signature_response_timeout();
 			assert!(!EthereumThresholdSigner::ceremony_retry_queues(retry_block).is_empty());
 
 			// Participant 1 was reported for not responding.
@@ -370,8 +370,8 @@ fn fail_path_due_to_report_signature_failed() {
 			// CFEs responds, triggering a retry for the next block.
 			run_cfes_on_sc_events(&cfes[..]);
 			let next_block_retry = frame_system::Pallet::<Test>::current_block_number() + 1;
-			let timeout_block_for_next_retry = next_block_retry +
-				EthereumThresholdSigner::threshold_signature_response_timeout() as u64;
+			let timeout_block_for_next_retry =
+				next_block_retry + EthereumThresholdSigner::threshold_signature_response_timeout();
 
 			assert_eq!(EthereumThresholdSigner::ceremony_retry_queues(next_block_retry).len(), 1);
 
@@ -601,7 +601,7 @@ mod failure_reporting {
 		// Status: 3 responses in, votes: [1:2, 2:1]
 		// Vote threshold not met, but two validators have failed to respond - they would be
 		// reported.
-		assert_eq!(ctx.offenders(), vec![4, 5], "Context was {:?}.", ctx);
+		assert_eq!(ctx.offenders(), vec![4, 5], "Context was {ctx:?}.");
 
 		// Fourth report, reporting threshold passed.
 		report(&mut ctx, 4, vec![1]);
@@ -609,12 +609,12 @@ mod failure_reporting {
 		// Status: 4 responses in, votes: [1:3, 2:1]
 		// Vote threshold has not been met for authority `1`, and `5` has not responded.
 		// As things stand, [5] would be reported.
-		assert_eq!(ctx.offenders(), vec![5], "Context was {:?}.", ctx);
+		assert_eq!(ctx.offenders(), vec![5], "Context was {ctx:?}.");
 
 		// Fifth report, reporting threshold passed.
 		report(&mut ctx, 5, vec![1, 2]);
 
 		// Status: 5 responses in, votes: [1:4, 2:2]. Only 1 has met the vote threshold.
-		assert_eq!(ctx.offenders(), vec![1], "Context was {:?}.", ctx);
+		assert_eq!(ctx.offenders(), vec![1], "Context was {ctx:?}.");
 	}
 }

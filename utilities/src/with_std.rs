@@ -3,6 +3,47 @@ use futures::{stream, Stream};
 #[doc(hidden)]
 pub use lazy_format::lazy_format as internal_lazy_format;
 
+pub fn clean_hex_address<const LEN: usize>(address_str: &str) -> Result<[u8; LEN], &'static str> {
+	let address_hex_str = match address_str.strip_prefix("0x") {
+		Some(address_stripped) => address_stripped,
+		None => address_str,
+	};
+
+	let address: [u8; LEN] = hex::decode(address_hex_str)
+		.map_err(|_| "Invalid hex")?
+		.try_into()
+		.map_err(|_| "Invalid address length")?;
+
+	Ok(address)
+}
+
+pub fn clean_eth_address(dirty_eth_address: &str) -> Result<[u8; 20], &'static str> {
+	clean_hex_address(dirty_eth_address)
+}
+
+pub fn clean_dot_address(dirty_dot_address: &str) -> Result<[u8; 32], &'static str> {
+	clean_hex_address(dirty_dot_address)
+}
+
+#[test]
+fn cleans_eth_address() {
+	// fail too short
+	let input = "0x323232";
+	assert!(clean_eth_address(input).is_err());
+
+	// fail invalid chars
+	let input = "0xZ29aB9EbDb421CE48b70flippya6e9a3DBD609C5";
+	assert!(clean_eth_address(input).is_err());
+
+	// success with 0x
+	let input = "0xB29aB9EbDb421CE48b70699758a6e9a3DBD609C5";
+	assert!(clean_eth_address(input).is_ok());
+
+	// success without 0x
+	let input = "B29aB9EbDb421CE48b70699758a6e9a3DBD609C5";
+	assert!(clean_eth_address(input).is_ok());
+}
+
 #[macro_export]
 macro_rules! assert_panics {
 	($expression:expr) => {

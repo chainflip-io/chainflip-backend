@@ -50,9 +50,9 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Governance Proposals (r:0 w:1)
 	fn propose_governance_extrinsic() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(18_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(5 as Weight))
-			.saturating_add(T::DbWeight::get().writes(3 as Weight))
+		Weight::from_ref_time(18_000_000)
+			.saturating_add(T::DbWeight::get().reads(5))
+			.saturating_add(T::DbWeight::get().writes(3))
 	}
 	// Storage: Governance Members (r:1 w:0)
 	// Storage: Governance Proposals (r:1 w:1)
@@ -60,66 +60,70 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Governance ActiveProposals (r:1 w:1)
 	fn approve() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(21_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().writes(3 as Weight))
+		Weight::from_ref_time(21_000_000)
+			.saturating_add(T::DbWeight::get().reads(4))
+			.saturating_add(T::DbWeight::get().writes(3))
 	}
 	// Storage: Governance Members (r:0 w:1)
 	fn new_membership_set() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(1_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(1_000_000)
+			.saturating_add(T::DbWeight::get().writes(1))
 	}
 	// Storage: System Digest (r:1 w:1)
 	// Storage: unknown [0x3a636f6465] (r:0 w:1)
 	fn call_as_sudo() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(11_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
+		Weight::from_ref_time(11_000_000)
+			.saturating_add(T::DbWeight::get().reads(1))
+			.saturating_add(T::DbWeight::get().writes(2))
 	}
 	// Storage: Governance ActiveProposals (r:1 w:0)
 	// Storage: Governance ExecutionPipeline (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn on_initialize(b: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(5_369_000 as Weight)
+		Weight::from_ref_time(5_369_000)
 			// Standard Error: 2_000
-			.saturating_add((454_000 as Weight).saturating_mul(b as Weight))
-			.saturating_add(T::DbWeight::get().reads(3 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+			.saturating_add(Weight::from_ref_time(454_000)
+.saturating_mul(b as u64)
+)
+			.saturating_add(T::DbWeight::get().reads(3))
+			.saturating_add(T::DbWeight::get().writes(1))
 	}
 	// Storage: Governance ActiveProposals (r:1 w:0)
 	// Storage: Governance ExecutionPipeline (r:1 w:0)
 	fn on_initialize_best_case() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(3_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
+		Weight::from_ref_time(3_000_000)
+			.saturating_add(T::DbWeight::get().reads(2))
 	}
 	// Storage: Governance ActiveProposals (r:1 w:0)
 	// Storage: Governance Proposals (r:0 w:4)
 	fn expire_proposals(b: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(1_465_000 as Weight)
+		Weight::from_ref_time(1_465_000)
 			// Standard Error: 18_000
-			.saturating_add((3_538_000 as Weight).saturating_mul(b as Weight))
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes((1 as Weight).saturating_mul(b as Weight)))
+			.saturating_add(Weight::from_ref_time(3_538_000)
+.saturating_mul(b as u64)
+)
+			.saturating_add(T::DbWeight::get().reads(1))
+			.saturating_add(T::DbWeight::get().writes(1).saturating_mul(b as u64))
 	}
 	// Storage: Governance GovKeyWhitelistedCallHash (r:0 w:1)
 	fn set_whitelisted_call_hash() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(1_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(1_000_000)
+			.saturating_add(T::DbWeight::get().writes(1))
 	}
 	// Storage: Governance NextGovKeyCallHashNonce (r:1 w:1)
 	// Storage: Governance GovKeyWhitelistedCallHash (r:1 w:1)
 	// Storage: Governance Members (r:0 w:1)
 	fn submit_govkey_call() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(15_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes(3 as Weight))
+		Weight::from_ref_time(15_000_000)
+			.saturating_add(T::DbWeight::get().reads(2))
+			.saturating_add(T::DbWeight::get().writes(3))
 	}
 }
 
@@ -133,9 +137,9 @@ impl WeightInfo for () {
 	// Storage: Governance Proposals (r:0 w:1)
 	fn propose_governance_extrinsic() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(18_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
+		Weight::from_ref_time(18_000_000)
+			.saturating_add(RocksDbWeight::get().reads(5))
+			.saturating_add(RocksDbWeight::get().writes(3))
 	}
 	// Storage: Governance Members (r:1 w:0)
 	// Storage: Governance Proposals (r:1 w:1)
@@ -143,65 +147,69 @@ impl WeightInfo for () {
 	// Storage: Governance ActiveProposals (r:1 w:1)
 	fn approve() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(21_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
+		Weight::from_ref_time(21_000_000)
+			.saturating_add(RocksDbWeight::get().reads(4))
+			.saturating_add(RocksDbWeight::get().writes(3))
 	}
 	// Storage: Governance Members (r:0 w:1)
 	fn new_membership_set() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(1_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(1_000_000)
+			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 	// Storage: System Digest (r:1 w:1)
 	// Storage: unknown [0x3a636f6465] (r:0 w:1)
 	fn call_as_sudo() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(11_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+		Weight::from_ref_time(11_000_000)
+			.saturating_add(RocksDbWeight::get().reads(1))
+			.saturating_add(RocksDbWeight::get().writes(2))
 	}
 	// Storage: Governance ActiveProposals (r:1 w:0)
 	// Storage: Governance ExecutionPipeline (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn on_initialize(b: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(5_369_000 as Weight)
+		Weight::from_ref_time(5_369_000)
 			// Standard Error: 2_000
-			.saturating_add((454_000 as Weight).saturating_mul(b as Weight))
-			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+			.saturating_add(Weight::from_ref_time(454_000)
+.saturating_mul(b as u64)
+)
+			.saturating_add(RocksDbWeight::get().reads(3))
+			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 	// Storage: Governance ActiveProposals (r:1 w:0)
 	// Storage: Governance ExecutionPipeline (r:1 w:0)
 	fn on_initialize_best_case() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(3_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
+		Weight::from_ref_time(3_000_000)
+			.saturating_add(RocksDbWeight::get().reads(2))
 	}
 	// Storage: Governance ActiveProposals (r:1 w:0)
 	// Storage: Governance Proposals (r:0 w:4)
 	fn expire_proposals(b: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(1_465_000 as Weight)
+		Weight::from_ref_time(1_465_000)
 			// Standard Error: 18_000
-			.saturating_add((3_538_000 as Weight).saturating_mul(b as Weight))
-			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
-			.saturating_add(RocksDbWeight::get().writes((1 as Weight).saturating_mul(b as Weight)))
+			.saturating_add(Weight::from_ref_time(3_538_000)
+.saturating_mul(b as u64)
+)
+			.saturating_add(RocksDbWeight::get().reads(1))
+			.saturating_add(RocksDbWeight::get().writes(1).saturating_mul(b as u64))
 	}
 	// Storage: Governance GovKeyWhitelistedCallHash (r:0 w:1)
 	fn set_whitelisted_call_hash() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(1_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(1_000_000)
+			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 	// Storage: Governance NextGovKeyCallHashNonce (r:1 w:1)
 	// Storage: Governance GovKeyWhitelistedCallHash (r:1 w:1)
 	// Storage: Governance Members (r:0 w:1)
 	fn submit_govkey_call() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(15_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
+		Weight::from_ref_time(15_000_000)
+			.saturating_add(RocksDbWeight::get().reads(2))
+			.saturating_add(RocksDbWeight::get().writes(3))
 	}
 }

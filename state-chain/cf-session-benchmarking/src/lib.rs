@@ -1,3 +1,4 @@
+#![cfg(feature = "runtime-benchmarks")]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use frame_benchmarking::{benchmarks, whitelisted_caller};

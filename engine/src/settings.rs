@@ -481,12 +481,12 @@ fn validate_endpoint(valid_schemes: Vec<&str>, url: &str) -> Result<()> {
 	let parsed_url = Url::parse(url)?;
 	let scheme = parsed_url.scheme();
 	if !valid_schemes.contains(&scheme) {
-		bail!("Invalid scheme: `{}`", scheme);
+		bail!("Invalid scheme: `{scheme}`");
 	}
-	if parsed_url.host() == None ||
+	if parsed_url.host().is_none() ||
 		parsed_url.username() != "" ||
-		parsed_url.password() != None ||
-		parsed_url.fragment() != None ||
+		parsed_url.password().is_some() ||
+		parsed_url.fragment().is_some() ||
 		parsed_url.cannot_be_a_base()
 	{
 		bail!("Invalid URL data.");

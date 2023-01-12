@@ -22,14 +22,14 @@ fn advance_by_block() {
 fn submit_heartbeat_and_move_forward_heartbeat_interval(
 	node: <Test as frame_system::Config>::AccountId,
 ) {
-	assert_ok!(ReputationPallet::heartbeat(Origin::signed(node)));
+	assert_ok!(ReputationPallet::heartbeat(RuntimeOrigin::signed(node)));
 	advance_by_hearbeat_intervals(1);
 }
 
 #[test]
 fn submitting_heartbeat_for_heartbeat_block_interval_should_reward_reputation_points() {
 	new_test_ext().execute_with(|| {
-		ReputationPallet::heartbeat(Origin::signed(ALICE)).unwrap();
+		ReputationPallet::heartbeat(RuntimeOrigin::signed(ALICE)).unwrap();
 		assert_eq!(reputation_points(&ALICE), REPUTATION_PER_HEARTBEAT,);
 	});
 }
@@ -54,7 +54,7 @@ fn offline_nodes_get_slashed_if_reputation_is_negative() {
 #[test]
 fn only_one_heartbeat_per_interval_earns_reputation() {
 	new_test_ext().execute_with(|| {
-		ReputationPallet::heartbeat(Origin::signed(ALICE)).unwrap();
+		ReputationPallet::heartbeat(RuntimeOrigin::signed(ALICE)).unwrap();
 		assert_eq!(reputation_points(&ALICE), REPUTATION_PER_HEARTBEAT,);
 		// submit again, then move forward
 		advance_by_block();
@@ -63,7 +63,7 @@ fn only_one_heartbeat_per_interval_earns_reputation() {
 		// heartbeat block interval
 		assert_eq!(reputation_points(&ALICE), REPUTATION_PER_HEARTBEAT,);
 		// we've moved forward a block interval, so now we should have the extra rep
-		ReputationPallet::heartbeat(Origin::signed(ALICE)).unwrap();
+		ReputationPallet::heartbeat(RuntimeOrigin::signed(ALICE)).unwrap();
 		assert_eq!(reputation_points(&ALICE), REPUTATION_PER_HEARTBEAT * 2,);
 	})
 }
@@ -71,10 +71,10 @@ fn only_one_heartbeat_per_interval_earns_reputation() {
 #[test]
 fn update_last_heartbeat_each_submission() {
 	new_test_ext().execute_with(|| {
-		ReputationPallet::heartbeat(Origin::signed(ALICE)).unwrap();
+		ReputationPallet::heartbeat(RuntimeOrigin::signed(ALICE)).unwrap();
 		assert_eq!(ReputationPallet::last_heartbeat(ALICE).unwrap(), 1);
 		advance_by_block();
-		ReputationPallet::heartbeat(Origin::signed(ALICE)).unwrap();
+		ReputationPallet::heartbeat(RuntimeOrigin::signed(ALICE)).unwrap();
 		assert_eq!(ReputationPallet::last_heartbeat(ALICE).unwrap(), 2);
 	})
 }
@@ -85,7 +85,7 @@ fn updating_accrual_rate_should_affect_reputation_points() {
 		// Fails due to too high a reputation points
 		assert_noop!(
 			ReputationPallet::update_accrual_ratio(
-				Origin::root(),
+				RuntimeOrigin::root(),
 				MAX_ACCRUABLE_REPUTATION + 1,
 				20
 			),
@@ -94,12 +94,16 @@ fn updating_accrual_rate_should_affect_reputation_points() {
 
 		// Fails due to online points not being > 0
 		assert_noop!(
-			ReputationPallet::update_accrual_ratio(Origin::root(), MAX_ACCRUABLE_REPUTATION, 0),
+			ReputationPallet::update_accrual_ratio(
+				RuntimeOrigin::root(),
+				MAX_ACCRUABLE_REPUTATION,
+				0
+			),
 			Error::<Test>::InvalidAccrualRatio,
 		);
 
 		assert_ok!(ReputationPallet::update_accrual_ratio(
-			Origin::root(),
+			RuntimeOrigin::root(),
 			ACCRUAL_RATIO.0,
 			ACCRUAL_RATIO.1,
 		));
@@ -111,7 +115,7 @@ fn updating_accrual_rate_should_affect_reputation_points() {
 
 		// Double the accrual rate.
 		assert_ok!(ReputationPallet::update_accrual_ratio(
-			Origin::root(),
+			RuntimeOrigin::root(),
 			ACCRUAL_RATIO.0 * 2,
 			ACCRUAL_RATIO.1,
 		));
@@ -121,7 +125,7 @@ fn updating_accrual_rate_should_affect_reputation_points() {
 
 		// Halve the divisor, equivalent to double the initial rate.
 		assert_ok!(ReputationPallet::update_accrual_ratio(
-			Origin::root(),
+			RuntimeOrigin::root(),
 			ACCRUAL_RATIO.0,
 			ACCRUAL_RATIO.1 / 2,
 		));
@@ -342,12 +346,12 @@ mod reporting_adapter_test {
 #[test]
 fn submitting_heartbeat_more_than_once_in_an_interval() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(ReputationPallet::heartbeat(Origin::signed(ALICE)));
+		assert_ok!(ReputationPallet::heartbeat(RuntimeOrigin::signed(ALICE)));
 		assert!(ReputationPallet::is_qualified(&ALICE), "Alice should be online");
-		assert_ok!(ReputationPallet::heartbeat(Origin::signed(ALICE)));
+		assert_ok!(ReputationPallet::heartbeat(RuntimeOrigin::signed(ALICE)));
 		assert!(ReputationPallet::is_qualified(&ALICE), "Alice should be online");
 		advance_by_hearbeat_intervals(1);
-		assert_ok!(ReputationPallet::heartbeat(Origin::signed(ALICE)));
+		assert_ok!(ReputationPallet::heartbeat(RuntimeOrigin::signed(ALICE)));
 		assert!(ReputationPallet::is_qualified(&ALICE), "Alice should be online");
 	});
 }
@@ -355,7 +359,7 @@ fn submitting_heartbeat_more_than_once_in_an_interval() {
 #[test]
 fn we_should_see_missing_nodes_when_not_having_submitted_one_interval() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(ReputationPallet::heartbeat(Origin::signed(ALICE)));
+		assert_ok!(ReputationPallet::heartbeat(RuntimeOrigin::signed(ALICE)));
 		assert!(ReputationPallet::is_qualified(&ALICE), "Alice should be online");
 		advance_by_hearbeat_intervals(1);
 		assert_eq!(
@@ -368,7 +372,7 @@ fn we_should_see_missing_nodes_when_not_having_submitted_one_interval() {
 			1,
 			"We should have one node"
 		);
-		assert_ok!(ReputationPallet::heartbeat(Origin::signed(ALICE)));
+		assert_ok!(ReputationPallet::heartbeat(RuntimeOrigin::signed(ALICE)));
 		assert_eq!(
 			ReputationPallet::current_network_state().online,
 			vec![ALICE],
@@ -380,11 +384,11 @@ fn we_should_see_missing_nodes_when_not_having_submitted_one_interval() {
 #[test]
 fn non_validators_should_not_appear_in_network_state() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(ReputationPallet::heartbeat(Origin::signed(BOB)));
-		assert_ok!(ReputationPallet::heartbeat(Origin::signed(ALICE)));
+		assert_ok!(ReputationPallet::heartbeat(RuntimeOrigin::signed(BOB)));
+		assert_ok!(ReputationPallet::heartbeat(RuntimeOrigin::signed(ALICE)));
 
 		let current_epoch = MockEpochInfo::epoch_index();
-		println!("The current epoch is: {}", current_epoch);
+		println!("The current epoch is: {current_epoch}");
 		assert!(
 			MockEpochInfo::authority_index(current_epoch, &BOB).is_none(),
 			"Bob should not be an authority"

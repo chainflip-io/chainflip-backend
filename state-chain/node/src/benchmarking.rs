@@ -16,11 +16,11 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Contains code to setup the command invocations in [`super::command`] which would
-//! otherwise bloat that module.
+//! Setup code for [`super::command`] which would otherwise bloat that module.
+//!
+//! Should only be used for benchmarking as it may break in other contexts.
 
 use crate::service::FullClient;
-
 use runtime::SystemCall;
 use sc_cli::Result;
 use sc_client_api::BlockBackend;
@@ -35,19 +35,27 @@ use std::{sync::Arc, time::Duration};
 /// Generates extrinsics for the `benchmark overhead` command.
 ///
 /// Note: Should only be used for benchmarking.
-pub struct BenchmarkExtrinsicBuilder {
+pub struct RemarkBuilder {
 	client: Arc<FullClient>,
 }
 
-impl BenchmarkExtrinsicBuilder {
+impl RemarkBuilder {
 	/// Creates a new [`Self`] from the given client.
 	pub fn new(client: Arc<FullClient>) -> Self {
 		Self { client }
 	}
 }
 
-impl frame_benchmarking_cli::ExtrinsicBuilder for BenchmarkExtrinsicBuilder {
-	fn remark(&self, nonce: u32) -> std::result::Result<OpaqueExtrinsic, &'static str> {
+impl frame_benchmarking_cli::ExtrinsicBuilder for RemarkBuilder {
+	fn pallet(&self) -> &str {
+		"system"
+	}
+
+	fn extrinsic(&self) -> &str {
+		"remark"
+	}
+
+	fn build(&self, nonce: u32) -> std::result::Result<OpaqueExtrinsic, &'static str> {
 		let acc = Sr25519Keyring::Bob.pair();
 		let extrinsic: OpaqueExtrinsic = create_benchmark_extrinsic(
 			self.client.as_ref(),
@@ -67,7 +75,7 @@ impl frame_benchmarking_cli::ExtrinsicBuilder for BenchmarkExtrinsicBuilder {
 pub fn create_benchmark_extrinsic(
 	client: &FullClient,
 	sender: sp_core::sr25519::Pair,
-	call: runtime::Call,
+	call: runtime::RuntimeCall,
 	nonce: u32,
 ) -> runtime::UncheckedExtrinsic {
 	let genesis_hash = client.block_hash(0).ok().flatten().expect("Genesis block exists; qed");
@@ -126,6 +134,6 @@ pub fn inherent_benchmark_data() -> Result<InherentData> {
 
 	timestamp
 		.provide_inherent_data(&mut inherent_data)
-		.map_err(|e| format!("creating inherent data: {:?}", e))?;
+		.map_err(|e| format!("creating inherent data: {e:?}"))?;
 	Ok(inherent_data)
 }

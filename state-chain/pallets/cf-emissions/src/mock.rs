@@ -74,8 +74,8 @@ impl system::Config for Test {
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
-	type Origin = Origin;
-	type Call = Call;
+	type RuntimeOrigin = RuntimeOrigin;
+	type RuntimeCall = RuntimeCall;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
@@ -83,7 +83,7 @@ impl system::Config for Test {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = BlockHashCount;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -100,7 +100,7 @@ impl Chainflip for Test {
 	type KeyId = Vec<u8>;
 	type ValidatorId = AccountId;
 	type Amount = u128;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
 	type EnsureWitnessedAtCurrentEpoch = NeverFailingOriginCheck<Self>;
 	type EpochInfo = cf_traits::mocks::epoch_info::MockEpochInfo;
@@ -110,11 +110,11 @@ impl Chainflip for Test {
 pub struct MockCallback;
 
 impl UnfilteredDispatchable for MockCallback {
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 
 	fn dispatch_bypass_filter(
 		self,
-		_origin: Self::Origin,
+		_origin: Self::RuntimeOrigin,
 	) -> frame_support::dispatch::DispatchResultWithPostInfo {
 		Ok(().into())
 	}
@@ -133,10 +133,10 @@ parameter_types! {
 }
 
 // Implement mock for RestrictionHandler
-impl_mock_waived_fees!(AccountId, Call);
+impl_mock_waived_fees!(AccountId, RuntimeCall);
 
 impl pallet_cf_flip::Config for Test {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type Balance = u128;
 	type ExistentialDeposit = ExistentialDeposit;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
@@ -236,7 +236,7 @@ impl Broadcaster<MockEthereum> for MockBroadcast {
 }
 
 impl pallet_cf_emissions::Config for Test {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type HostChain = MockEthereum;
 	type FlipBalance = FlipBalance;
 	type ApiCall = MockUpdateFlipSupply;

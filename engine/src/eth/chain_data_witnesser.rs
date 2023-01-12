@@ -9,11 +9,10 @@ use super::rpc::EthRpcApi;
 
 use cf_chains::eth::{Ethereum, TrackedData};
 
-use sp_core::U256;
 use state_chain_runtime::CfeSettings;
 use tokio::sync::watch;
 use utilities::{context, make_periodic_tick};
-use web3::types::BlockNumber;
+use web3::types::{BlockNumber, U256};
 
 const ETH_CHAIN_TRACKING_POLL_INTERVAL: Duration = Duration::from_secs(4);
 
@@ -62,8 +61,8 @@ where
                     if latest_data.block_height > last_witnessed_data.block_height || latest_data.base_fee != last_witnessed_data.base_fee {
                         let _result = state_chain_client
                             .submit_signed_extrinsic(
-                                state_chain_runtime::Call::Witnesser(pallet_cf_witnesser::Call::witness_at_epoch {
-                                    call: Box::new(state_chain_runtime::Call::EthereumChainTracking(
+                                state_chain_runtime::RuntimeCall::Witnesser(pallet_cf_witnesser::Call::witness_at_epoch {
+                                    call: Box::new(state_chain_runtime::RuntimeCall::EthereumChainTracking(
                                         pallet_cf_chain_tracking::Call::update_chain_state {
                                             state: latest_data,
                                         },

@@ -10,12 +10,12 @@ use generic_array::{typenum::Unsigned, ArrayLength};
 use num_derive::FromPrimitive;
 use zeroize::{DefaultIsZeroes, ZeroizeOnDrop};
 
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 
 use generic_array::GenericArray;
 use serde::{Deserialize, Serialize};
 
-use super::{KeyId, SigningPayload};
+use super::KeyId;
 
 /// The db uses a static length prefix, that must include the keygen data prefix and the chain tag
 pub const CHAIN_TAG_SIZE: usize = std::mem::size_of::<ChainTag>();
@@ -81,15 +81,10 @@ pub trait ECPoint:
 	}
 }
 
-pub trait Verifiable {
-	fn verify(&self, key_id: &KeyId, payload: &SigningPayload) -> anyhow::Result<()>;
-}
-
 pub trait CryptoScheme: 'static {
 	type Point: ECPoint;
 
-	type Signature: Verifiable
-		+ Debug
+	type Signature: Debug
 		+ Clone
 		+ PartialEq
 		+ serde::Serialize
@@ -98,6 +93,7 @@ pub trait CryptoScheme: 'static {
 		+ Send;
 
 	type AggKey;
+	type SigningPayload: Display + Debug + Sync + Send + Clone + PartialEq + Eq + AsRef<[u8]>;
 
 	/// Friendly name of the scheme used for logging
 	const NAME: &'static str;
@@ -114,7 +110,7 @@ pub trait CryptoScheme: 'static {
 	fn build_challenge(
 		pubkey: Self::Point,
 		nonce_commitment: Self::Point,
-		payload: &SigningPayload,
+		payload: &Self::SigningPayload,
 	) -> <Self::Point as ECPoint>::Scalar;
 
 	/// Build challenge response using our key share
@@ -135,6 +131,12 @@ pub trait CryptoScheme: 'static {
 		signature_response: &<Self::Point as ECPoint>::Scalar,
 	) -> bool;
 
+	fn verify_signature(
+		signature: &Self::Signature,
+		key_id: &KeyId,
+		payload: &Self::SigningPayload,
+	) -> anyhow::Result<()>;
+
 	fn agg_key(pubkey: &Self::Point) -> Self::AggKey;
 
 	// Only relevant for ETH contract keys, which is the only
@@ -142,6 +144,9 @@ pub trait CryptoScheme: 'static {
 	fn is_pubkey_compatible(_pubkey: &Self::Point) -> bool {
 		true
 	}
+
+	#[cfg(test)]
+	fn signing_payload_for_test() -> Self::SigningPayload;
 }
 
 pub trait ECScalar:

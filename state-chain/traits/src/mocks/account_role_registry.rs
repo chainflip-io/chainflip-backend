@@ -11,7 +11,7 @@ impl<T: Config> AccountRoleRegistry<T> for () {
 	}
 
 	fn ensure_account_role(
-		origin: <T as frame_system::Config>::Origin,
+		origin: <T as frame_system::Config>::RuntimeOrigin,
 		_role: cf_primitives::AccountRole,
 	) -> Result<<T as frame_system::Config>::AccountId, frame_support::error::BadOrigin> {
 		// always passes, regardless of role for the benchmarks

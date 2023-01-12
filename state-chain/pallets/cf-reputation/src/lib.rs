@@ -94,7 +94,7 @@ pub mod pallet {
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config: Chainflip {
 		/// The event type
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// For registering and verifying the account role.
 		type AccountRoleRegistry: AccountRoleRegistry<Self>;
@@ -120,7 +120,7 @@ pub mod pallet {
 		type Heartbeat: Heartbeat<ValidatorId = Self::ValidatorId, BlockNumber = Self::BlockNumber>;
 
 		/// Implementation of EnsureOrigin trait for governance
-		type EnsureGovernance: EnsureOrigin<Self::Origin>;
+		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The number of blocks for the time frame we would test liveliness within
 		#[pallet::constant]
@@ -272,7 +272,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
-			let old_penalty = Penalties::<T>::mutate(&offence, |penalty| {
+			let old_penalty = Penalties::<T>::mutate(offence, |penalty| {
 				let old = penalty.clone();
 				*penalty = new_penalty.clone();
 				old
@@ -401,7 +401,7 @@ impl<T: Config> OffenceReporter for Pallet<T> {
 
 		if penalty.reputation > 0 {
 			for validator_id in validators {
-				Reputations::<T>::mutate(&validator_id, |rep| {
+				Reputations::<T>::mutate(validator_id, |rep| {
 					rep.deduct_reputation(penalty.reputation);
 				});
 				Self::deposit_event(Event::OffencePenalty {
@@ -418,7 +418,7 @@ impl<T: Config> OffenceReporter for Pallet<T> {
 	}
 
 	fn forgive_all(offence: impl Into<Self::Offence>) {
-		Suspensions::<T>::remove(&offence.into());
+		Suspensions::<T>::remove(offence.into());
 	}
 }
 
@@ -497,7 +497,7 @@ impl<T: Config> Pallet<T> {
 	/// available.
 	fn resolve_penalty_for<O: Into<T::Offence>>(offence: O) -> Penalty<T> {
 		let offence: T::Offence = offence.into();
-		Penalties::<T>::get(&offence)
+		Penalties::<T>::get(offence)
 	}
 }
 

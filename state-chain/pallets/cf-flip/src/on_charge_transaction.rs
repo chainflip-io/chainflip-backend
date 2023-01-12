@@ -24,8 +24,8 @@ impl<T: TxConfig + FlipConfig + Config> OnChargeTransaction<T> for FlipTransacti
 
 	fn withdraw_fee(
 		who: &T::AccountId,
-		call: &T::Call,
-		_dispatch_info: &DispatchInfoOf<T::Call>,
+		call: &T::RuntimeCall,
+		_dispatch_info: &DispatchInfoOf<T::RuntimeCall>,
 		fee: Self::Balance,
 		_tip: Self::Balance,
 	) -> Result<Self::LiquidityInfo, frame_support::unsigned::TransactionValidityError> {
@@ -45,8 +45,8 @@ impl<T: TxConfig + FlipConfig + Config> OnChargeTransaction<T> for FlipTransacti
 
 	fn correct_and_deposit_fee(
 		who: &T::AccountId,
-		_dispatch_info: &sp_runtime::traits::DispatchInfoOf<T::Call>,
-		_post_info: &sp_runtime::traits::PostDispatchInfoOf<T::Call>,
+		_dispatch_info: &sp_runtime::traits::DispatchInfoOf<T::RuntimeCall>,
+		_post_info: &sp_runtime::traits::PostDispatchInfoOf<T::RuntimeCall>,
 		corrected_fee: Self::Balance,
 		_tip: Self::Balance,
 		escrow: Self::LiquidityInfo,

@@ -93,7 +93,7 @@ pub mod pallet {
 		#[pallet::constant]
 		type NetworkFee: Get<u16>;
 		/// Implementation of EnsureOrigin trait for governance
-		type EnsureGovernance: EnsureOrigin<Self::Origin>;
+		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
 	}
 
 	#[pallet::call]
@@ -159,7 +159,7 @@ pub mod pallet {
 					*total = total.saturating_add(flip_to_burn);
 				});
 			}
-			0
+			Weight::from_ref_time(0)
 		}
 	}
 	/// Network fee

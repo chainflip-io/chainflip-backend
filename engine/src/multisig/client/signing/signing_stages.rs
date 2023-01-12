@@ -31,15 +31,12 @@ type SigningStageResult<Crypto> = StageResult<SigningCeremony<Crypto>>;
 /// and collect those from all other parties
 pub struct AwaitCommitments1<Crypto: CryptoScheme> {
 	common: CeremonyCommon,
-	signing_common: SigningStateCommonInfo<Crypto::Point>,
+	signing_common: SigningStateCommonInfo<Crypto>,
 	nonces: Box<SecretNoncePair<Crypto::Point>>,
 }
 
 impl<Crypto: CryptoScheme> AwaitCommitments1<Crypto> {
-	pub fn new(
-		mut common: CeremonyCommon,
-		signing_common: SigningStateCommonInfo<Crypto::Point>,
-	) -> Self {
+	pub fn new(mut common: CeremonyCommon, signing_common: SigningStateCommonInfo<Crypto>) -> Self {
 		let nonces = SecretNoncePair::sample_random(&mut common.rng);
 
 		AwaitCommitments1 { common, signing_common, nonces }
@@ -67,7 +64,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 
 		let processor = VerifyCommitmentsBroadcast2::<Crypto> {
 			common: self.common.clone(),
-			signing_common: self.signing_common.clone(),
+			signing_common: self.signing_common,
 			nonces: self.nonces,
 			commitments: messages,
 		};
@@ -83,7 +80,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 /// Stage 2: Verifying data broadcast during stage 1
 struct VerifyCommitmentsBroadcast2<Crypto: CryptoScheme> {
 	common: CeremonyCommon,
-	signing_common: SigningStateCommonInfo<Crypto::Point>,
+	signing_common: SigningStateCommonInfo<Crypto>,
 	// Our nonce pair generated in the previous stage
 	nonces: Box<SecretNoncePair<Crypto::Point>>,
 	// Public nonce commitments collected in the previous stage
@@ -139,7 +136,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 /// Stage 3: Generating and broadcasting signature response shares
 struct LocalSigStage3<Crypto: CryptoScheme> {
 	common: CeremonyCommon,
-	signing_common: SigningStateCommonInfo<Crypto::Point>,
+	signing_common: SigningStateCommonInfo<Crypto>,
 	// Our nonce pair generated in the previous stage
 	nonces: Box<SecretNoncePair<Crypto::Point>>,
 	// Public nonce commitments (verified)
@@ -184,7 +181,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 	) -> SigningStageResult<Crypto> {
 		let processor = VerifyLocalSigsBroadcastStage4::<Crypto> {
 			common: self.common.clone(),
-			signing_common: self.signing_common.clone(),
+			signing_common: self.signing_common,
 			commitments: self.commitments,
 			local_sigs: messages,
 		};
@@ -198,7 +195,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 /// Stage 4: Verifying the broadcasting of signature shares
 struct VerifyLocalSigsBroadcastStage4<Crypto: CryptoScheme> {
 	common: CeremonyCommon,
-	signing_common: SigningStateCommonInfo<Crypto::Point>,
+	signing_common: SigningStateCommonInfo<Crypto>,
 	/// Nonce commitments from all parties (verified to be correctly broadcast)
 	commitments: BTreeMap<AuthorityCount, Comm1<Crypto::Point>>,
 	/// Signature shares sent to us (NOT verified to be correctly broadcast)

@@ -8,9 +8,8 @@ use chainflip_engine::{
 	logging::utils,
 };
 
-use sp_core::{H160, H256};
 use std::str::FromStr;
-use web3::types::U256;
+use web3::types::{H160, H256, U256};
 
 mod common;
 use crate::common::IntegrationTestConfig;
