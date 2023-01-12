@@ -84,16 +84,16 @@ mod test_missed_authorship_slots {
 		type BlockWeights = ();
 		type BlockLength = ();
 		type DbWeight = ();
-		type Origin = Origin;
+		type RuntimeOrigin = RuntimeOrigin;
 		type Index = u64;
 		type BlockNumber = u64;
-		type Call = Call;
+		type RuntimeCall = RuntimeCall;
 		type Hash = sp_core::H256;
 		type Hashing = ::sp_runtime::traits::BlakeTwo256;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
-		type Event = Event;
+		type RuntimeEvent = RuntimeEvent;
 		type BlockHashCount = BlockHashCount;
 		type Version = ();
 		type PalletInfo = PalletInfo;
@@ -170,10 +170,8 @@ mod test_missed_authorship_slots {
 			System::reset_events();
 			System::initialize(&block_number, &System::parent_hash(), &pre_digest);
 			System::on_initialize(block_number);
-			Timestamp::on_initialize(block_number);
 			assertions(<MissedAuraSlots as MissedAuthorshipSlots>::missed_slots().collect());
 			Aura::on_initialize(block_number);
-			Timestamp::set_timestamp(block_number);
 		}
 
 		new_test_ext(vec![0, 1, 2, 3, 4]).execute_with(|| {

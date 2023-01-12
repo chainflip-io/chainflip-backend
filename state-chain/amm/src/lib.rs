@@ -15,8 +15,6 @@
 //! Note: There are a few yet to be proved safe maths operations, there are marked below with `TODO:
 //! Prove`. We should resolve these issues before using this code in release.
 #![cfg_attr(not(feature = "std"), no_std)]
-#![feature(mixed_integer_ops)] // This has been stablized in a future version of rust
-
 use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 use codec::{Decode, Encode, MaxEncodedLen};

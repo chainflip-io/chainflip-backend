@@ -4,9 +4,9 @@ use frame_support::{
 	traits::{Hooks, OnNewAccount},
 };
 use state_chain_runtime::{
-	chainflip::address_derivation::AddressDerivation, AccountRoles, Call, EpochInfo,
-	EthereumIngressEgress, EthereumInstance, Event, LiquidityPools, LiquidityProvider, Origin,
-	Runtime, Swapping, System, Validator, Witnesser,
+	chainflip::address_derivation::AddressDerivation, AccountRoles, EpochInfo,
+	EthereumIngressEgress, EthereumInstance, LiquidityPools, LiquidityProvider, Runtime,
+	RuntimeCall, RuntimeEvent, RuntimeOrigin, Swapping, System, Validator, Weight, Witnesser,
 };
 
 use cf_amm::PoolState;
@@ -29,14 +29,14 @@ fn can_provide_liquidity_and_swap_assets() {
 		let lp_2: AccountId = AccountId::from([0xF2; 32]);
 		AccountRoles::on_new_account(&lp_1);
 		AccountRoles::on_new_account(&lp_2);
-		assert_ok!(LiquidityProvider::register_lp_account(Origin::signed(lp_1.clone())));
-		assert_ok!(LiquidityProvider::register_lp_account(Origin::signed(lp_2.clone())));
+		assert_ok!(LiquidityProvider::register_lp_account(RuntimeOrigin::signed(lp_1.clone())));
+		assert_ok!(LiquidityProvider::register_lp_account(RuntimeOrigin::signed(lp_2.clone())));
 
 		// Register the relayer account.
 		let relayer: AccountId = AccountId::from([0xE0; 32]);
 		AccountRoles::on_new_account(&relayer);
 		assert_ok!(AccountRoles::register_account_role(
-			Origin::signed(relayer.clone()),
+			RuntimeOrigin::signed(relayer.clone()),
 			AccountRole::Relayer
 		));
 
@@ -74,7 +74,7 @@ fn can_provide_liquidity_and_swap_assets() {
 			3_000_000u128,
 		));
 		assert_ok!(LiquidityProvider::update_position(
-			Origin::signed(lp_2.clone()),
+			RuntimeOrigin::signed(lp_2.clone()),
 			any::Asset::Flip,
 			AmmRange::new(-100_000, 100_000),
 			1_200_000u128,
@@ -99,7 +99,7 @@ fn can_provide_liquidity_and_swap_assets() {
 
 		// Test swap
 		assert_ok!(Swapping::register_swap_intent(
-			Origin::signed(relayer),
+			RuntimeOrigin::signed(relayer),
 			Asset::Eth,
 			Asset::Flip,
 			ForeignChainAddress::Eth(egress_address),
@@ -114,7 +114,7 @@ fn can_provide_liquidity_and_swap_assets() {
 			)
 			.expect("Should be able to generate a valid eth address.");
 
-		System::assert_has_event(Event::EthereumIngressEgress(
+		System::assert_has_event(RuntimeEvent::EthereumIngressEgress(
 			pallet_cf_ingress_egress::Event::StartWitnessing {
 				ingress_address,
 				ingress_asset: eth::Asset::Eth,
@@ -123,28 +123,29 @@ fn can_provide_liquidity_and_swap_assets() {
 
 		const SWAP_AMOUNT: AssetAmount = 10_000;
 		// Define the ingress call
-		let ingress_call =
-			Box::new(Call::EthereumIngressEgress(pallet_cf_ingress_egress::Call::do_ingress {
+		let ingress_call = Box::new(RuntimeCall::EthereumIngressEgress(
+			pallet_cf_ingress_egress::Call::do_ingress {
 				ingress_witnesses: vec![IngressWitness {
 					ingress_address,
 					asset: eth::Asset::Eth,
 					amount: SWAP_AMOUNT,
 					tx_id: Default::default(),
 				}],
-			}));
+			},
+		));
 
 		// Get the current authorities to witness the ingress.
 		let nodes = Validator::current_authorities();
 		let current_epoch = Validator::current_epoch();
 		for node in &nodes {
 			assert_ok!(Witnesser::witness_at_epoch(
-				Origin::signed(node.clone()),
+				RuntimeOrigin::signed(node.clone()),
 				ingress_call.clone(),
 				current_epoch
 			));
 		}
 
-		System::assert_has_event(Event::EthereumIngressEgress(
+		System::assert_has_event(RuntimeEvent::EthereumIngressEgress(
 			pallet_cf_ingress_egress::Event::IngressCompleted {
 				ingress_address,
 				asset: eth::Asset::Eth,
@@ -153,41 +154,49 @@ fn can_provide_liquidity_and_swap_assets() {
 			},
 		));
 
-		System::assert_has_event(Event::Swapping(pallet_cf_swapping::Event::SwapIngressReceived {
-			ingress_address: ForeignChainAddress::Eth(ingress_address.to_fixed_bytes()),
-			swap_id: pallet_cf_swapping::SwapIdCounter::<Runtime>::get(),
-			ingress_amount: SWAP_AMOUNT,
-		}));
+		System::assert_has_event(RuntimeEvent::Swapping(
+			pallet_cf_swapping::Event::SwapIngressReceived {
+				ingress_address: ForeignChainAddress::Eth(ingress_address.to_fixed_bytes()),
+				swap_id: pallet_cf_swapping::SwapIdCounter::<Runtime>::get(),
+				ingress_amount: SWAP_AMOUNT,
+			},
+		));
 
 		// Performs the actual swap during on_idle hooks.
-		let _ = Swapping::on_idle(1, 1_000_000_000_000);
+		let _ = Swapping::on_idle(1, Weight::from_ref_time(1_000_000_000_000));
 
 		//  Eth: $1 <-> Flip: $5,
 		// 10_000 Eth -> 100_000 USDC -> about 50_000 Flips, reduced by slippage.
-		System::assert_has_event(Event::LiquidityPools(pallet_cf_pools::Event::AssetSwaped {
-			from: Asset::Eth,
-			to: Asset::Usdc,
-			input: 10_000,
-			output: 98_966,
-		}));
-		System::assert_has_event(Event::LiquidityPools(pallet_cf_pools::Event::AssetSwaped {
-			from: Asset::Usdc,
-			to: Asset::Flip,
-			input: 98_966,
-			output: 46_755,
-		}));
+		System::assert_has_event(RuntimeEvent::LiquidityPools(
+			pallet_cf_pools::Event::AssetSwaped {
+				from: Asset::Eth,
+				to: Asset::Usdc,
+				input: 10_000,
+				output: 98_966,
+			},
+		));
+		System::assert_has_event(RuntimeEvent::LiquidityPools(
+			pallet_cf_pools::Event::AssetSwaped {
+				from: Asset::Usdc,
+				to: Asset::Flip,
+				input: 98_966,
+				output: 46_755,
+			},
+		));
 
-		System::assert_has_event(Event::Swapping(pallet_cf_swapping::Event::SwapEgressScheduled {
-			swap_id: 1,
-			egress_id: (ForeignChain::Ethereum, 1),
-			asset: Asset::Flip,
-			amount: 46_755,
-		}));
+		System::assert_has_event(RuntimeEvent::Swapping(
+			pallet_cf_swapping::Event::SwapEgressScheduled {
+				swap_id: 1,
+				egress_id: (ForeignChain::Ethereum, 1),
+				asset: Asset::Flip,
+				amount: 46_755,
+			},
+		));
 
 		// Egress the asset out during on_idle.
-		let _ = EthereumIngressEgress::on_idle(1, 1_000_000_000_000);
+		let _ = EthereumIngressEgress::on_idle(1, Weight::from_ref_time(1_000_000_000_000));
 
-		System::assert_has_event(Event::EthereumIngressEgress(
+		System::assert_has_event(RuntimeEvent::EthereumIngressEgress(
 			pallet_cf_ingress_egress::Event::BatchBroadcastRequested {
 				broadcast_id: 1,
 				egress_ids: vec![(ForeignChain::Ethereum, 1)],

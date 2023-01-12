@@ -8,7 +8,7 @@ use cf_traits::{
 	},
 	Chainflip, SwappingApi,
 };
-use frame_support::{dispatch::DispatchError, parameter_types};
+use frame_support::{dispatch::DispatchError, parameter_types, weights::Weight};
 use frame_system as system;
 use sp_core::{H256, U256};
 use sp_runtime::{
@@ -43,8 +43,8 @@ impl system::Config for Test {
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
-	type Origin = Origin;
-	type Call = Call;
+	type RuntimeOrigin = RuntimeOrigin;
+	type RuntimeCall = RuntimeCall;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
@@ -52,7 +52,7 @@ impl system::Config for Test {
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = BlockHashCount;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -81,7 +81,7 @@ impl Chainflip for Test {
 	type KeyId = Vec<u8>;
 	type ValidatorId = u64;
 	type Amount = u128;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
 	type EnsureWitnessedAtCurrentEpoch = NeverFailingOriginCheck<Self>;
 	type EpochInfo = cf_traits::mocks::epoch_info::MockEpochInfo;
@@ -91,21 +91,21 @@ impl Chainflip for Test {
 pub struct MockWeightInfo;
 
 impl WeightInfo for MockWeightInfo {
-	fn register_swap_intent() -> frame_support::weights::Weight {
-		100
+	fn register_swap_intent() -> Weight {
+		Weight::from_ref_time(100)
 	}
 
-	fn on_idle() -> frame_support::weights::Weight {
-		100
+	fn on_idle() -> Weight {
+		Weight::from_ref_time(100)
 	}
 
-	fn execute_group_of_swaps(_a: u32) -> frame_support::weights::Weight {
-		100
+	fn execute_group_of_swaps(_a: u32) -> Weight {
+		Weight::from_ref_time(100)
 	}
 }
 
 impl pallet_cf_swapping::Config for Test {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type AccountRoleRegistry = ();
 	type IngressHandler = MockIngressHandler<AnyChain, Self>;
 	type EgressHandler = MockEgressHandler<AnyChain>;

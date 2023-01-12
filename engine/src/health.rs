@@ -34,7 +34,7 @@ impl HealthChecker {
 		Ok(Self {
 			listener: TcpListener::bind(&bind_address)
 				.await
-				.with_context(|| format!("Could not bind TCP listener to {}", bind_address))?,
+				.with_context(|| format!("Could not bind TCP listener to {bind_address}"))?,
 			logger,
 		})
 	}

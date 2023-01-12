@@ -52,9 +52,9 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumVault KeygenResolutionPendingSince (r:0 w:1)
 	fn on_initialize_failure(_b: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(334_205_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(31 as Weight))
-			.saturating_add(T::DbWeight::get().writes(29 as Weight))
+		Weight::from_ref_time(334_205_000)
+			.saturating_add(T::DbWeight::get().reads(31))
+			.saturating_add(T::DbWeight::get().writes(29))
 	}
 	// Storage: EthereumVault PendingVaultRotation (r:1 w:1)
 	// Storage: EthereumThresholdSigner ThresholdSignatureRequestIdCounter (r:1 w:1)
@@ -70,18 +70,18 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumThresholdSigner RequestCallback (r:0 w:1)
 	fn on_initialize_success() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(115_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(5 as Weight))
-			.saturating_add(T::DbWeight::get().writes(11 as Weight))
+		Weight::from_ref_time(115_000_000)
+			.saturating_add(T::DbWeight::get().reads(5))
+			.saturating_add(T::DbWeight::get().writes(11))
 	}
 	// Storage: AccountRoles AccountRoles (r:1 w:0)
 	// Storage: EthereumVault PendingVaultRotation (r:1 w:1)
 	// Storage: EthereumVault SuccessVoters (r:1 w:1)
 	fn report_keygen_outcome() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(65_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(3 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
+		Weight::from_ref_time(65_000_000)
+			.saturating_add(T::DbWeight::get().reads(3))
+			.saturating_add(T::DbWeight::get().writes(2))
 	}
 	// Storage: EthereumThresholdSigner Signatures (r:1 w:2)
 	// Storage: Environment EthereumKeyManagerAddress (r:1 w:0)
@@ -102,34 +102,34 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumThresholdSigner RequestCallback (r:0 w:1)
 	fn on_keygen_verification_result() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(126_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(12 as Weight))
-			.saturating_add(T::DbWeight::get().writes(11 as Weight))
+		Weight::from_ref_time(126_000_000)
+			.saturating_add(T::DbWeight::get().reads(12))
+			.saturating_add(T::DbWeight::get().writes(11))
 	}
 	// Storage: EthereumVault PendingVaultRotation (r:1 w:1)
 	// Storage: Validator CurrentEpoch (r:1 w:0)
 	// Storage: EthereumVault Vaults (r:0 w:1)
 	fn vault_key_rotated() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(35_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
+		Weight::from_ref_time(35_000_000)
+			.saturating_add(T::DbWeight::get().reads(2))
+			.saturating_add(T::DbWeight::get().writes(2))
 	}
 	// Storage: Validator CurrentEpoch (r:1 w:0)
 	// Storage: Environment CurrentSystemState (r:1 w:1)
 	// Storage: EthereumVault Vaults (r:0 w:1)
 	fn vault_key_rotated_externally() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(39_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
+		Weight::from_ref_time(39_000_000)
+			.saturating_add(T::DbWeight::get().reads(2))
+			.saturating_add(T::DbWeight::get().writes(2))
 	}
 	// Storage: EthereumVault KeygenResponseTimeout (r:1 w:1)
 	fn set_keygen_response_timeout() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(27_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(27_000_000)
+			.saturating_add(T::DbWeight::get().reads(1))
+			.saturating_add(T::DbWeight::get().writes(1))
 	}
 }
 
@@ -145,9 +145,9 @@ impl WeightInfo for () {
 	// Storage: EthereumVault KeygenResolutionPendingSince (r:0 w:1)
 	fn on_initialize_failure(_b: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(334_205_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(31 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(29 as Weight))
+		Weight::from_ref_time(334_205_000)
+			.saturating_add(RocksDbWeight::get().reads(31))
+			.saturating_add(RocksDbWeight::get().writes(29))
 	}
 	// Storage: EthereumVault PendingVaultRotation (r:1 w:1)
 	// Storage: EthereumThresholdSigner ThresholdSignatureRequestIdCounter (r:1 w:1)
@@ -163,18 +163,18 @@ impl WeightInfo for () {
 	// Storage: EthereumThresholdSigner RequestCallback (r:0 w:1)
 	fn on_initialize_success() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(115_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(11 as Weight))
+		Weight::from_ref_time(115_000_000)
+			.saturating_add(RocksDbWeight::get().reads(5))
+			.saturating_add(RocksDbWeight::get().writes(11))
 	}
 	// Storage: AccountRoles AccountRoles (r:1 w:0)
 	// Storage: EthereumVault PendingVaultRotation (r:1 w:1)
 	// Storage: EthereumVault SuccessVoters (r:1 w:1)
 	fn report_keygen_outcome() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(65_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+		Weight::from_ref_time(65_000_000)
+			.saturating_add(RocksDbWeight::get().reads(3))
+			.saturating_add(RocksDbWeight::get().writes(2))
 	}
 	// Storage: EthereumThresholdSigner Signatures (r:1 w:2)
 	// Storage: Environment EthereumKeyManagerAddress (r:1 w:0)
@@ -195,33 +195,33 @@ impl WeightInfo for () {
 	// Storage: EthereumThresholdSigner RequestCallback (r:0 w:1)
 	fn on_keygen_verification_result() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(126_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(12 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(11 as Weight))
+		Weight::from_ref_time(126_000_000)
+			.saturating_add(RocksDbWeight::get().reads(12))
+			.saturating_add(RocksDbWeight::get().writes(11))
 	}
 	// Storage: EthereumVault PendingVaultRotation (r:1 w:1)
 	// Storage: Validator CurrentEpoch (r:1 w:0)
 	// Storage: EthereumVault Vaults (r:0 w:1)
 	fn vault_key_rotated() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(35_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+		Weight::from_ref_time(35_000_000)
+			.saturating_add(RocksDbWeight::get().reads(2))
+			.saturating_add(RocksDbWeight::get().writes(2))
 	}
 	// Storage: Validator CurrentEpoch (r:1 w:0)
 	// Storage: Environment CurrentSystemState (r:1 w:1)
 	// Storage: EthereumVault Vaults (r:0 w:1)
 	fn vault_key_rotated_externally() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(39_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+		Weight::from_ref_time(39_000_000)
+			.saturating_add(RocksDbWeight::get().reads(2))
+			.saturating_add(RocksDbWeight::get().writes(2))
 	}
 	// Storage: EthereumVault KeygenResponseTimeout (r:1 w:1)
 	fn set_keygen_response_timeout() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(27_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(27_000_000)
+			.saturating_add(RocksDbWeight::get().reads(1))
+			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 }

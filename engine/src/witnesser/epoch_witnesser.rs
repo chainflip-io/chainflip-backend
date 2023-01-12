@@ -51,7 +51,7 @@ where
 	task_scope(|scope| {
 		{
 			async {
-				let logger = logger.new(o!(COMPONENT_KEY => format!("{}-Witnesser", log_key)));
+				let logger = logger.new(o!(COMPONENT_KEY => format!("{log_key}-Witnesser")));
 				slog::info!(&logger, "Starting");
 
 				let mut option_state = Some(initial_state);

@@ -34,7 +34,7 @@ jobs:
       group: ${{ github.ref }}-cargo-fmt
       cancel-in-progress: true
     container:
-      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08-no-sccache'
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-12-16"
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -50,7 +50,7 @@ jobs:
       group: ${{ github.ref }}-cargo-clippy
       cancel-in-progress: true
     container:
-      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08-no-sccache'
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-12-16"
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -66,7 +66,7 @@ jobs:
       group: ${{ github.ref }}-cargo-doc
       cancel-in-progress: true
     container:
-      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08-no-sccache'
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-12-16"
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -100,7 +100,7 @@ jobs:
       cancel-in-progress: true
     needs: [set-variables, cargo-fmt]
     container:
-      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08-no-sccache'
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-12-16"
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -166,7 +166,7 @@ jobs:
       cancel-in-progress: true
     needs: [set-variables, cargo-fmt]
     container:
-      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08-no-sccache'
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-12-16"
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -314,8 +314,8 @@ jobs:
           echo ${{ secrets.CF_RUNNER_SUDO_PASSWORD }} | sudo -S apt-get install -y graphviz
       - uses: actions/setup-java@v3
         with:
-          distribution: 'zulu'
-          java-version: '17'
+          distribution: "zulu"
+          java-version: "17"
       - name: Generate class diagram
         run: |
           cd chainflip-docgen/

@@ -6,12 +6,12 @@ use cf_chains::eth::Ethereum;
 use cf_primitives::chains::assets::eth;
 use futures::Stream;
 use pallet_cf_ingress_egress::IngressWitness;
-use sp_core::H160;
 use state_chain_runtime::EthereumInstance;
 use tokio_stream::StreamExt;
 use web3::types::Transaction;
 
 use crate::{
+	eth::{core_h160, core_h256},
 	state_chain_observer::client::extrinsic_api::ExtrinsicApi,
 	witnesser::{
 		checkpointing::{start_checkpointing_for, WitnessedUntil},
@@ -66,9 +66,9 @@ where
 pub async fn start<StateChainClient>(
 	eth_dual_rpc: EthDualRpcClient,
 	epoch_starts_receiver: async_broadcast::Receiver<EpochStart<Ethereum>>,
-	eth_monitor_ingress_receiver: tokio::sync::mpsc::UnboundedReceiver<H160>,
+	eth_monitor_ingress_receiver: tokio::sync::mpsc::UnboundedReceiver<sp_core::H160>,
 	state_chain_client: Arc<StateChainClient>,
-	monitored_addresses: BTreeSet<H160>,
+	monitored_addresses: BTreeSet<sp_core::H160>,
 	logger: &slog::Logger,
 ) -> anyhow::Result<()>
 where
@@ -152,17 +152,17 @@ where
 								.iter()
 								.filter_map(|tx| {
 									let to_addr = tx.to?;
-									if monitored_addresses.contains(&to_addr) {
+									if monitored_addresses.contains(&core_h160(to_addr)) {
 										Some((tx, to_addr))
 									} else {
 										None
 									}
 								}).map(|(tx, to_addr)| {
 									IngressWitness {
-										ingress_address: to_addr,
+										ingress_address: core_h160(to_addr),
 										asset: eth::Asset::Eth,
 										amount: tx.value.as_u128(),
-										tx_id: tx.hash
+										tx_id: core_h256(tx.hash)
 									}
 								})
 								.collect::<Vec<IngressWitness<Ethereum>>>();

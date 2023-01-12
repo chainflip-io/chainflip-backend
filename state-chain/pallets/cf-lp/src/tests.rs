@@ -18,7 +18,7 @@ fn only_liquidity_provider_can_manage_positions() {
 
 		assert_noop!(
 			LiquidityProvider::update_position(
-				Origin::signed(NON_LP_ACCOUNT.into()),
+				RuntimeOrigin::signed(NON_LP_ACCOUNT.into()),
 				asset,
 				range,
 				1_000_000,
@@ -33,7 +33,7 @@ fn egress_chain_and_asset_must_match() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
 			LiquidityProvider::withdraw_free_balances(
-				Origin::signed(LP_ACCOUNT.into()),
+				RuntimeOrigin::signed(LP_ACCOUNT.into()),
 				1,
 				Asset::Eth,
 				ForeignChainAddress::Dot([0x00; 32]),
@@ -42,7 +42,7 @@ fn egress_chain_and_asset_must_match() {
 		);
 		assert_noop!(
 			LiquidityProvider::withdraw_free_balances(
-				Origin::signed(LP_ACCOUNT.into()),
+				RuntimeOrigin::signed(LP_ACCOUNT.into()),
 				1,
 				Asset::Dot,
 				ForeignChainAddress::Eth([0x00; 20]),
@@ -59,7 +59,7 @@ fn liquidity_providers_can_withdraw_free_balances() {
 
 		assert_noop!(
 			LiquidityProvider::withdraw_free_balances(
-				Origin::signed(LP_ACCOUNT.into()),
+				RuntimeOrigin::signed(LP_ACCOUNT.into()),
 				100,
 				Asset::Dot,
 				ForeignChainAddress::Eth([0x00; 20]),
@@ -68,7 +68,7 @@ fn liquidity_providers_can_withdraw_free_balances() {
 		);
 
 		assert_ok!(LiquidityProvider::withdraw_free_balances(
-			Origin::signed(LP_ACCOUNT.into()),
+			RuntimeOrigin::signed(LP_ACCOUNT.into()),
 			100,
 			Asset::Eth,
 			ForeignChainAddress::Eth([0x00; 20]),
@@ -90,7 +90,7 @@ fn cannot_deposit_and_withdrawal_during_maintenance() {
 		// Cannot request deposit address during maintenance.
 		assert_noop!(
 			LiquidityProvider::request_deposit_address(
-				Origin::signed(LP_ACCOUNT.into()),
+				RuntimeOrigin::signed(LP_ACCOUNT.into()),
 				Asset::Eth,
 			),
 			"We are in maintenance!"
@@ -99,7 +99,7 @@ fn cannot_deposit_and_withdrawal_during_maintenance() {
 		// Cannot withdraw liquidity during maintenance.
 		assert_noop!(
 			LiquidityProvider::withdraw_free_balances(
-				Origin::signed(LP_ACCOUNT.into()),
+				RuntimeOrigin::signed(LP_ACCOUNT.into()),
 				100,
 				Asset::Eth,
 				ForeignChainAddress::Eth([0x00; 20]),
@@ -113,12 +113,12 @@ fn cannot_deposit_and_withdrawal_during_maintenance() {
 
 		// Deposit and withdrawal can now work as per normal.
 		assert_ok!(LiquidityProvider::request_deposit_address(
-			Origin::signed(LP_ACCOUNT.into()),
+			RuntimeOrigin::signed(LP_ACCOUNT.into()),
 			Asset::Eth,
 		));
 
 		assert_ok!(LiquidityProvider::withdraw_free_balances(
-			Origin::signed(LP_ACCOUNT.into()),
+			RuntimeOrigin::signed(LP_ACCOUNT.into()),
 			100,
 			Asset::Eth,
 			ForeignChainAddress::Eth([0x00; 20]),
@@ -136,7 +136,7 @@ fn cannot_manage_liquidity_during_maintenance() {
 		let asset = Asset::Eth;
 
 		assert_ok!(LiquidityPools::new_pool(
-			Origin::root(),
+			RuntimeOrigin::root(),
 			asset,
 			0,
 			PoolState::sqrt_price_at_tick(0),
@@ -148,7 +148,7 @@ fn cannot_manage_liquidity_during_maintenance() {
 
 		assert_noop!(
 			LiquidityProvider::update_position(
-				Origin::signed(LP_ACCOUNT.into()),
+				RuntimeOrigin::signed(LP_ACCOUNT.into()),
 				asset,
 				range,
 				1_000_000,
@@ -161,7 +161,7 @@ fn cannot_manage_liquidity_during_maintenance() {
 		assert!(!MockSystemStateInfo::is_maintenance_mode());
 
 		assert_ok!(LiquidityProvider::update_position(
-			Origin::signed(LP_ACCOUNT.into()),
+			RuntimeOrigin::signed(LP_ACCOUNT.into()),
 			asset,
 			range,
 			1_000_000,
@@ -179,7 +179,7 @@ fn can_mint_and_burn_liquidity() {
 		let asset = Asset::Eth;
 
 		assert_ok!(LiquidityPools::new_pool(
-			Origin::root(),
+			RuntimeOrigin::root(),
 			asset,
 			0,
 			PoolState::sqrt_price_at_tick(0),
@@ -188,7 +188,7 @@ fn can_mint_and_burn_liquidity() {
 
 		// Can open a new position
 		assert_ok!(LiquidityProvider::update_position(
-			Origin::signed(LP_ACCOUNT.into()),
+			RuntimeOrigin::signed(LP_ACCOUNT.into()),
 			asset,
 			range,
 			1_000_000,
@@ -203,19 +203,21 @@ fn can_mint_and_burn_liquidity() {
 			Some(995_012)
 		);
 
-		System::assert_has_event(Event::LiquidityPools(pallet_cf_pools::Event::LiquidityMinted {
-			lp: LP_ACCOUNT.into(),
-			asset,
-			range,
-			minted_liquidity: 1_000_000,
-			asset_debited: PoolAssetMap::new(4988, 4988),
-		}));
-		System::assert_has_event(Event::LiquidityProvider(crate::Event::AccountDebited {
+		System::assert_has_event(RuntimeEvent::LiquidityPools(
+			pallet_cf_pools::Event::LiquidityMinted {
+				lp: LP_ACCOUNT.into(),
+				asset,
+				range,
+				minted_liquidity: 1_000_000,
+				asset_debited: PoolAssetMap::new(4988, 4988),
+			},
+		));
+		System::assert_has_event(RuntimeEvent::LiquidityProvider(crate::Event::AccountDebited {
 			account_id: LP_ACCOUNT.into(),
 			asset,
 			amount_debited: 4988,
 		}));
-		System::assert_has_event(Event::LiquidityProvider(crate::Event::AccountDebited {
+		System::assert_has_event(RuntimeEvent::LiquidityProvider(crate::Event::AccountDebited {
 			account_id: LP_ACCOUNT.into(),
 			asset: Asset::Usdc,
 			amount_debited: 4988,
@@ -233,7 +235,7 @@ fn can_mint_and_burn_liquidity() {
 		// Can mint more liquidity (+1000)
 		System::reset_events();
 		assert_ok!(LiquidityProvider::update_position(
-			Origin::signed(LP_ACCOUNT.into()),
+			RuntimeOrigin::signed(LP_ACCOUNT.into()),
 			asset,
 			range,
 			1_001_000,
@@ -248,19 +250,21 @@ fn can_mint_and_burn_liquidity() {
 			Some(995_007)
 		);
 
-		System::assert_has_event(Event::LiquidityPools(pallet_cf_pools::Event::LiquidityMinted {
-			lp: LP_ACCOUNT.into(),
-			asset,
-			range,
-			minted_liquidity: 1_000,
-			asset_debited: PoolAssetMap::new(5, 5),
-		}));
-		System::assert_has_event(Event::LiquidityProvider(crate::Event::AccountDebited {
+		System::assert_has_event(RuntimeEvent::LiquidityPools(
+			pallet_cf_pools::Event::LiquidityMinted {
+				lp: LP_ACCOUNT.into(),
+				asset,
+				range,
+				minted_liquidity: 1_000,
+				asset_debited: PoolAssetMap::new(5, 5),
+			},
+		));
+		System::assert_has_event(RuntimeEvent::LiquidityProvider(crate::Event::AccountDebited {
 			account_id: LP_ACCOUNT.into(),
 			asset,
 			amount_debited: 5,
 		}));
-		System::assert_has_event(Event::LiquidityProvider(crate::Event::AccountDebited {
+		System::assert_has_event(RuntimeEvent::LiquidityProvider(crate::Event::AccountDebited {
 			account_id: LP_ACCOUNT.into(),
 			asset: Asset::Usdc,
 			amount_debited: 5,
@@ -278,7 +282,7 @@ fn can_mint_and_burn_liquidity() {
 		// Can partially burn a liquidity position (-500_000)
 		System::reset_events();
 		assert_ok!(LiquidityProvider::update_position(
-			Origin::signed(LP_ACCOUNT.into()),
+			RuntimeOrigin::signed(LP_ACCOUNT.into()),
 			asset,
 			range,
 			501_000,
@@ -293,20 +297,22 @@ fn can_mint_and_burn_liquidity() {
 			Some(997_500)
 		);
 
-		System::assert_has_event(Event::LiquidityPools(pallet_cf_pools::Event::LiquidityBurned {
-			lp: LP_ACCOUNT.into(),
-			asset,
-			range,
-			burnt_liquidity: 500_000,
-			asset_credited: PoolAssetMap::new(2493, 2493),
-			fee_yielded: Default::default(),
-		}));
-		System::assert_has_event(Event::LiquidityProvider(crate::Event::AccountCredited {
+		System::assert_has_event(RuntimeEvent::LiquidityPools(
+			pallet_cf_pools::Event::LiquidityBurned {
+				lp: LP_ACCOUNT.into(),
+				asset,
+				range,
+				burnt_liquidity: 500_000,
+				asset_credited: PoolAssetMap::new(2493, 2493),
+				fee_yielded: Default::default(),
+			},
+		));
+		System::assert_has_event(RuntimeEvent::LiquidityProvider(crate::Event::AccountCredited {
 			account_id: LP_ACCOUNT.into(),
 			asset,
 			amount_credited: 2493,
 		}));
-		System::assert_has_event(Event::LiquidityProvider(crate::Event::AccountCredited {
+		System::assert_has_event(RuntimeEvent::LiquidityProvider(crate::Event::AccountCredited {
 			account_id: LP_ACCOUNT.into(),
 			asset: Asset::Usdc,
 			amount_credited: 2493,
@@ -324,7 +330,7 @@ fn can_mint_and_burn_liquidity() {
 		// Can fully burn a position
 		System::reset_events();
 		assert_ok!(LiquidityProvider::update_position(
-			Origin::signed(LP_ACCOUNT.into()),
+			RuntimeOrigin::signed(LP_ACCOUNT.into()),
 			asset,
 			range,
 			0,
@@ -339,20 +345,22 @@ fn can_mint_and_burn_liquidity() {
 			Some(999_998)
 		);
 
-		System::assert_has_event(Event::LiquidityPools(pallet_cf_pools::Event::LiquidityBurned {
-			lp: LP_ACCOUNT.into(),
-			asset,
-			range,
-			burnt_liquidity: 501_000,
-			asset_credited: PoolAssetMap::new(2_498, 2_498),
-			fee_yielded: Default::default(),
-		}));
-		System::assert_has_event(Event::LiquidityProvider(crate::Event::AccountCredited {
+		System::assert_has_event(RuntimeEvent::LiquidityPools(
+			pallet_cf_pools::Event::LiquidityBurned {
+				lp: LP_ACCOUNT.into(),
+				asset,
+				range,
+				burnt_liquidity: 501_000,
+				asset_credited: PoolAssetMap::new(2_498, 2_498),
+				fee_yielded: Default::default(),
+			},
+		));
+		System::assert_has_event(RuntimeEvent::LiquidityProvider(crate::Event::AccountCredited {
 			account_id: LP_ACCOUNT.into(),
 			asset,
 			amount_credited: 2_498,
 		}));
-		System::assert_has_event(Event::LiquidityProvider(crate::Event::AccountCredited {
+		System::assert_has_event(RuntimeEvent::LiquidityProvider(crate::Event::AccountCredited {
 			account_id: LP_ACCOUNT.into(),
 			asset: Asset::Usdc,
 			amount_credited: 2_498,
@@ -369,7 +377,7 @@ fn mint_fails_with_insufficient_balance() {
 		let asset = Asset::Eth;
 
 		assert_ok!(LiquidityPools::new_pool(
-			Origin::root(),
+			RuntimeOrigin::root(),
 			asset,
 			0,
 			PoolState::sqrt_price_at_tick(0),
@@ -379,7 +387,7 @@ fn mint_fails_with_insufficient_balance() {
 		// Can open a new position
 		assert_noop!(
 			LiquidityProvider::update_position(
-				Origin::signed(LP_ACCOUNT.into()),
+				RuntimeOrigin::signed(LP_ACCOUNT.into()),
 				asset,
 				range,
 				1_000_000,
@@ -400,7 +408,7 @@ fn can_collect_fee() {
 
 		// 50% fee
 		assert_ok!(LiquidityPools::new_pool(
-			Origin::root(),
+			RuntimeOrigin::root(),
 			asset,
 			500_000u32,
 			PoolState::sqrt_price_at_tick(0),
@@ -408,7 +416,7 @@ fn can_collect_fee() {
 
 		// Can open a new position
 		assert_ok!(LiquidityProvider::update_position(
-			Origin::signed(LP_ACCOUNT.into()),
+			RuntimeOrigin::signed(LP_ACCOUNT.into()),
 			asset,
 			range,
 			1_000_000,
@@ -451,17 +459,19 @@ fn can_collect_fee() {
 
 		// Collect fees acrued for the Liquidity Position.
 		assert_ok!(LiquidityProvider::collect_fees(
-			Origin::signed(LP_ACCOUNT.into()),
+			RuntimeOrigin::signed(LP_ACCOUNT.into()),
 			asset,
 			range
 		));
 
-		System::assert_has_event(Event::LiquidityPools(pallet_cf_pools::Event::FeeCollected {
-			lp: LP_ACCOUNT.into(),
-			asset,
-			range,
-			fee_yielded: PoolAssetMap::new(499, 0),
-		}));
+		System::assert_has_event(RuntimeEvent::LiquidityPools(
+			pallet_cf_pools::Event::FeeCollected {
+				lp: LP_ACCOUNT.into(),
+				asset,
+				range,
+				fee_yielded: PoolAssetMap::new(499, 0),
+			},
+		));
 
 		assert_eq!(
 			FreeBalances::<Test>::get(AccountId::from(LP_ACCOUNT), Asset::Eth),

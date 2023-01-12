@@ -26,20 +26,25 @@ fn can_create_new_trading_pool() {
 
 		// Fee must be between 0 - 50%
 		assert_noop!(
-			LiquidityPools::new_pool(Origin::root(), asset, 500_001u32, default_sqrt_price,),
+			LiquidityPools::new_pool(RuntimeOrigin::root(), asset, 500_001u32, default_sqrt_price,),
 			Error::<Test>::InvalidFeeAmount,
 		);
 
 		// Create a new pool.
-		assert_ok!(
-			LiquidityPools::new_pool(Origin::root(), asset, 500_000u32, default_sqrt_price,)
-		);
-		assert_eq!(LiquidityPools::current_tick(&asset), Some(0));
-		System::assert_last_event(Event::LiquidityPools(crate::Event::<Test>::NewPoolCreated {
+		assert_ok!(LiquidityPools::new_pool(
+			RuntimeOrigin::root(),
 			asset,
-			fee_100th_bips: 500_000u32,
-			initial_sqrt_price: default_sqrt_price,
-		}));
+			500_000u32,
+			default_sqrt_price,
+		));
+		assert_eq!(LiquidityPools::current_tick(&asset), Some(0));
+		System::assert_last_event(RuntimeEvent::LiquidityPools(
+			crate::Event::<Test>::NewPoolCreated {
+				asset,
+				fee_100th_bips: 500_000u32,
+				initial_sqrt_price: default_sqrt_price,
+			},
+		));
 		assert_ok!(LiquidityPools::mint(
 			LP.into(),
 			asset,
@@ -50,7 +55,7 @@ fn can_create_new_trading_pool() {
 
 		// Cannot create duplicate pool
 		assert_noop!(
-			LiquidityPools::new_pool(Origin::root(), asset, 0u32, default_sqrt_price,),
+			LiquidityPools::new_pool(RuntimeOrigin::root(), asset, 0u32, default_sqrt_price,),
 			Error::<Test>::PoolAlreadyExists
 		);
 	});
@@ -64,9 +69,12 @@ fn can_enable_disable_trading_pool() {
 		let default_sqrt_price = PoolState::sqrt_price_at_tick(0);
 
 		// Create a new pool.
-		assert_ok!(
-			LiquidityPools::new_pool(Origin::root(), asset, 500_000u32, default_sqrt_price,)
-		);
+		assert_ok!(LiquidityPools::new_pool(
+			RuntimeOrigin::root(),
+			asset,
+			500_000u32,
+			default_sqrt_price,
+		));
 		assert_ok!(LiquidityPools::mint(
 			LP.into(),
 			asset,
@@ -76,11 +84,10 @@ fn can_enable_disable_trading_pool() {
 		));
 
 		// Disable the pool
-		assert_ok!(LiquidityPools::update_pool_enabled(Origin::root(), asset, false));
-		System::assert_last_event(Event::LiquidityPools(crate::Event::<Test>::PoolStateUpdated {
-			asset,
-			enabled: false,
-		}));
+		assert_ok!(LiquidityPools::update_pool_enabled(RuntimeOrigin::root(), asset, false));
+		System::assert_last_event(RuntimeEvent::LiquidityPools(
+			crate::Event::<Test>::PoolStateUpdated { asset, enabled: false },
+		));
 
 		assert_noop!(
 			LiquidityPools::mint(
@@ -94,11 +101,10 @@ fn can_enable_disable_trading_pool() {
 		);
 
 		// Re-enable the pool
-		assert_ok!(LiquidityPools::update_pool_enabled(Origin::root(), asset, true));
-		System::assert_last_event(Event::LiquidityPools(crate::Event::<Test>::PoolStateUpdated {
-			asset,
-			enabled: true,
-		}));
+		assert_ok!(LiquidityPools::update_pool_enabled(RuntimeOrigin::root(), asset, true));
+		System::assert_last_event(RuntimeEvent::LiquidityPools(
+			crate::Event::<Test>::PoolStateUpdated { asset, enabled: true },
+		));
 
 		assert_ok!(LiquidityPools::mint(
 			LP.into(),

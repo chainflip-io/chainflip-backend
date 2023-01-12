@@ -139,7 +139,7 @@ where
 #[cfg(test)]
 pub mod tests {
 
-	use sp_core::{H160, H256, U256};
+	use web3::types::{H160, H256, U256};
 
 	use crate::logging::test_utils::new_test_logger;
 

@@ -18,6 +18,7 @@ use crate::multisig::{
 		utils::PartyIdxMapping,
 	},
 	crypto::Rng,
+	CryptoScheme,
 };
 
 use crate::multisig::crypto::eth::Point;
@@ -886,7 +887,7 @@ mod timeout {
 
 #[tokio::test]
 async fn genesis_keys_can_sign() {
-	use crate::multisig::{crypto::eth::EthSigning, tests::fixtures::SIGNING_PAYLOAD};
+	use crate::multisig::crypto::eth::EthSigning;
 
 	let account_ids: BTreeSet<_> = [1, 2, 3, 4].iter().map(|i| AccountId::new([*i; 32])).collect();
 
@@ -900,7 +901,7 @@ async fn genesis_keys_can_sign() {
 			DEFAULT_SIGNING_CEREMONY_ID,
 			key_id.clone(),
 			key_data.clone(),
-			SIGNING_PAYLOAD.clone(),
+			EthSigning::signing_payload_for_test(),
 			Rng::from_entropy(),
 		);
 	standard_signing(&mut signing_ceremony).await;

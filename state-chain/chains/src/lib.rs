@@ -14,6 +14,7 @@ use sp_std::{
 	convert::{Into, TryFrom},
 	fmt::Debug,
 	prelude::*,
+	vec,
 };
 
 pub use cf_primitives::chains::*;

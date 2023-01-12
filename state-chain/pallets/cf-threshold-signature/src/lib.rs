@@ -190,10 +190,11 @@ pub mod pallet {
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config<I: 'static = ()>: Chainflip {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
-		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self, I>>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Implementation of EnsureOrigin trait for governance
-		type EnsureGovernance: EnsureOrigin<Self::Origin>;
+		type EnsureGovernance: EnsureOrigin<<Self as frame_system::Config>::RuntimeOrigin>;
 
 		/// The top-level offence type must support this pallet's offence type.
 		type Offence: From<PalletOffence>;
@@ -203,13 +204,13 @@ pub mod pallet {
 
 		/// The top-level origin type of the runtime.
 		type RuntimeOrigin: From<Origin<Self, I>>
-			+ IsType<<Self as frame_system::Config>::Origin>
-			+ Into<Result<Origin<Self, I>, Self::RuntimeOrigin>>;
+			+ IsType<<Self as frame_system::Config>::RuntimeOrigin>
+			+ Into<Result<Origin<Self, I>, <Self as Config<I>>::RuntimeOrigin>>;
 
 		/// The calls that this pallet can dispatch after generating a signature.
 		type ThresholdCallable: Member
 			+ Parameter
-			+ UnfilteredDispatchable<Origin = Self::RuntimeOrigin>;
+			+ UnfilteredDispatchable<RuntimeOrigin = <Self as Config<I>>::RuntimeOrigin>;
 
 		/// A marker trait identifying the chain that we are signing for.
 		type TargetChain: ChainCrypto<KeyId = <Self as Chainflip>::KeyId>;
@@ -448,7 +449,7 @@ pub mod pallet {
 	}
 
 	#[pallet::origin]
-	#[derive(PartialEq, Eq, Copy, Clone, RuntimeDebug, Encode, Decode, TypeInfo)]
+	#[derive(PartialEq, Eq, Copy, Clone, RuntimeDebug, Encode, Decode, TypeInfo, MaxEncodedLen)]
 	#[scale_info(skip_type_params(T, I))]
 	pub struct Origin<T: Config<I>, I: 'static = ()>(pub(super) PhantomData<(T, I)>);
 
@@ -755,20 +756,22 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 pub struct EnsureThresholdSigned<T: Config<I>, I: 'static = ()>(PhantomData<(T, I)>);
 
-impl<T, I> EnsureOrigin<T::RuntimeOrigin> for EnsureThresholdSigned<T, I>
+impl<T, I> EnsureOrigin<<T as Config<I>>::RuntimeOrigin> for EnsureThresholdSigned<T, I>
 where
 	T: Config<I>,
 	I: 'static,
 {
 	type Success = ();
 
-	fn try_origin(o: T::RuntimeOrigin) -> Result<Self::Success, T::RuntimeOrigin> {
-		let res: Result<Origin<T, I>, T::RuntimeOrigin> = o.into();
+	fn try_origin(
+		o: <T as Config<I>>::RuntimeOrigin,
+	) -> Result<Self::Success, <T as Config<I>>::RuntimeOrigin> {
+		let res: Result<Origin<T, I>, <T as Config<I>>::RuntimeOrigin> = o.into();
 		res.map(|_| ())
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> T::RuntimeOrigin {
+	fn successful_origin() -> <T as Config<I>>::RuntimeOrigin {
 		Origin::<T, I>(Default::default()).into()
 	}
 }

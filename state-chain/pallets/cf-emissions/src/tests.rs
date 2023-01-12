@@ -110,7 +110,7 @@ fn should_mint_and_initiate_broadcast() {
 		assert!(MockBroadcast::get_called().is_none());
 		Emissions::on_initialize(SUPPLY_UPDATE_INTERVAL.into());
 		let after = Flip::<Test>::total_issuance();
-		assert!(after > before, "Expected {:?} > {:?}", after, before);
+		assert!(after > before, "Expected {after:?} > {before:?}");
 		assert_eq!(
 			MockBroadcast::get_called().unwrap().new_total_supply,
 			Flip::<Test>::total_issuance()

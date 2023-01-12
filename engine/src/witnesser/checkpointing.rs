@@ -18,7 +18,7 @@ pub async fn start_checkpointing_for(
 
 	let witnessed_until = tokio::task::spawn_blocking({
 		let file_path = file_path.clone();
-		move || match std::fs::read_to_string(&file_path).map_err(anyhow::Error::new).and_then(
+		move || match std::fs::read_to_string(file_path).map_err(anyhow::Error::new).and_then(
 			|string| serde_json::from_str::<WitnessedUntil>(&string).map_err(anyhow::Error::new),
 		) {
 			Ok(witnessed_record) => witnessed_record,

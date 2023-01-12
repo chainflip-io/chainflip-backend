@@ -44,7 +44,7 @@ pub mod pallet {
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config: Chainflip {
 		/// The event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 		/// Burns the proposal fee from the accounts.
 		type FeePayment: FeePayment<Amount = Self::Amount, AccountId = Self::AccountId>;
 		/// The chain instance.
@@ -127,7 +127,7 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
-			let mut weight = 0;
+			let mut weight = Weight::zero();
 			if let Some(proposal) = Proposals::<T>::take(current_block) {
 				weight = T::WeightInfo::on_initialize_resolve_votes(
 					Self::resolve_vote(proposal).try_into().unwrap(),
@@ -142,7 +142,7 @@ pub mod pallet {
 						proposal: Proposal::<T>::SetGovernanceKey(gov_key),
 					});
 					GovKeyUpdateAwaitingEnactment::<T>::kill();
-					weight += T::WeightInfo::on_initialize_execute_proposal();
+					weight.saturating_accrue(T::WeightInfo::on_initialize_execute_proposal());
 				}
 			}
 			if let Some((enactment_block, comm_key)) = CommKeyUpdateAwaitingEnactment::<T>::get() {
@@ -154,7 +154,7 @@ pub mod pallet {
 						proposal: Proposal::<T>::SetCommunityKey(comm_key),
 					});
 					CommKeyUpdateAwaitingEnactment::<T>::kill();
-					weight += T::WeightInfo::on_initialize_execute_proposal();
+					weight.saturating_accrue(T::WeightInfo::on_initialize_execute_proposal());
 				}
 			}
 			weight

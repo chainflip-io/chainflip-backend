@@ -1,5 +1,5 @@
 use crate::{
-	eth::{utils, EthRpcApi, EventParseError, SignatureAndEvent},
+	eth::{core_h160, core_h256, utils, EthRpcApi, EventParseError, SignatureAndEvent},
 	state_chain_observer::client::extrinsic_api::ExtrinsicApi,
 };
 use cf_chains::eth::{SchnorrVerificationComponents, TransactionFee};
@@ -219,7 +219,7 @@ impl EthContractWitnesser for KeyManager {
 												new_agg_key.serialize(),
 											),
 										block_number,
-										tx_id: event.tx_hash,
+										tx_id: core_h256(event.tx_hash),
 									}
 									.into(),
 								),
@@ -240,7 +240,7 @@ impl EthContractWitnesser for KeyManager {
 												new_agg_key.serialize(),
 											),
 										block_number,
-										tx_id: event.tx_hash,
+										tx_id: core_h256(event.tx_hash),
 									}
 									.into(),
 								),
@@ -266,7 +266,7 @@ impl EthContractWitnesser for KeyManager {
 											s: sig_data.sig.into(),
 											k_times_g_address: sig_data.k_times_g_address.into(),
 										},
-										signer_id: from,
+										signer_id: core_h160(from),
 										tx_fee: TransactionFee { effective_gas_price, gas_used },
 									}
 									.into(),

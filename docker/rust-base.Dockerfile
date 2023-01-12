@@ -13,7 +13,8 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
     lld \
     python3-dev \
     jq \
-    gcc-multilib
+    gcc-multilib \
+    protobuf-compiler
 
 # Set environment
 ENV PATH="/root/.cargo/bin:${PATH}"

@@ -191,7 +191,7 @@ benchmarks! {
 		let public_key: Ed25519PublicKey = pair.try_into().unwrap();
 	}: _(RawOrigin::Signed(caller.clone()), public_key, 0, 0, signature)
 	verify {
-		assert!(MappedPeers::<T>::contains_key(&public_key));
+		assert!(MappedPeers::<T>::contains_key(public_key));
 		assert!(AccountPeerMapping::<T>::contains_key(&caller));
 	}
 	set_vanity_name {

@@ -33,7 +33,7 @@ use crate::{
 		client::{KeygenFailureReason, MultisigClientApi},
 		eth::EthSigning,
 		polkadot::PolkadotSigning,
-		CryptoScheme, KeyId, SigningPayload,
+		CryptoScheme, KeyId,
 	},
 	p2p::{PeerInfo, PeerUpdate},
 	state_chain_observer::client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi},
@@ -63,7 +63,7 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
     state_chain_runtime::Runtime: pallet_cf_vaults::Config<I>,
 	C: CryptoScheme<AggKey = <<state_chain_runtime::Runtime as pallet_cf_vaults::Config<I>>::Chain as ChainCrypto>::AggKey>,
 	I: 'static + Sync + Send,
-	state_chain_runtime::Call: std::convert::From<pallet_cf_vaults::Call<state_chain_runtime::Runtime, I>>,
+	state_chain_runtime::RuntimeCall: std::convert::From<pallet_cf_vaults::Call<state_chain_runtime::Runtime, I>>,
 {
 	if keygen_participants.contains(&state_chain_client.account_id()) {
 		// We initiate keygen outside of the spawn to avoid requesting ceremonies out of order
@@ -103,7 +103,7 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient, C, I>(
 	ceremony_id: CeremonyId,
 	key_id: KeyId,
 	signers: BTreeSet<AccountId>,
-	payload: SigningPayload,
+	payload: C::SigningPayload,
 	logger: slog::Logger,
 ) where
 	MultisigClient: MultisigClientApi<C>,
@@ -111,7 +111,7 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient, C, I>(
 	C: CryptoScheme,
 	I: 'static + Sync + Send,
     state_chain_runtime::Runtime: pallet_cf_threshold_signature::Config<I>,
-	state_chain_runtime::Call: std::convert::From<pallet_cf_threshold_signature::Call<state_chain_runtime::Runtime, I>>,
+	state_chain_runtime::RuntimeCall: std::convert::From<pallet_cf_threshold_signature::Call<state_chain_runtime::Runtime, I>>,
 	<<state_chain_runtime::Runtime as pallet_cf_threshold_signature::Config<I>>::TargetChain as ChainCrypto>::ThresholdSignature: From<C::Signature>,
 {
 	if signers.contains(&state_chain_client.account_id()) {
@@ -352,7 +352,7 @@ where
                         Ok(events) => {
                             for event_record in events {
                                 match_event! {event_record.event, logger {
-                                    state_chain_runtime::Event::Validator(
+                                    state_chain_runtime::RuntimeEvent::Validator(
                                         pallet_cf_validator::Event::NewEpoch(new_epoch),
                                     ) => {
                                         start_epoch(current_block_hash, new_epoch, true, state_chain_client.storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<state_chain_runtime::Runtime>>(
@@ -361,7 +361,7 @@ where
                                             &account_id
                                         ).await.unwrap().is_some()).await;
                                     }
-                                    state_chain_runtime::Event::Validator(
+                                    state_chain_runtime::RuntimeEvent::Validator(
                                         pallet_cf_validator::Event::PeerIdRegistered(
                                             account_id,
                                             ed25519_pubkey,
@@ -376,7 +376,7 @@ where
                                             )
                                             .unwrap();
                                     }
-                                    state_chain_runtime::Event::Validator(
+                                    state_chain_runtime::RuntimeEvent::Validator(
                                         pallet_cf_validator::Event::PeerIdUnregistered(
                                             account_id,
                                             ed25519_pubkey,
@@ -386,7 +386,7 @@ where
                                             .send(PeerUpdate::Deregistered(account_id, ed25519_pubkey))
                                             .unwrap();
                                     }
-                                    state_chain_runtime::Event::EthereumVault(
+                                    state_chain_runtime::RuntimeEvent::EthereumVault(
                                         pallet_cf_vaults::Event::KeygenRequest(
                                             ceremony_id,
                                             keygen_participants,
@@ -405,7 +405,7 @@ where
                                         ).await;
                                     }
                                     #[cfg(feature = "ibiza")]
-                                    state_chain_runtime::Event::PolkadotVault(
+                                    state_chain_runtime::RuntimeEvent::PolkadotVault(
                                         pallet_cf_vaults::Event::KeygenRequest(
                                             ceremony_id,
                                             keygen_participants,
@@ -423,7 +423,7 @@ where
                                             logger.clone()
                                         ).await;
                                     }
-                                    state_chain_runtime::Event::EthereumThresholdSigner(
+                                    state_chain_runtime::RuntimeEvent::EthereumThresholdSigner(
                                         pallet_cf_threshold_signature::Event::ThresholdSignatureRequest{
                                             request_id: _,
                                             ceremony_id,
@@ -442,12 +442,12 @@ where
                                             ceremony_id,
                                             KeyId(key_id),
                                             signatories,
-                                            SigningPayload(payload.0.to_vec()),
+                                            crate::multisig::eth::EthSigningPayload(payload.0),
                                             logger.clone(),
                                         ).await;
                                     }
                                     #[cfg(feature = "ibiza")]
-                                    state_chain_runtime::Event::PolkadotThresholdSigner(
+                                    state_chain_runtime::RuntimeEvent::PolkadotThresholdSigner(
                                         pallet_cf_threshold_signature::Event::ThresholdSignatureRequest{
                                             request_id: _,
                                             ceremony_id,
@@ -466,11 +466,12 @@ where
                                             ceremony_id,
                                             KeyId(key_id),
                                             signatories,
-                                            SigningPayload(payload.0.to_vec()),
+                                            crate::multisig::polkadot::PolkadotSigningPayload::new(payload.0)
+                                                .expect("Payload should be correct size"),
                                             logger.clone(),
                                         ).await;
                                     }
-                                    state_chain_runtime::Event::EthereumBroadcaster(
+                                    state_chain_runtime::RuntimeEvent::EthereumBroadcaster(
                                         pallet_cf_broadcast::Event::TransactionBroadcastRequest {
                                             broadcast_attempt_id,
                                             nominee,
@@ -497,7 +498,7 @@ where
                                                             tx_hash
                                                         );
                                                         assert_eq!(
-                                                            tx_hash, expected_broadcast_tx_hash,
+                                                            tx_hash.0, expected_broadcast_tx_hash.0,
                                                             "tx_hash returned from `send` does not match expected hash"
                                                         );
                                                     },
@@ -527,7 +528,7 @@ where
                                                 );
 
                                                 let _result = state_chain_client.submit_signed_extrinsic(
-                                                    state_chain_runtime::Call::EthereumBroadcaster(
+                                                    state_chain_runtime::RuntimeCall::EthereumBroadcaster(
                                                         pallet_cf_broadcast::Call::transaction_signing_failure {
                                                             broadcast_attempt_id,
                                                         },
@@ -538,7 +539,7 @@ where
                                         }
                                     }
                                     #[cfg(feature = "ibiza")]
-                                    state_chain_runtime::Event::PolkadotBroadcaster(
+                                    state_chain_runtime::RuntimeEvent::PolkadotBroadcaster(
                                         pallet_cf_broadcast::Event::TransactionBroadcastRequest {
                                             broadcast_attempt_id,
                                             nominee,
@@ -562,14 +563,14 @@ where
                                             });
                                         }
                                     }
-                                    state_chain_runtime::Event::Environment(
+                                    state_chain_runtime::RuntimeEvent::Environment(
                                         pallet_cf_environment::Event::CfeSettingsUpdated {
                                             new_cfe_settings
                                         }) => {
                                             cfe_settings_update_sender.send(new_cfe_settings).unwrap();
                                     }
                                     #[cfg(feature = "ibiza")]
-                                    state_chain_runtime::Event::EthereumIngressEgress(
+                                    state_chain_runtime::RuntimeEvent::EthereumIngressEgress(
                                         pallet_cf_ingress_egress::Event::StartWitnessing {
                                             ingress_address,
                                             ingress_asset
@@ -589,7 +590,7 @@ where
                                         }
                                     }
                                     #[cfg(feature = "ibiza")]
-                                    state_chain_runtime::Event::PolkadotIngressEgress(
+                                    state_chain_runtime::RuntimeEvent::PolkadotIngressEgress(
                                         pallet_cf_ingress_egress::Event::StartWitnessing {
                                             ingress_address,
                                             ingress_asset

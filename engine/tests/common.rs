@@ -10,7 +10,8 @@ use chainflip_engine::{
 use config::{Config, ConfigError, File};
 use futures::stream::StreamExt;
 use serde::Deserialize;
-use sp_core::H160;
+
+use web3::types::H160;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct IntegrationTestConfig {
