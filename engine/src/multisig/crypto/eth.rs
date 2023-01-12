@@ -35,7 +35,7 @@ pub struct EthSigningPayload(pub [u8; 32]);
 
 impl std::fmt::Display for EthSigningPayload {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{}", hex::encode(&self.0))
+		write!(f, "{}", hex::encode(self.0))
 	}
 }
 
