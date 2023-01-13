@@ -286,15 +286,16 @@ fn swap_can_acrue_fees() {
 
 		const SWAP_AMOUNT: AssetAmount = 10_000;
 		// Define the ingress call
-		let ingress_call =
-			Box::new(RuntimeCall::EthereumIngressEgress(pallet_cf_ingress_egress::Call::do_ingress {
+		let ingress_call = Box::new(RuntimeCall::EthereumIngressEgress(
+			pallet_cf_ingress_egress::Call::do_ingress {
 				ingress_witnesses: vec![IngressWitness {
 					ingress_address,
 					asset: eth::Asset::Eth,
 					amount: SWAP_AMOUNT,
 					tx_id: Default::default(),
 				}],
-			}));
+			},
+		));
 
 		// Get the current authorities to witness the ingress.
 		let nodes = Validator::current_authorities();
@@ -312,18 +313,22 @@ fn swap_can_acrue_fees() {
 
 		//  Eth: $1 <-> Flip: $5,
 		// 10_000 Eth -50% -> 50_000 USDC - 50% -> about 12_500 Flips, reduced by slippage.
-		System::assert_has_event(RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::AssetSwaped {
-			from: Asset::Eth,
-			to: Asset::Usdc,
-			input: 10_000,
-			output: 49_742,
-		}));
-		System::assert_has_event(RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::AssetSwaped {
-			from: Asset::Usdc,
-			to: Asset::Flip,
-			input: 49_742,
-			output: 12_255,
-		}));
+		System::assert_has_event(RuntimeEvent::LiquidityPools(
+			pallet_cf_pools::Event::AssetSwaped {
+				from: Asset::Eth,
+				to: Asset::Usdc,
+				input: 10_000,
+				output: 49_742,
+			},
+		));
+		System::assert_has_event(RuntimeEvent::LiquidityPools(
+			pallet_cf_pools::Event::AssetSwaped {
+				from: Asset::Usdc,
+				to: Asset::Flip,
+				input: 49_742,
+				output: 12_255,
+			},
+		));
 
 		assert_eq!(
 			pallet_cf_lp::FreeBalances::<Runtime>::get(&lp_1, any::Asset::Eth),
@@ -358,22 +363,26 @@ fn swap_can_acrue_fees() {
 		));
 
 		// Burning half of the liquidity returns about half of assets vested.
-		System::assert_has_event(RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::LiquidityBurned {
-			lp: lp_1.clone(),
-			asset: any::Asset::Eth,
-			range,
-			burnt_liquidity: 1_500_000,
-			asset_credited: PoolAssetMap::new(466_708, 4_708_672),
-			fee_yielded: PoolAssetMap::new(0, 0),
-		}));
-		System::assert_has_event(RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::LiquidityBurned {
-			lp: lp_2.clone(),
-			asset: any::Asset::Flip,
-			range,
-			burnt_liquidity: 600_000,
-			asset_credited: PoolAssetMap::new(414_088, 856_927),
-			fee_yielded: PoolAssetMap::new(0, 0),
-		}));
+		System::assert_has_event(RuntimeEvent::LiquidityPools(
+			pallet_cf_pools::Event::LiquidityBurned {
+				lp: lp_1.clone(),
+				asset: any::Asset::Eth,
+				range,
+				burnt_liquidity: 1_500_000,
+				asset_credited: PoolAssetMap::new(466_708, 4_708_672),
+				fee_yielded: PoolAssetMap::new(0, 0),
+			},
+		));
+		System::assert_has_event(RuntimeEvent::LiquidityPools(
+			pallet_cf_pools::Event::LiquidityBurned {
+				lp: lp_2.clone(),
+				asset: any::Asset::Flip,
+				range,
+				burnt_liquidity: 600_000,
+				asset_credited: PoolAssetMap::new(414_088, 856_927),
+				fee_yielded: PoolAssetMap::new(0, 0),
+			},
+		));
 
 		System::reset_events();
 		// Burn the rest of the liquidity also return all fees acrued
@@ -391,22 +400,26 @@ fn swap_can_acrue_fees() {
 		));
 
 		// Burning half of the liquidity returns about half of assets vested.
-		System::assert_has_event(RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::LiquidityBurned {
-			lp: lp_1.clone(),
-			asset: any::Asset::Eth,
-			range,
-			burnt_liquidity: 1_500_000,
-			asset_credited: PoolAssetMap::new(466_708, 4_708_672),
-			fee_yielded: PoolAssetMap::new(4_999, 0),
-		}));
-		System::assert_has_event(RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::LiquidityBurned {
-			lp: lp_2.clone(),
-			asset: any::Asset::Flip,
-			range,
-			burnt_liquidity: 600_000,
-			asset_credited: PoolAssetMap::new(414_088, 856_927),
-			fee_yielded: PoolAssetMap::new(0, 24_870),
-		}));
+		System::assert_has_event(RuntimeEvent::LiquidityPools(
+			pallet_cf_pools::Event::LiquidityBurned {
+				lp: lp_1.clone(),
+				asset: any::Asset::Eth,
+				range,
+				burnt_liquidity: 1_500_000,
+				asset_credited: PoolAssetMap::new(466_708, 4_708_672),
+				fee_yielded: PoolAssetMap::new(4_999, 0),
+			},
+		));
+		System::assert_has_event(RuntimeEvent::LiquidityPools(
+			pallet_cf_pools::Event::LiquidityBurned {
+				lp: lp_2.clone(),
+				asset: any::Asset::Flip,
+				range,
+				burnt_liquidity: 600_000,
+				asset_credited: PoolAssetMap::new(414_088, 856_927),
+				fee_yielded: PoolAssetMap::new(0, 24_870),
+			},
+		));
 
 		// All vested assets are returned. Some swapped and with Fees added.
 		assert_eq!(
