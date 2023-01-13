@@ -205,7 +205,6 @@ pub trait SetAggKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
 pub trait SetGovKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
 	type AddressType;
 	fn new_unsigned(maybe_old_key: Option<Vec<u8>>, new_key: Vec<u8>) -> Result<Self, ()>;
-	fn from_u8(key: Vec<u8>) -> Self::AddressType;
 }
 
 pub trait SetCommKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {

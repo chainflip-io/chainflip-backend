@@ -60,15 +60,10 @@ where
 		let vault = E::lookup(SystemAccounts::Vault).ok_or(())?;
 		Ok(Self::ChangeGovKey(set_gov_key_with_agg_key::ChangeGovKey::new_unsigned(
 			E::replay_protection(),
-			Self::from_u8(maybe_old_key.unwrap()),
-			Self::from_u8(new_key),
+			maybe_old_key.unwrap().try_into().unwrap(),
+			new_key.try_into().unwrap(),
 			vault,
 		)))
-	}
-
-	fn from_u8(key: Vec<u8>) -> Self::AddressType {
-		let slice: [u8; 32] = key.try_into().expect("to have a valid length");
-		slice.into()
 	}
 }
 
