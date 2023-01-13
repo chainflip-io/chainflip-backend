@@ -92,6 +92,7 @@ zmq = {git = "https://github.com/chainflip-io/rust-zmq.git", tag = "chainflip-v0
 ed25519-dalek = "*"
 x25519-dalek = {version ="*", features = ["serde"]}
 rand = "0.8.4"
+ed25519-consensus = "2.0"
 
 # Local deps
 cf-chains = {path = "../state-chain/chains"}

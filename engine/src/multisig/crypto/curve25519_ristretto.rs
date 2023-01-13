@@ -8,8 +8,10 @@ type PK = curve25519_dalek::ristretto::RistrettoPoint;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Point(PK);
 
+// TODO: this scalar is shared between ristretto and edwards,
+// so it should be moved outside
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Scalar(SK);
+pub struct Scalar(pub(super) SK);
 
 mod point_impls {
 

@@ -1,6 +1,8 @@
 #[macro_use]
 mod helpers;
+pub mod curve25519_edwards;
 pub mod curve25519_ristretto;
+pub mod ed25519;
 pub mod eth;
 pub mod polkadot;
 pub mod secp256k1;
@@ -27,6 +29,7 @@ pub const CHAIN_TAG_SIZE: usize = std::mem::size_of::<ChainTag>();
 pub enum ChainTag {
 	Ethereum = 0x0000,
 	Polkadot = 0x0001,
+	Sui = 0x0002,
 }
 
 impl ChainTag {
