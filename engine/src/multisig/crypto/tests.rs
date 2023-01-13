@@ -15,7 +15,7 @@ fn test_signing_for_scheme<C: CryptoScheme>() {
 
 	let payload = C::signing_payload_for_test();
 
-	let signature = generate_single_party_signature::<C>(&secret_key, &payload.clone(), &mut rng);
+	let signature = generate_single_party_signature::<C>(&secret_key, &payload, &mut rng);
 
 	// Verification is typically delegated to third-party libraries whose
 	// behaviour we are attempting to replicate with FROST.

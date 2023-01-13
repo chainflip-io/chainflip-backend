@@ -67,8 +67,8 @@ impl CryptoScheme for Ed25519Signing {
 		use sha2::Digest;
 
 		let hash = sha2::Sha512::default()
-			.chain(&nonce_commitment.as_bytes())
-			.chain(&pubkey.as_bytes())
+			.chain(nonce_commitment.as_bytes())
+			.chain(pubkey.as_bytes())
 			.chain(&payload.0);
 
 		let mut output = [0u8; 64];
