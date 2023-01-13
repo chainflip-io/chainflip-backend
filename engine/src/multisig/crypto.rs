@@ -6,6 +6,8 @@ pub mod ed25519;
 pub mod eth;
 pub mod polkadot;
 pub mod secp256k1;
+#[cfg(test)]
+mod tests;
 
 use generic_array::{typenum::Unsigned, ArrayLength};
 
@@ -17,7 +19,7 @@ use std::fmt::{Debug, Display};
 use generic_array::GenericArray;
 use serde::{Deserialize, Serialize};
 
-use super::KeyId;
+use super::{client::signing::generate_schnorr_response, KeyId};
 
 /// The db uses a static length prefix, that must include the keygen data prefix and the chain tag
 pub const CHAIN_TAG_SIZE: usize = std::mem::size_of::<ChainTag>();
@@ -173,4 +175,22 @@ pub trait ECScalar:
 	fn zero() -> Self;
 
 	fn invert(&self) -> Option<Self>;
+}
+
+// Generate a signature using "single party multisig", which
+// is helpful for development and testing.
+pub fn generate_single_party_signature<C: CryptoScheme>(
+	secret_key: &<C::Point as ECPoint>::Scalar,
+	payload: &C::SigningPayload,
+	rng: &mut Rng,
+) -> C::Signature {
+	let public_key = C::Point::from_scalar(secret_key);
+	//
+	let nonce = <C::Point as ECPoint>::Scalar::random(rng);
+
+	let r = C::Point::from_scalar(&nonce);
+
+	let sigma = generate_schnorr_response::<C>(secret_key, public_key, r, nonce, payload);
+
+	C::build_signature(sigma, r)
 }
