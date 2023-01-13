@@ -340,58 +340,6 @@
         "tickBefore": 0
     },
     {
-        "amount0Before": "11505743598341114571255423385623647",
-        "amount0Delta": "1000",
-        "amount1Before": "11505743598341114571255423385506404",
-        "amount1Delta": "0",
-        "executionPrice": "0.0000",
-        "feeGrowthGlobal0X128Delta": "29575000",
-        "feeGrowthGlobal1X128Delta": "0",
-        "poolPriceAfter": "1.0000",
-        "poolPriceBefore": "1.0000",
-        "tickAfter": -1,
-        "tickBefore": 0
-    },
-    {
-        "amount0Before": "11505743598341114571255423385623647",
-        "amount0Delta": "0",
-        "amount1Before": "11505743598341114571255423385506404",
-        "amount1Delta": "1000",
-        "executionPrice": "-Infinity",
-        "feeGrowthGlobal0X128Delta": "0",
-        "feeGrowthGlobal1X128Delta": "29575000",
-        "poolPriceAfter": "1.0000",
-        "poolPriceBefore": "1.0000",
-        "tickAfter": 0,
-        "tickBefore": 0
-    },
-    {
-        "amount0Before": "11505743598341114571255423385623647",
-        "amount0Delta": "1000000000000000000",
-        "amount1Before": "11505743598341114571255423385506404",
-        "amount1Delta": "-996999999999999318",
-        "executionPrice": "0.99700",
-        "feeGrowthGlobal0X128Delta": "88725000000017597125",
-        "feeGrowthGlobal1X128Delta": "0",
-        "poolPriceAfter": "1.0000",
-        "poolPriceBefore": "1.0000",
-        "tickAfter": -1,
-        "tickBefore": 0
-    },
-    {
-        "amount0Before": "11505743598341114571255423385623647",
-        "amount0Delta": "-996999999999999232",
-        "amount1Before": "11505743598341114571255423385506404",
-        "amount1Delta": "1000000000000000000",
-        "executionPrice": "1.0030",
-        "feeGrowthGlobal0X128Delta": "0",
-        "feeGrowthGlobal1X128Delta": "88725000000020140575",
-        "poolPriceAfter": "1.0000",
-        "poolPriceBefore": "1.0000",
-        "tickAfter": 0,
-        "tickBefore": 0
-    },
-    {
         "amount0Before": "1994009290088178439",
         "amount0Delta": "1000",
         "amount1Before": "1994009290088178439",

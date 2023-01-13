@@ -615,8 +615,10 @@ impl PoolState {
 	/// `PairToBase`.
 	///
 	/// This function never panics
+
 	fn swap<SD: SwapDirection>(&mut self, mut amount: Amount) -> Amount {
 		let mut total_amount_out = Amount::zero();
+		println!(" NEW POOL ");
 
 		while let Some((target_tick, target_info)) = (Amount::zero() != amount)
 			.then_some(())
@@ -1094,6 +1096,8 @@ impl PoolState {
 
 #[cfg(test)]
 mod test {
+	use std::vec;
+
 	use super::*;
 
 	#[test]
@@ -1424,12 +1428,14 @@ mod test {
 			initial_price: &str,
 			fee_amount: u32,
 			positions: Vec<PositionParams>,
-		) -> PoolState {
+		) -> (PoolState, enum_map::EnumMap<Ticker, U256>) {
 			let mut pool =
 				PoolState::new(fee_amount / 10, U256::from_dec_str(initial_price).unwrap()); // encodeSqrtPrice (1,10) -> 25054144837504793118650146401
 			const ID: LiquidityProvider = H256([0xcf; 32]);
 			//const MINTED_LIQUIDITY: u128 = 3_161;
-			//let mut minted_capital = None;
+			let mut minted_capital = None;
+
+			let mut amountbefore: enum_map::EnumMap<Ticker, U256> = Default::default();
 
 			positions.iter().for_each(|position| {
 				pool.mint(
@@ -1438,15 +1444,18 @@ mod test {
 					position.upper_tick,
 					position.liquidity,
 					|_minted| {
-						//minted_capital.replace(minted);
+						minted_capital.replace(_minted);
 						true
 					},
 				)
 				.unwrap();
-				//let minted_capital = minted_capital.unwrap();
+				let minted_capital = minted_capital.unwrap();
+
+				amountbefore[Ticker::Base] += minted_capital[Ticker::Base];
+				amountbefore[!Ticker::Base] += minted_capital[!Ticker::Base];
 			});
 
-			pool
+			(pool, amountbefore)
 		}
 
 		let pool_0 = setup_pool(
@@ -1576,15 +1585,9 @@ mod test {
 				liquidity: 2_000_000_000_000_000_000,
 			}],
 		);
-		let pool_12 = setup_pool(
-			"79228162514264337593543950336", //encodeSqrtPrice (1,1)
-			pool_configs[PoolType::Medium].clone().fee_amount,
-			vec![PositionParams {
-				lower_tick: MIN_TICK_MEDIUM,
-				upper_tick: MAX_TICK_MEDIUM,
-				liquidity: MAX_TICK_GROSS_LIQUIDITY,
-			}],
-		);
+		// Removed pool 12 because the initial values can't be used in our case
+		// (MAX_LIQUIDITY_PER_TICK is too big
+
 		let pool_13 = setup_pool(
 			"1461446703485210103287273052203988822378723970341", // MaxSqrtRatio - 1
 			pool_configs[PoolType::Medium].clone().fee_amount,
@@ -1605,41 +1608,93 @@ mod test {
 		);
 
 		let pools = vec![
-			pool_10, pool_11, pool_2, pool_13, pool_14, pool_0, pool_7, pool_12, pool_5, pool_1,
-			pool_6, pool_4, pool_3, pool_8, pool_9,
+			pool_10, pool_11, pool_2, pool_13, pool_14, pool_0, pool_7, pool_5, pool_1, pool_6,
+			pool_4, pool_3, pool_8, pool_9,
 		];
+		let mut pool_number = 0;
 		let pools_after = pools
 			.iter()
-			.map(|pool| {
+			.map(|(pool, amount_before)| {
 				// NOTE: This two small swaps have issues, same as in the Python model. E.g. for
 				// pool10 (first) the tickAfter should be 705098 but it's 704730, more slippage than
 				// it should. Not sure why.
 
 				// test number 0 (according to order in the snapshots file)
 				let mut pool_after_swap_test_0 = pool.clone();
+				let amount_swap_in_test_0 =
+					vec![U256::from_dec_str("1000").unwrap(), U256::from(0)];
 				let amount_out_swap_test_0 = pool_after_swap_test_0
 					.swap_from_base_to_pair(U256::from_dec_str("1000").unwrap());
+				let amount_swap_out_test_0 = vec![U256::from(0), amount_out_swap_test_0];
 
 				// test number 1 (according to order in the snapshots file)
 				let mut pool_after_swap_test_1 = pool.clone();
+				let amount_swap_in_test_1 =
+					vec![U256::from(0), U256::from_dec_str("1000").unwrap()];
 				let amount_out_swap_test_1 = pool_after_swap_test_1
 					.swap_from_pair_to_base(U256::from_dec_str("1000").unwrap());
+				let amount_swap_out_test_1 = vec![amount_out_swap_test_1, U256::from(0)];
 
 				// test number 2 (according to order in the snapshots file)
 				let mut pool_after_swap_test_2 = pool.clone();
+				let amount_swap_in_test_2 =
+					vec![U256::from_dec_str("1000000000000000000").unwrap(), U256::from(0)];
 				let amount_out_swap_test_2 = pool_after_swap_test_2
 					.swap_from_base_to_pair(U256::from_dec_str("1000000000000000000").unwrap());
+				let amount_swap_out_test_2 = vec![U256::from(0), amount_out_swap_test_2];
 
-				// test number 4 (according to order in the snapshots file)
-				let mut pool_after_swap_test_4 = pool.clone();
-				let amount_out_swap_test_4 = pool_after_swap_test_4
+				if pool_number == 24 {
+					println!(
+						"amount in to swap         {}",
+						U256::from_dec_str("1000000000000000000").unwrap()
+					);
+					println!(
+						"amount actually swapped   {}",
+						U256::from_dec_str("1000000000000000000").unwrap() -
+							U256::from_dec_str("998999299629813905").unwrap()
+					);
+					println!("amount_out_swap_test_2    {}", amount_out_swap_test_2);
+
+					assert_eq!(1, 2);
+				}
+
+				// test number 3 (according to order in the snapshots file)
+				let mut pool_after_swap_test_3 = pool.clone();
+				let amount_swap_in_test_3 =
+					vec![U256::from(0), U256::from_dec_str("1000000000000000000").unwrap()];
+				let amount_out_swap_test_3 = pool_after_swap_test_3
 					.swap_from_pair_to_base(U256::from_dec_str("1000000000000000000").unwrap());
-
+				let amount_swap_out_test_3 = vec![amount_out_swap_test_3, U256::from(0)];
+				pool_number = pool_number + 4;
 				vec![
-					(pool.clone(), pool_after_swap_test_0, amount_out_swap_test_0),
-					(pool.clone(), pool_after_swap_test_1, amount_out_swap_test_1),
-					(pool.clone(), pool_after_swap_test_2, amount_out_swap_test_2),
-					(pool.clone(), pool_after_swap_test_4, amount_out_swap_test_4),
+					(
+						pool.clone(),
+						pool_after_swap_test_0,
+						amount_before,
+						amount_swap_in_test_0,
+						amount_swap_out_test_0,
+					),
+					(
+						pool.clone(),
+						pool_after_swap_test_1,
+						amount_before,
+						amount_swap_in_test_1,
+						amount_swap_out_test_1,
+					),
+					(
+						pool.clone(),
+						pool_after_swap_test_2,
+						amount_before,
+						amount_swap_in_test_2,
+						amount_swap_out_test_2,
+					),
+					(
+						pool.clone(),
+						pool_after_swap_test_3,
+						amount_before,
+						amount_swap_in_test_3,
+						amount_swap_out_test_3,
+					),
 				]
 			})
 			.collect::<Vec<_>>();
@@ -1649,7 +1704,8 @@ mod test {
 		println!("expected_output[0] {:?}", expected_output[0]);
 		let mut i = 0;
 		for pool_vec in pools_after {
-			for (pool_before, pool_after, amount_out) in pool_vec {
+			for (pool_before, pool_after, amountbefore, amount_swap_in, amount_swap_out) in pool_vec
+			{
 				// Skip the first two swaps for each pool as they have issues
 				if i % 4 == 0 || i % 4 == 1 {
 					println!("Skipping pool number {}", i);
@@ -1659,9 +1715,14 @@ mod test {
 				}
 				println!("Checking pool number {}", i);
 
+				// Check pool price before
+				// println!("expected_output[i] {:?}", expected_output[i]);
+
 				match &expected_output[i] {
 					OutputFormats::Format(output) => {
 						println!("Checking values");
+
+						// Compare tick before and tick after
 						assert_eq!(pool_before.current_tick, output.tickBefore);
 						assert_eq!(pool_after.current_tick, output.tickAfter);
 
@@ -1675,6 +1736,73 @@ mod test {
 							pool_before.current_sqrt_price.to_string().parse::<f64>().unwrap(),
 						);
 						assert_approx_equal_percentage(num_f64, formatted_price, 1f64);
+
+						// Compare poolPriceAfter.
+						let num_f64 = output.poolPriceAfter.as_str().parse::<f64>().unwrap();
+						let formatted_price = format_price_f64(
+							pool_after.current_sqrt_price.to_string().parse::<f64>().unwrap(),
+						);
+						assert_approx_equal_percentage(num_f64, formatted_price, 1f64);
+
+						// Compare feeGrowthGlobal
+						let feeGrowthGlobal0Snapshot =
+							U256::from_dec_str(output.feeGrowthGlobal0X128Delta.as_str()).unwrap();
+						let feeGrowthGlobal1Snapshot =
+							U256::from_dec_str(output.feeGrowthGlobal1X128Delta.as_str()).unwrap();
+
+						assert_approx_equal_percentage_u256(
+							pool_after.global_fee_growth[Ticker::Base] -
+								pool_before.global_fee_growth[Ticker::Base],
+							feeGrowthGlobal0Snapshot,
+							U256::from(1),
+						);
+						assert_approx_equal_percentage_u256(
+							pool_after.global_fee_growth[Ticker::Pair] -
+								pool_before.global_fee_growth[Ticker::Pair],
+							feeGrowthGlobal1Snapshot,
+							U256::from(1),
+						);
+
+						// Compare amount before
+						assert_approx_equal_percentage_u256(
+							amountbefore[Ticker::Base],
+							U256::from_dec_str(output.amount0Before.as_str()).unwrap(),
+							U256::from(1),
+						);
+						assert_approx_equal_percentage_u256(
+							amountbefore[Ticker::Pair],
+							U256::from_dec_str(output.amount1Before.as_str()).unwrap(),
+							U256::from(1),
+						);
+
+						// Compare amount Delta
+						// Conversion to f64 makes it lose precision
+
+						// Workaround for swaps that empty the pool that amountIn will be too much.
+
+						// TODO: Fix this
+						// if output.amount0Delta > 0 and output.amount0Delta != 1000 and 10000000
+						// then skip the check for that
+
+						assert_approx_equal_percentage(
+							output.amount0Delta.to_string().parse::<f64>().unwrap(),
+							amount_swap_in[0].to_string().parse::<f64>().unwrap() -
+								amount_swap_out[0].to_string().parse::<f64>().unwrap(),
+							1f64,
+						);
+
+						// TODO: Fix this
+						// if output.amount1Delta > 0 and output.amount0Delta != 1000 and 10000000
+						// then skip the check for that
+						assert_approx_equal_percentage(
+							output.amount1Delta.to_string().parse::<f64>().unwrap(),
+							amount_swap_in[1].to_string().parse::<f64>().unwrap() -
+								amount_swap_out[1].to_string().parse::<f64>().unwrap(),
+							10f64,
+						);
+
+						// assert_eq!((amount_swap_in[Ticker::Base] -
+						// amount_swap_out[Ticker::Pair]).as:str;
 					},
 					OutputFormats::FormatErrors(_) => println!("Not checking error cases for now"),
 				}
@@ -1698,6 +1826,12 @@ mod test {
 		// margin = 1 means 0.001%
 		let margin = margin / 10000.0;
 		let max = a.max(b);
-		assert!((a - b).abs() <= (max * margin));
+		assert!((a - b).abs() <= (max * margin).abs());
+	}
+	// Compare two U256 and check that they are equal within a margin of 0.001%
+	fn assert_approx_equal_percentage_u256(a: U256, b: U256, margin: U256) {
+		let max = a.max(b);
+		let min = a.min(b);
+		assert!(max - min <= (max * margin) / U256::from_dec_str("10000").unwrap());
 	}
 }
