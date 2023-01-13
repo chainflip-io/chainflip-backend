@@ -84,13 +84,7 @@ pub trait ECPoint:
 pub trait CryptoScheme: 'static {
 	type Point: ECPoint;
 
-	type Signature: Debug
-		+ Clone
-		+ PartialEq
-		+ serde::Serialize
-		+ for<'de> serde::Deserialize<'de>
-		+ Sync
-		+ Send;
+	type Signature: Debug + Clone + PartialEq + Sync + Send;
 
 	type AggKey;
 	type SigningPayload: Display + Debug + Sync + Send + Clone + PartialEq + Eq + AsRef<[u8]>;

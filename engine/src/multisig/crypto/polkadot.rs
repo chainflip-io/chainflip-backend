@@ -43,28 +43,6 @@ impl From<PolkadotSignature> for cf_chains::dot::PolkadotSignature {
 	}
 }
 
-impl Serialize for PolkadotSignature {
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-	where
-		S: serde::Serializer,
-	{
-		serializer.serialize_bytes(&self.0.to_bytes())
-	}
-}
-
-impl<'de> Deserialize<'de> for PolkadotSignature {
-	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-	where
-		D: serde::Deserializer<'de>,
-	{
-		let bytes = Vec::deserialize(deserializer)?;
-
-		schnorrkel::Signature::from_bytes(&bytes)
-			.map(PolkadotSignature)
-			.map_err(serde::de::Error::custom)
-	}
-}
-
 impl CryptoScheme for PolkadotSigning {
 	type Point = Point;
 	type Signature = PolkadotSignature;

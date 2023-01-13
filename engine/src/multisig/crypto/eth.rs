@@ -11,7 +11,7 @@ use num_bigint::BigUint;
 use secp256k1::constants::CURVE_ORDER;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EthSchnorrSignature {
 	/// Scalar component
 	pub s: [u8; 32],
