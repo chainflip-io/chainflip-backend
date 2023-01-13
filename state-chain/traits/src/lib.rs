@@ -790,3 +790,12 @@ pub trait VaultKeyWitnessedHandler<C: ChainAbi> {
 		tx_id: C::TransactionId,
 	) -> DispatchResultWithPostInfo;
 }
+
+pub trait BroadcastAnyChainGovKey {
+	fn broadcast(chain: ForeignChain, old_key: Option<Vec<u8>>, new_key: Vec<u8>);
+}
+
+pub trait BroadcastComKey {
+	type EthAddress;
+	fn broadcast(new_key: Self::EthAddress);
+}

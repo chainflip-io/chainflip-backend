@@ -13,6 +13,7 @@ mod mock;
 mod tests;
 
 pub mod weights;
+use cf_traits::BroadcastAnyChainGovKey;
 pub use weights::WeightInfo;
 
 #[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, RuntimeDebugNoBound)]
@@ -25,12 +26,7 @@ pub enum Proposal {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_chains::Ethereum;
-	use cf_traits::{Broadcaster, Chainflip, FeePayment, StakingInfo};
-
-	use cf_chains::{
-		SetCommKeyWithAggKey as SetCommunityKeyApiCall, SetGovKeyWithAggKey as SetGovKeyApiCall,
-	};
+	use cf_traits::{BroadcastComKey, Chainflip, FeePayment, StakingInfo};
 
 	use crate::pallet::Proposal::{SetCommunityKey, SetGovernanceKey};
 	#[pallet::pallet]
@@ -50,20 +46,21 @@ pub mod pallet {
 		/// The chain instance.
 		// type Chain: ChainAbi;
 		/// Smart contract calls.
-		type EthApiCalls: SetGovKeyApiCall<Ethereum> + SetCommunityKeyApiCall<Ethereum>;
-		/// Dot calls
-		#[cfg(feature = "ibiza")]
-		type DotApiCalls: SetGovKeyApiCall<Polkadot>;
+		// type EthApiCalls: SetGovKeyApiCall<Ethereum> + SetCommunityKeyApiCall<Ethereum>;
+		// /// Dot calls
+		// #[cfg(feature = "ibiza")]
+		// type DotApiCalls: SetGovKeyApiCall<Polkadot>;
 		/// Provides information about the current distribution of on-chain stake.
 		type StakingInfo: StakingInfo<
 			AccountId = <Self as frame_system::Config>::AccountId,
 			Balance = Self::Amount,
 		>;
 		/// Transaction broadcaster for configured destination chain.
-		type EthBroadcaster: Broadcaster<Ethereum, ApiCall = Self::EthApiCalls>;
+		type CommKeyBroadcaster: BroadcastComKey<EthAddress = Address>;
+		type AnyChainGovKeyBroadcaster: BroadcastAnyChainGovKey;
 		/// Dot broadcaster
-		#[cfg(feature = "ibiza")]
-		type DotBroadcaster: Broadcaster<Polkadot, ApiCall = Self::DotApiCalls>;
+		// #[cfg(feature = "ibiza")]
+		// type DotBroadcaster: Broadcaster<Polkadot, ApiCall = Self::DotApiCalls>;
 		/// Benchmarking weights.
 		type WeightInfo: WeightInfo;
 		/// Voting period of a proposal in blocks.
@@ -142,17 +139,15 @@ pub mod pallet {
 				if enactment_block == current_block {
 					match chain {
 						cf_chains::ForeignChain::Ethereum => {
-							T::EthBroadcaster::threshold_sign_and_broadcast(
-								<T::EthApiCalls as SetGovKeyApiCall<Ethereum>>::new_unsigned(
-									None,
-									key.clone(),
-								)
-								.unwrap(),
+							T::AnyChainGovKeyBroadcaster::broadcast(
+								cf_chains::ForeignChain::Ethereum,
+								None,
+								key.clone(),
 							);
 						},
 						cf_chains::ForeignChain::Polkadot => {
 							#[cfg(feature = "ibiza")]
-							Self::broadcast_dot_gov_key(key);
+							Self::broadcast_dot_gov_key(key.clone());
 						},
 					};
 					Self::deposit_event(Event::<T>::ProposalEnacted {
@@ -164,11 +159,7 @@ pub mod pallet {
 			}
 			if let Some((enactment_block, key)) = CommKeyUpdateAwaitingEnactment::<T>::get() {
 				if enactment_block == current_block {
-					T::EthBroadcaster::threshold_sign_and_broadcast(
-						<T::EthApiCalls as SetCommunityKeyApiCall<Ethereum>>::new_unsigned(
-							key.clone(),
-						),
-					);
+					T::CommKeyBroadcaster::broadcast(key.clone());
 					Self::deposit_event(Event::<T>::ProposalEnacted {
 						proposal: Proposal::SetCommunityKey(key),
 					});
@@ -241,9 +232,11 @@ pub mod pallet {
 		pub fn broadcast_dot_gov_key(key: Vec<u8>) {
 			use cf_chains::dot::PolkadotGovKey;
 			let old_key = PolkadotGovKey::<T>::take();
-			T::DotBroadcaster::threshold_sign_and_broadcast(<T::DotApiCalls as SetGovKeyApiCall<
-				Polkadot,
-			>>::new_unsigned(old_key, key.clone()));
+			T::AnyChainGovKeyBroadcaster::broadcast(
+				cf_chains::ForeignChain::Polkadot,
+				old_key,
+				key,
+			);
 			PolkadotGovKey::<T>::put(key);
 		}
 

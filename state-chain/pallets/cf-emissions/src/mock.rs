@@ -221,7 +221,7 @@ impl pallet_cf_emissions::Config for Test {
 	type Event = Event;
 	type HostChain = MockEthereum;
 	type FlipBalance = FlipBalance;
-	type ApiCall = MockUpdateFlipSupply;
+	type ApiCall = MockUpdateFlipSuppl
 	type Surplus = pallet_cf_flip::Surplus<Test>;
 	type Issuance = pallet_cf_flip::FlipIssuance<Test>;
 	type RewardsDistribution = MockRewardsDistribution;

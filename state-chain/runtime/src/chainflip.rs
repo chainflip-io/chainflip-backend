@@ -10,6 +10,7 @@ mod offences;
 use cf_primitives::{chains::assets, Asset, KeyId, ETHEREUM_ETH_ADDRESS};
 pub use offences::*;
 mod signer_nomination;
+use cf_chains::ForeignChain;
 use ethabi::Address as EthAbiAddress;
 pub use missed_authorship_slots::MissedAuraSlots;
 pub use signer_nomination::RandomSignerNomination;
@@ -17,8 +18,13 @@ use sp_core::U256;
 
 use crate::{
 	AccountId, Authorship, BlockNumber, Call, EmergencyRotationPercentageRange, Emissions,
-	Environment, EthereumInstance, Flip, FlipBalance, Reputation, Runtime, System, Validator,
+	Environment, EthereumBroadcaster, EthereumInstance, Flip, FlipBalance, Reputation, Runtime,
+	System, Validator,
 };
+
+#[cfg(feature = "ibiza")]
+use crate::PolkadotBroadcaster;
+
 #[cfg(feature = "ibiza")]
 use cf_chains::{
 	dot::{
@@ -33,13 +39,15 @@ use cf_chains::{
 		api::{EthereumApi, EthereumReplayProtection},
 		Ethereum,
 	},
-	ApiCall, ChainAbi, ChainEnvironment, ReplayProtectionProvider, TransactionBuilder,
+	ApiCall, ChainAbi, ChainEnvironment, ReplayProtectionProvider, SetCommKeyWithAggKey,
+	SetGovKeyWithAggKey, TransactionBuilder,
 };
 #[cfg(feature = "ibiza")]
 use cf_primitives::{AssetAmount, ForeignChain, ForeignChainAddress, IntentId};
 use cf_traits::{
-	BlockEmissions, Chainflip, EmergencyRotation, EpochInfo, EthEnvironmentProvider, Heartbeat,
-	Issuance, NetworkState, RewardsDistribution, RuntimeUpgrade, VaultTransitionHandler,
+	BlockEmissions, BroadcastAnyChainGovKey, BroadcastComKey, Chainflip, EmergencyRotation,
+	EpochInfo, EthEnvironmentProvider, Heartbeat, Issuance, NetworkState, RewardsDistribution,
+	RuntimeUpgrade, VaultTransitionHandler,
 };
 #[cfg(feature = "ibiza")]
 use cf_traits::{EgressApi, EpochKey, IngressApi};
@@ -314,6 +322,37 @@ impl EgressApi<AnyChain> for AnyChainIngressEgressHandler {
 					.expect("Caller must ensure for account is of the compatible type."),
 			),
 		}
+	}
+}
+
+pub struct TokenholderGovBroadcaster;
+
+impl BroadcastAnyChainGovKey for TokenholderGovBroadcaster {
+	fn broadcast(chain: ForeignChain, old_key: Option<Vec<u8>>, new_key: Vec<u8>) {
+		match chain {
+			ForeignChain::Ethereum => {
+				let api_call =
+					SetGovKeyWithAggKey::<Ethereum>::new_unsigned(None, new_key).unwrap();
+				EthereumBroadcaster::threshold_sign_and_broadcast(api_call);
+			},
+			ForeignChain::Polkadot => {
+				#[cfg(feature = "ibiza")]
+				let api_call = SetGovKeyWithAggKey::<Polkadot>::new_unsigned(old_key, new_key).unwrap();
+				#[cfg(feature = "ibiza")]
+				PolkadotBroadcaster::threshold_sign_and_broadcast(api_call);
+			},
+		}
+	}
+}
+
+impl BroadcastComKey for TokenholderGovBroadcaster {
+	type EthAddress = eth::Address;
+
+	fn broadcast(new_key: Self::EthAddress) {
+		// TODO: figure out why the type conversation is not working here.
+		// EthereumBroadcaster::threshold_sign_and_broadcast(
+		// 	SetCommKeyWithAggKey::<Ethereum>::new_unsigned(new_key).unwrap(),
+		// );
 	}
 }
 

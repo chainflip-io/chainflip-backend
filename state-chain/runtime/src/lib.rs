@@ -75,7 +75,7 @@ pub use cf_traits::{EpochInfo, EthEnvironmentProvider, QualifyNode, SessionKeysR
 pub use chainflip::chain_instances::*;
 use chainflip::{
 	epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat, EthEnvironment,
-	EthVaultTransitionHandler,
+	EthVaultTransitionHandler, TokenholderGovBroadcaster,
 };
 
 #[cfg(feature = "ibiza")]
@@ -524,10 +524,10 @@ impl pallet_cf_tokenholder_governance::Config for Runtime {
 	type Event = Event;
 	type FeePayment = Flip;
 	type StakingInfo = Flip;
-	type EthApiCalls = eth::api::EthereumApi<EthEnvironment>;
-	type EthBroadcaster = EthereumBroadcaster;
 	type WeightInfo = pallet_cf_tokenholder_governance::weights::PalletWeight<Runtime>;
 	type VotingPeriod = ConstU32<{ 14 * DAYS }>;
+	type AnyChainGovKeyBroadcaster = TokenholderGovBroadcaster;
+	type CommKeyBroadcaster = TokenholderGovBroadcaster;
 	/// 1000 FLIP in FLIPPERINOS
 	type ProposalFee = ConstU128<1_000_000_000_000_000_000_000>;
 	type EnactmentDelay = ConstU32<{ 7 * DAYS }>;
