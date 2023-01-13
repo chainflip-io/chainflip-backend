@@ -168,7 +168,7 @@ fn can_provide_liquidity_and_swap_assets() {
 		//  Eth: $1 <-> Flip: $5,
 		// 10_000 Eth -> 100_000 USDC -> about 50_000 Flips, reduced by slippage.
 		System::assert_has_event(RuntimeEvent::LiquidityPools(
-			pallet_cf_pools::Event::AssetSwaped {
+			pallet_cf_pools::Event::AssetsSwapped {
 				from: Asset::Eth,
 				to: Asset::Usdc,
 				input: 10_000,
@@ -176,7 +176,7 @@ fn can_provide_liquidity_and_swap_assets() {
 			},
 		));
 		System::assert_has_event(RuntimeEvent::LiquidityPools(
-			pallet_cf_pools::Event::AssetSwaped {
+			pallet_cf_pools::Event::AssetsSwapped {
 				from: Asset::Usdc,
 				to: Asset::Flip,
 				input: 98_966,
@@ -314,7 +314,7 @@ fn swap_can_acrue_fees() {
 		//  Eth: $1 <-> Flip: $5,
 		// 10_000 Eth -50% -> 50_000 USDC - 50% -> about 12_500 Flips, reduced by slippage.
 		System::assert_has_event(RuntimeEvent::LiquidityPools(
-			pallet_cf_pools::Event::AssetSwaped {
+			pallet_cf_pools::Event::AssetsSwapped {
 				from: Asset::Eth,
 				to: Asset::Usdc,
 				input: 10_000,
@@ -322,7 +322,7 @@ fn swap_can_acrue_fees() {
 			},
 		));
 		System::assert_has_event(RuntimeEvent::LiquidityPools(
-			pallet_cf_pools::Event::AssetSwaped {
+			pallet_cf_pools::Event::AssetsSwapped {
 				from: Asset::Usdc,
 				to: Asset::Flip,
 				input: 49_742,

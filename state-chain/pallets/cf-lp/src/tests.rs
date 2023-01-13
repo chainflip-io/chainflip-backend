@@ -224,7 +224,7 @@ fn can_mint_and_burn_liquidity() {
 		}));
 
 		assert_eq!(
-			LiquidityPools::minted_liqudity(&LP_ACCOUNT.into(), &asset),
+			LiquidityPools::minted_liquidity(&LP_ACCOUNT.into(), &asset),
 			vec![MintedLiquidity {
 				range: AmmRange::new(range.lower, range.upper),
 				liquidity: 1_000_000,
@@ -271,7 +271,7 @@ fn can_mint_and_burn_liquidity() {
 		}));
 
 		assert_eq!(
-			LiquidityPools::minted_liqudity(&LP_ACCOUNT.into(), &asset),
+			LiquidityPools::minted_liquidity(&LP_ACCOUNT.into(), &asset),
 			vec![MintedLiquidity {
 				range: AmmRange::new(range.lower, range.upper),
 				liquidity: 1_001_000,
@@ -319,7 +319,7 @@ fn can_mint_and_burn_liquidity() {
 		}));
 
 		assert_eq!(
-			LiquidityPools::minted_liqudity(&LP_ACCOUNT.into(), &asset),
+			LiquidityPools::minted_liquidity(&LP_ACCOUNT.into(), &asset),
 			vec![MintedLiquidity {
 				range: AmmRange::new(range.lower, range.upper),
 				liquidity: 501_000,
@@ -366,7 +366,7 @@ fn can_mint_and_burn_liquidity() {
 			amount_credited: 2_498,
 		}));
 
-		assert_eq!(LiquidityPools::minted_liqudity(&LP_ACCOUNT.into(), &asset), vec![]);
+		assert_eq!(LiquidityPools::minted_liquidity(&LP_ACCOUNT.into(), &asset), vec![]);
 	});
 }
 
@@ -439,7 +439,7 @@ fn can_collect_fee() {
 			Ok((U256::from(499u128), U256::from(500u128), U256::from(0u128)))
 		);
 		assert_eq!(
-			LiquidityPools::minted_liqudity(&LP_ACCOUNT.into(), &asset),
+			LiquidityPools::minted_liquidity(&LP_ACCOUNT.into(), &asset),
 			vec![MintedLiquidity {
 				range: AmmRange::new(range.lower, range.upper),
 				liquidity: 1_000_000,
@@ -484,7 +484,7 @@ fn can_collect_fee() {
 
 		// Fees has been reset.
 		assert_eq!(
-			LiquidityPools::minted_liqudity(&LP_ACCOUNT.into(), &asset),
+			LiquidityPools::minted_liquidity(&LP_ACCOUNT.into(), &asset),
 			vec![MintedLiquidity {
 				range: AmmRange::new(range.lower, range.upper),
 				liquidity: 1_000_000,

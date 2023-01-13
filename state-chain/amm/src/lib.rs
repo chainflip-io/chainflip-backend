@@ -382,7 +382,7 @@ impl PoolState {
 		self.current_tick
 	}
 
-	/// Tries to add `minted_liquidity` to/create the specified position, if `minted_liqudity == 0`
+	/// Tries to add `minted_liquidity` to/create the specified position, if `minted_liquidity == 0`
 	/// no position will be created or have liquidity added, the callback will not be called, and
 	/// the function will return `Ok(())`. Otherwise if the minting is possible the callback `f`
 	/// will be passed the Amounts required to add the specified `minted_liquidity` to the specified
@@ -609,7 +609,7 @@ impl PoolState {
 	}
 
 	/// Returns all postitions for a specific user.
-	pub fn minted_liqudity(&self, lp: AccountId) -> Vec<MintedLiquidity> {
+	pub fn minted_liquidity(&self, lp: AccountId) -> Vec<MintedLiquidity> {
 		self.positions
 			.iter()
 			.filter_map(|((account, lower, upper), position)| {

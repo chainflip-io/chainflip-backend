@@ -102,7 +102,7 @@ pub mod pallet {
 			range: AmmRange,
 			fee_yielded: PoolAssetMap<AssetAmount>,
 		},
-		AssetSwaped {
+		AssetsSwapped {
 			from: any::Asset,
 			to: any::Asset,
 			input: AssetAmount,
@@ -195,7 +195,7 @@ impl<T: Config> cf_traits::SwappingApi<U256> for Pallet<T> {
 				if let Some(pool) = maybe_pool.as_mut() {
 					ensure!(pool.pool_enabled(), Error::<T>::PoolDisabled);
 					let (output_amount, asset_0_fee) = pool.swap_from_base_to_pair(input_amount);
-					Self::deposit_event(Event::<T>::AssetSwaped {
+					Self::deposit_event(Event::<T>::AssetsSwapped {
 						from,
 						to,
 						input: input_amount.as_u128(),
@@ -210,7 +210,7 @@ impl<T: Config> cf_traits::SwappingApi<U256> for Pallet<T> {
 				if let Some(pool) = maybe_pool.as_mut() {
 					ensure!(pool.pool_enabled(), Error::<T>::PoolDisabled);
 					let (output_amount, asset_1_fee) = pool.swap_from_pair_to_base(input_amount);
-					Self::deposit_event(Event::<T>::AssetSwaped {
+					Self::deposit_event(Event::<T>::AssetsSwapped {
 						from,
 						to,
 						input: input_amount.as_u128(),
@@ -231,7 +231,7 @@ impl<T: Config> cf_traits::SwappingApi<U256> for Pallet<T> {
 							Err(Error::<T>::PoolDoesNotExist)
 						}
 					})?;
-				Self::deposit_event(Event::<T>::AssetSwaped {
+				Self::deposit_event(Event::<T>::AssetsSwapped {
 					from,
 					to: STABLE_ASSET,
 					input: input_amount.as_u128(),
@@ -248,7 +248,7 @@ impl<T: Config> cf_traits::SwappingApi<U256> for Pallet<T> {
 						}
 					})?;
 
-				Self::deposit_event(Event::<T>::AssetSwaped {
+				Self::deposit_event(Event::<T>::AssetsSwapped {
 					from: STABLE_ASSET,
 					to,
 					input: intermediate_amount.as_u128(),
@@ -260,7 +260,7 @@ impl<T: Config> cf_traits::SwappingApi<U256> for Pallet<T> {
 	}
 }
 
-/// Implementation for Liquidity Pool API for cf-amm.
+/// Implementation of Liquidity Pool API for cf-amm.
 /// `Amount` and `AccountId` are hard-coded type locked in by the amm code.
 impl<T: Config> LiquidityPoolApi<AmountU256, AccountId> for Pallet<T> {
 	const STABLE_ASSET: any::Asset = STABLE_ASSET;
@@ -342,7 +342,7 @@ impl<T: Config> LiquidityPoolApi<AmountU256, AccountId> for Pallet<T> {
 		})
 	}
 
-	/// Collects fees yeilded by user's position into user's free balance.
+	/// Collects fees yielded by user's position into user's free balance.
 	fn collect(
 		lp: AccountId,
 		asset: any::Asset,
@@ -373,10 +373,10 @@ impl<T: Config> LiquidityPoolApi<AmountU256, AccountId> for Pallet<T> {
 		})
 	}
 
-	/// Returns the user's Minted liquidities and fees acrued for a specific pool.
-	fn minted_liqudity(lp: &AccountId, asset: &any::Asset) -> Vec<MintedLiquidity> {
+	/// Returns the user's Minted liquidities and fees accrued for a specific pool.
+	fn minted_liquidity(lp: &AccountId, asset: &any::Asset) -> Vec<MintedLiquidity> {
 		if let Some(pool) = Pools::<T>::get(asset) {
-			pool.minted_liqudity(lp.clone())
+			pool.minted_liquidity(lp.clone())
 		} else {
 			vec![]
 		}
