@@ -273,7 +273,7 @@ impl<T: Config> LiquidityPoolApi<AmountU256, AccountId> for Pallet<T> {
 		liquidity_amount: Liquidity,
 		balance_check_callback: impl FnOnce(PoolAssetMap<AmountU256>) -> bool,
 	) -> Result<(PoolAssetMap<AmountU256>, Liquidity), DispatchError> {
-		Pools::<T>::mutate(&asset, |maybe_pool| {
+		Pools::<T>::mutate(asset, |maybe_pool| {
 			if let Some(pool) = maybe_pool.as_mut() {
 				ensure!(pool.pool_enabled(), Error::<T>::PoolDisabled);
 
@@ -314,7 +314,7 @@ impl<T: Config> LiquidityPoolApi<AmountU256, AccountId> for Pallet<T> {
 		range: AmmRange,
 		burnt_liquidity: Liquidity,
 	) -> Result<(PoolAssetMap<AmountU256>, PoolAssetMap<u128>), DispatchError> {
-		Pools::<T>::mutate(&asset, |maybe_pool| {
+		Pools::<T>::mutate(asset, |maybe_pool| {
 			if let Some(pool) = maybe_pool.as_mut() {
 				ensure!(pool.pool_enabled(), Error::<T>::PoolDisabled);
 
@@ -348,7 +348,7 @@ impl<T: Config> LiquidityPoolApi<AmountU256, AccountId> for Pallet<T> {
 		asset: any::Asset,
 		range: AmmRange,
 	) -> Result<PoolAssetMap<u128>, DispatchError> {
-		Pools::<T>::mutate(&asset, |maybe_pool| {
+		Pools::<T>::mutate(asset, |maybe_pool| {
 			if let Some(pool) = maybe_pool.as_mut() {
 				ensure!(pool.pool_enabled(), Error::<T>::PoolDisabled);
 
@@ -375,7 +375,7 @@ impl<T: Config> LiquidityPoolApi<AmountU256, AccountId> for Pallet<T> {
 
 	/// Returns the user's Minted liquidities and fees acrued for a specific pool.
 	fn minted_liqudity(lp: &AccountId, asset: &any::Asset) -> Vec<MintedLiquidity> {
-		if let Some(pool) = Pools::<T>::get(&asset) {
+		if let Some(pool) = Pools::<T>::get(asset) {
 			pool.minted_liqudity(lp.clone())
 		} else {
 			vec![]
@@ -384,11 +384,11 @@ impl<T: Config> LiquidityPoolApi<AmountU256, AccountId> for Pallet<T> {
 
 	/// Gets the current price of the pool in SqrtPrice
 	fn current_sqrt_price(asset: &any::Asset) -> Option<SqrtPriceQ64F96> {
-		Pools::<T>::get(&asset).map(|pool| pool.current_sqrt_price())
+		Pools::<T>::get(asset).map(|pool| pool.current_sqrt_price())
 	}
 
 	/// Gets the current price of the pool in Tick
 	fn current_tick(asset: &any::Asset) -> Option<Tick> {
-		Pools::<T>::get(&asset).map(|pool| pool.current_tick())
+		Pools::<T>::get(asset).map(|pool| pool.current_tick())
 	}
 }

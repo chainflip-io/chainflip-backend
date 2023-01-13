@@ -307,7 +307,7 @@ impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
 }
 #[cfg(feature = "ibiza")]
 impl pallet_cf_pools::Config for Runtime {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 }
 

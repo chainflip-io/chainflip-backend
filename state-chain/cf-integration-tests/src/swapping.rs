@@ -68,7 +68,7 @@ fn can_provide_liquidity_and_swap_assets() {
 
 		// Provide enough liquidity for the pools
 		assert_ok!(LiquidityProvider::update_position(
-			Origin::signed(lp_1.clone()),
+			RuntimeOrigin::signed(lp_1.clone()),
 			any::Asset::Eth,
 			AmmRange::new(-100_000, 100_000),
 			3_000_000u128,
@@ -213,14 +213,14 @@ fn swap_can_acrue_fees() {
 		let lp_2: AccountId = AccountId::from([0xF2; 32]);
 		AccountRoles::on_new_account(&lp_1);
 		AccountRoles::on_new_account(&lp_2);
-		assert_ok!(LiquidityProvider::register_lp_account(Origin::signed(lp_1.clone())));
-		assert_ok!(LiquidityProvider::register_lp_account(Origin::signed(lp_2.clone())));
+		assert_ok!(LiquidityProvider::register_lp_account(RuntimeOrigin::signed(lp_1.clone())));
+		assert_ok!(LiquidityProvider::register_lp_account(RuntimeOrigin::signed(lp_2.clone())));
 
 		// Register the relayer account.
 		let relayer: AccountId = AccountId::from([0xE0; 32]);
 		AccountRoles::on_new_account(&relayer);
 		assert_ok!(AccountRoles::register_account_role(
-			Origin::signed(relayer.clone()),
+			RuntimeOrigin::signed(relayer.clone()),
 			AccountRole::Relayer
 		));
 
@@ -255,13 +255,13 @@ fn swap_can_acrue_fees() {
 
 		// Provide enough liquidity for the pools
 		assert_ok!(LiquidityProvider::update_position(
-			Origin::signed(lp_1.clone()),
+			RuntimeOrigin::signed(lp_1.clone()),
 			any::Asset::Eth,
 			range,
 			3_000_000u128,
 		));
 		assert_ok!(LiquidityProvider::update_position(
-			Origin::signed(lp_2.clone()),
+			RuntimeOrigin::signed(lp_2.clone()),
 			any::Asset::Flip,
 			range,
 			1_200_000u128,
@@ -269,7 +269,7 @@ fn swap_can_acrue_fees() {
 
 		// Test swap
 		assert_ok!(Swapping::register_swap_intent(
-			Origin::signed(relayer),
+			RuntimeOrigin::signed(relayer),
 			Asset::Eth,
 			Asset::Flip,
 			ForeignChainAddress::Eth(egress_address),
@@ -287,7 +287,7 @@ fn swap_can_acrue_fees() {
 		const SWAP_AMOUNT: AssetAmount = 10_000;
 		// Define the ingress call
 		let ingress_call =
-			Box::new(Call::EthereumIngressEgress(pallet_cf_ingress_egress::Call::do_ingress {
+			Box::new(RuntimeCall::EthereumIngressEgress(pallet_cf_ingress_egress::Call::do_ingress {
 				ingress_witnesses: vec![IngressWitness {
 					ingress_address,
 					asset: eth::Asset::Eth,
@@ -301,24 +301,24 @@ fn swap_can_acrue_fees() {
 		let current_epoch = Validator::current_epoch();
 		for node in &nodes {
 			assert_ok!(Witnesser::witness_at_epoch(
-				Origin::signed(node.clone()),
+				RuntimeOrigin::signed(node.clone()),
 				ingress_call.clone(),
 				current_epoch
 			));
 		}
 
 		// Performs the actual swap during on_idle hooks.
-		let _ = Swapping::on_idle(1, 1_000_000_000_000);
+		let _ = Swapping::on_idle(1, Weight::from_ref_time(1_000_000_000_000));
 
 		//  Eth: $1 <-> Flip: $5,
 		// 10_000 Eth -50% -> 50_000 USDC - 50% -> about 12_500 Flips, reduced by slippage.
-		System::assert_has_event(Event::LiquidityPools(pallet_cf_pools::Event::AssetSwaped {
+		System::assert_has_event(RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::AssetSwaped {
 			from: Asset::Eth,
 			to: Asset::Usdc,
 			input: 10_000,
 			output: 49_742,
 		}));
-		System::assert_has_event(Event::LiquidityPools(pallet_cf_pools::Event::AssetSwaped {
+		System::assert_has_event(RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::AssetSwaped {
 			from: Asset::Usdc,
 			to: Asset::Flip,
 			input: 49_742,
@@ -345,20 +345,20 @@ fn swap_can_acrue_fees() {
 		System::reset_events();
 		// Partial burn does not return fees acrued
 		assert_ok!(LiquidityProvider::update_position(
-			Origin::signed(lp_1.clone()),
+			RuntimeOrigin::signed(lp_1.clone()),
 			any::Asset::Eth,
 			range,
 			1_500_000u128
 		));
 		assert_ok!(LiquidityProvider::update_position(
-			Origin::signed(lp_2.clone()),
+			RuntimeOrigin::signed(lp_2.clone()),
 			any::Asset::Flip,
 			range,
 			600_000u128
 		));
 
 		// Burning half of the liquidity returns about half of assets vested.
-		System::assert_has_event(Event::LiquidityPools(pallet_cf_pools::Event::LiquidityBurned {
+		System::assert_has_event(RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::LiquidityBurned {
 			lp: lp_1.clone(),
 			asset: any::Asset::Eth,
 			range,
@@ -366,7 +366,7 @@ fn swap_can_acrue_fees() {
 			asset_credited: PoolAssetMap::new(466_708, 4_708_672),
 			fee_yielded: PoolAssetMap::new(0, 0),
 		}));
-		System::assert_has_event(Event::LiquidityPools(pallet_cf_pools::Event::LiquidityBurned {
+		System::assert_has_event(RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::LiquidityBurned {
 			lp: lp_2.clone(),
 			asset: any::Asset::Flip,
 			range,
@@ -378,20 +378,20 @@ fn swap_can_acrue_fees() {
 		System::reset_events();
 		// Burn the rest of the liquidity also return all fees acrued
 		assert_ok!(LiquidityProvider::update_position(
-			Origin::signed(lp_1.clone()),
+			RuntimeOrigin::signed(lp_1.clone()),
 			any::Asset::Eth,
 			range,
 			0u128
 		));
 		assert_ok!(LiquidityProvider::update_position(
-			Origin::signed(lp_2.clone()),
+			RuntimeOrigin::signed(lp_2.clone()),
 			any::Asset::Flip,
 			range,
 			0u128
 		));
 
 		// Burning half of the liquidity returns about half of assets vested.
-		System::assert_has_event(Event::LiquidityPools(pallet_cf_pools::Event::LiquidityBurned {
+		System::assert_has_event(RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::LiquidityBurned {
 			lp: lp_1.clone(),
 			asset: any::Asset::Eth,
 			range,
@@ -399,7 +399,7 @@ fn swap_can_acrue_fees() {
 			asset_credited: PoolAssetMap::new(466_708, 4_708_672),
 			fee_yielded: PoolAssetMap::new(4_999, 0),
 		}));
-		System::assert_has_event(Event::LiquidityPools(pallet_cf_pools::Event::LiquidityBurned {
+		System::assert_has_event(RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::LiquidityBurned {
 			lp: lp_2.clone(),
 			asset: any::Asset::Flip,
 			range,
