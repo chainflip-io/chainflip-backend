@@ -11,7 +11,7 @@ fn can_create_new_trading_pool() {
 		let asset = Asset::Eth;
 		let default_sqrt_price = PoolState::sqrt_price_at_tick(0);
 		// Pool does not exist.
-		assert!(Pools::<Test>::get(&asset).is_none());
+		assert!(Pools::<Test>::get(asset).is_none());
 		assert_noop!(
 			LiquidityPools::mint(
 				LP.into(),
