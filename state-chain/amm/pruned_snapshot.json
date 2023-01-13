@@ -184,7 +184,7 @@
         "feeGrowthGlobal0X128Delta": "510423550381413479995299567101531162",
         "feeGrowthGlobal1X128Delta": "0",
         "poolPriceAfter": "4.0241",
-        "poolPriceBefore": "3.4026e+38",
+        "poolPriceBefore": "3.4025e+38",
         "tickAfter": 13923,
         "tickBefore": 887271
     },

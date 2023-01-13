@@ -1665,26 +1665,16 @@ mod test {
 						assert_eq!(pool_before.current_tick, output.tickBefore);
 						assert_eq!(pool_after.current_tick, output.tickAfter);
 
-						let price = output.poolPriceBefore.as_str();
-						let parts: Vec<&str>;
-						if price.contains("e+") {
-							parts = price.split("e+").collect();
-							let extra_dec = parts[0].len() - parts[0].find(".").unwrap() - 1; // -1 because we will remove the dot
-							let exponent = U256::from_dec_str(parts[1]).unwrap();
-							let num_string = parts[0].replace(".", "");
+						// Using assert_approx_equal_percentage to compare floats because the
+						// operations return extra decimals compared to the snapshot. Margin of
+						// 0.001%
 
-							let number = U256::from_dec_str(num_string.as_str()).unwrap();
-
-							assert_eq!(
-								format_price(pool_before.current_sqrt_price) /
-									U256::from(10).pow(exponent - extra_dec),
-								number
-							);
-						} else {
-							i = i + 1;
-							continue
-							//let number = U256::from_dec_str(price).unwrap();
-						}
+						// Compare poolPriceBefore.
+						let num_f64 = output.poolPriceBefore.as_str().parse::<f64>().unwrap();
+						let formatted_price = format_price_f64(
+							pool_before.current_sqrt_price.to_string().parse::<f64>().unwrap(),
+						);
+						assert_approx_equal_percentage(num_f64, formatted_price, 1f64);
 					},
 					OutputFormats::FormatErrors(_) => println!("Not checking error cases for now"),
 				}
@@ -1698,5 +1688,16 @@ mod test {
 		let price = (price / U256::from(2).pow(U256::from_dec_str("96").unwrap()))
 			.pow(U256::from_dec_str("2").unwrap());
 		price
+	}
+	fn format_price_f64(price: f64) -> f64 {
+		let price = (price / 2f64.powf(96f64)).powf(2f64);
+		price
+	}
+
+	fn assert_approx_equal_percentage(a: f64, b: f64, margin: f64) {
+		// margin = 1 means 0.001%
+		let margin = margin / 10000.0;
+		let max = a.max(b);
+		assert!((a - b).abs() <= (max * margin));
 	}
 }
