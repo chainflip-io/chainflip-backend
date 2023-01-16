@@ -1327,7 +1327,7 @@ mod test {
 	#[test]
 	fn test_swaps_with_pool_configs() {
 		use serde::{Deserialize, Serialize};
-		use serde_json::{self, from_str, Value};
+		use serde_json::{self, Value};
 
 		let file = std::fs::read_to_string("pruned_snapshot.json").expect("Unable to read file");
 		let json_data: Value = serde_json::from_str(&file).expect("JSON was not well-formatted");
@@ -1365,6 +1365,7 @@ mod test {
 			FormatErrors(OutputFormatErrors),
 		}
 
+		#[allow(non_snake_case)]
 		#[derive(Serialize, Deserialize, Debug)]
 		pub struct OutputFormat {
 			amount0Before: String,
@@ -1380,6 +1381,7 @@ mod test {
 			tickBefore: i32,
 		}
 
+		#[allow(non_snake_case)]
 		#[derive(Serialize, Deserialize, Debug)]
 		pub struct OutputFormatErrors {
 			poolBalance0: String,
@@ -1687,7 +1689,7 @@ mod test {
 				// to be quite different. In the case of a larger swap the rounding doesn't impact
 				// the result significantly.
 				if i == 0 || i == 5 || i == 12 || i == 17 {
-					i = i + 1;
+					i += 1;
 					continue
 				}
 
@@ -1716,21 +1718,21 @@ mod test {
 						assert_approx_equal_percentage(num_f64, formatted_price, 1f64);
 
 						// Compare feeGrowthGlobal
-						let feeGrowthGlobal0Snapshot =
+						let fee_growth_global_0_snapshot =
 							U256::from_dec_str(output.feeGrowthGlobal0X128Delta.as_str()).unwrap();
-						let feeGrowthGlobal1Snapshot =
+						let fee_growth_global_1_snapshot =
 							U256::from_dec_str(output.feeGrowthGlobal1X128Delta.as_str()).unwrap();
 
 						assert_approx_equal_percentage_u256(
 							pool_after.global_fee_growth[Ticker::Base] -
 								pool_before.global_fee_growth[Ticker::Base],
-							feeGrowthGlobal0Snapshot,
+							fee_growth_global_0_snapshot,
 							U256::from(1),
 						);
 						assert_approx_equal_percentage_u256(
 							pool_after.global_fee_growth[Ticker::Pair] -
 								pool_before.global_fee_growth[Ticker::Pair],
-							feeGrowthGlobal1Snapshot,
+							fee_growth_global_1_snapshot,
 							U256::from(1),
 						);
 
@@ -1812,19 +1814,13 @@ mod test {
 					},
 				}
 				// Increase expected_output index
-				i = i + 1;
+				i += 1;
 			}
 		}
 	}
 
-	fn format_price(price: U256) -> U256 {
-		let price = (price / U256::from(2).pow(U256::from_dec_str("96").unwrap()))
-			.pow(U256::from_dec_str("2").unwrap());
-		price
-	}
 	fn format_price_f64(price: f64) -> f64 {
-		let price = (price / 2f64.powf(96f64)).powf(2f64);
-		price
+		(price / 2f64.powf(96f64)).powf(2f64)
 	}
 
 	fn assert_approx_equal_percentage(a: f64, b: f64, margin: f64) {
