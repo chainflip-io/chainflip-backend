@@ -43,13 +43,6 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 		/// Burns the proposal fee from the accounts.
 		type FeePayment: FeePayment<Amount = Self::Amount, AccountId = Self::AccountId>;
-		/// The chain instance.
-		// type Chain: ChainAbi;
-		/// Smart contract calls.
-		// type EthApiCalls: SetGovKeyApiCall<Ethereum> + SetCommunityKeyApiCall<Ethereum>;
-		// /// Dot calls
-		// #[cfg(feature = "ibiza")]
-		// type DotApiCalls: SetGovKeyApiCall<Polkadot>;
 		/// Provides information about the current distribution of on-chain stake.
 		type StakingInfo: StakingInfo<
 			AccountId = <Self as frame_system::Config>::AccountId,
@@ -58,9 +51,6 @@ pub mod pallet {
 		/// Transaction broadcaster for configured destination chain.
 		type CommKeyBroadcaster: BroadcastComKey<EthAddress = Address>;
 		type AnyChainGovKeyBroadcaster: BroadcastAnyChainGovKey;
-		/// Dot broadcaster
-		// #[cfg(feature = "ibiza")]
-		// type DotBroadcaster: Broadcaster<Polkadot, ApiCall = Self::DotApiCalls>;
 		/// Benchmarking weights.
 		type WeightInfo: WeightInfo;
 		/// Voting period of a proposal in blocks.
@@ -89,14 +79,12 @@ pub mod pallet {
 	/// The Government key proposal currently awaiting enactment, if any. Indexed by the block
 	/// number we will attempt to enact this update.
 	#[pallet::storage]
-	#[pallet::getter(fn gov_enactment)]
 	pub type GovKeyUpdateAwaitingEnactment<T> =
 		StorageValue<_, (BlockNumberFor<T>, (ForeignChain, Vec<u8>)), OptionQuery>;
 
 	/// The Community key proposal currently awaiting enactment, if any. Indexed by the block number
 	/// we will attempt to enact this update.
 	#[pallet::storage]
-	#[pallet::getter(fn community_enactment)]
 	pub type CommKeyUpdateAwaitingEnactment<T> =
 		StorageValue<_, (BlockNumberFor<T>, Address), OptionQuery>;
 
@@ -159,7 +147,7 @@ pub mod pallet {
 			}
 			if let Some((enactment_block, key)) = CommKeyUpdateAwaitingEnactment::<T>::get() {
 				if enactment_block == current_block {
-					T::CommKeyBroadcaster::broadcast(key.clone());
+					T::CommKeyBroadcaster::broadcast(key);
 					Self::deposit_event(Event::<T>::ProposalEnacted {
 						proposal: Proposal::SetCommunityKey(key),
 					});

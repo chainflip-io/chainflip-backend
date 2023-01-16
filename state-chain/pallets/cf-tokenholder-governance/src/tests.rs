@@ -54,9 +54,7 @@ fn update_gov_key_via_onchain_proposal() {
 		assert!(GovKeyUpdateAwaitingEnactment::<Test>::get().is_none());
 		assert_eq!(
 			last_event::<Test>(),
-			crate::mock::Event::TokenholderGovernance(crate::Event::ProposalEnacted {
-				proposal: proposal.clone()
-			}),
+			crate::mock::Event::TokenholderGovernance(crate::Event::ProposalEnacted { proposal }),
 		);
 	});
 }
@@ -173,10 +171,7 @@ fn replace_proposal_during_enactment_period() {
 				proposal.clone()
 			));
 			assert_ok!(TokenholderGovernance::back_proposal(Origin::signed(BOB), proposal.clone()));
-			assert_ok!(TokenholderGovernance::back_proposal(
-				Origin::signed(CHARLES),
-				proposal.clone()
-			));
+			assert_ok!(TokenholderGovernance::back_proposal(Origin::signed(CHARLES), proposal));
 		}
 		go_to_block(5);
 		create_and_back_proposal(Proposal::SetGovernanceKey(gov_key_proposal.clone()));
