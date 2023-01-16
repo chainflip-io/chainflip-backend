@@ -222,7 +222,7 @@ jobs:
           DOT__WS_NODE_ENDPOINT: ${{ secrets.DOT__WS_NODE_ENDPOINT }}
       - name: Check engine health
         run: >
-          curl --url 'http://localhost:5555/health' --connect-timeout 5 --max-time 10 --retry 5 --retry-delay 1 --retry-max-time 20 --retry-connrefused -vv
+          curl --url 'http://localhost:5555/health' --connect-timeout 5 --max-time 10 --retry 10 --retry-delay 2 --retry-max-time 20 --retry-connrefused -vv
       - name: Clone docgen
         uses: actions/checkout@v3
         with:
