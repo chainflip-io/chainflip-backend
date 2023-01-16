@@ -33,44 +33,54 @@ pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	fn remark(_b: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(2_248_000 as Weight)
+		(Weight::from_ref_time(2_248_000)
+)
 	}
 	fn remark_with_event(b: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(17_214_000 as Weight)
+		(Weight::from_ref_time(17_214_000)
+)
 			// Standard Error: 0
-			.saturating_add((2_000 as Weight).saturating_mul(b as Weight))
+			.saturating_add((Weight::from_ref_time(2_000)
+).saturating_mul(b as u64))
 	}
 	// Storage: System Digest (r:1 w:1)
 	// Storage: unknown [0x3a686561707061676573] (r:0 w:1)
 	fn set_heap_pages() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(5_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
+		(Weight::from_ref_time(5_000_000)
+)
+			.saturating_add(T::DbWeight::get().reads(1u64))
+			.saturating_add(T::DbWeight::get().writes(2u64))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	fn set_storage(i: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(0 as Weight)
+		(Weight::from_ref_time(0)
+)
 			// Standard Error: 1_000
-			.saturating_add((819_000 as Weight).saturating_mul(i as Weight))
-			.saturating_add(T::DbWeight::get().writes((1 as Weight).saturating_mul(i as Weight)))
+			.saturating_add((Weight::from_ref_time(819_000)
+).saturating_mul(i as u64))
+			.saturating_add(T::DbWeight::get().writes(i as u64))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	fn kill_storage(i: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(0 as Weight)
+		(Weight::from_ref_time(0)
+)
 			// Standard Error: 1_000
-			.saturating_add((601_000 as Weight).saturating_mul(i as Weight))
-			.saturating_add(T::DbWeight::get().writes((1 as Weight).saturating_mul(i as Weight)))
+			.saturating_add((Weight::from_ref_time(601_000)
+).saturating_mul(i as u64))
+			.saturating_add(T::DbWeight::get().writes(i as u64))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	fn kill_prefix(p: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(0 as Weight)
+		(Weight::from_ref_time(0)
+)
 			// Standard Error: 2_000
-			.saturating_add((1_318_000 as Weight).saturating_mul(p as Weight))
-			.saturating_add(T::DbWeight::get().writes((1 as Weight).saturating_mul(p as Weight)))
+			.saturating_add((Weight::from_ref_time(1_318_000)
+).saturating_mul(p as u64))
+			.saturating_add(T::DbWeight::get().writes(p as u64))
 	}
 }

@@ -21,7 +21,7 @@ benchmarks! {
 		assert_eq!(ProposalIdCounter::<T>::get(), 1);
 	}
 	approve {
-		let call: <T as Config>::Call = frame_system::Call::remark{remark: vec![]}.into();
+		let call: <T as Config>::RuntimeCall = frame_system::Call::remark{remark: vec![]}.into();
 		let caller: T::AccountId = whitelisted_caller();
 		<Members<T>>::put(vec![caller.clone()]);
 		Pallet::<T>::push_proposal(Box::new(call));
@@ -39,7 +39,7 @@ benchmarks! {
 		assert_eq!(Members::<T>::get(), members);
 	}
 	call_as_sudo {
-		let call: <T as Config>::Call = frame_system::Call::set_code_without_checks{ code: vec![1, 2, 3, 4] }.into();
+		let call: <T as Config>::RuntimeCall = frame_system::Call::set_code_without_checks{ code: vec![1, 2, 3, 4] }.into();
 		let sudo_call = Call::<T>::call_as_sudo{ call: Box::new(call) };
 		let origin = T::EnsureGovernance::successful_origin();
 	}: { sudo_call.dispatch_bypass_filter(origin)? }
@@ -83,7 +83,7 @@ benchmarks! {
 		let next_nonce = 788;
 		NextGovKeyCallHashNonce::<T>::put(next_nonce);
 
-		let new_membership_set_call: <T as Config>::Call = Call::<T>::new_membership_set {
+		let new_membership_set_call: <T as Config>::RuntimeCall = Call::<T>::new_membership_set {
 			accounts: vec![]
 		}.into();
 

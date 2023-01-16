@@ -101,7 +101,7 @@ pub fn read_clean_and_decode_hex_str_file<V, T: FnOnce(&str) -> Result<V, anyhow
 	context: &str,
 	t: T,
 ) -> Result<V, anyhow::Error> {
-	std::fs::read_to_string(&file)
+	std::fs::read_to_string(file)
 		.map_err(anyhow::Error::new)
 		.with_context(|| format!("Failed to read {} file at {}", context, file.display()))
 		.and_then(|string| {

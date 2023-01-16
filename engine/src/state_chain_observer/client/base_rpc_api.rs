@@ -120,12 +120,7 @@ impl BaseRpcClient<jsonrpsee::ws_client::WsClient> {
 		let ws_endpoint = state_chain_settings.ws_endpoint.as_str();
 		Ok(Self {
 			raw_rpc_client: WsClientBuilder::default().build(ws_endpoint).await.with_context(
-				|| {
-					format!(
-						"Failed to establish rpc connection to substrate node '{}'",
-						ws_endpoint
-					)
-				},
+				|| format!("Failed to establish rpc connection to substrate node '{ws_endpoint}'"),
 			)?,
 		})
 	}

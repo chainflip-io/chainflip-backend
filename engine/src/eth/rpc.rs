@@ -1,11 +1,11 @@
-use sp_core::{H256, U256};
 use utilities::{context, make_periodic_tick};
 use web3::{
 	api::SubscriptionStream,
 	signing::SecretKeyRef,
 	types::{
 		Block, BlockHeader, BlockNumber, Bytes, CallRequest, FeeHistory, Filter, Log,
-		SignedTransaction, SyncState, Transaction, TransactionParameters, TransactionReceipt, U64,
+		SignedTransaction, SyncState, Transaction, TransactionParameters, TransactionReceipt, H256,
+		U256, U64,
 	},
 	Web3,
 };
@@ -51,7 +51,7 @@ impl<T: EthTransport> EthRpcClient<T> {
 			"Connecting new {} web3 client{}",
 			T::transport_protocol(),
 			match redact_secret_eth_node_endpoint(node_endpoint) {
-				Ok(redacted_node_endpoint) => format!(" to {}", redacted_node_endpoint),
+				Ok(redacted_node_endpoint) => format!(" to {redacted_node_endpoint}"),
 				Err(e) => {
 					slog::error!(
 						logger,
@@ -513,8 +513,7 @@ pub mod mocks {
 	use super::*;
 
 	use mockall::mock;
-	use sp_core::H256;
-	use web3::types::{Block, Bytes, Filter, Log};
+	// use web3::types::{Block, Bytes, Filter, Log, H256};
 
 	mock!(
 		// becomes MockEthHttpRpcClient

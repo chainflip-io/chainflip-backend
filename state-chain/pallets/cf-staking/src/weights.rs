@@ -54,9 +54,9 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Staking ActiveBidder (r:0 w:1)
 	fn staked() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(73_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().writes(6 as Weight))
+		Weight::from_ref_time(73_000_000)
+			.saturating_add(T::DbWeight::get().reads(4))
+			.saturating_add(T::DbWeight::get().writes(6))
 	}
 	// Storage: Environment CurrentSystemState (r:1 w:0)
 	// Storage: Validator CurrentRotationPhase (r:1 w:0)
@@ -91,9 +91,9 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Flip PendingClaimsReserve (r:0 w:1)
 	fn claim() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(182_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(25 as Weight))
-			.saturating_add(T::DbWeight::get().writes(14 as Weight))
+		Weight::from_ref_time(182_000_000)
+			.saturating_add(T::DbWeight::get().reads(25))
+			.saturating_add(T::DbWeight::get().writes(14))
 	}
 	// Storage: Environment CurrentSystemState (r:1 w:0)
 	// Storage: Flip Account (r:1 w:1)
@@ -127,9 +127,9 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Flip PendingClaimsReserve (r:0 w:1)
 	fn claim_all() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(188_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(24 as Weight))
-			.saturating_add(T::DbWeight::get().writes(14 as Weight))
+		Weight::from_ref_time(188_000_000)
+			.saturating_add(T::DbWeight::get().reads(24))
+			.saturating_add(T::DbWeight::get().writes(14))
 	}
 	// Storage: Staking PendingClaims (r:1 w:1)
 	// Storage: Staking ClaimExpiries (r:1 w:1)
@@ -144,39 +144,39 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Staking ActiveBidder (r:0 w:1)
 	fn claimed() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(106_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(8 as Weight))
-			.saturating_add(T::DbWeight::get().writes(10 as Weight))
+		Weight::from_ref_time(106_000_000)
+			.saturating_add(T::DbWeight::get().reads(8))
+			.saturating_add(T::DbWeight::get().writes(10))
 	}
 	// Storage: EthereumThresholdSigner Signatures (r:1 w:1)
 	// Storage: Staking PendingClaims (r:1 w:1)
 	fn post_claim_signature() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(53_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
+		Weight::from_ref_time(53_000_000)
+			.saturating_add(T::DbWeight::get().reads(2))
+			.saturating_add(T::DbWeight::get().writes(2))
 	}
 	// Storage: AccountRoles AccountRoles (r:1 w:0)
 	// Storage: Staking ActiveBidder (r:1 w:1)
 	fn retire_account() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(34_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(34_000_000)
+			.saturating_add(T::DbWeight::get().reads(2))
+			.saturating_add(T::DbWeight::get().writes(1))
 	}
 	// Storage: AccountRoles AccountRoles (r:1 w:0)
 	// Storage: Staking ActiveBidder (r:1 w:1)
 	fn activate_account() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(35_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(35_000_000)
+			.saturating_add(T::DbWeight::get().reads(2))
+			.saturating_add(T::DbWeight::get().writes(1))
 	}
 	// Storage: Staking ClaimExpiries (r:1 w:0)
 	fn on_initialize_best_case() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(5_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
+		Weight::from_ref_time(5_000_000)
+			.saturating_add(T::DbWeight::get().reads(1))
 	}
 	// Storage: Staking ClaimExpiries (r:1 w:1)
 	// Storage: Staking PendingClaims (r:7 w:7)
@@ -186,19 +186,23 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Validator Backups (r:1 w:1)
 	fn expire_pending_claims_at(b: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(0 as Weight)
+		Weight::from_ref_time(0)
 			// Standard Error: 197_000
-			.saturating_add((47_712_000 as Weight).saturating_mul(b as Weight))
-			.saturating_add(T::DbWeight::get().reads(3 as Weight))
-			.saturating_add(T::DbWeight::get().reads((3 as Weight).saturating_mul(b as Weight)))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes((3 as Weight).saturating_mul(b as Weight)))
+			.saturating_add(Weight::from_ref_time(47_712_000)
+.saturating_mul(b as u64)
+)
+			.saturating_add(T::DbWeight::get().reads(3))
+			.saturating_add(T::DbWeight::get().reads(3).saturating_mul(b as u64)
+)
+			.saturating_add(T::DbWeight::get().writes(2))
+			.saturating_add(T::DbWeight::get().writes(3).saturating_mul(b as u64)
+)
 	}
 	// Storage: Staking MinimumStake (r:0 w:1)
 	fn update_minimum_stake() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(22_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(22_000_000)
+			.saturating_add(T::DbWeight::get().writes(1))
 	}
 }
 
@@ -213,9 +217,9 @@ impl WeightInfo for () {
 	// Storage: Staking ActiveBidder (r:0 w:1)
 	fn staked() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(73_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(6 as Weight))
+		Weight::from_ref_time(73_000_000)
+			.saturating_add(RocksDbWeight::get().reads(4))
+			.saturating_add(RocksDbWeight::get().writes(6))
 	}
 	// Storage: Environment CurrentSystemState (r:1 w:0)
 	// Storage: Validator CurrentRotationPhase (r:1 w:0)
@@ -250,9 +254,9 @@ impl WeightInfo for () {
 	// Storage: Flip PendingClaimsReserve (r:0 w:1)
 	fn claim() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(182_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(25 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(14 as Weight))
+		Weight::from_ref_time(182_000_000)
+			.saturating_add(RocksDbWeight::get().reads(25))
+			.saturating_add(RocksDbWeight::get().writes(14))
 	}
 	// Storage: Environment CurrentSystemState (r:1 w:0)
 	// Storage: Flip Account (r:1 w:1)
@@ -286,9 +290,9 @@ impl WeightInfo for () {
 	// Storage: Flip PendingClaimsReserve (r:0 w:1)
 	fn claim_all() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(188_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(24 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(14 as Weight))
+		Weight::from_ref_time(188_000_000)
+			.saturating_add(RocksDbWeight::get().reads(24))
+			.saturating_add(RocksDbWeight::get().writes(14))
 	}
 	// Storage: Staking PendingClaims (r:1 w:1)
 	// Storage: Staking ClaimExpiries (r:1 w:1)
@@ -303,39 +307,39 @@ impl WeightInfo for () {
 	// Storage: Staking ActiveBidder (r:0 w:1)
 	fn claimed() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(106_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(8 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(10 as Weight))
+		Weight::from_ref_time(106_000_000)
+			.saturating_add(RocksDbWeight::get().reads(8))
+			.saturating_add(RocksDbWeight::get().writes(10))
 	}
 	// Storage: EthereumThresholdSigner Signatures (r:1 w:1)
 	// Storage: Staking PendingClaims (r:1 w:1)
 	fn post_claim_signature() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(53_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+		Weight::from_ref_time(53_000_000)
+			.saturating_add(RocksDbWeight::get().reads(2))
+			.saturating_add(RocksDbWeight::get().writes(2))
 	}
 	// Storage: AccountRoles AccountRoles (r:1 w:0)
 	// Storage: Staking ActiveBidder (r:1 w:1)
 	fn retire_account() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(34_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(34_000_000)
+			.saturating_add(RocksDbWeight::get().reads(2))
+			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 	// Storage: AccountRoles AccountRoles (r:1 w:0)
 	// Storage: Staking ActiveBidder (r:1 w:1)
 	fn activate_account() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(35_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(35_000_000)
+			.saturating_add(RocksDbWeight::get().reads(2))
+			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 	// Storage: Staking ClaimExpiries (r:1 w:0)
 	fn on_initialize_best_case() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(5_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
+		Weight::from_ref_time(5_000_000)
+			.saturating_add(RocksDbWeight::get().reads(1))
 	}
 	// Storage: Staking ClaimExpiries (r:1 w:1)
 	// Storage: Staking PendingClaims (r:7 w:7)
@@ -345,18 +349,22 @@ impl WeightInfo for () {
 	// Storage: Validator Backups (r:1 w:1)
 	fn expire_pending_claims_at(b: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(0 as Weight)
+		Weight::from_ref_time(0)
 			// Standard Error: 197_000
-			.saturating_add((47_712_000 as Weight).saturating_mul(b as Weight))
-			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
-			.saturating_add(RocksDbWeight::get().reads((3 as Weight).saturating_mul(b as Weight)))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes((3 as Weight).saturating_mul(b as Weight)))
+			.saturating_add(Weight::from_ref_time(47_712_000)
+.saturating_mul(b as u64)
+)
+			.saturating_add(RocksDbWeight::get().reads(3))
+			.saturating_add(RocksDbWeight::get().reads(3).saturating_mul(b as u64)
+)
+			.saturating_add(RocksDbWeight::get().writes(2))
+			.saturating_add(RocksDbWeight::get().writes(3).saturating_mul(b as u64)
+)
 	}
 	// Storage: Staking MinimumStake (r:0 w:1)
 	fn update_minimum_stake() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(22_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(22_000_000)
+			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 }

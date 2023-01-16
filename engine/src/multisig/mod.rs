@@ -9,9 +9,6 @@ pub mod db;
 
 pub use crypto::{eth, polkadot, ChainTag, CryptoScheme, Rng};
 
-#[cfg(test)]
-mod tests;
-
 use anyhow::Result;
 use cf_primitives::CeremonyId;
 
@@ -29,15 +26,6 @@ pub use client::{MultisigClient, MultisigMessage};
 pub use db::PersistentKeyDB;
 
 use self::client::key_store::KeyStore;
-
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Hash, Eq)]
-pub struct SigningPayload(pub Vec<u8>);
-
-impl std::fmt::Display for SigningPayload {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{}", hex::encode(&self.0))
-	}
-}
 
 /// Public key compressed (33 bytes = 32 bytes + a y parity byte)
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone)]

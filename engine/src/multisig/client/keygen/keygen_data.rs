@@ -49,7 +49,7 @@ impl<P: ECPoint> std::fmt::Display for KeygenData<P> {
 			KeygenData::BlameResponse8(inner) => inner.to_string(),
 			KeygenData::VerifyBlameResponses9(inner) => inner.to_string(),
 		};
-		write!(f, "KeygenData({})", inner)
+		write!(f, "KeygenData({inner})")
 	}
 }
 

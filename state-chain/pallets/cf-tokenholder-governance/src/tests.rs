@@ -54,7 +54,9 @@ fn update_gov_key_via_onchain_proposal() {
 		assert!(GovKeyUpdateAwaitingEnactment::<Test>::get().is_none());
 		assert_eq!(
 			last_event::<Test>(),
-			crate::mock::Event::TokenholderGovernance(crate::Event::ProposalEnacted { proposal }),
+			crate::mock::RuntimeEvent::TokenholderGovernance(crate::Event::ProposalEnacted {
+				proposal
+			}),
 		);
 	});
 }

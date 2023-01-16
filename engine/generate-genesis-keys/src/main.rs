@@ -64,8 +64,8 @@ fn main() {
 	use_chainflip_account_id_encoding();
 
 	let node_id_to_name_map = load_node_ids_from_csv(
-		csv::Reader::from_path(&env::var(ENV_VAR_INPUT_FILE).unwrap_or_else(|_| {
-			panic!("No genesis node id csv file defined with {}", ENV_VAR_INPUT_FILE)
+		csv::Reader::from_path(env::var(ENV_VAR_INPUT_FILE).unwrap_or_else(|_| {
+			panic!("No genesis node id csv file defined with {ENV_VAR_INPUT_FILE}")
 		}))
 		.expect("Should read from csv file"),
 	);
@@ -94,7 +94,7 @@ fn generate_and_save_keys<Crypto: CryptoScheme>(
 			&Path::new(
 				node_id_to_name_map
 					.get(&node_id)
-					.unwrap_or_else(|| panic!("Should have name for node_id: {}", node_id)),
+					.unwrap_or_else(|| panic!("Should have name for node_id: {node_id}")),
 			)
 			.with_extension(DB_EXTENSION),
 			// The genesis hash is unknown at this time, it will be written when the node runs for

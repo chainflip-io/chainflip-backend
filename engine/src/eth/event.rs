@@ -1,10 +1,9 @@
 use anyhow::{anyhow, Result};
-use sp_core::U256;
 
 use std::fmt::Debug;
 use web3::{
 	ethabi::RawLog,
-	types::{Log, H256},
+	types::{Log, H256, U256},
 };
 
 /// Type for storing common (i.e. tx_hash) and specific event information
@@ -51,7 +50,7 @@ mod tests {
 
 	use std::str::FromStr;
 
-	use sp_core::H160;
+	use web3::types::H160;
 
 	use crate::eth::{key_manager::KeyManager, EthContractWitnesser};
 

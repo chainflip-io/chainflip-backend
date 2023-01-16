@@ -38,11 +38,13 @@ httparse = "1.4.1"
 itertools = "0.10"
 clap = { version = "3.2.16", features = ["derive", "env"] }
 chrono = "0.4.19"
+atomicwrites = "0.3.1"
+scopeguard = "1.1.0"
 # have to use the older version until secp256k1 updates its dependency (https://github.com/rust-bitcoin/rust-secp256k1/issues/328)
 rand_legacy = { package = "rand", version = "0.6" }
 
 # Same version of jsonrpsee as substrate
-jsonrpsee = { version = "0.13.0", features = ["full"] }
+jsonrpsee = { version = "0.15.1", features = ["full"] }
 
 websocket = "0.24"
 ethbloom = "0.12.1"
@@ -58,7 +60,7 @@ sha2 = "0.9.5"
 slog = {version = "2.7.0", features = ["max_level_trace", "release_max_level_trace"]}
 slog-async = {version = "2.6.0"}
 slog-json = {version = "2.3.0"}
-subxt = "0.24.0"
+subxt = "0.25.0"
 thiserror = "1.0.26"
 tokio = {version = "1.13.1", features = ["full", "test-util"]}
 tokio-stream = {version = "0.1.5", features = ["sync"]}
@@ -68,7 +70,6 @@ num-traits = "0.2"
 num-derive = "0.3"
 web3 = {git = 'https://github.com/tomusdrw/rust-web3.git', rev = '8796c88', features = ['signing']}
 zeroize = "1.5.4"
-libp2p = "0.44"
 # Required so that we can create a web3-compatible secret key.
 web3-secp256k1 = {package = 'secp256k1', version = '0.21'}
 generic-array= "0.14"
@@ -86,7 +87,7 @@ typenum = "1.15"
 # use the same version as polkadot.
 schnorrkel = "0.9.1"
 rayon = "1.5"
-pin-project = "1.0.11"
+pin-project = "1.0.12"
 zmq = {git = "https://github.com/chainflip-io/rust-zmq.git", tag = "chainflip-v0.9.2+1", features = ["vendored"]}
 ed25519-dalek = "*"
 x25519-dalek = {version ="*", features = ["serde"]}
@@ -113,58 +114,26 @@ state-chain-runtime = {path = "../state-chain/runtime"}
 chainflip-node = {path = "../state-chain/node"}
 utilities = {path = "../utilities"}
 
+# substrate deps
+codec = { package = "parity-scale-codec", version = "3.0.0", features = ["derive", "full"] }
+scale-info = { version = "2.1.1", features = ["derive"] }
+frame-metadata = { version = "15.0.0" }
+frame-support = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12" }
+frame-system = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12" }
+sc-rpc-api = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12" }
+sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12" }
+sp-keyring = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12" }
+sp-rpc = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12" }
+sp-runtime = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12" }
+sp-version = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12" }
+
 [dependencies.rocksdb]
-version = "0.18.0"
+version = "0.19.0"
 # Disabling of default features, and using lz4 compression is primarily to avoid linker issues
 # resulting from the default compression using libs that conflict with the system libs
 # https://github.com/rust-rocksdb/rust-rocksdb/pull/555
 default-features = false
 features = ["lz4"]
-
-# substrate deps
-[dependencies.codec]
-features = ['derive', 'full']
-package = 'parity-scale-codec'
-version = '3.0.0'
-
-[dependencies.scale-info]
-features = ['derive']
-version = '2.1.1'
-
-[dependencies.frame-metadata]
-version = "15.0.0"
-
-[dependencies.frame-support]
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
-
-[dependencies.frame-system]
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
-
-[dependencies.sc-rpc-api]
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
-
-[dependencies.sp-core]
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
-
-[dependencies.sp-keyring]
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
-
-[dependencies.sp-rpc]
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
-
-[dependencies.sp-runtime]
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
-
-[dependencies.sp-version]
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
 
 [dev-dependencies]
 env_logger = "0.9.0"
@@ -172,11 +141,11 @@ log = "0.4.16"
 mockall = "0.11.0"
 csv = "1.1.6"
 tempfile = "3.3.0"
-ethereum = "0.12"
+ethereum = "0.14"
 rlp = "0.5"
 
 [build-dependencies]
-substrate-build-script-utils = { git = "https://github.com/chainflip-io/substrate.git", tag = 'chainflip-monthly-2022-06+01' }
+substrate-build-script-utils = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12" }
 
 [features]
 integration-test = []

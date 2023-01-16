@@ -12,7 +12,7 @@ fn test_ensure_stake_of_validator() {
 	new_test_ext().execute_with(|| {
 		AccountRoles::<Test>::insert(ALICE, AccountRole::None);
 		assert_ok!(Pallet::<Test>::register_account_role(
-			Origin::signed(ALICE),
+			RuntimeOrigin::signed(ALICE),
 			AccountRole::Validator
 		));
 	});
@@ -24,7 +24,10 @@ fn test_expect_validator_register_fails() {
 		MockBidInfo::set_min_bid(35);
 		AccountRoles::<Test>::insert(ALICE, AccountRole::None);
 		assert_noop!(
-			Pallet::<Test>::register_account_role(Origin::signed(ALICE), AccountRole::Validator),
+			Pallet::<Test>::register_account_role(
+				RuntimeOrigin::signed(ALICE),
+				AccountRole::Validator
+			),
 			crate::Error::<Test>::NotEnoughStake
 		);
 	});

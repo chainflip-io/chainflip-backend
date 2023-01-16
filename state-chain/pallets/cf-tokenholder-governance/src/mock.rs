@@ -50,8 +50,8 @@ impl system::Config for Test {
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
-	type Origin = Origin;
-	type Call = Call;
+	type RuntimeOrigin = RuntimeOrigin;
+	type RuntimeCall = RuntimeCall;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
@@ -59,7 +59,7 @@ impl system::Config for Test {
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = BlockHashCount;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -72,13 +72,13 @@ impl system::Config for Test {
 	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
-cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
+cf_traits::impl_mock_ensure_witnessed_for_origin!(RuntimeOrigin);
 
 impl Chainflip for Test {
 	type KeyId = Vec<u8>;
 	type ValidatorId = u64;
 	type Amount = u128;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type EnsureWitnessed = MockEnsureWitnessed;
 	type EnsureWitnessedAtCurrentEpoch = MockEnsureWitnessed;
 	type EpochInfo = MockEpochInfo;
@@ -94,7 +94,7 @@ parameter_types! {
 }
 
 // Implement mock for RestrictionHandler
-impl_mock_waived_fees!(AccountId, Call);
+impl_mock_waived_fees!(AccountId, RuntimeCall);
 impl_mock_stake_transfer!(AccountId, u128);
 
 pub struct MockKeyBroadcaster;
@@ -110,7 +110,7 @@ impl BroadcastComKey for MockKeyBroadcaster {
 }
 
 impl pallet_cf_flip::Config for Test {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type Balance = u128;
 	type ExistentialDeposit = ExistentialDeposit;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
@@ -121,7 +121,7 @@ impl pallet_cf_flip::Config for Test {
 }
 
 impl pallet_cf_tokenholder_governance::Config for Test {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type FeePayment = Flip;
 	type StakingInfo = Flip;
 	type CommKeyBroadcaster = MockKeyBroadcaster;

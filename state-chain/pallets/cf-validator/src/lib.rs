@@ -130,7 +130,7 @@ pub mod pallet {
 		frame_system::Config + Chainflip + pallet_session::Config<ValidatorId = ValidatorIdOf<Self>>
 	{
 		/// The overarching event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The top-level offence type must support this pallet's offence type.
 		type Offence: From<PalletOffence>;
@@ -148,7 +148,7 @@ pub mod pallet {
 		type VaultRotator: VaultRotator<ValidatorId = ValidatorIdOf<Self>>;
 
 		/// Implementation of EnsureOrigin trait for governance
-		type EnsureGovernance: EnsureOrigin<Self::Origin>;
+		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// For retrieving missed authorship slots.
 		type MissedAuthorshipSlots: MissedAuthorshipSlots;
@@ -376,17 +376,17 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(block_number: BlockNumberFor<T>) -> Weight {
 			log::trace!(target: "cf-validator", "on_initialize: {:?}",CurrentRotationPhase::<T>::get());
-			let mut weight = 0;
+			let mut weight = Weight::zero();
 
 			// Check expiry of epoch and store last expired.
 			if let Some(epoch_index) = EpochExpiries::<T>::take(block_number) {
-				weight += Self::expire_epoch(epoch_index);
+				weight.saturating_accrue(Self::expire_epoch(epoch_index));
 			}
 
-			weight += Self::punish_missed_authorship_slots();
+			weight.saturating_accrue(Self::punish_missed_authorship_slots());
 
 			// Progress the authority rotation if necessary.
-			weight += match CurrentRotationPhase::<T>::get() {
+			weight.saturating_accrue(match CurrentRotationPhase::<T>::get() {
 				RotationPhase::Idle => {
 					if block_number.saturating_sub(CurrentEpochStartedAt::<T>::get()) >=
 						BlocksPerEpoch::<T>::get()
@@ -430,10 +430,9 @@ pub mod pallet {
 						async_result => {
 							debug_assert!(
 								false,
-								"Ready(KeygenComplete), Ready(Failed), Pending possible. Got: {:?}",
-								async_result
+								"Ready(KeygenComplete), Ready(Failed), Pending possible. Got: {async_result:?}"
 							);
-							log::error!(target: "cf-validator", "Ready(KeygenComplete), Ready(Failed), Pending possible. Got: {:?}", async_result);
+							log::error!(target: "cf-validator", "Ready(KeygenComplete), Ready(Failed), Pending possible. Got: {async_result:?}");
 							Self::set_rotation_phase(RotationPhase::Idle);
 							// Use the weight of the pending phase.
 							// T::ValidatorWeightInfo::rotation_phase_vaults_rotating_pending(
@@ -442,7 +441,7 @@ pub mod pallet {
 						},
 					};
 					// TODO: Use actual weights
-					0 as Weight
+					Weight::from_ref_time(0)
 				},
 				RotationPhase::ActivatingKeys(rotation_state) => {
 					match T::VaultRotator::status() {
@@ -457,14 +456,13 @@ pub mod pallet {
 						async_result => {
 							debug_assert!(
 								false,
-								"Pending, or Ready(RotationComplete) possible. Got: {:?}",
-								async_result
+								"Pending, or Ready(RotationComplete) possible. Got: {async_result:?}"
 							);
-							log::error!(target: "cf-validator", "Pending and Ready(RotationComplete) possible. Got {:?}", async_result);
+							log::error!(target: "cf-validator", "Pending and Ready(RotationComplete) possible. Got {async_result:?}");
 							Self::set_rotation_phase(RotationPhase::Idle);
 						},
 					}
-					0 as Weight
+					Weight::from_ref_time(0)
 				},
 				// The new session will kick off the new epoch
 				RotationPhase::NewKeysActivated(rotation_state) =>
@@ -475,7 +473,7 @@ pub mod pallet {
 					T::ValidatorWeightInfo::rotation_phase_vaults_rotated(
 						rotation_state.num_primary_candidates(),
 					),
-			};
+			});
 			weight
 		}
 	}
@@ -652,18 +650,18 @@ pub mod pallet {
 
 				if existing_peer_id != peer_id {
 					ensure!(
-						!MappedPeers::<T>::contains_key(&peer_id),
+						!MappedPeers::<T>::contains_key(peer_id),
 						Error::<T>::AccountPeerMappingOverlap
 					);
-					MappedPeers::<T>::remove(&existing_peer_id);
-					MappedPeers::<T>::insert(&peer_id, ());
+					MappedPeers::<T>::remove(existing_peer_id);
+					MappedPeers::<T>::insert(peer_id, ());
 				}
 			} else {
 				ensure!(
-					!MappedPeers::<T>::contains_key(&peer_id),
+					!MappedPeers::<T>::contains_key(peer_id),
 					Error::<T>::AccountPeerMappingOverlap
 				);
-				MappedPeers::<T>::insert(&peer_id, ());
+				MappedPeers::<T>::insert(peer_id, ());
 			}
 
 			AccountPeerMapping::<T>::insert(&account_id, (peer_id, port, ip_address));
@@ -697,7 +695,7 @@ pub mod pallet {
 			let validator_id = <ValidatorIdOf<T> as IsType<
 				<T as frame_system::Config>::AccountId,
 			>>::from_ref(&account_id);
-			NodeCFEVersion::<T>::try_mutate(&validator_id, |current_version| {
+			NodeCFEVersion::<T>::try_mutate(validator_id, |current_version| {
 				if *current_version != new_version {
 					Self::deposit_event(Event::CFEVersionUpdated {
 						account_id: validator_id.clone(),
@@ -1051,7 +1049,7 @@ impl<T: Config> Pallet<T> {
 		Bond::<T>::set(new_bond);
 
 		new_authorities.iter().enumerate().for_each(|(index, account_id)| {
-			AuthorityIndex::<T>::insert(&new_epoch, account_id, index as AuthorityCount);
+			AuthorityIndex::<T>::insert(new_epoch, account_id, index as AuthorityCount);
 			EpochHistory::<T>::activate_epoch(account_id, new_epoch);
 			T::Bonder::update_bond(account_id, EpochHistory::<T>::active_bond(account_id));
 		});
@@ -1367,8 +1365,8 @@ pub struct DeletePeerMapping<T: Config>(PhantomData<T>);
 /// account by burning it.
 impl<T: Config> OnKilledAccount<T::AccountId> for DeletePeerMapping<T> {
 	fn on_killed_account(account_id: &T::AccountId) {
-		if let Some((peer_id, _, _)) = AccountPeerMapping::<T>::take(&account_id) {
-			MappedPeers::<T>::remove(&peer_id);
+		if let Some((peer_id, _, _)) = AccountPeerMapping::<T>::take(account_id) {
+			MappedPeers::<T>::remove(peer_id);
 			Pallet::<T>::deposit_event(Event::PeerIdUnregistered(account_id.clone(), peer_id));
 		}
 	}
@@ -1417,9 +1415,9 @@ impl<T: Config> StakeHandler for UpdateBackupMapping<T> {
 			if amount.is_zero() {
 				if backups.remove(validator_id).is_none() {
 					#[cfg(not(test))]
-					log::warn!("Tried to remove non-existent ValidatorId {:?}..", validator_id);
+					log::warn!("Tried to remove non-existent ValidatorId {validator_id:?}..");
 					#[cfg(test)]
-					panic!("Tried to remove non-existent ValidatorId {:?}..", validator_id);
+					panic!("Tried to remove non-existent ValidatorId {validator_id:?}..");
 				}
 			} else {
 				backups.insert(validator_id.clone(), amount);

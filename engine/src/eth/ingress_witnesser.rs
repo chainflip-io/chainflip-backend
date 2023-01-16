@@ -6,14 +6,15 @@ use cf_chains::eth::Ethereum;
 use cf_primitives::chains::assets::eth;
 use futures::Stream;
 use pallet_cf_ingress_egress::IngressWitness;
-use sp_core::H160;
 use state_chain_runtime::EthereumInstance;
 use tokio_stream::StreamExt;
 use web3::types::Transaction;
 
 use crate::{
+	eth::{core_h160, core_h256},
 	state_chain_observer::client::extrinsic_api::ExtrinsicApi,
 	witnesser::{
+		checkpointing::{start_checkpointing_for, WitnessedUntil},
 		epoch_witnesser::{self, should_end_witnessing},
 		EpochStart,
 	},
@@ -65,9 +66,9 @@ where
 pub async fn start<StateChainClient>(
 	eth_dual_rpc: EthDualRpcClient,
 	epoch_starts_receiver: async_broadcast::Receiver<EpochStart<Ethereum>>,
-	eth_monitor_ingress_receiver: tokio::sync::mpsc::UnboundedReceiver<H160>,
+	eth_monitor_ingress_receiver: tokio::sync::mpsc::UnboundedReceiver<sp_core::H160>,
 	state_chain_client: Arc<StateChainClient>,
-	monitored_addresses: BTreeSet<H160>,
+	monitored_addresses: BTreeSet<sp_core::H160>,
 	logger: &slog::Logger,
 ) -> anyhow::Result<()>
 where
@@ -86,8 +87,22 @@ where
 			let eth_http_rpc = eth_dual_rpc.http_client.clone();
 			let state_chain_client = state_chain_client.clone();
 			async move {
+
+				let (witnessed_until, witnessed_until_sender) = start_checkpointing_for("eth-ingress", &logger).await;
+
+				// Don't witness for past epochs
+				if epoch_start.epoch_index < witnessed_until.epoch_index {
+					return Ok((monitored_addresses, eth_monitor_ingress_receiver));
+				}
+
+				let from_block = if witnessed_until.epoch_index == epoch_start.epoch_index {
+					std::cmp::max(epoch_start.block_number, witnessed_until.block_number)
+				} else {
+					epoch_start.block_number
+				};
+
 				let safe_ws_tx_stream = block_transactions_stream_from_head_stream(
-					epoch_start.block_number,
+					from_block,
 					safe_ws_head_stream(
 						eth_ws_rpc.subscribe_new_heads().await?,
 						ETH_BLOCK_SAFETY_MARGIN,
@@ -99,7 +114,7 @@ where
 				.await?;
 
 				let safe_http_tx_stream = block_transactions_stream_from_head_stream(
-					epoch_start.block_number,
+					from_block,
 					safe_polling_http_head_stream(
 						eth_http_rpc.clone(),
 						HTTP_POLL_INTERVAL,
@@ -137,17 +152,17 @@ where
 								.iter()
 								.filter_map(|tx| {
 									let to_addr = tx.to?;
-									if monitored_addresses.contains(&to_addr) {
+									if monitored_addresses.contains(&core_h160(to_addr)) {
 										Some((tx, to_addr))
 									} else {
 										None
 									}
 								}).map(|(tx, to_addr)| {
 									IngressWitness {
-										ingress_address: to_addr,
+										ingress_address: core_h160(to_addr),
 										asset: eth::Asset::Eth,
 										amount: tx.value.as_u128(),
-										tx_id: tx.hash
+										tx_id: core_h256(tx.hash)
 									}
 								})
 								.collect::<Vec<IngressWitness<Ethereum>>>();
@@ -168,6 +183,14 @@ where
 										)
 										.await;
 								}
+
+								witnessed_until_sender
+									.send(WitnessedUntil {
+										epoch_index: epoch_start.epoch_index,
+										block_number: block_with_txs.block_number,
+									})
+									.unwrap();
+
 						},
 						else => break,
 					};

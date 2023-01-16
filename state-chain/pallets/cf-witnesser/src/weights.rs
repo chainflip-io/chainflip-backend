@@ -48,23 +48,23 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Witnesser ExtraCallData (r:1 w:0)
 	fn witness_at_epoch() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(41_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(9 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
+		Weight::from_ref_time(41_000_000)
+			.saturating_add(T::DbWeight::get().reads(9))
+			.saturating_add(T::DbWeight::get().writes(2))
 	}
 	// Storage: Witnesser Votes (r:0 w:1)
 	fn remove_storage_items(n: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(2_563_000 as Weight)
+		Weight::from_ref_time(2_563_000)
 			// Standard Error: 4_000
-			.saturating_add((981_000 as Weight).saturating_mul(n as Weight))
-			.saturating_add(T::DbWeight::get().writes((1 as Weight).saturating_mul(n as Weight)))
+			.saturating_add((Weight::from_ref_time(981_000).saturating_mul(n as u64))
+			.saturating_add(T::DbWeight::get().writes(1).saturating_mul(n as u64)))
 	}
 	// Storage: Witnesser EpochsToCull (r:1 w:0)
 	fn on_idle_with_nothing_to_remove() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(3_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
+		Weight::from_ref_time(3_000_000)
+			.saturating_add(T::DbWeight::get().reads(1))
 	}
 }
 
@@ -80,22 +80,22 @@ impl WeightInfo for () {
 	// Storage: Witnesser ExtraCallData (r:1 w:0)
 	fn witness_at_epoch() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(41_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(9 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+		Weight::from_ref_time(41_000_000)
+			.saturating_add(RocksDbWeight::get().reads(9))
+			.saturating_add(RocksDbWeight::get().writes(2))
 	}
 	// Storage: Witnesser Votes (r:0 w:1)
 	fn remove_storage_items(n: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(2_563_000 as Weight)
+		Weight::from_ref_time(2_563_000)
 			// Standard Error: 4_000
-			.saturating_add((981_000 as Weight).saturating_mul(n as Weight))
-			.saturating_add(RocksDbWeight::get().writes((1 as Weight).saturating_mul(n as Weight)))
+			.saturating_add(Weight::from_ref_time(981_000).saturating_mul(n as u64))
+			.saturating_add(RocksDbWeight::get().writes(1).saturating_mul(n as u64))
 	}
 	// Storage: Witnesser EpochsToCull (r:1 w:0)
 	fn on_idle_with_nothing_to_remove() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(3_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
+		Weight::from_ref_time(3_000_000)
+			.saturating_add(RocksDbWeight::get().reads(1))
 	}
 }

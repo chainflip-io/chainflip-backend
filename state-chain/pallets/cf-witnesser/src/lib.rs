@@ -52,19 +52,19 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The outer Origin needs to be compatible with this pallet's Origin
-		type Origin: From<RawOrigin>;
+		type RuntimeOrigin: From<RawOrigin>;
 
 		/// For registering and verifying the account role.
 		type AccountRoleRegistry: AccountRoleRegistry<Self>;
 
 		/// The overarching call type.
-		type Call: Member
+		type RuntimeCall: Member
 			+ Parameter
 			+ From<frame_system::Call<Self>>
-			+ UnfilteredDispatchable<Origin = <Self as Config>::Origin>
+			+ UnfilteredDispatchable<RuntimeOrigin = <Self as Config>::RuntimeOrigin>
 			+ GetDispatchInfo
 			+ WitnessDataExtraction;
 
@@ -128,7 +128,8 @@ pub mod pallet {
 			};
 
 			let max_deletions_count_remaining = remaining_weight
-				.checked_div(T::WeightInfo::remove_storage_items(1))
+				.ref_time()
+				.checked_div(T::WeightInfo::remove_storage_items(1).ref_time())
 				.unwrap_or_default();
 
 			if max_deletions_count_remaining == 0 {
@@ -136,7 +137,7 @@ pub mod pallet {
 			}
 
 			let mut deletions_count_remaining = max_deletions_count_remaining;
-			let mut used_weight: Weight = 0;
+			let mut used_weight: Weight = Weight::zero();
 			let (mut cleared_votes, mut cleared_extra_call_data, mut cleared_call_hash) =
 				(false, false, false);
 
@@ -251,7 +252,7 @@ pub mod pallet {
 		)]
 		pub fn witness_at_epoch(
 			origin: OriginFor<T>,
-			mut call: Box<<T as Config>::Call>,
+			mut call: Box<<T as Config>::RuntimeCall>,
 			epoch_index: EpochIndex,
 		) -> DispatchResultWithPostInfo {
 			let who = T::AccountRoleRegistry::ensure_validator(origin)?;
@@ -309,7 +310,7 @@ pub mod pallet {
 					*vote = true;
 
 					if let Some(extra_data) = extra_data {
-						ExtraCallData::<T>::append(epoch_index, &call_hash, extra_data);
+						ExtraCallData::<T>::append(epoch_index, call_hash, extra_data);
 					}
 
 					Ok(vote_count)
@@ -322,9 +323,9 @@ pub mod pallet {
 			// been witnessed in the past.
 			if num_votes == success_threshold_from_share_count(num_authorities) as usize &&
 				(last_expired_epoch..=current_epoch)
-					.all(|epoch| CallHashExecuted::<T>::get(epoch, &call_hash).is_none())
+					.all(|epoch| CallHashExecuted::<T>::get(epoch, call_hash).is_none())
 			{
-				if let Some(mut extra_data) = ExtraCallData::<T>::get(epoch_index, &call_hash) {
+				if let Some(mut extra_data) = ExtraCallData::<T>::get(epoch_index, call_hash) {
 					call.combine_and_inject(&mut extra_data)
 				}
 				let _result = call
@@ -342,7 +343,7 @@ pub mod pallet {
 							error: e.error,
 						});
 					});
-				CallHashExecuted::<T>::insert(epoch_index, &call_hash, ());
+				CallHashExecuted::<T>::insert(epoch_index, call_hash, ());
 			}
 			Ok(().into())
 		}
@@ -353,7 +354,7 @@ pub mod pallet {
 	pub type Origin = RawOrigin;
 
 	/// The raw origin enum for this pallet.
-	#[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode, TypeInfo)]
+	#[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode, TypeInfo, MaxEncodedLen)]
 	pub enum RawOrigin {
 		HistoricalActiveEpochWitnessThreshold,
 		CurrentEpochWitnessThreshold,

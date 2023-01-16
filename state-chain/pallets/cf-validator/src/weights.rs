@@ -54,47 +54,47 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Validator BlocksPerEpoch (r:1 w:1)
 	fn set_blocks_for_epoch() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(17_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(17_000_000)
+			.saturating_add(T::DbWeight::get().reads(2))
+			.saturating_add(T::DbWeight::get().writes(1))
 	}
 	// Storage: Validator BackupRewardNodePercentage (r:0 w:1)
 	fn set_backup_reward_node_percentage() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(15_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(15_000_000)
+			.saturating_add(T::DbWeight::get().writes(1))
 	}
 	// Storage: Validator CurrentAuthorities (r:1 w:0)
 	// Storage: Validator AuthoritySetMinSize (r:0 w:1)
 	fn set_authority_set_min_size() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(14_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(14_000_000)
+			.saturating_add(T::DbWeight::get().reads(1))
+			.saturating_add(T::DbWeight::get().writes(1))
 	}
 	// Storage: AccountRoles AccountRoles (r:1 w:0)
 	// Storage: Validator NodeCFEVersion (r:1 w:1)
 	fn cfe_version() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(20_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(20_000_000)
+			.saturating_add(T::DbWeight::get().reads(2))
+			.saturating_add(T::DbWeight::get().writes(1))
 	}
 	// Storage: AccountRoles AccountRoles (r:1 w:0)
 	// Storage: Validator AccountPeerMapping (r:1 w:1)
 	// Storage: Validator MappedPeers (r:1 w:1)
 	fn register_peer_id() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(58_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(3 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
+		Weight::from_ref_time(58_000_000)
+			.saturating_add(T::DbWeight::get().reads(3))
+			.saturating_add(T::DbWeight::get().writes(2))
 	}
 	// Storage: Validator VanityNames (r:1 w:1)
 	fn set_vanity_name() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(14_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(14_000_000)
+			.saturating_add(T::DbWeight::get().reads(1))
+			.saturating_add(T::DbWeight::get().writes(1))
 	}
 	// Storage: Validator HistoricalAuthorities (r:1 w:0)
 	// Storage: Validator HistoricalActiveEpochs (r:3 w:3)
@@ -105,11 +105,11 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Reputation Reputations (r:5 w:5)
 	fn expire_epoch(a: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(0 as Weight)
+		Weight::from_ref_time(0)
 			// Standard Error: 348_000
-			.saturating_add((11_775_000 as Weight).saturating_mul(a as Weight))
-			.saturating_add(T::DbWeight::get().reads((3 as Weight).saturating_mul(a as Weight)))
-			.saturating_add(T::DbWeight::get().writes((3 as Weight).saturating_mul(a as Weight)))
+			.saturating_add(Weight::from_ref_time(11_775_000).saturating_mul(a as u64))
+			.saturating_add(T::DbWeight::get().reads(3).saturating_mul(a as u64))
+			.saturating_add(T::DbWeight::get().writes(3).saturating_mul(a as u64))
 	}
 	// Storage: System Digest (r:1 w:0)
 	// Storage: unknown [0xac56b214382d772914db46f9c4a772eda7d533d63f25202626db56d673717380] (r:1 w:1)
@@ -119,11 +119,11 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Reputation Suspensions (r:1 w:1)
 	fn missed_authorship_slots(m: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(20_867_000 as Weight)
+		Weight::from_ref_time(20_867_000)
 			// Standard Error: 420_000
-			.saturating_add((5_461_000 as Weight).saturating_mul(m as Weight))
-			.saturating_add(T::DbWeight::get().reads(7 as Weight))
-			.saturating_add(T::DbWeight::get().writes(4 as Weight))
+			.saturating_add(Weight::from_ref_time(5_461_000).saturating_mul(m as u64))
+			.saturating_add(T::DbWeight::get().reads(7))
+			.saturating_add(T::DbWeight::get().writes(4))
 	}
 	// Storage: Validator EpochExpiries (r:1 w:0)
 	// Storage: System Digest (r:1 w:0)
@@ -133,8 +133,8 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Validator BlocksPerEpoch (r:1 w:0)
 	fn rotation_phase_idle() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(11_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(6 as Weight))
+		Weight::from_ref_time(11_000_000)
+			.saturating_add(T::DbWeight::get().reads(6))
 	}
 	// Storage: Environment CurrentSystemState (r:1 w:0)
 	// Storage: Validator CurrentRotationPhase (r:1 w:1)
@@ -153,18 +153,18 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumVault KeygenResolutionPendingSince (r:0 w:1)
 	fn start_authority_rotation(a: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(1_189_000 as Weight)
+		Weight::from_ref_time(1_189_000)
 			// Standard Error: 211_000
-			.saturating_add((28_441_000 as Weight).saturating_mul(a as Weight))
-			.saturating_add(T::DbWeight::get().reads(21 as Weight))
-			.saturating_add(T::DbWeight::get().reads((6 as Weight).saturating_mul(a as Weight)))
-			.saturating_add(T::DbWeight::get().writes(4 as Weight))
+			.saturating_add(Weight::from_ref_time(28_441_000).saturating_mul(a as u64))
+			.saturating_add(T::DbWeight::get().reads(21))
+			.saturating_add(T::DbWeight::get().reads(6).saturating_mul(a as u64))
+			.saturating_add(T::DbWeight::get().writes(4))
 	}
 	// Storage: Environment CurrentSystemState (r:1 w:0)
 	fn start_authority_rotation_in_maintenance_mode() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(2_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
+		Weight::from_ref_time(2_000_000)
+			.saturating_add(T::DbWeight::get().reads(1))
 	}
 	// Storage: Validator EpochExpiries (r:1 w:0)
 	// Storage: System Digest (r:1 w:0)
@@ -173,10 +173,10 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumVault PendingVaultRotation (r:1 w:0)
 	fn rotation_phase_vaults_rotating_pending(a: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(11_972_000 as Weight)
+		Weight::from_ref_time(11_972_000)
 			// Standard Error: 4_000
-			.saturating_add((32_000 as Weight).saturating_mul(a as Weight))
-			.saturating_add(T::DbWeight::get().reads(5 as Weight))
+			.saturating_add(Weight::from_ref_time(32_000).saturating_mul(a as u64))
+			.saturating_add(T::DbWeight::get().reads(5))
 	}
 	// Storage: Validator EpochExpiries (r:1 w:0)
 	// Storage: System Digest (r:1 w:0)
@@ -185,11 +185,11 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumVault PendingVaultRotation (r:1 w:0)
 	fn rotation_phase_vaults_rotating_success(a: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(21_744_000 as Weight)
+		Weight::from_ref_time(21_744_000)
 			// Standard Error: 8_000
-			.saturating_add((50_000 as Weight).saturating_mul(a as Weight))
-			.saturating_add(T::DbWeight::get().reads(5 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+			.saturating_add(Weight::from_ref_time(50_000).saturating_mul(a as u64))
+			.saturating_add(T::DbWeight::get().reads(5))
+			.saturating_add(T::DbWeight::get().writes(1))
 	}
 	// Storage: Validator EpochExpiries (r:1 w:0)
 	// Storage: System Digest (r:1 w:0)
@@ -201,11 +201,13 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumVault KeygenResolutionPendingSince (r:0 w:1)
 	fn rotation_phase_vaults_rotating_failure(o: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(60_124_000 as Weight)
+		Weight::from_ref_time(60_124_000)
 			// Standard Error: 98_000
-			.saturating_add((184_000 as Weight).saturating_mul(o as Weight))
-			.saturating_add(T::DbWeight::get().reads(7 as Weight))
-			.saturating_add(T::DbWeight::get().writes(4 as Weight))
+			.saturating_add(Weight::from_ref_time(184_000)
+.saturating_mul(o as u64)
+)
+			.saturating_add(T::DbWeight::get().reads(7))
+			.saturating_add(T::DbWeight::get().writes(4))
 	}
 	// Storage: Validator EpochExpiries (r:1 w:0)
 	// Storage: System Digest (r:1 w:0)
@@ -213,18 +215,20 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Validator CurrentRotationPhase (r:1 w:0)
 	fn rotation_phase_vaults_rotated(a: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(9_735_000 as Weight)
+		Weight::from_ref_time(9_735_000)
 			// Standard Error: 5_000
-			.saturating_add((28_000 as Weight).saturating_mul(a as Weight))
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
+			.saturating_add(Weight::from_ref_time(28_000)
+.saturating_mul(a as u64)
+)
+			.saturating_add(T::DbWeight::get().reads(4))
 	}
 	// Storage: Validator CurrentAuthorities (r:1 w:0)
 	// Storage: Validator AuctionParameters (r:0 w:1)
 	fn set_auction_parameters() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(17_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(17_000_000)
+			.saturating_add(T::DbWeight::get().reads(1))
+			.saturating_add(T::DbWeight::get().writes(1))
 	}
 }
 
@@ -234,47 +238,47 @@ impl WeightInfo for () {
 	// Storage: Validator BlocksPerEpoch (r:1 w:1)
 	fn set_blocks_for_epoch() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(17_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(17_000_000)
+			.saturating_add(RocksDbWeight::get().reads(2))
+			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 	// Storage: Validator BackupRewardNodePercentage (r:0 w:1)
 	fn set_backup_reward_node_percentage() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(15_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(15_000_000)
+			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 	// Storage: Validator CurrentAuthorities (r:1 w:0)
 	// Storage: Validator AuthoritySetMinSize (r:0 w:1)
 	fn set_authority_set_min_size() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(14_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(14_000_000)
+			.saturating_add(RocksDbWeight::get().reads(1))
+			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 	// Storage: AccountRoles AccountRoles (r:1 w:0)
 	// Storage: Validator NodeCFEVersion (r:1 w:1)
 	fn cfe_version() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(20_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(20_000_000)
+			.saturating_add(RocksDbWeight::get().reads(2))
+			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 	// Storage: AccountRoles AccountRoles (r:1 w:0)
 	// Storage: Validator AccountPeerMapping (r:1 w:1)
 	// Storage: Validator MappedPeers (r:1 w:1)
 	fn register_peer_id() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(58_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+		Weight::from_ref_time(58_000_000)
+			.saturating_add(RocksDbWeight::get().reads(3))
+			.saturating_add(RocksDbWeight::get().writes(2))
 	}
 	// Storage: Validator VanityNames (r:1 w:1)
 	fn set_vanity_name() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(14_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(14_000_000)
+			.saturating_add(RocksDbWeight::get().reads(1))
+			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 	// Storage: Validator HistoricalAuthorities (r:1 w:0)
 	// Storage: Validator HistoricalActiveEpochs (r:3 w:3)
@@ -285,11 +289,11 @@ impl WeightInfo for () {
 	// Storage: Reputation Reputations (r:5 w:5)
 	fn expire_epoch(a: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(0 as Weight)
+		Weight::from_ref_time(0)
 			// Standard Error: 348_000
-			.saturating_add((11_775_000 as Weight).saturating_mul(a as Weight))
-			.saturating_add(RocksDbWeight::get().reads((3 as Weight).saturating_mul(a as Weight)))
-			.saturating_add(RocksDbWeight::get().writes((3 as Weight).saturating_mul(a as Weight)))
+			.saturating_add(Weight::from_ref_time(11_775_000).saturating_mul(a as u64))
+			.saturating_add(RocksDbWeight::get().reads(3).saturating_mul(a as u64))
+			.saturating_add(RocksDbWeight::get().writes(3).saturating_mul(a as u64))
 	}
 	// Storage: System Digest (r:1 w:0)
 	// Storage: unknown [0xac56b214382d772914db46f9c4a772eda7d533d63f25202626db56d673717380] (r:1 w:1)
@@ -299,11 +303,11 @@ impl WeightInfo for () {
 	// Storage: Reputation Suspensions (r:1 w:1)
 	fn missed_authorship_slots(m: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(20_867_000 as Weight)
+		Weight::from_ref_time(20_867_000)
 			// Standard Error: 420_000
-			.saturating_add((5_461_000 as Weight).saturating_mul(m as Weight))
-			.saturating_add(RocksDbWeight::get().reads(7 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
+			.saturating_add(Weight::from_ref_time(5_461_000).saturating_mul(m as u64))
+			.saturating_add(RocksDbWeight::get().reads(7))
+			.saturating_add(RocksDbWeight::get().writes(4))
 	}
 	// Storage: Validator EpochExpiries (r:1 w:0)
 	// Storage: System Digest (r:1 w:0)
@@ -313,8 +317,8 @@ impl WeightInfo for () {
 	// Storage: Validator BlocksPerEpoch (r:1 w:0)
 	fn rotation_phase_idle() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(11_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(6 as Weight))
+		Weight::from_ref_time(11_000_000)
+			.saturating_add(RocksDbWeight::get().reads(6))
 	}
 	// Storage: Environment CurrentSystemState (r:1 w:0)
 	// Storage: Validator CurrentRotationPhase (r:1 w:1)
@@ -333,18 +337,20 @@ impl WeightInfo for () {
 	// Storage: EthereumVault KeygenResolutionPendingSince (r:0 w:1)
 	fn start_authority_rotation(a: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(1_189_000 as Weight)
+		Weight::from_ref_time(1_189_000)
 			// Standard Error: 211_000
-			.saturating_add((28_441_000 as Weight).saturating_mul(a as Weight))
-			.saturating_add(RocksDbWeight::get().reads(21 as Weight))
-			.saturating_add(RocksDbWeight::get().reads((6 as Weight).saturating_mul(a as Weight)))
-			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
+			.saturating_add(Weight::from_ref_time(28_441_000)
+.saturating_mul(a as u64)
+)
+			.saturating_add(RocksDbWeight::get().reads(21))
+			.saturating_add(RocksDbWeight::get().reads(6).saturating_mul(a as u64))
+			.saturating_add(RocksDbWeight::get().writes(4))
 	}
 	// Storage: Environment CurrentSystemState (r:1 w:0)
 	fn start_authority_rotation_in_maintenance_mode() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(2_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
+		Weight::from_ref_time(2_000_000)
+			.saturating_add(RocksDbWeight::get().reads(1))
 	}
 	// Storage: Validator EpochExpiries (r:1 w:0)
 	// Storage: System Digest (r:1 w:0)
@@ -353,10 +359,12 @@ impl WeightInfo for () {
 	// Storage: EthereumVault PendingVaultRotation (r:1 w:0)
 	fn rotation_phase_vaults_rotating_pending(a: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(11_972_000 as Weight)
+		Weight::from_ref_time(11_972_000)
 			// Standard Error: 4_000
-			.saturating_add((32_000 as Weight).saturating_mul(a as Weight))
-			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
+			.saturating_add(Weight::from_ref_time(32_000)
+.saturating_mul(a as u64)
+)
+			.saturating_add(RocksDbWeight::get().reads(5))
 	}
 	// Storage: Validator EpochExpiries (r:1 w:0)
 	// Storage: System Digest (r:1 w:0)
@@ -365,11 +373,13 @@ impl WeightInfo for () {
 	// Storage: EthereumVault PendingVaultRotation (r:1 w:0)
 	fn rotation_phase_vaults_rotating_success(a: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(21_744_000 as Weight)
+		Weight::from_ref_time(21_744_000)
 			// Standard Error: 8_000
-			.saturating_add((50_000 as Weight).saturating_mul(a as Weight))
-			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+			.saturating_add(Weight::from_ref_time(50_000)
+.saturating_mul(a as u64)
+)
+			.saturating_add(RocksDbWeight::get().reads(5))
+			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 	// Storage: Validator EpochExpiries (r:1 w:0)
 	// Storage: System Digest (r:1 w:0)
@@ -381,11 +391,13 @@ impl WeightInfo for () {
 	// Storage: EthereumVault KeygenResolutionPendingSince (r:0 w:1)
 	fn rotation_phase_vaults_rotating_failure(o: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(60_124_000 as Weight)
+		Weight::from_ref_time(60_124_000)
 			// Standard Error: 98_000
-			.saturating_add((184_000 as Weight).saturating_mul(o as Weight))
-			.saturating_add(RocksDbWeight::get().reads(7 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
+			.saturating_add(Weight::from_ref_time(184_000)
+.saturating_mul(o as u64)
+)
+			.saturating_add(RocksDbWeight::get().reads(7))
+			.saturating_add(RocksDbWeight::get().writes(4))
 	}
 	// Storage: Validator EpochExpiries (r:1 w:0)
 	// Storage: System Digest (r:1 w:0)
@@ -393,17 +405,19 @@ impl WeightInfo for () {
 	// Storage: Validator CurrentRotationPhase (r:1 w:0)
 	fn rotation_phase_vaults_rotated(a: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(9_735_000 as Weight)
+		Weight::from_ref_time(9_735_000)
 			// Standard Error: 5_000
-			.saturating_add((28_000 as Weight).saturating_mul(a as Weight))
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
+			.saturating_add(Weight::from_ref_time(28_000)
+.saturating_mul(a as u64)
+)
+			.saturating_add(RocksDbWeight::get().reads(4))
 	}
 	// Storage: Validator CurrentAuthorities (r:1 w:0)
 	// Storage: Validator AuctionParameters (r:0 w:1)
 	fn set_auction_parameters() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(17_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(17_000_000)
+			.saturating_add(RocksDbWeight::get().reads(1))
+			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 }

@@ -81,9 +81,9 @@ pub mod pallet {
 	pub trait Config: frame_system::Config {
 		/// Because we want to emit events when there is a config change during
 		/// an runtime upgrade
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 		/// Governance origin to secure extrinsic
-		type EnsureGovernance: EnsureOrigin<Self::Origin>;
+		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
 		/// Polkadot Vault Creation Apicall
 		#[cfg(feature = "ibiza")]
 		type CreatePolkadotVault: CreatePolkadotVault;

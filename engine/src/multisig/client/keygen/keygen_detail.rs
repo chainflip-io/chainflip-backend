@@ -455,8 +455,7 @@ mod tests {
 		));
 
 		// Now it is okay to distribute the shares
-
-		let _agg_pubkey: Point = coeff_commitments.iter().map(|(_idx, c)| c.commitments.0[0]).sum();
+		let _agg_pubkey: Point = coeff_commitments.values().map(|c| c.commitments.0[0]).sum();
 
 		let mut secret_shares = vec![];
 

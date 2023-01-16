@@ -55,7 +55,7 @@ impl DotRpcApi for DotRpcClient {
 		Ok(Box::pin(
 			self.online_client
 				.rpc()
-				.subscribe_finalized_blocks()
+				.subscribe_finalized_block_headers()
 				.await
 				.map_err(|e| anyhow!("Error initialising finalised head stream: {e}"))?
 				.map_err(|e| anyhow!("Error in finalised head stream: {e}")),
@@ -75,6 +75,7 @@ impl DotRpcApi for DotRpcClient {
 			.rpc()
 			.block(Some(hash))
 			.await
+			.map(|r| r.map(|r| r.block))
 			.map_err(|e| anyhow!("Failed to query for block with error: {e}"))
 	}
 
@@ -122,6 +123,6 @@ mod tests {
 		];
 
 		let tx_hash = dot_broadcaster.send(balances_signed_encoded_bytes).await.unwrap();
-		println!("Tx hash: {:?}", tx_hash);
+		println!("Tx hash: {tx_hash:?}");
 	}
 }

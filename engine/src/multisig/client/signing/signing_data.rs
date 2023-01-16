@@ -65,7 +65,7 @@ impl<P: ECPoint> Display for SigningData<P> {
 			SigningData::LocalSigStage3(x) => x.to_string(),
 			SigningData::VerifyLocalSigsStage4(x) => x.to_string(),
 		};
-		write!(f, "SigningData({})", inner)
+		write!(f, "SigningData({inner})")
 	}
 }
 

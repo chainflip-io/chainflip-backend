@@ -7,6 +7,7 @@ use crate::{
 	eth::rpc::EthDualRpcClient,
 	state_chain_observer::client::extrinsic_api::ExtrinsicApi,
 	witnesser::{
+		checkpointing::{start_checkpointing_for, WitnessedUntil},
 		epoch_witnesser::{self, should_end_witnessing},
 		EpochStart,
 	},
@@ -40,33 +41,56 @@ where
 			let eth_dual_rpc = eth_dual_rpc.clone();
 
 			async move {
-				let mut block_stream = block_events_stream_for_contract_from(
-					epoch_start.block_number,
-					&contract_witnesser,
-					eth_dual_rpc.clone(),
-					&logger,
-				)
-				.await?;
+				let contract_name = contract_witnesser.contract_name();
 
-				while let Some(block) = block_stream.next().await {
-					if should_end_witnessing::<Ethereum>(
-						end_witnessing_signal.clone(),
-						block.block_number,
+				let (witnessed_until, witnessed_until_sender) =
+					start_checkpointing_for(&contract_name, &logger).await;
+
+				// Witnessing is only done for current or new epochs
+				if epoch_start.epoch_index >= witnessed_until.epoch_index {
+					let from_block = if witnessed_until.epoch_index == epoch_start.epoch_index {
+						std::cmp::max(epoch_start.block_number, witnessed_until.block_number)
+					} else {
+						epoch_start.block_number
+					};
+
+					let mut block_stream = block_events_stream_for_contract_from(
+						from_block,
+						&contract_witnesser,
+						eth_dual_rpc.clone(),
 						&logger,
-					) {
-						break
-					}
+					)
+					.await?;
 
-					contract_witnesser
-						.handle_block_events(
-							epoch_start.epoch_index,
-							block.block_number,
-							block,
-							state_chain_client.clone(),
-							&eth_dual_rpc,
+					while let Some(block) = block_stream.next().await {
+						let block_number = block.block_number;
+
+						if should_end_witnessing::<Ethereum>(
+							end_witnessing_signal.clone(),
+							block_number,
 							&logger,
-						)
-						.await?;
+						) {
+							break
+						}
+
+						contract_witnesser
+							.handle_block_events(
+								epoch_start.epoch_index,
+								block_number,
+								block,
+								state_chain_client.clone(),
+								&eth_dual_rpc,
+								&logger,
+							)
+							.await?;
+
+						witnessed_until_sender
+							.send(WitnessedUntil {
+								epoch_index: epoch_start.epoch_index,
+								block_number,
+							})
+							.unwrap();
+					}
 				}
 				Ok(contract_witnesser)
 			}

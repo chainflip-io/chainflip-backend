@@ -1,5 +1,5 @@
 use cf_traits::Bid;
-use sp_runtime::helpers_128bit::multiply_by_rational;
+use sp_runtime::{helpers_128bit::multiply_by_rational_with_rounding, Rounding};
 use sp_std::{cmp::min, prelude::*};
 
 //TODO: The u128 is not big enough for some calculations (for example this one) which involve
@@ -44,10 +44,11 @@ where
 			let backup_stake = amount / QUANTISATION_FACTOR;
 			let reward = min(
 				average_authority_reward,
-				multiply_by_rational(
+				multiply_by_rational_with_rounding(
 					average_authority_reward.saturating_mul(backup_stake),
 					backup_stake,
 					bond,
+					Rounding::Down,
 				)
 				.unwrap()
 				.checked_div(bond)
@@ -69,7 +70,16 @@ where
 		rewards
 			.into_iter()
 			.map(|(id, reward)| {
-				(id, multiply_by_rational(reward, emissions_cap, total_rewards).unwrap_or_default())
+				(
+					id,
+					multiply_by_rational_with_rounding(
+						reward,
+						emissions_cap,
+						total_rewards,
+						sp_runtime::Rounding::Up,
+					)
+					.unwrap_or_default(),
+				)
 			})
 			.map(|(id, reward)| (id, (reward.saturating_mul(QUANTISATION_FACTOR)).into()))
 			.collect()

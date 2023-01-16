@@ -1,12 +1,12 @@
-use crate::{Call, EthereumInstance, Runtime};
+use crate::{EthereumInstance, Runtime, RuntimeCall};
 use codec::{Decode, Encode};
 use pallet_cf_witnesser::WitnessDataExtraction;
 use sp_std::{mem, prelude::*};
 
-impl WitnessDataExtraction for Call {
+impl WitnessDataExtraction for RuntimeCall {
 	fn extract(&mut self) -> Option<Vec<u8>> {
 		match self {
-			Call::EthereumChainTracking(pallet_cf_chain_tracking::Call::<
+			RuntimeCall::EthereumChainTracking(pallet_cf_chain_tracking::Call::<
 				Runtime,
 				EthereumInstance,
 			>::update_chain_state {
@@ -25,7 +25,7 @@ impl WitnessDataExtraction for Call {
 		}
 
 		match self {
-			Call::EthereumChainTracking(pallet_cf_chain_tracking::Call::<
+			RuntimeCall::EthereumChainTracking(pallet_cf_chain_tracking::Call::<
 				Runtime,
 				EthereumInstance,
 			>::update_chain_state {
@@ -56,7 +56,7 @@ impl WitnessDataExtraction for Call {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{Origin, Validator, Witnesser};
+	use crate::{RuntimeOrigin, Validator, Witnesser};
 	use cf_chains::{
 		eth::{Ethereum, TrackedData},
 		Chain,
@@ -70,12 +70,15 @@ mod tests {
 	const BLOCK_HEIGHT: u64 = 1_000;
 	const BASE_FEE: u128 = 40;
 
-	fn eth_chain_tracking_call_with_fee(priority_fee: <Ethereum as Chain>::ChainAmount) -> Call {
-		Call::EthereumChainTracking(
-			pallet_cf_chain_tracking::Call::<Runtime, EthereumInstance>::update_chain_state {
-				state: TrackedData { block_height: BLOCK_HEIGHT, base_fee: BASE_FEE, priority_fee },
-			},
-		)
+	fn eth_chain_tracking_call_with_fee(
+		priority_fee: <Ethereum as Chain>::ChainAmount,
+	) -> RuntimeCall {
+		RuntimeCall::EthereumChainTracking(pallet_cf_chain_tracking::Call::<
+			Runtime,
+			EthereumInstance,
+		>::update_chain_state {
+			state: TrackedData { block_height: BLOCK_HEIGHT, base_fee: BASE_FEE, priority_fee },
+		})
 	}
 
 	#[test]
@@ -134,7 +137,7 @@ mod tests {
 					index as u32,
 				);
 				assert_ok!(Witnesser::witness_at_epoch(
-					Origin::signed(authority_id),
+					RuntimeOrigin::signed(authority_id),
 					Box::new(calls[index].clone()),
 					current_epoch
 				));

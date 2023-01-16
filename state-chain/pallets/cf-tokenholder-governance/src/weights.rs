@@ -48,12 +48,14 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: TokenholderGovernance GovKeyUpdateAwaitingEnactment (r:0 w:1)
 	fn on_initialize_resolve_votes(a: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(0 as Weight)
+		Weight::from_ref_time(0)
 			// Standard Error: 44_000
-			.saturating_add((3_161_000 as Weight).saturating_mul(a as Weight))
-			.saturating_add(T::DbWeight::get().reads(5 as Weight))
-			.saturating_add(T::DbWeight::get().reads((1 as Weight).saturating_mul(a as Weight)))
-			.saturating_add(T::DbWeight::get().writes(3 as Weight))
+			.saturating_add(Weight::from_ref_time(3_161_000)
+.saturating_mul(a as u64)
+)
+			.saturating_add(T::DbWeight::get().reads(5))
+			.saturating_add(T::DbWeight::get().reads(1).saturating_mul(a as u64))
+			.saturating_add(T::DbWeight::get().writes(3))
 	}
 	// Storage: TokenholderGovernance Proposals (r:1 w:0)
 	// Storage: TokenholderGovernance GovKeyUpdateAwaitingEnactment (r:1 w:1)
@@ -77,9 +79,9 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumThresholdSigner RequestCallback (r:0 w:1)
 	fn on_initialize_execute_proposal() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(46_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(17 as Weight))
-			.saturating_add(T::DbWeight::get().writes(10 as Weight))
+		Weight::from_ref_time(46_000_000)
+			.saturating_add(T::DbWeight::get().reads(17))
+			.saturating_add(T::DbWeight::get().writes(10))
 	}
 	// Storage: Flip Account (r:1 w:1)
 	// Storage: Flip TotalIssuance (r:1 w:1)
@@ -87,18 +89,20 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: TokenholderGovernance Proposals (r:0 w:1)
 	fn submit_proposal() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(16_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes(4 as Weight))
+		Weight::from_ref_time(16_000_000)
+			.saturating_add(T::DbWeight::get().reads(2))
+			.saturating_add(T::DbWeight::get().writes(4))
 	}
 	// Storage: TokenholderGovernance Backers (r:1 w:1)
 	fn back_proposal(a: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(1_808_000 as Weight)
+		Weight::from_ref_time(1_808_000)
 			// Standard Error: 5_000
-			.saturating_add((25_000 as Weight).saturating_mul(a as Weight))
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+			.saturating_add(Weight::from_ref_time(25_000)
+.saturating_mul(a as u64)
+)
+			.saturating_add(T::DbWeight::get().reads(1))
+			.saturating_add(T::DbWeight::get().writes(1))
 	}
 }
 
@@ -113,12 +117,14 @@ impl WeightInfo for () {
 	// Storage: TokenholderGovernance GovKeyUpdateAwaitingEnactment (r:0 w:1)
 	fn on_initialize_resolve_votes(a: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(0 as Weight)
+		Weight::from_ref_time(0)
 			// Standard Error: 44_000
-			.saturating_add((3_161_000 as Weight).saturating_mul(a as Weight))
-			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
-			.saturating_add(RocksDbWeight::get().reads((1 as Weight).saturating_mul(a as Weight)))
-			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
+			.saturating_add(Weight::from_ref_time(3_161_000)
+.saturating_mul(a as u64)
+)
+			.saturating_add(RocksDbWeight::get().reads(5))
+			.saturating_add(RocksDbWeight::get().reads(1).saturating_mul(a as u64))
+			.saturating_add(RocksDbWeight::get().writes(3))
 	}
 	// Storage: TokenholderGovernance Proposals (r:1 w:0)
 	// Storage: TokenholderGovernance GovKeyUpdateAwaitingEnactment (r:1 w:1)
@@ -142,9 +148,9 @@ impl WeightInfo for () {
 	// Storage: EthereumThresholdSigner RequestCallback (r:0 w:1)
 	fn on_initialize_execute_proposal() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(46_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(17 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(10 as Weight))
+		Weight::from_ref_time(46_000_000)
+			.saturating_add(RocksDbWeight::get().reads(17))
+			.saturating_add(RocksDbWeight::get().writes(10))
 	}
 	// Storage: Flip Account (r:1 w:1)
 	// Storage: Flip TotalIssuance (r:1 w:1)
@@ -152,17 +158,19 @@ impl WeightInfo for () {
 	// Storage: TokenholderGovernance Proposals (r:0 w:1)
 	fn submit_proposal() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(16_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
+		Weight::from_ref_time(16_000_000)
+			.saturating_add(RocksDbWeight::get().reads(2))
+			.saturating_add(RocksDbWeight::get().writes(4))
 	}
 	// Storage: TokenholderGovernance Backers (r:1 w:1)
 	fn back_proposal(a: u32, ) -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(1_808_000 as Weight)
+		Weight::from_ref_time(1_808_000)
 			// Standard Error: 5_000
-			.saturating_add((25_000 as Weight).saturating_mul(a as Weight))
-			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+			.saturating_add(Weight::from_ref_time(25_000)
+.saturating_mul(a as u64)
+)
+			.saturating_add(RocksDbWeight::get().reads(1))
+			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 }
