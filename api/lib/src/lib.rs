@@ -1,7 +1,7 @@
 use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
 use cf_chains::eth::H256;
-use cf_primitives::AccountRole;
+use cf_primitives::{AccountRole, Asset, ForeignChainAddress};
 use futures::{FutureExt, Stream, StreamExt};
 use pallet_cf_validator::MAX_LENGTH_FOR_VANITY_NAME;
 use rand_legacy::FromEntropy;
@@ -11,8 +11,6 @@ use sp_finality_grandpa::AuthorityId as GrandpaId;
 use state_chain_runtime::opaque::SessionKeys;
 
 use custom_rpc::CustomApiClient;
-
-use cf_primitives::{Asset, ForeignChainAddress};
 
 pub mod primitives {
 	pub use cf_primitives::*;

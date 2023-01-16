@@ -1,16 +1,12 @@
-use crate::threshold_signing::{
-	DotThresholdSigner, EthKeyComponents, EthThresholdSigner, ThresholdSigner,
-};
-
-use crate::threshold_signing::DotKeyComponents;
-use cf_chains::dot::PolkadotSignature;
-use state_chain_runtime::PolkadotInstance;
-
 use super::*;
-use cf_chains::{eth::SchnorrVerificationComponents, ChainCrypto};
-use cf_primitives::{AccountRole, CeremonyId, EpochIndex, FlipBalance};
 
-use cf_primitives::TxId;
+use crate::threshold_signing::{
+	DotKeyComponents, DotThresholdSigner, EthKeyComponents, EthThresholdSigner, KeyUtils,
+	ThresholdSigner,
+};
+use cf_chains::{dot::PolkadotSignature, eth::SchnorrVerificationComponents, ChainCrypto};
+
+use cf_primitives::{AccountRole, CeremonyId, EpochIndex, FlipBalance, TxId};
 
 use cf_traits::{AccountRoleRegistry, EpochInfo};
 use codec::Encode;
@@ -19,11 +15,10 @@ use pallet_cf_staking::{ClaimAmount, MinimumStake};
 use pallet_cf_validator::RotationPhase;
 use sp_std::collections::btree_set::BTreeSet;
 use state_chain_runtime::{
-	AccountRoles, Authorship, EthereumInstance, RuntimeEvent, RuntimeOrigin, Weight,
+	AccountRoles, Authorship, EthereumInstance, PolkadotInstance, RuntimeEvent, RuntimeOrigin,
+	Weight,
 };
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
-
-use crate::threshold_signing::KeyUtils;
 
 // TODO: Can we use the actual events here?
 // Events from ethereum contract

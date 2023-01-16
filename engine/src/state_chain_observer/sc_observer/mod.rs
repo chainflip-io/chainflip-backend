@@ -2,14 +2,14 @@
 mod tests;
 
 use anyhow::{anyhow, Context};
-use cf_chains::{eth::Ethereum, ChainCrypto};
-use cf_primitives::{BlockNumber, CeremonyId};
+use cf_chains::{eth::Ethereum, ChainCrypto, dot, Polkadot};
+use cf_primitives::{BlockNumber, CeremonyId, PolkadotAccountId};
 use futures::{FutureExt, Stream, StreamExt};
 use pallet_cf_vaults::KeygenError;
 use slog::o;
-use sp_core::{Hasher, H256};
+use sp_core::{Hasher, H256, H160};
 use sp_runtime::{traits::Keccak256, AccountId32};
-use state_chain_runtime::{AccountId, CfeSettings, EthereumInstance};
+use state_chain_runtime::{AccountId, CfeSettings, EthereumInstance, PolkadotInstance};
 use std::{
 	collections::BTreeSet,
 	sync::{
@@ -19,10 +19,6 @@ use std::{
 	time::Duration,
 };
 use tokio::sync::{mpsc::UnboundedSender, watch};
-
-use cf_chains::{dot, Polkadot};
-
-use state_chain_runtime::PolkadotInstance;
 
 use crate::{
 	eth::{rpc::EthRpcApi, EthBroadcaster},
@@ -37,13 +33,8 @@ use crate::{
 	state_chain_observer::client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi},
 	task_scope::{task_scope, Scope},
 	witnesser::EpochStart,
+    dot::{rpc::DotRpcApi, DotBroadcaster}
 };
-
-use crate::dot::{rpc::DotRpcApi, DotBroadcaster};
-
-use sp_core::H160;
-
-use cf_primitives::PolkadotAccountId;
 
 async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 	scope: &Scope<'a, anyhow::Error>,

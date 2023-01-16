@@ -39,12 +39,12 @@ use cf_traits::{
 	RuntimeUpgrade, VaultTransitionHandler,
 };
 use codec::{Decode, Encode};
-use frame_support::dispatch::DispatchError;
+
 use pallet_cf_chain_tracking::ChainState;
 use scale_info::TypeInfo;
 
 use frame_support::{
-	dispatch::{DispatchErrorWithPostInfo, PostDispatchInfo},
+	dispatch::{DispatchError, DispatchErrorWithPostInfo, PostDispatchInfo},
 	traits::Get,
 };
 

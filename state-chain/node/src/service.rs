@@ -1,19 +1,19 @@
 //! Service and ServiceFactory implementation. Specialized wrapper over substrate service.
 
-use custom_rpc::{CustomApiServer, CustomRpc};
+use custom_rpc::{CustomApiServer, CustomRpc, PoolsApiServer, PoolsRpc};
 use jsonrpsee::RpcModule;
 use sc_client_api::BlockBackend;
 use sc_consensus_aura::{ImportQueueParams, SlotProportion, StartAuraParams};
+use sp_consensus_aura::sr25519::AuthorityPair as AuraPair;
+
 pub use sc_executor::NativeElseWasmExecutor;
 use sc_finality_grandpa::SharedVoterState;
 use sc_keystore::LocalKeystore;
 use sc_service::{error::Error as ServiceError, Configuration, TaskManager};
 use sc_telemetry::{Telemetry, TelemetryWorker};
-use sp_consensus_aura::sr25519::AuthorityPair as AuraPair;
+
 use state_chain_runtime::{self, opaque::Block, RuntimeApi};
 use std::{marker::PhantomData, sync::Arc, time::Duration};
-
-use custom_rpc::{PoolsApiServer, PoolsRpc};
 
 // Our native executor instance.
 pub struct ExecutorDispatch;

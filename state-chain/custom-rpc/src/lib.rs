@@ -1,5 +1,9 @@
 use cf_chains::eth::SigData;
-use jsonrpsee::{core::RpcResult, proc_macros::rpc, types::error::CallError};
+use jsonrpsee::{
+	core::RpcResult,
+	proc_macros::rpc,
+	types::error::{CallError, ErrorCode},
+};
 use pallet_cf_governance::GovCallHash;
 use sc_client_api::HeaderBackend;
 use serde::{Deserialize, Serialize};
@@ -15,8 +19,6 @@ use std::{marker::PhantomData, sync::Arc};
 
 #[allow(unused)]
 use state_chain_runtime::{Asset, AssetAmount, ExchangeRate};
-
-use jsonrpsee::types::error::ErrorCode;
 
 #[derive(Serialize, Deserialize)]
 pub struct RpcAccountInfo {

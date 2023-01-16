@@ -5,6 +5,7 @@ use anyhow::Context;
 
 use cf_primitives::AccountRole;
 use chainflip_engine::{
+	dot::{rpc::DotRpcClient, DotBroadcaster},
 	eth::{
 		self, build_broadcast_channel, key_manager::KeyManager, rpc::EthDualRpcClient,
 		stake_manager::StakeManager, EthBroadcaster,
@@ -25,8 +26,6 @@ use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use clap::Parser;
 use futures::FutureExt;
 use pallet_cf_validator::SemVer;
-
-use chainflip_engine::dot::{rpc::DotRpcClient, DotBroadcaster};
 use web3::types::U256;
 
 #[tokio::main]

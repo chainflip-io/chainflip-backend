@@ -4,14 +4,12 @@ use cf_chains::{
 	eth::{Ethereum, Transaction},
 	ChainCrypto,
 };
-use cf_primitives::AccountRole;
+use cf_primitives::{AccountRole, PolkadotAccountId};
 use frame_system::Phase;
 use futures::{FutureExt, StreamExt};
 use mockall::predicate::{self, eq};
 use pallet_cf_broadcast::BroadcastAttemptId;
 use pallet_cf_vaults::Vault;
-
-use cf_primitives::PolkadotAccountId;
 
 use sp_core::{Hasher, H256};
 use sp_runtime::{traits::Keccak256, AccountId32, Digest};
@@ -20,6 +18,7 @@ use tokio::sync::watch;
 use web3::types::{Bytes, SignedTransaction};
 
 use crate::{
+	dot::{rpc::MockDotRpcApi, DotBroadcaster},
 	eth::{
 		rpc::{EthWsRpcClient, MockEthRpcApi},
 		EthBroadcaster,
@@ -35,8 +34,6 @@ use crate::{
 	task_scope::task_scope,
 	witnesser::EpochStart,
 };
-
-use crate::dot::{rpc::MockDotRpcApi, DotBroadcaster};
 
 fn test_header(number: u32) -> Header {
 	Header {
@@ -86,26 +83,24 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 			}))
 		});
 
-	{
-		state_chain_client
-			.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
-				state_chain_runtime::Runtime,
-				state_chain_runtime::PolkadotInstance,
-			>>()
-			.with(eq(initial_block_hash), eq(initial_epoch))
-			.once()
-			.return_once(move |_, _| {
-				Ok(Some(Vault { public_key: Default::default(), active_from_block: 80 }))
-			});
+	state_chain_client
+		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
+			state_chain_runtime::Runtime,
+			state_chain_runtime::PolkadotInstance,
+		>>()
+		.with(eq(initial_block_hash), eq(initial_epoch))
+		.once()
+		.return_once(move |_, _| {
+			Ok(Some(Vault { public_key: Default::default(), active_from_block: 80 }))
+		});
 
-		state_chain_client
+	state_chain_client
 			.expect_storage_value::<pallet_cf_environment::PolkadotVaultAccountId<
 				state_chain_runtime::Runtime,
 			>>()
 			.with(eq(initial_block_hash))
 			.once()
 			.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
-	}
 
 	let eth_multisig_client = MockMultisigClientApi::new();
 	let dot_multisig_client = MockMultisigClientApi::new();
@@ -218,29 +213,27 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 			}))
 		});
 
-	{
-		state_chain_client
-			.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
-				state_chain_runtime::Runtime,
-				state_chain_runtime::PolkadotInstance,
-			>>()
-			.with(eq(initial_block_hash), eq(active_epoch))
-			.once()
-			.return_once(move |_, _| {
-				Ok(Some(Vault {
-					public_key: Default::default(),
-					active_from_block: current_epoch_from_block_dot,
-				}))
-			});
+	state_chain_client
+		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
+			state_chain_runtime::Runtime,
+			state_chain_runtime::PolkadotInstance,
+		>>()
+		.with(eq(initial_block_hash), eq(active_epoch))
+		.once()
+		.return_once(move |_, _| {
+			Ok(Some(Vault {
+				public_key: Default::default(),
+				active_from_block: current_epoch_from_block_dot,
+			}))
+		});
 
-		state_chain_client
-				.expect_storage_value::<pallet_cf_environment::PolkadotVaultAccountId<
-					state_chain_runtime::Runtime,
-				>>()
-				.with(eq(initial_block_hash))
-				.once()
-				.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
-	}
+	state_chain_client
+		.expect_storage_value::<pallet_cf_environment::PolkadotVaultAccountId<
+			state_chain_runtime::Runtime,
+		>>()
+		.with(eq(initial_block_hash))
+		.once()
+		.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
 
 	state_chain_client
 		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
@@ -256,29 +249,27 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 			}))
 		});
 
-	{
-		state_chain_client
-			.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
-				state_chain_runtime::Runtime,
-				state_chain_runtime::PolkadotInstance,
-			>>()
-			.with(eq(initial_block_hash), eq(current_epoch))
-			.once()
-			.return_once(move |_, _| {
-				Ok(Some(Vault {
-					public_key: Default::default(),
-					active_from_block: current_epoch_from_block_dot,
-				}))
-			});
+	state_chain_client
+		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
+			state_chain_runtime::Runtime,
+			state_chain_runtime::PolkadotInstance,
+		>>()
+		.with(eq(initial_block_hash), eq(current_epoch))
+		.once()
+		.return_once(move |_, _| {
+			Ok(Some(Vault {
+				public_key: Default::default(),
+				active_from_block: current_epoch_from_block_dot,
+			}))
+		});
 
-		state_chain_client
-			.expect_storage_value::<pallet_cf_environment::PolkadotVaultAccountId<
-				state_chain_runtime::Runtime,
-			>>()
-			.with(eq(initial_block_hash))
-			.once()
-			.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
-	}
+	state_chain_client
+		.expect_storage_value::<pallet_cf_environment::PolkadotVaultAccountId<
+			state_chain_runtime::Runtime,
+		>>()
+		.with(eq(initial_block_hash))
+		.once()
+		.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
 
 	// No blocks in the stream
 	let sc_block_stream = tokio_stream::iter(vec![]);
@@ -395,26 +386,24 @@ async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
 			}))
 		});
 
-	{
-		state_chain_client
-			.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
-				state_chain_runtime::Runtime,
-				state_chain_runtime::PolkadotInstance,
-			>>()
-			.with(eq(initial_block_hash), eq(3))
-			.once()
-			.return_once(move |_, _| {
-				Ok(Some(Vault { public_key: Default::default(), active_from_block: 80 }))
-			});
+	state_chain_client
+		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
+			state_chain_runtime::Runtime,
+			state_chain_runtime::PolkadotInstance,
+		>>()
+		.with(eq(initial_block_hash), eq(3))
+		.once()
+		.return_once(move |_, _| {
+			Ok(Some(Vault { public_key: Default::default(), active_from_block: 80 }))
+		});
 
-		state_chain_client
-			.expect_storage_value::<pallet_cf_environment::PolkadotVaultAccountId<
-				state_chain_runtime::Runtime,
-			>>()
-			.with(eq(initial_block_hash))
-			.once()
-			.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
-	}
+	state_chain_client
+		.expect_storage_value::<pallet_cf_environment::PolkadotVaultAccountId<
+			state_chain_runtime::Runtime,
+		>>()
+		.with(eq(initial_block_hash))
+		.once()
+		.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
 
 	let sc_block_stream = tokio_stream::iter(vec![]);
 
@@ -525,29 +514,27 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 			}))
 		});
 
-	{
-		state_chain_client
-			.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
-				state_chain_runtime::Runtime,
-				state_chain_runtime::PolkadotInstance,
-			>>()
-			.with(eq(initial_block_hash), eq(initial_epoch))
-			.once()
-			.return_once(move |_, _| {
-				Ok(Some(Vault {
-					public_key: Default::default(),
-					active_from_block: initial_epoch_from_block_dot,
-				}))
-			});
+	state_chain_client
+		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
+			state_chain_runtime::Runtime,
+			state_chain_runtime::PolkadotInstance,
+		>>()
+		.with(eq(initial_block_hash), eq(initial_epoch))
+		.once()
+		.return_once(move |_, _| {
+			Ok(Some(Vault {
+				public_key: Default::default(),
+				active_from_block: initial_epoch_from_block_dot,
+			}))
+		});
 
-		state_chain_client
-			.expect_storage_value::<pallet_cf_environment::PolkadotVaultAccountId<
-				state_chain_runtime::Runtime,
-			>>()
-			.with(eq(initial_block_hash))
-			.once()
-			.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
-	}
+	state_chain_client
+		.expect_storage_value::<pallet_cf_environment::PolkadotVaultAccountId<
+			state_chain_runtime::Runtime,
+		>>()
+		.with(eq(initial_block_hash))
+		.once()
+		.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
 
 	let empty_block_header = test_header(20);
 	let new_epoch_block_header = test_header(21);
@@ -587,28 +574,26 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 			}))
 		});
 
-	{
-		state_chain_client
-			.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
-				state_chain_runtime::Runtime,
-				state_chain_runtime::PolkadotInstance,
-			>>()
-			.with(eq(new_epoch_block_header_hash), eq(new_epoch))
-			.once()
-			.return_once(move |_, _| {
-				Ok(Some(Vault {
-					public_key: Default::default(),
-					active_from_block: initial_epoch_from_block_dot,
-				}))
-			});
-		state_chain_client
-		.expect_storage_value::<pallet_cf_environment::PolkadotVaultAccountId<
+	state_chain_client
+		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
 			state_chain_runtime::Runtime,
+			state_chain_runtime::PolkadotInstance,
 		>>()
-		.with(eq(new_epoch_block_header_hash))
+		.with(eq(new_epoch_block_header_hash), eq(new_epoch))
 		.once()
-		.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
-	}
+		.return_once(move |_, _| {
+			Ok(Some(Vault {
+				public_key: Default::default(),
+				active_from_block: initial_epoch_from_block_dot,
+			}))
+		});
+	state_chain_client
+	.expect_storage_value::<pallet_cf_environment::PolkadotVaultAccountId<
+		state_chain_runtime::Runtime,
+	>>()
+	.with(eq(new_epoch_block_header_hash))
+	.once()
+	.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
 
 	state_chain_client.expect_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<state_chain_runtime::Runtime>>()
 		.with(eq(new_epoch_block_header_hash), eq(5), eq(account_id.clone()))
@@ -729,26 +714,24 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 			}))
 		});
 
-	{
-		state_chain_client
-			.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
-				state_chain_runtime::Runtime,
-				state_chain_runtime::PolkadotInstance,
-			>>()
-			.with(eq(initial_block_hash), eq(initial_epoch))
-			.once()
-			.return_once(move |_, _| {
-				Ok(Some(Vault { public_key: Default::default(), active_from_block: 20 }))
-			});
+	state_chain_client
+		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
+			state_chain_runtime::Runtime,
+			state_chain_runtime::PolkadotInstance,
+		>>()
+		.with(eq(initial_block_hash), eq(initial_epoch))
+		.once()
+		.return_once(move |_, _| {
+			Ok(Some(Vault { public_key: Default::default(), active_from_block: 20 }))
+		});
 
-		state_chain_client
-			.expect_storage_value::<pallet_cf_environment::PolkadotVaultAccountId<
-				state_chain_runtime::Runtime,
-			>>()
-			.with(eq(initial_block_hash))
-			.once()
-			.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
-	}
+	state_chain_client
+		.expect_storage_value::<pallet_cf_environment::PolkadotVaultAccountId<
+			state_chain_runtime::Runtime,
+		>>()
+		.with(eq(initial_block_hash))
+		.once()
+		.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
 
 	let empty_block_header = test_header(20);
 	let new_epoch_block_header = test_header(21);
@@ -788,26 +771,24 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 			}))
 		});
 
-	{
-		state_chain_client
-			.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
-				state_chain_runtime::Runtime,
-				state_chain_runtime::PolkadotInstance,
-			>>()
-			.with(eq(new_epoch_block_header_hash), eq(new_epoch))
-			.once()
-			.return_once(move |_, _| {
-				Ok(Some(Vault { public_key: Default::default(), active_from_block: 80 }))
-			});
+	state_chain_client
+		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
+			state_chain_runtime::Runtime,
+			state_chain_runtime::PolkadotInstance,
+		>>()
+		.with(eq(new_epoch_block_header_hash), eq(new_epoch))
+		.once()
+		.return_once(move |_, _| {
+			Ok(Some(Vault { public_key: Default::default(), active_from_block: 80 }))
+		});
 
-		state_chain_client
-			.expect_storage_value::<pallet_cf_environment::PolkadotVaultAccountId<
-				state_chain_runtime::Runtime,
-			>>()
-			.with(eq(new_epoch_block_header_hash))
-			.once()
-			.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
-	}
+	state_chain_client
+		.expect_storage_value::<pallet_cf_environment::PolkadotVaultAccountId<
+			state_chain_runtime::Runtime,
+		>>()
+		.with(eq(new_epoch_block_header_hash))
+		.once()
+		.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
 
 	state_chain_client.expect_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<state_chain_runtime::Runtime>>()
 		.with(eq(new_epoch_block_header_hash), eq(new_epoch), eq(account_id.clone()))
@@ -930,26 +911,24 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 			}))
 		});
 
-	{
-		state_chain_client
-			.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
-				state_chain_runtime::Runtime,
-				state_chain_runtime::PolkadotInstance,
-			>>()
-			.with(eq(initial_block_hash), eq(initial_epoch))
-			.once()
-			.return_once(move |_, _| {
-				Ok(Some(Vault { public_key: Default::default(), active_from_block: 20 }))
-			});
+	state_chain_client
+		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
+			state_chain_runtime::Runtime,
+			state_chain_runtime::PolkadotInstance,
+		>>()
+		.with(eq(initial_block_hash), eq(initial_epoch))
+		.once()
+		.return_once(move |_, _| {
+			Ok(Some(Vault { public_key: Default::default(), active_from_block: 20 }))
+		});
 
-		state_chain_client
-			.expect_storage_value::<pallet_cf_environment::PolkadotVaultAccountId<
-				state_chain_runtime::Runtime,
-			>>()
-			.with(eq(initial_block_hash))
-			.once()
-			.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
-	}
+	state_chain_client
+		.expect_storage_value::<pallet_cf_environment::PolkadotVaultAccountId<
+			state_chain_runtime::Runtime,
+		>>()
+		.with(eq(initial_block_hash))
+		.once()
+		.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
 
 	let empty_block_header = test_header(20);
 	let new_epoch_block_header = test_header(21);
@@ -990,26 +969,24 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 			}))
 		});
 
-	{
-		state_chain_client
-			.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
-				state_chain_runtime::Runtime,
-				state_chain_runtime::PolkadotInstance,
-			>>()
-			.with(eq(new_epoch_block_header_hash), eq(new_epoch))
-			.once()
-			.return_once(move |_, _| {
-				Ok(Some(Vault { public_key: Default::default(), active_from_block: 80 }))
-			});
+	state_chain_client
+		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
+			state_chain_runtime::Runtime,
+			state_chain_runtime::PolkadotInstance,
+		>>()
+		.with(eq(new_epoch_block_header_hash), eq(new_epoch))
+		.once()
+		.return_once(move |_, _| {
+			Ok(Some(Vault { public_key: Default::default(), active_from_block: 80 }))
+		});
 
-		state_chain_client
-				.expect_storage_value::<pallet_cf_environment::PolkadotVaultAccountId<
-					state_chain_runtime::Runtime,
-				>>()
-				.with(eq(new_epoch_block_header_hash))
-				.once()
-				.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
-	}
+	state_chain_client
+			.expect_storage_value::<pallet_cf_environment::PolkadotVaultAccountId<
+				state_chain_runtime::Runtime,
+			>>()
+			.with(eq(new_epoch_block_header_hash))
+			.once()
+			.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
 
 	state_chain_client.expect_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<state_chain_runtime::Runtime>>()
 		.with(eq(new_epoch_block_header_hash), eq(4), eq(account_id.clone()))
@@ -1132,26 +1109,24 @@ async fn only_encodes_and_signs_when_specified() {
 			}))
 		});
 
-	{
-		state_chain_client
-			.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
-				state_chain_runtime::Runtime,
-				state_chain_runtime::PolkadotInstance,
-			>>()
-			.with(eq(initial_block_hash), eq(initial_epoch))
-			.once()
-			.return_once(move |_, _| {
-				Ok(Some(Vault { public_key: Default::default(), active_from_block: 80 }))
-			});
+	state_chain_client
+		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
+			state_chain_runtime::Runtime,
+			state_chain_runtime::PolkadotInstance,
+		>>()
+		.with(eq(initial_block_hash), eq(initial_epoch))
+		.once()
+		.return_once(move |_, _| {
+			Ok(Some(Vault { public_key: Default::default(), active_from_block: 80 }))
+		});
 
-		state_chain_client
-			.expect_storage_value::<pallet_cf_environment::PolkadotVaultAccountId<
-				state_chain_runtime::Runtime,
-			>>()
-			.with(eq(initial_block_hash))
-			.once()
-			.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
-	}
+	state_chain_client
+		.expect_storage_value::<pallet_cf_environment::PolkadotVaultAccountId<
+			state_chain_runtime::Runtime,
+		>>()
+		.with(eq(initial_block_hash))
+		.once()
+		.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
 
 	let block_header = test_header(21);
 	let sc_block_stream = tokio_stream::iter([block_header.clone()]);

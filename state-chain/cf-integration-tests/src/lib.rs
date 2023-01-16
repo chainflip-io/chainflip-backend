@@ -14,7 +14,6 @@ mod genesis;
 mod governance;
 mod new_epoch;
 mod staking;
-
 mod swapping;
 
 use frame_support::{assert_noop, assert_ok, traits::OnInitialize};

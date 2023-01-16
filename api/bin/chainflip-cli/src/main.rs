@@ -1,15 +1,12 @@
 #![feature(absolute_path)]
 use std::path::PathBuf;
 
-use api::primitives::{AccountRole, ClaimAmount, Hash};
+use api::primitives::{AccountRole, Asset, ClaimAmount, Hash};
 use chainflip_api as api;
 use clap::Parser;
 use settings::{CLICommandLineOptions, CLISettings};
 
-use crate::settings::{LiquidityProviderSubcommands, RelayerSubcommands};
-use api::primitives::Asset;
-
-use crate::settings::{Claim, CliCommand::*};
+use crate::settings::{Claim, CliCommand::*, LiquidityProviderSubcommands, RelayerSubcommands};
 use anyhow::{anyhow, Result};
 use utilities::clean_eth_address;
 

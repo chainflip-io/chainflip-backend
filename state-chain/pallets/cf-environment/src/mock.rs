@@ -1,13 +1,15 @@
 use crate::{self as pallet_cf_environment, cfe};
-use cf_chains::dot::POLKADOT_METADATA;
-use cf_chains::{dot::api::CreatePolkadotVault, ApiCall, Chain, ChainCrypto, Polkadot};
+use cf_chains::{
+	dot::{api::CreatePolkadotVault, POLKADOT_METADATA},
+	ApiCall, Chain, ChainCrypto, Polkadot,
+};
 
 use cf_primitives::BroadcastId;
-use cf_traits::mocks::ensure_origin_mock::NeverFailingOriginCheck;
-use cf_traits::{Broadcaster, VaultKeyWitnessedHandler};
+use cf_traits::{
+	mocks::ensure_origin_mock::NeverFailingOriginCheck, Broadcaster, VaultKeyWitnessedHandler,
+};
 
 use frame_support::parameter_types;
-use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -38,7 +40,7 @@ parameter_types! {
 	pub const SS58Prefix: u8 = 42;
 }
 
-impl system::Config for Test {
+impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
@@ -145,9 +147,9 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			cfe_settings: CFE_SETTINGS,
 			flip_token_address: [0u8; 20],
 			eth_usdc_address: [0x2; 20],
-		
+
 			polkadot_vault_account_id: None,
-		
+
 			polkadot_network_metadata: POLKADOT_METADATA,
 		},
 	};

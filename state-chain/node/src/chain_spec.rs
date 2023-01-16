@@ -9,19 +9,17 @@ use state_chain_runtime::{
 	chainflip::Offence, opaque::SessionKeys, AccountId, AccountRolesConfig, AuraConfig,
 	BlockNumber, CfeSettings, EmissionsConfig, EnvironmentConfig, EthereumThresholdSignerConfig,
 	EthereumVaultConfig, FlipBalance, FlipConfig, GenesisConfig, GovernanceConfig, GrandpaConfig,
-	ReputationConfig, SessionConfig, StakingConfig, SystemConfig, ValidatorConfig, WASM_BINARY,
+	PolkadotThresholdSignerConfig, PolkadotVaultConfig, ReputationConfig, SessionConfig, Signature,
+	StakingConfig, SystemConfig, ValidatorConfig, WASM_BINARY,
 };
 
 use common::FLIPPERINOS_PER_FLIP;
-
-use state_chain_runtime::{PolkadotThresholdSignerConfig, PolkadotVaultConfig};
 
 use std::{env, marker::PhantomData};
 use utilities::clean_eth_address;
 
 use sp_core::{sr25519, Pair, Public};
 use sp_runtime::traits::{IdentifyAccount, Verify};
-use state_chain_runtime::Signature;
 
 pub mod common;
 pub mod perseverance;
