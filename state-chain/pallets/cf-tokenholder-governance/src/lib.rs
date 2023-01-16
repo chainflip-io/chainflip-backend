@@ -48,8 +48,9 @@ pub mod pallet {
 			AccountId = <Self as frame_system::Config>::AccountId,
 			Balance = Self::Amount,
 		>;
-		/// Transaction broadcaster for configured destination chain.
+		/// Broadcasts the comm key to Ethereum
 		type CommKeyBroadcaster: BroadcastComKey<EthAddress = Address>;
+		/// Broadcasts the gov key to any supported chain.
 		type AnyChainGovKeyBroadcaster: BroadcastAnyChainGovKey;
 		/// Benchmarking weights.
 		type WeightInfo: WeightInfo;
