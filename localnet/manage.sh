@@ -73,14 +73,7 @@ build() {
     fi
   fi
   echo $COMMIT_HASH >$LOCALNET_INIT_DIR/secrets/.hash
-  echo
-  read -p "🏖  What release would you like to use? [sandstorm / ibiza] (default: ibiza)?: " RELEASE
-  RELEASE=${RELEASE:-"ibiza"}
-  if [[ "$RELEASE" == "sandstorm" ]]; then
-    APT_REPO="deb https://${APT_REPO_USERNAME}:${APT_REPO_PASSWORD}@apt.aws.chainflip.xyz/ci/${COMMIT_HASH}/ focal main"
-  else
-    APT_REPO="deb https://${APT_REPO_USERNAME}:${APT_REPO_PASSWORD}@apt.aws.chainflip.xyz/ci/ibiza/${COMMIT_HASH}/ focal main"
-  fi
+  APT_REPO="deb https://${APT_REPO_USERNAME}:${APT_REPO_PASSWORD}@apt.aws.chainflip.xyz/ci/${COMMIT_HASH}/ focal main"
   echo
   echo "🏗 Building network"
 
