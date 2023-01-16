@@ -6,7 +6,6 @@ use cf_chains::{
 	dot::{api::CreatePolkadotVault, Polkadot, PolkadotAccountId, PolkadotIndex, PolkadotMetadata},
 	ChainCrypto,
 };
-use sp_core::sr25519;
 
 use cf_primitives::{Asset, EthereumAddress};
 pub use cf_traits::EthEnvironmentProvider;
@@ -69,6 +68,7 @@ pub mod cfe {
 #[frame_support::pallet]
 pub mod pallet {
 
+	use cf_chains::dot::PolkadotPublicKey;
 	use cf_primitives::{Asset, TxId};
 
 	use cf_traits::{Broadcaster, VaultKeyWitnessedHandler};
@@ -271,23 +271,20 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
-		// TODO: We can use the dot agg key now that the feature flag is removed?
 		#[allow(unused_variables)]
 		#[pallet::weight(0)]
 		pub fn create_polkadot_vault(
 			origin: OriginFor<T>,
-			dot_aggkey: [u8; 32],
+			dot_aggkey: PolkadotPublicKey,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
-			let key = dot_aggkey
-				.to_vec()
-				.try_into()
-				.expect("This should not fail since the size of vec is guaranteed to be 32");
 			T::PolkadotBroadcaster::threshold_sign_and_broadcast(
-				T::CreatePolkadotVault::new_unsigned(key),
+				T::CreatePolkadotVault::new_unsigned(dot_aggkey),
 			);
-			Self::deposit_event(Event::<T>::PolkadotVaultCreationCallInitiated { agg_key: key });
+			Self::deposit_event(Event::<T>::PolkadotVaultCreationCallInitiated {
+				agg_key: dot_aggkey,
+			});
 			Ok(().into())
 		}
 
@@ -307,32 +304,27 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
-		// TODO: Use actual types here now that feature flag removed
 		#[allow(unused_variables)]
 		#[pallet::weight(0)]
 		pub fn witness_polkadot_vault_creation(
 			origin: OriginFor<T>,
-			dot_pure_proxy_vault_key: [u8; 32],
-			dot_witnessed_aggkey: [u8; 32],
+			dot_pure_proxy_vault_key: PolkadotAccountId,
+			dot_witnessed_aggkey: PolkadotPublicKey,
 			tx_id: TxId,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
 			use cf_traits::VaultKeyWitnessedHandler;
-			use sp_runtime::{traits::IdentifyAccount, MultiSigner};
 
 			// Set Polkadot Pure Proxy Vault Account
-			let polkadot_vault_account_id =
-				MultiSigner::Sr25519(sr25519::Public(dot_pure_proxy_vault_key)).into_account();
-			PolkadotVaultAccountId::<T>::put(polkadot_vault_account_id.clone());
-			Self::deposit_event(Event::<T>::PolkadotVaultAccountSet { polkadot_vault_account_id });
+			PolkadotVaultAccountId::<T>::put(dot_pure_proxy_vault_key.clone());
+			Self::deposit_event(Event::<T>::PolkadotVaultAccountSet {
+				polkadot_vault_account_id: dot_pure_proxy_vault_key,
+			});
 
 			// Witness the agg_key rotation manually in the vaults pallet for polkadot
 			let dispatch_result = T::PolkadotVaultKeyWitnessedHandler::on_new_key_activated(
-				dot_witnessed_aggkey
-					.to_vec()
-					.try_into()
-					.expect("This should not fail since the size of vec is guaranteed to be 32"),
+				dot_witnessed_aggkey,
 				tx_id.block_number,
 				tx_id,
 			)?;
