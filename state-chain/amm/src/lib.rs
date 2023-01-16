@@ -24,13 +24,16 @@ use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 
 use cf_primitives::{
-	liquidity::{
-		AmountU256, FeeGrowthQ128F128, Liquidity, MintedLiquidity, PoolAsset, PoolAssetMap,
-		SqrtPriceQ64F96, Tick,
-	},
+	liquidity::{AmountU256, Liquidity, MintedLiquidity, PoolAssetMap, PoolSide, Tick},
 	AccountId, AmmRange,
 };
 use sp_core::{U256, U512};
+
+/// sqrt(Price) in amm exchange Pool. Q64.96 numerical type.
+pub type SqrtPriceQ64F96 = U256;
+
+/// Q128.128 numerical type use to record Fee.
+pub type FeeGrowthQ128F128 = U256;
 
 /// The minimum tick that may be passed to `sqrt_price_at_tick` computed from log base 1.0001 of
 /// 2**-128
@@ -104,7 +107,7 @@ impl Position {
 			.unwrap_or(u128::MAX);
 
 			// saturating is acceptable, it is on LPs to withdraw fees before you hit u128::MAX fees
-			current_fees_owned.saturating_add(new_fees_owed)
+			*current_fees_owned = current_fees_owned.saturating_add(new_fees_owed);
 		});
 		self.last_fee_growth_inside = fee_growth_inside;
 	}
@@ -132,7 +135,7 @@ pub struct TickInfo {
 }
 
 trait SwapDirection {
-	const INPUT_TICKER: PoolAsset;
+	const INPUT_TICKER: PoolSide;
 
 	/// The xy=k maths only works while the liquidity is constant, so this function returns the
 	/// closest (to the current) next tick/price where liquidity possibly changes. Note the
@@ -174,7 +177,7 @@ trait SwapDirection {
 
 pub struct BaseToPair {}
 impl SwapDirection for BaseToPair {
-	const INPUT_TICKER: PoolAsset = PoolAsset::Asset0;
+	const INPUT_TICKER: PoolSide = PoolSide::Asset0;
 
 	fn target_tick(
 		current_tick: Tick,
@@ -224,7 +227,7 @@ impl SwapDirection for BaseToPair {
 
 pub struct PairToBase {}
 impl SwapDirection for PairToBase {
-	const INPUT_TICKER: PoolAsset = PoolAsset::Asset1;
+	const INPUT_TICKER: PoolSide = PoolSide::Asset1;
 
 	fn target_tick(
 		current_tick: Tick,
@@ -279,7 +282,7 @@ pub enum MintError {
 	/// One of the start/end ticks of the range reached its maximum gross liquidity
 	MaximumGrossLiquidity,
 	/// The checking function failed during mint.
-	MintCheckFunctionFailed,
+	ShouldMintFunctionFailed,
 }
 
 #[derive(Debug)]
@@ -372,11 +375,6 @@ impl PoolState {
 		self.enabled
 	}
 
-	/// Gets the current sqrt-price of the pool
-	pub fn current_sqrt_price(&self) -> SqrtPriceQ64F96 {
-		self.current_sqrt_price
-	}
-
 	/// Gets the current price of the pool in Tick
 	pub fn current_tick(&self) -> Tick {
 		self.current_tick
@@ -402,7 +400,7 @@ impl PoolState {
 		lower_tick: Tick,
 		upper_tick: Tick,
 		minted_liquidity: Liquidity,
-		f: impl FnOnce(PoolAssetMap<AmountU256>) -> bool,
+		should_mint: impl FnOnce(PoolAssetMap<AmountU256>) -> bool,
 	) -> Result<PoolAssetMap<AmountU256>, MintError> {
 		if (lower_tick > upper_tick) || (lower_tick < MIN_TICK) && (upper_tick > MAX_TICK) {
 			return Err(MintError::InvalidTickRange)
@@ -470,7 +468,7 @@ impl PoolState {
 		let (amounts_required, current_liquidity_delta) =
 			self.liquidity_to_amounts::<true>(minted_liquidity, lower_tick, upper_tick);
 
-		if f(amounts_required) {
+		if should_mint(amounts_required) {
 			self.current_liquidity += current_liquidity_delta;
 			self.positions.insert((lp, lower_tick, upper_tick), position);
 			self.liquidity_map.insert(lower_tick, lower_info);
@@ -478,7 +476,7 @@ impl PoolState {
 
 			Ok(amounts_required)
 		} else {
-			Err(MintError::MintCheckFunctionFailed)
+			Err(MintError::ShouldMintFunctionFailed)
 		}
 	}
 
@@ -1044,7 +1042,7 @@ impl PoolState {
 				} else {
 					sqrt_price_q64f128 << (127u8 - most_signifcant_bit)
 				}
-				.as_u128(), // Conversion to u128 is safe as top 128 bits are always zero
+				.low_u128(), // Conversion to u128 is safe as top 128 bits are always zero
 			)
 		};
 

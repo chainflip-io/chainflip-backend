@@ -1,12 +1,10 @@
 use cf_primitives::{
-	AmmRange, AmountU256, Asset, AssetAmount, ForeignChainAddress, Liquidity, MintedLiquidity,
-	PoolAssetMap, SqrtPriceQ64F96, Tick,
+	AmmRange, Asset, AssetAmount, ForeignChainAddress, Liquidity, MintedLiquidity, PoolAssetMap,
+	SwapResult, Tick,
 };
 use frame_support::dispatch::DispatchError;
-use sp_core::U256;
 use sp_runtime::DispatchResult;
 use sp_std::vec::Vec;
-
 pub trait SwapIntentHandler {
 	type AccountId;
 	fn on_swap_ingress(
@@ -31,23 +29,20 @@ pub trait LpProvisioningApi {
 	) -> DispatchResult;
 }
 
-pub trait SwappingApi<Amount> {
+pub trait SwappingApi {
 	// Attempt to swap `from` asset to `to` asset.
 	// If OK, return (output_amount, input_asset_fee, stable_asset_fee)
-	fn swap(
-		from: Asset,
-		to: Asset,
-		input_amount: Amount,
-	) -> Result<(Amount, Amount, Amount), DispatchError>;
+	fn swap(from: Asset, to: Asset, input_amount: AssetAmount)
+		-> Result<SwapResult, DispatchError>;
 }
 
-impl SwappingApi<AmountU256> for () {
+impl SwappingApi for () {
 	fn swap(
 		_from: Asset,
 		_to: Asset,
-		_input_amount: AmountU256,
-	) -> Result<(AmountU256, AmountU256, AmountU256), DispatchError> {
-		Ok((U256::zero(), U256::zero(), U256::zero()))
+		_input_amount: AssetAmount,
+	) -> Result<SwapResult, DispatchError> {
+		Ok(Default::default())
 	}
 }
 
@@ -63,7 +58,7 @@ pub trait LiquidityPoolApi<Amount, AccountId> {
 		range: AmmRange,
 		liquidity_amount: Liquidity,
 		balance_check_callback: impl FnOnce(PoolAssetMap<Amount>) -> bool,
-	) -> Result<(PoolAssetMap<Amount>, Liquidity), DispatchError>;
+	) -> Result<PoolAssetMap<Amount>, DispatchError>;
 
 	/// Burn some liquidity from an exchange pool to withdraw assets.
 	fn burn(
@@ -71,9 +66,9 @@ pub trait LiquidityPoolApi<Amount, AccountId> {
 		asset: Asset,
 		range: AmmRange,
 		burnt_liquidity: Liquidity,
-	) -> Result<(PoolAssetMap<AmountU256>, PoolAssetMap<u128>), DispatchError>;
+	) -> Result<(PoolAssetMap<Amount>, PoolAssetMap<u128>), DispatchError>;
 
-	/// Collects fees yeilded by user's position into user's free balance.
+	/// Collects fees yielded by user's position into user's free balance.
 	fn collect(
 		lp: AccountId,
 		asset: Asset,
@@ -82,9 +77,6 @@ pub trait LiquidityPoolApi<Amount, AccountId> {
 
 	/// Returns the user's Minted liquidities and fees acrued for a specific pool.
 	fn minted_liquidity(lp: &AccountId, asset: &Asset) -> Vec<MintedLiquidity>;
-
-	/// Gets the current price of the pool in SqrtPrice
-	fn current_sqrt_price(asset: &Asset) -> Option<SqrtPriceQ64F96>;
 
 	/// Gets the current price of the pool in Tick
 	fn current_tick(asset: &Asset) -> Option<Tick>;

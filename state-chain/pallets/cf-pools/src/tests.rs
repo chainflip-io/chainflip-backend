@@ -1,6 +1,5 @@
 use crate::{mock::*, Error, Pools};
-use cf_amm::PoolState;
-use cf_primitives::{chains::assets::any::Asset, AmmRange, AmountU256, PoolAssetMap};
+use cf_primitives::{chains::assets::any::Asset, AmmRange, AssetAmount, PoolAssetMap};
 use cf_traits::LiquidityPoolApi;
 use frame_support::{assert_noop, assert_ok};
 
@@ -9,7 +8,7 @@ fn can_create_new_trading_pool() {
 	new_test_ext().execute_with(|| {
 		let range = AmmRange::new(-100, 100);
 		let asset = Asset::Eth;
-		let default_sqrt_price = PoolState::sqrt_price_at_tick(0);
+		let default_tick_price = 0;
 		// Pool does not exist.
 		assert!(Pools::<Test>::get(asset).is_none());
 		assert_noop!(
@@ -18,7 +17,7 @@ fn can_create_new_trading_pool() {
 				asset,
 				range,
 				1_000_000,
-				|_: PoolAssetMap<AmountU256>| true,
+				|_: PoolAssetMap<AssetAmount>| true,
 			),
 			Error::<Test>::PoolDoesNotExist,
 		);
@@ -26,7 +25,7 @@ fn can_create_new_trading_pool() {
 
 		// Fee must be between 0 - 50%
 		assert_noop!(
-			LiquidityPools::new_pool(RuntimeOrigin::root(), asset, 500_001u32, default_sqrt_price,),
+			LiquidityPools::new_pool(RuntimeOrigin::root(), asset, 500_001u32, default_tick_price,),
 			Error::<Test>::InvalidFeeAmount,
 		);
 
@@ -35,14 +34,14 @@ fn can_create_new_trading_pool() {
 			RuntimeOrigin::root(),
 			asset,
 			500_000u32,
-			default_sqrt_price,
+			default_tick_price,
 		));
 		assert_eq!(LiquidityPools::current_tick(&asset), Some(0));
 		System::assert_last_event(RuntimeEvent::LiquidityPools(
 			crate::Event::<Test>::NewPoolCreated {
 				asset,
 				fee_100th_bips: 500_000u32,
-				initial_sqrt_price: default_sqrt_price,
+				initial_tick_price: default_tick_price,
 			},
 		));
 		assert_ok!(LiquidityPools::mint(
@@ -50,12 +49,12 @@ fn can_create_new_trading_pool() {
 			asset,
 			range,
 			1_000_000,
-			|_: PoolAssetMap<AmountU256>| true
+			|_: PoolAssetMap<AssetAmount>| true
 		));
 
 		// Cannot create duplicate pool
 		assert_noop!(
-			LiquidityPools::new_pool(RuntimeOrigin::root(), asset, 0u32, default_sqrt_price,),
+			LiquidityPools::new_pool(RuntimeOrigin::root(), asset, 0u32, default_tick_price,),
 			Error::<Test>::PoolAlreadyExists
 		);
 	});
@@ -66,21 +65,21 @@ fn can_enable_disable_trading_pool() {
 	new_test_ext().execute_with(|| {
 		let range = AmmRange::new(-100, 100);
 		let asset = Asset::Eth;
-		let default_sqrt_price = PoolState::sqrt_price_at_tick(0);
+		let default_tick_price = 0;
 
 		// Create a new pool.
 		assert_ok!(LiquidityPools::new_pool(
 			RuntimeOrigin::root(),
 			asset,
 			500_000u32,
-			default_sqrt_price,
+			default_tick_price,
 		));
 		assert_ok!(LiquidityPools::mint(
 			LP.into(),
 			asset,
 			range,
 			1_000_000,
-			|_: PoolAssetMap<AmountU256>| true
+			|_: PoolAssetMap<AssetAmount>| true
 		));
 
 		// Disable the pool
@@ -95,7 +94,7 @@ fn can_enable_disable_trading_pool() {
 				asset,
 				range,
 				1_000_000,
-				|_: PoolAssetMap<AmountU256>| true
+				|_: PoolAssetMap<AssetAmount>| true
 			),
 			Error::<Test>::PoolDisabled
 		);
@@ -111,7 +110,7 @@ fn can_enable_disable_trading_pool() {
 			asset,
 			range,
 			1_000_000,
-			|_: PoolAssetMap<AmountU256>| true
+			|_: PoolAssetMap<AssetAmount>| true
 		));
 	});
 }

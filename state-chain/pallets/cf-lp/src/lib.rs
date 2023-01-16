@@ -10,8 +10,8 @@ use sp_std::cmp::{Ord, Ordering};
 
 use cf_chains::AnyChain;
 use cf_primitives::{
-	liquidity::PoolAssetMap, AmmRange, AmountU256, Asset, AssetAmount, ForeignChain,
-	ForeignChainAddress, IntentId, Liquidity, PoolAsset,
+	liquidity::PoolAssetMap, AmmRange, Asset, AssetAmount, ForeignChain, ForeignChainAddress,
+	IntentId, Liquidity, PoolSide,
 };
 use cf_traits::{
 	liquidity::LpProvisioningApi, AccountRoleRegistry, Chainflip, EgressApi, IngressApi,
@@ -53,7 +53,7 @@ pub mod pallet {
 		type EgressHandler: EgressApi<AnyChain>;
 
 		/// API to interface with exchange Pools
-		type LiquidityPoolApi: LiquidityPoolApi<AmountU256, Self::AccountId>;
+		type LiquidityPoolApi: LiquidityPoolApi<AssetAmount, Self::AccountId>;
 
 		/// For governance checks.
 		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
@@ -218,11 +218,11 @@ pub mod pallet {
 			let fees_collected = T::LiquidityPoolApi::collect(account_id.clone(), asset, range)?;
 
 			// Credit the user's asset into their account.
-			Pallet::<T>::credit(&account_id, asset, fees_collected[PoolAsset::Asset0])?;
+			Pallet::<T>::credit(&account_id, asset, fees_collected[PoolSide::Asset0])?;
 			Pallet::<T>::credit(
 				&account_id,
 				T::LiquidityPoolApi::STABLE_ASSET,
-				fees_collected[PoolAsset::Asset1],
+				fees_collected[PoolSide::Asset1],
 			)?;
 
 			Ok(())
@@ -278,17 +278,17 @@ impl<T: Config> Pallet<T> {
 		range: AmmRange,
 		liquidity_amount: Liquidity,
 	) -> DispatchResult {
-		let checking_function = |asset_map: PoolAssetMap<AmountU256>| {
+		let checking_function = |asset_map: PoolAssetMap<AssetAmount>| {
 			// Check user has enough funds for both assets
-			Self::check_can_withdraw(&account_id, asset, asset_map[PoolAsset::Asset0].as_u128()) &&
+			Self::check_can_withdraw(&account_id, asset, asset_map[PoolSide::Asset0]) &&
 				Self::check_can_withdraw(
 					&account_id,
 					T::LiquidityPoolApi::STABLE_ASSET,
-					asset_map[PoolAsset::Asset1].as_u128(),
+					asset_map[PoolSide::Asset1],
 				)
 		};
 
-		let (amount_debited, _) = T::LiquidityPoolApi::mint(
+		let amount_debited = T::LiquidityPoolApi::mint(
 			account_id.clone(),
 			asset,
 			range,
@@ -297,11 +297,11 @@ impl<T: Config> Pallet<T> {
 		)?;
 
 		// Debit the user's asset from their account.
-		Pallet::<T>::try_debit(&account_id, asset, amount_debited[PoolAsset::Asset0].as_u128())?;
+		Pallet::<T>::try_debit(&account_id, asset, amount_debited[PoolSide::Asset0])?;
 		Pallet::<T>::try_debit(
 			&account_id,
 			T::LiquidityPoolApi::STABLE_ASSET,
-			amount_debited[PoolAsset::Asset1].as_u128(),
+			amount_debited[PoolSide::Asset1],
 		)
 	}
 
@@ -318,16 +318,12 @@ impl<T: Config> Pallet<T> {
 		Pallet::<T>::credit(
 			&account_id,
 			asset,
-			amount_credited[PoolAsset::Asset0]
-				.as_u128()
-				.saturating_add(fees_collected[PoolAsset::Asset0]),
+			amount_credited[PoolSide::Asset0].saturating_add(fees_collected[PoolSide::Asset0]),
 		)?;
 		Pallet::<T>::credit(
 			&account_id,
 			T::LiquidityPoolApi::STABLE_ASSET,
-			amount_credited[PoolAsset::Asset1]
-				.as_u128()
-				.saturating_add(fees_collected[PoolAsset::Asset1]),
+			amount_credited[PoolSide::Asset1].saturating_add(fees_collected[PoolSide::Asset1]),
 		)?;
 
 		Ok(())

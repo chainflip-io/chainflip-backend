@@ -70,8 +70,7 @@ use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
 pub use cf_primitives::{
-	Asset, AssetAmount, BlockNumber, ExchangeRate, FlipBalance, ForeignChainAddress,
-	SqrtPriceQ64F96, Tick,
+	Asset, AssetAmount, BlockNumber, ExchangeRate, FlipBalance, ForeignChainAddress, Tick,
 };
 pub use cf_traits::{EpochInfo, EthEnvironmentProvider, QualifyNode, SessionKeysRegistered};
 
@@ -1011,13 +1010,6 @@ impl_runtime_apis! {
 
 	#[cfg(feature = "ibiza")]
 	impl pallet_cf_pools_runtime_api::PoolsApi<Block> for Runtime {
-		fn cf_pool_sqrt_price(
-			asset: Asset,
-		) -> Option<SqrtPriceQ64F96> {
-			use cf_traits::LiquidityPoolApi;
-			LiquidityPools::current_sqrt_price(&asset)
-		}
-
 		fn cf_pool_tick_price(
 			asset: Asset,
 		) -> Option<Tick> {

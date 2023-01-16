@@ -1,14 +1,13 @@
 use crate::{mock::*, FreeBalances};
 
-use cf_amm::PoolState;
 use cf_primitives::{
 	liquidity::AmmRange, AccountId, Asset, ForeignChainAddress, MintedLiquidity, PoolAssetMap,
+	SwapResult,
 };
 use cf_traits::{
 	mocks::system_state_info::MockSystemStateInfo, LiquidityPoolApi, SwappingApi, SystemStateInfo,
 };
 use frame_support::{assert_noop, assert_ok, error::BadOrigin};
-use sp_core::U256;
 
 #[test]
 fn only_liquidity_provider_can_manage_positions() {
@@ -135,12 +134,7 @@ fn cannot_manage_liquidity_during_maintenance() {
 		let range = AmmRange::new(-100, 100);
 		let asset = Asset::Eth;
 
-		assert_ok!(LiquidityPools::new_pool(
-			RuntimeOrigin::root(),
-			asset,
-			0,
-			PoolState::sqrt_price_at_tick(0),
-		));
+		assert_ok!(LiquidityPools::new_pool(RuntimeOrigin::root(), asset, 0, 0,));
 
 		// Activate maintenance mode
 		MockSystemStateInfo::set_maintenance(true);
@@ -178,12 +172,7 @@ fn can_mint_and_burn_liquidity() {
 		let range = AmmRange::new(-100, 100);
 		let asset = Asset::Eth;
 
-		assert_ok!(LiquidityPools::new_pool(
-			RuntimeOrigin::root(),
-			asset,
-			0,
-			PoolState::sqrt_price_at_tick(0),
-		));
+		assert_ok!(LiquidityPools::new_pool(RuntimeOrigin::root(), asset, 0, 0,));
 		System::reset_events();
 
 		// Can open a new position
@@ -376,12 +365,7 @@ fn mint_fails_with_insufficient_balance() {
 		let range = AmmRange::new(-100, 100);
 		let asset = Asset::Eth;
 
-		assert_ok!(LiquidityPools::new_pool(
-			RuntimeOrigin::root(),
-			asset,
-			0,
-			PoolState::sqrt_price_at_tick(0),
-		));
+		assert_ok!(LiquidityPools::new_pool(RuntimeOrigin::root(), asset, 0, 0,));
 		System::reset_events();
 
 		// Can open a new position
@@ -407,12 +391,7 @@ fn can_collect_fee() {
 		let asset = Asset::Eth;
 
 		// 50% fee
-		assert_ok!(LiquidityPools::new_pool(
-			RuntimeOrigin::root(),
-			asset,
-			500_000u32,
-			PoolState::sqrt_price_at_tick(0),
-		));
+		assert_ok!(LiquidityPools::new_pool(RuntimeOrigin::root(), asset, 500_000u32, 0,));
 
 		// Can open a new position
 		assert_ok!(LiquidityProvider::update_position(
@@ -435,8 +414,8 @@ fn can_collect_fee() {
 
 		// Trigger swap to acrue some fees
 		assert_eq!(
-			LiquidityPools::swap(Asset::Eth, Asset::Usdc, U256::from(1_000u128)),
-			Ok((U256::from(499u128), U256::from(500u128), U256::from(0u128)))
+			LiquidityPools::swap(Asset::Eth, Asset::Usdc, 1_000u128),
+			Ok(SwapResult::new(499u128, 500u128, 0u128))
 		);
 		assert_eq!(
 			LiquidityPools::minted_liquidity(&LP_ACCOUNT.into(), &asset),

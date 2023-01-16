@@ -8,7 +8,6 @@ use frame_support::{
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use sp_arithmetic::{helpers_128bit::multiply_by_rational_with_rounding, Rounding};
-use sp_core::U256;
 use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
 
 #[cfg(test)]
@@ -58,7 +57,7 @@ pub mod pallet {
 		/// API for handling asset egress.
 		type EgressHandler: EgressApi<AnyChain>;
 		/// An interface to the AMM api implementation.
-		type SwappingApi: SwappingApi<U256>;
+		type SwappingApi: SwappingApi;
 		/// The Weight information.
 		type WeightInfo: WeightInfo;
 	}
@@ -248,15 +247,15 @@ pub mod pallet {
 				})
 				.sum();
 
-			let (bundle_output, _, _) = T::SwappingApi::swap(from, to, bundle_total_input.into())
-				.unwrap_or((U256::zero(), U256::zero(), U256::zero()));
+			let swap_result =
+				T::SwappingApi::swap(from, to, bundle_total_input).unwrap_or_default();
 
 			if bundle_total_input > 0 {
 				for swap in swaps {
 					Self::deposit_event(Event::<T>::SwapExecuted { swap_id: swap.swap_id });
 					if let Some(swap_output) = multiply_by_rational_with_rounding(
 						swap.amount,
-						bundle_output.as_u128(),
+						swap_result.output_amount,
 						bundle_total_input,
 						Rounding::Down,
 					) {
@@ -276,7 +275,7 @@ pub mod pallet {
 					} else {
 						log::error!(
 							"Unable to calculate valid swap output for swap {:?}!",
-							&(swap.amount, bundle_total_input, bundle_output)
+							&(swap.amount, bundle_total_input, swap_result.output_amount)
 						);
 					}
 				}

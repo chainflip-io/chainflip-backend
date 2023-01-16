@@ -9,7 +9,6 @@ use state_chain_runtime::{
 	RuntimeCall, RuntimeEvent, RuntimeOrigin, Swapping, System, Validator, Weight, Witnesser,
 };
 
-use cf_amm::PoolState;
 use cf_primitives::{
 	chains::{
 		assets::{any, eth},
@@ -54,7 +53,7 @@ fn can_provide_liquidity_and_swap_assets() {
 			pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
 			any::Asset::Eth,
 			0u32,
-			PoolState::sqrt_price_at_tick(23_028),
+			23_028,
 		));
 
 		// Use governance to create a new Eth <-> USDC pool.
@@ -63,7 +62,7 @@ fn can_provide_liquidity_and_swap_assets() {
 			pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
 			any::Asset::Flip,
 			0u32,
-			PoolState::sqrt_price_at_tick(6_932),
+			6_932,
 		));
 
 		// Provide enough liquidity for the pools
@@ -240,7 +239,7 @@ fn swap_can_acrue_fees() {
 			pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
 			any::Asset::Eth,
 			500000u32,
-			PoolState::sqrt_price_at_tick(23_028),
+			23_028,
 		));
 
 		// Use governance to create a new Eth <-> USDC pool.
@@ -250,7 +249,7 @@ fn swap_can_acrue_fees() {
 			pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
 			any::Asset::Flip,
 			500000u32,
-			PoolState::sqrt_price_at_tick(6_932),
+			6_932,
 		));
 
 		// Provide enough liquidity for the pools

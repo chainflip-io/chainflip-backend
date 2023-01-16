@@ -763,7 +763,6 @@ dependencies = [
 name = "cf-integration-tests"
 version = "0.1.0"
 dependencies = [
- "cf-amm",
  "cf-chains",
  "cf-primitives",
  "cf-traits",
@@ -892,7 +891,6 @@ dependencies = [
  "log 0.4.17",
  "parity-scale-codec",
  "scale-info",
- "sp-core 7.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12)",
  "sp-io 7.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12)",
  "sp-runtime 7.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12)",
  "sp-std 5.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12)",
@@ -5661,7 +5659,6 @@ dependencies = [
 name = "pallet-cf-lp"
 version = "0.1.0"
 dependencies = [
- "cf-amm",
  "cf-chains",
  "cf-primitives",
  "cf-traits",

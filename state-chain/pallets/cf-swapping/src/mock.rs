@@ -1,6 +1,6 @@
 use crate::{self as pallet_cf_swapping, WeightInfo};
 use cf_chains::AnyChain;
-use cf_primitives::Asset;
+use cf_primitives::{Asset, AssetAmount, SwapResult};
 use cf_traits::{
 	mocks::{
 		egress_handler::MockEgressHandler, ensure_origin_mock::NeverFailingOriginCheck,
@@ -10,7 +10,7 @@ use cf_traits::{
 };
 use frame_support::{dispatch::DispatchError, parameter_types, weights::Weight};
 use frame_system as system;
-use sp_core::{H256, U256};
+use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
@@ -67,13 +67,13 @@ impl system::Config for Test {
 
 pub struct MockSwappingApi;
 
-impl SwappingApi<U256> for MockSwappingApi {
+impl SwappingApi for MockSwappingApi {
 	fn swap(
 		_from: Asset,
 		_to: Asset,
-		swap_input: U256,
-	) -> Result<(U256, U256, U256), DispatchError> {
-		Ok((swap_input, Default::default(), Default::default()))
+		swap_input: AssetAmount,
+	) -> Result<SwapResult, DispatchError> {
+		Ok(SwapResult::new(swap_input, Default::default(), Default::default()))
 	}
 }
 

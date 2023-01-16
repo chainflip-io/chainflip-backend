@@ -17,7 +17,7 @@ use std::{marker::PhantomData, sync::Arc};
 use state_chain_runtime::{Asset, AssetAmount, ExchangeRate};
 
 #[cfg(feature = "ibiza")]
-use cf_primitives::{SqrtPriceQ64F96, Tick};
+use cf_primitives::Tick;
 
 #[derive(Serialize, Deserialize)]
 pub struct RpcAccountInfo {
@@ -453,13 +453,6 @@ where
 #[cfg(feature = "ibiza")]
 #[rpc(server, client, namespace = "cf")]
 pub trait PoolsApi {
-	#[method(name = "pool_sqrt_price")]
-	fn cf_pool_sqrt_price(
-		&self,
-		asset: Asset,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<SqrtPriceQ64F96>>;
-
 	#[method(name = "pool_tick_price")]
 	fn cf_pool_tick_price(
 		&self,
@@ -475,17 +468,6 @@ where
 	C: sp_api::ProvideRuntimeApi<B> + Send + Sync + 'static + HeaderBackend<B>,
 	C::Api: pallet_cf_pools_runtime_api::PoolsApi<B>,
 {
-	fn cf_pool_sqrt_price(
-		&self,
-		asset: Asset,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<SqrtPriceQ64F96>> {
-		self.client
-			.runtime_api()
-			.cf_pool_sqrt_price(&self.query_block_id(at), asset)
-			.map_err(to_rpc_error)
-	}
-
 	fn cf_pool_tick_price(
 		&self,
 		asset: Asset,
