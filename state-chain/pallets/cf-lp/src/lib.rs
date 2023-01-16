@@ -138,7 +138,7 @@ pub mod pallet {
 				);
 
 				// Debit the asset from the account.
-				Pallet::<T>::try_debit(&account_id, asset, amount)?;
+				Self::try_debit(&account_id, asset, amount)?;
 
 				let egress_id = T::EgressHandler::schedule_egress(asset, amount, egress_address);
 
@@ -218,8 +218,8 @@ pub mod pallet {
 			let fees_collected = T::LiquidityPoolApi::collect(account_id.clone(), asset, range)?;
 
 			// Credit the user's asset into their account.
-			Pallet::<T>::credit(&account_id, asset, fees_collected[PoolSide::Asset0])?;
-			Pallet::<T>::credit(
+			Self::credit(&account_id, asset, fees_collected[PoolSide::Asset0])?;
+			Self::credit(
 				&account_id,
 				T::LiquidityPoolApi::STABLE_ASSET,
 				fees_collected[PoolSide::Asset1],
@@ -297,8 +297,8 @@ impl<T: Config> Pallet<T> {
 		)?;
 
 		// Debit the user's asset from their account.
-		Pallet::<T>::try_debit(&account_id, asset, amount_debited[PoolSide::Asset0])?;
-		Pallet::<T>::try_debit(
+		Self::try_debit(&account_id, asset, amount_debited[PoolSide::Asset0])?;
+		Self::try_debit(
 			&account_id,
 			T::LiquidityPoolApi::STABLE_ASSET,
 			amount_debited[PoolSide::Asset1],
@@ -315,12 +315,12 @@ impl<T: Config> Pallet<T> {
 			T::LiquidityPoolApi::burn(account_id.clone(), asset, range, liquidity_amount)?;
 
 		// Credit the user's asset into their account.
-		Pallet::<T>::credit(
+		Self::credit(
 			&account_id,
 			asset,
 			amount_credited[PoolSide::Asset0].saturating_add(fees_collected[PoolSide::Asset0]),
 		)?;
-		Pallet::<T>::credit(
+		Self::credit(
 			&account_id,
 			T::LiquidityPoolApi::STABLE_ASSET,
 			amount_credited[PoolSide::Asset1].saturating_add(fees_collected[PoolSide::Asset1]),
@@ -338,6 +338,6 @@ impl<T: Config> LpProvisioningApi for Pallet<T> {
 		asset: Asset,
 		amount: AssetAmount,
 	) -> DispatchResult {
-		Pallet::<T>::credit(account_id, asset, amount).map_err(Into::into)
+		Self::credit(account_id, asset, amount).map_err(Into::into)
 	}
 }
