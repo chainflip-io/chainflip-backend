@@ -10,6 +10,7 @@ mod offences;
 use cf_primitives::{chains::assets, Asset, KeyId, ETHEREUM_ETH_ADDRESS};
 pub use offences::*;
 mod signer_nomination;
+use crate::RuntimeCall;
 use cf_chains::ForeignChain;
 use ethabi::Address as EthAbiAddress;
 pub use missed_authorship_slots::MissedAuraSlots;
@@ -17,9 +18,9 @@ pub use signer_nomination::RandomSignerNomination;
 use sp_core::U256;
 
 use crate::{
-	AccountId, Authorship, BlockNumber, Call, EmergencyRotationPercentageRange, Emissions,
-	Environment, EthereumBroadcaster, EthereumInstance, Flip, FlipBalance, Reputation, Runtime,
-	System, Validator,
+	AccountId, Authorship, BlockNumber, EmergencyRotationPercentageRange, Emissions, Environment,
+	EthereumBroadcaster, EthereumInstance, Flip, FlipBalance, Reputation, Runtime, System,
+	Validator,
 };
 
 #[cfg(feature = "ibiza")]
@@ -331,7 +332,7 @@ impl EgressApi<AnyChain> for AnyChainIngressEgressHandler {
 pub struct TokenholderGovBroadcaster;
 
 impl BroadcastAnyChainGovKey for TokenholderGovBroadcaster {
-	fn broadcast(chain: ForeignChain, old_key: Option<Vec<u8>>, new_key: Vec<u8>) {
+	fn broadcast(chain: ForeignChain, _old_key: Option<Vec<u8>>, new_key: Vec<u8>) {
 		match chain {
 			ForeignChain::Ethereum => {
 				let api_call =
