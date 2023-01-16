@@ -211,14 +211,3 @@ try-runtime = [
   'pallet-session/try-runtime',
   'pallet-authorship/try-runtime',
 ]
-ibiza = [
-  'cf-chains/ibiza',
-  'cf-traits/ibiza',
-  'pallet-cf-environment/ibiza',
-  'pallet-cf-emissions/ibiza',
-  'pallet-cf-ingress-egress',
-  'pallet-cf-lp',
-  'pallet-cf-pools-runtime-api',
-  'pallet-cf-pools',
-  'pallet-cf-swapping',
-]
