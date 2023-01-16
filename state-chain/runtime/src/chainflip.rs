@@ -348,12 +348,7 @@ impl BroadcastAnyChainGovKey for TokenholderGovBroadcaster {
 impl BroadcastComKey for TokenholderGovBroadcaster {
 	type EthAddress = eth::Address;
 
-	fn broadcast(_new_key: Self::EthAddress) {
-		// TODO: figure out why the type conversation is not working here.
-		// EthereumBroadcaster::threshold_sign_and_broadcast(
-		// 	SetCommKeyWithAggKey::<Ethereum>::new_unsigned(new_key).unwrap(),
-		// );
-	}
+	fn broadcast(_new_key: Self::EthAddress) {}
 }
 
 #[cfg(feature = "ibiza")]
