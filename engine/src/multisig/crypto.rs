@@ -177,15 +177,15 @@ pub trait ECScalar:
 	fn invert(&self) -> Option<Self>;
 }
 
-// Generate a signature using "single party multisig", which
-// is helpful for development and testing.
+/// Generate a signature using "single party multisig", which
+/// is helpful for development and testing.
 pub fn generate_single_party_signature<C: CryptoScheme>(
 	secret_key: &<C::Point as ECPoint>::Scalar,
 	payload: &C::SigningPayload,
 	rng: &mut Rng,
 ) -> C::Signature {
 	let public_key = C::Point::from_scalar(secret_key);
-	//
+
 	let nonce = <C::Point as ECPoint>::Scalar::random(rng);
 
 	let r = C::Point::from_scalar(&nonce);
