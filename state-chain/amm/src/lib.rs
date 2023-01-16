@@ -624,7 +624,6 @@ impl PoolState {
 			.and_then(|()| SD::target_tick(self.current_tick, &mut self.liquidity_map))
 		{
 			let sqrt_ratio_target = Self::sqrt_price_at_tick(*target_tick);
-
 			let amount_minus_fees = mul_div_floor(
 				amount,
 				U256::from(ONE_IN_PIPS - self.fee_pips),
@@ -1608,13 +1607,10 @@ mod test {
 			pool_10, pool_11, pool_2, pool_13, pool_14, pool_0, pool_7, pool_5, pool_1, pool_6,
 			pool_4, pool_3, pool_8, pool_9,
 		];
+
 		let pools_after = pools
 			.iter()
 			.map(|(pool, amount_before)| {
-				// NOTE: This two small swaps have issues, same as in the Python model. E.g. for
-				// pool10 (first) the tickAfter should be 705098 but it's 704730, more slippage than
-				// it should. Not sure why.
-
 				// test number 0 (according to order in the snapshots file)
 				let mut pool_after_swap_test_0 = pool.clone();
 				let amount_swap_in_test_0 =
@@ -1684,11 +1680,14 @@ mod test {
 		for pool_vec in pools_after {
 			for (pool_before, pool_after, amountbefore, amount_swap_in, amount_swap_out) in pool_vec
 			{
-				// Skip the first two swaps for each pool as they have issues - to debug?
-				if i % 4 == 0 || i % 4 == 1 {
-					println!("Skipping pool number {}", i);
+				// Pools x swapcases combinations that differ from the result in the snapshot
+				// pool 10, 11, 13 and 14. This is when the swap is done across a large range of
+				// ticks, which Solidity does in multiple steps due to the Bitmap implementation.
+				// For small swaps the rounding in each step is quite big which causes the results
+				// to be quite different. In the case of a larger swap the rounding doesn't impact
+				// the result significantly.
+				if i == 0 || i == 5 || i == 12 || i == 17 {
 					i = i + 1;
-
 					continue
 				}
 
