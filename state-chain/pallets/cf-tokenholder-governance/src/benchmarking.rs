@@ -2,16 +2,13 @@
 
 use super::*;
 
-use cf_chains::benchmarking_value::BenchmarkValue;
 use cf_traits::{Chainflip, FeePayment};
 use frame_benchmarking::{account, benchmarks, whitelisted_caller, Vec};
 use frame_support::sp_runtime::traits::UniqueSaturatedFrom;
 use frame_system::RawOrigin;
 
-fn generate_proposal<T: Config>() -> Proposal<T> {
-	Proposal::SetGovernanceKey(
-		<<T as pallet::Config>::Chain as cf_chains::ChainCrypto>::GovKey::benchmark_value(),
-	)
+fn generate_proposal<T: Config>() -> Proposal {
+	Proposal::SetGovernanceKey((ForeignChain::Ethereum, vec![1; 32]))
 }
 
 benchmarks! {
@@ -35,7 +32,7 @@ benchmarks! {
 		assert!(GovKeyUpdateAwaitingEnactment::<T>::get().is_some());
 	}
 	on_initialize_execute_proposal {
-		GovKeyUpdateAwaitingEnactment::<T>::set(Some((1u32.into(), <<T as pallet::Config>::Chain as cf_chains::ChainCrypto>::GovKey::benchmark_value())));
+		GovKeyUpdateAwaitingEnactment::<T>::set(Some((1u32.into(), (ForeignChain::Ethereum, vec![1; 32]))));
 	}: {
 		Pallet::<T>::on_initialize(1u32.into());
 	} verify {

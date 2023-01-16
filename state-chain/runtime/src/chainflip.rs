@@ -39,11 +39,11 @@ use cf_chains::{
 		api::{EthereumApi, EthereumReplayProtection},
 		Ethereum,
 	},
-	ApiCall, ChainAbi, ChainEnvironment, ReplayProtectionProvider, SetCommKeyWithAggKey,
-	SetGovKeyWithAggKey, TransactionBuilder,
+	ApiCall, ChainAbi, ChainEnvironment, ReplayProtectionProvider, SetGovKeyWithAggKey,
+	TransactionBuilder,
 };
 #[cfg(feature = "ibiza")]
-use cf_primitives::{AssetAmount, ForeignChain, ForeignChainAddress, IntentId};
+use cf_primitives::{AssetAmount, ForeignChainAddress, IntentId};
 use cf_traits::{
 	BlockEmissions, BroadcastAnyChainGovKey, BroadcastComKey, Chainflip, EmergencyRotation,
 	EpochInfo, EthEnvironmentProvider, Heartbeat, Issuance, NetworkState, RewardsDistribution,
@@ -328,7 +328,7 @@ impl EgressApi<AnyChain> for AnyChainIngressEgressHandler {
 pub struct TokenholderGovBroadcaster;
 
 impl BroadcastAnyChainGovKey for TokenholderGovBroadcaster {
-	fn broadcast(chain: ForeignChain, old_key: Option<Vec<u8>>, new_key: Vec<u8>) {
+	fn broadcast(chain: ForeignChain, _old_key: Option<Vec<u8>>, new_key: Vec<u8>) {
 		match chain {
 			ForeignChain::Ethereum => {
 				let api_call =
@@ -348,7 +348,7 @@ impl BroadcastAnyChainGovKey for TokenholderGovBroadcaster {
 impl BroadcastComKey for TokenholderGovBroadcaster {
 	type EthAddress = eth::Address;
 
-	fn broadcast(new_key: Self::EthAddress) {
+	fn broadcast(_new_key: Self::EthAddress) {
 		// TODO: figure out why the type conversation is not working here.
 		// EthereumBroadcaster::threshold_sign_and_broadcast(
 		// 	SetCommKeyWithAggKey::<Ethereum>::new_unsigned(new_key).unwrap(),

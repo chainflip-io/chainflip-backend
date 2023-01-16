@@ -1,20 +1,15 @@
 use crate::{self as pallet_cf_tokenholder_governance};
-use cf_chains::{eth::Address, mocks::MockEthereum, ApiCall, ChainAbi, ChainCrypto};
-use cf_primitives::BroadcastId;
+use cf_chains::eth::Address;
 use cf_traits::{
 	impl_mock_stake_transfer, impl_mock_waived_fees,
 	mocks::{
 		ensure_origin_mock::NeverFailingOriginCheck, epoch_info::MockEpochInfo,
 		system_state_info::MockSystemStateInfo,
 	},
-	BroadcastAnyChainGovKey, BroadcastComKey, Broadcaster, Chainflip, StakeTransfer, WaivedFees,
+	BroadcastAnyChainGovKey, BroadcastComKey, Chainflip, StakeTransfer, WaivedFees,
 };
-use codec::{Decode, Encode, MaxEncodedLen};
-use frame_support::{
-	parameter_types, storage, traits::HandleLifetime, StorageHasher, Twox64Concat,
-};
+use frame_support::{parameter_types, traits::HandleLifetime};
 use frame_system as system;
-use scale_info::TypeInfo;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -22,7 +17,6 @@ use sp_runtime::{
 	BuildStorage,
 };
 
-use cf_chains::{SetCommKeyWithAggKey, SetGovKeyWithAggKey};
 use system::pallet_prelude::BlockNumberFor;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -106,13 +100,13 @@ impl_mock_stake_transfer!(AccountId, u128);
 pub struct MockKeyBroadcaster;
 
 impl BroadcastAnyChainGovKey for MockKeyBroadcaster {
-	fn broadcast(chain: cf_chains::ForeignChain, old_key: Option<Vec<u8>>, new_key: Vec<u8>) {}
+	fn broadcast(_chain: cf_chains::ForeignChain, _old_key: Option<Vec<u8>>, _new_key: Vec<u8>) {}
 }
 
 impl BroadcastComKey for MockKeyBroadcaster {
 	type EthAddress = Address;
 
-	fn broadcast(new_key: Self::EthAddress) {}
+	fn broadcast(_new_key: Self::EthAddress) {}
 }
 
 impl pallet_cf_flip::Config for Test {
