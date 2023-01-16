@@ -1,13 +1,9 @@
 use crate::{self as pallet_cf_environment, cfe};
-#[cfg(feature = "ibiza")]
 use cf_chains::dot::POLKADOT_METADATA;
-#[cfg(feature = "ibiza")]
 use cf_chains::{dot::api::CreatePolkadotVault, ApiCall, Chain, ChainCrypto, Polkadot};
 
-#[cfg(feature = "ibiza")]
 use cf_primitives::BroadcastId;
 use cf_traits::mocks::ensure_origin_mock::NeverFailingOriginCheck;
-#[cfg(feature = "ibiza")]
 use cf_traits::{Broadcaster, VaultKeyWitnessedHandler};
 
 use frame_support::parameter_types;
@@ -19,7 +15,6 @@ use sp_runtime::{
 	BuildStorage,
 };
 
-#[cfg(feature = "ibiza")]
 use crate::{Decode, Encode, TypeInfo};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -70,18 +65,15 @@ impl system::Config for Test {
 	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
-#[cfg(feature = "ibiza")]
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct MockCreatePolkadotVault {
 	agg_key: cf_chains::dot::PolkadotPublicKey,
 }
-#[cfg(feature = "ibiza")]
 impl CreatePolkadotVault for MockCreatePolkadotVault {
 	fn new_unsigned(proxy_key: cf_chains::dot::PolkadotPublicKey) -> Self {
 		Self { agg_key: proxy_key }
 	}
 }
-#[cfg(feature = "ibiza")]
 impl ApiCall<Polkadot> for MockCreatePolkadotVault {
 	fn threshold_signature_payload(&self) -> <Polkadot as cf_chains::ChainCrypto>::Payload {
 		unimplemented!()
@@ -99,9 +91,7 @@ impl ApiCall<Polkadot> for MockCreatePolkadotVault {
 		unimplemented!()
 	}
 }
-#[cfg(feature = "ibiza")]
 pub struct MockPolkadotBroadcaster;
-#[cfg(feature = "ibiza")]
 impl Broadcaster<Polkadot> for MockPolkadotBroadcaster {
 	type ApiCall = MockCreatePolkadotVault;
 
@@ -109,9 +99,7 @@ impl Broadcaster<Polkadot> for MockPolkadotBroadcaster {
 		unimplemented!()
 	}
 }
-#[cfg(feature = "ibiza")]
 pub struct MockPolkadotVaultKeyWitnessedHandler;
-#[cfg(feature = "ibiza")]
 impl VaultKeyWitnessedHandler<Polkadot> for MockPolkadotVaultKeyWitnessedHandler {
 	fn on_new_key_activated(
 		_new_public_key: <Polkadot as ChainCrypto>::AggKey,
@@ -125,11 +113,11 @@ impl VaultKeyWitnessedHandler<Polkadot> for MockPolkadotVaultKeyWitnessedHandler
 impl pallet_cf_environment::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
-	#[cfg(feature = "ibiza")]
+
 	type CreatePolkadotVault = MockCreatePolkadotVault;
-	#[cfg(feature = "ibiza")]
+
 	type PolkadotBroadcaster = MockPolkadotBroadcaster;
-	#[cfg(feature = "ibiza")]
+
 	type PolkadotVaultKeyWitnessedHandler = MockPolkadotVaultKeyWitnessedHandler;
 	type WeightInfo = ();
 }
@@ -157,9 +145,9 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			cfe_settings: CFE_SETTINGS,
 			flip_token_address: [0u8; 20],
 			eth_usdc_address: [0x2; 20],
-			#[cfg(feature = "ibiza")]
+		
 			polkadot_vault_account_id: None,
-			#[cfg(feature = "ibiza")]
+		
 			polkadot_network_metadata: POLKADOT_METADATA,
 		},
 	};

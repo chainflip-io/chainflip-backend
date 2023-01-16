@@ -20,10 +20,8 @@ use std::{
 };
 use tokio::sync::{mpsc::UnboundedSender, watch};
 
-#[cfg(feature = "ibiza")]
 use cf_chains::{dot, Polkadot};
 
-#[cfg(feature = "ibiza")]
 use state_chain_runtime::PolkadotInstance;
 
 use crate::{
@@ -41,13 +39,10 @@ use crate::{
 	witnesser::EpochStart,
 };
 
-#[cfg(feature = "ibiza")]
 use crate::dot::{rpc::DotRpcApi, DotBroadcaster};
 
-#[cfg(feature = "ibiza")]
 use sp_core::H160;
 
-#[cfg(feature = "ibiza")]
 use cf_primitives::PolkadotAccountId;
 
 async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
@@ -195,30 +190,30 @@ pub async fn start<
 	StateChainClient,
 	BlockStream,
 	EthRpc,
-	#[cfg(feature = "ibiza")] DotRpc: DotRpcApi + Send + Sync + 'static,
+ DotRpc: DotRpcApi + Send + Sync + 'static,
 	EthMultisigClient,
 	PolkadotMultisigClient,
 >(
 	state_chain_client: Arc<StateChainClient>,
 	sc_block_stream: BlockStream,
 	eth_broadcaster: EthBroadcaster<EthRpc>,
-	#[cfg(feature = "ibiza")] dot_broadcaster: DotBroadcaster<DotRpc>,
+ dot_broadcaster: DotBroadcaster<DotRpc>,
 	eth_multisig_client: EthMultisigClient,
 	dot_multisig_client: PolkadotMultisigClient,
 	peer_update_sender: UnboundedSender<PeerUpdate>,
 	eth_epoch_start_sender: async_broadcast::Sender<EpochStart<Ethereum>>,
-	#[cfg(feature = "ibiza")] eth_monitor_ingress_sender: tokio::sync::mpsc::UnboundedSender<H160>,
-	#[cfg(feature = "ibiza")] eth_monitor_flip_ingress_sender: tokio::sync::mpsc::UnboundedSender<
+ eth_monitor_ingress_sender: tokio::sync::mpsc::UnboundedSender<H160>,
+ eth_monitor_flip_ingress_sender: tokio::sync::mpsc::UnboundedSender<
 		H160,
 	>,
-	#[cfg(feature = "ibiza")] eth_monitor_usdc_ingress_sender: tokio::sync::mpsc::UnboundedSender<
+ eth_monitor_usdc_ingress_sender: tokio::sync::mpsc::UnboundedSender<
 		H160,
 	>,
-	#[cfg(feature = "ibiza")] dot_epoch_start_sender: async_broadcast::Sender<EpochStart<Polkadot>>,
-	#[cfg(feature = "ibiza")] dot_monitor_ingress_sender: tokio::sync::mpsc::UnboundedSender<
+ dot_epoch_start_sender: async_broadcast::Sender<EpochStart<Polkadot>>,
+ dot_monitor_ingress_sender: tokio::sync::mpsc::UnboundedSender<
 		PolkadotAccountId,
 	>,
-	#[cfg(feature = "ibiza")] dot_monitor_signature_sender: tokio::sync::mpsc::UnboundedSender<
+ dot_monitor_signature_sender: tokio::sync::mpsc::UnboundedSender<
 		[u8; 64],
 	>,
 	cfe_settings_update_sender: watch::Sender<CfeSettings>,
@@ -244,7 +239,7 @@ where
 
         let start_epoch = |block_hash: H256, index: u32, current: bool, participant: bool| {
             let eth_epoch_start_sender = &eth_epoch_start_sender;
-            #[cfg(feature = "ibiza")]
+        
             let dot_epoch_start_sender = &dot_epoch_start_sender;
             let state_chain_client = &state_chain_client;
 
@@ -265,7 +260,7 @@ where
                     data: (),
                 }).await.unwrap();
 
-                #[cfg(feature = "ibiza")]
+            
                 {
                     // It is possible for there not to be a Polkadot vault.
                     // At genesis there is no Polkadot vault, so we want to check that the vault exists
@@ -404,7 +399,7 @@ where
                                             logger.clone()
                                         ).await;
                                     }
-                                    #[cfg(feature = "ibiza")]
+                                
                                     state_chain_runtime::RuntimeEvent::PolkadotVault(
                                         pallet_cf_vaults::Event::KeygenRequest(
                                             ceremony_id,
@@ -446,7 +441,7 @@ where
                                             logger.clone(),
                                         ).await;
                                     }
-                                    #[cfg(feature = "ibiza")]
+                                
                                     state_chain_runtime::RuntimeEvent::PolkadotThresholdSigner(
                                         pallet_cf_threshold_signature::Event::ThresholdSignatureRequest{
                                             request_id: _,
@@ -538,7 +533,7 @@ where
                                             }
                                         }
                                     }
-                                    #[cfg(feature = "ibiza")]
+                                
                                     state_chain_runtime::RuntimeEvent::PolkadotBroadcaster(
                                         pallet_cf_broadcast::Event::TransactionBroadcastRequest {
                                             broadcast_attempt_id,
@@ -569,7 +564,7 @@ where
                                         }) => {
                                             cfe_settings_update_sender.send(new_cfe_settings).unwrap();
                                     }
-                                    #[cfg(feature = "ibiza")]
+                                
                                     state_chain_runtime::RuntimeEvent::EthereumIngressEgress(
                                         pallet_cf_ingress_egress::Event::StartWitnessing {
                                             ingress_address,
@@ -589,7 +584,7 @@ where
                                             }
                                         }
                                     }
-                                    #[cfg(feature = "ibiza")]
+                                
                                     state_chain_runtime::RuntimeEvent::PolkadotIngressEgress(
                                         pallet_cf_ingress_egress::Event::StartWitnessing {
                                             ingress_address,

@@ -26,7 +26,6 @@ use clap::Parser;
 use futures::FutureExt;
 use pallet_cf_validator::SemVer;
 
-#[cfg(feature = "ibiza")]
 use chainflip_engine::dot::{rpc::DotRpcClient, DotBroadcaster};
 use web3::types::U256;
 
@@ -80,7 +79,6 @@ async fn main() -> anyhow::Result<()> {
 				EthBroadcaster::new(&settings.eth, eth_dual_rpc.clone(), &root_logger)
 					.context("Failed to create ETH broadcaster")?;
 
-			#[cfg(feature = "ibiza")]
 			let dot_rpc_client = DotRpcClient::new(&settings.dot.ws_node_endpoint)
 				.await
 				.context("Failed to create Polkadot Client")?;
@@ -107,7 +105,6 @@ async fn main() -> anyhow::Result<()> {
 				_epoch_start_receiver_4, _epoch_start_receiver_5, _epoch_start_receiver_6],
 			) = build_broadcast_channel(10);
 
-			#[cfg(feature = "ibiza")]
 			let (dot_epoch_start_sender, [dot_epoch_start_receiver]) = build_broadcast_channel(10);
 
 			let cfe_settings = state_chain_client
@@ -220,19 +217,18 @@ async fn main() -> anyhow::Result<()> {
 				&root_logger,
 			));
 
-			#[cfg(feature = "ibiza")]
 			let (eth_monitor_ingress_sender, eth_monitor_ingress_receiver) =
 				tokio::sync::mpsc::unbounded_channel();
-			#[cfg(feature = "ibiza")]
+
 			let (eth_monitor_flip_ingress_sender, eth_monitor_flip_ingress_receiver) =
 				tokio::sync::mpsc::unbounded_channel();
-			#[cfg(feature = "ibiza")]
+
 			let (eth_monitor_usdc_ingress_sender, eth_monitor_usdc_ingress_receiver) =
 				tokio::sync::mpsc::unbounded_channel();
-			#[cfg(feature = "ibiza")]
+
 			let (dot_monitor_ingress_sender, dot_monitor_ingress_receiver) =
 				tokio::sync::mpsc::unbounded_channel();
-			#[cfg(feature = "ibiza")]
+
 			let (dot_monitor_signature_sender, dot_monitor_signature_receiver) =
 				tokio::sync::mpsc::unbounded_channel();
 
@@ -241,30 +237,22 @@ async fn main() -> anyhow::Result<()> {
 				state_chain_client.clone(),
 				state_chain_block_stream,
 				eth_broadcaster,
-				#[cfg(feature = "ibiza")]
 				DotBroadcaster::new(dot_rpc_client.clone()),
 				eth_multisig_client,
 				dot_multisig_client,
 				peer_update_sender,
 				epoch_start_sender,
-				#[cfg(feature = "ibiza")]
 				eth_monitor_ingress_sender,
-				#[cfg(feature = "ibiza")]
 				eth_monitor_flip_ingress_sender,
-				#[cfg(feature = "ibiza")]
 				eth_monitor_usdc_ingress_sender,
-				#[cfg(feature = "ibiza")]
 				dot_epoch_start_sender,
-				#[cfg(feature = "ibiza")]
 				dot_monitor_ingress_sender,
-				#[cfg(feature = "ibiza")]
 				dot_monitor_signature_sender,
 				cfe_settings_update_sender,
 				latest_block_hash,
 				root_logger.clone(),
 			));
 
-			#[cfg(feature = "ibiza")]
 			{
 				use cf_primitives::{chains::assets, Asset};
 				use chainflip_engine::{dot, eth::erc20_witnesser::Erc20Witnesser};

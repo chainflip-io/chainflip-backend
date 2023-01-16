@@ -106,11 +106,9 @@ pub enum Claim {
 #[derive(Parser, Clone, Debug)]
 pub enum CliCommand {
 	/// Relayer specific commands
-	#[cfg(feature = "ibiza")]
 	#[clap(subcommand)]
 	Relayer(RelayerSubcommands),
 	/// Liquidity provider specific commands
-	#[cfg(feature = "ibiza")]
 	#[clap(subcommand, name = "lp")]
 	LiquidityProvider(LiquidityProviderSubcommands),
 	#[clap(about = "Requesting and checking claims")]

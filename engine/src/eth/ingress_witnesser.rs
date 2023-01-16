@@ -1,5 +1,3 @@
-#![cfg(feature = "ibiza")]
-
 use std::{collections::BTreeSet, pin::Pin, sync::Arc};
 
 use cf_chains::eth::Ethereum;

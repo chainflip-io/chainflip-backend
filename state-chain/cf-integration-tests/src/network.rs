@@ -2,18 +2,14 @@ use crate::threshold_signing::{
 	DotThresholdSigner, EthKeyComponents, EthThresholdSigner, ThresholdSigner,
 };
 
-#[cfg(feature = "ibiza")]
 use crate::threshold_signing::DotKeyComponents;
-#[cfg(feature = "ibiza")]
 use cf_chains::dot::PolkadotSignature;
-#[cfg(feature = "ibiza")]
 use state_chain_runtime::PolkadotInstance;
 
 use super::*;
 use cf_chains::{eth::SchnorrVerificationComponents, ChainCrypto};
 use cf_primitives::{AccountRole, CeremonyId, EpochIndex, FlipBalance};
 
-#[cfg(feature = "ibiza")]
 use cf_primitives::TxId;
 
 use cf_traits::{AccountRoleRegistry, EpochInfo};
@@ -222,7 +218,7 @@ impl Engine {
 							self.eth_threshold_signer.borrow().sign_with_key(key_id.clone(), payload.as_fixed_bytes()),
 						);
 					}
-					#[cfg(feature = "ibiza")]
+
 					RuntimeEvent::PolkadotThresholdSigner(
 						pallet_cf_threshold_signature::Event::ThresholdSignatureRequest {
 							request_id: _,
@@ -254,7 +250,7 @@ impl Engine {
 									Validator::epoch_index()
 								);
 
-								#[cfg(feature = "ibiza")]
+
 								let _result = state_chain_runtime::Witnesser::witness_at_epoch(
 									RuntimeOrigin::signed(self.node_id.clone()),
 									Box::new(pallet_cf_vaults::Call::<_, PolkadotInstance>::vault_key_rotated {
@@ -307,7 +303,7 @@ impl Engine {
 					pallet_cf_vaults::Event::KeygenRequest(ceremony_id, participants)) => {
 						report_keygen_outcome_for_chain::<EthKeyComponents, SchnorrVerificationComponents, state_chain_runtime::Runtime, EthereumInstance>(*ceremony_id, participants, self.eth_threshold_signer.clone(), self.node_id.clone());
 				}
-				#[cfg(feature = "ibiza")]
+
 				RuntimeEvent::PolkadotVault(
 					pallet_cf_vaults::Event::KeygenRequest(ceremony_id, participants)) => {
 						report_keygen_outcome_for_chain::<DotKeyComponents, PolkadotSignature, state_chain_runtime::Runtime, PolkadotInstance>(*ceremony_id, participants, self.dot_threshold_signer.clone(), self.node_id.clone());

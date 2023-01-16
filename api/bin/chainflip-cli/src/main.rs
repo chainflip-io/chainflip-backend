@@ -6,9 +6,7 @@ use chainflip_api as api;
 use clap::Parser;
 use settings::{CLICommandLineOptions, CLISettings};
 
-#[cfg(feature = "ibiza")]
 use crate::settings::{LiquidityProviderSubcommands, RelayerSubcommands};
-#[cfg(feature = "ibiza")]
 use api::primitives::Asset;
 
 use crate::settings::{Claim, CliCommand::*};
@@ -48,10 +46,8 @@ async fn run_cli() -> Result<()> {
 	);
 
 	match command_line_opts.cmd {
-		#[cfg(feature = "ibiza")]
 		Relayer(RelayerSubcommands::SwapIntent(params)) =>
 			swap_intent(&cli_settings.state_chain, params).await,
-		#[cfg(feature = "ibiza")]
 		LiquidityProvider(LiquidityProviderSubcommands::Deposit { asset }) =>
 			liquidity_deposit(&cli_settings.state_chain, asset).await,
 		Claim(Claim::Request { amount, eth_address, should_register_claim }) =>
@@ -68,7 +64,6 @@ async fn run_cli() -> Result<()> {
 	}
 }
 
-#[cfg(feature = "ibiza")]
 pub async fn swap_intent(
 	state_chain_settings: &settings::StateChain,
 	params: settings::SwapIntentParams,
@@ -101,7 +96,6 @@ pub async fn swap_intent(
 	Ok(())
 }
 
-#[cfg(feature = "ibiza")]
 pub async fn liquidity_deposit(
 	state_chain_settings: &settings::StateChain,
 	asset: Asset,
