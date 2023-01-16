@@ -58,15 +58,10 @@ jobs:
           CF_APT_REPO_BASIC_AUTH_USERNAME: op://github-actions/CF_APT_REPO_BASIC_AUTH/username
           CF_APT_REPO_BASIC_AUTH_PASSWORD: op://github-actions/CF_APT_REPO_BASIC_AUTH/password
 
-      - name: Set Sandstorm Apt Repo Path
-        if: ${{ github.event.inputs.release == 'sandstorm' }}
-        run: |
-          echo "APT_REPO_PATH=ci" >> $GITHUB_ENV
-
       - name: Download binary to benchmark
         run: |
           sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 14DFB4CA9296F83A
-          echo "deb https://${{ env.CF_APT_REPO_BASIC_AUTH_USERNAME }}:${{ env.CF_APT_REPO_BASIC_AUTH_PASSWORD }}@apt.aws.chainflip.xyz/${{ env.APT_REPO_PATH }}/${{ inputs.commit_sha }}/ focal main"  | sudo tee /etc/apt/sources.list.d/chainflip.list
+          echo "deb https://${{ env.CF_APT_REPO_BASIC_AUTH_USERNAME }}:${{ env.CF_APT_REPO_BASIC_AUTH_PASSWORD }}@apt.aws.chainflip.xyz/ci/${{ inputs.commit_sha }}/ focal main"  | sudo tee /etc/apt/sources.list.d/chainflip.list
           sudo apt update
           sudo apt install chainflip-node
 

@@ -142,7 +142,7 @@ jobs:
       - name: Upload packages
         uses: actions/upload-artifact@v3
         with:
-          name: chainflip-backend-packages-sandstorm
+          name: chainflip-backend-packages
           path: target/debian/*.deb
       - name: Upload binary artifacts
         uses: actions/upload-artifact@v3
@@ -264,7 +264,7 @@ jobs:
     needs: [set-variables, build-and-test]
     uses: ./.github/workflows/.deb-publish.yaml
     with:
-      artifacts: chainflip-backend-packages-sandstorm
+      artifacts: chainflip-backend-packages
       version: ci/${{ needs.set-variables.outputs.commit_hash }}/
       environment: dev
       commit_hash: ${{ needs.set-variables.outputs.commit_hash }}

@@ -115,8 +115,8 @@ jobs:
         run: echo "### Production Packages Published! :rocket:" >> $GITHUB_STEP_SUMMARY
 
       - name: Set Summary Title
-        if: ${{ contains(inputs.artifacts, 'sandstorm') }}
-        run: echo "### Sandstorm Packages Published! :rocket:" >> $GITHUB_STEP_SUMMARY
+        if: ! ${{ contains(inputs.artifacts, 'prod') }}
+        run: echo "### Packages Published! :rocket:" >> $GITHUB_STEP_SUMMARY
 
       - name: Create Github Summary
         run: |
