@@ -31,15 +31,15 @@ impl From<EthSchnorrSignature> for cf_chains::eth::SchnorrVerificationComponents
 pub struct EthSigning {}
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Hash, Eq)]
-pub struct EthSigningPayload(pub [u8; 32]);
+pub struct SigningPayload(pub [u8; 32]);
 
-impl std::fmt::Display for EthSigningPayload {
+impl std::fmt::Display for SigningPayload {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "{}", hex::encode(self.0))
 	}
 }
 
-impl AsRef<[u8]> for EthSigningPayload {
+impl AsRef<[u8]> for SigningPayload {
 	fn as_ref(&self) -> &[u8] {
 		&self.0
 	}
@@ -49,7 +49,7 @@ impl CryptoScheme for EthSigning {
 	type Point = Point;
 	type Signature = EthSchnorrSignature;
 	type AggKey = cf_chains::eth::AggKey;
-	type SigningPayload = EthSigningPayload;
+	type SigningPayload = SigningPayload;
 
 	const NAME: &'static str = "Ethereum";
 	const CHAIN_TAG: ChainTag = ChainTag::Ethereum;
@@ -126,6 +126,6 @@ impl CryptoScheme for EthSigning {
 
 	#[cfg(test)]
 	fn signing_payload_for_test() -> Self::SigningPayload {
-		EthSigningPayload("Chainflip:Chainflip:Chainflip:01".as_bytes().try_into().unwrap())
+		SigningPayload("Chainflip:Chainflip:Chainflip:01".as_bytes().try_into().unwrap())
 	}
 }

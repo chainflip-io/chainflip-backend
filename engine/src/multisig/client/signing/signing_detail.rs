@@ -227,7 +227,7 @@ mod tests {
 
 	use crate::multisig::{
 		crypto::eth::{EthSigning, Point, Scalar},
-		eth::EthSigningPayload,
+		eth::SigningPayload,
 	};
 
 	const SECRET_KEY: &str = "fbcb47bc85b881e0dfb31c872d4e06848f80530ccbd18fc016a27c4a744d0eba";
@@ -243,7 +243,7 @@ mod tests {
 		// Given the signing key, nonce and message hash, check that
 		// sigma (signature response) is correct and matches the expected
 		// (by the KeyManager contract) value
-		let payload = EthSigningPayload(hex::decode(MESSAGE_HASH).unwrap().try_into().unwrap());
+		let payload = SigningPayload(hex::decode(MESSAGE_HASH).unwrap().try_into().unwrap());
 
 		let nonce = Scalar::from_hex(NONCE_KEY);
 		let commitment = Point::from_scalar(&nonce);
@@ -283,7 +283,7 @@ mod tests {
 		// The seed must not change or the test will break.
 		let mut rng = Rng::from_seed([0; 32]);
 
-		let payload = EthSigningPayload(hex::decode(MESSAGE_HASH).unwrap().try_into().unwrap());
+		let payload = SigningPayload(hex::decode(MESSAGE_HASH).unwrap().try_into().unwrap());
 		let idxs = BTreeSet::from_iter(vec![1u32, 2, 3]);
 		let commitments: BTreeMap<AuthorityCount, SigningCommitment<Point>> = idxs
 			.iter()
