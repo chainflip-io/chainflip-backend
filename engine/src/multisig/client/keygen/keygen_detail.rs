@@ -543,17 +543,13 @@ pub mod genesis {
 				(
 					validator_mapping.get_id(idx).clone(),
 					KeygenResultInfo {
-						key: Arc::new(KeygenResult {
-							key_share: KeyShare {
+						key: Arc::new(KeygenResult::new(
+							KeyShare {
 								y: agg_pubkey.0,
 								x_i: compute_secret_key_share(IncomingShares(incoming_shares)),
 							},
-							party_public_keys: derive_local_pubkeys_for_parties(
-								params,
-								&commitments,
-							),
-							phantom_data: std::marker::PhantomData,
-						}),
+							derive_local_pubkeys_for_parties(params, &commitments),
+						)),
 						validator_mapping: Arc::new(validator_mapping.clone()),
 						params,
 					},

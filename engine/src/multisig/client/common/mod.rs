@@ -32,8 +32,15 @@ pub struct KeygenResult<C: CryptoScheme> {
 	pub key_share: KeyShare<C::Point>,
 	#[serde(bound = "")]
 	pub party_public_keys: Vec<C::Point>,
-	// TODO: make this private
-	pub phantom_data: std::marker::PhantomData<C>,
+	// NOTE: making this private ensures that the only
+	// way to create the struct is through the "constructor"
+	phantom_data: std::marker::PhantomData<C>,
+}
+
+impl<C: CryptoScheme> KeygenResult<C> {
+	pub fn new(key_share: KeyShare<C::Point>, party_public_keys: Vec<C::Point>) -> Self {
+		Self { key_share, party_public_keys, phantom_data: std::marker::PhantomData }
+	}
 }
 
 impl<C: CryptoScheme> KeygenResult<C> {
