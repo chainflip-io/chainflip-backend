@@ -208,6 +208,7 @@ jobs:
           chmod +x ./target/release/chainflip*
       - name: Run node in background
         run: |
+          ./target/release/chainflip-node purge-chain --chain="dev" -y
           ./target/release/chainflip-node key insert --key-type 'aura' --scheme sr25519 --chain dev --suri "${{ secrets.BASHFUL_SECRET_SEED }}"
           ./target/release/chainflip-node key insert --key-type 'gran' --scheme ed25519 --chain dev --suri "${{ secrets.BASHFUL_SECRET_SEED }}"
           ./target/release/chainflip-node --chain dev --node-key-file=node_key_file --validator --force-authoring --rpc-cors=all &
