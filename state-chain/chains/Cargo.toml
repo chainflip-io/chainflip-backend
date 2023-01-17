@@ -61,4 +61,3 @@ runtime-benchmarks = [
   'frame-system/runtime-benchmarks',
 ]
 runtime-integration-tests = []
-ibiza = []

@@ -39,13 +39,13 @@ pallet-cf-emissions = { path = '../pallets/cf-emissions', default-features = fal
 pallet-cf-environment = { path = '../pallets/cf-environment', default-features = false }
 pallet-cf-flip = { path = '../pallets/cf-flip', default-features = false }
 pallet-cf-governance = { path = '../pallets/cf-governance', default-features = false }
-pallet-cf-ingress-egress = { path = '../pallets/cf-ingress-egress', default-features = false, optional = true }
-pallet-cf-lp =  { path = '../pallets/cf-lp', default-features = false, optional = true }
-pallet-cf-pools = { path = '../pallets/cf-pools', default-features = false, optional = true }
-pallet-cf-pools-runtime-api = {path = "../pallets/cf-pools/runtime-api", default-features = false, optional = true}
+pallet-cf-ingress-egress = { path = '../pallets/cf-ingress-egress', default-features = false }
+pallet-cf-lp =  { path = '../pallets/cf-lp', default-features = false }
+pallet-cf-pools = { path = '../pallets/cf-pools', default-features = false  }
+pallet-cf-pools-runtime-api = {path = "../pallets/cf-pools/runtime-api", default-features = false }
 pallet-cf-reputation = { path = '../pallets/cf-reputation', default-features = false }
 pallet-cf-staking = { path = '../pallets/cf-staking', default-features = false }
-pallet-cf-swapping = { path = '../pallets/cf-swapping', default-features = false, optional = true }
+pallet-cf-swapping = { path = '../pallets/cf-swapping', default-features = false  }
 pallet-cf-threshold-signature = { path = '../pallets/cf-threshold-signature', default-features = false }
 pallet-cf-tokenholder-governance = { path = '../pallets/cf-tokenholder-governance', default-features = false }
 pallet-cf-validator = { path = '../pallets/cf-validator', default-features = false }
@@ -107,12 +107,12 @@ runtime-benchmarks = [
   'pallet-cf-environment/runtime-benchmarks',
   'pallet-cf-flip/runtime-benchmarks',
   'pallet-cf-governance/runtime-benchmarks',
-  'pallet-cf-ingress-egress?/runtime-benchmarks',
-  'pallet-cf-lp?/runtime-benchmarks',
-  'pallet-cf-pools?/runtime-benchmarks',
+  'pallet-cf-ingress-egress/runtime-benchmarks',
+  'pallet-cf-lp/runtime-benchmarks',
+  'pallet-cf-pools/runtime-benchmarks',
   'pallet-cf-reputation/runtime-benchmarks',
   'pallet-cf-staking/runtime-benchmarks',
-  'pallet-cf-swapping?/runtime-benchmarks',
+  'pallet-cf-swapping/runtime-benchmarks',
   'pallet-cf-threshold-signature/runtime-benchmarks',
   'pallet-cf-tokenholder-governance/runtime-benchmarks',
   'pallet-cf-validator/runtime-benchmarks',
@@ -147,13 +147,13 @@ std = [
   'pallet-cf-environment/std',
   'pallet-cf-flip/std',
   'pallet-cf-governance/std',
-  'pallet-cf-ingress-egress?/std',
-  'pallet-cf-lp?/std',
-  'pallet-cf-pools-runtime-api?/std',
-  'pallet-cf-pools?/std',
+  'pallet-cf-ingress-egress/std',
+  'pallet-cf-lp/std',
+  'pallet-cf-pools-runtime-api/std',
+  'pallet-cf-pools/std',
   'pallet-cf-reputation/std',
   'pallet-cf-staking/std',
-  'pallet-cf-swapping?/std',
+  'pallet-cf-swapping/std',
   'pallet-cf-threshold-signature/std',
   'pallet-cf-tokenholder-governance/std',
   'pallet-cf-validator/std',
@@ -210,15 +210,4 @@ try-runtime = [
   'pallet-randomness-collective-flip/try-runtime',
   'pallet-session/try-runtime',
   'pallet-authorship/try-runtime',
-]
-ibiza = [
-  'cf-chains/ibiza',
-  'cf-traits/ibiza',
-  'pallet-cf-environment/ibiza',
-  'pallet-cf-emissions/ibiza',
-  'pallet-cf-ingress-egress',
-  'pallet-cf-lp',
-  'pallet-cf-pools-runtime-api',
-  'pallet-cf-pools',
-  'pallet-cf-swapping',
 ]

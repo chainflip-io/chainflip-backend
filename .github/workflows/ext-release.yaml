@@ -10,7 +10,6 @@ on:
         options:
           - "perseverance"
           - "sandstorm"
-          - "ibiza"
           - "sysiphos"
           - "berghain"
 # on:

@@ -1,7 +1,9 @@
 use crate as pallet_cf_emissions;
 use cf_chains::{
-	mocks::MockEthereum, ApiCall, ChainAbi, ChainCrypto, ReplayProtectionProvider, UpdateFlipSupply,
+	mocks::MockEthereum, AnyChain, ApiCall, ChainAbi, ChainCrypto, ReplayProtectionProvider,
+	UpdateFlipSupply,
 };
+use cf_traits::mocks::egress_handler::MockEgressHandler;
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	parameter_types, storage,
@@ -16,12 +18,6 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage,
 };
-
-#[cfg(feature = "ibiza")]
-use cf_chains::AnyChain;
-
-#[cfg(feature = "ibiza")]
-use cf_traits::mocks::egress_handler::MockEgressHandler;
 
 use cf_traits::{
 	mocks::{
@@ -248,9 +244,7 @@ impl pallet_cf_emissions::Config for Test {
 	type Broadcaster = MockBroadcast;
 	type WeightInfo = ();
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
-	#[cfg(feature = "ibiza")]
 	type FlipToBurn = MockFlipToBurn;
-	#[cfg(feature = "ibiza")]
 	type EgressHandler = MockEgressHandler<AnyChain>;
 }
 

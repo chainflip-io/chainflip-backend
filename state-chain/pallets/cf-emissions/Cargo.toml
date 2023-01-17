@@ -65,7 +65,3 @@ try-runtime = [
   'frame-support/try-runtime',
   'cf-runtime-upgrade-utilities/try-runtime'
 ]
-ibiza = [
-  "cf-chains/ibiza",
-  "cf-traits/ibiza",
-]

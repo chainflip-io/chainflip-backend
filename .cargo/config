@@ -12,9 +12,6 @@ cf-clippy = "clippy --all-targets --all-features"
 ci-build = "build --release --features runtime-benchmarks"
 ci-test = "test --lib --features runtime-benchmarks"
 
-ci-build-ibiza = "build --release --features ibiza"
-ci-test-ibiza = "test --lib --features ibiza --features runtime-benchmarks"
-
 ci-clippy = "clippy --all-targets --all-features -- -D warnings"
 
 # Check for feature inconsistencies.

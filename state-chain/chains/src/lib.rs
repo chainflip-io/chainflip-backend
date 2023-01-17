@@ -21,9 +21,7 @@ pub use cf_primitives::chains::*;
 
 pub mod benchmarking_value;
 
-#[cfg(feature = "ibiza")]
 pub mod any;
-#[cfg(feature = "ibiza")]
 pub mod dot;
 pub mod eth;
 
