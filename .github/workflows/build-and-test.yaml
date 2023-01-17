@@ -208,9 +208,9 @@ jobs:
           chmod +x ./target/release/chainflip*
       - name: Run node in background
         run: |
-          ./target/release/chainflip-node --chain dev --node-key-file=node_key_file &
           ./target/release/chainflip-node key insert --key-type 'aura' --scheme sr25519 --chain dev --suri "${{ secrets.BASHFUL_SECRET_SEED }}"
           ./target/release/chainflip-node key insert --key-type 'gran' --scheme ed25519 --chain dev --suri "${{ secrets.BASHFUL_SECRET_SEED }}"
+          ./target/release/chainflip-node --chain dev --node-key-file=node_key_file &
           sleep 10
       - name: Check node health
         run: >
