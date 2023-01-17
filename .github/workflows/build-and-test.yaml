@@ -202,7 +202,6 @@ jobs:
           path: ./target/release
       - name: Setup config and give permissions
         run: |
-          mkdir config
           echo -n ${{ secrets.BASHFUL_SIGNING_KEY }} > signing_key_file
           echo -n ${{ secrets.ETH_PRIVATE_KEY }} > eth_private_key_file
           echo -n ${{ secrets.NODE_KEY }} > node_key_file
