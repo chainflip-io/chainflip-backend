@@ -25,6 +25,11 @@ use sp_runtime::{
 	Rounding, SaturatedConversion,
 };
 
+#[cfg(feature = "ibiza")]
+use cf_primitives::{chains::AnyChain, Asset};
+#[cfg(feature = "ibiza")]
+use cf_traits::{EgressApi, FlipBurnInfo};
+
 pub mod weights;
 pub use weights::WeightInfo;
 
@@ -91,11 +96,19 @@ pub mod pallet {
 		/// Something that can provide the stake manager address.
 		type EthEnvironmentProvider: EthEnvironmentProvider;
 
-		/// Benchmark stuff
-		type WeightInfo: WeightInfo;
-
 		/// For governance checks.
 		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
+
+		/// The interface for accessing the amount of Flip we want burn.
+		#[cfg(feature = "ibiza")]
+		type FlipToBurn: FlipBurnInfo;
+
+		/// API for handling asset egress.
+		#[cfg(feature = "ibiza")]
+		type EgressHandler: EgressApi<AnyChain>;
+
+		/// Benchmark stuff.
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::pallet]
@@ -164,6 +177,18 @@ pub mod pallet {
 			T::RewardsDistribution::distribute();
 			if Self::should_update_supply_at(current_block) {
 				if T::SystemState::ensure_no_maintenance().is_ok() {
+					#[cfg(feature = "ibiza")]
+					{
+						let flip_to_burn = T::FlipToBurn::take_flip_to_burn();
+						T::EgressHandler::schedule_egress(
+							Asset::Flip,
+							flip_to_burn,
+							cf_primitives::ForeignChainAddress::Eth(
+								T::EthEnvironmentProvider::stake_manager_address(),
+							),
+						);
+						T::Issuance::burn(flip_to_burn.into());
+					}
 					Self::broadcast_update_total_supply(
 						T::Issuance::total_issuance(),
 						current_block,
