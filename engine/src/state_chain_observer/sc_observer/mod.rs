@@ -416,7 +416,7 @@ where
                                             ceremony_id,
                                             KeyId(key_id),
                                             signatories,
-                                            crate::multisig::eth::EthSigningPayload(payload.0),
+                                            crate::multisig::eth::SigningPayload(payload.0),
                                             logger.clone(),
                                         ).await;
                                     }
@@ -440,7 +440,7 @@ where
                                             ceremony_id,
                                             KeyId(key_id),
                                             signatories,
-                                            crate::multisig::polkadot::PolkadotSigningPayload::new(payload.0)
+                                            crate::multisig::polkadot::SigningPayload::new(payload.0)
                                                 .expect("Payload should be correct size"),
                                             logger.clone(),
                                         ).await;
