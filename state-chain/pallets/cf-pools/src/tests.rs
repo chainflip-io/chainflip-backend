@@ -103,7 +103,7 @@ fn test_fee_calculation() {
 }
 
 #[test]
-fn test_back_flip_no_funds_available() {
+fn test_buy_back_flip_no_funds_available() {
 	new_test_ext().execute_with(|| {
 		<Pools as LiquidityPoolApi>::deploy(
 			&any::Asset::Flip,

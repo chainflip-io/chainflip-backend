@@ -45,7 +45,7 @@ use cf_traits::{
 
 pub type AccountId = u64;
 
-pub const FLIP_TO_BURN: u128 = 10000;
+pub const FLIP_TO_BURN: u128 = 10_000;
 pub const SUPPLY_UPDATE_INTERVAL: u32 = 10;
 pub const TOTAL_ISSUANCE: u128 = 1_000_000_000;
 

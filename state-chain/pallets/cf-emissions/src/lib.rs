@@ -179,9 +179,6 @@ pub mod pallet {
 				if T::SystemState::ensure_no_maintenance().is_ok() {
 					#[cfg(feature = "ibiza")]
 					{
-						// Note: There is a potential that we could have a delta between
-						// the total on-chain supply and the total amount of all flip on ETH for a
-						// short amount of time due to a falling broadcast and retry attempt.
 						let flip_to_burn = T::FlipToBurn::take_flip_to_burn();
 						T::EgressHandler::schedule_egress(
 							Asset::Flip,
