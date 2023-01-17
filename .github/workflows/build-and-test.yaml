@@ -138,6 +138,7 @@ jobs:
           cargo deb --no-build --no-strip -p chainflip-engine --deb-revision "${{ steps.vars.outputs.date }}"
           cargo deb --no-build --no-strip -p chainflip-cli --deb-revision "${{ steps.vars.outputs.date }}"
           cargo deb --no-build --no-strip -p chainflip-node --deb-revision "${{ steps.vars.outputs.date }}"
+          cargo deb --no-build --no-strip -p chainflip-relayer --deb-revision "${{ steps.vars.outputs.date }}"
           cargo deb --no-build --no-strip -p generate-genesis-keys --deb-revision "${{ steps.vars.outputs.date }}"
       - name: Upload packages
         uses: actions/upload-artifact@v3
