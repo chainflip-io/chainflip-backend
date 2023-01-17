@@ -7,8 +7,8 @@ use crate::multisig::{
 		common::{BroadcastFailureReason, SigningFailureReason, SigningStageName},
 		helpers::{
 			gen_invalid_local_sig, gen_invalid_signing_comm1, new_nodes, new_signing_ceremony,
-			run_stages, SigningCeremonyRunner, ACCOUNT_IDS, DEFAULT_KEYGEN_SEED,
-			DEFAULT_SIGNING_CEREMONY_ID, DEFAULT_SIGNING_SEED,
+			run_stages, SigningCeremonyRunner, ACCOUNT_IDS, DEFAULT_SIGNING_CEREMONY_ID,
+			DEFAULT_SIGNING_SEED,
 		},
 		keygen::generate_key_data,
 		signing::signing_data,
@@ -98,9 +98,14 @@ async fn should_report_on_inconsistent_broadcast_local_sig3() {
 }
 
 async fn should_sign_with_all_parties<C: CryptoScheme>() {
+	// This seed ensures that the initially
+	// generated key is incompatible to increase
+	// test coverage
+	let seed = [0u8; 32];
+
 	let (key_id, key_data) = generate_key_data::<C>(
 		BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
-		&mut Rng::from_seed(DEFAULT_KEYGEN_SEED),
+		&mut Rng::from_seed(seed),
 		true,
 	)
 	.expect("Should generate key for test");

@@ -530,6 +530,14 @@ pub mod genesis {
 
 		let agg_pubkey = derive_aggregate_pubkey::<C>(&commitments, allow_high_pubkey)?;
 
+		#[cfg(test)]
+		{
+			// NOTE: test-only code to ensure that we cover the case
+			// where the initially generated key is incompatible (should
+			// always be the case due to the hard-coded rng seed)
+			assert!(!C::is_pubkey_compatible(&agg_pubkey.0));
+		}
+
 		let validator_mapping = PartyIdxMapping::from_participants(signers);
 
 		let keygen_result_infos: HashMap<_, _> = (1..=n)
