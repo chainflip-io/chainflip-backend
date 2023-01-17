@@ -1042,13 +1042,14 @@ impl PoolState {
 				} else {
 					sqrt_price_q64f128 << (127u8 - most_signifcant_bit)
 				}
-				.low_u128(), // Conversion to u128 is safe as top 128 bits are always zero
+				.try_into()
+				.expect("Conversion to u128 is safe as top 128 bits are always zero"),
 			)
 		};
 
 		let log_2_q63f64 = {
 			let mut log_2_q63f64 = (integer_log_2 as i128) << 64u8;
-			let mut _mantissa = mantissa;
+			let mut _mantissa: u128 = mantissa;
 
 			// rustfmt chokes when formatting this macro.
 			// See: https://github.com/rust-lang/rustfmt/issues/5404

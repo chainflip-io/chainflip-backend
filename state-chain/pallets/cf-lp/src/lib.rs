@@ -311,19 +311,21 @@ impl<T: Config> Pallet<T> {
 		range: AmmRange,
 		liquidity_amount: Liquidity,
 	) -> DispatchResult {
-		let (amount_credited, fees_collected) =
+		let burn_result =
 			T::LiquidityPoolApi::burn(account_id.clone(), asset, range, liquidity_amount)?;
 
 		// Credit the user's asset into their account.
 		Self::credit(
 			&account_id,
 			asset,
-			amount_credited[PoolSide::Asset0].saturating_add(fees_collected[PoolSide::Asset0]),
+			burn_result.asset_returned[PoolSide::Asset0]
+				.saturating_add(burn_result.fees_accrued[PoolSide::Asset0]),
 		)?;
 		Self::credit(
 			&account_id,
 			T::LiquidityPoolApi::STABLE_ASSET,
-			amount_credited[PoolSide::Asset1].saturating_add(fees_collected[PoolSide::Asset1]),
+			burn_result.asset_returned[PoolSide::Asset1]
+				.saturating_add(burn_result.fees_accrued[PoolSide::Asset1]),
 		)?;
 
 		Ok(())

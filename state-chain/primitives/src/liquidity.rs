@@ -1,3 +1,4 @@
+use crate::AssetAmount;
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 pub use sp_core::U256;
@@ -95,11 +96,23 @@ impl From<PoolAssetMap<u128>> for PoolAssetMap<U256> {
 		Self::new(asset_map[PoolSide::Asset0].into(), asset_map[PoolSide::Asset1].into())
 	}
 }
-
+#[derive(Debug)]
+pub enum ConversionError {
+	Overflow,
+}
 /// Downcasts the U256 into U128. Assuming that the number will be above U128::MAX
-impl From<PoolAssetMap<U256>> for PoolAssetMap<u128> {
-	fn from(asset_map: PoolAssetMap<U256>) -> Self {
-		Self::new(asset_map[PoolSide::Asset0].low_u128(), asset_map[PoolSide::Asset1].low_u128())
+impl TryInto<PoolAssetMap<u128>> for PoolAssetMap<U256> {
+	type Error = ConversionError;
+
+	fn try_into(self) -> Result<PoolAssetMap<u128>, ConversionError> {
+		if self[PoolSide::Asset0] > u128::MAX.into() || self[PoolSide::Asset1] > u128::MAX.into() {
+			Err(ConversionError::Overflow)
+		} else {
+			Ok(PoolAssetMap::new(
+				self[PoolSide::Asset0].low_u128(),
+				self[PoolSide::Asset1].low_u128(),
+			))
+		}
 	}
 }
 
@@ -109,4 +122,19 @@ pub struct MintedLiquidity {
 	pub range: AmmRange,
 	pub liquidity: Liquidity,
 	pub fees_acrued: PoolAssetMap<u128>,
+}
+
+#[derive(Copy, Clone, Default, Eq, PartialEq, Debug)]
+pub struct BurnResult {
+	pub asset_returned: PoolAssetMap<AssetAmount>,
+	pub fees_accrued: PoolAssetMap<AssetAmount>,
+}
+
+impl BurnResult {
+	pub fn new(
+		asset_returned: PoolAssetMap<AssetAmount>,
+		fees_accrued: PoolAssetMap<AssetAmount>,
+	) -> Self {
+		Self { asset_returned, fees_accrued }
+	}
 }

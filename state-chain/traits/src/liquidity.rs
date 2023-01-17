@@ -1,6 +1,6 @@
 use cf_primitives::{
-	AmmRange, Asset, AssetAmount, ForeignChainAddress, Liquidity, MintedLiquidity, PoolAssetMap,
-	SwapResult, Tick,
+	AmmRange, Asset, AssetAmount, BurnResult, ForeignChainAddress, Liquidity, MintedLiquidity,
+	PoolAssetMap, SwapResult, Tick,
 };
 use frame_support::dispatch::DispatchError;
 use sp_runtime::DispatchResult;
@@ -66,7 +66,7 @@ pub trait LiquidityPoolApi<Amount, AccountId> {
 		asset: Asset,
 		range: AmmRange,
 		burnt_liquidity: Liquidity,
-	) -> Result<(PoolAssetMap<Amount>, PoolAssetMap<u128>), DispatchError>;
+	) -> Result<BurnResult, DispatchError>;
 
 	/// Collects fees yielded by user's position into user's free balance.
 	fn collect(

@@ -1,8 +1,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use cf_amm::{CreatePoolError, MintError, PoolState, PositionError, MAX_FEE_100TH_BIPS};
 use cf_primitives::{
-	chains::assets::any, AccountId, AmmRange, AmountU256, AssetAmount, Liquidity, MintedLiquidity,
-	PoolAssetMap, SwapResult, Tick,
+	chains::assets::any, AccountId, AmmRange, AmountU256, AssetAmount, BurnResult, Liquidity,
+	MintedLiquidity, PoolAssetMap, SwapResult, Tick,
 };
 use cf_traits::{Chainflip, LiquidityPoolApi};
 use frame_support::pallet_prelude::*;
@@ -199,11 +199,13 @@ impl<T: Config> cf_traits::SwappingApi for Pallet<T> {
 						from,
 						to,
 						input: input_amount,
-						output: output_amount.low_u128(),
+						output: output_amount
+							.try_into()
+							.expect("Swap output must be less than u128::MAX"),
 					});
 					Ok(SwapResult::new(
-						output_amount.low_u128(),
-						asset_0_fee.low_u128(),
+						output_amount.try_into().expect("Swap output must be less than u128::MAX"),
+						asset_0_fee.try_into().expect("Swap fees must be less than u128::MAX"),
 						Default::default(),
 					))
 				} else {
@@ -219,12 +221,14 @@ impl<T: Config> cf_traits::SwappingApi for Pallet<T> {
 						from,
 						to,
 						input: input_amount,
-						output: output_amount.low_u128(),
+						output: output_amount
+							.try_into()
+							.expect("Swap output must be less than u128::MAX"),
 					});
 					Ok(SwapResult::new(
-						output_amount.low_u128(),
+						output_amount.try_into().expect("Swap output must be less than u128::MAX"),
 						Default::default(),
-						asset_1_fee.low_u128(),
+						asset_1_fee.try_into().expect("Swap fees must be less than u128::MAX"),
 					))
 				} else {
 					Err(Error::<T>::PoolDoesNotExist.into())
@@ -244,7 +248,9 @@ impl<T: Config> cf_traits::SwappingApi for Pallet<T> {
 					from,
 					to: STABLE_ASSET,
 					input: input_amount,
-					output: intermediate_amount.low_u128(),
+					output: intermediate_amount
+						.try_into()
+						.expect("Swap output must be less than u128::MAX"),
 				});
 
 				let (output_amount, stable_asset_fee) =
@@ -260,13 +266,17 @@ impl<T: Config> cf_traits::SwappingApi for Pallet<T> {
 				Self::deposit_event(Event::<T>::AssetsSwapped {
 					from: STABLE_ASSET,
 					to,
-					input: intermediate_amount.low_u128(),
-					output: output_amount.low_u128(),
+					input: intermediate_amount
+						.try_into()
+						.expect("Swap output must be less than u128::MAX"),
+					output: output_amount
+						.try_into()
+						.expect("Swap output must be less than u128::MAX"),
 				});
 				Ok(SwapResult::new(
-					output_amount.low_u128(),
-					asset_0_fee.low_u128(),
-					stable_asset_fee.low_u128(),
+					output_amount.try_into().expect("Swap output must be less than u128::MAX"),
+					asset_0_fee.try_into().expect("Swap fees must be less than u128::MAX"),
+					stable_asset_fee.try_into().expect("Swap fees must be less than u128::MAX"),
 				))
 			},
 		}
@@ -291,10 +301,15 @@ impl<T: Config> LiquidityPoolApi<AssetAmount, AccountId> for Pallet<T> {
 			if let Some(pool) = maybe_pool.as_mut() {
 				ensure!(pool.pool_enabled(), Error::<T>::PoolDisabled);
 
-				let should_mint_u256 =
-					|amount: PoolAssetMap<AmountU256>| -> bool { should_mint(amount.into()) };
+				let should_mint_u256 = |amount: PoolAssetMap<AmountU256>| -> bool {
+					should_mint(
+						amount
+							.try_into()
+							.expect("Mint required asset amounts must be less than u128::MAX"),
+					)
+				};
 				// Mint the Liquidity from the pool.
-				let asset_spent: PoolAssetMap<AmountU256> = pool
+				let asset_spent_u256: PoolAssetMap<AmountU256> = pool
 					.mint(lp.clone(), range.lower, range.upper, liquidity_amount, should_mint_u256)
 					.map_err(|e| match e {
 						MintError::InvalidTickRange => Error::<T>::InvalidTickRange,
@@ -302,15 +317,18 @@ impl<T: Config> LiquidityPoolApi<AssetAmount, AccountId> for Pallet<T> {
 						MintError::ShouldMintFunctionFailed => Error::<T>::InsufficientBalance,
 					})?;
 
+				let asset_debited = asset_spent_u256
+					.try_into()
+					.expect("Mint required asset amounts must be less than u128::MAX");
 				Self::deposit_event(Event::<T>::LiquidityMinted {
 					lp,
 					asset,
 					range,
 					minted_liquidity: liquidity_amount,
-					asset_debited: asset_spent.into(),
+					asset_debited,
 				});
 
-				Ok(asset_spent.into())
+				Ok(asset_debited)
 			} else {
 				Err(Error::<T>::PoolDoesNotExist.into())
 			}
@@ -324,29 +342,34 @@ impl<T: Config> LiquidityPoolApi<AssetAmount, AccountId> for Pallet<T> {
 		asset: any::Asset,
 		range: AmmRange,
 		burnt_liquidity: Liquidity,
-	) -> Result<(PoolAssetMap<AssetAmount>, PoolAssetMap<AssetAmount>), DispatchError> {
+	) -> Result<BurnResult, DispatchError> {
 		Pools::<T>::mutate(asset, |maybe_pool| {
 			if let Some(pool) = maybe_pool.as_mut() {
 				ensure!(pool.pool_enabled(), Error::<T>::PoolDisabled);
 
 				// Burn liquidity from the user's position.
-				let (asset_credited, fees): (PoolAssetMap<AmountU256>, PoolAssetMap<u128>) = pool
-					.burn(lp.clone(), range.lower, range.upper, burnt_liquidity)
-					.map_err(|e| match e {
-						PositionError::NonExistent => Error::<T>::PositionDoesNotExist,
-						PositionError::PositionLacksLiquidity => Error::<T>::PositionLacksLiquidity,
-					})?;
+				let (asset_credited_u256, fees): (PoolAssetMap<AmountU256>, PoolAssetMap<u128>) =
+					pool.burn(lp.clone(), range.lower, range.upper, burnt_liquidity).map_err(
+						|e| match e {
+							PositionError::NonExistent => Error::<T>::PositionDoesNotExist,
+							PositionError::PositionLacksLiquidity =>
+								Error::<T>::PositionLacksLiquidity,
+						},
+					)?;
 
+				let asset_credited = asset_credited_u256
+					.try_into()
+					.expect("Asset amount returned from Burn must be less than u128::MAX");
 				Self::deposit_event(Event::<T>::LiquidityBurned {
 					lp,
 					asset,
 					range,
 					burnt_liquidity,
-					asset_credited: asset_credited.into(),
+					asset_credited,
 					fee_yielded: fees,
 				});
 
-				Ok((asset_credited.into(), fees))
+				Ok(BurnResult::new(asset_credited, fees))
 			} else {
 				Err(Error::<T>::PoolDoesNotExist.into())
 			}
