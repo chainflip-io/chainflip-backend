@@ -113,7 +113,9 @@ impl pallet_cf_account_roles::Config for Test {
 }
 
 impl pallet_cf_pools::Config for Test {
+	type RuntimeEvent = RuntimeEvent;
 	type NetworkFee = ConstU16<100>;
+	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 }
 
 impl crate::Config for Test {
@@ -138,6 +140,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 				(NON_LP_ACCOUNT, AccountRole::Validator),
 			],
 		},
+		liquidity_pools: Default::default(),
 	};
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();

@@ -306,8 +306,10 @@ impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
 }
 #[cfg(feature = "ibiza")]
 impl pallet_cf_pools::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
 	// fee = 0,1%
 	type NetworkFee = ConstU16<10>;
+	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 }
 
 #[cfg(feature = "ibiza")]
@@ -561,6 +563,10 @@ impl pallet_cf_emissions::Config for Runtime {
 	type EthEnvironmentProvider = Environment;
 	type WeightInfo = pallet_cf_emissions::weights::PalletWeight<Runtime>;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+	#[cfg(feature = "ibiza")]
+	type FlipToBurn = LiquidityPools;
+	#[cfg(feature = "ibiza")]
+	type EgressHandler = chainflip::AnyChainIngressEgressHandler;
 }
 
 parameter_types! {
