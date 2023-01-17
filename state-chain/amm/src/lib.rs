@@ -74,22 +74,22 @@ impl Position {
 		upper_tick: Tick,
 		upper_info: &TickInfo,
 	) {
-		let fee_growth_inside = PoolAssetMap::new_from_fn(|ticker| {
+		let fee_growth_inside = PoolAssetMap::new_from_fn(|side| {
 			let fee_growth_below = if pool_state.current_tick < lower_tick {
-				pool_state.global_fee_growth[ticker] - lower_info.fee_growth_outside[ticker]
+				pool_state.global_fee_growth[side] - lower_info.fee_growth_outside[side]
 			} else {
-				lower_info.fee_growth_outside[ticker]
+				lower_info.fee_growth_outside[side]
 			};
 
 			let fee_growth_above = if pool_state.current_tick < upper_tick {
-				upper_info.fee_growth_outside[ticker]
+				upper_info.fee_growth_outside[side]
 			} else {
-				pool_state.global_fee_growth[ticker] - upper_info.fee_growth_outside[ticker]
+				pool_state.global_fee_growth[side] - upper_info.fee_growth_outside[side]
 			};
 
-			pool_state.global_fee_growth[ticker] - fee_growth_below - fee_growth_above
+			pool_state.global_fee_growth[side] - fee_growth_below - fee_growth_above
 		});
-		self.fees_owed.mutate(|ticker, current_fees_owned| {
+		self.fees_owed.mutate(|side, current_fees_owned| {
 			// DIFF: This behaviour is different than Uniswap's. We saturate fees_owed instead of
 			// overflowing
 
@@ -99,7 +99,7 @@ impl Position {
 				U512::one() << 128 > u128::MAX
 			*/
 			let new_fees_owed: u128 = mul_div_floor(
-				fee_growth_inside[ticker] - self.last_fee_growth_inside[ticker],
+				fee_growth_inside[side] - self.last_fee_growth_inside[side],
 				self.liquidity.into(),
 				U512::one() << 128,
 			)
@@ -135,7 +135,7 @@ pub struct TickInfo {
 }
 
 trait SwapDirection {
-	const INPUT_TICKER: PoolSide;
+	const INPUT_SIDE: PoolSide;
 
 	/// The xy=k maths only works while the liquidity is constant, so this function returns the
 	/// closest (to the current) next tick/price where liquidity possibly changes. Note the
@@ -177,7 +177,7 @@ trait SwapDirection {
 
 pub struct BaseToPair {}
 impl SwapDirection for BaseToPair {
-	const INPUT_TICKER: PoolSide = PoolSide::Asset0;
+	const INPUT_SIDE: PoolSide = PoolSide::Asset0;
 
 	fn target_tick(
 		current_tick: Tick,
@@ -227,7 +227,7 @@ impl SwapDirection for BaseToPair {
 
 pub struct PairToBase {}
 impl SwapDirection for PairToBase {
-	const INPUT_TICKER: PoolSide = PoolSide::Asset1;
+	const INPUT_SIDE: PoolSide = PoolSide::Asset1;
 
 	fn target_tick(
 		current_tick: Tick,
@@ -624,32 +624,31 @@ impl PoolState {
 			.collect()
 	}
 
-	/// Swaps the specified Amount of Base into Pair, and returns the Pair Amount.
+	/// Swaps the specified Amount of Base into Pair. Returns the Output and Fee amount.
 	///
 	/// This function never panics
 	pub fn swap_from_base_to_pair(&mut self, amount: AmountU256) -> (AmountU256, AmountU256) {
 		self.swap::<BaseToPair>(amount)
 	}
 
-	/// Swaps the specified Amount of Pair into Base, and returns the Base Amount.
+	/// Swaps the specified Amount of Pair into Base. Returns the Output and Fee amount.
 	///
 	/// This function never panics
 	pub fn swap_from_pair_to_base(&mut self, amount: AmountU256) -> (AmountU256, AmountU256) {
 		self.swap::<PairToBase>(amount)
 	}
 
-	/// Swaps the specified Amount into the other currency, and returns the Amount. The direction of
-	/// the swap is controlled by the generic type parameter `SD`, by setting it to `BaseToPair` or
-	/// `PairToBase`.
+	/// Swaps the specified Amount into the other currency. Returns the Output and Fees amount. The
+	/// direction of the swap is controlled by the generic type parameter `SD`, by setting it to
+	/// `BaseToPair` or `PairToBase`.
 	///
 	/// This function never panics
 	fn swap<SD: SwapDirection>(&mut self, mut amount: AmountU256) -> (AmountU256, AmountU256) {
 		let mut total_amount_out = AmountU256::zero();
 		let mut total_fee_paid = AmountU256::zero();
 
-		while let Some((target_tick, target_info)) = (AmountU256::zero() != amount)
-			.then_some(())
-			.and_then(|()| SD::target_tick(self.current_tick, &mut self.liquidity_map))
+		while let Some(Some((target_tick, target_info))) =
+			(!amount.is_zero()).then(|| SD::target_tick(self.current_tick, &mut self.liquidity_map))
 		{
 			let sqrt_ratio_target = Self::sqrt_price_at_tick(*target_tick);
 
@@ -702,14 +701,14 @@ impl PoolState {
 				// case of reverting an extrinsic's mutations which is expensive in Substrate based
 				// chains.
 				if self.current_liquidity > 0 {
-					self.global_fee_growth[SD::INPUT_TICKER] =
-						self.global_fee_growth[SD::INPUT_TICKER].saturating_add(mul_div_floor(
+					self.global_fee_growth[SD::INPUT_SIDE] = self.global_fee_growth[SD::INPUT_SIDE]
+						.saturating_add(mul_div_floor(
 							fees,
 							U256::from(1) << 128u32,
 							self.current_liquidity,
 						));
-					target_info.fee_growth_outside = PoolAssetMap::new_from_fn(|ticker| {
-						self.global_fee_growth[ticker] - target_info.fee_growth_outside[ticker]
+					target_info.fee_growth_outside = PoolAssetMap::new_from_fn(|side| {
+						self.global_fee_growth[side] - target_info.fee_growth_outside[side]
 					});
 				}
 
@@ -746,8 +745,8 @@ impl PoolState {
 				// consider the case of reverting an extrinsic's mutations which is expensive in
 				// Substrate based chains.
 				if self.current_liquidity > 0 {
-					self.global_fee_growth[SD::INPUT_TICKER] =
-						self.global_fee_growth[SD::INPUT_TICKER].saturating_add(mul_div_floor(
+					self.global_fee_growth[SD::INPUT_SIDE] = self.global_fee_growth[SD::INPUT_SIDE]
+						.saturating_add(mul_div_floor(
 							fees,
 							U256::from(1) << 128u32,
 							self.current_liquidity,

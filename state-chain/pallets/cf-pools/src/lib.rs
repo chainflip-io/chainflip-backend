@@ -39,7 +39,7 @@ pub mod pallet {
 	pub struct Pallet<T>(PhantomData<T>);
 
 	/// Pools are indexed by single asset since USDC is implicit.
-	/// any::Asset::Usdc is always PoolSide::Asset1
+	/// The STABLE_ASSET is always PoolSide::Asset1
 	#[pallet::storage]
 	pub(super) type Pools<T: Config> =
 		StorageMap<_, Twox64Concat, any::Asset, PoolState, OptionQuery>;
@@ -106,6 +106,7 @@ pub mod pallet {
 			to: any::Asset,
 			input: AssetAmount,
 			output: AssetAmount,
+			input_asset_fee: AssetAmount,
 		},
 	}
 
@@ -125,7 +126,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let _ok = T::EnsureGovernance::ensure_origin(origin)?;
 
-			Pools::<T>::mutate(asset, |maybe_pool| {
+			Pools::<T>::try_mutate(asset, |maybe_pool| {
 				if let Some(pool) = maybe_pool.as_mut() {
 					pool.update_pool_enabled(enabled);
 					Ok(())
@@ -155,7 +156,7 @@ pub mod pallet {
 			let _ok = T::EnsureGovernance::ensure_origin(origin)?;
 			// Fee amount must be <= 50%
 			ensure!(fee_100th_bips <= MAX_FEE_100TH_BIPS, Error::<T>::InvalidFeeAmount);
-			Pools::<T>::mutate(asset, |maybe_pool| {
+			Pools::<T>::try_mutate(asset, |maybe_pool| {
 				if maybe_pool.is_some() {
 					Err(Error::<T>::PoolAlreadyExists)
 				} else {
@@ -190,7 +191,7 @@ impl<T: Config> cf_traits::SwappingApi for Pallet<T> {
 		input_amount: AssetAmount,
 	) -> Result<SwapResult, DispatchError> {
 		match (from, to) {
-			(input_asset, any::Asset::Usdc) => Pools::<T>::mutate(input_asset, |maybe_pool| {
+			(input_asset, STABLE_ASSET) => Pools::<T>::try_mutate(input_asset, |maybe_pool| {
 				if let Some(pool) = maybe_pool.as_mut() {
 					ensure!(pool.pool_enabled(), Error::<T>::PoolDisabled);
 					let (output_amount, asset_0_fee) =
@@ -202,6 +203,9 @@ impl<T: Config> cf_traits::SwappingApi for Pallet<T> {
 						output: output_amount
 							.try_into()
 							.expect("Swap output must be less than u128::MAX"),
+						input_asset_fee: asset_0_fee
+							.try_into()
+							.expect("Swap fees must be less than u128::MAX"),
 					});
 					Ok(SwapResult::new(
 						output_amount.try_into().expect("Swap output must be less than u128::MAX"),
@@ -212,7 +216,7 @@ impl<T: Config> cf_traits::SwappingApi for Pallet<T> {
 					Err(Error::<T>::PoolDoesNotExist.into())
 				}
 			}),
-			(any::Asset::Usdc, output_asset) => Pools::<T>::mutate(output_asset, |maybe_pool| {
+			(STABLE_ASSET, output_asset) => Pools::<T>::try_mutate(output_asset, |maybe_pool| {
 				if let Some(pool) = maybe_pool.as_mut() {
 					ensure!(pool.pool_enabled(), Error::<T>::PoolDisabled);
 					let (output_amount, asset_1_fee) =
@@ -224,6 +228,9 @@ impl<T: Config> cf_traits::SwappingApi for Pallet<T> {
 						output: output_amount
 							.try_into()
 							.expect("Swap output must be less than u128::MAX"),
+						input_asset_fee: asset_1_fee
+							.try_into()
+							.expect("Swap fees must be less than u128::MAX"),
 					});
 					Ok(SwapResult::new(
 						output_amount.try_into().expect("Swap output must be less than u128::MAX"),
@@ -236,7 +243,7 @@ impl<T: Config> cf_traits::SwappingApi for Pallet<T> {
 			}),
 			(input_asset, output_asset) => {
 				let (intermediate_amount, asset_0_fee) =
-					Pools::<T>::mutate(input_asset, |maybe_pool| {
+					Pools::<T>::try_mutate(input_asset, |maybe_pool| {
 						if let Some(pool) = maybe_pool.as_mut() {
 							ensure!(pool.pool_enabled(), Error::<T>::PoolDisabled);
 							Ok(pool.swap_from_base_to_pair(input_amount.into()))
@@ -251,10 +258,13 @@ impl<T: Config> cf_traits::SwappingApi for Pallet<T> {
 					output: intermediate_amount
 						.try_into()
 						.expect("Swap output must be less than u128::MAX"),
+					input_asset_fee: asset_0_fee
+						.try_into()
+						.expect("Swap fees must be less than u128::MAX"),
 				});
 
 				let (output_amount, stable_asset_fee) =
-					Pools::<T>::mutate(output_asset, |maybe_pool| {
+					Pools::<T>::try_mutate(output_asset, |maybe_pool| {
 						if let Some(pool) = maybe_pool.as_mut() {
 							ensure!(pool.pool_enabled(), Error::<T>::PoolDisabled);
 							Ok(pool.swap_from_pair_to_base(intermediate_amount))
@@ -272,6 +282,9 @@ impl<T: Config> cf_traits::SwappingApi for Pallet<T> {
 					output: output_amount
 						.try_into()
 						.expect("Swap output must be less than u128::MAX"),
+					input_asset_fee: stable_asset_fee
+						.try_into()
+						.expect("Swap fees must be less than u128::MAX"),
 				});
 				Ok(SwapResult::new(
 					output_amount.try_into().expect("Swap output must be less than u128::MAX"),
@@ -297,7 +310,7 @@ impl<T: Config> LiquidityPoolApi<AssetAmount, AccountId> for Pallet<T> {
 		liquidity_amount: Liquidity,
 		should_mint: impl FnOnce(PoolAssetMap<AssetAmount>) -> bool,
 	) -> Result<PoolAssetMap<AssetAmount>, DispatchError> {
-		Pools::<T>::mutate(asset, |maybe_pool| {
+		Pools::<T>::try_mutate(asset, |maybe_pool| {
 			if let Some(pool) = maybe_pool.as_mut() {
 				ensure!(pool.pool_enabled(), Error::<T>::PoolDisabled);
 
@@ -308,7 +321,7 @@ impl<T: Config> LiquidityPoolApi<AssetAmount, AccountId> for Pallet<T> {
 							.expect("Mint required asset amounts must be less than u128::MAX"),
 					)
 				};
-				// Mint the Liquidity from the pool.
+
 				let asset_spent_u256: PoolAssetMap<AmountU256> = pool
 					.mint(lp.clone(), range.lower, range.upper, liquidity_amount, should_mint_u256)
 					.map_err(|e| match e {
@@ -343,7 +356,7 @@ impl<T: Config> LiquidityPoolApi<AssetAmount, AccountId> for Pallet<T> {
 		range: AmmRange,
 		burnt_liquidity: Liquidity,
 	) -> Result<BurnResult, DispatchError> {
-		Pools::<T>::mutate(asset, |maybe_pool| {
+		Pools::<T>::try_mutate(asset, |maybe_pool| {
 			if let Some(pool) = maybe_pool.as_mut() {
 				ensure!(pool.pool_enabled(), Error::<T>::PoolDisabled);
 
@@ -376,13 +389,13 @@ impl<T: Config> LiquidityPoolApi<AssetAmount, AccountId> for Pallet<T> {
 		})
 	}
 
-	/// Collects fees yielded by user's position into user's free balance.
+	/// Returns and resets fees accrued in user's position.
 	fn collect(
 		lp: AccountId,
 		asset: any::Asset,
 		range: AmmRange,
 	) -> Result<PoolAssetMap<AssetAmount>, DispatchError> {
-		Pools::<T>::mutate(asset, |maybe_pool| {
+		Pools::<T>::try_mutate(asset, |maybe_pool| {
 			if let Some(pool) = maybe_pool.as_mut() {
 				ensure!(pool.pool_enabled(), Error::<T>::PoolDisabled);
 

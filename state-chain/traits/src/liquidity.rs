@@ -68,7 +68,7 @@ pub trait LiquidityPoolApi<Amount, AccountId> {
 		burnt_liquidity: Liquidity,
 	) -> Result<BurnResult, DispatchError>;
 
-	/// Collects fees yielded by user's position into user's free balance.
+	/// Returns and resets fees accrued in user's position.
 	fn collect(
 		lp: AccountId,
 		asset: Asset,
