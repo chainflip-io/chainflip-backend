@@ -12,7 +12,7 @@ use itertools::{Either, Itertools};
 
 use async_trait::async_trait;
 
-use rand_legacy::{FromEntropy, RngCore, SeedableRng};
+use rand_legacy::{RngCore, SeedableRng};
 
 use slog::Logger;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -28,10 +28,7 @@ use crate::{
 				KeygenCeremony, SigningCeremony,
 			},
 			ceremony_runner::CeremonyRunner,
-			common::{
-				broadcast::BroadcastStage, CeremonyCommon, CeremonyFailureReason,
-				KeygenFailureReason,
-			},
+			common::{broadcast::BroadcastStage, CeremonyCommon, CeremonyFailureReason},
 			keygen::{generate_key_data, HashComm1, HashContext, VerifyHashCommitmentsBroadcast2},
 			signing, KeygenResultInfo, PartyIdxMapping, ThresholdParameters,
 		},
@@ -88,11 +85,10 @@ pub struct Node<C: CeremonyTrait> {
 	/// If any of the methods we called on the ceremony runner returned the outcome,
 	/// it will be stored here
 	outcome: Option<CeremonyOutcome<C>>,
-	allowing_high_pubkey: bool,
 	logger: slog::Logger,
 }
 
-fn new_node<C: CeremonyTrait>(account_id: AccountId, allowing_high_pubkey: bool) -> Node<C> {
+fn new_node<C: CeremonyTrait>(account_id: AccountId) -> Node<C> {
 	let logger = new_test_logger().new(slog::o!("account_id" => account_id.to_string()));
 
 	let (outgoing_p2p_message_sender, outgoing_p2p_message_receiver) =
@@ -105,7 +101,6 @@ fn new_node<C: CeremonyTrait>(account_id: AccountId, allowing_high_pubkey: bool)
 		own_account_id: account_id,
 		ceremony_runner,
 		outgoing_p2p_message_receiver,
-		allowing_high_pubkey,
 		outcome: None,
 		logger,
 	}
@@ -189,7 +184,6 @@ impl Node<KeygenCeremonyEth> {
 			signers,
 			&self.outgoing_p2p_message_sender,
 			rng,
-			self.allowing_high_pubkey,
 			&self.logger,
 		)
 		.expect("invalid request");
@@ -206,19 +200,7 @@ pub fn new_nodes<AccountIds: IntoIterator<Item = AccountId>, C: CeremonyTrait>(
 ) -> HashMap<AccountId, Node<C>> {
 	account_ids
 		.into_iter()
-		.map(|account_id| (account_id.clone(), new_node(account_id, true)))
-		.collect()
-}
-
-pub fn new_nodes_without_allow_high_pubkey<
-	AccountIds: IntoIterator<Item = AccountId>,
-	C: CeremonyTrait,
->(
-	account_ids: AccountIds,
-) -> HashMap<AccountId, Node<C>> {
-	account_ids
-		.into_iter()
-		.map(|account_id| (account_id.clone(), new_node(account_id, false)))
+		.map(|account_id| (account_id.clone(), new_node(account_id)))
 		.collect()
 }
 
@@ -716,9 +698,7 @@ pub async fn new_signing_ceremony<C: CryptoScheme>(
 	let (key_id, key_data) = generate_key_data::<C>(
 		BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
 		&mut Rng::from_seed(DEFAULT_KEYGEN_SEED),
-		true,
-	)
-	.expect("Should generate key for test");
+	);
 
 	SigningCeremonyRunner::new_with_threshold_subset_of_signers(
 		new_nodes(ACCOUNT_IDS.clone()),
@@ -770,55 +750,6 @@ pub async fn run_keygen(
 	let keygen_ceremony =
 		KeygenCeremonyRunner::new(nodes, ceremony_id, Rng::from_seed(DEFAULT_KEYGEN_SEED));
 	standard_keygen(keygen_ceremony).await
-}
-
-pub async fn run_keygen_with_err_on_high_pubkey<AccountIds: IntoIterator<Item = AccountId>>(
-	account_ids: AccountIds,
-) -> Result<
-	(
-		KeyId,
-		HashMap<AccountId, KeygenResultInfo<EthSigning>>,
-		HashMap<AccountId, Node<KeygenCeremonyEth>>,
-	),
-	(),
-> {
-	let mut keygen_ceremony = KeygenCeremonyRunner::new(
-		new_nodes_without_allow_high_pubkey(account_ids),
-		DEFAULT_KEYGEN_CEREMONY_ID,
-		Rng::from_entropy(),
-	);
-
-	let stage_1_messages = keygen_ceremony.request().await;
-	let stage_4_messages = run_stages!(
-		keygen_ceremony,
-		stage_1_messages,
-		keygen::VerifyHashComm2,
-		keygen::CoeffComm3<Point>,
-		keygen::VerifyCoeffComm4<Point>
-	);
-	keygen_ceremony.distribute_messages(stage_4_messages).await;
-	match keygen_ceremony
-		.try_complete_with_error(&[], KeygenFailureReason::KeyNotCompatible)
-		.await
-	{
-		Some(_) => Err(()),
-		None => {
-			let stage_5_messages = keygen_ceremony
-				.gather_outgoing_messages::<keygen::SecretShare5<Point>, _>()
-				.await;
-			let stage_7_messages = run_stages!(
-				keygen_ceremony,
-				stage_5_messages,
-				keygen::Complaints6,
-				keygen::VerifyComplaints7
-			);
-			keygen_ceremony.distribute_messages(stage_7_messages).await;
-
-			let (key_id, key_data) = keygen_ceremony.complete().await;
-
-			Ok((key_id, key_data, keygen_ceremony.nodes))
-		},
-	}
 }
 
 /// Generate an invalid local sig for stage3
@@ -879,7 +810,6 @@ pub fn gen_invalid_keygen_stage_2_state<P: ECPoint>(
 	let commitment = gen_invalid_keygen_comm1(&mut rng, account_ids.len() as u32);
 	let processor = VerifyHashCommitmentsBroadcast2::new(
 		common.clone(),
-		true,
 		commitment,
 		account_ids.iter().map(|_| (0, None)).collect(),
 		keygen::OutgoingShares(BTreeMap::new()),
@@ -894,8 +824,7 @@ pub fn gen_invalid_keygen_stage_2_state<P: ECPoint>(
 /// Generates key data using the DEFAULT_KEYGEN_SEED and returns the KeygenResultInfo for the first
 /// signer.
 pub fn get_key_data_for_test<C: CryptoScheme>(signers: BTreeSet<AccountId>) -> KeygenResultInfo<C> {
-	generate_key_data::<C>(signers.clone(), &mut Rng::from_seed(DEFAULT_KEYGEN_SEED), true)
-		.expect("Should not be able to fail generating key data")
+	generate_key_data::<C>(signers.clone(), &mut Rng::from_seed(DEFAULT_KEYGEN_SEED))
 		.1
 		.get(signers.iter().next().unwrap())
 		.expect("should get keygen for an account")

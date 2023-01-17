@@ -106,9 +106,7 @@ async fn should_sign_with_all_parties<C: CryptoScheme>() {
 	let (key_id, key_data) = generate_key_data::<C>(
 		BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
 		&mut Rng::from_seed(seed),
-		true,
-	)
-	.expect("Should generate key for test");
+	);
 
 	let mut signing_ceremony = SigningCeremonyRunner::<C>::new_with_all_signers(
 		new_nodes(ACCOUNT_IDS.clone()),
