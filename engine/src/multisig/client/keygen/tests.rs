@@ -885,3 +885,28 @@ async fn genesis_keys_can_sign() {
 		);
 	standard_signing(&mut signing_ceremony).await;
 }
+
+#[tokio::test]
+// Test that a key that was initially incompatible with Eth contract
+// was correctly turned into a compatible one, which can be used for
+// multiparty signing.
+async fn initially_incompatible_keys_can_sign() {
+	use crate::multisig::crypto::eth::EthSigning;
+
+	let account_ids: BTreeSet<_> = [1, 2, 3, 4].iter().map(|i| AccountId::new([*i; 32])).collect();
+
+	let mut rng = Rng::from_entropy();
+	let (key_id, key_data) =
+		keygen::generate_key_data_with_initial_incompatibility(account_ids.clone(), &mut rng);
+
+	let (mut signing_ceremony, _non_signing_nodes) =
+		SigningCeremonyRunner::<EthSigning>::new_with_threshold_subset_of_signers(
+			new_nodes(account_ids),
+			DEFAULT_SIGNING_CEREMONY_ID,
+			key_id.clone(),
+			key_data.clone(),
+			EthSigning::signing_payload_for_test(),
+			Rng::from_entropy(),
+		);
+	standard_signing(&mut signing_ceremony).await;
+}

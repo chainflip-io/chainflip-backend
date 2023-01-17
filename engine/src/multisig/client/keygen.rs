@@ -16,6 +16,9 @@ pub use keygen_data::{
 	VerifyBlameResponses9, VerifyCoeffComm4, VerifyComplaints7, VerifyHashComm2,
 };
 
-pub use keygen_detail::{genesis::generate_key_data, HashContext};
+pub use keygen_detail::{
+	genesis::{generate_key_data, generate_key_data_with_initial_incompatibility},
+	HashContext,
+};
 
 pub use keygen_stages::{HashCommitments1, VerifyHashCommitmentsBroadcast2};

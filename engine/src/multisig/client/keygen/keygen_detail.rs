@@ -477,36 +477,35 @@ pub mod genesis {
 	use std::collections::HashMap;
 
 	use super::*;
-	use crate::multisig::{client::PartyIdxMapping, KeyId};
+	use crate::multisig::{client::PartyIdxMapping, eth::EthSigning, KeyId};
 	use state_chain_runtime::AccountId;
 
 	/// Generate keys for all participants in a centralised manner.
 	/// (Useful for testing and genesis keygen)
-	pub fn generate_key_data<C: CryptoScheme>(
+	fn generate_key_data_detail<C: CryptoScheme>(
 		signers: BTreeSet<AccountId>,
+		initial_key_must_be_incompatible: bool,
 		rng: &mut Rng,
 	) -> (KeyId, HashMap<AccountId, KeygenResultInfo<C>>) {
 		let params = ThresholdParameters::from_share_count(signers.len() as AuthorityCount);
 		let n = params.share_count;
 		let t = params.threshold;
 
-		let (commitments, outgoing_secret_shares): (BTreeMap<_, _>, BTreeMap<_, _>) = (1..=n)
-			.map(|idx| {
-				let (_secret, commitments, shares) =
-					generate_secret_and_shares::<C::Point>(rng, n, t);
-				((idx, DKGCommitment { commitments }), (idx, shares))
-			})
-			.unzip();
+		let (commitments, outgoing_secret_shares, agg_pubkey) = loop {
+			let (commitments, outgoing_secret_shares): (BTreeMap<_, _>, BTreeMap<_, _>) = (1..=n)
+				.map(|idx| {
+					let (_secret, commitments, shares) =
+						generate_secret_and_shares::<C::Point>(rng, n, t);
+					((idx, DKGCommitment { commitments }), (idx, shares))
+				})
+				.unzip();
 
-		let agg_pubkey = derive_aggregate_pubkey::<C>(&commitments);
+			let agg_pubkey = derive_aggregate_pubkey::<C>(&commitments);
 
-		#[cfg(test)]
-		{
-			// NOTE: test-only code to ensure that we cover the case
-			// where the initially generated key is incompatible (should
-			// always be the case due to the hard-coded rng seed)
-			assert!(!C::is_pubkey_compatible(&agg_pubkey.0));
-		}
+			if !initial_key_must_be_incompatible || !C::is_pubkey_compatible(&agg_pubkey.0) {
+				break (commitments, outgoing_secret_shares, agg_pubkey)
+			}
+		};
 
 		let validator_mapping = PartyIdxMapping::from_participants(signers);
 
@@ -539,5 +538,19 @@ pub mod genesis {
 			keygen_result_infos.values().next().unwrap().key.get_public_key_bytes();
 
 		(KeyId(aggregate_pubkey), keygen_result_infos)
+	}
+
+	pub fn generate_key_data<C: CryptoScheme>(
+		signers: BTreeSet<AccountId>,
+		rng: &mut Rng,
+	) -> (KeyId, HashMap<AccountId, KeygenResultInfo<C>>) {
+		generate_key_data_detail(signers, false, rng)
+	}
+
+	pub fn generate_key_data_with_initial_incompatibility(
+		signers: BTreeSet<AccountId>,
+		rng: &mut Rng,
+	) -> (KeyId, HashMap<AccountId, KeygenResultInfo<EthSigning>>) {
+		generate_key_data_detail(signers, true, rng)
 	}
 }
