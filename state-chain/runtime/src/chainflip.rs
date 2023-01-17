@@ -332,7 +332,7 @@ impl EgressApi<AnyChain> for AnyChainIngressEgressHandler {
 pub struct TokenholderGovBroadcaster;
 
 impl BroadcastAnyChainGovKey for TokenholderGovBroadcaster {
-	fn broadcast(chain: ForeignChain, _old_key: Option<Vec<u8>>, new_key: Vec<u8>) {
+	fn broadcast(chain: ForeignChain, old_key: Option<Vec<u8>>, new_key: Vec<u8>) {
 		match chain {
 			ForeignChain::Ethereum => {
 				let api_call =
