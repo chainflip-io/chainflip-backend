@@ -111,7 +111,6 @@ impl TryFrom<PoolAssetMap<U256>> for PoolAssetMap<u128> {
 pub struct MintedLiquidity {
 	pub range: AmmRange,
 	pub liquidity: Liquidity,
-	pub fees_acrued: PoolAssetMap<u128>,
 }
 
 #[derive(Copy, Clone, Default, Eq, PartialEq, Debug)]

@@ -62,7 +62,6 @@ pub const MAX_FEE_100TH_BIPS: u32 = ONE_IN_HUNDREDTH_BIPS / 2;
 struct Position {
 	liquidity: Liquidity,
 	last_fee_growth_inside: PoolAssetMap<FeeGrowthQ128F128>,
-	fees_owed: PoolAssetMap<u128>,
 }
 
 impl Position {
@@ -73,7 +72,7 @@ impl Position {
 		lower_info: &TickInfo,
 		upper_tick: Tick,
 		upper_info: &TickInfo,
-	) {
+	) -> PoolAssetMap<u128> {
 		let fee_growth_inside = PoolAssetMap::new_from_fn(|side| {
 			let fee_growth_below = if pool_state.current_tick < lower_tick {
 				pool_state.global_fee_growth[side] - lower_info.fee_growth_outside[side]
@@ -89,7 +88,8 @@ impl Position {
 
 			pool_state.global_fee_growth[side] - fee_growth_below - fee_growth_above
 		});
-		self.fees_owed.mutate(|side, current_fees_owed| {
+		let mut fees_owed = PoolAssetMap::<u128>::default();
+		fees_owed.mutate(|side, current_fees_owed| {
 			// DIFF: This behaviour is different than Uniswap's. We saturate fees_owed instead of
 			// overflowing
 
@@ -98,18 +98,16 @@ impl Position {
 				Note position.liqiudity: u128
 				U512::one() << 128 > u128::MAX
 			*/
-			let new_fees_owed: u128 = mul_div_floor(
+			*current_fees_owed = mul_div_floor(
 				fee_growth_inside[side] - self.last_fee_growth_inside[side],
 				self.liquidity.into(),
 				U512::one() << 128,
 			)
 			.try_into()
 			.unwrap_or(u128::MAX);
-
-			// saturating is acceptable, it is on LPs to withdraw fees before you hit u128::MAX fees
-			*current_fees_owed = current_fees_owed.saturating_add(new_fees_owed);
 		});
 		self.last_fee_growth_inside = fee_growth_inside;
+		fees_owed
 	}
 
 	fn set_liquidity(
@@ -120,9 +118,11 @@ impl Position {
 		lower_info: &TickInfo,
 		upper_tick: Tick,
 		upper_info: &TickInfo,
-	) {
-		self.update_fees_owed(pool_state, lower_tick, lower_info, upper_tick, upper_info);
+	) -> PoolAssetMap<u128> {
+		let fees_owed =
+			self.update_fees_owed(pool_state, lower_tick, lower_info, upper_tick, upper_info);
 		self.liquidity = new_liquidity;
+		fees_owed
 	}
 }
 
@@ -391,7 +391,7 @@ impl PoolState {
 		upper_tick: Tick,
 		minted_liquidity: Liquidity,
 		should_mint: impl FnOnce(PoolAssetMap<AmountU256>) -> Result<(), MintError>,
-	) -> Result<PoolAssetMap<AmountU256>, MintError> {
+	) -> Result<(PoolAssetMap<AmountU256>, PoolAssetMap<u128>), MintError> {
 		if (lower_tick > upper_tick) || (lower_tick < MIN_TICK) && (upper_tick > MAX_TICK) {
 			return Err(MintError::InvalidTickRange)
 		}
@@ -407,7 +407,6 @@ impl PoolState {
 			.unwrap_or_else(|| Position {
 				liquidity: 0,
 				last_fee_growth_inside: Default::default(),
-				fees_owed: Default::default(),
 			});
 
 		let tick_info_with_updated_gross_liquidity = |tick| {
@@ -445,7 +444,7 @@ impl PoolState {
 		upper_info.liquidity_delta =
 			upper_info.liquidity_delta.checked_sub_unsigned(minted_liquidity).unwrap();
 
-		position.set_liquidity(
+		let fees_owed = position.set_liquidity(
 			self,
 			// Cannot overflow due to * MAX_TICK_GROSS_LIQUIDITY
 			position.liquidity + minted_liquidity,
@@ -464,7 +463,7 @@ impl PoolState {
 		self.liquidity_map.insert(lower_tick, lower_info);
 		self.liquidity_map.insert(upper_tick, upper_info);
 
-		Ok(amounts_required)
+		Ok((amounts_required, fees_owed))
 	}
 
 	/// Tries to remove liquidity from the specified range-order, and convert the liqudity into
@@ -500,7 +499,7 @@ impl PoolState {
 				upper_info.liquidity_delta =
 					lower_info.liquidity_delta.checked_add_unsigned(burnt_liquidity).unwrap();
 
-				position.set_liquidity(
+				let fees_owed = position.set_liquidity(
 					self,
 					position.liquidity - burnt_liquidity,
 					lower_tick,
@@ -517,21 +516,14 @@ impl PoolState {
 				// current_liquidity for it to need to be substrated now
 				self.current_liquidity -= current_liquidity_delta;
 
-				let fees_owed = if position.liquidity == 0 {
+				if position.liquidity == 0 {
 					// DIFF: This behaviour is different than Uniswap's to ensure if a position
 					// exists its ticks also exist in the liquidity_map. Position will automatically
 					// be removed if all the liquidity has been burnt.
 					self.positions.remove(&(lp, lower_tick, upper_tick));
-
-					position.fees_owed
 				} else {
 					// Re-insert the leftover liquidity into storage.
 					self.positions.insert((lp, lower_tick, upper_tick), position);
-
-					// If the position is not fully burnt then the position fees are not updated
-					// and zero fees are returned. So basically fees are collected when
-					// the whole position is burnt or when we call collect.
-					Default::default()
 				};
 
 				if lower_info.liquidity_gross == 0 && lower_tick != MIN_TICK
@@ -560,39 +552,6 @@ impl PoolState {
 		}
 	}
 
-	/// Tries to calculates the fees owed to the specified position, resets the fees owed for that
-	/// position to zero, and returns the calculated amount of fees owed
-	///
-	/// This function never panics
-	///
-	/// If this function returns an `Err(_)` no state changes have occurred
-	pub fn collect(
-		&mut self,
-		lp: AccountId,
-		lower_tick: Tick,
-		upper_tick: Tick,
-	) -> Result<PoolAssetMap<u128>, PositionError> {
-		if let Some(mut position) =
-			self.positions.get(&(lp.clone(), lower_tick, upper_tick)).cloned()
-		{
-			debug_assert!(position.liquidity != 0);
-			let lower_info = self.liquidity_map.get(&lower_tick).unwrap();
-			let upper_info = self.liquidity_map.get(&upper_tick).unwrap();
-
-			position.update_fees_owed(self, lower_tick, lower_info, upper_tick, upper_info);
-
-			// Take the fee and reset the current record
-			let fees_owed = position.fees_owed;
-			position.fees_owed = Default::default();
-
-			self.positions.insert((lp, lower_tick, upper_tick), position);
-
-			Ok(fees_owed)
-		} else {
-			Err(PositionError::NonExistent)
-		}
-	}
-
 	/// Returns all postitions for a specific user.
 	pub fn minted_liquidity(&self, lp: AccountId) -> Vec<MintedLiquidity> {
 		self.positions
@@ -602,7 +561,6 @@ impl PoolState {
 					Some(MintedLiquidity {
 						range: AmmRange::new(*lower, *upper),
 						liquidity: position.liquidity,
-						fees_acrued: position.fees_owed,
 					})
 				} else {
 					None
