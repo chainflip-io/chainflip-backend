@@ -206,7 +206,7 @@ jobs:
       - name: Run node in background
         run: |
           ./target/release/chainflip-node --chain dev --node-key-file=node_key_file &
-          sleep 2
+          sleep 60
       - name: Check node health
         run: >
           curl --request POST -L -H "Content-Type:application/json;charset=utf-8" --data '{"id":1, "jsonrpc":"2.0", "method": "system_health"}' --url
