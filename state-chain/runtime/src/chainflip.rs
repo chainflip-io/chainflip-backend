@@ -17,24 +17,23 @@ pub use missed_authorship_slots::MissedAuraSlots;
 pub use signer_nomination::RandomSignerNomination;
 use sp_core::U256;
 
+use cf_chains::Chain;
+
+use cf_chains::AnyChain;
+
 use crate::{
 	AccountId, Authorship, BlockNumber, EmergencyRotationPercentageRange, Emissions, Environment,
 	EthereumBroadcaster, EthereumInstance, Flip, FlipBalance, Reputation, Runtime, System,
 	Validator,
 };
 
-#[cfg(feature = "ibiza")]
 use crate::PolkadotBroadcaster;
 
-#[cfg(feature = "ibiza")]
 use cf_chains::{
 	dot::{
 		api::PolkadotApi, Polkadot, PolkadotAccountId, PolkadotReplayProtection,
 		PolkadotTransactionData,
 	},
-	AnyChain, Chain,
-};
-use cf_chains::{
 	eth::{
 		self,
 		api::{EthereumApi, EthereumReplayProtection},
@@ -43,25 +42,20 @@ use cf_chains::{
 	ApiCall, ChainAbi, ChainEnvironment, ReplayProtectionProvider, SetGovKeyWithAggKey,
 	TransactionBuilder,
 };
-#[cfg(feature = "ibiza")]
+
 use cf_primitives::{AssetAmount, ForeignChainAddress, IntentId};
 use cf_traits::{
-	BlockEmissions, BroadcastAnyChainGovKey, BroadcastComKey, Chainflip, EmergencyRotation,
-	EpochInfo, EthEnvironmentProvider, Heartbeat, Issuance, NetworkState, RewardsDistribution,
-	RuntimeUpgrade, VaultTransitionHandler,
+	BlockEmissions, BroadcastAnyChainGovKey, BroadcastComKey, Chainflip, EgressApi,
+	EmergencyRotation, EpochInfo, EpochKey, EthEnvironmentProvider, Heartbeat, IngressApi,
+	Issuance, NetworkState, RewardsDistribution, RuntimeUpgrade, VaultTransitionHandler,
 };
-#[cfg(feature = "ibiza")]
-use cf_traits::{EgressApi, EpochKey, IngressApi};
-#[cfg(feature = "ibiza")]
 use codec::{Decode, Encode};
-#[cfg(feature = "ibiza")]
-use frame_support::dispatch::DispatchError;
+
 use pallet_cf_chain_tracking::ChainState;
-#[cfg(feature = "ibiza")]
 use scale_info::TypeInfo;
 
 use frame_support::{
-	dispatch::{DispatchErrorWithPostInfo, PostDispatchInfo},
+	dispatch::{DispatchError, DispatchErrorWithPostInfo, PostDispatchInfo},
 	traits::Get,
 };
 
@@ -189,9 +183,7 @@ impl TransactionBuilder<Ethereum, EthereumApi<EthEnvironment>> for EthTransactio
 	}
 }
 
-#[cfg(feature = "ibiza")]
 pub struct DotTransactionBuilder;
-#[cfg(feature = "ibiza")]
 impl TransactionBuilder<Polkadot, PolkadotApi<DotEnvironment>> for DotTransactionBuilder {
 	fn build_transaction(
 		signed_call: &PolkadotApi<DotEnvironment>,
@@ -250,11 +242,9 @@ impl ChainEnvironment<assets::eth::Asset, EthAbiAddress> for EthEnvironment {
 	}
 }
 
-#[cfg(feature = "ibiza")]
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct DotEnvironment;
 
-#[cfg(feature = "ibiza")]
 impl ReplayProtectionProvider<Polkadot> for DotEnvironment {
 	// Get the Environment values for vault_account, NetworkChoice and the next nonce for the
 	// proxy_account
@@ -269,7 +259,6 @@ impl ReplayProtectionProvider<Polkadot> for DotEnvironment {
 	}
 }
 
-#[cfg(feature = "ibiza")]
 impl ChainEnvironment<cf_chains::dot::api::SystemAccounts, PolkadotAccountId> for DotEnvironment {
 	fn lookup(query: cf_chains::dot::api::SystemAccounts) -> Option<PolkadotAccountId> {
 		use crate::PolkadotVault;
@@ -292,9 +281,7 @@ impl ChainEnvironment<cf_chains::dot::api::SystemAccounts, PolkadotAccountId> fo
 pub struct EthVaultTransitionHandler;
 impl VaultTransitionHandler<Ethereum> for EthVaultTransitionHandler {}
 
-#[cfg(feature = "ibiza")]
 pub struct DotVaultTransitionHandler;
-#[cfg(feature = "ibiza")]
 impl VaultTransitionHandler<Polkadot> for DotVaultTransitionHandler {
 	fn on_new_vault() {
 		Environment::reset_polkadot_proxy_account_nonce();
@@ -303,7 +290,6 @@ impl VaultTransitionHandler<Polkadot> for DotVaultTransitionHandler {
 
 pub struct AnyChainIngressEgressHandler;
 
-#[cfg(feature = "ibiza")]
 impl EgressApi<AnyChain> for AnyChainIngressEgressHandler {
 	fn schedule_egress(
 		asset: Asset,
@@ -340,9 +326,8 @@ impl BroadcastAnyChainGovKey for TokenholderGovBroadcaster {
 				EthereumBroadcaster::threshold_sign_and_broadcast(api_call);
 			},
 			ForeignChain::Polkadot => {
-				#[cfg(feature = "ibiza")]
-				let api_call = SetGovKeyWithAggKey::<Polkadot>::new_unsigned(old_key, new_key).unwrap();
-				#[cfg(feature = "ibiza")]
+				let api_call =
+					SetGovKeyWithAggKey::<Polkadot>::new_unsigned(old_key, new_key).unwrap();
 				PolkadotBroadcaster::threshold_sign_and_broadcast(api_call);
 			},
 		}
@@ -355,7 +340,6 @@ impl BroadcastComKey for TokenholderGovBroadcaster {
 	fn broadcast(_new_key: Self::EthAddress) {}
 }
 
-#[cfg(feature = "ibiza")]
 impl IngressApi<AnyChain> for AnyChainIngressEgressHandler {
 	type AccountId = <Runtime as frame_system::Config>::AccountId;
 

@@ -1,5 +1,9 @@
 use cf_chains::eth::SigData;
-use jsonrpsee::{core::RpcResult, proc_macros::rpc, types::error::CallError};
+use jsonrpsee::{
+	core::RpcResult,
+	proc_macros::rpc,
+	types::error::{CallError, ErrorCode},
+};
 use pallet_cf_governance::GovCallHash;
 use sc_client_api::HeaderBackend;
 use serde::{Deserialize, Serialize};
@@ -15,9 +19,6 @@ use std::{marker::PhantomData, sync::Arc};
 
 #[allow(unused)]
 use state_chain_runtime::{Asset, AssetAmount, ExchangeRate};
-
-#[cfg(feature = "ibiza")]
-use jsonrpsee::types::error::ErrorCode;
 
 #[derive(Serialize, Deserialize)]
 pub struct RpcAccountInfo {
@@ -429,16 +430,13 @@ where
 	}
 }
 
-#[cfg(feature = "ibiza")]
 use pallet_cf_pools_runtime_api::PoolsApi;
 
-#[cfg(feature = "ibiza")]
 pub struct PoolsRpc<C, B> {
 	pub client: Arc<C>,
 	pub _phantom: PhantomData<B>,
 }
 
-#[cfg(feature = "ibiza")]
 impl<C, B> PoolsRpc<C, B>
 where
 	B: sp_runtime::traits::Block<Hash = state_chain_runtime::Hash>,
@@ -450,7 +448,6 @@ where
 	}
 }
 
-#[cfg(feature = "ibiza")]
 #[rpc(server, client, namespace = "cf")]
 pub trait PoolsApi {
 	#[method(name = "swap_rate")]
@@ -463,7 +460,6 @@ pub trait PoolsApi {
 	) -> RpcResult<ExchangeRate>;
 }
 
-#[cfg(feature = "ibiza")]
 impl<C, B> PoolsApiServer for PoolsRpc<C, B>
 where
 	B: sp_runtime::traits::Block<Hash = state_chain_runtime::Hash>,

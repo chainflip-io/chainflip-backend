@@ -91,7 +91,7 @@ pub mod pallet {
 
 	/// The current Polkadot GOV key
 	#[pallet::storage]
-	pub type PolkadotGovKey<T> = StorageValue<_, (BlockNumberFor<T>, Vec<u8>), ValueQuery>;
+	pub type PolkadotGovKey<T> = StorageValue<_, Vec<u8>, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -135,7 +135,6 @@ pub mod pallet {
 							);
 						},
 						cf_chains::ForeignChain::Polkadot => {
-							#[cfg(feature = "ibiza")]
 							Self::broadcast_dot_gov_key(key.clone());
 						},
 					};
@@ -217,14 +216,12 @@ pub mod pallet {
 	}
 
 	impl<T: Config> Pallet<T> {
-		#[cfg(feature = "ibiza")]
 		pub fn broadcast_dot_gov_key(key: Vec<u8>) {
-			use cf_chains::dot::PolkadotGovKey;
 			let old_key = PolkadotGovKey::<T>::take();
 			T::AnyChainGovKeyBroadcaster::broadcast(
 				cf_chains::ForeignChain::Polkadot,
-				old_key,
-				key,
+				Some(old_key),
+				key.clone(),
 			);
 			PolkadotGovKey::<T>::put(key);
 		}

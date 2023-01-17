@@ -1,7 +1,7 @@
 use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
 use cf_chains::eth::H256;
-use cf_primitives::AccountRole;
+use cf_primitives::{AccountRole, Asset, ForeignChainAddress};
 use futures::{FutureExt, Stream, StreamExt};
 use pallet_cf_validator::MAX_LENGTH_FOR_VANITY_NAME;
 use rand_legacy::FromEntropy;
@@ -11,9 +11,6 @@ use sp_finality_grandpa::AuthorityId as GrandpaId;
 use state_chain_runtime::opaque::SessionKeys;
 
 use custom_rpc::CustomApiClient;
-
-#[cfg(feature = "ibiza")]
-use cf_primitives::{Asset, ForeignChainAddress};
 
 pub mod primitives {
 	pub use cf_primitives::*;
@@ -112,7 +109,6 @@ where
 	}
 }
 
-#[cfg(feature = "ibiza")]
 async fn connect_submit_and_get_events<Call>(
 	state_chain_settings: &settings::StateChain,
 	call: Call,
@@ -496,7 +492,6 @@ pub async fn set_vanity_name(
 	.await
 }
 
-#[cfg(feature = "ibiza")]
 pub async fn register_swap_intent(
 	state_chain_settings: &settings::StateChain,
 	ingress_asset: Asset,
@@ -531,7 +526,6 @@ pub async fn register_swap_intent(
 	}
 }
 
-#[cfg(feature = "ibiza")]
 pub async fn liquidity_deposit(
 	state_chain_settings: &settings::StateChain,
 	asset: Asset,

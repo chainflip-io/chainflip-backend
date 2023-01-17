@@ -14,9 +14,7 @@ pub mod witnesser;
 mod testing;
 
 // Blockchains
-pub mod eth;
-
-#[cfg(feature = "ibiza")]
 pub mod dot;
+pub mod eth;
 
 pub mod logging;

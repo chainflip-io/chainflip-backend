@@ -13,7 +13,7 @@ repository = 'https://github.com/chainflip-io/chainflip-backend'
 [dependencies]
 cf-traits = {path = '../../traits', default-features = false}
 cf-primitives = {path = '../../primitives', default-features = false}
-cf-chains = { path ='../../chains', default-features = false, features = ["ibiza"] }
+cf-chains = { path ='../../chains', default-features = false }
 
 # ==== Parity deps ====
 codec = { package = 'parity-scale-codec', version = '3.0.0', default-features = false, features = ['derive'] }
@@ -50,4 +50,3 @@ runtime-benchmarks = [
   'frame-system/runtime-benchmarks',
 ]
 try-runtime = ['frame-support/try-runtime']
-ibiza = []
