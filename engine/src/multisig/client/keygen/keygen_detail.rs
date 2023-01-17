@@ -543,7 +543,7 @@ pub mod genesis {
 				(
 					validator_mapping.get_id(idx).clone(),
 					KeygenResultInfo {
-						key: Arc::new(KeygenResult::new(
+						key: Arc::new(KeygenResult::new_compatible(
 							KeyShare {
 								y: agg_pubkey.0,
 								x_i: compute_secret_key_share(IncomingShares(incoming_shares)),
@@ -557,6 +557,9 @@ pub mod genesis {
 			})
 			.collect();
 
-		Ok((KeyId(agg_pubkey.0.as_bytes().to_vec()), keygen_result_infos))
+		let aggregate_pubkey =
+			keygen_result_infos.values().next().unwrap().key.get_public_key_bytes();
+
+		Ok((KeyId(aggregate_pubkey), keygen_result_infos))
 	}
 }

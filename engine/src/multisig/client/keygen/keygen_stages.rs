@@ -553,7 +553,7 @@ async fn finalize_keygen<Crypto: CryptoScheme>(
 			.unwrap();
 
 	let keygen_result_info = KeygenResultInfo {
-		key: Arc::new(KeygenResult::new(
+		key: Arc::new(KeygenResult::new_compatible(
 			KeyShare { y: agg_pubkey.0, x_i: compute_secret_key_share(secret_shares) },
 			party_public_keys,
 		)),
