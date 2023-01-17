@@ -15,26 +15,26 @@ const SIGNING_CTX: &[u8] = b"substrate";
 pub struct PolkadotSignature(schnorrkel::Signature);
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Hash, Eq)]
-pub struct PolkadotSigningPayload(Vec<u8>);
+pub struct SigningPayload(Vec<u8>);
 
-impl std::fmt::Display for PolkadotSigningPayload {
+impl std::fmt::Display for SigningPayload {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "{}", hex::encode(&self.0))
 	}
 }
 
-impl AsRef<[u8]> for PolkadotSigningPayload {
+impl AsRef<[u8]> for SigningPayload {
 	fn as_ref(&self) -> &[u8] {
 		self.0.as_ref()
 	}
 }
 
-impl PolkadotSigningPayload {
+impl SigningPayload {
 	pub fn new(payload: Vec<u8>) -> Result<Self> {
 		if payload.is_empty() || payload.len() > 256 {
 			anyhow::bail!("Invalid payload size");
 		}
-		Ok(PolkadotSigningPayload(payload))
+		Ok(SigningPayload(payload))
 	}
 }
 
@@ -44,33 +44,11 @@ impl From<PolkadotSignature> for cf_chains::dot::PolkadotSignature {
 	}
 }
 
-impl Serialize for PolkadotSignature {
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-	where
-		S: serde::Serializer,
-	{
-		serializer.serialize_bytes(&self.0.to_bytes())
-	}
-}
-
-impl<'de> Deserialize<'de> for PolkadotSignature {
-	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-	where
-		D: serde::Deserializer<'de>,
-	{
-		let bytes = Vec::deserialize(deserializer)?;
-
-		schnorrkel::Signature::from_bytes(&bytes)
-			.map(PolkadotSignature)
-			.map_err(serde::de::Error::custom)
-	}
-}
-
 impl CryptoScheme for PolkadotSigning {
 	type Point = Point;
 	type Signature = PolkadotSignature;
 	type AggKey = cf_chains::dot::PolkadotPublicKey;
-	type SigningPayload = PolkadotSigningPayload;
+	type SigningPayload = SigningPayload;
 
 	const NAME: &'static str = "Polkadot";
 	const CHAIN_TAG: ChainTag = ChainTag::Polkadot;
@@ -152,7 +130,7 @@ impl CryptoScheme for PolkadotSigning {
 
 	#[cfg(test)]
 	fn signing_payload_for_test() -> Self::SigningPayload {
-		PolkadotSigningPayload::new(vec![1_u8; 256]).unwrap()
+		SigningPayload::new(vec![1_u8; 256]).unwrap()
 	}
 }
 

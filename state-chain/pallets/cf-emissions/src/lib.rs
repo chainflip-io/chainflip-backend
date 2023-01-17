@@ -3,7 +3,10 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use cf_chains::UpdateFlipSupply;
-use cf_traits::{Broadcaster, EthEnvironmentProvider};
+use cf_traits::{
+	BlockEmissions, Broadcaster, EgressApi, EthEnvironmentProvider, FlipBurnInfo, Issuance,
+	RewardsDistribution,
+};
 use frame_support::dispatch::Weight;
 use frame_system::pallet_prelude::BlockNumberFor;
 pub use pallet::*;
@@ -17,13 +20,14 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-use cf_traits::{BlockEmissions, Issuance, RewardsDistribution};
 use frame_support::traits::{Get, Imbalance};
 use sp_arithmetic::traits::UniqueSaturatedFrom;
 use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, UniqueSaturatedInto, Zero},
 	Rounding, SaturatedConversion,
 };
+
+use cf_primitives::{chains::AnyChain, Asset};
 
 pub mod weights;
 pub use weights::WeightInfo;
@@ -91,11 +95,17 @@ pub mod pallet {
 		/// Something that can provide the stake manager address.
 		type EthEnvironmentProvider: EthEnvironmentProvider;
 
-		/// Benchmark stuff
-		type WeightInfo: WeightInfo;
-
 		/// For governance checks.
 		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
+
+		/// The interface for accessing the amount of Flip we want burn.
+		type FlipToBurn: FlipBurnInfo;
+
+		/// API for handling asset egress.
+		type EgressHandler: EgressApi<AnyChain>;
+
+		/// Benchmark stuff.
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::pallet]
@@ -164,6 +174,15 @@ pub mod pallet {
 			T::RewardsDistribution::distribute();
 			if Self::should_update_supply_at(current_block) {
 				if T::SystemState::ensure_no_maintenance().is_ok() {
+					let flip_to_burn = T::FlipToBurn::take_flip_to_burn();
+					T::EgressHandler::schedule_egress(
+						Asset::Flip,
+						flip_to_burn,
+						cf_primitives::ForeignChainAddress::Eth(
+							T::EthEnvironmentProvider::stake_manager_address(),
+						),
+					);
+					T::Issuance::burn(flip_to_burn.into());
 					Self::broadcast_update_total_supply(
 						T::Issuance::total_issuance(),
 						current_block,

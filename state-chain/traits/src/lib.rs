@@ -12,10 +12,8 @@ use core::fmt::Debug;
 pub use async_result::AsyncResult;
 use sp_std::collections::btree_set::BTreeSet;
 
-#[cfg(feature = "ibiza")]
-use cf_chains::Polkadot;
 use cf_chains::{
-	benchmarking_value::BenchmarkValue, ApiCall, Chain, ChainAbi, ChainCrypto, Ethereum,
+	benchmarking_value::BenchmarkValue, ApiCall, Chain, ChainAbi, ChainCrypto, Ethereum, Polkadot,
 };
 
 use cf_primitives::{
@@ -664,7 +662,6 @@ impl<T: frame_system::Config> IngressApi<Ethereum> for T {
 	}
 }
 
-#[cfg(feature = "ibiza")]
 impl<T: frame_system::Config> IngressApi<Polkadot> for T {
 	type AccountId = T::AccountId;
 	fn register_liquidity_ingress_intent(
@@ -701,7 +698,6 @@ impl AddressDerivationApi<Ethereum> for () {
 	}
 }
 
-#[cfg(feature = "ibiza")]
 impl AddressDerivationApi<Polkadot> for () {
 	fn generate_address(
 		_ingress_asset: <Polkadot as Chain>::ChainAsset,
@@ -765,7 +761,6 @@ impl<T: frame_system::Config> EgressApi<Ethereum> for T {
 	}
 }
 
-#[cfg(feature = "ibiza")]
 impl<T: frame_system::Config> EgressApi<Polkadot> for T {
 	fn schedule_egress(
 		_foreign_asset: assets::dot::Asset,
@@ -793,4 +788,10 @@ pub trait VaultKeyWitnessedHandler<C: ChainAbi> {
 		block_number: C::ChainBlockNumber,
 		tx_id: C::TransactionId,
 	) -> DispatchResultWithPostInfo;
+}
+
+/// Provides an interface to access the amount of Flip that is ready to be burned.
+pub trait FlipBurnInfo {
+	/// Takes the available Flip and returns it.
+	fn take_flip_to_burn() -> AssetAmount;
 }

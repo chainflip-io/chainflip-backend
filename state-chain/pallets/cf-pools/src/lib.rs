@@ -5,7 +5,9 @@ use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{traits::Saturating, FixedPointNumber, Permill},
 };
+use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
+use sp_arithmetic::traits::Zero;
 
 const BASIS_POINTS_PER_MILLION: u32 = 100;
 
@@ -80,13 +82,58 @@ pub(crate) mod mini_pool {
 
 #[frame_support::pallet]
 pub mod pallet {
+	use cf_primitives::Asset;
+	use frame_system::pallet_prelude::BlockNumberFor;
+
 	use super::*;
 
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config: Chainflip {
+		/// The event type.
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 		#[pallet::constant]
 		type NetworkFee: Get<u16>;
+		/// Implementation of EnsureOrigin trait for governance
+		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
+	}
+
+	#[pallet::event]
+	#[pallet::generate_deposit(pub(super) fn deposit_event)]
+	pub enum Event<T: Config> {
+		/// Updated the buy interval.
+		UpdatedBuyInterval { buy_interval: T::BlockNumber },
+	}
+
+	#[pallet::error]
+	pub enum Error<T> {
+		/// Setting the buy interval to zero is not allowed.
+		ZeroBuyIntervalNotAllowed,
+	}
+
+	#[pallet::call]
+	impl<T: Config> Pallet<T> {
+		/// Updates the buy interval.
+		///
+		/// ## Events
+		///
+		/// - [UpdatedBuyInterval](Event::UpdatedBuyInterval)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_system::BadOrigin)
+		/// - [ZeroBuyIntervalNotAllowed](pallet_cf_pools::Error::ZeroBuyIntervalNotAllowed)
+		#[pallet::weight(0)]
+		pub fn update_buy_interval(
+			origin: OriginFor<T>,
+			new_buy_interval: T::BlockNumber,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureGovernance::ensure_origin(origin)?;
+			ensure!(new_buy_interval != Zero::zero(), Error::<T>::ZeroBuyIntervalNotAllowed);
+			FlipBuyInterval::<T>::set(new_buy_interval);
+			Self::deposit_event(Event::<T>::UpdatedBuyInterval { buy_interval: new_buy_interval });
+			Ok(().into())
+		}
 	}
 
 	#[pallet::pallet]
@@ -94,14 +141,59 @@ pub mod pallet {
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(PhantomData<T>);
 
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config> {
+		pub flip_buy_interval: T::BlockNumber,
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+		fn build(&self) {
+			FlipBuyInterval::<T>::set(T::BlockNumber::from(1_u32));
+		}
+	}
+
+	#[cfg(feature = "std")]
+	impl<T: Config> Default for GenesisConfig<T> {
+		fn default() -> Self {
+			Self { flip_buy_interval: T::BlockNumber::from(1_u32) }
+		}
+	}
+
 	/// Pools are indexed by single asset since USDC is implicit.
 	#[pallet::storage]
 	pub(super) type Pools<T: Config> =
 		StorageMap<_, Twox64Concat, any::Asset, mini_pool::AmmPool, ValueQuery>;
 
+	/// FLIP ready to be burned.
+	#[pallet::storage]
+	pub(super) type FlipToBurn<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
+
+	/// Interval at which we buy FLIP in order to burn it.
+	#[pallet::storage]
+	pub(super) type FlipBuyInterval<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
+
 	/// Network fee
 	#[pallet::storage]
 	pub type CollectedNetworkFee<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
+
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
+			// Note: FlipBuyInterval is never zero!
+			if current_block % FlipBuyInterval::<T>::get() == Zero::zero() &&
+				CollectedNetworkFee::<T>::get() != 0
+			{
+				let flip_to_burn = Pools::<T>::mutate(Asset::Flip, |pool| {
+					pool.reverse_swap(CollectedNetworkFee::<T>::take())
+				});
+				FlipToBurn::<T>::mutate(|total| {
+					*total = total.saturating_add(flip_to_burn);
+				});
+			}
+			Weight::from_ref_time(0)
+		}
+	}
 }
 
 impl<T: Config> cf_traits::SwappingApi for Pallet<T> {
@@ -210,6 +302,12 @@ impl<T: Config> cf_traits::LiquidityPoolApi for Pallet<T> {
 				PoolAsset::Asset1 => (0u128, *volume),
 			},
 		})
+	}
+}
+
+impl<T: Config> cf_traits::FlipBurnInfo for Pallet<T> {
+	fn take_flip_to_burn() -> AssetAmount {
+		FlipToBurn::<T>::take()
 	}
 }
 

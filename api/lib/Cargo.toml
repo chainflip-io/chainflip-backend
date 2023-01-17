@@ -29,9 +29,9 @@ custom-rpc = {path = "../../state-chain/custom-rpc"}
 pallet-cf-account-roles = { path = '../../state-chain/pallets/cf-account-roles' }
 pallet-cf-environment = {path = "../../state-chain/pallets/cf-environment"}
 pallet-cf-governance = {path = "../../state-chain/pallets/cf-governance"}
-pallet-cf-lp = { path = '../../state-chain/pallets/cf-lp', optional = true }
+pallet-cf-lp = { path = '../../state-chain/pallets/cf-lp' }
 pallet-cf-staking = {path = "../../state-chain/pallets/cf-staking"}
-pallet-cf-swapping = { path = '../../state-chain/pallets/cf-swapping', optional = true }
+pallet-cf-swapping = { path = '../../state-chain/pallets/cf-swapping' }
 pallet-cf-threshold-signature = {path = "../../state-chain/pallets/cf-threshold-signature"}
 pallet-cf-validator = {path = "../../state-chain/pallets/cf-validator"}
 state-chain-runtime = {path = "../../state-chain/runtime"}
@@ -41,15 +41,3 @@ frame-system = {git = 'https://github.com/chainflip-io/substrate.git', tag = 'ch
 sp-consensus-aura = {git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2022-12'}
 sp-core = {git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2022-12'}
 sp-finality-grandpa = {git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2022-12'}
-
-[features]
-ibiza = [
-    'chainflip-engine/ibiza',
-    'cf-chains/ibiza',
-    'custom-rpc/ibiza',
-    'chainflip-node/ibiza',
-    'pallet-cf-environment/ibiza',
-    'pallet-cf-lp',
-    'pallet-cf-swapping',
-    'state-chain-runtime/ibiza',
-]

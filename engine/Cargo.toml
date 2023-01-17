@@ -89,9 +89,10 @@ schnorrkel = "0.9.1"
 rayon = "1.5"
 pin-project = "1.0.12"
 zmq = {git = "https://github.com/chainflip-io/rust-zmq.git", tag = "chainflip-v0.9.2+1", features = ["vendored"]}
-ed25519-dalek = "*"
-x25519-dalek = {version ="*", features = ["serde"]}
+ed25519-dalek = "1.0"
+x25519-dalek = {version ="1.1", features = ["serde"]}
 rand = "0.8.4"
+ed25519-consensus = "2.0"
 
 # Local deps
 cf-chains = {path = "../state-chain/chains"}
@@ -102,7 +103,7 @@ pallet-cf-chain-tracking = {path = "../state-chain/pallets/cf-chain-tracking"}
 pallet-cf-environment = {path = "../state-chain/pallets/cf-environment"}
 pallet-cf-flip = {path = "../state-chain/pallets/cf-flip"}
 pallet-cf-governance = {path = "../state-chain/pallets/cf-governance"}
-pallet-cf-ingress-egress = {path = "../state-chain/pallets/cf-ingress-egress", optional = true }
+pallet-cf-ingress-egress = {path = "../state-chain/pallets/cf-ingress-egress" }
 pallet-cf-reputation = {path = "../state-chain/pallets/cf-reputation"}
 pallet-cf-staking = {path = "../state-chain/pallets/cf-staking"}
 pallet-cf-threshold-signature = {path = "../state-chain/pallets/cf-threshold-signature"}
@@ -149,11 +150,3 @@ substrate-build-script-utils = { git = "https://github.com/chainflip-io/substrat
 
 [features]
 integration-test = []
-ibiza = [
-    'cf-chains/ibiza',
-    'chainflip-node/ibiza',
-    'pallet-cf-environment/ibiza',
-    'pallet-cf-ingress-egress',
-    'state-chain-runtime/ibiza',
-    "custom-rpc/ibiza",
-]

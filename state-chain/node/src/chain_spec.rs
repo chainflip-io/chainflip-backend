@@ -1,4 +1,3 @@
-#[cfg(feature = "ibiza")]
 use cf_chains::dot::{POLKADOT_METADATA, POLKADOT_VAULT_ACCOUNT};
 use cf_primitives::{AccountRole, AuthorityCount};
 
@@ -10,31 +9,23 @@ use state_chain_runtime::{
 	chainflip::Offence, opaque::SessionKeys, AccountId, AccountRolesConfig, AuraConfig,
 	BlockNumber, CfeSettings, EmissionsConfig, EnvironmentConfig, EthereumThresholdSignerConfig,
 	EthereumVaultConfig, FlipBalance, FlipConfig, GenesisConfig, GovernanceConfig, GrandpaConfig,
-	ReputationConfig, SessionConfig, StakingConfig, SystemConfig, ValidatorConfig, WASM_BINARY,
+	PolkadotThresholdSignerConfig, PolkadotVaultConfig, ReputationConfig, SessionConfig, Signature,
+	StakingConfig, SystemConfig, ValidatorConfig, WASM_BINARY,
 };
 
-#[cfg(feature = "ibiza")]
 use common::FLIPPERINOS_PER_FLIP;
-
-#[cfg(feature = "ibiza")]
-use state_chain_runtime::{PolkadotThresholdSignerConfig, PolkadotVaultConfig};
 
 use std::{env, marker::PhantomData};
 use utilities::clean_eth_address;
 
-#[cfg(feature = "ibiza")]
 use sp_core::{sr25519, Pair, Public};
-#[cfg(feature = "ibiza")]
 use sp_runtime::traits::{IdentifyAccount, Verify};
-#[cfg(feature = "ibiza")]
-use state_chain_runtime::Signature;
 
 pub mod common;
 pub mod perseverance;
 pub mod sisyphos;
 pub mod testnet;
 
-#[cfg(feature = "ibiza")]
 /// Generate a crypto pair from seed.
 pub fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {
 	TPublic::Pair::from_string(&format!("//{seed}"), None)
@@ -42,10 +33,8 @@ pub fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Pu
 		.public()
 }
 
-#[cfg(feature = "ibiza")]
 type AccountPublic = <Signature as Verify>::Signer;
 
-#[cfg(feature = "ibiza")]
 /// Generate an account ID from seed.
 pub fn get_account_id_from_seed<TPublic: Public>(seed: &str) -> AccountId
 where
@@ -202,7 +191,6 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 					.unchecked_into(),
 				)],
 				// Extra accounts
-				#[cfg(feature = "ibiza")]
 				vec![
 					(
 						get_account_id_from_seed::<sr25519::Public>("LP_1"),
@@ -225,8 +213,6 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 						100 * FLIPPERINOS_PER_FLIP,
 					),
 				],
-				#[cfg(not(feature = "ibiza"))]
-				vec![],
 				// Governance account - Snow White
 				snow_white.into(),
 				1,
@@ -243,9 +229,9 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 						max_ceremony_stage_duration,
 						eth_priority_fee_percentile: common::ETH_PRIORITY_FEE_PERCENTILE,
 					},
-					#[cfg(feature = "ibiza")]
+
 					polkadot_vault_account_id: POLKADOT_VAULT_ACCOUNT,
-					#[cfg(feature = "ibiza")]
+
 					polkadot_network_metadata: POLKADOT_METADATA,
 				},
 				eth_init_agg_key,
@@ -332,7 +318,6 @@ macro_rules! network_spec {
 								),
 							],
 							// Extra accounts
-							#[cfg(feature = "ibiza")]
 							vec![
 								(
 									get_account_id_from_seed::<sr25519::Public>("LP_1"),
@@ -355,8 +340,6 @@ macro_rules! network_spec {
 									100 * FLIPPERINOS_PER_FLIP,
 								),
 							],
-							#[cfg(not(feature = "ibiza"))]
-							vec![],
 							// Governance account - Snow White
 							SNOW_WHITE_SR25519.into(),
 							MIN_AUTHORITIES,
@@ -373,9 +356,9 @@ macro_rules! network_spec {
 									max_ceremony_stage_duration,
 									eth_priority_fee_percentile: ETH_PRIORITY_FEE_PERCENTILE,
 								},
-								#[cfg(feature = "ibiza")]
+
 								polkadot_vault_account_id: POLKADOT_VAULT_ACCOUNT,
-								#[cfg(feature = "ibiza")]
+
 								polkadot_network_metadata: POLKADOT_METADATA,
 							},
 							eth_init_agg_key,
@@ -532,7 +515,7 @@ fn testnet_genesis(
 			deployment_block: ethereum_deployment_block,
 			keygen_response_timeout: keygen_ceremony_timeout_blocks,
 		},
-		#[cfg(feature = "ibiza")]
+
 		polkadot_vault: PolkadotVaultConfig {
 			vault_key: None,
 			deployment_block: 0,
@@ -542,7 +525,7 @@ fn testnet_genesis(
 			threshold_signature_response_timeout: threshold_signature_ceremony_timeout_blocks,
 			_instance: PhantomData,
 		},
-		#[cfg(feature = "ibiza")]
+
 		polkadot_threshold_signer: PolkadotThresholdSignerConfig {
 			threshold_signature_response_timeout: threshold_signature_ceremony_timeout_blocks,
 			_instance: PhantomData,
@@ -553,6 +536,7 @@ fn testnet_genesis(
 			supply_update_interval,
 		},
 		transaction_payment: Default::default(),
+		liquidity_pools: Default::default(),
 	}
 }
 

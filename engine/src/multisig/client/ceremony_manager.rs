@@ -20,7 +20,7 @@ use crate::{
 			keygen::generate_key_data,
 			CeremonyRequestDetails,
 		},
-		crypto::{CryptoScheme, ECPoint, ECScalar, Rng},
+		crypto::{generate_single_party_signature, CryptoScheme, Rng},
 	},
 	p2p::OutgoingMultisigStageMessages,
 	task_scope::{task_scope, Scope, ScopedJoinHandle},
@@ -499,14 +499,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 
 		let key = &keygen_result_info.key.key_share;
 
-		let nonce = <C::Point as ECPoint>::Scalar::random(&mut rng);
-
-		let r = C::Point::from_scalar(&nonce);
-
-		let sigma =
-			client::signing::generate_schnorr_response::<C>(&key.x_i, key.y, r, nonce, &payload);
-
-		C::build_signature(sigma, r)
+		generate_single_party_signature::<C>(&key.x_i, &payload, &mut rng)
 	}
 }
 

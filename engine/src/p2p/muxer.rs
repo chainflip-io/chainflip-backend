@@ -138,6 +138,9 @@ impl P2PMuxer {
 								.send((account_id, payload.to_owned()))
 								.expect("polkadot receiver dropped");
 						},
+						ChainTag::Sui => {
+							slog::warn!(self.logger, "Sui chain tag is not supported yet")
+						},
 					},
 					Err(err) => {
 						slog::trace!(
