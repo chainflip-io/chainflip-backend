@@ -525,9 +525,7 @@ impl pallet_cf_emissions::Config for Runtime {
 	type EthEnvironmentProvider = Environment;
 	type WeightInfo = pallet_cf_emissions::weights::PalletWeight<Runtime>;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
-	#[cfg(feature = "ibiza")]
 	type FlipToBurn = LiquidityPools;
-	#[cfg(feature = "ibiza")]
 	type EgressHandler = chainflip::AnyChainIngressEgressHandler;
 }
 

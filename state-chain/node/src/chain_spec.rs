@@ -536,7 +536,6 @@ fn testnet_genesis(
 			supply_update_interval,
 		},
 		transaction_payment: Default::default(),
-		#[cfg(feature = "ibiza")]
 		liquidity_pools: Default::default(),
 	}
 }

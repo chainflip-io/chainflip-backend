@@ -1,12 +1,12 @@
 use crate::{mock::*, BlockEmissions, LastSupplyUpdateBlock, Pallet};
-use cf_traits::{mocks::system_state_info::MockSystemStateInfo, RewardsDistribution};
+use cf_traits::{
+	mocks::{egress_handler::MockEgressHandler, system_state_info::MockSystemStateInfo},
+	RewardsDistribution,
+};
 use frame_support::traits::OnInitialize;
 use pallet_cf_flip::Pallet as Flip;
 
-#[cfg(feature = "ibiza")]
 use cf_chains::AnyChain;
-#[cfg(feature = "ibiza")]
-use cf_traits::mocks::egress_handler::MockEgressHandler;
 
 type Emissions = Pallet<Test>;
 
@@ -154,7 +154,6 @@ fn test_example_block_reward_calcaulation() {
 }
 
 #[test]
-#[cfg(feature = "ibiza")]
 fn burn_flip() {
 	new_test_ext(vec![1, 2], None).execute_with(|| {
 		Emissions::on_initialize(SUPPLY_UPDATE_INTERVAL.into());
