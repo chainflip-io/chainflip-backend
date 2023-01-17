@@ -209,7 +209,9 @@ jobs:
       - name: Run node in background
         run: |
           ./target/release/chainflip-node --chain dev --node-key-file=node_key_file &
-          sleep 60
+          ./target/release/chainflip-node key insert --key-type 'aura' --scheme sr25519 --chain dev --suri "${{ secrets.BASHFUL_SECRET_SEED }}"
+          ./target/release/chainflip-node key insert --key-type 'gran' --scheme ed25519 --chain dev --suri "${{ secrets.BASHFUL_SECRET_SEED }}"
+          sleep 10
       - name: Check node health
         run: >
           curl --request POST -L -H "Content-Type:application/json;charset=utf-8" --data '{"id":1, "jsonrpc":"2.0", "method": "system_health"}' --url
