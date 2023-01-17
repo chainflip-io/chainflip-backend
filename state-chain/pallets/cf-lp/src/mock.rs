@@ -113,6 +113,7 @@ impl pallet_cf_account_roles::Config for Test {
 }
 
 impl pallet_cf_pools::Config for Test {
+	type RuntimeEvent = RuntimeEvent;
 	type NetworkFee = ConstU16<100>;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 }
