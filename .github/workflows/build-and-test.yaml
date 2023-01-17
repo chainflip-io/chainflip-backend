@@ -153,6 +153,7 @@ jobs:
             ./target/release/chainflip-engine
             ./target/release/chainflip-cli
             ./target/release/generate-genesis-keys
+            ./target/release/chainflip-relayer
             ./target/release/wbuild/state-chain-runtime/state_chain_runtime*.wasm
       - name: Check if building changes any files
         run: |
@@ -185,6 +186,8 @@ jobs:
       group: ${{ github.ref }}-test-single-node
       cancel-in-progress: true
     needs: [build-and-test]
+    env:
+      RUST_BACKTRACE: 1
     steps:
       - uses: actions/setup-node@v3
         with:
