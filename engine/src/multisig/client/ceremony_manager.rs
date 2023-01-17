@@ -82,7 +82,7 @@ impl<C: CryptoScheme> CeremonyTrait for KeygenCeremony<C> {
 	type Crypto = C;
 	type Data = KeygenData<<C as CryptoScheme>::Point>;
 	type Request = CeremonyRequest<C>;
-	type Output = KeygenResultInfo<<C as CryptoScheme>::Point>;
+	type Output = KeygenResultInfo<C>;
 	type FailureReason = KeygenFailureReason;
 	type CeremonyStageName = KeygenStageName;
 }
@@ -125,7 +125,7 @@ pub fn prepare_signing_request<Crypto: CryptoScheme>(
 	ceremony_id: CeremonyId,
 	own_account_id: &AccountId,
 	signers: BTreeSet<AccountId>,
-	key_info: KeygenResultInfo<Crypto::Point>,
+	key_info: KeygenResultInfo<Crypto>,
 	payload: Crypto::SigningPayload,
 	outgoing_p2p_message_sender: &UnboundedSender<OutgoingMultisigStageMessages>,
 	rng: Rng,
@@ -397,7 +397,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 		ceremony_id: CeremonyId,
 		signers: BTreeSet<AccountId>,
 		payload: C::SigningPayload,
-		key_info: KeygenResultInfo<C::Point>,
+		key_info: KeygenResultInfo<C>,
 		rng: Rng,
 		result_sender: CeremonyResultSender<SigningCeremony<C>>,
 		scope: &Scope<'_, anyhow::Error>,
@@ -486,7 +486,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 		self.latest_ceremony_id = ceremony_id;
 	}
 
-	fn single_party_keygen(&self, rng: Rng) -> KeygenResultInfo<C::Point> {
+	fn single_party_keygen(&self, rng: Rng) -> KeygenResultInfo<C> {
 		slog::info!(self.logger, "Performing solo keygen");
 
 		let (_key_id, key_data) = generate_key_data_until_compatible::<C>(
@@ -500,7 +500,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 	fn single_party_signing(
 		&self,
 		payload: C::SigningPayload,
-		keygen_result_info: KeygenResultInfo<C::Point>,
+		keygen_result_info: KeygenResultInfo<C>,
 		mut rng: Rng,
 	) -> C::Signature {
 		slog::info!(self.logger, "Performing solo signing");

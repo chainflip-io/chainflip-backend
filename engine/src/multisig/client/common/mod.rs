@@ -19,20 +19,25 @@ use serde::{Deserialize, Serialize};
 
 use thiserror::Error;
 
-use crate::multisig::crypto::{ECPoint, KeyShare};
+use crate::multisig::{
+	crypto::{ECPoint, KeyShare},
+	CryptoScheme,
+};
 
 use super::{utils::PartyIdxMapping, ThresholdParameters};
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-pub struct KeygenResult<P: ECPoint> {
+pub struct KeygenResult<C: CryptoScheme> {
 	#[serde(bound = "")]
-	pub key_share: KeyShare<P>,
+	pub key_share: KeyShare<C::Point>,
 	#[serde(bound = "")]
-	pub party_public_keys: Vec<P>,
+	pub party_public_keys: Vec<C::Point>,
+	// TODO: make this private
+	pub phantom_data: std::marker::PhantomData<C>,
 }
 
-impl<P: ECPoint> KeygenResult<P> {
-	pub fn get_public_key(&self) -> P {
+impl<C: CryptoScheme> KeygenResult<C> {
+	pub fn get_public_key(&self) -> C::Point {
 		self.key_share.y
 	}
 
@@ -43,9 +48,9 @@ impl<P: ECPoint> KeygenResult<P> {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-pub struct KeygenResultInfo<P: ECPoint> {
+pub struct KeygenResultInfo<C: CryptoScheme> {
 	#[serde(bound = "")]
-	pub key: Arc<KeygenResult<P>>,
+	pub key: Arc<KeygenResult<C>>,
 	pub validator_mapping: Arc<PartyIdxMapping>,
 	pub params: ThresholdParameters,
 }

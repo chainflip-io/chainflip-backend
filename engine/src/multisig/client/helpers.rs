@@ -117,7 +117,7 @@ pub struct SigningCeremonyDetails<C: CryptoScheme> {
 	pub ceremony_id: CeremonyId,
 	pub signers: BTreeSet<AccountId>,
 	pub payload: C::SigningPayload,
-	pub keygen_result_info: KeygenResultInfo<C::Point>,
+	pub keygen_result_info: KeygenResultInfo<C>,
 }
 
 pub struct KeygenCeremonyDetails {
@@ -619,7 +619,7 @@ impl KeygenCeremonyRunner {
 
 pub struct SigningCeremonyRunnerData<C: CryptoScheme> {
 	pub key_id: KeyId,
-	pub key_data: HashMap<AccountId, KeygenResultInfo<C::Point>>,
+	pub key_data: HashMap<AccountId, KeygenResultInfo<C>>,
 	pub payload: C::SigningPayload,
 }
 pub type SigningCeremonyRunner<C> =
@@ -663,7 +663,7 @@ impl<C: CryptoScheme> SigningCeremonyRunner<C> {
 		nodes: HashMap<AccountId, Node<SigningCeremony<C>>>,
 		ceremony_id: CeremonyId,
 		key_id: KeyId,
-		key_data: HashMap<AccountId, KeygenResultInfo<C::Point>>,
+		key_data: HashMap<AccountId, KeygenResultInfo<C>>,
 		payload: C::SigningPayload,
 		rng: Rng,
 	) -> Self {
@@ -679,7 +679,7 @@ impl<C: CryptoScheme> SigningCeremonyRunner<C> {
 		nodes: HashMap<AccountId, Node<SigningCeremony<C>>>,
 		ceremony_id: CeremonyId,
 		key_id: KeyId,
-		key_data: HashMap<AccountId, KeygenResultInfo<C::Point>>,
+		key_data: HashMap<AccountId, KeygenResultInfo<C>>,
 		payload: C::SigningPayload,
 		rng: Rng,
 	) -> (Self, HashMap<AccountId, Node<SigningCeremony<C>>>) {
@@ -747,7 +747,7 @@ pub async fn standard_signing<C: CryptoScheme>(
 
 pub async fn standard_keygen(
 	mut keygen_ceremony: KeygenCeremonyRunner,
-) -> (KeyId, HashMap<AccountId, KeygenResultInfo<Point>>) {
+) -> (KeyId, HashMap<AccountId, KeygenResultInfo<EthSigning>>) {
 	let stage_1_messages = keygen_ceremony.request().await;
 	let messages = run_stages!(
 		keygen_ceremony,
@@ -766,7 +766,7 @@ pub async fn standard_keygen(
 pub async fn run_keygen(
 	nodes: HashMap<AccountId, Node<KeygenCeremonyEth>>,
 	ceremony_id: CeremonyId,
-) -> (KeyId, HashMap<AccountId, KeygenResultInfo<Point>>) {
+) -> (KeyId, HashMap<AccountId, KeygenResultInfo<EthSigning>>) {
 	let keygen_ceremony =
 		KeygenCeremonyRunner::new(nodes, ceremony_id, Rng::from_seed(DEFAULT_KEYGEN_SEED));
 	standard_keygen(keygen_ceremony).await
@@ -777,7 +777,7 @@ pub async fn run_keygen_with_err_on_high_pubkey<AccountIds: IntoIterator<Item = 
 ) -> Result<
 	(
 		KeyId,
-		HashMap<AccountId, KeygenResultInfo<Point>>,
+		HashMap<AccountId, KeygenResultInfo<EthSigning>>,
 		HashMap<AccountId, Node<KeygenCeremonyEth>>,
 	),
 	(),
@@ -893,9 +893,7 @@ pub fn gen_invalid_keygen_stage_2_state<P: ECPoint>(
 
 /// Generates key data using the DEFAULT_KEYGEN_SEED and returns the KeygenResultInfo for the first
 /// signer.
-pub fn get_key_data_for_test<C: CryptoScheme>(
-	signers: BTreeSet<AccountId>,
-) -> KeygenResultInfo<C::Point> {
+pub fn get_key_data_for_test<C: CryptoScheme>(signers: BTreeSet<AccountId>) -> KeygenResultInfo<C> {
 	generate_key_data::<C>(signers.clone(), &mut Rng::from_seed(DEFAULT_KEYGEN_SEED), true)
 		.expect("Should not be able to fail generating key data")
 		.1

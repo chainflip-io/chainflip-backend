@@ -5,6 +5,7 @@ use cf_chains::dot::PolkadotPublicKey;
 use schnorrkel::context::{SigningContext, SigningTranscript};
 use serde::{Deserialize, Serialize};
 
+#[derive(Clone, Debug, PartialEq)]
 pub struct PolkadotSigning {}
 
 // Polkadot seems to be using this generic "substrate" context for signing

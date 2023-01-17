@@ -492,7 +492,7 @@ pub mod genesis {
 		account_ids: BTreeSet<AccountId>,
 		max_attempts: usize,
 		mut rng: Rng,
-	) -> (KeyId, HashMap<AccountId, KeygenResultInfo<C::Point>>) {
+	) -> (KeyId, HashMap<AccountId, KeygenResultInfo<C>>) {
 		let mut attempt_counter = 0;
 
 		loop {
@@ -509,11 +509,13 @@ pub mod genesis {
 		}
 	}
 
+	/// Generate keys for all participants in a centralised manner.
+	/// (Useful for testing and genesis keygen)
 	pub fn generate_key_data<C: CryptoScheme>(
 		signers: BTreeSet<AccountId>,
 		rng: &mut Rng,
 		allow_high_pubkey: bool,
-	) -> anyhow::Result<(KeyId, HashMap<AccountId, KeygenResultInfo<C::Point>>)> {
+	) -> anyhow::Result<(KeyId, HashMap<AccountId, KeygenResultInfo<C>>)> {
 		let params = ThresholdParameters::from_share_count(signers.len() as AuthorityCount);
 		let n = params.share_count;
 		let t = params.threshold;
@@ -550,6 +552,7 @@ pub mod genesis {
 								params,
 								&commitments,
 							),
+							phantom_data: std::marker::PhantomData,
 						}),
 						validator_mapping: Arc::new(validator_mapping.clone()),
 						params,

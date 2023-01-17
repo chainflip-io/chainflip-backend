@@ -556,6 +556,7 @@ async fn finalize_keygen<Crypto: CryptoScheme>(
 		key: Arc::new(KeygenResult {
 			key_share: KeyShare { y: agg_pubkey.0, x_i: compute_secret_key_share(secret_shares) },
 			party_public_keys,
+			phantom_data: std::marker::PhantomData,
 		}),
 		validator_mapping: common.validator_mapping,
 		params,

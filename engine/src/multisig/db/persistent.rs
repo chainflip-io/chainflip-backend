@@ -139,7 +139,7 @@ impl PersistentKeyDB {
 	pub fn update_key<C: CryptoScheme>(
 		&self,
 		key_id: &KeyId,
-		keygen_result_info: &KeygenResultInfo<C::Point>,
+		keygen_result_info: &KeygenResultInfo<C>,
 	) {
 		let key_id_with_prefix =
 			[KEYGEN_DATA_PARTIAL_PREFIX, &(C::CHAIN_TAG.to_bytes())[..], &key_id.0.clone()[..]]
@@ -155,8 +155,8 @@ impl PersistentKeyDB {
 			.unwrap_or_else(|e| panic!("Failed to update key {}. Error: {}", &key_id, e));
 	}
 
-	pub fn load_keys<C: CryptoScheme>(&self) -> HashMap<KeyId, KeygenResultInfo<C::Point>> {
-		let keys: HashMap<KeyId, KeygenResultInfo<C::Point>> = self
+	pub fn load_keys<C: CryptoScheme>(&self) -> HashMap<KeyId, KeygenResultInfo<C>> {
+		let keys: HashMap<KeyId, KeygenResultInfo<C>> = self
 			.db
 			.prefix_iterator_cf(
 				get_data_column_handle(&self.db),
@@ -174,7 +174,7 @@ impl PersistentKeyDB {
 				let key_id: KeyId = KeyId(key_id[PREFIX_SIZE..].into());
 
 				// deserialize the `KeygenResultInfo`
-				match bincode::deserialize::<KeygenResultInfo<C::Point>>(&key_info) {
+				match bincode::deserialize::<KeygenResultInfo<C>>(&key_info) {
 					Ok(keygen_result_info) => Some((key_id, keygen_result_info)),
 					Err(err) => {
 						slog::error!(

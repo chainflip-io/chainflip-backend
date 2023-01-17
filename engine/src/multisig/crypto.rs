@@ -81,7 +81,7 @@ pub trait ECPoint:
 	}
 }
 
-pub trait CryptoScheme: 'static {
+pub trait CryptoScheme: 'static + Clone + Send + Sync + Debug + PartialEq {
 	type Point: ECPoint;
 
 	type Signature: Debug

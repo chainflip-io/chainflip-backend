@@ -57,7 +57,7 @@ fn find_backups(temp_dir: &TempDir, db_path: PathBuf) -> Result<Vec<PathBuf>, st
 	Ok(backups)
 }
 
-fn get_single_key_data<C: CryptoScheme>() -> KeygenResultInfo<C::Point> {
+fn get_single_key_data<C: CryptoScheme>() -> KeygenResultInfo<C> {
 	get_key_data_for_test::<C>(BTreeSet::from_iter([AccountId32::new([0; 32])]))
 }
 
