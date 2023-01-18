@@ -35,7 +35,7 @@ pub struct KeygenResult<C: CryptoScheme> {
 	// NOTE: making this private ensures that the only
 	// way to create the struct is through the "constructor",
 	// which is important for ensuring its compatibility
-	phantom_data: std::marker::PhantomData<C>,
+	unused_private_field: (),
 }
 
 /// This computes a scalar, multiplying by which the public key will become compatible
@@ -67,7 +67,7 @@ impl<C: CryptoScheme> KeygenResult<C> {
 		let key_share = KeyShare { x_i: key_share.x_i * &factor, y: key_share.y * &factor };
 		let party_public_keys = party_public_keys.into_iter().map(|pk| pk * &factor).collect();
 
-		Self { key_share, party_public_keys, phantom_data: std::marker::PhantomData }
+		Self { key_share, party_public_keys, unused_private_field: () }
 	}
 }
 
