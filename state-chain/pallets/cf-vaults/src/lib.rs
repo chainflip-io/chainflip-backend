@@ -33,16 +33,8 @@ mod tests;
 #[cfg(feature = "std")]
 const KEYGEN_CEREMONY_RESPONSE_TIMEOUT_DEFAULT: u32 = 10;
 
-#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug)]
-pub enum KeygenError<Id> {
-	/// Generated key is incompatible with requirements.
-	Incompatible,
-	/// Keygen failed with the enclosed guilty parties.
-	Failure(BTreeSet<Id>),
-}
-
-pub type KeygenOutcome<Key, Id> = Result<Key, KeygenError<Id>>;
-pub type ReportedKeygenOutcome<Key, Id> = Result<Key, KeygenError<Id>>;
+pub type KeygenOutcome<Key, Id> = Result<Key, BTreeSet<Id>>;
+pub type ReportedKeygenOutcome<Key, Id> = Result<Key, BTreeSet<Id>>;
 
 pub type ReportedKeygenOutcomeFor<T, I = ()> =
 	ReportedKeygenOutcome<AggKeyFor<T, I>, <T as Chainflip>::ValidatorId>;
@@ -99,11 +91,6 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 		FailureVoters::<T, I>::append(voter);
 	}
 
-	fn add_incompatible_vote(&mut self, voter: &T::ValidatorId) {
-		assert!(self.remaining_candidates.remove(voter));
-		IncompatibleVoters::<T, I>::append(voter);
-	}
-
 	/// How many candidates are we still awaiting a response from?
 	fn remaining_candidate_count(&self) -> AuthorityCount {
 		self.remaining_candidates.len() as AuthorityCount
@@ -134,10 +121,6 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 			SuccessVoters::<T, I>::decode_len(key).unwrap_or_default() >= super_majority_threshold
 		}) {
 			SuccessVoters::<T, I>::remove(key);
-		} else if IncompatibleVoters::<T, I>::decode_len().unwrap_or_default() >=
-			super_majority_threshold
-		{
-			IncompatibleVoters::<T, I>::kill();
 		} else if FailureVoters::<T, I>::decode_len().unwrap_or_default() >=
 			super_majority_threshold
 		{
@@ -145,25 +128,21 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 		} else {
 			let _empty = SuccessVoters::<T, I>::clear(u32::MAX, None);
 			FailureVoters::<T, I>::kill();
-			IncompatibleVoters::<T, I>::kill();
 			log::warn!("Unable to determine a consensus outcome for keygen.");
 		}
 
-		Err(KeygenError::Failure(
-			SuccessVoters::<T, I>::drain()
-				.flat_map(|(_k, dissenters)| dissenters)
-				.chain(FailureVoters::<T, I>::take())
-				.chain(IncompatibleVoters::<T, I>::take())
-				.chain(self.blame_votes.into_iter().filter_map(|(id, vote_count)| {
-					if vote_count >= super_majority_threshold as u32 {
-						Some(id)
-					} else {
-						None
-					}
-				}))
-				.chain(self.remaining_candidates)
-				.collect(),
-		))
+		Err(SuccessVoters::<T, I>::drain()
+			.flat_map(|(_k, dissenters)| dissenters)
+			.chain(FailureVoters::<T, I>::take())
+			.chain(self.blame_votes.into_iter().filter_map(|(id, vote_count)| {
+				if vote_count >= super_majority_threshold as u32 {
+					Some(id)
+				} else {
+					None
+				}
+			}))
+			.chain(self.remaining_candidates)
+			.collect())
 	}
 }
 
@@ -331,14 +310,7 @@ pub mod pallet {
 							keygen_participants,
 						);
 					},
-					// TODO: Return to this case. For now, handle as any other keygen failure
-					Err(KeygenError::Incompatible) => {
-						PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Failed {
-							offenders: Default::default(),
-						});
-						Self::deposit_event(Event::KeygenIncompatible(keygen_ceremony_id));
-					},
-					Err(KeygenError::Failure(offenders)) => {
+					Err(offenders) => {
 						weight += T::WeightInfo::on_initialize_failure(offenders.len() as u32);
 						Self::terminate_keygen_procedure(
 							&if (offenders.len() as AuthorityCount) <
@@ -383,12 +355,6 @@ pub mod pallet {
 	pub type SuccessVoters<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Identity, AggKeyFor<T, I>, Vec<T::ValidatorId>, ValueQuery>;
 
-	/// The voters who voted that a particular keygen ceremony generated an incompatible key
-	#[pallet::storage]
-	#[pallet::getter(fn incompatible_voters)]
-	pub type IncompatibleVoters<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, Vec<T::ValidatorId>, ValueQuery>;
-
 	/// The voters who voted for failure for a particular agg key rotation
 	#[pallet::storage]
 	#[pallet::getter(fn failure_voters)]
@@ -416,9 +382,6 @@ pub mod pallet {
 		VaultRotatedExternally(<T::Chain as ChainCrypto>::AggKey),
 		/// A keygen participant has reported that keygen was successful \[validator_id\]
 		KeygenSuccessReported(T::ValidatorId),
-		/// A keygen participant has reported that an incompatible key was generated
-		/// \[validator_id\]
-		KeygenIncompatibleReported(T::ValidatorId),
 		/// A keygen participant has reported that keygen has failed \[validator_id\]
 		KeygenFailureReported(T::ValidatorId),
 		/// Keygen was successful \[ceremony_id\]
@@ -430,8 +393,6 @@ pub mod pallet {
 			keygen_ceremony_id: CeremonyId,
 			failed_signing_ceremony_id: CeremonyId,
 		},
-		/// Keygen was incompatible \[ceremony_id\]
-		KeygenIncompatible(CeremonyId),
 		/// Keygen has failed \[ceremony_id\]
 		KeygenFailure(CeremonyId),
 		/// Keygen response timeout has occurred \[ceremony_id\]
@@ -468,7 +429,6 @@ pub mod pallet {
 		///
 		/// - [KeygenSuccessReported](Event::KeygenSuccessReported)
 		/// - [KeygenFailureReported](Event::KeygenFailureReported)
-		/// - [KeygenIncompatibleReported](Event::KeygenIncompatibleReported)
 		///
 		/// ## Errors
 		///
@@ -515,11 +475,7 @@ pub mod pallet {
 					keygen_status.add_success_vote(&reporter, key);
 					Self::deposit_event(Event::<T, I>::KeygenSuccessReported(reporter));
 				},
-				Err(KeygenError::Incompatible) => {
-					keygen_status.add_incompatible_vote(&reporter);
-					Self::deposit_event(Event::<T, I>::KeygenIncompatibleReported(reporter));
-				},
-				Err(KeygenError::Failure(blamed)) => {
+				Err(blamed) => {
 					keygen_status.add_failure_vote(&reporter, blamed);
 					Self::deposit_event(Event::<T, I>::KeygenFailureReported(reporter));
 				},
