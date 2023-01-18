@@ -372,7 +372,7 @@ fn swap_can_acrue_fees() {
 				asset: any::Asset::Eth,
 				range,
 				burnt_liquidity: 1_500_000,
-				asset_credited: PoolAssetMap::new(466_708, 4_708_672),
+				assets_returned: PoolAssetMap::new(466_708, 4_708_672),
 				fee_yielded: PoolAssetMap::new(0, 0),
 			},
 		));
@@ -382,7 +382,7 @@ fn swap_can_acrue_fees() {
 				asset: any::Asset::Flip,
 				range,
 				burnt_liquidity: 600_000,
-				asset_credited: PoolAssetMap::new(414_088, 856_927),
+				assets_returned: PoolAssetMap::new(414_088, 856_927),
 				fee_yielded: PoolAssetMap::new(0, 0),
 			},
 		));
@@ -409,7 +409,7 @@ fn swap_can_acrue_fees() {
 				asset: any::Asset::Eth,
 				range,
 				burnt_liquidity: 1_500_000,
-				asset_credited: PoolAssetMap::new(466_708, 4_708_672),
+				assets_returned: PoolAssetMap::new(466_708, 4_708_672),
 				fee_yielded: PoolAssetMap::new(4_999, 0),
 			},
 		));
@@ -419,7 +419,7 @@ fn swap_can_acrue_fees() {
 				asset: any::Asset::Flip,
 				range,
 				burnt_liquidity: 600_000,
-				asset_credited: PoolAssetMap::new(414_088, 856_927),
+				assets_returned: PoolAssetMap::new(414_088, 856_927),
 				fee_yielded: PoolAssetMap::new(0, 24_870),
 			},
 		));

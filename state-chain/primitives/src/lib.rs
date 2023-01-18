@@ -240,20 +240,3 @@ impl From<ForeignChainAddress> for ForeignChain {
 }
 
 pub type EgressBatch<Amount, EgressAddress> = Vec<(Amount, EgressAddress)>;
-
-#[derive(Copy, Clone, Default, Eq, PartialEq, Debug)]
-pub struct SwapResult {
-	pub output_amount: AssetAmount,
-	pub input_asset_fee: AssetAmount,
-	pub stable_asset_fee: AssetAmount,
-}
-
-impl SwapResult {
-	pub fn new(
-		output_amount: AssetAmount,
-		input_asset_fee: AssetAmount,
-		stable_asset_fee: AssetAmount,
-	) -> Self {
-		Self { output_amount, input_asset_fee, stable_asset_fee }
-	}
-}

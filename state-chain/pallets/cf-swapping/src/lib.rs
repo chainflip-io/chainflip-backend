@@ -247,7 +247,7 @@ pub mod pallet {
 				})
 				.sum();
 
-			let swap_result =
+			let output_amount =
 				T::SwappingApi::swap(from, to, bundle_total_input).unwrap_or_default();
 
 			if bundle_total_input > 0 {
@@ -255,7 +255,7 @@ pub mod pallet {
 					Self::deposit_event(Event::<T>::SwapExecuted { swap_id: swap.swap_id });
 					if let Some(swap_output) = multiply_by_rational_with_rounding(
 						swap.amount,
-						swap_result.output_amount,
+						output_amount,
 						bundle_total_input,
 						Rounding::Down,
 					) {
@@ -275,7 +275,7 @@ pub mod pallet {
 					} else {
 						log::error!(
 							"Unable to calculate valid swap output for swap {:?}!",
-							&(swap.amount, bundle_total_input, swap_result.output_amount)
+							&(swap.amount, bundle_total_input, output_amount)
 						);
 					}
 				}

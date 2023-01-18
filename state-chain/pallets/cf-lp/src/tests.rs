@@ -2,7 +2,6 @@ use crate::{mock::*, FreeBalances};
 
 use cf_primitives::{
 	liquidity::AmmRange, AccountId, Asset, ForeignChainAddress, MintedLiquidity, PoolAssetMap,
-	SwapResult,
 };
 use cf_traits::{
 	mocks::system_state_info::MockSystemStateInfo, LiquidityPoolApi, SwappingApi, SystemStateInfo,
@@ -31,7 +30,7 @@ fn only_liquidity_provider_can_manage_positions() {
 fn egress_chain_and_asset_must_match() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			LiquidityProvider::withdraw_free_balances(
+			LiquidityProvider::withdraw_asset(
 				RuntimeOrigin::signed(LP_ACCOUNT.into()),
 				1,
 				Asset::Eth,
@@ -40,7 +39,7 @@ fn egress_chain_and_asset_must_match() {
 			crate::Error::<Test>::InvalidEgressAddress
 		);
 		assert_noop!(
-			LiquidityProvider::withdraw_free_balances(
+			LiquidityProvider::withdraw_asset(
 				RuntimeOrigin::signed(LP_ACCOUNT.into()),
 				1,
 				Asset::Dot,
@@ -52,12 +51,12 @@ fn egress_chain_and_asset_must_match() {
 }
 
 #[test]
-fn liquidity_providers_can_withdraw_free_balances() {
+fn liquidity_providers_can_withdraw_asset() {
 	new_test_ext().execute_with(|| {
 		FreeBalances::<Test>::insert(AccountId::from(LP_ACCOUNT), Asset::Eth, 1_000);
 
 		assert_noop!(
-			LiquidityProvider::withdraw_free_balances(
+			LiquidityProvider::withdraw_asset(
 				RuntimeOrigin::signed(LP_ACCOUNT.into()),
 				100,
 				Asset::Dot,
@@ -66,7 +65,7 @@ fn liquidity_providers_can_withdraw_free_balances() {
 			crate::Error::<Test>::InvalidEgressAddress
 		);
 
-		assert_ok!(LiquidityProvider::withdraw_free_balances(
+		assert_ok!(LiquidityProvider::withdraw_asset(
 			RuntimeOrigin::signed(LP_ACCOUNT.into()),
 			100,
 			Asset::Eth,
@@ -97,7 +96,7 @@ fn cannot_deposit_and_withdrawal_during_maintenance() {
 
 		// Cannot withdraw liquidity during maintenance.
 		assert_noop!(
-			LiquidityProvider::withdraw_free_balances(
+			LiquidityProvider::withdraw_asset(
 				RuntimeOrigin::signed(LP_ACCOUNT.into()),
 				100,
 				Asset::Eth,
@@ -116,7 +115,7 @@ fn cannot_deposit_and_withdrawal_during_maintenance() {
 			Asset::Eth,
 		));
 
-		assert_ok!(LiquidityProvider::withdraw_free_balances(
+		assert_ok!(LiquidityProvider::withdraw_asset(
 			RuntimeOrigin::signed(LP_ACCOUNT.into()),
 			100,
 			Asset::Eth,
@@ -164,7 +163,7 @@ fn cannot_manage_liquidity_during_maintenance() {
 }
 
 #[test]
-fn can_mint_and_burn_liquidity() {
+fn can_mint_liquidity() {
 	new_test_ext().execute_with(|| {
 		FreeBalances::<Test>::insert(AccountId::from(LP_ACCOUNT), Asset::Eth, 1_000_000);
 		FreeBalances::<Test>::insert(AccountId::from(LP_ACCOUNT), Asset::Usdc, 1_000_000);
@@ -198,7 +197,7 @@ fn can_mint_and_burn_liquidity() {
 				asset,
 				range,
 				minted_liquidity: 1_000_000,
-				asset_debited: PoolAssetMap::new(4988, 4988),
+				assets_debited: PoolAssetMap::new(4988, 4988),
 			},
 		));
 		System::assert_has_event(RuntimeEvent::LiquidityProvider(crate::Event::AccountDebited {
@@ -245,7 +244,7 @@ fn can_mint_and_burn_liquidity() {
 				asset,
 				range,
 				minted_liquidity: 1_000,
-				asset_debited: PoolAssetMap::new(5, 5),
+				assets_debited: PoolAssetMap::new(5, 5),
 			},
 		));
 		System::assert_has_event(RuntimeEvent::LiquidityProvider(crate::Event::AccountDebited {
@@ -267,6 +266,26 @@ fn can_mint_and_burn_liquidity() {
 				fees_acrued: PoolAssetMap::default()
 			}]
 		);
+	});
+}
+
+#[test]
+fn can_burn_liquidity() {
+	new_test_ext().execute_with(|| {
+		FreeBalances::<Test>::insert(AccountId::from(LP_ACCOUNT), Asset::Eth, 1_000_000);
+		FreeBalances::<Test>::insert(AccountId::from(LP_ACCOUNT), Asset::Usdc, 1_000_000);
+
+		let range = AmmRange::new(-100, 100);
+		let asset = Asset::Eth;
+
+		assert_ok!(LiquidityPools::new_pool(RuntimeOrigin::root(), asset, 0, 0,));
+
+		assert_ok!(LiquidityProvider::update_position(
+			RuntimeOrigin::signed(LP_ACCOUNT.into()),
+			asset,
+			range,
+			1_000_000,
+		));
 
 		// Can partially burn a liquidity position (-500_000)
 		System::reset_events();
@@ -274,16 +293,16 @@ fn can_mint_and_burn_liquidity() {
 			RuntimeOrigin::signed(LP_ACCOUNT.into()),
 			asset,
 			range,
-			501_000,
+			500_000,
 		));
 
 		assert_eq!(
 			FreeBalances::<Test>::get(AccountId::from(LP_ACCOUNT), Asset::Eth),
-			Some(997_500)
+			Some(997_505)
 		);
 		assert_eq!(
 			FreeBalances::<Test>::get(AccountId::from(LP_ACCOUNT), Asset::Usdc),
-			Some(997_500)
+			Some(997_505)
 		);
 
 		System::assert_has_event(RuntimeEvent::LiquidityPools(
@@ -292,7 +311,7 @@ fn can_mint_and_burn_liquidity() {
 				asset,
 				range,
 				burnt_liquidity: 500_000,
-				asset_credited: PoolAssetMap::new(2493, 2493),
+				assets_returned: PoolAssetMap::new(2493, 2493),
 				fee_yielded: Default::default(),
 			},
 		));
@@ -311,7 +330,7 @@ fn can_mint_and_burn_liquidity() {
 			LiquidityPools::minted_liquidity(&LP_ACCOUNT.into(), &asset),
 			vec![MintedLiquidity {
 				range: AmmRange::new(range.lower, range.upper),
-				liquidity: 501_000,
+				liquidity: 500_000,
 				fees_acrued: PoolAssetMap::default()
 			}]
 		);
@@ -339,20 +358,20 @@ fn can_mint_and_burn_liquidity() {
 				lp: LP_ACCOUNT.into(),
 				asset,
 				range,
-				burnt_liquidity: 501_000,
-				asset_credited: PoolAssetMap::new(2_498, 2_498),
+				burnt_liquidity: 500_000,
+				assets_returned: PoolAssetMap::new(2_493, 2_493),
 				fee_yielded: Default::default(),
 			},
 		));
 		System::assert_has_event(RuntimeEvent::LiquidityProvider(crate::Event::AccountCredited {
 			account_id: LP_ACCOUNT.into(),
 			asset,
-			amount_credited: 2_498,
+			amount_credited: 2_493,
 		}));
 		System::assert_has_event(RuntimeEvent::LiquidityProvider(crate::Event::AccountCredited {
 			account_id: LP_ACCOUNT.into(),
 			asset: Asset::Usdc,
-			amount_credited: 2_498,
+			amount_credited: 2_493,
 		}));
 
 		assert_eq!(LiquidityPools::minted_liquidity(&LP_ACCOUNT.into(), &asset), vec![]);
@@ -413,10 +432,7 @@ fn can_collect_fee() {
 		System::reset_events();
 
 		// Trigger swap to acrue some fees
-		assert_eq!(
-			LiquidityPools::swap(Asset::Eth, Asset::Usdc, 1_000u128),
-			Ok(SwapResult::new(499u128, 500u128, 0u128))
-		);
+		assert_eq!(LiquidityPools::swap(Asset::Eth, Asset::Usdc, 1_000u128), Ok(499u128));
 		assert_eq!(
 			LiquidityPools::minted_liquidity(&LP_ACCOUNT.into(), &asset),
 			vec![MintedLiquidity {

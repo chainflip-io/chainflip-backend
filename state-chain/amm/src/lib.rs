@@ -24,7 +24,7 @@ use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 
 use cf_primitives::{
-	liquidity::{AmountU256, Liquidity, MintedLiquidity, PoolAssetMap, PoolSide, Tick},
+	liquidity::{AmountU256, Liquidity, MintError, MintedLiquidity, PoolAssetMap, PoolSide, Tick},
 	AccountId, AmmRange,
 };
 use sp_core::{U256, U512};
@@ -89,7 +89,7 @@ impl Position {
 
 			pool_state.global_fee_growth[side] - fee_growth_below - fee_growth_above
 		});
-		self.fees_owed.mutate(|side, current_fees_owned| {
+		self.fees_owed.mutate(|side, current_fees_owed| {
 			// DIFF: This behaviour is different than Uniswap's. We saturate fees_owed instead of
 			// overflowing
 
@@ -107,7 +107,7 @@ impl Position {
 			.unwrap_or(u128::MAX);
 
 			// saturating is acceptable, it is on LPs to withdraw fees before you hit u128::MAX fees
-			*current_fees_owned = current_fees_owned.saturating_add(new_fees_owed);
+			*current_fees_owed = current_fees_owed.saturating_add(new_fees_owed);
 		});
 		self.last_fee_growth_inside = fee_growth_inside;
 	}
@@ -276,16 +276,6 @@ impl SwapDirection for PairToBase {
 }
 
 #[derive(Debug)]
-pub enum MintError {
-	/// Invalid Tick range
-	InvalidTickRange,
-	/// One of the start/end ticks of the range reached its maximum gross liquidity
-	MaximumGrossLiquidity,
-	/// The checking function failed during mint.
-	ShouldMintFunctionFailed,
-}
-
-#[derive(Debug)]
 pub enum CreatePoolError {
 	/// Fee must be between 0 - 50%
 	InvalidFeeAmount,
@@ -400,7 +390,7 @@ impl PoolState {
 		lower_tick: Tick,
 		upper_tick: Tick,
 		minted_liquidity: Liquidity,
-		should_mint: impl FnOnce(PoolAssetMap<AmountU256>) -> bool,
+		should_mint: impl FnOnce(PoolAssetMap<AmountU256>) -> Result<(), MintError>,
 	) -> Result<PoolAssetMap<AmountU256>, MintError> {
 		if (lower_tick > upper_tick) || (lower_tick < MIN_TICK) && (upper_tick > MAX_TICK) {
 			return Err(MintError::InvalidTickRange)
@@ -468,16 +458,13 @@ impl PoolState {
 		let (amounts_required, current_liquidity_delta) =
 			self.liquidity_to_amounts::<true>(minted_liquidity, lower_tick, upper_tick);
 
-		if should_mint(amounts_required) {
-			self.current_liquidity += current_liquidity_delta;
-			self.positions.insert((lp, lower_tick, upper_tick), position);
-			self.liquidity_map.insert(lower_tick, lower_info);
-			self.liquidity_map.insert(upper_tick, upper_info);
+		should_mint(amounts_required)?;
+		self.current_liquidity += current_liquidity_delta;
+		self.positions.insert((lp, lower_tick, upper_tick), position);
+		self.liquidity_map.insert(lower_tick, lower_info);
+		self.liquidity_map.insert(upper_tick, upper_info);
 
-			Ok(amounts_required)
-		} else {
-			Err(MintError::ShouldMintFunctionFailed)
-		}
+		Ok(amounts_required)
 	}
 
 	/// Tries to remove liquidity from the specified range-order, and convert the liqudity into

@@ -126,15 +126,25 @@ pub struct MintedLiquidity {
 
 #[derive(Copy, Clone, Default, Eq, PartialEq, Debug)]
 pub struct BurnResult {
-	pub asset_returned: PoolAssetMap<AssetAmount>,
+	pub assets_returned: PoolAssetMap<AssetAmount>,
 	pub fees_accrued: PoolAssetMap<AssetAmount>,
 }
 
 impl BurnResult {
 	pub fn new(
-		asset_returned: PoolAssetMap<AssetAmount>,
+		assets_returned: PoolAssetMap<AssetAmount>,
 		fees_accrued: PoolAssetMap<AssetAmount>,
 	) -> Self {
-		Self { asset_returned, fees_accrued }
+		Self { assets_returned, fees_accrued }
 	}
+}
+
+#[derive(Debug)]
+pub enum MintError {
+	/// Invalid Tick range
+	InvalidTickRange,
+	/// One of the start/end ticks of the range reached its maximum gross liquidity
+	MaximumGrossLiquidity,
+	/// The user does not have sufficient balance to pay for the mint.
+	InsufficientBalance,
 }

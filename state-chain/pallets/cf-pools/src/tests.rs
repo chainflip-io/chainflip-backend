@@ -17,7 +17,7 @@ fn can_create_new_trading_pool() {
 				asset,
 				range,
 				1_000_000,
-				|_: PoolAssetMap<AssetAmount>| true,
+				|_: PoolAssetMap<AssetAmount>| Ok(()),
 			),
 			Error::<Test>::PoolDoesNotExist,
 		);
@@ -49,7 +49,7 @@ fn can_create_new_trading_pool() {
 			asset,
 			range,
 			1_000_000,
-			|_: PoolAssetMap<AssetAmount>| true
+			|_: PoolAssetMap<AssetAmount>| Ok(())
 		));
 
 		// Cannot create duplicate pool
@@ -79,7 +79,7 @@ fn can_enable_disable_trading_pool() {
 			asset,
 			range,
 			1_000_000,
-			|_: PoolAssetMap<AssetAmount>| true
+			|_: PoolAssetMap<AssetAmount>| Ok(())
 		));
 
 		// Disable the pool
@@ -94,7 +94,7 @@ fn can_enable_disable_trading_pool() {
 				asset,
 				range,
 				1_000_000,
-				|_: PoolAssetMap<AssetAmount>| true
+				|_: PoolAssetMap<AssetAmount>| Ok(())
 			),
 			Error::<Test>::PoolDisabled
 		);
@@ -110,7 +110,7 @@ fn can_enable_disable_trading_pool() {
 			asset,
 			range,
 			1_000_000,
-			|_: PoolAssetMap<AssetAmount>| true
+			|_: PoolAssetMap<AssetAmount>| Ok(())
 		));
 	});
 }

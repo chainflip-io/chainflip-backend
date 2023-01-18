@@ -1,8 +1,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-use cf_amm::{CreatePoolError, MintError, PoolState, PositionError, MAX_FEE_100TH_BIPS};
+use cf_amm::{CreatePoolError, PoolState, PositionError, MAX_FEE_100TH_BIPS};
 use cf_primitives::{
-	chains::assets::any, AccountId, AmmRange, AmountU256, AssetAmount, BurnResult, Liquidity,
-	MintedLiquidity, PoolAssetMap, SwapResult, Tick,
+	chains::assets::any, liquidity::MintError, AccountId, AmmRange, AmountU256, AssetAmount,
+	BurnResult, Liquidity, MintedLiquidity, PoolAssetMap, Tick,
 };
 use cf_traits::{Chainflip, LiquidityPoolApi};
 use frame_support::pallet_prelude::*;
@@ -85,14 +85,14 @@ pub mod pallet {
 			asset: any::Asset,
 			range: AmmRange,
 			minted_liquidity: Liquidity,
-			asset_debited: PoolAssetMap<AssetAmount>,
+			assets_debited: PoolAssetMap<AssetAmount>,
 		},
 		LiquidityBurned {
 			lp: AccountId,
 			asset: any::Asset,
 			range: AmmRange,
 			burnt_liquidity: Liquidity,
-			asset_credited: PoolAssetMap<AssetAmount>,
+			assets_returned: PoolAssetMap<AssetAmount>,
 			fee_yielded: PoolAssetMap<AssetAmount>,
 		},
 		FeeCollected {
@@ -189,7 +189,7 @@ impl<T: Config> cf_traits::SwappingApi for Pallet<T> {
 		from: any::Asset,
 		to: any::Asset,
 		input_amount: AssetAmount,
-	) -> Result<SwapResult, DispatchError> {
+	) -> Result<AssetAmount, DispatchError> {
 		match (from, to) {
 			(input_asset, STABLE_ASSET) => Pools::<T>::try_mutate(input_asset, |maybe_pool| {
 				if let Some(pool) = maybe_pool.as_mut() {
@@ -207,11 +207,7 @@ impl<T: Config> cf_traits::SwappingApi for Pallet<T> {
 							.try_into()
 							.expect("Swap fees must be less than u128::MAX"),
 					});
-					Ok(SwapResult::new(
-						output_amount.try_into().expect("Swap output must be less than u128::MAX"),
-						asset_0_fee.try_into().expect("Swap fees must be less than u128::MAX"),
-						Default::default(),
-					))
+					Ok(output_amount.try_into().expect("Swap output must be less than u128::MAX"))
 				} else {
 					Err(Error::<T>::PoolDoesNotExist.into())
 				}
@@ -232,11 +228,7 @@ impl<T: Config> cf_traits::SwappingApi for Pallet<T> {
 							.try_into()
 							.expect("Swap fees must be less than u128::MAX"),
 					});
-					Ok(SwapResult::new(
-						output_amount.try_into().expect("Swap output must be less than u128::MAX"),
-						Default::default(),
-						asset_1_fee.try_into().expect("Swap fees must be less than u128::MAX"),
-					))
+					Ok(output_amount.try_into().expect("Swap output must be less than u128::MAX"))
 				} else {
 					Err(Error::<T>::PoolDoesNotExist.into())
 				}
@@ -286,11 +278,7 @@ impl<T: Config> cf_traits::SwappingApi for Pallet<T> {
 						.try_into()
 						.expect("Swap fees must be less than u128::MAX"),
 				});
-				Ok(SwapResult::new(
-					output_amount.try_into().expect("Swap output must be less than u128::MAX"),
-					asset_0_fee.try_into().expect("Swap fees must be less than u128::MAX"),
-					stable_asset_fee.try_into().expect("Swap fees must be less than u128::MAX"),
-				))
+				Ok(output_amount.try_into().expect("Swap output must be less than u128::MAX"))
 			},
 		}
 	}
@@ -298,7 +286,7 @@ impl<T: Config> cf_traits::SwappingApi for Pallet<T> {
 
 /// Implementation of Liquidity Pool API for cf-amm.
 /// `Amount` and `AccountId` are hard-coded type locked in by the amm code.
-impl<T: Config> LiquidityPoolApi<AssetAmount, AccountId> for Pallet<T> {
+impl<T: Config> LiquidityPoolApi<AccountId> for Pallet<T> {
 	const STABLE_ASSET: any::Asset = STABLE_ASSET;
 
 	/// Deposit up to some amount of assets into an exchange pool. Minting some "Liquidity".
@@ -308,13 +296,13 @@ impl<T: Config> LiquidityPoolApi<AssetAmount, AccountId> for Pallet<T> {
 		asset: any::Asset,
 		range: AmmRange,
 		liquidity_amount: Liquidity,
-		should_mint: impl FnOnce(PoolAssetMap<AssetAmount>) -> bool,
+		should_mint: impl FnOnce(PoolAssetMap<AssetAmount>) -> Result<(), MintError>,
 	) -> Result<PoolAssetMap<AssetAmount>, DispatchError> {
 		Pools::<T>::try_mutate(asset, |maybe_pool| {
 			if let Some(pool) = maybe_pool.as_mut() {
 				ensure!(pool.pool_enabled(), Error::<T>::PoolDisabled);
 
-				let should_mint_u256 = |amount: PoolAssetMap<AmountU256>| -> bool {
+				let should_mint_u256 = |amount: PoolAssetMap<AmountU256>| -> Result<(), MintError> {
 					should_mint(
 						amount
 							.try_into()
@@ -322,15 +310,15 @@ impl<T: Config> LiquidityPoolApi<AssetAmount, AccountId> for Pallet<T> {
 					)
 				};
 
-				let asset_spent_u256: PoolAssetMap<AmountU256> = pool
+				let assets_spent_u256: PoolAssetMap<AmountU256> = pool
 					.mint(lp.clone(), range.lower, range.upper, liquidity_amount, should_mint_u256)
 					.map_err(|e| match e {
 						MintError::InvalidTickRange => Error::<T>::InvalidTickRange,
 						MintError::MaximumGrossLiquidity => Error::<T>::MaximumGrossLiquidity,
-						MintError::ShouldMintFunctionFailed => Error::<T>::InsufficientBalance,
+						MintError::InsufficientBalance => Error::<T>::InsufficientBalance,
 					})?;
 
-				let asset_debited = asset_spent_u256
+				let assets_debited = assets_spent_u256
 					.try_into()
 					.expect("Mint required asset amounts must be less than u128::MAX");
 				Self::deposit_event(Event::<T>::LiquidityMinted {
@@ -338,10 +326,10 @@ impl<T: Config> LiquidityPoolApi<AssetAmount, AccountId> for Pallet<T> {
 					asset,
 					range,
 					minted_liquidity: liquidity_amount,
-					asset_debited,
+					assets_debited,
 				});
 
-				Ok(asset_debited)
+				Ok(assets_debited)
 			} else {
 				Err(Error::<T>::PoolDoesNotExist.into())
 			}
@@ -360,8 +348,7 @@ impl<T: Config> LiquidityPoolApi<AssetAmount, AccountId> for Pallet<T> {
 			if let Some(pool) = maybe_pool.as_mut() {
 				ensure!(pool.pool_enabled(), Error::<T>::PoolDisabled);
 
-				// Burn liquidity from the user's position.
-				let (asset_credited_u256, fees): (PoolAssetMap<AmountU256>, PoolAssetMap<u128>) =
+				let (assets_returned_u256, fees): (PoolAssetMap<AmountU256>, PoolAssetMap<u128>) =
 					pool.burn(lp.clone(), range.lower, range.upper, burnt_liquidity).map_err(
 						|e| match e {
 							PositionError::NonExistent => Error::<T>::PositionDoesNotExist,
@@ -370,7 +357,7 @@ impl<T: Config> LiquidityPoolApi<AssetAmount, AccountId> for Pallet<T> {
 						},
 					)?;
 
-				let asset_credited = asset_credited_u256
+				let assets_returned = assets_returned_u256
 					.try_into()
 					.expect("Asset amount returned from Burn must be less than u128::MAX");
 				Self::deposit_event(Event::<T>::LiquidityBurned {
@@ -378,11 +365,11 @@ impl<T: Config> LiquidityPoolApi<AssetAmount, AccountId> for Pallet<T> {
 					asset,
 					range,
 					burnt_liquidity,
-					asset_credited,
+					assets_returned,
 					fee_yielded: fees,
 				});
 
-				Ok(BurnResult::new(asset_credited, fees))
+				Ok(BurnResult::new(assets_returned, fees))
 			} else {
 				Err(Error::<T>::PoolDoesNotExist.into())
 			}
@@ -399,7 +386,6 @@ impl<T: Config> LiquidityPoolApi<AssetAmount, AccountId> for Pallet<T> {
 			if let Some(pool) = maybe_pool.as_mut() {
 				ensure!(pool.pool_enabled(), Error::<T>::PoolDisabled);
 
-				// Collect fees acrued by user's position.
 				let fees: PoolAssetMap<AssetAmount> =
 					pool.collect(lp.clone(), range.lower, range.upper).map_err(|e| match e {
 						PositionError::NonExistent => Error::<T>::PositionDoesNotExist,

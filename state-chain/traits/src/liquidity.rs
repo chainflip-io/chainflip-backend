@@ -1,6 +1,6 @@
 use cf_primitives::{
-	AmmRange, Asset, AssetAmount, BurnResult, ForeignChainAddress, Liquidity, MintedLiquidity,
-	PoolAssetMap, SwapResult, Tick,
+	liquidity::MintError, AmmRange, Asset, AssetAmount, BurnResult, ForeignChainAddress, Liquidity,
+	MintedLiquidity, PoolAssetMap, Tick,
 };
 use frame_support::dispatch::DispatchError;
 use sp_runtime::DispatchResult;
@@ -32,8 +32,11 @@ pub trait LpProvisioningApi {
 pub trait SwappingApi {
 	// Attempt to swap `from` asset to `to` asset.
 	// If OK, return (output_amount, input_asset_fee, stable_asset_fee)
-	fn swap(from: Asset, to: Asset, input_amount: AssetAmount)
-		-> Result<SwapResult, DispatchError>;
+	fn swap(
+		from: Asset,
+		to: Asset,
+		input_amount: AssetAmount,
+	) -> Result<AssetAmount, DispatchError>;
 }
 
 impl SwappingApi for () {
@@ -41,26 +44,28 @@ impl SwappingApi for () {
 		_from: Asset,
 		_to: Asset,
 		_input_amount: AssetAmount,
-	) -> Result<SwapResult, DispatchError> {
+	) -> Result<AssetAmount, DispatchError> {
 		Ok(Default::default())
 	}
 }
 
 /// API to interface with the Pools pallet to manage Uniswap v3 style Exchange Pools.
 /// All pools are Asset <-> USDC
-pub trait LiquidityPoolApi<Amount, AccountId> {
+pub trait LiquidityPoolApi<AccountId> {
 	const STABLE_ASSET: Asset;
 
 	/// Deposit up to some amount of assets into an exchange pool. Minting some "Liquidity".
+	/// Returns Ok((asset_vested, liquidity_minted))
 	fn mint(
 		lp: AccountId,
 		asset: Asset,
 		range: AmmRange,
 		liquidity_amount: Liquidity,
-		balance_check_callback: impl FnOnce(PoolAssetMap<Amount>) -> bool,
-	) -> Result<PoolAssetMap<Amount>, DispatchError>;
+		balance_check_callback: impl FnOnce(PoolAssetMap<AssetAmount>) -> Result<(), MintError>,
+	) -> Result<PoolAssetMap<AssetAmount>, DispatchError>;
 
 	/// Burn some liquidity from an exchange pool to withdraw assets.
+	/// Returns Ok((assets_retrieved, fee_accrued))
 	fn burn(
 		lp: AccountId,
 		asset: Asset,

@@ -10,8 +10,8 @@ use sp_std::cmp::{Ord, Ordering};
 
 use cf_chains::AnyChain;
 use cf_primitives::{
-	liquidity::PoolAssetMap, AmmRange, Asset, AssetAmount, ForeignChain, ForeignChainAddress,
-	IntentId, Liquidity, PoolSide,
+	liquidity::{MintError, PoolAssetMap},
+	AmmRange, Asset, AssetAmount, ForeignChain, ForeignChainAddress, IntentId, Liquidity, PoolSide,
 };
 use cf_traits::{
 	liquidity::LpProvisioningApi, AccountRoleRegistry, Chainflip, EgressApi, IngressApi,
@@ -53,7 +53,7 @@ pub mod pallet {
 		type EgressHandler: EgressApi<AnyChain>;
 
 		/// API to interface with exchange Pools
-		type LiquidityPoolApi: LiquidityPoolApi<AssetAmount, Self::AccountId>;
+		type LiquidityPoolApi: LiquidityPoolApi<Self::AccountId>;
 
 		/// For governance checks.
 		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
@@ -121,7 +121,7 @@ pub mod pallet {
 		/// For when the user wants to withdraw their free balances out of the chain.
 		/// Requires a valid foreign chain address.
 		#[pallet::weight(0)]
-		pub fn withdraw_free_balances(
+		pub fn withdraw_asset(
 			origin: OriginFor<T>,
 			amount: AssetAmount,
 			asset: Asset,
@@ -174,7 +174,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			asset: Asset,
 			range: AmmRange,
-			liquidity_amount: Liquidity,
+			liquidity_target: Liquidity,
 		) -> DispatchResult {
 			T::SystemState::ensure_no_maintenance()?;
 			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
@@ -188,20 +188,20 @@ pub mod pallet {
 				.unwrap_or_default()
 				.liquidity;
 
-			match current_liquidity.cmp(&liquidity_amount) {
+			match current_liquidity.cmp(&liquidity_target) {
 				// Burn the difference
 				Ordering::Greater => Self::burn_liquidity(
 					account_id,
 					asset,
 					range,
-					current_liquidity.saturating_sub(liquidity_amount),
+					current_liquidity.saturating_sub(liquidity_target),
 				),
 				// Mint the difference
 				Ordering::Less => Self::mint_liquidity(
 					account_id,
 					asset,
 					range,
-					liquidity_amount.saturating_sub(current_liquidity),
+					liquidity_target.saturating_sub(current_liquidity),
 				),
 				// Do nothing if the liquidity matches.
 				Ordering::Equal => Ok(()),
@@ -278,17 +278,19 @@ impl<T: Config> Pallet<T> {
 		range: AmmRange,
 		liquidity_amount: Liquidity,
 	) -> DispatchResult {
-		let checking_function = |asset_map: PoolAssetMap<AssetAmount>| {
+		let checking_function = |asset_map: PoolAssetMap<AssetAmount>| -> Result<(), MintError> {
 			// Check user has enough funds for both assets
-			Self::check_can_withdraw(&account_id, asset, asset_map[PoolSide::Asset0]) &&
+			(Self::check_can_withdraw(&account_id, asset, asset_map[PoolSide::Asset0]) &&
 				Self::check_can_withdraw(
 					&account_id,
 					T::LiquidityPoolApi::STABLE_ASSET,
 					asset_map[PoolSide::Asset1],
-				)
+				))
+			.then_some(())
+			.ok_or(MintError::InsufficientBalance)
 		};
 
-		let amount_debited = T::LiquidityPoolApi::mint(
+		let amount_to_be_debited = T::LiquidityPoolApi::mint(
 			account_id.clone(),
 			asset,
 			range,
@@ -297,11 +299,11 @@ impl<T: Config> Pallet<T> {
 		)?;
 
 		// Debit the user's asset from their account.
-		Self::try_debit(&account_id, asset, amount_debited[PoolSide::Asset0])?;
+		Self::try_debit(&account_id, asset, amount_to_be_debited[PoolSide::Asset0])?;
 		Self::try_debit(
 			&account_id,
 			T::LiquidityPoolApi::STABLE_ASSET,
-			amount_debited[PoolSide::Asset1],
+			amount_to_be_debited[PoolSide::Asset1],
 		)
 	}
 
@@ -318,13 +320,13 @@ impl<T: Config> Pallet<T> {
 		Self::credit(
 			&account_id,
 			asset,
-			burn_result.asset_returned[PoolSide::Asset0]
+			burn_result.assets_returned[PoolSide::Asset0]
 				.saturating_add(burn_result.fees_accrued[PoolSide::Asset0]),
 		)?;
 		Self::credit(
 			&account_id,
 			T::LiquidityPoolApi::STABLE_ASSET,
-			burn_result.asset_returned[PoolSide::Asset1]
+			burn_result.assets_returned[PoolSide::Asset1]
 				.saturating_add(burn_result.fees_accrued[PoolSide::Asset1]),
 		)?;
 
