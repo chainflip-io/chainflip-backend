@@ -92,4 +92,8 @@ decl_runtime_apis!(
 		fn cf_generate_gov_key_call_hash(call: Vec<u8>) -> GovCallHash;
 		fn cf_auction_state() -> AuctionState;
 	}
+
+	pub trait CustomRuntimeApiV2 {
+		fn cf_account_info(account_id: AccountId32) -> RuntimeApiAccountInfo;
+	}
 );

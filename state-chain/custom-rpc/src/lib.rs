@@ -33,6 +33,24 @@ pub struct RpcAccountInfo {
 	pub state: ChainflipAccountStateWithPassive,
 }
 
+// #[derive(Serialize, Deserialize)]
+// pub struct RpcAccountInfoV2 {
+// 	pub stake: NumberOrHex,
+// 	pub bond: NumberOrHex,
+// 	pub last_heartbeat: u32,
+// 	pub is_live: bool,
+// 	pub is_activated: bool,
+// 	pub online_credits: u32,
+// 	pub reputation_points: i32,
+// 	pub withdrawal_address: String,
+// 	pub state: ChainflipAccountStateWithPassive,
+// 	pub keyholder_epochs: Vec<EpochIndex>,
+// 	pub is_current_authority: bool,
+// 	pub is_current_backup: bool,
+// 	pub is_qualified: bool,
+// 	pub is_online: bool,
+// }
+
 #[derive(Serialize, Deserialize)]
 pub struct RpcPendingClaim {
 	amount: NumberOrHex,

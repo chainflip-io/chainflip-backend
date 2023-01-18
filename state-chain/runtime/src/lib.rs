@@ -810,8 +810,19 @@ impl_runtime_apis! {
 				})
 				.collect()
 		}
+
 		fn cf_account_info(account_id: AccountId) -> RuntimeApiAccountInfo {
 			let account_info = pallet_cf_flip::Account::<Runtime>::get(&account_id);
+			// is online
+			let is_online = Reputation::current_network_state().online.contains(&account_id);
+			// is current authority
+			let is_current_authority = pallet_cf_validator::CurrentAuthorities::<Runtime>::get().contains(&account_id);
+			// is current backup
+			let is_current_backup = pallet_cf_validator::Backups::<Runtime>::get().contains_key(&account_id);
+			let key_holder_epochs = pallet_cf_validator::HistoricalActiveEpochs::<Runtime>::get(&account_id);
+			let account_role = pallet_cf_account_roles::AccountRoles::<Runtime>::get(&account_id);
+			let peer_id_registered = pallet_cf_validator::MappedPeers::<Runtime>::contains_key(&account_id);
+
 			let reputation_info = pallet_cf_reputation::Reputations::<Runtime>::get(&account_id);
 			let withdrawal_address = pallet_cf_staking::WithdrawalAddresses::<Runtime>::get(&account_id).unwrap_or([0; 20]);
 
