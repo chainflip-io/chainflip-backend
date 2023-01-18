@@ -25,10 +25,7 @@ use crate::{
 	eth::{rpc::EthRpcApi, EthBroadcaster},
 	logging::COMPONENT_KEY,
 	multisig::{
-		client::{KeygenFailureReason, MultisigClientApi},
-		eth::EthSigning,
-		polkadot::PolkadotSigning,
-		CryptoScheme, KeyId,
+		client::MultisigClientApi, eth::EthSigning, polkadot::PolkadotSigning, CryptoScheme, KeyId,
 	},
 	p2p::{PeerInfo, PeerUpdate},
 	state_chain_observer::client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi},
@@ -62,12 +59,8 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 						ceremony_id,
 						reported_outcome: keygen_result_future
 							.await
-							.map_err(|(bad_account_ids, reason)| {
-								if let KeygenFailureReason::KeyNotCompatible = reason {
-									KeygenError::Incompatible
-								} else {
-									KeygenError::Failure(bad_account_ids)
-								}
+							.map_err(|(bad_account_ids, _reason)| {
+								KeygenError::Failure(bad_account_ids)
 							}),
 					},
 					&logger,

@@ -2,6 +2,7 @@ use super::{curve25519_edwards::Point, ChainTag, CryptoScheme, ECPoint};
 use ed25519_consensus::VerificationKeyBytes;
 use serde::{Deserialize, Serialize};
 
+#[derive(Clone, Debug, PartialEq)]
 pub struct Ed25519Signing {}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
