@@ -105,7 +105,7 @@ decl_runtime_apis!(
 		fn cf_flip_supply() -> (u128, u128);
 		fn cf_accounts() -> Vec<(AccountId32, VanityName)>;
 		fn cf_account_info(account_id: AccountId32) -> RuntimeApiAccountInfo;
-		fn cf_v2_account_info(account_id: AccountId32) -> RuntimeApiAccountInfoV2;
+		fn cf_account_info_v2(account_id: AccountId32) -> RuntimeApiAccountInfoV2;
 		fn cf_pending_claim(account_id: AccountId32) -> Option<RuntimeApiPendingClaim>;
 		fn cf_get_claim_certificate(account_id: AccountId32) -> Option<Vec<u8>>;
 		fn cf_penalties() -> Vec<(Offence, RuntimeApiPenalty)>;

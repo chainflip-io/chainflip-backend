@@ -366,7 +366,7 @@ where
 		let account_info = self
 			.client
 			.runtime_api()
-			.cf_v2_account_info(&self.query_block_id(at), account_id)
+			.cf_account_info_v2(&self.query_block_id(at), account_id)
 			.map_err(to_rpc_error)?;
 
 		Ok(RpcAccountInfoV2 {

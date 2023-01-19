@@ -5,7 +5,6 @@ pub mod chainflip;
 pub mod constants;
 pub mod runtime_apis;
 mod weights;
-use cf_primitives::AccountRole;
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
 use pallet_transaction_payment::ConstFeeMultiplier;
@@ -812,18 +811,14 @@ impl_runtime_apis! {
 				})
 				.collect()
 		}
-
-		fn cf_v2_account_info(account_id: AccountId) -> RuntimeApiAccountInfoV2 {
+		fn cf_account_info_v2(account_id: AccountId) -> RuntimeApiAccountInfoV2 {
 			let account_info_v1 = Self::cf_account_info(account_id.clone());
 			let is_online = Reputation::current_network_state().online.contains(&account_id);
 			let is_current_backup = pallet_cf_validator::Backups::<Runtime>::get().contains_key(&account_id);
 			let key_holder_epochs = pallet_cf_validator::HistoricalActiveEpochs::<Runtime>::get(&account_id);
+			let is_qualified = <<Runtime as pallet_cf_validator::Config>::AuctionQualification as QualifyNode>::is_qualified(&account_id);
 			let is_current_authority = pallet_cf_validator::CurrentAuthorities::<Runtime>::get().contains(&account_id);
-			let account_role = pallet_cf_account_roles::AccountRoles::<Runtime>::get(&account_id);
 			let is_bidding = pallet_cf_staking::ActiveBidder::<Runtime>::get(&account_id);
-			let peer_id_registered = pallet_cf_validator::AccountPeerMapping::<Runtime>::contains_key(&account_id);
-			// TODO: check for session key as well here.
-			let is_qualified = is_online && is_bidding && account_role == Some(AccountRole::Validator) && peer_id_registered;
 			RuntimeApiAccountInfoV2 {
 				stake: account_info_v1.stake,
 				bond: account_info_v1.bond,
@@ -837,12 +832,11 @@ impl_runtime_apis! {
 				keyholder_epochs: key_holder_epochs,
 				is_current_authority,
 				is_current_backup,
-				is_qualified,
+				is_qualified: is_bidding && is_qualified,
 				is_online,
 				is_bidding,
 			}
 		}
-
 		fn cf_account_info(account_id: AccountId) -> RuntimeApiAccountInfo {
 			let account_info = pallet_cf_flip::Account::<Runtime>::get(&account_id);
 			let reputation_info = pallet_cf_reputation::Reputations::<Runtime>::get(&account_id);
