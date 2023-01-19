@@ -1,5 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-use cf_amm::{CreatePoolError, PoolState, PositionError, MAX_FEE_100TH_BIPS};
+use cf_amm::{CreatePoolError, PoolState, PositionError, MAX_FEE_100TH_BIPS, MAX_TICK, MIN_TICK};
 use cf_primitives::{
 	chains::assets::any, liquidity::MintError, AccountId, AmmRange, AmountU256, AssetAmount,
 	BurnResult, Liquidity, MintedLiquidity, PoolAssetMap, Tick,
@@ -120,6 +120,8 @@ pub mod pallet {
 		PoolDisabled,
 		/// The Upper or Lower tick is invalid.
 		InvalidTickRange,
+		/// The tick is invalid.
+		InvalidTick,
 		/// One of the start/end ticks of the range reached its maximum gross liquidity
 		MaximumGrossLiquidity,
 		/// User's position does not have enough liquidity.
@@ -241,6 +243,7 @@ pub mod pallet {
 			let _ok = T::EnsureGovernance::ensure_origin(origin)?;
 			// Fee amount must be <= 50%
 			ensure!(fee_100th_bips <= MAX_FEE_100TH_BIPS, Error::<T>::InvalidFeeAmount);
+			ensure!((MIN_TICK..=MAX_TICK).contains(&initial_tick_price), Error::<T>::InvalidTick);
 			Pools::<T>::try_mutate(asset, |maybe_pool| {
 				if maybe_pool.is_some() {
 					Err(Error::<T>::PoolAlreadyExists)
