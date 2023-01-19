@@ -2,7 +2,7 @@
 use cf_amm::{CreatePoolError, PoolState, PositionError, MAX_FEE_100TH_BIPS, MAX_TICK, MIN_TICK};
 use cf_primitives::{
 	chains::assets::any, liquidity::MintError, AccountId, AmmRange, AmountU256, AssetAmount,
-	BurnResult, Liquidity, MintedLiquidity, PoolAssetMap, PoolSide, Tick,
+	BurnResult, Liquidity, MintedLiquidity, PoolAssetMap, Tick,
 };
 use cf_traits::{Chainflip, LiquidityPoolApi, SwappingApi};
 use frame_support::{pallet_prelude::*, transactional};
