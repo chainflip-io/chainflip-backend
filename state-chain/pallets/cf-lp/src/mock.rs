@@ -1,17 +1,13 @@
 use crate as pallet_cf_lp;
 use cf_chains::{eth::assets, AnyChain, Chain, Ethereum};
-use cf_primitives::{AccountId, AccountRole, AuthorityCount, BroadcastId, IntentId};
+use cf_primitives::{AccountId, AccountRole, AuthorityCount, IntentId};
 use cf_traits::{
 	mocks::{
-		all_batch::{MockAllBatch, MockEthEnvironment},
-		bid_info::MockBidInfo,
-		egress_handler::MockEgressHandler,
-		ensure_origin_mock::NeverFailingOriginCheck,
-		ingress_handler::MockIngressHandler,
-		staking_info::MockStakingInfo,
-		system_state_info::MockSystemStateInfo,
+		bid_info::MockBidInfo, egress_handler::MockEgressHandler,
+		ensure_origin_mock::NeverFailingOriginCheck, ingress_handler::MockIngressHandler,
+		staking_info::MockStakingInfo, system_state_info::MockSystemStateInfo,
 	},
-	AddressDerivationApi, Broadcaster,
+	AddressDerivationApi,
 };
 use frame_support::{parameter_types, sp_runtime::app_crypto::sp_core::H160};
 use frame_system as system;
@@ -84,15 +80,6 @@ impl system::Config for Test {
 	type SS58Prefix = SS58Prefix;
 	type OnSetCode = ();
 	type MaxConsumers = frame_support::traits::ConstU32<5>;
-}
-
-pub struct MockBroadcast;
-impl Broadcaster<Ethereum> for MockBroadcast {
-	type ApiCall = MockAllBatch<MockEthEnvironment>;
-
-	fn threshold_sign_and_broadcast(_api_call: Self::ApiCall) -> BroadcastId {
-		1
-	}
 }
 
 impl cf_traits::Chainflip for Test {
