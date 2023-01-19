@@ -835,11 +835,11 @@ impl_runtime_apis! {
 				withdrawal_address: account_info_v1.withdrawal_address,
 				state: account_info_v1.state,
 				keyholder_epochs: key_holder_epochs,
-				is_current_authority: is_current_authority,
-				is_current_backup: is_current_backup,
-				is_qualified: is_qualified,
-				is_online: is_online,
-				is_bidding: is_bidding,
+				is_current_authority,
+				is_current_backup,
+				is_qualified,
+				is_online,
+				is_bidding,
 			}
 		}
 
