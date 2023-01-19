@@ -303,6 +303,18 @@ where
 
         let mut last_heartbeat_submitted_at = 0;
 
+        // We want to submit a little more frequently than the interval, just in case we submit
+        // close to the boundary, and our heartbeat ends up on the wrong side of the interval we're submitting for.
+        // The assumption here is that `HEARTBEAT_SAFETY_MARGIN` >> `heartbeat_block_interval`
+        const HEARTBEAT_SAFETY_MARGIN: BlockNumber = 10;
+        let blocks_per_heartbeat =  heartbeat_block_interval - HEARTBEAT_SAFETY_MARGIN;
+
+        slog::info!(
+            logger,
+            "Sending heartbeat every {} blocks",
+            blocks_per_heartbeat
+        );
+
         let mut sc_block_stream = Box::pin(sc_block_stream);
         loop {
             match sc_block_stream.next().await {
@@ -576,18 +588,6 @@ where
                             );
                         }
                     }
-
-                    // We want to submit a little more frequently than the interval, just in case we submit
-                    // close to the boundary, and our heartbeat ends up on the wrong side of the interval we're submitting for.
-                    // The assumption here is that `HEARTBEAT_SAFETY_MARGIN` >> `heartbeat_block_interval`
-                    const HEARTBEAT_SAFETY_MARGIN: BlockNumber = 10;
-                    let blocks_per_heartbeat =  heartbeat_block_interval - HEARTBEAT_SAFETY_MARGIN;
-
-                    slog::info!(
-                        logger,
-                        "Sending heartbeat every {} blocks",
-                        blocks_per_heartbeat
-                    );
 
                     // All nodes must send a heartbeat regardless of their validator status (at least for now).
                     // We send it every `blocks_per_heartbeat` from the block they started up at.
