@@ -172,7 +172,7 @@ fn can_provide_liquidity_and_swap_assets() {
 				to: Asset::Usdc,
 				input: 10_000,
 				output: 98_966,
-				input_asset_fee: 0,
+				liquidity_fee: 0,
 			},
 		));
 		System::assert_has_event(RuntimeEvent::LiquidityPools(
@@ -181,7 +181,7 @@ fn can_provide_liquidity_and_swap_assets() {
 				to: Asset::Flip,
 				input: 98_966,
 				output: 46_755,
-				input_asset_fee: 0,
+				liquidity_fee: 0,
 			},
 		));
 
@@ -320,7 +320,7 @@ fn swap_can_acrue_fees() {
 				to: Asset::Usdc,
 				input: 10_000,
 				output: 49_742,
-				input_asset_fee: 5_000,
+				liquidity_fee: 5_000,
 			},
 		));
 		System::assert_has_event(RuntimeEvent::LiquidityPools(
@@ -329,7 +329,7 @@ fn swap_can_acrue_fees() {
 				to: Asset::Flip,
 				input: 49_742,
 				output: 12_255,
-				input_asset_fee: 24_871,
+				liquidity_fee: 24_871,
 			},
 		));
 

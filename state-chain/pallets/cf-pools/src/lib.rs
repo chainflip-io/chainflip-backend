@@ -21,6 +21,7 @@ mod tests;
 
 #[frame_support::pallet]
 pub mod pallet {
+	use frame_support::transactional;
 	use frame_system::pallet_prelude::BlockNumberFor;
 
 	use super::*;
@@ -176,7 +177,7 @@ pub mod pallet {
 			to: any::Asset,
 			input: AssetAmount,
 			output: AssetAmount,
-			input_asset_fee: AssetAmount,
+			liquidity_fee: AssetAmount,
 		},
 	}
 
@@ -281,102 +282,23 @@ pub mod pallet {
 			to: any::Asset,
 			input_amount: AssetAmount,
 		) -> Result<AssetAmount, DispatchError> {
-			match (from, to) {
-				(input_asset, STABLE_ASSET) => Pools::<T>::try_mutate(input_asset, |maybe_pool| {
-					if let Some(pool) = maybe_pool.as_mut() {
-						ensure!(pool.pool_enabled(), Error::<T>::PoolDisabled);
-						let (output_amount, asset_0_fee) =
-							pool.swap_from_asset_0_to_asset_1(input_amount.into());
-						Self::deposit_event(Event::<T>::AssetsSwapped {
-							from,
-							to,
-							input: input_amount,
-							output: output_amount
-								.try_into()
-								.expect("Swap output must be less than u128::MAX"),
-							input_asset_fee: asset_0_fee
-								.try_into()
-								.expect("Swap fees must be less than u128::MAX"),
-						});
-						Ok(output_amount
-							.try_into()
-							.expect("Swap output must be less than u128::MAX"))
-					} else {
-						Err(Error::<T>::PoolDoesNotExist.into())
-					}
-				}),
-				(STABLE_ASSET, output_asset) =>
-					Pools::<T>::try_mutate(output_asset, |maybe_pool| {
-						if let Some(pool) = maybe_pool.as_mut() {
-							ensure!(pool.pool_enabled(), Error::<T>::PoolDisabled);
-							let (output_amount, asset_1_fee) =
-								pool.swap_from_asset_1_to_asset_0(input_amount.into());
-							Self::deposit_event(Event::<T>::AssetsSwapped {
-								from,
-								to,
-								input: input_amount,
-								output: output_amount
-									.try_into()
-									.expect("Swap output must be less than u128::MAX"),
-								input_asset_fee: asset_1_fee
-									.try_into()
-									.expect("Swap fees must be less than u128::MAX"),
-							});
-							Ok(output_amount
-								.try_into()
-								.expect("Swap output must be less than u128::MAX"))
-						} else {
-							Err(Error::<T>::PoolDoesNotExist.into())
-						}
-					}),
-				(input_asset, output_asset) => {
-					let (intermediate_amount, asset_0_fee) =
-						Pools::<T>::try_mutate(input_asset, |maybe_pool| {
-							if let Some(pool) = maybe_pool.as_mut() {
-								ensure!(pool.pool_enabled(), Error::<T>::PoolDisabled);
-								Ok(pool.swap_from_asset_0_to_asset_1(input_amount.into()))
-							} else {
-								Err(Error::<T>::PoolDoesNotExist)
-							}
-						})?;
-					Self::deposit_event(Event::<T>::AssetsSwapped {
-						from,
-						to: STABLE_ASSET,
-						input: input_amount,
-						output: intermediate_amount
-							.try_into()
-							.expect("Swap output must be less than u128::MAX"),
-						input_asset_fee: asset_0_fee
-							.try_into()
-							.expect("Swap fees must be less than u128::MAX"),
-					});
-
-					let (output_amount, stable_asset_fee) =
-						Pools::<T>::try_mutate(output_asset, |maybe_pool| {
-							if let Some(pool) = maybe_pool.as_mut() {
-								ensure!(pool.pool_enabled(), Error::<T>::PoolDisabled);
-								Ok(pool.swap_from_asset_1_to_asset_0(intermediate_amount))
-							} else {
-								Err(Error::<T>::PoolDoesNotExist)
-							}
-						})?;
-
-					Self::deposit_event(Event::<T>::AssetsSwapped {
-						from: STABLE_ASSET,
-						to,
-						input: intermediate_amount
-							.try_into()
-							.expect("Swap output must be less than u128::MAX"),
-						output: output_amount
-							.try_into()
-							.expect("Swap output must be less than u128::MAX"),
-						input_asset_fee: stable_asset_fee
-							.try_into()
-							.expect("Swap fees must be less than u128::MAX"),
-					});
-					Ok(output_amount.try_into().expect("Swap output must be less than u128::MAX"))
+			Ok(match (from, to) {
+				(input_asset, STABLE_ASSET) => {
+					let gross_output =
+						Self::process_swap_leg(SwapLeg::ToStable, input_asset, input_amount)?;
+					Self::take_network_fee(gross_output)
 				},
-			}
+				(STABLE_ASSET, output_asset) => {
+					let net_input = Self::take_network_fee(input_amount);
+					Self::process_swap_leg(SwapLeg::FromStable, output_asset, net_input)?
+				},
+				(input_asset, output_asset) => {
+					let intermediate_output =
+						Self::process_swap_leg(SwapLeg::ToStable, input_asset, input_amount)?;
+					let intermediate_input = Self::take_network_fee(intermediate_output);
+					Self::process_swap_leg(SwapLeg::FromStable, output_asset, intermediate_input)?
+				},
+			})
 		}
 	}
 
@@ -534,6 +456,11 @@ pub mod pallet {
 		}
 	}
 
+	enum SwapLeg {
+		FromStable,
+		ToStable,
+	}
+
 	impl<T: Config> Pallet<T> {
 		fn calc_fee(fee: u16, input: AssetAmount) -> AssetAmount {
 			Permill::from_parts(fee as u32 * BASIS_POINTS_PER_MILLION) * input
@@ -546,6 +473,44 @@ pub mod pallet {
 			});
 			Self::deposit_event(Event::<T>::NetworkFeeTaken { fee_amount: fee });
 			input.saturating_sub(fee)
+		}
+
+		fn process_swap_leg(
+			direction: SwapLeg,
+			asset: any::Asset,
+			input_amount: AssetAmount,
+		) -> Result<AssetAmount, Error<T>> {
+			Pools::<T>::try_mutate(asset, |maybe_pool| {
+				if let Some(pool) = maybe_pool.as_mut() {
+					ensure!(pool.pool_enabled(), Error::<T>::PoolDisabled);
+					let (from, to, (output_amount, fee)) = match direction {
+						SwapLeg::FromStable => (
+							any::Asset::Usdc,
+							asset,
+							pool.swap_from_asset_1_to_asset_0(input_amount.into()),
+						),
+						SwapLeg::ToStable => (
+							asset,
+							any::Asset::Usdc,
+							pool.swap_from_asset_0_to_asset_1(input_amount.into()),
+						),
+					};
+					Self::deposit_event(Event::<T>::AssetsSwapped {
+						from,
+						to,
+						input: input_amount,
+						output: output_amount
+							.try_into()
+							.expect("Swap output must be less than u128::MAX"),
+						liquidity_fee: fee
+							.try_into()
+							.expect("Swap fees must be less than u128::MAX"),
+					});
+					Ok(output_amount.try_into().expect("Swap output must be less than u128::MAX"))
+				} else {
+					Err(Error::<T>::PoolDoesNotExist.into())
+				}
+			})
 		}
 	}
 }
