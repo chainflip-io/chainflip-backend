@@ -96,23 +96,13 @@ impl From<PoolAssetMap<u128>> for PoolAssetMap<U256> {
 		Self::new(asset_map[PoolSide::Asset0].into(), asset_map[PoolSide::Asset1].into())
 	}
 }
-#[derive(Debug)]
-pub enum ConversionError {
-	Overflow,
-}
-/// Downcasts the U256 into U128. Assuming that the number will be above U128::MAX
-impl TryInto<PoolAssetMap<u128>> for PoolAssetMap<U256> {
-	type Error = ConversionError;
 
-	fn try_into(self) -> Result<PoolAssetMap<u128>, ConversionError> {
-		if self[PoolSide::Asset0] > u128::MAX.into() || self[PoolSide::Asset1] > u128::MAX.into() {
-			Err(ConversionError::Overflow)
-		} else {
-			Ok(PoolAssetMap::new(
-				self[PoolSide::Asset0].low_u128(),
-				self[PoolSide::Asset1].low_u128(),
-			))
-		}
+/// Attempts to cast U256s to u128s, failing on overflow.
+impl TryFrom<PoolAssetMap<U256>> for PoolAssetMap<u128> {
+	type Error = <u128 as TryFrom<U256>>::Error;
+
+	fn try_from(value: PoolAssetMap<U256>) -> Result<Self, Self::Error> {
+		Ok(Self::new(value.asset_0.try_into()?, value.asset_1.try_into()?))
 	}
 }
 
