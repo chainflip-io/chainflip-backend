@@ -474,13 +474,13 @@ impl<T: Config> Pallet<T> {
 				ensure!(pool.pool_enabled(), Error::<T>::PoolDisabled);
 				let (from, to, (output_amount, fee)) = match direction {
 					SwapLeg::FromStable => (
-						any::Asset::Usdc,
+						STABLE_ASSET,
 						asset,
 						pool.swap_from_asset_1_to_asset_0(input_amount.into()),
 					),
 					SwapLeg::ToStable => (
 						asset,
-						any::Asset::Usdc,
+						STABLE_ASSET,
 						pool.swap_from_asset_0_to_asset_1(input_amount.into()),
 					),
 				};
