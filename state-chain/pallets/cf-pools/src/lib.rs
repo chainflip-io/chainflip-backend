@@ -275,6 +275,7 @@ pub mod pallet {
 	}
 
 	impl<T: Config> SwappingApi for Pallet<T> {
+		#[transactional]
 		fn swap(
 			from: any::Asset,
 			to: any::Asset,
