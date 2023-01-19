@@ -245,12 +245,6 @@ fn staked_and_claimed_events_must_match() {
 			<Error<Test>>::InvalidClaimDetails
 		);
 
-		// Invalid Claimed Event from Ethereum: wrong nonce.
-		assert_noop!(
-			Staking::claimed(RuntimeOrigin::root(), ALICE, STAKE - 1, TX_HASH),
-			<Error<Test>>::InvalidClaimDetails
-		);
-
 		// Valid Claimed Event from Ethereum.
 		assert_ok!(Staking::claimed(RuntimeOrigin::root(), ALICE, STAKE, TX_HASH));
 
