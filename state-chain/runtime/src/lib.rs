@@ -5,6 +5,7 @@ pub mod chainflip;
 pub mod constants;
 pub mod runtime_apis;
 mod weights;
+use cf_primitives::AccountRole;
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
 use pallet_transaction_payment::ConstFeeMultiplier;
@@ -25,6 +26,7 @@ use cf_chains::{
 };
 use pallet_transaction_payment::Multiplier;
 
+use crate::runtime_apis::RuntimeApiAccountInfoV2;
 use pallet_cf_validator::BidInfoProvider;
 
 pub use frame_support::{
@@ -811,18 +813,38 @@ impl_runtime_apis! {
 				.collect()
 		}
 
-		fn cf_account_info(account_id: AccountId) -> RuntimeApiAccountInfo {
-			let account_info = pallet_cf_flip::Account::<Runtime>::get(&account_id);
-			// is online
+		fn cf_v2_account_info(account_id: AccountId) -> RuntimeApiAccountInfoV2 {
+			let account_info_v1 = Self::cf_account_info(account_id.clone());
 			let is_online = Reputation::current_network_state().online.contains(&account_id);
-			// is current authority
-			let is_current_authority = pallet_cf_validator::CurrentAuthorities::<Runtime>::get().contains(&account_id);
-			// is current backup
 			let is_current_backup = pallet_cf_validator::Backups::<Runtime>::get().contains_key(&account_id);
 			let key_holder_epochs = pallet_cf_validator::HistoricalActiveEpochs::<Runtime>::get(&account_id);
+			let is_current_authority = pallet_cf_validator::CurrentAuthorities::<Runtime>::get().contains(&account_id);
 			let account_role = pallet_cf_account_roles::AccountRoles::<Runtime>::get(&account_id);
-			let peer_id_registered = pallet_cf_validator::MappedPeers::<Runtime>::contains_key(&account_id);
+			let is_bidding = pallet_cf_staking::ActiveBidder::<Runtime>::get(&account_id);
+			let peer_id_registered = pallet_cf_validator::AccountPeerMapping::<Runtime>::contains_key(&account_id);
+			// TODO: check for session key as well here.
+			let is_qualified = is_online && is_bidding && account_role == Some(AccountRole::Validator);
+			RuntimeApiAccountInfoV2 {
+				stake: account_info_v1.stake,
+				bond: account_info_v1.bond,
+				last_heartbeat: account_info_v1.last_heartbeat,
+				is_live: account_info_v1.is_live,
+				is_activated: account_info_v1.is_activated,
+				online_credits: account_info_v1.online_credits,
+				reputation_points: account_info_v1.reputation_points,
+				withdrawal_address: account_info_v1.withdrawal_address,
+				state: account_info_v1.state,
+				keyholder_epochs: key_holder_epochs,
+				is_current_authority: is_current_authority,
+				is_current_backup: is_current_backup,
+				is_qualified: is_qualified,
+				is_online: is_online,
+				is_bidding: is_bidding,
+			}
+		}
 
+		fn cf_account_info(account_id: AccountId) -> RuntimeApiAccountInfo {
+			let account_info = pallet_cf_flip::Account::<Runtime>::get(&account_id);
 			let reputation_info = pallet_cf_reputation::Reputations::<Runtime>::get(&account_id);
 			let withdrawal_address = pallet_cf_staking::WithdrawalAddresses::<Runtime>::get(&account_id).unwrap_or([0; 20]);
 
