@@ -2,15 +2,13 @@ use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
 use cf_chains::eth::H256;
 use cf_primitives::{AccountRole, Asset, ForeignChainAddress};
-use futures::{FutureExt, Stream, StreamExt};
+use futures::{FutureExt, Stream};
 use pallet_cf_validator::MAX_LENGTH_FOR_VANITY_NAME;
 use rand_legacy::FromEntropy;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{ed25519::Public as EdPublic, sr25519::Public as SrPublic, Bytes, Pair};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use state_chain_runtime::opaque::SessionKeys;
-
-use custom_rpc::CustomApiClient;
 
 pub mod primitives {
 	pub use cf_primitives::*;
@@ -174,52 +172,6 @@ pub async fn request_claim(
 			.map_err(|_| anyhow!("invalid claim"))?;
 
 			Ok(tx_hash)
-		}
-		.boxed()
-	})
-	.await
-}
-
-/// Get claim certificate by polling the State Chain.
-/// Returns `None` if no certificate is detected after polling
-/// for `blocks_to_poll_limit` blocks.
-pub async fn poll_for_claim_certificate(
-	state_chain_settings: &settings::StateChain,
-	blocks_to_poll_limit: usize,
-) -> Result<Option<ClaimCertificate>> {
-	task_scope(|scope| {
-		async {
-			let logger = new_discard_logger();
-			let (_block_hash, mut block_stream, state_chain_client) = StateChainClient::new(
-				scope,
-				state_chain_settings,
-				AccountRole::None,
-				false,
-				&logger,
-			)
-			.await?;
-
-			let account_id = state_chain_client.account_id();
-
-			let mut blocks_polled = 0;
-
-			while let Some(_result_header) = block_stream.next().await {
-				if let Some(certificate) = state_chain_client
-					.base_rpc_client
-					.raw_rpc_client
-					.cf_get_claim_certificate(account_id.clone(), None)
-					.await?
-				{
-					return Ok(Some(certificate))
-				}
-
-				blocks_polled += 1;
-				if blocks_polled >= blocks_to_poll_limit {
-					return Ok(None)
-				}
-			}
-
-			Err(anyhow!("Block stream unexpectedly ended"))
 		}
 		.boxed()
 	})

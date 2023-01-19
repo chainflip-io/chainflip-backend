@@ -13,16 +13,10 @@ use crate::{
 	chainflip::Offence,
 	runtime_apis::{
 		AuctionState, BackupOrPassive, ChainflipAccountStateWithPassive, RuntimeApiAccountInfo,
-		RuntimeApiPenalty, RuntimeApiPendingClaim,
+		RuntimeApiPenalty,
 	},
 };
-use cf_chains::{
-	dot,
-	dot::api::PolkadotApi,
-	eth,
-	eth::{api::register_claim::RegisterClaim, Ethereum},
-	Polkadot,
-};
+use cf_chains::{dot, dot::api::PolkadotApi, eth, eth::Ethereum, Polkadot};
 use pallet_transaction_payment::Multiplier;
 
 use pallet_cf_validator::BidInfoProvider;
@@ -478,7 +472,7 @@ impl pallet_cf_staking::Config for Runtime {
 	type AccountRoleRegistry = AccountRoles;
 	type Balance = FlipBalance;
 	type Flip = Flip;
-	type ThresholdSigner = EthereumThresholdSigner;
+	type Broadcaster = EthereumBroadcaster;
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, Instance1>;
 	type RegisterClaim = eth::api::EthereumApi<EthEnvironment>;
@@ -834,36 +828,6 @@ impl_runtime_apis! {
 				reputation_points: reputation_info.reputation_points,
 				withdrawal_address,
 				state: get_validator_state(&account_id),
-			}
-		}
-
-		fn cf_pending_claim(account_id: AccountId) -> Option<RuntimeApiPendingClaim> {
-			let api_call = pallet_cf_staking::PendingClaims::<Runtime>::get(account_id)?;
-			let pending_claim: RegisterClaim = match api_call {
-				eth::api::EthereumApi::RegisterClaim(tx) => tx,
-				_ => unreachable!(),
-			};
-
-			Some(RuntimeApiPendingClaim {
-				amount: pending_claim.amount,
-				address: pending_claim.address.into(),
-				expiry: pending_claim.expiry,
-				sig_data: pending_claim.sig_data,
-			})
-		}
-
-		fn cf_get_claim_certificate(account_id: AccountId) -> Option<Vec<u8>> {
-			let api_call = pallet_cf_staking::PendingClaims::<Runtime>::get(account_id)?;
-			let pending_claim: RegisterClaim = match api_call {
-				eth::api::EthereumApi::RegisterClaim(tx) => tx,
-				_ => unreachable!(),
-			};
-
-			if pending_claim.sig_data.is_signed() {
-				use cf_chains::ApiCall;
-				Some(pending_claim.chain_encoded())
-			} else {
-				None
 			}
 		}
 

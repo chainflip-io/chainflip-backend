@@ -2,7 +2,6 @@ use crate::{
 	mock::*, pallet, ActiveBidder, ClaimAmount, ClaimExpiries, Error, EthereumAddress,
 	FailedStakeAttempts, Pallet, PendingClaims, WithdrawalAddresses,
 };
-use cf_chains::RegisterClaim;
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{
 	mocks::{system_state_info::MockSystemStateInfo, time_source},
@@ -81,11 +80,11 @@ fn staked_amount_is_added_and_subtracted() {
 		assert_eq!(Flip::total_balance_of(&BOB), STAKE_B - CLAIM_B);
 
 		// Check the pending claims
-		assert_eq!(PendingClaims::<Test>::get(ALICE).unwrap().amount(), CLAIM_A);
-		assert_eq!(PendingClaims::<Test>::get(BOB).unwrap().amount(), CLAIM_B);
+		assert!(PendingClaims::<Test>::get(ALICE).is_some());
+		assert!(PendingClaims::<Test>::get(BOB).is_some());
 
-		// Two threshold signature requests should have been made.
-		assert_eq!(MockThresholdSigner::received_requests().len(), 2);
+		// Two broadcasts should have been initiated by the two claims.
+		assert_eq!(MockBroadcaster::received_requests().len(), 2);
 
 		assert_event_sequence!(
 			Test,
@@ -217,7 +216,7 @@ fn cannot_double_claim() {
 }
 
 #[test]
-fn staked_and_claimed_events_must_match() {
+fn claim_cannot_occur_without_staking_first() {
 	new_test_ext().execute_with(|| {
 		const STAKE: u128 = 45;
 
@@ -233,16 +232,13 @@ fn staked_and_claimed_events_must_match() {
 		// Claim it.
 		assert_ok!(Staking::claim(RuntimeOrigin::signed(ALICE), STAKE.into(), ETH_DUMMY_ADDR));
 
+		// Claim should kick off a broadcast request.
+		assert_eq!(MockBroadcaster::received_requests().len(), 1);
+
 		// Invalid Claimed Event from Ethereum: wrong account.
 		assert_noop!(
 			Staking::claimed(RuntimeOrigin::root(), BOB, STAKE, TX_HASH),
 			<Error<Test>>::NoPendingClaim
-		);
-
-		// Invalid Claimed Event from Ethereum: wrong amount.
-		assert_noop!(
-			Staking::claimed(RuntimeOrigin::root(), ALICE, STAKE - 1, TX_HASH),
-			<Error<Test>>::InvalidClaimDetails
 		);
 
 		// Valid Claimed Event from Ethereum.
@@ -250,9 +246,6 @@ fn staked_and_claimed_events_must_match() {
 
 		// The account balance is now zero, it should have been reaped.
 		assert!(!frame_system::Pallet::<Test>::account_exists(&ALICE));
-
-		// Threshold signature request should have been made.
-		assert_eq!(MockThresholdSigner::received_requests().len(), 1);
 
 		assert_event_sequence!(
 			Test,
@@ -262,6 +255,11 @@ fn staked_and_claimed_events_must_match() {
 				tx_hash: TX_HASH,
 				stake_added: STAKE,
 				total_stake: STAKE
+			}),
+			RuntimeEvent::Staking(crate::Event::ClaimRequested {
+				account_id: ALICE,
+				amount: STAKE,
+				broadcast_id: 0
 			}),
 			RuntimeEvent::System(frame_system::Event::KilledAccount { account: ALICE }),
 			RuntimeEvent::Staking(crate::Event::ClaimSettled(ALICE, STAKE))
@@ -288,77 +286,6 @@ fn multisig_endpoints_cant_be_called_from_invalid_origins() {
 			Staking::claimed(RuntimeOrigin::signed(ALICE), ALICE, STAKE, TX_HASH),
 			BadOrigin
 		);
-	});
-}
-
-#[test]
-fn signature_is_inserted() {
-	new_test_ext().execute_with(|| {
-		const STAKE: u128 = 45;
-		const START_TIME: Duration = Duration::from_secs(10);
-
-		// Start the time at the 10-second mark.
-		time_source::Mock::reset_to(START_TIME);
-
-		// Stake some FLIP.
-		assert_ok!(Staking::staked(RuntimeOrigin::root(), ALICE, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
-
-		// Claim it.
-		assert_ok!(Staking::claim(RuntimeOrigin::signed(ALICE), STAKE.into(), ETH_DUMMY_ADDR));
-
-		// Threshold signature request should have been made.
-		assert_eq!(MockThresholdSigner::received_requests().len(), 1);
-
-		// Threshold signature generated.
-		MockThresholdSigner::on_signature_ready(&ALICE).unwrap();
-
-		assert_event_sequence!(
-			Test,
-			RuntimeEvent::System(frame_system::Event::NewAccount { account: ALICE }),
-			RuntimeEvent::Staking(crate::Event::Staked {
-				account_id: ALICE,
-				tx_hash: TX_HASH,
-				stake_added: STAKE,
-				total_stake: STAKE
-			}),
-			RuntimeEvent::Staking(crate::Event::ClaimSignatureIssued(
-				ALICE,
-				vec![
-					26, 207, 82, 35, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 207, 207, 207, 207, 207,
-					207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 0,
-					0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-					0, 0, 0, 122, 105, 249, 102, 238, 241, 89, 232, 39, 185, 33, 125, 210, 208,
-					147, 185, 206, 123, 93, 154, 198, 139, 192, 212, 144, 47, 233, 178, 176, 182,
-					4, 171, 175, 231, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207,
-					207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207,
-					207, 207, 207, 207, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-					0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 42, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 207,
-					207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207,
-					207, 207, 207, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161,
-					161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161,
-					161, 161, 161, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-					0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 45, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 42, 42,
-					42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 0, 0,
-					0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-					0, 0, 0, 20
-				]
-			))
-		);
-
-		// Check storage for the signature.
-		assert!(PendingClaims::<Test>::contains_key(ALICE));
-		let api_call =
-			frame_support::storage::unhashed::get::<cf_chains::eth::api::EthereumApi<()>>(
-				PendingClaims::<Test>::hashed_key_for(ALICE).as_slice(),
-			)
-			.expect("there should be a pending claim at this point");
-
-		let claim = match api_call {
-			cf_chains::eth::api::EthereumApi::RegisterClaim(inner) => inner,
-			_ => panic!("Wrong api call."),
-		};
-
-		assert_eq!(claim.sig_data.get_signature(), ETH_DUMMY_SIG);
 	});
 }
 
@@ -494,7 +421,7 @@ fn claim_expiry() {
 		time_source::Mock::reset_to(START_TIME);
 		const INIT_TICK: u64 = 4;
 		time_source::Mock::tick(Duration::from_secs(INIT_TICK));
-		assert_ok!(Staking::post_claim_signature(RuntimeOrigin::root(), ALICE, 0));
+		// assert_ok!(Staking::post_claim_signature(RuntimeOrigin::root(), ALICE, 0));
 
 		// Trigger expiry.
 		Pallet::<Test>::on_initialize(0);
@@ -549,30 +476,18 @@ fn claim_expiry() {
 				stake_added: STAKE,
 				total_stake: STAKE
 			}),
-			RuntimeEvent::Staking(crate::Event::ClaimSignatureIssued(
-				ALICE,
-				vec![
-					26, 207, 82, 35, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 207, 207, 207, 207, 207,
-					207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 0,
-					0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-					0, 0, 0, 122, 105, 249, 102, 238, 241, 89, 232, 39, 185, 33, 125, 210, 208,
-					147, 185, 206, 123, 93, 154, 198, 139, 192, 212, 144, 47, 233, 178, 176, 182,
-					4, 171, 175, 231, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207,
-					207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207,
-					207, 207, 207, 207, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-					0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 42, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 207,
-					207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207,
-					207, 207, 207, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161,
-					161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161,
-					161, 161, 161, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-					0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 45, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 42, 42,
-					42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 0, 0,
-					0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-					0, 0, 0, 20
-				]
-			)),
-			RuntimeEvent::Staking(crate::Event::ClaimExpired(ALICE, STAKE)),
-			RuntimeEvent::Staking(crate::Event::ClaimExpired(BOB, STAKE))
+			RuntimeEvent::Staking(crate::Event::ClaimRequested {
+				account_id: ALICE,
+				amount: STAKE,
+				broadcast_id: 0
+			}),
+			RuntimeEvent::Staking(crate::Event::ClaimRequested {
+				account_id: BOB,
+				amount: STAKE,
+				broadcast_id: 0
+			}),
+			RuntimeEvent::Staking(crate::Event::ClaimExpired { account_id: ALICE }),
+			RuntimeEvent::Staking(crate::Event::ClaimExpired { account_id: BOB })
 		);
 	});
 }

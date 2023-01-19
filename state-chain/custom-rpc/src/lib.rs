@@ -9,7 +9,7 @@ use sp_runtime::AccountId32;
 use state_chain_runtime::{
 	chainflip::Offence,
 	constants::common::TX_FEE_MULTIPLIER,
-	runtime_apis::{ChainflipAccountStateWithPassive, CustomRuntimeApi, RuntimeApiPendingClaim},
+	runtime_apis::{ChainflipAccountStateWithPassive, CustomRuntimeApi},
 };
 use std::{marker::PhantomData, sync::Arc};
 
@@ -120,19 +120,6 @@ pub trait CustomApi {
 		account_id: AccountId32,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcAccountInfo>;
-	#[method(name = "pending_claim")]
-	fn cf_pending_claim(
-		&self,
-		account_id: AccountId32,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<RpcPendingClaim>>;
-
-	#[method(name = "get_claim_certificate")]
-	fn cf_get_claim_certificate(
-		&self,
-		account_id: AccountId32,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<Vec<u8>>>;
 
 	#[method(name = "penalties")]
 	fn cf_penalties(
@@ -330,46 +317,6 @@ where
 			withdrawal_address: hex::encode(account_info.withdrawal_address),
 			state: account_info.state,
 		})
-	}
-	fn cf_pending_claim(
-		&self,
-		account_id: AccountId32,
-		at: Option<<B as BlockT>::Hash>,
-	) -> RpcResult<Option<RpcPendingClaim>> {
-		let pending_claim: RuntimeApiPendingClaim = match self
-			.client
-			.runtime_api()
-			.cf_pending_claim(&self.query_block_id(at), account_id)
-			.map_err(to_rpc_error)?
-		{
-			Some(pending_claim) => pending_claim,
-			None => return Ok(None),
-		};
-
-		Ok(Some(RpcPendingClaim {
-			amount: pending_claim.amount.into(),
-			expiry: pending_claim.expiry.into(),
-			address: hex::encode(pending_claim.address),
-			sig_data: pending_claim.sig_data,
-		}))
-	}
-
-	fn cf_get_claim_certificate(
-		&self,
-		account_id: AccountId32,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<Vec<u8>>> {
-		let certificate = match self
-			.client
-			.runtime_api()
-			.cf_get_claim_certificate(&self.query_block_id(at), account_id)
-			.map_err(to_rpc_error)?
-		{
-			Some(cert) => cert,
-			None => return Ok(None),
-		};
-
-		Ok(Some(certificate))
 	}
 
 	fn cf_penalties(

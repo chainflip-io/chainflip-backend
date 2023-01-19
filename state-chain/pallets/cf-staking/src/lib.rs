@@ -16,7 +16,7 @@ pub use weights::WeightInfo;
 mod tests;
 
 use cf_chains::RegisterClaim;
-use cf_traits::{Bid, BidderProvider, EpochInfo, StakeTransfer, ThresholdSigner};
+use cf_traits::{Bid, BidderProvider, EpochInfo, StakeTransfer};
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
@@ -44,8 +44,9 @@ pub const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
 pub mod pallet {
 
 	use super::*;
-	use cf_chains::{eth::Ethereum, ApiCall};
-	use cf_traits::AccountRoleRegistry;
+	use cf_chains::eth::Ethereum;
+	use cf_primitives::BroadcastId;
+	use cf_traits::{AccountRoleRegistry, Broadcaster};
 	use frame_support::{pallet_prelude::*, Parameter};
 	use frame_system::pallet_prelude::*;
 
@@ -106,8 +107,7 @@ pub mod pallet {
 			Balance = Self::Balance,
 		>;
 
-		/// Threshold signer.
-		type ThresholdSigner: ThresholdSigner<Ethereum, Callback = Self::ThresholdCallable>;
+		type Broadcaster: Broadcaster<Ethereum, ApiCall = Self::RegisterClaim>;
 
 		/// Ensure that only threshold signature consensus can post a signature.
 		type EnsureThresholdSigned: EnsureOrigin<Self::RuntimeOrigin>;
@@ -132,12 +132,10 @@ pub mod pallet {
 	pub type ActiveBidder<T: Config> =
 		StorageMap<_, Blake2_128Concat, AccountId<T>, bool, ValueQuery>;
 
-	/// PendingClaims can be in one of two states:
-	/// - Pending threshold signature to allow registration of the claim.
-	/// - Pending execution of the claim on ETH.
+	/// PendingClaims stores a () for the account until the claim is executed.
 	#[pallet::storage]
 	pub type PendingClaims<T: Config> =
-		StorageMap<_, Blake2_128Concat, AccountId<T>, T::RegisterClaim, OptionQuery>;
+		StorageMap<_, Blake2_128Concat, AccountId<T>, (), OptionQuery>;
 
 	/// Locks a particular account's ability to claim to a particular ETH address.
 	#[pallet::storage]
@@ -194,12 +192,16 @@ pub mod pallet {
 			total_stake: FlipBalance<T>,
 		},
 
+		// Someone has requested to claim some FLIP into their Ethereum wallet.
+		ClaimRequested {
+			account_id: AccountId<T>,
+			amount: FlipBalance<T>,
+			broadcast_id: BroadcastId,
+		},
+
 		/// A node has claimed their FLIP on the Ethereum chain. \[account_id,
 		/// claimed_amount\]
 		ClaimSettled(AccountId<T>, FlipBalance<T>),
-
-		/// A claim signature has been issued by the signer module. \[account_id, signed_payload\]
-		ClaimSignatureIssued(AccountId<T>, Vec<u8>),
 
 		/// An account has retired and will no longer take part in auctions. \[account_id\]
 		AccountRetired(AccountId<T>),
@@ -207,8 +209,8 @@ pub mod pallet {
 		/// A previously retired account has been re-activated. \[account_id\]
 		AccountActivated(AccountId<T>),
 
-		/// A claim has expired without being executed. \[account_id, nonce, amount\]
-		ClaimExpired(AccountId<T>, FlipBalance<T>),
+		/// A claim has expired without being executed.
+		ClaimExpired { account_id: AccountId<T> },
 
 		/// A stake attempt has failed. \[account_id, eth_address, amount\]
 		FailedStakeAttempt(AccountId<T>, EthereumAddress, FlipBalance<T>),
@@ -224,10 +226,6 @@ pub mod pallet {
 
 		/// An invalid claim has been witnessed: the account has no pending claims.
 		NoPendingClaim,
-
-		/// An invalid claim has been witnessed: the amount claimed, does not match the pending
-		/// claim.
-		InvalidClaimDetails,
 
 		/// The claimant tried to claim despite having a claim already pending.
 		PendingClaim,
@@ -382,18 +380,11 @@ pub mod pallet {
 				contract_expiry,
 			);
 
-			T::ThresholdSigner::request_signature_with_callback(
-				call.threshold_signature_payload(),
-				|id| {
-					Call::<T>::post_claim_signature {
-						account_id: account_id.clone(),
-						signature_request_id: id,
-					}
-					.into()
-				},
-			);
+			PendingClaims::<T>::insert(account_id.clone(), ());
 
-			PendingClaims::<T>::insert(account_id, call);
+			let broadcast_id = T::Broadcaster::threshold_sign_and_broadcast(call);
+
+			Self::deposit_event(Event::ClaimRequested { account_id, amount, broadcast_id });
 
 			Ok(().into())
 		}
@@ -414,7 +405,6 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [NoPendingClaim](Error::NoPendingClaim)
-		/// - [InvalidClaimDetails](Error::InvalidClaimDetails)
 		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[pallet::weight(T::WeightInfo::claimed())]
 		pub fn claimed(
@@ -426,16 +416,8 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
-			ensure!(
-				claimed_amount ==
-					PendingClaims::<T>::get(&account_id)
-						.ok_or(Error::<T>::NoPendingClaim)?
-						.amount()
-						.into(),
-				Error::<T>::InvalidClaimDetails
-			);
+			PendingClaims::<T>::take(&account_id).ok_or(Error::<T>::NoPendingClaim)?;
 
-			PendingClaims::<T>::remove(&account_id);
 			// Assumption: One claim per account here.
 			ClaimExpiries::<T>::mutate(|expiries| {
 				expiries.retain(|(_, expiry_account_id)| expiry_account_id != &account_id);
@@ -457,50 +439,6 @@ pub mod pallet {
 
 			Self::deposit_event(Event::ClaimSettled(account_id, claimed_amount));
 
-			Ok(().into())
-		}
-
-		/// **This call can only be dispatched from the threshold signature origin.**
-		///
-		/// The claim signature generated by the CFE is registered via the threshold signature
-		/// pallet. This Call is a callback for a valid threshold signature which
-		/// corresponds to a claim. After `post_claim_signature` it is the responsibility of the
-		/// user to finish the claiming process by registering the claim and executing the claim on
-		/// Ethereum.
-		///
-		/// ## Events
-		///
-		/// - [ClaimSignatureIssued](Event::ClaimSignatureIssued)
-		///
-		/// ## Errors
-		///
-		/// - [NoPendingClaim](Error::NoPendingClaim)
-		/// - [SignatureNotReady](Error::SignatureNotReady)
-		#[pallet::weight(T::WeightInfo::post_claim_signature())]
-		pub fn post_claim_signature(
-			origin: OriginFor<T>,
-			account_id: AccountId<T>,
-			signature_request_id: <T::ThresholdSigner as ThresholdSigner<Ethereum>>::RequestId,
-		) -> DispatchResultWithPostInfo {
-			T::EnsureThresholdSigned::ensure_origin(origin)?;
-
-			let signature = T::ThresholdSigner::signature_result(signature_request_id)
-				.ready_or_else(|r| {
-					// This should never happen unless there is a mistake in the implementation.
-					log::error!("Callback triggered with no signature. Signature status {:?}", r);
-					Error::<T>::SignatureNotReady
-				})?
-				.expect("Assumption: post_claim_signature only triggered when the signature ceremony results in success");
-
-			let claim_details_signed = PendingClaims::<T>::get(&account_id)
-				.ok_or(Error::<T>::NoPendingClaim)?
-				.signed(&signature);
-
-			PendingClaims::<T>::insert(&account_id, &claim_details_signed);
-			Self::deposit_event(Event::ClaimSignatureIssued(
-				account_id,
-				claim_details_signed.chain_encoded(),
-			));
 			Ok(().into())
 		}
 
@@ -615,13 +553,12 @@ impl<T: Config> Pallet<T> {
 		// take the len after we've partitioned the expiries.
 		let expiries_len = expiries.len() as u32;
 		for (_, account_id) in expiries {
-			if let Some(pending_claim) = PendingClaims::<T>::take(&account_id) {
-				let claim_amount = pending_claim.amount().into();
+			if PendingClaims::<T>::take(&account_id).is_some() {
 				// Re-credit the account
-				T::Flip::revert_claim(&account_id, claim_amount)
+				T::Flip::revert_claim(&account_id)
 					.expect("Pending Claim should exist since the corresponding expiry exists");
 
-				Self::deposit_event(Event::<T>::ClaimExpired(account_id, claim_amount));
+				Self::deposit_event(Event::<T>::ClaimExpired { account_id });
 			}
 		}
 

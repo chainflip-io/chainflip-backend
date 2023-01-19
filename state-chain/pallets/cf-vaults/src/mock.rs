@@ -56,7 +56,6 @@ pub enum SystemState {
 	Maintenance,
 }
 
-// TODO: Unify with staking pallet mock
 pub const ETH_DUMMY_SIG: eth::SchnorrVerificationComponents =
 	eth::SchnorrVerificationComponents { s: [0xcf; 32], k_times_g_address: [0xcf; 20] };
 
