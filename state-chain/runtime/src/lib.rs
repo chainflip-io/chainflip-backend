@@ -71,7 +71,7 @@ use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
 pub use cf_primitives::{
-	Asset, AssetAmount, BlockNumber, ExchangeRate, FlipBalance, ForeignChainAddress,
+	Asset, AssetAmount, BlockNumber, ExchangeRate, FlipBalance, ForeignChainAddress, Tick,
 };
 pub use cf_traits::{EpochInfo, EthEnvironmentProvider, QualifyNode, SessionKeysRegistered};
 
@@ -269,8 +269,7 @@ impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
 }
 impl pallet_cf_pools::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	// fee = 0,1%
-	type NetworkFee = ConstU16<10>;
+	type NetworkFee = ConstU16<0>;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 }
 
@@ -907,15 +906,15 @@ impl_runtime_apis! {
 	}
 
 	impl pallet_cf_pools_runtime_api::PoolsApi<Block> for Runtime {
-		fn cf_swap_rate(input_asset: Asset, output_asset: Asset, input_amount: AssetAmount) -> ExchangeRate {
+		fn cf_pool_tick_price(
+			asset: Asset,
+		) -> Option<Tick> {
 			use cf_traits::LiquidityPoolApi;
-
-			LiquidityPools::swap_rate(input_asset, output_asset, input_amount)
+			LiquidityPools::current_tick(&asset)
 		}
 	}
 
 	// END custom runtime APIs
-
 	impl sp_api::Core<Block> for Runtime {
 		fn version() -> RuntimeVersion {
 			VERSION

@@ -10,10 +10,10 @@ mod offences;
 use cf_primitives::{chains::assets, Asset, KeyId, ETHEREUM_ETH_ADDRESS};
 pub use offences::*;
 mod signer_nomination;
+use cf_primitives::liquidity::U256;
 use ethabi::Address as EthAbiAddress;
 pub use missed_authorship_slots::MissedAuraSlots;
 pub use signer_nomination::RandomSignerNomination;
-use sp_core::U256;
 
 use crate::{
 	AccountId, Authorship, BlockNumber, EmergencyRotationPercentageRange, Emissions, Environment,

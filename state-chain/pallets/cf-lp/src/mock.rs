@@ -1,6 +1,6 @@
 use crate as pallet_cf_lp;
 use cf_chains::{eth::assets, AnyChain, Chain, Ethereum};
-use cf_primitives::{AccountRole, BroadcastId, IntentId};
+use cf_primitives::{AccountId, AccountRole, AuthorityCount, BroadcastId, IntentId};
 use cf_traits::{
 	mocks::{
 		all_batch::{MockAllBatch, MockEthEnvironment},
@@ -13,9 +13,9 @@ use cf_traits::{
 	},
 	AddressDerivationApi, Broadcaster,
 };
-use frame_support::{parameter_types, sp_runtime::app_crypto::sp_core::H160, traits::ConstU16};
+use frame_support::{parameter_types, sp_runtime::app_crypto::sp_core::H160};
 use frame_system as system;
-use sp_core::H256;
+use sp_core::{ConstU16, H256};
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
@@ -26,7 +26,6 @@ use sp_std::str::FromStr;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
-type AccountId = u64;
 
 pub struct MockAddressDerivation;
 
@@ -52,6 +51,8 @@ frame_support::construct_runtime!(
 		LiquidityPools: pallet_cf_pools,
 	}
 );
+
+cf_traits::impl_mock_epoch_info!(AccountId, u128, u32, AuthorityCount);
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
@@ -96,12 +97,12 @@ impl Broadcaster<Ethereum> for MockBroadcast {
 
 impl cf_traits::Chainflip for Test {
 	type KeyId = Vec<u8>;
-	type ValidatorId = u64;
+	type ValidatorId = AccountId;
 	type Amount = u128;
 	type RuntimeCall = RuntimeCall;
 	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
 	type EnsureWitnessedAtCurrentEpoch = NeverFailingOriginCheck<Self>;
-	type EpochInfo = cf_traits::mocks::epoch_info::MockEpochInfo;
+	type EpochInfo = MockEpochInfo;
 	type SystemState = MockSystemStateInfo;
 }
 
@@ -114,7 +115,7 @@ impl pallet_cf_account_roles::Config for Test {
 
 impl pallet_cf_pools::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type NetworkFee = ConstU16<100>;
+	type NetworkFee = ConstU16<0>;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 }
 
@@ -127,8 +128,8 @@ impl crate::Config for Test {
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 }
 
-pub const LP_ACCOUNT: u64 = 1;
-pub const NON_LP_ACCOUNT: u64 = 2;
+pub const LP_ACCOUNT: [u8; 32] = [1u8; 32];
+pub const NON_LP_ACCOUNT: [u8; 32] = [2u8; 32];
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
@@ -136,8 +137,8 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		system: Default::default(),
 		account_roles: AccountRolesConfig {
 			initial_account_roles: vec![
-				(LP_ACCOUNT, AccountRole::LiquidityProvider),
-				(NON_LP_ACCOUNT, AccountRole::Validator),
+				(LP_ACCOUNT.into(), AccountRole::LiquidityProvider),
+				(NON_LP_ACCOUNT.into(), AccountRole::Validator),
 			],
 		},
 		liquidity_pools: Default::default(),

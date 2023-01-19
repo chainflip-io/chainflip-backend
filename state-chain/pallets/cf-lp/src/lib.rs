@@ -6,44 +6,26 @@ use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use sp_runtime::DispatchResult;
+use sp_std::cmp::{Ord, Ordering};
 
 use cf_chains::AnyChain;
 use cf_primitives::{
-	liquidity::{PositionId, TradingPosition},
-	Asset, AssetAmount, ForeignChain, ForeignChainAddress, IntentId,
+	liquidity::{MintError, PoolAssetMap},
+	AmmRange, Asset, AssetAmount, ForeignChain, ForeignChainAddress, IntentId, Liquidity, PoolSide,
 };
 use cf_traits::{
 	liquidity::LpProvisioningApi, AccountRoleRegistry, Chainflip, EgressApi, IngressApi,
 	LiquidityPoolApi, SystemStateInfo,
 };
-use codec::{Decode, Encode, MaxEncodedLen};
-use scale_info::TypeInfo;
 
 #[cfg(feature = "std")]
-use serde::{Deserialize, Serialize};
-
 // #[cfg(feature = "runtime-benchmarks")]
 // mod benchmarking;
-
 #[cfg(test)]
 mod mock;
 
 #[cfg(test)]
 mod tests;
-
-#[derive(Debug, Encode, Decode, MaxEncodedLen, TypeInfo)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub struct UserTradingPosition<AccountId, Amount> {
-	pub account_id: AccountId,
-	pub position: TradingPosition<Amount>,
-	pub asset: Asset,
-}
-
-impl<AccountId, Amount> UserTradingPosition<AccountId, Amount> {
-	pub fn new(account_id: AccountId, position: TradingPosition<Amount>, asset: Asset) -> Self {
-		Self { account_id, position, asset }
-	}
-}
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -71,7 +53,7 @@ pub mod pallet {
 		type EgressHandler: EgressApi<AnyChain>;
 
 		/// API to interface with exchange Pools
-		type LiquidityPoolApi: LiquidityPoolApi;
+		type LiquidityPoolApi: LiquidityPoolApi<Self::AccountId>;
 
 		/// For governance checks.
 		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
@@ -81,8 +63,6 @@ pub mod pallet {
 	pub enum Error<T> {
 		// The user does not have enough fund.
 		InsufficientBalance,
-		// The TradingPosition provided is invalid for the liquidity pool.
-		InvalidTradingPosition,
 		// The caller is not authorized to modify the trading position.
 		UnauthorisedToModify,
 		// The Asset cannot be egressed to the destination chain.
@@ -101,22 +81,6 @@ pub mod pallet {
 			account_id: T::AccountId,
 			asset: Asset,
 			amount_credited: AssetAmount,
-		},
-		TradingPositionOpened {
-			account_id: T::AccountId,
-			position_id: PositionId,
-			asset: Asset,
-			position: TradingPosition<AssetAmount>,
-		},
-		TradingPositionUpdated {
-			account_id: T::AccountId,
-			position_id: PositionId,
-			asset: Asset,
-			new_position: TradingPosition<AssetAmount>,
-		},
-		TradingPositionClosed {
-			account_id: T::AccountId,
-			position_id: PositionId,
 		},
 		DepositAddressReady {
 			intent_id: IntentId,
@@ -138,18 +102,10 @@ pub mod pallet {
 	pub type FreeBalances<T: Config> =
 		StorageDoubleMap<_, Twox64Concat, T::AccountId, Identity, Asset, AssetAmount>;
 
-	#[pallet::storage]
-	/// A map of Amm Position ID to the TradingPosition and owner. Map: PositionId =>
-	/// UserTradingPosition
-	pub type TradingPositions<T: Config> =
-		StorageMap<_, Twox64Concat, PositionId, UserTradingPosition<T::AccountId, AssetAmount>>;
-
-	#[pallet::storage]
-	/// Stores the Position ID for the next Amm position.
-	pub type NextTradingPositionId<T: Config> = StorageValue<_, PositionId, ValueQuery>;
-
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+		/// For when the user wants to deposit assets into the Chain.
+		/// Generates a new ingress address for the user to posit their assets.
 		#[pallet::weight(0)]
 		pub fn request_deposit_address(origin: OriginFor<T>, asset: Asset) -> DispatchResult {
 			T::SystemState::ensure_no_maintenance()?;
@@ -162,37 +118,42 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// For when the user wants to withdraw their free balances out of the chain.
+		/// Requires a valid foreign chain address.
 		#[pallet::weight(0)]
-		pub fn withdraw_liquidity(
+		pub fn withdraw_asset(
 			origin: OriginFor<T>,
 			amount: AssetAmount,
 			asset: Asset,
 			egress_address: ForeignChainAddress,
 		) -> DispatchResult {
-			T::SystemState::ensure_no_maintenance()?;
-			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
+			if amount > 0 {
+				T::SystemState::ensure_no_maintenance()?;
+				let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
-			// Check validity of Chain and Asset
-			ensure!(
-				ForeignChain::from(egress_address) == ForeignChain::from(asset),
-				Error::<T>::InvalidEgressAddress
-			);
+				// Check validity of Chain and Asset
+				ensure!(
+					ForeignChain::from(egress_address) == ForeignChain::from(asset),
+					Error::<T>::InvalidEgressAddress
+				);
 
-			// Debit the asset from the account.
-			Pallet::<T>::try_debit(&account_id, asset, amount)?;
+				// Debit the asset from the account.
+				Self::try_debit(&account_id, asset, amount)?;
 
-			let egress_id = T::EgressHandler::schedule_egress(asset, amount, egress_address);
+				let egress_id = T::EgressHandler::schedule_egress(asset, amount, egress_address);
 
-			Self::deposit_event(Event::<T>::WithdrawalEgressScheduled {
-				egress_id,
-				asset,
-				amount,
-				egress_address,
-			});
-
+				Self::deposit_event(Event::<T>::WithdrawalEgressScheduled {
+					egress_id,
+					asset,
+					amount,
+					egress_address,
+				});
+			}
 			Ok(())
 		}
 
+		/// Register the account as a Liquidity Provider.
+		/// Account roles are immutable once registered.
 		#[pallet::weight(0)]
 		pub fn register_lp_account(who: OriginFor<T>) -> DispatchResult {
 			let account_id = ensure_signed(who)?;
@@ -202,131 +163,68 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::weight(0)]
-		pub fn open_position(
-			origin: OriginFor<T>,
-			asset: Asset,
-			position: TradingPosition<AssetAmount>,
-		) -> DispatchResult {
-			T::SystemState::ensure_no_maintenance()?;
-			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
-
-			let maybe_liquidity =
-				T::LiquidityPoolApi::get_liquidity_amount_by_position(&asset, &position);
-			ensure!(maybe_liquidity.is_some(), Error::<T>::InvalidTradingPosition);
-			let (liquidity_0, liquidity_1) = maybe_liquidity.unwrap();
-
-			// Debit the user's asset from their account.
-			Pallet::<T>::try_debit(&account_id, asset, liquidity_0)?;
-			Pallet::<T>::try_debit(&account_id, T::LiquidityPoolApi::STABLE_ASSET, liquidity_1)?;
-
-			T::LiquidityPoolApi::deploy(&asset, position);
-
-			let position_id = NextTradingPositionId::<T>::get();
-			NextTradingPositionId::<T>::put(position_id.saturating_add(1u64));
-
-			// Insert the position into
-			TradingPositions::<T>::insert(
-				position_id,
-				UserTradingPosition::<T::AccountId, AssetAmount>::new(
-					account_id.clone(),
-					position,
-					asset,
-				),
-			);
-
-			Self::deposit_event(Event::<T>::TradingPositionOpened {
-				account_id,
-				position_id,
-				asset,
-				position,
-			});
-
-			Ok(())
-		}
-
+		/// Adjust the current liquidity position for a liquidity pool.
+		/// Compare the current liquidity level for the given pool/position with provided one  
+		/// and automatically mint/burn liquidity to match the target.
+		/// Adding non-zero amount to an non-existant position will create the position.
+		/// Adding Zero amount to an existing position will fully burn all liquidity in the
+		/// position.
 		#[pallet::weight(0)]
 		pub fn update_position(
 			origin: OriginFor<T>,
 			asset: Asset,
-			id: PositionId,
-			new_position: TradingPosition<AssetAmount>,
+			range: AmmRange,
+			liquidity_target: Liquidity,
 		) -> DispatchResult {
 			T::SystemState::ensure_no_maintenance()?;
 			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
-			TradingPositions::<T>::try_mutate(id, |maybe_position| -> DispatchResult {
-				ensure!(maybe_position.is_some(), Error::<T>::InvalidTradingPosition);
-				let mut current_position = maybe_position.as_mut().unwrap();
-				ensure!(current_position.asset == asset, Error::<T>::InvalidTradingPosition);
-				ensure!(
-					current_position.account_id == account_id,
-					Error::<T>::UnauthorisedToModify
-				);
+			// Retrieve the unique LP positions from the pool.
+			let current_liquidity = T::LiquidityPoolApi::minted_liquidity(&account_id, &asset)
+				.into_iter()
+				.find(|position| {
+					position.range.lower == range.lower && position.range.upper == range.upper
+				})
+				.unwrap_or_default()
+				.liquidity;
 
-				let (old_liquidity_0, old_liquidity_1) =
-					T::LiquidityPoolApi::retract(&asset, current_position.position);
-
-				// Refund the debited assets for the previous position
-				Pallet::<T>::credit(&account_id, asset, old_liquidity_0)?;
-				Pallet::<T>::credit(
-					&account_id,
-					T::LiquidityPoolApi::STABLE_ASSET,
-					old_liquidity_1,
-				)?;
-
-				// Debit the user's account for the new position.
-				let maybe_new_liquidity =
-					T::LiquidityPoolApi::get_liquidity_amount_by_position(&asset, &new_position);
-				ensure!(maybe_new_liquidity.is_some(), Error::<T>::InvalidTradingPosition);
-				let (new_liquidity_0, new_liquidity_1) = maybe_new_liquidity.unwrap();
-
-				Pallet::<T>::try_debit(&account_id, asset, new_liquidity_0)?;
-				Pallet::<T>::try_debit(
-					&account_id,
-					T::LiquidityPoolApi::STABLE_ASSET,
-					new_liquidity_1,
-				)?;
-
-				// Update the pool's liquidity amount
-				T::LiquidityPoolApi::deploy(&asset, new_position);
-
-				// Update the Position storage
-				current_position.position = new_position;
-
-				Self::deposit_event(Event::<T>::TradingPositionUpdated {
+			match current_liquidity.cmp(&liquidity_target) {
+				// Burn the difference
+				Ordering::Greater => Self::burn_liquidity(
 					account_id,
-					position_id: id,
 					asset,
-					new_position,
-				});
-
-				Ok(())
-			})
+					range,
+					current_liquidity.saturating_sub(liquidity_target),
+				),
+				// Mint the difference
+				Ordering::Less => Self::mint_liquidity(
+					account_id,
+					asset,
+					range,
+					liquidity_target.saturating_sub(current_liquidity),
+				),
+				// Do nothing if the liquidity matches.
+				Ordering::Equal => Ok(()),
+			}
 		}
 
+		/// Collects all the fees currently held in a user position. Credit the fee to
+		/// user's free balance. Reset the fees stored in the pool position.
 		#[pallet::weight(0)]
-		pub fn close_position(who: OriginFor<T>, position_id: PositionId) -> DispatchResult {
+		pub fn collect_fees(origin: OriginFor<T>, asset: Asset, range: AmmRange) -> DispatchResult {
 			T::SystemState::ensure_no_maintenance()?;
-			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(who)?;
+			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
-			// Remove the position.
-			let maybe_position = TradingPositions::<T>::take(position_id);
+			let fees_collected = T::LiquidityPoolApi::collect(account_id.clone(), asset, range)?;
 
-			// Ensure the position exists and belongs to the user.
-			ensure!(maybe_position.is_some(), Error::<T>::InvalidTradingPosition);
-			let current_position = maybe_position.unwrap();
-			ensure!(current_position.account_id == account_id, Error::<T>::UnauthorisedToModify);
+			// Credit the user's asset into their account.
+			Self::credit(&account_id, asset, fees_collected[PoolSide::Asset0])?;
+			Self::credit(
+				&account_id,
+				T::LiquidityPoolApi::STABLE_ASSET,
+				fees_collected[PoolSide::Asset1],
+			)?;
 
-			// Update the pool's liquidity amount
-			let (asset_0_credit, asset_1_credit) =
-				T::LiquidityPoolApi::retract(&current_position.asset, current_position.position);
-
-			// Refund the debited assets for the previous position
-			Pallet::<T>::credit(&account_id, current_position.asset, asset_0_credit)?;
-			Pallet::<T>::credit(&account_id, T::LiquidityPoolApi::STABLE_ASSET, asset_1_credit)?;
-
-			Self::deposit_event(Event::<T>::TradingPositionClosed { account_id, position_id });
 			Ok(())
 		}
 	}
@@ -334,6 +232,10 @@ pub mod pallet {
 
 impl<T: Config> Pallet<T> {
 	fn try_debit(account_id: &T::AccountId, asset: Asset, amount: AssetAmount) -> DispatchResult {
+		if amount == 0 {
+			return Ok(())
+		}
+
 		let mut balance = FreeBalances::<T>::get(account_id, asset).unwrap_or_default();
 		ensure!(balance >= amount, Error::<T>::InsufficientBalance);
 		balance = balance.saturating_sub(amount);
@@ -348,6 +250,10 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn credit(account_id: &T::AccountId, asset: Asset, amount: AssetAmount) -> DispatchResult {
+		if amount == 0 {
+			return Ok(())
+		}
+
 		FreeBalances::<T>::mutate(account_id, asset, |maybe_balance| {
 			let mut balance = maybe_balance.unwrap_or_default();
 			balance = balance.saturating_add(amount);
@@ -361,6 +267,71 @@ impl<T: Config> Pallet<T> {
 		});
 		Ok(())
 	}
+
+	fn check_can_withdraw(account_id: &T::AccountId, asset: Asset, amount: AssetAmount) -> bool {
+		FreeBalances::<T>::get(account_id, asset).unwrap_or_default() >= amount
+	}
+
+	pub fn mint_liquidity(
+		account_id: T::AccountId,
+		asset: Asset,
+		range: AmmRange,
+		liquidity_amount: Liquidity,
+	) -> DispatchResult {
+		let checking_function = |asset_map: PoolAssetMap<AssetAmount>| -> Result<(), MintError> {
+			// Check user has enough funds for both assets
+			(Self::check_can_withdraw(&account_id, asset, asset_map[PoolSide::Asset0]) &&
+				Self::check_can_withdraw(
+					&account_id,
+					T::LiquidityPoolApi::STABLE_ASSET,
+					asset_map[PoolSide::Asset1],
+				))
+			.then_some(())
+			.ok_or(MintError::InsufficientBalance)
+		};
+
+		let amount_to_be_debited = T::LiquidityPoolApi::mint(
+			account_id.clone(),
+			asset,
+			range,
+			liquidity_amount,
+			checking_function,
+		)?;
+
+		// Debit the user's asset from their account.
+		Self::try_debit(&account_id, asset, amount_to_be_debited[PoolSide::Asset0])?;
+		Self::try_debit(
+			&account_id,
+			T::LiquidityPoolApi::STABLE_ASSET,
+			amount_to_be_debited[PoolSide::Asset1],
+		)
+	}
+
+	pub fn burn_liquidity(
+		account_id: T::AccountId,
+		asset: Asset,
+		range: AmmRange,
+		liquidity_amount: Liquidity,
+	) -> DispatchResult {
+		let burn_result =
+			T::LiquidityPoolApi::burn(account_id.clone(), asset, range, liquidity_amount)?;
+
+		// Credit the user's asset into their account.
+		Self::credit(
+			&account_id,
+			asset,
+			burn_result.assets_returned[PoolSide::Asset0]
+				.saturating_add(burn_result.fees_accrued[PoolSide::Asset0]),
+		)?;
+		Self::credit(
+			&account_id,
+			T::LiquidityPoolApi::STABLE_ASSET,
+			burn_result.assets_returned[PoolSide::Asset1]
+				.saturating_add(burn_result.fees_accrued[PoolSide::Asset1]),
+		)?;
+
+		Ok(())
+	}
 }
 
 impl<T: Config> LpProvisioningApi for Pallet<T> {
@@ -371,6 +342,6 @@ impl<T: Config> LpProvisioningApi for Pallet<T> {
 		asset: Asset,
 		amount: AssetAmount,
 	) -> DispatchResult {
-		Pallet::<T>::credit(account_id, asset, amount).map_err(Into::into)
+		Self::credit(account_id, asset, amount).map_err(Into::into)
 	}
 }

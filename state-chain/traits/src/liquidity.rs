@@ -1,9 +1,10 @@
-use sp_runtime::DispatchResult;
-
 use cf_primitives::{
-	liquidity::TradingPosition, Asset, AssetAmount, ExchangeRate, ForeignChainAddress,
+	liquidity::MintError, AmmRange, Asset, AssetAmount, BurnResult, ForeignChainAddress, Liquidity,
+	MintedLiquidity, PoolAssetMap, Tick,
 };
-
+use frame_support::dispatch::DispatchError;
+use sp_runtime::DispatchResult;
+use sp_std::vec::Vec;
 pub trait SwapIntentHandler {
 	type AccountId;
 	fn on_swap_ingress(
@@ -29,41 +30,61 @@ pub trait LpProvisioningApi {
 }
 
 pub trait SwappingApi {
+	// Attempt to swap `from` asset to `to` asset.
+	// If OK, return (output_amount, input_asset_fee, stable_asset_fee)
 	fn swap(
 		from: Asset,
 		to: Asset,
 		input_amount: AssetAmount,
-		fee: u16,
-	) -> (AssetAmount, (Asset, AssetAmount));
+	) -> Result<AssetAmount, DispatchError>;
 }
 
-/// API to interface with Exchange Pools.
+impl SwappingApi for () {
+	fn swap(
+		_from: Asset,
+		_to: Asset,
+		_input_amount: AssetAmount,
+	) -> Result<AssetAmount, DispatchError> {
+		Ok(Default::default())
+	}
+}
+
+/// API to interface with the Pools pallet to manage Uniswap v3 style Exchange Pools.
 /// All pools are Asset <-> USDC
-pub trait LiquidityPoolApi {
+pub trait LiquidityPoolApi<AccountId> {
 	const STABLE_ASSET: Asset;
 
-	/// Deploy a liquidity position into a pool.
-	fn deploy(asset: &Asset, position: TradingPosition<AssetAmount>);
+	/// Deposit up to some amount of assets into an exchange pool. Minting some "Liquidity".
+	/// Returns Ok((asset_vested, liquidity_minted))
+	fn mint(
+		lp: AccountId,
+		asset: Asset,
+		range: AmmRange,
+		liquidity_amount: Liquidity,
+		balance_check_callback: impl FnOnce(PoolAssetMap<AssetAmount>) -> Result<(), MintError>,
+	) -> Result<PoolAssetMap<AssetAmount>, DispatchError>;
 
-	/// Retract a liquidity position from a pool.
-	fn retract(asset: &Asset, position: TradingPosition<AssetAmount>)
-		-> (AssetAmount, AssetAmount);
+	/// Burn some liquidity from an exchange pool to withdraw assets.
+	/// Returns Ok((assets_retrieved, fee_accrued))
+	fn burn(
+		lp: AccountId,
+		asset: Asset,
+		range: AmmRange,
+		burnt_liquidity: Liquidity,
+	) -> Result<BurnResult, DispatchError>;
 
-	/// Gets the current liquidity amount from a pool
-	fn get_liquidity(asset: &Asset) -> (AssetAmount, AssetAmount);
+	/// Returns and resets fees accrued in user's position.
+	fn collect(
+		lp: AccountId,
+		asset: Asset,
+		range: AmmRange,
+	) -> Result<PoolAssetMap<u128>, DispatchError>;
 
-	/// Gets the current swap rate for an pool
-	fn swap_rate(
-		input_asset: Asset,
-		output_asset: Asset,
-		input_amount: AssetAmount,
-	) -> ExchangeRate;
+	/// Returns the user's Minted liquidities and fees acrued for a specific pool.
+	fn minted_liquidity(lp: &AccountId, asset: &Asset) -> Vec<MintedLiquidity>;
 
-	/// Calculates the liquidity that corresponds to a given trading position.
-	fn get_liquidity_amount_by_position(
-		asset: &Asset,
-		position: &TradingPosition<AssetAmount>,
-	) -> Option<(AssetAmount, AssetAmount)>;
+	/// Gets the current price of the pool in Tick
+	fn current_tick(asset: &Asset) -> Option<Tick>;
 }
 
 // TODO Remove these in favour of a real mocks.
@@ -92,17 +113,5 @@ impl<T: frame_system::Config> LpProvisioningApi for T {
 	) -> DispatchResult {
 		// TODO
 		Ok(())
-	}
-}
-
-impl SwappingApi for () {
-	fn swap(
-		_from: Asset,
-		_to: Asset,
-		_input_amount: AssetAmount,
-		_fee: u16,
-	) -> (AssetAmount, (Asset, AssetAmount)) {
-		// TODO
-		(0, (Asset::Usdc, 0))
 	}
 }

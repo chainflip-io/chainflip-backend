@@ -683,8 +683,12 @@ dependencies = [
 name = "cf-amm"
 version = "0.1.0"
 dependencies = [
- "enum-map",
- "primitive-types 0.12.1",
+ "cf-primitives",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sp-core 7.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12)",
+ "sp-std 5.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12)",
 ]
 
 [[package]]
@@ -734,6 +738,7 @@ dependencies = [
  "pallet-cf-flip",
  "pallet-cf-governance",
  "pallet-cf-ingress-egress",
+ "pallet-cf-lp",
  "pallet-cf-pools",
  "pallet-cf-reputation",
  "pallet-cf-staking",
@@ -843,7 +848,6 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "scale-info",
- "sp-core 7.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12)",
  "sp-io 7.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12)",
  "sp-runtime 7.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12)",
  "sp-std 5.0.0 (git+https://github.com/chainflip-io/substrate.git?tag=chainflip-monthly-2022-12)",
@@ -1679,6 +1683,7 @@ name = "custom-rpc"
 version = "0.1.0"
 dependencies = [
  "cf-chains",
+ "cf-primitives",
  "hex",
  "jsonrpsee 0.15.1",
  "pallet-cf-governance",
@@ -2163,26 +2168,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c9720bba047d567ffc8a3cba48bf19126600e249ab7f128e9233e6376976a116"
 dependencies = [
  "heck",
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
-name = "enum-map"
-version = "2.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "50c25992259941eb7e57b936157961b217a4fc8597829ddef0596d6c3cd86e1a"
-dependencies = [
- "enum-map-derive",
-]
-
-[[package]]
-name = "enum-map-derive"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2a4da76b3b6116d758c7ba93f7ec6a35d2e2cf24feda76c6e38a375f4d5c59f2"
-dependencies = [
  "proc-macro2",
  "quote",
  "syn",

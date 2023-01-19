@@ -14,8 +14,8 @@ targets = ['x86_64-unknown-linux-gnu']
 
 [dependencies]
 # Internal dependencies
-cf-traits = {path = '../../traits', default-features = false}
-cf-primitives = {path = '../../primitives', default-features = false}
+cf-traits = { path = '../../traits', default-features = false }
+cf-primitives = { path = '../../primitives', default-features = false }
 cf-amm = { path = '../../amm', default-features = false }
 
 log = { version = '0.4.16', default-features = false }
@@ -29,24 +29,25 @@ frame-support = { git = "https://github.com/chainflip-io/substrate.git", tag = "
 frame-system = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
 sp-arithmetic = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
 sp-std = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
+sp-runtime = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
 
 [dev-dependencies]
-sp-core = { version = "7.0.0", git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12" }
-sp-runtime = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12" }
 sp-io = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12" }
+sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12" }
 
 [features]
 default = ['std']
 std = [
-  'cf-amm/std',
-  'cf-primitives/std',
   'cf-traits/std',
+  'cf-primitives/std',
+  'cf-amm/std',
   'codec/std',
   'scale-info/std',
   'frame-benchmarking?/std',
   'frame-support/std',
   'frame-system/std',
   'sp-std/std',
+  'sp-runtime/std',
   'log/std',
   'sp-arithmetic/std'
 ]

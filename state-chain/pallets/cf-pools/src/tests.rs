@@ -1,121 +1,148 @@
-use crate::{mini_pool, mock::*, CollectedNetworkFee, FlipBuyInterval};
-use cf_primitives::{chains::assets::any, AmmRange, AssetAmount};
-use cf_traits::{LiquidityPoolApi, SwappingApi};
+use crate::{mock::*, CollectedNetworkFee, Error, FlipBuyInterval, Pools};
+use cf_primitives::{chains::assets::any::Asset, AmmRange, AssetAmount, PoolAssetMap};
+use cf_traits::LiquidityPoolApi;
+use frame_support::{assert_noop, assert_ok};
 
 use crate::FlipToBurn;
 use frame_support::traits::Hooks;
 
 #[test]
-fn funds_are_conserved() {
-	const INITIAL_LIQUIDITY_0: AssetAmount = 200_000;
-	const INITIAL_LIQUIDITY_1: AssetAmount = 20_000;
-	const INITIAL_LIQUIDITY_TOTAL: AssetAmount = INITIAL_LIQUIDITY_0 + INITIAL_LIQUIDITY_1;
-	const SWAP_AMOUNT: AssetAmount = 300;
-
-	let mut pool = mini_pool::AmmPool::default();
-
-	pool.add_liquidity(INITIAL_LIQUIDITY_0, INITIAL_LIQUIDITY_1);
-
-	// Swapping one way should not create or destroy funds.
-	let output = pool.swap(SWAP_AMOUNT);
-	assert!(output > 0);
-	assert_eq!(pool.get_liquidity().0, INITIAL_LIQUIDITY_0 + SWAP_AMOUNT);
-	assert_eq!(
-		pool.get_liquidity().0 + pool.get_liquidity().1 + output,
-		INITIAL_LIQUIDITY_TOTAL + SWAP_AMOUNT
-	);
-
-	// Swapping the other way should not create or destroy funds.
-	let output = pool.reverse_swap(output);
-	assert_eq!(
-		pool.get_liquidity().0 + pool.get_liquidity().1 + output,
-		INITIAL_LIQUIDITY_TOTAL + SWAP_AMOUNT
-	);
-}
-
-#[test]
-fn funds_are_conserved_via_api() {
-	const INITIAL_LIQUIDITY_0: AssetAmount = 200_000;
-	const INITIAL_LIQUIDITY_1: AssetAmount = 20_000;
-	const COLLECTED_NETWORK_FEE_PER_SWAP: AssetAmount = 3;
-	const INITIAL_LIQUIDITY_TOTAL: AssetAmount = INITIAL_LIQUIDITY_0 + INITIAL_LIQUIDITY_1;
-	const SWAP_AMOUNT: AssetAmount = 300;
-
-	fn eth_liquidity() -> AssetAmount {
-		<Pools as LiquidityPoolApi>::get_liquidity(&any::Asset::Eth).0
-	}
-
-	fn usdc_liquidity() -> AssetAmount {
-		<Pools as LiquidityPoolApi>::get_liquidity(&any::Asset::Eth).1
-	}
-
+fn can_create_new_trading_pool() {
 	new_test_ext().execute_with(|| {
-		<Pools as LiquidityPoolApi>::deploy(
-			&any::Asset::Eth,
-			cf_primitives::TradingPosition::ClassicV3 {
-				range: AmmRange::default(),
-				volume_0: INITIAL_LIQUIDITY_0,
-				volume_1: INITIAL_LIQUIDITY_1,
+		let range = AmmRange::new(-100, 100);
+		let asset = Asset::Eth;
+		let default_tick_price = 0;
+		// Pool does not exist.
+		assert!(Pools::<Test>::get(asset).is_none());
+		assert_noop!(
+			LiquidityPools::mint(
+				LP.into(),
+				asset,
+				range,
+				1_000_000,
+				|_: PoolAssetMap<AssetAmount>| Ok(()),
+			),
+			Error::<Test>::PoolDoesNotExist,
+		);
+		assert_eq!(LiquidityPools::current_tick(&asset), None);
+
+		// Fee must be between 0 - 50%
+		assert_noop!(
+			LiquidityPools::new_pool(RuntimeOrigin::root(), asset, 500_001u32, default_tick_price,),
+			Error::<Test>::InvalidFeeAmount,
+		);
+
+		// Create a new pool.
+		assert_ok!(LiquidityPools::new_pool(
+			RuntimeOrigin::root(),
+			asset,
+			500_000u32,
+			default_tick_price,
+		));
+		assert_eq!(LiquidityPools::current_tick(&asset), Some(0));
+		System::assert_last_event(RuntimeEvent::LiquidityPools(
+			crate::Event::<Test>::NewPoolCreated {
+				asset,
+				fee_100th_bips: 500_000u32,
+				initial_tick_price: default_tick_price,
 			},
+		));
+		assert_ok!(LiquidityPools::mint(
+			LP.into(),
+			asset,
+			range,
+			1_000_000,
+			|_: PoolAssetMap<AssetAmount>| Ok(())
+		));
+
+		// Cannot create duplicate pool
+		assert_noop!(
+			LiquidityPools::new_pool(RuntimeOrigin::root(), asset, 0u32, default_tick_price,),
+			Error::<Test>::PoolAlreadyExists
 		);
-
-		let (output, _) =
-			<Pools as SwappingApi>::swap(any::Asset::Eth, any::Asset::Usdc, SWAP_AMOUNT, 0);
-
-		assert_eq!(CollectedNetworkFee::<Test>::get(), COLLECTED_NETWORK_FEE_PER_SWAP);
-
-		<Pools as LiquidityPoolApi>::get_liquidity(&any::Asset::Eth);
-
-		// Swapping one way should not create or destroy funds.
-		assert!(output > 0);
-		assert_eq!(eth_liquidity(), INITIAL_LIQUIDITY_0 + SWAP_AMOUNT);
-		assert_eq!(
-			eth_liquidity() + usdc_liquidity() + output + COLLECTED_NETWORK_FEE_PER_SWAP,
-			INITIAL_LIQUIDITY_TOTAL + SWAP_AMOUNT
-		);
-
-		// Swapping the other way should not create or destroy funds.
-		let (output, _) =
-			<Pools as SwappingApi>::swap(any::Asset::Usdc, any::Asset::Eth, output, 0);
-		assert!(output > 0);
-		assert_eq!(
-			eth_liquidity() + usdc_liquidity() + output + COLLECTED_NETWORK_FEE_PER_SWAP * 2,
-			INITIAL_LIQUIDITY_TOTAL + SWAP_AMOUNT
-		);
-		assert_eq!(CollectedNetworkFee::<Test>::get(), COLLECTED_NETWORK_FEE_PER_SWAP * 2);
 	});
 }
 
 #[test]
-fn test_fee_calculation() {
+fn can_enable_disable_trading_pool() {
 	new_test_ext().execute_with(|| {
-		// Show we can never overflow and panic
-		Pools::calc_fee(u16::MAX, AssetAmount::MAX);
-		// 200 bps (2%) of 100 = 2
-		assert_eq!(Pools::calc_fee(200, 100), 2);
-		// 2220 bps = 22 % of 199 = 43,78
-		assert_eq!(Pools::calc_fee(2220, 199), 44);
-		// 2220 bps = 22 % of 234 = 51,26
-		assert_eq!(Pools::calc_fee(2220, 233), 52);
-		// 10 bps = 0,1% of 3000 = 3
-		assert_eq!(Pools::calc_fee(10, 3000), 3);
+		let range = AmmRange::new(-100, 100);
+		let asset = Asset::Eth;
+		let default_tick_price = 0;
+
+		// Create a new pool.
+		assert_ok!(LiquidityPools::new_pool(
+			RuntimeOrigin::root(),
+			asset,
+			500_000u32,
+			default_tick_price,
+		));
+		assert_ok!(LiquidityPools::mint(
+			LP.into(),
+			asset,
+			range,
+			1_000_000,
+			|_: PoolAssetMap<AssetAmount>| Ok(())
+		));
+
+		// Disable the pool
+		assert_ok!(LiquidityPools::update_pool_enabled(RuntimeOrigin::root(), asset, false));
+		System::assert_last_event(RuntimeEvent::LiquidityPools(
+			crate::Event::<Test>::PoolStateUpdated { asset, enabled: false },
+		));
+
+		assert_noop!(
+			LiquidityPools::mint(
+				LP.into(),
+				asset,
+				range,
+				1_000_000,
+				|_: PoolAssetMap<AssetAmount>| Ok(())
+			),
+			Error::<Test>::PoolDisabled
+		);
+
+		// Re-enable the pool
+		assert_ok!(LiquidityPools::update_pool_enabled(RuntimeOrigin::root(), asset, true));
+		System::assert_last_event(RuntimeEvent::LiquidityPools(
+			crate::Event::<Test>::PoolStateUpdated { asset, enabled: true },
+		));
+
+		assert_ok!(LiquidityPools::mint(
+			LP.into(),
+			asset,
+			range,
+			1_000_000,
+			|_: PoolAssetMap<AssetAmount>| Ok(())
+		));
 	});
 }
 
 #[test]
 fn test_buy_back_flip_no_funds_available() {
 	new_test_ext().execute_with(|| {
-		<Pools as LiquidityPoolApi>::deploy(
-			&any::Asset::Flip,
-			cf_primitives::TradingPosition::ClassicV3 {
-				range: AmmRange::default(),
-				volume_0: 1000,
-				volume_1: 1000,
-			},
-		);
+		let range = AmmRange::new(-100, 100);
+		let asset = Asset::Flip;
+		let default_tick_price = 0;
+
+		// Create a new pool.
+		assert_ok!(LiquidityPools::new_pool(
+			RuntimeOrigin::root(),
+			asset,
+			500_000u32,
+			default_tick_price,
+		));
+		assert_ok!(LiquidityPools::mint(
+			LP.into(),
+			asset,
+			range,
+			1_000_000,
+			|_: PoolAssetMap<AssetAmount>| Ok(())
+		));
+
 		FlipBuyInterval::<Test>::set(5);
 		CollectedNetworkFee::<Test>::set(30);
-		Pools::on_initialize(8);
+		LiquidityPools::on_initialize(8);
 		assert_eq!(FlipToBurn::<Test>::get(), 0);
 	});
 }
@@ -123,27 +150,53 @@ fn test_buy_back_flip_no_funds_available() {
 #[test]
 fn test_buy_back_flip() {
 	new_test_ext().execute_with(|| {
-		// Deploy a Flip pool
-		<Pools as LiquidityPoolApi>::deploy(
-			&any::Asset::Flip,
-			cf_primitives::TradingPosition::ClassicV3 {
-				range: AmmRange::default(),
-				volume_0: 1000,
-				volume_1: 1000,
-			},
-		);
+		let range = AmmRange::new(-100, 100);
+		let asset = Asset::Flip;
+		let default_tick_price = 0;
+
+		// Create a new pool.
+		assert_ok!(LiquidityPools::new_pool(
+			RuntimeOrigin::root(),
+			asset,
+			500_000u32,
+			default_tick_price,
+		));
+		assert_ok!(LiquidityPools::mint(
+			LP.into(),
+			asset,
+			range,
+			1_000_000,
+			|_: PoolAssetMap<AssetAmount>| Ok(())
+		));
+
 		FlipBuyInterval::<Test>::set(5);
 		CollectedNetworkFee::<Test>::set(30);
-		Pools::on_initialize(10);
+		LiquidityPools::on_initialize(10);
 		let initial_flip_to_burn = FlipToBurn::<Test>::get();
 		// Expect the some funds available to burn
 		assert!(initial_flip_to_burn != 0);
 		CollectedNetworkFee::<Test>::set(30);
-		Pools::on_initialize(14);
+		LiquidityPools::on_initialize(14);
 		// Expect nothing to change because we didn't passed the buy interval threshold
 		assert_eq!(initial_flip_to_burn, FlipToBurn::<Test>::get());
-		Pools::on_initialize(15);
+		LiquidityPools::on_initialize(15);
 		// Expect the amount of Flip we can burn to increase
 		assert!(initial_flip_to_burn < FlipToBurn::<Test>::get(), "flip to burn didn't increased!");
+	});
+}
+
+#[test]
+fn test_network_fee_calculation() {
+	new_test_ext().execute_with(|| {
+		// Show we can never overflow and panic
+		LiquidityPools::calc_fee(u16::MAX, AssetAmount::MAX);
+		// 200 bps (2%) of 100 = 2
+		assert_eq!(LiquidityPools::calc_fee(200, 100), 2);
+		// 2220 bps = 22 % of 199 = 43,78
+		assert_eq!(LiquidityPools::calc_fee(2220, 199), 44);
+		// 2220 bps = 22 % of 234 = 51,26
+		assert_eq!(LiquidityPools::calc_fee(2220, 233), 52);
+		// 10 bps = 0,1% of 3000 = 3
+		assert_eq!(LiquidityPools::calc_fee(10, 3000), 3);
 	});
 }
