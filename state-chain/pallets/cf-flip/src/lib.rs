@@ -29,7 +29,9 @@ use frame_support::{
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use sp_runtime::{
-	traits::{AtLeast32BitUnsigned, MaybeSerializeDeserialize, Saturating, UniqueSaturatedInto},
+	traits::{
+		AtLeast32BitUnsigned, MaybeSerializeDeserialize, Saturating, UniqueSaturatedInto, Zero,
+	},
 	DispatchError, Permill, RuntimeDebug,
 };
 use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
@@ -581,7 +583,7 @@ where
 	fn slash(account_id: &Self::AccountId, blocks: Self::BlockNumber) {
 		let account = Account::<T>::get(account_id);
 		let slash_amount = (SlashingRate::<T>::get() * account.bond).saturating_mul(blocks.into());
-		if account.can_be_slashed(slash_amount) {
+		if !slash_amount.is_zero() && account.can_be_slashed(slash_amount) {
 			Pallet::<T>::settle(account_id, Pallet::<T>::burn(slash_amount).into());
 			Pallet::<T>::deposit_event(Event::<T>::SlashingPerformed {
 				who: account_id.clone(),
