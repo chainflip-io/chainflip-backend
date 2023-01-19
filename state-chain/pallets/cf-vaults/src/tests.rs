@@ -1,7 +1,7 @@
 use crate::{
-	mock::*, CeremonyId, Error, Event as PalletEvent, FailureVoters, KeygenError,
-	KeygenResolutionPendingSince, KeygenResponseTimeout, PalletOffence, PendingVaultRotation,
-	SuccessVoters, Vault, VaultRotationStatus, Vaults,
+	mock::*, CeremonyId, Error, Event as PalletEvent, FailureVoters, KeygenResolutionPendingSince,
+	KeygenResponseTimeout, PalletOffence, PendingVaultRotation, SuccessVoters, Vault,
+	VaultRotationStatus, Vaults,
 };
 use cf_chains::eth::Ethereum;
 use cf_test_utilities::{last_event, maybe_last_event};
@@ -180,7 +180,7 @@ fn no_active_rotation() {
 			VaultsPallet::report_keygen_outcome(
 				RuntimeOrigin::signed(ALICE),
 				1,
-				Err(KeygenError::Failure(Default::default()))
+				Err(Default::default())
 			),
 			Error::<MockRuntime, _>::NoActiveRotation
 		);
@@ -229,7 +229,7 @@ fn cannot_report_two_different_keygen_outcomes() {
 			VaultsPallet::report_keygen_outcome(
 				RuntimeOrigin::signed(ALICE),
 				ceremony_id,
-				Err(KeygenError::Failure(BTreeSet::from_iter([BOB, CHARLIE])))
+				Err(BTreeSet::from_iter([BOB, CHARLIE]))
 			),
 			Error::<MockRuntime, _>::InvalidRespondent
 		);
@@ -411,7 +411,7 @@ fn keygen_report_failure() {
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			RuntimeOrigin::signed(ALICE),
 			ceremony_id,
-			Err(KeygenError::Failure(BTreeSet::from_iter([CHARLIE])))
+			Err(BTreeSet::from_iter([CHARLIE]))
 		));
 		assert_eq!(<VaultsPallet as VaultRotator>::status(), AsyncResult::Pending);
 
@@ -423,7 +423,7 @@ fn keygen_report_failure() {
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			RuntimeOrigin::signed(BOB),
 			ceremony_id,
-			Err(KeygenError::Failure(BTreeSet::from_iter([CHARLIE])))
+			Err(BTreeSet::from_iter([CHARLIE]))
 		));
 
 		// A resolution is still pending - we expect 100% response rate.
@@ -437,7 +437,7 @@ fn keygen_report_failure() {
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			RuntimeOrigin::signed(CHARLIE),
 			ceremony_id,
-			Err(KeygenError::Failure(BTreeSet::from_iter([CHARLIE])))
+			Err(BTreeSet::from_iter([CHARLIE]))
 		));
 
 		// This time we should have enough votes for consensus.
@@ -471,7 +471,7 @@ fn test_keygen_timeout_period() {
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			RuntimeOrigin::signed(ALICE),
 			ceremony_id,
-			Err(KeygenError::Failure(BTreeSet::from_iter([CHARLIE])))
+			Err(BTreeSet::from_iter([CHARLIE]))
 		));
 
 		// > 25 blocks later we should resolve an error.
@@ -621,17 +621,13 @@ fn set_keygen_response_timeout_works() {
 
 mod keygen_reporting {
 	use super::*;
-	use crate::{AggKeyFor, KeygenError, KeygenOutcome, KeygenOutcomeFor, KeygenResponseStatus};
+	use crate::{AggKeyFor, KeygenOutcomeFor, KeygenResponseStatus};
 	use sp_std::collections::btree_set::BTreeSet;
 
 	macro_rules! assert_failure_outcome {
 		($ex:expr) => {
 			let outcome: KeygenOutcomeFor<MockRuntime> = $ex;
-			assert!(
-				matches!(outcome, Err(KeygenError::Failure(_))),
-				"Expected failure, got: {:?}",
-				outcome
-			);
+			assert!(matches!(outcome, Err(_)), "Expected failure, got: {:?}", outcome);
 		};
 	}
 
@@ -746,7 +742,7 @@ mod keygen_reporting {
 	fn get_outcome<F: Fn(u64) -> I, I: IntoIterator<Item = u64>>(
 		outcomes: &[ReportedOutcome],
 		report_gen: F,
-	) -> KeygenOutcome<AggKeyFor<MockRuntime>, u64> {
+	) -> Result<AggKeyFor<MockRuntime>, BTreeSet<u64>> {
 		let mut status = KeygenResponseStatus::<MockRuntime, _>::new(BTreeSet::from_iter(
 			1..=outcomes.len() as u64,
 		));
@@ -803,7 +799,7 @@ mod keygen_reporting {
 					assert!(
 						matches!(
 							outcome.clone(),
-							Err(KeygenError::Failure(blamed)) if blamed == BTreeSet::from_iter([n as u64])
+							Err(blamed) if blamed == BTreeSet::from_iter([n as u64])
 						),
 						"Expected Failure([{n:?}]), got: {outcome:?}."
 					);
@@ -837,7 +833,7 @@ mod keygen_reporting {
 			assert!(
 				matches!(
 					outcome.clone(),
-					Err(KeygenError::Failure(blamed)) if blamed.is_empty(),
+					Err(blamed) if blamed.is_empty(),
 				),
 				"Got outcome: {outcome:?}",
 			);
@@ -849,7 +845,7 @@ mod keygen_reporting {
 					&n_times([(17, ReportedOutcome::Failure), (7, ReportedOutcome::Timeout)]),
 					|id| if id < 16 { [17] } else { [16] }
 				),
-				Err(KeygenError::Failure(blamed)) if blamed == BTreeSet::from_iter(18..=24)
+				Err(blamed) if blamed == BTreeSet::from_iter(18..=24)
 			));
 
 			// As above, but some nodes have reported the wrong outcome.
@@ -863,7 +859,7 @@ mod keygen_reporting {
 					]),
 					|id| if id < 16 { [17] } else { [16] }
 				),
-				Err(KeygenError::Failure(blamed)) if blamed == BTreeSet::from_iter(18..=24)
+				Err(blamed) if blamed == BTreeSet::from_iter(18..=24)
 			));
 
 			// As above, but some nodes have additionally been voted on.
@@ -877,7 +873,7 @@ mod keygen_reporting {
 					]),
 					|id| if id > 16 { [1, 2] } else { [17, 18] }
 				),
-				Err(KeygenError::Failure(blamed)) if blamed == BTreeSet::from_iter(17..=24)
+				Err(blamed) if blamed == BTreeSet::from_iter(17..=24)
 			));
 		});
 	}
@@ -890,7 +886,7 @@ mod keygen_reporting {
 			assert!(
 				matches!(
 					outcome.clone(),
-					Err(KeygenError::Failure(blamed)) if blamed == BTreeSet::from_iter([6])
+					Err(blamed) if blamed == BTreeSet::from_iter([6])
 				),
 				"Got outcome: {outcome:?}",
 			);
@@ -898,24 +894,24 @@ mod keygen_reporting {
 			// First five candidates all report candidate 6, candidate 6 reports 1.
 			assert!(matches!(
 				get_outcome(&reported_outcomes(b"ffffft"), |id| if id == 6 { [1] } else { [6] }),
-				Err(KeygenError::Failure(blamed)) if blamed == BTreeSet::from_iter([6])
+				Err(blamed) if blamed == BTreeSet::from_iter([6])
 			));
 
 			// First five candidates all report nobody, candidate 6 unresponsive.
 			assert!(matches!(
 				get_outcome(&reported_outcomes(b"ffffft"), |_| []),
-				Err(KeygenError::Failure(blamed)) if blamed == BTreeSet::from_iter([6])
+				Err(blamed) if blamed == BTreeSet::from_iter([6])
 			));
 
 			// Candidates 3 and 6 unresponsive.
 			assert!(matches!(
 				get_outcome(&reported_outcomes(b"fftfft"), |_| []),
-				Err(KeygenError::Failure(blamed)) if blamed == BTreeSet::from_iter([3, 6])
+				Err(blamed) if blamed == BTreeSet::from_iter([3, 6])
 			));
 			// One candidate unresponsive, one blamed by majority.
 			assert!(matches!(
 				get_outcome(&reported_outcomes(b"ffffftf"), |id| if id != 3 { [3] } else { [4] }),
-				Err(KeygenError::Failure(blamed)) if blamed == BTreeSet::from_iter([3, 6])
+				Err(blamed) if blamed == BTreeSet::from_iter([3, 6])
 			));
 
 			// One candidate unresponsive, one rogue blames everyone else.
@@ -927,7 +923,7 @@ mod keygen_reporting {
 						vec![1, 2, 4, 5, 6, 7]
 					}
 				}),
-				Err(KeygenError::Failure(blamed)) if blamed == BTreeSet::from_iter([3, 6])
+				Err(blamed) if blamed == BTreeSet::from_iter([3, 6])
 			));
 
 			let failures = |n| n_times([(n, ReportedOutcome::Failure)]);
@@ -935,25 +931,25 @@ mod keygen_reporting {
 			// Candidates don't agree.
 			assert!(matches!(
 				get_outcome(&failures(6), |id| [(id + 1) % 6]),
-				Err(KeygenError::Failure(blamed)) if blamed.is_empty()
+				Err(blamed) if blamed.is_empty()
 			));
 
 			// Candidate agreement is below reporting threshold.
 			assert!(matches!(
 				get_outcome(&failures(6), |id| if id < 4 { [6] } else { [2] }),
-				Err(KeygenError::Failure(blamed)) if blamed.is_empty()
+				Err(blamed) if blamed.is_empty()
 			));
 
 			// Candidates agreement just above threshold.
 			assert!(matches!(
 				get_outcome(&failures(6), |id| if id == 6 { [1] } else { [6] }),
-				Err(KeygenError::Failure(blamed)) if blamed == BTreeSet::from_iter([6])
+				Err(blamed) if blamed == BTreeSet::from_iter([6])
 			));
 
 			// Candidates agree on multiple offenders.
 			assert!(matches!(
 				get_outcome(&failures(12), |id| if id < 9 { [11, 12] } else { [1, 2] }),
-				Err(KeygenError::Failure(blamed)) if blamed == BTreeSet::from_iter([11, 12])
+				Err(blamed) if blamed == BTreeSet::from_iter([11, 12])
 			));
 
 			// Overlapping agreement - no agreement on the entire set but in aggregate we can
@@ -968,13 +964,13 @@ mod keygen_reporting {
 						[1, 2]
 					}
 				}),
-				Err(KeygenError::Failure(blamed)) if blamed == BTreeSet::from_iter([1, 11])
+				Err(blamed) if blamed == BTreeSet::from_iter([1, 11])
 			));
 
 			// Unresponsive and dissenting nodes are reported.
 			assert!(matches!(
 				get_outcome(&reported_outcomes(b"tfffsfffbffft"), |_| []),
-				Err(KeygenError::Failure(blamed)) if blamed == BTreeSet::from_iter([1, 5, 9, 13])
+				Err(blamed) if blamed == BTreeSet::from_iter([1, 5, 9, 13])
 			));
 		});
 	}

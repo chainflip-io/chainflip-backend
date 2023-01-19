@@ -5,7 +5,6 @@ use anyhow::{anyhow, Context};
 use cf_chains::{dot, eth::Ethereum, ChainCrypto, Polkadot};
 use cf_primitives::{BlockNumber, CeremonyId, PolkadotAccountId};
 use futures::{FutureExt, Stream, StreamExt};
-use pallet_cf_vaults::KeygenError;
 use slog::o;
 use sp_core::{Hasher, H160, H256};
 use sp_runtime::{traits::Keccak256, AccountId32};
@@ -60,7 +59,7 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 						reported_outcome: keygen_result_future
 							.await
 							.map_err(|(bad_account_ids, _reason)| {
-								KeygenError::Failure(bad_account_ids)
+								bad_account_ids
 							}),
 					},
 					&logger,
