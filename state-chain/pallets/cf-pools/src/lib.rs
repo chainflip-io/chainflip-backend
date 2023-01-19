@@ -168,6 +168,9 @@ pub mod pallet {
 			range: AmmRange,
 			fee_yielded: PoolAssetMap<AssetAmount>,
 		},
+		NetworkFeeTaken {
+			fee_amount: AssetAmount,
+		},
 		AssetsSwapped {
 			from: any::Asset,
 			to: any::Asset,
@@ -540,6 +543,7 @@ pub mod pallet {
 			CollectedNetworkFee::<T>::mutate(|total| {
 				*total = total.saturating_add(fee);
 			});
+			Self::deposit_event(Event::<T>::NetworkFeeTaken { fee_amount: fee });
 			input.saturating_sub(fee)
 		}
 	}
