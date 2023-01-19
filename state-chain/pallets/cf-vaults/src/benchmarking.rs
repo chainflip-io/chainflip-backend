@@ -114,7 +114,7 @@ benchmarks_instance_pallet! {
 		// Submit a key that doesn't verify the signature. This is approximately the same cost as success at time of writing.
 		// But is much easier to write, and we might add slashing, which would increase the cost of the failure. Making this test the more
 		// expensive of the two paths, therefore ensuring we have a more conservative benchmark
-	} : _(RawOrigin::Signed(caller), CEREMONY_ID, ReportedKeygenOutcomeFor::<T, I>::Ok(AggKeyFor::<T, I>::benchmark_value()))
+	} : _(RawOrigin::Signed(caller), CEREMONY_ID, KeygenOutcomeFor::<T, I>::Ok(AggKeyFor::<T, I>::benchmark_value()))
 	verify {
 		assert!(matches!(
 			PendingVaultRotation::<T, I>::get().unwrap(),

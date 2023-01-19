@@ -621,7 +621,7 @@ fn set_keygen_response_timeout_works() {
 
 mod keygen_reporting {
 	use super::*;
-	use crate::{AggKeyFor, KeygenOutcome, KeygenOutcomeFor, KeygenResponseStatus};
+	use crate::{AggKeyFor, KeygenOutcomeFor, KeygenResponseStatus};
 	use sp_std::collections::btree_set::BTreeSet;
 
 	macro_rules! assert_failure_outcome {
@@ -742,7 +742,7 @@ mod keygen_reporting {
 	fn get_outcome<F: Fn(u64) -> I, I: IntoIterator<Item = u64>>(
 		outcomes: &[ReportedOutcome],
 		report_gen: F,
-	) -> KeygenOutcome<AggKeyFor<MockRuntime>, u64> {
+	) -> Result<AggKeyFor<MockRuntime>, BTreeSet<u64>> {
 		let mut status = KeygenResponseStatus::<MockRuntime, _>::new(BTreeSet::from_iter(
 			1..=outcomes.len() as u64,
 		));

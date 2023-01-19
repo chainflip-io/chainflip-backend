@@ -33,14 +33,9 @@ mod tests;
 #[cfg(feature = "std")]
 const KEYGEN_CEREMONY_RESPONSE_TIMEOUT_DEFAULT: u32 = 10;
 
-pub type KeygenOutcome<Key, Id> = Result<Key, BTreeSet<Id>>;
-pub type ReportedKeygenOutcome<Key, Id> = Result<Key, BTreeSet<Id>>;
-
-pub type ReportedKeygenOutcomeFor<T, I = ()> =
-	ReportedKeygenOutcome<AggKeyFor<T, I>, <T as Chainflip>::ValidatorId>;
 pub type PayloadFor<T, I = ()> = <<T as Config<I>>::Chain as ChainCrypto>::Payload;
 pub type KeygenOutcomeFor<T, I = ()> =
-	KeygenOutcome<AggKeyFor<T, I>, <T as Chainflip>::ValidatorId>;
+	Result<AggKeyFor<T, I>, BTreeSet<<T as Chainflip>::ValidatorId>>;
 pub type AggKeyFor<T, I = ()> = <<T as Config<I>>::Chain as ChainCrypto>::AggKey;
 pub type ChainBlockNumberFor<T, I = ()> = <<T as Config<I>>::Chain as Chain>::ChainBlockNumber;
 pub type TransactionIdFor<T, I = ()> = <<T as Config<I>>::Chain as ChainCrypto>::TransactionId;
@@ -443,7 +438,7 @@ pub mod pallet {
 		pub fn report_keygen_outcome(
 			origin: OriginFor<T>,
 			ceremony_id: CeremonyId,
-			reported_outcome: ReportedKeygenOutcomeFor<T, I>,
+			reported_outcome: KeygenOutcomeFor<T, I>,
 		) -> DispatchResultWithPostInfo {
 			let reporter = T::AccountRoleRegistry::ensure_validator(origin)?.into();
 
