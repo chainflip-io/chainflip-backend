@@ -1,7 +1,10 @@
-use crate::{mock::*, Error, Pools};
+use crate::{mock::*, CollectedNetworkFee, Error, FlipBuyInterval, Pools};
 use cf_primitives::{chains::assets::any::Asset, AmmRange, AssetAmount, PoolAssetMap};
 use cf_traits::LiquidityPoolApi;
 use frame_support::{assert_noop, assert_ok};
+
+use crate::FlipToBurn;
+use frame_support::traits::Hooks;
 
 #[test]
 fn can_create_new_trading_pool() {
@@ -112,5 +115,72 @@ fn can_enable_disable_trading_pool() {
 			1_000_000,
 			|_: PoolAssetMap<AssetAmount>| Ok(())
 		));
+	});
+}
+
+#[test]
+fn test_buy_back_flip_no_funds_available() {
+	new_test_ext().execute_with(|| {
+		let range = AmmRange::new(-100, 100);
+		let asset = Asset::Flip;
+		let default_tick_price = 0;
+
+		// Create a new pool.
+		assert_ok!(LiquidityPools::new_pool(
+			RuntimeOrigin::root(),
+			asset,
+			500_000u32,
+			default_tick_price,
+		));
+		assert_ok!(LiquidityPools::mint(
+			LP.into(),
+			asset,
+			range,
+			1_000_000,
+			|_: PoolAssetMap<AssetAmount>| Ok(())
+		));
+
+		FlipBuyInterval::<Test>::set(5);
+		CollectedNetworkFee::<Test>::set(30);
+		LiquidityPools::on_initialize(8);
+		assert_eq!(FlipToBurn::<Test>::get(), 0);
+	});
+}
+
+#[test]
+fn test_buy_back_flip() {
+	new_test_ext().execute_with(|| {
+		let range = AmmRange::new(-100, 100);
+		let asset = Asset::Flip;
+		let default_tick_price = 0;
+
+		// Create a new pool.
+		assert_ok!(LiquidityPools::new_pool(
+			RuntimeOrigin::root(),
+			asset,
+			500_000u32,
+			default_tick_price,
+		));
+		assert_ok!(LiquidityPools::mint(
+			LP.into(),
+			asset,
+			range,
+			1_000_000,
+			|_: PoolAssetMap<AssetAmount>| Ok(())
+		));
+
+		FlipBuyInterval::<Test>::set(5);
+		CollectedNetworkFee::<Test>::set(30);
+		LiquidityPools::on_initialize(10);
+		let initial_flip_to_burn = FlipToBurn::<Test>::get();
+		// Expect the some funds available to burn
+		assert!(initial_flip_to_burn != 0);
+		CollectedNetworkFee::<Test>::set(30);
+		LiquidityPools::on_initialize(14);
+		// Expect nothing to change because we didn't passed the buy interval threshold
+		assert_eq!(initial_flip_to_burn, FlipToBurn::<Test>::get());
+		LiquidityPools::on_initialize(15);
+		// Expect the amount of Flip we can burn to increase
+		assert!(initial_flip_to_burn < FlipToBurn::<Test>::get(), "flip to burn didn't increased!");
 	});
 }

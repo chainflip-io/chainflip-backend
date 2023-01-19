@@ -45,4 +45,3 @@ runtime-benchmarks = [
   'frame-system/runtime-benchmarks',
   'cf-chains/runtime-benchmarks',
 ]
-ibiza = ["cf-chains/ibiza"]

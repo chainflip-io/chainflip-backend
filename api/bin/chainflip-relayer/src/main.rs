@@ -37,7 +37,6 @@ impl RpcServerImpl {
 	}
 }
 
-#[cfg(feature = "ibiza")]
 #[async_trait]
 impl RpcServer for RpcServerImpl {
 	async fn register_account(&self) -> Result<(), Error> {
@@ -69,22 +68,6 @@ impl RpcServer for RpcServerImpl {
 		.await
 		.map(|address| ["0x", &hex::encode(address.as_ref())].concat())
 		.map_err(|e| anyhow!("{}:{}", e, e.root_cause()))?)
-	}
-}
-
-#[cfg(not(feature = "ibiza"))]
-impl RpcServer for RpcServerImpl {
-	async fn register_account(&self) -> Result<(), Error> {
-		unimplemented!("Must compile with ibiza feature flag.")
-	}
-	async fn request_swap_ingress_address(
-		&self,
-		ingress_asset: Asset,
-		egress_asset: Asset,
-		egress_address: String,
-		relayer_commission_bps: BasisPoints,
-	) -> Result<String, Error> {
-		unimplemented!("Must compile with ibiza feature flag.")
 	}
 }
 

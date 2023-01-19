@@ -16,7 +16,6 @@ use std::{marker::PhantomData, sync::Arc};
 #[allow(unused)]
 use state_chain_runtime::{Asset, AssetAmount, ExchangeRate};
 
-#[cfg(feature = "ibiza")]
 use cf_primitives::Tick;
 
 #[derive(Serialize, Deserialize)]
@@ -429,16 +428,13 @@ where
 	}
 }
 
-#[cfg(feature = "ibiza")]
 use pallet_cf_pools_runtime_api::PoolsApi;
 
-#[cfg(feature = "ibiza")]
 pub struct PoolsRpc<C, B> {
 	pub client: Arc<C>,
 	pub _phantom: PhantomData<B>,
 }
 
-#[cfg(feature = "ibiza")]
 impl<C, B> PoolsRpc<C, B>
 where
 	B: sp_runtime::traits::Block<Hash = state_chain_runtime::Hash>,
@@ -450,7 +446,6 @@ where
 	}
 }
 
-#[cfg(feature = "ibiza")]
 #[rpc(server, client, namespace = "cf")]
 pub trait PoolsApi {
 	#[method(name = "pool_tick_price")]
@@ -461,7 +456,6 @@ pub trait PoolsApi {
 	) -> RpcResult<Option<Tick>>;
 }
 
-#[cfg(feature = "ibiza")]
 impl<C, B> PoolsApiServer for PoolsRpc<C, B>
 where
 	B: sp_runtime::traits::Block<Hash = state_chain_runtime::Hash>,

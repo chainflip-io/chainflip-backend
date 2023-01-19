@@ -1,7 +1,9 @@
 use crate as pallet_cf_emissions;
 use cf_chains::{
-	mocks::MockEthereum, ApiCall, ChainAbi, ChainCrypto, ReplayProtectionProvider, UpdateFlipSupply,
+	mocks::MockEthereum, AnyChain, ApiCall, ChainAbi, ChainCrypto, ReplayProtectionProvider,
+	UpdateFlipSupply,
 };
+use cf_traits::mocks::egress_handler::MockEgressHandler;
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	parameter_types, storage,
@@ -23,7 +25,7 @@ use cf_traits::{
 		eth_replay_protection_provider::MockEthReplayProtectionProvider,
 		system_state_info::MockSystemStateInfo,
 	},
-	Broadcaster, Issuance, WaivedFees,
+	Broadcaster, FlipBurnInfo, Issuance, WaivedFees,
 };
 
 use cf_primitives::{BroadcastId, FlipBalance};
@@ -38,6 +40,10 @@ use cf_traits::{
 };
 
 pub type AccountId = u64;
+
+pub const FLIP_TO_BURN: u128 = 10_000;
+pub const SUPPLY_UPDATE_INTERVAL: u32 = 10;
+pub const TOTAL_ISSUANCE: u128 = 1_000_000_000;
 
 cf_traits::impl_mock_stake_transfer!(AccountId, u128);
 
@@ -198,6 +204,14 @@ impl ApiCall<MockEthereum> for MockUpdateFlipSupply {
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct MockBroadcast;
 
+pub struct MockFlipToBurn;
+
+impl FlipBurnInfo for MockFlipToBurn {
+	fn take_flip_to_burn() -> cf_primitives::AssetAmount {
+		FLIP_TO_BURN
+	}
+}
+
 impl MockBroadcast {
 	pub fn call(outgoing: MockUpdateFlipSupply) -> u32 {
 		storage::hashed::put(&<Twox64Concat as StorageHasher>::hash, b"MockBroadcast", &outgoing);
@@ -230,13 +244,13 @@ impl pallet_cf_emissions::Config for Test {
 	type Broadcaster = MockBroadcast;
 	type WeightInfo = ();
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
+	type FlipToBurn = MockFlipToBurn;
+	type EgressHandler = MockEgressHandler<AnyChain>;
 }
-
-pub const SUPPLY_UPDATE_INTERVAL: u32 = 10;
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext(validators: Vec<u64>, issuance: Option<u128>) -> sp_io::TestExternalities {
-	let total_issuance = issuance.unwrap_or(1_000_000_000u128);
+	let total_issuance = issuance.unwrap_or(TOTAL_ISSUANCE);
 	let config = GenesisConfig {
 		system: Default::default(),
 		flip: FlipConfig { total_issuance },

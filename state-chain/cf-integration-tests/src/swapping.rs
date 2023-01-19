@@ -329,7 +329,7 @@ fn swap_can_acrue_fees() {
 				to: Asset::Flip,
 				input: 49_742,
 				output: 12_255,
-				input_asset_fee: 24_371,
+				input_asset_fee: 24_871,
 			},
 		));
 

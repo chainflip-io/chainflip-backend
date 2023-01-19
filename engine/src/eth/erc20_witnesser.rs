@@ -1,5 +1,3 @@
-#![cfg(feature = "ibiza")]
-
 use std::{collections::BTreeSet, sync::Arc};
 
 use async_trait::async_trait;
@@ -138,14 +136,18 @@ impl EthContractWitnesser for Erc20Witnesser {
 					Erc20Event::Transfer {
 						from: utils::decode_log_param(&log, "from")?,
 						to: utils::decode_log_param(&log, "to")?,
-						value: utils::decode_log_param::<ethabi::Uint>(&log, "value")?.as_u128(),
+						value: utils::decode_log_param::<ethabi::Uint>(&log, "value")?
+							.try_into()
+							.expect("Transfer value should fit u128"),
 					}
 				} else if event_signature == approval.signature {
 					let log = approval.event.parse_log(raw_log)?;
 					Erc20Event::Approval {
 						owner: utils::decode_log_param(&log, "owner")?,
 						spender: utils::decode_log_param(&log, "spender")?,
-						value: utils::decode_log_param::<ethabi::Uint>(&log, "value")?.as_u128(),
+						value: utils::decode_log_param::<ethabi::Uint>(&log, "value")?
+							.try_into()
+							.expect("Approval value should fit u128"),
 					}
 				} else {
 					Erc20Event::Other(raw_log)

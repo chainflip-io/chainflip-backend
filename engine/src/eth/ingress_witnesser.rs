@@ -1,5 +1,3 @@
-#![cfg(feature = "ibiza")]
-
 use std::{collections::BTreeSet, pin::Pin, sync::Arc};
 
 use cf_chains::eth::Ethereum;
@@ -161,7 +159,7 @@ where
 									IngressWitness {
 										ingress_address: core_h160(to_addr),
 										asset: eth::Asset::Eth,
-										amount: tx.value.as_u128(),
+										amount: tx.value.try_into().expect("Ingress witness transfer value should fit u128"),
 										tx_id: core_h256(tx.hash)
 									}
 								})

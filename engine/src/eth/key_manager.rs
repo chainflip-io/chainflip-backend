@@ -253,10 +253,11 @@ impl EthContractWitnesser for KeyManager {
 				KeyManagerEvent::SignatureAccepted { sig_data, .. } => {
 					let TransactionReceipt { gas_used, effective_gas_price, from, .. } =
 						eth_rpc.transaction_receipt(event.tx_hash).await?;
-					let gas_used = gas_used.context("TransactionReceipt should have gas_used. This might be due to using a light client.")?.as_u128();
+					let gas_used = gas_used.context("TransactionReceipt should have gas_used. This might be due to using a light client.")?.try_into().expect("Gas used should fit u128");
 					let effective_gas_price = effective_gas_price
 						.context("TransactionReceipt should have effective gas price")?
-						.as_u128();
+						.try_into()
+						.expect("Effective gas price should fit u128");
 					let _result = state_chain_client
 						.submit_signed_extrinsic(
 							pallet_cf_witnesser::Call::witness_at_epoch {

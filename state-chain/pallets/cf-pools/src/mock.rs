@@ -6,7 +6,7 @@ use cf_traits::{
 };
 use frame_support::parameter_types;
 use frame_system as system;
-use sp_core::H256;
+use sp_core::{ConstU16, H256};
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
@@ -77,13 +77,14 @@ impl Chainflip for Test {
 
 impl pallet_cf_pools::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
+	type NetworkFee = ConstU16<0>;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 }
 
 #[allow(unused)]
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let config = GenesisConfig { system: Default::default() };
+	let config = GenesisConfig { system: Default::default(), liquidity_pools: Default::default() };
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 

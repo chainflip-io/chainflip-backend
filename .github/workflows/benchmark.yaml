@@ -1,32 +1,27 @@
-name: 'Run Benchmarks'
+name: "Run Benchmarks"
 on:
   workflow_dispatch:
     inputs:
       commit_sha:
-        description: 'Which Commit SHA should we get the binaries from?'
+        description: "Which Commit SHA should we get the binaries from?"
         required: true
         type: string
       base_branch_name:
-        description: 'Which Branch should the Results PR be opened against?'
+        description: "Which Branch should the Results PR be opened against?"
         required: true
         type: string
-      release:
-        description: 'Which release to use? Sandstorm or Ibiza?'
-        required: false
-        type: string
-        default: sandstorm
       steps:
-        description: 'How many steps should we run?'
+        description: "How many steps should we run?"
         required: false
         type: string
         default: "20"
       repetitions:
-        description: 'How many times should we repeat each step?'
+        description: "How many times should we repeat each step?"
         required: false
         type: string
         default: "10"
       benchmark_machine_spec:
-        description: 'What machine Spec the benchmark will run on?'
+        description: "What machine Spec the benchmark will run on?"
         required: true
         default: 4vCPU-8GB
         type: choice
@@ -38,7 +33,13 @@ jobs:
   run_benchmarks:
     env:
       CIRCLE_CI_ARTIFACT_URL: ${{ github.event.inputs.circleCiArtifactUrl }}
-    runs-on: [self-hosted, linux, x64, '${{ github.event.inputs.benchmark_machine_spec }}']
+    runs-on:
+      [
+        self-hosted,
+        linux,
+        x64,
+        "${{ github.event.inputs.benchmark_machine_spec }}",
+      ]
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -57,20 +58,10 @@ jobs:
           CF_APT_REPO_BASIC_AUTH_USERNAME: op://github-actions/CF_APT_REPO_BASIC_AUTH/username
           CF_APT_REPO_BASIC_AUTH_PASSWORD: op://github-actions/CF_APT_REPO_BASIC_AUTH/password
 
-      - name: Set Ibiza Apt Repo Path
-        if: ${{ github.event.inputs.release == 'ibiza' }}
-        run: |
-          echo "APT_REPO_PATH=ci/ibiza" >> $GITHUB_ENV
-
-      - name: Set Sandstorm Apt Repo Path
-        if: ${{ github.event.inputs.release == 'sandstorm' }}
-        run: |
-          echo "APT_REPO_PATH=ci" >> $GITHUB_ENV
-
       - name: Download binary to benchmark
         run: |
           sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 14DFB4CA9296F83A
-          echo "deb https://${{ env.CF_APT_REPO_BASIC_AUTH_USERNAME }}:${{ env.CF_APT_REPO_BASIC_AUTH_PASSWORD }}@apt.aws.chainflip.xyz/${{ env.APT_REPO_PATH }}/${{ inputs.commit_sha }}/ focal main"  | sudo tee /etc/apt/sources.list.d/chainflip.list
+          echo "deb https://${{ env.CF_APT_REPO_BASIC_AUTH_USERNAME }}:${{ env.CF_APT_REPO_BASIC_AUTH_PASSWORD }}@apt.aws.chainflip.xyz/ci/${{ inputs.commit_sha }}/ focal main"  | sudo tee /etc/apt/sources.list.d/chainflip.list
           sudo apt update
           sudo apt install chainflip-node
 
@@ -85,9 +76,9 @@ jobs:
         uses: peter-evans/create-pull-request@v4
         with:
           base: ${{ inputs.base_branch_name }}
-          title: '[AUTOMATED] Benchmark results'
-          commit-message: '[AUTOMATED] Benchmarking results.'
-          body: 'This pull request was opened automatically. Close it if you think it was opened in error.'
+          title: "[AUTOMATED] Benchmark results"
+          commit-message: "[AUTOMATED] Benchmarking results."
+          body: "This pull request was opened automatically. Close it if you think it was opened in error."
           branch: auto/benchmark-results
           delete-branch: true
           token: ${{ secrets.CF_GITHUB_BOT_TOKEN }}

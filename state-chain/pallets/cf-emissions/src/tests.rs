@@ -1,7 +1,12 @@
 use crate::{mock::*, BlockEmissions, LastSupplyUpdateBlock, Pallet};
-use cf_traits::{mocks::system_state_info::MockSystemStateInfo, RewardsDistribution};
+use cf_traits::{
+	mocks::{egress_handler::MockEgressHandler, system_state_info::MockSystemStateInfo},
+	RewardsDistribution,
+};
 use frame_support::traits::OnInitialize;
 use pallet_cf_flip::Pallet as Flip;
+
+use cf_chains::AnyChain;
 
 type Emissions = Pallet<Test>;
 
@@ -146,4 +151,18 @@ fn test_example_block_reward_calcaulation() {
 	let inflation: u128 = 2720; // perbill
 	let expected: u128 = 1_813_333_333_333_333_333;
 	assert_eq!(calculate_inflation_to_block_reward(issuance, inflation, 150u128), expected);
+}
+
+#[test]
+fn burn_flip() {
+	new_test_ext(vec![1, 2], None).execute_with(|| {
+		Emissions::on_initialize(SUPPLY_UPDATE_INTERVAL.into());
+		assert_eq!(
+			MockBroadcast::get_called().unwrap().new_total_supply,
+			Flip::<Test>::total_issuance()
+		);
+		let egresses = MockEgressHandler::<AnyChain>::get_scheduled_egresses();
+		assert!(egresses.len() == 1);
+		assert_eq!(egresses.first().expect("should exist").1, FLIP_TO_BURN);
+	});
 }

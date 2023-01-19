@@ -20,9 +20,9 @@ on:
         type: string
 
 env:
-  APTLY_VERSION: '1.5.0'
-  REGISTRY: 'ghcr.io'
-  REPO_REGION: 'eu-central-1'
+  APTLY_VERSION: "1.5.0"
+  REGISTRY: "ghcr.io"
+  REPO_REGION: "eu-central-1"
 
 jobs:
   build-deb:
@@ -45,7 +45,6 @@ jobs:
         id: vars
         run: |
           echo "codename=$(lsb_release -c -s)" >> $GITHUB_OUTPUT
-
 
       - name: Install Aptly and dependencies
         run: |
@@ -116,12 +115,8 @@ jobs:
         run: echo "### Production Packages Published! :rocket:" >> $GITHUB_STEP_SUMMARY
 
       - name: Set Summary Title
-        if: ${{ contains(inputs.artifacts, 'sandstorm') }}
-        run: echo "### Sandstorm Packages Published! :rocket:" >> $GITHUB_STEP_SUMMARY
-
-      - name: Set Summary Title
-        if: contains(inputs.artifacts, 'ibiza')
-        run: echo "### Ibiza Packages Published! :rocket:" >> $GITHUB_STEP_SUMMARY
+        if: ${{ ! contains(inputs.artifacts, 'prod') }}
+        run: echo "### Packages Published! :rocket:" >> $GITHUB_STEP_SUMMARY
 
       - name: Create Github Summary
         run: |

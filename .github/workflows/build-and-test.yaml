@@ -138,11 +138,12 @@ jobs:
           cargo deb --no-build --no-strip -p chainflip-engine --deb-revision "${{ steps.vars.outputs.date }}"
           cargo deb --no-build --no-strip -p chainflip-cli --deb-revision "${{ steps.vars.outputs.date }}"
           cargo deb --no-build --no-strip -p chainflip-node --deb-revision "${{ steps.vars.outputs.date }}"
+          cargo deb --no-build --no-strip -p chainflip-relayer --deb-revision "${{ steps.vars.outputs.date }}"
           cargo deb --no-build --no-strip -p generate-genesis-keys --deb-revision "${{ steps.vars.outputs.date }}"
       - name: Upload packages
         uses: actions/upload-artifact@v3
         with:
-          name: chainflip-backend-packages-sandstorm
+          name: chainflip-backend-packages
           path: target/debian/*.deb
       - name: Upload binary artifacts
         uses: actions/upload-artifact@v3
@@ -153,75 +154,8 @@ jobs:
             ./target/release/chainflip-engine
             ./target/release/chainflip-cli
             ./target/release/generate-genesis-keys
-            ./target/release/wbuild/state-chain-runtime/state_chain_runtime*.wasm
-      - name: Check if building changes any files
-        run: |
-          git diff --exit-code
-          git diff --cached --exit-code
-
-  build-and-test-ibiza:
-    runs-on: [hetzner]
-    concurrency:
-      group: ${{ github.ref }}-build-and-test-ibiza
-      cancel-in-progress: true
-    needs: [set-variables, cargo-fmt]
-    container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-12-16"
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-    env:
-      COMMIT_HASH: ${{ needs.set-variables.outputs.commit_hash }}
-      BRANCH_NAME: ${{ needs.set-variables.outputs.branch_name }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-      - name: Update APT
-        run: apt update
-      # - name: Setup sccache
-      #   uses: hendrikmuhs/ccache-action@v1.2
-      #   with:
-      #     max-size: ${{ env.SCCACHE_CACHE_SIZE }}
-      #     variant: sccache
-      #     save: false
-      # - run: sccache --show-stats
-      - name: cargo ci-build-ibiza
-        run: |
-          cargo ci-build-ibiza --locked
-          # sccache --show-stats
-      - name: cargo ci-test-ibiza --locked
-        run: |
-          cargo ci-test-ibiza --locked
-          # sccache --show-stats
-      - name: Install cargo-deb
-        run: cargo install cargo-deb
-      - name: Get date
-        id: vars
-        run: |
-          echo "date=$(date +'%Y%m%d%H%M')" >> $GITHUB_OUTPUT
-      - name: Build packages
-        run: |
-          cargo deb --no-build --no-strip -p chainflip-engine --deb-revision "${{ steps.vars.outputs.date }}"
-          cargo deb --no-build --no-strip -p chainflip-cli --deb-revision "${{ steps.vars.outputs.date }}"
-          cargo deb --no-build --no-strip -p chainflip-node --deb-revision "${{ steps.vars.outputs.date }}"
-          cargo deb --no-build --no-strip -p chainflip-relayer --deb-revision "${{ steps.vars.outputs.date }}"
-          cargo deb --no-build --no-strip -p generate-genesis-keys --deb-revision "${{ steps.vars.outputs.date }}"
-      - name: Upload packages
-        uses: actions/upload-artifact@v3
-        with:
-          name: chainflip-backend-packages-ibiza
-          path: target/debian/*.deb
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v3
-        with:
-          name: chainflip-backend-bin-ibiza
-          path: |
-            ./target/release/chainflip-node
-            ./target/release/chainflip-engine
-            ./target/release/chainflip-cli
             ./target/release/chainflip-relayer
-            ./target/release/generate-genesis-keys
-            ./target/release/wbuild/state-chain-runtime/state_chain_runtime.wasm
+            ./target/release/wbuild/state-chain-runtime/state_chain_runtime*.wasm
       - name: Check if building changes any files
         run: |
           git diff --exit-code
@@ -253,6 +187,8 @@ jobs:
       group: ${{ github.ref }}-test-single-node
       cancel-in-progress: true
     needs: [build-and-test]
+    env:
+      RUST_BACKTRACE: 1
     steps:
       - uses: actions/setup-node@v3
         with:
@@ -266,15 +202,17 @@ jobs:
           path: ./target/release
       - name: Setup config and give permissions
         run: |
-          mkdir config
           echo -n ${{ secrets.BASHFUL_SIGNING_KEY }} > signing_key_file
           echo -n ${{ secrets.ETH_PRIVATE_KEY }} > eth_private_key_file
           echo -n ${{ secrets.NODE_KEY }} > node_key_file
           chmod +x ./target/release/chainflip*
       - name: Run node in background
         run: |
-          ./target/release/chainflip-node --chain dev --node-key-file=node_key_file &
-          sleep 2
+          ./target/release/chainflip-node purge-chain --chain="dev" -y
+          ./target/release/chainflip-node key insert --key-type 'aura' --scheme sr25519 --chain dev --suri "${{ secrets.BASHFUL_SECRET_SEED }}"
+          ./target/release/chainflip-node key insert --key-type 'gran' --scheme ed25519 --chain dev --suri "${{ secrets.BASHFUL_SECRET_SEED }}"
+          ./target/release/chainflip-node --chain dev --node-key-file=node_key_file --validator --force-authoring --rpc-cors=all &
+          sleep 10
       - name: Check node health
         run: >
           curl --request POST -L -H "Content-Type:application/json;charset=utf-8" --data '{"id":1, "jsonrpc":"2.0", "method": "system_health"}' --url
@@ -287,9 +225,10 @@ jobs:
           ETH__NODE_ENDPOINT: ${{ secrets.ETH__NODE_ENDPOINT }}
           ETH__WS_NODE_ENDPOINT: ${{ secrets.ETH__WS_NODE_ENDPOINT }}
           ETH__HTTP_NODE_ENDPOINT: ${{ secrets.ETH__HTTP_NODE_ENDPOINT }}
+          DOT__WS_NODE_ENDPOINT: ${{ secrets.DOT__WS_NODE_ENDPOINT }}
       - name: Check engine health
         run: >
-          curl --url 'http://localhost:5555/health' --connect-timeout 5 --max-time 10 --retry 5 --retry-delay 1 --retry-max-time 20 --retry-connrefused -vv
+          curl --url 'http://localhost:5555/health' --connect-timeout 5 --max-time 10 --retry 10 --retry-delay 2 --retry-max-time 20 --retry-connrefused -vv
       - name: Clone docgen
         uses: actions/checkout@v3
         with:
@@ -332,19 +271,8 @@ jobs:
     needs: [set-variables, build-and-test]
     uses: ./.github/workflows/.deb-publish.yaml
     with:
-      artifacts: chainflip-backend-packages-sandstorm
+      artifacts: chainflip-backend-packages
       version: ci/${{ needs.set-variables.outputs.commit_hash }}/
-      environment: dev
-      commit_hash: ${{ needs.set-variables.outputs.commit_hash }}
-    secrets: inherit
-
-  deb-publish-ibiza:
-    name: Publish Ibiza Packages to APT repo
-    needs: [set-variables, build-and-test-ibiza]
-    uses: ./.github/workflows/.deb-publish.yaml
-    with:
-      artifacts: chainflip-backend-packages-ibiza
-      version: ci/ibiza/${{ needs.set-variables.outputs.commit_hash }}/
       environment: dev
       commit_hash: ${{ needs.set-variables.outputs.commit_hash }}
     secrets: inherit
