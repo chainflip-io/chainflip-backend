@@ -495,7 +495,7 @@ impl<T: Config> Pallet<T> {
 				});
 				Ok(output_amount.try_into().expect("Swap output must be less than u128::MAX"))
 			} else {
-				Err(Error::<T>::PoolDoesNotExist.into())
+				Err(Error::<T>::PoolDoesNotExist)
 			}
 		})
 	}
