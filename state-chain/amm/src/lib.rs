@@ -175,8 +175,8 @@ trait SwapDirection {
 	fn current_tick_after_crossing_target_tick(target_tick: Tick) -> Tick;
 }
 
-pub struct BaseToPair {}
-impl SwapDirection for BaseToPair {
+pub struct Asset0ToAsset1 {}
+impl SwapDirection for Asset0ToAsset1 {
 	const INPUT_SIDE: PoolSide = PoolSide::Asset0;
 
 	fn target_tick(
@@ -197,7 +197,7 @@ impl SwapDirection for BaseToPair {
 		target: SqrtPriceQ64F96,
 		liquidity: Liquidity,
 	) -> AmountU256 {
-		PoolState::base_amount_delta_ceil(target, current, liquidity)
+		PoolState::asset_0_amount_delta_ceil(target, current, liquidity)
 	}
 
 	fn output_amount_delta_floor(
@@ -205,7 +205,7 @@ impl SwapDirection for BaseToPair {
 		target: SqrtPriceQ64F96,
 		liquidity: Liquidity,
 	) -> AmountU256 {
-		PoolState::pair_amount_delta_floor(target, current, liquidity)
+		PoolState::asset_1_amount_delta_floor(target, current, liquidity)
 	}
 
 	fn next_sqrt_price_from_input_amount(
@@ -213,7 +213,7 @@ impl SwapDirection for BaseToPair {
 		liquidity: Liquidity,
 		amount: AmountU256,
 	) -> SqrtPriceQ64F96 {
-		PoolState::next_sqrt_price_from_base_input(sqrt_ratio_current, liquidity, amount)
+		PoolState::next_sqrt_price_from_asset_0_input(sqrt_ratio_current, liquidity, amount)
 	}
 
 	fn liquidity_delta_on_crossing_tick(tick_liquidity: &TickInfo) -> i128 {
@@ -225,8 +225,8 @@ impl SwapDirection for BaseToPair {
 	}
 }
 
-pub struct PairToBase {}
-impl SwapDirection for PairToBase {
+pub struct Asset1ToAsset0 {}
+impl SwapDirection for Asset1ToAsset0 {
 	const INPUT_SIDE: PoolSide = PoolSide::Asset1;
 
 	fn target_tick(
@@ -247,7 +247,7 @@ impl SwapDirection for PairToBase {
 		target: SqrtPriceQ64F96,
 		liquidity: Liquidity,
 	) -> AmountU256 {
-		PoolState::pair_amount_delta_ceil(current, target, liquidity)
+		PoolState::asset_1_amount_delta_ceil(current, target, liquidity)
 	}
 
 	fn output_amount_delta_floor(
@@ -255,7 +255,7 @@ impl SwapDirection for PairToBase {
 		target: SqrtPriceQ64F96,
 		liquidity: Liquidity,
 	) -> AmountU256 {
-		PoolState::base_amount_delta_floor(current, target, liquidity)
+		PoolState::asset_0_amount_delta_floor(current, target, liquidity)
 	}
 
 	fn next_sqrt_price_from_input_amount(
@@ -263,7 +263,7 @@ impl SwapDirection for PairToBase {
 		liquidity: Liquidity,
 		amount: AmountU256,
 	) -> SqrtPriceQ64F96 {
-		PoolState::next_sqrt_price_from_pair_input(sqrt_ratio_current, liquidity, amount)
+		PoolState::next_sqrt_price_from_asset_1_input(sqrt_ratio_current, liquidity, amount)
 	}
 
 	fn liquidity_delta_on_crossing_tick(tick_liquidity: &TickInfo) -> i128 {
@@ -611,23 +611,23 @@ impl PoolState {
 			.collect()
 	}
 
-	/// Swaps the specified Amount of Base into Pair. Returns the Output and Fee amount.
+	/// Swaps the specified Amount of Asset 0 into Asset 1. Returns the Output and Fee amount.
 	///
 	/// This function never panics
-	pub fn swap_from_base_to_pair(&mut self, amount: AmountU256) -> (AmountU256, AmountU256) {
-		self.swap::<BaseToPair>(amount)
+	pub fn swap_from_asset_0_to_asset_1(&mut self, amount: AmountU256) -> (AmountU256, AmountU256) {
+		self.swap::<Asset0ToAsset1>(amount)
 	}
 
-	/// Swaps the specified Amount of Pair into Base. Returns the Output and Fee amount.
+	/// Swaps the specified Amount of Asset 1 into Asset 0. Returns the Output and Fee amount.
 	///
 	/// This function never panics
-	pub fn swap_from_pair_to_base(&mut self, amount: AmountU256) -> (AmountU256, AmountU256) {
-		self.swap::<PairToBase>(amount)
+	pub fn swap_from_asset_1_to_asset_0(&mut self, amount: AmountU256) -> (AmountU256, AmountU256) {
+		self.swap::<Asset1ToAsset0>(amount)
 	}
 
 	/// Swaps the specified Amount into the other currency. Returns the Output and Fees amount. The
 	/// direction of the swap is controlled by the generic type parameter `SD`, by setting it to
-	/// `BaseToPair` or `PairToBase`.
+	/// `Asset0ToAsset1` or `Asset1ToAsset0`.
 	///
 	/// This function never panics
 	fn swap<SD: SwapDirection>(&mut self, mut amount: AmountU256) -> (AmountU256, AmountU256) {
@@ -763,9 +763,9 @@ impl PoolState {
 			(
 				PoolAssetMap::new(
 					(if ROUND_UP {
-						Self::base_amount_delta_ceil
+						Self::asset_0_amount_delta_ceil
 					} else {
-						Self::base_amount_delta_floor
+						Self::asset_0_amount_delta_floor
 					})(
 						Self::sqrt_price_at_tick(lower_tick),
 						Self::sqrt_price_at_tick(upper_tick),
@@ -779,14 +779,14 @@ impl PoolState {
 			(
 				PoolAssetMap::new(
 					(if ROUND_UP {
-						Self::base_amount_delta_ceil
+						Self::asset_0_amount_delta_ceil
 					} else {
-						Self::base_amount_delta_floor
+						Self::asset_0_amount_delta_floor
 					})(self.current_sqrt_price, Self::sqrt_price_at_tick(upper_tick), liquidity),
 					(if ROUND_UP {
-						Self::pair_amount_delta_ceil
+						Self::asset_1_amount_delta_ceil
 					} else {
-						Self::pair_amount_delta_floor
+						Self::asset_1_amount_delta_floor
 					})(Self::sqrt_price_at_tick(lower_tick), self.current_sqrt_price, liquidity),
 				),
 				liquidity,
@@ -796,9 +796,9 @@ impl PoolState {
 				PoolAssetMap::new(
 					0.into(),
 					(if ROUND_UP {
-						Self::pair_amount_delta_ceil
+						Self::asset_1_amount_delta_ceil
 					} else {
-						Self::pair_amount_delta_floor
+						Self::asset_1_amount_delta_floor
 					})(
 						Self::sqrt_price_at_tick(lower_tick),
 						Self::sqrt_price_at_tick(upper_tick),
@@ -810,7 +810,7 @@ impl PoolState {
 		}
 	}
 
-	fn base_amount_delta_floor(
+	fn asset_0_amount_delta_floor(
 		from: SqrtPriceQ64F96,
 		to: SqrtPriceQ64F96,
 		liquidity: Liquidity,
@@ -827,7 +827,7 @@ impl PoolState {
 		mul_div_floor(U256::from(liquidity) << 96u32, to - from, U256::full_mul(to, from))
 	}
 
-	fn base_amount_delta_ceil(
+	fn asset_0_amount_delta_ceil(
 		from: SqrtPriceQ64F96,
 		to: SqrtPriceQ64F96,
 		liquidity: Liquidity,
@@ -844,7 +844,7 @@ impl PoolState {
 		mul_div_ceil(U256::from(liquidity) << 96u32, to - from, U256::full_mul(to, from))
 	}
 
-	fn pair_amount_delta_floor(
+	fn asset_1_amount_delta_floor(
 		from: SqrtPriceQ64F96,
 		to: SqrtPriceQ64F96,
 		liquidity: Liquidity,
@@ -864,7 +864,7 @@ impl PoolState {
 		mul_div_floor(liquidity.into(), to - from, U512::from(1) << 96u32)
 	}
 
-	fn pair_amount_delta_ceil(
+	fn asset_1_amount_delta_ceil(
 		from: SqrtPriceQ64F96,
 		to: SqrtPriceQ64F96,
 		liquidity: Liquidity,
@@ -884,7 +884,7 @@ impl PoolState {
 		mul_div_ceil(liquidity.into(), to - from, U512::from(1u32) << 96u32)
 	}
 
-	fn next_sqrt_price_from_base_input(
+	fn next_sqrt_price_from_asset_0_input(
 		sqrt_ratio_current: SqrtPriceQ64F96,
 		liquidity: Liquidity,
 		amount: AmountU256,
@@ -910,7 +910,7 @@ impl PoolState {
 		)
 	}
 
-	fn next_sqrt_price_from_pair_input(
+	fn next_sqrt_price_from_asset_1_input(
 		sqrt_ratio_current: SqrtPriceQ64F96,
 		liquidity: Liquidity,
 		amount: AmountU256,
@@ -1155,14 +1155,14 @@ mod test {
 	#[test]
 	fn output_amounts_bounded() {
 		// Note these values are significant over-estimates of the maximum output amount
-		PairToBase::output_amount_delta_floor(
+		Asset1ToAsset0::output_amount_delta_floor(
 			PoolState::sqrt_price_at_tick(MIN_TICK),
 			PoolState::sqrt_price_at_tick(MAX_TICK),
 			MAX_TICK_GROSS_LIQUIDITY,
 		)
 		.checked_mul((1 + MAX_TICK - MIN_TICK).into())
 		.unwrap();
-		BaseToPair::output_amount_delta_floor(
+		Asset0ToAsset1::output_amount_delta_floor(
 			PoolState::sqrt_price_at_tick(MAX_TICK),
 			PoolState::sqrt_price_at_tick(MIN_TICK),
 			MAX_TICK_GROSS_LIQUIDITY,

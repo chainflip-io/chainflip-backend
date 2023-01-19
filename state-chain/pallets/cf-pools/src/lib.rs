@@ -279,7 +279,7 @@ pub mod pallet {
 					if let Some(pool) = maybe_pool.as_mut() {
 						ensure!(pool.pool_enabled(), Error::<T>::PoolDisabled);
 						let (output_amount, asset_0_fee) =
-							pool.swap_from_base_to_pair(input_amount.into());
+							pool.swap_from_asset_0_to_asset_1(input_amount.into());
 						Self::deposit_event(Event::<T>::AssetsSwapped {
 							from,
 							to,
@@ -303,7 +303,7 @@ pub mod pallet {
 						if let Some(pool) = maybe_pool.as_mut() {
 							ensure!(pool.pool_enabled(), Error::<T>::PoolDisabled);
 							let (output_amount, asset_1_fee) =
-								pool.swap_from_pair_to_base(input_amount.into());
+								pool.swap_from_asset_1_to_asset_0(input_amount.into());
 							Self::deposit_event(Event::<T>::AssetsSwapped {
 								from,
 								to,
@@ -327,7 +327,7 @@ pub mod pallet {
 						Pools::<T>::try_mutate(input_asset, |maybe_pool| {
 							if let Some(pool) = maybe_pool.as_mut() {
 								ensure!(pool.pool_enabled(), Error::<T>::PoolDisabled);
-								Ok(pool.swap_from_base_to_pair(input_amount.into()))
+								Ok(pool.swap_from_asset_0_to_asset_1(input_amount.into()))
 							} else {
 								Err(Error::<T>::PoolDoesNotExist)
 							}
@@ -348,7 +348,7 @@ pub mod pallet {
 						Pools::<T>::try_mutate(output_asset, |maybe_pool| {
 							if let Some(pool) = maybe_pool.as_mut() {
 								ensure!(pool.pool_enabled(), Error::<T>::PoolDisabled);
-								Ok(pool.swap_from_pair_to_base(intermediate_amount))
+								Ok(pool.swap_from_asset_1_to_asset_0(intermediate_amount))
 							} else {
 								Err(Error::<T>::PoolDoesNotExist)
 							}
