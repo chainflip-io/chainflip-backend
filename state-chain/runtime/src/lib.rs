@@ -823,7 +823,7 @@ impl_runtime_apis! {
 			let is_bidding = pallet_cf_staking::ActiveBidder::<Runtime>::get(&account_id);
 			let peer_id_registered = pallet_cf_validator::AccountPeerMapping::<Runtime>::contains_key(&account_id);
 			// TODO: check for session key as well here.
-			let is_qualified = is_online && is_bidding && account_role == Some(AccountRole::Validator);
+			let is_qualified = is_online && is_bidding && account_role == Some(AccountRole::Validator) && peer_id_registered;
 			RuntimeApiAccountInfoV2 {
 				stake: account_info_v1.stake,
 				bond: account_info_v1.bond,
