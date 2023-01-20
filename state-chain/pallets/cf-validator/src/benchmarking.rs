@@ -314,7 +314,7 @@ benchmarks! {
 		assert_eq!(T::VaultRotator::status(), AsyncResult::Pending);
 	}
 
-	rotation_phase_vaults_rotating_success {
+	rotation_phase_keygen_success {
 		// a = authority set target size
 		let a in 3 .. 150;
 
@@ -340,7 +340,7 @@ benchmarks! {
 	verify {
 		assert!(matches!(
 			CurrentRotationPhase::<T>::get(),
-			RotationPhase::NewKeysActivated(..)
+			RotationPhase::ActivatingKeys(..)
 		));
 	}
 
