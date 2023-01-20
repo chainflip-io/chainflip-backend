@@ -287,33 +287,6 @@ benchmarks! {
 
 	/**** 2. RotationPhase::KeygensInProgress ****/
 
-	rotation_phase_vaults_rotating_pending {
-		// a = authority set target size
-		let a in 3 .. 150;
-
-		// Set up a vault rotation with a primary candidates and 50 auction losers (the losers just have to be
-		// enough to fill up available secondary slots).
-		start_vault_rotation::<T>(a, a / 3, 1);
-
-		// This assertion ensures we are using the correct weight parameter.
-		assert_eq!(
-			match CurrentRotationPhase::<T>::get() {
-				RotationPhase::KeygensInProgress(rotation_state) => Some(rotation_state.num_primary_candidates()),
-				_ => None,
-			}.expect("phase should be KeygensInProgress"),
-			a
-		);
-		assert!(matches!(
-			CurrentRotationPhase::<T>::get(),
-			RotationPhase::KeygensInProgress(..)
-		));
-	}: {
-		Pallet::<T>::on_initialize(1u32.into());
-	}
-	verify {
-		assert_eq!(T::VaultRotator::status(), AsyncResult::Pending);
-	}
-
 	rotation_phase_keygen_success {
 		// a = authority set target size
 		let a in 3 .. 150;
