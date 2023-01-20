@@ -47,7 +47,7 @@ pub mod pallet {
 	use cf_chains::eth::Ethereum;
 	use cf_primitives::BroadcastId;
 	use cf_traits::{AccountRoleRegistry, Broadcaster};
-	use frame_support::{pallet_prelude::*, Parameter};
+	use frame_support::{pallet_prelude::*, serde::__private::ser::constrain, Parameter};
 	use frame_system::pallet_prelude::*;
 
 	#[allow(unused_imports)]
@@ -197,6 +197,8 @@ pub mod pallet {
 			account_id: AccountId<T>,
 			amount: FlipBalance<T>,
 			broadcast_id: BroadcastId,
+			// Unix time.
+			expiry_time: u64,
 		},
 
 		/// A node has claimed their FLIP on the Ethereum chain. \[account_id,
@@ -382,9 +384,12 @@ pub mod pallet {
 
 			PendingClaims::<T>::insert(account_id.clone(), ());
 
-			let broadcast_id = T::Broadcaster::threshold_sign_and_broadcast(call);
-
-			Self::deposit_event(Event::ClaimRequested { account_id, amount, broadcast_id });
+			Self::deposit_event(Event::ClaimRequested {
+				account_id,
+				amount,
+				broadcast_id: T::Broadcaster::threshold_sign_and_broadcast(call),
+				expiry_time: contract_expiry,
+			});
 
 			Ok(().into())
 		}
