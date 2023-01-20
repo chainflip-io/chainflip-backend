@@ -542,10 +542,7 @@ impl<T: Config> cf_traits::StakeTransfer for Pallet<T> {
 		Ok(())
 	}
 
-	fn revert_claim(
-		account_id: &Self::AccountId,
-		_amount: Self::Balance,
-	) -> Result<(), DispatchError> {
+	fn revert_claim(account_id: &Self::AccountId) -> Result<(), DispatchError> {
 		// claim reverts automatically when dropped
 		let imbalance = Self::try_withdraw_pending_claim(account_id)?;
 		Self::settle(account_id, imbalance.into());

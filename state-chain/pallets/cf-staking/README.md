@@ -22,15 +22,13 @@ In order to join the network and bid for a validator slot participants must stak
 
 Claiming is a bit more involved. In order to claim available stake, active validator nodes must generate a valid threshold signature over the claim arguments and a nonce value.
 
-This then allows anyone to craft a valid `StakeManager::claim` smart contract call.
+The user requests a claim, by calling the `claim` extrinsic (normally via the CLI).
 
-When called, `StakeManager::claim` will emit a `Claimed` event. This event is then witnessed on the state chain to update the validator's balance.
+A `RegisterClaim` call is then broadcast to the Ethereum network. The transaction fee is paid by the authority network.
 
-A validator can have at most one open claim at any given time. If a validator submits a new claim this replaces any existing claim.
+The user then needs to execute the claim on the `StakeManager` contract. Executing, i.e.calling `StakeManager::claim` (normally done via the Staking app UI) will emit a `Claimed` event. This event is then witnessed on the state chain to update the validator's balance on chain.
 
-### Signatures
-
-Once the CFE has generated a valid signature for a claim, it should be posted back to the chain via `post_claim_signature`.
+A validator can have at most one open claim at any given time. They must either execute the claim, or wait for expiry until initiating a new claim.
 
 ## Dependencies
 

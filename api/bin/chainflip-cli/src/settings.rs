@@ -95,12 +95,7 @@ pub enum Claim {
 		amount: Option<f64>,
 		#[clap(help = "The Ethereum address you wish to claim your FLIP to")]
 		eth_address: String,
-
-		#[clap(long = "register", hide = true)]
-		should_register_claim: bool,
 	},
-	#[clap(about = "Get claim certificate for your recently submitted claim")]
-	Check,
 }
 
 #[derive(Parser, Clone, Debug)]

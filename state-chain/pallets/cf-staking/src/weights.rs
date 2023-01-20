@@ -34,7 +34,6 @@ pub trait WeightInfo {
 	fn claim() -> Weight;
 	fn claim_all() -> Weight;
 	fn claimed() -> Weight;
-	fn post_claim_signature() -> Weight;
 	fn retire_account() -> Weight;
 	fn activate_account() -> Weight;
 	fn on_initialize_best_case() -> Weight;
@@ -150,14 +149,6 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		Weight::from_ref_time(68_000_000)
 			.saturating_add(T::DbWeight::get().reads(8))
 			.saturating_add(T::DbWeight::get().writes(13))
-	}
-	// Storage: EthereumThresholdSigner Signature (r:1 w:1)
-	// Storage: Staking PendingClaims (r:1 w:1)
-	fn post_claim_signature() -> Weight {
-		// Minimum execution time: 31_000 nanoseconds.
-		Weight::from_ref_time(32_000_000)
-			.saturating_add(T::DbWeight::get().reads(2))
-			.saturating_add(T::DbWeight::get().writes(2))
 	}
 	// Storage: AccountRoles AccountRoles (r:1 w:0)
 	// Storage: Validator CurrentRotationPhase (r:1 w:0)
@@ -317,14 +308,6 @@ impl WeightInfo for () {
 		Weight::from_ref_time(68_000_000)
 			.saturating_add(RocksDbWeight::get().reads(8))
 			.saturating_add(RocksDbWeight::get().writes(13))
-	}
-	// Storage: EthereumThresholdSigner Signature (r:1 w:1)
-	// Storage: Staking PendingClaims (r:1 w:1)
-	fn post_claim_signature() -> Weight {
-		// Minimum execution time: 31_000 nanoseconds.
-		Weight::from_ref_time(32_000_000)
-			.saturating_add(RocksDbWeight::get().reads(2))
-			.saturating_add(RocksDbWeight::get().writes(2))
 	}
 	// Storage: AccountRoles AccountRoles (r:1 w:0)
 	// Storage: Validator CurrentRotationPhase (r:1 w:0)

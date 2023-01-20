@@ -1,24 +1,22 @@
 use crate as pallet_cf_staking;
-use cf_chains::{
-	eth::{self, Ethereum},
-	ChainCrypto,
-};
-use cf_primitives::{AuthorityCount, CeremonyId};
+use cf_chains::{ApiCall, Chain, ChainCrypto, Ethereum};
+use cf_primitives::AuthorityCount;
 use cf_traits::{
 	impl_mock_waived_fees,
 	mocks::{
-		bid_info::MockBidInfo, eth_replay_protection_provider::MockEthReplayProtectionProvider,
-		staking_info::MockStakingInfo, system_state_info::MockSystemStateInfo,
+		bid_info::MockBidInfo, staking_info::MockStakingInfo,
+		system_state_info::MockSystemStateInfo,
 	},
-	AsyncResult, ThresholdSigner, WaivedFees,
+	Broadcaster, WaivedFees,
 };
-use frame_support::{dispatch::DispatchResultWithPostInfo, parameter_types};
+use codec::{Decode, Encode, MaxEncodedLen};
+use frame_support::parameter_types;
+use scale_info::TypeInfo;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 	AccountId32, BuildStorage,
 };
-use sp_std::collections::btree_set::BTreeSet;
 use std::time::Duration;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -126,69 +124,61 @@ cf_traits::impl_mock_ensure_witnessed_for_origin!(RuntimeOrigin);
 cf_traits::impl_mock_epoch_info!(AccountId, u128, u32, AuthorityCount);
 cf_traits::impl_mock_stake_transfer!(AccountId, u128);
 
-pub struct MockThresholdSigner;
+pub struct MockBroadcaster;
 
 thread_local! {
-	pub static SIGNATURE_REQUESTS: RefCell<Vec<<Ethereum as ChainCrypto>::Payload>> = RefCell::new(vec![]);
+	pub static CLAIM_BROADCAST_REQUESTS: RefCell<Vec<<Ethereum as Chain>::ChainAmount>> = RefCell::new(vec![]);
 }
 
-impl MockThresholdSigner {
-	pub fn received_requests() -> Vec<<Ethereum as ChainCrypto>::Payload> {
-		SIGNATURE_REQUESTS.with(|cell| cell.borrow().clone())
-	}
-
-	pub fn on_signature_ready(account_id: &AccountId) -> DispatchResultWithPostInfo {
-		Staking::post_claim_signature(RuntimeOrigin::root(), account_id.clone(), 0)
-	}
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub struct MockRegisterClaim {
+	amount: <Ethereum as Chain>::ChainAmount,
 }
 
-impl ThresholdSigner<Ethereum> for MockThresholdSigner {
-	type RequestId = u32;
-	type Error = &'static str;
-	type Callback = RuntimeCall;
-	type KeyId = <Test as Chainflip>::KeyId;
-	type ValidatorId = AccountId;
-
-	fn request_signature(
-		payload: <Ethereum as ChainCrypto>::Payload,
-	) -> (Self::RequestId, CeremonyId) {
-		SIGNATURE_REQUESTS.with(|cell| cell.borrow_mut().push(payload));
-		(0, 1)
+impl cf_chains::RegisterClaim<Ethereum> for MockRegisterClaim {
+	fn new_unsigned(_node_id: &[u8; 32], amount: u128, _address: &[u8; 20], _expiry: u64) -> Self {
+		Self { amount }
 	}
 
-	fn request_keygen_verification_signature(
-		payload: <Ethereum as ChainCrypto>::Payload,
-		_key_id: Self::KeyId,
-		_participants: BTreeSet<Self::ValidatorId>,
-	) -> (Self::RequestId, CeremonyId) {
-		Self::request_signature(payload)
-	}
-
-	fn register_callback(_: Self::RequestId, _: Self::Callback) -> Result<(), Self::Error> {
-		Ok(())
-	}
-
-	fn signature_result(
-		_: Self::RequestId,
-	) -> cf_traits::AsyncResult<
-		Result<<Ethereum as ChainCrypto>::ThresholdSignature, Vec<Self::ValidatorId>>,
-	> {
-		AsyncResult::Ready(Ok(ETH_DUMMY_SIG))
-	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn insert_signature(
-		_request_id: Self::RequestId,
-		_signature: <Ethereum as ChainCrypto>::ThresholdSignature,
-	) {
-		// do nothing, the mock impl of signature_result doesn't take from any storage
-		// so we don't need to insert any storage.
+	fn amount(&self) -> u128 {
+		self.amount
 	}
 }
 
-// The dummy signature can't be Default - this would be interpreted as no signature.
-pub const ETH_DUMMY_SIG: eth::SchnorrVerificationComponents =
-	eth::SchnorrVerificationComponents { s: [0xcf; 32], k_times_g_address: [0xcf; 20] };
+impl ApiCall<Ethereum> for MockRegisterClaim {
+	fn threshold_signature_payload(&self) -> <Ethereum as ChainCrypto>::Payload {
+		unimplemented!()
+	}
+
+	fn signed(self, _threshold_signature: &<Ethereum as ChainCrypto>::ThresholdSignature) -> Self {
+		unimplemented!()
+	}
+
+	fn chain_encoded(&self) -> Vec<u8> {
+		unimplemented!()
+	}
+
+	fn is_signed(&self) -> bool {
+		unimplemented!()
+	}
+}
+
+impl MockBroadcaster {
+	pub fn received_requests() -> Vec<<Ethereum as Chain>::ChainAmount> {
+		CLAIM_BROADCAST_REQUESTS.with(|cell| cell.borrow().clone())
+	}
+}
+
+impl Broadcaster<Ethereum> for MockBroadcaster {
+	type ApiCall = MockRegisterClaim;
+
+	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) -> cf_primitives::BroadcastId {
+		CLAIM_BROADCAST_REQUESTS.with(|cell| {
+			cell.borrow_mut().push(api_call.amount);
+		});
+		0
+	}
+}
 
 pub const CLAIM_DELAY_BUFFER_SECS: u64 = 10;
 
@@ -200,11 +190,11 @@ impl pallet_cf_staking::Config for Test {
 	type Flip = Flip;
 	type WeightInfo = ();
 	type StakerId = AccountId;
-	type ThresholdSigner = MockThresholdSigner;
+	type Broadcaster = MockBroadcaster;
 	type ThresholdCallable = RuntimeCall;
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
-	type RegisterClaim = eth::api::EthereumApi<MockEthReplayProtectionProvider>;
+	type RegisterClaim = MockRegisterClaim;
 }
 
 pub const CLAIM_TTL_SECS: u64 = 10;

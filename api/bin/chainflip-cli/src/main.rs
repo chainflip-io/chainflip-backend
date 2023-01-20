@@ -47,9 +47,8 @@ async fn run_cli() -> Result<()> {
 			swap_intent(&cli_settings.state_chain, params).await,
 		LiquidityProvider(LiquidityProviderSubcommands::Deposit { asset }) =>
 			liquidity_deposit(&cli_settings.state_chain, asset).await,
-		Claim(Claim::Request { amount, eth_address, should_register_claim }) =>
-			request_claim(amount, &eth_address, &cli_settings, should_register_claim).await,
-		Claim(Claim::Check {}) => check_claim(&cli_settings.state_chain).await,
+		Claim(Claim::Request { amount, eth_address }) =>
+			request_claim(amount, &eth_address, &cli_settings).await,
 		RegisterAccountRole { role } => register_account_role(role, &cli_settings).await,
 		Rotate {} => rotate_keys(&cli_settings.state_chain).await,
 		Retire {} => api::retire_account(&cli_settings.state_chain).await,
@@ -137,24 +136,10 @@ pub async fn rotate_keys(state_chain_settings: &settings::StateChain) -> Result<
 	Ok(())
 }
 
-async fn check_claim(state_chain_settings: &settings::StateChain) -> Result<()> {
-	const POLL_LIMIT_BLOCKS: usize = 10;
-
-	if let Some(certificate) =
-		api::poll_for_claim_certificate(state_chain_settings, POLL_LIMIT_BLOCKS).await?
-	{
-		println!("Claim certificate found: {:?}", hex::encode(certificate));
-	} else {
-		println!("No claim certificate found. Try again later.");
-	}
-	Ok(())
-}
-
 async fn request_claim(
 	amount: Option<f64>,
 	eth_address: &str,
 	settings: &CLISettings,
-	should_register_claim: bool,
 ) -> Result<()> {
 	// Sanitise data
 
@@ -197,30 +182,9 @@ async fn request_claim(
 
 	let tx_hash = api::request_claim(amount, eth_address, &settings.state_chain).await?;
 
-	println!("Your claim has transaction hash: `{tx_hash:#x}`. Waiting for signed claim data...");
-
-	const POLL_LIMIT_BLOCKS: usize = 20;
-
-	match api::poll_for_claim_certificate(&settings.state_chain, POLL_LIMIT_BLOCKS).await? {
-		Some(claim_cert) => {
-			println!("Your claim certificate is: {:?}", hex::encode(claim_cert.clone()));
-
-			if should_register_claim {
-				let tx_hash = api::register_claim(&settings.eth, &settings.state_chain, claim_cert)
-					.await
-					.expect("Failed to register claim on ETH");
-
-				println!("Submitted claim to Ethereum successfully with tx_hash: {tx_hash:#x}");
-			} else {
-				println!(
-					"Your claim request has been successfully registered. Please proceed to the Staking UI to complete your claim."
-				);
-			}
-		},
-		None => {
-			println!("Certificate takes longer to generate than expected. Please check claim certificate later.")
-		},
-	};
+	println!(
+		"Your claim request has transaction hash: `{tx_hash:#x}`. View your claim's progress on the staking app."
+	);
 
 	Ok(())
 }
