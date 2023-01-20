@@ -129,8 +129,6 @@ pub mod pallet {
 		PositionLacksLiquidity,
 		/// The user's position does not exist.
 		PositionDoesNotExist,
-		/// The user does not have enough balance to mint liquidity.
-		InsufficientBalance,
 	}
 
 	#[pallet::event]

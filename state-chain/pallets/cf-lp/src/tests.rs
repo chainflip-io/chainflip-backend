@@ -392,7 +392,7 @@ fn mint_fails_with_insufficient_balance() {
 				range,
 				1_000_000,
 			),
-			pallet_cf_pools::Error::<Test>::InsufficientBalance
+			crate::Error::<Test>::InsufficientBalance
 		);
 	});
 }
