@@ -307,9 +307,6 @@ impl<T: Config> SwappingApi for Pallet<T> {
 impl<T: Config> LiquidityPoolApi<AccountId> for Pallet<T> {
 	const STABLE_ASSET: any::Asset = STABLE_ASSET;
 
-	/// Deposit up to some amount of assets into an exchange pool. Minting some "Liquidity".
-	///
-	/// Returns the actual token amounts minted.
 	fn mint(
 		lp: AccountId,
 		asset: any::Asset,
@@ -356,8 +353,6 @@ impl<T: Config> LiquidityPoolApi<AccountId> for Pallet<T> {
 		})
 	}
 
-	/// Burn some liquidity from an exchange pool to withdraw assets.
-	/// Returns Ok((assets_retrieved, fee_accrued))
 	fn burn(
 		lp: AccountId,
 		asset: any::Asset,
@@ -396,7 +391,6 @@ impl<T: Config> LiquidityPoolApi<AccountId> for Pallet<T> {
 		})
 	}
 
-	/// Returns the user's Minted liquidities and fees accrued for a specific pool.
 	fn minted_liquidity(lp: &AccountId, asset: &any::Asset) -> Vec<MintedLiquidity> {
 		if let Some(pool) = Pools::<T>::get(asset) {
 			pool.minted_liquidity(lp.clone())
@@ -405,7 +399,6 @@ impl<T: Config> LiquidityPoolApi<AccountId> for Pallet<T> {
 		}
 	}
 
-	/// Gets the current price of the pool in Tick
 	fn current_tick(asset: &any::Asset) -> Option<Tick> {
 		Pools::<T>::get(asset).map(|pool| pool.current_tick())
 	}
