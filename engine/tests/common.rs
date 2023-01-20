@@ -1,14 +1,17 @@
 #![cfg(feature = "integration-test")]
 
+use anyhow::Result;
+use std::{fmt::Debug, pin::Pin};
+
 use chainflip_engine::{
 	eth::{
-		block_events_stream_for_contract_from, event::Event, rpc::EthDualRpcClient,
-		EthContractWitnesser,
+		contract_witnesser::block_to_events, core_h160, event::Event, rpc::EthDualRpcClient,
+		safe_dual_block_subscription_from, BlockWithProcessedItems, EthContractWitnesser,
 	},
 	settings::{CfSettings, CommandLineOptions, Settings},
 };
 use config::{Config, ConfigError, File};
-use futures::stream::StreamExt;
+use futures::{stream::StreamExt, Stream};
 use serde::Deserialize;
 
 use web3::types::H160;
@@ -33,12 +36,55 @@ impl IntegrationTestConfig {
 	}
 }
 
+/// Get a block events stream for the contract, returning the stream only if the head of the stream
+/// is ahead of from_block (otherwise it will wait until we have reached from_block).
+async fn block_events_stream_for_contract_from<EventParameters, ContractWitnesser>(
+	from_block: u64,
+	contract_witnesser: ContractWitnesser,
+	eth_dual_rpc: EthDualRpcClient,
+	logger: &slog::Logger,
+) -> Result<
+	Pin<Box<dyn Stream<Item = BlockWithProcessedItems<Event<EventParameters>>> + Send + 'static>>,
+>
+where
+	EventParameters: Debug + Send + Sync + 'static,
+	ContractWitnesser:
+		EthContractWitnesser<EventParameters = EventParameters> + Send + Sync + 'static,
+{
+	let contract_address = contract_witnesser.contract_address();
+	slog::info!(
+		logger,
+		"Subscribing to ETH events from contract at address: {:?}",
+		hex::encode(contract_address)
+	);
+
+	let safe_header_stream =
+		safe_dual_block_subscription_from(from_block, eth_dual_rpc.clone(), logger).await?;
+
+	Ok(Box::pin(safe_header_stream.then({
+		move |block| {
+			let rpc = eth_dual_rpc.clone();
+			let decode_log_closure = contract_witnesser.decode_log_closure().unwrap();
+			async move {
+				let processed_block_items =
+					block_to_events(&block, core_h160(contract_address), &decode_log_closure, &rpc)
+						.await;
+
+				BlockWithProcessedItems {
+					block_number: block.block_number.as_u64(),
+					processed_block_items,
+				}
+			}
+		}
+	})))
+}
+
 pub async fn get_contract_events<ContractWitnesser>(
 	contract_witnesser: ContractWitnesser,
 	logger: slog::Logger,
 ) -> Vec<Event<<ContractWitnesser as EthContractWitnesser>::EventParameters>>
 where
-	ContractWitnesser: EthContractWitnesser + std::marker::Sync,
+	ContractWitnesser: EthContractWitnesser + std::marker::Sync + Send + 'static,
 {
 	let eth_dual_rpc = EthDualRpcClient::new_test(
 		&<Settings as CfSettings>::load_settings_from_all_sources(
@@ -58,7 +104,7 @@ where
         std::time::Duration::from_secs(10),
         block_events_stream_for_contract_from(
             0,
-            &contract_witnesser,
+            contract_witnesser,
             eth_dual_rpc.clone(),
             &logger,
         ),
@@ -66,7 +112,7 @@ where
     .await
     .expect("Timeout getting events. You might need to run hardhat with --config hardhat-interval-mining.config.js")
     .unwrap()
-    .map(|block| futures::stream::iter(block.block_items))
+    .map(|block| futures::stream::iter(block.processed_block_items.expect("should have fetched events")))
     .flatten()
     .take_until(tokio::time::sleep(std::time::Duration::from_millis(1000)))
     .collect::<Vec<_>>()
