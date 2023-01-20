@@ -8,6 +8,6 @@
     --pallet pallet_cf_$1 \
     --output state-chain/pallets/cf-$1/src/weights.rs \
     --execution=wasm \
-    --steps=2 \
-    --repeat=1 \
+    --steps=20 \
+    --repeat=20 \
     --template=state-chain/chainflip-weight-template.hbs
