@@ -88,23 +88,21 @@ impl Position {
 
 			pool_state.global_fee_growth[side] - fee_growth_below - fee_growth_above
 		});
-		let mut fees_owed = PoolAssetMap::<u128>::default();
-		fees_owed.mutate(|side, current_fees_owed| {
-			// DIFF: This behaviour is different than Uniswap's. We saturate fees_owed instead of
-			// overflowing
-
+		// DIFF: This behaviour is different than Uniswap's. We saturate fees_owed instead of
+		// overflowing
+		let fees_owed = PoolAssetMap::new_from_fn(|side| {
 			/*
 				Proof that `mul_div` does not overflow:
 				Note position.liqiudity: u128
 				U512::one() << 128 > u128::MAX
 			*/
-			*current_fees_owed = mul_div_floor(
+			mul_div_floor(
 				fee_growth_inside[side] - self.last_fee_growth_inside[side],
 				self.liquidity.into(),
 				U512::one() << 128,
 			)
 			.try_into()
-			.unwrap_or(u128::MAX);
+			.unwrap_or(u128::MAX)
 		});
 		self.last_fee_growth_inside = fee_growth_inside;
 		fees_owed
