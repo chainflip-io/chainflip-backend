@@ -253,7 +253,7 @@ impl<T: Config> Pallet<T> {
 		range: AmmRange,
 		liquidity_amount: Liquidity,
 	) -> DispatchResult {
-		let earned_fees = T::LiquidityPoolApi::mint(
+		let fees_harvested = T::LiquidityPoolApi::mint(
 			account_id.clone(),
 			asset,
 			range,
@@ -269,11 +269,11 @@ impl<T: Config> Pallet<T> {
 			},
 		)?;
 
-		Self::credit(&account_id, asset, earned_fees[PoolSide::Asset0])?;
+		Self::credit(&account_id, asset, fees_harvested[PoolSide::Asset0])?;
 		Self::credit(
 			&account_id,
 			T::LiquidityPoolApi::STABLE_ASSET,
-			earned_fees[PoolSide::Asset1],
+			fees_harvested[PoolSide::Asset1],
 		)?;
 		Ok(())
 	}

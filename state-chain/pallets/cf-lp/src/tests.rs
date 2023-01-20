@@ -196,6 +196,7 @@ fn can_mint_liquidity() {
 				range,
 				minted_liquidity: 1_000_000,
 				assets_debited: PoolAssetMap::new(4988, 4988),
+				fees_harvested: Default::default(),
 			},
 		));
 		System::assert_has_event(RuntimeEvent::LiquidityProvider(crate::Event::AccountDebited {
@@ -242,6 +243,7 @@ fn can_mint_liquidity() {
 				range,
 				minted_liquidity: 1_000,
 				assets_debited: PoolAssetMap::new(5, 5),
+				fees_harvested: Default::default(),
 			},
 		));
 		System::assert_has_event(RuntimeEvent::LiquidityProvider(crate::Event::AccountDebited {
@@ -308,7 +310,7 @@ fn can_burn_liquidity() {
 				range,
 				burnt_liquidity: 500_000,
 				assets_returned: PoolAssetMap::new(2493, 2493),
-				fee_yielded: Default::default(),
+				fees_harvested: Default::default(),
 			},
 		));
 		System::assert_has_event(RuntimeEvent::LiquidityProvider(crate::Event::AccountCredited {
@@ -355,7 +357,7 @@ fn can_burn_liquidity() {
 				range,
 				burnt_liquidity: 500_000,
 				assets_returned: PoolAssetMap::new(2_493, 2_493),
-				fee_yielded: Default::default(),
+				fees_harvested: Default::default(),
 			},
 		));
 		System::assert_has_event(RuntimeEvent::LiquidityProvider(crate::Event::AccountCredited {

@@ -154,6 +154,7 @@ pub mod pallet {
 			range: AmmRange,
 			minted_liquidity: Liquidity,
 			assets_debited: PoolAssetMap<AssetAmount>,
+			fees_harvested: PoolAssetMap<AssetAmount>,
 		},
 		LiquidityBurned {
 			lp: AccountId,
@@ -161,13 +162,7 @@ pub mod pallet {
 			range: AmmRange,
 			burnt_liquidity: Liquidity,
 			assets_returned: PoolAssetMap<AssetAmount>,
-			fee_yielded: PoolAssetMap<AssetAmount>,
-		},
-		FeeCollected {
-			lp: AccountId,
-			asset: any::Asset,
-			range: AmmRange,
-			fee_yielded: PoolAssetMap<AssetAmount>,
+			fees_harvested: PoolAssetMap<AssetAmount>,
 		},
 		NetworkFeeTaken {
 			fee_amount: AssetAmount,
@@ -326,7 +321,7 @@ impl<T: Config> LiquidityPoolApi<AccountId> for Pallet<T> {
 					)
 				};
 
-				let (required_assets, earned_fees) = pool
+				let (required_assets, fees_harvested) = pool
 					.mint(lp.clone(), range.lower, range.upper, liquidity_amount, try_debit_u256)
 					.map_err(|e| match e {
 						MintError::InvalidTickRange => Error::<T>::InvalidTickRange.into(),
@@ -344,9 +339,10 @@ impl<T: Config> LiquidityPoolApi<AccountId> for Pallet<T> {
 					range,
 					minted_liquidity: liquidity_amount,
 					assets_debited,
+					fees_harvested,
 				});
 
-				Ok(earned_fees)
+				Ok(fees_harvested)
 			} else {
 				Err(Error::<T>::PoolDoesNotExist.into())
 			}
@@ -363,7 +359,10 @@ impl<T: Config> LiquidityPoolApi<AccountId> for Pallet<T> {
 			if let Some(pool) = maybe_pool.as_mut() {
 				ensure!(pool.pool_enabled(), Error::<T>::PoolDisabled);
 
-				let (assets_returned_u256, fees): (PoolAssetMap<AmountU256>, PoolAssetMap<u128>) =
+				let (assets_returned_u256, fees_harvested): (
+					PoolAssetMap<AmountU256>,
+					PoolAssetMap<u128>,
+				) =
 					pool.burn(lp.clone(), range.lower, range.upper, burnt_liquidity).map_err(
 						|e| match e {
 							PositionError::NonExistent => Error::<T>::PositionDoesNotExist,
@@ -381,10 +380,10 @@ impl<T: Config> LiquidityPoolApi<AccountId> for Pallet<T> {
 					range,
 					burnt_liquidity,
 					assets_returned,
-					fee_yielded: fees,
+					fees_harvested,
 				});
 
-				Ok(BurnResult::new(assets_returned, fees))
+				Ok(BurnResult::new(assets_returned, fees_harvested))
 			} else {
 				Err(Error::<T>::PoolDoesNotExist.into())
 			}
