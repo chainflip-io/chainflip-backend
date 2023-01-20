@@ -179,7 +179,7 @@ where
 		let opt_block_header = if merged_has_yielded {
 			if block_number == next_block_to_yield {
 				Some(block)
-			// if we're only one block "behind" we're not really "behind", we were just the
+			// if we're only one block behind we're not really "behind", we were just the
 			// second stream polled
 			} else if block_number + 1 < next_block_to_yield {
 				None
