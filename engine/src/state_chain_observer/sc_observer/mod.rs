@@ -33,6 +33,13 @@ use crate::{
 	witnesser::EpochStart,
 };
 
+pub struct EthAddressToMonitorSender {
+	pub eth: UnboundedSender<H160>,
+	pub flip: UnboundedSender<H160>,
+	pub usdc: UnboundedSender<H160>,
+}
+
+
 async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 	scope: &Scope<'a, anyhow::Error>,
 	multisig_client: &'a MultisigClient,
@@ -186,9 +193,7 @@ pub async fn start<
 	dot_multisig_client: PolkadotMultisigClient,
 	peer_update_sender: UnboundedSender<PeerUpdate>,
 	eth_epoch_start_sender: async_broadcast::Sender<EpochStart<Ethereum>>,
-	eth_monitor_ingress_sender: tokio::sync::mpsc::UnboundedSender<H160>,
-	eth_monitor_flip_ingress_sender: tokio::sync::mpsc::UnboundedSender<H160>,
-	eth_monitor_usdc_ingress_sender: tokio::sync::mpsc::UnboundedSender<H160>,
+	eth_address_to_monitor_sender: EthAddressToMonitorSender,
 	dot_epoch_start_sender: async_broadcast::Sender<EpochStart<Polkadot>>,
 	dot_monitor_ingress_sender: tokio::sync::mpsc::UnboundedSender<PolkadotAccountId>,
 	dot_monitor_signature_sender: tokio::sync::mpsc::UnboundedSender<[u8; 64]>,
@@ -546,13 +551,13 @@ where
                                         use cf_primitives::chains::assets::eth;
                                         match ingress_asset {
                                             eth::Asset::Eth => {
-                                                eth_monitor_ingress_sender.send(ingress_address).unwrap();
+                                                eth_address_to_monitor_sender.eth.send(ingress_address).unwrap();
                                             }
                                             eth::Asset::Flip => {
-                                                eth_monitor_flip_ingress_sender.send(ingress_address).unwrap();
+                                                eth_address_to_monitor_sender.flip.send(ingress_address).unwrap();
                                             }
                                             eth::Asset::Usdc => {
-                                                eth_monitor_usdc_ingress_sender.send(ingress_address).unwrap();
+                                                eth_address_to_monitor_sender.usdc.send(ingress_address).unwrap();
                                             }
                                         }
                                     }
