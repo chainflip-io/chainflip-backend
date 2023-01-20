@@ -413,19 +413,11 @@ pub mod pallet {
 							Self::set_rotation_phase(RotationPhase::ActivatingKeys(rotation_state));
 						},
 						AsyncResult::Ready(VaultStatus::Failed(offenders)) => {
-							// let weight =
-							// 	T::ValidatorWeightInfo::rotation_phase_vaults_rotating_failure(
-							// 		offenders.len() as u32,
-							// 	);
 							rotation_state.ban(offenders);
 							Self::start_vault_rotation(rotation_state);
-							// weight
 						},
 						AsyncResult::Pending => {
 							log::debug!(target: "cf-validator", "awaiting keygen completion");
-							// T::ValidatorWeightInfo::rotation_phase_vaults_rotating_pending(
-							// 	rotation_state.num_primary_candidates(),
-							// )
 						},
 						async_result => {
 							debug_assert!(
@@ -434,10 +426,6 @@ pub mod pallet {
 							);
 							log::error!(target: "cf-validator", "Ready(KeygenComplete), Ready(Failed), Pending possible. Got: {async_result:?}");
 							Self::set_rotation_phase(RotationPhase::Idle);
-							// Use the weight of the pending phase.
-							// T::ValidatorWeightInfo::rotation_phase_vaults_rotating_pending(
-							// 	rotation_state.num_primary_candidates(),
-							// )
 						},
 					};
 					// TODO: Use actual weights
