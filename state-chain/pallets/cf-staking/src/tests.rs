@@ -421,7 +421,6 @@ fn claim_expiry() {
 		time_source::Mock::reset_to(START_TIME);
 		const INIT_TICK: u64 = 4;
 		time_source::Mock::tick(Duration::from_secs(INIT_TICK));
-		// assert_ok!(Staking::post_claim_signature(RuntimeOrigin::root(), ALICE, 0));
 
 		// Trigger expiry.
 		Pallet::<Test>::on_initialize(0);
