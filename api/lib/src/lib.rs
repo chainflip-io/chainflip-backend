@@ -1,4 +1,4 @@
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{anyhow, bail, Result};
 use async_trait::async_trait;
 use cf_chains::eth::H256;
 use cf_primitives::{AccountRole, Asset, ForeignChainAddress};
@@ -21,7 +21,6 @@ pub use chainflip_engine::settings;
 pub use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 
 use chainflip_engine::{
-	eth::{rpc::EthDualRpcClient, EthBroadcaster},
 	logging::utils::new_discard_logger,
 	state_chain_observer::client::{
 		base_rpc_api::{BaseRpcApi, BaseRpcClient, RawRpcApi},
@@ -172,71 +171,6 @@ pub async fn request_claim(
 			.map_err(|_| anyhow!("invalid claim"))?;
 
 			Ok(tx_hash)
-		}
-		.boxed()
-	})
-	.await
-}
-
-/// Register the claim certificate on Ethereum
-pub async fn register_claim(
-	eth_settings: &settings::Eth,
-	state_chain_settings: &settings::StateChain,
-	claim_cert: ClaimCertificate,
-) -> Result<web3::types::H256> {
-	task_scope(|scope| {
-		async {
-			let logger = new_discard_logger();
-			let (_, _block_stream, state_chain_client) = StateChainClient::new(
-				scope,
-				state_chain_settings,
-				AccountRole::None,
-				false,
-				&logger,
-			)
-			.await?;
-
-			let block_hash =
-				state_chain_client.base_rpc_client.latest_finalized_block_hash().await?;
-
-			let chain_id = state_chain_client
-				.storage_value::<pallet_cf_environment::EthereumChainId<state_chain_runtime::Runtime>>(
-					block_hash,
-				)
-				.await
-				.expect("Failed to fetch EthereumChainId from the State Chain");
-			let stake_manager_address = state_chain_client
-				.storage_value::<pallet_cf_environment::EthereumStakeManagerAddress<state_chain_runtime::Runtime>>(
-					block_hash,
-				)
-				.await
-				.expect("Failed to fetch EthereumStakeManagerAddress from State Chain");
-
-			println!(
-				"Registering your claim on the Ethereum network, to StakeManager address: {stake_manager_address:?}",
-			);
-
-			let eth_broadcaster = EthBroadcaster::new(
-				eth_settings,
-				EthDualRpcClient::new(eth_settings, chain_id.into(), &logger)
-					.await
-					.context("Could not create EthDualRpcClient")?,
-				&logger,
-			)?;
-
-			eth_broadcaster
-				.send(
-					eth_broadcaster
-						.encode_and_sign_tx(cf_chains::eth::Transaction {
-							chain_id,
-							contract: stake_manager_address.into(),
-							data: claim_cert,
-							..Default::default()
-						})
-						.await?
-						.0,
-				)
-				.await
 		}
 		.boxed()
 	})
