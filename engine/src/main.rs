@@ -58,30 +58,32 @@ async fn create_witnessers(
 	let (eth_monitor_usdc_ingress_sender, eth_monitor_usdc_ingress_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
-	let key_manager_address = state_chain_client
-		.storage_value::<pallet_cf_environment::EthereumKeyManagerAddress<state_chain_runtime::Runtime>>(
-			latest_block_hash,
-		)
-		.await
-		.context("Failed to get KeyManager address from SC")?;
-
 	let key_manager_witnesser = Box::new(ContractWitnesser::new(
-		KeyManager::new(key_manager_address.into()),
+		KeyManager::new(
+			state_chain_client
+				.storage_value::<pallet_cf_environment::EthereumKeyManagerAddress<state_chain_runtime::Runtime>>(
+					latest_block_hash,
+				)
+				.await
+				.context("Failed to get KeyManager address from SC")?
+				.into(),
+		),
 		state_chain_client.clone(),
 		eth_dual_rpc.clone(),
 		false,
 		logger,
 	));
 
-	let stake_manager_address = state_chain_client
-		.storage_value::<pallet_cf_environment::EthereumStakeManagerAddress<state_chain_runtime::Runtime>>(
-			latest_block_hash,
-		)
-		.await
-		.context("Failed to get StakeManager address from SC")?;
-
 	let stake_manager_witnesser = Box::new(ContractWitnesser::new(
-		StakeManager::new(stake_manager_address.into()),
+		StakeManager::new(
+			state_chain_client
+				.storage_value::<pallet_cf_environment::EthereumStakeManagerAddress<state_chain_runtime::Runtime>>(
+					latest_block_hash,
+				)
+				.await
+				.context("Failed to get StakeManager address from SC")?
+				.into(),
+		),
 		state_chain_client.clone(),
 		eth_dual_rpc.clone(),
 		true,
@@ -113,17 +115,16 @@ async fn create_witnessers(
 		.collect()
 	}
 
-	let flip_contract_address = state_chain_client
-		.storage_map_entry::<pallet_cf_environment::EthereumSupportedAssets<state_chain_runtime::Runtime>>(
-			latest_block_hash,
-			&Asset::Flip,
-		)
-		.await
-		.context("Failed to get FLIP address from SC")?
-		.expect("FLIP address must exist at genesis");
-
 	let flip_witnesser = Erc20Witnesser::new(
-		flip_contract_address.into(),
+		state_chain_client
+			.storage_map_entry::<pallet_cf_environment::EthereumSupportedAssets<state_chain_runtime::Runtime>>(
+				latest_block_hash,
+				&Asset::Flip,
+			)
+			.await
+			.context("Failed to get FLIP address from SC")?
+			.expect("FLIP address must exist at genesis")
+			.into(),
 		assets::eth::Asset::Flip,
 		monitored_addresses_from_all_eth(&eth_chain_ingress_addresses, assets::eth::Asset::Flip),
 		eth_monitor_flip_ingress_receiver,
