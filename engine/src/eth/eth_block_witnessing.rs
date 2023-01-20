@@ -21,7 +21,7 @@ pub async fn start<const N: usize>(
 	logger: &slog::Logger,
 ) -> anyhow::Result<()> {
 	epoch_witnesser::start(
-		"Block head producer".to_string(),
+		"Block_Head".to_string(),
 		epoch_start_receiver,
 		move |_| true,
 		witnessers,
