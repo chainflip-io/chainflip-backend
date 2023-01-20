@@ -20,6 +20,7 @@ pub trait HasBlockNumber: PartialEq + Debug + Send {
 	fn block_number(&self) -> u64;
 }
 
+#[cfg(test)]
 impl HasBlockNumber for u64 {
 	fn block_number(&self) -> u64 {
 		*self
