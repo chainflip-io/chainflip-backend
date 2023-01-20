@@ -1,5 +1,5 @@
 use crate::{
-	eth::{utils, EthRpcApi, EventParseError, SignatureAndEvent},
+	eth::{core_h160, core_h256, utils, EthRpcApi, EventParseError, SignatureAndEvent},
 	state_chain_observer::client::extrinsic_api::ExtrinsicApi,
 };
 use cf_chains::eth::{SchnorrVerificationComponents, TransactionFee};
@@ -219,7 +219,7 @@ impl EthContractWitnesser for KeyManager {
 												new_agg_key.serialize(),
 											),
 										block_number,
-										tx_id: event.tx_hash,
+										tx_id: core_h256(event.tx_hash),
 									}
 									.into(),
 								),
@@ -240,7 +240,7 @@ impl EthContractWitnesser for KeyManager {
 												new_agg_key.serialize(),
 											),
 										block_number,
-										tx_id: event.tx_hash,
+										tx_id: core_h256(event.tx_hash),
 									}
 									.into(),
 								),
@@ -253,10 +253,11 @@ impl EthContractWitnesser for KeyManager {
 				KeyManagerEvent::SignatureAccepted { sig_data, .. } => {
 					let TransactionReceipt { gas_used, effective_gas_price, from, .. } =
 						eth_rpc.transaction_receipt(event.tx_hash).await?;
-					let gas_used = gas_used.context("TransactionReceipt should have gas_used. This might be due to using a light client.")?.as_u128();
+					let gas_used = gas_used.context("TransactionReceipt should have gas_used. This might be due to using a light client.")?.try_into().expect("Gas used should fit u128");
 					let effective_gas_price = effective_gas_price
 						.context("TransactionReceipt should have effective gas price")?
-						.as_u128();
+						.try_into()
+						.expect("Effective gas price should fit u128");
 					let _result = state_chain_client
 						.submit_signed_extrinsic(
 							pallet_cf_witnesser::Call::witness_at_epoch {
@@ -266,7 +267,7 @@ impl EthContractWitnesser for KeyManager {
 											s: sig_data.sig.into(),
 											k_times_g_address: sig_data.k_times_g_address.into(),
 										},
-										signer_id: from,
+										signer_id: core_h160(from),
 										tx_fee: TransactionFee { effective_gas_price, gas_used },
 									}
 									.into(),

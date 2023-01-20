@@ -14,8 +14,6 @@ mod genesis;
 mod governance;
 mod new_epoch;
 mod staking;
-
-#[cfg(feature = "ibiza")]
 mod swapping;
 
 use frame_support::{assert_noop, assert_ok, traits::OnInitialize};
@@ -23,8 +21,8 @@ use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::crypto::{Pair, Public};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use state_chain_runtime::{
-	constants::common::*, opaque::SessionKeys, AccountId, Emissions, Flip, Governance, Origin,
-	Reputation, Runtime, Staking, System, Timestamp, Validator, Witnesser,
+	constants::common::*, opaque::SessionKeys, AccountId, Emissions, Flip, Governance, Reputation,
+	Runtime, RuntimeOrigin, Staking, System, Validator, Witnesser,
 };
 
 use cf_primitives::{AuthorityCount, BlockNumber, EpochIndex, FlipBalance};
@@ -49,7 +47,7 @@ pub const ERIN: [u8; 32] = [0xee; 32];
 const GENESIS_EPOCH: EpochIndex = 1;
 
 pub fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {
-	TPublic::Pair::from_string(&format!("//{}", seed), None)
+	TPublic::Pair::from_string(&format!("//{seed}"), None)
 		.expect("static values are valid; qed")
 		.public()
 }

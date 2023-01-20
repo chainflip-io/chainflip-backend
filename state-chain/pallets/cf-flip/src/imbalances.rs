@@ -139,7 +139,7 @@ impl<T: Config> Surplus<T> {
 	/// Tries to withdraw funds from a Pending Claims reserve for the corresponding Account ID.
 	/// Fails if the pending claim doesn't exist for that ID
 	pub(super) fn try_from_pending_claims_reserve(account_id: &T::AccountId) -> Option<Self> {
-		Flip::PendingClaimsReserve::<T>::take(&account_id)
+		Flip::PendingClaimsReserve::<T>::take(account_id)
 			.map(|amount| Self::new(amount, ImbalanceSource::pending_claims(account_id.clone())))
 	}
 
@@ -243,7 +243,7 @@ impl<T: Config> Deficit<T> {
 		account_id: &T::AccountId,
 		amount: T::Balance,
 	) -> Self {
-		Flip::PendingClaimsReserve::<T>::insert(&account_id, amount);
+		Flip::PendingClaimsReserve::<T>::insert(account_id, amount);
 		Self::new(amount, ImbalanceSource::pending_claims(account_id.clone()))
 	}
 

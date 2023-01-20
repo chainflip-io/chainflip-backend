@@ -9,11 +9,10 @@ use super::rpc::EthRpcApi;
 
 use cf_chains::eth::{Ethereum, TrackedData};
 
-use sp_core::U256;
 use state_chain_runtime::CfeSettings;
 use tokio::sync::watch;
 use utilities::{context, make_periodic_tick};
-use web3::types::BlockNumber;
+use web3::types::{BlockNumber, U256};
 
 const ETH_CHAIN_TRACKING_POLL_INTERVAL: Duration = Duration::from_secs(4);
 
@@ -62,8 +61,8 @@ where
                     if latest_data.block_height > last_witnessed_data.block_height || latest_data.base_fee != last_witnessed_data.base_fee {
                         let _result = state_chain_client
                             .submit_signed_extrinsic(
-                                state_chain_runtime::Call::Witnesser(pallet_cf_witnesser::Call::witness_at_epoch {
-                                    call: Box::new(state_chain_runtime::Call::EthereumChainTracking(
+                                state_chain_runtime::RuntimeCall::Witnesser(pallet_cf_witnesser::Call::witness_at_epoch {
+                                    call: Box::new(state_chain_runtime::RuntimeCall::EthereumChainTracking(
                                         pallet_cf_chain_tracking::Call::update_chain_state {
                                             state: latest_data,
                                         },
@@ -106,9 +105,12 @@ async fn get_tracked_data<EthRpcClient: EthRpcApi + Send + Sync>(
 	if let BlockNumber::Number(block_number) = fee_history.oldest_block {
 		Ok(TrackedData::<Ethereum> {
 			block_height: block_number.as_u64(),
-			base_fee: context!(fee_history.base_fee_per_gas.first())?.as_u128(),
-			priority_fee: context!(context!(context!(fee_history.reward)?.first())?.first())?
-				.as_u128(),
+			base_fee: (*context!(fee_history.base_fee_per_gas.first())?)
+				.try_into()
+				.expect("Base fee should fit u128"),
+			priority_fee: (*context!(context!(context!(fee_history.reward)?.first())?.first())?)
+				.try_into()
+				.expect("Priority fee should fit u128"),
 		})
 	} else {
 		Err(anyhow::anyhow!("fee_history did not return `oldest_block` as a number"))

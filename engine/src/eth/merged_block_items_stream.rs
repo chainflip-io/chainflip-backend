@@ -307,8 +307,8 @@ mod merged_stream_tests {
 
 	use std::time::Duration;
 
-	use sp_core::U256;
 	use utilities::assert_future_panics;
+	use web3::types::U256;
 
 	use crate::{
 		eth::{

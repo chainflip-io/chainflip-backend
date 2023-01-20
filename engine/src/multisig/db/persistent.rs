@@ -98,12 +98,9 @@ impl PersistentKeyDB {
 		create_missing_db_and_cols_opts.create_missing_column_families(true);
 		create_missing_db_and_cols_opts.create_if_missing(true);
 
-		let cf_descriptors: Vec<ColumnFamilyDescriptor> =
-			cfs.into_iter().map(|(_, cf_desc)| cf_desc).collect();
-
 		// Open the db or create a new one if it doesn't exist
 		let db =
-			DB::open_cf_descriptors(&create_missing_db_and_cols_opts, &db_path, cf_descriptors)
+			DB::open_cf_descriptors(&create_missing_db_and_cols_opts, db_path, cfs.into_values())
 				.map_err(anyhow::Error::msg)
 				.context(format!("Failed to open database at: {}", db_path.display()))?;
 
@@ -142,7 +139,7 @@ impl PersistentKeyDB {
 	pub fn update_key<C: CryptoScheme>(
 		&self,
 		key_id: &KeyId,
-		keygen_result_info: &KeygenResultInfo<C::Point>,
+		keygen_result_info: &KeygenResultInfo<C>,
 	) {
 		let key_id_with_prefix =
 			[KEYGEN_DATA_PARTIAL_PREFIX, &(C::CHAIN_TAG.to_bytes())[..], &key_id.0.clone()[..]]
@@ -152,25 +149,32 @@ impl PersistentKeyDB {
 			.put_cf(
 				get_data_column_handle(&self.db),
 				key_id_with_prefix,
-				&bincode::serialize(keygen_result_info)
+				bincode::serialize(keygen_result_info)
 					.expect("Couldn't serialize keygen result info"),
 			)
 			.unwrap_or_else(|e| panic!("Failed to update key {}. Error: {}", &key_id, e));
 	}
 
-	pub fn load_keys<C: CryptoScheme>(&self) -> HashMap<KeyId, KeygenResultInfo<C::Point>> {
-		let keys: HashMap<KeyId, KeygenResultInfo<C::Point>> = self
+	pub fn load_keys<C: CryptoScheme>(&self) -> HashMap<KeyId, KeygenResultInfo<C>> {
+		let keys: HashMap<KeyId, KeygenResultInfo<C>> = self
 			.db
 			.prefix_iterator_cf(
 				get_data_column_handle(&self.db),
 				[&KEYGEN_DATA_PARTIAL_PREFIX[..], &(C::CHAIN_TAG.to_bytes())[..]].concat(),
 			)
+			.filter_map(|result| match result {
+				Ok(key) => Some(key),
+				Err(err) => {
+					slog::error!(self.logger, "Error getting prefix iterator: {err}");
+					None
+				},
+			})
 			.filter_map(|(key_id, key_info)| {
 				// Strip the prefix off the key_id
 				let key_id: KeyId = KeyId(key_id[PREFIX_SIZE..].into());
 
 				// deserialize the `KeygenResultInfo`
-				match bincode::deserialize::<KeygenResultInfo<C::Point>>(&key_info) {
+				match bincode::deserialize::<KeygenResultInfo<C>>(&key_info) {
 					Ok(keygen_result_info) => Some((key_id, keygen_result_info)),
 					Err(err) => {
 						slog::error!(
@@ -255,7 +259,7 @@ pub fn get_data_column_handle(db: &DB) -> &ColumnFamily {
 
 fn get_column_handle<'a>(db: &'a DB, column_name: &str) -> &'a ColumnFamily {
 	db.cf_handle(column_name)
-		.unwrap_or_else(|| panic!("Should get column family handle for {}", column_name))
+		.unwrap_or_else(|| panic!("Should get column family handle for {column_name}"))
 }
 
 /// Get the schema version from the metadata column in the db.
@@ -265,7 +269,7 @@ fn read_schema_version(db: &DB, logger: &slog::Logger) -> Result<u32> {
 		.map(|version| {
 			let version: [u8; 4] = version.try_into().expect("Version should be a u32");
 			let version = u32::from_be_bytes(version);
-			slog::info!(logger, "Found db_schema_version of {}", version);
+			slog::info!(logger, "Found db_schema_version of {version}");
 			version
 		})
 		.ok_or_else(|| anyhow!("Could not find db schema version"))
@@ -359,7 +363,7 @@ fn migrate_db_to_latest(
 			// Future migrations can be added here
 
 			// No migrations exist yet so just panic
-			panic!("Invalid migration from schema version {}", version);
+			panic!("Invalid migration from schema version {version}");
 		},
 	}
 }

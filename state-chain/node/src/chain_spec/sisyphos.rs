@@ -9,16 +9,16 @@ pub const NETWORK_NAME: &str = "Chainflip-Sisyphos";
 pub const CHAIN_TYPE: ChainType = ChainType::Live;
 
 pub const ENV: StateChainEnvironment = StateChainEnvironment {
-	flip_token_address: hex_literal::hex!("d992EC2354E8A8c12e92372049aa4A7310Bd95eD"),
+	flip_token_address: hex_literal::hex!("4144Bbc35B735296C90A55160Cff48621e7b6779"),
 	eth_usdc_address: hex_literal::hex!("07865c6e87b9f70255377e024ace6630c1eaa37f"),
-	stake_manager_address: hex_literal::hex!("81B0D1bD77307AFdafCC6A7B9B600C0197eC401f"),
-	key_manager_address: hex_literal::hex!("1F51addC19e618E4f8435653AE30Ac473235E59e"),
-	eth_vault_address: hex_literal::hex!("75de4859a35A3D3C2296a795Cb3E60bfb9145E0e"),
+	stake_manager_address: hex_literal::hex!("1Bea4fcD256F2aFBf6d43981bd0c3237AF4FD81D"),
+	key_manager_address: hex_literal::hex!("B78ED114f5bE3631B7401fE90A4c7db608531A34"),
+	eth_vault_address: hex_literal::hex!("b6FA6d60Df5D5017AE63808455f3c929F8068534"),
 	ethereum_chain_id: CHAIN_ID_GOERLI,
 	eth_init_agg_key: hex_literal::hex!(
-		"03670db192abdc18af6cbc42b8c09f3974fd6ba6fa5d2a957c279c91fece270690"
+		"0337ab51e19d7da20e7602a6727c5ad95866e27d9ba671e2e8f4e7ac3eed9549fe"
 	),
-	ethereum_deployment_block: 7826394u64,
+	ethereum_deployment_block: 8283363u64,
 	genesis_stake_amount: GENESIS_STAKE_AMOUNT,
 	min_stake: MIN_STAKE,
 	eth_block_safety_margin: eth::BLOCK_SAFETY_MARGIN as u32,

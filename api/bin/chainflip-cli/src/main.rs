@@ -1,17 +1,12 @@
 #![feature(absolute_path)]
 use std::path::PathBuf;
 
-use api::primitives::{AccountRole, ClaimAmount, Hash};
+use api::primitives::{AccountRole, Asset, ClaimAmount, Hash};
 use chainflip_api as api;
 use clap::Parser;
 use settings::{CLICommandLineOptions, CLISettings};
 
-#[cfg(feature = "ibiza")]
-use crate::settings::{LiquidityProviderSubcommands, RelayerSubcommands};
-#[cfg(feature = "ibiza")]
-use api::primitives::Asset;
-
-use crate::settings::{Claim, CliCommand::*};
+use crate::settings::{Claim, CliCommand::*, LiquidityProviderSubcommands, RelayerSubcommands};
 use anyhow::{anyhow, Result};
 use utilities::clean_eth_address;
 
@@ -25,7 +20,7 @@ async fn main() {
 	std::process::exit(match run_cli().await {
 		Ok(_) => 0,
 		Err(err) => {
-			eprintln!("Error: {:?}", err);
+			eprintln!("Error: {err:?}");
 			1
 		},
 	})
@@ -48,10 +43,8 @@ async fn run_cli() -> Result<()> {
 	);
 
 	match command_line_opts.cmd {
-		#[cfg(feature = "ibiza")]
 		Relayer(RelayerSubcommands::SwapIntent(params)) =>
 			swap_intent(&cli_settings.state_chain, params).await,
-		#[cfg(feature = "ibiza")]
 		LiquidityProvider(LiquidityProviderSubcommands::Deposit { asset }) =>
 			liquidity_deposit(&cli_settings.state_chain, asset).await,
 		Claim(Claim::Request { amount, eth_address, should_register_claim }) =>
@@ -68,7 +61,6 @@ async fn run_cli() -> Result<()> {
 	}
 }
 
-#[cfg(feature = "ibiza")]
 pub async fn swap_intent(
 	state_chain_settings: &settings::StateChain,
 	params: settings::SwapIntentParams,
@@ -79,12 +71,12 @@ pub async fn swap_intent(
 	let egress_address = match ForeignChain::from(params.egress_asset) {
 		ForeignChain::Ethereum => {
 			let addr = clean_eth_address(&params.egress_address)
-				.map_err(|err| anyhow!("Failed to parse address: {}", err))?;
+				.map_err(|err| anyhow!("Failed to parse address: {err}"))?;
 			ForeignChainAddress::Eth(addr)
 		},
 		ForeignChain::Polkadot => {
 			let addr = clean_dot_address(&params.egress_address)
-				.map_err(|err| anyhow!("Failed to parse address: {}", err))?;
+				.map_err(|err| anyhow!("Failed to parse address: {err}"))?;
 			ForeignChainAddress::Dot(addr)
 		},
 	};
@@ -97,17 +89,16 @@ pub async fn swap_intent(
 		params.relayer_commission,
 	)
 	.await?;
-	println!("Ingress address: {}", address);
+	println!("Ingress address: {address}");
 	Ok(())
 }
 
-#[cfg(feature = "ibiza")]
 pub async fn liquidity_deposit(
 	state_chain_settings: &settings::StateChain,
 	asset: Asset,
 ) -> Result<()> {
 	let address = api::liquidity_deposit(state_chain_settings, asset).await?;
-	println!("Ingress address: {}", address);
+	println!("Ingress address: {address}");
 	Ok(())
 }
 
@@ -117,11 +108,11 @@ pub async fn request_block(
 ) -> Result<()> {
 	match api::request_block(block_hash, state_chain_settings).await {
 		Ok(block) => {
-			println!("{:#?}", block);
+			println!("{block:#?}");
 			Ok(())
 		},
 		Err(err) => {
-			println!("Could not find block with block hash {:x?}", block_hash);
+			println!("Could not find block with block hash {block_hash:x?}");
 			Err(err)
 		},
 	}
@@ -129,8 +120,7 @@ pub async fn request_block(
 
 async fn register_account_role(role: AccountRole, settings: &settings::CLISettings) -> Result<()> {
 	println!(
-        "Submitting `register-account-role` with role: {:?}. This cannot be reversed for your account.",
-        role
+        "Submitting `register-account-role` with role: {role:?}. This cannot be reversed for your account.",
     );
 
 	if !confirm_submit() {
@@ -142,7 +132,7 @@ async fn register_account_role(role: AccountRole, settings: &settings::CLISettin
 
 pub async fn rotate_keys(state_chain_settings: &settings::StateChain) -> Result<()> {
 	let tx_hash = api::rotate_keys(state_chain_settings).await?;
-	println!("Session key rotated at tx {:#x}.", tx_hash);
+	println!("Session key rotated at tx {tx_hash:#x}.");
 
 	Ok(())
 }
@@ -207,7 +197,7 @@ async fn request_claim(
 
 	let tx_hash = api::request_claim(amount, eth_address, &settings.state_chain).await?;
 
-	println!("Your claim has transaction hash: `{:#x}`. Waiting for signed claim data...", tx_hash);
+	println!("Your claim has transaction hash: `{tx_hash:#x}`. Waiting for signed claim data...");
 
 	const POLL_LIMIT_BLOCKS: usize = 20;
 
@@ -220,7 +210,7 @@ async fn request_claim(
 					.await
 					.expect("Failed to register claim on ETH");
 
-				println!("Submitted claim to Ethereum successfully with tx_hash: {:#x}", tx_hash);
+				println!("Submitted claim to Ethereum successfully with tx_hash: {tx_hash:#x}");
 			} else {
 				println!(
 					"Your claim request has been successfully registered. Please proceed to the Staking UI to complete your claim."
@@ -287,8 +277,7 @@ fn generate_keys(path: Option<PathBuf>) -> Result<()> {
 
 	if node_key_file.exists() || signing_key_file.exists() || ethereum_key_file.exists() {
 		anyhow::bail!(
-			"Key file(s) already exist, please move/delete them manually from {}",
-			absolute_path_string
+			"Key file(s) already exist, please move/delete them manually from {absolute_path_string}"
 		);
 	}
 
@@ -305,9 +294,9 @@ fn generate_keys(path: Option<PathBuf>) -> Result<()> {
 	let (signing_key, signing_key_seed) = api::generate_signing_key(None)?;
 	fs::write(signing_key_file, hex::encode(signing_key.secret_key))?;
 	println!("🔑 Your Validator key is: 0x{}", hex::encode(signing_key.public_key));
-	println!("🌱 Your Validator key seed phrase is: {}", signing_key_seed);
+	println!("🌱 Your Validator key seed phrase is: {signing_key_seed}");
 
-	println!("Saved all secret keys to {}", absolute_path_string);
+	println!("Saved all secret keys to {absolute_path_string}");
 
 	Ok(())
 }

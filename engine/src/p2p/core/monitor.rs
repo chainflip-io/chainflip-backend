@@ -208,13 +208,11 @@ pub fn start_monitoring_thread(
 								// internal event loop, seemingly blocking all other sockets.
 								slog::trace!(
 									logger,
-									"Socket event: authentication success with {}",
-									account_id
+									"Socket event: authentication success with {account_id}",
 								);
 							},
 							unknown_event => panic!(
-								"P2P AUTH MONITOR: unexpected socket event: {:?}",
-								unknown_event
+								"P2P AUTH MONITOR: unexpected socket event: {unknown_event:?}",
 							),
 						}
 					},

@@ -16,8 +16,7 @@ use std::{marker::PhantomData, sync::Arc};
 #[allow(unused)]
 use state_chain_runtime::{Asset, AssetAmount, ExchangeRate};
 
-#[cfg(feature = "ibiza")]
-use jsonrpsee::types::error::ErrorCode;
+use cf_primitives::Tick;
 
 #[derive(Serialize, Deserialize)]
 pub struct RpcAccountInfo {
@@ -429,16 +428,13 @@ where
 	}
 }
 
-#[cfg(feature = "ibiza")]
 use pallet_cf_pools_runtime_api::PoolsApi;
 
-#[cfg(feature = "ibiza")]
 pub struct PoolsRpc<C, B> {
 	pub client: Arc<C>,
 	pub _phantom: PhantomData<B>,
 }
 
-#[cfg(feature = "ibiza")]
 impl<C, B> PoolsRpc<C, B>
 where
 	B: sp_runtime::traits::Block<Hash = state_chain_runtime::Hash>,
@@ -450,42 +446,30 @@ where
 	}
 }
 
-#[cfg(feature = "ibiza")]
 #[rpc(server, client, namespace = "cf")]
 pub trait PoolsApi {
-	#[method(name = "swap_rate")]
-	fn cf_swap_rate(
+	#[method(name = "pool_tick_price")]
+	fn cf_pool_tick_price(
 		&self,
-		input_asset: Asset,
-		output_asset: Asset,
-		input_amount: NumberOrHex,
+		asset: Asset,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<ExchangeRate>;
+	) -> RpcResult<Option<Tick>>;
 }
 
-#[cfg(feature = "ibiza")]
 impl<C, B> PoolsApiServer for PoolsRpc<C, B>
 where
 	B: sp_runtime::traits::Block<Hash = state_chain_runtime::Hash>,
 	C: sp_api::ProvideRuntimeApi<B> + Send + Sync + 'static + HeaderBackend<B>,
 	C::Api: pallet_cf_pools_runtime_api::PoolsApi<B>,
 {
-	fn cf_swap_rate(
+	fn cf_pool_tick_price(
 		&self,
-		input_asset: Asset,
-		output_asset: Asset,
-		input_amount: NumberOrHex,
+		asset: Asset,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<ExchangeRate> {
+	) -> RpcResult<Option<Tick>> {
 		self.client
 			.runtime_api()
-			.cf_swap_rate(
-				&self.query_block_id(at),
-				input_asset,
-				output_asset,
-				u128::try_from(input_amount)
-					.map_err(|_| CallError::Custom(ErrorCode::InvalidParams.into()))?,
-			)
+			.cf_pool_tick_price(&self.query_block_id(at), asset)
 			.map_err(to_rpc_error)
 	}
 }

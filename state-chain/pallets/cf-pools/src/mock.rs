@@ -1,11 +1,12 @@
 use crate::{self as pallet_cf_pools};
+use cf_primitives::{AccountId, AuthorityCount};
 use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
 	Chainflip,
 };
-use frame_support::{parameter_types, traits::ConstU16};
+use frame_support::parameter_types;
 use frame_system as system;
-use sp_core::H256;
+use sp_core::{ConstU16, H256};
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
@@ -14,7 +15,10 @@ use sp_runtime::{
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
-type AccountId = u64;
+
+cf_traits::impl_mock_epoch_info!(AccountId, u128, u32, AuthorityCount);
+
+pub const LP: [u8; 32] = [0u8; 32];
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
@@ -24,7 +28,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system,
-		Pools: pallet_cf_pools,
+		LiquidityPools: pallet_cf_pools,
 	}
 );
 
@@ -38,8 +42,8 @@ impl system::Config for Test {
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
-	type Origin = Origin;
-	type Call = Call;
+	type RuntimeOrigin = RuntimeOrigin;
+	type RuntimeCall = RuntimeCall;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
@@ -47,7 +51,7 @@ impl system::Config for Test {
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = BlockHashCount;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -62,23 +66,25 @@ impl system::Config for Test {
 
 impl Chainflip for Test {
 	type KeyId = Vec<u8>;
-	type ValidatorId = u64;
+	type ValidatorId = AccountId;
 	type Amount = u128;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
 	type EnsureWitnessedAtCurrentEpoch = NeverFailingOriginCheck<Self>;
-	type EpochInfo = cf_traits::mocks::epoch_info::MockEpochInfo;
+	type EpochInfo = MockEpochInfo;
 	type SystemState = MockSystemStateInfo;
 }
 
 impl pallet_cf_pools::Config for Test {
-	type NetworkFee = ConstU16<1000>;
+	type RuntimeEvent = RuntimeEvent;
+	type NetworkFee = ConstU16<0>;
+	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 }
 
 #[allow(unused)]
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let config = GenesisConfig { system: Default::default() };
+	let config = GenesisConfig { system: Default::default(), liquidity_pools: Default::default() };
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 

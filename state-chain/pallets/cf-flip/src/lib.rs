@@ -29,7 +29,9 @@ use frame_support::{
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use sp_runtime::{
-	traits::{AtLeast32BitUnsigned, MaybeSerializeDeserialize, Saturating, UniqueSaturatedInto},
+	traits::{
+		AtLeast32BitUnsigned, MaybeSerializeDeserialize, Saturating, UniqueSaturatedInto, Zero,
+	},
 	DispatchError, Permill, RuntimeDebug,
 };
 use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
@@ -49,10 +51,10 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Implementation of EnsureOrigin trait for governance
-		type EnsureGovernance: EnsureOrigin<Self::Origin>;
+		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The balance of an account.
 		type Balance: Member
@@ -80,7 +82,7 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 
 		/// Handles the access of governance extrinsic
-		type WaivedFees: WaivedFees<AccountId = Self::AccountId, Call = Self::Call>;
+		type WaivedFees: WaivedFees<AccountId = Self::AccountId, RuntimeCall = Self::RuntimeCall>;
 	}
 
 	#[pallet::pallet]
@@ -154,10 +156,11 @@ pub mod pallet {
 		/// Reap any accounts that are below `T::ExistentialDeposit`, and burn the dust.
 		fn on_idle(_block_number: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
 			let max_accounts_to_reap = remaining_weight
-				.checked_div(T::WeightInfo::reap_one_account())
+				.ref_time()
+				.checked_div(T::WeightInfo::reap_one_account().ref_time())
 				.unwrap_or_default();
 			if max_accounts_to_reap == 0 {
-				return 0
+				return Weight::zero()
 			}
 
 			let mut number_of_accounts_reaped = 0u64;
@@ -170,7 +173,7 @@ pub mod pallet {
 					let _reap_result = frame_system::Provider::<T>::killed(&account_id);
 					number_of_accounts_reaped += 1u64;
 				});
-			number_of_accounts_reaped.saturating_mul(T::WeightInfo::reap_one_account())
+			T::WeightInfo::reap_one_account().saturating_mul(number_of_accounts_reaped)
 		}
 	}
 
@@ -580,7 +583,7 @@ where
 	fn slash(account_id: &Self::AccountId, blocks: Self::BlockNumber) {
 		let account = Account::<T>::get(account_id);
 		let slash_amount = (SlashingRate::<T>::get() * account.bond).saturating_mul(blocks.into());
-		if account.can_be_slashed(slash_amount) {
+		if !slash_amount.is_zero() && account.can_be_slashed(slash_amount) {
 			Pallet::<T>::settle(account_id, Pallet::<T>::burn(slash_amount).into());
 			Pallet::<T>::deposit_event(Event::<T>::SlashingPerformed {
 				who: account_id.clone(),

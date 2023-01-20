@@ -39,12 +39,12 @@ pub mod pallet {
 	pub struct Pallet<T>(_);
 
 	use frame_system::pallet_prelude::*;
-	use sp_std::vec::Vec;
+	use sp_std::collections::btree_set::BTreeSet;
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config: Chainflip {
 		/// The event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 		/// Burns the proposal fee from the accounts.
 		type FeePayment: FeePayment<Amount = Self::Amount, AccountId = Self::AccountId>;
 		/// The chain instance.
@@ -81,7 +81,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn backers)]
 	pub type Backers<T: Config> =
-		StorageMap<_, Twox64Concat, Proposal<T>, Vec<T::AccountId>, ValueQuery>;
+		StorageMap<_, Twox64Concat, Proposal<T>, BTreeSet<T::AccountId>, ValueQuery>;
 
 	/// The Government key proposal currently awaiting enactment, if any. Indexed by the block
 	/// number we will attempt to enact this update.
@@ -127,7 +127,7 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
-			let mut weight = 0;
+			let mut weight = Weight::zero();
 			if let Some(proposal) = Proposals::<T>::take(current_block) {
 				weight = T::WeightInfo::on_initialize_resolve_votes(
 					Self::resolve_vote(proposal).try_into().unwrap(),
@@ -142,7 +142,7 @@ pub mod pallet {
 						proposal: Proposal::<T>::SetGovernanceKey(gov_key),
 					});
 					GovKeyUpdateAwaitingEnactment::<T>::kill();
-					weight += T::WeightInfo::on_initialize_execute_proposal();
+					weight.saturating_accrue(T::WeightInfo::on_initialize_execute_proposal());
 				}
 			}
 			if let Some((enactment_block, comm_key)) = CommKeyUpdateAwaitingEnactment::<T>::get() {
@@ -154,7 +154,7 @@ pub mod pallet {
 						proposal: Proposal::<T>::SetCommunityKey(comm_key),
 					});
 					CommKeyUpdateAwaitingEnactment::<T>::kill();
-					weight += T::WeightInfo::on_initialize_execute_proposal();
+					weight.saturating_accrue(T::WeightInfo::on_initialize_execute_proposal());
 				}
 			}
 			weight
@@ -185,7 +185,7 @@ pub mod pallet {
 				<frame_system::Pallet<T>>::block_number() + T::VotingPeriod::get(),
 				proposal.clone(),
 			);
-			Backers::<T>::insert(proposal.clone(), vec![proposer]);
+			Backers::<T>::insert(proposal.clone(), BTreeSet::from([proposer]));
 			Self::deposit_event(Event::<T>::ProposalSubmitted { proposal });
 			Ok(().into())
 		}
@@ -205,10 +205,9 @@ pub mod pallet {
 			let backer = ensure_signed(origin)?;
 			Backers::<T>::try_mutate_exists(proposal, |maybe_backers| match maybe_backers {
 				Some(backers) => {
-					if backers.contains(&backer) {
+					if !backers.insert(backer) {
 						return Err(Error::<T>::AlreadyBacked)
 					}
-					backers.push(backer);
 					Ok(())
 				},
 				None => Err(Error::<T>::ProposalDoesntExist),

@@ -6,18 +6,15 @@ use crate::multisig::{
 	client::{
 		common::{BroadcastFailureReason, KeygenFailureReason, KeygenStageName},
 		helpers::{
-			gen_invalid_keygen_comm1, get_invalid_hash_comm, new_nodes, run_keygen,
-			run_keygen_with_err_on_high_pubkey, run_stages, standard_signing, KeygenCeremonyRunner,
-			SigningCeremonyRunner, ACCOUNT_IDS, DEFAULT_KEYGEN_CEREMONY_ID,
-			DEFAULT_SIGNING_CEREMONY_ID,
+			gen_invalid_keygen_comm1, get_invalid_hash_comm, new_nodes, run_keygen, run_stages,
+			standard_signing, KeygenCeremonyRunner, SigningCeremonyRunner, ACCOUNT_IDS,
+			DEFAULT_KEYGEN_CEREMONY_ID, DEFAULT_SIGNING_CEREMONY_ID,
 		},
-		keygen::{
-			self, generate_key_data_until_compatible, Complaints6, VerifyComplaints7,
-			VerifyHashComm2,
-		},
+		keygen::{self, Complaints6, VerifyComplaints7, VerifyHashComm2},
 		utils::PartyIdxMapping,
 	},
 	crypto::Rng,
+	CryptoScheme,
 };
 
 use crate::multisig::crypto::eth::Point;
@@ -454,22 +451,6 @@ async fn should_report_on_invalid_complaints4() {
 		.await;
 }
 
-// Keygen aborts if the key is not compatible with the contract at VerifyCommitmentsBroadcast2
-#[tokio::test]
-async fn should_handle_not_compatible_keygen() {
-	let mut counter = 0;
-	loop {
-		if let Err(()) = run_keygen_with_err_on_high_pubkey(ACCOUNT_IDS.clone()).await {
-			break
-		} else {
-			// We have a 50/50 chance of failing each time, so we should have failed keygen within
-			// 40 tries But it has a 0.0000000001% chance of failing this test as a false positive.
-			counter += 1;
-			assert!(counter < 40, "Should have failed keygen with high pub key by now")
-		}
-	}
-}
-
 mod timeout {
 
 	use super::*;
@@ -886,13 +867,12 @@ mod timeout {
 
 #[tokio::test]
 async fn genesis_keys_can_sign() {
-	use crate::multisig::{crypto::eth::EthSigning, tests::fixtures::SIGNING_PAYLOAD};
+	use crate::multisig::crypto::eth::EthSigning;
 
 	let account_ids: BTreeSet<_> = [1, 2, 3, 4].iter().map(|i| AccountId::new([*i; 32])).collect();
 
-	let rng = Rng::from_entropy();
-	let (key_id, key_data) =
-		generate_key_data_until_compatible::<EthSigning>(account_ids.clone(), 20, rng);
+	let mut rng = Rng::from_entropy();
+	let (key_id, key_data) = keygen::generate_key_data::<EthSigning>(account_ids.clone(), &mut rng);
 
 	let (mut signing_ceremony, _non_signing_nodes) =
 		SigningCeremonyRunner::<EthSigning>::new_with_threshold_subset_of_signers(
@@ -900,7 +880,32 @@ async fn genesis_keys_can_sign() {
 			DEFAULT_SIGNING_CEREMONY_ID,
 			key_id.clone(),
 			key_data.clone(),
-			SIGNING_PAYLOAD.clone(),
+			EthSigning::signing_payload_for_test(),
+			Rng::from_entropy(),
+		);
+	standard_signing(&mut signing_ceremony).await;
+}
+
+#[tokio::test]
+// Test that a key that was initially incompatible with Eth contract
+// was correctly turned into a compatible one, which can be used for
+// multiparty signing.
+async fn initially_incompatible_keys_can_sign() {
+	use crate::multisig::crypto::eth::EthSigning;
+
+	let account_ids: BTreeSet<_> = [1, 2, 3, 4].iter().map(|i| AccountId::new([*i; 32])).collect();
+
+	let mut rng = Rng::from_entropy();
+	let (key_id, key_data) =
+		keygen::generate_key_data_with_initial_incompatibility(account_ids.clone(), &mut rng);
+
+	let (mut signing_ceremony, _non_signing_nodes) =
+		SigningCeremonyRunner::<EthSigning>::new_with_threshold_subset_of_signers(
+			new_nodes(account_ids),
+			DEFAULT_SIGNING_CEREMONY_ID,
+			key_id.clone(),
+			key_data.clone(),
+			EthSigning::signing_payload_for_test(),
 			Rng::from_entropy(),
 		);
 	standard_signing(&mut signing_ceremony).await;

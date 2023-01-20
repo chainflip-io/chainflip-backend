@@ -10,7 +10,7 @@ pub const SIGNING_CEREMONY_FAILED: &str = "E2";
 pub const KEYGEN_REQUEST_IGNORED: &str = "E3";
 pub const KEYGEN_REQUEST_EXPIRED: &str = "E4";
 pub const KEYGEN_CEREMONY_FAILED: &str = "E5";
-pub const KEYGEN_REJECTED_INCOMPATIBLE: &str = "E6";
+// pub const KEYGEN_REJECTED_INCOMPATIBLE: &str = "E6"; // No longer used
 // pub const CEREMONY_REQUEST_IGNORED: &str = "E7"; // No longer used
 pub const UNAUTHORIZED_SIGNING_ABORTED: &str = "E8";
 pub const UNAUTHORIZED_KEYGEN_ABORTED: &str = "E9";
@@ -82,7 +82,7 @@ pub mod utils {
 	impl Serializer for PrintlnSerializer {
 		fn emit_arguments(&mut self, key: Key, val: &fmt::Arguments) -> Result<(), slog::Error> {
 			if key != COMPONENT_KEY {
-				println!("{} {} = {}", KV_LIST_INDENT, key, val);
+				println!("{KV_LIST_INDENT} {key} = {val}");
 			}
 			Ok(())
 		}

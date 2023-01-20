@@ -1,15 +1,20 @@
+use crate::AssetAmount;
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
+pub use sp_core::U256;
+use sp_std::ops::{Index, IndexMut, Not};
 
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 
-/// The id type for range orders.
-pub type PositionId = u64;
-
-/// The type used for measuring price ticks. Note Uniswap uses i24 but this is not supported in
-/// rust.
+/// Representation of a price: p = 1.0001^Tick
 pub type Tick = i32;
+
+/// Representation of Liquidity in an exchange pool.
+pub type Liquidity = u128;
+
+/// Amount used to calculate exchange pool
+pub type AmountU256 = U256;
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
@@ -18,43 +23,132 @@ pub struct AmmRange {
 	pub upper: Tick,
 }
 
+impl AmmRange {
+	pub fn new(lower: Tick, upper: Tick) -> Self {
+		Self { lower, upper }
+	}
+}
+
 /// Denotes the two assets contained in a pool.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub enum PoolAsset {
+pub enum PoolSide {
 	Asset0,
 	Asset1,
 }
 
-/// Represents the types of order that an LP can submit to the AMM.
-#[derive(Copy, Clone, Debug, TypeInfo, PartialEq, Eq, Encode, Decode, MaxEncodedLen)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub enum TradingPosition<Volume> {
-	/// Standard Uniswap V3 style 'sticky' range order position. When executed, the converted
-	/// amount remains in the pool.
-	///
-	/// The volumes must be consistent with the specified range.
-	ClassicV3 { range: AmmRange, volume_0: Volume, volume_1: Volume },
-	/// A 'volatile' single-sided position. When executed, the converted amount is returned to the
-	/// LP's free balance.
-	VolatileV3 { range: AmmRange, side: PoolAsset, volume: Volume },
+impl Not for PoolSide {
+	type Output = Self;
+
+	fn not(self) -> Self::Output {
+		match self {
+			PoolSide::Asset0 => PoolSide::Asset1,
+			PoolSide::Asset1 => PoolSide::Asset0,
+		}
+	}
 }
 
-impl<Volume: Default + Copy> TradingPosition<Volume> {
-	pub fn volume_0(&self) -> Volume {
-		match self {
-			TradingPosition::ClassicV3 { volume_0, .. } => *volume_0,
-			TradingPosition::VolatileV3 { side, volume, .. } if *side == PoolAsset::Asset0 =>
-				*volume,
-			_ => Default::default(),
+/// A custom type that contains two `Amount`s, one for each side of an exchange pool.
+#[derive(Copy, Clone, Default, Debug, TypeInfo, PartialEq, Eq, Encode, Decode, MaxEncodedLen)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct PoolAssetMap<Amount> {
+	asset_0: Amount,
+	asset_1: Amount,
+}
+
+impl<Amount: Copy> PoolAssetMap<Amount> {
+	pub fn new(asset_0: Amount, asset_1: Amount) -> Self {
+		Self { asset_0, asset_1 }
+	}
+
+	/// Creates a new PooAssetMap from a function f
+	pub fn new_from_fn(f: impl Fn(PoolSide) -> Amount) -> Self {
+		Self { asset_0: f(PoolSide::Asset0), asset_1: f(PoolSide::Asset1) }
+	}
+
+	pub fn mutate(&mut self, mut f: impl FnMut(PoolSide, &mut Amount)) {
+		f(PoolSide::Asset0, &mut self.asset_0);
+		f(PoolSide::Asset1, &mut self.asset_1);
+	}
+}
+
+impl<Amount> Index<PoolSide> for PoolAssetMap<Amount> {
+	type Output = Amount;
+	fn index(&self, side: PoolSide) -> &Amount {
+		match side {
+			PoolSide::Asset0 => &self.asset_0,
+			PoolSide::Asset1 => &self.asset_1,
 		}
 	}
-	pub fn volume_1(&self) -> Volume {
-		match self {
-			TradingPosition::ClassicV3 { volume_1, .. } => *volume_1,
-			TradingPosition::VolatileV3 { side, volume, .. } if *side == PoolAsset::Asset1 =>
-				*volume,
-			_ => Default::default(),
+}
+
+impl<Amount> IndexMut<PoolSide> for PoolAssetMap<Amount> {
+	fn index_mut(&mut self, side: PoolSide) -> &mut Amount {
+		match side {
+			PoolSide::Asset0 => &mut self.asset_0,
+			PoolSide::Asset1 => &mut self.asset_1,
 		}
 	}
+}
+
+impl From<PoolAssetMap<u128>> for PoolAssetMap<U256> {
+	fn from(asset_map: PoolAssetMap<u128>) -> Self {
+		Self::new(asset_map[PoolSide::Asset0].into(), asset_map[PoolSide::Asset1].into())
+	}
+}
+
+/// Attempts to cast U256s to u128s, failing on overflow.
+impl TryFrom<PoolAssetMap<U256>> for PoolAssetMap<u128> {
+	type Error = <u128 as TryFrom<U256>>::Error;
+
+	fn try_from(value: PoolAssetMap<U256>) -> Result<Self, Self::Error> {
+		Ok(Self::new(value.asset_0.try_into()?, value.asset_1.try_into()?))
+	}
+}
+
+// Simple struct used to represent an minted Liquidity position.
+#[derive(Copy, Clone, Default, Eq, PartialEq, Debug)]
+pub struct MintedLiquidity {
+	pub range: AmmRange,
+	pub liquidity: Liquidity,
+}
+
+#[derive(Copy, Clone, Default, Eq, PartialEq, Debug)]
+pub struct MintResult {
+	pub assets_spent: PoolAssetMap<AssetAmount>,
+	pub fees_returned: PoolAssetMap<AssetAmount>,
+}
+
+impl MintResult {
+	pub fn new(
+		assets_spent: PoolAssetMap<AssetAmount>,
+		fees_returned: PoolAssetMap<AssetAmount>,
+	) -> Self {
+		Self { assets_spent, fees_returned }
+	}
+}
+
+#[derive(Copy, Clone, Default, Eq, PartialEq, Debug)]
+pub struct BurnResult {
+	pub assets_returned: PoolAssetMap<AssetAmount>,
+	pub fees_accrued: PoolAssetMap<AssetAmount>,
+}
+
+impl BurnResult {
+	pub fn new(
+		assets_returned: PoolAssetMap<AssetAmount>,
+		fees_accrued: PoolAssetMap<AssetAmount>,
+	) -> Self {
+		Self { assets_returned, fees_accrued }
+	}
+}
+
+#[derive(Debug)]
+pub enum MintError {
+	/// Invalid Tick range
+	InvalidTickRange,
+	/// One of the start/end ticks of the range reached its maximum gross liquidity
+	MaximumGrossLiquidity,
+	/// The user does not have sufficient balance to pay for the mint.
+	InsufficientBalance,
 }

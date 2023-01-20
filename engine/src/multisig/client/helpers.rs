@@ -12,7 +12,7 @@ use itertools::{Either, Itertools};
 
 use async_trait::async_trait;
 
-use rand_legacy::{FromEntropy, RngCore, SeedableRng};
+use rand_legacy::{RngCore, SeedableRng};
 
 use slog::Logger;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -28,15 +28,12 @@ use crate::{
 				KeygenCeremony, SigningCeremony,
 			},
 			ceremony_runner::CeremonyRunner,
-			common::{
-				broadcast::BroadcastStage, CeremonyCommon, CeremonyFailureReason,
-				KeygenFailureReason,
-			},
+			common::{broadcast::BroadcastStage, CeremonyCommon, CeremonyFailureReason},
 			keygen::{generate_key_data, HashComm1, HashContext, VerifyHashCommitmentsBroadcast2},
 			signing, KeygenResultInfo, PartyIdxMapping, ThresholdParameters,
 		},
-		crypto::{ECPoint, Rng, Verifiable},
-		CryptoScheme, KeyId, SigningPayload,
+		crypto::{ECPoint, Rng},
+		CryptoScheme, KeyId,
 	},
 	p2p::OutgoingMultisigStageMessages,
 };
@@ -51,7 +48,6 @@ use crate::{
 		// This determines which crypto scheme will be used in tests
 		// (we make arbitrary choice to use eth)
 		crypto::eth::{EthSigning, Point},
-		tests::fixtures::SIGNING_PAYLOAD,
 	},
 	testing::expect_recv_with_timeout,
 };
@@ -89,11 +85,10 @@ pub struct Node<C: CeremonyTrait> {
 	/// If any of the methods we called on the ceremony runner returned the outcome,
 	/// it will be stored here
 	outcome: Option<CeremonyOutcome<C>>,
-	allowing_high_pubkey: bool,
 	logger: slog::Logger,
 }
 
-fn new_node<C: CeremonyTrait>(account_id: AccountId, allowing_high_pubkey: bool) -> Node<C> {
+fn new_node<C: CeremonyTrait>(account_id: AccountId) -> Node<C> {
 	let logger = new_test_logger().new(slog::o!("account_id" => account_id.to_string()));
 
 	let (outgoing_p2p_message_sender, outgoing_p2p_message_receiver) =
@@ -106,7 +101,6 @@ fn new_node<C: CeremonyTrait>(account_id: AccountId, allowing_high_pubkey: bool)
 		own_account_id: account_id,
 		ceremony_runner,
 		outgoing_p2p_message_receiver,
-		allowing_high_pubkey,
 		outcome: None,
 		logger,
 	}
@@ -117,8 +111,8 @@ pub struct SigningCeremonyDetails<C: CryptoScheme> {
 	pub rng: Rng,
 	pub ceremony_id: CeremonyId,
 	pub signers: BTreeSet<AccountId>,
-	pub payload: SigningPayload,
-	pub keygen_result_info: KeygenResultInfo<C::Point>,
+	pub payload: C::SigningPayload,
+	pub keygen_result_info: KeygenResultInfo<C>,
 }
 
 pub struct KeygenCeremonyDetails {
@@ -190,7 +184,6 @@ impl Node<KeygenCeremonyEth> {
 			signers,
 			&self.outgoing_p2p_message_sender,
 			rng,
-			self.allowing_high_pubkey,
 			&self.logger,
 		)
 		.expect("invalid request");
@@ -207,19 +200,7 @@ pub fn new_nodes<AccountIds: IntoIterator<Item = AccountId>, C: CeremonyTrait>(
 ) -> HashMap<AccountId, Node<C>> {
 	account_ids
 		.into_iter()
-		.map(|account_id| (account_id.clone(), new_node(account_id, true)))
-		.collect()
-}
-
-pub fn new_nodes_without_allow_high_pubkey<
-	AccountIds: IntoIterator<Item = AccountId>,
-	C: CeremonyTrait,
->(
-	account_ids: AccountIds,
-) -> HashMap<AccountId, Node<C>> {
-	account_ids
-		.into_iter()
-		.map(|account_id| (account_id.clone(), new_node(account_id, false)))
+		.map(|account_id| (account_id.clone(), new_node(account_id)))
 		.collect()
 }
 
@@ -267,8 +248,8 @@ where
 
 	pub fn select_account_ids<const COUNT: usize>(&self) -> [AccountId; COUNT] {
 		self.nodes
-			.iter()
-			.map(|(account_id, _)| account_id.clone())
+			.keys()
+			.cloned()
 			.sorted()
 			.take(COUNT)
 			.collect::<Vec<_>>()
@@ -339,8 +320,7 @@ where
 
 			assert_eq!(
 				ceremony_id, self_ceremony_id,
-				"Client output p2p message for ceremony_id {}, expected {}",
-				ceremony_id, self_ceremony_id
+				"Client output p2p message for ceremony_id {ceremony_id}, expected {self_ceremony_id}"
 			);
 
 			let ceremony_data =
@@ -483,8 +463,7 @@ where
 			assert_eq!(
 				failure_reasons.len(),
 				1,
-				"The ceremony failure reason was not the same for all nodes: {:?}",
-				failure_reasons
+				"The ceremony failure reason was not the same for all nodes: {failure_reasons:?}",
 			);
 			Some(Err((
 				all_reported_parties.into_iter().next().unwrap(),
@@ -573,7 +552,7 @@ impl CeremonyRunnerStrategy for KeygenCeremonyRunner {
 		&self,
 		outputs: HashMap<AccountId, <Self::CeremonyType as CeremonyTrait>::Output>,
 	) -> Self::CheckedOutput {
-		let (_, public_key) = all_same(outputs.iter().map(|(_, keygen_result_info)| {
+		let (_, public_key) = all_same(outputs.values().map(|keygen_result_info| {
 			(keygen_result_info.params, keygen_result_info.key.get_public_key().get_element())
 		}))
 		.expect("Generated keys don't match");
@@ -622,8 +601,8 @@ impl KeygenCeremonyRunner {
 
 pub struct SigningCeremonyRunnerData<C: CryptoScheme> {
 	pub key_id: KeyId,
-	pub key_data: HashMap<AccountId, KeygenResultInfo<C::Point>>,
-	pub payload: SigningPayload,
+	pub key_data: HashMap<AccountId, KeygenResultInfo<C>>,
+	pub payload: C::SigningPayload,
 }
 pub type SigningCeremonyRunner<C> =
 	CeremonyTestRunner<SigningCeremonyRunnerData<C>, SigningCeremony<C>>;
@@ -638,12 +617,14 @@ impl<C: CryptoScheme> CeremonyRunnerStrategy for SigningCeremonyRunner<C> {
 		&self,
 		outputs: HashMap<AccountId, <Self::CeremonyType as CeremonyTrait>::Output>,
 	) -> Self::CheckedOutput {
-		let signature = all_same(outputs.into_iter().map(|(_, signature)| signature))
-			.expect("Signatures don't match");
+		let signature = all_same(outputs.into_values()).expect("Signatures don't match");
 
-		signature
-			.verify(&self.ceremony_runner_data.key_id, &SIGNING_PAYLOAD)
-			.expect("Should be valid signature");
+		C::verify_signature(
+			&signature,
+			&self.ceremony_runner_data.key_id,
+			&C::signing_payload_for_test(),
+		)
+		.expect("Should be valid signature");
 
 		signature
 	}
@@ -664,8 +645,8 @@ impl<C: CryptoScheme> SigningCeremonyRunner<C> {
 		nodes: HashMap<AccountId, Node<SigningCeremony<C>>>,
 		ceremony_id: CeremonyId,
 		key_id: KeyId,
-		key_data: HashMap<AccountId, KeygenResultInfo<C::Point>>,
-		payload: SigningPayload,
+		key_data: HashMap<AccountId, KeygenResultInfo<C>>,
+		payload: C::SigningPayload,
 		rng: Rng,
 	) -> Self {
 		Self::inner_new(
@@ -680,8 +661,8 @@ impl<C: CryptoScheme> SigningCeremonyRunner<C> {
 		nodes: HashMap<AccountId, Node<SigningCeremony<C>>>,
 		ceremony_id: CeremonyId,
 		key_id: KeyId,
-		key_data: HashMap<AccountId, KeygenResultInfo<C::Point>>,
-		payload: SigningPayload,
+		key_data: HashMap<AccountId, KeygenResultInfo<C>>,
+		payload: C::SigningPayload,
 		rng: Rng,
 	) -> (Self, HashMap<AccountId, Node<SigningCeremony<C>>>) {
 		let nodes_len = nodes.len();
@@ -717,16 +698,14 @@ pub async fn new_signing_ceremony<C: CryptoScheme>(
 	let (key_id, key_data) = generate_key_data::<C>(
 		BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
 		&mut Rng::from_seed(DEFAULT_KEYGEN_SEED),
-		true,
-	)
-	.expect("Should generate key for test");
+	);
 
 	SigningCeremonyRunner::new_with_threshold_subset_of_signers(
 		new_nodes(ACCOUNT_IDS.clone()),
 		DEFAULT_SIGNING_CEREMONY_ID,
 		key_id,
 		key_data,
-		SIGNING_PAYLOAD.clone(),
+		C::signing_payload_for_test(),
 		Rng::from_seed(DEFAULT_SIGNING_SEED),
 	)
 }
@@ -748,7 +727,7 @@ pub async fn standard_signing<C: CryptoScheme>(
 
 pub async fn standard_keygen(
 	mut keygen_ceremony: KeygenCeremonyRunner,
-) -> (KeyId, HashMap<AccountId, KeygenResultInfo<Point>>) {
+) -> (KeyId, HashMap<AccountId, KeygenResultInfo<EthSigning>>) {
 	let stage_1_messages = keygen_ceremony.request().await;
 	let messages = run_stages!(
 		keygen_ceremony,
@@ -767,59 +746,10 @@ pub async fn standard_keygen(
 pub async fn run_keygen(
 	nodes: HashMap<AccountId, Node<KeygenCeremonyEth>>,
 	ceremony_id: CeremonyId,
-) -> (KeyId, HashMap<AccountId, KeygenResultInfo<Point>>) {
+) -> (KeyId, HashMap<AccountId, KeygenResultInfo<EthSigning>>) {
 	let keygen_ceremony =
 		KeygenCeremonyRunner::new(nodes, ceremony_id, Rng::from_seed(DEFAULT_KEYGEN_SEED));
 	standard_keygen(keygen_ceremony).await
-}
-
-pub async fn run_keygen_with_err_on_high_pubkey<AccountIds: IntoIterator<Item = AccountId>>(
-	account_ids: AccountIds,
-) -> Result<
-	(
-		KeyId,
-		HashMap<AccountId, KeygenResultInfo<Point>>,
-		HashMap<AccountId, Node<KeygenCeremonyEth>>,
-	),
-	(),
-> {
-	let mut keygen_ceremony = KeygenCeremonyRunner::new(
-		new_nodes_without_allow_high_pubkey(account_ids),
-		DEFAULT_KEYGEN_CEREMONY_ID,
-		Rng::from_entropy(),
-	);
-
-	let stage_1_messages = keygen_ceremony.request().await;
-	let stage_4_messages = run_stages!(
-		keygen_ceremony,
-		stage_1_messages,
-		keygen::VerifyHashComm2,
-		keygen::CoeffComm3<Point>,
-		keygen::VerifyCoeffComm4<Point>
-	);
-	keygen_ceremony.distribute_messages(stage_4_messages).await;
-	match keygen_ceremony
-		.try_complete_with_error(&[], KeygenFailureReason::KeyNotCompatible)
-		.await
-	{
-		Some(_) => Err(()),
-		None => {
-			let stage_5_messages = keygen_ceremony
-				.gather_outgoing_messages::<keygen::SecretShare5<Point>, _>()
-				.await;
-			let stage_7_messages = run_stages!(
-				keygen_ceremony,
-				stage_5_messages,
-				keygen::Complaints6,
-				keygen::VerifyComplaints7
-			);
-			keygen_ceremony.distribute_messages(stage_7_messages).await;
-
-			let (key_id, key_data) = keygen_ceremony.complete().await;
-
-			Ok((key_id, key_data, keygen_ceremony.nodes))
-		},
-	}
 }
 
 /// Generate an invalid local sig for stage3
@@ -850,7 +780,7 @@ pub fn gen_invalid_keygen_comm1<P: ECPoint>(
 		0,
 		ThresholdParameters {
 			share_count,
-			threshold: threshold_from_share_count(share_count as u32) as AuthorityCount,
+			threshold: threshold_from_share_count(share_count) as AuthorityCount,
 		},
 	);
 	fake_comm1
@@ -880,7 +810,6 @@ pub fn gen_invalid_keygen_stage_2_state<P: ECPoint>(
 	let commitment = gen_invalid_keygen_comm1(&mut rng, account_ids.len() as u32);
 	let processor = VerifyHashCommitmentsBroadcast2::new(
 		common.clone(),
-		true,
 		commitment,
 		account_ids.iter().map(|_| (0, None)).collect(),
 		keygen::OutgoingShares(BTreeMap::new()),
@@ -894,11 +823,8 @@ pub fn gen_invalid_keygen_stage_2_state<P: ECPoint>(
 
 /// Generates key data using the DEFAULT_KEYGEN_SEED and returns the KeygenResultInfo for the first
 /// signer.
-pub fn get_key_data_for_test<C: CryptoScheme>(
-	signers: BTreeSet<AccountId>,
-) -> KeygenResultInfo<C::Point> {
-	generate_key_data::<C>(signers.clone(), &mut Rng::from_seed(DEFAULT_KEYGEN_SEED), true)
-		.expect("Should not be able to fail generating key data")
+pub fn get_key_data_for_test<C: CryptoScheme>(signers: BTreeSet<AccountId>) -> KeygenResultInfo<C> {
+	generate_key_data::<C>(signers.clone(), &mut Rng::from_seed(DEFAULT_KEYGEN_SEED))
 		.1
 		.get(signers.iter().next().unwrap())
 		.expect("should get keygen for an account")

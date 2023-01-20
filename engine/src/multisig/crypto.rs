@@ -1,21 +1,25 @@
 #[macro_use]
 mod helpers;
+pub mod curve25519_edwards;
 pub mod curve25519_ristretto;
+pub mod ed25519;
 pub mod eth;
 pub mod polkadot;
 pub mod secp256k1;
+#[cfg(test)]
+mod tests;
 
 use generic_array::{typenum::Unsigned, ArrayLength};
 
 use num_derive::FromPrimitive;
 use zeroize::{DefaultIsZeroes, ZeroizeOnDrop};
 
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 
 use generic_array::GenericArray;
 use serde::{Deserialize, Serialize};
 
-use super::{KeyId, SigningPayload};
+use super::{client::signing::generate_schnorr_response, KeyId};
 
 /// The db uses a static length prefix, that must include the keygen data prefix and the chain tag
 pub const CHAIN_TAG_SIZE: usize = std::mem::size_of::<ChainTag>();
@@ -27,6 +31,7 @@ pub const CHAIN_TAG_SIZE: usize = std::mem::size_of::<ChainTag>();
 pub enum ChainTag {
 	Ethereum = 0x0000,
 	Polkadot = 0x0001,
+	Sui = 0x0002,
 }
 
 impl ChainTag {
@@ -81,23 +86,13 @@ pub trait ECPoint:
 	}
 }
 
-pub trait Verifiable {
-	fn verify(&self, key_id: &KeyId, payload: &SigningPayload) -> anyhow::Result<()>;
-}
-
-pub trait CryptoScheme: 'static {
+pub trait CryptoScheme: 'static + Clone + Send + Sync + Debug + PartialEq {
 	type Point: ECPoint;
 
-	type Signature: Verifiable
-		+ Debug
-		+ Clone
-		+ PartialEq
-		+ serde::Serialize
-		+ for<'de> serde::Deserialize<'de>
-		+ Sync
-		+ Send;
+	type Signature: Debug + Clone + PartialEq + Sync + Send;
 
 	type AggKey;
+	type SigningPayload: Display + Debug + Sync + Send + Clone + PartialEq + Eq + AsRef<[u8]>;
 
 	/// Friendly name of the scheme used for logging
 	const NAME: &'static str;
@@ -114,7 +109,7 @@ pub trait CryptoScheme: 'static {
 	fn build_challenge(
 		pubkey: Self::Point,
 		nonce_commitment: Self::Point,
-		payload: &SigningPayload,
+		payload: &Self::SigningPayload,
 	) -> <Self::Point as ECPoint>::Scalar;
 
 	/// Build challenge response using our key share
@@ -135,6 +130,12 @@ pub trait CryptoScheme: 'static {
 		signature_response: &<Self::Point as ECPoint>::Scalar,
 	) -> bool;
 
+	fn verify_signature(
+		signature: &Self::Signature,
+		key_id: &KeyId,
+		payload: &Self::SigningPayload,
+	) -> anyhow::Result<()>;
+
 	fn agg_key(pubkey: &Self::Point) -> Self::AggKey;
 
 	// Only relevant for ETH contract keys, which is the only
@@ -142,6 +143,9 @@ pub trait CryptoScheme: 'static {
 	fn is_pubkey_compatible(_pubkey: &Self::Point) -> bool {
 		true
 	}
+
+	#[cfg(test)]
+	fn signing_payload_for_test() -> Self::SigningPayload;
 }
 
 pub trait ECScalar:
@@ -171,4 +175,22 @@ pub trait ECScalar:
 	fn zero() -> Self;
 
 	fn invert(&self) -> Option<Self>;
+}
+
+/// Generate a signature using "single party multisig", which
+/// is helpful for development and testing.
+pub fn generate_single_party_signature<C: CryptoScheme>(
+	secret_key: &<C::Point as ECPoint>::Scalar,
+	payload: &C::SigningPayload,
+	rng: &mut Rng,
+) -> C::Signature {
+	let public_key = C::Point::from_scalar(secret_key);
+
+	let nonce = <C::Point as ECPoint>::Scalar::random(rng);
+
+	let r = C::Point::from_scalar(&nonce);
+
+	let sigma = generate_schnorr_response::<C>(secret_key, public_key, r, nonce, payload);
+
+	C::build_signature(sigma, r)
 }

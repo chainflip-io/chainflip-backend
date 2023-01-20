@@ -1,7 +1,7 @@
 use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
 use cf_chains::eth::H256;
-use cf_primitives::AccountRole;
+use cf_primitives::{AccountRole, Asset, ForeignChainAddress};
 use futures::{FutureExt, Stream, StreamExt};
 use pallet_cf_validator::MAX_LENGTH_FOR_VANITY_NAME;
 use rand_legacy::FromEntropy;
@@ -11,9 +11,6 @@ use sp_finality_grandpa::AuthorityId as GrandpaId;
 use state_chain_runtime::opaque::SessionKeys;
 
 use custom_rpc::CustomApiClient;
-
-#[cfg(feature = "ibiza")]
-use cf_primitives::{Asset, ForeignChainAddress};
 
 pub mod primitives {
 	pub use cf_primitives::*;
@@ -74,7 +71,7 @@ pub async fn request_block(
 	block_hash: state_chain_runtime::Hash,
 	state_chain_settings: &settings::StateChain,
 ) -> Result<state_chain_runtime::SignedBlock> {
-	println!("Querying the state chain for the block with hash {:x?}.", block_hash);
+	println!("Querying the state chain for the block with hash {block_hash:x?}.");
 
 	let state_chain_rpc_client = BaseRpcClient::new(state_chain_settings).await?;
 
@@ -90,9 +87,9 @@ async fn submit_and_ensure_success<Call, BlockStream>(
 	client: &StateChainClient,
 	block_stream: &mut BlockStream,
 	call: Call,
-) -> Result<(H256, Vec<state_chain_runtime::Event>)>
+) -> Result<(H256, Vec<state_chain_runtime::RuntimeEvent>)>
 where
-	Call: Into<state_chain_runtime::Call> + Clone + std::fmt::Debug + Send + Sync + 'static,
+	Call: Into<state_chain_runtime::RuntimeCall> + Clone + std::fmt::Debug + Send + Sync + 'static,
 	BlockStream: Stream<Item = state_chain_runtime::Header> + Unpin + Send + 'static,
 {
 	let logger = new_discard_logger();
@@ -103,7 +100,7 @@ where
 	if let Some(_failure) = events.iter().find(|event| {
 		matches!(
 			event,
-			state_chain_runtime::Event::System(frame_system::Event::ExtrinsicFailed { .. })
+			state_chain_runtime::RuntimeEvent::System(frame_system::Event::ExtrinsicFailed { .. })
 		)
 	}) {
 		Err(anyhow!("extrinsic execution failed"))
@@ -112,13 +109,12 @@ where
 	}
 }
 
-#[cfg(feature = "ibiza")]
 async fn connect_submit_and_get_events<Call>(
 	state_chain_settings: &settings::StateChain,
 	call: Call,
-) -> Result<Vec<state_chain_runtime::Event>>
+) -> Result<Vec<state_chain_runtime::RuntimeEvent>>
 where
-	Call: Into<state_chain_runtime::Call> + Clone + std::fmt::Debug + Send + Sync + 'static,
+	Call: Into<state_chain_runtime::RuntimeCall> + Clone + std::fmt::Debug + Send + Sync + 'static,
 {
 	task_scope(|scope| {
 		async {
@@ -235,7 +231,7 @@ pub async fn register_claim(
 	eth_settings: &settings::Eth,
 	state_chain_settings: &settings::StateChain,
 	claim_cert: ClaimCertificate,
-) -> Result<H256> {
+) -> Result<web3::types::H256> {
 	task_scope(|scope| {
 		async {
 			let logger = new_discard_logger();
@@ -265,8 +261,7 @@ pub async fn register_claim(
 				.expect("Failed to fetch EthereumStakeManagerAddress from State Chain");
 
 			println!(
-				"Registering your claim on the Ethereum network, to StakeManager address: {:?}",
-				stake_manager_address
+				"Registering your claim on the Ethereum network, to StakeManager address: {stake_manager_address:?}",
 			);
 
 			let eth_broadcaster = EthBroadcaster::new(
@@ -319,7 +314,7 @@ pub async fn register_account_role(
 				)
 				.await
 				.expect("Could not set register account role for account");
-			println!("Account role set at tx {:#x}.", tx_hash);
+			println!("Account role set at tx {tx_hash:#x}.");
 			Ok(())
 		}
 		.boxed()
@@ -420,7 +415,7 @@ pub async fn retire_account(state_chain_settings: &settings::StateChain) -> Resu
 				.submit_signed_extrinsic(pallet_cf_staking::Call::retire_account {}, &logger)
 				.await
 				.expect("Could not retire account");
-			println!("Account retired at tx {:#x}.", tx_hash);
+			println!("Account retired at tx {tx_hash:#x}.");
 			Ok(())
 		}
 		.boxed()
@@ -448,7 +443,7 @@ pub async fn activate_account(state_chain_settings: &settings::StateChain) -> Re
 					.submit_signed_extrinsic(pallet_cf_staking::Call::activate_account {}, &logger)
 					.await
 					.expect("Could not activate account");
-				println!("Account activated at tx {:#x}.", tx_hash);
+				println!("Account activated at tx {tx_hash:#x}.");
 			}
 			AccountRole::None => {
 				println!("You have not yet registered an account role. If you wish to activate your account to gain a chance at becoming an authority on the Chainflip network
@@ -489,7 +484,7 @@ pub async fn set_vanity_name(
 				)
 				.await
 				.expect("Could not set vanity name for your account");
-			println!("Vanity name set at tx {:#x}.", tx_hash);
+			println!("Vanity name set at tx {tx_hash:#x}.");
 			Ok(())
 		}
 		.boxed()
@@ -497,7 +492,6 @@ pub async fn set_vanity_name(
 	.await
 }
 
-#[cfg(feature = "ibiza")]
 pub async fn register_swap_intent(
 	state_chain_settings: &settings::StateChain,
 	ingress_asset: Asset,
@@ -516,13 +510,14 @@ pub async fn register_swap_intent(
 	)
 	.await?;
 
-	if let Some(state_chain_runtime::Event::Swapping(pallet_cf_swapping::Event::NewSwapIntent {
-		ingress_address,
-		..
-	})) = events.iter().find(|event| {
+	if let Some(state_chain_runtime::RuntimeEvent::Swapping(
+		pallet_cf_swapping::Event::NewSwapIntent { ingress_address, .. },
+	)) = events.iter().find(|event| {
 		matches!(
 			event,
-			state_chain_runtime::Event::Swapping(pallet_cf_swapping::Event::NewSwapIntent { .. })
+			state_chain_runtime::RuntimeEvent::Swapping(
+				pallet_cf_swapping::Event::NewSwapIntent { .. }
+			)
 		)
 	}) {
 		Ok(*ingress_address)
@@ -531,7 +526,6 @@ pub async fn register_swap_intent(
 	}
 }
 
-#[cfg(feature = "ibiza")]
 pub async fn liquidity_deposit(
 	state_chain_settings: &settings::StateChain,
 	asset: Asset,
@@ -542,12 +536,12 @@ pub async fn liquidity_deposit(
 	)
 	.await?;
 
-	if let Some(state_chain_runtime::Event::LiquidityProvider(
+	if let Some(state_chain_runtime::RuntimeEvent::LiquidityProvider(
 		pallet_cf_lp::Event::DepositAddressReady { ingress_address, intent_id: _ },
 	)) = events.iter().find(|event| {
 		matches!(
 			event,
-			state_chain_runtime::Event::LiquidityProvider(
+			state_chain_runtime::RuntimeEvent::LiquidityProvider(
 				pallet_cf_lp::Event::DepositAddressReady { .. }
 			)
 		)

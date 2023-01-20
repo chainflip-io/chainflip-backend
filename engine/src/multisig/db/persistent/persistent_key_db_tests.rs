@@ -31,7 +31,7 @@ fn open_db_and_write_version_data(path: &Path, schema_version: u32) {
 	let mut opts = Options::default();
 	opts.create_missing_column_families(true);
 	opts.create_if_missing(true);
-	let db = DB::open_cf(&opts, &path, COLUMN_FAMILIES).expect("Should open db file");
+	let db = DB::open_cf(&opts, path, COLUMN_FAMILIES).expect("Should open db file");
 
 	// Write the schema version
 	db.put_cf(get_metadata_column_handle(&db), DB_SCHEMA_VERSION_KEY, schema_version.to_be_bytes())
@@ -41,7 +41,7 @@ fn open_db_and_write_version_data(path: &Path, schema_version: u32) {
 fn find_backups(temp_dir: &TempDir, db_path: PathBuf) -> Result<Vec<PathBuf>, std::io::Error> {
 	let backups_path = temp_dir.path().join(BACKUPS_DIRECTORY);
 
-	let backups: Vec<PathBuf> = fs::read_dir(&backups_path)?
+	let backups: Vec<PathBuf> = fs::read_dir(backups_path)?
 		.collect::<Result<Vec<std::fs::DirEntry>, std::io::Error>>()?
 		.iter()
 		.filter_map(|entry| {
@@ -57,7 +57,7 @@ fn find_backups(temp_dir: &TempDir, db_path: PathBuf) -> Result<Vec<PathBuf>, st
 	Ok(backups)
 }
 
-fn get_single_key_data<C: CryptoScheme>() -> KeygenResultInfo<C::Point> {
+fn get_single_key_data<C: CryptoScheme>() -> KeygenResultInfo<C> {
 	get_key_data_for_test::<C>(BTreeSet::from_iter([AccountId32::new([0; 32])]))
 }
 
@@ -241,7 +241,7 @@ fn can_load_key_from_backup() {
 	// Try and open the backup to make sure it still works
 	{
 		let backups = find_backups(&directory, db_path).unwrap();
-		assert!(backups.len() == 1, "Incorrect number of backups found in {}", BACKUPS_DIRECTORY);
+		assert!(backups.len() == 1, "Incorrect number of backups found in {BACKUPS_DIRECTORY}");
 
 		// Should be able to open the backup and load the key
 		let p_db =

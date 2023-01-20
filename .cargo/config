@@ -12,10 +12,15 @@ cf-clippy = "clippy --all-targets --all-features"
 ci-build = "build --release --features runtime-benchmarks"
 ci-test = "test --lib --features runtime-benchmarks"
 
-ci-build-ibiza = "build --release --features ibiza"
-ci-test-ibiza = "test --lib --features ibiza --features runtime-benchmarks"
-
 ci-clippy = "clippy --all-targets --all-features -- -D warnings"
+
+# Check for feature inconsistencies.
+check-sc-features = '''
+tree --no-default-features --depth 1 --edges=features,normal
+    -p state-chain-*
+    -p pallet-cf-*
+    -p cf-*
+'''
 
 # Run just the CFE unit tests
 cfe-test = "test --package chainflip-engine --lib"

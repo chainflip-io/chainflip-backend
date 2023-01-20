@@ -479,13 +479,6 @@ impl TryFrom<Vec<u8>> for AggKey {
 	}
 }
 
-#[cfg(feature = "std")]
-impl From<&secp256k1::PublicKey> for AggKey {
-	fn from(key: &secp256k1::PublicKey) -> Self {
-		AggKey::from_pubkey_compressed(key.serialize())
-	}
-}
-
 #[derive(Encode, Decode, TypeInfo, Copy, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct SchnorrVerificationComponents {
 	/// Scalar component

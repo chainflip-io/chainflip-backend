@@ -106,11 +106,9 @@ pub enum Claim {
 #[derive(Parser, Clone, Debug)]
 pub enum CliCommand {
 	/// Relayer specific commands
-	#[cfg(feature = "ibiza")]
 	#[clap(subcommand)]
 	Relayer(RelayerSubcommands),
 	/// Liquidity provider specific commands
-	#[cfg(feature = "ibiza")]
 	#[clap(subcommand, name = "lp")]
 	LiquidityProvider(LiquidityProviderSubcommands),
 	#[clap(about = "Requesting and checking claims")]
@@ -164,7 +162,7 @@ fn account_role_parser(s: &str) -> Result<AccountRole, String> {
 	} else if lower_str == "r" || lower_str == "relayer" {
 		Ok(AccountRole::Relayer)
 	} else {
-		Err(format!("{} is not a valid role. The valid roles (with their shorthand input) are: 'Validator' (v), 'Liquidity Provider' (lp), 'Relayer' (r)", s))
+		Err(format!("{s} is not a valid role. The valid roles (with their shorthand input) are: 'Validator' (v), 'Liquidity Provider' (lp), 'Relayer' (r)"))
 	}
 }
 

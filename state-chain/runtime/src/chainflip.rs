@@ -10,48 +10,43 @@ mod offences;
 use cf_primitives::{chains::assets, Asset, KeyId, ETHEREUM_ETH_ADDRESS};
 pub use offences::*;
 mod signer_nomination;
+use cf_primitives::liquidity::U256;
 use ethabi::Address as EthAbiAddress;
 pub use missed_authorship_slots::MissedAuraSlots;
 pub use signer_nomination::RandomSignerNomination;
-use sp_core::U256;
 
 use crate::{
-	AccountId, Authorship, BlockNumber, Call, EmergencyRotationPercentageRange, Emissions,
-	Environment, EthereumInstance, Flip, FlipBalance, Reputation, Runtime, System, Validator,
+	AccountId, Authorship, BlockNumber, EmergencyRotationPercentageRange, Emissions, Environment,
+	EthereumInstance, Flip, FlipBalance, Reputation, Runtime, RuntimeCall, System, Validator,
 };
-#[cfg(feature = "ibiza")]
 use cf_chains::{
 	dot::{
 		api::PolkadotApi, Polkadot, PolkadotAccountId, PolkadotReplayProtection,
 		PolkadotTransactionData,
 	},
-	AnyChain, Chain,
-};
-use cf_chains::{
 	eth::{
 		self,
 		api::{EthereumApi, EthereumReplayProtection},
 		Ethereum,
 	},
-	ApiCall, ChainAbi, ChainEnvironment, ReplayProtectionProvider, TransactionBuilder,
+	AnyChain, ApiCall, Chain, ChainAbi, ChainEnvironment, ReplayProtectionProvider,
+	TransactionBuilder,
 };
-#[cfg(feature = "ibiza")]
 use cf_primitives::{AssetAmount, ForeignChain, ForeignChainAddress, IntentId};
 use cf_traits::{
-	BlockEmissions, Chainflip, EmergencyRotation, EpochInfo, EthEnvironmentProvider, Heartbeat,
-	Issuance, NetworkState, RewardsDistribution, RuntimeUpgrade, VaultTransitionHandler,
+	BlockEmissions, Chainflip, EgressApi, EmergencyRotation, EpochInfo, EpochKey,
+	EthEnvironmentProvider, Heartbeat, IngressApi, Issuance, NetworkState, RewardsDistribution,
+	RuntimeUpgrade, VaultTransitionHandler,
 };
-#[cfg(feature = "ibiza")]
-use cf_traits::{EgressApi, EpochKey, IngressApi};
-#[cfg(feature = "ibiza")]
 use codec::{Decode, Encode};
-#[cfg(feature = "ibiza")]
-use frame_support::dispatch::DispatchError;
+
 use pallet_cf_chain_tracking::ChainState;
-#[cfg(feature = "ibiza")]
 use scale_info::TypeInfo;
 
-use frame_support::{dispatch::DispatchErrorWithPostInfo, traits::Get, weights::PostDispatchInfo};
+use frame_support::{
+	dispatch::{DispatchError, DispatchErrorWithPostInfo, PostDispatchInfo},
+	traits::Get,
+};
 
 use pallet_cf_validator::PercentageRange;
 use sp_runtime::traits::{UniqueSaturatedFrom, UniqueSaturatedInto};
@@ -60,7 +55,7 @@ use sp_std::prelude::*;
 use backup_node_rewards::calculate_backup_rewards;
 
 impl Chainflip for Runtime {
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type Amount = FlipBalance;
 	type ValidatorId = <Self as frame_system::Config>::AccountId;
 	type KeyId = KeyId;
@@ -130,10 +125,10 @@ pub struct WaivedFees;
 
 impl cf_traits::WaivedFees for WaivedFees {
 	type AccountId = AccountId;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 
-	fn should_waive_fees(call: &Self::Call, caller: &Self::AccountId) -> bool {
-		if matches!(call, Call::Governance(_)) {
+	fn should_waive_fees(call: &Self::RuntimeCall, caller: &Self::AccountId) -> bool {
+		if matches!(call, RuntimeCall::Governance(_)) {
 			return super::Governance::members().contains(caller)
 		}
 		false
@@ -177,9 +172,7 @@ impl TransactionBuilder<Ethereum, EthereumApi<EthEnvironment>> for EthTransactio
 	}
 }
 
-#[cfg(feature = "ibiza")]
 pub struct DotTransactionBuilder;
-#[cfg(feature = "ibiza")]
 impl TransactionBuilder<Polkadot, PolkadotApi<DotEnvironment>> for DotTransactionBuilder {
 	fn build_transaction(
 		signed_call: &PolkadotApi<DotEnvironment>,
@@ -238,11 +231,9 @@ impl ChainEnvironment<assets::eth::Asset, EthAbiAddress> for EthEnvironment {
 	}
 }
 
-#[cfg(feature = "ibiza")]
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct DotEnvironment;
 
-#[cfg(feature = "ibiza")]
 impl ReplayProtectionProvider<Polkadot> for DotEnvironment {
 	// Get the Environment values for vault_account, NetworkChoice and the next nonce for the
 	// proxy_account
@@ -257,7 +248,6 @@ impl ReplayProtectionProvider<Polkadot> for DotEnvironment {
 	}
 }
 
-#[cfg(feature = "ibiza")]
 impl ChainEnvironment<cf_chains::dot::api::SystemAccounts, PolkadotAccountId> for DotEnvironment {
 	fn lookup(query: cf_chains::dot::api::SystemAccounts) -> Option<PolkadotAccountId> {
 		use crate::PolkadotVault;
@@ -280,9 +270,7 @@ impl ChainEnvironment<cf_chains::dot::api::SystemAccounts, PolkadotAccountId> fo
 pub struct EthVaultTransitionHandler;
 impl VaultTransitionHandler<Ethereum> for EthVaultTransitionHandler {}
 
-#[cfg(feature = "ibiza")]
 pub struct DotVaultTransitionHandler;
-#[cfg(feature = "ibiza")]
 impl VaultTransitionHandler<Polkadot> for DotVaultTransitionHandler {
 	fn on_new_vault() {
 		Environment::reset_polkadot_proxy_account_nonce();
@@ -291,7 +279,6 @@ impl VaultTransitionHandler<Polkadot> for DotVaultTransitionHandler {
 
 pub struct AnyChainIngressEgressHandler;
 
-#[cfg(feature = "ibiza")]
 impl EgressApi<AnyChain> for AnyChainIngressEgressHandler {
 	fn schedule_egress(
 		asset: Asset,
@@ -317,7 +304,6 @@ impl EgressApi<AnyChain> for AnyChainIngressEgressHandler {
 	}
 }
 
-#[cfg(feature = "ibiza")]
 impl IngressApi<AnyChain> for AnyChainIngressEgressHandler {
 	type AccountId = <Runtime as frame_system::Config>::AccountId;
 

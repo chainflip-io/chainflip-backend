@@ -1,10 +1,10 @@
 use frame_system::Config;
 
-pub fn last_event<T: Config>() -> <T as Config>::Event {
+pub fn last_event<T: Config>() -> <T as Config>::RuntimeEvent {
 	maybe_last_event::<T>().expect("Event expected")
 }
 
-pub fn maybe_last_event<T: Config>() -> Option<<T as Config>::Event> {
+pub fn maybe_last_event<T: Config>() -> Option<<T as Config>::RuntimeEvent> {
 	frame_system::Pallet::<T>::events().pop().map(|e| e.event)
 }
 

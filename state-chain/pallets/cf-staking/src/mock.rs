@@ -33,7 +33,7 @@ use cf_traits::{
 };
 
 impl pallet_cf_account_roles::Config for Test {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BidInfo = MockBidInfo;
 	type StakeInfo = MockStakingInfo<Self>;
 	type WeightInfo = ();
@@ -63,8 +63,8 @@ impl frame_system::Config for Test {
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
-	type Origin = Origin;
-	type Call = Call;
+	type RuntimeOrigin = RuntimeOrigin;
+	type RuntimeCall = RuntimeCall;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = sp_core::H256;
@@ -72,7 +72,7 @@ impl frame_system::Config for Test {
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = BlockHashCount;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -89,7 +89,7 @@ impl Chainflip for Test {
 	type KeyId = Vec<u8>;
 	type ValidatorId = AccountId;
 	type Amount = Balance;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type EnsureWitnessed = MockEnsureWitnessed;
 	type EnsureWitnessedAtCurrentEpoch = MockEnsureWitnessed;
 	type EpochInfo = MockEpochInfo;
@@ -109,10 +109,10 @@ parameter_types! {
 }
 
 // Implement mock for RestrictionHandler
-impl_mock_waived_fees!(AccountId, Call);
+impl_mock_waived_fees!(AccountId, RuntimeCall);
 
 impl pallet_cf_flip::Config for Test {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type Balance = u128;
 	type ExistentialDeposit = ExistentialDeposit;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
@@ -122,7 +122,7 @@ impl pallet_cf_flip::Config for Test {
 	type WaivedFees = WaivedFeesMock;
 }
 
-cf_traits::impl_mock_ensure_witnessed_for_origin!(Origin);
+cf_traits::impl_mock_ensure_witnessed_for_origin!(RuntimeOrigin);
 cf_traits::impl_mock_epoch_info!(AccountId, u128, u32, AuthorityCount);
 cf_traits::impl_mock_stake_transfer!(AccountId, u128);
 
@@ -138,14 +138,14 @@ impl MockThresholdSigner {
 	}
 
 	pub fn on_signature_ready(account_id: &AccountId) -> DispatchResultWithPostInfo {
-		Staking::post_claim_signature(Origin::root(), account_id.clone(), 0)
+		Staking::post_claim_signature(RuntimeOrigin::root(), account_id.clone(), 0)
 	}
 }
 
 impl ThresholdSigner<Ethereum> for MockThresholdSigner {
 	type RequestId = u32;
 	type Error = &'static str;
-	type Callback = Call;
+	type Callback = RuntimeCall;
 	type KeyId = <Test as Chainflip>::KeyId;
 	type ValidatorId = AccountId;
 
@@ -193,7 +193,7 @@ pub const ETH_DUMMY_SIG: eth::SchnorrVerificationComponents =
 pub const CLAIM_DELAY_BUFFER_SECS: u64 = 10;
 
 impl pallet_cf_staking::Config for Test {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type TimeSource = time_source::Mock;
 	type Balance = u128;
 	type AccountRoleRegistry = ();
@@ -201,7 +201,7 @@ impl pallet_cf_staking::Config for Test {
 	type WeightInfo = ();
 	type StakerId = AccountId;
 	type ThresholdSigner = MockThresholdSigner;
-	type ThresholdCallable = Call;
+	type ThresholdCallable = RuntimeCall;
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type RegisterClaim = eth::api::EthereumApi<MockEthReplayProtectionProvider>;

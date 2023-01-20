@@ -41,21 +41,21 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Environment CurrentSystemState (r:1 w:1)
 	fn set_system_state() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(26_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(26_000_000)
+			.saturating_add(T::DbWeight::get().reads(1))
+			.saturating_add(T::DbWeight::get().writes(1))
 	}
 	// Storage: Environment CfeSettings (r:0 w:1)
 	fn set_cfe_settings() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(23_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(23_000_000)
+			.saturating_add(T::DbWeight::get().writes(1))
 	}
 	// Storage: Environment EthereumSupportedAssets (r:0 w:1)
 	fn update_supported_eth_assets() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(24_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(24_000_000)
+			.saturating_add(T::DbWeight::get().writes(1))
 	}
 }
 
@@ -64,20 +64,20 @@ impl WeightInfo for () {
 	// Storage: Environment CurrentSystemState (r:1 w:1)
 	fn set_system_state() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(26_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(26_000_000)
+			.saturating_add(RocksDbWeight::get().reads(1))
+			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 	// Storage: Environment CfeSettings (r:0 w:1)
 	fn set_cfe_settings() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(23_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(23_000_000)
+			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 	// Storage: Environment EthereumSupportedAssets (r:0 w:1)
 	fn update_supported_eth_assets() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(24_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(24_000_000)
+			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 }

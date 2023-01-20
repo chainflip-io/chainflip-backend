@@ -43,36 +43,36 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Reputation AccrualRatio (r:0 w:1)
 	fn update_accrual_ratio() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(12_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(12_000_000)
+			.saturating_add(T::DbWeight::get().writes(1))
 	}
 	// Storage: Reputation Penalties (r:1 w:1)
 	fn set_penalty() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(14_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(14_000_000)
+			.saturating_add(T::DbWeight::get().reads(1))
+			.saturating_add(T::DbWeight::get().writes(1))
 	}
 	// Storage: Reputation Penalties (r:0 w:1)
 	fn update_missed_heartbeat_penalty() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(12_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(12_000_000)
+			.saturating_add(T::DbWeight::get().writes(1))
 	}
 	// Storage: unknown [0x19ebab52d1fc3244db45364979b4af8e4e7b9012096b41c4eb3aaf947f6ea429] (r:1 w:0)
 	fn on_runtime_upgrade() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(7_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
+		Weight::from_ref_time(7_000_000)
+			.saturating_add(T::DbWeight::get().reads(1))
 	}
 	// Storage: Reputation LastHeartbeat (r:1 w:1)
 	// Storage: Reputation Reputations (r:1 w:1)
 	// Storage: Reputation AccrualRatio (r:1 w:0)
 	fn heartbeat() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(11_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(3 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
+		Weight::from_ref_time(11_000_000)
+			.saturating_add(T::DbWeight::get().reads(3))
+			.saturating_add(T::DbWeight::get().writes(2))
 	}
 	// Storage: Validator CurrentAuthorities (r:1 w:0)
 	// Storage: Reputation LastHeartbeat (r:1 w:0)
@@ -85,13 +85,13 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Validator Backups (r:1 w:0)
 	fn submit_network_state() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(45_000_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(9 as Weight))
-			.saturating_add(T::DbWeight::get().writes(4 as Weight))
+		Weight::from_ref_time(45_000_000)
+			.saturating_add(T::DbWeight::get().reads(9))
+			.saturating_add(T::DbWeight::get().writes(4))
 	}
 	fn on_initialize_no_action() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(0 as Weight)
+		Weight::from_ref_time(0)
 	}
 }
 
@@ -100,36 +100,36 @@ impl WeightInfo for () {
 	// Storage: Reputation AccrualRatio (r:0 w:1)
 	fn update_accrual_ratio() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(12_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(12_000_000)
+			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 	// Storage: Reputation Penalties (r:1 w:1)
 	fn set_penalty() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(14_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(14_000_000)
+			.saturating_add(RocksDbWeight::get().reads(1))
+			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 	// Storage: Reputation Penalties (r:0 w:1)
 	fn update_missed_heartbeat_penalty() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(12_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(12_000_000)
+			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 	// Storage: unknown [0x19ebab52d1fc3244db45364979b4af8e4e7b9012096b41c4eb3aaf947f6ea429] (r:1 w:0)
 	fn on_runtime_upgrade() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(7_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
+		Weight::from_ref_time(7_000_000)
+			.saturating_add(RocksDbWeight::get().reads(1))
 	}
 	// Storage: Reputation LastHeartbeat (r:1 w:1)
 	// Storage: Reputation Reputations (r:1 w:1)
 	// Storage: Reputation AccrualRatio (r:1 w:0)
 	fn heartbeat() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(11_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+		Weight::from_ref_time(11_000_000)
+			.saturating_add(RocksDbWeight::get().reads(3))
+			.saturating_add(RocksDbWeight::get().writes(2))
 	}
 	// Storage: Validator CurrentAuthorities (r:1 w:0)
 	// Storage: Reputation LastHeartbeat (r:1 w:0)
@@ -142,12 +142,12 @@ impl WeightInfo for () {
 	// Storage: Validator Backups (r:1 w:0)
 	fn submit_network_state() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(45_000_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(9 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
+		Weight::from_ref_time(45_000_000)
+			.saturating_add(RocksDbWeight::get().reads(9))
+			.saturating_add(RocksDbWeight::get().writes(4))
 	}
 	fn on_initialize_no_action() -> Weight {
 		#[allow(clippy::unnecessary_cast)]
-		(0 as Weight)
+		Weight::from_ref_time(0)
 	}
 }

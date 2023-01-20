@@ -51,13 +51,11 @@ pub struct Eth {
 	pub private_key_file: PathBuf,
 }
 
-#[cfg(feature = "ibiza")]
 #[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
 pub struct Dot {
 	pub ws_node_endpoint: String,
 }
 
-#[cfg(feature = "ibiza")]
 impl Dot {
 	pub fn validate_settings(&self) -> Result<(), ConfigError> {
 		validate_websocket_endpoint(&self.ws_node_endpoint)
@@ -99,7 +97,7 @@ pub struct Settings {
 	pub node_p2p: P2P,
 	pub state_chain: StateChain,
 	pub eth: Eth,
-	#[cfg(feature = "ibiza")]
+
 	pub dot: Dot,
 	pub health_check: Option<HealthCheck>,
 	pub signing: Signing,
@@ -125,7 +123,6 @@ pub struct EthOptions {
 	pub eth_private_key_file: Option<PathBuf>,
 }
 
-#[cfg(feature = "ibiza")]
 #[derive(Parser, Debug, Clone, Default)]
 pub struct DotOptions {
 	pub dot_ws_node_endpoint: Option<String>,
@@ -163,7 +160,6 @@ pub struct CommandLineOptions {
 	#[clap(flatten)]
 	eth_opts: EthOptions,
 
-	#[cfg(feature = "ibiza")]
 	#[clap(flatten)]
 	dot_opts: DotOptions,
 
@@ -187,7 +183,7 @@ impl Default for CommandLineOptions {
 			p2p_opts: P2POptions::default(),
 			state_chain_opts: StateChainOptions::default(),
 			eth_opts: EthOptions::default(),
-			#[cfg(feature = "ibiza")]
+
 			dot_opts: DotOptions::default(),
 			health_check_hostname: None,
 			health_check_port: None,
@@ -309,7 +305,6 @@ impl CfSettings for Settings {
 	fn validate_settings(&self) -> Result<(), ConfigError> {
 		self.eth.validate_settings()?;
 
-		#[cfg(feature = "ibiza")]
 		self.dot.validate_settings()?;
 
 		self.state_chain.validate_settings()?;
@@ -371,7 +366,6 @@ impl Source for CommandLineOptions {
 
 		self.eth_opts.insert_all(&mut map);
 
-		#[cfg(feature = "ibiza")]
 		insert_command_line_option(
 			&mut map,
 			"dot.ws_node_endpoint",
@@ -481,12 +475,12 @@ fn validate_endpoint(valid_schemes: Vec<&str>, url: &str) -> Result<()> {
 	let parsed_url = Url::parse(url)?;
 	let scheme = parsed_url.scheme();
 	if !valid_schemes.contains(&scheme) {
-		bail!("Invalid scheme: `{}`", scheme);
+		bail!("Invalid scheme: `{scheme}`");
 	}
-	if parsed_url.host() == None ||
+	if parsed_url.host().is_none() ||
 		parsed_url.username() != "" ||
-		parsed_url.password() != None ||
-		parsed_url.fragment() != None ||
+		parsed_url.password().is_some() ||
+		parsed_url.fragment().is_some() ||
 		parsed_url.cannot_be_a_base()
 	{
 		bail!("Invalid URL data.");
@@ -516,7 +510,7 @@ mod tests {
 		env::set_var(ETH_HTTP_NODE_ENDPOINT, "http://localhost:8545");
 		env::set_var(ETH_WS_NODE_ENDPOINT, "ws://localhost:8545");
 		env::set_var(NODE_P2P_IP_ADDRESS, "1.1.1.1");
-		#[cfg(feature = "ibiza")]
+
 		env::set_var("DOT__WS_NODE_ENDPOINT", "wss://my_fake_polkadot_rpc:443/<secret_key>");
 	}
 
@@ -635,7 +629,7 @@ mod tests {
 				eth_http_node_endpoint: Some("http://endpoint:4321".to_owned()),
 				eth_private_key_file: Some(PathBuf::from_str("eth_key_file").unwrap()),
 			},
-			#[cfg(feature = "ibiza")]
+
 			dot_opts: DotOptions { dot_ws_node_endpoint: Some("ws://endpoint:4321".to_owned()) },
 			health_check_hostname: Some("health_check_hostname".to_owned()),
 			health_check_port: Some(1337),
@@ -664,7 +658,6 @@ mod tests {
 		assert_eq!(opts.eth_opts.eth_http_node_endpoint.unwrap(), settings.eth.http_node_endpoint);
 		assert_eq!(opts.eth_opts.eth_private_key_file.unwrap(), settings.eth.private_key_file);
 
-		#[cfg(feature = "ibiza")]
 		assert_eq!(opts.dot_opts.dot_ws_node_endpoint.unwrap(), settings.dot.ws_node_endpoint);
 
 		assert_eq!(

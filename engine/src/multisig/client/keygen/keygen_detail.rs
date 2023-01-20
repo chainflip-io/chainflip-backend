@@ -8,8 +8,6 @@ use serde::{Deserialize, Serialize};
 use sp_core::H256;
 use zeroize::Zeroize;
 
-use anyhow::anyhow;
-
 use crate::multisig::{
 	client::{
 		common::KeygenFailureReason, KeygenResult, KeygenResultInfo, PartyIdxMapping,
@@ -287,24 +285,20 @@ pub fn validate_commitments<P: ECPoint>(
 
 pub struct ValidAggregateKey<P: ECPoint>(pub P);
 
-/// Derive aggregate pubkey from party commitments
-/// Note that setting `allow_high_pubkey` to true lets us skip compatibility check
-/// in tests as otherwise they would be non-deterministic
+/// Derive aggregate pubkey from party commitments. The resulting
+/// key might be incompatible according to [C::is_pubkey_compatible].
 pub fn derive_aggregate_pubkey<C: CryptoScheme>(
 	commitments: &BTreeMap<AuthorityCount, DKGCommitment<C::Point>>,
-	allow_high_pubkey: bool,
-) -> anyhow::Result<ValidAggregateKey<C::Point>> {
+) -> ValidAggregateKey<C::Point> {
 	let pubkey: C::Point = commitments.iter().map(|(_idx, c)| c.commitments.0[0]).sum();
 
-	if !allow_high_pubkey && !C::is_pubkey_compatible(&pubkey) {
-		Err(anyhow!("pubkey is not compatible"))
-	} else if check_high_degree_commitments(commitments) {
+	if check_high_degree_commitments(commitments) {
 		// Sanity check (the chance of this failing is infinitesimal due to the
 		// hash commitment stage at the beginning of the ceremony)
-		Err(anyhow!("high degree coefficient is zero"))
-	} else {
-		Ok(ValidAggregateKey(pubkey))
+		panic!("high degree coefficient is zero");
 	}
+
+	ValidAggregateKey(pubkey)
 }
 
 /// Derive each party's "local" pubkey
@@ -455,8 +449,7 @@ mod tests {
 		));
 
 		// Now it is okay to distribute the shares
-
-		let _agg_pubkey: Point = coeff_commitments.iter().map(|(_idx, c)| c.commitments.0[0]).sum();
+		let _agg_pubkey: Point = coeff_commitments.values().map(|c| c.commitments.0[0]).sum();
 
 		let mut secret_shares = vec![];
 
@@ -484,50 +477,35 @@ pub mod genesis {
 	use std::collections::HashMap;
 
 	use super::*;
-	use crate::multisig::{client::PartyIdxMapping, KeyId};
+	use crate::multisig::{client::PartyIdxMapping, eth::EthSigning, KeyId};
 	use state_chain_runtime::AccountId;
 
-	/// Attempts to generate key data until we generate a key that is contract
-	/// compatible. It will try `max_attempts` before failing.
-	pub fn generate_key_data_until_compatible<C: CryptoScheme>(
-		account_ids: BTreeSet<AccountId>,
-		max_attempts: usize,
-		mut rng: Rng,
-	) -> (KeyId, HashMap<AccountId, KeygenResultInfo<C::Point>>) {
-		let mut attempt_counter = 0;
-
-		loop {
-			attempt_counter += 1;
-			match generate_key_data::<C>(account_ids.clone(), &mut rng, false) {
-				Ok(result) => break result,
-				Err(_) => {
-					// limit iteration so we don't loop forever
-					if attempt_counter >= max_attempts {
-						panic!("too many keygen attempts");
-					}
-				},
-			}
-		}
-	}
-
-	pub fn generate_key_data<C: CryptoScheme>(
+	/// Generate keys for all participants in a centralised manner.
+	/// (Useful for testing and genesis keygen)
+	fn generate_key_data_detail<C: CryptoScheme>(
 		signers: BTreeSet<AccountId>,
+		initial_key_must_be_incompatible: bool,
 		rng: &mut Rng,
-		allow_high_pubkey: bool,
-	) -> anyhow::Result<(KeyId, HashMap<AccountId, KeygenResultInfo<C::Point>>)> {
+	) -> (KeyId, HashMap<AccountId, KeygenResultInfo<C>>) {
 		let params = ThresholdParameters::from_share_count(signers.len() as AuthorityCount);
 		let n = params.share_count;
 		let t = params.threshold;
 
-		let (commitments, outgoing_secret_shares): (BTreeMap<_, _>, BTreeMap<_, _>) = (1..=n)
-			.map(|idx| {
-				let (_secret, commitments, shares) =
-					generate_secret_and_shares::<C::Point>(rng, n, t);
-				((idx, DKGCommitment { commitments }), (idx, shares))
-			})
-			.unzip();
+		let (commitments, outgoing_secret_shares, agg_pubkey) = loop {
+			let (commitments, outgoing_secret_shares): (BTreeMap<_, _>, BTreeMap<_, _>) = (1..=n)
+				.map(|idx| {
+					let (_secret, commitments, shares) =
+						generate_secret_and_shares::<C::Point>(rng, n, t);
+					((idx, DKGCommitment { commitments }), (idx, shares))
+				})
+				.unzip();
 
-		let agg_pubkey = derive_aggregate_pubkey::<C>(&commitments, allow_high_pubkey)?;
+			let agg_pubkey = derive_aggregate_pubkey::<C>(&commitments);
+
+			if !initial_key_must_be_incompatible || !C::is_pubkey_compatible(&agg_pubkey.0) {
+				break (commitments, outgoing_secret_shares, agg_pubkey)
+			}
+		};
 
 		let validator_mapping = PartyIdxMapping::from_participants(signers);
 
@@ -542,16 +520,13 @@ pub mod genesis {
 				(
 					validator_mapping.get_id(idx).clone(),
 					KeygenResultInfo {
-						key: Arc::new(KeygenResult {
-							key_share: KeyShare {
+						key: Arc::new(KeygenResult::new_compatible(
+							KeyShare {
 								y: agg_pubkey.0,
 								x_i: compute_secret_key_share(IncomingShares(incoming_shares)),
 							},
-							party_public_keys: derive_local_pubkeys_for_parties(
-								params,
-								&commitments,
-							),
-						}),
+							derive_local_pubkeys_for_parties(params, &commitments),
+						)),
 						validator_mapping: Arc::new(validator_mapping.clone()),
 						params,
 					},
@@ -559,6 +534,23 @@ pub mod genesis {
 			})
 			.collect();
 
-		Ok((KeyId(agg_pubkey.0.as_bytes().to_vec()), keygen_result_infos))
+		let aggregate_pubkey =
+			keygen_result_infos.values().next().unwrap().key.get_public_key_bytes();
+
+		(KeyId(aggregate_pubkey), keygen_result_infos)
+	}
+
+	pub fn generate_key_data<C: CryptoScheme>(
+		signers: BTreeSet<AccountId>,
+		rng: &mut Rng,
+	) -> (KeyId, HashMap<AccountId, KeygenResultInfo<C>>) {
+		generate_key_data_detail(signers, false, rng)
+	}
+
+	pub fn generate_key_data_with_initial_incompatibility(
+		signers: BTreeSet<AccountId>,
+		rng: &mut Rng,
+	) -> (KeyId, HashMap<AccountId, KeygenResultInfo<EthSigning>>) {
+		generate_key_data_detail(signers, true, rng)
 	}
 }

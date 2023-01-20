@@ -7,8 +7,9 @@ use pallet_transaction_payment::OnChargeTransaction;
 // Governance is allowed to make free calls to governance gated extrinsics.
 fn governance_members_pay_no_fees_for_governance_extrinsics() {
 	super::genesis::default().build().execute_with(|| {
-		let call: state_chain_runtime::Call = frame_system::Call::remark { remark: vec![] }.into();
-		let gov_call: state_chain_runtime::Call =
+		let call: state_chain_runtime::RuntimeCall =
+			frame_system::Call::remark { remark: vec![] }.into();
+		let gov_call: state_chain_runtime::RuntimeCall =
 			pallet_cf_governance::Call::approve { approved_id: 1 }.into();
 		// Expect a successful normal call to work
 		let ordinary = FlipTransactionPayment::<Runtime>::withdraw_fee(

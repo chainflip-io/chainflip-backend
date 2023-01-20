@@ -39,6 +39,12 @@ impl<BaseRpcClient> StateChainClient<BaseRpcClient> {
 	}
 }
 
+fn assert_stream_send<'u, R>(
+	strm: impl 'u + Send + Stream<Item = R>,
+) -> impl 'u + Send + Stream<Item = R> {
+	strm
+}
+
 impl StateChainClient {
 	pub async fn new<'a>(
 		scope: &Scope<'a, anyhow::Error>,
@@ -91,7 +97,7 @@ impl StateChainClient {
 
 			(
 				latest_finalized_header.clone(),
-				Box::pin(
+				assert_stream_send(Box::pin(
 					sparse_finalized_block_header_stream
 						.and_then(move |next_finalized_header| {
 							assert!(latest_finalized_header.number < next_finalized_header.number);
@@ -142,7 +148,7 @@ impl StateChainClient {
 						})
 						.end_after_error()
 						.try_flatten(),
-				),
+				)),
 			)
 		};
 
@@ -272,7 +278,7 @@ pub mod mocks {
 				logger: &slog::Logger,
 			) -> Result<H256>
 			where
-				Call: Into<state_chain_runtime::Call> + Clone + std::fmt::Debug + Send + Sync + 'static;
+				Call: Into<state_chain_runtime::RuntimeCall> + Clone + std::fmt::Debug + Send + Sync + 'static;
 
 			async fn submit_unsigned_extrinsic<Call>(
 				&self,
@@ -280,13 +286,13 @@ pub mod mocks {
 				logger: &slog::Logger,
 			) -> Result<H256>
 			where
-				Call: Into<state_chain_runtime::Call> + Clone + std::fmt::Debug + Send + Sync + 'static;
+				Call: Into<state_chain_runtime::RuntimeCall> + Clone + std::fmt::Debug + Send + Sync + 'static;
 
 			async fn watch_submitted_extrinsic<BlockStream>(
 				&self,
 				extrinsic_hash: state_chain_runtime::Hash,
 				block_stream: &mut BlockStream,
-			) -> Result<Vec<state_chain_runtime::Event>>
+			) -> Result<Vec<state_chain_runtime::RuntimeEvent>>
 			where
 				BlockStream:
 					Stream<Item = state_chain_runtime::Header> + Unpin + Send + 'static;

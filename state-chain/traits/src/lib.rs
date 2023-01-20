@@ -12,10 +12,8 @@ use core::fmt::Debug;
 pub use async_result::AsyncResult;
 use sp_std::collections::btree_set::BTreeSet;
 
-#[cfg(feature = "ibiza")]
-use cf_chains::Polkadot;
 use cf_chains::{
-	benchmarking_value::BenchmarkValue, ApiCall, Chain, ChainAbi, ChainCrypto, Ethereum,
+	benchmarking_value::BenchmarkValue, ApiCall, Chain, ChainAbi, ChainCrypto, Ethereum, Polkadot,
 };
 
 use cf_primitives::{
@@ -65,12 +63,14 @@ pub trait Chainflip: frame_system::Config {
 	/// An id type for keys used in threshold signature ceremonies.
 	type KeyId: Member + Parameter + From<Vec<u8>> + BenchmarkValue;
 	/// The overarching call type.
-	type Call: Member + Parameter + UnfilteredDispatchable<Origin = Self::Origin>;
+	type RuntimeCall: Member
+		+ Parameter
+		+ UnfilteredDispatchable<RuntimeOrigin = Self::RuntimeOrigin>;
 	/// A type that allows us to check if a call was a result of witness consensus.
-	type EnsureWitnessed: EnsureOrigin<Self::Origin>;
+	type EnsureWitnessed: EnsureOrigin<Self::RuntimeOrigin>;
 	/// A type that allows us to check if a call was a result of witness consensus by the current
 	/// epoch.
-	type EnsureWitnessedAtCurrentEpoch: EnsureOrigin<Self::Origin>;
+	type EnsureWitnessedAtCurrentEpoch: EnsureOrigin<Self::RuntimeOrigin>;
 	/// Information about the current Epoch.
 	type EpochInfo: EpochInfo<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
 	/// Access to information about the current system state
@@ -485,8 +485,8 @@ pub trait BlockEmissions {
 /// Checks if the caller can execute free transactions
 pub trait WaivedFees {
 	type AccountId;
-	type Call;
-	fn should_waive_fees(call: &Self::Call, caller: &Self::AccountId) -> bool;
+	type RuntimeCall;
+	fn should_waive_fees(call: &Self::RuntimeCall, caller: &Self::AccountId) -> bool;
 }
 
 /// Qualify what is considered as a potential authority for the network
@@ -662,7 +662,6 @@ impl<T: frame_system::Config> IngressApi<Ethereum> for T {
 	}
 }
 
-#[cfg(feature = "ibiza")]
 impl<T: frame_system::Config> IngressApi<Polkadot> for T {
 	type AccountId = T::AccountId;
 	fn register_liquidity_ingress_intent(
@@ -699,7 +698,6 @@ impl AddressDerivationApi<Ethereum> for () {
 	}
 }
 
-#[cfg(feature = "ibiza")]
 impl AddressDerivationApi<Polkadot> for () {
 	fn generate_address(
 		_ingress_asset: <Polkadot as Chain>::ChainAsset,
@@ -724,18 +722,20 @@ pub trait AccountRoleRegistry<T: frame_system::Config> {
 		Self::register_account_role(account_id, AccountRole::Validator)
 	}
 
-	fn ensure_account_role(origin: T::Origin, role: AccountRole)
-		-> Result<T::AccountId, BadOrigin>;
+	fn ensure_account_role(
+		origin: T::RuntimeOrigin,
+		role: AccountRole,
+	) -> Result<T::AccountId, BadOrigin>;
 
-	fn ensure_relayer(origin: T::Origin) -> Result<T::AccountId, BadOrigin> {
+	fn ensure_relayer(origin: T::RuntimeOrigin) -> Result<T::AccountId, BadOrigin> {
 		Self::ensure_account_role(origin, AccountRole::Relayer)
 	}
 
-	fn ensure_liquidity_provider(origin: T::Origin) -> Result<T::AccountId, BadOrigin> {
+	fn ensure_liquidity_provider(origin: T::RuntimeOrigin) -> Result<T::AccountId, BadOrigin> {
 		Self::ensure_account_role(origin, AccountRole::LiquidityProvider)
 	}
 
-	fn ensure_validator(origin: T::Origin) -> Result<T::AccountId, BadOrigin> {
+	fn ensure_validator(origin: T::RuntimeOrigin) -> Result<T::AccountId, BadOrigin> {
 		Self::ensure_account_role(origin, AccountRole::Validator)
 	}
 	#[cfg(feature = "runtime-benchmarks")]
@@ -761,7 +761,6 @@ impl<T: frame_system::Config> EgressApi<Ethereum> for T {
 	}
 }
 
-#[cfg(feature = "ibiza")]
 impl<T: frame_system::Config> EgressApi<Polkadot> for T {
 	fn schedule_egress(
 		_foreign_asset: assets::dot::Asset,
@@ -789,4 +788,10 @@ pub trait VaultKeyWitnessedHandler<C: ChainAbi> {
 		block_number: C::ChainBlockNumber,
 		tx_id: C::TransactionId,
 	) -> DispatchResultWithPostInfo;
+}
+
+/// Provides an interface to access the amount of Flip that is ready to be burned.
+pub trait FlipBurnInfo {
+	/// Takes the available Flip and returns it.
+	fn take_flip_to_burn() -> AssetAmount;
 }

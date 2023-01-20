@@ -17,10 +17,10 @@ use crate::{
 		client,
 		client::{
 			common::{KeygenFailureReason, SigningFailureReason},
-			keygen::generate_key_data_until_compatible,
+			keygen::generate_key_data,
 			CeremonyRequestDetails,
 		},
-		crypto::{CryptoScheme, ECPoint, ECScalar, Rng},
+		crypto::{generate_single_party_signature, CryptoScheme, Rng},
 	},
 	p2p::OutgoingMultisigStageMessages,
 	task_scope::{task_scope, Scope, ScopedJoinHandle},
@@ -37,8 +37,6 @@ use crate::logging::{CEREMONY_ID_KEY, CEREMONY_TYPE_KEY};
 use client::common::{
 	broadcast::BroadcastStage, CeremonyCommon, CeremonyFailureReason, KeygenResultInfo,
 };
-
-use crate::multisig::SigningPayload;
 
 use super::{
 	common::{CeremonyStage, KeygenStageName, PreProcessStageDataCheck, SigningStageName},
@@ -84,7 +82,7 @@ impl<C: CryptoScheme> CeremonyTrait for KeygenCeremony<C> {
 	type Crypto = C;
 	type Data = KeygenData<<C as CryptoScheme>::Point>;
 	type Request = CeremonyRequest<C>;
-	type Output = KeygenResultInfo<<C as CryptoScheme>::Point>;
+	type Output = KeygenResultInfo<C>;
 	type FailureReason = KeygenFailureReason;
 	type CeremonyStageName = KeygenStageName;
 }
@@ -93,11 +91,11 @@ pub struct SigningCeremony<C> {
 	_phantom: PhantomData<C>,
 }
 
-impl<Crypto: CryptoScheme> CeremonyTrait for SigningCeremony<Crypto> {
-	type Crypto = Crypto;
-	type Data = SigningData<<Crypto as CryptoScheme>::Point>;
-	type Request = CeremonyRequest<Crypto>;
-	type Output = <Crypto as CryptoScheme>::Signature;
+impl<C: CryptoScheme> CeremonyTrait for SigningCeremony<C> {
+	type Crypto = C;
+	type Data = SigningData<<C as CryptoScheme>::Point>;
+	type Request = CeremonyRequest<C>;
+	type Output = <C as CryptoScheme>::Signature;
 	type FailureReason = SigningFailureReason;
 	type CeremonyStageName = SigningStageName;
 }
@@ -109,7 +107,6 @@ pub struct CeremonyManager<C: CryptoScheme> {
 	outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
 	signing_states: CeremonyStates<SigningCeremony<C>>,
 	keygen_states: CeremonyStates<KeygenCeremony<C>>,
-	allowing_high_pubkey: bool,
 	latest_ceremony_id: CeremonyId,
 	logger: slog::Logger,
 }
@@ -127,8 +124,8 @@ pub fn prepare_signing_request<Crypto: CryptoScheme>(
 	ceremony_id: CeremonyId,
 	own_account_id: &AccountId,
 	signers: BTreeSet<AccountId>,
-	key_info: KeygenResultInfo<Crypto::Point>,
-	payload: SigningPayload,
+	key_info: KeygenResultInfo<Crypto>,
+	payload: Crypto::SigningPayload,
 	outgoing_p2p_message_sender: &UnboundedSender<OutgoingMultisigStageMessages>,
 	rng: Rng,
 	logger: &slog::Logger,
@@ -189,7 +186,6 @@ pub fn prepare_keygen_request<Crypto: CryptoScheme>(
 	participants: BTreeSet<AccountId>,
 	outgoing_p2p_message_sender: &UnboundedSender<OutgoingMultisigStageMessages>,
 	rng: Rng,
-	allowing_high_pubkey: bool,
 	logger: &slog::Logger,
 ) -> Result<PreparedRequest<KeygenCeremony<Crypto>>, KeygenFailureReason> {
 	let validator_mapping = Arc::new(PartyIdxMapping::from_participants(participants.clone()));
@@ -217,7 +213,6 @@ pub fn prepare_keygen_request<Crypto: CryptoScheme>(
 
 		let processor = HashCommitments1::new(
 			common.clone(),
-			allowing_high_pubkey,
 			generate_keygen_context(ceremony_id, participants),
 		);
 
@@ -259,7 +254,6 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 			outgoing_p2p_message_sender,
 			signing_states: CeremonyStates::new(),
 			keygen_states: CeremonyStates::new(),
-			allowing_high_pubkey: false,
 			latest_ceremony_id,
 			logger: logger.clone(),
 		}
@@ -367,7 +361,6 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 			participants,
 			&self.outgoing_p2p_message_sender,
 			rng,
-			self.allowing_high_pubkey,
 			&logger_with_ceremony_id,
 		) {
 			Ok(request) => request,
@@ -389,7 +382,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 
 		ceremony_handle
 			.on_request(request, result_sender)
-			.with_context(|| format!("Invalid keygen request with ceremony id {}", ceremony_id))
+			.with_context(|| format!("Invalid keygen request with ceremony id {ceremony_id}"))
 			.unwrap();
 	}
 
@@ -398,8 +391,8 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 		&mut self,
 		ceremony_id: CeremonyId,
 		signers: BTreeSet<AccountId>,
-		payload: SigningPayload,
-		key_info: KeygenResultInfo<C::Point>,
+		payload: C::SigningPayload,
+		key_info: KeygenResultInfo<C>,
 		rng: Rng,
 		result_sender: CeremonyResultSender<SigningCeremony<C>>,
 		scope: &Scope<'_, anyhow::Error>,
@@ -445,7 +438,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 
 		ceremony_handle
 			.on_request(request, result_sender)
-			.with_context(|| format!("Invalid sign request with ceremony id {}", ceremony_id))
+			.with_context(|| format!("Invalid sign request with ceremony id {ceremony_id}"))
 			.unwrap();
 	}
 
@@ -488,35 +481,25 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 		self.latest_ceremony_id = ceremony_id;
 	}
 
-	fn single_party_keygen(&self, rng: Rng) -> KeygenResultInfo<C::Point> {
+	fn single_party_keygen(&self, mut rng: Rng) -> KeygenResultInfo<C> {
 		slog::info!(self.logger, "Performing solo keygen");
 
-		let (_key_id, key_data) = generate_key_data_until_compatible::<C>(
-			BTreeSet::from_iter([self.my_account_id.clone()]),
-			30,
-			rng,
-		);
+		let (_key_id, key_data) =
+			generate_key_data::<C>(BTreeSet::from_iter([self.my_account_id.clone()]), &mut rng);
 		key_data[&self.my_account_id].clone()
 	}
 
 	fn single_party_signing(
 		&self,
-		payload: SigningPayload,
-		keygen_result_info: KeygenResultInfo<C::Point>,
+		payload: C::SigningPayload,
+		keygen_result_info: KeygenResultInfo<C>,
 		mut rng: Rng,
 	) -> C::Signature {
 		slog::info!(self.logger, "Performing solo signing");
 
 		let key = &keygen_result_info.key.key_share;
 
-		let nonce = <C::Point as ECPoint>::Scalar::random(&mut rng);
-
-		let r = C::Point::from_scalar(&nonce);
-
-		let sigma =
-			client::signing::generate_schnorr_response::<C>(&key.x_i, key.y, r, nonce, &payload);
-
-		C::build_signature(sigma, r)
+		generate_single_party_signature::<C>(&key.x_i, &payload, &mut rng)
 	}
 }
 

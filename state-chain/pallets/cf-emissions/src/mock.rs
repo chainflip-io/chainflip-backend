@@ -1,7 +1,9 @@
 use crate as pallet_cf_emissions;
 use cf_chains::{
-	mocks::MockEthereum, ApiCall, ChainAbi, ChainCrypto, ReplayProtectionProvider, UpdateFlipSupply,
+	mocks::MockEthereum, AnyChain, ApiCall, ChainAbi, ChainCrypto, ReplayProtectionProvider,
+	UpdateFlipSupply,
 };
+use cf_traits::mocks::egress_handler::MockEgressHandler;
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	parameter_types, storage,
@@ -23,7 +25,7 @@ use cf_traits::{
 		eth_replay_protection_provider::MockEthReplayProtectionProvider,
 		system_state_info::MockSystemStateInfo,
 	},
-	Broadcaster, Issuance, WaivedFees,
+	Broadcaster, FlipBurnInfo, Issuance, WaivedFees,
 };
 
 use cf_primitives::{BroadcastId, FlipBalance};
@@ -38,6 +40,10 @@ use cf_traits::{
 };
 
 pub type AccountId = u64;
+
+pub const FLIP_TO_BURN: u128 = 10_000;
+pub const SUPPLY_UPDATE_INTERVAL: u32 = 10;
+pub const TOTAL_ISSUANCE: u128 = 1_000_000_000;
 
 cf_traits::impl_mock_stake_transfer!(AccountId, u128);
 
@@ -64,8 +70,8 @@ impl system::Config for Test {
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
-	type Origin = Origin;
-	type Call = Call;
+	type RuntimeOrigin = RuntimeOrigin;
+	type RuntimeCall = RuntimeCall;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
@@ -73,7 +79,7 @@ impl system::Config for Test {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = BlockHashCount;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -90,7 +96,7 @@ impl Chainflip for Test {
 	type KeyId = Vec<u8>;
 	type ValidatorId = AccountId;
 	type Amount = u128;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
 	type EnsureWitnessedAtCurrentEpoch = NeverFailingOriginCheck<Self>;
 	type EpochInfo = cf_traits::mocks::epoch_info::MockEpochInfo;
@@ -100,11 +106,11 @@ impl Chainflip for Test {
 pub struct MockCallback;
 
 impl UnfilteredDispatchable for MockCallback {
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 
 	fn dispatch_bypass_filter(
 		self,
-		_origin: Self::Origin,
+		_origin: Self::RuntimeOrigin,
 	) -> frame_support::dispatch::DispatchResultWithPostInfo {
 		Ok(().into())
 	}
@@ -123,10 +129,10 @@ parameter_types! {
 }
 
 // Implement mock for RestrictionHandler
-impl_mock_waived_fees!(AccountId, Call);
+impl_mock_waived_fees!(AccountId, RuntimeCall);
 
 impl pallet_cf_flip::Config for Test {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type Balance = u128;
 	type ExistentialDeposit = ExistentialDeposit;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
@@ -198,6 +204,14 @@ impl ApiCall<MockEthereum> for MockUpdateFlipSupply {
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct MockBroadcast;
 
+pub struct MockFlipToBurn;
+
+impl FlipBurnInfo for MockFlipToBurn {
+	fn take_flip_to_burn() -> cf_primitives::AssetAmount {
+		FLIP_TO_BURN
+	}
+}
+
 impl MockBroadcast {
 	pub fn call(outgoing: MockUpdateFlipSupply) -> u32 {
 		storage::hashed::put(&<Twox64Concat as StorageHasher>::hash, b"MockBroadcast", &outgoing);
@@ -218,7 +232,7 @@ impl Broadcaster<MockEthereum> for MockBroadcast {
 }
 
 impl pallet_cf_emissions::Config for Test {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type HostChain = MockEthereum;
 	type FlipBalance = FlipBalance;
 	type ApiCall = MockUpdateFlipSupply;
@@ -230,13 +244,13 @@ impl pallet_cf_emissions::Config for Test {
 	type Broadcaster = MockBroadcast;
 	type WeightInfo = ();
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
+	type FlipToBurn = MockFlipToBurn;
+	type EgressHandler = MockEgressHandler<AnyChain>;
 }
-
-pub const SUPPLY_UPDATE_INTERVAL: u32 = 10;
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext(validators: Vec<u64>, issuance: Option<u128>) -> sp_io::TestExternalities {
-	let total_issuance = issuance.unwrap_or(1_000_000_000u128);
+	let total_issuance = issuance.unwrap_or(TOTAL_ISSUANCE);
 	let config = GenesisConfig {
 		system: Default::default(),
 		flip: FlipConfig { total_issuance },

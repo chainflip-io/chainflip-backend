@@ -13,53 +13,21 @@ repository = 'https://github.com/chainflip-io/chainflip-backend'
 [dependencies]
 cf-traits = {path = '../../traits', default-features = false}
 cf-primitives = {path = '../../primitives', default-features = false}
-cf-chains = { path ='../../chains', default-features = false, features = ["ibiza"] }
+cf-chains = { path ='../../chains', default-features = false }
 
 # ==== Parity deps ====
-[dependencies.codec]
-default-features = false
-features = ['derive']
-package = 'parity-scale-codec'
-version = '3.0.0'
+codec = { package = 'parity-scale-codec', version = '3.0.0', default-features = false, features = ['derive'] }
+scale-info = { version = '2.1.1', default-features = false, features = ['derive'] }
 
-[dependencies.frame-support]
-default-features = false
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
+frame-benchmarking = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", optional = true, default-features = false }
+frame-support = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
+frame-system = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
+sp-runtime = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
+sp-std = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
 
-[dependencies.frame-system]
-default-features = false
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
-
-[dependencies.scale-info]
-default-features = false
-features = ['derive']
-version = '2.1.1'
-
-[dependencies.sp-std]
-default-features = false
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
-
-[dependencies.sp-runtime]
-default-features = false
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
-
-[dependencies.frame-benchmarking]
-default-features = false
-git = 'https://github.com/chainflip-io/substrate.git'
-optional = true
-tag = 'chainflip-monthly-2022-06+01'
-
-[dev-dependencies.sp-core]
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
-
-[dev-dependencies.sp-io]
-git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
+[dev-dependencies]
+sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12" }
+sp-io = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12" }
 
 [features]
 default = ['std']
@@ -68,7 +36,7 @@ std = [
   'cf-traits/std',
   'cf-chains/std',
   'codec/std',
-  'frame-benchmarking/std',
+  'frame-benchmarking?/std',
   'frame-support/std',
   'frame-system/std',
   'scale-info/std',
@@ -82,4 +50,3 @@ runtime-benchmarks = [
   'frame-system/runtime-benchmarks',
 ]
 try-runtime = ['frame-support/try-runtime']
-ibiza = []

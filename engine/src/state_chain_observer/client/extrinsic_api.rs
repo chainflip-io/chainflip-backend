@@ -34,7 +34,12 @@ pub trait ExtrinsicApi {
 		logger: &slog::Logger,
 	) -> Result<H256>
 	where
-		Call: Into<state_chain_runtime::Call> + Clone + std::fmt::Debug + Send + Sync + 'static;
+		Call: Into<state_chain_runtime::RuntimeCall>
+			+ Clone
+			+ std::fmt::Debug
+			+ Send
+			+ Sync
+			+ 'static;
 
 	async fn submit_unsigned_extrinsic<Call>(
 		&self,
@@ -42,13 +47,18 @@ pub trait ExtrinsicApi {
 		logger: &slog::Logger,
 	) -> Result<H256>
 	where
-		Call: Into<state_chain_runtime::Call> + Clone + std::fmt::Debug + Send + Sync + 'static;
+		Call: Into<state_chain_runtime::RuntimeCall>
+			+ Clone
+			+ std::fmt::Debug
+			+ Send
+			+ Sync
+			+ 'static;
 
 	async fn watch_submitted_extrinsic<BlockStream>(
 		&self,
 		extrinsic_hash: state_chain_runtime::Hash,
 		block_stream: &mut BlockStream,
-	) -> Result<Vec<state_chain_runtime::Event>>
+	) -> Result<Vec<state_chain_runtime::RuntimeEvent>>
 	where
 		BlockStream: Stream<Item = state_chain_runtime::Header> + Unpin + Send + 'static;
 }
@@ -60,7 +70,7 @@ fn invalid_err_obj(invalid_reason: InvalidTransaction) -> ErrorObjectOwned {
 impl<BaseRpcApi> super::StateChainClient<BaseRpcApi> {
 	fn create_and_sign_extrinsic(
 		&self,
-		call: state_chain_runtime::Call,
+		call: state_chain_runtime::RuntimeCall,
 		runtime_version: &RuntimeVersion,
 		genesis_hash: state_chain_runtime::Hash,
 		nonce: state_chain_runtime::Index,
@@ -116,7 +126,12 @@ impl<BaseRpcApi: super::base_rpc_api::BaseRpcApi + Send + Sync + 'static> Extrin
 	/// fails on an invalid nonce.
 	async fn submit_signed_extrinsic<Call>(&self, call: Call, logger: &slog::Logger) -> Result<H256>
 	where
-		Call: Into<state_chain_runtime::Call> + Clone + std::fmt::Debug + Send + Sync + 'static,
+		Call: Into<state_chain_runtime::RuntimeCall>
+			+ Clone
+			+ std::fmt::Debug
+			+ Send
+			+ Sync
+			+ 'static,
 	{
 		for _ in 0..MAX_EXTRINSIC_RETRY_ATTEMPTS {
 			// use the previous value but increment it for the next thread that loads/fetches it
@@ -224,7 +239,12 @@ impl<BaseRpcApi: super::base_rpc_api::BaseRpcApi + Send + Sync + 'static> Extrin
 		logger: &slog::Logger,
 	) -> Result<H256>
 	where
-		Call: Into<state_chain_runtime::Call> + std::fmt::Debug + Clone + Send + Sync + 'static,
+		Call: Into<state_chain_runtime::RuntimeCall>
+			+ std::fmt::Debug
+			+ Clone
+			+ Send
+			+ Sync
+			+ 'static,
 	{
 		let extrinsic = state_chain_runtime::UncheckedExtrinsic::new_unsigned(call.clone().into());
 		let expected_hash = BlakeTwo256::hash_of(&extrinsic);
@@ -277,7 +297,7 @@ impl<BaseRpcApi: super::base_rpc_api::BaseRpcApi + Send + Sync + 'static> Extrin
 		&self,
 		extrinsic_hash: state_chain_runtime::Hash,
 		block_stream: &mut BlockStream,
-	) -> Result<Vec<state_chain_runtime::Event>>
+	) -> Result<Vec<state_chain_runtime::RuntimeEvent>>
 	where
 		BlockStream: Stream<Item = state_chain_runtime::Header> + Unpin + Send + 'static,
 	{

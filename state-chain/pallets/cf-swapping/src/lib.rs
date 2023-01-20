@@ -6,10 +6,9 @@ use frame_support::{
 	sp_runtime::{traits::Saturating, Permill},
 };
 use frame_system::pallet_prelude::*;
+pub use pallet::*;
 use sp_arithmetic::{helpers_128bit::multiply_by_rational_with_rounding, Rounding};
 use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
-
-pub use pallet::*;
 
 #[cfg(test)]
 mod mock;
@@ -47,7 +46,7 @@ pub mod pallet {
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config: Chainflip {
 		/// Standard Event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 		/// For registering and verifying the account role.
 		type AccountRoleRegistry: AccountRoleRegistry<Self>;
 		/// API for handling asset ingress.
@@ -100,7 +99,7 @@ pub mod pallet {
 		/// A swap was executed.
 		SwapExecuted { swap_id: u64 },
 		/// A swap egress was scheduled.
-		SwapEgressScheduled { swap_id: u64, egress_id: EgressId },
+		SwapEgressScheduled { swap_id: u64, egress_id: EgressId, asset: Asset, amount: AssetAmount },
 		/// A withdrawal was requested.
 		WithdrawalRequested {
 			amount: AssetAmount,
@@ -123,15 +122,14 @@ pub mod pallet {
 		/// Do swapping with remaining weight in this block
 		fn on_idle(_block_number: BlockNumberFor<T>, available_weight: Weight) -> Weight {
 			let swaps = SwapQueue::<T>::get();
-			let mut used_weight =
-				T::DbWeight::get().reads(1 as Weight) + T::DbWeight::get().writes(1 as Weight);
+			let mut used_weight = T::DbWeight::get().reads(1) + T::DbWeight::get().writes(1);
 
 			let swap_groups = Self::group_swaps_by_asset_pair(swaps);
 			let mut unexecuted = vec![];
 
 			for (asset_pair, swaps) in swap_groups {
 				let swap_group_weight = T::WeightInfo::execute_group_of_swaps(swaps.len() as u32);
-				if used_weight.saturating_add(swap_group_weight) > available_weight {
+				if used_weight.saturating_add(swap_group_weight).all_gt(available_weight) {
 					// Add un-excecuted swaps back to storage
 					unexecuted.extend(swaps)
 				} else {
@@ -238,40 +236,48 @@ pub mod pallet {
 
 	impl<T: Config> Pallet<T> {
 		pub fn execute_group_of_swaps(swaps: Vec<Swap>, from: Asset, to: Asset) {
-			let mut bundle_input = 0;
-			let mut bundle_inputs = vec![];
-
-			for swap in &swaps {
-				debug_assert_eq!((swap.from, swap.to), (from, to));
-				// TODO: use a struct instead of tuple.
-				bundle_inputs.push((swap.amount, swap.to, swap.egress_address, swap.swap_id));
-				bundle_input.saturating_accrue(swap.amount);
+			if swaps.is_empty() {
+				return
 			}
+			let bundle_total_input: AssetAmount = swaps
+				.iter()
+				.map(|swap| {
+					debug_assert_eq!((swap.from, swap.to), (from, to));
+					swap.amount
+				})
+				.sum();
 
-			let (bundle_output, _) = T::SwappingApi::swap(from, to, bundle_input, 1);
+			let output_amount =
+				T::SwappingApi::swap(from, to, bundle_total_input).unwrap_or_default();
 
-			for swap in &swaps {
-				Self::deposit_event(Event::<T>::SwapExecuted { swap_id: swap.swap_id });
-			}
-
-			for (input_amount, egress_asset, egress_address, swap_id) in bundle_inputs {
-				if let Some(swap_output) = multiply_by_rational_with_rounding(
-					input_amount,
-					bundle_output,
-					bundle_input,
-					Rounding::Down,
-				) {
-					let egress_id = T::EgressHandler::schedule_egress(
-						egress_asset,
-						swap_output,
-						egress_address,
-					);
-					Self::deposit_event(Event::<T>::SwapEgressScheduled { swap_id, egress_id });
-				} else {
-					log::error!(
-						"Unable to calculate valid swap output for swap {:?}!",
-						&(input_amount, bundle_input, bundle_output)
-					);
+			if bundle_total_input > 0 {
+				for swap in swaps {
+					Self::deposit_event(Event::<T>::SwapExecuted { swap_id: swap.swap_id });
+					if let Some(swap_output) = multiply_by_rational_with_rounding(
+						swap.amount,
+						output_amount,
+						bundle_total_input,
+						Rounding::Down,
+					) {
+						if swap_output > 0 {
+							let egress_id = T::EgressHandler::schedule_egress(
+								swap.to,
+								swap_output,
+								swap.egress_address,
+							);
+							Self::deposit_event(Event::<T>::SwapEgressScheduled {
+								swap_id: swap.swap_id,
+								egress_id,
+								asset: to,
+								amount: swap_output,
+							});
+						}
+					} else {
+						log::error!(
+							"Unable to calculate valid swap output for swap {:?}!",
+							&(swap.amount, bundle_total_input, output_amount)
+						);
+					}
 				}
 			}
 		}

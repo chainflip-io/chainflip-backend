@@ -5,9 +5,9 @@ use std::collections::BTreeSet;
 use crate::{
 	common::format_iterator,
 	logging::{
-		KEYGEN_CEREMONY_FAILED, KEYGEN_REJECTED_INCOMPATIBLE, KEYGEN_REQUEST_IGNORED,
-		REPORTED_PARTIES_KEY, REQUEST_TO_SIGN_IGNORED, SIGNING_CEREMONY_FAILED,
-		UNAUTHORIZED_KEYGEN_ABORTED, UNAUTHORIZED_SIGNING_ABORTED,
+		KEYGEN_CEREMONY_FAILED, KEYGEN_REQUEST_IGNORED, REPORTED_PARTIES_KEY,
+		REQUEST_TO_SIGN_IGNORED, SIGNING_CEREMONY_FAILED, UNAUTHORIZED_KEYGEN_ABORTED,
+		UNAUTHORIZED_SIGNING_ABORTED,
 	},
 };
 
@@ -43,8 +43,6 @@ pub enum KeygenFailureReason {
 	InvalidCommitment,
 	#[error("Invalid secret share in a blame response")]
 	InvalidBlameResponse,
-	#[error("The key is not compatible")]
-	KeyNotCompatible,
 	#[error("Invalid Complaint")]
 	InvalidComplaint,
 }
@@ -118,9 +116,6 @@ impl CeremonyFailureReason for KeygenFailureReason {
 			},
 			KeygenFailureReason::InvalidComplaint => {
 				slog::warn!(logger, #KEYGEN_CEREMONY_FAILED, "{}: {}",KEYGEN_CEREMONY_FAILED_PREFIX, self; REPORTED_PARTIES_KEY => reported_parties);
-			},
-			KeygenFailureReason::KeyNotCompatible => {
-				slog::debug!(logger, #KEYGEN_REJECTED_INCOMPATIBLE, "{}: {}",KEYGEN_CEREMONY_FAILED_PREFIX, self);
 			},
 		}
 	}

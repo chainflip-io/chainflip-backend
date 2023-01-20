@@ -7,6 +7,7 @@ pub mod runtime_apis;
 mod weights;
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
+use pallet_transaction_payment::ConstFeeMultiplier;
 
 use crate::{
 	chainflip::Offence,
@@ -15,12 +16,14 @@ use crate::{
 		RuntimeApiPenalty, RuntimeApiPendingClaim,
 	},
 };
-#[cfg(feature = "ibiza")]
-use cf_chains::{dot, dot::api::PolkadotApi, Polkadot};
 use cf_chains::{
+	dot,
+	dot::api::PolkadotApi,
 	eth,
 	eth::{api::register_claim::RegisterClaim, Ethereum},
+	Polkadot,
 };
+use pallet_transaction_payment::Multiplier;
 
 use pallet_cf_validator::BidInfoProvider;
 
@@ -50,7 +53,7 @@ use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
 use sp_runtime::traits::{
-	AccountIdLookup, BlakeTwo256, Block as BlockT, ConvertInto, IdentifyAccount, NumberFor,
+	AccountIdLookup, BlakeTwo256, Block as BlockT, ConvertInto, IdentifyAccount, NumberFor, One,
 	OpaqueKeys, UniqueSaturatedInto, Verify,
 };
 
@@ -68,7 +71,7 @@ use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
 pub use cf_primitives::{
-	Asset, AssetAmount, BlockNumber, ExchangeRate, FlipBalance, ForeignChainAddress,
+	Asset, AssetAmount, BlockNumber, ExchangeRate, FlipBalance, ForeignChainAddress, Tick,
 };
 pub use cf_traits::{EpochInfo, EthEnvironmentProvider, QualifyNode, SessionKeysRegistered};
 
@@ -78,7 +81,6 @@ use chainflip::{
 	EthVaultTransitionHandler,
 };
 
-#[cfg(feature = "ibiza")]
 use chainflip::{all_vaults_rotator::AllVaultRotator, DotEnvironment, DotVaultTransitionHandler};
 use constants::common::*;
 use pallet_cf_flip::{Bonder, FlipSlasher};
@@ -158,37 +160,8 @@ parameter_types! {
 	};
 }
 
-#[cfg(not(feature = "ibiza"))]
 impl pallet_cf_validator::Config for Runtime {
-	type Event = Event;
-	type Offence = chainflip::Offence;
-	type AccountRoleRegistry = AccountRoles;
-	type EpochTransitionHandler = ChainflipEpochTransitions;
-	type MinEpoch = MinEpoch;
-	type ValidatorWeightInfo = pallet_cf_validator::weights::PalletWeight<Runtime>;
-	type VaultRotator = EthereumVault;
-	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
-	type MissedAuthorshipSlots = chainflip::MissedAuraSlots;
-	type BidderProvider = pallet_cf_staking::Pallet<Self>;
-	type AuctionQualification = (
-		Reputation,
-		pallet_cf_validator::PeerMapping<Self>,
-		SessionKeysRegistered<
-			<Self as frame_system::Config>::AccountId,
-			pallet_session::Pallet<Self>,
-		>,
-		AccountRoles,
-	);
-	type OffenceReporter = Reputation;
-	type EmergencyRotationPercentageRange = EmergencyRotationPercentageRange;
-	type Bonder = Bonder<Runtime>;
-	type ReputationResetter = Reputation;
-}
-
-// Only difference here is that we use the AllVaultRotator
-#[cfg(feature = "ibiza")]
-impl pallet_cf_validator::Config for Runtime {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type Offence = chainflip::Offence;
 	type AccountRoleRegistry = AccountRoles;
 	type EpochTransitionHandler = ChainflipEpochTransitions;
@@ -214,20 +187,16 @@ impl pallet_cf_validator::Config for Runtime {
 }
 
 impl pallet_cf_environment::Config for Runtime {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
-	#[cfg(feature = "ibiza")]
 	type CreatePolkadotVault = PolkadotApi<DotEnvironment>;
-	#[cfg(feature = "ibiza")]
 	type PolkadotBroadcaster = PolkadotBroadcaster;
-	#[cfg(feature = "ibiza")]
 	type PolkadotVaultKeyWitnessedHandler = PolkadotVault;
 	type WeightInfo = pallet_cf_environment::weights::PalletWeight<Runtime>;
 }
 
-#[cfg(feature = "ibiza")]
 impl pallet_cf_swapping::Config for Runtime {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type IngressHandler = chainflip::AnyChainIngressEgressHandler;
 	type EgressHandler = chainflip::AnyChainIngressEgressHandler;
 	type SwappingApi = LiquidityPools;
@@ -236,8 +205,8 @@ impl pallet_cf_swapping::Config for Runtime {
 }
 
 impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
-	type Event = Event;
-	type Call = Call;
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, EthereumInstance>;
@@ -254,10 +223,9 @@ impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 	type SystemStateManager = pallet_cf_environment::SystemStateProvider<Runtime>;
 }
 
-#[cfg(feature = "ibiza")]
 impl pallet_cf_vaults::Config<PolkadotInstance> for Runtime {
-	type Event = Event;
-	type Call = Call;
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, PolkadotInstance>;
@@ -274,12 +242,10 @@ impl pallet_cf_vaults::Config<PolkadotInstance> for Runtime {
 	type SystemStateManager = pallet_cf_environment::SystemStateProvider<Runtime>;
 }
 
-#[cfg(feature = "ibiza")]
 use chainflip::address_derivation::AddressDerivation;
 
-#[cfg(feature = "ibiza")]
 impl pallet_cf_ingress_egress::Config<EthereumInstance> for Runtime {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type TargetChain = Ethereum;
 	type AddressDerivation = AddressDerivation;
 	type LpProvisioning = LiquidityProvider;
@@ -290,9 +256,8 @@ impl pallet_cf_ingress_egress::Config<EthereumInstance> for Runtime {
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 }
 
-#[cfg(feature = "ibiza")]
 impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type TargetChain = Polkadot;
 	type AddressDerivation = AddressDerivation;
 	type LpProvisioning = LiquidityProvider;
@@ -302,15 +267,14 @@ impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 }
-#[cfg(feature = "ibiza")]
 impl pallet_cf_pools::Config for Runtime {
-	// fee = 0,1%
-	type NetworkFee = ConstU16<10>;
+	type RuntimeEvent = RuntimeEvent;
+	type NetworkFee = ConstU16<0>;
+	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 }
 
-#[cfg(feature = "ibiza")]
 impl pallet_cf_lp::Config for Runtime {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type AccountRoleRegistry = AccountRoles;
 	type IngressHandler = chainflip::AnyChainIngressEgressHandler;
 	type EgressHandler = chainflip::AnyChainIngressEgressHandler;
@@ -319,7 +283,7 @@ impl pallet_cf_lp::Config for Runtime {
 }
 
 impl pallet_cf_account_roles::Config for Runtime {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type StakeInfo = Flip;
 	type BidInfo = BidInfoProvider<Runtime>;
 	type WeightInfo = pallet_cf_account_roles::weights::PalletWeight<Runtime>;
@@ -327,17 +291,17 @@ impl pallet_cf_account_roles::Config for Runtime {
 
 impl<LocalCall> SendTransactionTypes<LocalCall> for Runtime
 where
-	Call: From<LocalCall>,
+	RuntimeCall: From<LocalCall>,
 {
 	type Extrinsic = UncheckedExtrinsic;
-	type OverarchingCall = Call;
+	type OverarchingCall = RuntimeCall;
 }
 
 impl pallet_session::Config for Runtime {
 	type SessionHandler = <opaque::SessionKeys as OpaqueKeys>::KeyTypeIdProviders;
 	type ShouldEndSession = Validator;
 	type SessionManager = Validator;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type Keys = opaque::SessionKeys;
 	type NextSessionRotation = Validator;
 	type ValidatorId = <Self as frame_system::Config>::AccountId;
@@ -356,8 +320,11 @@ parameter_types! {
 	pub const Version: RuntimeVersion = VERSION;
 	pub const BlockHashCount: BlockNumber = 2400;
 	/// We allow for 2 seconds of compute with a 6 second average block time.
-	pub BlockWeights: frame_system::limits::BlockWeights = frame_system::limits::BlockWeights
-		::with_sensible_defaults(2 * WEIGHT_PER_SECOND, NORMAL_DISPATCH_RATIO);
+	pub BlockWeights: frame_system::limits::BlockWeights =
+		frame_system::limits::BlockWeights::with_sensible_defaults(
+			(2u64 * WEIGHT_PER_SECOND).set_proof_size(u64::MAX),
+			NORMAL_DISPATCH_RATIO,
+		);
 	pub BlockLength: frame_system::limits::BlockLength = frame_system::limits::BlockLength
 		::max_with_normal_ratio(5 * 1024 * 1024, NORMAL_DISPATCH_RATIO);
 }
@@ -374,7 +341,7 @@ impl frame_system::Config for Runtime {
 	/// The identifier used to distinguish between accounts.
 	type AccountId = AccountId;
 	/// The aggregated dispatch type that is available for extrinsics.
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	/// The lookup mechanism to get account ID from whatever is passed in dispatchers.
 	type Lookup = AccountIdLookup<AccountId, ()>;
 	/// The index type for storing how many extrinsics an account has signed.
@@ -388,9 +355,9 @@ impl frame_system::Config for Runtime {
 	/// The header type.
 	type Header = generic::Header<BlockNumber, BlakeTwo256>;
 	/// The ubiquitous event type.
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	/// The ubiquitous origin type.
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	/// Maximum number of block number to block hash mappings to keep (oldest pruned first).
 	type BlockHashCount = BlockHashCount;
 	/// The weight of database operations that the runtime can invoke.
@@ -453,8 +420,7 @@ type GrandpaOffenceReporter<T> = pallet_cf_reputation::ChainflipOffenceReporting
 >;
 
 impl pallet_grandpa::Config for Runtime {
-	type Event = Event;
-	type Call = Call;
+	type RuntimeEvent = RuntimeEvent;
 	type KeyOwnerProofSystem = Historical;
 	type KeyOwnerProof = KeyOwnerProof<Historical, GrandpaId>;
 	type KeyOwnerIdentification = KeyOwnerIdentification<Historical, GrandpaId>;
@@ -483,7 +449,7 @@ impl pallet_authorship::Config for Runtime {
 }
 
 impl pallet_cf_flip::Config for Runtime {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type Balance = FlipBalance;
 	type ExistentialDeposit = ConstU128<500>;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
@@ -494,9 +460,9 @@ impl pallet_cf_flip::Config for Runtime {
 }
 
 impl pallet_cf_witnesser::Config for Runtime {
-	type Event = Event;
-	type Origin = Origin;
-	type Call = Call;
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeOrigin = RuntimeOrigin;
+	type RuntimeCall = RuntimeCall;
 	type AccountRoleRegistry = AccountRoles;
 	type ValidatorId = <Self as frame_system::Config>::AccountId;
 	type EpochInfo = pallet_cf_validator::Pallet<Self>;
@@ -505,8 +471,8 @@ impl pallet_cf_witnesser::Config for Runtime {
 }
 
 impl pallet_cf_staking::Config for Runtime {
-	type Event = Event;
-	type ThresholdCallable = Call;
+	type RuntimeEvent = RuntimeEvent;
+	type ThresholdCallable = RuntimeCall;
 	type StakerId = AccountId;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type AccountRoleRegistry = AccountRoles;
@@ -521,7 +487,7 @@ impl pallet_cf_staking::Config for Runtime {
 }
 
 impl pallet_cf_tokenholder_governance::Config for Runtime {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type FeePayment = Flip;
 	type Chain = Ethereum;
 	type StakingInfo = Flip;
@@ -535,9 +501,9 @@ impl pallet_cf_tokenholder_governance::Config for Runtime {
 }
 
 impl pallet_cf_governance::Config for Runtime {
-	type Origin = Origin;
-	type Call = Call;
-	type Event = Event;
+	type RuntimeOrigin = RuntimeOrigin;
+	type RuntimeCall = RuntimeCall;
+	type RuntimeEvent = RuntimeEvent;
 	type TimeSource = Timestamp;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type WeightInfo = pallet_cf_governance::weights::PalletWeight<Runtime>;
@@ -546,7 +512,7 @@ impl pallet_cf_governance::Config for Runtime {
 }
 
 impl pallet_cf_emissions::Config for Runtime {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type HostChain = Ethereum;
 	type FlipBalance = FlipBalance;
 	type ApiCall = eth::api::EthereumApi<EthEnvironment>;
@@ -558,15 +524,22 @@ impl pallet_cf_emissions::Config for Runtime {
 	type EthEnvironmentProvider = Environment;
 	type WeightInfo = pallet_cf_emissions::weights::PalletWeight<Runtime>;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+	type FlipToBurn = LiquidityPools;
+	type EgressHandler = chainflip::AnyChainIngressEgressHandler;
+}
+
+parameter_types! {
+	pub FeeMultiplier: Multiplier = Multiplier::one();
 }
 
 impl pallet_transaction_payment::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
 	type OnChargeTransaction = pallet_cf_flip::FlipTransactionPayment<Self>;
 	type OperationalFeeMultiplier = ConstU8<5>;
 	type WeightToFee =
 		ConstantMultiplier<FlipBalance, ConstU128<{ constants::common::TX_FEE_MULTIPLIER }>>;
 	type LengthToFee = ConstantMultiplier<FlipBalance, ConstU128<1_000_000>>;
-	type FeeMultiplierUpdate = ();
+	type FeeMultiplierUpdate = ConstFeeMultiplier<FeeMultiplier>;
 }
 
 parameter_types! {
@@ -575,7 +548,7 @@ parameter_types! {
 }
 
 impl pallet_cf_reputation::Config for Runtime {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type Offence = chainflip::Offence;
 	type AccountRoleRegistry = AccountRoles;
 	type Heartbeat = ChainflipHeartbeat;
@@ -588,11 +561,11 @@ impl pallet_cf_reputation::Config for Runtime {
 }
 
 impl pallet_cf_threshold_signature::Config<EthereumInstance> for Runtime {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type Offence = chainflip::Offence;
-	type RuntimeOrigin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type AccountRoleRegistry = AccountRoles;
-	type ThresholdCallable = Call;
+	type ThresholdCallable = RuntimeCall;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type ThresholdSignerNomination = chainflip::RandomSignerNomination;
 	type TargetChain = Ethereum;
@@ -602,14 +575,12 @@ impl pallet_cf_threshold_signature::Config<EthereumInstance> for Runtime {
 	type CeremonyRetryDelay = ConstU32<1>;
 	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
 }
-
-#[cfg(feature = "ibiza")]
 impl pallet_cf_threshold_signature::Config<PolkadotInstance> for Runtime {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type Offence = chainflip::Offence;
-	type RuntimeOrigin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type AccountRoleRegistry = AccountRoles;
-	type ThresholdCallable = Call;
+	type ThresholdCallable = RuntimeCall;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type ThresholdSignerNomination = chainflip::RandomSignerNomination;
 	type TargetChain = Polkadot;
@@ -621,8 +592,8 @@ impl pallet_cf_threshold_signature::Config<PolkadotInstance> for Runtime {
 }
 
 impl pallet_cf_broadcast::Config<EthereumInstance> for Runtime {
-	type Event = Event;
-	type Call = Call;
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
 	type Offence = chainflip::Offence;
 	type AccountRoleRegistry = AccountRoles;
 	type TargetChain = Ethereum;
@@ -637,11 +608,9 @@ impl pallet_cf_broadcast::Config<EthereumInstance> for Runtime {
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type KeyProvider = EthereumVault;
 }
-
-#[cfg(feature = "ibiza")]
 impl pallet_cf_broadcast::Config<PolkadotInstance> for Runtime {
-	type Event = Event;
-	type Call = Call;
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
 	type Offence = chainflip::Offence;
 	type AccountRoleRegistry = AccountRoles;
 	type TargetChain = Polkadot;
@@ -658,62 +627,26 @@ impl pallet_cf_broadcast::Config<PolkadotInstance> for Runtime {
 }
 
 impl pallet_cf_chain_tracking::Config<EthereumInstance> for Runtime {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type TargetChain = Ethereum;
 	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
 	type AgeLimit = ConstU64<{ constants::common::eth::BLOCK_SAFETY_MARGIN }>;
 }
 
-#[cfg(feature = "ibiza")]
 impl pallet_cf_chain_tracking::Config<PolkadotInstance> for Runtime {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type TargetChain = Polkadot;
 	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
 	// TODO: Set good limit
 	type AgeLimit = ConstU32<1>;
 }
 
-// The latest release runtime
-#[cfg(not(feature = "ibiza"))]
 construct_runtime!(
-	pub enum Runtime where
+	pub struct Runtime
+	where
 		Block = Block,
 		NodeBlock = opaque::Block,
-		UncheckedExtrinsic = UncheckedExtrinsic
-	{
-		System: frame_system,
-		RandomnessCollectiveFlip: pallet_randomness_collective_flip,
-		Timestamp: pallet_timestamp,
-		Environment: pallet_cf_environment,
-		Flip: pallet_cf_flip,
-		Emissions: pallet_cf_emissions,
-		Staking: pallet_cf_staking,
-		// AccountRoles after staking, since account creation comes first.
-		AccountRoles: pallet_cf_account_roles,
-		TransactionPayment: pallet_transaction_payment,
-		Witnesser: pallet_cf_witnesser,
-		Validator: pallet_cf_validator,
-		Session: pallet_session,
-		Historical: session_historical::{Pallet},
-		Aura: pallet_aura,
-		Authorship: pallet_authorship,
-		Grandpa: pallet_grandpa,
-		Governance: pallet_cf_governance,
-		TokenholderGovernance: pallet_cf_tokenholder_governance,
-		EthereumVault: pallet_cf_vaults::<Instance1>,
-		Reputation: pallet_cf_reputation,
-		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>,
-		EthereumBroadcaster: pallet_cf_broadcast::<Instance1>,
-		EthereumChainTracking: pallet_cf_chain_tracking::<Instance1>,
-	}
-);
-
-#[cfg(feature = "ibiza")]
-construct_runtime!(
-	pub enum Runtime where
-		Block = Block,
-		NodeBlock = opaque::Block,
-		UncheckedExtrinsic = UncheckedExtrinsic
+		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system,
 		RandomnessCollectiveFlip: pallet_randomness_collective_flip,
@@ -771,11 +704,12 @@ pub type SignedExtra = (
 	pallet_transaction_payment::ChargeTransactionPayment<Runtime>,
 );
 /// Unchecked extrinsic type as expected by this runtime.
-pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Call, Signature, SignedExtra>;
+pub type UncheckedExtrinsic =
+	generic::UncheckedExtrinsic<Address, RuntimeCall, Signature, SignedExtra>;
 /// The payload being signed in transactions.
-pub type SignedPayload = generic::SignedPayload<Call, SignedExtra>;
+pub type SignedPayload = generic::SignedPayload<RuntimeCall, SignedExtra>;
 /// Extrinsic type that has already been checked.
-pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Call, SignedExtra>;
+pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, RuntimeCall, SignedExtra>;
 /// Executive: handles dispatch to the various modules.
 pub type Executive = frame_executive::Executive<
 	Runtime,
@@ -790,7 +724,6 @@ pub type Executive = frame_executive::Executive<
 #[macro_use]
 extern crate frame_benchmarking;
 
-#[cfg(feature = "ibiza")]
 #[cfg(feature = "runtime-benchmarks")]
 mod benches {
 	define_benchmarks!(
@@ -817,30 +750,6 @@ mod benches {
 	);
 }
 
-#[cfg(not(feature = "ibiza"))]
-#[cfg(feature = "runtime-benchmarks")]
-mod benches {
-	define_benchmarks!(
-		[frame_benchmarking, BaselineBench::<Runtime>]
-		[frame_system, SystemBench::<Runtime>]
-		[pallet_timestamp, Timestamp]
-		[pallet_cf_environment, Environment]
-		[pallet_cf_flip, Flip]
-		[pallet_cf_emissions, Emissions]
-		[pallet_cf_staking, Staking]
-		[pallet_session, SessionBench::<Runtime>]
-		[pallet_cf_witnesser, Witnesser]
-		[pallet_cf_validator, Validator]
-		[pallet_cf_governance, Governance]
-		[pallet_cf_tokenholder_governance, TokenholderGovernance]
-		[pallet_cf_vaults, EthereumVault]
-		[pallet_cf_reputation, Reputation]
-		[pallet_cf_threshold_signature, EthereumThresholdSigner]
-		[pallet_cf_broadcast, EthereumBroadcaster]
-		[pallet_cf_chain_tracking, EthereumChainTracking]
-	);
-}
-
 impl_runtime_apis! {
 	// START custom runtime APIs
 	impl runtime_apis::CustomRuntimeApi<Block> for Runtime {
@@ -863,7 +772,7 @@ impl_runtime_apis! {
 			let epoch_index = Self::cf_current_epoch();
 			// We should always have a Vault for the current epoch, but in case we do
 			// not, just return an empty Vault.
-			let vault: Vault<Ethereum> = EthereumVault::vaults(&epoch_index).unwrap_or_default();
+			let vault: Vault<Ethereum> = EthereumVault::vaults(epoch_index).unwrap_or_default();
 			(vault.public_key.to_pubkey_compressed(), vault.active_from_block.unique_saturated_into())
 		}
 		fn cf_auction_parameters() -> (u32, u32) {
@@ -929,7 +838,7 @@ impl_runtime_apis! {
 		}
 
 		fn cf_pending_claim(account_id: AccountId) -> Option<RuntimeApiPendingClaim> {
-			let api_call = pallet_cf_staking::PendingClaims::<Runtime>::get(&account_id)?;
+			let api_call = pallet_cf_staking::PendingClaims::<Runtime>::get(account_id)?;
 			let pending_claim: RegisterClaim = match api_call {
 				eth::api::EthereumApi::RegisterClaim(tx) => tx,
 				_ => unreachable!(),
@@ -944,7 +853,7 @@ impl_runtime_apis! {
 		}
 
 		fn cf_get_claim_certificate(account_id: AccountId) -> Option<Vec<u8>> {
-			let api_call = pallet_cf_staking::PendingClaims::<Runtime>::get(&account_id)?;
+			let api_call = pallet_cf_staking::PendingClaims::<Runtime>::get(account_id)?;
 			let pending_claim: RegisterClaim = match api_call {
 				eth::api::EthereumApi::RegisterClaim(tx) => tx,
 				_ => unreachable!(),
@@ -996,17 +905,16 @@ impl_runtime_apis! {
 		}
 	}
 
-	#[cfg(feature = "ibiza")]
 	impl pallet_cf_pools_runtime_api::PoolsApi<Block> for Runtime {
-		fn cf_swap_rate(input_asset: Asset, output_asset: Asset, input_amount: AssetAmount) -> ExchangeRate {
+		fn cf_pool_tick_price(
+			asset: Asset,
+		) -> Option<Tick> {
 			use cf_traits::LiquidityPoolApi;
-
-			LiquidityPools::swap_rate(input_asset, output_asset, input_amount)
+			LiquidityPools::current_tick(&asset)
 		}
 	}
 
 	// END custom runtime APIs
-
 	impl sp_api::Core<Block> for Runtime {
 		fn version() -> RuntimeVersion {
 			VERSION
@@ -1143,6 +1051,23 @@ impl_runtime_apis! {
 		}
 	}
 
+	impl pallet_transaction_payment_rpc_runtime_api::TransactionPaymentCallApi<Block, Balance, RuntimeCall>
+		for Runtime
+	{
+		fn query_call_info(
+			call: RuntimeCall,
+			len: u32,
+		) -> pallet_transaction_payment::RuntimeDispatchInfo<Balance> {
+			TransactionPayment::query_call_info(call, len)
+		}
+		fn query_call_fee_details(
+			call: RuntimeCall,
+			len: u32,
+		) -> pallet_transaction_payment::FeeDetails<Balance> {
+			TransactionPayment::query_call_fee_details(call, len)
+		}
+	}
+
 	#[cfg(feature = "try-runtime")]
 	impl frame_try_runtime::TryRuntime<Block> for Runtime {
 		fn on_runtime_upgrade() -> (Weight, Weight) {
@@ -1153,8 +1078,14 @@ impl_runtime_apis! {
 			(weight, BlockWeights::get().max_block)
 		}
 
-		fn execute_block_no_check(block: Block) -> Weight {
-			Executive::execute_block_no_check(block)
+		fn execute_block(
+			block: Block,
+			state_root_check: bool,
+			select: frame_try_runtime::TryStateSelect
+		) -> Weight {
+			// NOTE: intentional unwrap: we don't want to propagate the error backwards, and want to
+			// have a backtrace here.
+			Executive::try_execute_block(block, state_root_check, select).expect("execute-block failed")
 		}
 	}
 
@@ -1192,18 +1123,8 @@ impl_runtime_apis! {
 			impl frame_system_benchmarking::Config for Runtime {}
 			impl baseline::Config for Runtime {}
 
-			let whitelist: Vec<TrackedStorageKey> = vec![
-				// Block Number
-				hex_literal::hex!("26aa394eea5630e07c48ae0c9558cef702a5c1b19ab7a04f536c519aca4983ac").to_vec().into(),
-				// Total Issuance
-				hex_literal::hex!("c2261276cc9d1f8598ea4b6a74b15c2f57c875e4cff74148e4628f264b974c80").to_vec().into(),
-				// Execution Phase
-				hex_literal::hex!("26aa394eea5630e07c48ae0c9558cef7ff553b5a9862a516939d82b3d3d8661a").to_vec().into(),
-				// Event Count
-				hex_literal::hex!("26aa394eea5630e07c48ae0c9558cef70a98fdbe9ce6c55837576c60c7af3850").to_vec().into(),
-				// System Events
-				hex_literal::hex!("26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7").to_vec().into(),
-			];
+			use frame_support::traits::WhitelistedStorageKeys;
+			let whitelist: Vec<TrackedStorageKey> = AllPalletsWithSystem::whitelisted_storage_keys();
 
 			let mut batches = Vec::<BenchmarkBatch>::new();
 			let params = (&config, &whitelist);
@@ -1224,7 +1145,7 @@ mod test {
 	#[test]
 	fn call_size() {
 		assert!(
-			core::mem::size_of::<Call>() <= CALL_ENUM_MAX_SIZE,
+			core::mem::size_of::<RuntimeCall>() <= CALL_ENUM_MAX_SIZE,
 			r"
 			Polkadot suggests a 230 byte limit for the size of the Call type. We use {} but this runtime's call size
 			is {}. If this test fails then you have just added a call variant that exceed the limit.
@@ -1241,7 +1162,36 @@ mod test {
 			  - https://fasterthanli.me/articles/peeking-inside-a-rust-enum
 			",
 			CALL_ENUM_MAX_SIZE,
-			core::mem::size_of::<Call>(),
+			core::mem::size_of::<RuntimeCall>(),
+		);
+	}
+
+	use frame_support::traits::WhitelistedStorageKeys;
+	use sp_core::hexdisplay::HexDisplay;
+	use std::collections::HashSet;
+
+	#[test]
+	fn check_whitelist() {
+		let whitelist: HashSet<String> = AllPalletsWithSystem::whitelisted_storage_keys()
+			.iter()
+			.map(|e| HexDisplay::from(&e.key).to_string())
+			.collect();
+
+		// Block Number
+		assert!(
+			whitelist.contains("26aa394eea5630e07c48ae0c9558cef702a5c1b19ab7a04f536c519aca4983ac")
+		);
+		// Execution Phase
+		assert!(
+			whitelist.contains("26aa394eea5630e07c48ae0c9558cef7ff553b5a9862a516939d82b3d3d8661a")
+		);
+		// Event Count
+		assert!(
+			whitelist.contains("26aa394eea5630e07c48ae0c9558cef70a98fdbe9ce6c55837576c60c7af3850")
+		);
+		// System Events
+		assert!(
+			whitelist.contains("26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7")
 		);
 	}
 }

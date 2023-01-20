@@ -8,10 +8,7 @@ use cf_primitives::AuthorityCount;
 
 use zeroize::Zeroize;
 
-use crate::multisig::{
-	crypto::{CryptoScheme, ECPoint, ECScalar, KeyShare, Rng},
-	SigningPayload,
-};
+use crate::multisig::crypto::{CryptoScheme, ECPoint, ECScalar, KeyShare, Rng};
 
 use sha2::{Digest, Sha256};
 
@@ -117,27 +114,27 @@ fn gen_rho_i<P: ECPoint>(
 type SigningResponse<P> = LocalSig3<P>;
 
 /// Generate binding values for each party given their previously broadcast commitments
-fn generate_bindings<P: ECPoint>(
-	payload: &SigningPayload,
-	commitments: &BTreeMap<AuthorityCount, SigningCommitment<P>>,
+fn generate_bindings<C: CryptoScheme>(
+	payload: &C::SigningPayload,
+	commitments: &BTreeMap<AuthorityCount, SigningCommitment<C::Point>>,
 	all_idxs: &BTreeSet<AuthorityCount>,
-) -> BTreeMap<AuthorityCount, P::Scalar> {
+) -> BTreeMap<AuthorityCount, <C::Point as ECPoint>::Scalar> {
 	all_idxs
 		.iter()
-		.map(|idx| (*idx, gen_rho_i(*idx, &payload.0, commitments, all_idxs)))
+		.map(|idx| (*idx, gen_rho_i(*idx, payload.as_ref(), commitments, all_idxs)))
 		.collect()
 }
 
 /// Generate local signature/response (shard). See step 5 in Figure 3 (page 15).
 pub fn generate_local_sig<C: CryptoScheme>(
-	payload: &SigningPayload,
+	payload: &C::SigningPayload,
 	key: &KeyShare<C::Point>,
 	nonces: &SecretNoncePair<C::Point>,
 	commitments: &BTreeMap<AuthorityCount, SigningCommitment<C::Point>>,
 	own_idx: AuthorityCount,
 	all_idxs: &BTreeSet<AuthorityCount>,
 ) -> SigningResponse<C::Point> {
-	let bindings = generate_bindings(payload, commitments, all_idxs);
+	let bindings = generate_bindings::<C>(payload, commitments, all_idxs);
 
 	// This is `R` in a Schnorr signature
 	let group_commitment = gen_group_commitment(commitments, &bindings);
@@ -163,7 +160,7 @@ pub fn generate_schnorr_response<C: CryptoScheme>(
 	pubkey: C::Point,
 	nonce_commitment: C::Point,
 	nonce: <C::Point as ECPoint>::Scalar,
-	payload: &SigningPayload,
+	payload: &C::SigningPayload,
 ) -> <C::Point as ECPoint>::Scalar {
 	let challenge = C::build_challenge(pubkey, nonce_commitment, payload);
 
@@ -174,14 +171,14 @@ pub fn generate_schnorr_response<C: CryptoScheme>(
 /// (aggregate) signature given that no party misbehaved. Otherwise
 /// return the misbehaving parties.
 pub fn aggregate_signature<C: CryptoScheme>(
-	payload: &SigningPayload,
+	payload: &C::SigningPayload,
 	signer_idxs: &BTreeSet<AuthorityCount>,
 	agg_pubkey: C::Point,
 	pubkeys: &BTreeMap<AuthorityCount, C::Point>,
 	commitments: &BTreeMap<AuthorityCount, SigningCommitment<C::Point>>,
 	responses: &BTreeMap<AuthorityCount, SigningResponse<C::Point>>,
 ) -> Result<C::Signature, BTreeSet<AuthorityCount>> {
-	let bindings = generate_bindings(payload, commitments, signer_idxs);
+	let bindings = generate_bindings::<C>(payload, commitments, signer_idxs);
 
 	let group_commitment = gen_group_commitment(commitments, &bindings);
 
@@ -228,7 +225,10 @@ mod tests {
 
 	use super::*;
 
-	use crate::multisig::crypto::eth::{EthSigning, Point, Scalar};
+	use crate::multisig::{
+		crypto::eth::{EthSigning, Point, Scalar},
+		eth::SigningPayload,
+	};
 
 	const SECRET_KEY: &str = "fbcb47bc85b881e0dfb31c872d4e06848f80530ccbd18fc016a27c4a744d0eba";
 	const NONCE_KEY: &str = "d51e13c68bf56155a83e50fd9bc840e2a1847fb9b49cd206a577ecd1cd15e285";
@@ -243,7 +243,7 @@ mod tests {
 		// Given the signing key, nonce and message hash, check that
 		// sigma (signature response) is correct and matches the expected
 		// (by the KeyManager contract) value
-		let payload = SigningPayload(hex::decode(MESSAGE_HASH).unwrap().to_vec());
+		let payload = SigningPayload(hex::decode(MESSAGE_HASH).unwrap().try_into().unwrap());
 
 		let nonce = Scalar::from_hex(NONCE_KEY);
 		let commitment = Point::from_scalar(&nonce);
@@ -275,5 +275,38 @@ mod tests {
 			&challenge,
 			&response,
 		));
+	}
+
+	#[test]
+	fn bindings_are_backwards_compatible() {
+		use rand_legacy::SeedableRng;
+		// The seed must not change or the test will break.
+		let mut rng = Rng::from_seed([0; 32]);
+
+		let payload = SigningPayload(hex::decode(MESSAGE_HASH).unwrap().try_into().unwrap());
+		let idxs = BTreeSet::from_iter(vec![1u32, 2, 3]);
+		let commitments: BTreeMap<AuthorityCount, SigningCommitment<Point>> = idxs
+			.iter()
+			.map(|id| {
+				(*id, SigningCommitment { d: Point::random(&mut rng), e: Point::random(&mut rng) })
+			})
+			.collect();
+
+		let bindings = generate_bindings::<EthSigning>(&payload, &commitments, &idxs);
+
+		// Compare the generated bindings with existing bindings to confirm that the hashing in
+		// `gen_rho_i` has not changed.
+		assert_eq!(
+			hex::encode(bindings.get(&1u32).unwrap().as_bytes()),
+			"d21e9745014dedea06fc653b93845b17c20737ef9fe1bac189c70ffb2794250a"
+		);
+		assert_eq!(
+			hex::encode(bindings.get(&2u32).unwrap().as_bytes()),
+			"87c25a1056df0e55a359468f76822a7244232e8a339700d24293d7ea3547aad9"
+		);
+		assert_eq!(
+			hex::encode(bindings.get(&3u32).unwrap().as_bytes()),
+			"d74a3892851b2f4114fb58cd0a7813dec65a7b5c1bfe6c512091e627a92f512d"
+		);
 	}
 }

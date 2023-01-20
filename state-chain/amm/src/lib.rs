@@ -14,20 +14,26 @@
 //!
 //! Note: There are a few yet to be proved safe maths operations, there are marked below with `TODO:
 //! Prove`. We should resolve these issues before using this code in release.
+#![cfg_attr(not(feature = "std"), no_std)]
+use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
-#![feature(mixed_integer_ops)] // This has been stablized in a future version of rust
+use codec::{Decode, Encode, MaxEncodedLen};
+use scale_info::TypeInfo;
 
-use std::{collections::BTreeMap, default, u128};
+#[cfg(feature = "std")]
+use serde::{Deserialize, Serialize};
 
-use enum_map::Enum;
-use primitive_types::{H256, U256, U512};
+use cf_primitives::{
+	liquidity::{AmountU256, Liquidity, MintError, MintedLiquidity, PoolAssetMap, PoolSide, Tick},
+	AccountId, AmmRange,
+};
+use sp_core::{U256, U512};
 
-pub type Tick = i32;
-pub type Liquidity = u128;
-pub type LiquidityProvider = H256;
-pub type Amount = U256;
-type SqrtPriceQ64F96 = U256;
-type FeeGrowthQ128F128 = U256;
+/// sqrt(Price) in amm exchange Pool. Q64.96 numerical type.
+pub type SqrtPriceQ64F96 = U256;
+
+/// Q128.128 numerical type use to record Fee.
+pub type FeeGrowthQ128F128 = U256;
 
 /// The minimum tick that may be passed to `sqrt_price_at_tick` computed from log base 1.0001 of
 /// 2**-128
@@ -46,13 +52,18 @@ const MAX_SQRT_PRICE: SqrtPriceQ64F96 =
 
 const MAX_TICK_GROSS_LIQUIDITY: Liquidity = Liquidity::MAX / ((1 + MAX_TICK - MIN_TICK) as u128);
 
-const ONE_IN_PIPS: u32 = 100000;
+/// Minimum resolution for fee is 0.01 of a Basis Point: 0.0001%. Maximum is 50%.
+const ONE_IN_HUNDREDTH_BIPS: u32 = 1000000;
 
-#[derive(Clone, Debug)]
+pub const MAX_FEE_100TH_BIPS: u32 = ONE_IN_HUNDREDTH_BIPS / 2;
+
+#[derive(Copy, Clone, Debug, TypeInfo, PartialEq, Eq, Encode, Decode, MaxEncodedLen)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 struct Position {
 	liquidity: Liquidity,
-	last_fee_growth_inside: enum_map::EnumMap<Ticker, FeeGrowthQ128F128>,
+	last_fee_growth_inside: PoolAssetMap<FeeGrowthQ128F128>,
 }
+
 impl Position {
 	fn update_fees_owed(
 		&mut self,
@@ -61,23 +72,24 @@ impl Position {
 		lower_info: &TickInfo,
 		upper_tick: Tick,
 		upper_info: &TickInfo,
-	) -> enum_map::EnumMap<Ticker, u128> {
-		let fee_growth_inside = enum_map::EnumMap::default().map(|ticker, ()| {
+	) -> PoolAssetMap<u128> {
+		let fee_growth_inside = PoolAssetMap::new_from_fn(|side| {
 			let fee_growth_below = if pool_state.current_tick < lower_tick {
-				pool_state.global_fee_growth[ticker] - lower_info.fee_growth_outside[ticker]
+				pool_state.global_fee_growth[side] - lower_info.fee_growth_outside[side]
 			} else {
-				lower_info.fee_growth_outside[ticker]
+				lower_info.fee_growth_outside[side]
 			};
 
 			let fee_growth_above = if pool_state.current_tick < upper_tick {
-				upper_info.fee_growth_outside[ticker]
+				upper_info.fee_growth_outside[side]
 			} else {
-				pool_state.global_fee_growth[ticker] - upper_info.fee_growth_outside[ticker]
+				pool_state.global_fee_growth[side] - upper_info.fee_growth_outside[side]
 			};
 
-			pool_state.global_fee_growth[ticker] - fee_growth_below - fee_growth_above
+			pool_state.global_fee_growth[side] - fee_growth_below - fee_growth_above
 		});
-		let fees_owed = enum_map::EnumMap::default().map(|ticker, ()| {
+
+		let fees_owed = PoolAssetMap::new_from_fn(|side| {
 			// DIFF: This behaviour is different than Uniswap's. We saturate fees_owed instead of
 			// overflowing
 
@@ -87,7 +99,7 @@ impl Position {
 				U512::one() << 128 > u128::MAX
 			*/
 			mul_div_floor(
-				fee_growth_inside[ticker] - self.last_fee_growth_inside[ticker],
+				fee_growth_inside[side] - self.last_fee_growth_inside[side],
 				self.liquidity.into(),
 				U512::one() << 128,
 			)
@@ -106,7 +118,7 @@ impl Position {
 		lower_info: &TickInfo,
 		upper_tick: Tick,
 		upper_info: &TickInfo,
-	) -> enum_map::EnumMap<Ticker, u128> {
+	) -> PoolAssetMap<u128> {
 		let fees_owed =
 			self.update_fees_owed(pool_state, lower_tick, lower_info, upper_tick, upper_info);
 		self.liquidity = new_liquidity;
@@ -114,64 +126,16 @@ impl Position {
 	}
 }
 
-#[derive(Clone, Debug)]
-struct TickInfo {
+#[derive(Copy, Clone, Debug, TypeInfo, PartialEq, Eq, Encode, Decode, MaxEncodedLen)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct TickInfo {
 	liquidity_delta: i128,
 	liquidity_gross: u128,
-	fee_growth_outside: enum_map::EnumMap<Ticker, FeeGrowthQ128F128>,
-}
-
-#[derive(Debug)]
-pub struct PoolState {
-	fee_pips: u32,
-	current_sqrt_price: SqrtPriceQ64F96,
-	current_tick: Tick,
-	current_liquidity: Liquidity,
-	global_fee_growth: enum_map::EnumMap<Ticker, FeeGrowthQ128F128>,
-	liquidity_map: BTreeMap<Tick, TickInfo>,
-	positions: BTreeMap<(LiquidityProvider, Tick, Tick), Position>,
-}
-
-#[derive(Enum, Clone, Copy, Debug)]
-pub enum Ticker {
-	Base,
-	Pair,
-}
-
-impl std::ops::Not for Ticker {
-	type Output = Self;
-
-	fn not(self) -> Self::Output {
-		match self {
-			Ticker::Base => Ticker::Pair,
-			Ticker::Pair => Ticker::Base,
-		}
-	}
-}
-
-fn mul_div_floor<C: Into<U512>>(a: U256, b: U256, c: C) -> U256 {
-	let c: U512 = c.into();
-	(U256::full_mul(a, b) / c).try_into().unwrap()
-}
-
-fn mul_div_ceil<C: Into<U512>>(a: U256, b: U256, c: C) -> U256 {
-	let c: U512 = c.into();
-
-	let (d, m) = U512::div_mod(U256::full_mul(a, b), c);
-
-	if m > U512::from(0) {
-		// cannot overflow as for m > 0, c must be > 1, and as (a*b) <= U512::MAX, therefore a*b/c <
-		// U512::MAX
-		d + 1
-	} else {
-		d
-	}
-	.try_into()
-	.unwrap()
+	fee_growth_outside: PoolAssetMap<FeeGrowthQ128F128>,
 }
 
 trait SwapDirection {
-	const INPUT_TICKER: Ticker;
+	const INPUT_SIDE: PoolSide;
 
 	/// The xy=k maths only works while the liquidity is constant, so this function returns the
 	/// closest (to the current) next tick/price where liquidity possibly changes. Note the
@@ -187,21 +151,21 @@ trait SwapDirection {
 		from: SqrtPriceQ64F96,
 		to: SqrtPriceQ64F96,
 		liquidity: Liquidity,
-	) -> Amount;
+	) -> AmountU256;
 	/// Calculates the swap output amount needed to move the current price given the specified
 	/// amount of liquidity
 	fn output_amount_delta_floor(
 		from: SqrtPriceQ64F96,
 		to: SqrtPriceQ64F96,
 		liquidity: Liquidity,
-	) -> Amount;
+	) -> AmountU256;
 
 	/// Calculates where the current price will be after a swap of amount given the current price
 	/// and a specific amount of liquidity
 	fn next_sqrt_price_from_input_amount(
 		sqrt_ratio_current: SqrtPriceQ64F96,
 		liquidity: Liquidity,
-		amount: Amount,
+		amount: AmountU256,
 	) -> SqrtPriceQ64F96;
 
 	/// For a given tick calculates the change in current liquidity when that tick is crossed
@@ -211,19 +175,19 @@ trait SwapDirection {
 	fn current_tick_after_crossing_target_tick(target_tick: Tick) -> Tick;
 }
 
-pub struct BaseToPair {}
-impl SwapDirection for BaseToPair {
-	const INPUT_TICKER: Ticker = Ticker::Base;
+pub struct Asset0ToAsset1 {}
+impl SwapDirection for Asset0ToAsset1 {
+	const INPUT_SIDE: PoolSide = PoolSide::Asset0;
 
 	fn target_tick(
 		current_tick: Tick,
 		liquidity_map: &mut BTreeMap<Tick, TickInfo>,
 	) -> Option<(&Tick, &mut TickInfo)> {
-		assert!(liquidity_map.contains_key(&MIN_TICK));
+		debug_assert!(liquidity_map.contains_key(&MIN_TICK));
 		if current_tick >= MIN_TICK {
 			Some(liquidity_map.range_mut(..=current_tick).next_back().unwrap())
 		} else {
-			assert_eq!(current_tick, Self::current_tick_after_crossing_target_tick(MIN_TICK));
+			debug_assert_eq!(current_tick, Self::current_tick_after_crossing_target_tick(MIN_TICK));
 			None
 		}
 	}
@@ -232,24 +196,24 @@ impl SwapDirection for BaseToPair {
 		current: SqrtPriceQ64F96,
 		target: SqrtPriceQ64F96,
 		liquidity: Liquidity,
-	) -> Amount {
-		PoolState::base_amount_delta_ceil(target, current, liquidity)
+	) -> AmountU256 {
+		PoolState::asset_0_amount_delta_ceil(target, current, liquidity)
 	}
 
 	fn output_amount_delta_floor(
 		current: SqrtPriceQ64F96,
 		target: SqrtPriceQ64F96,
 		liquidity: Liquidity,
-	) -> Amount {
-		PoolState::pair_amount_delta_floor(target, current, liquidity)
+	) -> AmountU256 {
+		PoolState::asset_1_amount_delta_floor(target, current, liquidity)
 	}
 
 	fn next_sqrt_price_from_input_amount(
 		sqrt_ratio_current: SqrtPriceQ64F96,
 		liquidity: Liquidity,
-		amount: Amount,
+		amount: AmountU256,
 	) -> SqrtPriceQ64F96 {
-		PoolState::next_sqrt_price_from_base_input(sqrt_ratio_current, liquidity, amount)
+		PoolState::next_sqrt_price_from_asset_0_input(sqrt_ratio_current, liquidity, amount)
 	}
 
 	fn liquidity_delta_on_crossing_tick(tick_liquidity: &TickInfo) -> i128 {
@@ -261,19 +225,19 @@ impl SwapDirection for BaseToPair {
 	}
 }
 
-pub struct PairToBase {}
-impl SwapDirection for PairToBase {
-	const INPUT_TICKER: Ticker = Ticker::Pair;
+pub struct Asset1ToAsset0 {}
+impl SwapDirection for Asset1ToAsset0 {
+	const INPUT_SIDE: PoolSide = PoolSide::Asset1;
 
 	fn target_tick(
 		current_tick: Tick,
 		liquidity_map: &mut BTreeMap<Tick, TickInfo>,
 	) -> Option<(&Tick, &mut TickInfo)> {
-		assert!(liquidity_map.contains_key(&MAX_TICK));
+		debug_assert!(liquidity_map.contains_key(&MAX_TICK));
 		if current_tick < MAX_TICK {
 			Some(liquidity_map.range_mut(current_tick + 1..).next().unwrap())
 		} else {
-			assert_eq!(current_tick, Self::current_tick_after_crossing_target_tick(MAX_TICK));
+			debug_assert_eq!(current_tick, Self::current_tick_after_crossing_target_tick(MAX_TICK));
 			None
 		}
 	}
@@ -282,24 +246,24 @@ impl SwapDirection for PairToBase {
 		current: SqrtPriceQ64F96,
 		target: SqrtPriceQ64F96,
 		liquidity: Liquidity,
-	) -> Amount {
-		PoolState::pair_amount_delta_ceil(current, target, liquidity)
+	) -> AmountU256 {
+		PoolState::asset_1_amount_delta_ceil(current, target, liquidity)
 	}
 
 	fn output_amount_delta_floor(
 		current: SqrtPriceQ64F96,
 		target: SqrtPriceQ64F96,
 		liquidity: Liquidity,
-	) -> Amount {
-		PoolState::base_amount_delta_floor(current, target, liquidity)
+	) -> AmountU256 {
+		PoolState::asset_0_amount_delta_floor(current, target, liquidity)
 	}
 
 	fn next_sqrt_price_from_input_amount(
 		sqrt_ratio_current: SqrtPriceQ64F96,
 		liquidity: Liquidity,
-		amount: Amount,
+		amount: AmountU256,
 	) -> SqrtPriceQ64F96 {
-		PoolState::next_sqrt_price_from_pair_input(sqrt_ratio_current, liquidity, amount)
+		PoolState::next_sqrt_price_from_asset_1_input(sqrt_ratio_current, liquidity, amount)
 	}
 
 	fn liquidity_delta_on_crossing_tick(tick_liquidity: &TickInfo) -> i128 {
@@ -312,22 +276,17 @@ impl SwapDirection for PairToBase {
 }
 
 #[derive(Debug)]
-pub enum MintError {
-	/// Invalid Tick range
-	InvalidTickRange,
-	/// One of the start/end ticks of the range reached its maximm gross liquidity
-	MaximumGrossLiquidity,
+pub enum CreatePoolError {
+	/// Fee must be between 0 - 50%
+	InvalidFeeAmount,
+	/// The initial price is outside the allowed range.
+	InvalidInitialPrice,
 }
 
 #[derive(Debug)]
-pub enum PositionError<T> {
+pub enum PositionError {
 	/// Position referenced does not exist
 	NonExistent,
-	Other(T),
-}
-
-#[derive(Debug)]
-pub enum BurnError {
 	/// Position referenced does not contain the requested liquidity
 	PositionLacksLiquidity,
 }
@@ -335,17 +294,39 @@ pub enum BurnError {
 #[derive(Debug)]
 pub enum CollectError {}
 
+#[derive(Debug, TypeInfo, PartialEq, Eq, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct PoolState {
+	enabled: bool,
+	fee_100th_bips: u32,
+	current_sqrt_price: SqrtPriceQ64F96,
+	current_tick: Tick,
+	current_liquidity: Liquidity,
+	global_fee_growth: PoolAssetMap<FeeGrowthQ128F128>,
+	liquidity_map: BTreeMap<Tick, TickInfo>,
+	positions: BTreeMap<(AccountId, Tick, Tick), Position>,
+}
+
 impl PoolState {
 	/// Creates a new pool with the specified fee and initial price. The pool is created with no
 	/// liquidity, it must be added using the `PoolState::mint` function.
 	///
-	/// This function will panic if fee_pips or initial_sqrt_price are outside the allowed bounds
-	pub fn new(fee_pips: u32, initial_sqrt_price: SqrtPriceQ64F96) -> Self {
-		assert!(fee_pips <= ONE_IN_PIPS / 2);
-		assert!(MIN_SQRT_PRICE <= initial_sqrt_price && initial_sqrt_price < MAX_SQRT_PRICE);
+	/// This function will panic if fee_100th_bips or initial_sqrt_price are outside the allowed
+	/// bounds
+	pub fn new(
+		fee_100th_bips: u32,
+		initial_sqrt_price: SqrtPriceQ64F96,
+	) -> Result<Self, CreatePoolError> {
+		if fee_100th_bips > MAX_FEE_100TH_BIPS {
+			return Err(CreatePoolError::InvalidFeeAmount)
+		};
+		if initial_sqrt_price < MIN_SQRT_PRICE || initial_sqrt_price > MAX_SQRT_PRICE {
+			return Err(CreatePoolError::InvalidInitialPrice)
+		}
 		let initial_tick = Self::tick_at_sqrt_price(initial_sqrt_price);
-		Self {
-			fee_pips,
+		Ok(Self {
+			enabled: true,
+			fee_100th_bips,
 			current_sqrt_price: initial_sqrt_price,
 			current_tick: initial_tick,
 			current_liquidity: 0,
@@ -371,15 +352,30 @@ impl PoolState {
 			]
 			.into(),
 			positions: Default::default(),
-		}
+		})
 	}
 
-	/// Tries to add `minted_liquidity` to/create the specified position, if `minted_liqudity == 0`
+	/// Update the pool state to enable/disable the pool
+	pub fn update_pool_enabled(&mut self, enabled: bool) {
+		self.enabled = enabled;
+	}
+
+	/// Gets the current pool state (enabled/disabled)
+	pub fn pool_enabled(&self) -> bool {
+		self.enabled
+	}
+
+	/// Gets the current price of the pool in Tick
+	pub fn current_tick(&self) -> Tick {
+		self.current_tick
+	}
+
+	/// Tries to add `minted_liquidity` to/create the specified position, if `minted_liquidity == 0`
 	/// no position will be created or have liquidity added, the callback will not be called, and
 	/// the function will return `Ok(())`. Otherwise if the minting is possible the callback `f`
 	/// will be passed the Amounts required to add the specified `minted_liquidity` to the specified
 	/// position. The callback should return a boolean specifying if the liquidity minting should
-	/// occur. If `false` is returned the position will not be created. If 'true' is returned the
+	/// occur. If `false` is returned the position will not be created. If 'Ok(())' is returned the
 	/// position will be created if it didn't already exist, and `minted_liquidity` will be added to
 	/// it. Then the function will return `Ok(())`. Otherwise if the minting is not possible the
 	/// callback will not be called, no state will be affected, and the function will return Err(_),
@@ -388,82 +384,86 @@ impl PoolState {
 	/// This function never panics
 	///
 	/// If this function returns an `Err(_)` no state changes have occurred
-	pub fn mint<F: FnOnce(enum_map::EnumMap<Ticker, Amount>) -> bool>(
+	pub fn mint(
 		&mut self,
-		lp: LiquidityProvider,
+		lp: AccountId,
 		lower_tick: Tick,
 		upper_tick: Tick,
 		minted_liquidity: Liquidity,
-		f: F,
-	) -> Result<enum_map::EnumMap<Ticker, u128>, MintError> {
-		if lower_tick < upper_tick && MIN_TICK <= lower_tick && upper_tick <= MAX_TICK {
-			let mut fees_owed = Default::default();
-			if minted_liquidity > 0 {
-				let mut position =
-					self.positions.get(&(lp, lower_tick, upper_tick)).cloned().unwrap_or_else(
-						|| Position { liquidity: 0, last_fee_growth_inside: Default::default() },
-					);
-				let tick_info_with_updated_gross_liquidity = |tick| {
-					let mut tick_info =
-						self.liquidity_map.get(&tick).cloned().unwrap_or_else(|| {
-							TickInfo {
-								liquidity_delta: 0,
-								liquidity_gross: 0,
-								fee_growth_outside: if tick <= self.current_tick {
-									// by convention, we assume that all growth before a tick was
-									// initialized happened _below_ the tick
-									self.global_fee_growth
-								} else {
-									Default::default()
-								},
-							}
-						});
-
-					tick_info.liquidity_gross =
-						u128::saturating_add(tick_info.liquidity_gross, minted_liquidity);
-					if tick_info.liquidity_gross > MAX_TICK_GROSS_LIQUIDITY {
-						Err(MintError::MaximumGrossLiquidity)
-					} else {
-						Ok(tick_info)
-					}
-				};
-
-				let mut lower_info = tick_info_with_updated_gross_liquidity(lower_tick)?;
-				// Cannot overflow as liquidity_delta.abs() is bounded to <=
-				// MAX_TICK_GROSS_LIQUIDITY
-				lower_info.liquidity_delta =
-					lower_info.liquidity_delta.checked_add_unsigned(minted_liquidity).unwrap();
-				let mut upper_info = tick_info_with_updated_gross_liquidity(upper_tick)?;
-				// Cannot underflow as liquidity_delta.abs() is bounded to <=
-				// MAX_TICK_GROSS_LIQUIDITY
-				upper_info.liquidity_delta =
-					upper_info.liquidity_delta.checked_sub_unsigned(minted_liquidity).unwrap();
-
-				fees_owed = position.set_liquidity(
-					self,
-					// Cannot overflow due to * MAX_TICK_GROSS_LIQUIDITY
-					position.liquidity + minted_liquidity,
-					lower_tick,
-					&lower_info,
-					upper_tick,
-					&upper_info,
-				);
-
-				let (amounts_required, current_liquidity_delta) =
-					self.liquidity_to_amounts::<true>(minted_liquidity, lower_tick, upper_tick);
-
-				if f(amounts_required) {
-					self.current_liquidity += current_liquidity_delta;
-					self.positions.insert((lp, lower_tick, upper_tick), position);
-					self.liquidity_map.insert(lower_tick, lower_info);
-					self.liquidity_map.insert(upper_tick, upper_info);
-				}
-			}
-
-			Ok(fees_owed)
-		} else {
-			Err(MintError::InvalidTickRange)
+		should_mint: impl FnOnce(PoolAssetMap<AmountU256>) -> Result<(), MintError>,
+	) -> Result<(PoolAssetMap<AmountU256>, PoolAssetMap<u128>), MintError> {
+		if (lower_tick > upper_tick) || (lower_tick < MIN_TICK) && (upper_tick > MAX_TICK) {
+			return Err(MintError::InvalidTickRange)
 		}
+
+		if minted_liquidity == 0 {
+			return Ok(Default::default())
+		}
+
+		let mut position = self
+			.positions
+			.get(&(lp.clone(), lower_tick, upper_tick))
+			.cloned()
+			.unwrap_or_else(|| Position {
+				liquidity: 0,
+				last_fee_growth_inside: Default::default(),
+			});
+
+		let tick_info_with_updated_gross_liquidity = |tick| {
+			let mut tick_info = self.liquidity_map.get(&tick).cloned().unwrap_or_else(|| {
+				TickInfo {
+					liquidity_delta: 0,
+					liquidity_gross: 0,
+					fee_growth_outside: if tick <= self.current_tick {
+						// by convention, we assume that all growth before a tick was
+						// initialized happened _below_ the tick
+						self.global_fee_growth
+					} else {
+						Default::default()
+					},
+				}
+			});
+
+			tick_info.liquidity_gross =
+				u128::saturating_add(tick_info.liquidity_gross, minted_liquidity);
+			if tick_info.liquidity_gross > MAX_TICK_GROSS_LIQUIDITY {
+				Err(MintError::MaximumGrossLiquidity)
+			} else {
+				Ok(tick_info)
+			}
+		};
+
+		let mut lower_info = tick_info_with_updated_gross_liquidity(lower_tick)?;
+		// Cannot overflow as liquidity_delta.abs() is bounded to <=
+		// MAX_TICK_GROSS_LIQUIDITY
+		lower_info.liquidity_delta =
+			lower_info.liquidity_delta.checked_add_unsigned(minted_liquidity).unwrap();
+		let mut upper_info = tick_info_with_updated_gross_liquidity(upper_tick)?;
+		// Cannot underflow as liquidity_delta.abs() is bounded to <=
+		// MAX_TICK_GROSS_LIQUIDITY
+		upper_info.liquidity_delta =
+			upper_info.liquidity_delta.checked_sub_unsigned(minted_liquidity).unwrap();
+
+		let fees_returned = position.set_liquidity(
+			self,
+			// Cannot overflow due to * MAX_TICK_GROSS_LIQUIDITY
+			position.liquidity + minted_liquidity,
+			lower_tick,
+			&lower_info,
+			upper_tick,
+			&upper_info,
+		);
+
+		let (amounts_required, current_liquidity_delta) =
+			self.liquidity_to_amounts::<true>(minted_liquidity, lower_tick, upper_tick);
+
+		should_mint(amounts_required)?;
+		self.current_liquidity += current_liquidity_delta;
+		self.positions.insert((lp, lower_tick, upper_tick), position);
+		self.liquidity_map.insert(lower_tick, lower_info);
+		self.liquidity_map.insert(upper_tick, upper_info);
+
+		Ok((amounts_required, fees_returned))
 	}
 
 	/// Tries to remove liquidity from the specified range-order, and convert the liqudity into
@@ -476,22 +476,25 @@ impl PoolState {
 	#[allow(clippy::type_complexity)]
 	pub fn burn(
 		&mut self,
-		lp: LiquidityProvider,
+		lp: AccountId,
 		lower_tick: Tick,
 		upper_tick: Tick,
 		burnt_liquidity: Liquidity,
-	) -> Result<
-		(enum_map::EnumMap<Ticker, Amount>, enum_map::EnumMap<Ticker, u128>),
-		PositionError<BurnError>,
-	> {
-		if let Some(mut position) = self.positions.get(&(lp, lower_tick, upper_tick)).cloned() {
-			assert!(position.liquidity != 0);
+	) -> Result<(PoolAssetMap<AmountU256>, PoolAssetMap<u128>), PositionError> {
+		if burnt_liquidity == 0 {
+			return Ok((Default::default(), Default::default()))
+		}
+
+		if let Some(mut position) =
+			self.positions.get(&(lp.clone(), lower_tick, upper_tick)).cloned()
+		{
+			debug_assert!(position.liquidity != 0);
 			if burnt_liquidity <= position.liquidity {
-				let mut lower_info = self.liquidity_map.get(&lower_tick).unwrap().clone();
+				let mut lower_info = *self.liquidity_map.get(&lower_tick).unwrap();
 				lower_info.liquidity_gross -= burnt_liquidity;
 				lower_info.liquidity_delta =
 					lower_info.liquidity_delta.checked_sub_unsigned(burnt_liquidity).unwrap();
-				let mut upper_info = self.liquidity_map.get(&upper_tick).unwrap().clone();
+				let mut upper_info = *self.liquidity_map.get(&upper_tick).unwrap();
 				upper_info.liquidity_gross -= burnt_liquidity;
 				upper_info.liquidity_delta =
 					lower_info.liquidity_delta.checked_add_unsigned(burnt_liquidity).unwrap();
@@ -513,18 +516,10 @@ impl PoolState {
 				// current_liquidity for it to need to be substrated now
 				self.current_liquidity -= current_liquidity_delta;
 
-				if position.liquidity == 0 {
-					// DIFF: This behaviour is different than Uniswap's to ensure if a position
-					// exists its ticks also exist in the liquidity_map
-					// In other words, the position will automatically be removed if all the
-					// liquidity has been burnt.
-					self.positions.remove(&(lp, lower_tick, upper_tick));
-				}
-
 				if lower_info.liquidity_gross == 0 && lower_tick != MIN_TICK
 				// Guarantee MIN_TICK is always in map to simplify swap logic
 				{
-					assert_eq!(position.liquidity, 0);
+					debug_assert_eq!(position.liquidity, 0);
 					self.liquidity_map.remove(&lower_tick);
 				} else {
 					*self.liquidity_map.get_mut(&lower_tick).unwrap() = lower_info;
@@ -532,63 +527,82 @@ impl PoolState {
 				if upper_info.liquidity_gross == 0 && upper_tick != MAX_TICK
 				// Guarantee MAX_TICK is always in map to simplify swap logic
 				{
-					assert_eq!(position.liquidity, 0);
+					debug_assert_eq!(position.liquidity, 0);
 					self.liquidity_map.remove(&upper_tick);
 				} else {
 					*self.liquidity_map.get_mut(&upper_tick).unwrap() = upper_info;
 				}
 
-				// BUGFIX: We must update the position's liquidity, otherwise the LP would
-				// effectively be able to burn liquidity from other position. This will also update
-				// the fees owed, which is not strictly necessary but it's a good idea (how Uniswap
-				// works). Could also be added as part of the if/else before but then we need to
-				// clone position to get ownership.
-				if position.liquidity != 0 {
+				if position.liquidity == 0 {
+					// DIFF: This behaviour is different than Uniswap's to ensure if a position
+					// exists its ticks also exist in the liquidity_map
+					// In other words, the position will automatically be removed if all the
+					// liquidity has been burnt.
+					self.positions.remove(&(lp, lower_tick, upper_tick));
+				} else {
+					// BUGFIX: Reinsert the updated position back into storage.
 					self.positions.insert((lp, lower_tick, upper_tick), position);
 				}
 
 				Ok((amounts_owed, fees_owed))
 			} else {
-				Err(PositionError::Other(BurnError::PositionLacksLiquidity))
+				Err(PositionError::PositionLacksLiquidity)
 			}
 		} else {
 			Err(PositionError::NonExistent)
 		}
 	}
 
-	/// Swaps the specified Amount of Base into Pair, and returns the Pair Amount.
-	///
-	/// This function never panics
-	pub fn swap_from_base_to_pair(&mut self, amount: Amount) -> Amount {
-		self.swap::<BaseToPair>(amount)
+	/// Returns all postitions for a specific user.
+	pub fn minted_liquidity(&self, lp: AccountId) -> Vec<MintedLiquidity> {
+		self.positions
+			.iter()
+			.filter_map(|((account, lower, upper), position)| {
+				if *account == lp {
+					Some(MintedLiquidity {
+						range: AmmRange::new(*lower, *upper),
+						liquidity: position.liquidity,
+					})
+				} else {
+					None
+				}
+			})
+			.collect()
 	}
 
-	/// Swaps the specified Amount of Pair into Base, and returns the Base Amount.
+	/// Swaps the specified Amount of Asset 0 into Asset 1. Returns the Output and Fee amount.
 	///
 	/// This function never panics
-	pub fn swap_from_pair_to_base(&mut self, amount: Amount) -> Amount {
-		self.swap::<PairToBase>(amount)
+	pub fn swap_from_asset_0_to_asset_1(&mut self, amount: AmountU256) -> (AmountU256, AmountU256) {
+		self.swap::<Asset0ToAsset1>(amount)
 	}
 
-	/// Swaps the specified Amount into the other currency, and returns the Amount. The direction of
-	/// the swap is controlled by the generic type parameter `SD`, by setting it to `BaseToPair` or
-	/// `PairToBase`.
+	/// Swaps the specified Amount of Asset 1 into Asset 0. Returns the Output and Fee amount.
 	///
 	/// This function never panics
-	fn swap<SD: SwapDirection>(&mut self, mut amount: Amount) -> Amount {
-		let mut total_amount_out = Amount::zero();
+	pub fn swap_from_asset_1_to_asset_0(&mut self, amount: AmountU256) -> (AmountU256, AmountU256) {
+		self.swap::<Asset1ToAsset0>(amount)
+	}
 
-		while let Some((target_tick, target_info)) = (Amount::zero() != amount)
-			.then_some(())
-			.and_then(|()| SD::target_tick(self.current_tick, &mut self.liquidity_map))
+	/// Swaps the specified Amount into the other currency. Returns the Output and Fees amount. The
+	/// direction of the swap is controlled by the generic type parameter `SD`, by setting it to
+	/// `Asset0ToAsset1` or `Asset1ToAsset0`.
+	///
+	/// This function never panics
+	fn swap<SD: SwapDirection>(&mut self, mut amount: AmountU256) -> (AmountU256, AmountU256) {
+		let mut total_amount_out = AmountU256::zero();
+		let mut total_fee_paid = AmountU256::zero();
+
+		while let Some(Some((target_tick, target_info))) =
+			(!amount.is_zero()).then(|| SD::target_tick(self.current_tick, &mut self.liquidity_map))
 		{
 			let sqrt_ratio_target = Self::sqrt_price_at_tick(*target_tick);
 
 			let amount_minus_fees = mul_div_floor(
 				amount,
-				U256::from(ONE_IN_PIPS - self.fee_pips),
-				U256::from(ONE_IN_PIPS),
-			); // This cannot overflow as we bound fee_pips to <= ONE_IN_PIPS/2 (TODO)
+				U256::from(ONE_IN_HUNDREDTH_BIPS - self.fee_100th_bips),
+				U256::from(ONE_IN_HUNDREDTH_BIPS),
+			); // This cannot overflow as we bound fee_100th_bips to <= ONE_IN_HUNDREDTH_BIPS/2 (TODO)
 
 			let amount_required_to_reach_target = SD::input_amount_delta_ceil(
 				self.current_sqrt_price,
@@ -599,7 +613,7 @@ impl PoolState {
 			let sqrt_ratio_next = if amount_minus_fees >= amount_required_to_reach_target {
 				sqrt_ratio_target
 			} else {
-				assert!(self.current_liquidity != 0);
+				debug_assert!(self.current_liquidity != 0);
 				SD::next_sqrt_price_from_input_amount(
 					self.current_sqrt_price,
 					self.current_liquidity,
@@ -616,14 +630,14 @@ impl PoolState {
 				self.current_liquidity,
 			);
 
-			// next_sqrt_price_from_input_amount rounds so this maybe true even though
+			// next_sqrt_price_from_input_amount rounds so this maybe Ok(()) even though
 			// amount_minus_fees < amount_required_to_reach_target (TODO Prove)
 			if sqrt_ratio_next == sqrt_ratio_target {
-				// Will not overflow as fee_pips <= ONE_IN_PIPS / 2
+				// Will not overflow as fee_100th_bips <= ONE_IN_HUNDREDTH_BIPS / 2
 				let fees = mul_div_ceil(
 					amount_required_to_reach_target,
-					U256::from(self.fee_pips),
-					U256::from(ONE_IN_PIPS - self.fee_pips),
+					U256::from(self.fee_100th_bips),
+					U256::from(ONE_IN_HUNDREDTH_BIPS - self.fee_100th_bips),
 				);
 
 				// DIFF: This behaviour is different to Uniswap's, we saturate instead of
@@ -635,16 +649,15 @@ impl PoolState {
 				// BUGFIX: fees need to be divided by the current_liquidity to get the fee growth
 				// BUGFIX2: Update only if currentliquditiy > 0 to avoid division by zero
 				if self.current_liquidity > 0 {
-					self.global_fee_growth[SD::INPUT_TICKER] =
-						self.global_fee_growth[SD::INPUT_TICKER].saturating_add(mul_div_floor(
+					self.global_fee_growth[SD::INPUT_SIDE] = self.global_fee_growth[SD::INPUT_SIDE]
+						.saturating_add(mul_div_floor(
 							fees,
 							U256::from(1) << 128u32,
 							self.current_liquidity,
 						));
-					target_info.fee_growth_outside =
-						enum_map::EnumMap::default().map(|ticker, ()| {
-							self.global_fee_growth[ticker] - target_info.fee_growth_outside[ticker]
-						});
+					target_info.fee_growth_outside = PoolAssetMap::new_from_fn(|side| {
+						self.global_fee_growth[side] - target_info.fee_growth_outside[side]
+					});
 				}
 
 				self.current_sqrt_price = sqrt_ratio_target;
@@ -653,6 +666,8 @@ impl PoolState {
 				// TODO: Prove these don't underflow
 				amount -= amount_required_to_reach_target;
 				amount -= fees;
+
+				total_fee_paid += fees;
 
 				// Since the liquidity value is used for the fee calculation, updating needs to be
 				// done at the end.
@@ -672,6 +687,7 @@ impl PoolState {
 				// Will not underflow due to rounding in flavor of the pool of both sqrt_ratio_next
 				// and amount_in. (TODO: Prove)
 				let fees = amount - amount_in;
+				total_fee_paid += fees;
 
 				// DIFF: This behaviour is different to Uniswap's,
 				// we saturate instead of overflowing/bricking the pool. This means we just stop
@@ -682,8 +698,8 @@ impl PoolState {
 				// BUGFIX: fees need to be divided by the current_liquidity to get the fee growth
 				// BUGFIX2: Update only if currentliquditiy > 0 to avoid division by zero
 				if self.current_liquidity > 0 {
-					self.global_fee_growth[SD::INPUT_TICKER] =
-						self.global_fee_growth[SD::INPUT_TICKER].saturating_add(mul_div_floor(
+					self.global_fee_growth[SD::INPUT_SIDE] = self.global_fee_growth[SD::INPUT_SIDE]
+						.saturating_add(mul_div_floor(
 							fees,
 							U256::from(1) << 128u32,
 							self.current_liquidity,
@@ -701,7 +717,7 @@ impl PoolState {
 			};
 		}
 
-		total_amount_out
+		(total_amount_out, total_fee_paid)
 	}
 
 	fn liquidity_to_amounts<const ROUND_UP: bool>(
@@ -709,57 +725,65 @@ impl PoolState {
 		liquidity: Liquidity,
 		lower_tick: Tick,
 		upper_tick: Tick,
-	) -> (enum_map::EnumMap<Ticker, Amount>, Liquidity) {
+	) -> (PoolAssetMap<AmountU256>, Liquidity) {
 		if self.current_tick < lower_tick {
 			(
-				enum_map::enum_map! {
-					Ticker::Base => (if ROUND_UP { Self::base_amount_delta_ceil } else { Self::base_amount_delta_floor })(
+				PoolAssetMap::new(
+					(if ROUND_UP {
+						Self::asset_0_amount_delta_ceil
+					} else {
+						Self::asset_0_amount_delta_floor
+					})(
 						Self::sqrt_price_at_tick(lower_tick),
 						Self::sqrt_price_at_tick(upper_tick),
-						liquidity
+						liquidity,
 					),
-					Ticker::Pair => 0.into()
-				},
+					0.into(),
+				),
 				0,
 			)
 		} else if self.current_tick < upper_tick {
 			(
-				enum_map::enum_map! {
-					Ticker::Base => (if ROUND_UP { Self::base_amount_delta_ceil } else { Self::base_amount_delta_floor })(
-						self.current_sqrt_price,
-						Self::sqrt_price_at_tick(upper_tick),
-						liquidity
-					),
-					Ticker::Pair => (if ROUND_UP { Self::pair_amount_delta_ceil } else { Self::pair_amount_delta_floor })(
-						Self::sqrt_price_at_tick(lower_tick),
-						self.current_sqrt_price,
-						liquidity
-					)
-				},
+				PoolAssetMap::new(
+					(if ROUND_UP {
+						Self::asset_0_amount_delta_ceil
+					} else {
+						Self::asset_0_amount_delta_floor
+					})(self.current_sqrt_price, Self::sqrt_price_at_tick(upper_tick), liquidity),
+					(if ROUND_UP {
+						Self::asset_1_amount_delta_ceil
+					} else {
+						Self::asset_1_amount_delta_floor
+					})(Self::sqrt_price_at_tick(lower_tick), self.current_sqrt_price, liquidity),
+				),
 				liquidity,
 			)
 		} else {
 			(
-				enum_map::enum_map! {
-					Ticker::Base => 0.into(),
-					Ticker::Pair => (if ROUND_UP { Self::pair_amount_delta_ceil } else { Self::pair_amount_delta_floor })(
+				PoolAssetMap::new(
+					0.into(),
+					(if ROUND_UP {
+						Self::asset_1_amount_delta_ceil
+					} else {
+						Self::asset_1_amount_delta_floor
+					})(
 						Self::sqrt_price_at_tick(lower_tick),
 						Self::sqrt_price_at_tick(upper_tick),
-						liquidity
-					)
-				},
+						liquidity,
+					),
+				),
 				0,
 			)
 		}
 	}
 
-	fn base_amount_delta_floor(
+	fn asset_0_amount_delta_floor(
 		from: SqrtPriceQ64F96,
 		to: SqrtPriceQ64F96,
 		liquidity: Liquidity,
-	) -> Amount {
-		assert!(SqrtPriceQ64F96::zero() < from);
-		assert!(from <= to);
+	) -> AmountU256 {
+		debug_assert!(SqrtPriceQ64F96::zero() < from);
+		debug_assert!(from <= to);
 
 		/*
 			Proof that `mul_div` does not overflow:
@@ -770,13 +794,13 @@ impl PoolState {
 		mul_div_floor(U256::from(liquidity) << 96u32, to - from, U256::full_mul(to, from))
 	}
 
-	fn base_amount_delta_ceil(
+	fn asset_0_amount_delta_ceil(
 		from: SqrtPriceQ64F96,
 		to: SqrtPriceQ64F96,
 		liquidity: Liquidity,
-	) -> Amount {
-		assert!(SqrtPriceQ64F96::zero() < from);
-		assert!(from <= to);
+	) -> AmountU256 {
+		debug_assert!(SqrtPriceQ64F96::zero() < from);
+		debug_assert!(from <= to);
 
 		/*
 			Proof that `mul_div` does not overflow:
@@ -787,15 +811,15 @@ impl PoolState {
 		mul_div_ceil(U256::from(liquidity) << 96u32, to - from, U256::full_mul(to, from))
 	}
 
-	fn pair_amount_delta_floor(
+	fn asset_1_amount_delta_floor(
 		from: SqrtPriceQ64F96,
 		to: SqrtPriceQ64F96,
 		liquidity: Liquidity,
-	) -> Amount {
-		assert!(SqrtPriceQ64F96::zero() < from);
+	) -> AmountU256 {
+		debug_assert!(SqrtPriceQ64F96::zero() < from);
 		// BUGFIX: When minting/burning at lowertick == currenttick, from == to. When swapping only
 		// from < to. To refine the check?
-		assert!(from <= to);
+		debug_assert!(from <= to);
 
 		/*
 			Proof that `mul_div` does not overflow:
@@ -807,15 +831,15 @@ impl PoolState {
 		mul_div_floor(liquidity.into(), to - from, U512::from(1) << 96u32)
 	}
 
-	fn pair_amount_delta_ceil(
+	fn asset_1_amount_delta_ceil(
 		from: SqrtPriceQ64F96,
 		to: SqrtPriceQ64F96,
 		liquidity: Liquidity,
-	) -> Amount {
-		assert!(SqrtPriceQ64F96::zero() < from);
+	) -> AmountU256 {
+		debug_assert!(SqrtPriceQ64F96::zero() < from);
 		// BUGFIX: When minting/burning at lowertick == currenttick, from == to. When swapping only
 		// from < to. To refine the check?
-		assert!(from <= to);
+		debug_assert!(from <= to);
 
 		/*
 			Proof that `mul_div` does not overflow:
@@ -827,13 +851,13 @@ impl PoolState {
 		mul_div_ceil(liquidity.into(), to - from, U512::from(1u32) << 96u32)
 	}
 
-	fn next_sqrt_price_from_base_input(
+	fn next_sqrt_price_from_asset_0_input(
 		sqrt_ratio_current: SqrtPriceQ64F96,
 		liquidity: Liquidity,
-		amount: Amount,
+		amount: AmountU256,
 	) -> SqrtPriceQ64F96 {
-		assert!(0 < liquidity);
-		assert!(SqrtPriceQ64F96::zero() < sqrt_ratio_current);
+		debug_assert!(0 < liquidity);
+		debug_assert!(SqrtPriceQ64F96::zero() < sqrt_ratio_current);
 
 		let liquidity = U256::from(liquidity) << 96u32;
 
@@ -853,18 +877,18 @@ impl PoolState {
 		)
 	}
 
-	fn next_sqrt_price_from_pair_input(
+	fn next_sqrt_price_from_asset_1_input(
 		sqrt_ratio_current: SqrtPriceQ64F96,
 		liquidity: Liquidity,
-		amount: Amount,
+		amount: AmountU256,
 	) -> SqrtPriceQ64F96 {
 		// Will not overflow as function is not called if amount >= amount_required_to_reach_target,
 		// therefore bounding the function output to approximately <= MAX_SQRT_PRICE
 		sqrt_ratio_current + (amount << 96u32) / liquidity
 	}
 
-	fn sqrt_price_at_tick(tick: Tick) -> SqrtPriceQ64F96 {
-		assert!((MIN_TICK..=MAX_TICK).contains(&tick));
+	pub fn sqrt_price_at_tick(tick: Tick) -> SqrtPriceQ64F96 {
+		debug_assert!((MIN_TICK..=MAX_TICK).contains(&tick));
 
 		let abs_tick = tick.unsigned_abs();
 
@@ -926,10 +950,10 @@ impl PoolState {
 	}
 
 	/// Calculates the greatest tick value such that `sqrt_price_at_tick(tick) <= sqrt_price`
-	fn tick_at_sqrt_price(sqrt_price: SqrtPriceQ64F96) -> Tick {
-		assert!(sqrt_price >= MIN_SQRT_PRICE);
+	pub fn tick_at_sqrt_price(sqrt_price: SqrtPriceQ64F96) -> Tick {
+		debug_assert!(sqrt_price >= MIN_SQRT_PRICE);
 		// Note the price can never actually reach MAX_SQRT_PRICE
-		assert!(sqrt_price < MAX_SQRT_PRICE);
+		debug_assert!(sqrt_price < MAX_SQRT_PRICE);
 
 		let sqrt_price_q64f128 = sqrt_price << 32u128;
 
@@ -971,13 +995,14 @@ impl PoolState {
 				} else {
 					sqrt_price_q64f128 << (127u8 - most_signifcant_bit)
 				}
-				.as_u128(), // Conversion to u128 is safe as top 128 bits are always zero
+				.try_into()
+				.expect("Conversion to u128 is safe as top 128 bits are always zero"),
 			)
 		};
 
 		let log_2_q63f64 = {
 			let mut log_2_q63f64 = (integer_log_2 as i128) << 64u8;
-			let mut _mantissa = mantissa;
+			let mut _mantissa: u128 = mantissa;
 
 			// rustfmt chokes when formatting this macro.
 			// See: https://github.com/rust-lang/rustfmt/issues/5404
@@ -1052,6 +1077,27 @@ impl PoolState {
 	}
 }
 
+fn mul_div_floor<C: Into<U512>>(a: U256, b: U256, c: C) -> U256 {
+	let c: U512 = c.into();
+	(U256::full_mul(a, b) / c).try_into().unwrap()
+}
+
+fn mul_div_ceil<C: Into<U512>>(a: U256, b: U256, c: C) -> U256 {
+	let c: U512 = c.into();
+
+	let (d, m) = U512::div_mod(U256::full_mul(a, b), c);
+
+	if m > U512::from(0) {
+		// cannot overflow as for m > 0, c must be > 1, and as (a*b) <= U512::MAX, therefore a*b/c <
+		// U512::MAX
+		d + 1
+	} else {
+		d
+	}
+	.try_into()
+	.unwrap()
+}
+
 #[cfg(test)]
 mod test {
 	use super::*;
@@ -1076,14 +1122,14 @@ mod test {
 	#[test]
 	fn output_amounts_bounded() {
 		// Note these values are significant over-estimates of the maximum output amount
-		PairToBase::output_amount_delta_floor(
+		Asset1ToAsset0::output_amount_delta_floor(
 			PoolState::sqrt_price_at_tick(MIN_TICK),
 			PoolState::sqrt_price_at_tick(MAX_TICK),
 			MAX_TICK_GROSS_LIQUIDITY,
 		)
 		.checked_mul((1 + MAX_TICK - MIN_TICK).into())
 		.unwrap();
-		BaseToPair::output_amount_delta_floor(
+		Asset0ToAsset1::output_amount_delta_floor(
 			PoolState::sqrt_price_at_tick(MAX_TICK),
 			PoolState::sqrt_price_at_tick(MIN_TICK),
 			MAX_TICK_GROSS_LIQUIDITY,
@@ -1286,65 +1332,65 @@ mod test {
 	pub const MIN_TICK_UNISWAP_MEDIUM: Tick = -887220;
 	pub const MAX_TICK_UNISWAP_MEDIUM: Tick = -MIN_TICK_UNISWAP_MEDIUM;
 
-	fn mint_pool() -> (PoolState, enum_map::EnumMap<Ticker, Amount>, LiquidityProvider) {
+	fn mint_pool() -> (PoolState, PoolAssetMap<AmountU256>, AccountId) {
 		let mut pool =
-			PoolState::new(300, U256::from_dec_str("25054144837504793118650146401").unwrap()); // encodeSqrtPrice (1,10)
-		const ID: LiquidityProvider = H256([0xcf; 32]);
+			PoolState::new(300, U256::from_dec_str("25054144837504793118650146401").unwrap())
+				.unwrap(); // encodeSqrtPrice (1,10)
+		let id: AccountId = AccountId::from([0xcf; 32]);
 		const MINTED_LIQUIDITY: u128 = 3_161;
 		let mut minted_capital = None;
 
-		let fees_owed = pool
-			.mint(
-				ID,
-				MIN_TICK_UNISWAP_MEDIUM,
-				MAX_TICK_UNISWAP_MEDIUM,
-				MINTED_LIQUIDITY,
-				|minted| {
-					minted_capital.replace(minted);
-					true
-				},
-			)
-			.unwrap();
+		let _ = pool.mint(
+			id.clone(),
+			MIN_TICK_UNISWAP_MEDIUM,
+			MAX_TICK_UNISWAP_MEDIUM,
+			MINTED_LIQUIDITY,
+			|minted| {
+				minted_capital.replace(minted);
+				Ok(())
+			},
+		);
 		let minted_capital = minted_capital.unwrap();
 
-		(pool, minted_capital, ID)
+		(pool, minted_capital, id)
 	}
 
 	#[test]
 	#[should_panic]
 	fn test_initialize_failure() {
-		PoolState::new(100, U256::from(1));
+		let _ = PoolState::new(100, U256::from(1));
 	}
 	#[test]
 	fn test_initialize_success() {
-		PoolState::new(100, U256::from(MIN_SQRT_PRICE));
-		PoolState::new(100, U256::from(MAX_SQRT_PRICE - 1));
+		let _ = PoolState::new(100, MIN_SQRT_PRICE);
+		let _ = PoolState::new(100, MAX_SQRT_PRICE - 1);
 
 		let pool =
-			PoolState::new(100, U256::from_dec_str("56022770974786143748341366784").unwrap());
+			PoolState::new(100, U256::from_dec_str("56022770974786143748341366784").unwrap())
+				.unwrap();
 
 		assert_eq!(
 			pool.current_sqrt_price,
 			U256::from_dec_str("56022770974786143748341366784").unwrap()
 		);
-		assert_eq!(pool.current_tick, Tick::from(-6_932));
+		assert_eq!(pool.current_tick, -6_932);
 	}
 	#[test]
 	#[should_panic]
 	fn test_initialize_too_low() {
-		PoolState::new(100, U256::from(MIN_SQRT_PRICE - 1));
+		let _ = PoolState::new(100, MIN_SQRT_PRICE - 1);
 	}
 
 	#[test]
 	#[should_panic]
 	fn test_initialize_too_high() {
-		PoolState::new(100, U256::from(MAX_SQRT_PRICE));
+		let _ = PoolState::new(100, MAX_SQRT_PRICE);
 	}
 
 	#[test]
 	#[should_panic]
 	fn test_initialize_too_high_2() {
-		PoolState::new(
+		let _ = PoolState::new(
 			100,
 			U256::from_dec_str(
 				"57896044618658097711785492504343953926634992332820282019728792003956564819968", /* 2**160-1 */
@@ -1360,16 +1406,16 @@ mod test {
 	#[test]
 	fn test_mint_err() {
 		let (mut pool, _, id) = mint_pool();
-		assert!(pool.mint(id, 1, 0, 1, |_| true).is_err());
-		assert!((pool.mint(id, -887273, 0, 1, |_| true)).is_err());
-		assert!((pool.mint(id, 0, 887273, 1, |_| true)).is_err());
+		assert!(pool.mint(id.clone(), 1, 0, 1, |_| Ok(())).is_err());
+		assert!((pool.mint(id.clone(), -887273, 0, 1, |_| Ok(()))).is_err());
+		assert!((pool.mint(id.clone(), 0, 887273, 1, |_| Ok(()))).is_err());
 
 		assert!((pool.mint(
-			id,
+			id.clone(),
 			MIN_TICK_UNISWAP_MEDIUM + 1,
 			MAX_TICK_UNISWAP_MEDIUM - 1,
 			MAX_TICK_GROSS_LIQUIDITY + 1,
-			|_| true
+			|_| Ok(())
 		))
 		.is_err());
 
@@ -1378,7 +1424,7 @@ mod test {
 			MIN_TICK_UNISWAP_MEDIUM + 1,
 			MAX_TICK_UNISWAP_MEDIUM - 1,
 			MAX_TICK_GROSS_LIQUIDITY,
-			|_| true
+			|_| Ok(())
 		))
 		.is_ok());
 	}
@@ -1387,63 +1433,69 @@ mod test {
 	fn test_mint_err_tickmax() {
 		let (mut pool, _, id) = mint_pool();
 
-		let fees_owed = pool
-			.mint(id, MIN_TICK_UNISWAP_MEDIUM + 1, MAX_TICK_UNISWAP_MEDIUM - 1, 1000, |_| true)
+		let (_, fees_owed) = pool
+			.mint(
+				id.clone(),
+				MIN_TICK_UNISWAP_MEDIUM + 1,
+				MAX_TICK_UNISWAP_MEDIUM - 1,
+				1000,
+				|_| Ok(()),
+			)
 			.unwrap();
 
-		//assert_eq!(fees_owed.unwrap()[Ticker::Base], 0);
-		// assert_eq!(fees_owed.unwrap()[Ticker::Pair], 0);
-		match (fees_owed[Ticker::Base], fees_owed[Ticker::Pair]) {
+		//assert_eq!(fees_owed.unwrap()[PoolSide::Asset0], 0);
+		// assert_eq!(fees_owed.unwrap()[PoolSide::Asset1], 0);
+		match (fees_owed[PoolSide::Asset0], fees_owed[PoolSide::Asset1]) {
 			(0, 0) => {},
 			_ => panic!("Fees accrued are not zero"),
 		}
 
 		assert!((pool.mint(
-			id,
+			id.clone(),
 			MIN_TICK_UNISWAP_MEDIUM + 1,
 			MAX_TICK_UNISWAP_MEDIUM - 1,
 			MAX_TICK_GROSS_LIQUIDITY - 1000 + 1,
-			|_| true
+			|_| Ok(())
 		))
 		.is_err());
 
 		assert!((pool.mint(
-			id,
+			id.clone(),
 			MIN_TICK_UNISWAP_MEDIUM + 2,
 			MAX_TICK_UNISWAP_MEDIUM - 1,
 			MAX_TICK_GROSS_LIQUIDITY - 1000 + 1,
-			|_| true
+			|_| Ok(())
 		))
 		.is_err());
 
 		assert!((pool.mint(
-			id,
+			id.clone(),
 			MIN_TICK_UNISWAP_MEDIUM + 1,
 			MAX_TICK_UNISWAP_MEDIUM - 2,
 			MAX_TICK_GROSS_LIQUIDITY - 1000 + 1,
-			|_| true
+			|_| Ok(())
 		))
 		.is_err());
 
-		let fees_owed = pool
+		let (_, fees_owed) = pool
 			.mint(
-				id,
+				id.clone(),
 				MIN_TICK_UNISWAP_MEDIUM + 1,
 				MAX_TICK_UNISWAP_MEDIUM - 1,
 				MAX_TICK_GROSS_LIQUIDITY - 1000,
-				|_| true,
+				|_| Ok(()),
 			)
 			.unwrap();
-		match (fees_owed[Ticker::Base], fees_owed[Ticker::Pair]) {
+		match (fees_owed[PoolSide::Asset0], fees_owed[PoolSide::Asset1]) {
 			(0, 0) => {},
 			_ => panic!("Fees accrued are not zero"),
 		}
 
 		// Different behaviour from Uniswap - does not revert when minting 0
-		let fees_owed = pool
-			.mint(id, MIN_TICK_UNISWAP_MEDIUM + 1, MAX_TICK_UNISWAP_MEDIUM - 1, 0, |_| true)
+		let (_, fees_owed) = pool
+			.mint(id, MIN_TICK_UNISWAP_MEDIUM + 1, MAX_TICK_UNISWAP_MEDIUM - 1, 0, |_| Ok(()))
 			.unwrap();
-		match (fees_owed[Ticker::Base], fees_owed[Ticker::Pair]) {
+		match (fees_owed[PoolSide::Asset0], fees_owed[PoolSide::Asset1]) {
 			(0, 0) => {},
 			_ => panic!("Fees accrued are not zero"),
 		}
@@ -1455,7 +1507,7 @@ mod test {
 	fn test_balances() {
 		let (_, minted_capital, _) = mint_pool();
 		// Check "balances"
-		const INPUT_TICKER: Ticker = Ticker::Base;
+		const INPUT_TICKER: PoolSide = PoolSide::Asset0;
 		assert_eq!(minted_capital[INPUT_TICKER], U256::from(9_996));
 		assert_eq!(minted_capital[!INPUT_TICKER], U256::from(1_000));
 	}
@@ -1464,7 +1516,7 @@ mod test {
 	fn test_initial_tick() {
 		let (pool, _, _) = mint_pool();
 		// Check current tick
-		assert_eq!(pool.current_tick, Tick::from(-23_028));
+		assert_eq!(pool.current_tick, -23_028);
 	}
 
 	#[test]
@@ -1472,18 +1524,18 @@ mod test {
 		let (mut pool, mut minted_capital_accum, id) = mint_pool();
 
 		const MINTED_LIQUIDITY: u128 = 10_000;
-		const INPUT_TICKER: Ticker = Ticker::Base;
+		const INPUT_TICKER: PoolSide = PoolSide::Asset0;
 
 		let mut minted_capital = None;
-		let fees_owed = pool
+		let (_, fees_owed) = pool
 			.mint(id, -22980, 0, MINTED_LIQUIDITY, |minted| {
 				minted_capital.replace(minted);
-				true
+				Ok(())
 			})
 			.unwrap();
 		let minted_capital = minted_capital.unwrap();
 
-		match (fees_owed[Ticker::Base], fees_owed[Ticker::Pair]) {
+		match (fees_owed[PoolSide::Asset0], fees_owed[PoolSide::Asset1]) {
 			(0, 0) => {},
 			_ => panic!("Fees accrued are not zero"),
 		}
@@ -1510,17 +1562,17 @@ mod test {
 			5070602400912917605986812821504, /* 2**102 */
 			|minted| {
 				minted_capital.replace(minted);
-				true
+				Ok(())
 			},
 		)
 		.unwrap();
 		let minted_capital = minted_capital.unwrap();
 
-		minted_capital_accum[Ticker::Base] += minted_capital[Ticker::Base];
-		minted_capital_accum[!Ticker::Base] += minted_capital[!Ticker::Base];
+		minted_capital_accum[PoolSide::Asset0] += minted_capital[PoolSide::Asset0];
+		minted_capital_accum[!PoolSide::Asset0] += minted_capital[!PoolSide::Asset0];
 
-		assert_eq!(minted_capital_accum[Ticker::Base], U256::from(9_996 + 828_011_525));
-		assert_eq!(minted_capital_accum[!Ticker::Base], U256::from(1_000));
+		assert_eq!(minted_capital_accum[PoolSide::Asset0], U256::from(9_996 + 828_011_525));
+		assert_eq!(minted_capital_accum[!PoolSide::Asset0], U256::from(1_000));
 	}
 
 	#[test]
@@ -1529,67 +1581,67 @@ mod test {
 		let mut minted_capital = None;
 		pool.mint(id, -22980, 887220, 10000, |minted| {
 			minted_capital.replace(minted);
-			true
+			Ok(())
 		})
 		.unwrap();
 		let minted_capital = minted_capital.unwrap();
 
-		minted_capital_accum[Ticker::Base] += minted_capital[Ticker::Base];
-		minted_capital_accum[!Ticker::Base] += minted_capital[!Ticker::Base];
+		minted_capital_accum[PoolSide::Asset0] += minted_capital[PoolSide::Asset0];
+		minted_capital_accum[!PoolSide::Asset0] += minted_capital[!PoolSide::Asset0];
 
-		assert_eq!(minted_capital_accum[Ticker::Base], U256::from(9_996 + 31_549));
-		assert_eq!(minted_capital_accum[!Ticker::Base], U256::from(1_000));
+		assert_eq!(minted_capital_accum[PoolSide::Asset0], U256::from(9_996 + 31_549));
+		assert_eq!(minted_capital_accum[!PoolSide::Asset0], U256::from(1_000));
 	}
 
 	#[test]
 	fn test_removing_works_0() {
 		let (mut pool, _, id) = mint_pool();
 		let mut minted_capital = None;
-		pool.mint(id, -240, 0, 10000, |minted| {
+		pool.mint(id.clone(), -240, 0, 10000, |minted| {
 			minted_capital.replace(minted);
-			true
+			Ok(())
 		})
 		.unwrap();
 
 		let (returned_capital, fees_owed) = pool.burn(id, -240, 0, 10000).unwrap();
 
-		assert_eq!(returned_capital[Ticker::Base], U256::from(120));
-		assert_eq!(returned_capital[!Ticker::Base], U256::from(0));
+		assert_eq!(returned_capital[PoolSide::Asset0], U256::from(120));
+		assert_eq!(returned_capital[!PoolSide::Asset0], U256::from(0));
 
-		assert_eq!(fees_owed[Ticker::Base], 0);
-		assert_eq!(fees_owed[!Ticker::Base], 0);
+		assert_eq!(fees_owed[PoolSide::Asset0], 0);
+		assert_eq!(fees_owed[!PoolSide::Asset0], 0);
 	}
 
 	#[test]
 	fn test_removing_works_twosteps_0() {
 		let (mut pool, _, id) = mint_pool();
 		let mut minted_capital = None;
-		pool.mint(id, -240, 0, 10000, |minted| {
+		pool.mint(id.clone(), -240, 0, 10000, |minted| {
 			minted_capital.replace(minted);
-			true
+			Ok(())
 		})
 		.unwrap();
 
-		let (returned_capital_0, fees_owed_0) = pool.burn(id, -240, 0, 10000 / 2).unwrap();
+		let (returned_capital_0, fees_owed_0) = pool.burn(id.clone(), -240, 0, 10000 / 2).unwrap();
 		let (returned_capital_1, fees_owed_1) = pool.burn(id, -240, 0, 10000 / 2).unwrap();
 
-		assert_eq!(returned_capital_0[Ticker::Base], U256::from(60));
-		assert_eq!(returned_capital_0[!Ticker::Base], U256::from(0));
-		assert_eq!(returned_capital_1[Ticker::Base], U256::from(60));
-		assert_eq!(returned_capital_1[!Ticker::Base], U256::from(0));
+		assert_eq!(returned_capital_0[PoolSide::Asset0], U256::from(60));
+		assert_eq!(returned_capital_0[!PoolSide::Asset0], U256::from(0));
+		assert_eq!(returned_capital_1[PoolSide::Asset0], U256::from(60));
+		assert_eq!(returned_capital_1[!PoolSide::Asset0], U256::from(0));
 
-		assert_eq!(fees_owed_0[Ticker::Base], 0);
-		assert_eq!(fees_owed_0[!Ticker::Base], 0);
-		assert_eq!(fees_owed_1[Ticker::Base], 0);
-		assert_eq!(fees_owed_1[!Ticker::Base], 0);
+		assert_eq!(fees_owed_0[PoolSide::Asset0], 0);
+		assert_eq!(fees_owed_0[!PoolSide::Asset0], 0);
+		assert_eq!(fees_owed_1[PoolSide::Asset0], 0);
+		assert_eq!(fees_owed_1[!PoolSide::Asset0], 0);
 	}
 
 	#[test]
 	fn test_addliquidityto_liquiditygross() {
 		let (mut pool, _, id) = mint_pool();
-		let fees_owed = pool.mint(id, -240, 0, 100, |_| true).unwrap();
+		let (_, fees_owed) = pool.mint(id.clone(), -240, 0, 100, |_| Ok(())).unwrap();
 
-		match (fees_owed[Ticker::Base], fees_owed[Ticker::Pair]) {
+		match (fees_owed[PoolSide::Asset0], fees_owed[PoolSide::Asset1]) {
 			(0, 0) => {},
 			_ => panic!("Fees accrued are not zero"),
 		}
@@ -1599,9 +1651,9 @@ mod test {
 		assert!(!pool.liquidity_map.contains_key(&1));
 		assert!(!pool.liquidity_map.contains_key(&2));
 
-		let fees_owed = pool.mint(id, -240, 1, 150, |_| true).unwrap();
+		let (_, fees_owed) = pool.mint(id.clone(), -240, 1, 150, |_| Ok(())).unwrap();
 
-		match (fees_owed[Ticker::Base], fees_owed[Ticker::Pair]) {
+		match (fees_owed[PoolSide::Asset0], fees_owed[PoolSide::Asset1]) {
 			(0, 0) => {},
 			_ => panic!("Fees accrued are not zero"),
 		}
@@ -1610,9 +1662,9 @@ mod test {
 		assert_eq!(pool.liquidity_map.get(&1).unwrap().liquidity_gross, 150);
 		assert!(!pool.liquidity_map.contains_key(&2));
 
-		let fees_owed = pool.mint(id, 0, 2, 60, |_| true).unwrap();
+		let (_, fees_owed) = pool.mint(id, 0, 2, 60, |_| Ok(())).unwrap();
 
-		match (fees_owed[Ticker::Base], fees_owed[Ticker::Pair]) {
+		match (fees_owed[PoolSide::Asset0], fees_owed[PoolSide::Asset1]) {
 			(0, 0) => {},
 			_ => panic!("Fees accrued are not zero"),
 		}
@@ -1625,10 +1677,10 @@ mod test {
 	#[test]
 	fn test_remove_liquidity_liquiditygross() {
 		let (mut pool, _, id) = mint_pool();
-		pool.mint(id, -240, 0, 100, |_| true).unwrap();
-		pool.mint(id, -240, 0, 40, |_| true).unwrap();
+		pool.mint(id.clone(), -240, 0, 100, |_| Ok(())).unwrap();
+		pool.mint(id.clone(), -240, 0, 40, |_| Ok(())).unwrap();
 		let (_, fees_owed) = pool.burn(id, -240, 0, 90).unwrap();
-		match (fees_owed[Ticker::Base], fees_owed[Ticker::Pair]) {
+		match (fees_owed[PoolSide::Asset0], fees_owed[PoolSide::Asset1]) {
 			(0, 0) => {},
 			_ => panic!("Fees accrued are not zero"),
 		}
@@ -1639,9 +1691,9 @@ mod test {
 	#[test]
 	fn test_clearsticklower_ifpositionremoved() {
 		let (mut pool, _, id) = mint_pool();
-		pool.mint(id, -240, 0, 100, |_| true).unwrap();
+		pool.mint(id.clone(), -240, 0, 100, |_| Ok(())).unwrap();
 		let (_, fees_owed) = pool.burn(id, -240, 0, 100).unwrap();
-		match (fees_owed[Ticker::Base], fees_owed[Ticker::Pair]) {
+		match (fees_owed[PoolSide::Asset0], fees_owed[PoolSide::Asset1]) {
 			(0, 0) => {},
 			_ => panic!("Fees accrued are not zero"),
 		}
@@ -1651,7 +1703,7 @@ mod test {
 	#[test]
 	fn test_clearstickupper_ifpositionremoved() {
 		let (mut pool, _, id) = mint_pool();
-		pool.mint(id, -240, 0, 100, |_| true).unwrap();
+		pool.mint(id.clone(), -240, 0, 100, |_| Ok(())).unwrap();
 		pool.burn(id, -240, 0, 100).unwrap();
 		assert!(!pool.liquidity_map.contains_key(&0));
 	}
@@ -1659,17 +1711,17 @@ mod test {
 	#[test]
 	fn test_clears_onlyunused() {
 		let (mut pool, _, id) = mint_pool();
-		pool.mint(id, -240, 0, 100, |_| true).unwrap();
-		pool.mint(id, -60, 0, 250, |_| true).unwrap();
+		pool.mint(id.clone(), -240, 0, 100, |_| Ok(())).unwrap();
+		pool.mint(id.clone(), -60, 0, 250, |_| Ok(())).unwrap();
 		pool.burn(id, -240, 0, 100).unwrap();
 		assert!(!pool.liquidity_map.contains_key(&-240));
 		assert_eq!(pool.liquidity_map.get(&0).unwrap().liquidity_gross, 250);
 		assert_eq!(
-			pool.liquidity_map.get(&0).unwrap().fee_growth_outside[Ticker::Base],
+			pool.liquidity_map.get(&0).unwrap().fee_growth_outside[PoolSide::Asset0],
 			U256::from(0)
 		);
 		assert_eq!(
-			pool.liquidity_map.get(&0).unwrap().fee_growth_outside[!Ticker::Base],
+			pool.liquidity_map.get(&0).unwrap().fee_growth_outside[!PoolSide::Asset0],
 			U256::from(0)
 		);
 	}
@@ -1687,21 +1739,21 @@ mod test {
 			100,
 			|minted| {
 				minted_capital.replace(minted);
-				true
+				Ok(())
 			},
 		)
 		.unwrap();
 		let minted_capital = minted_capital.unwrap();
 
-		assert_eq!(minted_capital[Ticker::Base], U256::from(317));
-		assert_eq!(minted_capital[!Ticker::Base], U256::from(32));
+		assert_eq!(minted_capital[PoolSide::Asset0], U256::from(317));
+		assert_eq!(minted_capital[!PoolSide::Asset0], U256::from(32));
 
 		assert_eq!(
-			minted_capital_accum[Ticker::Base] + minted_capital[Ticker::Base],
+			minted_capital_accum[PoolSide::Asset0] + minted_capital[PoolSide::Asset0],
 			U256::from(9_996 + 317)
 		);
 		assert_eq!(
-			minted_capital_accum[!Ticker::Base] + minted_capital[!Ticker::Base],
+			minted_capital_accum[!PoolSide::Asset0] + minted_capital[!PoolSide::Asset0],
 			U256::from(1_000 + 32)
 		);
 	}
@@ -1714,7 +1766,7 @@ mod test {
 			MIN_TICK_UNISWAP_MEDIUM + TICKSPACING_UNISWAP_MEDIUM,
 			MAX_TICK_UNISWAP_MEDIUM - TICKSPACING_UNISWAP_MEDIUM,
 			100,
-			|_| true,
+			|_| Ok(()),
 		)
 		.unwrap();
 		assert_eq!(
@@ -1734,7 +1786,7 @@ mod test {
 			MIN_TICK_UNISWAP_MEDIUM + TICKSPACING_UNISWAP_MEDIUM,
 			MAX_TICK_UNISWAP_MEDIUM - TICKSPACING_UNISWAP_MEDIUM,
 			100,
-			|_| true,
+			|_| Ok(()),
 		)
 		.unwrap();
 		assert_eq!(
@@ -1752,20 +1804,20 @@ mod test {
 		let mut minted_capital = None;
 		pool.mint(id, MIN_TICK_UNISWAP_MEDIUM, MAX_TICK_UNISWAP_MEDIUM, 10000, |minted| {
 			minted_capital.replace(minted);
-			true
+			Ok(())
 		})
 		.unwrap();
 		let minted_capital = minted_capital.unwrap();
 
-		assert_eq!(minted_capital[Ticker::Base], U256::from(31623));
-		assert_eq!(minted_capital[!Ticker::Base], U256::from(3163));
+		assert_eq!(minted_capital[PoolSide::Asset0], U256::from(31623));
+		assert_eq!(minted_capital[!PoolSide::Asset0], U256::from(3163));
 
 		assert_eq!(
-			minted_capital_accum[Ticker::Base] + minted_capital[Ticker::Base],
+			minted_capital_accum[PoolSide::Asset0] + minted_capital[PoolSide::Asset0],
 			U256::from(9_996 + 31623)
 		);
 		assert_eq!(
-			minted_capital_accum[!Ticker::Base] + minted_capital[!Ticker::Base],
+			minted_capital_accum[!PoolSide::Asset0] + minted_capital[!PoolSide::Asset0],
 			U256::from(1_000 + 3163)
 		);
 	}
@@ -1774,25 +1826,25 @@ mod test {
 	fn test_removing() {
 		let (mut pool, _, id) = mint_pool();
 		pool.mint(
-			id,
+			id.clone(),
 			MIN_TICK_UNISWAP_MEDIUM + TICKSPACING_UNISWAP_MEDIUM,
 			MAX_TICK_UNISWAP_MEDIUM - TICKSPACING_UNISWAP_MEDIUM,
 			100,
-			|_| true,
+			|_| Ok(()),
 		)
 		.unwrap();
 
 		let (amounts_owed, _) = pool
 			.burn(
-				id,
+				id.clone(),
 				MIN_TICK_UNISWAP_MEDIUM + TICKSPACING_UNISWAP_MEDIUM,
 				MAX_TICK_UNISWAP_MEDIUM - TICKSPACING_UNISWAP_MEDIUM,
 				100,
 			)
 			.unwrap();
 
-		assert_eq!(amounts_owed[Ticker::Base], U256::from(316));
-		assert_eq!(amounts_owed[!Ticker::Base], U256::from(31));
+		assert_eq!(amounts_owed[PoolSide::Asset0], U256::from(316));
+		assert_eq!(amounts_owed[!PoolSide::Asset0], U256::from(31));
 
 		// DIFF: Burn will have burnt the entire position so it will be deleted.
 		match pool.burn(
@@ -1814,20 +1866,20 @@ mod test {
 		let mut minted_capital = None;
 		pool.mint(id, -46080, -23040, 10000, |minted| {
 			minted_capital.replace(minted);
-			true
+			Ok(())
 		})
 		.unwrap();
 		let minted_capital = minted_capital.unwrap();
 
-		assert_eq!(minted_capital[Ticker::Base], U256::from(0));
-		assert_eq!(minted_capital[!Ticker::Base], U256::from(2162));
+		assert_eq!(minted_capital[PoolSide::Asset0], U256::from(0));
+		assert_eq!(minted_capital[!PoolSide::Asset0], U256::from(2162));
 
 		assert_eq!(
-			minted_capital_accum[Ticker::Base] + minted_capital[Ticker::Base],
+			minted_capital_accum[PoolSide::Asset0] + minted_capital[PoolSide::Asset0],
 			U256::from(9_996)
 		);
 		assert_eq!(
-			minted_capital_accum[!Ticker::Base] + minted_capital[!Ticker::Base],
+			minted_capital_accum[!PoolSide::Asset0] + minted_capital[!PoolSide::Asset0],
 			U256::from(1_000 + 2162)
 		);
 	}
@@ -1843,21 +1895,21 @@ mod test {
 			5070602400912917605986812821504, /* 2**102 */
 			|minted| {
 				minted_capital.replace(minted);
-				true
+				Ok(())
 			},
 		)
 		.unwrap();
 		let minted_capital = minted_capital.unwrap();
 
-		assert_eq!(minted_capital[Ticker::Base], U256::from(0));
-		assert_eq!(minted_capital[!Ticker::Base], U256::from(828011520));
+		assert_eq!(minted_capital[PoolSide::Asset0], U256::from(0));
+		assert_eq!(minted_capital[!PoolSide::Asset0], U256::from(828011520));
 
 		assert_eq!(
-			minted_capital_accum[Ticker::Base] + minted_capital[Ticker::Base],
+			minted_capital_accum[PoolSide::Asset0] + minted_capital[PoolSide::Asset0],
 			U256::from(9_996)
 		);
 		assert_eq!(
-			minted_capital_accum[!Ticker::Base] + minted_capital[!Ticker::Base],
+			minted_capital_accum[!PoolSide::Asset0] + minted_capital[!PoolSide::Asset0],
 			U256::from(1_000 + 828011520)
 		);
 	}
@@ -1868,20 +1920,20 @@ mod test {
 		let mut minted_capital = None;
 		pool.mint(id, MIN_TICK_UNISWAP_MEDIUM, -23040, 10000, |minted| {
 			minted_capital.replace(minted);
-			true
+			Ok(())
 		})
 		.unwrap();
 		let minted_capital = minted_capital.unwrap();
 
-		assert_eq!(minted_capital[Ticker::Base], U256::from(0));
-		assert_eq!(minted_capital[!Ticker::Base], U256::from(3161));
+		assert_eq!(minted_capital[PoolSide::Asset0], U256::from(0));
+		assert_eq!(minted_capital[!PoolSide::Asset0], U256::from(3161));
 
 		assert_eq!(
-			minted_capital_accum[Ticker::Base] + minted_capital[Ticker::Base],
+			minted_capital_accum[PoolSide::Asset0] + minted_capital[PoolSide::Asset0],
 			U256::from(9_996)
 		);
 		assert_eq!(
-			minted_capital_accum[!Ticker::Base] + minted_capital[!Ticker::Base],
+			minted_capital_accum[!PoolSide::Asset0] + minted_capital[!PoolSide::Asset0],
 			U256::from(1_000 + 3161)
 		);
 	}
@@ -1890,20 +1942,20 @@ mod test {
 	fn test_removing_works_1() {
 		let (mut pool, _, id) = mint_pool();
 		let mut minted_capital = None;
-		pool.mint(id, -46080, -46020, 10000, |minted| {
+		pool.mint(id.clone(), -46080, -46020, 10000, |minted| {
 			minted_capital.replace(minted);
-			true
+			Ok(())
 		})
 		.unwrap();
 
-		let (returned_capital, fees_owed) = pool.burn(id, -46080, -46020, 10000).unwrap();
+		let (returned_capital, fees_owed) = pool.burn(id.clone(), -46080, -46020, 10000).unwrap();
 
 		// DIFF: Burn will have burnt the entire position so it will be deleted.
-		assert_eq!(returned_capital[Ticker::Base], U256::from(0));
-		assert_eq!(returned_capital[!Ticker::Base], U256::from(3));
+		assert_eq!(returned_capital[PoolSide::Asset0], U256::from(0));
+		assert_eq!(returned_capital[!PoolSide::Asset0], U256::from(3));
 
-		assert_eq!(fees_owed[Ticker::Base], 0);
-		assert_eq!(fees_owed[!Ticker::Base], 0);
+		assert_eq!(fees_owed[PoolSide::Asset0], 0);
+		assert_eq!(fees_owed[!PoolSide::Asset0], 0);
 
 		match pool.burn(id, -46080, -46020, 1) {
 			Err(PositionError::NonExistent) => {},
@@ -1917,21 +1969,21 @@ mod test {
 	fn test_poke_uninitialized_position() {
 		let (mut pool, _, id) = mint_pool();
 		pool.mint(
-			H256([0xce; 32]),
+			AccountId::from([0xce; 32]),
 			MIN_TICK_UNISWAP_MEDIUM + TICKSPACING_UNISWAP_MEDIUM,
 			MAX_TICK_UNISWAP_MEDIUM - TICKSPACING_UNISWAP_MEDIUM,
 			expandto18decimals(1).as_u128(),
-			|_| true,
+			|_| Ok(()),
 		)
 		.unwrap();
 
-		let SWAP_INPUT: u128 = expandto18decimals(1).as_u128();
+		let swap_input: u128 = expandto18decimals(1).as_u128();
 
-		pool.swap::<BaseToPair>((SWAP_INPUT / 10).into());
-		pool.swap::<PairToBase>((SWAP_INPUT / 100).into());
+		pool.swap::<Asset0ToAsset1>((swap_input / 10).into());
+		pool.swap::<Asset1ToAsset0>((swap_input / 100).into());
 
 		match pool.burn(
-			id,
+			id.clone(),
 			MIN_TICK_UNISWAP_MEDIUM + TICKSPACING_UNISWAP_MEDIUM,
 			MAX_TICK_UNISWAP_MEDIUM - TICKSPACING_UNISWAP_MEDIUM,
 			0,
@@ -1940,17 +1992,17 @@ mod test {
 			_ => panic!("Expected NonExistent"),
 		}
 
-		let fees_owed = pool
+		let (_, fees_owed) = pool
 			.mint(
-				id,
+				id.clone(),
 				MIN_TICK_UNISWAP_MEDIUM + TICKSPACING_UNISWAP_MEDIUM,
 				MAX_TICK_UNISWAP_MEDIUM - TICKSPACING_UNISWAP_MEDIUM,
 				1,
-				|_| true,
+				|_| Ok(()),
 			)
 			.unwrap();
 
-		match (fees_owed[Ticker::Base], fees_owed[Ticker::Pair]) {
+		match (fees_owed[PoolSide::Asset0], fees_owed[PoolSide::Asset1]) {
 			(0, 0) => {},
 			_ => panic!("Fees accrued are not zero"),
 		}
@@ -1958,26 +2010,26 @@ mod test {
 		let tick = pool
 			.positions
 			.get(&(
-				id,
+				id.clone(),
 				MIN_TICK_UNISWAP_MEDIUM + TICKSPACING_UNISWAP_MEDIUM,
 				MAX_TICK_UNISWAP_MEDIUM - TICKSPACING_UNISWAP_MEDIUM,
 			))
 			.unwrap();
 		assert_eq!(tick.liquidity, 1);
 		assert_eq!(
-			tick.last_fee_growth_inside[Ticker::Base],
+			tick.last_fee_growth_inside[PoolSide::Asset0],
 			U256::from_dec_str("102084710076281216349243831104605583").unwrap()
 		);
 		assert_eq!(
-			tick.last_fee_growth_inside[!Ticker::Base],
+			tick.last_fee_growth_inside[!PoolSide::Asset0],
 			U256::from_dec_str("10208471007628121634924383110460558").unwrap()
 		);
-		// assert_eq!(tick.fees_owed[Ticker::Base], 0);
-		// assert_eq!(tick.fees_owed[!Ticker::Base], 0);
+		// assert_eq!(tick.fees_owed[PoolSide::Asset0], 0);
+		// assert_eq!(tick.fees_owed[!PoolSide::Asset0], 0);
 
 		let (returned_capital, fees_owed) = pool
 			.burn(
-				id,
+				id.clone(),
 				MIN_TICK_UNISWAP_MEDIUM + TICKSPACING_UNISWAP_MEDIUM,
 				MAX_TICK_UNISWAP_MEDIUM - TICKSPACING_UNISWAP_MEDIUM,
 				1,
@@ -1985,12 +2037,12 @@ mod test {
 			.unwrap();
 
 		// DIFF: Burn will have burnt the entire position so it will be deleted.
-		assert_eq!(fees_owed[Ticker::Base], 0);
-		assert_eq!(fees_owed[!Ticker::Base], 0);
+		assert_eq!(fees_owed[PoolSide::Asset0], 0);
+		assert_eq!(fees_owed[!PoolSide::Asset0], 0);
 
-		// This could be missing + fees_owed[Ticker::Base]
-		assert_eq!(returned_capital[Ticker::Base], U256::from(3));
-		assert_eq!(returned_capital[!Ticker::Base], U256::from(0));
+		// This could be missing + fees_owed[PoolSide::Asset0]
+		assert_eq!(returned_capital[PoolSide::Asset0], U256::from(3));
+		assert_eq!(returned_capital[!PoolSide::Asset0], U256::from(0));
 
 		match pool.positions.get(&(
 			id,
@@ -2002,38 +2054,36 @@ mod test {
 		}
 	}
 
-	pub const INITIALIZE_LIQUIDITY_AMOUNT: u128 = 2000000000000000000 as u128;
+	pub const INITIALIZE_LIQUIDITY_AMOUNT: u128 = 2000000000000000000u128;
 
 	// #Burn
-
 	fn pool_initialized_zerotick(
 		mut pool: PoolState,
-	) -> (PoolState, enum_map::EnumMap<Ticker, Amount>, LiquidityProvider) {
-		const ID: LiquidityProvider = H256([0xcf; 32]);
+	) -> (PoolState, PoolAssetMap<AmountU256>, AccountId) {
+		let id: AccountId = AccountId::from([0xcf; 32]);
 		let mut minted_capital = None;
 
 		pool.mint(
-			ID,
+			id.clone(),
 			MIN_TICK_UNISWAP_MEDIUM,
 			MAX_TICK_UNISWAP_MEDIUM,
 			INITIALIZE_LIQUIDITY_AMOUNT,
 			|minted| {
 				minted_capital.replace(minted);
-				true
+				Ok(())
 			},
 		)
 		.unwrap();
 		let minted_capital = minted_capital.unwrap();
 
-		(pool, minted_capital, ID)
+		(pool, minted_capital, id)
 	}
 
 	// Medium Fee, tickSpacing = 12, 1:1 price
-	fn mediumpool_initialized_zerotick(
-	) -> (PoolState, enum_map::EnumMap<Ticker, Amount>, LiquidityProvider) {
+	fn mediumpool_initialized_zerotick() -> (PoolState, PoolAssetMap<AmountU256>, AccountId) {
 		// fee_pips shall be one order of magnitude smaller than in the Uniswap pool (because
 		// ONE_IN_PIPS is /10)
-		let mut pool = PoolState::new(300, encodedprice1_1());
+		let pool = PoolState::new(300, encodedprice1_1()).unwrap();
 		pool_initialized_zerotick(pool)
 	}
 
@@ -2045,9 +2095,8 @@ mod test {
 	}
 
 	fn checkticknotclear(pool: &PoolState, tick: Tick) {
-		match pool.liquidity_map.get(&tick) {
-			None => panic!("Expected Key"),
-			_ => {},
+		if pool.liquidity_map.get(&tick).is_none() {
+			panic!("Expected Key")
 		}
 	}
 
@@ -2057,21 +2106,21 @@ mod test {
 		let (mut pool, _, _id) = mediumpool_initialized_zerotick();
 		// some activity that would make the ticks non-zero
 		pool.mint(
-			H256([0xce; 32]),
+			AccountId::from([0xce; 32]),
 			MIN_TICK_UNISWAP_MEDIUM,
 			MAX_TICK_UNISWAP_MEDIUM,
 			expandto18decimals(1).as_u128(),
-			|_| true,
+			|_| Ok(()),
 		)
 		.unwrap();
 
-		pool.swap::<BaseToPair>(expandto18decimals(1));
-		pool.swap::<PairToBase>(expandto18decimals(1));
+		pool.swap::<Asset0ToAsset1>(expandto18decimals(1));
+		pool.swap::<Asset1ToAsset0>(expandto18decimals(1));
 
 		// Should be able to do only 1 burn (1000000000000000000 / 987654321000000000)
 
 		pool.burn(
-			H256([0xce; 32]),
+			AccountId::from([0xce; 32]),
 			MIN_TICK_UNISWAP_MEDIUM,
 			MAX_TICK_UNISWAP_MEDIUM,
 			987654321000000000,
@@ -2079,12 +2128,12 @@ mod test {
 		.unwrap();
 
 		match pool.burn(
-			H256([0xce; 32]),
+			AccountId::from([0xce; 32]),
 			MIN_TICK_UNISWAP_MEDIUM,
 			MAX_TICK_UNISWAP_MEDIUM,
 			987654321000000000,
 		) {
-			Err(PositionError::Other(BurnError::PositionLacksLiquidity)) => {},
+			Err(PositionError::PositionLacksLiquidity) => {},
 			_ => panic!("Expected InsufficientLiquidity"),
 		}
 	}
@@ -2094,43 +2143,43 @@ mod test {
 		let (mut pool, _, _id) = mediumpool_initialized_zerotick();
 		// some activity that would make the ticks non-zero
 		pool.mint(
-			H256([0xce; 32]),
+			AccountId::from([0xce; 32]),
 			MIN_TICK_UNISWAP_MEDIUM,
 			MAX_TICK_UNISWAP_MEDIUM,
 			expandto18decimals(1).as_u128(),
-			|_| true,
+			|_| Ok(()),
 		)
 		.unwrap();
 
-		pool.swap::<BaseToPair>(expandto18decimals(1));
-		pool.swap::<PairToBase>(expandto18decimals(1));
+		pool.swap::<Asset0ToAsset1>(expandto18decimals(1));
+		pool.swap::<Asset1ToAsset0>(expandto18decimals(1));
 
 		// Add a poke to update the fee growth and check it's value
 		let (returned_capital, fees_owed) = pool
-			.burn(H256([0xce; 32]), MIN_TICK_UNISWAP_MEDIUM, MAX_TICK_UNISWAP_MEDIUM, 0)
+			.burn(AccountId::from([0xce; 32]), MIN_TICK_UNISWAP_MEDIUM, MAX_TICK_UNISWAP_MEDIUM, 0)
 			.unwrap();
 
-		assert_ne!(fees_owed[Ticker::Base], 0);
-		assert_ne!(fees_owed[!Ticker::Base], 0);
-		assert_eq!(returned_capital[Ticker::Base], U256::from(0));
-		assert_eq!(returned_capital[!Ticker::Base], U256::from(0));
+		assert_ne!(fees_owed[PoolSide::Asset0], 0);
+		assert_ne!(fees_owed[!PoolSide::Asset0], 0);
+		assert_eq!(returned_capital[PoolSide::Asset0], U256::from(0));
+		assert_eq!(returned_capital[!PoolSide::Asset0], U256::from(0));
 
 		let pos = pool
 			.positions
-			.get(&(H256([0xce; 32]), MIN_TICK_UNISWAP_MEDIUM, MAX_TICK_UNISWAP_MEDIUM))
+			.get(&(AccountId::from([0xce; 32]), MIN_TICK_UNISWAP_MEDIUM, MAX_TICK_UNISWAP_MEDIUM))
 			.unwrap();
 		assert_eq!(
-			pos.last_fee_growth_inside[Ticker::Base],
+			pos.last_fee_growth_inside[PoolSide::Asset0],
 			U256::from_dec_str("340282366920938463463374607431768211").unwrap()
 		);
 		assert_eq!(
-			pos.last_fee_growth_inside[!Ticker::Base],
+			pos.last_fee_growth_inside[!PoolSide::Asset0],
 			U256::from_dec_str("340282366920938463463374607431768211").unwrap()
 		);
 
 		let (returned_capital, fees_owed) = pool
 			.burn(
-				H256([0xce; 32]),
+				AccountId::from([0xce; 32]),
 				MIN_TICK_UNISWAP_MEDIUM,
 				MAX_TICK_UNISWAP_MEDIUM,
 				expandto18decimals(1).as_u128(),
@@ -2139,15 +2188,15 @@ mod test {
 
 		// DIFF: Burn will have burnt the entire position so it will be deleted.
 		// Also, fees will already have been collected in the first burn.
-		assert_eq!(fees_owed[Ticker::Base], 0);
-		assert_eq!(fees_owed[!Ticker::Base], 0);
+		assert_eq!(fees_owed[PoolSide::Asset0], 0);
+		assert_eq!(fees_owed[!PoolSide::Asset0], 0);
 
-		// This could be missing + fees_owed[Ticker::Base]
-		assert_ne!(returned_capital[Ticker::Base], U256::from(0));
-		assert_ne!(returned_capital[!Ticker::Base], U256::from(0));
+		// This could be missing + fees_owed[PoolSide::Asset0]
+		assert_ne!(returned_capital[PoolSide::Asset0], U256::from(0));
+		assert_ne!(returned_capital[!PoolSide::Asset0], U256::from(0));
 
 		match pool.positions.get(&(
-			H256([0xce; 32]),
+			AccountId::from([0xce; 32]),
 			MIN_TICK_UNISWAP_MEDIUM,
 			MAX_TICK_UNISWAP_MEDIUM,
 		)) {
@@ -2161,15 +2210,15 @@ mod test {
 		let (mut pool, _, id) = mediumpool_initialized_zerotick();
 		// some activity that would make the ticks non-zero
 		pool.mint(
-			id,
+			id.clone(),
 			MIN_TICK_UNISWAP_MEDIUM + TICKSPACING_UNISWAP_MEDIUM,
 			MAX_TICK_UNISWAP_MEDIUM - TICKSPACING_UNISWAP_MEDIUM,
 			1,
-			|_| true,
+			|_| Ok(()),
 		)
 		.unwrap();
 
-		pool.swap::<BaseToPair>(expandto18decimals(1));
+		pool.swap::<Asset0ToAsset1>(expandto18decimals(1));
 
 		pool.burn(
 			id,
@@ -2188,22 +2237,22 @@ mod test {
 		let (mut pool, _, id) = mediumpool_initialized_zerotick();
 		// some activity that would make the ticks non-zero
 		pool.mint(
-			id,
+			id.clone(),
 			MIN_TICK_UNISWAP_MEDIUM + TICKSPACING_UNISWAP_MEDIUM,
 			MAX_TICK_UNISWAP_MEDIUM - TICKSPACING_UNISWAP_MEDIUM,
 			1,
-			|_| true,
+			|_| Ok(()),
 		)
 		.unwrap();
 		pool.mint(
-			id,
+			id.clone(),
 			MIN_TICK_UNISWAP_MEDIUM + 2 * TICKSPACING_UNISWAP_MEDIUM,
 			MAX_TICK_UNISWAP_MEDIUM - TICKSPACING_UNISWAP_MEDIUM,
 			1,
-			|_| true,
+			|_| Ok(()),
 		)
 		.unwrap();
-		pool.swap::<BaseToPair>(expandto18decimals(1));
+		pool.swap::<Asset0ToAsset1>(expandto18decimals(1));
 
 		pool.burn(
 			id,
@@ -2222,22 +2271,22 @@ mod test {
 		let (mut pool, _, id) = mediumpool_initialized_zerotick();
 		// some activity that would make the ticks non-zero
 		pool.mint(
-			id,
+			id.clone(),
 			MIN_TICK_UNISWAP_MEDIUM + TICKSPACING_UNISWAP_MEDIUM,
 			MAX_TICK_UNISWAP_MEDIUM - TICKSPACING_UNISWAP_MEDIUM,
 			1,
-			|_| true,
+			|_| Ok(()),
 		)
 		.unwrap();
 		pool.mint(
-			id,
+			id.clone(),
 			MIN_TICK_UNISWAP_MEDIUM + TICKSPACING_UNISWAP_MEDIUM,
 			MAX_TICK_UNISWAP_MEDIUM - 2 * TICKSPACING_UNISWAP_MEDIUM,
 			1,
-			|_| true,
+			|_| Ok(()),
 		)
 		.unwrap();
-		pool.swap::<BaseToPair>(expandto18decimals(1));
+		pool.swap::<Asset0ToAsset1>(expandto18decimals(1));
 
 		pool.burn(
 			id,
@@ -2258,10 +2307,9 @@ mod test {
 	pub const MAX_TICK_UNISWAP_LOW: Tick = -MIN_TICK_UNISWAP_LOW;
 
 	// Low Fee, tickSpacing = 10, 1:1 price
-	fn lowpool_initialized_zerotick(
-	) -> (PoolState, enum_map::EnumMap<Ticker, Amount>, LiquidityProvider) {
-		// TIckspaci
-		let mut pool = PoolState::new(50, encodedprice1_1()); //	encodeSqrtPrice (1,1)
+	fn lowpool_initialized_zerotick() -> (PoolState, PoolAssetMap<AmountU256>, AccountId) {
+		// Tickspacing
+		let pool = PoolState::new(50, encodedprice1_1()).unwrap(); //	encodeSqrtPrice (1,1)
 		pool_initialized_zerotick(pool)
 	}
 
@@ -2269,60 +2317,60 @@ mod test {
 	fn test_mint_rightofcurrentprice() {
 		let (mut pool, _, id) = lowpool_initialized_zerotick();
 
-		let liquiditybefore = pool.current_liquidity.clone();
+		let liquiditybefore = pool.current_liquidity;
 
 		let mut minted_capital = None;
 		pool.mint(id, TICKSPACING_UNISWAP_LOW, 2 * TICKSPACING_UNISWAP_LOW, 1000, |minted| {
 			minted_capital.replace(minted);
-			true
+			Ok(())
 		})
 		.unwrap();
 		let minted_capital = minted_capital.unwrap();
 
 		assert!(pool.current_liquidity >= liquiditybefore);
 
-		assert_eq!(minted_capital[Ticker::Base], U256::from(1));
-		assert_eq!(minted_capital[!Ticker::Base], U256::from(0));
+		assert_eq!(minted_capital[PoolSide::Asset0], U256::from(1));
+		assert_eq!(minted_capital[!PoolSide::Asset0], U256::from(0));
 	}
 
 	#[test]
 	fn test_mint_leftofcurrentprice() {
 		let (mut pool, _, id) = lowpool_initialized_zerotick();
 
-		let liquiditybefore = pool.current_liquidity.clone();
+		let liquiditybefore = pool.current_liquidity;
 
 		let mut minted_capital = None;
 		pool.mint(id, -2 * TICKSPACING_UNISWAP_LOW, -TICKSPACING_UNISWAP_LOW, 1000, |minted| {
 			minted_capital.replace(minted);
-			true
+			Ok(())
 		})
 		.unwrap();
 		let minted_capital = minted_capital.unwrap();
 
 		assert!(pool.current_liquidity >= liquiditybefore);
 
-		assert_eq!(minted_capital[Ticker::Base], U256::from(0));
-		assert_eq!(minted_capital[!Ticker::Base], U256::from(1));
+		assert_eq!(minted_capital[PoolSide::Asset0], U256::from(0));
+		assert_eq!(minted_capital[!PoolSide::Asset0], U256::from(1));
 	}
 
 	#[test]
 	fn test_mint_withincurrentprice() {
 		let (mut pool, _, id) = lowpool_initialized_zerotick();
 
-		let liquiditybefore = pool.current_liquidity.clone();
+		let liquiditybefore = pool.current_liquidity;
 
 		let mut minted_capital = None;
 		pool.mint(id, -TICKSPACING_UNISWAP_LOW, TICKSPACING_UNISWAP_LOW, 1000, |minted| {
 			minted_capital.replace(minted);
-			true
+			Ok(())
 		})
 		.unwrap();
 		let minted_capital = minted_capital.unwrap();
 
 		assert!(pool.current_liquidity >= liquiditybefore);
 
-		assert_eq!(minted_capital[Ticker::Base], U256::from(1));
-		assert_eq!(minted_capital[!Ticker::Base], U256::from(1));
+		assert_eq!(minted_capital[PoolSide::Asset0], U256::from(1));
+		assert_eq!(minted_capital[!PoolSide::Asset0], U256::from(1));
 	}
 
 	#[test]
@@ -2330,11 +2378,11 @@ mod test {
 		let (mut pool, _, id) = lowpool_initialized_zerotick();
 
 		pool.mint(
-			id,
+			id.clone(),
 			-TICKSPACING_UNISWAP_LOW,
 			TICKSPACING_UNISWAP_LOW,
 			expandto18decimals(1).as_u128(),
-			|_| true,
+			|_| Ok(()),
 		)
 		.unwrap();
 
@@ -2344,7 +2392,7 @@ mod test {
 			TICKSPACING_UNISWAP_LOW,
 			expandto18decimals(1).as_u128() + 1,
 		) {
-			Err(PositionError::Other(BurnError::PositionLacksLiquidity)) => {},
+			Err(PositionError::PositionLacksLiquidity) => {},
 			_ => panic!("Should not be able to remove more than position"),
 		}
 	}
@@ -2354,16 +2402,16 @@ mod test {
 		let (mut pool, _, id) = lowpool_initialized_zerotick();
 
 		pool.mint(
-			id,
+			id.clone(),
 			-TICKSPACING_UNISWAP_LOW * 100,
 			TICKSPACING_UNISWAP_LOW * 100,
 			expandto18decimals(100).as_u128(),
-			|_| true,
+			|_| Ok(()),
 		)
 		.unwrap();
 
-		let liquiditybefore = pool.current_liquidity.clone();
-		pool.swap::<BaseToPair>(expandto18decimals(1));
+		let liquiditybefore = pool.current_liquidity;
+		pool.swap::<Asset0ToAsset1>(expandto18decimals(1));
 
 		assert!(pool.current_liquidity >= liquiditybefore);
 
@@ -2372,18 +2420,18 @@ mod test {
 			.burn(id, -TICKSPACING_UNISWAP_LOW * 100, TICKSPACING_UNISWAP_LOW * 100, 0)
 			.unwrap();
 
-		assert_eq!(returned_capital[Ticker::Base], U256::from(0));
-		assert_eq!(returned_capital[!Ticker::Base], U256::from(0));
+		assert_eq!(returned_capital[PoolSide::Asset0], U256::from(0));
+		assert_eq!(returned_capital[!PoolSide::Asset0], U256::from(0));
 
-		assert!(fees_owed[Ticker::Base] > 0);
-		assert_eq!(fees_owed[!Ticker::Base], 0);
+		assert!(fees_owed[PoolSide::Asset0] > 0);
+		assert_eq!(fees_owed[!PoolSide::Asset0], 0);
 	}
 
 	// Post initialize at medium fee
 
 	#[test]
 	fn test_initial_liquidity() {
-		let (mut pool, _, id) = mediumpool_initialized_zerotick();
+		let (pool, _, _) = mediumpool_initialized_zerotick();
 		assert_eq!(pool.current_liquidity, expandto18decimals(2).as_u128());
 	}
 
@@ -2395,7 +2443,7 @@ mod test {
 			-TICKSPACING_UNISWAP_MEDIUM,
 			TICKSPACING_UNISWAP_MEDIUM,
 			expandto18decimals(3).as_u128(),
-			|_| true,
+			|_| Ok(()),
 		)
 		.unwrap();
 		assert_eq!(pool.current_liquidity, expandto18decimals(5).as_u128());
@@ -2409,7 +2457,7 @@ mod test {
 			TICKSPACING_UNISWAP_MEDIUM,
 			2 * TICKSPACING_UNISWAP_MEDIUM,
 			expandto18decimals(3).as_u128(),
-			|_| true,
+			|_| Ok(()),
 		)
 		.unwrap();
 		assert_eq!(pool.current_liquidity, expandto18decimals(2).as_u128());
@@ -2423,7 +2471,7 @@ mod test {
 			-2 * TICKSPACING_UNISWAP_MEDIUM,
 			-TICKSPACING_UNISWAP_MEDIUM,
 			expandto18decimals(3).as_u128(),
-			|_| true,
+			|_| Ok(()),
 		)
 		.unwrap();
 		assert_eq!(pool.current_liquidity, expandto18decimals(2).as_u128());
@@ -2434,12 +2482,12 @@ mod test {
 		let (mut pool, _, id) = mediumpool_initialized_zerotick();
 		assert_eq!(pool.current_liquidity, expandto18decimals(2).as_u128());
 
-		pool.mint(id, 0, TICKSPACING_UNISWAP_MEDIUM, expandto18decimals(1).as_u128(), |_| true)
+		pool.mint(id, 0, TICKSPACING_UNISWAP_MEDIUM, expandto18decimals(1).as_u128(), |_| Ok(()))
 			.unwrap();
 		assert_eq!(pool.current_liquidity, expandto18decimals(3).as_u128());
 
 		// swap toward the left (just enough for the tick transition function to trigger)
-		pool.swap::<BaseToPair>((1).into());
+		pool.swap::<Asset0ToAsset1>((1).into());
 
 		assert_eq!(pool.current_tick, -1);
 		assert_eq!(pool.current_liquidity, expandto18decimals(2).as_u128());
@@ -2450,12 +2498,12 @@ mod test {
 		let (mut pool, _, id) = mediumpool_initialized_zerotick();
 		assert_eq!(pool.current_liquidity, expandto18decimals(2).as_u128());
 
-		pool.mint(id, -TICKSPACING_UNISWAP_MEDIUM, 0, expandto18decimals(1).as_u128(), |_| true)
+		pool.mint(id, -TICKSPACING_UNISWAP_MEDIUM, 0, expandto18decimals(1).as_u128(), |_| Ok(()))
 			.unwrap();
 		assert_eq!(pool.current_liquidity, expandto18decimals(2).as_u128());
 
 		// swap toward the left (just enough for the tick transition function to trigger)
-		pool.swap::<BaseToPair>((1).into());
+		pool.swap::<Asset0ToAsset1>((1).into());
 
 		assert_eq!(pool.current_tick, -1);
 		assert_eq!(pool.current_liquidity, expandto18decimals(3).as_u128());
@@ -2464,29 +2512,33 @@ mod test {
 	// Uniswap "limit orders"
 
 	#[test]
-	fn test_limitselling_basetopair_tick0thru1() {
+	fn test_limitselling_asset_0_to_asset1_tick0thru1() {
 		let (mut pool, _, id) = mediumpool_initialized_zerotick();
 		let mut minted_capital = None;
-		pool.mint(id, 0, 120, expandto18decimals(1).as_u128(), |minted| {
+		pool.mint(id.clone(), 0, 120, expandto18decimals(1).as_u128(), |minted| {
 			minted_capital.replace(minted);
-			true
+			Ok(())
 		})
 		.unwrap();
 		let minted_capital = minted_capital.unwrap();
 
-		assert_eq!(minted_capital[Ticker::Base], U256::from_dec_str("5981737760509663").unwrap());
-		assert_eq!(minted_capital[!Ticker::Base], U256::from_dec_str("0").unwrap());
+		assert_eq!(
+			minted_capital[PoolSide::Asset0],
+			U256::from_dec_str("5981737760509663").unwrap()
+		);
+		assert_eq!(minted_capital[!PoolSide::Asset0], U256::from_dec_str("0").unwrap());
 
 		// somebody takes the limit order
-		pool.swap::<PairToBase>((U256::from_dec_str("2000000000000000000").unwrap()).into());
+		pool.swap::<Asset1ToAsset0>(U256::from_dec_str("2000000000000000000").unwrap());
 
-		let (burned, fees_owed) = pool.burn(id, 0, 120, expandto18decimals(1).as_u128()).unwrap();
-		assert_eq!(burned[Ticker::Base], U256::from_dec_str("0").unwrap());
-		assert_eq!(burned[!Ticker::Base], U256::from_dec_str("6017734268818165").unwrap());
+		let (burned, fees_owed) =
+			pool.burn(id.clone(), 0, 120, expandto18decimals(1).as_u128()).unwrap();
+		assert_eq!(burned[PoolSide::Asset0], U256::from_dec_str("0").unwrap());
+		assert_eq!(burned[!PoolSide::Asset0], U256::from_dec_str("6017734268818165").unwrap());
 
 		// DIFF: position fully burnt
-		assert_eq!(fees_owed[Ticker::Base], 0);
-		assert_eq!(fees_owed[!Ticker::Base], 18107525382602);
+		assert_eq!(fees_owed[PoolSide::Asset0], 0);
+		assert_eq!(fees_owed[!PoolSide::Asset0], 18107525382602);
 
 		match pool.burn(id, 0, 120, 1) {
 			Err(PositionError::NonExistent) => {},
@@ -2497,65 +2549,72 @@ mod test {
 	}
 
 	#[test]
-	fn test_limitselling_basetopair_tick0thru1_poke() {
+	fn test_limitselling_asset_0_to_asset_1_tick0thru1_poke() {
 		let (mut pool, _, id) = mediumpool_initialized_zerotick();
 		let mut minted_capital = None;
-		pool.mint(id, 0, 120, expandto18decimals(1).as_u128(), |minted| {
+		pool.mint(id.clone(), 0, 120, expandto18decimals(1).as_u128(), |minted| {
 			minted_capital.replace(minted);
-			true
+			Ok(())
 		})
 		.unwrap();
 		let minted_capital = minted_capital.unwrap();
 
-		assert_eq!(minted_capital[Ticker::Base], U256::from_dec_str("5981737760509663").unwrap());
-		assert_eq!(minted_capital[!Ticker::Base], U256::from_dec_str("0").unwrap());
+		assert_eq!(
+			minted_capital[PoolSide::Asset0],
+			U256::from_dec_str("5981737760509663").unwrap()
+		);
+		assert_eq!(minted_capital[!PoolSide::Asset0], U256::from_dec_str("0").unwrap());
 
 		// somebody takes the limit order
-		pool.swap::<PairToBase>((U256::from_dec_str("2000000000000000000").unwrap()).into());
+		pool.swap::<Asset1ToAsset0>(U256::from_dec_str("2000000000000000000").unwrap());
 
-		let (burned, fees_owed) = pool.burn(id, 0, 120, 0).unwrap();
-		assert_eq!(burned[Ticker::Base], U256::from_dec_str("0").unwrap());
-		assert_eq!(burned[!Ticker::Base], U256::from_dec_str("0").unwrap());
+		let (burned, fees_owed) = pool.burn(id.clone(), 0, 120, 0).unwrap();
+		assert_eq!(burned[PoolSide::Asset0], U256::from_dec_str("0").unwrap());
+		assert_eq!(burned[!PoolSide::Asset0], U256::from_dec_str("0").unwrap());
 
 		// DIFF: position fully burnt
-		assert_eq!(fees_owed[Ticker::Base], 0);
-		assert_eq!(fees_owed[!Ticker::Base], 18107525382602);
+		assert_eq!(fees_owed[PoolSide::Asset0], 0);
+		assert_eq!(fees_owed[!PoolSide::Asset0], 18107525382602);
 
 		let (burned, fees_owed) = pool.burn(id, 0, 120, expandto18decimals(1).as_u128()).unwrap();
-		assert_eq!(burned[Ticker::Base], U256::from_dec_str("0").unwrap());
-		assert_eq!(burned[!Ticker::Base], U256::from_dec_str("6017734268818165").unwrap());
+		assert_eq!(burned[PoolSide::Asset0], U256::from_dec_str("0").unwrap());
+		assert_eq!(burned[!PoolSide::Asset0], U256::from_dec_str("6017734268818165").unwrap());
 
 		// DIFF: position fully burnt
-		assert_eq!(fees_owed[Ticker::Base], 0);
-		assert_eq!(fees_owed[!Ticker::Base], 0);
+		assert_eq!(fees_owed[PoolSide::Asset0], 0);
+		assert_eq!(fees_owed[!PoolSide::Asset0], 0);
 
 		assert!(pool.current_tick > 120)
 	}
 
 	#[test]
-	fn test_limitselling_pairtobase_tick1thru0() {
+	fn test_limitselling_asset_1_to_asset_0_tick1thru0() {
 		let (mut pool, _, id) = mediumpool_initialized_zerotick();
 		let mut minted_capital = None;
-		pool.mint(id, -120, 0, expandto18decimals(1).as_u128(), |minted| {
+		pool.mint(id.clone(), -120, 0, expandto18decimals(1).as_u128(), |minted| {
 			minted_capital.replace(minted);
-			true
+			Ok(())
 		})
 		.unwrap();
 		let minted_capital = minted_capital.unwrap();
 
-		assert_eq!(minted_capital[!Ticker::Base], U256::from_dec_str("5981737760509663").unwrap());
-		assert_eq!(minted_capital[Ticker::Base], U256::from_dec_str("0").unwrap());
+		assert_eq!(
+			minted_capital[!PoolSide::Asset0],
+			U256::from_dec_str("5981737760509663").unwrap()
+		);
+		assert_eq!(minted_capital[PoolSide::Asset0], U256::from_dec_str("0").unwrap());
 
 		// somebody takes the limit order
-		pool.swap::<BaseToPair>((U256::from_dec_str("2000000000000000000").unwrap()).into());
+		pool.swap::<Asset0ToAsset1>(U256::from_dec_str("2000000000000000000").unwrap());
 
-		let (burned, fees_owed) = pool.burn(id, -120, 0, expandto18decimals(1).as_u128()).unwrap();
-		assert_eq!(burned[!Ticker::Base], U256::from_dec_str("0").unwrap());
-		assert_eq!(burned[Ticker::Base], U256::from_dec_str("6017734268818165").unwrap());
+		let (burned, fees_owed) =
+			pool.burn(id.clone(), -120, 0, expandto18decimals(1).as_u128()).unwrap();
+		assert_eq!(burned[!PoolSide::Asset0], U256::from_dec_str("0").unwrap());
+		assert_eq!(burned[PoolSide::Asset0], U256::from_dec_str("6017734268818165").unwrap());
 
 		// DIFF: position fully burnt
-		assert_eq!(fees_owed[!Ticker::Base], 0);
-		assert_eq!(fees_owed[Ticker::Base], 18107525382602);
+		assert_eq!(fees_owed[!PoolSide::Asset0], 0);
+		assert_eq!(fees_owed[PoolSide::Asset0], 18107525382602);
 
 		match pool.burn(id, -120, 0, 1) {
 			Err(PositionError::NonExistent) => {},
@@ -2566,36 +2625,40 @@ mod test {
 	}
 
 	#[test]
-	fn test_limitselling_pairtobase_tick1thru0_poke() {
+	fn test_limitselling_asset_1_to_asset_0_tick1thru0_poke() {
 		let (mut pool, _, id) = mediumpool_initialized_zerotick();
 		let mut minted_capital = None;
-		pool.mint(id, -120, 0, expandto18decimals(1).as_u128(), |minted| {
+		pool.mint(id.clone(), -120, 0, expandto18decimals(1).as_u128(), |minted| {
 			minted_capital.replace(minted);
-			true
+			Ok(())
 		})
 		.unwrap();
 		let minted_capital = minted_capital.unwrap();
 
-		assert_eq!(minted_capital[!Ticker::Base], U256::from_dec_str("5981737760509663").unwrap());
-		assert_eq!(minted_capital[Ticker::Base], U256::from_dec_str("0").unwrap());
+		assert_eq!(
+			minted_capital[!PoolSide::Asset0],
+			U256::from_dec_str("5981737760509663").unwrap()
+		);
+		assert_eq!(minted_capital[PoolSide::Asset0], U256::from_dec_str("0").unwrap());
 
 		// somebody takes the limit order
-		pool.swap::<BaseToPair>((U256::from_dec_str("2000000000000000000").unwrap()).into());
+		pool.swap::<Asset0ToAsset1>(U256::from_dec_str("2000000000000000000").unwrap());
 
-		let (burned, fees_owed) = pool.burn(id, -120, 0, 0).unwrap();
-		assert_eq!(burned[!Ticker::Base], U256::from_dec_str("0").unwrap());
-		assert_eq!(burned[Ticker::Base], U256::from_dec_str("0").unwrap());
+		let (burned, fees_owed) = pool.burn(id.clone(), -120, 0, 0).unwrap();
+		assert_eq!(burned[!PoolSide::Asset0], U256::from_dec_str("0").unwrap());
+		assert_eq!(burned[PoolSide::Asset0], U256::from_dec_str("0").unwrap());
 
-		assert_eq!(fees_owed[!Ticker::Base], 0);
-		assert_eq!(fees_owed[Ticker::Base], 18107525382602);
+		assert_eq!(fees_owed[!PoolSide::Asset0], 0);
+		assert_eq!(fees_owed[PoolSide::Asset0], 18107525382602);
 
-		let (burned, fees_owed) = pool.burn(id, -120, 0, expandto18decimals(1).as_u128()).unwrap();
-		assert_eq!(burned[!Ticker::Base], U256::from_dec_str("0").unwrap());
-		assert_eq!(burned[Ticker::Base], U256::from_dec_str("6017734268818165").unwrap());
+		let (burned, fees_owed) =
+			pool.burn(id.clone(), -120, 0, expandto18decimals(1).as_u128()).unwrap();
+		assert_eq!(burned[!PoolSide::Asset0], U256::from_dec_str("0").unwrap());
+		assert_eq!(burned[PoolSide::Asset0], U256::from_dec_str("6017734268818165").unwrap());
 
 		// DIFF: position fully burnt
-		assert_eq!(fees_owed[!Ticker::Base], 0);
-		assert_eq!(fees_owed[Ticker::Base], 0);
+		assert_eq!(fees_owed[!PoolSide::Asset0], 0);
+		assert_eq!(fees_owed[PoolSide::Asset0], 0);
 
 		match pool.burn(id, -120, 0, 1) {
 			Err(PositionError::NonExistent) => {},
@@ -2608,12 +2671,11 @@ mod test {
 	// #Collect
 
 	// Low Fee, tickSpacing = 10, 1:1 price
-	fn lowpool_initialized_one() -> (PoolState, enum_map::EnumMap<Ticker, Amount>, LiquidityProvider)
-	{
-		let mut pool = PoolState::new(50, encodedprice1_1());
-		const ID: LiquidityProvider = H256([0xcf; 32]);
-		let mut minted_amounts: enum_map::EnumMap<Ticker, Amount> = Default::default();
-		(pool, minted_amounts, ID)
+	fn lowpool_initialized_one() -> (PoolState, PoolAssetMap<AmountU256>, AccountId) {
+		let pool = PoolState::new(50, encodedprice1_1()).unwrap();
+		let id: AccountId = AccountId::from([0xcf; 32]);
+		let minted_amounts: PoolAssetMap<AmountU256> = Default::default();
+		(pool, minted_amounts, id)
 	}
 
 	#[test]
@@ -2621,36 +2683,36 @@ mod test {
 		let (mut pool, _, id) = lowpool_initialized_one();
 
 		pool.mint(
-			id,
+			id.clone(),
 			MIN_TICK_UNISWAP_LOW,
 			MAX_TICK_UNISWAP_LOW,
 			expandto18decimals(1).as_u128(),
-			|_| true,
+			|_| Ok(()),
 		)
 		.unwrap();
 		pool.mint(
-			id,
+			id.clone(),
 			MIN_TICK_UNISWAP_LOW + TICKSPACING_UNISWAP_LOW,
 			MAX_TICK_UNISWAP_LOW - TICKSPACING_UNISWAP_LOW,
 			2000000000000000000,
-			|_| true,
+			|_| Ok(()),
 		)
 		.unwrap();
 
-		pool.swap::<BaseToPair>((expandto18decimals(1)).into());
+		pool.swap::<Asset0ToAsset1>(expandto18decimals(1));
 
 		// poke positions
 		let (burned, fees_owed) =
-			pool.burn(id, MIN_TICK_UNISWAP_LOW, MAX_TICK_UNISWAP_LOW, 0).unwrap();
+			pool.burn(id.clone(), MIN_TICK_UNISWAP_LOW, MAX_TICK_UNISWAP_LOW, 0).unwrap();
 
-		assert_eq!(burned[Ticker::Base], U256::from_dec_str("0").unwrap());
-		assert_eq!(burned[!Ticker::Base], U256::from_dec_str("0").unwrap());
+		assert_eq!(burned[PoolSide::Asset0], U256::from_dec_str("0").unwrap());
+		assert_eq!(burned[!PoolSide::Asset0], U256::from_dec_str("0").unwrap());
 		// NOTE: Fee_owed value 1 unit different than Uniswap because uniswap requires 4 loops to do
 		// the swap instead of 1 causing the rounding to be different
-		assert_eq!(fees_owed[Ticker::Base], 166666666666666 as u128);
-		assert_eq!(fees_owed[!Ticker::Base], 0);
+		assert_eq!(fees_owed[PoolSide::Asset0], 166666666666666u128);
+		assert_eq!(fees_owed[!PoolSide::Asset0], 0);
 
-		let (burned, fees_owed) = pool
+		let (_, fees_owed) = pool
 			.burn(
 				id,
 				MIN_TICK_UNISWAP_LOW + TICKSPACING_UNISWAP_LOW,
@@ -2660,8 +2722,8 @@ mod test {
 			.unwrap();
 		// NOTE: Fee_owed value 1 unit different than Uniswap because uniswap requires 4 loops to do
 		// the swap instead of 1 causing the rounding to be different
-		assert_eq!(fees_owed[Ticker::Base], 333333333333333 as u128);
-		assert_eq!(fees_owed[!Ticker::Base], 0);
+		assert_eq!(fees_owed[PoolSide::Asset0], 333333333333333);
+		assert_eq!(fees_owed[!PoolSide::Asset0], 0);
 	}
 
 	// type(uint128).max * 2**128 / 1e18
@@ -2673,102 +2735,101 @@ mod test {
 	fn test_before_capbidn() {
 		let (mut pool, _, id) = lowpool_initialized_one();
 		pool.mint(
-			id,
+			id.clone(),
 			MIN_TICK_UNISWAP_LOW,
 			MAX_TICK_UNISWAP_LOW,
 			expandto18decimals(1).as_u128(),
-			|_| true,
+			|_| Ok(()),
 		)
 		.unwrap();
 
-		pool.global_fee_growth[Ticker::Base] =
+		pool.global_fee_growth[PoolSide::Asset0] =
 			U256::from_dec_str("115792089237316195423570985008687907852929702298719625575994")
 				.unwrap();
 
 		let (burned, fees_owed) =
 			pool.burn(id, MIN_TICK_UNISWAP_LOW, MAX_TICK_UNISWAP_LOW, 0).unwrap();
 
-		assert_eq!(burned[Ticker::Base], U256::from_dec_str("0").unwrap());
-		assert_eq!(burned[!Ticker::Base], U256::from_dec_str("0").unwrap());
+		assert_eq!(burned[PoolSide::Asset0], U256::from_dec_str("0").unwrap());
+		assert_eq!(burned[!PoolSide::Asset0], U256::from_dec_str("0").unwrap());
 
-		assert_eq!(fees_owed[Ticker::Base], u128::MAX - 1);
-		assert_eq!(fees_owed[!Ticker::Base], 0);
+		assert_eq!(fees_owed[PoolSide::Asset0], u128::MAX - 1);
+		assert_eq!(fees_owed[!PoolSide::Asset0], 0);
 	}
 
 	#[test]
 	fn test_after_capbidn() {
 		let (mut pool, _, id) = lowpool_initialized_one();
 		pool.mint(
-			id,
+			id.clone(),
 			MIN_TICK_UNISWAP_LOW,
 			MAX_TICK_UNISWAP_LOW,
 			expandto18decimals(1).as_u128(),
-			|_| true,
+			|_| Ok(()),
 		)
 		.unwrap();
 
-		pool.global_fee_growth[Ticker::Base] =
+		pool.global_fee_growth[PoolSide::Asset0] =
 			U256::from_dec_str("115792089237316195423570985008687907852929702298719625575995")
 				.unwrap();
 
 		let (burned, fees_owed) =
 			pool.burn(id, MIN_TICK_UNISWAP_LOW, MAX_TICK_UNISWAP_LOW, 0).unwrap();
 
-		assert_eq!(burned[Ticker::Base], U256::from_dec_str("0").unwrap());
-		assert_eq!(burned[!Ticker::Base], U256::from_dec_str("0").unwrap());
+		assert_eq!(burned[PoolSide::Asset0], U256::from_dec_str("0").unwrap());
+		assert_eq!(burned[!PoolSide::Asset0], U256::from_dec_str("0").unwrap());
 
-		assert_eq!(fees_owed[Ticker::Base], u128::MAX);
-		assert_eq!(fees_owed[!Ticker::Base], 0);
+		assert_eq!(fees_owed[PoolSide::Asset0], u128::MAX);
+		assert_eq!(fees_owed[!PoolSide::Asset0], 0);
 	}
 
 	#[test]
 	fn test_wellafter_capbidn() {
 		let (mut pool, _, id) = lowpool_initialized_one();
 		pool.mint(
-			id,
+			id.clone(),
 			MIN_TICK_UNISWAP_LOW,
 			MAX_TICK_UNISWAP_LOW,
 			expandto18decimals(1).as_u128(),
-			|_| true,
+			|_| Ok(()),
 		)
 		.unwrap();
 
-		pool.global_fee_growth[Ticker::Base] = U256::MAX;
+		pool.global_fee_growth[PoolSide::Asset0] = U256::MAX;
 
 		let (burned, fees_owed) =
 			pool.burn(id, MIN_TICK_UNISWAP_LOW, MAX_TICK_UNISWAP_LOW, 0).unwrap();
 
-		assert_eq!(burned[Ticker::Base], U256::from_dec_str("0").unwrap());
-		assert_eq!(burned[!Ticker::Base], U256::from_dec_str("0").unwrap());
+		assert_eq!(burned[PoolSide::Asset0], U256::from_dec_str("0").unwrap());
+		assert_eq!(burned[!PoolSide::Asset0], U256::from_dec_str("0").unwrap());
 
-		assert_eq!(fees_owed[Ticker::Base], u128::MAX);
-		assert_eq!(fees_owed[!Ticker::Base], 0);
+		assert_eq!(fees_owed[PoolSide::Asset0], u128::MAX);
+		assert_eq!(fees_owed[!PoolSide::Asset0], 0);
 	}
 
 	// DIFF: pool.global_fee_growth won't overflow. We make it saturate.
 
-	fn lowpool_initialized_setfees(
-	) -> (PoolState, enum_map::EnumMap<Ticker, Amount>, LiquidityProvider) {
+	fn lowpool_initialized_setfees() -> (PoolState, PoolAssetMap<AmountU256>, AccountId) {
 		let (mut pool, mut minted_amounts_accum, id) = lowpool_initialized_one();
-		pool.global_fee_growth[Ticker::Base] = U256::MAX;
-		pool.global_fee_growth[!Ticker::Base] = U256::MAX;
+		pool.global_fee_growth[PoolSide::Asset0] = U256::MAX;
+		pool.global_fee_growth[!PoolSide::Asset0] = U256::MAX;
 
 		let mut minted_capital = None;
 		pool.mint(
-			id,
+			id.clone(),
 			MIN_TICK_UNISWAP_LOW,
 			MAX_TICK_UNISWAP_LOW,
 			expandto18decimals(10).as_u128(),
 			|minted| {
 				minted_capital.replace(minted);
-				true
+				Ok(())
 			},
 		)
 		.unwrap();
 		let minted_capital = minted_capital.unwrap();
 
-		minted_amounts_accum[Ticker::Base] += minted_capital[Ticker::Base];
-		minted_amounts_accum[!Ticker::Base] += minted_capital[!Ticker::Base];
+		minted_amounts_accum[PoolSide::Asset0] += minted_capital[PoolSide::Asset0];
+		minted_amounts_accum[!PoolSide::Asset0] += minted_capital[!PoolSide::Asset0];
 
 		(pool, minted_amounts_accum, id)
 	}
@@ -2777,33 +2838,32 @@ mod test {
 	fn test_base() {
 		let (mut pool, _, id) = lowpool_initialized_setfees();
 
-		pool.swap::<BaseToPair>((expandto18decimals(1)).into());
+		pool.swap::<Asset0ToAsset1>(expandto18decimals(1));
 
-		assert_eq!(pool.global_fee_growth[Ticker::Base], U256::MAX);
-		assert_eq!(pool.global_fee_growth[!Ticker::Base], U256::MAX);
+		assert_eq!(pool.global_fee_growth[PoolSide::Asset0], U256::MAX);
+		assert_eq!(pool.global_fee_growth[!PoolSide::Asset0], U256::MAX);
 
-		let (burned, fees_owed) =
-			pool.burn(id, MIN_TICK_UNISWAP_LOW, MAX_TICK_UNISWAP_LOW, 0).unwrap();
+		let (_, fees_owed) = pool.burn(id, MIN_TICK_UNISWAP_LOW, MAX_TICK_UNISWAP_LOW, 0).unwrap();
 
 		// DIFF: no fees accrued
-		assert_eq!(fees_owed[Ticker::Base], 0);
-		assert_eq!(fees_owed[!Ticker::Base], 0);
+		assert_eq!(fees_owed[PoolSide::Asset0], 0);
+		assert_eq!(fees_owed[!PoolSide::Asset0], 0);
 	}
 
 	#[test]
 	fn test_pair() {
 		let (mut pool, _, id) = lowpool_initialized_setfees();
 
-		pool.swap::<PairToBase>((expandto18decimals(1)).into());
+		pool.swap::<Asset1ToAsset0>(expandto18decimals(1));
 
-		assert_eq!(pool.global_fee_growth[Ticker::Base], U256::MAX);
-		assert_eq!(pool.global_fee_growth[!Ticker::Base], U256::MAX);
+		assert_eq!(pool.global_fee_growth[PoolSide::Asset0], U256::MAX);
+		assert_eq!(pool.global_fee_growth[!PoolSide::Asset0], U256::MAX);
 
 		let (_, fees_owed) = pool.burn(id, MIN_TICK_UNISWAP_LOW, MAX_TICK_UNISWAP_LOW, 0).unwrap();
 
 		// DIFF: no fees accrued
-		assert_eq!(fees_owed[Ticker::Base], 0 as u128);
-		assert_eq!(fees_owed[!Ticker::Base], 0);
+		assert_eq!(fees_owed[PoolSide::Asset0], 0u128);
+		assert_eq!(fees_owed[!PoolSide::Asset0], 0);
 	}
 
 	// Skipped more fee protocol tests
@@ -2811,92 +2871,97 @@ mod test {
 	// #Tickspacing
 
 	// Medium Fee, tickSpacing = 12, 1:1 price
-	fn mediumpool_initialized_nomint(
-	) -> (PoolState, enum_map::EnumMap<Ticker, Amount>, LiquidityProvider) {
+	fn mediumpool_initialized_nomint() -> (PoolState, PoolAssetMap<AmountU256>, AccountId) {
 		// fee_pips shall be one order of magnitude smaller than in the Uniswap pool (because
 		// ONE_IN_PIPS is /10)
-		let mut pool = PoolState::new(300, encodedprice1_1());
-		const ID: LiquidityProvider = H256([0xcf; 32]);
-		let mut minted_amounts: enum_map::EnumMap<Ticker, Amount> = Default::default();
-		(pool, minted_amounts, ID)
+		let pool = PoolState::new(300, encodedprice1_1()).unwrap();
+		let id: AccountId = AccountId::from([0xcf; 32]);
+		let minted_amounts: PoolAssetMap<AmountU256> = Default::default();
+		(pool, minted_amounts, id)
 	}
 
 	// DIFF: We have a tickspacing of 1, which means we will never have issues with it.
 	#[test]
 	fn test_tickspacing() {
 		let (mut pool, _, id) = mediumpool_initialized_nomint();
-		pool.mint(id, -6, 6, 1, |_| true).unwrap();
-		pool.mint(id, -12, 12, 1, |_| true).unwrap();
-		pool.mint(id, -144, 120, 1, |_| true).unwrap();
-		pool.mint(id, -144, -120, 1, |_| true).unwrap();
+		pool.mint(id.clone(), -6, 6, 1, |_| Ok(())).unwrap();
+		pool.mint(id.clone(), -12, 12, 1, |_| Ok(())).unwrap();
+		pool.mint(id.clone(), -144, 120, 1, |_| Ok(())).unwrap();
+		pool.mint(id, -144, -120, 1, |_| Ok(())).unwrap();
 	}
 
 	#[test]
-	fn test_swapping_gaps_pairtobase() {
+	fn test_swapping_gaps_asset_1_to_asset_0() {
 		let (mut pool, _, id) = mediumpool_initialized_nomint();
-		pool.mint(id, 120000, 121200, 250000000000000000, |_| true).unwrap();
-		pool.swap::<PairToBase>((expandto18decimals(1)).into());
+		pool.mint(id.clone(), 120000, 121200, 250000000000000000, |_| Ok(())).unwrap();
+		pool.swap::<Asset1ToAsset0>(expandto18decimals(1));
 		let (returned_capital, fees_owed) =
 			pool.burn(id, 120000, 121200, 250000000000000000).unwrap();
 
-		assert_eq!(returned_capital[Ticker::Base], U256::from_dec_str("30027458295511").unwrap());
 		assert_eq!(
-			returned_capital[!Ticker::Base],
+			returned_capital[PoolSide::Asset0],
+			U256::from_dec_str("30027458295511").unwrap()
+		);
+		assert_eq!(
+			returned_capital[!PoolSide::Asset0],
 			U256::from_dec_str("996999999999999999").unwrap()
 		);
 
-		assert_eq!(fees_owed[Ticker::Base], 0);
-		assert!(fees_owed[!Ticker::Base] > 0);
+		assert_eq!(fees_owed[PoolSide::Asset0], 0);
+		assert!(fees_owed[!PoolSide::Asset0] > 0);
 
 		assert_eq!(pool.current_tick, 120196)
 	}
 
 	#[test]
-	fn test_swapping_gaps_basetopair() {
+	fn test_swapping_gaps_asset_0_to_asset_1() {
 		let (mut pool, _, id) = mediumpool_initialized_nomint();
-		pool.mint(id, -121200, -120000, 250000000000000000, |_| true).unwrap();
-		pool.swap::<BaseToPair>((expandto18decimals(1)).into());
+		pool.mint(id.clone(), -121200, -120000, 250000000000000000, |_| Ok(())).unwrap();
+		pool.swap::<Asset0ToAsset1>(expandto18decimals(1));
 		let (returned_capital, fees_owed) =
 			pool.burn(id, -121200, -120000, 250000000000000000).unwrap();
 
 		assert_eq!(
-			returned_capital[Ticker::Base],
+			returned_capital[PoolSide::Asset0],
 			U256::from_dec_str("996999999999999999").unwrap()
 		);
-		assert_eq!(returned_capital[!Ticker::Base], U256::from_dec_str("30027458295511").unwrap());
+		assert_eq!(
+			returned_capital[!PoolSide::Asset0],
+			U256::from_dec_str("30027458295511").unwrap()
+		);
 
-		assert_eq!(fees_owed[!Ticker::Base], 0);
-		assert!(fees_owed[Ticker::Base] > 0);
+		assert_eq!(fees_owed[!PoolSide::Asset0], 0);
+		assert!(fees_owed[PoolSide::Asset0] > 0);
 
 		assert_eq!(pool.current_tick, -120197)
 	}
 
 	#[test]
 	fn test_cannot_run_ticktransition_twice() {
-		const ID: LiquidityProvider = H256([0xcf; 32]);
+		let id: AccountId = AccountId::from([0xcf; 32]);
 
 		let p0 = PoolState::sqrt_price_at_tick(-24081) + 1;
-		let mut pool = PoolState::new(300, p0);
+		let mut pool = PoolState::new(300, p0).unwrap();
 		assert_eq!(pool.current_liquidity, 0);
 		assert_eq!(pool.current_tick, -24081);
 
 		// add a bunch of liquidity around current price
-		pool.mint(ID, -24082, -24080, expandto18decimals(1000).as_u128() as u128, |_| true)
+		pool.mint(id.clone(), -24082, -24080, expandto18decimals(1000).as_u128(), |_| Ok(()))
 			.unwrap();
-		assert_eq!(pool.current_liquidity, expandto18decimals(1000).as_u128() as u128);
+		assert_eq!(pool.current_liquidity, expandto18decimals(1000).as_u128());
 
-		pool.mint(ID, -24082, -24081, expandto18decimals(1000).as_u128() as u128, |_| true)
+		pool.mint(id, -24082, -24081, expandto18decimals(1000).as_u128(), |_| Ok(()))
 			.unwrap();
-		assert_eq!(pool.current_liquidity, expandto18decimals(1000).as_u128() as u128);
+		assert_eq!(pool.current_liquidity, expandto18decimals(1000).as_u128());
 
 		// check the math works out to moving the price down 1, sending no amount out, and having
 		// some amount remaining
-		let amount_swapped = pool.swap::<BaseToPair>((U256::from_dec_str("3").unwrap()).into());
+		let (amount_swapped, _) = pool.swap::<Asset0ToAsset1>(U256::from_dec_str("3").unwrap());
 		assert_eq!(amount_swapped, U256::from_dec_str("0").unwrap());
 
 		assert_eq!(pool.current_tick, -24082);
 		assert_eq!(pool.current_sqrt_price, p0 - 1);
-		assert_eq!(pool.current_liquidity, 2000000000000000000000 as u128);
+		assert_eq!(pool.current_liquidity, 2000000000000000000000u128);
 	}
 
 	///////////////////////////////////////////////////////////
@@ -2905,8 +2970,8 @@ mod test {
 	#[test]
 	#[should_panic]
 	fn test_frominput_fails_zero() {
-		// test PairToBase next_sqrt_price_from_input_amount
-		PairToBase::next_sqrt_price_from_input_amount(
+		// test Asset1ToAsset0 next_sqrt_price_from_input_amount
+		Asset1ToAsset0::next_sqrt_price_from_input_amount(
 			U256::from_dec_str("0").unwrap(),
 			0,
 			expandto18decimals(1) / 10,
@@ -2915,7 +2980,7 @@ mod test {
 	#[test]
 	#[should_panic]
 	fn test_frominput_fails_liqzero() {
-		BaseToPair::next_sqrt_price_from_input_amount(
+		Asset0ToAsset1::next_sqrt_price_from_input_amount(
 			U256::from_dec_str("1").unwrap(),
 			0,
 			expandto18decimals(1) / 10,
@@ -2926,7 +2991,7 @@ mod test {
 	#[test]
 	#[should_panic]
 	fn test_frominput_fails_inputoverflow() {
-		PairToBase::next_sqrt_price_from_input_amount(
+		Asset1ToAsset0::next_sqrt_price_from_input_amount(
 			U256::from_dec_str("1461501637330902918203684832716283019655932542975").unwrap(), /* 2^160-1 */
 			1024,
 			U256::from_dec_str("1461501637330902918203684832716283019655932542976").unwrap(), /* 2^160 */
@@ -2935,7 +3000,7 @@ mod test {
 	#[test]
 	#[should_panic]
 	fn test_frominput_fails_anyinputoverflow() {
-		PairToBase::next_sqrt_price_from_input_amount(
+		Asset1ToAsset0::next_sqrt_price_from_input_amount(
 			U256::from_dec_str("1").unwrap(),
 			1,
 			U256::from_dec_str(
@@ -2946,8 +3011,8 @@ mod test {
 	}
 
 	#[test]
-	fn test_frominput_zeroamount_basetopair() {
-		let price = BaseToPair::next_sqrt_price_from_input_amount(
+	fn test_frominput_zeroamount_asset_0_to_asset_1() {
+		let price = Asset0ToAsset1::next_sqrt_price_from_input_amount(
 			encodedprice1_1(),
 			expandto18decimals(1).as_u128(),
 			U256::from_dec_str("0").unwrap(),
@@ -2956,8 +3021,8 @@ mod test {
 	}
 
 	#[test]
-	fn test_frominput_zeroamount_pairtobase() {
-		let price = PairToBase::next_sqrt_price_from_input_amount(
+	fn test_frominput_zeroamount_asset_1_to_asset_0() {
+		let price = Asset1ToAsset0::next_sqrt_price_from_input_amount(
 			encodedprice1_1(),
 			expandto18decimals(1).as_u128(),
 			U256::from_dec_str("0").unwrap(),
@@ -2967,13 +3032,13 @@ mod test {
 
 	#[test]
 	fn test_maxamounts_minprice() {
-		let sqrtP: U256 =
+		let sqrt_p: U256 =
 			U256::from_dec_str("1461501637330902918203684832716283019655932542976").unwrap();
 		let liquidity: u128 = u128::MAX;
-		let maxamount_nooverflow = U256::MAX - (liquidity << 96); // sqrtP)
+		let maxamount_nooverflow = U256::MAX - (liquidity << 96); // sqrt_p)
 
-		let price = BaseToPair::next_sqrt_price_from_input_amount(
-			sqrtP, //2^96
+		let price = Asset0ToAsset1::next_sqrt_price_from_input_amount(
+			sqrt_p, //2^96
 			liquidity,
 			maxamount_nooverflow,
 		);
@@ -2983,7 +3048,7 @@ mod test {
 
 	#[test]
 	fn test_frominput_inputamount_pair() {
-		let price = PairToBase::next_sqrt_price_from_input_amount(
+		let price = Asset1ToAsset0::next_sqrt_price_from_input_amount(
 			encodedprice1_1(), //encodePriceSqrt(1, 1)
 			expandto18decimals(1).as_u128(),
 			expandto18decimals(1) / 10,
@@ -2993,7 +3058,7 @@ mod test {
 
 	#[test]
 	fn test_frominput_inputamount_base() {
-		let price = BaseToPair::next_sqrt_price_from_input_amount(
+		let price = Asset0ToAsset1::next_sqrt_price_from_input_amount(
 			encodedprice1_1(), //encodePriceSqrt(1, 1)
 			expandto18decimals(1).as_u128(),
 			expandto18decimals(1) / 10,
@@ -3003,7 +3068,7 @@ mod test {
 
 	#[test]
 	fn test_frominput_amountinmaxuint96_base() {
-		let price = BaseToPair::next_sqrt_price_from_input_amount(
+		let price = Asset0ToAsset1::next_sqrt_price_from_input_amount(
 			encodedprice1_1(), //encodePriceSqrt(1, 1)
 			expandto18decimals(10).as_u128(),
 			U256::from_dec_str("1267650600228229401496703205376").unwrap(), // 2**100
@@ -3013,9 +3078,9 @@ mod test {
 
 	#[test]
 	fn test_frominput_amountinmaxuint96_pair() {
-		let price = BaseToPair::next_sqrt_price_from_input_amount(
+		let price = Asset0ToAsset1::next_sqrt_price_from_input_amount(
 			encodedprice1_1(), //encodePriceSqrt(1, 1)
-			1 as u128,
+			1u128,
 			U256::MAX / 2,
 		);
 		assert_eq!(price, U256::from_dec_str("1").unwrap());
@@ -3045,7 +3110,7 @@ mod test {
 	#[test]
 	fn test_0_if_liquidity_0() {
 		assert_eq!(
-			PoolState::base_amount_delta_ceil(encodedprice1_1(), encodedprice2_1(), 0),
+			PoolState::asset_0_amount_delta_ceil(encodedprice1_1(), encodedprice2_1(), 0),
 			U256::from(0)
 		);
 	}
@@ -3053,7 +3118,7 @@ mod test {
 	#[test]
 	fn test_price1_121() {
 		assert_eq!(
-			PoolState::base_amount_delta_ceil(
+			PoolState::asset_0_amount_delta_ceil(
 				encodedprice1_1(),
 				encodedprice121_100(),
 				expandto18decimals(1).as_u128()
@@ -3062,7 +3127,7 @@ mod test {
 		);
 
 		assert_eq!(
-			PoolState::base_amount_delta_floor(
+			PoolState::asset_0_amount_delta_floor(
 				encodedprice1_1(),
 				encodedprice121_100(),
 				expandto18decimals(1).as_u128()
@@ -3074,12 +3139,12 @@ mod test {
 	#[test]
 	fn test_overflow() {
 		assert_eq!(
-			PoolState::base_amount_delta_ceil(
+			PoolState::asset_0_amount_delta_ceil(
 				U256::from_dec_str("2787593149816327892691964784081045188247552").unwrap(),
 				U256::from_dec_str("22300745198530623141535718272648361505980416").unwrap(),
 				expandto18decimals(1).as_u128(),
 			),
-			PoolState::base_amount_delta_floor(
+			PoolState::asset_0_amount_delta_floor(
 				U256::from_dec_str("2787593149816327892691964784081045188247552").unwrap(),
 				U256::from_dec_str("22300745198530623141535718272648361505980416").unwrap(),
 				expandto18decimals(1).as_u128(),
@@ -3092,7 +3157,7 @@ mod test {
 	#[test]
 	fn test_0_if_liquidity_0_pair() {
 		assert_eq!(
-			PoolState::pair_amount_delta_ceil(encodedprice1_1(), encodedprice2_1(), 0),
+			PoolState::asset_1_amount_delta_ceil(encodedprice1_1(), encodedprice2_1(), 0),
 			U256::from(0)
 		);
 	}
@@ -3100,7 +3165,7 @@ mod test {
 	#[test]
 	fn test_price1_121_pair() {
 		assert_eq!(
-			PoolState::pair_amount_delta_ceil(
+			PoolState::asset_1_amount_delta_ceil(
 				encodedprice1_1(),
 				encodedprice121_100(),
 				expandto18decimals(1).as_u128()
@@ -3109,7 +3174,7 @@ mod test {
 		);
 
 		assert_eq!(
-			PoolState::pair_amount_delta_floor(
+			PoolState::asset_1_amount_delta_floor(
 				encodedprice1_1(),
 				encodedprice121_100(),
 				expandto18decimals(1).as_u128()
@@ -3121,21 +3186,21 @@ mod test {
 	// Swap computation
 	#[test]
 	fn test_sqrtoverflows() {
-		let sqrtP =
+		let sqrt_p =
 			U256::from_dec_str("1025574284609383690408304870162715216695788925244").unwrap();
-		let liquidity = 50015962439936049619261659728067971248 as u128;
-		let sqrtQ = BaseToPair::next_sqrt_price_from_input_amount(
-			sqrtP,
+		let liquidity = 50015962439936049619261659728067971248u128;
+		let sqrt_q = Asset0ToAsset1::next_sqrt_price_from_input_amount(
+			sqrt_p,
 			liquidity,
 			U256::from_dec_str("406").unwrap(),
 		);
 		assert_eq!(
-			sqrtQ,
+			sqrt_q,
 			U256::from_dec_str("1025574284609383582644711336373707553698163132913").unwrap()
 		);
 
 		assert_eq!(
-			PoolState::base_amount_delta_ceil(sqrtQ, sqrtP, liquidity as u128),
+			PoolState::asset_0_amount_delta_ceil(sqrt_q, sqrt_p, liquidity),
 			U256::from_dec_str("406").unwrap()
 		);
 	}
@@ -3147,18 +3212,19 @@ mod test {
 	// computeSwapStep
 
 	// We cannot really fake the state of the pool to test this because we would need to mint a
-	// tick equivalent to desired sqrtPriceTarget but:
-	// sqrt_price_at_tick(tick_at_sqrt_price(sqrtPriceTarget)) != sqrtPriceTarget, due to the
+	// tick equivalent to desired sqrt_priceTarget but:
+	// sqrt_price_at_tick(tick_at_sqrt_price(sqrt_priceTarget)) != sqrt_priceTarget, due to the
 	// prices being between ticks - and therefore converting them to the closes tick.
 	//#[test]
-	fn test_amountcapped_pairtobase_fail() {
-		let mut pool = PoolState::new(60, encodedprice1_1());
-		const ID: LiquidityProvider = H256([0xcf; 32]);
+	#[allow(dead_code)]
+	fn test_amount_capped_asset_1_to_asset_0_fail() {
+		let mut pool = PoolState::new(60, encodedprice1_1()).unwrap();
+		let id: AccountId = AccountId::from([0xcf; 32]);
 
 		let mut minted_capital = None;
 
 		pool.mint(
-			ID,
+			id,
 			PoolState::tick_at_sqrt_price(encodedprice1_1()),
 			PoolState::tick_at_sqrt_price(
 				U256::from_dec_str("79623317895830914510487008059").unwrap(),
@@ -3166,12 +3232,12 @@ mod test {
 			expandto18decimals(2).as_u128(),
 			|minted| {
 				minted_capital.replace(minted);
-				true
+				Ok(())
 			},
 		)
 		.unwrap();
 
-		let minted_capital = minted_capital.unwrap();
+		let _minted_capital = minted_capital.unwrap();
 		println!(
 			"upper tick: {:?}",
 			PoolState::tick_at_sqrt_price(
@@ -3185,24 +3251,24 @@ mod test {
 			))
 		);
 		// Swap to the right towards price target
-		let amount_swapped = pool.swap::<PairToBase>((expandto18decimals(1)).into());
-		println!("Amount swapped: {:?}", amount_swapped);
+		let amount_swapped = pool.swap::<Asset1ToAsset0>(expandto18decimals(1));
+		println!("Amount swapped: {amount_swapped:?}",);
 	}
 
 	// Fake computeswapstep => Stripped down version of the real swap
 	// TODO: Consider refactoring real AMM to be able to easily test this.
 	// NOTE: Using ONE_IN_PIPS_UNISWAP here to match the tests. otherwise we would need decimals for
 	// the fee value
-	const ONE_IN_PIPS_UNISWAP: u32 = 1000000;
+	const ONE_IN_PIPS_UNISWAP: u32 = 1000000u32;
 
 	fn compute_swapstep<SD: SwapDirection>(
 		current_sqrt_price: SqrtPriceQ64F96,
 		sqrt_ratio_target: SqrtPriceQ64F96,
 		liquidity: Liquidity,
-		mut amount: Amount,
+		mut amount: AmountU256,
 		fee: u32,
-	) -> (Amount, Amount, SqrtPriceQ64F96, U256) {
-		let mut total_amount_out = Amount::zero();
+	) -> (AmountU256, AmountU256, SqrtPriceQ64F96, U256) {
+		let mut total_amount_out = AmountU256::zero();
 
 		let amount_minus_fees = mul_div_floor(
 			amount,
@@ -3226,12 +3292,11 @@ mod test {
 		total_amount_out +=
 			SD::output_amount_delta_floor(current_sqrt_price, sqrt_ratio_next, liquidity);
 
-		// next_sqrt_price_from_input_amount rounds so this maybe true even though
+		// next_sqrt_price_from_input_amount rounds so this maybe Ok(()) even though
 		// amount_minus_fees < amount_required_to_reach_target (TODO Prove)
-		let mut fees: U256 = Default::default();
 		if sqrt_ratio_next == sqrt_ratio_target {
 			// Will not overflow as fee_pips <= ONE_IN_PIPS / 2
-			fees = mul_div_ceil(
+			let fees = mul_div_ceil(
 				amount_required_to_reach_target,
 				U256::from(fee),
 				U256::from(ONE_IN_PIPS_UNISWAP - fee),
@@ -3240,25 +3305,25 @@ mod test {
 			// TODO: Prove these don't underflow
 			amount -= amount_required_to_reach_target;
 			amount -= fees;
-			return (amount_required_to_reach_target, total_amount_out, sqrt_ratio_next, fees)
+			(amount_required_to_reach_target, total_amount_out, sqrt_ratio_next, fees)
 		} else {
 			let amount_in =
 				SD::input_amount_delta_ceil(current_sqrt_price, sqrt_ratio_next, liquidity);
 			// Will not underflow due to rounding in flavor of the pool of both sqrt_ratio_next
 			// and amount_in. (TODO: Prove)
-			fees = amount - amount_in;
-			return (amount_in, total_amount_out, sqrt_ratio_next, fees)
-		};
+			let fees = amount - amount_in;
+			(amount_in, total_amount_out, sqrt_ratio_next, fees)
+		}
 	}
 
 	#[test]
-	fn test_amountcapped_pairtobase() {
+	fn test_amount_capped_asset_1_to_asset_0() {
 		let price = encodedprice1_1();
 		let amount = expandto18decimals(1);
 		let price_target = U256::from_dec_str("79623317895830914510487008059").unwrap();
 		let liquidity = expandto18decimals(2).as_u128();
 		let (amount_in, amount_out, sqrt_ratio_next, fees) =
-			compute_swapstep::<PairToBase>(price, price_target, liquidity, amount, 600);
+			compute_swapstep::<Asset1ToAsset0>(price, price_target, liquidity, amount, 600);
 
 		assert_eq!(amount_in, U256::from_dec_str("9975124224178055").unwrap());
 		assert_eq!(fees, U256::from_dec_str("5988667735148").unwrap());
@@ -3266,7 +3331,7 @@ mod test {
 		assert!(amount_in + fees < amount);
 
 		let price_after_input_amount =
-			PoolState::next_sqrt_price_from_pair_input(price, liquidity, amount);
+			PoolState::next_sqrt_price_from_asset_1_input(price, liquidity, amount);
 
 		assert_eq!(sqrt_ratio_next, price_target);
 		assert!(sqrt_ratio_next < price_after_input_amount);
@@ -3275,13 +3340,13 @@ mod test {
 	// Skip amountout test
 
 	#[test]
-	fn test_amountin_spent_pairtobase() {
+	fn test_amount_in_spent_asset_1_to_asset_0() {
 		let price = encodedprice1_1();
 		let price_target = U256::from_dec_str("792281625142643375935439503360").unwrap();
 		let liquidity = expandto18decimals(2).as_u128();
 		let amount = expandto18decimals(1);
 		let (amount_in, amount_out, sqrt_ratio_next, fees) =
-			compute_swapstep::<PairToBase>(price, price_target, liquidity, amount, 600);
+			compute_swapstep::<Asset1ToAsset0>(price, price_target, liquidity, amount, 600);
 
 		assert_eq!(amount_in, U256::from_dec_str("999400000000000000").unwrap());
 		assert_eq!(fees, U256::from_dec_str("600000000000000").unwrap());
@@ -3289,18 +3354,18 @@ mod test {
 		assert_eq!(amount_in + fees, amount);
 
 		let price_after_input_amount =
-			PoolState::next_sqrt_price_from_pair_input(price, liquidity, amount - fees);
+			PoolState::next_sqrt_price_from_asset_1_input(price, liquidity, amount - fees);
 
 		assert!(sqrt_ratio_next < price_target);
 		assert_eq!(sqrt_ratio_next, price_after_input_amount);
 	}
 
 	#[test]
-	fn test_targetprice1_partialinput() {
-		let (amount_in, amount_out, sqrt_ratio_next, fees) = compute_swapstep::<BaseToPair>(
+	fn test_target_price1_partial_input() {
+		let (amount_in, amount_out, sqrt_ratio_next, fees) = compute_swapstep::<Asset0ToAsset1>(
 			U256::from_dec_str("2").unwrap(),
 			U256::from_dec_str("1").unwrap(),
-			1 as u128,
+			1u128,
 			U256::from_dec_str("3915081100057732413702495386755767").unwrap(),
 			1,
 		);
@@ -3315,10 +3380,10 @@ mod test {
 
 	#[test]
 	fn test_entireinput_asfee() {
-		let (amount_in, amount_out, sqrt_ratio_next, fees) = compute_swapstep::<PairToBase>(
+		let (amount_in, amount_out, sqrt_ratio_next, fees) = compute_swapstep::<Asset1ToAsset0>(
 			U256::from_dec_str("2413").unwrap(),
 			U256::from_dec_str("79887613182836312").unwrap(),
-			1985041575832132834610021537970 as u128,
+			1985041575832132834610021537970u128,
 			U256::from_dec_str("10").unwrap(),
 			1872,
 		);
@@ -3337,75 +3402,81 @@ mod test {
 	// Previous tests using mint as a poke and to collect fees.
 
 	#[test]
-	fn test_limitselling_basetopair_tick0thru1_mint() {
+	fn test_limit_selling_asset_0_to_asset_1_tick0thru1_mint() {
 		let (mut pool, _, id) = mediumpool_initialized_zerotick();
 		let mut minted_capital = None;
-		pool.mint(id, 0, 120, expandto18decimals(1).as_u128(), |minted| {
+		pool.mint(id.clone(), 0, 120, expandto18decimals(1).as_u128(), |minted| {
 			minted_capital.replace(minted);
-			true
+			Ok(())
 		})
 		.unwrap();
 		let minted_capital = minted_capital.unwrap();
 
-		assert_eq!(minted_capital[Ticker::Base], U256::from_dec_str("5981737760509663").unwrap());
-		assert_eq!(minted_capital[!Ticker::Base], U256::from_dec_str("0").unwrap());
+		assert_eq!(
+			minted_capital[PoolSide::Asset0],
+			U256::from_dec_str("5981737760509663").unwrap()
+		);
+		assert_eq!(minted_capital[!PoolSide::Asset0], U256::from_dec_str("0").unwrap());
 
 		// somebody takes the limit order
-		pool.swap::<PairToBase>((U256::from_dec_str("2000000000000000000").unwrap()).into());
+		pool.swap::<Asset1ToAsset0>(U256::from_dec_str("2000000000000000000").unwrap());
 
-		let fees_owed = pool.mint(id, 0, 120, 1, |_| true).unwrap();
+		let (_, fees_owed) = pool.mint(id.clone(), 0, 120, 1, |_| Ok(())).unwrap();
 
-		assert_eq!(fees_owed[Ticker::Base], 0);
-		assert_eq!(fees_owed[!Ticker::Base], 18107525382602);
+		assert_eq!(fees_owed[PoolSide::Asset0], 0);
+		assert_eq!(fees_owed[!PoolSide::Asset0], 18107525382602);
 
-		let fees_owed = pool.mint(id, 0, 120, 1, |_| true).unwrap();
-		assert_eq!(fees_owed[Ticker::Base], 0);
-		assert_eq!(fees_owed[!Ticker::Base], 0);
+		let (_, fees_owed) = pool.mint(id.clone(), 0, 120, 1, |_| Ok(())).unwrap();
+		assert_eq!(fees_owed[PoolSide::Asset0], 0);
+		assert_eq!(fees_owed[!PoolSide::Asset0], 0);
 
 		let (burned, fees_owed) = pool.burn(id, 0, 120, expandto18decimals(1).as_u128()).unwrap();
-		assert_eq!(burned[Ticker::Base], U256::from_dec_str("0").unwrap());
-		assert_eq!(burned[!Ticker::Base], U256::from_dec_str("6017734268818165").unwrap());
+		assert_eq!(burned[PoolSide::Asset0], U256::from_dec_str("0").unwrap());
+		assert_eq!(burned[!PoolSide::Asset0], U256::from_dec_str("6017734268818165").unwrap());
 
 		// DIFF: position fully burnt
-		assert_eq!(fees_owed[Ticker::Base], 0);
-		assert_eq!(fees_owed[!Ticker::Base], 0);
+		assert_eq!(fees_owed[PoolSide::Asset0], 0);
+		assert_eq!(fees_owed[!PoolSide::Asset0], 0);
 
 		assert!(pool.current_tick > 120)
 	}
 
 	#[test]
-	fn test_limitselling_paior_tick1thru0_mint() {
+	fn test_limit_selling_paior_tick1thru0_mint() {
 		let (mut pool, _, id) = mediumpool_initialized_zerotick();
 		let mut minted_capital = None;
-		pool.mint(id, -120, 0, expandto18decimals(1).as_u128(), |minted| {
+		pool.mint(id.clone(), -120, 0, expandto18decimals(1).as_u128(), |minted| {
 			minted_capital.replace(minted);
-			true
+			Ok(())
 		})
 		.unwrap();
 		let minted_capital = minted_capital.unwrap();
 
-		assert_eq!(minted_capital[!Ticker::Base], U256::from_dec_str("5981737760509663").unwrap());
-		assert_eq!(minted_capital[Ticker::Base], U256::from_dec_str("0").unwrap());
+		assert_eq!(
+			minted_capital[!PoolSide::Asset0],
+			U256::from_dec_str("5981737760509663").unwrap()
+		);
+		assert_eq!(minted_capital[PoolSide::Asset0], U256::from_dec_str("0").unwrap());
 
 		// somebody takes the limit order
-		pool.swap::<BaseToPair>((U256::from_dec_str("2000000000000000000").unwrap()).into());
+		pool.swap::<Asset0ToAsset1>(U256::from_dec_str("2000000000000000000").unwrap());
 
-		let fees_owed = pool.mint(id, -120, 0, 1, |_| true).unwrap();
+		let (_, fees_owed) = pool.mint(id.clone(), -120, 0, 1, |_| Ok(())).unwrap();
 
-		assert_eq!(fees_owed[!Ticker::Base], 0);
-		assert_eq!(fees_owed[Ticker::Base], 18107525382602);
+		assert_eq!(fees_owed[!PoolSide::Asset0], 0);
+		assert_eq!(fees_owed[PoolSide::Asset0], 18107525382602);
 
-		let fees_owed = pool.mint(id, -120, 0, 1, |_| true).unwrap();
-		assert_eq!(fees_owed[!Ticker::Base], 0);
-		assert_eq!(fees_owed[Ticker::Base], 0);
+		let (_, fees_owed) = pool.mint(id.clone(), -120, 0, 1, |_| Ok(())).unwrap();
+		assert_eq!(fees_owed[!PoolSide::Asset0], 0);
+		assert_eq!(fees_owed[PoolSide::Asset0], 0);
 
 		let (burned, fees_owed) = pool.burn(id, -120, 0, expandto18decimals(1).as_u128()).unwrap();
-		assert_eq!(burned[!Ticker::Base], U256::from_dec_str("0").unwrap());
-		assert_eq!(burned[Ticker::Base], U256::from_dec_str("6017734268818165").unwrap());
+		assert_eq!(burned[!PoolSide::Asset0], U256::from_dec_str("0").unwrap());
+		assert_eq!(burned[PoolSide::Asset0], U256::from_dec_str("6017734268818165").unwrap());
 
 		// DIFF: position fully burnt
-		assert_eq!(fees_owed[!Ticker::Base], 0);
-		assert_eq!(fees_owed[Ticker::Base], 0);
+		assert_eq!(fees_owed[!PoolSide::Asset0], 0);
+		assert_eq!(fees_owed[PoolSide::Asset0], 0);
 
 		assert!(pool.current_tick < -120)
 	}
