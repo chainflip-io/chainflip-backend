@@ -397,6 +397,7 @@ pub mod pallet {
 					}
 				},
 				RotationPhase::KeygensInProgress(mut rotation_state) => {
+					let num_primary_candidates = rotation_state.num_primary_candidates();
 					match T::VaultRotator::status() {
 						// We need to differentiate keygen verif and other states.
 						// We can do this with an enum instead of Result<()>
@@ -428,10 +429,10 @@ pub mod pallet {
 							Self::set_rotation_phase(RotationPhase::Idle);
 						},
 					};
-					// TODO: Use actual weights
-					Weight::from_ref_time(0)
+					T::ValidatorWeightInfo::rotation_phase_keygen_success(num_primary_candidates)
 				},
 				RotationPhase::ActivatingKeys(rotation_state) => {
+					let num_primary_candidates = rotation_state.num_primary_candidates();
 					match T::VaultRotator::status() {
 						AsyncResult::Ready(VaultStatus::RotationComplete) => {
 							Self::set_rotation_phase(RotationPhase::NewKeysActivated(
@@ -450,17 +451,10 @@ pub mod pallet {
 							Self::set_rotation_phase(RotationPhase::Idle);
 						},
 					}
-					Weight::from_ref_time(0)
+					T::ValidatorWeightInfo::rotation_phase_activating_keys_success(num_primary_candidates)
 				},
 				// The new session will kick off the new epoch
-				RotationPhase::NewKeysActivated(rotation_state) =>
-					T::ValidatorWeightInfo::rotation_phase_vaults_rotated(
-						rotation_state.num_primary_candidates(),
-					),
-				RotationPhase::SessionRotating(rotation_state) =>
-					T::ValidatorWeightInfo::rotation_phase_vaults_rotated(
-						rotation_state.num_primary_candidates(),
-					),
+				_ => Weight::from_ref_time(0),
 			});
 			weight
 		}

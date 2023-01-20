@@ -345,42 +345,6 @@ benchmarks! {
 		));
 	}
 
-	/**** 3. RotationPhase::NewKeysActivated ****/
-	/**** 4. RotationPhase::SessionRotating ****/
-	/**** (Both phases have equal weight) ****/
-
-	rotation_phase_vaults_rotated {
-		// a = authority set target size
-		let a in 3 .. 150;
-
-		// Set up a vault rotation.
-		start_vault_rotation::<T>(a, 50, 1);
-		match CurrentRotationPhase::<T>::get() {
-			RotationPhase::KeygensInProgress(rotation_state) =>
-				CurrentRotationPhase::<T>::put(RotationPhase::NewKeysActivated(rotation_state)),
-			_ => panic!("phase should be NewKeysActivated"),
-		}
-
-		// This assertion ensures we are using the correct weight parameter.
-		assert_eq!(
-			match CurrentRotationPhase::<T>::get() {
-				RotationPhase::NewKeysActivated(rotation_state) => Some(rotation_state.num_primary_candidates()),
-				_ => None,
-			}.expect("phase should be NewKeysActivated"),
-			a,
-			"Incorrect weight parameters."
-		);
-	}: {
-		Pallet::<T>::on_initialize(1u32.into());
-	}
-	verify {
-		assert!(
-			matches!(
-				CurrentRotationPhase::<T>::get(),
-				RotationPhase::NewKeysActivated(..),
-			),
-		);
-	}
 	set_auction_parameters {
 		let origin = <T as Config>::EnsureGovernance::successful_origin();
 		let params = SetSizeParameters {
