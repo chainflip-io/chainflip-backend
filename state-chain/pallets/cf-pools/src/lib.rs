@@ -319,7 +319,7 @@ impl<T: Config> LiquidityPoolApi<AccountId> for Pallet<T> {
 					)
 				};
 
-				let (required_assets, fees_harvested) = pool
+				let (assets_debited, fees_harvested) = pool
 					.mint(lp.clone(), range.lower, range.upper, liquidity_amount, try_debit_u256)
 					.map_err(|e| match e {
 						MintError::InvalidTickRange => Error::<T>::InvalidTickRange.into(),
@@ -328,7 +328,7 @@ impl<T: Config> LiquidityPoolApi<AccountId> for Pallet<T> {
 						MintError::CallbackError(e) => e,
 					})?;
 
-				let assets_debited = required_assets
+				let assets_debited = assets_debited
 					.try_into()
 					.expect("Mint required asset amounts must be less than u128::MAX");
 				Self::deposit_event(Event::<T>::LiquidityMinted {
