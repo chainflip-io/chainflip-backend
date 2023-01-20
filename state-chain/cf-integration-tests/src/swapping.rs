@@ -400,7 +400,7 @@ fn swap_can_accrue_fees() {
 			pallet_cf_lp::Event::AccountCredited {
 				account_id: lp_1.clone(),
 				asset: any::Asset::Usdc,
-				amount_credited: 4_708_672 + 0,
+				amount_credited: 4_708_672,
 			},
 		));
 		System::assert_has_event(RuntimeEvent::LiquidityProvider(
@@ -414,7 +414,7 @@ fn swap_can_accrue_fees() {
 			pallet_cf_lp::Event::AccountCredited {
 				account_id: lp_2.clone(),
 				asset: any::Asset::Flip,
-				amount_credited: 414_088 + 0,
+				amount_credited: 414_088,
 			},
 		));
 

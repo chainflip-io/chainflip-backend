@@ -3,9 +3,7 @@ use crate::{mock::*, FreeBalances};
 use cf_primitives::{
 	liquidity::AmmRange, AccountId, Asset, ForeignChainAddress, MintedLiquidity, PoolAssetMap,
 };
-use cf_traits::{
-	mocks::system_state_info::MockSystemStateInfo, LiquidityPoolApi, SwappingApi, SystemStateInfo,
-};
+use cf_traits::{mocks::system_state_info::MockSystemStateInfo, LiquidityPoolApi, SystemStateInfo};
 use frame_support::{assert_noop, assert_ok, error::BadOrigin};
 
 #[test]
