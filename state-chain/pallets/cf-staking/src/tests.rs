@@ -259,7 +259,8 @@ fn claim_cannot_occur_without_staking_first() {
 			RuntimeEvent::Staking(crate::Event::ClaimRequested {
 				account_id: ALICE,
 				amount: STAKE,
-				broadcast_id: 0
+				broadcast_id: 0,
+				expiry_time: 10,
 			}),
 			RuntimeEvent::System(frame_system::Event::KilledAccount { account: ALICE }),
 			RuntimeEvent::Staking(crate::Event::ClaimSettled(ALICE, STAKE))
@@ -401,10 +402,10 @@ fn test_retirement() {
 fn claim_expiry() {
 	new_test_ext().execute_with(|| {
 		const STAKE: u128 = 45;
-		const START_TIME: Duration = Duration::from_secs(10);
+		const START_TIME_SECS: u64 = 10;
 
 		// Start the time at the 10-second mark.
-		time_source::Mock::reset_to(START_TIME);
+		time_source::Mock::reset_to(Duration::from_secs(START_TIME_SECS));
 
 		// Stake some FLIP.
 		assert_ok!(Staking::staked(RuntimeOrigin::root(), ALICE, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
@@ -414,11 +415,12 @@ fn claim_expiry() {
 		assert_ok!(Staking::claim(RuntimeOrigin::signed(ALICE), STAKE.into(), ETH_DUMMY_ADDR));
 
 		// Bob claims a little later.
-		time_source::Mock::tick(Duration::from_secs(3));
+		const BOB_DELAY_SECS: u64 = 3;
+		time_source::Mock::tick(Duration::from_secs(BOB_DELAY_SECS));
 		assert_ok!(Staking::claim(RuntimeOrigin::signed(BOB), STAKE.into(), ETH_DUMMY_ADDR));
 
 		// If we stay within the defined bounds, we can claim.
-		time_source::Mock::reset_to(START_TIME);
+		time_source::Mock::reset_to(Duration::from_secs(START_TIME_SECS));
 		const INIT_TICK: u64 = 4;
 		time_source::Mock::tick(Duration::from_secs(INIT_TICK));
 
@@ -478,12 +480,14 @@ fn claim_expiry() {
 			RuntimeEvent::Staking(crate::Event::ClaimRequested {
 				account_id: ALICE,
 				amount: STAKE,
-				broadcast_id: 0
+				broadcast_id: 0,
+				expiry_time: START_TIME_SECS + CLAIM_TTL_SECS,
 			}),
 			RuntimeEvent::Staking(crate::Event::ClaimRequested {
 				account_id: BOB,
 				amount: STAKE,
-				broadcast_id: 0
+				broadcast_id: 0,
+				expiry_time: START_TIME_SECS + BOB_DELAY_SECS + CLAIM_TTL_SECS,
 			}),
 			RuntimeEvent::Staking(crate::Event::ClaimExpired { account_id: ALICE }),
 			RuntimeEvent::Staking(crate::Event::ClaimExpired { account_id: BOB })

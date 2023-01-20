@@ -47,7 +47,7 @@ pub mod pallet {
 	use cf_chains::eth::Ethereum;
 	use cf_primitives::BroadcastId;
 	use cf_traits::{AccountRoleRegistry, Broadcaster};
-	use frame_support::{pallet_prelude::*, serde::__private::ser::constrain, Parameter};
+	use frame_support::{pallet_prelude::*, Parameter};
 	use frame_system::pallet_prelude::*;
 
 	#[allow(unused_imports)]
