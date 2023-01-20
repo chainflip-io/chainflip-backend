@@ -45,8 +45,9 @@ pub trait WitnessDataExtraction {
 pub mod pallet {
 	use super::*;
 	use cf_traits::AccountRoleRegistry;
-	use frame_support::pallet_prelude::*;
+	use frame_support::{pallet_prelude::*, storage::with_transaction};
 	use frame_system::pallet_prelude::*;
+	use sp_runtime::TransactionOutcome;
 
 	/// Configure the pallet by specifying the parameters and types on which it depends.
 	#[pallet::config]
@@ -328,21 +329,25 @@ pub mod pallet {
 				if let Some(mut extra_data) = ExtraCallData::<T>::get(epoch_index, call_hash) {
 					call.combine_and_inject(&mut extra_data)
 				}
-				let _result = call
-					.dispatch_bypass_filter(
+				let _result = with_transaction(move || {
+					match call.dispatch_bypass_filter(
 						(if epoch_index == current_epoch {
 							RawOrigin::CurrentEpochWitnessThreshold
 						} else {
 							RawOrigin::HistoricalActiveEpochWitnessThreshold
 						})
 						.into(),
-					)
-					.map_err(|e| {
-						Self::deposit_event(Event::<T>::WitnessExecutionFailed {
-							call_hash,
-							error: e.error,
-						});
+					) {
+						r @ Ok(_) => TransactionOutcome::Commit(r),
+						r @ Err(_) => TransactionOutcome::Rollback(r),
+					}
+				})
+				.map_err(|e| {
+					Self::deposit_event(Event::<T>::WitnessExecutionFailed {
+						call_hash,
+						error: e.error,
 					});
+				});
 				CallHashExecuted::<T>::insert(epoch_index, call_hash, ());
 			}
 			Ok(().into())
