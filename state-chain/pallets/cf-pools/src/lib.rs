@@ -393,36 +393,6 @@ impl<T: Config> LiquidityPoolApi<AccountId> for Pallet<T> {
 		})
 	}
 
-	/// Returns and resets fees accrued in user's position.
-	fn collect(
-		lp: AccountId,
-		asset: any::Asset,
-		range: AmmRange,
-	) -> Result<PoolAssetMap<AssetAmount>, DispatchError> {
-		Pools::<T>::try_mutate(asset, |maybe_pool| {
-			if let Some(pool) = maybe_pool.as_mut() {
-				ensure!(pool.pool_enabled(), Error::<T>::PoolDisabled);
-
-				let fees: PoolAssetMap<AssetAmount> =
-					pool.collect(lp.clone(), range.lower, range.upper).map_err(|e| match e {
-						PositionError::NonExistent => Error::<T>::PositionDoesNotExist,
-						PositionError::PositionLacksLiquidity => Error::<T>::PositionLacksLiquidity,
-					})?;
-
-				Self::deposit_event(Event::<T>::FeeCollected {
-					lp,
-					asset,
-					range,
-					fee_yielded: fees,
-				});
-
-				Ok(fees)
-			} else {
-				Err(Error::<T>::PoolDoesNotExist.into())
-			}
-		})
-	}
-
 	/// Returns the user's Minted liquidities and fees accrued for a specific pool.
 	fn minted_liquidity(lp: &AccountId, asset: &any::Asset) -> Vec<MintedLiquidity> {
 		if let Some(pool) = Pools::<T>::get(asset) {

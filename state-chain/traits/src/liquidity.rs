@@ -73,13 +73,6 @@ pub trait LiquidityPoolApi<AccountId> {
 		burnt_liquidity: Liquidity,
 	) -> Result<BurnResult, DispatchError>;
 
-	/// Returns and resets fees accrued in user's position.
-	fn collect(
-		lp: AccountId,
-		asset: Asset,
-		range: AmmRange,
-	) -> Result<PoolAssetMap<u128>, DispatchError>;
-
 	/// Returns the user's Minted liquidities and fees acrued for a specific pool.
 	fn minted_liquidity(lp: &AccountId, asset: &Asset) -> Vec<MintedLiquidity>;
 

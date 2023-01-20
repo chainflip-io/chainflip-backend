@@ -207,26 +207,6 @@ pub mod pallet {
 				Ordering::Equal => Ok(()),
 			}
 		}
-
-		/// Collects all the fees currently held in a user position. Credit the fee to
-		/// user's free balance. Reset the fees stored in the pool position.
-		#[pallet::weight(0)]
-		pub fn collect_fees(origin: OriginFor<T>, asset: Asset, range: AmmRange) -> DispatchResult {
-			T::SystemState::ensure_no_maintenance()?;
-			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
-
-			let fees_collected = T::LiquidityPoolApi::collect(account_id.clone(), asset, range)?;
-
-			// Credit the user's asset into their account.
-			Self::credit(&account_id, asset, fees_collected[PoolSide::Asset0])?;
-			Self::credit(
-				&account_id,
-				T::LiquidityPoolApi::STABLE_ASSET,
-				fees_collected[PoolSide::Asset1],
-			)?;
-
-			Ok(())
-		}
 	}
 }
 
