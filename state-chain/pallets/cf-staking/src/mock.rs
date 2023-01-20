@@ -145,7 +145,6 @@ impl cf_chains::RegisterClaim<Ethereum> for MockRegisterClaim {
 	}
 }
 
-// TODO: Default implement the trait. Check if this is worth it.
 impl ApiCall<Ethereum> for MockRegisterClaim {
 	fn threshold_signature_payload(&self) -> <Ethereum as ChainCrypto>::Payload {
 		unimplemented!()
