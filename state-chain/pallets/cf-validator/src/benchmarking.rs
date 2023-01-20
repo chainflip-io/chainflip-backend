@@ -113,25 +113,22 @@ pub fn rotate_authorities<T: RuntimeConfig>(candidates: u32, epoch: u32) {
 	// Resolves the auction and starts the vault rotation.
 	Pallet::<T>::start_authority_rotation();
 
+	let block = frame_system::Pallet::<T>::current_block_number();
+
 	assert!(matches!(CurrentRotationPhase::<T>::get(), RotationPhase::KeygensInProgress(..)));
 
-	// Simulate success.
+	T::VaultRotator::set_status(AsyncResult::Ready(VaultStatus::KeygenComplete));
+
+	Pallet::<T>::on_initialize(block);
+
 	T::VaultRotator::set_status(AsyncResult::Ready(VaultStatus::RotationComplete));
 
-	// The rest should take care of itself.
-	let mut iterations = 0;
-	while !matches!(CurrentRotationPhase::<T>::get(), RotationPhase::Idle) {
-		let block = frame_system::Pallet::<T>::current_block_number();
-		Pallet::<T>::on_initialize(block);
-		pallet_session::Pallet::<T>::on_initialize(block);
-		iterations += 1;
-		if iterations > 4 {
-			panic!(
-				"Rotation should not take more than 4 iterations. Stuck at {:?}",
-				CurrentRotationPhase::<T>::get()
-			);
-		}
-	}
+	Pallet::<T>::on_initialize(block);
+	pallet_session::Pallet::<T>::on_initialize(block);
+	Pallet::<T>::on_initialize(block);
+	pallet_session::Pallet::<T>::on_initialize(block);
+
+	assert!(matches!(CurrentRotationPhase::<T>::get(), RotationPhase::Idle));
 
 	assert_eq!(Pallet::<T>::epoch_index(), old_epoch + 1, "authority rotation failed");
 }

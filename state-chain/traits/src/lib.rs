@@ -183,9 +183,7 @@ pub trait VaultRotator {
 	fn activate();
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn set_status(_outcome: AsyncResult<VaultStatus<Self::ValidatorId>>) {
-		unimplemented!()
-	}
+	fn set_status(_outcome: AsyncResult<VaultStatus<Self::ValidatorId>>);
 }
 
 /// Handler for Epoch life cycle events.
