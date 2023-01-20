@@ -317,33 +317,32 @@ benchmarks! {
 		));
 	}
 
-	rotation_phase_vaults_rotating_failure {
-		// o = number of offenders - can be at most 1/3 of the set size.
-		let o in 1 .. { 150 / 3 };
+	rotation_phase_activating_keys_success {
+		// a = authority set target size
+		let a in 3 .. 150;
 
-		// Set up a vault rotation.
-		start_vault_rotation::<T>(150, 50, 1);
+		start_vault_rotation::<T>(a, 50, 1);
 
-		// Simulate failure.
-		let offenders = bidder_set::<T, ValidatorIdOf<T>, _>(o, 1).collect::<BTreeSet<_>>();
-		T::VaultRotator::set_status(AsyncResult::Ready(VaultStatus::Failed(offenders.clone())));
+		let block = frame_system::Pallet::<T>::current_block_number();
 
-		// This assertion ensures we are using the correct weight parameters.
-		assert_eq!(offenders.len() as u32, o, "Incorrect weight parameters.");
+		assert!(matches!(CurrentRotationPhase::<T>::get(), RotationPhase::KeygensInProgress(..)));
+
+		T::VaultRotator::set_status(AsyncResult::Ready(VaultStatus::KeygenComplete));
+
+		Pallet::<T>::on_initialize(block);
+
+		T::VaultRotator::set_status(AsyncResult::Ready(VaultStatus::RotationComplete));
+
+		Pallet::<T>::on_initialize(block);
+
 	}: {
 		Pallet::<T>::on_initialize(1u32.into());
 	}
 	verify {
-		assert!(
-			matches!(
-				CurrentRotationPhase::<T>::get(),
-				RotationPhase::KeygensInProgress(rotation_state)
-					if rotation_state.authority_candidates::<BTreeSet<_>>().is_disjoint(
-						&offenders
-					)
-			),
-			"Offenders should not be authority candidates."
-		);
+		assert!(matches!(
+			CurrentRotationPhase::<T>::get(),
+			RotationPhase::NewKeysActivated(..)
+		));
 	}
 
 	/**** 3. RotationPhase::NewKeysActivated ****/
