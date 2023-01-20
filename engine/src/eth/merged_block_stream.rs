@@ -200,7 +200,7 @@ where
 			Some(block)
 		};
 
-		if let Some(block_header) = opt_block_header {
+		if opt_block_header.is_some() {
 			// yield, if we are at high enough block number
 			log_when_yielding(
 				protocol_state,
@@ -208,10 +208,9 @@ where
 				merged_stream_state,
 				block_number,
 			);
-			Ok(Some(block_header))
-		} else {
-			Ok(None)
 		}
+
+		Ok(opt_block_header)
 	}
 
 	Ok(Box::pin(stream::unfold(init_state, |mut stream_state| async move {
