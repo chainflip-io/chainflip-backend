@@ -46,7 +46,7 @@ pub async fn start<const N: usize>(
 
 					slog::trace!(
 						logger,
-						"Eth block witnessers process block {:?}",
+						"Eth block witnessers are processing block {:?}",
 						block.block_number
 					);
 
