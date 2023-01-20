@@ -18,7 +18,10 @@ use futures::{stream, Stream, StreamExt};
 use pallet_cf_ingress_egress::IngressWitness;
 use sp_runtime::MultiSignature;
 use state_chain_runtime::PolkadotInstance;
-use subxt::events::{Phase, StaticEvent};
+use subxt::{
+	config::Header,
+	events::{Phase, StaticEvent},
+};
 
 use crate::{
 	state_chain_observer::client::extrinsic_api::ExtrinsicApi,
