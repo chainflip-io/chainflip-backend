@@ -298,21 +298,20 @@ pub struct BlockWithItems<BlockItem: Debug> {
 	pub block_items: Vec<BlockItem>,
 }
 
-async fn eth_block_head_stream_from<BlockHeaderStream, EthRpc>(
+/// Same as [`safe_dual_block_subscription`] but prepends the stream with
+/// historical blocks from a given block number.
+pub async fn safe_dual_block_subscription_from(
 	from_block: u64,
-	safe_head_stream: BlockHeaderStream,
-	eth_rpc: EthRpc,
+	eth_dual_rpc: EthDualRpcClient,
 	logger: &slog::Logger,
-) -> Result<Pin<Box<dyn Stream<Item = EthNumberBloom> + Send + 'static>>>
-where
-	BlockHeaderStream: Stream<Item = EthNumberBloom> + 'static + Send,
-	EthRpc: 'static + EthRpcApi + Send + Sync + Clone,
-{
+) -> Result<Pin<Box<dyn Stream<Item = EthNumberBloom> + Send + 'static>>> {
+	let safe_head_stream = safe_dual_block_subscription(eth_dual_rpc.clone(), logger).await?;
+
 	block_head_stream_from(
 		from_block,
 		safe_head_stream,
 		move |block_number| {
-			let eth_rpc = eth_rpc.clone();
+			let eth_rpc = eth_dual_rpc.clone();
 			Box::pin(async move {
 				eth_rpc.block(U64::from(block_number)).await.and_then(|block| {
 					let number_bloom: Result<EthNumberBloom> =
@@ -324,18 +323,6 @@ where
 		logger,
 	)
 	.await
-}
-
-/// Same as [`safe_dual_block_subscription`] but prepends the stream with
-/// historical blocks from a given block number.
-pub async fn safe_dual_block_subscription_from(
-	from_block: u64,
-	eth_dual_rpc: EthDualRpcClient,
-	logger: &slog::Logger,
-) -> Result<Pin<Box<dyn Stream<Item = EthNumberBloom> + Send + 'static>>> {
-	let safe_head_stream = safe_dual_block_subscription(eth_dual_rpc.clone(), logger).await?;
-
-	eth_block_head_stream_from(from_block, safe_head_stream, eth_dual_rpc, logger).await
 }
 
 /// Returns a safe stream of blocks from the latest block onward,
