@@ -1,6 +1,6 @@
 use cf_primitives::{
-	liquidity::MintError, AmmRange, Asset, AssetAmount, BurnResult, ForeignChainAddress, Liquidity,
-	MintedLiquidity, PoolAssetMap, Tick,
+	AmmRange, Asset, AssetAmount, BurnResult, ForeignChainAddress, Liquidity, MintedLiquidity,
+	PoolAssetMap, Tick,
 };
 use frame_support::dispatch::DispatchError;
 use sp_runtime::DispatchResult;
@@ -61,7 +61,7 @@ pub trait LiquidityPoolApi<AccountId> {
 		asset: Asset,
 		range: AmmRange,
 		liquidity_amount: Liquidity,
-		balance_check_callback: impl FnOnce(PoolAssetMap<AssetAmount>) -> Result<(), MintError>,
+		try_debit: impl FnOnce(PoolAssetMap<AssetAmount>) -> Result<(), DispatchError>,
 	) -> Result<PoolAssetMap<AssetAmount>, DispatchError>;
 
 	/// Burn some liquidity from an exchange pool to withdraw assets.

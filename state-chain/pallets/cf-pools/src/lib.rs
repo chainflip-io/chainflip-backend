@@ -1,8 +1,10 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-use cf_amm::{CreatePoolError, PoolState, PositionError, MAX_FEE_100TH_BIPS, MAX_TICK, MIN_TICK};
+use cf_amm::{
+	CreatePoolError, MintError, PoolState, PositionError, MAX_FEE_100TH_BIPS, MAX_TICK, MIN_TICK,
+};
 use cf_primitives::{
-	chains::assets::any, liquidity::MintError, AccountId, AmmRange, AmountU256, AssetAmount,
-	BurnResult, Liquidity, MintedLiquidity, PoolAssetMap, Tick,
+	chains::assets::any, AccountId, AmmRange, AmountU256, AssetAmount, BurnResult, Liquidity,
+	MintedLiquidity, PoolAssetMap, Tick,
 };
 use cf_traits::{Chainflip, LiquidityPoolApi, SwappingApi};
 use frame_support::{pallet_prelude::*, transactional};
@@ -313,29 +315,30 @@ impl<T: Config> LiquidityPoolApi<AccountId> for Pallet<T> {
 		asset: any::Asset,
 		range: AmmRange,
 		liquidity_amount: Liquidity,
-		should_mint: impl FnOnce(PoolAssetMap<AssetAmount>) -> Result<(), MintError>,
+		try_debit: impl FnOnce(PoolAssetMap<AssetAmount>) -> Result<(), DispatchError>,
 	) -> Result<PoolAssetMap<AssetAmount>, DispatchError> {
 		Pools::<T>::try_mutate(asset, |maybe_pool| {
 			if let Some(pool) = maybe_pool.as_mut() {
 				ensure!(pool.pool_enabled(), Error::<T>::PoolDisabled);
 
-				let should_mint_u256 = |amount: PoolAssetMap<AmountU256>| -> Result<(), MintError> {
-					should_mint(
+				let try_debit_u256 = |amount: PoolAssetMap<AmountU256>| {
+					try_debit(
 						amount
 							.try_into()
 							.expect("Mint required asset amounts must be less than u128::MAX"),
 					)
 				};
 
-				let assets_spent_u256: PoolAssetMap<AmountU256> = pool
-					.mint(lp.clone(), range.lower, range.upper, liquidity_amount, should_mint_u256)
+				let (required_assets, earned_fees) = pool
+					.mint(lp.clone(), range.lower, range.upper, liquidity_amount, try_debit_u256)
 					.map_err(|e| match e {
-						MintError::InvalidTickRange => Error::<T>::InvalidTickRange,
-						MintError::MaximumGrossLiquidity => Error::<T>::MaximumGrossLiquidity,
-						MintError::InsufficientBalance => Error::<T>::InsufficientBalance,
+						MintError::InvalidTickRange => Error::<T>::InvalidTickRange.into(),
+						MintError::MaximumGrossLiquidity =>
+							Error::<T>::MaximumGrossLiquidity.into(),
+						MintError::CallbackError(e) => e,
 					})?;
 
-				let assets_debited = assets_spent_u256
+				let assets_debited = required_assets
 					.try_into()
 					.expect("Mint required asset amounts must be less than u128::MAX");
 				Self::deposit_event(Event::<T>::LiquidityMinted {
@@ -346,7 +349,7 @@ impl<T: Config> LiquidityPoolApi<AccountId> for Pallet<T> {
 					assets_debited,
 				});
 
-				Ok(assets_debited)
+				Ok(earned_fees)
 			} else {
 				Err(Error::<T>::PoolDoesNotExist.into())
 			}

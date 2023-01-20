@@ -24,7 +24,7 @@ use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 
 use cf_primitives::{
-	liquidity::{AmountU256, Liquidity, MintError, MintedLiquidity, PoolAssetMap, PoolSide, Tick},
+	liquidity::{AmountU256, Liquidity, MintedLiquidity, PoolAssetMap, PoolSide, Tick},
 	AccountId, AmmRange,
 };
 use sp_core::{U256, U512};
@@ -290,6 +290,16 @@ pub enum PositionError {
 }
 
 #[derive(Debug)]
+pub enum MintError<E> {
+	/// Invalid Tick range
+	InvalidTickRange,
+	/// One of the start/end ticks of the range reached its maximum gross liquidity
+	MaximumGrossLiquidity,
+	/// The provided callback function didn't succeed.
+	CallbackError(E),
+}
+
+#[derive(Debug)]
 pub enum CollectError {}
 
 #[derive(Debug, TypeInfo, PartialEq, Eq, Encode, Decode)]
@@ -382,14 +392,14 @@ impl PoolState {
 	/// This function never panics
 	///
 	/// If this function returns an `Err(_)` no state changes have occurred
-	pub fn mint(
+	pub fn mint<E>(
 		&mut self,
 		lp: AccountId,
 		lower_tick: Tick,
 		upper_tick: Tick,
 		minted_liquidity: Liquidity,
-		should_mint: impl FnOnce(PoolAssetMap<AmountU256>) -> Result<(), MintError>,
-	) -> Result<(PoolAssetMap<AmountU256>, PoolAssetMap<u128>), MintError> {
+		try_debit: impl FnOnce(PoolAssetMap<AmountU256>) -> Result<(), E>,
+	) -> Result<(PoolAssetMap<AmountU256>, PoolAssetMap<u128>), MintError<E>> {
 		if (lower_tick > upper_tick) || (lower_tick < MIN_TICK) && (upper_tick > MAX_TICK) {
 			return Err(MintError::InvalidTickRange)
 		}
@@ -455,7 +465,7 @@ impl PoolState {
 		let (amounts_required, current_liquidity_delta) =
 			self.liquidity_to_amounts::<true>(minted_liquidity, lower_tick, upper_tick);
 
-		should_mint(amounts_required)?;
+		try_debit(amounts_required).map_err(MintError::CallbackError)?;
 		self.current_liquidity += current_liquidity_delta;
 		self.positions.insert((lp, lower_tick, upper_tick), position);
 		self.liquidity_map.insert(lower_tick, lower_info);

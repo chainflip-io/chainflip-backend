@@ -127,13 +127,3 @@ impl BurnResult {
 		Self { assets_returned, fees_accrued }
 	}
 }
-
-#[derive(Debug)]
-pub enum MintError {
-	/// Invalid Tick range
-	InvalidTickRange,
-	/// One of the start/end ticks of the range reached its maximum gross liquidity
-	MaximumGrossLiquidity,
-	/// The user does not have sufficient balance to pay for the mint.
-	InsufficientBalance,
-}

@@ -10,7 +10,6 @@ use sp_std::cmp::{Ord, Ordering};
 
 use cf_chains::AnyChain;
 use cf_primitives::{
-	liquidity::{MintError, PoolAssetMap},
 	AmmRange, Asset, AssetAmount, ForeignChain, ForeignChainAddress, IntentId, Liquidity, PoolSide,
 };
 use cf_traits::{
@@ -248,43 +247,35 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	fn check_can_withdraw(account_id: &T::AccountId, asset: Asset, amount: AssetAmount) -> bool {
-		FreeBalances::<T>::get(account_id, asset).unwrap_or_default() >= amount
-	}
-
 	pub fn mint_liquidity(
 		account_id: T::AccountId,
 		asset: Asset,
 		range: AmmRange,
 		liquidity_amount: Liquidity,
 	) -> DispatchResult {
-		let checking_function = |asset_map: PoolAssetMap<AssetAmount>| -> Result<(), MintError> {
-			// Check user has enough funds for both assets
-			(Self::check_can_withdraw(&account_id, asset, asset_map[PoolSide::Asset0]) &&
-				Self::check_can_withdraw(
-					&account_id,
-					T::LiquidityPoolApi::STABLE_ASSET,
-					asset_map[PoolSide::Asset1],
-				))
-			.then_some(())
-			.ok_or(MintError::InsufficientBalance)
-		};
-
-		let amount_to_be_debited = T::LiquidityPoolApi::mint(
+		let earned_fees = T::LiquidityPoolApi::mint(
 			account_id.clone(),
 			asset,
 			range,
 			liquidity_amount,
-			checking_function,
+			|amount_to_be_debited| {
+				Self::try_debit(&account_id, asset, amount_to_be_debited[PoolSide::Asset0])?;
+				Self::try_debit(
+					&account_id,
+					T::LiquidityPoolApi::STABLE_ASSET,
+					amount_to_be_debited[PoolSide::Asset1],
+				)?;
+				Ok(())
+			},
 		)?;
 
-		// Debit the user's asset from their account.
-		Self::try_debit(&account_id, asset, amount_to_be_debited[PoolSide::Asset0])?;
-		Self::try_debit(
+		Self::credit(&account_id, asset, earned_fees[PoolSide::Asset0])?;
+		Self::credit(
 			&account_id,
 			T::LiquidityPoolApi::STABLE_ASSET,
-			amount_to_be_debited[PoolSide::Asset1],
-		)
+			earned_fees[PoolSide::Asset1],
+		)?;
+		Ok(())
 	}
 
 	pub fn burn_liquidity(
