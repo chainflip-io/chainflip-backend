@@ -50,10 +50,12 @@ pub async fn start<const N: usize>(
 						block.block_number
 					);
 
-					// TODO: run these in parallel
-					for witnesser in &mut witnessers {
-						witnesser.process_block(&epoch, &block).await?;
-					}
+					futures::future::join_all(
+						witnessers.iter_mut().map(|w| w.process_block(&epoch, &block)),
+					)
+					.await
+					.into_iter()
+					.collect::<anyhow::Result<Vec<()>>>()?;
 				}
 
 				Ok(witnessers)
