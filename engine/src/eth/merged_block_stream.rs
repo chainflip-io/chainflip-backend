@@ -157,17 +157,14 @@ where
 		}
 	}
 
-	// Returns Error if:
-	// 1. the protocol stream does not return a contiguous sequence of blocks
-	// 2. the protocol streams have not started at the same block
-	// When returning Ok, will return None if:
-	// 1. the protocol stream is behind the next block to yield p
+	// When returning Ok, will return None if the protocol
+	// stream is behind the next block to yield
 	async fn on_block_for_protocol<Block: HasBlockNumber>(
 		merged_stream_state: &mut MergedStreamState,
 		protocol_state: &mut ProtocolState,
 		other_protocol_state: &ProtocolState,
 		block: Block,
-	) -> Result<Option<Block>> {
+	) -> Option<Block> {
 		let next_block_to_yield = merged_stream_state.last_block_yielded + 1;
 		let merged_has_yielded = merged_stream_state.last_block_yielded != 0;
 		let has_pulled = protocol_state.last_block_pulled != 0;
@@ -210,7 +207,7 @@ where
 			);
 		}
 
-		Ok(opt_block_header)
+		opt_block_header
 	}
 
 	Ok(Box::pin(stream::unfold(init_state, |mut stream_state| async move {
@@ -219,7 +216,7 @@ where
 		} = &mut stream_state;
 
 		loop {
-			let next_block = tokio::select! {
+			if let Some(block) = tokio::select! {
 				Some(block_header) = ws_stream.next() => {
 					on_block_for_protocol(merged_stream_state, ws_state, http_state, block_header).await
 				}
@@ -227,22 +224,9 @@ where
 					on_block_for_protocol(merged_stream_state, http_state, ws_state, block_header).await
 				}
 				else => break None
-			};
-
-			match next_block {
-				Ok(opt_block) =>
-					if let Some(block) = opt_block {
-						stream_state.merged_stream_state.last_block_yielded = block.block_number();
-						break Some((block, stream_state))
-					},
-				Err(err) => {
-					slog::error!(
-						stream_state.merged_stream_state.logger,
-						"Terminating ETH merged block stream due to error: {}",
-						err
-					);
-					break None
-				},
+			} {
+				stream_state.merged_stream_state.last_block_yielded = block.block_number();
+				break Some((block, stream_state))
 			}
 		}
 	})))
