@@ -102,6 +102,10 @@ impl WeightInfo for MockWeightInfo {
 	fn execute_group_of_swaps(_a: u32) -> Weight {
 		Weight::from_ref_time(100)
 	}
+
+	fn withdrawal() -> Weight {
+		Weight::from_ref_time(100)
+	}
 }
 
 impl pallet_cf_swapping::Config for Test {
