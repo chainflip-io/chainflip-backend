@@ -3,7 +3,10 @@ use cf_chains::Ethereum;
 use futures::StreamExt;
 
 use super::{rpc::EthDualRpcClient, safe_dual_block_subscription_from, EthNumberBloom};
-use crate::witnesser::{epoch_witnesser, EpochStart};
+use crate::witnesser::{
+	checkpointing::{start_checkpointing_for, WitnessedUntil},
+	epoch_witnesser, EpochStart,
+};
 
 #[async_trait]
 pub trait BlockProcessor: Send {
@@ -28,9 +31,24 @@ pub async fn start<const N: usize>(
 		move |end_witnessing_signal, epoch, mut witnessers, logger| {
 			let eth_rpc = eth_rpc.clone();
 			async move {
+				let (witnessed_until, witnessed_until_sender) =
+					start_checkpointing_for("block-head", &logger).await;
+
+				// Don't witness epochs that we've already witnessed
+				if epoch.epoch_index < witnessed_until.epoch_index {
+					return Ok(witnessers)
+				}
+
+				let from_block = if witnessed_until.epoch_index == epoch.epoch_index {
+					// Start where we left off
+					witnessed_until.block_number
+				} else {
+					// We haven't witnessed this epoch yet, so start from the beginning
+					epoch.block_number
+				};
+
 				let mut block_stream =
-					safe_dual_block_subscription_from(epoch.block_number, eth_rpc.clone(), &logger)
-						.await?;
+					safe_dual_block_subscription_from(from_block, eth_rpc.clone(), &logger).await?;
 
 				while let Some(block) = block_stream.next().await {
 					if let Some(end_block) = *end_witnessing_signal.lock().unwrap() {
@@ -56,6 +74,13 @@ pub async fn start<const N: usize>(
 					.await
 					.into_iter()
 					.collect::<anyhow::Result<Vec<()>>>()?;
+
+					witnessed_until_sender
+						.send(WitnessedUntil {
+							epoch_index: epoch.epoch_index,
+							block_number: epoch.block_number,
+						})
+						.unwrap();
 				}
 
 				Ok(witnessers)
