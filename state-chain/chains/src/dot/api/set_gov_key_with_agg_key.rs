@@ -19,7 +19,7 @@ use crate::{
 pub struct ChangeGovKey {
 	pub extrinsic_handler: PolkadotExtrinsicBuilder,
 	/// The current proxy AccountId
-	pub old_key: PolkadotPublicKey,
+	pub old_key: Option<PolkadotPublicKey>,
 	/// The current proxy AccountId
 	pub new_key: PolkadotPublicKey,
 	/// The vault anonymous Polkadot AccountId
@@ -29,7 +29,7 @@ pub struct ChangeGovKey {
 impl ChangeGovKey {
 	pub fn new_unsigned(
 		replay_protection: PolkadotReplayProtection,
-		old_key: PolkadotPublicKey,
+		old_key: Option<PolkadotPublicKey>,
 		new_key: PolkadotPublicKey,
 		vault_account: PolkadotAccountId,
 	) -> Self {
@@ -62,22 +62,35 @@ impl ChangeGovKey {
 			real: PolkadotAccountIdLookup::from(self.vault_account.clone()),
 			force_proxy_type: Some(PolkadotProxyType::Any),
 			call: Box::new(PolkadotRuntimeCall::Utility(UtilityCall::batch_all {
-				calls: vec![
-					PolkadotRuntimeCall::Proxy(ProxyCall::add_proxy {
+				calls: if self.old_key.is_some() {
+					vec![
+						PolkadotRuntimeCall::Proxy(ProxyCall::add_proxy {
+							delegate: PolkadotAccountIdLookup::from(
+								MultiSigner::Sr25519(self.new_key.0).into_account(),
+							),
+							proxy_type: PolkadotProxyType::Any,
+							delay: 0,
+						}),
+						PolkadotRuntimeCall::Proxy(ProxyCall::remove_proxy {
+							delegate: PolkadotAccountIdLookup::from(
+								MultiSigner::Sr25519(
+									self.old_key.expect("old key to be available").0,
+								)
+								.into_account(),
+							),
+							proxy_type: PolkadotProxyType::Any,
+							delay: 0,
+						}),
+					]
+				} else {
+					vec![PolkadotRuntimeCall::Proxy(ProxyCall::add_proxy {
 						delegate: PolkadotAccountIdLookup::from(
 							MultiSigner::Sr25519(self.new_key.0).into_account(),
 						),
 						proxy_type: PolkadotProxyType::Any,
 						delay: 0,
-					}),
-					PolkadotRuntimeCall::Proxy(ProxyCall::remove_proxy {
-						delegate: PolkadotAccountIdLookup::from(
-							MultiSigner::Sr25519(self.old_key.0).into_account(),
-						),
-						proxy_type: PolkadotProxyType::Any,
-						delay: 0,
-					}),
-				],
+					})]
+				},
 			})),
 		})
 	}

@@ -58,10 +58,14 @@ where
 	type AddressType = PolkadotPublicKey;
 	fn new_unsigned(maybe_old_key: Option<Vec<u8>>, new_key: Vec<u8>) -> Result<Self, ()> {
 		let vault = E::lookup(SystemAccounts::Vault).ok_or(())?;
+		let old_key = match maybe_old_key {
+			Some(old_key) => Some(old_key.try_into()?),
+			None => None,
+		};
 		Ok(Self::ChangeGovKey(set_gov_key_with_agg_key::ChangeGovKey::new_unsigned(
 			E::replay_protection(),
-			maybe_old_key.unwrap().try_into().unwrap(),
-			new_key.try_into().unwrap(),
+			old_key,
+			new_key.try_into()?,
 			vault,
 		)))
 	}

@@ -100,7 +100,13 @@ impl_mock_stake_transfer!(AccountId, u128);
 pub struct MockKeyBroadcaster;
 
 impl BroadcastAnyChainGovKey for MockKeyBroadcaster {
-	fn broadcast(_chain: cf_chains::ForeignChain, _old_key: Option<Vec<u8>>, _new_key: Vec<u8>) {}
+	fn broadcast(
+		_chain: cf_chains::ForeignChain,
+		_old_key: Option<Vec<u8>>,
+		_new_key: Vec<u8>,
+	) -> Result<(), ()> {
+		Ok(())
+	}
 }
 
 impl BroadcastComKey for MockKeyBroadcaster {

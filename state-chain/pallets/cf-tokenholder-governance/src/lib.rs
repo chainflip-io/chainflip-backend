@@ -26,6 +26,7 @@ pub enum Proposal {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use crate::Event::{GovKeyUpdatedHasFailed, GovKeyUpdatedWasSuccessful};
 	use cf_traits::{BroadcastComKey, Chainflip, FeePayment, StakingInfo};
 
 	use crate::pallet::Proposal::{SetCommunityKey, SetGovernanceKey};
@@ -91,7 +92,7 @@ pub mod pallet {
 
 	/// The current Polkadot GOV key
 	#[pallet::storage]
-	pub type PolkadotGovKey<T> = StorageValue<_, Vec<u8>, ValueQuery>;
+	pub type GovKeys<T> = StorageMap<_, Twox64Concat, ForeignChain, Vec<u8>>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -104,6 +105,10 @@ pub mod pallet {
 		ProposalRejected { proposal: Proposal },
 		/// A proposal was enacted.
 		ProposalEnacted { proposal: Proposal },
+		/// Update of GOV key has failed.
+		GovKeyUpdatedHasFailed { chain: ForeignChain, key: Vec<u8> },
+		/// Update of GOV key was successful.
+		GovKeyUpdatedWasSuccessful { chain: ForeignChain, key: Vec<u8> },
 	}
 
 	#[pallet::error]
@@ -128,14 +133,30 @@ pub mod pallet {
 				if enactment_block == current_block {
 					match chain {
 						cf_chains::ForeignChain::Ethereum => {
-							T::AnyChainGovKeyBroadcaster::broadcast(
+							// We can not fail for eth here.
+							let _ = T::AnyChainGovKeyBroadcaster::broadcast(
 								cf_chains::ForeignChain::Ethereum,
 								None,
 								key.clone(),
 							);
 						},
 						cf_chains::ForeignChain::Polkadot => {
-							Self::broadcast_dot_gov_key(key.clone());
+							if let Ok(_) = T::AnyChainGovKeyBroadcaster::broadcast(
+								cf_chains::ForeignChain::Polkadot,
+								GovKeys::<T>::get(ForeignChain::Polkadot),
+								key.clone(),
+							) {
+								GovKeys::<T>::insert(ForeignChain::Polkadot, key.clone());
+								Self::deposit_event(GovKeyUpdatedWasSuccessful {
+									chain: ForeignChain::Polkadot,
+									key: key.clone(),
+								});
+							} else {
+								Self::deposit_event(GovKeyUpdatedHasFailed {
+									chain: ForeignChain::Polkadot,
+									key: key.clone(),
+								});
+							}
 						},
 					};
 					Self::deposit_event(Event::<T>::ProposalEnacted {
@@ -215,16 +236,6 @@ pub mod pallet {
 	}
 
 	impl<T: Config> Pallet<T> {
-		pub fn broadcast_dot_gov_key(key: Vec<u8>) {
-			let old_key = PolkadotGovKey::<T>::take();
-			T::AnyChainGovKeyBroadcaster::broadcast(
-				cf_chains::ForeignChain::Polkadot,
-				Some(old_key),
-				key.clone(),
-			);
-			PolkadotGovKey::<T>::put(key);
-		}
-
 		pub fn resolve_vote(proposal: Proposal) -> usize {
 			let backers = Backers::<T>::take(&proposal);
 			Self::deposit_event(

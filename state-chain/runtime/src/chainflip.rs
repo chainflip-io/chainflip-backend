@@ -318,19 +318,22 @@ impl EgressApi<AnyChain> for AnyChainIngressEgressHandler {
 pub struct TokenholderGovBroadcaster;
 
 impl BroadcastAnyChainGovKey for TokenholderGovBroadcaster {
-	fn broadcast(chain: ForeignChain, old_key: Option<Vec<u8>>, new_key: Vec<u8>) {
+	fn broadcast(
+		chain: ForeignChain,
+		old_key: Option<Vec<u8>>,
+		new_key: Vec<u8>,
+	) -> Result<(), ()> {
 		match chain {
 			ForeignChain::Ethereum => {
-				let api_call =
-					SetGovKeyWithAggKey::<Ethereum>::new_unsigned(None, new_key).unwrap();
-				EthereumBroadcaster::threshold_sign_and_broadcast(api_call);
+				let api_call = SetGovKeyWithAggKey::<Ethereum>::new_unsigned(None, new_key)?;
+				EthereumBroadcaster::threshold_sign_and_broadcast(api_call)
 			},
 			ForeignChain::Polkadot => {
-				let api_call =
-					SetGovKeyWithAggKey::<Polkadot>::new_unsigned(old_key, new_key).unwrap();
-				PolkadotBroadcaster::threshold_sign_and_broadcast(api_call);
+				let api_call = SetGovKeyWithAggKey::<Polkadot>::new_unsigned(old_key, new_key)?;
+				PolkadotBroadcaster::threshold_sign_and_broadcast(api_call)
 			},
-		}
+		};
+		Ok(())
 	}
 }
 

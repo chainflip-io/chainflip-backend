@@ -788,7 +788,8 @@ pub trait VaultKeyWitnessedHandler<C: ChainAbi> {
 }
 
 pub trait BroadcastAnyChainGovKey {
-	fn broadcast(chain: ForeignChain, old_key: Option<Vec<u8>>, new_key: Vec<u8>);
+	fn broadcast(chain: ForeignChain, old_key: Option<Vec<u8>>, new_key: Vec<u8>)
+		-> Result<(), ()>;
 }
 
 pub trait BroadcastComKey {
