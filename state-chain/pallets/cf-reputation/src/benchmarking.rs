@@ -29,10 +29,6 @@ benchmarks! {
 			Penalty { reputation: new_reputation_penalty, suspension: heartbeat_block_interval }
 		);
 	}
-	on_runtime_upgrade {
-	} : {
-		<Pallet::<T> as Hooks<_>>::on_runtime_upgrade();
-	}
 	heartbeat {
 		let caller: T::AccountId = whitelisted_caller();
 		let validator_id: T::ValidatorId = caller.clone().into();
