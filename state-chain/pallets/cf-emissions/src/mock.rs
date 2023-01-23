@@ -242,7 +242,7 @@ impl pallet_cf_emissions::Config for Test {
 	type CompoundingInterval = HeartbeatBlockInterval;
 	type EthEnvironmentProvider = MockEthEnvironmentProvider;
 	type Broadcaster = MockBroadcast;
-	type WeightInfo = ();
+	type EmissionsWeightInfo = ();
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type FlipToBurn = MockFlipToBurn;
 	type EgressHandler = MockEgressHandler<AnyChain>;

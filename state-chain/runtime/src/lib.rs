@@ -516,7 +516,7 @@ impl pallet_cf_emissions::Config for Runtime {
 	type RewardsDistribution = chainflip::BlockAuthorRewardDistribution;
 	type CompoundingInterval = ConstU32<COMPOUNDING_INTERVAL>;
 	type EthEnvironmentProvider = Environment;
-	type WeightInfo = pallet_cf_emissions::weights::PalletWeight<Runtime>;
+	type EmissionsWeightInfo = pallet_cf_emissions::weights::PalletWeight<Runtime>;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type FlipToBurn = LiquidityPools;
 	type EgressHandler = chainflip::AnyChainIngressEgressHandler;
