@@ -26,6 +26,10 @@ where
 {
 	CurrentAuthorities::<T>::put(authorities.clone().collect::<Vec<_>>());
 	for validator_id in authorities {
+		<T as pallet_cf_reputation::Config>::AccountRoleRegistry::register_account(
+			validator_id.clone().into(),
+			AccountRole::Validator,
+		);
 		let account_id = validator_id.into_ref();
 		whitelist_account!(account_id);
 		assert_ok!(pallet_cf_reputation::Pallet::<T>::heartbeat(
@@ -72,6 +76,7 @@ benchmarks_instance_pallet! {
 		<T as pallet::Config<I>>::AccountRoleRegistry::register_account(account, AccountRole::Validator);
 		let offenders = BTreeSet::from_iter(threshold_set.take(a as usize));
 	} : _(RawOrigin::Signed(reporter.into()), ceremony_id, offenders)
+	// TODO: Could be removed?
 	determine_offenders {
 		let a in 1 .. 200;
 
@@ -138,7 +143,6 @@ benchmarks_instance_pallet! {
 			0_usize,
 		);
 	}
-
 	// The above benchmark results in retries without any blamed parties. This benchmark allows us to account for
 	// blame reports.
 	report_offenders {
