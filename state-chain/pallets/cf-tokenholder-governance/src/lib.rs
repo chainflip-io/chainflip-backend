@@ -140,12 +140,14 @@ pub mod pallet {
 								key.clone(),
 							);
 						},
-						cf_chains::ForeignChain::Polkadot => {
-							if let Ok(_) = T::AnyChainGovKeyBroadcaster::broadcast(
+						cf_chains::ForeignChain::Polkadot =>
+							if T::AnyChainGovKeyBroadcaster::broadcast(
 								cf_chains::ForeignChain::Polkadot,
 								GovKeys::<T>::get(ForeignChain::Polkadot),
 								key.clone(),
-							) {
+							)
+							.is_ok()
+							{
 								GovKeys::<T>::insert(ForeignChain::Polkadot, key.clone());
 								Self::deposit_event(GovKeyUpdatedWasSuccessful {
 									chain: ForeignChain::Polkadot,
@@ -156,8 +158,7 @@ pub mod pallet {
 									chain: ForeignChain::Polkadot,
 									key: key.clone(),
 								});
-							}
-						},
+							},
 					};
 					Self::deposit_event(Event::<T>::ProposalEnacted {
 						proposal: Proposal::SetGovernanceKey((chain, key)),
