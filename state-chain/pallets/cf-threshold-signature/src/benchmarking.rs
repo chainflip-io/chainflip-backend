@@ -76,31 +76,6 @@ benchmarks_instance_pallet! {
 		<T as pallet::Config<I>>::AccountRoleRegistry::register_account(account, AccountRole::Validator);
 		let offenders = BTreeSet::from_iter(threshold_set.take(a as usize));
 	} : _(RawOrigin::Signed(reporter.into()), ceremony_id, offenders)
-	// TODO: Could be removed?
-	determine_offenders {
-		let a in 1 .. 200;
-
-		// Worst case: 1/2 of participants failed.
-		let blame_counts = (0..a / 2)
-			.map(|i| account::<<T as Chainflip>::ValidatorId>("signers", i, SEED))
-			.map(|id| (id, a))
-			.collect();
-
-		let completed_response_context = CeremonyContext::<T, I> {
-			request_context: RequestContext {
-				request_id: 1,
-				attempt_count: 0,
-				payload: PayloadFor::<T, I>::benchmark_value(),
-			},
-			threshold_ceremony_type: ThresholdCeremonyType::Standard,
-			remaining_respondents:Default::default(),
-			blame_counts,
-			participant_count:a,
-			key_id: <T as Chainflip>::KeyId::benchmark_value(),
-		};
-	} : {
-		let _ = completed_response_context.offenders();
-	}
 	set_threshold_signature_timeout {
 		let old_timeout: T::BlockNumber = 5u32.into();
 		ThresholdSignatureResponseTimeout::<T, I>::put(old_timeout);
