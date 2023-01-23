@@ -288,15 +288,7 @@ impl<T: Config> Pallet<T> {
 	fn should_update_supply_at(block_number: T::BlockNumber) -> bool {
 		let supply_update_interval = SupplyUpdateInterval::<T>::get();
 		let blocks_elapsed = block_number - LastSupplyUpdateBlock::<T>::get();
-		Self::should_update_supply(blocks_elapsed, supply_update_interval)
-	}
-
-	/// Checks if we should broadcast supply update.
-	fn should_update_supply(
-		blocks_elapsed_since_last_supply_update: T::BlockNumber,
-		supply_update_interval: T::BlockNumber,
-	) -> bool {
-		blocks_elapsed_since_last_supply_update >= supply_update_interval
+		blocks_elapsed >= supply_update_interval
 	}
 
 	/// Updates the total supply on the ETH blockchain

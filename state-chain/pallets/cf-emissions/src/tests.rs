@@ -11,18 +11,6 @@ use cf_chains::AnyChain;
 type Emissions = Pallet<Test>;
 
 #[test]
-fn test_should_mint() {
-	// If supply_update_interval is zero, we mint on every block.
-	assert!(Emissions::should_update_supply(0, 0));
-	assert!(Emissions::should_update_supply(1, 0));
-	// If not enough blocks have elapsed we don't broadcast supply update.
-	assert!(!Emissions::should_update_supply(0, 1));
-	// If we are at or above the supply_update_interval, we broadcast supply update.
-	assert!(Emissions::should_update_supply(1, 1));
-	assert!(Emissions::should_update_supply(2, 1));
-}
-
-#[test]
 fn test_should_mint_at() {
 	new_test_ext(vec![], None).execute_with(|| {
 		// It has been `SUPPLY_UPDATE_INTERVAL` blocks since the last broadcast.
