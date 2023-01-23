@@ -1,8 +1,10 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-use cf_amm::{CreatePoolError, PoolState, PositionError, MAX_FEE_100TH_BIPS, MAX_TICK, MIN_TICK};
+use cf_amm::{
+	CreatePoolError, MintError, PoolState, PositionError, MAX_FEE_100TH_BIPS, MAX_TICK, MIN_TICK,
+};
 use cf_primitives::{
-	chains::assets::any, liquidity::MintError, AccountId, AmmRange, AmountU256, AssetAmount,
-	BurnResult, Liquidity, MintedLiquidity, PoolAssetMap, Tick,
+	chains::assets::any, AccountId, AmmRange, AmountU256, AssetAmount, BurnResult, Liquidity,
+	MintedLiquidity, PoolAssetMap, Tick,
 };
 use cf_traits::{Chainflip, LiquidityPoolApi, SwappingApi};
 use frame_support::{pallet_prelude::*, transactional};
@@ -127,8 +129,6 @@ pub mod pallet {
 		PositionLacksLiquidity,
 		/// The user's position does not exist.
 		PositionDoesNotExist,
-		/// The user does not have enough balance to mint liquidity.
-		InsufficientBalance,
 	}
 
 	#[pallet::event]
@@ -152,6 +152,7 @@ pub mod pallet {
 			range: AmmRange,
 			minted_liquidity: Liquidity,
 			assets_debited: PoolAssetMap<AssetAmount>,
+			fees_harvested: PoolAssetMap<AssetAmount>,
 		},
 		LiquidityBurned {
 			lp: AccountId,
@@ -159,13 +160,7 @@ pub mod pallet {
 			range: AmmRange,
 			burnt_liquidity: Liquidity,
 			assets_returned: PoolAssetMap<AssetAmount>,
-			fee_yielded: PoolAssetMap<AssetAmount>,
-		},
-		FeeCollected {
-			lp: AccountId,
-			asset: any::Asset,
-			range: AmmRange,
-			fee_yielded: PoolAssetMap<AssetAmount>,
+			fees_harvested: PoolAssetMap<AssetAmount>,
 		},
 		NetworkFeeTaken {
 			fee_amount: AssetAmount,
@@ -305,37 +300,35 @@ impl<T: Config> SwappingApi for Pallet<T> {
 impl<T: Config> LiquidityPoolApi<AccountId> for Pallet<T> {
 	const STABLE_ASSET: any::Asset = STABLE_ASSET;
 
-	/// Deposit up to some amount of assets into an exchange pool. Minting some "Liquidity".
-	///
-	/// Returns the actual token amounts minted.
 	fn mint(
 		lp: AccountId,
 		asset: any::Asset,
 		range: AmmRange,
 		liquidity_amount: Liquidity,
-		should_mint: impl FnOnce(PoolAssetMap<AssetAmount>) -> Result<(), MintError>,
+		try_debit: impl FnOnce(PoolAssetMap<AssetAmount>) -> Result<(), DispatchError>,
 	) -> Result<PoolAssetMap<AssetAmount>, DispatchError> {
 		Pools::<T>::try_mutate(asset, |maybe_pool| {
 			if let Some(pool) = maybe_pool.as_mut() {
 				ensure!(pool.pool_enabled(), Error::<T>::PoolDisabled);
 
-				let should_mint_u256 = |amount: PoolAssetMap<AmountU256>| -> Result<(), MintError> {
-					should_mint(
+				let try_debit_u256 = |amount: PoolAssetMap<AmountU256>| {
+					try_debit(
 						amount
 							.try_into()
 							.expect("Mint required asset amounts must be less than u128::MAX"),
 					)
 				};
 
-				let assets_spent_u256: PoolAssetMap<AmountU256> = pool
-					.mint(lp.clone(), range.lower, range.upper, liquidity_amount, should_mint_u256)
+				let (assets_debited, fees_harvested) = pool
+					.mint(lp.clone(), range.lower, range.upper, liquidity_amount, try_debit_u256)
 					.map_err(|e| match e {
-						MintError::InvalidTickRange => Error::<T>::InvalidTickRange,
-						MintError::MaximumGrossLiquidity => Error::<T>::MaximumGrossLiquidity,
-						MintError::InsufficientBalance => Error::<T>::InsufficientBalance,
+						MintError::InvalidTickRange => Error::<T>::InvalidTickRange.into(),
+						MintError::MaximumGrossLiquidity =>
+							Error::<T>::MaximumGrossLiquidity.into(),
+						MintError::CallbackError(e) => e,
 					})?;
 
-				let assets_debited = assets_spent_u256
+				let assets_debited = assets_debited
 					.try_into()
 					.expect("Mint required asset amounts must be less than u128::MAX");
 				Self::deposit_event(Event::<T>::LiquidityMinted {
@@ -344,17 +337,16 @@ impl<T: Config> LiquidityPoolApi<AccountId> for Pallet<T> {
 					range,
 					minted_liquidity: liquidity_amount,
 					assets_debited,
+					fees_harvested,
 				});
 
-				Ok(assets_debited)
+				Ok(fees_harvested)
 			} else {
 				Err(Error::<T>::PoolDoesNotExist.into())
 			}
 		})
 	}
 
-	/// Burn some liquidity from an exchange pool to withdraw assets.
-	/// Returns Ok((assets_retrieved, fee_accrued))
 	fn burn(
 		lp: AccountId,
 		asset: any::Asset,
@@ -365,7 +357,10 @@ impl<T: Config> LiquidityPoolApi<AccountId> for Pallet<T> {
 			if let Some(pool) = maybe_pool.as_mut() {
 				ensure!(pool.pool_enabled(), Error::<T>::PoolDisabled);
 
-				let (assets_returned_u256, fees): (PoolAssetMap<AmountU256>, PoolAssetMap<u128>) =
+				let (assets_returned_u256, fees_harvested): (
+					PoolAssetMap<AmountU256>,
+					PoolAssetMap<u128>,
+				) =
 					pool.burn(lp.clone(), range.lower, range.upper, burnt_liquidity).map_err(
 						|e| match e {
 							PositionError::NonExistent => Error::<T>::PositionDoesNotExist,
@@ -383,47 +378,16 @@ impl<T: Config> LiquidityPoolApi<AccountId> for Pallet<T> {
 					range,
 					burnt_liquidity,
 					assets_returned,
-					fee_yielded: fees,
+					fees_harvested,
 				});
 
-				Ok(BurnResult::new(assets_returned, fees))
+				Ok(BurnResult::new(assets_returned, fees_harvested))
 			} else {
 				Err(Error::<T>::PoolDoesNotExist.into())
 			}
 		})
 	}
 
-	/// Returns and resets fees accrued in user's position.
-	fn collect(
-		lp: AccountId,
-		asset: any::Asset,
-		range: AmmRange,
-	) -> Result<PoolAssetMap<AssetAmount>, DispatchError> {
-		Pools::<T>::try_mutate(asset, |maybe_pool| {
-			if let Some(pool) = maybe_pool.as_mut() {
-				ensure!(pool.pool_enabled(), Error::<T>::PoolDisabled);
-
-				let fees: PoolAssetMap<AssetAmount> =
-					pool.collect(lp.clone(), range.lower, range.upper).map_err(|e| match e {
-						PositionError::NonExistent => Error::<T>::PositionDoesNotExist,
-						PositionError::PositionLacksLiquidity => Error::<T>::PositionLacksLiquidity,
-					})?;
-
-				Self::deposit_event(Event::<T>::FeeCollected {
-					lp,
-					asset,
-					range,
-					fee_yielded: fees,
-				});
-
-				Ok(fees)
-			} else {
-				Err(Error::<T>::PoolDoesNotExist.into())
-			}
-		})
-	}
-
-	/// Returns the user's Minted liquidities and fees accrued for a specific pool.
 	fn minted_liquidity(lp: &AccountId, asset: &any::Asset) -> Vec<MintedLiquidity> {
 		if let Some(pool) = Pools::<T>::get(asset) {
 			pool.minted_liquidity(lp.clone())
@@ -432,7 +396,6 @@ impl<T: Config> LiquidityPoolApi<AccountId> for Pallet<T> {
 		}
 	}
 
-	/// Gets the current price of the pool in Tick
 	fn current_tick(asset: &any::Asset) -> Option<Tick> {
 		Pools::<T>::get(asset).map(|pool| pool.current_tick())
 	}

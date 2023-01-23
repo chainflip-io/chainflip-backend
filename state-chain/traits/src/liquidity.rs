@@ -1,6 +1,6 @@
 use cf_primitives::{
-	liquidity::MintError, AmmRange, Asset, AssetAmount, BurnResult, ForeignChainAddress, Liquidity,
-	MintedLiquidity, PoolAssetMap, Tick,
+	AmmRange, Asset, AssetAmount, BurnResult, ForeignChainAddress, Liquidity, MintedLiquidity,
+	PoolAssetMap, Tick,
 };
 use frame_support::dispatch::DispatchError;
 use sp_runtime::DispatchResult;
@@ -54,31 +54,27 @@ impl SwappingApi for () {
 pub trait LiquidityPoolApi<AccountId> {
 	const STABLE_ASSET: Asset;
 
-	/// Deposit up to some amount of assets into an exchange pool. Minting some "Liquidity".
-	/// Returns Ok((asset_vested, liquidity_minted))
+	/// Deposit up to some amount of assets into an exchange pool.
+	///
+	/// The passed `try_debit` closure should debit the account balance and fail if this
+	/// is not possible.
+	///
+	/// Returns the harvested fees, if any.
 	fn mint(
 		lp: AccountId,
 		asset: Asset,
 		range: AmmRange,
 		liquidity_amount: Liquidity,
-		balance_check_callback: impl FnOnce(PoolAssetMap<AssetAmount>) -> Result<(), MintError>,
+		try_debit: impl FnOnce(PoolAssetMap<AssetAmount>) -> Result<(), DispatchError>,
 	) -> Result<PoolAssetMap<AssetAmount>, DispatchError>;
 
 	/// Burn some liquidity from an exchange pool to withdraw assets.
-	/// Returns Ok((assets_retrieved, fee_accrued))
 	fn burn(
 		lp: AccountId,
 		asset: Asset,
 		range: AmmRange,
 		burnt_liquidity: Liquidity,
 	) -> Result<BurnResult, DispatchError>;
-
-	/// Returns and resets fees accrued in user's position.
-	fn collect(
-		lp: AccountId,
-		asset: Asset,
-		range: AmmRange,
-	) -> Result<PoolAssetMap<u128>, DispatchError>;
 
 	/// Returns the user's Minted liquidities and fees acrued for a specific pool.
 	fn minted_liquidity(lp: &AccountId, asset: &Asset) -> Vec<MintedLiquidity>;
