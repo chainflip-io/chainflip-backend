@@ -84,20 +84,6 @@ pub enum LiquidityProviderSubcommands {
 	},
 }
 
-#[derive(clap::Subcommand, Clone, Debug)]
-pub enum Claim {
-	#[clap(about = "Submit an extrinsic to request generation of a claim certificate")]
-	Request {
-		#[clap(
-			help = "Amount to claim in FLIP (omit this option to claim all available FLIP)",
-			long = "exact"
-		)]
-		amount: Option<f64>,
-		#[clap(help = "The Ethereum address you wish to claim your FLIP to")]
-		eth_address: String,
-	},
-}
-
 #[derive(Parser, Clone, Debug)]
 pub enum CliCommand {
 	/// Relayer specific commands
@@ -106,9 +92,18 @@ pub enum CliCommand {
 	/// Liquidity provider specific commands
 	#[clap(subcommand, name = "lp")]
 	LiquidityProvider(LiquidityProviderSubcommands),
-	#[clap(about = "Requesting and checking claims")]
-	#[clap(subcommand)]
-	Claim(Claim),
+	#[clap(
+		about = "Request a claim. After requesting the claim, please proceed to the Staking app to complete the claiming process."
+	)]
+	Claim {
+		#[clap(
+			help = "Amount to claim in FLIP (omit this option to claim all available FLIP)",
+			long = "exact"
+		)]
+		amount: Option<f64>,
+		#[clap(help = "The Ethereum address you wish to claim your FLIP to")]
+		eth_address: String,
+	},
 	#[clap(
 		about = "Submit an extrinsic to request generation of a claim certificate (claiming all available FLIP)"
 	)]

@@ -6,7 +6,7 @@ use chainflip_api as api;
 use clap::Parser;
 use settings::{CLICommandLineOptions, CLISettings};
 
-use crate::settings::{Claim, CliCommand::*, LiquidityProviderSubcommands, RelayerSubcommands};
+use crate::settings::{CliCommand::*, LiquidityProviderSubcommands, RelayerSubcommands};
 use anyhow::{anyhow, Result};
 use utilities::clean_eth_address;
 
@@ -47,8 +47,7 @@ async fn run_cli() -> Result<()> {
 			swap_intent(&cli_settings.state_chain, params).await,
 		LiquidityProvider(LiquidityProviderSubcommands::Deposit { asset }) =>
 			liquidity_deposit(&cli_settings.state_chain, asset).await,
-		Claim(Claim::Request { amount, eth_address }) =>
-			request_claim(amount, &eth_address, &cli_settings).await,
+		Claim { amount, eth_address } => request_claim(amount, &eth_address, &cli_settings).await,
 		RegisterAccountRole { role } => register_account_role(role, &cli_settings).await,
 		Rotate {} => rotate_keys(&cli_settings.state_chain).await,
 		Retire {} => api::retire_account(&cli_settings.state_chain).await,
