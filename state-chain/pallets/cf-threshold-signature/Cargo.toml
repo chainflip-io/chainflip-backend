@@ -62,7 +62,6 @@ runtime-benchmarks = [
   'cf-traits/runtime-benchmarks',
   'cf-chains/runtime-benchmarks',
   'pallet-cf-validator',
-  'pallet-cf-validator/runtime-benchmarks',
   'pallet-cf-reputation',
 ]
 try-runtime = ['frame-support/try-runtime']

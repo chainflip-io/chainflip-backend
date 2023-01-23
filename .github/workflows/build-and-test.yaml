@@ -242,8 +242,6 @@ jobs:
           npm install
       - name: Generate State Chain docs
         run: |
-          export WS_ENDPOINT="ws://127.0.0.1:9944"
-          export TYPES_FILE="../state-chain/types.json"
           cd chainflip-docgen/
           npm run generate
       - name: Install graphviz

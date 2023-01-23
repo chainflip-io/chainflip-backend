@@ -24,7 +24,7 @@ use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 
 use cf_primitives::{
-	liquidity::{AmountU256, Liquidity, MintError, MintedLiquidity, PoolAssetMap, PoolSide, Tick},
+	liquidity::{AmountU256, Liquidity, MintedLiquidity, PoolAssetMap, PoolSide, Tick},
 	AccountId, AmmRange,
 };
 use sp_core::{U256, U512};
@@ -62,7 +62,6 @@ pub const MAX_FEE_100TH_BIPS: u32 = ONE_IN_HUNDREDTH_BIPS / 2;
 struct Position {
 	liquidity: Liquidity,
 	last_fee_growth_inside: PoolAssetMap<FeeGrowthQ128F128>,
-	fees_owed: PoolAssetMap<u128>,
 }
 
 impl Position {
@@ -73,7 +72,7 @@ impl Position {
 		lower_info: &TickInfo,
 		upper_tick: Tick,
 		upper_info: &TickInfo,
-	) {
+	) -> PoolAssetMap<u128> {
 		let fee_growth_inside = PoolAssetMap::new_from_fn(|side| {
 			let fee_growth_below = if pool_state.current_tick < lower_tick {
 				pool_state.global_fee_growth[side] - lower_info.fee_growth_outside[side]
@@ -89,27 +88,24 @@ impl Position {
 
 			pool_state.global_fee_growth[side] - fee_growth_below - fee_growth_above
 		});
-		self.fees_owed.mutate(|side, current_fees_owed| {
-			// DIFF: This behaviour is different than Uniswap's. We saturate fees_owed instead of
-			// overflowing
-
+		// DIFF: This behaviour is different than Uniswap's. We saturate fees_owed instead of
+		// overflowing
+		let fees_owed = PoolAssetMap::new_from_fn(|side| {
 			/*
 				Proof that `mul_div` does not overflow:
 				Note position.liqiudity: u128
 				U512::one() << 128 > u128::MAX
 			*/
-			let new_fees_owed: u128 = mul_div_floor(
+			mul_div_floor(
 				fee_growth_inside[side] - self.last_fee_growth_inside[side],
 				self.liquidity.into(),
 				U512::one() << 128,
 			)
 			.try_into()
-			.unwrap_or(u128::MAX);
-
-			// saturating is acceptable, it is on LPs to withdraw fees before you hit u128::MAX fees
-			*current_fees_owed = current_fees_owed.saturating_add(new_fees_owed);
+			.unwrap_or(u128::MAX)
 		});
 		self.last_fee_growth_inside = fee_growth_inside;
+		fees_owed
 	}
 
 	fn set_liquidity(
@@ -120,9 +116,11 @@ impl Position {
 		lower_info: &TickInfo,
 		upper_tick: Tick,
 		upper_info: &TickInfo,
-	) {
-		self.update_fees_owed(pool_state, lower_tick, lower_info, upper_tick, upper_info);
+	) -> PoolAssetMap<u128> {
+		let fees_owed =
+			self.update_fees_owed(pool_state, lower_tick, lower_info, upper_tick, upper_info);
 		self.liquidity = new_liquidity;
+		fees_owed
 	}
 }
 
@@ -292,6 +290,16 @@ pub enum PositionError {
 }
 
 #[derive(Debug)]
+pub enum MintError<E> {
+	/// Invalid Tick range
+	InvalidTickRange,
+	/// One of the start/end ticks of the range reached its maximum gross liquidity
+	MaximumGrossLiquidity,
+	/// The provided callback function didn't succeed.
+	CallbackError(E),
+}
+
+#[derive(Debug)]
 pub enum CollectError {}
 
 #[derive(Debug, TypeInfo, PartialEq, Eq, Encode, Decode)]
@@ -320,7 +328,7 @@ impl PoolState {
 		if fee_100th_bips > MAX_FEE_100TH_BIPS {
 			return Err(CreatePoolError::InvalidFeeAmount)
 		};
-		if initial_sqrt_price < MIN_SQRT_PRICE || initial_sqrt_price > MAX_SQRT_PRICE {
+		if initial_sqrt_price < MIN_SQRT_PRICE || initial_sqrt_price >= MAX_SQRT_PRICE {
 			return Err(CreatePoolError::InvalidInitialPrice)
 		}
 		let initial_tick = Self::tick_at_sqrt_price(initial_sqrt_price);
@@ -375,7 +383,7 @@ impl PoolState {
 	/// the function will return `Ok(())`. Otherwise if the minting is possible the callback `f`
 	/// will be passed the Amounts required to add the specified `minted_liquidity` to the specified
 	/// position. The callback should return a boolean specifying if the liquidity minting should
-	/// occur. If `false` is returned the position will not be created. If 'true' is returned the
+	/// occur. If `false` is returned the position will not be created. If 'Ok(())' is returned the
 	/// position will be created if it didn't already exist, and `minted_liquidity` will be added to
 	/// it. Then the function will return `Ok(())`. Otherwise if the minting is not possible the
 	/// callback will not be called, no state will be affected, and the function will return Err(_),
@@ -384,15 +392,15 @@ impl PoolState {
 	/// This function never panics
 	///
 	/// If this function returns an `Err(_)` no state changes have occurred
-	pub fn mint(
+	pub fn mint<E>(
 		&mut self,
 		lp: AccountId,
 		lower_tick: Tick,
 		upper_tick: Tick,
 		minted_liquidity: Liquidity,
-		should_mint: impl FnOnce(PoolAssetMap<AmountU256>) -> Result<(), MintError>,
-	) -> Result<PoolAssetMap<AmountU256>, MintError> {
-		if (lower_tick > upper_tick) || (lower_tick < MIN_TICK) && (upper_tick > MAX_TICK) {
+		try_debit: impl FnOnce(PoolAssetMap<AmountU256>) -> Result<(), E>,
+	) -> Result<(PoolAssetMap<AmountU256>, PoolAssetMap<u128>), MintError<E>> {
+		if (lower_tick >= upper_tick) || (lower_tick < MIN_TICK) || (upper_tick > MAX_TICK) {
 			return Err(MintError::InvalidTickRange)
 		}
 
@@ -407,7 +415,6 @@ impl PoolState {
 			.unwrap_or_else(|| Position {
 				liquidity: 0,
 				last_fee_growth_inside: Default::default(),
-				fees_owed: Default::default(),
 			});
 
 		let tick_info_with_updated_gross_liquidity = |tick| {
@@ -445,7 +452,7 @@ impl PoolState {
 		upper_info.liquidity_delta =
 			upper_info.liquidity_delta.checked_sub_unsigned(minted_liquidity).unwrap();
 
-		position.set_liquidity(
+		let fees_returned = position.set_liquidity(
 			self,
 			// Cannot overflow due to * MAX_TICK_GROSS_LIQUIDITY
 			position.liquidity + minted_liquidity,
@@ -458,13 +465,13 @@ impl PoolState {
 		let (amounts_required, current_liquidity_delta) =
 			self.liquidity_to_amounts::<true>(minted_liquidity, lower_tick, upper_tick);
 
-		should_mint(amounts_required)?;
+		try_debit(amounts_required).map_err(MintError::CallbackError)?;
 		self.current_liquidity += current_liquidity_delta;
 		self.positions.insert((lp, lower_tick, upper_tick), position);
 		self.liquidity_map.insert(lower_tick, lower_info);
 		self.liquidity_map.insert(upper_tick, upper_info);
 
-		Ok(amounts_required)
+		Ok((amounts_required, fees_returned))
 	}
 
 	/// Tries to remove liquidity from the specified range-order, and convert the liqudity into
@@ -482,10 +489,6 @@ impl PoolState {
 		upper_tick: Tick,
 		burnt_liquidity: Liquidity,
 	) -> Result<(PoolAssetMap<AmountU256>, PoolAssetMap<u128>), PositionError> {
-		if burnt_liquidity == 0 {
-			return Ok((Default::default(), Default::default()))
-		}
-
 		if let Some(mut position) =
 			self.positions.get(&(lp.clone(), lower_tick, upper_tick)).cloned()
 		{
@@ -500,7 +503,7 @@ impl PoolState {
 				upper_info.liquidity_delta =
 					lower_info.liquidity_delta.checked_add_unsigned(burnt_liquidity).unwrap();
 
-				position.set_liquidity(
+				let fees_owed = position.set_liquidity(
 					self,
 					position.liquidity - burnt_liquidity,
 					lower_tick,
@@ -516,23 +519,6 @@ impl PoolState {
 				// Will not underflow as current_liquidity_delta must have previously been added to
 				// current_liquidity for it to need to be substrated now
 				self.current_liquidity -= current_liquidity_delta;
-
-				let fees_owed = if position.liquidity == 0 {
-					// DIFF: This behaviour is different than Uniswap's to ensure if a position
-					// exists its ticks also exist in the liquidity_map. Position will automatically
-					// be removed if all the liquidity has been burnt.
-					self.positions.remove(&(lp, lower_tick, upper_tick));
-
-					position.fees_owed
-				} else {
-					// Re-insert the leftover liquidity into storage.
-					self.positions.insert((lp, lower_tick, upper_tick), position);
-
-					// If the position is not fully burnt then the position fees are not updated
-					// and zero fees are returned. So basically fees are collected when
-					// the whole position is burnt or when we call collect.
-					Default::default()
-				};
 
 				if lower_info.liquidity_gross == 0 && lower_tick != MIN_TICK
 				// Guarantee MIN_TICK is always in map to simplify swap logic
@@ -551,43 +537,21 @@ impl PoolState {
 					*self.liquidity_map.get_mut(&upper_tick).unwrap() = upper_info;
 				}
 
+				if position.liquidity == 0 {
+					// DIFF: This behaviour is different than Uniswap's to ensure if a position
+					// exists its ticks also exist in the liquidity_map
+					// In other words, the position will automatically be removed if all the
+					// liquidity has been burnt.
+					self.positions.remove(&(lp, lower_tick, upper_tick));
+				} else {
+					// Reinsert the updated position back into storage.
+					self.positions.insert((lp, lower_tick, upper_tick), position);
+				}
+
 				Ok((amounts_owed, fees_owed))
 			} else {
 				Err(PositionError::PositionLacksLiquidity)
 			}
-		} else {
-			Err(PositionError::NonExistent)
-		}
-	}
-
-	/// Tries to calculates the fees owed to the specified position, resets the fees owed for that
-	/// position to zero, and returns the calculated amount of fees owed
-	///
-	/// This function never panics
-	///
-	/// If this function returns an `Err(_)` no state changes have occurred
-	pub fn collect(
-		&mut self,
-		lp: AccountId,
-		lower_tick: Tick,
-		upper_tick: Tick,
-	) -> Result<PoolAssetMap<u128>, PositionError> {
-		if let Some(mut position) =
-			self.positions.get(&(lp.clone(), lower_tick, upper_tick)).cloned()
-		{
-			debug_assert!(position.liquidity != 0);
-			let lower_info = self.liquidity_map.get(&lower_tick).unwrap();
-			let upper_info = self.liquidity_map.get(&upper_tick).unwrap();
-
-			position.update_fees_owed(self, lower_tick, lower_info, upper_tick, upper_info);
-
-			// Take the fee and reset the current record
-			let fees_owed = position.fees_owed;
-			position.fees_owed = Default::default();
-
-			self.positions.insert((lp, lower_tick, upper_tick), position);
-
-			Ok(fees_owed)
 		} else {
 			Err(PositionError::NonExistent)
 		}
@@ -602,7 +566,6 @@ impl PoolState {
 					Some(MintedLiquidity {
 						range: AmmRange::new(*lower, *upper),
 						liquidity: position.liquidity,
-						fees_acrued: position.fees_owed,
 					})
 				} else {
 					None
@@ -671,7 +634,7 @@ impl PoolState {
 				self.current_liquidity,
 			);
 
-			// next_sqrt_price_from_input_amount rounds so this maybe true even though
+			// next_sqrt_price_from_input_amount rounds so this maybe Ok(()) even though
 			// amount_minus_fees < amount_required_to_reach_target (TODO Prove)
 			if sqrt_ratio_next == sqrt_ratio_target {
 				// Will not overflow as fee_100th_bips <= ONE_IN_HUNDREDTH_BIPS / 2
@@ -705,8 +668,11 @@ impl PoolState {
 				// TODO: Prove these don't underflow
 				amount -= amount_required_to_reach_target;
 				amount -= fees;
+
 				total_fee_paid += fees;
 
+				// Since the liquidity value is used for the fee calculation, updating needs to be
+				// done at the end.
 				// Note conversion to i128 and addition don't overflow (See test `max_liquidity`)
 				self.current_liquidity = i128::try_from(self.current_liquidity)
 					.unwrap()
@@ -740,7 +706,8 @@ impl PoolState {
 						));
 				}
 				// Recompute unless we're on a lower tick boundary (i.e. already
-				// transitioned ticks), and haven't moved.
+				// transitioned ticks), and haven't moved (test_updates_exiting &
+				// test_updates_entering)
 				if self.current_sqrt_price != sqrt_ratio_next {
 					self.current_sqrt_price = sqrt_ratio_next;
 					self.current_tick = Self::tick_at_sqrt_price(self.current_sqrt_price);
@@ -1357,5 +1324,2162 @@ mod test {
 			276324
 		);
 		assert_eq!(PoolState::tick_at_sqrt_price(MAX_SQRT_PRICE - 1), MAX_TICK - 1);
+	}
+
+	// UNISWAP TESTS => UniswapV3Pool.spec.ts
+
+	pub const TICKSPACING_UNISWAP_MEDIUM: Tick = 60;
+	pub const MIN_TICK_UNISWAP_MEDIUM: Tick = -887220;
+	pub const MAX_TICK_UNISWAP_MEDIUM: Tick = -MIN_TICK_UNISWAP_MEDIUM;
+
+	fn mint_pool() -> (PoolState, PoolAssetMap<AmountU256>, AccountId) {
+		let mut pool =
+			PoolState::new(3000, U256::from_dec_str("25054144837504793118650146401").unwrap())
+				.unwrap(); // encodeSqrtPrice (1,10)
+		let id: AccountId = AccountId::from([0xcf; 32]);
+		const MINTED_LIQUIDITY: u128 = 3_161;
+		let mut minted_capital = None;
+
+		let _ = pool.mint(
+			id.clone(),
+			MIN_TICK_UNISWAP_MEDIUM,
+			MAX_TICK_UNISWAP_MEDIUM,
+			MINTED_LIQUIDITY,
+			|minted| {
+				minted_capital.replace(minted);
+				Ok::<(), ()>(())
+			},
+		);
+		let minted_capital = minted_capital.unwrap();
+
+		(pool, minted_capital, id)
+	}
+
+	#[test]
+	fn test_initialize_failure() {
+		match PoolState::new(1000, U256::from(1)) {
+			Err(CreatePoolError::InvalidInitialPrice) => {},
+			_ => panic!("Fees accrued are not zero"),
+		}
+	}
+	#[test]
+	fn test_initialize_success() {
+		let _ = PoolState::new(1000, MIN_SQRT_PRICE);
+		let _ = PoolState::new(1000, MAX_SQRT_PRICE - 1);
+
+		let pool =
+			PoolState::new(1000, U256::from_dec_str("56022770974786143748341366784").unwrap())
+				.unwrap();
+
+		assert_eq!(
+			pool.current_sqrt_price,
+			U256::from_dec_str("56022770974786143748341366784").unwrap()
+		);
+		assert_eq!(pool.current_tick, -6_932);
+	}
+	#[test]
+	fn test_initialize_too_low() {
+		match PoolState::new(1000, MIN_SQRT_PRICE - 1) {
+			Err(CreatePoolError::InvalidInitialPrice) => {},
+			_ => panic!("Fees accrued are not zero"),
+		}
+	}
+
+	#[test]
+	fn test_initialize_too_high() {
+		match PoolState::new(1000, MAX_SQRT_PRICE) {
+			Err(CreatePoolError::InvalidInitialPrice) => {},
+			_ => panic!("Fees accrued are not zero"),
+		}
+	}
+
+	#[test]
+	fn test_initialize_too_high_2() {
+		match PoolState::new(
+			1000,
+			U256::from_dec_str(
+				"57896044618658097711785492504343953926634992332820282019728792003956564819968", /* 2**160-1 */
+			)
+			.unwrap(),
+		) {
+			Err(CreatePoolError::InvalidInitialPrice) => {},
+			_ => panic!("Fees accrued are not zero"),
+		}
+	}
+
+	// Minting
+
+	#[test]
+	fn test_mint_err() {
+		let (mut pool, _, id) = mint_pool();
+		assert!(pool.mint(id.clone(), 1, 0, 1, |_| Ok::<(), ()>(())).is_err());
+		assert!((pool.mint(id.clone(), -887273, 0, 1, |_| Ok::<(), ()>(()))).is_err());
+		assert!((pool.mint(id.clone(), 0, 887273, 1, |_| Ok::<(), ()>(()))).is_err());
+
+		assert!((pool.mint(
+			id.clone(),
+			MIN_TICK_UNISWAP_MEDIUM + 1,
+			MAX_TICK_UNISWAP_MEDIUM - 1,
+			MAX_TICK_GROSS_LIQUIDITY + 1,
+			|_| Ok::<(), ()>(())
+		))
+		.is_err());
+
+		assert!((pool.mint(
+			id,
+			MIN_TICK_UNISWAP_MEDIUM + 1,
+			MAX_TICK_UNISWAP_MEDIUM - 1,
+			MAX_TICK_GROSS_LIQUIDITY,
+			|_| Ok::<(), ()>(())
+		))
+		.is_ok());
+	}
+
+	#[test]
+	fn test_mint_err_tickmax() {
+		let (mut pool, _, id) = mint_pool();
+
+		let (_, fees_owed) = pool
+			.mint(
+				id.clone(),
+				MIN_TICK_UNISWAP_MEDIUM + 1,
+				MAX_TICK_UNISWAP_MEDIUM - 1,
+				1000,
+				|_| Ok::<(), ()>(()),
+			)
+			.unwrap();
+
+		//assert_eq!(fees_owed.unwrap()[PoolSide::Asset0], 0);
+		// assert_eq!(fees_owed.unwrap()[PoolSide::Asset1], 0);
+		match (fees_owed[PoolSide::Asset0], fees_owed[PoolSide::Asset1]) {
+			(0, 0) => {},
+			_ => panic!("Fees accrued are not zero"),
+		}
+
+		assert!((pool.mint(
+			id.clone(),
+			MIN_TICK_UNISWAP_MEDIUM + 1,
+			MAX_TICK_UNISWAP_MEDIUM - 1,
+			MAX_TICK_GROSS_LIQUIDITY - 1000 + 1,
+			|_| Ok::<(), ()>(())
+		))
+		.is_err());
+
+		assert!((pool.mint(
+			id.clone(),
+			MIN_TICK_UNISWAP_MEDIUM + 2,
+			MAX_TICK_UNISWAP_MEDIUM - 1,
+			MAX_TICK_GROSS_LIQUIDITY - 1000 + 1,
+			|_| Ok::<(), ()>(())
+		))
+		.is_err());
+
+		assert!((pool.mint(
+			id.clone(),
+			MIN_TICK_UNISWAP_MEDIUM + 1,
+			MAX_TICK_UNISWAP_MEDIUM - 2,
+			MAX_TICK_GROSS_LIQUIDITY - 1000 + 1,
+			|_| Ok::<(), ()>(())
+		))
+		.is_err());
+
+		let (_, fees_owed) = pool
+			.mint(
+				id.clone(),
+				MIN_TICK_UNISWAP_MEDIUM + 1,
+				MAX_TICK_UNISWAP_MEDIUM - 1,
+				MAX_TICK_GROSS_LIQUIDITY - 1000,
+				|_| Ok::<(), ()>(()),
+			)
+			.unwrap();
+		match (fees_owed[PoolSide::Asset0], fees_owed[PoolSide::Asset1]) {
+			(0, 0) => {},
+			_ => panic!("Fees accrued are not zero"),
+		}
+
+		// Different behaviour from Uniswap - does not revert when minting 0
+		let (_, fees_owed) = pool
+			.mint(id, MIN_TICK_UNISWAP_MEDIUM + 1, MAX_TICK_UNISWAP_MEDIUM - 1, 0, |_| {
+				Ok::<(), ()>(())
+			})
+			.unwrap();
+		match (fees_owed[PoolSide::Asset0], fees_owed[PoolSide::Asset1]) {
+			(0, 0) => {},
+			_ => panic!("Fees accrued are not zero"),
+		}
+	}
+
+	// Success cases
+
+	#[test]
+	fn test_balances() {
+		let (_, minted_capital, _) = mint_pool();
+		// Check "balances"
+		const INPUT_TICKER: PoolSide = PoolSide::Asset0;
+		assert_eq!(minted_capital[INPUT_TICKER], U256::from(9_996));
+		assert_eq!(minted_capital[!INPUT_TICKER], U256::from(1_000));
+	}
+
+	#[test]
+	fn test_initial_tick() {
+		let (pool, _, _) = mint_pool();
+		// Check current tick
+		assert_eq!(pool.current_tick, -23_028);
+	}
+
+	#[test]
+	fn above_current_price() {
+		let (mut pool, mut minted_capital_accum, id) = mint_pool();
+
+		const MINTED_LIQUIDITY: u128 = 10_000;
+		const INPUT_TICKER: PoolSide = PoolSide::Asset0;
+
+		let mut minted_capital = None;
+		let (_, fees_owed) = pool
+			.mint(id, -22980, 0, MINTED_LIQUIDITY, |minted| {
+				minted_capital.replace(minted);
+				Ok::<(), ()>(())
+			})
+			.unwrap();
+		let minted_capital = minted_capital.unwrap();
+
+		match (fees_owed[PoolSide::Asset0], fees_owed[PoolSide::Asset1]) {
+			(0, 0) => {},
+			_ => panic!("Fees accrued are not zero"),
+		}
+
+		assert_eq!(minted_capital[!INPUT_TICKER], U256::from(0));
+
+		minted_capital_accum[INPUT_TICKER] += minted_capital[INPUT_TICKER];
+		minted_capital_accum[!INPUT_TICKER] += minted_capital[!INPUT_TICKER];
+
+		assert_eq!(minted_capital_accum[INPUT_TICKER], U256::from(9_996 + 21_549));
+		assert_eq!(minted_capital_accum[!INPUT_TICKER], U256::from(1_000));
+	}
+
+	#[test]
+	fn test_maxtick_maxleverage() {
+		let (mut pool, mut minted_capital_accum, id) = mint_pool();
+		let mut minted_capital = None;
+		let uniswap_max_tick = 887220;
+		let uniswap_tickspacing = 60;
+		pool.mint(
+			id,
+			uniswap_max_tick - uniswap_tickspacing, /* 60 == Uniswap's tickSpacing */
+			uniswap_max_tick,
+			5070602400912917605986812821504, /* 2**102 */
+			|minted| {
+				minted_capital.replace(minted);
+				Ok::<(), ()>(())
+			},
+		)
+		.unwrap();
+		let minted_capital = minted_capital.unwrap();
+
+		minted_capital_accum[PoolSide::Asset0] += minted_capital[PoolSide::Asset0];
+		minted_capital_accum[!PoolSide::Asset0] += minted_capital[!PoolSide::Asset0];
+
+		assert_eq!(minted_capital_accum[PoolSide::Asset0], U256::from(9_996 + 828_011_525));
+		assert_eq!(minted_capital_accum[!PoolSide::Asset0], U256::from(1_000));
+	}
+
+	#[test]
+	fn test_maxtick() {
+		let (mut pool, mut minted_capital_accum, id) = mint_pool();
+		let mut minted_capital = None;
+		pool.mint(id, -22980, 887220, 10000, |minted| {
+			minted_capital.replace(minted);
+			Ok::<(), ()>(())
+		})
+		.unwrap();
+		let minted_capital = minted_capital.unwrap();
+
+		minted_capital_accum[PoolSide::Asset0] += minted_capital[PoolSide::Asset0];
+		minted_capital_accum[!PoolSide::Asset0] += minted_capital[!PoolSide::Asset0];
+
+		assert_eq!(minted_capital_accum[PoolSide::Asset0], U256::from(9_996 + 31_549));
+		assert_eq!(minted_capital_accum[!PoolSide::Asset0], U256::from(1_000));
+	}
+
+	#[test]
+	fn test_removing_works_0() {
+		let (mut pool, _, id) = mint_pool();
+		let mut minted_capital = None;
+		pool.mint(id.clone(), -240, 0, 10000, |minted| {
+			minted_capital.replace(minted);
+			Ok::<(), ()>(())
+		})
+		.unwrap();
+
+		let (returned_capital, fees_owed) = pool.burn(id, -240, 0, 10000).unwrap();
+
+		assert_eq!(returned_capital[PoolSide::Asset0], U256::from(120));
+		assert_eq!(returned_capital[!PoolSide::Asset0], U256::from(0));
+
+		assert_eq!(fees_owed[PoolSide::Asset0], 0);
+		assert_eq!(fees_owed[!PoolSide::Asset0], 0);
+	}
+
+	#[test]
+	fn test_removing_works_twosteps_0() {
+		let (mut pool, _, id) = mint_pool();
+		let mut minted_capital = None;
+		pool.mint(id.clone(), -240, 0, 10000, |minted| {
+			minted_capital.replace(minted);
+			Ok::<(), ()>(())
+		})
+		.unwrap();
+
+		let (returned_capital_0, fees_owed_0) = pool.burn(id.clone(), -240, 0, 10000 / 2).unwrap();
+		let (returned_capital_1, fees_owed_1) = pool.burn(id, -240, 0, 10000 / 2).unwrap();
+
+		assert_eq!(returned_capital_0[PoolSide::Asset0], U256::from(60));
+		assert_eq!(returned_capital_0[!PoolSide::Asset0], U256::from(0));
+		assert_eq!(returned_capital_1[PoolSide::Asset0], U256::from(60));
+		assert_eq!(returned_capital_1[!PoolSide::Asset0], U256::from(0));
+
+		assert_eq!(fees_owed_0[PoolSide::Asset0], 0);
+		assert_eq!(fees_owed_0[!PoolSide::Asset0], 0);
+		assert_eq!(fees_owed_1[PoolSide::Asset0], 0);
+		assert_eq!(fees_owed_1[!PoolSide::Asset0], 0);
+	}
+
+	#[test]
+	fn test_addliquidityto_liquiditygross() {
+		let (mut pool, _, id) = mint_pool();
+		let (_, fees_owed) = pool.mint(id.clone(), -240, 0, 100, |_| Ok::<(), ()>(())).unwrap();
+
+		match (fees_owed[PoolSide::Asset0], fees_owed[PoolSide::Asset1]) {
+			(0, 0) => {},
+			_ => panic!("Fees accrued are not zero"),
+		}
+
+		assert_eq!(pool.liquidity_map.get(&-240).unwrap().liquidity_gross, 100);
+		assert_eq!(pool.liquidity_map.get(&0).unwrap().liquidity_gross, 100);
+		assert!(!pool.liquidity_map.contains_key(&1));
+		assert!(!pool.liquidity_map.contains_key(&2));
+
+		let (_, fees_owed) = pool.mint(id.clone(), -240, 1, 150, |_| Ok::<(), ()>(())).unwrap();
+
+		match (fees_owed[PoolSide::Asset0], fees_owed[PoolSide::Asset1]) {
+			(0, 0) => {},
+			_ => panic!("Fees accrued are not zero"),
+		}
+		assert_eq!(pool.liquidity_map.get(&-240).unwrap().liquidity_gross, 250);
+		assert_eq!(pool.liquidity_map.get(&0).unwrap().liquidity_gross, 100);
+		assert_eq!(pool.liquidity_map.get(&1).unwrap().liquidity_gross, 150);
+		assert!(!pool.liquidity_map.contains_key(&2));
+
+		let (_, fees_owed) = pool.mint(id, 0, 2, 60, |_| Ok::<(), ()>(())).unwrap();
+
+		match (fees_owed[PoolSide::Asset0], fees_owed[PoolSide::Asset1]) {
+			(0, 0) => {},
+			_ => panic!("Fees accrued are not zero"),
+		}
+		assert_eq!(pool.liquidity_map.get(&-240).unwrap().liquidity_gross, 250);
+		assert_eq!(pool.liquidity_map.get(&0).unwrap().liquidity_gross, 160);
+		assert_eq!(pool.liquidity_map.get(&1).unwrap().liquidity_gross, 150);
+		assert_eq!(pool.liquidity_map.get(&2).unwrap().liquidity_gross, 60);
+	}
+
+	#[test]
+	fn test_remove_liquidity_liquiditygross() {
+		let (mut pool, _, id) = mint_pool();
+		pool.mint(id.clone(), -240, 0, 100, |_| Ok::<(), ()>(())).unwrap();
+		pool.mint(id.clone(), -240, 0, 40, |_| Ok::<(), ()>(())).unwrap();
+		let (_, fees_owed) = pool.burn(id, -240, 0, 90).unwrap();
+		match (fees_owed[PoolSide::Asset0], fees_owed[PoolSide::Asset1]) {
+			(0, 0) => {},
+			_ => panic!("Fees accrued are not zero"),
+		}
+		assert_eq!(pool.liquidity_map.get(&-240).unwrap().liquidity_gross, 50);
+		assert_eq!(pool.liquidity_map.get(&0).unwrap().liquidity_gross, 50);
+	}
+
+	#[test]
+	fn test_clearsticklower_ifpositionremoved() {
+		let (mut pool, _, id) = mint_pool();
+		pool.mint(id.clone(), -240, 0, 100, |_| Ok::<(), ()>(())).unwrap();
+		let (_, fees_owed) = pool.burn(id, -240, 0, 100).unwrap();
+		match (fees_owed[PoolSide::Asset0], fees_owed[PoolSide::Asset1]) {
+			(0, 0) => {},
+			_ => panic!("Fees accrued are not zero"),
+		}
+		assert!(!pool.liquidity_map.contains_key(&-240));
+	}
+
+	#[test]
+	fn test_clearstickupper_ifpositionremoved() {
+		let (mut pool, _, id) = mint_pool();
+		pool.mint(id.clone(), -240, 0, 100, |_| Ok::<(), ()>(())).unwrap();
+		pool.burn(id, -240, 0, 100).unwrap();
+		assert!(!pool.liquidity_map.contains_key(&0));
+	}
+
+	#[test]
+	fn test_clears_onlyunused() {
+		let (mut pool, _, id) = mint_pool();
+		pool.mint(id.clone(), -240, 0, 100, |_| Ok::<(), ()>(())).unwrap();
+		pool.mint(id.clone(), -60, 0, 250, |_| Ok::<(), ()>(())).unwrap();
+		pool.burn(id, -240, 0, 100).unwrap();
+		assert!(!pool.liquidity_map.contains_key(&-240));
+		assert_eq!(pool.liquidity_map.get(&0).unwrap().liquidity_gross, 250);
+		assert_eq!(
+			pool.liquidity_map.get(&0).unwrap().fee_growth_outside[PoolSide::Asset0],
+			U256::from(0)
+		);
+		assert_eq!(
+			pool.liquidity_map.get(&0).unwrap().fee_growth_outside[!PoolSide::Asset0],
+			U256::from(0)
+		);
+	}
+
+	// Including current price
+
+	#[test]
+	fn test_price_within_range() {
+		let (mut pool, minted_capital_accum, id) = mint_pool();
+		let mut minted_capital = None;
+		pool.mint(
+			id,
+			MIN_TICK_UNISWAP_MEDIUM + TICKSPACING_UNISWAP_MEDIUM,
+			MAX_TICK_UNISWAP_MEDIUM - TICKSPACING_UNISWAP_MEDIUM,
+			100,
+			|minted| {
+				minted_capital.replace(minted);
+				Ok::<(), ()>(())
+			},
+		)
+		.unwrap();
+		let minted_capital = minted_capital.unwrap();
+
+		assert_eq!(minted_capital[PoolSide::Asset0], U256::from(317));
+		assert_eq!(minted_capital[!PoolSide::Asset0], U256::from(32));
+
+		assert_eq!(
+			minted_capital_accum[PoolSide::Asset0] + minted_capital[PoolSide::Asset0],
+			U256::from(9_996 + 317)
+		);
+		assert_eq!(
+			minted_capital_accum[!PoolSide::Asset0] + minted_capital[!PoolSide::Asset0],
+			U256::from(1_000 + 32)
+		);
+	}
+
+	#[test]
+	fn test_initializes_lowertick() {
+		let (mut pool, _, id) = mint_pool();
+		pool.mint(
+			id,
+			MIN_TICK_UNISWAP_MEDIUM + TICKSPACING_UNISWAP_MEDIUM,
+			MAX_TICK_UNISWAP_MEDIUM - TICKSPACING_UNISWAP_MEDIUM,
+			100,
+			|_| Ok::<(), ()>(()),
+		)
+		.unwrap();
+		assert_eq!(
+			pool.liquidity_map
+				.get(&(MIN_TICK_UNISWAP_MEDIUM + TICKSPACING_UNISWAP_MEDIUM))
+				.unwrap()
+				.liquidity_gross,
+			100
+		);
+	}
+
+	#[test]
+	fn test_initializes_uppertick() {
+		let (mut pool, _, id) = mint_pool();
+		pool.mint(
+			id,
+			MIN_TICK_UNISWAP_MEDIUM + TICKSPACING_UNISWAP_MEDIUM,
+			MAX_TICK_UNISWAP_MEDIUM - TICKSPACING_UNISWAP_MEDIUM,
+			100,
+			|_| Ok::<(), ()>(()),
+		)
+		.unwrap();
+		assert_eq!(
+			pool.liquidity_map
+				.get(&(MAX_TICK_UNISWAP_MEDIUM - TICKSPACING_UNISWAP_MEDIUM))
+				.unwrap()
+				.liquidity_gross,
+			100
+		);
+	}
+
+	#[test]
+	fn test_minmax_tick() {
+		let (mut pool, minted_capital_accum, id) = mint_pool();
+		let mut minted_capital = None;
+		pool.mint(id, MIN_TICK_UNISWAP_MEDIUM, MAX_TICK_UNISWAP_MEDIUM, 10000, |minted| {
+			minted_capital.replace(minted);
+			Ok::<(), ()>(())
+		})
+		.unwrap();
+		let minted_capital = minted_capital.unwrap();
+
+		assert_eq!(minted_capital[PoolSide::Asset0], U256::from(31623));
+		assert_eq!(minted_capital[!PoolSide::Asset0], U256::from(3163));
+
+		assert_eq!(
+			minted_capital_accum[PoolSide::Asset0] + minted_capital[PoolSide::Asset0],
+			U256::from(9_996 + 31623)
+		);
+		assert_eq!(
+			minted_capital_accum[!PoolSide::Asset0] + minted_capital[!PoolSide::Asset0],
+			U256::from(1_000 + 3163)
+		);
+	}
+
+	#[test]
+	fn test_removing() {
+		let (mut pool, _, id) = mint_pool();
+		pool.mint(
+			id.clone(),
+			MIN_TICK_UNISWAP_MEDIUM + TICKSPACING_UNISWAP_MEDIUM,
+			MAX_TICK_UNISWAP_MEDIUM - TICKSPACING_UNISWAP_MEDIUM,
+			100,
+			|_| Ok::<(), ()>(()),
+		)
+		.unwrap();
+
+		let (amounts_owed, _) = pool
+			.burn(
+				id.clone(),
+				MIN_TICK_UNISWAP_MEDIUM + TICKSPACING_UNISWAP_MEDIUM,
+				MAX_TICK_UNISWAP_MEDIUM - TICKSPACING_UNISWAP_MEDIUM,
+				100,
+			)
+			.unwrap();
+
+		assert_eq!(amounts_owed[PoolSide::Asset0], U256::from(316));
+		assert_eq!(amounts_owed[!PoolSide::Asset0], U256::from(31));
+
+		// DIFF: Burn will have burnt the entire position so it will be deleted.
+		match pool.burn(
+			id,
+			MIN_TICK_UNISWAP_MEDIUM + TICKSPACING_UNISWAP_MEDIUM,
+			MAX_TICK_UNISWAP_MEDIUM - TICKSPACING_UNISWAP_MEDIUM,
+			1,
+		) {
+			Err(PositionError::NonExistent) => {},
+			_ => panic!("Expected NonExistent"),
+		}
+	}
+
+	// Below current price
+
+	#[test]
+	fn test_transfer_token1_only() {
+		let (mut pool, minted_capital_accum, id) = mint_pool();
+		let mut minted_capital = None;
+		pool.mint(id, -46080, -23040, 10000, |minted| {
+			minted_capital.replace(minted);
+			Ok::<(), ()>(())
+		})
+		.unwrap();
+		let minted_capital = minted_capital.unwrap();
+
+		assert_eq!(minted_capital[PoolSide::Asset0], U256::from(0));
+		assert_eq!(minted_capital[!PoolSide::Asset0], U256::from(2162));
+
+		assert_eq!(
+			minted_capital_accum[PoolSide::Asset0] + minted_capital[PoolSide::Asset0],
+			U256::from(9_996)
+		);
+		assert_eq!(
+			minted_capital_accum[!PoolSide::Asset0] + minted_capital[!PoolSide::Asset0],
+			U256::from(1_000 + 2162)
+		);
+	}
+
+	#[test]
+	fn test_mintick_maxleverage() {
+		let (mut pool, minted_capital_accum, id) = mint_pool();
+		let mut minted_capital = None;
+		pool.mint(
+			id,
+			MIN_TICK_UNISWAP_MEDIUM,
+			MIN_TICK_UNISWAP_MEDIUM + TICKSPACING_UNISWAP_MEDIUM,
+			5070602400912917605986812821504, /* 2**102 */
+			|minted| {
+				minted_capital.replace(minted);
+				Ok::<(), ()>(())
+			},
+		)
+		.unwrap();
+		let minted_capital = minted_capital.unwrap();
+
+		assert_eq!(minted_capital[PoolSide::Asset0], U256::from(0));
+		assert_eq!(minted_capital[!PoolSide::Asset0], U256::from(828011520));
+
+		assert_eq!(
+			minted_capital_accum[PoolSide::Asset0] + minted_capital[PoolSide::Asset0],
+			U256::from(9_996)
+		);
+		assert_eq!(
+			minted_capital_accum[!PoolSide::Asset0] + minted_capital[!PoolSide::Asset0],
+			U256::from(1_000 + 828011520)
+		);
+	}
+
+	#[test]
+	fn test_mintick() {
+		let (mut pool, minted_capital_accum, id) = mint_pool();
+		let mut minted_capital = None;
+		pool.mint(id, MIN_TICK_UNISWAP_MEDIUM, -23040, 10000, |minted| {
+			minted_capital.replace(minted);
+			Ok::<(), ()>(())
+		})
+		.unwrap();
+		let minted_capital = minted_capital.unwrap();
+
+		assert_eq!(minted_capital[PoolSide::Asset0], U256::from(0));
+		assert_eq!(minted_capital[!PoolSide::Asset0], U256::from(3161));
+
+		assert_eq!(
+			minted_capital_accum[PoolSide::Asset0] + minted_capital[PoolSide::Asset0],
+			U256::from(9_996)
+		);
+		assert_eq!(
+			minted_capital_accum[!PoolSide::Asset0] + minted_capital[!PoolSide::Asset0],
+			U256::from(1_000 + 3161)
+		);
+	}
+
+	#[test]
+	fn test_removing_works_1() {
+		let (mut pool, _, id) = mint_pool();
+		let mut minted_capital = None;
+		pool.mint(id.clone(), -46080, -46020, 10000, |minted| {
+			minted_capital.replace(minted);
+			Ok::<(), ()>(())
+		})
+		.unwrap();
+
+		let (returned_capital, fees_owed) = pool.burn(id.clone(), -46080, -46020, 10000).unwrap();
+
+		// DIFF: Burn will have burnt the entire position so it will be deleted.
+		assert_eq!(returned_capital[PoolSide::Asset0], U256::from(0));
+		assert_eq!(returned_capital[!PoolSide::Asset0], U256::from(3));
+
+		assert_eq!(fees_owed[PoolSide::Asset0], 0);
+		assert_eq!(fees_owed[!PoolSide::Asset0], 0);
+
+		match pool.burn(id, -46080, -46020, 1) {
+			Err(PositionError::NonExistent) => {},
+			_ => panic!("Expected NonExistent"),
+		}
+	}
+
+	// NOTE: There is no implementation of protocol fees so we skip those tests
+
+	#[test]
+	fn test_poke_uninitialized_position() {
+		let (mut pool, _, id) = mint_pool();
+		pool.mint(
+			AccountId::from([0xce; 32]),
+			MIN_TICK_UNISWAP_MEDIUM + TICKSPACING_UNISWAP_MEDIUM,
+			MAX_TICK_UNISWAP_MEDIUM - TICKSPACING_UNISWAP_MEDIUM,
+			expandto18decimals(1).as_u128(),
+			|_| Ok::<(), ()>(()),
+		)
+		.unwrap();
+
+		let swap_input: u128 = expandto18decimals(1).as_u128();
+
+		pool.swap::<Asset0ToAsset1>((swap_input / 10).into());
+		pool.swap::<Asset1ToAsset0>((swap_input / 100).into());
+
+		match pool.burn(
+			id.clone(),
+			MIN_TICK_UNISWAP_MEDIUM + TICKSPACING_UNISWAP_MEDIUM,
+			MAX_TICK_UNISWAP_MEDIUM - TICKSPACING_UNISWAP_MEDIUM,
+			0,
+		) {
+			Err(PositionError::NonExistent) => {},
+			_ => panic!("Expected NonExistent"),
+		}
+
+		let (_, fees_owed) = pool
+			.mint(
+				id.clone(),
+				MIN_TICK_UNISWAP_MEDIUM + TICKSPACING_UNISWAP_MEDIUM,
+				MAX_TICK_UNISWAP_MEDIUM - TICKSPACING_UNISWAP_MEDIUM,
+				1,
+				|_| Ok::<(), ()>(()),
+			)
+			.unwrap();
+
+		match (fees_owed[PoolSide::Asset0], fees_owed[PoolSide::Asset1]) {
+			(0, 0) => {},
+			_ => panic!("Fees accrued are not zero"),
+		}
+
+		let tick = pool
+			.positions
+			.get(&(
+				id.clone(),
+				MIN_TICK_UNISWAP_MEDIUM + TICKSPACING_UNISWAP_MEDIUM,
+				MAX_TICK_UNISWAP_MEDIUM - TICKSPACING_UNISWAP_MEDIUM,
+			))
+			.unwrap();
+		assert_eq!(tick.liquidity, 1);
+		assert_eq!(
+			tick.last_fee_growth_inside[PoolSide::Asset0],
+			U256::from_dec_str("102084710076281216349243831104605583").unwrap()
+		);
+		assert_eq!(
+			tick.last_fee_growth_inside[!PoolSide::Asset0],
+			U256::from_dec_str("10208471007628121634924383110460558").unwrap()
+		);
+		// assert_eq!(tick.fees_owed[PoolSide::Asset0], 0);
+		// assert_eq!(tick.fees_owed[!PoolSide::Asset0], 0);
+
+		let (returned_capital, fees_owed) = pool
+			.burn(
+				id.clone(),
+				MIN_TICK_UNISWAP_MEDIUM + TICKSPACING_UNISWAP_MEDIUM,
+				MAX_TICK_UNISWAP_MEDIUM - TICKSPACING_UNISWAP_MEDIUM,
+				1,
+			)
+			.unwrap();
+
+		// DIFF: Burn will have burnt the entire position so it will be deleted.
+		assert_eq!(fees_owed[PoolSide::Asset0], 0);
+		assert_eq!(fees_owed[!PoolSide::Asset0], 0);
+
+		// This could be missing + fees_owed[PoolSide::Asset0]
+		assert_eq!(returned_capital[PoolSide::Asset0], U256::from(3));
+		assert_eq!(returned_capital[!PoolSide::Asset0], U256::from(0));
+
+		match pool.positions.get(&(
+			id,
+			MIN_TICK_UNISWAP_MEDIUM + TICKSPACING_UNISWAP_MEDIUM,
+			MAX_TICK_UNISWAP_MEDIUM - TICKSPACING_UNISWAP_MEDIUM,
+		)) {
+			None => {},
+			_ => panic!("Expected NonExistent Key"),
+		}
+	}
+
+	pub const INITIALIZE_LIQUIDITY_AMOUNT: u128 = 2000000000000000000u128;
+
+	// #Burn
+	fn pool_initialized_zerotick(
+		mut pool: PoolState,
+	) -> (PoolState, PoolAssetMap<AmountU256>, AccountId) {
+		let id: AccountId = AccountId::from([0xcf; 32]);
+		let mut minted_capital = None;
+
+		pool.mint(
+			id.clone(),
+			MIN_TICK_UNISWAP_MEDIUM,
+			MAX_TICK_UNISWAP_MEDIUM,
+			INITIALIZE_LIQUIDITY_AMOUNT,
+			|minted| {
+				minted_capital.replace(minted);
+				Ok::<(), ()>(())
+			},
+		)
+		.unwrap();
+		let minted_capital = minted_capital.unwrap();
+
+		(pool, minted_capital, id)
+	}
+
+	// Medium Fee, tickSpacing = 12, 1:1 price
+	fn mediumpool_initialized_zerotick() -> (PoolState, PoolAssetMap<AmountU256>, AccountId) {
+		// fee_pips shall be one order of magnitude smaller than in the Uniswap pool (because
+		// ONE_IN_PIPS is /10)
+		let pool = PoolState::new(3000, encodedprice1_1()).unwrap();
+		pool_initialized_zerotick(pool)
+	}
+
+	fn checktickisclear(pool: &PoolState, tick: Tick) {
+		match pool.liquidity_map.get(&tick) {
+			None => {},
+			_ => panic!("Expected NonExistent Key"),
+		}
+	}
+
+	fn checkticknotclear(pool: &PoolState, tick: Tick) {
+		if pool.liquidity_map.get(&tick).is_none() {
+			panic!("Expected Key")
+		}
+	}
+
+	// Own test
+	#[test]
+	fn test_multiple_burns() {
+		let (mut pool, _, _id) = mediumpool_initialized_zerotick();
+		// some activity that would make the ticks non-zero
+		pool.mint(
+			AccountId::from([0xce; 32]),
+			MIN_TICK_UNISWAP_MEDIUM,
+			MAX_TICK_UNISWAP_MEDIUM,
+			expandto18decimals(1).as_u128(),
+			|_| Ok::<(), ()>(()),
+		)
+		.unwrap();
+
+		pool.swap::<Asset0ToAsset1>(expandto18decimals(1));
+		pool.swap::<Asset1ToAsset0>(expandto18decimals(1));
+
+		// Should be able to do only 1 burn (1000000000000000000 / 987654321000000000)
+
+		pool.burn(
+			AccountId::from([0xce; 32]),
+			MIN_TICK_UNISWAP_MEDIUM,
+			MAX_TICK_UNISWAP_MEDIUM,
+			987654321000000000,
+		)
+		.unwrap();
+
+		match pool.burn(
+			AccountId::from([0xce; 32]),
+			MIN_TICK_UNISWAP_MEDIUM,
+			MAX_TICK_UNISWAP_MEDIUM,
+			987654321000000000,
+		) {
+			Err(PositionError::PositionLacksLiquidity) => {},
+			_ => panic!("Expected InsufficientLiquidity"),
+		}
+	}
+
+	#[test]
+	fn test_notclearposition_ifnomoreliquidity() {
+		let (mut pool, _, _id) = mediumpool_initialized_zerotick();
+		// some activity that would make the ticks non-zero
+		pool.mint(
+			AccountId::from([0xce; 32]),
+			MIN_TICK_UNISWAP_MEDIUM,
+			MAX_TICK_UNISWAP_MEDIUM,
+			expandto18decimals(1).as_u128(),
+			|_| Ok::<(), ()>(()),
+		)
+		.unwrap();
+
+		pool.swap::<Asset0ToAsset1>(expandto18decimals(1));
+		pool.swap::<Asset1ToAsset0>(expandto18decimals(1));
+
+		// Add a poke to update the fee growth and check it's value
+		let (returned_capital, fees_owed) = pool
+			.burn(AccountId::from([0xce; 32]), MIN_TICK_UNISWAP_MEDIUM, MAX_TICK_UNISWAP_MEDIUM, 0)
+			.unwrap();
+
+		assert_ne!(fees_owed[PoolSide::Asset0], 0);
+		assert_ne!(fees_owed[!PoolSide::Asset0], 0);
+		assert_eq!(returned_capital[PoolSide::Asset0], U256::from(0));
+		assert_eq!(returned_capital[!PoolSide::Asset0], U256::from(0));
+
+		let pos = pool
+			.positions
+			.get(&(AccountId::from([0xce; 32]), MIN_TICK_UNISWAP_MEDIUM, MAX_TICK_UNISWAP_MEDIUM))
+			.unwrap();
+		assert_eq!(
+			pos.last_fee_growth_inside[PoolSide::Asset0],
+			U256::from_dec_str("340282366920938463463374607431768211").unwrap()
+		);
+		assert_eq!(
+			pos.last_fee_growth_inside[!PoolSide::Asset0],
+			U256::from_dec_str("340282366920938463463374607431768211").unwrap()
+		);
+
+		let (returned_capital, fees_owed) = pool
+			.burn(
+				AccountId::from([0xce; 32]),
+				MIN_TICK_UNISWAP_MEDIUM,
+				MAX_TICK_UNISWAP_MEDIUM,
+				expandto18decimals(1).as_u128(),
+			)
+			.unwrap();
+
+		// DIFF: Burn will have burnt the entire position so it will be deleted.
+		// Also, fees will already have been collected in the first burn.
+		assert_eq!(fees_owed[PoolSide::Asset0], 0);
+		assert_eq!(fees_owed[!PoolSide::Asset0], 0);
+
+		// This could be missing + fees_owed[PoolSide::Asset0]
+		assert_ne!(returned_capital[PoolSide::Asset0], U256::from(0));
+		assert_ne!(returned_capital[!PoolSide::Asset0], U256::from(0));
+
+		match pool.positions.get(&(
+			AccountId::from([0xce; 32]),
+			MIN_TICK_UNISWAP_MEDIUM,
+			MAX_TICK_UNISWAP_MEDIUM,
+		)) {
+			None => {},
+			_ => panic!("Expected NonExistent Key"),
+		}
+	}
+
+	#[test]
+	fn test_clearstick_iflastposition() {
+		let (mut pool, _, id) = mediumpool_initialized_zerotick();
+		// some activity that would make the ticks non-zero
+		pool.mint(
+			id.clone(),
+			MIN_TICK_UNISWAP_MEDIUM + TICKSPACING_UNISWAP_MEDIUM,
+			MAX_TICK_UNISWAP_MEDIUM - TICKSPACING_UNISWAP_MEDIUM,
+			1,
+			|_| Ok::<(), ()>(()),
+		)
+		.unwrap();
+
+		pool.swap::<Asset0ToAsset1>(expandto18decimals(1));
+
+		pool.burn(
+			id,
+			MIN_TICK_UNISWAP_MEDIUM + TICKSPACING_UNISWAP_MEDIUM,
+			MAX_TICK_UNISWAP_MEDIUM - TICKSPACING_UNISWAP_MEDIUM,
+			1,
+		)
+		.unwrap();
+
+		checktickisclear(&pool, MIN_TICK_UNISWAP_MEDIUM + TICKSPACING_UNISWAP_MEDIUM);
+		checktickisclear(&pool, MAX_TICK_UNISWAP_MEDIUM - TICKSPACING_UNISWAP_MEDIUM);
+	}
+
+	#[test]
+	fn test_clearlower_ifupperused() {
+		let (mut pool, _, id) = mediumpool_initialized_zerotick();
+		// some activity that would make the ticks non-zero
+		pool.mint(
+			id.clone(),
+			MIN_TICK_UNISWAP_MEDIUM + TICKSPACING_UNISWAP_MEDIUM,
+			MAX_TICK_UNISWAP_MEDIUM - TICKSPACING_UNISWAP_MEDIUM,
+			1,
+			|_| Ok::<(), ()>(()),
+		)
+		.unwrap();
+		pool.mint(
+			id.clone(),
+			MIN_TICK_UNISWAP_MEDIUM + 2 * TICKSPACING_UNISWAP_MEDIUM,
+			MAX_TICK_UNISWAP_MEDIUM - TICKSPACING_UNISWAP_MEDIUM,
+			1,
+			|_| Ok::<(), ()>(()),
+		)
+		.unwrap();
+		pool.swap::<Asset0ToAsset1>(expandto18decimals(1));
+
+		pool.burn(
+			id,
+			MIN_TICK_UNISWAP_MEDIUM + TICKSPACING_UNISWAP_MEDIUM,
+			MAX_TICK_UNISWAP_MEDIUM - TICKSPACING_UNISWAP_MEDIUM,
+			1,
+		)
+		.unwrap();
+
+		checktickisclear(&pool, MIN_TICK_UNISWAP_MEDIUM + TICKSPACING_UNISWAP_MEDIUM);
+		checkticknotclear(&pool, MAX_TICK_UNISWAP_MEDIUM - TICKSPACING_UNISWAP_MEDIUM);
+	}
+
+	#[test]
+	fn test_clearupper_iflowerused() {
+		let (mut pool, _, id) = mediumpool_initialized_zerotick();
+		// some activity that would make the ticks non-zero
+		pool.mint(
+			id.clone(),
+			MIN_TICK_UNISWAP_MEDIUM + TICKSPACING_UNISWAP_MEDIUM,
+			MAX_TICK_UNISWAP_MEDIUM - TICKSPACING_UNISWAP_MEDIUM,
+			1,
+			|_| Ok::<(), ()>(()),
+		)
+		.unwrap();
+		pool.mint(
+			id.clone(),
+			MIN_TICK_UNISWAP_MEDIUM + TICKSPACING_UNISWAP_MEDIUM,
+			MAX_TICK_UNISWAP_MEDIUM - 2 * TICKSPACING_UNISWAP_MEDIUM,
+			1,
+			|_| Ok::<(), ()>(()),
+		)
+		.unwrap();
+		pool.swap::<Asset0ToAsset1>(expandto18decimals(1));
+
+		pool.burn(
+			id,
+			MIN_TICK_UNISWAP_MEDIUM + TICKSPACING_UNISWAP_MEDIUM,
+			MAX_TICK_UNISWAP_MEDIUM - TICKSPACING_UNISWAP_MEDIUM,
+			1,
+		)
+		.unwrap();
+
+		checkticknotclear(&pool, MIN_TICK_UNISWAP_MEDIUM + TICKSPACING_UNISWAP_MEDIUM);
+		checktickisclear(&pool, MAX_TICK_UNISWAP_MEDIUM - TICKSPACING_UNISWAP_MEDIUM);
+	}
+
+	// Miscellaneous mint tests
+
+	pub const TICKSPACING_UNISWAP_LOW: Tick = 10;
+	pub const MIN_TICK_UNISWAP_LOW: Tick = -887220;
+	pub const MAX_TICK_UNISWAP_LOW: Tick = -MIN_TICK_UNISWAP_LOW;
+
+	// Low Fee, tickSpacing = 10, 1:1 price
+	fn lowpool_initialized_zerotick() -> (PoolState, PoolAssetMap<AmountU256>, AccountId) {
+		// Tickspacing
+		let pool = PoolState::new(500, encodedprice1_1()).unwrap(); //	encodeSqrtPrice (1,1)
+		pool_initialized_zerotick(pool)
+	}
+
+	#[test]
+	fn test_mint_rightofcurrentprice() {
+		let (mut pool, _, id) = lowpool_initialized_zerotick();
+
+		let liquiditybefore = pool.current_liquidity;
+
+		let mut minted_capital = None;
+		pool.mint(id, TICKSPACING_UNISWAP_LOW, 2 * TICKSPACING_UNISWAP_LOW, 1000, |minted| {
+			minted_capital.replace(minted);
+			Ok::<(), ()>(())
+		})
+		.unwrap();
+		let minted_capital = minted_capital.unwrap();
+
+		assert!(pool.current_liquidity >= liquiditybefore);
+
+		assert_eq!(minted_capital[PoolSide::Asset0], U256::from(1));
+		assert_eq!(minted_capital[!PoolSide::Asset0], U256::from(0));
+	}
+
+	#[test]
+	fn test_mint_leftofcurrentprice() {
+		let (mut pool, _, id) = lowpool_initialized_zerotick();
+
+		let liquiditybefore = pool.current_liquidity;
+
+		let mut minted_capital = None;
+		pool.mint(id, -2 * TICKSPACING_UNISWAP_LOW, -TICKSPACING_UNISWAP_LOW, 1000, |minted| {
+			minted_capital.replace(minted);
+			Ok::<(), ()>(())
+		})
+		.unwrap();
+		let minted_capital = minted_capital.unwrap();
+
+		assert!(pool.current_liquidity >= liquiditybefore);
+
+		assert_eq!(minted_capital[PoolSide::Asset0], U256::from(0));
+		assert_eq!(minted_capital[!PoolSide::Asset0], U256::from(1));
+	}
+
+	#[test]
+	fn test_mint_withincurrentprice() {
+		let (mut pool, _, id) = lowpool_initialized_zerotick();
+
+		let liquiditybefore = pool.current_liquidity;
+
+		let mut minted_capital = None;
+		pool.mint(id, -TICKSPACING_UNISWAP_LOW, TICKSPACING_UNISWAP_LOW, 1000, |minted| {
+			minted_capital.replace(minted);
+			Ok::<(), ()>(())
+		})
+		.unwrap();
+		let minted_capital = minted_capital.unwrap();
+
+		assert!(pool.current_liquidity >= liquiditybefore);
+
+		assert_eq!(minted_capital[PoolSide::Asset0], U256::from(1));
+		assert_eq!(minted_capital[!PoolSide::Asset0], U256::from(1));
+	}
+
+	#[test]
+	fn test_cannotremove_morethanposition() {
+		let (mut pool, _, id) = lowpool_initialized_zerotick();
+
+		pool.mint(
+			id.clone(),
+			-TICKSPACING_UNISWAP_LOW,
+			TICKSPACING_UNISWAP_LOW,
+			expandto18decimals(1).as_u128(),
+			|_| Ok::<(), ()>(()),
+		)
+		.unwrap();
+
+		match pool.burn(
+			id,
+			-TICKSPACING_UNISWAP_LOW,
+			TICKSPACING_UNISWAP_LOW,
+			expandto18decimals(1).as_u128() + 1,
+		) {
+			Err(PositionError::PositionLacksLiquidity) => {},
+			_ => panic!("Should not be able to remove more than position"),
+		}
+	}
+
+	#[test]
+	fn test_collectfees_withincurrentprice() {
+		let (mut pool, _, id) = lowpool_initialized_zerotick();
+
+		pool.mint(
+			id.clone(),
+			-TICKSPACING_UNISWAP_LOW * 100,
+			TICKSPACING_UNISWAP_LOW * 100,
+			expandto18decimals(100).as_u128(),
+			|_| Ok::<(), ()>(()),
+		)
+		.unwrap();
+
+		let liquiditybefore = pool.current_liquidity;
+		pool.swap::<Asset0ToAsset1>(expandto18decimals(1));
+
+		assert!(pool.current_liquidity >= liquiditybefore);
+
+		// Poke
+		let (returned_capital, fees_owed) = pool
+			.burn(id, -TICKSPACING_UNISWAP_LOW * 100, TICKSPACING_UNISWAP_LOW * 100, 0)
+			.unwrap();
+
+		assert_eq!(returned_capital[PoolSide::Asset0], U256::from(0));
+		assert_eq!(returned_capital[!PoolSide::Asset0], U256::from(0));
+
+		assert!(fees_owed[PoolSide::Asset0] > 0);
+		assert_eq!(fees_owed[!PoolSide::Asset0], 0);
+	}
+
+	// Post initialize at medium fee
+
+	#[test]
+	fn test_initial_liquidity() {
+		let (pool, _, _) = mediumpool_initialized_zerotick();
+		assert_eq!(pool.current_liquidity, expandto18decimals(2).as_u128());
+	}
+
+	#[test]
+	fn test_returns_insupply_inrange() {
+		let (mut pool, _, id) = mediumpool_initialized_zerotick();
+		pool.mint(
+			id,
+			-TICKSPACING_UNISWAP_MEDIUM,
+			TICKSPACING_UNISWAP_MEDIUM,
+			expandto18decimals(3).as_u128(),
+			|_| Ok::<(), ()>(()),
+		)
+		.unwrap();
+		assert_eq!(pool.current_liquidity, expandto18decimals(5).as_u128());
+	}
+
+	#[test]
+	fn test_excludes_supply_abovetick() {
+		let (mut pool, _, id) = mediumpool_initialized_zerotick();
+		pool.mint(
+			id,
+			TICKSPACING_UNISWAP_MEDIUM,
+			2 * TICKSPACING_UNISWAP_MEDIUM,
+			expandto18decimals(3).as_u128(),
+			|_| Ok::<(), ()>(()),
+		)
+		.unwrap();
+		assert_eq!(pool.current_liquidity, expandto18decimals(2).as_u128());
+	}
+
+	#[test]
+	fn test_excludes_supply_belowtick() {
+		let (mut pool, _, id) = mediumpool_initialized_zerotick();
+		pool.mint(
+			id,
+			-2 * TICKSPACING_UNISWAP_MEDIUM,
+			-TICKSPACING_UNISWAP_MEDIUM,
+			expandto18decimals(3).as_u128(),
+			|_| Ok::<(), ()>(()),
+		)
+		.unwrap();
+		assert_eq!(pool.current_liquidity, expandto18decimals(2).as_u128());
+	}
+
+	#[test]
+	fn test_updates_exiting() {
+		let (mut pool, _, id) = mediumpool_initialized_zerotick();
+		assert_eq!(pool.current_liquidity, expandto18decimals(2).as_u128());
+
+		pool.mint(id, 0, TICKSPACING_UNISWAP_MEDIUM, expandto18decimals(1).as_u128(), |_| {
+			Ok::<(), ()>(())
+		})
+		.unwrap();
+		assert_eq!(pool.current_liquidity, expandto18decimals(3).as_u128());
+
+		// swap toward the left (just enough for the tick transition function to trigger)
+		pool.swap::<Asset0ToAsset1>((1).into());
+
+		assert_eq!(pool.current_tick, -1);
+		assert_eq!(pool.current_liquidity, expandto18decimals(2).as_u128());
+	}
+
+	#[test]
+	fn test_updates_entering() {
+		let (mut pool, _, id) = mediumpool_initialized_zerotick();
+		assert_eq!(pool.current_liquidity, expandto18decimals(2).as_u128());
+
+		pool.mint(id, -TICKSPACING_UNISWAP_MEDIUM, 0, expandto18decimals(1).as_u128(), |_| {
+			Ok::<(), ()>(())
+		})
+		.unwrap();
+		assert_eq!(pool.current_liquidity, expandto18decimals(2).as_u128());
+
+		// swap toward the left (just enough for the tick transition function to trigger)
+		pool.swap::<Asset0ToAsset1>((1).into());
+
+		assert_eq!(pool.current_tick, -1);
+		assert_eq!(pool.current_liquidity, expandto18decimals(3).as_u128());
+	}
+
+	// Uniswap "limit orders"
+
+	#[test]
+	fn test_limitselling_asset_0_to_asset1_tick0thru1() {
+		let (mut pool, _, id) = mediumpool_initialized_zerotick();
+		let mut minted_capital = None;
+		pool.mint(id.clone(), 0, 120, expandto18decimals(1).as_u128(), |minted| {
+			minted_capital.replace(minted);
+			Ok::<(), ()>(())
+		})
+		.unwrap();
+		let minted_capital = minted_capital.unwrap();
+
+		assert_eq!(
+			minted_capital[PoolSide::Asset0],
+			U256::from_dec_str("5981737760509663").unwrap()
+		);
+		assert_eq!(minted_capital[!PoolSide::Asset0], U256::from_dec_str("0").unwrap());
+
+		// somebody takes the limit order
+		pool.swap::<Asset1ToAsset0>(U256::from_dec_str("2000000000000000000").unwrap());
+
+		let (burned, fees_owed) =
+			pool.burn(id.clone(), 0, 120, expandto18decimals(1).as_u128()).unwrap();
+		assert_eq!(burned[PoolSide::Asset0], U256::from_dec_str("0").unwrap());
+		assert_eq!(burned[!PoolSide::Asset0], U256::from_dec_str("6017734268818165").unwrap());
+
+		// DIFF: position fully burnt
+		assert_eq!(fees_owed[PoolSide::Asset0], 0);
+		assert_eq!(fees_owed[!PoolSide::Asset0], 18107525382602);
+
+		match pool.burn(id, 0, 120, 1) {
+			Err(PositionError::NonExistent) => {},
+			_ => panic!("Expected NonExistent"),
+		}
+
+		assert!(pool.current_tick > 120)
+	}
+
+	#[test]
+	fn test_limitselling_asset_0_to_asset_1_tick0thru1_poke() {
+		let (mut pool, _, id) = mediumpool_initialized_zerotick();
+		let mut minted_capital = None;
+		pool.mint(id.clone(), 0, 120, expandto18decimals(1).as_u128(), |minted| {
+			minted_capital.replace(minted);
+			Ok::<(), ()>(())
+		})
+		.unwrap();
+		let minted_capital = minted_capital.unwrap();
+
+		assert_eq!(
+			minted_capital[PoolSide::Asset0],
+			U256::from_dec_str("5981737760509663").unwrap()
+		);
+		assert_eq!(minted_capital[!PoolSide::Asset0], U256::from_dec_str("0").unwrap());
+
+		// somebody takes the limit order
+		pool.swap::<Asset1ToAsset0>(U256::from_dec_str("2000000000000000000").unwrap());
+
+		let (burned, fees_owed) = pool.burn(id.clone(), 0, 120, 0).unwrap();
+		assert_eq!(burned[PoolSide::Asset0], U256::from_dec_str("0").unwrap());
+		assert_eq!(burned[!PoolSide::Asset0], U256::from_dec_str("0").unwrap());
+
+		// DIFF: position fully burnt
+		assert_eq!(fees_owed[PoolSide::Asset0], 0);
+		assert_eq!(fees_owed[!PoolSide::Asset0], 18107525382602);
+
+		let (burned, fees_owed) = pool.burn(id, 0, 120, expandto18decimals(1).as_u128()).unwrap();
+		assert_eq!(burned[PoolSide::Asset0], U256::from_dec_str("0").unwrap());
+		assert_eq!(burned[!PoolSide::Asset0], U256::from_dec_str("6017734268818165").unwrap());
+
+		// DIFF: position fully burnt
+		assert_eq!(fees_owed[PoolSide::Asset0], 0);
+		assert_eq!(fees_owed[!PoolSide::Asset0], 0);
+
+		assert!(pool.current_tick > 120)
+	}
+
+	#[test]
+	fn test_limitselling_asset_1_to_asset_0_tick1thru0() {
+		let (mut pool, _, id) = mediumpool_initialized_zerotick();
+		let mut minted_capital = None;
+		pool.mint(id.clone(), -120, 0, expandto18decimals(1).as_u128(), |minted| {
+			minted_capital.replace(minted);
+			Ok::<(), ()>(())
+		})
+		.unwrap();
+		let minted_capital = minted_capital.unwrap();
+
+		assert_eq!(
+			minted_capital[!PoolSide::Asset0],
+			U256::from_dec_str("5981737760509663").unwrap()
+		);
+		assert_eq!(minted_capital[PoolSide::Asset0], U256::from_dec_str("0").unwrap());
+
+		// somebody takes the limit order
+		pool.swap::<Asset0ToAsset1>(U256::from_dec_str("2000000000000000000").unwrap());
+
+		let (burned, fees_owed) =
+			pool.burn(id.clone(), -120, 0, expandto18decimals(1).as_u128()).unwrap();
+		assert_eq!(burned[!PoolSide::Asset0], U256::from_dec_str("0").unwrap());
+		assert_eq!(burned[PoolSide::Asset0], U256::from_dec_str("6017734268818165").unwrap());
+
+		// DIFF: position fully burnt
+		assert_eq!(fees_owed[!PoolSide::Asset0], 0);
+		assert_eq!(fees_owed[PoolSide::Asset0], 18107525382602);
+
+		match pool.burn(id, -120, 0, 1) {
+			Err(PositionError::NonExistent) => {},
+			_ => panic!("Expected NonExistent"),
+		}
+
+		assert!(pool.current_tick < -120)
+	}
+
+	#[test]
+	fn test_limitselling_asset_1_to_asset_0_tick1thru0_poke() {
+		let (mut pool, _, id) = mediumpool_initialized_zerotick();
+		let mut minted_capital = None;
+		pool.mint(id.clone(), -120, 0, expandto18decimals(1).as_u128(), |minted| {
+			minted_capital.replace(minted);
+			Ok::<(), ()>(())
+		})
+		.unwrap();
+		let minted_capital = minted_capital.unwrap();
+
+		assert_eq!(
+			minted_capital[!PoolSide::Asset0],
+			U256::from_dec_str("5981737760509663").unwrap()
+		);
+		assert_eq!(minted_capital[PoolSide::Asset0], U256::from_dec_str("0").unwrap());
+
+		// somebody takes the limit order
+		pool.swap::<Asset0ToAsset1>(U256::from_dec_str("2000000000000000000").unwrap());
+
+		let (burned, fees_owed) = pool.burn(id.clone(), -120, 0, 0).unwrap();
+		assert_eq!(burned[!PoolSide::Asset0], U256::from_dec_str("0").unwrap());
+		assert_eq!(burned[PoolSide::Asset0], U256::from_dec_str("0").unwrap());
+
+		assert_eq!(fees_owed[!PoolSide::Asset0], 0);
+		assert_eq!(fees_owed[PoolSide::Asset0], 18107525382602);
+
+		let (burned, fees_owed) =
+			pool.burn(id.clone(), -120, 0, expandto18decimals(1).as_u128()).unwrap();
+		assert_eq!(burned[!PoolSide::Asset0], U256::from_dec_str("0").unwrap());
+		assert_eq!(burned[PoolSide::Asset0], U256::from_dec_str("6017734268818165").unwrap());
+
+		// DIFF: position fully burnt
+		assert_eq!(fees_owed[!PoolSide::Asset0], 0);
+		assert_eq!(fees_owed[PoolSide::Asset0], 0);
+
+		match pool.burn(id, -120, 0, 1) {
+			Err(PositionError::NonExistent) => {},
+			_ => panic!("Expected NonExistent"),
+		}
+
+		assert!(pool.current_tick < -120)
+	}
+
+	// #Collect
+
+	// Low Fee, tickSpacing = 10, 1:1 price
+	fn lowpool_initialized_one() -> (PoolState, PoolAssetMap<AmountU256>, AccountId) {
+		let pool = PoolState::new(500, encodedprice1_1()).unwrap();
+		let id: AccountId = AccountId::from([0xcf; 32]);
+		let minted_amounts: PoolAssetMap<AmountU256> = Default::default();
+		(pool, minted_amounts, id)
+	}
+
+	#[test]
+	fn test_multiplelps() {
+		let (mut pool, _, id) = lowpool_initialized_one();
+
+		pool.mint(
+			id.clone(),
+			MIN_TICK_UNISWAP_LOW,
+			MAX_TICK_UNISWAP_LOW,
+			expandto18decimals(1).as_u128(),
+			|_| Ok::<(), ()>(()),
+		)
+		.unwrap();
+		pool.mint(
+			id.clone(),
+			MIN_TICK_UNISWAP_LOW + TICKSPACING_UNISWAP_LOW,
+			MAX_TICK_UNISWAP_LOW - TICKSPACING_UNISWAP_LOW,
+			2000000000000000000,
+			|_| Ok::<(), ()>(()),
+		)
+		.unwrap();
+
+		pool.swap::<Asset0ToAsset1>(expandto18decimals(1));
+
+		// poke positions
+		let (burned, fees_owed) =
+			pool.burn(id.clone(), MIN_TICK_UNISWAP_LOW, MAX_TICK_UNISWAP_LOW, 0).unwrap();
+
+		assert_eq!(burned[PoolSide::Asset0], U256::from_dec_str("0").unwrap());
+		assert_eq!(burned[!PoolSide::Asset0], U256::from_dec_str("0").unwrap());
+		// NOTE: Fee_owed value 1 unit different than Uniswap because uniswap requires 4 loops to do
+		// the swap instead of 1 causing the rounding to be different
+		assert_eq!(fees_owed[PoolSide::Asset0], 166666666666666u128);
+		assert_eq!(fees_owed[!PoolSide::Asset0], 0);
+
+		let (_, fees_owed) = pool
+			.burn(
+				id,
+				MIN_TICK_UNISWAP_LOW + TICKSPACING_UNISWAP_LOW,
+				MAX_TICK_UNISWAP_LOW - TICKSPACING_UNISWAP_LOW,
+				0,
+			)
+			.unwrap();
+		// NOTE: Fee_owed value 1 unit different than Uniswap because uniswap requires 4 loops to do
+		// the swap instead of 1 causing the rounding to be different
+		assert_eq!(fees_owed[PoolSide::Asset0], 333333333333333);
+		assert_eq!(fees_owed[!PoolSide::Asset0], 0);
+	}
+
+	// type(uint128).max * 2**128 / 1e18
+	// https://www.wolframalpha.com/input/?i=%282**128+-+1%29+*+2**128+%2F+1e18
+	// U256::from_dec_str("115792089237316195423570985008687907852929702298719625575994").unwrap();
+
+	// Works across large increases
+	#[test]
+	fn test_before_capbidn() {
+		let (mut pool, _, id) = lowpool_initialized_one();
+		pool.mint(
+			id.clone(),
+			MIN_TICK_UNISWAP_LOW,
+			MAX_TICK_UNISWAP_LOW,
+			expandto18decimals(1).as_u128(),
+			|_| Ok::<(), ()>(()),
+		)
+		.unwrap();
+
+		pool.global_fee_growth[PoolSide::Asset0] =
+			U256::from_dec_str("115792089237316195423570985008687907852929702298719625575994")
+				.unwrap();
+
+		let (burned, fees_owed) =
+			pool.burn(id, MIN_TICK_UNISWAP_LOW, MAX_TICK_UNISWAP_LOW, 0).unwrap();
+
+		assert_eq!(burned[PoolSide::Asset0], U256::from_dec_str("0").unwrap());
+		assert_eq!(burned[!PoolSide::Asset0], U256::from_dec_str("0").unwrap());
+
+		assert_eq!(fees_owed[PoolSide::Asset0], u128::MAX - 1);
+		assert_eq!(fees_owed[!PoolSide::Asset0], 0);
+	}
+
+	#[test]
+	fn test_after_capbidn() {
+		let (mut pool, _, id) = lowpool_initialized_one();
+		pool.mint(
+			id.clone(),
+			MIN_TICK_UNISWAP_LOW,
+			MAX_TICK_UNISWAP_LOW,
+			expandto18decimals(1).as_u128(),
+			|_| Ok::<(), ()>(()),
+		)
+		.unwrap();
+
+		pool.global_fee_growth[PoolSide::Asset0] =
+			U256::from_dec_str("115792089237316195423570985008687907852929702298719625575995")
+				.unwrap();
+
+		let (burned, fees_owed) =
+			pool.burn(id, MIN_TICK_UNISWAP_LOW, MAX_TICK_UNISWAP_LOW, 0).unwrap();
+
+		assert_eq!(burned[PoolSide::Asset0], U256::from_dec_str("0").unwrap());
+		assert_eq!(burned[!PoolSide::Asset0], U256::from_dec_str("0").unwrap());
+
+		assert_eq!(fees_owed[PoolSide::Asset0], u128::MAX);
+		assert_eq!(fees_owed[!PoolSide::Asset0], 0);
+	}
+
+	#[test]
+	fn test_wellafter_capbidn() {
+		let (mut pool, _, id) = lowpool_initialized_one();
+		pool.mint(
+			id.clone(),
+			MIN_TICK_UNISWAP_LOW,
+			MAX_TICK_UNISWAP_LOW,
+			expandto18decimals(1).as_u128(),
+			|_| Ok::<(), ()>(()),
+		)
+		.unwrap();
+
+		pool.global_fee_growth[PoolSide::Asset0] = U256::MAX;
+
+		let (burned, fees_owed) =
+			pool.burn(id, MIN_TICK_UNISWAP_LOW, MAX_TICK_UNISWAP_LOW, 0).unwrap();
+
+		assert_eq!(burned[PoolSide::Asset0], U256::from_dec_str("0").unwrap());
+		assert_eq!(burned[!PoolSide::Asset0], U256::from_dec_str("0").unwrap());
+
+		assert_eq!(fees_owed[PoolSide::Asset0], u128::MAX);
+		assert_eq!(fees_owed[!PoolSide::Asset0], 0);
+	}
+
+	// DIFF: pool.global_fee_growth won't overflow. We make it saturate.
+
+	fn lowpool_initialized_setfees() -> (PoolState, PoolAssetMap<AmountU256>, AccountId) {
+		let (mut pool, mut minted_amounts_accum, id) = lowpool_initialized_one();
+		pool.global_fee_growth[PoolSide::Asset0] = U256::MAX;
+		pool.global_fee_growth[!PoolSide::Asset0] = U256::MAX;
+
+		let mut minted_capital = None;
+		pool.mint(
+			id.clone(),
+			MIN_TICK_UNISWAP_LOW,
+			MAX_TICK_UNISWAP_LOW,
+			expandto18decimals(10).as_u128(),
+			|minted| {
+				minted_capital.replace(minted);
+				Ok::<(), ()>(())
+			},
+		)
+		.unwrap();
+		let minted_capital = minted_capital.unwrap();
+
+		minted_amounts_accum[PoolSide::Asset0] += minted_capital[PoolSide::Asset0];
+		minted_amounts_accum[!PoolSide::Asset0] += minted_capital[!PoolSide::Asset0];
+
+		(pool, minted_amounts_accum, id)
+	}
+
+	#[test]
+	fn test_base() {
+		let (mut pool, _, id) = lowpool_initialized_setfees();
+
+		pool.swap::<Asset0ToAsset1>(expandto18decimals(1));
+
+		assert_eq!(pool.global_fee_growth[PoolSide::Asset0], U256::MAX);
+		assert_eq!(pool.global_fee_growth[!PoolSide::Asset0], U256::MAX);
+
+		let (_, fees_owed) = pool.burn(id, MIN_TICK_UNISWAP_LOW, MAX_TICK_UNISWAP_LOW, 0).unwrap();
+
+		// DIFF: no fees accrued
+		assert_eq!(fees_owed[PoolSide::Asset0], 0);
+		assert_eq!(fees_owed[!PoolSide::Asset0], 0);
+	}
+
+	#[test]
+	fn test_pair() {
+		let (mut pool, _, id) = lowpool_initialized_setfees();
+
+		pool.swap::<Asset1ToAsset0>(expandto18decimals(1));
+
+		assert_eq!(pool.global_fee_growth[PoolSide::Asset0], U256::MAX);
+		assert_eq!(pool.global_fee_growth[!PoolSide::Asset0], U256::MAX);
+
+		let (_, fees_owed) = pool.burn(id, MIN_TICK_UNISWAP_LOW, MAX_TICK_UNISWAP_LOW, 0).unwrap();
+
+		// DIFF: no fees accrued
+		assert_eq!(fees_owed[PoolSide::Asset0], 0u128);
+		assert_eq!(fees_owed[!PoolSide::Asset0], 0);
+	}
+
+	// Skipped more fee protocol tests
+
+	// #Tickspacing
+
+	// Medium Fee, tickSpacing = 12, 1:1 price
+	fn mediumpool_initialized_nomint() -> (PoolState, PoolAssetMap<AmountU256>, AccountId) {
+		// fee_pips shall be one order of magnitude smaller than in the Uniswap pool (because
+		// ONE_IN_PIPS is /10)
+		let pool = PoolState::new(3000, encodedprice1_1()).unwrap();
+		let id: AccountId = AccountId::from([0xcf; 32]);
+		let minted_amounts: PoolAssetMap<AmountU256> = Default::default();
+		(pool, minted_amounts, id)
+	}
+
+	// DIFF: We have a tickspacing of 1, which means we will never have issues with it.
+	#[test]
+	fn test_tickspacing() {
+		let (mut pool, _, id) = mediumpool_initialized_nomint();
+		pool.mint(id.clone(), -6, 6, 1, |_| Ok::<(), ()>(())).unwrap();
+		pool.mint(id.clone(), -12, 12, 1, |_| Ok::<(), ()>(())).unwrap();
+		pool.mint(id.clone(), -144, 120, 1, |_| Ok::<(), ()>(())).unwrap();
+		pool.mint(id, -144, -120, 1, |_| Ok::<(), ()>(())).unwrap();
+	}
+
+	#[test]
+	fn test_swapping_gaps_asset_1_to_asset_0() {
+		let (mut pool, _, id) = mediumpool_initialized_nomint();
+		pool.mint(id.clone(), 120000, 121200, 250000000000000000, |_| Ok::<(), ()>(()))
+			.unwrap();
+		pool.swap::<Asset1ToAsset0>(expandto18decimals(1));
+		let (returned_capital, fees_owed) =
+			pool.burn(id, 120000, 121200, 250000000000000000).unwrap();
+
+		assert_eq!(
+			returned_capital[PoolSide::Asset0],
+			U256::from_dec_str("30027458295511").unwrap()
+		);
+		assert_eq!(
+			returned_capital[!PoolSide::Asset0],
+			U256::from_dec_str("996999999999999999").unwrap()
+		);
+
+		assert_eq!(fees_owed[PoolSide::Asset0], 0);
+		assert!(fees_owed[!PoolSide::Asset0] > 0);
+
+		assert_eq!(pool.current_tick, 120196)
+	}
+
+	#[test]
+	fn test_swapping_gaps_asset_0_to_asset_1() {
+		let (mut pool, _, id) = mediumpool_initialized_nomint();
+		pool.mint(id.clone(), -121200, -120000, 250000000000000000, |_| Ok::<(), ()>(()))
+			.unwrap();
+		pool.swap::<Asset0ToAsset1>(expandto18decimals(1));
+		let (returned_capital, fees_owed) =
+			pool.burn(id, -121200, -120000, 250000000000000000).unwrap();
+
+		assert_eq!(
+			returned_capital[PoolSide::Asset0],
+			U256::from_dec_str("996999999999999999").unwrap()
+		);
+		assert_eq!(
+			returned_capital[!PoolSide::Asset0],
+			U256::from_dec_str("30027458295511").unwrap()
+		);
+
+		assert_eq!(fees_owed[!PoolSide::Asset0], 0);
+		assert!(fees_owed[PoolSide::Asset0] > 0);
+
+		assert_eq!(pool.current_tick, -120197)
+	}
+
+	#[test]
+	fn test_cannot_run_ticktransition_twice() {
+		let id: AccountId = AccountId::from([0xcf; 32]);
+
+		let p0 = PoolState::sqrt_price_at_tick(-24081) + 1;
+		let mut pool = PoolState::new(3000, p0).unwrap();
+		assert_eq!(pool.current_liquidity, 0);
+		assert_eq!(pool.current_tick, -24081);
+
+		// add a bunch of liquidity around current price
+		pool.mint(id.clone(), -24082, -24080, expandto18decimals(1000).as_u128(), |_| {
+			Ok::<(), ()>(())
+		})
+		.unwrap();
+		assert_eq!(pool.current_liquidity, expandto18decimals(1000).as_u128());
+
+		pool.mint(id, -24082, -24081, expandto18decimals(1000).as_u128(), |_| Ok::<(), ()>(()))
+			.unwrap();
+		assert_eq!(pool.current_liquidity, expandto18decimals(1000).as_u128());
+
+		// check the math works out to moving the price down 1, sending no amount out, and having
+		// some amount remaining
+		let (amount_swapped, _) = pool.swap::<Asset0ToAsset1>(U256::from_dec_str("3").unwrap());
+		assert_eq!(amount_swapped, U256::from_dec_str("0").unwrap());
+
+		assert_eq!(pool.current_tick, -24082);
+		assert_eq!(pool.current_sqrt_price, p0 - 1);
+		assert_eq!(pool.current_liquidity, 2000000000000000000000u128);
+	}
+
+	///////////////////////////////////////////////////////////
+	///               TEST SQRTPRICE MATH                  ////
+	///////////////////////////////////////////////////////////
+	#[test]
+	#[should_panic]
+	fn test_frominput_fails_zero() {
+		// test Asset1ToAsset0 next_sqrt_price_from_input_amount
+		Asset1ToAsset0::next_sqrt_price_from_input_amount(
+			U256::from_dec_str("0").unwrap(),
+			0,
+			expandto18decimals(1) / 10,
+		);
+	}
+	#[test]
+	#[should_panic]
+	fn test_frominput_fails_liqzero() {
+		Asset0ToAsset1::next_sqrt_price_from_input_amount(
+			U256::from_dec_str("1").unwrap(),
+			0,
+			expandto18decimals(1) / 10,
+		);
+	}
+
+	// TODO: These should fail fix if we tighten up the data types
+	#[test]
+	//#[should_panic]
+	fn test_frominput_fails_inputoverflow() {
+		Asset1ToAsset0::next_sqrt_price_from_input_amount(
+			U256::from_dec_str("1461501637330902918203684832716283019655932542975").unwrap(), /* 2^160-1 */
+			1024,
+			U256::from_dec_str("1461501637330902918203684832716283019655932542976").unwrap(), /* 2^160 */
+		);
+	}
+	#[test]
+	//#[should_panic]
+	fn test_frominput_fails_anyinputoverflow() {
+		Asset1ToAsset0::next_sqrt_price_from_input_amount(
+			U256::from_dec_str("1").unwrap(),
+			1,
+			U256::from_dec_str(
+				"57896044618658097711785492504343953926634992332820282019728792003956564819968",
+			)
+			.unwrap(), //2^255
+		);
+	}
+
+	#[test]
+	fn test_frominput_zeroamount_asset_0_to_asset_1() {
+		let price = Asset0ToAsset1::next_sqrt_price_from_input_amount(
+			encodedprice1_1(),
+			expandto18decimals(1).as_u128(),
+			U256::from_dec_str("0").unwrap(),
+		);
+		assert_eq!(price, encodedprice1_1());
+	}
+
+	#[test]
+	fn test_frominput_zeroamount_asset_1_to_asset_0() {
+		let price = Asset1ToAsset0::next_sqrt_price_from_input_amount(
+			encodedprice1_1(),
+			expandto18decimals(1).as_u128(),
+			U256::from_dec_str("0").unwrap(),
+		);
+		assert_eq!(price, encodedprice1_1());
+	}
+
+	#[test]
+	fn test_maxamounts_minprice() {
+		let sqrt_p: U256 =
+			U256::from_dec_str("1461501637330902918203684832716283019655932542976").unwrap();
+		let liquidity: u128 = u128::MAX;
+		let maxamount_nooverflow = U256::MAX - (liquidity << 96); // sqrt_p)
+
+		let price = Asset0ToAsset1::next_sqrt_price_from_input_amount(
+			sqrt_p, //2^96
+			liquidity,
+			maxamount_nooverflow,
+		);
+
+		assert_eq!(price, 1.into());
+	}
+
+	#[test]
+	fn test_frominput_inputamount_pair() {
+		let price = Asset1ToAsset0::next_sqrt_price_from_input_amount(
+			encodedprice1_1(), //encodePriceSqrt(1, 1)
+			expandto18decimals(1).as_u128(),
+			expandto18decimals(1) / 10,
+		);
+		assert_eq!(price, U256::from_dec_str("87150978765690771352898345369").unwrap());
+	}
+
+	#[test]
+	fn test_frominput_inputamount_base() {
+		let price = Asset0ToAsset1::next_sqrt_price_from_input_amount(
+			encodedprice1_1(), //encodePriceSqrt(1, 1)
+			expandto18decimals(1).as_u128(),
+			expandto18decimals(1) / 10,
+		);
+		assert_eq!(price, U256::from_dec_str("72025602285694852357767227579").unwrap());
+	}
+
+	#[test]
+	fn test_frominput_amountinmaxuint96_base() {
+		let price = Asset0ToAsset1::next_sqrt_price_from_input_amount(
+			encodedprice1_1(), //encodePriceSqrt(1, 1)
+			expandto18decimals(10).as_u128(),
+			U256::from_dec_str("1267650600228229401496703205376").unwrap(), // 2**100
+		);
+		assert_eq!(price, U256::from_dec_str("624999999995069620").unwrap());
+	}
+
+	#[test]
+	fn test_frominput_amountinmaxuint96_pair() {
+		let price = Asset0ToAsset1::next_sqrt_price_from_input_amount(
+			encodedprice1_1(), //encodePriceSqrt(1, 1)
+			1u128,
+			U256::MAX / 2,
+		);
+		assert_eq!(price, U256::from_dec_str("1").unwrap());
+	}
+
+	// Skip get amount from output
+
+	// #getAmount0Delta
+	fn encodedprice1_1() -> U256 {
+		U256::from_dec_str("79228162514264337593543950336").unwrap()
+	}
+	fn encodedprice2_1() -> U256 {
+		U256::from_dec_str("112045541949572287496682733568").unwrap()
+	}
+	fn encodedprice121_100() -> U256 {
+		U256::from_dec_str("87150978765690771352898345369").unwrap()
+	}
+	fn expandto18decimals(amount: u128) -> U256 {
+		U256::from(amount) * U256::from(10).pow(U256::from_dec_str("18").unwrap())
+	}
+
+	#[test]
+	fn test_expanded() {
+		assert_eq!(expandto18decimals(1), expandto18decimals(1));
+	}
+
+	#[test]
+	fn test_0_if_liquidity_0() {
+		assert_eq!(
+			PoolState::asset_0_amount_delta_ceil(encodedprice1_1(), encodedprice2_1(), 0),
+			U256::from(0)
+		);
+	}
+
+	#[test]
+	fn test_price1_121() {
+		assert_eq!(
+			PoolState::asset_0_amount_delta_ceil(
+				encodedprice1_1(),
+				encodedprice121_100(),
+				expandto18decimals(1).as_u128()
+			),
+			U256::from_dec_str("90909090909090910").unwrap()
+		);
+
+		assert_eq!(
+			PoolState::asset_0_amount_delta_floor(
+				encodedprice1_1(),
+				encodedprice121_100(),
+				expandto18decimals(1).as_u128()
+			),
+			U256::from_dec_str("90909090909090909").unwrap()
+		);
+	}
+
+	#[test]
+	fn test_overflow() {
+		assert_eq!(
+			PoolState::asset_0_amount_delta_ceil(
+				U256::from_dec_str("2787593149816327892691964784081045188247552").unwrap(),
+				U256::from_dec_str("22300745198530623141535718272648361505980416").unwrap(),
+				expandto18decimals(1).as_u128(),
+			),
+			PoolState::asset_0_amount_delta_floor(
+				U256::from_dec_str("2787593149816327892691964784081045188247552").unwrap(),
+				U256::from_dec_str("22300745198530623141535718272648361505980416").unwrap(),
+				expandto18decimals(1).as_u128(),
+			) + 1,
+		);
+	}
+
+	// #getAmount1Delta
+
+	#[test]
+	fn test_0_if_liquidity_0_pair() {
+		assert_eq!(
+			PoolState::asset_1_amount_delta_ceil(encodedprice1_1(), encodedprice2_1(), 0),
+			U256::from(0)
+		);
+	}
+
+	#[test]
+	fn test_price1_121_pair() {
+		assert_eq!(
+			PoolState::asset_1_amount_delta_ceil(
+				encodedprice1_1(),
+				encodedprice121_100(),
+				expandto18decimals(1).as_u128()
+			),
+			expandto18decimals(1) / 10
+		);
+
+		assert_eq!(
+			PoolState::asset_1_amount_delta_floor(
+				encodedprice1_1(),
+				encodedprice121_100(),
+				expandto18decimals(1).as_u128()
+			),
+			expandto18decimals(1) / 10 - 1
+		);
+	}
+
+	// Swap computation
+	#[test]
+	fn test_sqrtoverflows() {
+		let sqrt_p =
+			U256::from_dec_str("1025574284609383690408304870162715216695788925244").unwrap();
+		let liquidity = 50015962439936049619261659728067971248u128;
+		let sqrt_q = Asset0ToAsset1::next_sqrt_price_from_input_amount(
+			sqrt_p,
+			liquidity,
+			U256::from_dec_str("406").unwrap(),
+		);
+		assert_eq!(
+			sqrt_q,
+			U256::from_dec_str("1025574284609383582644711336373707553698163132913").unwrap()
+		);
+
+		assert_eq!(
+			PoolState::asset_0_amount_delta_ceil(sqrt_q, sqrt_p, liquidity),
+			U256::from_dec_str("406").unwrap()
+		);
+	}
+
+	///////////////////////////////////////////////////////////
+	///                  TEST SWAPMATH                     ////
+	///////////////////////////////////////////////////////////
+
+	// computeSwapStep
+
+	// We cannot really fake the state of the pool to test this because we would need to mint a
+	// tick equivalent to desired sqrt_priceTarget but:
+	// sqrt_price_at_tick(tick_at_sqrt_price(sqrt_priceTarget)) != sqrt_priceTarget, due to the
+	// prices being between ticks - and therefore converting them to the closes tick.
+	#[test]
+	fn test_amount_capped_asset_1_to_asset_0_fail() {
+		let mut pool = PoolState::new(600, encodedprice1_1()).unwrap();
+		let id: AccountId = AccountId::from([0xcf; 32]);
+
+		let mut minted_capital = None;
+
+		pool.mint(
+			id,
+			PoolState::tick_at_sqrt_price(encodedprice1_1()),
+			PoolState::tick_at_sqrt_price(
+				U256::from_dec_str("79623317895830914510487008059").unwrap(),
+			),
+			expandto18decimals(2).as_u128(),
+			|minted| {
+				minted_capital.replace(minted);
+				Ok::<(), ()>(())
+			},
+		)
+		.unwrap();
+
+		let _minted_capital = minted_capital.unwrap();
+		// Swap to the right towards price target
+		pool.swap::<Asset1ToAsset0>(expandto18decimals(1));
+	}
+
+	// Fake computeswapstep => Stripped down version of the real swap
+	// TODO: Consider refactoring real AMM to be able to easily test this.
+	// NOTE: Using ONE_IN_PIPS_UNISWAP here to match the tests. otherwise we would need decimals for
+	// the fee value
+	const ONE_IN_PIPS_UNISWAP: u32 = 1000000u32;
+
+	fn compute_swapstep<SD: SwapDirection>(
+		current_sqrt_price: SqrtPriceQ64F96,
+		sqrt_ratio_target: SqrtPriceQ64F96,
+		liquidity: Liquidity,
+		mut amount: AmountU256,
+		fee: u32,
+	) -> (AmountU256, AmountU256, SqrtPriceQ64F96, U256) {
+		let mut total_amount_out = AmountU256::zero();
+
+		let amount_minus_fees = mul_div_floor(
+			amount,
+			U256::from(ONE_IN_PIPS_UNISWAP - fee),
+			U256::from(ONE_IN_PIPS_UNISWAP),
+		); // This cannot overflow as we bound fee_pips to <= ONE_IN_PIPS/2 (TODO)
+
+		let amount_required_to_reach_target =
+			SD::input_amount_delta_ceil(current_sqrt_price, sqrt_ratio_target, liquidity);
+
+		let sqrt_ratio_next = if amount_minus_fees >= amount_required_to_reach_target {
+			sqrt_ratio_target
+		} else {
+			assert!(liquidity != 0);
+			SD::next_sqrt_price_from_input_amount(current_sqrt_price, liquidity, amount_minus_fees)
+		};
+
+		// Cannot overflow as if the swap traversed all ticks (MIN_TICK to MAX_TICK
+		// (inclusive)), assuming the maximum possible liquidity, total_amount_out would still
+		// be below U256::MAX (See test `output_amounts_bounded`)
+		total_amount_out +=
+			SD::output_amount_delta_floor(current_sqrt_price, sqrt_ratio_next, liquidity);
+
+		// next_sqrt_price_from_input_amount rounds so this maybe Ok(()) even though
+		// amount_minus_fees < amount_required_to_reach_target (TODO Prove)
+		if sqrt_ratio_next == sqrt_ratio_target {
+			// Will not overflow as fee_pips <= ONE_IN_PIPS / 2
+			let fees = mul_div_ceil(
+				amount_required_to_reach_target,
+				U256::from(fee),
+				U256::from(ONE_IN_PIPS_UNISWAP - fee),
+			);
+
+			// TODO: Prove these don't underflow
+			amount -= amount_required_to_reach_target;
+			amount -= fees;
+			(amount_required_to_reach_target, total_amount_out, sqrt_ratio_next, fees)
+		} else {
+			let amount_in =
+				SD::input_amount_delta_ceil(current_sqrt_price, sqrt_ratio_next, liquidity);
+			// Will not underflow due to rounding in flavor of the pool of both sqrt_ratio_next
+			// and amount_in. (TODO: Prove)
+			let fees = amount - amount_in;
+			(amount_in, total_amount_out, sqrt_ratio_next, fees)
+		}
+	}
+
+	#[test]
+	fn test_amount_capped_asset_1_to_asset_0() {
+		let price = encodedprice1_1();
+		let amount = expandto18decimals(1);
+		let price_target = U256::from_dec_str("79623317895830914510487008059").unwrap();
+		let liquidity = expandto18decimals(2).as_u128();
+		let (amount_in, amount_out, sqrt_ratio_next, fees) =
+			compute_swapstep::<Asset1ToAsset0>(price, price_target, liquidity, amount, 600);
+
+		assert_eq!(amount_in, U256::from_dec_str("9975124224178055").unwrap());
+		assert_eq!(fees, U256::from_dec_str("5988667735148").unwrap());
+		assert_eq!(amount_out, U256::from_dec_str("9925619580021728").unwrap());
+		assert!(amount_in + fees < amount);
+
+		let price_after_input_amount =
+			PoolState::next_sqrt_price_from_asset_1_input(price, liquidity, amount);
+
+		assert_eq!(sqrt_ratio_next, price_target);
+		assert!(sqrt_ratio_next < price_after_input_amount);
+	}
+
+	// Skip amountout test
+
+	#[test]
+	fn test_amount_in_spent_asset_1_to_asset_0() {
+		let price = encodedprice1_1();
+		let price_target = U256::from_dec_str("792281625142643375935439503360").unwrap();
+		let liquidity = expandto18decimals(2).as_u128();
+		let amount = expandto18decimals(1);
+		let (amount_in, amount_out, sqrt_ratio_next, fees) =
+			compute_swapstep::<Asset1ToAsset0>(price, price_target, liquidity, amount, 600);
+
+		assert_eq!(amount_in, U256::from_dec_str("999400000000000000").unwrap());
+		assert_eq!(fees, U256::from_dec_str("600000000000000").unwrap());
+		assert_eq!(amount_out, U256::from_dec_str("666399946655997866").unwrap());
+		assert_eq!(amount_in + fees, amount);
+
+		let price_after_input_amount =
+			PoolState::next_sqrt_price_from_asset_1_input(price, liquidity, amount - fees);
+
+		assert!(sqrt_ratio_next < price_target);
+		assert_eq!(sqrt_ratio_next, price_after_input_amount);
+	}
+
+	#[test]
+	fn test_target_price1_partial_input() {
+		let (amount_in, amount_out, sqrt_ratio_next, fees) = compute_swapstep::<Asset0ToAsset1>(
+			U256::from_dec_str("2").unwrap(),
+			U256::from_dec_str("1").unwrap(),
+			1u128,
+			U256::from_dec_str("3915081100057732413702495386755767").unwrap(),
+			1,
+		);
+		assert_eq!(amount_in, U256::from_dec_str("39614081257132168796771975168").unwrap());
+		assert_eq!(fees, U256::from_dec_str("39614120871253040049813").unwrap());
+		assert!(
+			amount_in + fees < U256::from_dec_str("3915081100057732413702495386755767").unwrap()
+		);
+		assert_eq!(amount_out, U256::from(0));
+		assert_eq!(sqrt_ratio_next, U256::from_dec_str("1").unwrap());
+	}
+
+	#[test]
+	fn test_entireinput_asfee() {
+		let (amount_in, amount_out, sqrt_ratio_next, fees) = compute_swapstep::<Asset1ToAsset0>(
+			U256::from_dec_str("2413").unwrap(),
+			U256::from_dec_str("79887613182836312").unwrap(),
+			1985041575832132834610021537970u128,
+			U256::from_dec_str("10").unwrap(),
+			1872,
+		);
+		assert_eq!(amount_in, U256::from_dec_str("0").unwrap());
+		assert_eq!(fees, U256::from_dec_str("10").unwrap());
+		assert_eq!(amount_out, U256::from_dec_str("0").unwrap());
+		assert_eq!(sqrt_ratio_next, U256::from_dec_str("2413").unwrap());
+	}
+
+	///////////////////////////////////////////////////////////
+	///                  ADDED TESTS                       ////
+	///////////////////////////////////////////////////////////
+
+	// Add some more tests for fees_owed collecting
+
+	// Previous tests using mint as a poke and to collect fees.
+
+	#[test]
+	fn test_limit_selling_asset_0_to_asset_1_tick0thru1_mint() {
+		let (mut pool, _, id) = mediumpool_initialized_zerotick();
+		let mut minted_capital = None;
+		pool.mint(id.clone(), 0, 120, expandto18decimals(1).as_u128(), |minted| {
+			minted_capital.replace(minted);
+			Ok::<(), ()>(())
+		})
+		.unwrap();
+		let minted_capital = minted_capital.unwrap();
+
+		assert_eq!(
+			minted_capital[PoolSide::Asset0],
+			U256::from_dec_str("5981737760509663").unwrap()
+		);
+		assert_eq!(minted_capital[!PoolSide::Asset0], U256::from_dec_str("0").unwrap());
+
+		// somebody takes the limit order
+		pool.swap::<Asset1ToAsset0>(U256::from_dec_str("2000000000000000000").unwrap());
+
+		let (_, fees_owed) = pool.mint(id.clone(), 0, 120, 1, |_| Ok::<(), ()>(())).unwrap();
+
+		assert_eq!(fees_owed[PoolSide::Asset0], 0);
+		assert_eq!(fees_owed[!PoolSide::Asset0], 18107525382602);
+
+		let (_, fees_owed) = pool.mint(id.clone(), 0, 120, 1, |_| Ok::<(), ()>(())).unwrap();
+		assert_eq!(fees_owed[PoolSide::Asset0], 0);
+		assert_eq!(fees_owed[!PoolSide::Asset0], 0);
+
+		let (burned, fees_owed) = pool.burn(id, 0, 120, expandto18decimals(1).as_u128()).unwrap();
+		assert_eq!(burned[PoolSide::Asset0], U256::from_dec_str("0").unwrap());
+		assert_eq!(burned[!PoolSide::Asset0], U256::from_dec_str("6017734268818165").unwrap());
+
+		// DIFF: position fully burnt
+		assert_eq!(fees_owed[PoolSide::Asset0], 0);
+		assert_eq!(fees_owed[!PoolSide::Asset0], 0);
+
+		assert!(pool.current_tick > 120)
+	}
+
+	#[test]
+	fn test_limit_selling_paior_tick1thru0_mint() {
+		let (mut pool, _, id) = mediumpool_initialized_zerotick();
+		let mut minted_capital = None;
+		pool.mint(id.clone(), -120, 0, expandto18decimals(1).as_u128(), |minted| {
+			minted_capital.replace(minted);
+			Ok::<(), ()>(())
+		})
+		.unwrap();
+		let minted_capital = minted_capital.unwrap();
+
+		assert_eq!(
+			minted_capital[!PoolSide::Asset0],
+			U256::from_dec_str("5981737760509663").unwrap()
+		);
+		assert_eq!(minted_capital[PoolSide::Asset0], U256::from_dec_str("0").unwrap());
+
+		// somebody takes the limit order
+		pool.swap::<Asset0ToAsset1>(U256::from_dec_str("2000000000000000000").unwrap());
+
+		let (_, fees_owed) = pool.mint(id.clone(), -120, 0, 1, |_| Ok::<(), ()>(())).unwrap();
+
+		assert_eq!(fees_owed[!PoolSide::Asset0], 0);
+		assert_eq!(fees_owed[PoolSide::Asset0], 18107525382602);
+
+		let (_, fees_owed) = pool.mint(id.clone(), -120, 0, 1, |_| Ok::<(), ()>(())).unwrap();
+		assert_eq!(fees_owed[!PoolSide::Asset0], 0);
+		assert_eq!(fees_owed[PoolSide::Asset0], 0);
+
+		let (burned, fees_owed) = pool.burn(id, -120, 0, expandto18decimals(1).as_u128()).unwrap();
+		assert_eq!(burned[!PoolSide::Asset0], U256::from_dec_str("0").unwrap());
+		assert_eq!(burned[PoolSide::Asset0], U256::from_dec_str("6017734268818165").unwrap());
+
+		// DIFF: position fully burnt
+		assert_eq!(fees_owed[!PoolSide::Asset0], 0);
+		assert_eq!(fees_owed[PoolSide::Asset0], 0);
+
+		assert!(pool.current_tick < -120)
 	}
 }

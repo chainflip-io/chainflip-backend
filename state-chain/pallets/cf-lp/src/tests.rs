@@ -3,9 +3,7 @@ use crate::{mock::*, FreeBalances};
 use cf_primitives::{
 	liquidity::AmmRange, AccountId, Asset, ForeignChainAddress, MintedLiquidity, PoolAssetMap,
 };
-use cf_traits::{
-	mocks::system_state_info::MockSystemStateInfo, LiquidityPoolApi, SwappingApi, SystemStateInfo,
-};
+use cf_traits::{mocks::system_state_info::MockSystemStateInfo, LiquidityPoolApi, SystemStateInfo};
 use frame_support::{assert_noop, assert_ok, error::BadOrigin};
 
 #[test]
@@ -198,6 +196,7 @@ fn can_mint_liquidity() {
 				range,
 				minted_liquidity: 1_000_000,
 				assets_debited: PoolAssetMap::new(4988, 4988),
+				fees_harvested: Default::default(),
 			},
 		));
 		System::assert_has_event(RuntimeEvent::LiquidityProvider(crate::Event::AccountDebited {
@@ -216,7 +215,6 @@ fn can_mint_liquidity() {
 			vec![MintedLiquidity {
 				range: AmmRange::new(range.lower, range.upper),
 				liquidity: 1_000_000,
-				fees_acrued: PoolAssetMap::default()
 			}]
 		);
 
@@ -245,6 +243,7 @@ fn can_mint_liquidity() {
 				range,
 				minted_liquidity: 1_000,
 				assets_debited: PoolAssetMap::new(5, 5),
+				fees_harvested: Default::default(),
 			},
 		));
 		System::assert_has_event(RuntimeEvent::LiquidityProvider(crate::Event::AccountDebited {
@@ -263,7 +262,6 @@ fn can_mint_liquidity() {
 			vec![MintedLiquidity {
 				range: AmmRange::new(range.lower, range.upper),
 				liquidity: 1_001_000,
-				fees_acrued: PoolAssetMap::default()
 			}]
 		);
 	});
@@ -312,7 +310,7 @@ fn can_burn_liquidity() {
 				range,
 				burnt_liquidity: 500_000,
 				assets_returned: PoolAssetMap::new(2493, 2493),
-				fee_yielded: Default::default(),
+				fees_harvested: Default::default(),
 			},
 		));
 		System::assert_has_event(RuntimeEvent::LiquidityProvider(crate::Event::AccountCredited {
@@ -331,7 +329,6 @@ fn can_burn_liquidity() {
 			vec![MintedLiquidity {
 				range: AmmRange::new(range.lower, range.upper),
 				liquidity: 500_000,
-				fees_acrued: PoolAssetMap::default()
 			}]
 		);
 
@@ -360,7 +357,7 @@ fn can_burn_liquidity() {
 				range,
 				burnt_liquidity: 500_000,
 				assets_returned: PoolAssetMap::new(2_493, 2_493),
-				fee_yielded: Default::default(),
+				fees_harvested: Default::default(),
 			},
 		));
 		System::assert_has_event(RuntimeEvent::LiquidityProvider(crate::Event::AccountCredited {
@@ -395,96 +392,7 @@ fn mint_fails_with_insufficient_balance() {
 				range,
 				1_000_000,
 			),
-			pallet_cf_pools::Error::<Test>::InsufficientBalance
-		);
-	});
-}
-
-#[test]
-fn can_collect_fee() {
-	new_test_ext().execute_with(|| {
-		FreeBalances::<Test>::insert(AccountId::from(LP_ACCOUNT), Asset::Eth, 1_000_000);
-		FreeBalances::<Test>::insert(AccountId::from(LP_ACCOUNT), Asset::Usdc, 1_000_000);
-
-		let range = AmmRange::new(-100, 100);
-		let asset = Asset::Eth;
-
-		// 50% fee
-		assert_ok!(LiquidityPools::new_pool(RuntimeOrigin::root(), asset, 500_000u32, 0,));
-
-		// Can open a new position
-		assert_ok!(LiquidityProvider::update_position(
-			RuntimeOrigin::signed(LP_ACCOUNT.into()),
-			asset,
-			range,
-			1_000_000,
-		));
-
-		assert_eq!(
-			FreeBalances::<Test>::get(AccountId::from(LP_ACCOUNT), Asset::Eth),
-			Some(995_012)
-		);
-		assert_eq!(
-			FreeBalances::<Test>::get(AccountId::from(LP_ACCOUNT), Asset::Usdc),
-			Some(995_012)
-		);
-
-		System::reset_events();
-
-		// Trigger swap to acrue some fees
-		assert_eq!(LiquidityPools::swap(Asset::Eth, Asset::Usdc, 1_000u128), Ok(499u128));
-		assert_eq!(
-			LiquidityPools::minted_liquidity(&LP_ACCOUNT.into(), &asset),
-			vec![MintedLiquidity {
-				range: AmmRange::new(range.lower, range.upper),
-				liquidity: 1_000_000,
-				fees_acrued: PoolAssetMap::default()
-			}]
-		);
-
-		// Balance before the collect.
-		assert_eq!(
-			FreeBalances::<Test>::get(AccountId::from(LP_ACCOUNT), Asset::Eth),
-			Some(995_012)
-		);
-		assert_eq!(
-			FreeBalances::<Test>::get(AccountId::from(LP_ACCOUNT), Asset::Usdc),
-			Some(995_012)
-		);
-
-		// Collect fees acrued for the Liquidity Position.
-		assert_ok!(LiquidityProvider::collect_fees(
-			RuntimeOrigin::signed(LP_ACCOUNT.into()),
-			asset,
-			range
-		));
-
-		System::assert_has_event(RuntimeEvent::LiquidityPools(
-			pallet_cf_pools::Event::FeeCollected {
-				lp: LP_ACCOUNT.into(),
-				asset,
-				range,
-				fee_yielded: PoolAssetMap::new(499, 0),
-			},
-		));
-
-		assert_eq!(
-			FreeBalances::<Test>::get(AccountId::from(LP_ACCOUNT), Asset::Eth),
-			Some(995_511)
-		);
-		assert_eq!(
-			FreeBalances::<Test>::get(AccountId::from(LP_ACCOUNT), Asset::Usdc),
-			Some(995_012)
-		);
-
-		// Fees has been reset.
-		assert_eq!(
-			LiquidityPools::minted_liquidity(&LP_ACCOUNT.into(), &asset),
-			vec![MintedLiquidity {
-				range: AmmRange::new(range.lower, range.upper),
-				liquidity: 1_000_000,
-				fees_acrued: PoolAssetMap::default()
-			}]
+			crate::Error::<Test>::InsufficientBalance
 		);
 	});
 }

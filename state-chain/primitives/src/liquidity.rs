@@ -111,7 +111,6 @@ impl TryFrom<PoolAssetMap<U256>> for PoolAssetMap<u128> {
 pub struct MintedLiquidity {
 	pub range: AmmRange,
 	pub liquidity: Liquidity,
-	pub fees_acrued: PoolAssetMap<u128>,
 }
 
 #[derive(Copy, Clone, Default, Eq, PartialEq, Debug)]
@@ -127,14 +126,4 @@ impl BurnResult {
 	) -> Self {
 		Self { assets_returned, fees_accrued }
 	}
-}
-
-#[derive(Debug)]
-pub enum MintError {
-	/// Invalid Tick range
-	InvalidTickRange,
-	/// One of the start/end ticks of the range reached its maximum gross liquidity
-	MaximumGrossLiquidity,
-	/// The user does not have sufficient balance to pay for the mint.
-	InsufficientBalance,
 }

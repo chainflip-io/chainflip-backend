@@ -207,7 +207,7 @@ fn can_provide_liquidity_and_swap_assets() {
 }
 
 #[test]
-fn swap_can_acrue_fees() {
+fn swap_can_accrue_fees() {
 	super::genesis::default().build().execute_with(|| {
 		// Register the liquidity provider account.
 		let lp_1: AccountId = AccountId::from([0xF1; 32]);
@@ -351,7 +351,7 @@ fn swap_can_acrue_fees() {
 		);
 
 		System::reset_events();
-		// Partial burn does not return fees acrued
+
 		assert_ok!(LiquidityProvider::update_position(
 			RuntimeOrigin::signed(lp_1.clone()),
 			any::Asset::Eth,
@@ -366,6 +366,7 @@ fn swap_can_acrue_fees() {
 		));
 
 		// Burning half of the liquidity returns about half of assets vested.
+		// All fees earned so far are also returned.
 		System::assert_has_event(RuntimeEvent::LiquidityPools(
 			pallet_cf_pools::Event::LiquidityBurned {
 				lp: lp_1.clone(),
@@ -373,7 +374,7 @@ fn swap_can_acrue_fees() {
 				range,
 				burnt_liquidity: 1_500_000,
 				assets_returned: PoolAssetMap::new(466_708, 4_708_672),
-				fee_yielded: PoolAssetMap::new(0, 0),
+				fees_harvested: PoolAssetMap::new(4999, 0),
 			},
 		));
 		System::assert_has_event(RuntimeEvent::LiquidityPools(
@@ -383,12 +384,42 @@ fn swap_can_acrue_fees() {
 				range,
 				burnt_liquidity: 600_000,
 				assets_returned: PoolAssetMap::new(414_088, 856_927),
-				fee_yielded: PoolAssetMap::new(0, 0),
+				fees_harvested: PoolAssetMap::new(0, 24_870),
+			},
+		));
+
+		// Accounts should be credited with returned capital + fees.
+		System::assert_has_event(RuntimeEvent::LiquidityProvider(
+			pallet_cf_lp::Event::AccountCredited {
+				account_id: lp_1.clone(),
+				asset: any::Asset::Eth,
+				amount_credited: 466_708 + 4999,
+			},
+		));
+		System::assert_has_event(RuntimeEvent::LiquidityProvider(
+			pallet_cf_lp::Event::AccountCredited {
+				account_id: lp_1.clone(),
+				asset: any::Asset::Usdc,
+				amount_credited: 4_708_672,
+			},
+		));
+		System::assert_has_event(RuntimeEvent::LiquidityProvider(
+			pallet_cf_lp::Event::AccountCredited {
+				account_id: lp_2.clone(),
+				asset: any::Asset::Usdc,
+				amount_credited: 856_927 + 24_870,
+			},
+		));
+		System::assert_has_event(RuntimeEvent::LiquidityProvider(
+			pallet_cf_lp::Event::AccountCredited {
+				account_id: lp_2.clone(),
+				asset: any::Asset::Flip,
+				amount_credited: 414_088,
 			},
 		));
 
 		System::reset_events();
-		// Burn the rest of the liquidity also return all fees acrued
+
 		assert_ok!(LiquidityProvider::update_position(
 			RuntimeOrigin::signed(lp_1.clone()),
 			any::Asset::Eth,
@@ -402,7 +433,6 @@ fn swap_can_acrue_fees() {
 			0u128
 		));
 
-		// Burning half of the liquidity returns about half of assets vested.
 		System::assert_has_event(RuntimeEvent::LiquidityPools(
 			pallet_cf_pools::Event::LiquidityBurned {
 				lp: lp_1.clone(),
@@ -410,7 +440,7 @@ fn swap_can_acrue_fees() {
 				range,
 				burnt_liquidity: 1_500_000,
 				assets_returned: PoolAssetMap::new(466_708, 4_708_672),
-				fee_yielded: PoolAssetMap::new(4_999, 0),
+				fees_harvested: PoolAssetMap::new(0, 0),
 			},
 		));
 		System::assert_has_event(RuntimeEvent::LiquidityPools(
@@ -420,7 +450,7 @@ fn swap_can_acrue_fees() {
 				range,
 				burnt_liquidity: 600_000,
 				assets_returned: PoolAssetMap::new(414_088, 856_927),
-				fee_yielded: PoolAssetMap::new(0, 24_870),
+				fees_harvested: PoolAssetMap::new(0, 0),
 			},
 		));
 
