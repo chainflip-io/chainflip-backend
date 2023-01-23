@@ -39,8 +39,8 @@ use cf_chains::{
 		api::{EthereumApi, EthereumReplayProtection},
 		Ethereum,
 	},
-	ApiCall, ChainAbi, ChainEnvironment, ReplayProtectionProvider, SetGovKeyWithAggKey,
-	TransactionBuilder,
+	ApiCall, ChainAbi, ChainEnvironment, ReplayProtectionProvider, SetCommKeyWithAggKey,
+	SetGovKeyWithAggKey, TransactionBuilder,
 };
 
 use cf_primitives::{AssetAmount, ForeignChainAddress, IntentId};
@@ -340,7 +340,11 @@ impl BroadcastAnyChainGovKey for TokenholderGovBroadcaster {
 impl BroadcastComKey for TokenholderGovBroadcaster {
 	type EthAddress = eth::Address;
 
-	fn broadcast(_new_key: Self::EthAddress) {}
+	fn broadcast(new_key: Self::EthAddress) {
+		EthereumBroadcaster::threshold_sign_and_broadcast(
+			SetCommKeyWithAggKey::<Ethereum>::new_unsigned(new_key),
+		);
+	}
 }
 
 impl IngressApi<AnyChain> for AnyChainIngressEgressHandler {
