@@ -816,8 +816,6 @@ impl_runtime_apis! {
 				stake: account_info_v1.stake,
 				bond: account_info_v1.bond,
 				last_heartbeat: account_info_v1.last_heartbeat,
-				is_live: account_info_v1.is_live,
-				is_activated: account_info_v1.is_activated,
 				online_credits: account_info_v1.online_credits,
 				reputation_points: account_info_v1.reputation_points,
 				withdrawal_address: account_info_v1.withdrawal_address,

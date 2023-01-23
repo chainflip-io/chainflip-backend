@@ -45,8 +45,6 @@ pub struct RuntimeApiAccountInfoV2 {
 	pub stake: u128,
 	pub bond: u128,
 	pub last_heartbeat: u32, // can *maybe* remove this - check with Andrew
-	pub is_live: bool,       // remove this
-	pub is_activated: bool,  // remove this
 	pub online_credits: u32,
 	pub reputation_points: i32,
 	pub withdrawal_address: [u8; 20],
