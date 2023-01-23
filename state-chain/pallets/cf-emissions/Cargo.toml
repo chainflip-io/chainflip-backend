@@ -14,9 +14,9 @@ targets = ['x86_64-unknown-linux-gnu']
 
 [dependencies]
 # Internal deps
-cf-primitives = { path ='../../primitives', default-features = false }
+cf-primitives = { path = '../../primitives', default-features = false }
 cf-traits = { path = '../../traits', default-features = false }
-cf-chains = {path = '../../chains', default-features = false}
+cf-chains = { path = '../../chains', default-features = false }
 cf-runtime-upgrade-utilities = { path = '../../runtime-upgrade-utilities', default-features = false }
 
 log = { version = '0.4.16', default-features = false }
@@ -36,44 +36,44 @@ version = '2.1.1'
 [dependencies.frame-system]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
+tag = 'chainflip-monthly-2022-06+02'
 
 [dependencies.frame-support]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
+tag = 'chainflip-monthly-2022-06+02'
 
 [dependencies.sp-arithmetic]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
+tag = 'chainflip-monthly-2022-06+02'
 
 [dependencies.frame-benchmarking]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
 optional = true
-tag = 'chainflip-monthly-2022-06+01'
+tag = 'chainflip-monthly-2022-06+02'
 
 [dependencies.sp-runtime]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
+tag = 'chainflip-monthly-2022-06+02'
 
 [dependencies.sp-std]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
+tag = 'chainflip-monthly-2022-06+02'
 
 [dev-dependencies]
 pallet-cf-flip = { path = '../cf-flip' }
 
 [dev-dependencies.sp-core]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
+tag = 'chainflip-monthly-2022-06+02'
 
 [dev-dependencies.sp-io]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
+tag = 'chainflip-monthly-2022-06+02'
 
 [features]
 default = ['std']
@@ -100,5 +100,5 @@ runtime-benchmarks = [
 ]
 try-runtime = [
   'frame-support/try-runtime',
-  'cf-runtime-upgrade-utilities/try-runtime'
+  'cf-runtime-upgrade-utilities/try-runtime',
 ]

@@ -9,19 +9,21 @@ description = 'Shared Chain-specific functionality for use in the substrate runt
 cf-primitives = { path = '../primitives', default-features = false }
 
 # Cryptography
-libsecp256k1 = { default-features = false, version = '0.7', features = ['static-context'] }
-secp256k1 = {optional = true, version = '0.21'}
+libsecp256k1 = { default-features = false, version = '0.7', features = [
+  'static-context',
+] }
+secp256k1 = { optional = true, version = '0.21' }
 
 # Ethereum
-ethabi = {default-features = false, version = '17.0'}
-ethereum-types = {default-features = false, version = '0.13.1'}
-ethereum = {default-features = false, version = '0.12'}
-rlp = {default-features = false, version = '0.5'}
+ethabi = { default-features = false, version = '17.0' }
+ethereum-types = { default-features = false, version = '0.13.1' }
+ethereum = { default-features = false, version = '0.12' }
+rlp = { default-features = false, version = '0.5' }
 
 # Other
-hex = {default-features = false, version = '0.4'}
-hex-literal = {version = '0.3'}
-serde = {optional = true, version = '1.0.126', features = ['derive']}
+hex = { default-features = false, version = '0.4' }
+hex-literal = { version = '0.3' }
+serde = { optional = true, version = '1.0.126', features = ['derive'] }
 log = { version = '0.4.16', default-features = false }
 
 # Substrate packages
@@ -39,33 +41,33 @@ version = '2.1.1'
 [dependencies.sp-std]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
+tag = 'chainflip-monthly-2022-06+02'
 
 [dependencies.frame-support]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
+tag = 'chainflip-monthly-2022-06+02'
 
 [dependencies.frame-system]
 default-features = false
 optional = true
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
+tag = 'chainflip-monthly-2022-06+02'
 
 [dependencies.sp-runtime]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
+tag = 'chainflip-monthly-2022-06+02'
 
 [dependencies.sp-core]
 default-features = false
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
+tag = 'chainflip-monthly-2022-06+02'
 
 
 [dev-dependencies]
 cf-test-utilities = { path = '../test-utilities' }
-rand = {version='0.8.4'}
+rand = { version = '0.8.4' }
 
 [features]
 default = ['std']
@@ -84,7 +86,7 @@ std = [
   'sp-runtime/std',
   'sp-std/std',
   'secp256k1',
-  'sp-core/std'
+  'sp-core/std',
 ]
 runtime-benchmarks = [
   'frame-support/runtime-benchmarks',

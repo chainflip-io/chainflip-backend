@@ -13,21 +13,21 @@ jsonrpsee = { version = "0.13.0", features = ["full"] }
 serde = { version = '1.0', features = ['derive'] }
 cf-chains = { path = '../chains' }
 cf-utilities = { package = 'utilities', path = '../../utilities' }
-pallet-cf-governance = {path = "../pallets/cf-governance"}
+pallet-cf-governance = { path = "../pallets/cf-governance" }
 hex = '0.4.3'
 
 [dependencies.sp-runtime]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
+tag = 'chainflip-monthly-2022-06+02'
 
 [dependencies.sp-api]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
+tag = 'chainflip-monthly-2022-06+02'
 
 [dependencies.sp-rpc]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
+tag = 'chainflip-monthly-2022-06+02'
 
 [dependencies.sc-client-api]
 git = 'https://github.com/chainflip-io/substrate.git'
-tag = 'chainflip-monthly-2022-06+01'
+tag = 'chainflip-monthly-2022-06+02'
