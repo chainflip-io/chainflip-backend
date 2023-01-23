@@ -1,5 +1,6 @@
 #[macro_use]
 mod helpers;
+mod curve25519;
 pub mod curve25519_edwards;
 pub mod curve25519_ristretto;
 pub mod ed25519;

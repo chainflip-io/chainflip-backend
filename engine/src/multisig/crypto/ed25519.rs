@@ -75,7 +75,7 @@ impl CryptoScheme for Ed25519Signing {
 		let mut output = [0u8; 64];
 		output.copy_from_slice(hash.finalize().as_slice());
 
-		use crate::multisig::crypto::curve25519_ristretto::Scalar;
+		use crate::multisig::crypto::curve25519::Scalar;
 
 		Scalar(curve25519_dalek::scalar::Scalar::from_bytes_mod_order_wide(&output))
 	}
