@@ -1,10 +1,10 @@
 use serde::{Deserialize, Serialize};
 
-use super::ECPoint;
+use super::super::ECPoint;
 
 type PK = curve25519_dalek::ristretto::RistrettoPoint;
 
-use super::curve25519::Scalar;
+use super::Scalar;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Point(PK);

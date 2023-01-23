@@ -1,4 +1,4 @@
-use super::{curve25519_edwards::Point, ChainTag, CryptoScheme, ECPoint};
+use super::{curve25519::edwards::Point, ChainTag, CryptoScheme, ECPoint};
 use ed25519_consensus::VerificationKeyBytes;
 use serde::{Deserialize, Serialize};
 
@@ -38,7 +38,7 @@ impl AsRef<[u8]> for SigningPayload {
 }
 
 impl CryptoScheme for Ed25519Signing {
-	type Point = super::curve25519_edwards::Point;
+	type Point = super::curve25519::edwards::Point;
 
 	type Signature = Signature;
 

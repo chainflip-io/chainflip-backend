@@ -1,8 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::ECPoint;
-
-pub type Scalar = super::curve25519::Scalar;
+use super::{super::ECPoint, Scalar};
 
 type PK = curve25519_dalek::edwards::EdwardsPoint;
 

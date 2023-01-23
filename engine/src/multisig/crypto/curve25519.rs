@@ -1,3 +1,6 @@
+pub mod edwards;
+pub mod ristretto;
+
 use serde::{Deserialize, Serialize};
 
 use super::ECScalar;

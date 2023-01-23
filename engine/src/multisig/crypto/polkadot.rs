@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use super::{curve25519_ristretto::Point, ChainTag, CryptoScheme, ECPoint};
+use super::{curve25519::ristretto::Point, ChainTag, CryptoScheme, ECPoint};
 use cf_chains::dot::PolkadotPublicKey;
 use schnorrkel::context::{SigningContext, SigningTranscript};
 use serde::{Deserialize, Serialize};
