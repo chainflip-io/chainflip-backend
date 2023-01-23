@@ -1,10 +1,9 @@
 use cf_primitives::{
-	AmmRange, Asset, AssetAmount, BurnResult, ForeignChainAddress, Liquidity, MintedLiquidity,
-	PoolAssetMap, Tick,
+	AmmRange, Asset, AssetAmount, BurnResult, ForeignChainAddress, Liquidity, PoolAssetMap, Tick,
 };
 use frame_support::dispatch::DispatchError;
 use sp_runtime::DispatchResult;
-use sp_std::vec::Vec;
+
 pub trait SwapIntentHandler {
 	type AccountId;
 	fn on_swap_ingress(
@@ -77,7 +76,7 @@ pub trait LiquidityPoolApi<AccountId> {
 	) -> Result<BurnResult, DispatchError>;
 
 	/// Returns the user's Minted liquidities and fees acrued for a specific pool.
-	fn minted_liquidity(lp: &AccountId, asset: &Asset) -> Vec<MintedLiquidity>;
+	fn minted_liquidity(lp: &AccountId, asset: &Asset, range: AmmRange) -> Liquidity;
 
 	/// Gets the current price of the pool in Tick
 	fn current_tick(asset: &Asset) -> Option<Tick>;

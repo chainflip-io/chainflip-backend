@@ -179,13 +179,8 @@ pub mod pallet {
 			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
 			// Retrieve the unique LP positions from the pool.
-			let current_liquidity = T::LiquidityPoolApi::minted_liquidity(&account_id, &asset)
-				.into_iter()
-				.find(|position| {
-					position.range.lower == range.lower && position.range.upper == range.upper
-				})
-				.unwrap_or_default()
-				.liquidity;
+			let current_liquidity =
+				T::LiquidityPoolApi::minted_liquidity(&account_id, &asset, range);
 
 			match current_liquidity.cmp(&liquidity_target) {
 				// Burn the difference

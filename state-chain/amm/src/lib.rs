@@ -15,7 +15,7 @@
 //! Note: There are a few yet to be proved safe maths operations, there are marked below with `TODO:
 //! Prove`. We should resolve these issues before using this code in release.
 #![cfg_attr(not(feature = "std"), no_std)]
-use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
+use sp_std::collections::btree_map::BTreeMap;
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
@@ -24,7 +24,7 @@ use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 
 use cf_primitives::{
-	liquidity::{AmountU256, Liquidity, MintedLiquidity, PoolAssetMap, PoolSide, Tick},
+	liquidity::{AmountU256, Liquidity, PoolAssetMap, PoolSide, Tick},
 	AccountId, AmmRange,
 };
 use sp_core::{U256, U512};
@@ -57,7 +57,7 @@ const ONE_IN_HUNDREDTH_BIPS: u32 = 1000000;
 
 pub const MAX_FEE_100TH_BIPS: u32 = ONE_IN_HUNDREDTH_BIPS / 2;
 
-#[derive(Copy, Clone, Debug, TypeInfo, PartialEq, Eq, Encode, Decode, MaxEncodedLen)]
+#[derive(Copy, Clone, Debug, Default, TypeInfo, PartialEq, Eq, Encode, Decode, MaxEncodedLen)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 struct Position {
 	liquidity: Liquidity,
@@ -558,20 +558,11 @@ impl PoolState {
 	}
 
 	/// Returns all postitions for a specific user.
-	pub fn minted_liquidity(&self, lp: AccountId) -> Vec<MintedLiquidity> {
-		self.positions
-			.iter()
-			.filter_map(|((account, lower, upper), position)| {
-				if *account == lp {
-					Some(MintedLiquidity {
-						range: AmmRange::new(*lower, *upper),
-						liquidity: position.liquidity,
-					})
-				} else {
-					None
-				}
-			})
-			.collect()
+	pub fn minted_liquidity(&self, lp: AccountId, range: AmmRange) -> Liquidity {
+		match self.positions.get(&(lp, range.lower, range.upper)) {
+			Some(position) => position.liquidity,
+			None => Default::default(),
+		}
 	}
 
 	/// Swaps the specified Amount of Asset 0 into Asset 1. Returns the Output and Fee amount.
