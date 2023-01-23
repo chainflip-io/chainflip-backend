@@ -3,6 +3,7 @@
 
 use super::*;
 
+use cf_primitives::AccountRole;
 use cf_traits::AccountRoleRegistry;
 use frame_benchmarking::{account, benchmarks, whitelisted_caller};
 use frame_support::dispatch::UnfilteredDispatchable;
@@ -29,14 +30,10 @@ benchmarks! {
 			Penalty { reputation: new_reputation_penalty, suspension: heartbeat_block_interval }
 		);
 	}
-	on_runtime_upgrade {
-	} : {
-		<Pallet::<T> as Hooks<_>>::on_runtime_upgrade();
-	}
 	heartbeat {
 		let caller: T::AccountId = whitelisted_caller();
 		let validator_id: T::ValidatorId = caller.clone().into();
-		T::AccountRoleRegistry::register_as_validator(&caller).unwrap();
+		T::AccountRoleRegistry::register_account(caller.clone(), AccountRole::Validator);
 	} : _(RawOrigin::Signed(caller))
 	verify {
 		assert_eq!(LastHeartbeat::<T>::get(&validator_id), Some(1u32.into()));
