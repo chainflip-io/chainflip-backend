@@ -28,6 +28,7 @@ impl From<EthSchnorrSignature> for cf_chains::eth::SchnorrVerificationComponents
 }
 
 /// Ethereum crypto scheme (as defined by the Key Manager contract)
+#[derive(Clone, Debug, PartialEq)]
 pub struct EthSigning {}
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Hash, Eq)]

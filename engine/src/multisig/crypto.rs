@@ -1,7 +1,6 @@
 #[macro_use]
 mod helpers;
-pub mod curve25519_edwards;
-pub mod curve25519_ristretto;
+mod curve25519;
 pub mod ed25519;
 pub mod eth;
 pub mod polkadot;
@@ -86,7 +85,7 @@ pub trait ECPoint:
 	}
 }
 
-pub trait CryptoScheme: 'static {
+pub trait CryptoScheme: 'static + Clone + Send + Sync + Debug + PartialEq {
 	type Point: ECPoint;
 
 	type Signature: Debug + Clone + PartialEq + Sync + Send;

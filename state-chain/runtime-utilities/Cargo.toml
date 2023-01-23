@@ -16,6 +16,7 @@ sp-std = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainfl
 sp-runtime = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
 sp-io = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
 frame-support = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
+
 [features]
 default = ['std']
 std = [

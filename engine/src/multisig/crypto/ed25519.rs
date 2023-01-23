@@ -1,7 +1,8 @@
-use super::{curve25519_edwards::Point, ChainTag, CryptoScheme, ECPoint};
+use super::{curve25519::edwards::Point, ChainTag, CryptoScheme, ECPoint};
 use ed25519_consensus::VerificationKeyBytes;
 use serde::{Deserialize, Serialize};
 
+#[derive(Clone, Debug, PartialEq)]
 pub struct Ed25519Signing {}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -37,7 +38,7 @@ impl AsRef<[u8]> for SigningPayload {
 }
 
 impl CryptoScheme for Ed25519Signing {
-	type Point = super::curve25519_edwards::Point;
+	type Point = super::curve25519::edwards::Point;
 
 	type Signature = Signature;
 
@@ -74,7 +75,7 @@ impl CryptoScheme for Ed25519Signing {
 		let mut output = [0u8; 64];
 		output.copy_from_slice(hash.finalize().as_slice());
 
-		use crate::multisig::crypto::curve25519_ristretto::Scalar;
+		use crate::multisig::crypto::curve25519::Scalar;
 
 		Scalar(curve25519_dalek::scalar::Scalar::from_bytes_mod_order_wide(&output))
 	}

@@ -11,7 +11,6 @@ async-trait = "0.1.49"
 futures = "0.3.14"
 hex = "0.4.3"
 slog = {version = "2.7.0", features = ["max_level_trace", "release_max_level_trace"]}
-web3 = {git = 'https://github.com/tomusdrw/rust-web3.git', rev = '8796c88'}
 
 chainflip-engine = {path = "../../engine/"}
 ed25519-dalek = "1.0"

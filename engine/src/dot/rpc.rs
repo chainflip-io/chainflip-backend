@@ -6,8 +6,7 @@ use cf_primitives::PolkadotBlockNumber;
 use futures::{Stream, TryStreamExt};
 use subxt::{
 	events::{Events, EventsClient},
-	ext::sp_core::Bytes,
-	rpc::ChainBlock,
+	rpc::types::{Bytes, ChainBlock},
 	rpc_params, Config, OnlineClient, PolkadotConfig,
 };
 
@@ -80,6 +79,28 @@ impl DotRpcApi for DotRpcClient {
 	}
 
 	async fn events(&self, block_hash: PolkadotHash) -> Result<Events<PolkadotConfig>> {
+		let chain_runtime_version = self
+			.online_client
+			.rpc()
+			.runtime_version(Some(block_hash))
+			.await
+			.map_err(|e| anyhow!("Failed to query runtime version with error: {e}"))?;
+
+		// We set the metadata and runtime version we need to decode this block's events.
+		// The metadata from the OnlineClient is used within the EventsClient to decode the
+		// events.
+		if self.online_client.runtime_version() != chain_runtime_version {
+			let new_metadata = self
+				.online_client
+				.rpc()
+				.metadata(Some(block_hash))
+				.await
+				.map_err(|e| anyhow!("Failed to query metadata with error: {e}"))?;
+
+			self.online_client.set_runtime_version(chain_runtime_version);
+			self.online_client.set_metadata(new_metadata);
+		}
+
 		EventsClient::new(self.online_client.clone())
 			.at(Some(block_hash))
 			.await

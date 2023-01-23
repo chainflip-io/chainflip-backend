@@ -3,7 +3,6 @@
 
 use super::*;
 
-use cf_chains::{eth::Ethereum, ApiCall, ChainCrypto};
 use cf_primitives::AccountRole;
 use cf_traits::AccountRoleRegistry;
 use frame_benchmarking::{account, benchmarks, whitelisted_caller};
@@ -15,7 +14,6 @@ use frame_system::RawOrigin;
 use sp_std::vec::Vec;
 
 type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
-use cf_chains::benchmarking_value::BenchmarkValue;
 
 fn create_accounts<T: Config>(count: u32) -> Vec<AccountIdOf<T>> {
 	(0..=count).map(|i| account("doogle", i, 0)).collect()
@@ -125,39 +123,6 @@ benchmarks! {
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert!(!PendingClaims::<T>::contains_key(&caller));
-	}
-
-	post_claim_signature {
-		let withdrawal_address: EthereumAddress = [42u8; 20];
-
-		let caller: T::AccountId = whitelisted_caller();
-
-		// Stake some funds to claim
-		Call::<T>::staked {
-			account_id: caller.clone(),
-			amount: MinimumStake::<T>::get(),
-			withdrawal_address,
-			tx_hash: [211u8; 32],
-		}.dispatch_bypass_filter(T::EnsureWitnessed::successful_origin())?;
-
-		// requests a signature. So it's in the AsyncResult::Pending state
-		Pallet::<T>::claim(RawOrigin::Signed(caller.clone()).into(), ClaimAmount::Max, withdrawal_address)?;
-
-		// inserts signature so it's in the AsyncResult::Ready state
-		let signature_request_id = <T::ThresholdSigner as ThresholdSigner<Ethereum>>::RequestId::benchmark_value();
-		T::ThresholdSigner::insert_signature(
-			signature_request_id,
-			<Ethereum as ChainCrypto>::ThresholdSignature::benchmark_value(),
-		);
-
-		let call = Call::<T>::post_claim_signature {
-			account_id: caller.clone(),
-			signature_request_id,
-		};
-	}: { call.dispatch_bypass_filter(T::EnsureThresholdSigned::successful_origin())? }
-	verify {
-		assert!(PendingClaims::<T>::get(&caller).expect("Should have claim for caller").is_signed());
-		frame_system::Pallet::<T>::events().pop().expect("No event has been emitted from the post_claim_signature extrinsic");
 	}
 
 	retire_account {

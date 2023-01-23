@@ -1,5 +1,5 @@
 #!/bin/bash
-binary=./target/release/chainflip-node
+binary=./target/${1:-release}/chainflip-node
 steps=20
 repeat=10
 
@@ -25,8 +25,7 @@ echo "Benchmarking $BINARY with $STEPS steps and $REPEAT repetitions"
 TEMPLATE=state-chain/chainflip-weight-template.hbs
 echo "Executing benchmarks..."
 
-# TODO: implement benchmarking for threshold
-pallets=$(ls state-chain/pallets | grep -v threshold-signature)
+pallets=$(ls state-chain/pallets | grep -v .md)
 
 for pallet in $pallets ; do
   echo "Running benchmark for: $pallet"

@@ -1,10 +1,11 @@
 use anyhow::Result;
 
-use super::{curve25519_ristretto::Point, ChainTag, CryptoScheme, ECPoint};
+use super::{curve25519::ristretto::Point, ChainTag, CryptoScheme, ECPoint};
 use cf_chains::dot::PolkadotPublicKey;
 use schnorrkel::context::{SigningContext, SigningTranscript};
 use serde::{Deserialize, Serialize};
 
+#[derive(Clone, Debug, PartialEq)]
 pub struct PolkadotSigning {}
 
 // Polkadot seems to be using this generic "substrate" context for signing
@@ -137,7 +138,7 @@ impl CryptoScheme for PolkadotSigning {
 // signatures deemed valid by schnorrkel verification code
 #[test]
 fn signature_should_be_valid() {
-	use super::{curve25519_ristretto::Scalar, ECPoint, ECScalar};
+	use super::{curve25519::Scalar, ECPoint, ECScalar};
 	use crate::multisig::crypto::Rng;
 	use rand_legacy::SeedableRng;
 	use utilities::assert_ok;
