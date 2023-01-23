@@ -39,6 +39,10 @@ pub async fn start<const N: usize>(
 					return Ok(witnessers)
 				}
 
+				// We do this because it's possible to witness ahead of the epoch start during the
+				// previous epoch. If we don't start witnessing from the epoch start, when we
+				// receive a new epoch, we won't witness some of the blocks for the particular
+				// epoch, since witness extrinsics are submitted with the epoch number it's for.
 				let from_block = if witnessed_until.epoch_index == epoch.epoch_index {
 					// Start where we left off
 					witnessed_until.block_number
