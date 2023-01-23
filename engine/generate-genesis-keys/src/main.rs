@@ -1,8 +1,8 @@
 use chainflip_engine::{
 	logging::utils::new_discard_logger,
 	multisig::{
-		client::keygen::generate_key_data_until_compatible, eth::EthSigning,
-		polkadot::PolkadotSigning, CryptoScheme, PersistentKeyDB, Rng,
+		client::keygen::generate_key_data, eth::EthSigning, polkadot::PolkadotSigning,
+		CryptoScheme, PersistentKeyDB, Rng,
 	},
 };
 use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
@@ -82,10 +82,9 @@ fn main() {
 fn generate_and_save_keys<Crypto: CryptoScheme>(
 	node_id_to_name_map: &HashMap<AccountId, String>,
 ) -> String {
-	let (key_id, key_shares) = generate_key_data_until_compatible::<Crypto>(
+	let (key_id, key_shares) = generate_key_data::<Crypto>(
 		BTreeSet::from_iter(node_id_to_name_map.keys().cloned()),
-		20,
-		Rng::from_entropy(),
+		&mut Rng::from_entropy(),
 	);
 
 	// Create a db for each key share, giving the db the name of the node it is for.

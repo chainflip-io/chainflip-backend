@@ -29,5 +29,5 @@ pub use signing_detail::get_lagrange_coeff;
 #[derive(Clone)]
 pub struct SigningStateCommonInfo<C: CryptoScheme> {
 	pub payload: C::SigningPayload,
-	pub key: Arc<KeygenResult<C::Point>>,
+	pub key: Arc<KeygenResult<C>>,
 }

@@ -5,7 +5,6 @@ use anyhow::{anyhow, Context};
 use cf_chains::{dot, eth::Ethereum, ChainCrypto, Polkadot};
 use cf_primitives::{BlockNumber, CeremonyId, PolkadotAccountId};
 use futures::{FutureExt, Stream, StreamExt};
-use pallet_cf_vaults::KeygenError;
 use slog::o;
 use sp_core::{Hasher, H160, H256};
 use sp_runtime::{traits::Keccak256, AccountId32};
@@ -25,16 +24,20 @@ use crate::{
 	eth::{rpc::EthRpcApi, EthBroadcaster},
 	logging::COMPONENT_KEY,
 	multisig::{
-		client::{KeygenFailureReason, MultisigClientApi},
-		eth::EthSigning,
-		polkadot::PolkadotSigning,
-		CryptoScheme, KeyId,
+		client::MultisigClientApi, eth::EthSigning, polkadot::PolkadotSigning, CryptoScheme, KeyId,
 	},
 	p2p::{PeerInfo, PeerUpdate},
 	state_chain_observer::client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi},
 	task_scope::{task_scope, Scope},
 	witnesser::EpochStart,
 };
+
+pub struct EthAddressToMonitorSender {
+	pub eth: UnboundedSender<H160>,
+	pub flip: UnboundedSender<H160>,
+	pub usdc: UnboundedSender<H160>,
+}
+
 
 async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 	scope: &Scope<'a, anyhow::Error>,
@@ -62,12 +65,8 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 						ceremony_id,
 						reported_outcome: keygen_result_future
 							.await
-							.map_err(|(bad_account_ids, reason)| {
-								if let KeygenFailureReason::KeyNotCompatible = reason {
-									KeygenError::Incompatible
-								} else {
-									KeygenError::Failure(bad_account_ids)
-								}
+							.map_err(|(bad_account_ids, _reason)| {
+								bad_account_ids
 							}),
 					},
 					&logger,
@@ -193,9 +192,7 @@ pub async fn start<
 	dot_multisig_client: PolkadotMultisigClient,
 	peer_update_sender: UnboundedSender<PeerUpdate>,
 	eth_epoch_start_sender: async_broadcast::Sender<EpochStart<Ethereum>>,
-	eth_monitor_ingress_sender: tokio::sync::mpsc::UnboundedSender<H160>,
-	eth_monitor_flip_ingress_sender: tokio::sync::mpsc::UnboundedSender<H160>,
-	eth_monitor_usdc_ingress_sender: tokio::sync::mpsc::UnboundedSender<H160>,
+	eth_address_to_monitor_sender: EthAddressToMonitorSender,
 	dot_epoch_start_sender: async_broadcast::Sender<EpochStart<Polkadot>>,
 	dot_monitor_ingress_sender: tokio::sync::mpsc::UnboundedSender<PolkadotAccountId>,
 	dot_monitor_signature_sender: tokio::sync::mpsc::UnboundedSender<[u8; 64]>,
@@ -310,6 +307,18 @@ where
 
         let mut last_heartbeat_submitted_at = 0;
 
+        // We want to submit a little more frequently than the interval, just in case we submit
+        // close to the boundary, and our heartbeat ends up on the wrong side of the interval we're submitting for.
+        // The assumption here is that `HEARTBEAT_SAFETY_MARGIN` >> `heartbeat_block_interval`
+        const HEARTBEAT_SAFETY_MARGIN: BlockNumber = 10;
+        let blocks_per_heartbeat =  heartbeat_block_interval - HEARTBEAT_SAFETY_MARGIN;
+
+        slog::info!(
+            logger,
+            "Sending heartbeat every {} blocks",
+            blocks_per_heartbeat
+        );
+
         let mut sc_block_stream = Box::pin(sc_block_stream);
         loop {
             match sc_block_stream.next().await {
@@ -416,7 +425,7 @@ where
                                             ceremony_id,
                                             KeyId(key_id),
                                             signatories,
-                                            crate::multisig::eth::EthSigningPayload(payload.0),
+                                            crate::multisig::eth::SigningPayload(payload.0),
                                             logger.clone(),
                                         ).await;
                                     }
@@ -440,7 +449,7 @@ where
                                             ceremony_id,
                                             KeyId(key_id),
                                             signatories,
-                                            crate::multisig::polkadot::PolkadotSigningPayload::new(payload.0)
+                                            crate::multisig::polkadot::SigningPayload::new(payload.0)
                                                 .expect("Payload should be correct size"),
                                             logger.clone(),
                                         ).await;
@@ -553,13 +562,13 @@ where
                                         use cf_primitives::chains::assets::eth;
                                         match ingress_asset {
                                             eth::Asset::Eth => {
-                                                eth_monitor_ingress_sender.send(ingress_address).unwrap();
+                                                eth_address_to_monitor_sender.eth.send(ingress_address).unwrap();
                                             }
                                             eth::Asset::Flip => {
-                                                eth_monitor_flip_ingress_sender.send(ingress_address).unwrap();
+                                                eth_address_to_monitor_sender.flip.send(ingress_address).unwrap();
                                             }
                                             eth::Asset::Usdc => {
-                                                eth_monitor_usdc_ingress_sender.send(ingress_address).unwrap();
+                                                eth_address_to_monitor_sender.usdc.send(ingress_address).unwrap();
                                             }
                                         }
                                     }
@@ -583,18 +592,6 @@ where
                             );
                         }
                     }
-
-                    // We want to submit a little more frequently than the interval, just in case we submit
-                    // close to the boundary, and our heartbeat ends up on the wrong side of the interval we're submitting for.
-                    // The assumption here is that `HEARTBEAT_SAFETY_MARGIN` >> `heartbeat_block_interval`
-                    const HEARTBEAT_SAFETY_MARGIN: BlockNumber = 10;
-                    let blocks_per_heartbeat =  heartbeat_block_interval - HEARTBEAT_SAFETY_MARGIN;
-
-                    slog::info!(
-                        logger,
-                        "Sending heartbeat every {} blocks",
-                        blocks_per_heartbeat
-                    );
 
                     // All nodes must send a heartbeat regardless of their validator status (at least for now).
                     // We send it every `blocks_per_heartbeat` from the block they started up at.

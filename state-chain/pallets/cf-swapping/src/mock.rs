@@ -8,7 +8,7 @@ use cf_traits::{
 	},
 	Chainflip, SwappingApi,
 };
-use frame_support::{parameter_types, weights::Weight};
+use frame_support::{dispatch::DispatchError, parameter_types, weights::Weight};
 use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{
@@ -16,8 +16,6 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage,
 };
-
-pub const RELAYER_FEE: u128 = 5;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -74,9 +72,8 @@ impl SwappingApi for MockSwappingApi {
 		_from: Asset,
 		_to: Asset,
 		swap_input: AssetAmount,
-		_fee: u16,
-	) -> (AssetAmount, (cf_primitives::Asset, AssetAmount)) {
-		(swap_input, (cf_primitives::Asset::Usdc, RELAYER_FEE))
+	) -> Result<AssetAmount, DispatchError> {
+		Ok(swap_input)
 	}
 }
 
@@ -103,6 +100,10 @@ impl WeightInfo for MockWeightInfo {
 	}
 
 	fn execute_group_of_swaps(_a: u32) -> Weight {
+		Weight::from_ref_time(100)
+	}
+
+	fn withdrawal() -> Weight {
 		Weight::from_ref_time(100)
 	}
 }

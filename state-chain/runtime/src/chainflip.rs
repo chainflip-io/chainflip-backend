@@ -12,10 +12,10 @@ pub use offences::*;
 mod signer_nomination;
 use crate::RuntimeCall;
 use cf_chains::ForeignChain;
+use cf_primitives::liquidity::U256;
 use ethabi::Address as EthAbiAddress;
 pub use missed_authorship_slots::MissedAuraSlots;
 pub use signer_nomination::RandomSignerNomination;
-use sp_core::U256;
 
 use cf_chains::Chain;
 

@@ -155,7 +155,7 @@ where
 {
 	pub participants: BTreeSet<AccountId>,
 	pub payload: C::SigningPayload,
-	pub keygen_result_info: KeygenResultInfo<<C as CryptoScheme>::Point>,
+	pub keygen_result_info: KeygenResultInfo<C>,
 	pub rng: Rng,
 	pub result_sender: CeremonyResultSender<SigningCeremony<C>>,
 }

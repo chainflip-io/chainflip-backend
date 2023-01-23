@@ -105,9 +105,12 @@ async fn get_tracked_data<EthRpcClient: EthRpcApi + Send + Sync>(
 	if let BlockNumber::Number(block_number) = fee_history.oldest_block {
 		Ok(TrackedData::<Ethereum> {
 			block_height: block_number.as_u64(),
-			base_fee: context!(fee_history.base_fee_per_gas.first())?.as_u128(),
-			priority_fee: context!(context!(context!(fee_history.reward)?.first())?.first())?
-				.as_u128(),
+			base_fee: (*context!(fee_history.base_fee_per_gas.first())?)
+				.try_into()
+				.expect("Base fee should fit u128"),
+			priority_fee: (*context!(context!(context!(fee_history.reward)?.first())?.first())?)
+				.try_into()
+				.expect("Priority fee should fit u128"),
 		})
 	} else {
 		Err(anyhow::anyhow!("fee_history did not return `oldest_block` as a number"))

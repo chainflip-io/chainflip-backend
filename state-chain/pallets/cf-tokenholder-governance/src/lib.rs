@@ -35,7 +35,7 @@ pub mod pallet {
 	pub struct Pallet<T>(_);
 
 	use frame_system::pallet_prelude::*;
-	use sp_std::vec::Vec;
+	use sp_std::collections::btree_set::BTreeSet;
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config: Chainflip {
@@ -75,7 +75,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn backers)]
 	pub type Backers<T: Config> =
-		StorageMap<_, Twox64Concat, Proposal, Vec<T::AccountId>, ValueQuery>;
+		StorageMap<_, Twox64Concat, Proposal, BTreeSet<T::AccountId>, ValueQuery>;
 
 	/// The Government key proposal currently awaiting enactment, if any. Indexed by the block
 	/// number we will attempt to enact this update.
@@ -183,7 +183,7 @@ pub mod pallet {
 				<frame_system::Pallet<T>>::block_number() + T::VotingPeriod::get(),
 				proposal.clone(),
 			);
-			Backers::<T>::insert(proposal.clone(), vec![proposer]);
+			Backers::<T>::insert(proposal.clone(), BTreeSet::from([proposer]));
 			Self::deposit_event(Event::<T>::ProposalSubmitted { proposal });
 			Ok(().into())
 		}
@@ -203,10 +203,9 @@ pub mod pallet {
 			let backer = ensure_signed(origin)?;
 			Backers::<T>::try_mutate_exists(proposal, |maybe_backers| match maybe_backers {
 				Some(backers) => {
-					if backers.contains(&backer) {
+					if !backers.insert(backer) {
 						return Err(Error::<T>::AlreadyBacked)
 					}
-					backers.push(backer);
 					Ok(())
 				},
 				None => Err(Error::<T>::ProposalDoesntExist),

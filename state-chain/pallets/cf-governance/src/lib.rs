@@ -6,10 +6,12 @@ use codec::{Codec, Decode, Encode};
 use frame_support::{
 	dispatch::{GetDispatchInfo, UnfilteredDispatchable, Weight},
 	ensure,
+	pallet_prelude::DispatchResultWithPostInfo,
+	storage::with_transaction,
 	traits::{EnsureOrigin, Get, UnixTime},
 };
 pub use pallet::*;
-use sp_runtime::DispatchError;
+use sp_runtime::{DispatchError, TransactionOutcome};
 use sp_std::{boxed::Box, ops::Add, vec::Vec};
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -181,7 +183,7 @@ pub mod pallet {
 		/// CallHash whitelisted by the GovKey
 		GovKeyCallHashWhitelisted { call_hash: GovCallHash },
 		/// Failed GovKey call
-		GovKeyCallExecutionFailed { call_hash: GovCallHash },
+		GovKeyCallExecutionFailed { call_hash: GovCallHash, error: DispatchError },
 	}
 
 	#[pallet::error]
@@ -375,12 +377,11 @@ pub mod pallet {
 			let (call_hash, nonce) = Self::compute_gov_key_call_hash::<_>(call.clone());
 			match GovKeyWhitelistedCallHash::<T>::get() {
 				Some(whitelisted_call_hash) if whitelisted_call_hash == call_hash => {
-					Self::deposit_event(
-						match call.dispatch_bypass_filter(RawOrigin::GovernanceApproval.into()) {
-							Ok(_) => Event::GovKeyCallExecuted { call_hash },
-							Err(_) => Event::GovKeyCallExecutionFailed { call_hash },
-						},
-					);
+					Self::deposit_event(match Self::dispatch_governance_call(*call) {
+						Ok(_) => Event::GovKeyCallExecuted { call_hash },
+						Err(err) =>
+							Event::GovKeyCallExecutionFailed { call_hash, error: err.error },
+					});
 					NextGovKeyCallHashNonce::<T>::put(nonce.wrapping_add(1));
 					GovKeyWhitelistedCallHash::<T>::kill();
 
@@ -496,13 +497,14 @@ impl<T: Config> Pallet<T> {
 		ActiveProposals::<T>::set(active);
 		Self::expire_proposals(expired) + T::WeightInfo::on_initialize(num_proposals as u32)
 	}
+
 	fn execute_pending_proposals() -> Weight {
 		let mut execution_weight = Weight::zero();
 		for (call, id) in ExecutionPipeline::<T>::take() {
 			Self::deposit_event(
 				if let Ok(call) = <T as Config>::RuntimeCall::decode(&mut &(*call)) {
 					execution_weight.saturating_accrue(call.get_dispatch_info().weight);
-					match call.dispatch_bypass_filter((RawOrigin::GovernanceApproval).into()) {
+					match Self::dispatch_governance_call(call) {
 						Ok(_) => Event::Executed(id),
 						Err(err) => Event::FailedExecution(err.error),
 					}
@@ -534,5 +536,16 @@ impl<T: Config> Pallet<T> {
 			expiry_time: T::TimeSource::now().as_secs() + ExpiryTime::<T>::get(),
 		});
 		proposal_id
+	}
+
+	/// Dispatches a call from the governance origin, with transactional semantics, ie. if the call
+	/// dispatch returns `Err`, rolls back any storage updates.
+	fn dispatch_governance_call(call: <T as Config>::RuntimeCall) -> DispatchResultWithPostInfo {
+		with_transaction(move || {
+			match call.dispatch_bypass_filter(RawOrigin::GovernanceApproval.into()) {
+				r @ Ok(_) => TransactionOutcome::Commit(r),
+				r @ Err(_) => TransactionOutcome::Rollback(r),
+			}
+		})
 	}
 }

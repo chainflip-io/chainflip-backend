@@ -1,101 +1,128 @@
 use std::sync::Arc;
 
+use async_trait::async_trait;
 use cf_chains::eth::Ethereum;
-use futures::StreamExt;
+use sp_core::H160;
 
 use crate::{
-	eth::rpc::EthDualRpcClient,
-	state_chain_observer::client::extrinsic_api::ExtrinsicApi,
-	witnesser::{
-		checkpointing::{start_checkpointing_for, WitnessedUntil},
-		epoch_witnesser::{self, should_end_witnessing},
-		EpochStart,
-	},
+	eth::web3_h160, state_chain_observer::client::extrinsic_api::ExtrinsicApi,
+	witnesser::EpochStart,
 };
 
-use super::{block_events_stream_for_contract_from, EthContractWitnesser};
+use super::{
+	core_h160, eth_block_witnessing::BlockProcessor, event::Event, rpc::EthDualRpcClient,
+	BlockWithItems, DecodeLogClosure, EthContractWitnesser, EthNumberBloom,
+};
 
-// NB: This code can emit the same witness multiple times. e.g. if the CFE restarts in the middle of
-// witnessing a window of blocks
-pub async fn start<StateChainClient, ContractWitnesser>(
-	contract_witnesser: ContractWitnesser,
-	eth_dual_rpc: EthDualRpcClient,
-	epoch_starts_receiver: async_broadcast::Receiver<EpochStart<Ethereum>>,
-	// In some cases there is no use witnessing older epochs since any actions that could be taken
-	// either have already been taken, or can no longer be taken.
-	witness_historical_epochs: bool,
+pub struct ContractWitnesser<Contract, StateChainClient> {
+	contract: Contract,
+	rpc: EthDualRpcClient,
 	state_chain_client: Arc<StateChainClient>,
-	logger: &slog::Logger,
-) -> anyhow::Result<()>
+	should_witness_historical_epochs: bool,
+	logger: slog::Logger,
+}
+
+impl<Contract, StateChainClient> ContractWitnesser<Contract, StateChainClient>
 where
-	ContractWitnesser: 'static + EthContractWitnesser + Sync + Send,
-	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
+	Contract: EthContractWitnesser,
+	StateChainClient: ExtrinsicApi + Send + Sync,
 {
-	epoch_witnesser::start(
-		contract_witnesser.contract_name(),
-		epoch_starts_receiver,
-		move |epoch_start| witness_historical_epochs || epoch_start.current,
-		contract_witnesser,
-		move |end_witnessing_signal, epoch_start, mut contract_witnesser, logger| {
-			let state_chain_client = state_chain_client.clone();
-			let eth_dual_rpc = eth_dual_rpc.clone();
+	pub fn new(
+		contract: Contract,
+		state_chain_client: Arc<StateChainClient>,
+		rpc: EthDualRpcClient,
+		should_witness_historical_epochs: bool,
+		logger: &slog::Logger,
+	) -> Self {
+		Self {
+			contract,
+			rpc,
+			state_chain_client,
+			should_witness_historical_epochs,
+			logger: logger.clone(),
+		}
+	}
+}
 
-			async move {
-				let contract_name = contract_witnesser.contract_name();
+#[async_trait]
+impl<Contract, StateChainClient> BlockProcessor for ContractWitnesser<Contract, StateChainClient>
+where
+	Contract: EthContractWitnesser + Send + Sync,
+	StateChainClient: ExtrinsicApi + Send + Sync,
+{
+	async fn process_block(
+		&mut self,
+		epoch: &EpochStart<Ethereum>,
+		block: &EthNumberBloom,
+	) -> anyhow::Result<()> {
+		if !self.should_witness_historical_epochs && !epoch.current {
+			return Ok(())
+		}
 
-				let (witnessed_until, witnessed_until_sender) =
-					start_checkpointing_for(&contract_name, &logger).await;
+		let contract_address = self.contract.contract_address();
 
-				// Witnessing is only done for current or new epochs
-				if epoch_start.epoch_index >= witnessed_until.epoch_index {
-					let from_block = if witnessed_until.epoch_index == epoch_start.epoch_index {
-						std::cmp::max(epoch_start.block_number, witnessed_until.block_number)
-					} else {
-						epoch_start.block_number
-					};
+		let events = block_to_events(
+			block,
+			core_h160(contract_address),
+			&self.contract.decode_log_closure().unwrap(),
+			&self.rpc,
+		)
+		.await?;
 
-					let mut block_stream = block_events_stream_for_contract_from(
-						from_block,
-						&contract_witnesser,
-						eth_dual_rpc.clone(),
-						&logger,
-					)
-					.await?;
+		self.contract
+			.handle_block_events(
+				epoch.epoch_index,
+				block.block_number.as_u64(),
+				BlockWithItems { block_number: block.block_number.as_u64(), block_items: events },
+				// Can't this just take a reference?
+				self.state_chain_client.clone(),
+				&self.rpc,
+				&self.logger,
+			)
+			.await?;
 
-					while let Some(block) = block_stream.next().await {
-						let block_number = block.block_number;
+		Ok(())
+	}
+}
 
-						if should_end_witnessing::<Ethereum>(
-							end_witnessing_signal.clone(),
-							block_number,
-							&logger,
-						) {
-							break
-						}
+pub async fn block_to_events<'a, EventParameters>(
+	header: &'a EthNumberBloom,
+	contract_address: H160,
+	decode_log_fn: &DecodeLogClosure<EventParameters>,
+	eth_rpc: &'a EthDualRpcClient,
+) -> anyhow::Result<Vec<Event<EventParameters>>>
+where
+	EventParameters: core::fmt::Debug + Send + Sync + 'static,
+{
+	use crate::eth::rpc::EthRpcApi;
+	use ethbloom::{Bloom, Input};
+	use web3::types::{BlockNumber, FilterBuilder};
 
-						contract_witnesser
-							.handle_block_events(
-								epoch_start.epoch_index,
-								block_number,
-								block,
-								state_chain_client.clone(),
-								&eth_dual_rpc,
-								&logger,
-							)
-							.await?;
+	let mut contract_bloom = Bloom::default();
+	contract_bloom.accrue(Input::Raw(&contract_address.0));
 
-						witnessed_until_sender
-							.send(WitnessedUntil {
-								epoch_index: epoch_start.epoch_index,
-								block_number,
-							})
-							.unwrap();
-					}
-				}
-				Ok(contract_witnesser)
-			}
-		},
-		logger,
-	)
-	.await
+	let block_number = header.block_number;
+
+	// if we have logs for this block, fetch them.
+	if header.logs_bloom.contains_bloom(&contract_bloom) {
+		let logs = eth_rpc
+			.get_logs(
+				FilterBuilder::default()
+					// from_block *and* to_block are *inclusive*
+					.from_block(BlockNumber::Number(block_number))
+					.to_block(BlockNumber::Number(block_number))
+					.address(vec![web3_h160(contract_address)])
+					.build(),
+			)
+			.await?;
+
+		logs.into_iter()
+			.map(|unparsed_log| -> anyhow::Result<Event<EventParameters>> {
+				Event::<EventParameters>::new_from_unparsed_logs(decode_log_fn, unparsed_log)
+			})
+			.collect::<anyhow::Result<Vec<_>>>()
+	} else {
+		// we know there won't be interesting logs, so don't fetch for events
+		Ok(vec![])
+	}
 }
