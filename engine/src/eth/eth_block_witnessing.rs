@@ -78,7 +78,7 @@ pub async fn start<const N: usize>(
 					witnessed_until_sender
 						.send(WitnessedUntil {
 							epoch_index: epoch.epoch_index,
-							block_number: epoch.block_number,
+							block_number: block.block_number.as_u64(),
 						})
 						.unwrap();
 				}
