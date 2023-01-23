@@ -105,7 +105,7 @@ pub mod pallet {
 		type EgressHandler: EgressApi<AnyChain>;
 
 		/// Benchmark stuff.
-		type EmissionsWeightInfo: WeightInfo;
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::pallet]
@@ -193,7 +193,7 @@ pub mod pallet {
 					log::info!("System maintenance: skipping supply update broadcast.");
 				}
 			}
-			T::EmissionsWeightInfo::rewards_minted()
+			T::WeightInfo::rewards_minted()
 		}
 	}
 
@@ -211,7 +211,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
-		#[pallet::weight(T::EmissionsWeightInfo::update_current_authority_emission_inflation())]
+		#[pallet::weight(T::WeightInfo::update_current_authority_emission_inflation())]
 		pub fn update_current_authority_emission_inflation(
 			origin: OriginFor<T>,
 			inflation: u32,
@@ -231,7 +231,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
-		#[pallet::weight(T::EmissionsWeightInfo::update_backup_node_emission_inflation())]
+		#[pallet::weight(T::WeightInfo::update_backup_node_emission_inflation())]
 		pub fn update_backup_node_emission_inflation(
 			origin: OriginFor<T>,
 			inflation: u32,
@@ -251,7 +251,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
-		#[pallet::weight(T::EmissionsWeightInfo::update_supply_update_interval())]
+		#[pallet::weight(T::WeightInfo::update_supply_update_interval())]
 		pub fn update_supply_update_interval(
 			origin: OriginFor<T>,
 			value: BlockNumberFor<T>,
