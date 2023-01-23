@@ -189,11 +189,12 @@ pub mod pallet {
 					);
 					Self::deposit_event(Event::SupplyUpdateBroadcastRequested(current_block));
 					LastSupplyUpdateBlock::<T>::set(current_block);
+					return T::WeightInfo::rewards_minted()
 				} else {
 					log::info!("System maintenance: skipping supply update broadcast.");
 				}
 			}
-			T::WeightInfo::rewards_minted()
+			T::WeightInfo::rewards_not_minted()
 		}
 	}
 
@@ -288,15 +289,7 @@ impl<T: Config> Pallet<T> {
 	fn should_update_supply_at(block_number: T::BlockNumber) -> bool {
 		let supply_update_interval = SupplyUpdateInterval::<T>::get();
 		let blocks_elapsed = block_number - LastSupplyUpdateBlock::<T>::get();
-		Self::should_update_supply(blocks_elapsed, supply_update_interval)
-	}
-
-	/// Checks if we should broadcast supply update.
-	fn should_update_supply(
-		blocks_elapsed_since_last_supply_update: T::BlockNumber,
-		supply_update_interval: T::BlockNumber,
-	) -> bool {
-		blocks_elapsed_since_last_supply_update >= supply_update_interval
+		blocks_elapsed >= supply_update_interval
 	}
 
 	/// Updates the total supply on the ETH blockchain
