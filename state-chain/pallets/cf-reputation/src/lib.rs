@@ -139,9 +139,7 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(current_block: T::BlockNumber) -> Weight {
 			if Self::blocks_since_new_interval(current_block) == Zero::zero() {
-				// Provide feedback via the `Heartbeat` trait on each interval
 				T::Heartbeat::on_heartbeat_interval(Self::current_network_state());
-
 				return T::WeightInfo::submit_network_state()
 			}
 			T::WeightInfo::on_initialize_no_action()
