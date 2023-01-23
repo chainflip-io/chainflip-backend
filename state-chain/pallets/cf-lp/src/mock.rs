@@ -11,11 +11,11 @@ use cf_traits::{
 };
 use frame_support::{parameter_types, sp_runtime::app_crypto::sp_core::H160};
 use frame_system as system;
-use sp_core::{ConstU16, H256};
+use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
-	BuildStorage,
+	BuildStorage, Permill,
 };
 
 use sp_std::str::FromStr;
@@ -100,9 +100,12 @@ impl pallet_cf_account_roles::Config for Test {
 	type WeightInfo = ();
 }
 
+parameter_types! {
+	pub const NetworkFee: Permill = Permill::from_percent(0);
+}
 impl pallet_cf_pools::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type NetworkFee = ConstU16<0>;
+	type NetworkFee = NetworkFee;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 }
 

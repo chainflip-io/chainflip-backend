@@ -1,10 +1,8 @@
-use crate::{mock::*, CollectedNetworkFee, Error, FlipBuyInterval, Pools};
+use crate::{mock::*, CollectedNetworkFee, Error, FlipBuyInterval, FlipToBurn, Pools};
 use cf_primitives::{chains::assets::any::Asset, AmmRange, AssetAmount, PoolAssetMap};
 use cf_traits::LiquidityPoolApi;
-use frame_support::{assert_noop, assert_ok};
-
-use crate::FlipToBurn;
-use frame_support::traits::Hooks;
+use frame_support::{assert_noop, assert_ok, traits::Hooks};
+use sp_runtime::Permill;
 
 #[test]
 fn can_create_new_trading_pool() {
@@ -189,14 +187,14 @@ fn test_buy_back_flip() {
 fn test_network_fee_calculation() {
 	new_test_ext().execute_with(|| {
 		// Show we can never overflow and panic
-		LiquidityPools::calc_fee(u16::MAX, AssetAmount::MAX);
+		LiquidityPools::calc_fee(Permill::from_percent(100), AssetAmount::MAX);
 		// 200 bps (2%) of 100 = 2
-		assert_eq!(LiquidityPools::calc_fee(200, 100), 2);
+		assert_eq!(LiquidityPools::calc_fee(Permill::from_percent(2u32), 100), 2);
 		// 2220 bps = 22 % of 199 = 43,78
-		assert_eq!(LiquidityPools::calc_fee(2220, 199), 44);
+		assert_eq!(LiquidityPools::calc_fee(Permill::from_rational(2220u32, 10000u32), 199), 44);
 		// 2220 bps = 22 % of 234 = 51,26
-		assert_eq!(LiquidityPools::calc_fee(2220, 233), 52);
+		assert_eq!(LiquidityPools::calc_fee(Permill::from_rational(2220u32, 10000u32), 233), 52);
 		// 10 bps = 0,1% of 3000 = 3
-		assert_eq!(LiquidityPools::calc_fee(10, 3000), 3);
+		assert_eq!(LiquidityPools::calc_fee(Permill::from_rational(1u32, 1000u32), 3000), 3);
 	});
 }

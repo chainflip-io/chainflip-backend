@@ -6,11 +6,11 @@ use cf_traits::{
 };
 use frame_support::parameter_types;
 use frame_system as system;
-use sp_core::{ConstU16, H256};
+use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
-	BuildStorage,
+	BuildStorage, Permill,
 };
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -75,9 +75,12 @@ impl Chainflip for Test {
 	type SystemState = MockSystemStateInfo;
 }
 
+parameter_types! {
+	pub const NetworkFee: Permill = Permill::from_percent(0);
+}
 impl pallet_cf_pools::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type NetworkFee = ConstU16<0>;
+	type NetworkFee = NetworkFee;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 }
 

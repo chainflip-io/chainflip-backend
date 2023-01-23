@@ -261,9 +261,12 @@ impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 }
+parameter_types! {
+	pub const NetworkFee: Permill = Permill::from_percent(0);
+}
 impl pallet_cf_pools::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type NetworkFee = ConstU16<0>;
+	type NetworkFee = NetworkFee;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 }
 
