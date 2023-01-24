@@ -14,6 +14,7 @@ use tokio::sync::{
 	mpsc::{UnboundedReceiver, UnboundedSender},
 	oneshot,
 };
+use tracing::Instrument;
 
 use crate::{
 	common::format_iterator,
@@ -58,6 +59,8 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 		outcome_sender: UnboundedSender<(CeremonyId, CeremonyOutcome<Ceremony>)>,
 		logger: slog::Logger,
 	) -> Result<()> {
+		let span = tracing::info_span!("CeremonyRunner", ceremony_id = ceremony_id);
+
 		// We always create unauthorised first, it can get promoted to
 		// an authorised one with a ceremony request
 		let mut runner = Self::new_unauthorised(
@@ -72,7 +75,7 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 			tokio::select! {
 				Some((sender_id, message)) = message_receiver.recv() => {
 
-					if let Some(result) = runner.process_or_delay_message(sender_id, message).await {
+					if let Some(result) = runner.process_or_delay_message(sender_id, message).instrument(span.clone()).await {
 						break result;
 					}
 
@@ -81,7 +84,7 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 
 					let PreparedRequest { initial_stage } = request.expect("Ceremony request channel was dropped unexpectedly");
 
-					if let Some(result) = runner.on_ceremony_request(initial_stage).await {
+					if let Some(result) = runner.on_ceremony_request(initial_stage).instrument(span.clone()).await {
 						break result;
 					}
 
@@ -90,7 +93,7 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 
 					// Only timeout if the ceremony is authorised
 					if runner.stage.is_some() {
-						if let Some(result) = runner.on_timeout().await {
+						if let Some(result) = runner.on_timeout().instrument(span.clone()).await {
 							break result;
 						}
 					}
@@ -314,6 +317,14 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 
 			let missing_messages_from_accounts =
 				stage.ceremony_common().validator_mapping.get_ids(stage.awaited_parties());
+
+			tracing::warn!(
+					missing_ids = format_iterator(missing_messages_from_accounts.clone()).to_string(),
+					"Ceremony stage {} timed out before all messages collected ({} missing), trying to finalize current stage anyway.",
+					stage.get_stage_name(),
+					missing_messages_from_accounts.len()
+				);
+
 			slog::warn!(
 				self.logger,
 				"Ceremony stage {} timed out before all messages collected ({} missing), trying to finalize current stage anyway.",

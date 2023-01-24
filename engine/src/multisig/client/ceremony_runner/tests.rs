@@ -323,6 +323,8 @@ async fn should_not_timeout_unauthorised_ceremony() {
 
 #[tokio::test]
 async fn should_timeout_authorised_ceremony() {
+	crate::logging::init_test_logger();
+
 	let (task_handle, (_message_sender, request_sender, _outcome_receiver)) =
 		spawn_signing_ceremony_runner();
 

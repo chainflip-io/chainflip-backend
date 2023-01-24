@@ -23,6 +23,7 @@ use crate::{
 };
 
 use client::MultisigClient;
+use tracing::info_span;
 use utilities::{assert_err, assert_ok};
 
 #[tokio::test]
@@ -44,6 +45,7 @@ async fn should_ignore_rts_for_unknown_key() {
 		)),
 		ceremony_request_sender,
 		&logger,
+		info_span!(""),
 	);
 
 	// Send Sign Request
@@ -64,6 +66,7 @@ async fn should_ignore_rts_for_unknown_key() {
 
 #[tokio::test]
 async fn should_save_key_after_keygen() {
+	crate::logging::init_test_logger();
 	let logger = new_test_logger();
 	let (_dir, db_file) = new_temp_directory_with_nonexistent_file();
 
@@ -86,6 +89,7 @@ async fn should_save_key_after_keygen() {
 			)),
 			ceremony_request_sender,
 			&logger,
+			info_span!(""),
 		);
 
 		// Send Keygen Request
@@ -150,6 +154,7 @@ async fn should_load_keys_on_creation() {
 		)),
 		ceremony_request_sender,
 		&new_test_logger(),
+		info_span!(""),
 	);
 
 	// Check that the key was loaded during the creation of the client and it matches the original

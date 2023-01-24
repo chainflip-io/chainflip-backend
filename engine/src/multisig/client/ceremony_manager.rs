@@ -10,6 +10,7 @@ use std::{
 	sync::Arc,
 };
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
+use tracing::{info_span, Instrument};
 
 use crate::{
 	constants::CEREMONY_ID_WINDOW,
@@ -330,6 +331,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 					}
 				}
 			}
+			.instrument(info_span!("MultisigClient"))
 			.boxed()
 		})
 		.await
