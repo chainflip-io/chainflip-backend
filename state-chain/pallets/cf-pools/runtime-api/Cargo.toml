@@ -11,7 +11,7 @@ repository = 'https://github.com/chainflip-io/chainflip-backend'
 
 [dependencies]
 cf-primitives = {path = "../../../../state-chain/primitives", default-features = false}
-sp-api = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12", default-features = false }
+sp-api = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2", default-features = false }
 
 [features]
 default = ["std"]
