@@ -180,7 +180,7 @@ benchmarks! {
 			minimum_stake: MinimumStake::<T>::get(),
 		};
 
-		let origin = T::EnsureGovernance::successful_origin();
+		let origin = <T as pallet::Config>::EnsureGovernance::successful_origin();
 	} : { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert_eq!(MinimumStake::<T>::get(), MinimumStake::<T>::get());
