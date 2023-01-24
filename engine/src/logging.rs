@@ -377,3 +377,108 @@ mod tests {
 		assert!(!tag_cache.contains_tag("excluded"));
 	}
 }
+
+// Tracing -----------------------------------------------------
+
+pub fn init_json_logger() {
+	tracing_subscriber::fmt().json().with_max_level(tracing::Level::TRACE).init();
+}
+
+pub fn init_cli_logger_verbose() {
+	use tracing_subscriber::{
+		prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt,
+	};
+
+	// TODO: this is failing to init when running all CFE tests due to "global default trace
+	// dispatcher has already been set". What is setting it?
+	let _res = tracing_subscriber::registry().with(CLILoggerLayer).try_init();
+}
+
+#[cfg(test)]
+pub fn init_test_logger() {
+	init_cli_logger_verbose();
+}
+
+use tracing::Level;
+use tracing_subscriber::Layer;
+pub struct CLILoggerLayer;
+
+impl<S> Layer<S> for CLILoggerLayer
+where
+	S: tracing::Subscriber,
+{
+	fn on_event(
+		&self,
+		event: &tracing::Event<'_>,
+		_ctx: tracing_subscriber::layer::Context<'_, S>,
+	) {
+		const KV_LIST_INDENT: &str = "    \x1b[0;34m|\x1b[0m";
+		const LOCATION_INDENT: &str = "    \x1b[0;34m-->\x1b[0m";
+
+		let mut visitor = CustomVisitor::default();
+		event.record(&mut visitor);
+
+		// Color code with level
+		let level_color = match *event.metadata().level() {
+			Level::ERROR => "[0;31m",
+			Level::WARN => "[0;33m",
+			Level::INFO => "[0;36m",
+			Level::DEBUG => "[0;32m",
+			Level::TRACE => "[0;35m",
+		};
+
+		// Print the readable log
+		println!(
+			"\x1b{}[{}]\x1b[0m {} {}",
+			level_color,
+			event.metadata().level().as_str(),
+			visitor.message,
+			// Only show the tag if its not empty
+			if visitor.tag.is_some() {
+				format!("([{}], {})", visitor.tag.unwrap(), event.metadata().target())
+			} else {
+				format!("({})", event.metadata().target())
+			}
+		);
+
+		// Print the location of the log call if its a Warning or above
+		if matches!(*event.metadata().level(), Level::WARN | Level::ERROR) {
+			println!(
+				"{} {}:{}",
+				LOCATION_INDENT,
+				event.metadata().file().unwrap(),
+				event.metadata().line().unwrap()
+			);
+		}
+
+		// Print the list of key values pairs attached to the event
+		visitor.kv.iter().for_each(|(k, v)| {
+			println!("{KV_LIST_INDENT} {k} = {v}");
+		})
+	}
+}
+
+use std::{
+	collections::HashMap,
+	fmt::{self},
+};
+use tracing::field::{Field, Visit};
+
+#[derive(Default)]
+pub struct CustomVisitor {
+	pub message: String,
+	pub tag: Option<String>,
+	pub kv: HashMap<String, String>,
+}
+
+impl Visit for CustomVisitor {
+	fn record_debug(&mut self, field: &Field, value: &dyn fmt::Debug) {
+		match field.name() {
+			"message" => self.message = format!("{value:?}"),
+			"tag" => self.tag = Some(format!("{value:?}")),
+			_ => {
+				self.kv.insert(field.name().to_string(), format!("{value:?}"));
+			},
+		}
+	}
+}
