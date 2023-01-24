@@ -397,6 +397,7 @@ pub mod pallet {
 					}
 				},
 				RotationPhase::KeygensInProgress(mut rotation_state) => {
+					let num_primary_candidates = rotation_state.num_primary_candidates();
 					match T::VaultRotator::status() {
 						// We need to differentiate keygen verif and other states.
 						// We can do this with an enum instead of Result<()>
@@ -413,19 +414,11 @@ pub mod pallet {
 							Self::set_rotation_phase(RotationPhase::ActivatingKeys(rotation_state));
 						},
 						AsyncResult::Ready(VaultStatus::Failed(offenders)) => {
-							// let weight =
-							// 	T::ValidatorWeightInfo::rotation_phase_vaults_rotating_failure(
-							// 		offenders.len() as u32,
-							// 	);
 							rotation_state.ban(offenders);
 							Self::start_vault_rotation(rotation_state);
-							// weight
 						},
 						AsyncResult::Pending => {
 							log::debug!(target: "cf-validator", "awaiting keygen completion");
-							// T::ValidatorWeightInfo::rotation_phase_vaults_rotating_pending(
-							// 	rotation_state.num_primary_candidates(),
-							// )
 						},
 						async_result => {
 							debug_assert!(
@@ -434,16 +427,12 @@ pub mod pallet {
 							);
 							log::error!(target: "cf-validator", "Ready(KeygenComplete), Ready(Failed), Pending possible. Got: {async_result:?}");
 							Self::set_rotation_phase(RotationPhase::Idle);
-							// Use the weight of the pending phase.
-							// T::ValidatorWeightInfo::rotation_phase_vaults_rotating_pending(
-							// 	rotation_state.num_primary_candidates(),
-							// )
 						},
 					};
-					// TODO: Use actual weights
-					Weight::from_ref_time(0)
+					T::ValidatorWeightInfo::rotation_phase_keygen(num_primary_candidates)
 				},
 				RotationPhase::ActivatingKeys(rotation_state) => {
+					let num_primary_candidates = rotation_state.num_primary_candidates();
 					match T::VaultRotator::status() {
 						AsyncResult::Ready(VaultStatus::RotationComplete) => {
 							Self::set_rotation_phase(RotationPhase::NewKeysActivated(
@@ -462,17 +451,10 @@ pub mod pallet {
 							Self::set_rotation_phase(RotationPhase::Idle);
 						},
 					}
-					Weight::from_ref_time(0)
+					T::ValidatorWeightInfo::rotation_phase_activating_keys(num_primary_candidates)
 				},
 				// The new session will kick off the new epoch
-				RotationPhase::NewKeysActivated(rotation_state) =>
-					T::ValidatorWeightInfo::rotation_phase_vaults_rotated(
-						rotation_state.num_primary_candidates(),
-					),
-				RotationPhase::SessionRotating(rotation_state) =>
-					T::ValidatorWeightInfo::rotation_phase_vaults_rotated(
-						rotation_state.num_primary_candidates(),
-					),
+				_ => Weight::from_ref_time(0),
 			});
 			weight
 		}

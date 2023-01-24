@@ -9,5 +9,5 @@
     --output state-chain/pallets/cf-$1/src/weights.rs \
     --execution=wasm \
     --steps=20 \
-    --repeat=10 \
+    --repeat=20 \
     --template=state-chain/chainflip-weight-template.hbs
