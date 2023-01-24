@@ -4,14 +4,14 @@ use cf_amm::{
 };
 use cf_primitives::{
 	chains::assets::any, AccountId, AmmRange, AmountU256, AssetAmount, BurnResult, Liquidity,
-	MintedLiquidity, PoolAssetMap, Tick,
+	PoolAssetMap, Tick,
 };
 use cf_traits::{Chainflip, LiquidityPoolApi, SwappingApi};
 use frame_support::{pallet_prelude::*, transactional};
 use frame_system::pallet_prelude::OriginFor;
 use sp_arithmetic::traits::Zero;
 use sp_runtime::{Permill, Saturating};
-use sp_std::{vec, vec::Vec};
+use sp_std::vec;
 
 pub use pallet::*;
 
@@ -388,11 +388,11 @@ impl<T: Config> LiquidityPoolApi<AccountId> for Pallet<T> {
 		})
 	}
 
-	fn minted_liquidity(lp: &AccountId, asset: &any::Asset) -> Vec<MintedLiquidity> {
+	fn minted_liquidity(lp: &AccountId, asset: &any::Asset, range: AmmRange) -> Liquidity {
 		if let Some(pool) = Pools::<T>::get(asset) {
-			pool.minted_liquidity(lp.clone())
+			pool.minted_liquidity(lp.clone(), range)
 		} else {
-			vec![]
+			Default::default()
 		}
 	}
 

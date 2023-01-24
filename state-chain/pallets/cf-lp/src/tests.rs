@@ -1,8 +1,6 @@
 use crate::{mock::*, FreeBalances};
 
-use cf_primitives::{
-	liquidity::AmmRange, AccountId, Asset, ForeignChainAddress, MintedLiquidity, PoolAssetMap,
-};
+use cf_primitives::{liquidity::AmmRange, AccountId, Asset, ForeignChainAddress, PoolAssetMap};
 use cf_traits::{mocks::system_state_info::MockSystemStateInfo, LiquidityPoolApi, SystemStateInfo};
 use frame_support::{assert_noop, assert_ok, error::BadOrigin};
 
@@ -210,13 +208,7 @@ fn can_mint_liquidity() {
 			amount_debited: 4988,
 		}));
 
-		assert_eq!(
-			LiquidityPools::minted_liquidity(&LP_ACCOUNT.into(), &asset),
-			vec![MintedLiquidity {
-				range: AmmRange::new(range.lower, range.upper),
-				liquidity: 1_000_000,
-			}]
-		);
+		assert_eq!(LiquidityPools::minted_liquidity(&LP_ACCOUNT.into(), &asset, range), 1_000_000);
 
 		// Can mint more liquidity (+1000)
 		System::reset_events();
@@ -257,13 +249,7 @@ fn can_mint_liquidity() {
 			amount_debited: 5,
 		}));
 
-		assert_eq!(
-			LiquidityPools::minted_liquidity(&LP_ACCOUNT.into(), &asset),
-			vec![MintedLiquidity {
-				range: AmmRange::new(range.lower, range.upper),
-				liquidity: 1_001_000,
-			}]
-		);
+		assert_eq!(LiquidityPools::minted_liquidity(&LP_ACCOUNT.into(), &asset, range), 1_001_000,);
 	});
 }
 
@@ -324,13 +310,7 @@ fn can_burn_liquidity() {
 			amount_credited: 2493,
 		}));
 
-		assert_eq!(
-			LiquidityPools::minted_liquidity(&LP_ACCOUNT.into(), &asset),
-			vec![MintedLiquidity {
-				range: AmmRange::new(range.lower, range.upper),
-				liquidity: 500_000,
-			}]
-		);
+		assert_eq!(LiquidityPools::minted_liquidity(&LP_ACCOUNT.into(), &asset, range), 500_000,);
 
 		// Can fully burn a position
 		System::reset_events();
@@ -371,7 +351,7 @@ fn can_burn_liquidity() {
 			amount_credited: 2_493,
 		}));
 
-		assert_eq!(LiquidityPools::minted_liquidity(&LP_ACCOUNT.into(), &asset), vec![]);
+		assert_eq!(LiquidityPools::minted_liquidity(&LP_ACCOUNT.into(), &asset, range), 0);
 	});
 }
 
