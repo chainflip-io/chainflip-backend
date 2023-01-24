@@ -55,7 +55,6 @@ where
 	E: ChainEnvironment<SystemAccounts, <Polkadot as Chain>::ChainAccount>
 		+ ReplayProtectionProvider<Polkadot>,
 {
-	type AddressType = PolkadotPublicKey;
 	fn new_unsigned(maybe_old_key: Option<Vec<u8>>, new_key: Vec<u8>) -> Result<Self, ()> {
 		let vault = E::lookup(SystemAccounts::Vault).ok_or(())?;
 		let old_key = match maybe_old_key {

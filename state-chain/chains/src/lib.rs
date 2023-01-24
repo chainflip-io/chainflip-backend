@@ -203,7 +203,6 @@ pub trait SetAggKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
 
 #[allow(clippy::result_unit_err)]
 pub trait SetGovKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
-	type AddressType;
 	fn new_unsigned(maybe_old_key: Option<Vec<u8>>, new_key: Vec<u8>) -> Result<Self, ()>;
 }
 
