@@ -172,6 +172,10 @@ pub mod pallet {
 			output: AssetAmount,
 			liquidity_fee: AssetAmount,
 		},
+		SwapFeeSet {
+			asset: any::Asset,
+			fee_100th_bips: u32,
+		},
 	}
 
 	#[pallet::call]
@@ -204,6 +208,11 @@ pub mod pallet {
 		/// ## Events
 		///
 		/// - [On update](Event::PoolStateUpdated)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_system::BadOrigin)
+		/// - [PoolDoesNotExist](pallet_cf_pools::Error::PoolDoesNotExist)
 		#[pallet::weight(0)]
 		pub fn update_pool_enabled(
 			origin: OriginFor<T>,
@@ -229,7 +238,15 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [On update](Event::PoolStateUpdated)
+		/// - [On success](Event::NewPoolCreated)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_system::BadOrigin)
+		/// - [InvalidFeeAmount](pallet_cf_pools::Error::InvalidFeeAmount)
+		/// - [InvalidTick](pallet_cf_pools::Error::InvalidTick)
+		/// - [InvalidInitialPrice](pallet_cf_pools::Error::InvalidInitialPrice)
+		/// - [PoolAlreadyExists](pallet_cf_pools::Error::PoolAlreadyExists)
 		#[pallet::weight(0)]
 		pub fn new_pool(
 			origin: OriginFor<T>,
@@ -263,6 +280,38 @@ pub mod pallet {
 				fee_100th_bips,
 				initial_tick_price,
 			});
+
+			Ok(())
+		}
+
+		/// Sets how much fee an exchange pool takes during a swap.
+		/// Requires governance origin.
+		///
+		/// ## Events
+		///
+		/// - [On success](Event::SwapFeeSet)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_system::BadOrigin)
+		/// - [InvalidFeeAmount](pallet_cf_pools::Error::InvalidFeeAmount)
+		/// - [PoolDoesNotExist](pallet_cf_pools::Error::PoolDoesNotExist)
+		#[pallet::weight(0)]
+		pub fn set_swap_fee(
+			origin: OriginFor<T>,
+			asset: any::Asset,
+			fee_100th_bips: u32,
+		) -> DispatchResult {
+			let _ok = T::EnsureGovernance::ensure_origin(origin)?;
+
+			Pools::<T>::try_mutate(asset, |maybe_pool| {
+				if let Some(pool) = maybe_pool.as_mut() {
+					pool.set_fees(fee_100th_bips).map_err(|_| Error::InvalidFeeAmount)
+				} else {
+					Err(Error::<T>::PoolDoesNotExist)
+				}
+			})?;
+			Self::deposit_event(Event::<T>::SwapFeeSet { asset, fee_100th_bips });
 
 			Ok(())
 		}

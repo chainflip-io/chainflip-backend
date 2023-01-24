@@ -574,6 +574,15 @@ impl PoolState {
 			.collect()
 	}
 
+	pub fn set_fees(&mut self, fee_100th_bips: u32) -> Result<(), CreatePoolError> {
+		if fee_100th_bips > MAX_FEE_100TH_BIPS {
+			Err(CreatePoolError::InvalidFeeAmount)
+		} else {
+			self.fee_100th_bips = fee_100th_bips;
+			Ok(())
+		}
+	}
+
 	/// Swaps the specified Amount of Asset 0 into Asset 1. Returns the Output and Fee amount.
 	///
 	/// This function never panics

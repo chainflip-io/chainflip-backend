@@ -1,6 +1,6 @@
 use crate::{mock::*, CollectedNetworkFee, Error, FlipBuyInterval, Pools};
 use cf_primitives::{chains::assets::any::Asset, AmmRange, AssetAmount, PoolAssetMap};
-use cf_traits::LiquidityPoolApi;
+use cf_traits::{LiquidityPoolApi, SwappingApi};
 use frame_support::{assert_noop, assert_ok};
 
 use crate::FlipToBurn;
@@ -198,5 +198,63 @@ fn test_network_fee_calculation() {
 		assert_eq!(LiquidityPools::calc_fee(2220, 233), 52);
 		// 10 bps = 0,1% of 3000 = 3
 		assert_eq!(LiquidityPools::calc_fee(10, 3000), 3);
+	});
+}
+
+#[test]
+fn can_update_swap_fee() {
+	new_test_ext().execute_with(|| {
+		let range = AmmRange::new(-100, 100);
+		let asset = Asset::Flip;
+		let default_tick_price = 0;
+
+		// Create a new pool.
+		assert_ok!(LiquidityPools::new_pool(
+			RuntimeOrigin::root(),
+			asset,
+			500_000u32,
+			default_tick_price,
+		));
+		assert_ok!(LiquidityPools::mint(
+			LP.into(),
+			asset,
+			range,
+			1_000_000,
+			|_: PoolAssetMap<AssetAmount>| Ok(())
+		));
+
+		assert_ok!(LiquidityPools::swap(asset, Asset::Usdc, 1_000));
+
+		// Current swap fee is 50%
+		System::assert_has_event(RuntimeEvent::LiquidityPools(crate::Event::AssetsSwapped {
+			from: Asset::Flip,
+			to: Asset::Usdc,
+			input: 1000,
+			output: 499,
+			liquidity_fee: 500,
+		}));
+
+		assert_noop!(
+			LiquidityPools::set_swap_fee(RuntimeOrigin::root(), asset, 500001u32),
+			Error::<Test>::InvalidFeeAmount
+		);
+
+		assert_ok!(LiquidityPools::set_swap_fee(RuntimeOrigin::root(), asset, 0u32));
+		System::assert_last_event(RuntimeEvent::LiquidityPools(crate::Event::SwapFeeSet {
+			asset: Asset::Flip,
+			fee_100th_bips: 0u32,
+		}));
+
+		System::reset_events();
+		assert_ok!(LiquidityPools::swap(asset, Asset::Usdc, 1_000));
+
+		// Current swap fee is now 0%
+		System::assert_has_event(RuntimeEvent::LiquidityPools(crate::Event::AssetsSwapped {
+			from: Asset::Flip,
+			to: Asset::Usdc,
+			input: 1000,
+			output: 998,
+			liquidity_fee: 0,
+		}));
 	});
 }
