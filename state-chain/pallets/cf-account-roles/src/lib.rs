@@ -63,7 +63,6 @@ pub mod pallet {
 	pub enum Error<T> {
 		UnknownAccount,
 		AccountNotInitialised,
-		/// Accounts can only be upgraded from the initial [AccountRole::Undefined] state.
 		AccountRoleAlreadyRegistered,
 		NotEnoughStake,
 	}

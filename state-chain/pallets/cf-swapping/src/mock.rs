@@ -103,7 +103,7 @@ impl WeightInfo for MockWeightInfo {
 		Weight::from_ref_time(100)
 	}
 
-	fn withdrawal() -> Weight {
+	fn withdraw() -> Weight {
 		Weight::from_ref_time(100)
 	}
 }
