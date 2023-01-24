@@ -36,6 +36,7 @@ fn test_expect_validator_register_fails() {
 #[test]
 fn test_ensure_origin_struct() {
 	new_test_ext().execute_with(|| {
+		SwappingEnabled::<Test>::put(true);
 		// Root and none should be invalid.
 		EnsureRelayer::<Test>::ensure_origin(OriginFor::<Test>::root()).unwrap_err();
 		EnsureRelayer::<Test>::ensure_origin(OriginFor::<Test>::none()).unwrap_err();
@@ -81,6 +82,7 @@ fn test_ensure_origin_struct() {
 #[test]
 fn test_ensure_origin_fn() {
 	new_test_ext().execute_with(|| {
+		SwappingEnabled::<Test>::put(true);
 		// Root and none should be invalid.
 		ensure_relayer::<Test>(OriginFor::<Test>::root()).unwrap_err();
 		ensure_relayer::<Test>(OriginFor::<Test>::none()).unwrap_err();
