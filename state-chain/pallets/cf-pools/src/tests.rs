@@ -202,7 +202,7 @@ fn test_network_fee_calculation() {
 }
 
 #[test]
-fn can_update_swap_fee() {
+fn can_update_liquidity_fee() {
 	new_test_ext().execute_with(|| {
 		let range = AmmRange::new(-100, 100);
 		let asset = Asset::Flip;
@@ -235,15 +235,14 @@ fn can_update_swap_fee() {
 		}));
 
 		assert_noop!(
-			LiquidityPools::set_swap_fee(RuntimeOrigin::root(), asset, 500001u32),
+			LiquidityPools::set_liquidity_fee(RuntimeOrigin::root(), asset, 500001u32),
 			Error::<Test>::InvalidFeeAmount
 		);
 
-		assert_ok!(LiquidityPools::set_swap_fee(RuntimeOrigin::root(), asset, 0u32));
-		System::assert_last_event(RuntimeEvent::LiquidityPools(crate::Event::SwapFeeSet {
-			asset: Asset::Flip,
-			fee_100th_bips: 0u32,
-		}));
+		assert_ok!(LiquidityPools::set_liquidity_fee(RuntimeOrigin::root(), asset, 0u32));
+		System::assert_last_event(RuntimeEvent::LiquidityPools(
+			crate::Event::LiquidityFeeUpdated { asset: Asset::Flip, fee_100th_bips: 0u32 },
+		));
 
 		System::reset_events();
 		assert_ok!(LiquidityPools::swap(asset, Asset::Usdc, 1_000));

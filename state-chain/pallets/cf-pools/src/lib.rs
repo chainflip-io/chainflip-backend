@@ -172,7 +172,7 @@ pub mod pallet {
 			output: AssetAmount,
 			liquidity_fee: AssetAmount,
 		},
-		SwapFeeSet {
+		LiquidityFeeUpdated {
 			asset: any::Asset,
 			fee_100th_bips: u32,
 		},
@@ -284,12 +284,13 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Sets how much fee an exchange pool takes during a swap.
+		/// Sets the liquidity fee for an exchange pool.
+		///
 		/// Requires governance origin.
 		///
 		/// ## Events
 		///
-		/// - [On success](Event::SwapFeeSet)
+		/// - [On success](Event::LiquidityFeeUpdated)
 		///
 		/// ## Errors
 		///
@@ -297,7 +298,7 @@ pub mod pallet {
 		/// - [InvalidFeeAmount](pallet_cf_pools::Error::InvalidFeeAmount)
 		/// - [PoolDoesNotExist](pallet_cf_pools::Error::PoolDoesNotExist)
 		#[pallet::weight(0)]
-		pub fn set_swap_fee(
+		pub fn set_liquidity_fee(
 			origin: OriginFor<T>,
 			asset: any::Asset,
 			fee_100th_bips: u32,
@@ -311,7 +312,7 @@ pub mod pallet {
 					Err(Error::<T>::PoolDoesNotExist)
 				}
 			})?;
-			Self::deposit_event(Event::<T>::SwapFeeSet { asset, fee_100th_bips });
+			Self::deposit_event(Event::<T>::LiquidityFeeUpdated { asset, fee_100th_bips });
 
 			Ok(())
 		}
