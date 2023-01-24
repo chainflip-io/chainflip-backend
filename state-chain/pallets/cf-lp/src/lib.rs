@@ -178,7 +178,6 @@ pub mod pallet {
 			T::SystemState::ensure_no_maintenance()?;
 			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
-			// Retrieve the unique LP positions from the pool.
 			let current_liquidity =
 				T::LiquidityPoolApi::minted_liquidity(&account_id, &asset, range);
 

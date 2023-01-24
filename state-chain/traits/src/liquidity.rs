@@ -67,7 +67,7 @@ pub trait LiquidityPoolApi<AccountId> {
 		try_debit: impl FnOnce(PoolAssetMap<AssetAmount>) -> Result<(), DispatchError>,
 	) -> Result<PoolAssetMap<AssetAmount>, DispatchError>;
 
-	/// Burn some liquidity from an exchange pool to withdraw assets.
+	/// Burn some liquidity from an exchange pool to withdraw assets and harvest fees.
 	fn burn(
 		lp: AccountId,
 		asset: Asset,
@@ -75,10 +75,10 @@ pub trait LiquidityPoolApi<AccountId> {
 		burnt_liquidity: Liquidity,
 	) -> Result<BurnResult, DispatchError>;
 
-	/// Returns the user's Minted liquidities and fees acrued for a specific pool.
+	/// Returns the LP's minted liquidity for a specific position in a pool.
 	fn minted_liquidity(lp: &AccountId, asset: &Asset, range: AmmRange) -> Liquidity;
 
-	/// Gets the current price of the pool in Tick
+	/// Gets the current price of the pool in Tick.
 	fn current_tick(asset: &Asset) -> Option<Tick>;
 }
 

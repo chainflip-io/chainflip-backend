@@ -557,7 +557,7 @@ impl PoolState {
 		}
 	}
 
-	/// Returns all postitions for a specific user.
+	/// Returns liquidity held in a position.
 	pub fn minted_liquidity(&self, lp: AccountId, range: AmmRange) -> Liquidity {
 		match self.positions.get(&(lp, range.lower, range.upper)) {
 			Some(position) => position.liquidity,
