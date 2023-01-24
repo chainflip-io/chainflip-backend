@@ -33,7 +33,7 @@ pub trait WeightInfo {
 	fn register_swap_intent() -> Weight;
 	fn on_idle() -> Weight;
 	fn execute_group_of_swaps(a: u32, ) -> Weight;
-	fn withdrawal() -> Weight;
+	fn withdraw() -> Weight;
 }
 
 /// Weights for pallet_cf_swapping using the Substrate node and recommended hardware.
@@ -71,7 +71,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Swapping EarnedRelayerFees (r:1 w:1)
 	// Storage: EthereumIngressEgress EgressIdCounter (r:1 w:1)
 	// Storage: EthereumIngressEgress ScheduledEgressRequests (r:1 w:1)
-	fn withdrawal() -> Weight {
+	fn withdraw() -> Weight {
 		// Minimum execution time: 29_000 nanoseconds.
 		Weight::from_ref_time(30_000_000)
 			.saturating_add(T::DbWeight::get().reads(5))
@@ -113,7 +113,7 @@ impl WeightInfo for () {
 	// Storage: Swapping EarnedRelayerFees (r:1 w:1)
 	// Storage: EthereumIngressEgress EgressIdCounter (r:1 w:1)
 	// Storage: EthereumIngressEgress ScheduledEgressRequests (r:1 w:1)
-	fn withdrawal() -> Weight {
+	fn withdraw() -> Weight {
 		// Minimum execution time: 29_000 nanoseconds.
 		Weight::from_ref_time(30_000_000)
 			.saturating_add(RocksDbWeight::get().reads(5))
