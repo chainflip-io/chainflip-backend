@@ -41,8 +41,8 @@ pub trait WeightInfo {
 	fn rotation_phase_idle() -> Weight;
 	fn start_authority_rotation(a: u32, ) -> Weight;
 	fn start_authority_rotation_in_maintenance_mode() -> Weight;
-	fn rotation_phase_keygen_success(a: u32, ) -> Weight;
-	fn rotation_phase_activating_keys_success(a: u32, ) -> Weight;
+	fn rotation_phase_keygen(a: u32, ) -> Weight;
+	fn rotation_phase_activating_keys(a: u32, ) -> Weight;
 	fn set_auction_parameters() -> Weight;
 }
 
@@ -199,7 +199,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumThresholdSigner PendingCeremonies (r:0 w:1)
 	// Storage: EthereumThresholdSigner RequestCallback (r:0 w:1)
 	/// The range of component `a` is `[3, 150]`.
-	fn rotation_phase_keygen_success(a: u32, ) -> Weight {
+	fn rotation_phase_keygen(a: u32, ) -> Weight {
 		// Minimum execution time: 168_000 nanoseconds.
 		Weight::from_ref_time(189_554_596)
 			// Standard Error: 12_842
@@ -212,7 +212,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: unknown [0xac56b214382d772914db46f9c4a772eda7d533d63f25202626db56d673717380] (r:1 w:0)
 	// Storage: Validator CurrentRotationPhase (r:1 w:0)
 	/// The range of component `a` is `[3, 150]`.
-	fn rotation_phase_activating_keys_success(a: u32, ) -> Weight {
+	fn rotation_phase_activating_keys(a: u32, ) -> Weight {
 		// Minimum execution time: 20_000 nanoseconds.
 		Weight::from_ref_time(27_668_963)
 			// Standard Error: 5_411
@@ -381,7 +381,7 @@ impl WeightInfo for () {
 	// Storage: EthereumThresholdSigner PendingCeremonies (r:0 w:1)
 	// Storage: EthereumThresholdSigner RequestCallback (r:0 w:1)
 	/// The range of component `a` is `[3, 150]`.
-	fn rotation_phase_keygen_success(a: u32, ) -> Weight {
+	fn rotation_phase_keygen(a: u32, ) -> Weight {
 		// Minimum execution time: 168_000 nanoseconds.
 		Weight::from_ref_time(189_554_596)
 			// Standard Error: 12_842
@@ -394,7 +394,7 @@ impl WeightInfo for () {
 	// Storage: unknown [0xac56b214382d772914db46f9c4a772eda7d533d63f25202626db56d673717380] (r:1 w:0)
 	// Storage: Validator CurrentRotationPhase (r:1 w:0)
 	/// The range of component `a` is `[3, 150]`.
-	fn rotation_phase_activating_keys_success(a: u32, ) -> Weight {
+	fn rotation_phase_activating_keys(a: u32, ) -> Weight {
 		// Minimum execution time: 20_000 nanoseconds.
 		Weight::from_ref_time(27_668_963)
 			// Standard Error: 5_411

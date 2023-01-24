@@ -429,7 +429,7 @@ pub mod pallet {
 							Self::set_rotation_phase(RotationPhase::Idle);
 						},
 					};
-					T::ValidatorWeightInfo::rotation_phase_keygen_success(num_primary_candidates)
+					T::ValidatorWeightInfo::rotation_phase_keygen(num_primary_candidates)
 				},
 				RotationPhase::ActivatingKeys(rotation_state) => {
 					let num_primary_candidates = rotation_state.num_primary_candidates();
@@ -451,7 +451,7 @@ pub mod pallet {
 							Self::set_rotation_phase(RotationPhase::Idle);
 						},
 					}
-					T::ValidatorWeightInfo::rotation_phase_activating_keys_success(num_primary_candidates)
+					T::ValidatorWeightInfo::rotation_phase_activating_keys(num_primary_candidates)
 				},
 				// The new session will kick off the new epoch
 				_ => Weight::from_ref_time(0),

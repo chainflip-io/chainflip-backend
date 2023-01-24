@@ -287,7 +287,7 @@ benchmarks! {
 
 	/**** 2. RotationPhase::KeygensInProgress ****/
 
-	rotation_phase_keygen_success {
+	rotation_phase_keygen {
 		// a = authority set target size
 		let a in 3 .. 150;
 
@@ -317,7 +317,7 @@ benchmarks! {
 		));
 	}
 
-	rotation_phase_activating_keys_success {
+	rotation_phase_activating_keys {
 		// a = authority set target size
 		let a in 3 .. 150;
 
