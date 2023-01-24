@@ -218,7 +218,7 @@ fn expect_swap_id_to_be_emitted() {
 }
 
 #[test]
-fn withdrawal_relayer_fees() {
+fn withdraw_relayer_fees() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
 			Swapping::withdraw(
