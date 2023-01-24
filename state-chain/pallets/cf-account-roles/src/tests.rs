@@ -146,3 +146,22 @@ fn test_ensure_origin_fn() {
 		.unwrap();
 	});
 }
+
+#[test]
+fn cannot_register_swapping_roles_if_swapping_disabled() {
+	new_test_ext().execute_with(|| {
+		assert!(!SwappingEnabled::<Test>::get());
+
+		// As if the account is already staked.
+		AccountRoles::<Test>::insert(ALICE, AccountRole::None);
+
+		assert_noop!(Pallet::<Test>::register_as_relayer(&ALICE), Error::<Test>::SwappingDisabled);
+		assert_noop!(
+			Pallet::<Test>::register_as_liquidity_provider(&ALICE),
+			Error::<Test>::SwappingDisabled
+		);
+
+		// We can still register as a validator.
+		assert_ok!(Pallet::<Test>::register_as_validator(&ALICE));
+	})
+}
