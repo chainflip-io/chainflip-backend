@@ -150,7 +150,7 @@ pub mod pallet {
 impl<T: Config> Pallet<T> {
 	// WARN: This is not protected by the Swapping feature flag.
 	// In most cases the correct function to use is `register_account_role`.
-	pub fn register_account_role_unprotected(
+	fn register_account_role_unprotected(
 		account_id: &T::AccountId,
 		account_role: AccountRole,
 	) -> DispatchResult {
