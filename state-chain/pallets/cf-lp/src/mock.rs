@@ -97,6 +97,7 @@ impl pallet_cf_account_roles::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type BidInfo = MockBidInfo;
 	type StakeInfo = MockStakingInfo<Self>;
+	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type WeightInfo = ();
 }
 

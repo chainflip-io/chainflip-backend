@@ -39,6 +39,8 @@ pub mod pallet {
 		/// The Flip token implementation.
 		type StakeInfo: StakingInfo<AccountId = Self::AccountId, Balance = Self::Amount>;
 
+		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
+
 		/// Infos about bids.
 		type BidInfo: BidInfo<Balance = Self::Amount>;
 
@@ -49,6 +51,13 @@ pub mod pallet {
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(PhantomData<T>);
+
+	// TODO: Remove once swapping is enabled and stabilised.
+	// Acts to flag the swapping features. If there are no Relayer accounts or
+	// LP accounts, then the swapping features are disabled.
+	#[pallet::storage]
+	#[pallet::getter(fn swapping_enabled)]
+	pub type SwappingEnabled<T: Config> = StorageValue<_, bool, ValueQuery>;
 
 	#[pallet::storage]
 	pub type AccountRoles<T: Config> = StorageMap<_, Identity, T::AccountId, AccountRole>;
@@ -66,6 +75,8 @@ pub mod pallet {
 		/// Accounts can only be upgraded from the initial [AccountRole::Undefined] state.
 		AccountRoleAlreadyRegistered,
 		NotEnoughStake,
+		/// Initially when swapping features are deployed to the chain, they will be disabled.
+		SwappingDisabled,
 	}
 
 	#[pallet::genesis_config]
@@ -86,6 +97,7 @@ pub mod pallet {
 			for (account, role) in &self.initial_account_roles {
 				AccountRoles::<T>::insert(account, role);
 			}
+			SwappingEnabled::<T>::put(true);
 		}
 	}
 
@@ -106,14 +118,39 @@ pub mod pallet {
 			<Self as AccountRoleRegistry<T>>::register_account_role(&who, role)?;
 			Ok(())
 		}
+
+		// TODO: Remove this function after the feature is deployed and stabilised.
+		// Once the swapping features are enabled, they can't be disabled.
+		// If they have been enabled, it's possible accounts have already registered as Relayers or
+		// LPs. Thus, disabling this flag is not an indicator of whether the public can swap.
+		// Governance can bypass this by calling `gov_register_account_role`.
+		#[pallet::weight(T::WeightInfo::enable_swapping())]
+		pub fn enable_swapping(origin: OriginFor<T>) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+			SwappingEnabled::<T>::put(true);
+			Ok(())
+		}
+
+		// TODO: Remove this function after swapping is deployed and stabilised.
+		/// Bypass the Swapping Enabled check. This allows governance to enable swapping
+		/// features for some controlled accounts.
+		#[pallet::weight(T::WeightInfo::gov_register_account_role())]
+		pub fn gov_register_account_role(
+			origin: OriginFor<T>,
+			account: T::AccountId,
+			role: AccountRole,
+		) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+			Self::register_account_role_unprotected(&account, role)?;
+			Ok(())
+		}
 	}
 }
 
-impl<T: Config> AccountRoleRegistry<T> for Pallet<T> {
-	/// Register the account role for some account id.
-	///
-	/// Fails if an account type has already been registered for this account id.
-	fn register_account_role(
+impl<T: Config> Pallet<T> {
+	// WARN: This is not protected by the Swapping feature flag.
+	// In most cases the correct function to use is `register_account_role`.
+	pub fn register_account_role_unprotected(
 		account_id: &T::AccountId,
 		account_role: AccountRole,
 	) -> DispatchResult {
@@ -131,6 +168,24 @@ impl<T: Config> AccountRoleRegistry<T> for Pallet<T> {
 			}
 		})
 		.map_err(Into::into)
+	}
+}
+
+impl<T: Config> AccountRoleRegistry<T> for Pallet<T> {
+	/// Register the account role for some account id.
+	///
+	/// Fails if an account type has already been registered for this account id.
+	/// Or if Swapping is not yet enabled.
+	fn register_account_role(
+		account_id: &T::AccountId,
+		account_role: AccountRole,
+	) -> DispatchResult {
+		match account_role {
+			AccountRole::Relayer | AccountRole::LiquidityProvider
+				if !SwappingEnabled::<T>::get() =>
+				Err(Error::<T>::SwappingDisabled.into()),
+			_ => Self::register_account_role_unprotected(account_id, account_role),
+		}
 	}
 
 	fn ensure_account_role(
