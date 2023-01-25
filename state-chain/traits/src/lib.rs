@@ -785,6 +785,17 @@ pub trait VaultKeyWitnessedHandler<C: ChainAbi> {
 	) -> DispatchResultWithPostInfo;
 }
 
+pub trait BroadcastAnyChainGovKey {
+	#[allow(clippy::result_unit_err)]
+	fn broadcast(chain: ForeignChain, old_key: Option<Vec<u8>>, new_key: Vec<u8>)
+		-> Result<(), ()>;
+}
+
+pub trait BroadcastComKey {
+	type EthAddress;
+	fn broadcast(new_key: Self::EthAddress);
+}
+
 /// Provides an interface to access the amount of Flip that is ready to be burned.
 pub trait FlipBurnInfo {
 	/// Takes the available Flip and returns it.

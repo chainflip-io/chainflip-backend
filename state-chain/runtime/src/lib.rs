@@ -72,7 +72,7 @@ pub use cf_traits::{EpochInfo, EthEnvironmentProvider, QualifyNode, SessionKeysR
 pub use chainflip::chain_instances::*;
 use chainflip::{
 	epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat, EthEnvironment,
-	EthVaultTransitionHandler,
+	EthVaultTransitionHandler, TokenholderGovBroadcaster,
 };
 
 use chainflip::{all_vaults_rotator::AllVaultRotator, DotEnvironment, DotVaultTransitionHandler};
@@ -484,12 +484,11 @@ impl pallet_cf_staking::Config for Runtime {
 impl pallet_cf_tokenholder_governance::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type FeePayment = Flip;
-	type Chain = Ethereum;
 	type StakingInfo = Flip;
-	type ApiCalls = eth::api::EthereumApi<EthEnvironment>;
-	type Broadcaster = EthereumBroadcaster;
 	type WeightInfo = pallet_cf_tokenholder_governance::weights::PalletWeight<Runtime>;
 	type VotingPeriod = ConstU32<{ 14 * DAYS }>;
+	type AnyChainGovKeyBroadcaster = TokenholderGovBroadcaster;
+	type CommKeyBroadcaster = TokenholderGovBroadcaster;
 	/// 1000 FLIP in FLIPPERINOS
 	type ProposalFee = ConstU128<1_000_000_000_000_000_000_000>;
 	type EnactmentDelay = ConstU32<{ 7 * DAYS }>;
