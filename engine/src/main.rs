@@ -318,7 +318,7 @@ async fn main() -> anyhow::Result<()> {
 			let (dot_multisig_client, dot_multisig_client_backend_future) =
 				multisig::start_client::<PolkadotSigning>(
 					state_chain_client.account_id(),
-					KeyStore::new(db),
+					KeyStore::new(db.clone()),
 					dot_incoming_receiver,
 					dot_outgoing_sender,
 					latest_ceremony_id,
@@ -340,6 +340,7 @@ async fn main() -> anyhow::Result<()> {
 				epoch_start_receiver_1,
 				eth_dual_rpc.clone(),
 				eth_block_witnessers,
+				db,
 				&root_logger,
 			));
 

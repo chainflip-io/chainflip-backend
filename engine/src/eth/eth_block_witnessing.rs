@@ -1,11 +1,16 @@
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use cf_chains::Ethereum;
 use futures::StreamExt;
 
 use super::{rpc::EthDualRpcClient, safe_dual_block_subscription_from, EthNumberBloom};
-use crate::witnesser::{
-	checkpointing::{start_checkpointing_for, WitnessedUntil},
-	epoch_witnesser, EpochStart,
+use crate::{
+	multisig::{eth::EthSigning, PersistentKeyDB},
+	witnesser::{
+		checkpointing::{start_checkpointing_for, WitnessedUntil},
+		epoch_witnesser, EpochStart,
+	},
 };
 
 #[async_trait]
@@ -21,6 +26,7 @@ pub async fn start<const N: usize>(
 	epoch_start_receiver: async_broadcast::Receiver<EpochStart<Ethereum>>,
 	eth_rpc: EthDualRpcClient,
 	witnessers: [Box<dyn BlockProcessor>; N],
+	db: Arc<PersistentKeyDB>,
 	logger: &slog::Logger,
 ) -> anyhow::Result<()> {
 	epoch_witnesser::start(
@@ -30,9 +36,10 @@ pub async fn start<const N: usize>(
 		witnessers,
 		move |end_witnessing_signal, epoch, mut witnessers, logger| {
 			let eth_rpc = eth_rpc.clone();
+			let db = db.clone();
 			async move {
-				let (witnessed_until, witnessed_until_sender) =
-					start_checkpointing_for("block-head", &logger).await;
+				let (witnessed_until, witnessed_until_sender, _checkpointing_join_handle) =
+					start_checkpointing_for::<EthSigning>("block-head", db, &logger);
 
 				// Don't witness epochs that we've already witnessed
 				if epoch.epoch_index < witnessed_until.epoch_index {
