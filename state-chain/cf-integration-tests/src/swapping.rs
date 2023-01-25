@@ -17,7 +17,7 @@ use cf_primitives::{
 	AccountId, AccountRole, AmmRange, Asset, AssetAmount, ForeignChain, ForeignChainAddress,
 	PoolAssetMap,
 };
-use cf_traits::{AddressDerivationApi, LpProvisioningApi};
+use cf_traits::{AddressDerivationApi, LiquidityPoolApi, LpProvisioningApi};
 use pallet_cf_ingress_egress::IngressWitness;
 
 #[test]
@@ -471,5 +471,159 @@ fn swap_can_accrue_fees() {
 			pallet_cf_lp::FreeBalances::<Runtime>::get(&lp_2, any::Asset::Usdc),
 			Some(2_049_739)
 		);
+	});
+}
+
+#[test]
+fn swap_fails_with_insufficient_liquidity() {
+	super::genesis::default().build().execute_with(|| {
+		// Register the liquidity provider account.
+		let lp_1: AccountId = AccountId::from([0xF1; 32]);
+		let lp_2: AccountId = AccountId::from([0xF2; 32]);
+		AccountRoles::on_new_account(&lp_1);
+		AccountRoles::on_new_account(&lp_2);
+		assert_ok!(LiquidityProvider::register_lp_account(RuntimeOrigin::signed(lp_1.clone())));
+		assert_ok!(LiquidityProvider::register_lp_account(RuntimeOrigin::signed(lp_2.clone())));
+
+		// Register the relayer account.
+		let relayer: AccountId = AccountId::from([0xE0; 32]);
+		AccountRoles::on_new_account(&relayer);
+		assert_ok!(AccountRoles::register_account_role(
+			RuntimeOrigin::signed(relayer.clone()),
+			AccountRole::Relayer
+		));
+
+		let egress_address = [1u8; 20];
+		let range = AmmRange::new(-100_000, 100_000);
+
+		// Use governance to create a new Flip <-> USDC pool.
+		// Initialize exchange rate at 1:10 ratio. 1.0001^23028 = 10.001
+		assert_ok!(LiquidityPools::new_pool(
+			pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
+			any::Asset::Eth,
+			0u32,
+			23_028,
+		));
+
+		// Use governance to create a new Eth <-> USDC pool.
+		// Initialize exchange rate at 1:2 ratio. 1.0001^6932 = 2.00003
+		assert_ok!(LiquidityPools::new_pool(
+			pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
+			any::Asset::Flip,
+			0u32,
+			6_932,
+		));
+
+		// Provide liquidity to the exchange pool.
+		assert_ok!(LiquidityProvider::provision_account(&lp_1, Asset::Eth, 1_000_000));
+		assert_ok!(LiquidityProvider::provision_account(&lp_1, Asset::Usdc, 10_000_000));
+		assert_ok!(LiquidityProvider::provision_account(&lp_2, Asset::Flip, 1_000_000));
+		assert_ok!(LiquidityProvider::provision_account(&lp_2, Asset::Usdc, 2_000_000));
+
+		// Provide insufficient liquidity for the pools
+		assert_ok!(LiquidityProvider::update_position(
+			RuntimeOrigin::signed(lp_1.clone()),
+			any::Asset::Eth,
+			range,
+			1u128,
+		));
+		assert_ok!(LiquidityProvider::update_position(
+			RuntimeOrigin::signed(lp_2.clone()),
+			any::Asset::Flip,
+			range,
+			1u128,
+		));
+
+		// Test swap
+		assert_ok!(Swapping::register_swap_intent(
+			RuntimeOrigin::signed(relayer),
+			Asset::Eth,
+			Asset::Flip,
+			ForeignChainAddress::Eth(egress_address),
+			0u16,
+		));
+
+		// Note the ingress address here
+		let ingress_address =
+			<AddressDerivation as AddressDerivationApi<Ethereum>>::generate_address(
+				eth::Asset::Eth,
+				pallet_cf_ingress_egress::IntentIdCounter::<Runtime, EthereumInstance>::get(),
+			)
+			.expect("Should be able to generate a valid eth address.");
+
+		const SWAP_AMOUNT: AssetAmount = 10_000;
+		// Define the ingress call
+		let ingress_call = Box::new(RuntimeCall::EthereumIngressEgress(
+			pallet_cf_ingress_egress::Call::do_ingress {
+				ingress_witnesses: vec![IngressWitness {
+					ingress_address,
+					asset: eth::Asset::Eth,
+					amount: SWAP_AMOUNT,
+					tx_id: Default::default(),
+				}],
+			},
+		));
+
+		// Get the current authorities to witness the ingress.
+		let nodes = Validator::current_authorities();
+		let current_epoch = Validator::current_epoch();
+		for node in &nodes {
+			assert_ok!(Witnesser::witness_at_epoch(
+				RuntimeOrigin::signed(node.clone()),
+				ingress_call.clone(),
+				current_epoch
+			));
+		}
+
+		assert_eq!(LiquidityPools::current_tick(&Asset::Flip), Some(6_932));
+		assert_eq!(LiquidityPools::current_tick(&Asset::Eth), Some(23_028));
+
+		// Swaps should fail to execute due to insufficient liquidity.
+		let _ = Swapping::on_idle(1, Weight::from_ref_time(1_000_000_000_000));
+
+		// Failed swaps should leave the pool unchanged.
+		assert_eq!(LiquidityPools::current_tick(&Asset::Flip), Some(6_932));
+		assert_eq!(LiquidityPools::current_tick(&Asset::Eth), Some(23_028));
+
+		// Provide more liquidity for the pools
+		assert_ok!(LiquidityProvider::update_position(
+			RuntimeOrigin::signed(lp_1),
+			any::Asset::Eth,
+			range,
+			3_000_000u128,
+		));
+		assert_ok!(LiquidityProvider::update_position(
+			RuntimeOrigin::signed(lp_2),
+			any::Asset::Flip,
+			range,
+			1_200_000u128,
+		));
+
+		System::reset_events();
+		// Swap can now happen with sufficient liquidity
+		let _ = Swapping::on_idle(2, Weight::from_ref_time(1_000_000_000_000));
+
+		// The swap should move the tick value of the pools
+		assert_eq!(LiquidityPools::current_tick(&Asset::Flip), Some(8_065));
+		assert_eq!(LiquidityPools::current_tick(&Asset::Eth), Some(22_818));
+
+		System::assert_has_event(RuntimeEvent::LiquidityPools(
+			pallet_cf_pools::Event::AssetsSwapped {
+				from: Asset::Usdc,
+				to: Asset::Flip,
+				input: 98_966,
+				output: 46_755,
+				liquidity_fee: 0,
+			},
+		));
+
+		System::assert_has_event(RuntimeEvent::Swapping(
+			pallet_cf_swapping::Event::SwapEgressScheduled {
+				swap_id: 1,
+				egress_id: (ForeignChain::Ethereum, 1),
+				asset: Asset::Flip,
+				amount: 46_755,
+			},
+		));
 	});
 }

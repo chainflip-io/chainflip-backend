@@ -115,6 +115,8 @@ pub mod pallet {
 		InvalidEgressAddress,
 		/// The withdrawal is not possible because not enough funds are available.
 		NoFundsAvailable,
+		/// Swap failed to execute due to insufficient liquidity.
+		InsufficientLiquidity,
 	}
 
 	#[pallet::hooks]
@@ -135,7 +137,12 @@ pub mod pallet {
 				} else {
 					// Execute the swaps and add the weights.
 					used_weight.saturating_accrue(swap_group_weight);
-					Self::execute_group_of_swaps(swaps, asset_pair.0, asset_pair.1);
+					if Self::execute_group_of_swaps(swaps.clone(), asset_pair.0, asset_pair.1)
+						.is_err()
+					{
+						// If the swaps failed to execute, add them back into the queue.
+						unexecuted.extend(swaps)
+					}
 				}
 			}
 
@@ -239,9 +246,9 @@ pub mod pallet {
 	}
 
 	impl<T: Config> Pallet<T> {
-		pub fn execute_group_of_swaps(swaps: Vec<Swap>, from: Asset, to: Asset) {
+		pub fn execute_group_of_swaps(swaps: Vec<Swap>, from: Asset, to: Asset) -> DispatchResult {
 			if swaps.is_empty() {
-				return
+				return Ok(())
 			}
 			let bundle_total_input: AssetAmount = swaps
 				.iter()
@@ -251,39 +258,35 @@ pub mod pallet {
 				})
 				.sum();
 
-			let output_amount =
-				T::SwappingApi::swap(from, to, bundle_total_input).unwrap_or_default();
+			let output_amount = T::SwappingApi::swap(from, to, bundle_total_input)?;
 
 			if bundle_total_input > 0 {
 				for swap in swaps {
 					Self::deposit_event(Event::<T>::SwapExecuted { swap_id: swap.swap_id });
-					if let Some(swap_output) = multiply_by_rational_with_rounding(
+					let swap_output = multiply_by_rational_with_rounding(
 						swap.amount,
 						output_amount,
 						bundle_total_input,
 						Rounding::Down,
-					) {
-						if swap_output > 0 {
-							let egress_id = T::EgressHandler::schedule_egress(
-								swap.to,
-								swap_output,
-								swap.egress_address,
-							);
-							Self::deposit_event(Event::<T>::SwapEgressScheduled {
-								swap_id: swap.swap_id,
-								egress_id,
-								asset: to,
-								amount: swap_output,
-							});
-						}
-					} else {
-						log::error!(
-							"Unable to calculate valid swap output for swap {:?}!",
-							&(swap.amount, bundle_total_input, output_amount)
+					)
+					.expect("Divide by zero is checked.");
+
+					if swap_output > 0 {
+						let egress_id = T::EgressHandler::schedule_egress(
+							swap.to,
+							swap_output,
+							swap.egress_address,
 						);
+						Self::deposit_event(Event::<T>::SwapEgressScheduled {
+							swap_id: swap.swap_id,
+							egress_id,
+							asset: to,
+							amount: swap_output,
+						});
 					}
 				}
 			}
+			Ok(())
 		}
 
 		fn group_swaps_by_asset_pair(swaps: Vec<Swap>) -> BTreeMap<(Asset, Asset), Vec<Swap>> {
