@@ -819,7 +819,6 @@ impl_runtime_apis! {
 				online_credits: account_info_v1.online_credits,
 				reputation_points: account_info_v1.reputation_points,
 				withdrawal_address: account_info_v1.withdrawal_address,
-				state: account_info_v1.state,
 				keyholder_epochs: key_holder_epochs,
 				is_current_authority,
 				is_current_backup,

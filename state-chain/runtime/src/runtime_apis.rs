@@ -48,7 +48,6 @@ pub struct RuntimeApiAccountInfoV2 {
 	pub online_credits: u32,
 	pub reputation_points: i32,
 	pub withdrawal_address: [u8; 20],
-	pub state: ChainflipAccountStateWithPassive, // remove this
 	pub keyholder_epochs: Vec<EpochIndex>,
 	pub is_current_authority: bool,
 	pub is_current_backup: bool,
