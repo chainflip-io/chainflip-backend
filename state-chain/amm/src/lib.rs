@@ -624,7 +624,6 @@ impl PoolState {
 					U256::from(ONE_IN_HUNDREDTH_BIPS - self.fee_100th_bips),
 					U256::from(ONE_IN_HUNDREDTH_BIPS),
 				); // This cannot overflow as we bound fee_100th_bips to <= ONE_IN_HUNDREDTH_BIPS/2
-   // (TODO)
 
 				let amount_required_to_reach_target = SD::input_amount_delta_ceil(
 					self.current_sqrt_price,

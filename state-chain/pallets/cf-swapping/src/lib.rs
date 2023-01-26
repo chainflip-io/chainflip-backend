@@ -258,9 +258,8 @@ pub mod pallet {
 				})
 				.sum();
 
-			let output_amount = T::SwappingApi::swap(from, to, bundle_total_input)?;
-
 			if bundle_total_input > 0 {
+				let output_amount = T::SwappingApi::swap(from, to, bundle_total_input)?;
 				for swap in swaps {
 					Self::deposit_event(Event::<T>::SwapExecuted { swap_id: swap.swap_id });
 					let swap_output = multiply_by_rational_with_rounding(
@@ -269,7 +268,7 @@ pub mod pallet {
 						bundle_total_input,
 						Rounding::Down,
 					)
-					.expect("Divide by zero is checked.");
+					.unwrap_or_default();
 
 					if swap_output > 0 {
 						let egress_id = T::EgressHandler::schedule_egress(
