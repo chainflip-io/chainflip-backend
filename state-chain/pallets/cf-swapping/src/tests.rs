@@ -218,10 +218,10 @@ fn expect_swap_id_to_be_emitted() {
 }
 
 #[test]
-fn withdrawal_relayer_fees() {
+fn withdraw_relayer_fees() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			Swapping::withdrawal(
+			Swapping::withdraw(
 				RuntimeOrigin::signed(ALICE),
 				Asset::Eth,
 				ForeignChainAddress::Eth(Default::default()),
@@ -229,7 +229,7 @@ fn withdrawal_relayer_fees() {
 			<Error<Test>>::NoFundsAvailable
 		);
 		EarnedRelayerFees::<Test>::insert(ALICE, Asset::Eth, 200);
-		assert_ok!(Swapping::withdrawal(
+		assert_ok!(Swapping::withdraw(
 			RuntimeOrigin::signed(ALICE),
 			Asset::Eth,
 			ForeignChainAddress::Eth(Default::default()),

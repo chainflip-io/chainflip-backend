@@ -32,6 +32,22 @@ pub struct RpcAccountInfo {
 }
 
 #[derive(Serialize, Deserialize)]
+pub struct RpcAccountInfoV2 {
+	pub stake: NumberOrHex,
+	pub bond: NumberOrHex,
+	pub last_heartbeat: u32,
+	pub online_credits: u32,
+	pub reputation_points: i32,
+	pub withdrawal_address: String,
+	pub keyholder_epochs: Vec<u32>,
+	pub is_current_authority: bool,
+	pub is_current_backup: bool,
+	pub is_qualified: bool,
+	pub is_online: bool,
+	pub is_bidding: bool,
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct RpcPendingClaim {
 	amount: NumberOrHex,
 	address: String,
@@ -120,7 +136,12 @@ pub trait CustomApi {
 		account_id: AccountId32,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcAccountInfo>;
-
+	#[method(name = "account_info_v2")]
+	fn cf_account_info_v2(
+		&self,
+		account_id: AccountId32,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<RpcAccountInfoV2>;
 	#[method(name = "penalties")]
 	fn cf_penalties(
 		&self,
@@ -318,7 +339,32 @@ where
 			state: account_info.state,
 		})
 	}
+	fn cf_account_info_v2(
+		&self,
+		account_id: AccountId32,
+		at: Option<<B as BlockT>::Hash>,
+	) -> RpcResult<RpcAccountInfoV2> {
+		let account_info = self
+			.client
+			.runtime_api()
+			.cf_account_info_v2(&self.query_block_id(at), account_id)
+			.map_err(to_rpc_error)?;
 
+		Ok(RpcAccountInfoV2 {
+			stake: account_info.stake.into(),
+			bond: account_info.bond.into(),
+			last_heartbeat: account_info.last_heartbeat,
+			online_credits: account_info.online_credits,
+			reputation_points: account_info.reputation_points,
+			withdrawal_address: hex::encode(account_info.withdrawal_address),
+			keyholder_epochs: account_info.keyholder_epochs,
+			is_current_authority: account_info.is_current_authority,
+			is_current_backup: account_info.is_current_backup,
+			is_qualified: account_info.is_qualified,
+			is_online: account_info.is_online,
+			is_bidding: account_info.is_bidding,
+		})
+	}
 	fn cf_penalties(
 		&self,
 		at: Option<<B as BlockT>::Hash>,

@@ -4,14 +4,14 @@ use cf_amm::{
 };
 use cf_primitives::{
 	chains::assets::any, AccountId, AmmRange, AmountU256, AssetAmount, BurnResult, Liquidity,
-	MintedLiquidity, PoolAssetMap, Tick,
+	PoolAssetMap, Tick,
 };
 use cf_traits::{Chainflip, LiquidityPoolApi, SwappingApi};
 use frame_support::{pallet_prelude::*, transactional};
 use frame_system::pallet_prelude::OriginFor;
 use sp_arithmetic::traits::Zero;
 use sp_runtime::{Permill, Saturating};
-use sp_std::{vec, vec::Vec};
+use sp_std::vec;
 
 pub use pallet::*;
 
@@ -172,6 +172,10 @@ pub mod pallet {
 			output: AssetAmount,
 			liquidity_fee: AssetAmount,
 		},
+		LiquidityFeeUpdated {
+			asset: any::Asset,
+			fee_100th_bips: u32,
+		},
 	}
 
 	#[pallet::call]
@@ -204,6 +208,11 @@ pub mod pallet {
 		/// ## Events
 		///
 		/// - [On update](Event::PoolStateUpdated)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_system::BadOrigin)
+		/// - [PoolDoesNotExist](pallet_cf_pools::Error::PoolDoesNotExist)
 		#[pallet::weight(0)]
 		pub fn update_pool_enabled(
 			origin: OriginFor<T>,
@@ -229,7 +238,15 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [On update](Event::PoolStateUpdated)
+		/// - [On success](Event::NewPoolCreated)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_system::BadOrigin)
+		/// - [InvalidFeeAmount](pallet_cf_pools::Error::InvalidFeeAmount)
+		/// - [InvalidTick](pallet_cf_pools::Error::InvalidTick)
+		/// - [InvalidInitialPrice](pallet_cf_pools::Error::InvalidInitialPrice)
+		/// - [PoolAlreadyExists](pallet_cf_pools::Error::PoolAlreadyExists)
 		#[pallet::weight(0)]
 		pub fn new_pool(
 			origin: OriginFor<T>,
@@ -263,6 +280,39 @@ pub mod pallet {
 				fee_100th_bips,
 				initial_tick_price,
 			});
+
+			Ok(())
+		}
+
+		/// Sets the liquidity fee for an exchange pool.
+		///
+		/// Requires governance origin.
+		///
+		/// ## Events
+		///
+		/// - [On success](Event::LiquidityFeeUpdated)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_system::BadOrigin)
+		/// - [InvalidFeeAmount](pallet_cf_pools::Error::InvalidFeeAmount)
+		/// - [PoolDoesNotExist](pallet_cf_pools::Error::PoolDoesNotExist)
+		#[pallet::weight(0)]
+		pub fn set_liquidity_fee(
+			origin: OriginFor<T>,
+			asset: any::Asset,
+			fee_100th_bips: u32,
+		) -> DispatchResult {
+			let _ok = T::EnsureGovernance::ensure_origin(origin)?;
+
+			Pools::<T>::try_mutate(asset, |maybe_pool| {
+				if let Some(pool) = maybe_pool.as_mut() {
+					pool.set_fees(fee_100th_bips).map_err(|_| Error::InvalidFeeAmount)
+				} else {
+					Err(Error::<T>::PoolDoesNotExist)
+				}
+			})?;
+			Self::deposit_event(Event::<T>::LiquidityFeeUpdated { asset, fee_100th_bips });
 
 			Ok(())
 		}
@@ -388,11 +438,11 @@ impl<T: Config> LiquidityPoolApi<AccountId> for Pallet<T> {
 		})
 	}
 
-	fn minted_liquidity(lp: &AccountId, asset: &any::Asset) -> Vec<MintedLiquidity> {
+	fn minted_liquidity(lp: &AccountId, asset: &any::Asset, range: AmmRange) -> Liquidity {
 		if let Some(pool) = Pools::<T>::get(asset) {
-			pool.minted_liquidity(lp.clone())
+			pool.minted_liquidity(lp.clone(), range)
 		} else {
-			vec![]
+			Default::default()
 		}
 	}
 

@@ -1,6 +1,7 @@
 pub mod batch_fetch_and_transfer;
 pub mod create_anonymous_vault;
 pub mod rotate_vault_proxy;
+pub mod set_gov_key_with_agg_key;
 
 use super::PolkadotPublicKey;
 use crate::{dot::Polkadot, *};
@@ -14,6 +15,7 @@ pub enum PolkadotApi<Environment: 'static> {
 	BatchFetchAndTransfer(batch_fetch_and_transfer::BatchFetchAndTransfer),
 	RotateVaultProxy(rotate_vault_proxy::RotateVaultProxy),
 	CreateAnonymousVault(create_anonymous_vault::CreateAnonymousVault),
+	ChangeGovKey(set_gov_key_with_agg_key::ChangeGovKey),
 	#[doc(hidden)]
 	#[codec(skip)]
 	_Phantom(PhantomData<Environment>, Never),
@@ -45,6 +47,26 @@ where
 				vault,
 			),
 		))
+	}
+}
+
+impl<E: ReplayProtectionProvider<Polkadot>> SetGovKeyWithAggKey<Polkadot> for PolkadotApi<E>
+where
+	E: ChainEnvironment<SystemAccounts, <Polkadot as Chain>::ChainAccount>
+		+ ReplayProtectionProvider<Polkadot>,
+{
+	fn new_unsigned(maybe_old_key: Option<Vec<u8>>, new_key: Vec<u8>) -> Result<Self, ()> {
+		let vault = E::lookup(SystemAccounts::Vault).ok_or(())?;
+		let old_key = match maybe_old_key {
+			Some(old_key) => Some(old_key.try_into()?),
+			None => None,
+		};
+		Ok(Self::ChangeGovKey(set_gov_key_with_agg_key::ChangeGovKey::new_unsigned(
+			E::replay_protection(),
+			old_key,
+			new_key.try_into()?,
+			vault,
+		)))
 	}
 }
 
@@ -98,12 +120,19 @@ impl<E> From<create_anonymous_vault::CreateAnonymousVault> for PolkadotApi<E> {
 	}
 }
 
+impl<E> From<set_gov_key_with_agg_key::ChangeGovKey> for PolkadotApi<E> {
+	fn from(tx: set_gov_key_with_agg_key::ChangeGovKey) -> Self {
+		Self::ChangeGovKey(tx)
+	}
+}
+
 impl<E> ApiCall<Polkadot> for PolkadotApi<E> {
 	fn threshold_signature_payload(&self) -> <Polkadot as ChainCrypto>::Payload {
 		match self {
 			PolkadotApi::BatchFetchAndTransfer(tx) => tx.threshold_signature_payload(),
 			PolkadotApi::RotateVaultProxy(tx) => tx.threshold_signature_payload(),
 			PolkadotApi::CreateAnonymousVault(tx) => tx.threshold_signature_payload(),
+			PolkadotApi::ChangeGovKey(tx) => tx.threshold_signature_payload(),
 			PolkadotApi::_Phantom(..) => unreachable!(),
 		}
 	}
@@ -113,6 +142,7 @@ impl<E> ApiCall<Polkadot> for PolkadotApi<E> {
 			PolkadotApi::BatchFetchAndTransfer(call) => call.signed(threshold_signature).into(),
 			PolkadotApi::RotateVaultProxy(call) => call.signed(threshold_signature).into(),
 			PolkadotApi::CreateAnonymousVault(call) => call.signed(threshold_signature).into(),
+			PolkadotApi::ChangeGovKey(call) => call.signed(threshold_signature).into(),
 			PolkadotApi::_Phantom(..) => unreachable!(),
 		}
 	}
@@ -122,6 +152,7 @@ impl<E> ApiCall<Polkadot> for PolkadotApi<E> {
 			PolkadotApi::BatchFetchAndTransfer(call) => call.chain_encoded(),
 			PolkadotApi::RotateVaultProxy(call) => call.chain_encoded(),
 			PolkadotApi::CreateAnonymousVault(call) => call.chain_encoded(),
+			PolkadotApi::ChangeGovKey(call) => call.chain_encoded(),
 			PolkadotApi::_Phantom(..) => unreachable!(),
 		}
 	}
@@ -131,6 +162,7 @@ impl<E> ApiCall<Polkadot> for PolkadotApi<E> {
 			PolkadotApi::BatchFetchAndTransfer(call) => call.is_signed(),
 			PolkadotApi::RotateVaultProxy(call) => call.is_signed(),
 			PolkadotApi::CreateAnonymousVault(call) => call.is_signed(),
+			PolkadotApi::ChangeGovKey(call) => call.is_signed(),
 			PolkadotApi::_Phantom(..) => unreachable!(),
 		}
 	}

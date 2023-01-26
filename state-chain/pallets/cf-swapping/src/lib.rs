@@ -179,8 +179,13 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::weight(0)]
-		pub fn withdrawal(
+		/// Relayers can withdraw their collected fees.
+		///
+		/// ## Events
+		///
+		/// - [WithdrawalRequested](Event::WithdrawalRequested)
+		#[pallet::weight(T::WeightInfo::withdraw())]
+		pub fn withdraw(
 			origin: OriginFor<T>,
 			asset: Asset,
 			egress_address: ForeignChainAddress,
@@ -188,7 +193,6 @@ pub mod pallet {
 			T::SystemState::ensure_no_maintenance()?;
 			let account_id = T::AccountRoleRegistry::ensure_relayer(origin)?;
 
-			// Check validity of Chain and Asset
 			ensure!(
 				ForeignChain::from(egress_address) == ForeignChain::from(asset),
 				Error::<T>::InvalidEgressAddress

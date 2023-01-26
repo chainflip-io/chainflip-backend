@@ -1,5 +1,6 @@
 use crate::chainflip::Offence;
 use cf_chains::eth::SigData;
+use cf_primitives::EpochIndex;
 use codec::{Decode, Encode};
 use pallet_cf_governance::GovCallHash;
 #[cfg(feature = "std")]
@@ -37,6 +38,22 @@ pub struct RuntimeApiAccountInfo {
 	pub reputation_points: i32,
 	pub withdrawal_address: [u8; 20],
 	pub state: ChainflipAccountStateWithPassive,
+}
+
+#[derive(Encode, Decode, Eq, PartialEq)]
+pub struct RuntimeApiAccountInfoV2 {
+	pub stake: u128,
+	pub bond: u128,
+	pub last_heartbeat: u32, // can *maybe* remove this - check with Andrew
+	pub online_credits: u32,
+	pub reputation_points: i32,
+	pub withdrawal_address: [u8; 20],
+	pub keyholder_epochs: Vec<EpochIndex>,
+	pub is_current_authority: bool,
+	pub is_current_backup: bool,
+	pub is_qualified: bool,
+	pub is_online: bool,
+	pub is_bidding: bool,
 }
 
 #[derive(Encode, Decode, Eq, PartialEq)]
@@ -85,6 +102,7 @@ decl_runtime_apis!(
 		fn cf_flip_supply() -> (u128, u128);
 		fn cf_accounts() -> Vec<(AccountId32, VanityName)>;
 		fn cf_account_info(account_id: AccountId32) -> RuntimeApiAccountInfo;
+		fn cf_account_info_v2(account_id: AccountId32) -> RuntimeApiAccountInfoV2;
 		fn cf_penalties() -> Vec<(Offence, RuntimeApiPenalty)>;
 		fn cf_suspensions() -> Vec<(Offence, Vec<(u32, AccountId32)>)>;
 		fn cf_generate_gov_key_call_hash(call: Vec<u8>) -> GovCallHash;

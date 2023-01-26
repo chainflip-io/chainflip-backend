@@ -34,9 +34,9 @@ pallet-cf-swapping = { path = '../../state-chain/pallets/cf-swapping' }
 pallet-cf-threshold-signature = {path = "../../state-chain/pallets/cf-threshold-signature"}
 pallet-cf-validator = {path = "../../state-chain/pallets/cf-validator"}
 state-chain-runtime = {path = "../../state-chain/runtime"}
-frame-system = {git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2022-12'}
+frame-system = {git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2022-12+2'}
 
 # Substrate key types
-sp-consensus-aura = {git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2022-12'}
-sp-core = {git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2022-12'}
-sp-finality-grandpa = {git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2022-12'}
+sp-consensus-aura = {git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2022-12+2'}
+sp-core = {git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2022-12+2'}
+sp-finality-grandpa = {git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2022-12+2'}

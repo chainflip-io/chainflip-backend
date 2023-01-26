@@ -183,9 +183,7 @@ pub trait VaultRotator {
 	fn activate();
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn set_status(_outcome: AsyncResult<VaultStatus<Self::ValidatorId>>) {
-		unimplemented!()
-	}
+	fn set_status(_outcome: AsyncResult<VaultStatus<Self::ValidatorId>>);
 }
 
 /// Handler for Epoch life cycle events.
@@ -785,6 +783,17 @@ pub trait VaultKeyWitnessedHandler<C: ChainAbi> {
 		block_number: C::ChainBlockNumber,
 		tx_id: C::TransactionId,
 	) -> DispatchResultWithPostInfo;
+}
+
+pub trait BroadcastAnyChainGovKey {
+	#[allow(clippy::result_unit_err)]
+	fn broadcast(chain: ForeignChain, old_key: Option<Vec<u8>>, new_key: Vec<u8>)
+		-> Result<(), ()>;
+}
+
+pub trait BroadcastComKey {
+	type EthAddress;
+	fn broadcast(new_key: Self::EthAddress);
 }
 
 /// Provides an interface to access the amount of Flip that is ready to be burned.

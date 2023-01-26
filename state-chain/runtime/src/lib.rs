@@ -19,6 +19,7 @@ use crate::{
 use cf_chains::{dot, dot::api::PolkadotApi, eth, eth::Ethereum, Polkadot};
 use pallet_transaction_payment::Multiplier;
 
+use crate::runtime_apis::RuntimeApiAccountInfoV2;
 use pallet_cf_validator::BidInfoProvider;
 
 pub use frame_support::{
@@ -72,7 +73,7 @@ pub use cf_traits::{EpochInfo, EthEnvironmentProvider, QualifyNode, SessionKeysR
 pub use chainflip::chain_instances::*;
 use chainflip::{
 	epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat, EthEnvironment,
-	EthVaultTransitionHandler,
+	EthVaultTransitionHandler, TokenholderGovBroadcaster,
 };
 
 use chainflip::{all_vaults_rotator::AllVaultRotator, DotEnvironment, DotVaultTransitionHandler};
@@ -282,6 +283,7 @@ impl pallet_cf_lp::Config for Runtime {
 impl pallet_cf_account_roles::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type StakeInfo = Flip;
+	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type BidInfo = BidInfoProvider<Runtime>;
 	type WeightInfo = pallet_cf_account_roles::weights::PalletWeight<Runtime>;
 }
@@ -486,12 +488,11 @@ impl pallet_cf_staking::Config for Runtime {
 impl pallet_cf_tokenholder_governance::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type FeePayment = Flip;
-	type Chain = Ethereum;
 	type StakingInfo = Flip;
-	type ApiCalls = eth::api::EthereumApi<EthEnvironment>;
-	type Broadcaster = EthereumBroadcaster;
 	type WeightInfo = pallet_cf_tokenholder_governance::weights::PalletWeight<Runtime>;
 	type VotingPeriod = ConstU32<{ 14 * DAYS }>;
+	type AnyChainGovKeyBroadcaster = TokenholderGovBroadcaster;
+	type CommKeyBroadcaster = TokenholderGovBroadcaster;
 	/// 1000 FLIP in FLIPPERINOS
 	type ProposalFee = ConstU128<1_000_000_000_000_000_000_000>;
 	type EnactmentDelay = ConstU32<{ 7 * DAYS }>;
@@ -805,6 +806,29 @@ impl_runtime_apis! {
 					(account_id, vanity_name)
 				})
 				.collect()
+		}
+		fn cf_account_info_v2(account_id: AccountId) -> RuntimeApiAccountInfoV2 {
+			let account_info_v1 = Self::cf_account_info(account_id.clone());
+			let is_online = Reputation::current_network_state().online.contains(&account_id);
+			let is_current_backup = pallet_cf_validator::Backups::<Runtime>::get().contains_key(&account_id);
+			let key_holder_epochs = pallet_cf_validator::HistoricalActiveEpochs::<Runtime>::get(&account_id);
+			let is_qualified = <<Runtime as pallet_cf_validator::Config>::AuctionQualification as QualifyNode>::is_qualified(&account_id);
+			let is_current_authority = pallet_cf_validator::CurrentAuthorities::<Runtime>::get().contains(&account_id);
+			let is_bidding = pallet_cf_staking::ActiveBidder::<Runtime>::get(&account_id);
+			RuntimeApiAccountInfoV2 {
+				stake: account_info_v1.stake,
+				bond: account_info_v1.bond,
+				last_heartbeat: account_info_v1.last_heartbeat,
+				online_credits: account_info_v1.online_credits,
+				reputation_points: account_info_v1.reputation_points,
+				withdrawal_address: account_info_v1.withdrawal_address,
+				keyholder_epochs: key_holder_epochs,
+				is_current_authority,
+				is_current_backup,
+				is_qualified: is_bidding && is_qualified,
+				is_online,
+				is_bidding,
+			}
 		}
 		fn cf_account_info(account_id: AccountId) -> RuntimeApiAccountInfo {
 			let account_info = pallet_cf_flip::Account::<Runtime>::get(&account_id);

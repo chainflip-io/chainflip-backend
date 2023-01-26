@@ -72,6 +72,7 @@ impl Chainflip for Test {
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type BidInfo = MockBidInfo;
+	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type StakeInfo = MockStakingInfo<Self>;
 	type WeightInfo = ();
 }

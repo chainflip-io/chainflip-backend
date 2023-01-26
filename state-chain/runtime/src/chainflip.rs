@@ -10,15 +10,25 @@ mod offences;
 use cf_primitives::{chains::assets, Asset, KeyId, ETHEREUM_ETH_ADDRESS};
 pub use offences::*;
 mod signer_nomination;
+use crate::RuntimeCall;
+use cf_chains::ForeignChain;
 use cf_primitives::liquidity::U256;
 use ethabi::Address as EthAbiAddress;
 pub use missed_authorship_slots::MissedAuraSlots;
 pub use signer_nomination::RandomSignerNomination;
 
+use cf_chains::Chain;
+
+use cf_chains::AnyChain;
+
 use crate::{
 	AccountId, Authorship, BlockNumber, EmergencyRotationPercentageRange, Emissions, Environment,
-	EthereumInstance, Flip, FlipBalance, Reputation, Runtime, RuntimeCall, System, Validator,
+	EthereumBroadcaster, EthereumInstance, Flip, FlipBalance, Reputation, Runtime, System,
+	Validator,
 };
+
+use crate::PolkadotBroadcaster;
+
 use cf_chains::{
 	dot::{
 		api::PolkadotApi, Polkadot, PolkadotAccountId, PolkadotReplayProtection,
@@ -29,14 +39,15 @@ use cf_chains::{
 		api::{EthereumApi, EthereumReplayProtection},
 		Ethereum,
 	},
-	AnyChain, ApiCall, Chain, ChainAbi, ChainEnvironment, ReplayProtectionProvider,
-	TransactionBuilder,
+	ApiCall, ChainAbi, ChainEnvironment, ReplayProtectionProvider, SetCommKeyWithAggKey,
+	SetGovKeyWithAggKey, TransactionBuilder,
 };
-use cf_primitives::{AssetAmount, ForeignChain, ForeignChainAddress, IntentId};
+
+use cf_primitives::{AssetAmount, ForeignChainAddress, IntentId};
 use cf_traits::{
-	BlockEmissions, Chainflip, EgressApi, EmergencyRotation, EpochInfo, EpochKey,
-	EthEnvironmentProvider, Heartbeat, IngressApi, Issuance, NetworkState, RewardsDistribution,
-	RuntimeUpgrade, VaultTransitionHandler,
+	BlockEmissions, BroadcastAnyChainGovKey, BroadcastComKey, Chainflip, EgressApi,
+	EmergencyRotation, EpochInfo, EpochKey, EthEnvironmentProvider, Heartbeat, IngressApi,
+	Issuance, NetworkState, RewardsDistribution, RuntimeUpgrade, VaultTransitionHandler,
 };
 use codec::{Decode, Encode};
 
@@ -301,6 +312,38 @@ impl EgressApi<AnyChain> for AnyChainIngressEgressHandler {
 					.expect("Caller must ensure for account is of the compatible type."),
 			),
 		}
+	}
+}
+
+pub struct TokenholderGovBroadcaster;
+
+impl BroadcastAnyChainGovKey for TokenholderGovBroadcaster {
+	fn broadcast(
+		chain: ForeignChain,
+		old_key: Option<Vec<u8>>,
+		new_key: Vec<u8>,
+	) -> Result<(), ()> {
+		match chain {
+			ForeignChain::Ethereum => {
+				let api_call = SetGovKeyWithAggKey::<Ethereum>::new_unsigned(None, new_key)?;
+				EthereumBroadcaster::threshold_sign_and_broadcast(api_call)
+			},
+			ForeignChain::Polkadot => {
+				let api_call = SetGovKeyWithAggKey::<Polkadot>::new_unsigned(old_key, new_key)?;
+				PolkadotBroadcaster::threshold_sign_and_broadcast(api_call)
+			},
+		};
+		Ok(())
+	}
+}
+
+impl BroadcastComKey for TokenholderGovBroadcaster {
+	type EthAddress = eth::Address;
+
+	fn broadcast(new_key: Self::EthAddress) {
+		EthereumBroadcaster::threshold_sign_and_broadcast(
+			SetCommKeyWithAggKey::<Ethereum>::new_unsigned(new_key),
+		);
 	}
 }
 

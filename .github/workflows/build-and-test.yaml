@@ -167,7 +167,6 @@ jobs:
       group: ${{ github.ref }}-run-benchmarks
       cancel-in-progress: true
     needs: [build-and-test]
-    if: github.ref_name == 'main'
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -179,7 +178,7 @@ jobs:
       - name: Run benchmarks
         run: |
           chmod +x ./target/release/chainflip-node
-          ./state-chain/scripts/benchmark-all.sh --binary ./target/release/chainflip-node --steps 1 --repetitions 1
+          ./state-chain/scripts/benchmark-all.sh --binary ./target/release/chainflip-node --steps 2 --repetitions 1
 
   test-single-node:
     runs-on: [hetzner]

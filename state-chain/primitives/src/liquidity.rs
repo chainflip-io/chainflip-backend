@@ -106,13 +106,6 @@ impl TryFrom<PoolAssetMap<U256>> for PoolAssetMap<u128> {
 	}
 }
 
-// Simple struct used to represent an minted Liquidity position.
-#[derive(Copy, Clone, Default, Eq, PartialEq, Debug)]
-pub struct MintedLiquidity {
-	pub range: AmmRange,
-	pub liquidity: Liquidity,
-}
-
 #[derive(Copy, Clone, Default, Eq, PartialEq, Debug)]
 pub struct BurnResult {
 	pub assets_returned: PoolAssetMap<AssetAmount>,
