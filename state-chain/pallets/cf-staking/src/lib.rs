@@ -8,6 +8,7 @@ mod mock;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
+mod migrations;
 
 pub mod weights;
 pub use weights::WeightInfo;
@@ -16,21 +17,20 @@ pub use weights::WeightInfo;
 mod tests;
 
 use cf_chains::RegisterClaim;
-use cf_traits::{Bid, BidderProvider, EpochInfo, StakeTransfer};
+use cf_traits::{Bid, BidderProvider, EpochInfo, StakeTransfer, SystemStateInfo};
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
-	traits::{EnsureOrigin, HandleLifetime, IsType, OnKilledAccount, UnixTime},
+	pallet_prelude::Weight,
+	traits::{
+		EnsureOrigin, HandleLifetime, IsType, OnKilledAccount, OnRuntimeUpgrade, StorageVersion,
+		UnixTime,
+	},
 };
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
-use sp_std::prelude::*;
-
-use cf_traits::SystemStateInfo;
-
 use sp_runtime::traits::{AtLeast32BitUnsigned, CheckedSub, Zero};
-
-use frame_support::pallet_prelude::Weight;
+use sp_std::prelude::*;
 
 /// This address is used by the Ethereum contracts to indicate that no withdrawal address was
 /// specified when staking.
@@ -40,9 +40,10 @@ use frame_support::pallet_prelude::Weight;
 /// only be withdrawn to the specified address.
 pub const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
 
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
+
 #[frame_support::pallet]
 pub mod pallet {
-
 	use super::*;
 	use cf_chains::eth::Ethereum;
 	use cf_primitives::BroadcastId;
@@ -123,6 +124,7 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
+	#[pallet::storage_version(PALLET_VERSION)]
 	#[pallet::without_storage_info]
 	#[pallet::generate_store(pub (super) trait Store)]
 	pub struct Pallet<T>(PhantomData<T>);
@@ -177,6 +179,20 @@ pub mod pallet {
 			}
 
 			Self::expire_pending_claims_at(T::TimeSource::now().as_secs())
+		}
+
+		fn on_runtime_upgrade() -> Weight {
+			migrations::PalletMigration::<T>::on_runtime_upgrade()
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+			migrations::PalletMigration::<T>::pre_upgrade()
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
+			migrations::PalletMigration::<T>::post_upgrade(state)
 		}
 	}
 
