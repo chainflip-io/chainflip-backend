@@ -205,10 +205,11 @@ impl RewardsDistribution for BlockAuthorRewardDistribution {
 	fn distribute() {
 		let reward_amount = Emissions::current_authority_emission_per_block();
 		if reward_amount != 0 {
-			// TODO: Check if it's ok to panic here.
-			let current_block_author =
-				Authorship::author().expect("A block without an author is invalid.");
-			Flip::settle(&current_block_author, Self::Issuance::mint(reward_amount).into());
+			if let Some(current_block_author) = Authorship::author() {
+				Flip::settle(&current_block_author, Self::Issuance::mint(reward_amount).into());
+			} else {
+				log::warn!("No block author block {}.", System::current_block_number());
+			}
 		}
 	}
 }
