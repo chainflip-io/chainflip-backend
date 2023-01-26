@@ -1122,7 +1122,7 @@ impl<T: Config> Pallet<T> {
 					.clone()
 					.primary_candidates
 					.into_iter()
-					.filter(|validator_id| T::AuctionQualification::is_qualified(&validator_id))
+					.filter(|validator_id| !T::AuctionQualification::is_qualified(&validator_id))
 					.collect();
 
 				rotation_state.ban(unqualified);
