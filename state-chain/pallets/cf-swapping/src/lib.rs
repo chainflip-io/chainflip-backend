@@ -137,8 +137,7 @@ pub mod pallet {
 				} else {
 					// Execute the swaps and add the weights.
 					used_weight.saturating_accrue(swap_group_weight);
-					if Self::execute_group_of_swaps(swaps.clone(), asset_pair.0, asset_pair.1)
-						.is_err()
+					if Self::execute_group_of_swaps(&swaps[..], asset_pair.0, asset_pair.1).is_err()
 					{
 						// If the swaps failed to execute, add them back into the queue.
 						unexecuted.extend(swaps)
@@ -246,7 +245,7 @@ pub mod pallet {
 	}
 
 	impl<T: Config> Pallet<T> {
-		pub fn execute_group_of_swaps(swaps: Vec<Swap>, from: Asset, to: Asset) -> DispatchResult {
+		pub fn execute_group_of_swaps(swaps: &[Swap], from: Asset, to: Asset) -> DispatchResult {
 			if swaps.is_empty() {
 				return Ok(())
 			}
