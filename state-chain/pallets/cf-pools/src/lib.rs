@@ -36,7 +36,7 @@ pub mod pallet {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		#[pallet::constant]
-		type NetworkFee: Get<u16>;
+		type NetworkFee: Get<Permill>;
 
 		/// Implementation of EnsureOrigin trait for governance
 		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
@@ -463,9 +463,8 @@ enum SwapLeg {
 }
 
 impl<T: Config> Pallet<T> {
-	fn calc_fee(fee: u16, input: AssetAmount) -> AssetAmount {
-		const BASIS_POINTS_PER_MILLION: u32 = 100;
-		Permill::from_parts(fee as u32 * BASIS_POINTS_PER_MILLION) * input
+	fn calc_fee(fee: Permill, input: AssetAmount) -> AssetAmount {
+		fee * input
 	}
 
 	pub fn take_network_fee(input: AssetAmount) -> AssetAmount {
