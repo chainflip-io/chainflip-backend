@@ -246,10 +246,12 @@ pub mod pallet {
 
 	impl<T: Config> Pallet<T> {
 		pub fn execute_group_of_swaps(swaps: &[Swap], from: Asset, to: Asset) -> DispatchResult {
-			if swaps.is_empty() {
-				return Ok(())
-			}
-			let bundle_total_input: AssetAmount = swaps
+			debug_assert!(
+				!swaps.is_empty(),
+				"The implementation of grouped_swaps ensures that the swap groups are non-empty."
+			);
+
+			let bundle_input: AssetAmount = swaps
 				.iter()
 				.map(|swap| {
 					debug_assert_eq!((swap.from, swap.to), (from, to));
@@ -257,31 +259,40 @@ pub mod pallet {
 				})
 				.sum();
 
-			if bundle_total_input > 0 {
-				let output_amount = T::SwappingApi::swap(from, to, bundle_total_input)?;
-				for swap in swaps {
-					Self::deposit_event(Event::<T>::SwapExecuted { swap_id: swap.swap_id });
-					let swap_output = multiply_by_rational_with_rounding(
-						swap.amount,
-						output_amount,
-						bundle_total_input,
-						Rounding::Down,
-					)
-					.unwrap_or_default();
+			debug_assert!(bundle_input > 0, "Swap input of zero is invalid.");
 
-					if swap_output > 0 {
-						let egress_id = T::EgressHandler::schedule_egress(
-							swap.to,
-							swap_output,
-							swap.egress_address,
-						);
-						Self::deposit_event(Event::<T>::SwapEgressScheduled {
-							swap_id: swap.swap_id,
-							egress_id,
-							asset: to,
-							amount: swap_output,
-						});
-					}
+			let bundle_output = T::SwappingApi::swap(from, to, bundle_input)?;
+			for swap in swaps {
+				Self::deposit_event(Event::<T>::SwapExecuted { swap_id: swap.swap_id });
+				let swap_output = multiply_by_rational_with_rounding(
+					swap.amount,
+					bundle_output,
+					bundle_input,
+					Rounding::Down,
+				)
+				.expect("bundle_input >= swap_amount ∴ result can't overflow");
+
+				if swap_output > 0 {
+					let egress_id = T::EgressHandler::schedule_egress(
+						swap.to,
+						swap_output,
+						swap.egress_address,
+					);
+
+					Self::deposit_event(Event::<T>::SwapEgressScheduled {
+						swap_id: swap.swap_id,
+						egress_id,
+						asset: to,
+						amount: swap_output,
+					});
+				} else {
+					// This is unlikely but theoretically possible if, for example, the initial swap
+					// input is so small compared to the total bundle size that it rounds down to
+					// zero when we do the division.
+					log::warn!(
+						"Swap {:?} in bundle {{ input: {bundle_input}, output: {bundle_output} }} resulted in swap output of zero.",
+						swap
+					);
 				}
 			}
 			Ok(())
