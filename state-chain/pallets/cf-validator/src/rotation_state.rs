@@ -7,9 +7,9 @@ pub(crate) const SECONDARY_CANDIDATE_FRACTION: usize = 3;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Default)]
 pub struct RotationState<Id, Amount> {
-	primary_candidates: Vec<Id>,
-	secondary_candidates: Vec<Id>,
-	banned: BTreeSet<Id>,
+	pub primary_candidates: Vec<Id>,
+	pub secondary_candidates: Vec<Id>,
+	pub banned: BTreeSet<Id>,
 	pub bond: Amount,
 }
 

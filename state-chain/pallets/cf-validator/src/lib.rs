@@ -418,6 +418,7 @@ pub mod pallet {
 							// 		offenders.len() as u32,
 							// 	);
 							rotation_state.ban(offenders);
+
 							Self::start_vault_rotation(rotation_state);
 							// weight
 						},
@@ -1114,15 +1115,25 @@ impl<T: Config> Pallet<T> {
 						10u128.pow(18),
 				);
 
+				let mut rotation_state =
+					RotationState::from_auction_outcome::<T>(auction_outcome.clone());
+
+				let unqualified = rotation_state
+					.clone()
+					.primary_candidates
+					.into_iter()
+					.filter(|validator_id| T::AuctionQualification::is_qualified(&validator_id))
+					.collect();
+
+				rotation_state.ban(unqualified);
+
 				// Without reading the full list of bidders we can't know the real number.
 				// Use the winners and losers as an approximation.
 				let weight = T::ValidatorWeightInfo::start_authority_rotation(
 					(auction_outcome.winners.len() + auction_outcome.losers.len()) as u32,
 				);
 
-				Self::start_vault_rotation(RotationState::from_auction_outcome::<T>(
-					auction_outcome,
-				));
+				Self::start_vault_rotation(rotation_state);
 
 				weight
 			},
@@ -1217,9 +1228,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn qualified_bidders() -> impl Iterator<Item = Bid<ValidatorIdOf<T>, T::Amount>> {
-		T::BidderProvider::get_bidders()
-			.into_iter()
-			.filter(|bid| T::AuctionQualification::is_qualified(&bid.bidder_id))
+		T::BidderProvider::get_bidders().into_iter()
 	}
 }
 
