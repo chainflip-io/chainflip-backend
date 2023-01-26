@@ -60,7 +60,7 @@ use frame_support::{
 };
 
 use pallet_cf_validator::PercentageRange;
-use sp_runtime::traits::{UniqueSaturatedFrom, UniqueSaturatedInto};
+use sp_runtime::traits::{BlockNumberProvider, UniqueSaturatedFrom, UniqueSaturatedInto};
 use sp_std::prelude::*;
 
 use backup_node_rewards::calculate_backup_rewards;
