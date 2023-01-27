@@ -15,6 +15,7 @@ mod ws_safe_stream;
 pub mod rpc;
 
 pub mod utils;
+pub mod witnessing;
 
 use anyhow::{anyhow, Context, Result};
 

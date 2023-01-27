@@ -33,7 +33,7 @@ pub async fn start<G, F, Fut, State, Chain>(
 	initial_state: State,
 	mut epoch_witnesser_generator: F,
 	logger: &slog::Logger,
-) -> anyhow::Result<()>
+) -> Result<(), async_broadcast::Receiver<EpochStart<Chain>>>
 where
 	Chain: cf_chains::Chain,
 	F: FnMut(
@@ -48,7 +48,7 @@ where
 	State: Send + 'static,
 	G: FnMut(&EpochStart<Chain>) -> bool + Send + 'static,
 {
-	task_scope(|scope| {
+	match task_scope(|scope| {
 		{
 			async {
 				let logger = logger.new(o!(COMPONENT_KEY => format!("{log_key}-Witnesser")));
@@ -99,4 +99,11 @@ where
 		.boxed()
 	})
 	.await
+	{
+		Ok(()) => Ok(()),
+		Err(e) => {
+			slog::error!(logger, "Error: {:?}", e);
+			Err(epoch_start_receiver)
+		},
+	}
 }

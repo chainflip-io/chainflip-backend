@@ -269,7 +269,7 @@ pub async fn start<StateChainClient, DotRpc>(
 	monitored_signatures: BTreeSet<[u8; 64]>,
 	state_chain_client: Arc<StateChainClient>,
 	logger: &slog::Logger,
-) -> Result<()>
+) -> std::result::Result<(), async_broadcast::Receiver<EpochStart<Polkadot>>>
 where
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
 	DotRpc: DotRpcApi + 'static + Send + Sync + Clone,

@@ -26,9 +26,9 @@ pub async fn start<const N: usize>(
 	epoch_start_receiver: async_broadcast::Receiver<EpochStart<Ethereum>>,
 	eth_rpc: EthDualRpcClient,
 	witnessers: [Box<dyn BlockProcessor>; N],
-	db: Arc<PersistentKeyDB>,
-	logger: &slog::Logger,
-) -> anyhow::Result<()> {
+    db: Arc<PersistentKeyDB>,
+	logger: slog::Logger,
+) -> Result<(), async_broadcast::Receiver<EpochStart<Ethereum>>> {
 	epoch_witnesser::start(
 		"Block_Head".to_string(),
 		epoch_start_receiver,
@@ -97,7 +97,7 @@ pub async fn start<const N: usize>(
 				Ok(witnessers)
 			}
 		},
-		logger,
+		&logger,
 	)
 	.await?;
 
