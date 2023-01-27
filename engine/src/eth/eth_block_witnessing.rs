@@ -6,7 +6,7 @@ use futures::StreamExt;
 
 use super::{rpc::EthDualRpcClient, safe_dual_block_subscription_from, EthNumberBloom};
 use crate::{
-	multisig::{eth::EthSigning, PersistentKeyDB},
+	multisig::{ChainTag, PersistentKeyDB},
 	witnesser::{
 		checkpointing::{start_checkpointing_for, WitnessedUntil},
 		epoch_witnesser, EpochStart,
@@ -39,7 +39,7 @@ pub async fn start<const N: usize>(
 			let db = db.clone();
 			async move {
 				let (witnessed_until, witnessed_until_sender, _checkpointing_join_handle) =
-					start_checkpointing_for::<EthSigning>("block-head", db, &logger);
+					start_checkpointing_for(ChainTag::Ethereum, db, &logger);
 
 				// Don't witness epochs that we've already witnessed
 				if epoch.epoch_index < witnessed_until.epoch_index {

@@ -4,7 +4,7 @@ use cf_primitives::EpochIndex;
 use serde::{Deserialize, Serialize};
 use tokio::task::JoinHandle;
 
-use crate::multisig::{CryptoScheme, PersistentKeyDB};
+use crate::multisig::{ChainTag, PersistentKeyDB};
 
 const UPDATE_INTERVAL: Duration = Duration::from_secs(4);
 
@@ -14,17 +14,17 @@ pub struct WitnessedUntil {
 	pub block_number: u64,
 }
 
-pub fn start_checkpointing_for<C: CryptoScheme>(
-	witnesser_name: &str,
+pub fn start_checkpointing_for(
+	chain_tag: ChainTag,
 	db: Arc<PersistentKeyDB>,
 	logger: &slog::Logger,
 ) -> (WitnessedUntil, tokio::sync::watch::Sender<WitnessedUntil>, JoinHandle<()>) {
 	// Load the checkpoint or use the default if none is found
-	let witnessed_until = match db.load_checkpoint::<C>() {
+	let witnessed_until = match db.load_checkpoint(chain_tag) {
 		Ok(Some(checkpoint)) => {
 			slog::info!(
 				logger,
-				"Previous {witnesser_name} witnesser instance witnessed until epoch {}, block {}",
+				"Previous {chain_tag} witnesser instance witnessed until epoch {}, block {}",
 				checkpoint.epoch_index,
 				checkpoint.block_number
 			);
@@ -33,7 +33,7 @@ pub fn start_checkpointing_for<C: CryptoScheme>(
 		Ok(None) => {
 			slog::info!(
 				logger,
-				"No {witnesser_name} witnesser checkpoint found, using default of {:?}",
+				"No {chain_tag} witnesser checkpoint found, using default of {:?}",
 				WitnessedUntil::default()
 			);
 			WitnessedUntil::default()
@@ -41,7 +41,7 @@ pub fn start_checkpointing_for<C: CryptoScheme>(
 		Err(e) => {
 			slog::error!(
 				logger,
-				"Failed to load {witnesser_name} witnesser checkpoint, using default of {:?}: {e}",
+				"Failed to load {chain_tag} witnesser checkpoint, using default of {:?}: {e}",
 				WitnessedUntil::default()
 			);
 			WitnessedUntil::default()
@@ -65,7 +65,7 @@ pub fn start_checkpointing_for<C: CryptoScheme>(
 							changed_witnessed_until.block_number >
 								prev_witnessed_until.block_number
 					);
-					db.update_checkpoint::<C>(&changed_witnessed_until);
+					db.update_checkpoint(chain_tag, &changed_witnessed_until);
 					prev_witnessed_until = changed_witnessed_until;
 				}
 			} else {
@@ -82,12 +82,11 @@ mod tests {
 	use utilities::assert_ok;
 
 	use super::*;
-	use crate::{logging::test_utils::new_test_logger, multisig::eth::EthSigning};
+	use crate::logging::test_utils::new_test_logger;
 
-	#[tokio::test]
+	#[tokio::test(start_paused = true)]
 	async fn should_save_and_load_checkpoint() {
 		let logger = new_test_logger();
-		type Scheme = EthSigning;
 
 		let updated_witnessed_until = WitnessedUntil { epoch_index: 1, block_number: 2 };
 		assert_ne!(updated_witnessed_until, WitnessedUntil::default());
@@ -99,34 +98,25 @@ mod tests {
 			let db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, None, &logger).unwrap();
 
 			let (witnessed_until, witnessed_until_sender, checkpointing_join_handle) =
-				start_checkpointing_for::<Scheme>("test1", Arc::new(db), &logger);
+				start_checkpointing_for(ChainTag::Ethereum, Arc::new(db), &logger);
 			assert_eq!(witnessed_until, WitnessedUntil::default());
 
 			// Send an updated checkpoint to be saved to the db
 			assert_ok!(witnessed_until_sender.send(updated_witnessed_until.clone()));
 
-			// Skip some time so that the update goes through
-			tokio::time::sleep(Duration::from_millis(50)).await;
-			tokio::time::pause();
-			tokio::time::advance(UPDATE_INTERVAL).await;
-			tokio::time::resume();
-			tokio::time::sleep(Duration::from_millis(50)).await;
+			// Wait for longer than the update interval to ensure the update is processed.
+			tokio::time::sleep(UPDATE_INTERVAL * 2).await;
 
-			// Abort the task so we can open the db file again later
-			checkpointing_join_handle.abort();
-
-			// Skip some time to wait for the task to wake up and abort
-			tokio::time::pause();
-			tokio::time::advance(UPDATE_INTERVAL).await;
-			tokio::time::resume();
-			assert!(checkpointing_join_handle.is_finished());
+			// Dropping the sender causes the task to complete.
+			drop(witnessed_until_sender);
+			checkpointing_join_handle.await.unwrap();
 		}
 
 		{
 			// Start checkpointing again with the same db file
 			let db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, None, &logger).unwrap();
 			let (witnessed_until, _, _) =
-				start_checkpointing_for::<Scheme>("test2", Arc::new(db), &logger);
+				start_checkpointing_for(ChainTag::Ethereum, Arc::new(db), &logger);
 
 			// The checkpoint should be the updated value that was saved in the db
 			assert_eq!(witnessed_until, updated_witnessed_until);

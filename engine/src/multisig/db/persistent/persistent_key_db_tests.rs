@@ -349,24 +349,24 @@ fn should_error_if_genesis_hash_is_different() {
 #[test]
 fn should_save_and_load_checkpoint() {
 	let logger = new_test_logger();
-	type Scheme = EthSigning;
 
 	let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
 	let test_checkpoint = WitnessedUntil { epoch_index: 69, block_number: 420 };
 
+	let chain = ChainTag::Ethereum;
 	// Open a fresh db and write the checkpoint to it
 	{
 		let db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, None, &logger).unwrap();
 
-		assert!(db.load_checkpoint::<Scheme>().unwrap().is_none());
+		assert!(db.load_checkpoint(chain).unwrap().is_none());
 
-		db.update_checkpoint::<Scheme>(&test_checkpoint);
+		db.update_checkpoint(chain, &test_checkpoint);
 	}
 
 	// Open the db file again and load the checkpoint
 	{
 		let db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, None, &logger).unwrap();
 
-		assert_eq!(db.load_checkpoint::<Scheme>().unwrap(), Some(test_checkpoint));
+		assert_eq!(db.load_checkpoint(chain).unwrap(), Some(test_checkpoint));
 	}
 }
