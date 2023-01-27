@@ -20,12 +20,13 @@ pub fn start_checkpointing_for<C: CryptoScheme>(
 	logger: &slog::Logger,
 ) -> (WitnessedUntil, tokio::sync::watch::Sender<WitnessedUntil>, JoinHandle<()>) {
 	let witnessed_until = match db.load_checkpoint::<C>() {
-		Ok(checkpoint) => checkpoint.unwrap_or(WitnessedUntil::default()),
+		Ok(checkpoint) => checkpoint,
 		Err(e) => {
 			slog::error!(logger, "Failed to load {witnesser_name} witnesser checkpoint: {e}");
-			WitnessedUntil::default()
+			None
 		},
-	};
+	}
+	.unwrap_or(WitnessedUntil::default());
 
 	slog::info!(
 		logger,
@@ -37,8 +38,8 @@ pub fn start_checkpointing_for<C: CryptoScheme>(
 	let (witnessed_until_sender, witnessed_until_receiver) =
 		tokio::sync::watch::channel(witnessed_until.clone());
 
-	// Check every few seconds if the `witnessed_until` has changed and then update the database
-	let fut = async move {
+	let join_handle = tokio::spawn(async move {
+		// Check every few seconds if the `witnessed_until` has changed and then update the database
 		loop {
 			tokio::time::sleep(UPDATE_INTERVAL).await;
 			if let Ok(changed) = witnessed_until_receiver.has_changed() {
@@ -49,9 +50,7 @@ pub fn start_checkpointing_for<C: CryptoScheme>(
 				break
 			}
 		}
-	};
-
-	let join_handle = tokio::spawn(fut);
+	});
 
 	(witnessed_until, witnessed_until_sender, join_handle)
 }
