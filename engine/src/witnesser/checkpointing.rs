@@ -19,24 +19,39 @@ pub fn start_checkpointing_for<C: CryptoScheme>(
 	db: Arc<PersistentKeyDB>,
 	logger: &slog::Logger,
 ) -> (WitnessedUntil, tokio::sync::watch::Sender<WitnessedUntil>, JoinHandle<()>) {
+	// Load the checkpoint or use the default if none is found
 	let witnessed_until = match db.load_checkpoint::<C>() {
-		Ok(checkpoint) => checkpoint,
-		Err(e) => {
-			slog::error!(logger, "Failed to load {witnesser_name} witnesser checkpoint: {e}");
-			None
+		Ok(Some(checkpoint)) => {
+			slog::info!(
+				logger,
+				"Previous {witnesser_name} witnesser instance witnessed until epoch {}, block {}",
+				checkpoint.epoch_index,
+				checkpoint.block_number
+			);
+			checkpoint
 		},
-	}
-	.unwrap_or(WitnessedUntil::default());
-
-	slog::info!(
-		logger,
-		"Previous {witnesser_name} witnesser instance witnessed until epoch {}, block {}",
-		witnessed_until.epoch_index,
-		witnessed_until.block_number
-	);
+		Ok(None) => {
+			slog::info!(
+				logger,
+				"No {witnesser_name} witnesser checkpoint found, using default of {:?}",
+				WitnessedUntil::default()
+			);
+			WitnessedUntil::default()
+		},
+		Err(e) => {
+			slog::error!(
+				logger,
+				"Failed to load {witnesser_name} witnesser checkpoint, using default of {:?}: {e}",
+				WitnessedUntil::default()
+			);
+			WitnessedUntil::default()
+		},
+	};
 
 	let (witnessed_until_sender, witnessed_until_receiver) =
 		tokio::sync::watch::channel(witnessed_until.clone());
+
+	let mut prev_witnessed_until = witnessed_until.clone();
 
 	let join_handle = tokio::spawn(async move {
 		// Check every few seconds if the `witnessed_until` has changed and then update the database
@@ -44,7 +59,14 @@ pub fn start_checkpointing_for<C: CryptoScheme>(
 			tokio::time::sleep(UPDATE_INTERVAL).await;
 			if let Ok(changed) = witnessed_until_receiver.has_changed() {
 				if changed {
-					db.update_checkpoint::<C>(&witnessed_until_receiver.borrow().clone());
+					let changed_witnessed_until = witnessed_until_receiver.borrow().clone();
+					assert!(
+						changed_witnessed_until.epoch_index > prev_witnessed_until.epoch_index ||
+							changed_witnessed_until.block_number >
+								prev_witnessed_until.block_number
+					);
+					db.update_checkpoint::<C>(&changed_witnessed_until);
+					prev_witnessed_until = changed_witnessed_until;
 				}
 			} else {
 				break
