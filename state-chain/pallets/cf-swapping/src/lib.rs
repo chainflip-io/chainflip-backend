@@ -84,7 +84,9 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// An new swap intent has been registered.
-		NewSwapIntent { ingress_address: ForeignChainAddress },
+		NewSwapIntent {
+			ingress_address: ForeignChainAddress,
+		},
 		/// The swap ingress was received.
 		SwapIngressReceived {
 			swap_id: u64,
@@ -97,14 +99,24 @@ pub mod pallet {
 			egress_address: ForeignChainAddress,
 		},
 		/// A swap was executed.
-		SwapExecuted { swap_id: u64 },
+		SwapExecuted {
+			swap_id: u64,
+		},
 		/// A swap egress was scheduled.
-		SwapEgressScheduled { swap_id: u64, egress_id: EgressId, asset: Asset, amount: AssetAmount },
+		SwapEgressScheduled {
+			swap_id: u64,
+			egress_id: EgressId,
+			asset: Asset,
+			amount: AssetAmount,
+		},
 		/// A withdrawal was requested.
 		WithdrawalRequested {
 			amount: AssetAmount,
 			address: ForeignChainAddress,
 			egress_id: EgressId,
+		},
+		BatchSwapFailed {
+			asset_pair: (Asset, Asset),
 		},
 	}
 	#[pallet::error]
@@ -115,8 +127,6 @@ pub mod pallet {
 		InvalidEgressAddress,
 		/// The withdrawal is not possible because not enough funds are available.
 		NoFundsAvailable,
-		/// Swap failed to execute due to insufficient liquidity.
-		InsufficientLiquidity,
 	}
 
 	#[pallet::hooks]
@@ -140,6 +150,7 @@ pub mod pallet {
 					if Self::execute_group_of_swaps(&swaps[..], asset_pair.0, asset_pair.1).is_err()
 					{
 						// If the swaps failed to execute, add them back into the queue.
+						Self::deposit_event(Event::<T>::BatchSwapFailed { asset_pair });
 						unexecuted.extend(swaps)
 					}
 				}
