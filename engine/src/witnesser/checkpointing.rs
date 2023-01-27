@@ -84,7 +84,7 @@ mod tests {
 	use super::*;
 	use crate::logging::test_utils::new_test_logger;
 
-	#[tokio::test]
+	#[tokio::test(start_paused = true)]
 	async fn should_save_and_load_checkpoint() {
 		let logger = new_test_logger();
 
@@ -104,21 +104,12 @@ mod tests {
 			// Send an updated checkpoint to be saved to the db
 			assert_ok!(witnessed_until_sender.send(updated_witnessed_until.clone()));
 
-			// Skip some time so that the update goes through
-			tokio::time::sleep(Duration::from_millis(50)).await;
-			tokio::time::pause();
-			tokio::time::advance(UPDATE_INTERVAL).await;
-			tokio::time::resume();
-			tokio::time::sleep(Duration::from_millis(50)).await;
+			// Wait for longer than the update interval to ensure the update is processed.
+			tokio::time::sleep(UPDATE_INTERVAL * 2).await;
 
-			// Abort the task so we can open the db file again later
-			checkpointing_join_handle.abort();
-
-			// Skip some time to wait for the task to wake up and abort
-			tokio::time::pause();
-			tokio::time::advance(UPDATE_INTERVAL).await;
-			tokio::time::resume();
-			assert!(checkpointing_join_handle.is_finished());
+			// Dropping the sender causes the task to complete.
+			drop(witnessed_until_sender);
+			checkpointing_join_handle.await.unwrap();
 		}
 
 		{
