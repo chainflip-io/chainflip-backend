@@ -84,7 +84,9 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// An new swap intent has been registered.
-		NewSwapIntent { ingress_address: ForeignChainAddress },
+		NewSwapIntent {
+			ingress_address: ForeignChainAddress,
+		},
 		/// The swap ingress was received.
 		SwapIngressReceived {
 			swap_id: u64,
@@ -97,14 +99,24 @@ pub mod pallet {
 			egress_address: ForeignChainAddress,
 		},
 		/// A swap was executed.
-		SwapExecuted { swap_id: u64 },
+		SwapExecuted {
+			swap_id: u64,
+		},
 		/// A swap egress was scheduled.
-		SwapEgressScheduled { swap_id: u64, egress_id: EgressId, asset: Asset, amount: AssetAmount },
+		SwapEgressScheduled {
+			swap_id: u64,
+			egress_id: EgressId,
+			asset: Asset,
+			amount: AssetAmount,
+		},
 		/// A withdrawal was requested.
 		WithdrawalRequested {
 			amount: AssetAmount,
 			address: ForeignChainAddress,
 			egress_id: EgressId,
+		},
+		BatchSwapFailed {
+			asset_pair: (Asset, Asset),
 		},
 	}
 	#[pallet::error]
@@ -135,7 +147,12 @@ pub mod pallet {
 				} else {
 					// Execute the swaps and add the weights.
 					used_weight.saturating_accrue(swap_group_weight);
-					Self::execute_group_of_swaps(swaps, asset_pair.0, asset_pair.1);
+					if Self::execute_group_of_swaps(&swaps[..], asset_pair.0, asset_pair.1).is_err()
+					{
+						// If the swaps failed to execute, add them back into the queue.
+						Self::deposit_event(Event::<T>::BatchSwapFailed { asset_pair });
+						unexecuted.extend(swaps)
+					}
 				}
 			}
 
@@ -242,11 +259,13 @@ pub mod pallet {
 	}
 
 	impl<T: Config> Pallet<T> {
-		pub fn execute_group_of_swaps(swaps: Vec<Swap>, from: Asset, to: Asset) {
-			if swaps.is_empty() {
-				return
-			}
-			let bundle_total_input: AssetAmount = swaps
+		pub fn execute_group_of_swaps(swaps: &[Swap], from: Asset, to: Asset) -> DispatchResult {
+			debug_assert!(
+				!swaps.is_empty(),
+				"The implementation of grouped_swaps ensures that the swap groups are non-empty."
+			);
+
+			let bundle_input: AssetAmount = swaps
 				.iter()
 				.map(|swap| {
 					debug_assert_eq!((swap.from, swap.to), (from, to));
@@ -254,39 +273,43 @@ pub mod pallet {
 				})
 				.sum();
 
-			let output_amount =
-				T::SwappingApi::swap(from, to, bundle_total_input).unwrap_or_default();
+			debug_assert!(bundle_input > 0, "Swap input of zero is invalid.");
 
-			if bundle_total_input > 0 {
-				for swap in swaps {
-					Self::deposit_event(Event::<T>::SwapExecuted { swap_id: swap.swap_id });
-					if let Some(swap_output) = multiply_by_rational_with_rounding(
-						swap.amount,
-						output_amount,
-						bundle_total_input,
-						Rounding::Down,
-					) {
-						if swap_output > 0 {
-							let egress_id = T::EgressHandler::schedule_egress(
-								swap.to,
-								swap_output,
-								swap.egress_address,
-							);
-							Self::deposit_event(Event::<T>::SwapEgressScheduled {
-								swap_id: swap.swap_id,
-								egress_id,
-								asset: to,
-								amount: swap_output,
-							});
-						}
-					} else {
-						log::error!(
-							"Unable to calculate valid swap output for swap {:?}!",
-							&(swap.amount, bundle_total_input, output_amount)
-						);
-					}
+			let bundle_output = T::SwappingApi::swap(from, to, bundle_input)?;
+			for swap in swaps {
+				Self::deposit_event(Event::<T>::SwapExecuted { swap_id: swap.swap_id });
+				let swap_output = multiply_by_rational_with_rounding(
+					swap.amount,
+					bundle_output,
+					bundle_input,
+					Rounding::Down,
+				)
+				.expect("bundle_input >= swap_amount ∴ result can't overflow");
+
+				if swap_output > 0 {
+					let egress_id = T::EgressHandler::schedule_egress(
+						swap.to,
+						swap_output,
+						swap.egress_address,
+					);
+
+					Self::deposit_event(Event::<T>::SwapEgressScheduled {
+						swap_id: swap.swap_id,
+						egress_id,
+						asset: to,
+						amount: swap_output,
+					});
+				} else {
+					// This is unlikely but theoretically possible if, for example, the initial swap
+					// input is so small compared to the total bundle size that it rounds down to
+					// zero when we do the division.
+					log::warn!(
+						"Swap {:?} in bundle {{ input: {bundle_input}, output: {bundle_output} }} resulted in swap output of zero.",
+						swap
+					);
 				}
 			}
+			Ok(())
 		}
 
 		fn group_swaps_by_asset_pair(swaps: Vec<Swap>) -> BTreeMap<(Asset, Asset), Vec<Swap>> {

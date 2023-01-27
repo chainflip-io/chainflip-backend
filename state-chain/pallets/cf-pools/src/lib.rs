@@ -129,6 +129,8 @@ pub mod pallet {
 		PositionLacksLiquidity,
 		/// The user's position does not exist.
 		PositionDoesNotExist,
+		/// The pool does not have enough liquidity left to process the swap.
+		InsufficientLiquidity,
 	}
 
 	#[pallet::event]
@@ -488,12 +490,14 @@ impl<T: Config> Pallet<T> {
 					SwapLeg::FromStable => (
 						STABLE_ASSET,
 						asset,
-						pool.swap_from_asset_1_to_asset_0(input_amount.into()),
+						pool.swap_from_asset_1_to_asset_0(input_amount.into())
+							.map_err(|_| Error::<T>::InsufficientLiquidity)?,
 					),
 					SwapLeg::ToStable => (
 						asset,
 						STABLE_ASSET,
-						pool.swap_from_asset_0_to_asset_1(input_amount.into()),
+						pool.swap_from_asset_0_to_asset_1(input_amount.into())
+							.map_err(|_| Error::<T>::InsufficientLiquidity)?,
 					),
 				};
 				Self::deposit_event(Event::<T>::AssetsSwapped {
