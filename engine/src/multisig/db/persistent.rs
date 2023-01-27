@@ -13,6 +13,7 @@ use crate::{
 		crypto::{CryptoScheme, CHAIN_TAG_SIZE},
 		KeyId,
 	},
+	witnesser::checkpointing::WitnessedUntil,
 };
 
 use anyhow::{anyhow, bail, Context, Result};
@@ -28,8 +29,12 @@ pub const GENESIS_HASH_KEY: &[u8; 12] = b"genesis_hash";
 
 /// A static length prefix is used on the `DATA_COLUMN`
 pub const PREFIX_SIZE: usize = 10;
+const PARTIAL_PREFIX_SIZE: usize = PREFIX_SIZE - CHAIN_TAG_SIZE;
 /// Keygen data uses a prefix that is a combination of a keygen data prefix and the chain tag
-const KEYGEN_DATA_PARTIAL_PREFIX: &[u8; PREFIX_SIZE - CHAIN_TAG_SIZE] = b"key_____";
+const KEYGEN_DATA_PARTIAL_PREFIX: &[u8; PARTIAL_PREFIX_SIZE] = b"key_____";
+/// The Witnesser checkpoint uses a prefix that is a combination of a checkpoint prefix and the
+/// chain tag
+const WITNESSER_CHECKPOINT_PARTIAL_PREFIX: &[u8; PARTIAL_PREFIX_SIZE] = b"check___";
 
 /// Column family names
 // All data is stored in `DATA_COLUMN` with a prefix for key spaces
@@ -142,8 +147,7 @@ impl PersistentKeyDB {
 		keygen_result_info: &KeygenResultInfo<C>,
 	) {
 		let key_id_with_prefix =
-			[KEYGEN_DATA_PARTIAL_PREFIX, &(C::CHAIN_TAG.to_bytes())[..], &key_id.0.clone()[..]]
-				.concat();
+			[get_keygen_data_prefix::<C>().as_slice(), &key_id.0.clone()[..]].concat();
 
 		self.db
 			.put_cf(
@@ -158,10 +162,7 @@ impl PersistentKeyDB {
 	pub fn load_keys<C: CryptoScheme>(&self) -> HashMap<KeyId, KeygenResultInfo<C>> {
 		let keys: HashMap<KeyId, KeygenResultInfo<C>> = self
 			.db
-			.prefix_iterator_cf(
-				get_data_column_handle(&self.db),
-				[&KEYGEN_DATA_PARTIAL_PREFIX[..], &(C::CHAIN_TAG.to_bytes())[..]].concat(),
-			)
+			.prefix_iterator_cf(get_data_column_handle(&self.db), get_keygen_data_prefix::<C>())
 			.filter_map(|result| match result {
 				Ok(key) => Some(key),
 				Err(err) => {
@@ -194,6 +195,38 @@ impl PersistentKeyDB {
 		}
 		keys
 	}
+
+	/// Write the witnesser checkpoint to the db
+	pub fn update_checkpoint<C: CryptoScheme>(&self, checkpoint: &WitnessedUntil) {
+		self.db
+			.put_cf(
+				get_data_column_handle(&self.db),
+				get_checkpoint_prefix::<C>(),
+				bincode::serialize(checkpoint).expect("Should serialize WitnessedUntil checkpoint"),
+			)
+			.unwrap_or_else(|e| {
+				panic!("Failed to update {} witnesser checkpoint. Error: {e}", C::NAME)
+			});
+	}
+
+	pub fn load_checkpoint<C: CryptoScheme>(&self) -> Result<Option<WitnessedUntil>> {
+		self.db
+			.get_cf(get_data_column_handle(&self.db), get_checkpoint_prefix::<C>())?
+			.map(|data| {
+				bincode::deserialize::<WitnessedUntil>(&data).map_err(|e| {
+					anyhow!("Could not deserialize {} WitnessedUntil checkpoint: {e}", C::NAME)
+				})
+			})
+			.transpose()
+	}
+}
+
+fn get_keygen_data_prefix<C: CryptoScheme>() -> Vec<u8> {
+	[&KEYGEN_DATA_PARTIAL_PREFIX[..], &(C::CHAIN_TAG.to_bytes())[..]].concat()
+}
+
+fn get_checkpoint_prefix<C: CryptoScheme>() -> Vec<u8> {
+	[WITNESSER_CHECKPOINT_PARTIAL_PREFIX, &(C::CHAIN_TAG.to_bytes())[..]].concat()
 }
 
 // Creates a backup of the database folder to BACKUPS_DIRECTORY/backup_vx_xx_xx
