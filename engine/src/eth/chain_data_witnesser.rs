@@ -21,7 +21,7 @@ pub async fn start<StateChainClient, EthRpcClient>(
 	state_chain_client: Arc<StateChainClient>,
 	epoch_start_receiver: async_broadcast::Receiver<EpochStart<Ethereum>>,
 	cfe_settings_update_receiver: watch::Receiver<CfeSettings>,
-	logger: &slog::Logger,
+	logger: slog::Logger,
 ) -> anyhow::Result<(), async_broadcast::Receiver<EpochStart<Ethereum>>>
 where
 	EthRpcClient: 'static + EthRpcApi + Clone + Send + Sync,
@@ -84,7 +84,7 @@ where
                 Ok(last_witnessed_data)
             }
         },
-        logger,
+        &logger,
     ).await
 }
 

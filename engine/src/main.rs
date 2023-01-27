@@ -62,7 +62,7 @@ async fn main() -> anyhow::Result<()> {
 	);
 
 	task_scope(|scope| {
-		async {
+		async move {
 			if let Some(health_check_settings) = &settings.health_check {
 				scope.spawn(HealthChecker::new(health_check_settings, &root_logger).await?.run());
 			}
@@ -77,20 +77,19 @@ async fn main() -> anyhow::Result<()> {
 				)
 				.await?;
 
-			let eth_dual_rpc = EthDualRpcClient::new(
-				&settings.eth,
-				U256::from(
-					state_chain_client
-						.storage_value::<pallet_cf_environment::EthereumChainId<state_chain_runtime::Runtime>>(
-							latest_block_hash,
-						)
-						.await
-						.context("Failed to get EthereumChainId from state chain")?,
-				),
-				&root_logger,
-			)
-			.await
-			.context("Failed to create EthDualRpcClient")?;
+			let expected_chain_id = U256::from(
+				state_chain_client
+					.storage_value::<pallet_cf_environment::EthereumChainId<state_chain_runtime::Runtime>>(
+						latest_block_hash,
+					)
+					.await
+					.context("Failed to get EthereumChainId from state chain")?,
+			);
+
+			let eth_dual_rpc =
+				EthDualRpcClient::new(&settings.eth, expected_chain_id, &root_logger)
+					.await
+					.context("Failed to create EthDualRpcClient")?;
 
 			let eth_broadcaster =
 				EthBroadcaster::new(&settings.eth, eth_dual_rpc.clone(), &root_logger)
@@ -187,6 +186,17 @@ async fn main() -> anyhow::Result<()> {
 
 			scope.spawn(dot_multisig_client_backend_future);
 
+			eth::witnessing::start(
+				&scope,
+				settings.eth,
+				state_chain_client.clone(),
+				expected_chain_id,
+				latest_block_hash,
+				epoch_start_receiver_1,
+				root_logger.clone(),
+			)
+			.await;
+
 			// This witnesser is spawned separately because it does
 			// not use eth block subscription
 			scope.spawn(
@@ -195,7 +205,7 @@ async fn main() -> anyhow::Result<()> {
 					state_chain_client.clone(),
 					epoch_start_receiver_2,
 					cfe_settings_update_receiver,
-					&root_logger,
+					root_logger.clone(),
 				)
 				.map_err(|_r| anyhow::anyhow!("eth::chain_data_witnesser::start failed")),
 			);

@@ -1,11 +1,12 @@
 use std::{sync::Arc, time::Duration};
 
 use cf_chains::Ethereum;
-use futures::Future;
+use futures::{Future, FutureExt};
 use tokio::task::JoinHandle;
 
 use crate::{
-	state_chain_observer::client::StateChainClient, task_scope::Scope, witnesser::EpochStart,
+	settings, state_chain_observer::client::StateChainClient, task_scope::Scope,
+	witnesser::EpochStart,
 };
 
 use super::{
@@ -161,11 +162,45 @@ async fn create_witnessers(
 	)
 }
 
-// create a closure that takes the static state as a param, and just returns the future
-// of some other process, so we don't need to pass the params directly.
+pub async fn start(
+	scope: &Scope<'_, anyhow::Error>,
+	eth_settings: settings::Eth,
+	state_chain_client: Arc<StateChainClient>,
+	expected_chain_id: web3::types::U256,
+	latest_block_hash: sp_core::H256,
+	epoch_start_receiver: async_broadcast::Receiver<EpochStart<Ethereum>>,
+	logger: slog::Logger,
+) -> anyhow::Result<()> {
+	let create_and_run_witnesser_futures =
+		move |epoch_start_receiver: async_broadcast::Receiver<EpochStart<Ethereum>>| {
+			let eth_settings = eth_settings.clone();
+			let logger = logger.clone();
+			let state_chain_client = state_chain_client.clone();
+			let expected_chain_id = expected_chain_id.clone();
+			async move {
+				// We create a new RPC on each call to the future, since one common reason for
+				// failure is that the WS connection has been dropped. This ensures that we create a
+				// new client, and therefore create a new connection.
+				let dual_rpc =
+					EthDualRpcClient::new(&eth_settings, expected_chain_id, &logger).await.unwrap();
+				let witnessers =
+					create_witnessers(&state_chain_client, &dual_rpc, latest_block_hash, &logger)
+						.await
+						.unwrap();
+				eth_block_witnessing::start(
+					epoch_start_receiver,
+					dual_rpc,
+					witnessers,
+					logger.clone(),
+				)
+			}
+			.flatten()
+		};
 
-// We should actually pass in the generator here otherwise it makes no sense
-// It's also impossible to use a generic param unless the generator also takes a generic param
+	start_with_restart_on_failure(scope, create_and_run_witnesser_futures, epoch_start_receiver)
+		.await
+}
+
 async fn start_with_restart_on_failure<StaticState, TaskFut, TaskGenerator>(
 	scope: &Scope<'_, anyhow::Error>,
 	task: TaskGenerator,
@@ -211,7 +246,7 @@ mod tests {
 	use super::*;
 
 	#[tokio::test(start_paused = true)]
-	async fn test_general() {
+	async fn test_restart_on_failure() {
 		async fn start_up_some_loop(mut my_state: u32) -> Result<(), u32> {
 			my_state += 1;
 			let mut counter = 0;
