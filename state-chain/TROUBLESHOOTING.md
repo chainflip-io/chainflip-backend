@@ -18,11 +18,15 @@ First, build the runtime node with all features enabled:
 cargo build --release --all-features
 ```
 
-The quickest way to test a runtime upgrade is to run a local node and connect it to the live network.
+It's theoretically possible to connect to a remote rpc node to download the state for the try-runtime checks, but a much faster method is to run a local rpc node and connect to that instead.
 
 For example, for perseverance, first connect a local node to the network with some rpc optimisations:
 
 ```sh
+# Purge any pre-existing chain state.
+./target/release/chainflip-node purge-chain --chain ./state-chain/node/chainspecs/perseverance.chainspec.raw.json
+
+# Sync a fresh copy of the latest perseverance state.
 ./target/release/chainflip-node \
     --chain ./state-chain/node/chainspecs/perseverance.chainspec.raw.json 
     --sync warp \
@@ -33,15 +37,14 @@ For example, for perseverance, first connect a local node to the network with so
     --unsafe-ws-external
 ```
 
-In another terminal window, run the checks:
+Once the node has synced, in another terminal window, run the checks:
 
 ```sh
-./target/release/chainflip-node try-runtime \
-    --execution native \
-        on-runtime-upgrade live \
-            --uri wss://perseverance-rpc.chainflip.io:9944 \
-            --snapshot-path .state-snapshot
+./target/release/chainflip-node try-runtime --execution native \
+    on-runtime-upgrade live --uri wss://perseverance-rpc.chainflip.io:9944
 ```
+
+> *Note: Using `--execution native` ensures faster execution and also prevents log messages from being scrubbed.
 
 ### General tips and guidelines
 
@@ -144,7 +147,7 @@ To execute the benchmarks as tests run:
 cargo cf-test-all
 ```
 
-> ***NOTE:***  When you run your benchmark with the tests it's **NOT** running against the runtime but the mocks. If you make different assumptions in your mock it can be possible that the tests will fail.
+> **NOTE:**  When you run your benchmark with the tests it's **NOT** running against the runtime but against the mocks. If the behaviour of the mocks doesn't match the behaviour of the runtime, it's possible that tests will fail despite benchmarks succeeding, or that benchmarks will fail despite the tests succeeding.
 
 ### Some benchmark reference values
 
