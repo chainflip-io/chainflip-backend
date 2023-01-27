@@ -121,8 +121,8 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		/// Do swapping with remaining weight in this block
 		fn on_idle(_block_number: BlockNumberFor<T>, available_weight: Weight) -> Weight {
-			let swaps = SwapQueue::<T>::get();
-			let mut used_weight = T::DbWeight::get().reads(1) + T::DbWeight::get().writes(1);
+			let swaps = SwapQueue::<T>::take();
+			let mut used_weight = T::DbWeight::get().reads(1);
 
 			let swap_groups = Self::group_swaps_by_asset_pair(swaps);
 			let mut unexecuted = vec![];
@@ -139,7 +139,10 @@ pub mod pallet {
 				}
 			}
 
-			SwapQueue::<T>::put(unexecuted);
+			if !unexecuted.is_empty() {
+				SwapQueue::<T>::put(unexecuted);
+				used_weight.saturating_accrue(T::DbWeight::get().writes(1));
+			}
 			used_weight
 		}
 	}
