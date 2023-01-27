@@ -33,6 +33,16 @@ pub enum ChainTag {
 	Sui = 0x0002,
 }
 
+impl Display for ChainTag {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			ChainTag::Ethereum => write!(f, "Ethereum"),
+			ChainTag::Polkadot => write!(f, "Polkadot"),
+			ChainTag::Sui => write!(f, "Sui"),
+		}
+	}
+}
+
 impl ChainTag {
 	pub const fn to_bytes(self) -> [u8; CHAIN_TAG_SIZE] {
 		(self as u16).to_be_bytes()

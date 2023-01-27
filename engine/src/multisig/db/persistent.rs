@@ -11,7 +11,7 @@ use crate::{
 	multisig::{
 		client::KeygenResultInfo,
 		crypto::{CryptoScheme, CHAIN_TAG_SIZE},
-		KeyId,
+		ChainTag, KeyId,
 	},
 	witnesser::checkpointing::WitnessedUntil,
 };
@@ -197,24 +197,24 @@ impl PersistentKeyDB {
 	}
 
 	/// Write the witnesser checkpoint to the db
-	pub fn update_checkpoint<C: CryptoScheme>(&self, checkpoint: &WitnessedUntil) {
+	pub fn update_checkpoint(&self, chain_tag: ChainTag, checkpoint: &WitnessedUntil) {
 		self.db
 			.put_cf(
 				get_data_column_handle(&self.db),
-				get_checkpoint_prefix::<C>(),
+				get_checkpoint_prefix(chain_tag),
 				bincode::serialize(checkpoint).expect("Should serialize WitnessedUntil checkpoint"),
 			)
 			.unwrap_or_else(|e| {
-				panic!("Failed to update {} witnesser checkpoint. Error: {e}", C::NAME)
+				panic!("Failed to update {chain_tag} witnesser checkpoint. Error: {e}")
 			});
 	}
 
-	pub fn load_checkpoint<C: CryptoScheme>(&self) -> Result<Option<WitnessedUntil>> {
+	pub fn load_checkpoint(&self, chain_tag: ChainTag) -> Result<Option<WitnessedUntil>> {
 		self.db
-			.get_cf(get_data_column_handle(&self.db), get_checkpoint_prefix::<C>())?
+			.get_cf(get_data_column_handle(&self.db), get_checkpoint_prefix(chain_tag))?
 			.map(|data| {
 				bincode::deserialize::<WitnessedUntil>(&data).map_err(|e| {
-					anyhow!("Could not deserialize {} WitnessedUntil checkpoint: {e}", C::NAME)
+					anyhow!("Could not deserialize {chain_tag} WitnessedUntil checkpoint: {e}")
 				})
 			})
 			.transpose()
@@ -225,8 +225,8 @@ fn get_keygen_data_prefix<C: CryptoScheme>() -> Vec<u8> {
 	[&KEYGEN_DATA_PARTIAL_PREFIX[..], &(C::CHAIN_TAG.to_bytes())[..]].concat()
 }
 
-fn get_checkpoint_prefix<C: CryptoScheme>() -> Vec<u8> {
-	[WITNESSER_CHECKPOINT_PARTIAL_PREFIX, &(C::CHAIN_TAG.to_bytes())[..]].concat()
+fn get_checkpoint_prefix(chain_tag: ChainTag) -> Vec<u8> {
+	[WITNESSER_CHECKPOINT_PARTIAL_PREFIX, &(chain_tag.to_bytes())[..]].concat()
 }
 
 // Creates a backup of the database folder to BACKUPS_DIRECTORY/backup_vx_xx_xx
