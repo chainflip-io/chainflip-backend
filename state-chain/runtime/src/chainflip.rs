@@ -208,7 +208,7 @@ impl RewardsDistribution for BlockAuthorRewardDistribution {
 			if let Some(current_block_author) = Authorship::author() {
 				Flip::settle(&current_block_author, Self::Issuance::mint(reward_amount).into());
 			} else {
-				log::warn!("No block author block {}.", System::current_block_number());
+				log::warn!("No block author for block {}.", System::current_block_number());
 			}
 		}
 	}
