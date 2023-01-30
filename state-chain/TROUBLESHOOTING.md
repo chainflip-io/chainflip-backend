@@ -12,31 +12,39 @@ As of yet there is no real structure - this isn't intended to be a document to r
 
 First, build the runtime node with all features enabled:
 
+> *Note: you need to tweak the `spec_version` of the local runtime to match that of the remote chain.*
+
 ```sh
 cargo build --release --all-features
 ```
 
-Then run a variation of the following command.
+It's theoretically possible to connect to a remote rpc node to download the state for the try-runtime checks, but a much faster method is to run a local rpc node and connect to that instead.
+
+For example, for perseverance, first connect a local node to the network with some rpc optimisations:
 
 ```sh
-./target/release/chainflip-node try-runtime \
-    --execution Native \
-    --chain paradise \
-    --url wss://bashful-release.chainflip.xyz \
-    --block-at <SET TO A RECENT BLOCK ON CHAIN UPGRADING FROM> \
-        on-runtime-upgrade live \
-            --snapshot-path .state-snapshot
+# Purge any pre-existing chain state.
+./target/release/chainflip-node purge-chain --chain ./state-chain/node/chainspecs/perseverance.chainspec.raw.json
+
+# Sync a fresh copy of the latest perseverance state.
+./target/release/chainflip-node \
+    --chain ./state-chain/node/chainspecs/perseverance.chainspec.raw.json 
+    --sync warp \
+    --rpc-max-request-size 100000 \
+    --rpc-max-response-size 100000 \
+    --rpc-external \
+    --rpc-cors all \
+    --unsafe-ws-external
 ```
 
-To save time, you can then use the state snapshot in subsequent runs:
+Once the node has synced, in another terminal window, run the checks:
 
 ```sh
-./target/release/chainflip-node try-runtime \
-    --execution Native \
-    --block-at <SET TO A RECENT BLOCK ON CHAIN UPGRADING FROM> \
-        on-runtime-upgrade snap \
-            --snapshot-path .state-snapshot
+./target/release/chainflip-node try-runtime --execution native \
+    on-runtime-upgrade live --uri wss://perseverance-rpc.chainflip.io:9944
 ```
+
+> *Note: Using `--execution native` ensures faster execution and also prevents log messages from being scrubbed.
 
 ### General tips and guidelines
 
@@ -139,7 +147,7 @@ To execute the benchmarks as tests run:
 cargo cf-test-all
 ```
 
-> **_NOTE:_**  When you run your benchmark with the tests it's **NOT** running against the runtime but the mocks. If you make different assumptions in your mock it can be possible that the tests will fail.
+> **NOTE:**  When you run your benchmark with the tests it's **NOT** running against the runtime but against the mocks. If the behaviour of the mocks doesn't match the behaviour of the runtime, it's possible that tests will fail despite benchmarks succeeding, or that benchmarks will fail despite the tests succeeding.
 
 ### Some benchmark reference values
 
@@ -149,13 +157,13 @@ The typical order of magnitude for extrinsic and data access weights is in the m
 
 Typical values for runtime data access speeds for rocksdb are 25µs for a read and 100µs for a write.
 
-Typical values for extrinsic _execution_, ie. not including reads and writes, are around 30µs to 60µs.
+Typical values for extrinsic *execution*, ie. not including reads and writes, are around 30µs to 60µs.
 
-In other words, reads and writes are _expensive_ and writes in particular should be kept to a minimum. A single read is as expensive as a moderately complex extrinsic. We should avoid iterating over storage maps unless the size is tightly bounded.
+In other words, reads and writes are *expensive* and writes in particular should be kept to a minimum. A single read is as expensive as a moderately complex extrinsic. We should avoid iterating over storage maps unless the size is tightly bounded.
 
 ## Runtime Panics
 
-We should always convince ourselves that our runtime code _can't_ panic at runtime. This means thorough testing of the full range of possible inputs to any function that _might_ panic according to the compiler.
+We should always convince ourselves that our runtime code *can't* panic at runtime. This means thorough testing of the full range of possible inputs to any function that *might* panic according to the compiler.
 
 Anywhere we know we can't panic, but the compiler can't guarantee it, it's acceptable to follow parity's conventions of using `expect("reason why this can't panic")`.
 
@@ -164,7 +172,7 @@ There are grey areas. For example, it's acceptable to panic on any condition tha
 ### Benchmark whitelist
 
 When writing benchmarks, storage keys can be •whitelisted• for reads and/or writes, meaning reading/writing to the
-whitelisted key is ignored. This is confusing since mostly this is used in the context of whitelisting _account_
+whitelisted key is ignored. This is confusing since mostly this is used in the context of whitelisting *account*
 storage, which is easy to confuse with whitelisting the actual account.
 
 See [this PR](https://github.com/paritytech/substrate/pull/6815) for a decent explanation.
@@ -213,11 +221,12 @@ Substrate storage has 4 layers that work together to facilitate storage read/wri
 /// Remove all values under the first key `k1` in the overlay and up to `maybe_limit` in the backend.
 /// All values in the client overlay will be deleted, if `maybe_limit` is `Some` then up to that number of values are deleted from the client backend, otherwise all values in the client backend are deleted.
 fn clear_prefix<KArg1>(
-	k1: KArg1,
-	limit: u32,
-	maybe_cursor: Option<&[u8]>,
+ k1: KArg1,
+ limit: u32,
+ maybe_cursor: Option<&[u8]>,
 ) -> sp_io::MultiRemovalResults
 ```
+
 **prefix**: the first Key value in which you want all the data to be cleaned up
 
 **limit**: max number of data to be deleted from the *Backend*
@@ -226,20 +235,22 @@ fn clear_prefix<KArg1>(
 
 ``` rust
 pub struct MultiRemovalResults {
-	/// A continuation cursor which, if `Some` must be provided to the subsequent removal call.
-	/// If `None` then all removals are complete and no further calls are needed.
-	pub maybe_cursor: Option<Vec<u8>>,
-	/// The number of items removed from the backend database.
-	pub backend: u32,
-	/// The number of unique keys removed, taking into account both the backend and the overlay.
-	pub unique: u32,
-	/// The number of iterations (each requiring a storage seek/read) which were done.
-	pub loops: u32,
+ /// A continuation cursor which, if `Some` must be provided to the subsequent removal call.
+ /// If `None` then all removals are complete and no further calls are needed.
+ pub maybe_cursor: Option<Vec<u8>>,
+ /// The number of items removed from the backend database.
+ pub backend: u32,
+ /// The number of unique keys removed, taking into account both the backend and the overlay.
+ pub unique: u32,
+ /// The number of iterations (each requiring a storage seek/read) which were done.
+ pub loops: u32,
 }
 ```
+
 Note: At the time of writing, backend, unique and loops all return the same thing.
 
 ### Example Usage
+
 In a usual unit test, the whole test is done within the same block.
 Storage modified are stored on the Overlay Change Set. e.g.
 
@@ -253,39 +264,42 @@ assert!(Data::<T>::get(1, Alice), None);
 assert!(Data::<T>::get(1, BOB), None);
 ```
 
-Even if `limit` is set as 0, both entries are still deleted. 
+Even if `limit` is set as 0, both entries are still deleted.
 To be able to test deletion in the backend database, the change overlay will have to be committed into the DB. This can be done with `ext.commit_all()`
 
 ``` rust
 let mut ext = new_test_ext();
 ext.execute_with(|| {
-	// Data modification to the Overlay Change Set
-	Data::<T>::insert(1, Alice, 100);
-	Data::<T>::insert(1, BOB, 33);
+ // Data modification to the Overlay Change Set
+ Data::<T>::insert(1, Alice, 100);
+ Data::<T>::insert(1, BOB, 33);
 });
 
 // Commit the changeset to the DB backend
 let _ = ext.commit_all();
 
 ext.execute_with(|| {
-	// Test deletion of backend DB entries
-	let res = Data::clear_prefix(1, 1, None);
-	// res.maybe_cursor == ptr(1, BOB), res.unique = 1;
-	assert!(Data::<T>::get(1, Alice), None);
-	assert!(Data::<T>::get(1, BOB), Some(33));
+ // Test deletion of backend DB entries
+ let res = Data::clear_prefix(1, 1, None);
+ // res.maybe_cursor == ptr(1, BOB), res.unique = 1;
+ assert!(Data::<T>::get(1, Alice), None);
+ assert!(Data::<T>::get(1, BOB), Some(33));
 });
 ```
 
 ### Summary TL;DR
-* How clear_prefix works is a demonstrate on how Overlay Change Set interacts with the Backend DB.
-* If you need to test backend DB deletion you can use `ext.commit_all();` to manually push your changeset into the backend.
+
+- How clear_prefix works is a demonstrate on how Overlay Change Set interacts with the Backend DB.
+
+- If you need to test backend DB deletion you can use `ext.commit_all();` to manually push your changeset into the backend.
 
 ### Reference
+
 clear_prefix docs:
-https://github.com/paritytech/substrate/blob/dc45cc29167ee6358b527f3a0bcc0617dc9e4c99/frame/support/src/storage/mod.rs#L534
+<https://github.com/paritytech/substrate/blob/dc45cc29167ee6358b527f3a0bcc0617dc9e4c99/frame/support/src/storage/mod.rs#L534>
 
 Storage PDF:
-https://www.shawntabrizi.com/assets/presentations/substrate-storage-deep-dive.pdf
+<https://www.shawntabrizi.com/assets/presentations/substrate-storage-deep-dive.pdf>
 
 commit_all() doc and impl:
-https://github.com/paritytech/substrate/blob/a5f349ba9620979c3c95b65547ffd106d9660d9d/primitives/state-machine/src/testing.rs#L379
+<https://github.com/paritytech/substrate/blob/a5f349ba9620979c3c95b65547ffd106d9660d9d/primitives/state-machine/src/testing.rs#L379>
