@@ -109,47 +109,48 @@ async fn create_witnessers(
 		.collect()
 	}
 
-	let flip_witnesser = Erc20Witnesser::new(
-		state_chain_client
-			.storage_map_entry::<pallet_cf_environment::EthereumSupportedAssets<state_chain_runtime::Runtime>>(
-				latest_block_hash,
-				&Asset::Flip,
-			)
-			.await
-			.context("Failed to get FLIP address from SC")?
-			.expect("FLIP address must exist at genesis")
-			.into(),
-		assets::eth::Asset::Flip,
-		monitored_addresses_from_all_eth(&eth_chain_ingress_addresses, assets::eth::Asset::Flip),
-		flip_address_receiver,
-	);
-
 	let flip_contract_witnesser = ContractWitnesser::new(
-		flip_witnesser,
+		Erc20Witnesser::new(
+			state_chain_client
+				.storage_map_entry::<pallet_cf_environment::EthereumSupportedAssets<state_chain_runtime::Runtime>>(
+					latest_block_hash,
+					&Asset::Flip,
+				)
+				.await
+				.context("Failed to get FLIP address from SC")?
+				.expect("FLIP address must exist at genesis")
+				.into(),
+			assets::eth::Asset::Flip,
+			monitored_addresses_from_all_eth(
+				&eth_chain_ingress_addresses,
+				assets::eth::Asset::Flip,
+			),
+			flip_address_receiver,
+		),
 		state_chain_client.clone(),
 		eth_dual_rpc.clone(),
 		false,
 		logger,
 	);
 
-	let usdc_contract_address = state_chain_client
-		.storage_map_entry::<pallet_cf_environment::EthereumSupportedAssets<state_chain_runtime::Runtime>>(
-			latest_block_hash,
-			&Asset::Usdc,
-		)
-		.await
-		.context("Failed to get USDC address from SC")?
-		.expect("USDC address must exist at genesis");
-
-	let usdc_witnesser = Erc20Witnesser::new(
-		usdc_contract_address.into(),
-		assets::eth::Asset::Usdc,
-		monitored_addresses_from_all_eth(&eth_chain_ingress_addresses, assets::eth::Asset::Usdc),
-		usdc_address_receiver,
-	);
-
 	let usdc_contract_witnesser = ContractWitnesser::new(
-		usdc_witnesser,
+		Erc20Witnesser::new(
+			state_chain_client
+				.storage_map_entry::<pallet_cf_environment::EthereumSupportedAssets<state_chain_runtime::Runtime>>(
+					latest_block_hash,
+					&Asset::Usdc,
+				)
+				.await
+				.context("Failed to get USDC address from SC")?
+				.expect("USDC address must exist at genesis")
+				.into(),
+			assets::eth::Asset::Usdc,
+			monitored_addresses_from_all_eth(
+				&eth_chain_ingress_addresses,
+				assets::eth::Asset::Usdc,
+			),
+			usdc_address_receiver,
+		),
 		state_chain_client.clone(),
 		eth_dual_rpc.clone(),
 		false,
