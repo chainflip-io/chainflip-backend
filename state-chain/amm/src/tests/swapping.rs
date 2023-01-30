@@ -460,9 +460,9 @@ fn test_swaps_with_pool_configs() {
 			assert!(
 				catch_unwind(do_checks).is_ok(),
 				r#"
-                Test case failed for swap {:?} for pool[{pool_index}] {:#?}
-                Expected output: {:#?}
-                "#,
+				Test case failed for swap {:?} for pool[{pool_index}] {:#?}
+				Expected output: {:#?}
+				"#,
 				(swap_amount, input_side),
 				pool,
 				expected_output[output_index],
