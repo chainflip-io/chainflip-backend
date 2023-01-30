@@ -58,19 +58,6 @@ pub const MAX_TICK_LOW: Tick = -MIN_TICK_LOW;
 pub const MAX_TICK_MEDIUM: Tick = -MIN_TICK_MEDIUM;
 pub const MAX_TICK_HIGH: Tick = -MIN_TICK_HIGH;
 
-#[derive(Clone)]
-struct PoolConfig {
-	pub fee_amount: u32,
-	pub tick_spacing: i32,
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, PartialOrd, Eq, Ord)]
-enum PoolType {
-	Low,
-	Medium,
-	High,
-}
-
 struct PositionParams {
 	pub lower_tick: Tick,
 	pub upper_tick: Tick,
@@ -110,20 +97,20 @@ fn test_swaps_with_pool_configs() {
 		_ => panic!("Unexpected JSON format"),
 	};
 
-	let pool_configs = BTreeMap::<PoolType, PoolConfig>::from_iter([
-		(PoolType::Low, PoolConfig { fee_amount: 500, tick_spacing: 10 }),
-		(PoolType::Medium, PoolConfig { fee_amount: 3000, tick_spacing: 60 }),
-		(PoolType::High, PoolConfig { fee_amount: 10000, tick_spacing: 200 }),
-	]);
+	const LOW_FEE: u32 = 500;
+	const MEDIUM_FEE: u32 = 3_000;
+	const HIGH_FEE: u32 = 10_000;
+	const LOW_TICK_SPACING: i32 = 10;
+	const MEDIUM_TICK_SPACING: i32 = 60;
+	const _HIGH_TICK_SPACING: i32 = 200;
 
 	fn setup_pool(
-		initial_price: &str,
+		initial_price: AmountU256,
 		fee_amount: u32,
 		positions: Vec<PositionParams>,
 	) -> (PoolState, PoolAssetMap<AmountU256>) {
 		// encodeSqrtPrice (1,10) -> 25054144837504793118650146401
-		let mut pool =
-			PoolState::new(fee_amount / 10, U256::from_dec_str(initial_price).unwrap()).unwrap();
+		let mut pool = PoolState::new(fee_amount / 10, initial_price).unwrap();
 		const ID: [u8; 32] = [0xcf; 32];
 
 		let mut amounts_minted: PoolAssetMap<AmountU256> = Default::default();
@@ -147,8 +134,8 @@ fn test_swaps_with_pool_configs() {
 	}
 
 	let pool_0 = setup_pool(
-		"79228162514264337593543950336", //encodeSqrtPrice (1,1)
-		pool_configs[&PoolType::Low].clone().fee_amount,
+		encodedprice1_1(),
+		LOW_FEE,
 		vec![PositionParams {
 			lower_tick: MIN_TICK_LOW,
 			upper_tick: MAX_TICK_LOW,
@@ -156,8 +143,8 @@ fn test_swaps_with_pool_configs() {
 		}],
 	);
 	let pool_1 = setup_pool(
-		"79228162514264337593543950336", //encodeSqrtPrice (1,1)
-		pool_configs[&PoolType::Medium].clone().fee_amount,
+		encodedprice1_1(),
+		MEDIUM_FEE,
 		vec![PositionParams {
 			lower_tick: MIN_TICK_MEDIUM,
 			upper_tick: MAX_TICK_MEDIUM,
@@ -165,8 +152,8 @@ fn test_swaps_with_pool_configs() {
 		}],
 	);
 	let pool_2 = setup_pool(
-		"79228162514264337593543950336", //encodeSqrtPrice (1,1)
-		pool_configs[&PoolType::High].clone().fee_amount,
+		encodedprice1_1(),
+		HIGH_FEE,
 		vec![PositionParams {
 			lower_tick: MIN_TICK_HIGH,
 			upper_tick: MAX_TICK_HIGH,
@@ -174,8 +161,8 @@ fn test_swaps_with_pool_configs() {
 		}],
 	);
 	let pool_3 = setup_pool(
-		"250541448375047931186413801569", //encodeSqrtPrice (10,1)
-		pool_configs[&PoolType::Medium].clone().fee_amount,
+		U256::from_dec_str("250541448375047931186413801569").unwrap(), //encodeSqrtPrice (10,1)
+		MEDIUM_FEE,
 		vec![PositionParams {
 			lower_tick: MIN_TICK_MEDIUM,
 			upper_tick: MAX_TICK_MEDIUM,
@@ -183,8 +170,8 @@ fn test_swaps_with_pool_configs() {
 		}],
 	);
 	let pool_4 = setup_pool(
-		"25054144837504793118650146401", //encodeSqrtPrice (1,10)
-		pool_configs[&PoolType::Medium].clone().fee_amount,
+		U256::from_dec_str("25054144837504793118650146401").unwrap(), //encodeSqrtPrice (1,10)
+		MEDIUM_FEE,
 		vec![PositionParams {
 			lower_tick: MIN_TICK_MEDIUM,
 			upper_tick: MAX_TICK_MEDIUM,
@@ -192,24 +179,24 @@ fn test_swaps_with_pool_configs() {
 		}],
 	);
 	let pool_5 = setup_pool(
-		"79228162514264337593543950336", //encodeSqrtPrice (1,1)
-		pool_configs[&PoolType::Medium].clone().fee_amount,
+		encodedprice1_1(),
+		MEDIUM_FEE,
 		vec![
 			PositionParams {
 				lower_tick: MIN_TICK_MEDIUM,
-				upper_tick: -pool_configs[&PoolType::Medium].tick_spacing,
+				upper_tick: -MEDIUM_TICK_SPACING,
 				liquidity: 2_000_000_000_000_000_000,
 			},
 			PositionParams {
-				lower_tick: pool_configs[&PoolType::Medium].tick_spacing,
+				lower_tick: MEDIUM_TICK_SPACING,
 				upper_tick: MAX_TICK_MEDIUM,
 				liquidity: 2_000_000_000_000_000_000,
 			},
 		],
 	);
 	let pool_6 = setup_pool(
-		"79228162514264337593543950336", //encodeSqrtPrice (1,1)
-		pool_configs[&PoolType::Medium].clone().fee_amount,
+		encodedprice1_1(),
+		MEDIUM_FEE,
 		vec![
 			PositionParams {
 				lower_tick: MIN_TICK_MEDIUM,
@@ -218,46 +205,46 @@ fn test_swaps_with_pool_configs() {
 			},
 			PositionParams {
 				lower_tick: MIN_TICK_MEDIUM,
-				upper_tick: -pool_configs[&PoolType::Medium].tick_spacing,
+				upper_tick: -MEDIUM_TICK_SPACING,
 				liquidity: 2_000_000_000_000_000_000,
 			},
 			PositionParams {
-				lower_tick: pool_configs[&PoolType::Medium].tick_spacing,
+				lower_tick: MEDIUM_TICK_SPACING,
 				upper_tick: MAX_TICK_MEDIUM,
 				liquidity: 2_000_000_000_000_000_000,
 			},
 		],
 	);
 	let pool_7 = setup_pool(
-		"79228162514264337593543950336", //encodeSqrtPrice (1,1)
-		pool_configs[&PoolType::Low].clone().fee_amount,
+		encodedprice1_1(),
+		LOW_FEE,
 		vec![PositionParams {
-			lower_tick: -pool_configs[&PoolType::Low].tick_spacing,
-			upper_tick: pool_configs[&PoolType::Low].tick_spacing,
+			lower_tick: -LOW_TICK_SPACING,
+			upper_tick: LOW_TICK_SPACING,
 			liquidity: 2_000_000_000_000_000_000,
 		}],
 	);
 	let pool_8 = setup_pool(
-		"79228162514264337593543950336", //encodeSqrtPrice (1,1)
-		pool_configs[&PoolType::Medium].clone().fee_amount,
+		encodedprice1_1(),
+		MEDIUM_FEE,
 		vec![PositionParams {
 			lower_tick: 0,
-			upper_tick: 2000 * pool_configs[&PoolType::Medium].tick_spacing,
+			upper_tick: 2000 * MEDIUM_TICK_SPACING,
 			liquidity: 2_000_000_000_000_000_000,
 		}],
 	);
 	let pool_9 = setup_pool(
-		"79228162514264337593543950336", //encodeSqrtPrice (1,1)
-		pool_configs[&PoolType::Medium].clone().fee_amount,
+		encodedprice1_1(),
+		MEDIUM_FEE,
 		vec![PositionParams {
-			lower_tick: -2000 * pool_configs[&PoolType::Medium].tick_spacing,
+			lower_tick: -2000 * MEDIUM_TICK_SPACING,
 			upper_tick: 0,
 			liquidity: 2_000_000_000_000_000_000,
 		}],
 	);
 	let pool_10 = setup_pool(
-		"1033437718471923701407239276819587054334136928048", //encodeSqrtPrice (2**127,1)
-		pool_configs[&PoolType::Medium].clone().fee_amount,
+		U256::from_dec_str("1033437718471923701407239276819587054334136928048").unwrap(), /* encodeSqrtPrice (2**127,1) */
+		MEDIUM_FEE,
 		vec![PositionParams {
 			lower_tick: MIN_TICK_MEDIUM,
 			upper_tick: MAX_TICK_MEDIUM,
@@ -265,8 +252,8 @@ fn test_swaps_with_pool_configs() {
 		}],
 	);
 	let pool_11 = setup_pool(
-		"6085630636", //encodeSqrtPrice (1,2**127)
-		pool_configs[&PoolType::Medium].clone().fee_amount,
+		U256::from_dec_str("6085630636").unwrap(), //encodeSqrtPrice (1,2**127)
+		MEDIUM_FEE,
 		vec![PositionParams {
 			lower_tick: MIN_TICK_MEDIUM,
 			upper_tick: MAX_TICK_MEDIUM,
@@ -277,8 +264,8 @@ fn test_swaps_with_pool_configs() {
 	// (MAX_LIQUIDITY_PER_TICK is too big
 
 	let pool_13 = setup_pool(
-		"1461446703485210103287273052203988822378723970341", // MaxSqrtRatio - 1
-		pool_configs[&PoolType::Medium].clone().fee_amount,
+		U256::from_dec_str("1461446703485210103287273052203988822378723970341").unwrap(), /* MaxSqrtRatio - 1 */
+		MEDIUM_FEE,
 		vec![PositionParams {
 			lower_tick: MIN_TICK_MEDIUM,
 			upper_tick: MAX_TICK_MEDIUM,
@@ -286,8 +273,8 @@ fn test_swaps_with_pool_configs() {
 		}],
 	);
 	let pool_14 = setup_pool(
-		"4295128739", // MinSqrtRatio
-		pool_configs[&PoolType::Medium].clone().fee_amount,
+		U256::from_dec_str("4295128739").unwrap(), // MinSqrtRatio
+		MEDIUM_FEE,
 		vec![PositionParams {
 			lower_tick: MIN_TICK_MEDIUM,
 			upper_tick: MAX_TICK_MEDIUM,
