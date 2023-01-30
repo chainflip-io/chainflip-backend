@@ -21,6 +21,7 @@ state-chain-runtime = { path = '../runtime'}
 cf-traits = { path = '../traits'}
 cf-primitives = { path = '../primitives' }
 cf-chains = { path = '../chains', features = ['runtime-integration-tests']}
+cf-test-utilities = { path = '../test-utilities' }
 pallet-cf-validator = { path = '../pallets/cf-validator'}
 pallet-cf-staking = { path = '../pallets/cf-staking'}
 pallet-cf-witnesser = { path = '../pallets/cf-witnesser'}
