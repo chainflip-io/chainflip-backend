@@ -2,8 +2,8 @@ use crate::{mock::*, Error, *};
 use cf_test_utilities::last_event;
 use cf_traits::{
 	mocks::{
-		reputation_resetter::MockReputationResetter, system_state_info::MockSystemStateInfo,
-		vault_rotator::MockVaultRotatorA,
+		qualify_node::QualifyAll, reputation_resetter::MockReputationResetter,
+		system_state_info::MockSystemStateInfo, vault_rotator::MockVaultRotatorA,
 	},
 	AuctionOutcome, SystemStateInfo,
 };
@@ -407,6 +407,34 @@ fn register_peer_id() {
 		);
 		assert_eq!(ValidatorPallet::mapped_peer(&bob_peer_public_key), Some(()));
 		assert_eq!(ValidatorPallet::node_peer_id(&BOB), Some((bob_peer_public_key, 40043, 12)));
+	});
+}
+
+#[test]
+fn rerun_auction_if_not_enough_participants() {
+	new_test_ext().execute_with_unchecked_invariants(|| {
+		// Unqualify one of the auction winners
+		QualifyAll::<u64>::except(AUCTION_WINNERS[0]);
+		// Change the auction parameters to simulate a shortage in available candidates
+		assert_ok!(ValidatorPallet::set_auction_parameters(
+			RuntimeOrigin::root(),
+			SetSizeParameters { min_size: 3, max_size: 3, max_expansion: 3 }
+		));
+		// Run to the epoch boundary
+		MockBidderProvider::set_winning_bids();
+		run_to_block(EPOCH_DURATION);
+		// Assert that we still in the idle phase
+		assert!(matches!(CurrentRotationPhase::<Test>::get(), RotationPhase::<Test>::Idle));
+		// Set some over node to requalify the first auction winner
+		QualifyAll::<u64>::except(AUCTION_LOSERS[0]);
+		MockBidderProvider::set_winning_bids();
+		// Run to the next epoch boundary to kick of the next auction
+		run_to_block(EPOCH_DURATION * 2);
+		// Expect a resolved auction and kickedoff key-gen
+		assert!(matches!(
+			CurrentRotationPhase::<Test>::get(),
+			RotationPhase::<Test>::KeygensInProgress(..)
+		));
 	});
 }
 

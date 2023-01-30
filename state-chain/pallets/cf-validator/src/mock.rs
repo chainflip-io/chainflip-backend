@@ -6,7 +6,7 @@ use cf_traits::{
 		qualify_node::QualifyAll, reputation_resetter::MockReputationResetter,
 		system_state_info::MockSystemStateInfo, vault_rotator::MockVaultRotatorA,
 	},
-	Bid, Chainflip, QualifyNode, RuntimeAuctionOutcome,
+	Bid, Chainflip, RuntimeAuctionOutcome,
 };
 use frame_support::{
 	construct_runtime, parameter_types,
@@ -112,6 +112,7 @@ thread_local! {
 	));
 
 	pub static NUMBER_OF_AUCTIONS_ATTEMPTED: RefCell<u8> = RefCell::new(0);
+	pub static IS_QUALIFIED: RefCell<bool> = RefCell::new(true);
 }
 
 impl ValidatorRegistration<ValidatorId> for Test {
@@ -127,15 +128,6 @@ impl EpochTransitionHandler for TestEpochTransitionHandler {
 
 	fn on_new_epoch(_epoch_authorities: &[Self::ValidatorId]) {
 		// nothing
-	}
-}
-
-pub struct MockQualifyValidator;
-impl QualifyNode for MockQualifyValidator {
-	type ValidatorId = ValidatorId;
-
-	fn is_qualified(_validator_id: &Self::ValidatorId) -> bool {
-		true
 	}
 }
 
