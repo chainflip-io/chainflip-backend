@@ -441,6 +441,19 @@ pub mod pallet {
 			Self::deposit_event(Event::<T, I>::BroadcastSuccess { broadcast_id });
 			Ok(().into())
 		}
+
+		#[pallet::weight(0)]
+		pub fn stress_test(origin: OriginFor<T>, how_many: u32) -> DispatchResult {
+			ensure_root(origin)?;
+
+			let payload = PayloadFor::<T, I>::decode(&mut &[0xcf; 32][..])
+				.map_err(|_| Error::<T, I>::InvalidPayload)?;
+			for _ in 0..how_many {
+				T::ThresholdSigner::request_signature(payload.clone());
+			}
+
+			Ok(())
+		}
 	}
 }
 
