@@ -284,11 +284,14 @@ fn test_swaps_with_pool_configs() {
 		}],
 	);
 
-	let mut i = 0;
-	for (mut pool, minted_funds) in [
+	let mut output_index = 0;
+	for (pool_index, (mut pool, minted_funds)) in [
 		pool_10, pool_11, pool_2, pool_13, pool_14, pool_0, pool_7, pool_5, pool_1, pool_6, pool_4,
 		pool_3, pool_8, pool_9,
-	] {
+	]
+	.into_iter()
+	.enumerate()
+	{
 		let pool_initial = pool.clone();
 		for (swap_amount, input_side) in [
 			("1000", PoolSide::Asset0),
@@ -301,29 +304,31 @@ fn test_swaps_with_pool_configs() {
 				PoolSide::Asset0 => pool.swap_from_asset_0_to_asset_1(swap_input),
 				PoolSide::Asset1 => pool.swap_from_asset_1_to_asset_0(swap_input),
 			};
-			// Ok((pool.clone(), swap_input, swap_output))
 
-			// Pools x swapcases combinations that differ from the result in the snapshot
-			// pool 10, 11, 13 and 14. This is when the swap is done across a large range of
-			// ticks, which Solidity does in multiple steps due to the Bitmap implementation.
-			// For small swaps the rounding in each step is quite big which causes the results
-			// to be quite different. In the case of a larger swap the rounding doesn't impact
-			// the result significantly.
-			if i == 0 || i == 5 || i == 12 || i == 17 {
-				i += 1;
-				continue
-			}
-
-			let do_checks = || match &expected_output[i] {
+			let do_checks = || match &expected_output[output_index] {
 				OutputFormats::Format(output) => {
 					assert!(
 						swap_result.is_ok(),
-						"Expected swap {:?} for pool[{i}] {:#?} to succeed, but it failed: {:?}.",
+						"Expected swap {:?} for pool[{pool_index}] {:#?} to succeed, but it failed: {:?}.",
 						(swap_amount, input_side),
 						pool,
 						swap_result
 					);
-					let (swap_output, _) = swap_result.expect("Swap should succeed");
+
+					// Pools x swapcases combinations that differ from the result in the snapshot
+					// pool 10, 11, 13 and 14. This is when the swap is done across a large range of
+					// ticks, which Solidity does in multiple steps due to the Bitmap
+					// implementation. For small swaps the rounding in each step is quite big which
+					// causes the results to be quite different. In the case of a larger swap the
+					// rounding doesn't impact the result significantly.
+					if output_index == 0 ||
+						output_index == 5 || output_index == 12 ||
+						output_index == 17
+					{
+						return
+					}
+
+					let (swap_output, _) = swap_result.unwrap();
 					// Compare tick before and tick after
 					assert_eq!(pool_initial.current_tick, output.tickBefore);
 					assert_eq!(pool.current_tick, output.tickAfter);
@@ -425,7 +430,7 @@ fn test_swaps_with_pool_configs() {
 				OutputFormats::FormatErrors(output) => {
 					assert!(
 						swap_result.is_err(),
-						"Expected swap {:?} for pool[{i}] {:#?} to fail but it succeeded: {:?}.",
+						"Expected swap {:?} for pool[{pool_index}] {:#?} to fail but it succeeded: {:?}.",
 						(swap_amount, input_side),
 						pool,
 						swap_result
@@ -454,12 +459,12 @@ fn test_swaps_with_pool_configs() {
 
 			assert!(
 				catch_unwind(do_checks).is_ok(),
-				"Test case failed for swap {:?} for pool[{i}] {:#?}.",
+				"Test case failed for swap {:?} for pool[{pool_index}] {:#?}.",
 				(swap_amount, input_side),
 				pool
 			);
+
+			output_index += 1;
 		}
-		// Increase expected_output index
-		i += 1;
 	}
 }
