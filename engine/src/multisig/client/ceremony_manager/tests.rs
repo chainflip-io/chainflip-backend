@@ -13,7 +13,7 @@ use crate::{
 			common::{BroadcastFailureReason, SigningFailureReason, SigningStageName},
 			gen_keygen_data_hash_comm1, get_key_data_for_test,
 			helpers::{
-				cause_ceremony_timeout, ACCOUNT_IDS, DEFAULT_KEYGEN_SEED, DEFAULT_SIGNING_SEED,
+				ACCOUNT_IDS, CEREMONY_TIMEOUT_DURATION, DEFAULT_KEYGEN_SEED, DEFAULT_SIGNING_SEED,
 				INITIAL_LATEST_CEREMONY_ID,
 			},
 			keygen::KeygenData,
@@ -298,7 +298,7 @@ async fn should_not_create_unauthorized_ceremony_with_invalid_ceremony_id() {
 	.unwrap_err();
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn should_send_outcome_of_authorised_ceremony() {
 	let (ceremony_request_sender, _incoming_p2p_sender, _outgoing_p2p_receiver) =
 		spawn_ceremony_manager(ACCOUNT_IDS[0].clone(), INITIAL_LATEST_CEREMONY_ID);
@@ -310,8 +310,8 @@ async fn should_send_outcome_of_authorised_ceremony() {
 		INITIAL_LATEST_CEREMONY_ID + 1,
 	);
 
-	// Advance time to cause a timeout, then check that the correct ceremony outcome was received
-	cause_ceremony_timeout().await;
+	// Cause a timeout, then check that the correct ceremony outcome was received
+	tokio::time::sleep(CEREMONY_TIMEOUT_DURATION).await;
 	assert_eq!(
 		result_receiver.try_recv().unwrap(),
 		Err((

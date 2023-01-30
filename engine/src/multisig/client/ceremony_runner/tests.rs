@@ -6,7 +6,7 @@ use crate::{
 			common::SigningStageName,
 			gen_keygen_data_verify_hash_comm2, get_key_data_for_test,
 			helpers::{
-				cause_ceremony_timeout, gen_invalid_keygen_stage_2_state, ACCOUNT_IDS,
+				gen_invalid_keygen_stage_2_state, ACCOUNT_IDS, CEREMONY_TIMEOUT_DURATION,
 				DEFAULT_KEYGEN_SEED, DEFAULT_SIGNING_SEED,
 			},
 			signing::{
@@ -312,16 +312,17 @@ async fn should_ignore_message_from_unexpected_stage() {
 	.await;
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn should_not_timeout_unauthorised_ceremony() {
 	let (task_handle, _channels) = spawn_signing_ceremony_runner();
 
-	// Advance time, then check that the task did not end due to a timeout
-	cause_ceremony_timeout().await;
+	// Wait for long enough to timeout, then check that the task did not end
+	tokio::time::advance(CEREMONY_TIMEOUT_DURATION).await;
+	tokio::time::resume();
 	assert!(!task_handle.is_finished());
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn should_timeout_authorised_ceremony() {
 	let (task_handle, (_message_sender, request_sender, _outcome_receiver)) =
 		spawn_signing_ceremony_runner();
@@ -342,8 +343,8 @@ async fn should_timeout_authorised_ceremony() {
 		.unwrap(),
 	);
 
-	// Advance time, then check that the task was ended due to the timeout
+	// Wait for timeout, then check that the task has ended
 	assert!(!task_handle.is_finished());
-	cause_ceremony_timeout().await;
+	tokio::time::sleep(CEREMONY_TIMEOUT_DURATION).await;
 	assert!(task_handle.is_finished());
 }
