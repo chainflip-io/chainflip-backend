@@ -1,3 +1,5 @@
+use std::panic::catch_unwind;
+
 use super::*;
 use serde::{Deserialize, Serialize};
 
@@ -282,84 +284,25 @@ fn test_swaps_with_pool_configs() {
 		}],
 	);
 
-	let pools = vec![
+	let mut i = 0;
+	for (mut pool, minted_funds) in [
 		pool_10, pool_11, pool_2, pool_13, pool_14, pool_0, pool_7, pool_5, pool_1, pool_6, pool_4,
 		pool_3, pool_8, pool_9,
-	];
+	] {
+		let pool_initial = pool.clone();
+		for (swap_amount, input_side) in [
+			("1000", PoolSide::Asset0),
+			("1000", PoolSide::Asset1),
+			("1000000000000000000", PoolSide::Asset0),
+			("1000000000000000000", PoolSide::Asset1),
+		] {
+			let swap_input = U256::from_dec_str(swap_amount).unwrap();
+			let swap_result = match input_side {
+				PoolSide::Asset0 => pool.swap_from_asset_0_to_asset_1(swap_input),
+				PoolSide::Asset1 => pool.swap_from_asset_1_to_asset_0(swap_input),
+			};
+			// Ok((pool.clone(), swap_input, swap_output))
 
-	let pools_after = pools
-		.iter()
-		.map(|(pool, amount_before)| {
-			// test number 0 (according to order in the snapshots file)
-			let mut pool_after_swap_test_0 = pool.clone();
-			let amount_swap_in_test_0 = vec![U256::from_dec_str("1000").unwrap(), U256::from(0)];
-			let (amount_out_swap_test_0, _) = pool_after_swap_test_0
-				.swap_from_asset_0_to_asset_1(U256::from_dec_str("1000").unwrap())
-				.unwrap();
-			let amount_swap_out_test_0 = vec![U256::from(0), amount_out_swap_test_0];
-
-			// test number 1 (according to order in the snapshots file)
-			let mut pool_after_swap_test_1 = pool.clone();
-			let amount_swap_in_test_1 = vec![U256::from(0), U256::from_dec_str("1000").unwrap()];
-			let (amount_out_swap_test_1, _) = pool_after_swap_test_1
-				.swap_from_asset_1_to_asset_0(U256::from_dec_str("1000").unwrap())
-				.unwrap();
-			let amount_swap_out_test_1 = vec![amount_out_swap_test_1, U256::from(0)];
-
-			// test number 2 (according to order in the snapshots file)
-			let mut pool_after_swap_test_2 = pool.clone();
-			let amount_swap_in_test_2 =
-				vec![U256::from_dec_str("1000000000000000000").unwrap(), U256::from(0)];
-			let (amount_out_swap_test_2, _) = pool_after_swap_test_2
-				.swap_from_asset_0_to_asset_1(U256::from_dec_str("1000000000000000000").unwrap())
-				.unwrap();
-			let amount_swap_out_test_2 = vec![U256::from(0), amount_out_swap_test_2];
-
-			// test number 3 (according to order in the snapshots file)
-			let mut pool_after_swap_test_3 = pool.clone();
-			let amount_swap_in_test_3 =
-				vec![U256::from(0), U256::from_dec_str("1000000000000000000").unwrap()];
-			let (amount_out_swap_test_3, _) = pool_after_swap_test_3
-				.swap_from_asset_1_to_asset_0(U256::from_dec_str("1000000000000000000").unwrap())
-				.unwrap();
-			let amount_swap_out_test_3 = vec![amount_out_swap_test_3, U256::from(0)];
-			vec![
-				(
-					pool.clone(),
-					pool_after_swap_test_0,
-					amount_before,
-					amount_swap_in_test_0,
-					amount_swap_out_test_0,
-				),
-				(
-					pool.clone(),
-					pool_after_swap_test_1,
-					amount_before,
-					amount_swap_in_test_1,
-					amount_swap_out_test_1,
-				),
-				(
-					pool.clone(),
-					pool_after_swap_test_2,
-					amount_before,
-					amount_swap_in_test_2,
-					amount_swap_out_test_2,
-				),
-				(
-					pool.clone(),
-					pool_after_swap_test_3,
-					amount_before,
-					amount_swap_in_test_3,
-					amount_swap_out_test_3,
-				),
-			]
-		})
-		.collect::<Vec<_>>();
-
-	// Check pool results
-	let mut i = 0;
-	for pool_vec in pools_after {
-		for (pool_before, pool_after, amountbefore, amount_swap_in, amount_swap_out) in pool_vec {
 			// Pools x swapcases combinations that differ from the result in the snapshot
 			// pool 10, 11, 13 and 14. This is when the swap is done across a large range of
 			// ticks, which Solidity does in multiple steps due to the Bitmap implementation.
@@ -371,11 +314,19 @@ fn test_swaps_with_pool_configs() {
 				continue
 			}
 
-			match &expected_output[i] {
+			let do_checks = || match &expected_output[i] {
 				OutputFormats::Format(output) => {
+					assert!(
+						swap_result.is_ok(),
+						"Expected swap {:?} for pool[{i}] {:#?} to succeed, but it failed: {:?}.",
+						(swap_amount, input_side),
+						pool,
+						swap_result
+					);
+					let (swap_output, _) = swap_result.expect("Swap should succeed");
 					// Compare tick before and tick after
-					assert_eq!(pool_before.current_tick, output.tickBefore);
-					assert_eq!(pool_after.current_tick, output.tickAfter);
+					assert_eq!(pool_initial.current_tick, output.tickBefore);
+					assert_eq!(pool.current_tick, output.tickAfter);
 
 					// Using assert_approx_equal_percentage to compare floats because the
 					// operations return extra decimals compared to the snapshot. Margin of
@@ -384,14 +335,14 @@ fn test_swaps_with_pool_configs() {
 					// Compare poolPriceBefore.
 					let num_f64 = output.poolPriceBefore.as_str().parse::<f64>().unwrap();
 					let formatted_price = format_price_f64(
-						pool_before.current_sqrt_price.to_string().parse::<f64>().unwrap(),
+						pool_initial.current_sqrt_price.to_string().parse::<f64>().unwrap(),
 					);
 					assert_approx_equal_percentage(num_f64, formatted_price, 1f64);
 
 					// Compare poolPriceAfter.
 					let num_f64 = output.poolPriceAfter.as_str().parse::<f64>().unwrap();
 					let formatted_price = format_price_f64(
-						pool_after.current_sqrt_price.to_string().parse::<f64>().unwrap(),
+						pool.current_sqrt_price.to_string().parse::<f64>().unwrap(),
 					);
 					assert_approx_equal_percentage(num_f64, formatted_price, 1f64);
 
@@ -402,26 +353,26 @@ fn test_swaps_with_pool_configs() {
 						U256::from_dec_str(output.feeGrowthGlobal1X128Delta.as_str()).unwrap();
 
 					assert_approx_equal_percentage_u256(
-						pool_after.global_fee_growth[PoolSide::Asset0] -
-							pool_before.global_fee_growth[PoolSide::Asset0],
+						pool.global_fee_growth[PoolSide::Asset0] -
+							pool_initial.global_fee_growth[PoolSide::Asset0],
 						fee_growth_global_0_snapshot,
 						U256::from(1),
 					);
 					assert_approx_equal_percentage_u256(
-						pool_after.global_fee_growth[PoolSide::Asset1] -
-							pool_before.global_fee_growth[PoolSide::Asset1],
+						pool.global_fee_growth[PoolSide::Asset1] -
+							pool_initial.global_fee_growth[PoolSide::Asset1],
 						fee_growth_global_1_snapshot,
 						U256::from(1),
 					);
 
 					// Compare amount before
 					assert_approx_equal_percentage_u256(
-						amountbefore[PoolSide::Asset0],
+						minted_funds[PoolSide::Asset0],
 						U256::from_dec_str(output.amount0Before.as_str()).unwrap(),
 						U256::from(1),
 					);
 					assert_approx_equal_percentage_u256(
-						amountbefore[PoolSide::Asset1],
+						minted_funds[PoolSide::Asset1],
 						U256::from_dec_str(output.amount1Before.as_str()).unwrap(),
 						U256::from(1),
 					);
@@ -448,10 +399,11 @@ fn test_swaps_with_pool_configs() {
 							output.amount0Delta == "1000" ||
 							output.amount0Delta == "1000000000000000000"
 						{
+							assert!(input_side == PoolSide::Asset0);
 							assert_approx_equal_percentage(
 								output.amount0Delta.to_string().parse::<f64>().unwrap(),
-								amount_swap_in[0].to_string().parse::<f64>().unwrap() -
-									amount_swap_out[0].to_string().parse::<f64>().unwrap(),
+								swap_input.to_string().parse::<f64>().unwrap() -
+									swap_output.to_string().parse::<f64>().unwrap(),
 								1f64,
 							);
 						}
@@ -460,39 +412,54 @@ fn test_swaps_with_pool_configs() {
 							output.amount1Delta == "1000" ||
 							output.amount1Delta == "1000000000000000000"
 						{
+							assert!(input_side == PoolSide::Asset1);
 							assert_approx_equal_percentage(
 								output.amount1Delta.to_string().parse::<f64>().unwrap(),
-								amount_swap_in[1].to_string().parse::<f64>().unwrap() -
-									amount_swap_out[1].to_string().parse::<f64>().unwrap(),
+								swap_input.to_string().parse::<f64>().unwrap() -
+									swap_output.to_string().parse::<f64>().unwrap(),
 								10f64,
 							);
 						}
 					}
 				},
 				OutputFormats::FormatErrors(output) => {
+					assert!(
+						swap_result.is_err(),
+						"Expected swap {:?} for pool[{i}] {:#?} to fail but it succeeded: {:?}.",
+						(swap_amount, input_side),
+						pool,
+						swap_result
+					);
 					// We don't have a sqrtPriceLimitX96 so in our case it won't fail. We still
 					// check the intial values.
-					assert_eq!(pool_before.current_tick, output.tickBefore);
+					assert_eq!(pool_initial.current_tick, output.tickBefore);
 
 					assert_approx_equal_percentage_u256(
-						amountbefore[PoolSide::Asset0],
+						minted_funds[PoolSide::Asset0],
 						U256::from_dec_str(output.poolBalance0.as_str()).unwrap(),
 						U256::from(1),
 					);
 					assert_approx_equal_percentage_u256(
-						amountbefore[PoolSide::Asset1],
+						minted_funds[PoolSide::Asset1],
 						U256::from_dec_str(output.poolBalance1.as_str()).unwrap(),
 						U256::from(1),
 					);
 					let num_f64 = output.poolPriceBefore.as_str().parse::<f64>().unwrap();
 					let formatted_price = format_price_f64(
-						pool_before.current_sqrt_price.to_string().parse::<f64>().unwrap(),
+						pool_initial.current_sqrt_price.to_string().parse::<f64>().unwrap(),
 					);
 					assert_approx_equal_percentage(num_f64, formatted_price, 1f64);
 				},
-			}
-			// Increase expected_output index
-			i += 1;
+			};
+
+			assert!(
+				catch_unwind(do_checks).is_ok(),
+				"Test case failed for swap {:?} for pool[{i}] {:#?}.",
+				(swap_amount, input_side),
+				pool
+			);
 		}
+		// Increase expected_output index
+		i += 1;
 	}
 }
