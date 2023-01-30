@@ -2,11 +2,15 @@ use std::{
 	fmt::Display,
 	ops::{Deref, DerefMut},
 	path::Path,
+	time::Duration,
 };
 
 use anyhow::Context;
-use futures::TryStream;
+use futures::{Future, TryStream};
 use itertools::Itertools;
+use tokio::task::JoinHandle;
+
+use crate::task_scope::Scope;
 
 #[macro_export]
 macro_rules! try_or_throw {
@@ -106,6 +110,88 @@ mod tests {
 			.unwrap();
 		}
 		mutex.lock().await;
+	}
+}
+
+/// Starts a task and restarts if it fails.
+/// If it succeeds it will terminate, and not attempt a restart.
+/// The `StaticState` is used to allow for state to be shared between restarts.
+/// Such as a Receiver a task might need to continue to receive data from some other task,
+/// despite the fact it has been restarted.
+pub async fn start_with_restart_on_failure<StaticState, TaskFut, TaskGenerator>(
+	scope: &Scope<'_, anyhow::Error>,
+	task: TaskGenerator,
+	static_state: StaticState,
+) -> anyhow::Result<()>
+where
+	TaskFut: Future<Output = Result<(), StaticState>> + Send + 'static,
+	StaticState: Send + 'static,
+	TaskGenerator: Fn(StaticState) -> TaskFut + Send + 'static,
+{
+	scope.spawn(async move {
+
+		let mut current_task: Option<JoinHandle<Result<(), StaticState>>> = None;
+		let mut static_state = Some(static_state);
+
+		loop {
+			// Spawn with handle and then wait for future to finish
+			if let Some(current_task) = current_task.take() {
+				match current_task.await.unwrap() {
+					Ok(()) => break Ok(()),
+					Err(state) => {
+						static_state = Some(state);
+                        // give it some time before the next restart
+                        tokio::time::sleep(Duration::from_secs(2)).await;
+					},
+				}
+			}
+
+			// TODO: Use scope when it can accept any errors, not just anyhow errors
+			current_task = Some(tokio::spawn(task(static_state.take().expect("We only get here on error, where we set this. Or on first loop, where we set this."))));
+		}
+	});
+
+	Ok(())
+}
+
+#[cfg(test)]
+mod test_restart_on_failure {
+	use futures::FutureExt;
+
+	use crate::task_scope::task_scope;
+
+	use super::*;
+
+	#[tokio::test(start_paused = true)]
+	async fn test_restart_on_failure() {
+		async fn start_up_some_loop(mut my_state: u32) -> Result<(), u32> {
+			my_state += 1;
+			let mut counter = 0;
+			let end_number = 9;
+			for i in my_state..end_number {
+				counter += 1;
+
+				// will take 4 restarts (i.e. my_state needs to be 5), since each counts from 0
+				// before we get to 9
+				if i == 4 {
+					return Err(my_state)
+				}
+			}
+			assert_eq!(my_state, 5);
+			assert_eq!(counter, end_number - my_state);
+			Ok(())
+		}
+
+		// Ensure the sleeps are run. Doesn't actually sleep for 100 seconds with `start_paused =
+		// true`
+		tokio::time::sleep(Duration::from_secs(100)).await;
+
+		task_scope(|scope| {
+			let value = 0;
+			start_with_restart_on_failure(scope, start_up_some_loop, value).boxed()
+		})
+		.await
+		.unwrap();
 	}
 }
 
