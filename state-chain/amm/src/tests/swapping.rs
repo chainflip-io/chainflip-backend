@@ -285,20 +285,20 @@ fn test_swaps_with_pool_configs() {
 	);
 
 	let mut output_index = 0;
-	for (pool_index, (mut pool, minted_funds)) in [
+	for (pool_index, (pool_initial, minted_funds)) in [
 		pool_10, pool_11, pool_2, pool_13, pool_14, pool_0, pool_7, pool_5, pool_1, pool_6, pool_4,
 		pool_3, pool_8, pool_9,
 	]
 	.into_iter()
 	.enumerate()
 	{
-		let pool_initial = pool.clone();
 		for (swap_amount, input_side) in [
 			("1000", PoolSide::Asset0),
 			("1000", PoolSide::Asset1),
 			("1000000000000000000", PoolSide::Asset0),
 			("1000000000000000000", PoolSide::Asset1),
 		] {
+			let mut pool = pool_initial.clone();
 			let swap_input = U256::from_dec_str(swap_amount).unwrap();
 			let swap_result = match input_side {
 				PoolSide::Asset0 => pool.swap_from_asset_0_to_asset_1(swap_input),
