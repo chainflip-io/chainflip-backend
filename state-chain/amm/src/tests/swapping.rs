@@ -328,7 +328,6 @@ fn test_swaps_with_pool_configs() {
 						return
 					}
 
-					let (swap_output, _) = swap_result.unwrap();
 					// Compare tick before and tick after
 					assert_eq!(pool_initial.current_tick, output.tickBefore);
 					assert_eq!(pool.current_tick, output.tickAfter);
@@ -392,6 +391,7 @@ fn test_swaps_with_pool_configs() {
 					// https://www.notion.so/chainflip/Fallible-swaps-17e5104c3a204323bb271ad6c7cae2e6
 
 					if output.executionPrice != "NaN" {
+						let (swap_output, _) = swap_result.unwrap();
 						// Workaround for swaps that empty the pool that amountIn will be too
 						// much.
 
@@ -459,9 +459,13 @@ fn test_swaps_with_pool_configs() {
 
 			assert!(
 				catch_unwind(do_checks).is_ok(),
-				"Test case failed for swap {:?} for pool[{pool_index}] {:#?}.",
+				r#"
+                Test case failed for swap {:?} for pool[{pool_index}] {:#?}
+                Expected output: {:#?}
+                "#,
 				(swap_amount, input_side),
-				pool
+				pool,
+				expected_output[output_index],
 			);
 
 			output_index += 1;
