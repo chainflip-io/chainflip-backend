@@ -31,13 +31,13 @@ use crate::state_chain_observer::client::storage_api::StorageApi;
 
 use anyhow::Context;
 
-pub type AllWitnessers = (
-	ContractWitnesser<KeyManager, StateChainClient>,
-	ContractWitnesser<StakeManager, StateChainClient>,
-	IngressWitnesser<StateChainClient>,
-	ContractWitnesser<Erc20Witnesser, StateChainClient>,
-	ContractWitnesser<Erc20Witnesser, StateChainClient>,
-);
+pub struct AllWitnessers {
+	pub key_manager: ContractWitnesser<KeyManager, StateChainClient>,
+	pub stake_manager: ContractWitnesser<StakeManager, StateChainClient>,
+	pub eth_ingress: IngressWitnesser<StateChainClient>,
+	pub flip_ingress: ContractWitnesser<Erc20Witnesser, StateChainClient>,
+	pub usdc_ingress: ContractWitnesser<Erc20Witnesser, StateChainClient>,
+}
 
 async fn create_witnessers(
 	state_chain_client: &Arc<StateChainClient>,
@@ -164,13 +164,13 @@ async fn create_witnessers(
 		logger,
 	);
 
-	Ok((
-		key_manager_witnesser,
-		stake_manager_witnesser,
-		ingress_witnesser,
-		flip_contract_witnesser,
-		usdc_contract_witnesser,
-	))
+	Ok(AllWitnessers {
+		key_manager: key_manager_witnesser,
+		stake_manager: stake_manager_witnesser,
+		eth_ingress: ingress_witnesser,
+		flip_ingress: flip_contract_witnesser,
+		usdc_ingress: usdc_contract_witnesser,
+	})
 }
 
 pub async fn start(

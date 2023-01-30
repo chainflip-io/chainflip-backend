@@ -80,9 +80,9 @@ pub async fn start(
 								e
 							);
 							return Err(IngressAddressReceivers {
-								eth: witnessers.2.take_ingress_receiver(),
-								flip: witnessers.3.take_ingress_receiver(),
-								usdc: witnessers.4.take_ingress_receiver(),
+								eth: witnessers.eth_ingress.take_ingress_receiver(),
+								flip: witnessers.flip_ingress.take_ingress_receiver(),
+								usdc: witnessers.usdc_ingress.take_ingress_receiver(),
 							})
 						},
 					};
@@ -106,11 +106,11 @@ pub async fn start(
 					);
 
 					match futures::future::join_all([
-						witnessers.0.process_block(&epoch, &block),
-						witnessers.1.process_block(&epoch, &block),
-						witnessers.2.process_block(&epoch, &block),
-						witnessers.3.process_block(&epoch, &block),
-						witnessers.4.process_block(&epoch, &block),
+						witnessers.key_manager.process_block(&epoch, &block),
+						witnessers.stake_manager.process_block(&epoch, &block),
+						witnessers.eth_ingress.process_block(&epoch, &block),
+						witnessers.flip_ingress.process_block(&epoch, &block),
+						witnessers.usdc_ingress.process_block(&epoch, &block),
 					])
 					.await
 					.into_iter()
@@ -125,9 +125,9 @@ pub async fn start(
 								e
 							);
 							return Err(IngressAddressReceivers {
-								eth: witnessers.2.take_ingress_receiver(),
-								flip: witnessers.3.take_ingress_receiver(),
-								usdc: witnessers.4.take_ingress_receiver(),
+								eth: witnessers.eth_ingress.take_ingress_receiver(),
+								flip: witnessers.flip_ingress.take_ingress_receiver(),
+								usdc: witnessers.usdc_ingress.take_ingress_receiver(),
 							})
 						},
 					}
