@@ -1,13 +1,13 @@
 use state_chain_runtime::AccountId;
+use tracing::warn;
 
 use std::collections::BTreeSet;
 
 use crate::{
 	common::format_iterator,
 	logging::{
-		KEYGEN_CEREMONY_FAILED, KEYGEN_REQUEST_IGNORED, REPORTED_PARTIES_KEY,
-		REQUEST_TO_SIGN_IGNORED, SIGNING_CEREMONY_FAILED, UNAUTHORIZED_KEYGEN_ABORTED,
-		UNAUTHORIZED_SIGNING_ABORTED,
+		KEYGEN_CEREMONY_FAILED, KEYGEN_REQUEST_IGNORED, REQUEST_TO_SIGN_IGNORED,
+		SIGNING_CEREMONY_FAILED, UNAUTHORIZED_KEYGEN_ABORTED, UNAUTHORIZED_SIGNING_ABORTED,
 	},
 };
 
@@ -66,56 +66,55 @@ const REQUEST_TO_SIGN_IGNORED_PREFIX: &str = "Signing request ignored";
 const KEYGEN_REQUEST_IGNORED_PREFIX: &str = "Keygen request ignored";
 
 pub trait CeremonyFailureReason {
-	fn log(&self, reported_parties: &BTreeSet<AccountId>, logger: &slog::Logger);
+	fn log(&self, reported_parties: &BTreeSet<AccountId>);
 }
 
 impl CeremonyFailureReason for SigningFailureReason {
-	fn log(&self, reported_parties: &BTreeSet<AccountId>, logger: &slog::Logger) {
+	fn log(&self, reported_parties: &BTreeSet<AccountId>) {
 		let reported_parties = format_iterator(reported_parties).to_string();
 		match self {
-			SigningFailureReason::BroadcastFailure(_, _) => {
-				slog::warn!(logger, #SIGNING_CEREMONY_FAILED, "{}: {}",SIGNING_CEREMONY_FAILED_PREFIX, self; REPORTED_PARTIES_KEY => reported_parties);
+			SigningFailureReason::BroadcastFailure(_, _) |
+			SigningFailureReason::InvalidSigShare => {
+				warn!(
+					tag = SIGNING_CEREMONY_FAILED,
+					reported_parties = reported_parties,
+					"{SIGNING_CEREMONY_FAILED_PREFIX}: {self}",
+				);
 			},
 			SigningFailureReason::NotParticipatingInUnauthorisedCeremony => {
-				slog::warn!(logger,#UNAUTHORIZED_SIGNING_ABORTED, "{}: {}",SIGNING_CEREMONY_FAILED_PREFIX, self);
+				warn!(
+					tag = UNAUTHORIZED_SIGNING_ABORTED,
+					"{SIGNING_CEREMONY_FAILED_PREFIX}: {self}",
+				);
 			},
-			SigningFailureReason::InvalidParticipants => {
-				slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "{}: {}",REQUEST_TO_SIGN_IGNORED_PREFIX, self);
-			},
-			SigningFailureReason::InvalidSigShare => {
-				slog::warn!(logger, #SIGNING_CEREMONY_FAILED, "{}: {}",SIGNING_CEREMONY_FAILED_PREFIX, self; REPORTED_PARTIES_KEY => reported_parties);
-			},
-			SigningFailureReason::NotEnoughSigners => {
-				slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "{}: {}",REQUEST_TO_SIGN_IGNORED_PREFIX, self);
-			},
+			SigningFailureReason::InvalidParticipants |
+			SigningFailureReason::NotEnoughSigners |
 			SigningFailureReason::UnknownKey => {
-				slog::warn!(logger, #REQUEST_TO_SIGN_IGNORED, "{}: {}",REQUEST_TO_SIGN_IGNORED_PREFIX, self);
+				warn!(tag = REQUEST_TO_SIGN_IGNORED, "{REQUEST_TO_SIGN_IGNORED_PREFIX}: {self}",);
 			},
 		}
 	}
 }
 
 impl CeremonyFailureReason for KeygenFailureReason {
-	fn log(&self, reported_parties: &BTreeSet<AccountId>, logger: &slog::Logger) {
+	fn log(&self, reported_parties: &BTreeSet<AccountId>) {
 		let reported_parties = format_iterator(reported_parties).to_string();
 		match self {
-			KeygenFailureReason::BroadcastFailure(_, _) => {
-				slog::warn!(logger, #KEYGEN_CEREMONY_FAILED, "{}: {}",KEYGEN_CEREMONY_FAILED_PREFIX, self; REPORTED_PARTIES_KEY => reported_parties);
+			KeygenFailureReason::BroadcastFailure(_, _) |
+			KeygenFailureReason::InvalidBlameResponse |
+			KeygenFailureReason::InvalidCommitment |
+			KeygenFailureReason::InvalidComplaint => {
+				warn!(
+					tag = KEYGEN_CEREMONY_FAILED,
+					reported_parties = reported_parties,
+					"{KEYGEN_CEREMONY_FAILED_PREFIX}: {self}",
+				);
 			},
 			KeygenFailureReason::NotParticipatingInUnauthorisedCeremony => {
-				slog::warn!(logger,#UNAUTHORIZED_KEYGEN_ABORTED, "{}: {}",KEYGEN_CEREMONY_FAILED_PREFIX, self);
+				warn!(tag = UNAUTHORIZED_KEYGEN_ABORTED, "{KEYGEN_CEREMONY_FAILED_PREFIX}: {self}",);
 			},
 			KeygenFailureReason::InvalidParticipants => {
-				slog::warn!(logger, #KEYGEN_REQUEST_IGNORED, "{}: {}",KEYGEN_REQUEST_IGNORED_PREFIX, self);
-			},
-			KeygenFailureReason::InvalidBlameResponse => {
-				slog::warn!(logger, #KEYGEN_CEREMONY_FAILED, "{}: {}",KEYGEN_CEREMONY_FAILED_PREFIX, self; REPORTED_PARTIES_KEY => reported_parties);
-			},
-			KeygenFailureReason::InvalidCommitment => {
-				slog::warn!(logger, #KEYGEN_CEREMONY_FAILED, "{}: {}",KEYGEN_CEREMONY_FAILED_PREFIX, self; REPORTED_PARTIES_KEY => reported_parties);
-			},
-			KeygenFailureReason::InvalidComplaint => {
-				slog::warn!(logger, #KEYGEN_CEREMONY_FAILED, "{}: {}",KEYGEN_CEREMONY_FAILED_PREFIX, self; REPORTED_PARTIES_KEY => reported_parties);
+				warn!(tag = KEYGEN_REQUEST_IGNORED, "{KEYGEN_REQUEST_IGNORED_PREFIX}: {self}",);
 			},
 		}
 	}

@@ -2,19 +2,22 @@ use cf_primitives::{AccountId, AuthorityCount};
 use rand_legacy::FromEntropy;
 use std::collections::BTreeSet;
 
-use crate::multisig::{
-	client::{
-		common::{BroadcastFailureReason, KeygenFailureReason, KeygenStageName},
-		helpers::{
-			gen_invalid_keygen_comm1, get_invalid_hash_comm, new_nodes, run_keygen, run_stages,
-			standard_signing, KeygenCeremonyRunner, SigningCeremonyRunner, ACCOUNT_IDS,
-			DEFAULT_KEYGEN_CEREMONY_ID, DEFAULT_SIGNING_CEREMONY_ID,
+use crate::{
+	logging::init_test_logger,
+	multisig::{
+		client::{
+			common::{BroadcastFailureReason, KeygenFailureReason, KeygenStageName},
+			helpers::{
+				gen_invalid_keygen_comm1, get_invalid_hash_comm, new_nodes, run_keygen, run_stages,
+				standard_signing, KeygenCeremonyRunner, SigningCeremonyRunner, ACCOUNT_IDS,
+				DEFAULT_KEYGEN_CEREMONY_ID, DEFAULT_SIGNING_CEREMONY_ID,
+			},
+			keygen::{self, Complaints6, VerifyComplaints7, VerifyHashComm2},
+			utils::PartyIdxMapping,
 		},
-		keygen::{self, Complaints6, VerifyComplaints7, VerifyHashComm2},
-		utils::PartyIdxMapping,
+		crypto::Rng,
+		CryptoScheme,
 	},
-	crypto::Rng,
-	CryptoScheme,
 };
 
 use crate::multisig::crypto::eth::Point;
@@ -37,6 +40,7 @@ async fn happy_path_results_in_valid_key() {
 /// share, so the ceremony should be successful in the end
 #[tokio::test]
 async fn should_enter_blaming_stage_on_invalid_secret_shares() {
+	init_test_logger();
 	let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
 	let messages = ceremony.request().await;
@@ -72,6 +76,7 @@ async fn should_enter_blaming_stage_on_invalid_secret_shares() {
 
 #[tokio::test]
 async fn should_enter_blaming_stage_on_timeout_secret_shares() {
+	init_test_logger();
 	let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
 	let messages = ceremony.request().await;
@@ -108,6 +113,7 @@ async fn should_enter_blaming_stage_on_timeout_secret_shares() {
 /// parties reported
 #[tokio::test]
 async fn should_report_on_invalid_blame_response6() {
+	init_test_logger();
 	let mut ceremony = KeygenCeremonyRunner::new_with_default();
 	let party_idx_mapping =
 		PartyIdxMapping::from_participants(BTreeSet::from_iter(ceremony.nodes.keys().cloned()));
@@ -159,6 +165,7 @@ async fn should_report_on_invalid_blame_response6() {
 /// get reported.
 #[tokio::test]
 async fn should_report_on_incomplete_blame_response() {
+	init_test_logger();
 	let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
 	let [bad_node_id_1, target_node_id] = ceremony.select_account_ids();
@@ -198,6 +205,7 @@ async fn should_report_on_incomplete_blame_response() {
 // Fail on `verify_broadcasts` during `VerifyCommitmentsBroadcast2`
 #[tokio::test]
 async fn should_report_on_inconsistent_broadcast_comm1() {
+	init_test_logger();
 	let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
 	let messages = ceremony.request().await;
@@ -228,6 +236,7 @@ async fn should_report_on_inconsistent_broadcast_comm1() {
 
 #[tokio::test]
 async fn should_report_on_inconsistent_broadcast_hash_comm1a() {
+	init_test_logger();
 	let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
 	let mut messages = ceremony.request().await;
@@ -260,6 +269,7 @@ async fn should_report_on_inconsistent_broadcast_hash_comm1a() {
 // those parties reported.
 #[tokio::test]
 async fn should_report_on_invalid_hash_comm1a() {
+	init_test_logger();
 	let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
 	let messages = ceremony.request().await;
@@ -290,6 +300,7 @@ async fn should_report_on_invalid_hash_comm1a() {
 
 #[tokio::test]
 async fn should_report_on_inconsistent_broadcast_complaints4() {
+	init_test_logger();
 	let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
 	let messages = ceremony.request().await;
@@ -330,6 +341,7 @@ async fn should_report_on_inconsistent_broadcast_complaints4() {
 
 #[tokio::test]
 async fn should_report_on_inconsistent_broadcast_blame_responses6() {
+	init_test_logger();
 	let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
 	let party_idx_mapping =
@@ -391,6 +403,7 @@ async fn should_report_on_inconsistent_broadcast_blame_responses6() {
 // Fail on `validate_commitments` during `VerifyCommitmentsBroadcast2`.
 #[tokio::test]
 async fn should_report_on_invalid_comm1() {
+	init_test_logger();
 	let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
 	let messages = ceremony.request().await;
@@ -421,6 +434,7 @@ async fn should_report_on_invalid_comm1() {
 
 #[tokio::test]
 async fn should_report_on_invalid_complaints4() {
+	init_test_logger();
 	let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
 	let messages = ceremony.request().await;
@@ -463,6 +477,7 @@ mod timeout {
 
 		#[tokio::test]
 		async fn should_recover_if_party_appears_offline_to_minority_stage1a() {
+			init_test_logger();
 			let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
 			let mut messages = ceremony.request().await;
@@ -493,6 +508,7 @@ mod timeout {
 
 		#[tokio::test]
 		async fn should_recover_if_party_appears_offline_to_minority_stage1() {
+			init_test_logger();
 			let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
 			let messages = ceremony.request().await;
@@ -519,6 +535,7 @@ mod timeout {
 
 		#[tokio::test]
 		async fn should_recover_if_party_appears_offline_to_minority_stage4() {
+			init_test_logger();
 			let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
 			let messages = ceremony.request().await;
@@ -551,6 +568,7 @@ mod timeout {
 
 		#[tokio::test]
 		async fn should_recover_if_party_appears_offline_to_minority_stage6() {
+			init_test_logger();
 			let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
 			let messages = ceremony.request().await;
@@ -598,6 +616,7 @@ mod timeout {
 
 		#[tokio::test]
 		async fn should_recover_if_agree_on_values_stage2a() {
+			init_test_logger();
 			let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
 			let messages = ceremony.request().await;
@@ -624,6 +643,7 @@ mod timeout {
 
 		#[tokio::test]
 		async fn should_recover_if_agree_on_values_stage2() {
+			init_test_logger();
 			let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
 			let messages = ceremony.request().await;
@@ -644,6 +664,7 @@ mod timeout {
 
 		#[tokio::test]
 		async fn should_recover_if_agree_on_values_stage5() {
+			init_test_logger();
 			let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
 			let messages = ceremony.request().await;
@@ -667,6 +688,7 @@ mod timeout {
 
 		#[tokio::test]
 		async fn should_recover_if_agree_on_values_stage7() {
+			init_test_logger();
 			let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
 			let messages = ceremony.request().await;
@@ -705,6 +727,7 @@ mod timeout {
 
 		#[tokio::test]
 		async fn should_report_if_insufficient_messages_stage2a() {
+			init_test_logger();
 			let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
 			let messages = ceremony.request().await;
@@ -737,6 +760,7 @@ mod timeout {
 
 		#[tokio::test]
 		async fn should_report_if_insufficient_messages_stage2() {
+			init_test_logger();
 			let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
 			let messages = ceremony.request().await;
@@ -771,6 +795,7 @@ mod timeout {
 
 		#[tokio::test]
 		async fn should_report_if_insufficient_messages_stage5() {
+			init_test_logger();
 			let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
 			let messages = ceremony.request().await;
@@ -813,6 +838,7 @@ mod timeout {
 
 		#[tokio::test]
 		async fn should_report_if_insufficient_messages_stage7() {
+			init_test_logger();
 			let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
 			let messages = ceremony.request().await;
@@ -869,6 +895,7 @@ mod timeout {
 async fn genesis_keys_can_sign() {
 	use crate::multisig::crypto::eth::EthSigning;
 
+	init_test_logger();
 	let account_ids: BTreeSet<_> = [1, 2, 3, 4].iter().map(|i| AccountId::new([*i; 32])).collect();
 
 	let mut rng = Rng::from_entropy();
@@ -893,6 +920,7 @@ async fn genesis_keys_can_sign() {
 async fn initially_incompatible_keys_can_sign() {
 	use crate::multisig::crypto::eth::EthSigning;
 
+	init_test_logger();
 	let account_ids: BTreeSet<_> = [1, 2, 3, 4].iter().map(|i| AccountId::new([*i; 32])).collect();
 
 	let mut rng = Rng::from_entropy();

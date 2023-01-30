@@ -14,7 +14,6 @@ use async_trait::async_trait;
 
 use rand_legacy::{RngCore, SeedableRng};
 
-use slog::Logger;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use utilities::{assert_ok, success_threshold_from_share_count, threshold_from_share_count};
 
@@ -94,7 +93,7 @@ fn new_node<C: CeremonyTrait>(account_id: AccountId) -> Node<C> {
 	let (outgoing_p2p_message_sender, outgoing_p2p_message_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
-	let ceremony_runner = CeremonyRunner::new_unauthorised_for_test(logger.clone());
+	let ceremony_runner = CeremonyRunner::new_unauthorised_for_test();
 
 	Node {
 		outgoing_p2p_message_sender,
@@ -128,7 +127,7 @@ impl<C: CeremonyTrait> Node<C> {
 				slog::debug!(self.logger, "Node got successful outcome");
 			},
 			Err((reported_parties, failure_reason)) => {
-				failure_reason.log(reported_parties, &self.logger);
+				failure_reason.log(reported_parties);
 			},
 		}
 
@@ -163,7 +162,6 @@ impl<C: CryptoScheme> Node<SigningCeremony<C>> {
 			message_hash,
 			&self.outgoing_p2p_message_sender,
 			rng,
-			&self.logger,
 		)
 		.expect("invalid request");
 
@@ -184,7 +182,6 @@ impl Node<KeygenCeremonyEth> {
 			signers,
 			&self.outgoing_p2p_message_sender,
 			rng,
-			&self.logger,
 		)
 		.expect("invalid request");
 
@@ -794,7 +791,6 @@ pub fn gen_invalid_keygen_stage_2_state<P: ECPoint>(
 	ceremony_id: CeremonyId,
 	account_ids: BTreeSet<AccountId>,
 	mut rng: Rng,
-	logger: Logger,
 ) -> CeremonyRunner<KeygenCeremony<EthSigning>> {
 	let validator_mapping = Arc::new(PartyIdxMapping::from_participants(account_ids.clone()));
 	let common = CeremonyCommon {
@@ -804,7 +800,6 @@ pub fn gen_invalid_keygen_stage_2_state<P: ECPoint>(
 		outgoing_p2p_message_sender: tokio::sync::mpsc::unbounded_channel().0,
 		validator_mapping,
 		rng: rng.clone(),
-		logger: logger.clone(),
 	};
 
 	let commitment = gen_invalid_keygen_comm1(&mut rng, account_ids.len() as u32);
@@ -818,7 +813,7 @@ pub fn gen_invalid_keygen_stage_2_state<P: ECPoint>(
 
 	let stage = Box::new(BroadcastStage::new(processor, common));
 
-	CeremonyRunner::new_authorised(stage, logger)
+	CeremonyRunner::new_authorised(stage)
 }
 
 /// Generates key data using the DEFAULT_KEYGEN_SEED and returns the KeygenResultInfo for the first

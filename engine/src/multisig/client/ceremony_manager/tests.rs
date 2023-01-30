@@ -2,7 +2,7 @@ use std::{collections::BTreeSet, pin::Pin, time::Duration};
 
 use crate::{
 	constants::CEREMONY_ID_WINDOW,
-	logging::test_utils::new_test_logger,
+	logging::init_test_logger,
 	multisig::{
 		client::{
 			self,
@@ -74,7 +74,6 @@ fn new_ceremony_manager_for_test(
 		our_account_id,
 		tokio::sync::mpsc::unbounded_channel().0,
 		latest_ceremony_id,
-		&new_test_logger(),
 	)
 }
 
@@ -117,12 +116,8 @@ fn spawn_ceremony_manager(
 	let (ceremony_request_sender, ceremony_request_receiver) = mpsc::unbounded_channel();
 	let (incoming_p2p_sender, incoming_p2p_receiver) = mpsc::unbounded_channel();
 	let (outgoing_p2p_sender, outgoing_p2p_receiver) = mpsc::unbounded_channel();
-	let ceremony_manager = CeremonyManager::<EthSigning>::new(
-		our_account_id,
-		outgoing_p2p_sender,
-		latest_ceremony_id,
-		&new_test_logger(),
-	);
+	let ceremony_manager =
+		CeremonyManager::<EthSigning>::new(our_account_id, outgoing_p2p_sender, latest_ceremony_id);
 	tokio::spawn(ceremony_manager.run(ceremony_request_receiver, incoming_p2p_receiver));
 
 	(ceremony_request_sender, incoming_p2p_sender, outgoing_p2p_receiver)
@@ -131,6 +126,7 @@ fn spawn_ceremony_manager(
 #[tokio::test]
 #[should_panic]
 async fn should_panic_keygen_request_if_not_participating() {
+	init_test_logger();
 	let non_participating_id = AccountId::new([0; 32]);
 	assert!(!ACCOUNT_IDS.contains(&non_participating_id));
 
@@ -160,6 +156,7 @@ async fn should_panic_keygen_request_if_not_participating() {
 #[tokio::test]
 #[should_panic]
 async fn should_panic_rts_if_not_participating() {
+	init_test_logger();
 	let non_participating_id = AccountId::new([0; 32]);
 	assert!(!ACCOUNT_IDS.contains(&non_participating_id));
 
@@ -178,6 +175,7 @@ async fn should_panic_rts_if_not_participating() {
 
 #[tokio::test]
 async fn should_ignore_rts_with_insufficient_number_of_signers() {
+	init_test_logger();
 	// Create a list of signers that is equal to the threshold (not enough to generate a signature)
 	let threshold = threshold_from_share_count(ACCOUNT_IDS.len() as u32) as usize;
 	let not_enough_participants = BTreeSet::from_iter(ACCOUNT_IDS[0..threshold].iter().cloned());
@@ -202,6 +200,7 @@ async fn should_ignore_rts_with_insufficient_number_of_signers() {
 
 #[tokio::test]
 async fn should_ignore_rts_with_unknown_signer_id() {
+	init_test_logger();
 	let our_account_id_idx = 0;
 	let unknown_signer_idx = 1;
 	assert_ne!(
@@ -238,6 +237,7 @@ async fn should_ignore_rts_with_unknown_signer_id() {
 
 #[tokio::test]
 async fn should_not_create_unauthorized_ceremony_with_invalid_ceremony_id() {
+	init_test_logger();
 	let latest_ceremony_id = 1; // Invalid, because the CeremonyManager starts with this value as the latest
 	let past_ceremony_id = latest_ceremony_id - 1; // Invalid, because it was used in the past
 	let future_ceremony_id = latest_ceremony_id + CEREMONY_ID_WINDOW; // Valid, because its within the window
@@ -253,7 +253,6 @@ async fn should_not_create_unauthorized_ceremony_with_invalid_ceremony_id() {
 		ACCOUNT_IDS[0].clone(),
 		tokio::sync::mpsc::unbounded_channel().0,
 		latest_ceremony_id,
-		&new_test_logger(),
 	);
 
 	task_scope(|scope| {
@@ -300,6 +299,7 @@ async fn should_not_create_unauthorized_ceremony_with_invalid_ceremony_id() {
 
 #[tokio::test]
 async fn should_send_outcome_of_authorised_ceremony() {
+	init_test_logger();
 	let (ceremony_request_sender, _incoming_p2p_sender, _outgoing_p2p_receiver) =
 		spawn_ceremony_manager(ACCOUNT_IDS[0].clone(), INITIAL_LATEST_CEREMONY_ID);
 
@@ -326,6 +326,7 @@ async fn should_send_outcome_of_authorised_ceremony() {
 
 #[tokio::test]
 async fn should_cleanup_unauthorised_ceremony_if_not_participating() {
+	init_test_logger();
 	task_scope(|scope| {
 		async {
 			let our_account_id = ACCOUNT_IDS[0].clone();
@@ -342,7 +343,6 @@ async fn should_cleanup_unauthorised_ceremony_if_not_participating() {
 				our_account_id.clone(),
 				outgoing_p2p_sender,
 				INITIAL_LATEST_CEREMONY_ID,
-				&new_test_logger(),
 			);
 
 			// Manually spawn a ceremony runner in an unauthorised state
@@ -358,7 +358,6 @@ async fn should_cleanup_unauthorised_ceremony_if_not_participating() {
 					ceremony_runner_p2p_receiver,
 					ceremony_runner_request_receiver,
 					mpsc::unbounded_channel().0,
-					new_test_logger(),
 				));
 
 			// Turn the task handle into a ceremony handle and insert it into the ceremony manager
@@ -405,6 +404,7 @@ async fn should_cleanup_unauthorised_ceremony_if_not_participating() {
 // runner. Also checks that the ceremony runner processes incoming messages.
 #[tokio::test]
 async fn should_route_p2p_message() {
+	init_test_logger();
 	let our_account_id = ACCOUNT_IDS[0].clone();
 	let sender_account_id = ACCOUNT_IDS[1].clone();
 

@@ -21,6 +21,7 @@ use client::{
 };
 use itertools::Itertools;
 use sp_core::H256;
+use tracing::{debug, warn};
 
 use crate::multisig::crypto::{CryptoScheme, ECPoint, KeyShare};
 
@@ -140,14 +141,10 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 		self,
 		messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
 	) -> StageResult<KeygenCeremony<Crypto>> {
-		let hash_commitments = match verify_broadcasts(messages, &self.common.logger) {
+		let hash_commitments = match verify_broadcasts(messages) {
 			Ok(hash_commitments) => hash_commitments,
 			Err((reported_parties, abort_reason)) => {
-				slog::warn!(
-					self.common.logger,
-					"Broadcast verification is not successful for {}",
-					Self::NAME
-				);
+				warn!("Broadcast verification is not successful for {}", Self::NAME);
 				return KeygenStageResult::Error(
 					reported_parties,
 					KeygenFailureReason::BroadcastFailure(abort_reason, Self::NAME),
@@ -155,7 +152,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 			},
 		};
 
-		slog::debug!(self.common.logger, "{} is successful", Self::NAME);
+		debug!("{} is successful", Self::NAME);
 
 		// Just saving hash commitments for now. We will use them
 		// once the parties reveal their public coefficients (next two stages)
@@ -248,7 +245,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 		self,
 		messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
 	) -> KeygenStageResult<Crypto> {
-		let commitments = match verify_broadcasts(messages, &self.common.logger) {
+		let commitments = match verify_broadcasts(messages) {
 			Ok(comms) => comms,
 			Err((reported_parties, abort_reason)) =>
 				return KeygenStageResult::Error(
@@ -262,13 +259,12 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 			self.hash_commitments,
 			&self.context,
 			self.common.validator_mapping.clone(),
-			&self.common.logger,
 		) {
 			Ok(comms) => comms,
 			Err((blamed_parties, reason)) => return StageResult::Error(blamed_parties, reason),
 		};
 
-		slog::debug!(self.common.logger, "{} is successful", Self::NAME);
+		debug!("{} is successful", Self::NAME);
 
 		// At this point we know everyone's commitments, which can already be
 		// used to derive the resulting aggregate public key. Before proceeding
@@ -331,20 +327,18 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 					if verify_share(&share, &self.commitments[&sender_idx], self.common.own_idx) {
 						Some((sender_idx, share))
 					} else {
-						slog::warn!(
-							self.common.logger,
-							"Received invalid secret share";
-							"from_id" => self.common.validator_mapping.get_id(sender_idx).to_string()
+						warn!(
+							from_id = self.common.validator_mapping.get_id(sender_idx).to_string(),
+							"Received invalid secret share"
 						);
 
 						bad_parties.insert(sender_idx);
 						None
 					}
 				} else {
-					slog::warn!(
-						self.common.logger,
-						"Received no secret share";
-						"from_id" => self.common.validator_mapping.get_id(sender_idx).to_string()
+					warn!(
+						from_id = self.common.validator_mapping.get_id(sender_idx).to_string(),
+						"Received no secret share",
 					);
 
 					bad_parties.insert(sender_idx);
@@ -441,7 +435,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 		self,
 		messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
 	) -> KeygenStageResult<Crypto> {
-		let verified_complaints = match verify_broadcasts(messages, &self.common.logger) {
+		let verified_complaints = match verify_broadcasts(messages) {
 			Ok(comms) => comms,
 			Err((reported_parties, abort_reason)) =>
 				return KeygenStageResult::Error(
@@ -470,11 +464,9 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 					if self.common.is_idx_valid(*idx_blamed) {
 						true
 					} else {
-						slog::warn!(
-							self.common.logger,
-							"Invalid index [{}] in complaint",
-							idx_blamed;
-							"from_id" => self.common.validator_mapping.get_id(*idx_from).to_string(),
+						warn!(
+							from_id = self.common.validator_mapping.get_id(*idx_from).to_string(),
+							"Invalid index [{idx_blamed}] in complaint",
 						);
 						false
 					}
@@ -557,8 +549,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 			.iter()
 			.filter_map(|(idx, complaint)| {
 				if complaint.0.contains(&self.common.own_idx) {
-					slog::warn!(
-						self.common.logger,
+					warn!(
 						"We are blamed by {}",
 						self.common.validator_mapping.get_id(*idx).to_string()
 					);
@@ -575,8 +566,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 			idxs_to_reveal
 				.iter()
 				.map(|idx| {
-					slog::debug!(
-						self.common.logger,
+					debug!(
 						"Revealing share for {}",
 						self.common.validator_mapping.get_id(*idx).to_string()
 					);
@@ -659,10 +649,9 @@ impl<Crypto: CryptoScheme> VerifyBlameResponsesBroadcastStage9<Crypto> {
 			.iter()
 			.map(|(sender_idx, response)| {
 				if !is_blame_response_complete(*sender_idx, response, &self.complaints) {
-					slog::warn!(
-						self.common.logger,
-						"Incomplete blame response";
-						"from_id" => self.common.validator_mapping.get_id(*sender_idx).to_string()
+					warn!(
+						from_id = self.common.validator_mapping.get_id(*sender_idx).to_string(),
+						"Incomplete blame response",
 					);
 
 					return Err(sender_idx)
@@ -671,10 +660,9 @@ impl<Crypto: CryptoScheme> VerifyBlameResponsesBroadcastStage9<Crypto> {
 				if !response.0.iter().all(|(dest_idx, share)| {
 					verify_share(share, &self.commitments[sender_idx], *dest_idx)
 				}) {
-					slog::warn!(
-						self.common.logger,
-						"Invalid secret share in a blame response";
-						"from_id" => self.common.validator_mapping.get_id(*sender_idx).to_string()
+					warn!(
+						from_id = self.common.validator_mapping.get_id(*sender_idx).to_string(),
+						"Invalid secret share in a blame response"
 					);
 
 					return Err(sender_idx)
@@ -716,9 +704,9 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 		mut self,
 		messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
 	) -> KeygenStageResult<Crypto> {
-		slog::debug!(self.common.logger, "Processing {}", Self::NAME);
+		debug!("Processing {}", Self::NAME);
 
-		let verified_responses = match verify_broadcasts(messages, &self.common.logger) {
+		let verified_responses = match verify_broadcasts(messages) {
 			Ok(comms) => comms,
 			Err((reported_parties, abort_reason)) =>
 				return KeygenStageResult::Error(

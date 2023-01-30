@@ -20,6 +20,7 @@ use client::common::{
 use signing::signing_detail::{self, SecretNoncePair};
 
 use signing::SigningStateCommonInfo;
+use tracing::debug;
 
 use super::signing_data::{Comm1, LocalSig3, VerifyComm2, VerifyLocalSig4};
 
@@ -109,7 +110,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 		self,
 		messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
 	) -> SigningStageResult<Crypto> {
-		let verified_commitments = match verify_broadcasts(messages, &self.common.logger) {
+		let verified_commitments = match verify_broadcasts(messages) {
 			Ok(comms) => comms,
 			Err((reported_parties, abort_reason)) =>
 				return SigningStageResult::Error(
@@ -118,7 +119,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 				),
 		};
 
-		slog::debug!(self.common.logger, "{} is successful", Self::NAME);
+		debug!("{} is successful", Self::NAME);
 
 		let processor = LocalSigStage3::<Crypto> {
 			common: self.common.clone(),
@@ -224,7 +225,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 		self,
 		messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
 	) -> SigningStageResult<Crypto> {
-		let local_sigs = match verify_broadcasts(messages, &self.common.logger) {
+		let local_sigs = match verify_broadcasts(messages) {
 			Ok(sigs) => sigs,
 			Err((reported_parties, abort_reason)) =>
 				return SigningStageResult::Error(
@@ -233,7 +234,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 				),
 		};
 
-		slog::debug!(self.common.logger, "{} is successful", Self::NAME);
+		debug!("{} is successful", Self::NAME);
 
 		let all_idxs = &self.common.all_idxs;
 

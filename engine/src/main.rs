@@ -310,7 +310,6 @@ async fn main() -> anyhow::Result<()> {
 					eth_incoming_receiver,
 					eth_outgoing_sender,
 					latest_ceremony_id,
-					&root_logger,
 				);
 
 			scope.spawn(eth_multisig_client_backend_future);
@@ -322,7 +321,6 @@ async fn main() -> anyhow::Result<()> {
 					dot_incoming_receiver,
 					dot_outgoing_sender,
 					latest_ceremony_id,
-					&root_logger,
 				);
 
 			scope.spawn(dot_multisig_client_backend_future);

@@ -14,11 +14,10 @@ use tokio::sync::{
 	mpsc::{UnboundedReceiver, UnboundedSender},
 	oneshot,
 };
-use tracing::Instrument;
+use tracing::{debug, warn, Instrument};
 
 use crate::{
 	common::format_iterator,
-	logging::CEREMONY_ID_KEY,
 	multisig::client::common::{ProcessMessageResult, StageResult},
 };
 use state_chain_runtime::{constants::common::MAX_STAGE_DURATION_SECONDS, AccountId};
@@ -45,7 +44,6 @@ pub struct CeremonyRunner<Ceremony: CeremonyTrait> {
 	/// This will fire on stage timeout
 	timeout_handle: Pin<Box<tokio::time::Sleep>>,
 	outcome_sender: UnboundedSender<(CeremonyId, CeremonyOutcome<Ceremony>)>,
-	logger: slog::Logger,
 }
 
 impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
@@ -57,16 +55,12 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 		mut message_receiver: UnboundedReceiver<(AccountId, Ceremony::Data)>,
 		request_receiver: oneshot::Receiver<PreparedRequest<Ceremony>>,
 		outcome_sender: UnboundedSender<(CeremonyId, CeremonyOutcome<Ceremony>)>,
-		logger: slog::Logger,
 	) -> Result<()> {
 		let span = tracing::info_span!("CeremonyRunner", ceremony_id = ceremony_id);
 
 		// We always create unauthorised first, it can get promoted to
 		// an authorised one with a ceremony request
-		let mut runner = Self::new_unauthorised(
-			outcome_sender,
-			logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id)),
-		);
+		let mut runner = Self::new_unauthorised(outcome_sender);
 
 		// Fuse the oneshot future so it will not get called twice
 		let mut request_receiver = request_receiver.fuse();
@@ -111,7 +105,6 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 	/// cannot make any progress otherwise
 	fn new_unauthorised(
 		outcome_sender: UnboundedSender<(CeremonyId, CeremonyOutcome<Ceremony>)>,
-		logger: slog::Logger,
 	) -> Self {
 		CeremonyRunner {
 			stage: None,
@@ -119,7 +112,6 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 			// Unauthorised ceremonies cannot timeout, so just set the timeout to 0 for now.
 			timeout_handle: Box::pin(tokio::time::sleep(tokio::time::Duration::ZERO)),
 			outcome_sender,
-			logger,
 		}
 	}
 
@@ -158,11 +150,7 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 
 		match stage.finalize().await {
 			StageResult::NextStage(mut next_stage) => {
-				slog::debug!(
-					self.logger,
-					"Ceremony transitions to {}",
-					next_stage.get_stage_name()
-				);
+				debug!("Ceremony transitions to {}", next_stage.get_stage_name());
 
 				next_stage.init();
 
@@ -184,7 +172,7 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 			StageResult::Error(bad_validators, reason) =>
 				Some(Err((validator_mapping.get_ids(bad_validators), reason))),
 			StageResult::Done(result) => {
-				slog::debug!(self.logger, "Ceremony reached the final stage!");
+				debug!("Ceremony reached the final stage!");
 
 				Some(Ok(result))
 			},
@@ -201,10 +189,9 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 		match &mut self.stage {
 			None => {
 				if !data.is_first_stage() {
-					slog::debug!(
-						self.logger,
-						"Ignoring data: non-initial stage data for unauthorised ceremony";
-						"from_id" => sender_id.to_string(),
+					debug!(
+						from_id = sender_id.to_string(),
+						"Ignoring data: non-initial stage data for unauthorised ceremony"
 					);
 					return None
 				}
@@ -220,11 +207,7 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 				{
 					Some(idx) => idx,
 					None => {
-						slog::debug!(
-							self.logger,
-							"Ignoring data: sender {} is not a valid participant",
-							sender_id
-						);
+						debug!("Ignoring data: sender {sender_id} is not a valid participant",);
 						return None
 					},
 				};
@@ -233,10 +216,9 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 				if !data
 					.data_size_is_valid(stage.ceremony_common().all_idxs.len() as AuthorityCount)
 				{
-					slog::debug!(
-						self.logger,
-						"Ignoring data: incorrect number of elements";
-						"from_id" => sender_id.to_string(),
+					debug!(
+						from_id = sender_id.to_string(),
+						"Ignoring data: incorrect number of elements"
 					);
 					return None
 				}
@@ -263,8 +245,10 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 			let messages = std::mem::take(&mut self.delayed_messages);
 
 			if !messages.is_empty() {
-				slog::debug!(self.logger, "Processing {} delayed messages",messages.len();
-					"from_ids" => format_iterator(messages.keys()).to_string()
+				debug!(
+					from_ids = format_iterator(messages.keys()).to_string(),
+					"Processing {} delayed messages",
+					messages.len(),
 				);
 			}
 			for (id, m) in messages {
@@ -283,22 +267,14 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 		let delayed_messages_count = self.delayed_messages.len() + 1;
 		match &self.stage {
 			Some(stage) => {
-				slog::debug!(
-					self.logger,
-					"Delaying message {} from party [{}] during stage {}. (Total: {})",
-					m,
-					id,
+				debug!(
+					"Delaying message {m} from party [{id}] during stage {}. (Total: {delayed_messages_count})",
 					stage.get_stage_name(),
-					delayed_messages_count
 				);
 			},
 			None => {
-				slog::debug!(
-					self.logger,
-					"Delaying message {} from party [{}] for unauthorised ceremony. (Total: {})",
-					m,
-					id,
-					delayed_messages_count
+				debug!(
+					"Delaying message {m} from party [{id}] for unauthorised ceremony. (Total: {delayed_messages_count})",
 				)
 			},
 		}
@@ -318,19 +294,18 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 			let missing_messages_from_accounts =
 				stage.ceremony_common().validator_mapping.get_ids(stage.awaited_parties());
 
-			tracing::warn!(
+			warn!(
 					missing_ids = format_iterator(missing_messages_from_accounts.clone()).to_string(),
 					"Ceremony stage {} timed out before all messages collected ({} missing), trying to finalize current stage anyway.",
 					stage.get_stage_name(),
 					missing_messages_from_accounts.len()
 				);
 
-			slog::warn!(
-				self.logger,
+			warn!(
+				missing_ids = format_iterator(missing_messages_from_accounts).to_string(),
 				"Ceremony stage {} timed out before all messages collected ({} missing), trying to finalize current stage anyway.",
 				stage.get_stage_name(),
-				missing_messages_from_accounts.len();
-				"missing_ids" => format_iterator(missing_messages_from_accounts).to_string()
+				missing_messages_from_accounts.len()
 			);
 
 			self.finalize_current_stage().await
@@ -343,17 +318,16 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 #[cfg(test)]
 impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 	/// This is to allow calling a private method from tests
-	pub fn new_unauthorised_for_test(logger: slog::Logger) -> Self {
-		Self::new_unauthorised(tokio::sync::mpsc::unbounded_channel().0, logger)
+	pub fn new_unauthorised_for_test() -> Self {
+		Self::new_unauthorised(tokio::sync::mpsc::unbounded_channel().0)
 	}
 
-	pub fn new_authorised(stage: DynStage<Ceremony>, logger: slog::Logger) -> Self {
+	pub fn new_authorised(stage: DynStage<Ceremony>) -> Self {
 		CeremonyRunner {
 			stage: Some(stage),
 			delayed_messages: Default::default(),
 			timeout_handle: Box::pin(tokio::time::sleep(MAX_STAGE_DURATION)),
 			outcome_sender: tokio::sync::mpsc::unbounded_channel().0,
-			logger,
 		}
 	}
 
