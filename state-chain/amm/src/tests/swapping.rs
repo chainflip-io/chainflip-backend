@@ -127,7 +127,7 @@ fn test_swaps_with_pool_configs() {
 		positions: Vec<PositionParams>,
 	) -> (PoolState, PoolAssetMap<AmountU256>) {
 		// encodeSqrtPrice (1,10) -> 25054144837504793118650146401
-		let mut pool = PoolState::new(fee_amount / 10, initial_price).unwrap();
+		let mut pool = PoolState::new(fee_amount, initial_price).unwrap();
 		const ID: [u8; 32] = [0xcf; 32];
 
 		let mut amounts_minted: PoolAssetMap<AmountU256> = Default::default();
@@ -322,13 +322,60 @@ fn test_swaps_with_pool_configs() {
 
 			let do_checks = || match &expected_output[output_index] {
 				OutputFormats::Format(output) => {
-					assert!(
-						swap_result.is_ok(),
-						"Expected swap {:?} for pool[{pool_index}] {:#?} to succeed, but it failed: {:?}.",
-						(swap_amount, input_side),
-						pool,
-						swap_result
+					// Using assert_approx_equal_percentage to compare floats because the
+					// operations return extra decimals compared to the snapshot. Margin of
+					// 0.001%
+
+					// Check initial tick
+					assert_eq!(pool_initial.current_tick, output.tickBefore);
+					// Check initial pool price
+					let num_f64 = output.poolPriceBefore.as_str().parse::<f64>().unwrap();
+					let formatted_price = format_price_f64(
+						pool_initial.current_sqrt_price.to_string().parse::<f64>().unwrap(),
 					);
+					assert_approx_equal_percentage!(num_f64, formatted_price, 1f64);
+
+					// Compare amounts before
+					assert_approx_equal_percentage_u256!(
+						minted_funds[PoolSide::Asset0],
+						U256::from_dec_str(output.amount0Before.as_str()).unwrap(),
+						U256::from(1),
+					);
+					assert_approx_equal_percentage_u256!(
+						minted_funds[PoolSide::Asset1],
+						U256::from_dec_str(output.amount1Before.as_str()).unwrap(),
+						U256::from(1),
+					);
+					match swap_result {
+						Ok(_) => {},
+						Err(SwapError::InsufficientLiquidity) => {
+							// Catch cases where the liquidity is not enough to cover the
+							// swap
+							match input_side {
+								PoolSide::Asset0 => {
+									assert!(
+										output.amount0Delta != "1000" &&
+											output.amount0Delta != "1000000000000000000"
+									);
+								},
+								PoolSide::Asset1 => {
+									assert!(
+										output.amount1Delta != "1000" &&
+											output.amount1Delta != "1000000000000000000"
+									);
+								},
+							}
+							return
+						},
+						Err(err) => {
+							panic!(
+										"Expected swap {:?} for pool[{pool_index}] {:#?} to succeed, but it failed: {:?}.",
+										(swap_amount, input_side),
+										pool,
+										err
+									);
+						},
+					}
 
 					// Pools x swapcases combinations that differ from the result in the snapshot
 					// pool 10, 11, 13 and 14. This is when the swap is done across a large range of
@@ -343,20 +390,8 @@ fn test_swaps_with_pool_configs() {
 						return
 					}
 
-					// Compare tick before and tick after
-					assert_eq!(pool_initial.current_tick, output.tickBefore);
+					// Compare tick after
 					assert_eq!(pool.current_tick, output.tickAfter);
-
-					// Using assert_approx_equal_percentage to compare floats because the
-					// operations return extra decimals compared to the snapshot. Margin of
-					// 0.001%
-
-					// Compare poolPriceBefore.
-					let num_f64 = output.poolPriceBefore.as_str().parse::<f64>().unwrap();
-					let formatted_price = format_price_f64(
-						pool_initial.current_sqrt_price.to_string().parse::<f64>().unwrap(),
-					);
-					assert_approx_equal_percentage!(num_f64, formatted_price, 1f64);
 
 					// Compare poolPriceAfter.
 					let num_f64 = output.poolPriceAfter.as_str().parse::<f64>().unwrap();
@@ -384,18 +419,6 @@ fn test_swaps_with_pool_configs() {
 						U256::from(1),
 					);
 
-					// Compare amount before
-					assert_approx_equal_percentage_u256!(
-						minted_funds[PoolSide::Asset0],
-						U256::from_dec_str(output.amount0Before.as_str()).unwrap(),
-						U256::from(1),
-					);
-					assert_approx_equal_percentage_u256!(
-						minted_funds[PoolSide::Asset1],
-						U256::from_dec_str(output.amount1Before.as_str()).unwrap(),
-						U256::from(1),
-					);
-
 					// No need to check executionPrice. Checking amount0Delta and amount1Delta
 					// ensures executionPrice will be correct.
 
@@ -405,41 +428,33 @@ fn test_swaps_with_pool_configs() {
 					// behaviour of the pool without liquidity is different from Uniswap
 					// https://www.notion.so/chainflip/Fallible-swaps-17e5104c3a204323bb271ad6c7cae2e6
 
-					if output.executionPrice != "NaN" {
-						let (swap_output, _) = swap_result.unwrap();
-						// Workaround for swaps that empty the pool that amountIn will be too
-						// much.
+					// Any swap that empties the pool will have been catched before.
+					let (swap_output, _) = swap_result.unwrap();
 
-						// The two testcase swaps are exactIn. Therefore, if the amountIn is not
-						// one of those values, then it's a swap that emptied the pool.	If
-						// output.amount0Delta > 0 (asset0to1) and (output.amount0Delta != 1000
-						// or 10000000) then skip the check for amountIn.
+					if input_side == PoolSide::Asset0 {
+						assert!(input_side == PoolSide::Asset0);
+						assert_eq!(
+							output.amount0Delta.to_string().parse::<f64>().unwrap(),
+							swap_input.to_string().parse::<f64>().unwrap()
+						);
 
-						if output.amount0Delta.to_string().parse::<f64>().unwrap() <= 0.0 ||
-							output.amount0Delta == "1000" ||
-							output.amount0Delta == "1000000000000000000"
-						{
-							assert!(input_side == PoolSide::Asset0);
-							assert_approx_equal_percentage!(
-								output.amount0Delta.to_string().parse::<f64>().unwrap(),
-								swap_input.to_string().parse::<f64>().unwrap() -
-									swap_output.to_string().parse::<f64>().unwrap(),
-								1f64,
-							);
-						}
+						assert_approx_equal_percentage!(
+							output.amount1Delta.to_string().parse::<f64>().unwrap(),
+							-swap_output.to_string().parse::<f64>().unwrap(),
+							1f64,
+						);
+					} else {
+						assert!(input_side == PoolSide::Asset1);
+						assert_eq!(
+							output.amount1Delta.to_string().parse::<f64>().unwrap(),
+							swap_input.to_string().parse::<f64>().unwrap()
+						);
 
-						if output.amount1Delta.to_string().parse::<f64>().unwrap() <= 0.0 ||
-							output.amount1Delta == "1000" ||
-							output.amount1Delta == "1000000000000000000"
-						{
-							assert!(input_side == PoolSide::Asset1);
-							assert_approx_equal_percentage!(
-								output.amount1Delta.to_string().parse::<f64>().unwrap(),
-								swap_input.to_string().parse::<f64>().unwrap() -
-									swap_output.to_string().parse::<f64>().unwrap(),
-								10f64,
-							);
-						}
+						assert_approx_equal_percentage!(
+							output.amount0Delta.to_string().parse::<f64>().unwrap(),
+							-swap_output.to_string().parse::<f64>().unwrap(),
+							1f64,
+						);
 					}
 				},
 				OutputFormats::FormatErrors(output) => {
