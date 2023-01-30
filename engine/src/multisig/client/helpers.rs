@@ -69,6 +69,10 @@ pub const INITIAL_LATEST_CEREMONY_ID: CeremonyId = 0;
 pub const DEFAULT_KEYGEN_CEREMONY_ID: CeremonyId = INITIAL_LATEST_CEREMONY_ID + 1;
 pub const DEFAULT_SIGNING_CEREMONY_ID: CeremonyId = DEFAULT_KEYGEN_CEREMONY_ID + 1;
 
+/// Time it takes to cause a ceremony timeout (2 stages) with a small delay to allow for processing
+pub const CEREMONY_TIMEOUT_DURATION: Duration =
+	Duration::from_millis((((MAX_STAGE_DURATION_SECONDS * 2) as u64) * 1000) + 50);
+
 lazy_static! {
 	pub static ref ACCOUNT_IDS: Vec<AccountId> =
 		[1, 2, 3, 4].iter().map(|i| AccountId::new([*i; 32])).collect();
@@ -829,20 +833,4 @@ pub fn get_key_data_for_test<C: CryptoScheme>(signers: BTreeSet<AccountId>) -> K
 		.get(signers.iter().next().unwrap())
 		.expect("should get keygen for an account")
 		.to_owned()
-}
-
-/// Advances time by the stage duration x2 to cause a timeout
-pub async fn cause_ceremony_timeout() {
-	// Delay a small amount in case the ceremony runner has not processed the request/p2p message
-	// yet, and thus record the time the ceremony should expire.
-	tokio::time::sleep(Duration::from_millis(50)).await;
-
-	// We need to timeout 2 stages in case the second stage in a verification stage and will try to
-	// recover. So we must advance time by 2x the max stage duration.
-	tokio::time::pause();
-	tokio::time::advance(Duration::from_secs((MAX_STAGE_DURATION_SECONDS * 2) as u64)).await;
-	tokio::time::resume();
-
-	// A short delay to allow the ceremony runner to process the timeout and end the task
-	tokio::time::sleep(Duration::from_millis(50)).await;
 }
