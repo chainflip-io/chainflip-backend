@@ -39,7 +39,7 @@ pub async fn start(
 	db: Arc<PersistentKeyDB>,
 	logger: slog::Logger,
 ) -> Result<(), (async_broadcast::Receiver<EpochStart<Ethereum>>, IngressAddressReceivers)> {
-	match epoch_witnesser::start(
+	epoch_witnesser::start(
 		"Block_Head".to_string(),
 		epoch_start_receiver,
 		move |_| true,
@@ -137,8 +137,4 @@ pub async fn start(
 		&logger,
 	)
 	.await
-	{
-		Ok(_) => Ok(()),
-		Err((epoch_start_receiver, e)) => Err((epoch_start_receiver, e)),
-	}
 }
