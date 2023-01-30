@@ -7,7 +7,9 @@ pub mod decompose_recompose;
 pub mod epoch_transition;
 mod missed_authorship_slots;
 mod offences;
+use cf_chains::ChainCrypto;
 use cf_primitives::{chains::assets, Asset, KeyId, ETHEREUM_ETH_ADDRESS};
+use cf_traits::Broadcaster;
 pub use offences::*;
 mod signer_nomination;
 use crate::RuntimeCall;
@@ -318,23 +320,50 @@ impl EgressApi<AnyChain> for AnyChainIngressEgressHandler {
 
 pub struct TokenholderGovBroadcaster;
 
+impl TokenholderGovBroadcaster {
+	fn broadcast_gov_key<C, B>(maybe_old_key: Option<Vec<u8>>, new_key: Vec<u8>) -> Result<(), ()>
+	where
+		C: ChainAbi,
+		B: Broadcaster<C>,
+		<B as Broadcaster<C>>::ApiCall: cf_chains::SetGovKeyWithAggKey<C>,
+	{
+		let maybe_old_key = if let Some(old_key) = maybe_old_key {
+			Some(Decode::decode(&mut &old_key[..]).or(Err(()))?)
+		} else {
+			None
+		};
+		let api_call = SetGovKeyWithAggKey::<C>::new_unsigned(
+			maybe_old_key,
+			Decode::decode(&mut &new_key[..]).or(Err(()))?,
+		)?;
+		B::threshold_sign_and_broadcast(api_call);
+		Ok(())
+	}
+
+	fn is_govkey_compatible<C: ChainCrypto>(key: &[u8]) -> bool {
+		C::GovKey::decode(&mut &key[..]).is_ok()
+	}
+}
+
 impl BroadcastAnyChainGovKey for TokenholderGovBroadcaster {
 	fn broadcast(
 		chain: ForeignChain,
-		old_key: Option<Vec<u8>>,
+		maybe_old_key: Option<Vec<u8>>,
 		new_key: Vec<u8>,
 	) -> Result<(), ()> {
 		match chain {
-			ForeignChain::Ethereum => {
-				let api_call = SetGovKeyWithAggKey::<Ethereum>::new_unsigned(None, new_key)?;
-				EthereumBroadcaster::threshold_sign_and_broadcast(api_call)
-			},
-			ForeignChain::Polkadot => {
-				let api_call = SetGovKeyWithAggKey::<Polkadot>::new_unsigned(old_key, new_key)?;
-				PolkadotBroadcaster::threshold_sign_and_broadcast(api_call)
-			},
-		};
-		Ok(())
+			ForeignChain::Ethereum =>
+				Self::broadcast_gov_key::<Ethereum, EthereumBroadcaster>(maybe_old_key, new_key),
+			ForeignChain::Polkadot =>
+				Self::broadcast_gov_key::<Polkadot, PolkadotBroadcaster>(maybe_old_key, new_key),
+		}
+	}
+
+	fn is_govkey_compatible(chain: ForeignChain, key: &[u8]) -> bool {
+		match chain {
+			ForeignChain::Ethereum => Self::is_govkey_compatible::<Ethereum>(key),
+			ForeignChain::Polkadot => Self::is_govkey_compatible::<Polkadot>(key),
+		}
 	}
 }
 

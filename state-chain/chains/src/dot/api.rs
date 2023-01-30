@@ -50,21 +50,21 @@ where
 	}
 }
 
-impl<E: ReplayProtectionProvider<Polkadot>> SetGovKeyWithAggKey<Polkadot> for PolkadotApi<E>
+impl<E> SetGovKeyWithAggKey<Polkadot> for PolkadotApi<E>
 where
 	E: ChainEnvironment<SystemAccounts, <Polkadot as Chain>::ChainAccount>
 		+ ReplayProtectionProvider<Polkadot>,
 {
-	fn new_unsigned(maybe_old_key: Option<Vec<u8>>, new_key: Vec<u8>) -> Result<Self, ()> {
+	fn new_unsigned(
+		maybe_old_key: Option<PolkadotPublicKey>,
+		new_key: PolkadotPublicKey,
+	) -> Result<Self, ()> {
 		let vault = E::lookup(SystemAccounts::Vault).ok_or(())?;
-		let old_key = match maybe_old_key {
-			Some(old_key) => Some(old_key.try_into()?),
-			None => None,
-		};
+
 		Ok(Self::ChangeGovKey(set_gov_key_with_agg_key::ChangeGovKey::new_unsigned(
 			E::replay_protection(),
-			old_key,
-			new_key.try_into()?,
+			maybe_old_key,
+			new_key,
 			vault,
 		)))
 	}

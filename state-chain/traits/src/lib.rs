@@ -789,6 +789,8 @@ pub trait BroadcastAnyChainGovKey {
 	#[allow(clippy::result_unit_err)]
 	fn broadcast(chain: ForeignChain, old_key: Option<Vec<u8>>, new_key: Vec<u8>)
 		-> Result<(), ()>;
+
+	fn is_govkey_compatible(chain: ForeignChain, key: &[u8]) -> bool;
 }
 
 pub trait BroadcastComKey {

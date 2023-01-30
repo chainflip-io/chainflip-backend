@@ -90,7 +90,7 @@ pub mod pallet {
 	pub type CommKeyUpdateAwaitingEnactment<T> =
 		StorageValue<_, (BlockNumberFor<T>, Address), OptionQuery>;
 
-	/// The current Polkadot GOV key
+	/// Current Governance keys for foreign chains.
 	#[pallet::storage]
 	pub type GovKeys<T> = StorageMap<_, Twox64Concat, ForeignChain, Vec<u8>>;
 
@@ -117,6 +117,8 @@ pub mod pallet {
 		AlreadyBacked,
 		/// Proposal doesn't exist.
 		ProposalDoesntExist,
+		/// The proposed governance key is incompatible with the proposed chain.
+		IncompatibleGovkey,
 	}
 
 	#[pallet::hooks]
@@ -128,40 +130,27 @@ pub mod pallet {
 					Self::resolve_vote(proposal).try_into().unwrap(),
 				);
 			}
-			if let Some((enactment_block, (chain, key))) = GovKeyUpdateAwaitingEnactment::<T>::get()
+			if let Some((enactment_block, (chain, new_key))) =
+				GovKeyUpdateAwaitingEnactment::<T>::get()
 			{
 				if enactment_block == current_block {
-					match chain {
-						cf_chains::ForeignChain::Ethereum => {
-							// We can not fail for eth here.
-							let _ = T::AnyChainGovKeyBroadcaster::broadcast(
-								cf_chains::ForeignChain::Ethereum,
-								None,
-								key.clone(),
-							);
-						},
-						cf_chains::ForeignChain::Polkadot =>
-							if T::AnyChainGovKeyBroadcaster::broadcast(
-								cf_chains::ForeignChain::Polkadot,
-								GovKeys::<T>::get(ForeignChain::Polkadot),
-								key.clone(),
-							)
-							.is_ok()
-							{
-								GovKeys::<T>::insert(ForeignChain::Polkadot, key.clone());
-								Self::deposit_event(GovKeyUpdatedWasSuccessful {
-									chain: ForeignChain::Polkadot,
-									key: key.clone(),
-								});
-							} else {
-								Self::deposit_event(GovKeyUpdatedHasFailed {
-									chain: ForeignChain::Polkadot,
-									key: key.clone(),
-								});
-							},
-					};
+					if T::AnyChainGovKeyBroadcaster::broadcast(
+						chain,
+						GovKeys::<T>::get(chain),
+						new_key.clone(),
+					)
+					.is_ok()
+					{
+						GovKeys::<T>::insert(chain, &new_key);
+						Self::deposit_event(GovKeyUpdatedWasSuccessful {
+							chain,
+							key: new_key.clone(),
+						});
+					} else {
+						Self::deposit_event(GovKeyUpdatedHasFailed { chain, key: new_key.clone() });
+					}
 					Self::deposit_event(Event::<T>::ProposalEnacted {
-						proposal: Proposal::SetGovernanceKey((chain, key)),
+						proposal: Proposal::SetGovernanceKey((chain, new_key)),
 					});
 					GovKeyUpdateAwaitingEnactment::<T>::kill();
 					weight.saturating_accrue(T::WeightInfo::on_initialize_execute_proposal());
@@ -200,6 +189,13 @@ pub mod pallet {
 			proposal: Proposal,
 		) -> DispatchResultWithPostInfo {
 			let proposer = ensure_signed(origin)?;
+			match proposal {
+				Proposal::SetGovernanceKey((chain, ref key)) => ensure!(
+					T::AnyChainGovKeyBroadcaster::is_govkey_compatible(chain, key),
+					Error::<T>::IncompatibleGovkey
+				),
+				_ => {},
+			}
 			T::FeePayment::try_burn_fee(&proposer, T::ProposalFee::get())?;
 			Proposals::<T>::insert(
 				<frame_system::Pallet<T>>::block_number() + T::VotingPeriod::get(),
