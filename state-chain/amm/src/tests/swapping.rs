@@ -7,18 +7,33 @@ fn format_price_f64(price: f64) -> f64 {
 	(price / 2f64.powf(96f64)).powf(2f64)
 }
 
-fn assert_approx_equal_percentage(a: f64, b: f64, margin: f64) {
-	// margin = 1 means 0.001%
-	let margin = margin / 10000.0;
-	let max = a.max(b);
-	assert!((a - b).abs() <= (max * margin).abs());
+macro_rules! assert_approx_equal_percentage {
+	($a:expr, $b:expr, $margin:expr $(,)? ) => {
+		// margin = 1 means 0.001%
+		let margin = $margin / 10000.0;
+		let max = $a.max($b);
+		assert!(
+			($a - $b).abs() <= (max * margin).abs(),
+			"{} and {} are not within the margin of {}.",
+			$a,
+			$b,
+			margin
+		);
+	};
 }
 
-// Compare two U256 and check that they are equal within a margin of 0.001%
-fn assert_approx_equal_percentage_u256(a: U256, b: U256, margin: U256) {
-	let max = a.max(b);
-	let min = a.min(b);
-	assert!(max - min <= (max * margin) / U256::from_dec_str("10000").unwrap());
+macro_rules! assert_approx_equal_percentage_u256 {
+	($a:expr, $b:expr, $margin:expr $(,)? ) => {
+		let max = $a.max($b);
+		let min = $a.min($b);
+		assert!(
+			max - min <= (max * $margin) / U256::from_dec_str("10000").unwrap(),
+			"{} and {} are not within the margin of {}.",
+			$a,
+			$b,
+			$margin
+		);
+	};
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -341,14 +356,14 @@ fn test_swaps_with_pool_configs() {
 					let formatted_price = format_price_f64(
 						pool_initial.current_sqrt_price.to_string().parse::<f64>().unwrap(),
 					);
-					assert_approx_equal_percentage(num_f64, formatted_price, 1f64);
+					assert_approx_equal_percentage!(num_f64, formatted_price, 1f64);
 
 					// Compare poolPriceAfter.
 					let num_f64 = output.poolPriceAfter.as_str().parse::<f64>().unwrap();
 					let formatted_price = format_price_f64(
 						pool.current_sqrt_price.to_string().parse::<f64>().unwrap(),
 					);
-					assert_approx_equal_percentage(num_f64, formatted_price, 1f64);
+					assert_approx_equal_percentage!(num_f64, formatted_price, 1f64);
 
 					// Compare feeGrowthGlobal
 					let fee_growth_global_0_snapshot =
@@ -356,13 +371,13 @@ fn test_swaps_with_pool_configs() {
 					let fee_growth_global_1_snapshot =
 						U256::from_dec_str(output.feeGrowthGlobal1X128Delta.as_str()).unwrap();
 
-					assert_approx_equal_percentage_u256(
+					assert_approx_equal_percentage_u256!(
 						pool.global_fee_growth[PoolSide::Asset0] -
 							pool_initial.global_fee_growth[PoolSide::Asset0],
 						fee_growth_global_0_snapshot,
 						U256::from(1),
 					);
-					assert_approx_equal_percentage_u256(
+					assert_approx_equal_percentage_u256!(
 						pool.global_fee_growth[PoolSide::Asset1] -
 							pool_initial.global_fee_growth[PoolSide::Asset1],
 						fee_growth_global_1_snapshot,
@@ -370,12 +385,12 @@ fn test_swaps_with_pool_configs() {
 					);
 
 					// Compare amount before
-					assert_approx_equal_percentage_u256(
+					assert_approx_equal_percentage_u256!(
 						minted_funds[PoolSide::Asset0],
 						U256::from_dec_str(output.amount0Before.as_str()).unwrap(),
 						U256::from(1),
 					);
-					assert_approx_equal_percentage_u256(
+					assert_approx_equal_percentage_u256!(
 						minted_funds[PoolSide::Asset1],
 						U256::from_dec_str(output.amount1Before.as_str()).unwrap(),
 						U256::from(1),
@@ -405,7 +420,7 @@ fn test_swaps_with_pool_configs() {
 							output.amount0Delta == "1000000000000000000"
 						{
 							assert!(input_side == PoolSide::Asset0);
-							assert_approx_equal_percentage(
+							assert_approx_equal_percentage!(
 								output.amount0Delta.to_string().parse::<f64>().unwrap(),
 								swap_input.to_string().parse::<f64>().unwrap() -
 									swap_output.to_string().parse::<f64>().unwrap(),
@@ -418,7 +433,7 @@ fn test_swaps_with_pool_configs() {
 							output.amount1Delta == "1000000000000000000"
 						{
 							assert!(input_side == PoolSide::Asset1);
-							assert_approx_equal_percentage(
+							assert_approx_equal_percentage!(
 								output.amount1Delta.to_string().parse::<f64>().unwrap(),
 								swap_input.to_string().parse::<f64>().unwrap() -
 									swap_output.to_string().parse::<f64>().unwrap(),
@@ -439,12 +454,12 @@ fn test_swaps_with_pool_configs() {
 					// check the intial values.
 					assert_eq!(pool_initial.current_tick, output.tickBefore);
 
-					assert_approx_equal_percentage_u256(
+					assert_approx_equal_percentage_u256!(
 						minted_funds[PoolSide::Asset0],
 						U256::from_dec_str(output.poolBalance0.as_str()).unwrap(),
 						U256::from(1),
 					);
-					assert_approx_equal_percentage_u256(
+					assert_approx_equal_percentage_u256!(
 						minted_funds[PoolSide::Asset1],
 						U256::from_dec_str(output.poolBalance1.as_str()).unwrap(),
 						U256::from(1),
@@ -453,7 +468,7 @@ fn test_swaps_with_pool_configs() {
 					let formatted_price = format_price_f64(
 						pool_initial.current_sqrt_price.to_string().parse::<f64>().unwrap(),
 					);
-					assert_approx_equal_percentage(num_f64, formatted_price, 1f64);
+					assert_approx_equal_percentage!(num_f64, formatted_price, 1f64);
 				},
 			};
 
