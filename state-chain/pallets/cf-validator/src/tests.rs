@@ -427,9 +427,8 @@ fn rerun_auction_if_not_enough_participants() {
 		assert!(matches!(CurrentRotationPhase::<Test>::get(), RotationPhase::<Test>::Idle));
 		// Set some over node to requalify the first auction winner
 		QualifyAll::<u64>::except(AUCTION_LOSERS[0]);
-		MockBidderProvider::set_winning_bids();
-		// Run to the next epoch boundary to kick of the next auction
-		run_to_block(EPOCH_DURATION * 2);
+		// Run to the next block - we expect and immediate retry
+		run_to_block(EPOCH_DURATION + 1);
 		// Expect a resolved auction and kickedoff key-gen
 		assert!(matches!(
 			CurrentRotationPhase::<Test>::get(),
