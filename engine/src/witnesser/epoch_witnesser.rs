@@ -62,13 +62,7 @@ where
 				)> = None;
 
 				loop {
-					let epoch_start = epoch_start_receiver
-						.recv()
-						.await
-						.map_err(|e| {
-							slog::error!(logger, "Error receiving epoch start: {:?}", e);
-						})
-						.expect("Sender closed");
+					let epoch_start = epoch_start_receiver.recv().await.expect("Sender closed");
 
 					if let Some((end_witnessing_signal, handle)) =
 						end_witnessing_signal_and_handle.take()
