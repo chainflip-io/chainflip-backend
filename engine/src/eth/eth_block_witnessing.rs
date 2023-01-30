@@ -35,8 +35,8 @@ pub trait BlockProcessor: Send {
 
 pub async fn start(
 	epoch_start_receiver: async_broadcast::Receiver<EpochStart<Ethereum>>,
-	eth_rpc: EthDualRpcClient,
 	witnessers: AllWitnessers,
+	eth_rpc: EthDualRpcClient,
 	db: Arc<PersistentKeyDB>,
 	logger: slog::Logger,
 ) -> Result<(), (async_broadcast::Receiver<EpochStart<Ethereum>>, IngressAddressReceivers)> {

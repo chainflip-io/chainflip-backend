@@ -216,7 +216,9 @@ pub async fn start(
 				(epoch_start_receiver, ingress_address_receivers),
 				&logger
 			);
-			let witnessers = create_witnessers(
+			eth_block_witnessing::start(
+				epoch_start_receiver,
+				create_witnessers(
 					&state_chain_client,
 					&dual_rpc,
 					latest_block_hash,
@@ -224,11 +226,8 @@ pub async fn start(
 					&logger,
 				)
 				.await
-				.expect("If we failed here, we cannot connect to the StateChain, so allowing us to restart from here doesn't make much sense.");
-			eth_block_witnessing::start(
-				epoch_start_receiver,
+				.expect("If we failed here, we cannot connect to the StateChain, so allowing us to restart from here doesn't make much sense."),
 				dual_rpc,
-				witnessers,
 				db,
 				logger.clone(),
 			)
