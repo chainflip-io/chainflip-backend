@@ -6,7 +6,7 @@ use std::{
 
 use cf_chains::{eth::assets, Ethereum};
 use cf_primitives::Asset;
-use futures::{Future, FutureExt};
+use futures::Future;
 use sp_core::H160;
 use tokio::task::JoinHandle;
 
@@ -29,19 +29,21 @@ use crate::state_chain_observer::client::storage_api::StorageApi;
 
 use anyhow::Context;
 
+pub type AllWitnessers = (
+	ContractWitnesser<KeyManager, StateChainClient>,
+	ContractWitnesser<StakeManager, StateChainClient>,
+	IngressWitnesser<StateChainClient>,
+	ContractWitnesser<Erc20Witnesser, StateChainClient>,
+	ContractWitnesser<Erc20Witnesser, StateChainClient>,
+);
+
 async fn create_witnessers(
 	state_chain_client: &Arc<StateChainClient>,
 	eth_dual_rpc: &EthDualRpcClient,
 	latest_block_hash: sp_core::H256,
 	ingress_adddress_receivers: IngressAddressReceivers,
 	logger: &slog::Logger,
-) -> anyhow::Result<(
-	ContractWitnesser<KeyManager, StateChainClient>,
-	ContractWitnesser<StakeManager, StateChainClient>,
-	IngressWitnesser<StateChainClient>,
-	ContractWitnesser<Erc20Witnesser, StateChainClient>,
-	ContractWitnesser<Erc20Witnesser, StateChainClient>,
-)> {
+) -> anyhow::Result<AllWitnessers> {
 	let IngressAddressReceivers {
 		eth: eth_address_receiver,
 		flip: flip_address_receiver,
@@ -184,7 +186,7 @@ pub async fn start(
 			let eth_settings = eth_settings.clone();
 			let logger = logger.clone();
 			let state_chain_client = state_chain_client.clone();
-			let expected_chain_id = expected_chain_id.clone();
+			// let expected_chain_id = expected_chain_id.clone();
 			async move {
 				// We create a new RPC on each call to the future, since one common reason for
 				// failure is that the WS connection has been dropped. This ensures that we create a
@@ -206,8 +208,8 @@ pub async fn start(
 					witnessers,
 					logger.clone(),
 				)
+				.await
 			}
-			.flatten()
 		};
 
 	start_with_restart_on_failure(
@@ -288,7 +290,7 @@ mod tests {
 
 		task_scope(|scope| {
 			let value = 0;
-			start_with_restart_on_failure(&scope, start_up_some_loop, value).boxed()
+			start_with_restart_on_failure(scope, start_up_some_loop, value).boxed()
 		})
 		.await
 		.unwrap();

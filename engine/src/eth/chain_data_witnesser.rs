@@ -58,7 +58,6 @@ where
                         priority_fee
                     ).await.map_err(|e| {
 						slog::error!(logger, "Failed to get tracked data: {:?}", e);
-						()
 					})?;
 
                     if latest_data.block_height > last_witnessed_data.block_height || latest_data.base_fee != last_witnessed_data.base_fee {

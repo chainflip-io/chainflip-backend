@@ -6,9 +6,8 @@ use futures::StreamExt;
 use sp_core::H160;
 
 use super::{
-	contract_witnesser::ContractWitnesser, erc20_witnesser::Erc20Witnesser,
-	ingress_witnesser::IngressWitnesser, key_manager::KeyManager, rpc::EthDualRpcClient,
-	safe_dual_block_subscription_from, stake_manager::StakeManager, EthNumberBloom,
+	rpc::EthDualRpcClient, safe_dual_block_subscription_from, witnessing::AllWitnessers,
+	EthNumberBloom,
 };
 use crate::{
 	multisig::{ChainTag, PersistentKeyDB},
@@ -17,6 +16,9 @@ use crate::{
 		checkpointing::{start_checkpointing_for, WitnessedUntil},
 		epoch_witnesser, EpochStart,
 	},
+use crate::witnesser::{
+	checkpointing::{start_checkpointing_for, WitnessedUntil},
+	epoch_witnesser, EpochStart,
 };
 
 pub struct IngressAddressReceivers {
@@ -37,13 +39,7 @@ pub trait BlockProcessor: Send {
 pub async fn start(
 	epoch_start_receiver: async_broadcast::Receiver<EpochStart<Ethereum>>,
 	eth_rpc: EthDualRpcClient,
-	witnessers: (
-		ContractWitnesser<KeyManager, StateChainClient>,
-		ContractWitnesser<StakeManager, StateChainClient>,
-		IngressWitnesser<StateChainClient>,
-		ContractWitnesser<Erc20Witnesser, StateChainClient>,
-		ContractWitnesser<Erc20Witnesser, StateChainClient>,
-	),
+	witnessers: AllWitnessers,
 	db: Arc<PersistentKeyDB>,
 	logger: slog::Logger,
 ) -> Result<(), (async_broadcast::Receiver<EpochStart<Ethereum>>, IngressAddressReceivers)> {

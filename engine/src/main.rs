@@ -181,7 +181,7 @@ async fn main() -> anyhow::Result<()> {
 				tokio::sync::mpsc::unbounded_channel();
 
 			eth::witnessing::start(
-				&scope,
+				scope,
 				settings.eth,
 				state_chain_client.clone(),
 				expected_chain_id,

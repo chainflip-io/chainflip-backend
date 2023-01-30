@@ -67,7 +67,6 @@ where
 						.await
 						.map_err(|e| {
 							slog::error!(logger, "Error receiving epoch start: {:?}", e);
-							()
 						})
 						.expect("Sender closed");
 
