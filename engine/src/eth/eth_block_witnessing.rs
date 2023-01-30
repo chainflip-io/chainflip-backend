@@ -11,14 +11,10 @@ use super::{
 };
 use crate::{
 	multisig::{ChainTag, PersistentKeyDB},
-	state_chain_observer::client::StateChainClient,
 	witnesser::{
 		checkpointing::{start_checkpointing_for, WitnessedUntil},
 		epoch_witnesser, EpochStart,
 	},
-use crate::witnesser::{
-	checkpointing::{start_checkpointing_for, WitnessedUntil},
-	epoch_witnesser, EpochStart,
 };
 
 pub struct IngressAddressReceivers {

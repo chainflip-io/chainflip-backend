@@ -192,6 +192,7 @@ async fn main() -> anyhow::Result<()> {
 					flip: flip_monitor_ingress_receiver,
 					usdc: usdc_monitor_ingress_receiver,
 				},
+				db.clone(),
 				root_logger.clone(),
 			)
 			.await

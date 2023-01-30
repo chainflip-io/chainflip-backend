@@ -11,7 +11,7 @@ use sp_core::H160;
 use tokio::task::JoinHandle;
 
 use crate::{
-	eth::ingress_witnesser::IngressWitnesser, settings,
+	eth::ingress_witnesser::IngressWitnesser, multisig::PersistentKeyDB, settings,
 	state_chain_observer::client::StateChainClient, task_scope::Scope, witnesser::EpochStart,
 };
 
@@ -179,6 +179,7 @@ pub async fn start(
 	latest_block_hash: sp_core::H256,
 	epoch_start_receiver: async_broadcast::Receiver<EpochStart<Ethereum>>,
 	ingress_address_receivers: IngressAddressReceivers,
+	db: Arc<PersistentKeyDB>,
 	logger: slog::Logger,
 ) -> anyhow::Result<()> {
 	let create_and_run_witnesser_futures =
@@ -186,7 +187,7 @@ pub async fn start(
 			let eth_settings = eth_settings.clone();
 			let logger = logger.clone();
 			let state_chain_client = state_chain_client.clone();
-			// let expected_chain_id = expected_chain_id.clone();
+			let db = db.clone();
 			async move {
 				// We create a new RPC on each call to the future, since one common reason for
 				// failure is that the WS connection has been dropped. This ensures that we create a
@@ -206,6 +207,7 @@ pub async fn start(
 					epoch_start_receiver,
 					dual_rpc,
 					witnessers,
+					db,
 					logger.clone(),
 				)
 				.await
