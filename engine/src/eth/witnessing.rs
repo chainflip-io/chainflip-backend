@@ -13,7 +13,8 @@ use tokio::task::JoinHandle;
 
 use crate::{
 	eth::ingress_witnesser::IngressWitnesser, multisig::PersistentKeyDB, settings,
-	state_chain_observer::client::StateChainClient, task_scope::Scope, witnesser::EpochStart,
+	state_chain_observer::client::StateChainClient, task_scope::Scope, try_or_throw,
+	witnesser::EpochStart,
 };
 
 use super::{
@@ -198,19 +199,24 @@ pub async fn start(
 		.map_err(|_r| anyhow::anyhow!("eth::chain_data_witnesser::start failed")),
 	);
 
-	let create_and_run_witnesser_futures =
-		move |(epoch_start_receiver, ingress_address_receivers)| {
-			let eth_settings = eth_settings.clone();
-			let logger = logger.clone();
-			let state_chain_client = state_chain_client.clone();
-			let db = db.clone();
-			async move {
-				// We create a new RPC on each call to the future, since one common reason for
-				// failure is that the WS connection has been dropped. This ensures that we create a
-				// new client, and therefore create a new connection.
-				let dual_rpc =
-					EthDualRpcClient::new(&eth_settings, expected_chain_id, &logger).await.unwrap();
-				let witnessers = create_witnessers(
+	let create_and_run_witnesser_futures = move |(
+		epoch_start_receiver,
+		ingress_address_receivers,
+	)| {
+		let eth_settings = eth_settings.clone();
+		let logger = logger.clone();
+		let state_chain_client = state_chain_client.clone();
+		let db = db.clone();
+		async move {
+			// We create a new RPC on each call to the future, since one common reason for
+			// failure is that the WS connection has been dropped. This ensures that we create a
+			// new client, and therefore create a new connection.
+			let dual_rpc = try_or_throw!(
+				EthDualRpcClient::new(&eth_settings, expected_chain_id, &logger).await,
+				(epoch_start_receiver, ingress_address_receivers),
+				&logger
+			);
+			let witnessers = create_witnessers(
 					&state_chain_client,
 					&dual_rpc,
 					latest_block_hash,
@@ -218,17 +224,17 @@ pub async fn start(
 					&logger,
 				)
 				.await
-				.unwrap();
-				eth_block_witnessing::start(
-					epoch_start_receiver,
-					dual_rpc,
-					witnessers,
-					db,
-					logger.clone(),
-				)
-				.await
-			}
-		};
+				.expect("If we failed here, we cannot connect to the StateChain, so allowing us to restart from here doesn't make much sense.");
+			eth_block_witnessing::start(
+				epoch_start_receiver,
+				dual_rpc,
+				witnessers,
+				db,
+				logger.clone(),
+			)
+			.await
+		}
+	};
 
 	start_with_restart_on_failure(
 		scope,
