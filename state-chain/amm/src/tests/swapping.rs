@@ -367,14 +367,6 @@ fn test_swaps_with_pool_configs() {
 							}
 							return
 						},
-						Err(err) => {
-							panic!(
-										"Expected swap {:?} for pool[{pool_index}] {:#?} to succeed, but it failed: {:?}.",
-										(swap_amount, input_side),
-										pool,
-										err
-									);
-						},
 					}
 
 					// Pools x swapcases combinations that differ from the result in the snapshot
