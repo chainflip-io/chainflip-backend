@@ -269,6 +269,7 @@ impl pallet_cf_pools::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type NetworkFee = NetworkFee;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+	type WeightInfo = ();
 }
 
 impl pallet_cf_lp::Config for Runtime {
@@ -745,6 +746,7 @@ mod benches {
 		[pallet_cf_swapping, Swapping]
 		[pallet_cf_account_roles, AccountRoles]
 		[pallet_cf_ingress_egress, EthereumIngressEgress]
+		[pallet_cf_pools, LiquidityPools]
 	);
 }
 
