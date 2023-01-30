@@ -8,6 +8,19 @@ use anyhow::Context;
 use futures::TryStream;
 use itertools::Itertools;
 
+#[macro_export]
+macro_rules! try_or_throw {
+	($exp:expr, $err_expr:expr, $logger:expr) => {
+		match $exp {
+			Ok(ok) => ok,
+			Err(e) => {
+				slog::error!($logger, "Error: {}", e);
+				return Err($err_expr)
+			},
+		}
+	};
+}
+
 struct MutexStateAndPoisonFlag<T> {
 	poisoned: bool,
 	state: T,

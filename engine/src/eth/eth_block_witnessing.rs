@@ -11,6 +11,7 @@ use super::{
 };
 use crate::{
 	multisig::{ChainTag, PersistentKeyDB},
+	try_or_throw,
 	witnesser::{
 		checkpointing::{start_checkpointing_for, WitnessedUntil},
 		epoch_witnesser, EpochStart,
@@ -71,24 +72,21 @@ pub async fn start(
 				// We need to throw out the receivers so we can restart the process while ensuring
 				// we are still able to receive new ingress addresses to monitor.
 				macro_rules! try_or_throw_receivers {
-					($exp:expr, $logger:expr) => {
-						match $exp {
-							Ok(ok) => ok,
-							Err(e) => {
-								slog::error!($logger, "Error: {}", e);
-								return Err(IngressAddressReceivers {
-									eth: witnessers.eth_ingress.take_ingress_receiver(),
-									flip: witnessers.flip_ingress.take_ingress_receiver(),
-									usdc: witnessers.usdc_ingress.take_ingress_receiver(),
-								})
+					($exp:expr) => {
+						try_or_throw!(
+							$exp,
+							IngressAddressReceivers {
+								eth: witnessers.eth_ingress.take_ingress_receiver(),
+								flip: witnessers.flip_ingress.take_ingress_receiver(),
+								usdc: witnessers.usdc_ingress.take_ingress_receiver(),
 							},
-						}
+							&logger
+						)
 					};
 				}
 
 				let mut block_stream = try_or_throw_receivers!(
-					safe_dual_block_subscription_from(from_block, eth_rpc.clone(), &logger).await,
-					logger
+					safe_dual_block_subscription_from(from_block, eth_rpc.clone(), &logger).await
 				);
 
 				while let Some(block) = block_stream.next().await {
@@ -109,19 +107,16 @@ pub async fn start(
 						block.block_number
 					);
 
-					try_or_throw_receivers!(
-						futures::future::join_all([
-							witnessers.key_manager.process_block(&epoch, &block),
-							witnessers.stake_manager.process_block(&epoch, &block),
-							witnessers.eth_ingress.process_block(&epoch, &block),
-							witnessers.flip_ingress.process_block(&epoch, &block),
-							witnessers.usdc_ingress.process_block(&epoch, &block),
-						])
-						.await
-						.into_iter()
-						.collect::<anyhow::Result<Vec<()>>>(),
-						logger
-					);
+					try_or_throw_receivers!(futures::future::join_all([
+						witnessers.key_manager.process_block(&epoch, &block),
+						witnessers.stake_manager.process_block(&epoch, &block),
+						witnessers.eth_ingress.process_block(&epoch, &block),
+						witnessers.flip_ingress.process_block(&epoch, &block),
+						witnessers.usdc_ingress.process_block(&epoch, &block),
+					])
+					.await
+					.into_iter()
+					.collect::<anyhow::Result<Vec<()>>>());
 
 					witnessed_until_sender
 						.send(WitnessedUntil {
