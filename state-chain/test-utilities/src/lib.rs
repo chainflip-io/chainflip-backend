@@ -30,3 +30,12 @@ macro_rules! assert_event_sequence {
 		)*
 	};
 }
+
+#[macro_export]
+macro_rules! assert_has_event_pattern {
+	($runtime:ty, $evt:pat) => {
+		let events = frame_system::Pallet::<$runtime>::events();
+
+		assert!(System::events().iter().any(|record| matches!(record.event, $evt)))
+	};
+}

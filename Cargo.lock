@@ -752,6 +752,7 @@ version = "0.1.0"
 dependencies = [
  "cf-chains",
  "cf-primitives",
+ "cf-test-utilities",
  "cf-traits",
  "frame-executive",
  "frame-support",
