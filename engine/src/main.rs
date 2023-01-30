@@ -187,29 +187,18 @@ async fn main() -> anyhow::Result<()> {
 				expected_chain_id,
 				latest_block_hash,
 				epoch_start_receiver_1,
+				epoch_start_receiver_2,
 				IngressAddressReceivers {
 					eth: eth_monitor_ingress_receiver,
 					flip: flip_monitor_ingress_receiver,
 					usdc: usdc_monitor_ingress_receiver,
 				},
+				cfe_settings_update_receiver,
 				db.clone(),
 				root_logger.clone(),
 			)
 			.await
 			.unwrap();
-
-			// This witnesser is spawned separately because it does
-			// not use eth block subscription
-			scope.spawn(
-				eth::chain_data_witnesser::start(
-					eth_dual_rpc.clone(),
-					state_chain_client.clone(),
-					epoch_start_receiver_2,
-					cfe_settings_update_receiver,
-					root_logger.clone(),
-				)
-				.map_err(|_r| anyhow::anyhow!("eth::chain_data_witnesser::start failed")),
-			);
 
 			let (dot_monitor_ingress_sender, dot_monitor_ingress_receiver) =
 				tokio::sync::mpsc::unbounded_channel();

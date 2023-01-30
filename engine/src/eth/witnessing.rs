@@ -6,7 +6,8 @@ use std::{
 
 use cf_chains::{eth::assets, Ethereum};
 use cf_primitives::Asset;
-use futures::Future;
+use futures::{Future, TryFutureExt};
+use pallet_cf_environment::cfe;
 use sp_core::H160;
 use tokio::task::JoinHandle;
 
@@ -16,6 +17,7 @@ use crate::{
 };
 
 use super::{
+	chain_data_witnesser,
 	contract_witnesser::ContractWitnesser,
 	erc20_witnesser::Erc20Witnesser,
 	eth_block_witnessing::{self, IngressAddressReceivers},
@@ -178,10 +180,23 @@ pub async fn start(
 	expected_chain_id: web3::types::U256,
 	latest_block_hash: sp_core::H256,
 	epoch_start_receiver: async_broadcast::Receiver<EpochStart<Ethereum>>,
+	epoch_start_receiver_2: async_broadcast::Receiver<EpochStart<Ethereum>>,
 	ingress_address_receivers: IngressAddressReceivers,
+	cfe_settings_update_receiver: tokio::sync::watch::Receiver<cfe::CfeSettings>,
 	db: Arc<PersistentKeyDB>,
 	logger: slog::Logger,
 ) -> anyhow::Result<()> {
+	scope.spawn(
+		chain_data_witnesser::start(
+			EthDualRpcClient::new(&eth_settings, expected_chain_id, &logger).await.unwrap(),
+			state_chain_client.clone(),
+			epoch_start_receiver_2,
+			cfe_settings_update_receiver,
+			logger.clone(),
+		)
+		.map_err(|_r| anyhow::anyhow!("eth::chain_data_witnesser::start failed")),
+	);
+
 	let create_and_run_witnesser_futures =
 		move |(epoch_start_receiver, ingress_address_receivers)| {
 			let eth_settings = eth_settings.clone();
@@ -219,7 +234,9 @@ pub async fn start(
 		create_and_run_witnesser_futures,
 		(epoch_start_receiver, ingress_address_receivers),
 	)
-	.await
+	.await?;
+
+	Ok(())
 }
 
 async fn start_with_restart_on_failure<StaticState, TaskFut, TaskGenerator>(
