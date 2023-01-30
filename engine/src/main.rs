@@ -1,23 +1,13 @@
-use std::{
-	collections::{BTreeSet, HashMap},
-	sync::{Arc, Mutex},
-};
+use std::sync::Arc;
 
 use anyhow::Context;
 
-use cf_chains::Ethereum;
-use cf_primitives::{chains::assets, AccountRole, Asset};
+use cf_primitives::AccountRole;
 use chainflip_engine::{
 	dot::{rpc::DotRpcClient, witnesser as dot_witnesser, DotBroadcaster},
 	eth::{
-		self, build_broadcast_channel,
-		contract_witnesser::ContractWitnesser,
-		erc20_witnesser::Erc20Witnesser,
-		eth_block_witnessing::{self, BlockProcessor},
-		key_manager::KeyManager,
-		rpc::EthDualRpcClient,
-		stake_manager::StakeManager,
-		EthBroadcaster,
+		self, build_broadcast_channel, eth_block_witnessing::IngressAddressReceivers,
+		rpc::EthDualRpcClient, EthBroadcaster,
 	},
 	health::HealthChecker,
 	logging,
@@ -29,21 +19,16 @@ use chainflip_engine::{
 	settings::{CommandLineOptions, Settings},
 	state_chain_observer::{
 		self,
-		client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi, StateChainClient},
+		client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi},
 		EthAddressToMonitorSender,
 	},
-	task_scope::{task_scope, ScopedJoinHandle},
-	witnesser::EpochStart,
+	task_scope::task_scope,
 };
-use eth::ingress_witnesser::IngressWitnesser;
-use itertools::Itertools;
-use sp_core::H160;
 
 use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use clap::Parser;
 use futures::{FutureExt, TryFutureExt};
 use pallet_cf_validator::SemVer;
-use tokio::task::JoinHandle;
 use web3::types::U256;
 
 #[tokio::main]
@@ -186,6 +171,15 @@ async fn main() -> anyhow::Result<()> {
 
 			scope.spawn(dot_multisig_client_backend_future);
 
+			let (eth_monitor_ingress_sender, eth_monitor_ingress_receiver) =
+				tokio::sync::mpsc::unbounded_channel();
+
+			let (flip_monitor_ingress_sender, flip_monitor_ingress_receiver) =
+				tokio::sync::mpsc::unbounded_channel();
+
+			let (usdc_monitor_ingress_sender, usdc_monitor_ingress_receiver) =
+				tokio::sync::mpsc::unbounded_channel();
+
 			eth::witnessing::start(
 				&scope,
 				settings.eth,
@@ -193,9 +187,15 @@ async fn main() -> anyhow::Result<()> {
 				expected_chain_id,
 				latest_block_hash,
 				epoch_start_receiver_1,
+				IngressAddressReceivers {
+					eth: eth_monitor_ingress_receiver,
+					flip: flip_monitor_ingress_receiver,
+					usdc: usdc_monitor_ingress_receiver,
+				},
 				root_logger.clone(),
 			)
-			.await;
+			.await
+			.unwrap();
 
 			// This witnesser is spawned separately because it does
 			// not use eth block subscription
@@ -226,7 +226,11 @@ async fn main() -> anyhow::Result<()> {
 				dot_multisig_client,
 				peer_update_sender,
 				epoch_start_sender,
-				todo!(),
+				EthAddressToMonitorSender {
+					eth: eth_monitor_ingress_sender,
+					flip: flip_monitor_ingress_sender,
+					usdc: usdc_monitor_ingress_sender,
+				},
 				dot_epoch_start_sender,
 				dot_monitor_ingress_sender,
 				dot_monitor_signature_sender,
@@ -272,7 +276,7 @@ async fn main() -> anyhow::Result<()> {
 						.map(|(signature, _)| signature.0)
 						.collect(),
 					state_chain_client,
-					&root_logger,
+					root_logger.clone(),
 				)
 				.map_err(|_r| anyhow::anyhow!("DOT witnesser failed")),
 			);

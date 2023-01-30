@@ -22,7 +22,7 @@ pub async fn start<StateChainClient, EthRpcClient>(
 	epoch_start_receiver: async_broadcast::Receiver<EpochStart<Ethereum>>,
 	cfe_settings_update_receiver: watch::Receiver<CfeSettings>,
 	logger: slog::Logger,
-) -> anyhow::Result<(), async_broadcast::Receiver<EpochStart<Ethereum>>>
+) -> anyhow::Result<(), (async_broadcast::Receiver<EpochStart<Ethereum>>, ())>
 where
 	EthRpcClient: 'static + EthRpcApi + Clone + Send + Sync,
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
@@ -56,7 +56,10 @@ where
                     let latest_data = get_tracked_data(
                         &eth_rpc,
                         priority_fee
-                    ).await?;
+                    ).await.map_err(|e| {
+						slog::error!(logger, "Failed to get tracked data: {:?}", e);
+						()
+					})?;
 
                     if latest_data.block_height > last_witnessed_data.block_height || latest_data.base_fee != last_witnessed_data.base_fee {
                         let _result = state_chain_client

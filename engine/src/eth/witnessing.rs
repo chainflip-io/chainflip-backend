@@ -1,20 +1,29 @@
-use std::{sync::Arc, time::Duration};
+use std::{
+	collections::{BTreeSet, HashMap},
+	sync::Arc,
+	time::Duration,
+};
 
-use cf_chains::Ethereum;
+use cf_chains::{eth::assets, Ethereum};
+use cf_primitives::Asset;
 use futures::{Future, FutureExt};
+use sp_core::H160;
 use tokio::task::JoinHandle;
 
 use crate::{
-	settings, state_chain_observer::client::StateChainClient, task_scope::Scope,
-	witnesser::EpochStart,
+	eth::ingress_witnesser::IngressWitnesser, settings,
+	state_chain_observer::client::StateChainClient, task_scope::Scope, witnesser::EpochStart,
 };
 
 use super::{
 	contract_witnesser::ContractWitnesser,
-	eth_block_witnessing::{self, BlockProcessor},
+	erc20_witnesser::Erc20Witnesser,
+	eth_block_witnessing::{self, IngressAddressReceivers},
 	key_manager::KeyManager,
 	rpc::EthDualRpcClient,
+	stake_manager::StakeManager,
 };
+use itertools::Itertools;
 
 use crate::state_chain_observer::client::storage_api::StorageApi;
 
@@ -24,17 +33,22 @@ async fn create_witnessers(
 	state_chain_client: &Arc<StateChainClient>,
 	eth_dual_rpc: &EthDualRpcClient,
 	latest_block_hash: sp_core::H256,
+	ingress_adddress_receivers: IngressAddressReceivers,
 	logger: &slog::Logger,
-) -> anyhow::Result<[Box<dyn BlockProcessor>; 1]> {
-	// let (eth_monitor_ingress_sender, eth_monitor_ingress_receiver) =
-	// 	tokio::sync::mpsc::unbounded_channel();
+) -> anyhow::Result<(
+	ContractWitnesser<KeyManager, StateChainClient>,
+	ContractWitnesser<StakeManager, StateChainClient>,
+	IngressWitnesser<StateChainClient>,
+	ContractWitnesser<Erc20Witnesser, StateChainClient>,
+	ContractWitnesser<Erc20Witnesser, StateChainClient>,
+)> {
+	let IngressAddressReceivers {
+		eth: eth_address_receiver,
+		flip: flip_address_receiver,
+		usdc: usdc_address_receiver,
+	} = ingress_adddress_receivers;
 
-	// let (eth_monitor_flip_ingress_sender, eth_monitor_flip_ingress_receiver) =
-	// 	tokio::sync::mpsc::unbounded_channel();
-
-	// let (eth_monitor_usdc_ingress_sender, eth_monitor_usdc_ingress_receiver) =
-	// 	tokio::sync::mpsc::unbounded_channel();
-	let key_manager_witnesser = Box::new(ContractWitnesser::new(
+	let key_manager_witnesser = ContractWitnesser::new(
 		KeyManager::new(
 			state_chain_client
 				.storage_value::<pallet_cf_environment::EthereumKeyManagerAddress<state_chain_runtime::Runtime>>(
@@ -48,118 +62,111 @@ async fn create_witnessers(
 		eth_dual_rpc.clone(),
 		false,
 		logger,
-	));
+	);
 
-	// let stake_manager_witnesser = Box::new(ContractWitnesser::new(
-	// 	StakeManager::new(
-	// 		state_chain_client
-	// 			.storage_value::<pallet_cf_environment::EthereumStakeManagerAddress<state_chain_runtime::Runtime>>(
-	// 				latest_block_hash,
-	// 			)
-	// 			.await
-	// 			.context("Failed to get StakeManager address from SC")?
-	// 			.into(),
-	// 	),
-	// 	state_chain_client.clone(),
-	// 	eth_dual_rpc.clone(),
-	// 	true,
-	// 	logger,
-	// ));
+	let stake_manager_witnesser = ContractWitnesser::new(
+		StakeManager::new(
+			state_chain_client
+				.storage_value::<pallet_cf_environment::EthereumStakeManagerAddress<state_chain_runtime::Runtime>>(
+					latest_block_hash,
+				)
+				.await
+				.context("Failed to get StakeManager address from SC")?
+				.into(),
+		),
+		state_chain_client.clone(),
+		eth_dual_rpc.clone(),
+		true,
+		logger,
+	);
 
-	// let eth_chain_ingress_addresses = state_chain_client
-	// 	.storage_map::<pallet_cf_ingress_egress::IntentIngressDetails<
-	// 		state_chain_runtime::Runtime,
-	// 		state_chain_runtime::EthereumInstance,
-	// 	>>(latest_block_hash)
-	// 	.await
-	// 	.context("Failed to get initial ingress details")?
-	// 	.into_iter()
-	// 	.map(|(address, intent)| (intent.ingress_asset, address))
-	// 	.into_group_map();
+	let eth_chain_ingress_addresses = state_chain_client
+		.storage_map::<pallet_cf_ingress_egress::IntentIngressDetails<
+			state_chain_runtime::Runtime,
+			state_chain_runtime::EthereumInstance,
+		>>(latest_block_hash)
+		.await
+		.context("Failed to get initial ingress details")?
+		.into_iter()
+		.map(|(address, intent)| (intent.ingress_asset, address))
+		.into_group_map();
 
-	// fn monitored_addresses_from_all_eth(
-	// 	eth_chain_ingress_addresses: &HashMap<assets::eth::Asset, Vec<H160>>,
-	// 	asset: assets::eth::Asset,
-	// ) -> BTreeSet<H160> {
-	// 	if let Some(eth_ingress_addresses) = eth_chain_ingress_addresses.get(&asset) {
-	// 		eth_ingress_addresses.clone()
-	// 	} else {
-	// 		Default::default()
-	// 	}
-	// 	.iter()
-	// 	.cloned()
-	// 	.collect()
-	// }
+	fn monitored_addresses_from_all_eth(
+		eth_chain_ingress_addresses: &HashMap<assets::eth::Asset, Vec<H160>>,
+		asset: assets::eth::Asset,
+	) -> BTreeSet<H160> {
+		if let Some(eth_ingress_addresses) = eth_chain_ingress_addresses.get(&asset) {
+			eth_ingress_addresses.clone()
+		} else {
+			Default::default()
+		}
+		.iter()
+		.cloned()
+		.collect()
+	}
 
-	// let flip_witnesser = Erc20Witnesser::new(
-	// 	state_chain_client
-	// 		.storage_map_entry::<pallet_cf_environment::EthereumSupportedAssets<state_chain_runtime::Runtime>>(
-	// 			latest_block_hash,
-	// 			&Asset::Flip,
-	// 		)
-	// 		.await
-	// 		.context("Failed to get FLIP address from SC")?
-	// 		.expect("FLIP address must exist at genesis")
-	// 		.into(),
-	// 	assets::eth::Asset::Flip,
-	// 	monitored_addresses_from_all_eth(&eth_chain_ingress_addresses, assets::eth::Asset::Flip),
-	// 	eth_monitor_flip_ingress_receiver,
-	// );
+	let flip_witnesser = Erc20Witnesser::new(
+		state_chain_client
+			.storage_map_entry::<pallet_cf_environment::EthereumSupportedAssets<state_chain_runtime::Runtime>>(
+				latest_block_hash,
+				&Asset::Flip,
+			)
+			.await
+			.context("Failed to get FLIP address from SC")?
+			.expect("FLIP address must exist at genesis")
+			.into(),
+		assets::eth::Asset::Flip,
+		monitored_addresses_from_all_eth(&eth_chain_ingress_addresses, assets::eth::Asset::Flip),
+		flip_address_receiver,
+	);
 
-	// let flip_contract_witnesser = Box::new(ContractWitnesser::new(
-	// 	flip_witnesser,
-	// 	state_chain_client.clone(),
-	// 	eth_dual_rpc.clone(),
-	// 	false,
-	// 	logger,
-	// ));
+	let flip_contract_witnesser = ContractWitnesser::new(
+		flip_witnesser,
+		state_chain_client.clone(),
+		eth_dual_rpc.clone(),
+		false,
+		logger,
+	);
 
-	// let usdc_contract_address = state_chain_client
-	// 	.storage_map_entry::<pallet_cf_environment::EthereumSupportedAssets<state_chain_runtime::Runtime>>(
-	// 		latest_block_hash,
-	// 		&Asset::Usdc,
-	// 	)
-	// 	.await
-	// 	.context("Failed to get USDC address from SC")?
-	// 	.expect("USDC address must exist at genesis");
+	let usdc_contract_address = state_chain_client
+		.storage_map_entry::<pallet_cf_environment::EthereumSupportedAssets<state_chain_runtime::Runtime>>(
+			latest_block_hash,
+			&Asset::Usdc,
+		)
+		.await
+		.context("Failed to get USDC address from SC")?
+		.expect("USDC address must exist at genesis");
 
-	// let usdc_witnesser = Erc20Witnesser::new(
-	// 	usdc_contract_address.into(),
-	// 	assets::eth::Asset::Usdc,
-	// 	monitored_addresses_from_all_eth(&eth_chain_ingress_addresses, assets::eth::Asset::Usdc),
-	// 	eth_monitor_usdc_ingress_receiver,
-	// );
+	let usdc_witnesser = Erc20Witnesser::new(
+		usdc_contract_address.into(),
+		assets::eth::Asset::Usdc,
+		monitored_addresses_from_all_eth(&eth_chain_ingress_addresses, assets::eth::Asset::Usdc),
+		usdc_address_receiver,
+	);
 
-	// let usdc_contract_witnesser = Box::new(ContractWitnesser::new(
-	// 	usdc_witnesser,
-	// 	state_chain_client.clone(),
-	// 	eth_dual_rpc.clone(),
-	// 	false,
-	// 	logger,
-	// ));
+	let usdc_contract_witnesser = ContractWitnesser::new(
+		usdc_witnesser,
+		state_chain_client.clone(),
+		eth_dual_rpc.clone(),
+		false,
+		logger,
+	);
 
-	// let ingress_witnesser = Box::new(IngressWitnesser::new(
-	// 	state_chain_client.clone(),
-	// 	eth_dual_rpc.clone(),
-	// 	monitored_addresses_from_all_eth(&eth_chain_ingress_addresses, assets::eth::Asset::Eth),
-	// 	eth_monitor_ingress_receiver,
-	// 	logger,
-	// ));
+	let ingress_witnesser = IngressWitnesser::new(
+		state_chain_client.clone(),
+		eth_dual_rpc.clone(),
+		monitored_addresses_from_all_eth(&eth_chain_ingress_addresses, assets::eth::Asset::Eth),
+		eth_address_receiver,
+		logger,
+	);
 
-	Ok(
-		[
-			key_manager_witnesser,
-			// stake_manager_witnesser,
-			// flip_contract_witnesser,
-			// usdc_contract_witnesser,
-			// ingress_witnesser,
-		],
-		// EthAddressToMonitorSender {
-		// 	eth: eth_monitor_ingress_sender,
-		// 	flip: eth_monitor_flip_ingress_sender,
-		// 	usdc: eth_monitor_usdc_ingress_sender,
-		// },
-	)
+	Ok((
+		key_manager_witnesser,
+		stake_manager_witnesser,
+		ingress_witnesser,
+		flip_contract_witnesser,
+		usdc_contract_witnesser,
+	))
 }
 
 pub async fn start(
@@ -169,10 +176,11 @@ pub async fn start(
 	expected_chain_id: web3::types::U256,
 	latest_block_hash: sp_core::H256,
 	epoch_start_receiver: async_broadcast::Receiver<EpochStart<Ethereum>>,
+	ingress_address_receivers: IngressAddressReceivers,
 	logger: slog::Logger,
 ) -> anyhow::Result<()> {
 	let create_and_run_witnesser_futures =
-		move |epoch_start_receiver: async_broadcast::Receiver<EpochStart<Ethereum>>| {
+		move |(epoch_start_receiver, ingress_address_receivers)| {
 			let eth_settings = eth_settings.clone();
 			let logger = logger.clone();
 			let state_chain_client = state_chain_client.clone();
@@ -183,10 +191,15 @@ pub async fn start(
 				// new client, and therefore create a new connection.
 				let dual_rpc =
 					EthDualRpcClient::new(&eth_settings, expected_chain_id, &logger).await.unwrap();
-				let witnessers =
-					create_witnessers(&state_chain_client, &dual_rpc, latest_block_hash, &logger)
-						.await
-						.unwrap();
+				let witnessers = create_witnessers(
+					&state_chain_client,
+					&dual_rpc,
+					latest_block_hash,
+					ingress_address_receivers,
+					&logger,
+				)
+				.await
+				.unwrap();
 				eth_block_witnessing::start(
 					epoch_start_receiver,
 					dual_rpc,
@@ -197,8 +210,12 @@ pub async fn start(
 			.flatten()
 		};
 
-	start_with_restart_on_failure(scope, create_and_run_witnesser_futures, epoch_start_receiver)
-		.await
+	start_with_restart_on_failure(
+		scope,
+		create_and_run_witnesser_futures,
+		(epoch_start_receiver, ingress_address_receivers),
+	)
+	.await
 }
 
 async fn start_with_restart_on_failure<StaticState, TaskFut, TaskGenerator>(

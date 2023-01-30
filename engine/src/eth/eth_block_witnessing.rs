@@ -3,15 +3,27 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use cf_chains::Ethereum;
 use futures::StreamExt;
+use sp_core::H160;
 
-use super::{rpc::EthDualRpcClient, safe_dual_block_subscription_from, EthNumberBloom};
+use super::{
+	contract_witnesser::ContractWitnesser, erc20_witnesser::Erc20Witnesser,
+	ingress_witnesser::IngressWitnesser, key_manager::KeyManager, rpc::EthDualRpcClient,
+	safe_dual_block_subscription_from, stake_manager::StakeManager, EthNumberBloom,
+};
 use crate::{
 	multisig::{ChainTag, PersistentKeyDB},
+	state_chain_observer::client::StateChainClient,
 	witnesser::{
 		checkpointing::{start_checkpointing_for, WitnessedUntil},
 		epoch_witnesser, EpochStart,
 	},
 };
+
+pub struct IngressAddressReceivers {
+	pub eth: tokio::sync::mpsc::UnboundedReceiver<H160>,
+	pub flip: tokio::sync::mpsc::UnboundedReceiver<H160>,
+	pub usdc: tokio::sync::mpsc::UnboundedReceiver<H160>,
+}
 
 #[async_trait]
 pub trait BlockProcessor: Send {
@@ -22,14 +34,20 @@ pub trait BlockProcessor: Send {
 	) -> anyhow::Result<()>;
 }
 
-pub async fn start<const N: usize>(
+pub async fn start(
 	epoch_start_receiver: async_broadcast::Receiver<EpochStart<Ethereum>>,
 	eth_rpc: EthDualRpcClient,
-	witnessers: [Box<dyn BlockProcessor>; N],
-    db: Arc<PersistentKeyDB>,
+	witnessers: (
+		ContractWitnesser<KeyManager, StateChainClient>,
+		ContractWitnesser<StakeManager, StateChainClient>,
+		IngressWitnesser<StateChainClient>,
+		ContractWitnesser<Erc20Witnesser, StateChainClient>,
+		ContractWitnesser<Erc20Witnesser, StateChainClient>,
+	),
+	db: Arc<PersistentKeyDB>,
 	logger: slog::Logger,
-) -> Result<(), async_broadcast::Receiver<EpochStart<Ethereum>>> {
-	epoch_witnesser::start(
+) -> Result<(), (async_broadcast::Receiver<EpochStart<Ethereum>>, IngressAddressReceivers)> {
+	match epoch_witnesser::start(
 		"Block_Head".to_string(),
 		epoch_start_receiver,
 		move |_| true,
@@ -43,7 +61,7 @@ pub async fn start<const N: usize>(
 
 				// Don't witness epochs that we've already witnessed
 				if epoch.epoch_index < witnessed_until.epoch_index {
-					return Ok(witnessers)
+					return Result::<_, IngressAddressReceivers>::Ok(witnessers)
 				}
 
 				// We do this because it's possible to witness ahead of the epoch start during the
@@ -59,7 +77,23 @@ pub async fn start<const N: usize>(
 				};
 
 				let mut block_stream =
-					safe_dual_block_subscription_from(from_block, eth_rpc.clone(), &logger).await?;
+					match safe_dual_block_subscription_from(from_block, eth_rpc.clone(), &logger)
+						.await
+					{
+						Ok(stream) => stream,
+						Err(e) => {
+							slog::error!(
+								logger,
+								"Eth block witnessers failed to subscribe to eth blocks: {:?}",
+								e
+							);
+							return Err(IngressAddressReceivers {
+								eth: witnessers.2.take_ingress_receiver(),
+								flip: witnessers.3.take_ingress_receiver(),
+								usdc: witnessers.4.take_ingress_receiver(),
+							})
+						},
+					};
 
 				while let Some(block) = block_stream.next().await {
 					if let Some(end_block) = *end_witnessing_signal.lock().unwrap() {
@@ -79,12 +113,32 @@ pub async fn start<const N: usize>(
 						block.block_number
 					);
 
-					futures::future::join_all(
-						witnessers.iter_mut().map(|w| w.process_block(&epoch, &block)),
-					)
+					match futures::future::join_all([
+						witnessers.0.process_block(&epoch, &block),
+						witnessers.1.process_block(&epoch, &block),
+						witnessers.2.process_block(&epoch, &block),
+						witnessers.3.process_block(&epoch, &block),
+						witnessers.4.process_block(&epoch, &block),
+					])
 					.await
 					.into_iter()
-					.collect::<anyhow::Result<Vec<()>>>()?;
+					.collect::<anyhow::Result<Vec<()>>>()
+					{
+						Ok(_) => (),
+						Err(e) => {
+							slog::error!(
+								logger,
+								"Eth block witnessers failed to process block {:?}: {:?}",
+								block.block_number,
+								e
+							);
+							return Err(IngressAddressReceivers {
+								eth: witnessers.2.take_ingress_receiver(),
+								flip: witnessers.3.take_ingress_receiver(),
+								usdc: witnessers.4.take_ingress_receiver(),
+							})
+						},
+					}
 
 					witnessed_until_sender
 						.send(WitnessedUntil {
@@ -99,7 +153,9 @@ pub async fn start<const N: usize>(
 		},
 		&logger,
 	)
-	.await?;
-
-	Ok(())
+	.await
+	{
+		Ok(_) => Ok(()),
+		Err((epoch_start_receiver, e)) => Err((epoch_start_receiver, e)),
+	}
 }
