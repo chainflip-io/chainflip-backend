@@ -93,7 +93,6 @@ impl pallet_session::Config for Test {
 	type NextSessionRotation = ();
 	type WeightInfo = ();
 }
-
 pub const AUCTION_WINNERS: [ValidatorId; 4] = [0, 1, 2, 3];
 pub const WINNING_BIDS: [Amount; 4] = [120, 120, 110, 105];
 pub const AUCTION_LOSERS: [ValidatorId; 3] = [5, 6, 7];
@@ -112,7 +111,6 @@ thread_local! {
 	));
 
 	pub static NUMBER_OF_AUCTIONS_ATTEMPTED: RefCell<u8> = RefCell::new(0);
-	pub static IS_QUALIFIED: RefCell<bool> = RefCell::new(true);
 }
 
 impl ValidatorRegistration<ValidatorId> for Test {
@@ -133,7 +131,6 @@ impl EpochTransitionHandler for TestEpochTransitionHandler {
 
 thread_local! {
 	pub static MISSED_SLOTS: RefCell<(u64, u64)> = RefCell::new(Default::default());
-
 	pub static BIDDERS: RefCell<Vec<Bid<ValidatorId, Amount>>> = RefCell::new(Default::default());
 }
 
