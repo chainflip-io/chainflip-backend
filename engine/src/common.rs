@@ -12,6 +12,10 @@ use tokio::task::JoinHandle;
 
 use crate::task_scope::Scope;
 
+/// Unrwaps a result, logging the error and returning early eith a provided error expression.
+/// This is particularly useful over `.map_err()` when inside a future, and need to return
+/// early with items from that future, due to the fact the future owns the values you want
+/// to return.
 #[macro_export]
 macro_rules! try_or_throw {
 	($exp:expr, $err_expr:expr, $logger:expr) => {
