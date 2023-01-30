@@ -68,24 +68,28 @@ pub async fn start(
 					epoch.block_number
 				};
 
-				let mut block_stream =
-					match safe_dual_block_subscription_from(from_block, eth_rpc.clone(), &logger)
-						.await
-					{
-						Ok(stream) => stream,
-						Err(e) => {
-							slog::error!(
-								logger,
-								"Eth block witnessers failed to subscribe to eth blocks: {:?}",
-								e
-							);
-							return Err(IngressAddressReceivers {
-								eth: witnessers.eth_ingress.take_ingress_receiver(),
-								flip: witnessers.flip_ingress.take_ingress_receiver(),
-								usdc: witnessers.usdc_ingress.take_ingress_receiver(),
-							})
-						},
+				// We need to throw out the receivers so we can restart the process while ensuring
+				// we are still able to receive new ingress addresses to monitor.
+				macro_rules! try_or_throw_receivers {
+					($exp:expr, $logger:expr) => {
+						match $exp {
+							Ok(ok) => ok,
+							Err(e) => {
+								slog::error!($logger, "Error: {}", e);
+								return Err(IngressAddressReceivers {
+									eth: witnessers.eth_ingress.take_ingress_receiver(),
+									flip: witnessers.flip_ingress.take_ingress_receiver(),
+									usdc: witnessers.usdc_ingress.take_ingress_receiver(),
+								})
+							},
+						}
 					};
+				}
+
+				let mut block_stream = try_or_throw_receivers!(
+					safe_dual_block_subscription_from(from_block, eth_rpc.clone(), &logger).await,
+					logger
+				);
 
 				while let Some(block) = block_stream.next().await {
 					if let Some(end_block) = *end_witnessing_signal.lock().unwrap() {
@@ -105,32 +109,19 @@ pub async fn start(
 						block.block_number
 					);
 
-					match futures::future::join_all([
-						witnessers.key_manager.process_block(&epoch, &block),
-						witnessers.stake_manager.process_block(&epoch, &block),
-						witnessers.eth_ingress.process_block(&epoch, &block),
-						witnessers.flip_ingress.process_block(&epoch, &block),
-						witnessers.usdc_ingress.process_block(&epoch, &block),
-					])
-					.await
-					.into_iter()
-					.collect::<anyhow::Result<Vec<()>>>()
-					{
-						Ok(_) => (),
-						Err(e) => {
-							slog::error!(
-								logger,
-								"Eth block witnessers failed to process block {:?}: {:?}",
-								block.block_number,
-								e
-							);
-							return Err(IngressAddressReceivers {
-								eth: witnessers.eth_ingress.take_ingress_receiver(),
-								flip: witnessers.flip_ingress.take_ingress_receiver(),
-								usdc: witnessers.usdc_ingress.take_ingress_receiver(),
-							})
-						},
-					}
+					try_or_throw_receivers!(
+						futures::future::join_all([
+							witnessers.key_manager.process_block(&epoch, &block),
+							witnessers.stake_manager.process_block(&epoch, &block),
+							witnessers.eth_ingress.process_block(&epoch, &block),
+							witnessers.flip_ingress.process_block(&epoch, &block),
+							witnessers.usdc_ingress.process_block(&epoch, &block),
+						])
+						.await
+						.into_iter()
+						.collect::<anyhow::Result<Vec<()>>>(),
+						logger
+					);
 
 					witnessed_until_sender
 						.send(WitnessedUntil {
