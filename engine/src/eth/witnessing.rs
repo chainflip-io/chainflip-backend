@@ -240,6 +240,11 @@ pub async fn start(
 	Ok(())
 }
 
+/// Starts a task and restarts if it fails.
+/// If it succeeds it will terminate, and not attempt a restart.
+/// The `StaticState` is used to allow for state to be shared between restarts.
+/// Such as a Receiver a task might need to continue to receive data from some other task,
+/// despite the fact it has been restarted.
 async fn start_with_restart_on_failure<StaticState, TaskFut, TaskGenerator>(
 	scope: &Scope<'_, anyhow::Error>,
 	task: TaskGenerator,
