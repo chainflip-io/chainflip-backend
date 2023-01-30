@@ -49,7 +49,7 @@ where
 	State: Send + 'static,
 	G: FnMut(&EpochStart<Chain>) -> bool + Send + 'static,
 {
-	match task_scope(|scope| {
+	task_scope(|scope| {
 		{
 			async {
 				let logger = logger.new(o!(COMPONENT_KEY => format!("{log_key}-Witnesser")));
@@ -106,8 +106,5 @@ where
 		.boxed()
 	})
 	.await
-	{
-		Ok(()) => Ok(()),
-		Err(e) => Err((epoch_start_receiver, e)),
-	}
+	.map_err(|e| (epoch_start_receiver, e))
 }
