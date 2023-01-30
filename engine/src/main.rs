@@ -71,15 +71,6 @@ async fn main() -> anyhow::Result<()> {
 					.context("Failed to get EthereumChainId from state chain")?,
 			);
 
-			let eth_dual_rpc =
-				EthDualRpcClient::new(&settings.eth, expected_chain_id, &root_logger)
-					.await
-					.context("Failed to create EthDualRpcClient")?;
-
-			let eth_broadcaster =
-				EthBroadcaster::new(&settings.eth, eth_dual_rpc.clone(), &root_logger)
-					.context("Failed to create ETH broadcaster")?;
-
 			let dot_rpc_client = DotRpcClient::new(&settings.dot.ws_node_endpoint)
 				.await
 				.context("Failed to create Polkadot Client")?;
@@ -180,6 +171,41 @@ async fn main() -> anyhow::Result<()> {
 			let (usdc_monitor_ingress_sender, usdc_monitor_ingress_receiver) =
 				tokio::sync::mpsc::unbounded_channel();
 
+			let (dot_monitor_ingress_sender, dot_monitor_ingress_receiver) =
+				tokio::sync::mpsc::unbounded_channel();
+
+			let (dot_monitor_signature_sender, dot_monitor_signature_receiver) =
+				tokio::sync::mpsc::unbounded_channel();
+
+			scope.spawn(state_chain_observer::start(
+				state_chain_client.clone(),
+				state_chain_block_stream,
+				EthBroadcaster::new(
+					&settings.eth,
+					EthDualRpcClient::new(&settings.eth, expected_chain_id, &root_logger)
+						.await
+						.context("Failed to create EthDualRpcClient")?,
+					&root_logger,
+				)
+				.context("Failed to create ETH broadcaster")?,
+				DotBroadcaster::new(dot_rpc_client.clone()),
+				eth_multisig_client,
+				dot_multisig_client,
+				peer_update_sender,
+				epoch_start_sender,
+				EthAddressToMonitorSender {
+					eth: eth_monitor_ingress_sender,
+					flip: flip_monitor_ingress_sender,
+					usdc: usdc_monitor_ingress_sender,
+				},
+				dot_epoch_start_sender,
+				dot_monitor_ingress_sender,
+				dot_monitor_signature_sender,
+				cfe_settings_update_sender,
+				latest_block_hash,
+				root_logger.clone(),
+			));
+
 			eth::witnessing::start(
 				scope,
 				settings.eth,
@@ -199,35 +225,6 @@ async fn main() -> anyhow::Result<()> {
 			)
 			.await
 			.unwrap();
-
-			let (dot_monitor_ingress_sender, dot_monitor_ingress_receiver) =
-				tokio::sync::mpsc::unbounded_channel();
-
-			let (dot_monitor_signature_sender, dot_monitor_signature_receiver) =
-				tokio::sync::mpsc::unbounded_channel();
-
-			// Start state chain components
-			scope.spawn(state_chain_observer::start(
-				state_chain_client.clone(),
-				state_chain_block_stream,
-				eth_broadcaster,
-				DotBroadcaster::new(dot_rpc_client.clone()),
-				eth_multisig_client,
-				dot_multisig_client,
-				peer_update_sender,
-				epoch_start_sender,
-				EthAddressToMonitorSender {
-					eth: eth_monitor_ingress_sender,
-					flip: flip_monitor_ingress_sender,
-					usdc: usdc_monitor_ingress_sender,
-				},
-				dot_epoch_start_sender,
-				dot_monitor_ingress_sender,
-				dot_monitor_signature_sender,
-				cfe_settings_update_sender,
-				latest_block_hash,
-				root_logger.clone(),
-			));
 
 			scope.spawn(
 				dot_witnesser::start(
