@@ -451,6 +451,11 @@ impl<T: Config> LiquidityPoolApi<AccountId> for Pallet<T> {
 	fn current_tick(asset: &any::Asset) -> Option<Tick> {
 		Pools::<T>::get(asset).map(|pool| pool.current_tick())
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn new_pool(asset: any::Asset) {
+		Pools::<T>::insert(asset, PoolState::new(0u32, PoolState::sqrt_price_at_tick(0)).unwrap());
+	}
 }
 
 impl<T: Config> cf_traits::FlipBurnInfo for Pallet<T> {

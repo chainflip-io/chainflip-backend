@@ -278,6 +278,7 @@ impl pallet_cf_lp::Config for Runtime {
 	type EgressHandler = chainflip::AnyChainIngressEgressHandler;
 	type LiquidityPoolApi = LiquidityPools;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+	type WeightInfo = pallet_cf_lp::weights::PalletWeight<Runtime>;
 }
 
 impl pallet_cf_account_roles::Config for Runtime {
@@ -745,6 +746,7 @@ mod benches {
 		[pallet_cf_swapping, Swapping]
 		[pallet_cf_account_roles, AccountRoles]
 		[pallet_cf_ingress_egress, EthereumIngressEgress]
+		[pallet_cf_lp, LiquidityProvider]
 	);
 }
 
