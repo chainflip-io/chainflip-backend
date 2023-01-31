@@ -93,13 +93,13 @@ impl pallet_session::Config for Test {
 	type NextSessionRotation = ();
 	type WeightInfo = ();
 }
-pub const AUCTION_WINNERS: [ValidatorId; 5] = [0, 1, 2, 3, 4];
-pub const WINNING_BIDS: [Amount; 5] = [120, 120, 110, 105, 100];
+pub const AUCTION_WINNERS: [ValidatorId; 4] = [0, 1, 2, 3];
+pub const WINNING_BIDS: [Amount; 4] = [120, 120, 110, 105];
 pub const AUCTION_LOSERS: [ValidatorId; 3] = [5, 6, 7];
 pub const UNQUALIFIED_NODE: ValidatorId = 8;
 pub const UNQUALIFIED_NODE_BID: Amount = 200;
 pub const LOSING_BIDS: [Amount; 3] = [99, 90, 74];
-pub const BOND: Amount = 100;
+pub const BOND: Amount = 105;
 
 thread_local! {
 	pub static NEXT_AUCTION_OUTCOME: RefCell<Result<RuntimeAuctionOutcome<Test>, &'static str>> = RefCell::new(Ok(
