@@ -40,6 +40,10 @@ where
 			logger: logger.clone(),
 		}
 	}
+
+	pub fn take_ingress_receiver(self) -> tokio::sync::mpsc::UnboundedReceiver<H160> {
+		self.eth_monitor_ingress_receiver
+	}
 }
 
 #[async_trait]

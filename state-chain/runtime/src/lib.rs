@@ -216,6 +216,7 @@ impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 	type CeremonyIdProvider = pallet_cf_validator::CeremonyIdProvider<Self>;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
 	type SystemStateManager = pallet_cf_environment::SystemStateProvider<Runtime>;
+	type Slasher = FlipSlasher<Self>;
 }
 
 impl pallet_cf_vaults::Config<PolkadotInstance> for Runtime {
@@ -235,6 +236,7 @@ impl pallet_cf_vaults::Config<PolkadotInstance> for Runtime {
 	type CeremonyIdProvider = pallet_cf_validator::CeremonyIdProvider<Self>;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
 	type SystemStateManager = pallet_cf_environment::SystemStateProvider<Runtime>;
+	type Slasher = FlipSlasher<Self>;
 }
 
 use chainflip::address_derivation::AddressDerivation;
@@ -269,6 +271,7 @@ impl pallet_cf_pools::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type NetworkFee = NetworkFee;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+	type WeightInfo = ();
 }
 
 impl pallet_cf_lp::Config for Runtime {
@@ -747,6 +750,7 @@ mod benches {
 		[pallet_cf_account_roles, AccountRoles]
 		[pallet_cf_ingress_egress, EthereumIngressEgress]
 		[pallet_cf_lp, LiquidityProvider]
+		[pallet_cf_pools, LiquidityPools]
 	);
 }
 
