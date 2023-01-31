@@ -201,6 +201,9 @@ async fn main() -> anyhow::Result<()> {
 		settings.log.blacklist.clone(),
 	);
 
+	// Also init the tracing json logger because the multisig clients are now using tracing
+	logging::init_json_logger();
+
 	task_scope(|scope| {
 		async {
 			if let Some(health_check_settings) = &settings.health_check {
