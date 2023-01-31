@@ -82,6 +82,7 @@ impl pallet_cf_pools::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type NetworkFee = NetworkFee;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
+	type WeightInfo = ();
 }
 
 #[allow(unused)]
