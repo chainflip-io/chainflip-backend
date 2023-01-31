@@ -125,7 +125,7 @@ mod tests {
 pub async fn start_with_restart_on_failure<StaticState, TaskFut, TaskGenerator>(
 	scope: &Scope<'_, anyhow::Error>,
 	task: TaskGenerator,
-	static_state: StaticState,
+	mut static_state: StaticState,
 ) -> anyhow::Result<()>
 where
 	TaskFut: Future<Output = Result<(), StaticState>> + Send + 'static,
@@ -133,25 +133,18 @@ where
 	TaskGenerator: Fn(StaticState) -> TaskFut + Send + 'static,
 {
 	scope.spawn(async move {
-
-		let mut current_task: Option<JoinHandle<Result<(), StaticState>>> = None;
-		let mut static_state = Some(static_state);
-
 		loop {
-			// Spawn with handle and then wait for future to finish
-			if let Some(current_task) = current_task.take() {
-				match current_task.await.unwrap() {
-					Ok(()) => break Ok(()),
-					Err(state) => {
-						static_state = Some(state);
-                        // give it some time before the next restart
-                        tokio::time::sleep(Duration::from_secs(2)).await;
-					},
-				}
-			}
-
 			// TODO: Use scope when it can accept any errors, not just anyhow errors
-			current_task = Some(tokio::spawn(task(static_state.take().expect("We only get here on error, where we set this. Or on first loop, where we set this."))));
+			let current_task = tokio::spawn(task(static_state));
+
+			// Spawn with handle and then wait for future to finish
+			static_state = match current_task.await.unwrap() {
+				Ok(()) => break Ok(()),
+				Err(state) => state,
+			};
+
+			// give it some time before the next restart
+			tokio::time::sleep(Duration::from_secs(2)).await;
 		}
 	});
 
