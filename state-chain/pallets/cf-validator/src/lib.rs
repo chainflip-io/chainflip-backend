@@ -993,9 +993,6 @@ impl<T: Config> Pallet<T> {
 			old_epoch,
 		);
 
-		// Update current / historical authority status.
-		let new_authorities_lookup = rotation_state.authority_candidates::<BTreeSet<_>>();
-
 		let new_authorities = rotation_state.authority_candidates::<Vec<_>>();
 
 		Self::initialise_new_epoch(
@@ -1003,13 +1000,7 @@ impl<T: Config> Pallet<T> {
 			&new_authorities,
 			rotation_state.bond,
 			Self::qualified_bidders()
-				.filter_map(|Bid { bidder_id, amount }| {
-					if !new_authorities_lookup.contains(&bidder_id) {
-						Some((bidder_id, amount))
-					} else {
-						None
-					}
-				})
+				.filter_map(|Bid { bidder_id, amount }| Some((bidder_id, amount)))
 				.collect(),
 		);
 
