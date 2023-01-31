@@ -340,7 +340,7 @@ async fn main() -> anyhow::Result<()> {
 				epoch_start_receiver_1,
 				eth_dual_rpc.clone(),
 				eth_block_witnessers,
-				db,
+				db.clone(),
 				&root_logger,
 			));
 
@@ -413,6 +413,7 @@ async fn main() -> anyhow::Result<()> {
 					.map(|(signature, _)| signature.0)
 					.collect(),
 				state_chain_client,
+				db,
 				&root_logger,
 			));
 
