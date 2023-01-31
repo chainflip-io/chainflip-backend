@@ -53,6 +53,14 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 			PendingVaultRotation::<T, I>::get().unwrap(),
 			VaultRotationStatus::AwaitingRotation { .. }
 		));
+
+		// Invert what runs in the migration step as a test
+		if CurrentVaultEpochAndState::<T, I>::get().key_state == KeyState::Active {
+			assert!(Vaults::<T, I>::get(T::EpochInfo::epoch_index()).is_some());
+		} else {
+			assert!(Vaults::<T, I>::get(T::EpochInfo::epoch_index()).is_none());
+		}
+
 		Ok(())
 	}
 }
