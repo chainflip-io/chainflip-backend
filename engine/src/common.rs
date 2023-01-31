@@ -8,7 +8,6 @@ use std::{
 use anyhow::Context;
 use futures::{Future, TryStream};
 use itertools::Itertools;
-use tokio::task::JoinHandle;
 
 use crate::task_scope::Scope;
 
@@ -161,27 +160,21 @@ mod test_restart_on_failure {
 
 	#[tokio::test(start_paused = true)]
 	async fn test_restart_on_failure() {
-		async fn start_up_some_loop(mut my_state: u32) -> Result<(), u32> {
-			my_state += 1;
-			let mut counter = 0;
-			let end_number = 9;
-			for i in my_state..end_number {
-				counter += 1;
+		async fn start_up_some_loop(mut restart_count: u32) -> Result<(), u32> {
+			restart_count += 1;
 
-				// will take 4 restarts (i.e. my_state needs to be 5), since each counts from 0
-				// before we get to 9
+			if restart_count == 6 {
+				return Ok(())
+			}
+
+			for i in 0..10 {
 				if i == 4 {
-					return Err(my_state)
+					return Err(restart_count)
 				}
 			}
-			assert_eq!(my_state, 5);
-			assert_eq!(counter, end_number - my_state);
-			Ok(())
-		}
 
-		// Ensure the sleeps are run. Doesn't actually sleep for 100 seconds with `start_paused =
-		// true`
-		tokio::time::sleep(Duration::from_secs(100)).await;
+			panic!("Should not reach here");
+		}
 
 		task_scope(|scope| {
 			let value = 0;
