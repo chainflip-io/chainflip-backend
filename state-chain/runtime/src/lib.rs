@@ -216,6 +216,7 @@ impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 	type CeremonyIdProvider = pallet_cf_validator::CeremonyIdProvider<Self>;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
 	type SystemStateManager = pallet_cf_environment::SystemStateProvider<Runtime>;
+	type Slasher = FlipSlasher<Self>;
 }
 
 impl pallet_cf_vaults::Config<PolkadotInstance> for Runtime {
@@ -235,6 +236,7 @@ impl pallet_cf_vaults::Config<PolkadotInstance> for Runtime {
 	type CeremonyIdProvider = pallet_cf_validator::CeremonyIdProvider<Self>;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
 	type SystemStateManager = pallet_cf_environment::SystemStateProvider<Runtime>;
+	type Slasher = FlipSlasher<Self>;
 }
 
 use chainflip::address_derivation::AddressDerivation;
