@@ -3,15 +3,26 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use cf_chains::Ethereum;
 use futures::StreamExt;
+use sp_core::H160;
 
-use super::{rpc::EthDualRpcClient, safe_dual_block_subscription_from, EthNumberBloom};
+use super::{
+	rpc::EthDualRpcClient, safe_dual_block_subscription_from, witnessing::AllWitnessers,
+	EthNumberBloom,
+};
 use crate::{
 	multisig::{ChainTag, PersistentKeyDB},
+	try_or_throw,
 	witnesser::{
 		checkpointing::{start_checkpointing_for, WitnessedUntil},
 		epoch_witnesser, EpochStart,
 	},
 };
+
+pub struct IngressAddressReceivers {
+	pub eth: tokio::sync::mpsc::UnboundedReceiver<H160>,
+	pub flip: tokio::sync::mpsc::UnboundedReceiver<H160>,
+	pub usdc: tokio::sync::mpsc::UnboundedReceiver<H160>,
+}
 
 #[async_trait]
 pub trait BlockProcessor: Send {
@@ -22,13 +33,13 @@ pub trait BlockProcessor: Send {
 	) -> anyhow::Result<()>;
 }
 
-pub async fn start<const N: usize>(
+pub async fn start(
 	epoch_start_receiver: async_broadcast::Receiver<EpochStart<Ethereum>>,
+	witnessers: AllWitnessers,
 	eth_rpc: EthDualRpcClient,
-	witnessers: [Box<dyn BlockProcessor>; N],
 	db: Arc<PersistentKeyDB>,
-	logger: &slog::Logger,
-) -> anyhow::Result<()> {
+	logger: slog::Logger,
+) -> Result<(), (async_broadcast::Receiver<EpochStart<Ethereum>>, IngressAddressReceivers)> {
 	epoch_witnesser::start(
 		"Block_Head".to_string(),
 		epoch_start_receiver,
@@ -43,7 +54,7 @@ pub async fn start<const N: usize>(
 
 				// Don't witness epochs that we've already witnessed
 				if epoch.epoch_index < witnessed_until.epoch_index {
-					return Ok(witnessers)
+					return Result::<_, IngressAddressReceivers>::Ok(witnessers)
 				}
 
 				// We do this because it's possible to witness ahead of the epoch start during the
@@ -58,8 +69,25 @@ pub async fn start<const N: usize>(
 					epoch.block_number
 				};
 
-				let mut block_stream =
-					safe_dual_block_subscription_from(from_block, eth_rpc.clone(), &logger).await?;
+				// We need to throw out the receivers so we can restart the process while ensuring
+				// we are still able to receive new ingress addresses to monitor.
+				macro_rules! try_or_throw_receivers {
+					($exp:expr) => {
+						try_or_throw!(
+							$exp,
+							IngressAddressReceivers {
+								eth: witnessers.eth_ingress.take_ingress_receiver(),
+								flip: witnessers.flip_ingress.take_ingress_receiver(),
+								usdc: witnessers.usdc_ingress.take_ingress_receiver(),
+							},
+							&logger
+						)
+					};
+				}
+
+				let mut block_stream = try_or_throw_receivers!(
+					safe_dual_block_subscription_from(from_block, eth_rpc.clone(), &logger).await
+				);
 
 				while let Some(block) = block_stream.next().await {
 					if let Some(end_block) = *end_witnessing_signal.lock().unwrap() {
@@ -79,12 +107,16 @@ pub async fn start<const N: usize>(
 						block.block_number
 					);
 
-					futures::future::join_all(
-						witnessers.iter_mut().map(|w| w.process_block(&epoch, &block)),
-					)
+					try_or_throw_receivers!(futures::future::join_all([
+						witnessers.key_manager.process_block(&epoch, &block),
+						witnessers.stake_manager.process_block(&epoch, &block),
+						witnessers.eth_ingress.process_block(&epoch, &block),
+						witnessers.flip_ingress.process_block(&epoch, &block),
+						witnessers.usdc_ingress.process_block(&epoch, &block),
+					])
 					.await
 					.into_iter()
-					.collect::<anyhow::Result<Vec<()>>>()?;
+					.collect::<anyhow::Result<Vec<()>>>());
 
 					witnessed_until_sender
 						.send(WitnessedUntil {
@@ -97,9 +129,7 @@ pub async fn start<const N: usize>(
 				Ok(witnessers)
 			}
 		},
-		logger,
+		&logger,
 	)
-	.await?;
-
-	Ok(())
+	.await
 }

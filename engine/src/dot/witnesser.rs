@@ -268,8 +268,8 @@ pub async fn start<StateChainClient, DotRpc>(
 	signature_receiver: tokio::sync::mpsc::UnboundedReceiver<[u8; 64]>,
 	monitored_signatures: BTreeSet<[u8; 64]>,
 	state_chain_client: Arc<StateChainClient>,
-	logger: &slog::Logger,
-) -> Result<()>
+	logger: slog::Logger,
+) -> std::result::Result<(), (async_broadcast::Receiver<EpochStart<Polkadot>>, anyhow::Error)>
 where
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
 	DotRpc: DotRpcApi + 'static + Send + Sync + Clone,
@@ -470,7 +470,7 @@ where
 				Ok((monitored_ingress_addresses, ingress_address_receiver, monitored_signatures, signature_receiver))
 			}
 		},
-		logger,
+		&logger,
 	)
 	.await
 }
@@ -759,7 +759,7 @@ mod tests {
 			signature_receiver,
 			BTreeSet::default(),
 			state_chain_client,
-			&logger,
+			logger,
 		)
 		.await
 		.unwrap();

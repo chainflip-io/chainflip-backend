@@ -2,11 +2,31 @@ use std::{
 	fmt::Display,
 	ops::{Deref, DerefMut},
 	path::Path,
+	time::Duration,
 };
 
 use anyhow::Context;
-use futures::TryStream;
+use futures::{Future, TryStream};
 use itertools::Itertools;
+
+use crate::task_scope::Scope;
+
+/// Unrwaps a result, logging the error and returning early eith a provided error expression.
+/// This is particularly useful over `.map_err()` when inside a future, and need to return
+/// early with items from that future, due to the fact the future owns the values you want
+/// to return.
+#[macro_export]
+macro_rules! try_or_throw {
+	($exp:expr, $err_expr:expr, $logger:expr) => {
+		match $exp {
+			Ok(ok) => ok,
+			Err(e) => {
+				slog::error!($logger, "Error: {}", e);
+				return Err($err_expr)
+			},
+		}
+	};
+}
 
 struct MutexStateAndPoisonFlag<T> {
 	poisoned: bool,
@@ -93,6 +113,75 @@ mod tests {
 			.unwrap();
 		}
 		mutex.lock().await;
+	}
+}
+
+/// Starts a task and restarts if it fails.
+/// If it succeeds it will terminate, and not attempt a restart.
+/// The `StaticState` is used to allow for state to be shared between restarts.
+/// Such as a Receiver a task might need to continue to receive data from some other task,
+/// despite the fact it has been restarted.
+pub async fn start_with_restart_on_failure<StaticState, TaskFut, TaskGenerator>(
+	scope: &Scope<'_, anyhow::Error>,
+	task: TaskGenerator,
+	mut static_state: StaticState,
+) -> anyhow::Result<()>
+where
+	TaskFut: Future<Output = Result<(), StaticState>> + Send + 'static,
+	StaticState: Send + 'static,
+	TaskGenerator: Fn(StaticState) -> TaskFut + Send + 'static,
+{
+	scope.spawn(async move {
+		loop {
+			// TODO: Use scope when it can accept any errors, not just anyhow errors
+			let current_task = tokio::spawn(task(static_state));
+
+			// Spawn with handle and then wait for future to finish
+			static_state = match current_task.await.unwrap() {
+				Ok(()) => break Ok(()),
+				Err(state) => state,
+			};
+
+			// give it some time before the next restart
+			tokio::time::sleep(Duration::from_secs(2)).await;
+		}
+	});
+
+	Ok(())
+}
+
+#[cfg(test)]
+mod test_restart_on_failure {
+	use futures::FutureExt;
+
+	use crate::task_scope::task_scope;
+
+	use super::*;
+
+	#[tokio::test(start_paused = true)]
+	async fn test_restart_on_failure() {
+		async fn start_up_some_loop(mut restart_count: u32) -> Result<(), u32> {
+			restart_count += 1;
+
+			if restart_count == 6 {
+				return Ok(())
+			}
+
+			for i in 0..10 {
+				if i == 4 {
+					return Err(restart_count)
+				}
+			}
+
+			panic!("Should not reach here");
+		}
+
+		task_scope(|scope| {
+			let value = 0;
+			start_with_restart_on_failure(scope, start_up_some_loop, value).boxed()
+		})
+		.await
+		.unwrap();
 	}
 }
 
