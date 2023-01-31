@@ -1000,7 +1000,7 @@ impl<T: Config> Pallet<T> {
 			&new_authorities,
 			rotation_state.bond,
 			Self::qualified_bidders()
-				.filter_map(|Bid { bidder_id, amount }| Some((bidder_id, amount)))
+				.map(|Bid { bidder_id, amount }| (bidder_id, amount))
 				.collect(),
 		);
 
