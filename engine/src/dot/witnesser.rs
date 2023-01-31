@@ -28,7 +28,7 @@ use crate::{
 	state_chain_observer::client::extrinsic_api::ExtrinsicApi,
 	witnesser::{
 		block_head_stream_from::block_head_stream_from,
-		checkpointing::{start_checkpointing_for, WitnessedUntil},
+		checkpointing::{get_witnesser_start_block_with_checkpointing, WitnessedUntil},
 		epoch_witnesser::{self, should_end_witnessing},
 		BlockNumberable, EpochStart,
 	},
@@ -290,27 +290,10 @@ where
 			let state_chain_client = state_chain_client.clone();
 			let db = db.clone();
 			async move {
-				let (witnessed_until, witnessed_until_sender, _checkpointing_join_handle) =
-					start_checkpointing_for(ChainTag::Polkadot, db, &logger);
-
-				// Don't witness epochs that we've already witnessed
-				if epoch_start.epoch_index < witnessed_until.epoch_index {
-					return Ok((monitored_ingress_addresses, ingress_address_receiver, monitored_signatures, signature_receiver))
-				}
-
-				// We do this because it's possible to witness ahead of the epoch start during the
-				// previous epoch. If we don't start witnessing from the epoch start, when we
-				// receive a new epoch, we won't witness some of the blocks for the particular
-				// epoch, since witness extrinsics are submitted with the epoch number it's for.
-				let from_block = if witnessed_until.epoch_index == epoch_start.epoch_index {
-					// Start where we left off
-					witnessed_until.block_number as PolkadotBlockNumber // TODO: better conversion
-				} else {
-					// We haven't witnessed this epoch yet, so start from the beginning
-					epoch_start.block_number
+				let (from_block, witnessed_until_sender) = match get_witnesser_start_block_with_checkpointing(ChainTag::Polkadot, &epoch_start, db, &logger){
+					Some((from_block, witnessed_until_sender)) => (from_block, witnessed_until_sender),
+					None => return Ok((monitored_ingress_addresses, ingress_address_receiver, monitored_signatures, signature_receiver)),
 				};
-
-
 
 				let safe_head_stream =
 					take_while_ok(dot_client.subscribe_finalized_heads().await?, &logger)

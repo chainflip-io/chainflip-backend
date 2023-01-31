@@ -8,7 +8,7 @@ use super::{rpc::EthDualRpcClient, safe_dual_block_subscription_from, EthNumberB
 use crate::{
 	multisig::{ChainTag, PersistentKeyDB},
 	witnesser::{
-		checkpointing::{start_checkpointing_for, WitnessedUntil},
+		checkpointing::{get_witnesser_start_block_with_checkpointing, WitnessedUntil},
 		epoch_witnesser, EpochStart,
 	},
 };
@@ -38,25 +38,17 @@ pub async fn start<const N: usize>(
 			let eth_rpc = eth_rpc.clone();
 			let db = db.clone();
 			async move {
-				let (witnessed_until, witnessed_until_sender, _checkpointing_join_handle) =
-					start_checkpointing_for(ChainTag::Ethereum, db, &logger);
-
-				// Don't witness epochs that we've already witnessed
-				if epoch.epoch_index < witnessed_until.epoch_index {
-					return Ok(witnessers)
-				}
-
-				// We do this because it's possible to witness ahead of the epoch start during the
-				// previous epoch. If we don't start witnessing from the epoch start, when we
-				// receive a new epoch, we won't witness some of the blocks for the particular
-				// epoch, since witness extrinsics are submitted with the epoch number it's for.
-				let from_block = if witnessed_until.epoch_index == epoch.epoch_index {
-					// Start where we left off
-					witnessed_until.block_number
-				} else {
-					// We haven't witnessed this epoch yet, so start from the beginning
-					epoch.block_number
-				};
+				let (from_block, witnessed_until_sender) =
+					match get_witnesser_start_block_with_checkpointing(
+						ChainTag::Ethereum,
+						&epoch,
+						db,
+						&logger,
+					) {
+						Some((from_block, witnessed_until_sender)) =>
+							(from_block, witnessed_until_sender),
+						None => return Ok(witnessers),
+					};
 
 				let mut block_stream =
 					safe_dual_block_subscription_from(from_block, eth_rpc.clone(), &logger).await?;

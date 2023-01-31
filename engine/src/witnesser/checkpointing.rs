@@ -6,6 +6,8 @@ use tokio::task::JoinHandle;
 
 use crate::multisig::{ChainTag, PersistentKeyDB};
 
+use super::EpochStart;
+
 const UPDATE_INTERVAL: Duration = Duration::from_secs(4);
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default)]
@@ -14,7 +16,7 @@ pub struct WitnessedUntil {
 	pub block_number: u64,
 }
 
-pub fn start_checkpointing_for(
+fn start_checkpointing_for(
 	chain_tag: ChainTag,
 	db: Arc<PersistentKeyDB>,
 	logger: &slog::Logger,
@@ -75,6 +77,41 @@ pub fn start_checkpointing_for(
 	});
 
 	(witnessed_until, witnessed_until_sender, join_handle)
+}
+
+/// Loads the checkpoint from the db then starts checkpointing. Returns the block number at which to
+/// start witnessing and `None` if the epoch has already been witnessed.
+pub fn get_witnesser_start_block_with_checkpointing<Chain: cf_chains::Chain>(
+	chain_tag: ChainTag,
+	epoch_start: &EpochStart<Chain>,
+	db: Arc<PersistentKeyDB>,
+	logger: &slog::Logger,
+) -> Option<(Chain::ChainBlockNumber, tokio::sync::watch::Sender<WitnessedUntil>)>
+where
+	<<Chain as cf_chains::Chain>::ChainBlockNumber as TryFrom<u64>>::Error: std::fmt::Debug,
+{
+	let (witnessed_until, witnessed_until_sender, _checkpointing_join_handle) =
+		start_checkpointing_for(chain_tag, db, logger);
+
+	// Don't witness epochs that we've already witnessed
+	if epoch_start.epoch_index < witnessed_until.epoch_index {
+		return None
+	}
+
+	// We do this because it's possible to witness ahead of the epoch start during the
+	// previous epoch. If we don't start witnessing from the epoch start, when we
+	// receive a new epoch, we won't witness some of the blocks for the particular
+	// epoch, since witness extrinsics are submitted with the epoch number it's for.
+	let from_block = if witnessed_until.epoch_index == epoch_start.epoch_index {
+		// Start where we left off
+		Chain::ChainBlockNumber::try_from(witnessed_until.block_number)
+			.expect("Should convert block number from u64")
+	} else {
+		// We haven't witnessed this epoch yet, so start from the beginning
+		epoch_start.block_number
+	};
+
+	Some((from_block, witnessed_until_sender))
 }
 
 #[cfg(test)]
