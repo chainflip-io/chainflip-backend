@@ -32,7 +32,7 @@ use sp_runtime::{
 	traits::{
 		AtLeast32BitUnsigned, MaybeSerializeDeserialize, Saturating, UniqueSaturatedInto, Zero,
 	},
-	DispatchError, Permill, RuntimeDebug,
+	DispatchError, Percent, Permill, RuntimeDebug,
 };
 use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 
@@ -569,6 +569,26 @@ impl<T: Config> OnKilledAccount<T::AccountId> for BurnFlipAccount<T> {
 
 pub struct FlipSlasher<T: Config>(PhantomData<T>);
 
+impl<T, B> FlipSlasher<T>
+where
+	T: Config<BlockNumber = B>,
+	B: UniqueSaturatedInto<T::Balance> + Into<T::Balance>,
+{
+	fn attempt_slash(
+		account_id: &T::AccountId,
+		account: FlipAccount<T::Balance>,
+		slash_amount: T::Balance,
+	) {
+		if !slash_amount.is_zero() && account.can_be_slashed(slash_amount) {
+			Pallet::<T>::settle(account_id, Pallet::<T>::burn(slash_amount).into());
+			Pallet::<T>::deposit_event(Event::<T>::SlashingPerformed {
+				who: account_id.clone(),
+				amount: slash_amount,
+			});
+		}
+	}
+}
+
 impl<T, B> Slashing for FlipSlasher<T>
 where
 	T: Config<BlockNumber = B>,
@@ -580,12 +600,12 @@ where
 	fn slash(account_id: &Self::AccountId, blocks: Self::BlockNumber) {
 		let account = Account::<T>::get(account_id);
 		let slash_amount = (SlashingRate::<T>::get() * account.bond).saturating_mul(blocks.into());
-		if !slash_amount.is_zero() && account.can_be_slashed(slash_amount) {
-			Pallet::<T>::settle(account_id, Pallet::<T>::burn(slash_amount).into());
-			Pallet::<T>::deposit_event(Event::<T>::SlashingPerformed {
-				who: account_id.clone(),
-				amount: slash_amount,
-			});
-		}
+		Self::attempt_slash(account_id, account, slash_amount);
+	}
+
+	fn slash_stake(account_id: &Self::AccountId, slash_rate: Percent) {
+		let account = Account::<T>::get(account_id);
+		let slash_amount = slash_rate * account.stake;
+		Self::attempt_slash(account_id, account, slash_amount);
 	}
 }
