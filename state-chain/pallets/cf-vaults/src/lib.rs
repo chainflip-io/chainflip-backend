@@ -370,6 +370,8 @@ pub mod pallet {
 	pub(super) type KeygenResponseTimeout<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
+	/// The % amoount of the bond that is slashed for an agreed reported party
+	/// (2/3 must agree the node was an offender) on keygen failure.
 	#[pallet::storage]
 	pub(super) type KeygenSlashRate<T, I = ()> = StorageValue<_, Percent, ValueQuery>;
 
