@@ -384,19 +384,13 @@ pub fn init_json_logger() {
 	tracing_subscriber::fmt().json().with_max_level(tracing::Level::TRACE).init();
 }
 
-pub fn init_cli_logger_verbose() {
-	use tracing_subscriber::{
-		prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt,
-	};
-
-	// TODO: this is failing to init when running all CFE tests due to "global default trace
-	// dispatcher has already been set". What is setting it?
-	let _res = tracing_subscriber::registry().with(CLILoggerLayer).try_init();
-}
-
 #[cfg(test)]
 pub fn init_test_logger() {
-	init_cli_logger_verbose();
+	use tracing_subscriber::{
+		prelude::__tracing_subscriber_SubscriberExt, registry, util::SubscriberInitExt,
+	};
+
+	let _res = registry().with(CLILoggerLayer).try_init();
 }
 
 use tracing::Level;
