@@ -213,5 +213,22 @@ fn incompatible_gov_key_is_noop() {
 		);
 	});
 }
-// TODO:
-// - Use Mock to ensure gov key is broadcast to correct chain.
+
+#[test]
+fn govkey_broadcast_to_correct_chain() {
+	new_test_ext().execute_with(|| {
+		let gov_key = b"SO_IMPORTANT".to_vec();
+		GovKeyUpdateAwaitingEnactment::<Test>::put((1, (ForeignChain::Polkadot, gov_key.clone())));
+		TokenholderGovernance::on_initialize(1);
+		assert_eq!(
+			MockBroadcaster::broadcasted_gov_key().unwrap(),
+			(ForeignChain::Polkadot, None, gov_key.clone(),)
+		);
+		GovKeyUpdateAwaitingEnactment::<Test>::put((1, (ForeignChain::Ethereum, gov_key.clone())));
+		TokenholderGovernance::on_initialize(1);
+		assert_eq!(
+			MockBroadcaster::broadcasted_gov_key().unwrap(),
+			(ForeignChain::Ethereum, None, gov_key,)
+		);
+	});
+}

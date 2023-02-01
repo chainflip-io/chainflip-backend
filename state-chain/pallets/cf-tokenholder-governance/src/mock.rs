@@ -1,5 +1,5 @@
 use crate::{self as pallet_cf_tokenholder_governance};
-use cf_chains::{ChainCrypto, Ethereum};
+use cf_chains::{ChainCrypto, Ethereum, ForeignChain};
 use cf_traits::{
 	impl_mock_stake_transfer, impl_mock_waived_fees,
 	mocks::{
@@ -103,6 +103,9 @@ pub struct MockBroadcaster;
 impl MockBroadcaster {
 	pub fn set_behaviour(behaviour: MockBroadcasterBehaviour) {
 		MockBroadcasterStorage::put(behaviour);
+	}
+	pub fn broadcasted_gov_key() -> Option<(ForeignChain, Option<Vec<u8>>, Vec<u8>)> {
+		GovKeyBroadcasted::get()
 	}
 	fn is_govkey_compatible() -> bool {
 		MockBroadcasterStorage::get().unwrap_or_default().key_compatible
