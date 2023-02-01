@@ -1,23 +1,9 @@
 use crate::*;
 use cf_chains::{ChainCrypto, Ethereum};
-use cf_primitives::BlockNumber;
 use frame_system::pallet_prelude::BlockNumberFor;
 use sp_std::{collections::btree_set::BTreeSet, marker::PhantomData};
 
 pub struct Migration<T: Config>(PhantomData<T>);
-
-#[cfg(feature = "try-runtime")]
-mod try_runtime_tests {
-	use super::*;
-
-	pub const GOV_KEY: [u8; 20] = [0xcf; 20];
-	pub const SUBMITTER: [u8; 32] = [0xcf; 32];
-	pub const CHAIN: ForeignChain = ForeignChain::Ethereum;
-
-	pub fn submitter_account_id<T: frame_system::Config>() -> T::AccountId {
-		Decode::decode(&mut &SUBMITTER[..]).unwrap()
-	}
-}
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub enum ProposalV0 {
@@ -78,33 +64,55 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
-		// Ensure we have a proposal to migrate in case there are none on the test chain.
-		let proposal = ProposalV0::SetGovernanceKey(try_runtime_tests::GOV_KEY.into());
-		let block = <frame_system::Pallet<T>>::block_number() + T::VotingPeriod::get();
-		old::Proposals::<T>::insert(
-			<frame_system::Pallet<T>>::block_number() + T::VotingPeriod::get(),
-			proposal.clone(),
-		);
-		old::Backers::<T>::insert(proposal, vec![try_runtime_tests::submitter_account_id::<T>()]);
-		Ok(block.encode())
+		// Not much to test here - see unit test.
+		Ok(Default::default())
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(block_encoded: Vec<u8>) -> Result<(), &'static str> {
-		let block = <BlockNumberFor<T> as Decode>::decode(&mut &block_encoded[..]).unwrap();
-		let expected_proposal =
-			Proposal::SetGovernanceKey(try_runtime_tests::CHAIN, try_runtime_tests::GOV_KEY.into());
+	fn post_upgrade(_: Vec<u8>) -> Result<(), &'static str> {
+		ensure!(old::Backers::<T>::drain().count() == 0, "Old storage for Backers not cleared.");
 		ensure!(
-			Proposals::<T>::get(block)
-				.expect("Proposal should have been inserted during pre upgrade") ==
-				expected_proposal,
-			"Proposal translation is incorrect."
-		);
-		ensure!(
-			Backers::<T>::get(&expected_proposal)
-				.contains(&try_runtime_tests::submitter_account_id::<T>()),
-			"Submitter account is missing."
+			old::Proposals::<T>::drain().count() == 0,
+			"Old storage for Proposals not cleared."
 		);
 		Ok(())
+	}
+}
+
+#[cfg(test)]
+mod test_runtime_upgrade {
+	use super::*;
+	use mock::Test;
+
+	pub const GOV_KEY: [u8; 20] = [0xcf; 20];
+	pub const BACKERS: &[u64; 3] = &[1, 2, 3];
+	pub const CHAIN: ForeignChain = ForeignChain::Ethereum;
+
+	#[test]
+	fn test() {
+		mock::new_test_ext().execute_with(|| {
+			// pre upgrade
+			let proposal = ProposalV0::SetGovernanceKey(GOV_KEY.into());
+			let block = <frame_system::Pallet<Test>>::block_number() +
+				<Test as Config>::VotingPeriod::get();
+			old::Proposals::<Test>::insert(block, proposal.clone());
+			old::Backers::<Test>::insert(proposal, BACKERS.as_slice());
+
+			// upgrade
+			Migration::<Test>::on_runtime_upgrade();
+
+			// post upgrade
+			let expected_proposal = Proposal::SetGovernanceKey(CHAIN, GOV_KEY.into());
+			assert_eq!(
+				Proposals::<Test>::get(block).unwrap(),
+				expected_proposal,
+				"Proposal translation is incorrect."
+			);
+			assert_eq!(
+				Backers::<Test>::get(&expected_proposal),
+				BTreeSet::<_>::from_iter(BACKERS.clone()),
+				"Backers accounts are incorrect."
+			);
+		})
 	}
 }
