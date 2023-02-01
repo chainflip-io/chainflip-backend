@@ -5,44 +5,44 @@ use sp_std::{collections::btree_set::BTreeSet, marker::PhantomData};
 
 pub struct Migration<T: Config>(PhantomData<T>);
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
-pub enum ProposalV0 {
-	SetGovernanceKey(<Ethereum as ChainCrypto>::GovKey),
-	SetCommunityKey(<Ethereum as ChainCrypto>::GovKey),
-}
-
-mod old {
+mod v0 {
 	use super::*;
 	use frame_support::Twox64Concat;
 
+	#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
+	pub enum Proposal {
+		SetGovernanceKey(<Ethereum as ChainCrypto>::GovKey),
+		SetCommunityKey(<Ethereum as ChainCrypto>::GovKey),
+	}
+
 	#[frame_support::storage_alias]
 	pub type Proposals<T: Config> =
-		StorageMap<TokenholderGovernance, Twox64Concat, BlockNumberFor<T>, ProposalV0>;
+		StorageMap<TokenholderGovernance, Twox64Concat, BlockNumberFor<T>, Proposal>;
 
 	#[frame_support::storage_alias]
 	pub type Backers<T: Config> = StorageMap<
 		TokenholderGovernance,
 		Twox64Concat,
-		ProposalV0,
+		Proposal,
 		Vec<<T as frame_system::Config>::AccountId>,
 	>;
 }
 
-impl From<ProposalV0> for Proposal {
-	fn from(old: ProposalV0) -> Self {
+impl From<v0::Proposal> for Proposal {
+	fn from(old: v0::Proposal) -> Self {
 		match old {
-			ProposalV0::SetGovernanceKey(ref new_key) =>
+			v0::Proposal::SetGovernanceKey(ref new_key) =>
 				Proposal::SetGovernanceKey(ForeignChain::Ethereum, new_key.encode()),
-			ProposalV0::SetCommunityKey(new_key) => Proposal::SetCommunityKey(new_key),
+			v0::Proposal::SetCommunityKey(new_key) => Proposal::SetCommunityKey(new_key),
 		}
 	}
 }
 
 impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
-		Proposals::<T>::translate_values::<ProposalV0, _>(|proposal_v0| Some(proposal_v0.into()));
+		Proposals::<T>::translate_values::<v0::Proposal, _>(|proposal_v0| Some(proposal_v0.into()));
 		// Collect this into a vec first to avoid mutating the map in-place.
-		for (proposal_v1, backers_set) in old::Backers::<T>::drain()
+		for (proposal_v1, backers_set) in v0::Backers::<T>::drain()
 			.map(|(proposal_v0, backers_vec)| {
 				(proposal_v0.into(), BTreeSet::<_>::from_iter(backers_vec))
 			})
@@ -80,11 +80,8 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 			Proposals::<T>::iter_keys().count() as u32 == proposal_count,
 			"Proposals migration failed."
 		);
-		ensure!(old::Backers::<T>::drain().count() == 0, "Old storage for Backers not cleared.");
-		ensure!(
-			old::Proposals::<T>::drain().count() == 0,
-			"Old storage for Proposals not cleared."
-		);
+		ensure!(v0::Backers::<T>::drain().count() == 0, "Old storage for Backers not cleared.");
+		ensure!(v0::Proposals::<T>::drain().count() == 0, "Old storage for Proposals not cleared.");
 		Ok(())
 	}
 }
@@ -102,11 +99,11 @@ mod test_runtime_upgrade {
 	fn test() {
 		mock::new_test_ext().execute_with(|| {
 			// pre upgrade
-			let proposal = ProposalV0::SetGovernanceKey(GOV_KEY.into());
+			let proposal = v0::Proposal::SetGovernanceKey(GOV_KEY.into());
 			let block = <frame_system::Pallet<Test>>::block_number() +
 				<Test as Config>::VotingPeriod::get();
-			old::Proposals::<Test>::insert(block, proposal.clone());
-			old::Backers::<Test>::insert(proposal, BACKERS.as_slice());
+			v0::Proposals::<Test>::insert(block, proposal.clone());
+			v0::Backers::<Test>::insert(proposal, BACKERS.as_slice());
 
 			// upgrade
 			Migration::<Test>::on_runtime_upgrade();
