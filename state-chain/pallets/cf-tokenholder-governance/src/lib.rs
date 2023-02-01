@@ -2,12 +2,19 @@
 use cf_chains::{eth::Address, ForeignChain};
 use cf_traits::{BroadcastAnyChainGovKey, Chainflip, CommKeyBroadcaster, FeePayment, StakingInfo};
 use codec::{Decode, Encode};
-use frame_support::{dispatch::Weight, pallet_prelude::*, RuntimeDebugNoBound};
+use frame_support::{
+	dispatch::Weight,
+	pallet_prelude::*,
+	traits::{OnRuntimeUpgrade, StorageVersion},
+	RuntimeDebugNoBound,
+};
 use sp_std::{cmp::PartialEq, vec, vec::Vec};
 
 pub use pallet::*;
+
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
+mod migrations;
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
@@ -23,12 +30,15 @@ pub enum Proposal {
 	SetCommunityKey(Address),
 }
 
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
 
 	#[pallet::pallet]
 	#[pallet::without_storage_info]
+	#[pallet::storage_version(PALLET_VERSION)]
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
 
@@ -167,6 +177,20 @@ pub mod pallet {
 				}
 			}
 			weight
+		}
+
+		fn on_runtime_upgrade() -> Weight {
+			migrations::PalletMigration::<T>::on_runtime_upgrade()
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+			migrations::PalletMigration::<T>::pre_upgrade()
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
+			migrations::PalletMigration::<T>::post_upgrade(state)
 		}
 	}
 
