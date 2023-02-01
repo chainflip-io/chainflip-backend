@@ -64,12 +64,22 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
-		// Not much to test here - see unit test.
-		Ok(Default::default())
+		let awaiting = GovKeyUpdateAwaitingEnactment::<T>::get().is_some();
+		let proposal_count = Proposals::<T>::iter_keys().count() as u32;
+		Ok((awaiting, proposal_count).encode())
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(_: Vec<u8>) -> Result<(), &'static str> {
+	fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
+		let (awaiting, proposal_count) = <(bool, u32)>::decode(&mut &state[..]).unwrap();
+		ensure!(
+			GovKeyUpdateAwaitingEnactment::<T>::get().is_some() == awaiting,
+			"GovKeyUpdateAwaitingEnactment migration failed."
+		);
+		ensure!(
+			Proposals::<T>::iter_keys().count() as u32 == proposal_count,
+			"Proposals migration failed."
+		);
 		ensure!(old::Backers::<T>::drain().count() == 0, "Old storage for Backers not cleared.");
 		ensure!(
 			old::Proposals::<T>::drain().count() == 0,
