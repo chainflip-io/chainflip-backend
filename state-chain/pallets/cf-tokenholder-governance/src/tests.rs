@@ -1,5 +1,4 @@
 use crate::tests::TokenholderGovernance;
-use cf_chains::ChainCrypto;
 use cf_test_utilities::last_event;
 use frame_support::{assert_noop, assert_ok};
 
@@ -14,8 +13,6 @@ fn awaiting_gov_key() -> Vec<u8> {
 	let (_, (_, awaiting_key)) = GovKeyUpdateAwaitingEnactment::<Test>::get().unwrap();
 	awaiting_key
 }
-
-type GovKeyProposal = (ForeignChain, Vec<u8>);
 
 #[test]
 fn update_gov_key_via_onchain_proposal() {
@@ -200,6 +197,21 @@ fn replace_proposal_during_enactment_period() {
 	});
 }
 
+#[test]
+fn incompatible_gov_key_is_noop() {
+	new_test_ext().execute_with(|| {
+		MockBroadcaster::set_behaviour(MockBroadcasterBehaviour {
+			key_compatible: false,
+			..Default::default()
+		});
+		assert_noop!(
+			TokenholderGovernance::submit_proposal(
+				RuntimeOrigin::signed(ALICE),
+				Proposal::SetGovernanceKey(ForeignChain::Ethereum, Default::default()),
+			),
+			Error::<Test>::IncompatibleGovkey
+		);
+	});
+}
 // TODO:
-// - Test incompatible gov key is noop.
 // - Use Mock to ensure gov key is broadcast to correct chain.

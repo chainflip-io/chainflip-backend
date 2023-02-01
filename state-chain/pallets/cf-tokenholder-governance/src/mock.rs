@@ -114,8 +114,8 @@ impl MockBroadcaster {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub struct MockBroadcasterBehaviour {
-	key_compatible: bool,
-	broadcast_success: bool,
+	pub key_compatible: bool,
+	pub broadcast_success: bool,
 }
 
 impl Default for MockBroadcasterBehaviour {
