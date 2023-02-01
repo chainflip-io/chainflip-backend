@@ -13,6 +13,8 @@ benchmarks! {
 		};
 	}: {
 		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::successful_origin());
+	} verify {
+		assert_eq!(FlipBuyInterval::<T>::get(), T::BlockNumber::one());
 	}
 
 	update_pool_enabled {
@@ -24,6 +26,8 @@ benchmarks! {
 		};
 	}: {
 		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::successful_origin());
+	} verify {
+		assert!(!Pools::<T>::get(Asset::Eth).unwrap().pool_enabled());
 	}
 
 	new_pool {
@@ -34,6 +38,8 @@ benchmarks! {
 		};
 	}: {
 		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::successful_origin());
+	} verify {
+		assert!(Pools::<T>::get(Asset::Eth).is_some());
 	}
 
 	set_liquidity_fee {
@@ -41,10 +47,12 @@ benchmarks! {
 		let _ = Pallet::<T>::new_pool(origin, Asset::Eth, 0, 0);
 		let call =  Call::<T>::set_liquidity_fee {
 			asset: Asset::Eth,
-			fee_100th_bips: 1u32,
+			fee_100th_bips: 123u32,
 		};
 	}: {
 		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::successful_origin());
+	} verify {
+		assert_eq!(Pools::<T>::get(Asset::Eth).unwrap().get_liquidity_fees(), 123u32);
 	}
 
 	impl_benchmark_test_suite!(

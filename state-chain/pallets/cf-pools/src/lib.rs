@@ -317,7 +317,7 @@ pub mod pallet {
 
 			Pools::<T>::try_mutate(asset, |maybe_pool| {
 				if let Some(pool) = maybe_pool.as_mut() {
-					pool.set_fees(fee_100th_bips).map_err(|_| Error::InvalidFeeAmount)
+					pool.set_liquidity_fees(fee_100th_bips).map_err(|_| Error::InvalidFeeAmount)
 				} else {
 					Err(Error::<T>::PoolDoesNotExist)
 				}

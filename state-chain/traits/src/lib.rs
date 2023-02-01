@@ -737,6 +737,11 @@ pub trait AccountRoleRegistry<T: frame_system::Config> {
 	}
 	#[cfg(feature = "runtime-benchmarks")]
 	fn register_account(_account_id: T::AccountId, _role: AccountRole) {}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn get_account_role(_account_id: T::AccountId) -> AccountRole {
+		Default::default()
+	}
 }
 
 /// API that allows other pallets to Egress assets out of the State Chain.
