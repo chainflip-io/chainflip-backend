@@ -139,7 +139,7 @@ fn cannot_create_proposal_with_insufficient_liquidity() {
 fn not_enough_backed_liquidity_for_proposal_enactment() {
 	new_test_ext().execute_with(|| {
 		let proposed_key = vec![1; 32];
-		let proposal = Proposal::SetGovernanceKey(ForeignChain::Ethereum, proposed_key.clone());
+		let proposal = Proposal::SetGovernanceKey(ForeignChain::Ethereum, proposed_key);
 
 		assert_ok!(TokenholderGovernance::submit_proposal(
 			RuntimeOrigin::signed(ALICE),

@@ -102,7 +102,7 @@ mod test_runtime_upgrade {
 			let proposal = v0::Proposal::SetGovernanceKey(GOV_KEY.into());
 			let block = <frame_system::Pallet<Test>>::block_number() +
 				<Test as Config>::VotingPeriod::get();
-			v0::Proposals::<Test>::insert(block, proposal.clone());
+			v0::Proposals::<Test>::insert(block, proposal);
 			v0::Backers::<Test>::insert(proposal, BACKERS.as_slice());
 
 			// upgrade
@@ -117,7 +117,7 @@ mod test_runtime_upgrade {
 			);
 			assert_eq!(
 				Backers::<Test>::get(&expected_proposal),
-				BTreeSet::<_>::from_iter(BACKERS.clone()),
+				BTreeSet::<_>::from_iter(*BACKERS),
 				"Backers accounts are incorrect."
 			);
 		})

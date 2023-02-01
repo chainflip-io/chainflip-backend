@@ -213,12 +213,11 @@ pub mod pallet {
 			proposal: Proposal,
 		) -> DispatchResultWithPostInfo {
 			let proposer = ensure_signed(origin)?;
-			match proposal {
-				Proposal::SetGovernanceKey(chain, ref key) => ensure!(
+			if let Proposal::SetGovernanceKey(chain, ref key) = proposal {
+				ensure!(
 					T::AnyChainGovKeyBroadcaster::is_govkey_compatible(chain, key),
 					Error::<T>::IncompatibleGovkey
-				),
-				_ => {},
+				);
 			}
 			T::FeePayment::try_burn_fee(&proposer, T::ProposalFee::get())?;
 			Proposals::<T>::insert(
