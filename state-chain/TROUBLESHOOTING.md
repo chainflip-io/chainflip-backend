@@ -18,15 +18,18 @@ First, build the runtime node with all features enabled:
 cargo build --release --all-features
 ```
 
-It's theoretically possible to connect to a remote rpc node to download the state for the try-runtime checks, but a much faster method is to run a local rpc node and connect to that instead.
-
-For example, for perseverance, first connect a local node to the network with some rpc optimisations:
+Now you can run your tests like so (using an appropriate public rpc node):
 
 ```sh
-# Purge any pre-existing chain state.
-./target/release/chainflip-node purge-chain --chain ./state-chain/node/chainspecs/perseverance.chainspec.raw.json
+./target/release/chainflip-node try-runtime --execution native \
+    on-runtime-upgrade live --uri wss://perseverance-rpc.chainflip.io:443
+```
 
-# Sync a fresh copy of the latest perseverance state.
+Sometimes this doesn't work. In this case you run a local rpc node and connect to that instead.
+
+First connect a local node to the network with some rpc optimisations:
+
+```sh
 ./target/release/chainflip-node \
     --chain ./state-chain/node/chainspecs/perseverance.chainspec.raw.json 
     --sync warp \
@@ -41,7 +44,7 @@ Once the node has synced, in another terminal window, run the checks:
 
 ```sh
 ./target/release/chainflip-node try-runtime --execution native \
-    on-runtime-upgrade live --uri wss://perseverance-rpc.chainflip.io:9944
+    on-runtime-upgrade live --uri ws://localhost:9944
 ```
 
 > *Note: Using `--execution native` ensures faster execution and also prevents log messages from being scrubbed.
