@@ -7,30 +7,13 @@ pub mod decompose_recompose;
 pub mod epoch_transition;
 mod missed_authorship_slots;
 mod offences;
-use cf_chains::ChainCrypto;
-use cf_primitives::{chains::assets, Asset, KeyId, ETHEREUM_ETH_ADDRESS};
-use cf_traits::Broadcaster;
-pub use offences::*;
 mod signer_nomination;
-use crate::RuntimeCall;
-use cf_chains::ForeignChain;
-use cf_primitives::liquidity::U256;
-use ethabi::Address as EthAbiAddress;
-pub use missed_authorship_slots::MissedAuraSlots;
-pub use signer_nomination::RandomSignerNomination;
-
-use cf_chains::Chain;
-
-use cf_chains::AnyChain;
 
 use crate::{
 	AccountId, Authorship, BlockNumber, EmergencyRotationPercentageRange, Emissions, Environment,
-	EthereumBroadcaster, EthereumInstance, Flip, FlipBalance, Reputation, Runtime, System,
-	Validator,
+	EthereumBroadcaster, EthereumInstance, Flip, FlipBalance, PolkadotBroadcaster, Reputation,
+	Runtime, RuntimeCall, System, Validator,
 };
-
-use crate::PolkadotBroadcaster;
-
 use cf_chains::{
 	dot::{
 		api::PolkadotApi, Polkadot, PolkadotAccountId, PolkadotReplayProtection,
@@ -41,27 +24,30 @@ use cf_chains::{
 		api::{EthereumApi, EthereumReplayProtection},
 		Ethereum,
 	},
-	ApiCall, ChainAbi, ChainEnvironment, ReplayProtectionProvider, SetCommKeyWithAggKey,
-	SetGovKeyWithAggKey, TransactionBuilder,
+	AnyChain, ApiCall, Chain, ChainAbi, ChainCrypto, ChainEnvironment, ForeignChain,
+	ReplayProtectionProvider, SetCommKeyWithAggKey, SetGovKeyWithAggKey, TransactionBuilder,
 };
-
-use cf_primitives::{AssetAmount, ForeignChainAddress, IntentId};
+use cf_primitives::{
+	chains::assets, liquidity::U256, Asset, AssetAmount, ForeignChainAddress, IntentId, KeyId,
+	ETHEREUM_ETH_ADDRESS,
+};
 use cf_traits::{
-	BlockEmissions, BroadcastAnyChainGovKey, BroadcastComKey, Chainflip, EgressApi,
+	BlockEmissions, BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster, EgressApi,
 	EmergencyRotation, EpochInfo, EpochKey, EthEnvironmentProvider, Heartbeat, IngressApi,
 	Issuance, NetworkState, RewardsDistribution, RuntimeUpgrade, VaultTransitionHandler,
 };
 use codec::{Decode, Encode};
-
-use pallet_cf_chain_tracking::ChainState;
-use scale_info::TypeInfo;
-
+use ethabi::Address as EthAbiAddress;
 use frame_support::{
 	dispatch::{DispatchError, DispatchErrorWithPostInfo, PostDispatchInfo},
 	traits::Get,
 };
-
+pub use missed_authorship_slots::MissedAuraSlots;
+pub use offences::*;
+use pallet_cf_chain_tracking::ChainState;
 use pallet_cf_validator::PercentageRange;
+use scale_info::TypeInfo;
+pub use signer_nomination::RandomSignerNomination;
 use sp_runtime::traits::{BlockNumberProvider, UniqueSaturatedFrom, UniqueSaturatedInto};
 use sp_std::prelude::*;
 
@@ -318,9 +304,9 @@ impl EgressApi<AnyChain> for AnyChainIngressEgressHandler {
 	}
 }
 
-pub struct TokenholderGovBroadcaster;
+pub struct TokenholderGovernanceBroadcaster;
 
-impl TokenholderGovBroadcaster {
+impl TokenholderGovernanceBroadcaster {
 	fn broadcast_gov_key<C, B>(maybe_old_key: Option<Vec<u8>>, new_key: Vec<u8>) -> Result<(), ()>
 	where
 		C: ChainAbi,
@@ -345,8 +331,8 @@ impl TokenholderGovBroadcaster {
 	}
 }
 
-impl BroadcastAnyChainGovKey for TokenholderGovBroadcaster {
-	fn broadcast(
+impl BroadcastAnyChainGovKey for TokenholderGovernanceBroadcaster {
+	fn broadcast_gov_key(
 		chain: ForeignChain,
 		maybe_old_key: Option<Vec<u8>>,
 		new_key: Vec<u8>,
@@ -367,10 +353,8 @@ impl BroadcastAnyChainGovKey for TokenholderGovBroadcaster {
 	}
 }
 
-impl BroadcastComKey for TokenholderGovBroadcaster {
-	type EthAddress = eth::Address;
-
-	fn broadcast(new_key: Self::EthAddress) {
+impl CommKeyBroadcaster for TokenholderGovernanceBroadcaster {
+	fn broadcast(new_key: <Ethereum as ChainCrypto>::GovKey) {
 		EthereumBroadcaster::threshold_sign_and_broadcast(
 			SetCommKeyWithAggKey::<Ethereum>::new_unsigned(new_key),
 		);
