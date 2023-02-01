@@ -26,7 +26,7 @@ pub use weights::WeightInfo;
 #[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, RuntimeDebugNoBound)]
 #[scale_info(skip_type_params(T))]
 pub enum Proposal {
-	SetGovernanceKey((ForeignChain, Vec<u8>)),
+	SetGovernanceKey(ForeignChain, Vec<u8>),
 	SetCommunityKey(Address),
 }
 
@@ -160,7 +160,7 @@ pub mod pallet {
 						});
 					}
 					Self::deposit_event(Event::<T>::ProposalEnacted {
-						proposal: Proposal::SetGovernanceKey((chain, new_key)),
+						proposal: Proposal::SetGovernanceKey(chain, new_key),
 					});
 					GovKeyUpdateAwaitingEnactment::<T>::kill();
 					weight.saturating_accrue(T::WeightInfo::on_initialize_execute_proposal());
@@ -214,7 +214,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let proposer = ensure_signed(origin)?;
 			match proposal {
-				Proposal::SetGovernanceKey((chain, ref key)) => ensure!(
+				Proposal::SetGovernanceKey(chain, ref key) => ensure!(
 					T::AnyChainGovKeyBroadcaster::is_govkey_compatible(chain, key),
 					Error::<T>::IncompatibleGovkey
 				),
@@ -266,7 +266,7 @@ pub mod pallet {
 					let enactment_block =
 						<frame_system::Pallet<T>>::block_number() + T::EnactmentDelay::get();
 					match proposal.clone() {
-						Proposal::SetGovernanceKey((chain, key)) => {
+						Proposal::SetGovernanceKey(chain, key) => {
 							GovKeyUpdateAwaitingEnactment::<T>::put::<(
 								<T as frame_system::Config>::BlockNumber,
 								(cf_chains::ForeignChain, Vec<u8>),

@@ -1,4 +1,5 @@
 use crate::tests::TokenholderGovernance;
+use cf_chains::ChainCrypto;
 use cf_test_utilities::last_event;
 use frame_support::{assert_noop, assert_ok};
 
@@ -9,13 +10,17 @@ fn go_to_block(n: u64) {
 	TokenholderGovernance::on_initialize(n);
 }
 
+fn awaiting_gov_key() -> Vec<u8> {
+	let (_, (_, awaiting_key)) = GovKeyUpdateAwaitingEnactment::<Test>::get().unwrap();
+	awaiting_key
+}
+
 type GovKeyProposal = (ForeignChain, Vec<u8>);
 
 #[test]
 fn update_gov_key_via_onchain_proposal() {
 	new_test_ext().execute_with(|| {
-		let gov_key_proposal: GovKeyProposal = (ForeignChain::Ethereum, vec![1; 32]);
-		let proposal = Proposal::SetGovernanceKey(gov_key_proposal);
+		let proposal = Proposal::SetGovernanceKey(ForeignChain::Ethereum, vec![1; 32]);
 		assert_ok!(TokenholderGovernance::submit_proposal(
 			RuntimeOrigin::signed(ALICE),
 			proposal.clone()
@@ -71,11 +76,11 @@ fn update_gov_key_via_onchain_proposal() {
 #[test]
 fn fees_are_burned_on_successful_proposal() {
 	new_test_ext().execute_with(|| {
-		let gov_key_proposal: GovKeyProposal = (ForeignChain::Ethereum, vec![1; 32]);
+		let gov_key_proposal = Proposal::SetGovernanceKey(ForeignChain::Ethereum, vec![1; 32]);
 		let balance_before = Flip::total_balance_of(&ALICE);
 		assert_ok!(TokenholderGovernance::submit_proposal(
 			RuntimeOrigin::signed(ALICE),
-			Proposal::SetGovernanceKey(gov_key_proposal)
+			gov_key_proposal
 		));
 		assert_eq!(
 			Flip::total_balance_of(&ALICE),
@@ -87,21 +92,18 @@ fn fees_are_burned_on_successful_proposal() {
 #[test]
 fn cannot_back_proposal_twice() {
 	new_test_ext().execute_with(|| {
-		let gov_key_proposal: GovKeyProposal = (ForeignChain::Ethereum, vec![1; 32]);
+		let gov_key_proposal = Proposal::SetGovernanceKey(ForeignChain::Ethereum, vec![1; 32]);
 
 		assert_ok!(TokenholderGovernance::submit_proposal(
 			RuntimeOrigin::signed(ALICE),
-			Proposal::SetGovernanceKey(gov_key_proposal.clone())
+			gov_key_proposal.clone()
 		));
 		assert_ok!(TokenholderGovernance::back_proposal(
 			RuntimeOrigin::signed(BOB),
-			Proposal::SetGovernanceKey(gov_key_proposal.clone())
+			gov_key_proposal.clone()
 		));
 		assert_noop!(
-			TokenholderGovernance::back_proposal(
-				RuntimeOrigin::signed(BOB),
-				Proposal::SetGovernanceKey(gov_key_proposal)
-			),
+			TokenholderGovernance::back_proposal(RuntimeOrigin::signed(BOB), gov_key_proposal),
 			Error::<Test>::AlreadyBacked
 		);
 	});
@@ -110,13 +112,10 @@ fn cannot_back_proposal_twice() {
 #[test]
 fn cannot_back_not_existing_proposal() {
 	new_test_ext().execute_with(|| {
-		let gov_key_proposal: GovKeyProposal = (ForeignChain::Ethereum, vec![1; 32]);
+		let gov_key_proposal = Proposal::SetGovernanceKey(ForeignChain::Ethereum, vec![1; 32]);
 
 		assert_noop!(
-			TokenholderGovernance::back_proposal(
-				RuntimeOrigin::signed(BOB),
-				Proposal::SetGovernanceKey(gov_key_proposal)
-			),
+			TokenholderGovernance::back_proposal(RuntimeOrigin::signed(BOB), gov_key_proposal),
 			Error::<Test>::ProposalDoesntExist
 		);
 	});
@@ -125,13 +124,13 @@ fn cannot_back_not_existing_proposal() {
 #[test]
 fn cannot_create_proposal_with_insufficient_liquidity() {
 	new_test_ext().execute_with(|| {
-		let gov_key_proposal: GovKeyProposal = (ForeignChain::Ethereum, vec![1; 32]);
+		let gov_key_proposal = Proposal::SetGovernanceKey(ForeignChain::Ethereum, vec![1; 32]);
 
 		let balance_before = Flip::total_balance_of(&BROKE_PAUL);
 		assert_noop!(
 			TokenholderGovernance::submit_proposal(
 				RuntimeOrigin::signed(BROKE_PAUL),
-				Proposal::SetGovernanceKey(gov_key_proposal),
+				gov_key_proposal,
 			),
 			pallet_cf_flip::Error::<Test>::InsufficientLiquidity
 		);
@@ -142,11 +141,12 @@ fn cannot_create_proposal_with_insufficient_liquidity() {
 #[test]
 fn not_enough_backed_liquidity_for_proposal_enactment() {
 	new_test_ext().execute_with(|| {
-		let gov_key_proposal: GovKeyProposal = (ForeignChain::Ethereum, vec![1; 32]);
+		let proposed_key = vec![1; 32];
+		let proposal = Proposal::SetGovernanceKey(ForeignChain::Ethereum, proposed_key.clone());
 
 		assert_ok!(TokenholderGovernance::submit_proposal(
 			RuntimeOrigin::signed(ALICE),
-			Proposal::SetGovernanceKey(gov_key_proposal.clone())
+			proposal.clone()
 		));
 		TokenholderGovernance::on_initialize(
 			<frame_system::Pallet<Test>>::block_number() +
@@ -156,15 +156,11 @@ fn not_enough_backed_liquidity_for_proposal_enactment() {
 			<frame_system::Pallet<Test>>::block_number() +
 				<mock::Test as Config>::VotingPeriod::get()
 		));
-		assert!(!Backers::<Test>::contains_key(Proposal::SetGovernanceKey(
-			gov_key_proposal.clone()
-		)));
+		assert!(!Backers::<Test>::contains_key(&proposal));
 		assert!(GovKeyUpdateAwaitingEnactment::<Test>::get().is_none());
 		assert_eq!(
 			last_event::<Test>(),
-			mock::RuntimeEvent::TokenholderGovernance(crate::Event::ProposalRejected {
-				proposal: Proposal::SetGovernanceKey(gov_key_proposal)
-			}),
+			mock::RuntimeEvent::TokenholderGovernance(crate::Event::ProposalRejected { proposal }),
 		);
 	});
 }
@@ -172,8 +168,8 @@ fn not_enough_backed_liquidity_for_proposal_enactment() {
 #[test]
 fn replace_proposal_during_enactment_period() {
 	new_test_ext().execute_with(|| {
-		let gov_key_proposal: GovKeyProposal = (ForeignChain::Ethereum, vec![1; 32]);
-		let another_gov_key_proposal: GovKeyProposal = (ForeignChain::Ethereum, vec![1; 32]);
+		let proposed_key_1 = vec![1; 32];
+		let proposed_key_2 = vec![2; 32];
 		fn create_and_back_proposal(proposal: Proposal) {
 			assert_ok!(TokenholderGovernance::submit_proposal(
 				RuntimeOrigin::signed(ALICE),
@@ -189,14 +185,21 @@ fn replace_proposal_during_enactment_period() {
 			));
 		}
 		go_to_block(5);
-		create_and_back_proposal(Proposal::SetGovernanceKey(gov_key_proposal.clone()));
+		create_and_back_proposal(Proposal::SetGovernanceKey(
+			ForeignChain::Ethereum,
+			proposed_key_1.clone(),
+		));
 		go_to_block(15);
-		assert_eq!(GovKeyUpdateAwaitingEnactment::<Test>::get().unwrap().1, gov_key_proposal);
-		create_and_back_proposal(Proposal::SetGovernanceKey(another_gov_key_proposal.clone()));
+		assert_eq!(awaiting_gov_key(), proposed_key_1);
+		create_and_back_proposal(Proposal::SetGovernanceKey(
+			ForeignChain::Ethereum,
+			proposed_key_2.clone(),
+		));
 		go_to_block(25);
-		assert_eq!(
-			GovKeyUpdateAwaitingEnactment::<Test>::get().unwrap().1,
-			another_gov_key_proposal
-		);
+		assert_eq!(awaiting_gov_key(), proposed_key_2);
 	});
 }
+
+// TODO:
+// - Test incompatible gov key is noop.
+// - Use Mock to ensure gov key is broadcast to correct chain.
