@@ -7,8 +7,9 @@ use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex, GENESIS_EPOCH};
 use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, Broadcaster, CeremonyIdProvider, Chainflip,
-	CurrentEpochIndex, EpochKey, EpochTransitionHandler, KeyProvider, KeyState, SystemStateManager,
-	ThresholdSigner, VaultKeyWitnessedHandler, VaultRotator, VaultStatus, VaultTransitionHandler,
+	CurrentEpochIndex, EpochKey, EpochTransitionHandler, KeyProvider, KeyState, Slashing,
+	SystemStateManager, ThresholdSigner, VaultKeyWitnessedHandler, VaultRotator, VaultStatus,
+	VaultTransitionHandler,
 };
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
@@ -194,6 +195,7 @@ impl Default for VaultEpochAndState {
 pub mod pallet {
 
 	use cf_traits::{AccountRoleRegistry, ThresholdSigner, VaultTransitionHandler};
+	use sp_runtime::Percent;
 
 	use super::*;
 
@@ -247,6 +249,8 @@ pub mod pallet {
 			ValidatorId = Self::ValidatorId,
 			Offence = Self::Offence,
 		>;
+
+		type Slasher: Slashing<AccountId = Self::ValidatorId, BlockNumber = Self::BlockNumber>;
 
 		/// Ceremony Id source for keygen ceremonies.
 		type CeremonyIdProvider: CeremonyIdProvider<CeremonyId = CeremonyId>;
@@ -365,6 +369,11 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(super) type KeygenResponseTimeout<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, BlockNumberFor<T>, ValueQuery>;
+
+	/// The % amoount of the bond that is slashed for an agreed reported party
+	/// (2/3 must agree the node was an offender) on keygen failure.
+	#[pallet::storage]
+	pub(super) type KeygenSlashRate<T, I = ()> = StorageValue<_, Percent, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
@@ -612,6 +621,18 @@ pub mod pallet {
 
 			Ok(().into())
 		}
+
+		#[pallet::weight(T::WeightInfo::set_keygen_response_timeout())]
+		pub fn set_keygen_slash_rate(
+			origin: OriginFor<T>,
+			percent_of_stake: Percent,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			KeygenSlashRate::<T, I>::put(percent_of_stake);
+
+			Ok(().into())
+		}
 	}
 
 	#[pallet::genesis_config]
@@ -736,6 +757,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	fn terminate_keygen_procedure(offenders: &[T::ValidatorId], event: Event<T, I>) {
 		T::OffenceReporter::report_many(PalletOffence::FailedKeygen, offenders);
+		for offender in offenders {
+			T::Slasher::slash_stake(offender, KeygenSlashRate::<T, I>::get());
+		}
 		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Failed {
 			offenders: offenders.iter().cloned().collect(),
 		});

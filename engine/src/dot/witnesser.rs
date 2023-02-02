@@ -271,8 +271,8 @@ pub async fn start<StateChainClient, DotRpc>(
 	monitored_signatures: BTreeSet<[u8; 64]>,
 	state_chain_client: Arc<StateChainClient>,
 	db: Arc<PersistentKeyDB>,
-	logger: &slog::Logger,
-) -> Result<()>
+	logger: slog::Logger,
+) -> std::result::Result<(), (async_broadcast::Receiver<EpochStart<Polkadot>>, anyhow::Error)>
 where
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
 	DotRpc: DotRpcApi + 'static + Send + Sync + Clone,
@@ -486,7 +486,7 @@ where
 				Ok((monitored_ingress_addresses, ingress_address_receiver, monitored_signatures, signature_receiver))
 			}
 		},
-		logger,
+		&logger,
 	)
 	.await
 }
@@ -779,7 +779,7 @@ mod tests {
 			BTreeSet::default(),
 			state_chain_client,
 			Arc::new(db),
-			&logger,
+			logger,
 		)
 		.await
 		.unwrap();

@@ -26,14 +26,14 @@ pub fn should_end_witnessing<Chain: cf_chains::Chain>(
 	false
 }
 
-pub async fn start<G, F, Fut, State, Chain>(
+pub async fn start<G, F, Fut, FutErr, State, Chain>(
 	log_key: String,
 	mut epoch_start_receiver: async_broadcast::Receiver<EpochStart<Chain>>,
 	mut should_epoch_participant_witness: G,
 	initial_state: State,
 	mut epoch_witnesser_generator: F,
 	logger: &slog::Logger,
-) -> anyhow::Result<()>
+) -> Result<(), (async_broadcast::Receiver<EpochStart<Chain>>, FutErr)>
 where
 	Chain: cf_chains::Chain,
 	F: FnMut(
@@ -44,7 +44,8 @@ where
 		) -> Fut
 		+ Send
 		+ 'static,
-	Fut: Future<Output = anyhow::Result<State>> + Send + 'static,
+	Fut: Future<Output = Result<State, FutErr>> + Send + 'static,
+	FutErr: Send + 'static,
 	State: Send + 'static,
 	G: FnMut(&EpochStart<Chain>) -> bool + Send + 'static,
 {
@@ -61,7 +62,7 @@ where
 				)> = None;
 
 				loop {
-					let epoch_start = epoch_start_receiver.recv().await?;
+					let epoch_start = epoch_start_receiver.recv().await.expect("Sender closed");
 
 					if let Some((end_witnessing_signal, handle)) =
 						end_witnessing_signal_and_handle.take()
@@ -99,4 +100,5 @@ where
 		.boxed()
 	})
 	.await
+	.map_err(|e| (epoch_start_receiver, e))
 }

@@ -31,7 +31,7 @@ use frame_support::{
 use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, Bounded, MaybeSerializeDeserialize},
-	DispatchError, DispatchResult, FixedPointOperand, RuntimeDebug,
+	DispatchError, DispatchResult, FixedPointOperand, Percent, RuntimeDebug,
 };
 use sp_std::{iter::Sum, marker::PhantomData, prelude::*};
 
@@ -335,6 +335,8 @@ pub trait Slashing {
 
 	/// Slashes a validator for the equivalent of some number of blocks offline.
 	fn slash(validator_id: &Self::AccountId, blocks_offline: Self::BlockNumber);
+
+	fn slash_stake(account_id: &Self::AccountId, amount: Percent);
 }
 
 /// Can nominate a single account.
@@ -735,6 +737,11 @@ pub trait AccountRoleRegistry<T: frame_system::Config> {
 	}
 	#[cfg(feature = "runtime-benchmarks")]
 	fn register_account(_account_id: T::AccountId, _role: AccountRole) {}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn get_account_role(_account_id: T::AccountId) -> AccountRole {
+		Default::default()
+	}
 }
 
 /// API that allows other pallets to Egress assets out of the State Chain.

@@ -134,7 +134,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("chainflip-node"),
 	impl_name: create_runtime_str!("chainflip-node"),
 	authoring_version: 1,
-	spec_version: 2,
+	spec_version: 3,
 	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 1,
@@ -216,6 +216,7 @@ impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 	type CeremonyIdProvider = pallet_cf_validator::CeremonyIdProvider<Self>;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
 	type SystemStateManager = pallet_cf_environment::SystemStateProvider<Runtime>;
+	type Slasher = FlipSlasher<Self>;
 }
 
 impl pallet_cf_vaults::Config<PolkadotInstance> for Runtime {
@@ -235,6 +236,7 @@ impl pallet_cf_vaults::Config<PolkadotInstance> for Runtime {
 	type CeremonyIdProvider = pallet_cf_validator::CeremonyIdProvider<Self>;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
 	type SystemStateManager = pallet_cf_environment::SystemStateProvider<Runtime>;
+	type Slasher = FlipSlasher<Self>;
 }
 
 use chainflip::address_derivation::AddressDerivation;
@@ -269,6 +271,7 @@ impl pallet_cf_pools::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type NetworkFee = NetworkFee;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+	type WeightInfo = ();
 }
 
 impl pallet_cf_lp::Config for Runtime {
@@ -278,6 +281,7 @@ impl pallet_cf_lp::Config for Runtime {
 	type EgressHandler = chainflip::AnyChainIngressEgressHandler;
 	type LiquidityPoolApi = LiquidityPools;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+	type WeightInfo = pallet_cf_lp::weights::PalletWeight<Runtime>;
 }
 
 impl pallet_cf_account_roles::Config for Runtime {
@@ -745,6 +749,8 @@ mod benches {
 		[pallet_cf_swapping, Swapping]
 		[pallet_cf_account_roles, AccountRoles]
 		[pallet_cf_ingress_egress, EthereumIngressEgress]
+		[pallet_cf_lp, LiquidityProvider]
+		[pallet_cf_pools, LiquidityPools]
 	);
 }
 

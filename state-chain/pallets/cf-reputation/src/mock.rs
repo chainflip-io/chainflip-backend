@@ -106,6 +106,10 @@ impl Slashing for MockSlasher {
 			count.borrow_mut().push(*validator_id);
 		});
 	}
+
+	fn slash_stake(_account_id: &Self::AccountId, _amount: sp_runtime::Percent) {
+		unimplemented!()
+	}
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 100u64;
