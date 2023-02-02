@@ -12,7 +12,7 @@ use sp_core::H160;
 use crate::{
 	common::start_with_restart_on_failure, eth::ingress_witnesser::IngressWitnesser,
 	multisig::PersistentKeyDB, settings, state_chain_observer::client::StateChainClient,
-	task_scope::Scope, try_or_throw, witnesser::EpochStart,
+	task_scope::Scope, try_with_logging, witnesser::EpochStart,
 };
 
 use super::{
@@ -209,7 +209,7 @@ pub async fn start(
 			// We create a new RPC on each call to the future, since one common reason for
 			// failure is that the WS connection has been dropped. This ensures that we create a
 			// new client, and therefore create a new connection.
-			let dual_rpc = unwrap_or_log_and_bail!(
+			let dual_rpc = try_with_logging!(
 				EthDualRpcClient::new(&eth_settings, expected_chain_id, &logger).await,
 				(epoch_start_receiver, ingress_address_receivers),
 				&logger

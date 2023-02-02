@@ -11,7 +11,7 @@ use super::{
 };
 use crate::{
 	multisig::{ChainTag, PersistentKeyDB},
-	unwrap_or_log_and_bail,
+	try_with_logging,
 	witnesser::{
 		checkpointing::{start_checkpointing_for, WitnessedUntil},
 		epoch_witnesser, EpochStart,
@@ -75,9 +75,9 @@ pub async fn start(
 				// rustfmt chokes when formatting this macro.
 				// See: https://github.com/rust-lang/rustfmt/issues/5404
 				#[rustfmt::skip]
-				macro_rules! unwrap_or_log_and_bail_receivers {
+				macro_rules! try_with_logging_receivers {
 					($exp:expr) => {
-						unwrap_or_log_and_bail!(
+						try_with_logging!(
 							$exp,
 							IngressAddressReceivers {
 								eth: witnessers.eth_ingress.take_ingress_receiver(),
@@ -89,7 +89,7 @@ pub async fn start(
 					};
 				}
 
-				let mut block_stream = unwrap_or_log_and_bail_receivers!(
+				let mut block_stream = try_with_logging_receivers!(
 					safe_dual_block_subscription_from(from_block, eth_rpc.clone(), &logger).await
 				);
 
@@ -111,7 +111,7 @@ pub async fn start(
 						block.block_number
 					);
 
-					unwrap_or_log_and_bail_receivers!(futures::future::join_all([
+					try_with_logging_receivers!(futures::future::join_all([
 						witnessers.key_manager.process_block(&epoch, &block),
 						witnessers.stake_manager.process_block(&epoch, &block),
 						witnessers.eth_ingress.process_block(&epoch, &block),
