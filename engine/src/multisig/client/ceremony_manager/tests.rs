@@ -373,18 +373,18 @@ async fn should_cleanup_unauthorised_ceremony_if_not_participating() {
 				.insert(CEREMONY_ID, ceremony_handle);
 
 			// Start the ceremony manager running
-			tokio::spawn(ceremony_manager.run(ceremony_request_receiver, incoming_p2p_receiver));
+			let ceremony_manager_join_handle = tokio::spawn(
+				ceremony_manager.run(ceremony_request_receiver, incoming_p2p_receiver),
+			);
 
 			// Sanity check that the channel to the ceremony runner task is open
 			assert!(!ceremony_runner_p2p_sender.is_closed());
 
 			// Send a signing request that we are not participating in
-			// which has the same ceremony id as the unauthorised ceremony
-			let mut participants = BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned());
-			participants.remove(&our_account_id);
-
-			let _result_receiver =
-				send_signing_request(&ceremony_request_sender, participants, CEREMONY_ID);
+			// which has the same ceremony id as the unauthorised ceremony.
+			// Non-participating ceremonies are send with `None` for the details.
+			let _res = ceremony_request_sender
+				.send(CeremonyRequest { details: None, ceremony_id: CEREMONY_ID });
 
 			// Small delay to let the ceremony manager process the request
 			tokio::time::sleep(Duration::from_millis(50)).await;
@@ -392,6 +392,10 @@ async fn should_cleanup_unauthorised_ceremony_if_not_participating() {
 			// Check that the channel to the ceremony runner task is closed, so the task must have
 			// been aborted.
 			assert!(ceremony_runner_p2p_sender.is_closed());
+
+			// Make sure that the ceremony manager did not crash and cause a false positive on the
+			// check above
+			assert!(!ceremony_manager_join_handle.is_finished());
 
 			Ok(())
 		}
