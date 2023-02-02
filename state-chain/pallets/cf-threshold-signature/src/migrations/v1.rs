@@ -48,29 +48,22 @@ mod old {
 
 impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 	fn on_runtime_upgrade() -> Weight {
-		for (k, v) in old::RetryQueues::<T, I>::iter().drain() {
+		for (k, v) in old::RetryQueues::<T, I>::drain() {
 			CeremonyRetryQueues::<T, I>::insert(k, v);
 		}
 
-		for (
-			k,
-			old::CeremonyContext {
-				request_context:
-					old::RequestContext { request_id, attempt_count, payload, key_id: _, retry_policy },
-				remaining_respondents,
-				blame_counts,
-				participant_count,
-				key_id,
-				_phantom,
-			},
-		) in old::PendingCeremonies::<T, I>::iter().drain()
-		{
-			let new_request_context = RequestContext { request_id, attempt_count, payload };
-
-			PendingCeremonies::<T, I>::insert(
-				k,
-				CeremonyContext {
-					request_context: new_request_context,
+		PendingCeremonies::<T, I>::translate_values::<old::CeremonyContext<T, I>, _>(
+			|old::CeremonyContext {
+			     request_context:
+			         old::RequestContext { request_id, attempt_count, payload, key_id: _, retry_policy },
+			     remaining_respondents,
+			     blame_counts,
+			     participant_count,
+			     key_id,
+			     _phantom,
+			 }| {
+				Some(CeremonyContext {
+					request_context: RequestContext { request_id, attempt_count, payload },
 					remaining_respondents,
 					blame_counts,
 					participant_count,
@@ -80,11 +73,11 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 					} else {
 						ThresholdCeremonyType::Standard
 					},
-				},
-			);
-		}
+				})
+			},
+		);
 
-		old::LiveCeremonies::<T, I>::iter().drain().for_each(|_| {
+		old::LiveCeremonies::<T, I>::drain().for_each(|_| {
 			// drain it
 		});
 
