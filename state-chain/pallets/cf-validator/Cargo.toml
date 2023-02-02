@@ -62,6 +62,7 @@ std = [
   'sp-core/std',
   'sp-runtime/std',
   'pallet-session/std',
+  'pallet-cf-vaults/std',
   'log/std',
 ]
 runtime-benchmarks = [
@@ -71,7 +72,7 @@ runtime-benchmarks = [
   'frame-system/runtime-benchmarks',
   'pallet-cf-staking',
   'pallet-cf-reputation',
-  'pallet-cf-vaults',
+  'pallet-cf-vaults/runtime-benchmarks',
   'sp-application-crypto',
 ]
 try-runtime = [

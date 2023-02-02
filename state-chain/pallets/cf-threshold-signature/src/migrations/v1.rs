@@ -124,3 +124,89 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 		Ok(())
 	}
 }
+
+#[cfg(test)]
+mod migration_tests {
+
+	use crate::mock::MockKeyProvider;
+
+	use super::*;
+
+	#[test]
+	fn migration_successful_with_retry_queue_and_pending_ceremony_items() {
+		mock::new_test_ext().execute_with(|| {
+			let mut retry_queue = Vec::new();
+
+			for i in 0..10 {
+				retry_queue.push(i);
+			}
+
+			let key_id = MockKeyProvider::current_epoch_key().key;
+
+			const BLOCK_NUMBER: u64 = 4;
+
+			old::RetryQueues::<mock::Test, mock::Instance1>::insert(
+				BLOCK_NUMBER,
+				retry_queue.clone(),
+			);
+
+			const CEREMONY_ID: CeremonyId = 1;
+			const PAYLOAD: [u8; 4] = [7; 4];
+			const REQUEST_ID: RequestId = 1;
+			const ATTEMPT_COUNT: AttemptCount = 4;
+			const BLAME_COUNTS: [(u64, u32); 3] = [(1, 1), (7, 4), (3, 6)];
+
+			let pending_ceremony = old::CeremonyContext {
+				request_context: old::RequestContext {
+					request_id: REQUEST_ID,
+					attempt_count: ATTEMPT_COUNT,
+					payload: PAYLOAD,
+					key_id: None,
+					retry_policy: old::RetryPolicy::Always,
+				},
+				remaining_respondents: BTreeSet::default(),
+				blame_counts: BTreeMap::from(BLAME_COUNTS),
+				participant_count: 25,
+				key_id: key_id.to_vec(),
+				_phantom: PhantomData,
+			};
+
+			old::PendingCeremonies::<mock::Test, mock::Instance1>::insert(
+				CEREMONY_ID,
+				pending_ceremony.clone(),
+			);
+
+			assert_eq!(
+				old::RetryQueues::<mock::Test, mock::Instance1>::get(BLOCK_NUMBER),
+				retry_queue
+			);
+			assert_eq!(
+				old::PendingCeremonies::<mock::Test, mock::Instance1>::get(CEREMONY_ID).unwrap(),
+				pending_ceremony
+			);
+
+			Migration::<mock::Test, mock::Instance1>::on_runtime_upgrade();
+
+			assert_eq!(
+				CeremonyRetryQueues::<mock::Test, mock::Instance1>::get(BLOCK_NUMBER),
+				retry_queue
+			);
+
+			assert_eq!(
+				PendingCeremonies::<mock::Test, mock::Instance1>::get(CEREMONY_ID).unwrap(),
+				CeremonyContext {
+					request_context: RequestContext {
+						request_id: REQUEST_ID,
+						attempt_count: ATTEMPT_COUNT,
+						payload: PAYLOAD,
+					},
+					remaining_respondents: BTreeSet::default(),
+					blame_counts: BTreeMap::from(BLAME_COUNTS),
+					participant_count: 25,
+					key_id: key_id.to_vec(),
+					threshold_ceremony_type: ThresholdCeremonyType::Standard,
+				}
+			);
+		})
+	}
+}
