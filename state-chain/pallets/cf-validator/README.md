@@ -12,7 +12,7 @@ Validator nodes fall into different categories:
 To qualify as a Validator Node, the following conditions must be met:
 
 1. The node must be **staked**.
-2. The node must **not** be **retired**.
+2. The node must **not** be **bidding**.
 3. The node must have registered its **session keys**.
 4. The node must have registered its **peer id**.
 5. The node must be **online**, which is at the time of writing means **submitting heartbeats**.

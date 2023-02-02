@@ -210,8 +210,7 @@ pub trait ReputationResetter {
 pub trait BidderProvider {
 	type ValidatorId;
 	type Amount;
-	/// Provide a list of bidders, those stakers that are not retired, with their bids which are
-	/// greater than zero
+	/// Provide a list of bidders. Those who are staked and their account is in the `bidding` state.
 	fn get_bidders() -> Vec<Bid<Self::ValidatorId, Self::Amount>>;
 }
 

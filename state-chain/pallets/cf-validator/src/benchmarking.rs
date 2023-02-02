@@ -58,7 +58,7 @@ pub fn init_bidders<T: RuntimeConfig>(n: u32, set_id: u32, flip_staked: u128) {
 			bidder.clone(),
 			AccountRole::Validator,
 		);
-		assert_ok!(pallet_cf_staking::Pallet::<T>::activate_account(bidder_origin.clone(),));
+		assert_ok!(pallet_cf_staking::Pallet::<T>::start_bidding(bidder_origin.clone(),));
 
 		let public_key: p2p_crypto::Public = RuntimeAppPublic::generate_pair(None);
 		let signature = public_key.sign(&bidder.encode()).unwrap();
