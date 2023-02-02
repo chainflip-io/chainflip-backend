@@ -148,6 +148,7 @@ mod migration_tests {
 			const REQUEST_ID: RequestId = 1;
 			const ATTEMPT_COUNT: AttemptCount = 4;
 			const BLAME_COUNTS: [(u64, u32); 3] = [(1, 1), (7, 4), (3, 6)];
+			const PARTICIPANT_COUNT: u32 = 25;
 
 			let pending_ceremony = old::CeremonyContext {
 				request_context: old::RequestContext {
@@ -159,7 +160,7 @@ mod migration_tests {
 				},
 				remaining_respondents: BTreeSet::default(),
 				blame_counts: BTreeMap::from(BLAME_COUNTS),
-				participant_count: 25,
+				participant_count: PARTICIPANT_COUNT,
 				key_id: key_id.to_vec(),
 				_phantom: PhantomData,
 			};
@@ -199,7 +200,7 @@ mod migration_tests {
 					},
 					remaining_respondents: BTreeSet::default(),
 					blame_counts: BTreeMap::from(BLAME_COUNTS),
-					participant_count: 25,
+					participant_count: PARTICIPANT_COUNT,
 					key_id: key_id.to_vec(),
 					threshold_ceremony_type: ThresholdCeremonyType::Standard,
 				}
