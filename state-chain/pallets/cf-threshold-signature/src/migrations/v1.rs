@@ -185,7 +185,11 @@ mod migration_tests {
 				pending_ceremony
 			);
 
+			#[cfg(feature = "try-runtime")]
+			let state = Migration::<mock::Test, mock::Instance1>::pre_upgrade().unwrap();
 			Migration::<mock::Test, mock::Instance1>::on_runtime_upgrade();
+			#[cfg(feature = "try-runtime")]
+			Migration::<mock::Test, mock::Instance1>::post_upgrade(state).unwrap();
 
 			assert_eq!(
 				CeremonyRetryQueues::<mock::Test, mock::Instance1>::get(BLOCK_NUMBER),
