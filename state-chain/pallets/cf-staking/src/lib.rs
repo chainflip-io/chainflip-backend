@@ -376,7 +376,7 @@ pub mod pallet {
 				Error::<T>::BelowMinimumStake
 			);
 
-			// Throw an error if the staker tries to claim too much. Otherwise decrement the stake
+			// Return an error if the staker tries to claim too much. Otherwise decrement the stake
 			// by the amount claimed.
 			T::Flip::try_initiate_claim(&account_id, amount)?;
 

@@ -11,7 +11,7 @@ use super::{
 };
 use crate::{
 	multisig::{ChainTag, PersistentKeyDB},
-	try_or_throw,
+	try_with_logging,
 	witnesser::{
 		checkpointing::{
 			get_witnesser_start_block_with_checkpointing, StartCheckpointing, WitnessedUntil,
@@ -64,11 +64,15 @@ pub async fn start(
 							return Result::<_, IngressAddressReceivers>::Ok(witnessers),
 					};
 
-				// We need to throw out the receivers so we can restart the process while ensuring
+				// We need to return the receivers so we can restart the process while ensuring
 				// we are still able to receive new ingress addresses to monitor.
-				macro_rules! try_or_throw_receivers {
+				//
+				// rustfmt chokes when formatting this macro.
+				// See: https://github.com/rust-lang/rustfmt/issues/5404
+				#[rustfmt::skip]
+				macro_rules! try_with_logging_receivers {
 					($exp:expr) => {
-						try_or_throw!(
+						try_with_logging!(
 							$exp,
 							IngressAddressReceivers {
 								eth: witnessers.eth_ingress.take_ingress_receiver(),
@@ -80,7 +84,7 @@ pub async fn start(
 					};
 				}
 
-				let mut block_stream = try_or_throw_receivers!(
+				let mut block_stream = try_with_logging_receivers!(
 					safe_dual_block_subscription_from(from_block, eth_rpc.clone(), &logger).await
 				);
 
@@ -102,7 +106,7 @@ pub async fn start(
 						block.block_number
 					);
 
-					try_or_throw_receivers!(futures::future::join_all([
+					try_with_logging_receivers!(futures::future::join_all([
 						witnessers.key_manager.process_block(&epoch, &block),
 						witnessers.stake_manager.process_block(&epoch, &block),
 						witnessers.eth_ingress.process_block(&epoch, &block),
