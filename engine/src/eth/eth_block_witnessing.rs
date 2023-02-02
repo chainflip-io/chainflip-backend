@@ -13,7 +13,9 @@ use crate::{
 	multisig::{ChainTag, PersistentKeyDB},
 	try_or_throw,
 	witnesser::{
-		checkpointing::{get_witnesser_start_block_with_checkpointing, WitnessedUntil},
+		checkpointing::{
+			get_witnesser_start_block_with_checkpointing, StartCheckpointing, WitnessedUntil,
+		},
 		epoch_witnesser, EpochStart,
 	},
 };
@@ -56,9 +58,10 @@ pub async fn start(
 						db,
 						&logger,
 					) {
-						Some((from_block, witnessed_until_sender)) =>
+						StartCheckpointing::Started((from_block, witnessed_until_sender)) =>
 							(from_block, witnessed_until_sender),
-						None => return Result::<_, IngressAddressReceivers>::Ok(witnessers),
+						StartCheckpointing::AlreadyWitnessedEpoch =>
+							return Result::<_, IngressAddressReceivers>::Ok(witnessers),
 					};
 
 				// We need to throw out the receivers so we can restart the process while ensuring

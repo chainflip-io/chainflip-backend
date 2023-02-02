@@ -76,17 +76,23 @@ fn start_checkpointing_for(
 		}
 	});
 
+	// Returning the join handle so the task can be awaited upon during unit tests
 	(witnessed_until, witnessed_until_sender, join_handle)
 }
 
+pub enum StartCheckpointing<Chain: cf_chains::Chain> {
+	Started((Chain::ChainBlockNumber, tokio::sync::watch::Sender<WitnessedUntil>)),
+	AlreadyWitnessedEpoch,
+}
+
 /// Loads the checkpoint from the db then starts checkpointing. Returns the block number at which to
-/// start witnessing and `None` if the epoch has already been witnessed.
+/// start witnessing unless the epoch has already been witnessed.
 pub fn get_witnesser_start_block_with_checkpointing<Chain: cf_chains::Chain>(
 	chain_tag: ChainTag,
 	epoch_start: &EpochStart<Chain>,
 	db: Arc<PersistentKeyDB>,
 	logger: &slog::Logger,
-) -> Option<(Chain::ChainBlockNumber, tokio::sync::watch::Sender<WitnessedUntil>)>
+) -> StartCheckpointing<Chain>
 where
 	<<Chain as cf_chains::Chain>::ChainBlockNumber as TryFrom<u64>>::Error: std::fmt::Debug,
 {
@@ -95,7 +101,7 @@ where
 
 	// Don't witness epochs that we've already witnessed
 	if epoch_start.epoch_index < witnessed_until.epoch_index {
-		return None
+		return StartCheckpointing::AlreadyWitnessedEpoch
 	}
 
 	// We do this because it's possible to witness ahead of the epoch start during the
@@ -103,15 +109,16 @@ where
 	// receive a new epoch, we won't witness some of the blocks for the particular
 	// epoch, since witness extrinsics are submitted with the epoch number it's for.
 	let from_block = if witnessed_until.epoch_index == epoch_start.epoch_index {
-		// Start where we left off
-		Chain::ChainBlockNumber::try_from(witnessed_until.block_number)
+		witnessed_until
+			.block_number
+			.try_into()
 			.expect("Should convert block number from u64")
 	} else {
-		// We haven't witnessed this epoch yet, so start from the beginning
+		// We haven't started witnessing this epoch yet, so start from the beginning
 		epoch_start.block_number
 	};
 
-	Some((from_block, witnessed_until_sender))
+	StartCheckpointing::Started((from_block, witnessed_until_sender))
 }
 
 #[cfg(test)]

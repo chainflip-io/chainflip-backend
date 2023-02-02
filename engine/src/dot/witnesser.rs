@@ -28,7 +28,9 @@ use crate::{
 	state_chain_observer::client::extrinsic_api::ExtrinsicApi,
 	witnesser::{
 		block_head_stream_from::block_head_stream_from,
-		checkpointing::{get_witnesser_start_block_with_checkpointing, WitnessedUntil},
+		checkpointing::{
+			get_witnesser_start_block_with_checkpointing, StartCheckpointing, WitnessedUntil,
+		},
 		epoch_witnesser::{self, should_end_witnessing},
 		BlockNumberable, EpochStart,
 	},
@@ -291,8 +293,8 @@ where
 			let db = db.clone();
 			async move {
 				let (from_block, witnessed_until_sender) = match get_witnesser_start_block_with_checkpointing(ChainTag::Polkadot, &epoch_start, db, &logger){
-					Some((from_block, witnessed_until_sender)) => (from_block, witnessed_until_sender),
-					None => return Ok((monitored_ingress_addresses, ingress_address_receiver, monitored_signatures, signature_receiver)),
+					StartCheckpointing::Started((from_block, witnessed_until_sender)) => (from_block, witnessed_until_sender),
+					StartCheckpointing::AlreadyWitnessedEpoch => return Ok((monitored_ingress_addresses, ingress_address_receiver, monitored_signatures, signature_receiver)),
 				};
 
 				let safe_head_stream =
