@@ -380,10 +380,15 @@ mod tests {
 
 // Tracing -----------------------------------------------------
 
+/// Install global collector using json formatting and the RUST_LOG env var
 pub fn init_json_logger() {
-	tracing_subscriber::fmt().json().with_max_level(tracing::Level::TRACE).init();
+	tracing_subscriber::fmt()
+		.json()
+		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+		.init();
 }
 
+/// Run at the start of unit tests to output all tracing logs in a CLI readable format.
 #[cfg(test)]
 pub fn init_test_logger() {
 	use tracing_subscriber::{
@@ -397,6 +402,8 @@ use tracing::Level;
 use tracing_subscriber::Layer;
 pub struct CLILoggerLayer;
 
+/// A custom layer for tracing that makes the logs more readable on a CLI. Adds color, formatting
+/// and a list of key/value pairs while not showing spans, timestamps and other clutter.
 impl<S> Layer<S> for CLILoggerLayer
 where
 	S: tracing::Subscriber,
@@ -423,8 +430,7 @@ where
 
 		// Print the readable log
 		println!(
-			"\x1b{}[{}]\x1b[0m {} {}",
-			level_color,
+			"\x1b{level_color}[{}]\x1b[0m {} {}",
 			event.metadata().level().as_str(),
 			visitor.message,
 			// Only show the tag if its not empty
@@ -438,8 +444,7 @@ where
 		// Print the location of the log call if its a Warning or above
 		if matches!(*event.metadata().level(), Level::WARN | Level::ERROR) {
 			println!(
-				"{} {}:{}",
-				LOCATION_INDENT,
+				"{LOCATION_INDENT} {}:{}",
 				event.metadata().file().unwrap(),
 				event.metadata().line().unwrap()
 			);
@@ -465,6 +470,7 @@ pub struct CustomVisitor {
 	pub kv: HashMap<String, String>,
 }
 
+// Gathers data from a log event
 impl Visit for CustomVisitor {
 	fn record_debug(&mut self, field: &Field, value: &dyn fmt::Debug) {
 		match field.name() {

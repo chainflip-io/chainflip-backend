@@ -103,7 +103,7 @@ x25519-dalek = { version = "1.1", features = ["serde"] }
 rand = "0.8.4"
 ed25519-consensus = "2.0"
 tracing = "0.1"
-tracing-subscriber = {version = "0.3", features = ["json"]}
+tracing-subscriber = {version = "0.3", features = ["json", "env-filter"]}
 
 # Local deps
 cf-chains = { path = "../state-chain/chains" }
