@@ -263,6 +263,7 @@ async fn main() -> anyhow::Result<()> {
 						.map(|(signature, _)| signature.0)
 						.collect(),
 					state_chain_client,
+					db,
 					root_logger.clone(),
 				)
 				.map_err(|_r| anyhow::anyhow!("DOT witnesser failed")),
