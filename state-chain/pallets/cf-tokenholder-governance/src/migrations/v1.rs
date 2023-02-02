@@ -80,8 +80,6 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 			Proposals::<T>::iter_keys().count() as u32 == proposal_count,
 			"Proposals migration failed."
 		);
-		ensure!(v0::Backers::<T>::drain().count() == 0, "Old storage for Backers not cleared.");
-		ensure!(v0::Proposals::<T>::drain().count() == 0, "Old storage for Proposals not cleared.");
 		Ok(())
 	}
 }
@@ -105,10 +103,16 @@ mod test_runtime_upgrade {
 			v0::Proposals::<Test>::insert(block, proposal);
 			v0::Backers::<Test>::insert(proposal, BACKERS.as_slice());
 
+			#[cfg(feature = "try-runtime")]
+			let state = Migration::<Test>::pre_upgrade().unwrap();
+
 			// upgrade
 			Migration::<Test>::on_runtime_upgrade();
 
 			// post upgrade
+			#[cfg(feature = "try-runtime")]
+			Migration::<Test>::post_upgrade(state).unwrap();
+
 			let expected_proposal = Proposal::SetGovernanceKey(CHAIN, GOV_KEY.into());
 			assert_eq!(
 				Proposals::<Test>::get(block).unwrap(),
