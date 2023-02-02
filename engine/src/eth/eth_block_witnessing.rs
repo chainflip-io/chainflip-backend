@@ -71,6 +71,10 @@ pub async fn start(
 
 				// We need to return the receivers so we can restart the process while ensuring
 				// we are still able to receive new ingress addresses to monitor.
+				//
+				// rustfmt chokes when formatting this macro.
+				// See: https://github.com/rust-lang/rustfmt/issues/5404
+				#[rustfmt::skip]
 				macro_rules! unwrap_or_log_and_bail_receivers {
 					($exp:expr) => {
 						unwrap_or_log_and_bail!(
