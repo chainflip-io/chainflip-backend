@@ -48,7 +48,7 @@ mod old {
 
 impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 	fn on_runtime_upgrade() -> Weight {
-		for (k, v) in old::RetryQueues::<T, I>::drain() {
+		for (k, v) in old::RetryQueues::<T, I>::drain().collect::<Vec<_>>() {
 			CeremonyRetryQueues::<T, I>::insert(k, v);
 		}
 
