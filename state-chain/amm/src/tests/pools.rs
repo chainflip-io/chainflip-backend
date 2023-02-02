@@ -39,14 +39,14 @@ fn mediumpool_initialized_zerotick() -> (PoolState, PoolAssetMap<AmountU256>, Ac
 	pool_initialized_zerotick(pool)
 }
 
-fn checktickisclear(pool: &PoolState, tick: Tick) {
+fn check_tick_is_clear(pool: &PoolState, tick: Tick) {
 	match pool.liquidity_map.get(&tick) {
 		None => {},
 		_ => panic!("Expected NonExistent Key"),
 	}
 }
 
-fn checkticknotclear(pool: &PoolState, tick: Tick) {
+fn check_tick_not_clear(pool: &PoolState, tick: Tick) {
 	if pool.liquidity_map.get(&tick).is_none() {
 		panic!("Expected Key")
 	}
@@ -902,8 +902,8 @@ fn test_clearstick_iflastposition() {
 	)
 	.unwrap();
 
-	checktickisclear(&pool, MIN_TICK_UNISWAP_MEDIUM + TICKSPACING_UNISWAP_MEDIUM);
-	checktickisclear(&pool, MAX_TICK_UNISWAP_MEDIUM - TICKSPACING_UNISWAP_MEDIUM);
+	check_tick_is_clear(&pool, MIN_TICK_UNISWAP_MEDIUM + TICKSPACING_UNISWAP_MEDIUM);
+	check_tick_is_clear(&pool, MAX_TICK_UNISWAP_MEDIUM - TICKSPACING_UNISWAP_MEDIUM);
 }
 
 #[test]
@@ -936,8 +936,8 @@ fn test_clearlower_ifupperused() {
 	)
 	.unwrap();
 
-	checktickisclear(&pool, MIN_TICK_UNISWAP_MEDIUM + TICKSPACING_UNISWAP_MEDIUM);
-	checkticknotclear(&pool, MAX_TICK_UNISWAP_MEDIUM - TICKSPACING_UNISWAP_MEDIUM);
+	check_tick_is_clear(&pool, MIN_TICK_UNISWAP_MEDIUM + TICKSPACING_UNISWAP_MEDIUM);
+	check_tick_not_clear(&pool, MAX_TICK_UNISWAP_MEDIUM - TICKSPACING_UNISWAP_MEDIUM);
 }
 
 #[test]
@@ -970,8 +970,8 @@ fn test_clearupper_iflowerused() {
 	)
 	.unwrap();
 
-	checkticknotclear(&pool, MIN_TICK_UNISWAP_MEDIUM + TICKSPACING_UNISWAP_MEDIUM);
-	checktickisclear(&pool, MAX_TICK_UNISWAP_MEDIUM - TICKSPACING_UNISWAP_MEDIUM);
+	check_tick_not_clear(&pool, MIN_TICK_UNISWAP_MEDIUM + TICKSPACING_UNISWAP_MEDIUM);
+	check_tick_is_clear(&pool, MAX_TICK_UNISWAP_MEDIUM - TICKSPACING_UNISWAP_MEDIUM);
 }
 
 pub const TICKSPACING_UNISWAP_LOW: Tick = 10;

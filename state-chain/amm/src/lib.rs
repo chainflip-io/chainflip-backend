@@ -128,7 +128,7 @@ impl Position {
 	}
 }
 
-#[derive(Copy, Clone, Debug, TypeInfo, PartialEq, Eq, Encode, Decode, MaxEncodedLen)]
+#[derive(Copy, Clone, Debug, Default, TypeInfo, PartialEq, Eq, Encode, Decode, MaxEncodedLen)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct TickInfo {
 	liquidity_delta: i128,
@@ -187,7 +187,7 @@ impl SwapDirection for Asset0ToAsset1 {
 	) -> Option<(&Tick, &mut TickInfo)> {
 		debug_assert!(liquidity_map.contains_key(&MIN_TICK));
 		if current_tick >= MIN_TICK {
-			Some(liquidity_map.range_mut(..=current_tick).next_back().unwrap())
+			liquidity_map.range_mut(..=current_tick).next_back()
 		} else {
 			debug_assert_eq!(current_tick, Self::current_tick_after_crossing_target_tick(MIN_TICK));
 			None
@@ -237,7 +237,7 @@ impl SwapDirection for Asset1ToAsset0 {
 	) -> Option<(&Tick, &mut TickInfo)> {
 		debug_assert!(liquidity_map.contains_key(&MAX_TICK));
 		if current_tick < MAX_TICK {
-			Some(liquidity_map.range_mut(current_tick + 1..).next().unwrap())
+			liquidity_map.range_mut(current_tick + 1..).next()
 		} else {
 			debug_assert_eq!(current_tick, Self::current_tick_after_crossing_target_tick(MAX_TICK));
 			None
@@ -421,10 +421,7 @@ impl PoolState {
 			.positions
 			.get(&(lp.clone(), lower_tick, upper_tick))
 			.cloned()
-			.unwrap_or_else(|| Position {
-				liquidity: 0,
-				last_fee_growth_inside: Default::default(),
-			});
+			.unwrap_or_default();
 
 		let tick_info_with_updated_gross_liquidity = |tick| {
 			let mut tick_info = self.liquidity_map.get(&tick).cloned().unwrap_or_else(|| {
@@ -453,13 +450,17 @@ impl PoolState {
 		let mut lower_info = tick_info_with_updated_gross_liquidity(lower_tick)?;
 		// Cannot overflow as liquidity_delta.abs() is bounded to <=
 		// MAX_TICK_GROSS_LIQUIDITY
-		lower_info.liquidity_delta =
-			lower_info.liquidity_delta.checked_add_unsigned(minted_liquidity).unwrap();
+		lower_info.liquidity_delta = lower_info
+			.liquidity_delta
+			.checked_add_unsigned(minted_liquidity)
+			.unwrap_or(i128::MAX);
 		let mut upper_info = tick_info_with_updated_gross_liquidity(upper_tick)?;
 		// Cannot underflow as liquidity_delta.abs() is bounded to <=
 		// MAX_TICK_GROSS_LIQUIDITY
-		upper_info.liquidity_delta =
-			upper_info.liquidity_delta.checked_sub_unsigned(minted_liquidity).unwrap();
+		upper_info.liquidity_delta = upper_info
+			.liquidity_delta
+			.checked_sub_unsigned(minted_liquidity)
+			.unwrap_or(i128::MIN);
 
 		let fees_returned = position.set_liquidity(
 			self,
@@ -503,14 +504,34 @@ impl PoolState {
 		{
 			debug_assert!(position.liquidity != 0);
 			if burnt_liquidity <= position.liquidity {
-				let mut lower_info = *self.liquidity_map.get(&lower_tick).unwrap();
-				lower_info.liquidity_gross -= burnt_liquidity;
-				lower_info.liquidity_delta =
-					lower_info.liquidity_delta.checked_sub_unsigned(burnt_liquidity).unwrap();
-				let mut upper_info = *self.liquidity_map.get(&upper_tick).unwrap();
-				upper_info.liquidity_gross -= burnt_liquidity;
-				upper_info.liquidity_delta =
-					lower_info.liquidity_delta.checked_add_unsigned(burnt_liquidity).unwrap();
+				let mut lower_info = match self.liquidity_map.get(&lower_tick) {
+					Some(lower_info) => Ok(*lower_info),
+					None => Err(PositionError::PositionLacksLiquidity),
+				}?;
+				let mut upper_info = match self.liquidity_map.get(&upper_tick) {
+					Some(upper_info) => Ok(*upper_info),
+					None => Err(PositionError::PositionLacksLiquidity),
+				}?;
+
+				if lower_info.liquidity_gross < burnt_liquidity ||
+					upper_info.liquidity_gross < burnt_liquidity
+				{
+					return Err(PositionError::PositionLacksLiquidity)
+				}
+
+				lower_info.liquidity_gross =
+					lower_info.liquidity_gross.saturating_sub(burnt_liquidity);
+				lower_info.liquidity_delta = lower_info
+					.liquidity_delta
+					.checked_sub_unsigned(burnt_liquidity)
+					.unwrap_or(i128::MIN);
+
+				upper_info.liquidity_gross =
+					upper_info.liquidity_gross.saturating_sub(burnt_liquidity);
+				upper_info.liquidity_delta = lower_info
+					.liquidity_delta
+					.checked_add_unsigned(burnt_liquidity)
+					.unwrap_or(i128::MAX);
 
 				let fees_owed = position.set_liquidity(
 					self,
@@ -535,7 +556,7 @@ impl PoolState {
 					debug_assert_eq!(position.liquidity, 0);
 					self.liquidity_map.remove(&lower_tick);
 				} else {
-					*self.liquidity_map.get_mut(&lower_tick).unwrap() = lower_info;
+					self.liquidity_map.insert(lower_tick, lower_info);
 				}
 				if upper_info.liquidity_gross == 0 && upper_tick != MAX_TICK
 				// Guarantee MAX_TICK is always in map to simplify swap logic
@@ -543,7 +564,7 @@ impl PoolState {
 					debug_assert_eq!(position.liquidity, 0);
 					self.liquidity_map.remove(&upper_tick);
 				} else {
-					*self.liquidity_map.get_mut(&upper_tick).unwrap() = upper_info;
+					self.liquidity_map.insert(upper_tick, upper_info);
 				}
 
 				if position.liquidity == 0 {
