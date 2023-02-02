@@ -77,6 +77,12 @@ pub mod pallet {
 		pub ingress_asset: C::ChainAsset,
 	}
 
+	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+	pub enum DeploymentStatus {
+		Deployed,   // an address that has already been deployed
+		Undeployed, // an address that has not been deployed yet
+	}
+
 	/// Contains information relevant to the action to commence once ingress succeeds.
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	pub enum IntentAction<AccountId> {
@@ -164,6 +170,26 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(crate) type DisabledEgressAssets<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, TargetChainAsset<T, I>, ()>;
+
+	#[pallet::storage]
+	pub(crate) type ActiveIntents<T: Config<I>, I: 'static = ()> = StorageMap<
+		_,
+		Twox64Concat,
+		ForeignChainAddress,
+		IntentAction<<T as frame_system::Config>::AccountId>,
+	>;
+
+	#[pallet::storage]
+	pub(crate) type StaleIntents<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, ForeignChainAddress, ()>;
+
+	#[pallet::storage]
+	pub(crate) type AddressStatus<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, ForeignChainAddress, DeploymentStatus>;
+
+	#[pallet::storage]
+	pub(crate) type IntentExpiries<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, T::BlockNumber, Vec<ForeignChainAddress>>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
