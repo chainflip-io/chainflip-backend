@@ -661,7 +661,7 @@ impl<T: Config> Pallet<T> {
 	/// Sets the `active` flag associated with the account to true, signalling that the account
 	/// wishes to participate in auctions, to become a network authority.
 	///
-	/// Returns an error if the account is already active, or if the account has no stake
+	/// Returns an error if the account is already bidding, or if the account has no stake
 	/// associated.
 	fn activate_bidding(account_id: &AccountId<T>) -> Result<(), Error<T>> {
 		ActiveBidder::<T>::try_mutate_exists(account_id, |maybe_status| {
