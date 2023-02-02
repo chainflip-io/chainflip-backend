@@ -9,7 +9,7 @@ use frame_system::RawOrigin;
 use sp_std::collections::btree_set::BTreeSet;
 
 fn generate_proposal<T: Config>() -> Proposal {
-	Proposal::SetGovernanceKey((ForeignChain::Ethereum, vec![1; 32]))
+	Proposal::SetGovernanceKey(ForeignChain::Ethereum, vec![1; 32])
 }
 
 benchmarks! {

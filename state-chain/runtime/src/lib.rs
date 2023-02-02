@@ -16,7 +16,13 @@ use crate::{
 		RuntimeApiPenalty,
 	},
 };
-use cf_chains::{dot, dot::api::PolkadotApi, eth, eth::Ethereum, Polkadot};
+use cf_chains::{
+	dot,
+	dot::api::PolkadotApi,
+	eth,
+	eth::{api::EthereumApi, Ethereum},
+	Polkadot,
+};
 use pallet_transaction_payment::Multiplier;
 
 use crate::runtime_apis::RuntimeApiAccountInfoV2;
@@ -73,7 +79,7 @@ pub use cf_traits::{EpochInfo, EthEnvironmentProvider, QualifyNode, SessionKeysR
 pub use chainflip::chain_instances::*;
 use chainflip::{
 	epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat, EthEnvironment,
-	EthVaultTransitionHandler, TokenholderGovBroadcaster,
+	EthVaultTransitionHandler, TokenholderGovernanceBroadcaster,
 };
 
 use chainflip::{all_vaults_rotator::AllVaultRotator, DotEnvironment, DotVaultTransitionHandler};
@@ -484,7 +490,7 @@ impl pallet_cf_staking::Config for Runtime {
 	type Broadcaster = EthereumBroadcaster;
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, Instance1>;
-	type RegisterClaim = eth::api::EthereumApi<EthEnvironment>;
+	type RegisterClaim = EthereumApi<EthEnvironment>;
 	type TimeSource = Timestamp;
 	type WeightInfo = pallet_cf_staking::weights::PalletWeight<Runtime>;
 }
@@ -495,10 +501,9 @@ impl pallet_cf_tokenholder_governance::Config for Runtime {
 	type StakingInfo = Flip;
 	type WeightInfo = pallet_cf_tokenholder_governance::weights::PalletWeight<Runtime>;
 	type VotingPeriod = ConstU32<{ 14 * DAYS }>;
-	type AnyChainGovKeyBroadcaster = TokenholderGovBroadcaster;
-	type CommKeyBroadcaster = TokenholderGovBroadcaster;
-	/// 1000 FLIP in FLIPPERINOS
-	type ProposalFee = ConstU128<1_000_000_000_000_000_000_000>;
+	type AnyChainGovKeyBroadcaster = TokenholderGovernanceBroadcaster;
+	type CommKeyBroadcaster = TokenholderGovernanceBroadcaster;
+	type ProposalFee = ConstU128<{ 1_000 * FLIPPERINOS_PER_FLIP }>;
 	type EnactmentDelay = ConstU32<{ 7 * DAYS }>;
 }
 
