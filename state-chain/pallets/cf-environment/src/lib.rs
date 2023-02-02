@@ -10,12 +10,12 @@ use cf_chains::{
 use cf_primitives::{Asset, EthereumAddress};
 pub use cf_traits::EthEnvironmentProvider;
 use cf_traits::{SystemStateInfo, SystemStateManager};
-use frame_support::pallet_prelude::*;
+use frame_support::{
+	pallet_prelude::*,
+	traits::{OnRuntimeUpgrade, StorageVersion},
+};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
-use sp_std::vec::Vec;
-
-use frame_support::traits::{OnRuntimeUpgrade, StorageVersion};
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
@@ -199,12 +199,12 @@ pub mod pallet {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+		fn pre_upgrade() -> Result<sp_std::vec::Vec<u8>, &'static str> {
 			migrations::PalletMigration::<T>::pre_upgrade()
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
+		fn post_upgrade(state: sp_std::vec::Vec<u8>) -> Result<(), &'static str> {
 			migrations::PalletMigration::<T>::post_upgrade(state)
 		}
 	}
