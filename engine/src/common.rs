@@ -16,7 +16,7 @@ use crate::task_scope::Scope;
 /// early with items from that future, due to the fact the future owns the values you want
 /// to return.
 #[macro_export]
-macro_rules! try_or_throw {
+macro_rules! unwrap_or_log_and_bail {
 	($exp:expr, $err_expr:expr, $logger:expr) => {
 		match $exp {
 			Ok(ok) => ok,

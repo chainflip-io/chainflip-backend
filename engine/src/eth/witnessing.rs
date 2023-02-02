@@ -209,7 +209,7 @@ pub async fn start(
 			// We create a new RPC on each call to the future, since one common reason for
 			// failure is that the WS connection has been dropped. This ensures that we create a
 			// new client, and therefore create a new connection.
-			let dual_rpc = try_or_throw!(
+			let dual_rpc = unwrap_or_log_and_bail!(
 				EthDualRpcClient::new(&eth_settings, expected_chain_id, &logger).await,
 				(epoch_start_receiver, ingress_address_receivers),
 				&logger
