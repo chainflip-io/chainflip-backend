@@ -39,11 +39,9 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 
 		// new storage items related to polkadot integration
 
-		PolkadotVaultAccountId::<T>::set(None);
 		// Polkadot metadata is initialized with the config that is used in the persistent polkadot
 		// testnet
 		PolkadotNetworkMetadata::<T>::set(POLKADOT_METADATA);
-		PolkadotProxyAccountNonce::<T>::set(0);
 
 		Weight::zero()
 	}
@@ -89,9 +87,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 		assert!(EthereumKeyManagerAddress::<T>::exists());
 		assert!(EthereumVaultAddress::<T>::exists());
 		assert!(EthereumSignatureNonce::<T>::exists());
-		assert!(PolkadotVaultAccountId::<T>::exists());
 		assert!(PolkadotNetworkMetadata::<T>::exists());
-		assert!(PolkadotProxyAccountNonce::<T>::exists());
 
 		Ok(())
 	}
