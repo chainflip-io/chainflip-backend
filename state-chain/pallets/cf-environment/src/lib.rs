@@ -460,10 +460,6 @@ impl<T: Config> Pallet<T> {
 		})
 	}
 
-	pub fn get_polkadot_network_metadata() -> PolkadotMetadata {
-		PolkadotNetworkMetadata::<T>::get()
-	}
-
 	pub fn get_polkadot_vault_account() -> Option<PolkadotAccountId> {
 		PolkadotVaultAccountId::<T>::get()
 	}
