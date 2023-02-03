@@ -1120,23 +1120,9 @@ impl<T: Config> Pallet<T> {
 				let mut rotation_state =
 					RotationState::from_auction_outcome::<T>(auction_outcome.clone());
 
-				rotation_state.ban(
-					rotation_state
-						.clone()
-						.primary_candidates
-						.into_iter()
-						.filter(|validator_id| !T::KeygenQualification::is_qualified(validator_id))
-						.collect(),
-				);
-
-				rotation_state.ban(
-					rotation_state
-						.clone()
-						.secondary_candidates
-						.into_iter()
-						.filter(|validator_id| !T::KeygenQualification::is_qualified(validator_id))
-						.collect(),
-				);
+				rotation_state.ban_all_where(|validator_id| {
+					!T::KeygenQualification::is_qualified(validator_id)
+				});
 
 				// Without reading the full list of bidders we can't know the real number.
 				// Use the winners and losers as an approximation.

@@ -7,9 +7,9 @@ pub(crate) const SECONDARY_CANDIDATE_FRACTION: usize = 3;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Default)]
 pub struct RotationState<Id, Amount> {
-	pub primary_candidates: Vec<Id>,
-	pub secondary_candidates: Vec<Id>,
-	pub banned: BTreeSet<Id>,
+	primary_candidates: Vec<Id>,
+	secondary_candidates: Vec<Id>,
+	banned: BTreeSet<Id>,
 	pub bond: Amount,
 }
 
@@ -69,6 +69,22 @@ impl<Id: Ord + Clone, Amount: AtLeast32BitUnsigned + Copy> RotationState<Id, Amo
 
 	pub fn num_primary_candidates(&self) -> u32 {
 		self.primary_candidates.len() as u32
+	}
+
+	/// Ban all validators where `f` returns true.
+	pub fn ban_all_where(&mut self, f: impl Fn(&Id) -> bool) {
+		self.banned.extend(
+			self.primary_candidates
+				.clone()
+				.into_iter()
+				.filter(|validator_id| f(validator_id)),
+		);
+		self.banned.extend(
+			self.secondary_candidates
+				.clone()
+				.into_iter()
+				.filter(|validator_id| f(validator_id)),
+		);
 	}
 }
 
