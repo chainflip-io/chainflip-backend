@@ -1118,11 +1118,19 @@ impl<T: Config> Pallet<T> {
 				let mut rotation_state =
 					RotationState::from_auction_outcome::<T>(auction_outcome.clone());
 
-				// Ban all unqualified before we kick of key-gen
 				rotation_state.ban(
 					rotation_state
 						.clone()
 						.primary_candidates
+						.into_iter()
+						.filter(|validator_id| !T::AuctionQualification::is_qualified(validator_id))
+						.collect(),
+				);
+
+				rotation_state.ban(
+					rotation_state
+						.clone()
+						.secondary_candidates
 						.into_iter()
 						.filter(|validator_id| !T::AuctionQualification::is_qualified(validator_id))
 						.collect(),
