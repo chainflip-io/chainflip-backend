@@ -1002,7 +1002,8 @@ impl<T: Config> Pallet<T> {
 			new_epoch,
 			&new_authorities,
 			rotation_state.bond,
-			Self::qualified_bidders()
+			T::BidderProvider::get_bidders()
+				.into_iter()
 				.filter_map(|Bid { bidder_id, amount }| {
 					if !new_authorities_lookup.contains(&bidder_id) {
 						Some((bidder_id, amount))
@@ -1091,8 +1092,9 @@ impl<T: Config> Pallet<T> {
 			T::EpochInfo::current_authority_count(),
 			AuctionParameters::<T>::get(),
 		)
-		.and_then(|resolver| resolver.resolve_auction(Self::qualified_bidders().collect()))
-		{
+		.and_then(|resolver| {
+			resolver.resolve_auction(T::BidderProvider::get_bidders().into_iter().collect())
+		}) {
 			Ok(auction_outcome) => {
 				Self::deposit_event(Event::AuctionCompleted(
 					auction_outcome.winners.clone(),
@@ -1234,10 +1236,6 @@ impl<T: Config> Pallet<T> {
 		)?;
 		AuctionParameters::<T>::put(new_parameters);
 		Ok(())
-	}
-
-	fn qualified_bidders() -> impl Iterator<Item = Bid<ValidatorIdOf<T>, T::Amount>> {
-		T::BidderProvider::get_bidders().into_iter()
 	}
 }
 
