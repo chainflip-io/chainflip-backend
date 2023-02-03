@@ -3,6 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use cf_primitives::AuthorityCount;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
+use tracing::warn;
 use utilities::threshold_from_share_count;
 
 use super::BroadcastFailureReason;
@@ -46,7 +47,6 @@ where
 // the threshold to 50% for symmetry?)
 pub fn verify_broadcasts<T>(
 	verification_messages: BTreeMap<AuthorityCount, Option<BroadcastVerificationMessage<T>>>,
-	logger: &slog::Logger,
 ) -> Result<BTreeMap<AuthorityCount, T>, (BTreeSet<AuthorityCount>, BroadcastFailureReason)>
 where
 	T: Clone + serde::Serialize + serde::de::DeserializeOwned + std::fmt::Debug,
@@ -68,7 +68,7 @@ where
 		.filter(|(sender, message)| {
 			let valid = check_verification_message_indexes(message, &participating_idxs);
 			if !(valid) {
-				slog::warn!(logger, "Disregarding verification message from: {}", sender);
+				warn!("Disregarding verification message from: {sender}");
 			}
 			valid
 		})
@@ -142,7 +142,6 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::logging::test_utils::new_test_logger;
 	use std::collections::BTreeSet;
 
 	/// Transforms the (more concise) test data into the expected "shape";
@@ -178,7 +177,7 @@ mod tests {
 	) {
 		let expected = expected.map(|values| values.into_iter().collect::<BTreeMap<_, _>>());
 
-		assert_eq!(verify_broadcasts(verification_messages, &new_test_logger()), expected);
+		assert_eq!(verify_broadcasts(verification_messages), expected);
 	}
 
 	#[test]

@@ -2,7 +2,6 @@ use std::{collections::BTreeSet, pin::Pin, time::Duration};
 
 use crate::{
 	constants::CEREMONY_ID_WINDOW,
-	logging::test_utils::new_test_logger,
 	multisig::{
 		client::{
 			self,
@@ -74,7 +73,6 @@ fn new_ceremony_manager_for_test(
 		our_account_id,
 		tokio::sync::mpsc::unbounded_channel().0,
 		latest_ceremony_id,
-		&new_test_logger(),
 	)
 }
 
@@ -117,12 +115,8 @@ fn spawn_ceremony_manager(
 	let (ceremony_request_sender, ceremony_request_receiver) = mpsc::unbounded_channel();
 	let (incoming_p2p_sender, incoming_p2p_receiver) = mpsc::unbounded_channel();
 	let (outgoing_p2p_sender, outgoing_p2p_receiver) = mpsc::unbounded_channel();
-	let ceremony_manager = CeremonyManager::<EthSigning>::new(
-		our_account_id,
-		outgoing_p2p_sender,
-		latest_ceremony_id,
-		&new_test_logger(),
-	);
+	let ceremony_manager =
+		CeremonyManager::<EthSigning>::new(our_account_id, outgoing_p2p_sender, latest_ceremony_id);
 	tokio::spawn(ceremony_manager.run(ceremony_request_receiver, incoming_p2p_receiver));
 
 	(ceremony_request_sender, incoming_p2p_sender, outgoing_p2p_receiver)
@@ -253,7 +247,6 @@ async fn should_not_create_unauthorized_ceremony_with_invalid_ceremony_id() {
 		ACCOUNT_IDS[0].clone(),
 		tokio::sync::mpsc::unbounded_channel().0,
 		latest_ceremony_id,
-		&new_test_logger(),
 	);
 
 	task_scope(|scope| {
@@ -342,7 +335,6 @@ async fn should_cleanup_unauthorised_ceremony_if_not_participating() {
 				our_account_id.clone(),
 				outgoing_p2p_sender,
 				INITIAL_LATEST_CEREMONY_ID,
-				&new_test_logger(),
 			);
 
 			// Manually spawn a ceremony runner in an unauthorised state
@@ -358,7 +350,6 @@ async fn should_cleanup_unauthorised_ceremony_if_not_participating() {
 					ceremony_runner_p2p_receiver,
 					ceremony_runner_request_receiver,
 					mpsc::unbounded_channel().0,
-					new_test_logger(),
 				));
 
 			// Turn the task handle into a ceremony handle and insert it into the ceremony manager
