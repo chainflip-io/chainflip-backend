@@ -669,11 +669,11 @@ impl PoolState {
 				// Cannot overflow as if the swap traversed all ticks (MIN_TICK to MAX_TICK
 				// (inclusive)), assuming the maximum possible liquidity, total_amount_out would
 				// still be below U256::MAX (See test `output_amounts_bounded`)
-				total_amount_out += SD::output_amount_delta_floor(
+				total_amount_out = total_amount_out.saturating_add(SD::output_amount_delta_floor(
 					self.current_sqrt_price,
 					sqrt_ratio_next,
 					self.current_liquidity,
-				);
+				));
 
 				// next_sqrt_price_from_input_amount rounds so this maybe Ok(()) even though
 				// amount_minus_fees < amount_required_to_reach_target (TODO Prove)
@@ -682,7 +682,7 @@ impl PoolState {
 					let fees = mul_div_ceil(
 						amount_required_to_reach_target,
 						U256::from(self.fee_100th_bips),
-						U256::from(ONE_IN_HUNDREDTH_BIPS - self.fee_100th_bips),
+						U256::from(ONE_IN_HUNDREDTH_BIPS.saturating_sub(self.fee_100th_bips)),
 					);
 
 					// DIFF: This behaviour is different to Uniswap's, we saturate instead of
@@ -699,7 +699,8 @@ impl PoolState {
 								self.current_liquidity,
 							));
 						target_info.fee_growth_outside = PoolAssetMap::new_from_fn(|side| {
-							self.global_fee_growth[side] - target_info.fee_growth_outside[side]
+							self.global_fee_growth[side]
+								.saturating_sub(target_info.fee_growth_outside[side])
 						});
 					}
 
@@ -710,18 +711,20 @@ impl PoolState {
 					amount = amount.saturating_sub(amount_required_to_reach_target);
 					amount = amount.saturating_sub(fees);
 
-					total_fee_paid += fees;
+					total_fee_paid = total_fee_paid.saturating_add(fees);
 
 					// Since the liquidity value is used for the fee calculation, updating needs to
 					// be done at the end.
 					// Note conversion to i128 and addition don't overflow (See test
 					// `max_liquidity`)
-					self.current_liquidity = i128::try_from(self.current_liquidity)
-						.unwrap()
-						.checked_add(SD::liquidity_delta_on_crossing_tick(target_info))
-						.unwrap()
-						.try_into()
-						.unwrap();
+					let liquidity_delta = SD::liquidity_delta_on_crossing_tick(target_info);
+					if liquidity_delta >= 0 {
+						self.current_liquidity =
+							self.current_liquidity.saturating_add(liquidity_delta.unsigned_abs());
+					} else {
+						self.current_liquidity =
+							self.current_liquidity.saturating_sub(liquidity_delta.unsigned_abs());
+					}
 				} else {
 					let amount_in = SD::input_amount_delta_ceil(
 						self.current_sqrt_price,
@@ -731,7 +734,7 @@ impl PoolState {
 					// Will not underflow due to rounding in flavor of the pool of both
 					// sqrt_ratio_next and amount_in. (TODO: Prove)
 					let fees = amount.saturating_sub(amount_in);
-					total_fee_paid += fees;
+					total_fee_paid = total_fee_paid.saturating_add(fees);
 
 					// DIFF: This behaviour is different to Uniswap's,
 					// we saturate instead of overflowing/bricking the pool. This means we just stop
@@ -837,7 +840,11 @@ impl PoolState {
 			Then A * B >= B and B - A < B
 			Then A * B > B - A
 		*/
-		mul_div_floor(U256::from(liquidity) << 96u32, to - from, U256::full_mul(to, from))
+		mul_div_floor(
+			U256::from(liquidity) << 96u32,
+			to.saturating_sub(from),
+			U256::full_mul(to, from),
+		)
 	}
 
 	fn asset_0_amount_delta_ceil(
@@ -854,7 +861,11 @@ impl PoolState {
 			Then A * B >= B and B - A < B
 			Then A * B > B - A
 		*/
-		mul_div_ceil(U256::from(liquidity) << 96u32, to - from, U256::full_mul(to, from))
+		mul_div_ceil(
+			U256::from(liquidity) << 96u32,
+			to.saturating_sub(from),
+			U256::full_mul(to, from),
+		)
 	}
 
 	fn asset_1_amount_delta_floor(
@@ -874,7 +885,7 @@ impl PoolState {
 			Then (B - A) / (1<<96) <= u64::MAX (160 - 96 = 64)
 			Then L * ((B - A) / (1<<96)) <= u192::MAX < u256::MAX
 		*/
-		mul_div_floor(liquidity.into(), to - from, U512::from(1) << 96u32)
+		mul_div_floor(liquidity.into(), to.saturating_sub(from), U512::from(1) << 96u32)
 	}
 
 	fn asset_1_amount_delta_ceil(
@@ -894,7 +905,7 @@ impl PoolState {
 			Then (B - A) / (1<<96) <= u64::MAX (160 - 96 = 64)
 			Then L * ((B - A) / (1<<96)) <= u192::MAX < u256::MAX
 		*/
-		mul_div_ceil(liquidity.into(), to - from, U512::from(1u32) << 96u32)
+		mul_div_ceil(liquidity.into(), to.saturating_sub(from), U512::from(1u32) << 96u32)
 	}
 
 	fn next_sqrt_price_from_asset_0_input(
@@ -919,7 +930,7 @@ impl PoolState {
 			sqrt_ratio_current,
 			// Addition will not overflow as function is not called if amount >=
 			// amount_required_to_reach_target
-			U512::from(liquidity) + U256::full_mul(amount, sqrt_ratio_current),
+			U512::from(liquidity).saturating_add(U256::full_mul(amount, sqrt_ratio_current)),
 		)
 	}
 
@@ -928,9 +939,14 @@ impl PoolState {
 		liquidity: Liquidity,
 		amount: AmountU256,
 	) -> SqrtPriceQ64F96 {
+		debug_assert!(liquidity > 0);
 		// Will not overflow as function is not called if amount >= amount_required_to_reach_target,
 		// therefore bounding the function output to approximately <= MAX_SQRT_PRICE
-		sqrt_ratio_current + (amount << 96u32) / liquidity
+		sqrt_ratio_current.saturating_add(
+			(amount << 96u32)
+				.checked_div(liquidity.into())
+				.expect("Liquidity should never be zero"),
+		)
 	}
 
 	pub fn sqrt_price_at_tick(tick: Tick) -> SqrtPriceQ64F96 {
@@ -959,9 +975,9 @@ impl PoolState {
 					none of the checked_mul calls in any of the applications of the macro will overflow
 				*/
 				#[cfg(debug_assertions)]
-				U256::checked_mul(U256::one() << 128u128, $constant.into()).unwrap();
+				U256::saturating_mul(U256::one() << 128u128, $constant.into());
 				if abs_tick & (0x1u32 << $bit) != 0 {
-					r = U256::checked_mul(r, U256::from($constant)).unwrap() >> 128u128
+					r = U256::saturating_mul(r, U256::from($constant)) >> 128u128
 				}
 			}
 		}
@@ -986,13 +1002,17 @@ impl PoolState {
 		handle_tick_bit!(18, 0x2216e584f5fa1ea926041bedfe98u128);
 		handle_tick_bit!(19, 0x48a170391f7dc42444e8fa2u128);
 		// Note due to MIN_TICK and MAX_TICK bounds, past the 20th bit abs_tick is all zeros
-
+		// r is guaranteed to be > 0
+		debug_assert!(!r.is_zero());
 		let sqrt_price_q32f128 = if tick > 0 { U256::MAX / r } else { r };
 
 		// we round up in the division so tick_at_sqrt_price of the output price is always
 		// consistent
-		(sqrt_price_q32f128 >> 32u128) +
-			if sqrt_price_q32f128.low_u32() == 0 { U256::zero() } else { U256::one() }
+		(sqrt_price_q32f128 >> 32u128).saturating_add(if sqrt_price_q32f128.low_u32() == 0 {
+			U256::zero()
+		} else {
+			U256::one()
+		})
 	}
 
 	/// Calculates the greatest tick value such that `sqrt_price_at_tick(tick) <= sqrt_price`
@@ -1057,14 +1077,14 @@ impl PoolState {
 				($bit:literal) => {
 					// Note squaring a number doubles its log
 					let mantissa_sq =
-						(U256::checked_mul(_mantissa.into(), _mantissa.into()).unwrap() >> 127u8);
+						(U256::saturating_mul(_mantissa.into(), _mantissa.into()) >> 127u8);
 					_mantissa = if mantissa_sq.bit(128) {
 						// is the 129th bit set, all higher bits must be zero due to 127 right bit
 						// shift
 						log_2_q63f64 |= (1i128 << $bit);
-						(mantissa_sq >> 1u8).as_u128()
+						(mantissa_sq >> 1u8).try_into().expect("mantissa calculation should never overflow")
 					} else {
-						mantissa_sq.as_u128()
+						mantissa_sq.try_into().expect("mantissa calculation should never overflow")
 					}
 				};
 			}
@@ -1105,13 +1125,13 @@ impl PoolState {
 			U256::from(3402992956809132418596140100660247210u128),
 		)
 		.0 >> 128u8)
-			.as_u128() as Tick; // Add Checks
+			.low_u128() as Tick;
 		let tick_high = (U256::overflowing_add(
 			log_sqrt10001_q127f128,
 			U256::from(291339464771989622907027621153398088495u128),
 		)
 		.0 >> 128u8)
-			.as_u128() as Tick; // Add Checks
+			.low_u128() as Tick;
 
 		if tick_low == tick_high {
 			tick_low
@@ -1125,7 +1145,10 @@ impl PoolState {
 
 fn mul_div_floor<C: Into<U512>>(a: U256, b: U256, c: C) -> U256 {
 	let c: U512 = c.into();
-	(U256::full_mul(a, b) / c).try_into().unwrap()
+	debug_assert!(!c.is_zero());
+	(U256::full_mul(a, b) / c)
+		.try_into()
+		.expect("Core AMM arithmetic should never divide by zero")
 }
 
 fn mul_div_ceil<C: Into<U512>>(a: U256, b: U256, c: C) -> U256 {
@@ -1141,5 +1164,5 @@ fn mul_div_ceil<C: Into<U512>>(a: U256, b: U256, c: C) -> U256 {
 		d
 	}
 	.try_into()
-	.unwrap()
+	.expect("Core AMM arithmetic should never overflow")
 }
