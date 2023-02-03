@@ -160,7 +160,7 @@ pub mod pallet {
 		>;
 
 		/// Criteria that need to be fulfilled to qualify as a validator node (authority or backup).
-		type AuctionQualification: QualifyNode<ValidatorId = ValidatorIdOf<Self>>;
+		type KeygenQualification: QualifyNode<ValidatorId = ValidatorIdOf<Self>>;
 
 		/// For reporting missed authorship slots.
 		type OffenceReporter: OffenceReporter<
@@ -1123,7 +1123,7 @@ impl<T: Config> Pallet<T> {
 						.clone()
 						.primary_candidates
 						.into_iter()
-						.filter(|validator_id| !T::AuctionQualification::is_qualified(validator_id))
+						.filter(|validator_id| !T::KeygenQualification::is_qualified(validator_id))
 						.collect(),
 				);
 
@@ -1132,7 +1132,7 @@ impl<T: Config> Pallet<T> {
 						.clone()
 						.secondary_candidates
 						.into_iter()
-						.filter(|validator_id| !T::AuctionQualification::is_qualified(validator_id))
+						.filter(|validator_id| !T::KeygenQualification::is_qualified(validator_id))
 						.collect(),
 				);
 
@@ -1187,7 +1187,7 @@ impl<T: Config> Pallet<T> {
 	) -> impl Iterator<Item = Bid<ValidatorIdOf<T>, <T as Chainflip>::Amount>> {
 		let mut backups: Vec<_> = Backups::<T>::get()
 			.into_iter()
-			.filter(|(bidder_id, _)| T::AuctionQualification::is_qualified(bidder_id))
+			.filter(|(bidder_id, _)| T::KeygenQualification::is_qualified(bidder_id))
 			.collect();
 
 		let limit = Self::backup_reward_nodes_limit();
