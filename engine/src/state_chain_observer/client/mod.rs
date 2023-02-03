@@ -7,12 +7,15 @@ use base_rpc_api::BaseRpcApi;
 
 use anyhow::{anyhow, bail, Context, Result};
 use cf_primitives::AccountRole;
-use futures::{Stream, StreamExt, TryFutureExt, TryStreamExt};
+use frame_support::pallet_prelude::InvalidTransaction;
+use futures::{Stream, StreamExt, TryStreamExt};
 
 use slog::o;
 use sp_core::{Pair, H256};
-use std::sync::{atomic::AtomicU32, Arc};
-use tokio::sync::RwLock;
+use sp_runtime::traits::Hash;
+use state_chain_runtime::AccountId;
+use std::sync::Arc;
+use tokio::sync::{mpsc, oneshot};
 
 use crate::{
 	common::{read_clean_and_decode_hex_str_file, EngineTryStreamExt},
@@ -25,10 +28,16 @@ use crate::{
 pub struct StateChainClient<
 	BaseRpcClient = base_rpc_api::BaseRpcClient<jsonrpsee::ws_client::WsClient>,
 > {
-	nonce: AtomicU32,
-	runtime_version: RwLock<sp_version::RuntimeVersion>,
 	genesis_hash: state_chain_runtime::Hash,
-	signer: signer::PairSigner<sp_core::sr25519::Pair>,
+	account_id: AccountId,
+	signed_extrinsic_request_sender: mpsc::UnboundedSender<(
+		state_chain_runtime::RuntimeCall,
+		oneshot::Sender<Result<H256, anyhow::Error>>,
+	)>,
+	unsigned_extrinsic_request_sender: mpsc::UnboundedSender<(
+		state_chain_runtime::RuntimeCall,
+		oneshot::Sender<Result<H256, anyhow::Error>>,
+	)>,
 	_task_handle: ScopedJoinHandle<()>,
 	pub base_rpc_client: Arc<BaseRpcClient>,
 }
@@ -37,6 +46,14 @@ impl<BaseRpcClient> StateChainClient<BaseRpcClient> {
 	pub fn get_genesis_hash(&self) -> state_chain_runtime::Hash {
 		self.genesis_hash
 	}
+}
+
+fn invalid_err_obj(invalid_reason: InvalidTransaction) -> jsonrpsee::types::ErrorObjectOwned {
+	jsonrpsee::types::ErrorObject::owned(
+		1010,
+		"Invalid Transaction",
+		Some(<&'static str>::from(invalid_reason)),
+	)
 }
 
 /// This resolves a compiler bug: https://github.com/rust-lang/rust/issues/102211#issuecomment-1372215393
@@ -81,6 +98,8 @@ impl StateChainClient {
 
 		let base_rpc_client =
 			Arc::new(base_rpc_api::BaseRpcClient::new(state_chain_settings).await?);
+
+		let genesis_hash = base_rpc_client.block_hash(0).await?.unwrap();
 
 		let (first_finalized_block_header, mut finalized_block_header_stream) = {
 			// https://substrate.stackexchange.com/questions/3667/api-rpc-chain-subscribefinalizedheads-missing-blocks
@@ -219,23 +238,156 @@ impl StateChainClient {
 			)
 		};
 
+		// These are unbounded to avoid deadlock between sending blocks and receiving extrinsics
+		let (signed_extrinsic_request_sender, mut signed_extrinsic_request_receiver) =
+			mpsc::unbounded_channel();
+		let (unsigned_extrinsic_request_sender, mut unsigned_extrinsic_request_receiver) =
+			mpsc::unbounded_channel();
+
 		const BLOCK_CAPACITY: usize = 10;
 		let (block_sender, block_receiver) = async_broadcast::broadcast(BLOCK_CAPACITY);
 
 		let state_chain_client = Arc::new(StateChainClient {
-			nonce: AtomicU32::new(account_nonce),
-			runtime_version: RwLock::new(base_rpc_client.runtime_version().await?),
-			genesis_hash: base_rpc_client.block_hash(0).await?.unwrap(),
-			signer: signer.clone(),
-			_task_handle: scope.spawn_with_handle(async move {
-				finalized_block_header_stream
-					.try_for_each(|block_header| {
-						block_sender
-							.broadcast(block_header)
-							.map_err(anyhow::Error::new)
-							.map_ok(|_| ())
-					})
-					.await
+			genesis_hash,
+			account_id: signer.account_id.clone(),
+			signed_extrinsic_request_sender,
+			unsigned_extrinsic_request_sender,
+			_task_handle: scope.spawn_with_handle({
+				let logger = logger.clone();
+				let base_rpc_client = base_rpc_client.clone();
+				let mut runtime_version = base_rpc_client.runtime_version().await?;
+				let mut account_nonce = account_nonce;
+
+				async move {
+					loop {
+						tokio::select! {
+							Some((call, result_sender)) = signed_extrinsic_request_receiver.recv() => {
+								let _result = result_sender.send({
+									let mut retries = 0..crate::constants::MAX_EXTRINSIC_RETRY_ATTEMPTS;
+									loop {
+										if retries.next().is_none() {
+											break Err(anyhow!("Exceeded maximum number of retry attempts"))
+										} else {
+											match base_rpc_client
+												.submit_extrinsic(signer.new_signed_extrinsic(
+													call.clone(),
+													&runtime_version,
+													genesis_hash,
+													account_nonce,
+												))
+												.await
+											{
+												Ok(tx_hash) => {
+													account_nonce += 1;
+													break Ok(tx_hash)
+												},
+												Err(rpc_err) => match rpc_err {
+													// This occurs when a transaction with the same nonce is in the transaction pool
+													// (and the priority is <= priority of that existing tx)
+													jsonrpsee::core::Error::Call(jsonrpsee::types::error::CallError::Custom(ref obj)) if obj.code() == 1014 => {
+														slog::warn!(
+															logger,
+															"Extrinsic submission failed with nonce: {}. Error: {:?}. Transaction with same nonce found in transaction pool.",
+															account_nonce,
+															rpc_err
+														);
+													},
+													// This occurs when the nonce has already been *consumed* i.e a transaction with
+													// that nonce is in a block
+													jsonrpsee::core::Error::Call(jsonrpsee::types::error::CallError::Custom(ref obj))
+														if obj == &invalid_err_obj(InvalidTransaction::Stale) =>
+													{
+														// Since we can submit, crash (lose in-memory nonce state), restart => fetch
+														// nonce from finalised. If the tx we submitted is not yet finalised, we
+														// will fetch a nonce that will be too low. Which would cause this warning
+														// on startup at submission of first (possibly couple) of extrinsics.
+														slog::warn!(
+															logger,
+															"Extrinsic submission failed with nonce: {}. Error: {:?}. Transaction stale.",
+															account_nonce,
+															rpc_err
+														);
+													},
+													jsonrpsee::core::Error::Call(jsonrpsee::types::error::CallError::Custom(ref obj))
+														if obj == &invalid_err_obj(InvalidTransaction::BadProof) =>
+													{
+														slog::warn!(
+															logger,
+															"Extrinsic submission failed with nonce: {}. Error: {:?}. Refetching the runtime version.",
+															account_nonce,
+															rpc_err
+														);
+														let new_runtime_version = base_rpc_client.runtime_version().await?;
+														if new_runtime_version == runtime_version {
+															slog::warn!(logger, "Fetched RuntimeVersion of {:?} is the same as the previous RuntimeVersion. This is not expected.", &runtime_version);
+															// break, as the error is now very unlikely to be solved by fetching
+															// again
+															break Err(anyhow!("Fetched RuntimeVersion of {:?} is the same as the previous RuntimeVersion. This is not expected.", &runtime_version))
+														}
+
+														runtime_version = new_runtime_version;
+													},
+													err => break Err(err.into()),
+												}
+											}
+										}
+									}
+								});
+							}
+							Some((call, result_sender)) = unsigned_extrinsic_request_receiver.recv() => {
+								let _result = result_sender.send({
+									let extrinsic = state_chain_runtime::UncheckedExtrinsic::new_unsigned(call.clone());
+									let expected_hash = sp_runtime::traits::BlakeTwo256::hash_of(&extrinsic);
+									match base_rpc_client.submit_extrinsic(extrinsic).await {
+										Ok(tx_hash) => {
+											slog::info!(
+												logger,
+												"Unsigned extrinsic {:?} submitted successfully with tx_hash: {:#x}",
+												&call,
+												tx_hash
+											);
+											assert_eq!(
+												tx_hash, expected_hash,
+												"tx_hash returned from RPC does not match expected hash"
+											);
+											Ok(tx_hash)
+										},
+										Err(rpc_err) => {
+											match rpc_err {
+												// POOL_ALREADY_IMPORTED error occurs when the transaction is already in the
+												// pool More than one node can submit the same unsigned extrinsic. E.g. in the
+												// case of a threshold signature success. Thus, if we get a "Transaction already
+												// in pool" "error" we know that this particular extrinsic has already been
+												// submitted. And so we can ignore the error and return the transaction hash
+												jsonrpsee::core::Error::Call(jsonrpsee::types::error::CallError::Custom(ref obj)) if obj.code() == 1013 => {
+													slog::trace!(
+														logger,
+														"Unsigned extrinsic {:?} with tx_hash {:#x} already in pool.",
+														&call,
+														expected_hash
+													);
+													Ok(expected_hash)
+												},
+												_ => {
+													slog::error!(
+														logger,
+														"Unsigned extrinsic failed with error: {}. Extrinsic: {:?}",
+														rpc_err,
+														&call
+													);
+													Err(rpc_err.into())
+												},
+											}
+										},
+									}
+								});
+							}
+							option_block_header = finalized_block_header_stream.next() => {
+								let _result = block_sender.broadcast(option_block_header.unwrap()?).await;
+							}
+						}
+					}
+				}
 			}),
 			base_rpc_client,
 		});
