@@ -2,23 +2,20 @@ use std::collections::BTreeSet;
 
 use rand_legacy::SeedableRng;
 
-use crate::{
-	logging::init_test_logger,
-	multisig::{
-		client::{
-			common::{BroadcastFailureReason, SigningFailureReason, SigningStageName},
-			helpers::{
-				gen_invalid_local_sig, gen_invalid_signing_comm1, new_nodes, new_signing_ceremony,
-				run_stages, SigningCeremonyRunner, ACCOUNT_IDS, DEFAULT_SIGNING_CEREMONY_ID,
-				DEFAULT_SIGNING_SEED,
-			},
-			keygen::generate_key_data,
-			signing::signing_data,
+use crate::multisig::{
+	client::{
+		common::{BroadcastFailureReason, SigningFailureReason, SigningStageName},
+		helpers::{
+			gen_invalid_local_sig, gen_invalid_signing_comm1, new_nodes, new_signing_ceremony,
+			run_stages, SigningCeremonyRunner, ACCOUNT_IDS, DEFAULT_SIGNING_CEREMONY_ID,
+			DEFAULT_SIGNING_SEED,
 		},
-		crypto::polkadot::PolkadotSigning,
-		eth::EthSigning,
-		CryptoScheme, Rng,
+		keygen::generate_key_data,
+		signing::signing_data,
 	},
+	crypto::polkadot::PolkadotSigning,
+	eth::EthSigning,
+	CryptoScheme, Rng,
 };
 
 // We choose (arbitrarily) to use eth crypto for unit tests.
@@ -29,7 +26,6 @@ type VerifyLocalSig4 = signing_data::VerifyLocalSig4<Point>;
 
 #[tokio::test]
 async fn should_report_on_invalid_local_sig3() {
-	init_test_logger();
 	let (mut signing_ceremony, _) = new_signing_ceremony::<EthSigning>().await;
 
 	let messages = signing_ceremony.request().await;
@@ -51,7 +47,6 @@ async fn should_report_on_invalid_local_sig3() {
 
 #[tokio::test]
 async fn should_report_on_inconsistent_broadcast_comm1() {
-	init_test_logger();
 	let (mut signing_ceremony, _) = new_signing_ceremony::<EthSigning>().await;
 
 	let mut messages = signing_ceremony.request().await;
@@ -77,7 +72,6 @@ async fn should_report_on_inconsistent_broadcast_comm1() {
 
 #[tokio::test]
 async fn should_report_on_inconsistent_broadcast_local_sig3() {
-	init_test_logger();
 	let (mut signing_ceremony, _) = new_signing_ceremony::<EthSigning>().await;
 
 	let messages = signing_ceremony.request().await;
@@ -104,7 +98,6 @@ async fn should_report_on_inconsistent_broadcast_local_sig3() {
 }
 
 async fn should_sign_with_all_parties<C: CryptoScheme>() {
-	init_test_logger();
 	// This seed ensures that the initially
 	// generated key is incompatible to increase
 	// test coverage
@@ -138,13 +131,11 @@ async fn should_sign_with_all_parties<C: CryptoScheme>() {
 
 #[tokio::test]
 async fn should_sign_with_all_parties_eth() {
-	init_test_logger();
 	should_sign_with_all_parties::<EthSigning>().await;
 }
 
 #[tokio::test]
 async fn should_sign_with_all_parties_polkadot() {
-	init_test_logger();
 	should_sign_with_all_parties::<PolkadotSigning>().await;
 }
 
@@ -168,7 +159,6 @@ mod timeout {
 
 		#[tokio::test]
 		async fn should_recover_if_party_appears_offline_to_minority_stage1() {
-			init_test_logger();
 			let (mut signing_ceremony, _) = new_signing_ceremony::<EthSigning>().await;
 
 			let mut messages = signing_ceremony.request().await;
@@ -197,7 +187,6 @@ mod timeout {
 
 		#[tokio::test]
 		async fn should_recover_if_party_appears_offline_to_minority_stage3() {
-			init_test_logger();
 			let (mut signing_ceremony, _) = new_signing_ceremony::<EthSigning>().await;
 
 			let messages = signing_ceremony.request().await;
@@ -240,7 +229,6 @@ mod timeout {
 
 		#[tokio::test]
 		async fn should_recover_if_agree_on_values_stage2() {
-			init_test_logger();
 			let (mut ceremony, _) = new_signing_ceremony::<EthSigning>().await;
 
 			let [bad_node_id] = &ceremony.select_account_ids();
@@ -259,7 +247,6 @@ mod timeout {
 
 		#[tokio::test]
 		async fn should_recover_if_agree_on_values_stage4() {
-			init_test_logger();
 			let (mut ceremony, _) = new_signing_ceremony::<EthSigning>().await;
 
 			let [bad_node_id] = &ceremony.select_account_ids();
@@ -285,7 +272,6 @@ mod timeout {
 
 		#[tokio::test]
 		async fn should_report_if_insufficient_messages_stage2() {
-			init_test_logger();
 			let (mut signing_ceremony, _) = new_signing_ceremony::<EthSigning>().await;
 
 			// bad party 1 will timeout during a broadcast stage. It should be reported
@@ -319,7 +305,6 @@ mod timeout {
 
 		#[tokio::test]
 		async fn should_report_if_insufficient_messages_stage4() {
-			init_test_logger();
 			let (mut signing_ceremony, _) = new_signing_ceremony::<EthSigning>().await;
 
 			// bad party 1 will timeout during a broadcast stage. It should be reported

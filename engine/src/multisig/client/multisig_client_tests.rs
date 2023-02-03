@@ -2,7 +2,7 @@ use std::{collections::BTreeSet, sync::Arc};
 
 use super::*;
 use crate::{
-	logging::{init_test_logger, test_utils::new_test_logger},
+	logging::test_utils::new_test_logger,
 	multisig::{
 		client::{
 			self,
@@ -24,7 +24,6 @@ use utilities::{assert_err, assert_ok};
 
 #[tokio::test]
 async fn should_ignore_rts_for_unknown_key() {
-	init_test_logger();
 	let account_id = &ACCOUNT_IDS[0];
 	let (_dir, db_file) = new_temp_directory_with_nonexistent_file();
 
@@ -57,7 +56,6 @@ async fn should_ignore_rts_for_unknown_key() {
 
 #[tokio::test]
 async fn should_save_key_after_keygen() {
-	init_test_logger();
 	let logger = new_test_logger();
 	let (_dir, db_file) = new_temp_directory_with_nonexistent_file();
 
@@ -113,8 +111,6 @@ async fn should_save_key_after_keygen() {
 
 #[tokio::test]
 async fn should_load_keys_on_creation() {
-	init_test_logger();
-
 	// Generate a key to use in this test
 	let (key_id, stored_keygen_result_info) = {
 		let (key_id, key_data) =

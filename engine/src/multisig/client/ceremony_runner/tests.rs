@@ -1,5 +1,4 @@
 use crate::{
-	logging::init_test_logger,
 	multisig::{
 		client::{
 			ceremony_manager::{prepare_signing_request, KeygenCeremony, SigningCeremony},
@@ -56,7 +55,6 @@ fn spawn_signing_ceremony_runner(
 
 #[tokio::test]
 async fn should_ignore_stage_data_with_incorrect_size() {
-	init_test_logger();
 	let rng = Rng::from_seed(DEFAULT_KEYGEN_SEED);
 	let num_of_participants = ACCOUNT_IDS.len() as u32;
 
@@ -87,7 +85,6 @@ async fn should_ignore_stage_data_with_incorrect_size() {
 
 #[tokio::test]
 async fn should_ignore_non_stage_1_messages_while_unauthorised() {
-	init_test_logger();
 	let num_of_participants = ACCOUNT_IDS.len() as u32;
 
 	// Create an unauthorised ceremony
@@ -111,7 +108,6 @@ async fn should_ignore_non_stage_1_messages_while_unauthorised() {
 
 #[tokio::test]
 async fn should_delay_stage_1_message_while_unauthorised() {
-	init_test_logger();
 	let our_account_id = ACCOUNT_IDS[0].clone();
 	let sender_account_id = ACCOUNT_IDS[2].clone();
 
@@ -153,7 +149,6 @@ async fn should_delay_stage_1_message_while_unauthorised() {
 
 #[tokio::test]
 async fn should_process_delayed_messages_after_finishing_a_stage() {
-	init_test_logger();
 	let our_account_id = ACCOUNT_IDS[0].clone();
 	let sender_account_id = ACCOUNT_IDS[1].clone();
 	// This test must only have 2 participants, so a single message from the sender will cause the
@@ -235,7 +230,6 @@ async fn gen_stage_1_signing_state(
 
 #[tokio::test]
 async fn should_ignore_duplicate_message() {
-	init_test_logger();
 	let our_account_id = ACCOUNT_IDS[0].clone();
 	let sender_account_id = ACCOUNT_IDS[1].clone();
 	// This test must have more then 2 participants to stop the stage advancing after a single
@@ -261,7 +255,6 @@ async fn should_ignore_duplicate_message() {
 
 #[tokio::test]
 async fn should_ignore_message_from_non_participating_account() {
-	init_test_logger();
 	let our_account_id = ACCOUNT_IDS[0].clone();
 	let mut participants = BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned());
 	let non_participant_id = ACCOUNT_IDS[2].clone();
@@ -279,7 +272,6 @@ async fn should_ignore_message_from_non_participating_account() {
 
 #[tokio::test]
 async fn should_ignore_message_from_unknown_account_id() {
-	init_test_logger();
 	let our_account_id = ACCOUNT_IDS[0].clone();
 	let participants = BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned());
 	let unknown_id = AccountId::new([0; 32]);
@@ -295,7 +287,6 @@ async fn should_ignore_message_from_unknown_account_id() {
 
 #[tokio::test]
 async fn should_ignore_message_from_unexpected_stage() {
-	init_test_logger();
 	let our_account_id = ACCOUNT_IDS[0].clone();
 	let sender_account_id = ACCOUNT_IDS[1].clone();
 	let participants = BTreeSet::from_iter([our_account_id.clone(), sender_account_id.clone()]);
@@ -316,7 +307,6 @@ async fn should_ignore_message_from_unexpected_stage() {
 
 #[tokio::test]
 async fn should_not_timeout_unauthorised_ceremony() {
-	init_test_logger();
 	let (task_handle, _channels) = spawn_signing_ceremony_runner();
 
 	// Advance time, then check that the task did not end due to a timeout
@@ -326,8 +316,6 @@ async fn should_not_timeout_unauthorised_ceremony() {
 
 #[tokio::test]
 async fn should_timeout_authorised_ceremony() {
-	init_test_logger();
-
 	let (task_handle, (_message_sender, request_sender, _outcome_receiver)) =
 		spawn_signing_ceremony_runner();
 
