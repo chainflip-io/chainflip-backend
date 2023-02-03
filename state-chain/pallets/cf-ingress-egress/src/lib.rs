@@ -33,6 +33,18 @@ pub enum FetchOrTransfer<C: Chain> {
 	Transfer { egress_id: EgressId, asset: C::ChainAsset, to: C::ChainAccount, amount: AssetAmount },
 }
 
+#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub enum DeploymentStatus {
+	Deployed,   // an address that has already been deployed
+	Undeployed, // an address that has not been deployed yet
+}
+
+impl Default for DeploymentStatus {
+	fn default() -> Self {
+		Self::Undeployed
+	}
+}
+
 impl<C: Chain> FetchOrTransfer<C> {
 	fn asset(&self) -> &C::ChainAsset {
 		match self {
@@ -75,12 +87,6 @@ pub mod pallet {
 	pub struct IngressDetails<C: Chain> {
 		pub intent_id: IntentId,
 		pub ingress_asset: C::ChainAsset,
-	}
-
-	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-	pub enum DeploymentStatus {
-		Deployed,   // an address that has already been deployed
-		Undeployed, // an address that has not been deployed yet
 	}
 
 	/// Contains information relevant to the action to commence once ingress succeeds.
@@ -179,17 +185,18 @@ pub mod pallet {
 		IntentAction<<T as frame_system::Config>::AccountId>,
 	>;
 
+	/// Stores pools of addresses that are available for use.
 	#[pallet::storage]
 	pub(crate) type StaleIntents<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, ForeignChainAddress, ()>;
+		StorageMap<_, Twox64Concat, ForeignChain, Vec<ForeignChainAddress>, ValueQuery>;
 
 	#[pallet::storage]
 	pub(crate) type AddressStatus<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, ForeignChainAddress, DeploymentStatus>;
+		StorageMap<_, Twox64Concat, ForeignChainAddress, DeploymentStatus, ValueQuery>;
 
 	#[pallet::storage]
 	pub(crate) type IntentExpiries<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, T::BlockNumber, Vec<ForeignChainAddress>>;
+		StorageMap<_, Twox64Concat, T::BlockNumber, (ForeignChain, Vec<ForeignChainAddress>)>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -198,7 +205,6 @@ pub mod pallet {
 			ingress_address: TargetChainAccount<T, I>,
 			ingress_asset: TargetChainAsset<T, I>,
 		},
-
 		IngressCompleted {
 			ingress_address: TargetChainAccount<T, I>,
 			asset: TargetChainAsset<T, I>,
@@ -222,6 +228,9 @@ pub mod pallet {
 		BatchBroadcastRequested {
 			broadcast_id: BroadcastId,
 			egress_ids: Vec<EgressId>,
+		},
+		StopWitnessing {
+			ingress_address: TargetChainAccount<T, I>,
 		},
 	}
 
@@ -255,6 +264,29 @@ pub mod pallet {
 
 			with_transaction(|| Self::egress_scheduled_assets(Some(request_count)))
 				.unwrap_or_else(|_| T::WeightInfo::egress_assets(0))
+		}
+
+		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
+			// Look up the addresses to be expired for this block and for each
+			// a) move from active to stale intents.
+			// b) emit an event StopWitnessing to signal to the CFE that it can stop monitoring the
+			// expired address.
+			if let Some(chains) = IntentExpiries::<T, I>::take(n) {
+				match chains.0 {
+					ForeignChain::Ethereum => {
+						let addresses = chains.1;
+						for address in addresses {
+							if let Some(_) = ActiveIntents::<T, I>::take(&address) {
+								StaleIntents::<T, I>::mutate(ForeignChain::Ethereum, |v| {
+									v.push(address);
+								});
+							}
+						}
+					},
+					ForeignChain::Polkadot => todo!(),
+				}
+			}
+			T::DbWeight::get().reads(1)
 		}
 
 		fn integrity_test() {
@@ -459,6 +491,41 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		Self::deposit_event(Event::IngressCompleted { ingress_address, asset, amount, tx_id });
 		Ok(())
+	}
+	/// Create a new intent address for the given asset and registers it with the given action.
+	fn ingress_intent_creation(
+		chain: ForeignChain,
+		asset: TargetChainAsset<T, I>,
+		intent_action: IntentAction<T::AccountId>,
+	) -> ForeignChainAddress {
+		let next_intent_id = IntentIdCounter::<T, I>::get()
+			.checked_add(1)
+			.ok_or(Error::<T, I>::IntentIdsExhausted)
+			.unwrap();
+		let ttl = T::BlockNumber::from(3_u32);
+		// If and address is available use it
+		let intent_address = match chain {
+			ForeignChain::Ethereum => {
+				let mut a = StaleIntents::<T, I>::get(ForeignChain::Ethereum);
+				let address = if let Some(address) = a.pop() {
+					address
+				} else {
+					T::AddressDerivation::generate_address(asset, next_intent_id).unwrap().into()
+				};
+				IntentExpiries::<T, I>::mutate(ttl, |v| {
+					if let Some(v) = v {
+						v.0 = ForeignChain::Ethereum;
+						v.1.push(address);
+					} else {
+						*v = Some((ForeignChain::Ethereum, vec![address]));
+					}
+				});
+				address
+			},
+			ForeignChain::Polkadot => todo!(),
+		};
+		ActiveIntents::<T, I>::insert(intent_address, intent_action);
+		intent_address
 	}
 }
 
