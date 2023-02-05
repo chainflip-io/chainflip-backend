@@ -187,7 +187,12 @@ impl SwapDirection for Asset0ToAsset1 {
 	) -> Option<(&Tick, &mut TickInfo)> {
 		debug_assert!(liquidity_map.contains_key(&MIN_TICK));
 		if current_tick >= MIN_TICK {
-			liquidity_map.range_mut(..=current_tick).next_back()
+			Some(
+				liquidity_map
+					.range_mut(..=current_tick)
+					.next_back()
+					.expect("Liquidity must exist"),
+			)
 		} else {
 			debug_assert_eq!(current_tick, Self::current_tick_after_crossing_target_tick(MIN_TICK));
 			None
@@ -237,7 +242,12 @@ impl SwapDirection for Asset1ToAsset0 {
 	) -> Option<(&Tick, &mut TickInfo)> {
 		debug_assert!(liquidity_map.contains_key(&MAX_TICK));
 		if current_tick < MAX_TICK {
-			liquidity_map.range_mut(current_tick + 1..).next()
+			Some(
+				liquidity_map
+					.range_mut(current_tick + 1..)
+					.next()
+					.expect("Liquidity must exist"),
+			)
 		} else {
 			debug_assert_eq!(current_tick, Self::current_tick_after_crossing_target_tick(MAX_TICK));
 			None
@@ -453,14 +463,14 @@ impl PoolState {
 		lower_info.liquidity_delta = lower_info
 			.liquidity_delta
 			.checked_add_unsigned(minted_liquidity)
-			.unwrap_or(i128::MAX);
+			.expect("Add liquidity should never overflow.");
 		let mut upper_info = tick_info_with_updated_gross_liquidity(upper_tick)?;
 		// Cannot underflow as liquidity_delta.abs() is bounded to <=
 		// MAX_TICK_GROSS_LIQUIDITY
 		upper_info.liquidity_delta = upper_info
 			.liquidity_delta
 			.checked_sub_unsigned(minted_liquidity)
-			.unwrap_or(i128::MIN);
+			.expect("Subtracting liquidity should never underflow.");
 
 		let fees_returned = position.set_liquidity(
 			self,
@@ -524,14 +534,14 @@ impl PoolState {
 				lower_info.liquidity_delta = lower_info
 					.liquidity_delta
 					.checked_sub_unsigned(burnt_liquidity)
-					.unwrap_or(i128::MIN);
+					.expect("Subtracting liquidity should never underflow");
 
 				upper_info.liquidity_gross =
 					upper_info.liquidity_gross.saturating_sub(burnt_liquidity);
 				upper_info.liquidity_delta = lower_info
 					.liquidity_delta
 					.checked_add_unsigned(burnt_liquidity)
-					.unwrap_or(i128::MAX);
+					.expect("Adding liquidity should never overflow");
 
 				let fees_owed = position.set_liquidity(
 					self,
