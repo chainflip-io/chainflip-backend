@@ -17,14 +17,16 @@ use cf_traits::{
 	LiquidityPoolApi, SystemStateInfo,
 };
 
-#[cfg(feature = "std")]
-// #[cfg(feature = "runtime-benchmarks")]
-// mod benchmarking;
-#[cfg(test)]
-mod mock;
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
 
 #[cfg(test)]
+mod mock;
+#[cfg(test)]
 mod tests;
+
+pub mod weights;
+pub use weights::WeightInfo;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -56,6 +58,9 @@ pub mod pallet {
 
 		/// For governance checks.
 		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
+
+		/// Benchmark weights
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::error]
@@ -105,7 +110,7 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// For when the user wants to deposit assets into the Chain.
 		/// Generates a new ingress address for the user to posit their assets.
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::request_deposit_address())]
 		pub fn request_deposit_address(origin: OriginFor<T>, asset: Asset) -> DispatchResult {
 			T::SystemState::ensure_no_maintenance()?;
 			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
@@ -119,7 +124,7 @@ pub mod pallet {
 
 		/// For when the user wants to withdraw their free balances out of the chain.
 		/// Requires a valid foreign chain address.
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::withdraw_asset())]
 		pub fn withdraw_asset(
 			origin: OriginFor<T>,
 			amount: AssetAmount,
@@ -153,7 +158,7 @@ pub mod pallet {
 
 		/// Register the account as a Liquidity Provider.
 		/// Account roles are immutable once registered.
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::register_lp_account())]
 		pub fn register_lp_account(who: OriginFor<T>) -> DispatchResult {
 			let account_id = ensure_signed(who)?;
 
@@ -168,7 +173,7 @@ pub mod pallet {
 		/// Adding non-zero amount to an non-existant position will create the position.
 		/// Adding Zero amount to an existing position will fully burn all liquidity in the
 		/// position.
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::update_position())]
 		pub fn update_position(
 			origin: OriginFor<T>,
 			asset: Asset,

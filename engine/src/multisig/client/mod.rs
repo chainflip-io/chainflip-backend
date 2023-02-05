@@ -16,7 +16,7 @@ pub mod ceremony_manager;
 
 use std::collections::BTreeSet;
 
-use crate::{common::format_iterator, logging::CEREMONY_ID_KEY, multisig::KeyId};
+use crate::{common::format_iterator, multisig::KeyId};
 
 use cf_primitives::{AuthorityCount, CeremonyId};
 use futures::{future::BoxFuture, FutureExt};
@@ -25,6 +25,7 @@ use state_chain_runtime::AccountId;
 use serde::{Deserialize, Serialize};
 
 use tokio::sync::mpsc::UnboundedSender;
+use tracing::{debug, info, info_span, Instrument};
 use utilities::threshold_from_share_count;
 
 use keygen::KeygenData;
@@ -167,7 +168,6 @@ pub struct MultisigClient<C: CryptoScheme> {
 	my_account_id: AccountId,
 	ceremony_request_sender: UnboundedSender<CeremonyRequest<C>>,
 	key_store: std::sync::Mutex<KeyStore<C>>,
-	logger: slog::Logger,
 }
 
 impl<C> MultisigClient<C>
@@ -178,13 +178,11 @@ where
 		my_account_id: AccountId,
 		key_store: KeyStore<C>,
 		ceremony_request_sender: UnboundedSender<CeremonyRequest<C>>,
-		logger: &slog::Logger,
 	) -> Self {
 		MultisigClient {
 			my_account_id,
 			key_store: std::sync::Mutex::new(key_store),
 			ceremony_request_sender,
-			logger: logger.clone(),
 		}
 	}
 }
@@ -196,12 +194,12 @@ impl<C: CryptoScheme> MultisigClientApi<C> for MultisigClient<C> {
 		participants: BTreeSet<AccountId>,
 	) -> BoxFuture<'_, Result<C::AggKey, (BTreeSet<AccountId>, KeygenFailureReason)>> {
 		assert!(participants.contains(&self.my_account_id));
+		let span = info_span!("Keygen Ceremony", ceremony_id = ceremony_id);
+		let _entered = span.enter();
 
-		slog::info!(
-			self.logger,
-			"Received a keygen request";
-			"participants" => format_iterator(&participants).to_string(),
-			CEREMONY_ID_KEY => ceremony_id
+		info!(
+			participants = format_iterator(&participants).to_string(),
+			"Received a keygen request"
 		);
 
 		use rand_legacy::FromEntropy;
@@ -235,15 +233,13 @@ impl<C: CryptoScheme> MultisigClientApi<C> for MultisigClient<C> {
 					Ok(C::agg_key(&keygen_result_info.key.get_public_key()))
 				},
 				Err((reported_parties, failure_reason)) => {
-					failure_reason.log(
-						&reported_parties,
-						&self.logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id)),
-					);
+					failure_reason.log(&reported_parties);
 
 					Err((reported_parties, failure_reason))
 				},
 			}
 		}
+		.instrument(span.clone())
 		.boxed()
 	}
 
@@ -254,14 +250,15 @@ impl<C: CryptoScheme> MultisigClientApi<C> for MultisigClient<C> {
 		signers: BTreeSet<AccountId>,
 		payload: C::SigningPayload,
 	) -> BoxFuture<'_, Result<C::Signature, (BTreeSet<AccountId>, SigningFailureReason)>> {
+		let span = info_span!("Signing Ceremony", ceremony_id = ceremony_id);
+		let _entered = span.enter();
+
 		assert!(signers.contains(&self.my_account_id));
 
-		slog::debug!(
-			self.logger,
-			"Received a request to sign";
-			"payload" => payload.to_string(),
-			"signers" => format_iterator(&signers).to_string(),
-			CEREMONY_ID_KEY => ceremony_id
+		debug!(
+			payload = payload.to_string(),
+			signers = format_iterator(&signers).to_string(),
+			"Received a request to sign",
 		);
 
 		use rand_legacy::FromEntropy;
@@ -300,10 +297,7 @@ impl<C: CryptoScheme> MultisigClientApi<C> for MultisigClient<C> {
 					.expect("Signing result oneshot channel dropped before receiving a result");
 
 				result.map_err(|(reported_parties, failure_reason)| {
-					failure_reason.log(
-						&reported_parties,
-						&self.logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id)),
-					);
+					failure_reason.log(&reported_parties);
 
 					(reported_parties, failure_reason)
 				})
@@ -311,10 +305,7 @@ impl<C: CryptoScheme> MultisigClientApi<C> for MultisigClient<C> {
 				// No key was found for the given key_id
 				let reported_parties = BTreeSet::new();
 				let failure_reason = SigningFailureReason::UnknownKey;
-				failure_reason.log(
-					&reported_parties,
-					&self.logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id)),
-				);
+				failure_reason.log(&reported_parties);
 				Err((reported_parties, failure_reason))
 			}
 		}

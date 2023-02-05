@@ -26,8 +26,6 @@ use scale_info::TypeInfo;
 
 pub type PolkadotSignature = sr25519::Signature;
 
-pub type PolkadotGovKey = (); // Todo
-
 pub type PolkadotBalance = u128;
 pub type PolkadotIndex = u32;
 pub type PolkadotExtrinsicIndex = u32;
@@ -129,7 +127,7 @@ impl ChainCrypto for Polkadot {
 	type Payload = EncodedPolkadotPayload;
 	type ThresholdSignature = PolkadotSignature;
 	type TransactionId = TxId;
-	type GovKey = PolkadotGovKey;
+	type GovKey = PolkadotPublicKey;
 
 	fn verify_threshold_signature(
 		agg_key: &Self::AggKey,

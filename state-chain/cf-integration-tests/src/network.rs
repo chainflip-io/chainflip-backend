@@ -95,8 +95,8 @@ impl StakingContract {
 pub struct Cli;
 
 impl Cli {
-	pub fn activate_account(account: &NodeId) {
-		assert_ok!(Staking::activate_account(RuntimeOrigin::signed(account.clone())));
+	pub fn start_bidding(account: &NodeId) {
+		assert_ok!(Staking::start_bidding(RuntimeOrigin::signed(account.clone())));
 	}
 
 	pub fn claim(account: &NodeId, amount: ClaimAmount<FlipBalance>, eth_address: EthereumAddress) {

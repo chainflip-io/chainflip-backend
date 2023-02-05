@@ -11,6 +11,7 @@ mod tests;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
+mod migrations;
 pub mod weights;
 
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -26,7 +27,7 @@ use cf_traits::{
 use frame_support::{
 	dispatch::UnfilteredDispatchable,
 	ensure,
-	traits::{EnsureOrigin, Get},
+	traits::{EnsureOrigin, Get, OnRuntimeUpgrade, StorageVersion},
 };
 use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
 pub use pallet::*;
@@ -73,6 +74,8 @@ pub enum ThresholdCeremonyType {
 	Standard,
 	KeygenVerification,
 }
+
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -240,6 +243,7 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
+	#[pallet::storage_version(PALLET_VERSION)]
 	#[pallet::without_storage_info]
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
@@ -445,6 +449,20 @@ pub mod pallet {
 
 			T::Weights::on_initialize(T::EpochInfo::current_authority_count(), num_retries) +
 				T::Weights::report_offenders(num_offenders as AuthorityCount)
+		}
+
+		fn on_runtime_upgrade() -> Weight {
+			migrations::PalletMigration::<T, I>::on_runtime_upgrade()
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+			migrations::PalletMigration::<T, I>::pre_upgrade()
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
+			migrations::PalletMigration::<T, I>::post_upgrade(state)
 		}
 	}
 

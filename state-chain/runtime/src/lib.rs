@@ -16,7 +16,13 @@ use crate::{
 		RuntimeApiPenalty,
 	},
 };
-use cf_chains::{dot, dot::api::PolkadotApi, eth, eth::Ethereum, Polkadot};
+use cf_chains::{
+	dot,
+	dot::api::PolkadotApi,
+	eth,
+	eth::{api::EthereumApi, Ethereum},
+	Polkadot,
+};
 use pallet_transaction_payment::Multiplier;
 
 use crate::runtime_apis::RuntimeApiAccountInfoV2;
@@ -73,7 +79,7 @@ pub use cf_traits::{EpochInfo, EthEnvironmentProvider, QualifyNode, SessionKeysR
 pub use chainflip::chain_instances::*;
 use chainflip::{
 	epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat, EthEnvironment,
-	EthVaultTransitionHandler, TokenholderGovBroadcaster,
+	EthVaultTransitionHandler, TokenholderGovernanceBroadcaster,
 };
 
 use chainflip::{all_vaults_rotator::AllVaultRotator, DotEnvironment, DotVaultTransitionHandler};
@@ -134,7 +140,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("chainflip-node"),
 	impl_name: create_runtime_str!("chainflip-node"),
 	authoring_version: 1,
-	spec_version: 2,
+	spec_version: 3,
 	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 1,
@@ -281,6 +287,7 @@ impl pallet_cf_lp::Config for Runtime {
 	type EgressHandler = chainflip::AnyChainIngressEgressHandler;
 	type LiquidityPoolApi = LiquidityPools;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+	type WeightInfo = pallet_cf_lp::weights::PalletWeight<Runtime>;
 }
 
 impl pallet_cf_account_roles::Config for Runtime {
@@ -483,7 +490,7 @@ impl pallet_cf_staking::Config for Runtime {
 	type Broadcaster = EthereumBroadcaster;
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, Instance1>;
-	type RegisterClaim = eth::api::EthereumApi<EthEnvironment>;
+	type RegisterClaim = EthereumApi<EthEnvironment>;
 	type TimeSource = Timestamp;
 	type WeightInfo = pallet_cf_staking::weights::PalletWeight<Runtime>;
 }
@@ -494,10 +501,9 @@ impl pallet_cf_tokenholder_governance::Config for Runtime {
 	type StakingInfo = Flip;
 	type WeightInfo = pallet_cf_tokenholder_governance::weights::PalletWeight<Runtime>;
 	type VotingPeriod = ConstU32<{ 14 * DAYS }>;
-	type AnyChainGovKeyBroadcaster = TokenholderGovBroadcaster;
-	type CommKeyBroadcaster = TokenholderGovBroadcaster;
-	/// 1000 FLIP in FLIPPERINOS
-	type ProposalFee = ConstU128<1_000_000_000_000_000_000_000>;
+	type AnyChainGovKeyBroadcaster = TokenholderGovernanceBroadcaster;
+	type CommKeyBroadcaster = TokenholderGovernanceBroadcaster;
+	type ProposalFee = ConstU128<{ 1_000 * FLIPPERINOS_PER_FLIP }>;
 	type EnactmentDelay = ConstU32<{ 7 * DAYS }>;
 }
 
@@ -748,6 +754,7 @@ mod benches {
 		[pallet_cf_swapping, Swapping]
 		[pallet_cf_account_roles, AccountRoles]
 		[pallet_cf_ingress_egress, EthereumIngressEgress]
+		[pallet_cf_lp, LiquidityProvider]
 		[pallet_cf_pools, LiquidityPools]
 	);
 }

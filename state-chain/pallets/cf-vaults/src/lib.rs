@@ -11,7 +11,10 @@ use cf_traits::{
 	SystemStateManager, ThresholdSigner, VaultKeyWitnessedHandler, VaultRotator, VaultStatus,
 	VaultTransitionHandler,
 };
-use frame_support::pallet_prelude::*;
+use frame_support::{
+	pallet_prelude::*,
+	traits::{OnRuntimeUpgrade, StorageVersion},
+};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use sp_runtime::traits::{BlockNumberProvider, One, Saturating};
@@ -24,12 +27,15 @@ use sp_std::{
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
+mod migrations;
 pub mod weights;
 pub use weights::WeightInfo;
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
 mod tests;
+
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
 #[cfg(feature = "std")]
 const KEYGEN_CEREMONY_RESPONSE_TIMEOUT_DEFAULT: u32 = 10;
@@ -200,6 +206,7 @@ pub mod pallet {
 	use super::*;
 
 	#[pallet::pallet]
+	#[pallet::storage_version(PALLET_VERSION)]
 	#[pallet::generate_store(pub (super) trait Store)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
@@ -327,6 +334,20 @@ pub mod pallet {
 			}
 
 			weight
+		}
+
+		fn on_runtime_upgrade() -> Weight {
+			migrations::PalletMigration::<T, I>::on_runtime_upgrade()
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+			migrations::PalletMigration::<T, I>::pre_upgrade()
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
+			migrations::PalletMigration::<T, I>::post_upgrade(state)
 		}
 	}
 

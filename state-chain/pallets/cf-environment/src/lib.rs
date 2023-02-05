@@ -10,7 +10,10 @@ use cf_chains::{
 use cf_primitives::{Asset, EthereumAddress};
 pub use cf_traits::EthEnvironmentProvider;
 use cf_traits::{SystemStateInfo, SystemStateManager};
-use frame_support::pallet_prelude::*;
+use frame_support::{
+	pallet_prelude::*,
+	traits::{OnRuntimeUpgrade, StorageVersion},
+};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
 
@@ -24,6 +27,9 @@ mod tests;
 
 pub mod weights;
 pub use weights::WeightInfo;
+mod migrations;
+
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum SystemState {
@@ -106,6 +112,7 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
+	#[pallet::storage_version(PALLET_VERSION)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
 
@@ -183,6 +190,23 @@ pub mod pallet {
 		PolkadotVaultCreationCallInitiated { agg_key: <Polkadot as ChainCrypto>::AggKey },
 		/// Polkadot Vault Account is successfully set
 		PolkadotVaultAccountSet { polkadot_vault_account_id: PolkadotAccountId },
+	}
+
+	#[pallet::hooks]
+	impl<T: Config> Hooks<T::BlockNumber> for Pallet<T> {
+		fn on_runtime_upgrade() -> Weight {
+			migrations::PalletMigration::<T>::on_runtime_upgrade()
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<sp_std::vec::Vec<u8>, &'static str> {
+			migrations::PalletMigration::<T>::pre_upgrade()
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade(state: sp_std::vec::Vec<u8>) -> Result<(), &'static str> {
+			migrations::PalletMigration::<T>::post_upgrade(state)
+		}
 	}
 
 	#[pallet::call]

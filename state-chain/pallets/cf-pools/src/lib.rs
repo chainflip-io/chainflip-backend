@@ -317,7 +317,7 @@ pub mod pallet {
 
 			Pools::<T>::try_mutate(asset, |maybe_pool| {
 				if let Some(pool) = maybe_pool.as_mut() {
-					pool.set_fees(fee_100th_bips).map_err(|_| Error::InvalidFeeAmount)
+					pool.set_liquidity_fees(fee_100th_bips).map_err(|_| Error::InvalidFeeAmount)
 				} else {
 					Err(Error::<T>::PoolDoesNotExist)
 				}
@@ -458,6 +458,11 @@ impl<T: Config> LiquidityPoolApi<AccountId> for Pallet<T> {
 
 	fn current_tick(asset: &any::Asset) -> Option<Tick> {
 		Pools::<T>::get(asset).map(|pool| pool.current_tick())
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn new_pool(asset: any::Asset) {
+		Pools::<T>::insert(asset, PoolState::new(0u32, PoolState::sqrt_price_at_tick(0)).unwrap());
 	}
 }
 

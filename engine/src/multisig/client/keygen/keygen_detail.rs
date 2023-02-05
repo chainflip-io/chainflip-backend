@@ -6,6 +6,7 @@ use std::{
 use cf_primitives::AuthorityCount;
 use serde::{Deserialize, Serialize};
 use sp_core::H256;
+use tracing::warn;
 use zeroize::Zeroize;
 
 use crate::multisig::{
@@ -247,31 +248,36 @@ pub fn validate_commitments<P: ECPoint>(
 	hash_commitments: BTreeMap<AuthorityCount, HashComm1>,
 	context: &HashContext,
 	validator_mapping: Arc<PartyIdxMapping>,
-	logger: &slog::Logger,
 ) -> Result<
 	BTreeMap<AuthorityCount, DKGCommitment<P>>,
 	(BTreeSet<AuthorityCount>, KeygenFailureReason),
 > {
 	let invalid_idxs: BTreeSet<_> = public_coefficients
-        .iter()
-        .filter_map(|(idx, c)| {
-            let challenge = generate_dkg_challenge(*idx, context, c.commitments.0[0], c.zkp.r);
+		.iter()
+		.filter_map(|(idx, c)| {
+			let challenge = generate_dkg_challenge(*idx, context, c.commitments.0[0], c.zkp.r);
 
-            let hash_commitment = hash_commitments
-                .get(idx)
-                .expect("message must be present due to ceremony runner invariants");
+			let hash_commitment = hash_commitments
+				.get(idx)
+				.expect("message must be present due to ceremony runner invariants");
 
-            if !is_valid_zkp(challenge, &c.zkp, &c.commitments) {
-                slog::warn!(logger, "Invalid ZKP commitment"; "from_id" => validator_mapping.get_id(*idx).to_string());
-                Some(*idx)
-            } else if !is_valid_hash_commitment(c, &hash_commitment.0) {
-                slog::warn!(logger, "Invalid hash commitment"; "from_id" => validator_mapping.get_id(*idx).to_string());
-                Some(*idx)
-            } else {
-                None
-            }
-        })
-        .collect();
+			if !is_valid_zkp(challenge, &c.zkp, &c.commitments) {
+				warn!(
+					from_id = validator_mapping.get_id(*idx).to_string(),
+					"Invalid ZKP commitment"
+				);
+				Some(*idx)
+			} else if !is_valid_hash_commitment(c, &hash_commitment.0) {
+				warn!(
+					from_id = validator_mapping.get_id(*idx).to_string(),
+					"Invalid hash commitment"
+				);
+				Some(*idx)
+			} else {
+				None
+			}
+		})
+		.collect();
 
 	if invalid_idxs.is_empty() {
 		Ok(public_coefficients
@@ -389,8 +395,6 @@ mod tests {
 
 	use utilities::assert_ok;
 
-	use crate::logging::test_utils::new_test_logger;
-
 	use super::*;
 
 	#[test]
@@ -445,7 +449,6 @@ mod tests {
 			Arc::new(PartyIdxMapping::from_participants(BTreeSet::from_iter(
 				(1..=n as u8).map(|i| AccountId::new([i; 32]))
 			))),
-			&new_test_logger()
 		));
 
 		// Now it is okay to distribute the shares

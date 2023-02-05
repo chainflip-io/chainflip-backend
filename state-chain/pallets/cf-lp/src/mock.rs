@@ -118,6 +118,7 @@ impl crate::Config for Test {
 	type EgressHandler = MockEgressHandler<AnyChain>;
 	type LiquidityPoolApi = LiquidityPools;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
+	type WeightInfo = ();
 }
 
 pub const LP_ACCOUNT: [u8; 32] = [1u8; 32];

@@ -11,9 +11,11 @@ use super::{
 };
 use crate::{
 	multisig::{ChainTag, PersistentKeyDB},
-	try_or_throw,
+	try_with_logging,
 	witnesser::{
-		checkpointing::{start_checkpointing_for, WitnessedUntil},
+		checkpointing::{
+			get_witnesser_start_block_with_checkpointing, StartCheckpointing, WitnessedUntil,
+		},
 		epoch_witnesser, EpochStart,
 	},
 };
@@ -49,31 +51,28 @@ pub async fn start(
 			let eth_rpc = eth_rpc.clone();
 			let db = db.clone();
 			async move {
-				let (witnessed_until, witnessed_until_sender, _checkpointing_join_handle) =
-					start_checkpointing_for(ChainTag::Ethereum, db, &logger);
+				let (from_block, witnessed_until_sender) =
+					match get_witnesser_start_block_with_checkpointing(
+						ChainTag::Ethereum,
+						&epoch,
+						db,
+						&logger,
+					) {
+						StartCheckpointing::Started((from_block, witnessed_until_sender)) =>
+							(from_block, witnessed_until_sender),
+						StartCheckpointing::AlreadyWitnessedEpoch =>
+							return Result::<_, IngressAddressReceivers>::Ok(witnessers),
+					};
 
-				// Don't witness epochs that we've already witnessed
-				if epoch.epoch_index < witnessed_until.epoch_index {
-					return Result::<_, IngressAddressReceivers>::Ok(witnessers)
-				}
-
-				// We do this because it's possible to witness ahead of the epoch start during the
-				// previous epoch. If we don't start witnessing from the epoch start, when we
-				// receive a new epoch, we won't witness some of the blocks for the particular
-				// epoch, since witness extrinsics are submitted with the epoch number it's for.
-				let from_block = if witnessed_until.epoch_index == epoch.epoch_index {
-					// Start where we left off
-					witnessed_until.block_number
-				} else {
-					// We haven't witnessed this epoch yet, so start from the beginning
-					epoch.block_number
-				};
-
-				// We need to throw out the receivers so we can restart the process while ensuring
+				// We need to return the receivers so we can restart the process while ensuring
 				// we are still able to receive new ingress addresses to monitor.
-				macro_rules! try_or_throw_receivers {
+				//
+				// rustfmt chokes when formatting this macro.
+				// See: https://github.com/rust-lang/rustfmt/issues/5404
+				#[rustfmt::skip]
+				macro_rules! try_with_logging_receivers {
 					($exp:expr) => {
-						try_or_throw!(
+						try_with_logging!(
 							$exp,
 							IngressAddressReceivers {
 								eth: witnessers.eth_ingress.take_ingress_receiver(),
@@ -85,7 +84,7 @@ pub async fn start(
 					};
 				}
 
-				let mut block_stream = try_or_throw_receivers!(
+				let mut block_stream = try_with_logging_receivers!(
 					safe_dual_block_subscription_from(from_block, eth_rpc.clone(), &logger).await
 				);
 
@@ -107,7 +106,7 @@ pub async fn start(
 						block.block_number
 					);
 
-					try_or_throw_receivers!(futures::future::join_all([
+					try_with_logging_receivers!(futures::future::join_all([
 						witnessers.key_manager.process_block(&epoch, &block),
 						witnessers.stake_manager.process_block(&epoch, &block),
 						witnessers.eth_ingress.process_block(&epoch, &block),

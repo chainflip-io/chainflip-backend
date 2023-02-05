@@ -1078,6 +1078,8 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-stream",
+ "tracing",
+ "tracing-subscriber 0.3.16",
  "typenum",
  "url 1.7.2",
  "utilities",
@@ -5465,6 +5467,7 @@ version = "0.1.0"
 dependencies = [
  "cf-chains",
  "cf-primitives",
+ "cf-runtime-upgrade-utilities",
  "cf-traits",
  "frame-benchmarking",
  "frame-support",
@@ -5659,6 +5662,7 @@ version = "0.1.0"
 dependencies = [
  "cf-chains",
  "cf-primitives",
+ "cf-runtime-upgrade-utilities",
  "cf-traits",
  "frame-benchmarking",
  "frame-support",
@@ -5681,6 +5685,7 @@ version = "0.1.0"
 dependencies = [
  "cf-chains",
  "cf-primitives",
+ "cf-runtime-upgrade-utilities",
  "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",
@@ -10512,12 +10517,15 @@ dependencies = [
  "nu-ansi-term",
  "once_cell",
  "regex",
+ "serde",
+ "serde_json",
  "sharded-slab",
  "smallvec",
  "thread_local",
  "tracing",
  "tracing-core",
  "tracing-log",
+ "tracing-serde",
 ]
 
 [[package]]

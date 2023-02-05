@@ -86,7 +86,7 @@ fn genesis_nodes_rotated_out_accumulate_rewards_correctly() {
 			for node in &init_backup_nodes {
 				network::Cli::register_as_validator(node);
 				network::setup_account_and_peer_mapping(node);
-				network::Cli::activate_account(node);
+				network::Cli::start_bidding(node);
 			}
 
 			// Start an auction
