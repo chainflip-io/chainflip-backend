@@ -427,20 +427,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 	}
 
-	/// Generate a new address for the user to deposit assets into.
-	/// Generate an `intent_id` and a chain-specific address.
-	fn generate_new_address(
-		ingress_asset: TargetChainAsset<T, I>,
-	) -> Result<(IntentId, TargetChainAccount<T, I>), DispatchError> {
-		let next_intent_id = IntentIdCounter::<T, I>::get()
-			.checked_add(1)
-			.ok_or(Error::<T, I>::IntentIdsExhausted)?;
-		let ingress_address =
-			T::AddressDerivation::generate_address(ingress_asset, next_intent_id)?;
-		IntentIdCounter::<T, I>::put(next_intent_id);
-		Ok((next_intent_id, ingress_address))
-	}
-
 	/// Completes a single ingress request.
 	fn do_single_ingress(
 		ingress_address: TargetChainAccount<T, I>,
@@ -521,6 +507,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			}
 		});
 		ActiveIntents::<T, I>::insert(address.clone(), (asset, intent_action));
+		IntentIdCounter::<T, I>::put(next_intent_id);
 		(next_intent_id, address)
 	}
 }
