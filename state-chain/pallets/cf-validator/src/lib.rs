@@ -160,7 +160,7 @@ pub mod pallet {
 		>;
 
 		/// Criteria that need to be fulfilled to qualify as a validator node (authority or backup).
-		type AuctionQualification: QualifyNode<ValidatorId = ValidatorIdOf<Self>>;
+		type KeygenQualification: QualifyNode<ValidatorId = ValidatorIdOf<Self>>;
 
 		/// For reporting missed authorship slots.
 		type OffenceReporter: OffenceReporter<
@@ -415,6 +415,7 @@ pub mod pallet {
 						},
 						AsyncResult::Ready(VaultStatus::Failed(offenders)) => {
 							rotation_state.ban(offenders);
+
 							Self::start_vault_rotation(rotation_state);
 						},
 						AsyncResult::Pending => {
@@ -983,7 +984,8 @@ impl<T: Config> Pallet<T> {
 			new_epoch,
 			&new_authorities,
 			rotation_state.bond,
-			Self::qualified_bidders()
+			T::BidderProvider::get_bidders()
+				.into_iter()
 				.filter_map(|Bid { bidder_id, amount }| {
 					if !new_authorities_lookup.contains(&bidder_id) {
 						Some((bidder_id, amount))
@@ -1072,7 +1074,7 @@ impl<T: Config> Pallet<T> {
 			T::EpochInfo::current_authority_count(),
 			AuctionParameters::<T>::get(),
 		)
-		.and_then(|resolver| resolver.resolve_auction(Self::qualified_bidders().collect()))
+		.and_then(|resolver| resolver.resolve_auction(T::BidderProvider::get_bidders()))
 		{
 			Ok(auction_outcome) => {
 				Self::deposit_event(Event::AuctionCompleted(
@@ -1096,15 +1098,18 @@ impl<T: Config> Pallet<T> {
 						10u128.pow(18),
 				);
 
+				let mut rotation_state =
+					RotationState::from_auction_outcome::<T>(auction_outcome.clone());
+
+				rotation_state.qualify_nodes::<T::KeygenQualification>();
+
 				// Without reading the full list of bidders we can't know the real number.
 				// Use the winners and losers as an approximation.
 				let weight = T::ValidatorWeightInfo::start_authority_rotation(
 					(auction_outcome.winners.len() + auction_outcome.losers.len()) as u32,
 				);
 
-				Self::start_vault_rotation(RotationState::from_auction_outcome::<T>(
-					auction_outcome,
-				));
+				Self::start_vault_rotation(rotation_state);
 
 				weight
 			},
@@ -1149,7 +1154,7 @@ impl<T: Config> Pallet<T> {
 	) -> impl Iterator<Item = Bid<ValidatorIdOf<T>, <T as Chainflip>::Amount>> {
 		let mut backups: Vec<_> = Backups::<T>::get()
 			.into_iter()
-			.filter(|(bidder_id, _)| T::AuctionQualification::is_qualified(bidder_id))
+			.filter(|(bidder_id, _)| T::KeygenQualification::is_qualified(bidder_id))
 			.collect();
 
 		let limit = Self::backup_reward_nodes_limit();
@@ -1196,12 +1201,6 @@ impl<T: Config> Pallet<T> {
 		)?;
 		AuctionParameters::<T>::put(new_parameters);
 		Ok(())
-	}
-
-	fn qualified_bidders() -> impl Iterator<Item = Bid<ValidatorIdOf<T>, T::Amount>> {
-		T::BidderProvider::get_bidders()
-			.into_iter()
-			.filter(|bid| T::AuctionQualification::is_qualified(&bid.bidder_id))
 	}
 }
 
