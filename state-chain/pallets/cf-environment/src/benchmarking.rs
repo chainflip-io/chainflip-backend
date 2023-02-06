@@ -5,6 +5,7 @@ use super::*;
 use cf_primitives::Asset;
 use frame_benchmarking::benchmarks;
 
+use cf_chains::dot::{RuntimeVersion, POLKADOT_RUNTIME_VERSION};
 use frame_support::dispatch::UnfilteredDispatchable;
 
 benchmarks! {
@@ -33,4 +34,13 @@ benchmarks! {
 		let address = [0; 20];
 		let call = Call::<T>::update_supported_eth_assets { asset, address };
 	}: { call.dispatch_bypass_filter(origin)? }
+	update_polkadot_runtime_version {
+		let origin = T::EnsureWitnessed::successful_origin();
+		assert_eq!(PolkadotRuntimeVersion::<T>::get(), POLKADOT_RUNTIME_VERSION);
+		let runtime_version = RuntimeVersion { spec_version: POLKADOT_RUNTIME_VERSION.spec_version + 1, transaction_version: 1 };
+		let call = Call::<T>::update_polkadot_runtime_version { runtime_version };
+	}: { call.dispatch_bypass_filter(origin)? }
+	verify {
+		assert_eq!(PolkadotRuntimeVersion::<T>::get(), runtime_version);
+	}
 }

@@ -362,7 +362,7 @@ pub mod pallet {
 			Ok(dispatch_result)
 		}
 
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::update_polkadot_runtime_version())]
 		pub fn update_polkadot_runtime_version(
 			origin: OriginFor<T>,
 			runtime_version: RuntimeVersion,
