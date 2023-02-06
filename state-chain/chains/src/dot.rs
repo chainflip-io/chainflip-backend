@@ -54,7 +54,6 @@ pub const WESTEND_METADATA: PolkadotMetadata = PolkadotMetadata {
 	genesis_hash: hex_literal::hex!(
 		"e143f23803ac50e8f6f8e62695d1ce9e4e1d68aa36c1cd2cfd15340213f3423e"
 	),
-	block_hash_count: 4096,
 };
 
 // Polkadot mainnet
@@ -64,7 +63,6 @@ pub const POLKADOT_METADATA: PolkadotMetadata = PolkadotMetadata {
 	genesis_hash: hex_literal::hex!(
 		"5f551688012d25a98e729752169f509c6186af8079418c118844cc852b332bf5"
 	),
-	block_hash_count: 4096,
 };
 
 // test westend account 1 (CHAINFLIP-TEST)
@@ -772,7 +770,6 @@ pub struct PolkadotMetadata {
 	pub spec_version: PolkadotSpecVersion,
 	pub transaction_version: PolkadotTransactionVersion,
 	pub genesis_hash: [u8; 32],
-	pub block_hash_count: PolkadotBlockNumber,
 }
 
 impl Default for PolkadotMetadata {
