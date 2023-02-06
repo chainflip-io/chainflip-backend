@@ -84,11 +84,16 @@ impl<Id: Ord + Clone, Amount: AtLeast32BitUnsigned + Copy> RotationState<Id, Amo
 
 #[cfg(test)]
 mod rotation_state_tests {
+	use cf_traits::mocks::qualify_node::QualifyAll;
+
 	use super::*;
+
+	type Id = u64;
+	type Amount = u128;
 
 	#[test]
 	fn banning_is_additive() {
-		let mut rotation_state = RotationState::<u64, u64> {
+		let mut rotation_state = RotationState::<Id, Amount> {
 			primary_candidates: (0..10).collect(),
 			secondary_candidates: (20..30).collect(),
 			banned: Default::default(),
@@ -109,7 +114,7 @@ mod rotation_state_tests {
 
 	#[test]
 	fn authority_candidates_prefers_primaries_and_excludes_banned() {
-		let rotation_state = RotationState::<u64, u64> {
+		let rotation_state = RotationState::<Id, Amount> {
 			primary_candidates: (0..10).collect(),
 			secondary_candidates: (20..30).collect(),
 			banned: BTreeSet::from([1, 2, 4]),
@@ -119,5 +124,24 @@ mod rotation_state_tests {
 		let candidates: Vec<_> = rotation_state.authority_candidates();
 
 		assert_eq!(candidates, vec![0, 3, 5, 6, 7, 8, 9, 20, 21, 22]);
+	}
+
+	#[test]
+	fn qualification_is_additive() {
+		sp_io::TestExternalities::new_empty().execute_with(|| {
+			let mut rotation_state = RotationState::<Id, Amount> {
+				primary_candidates: (0..10).collect(),
+				secondary_candidates: (20..30).collect(),
+				banned: BTreeSet::from([0, 1, 3]),
+				bond: Default::default(),
+			};
+			QualifyAll::<Id>::except([1, 2, 4]);
+			rotation_state.qualify_nodes::<QualifyAll<_>>();
+
+			assert_eq!(
+				rotation_state.authority_candidates::<Vec<_>>(),
+				vec![5, 6, 7, 8, 9, 20, 21, 22, 23, 24]
+			)
+		});
 	}
 }

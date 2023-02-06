@@ -414,7 +414,7 @@ fn register_peer_id() {
 fn rerun_auction_if_not_enough_participants() {
 	new_test_ext().execute_with_unchecked_invariants(|| {
 		// Unqualify one of the auction winners
-		QualifyAll::<u64>::except(AUCTION_WINNERS[0]);
+		QualifyAll::<u64>::except([AUCTION_WINNERS[0]]);
 		// Change the auction parameters to simulate a shortage in available candidates
 		assert_ok!(ValidatorPallet::set_auction_parameters(
 			RuntimeOrigin::root(),
@@ -426,7 +426,7 @@ fn rerun_auction_if_not_enough_participants() {
 		// Assert that we still in the idle phase
 		assert!(matches!(CurrentRotationPhase::<Test>::get(), RotationPhase::<Test>::Idle));
 		// Set some over node to requalify the first auction winner
-		QualifyAll::<u64>::except(AUCTION_LOSERS[0]);
+		QualifyAll::<u64>::except([AUCTION_LOSERS[0]]);
 		// Run to the next block - we expect and immediate retry
 		run_to_block(EPOCH_DURATION + 1);
 		// Expect a resolved auction and kickedoff key-gen

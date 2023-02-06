@@ -265,7 +265,7 @@ impl TestExternalitiesWithCheck {
 	pub fn execute_with<R>(&mut self, execute: impl FnOnce() -> R) -> R {
 		self.ext.execute_with(|| {
 			System::set_block_number(1);
-			QualifyAll::<u64>::except(UNQUALIFIED_NODE);
+			QualifyAll::<u64>::except([UNQUALIFIED_NODE]);
 			log::debug!("Pre-test invariant check.");
 			assert_invariants!();
 			log::debug!("Pre-test invariant check passed.");
@@ -279,7 +279,7 @@ impl TestExternalitiesWithCheck {
 	pub fn execute_with_unchecked_invariants<R>(&mut self, execute: impl FnOnce() -> R) -> R {
 		self.ext.execute_with(|| {
 			System::set_block_number(1);
-			QualifyAll::<u64>::except(UNQUALIFIED_NODE);
+			QualifyAll::<u64>::except([UNQUALIFIED_NODE]);
 			execute()
 		})
 	}
