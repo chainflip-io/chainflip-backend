@@ -371,8 +371,9 @@ pub mod pallet {
 
 			let RuntimeVersion { spec_version, .. } = PolkadotRuntimeVersion::<T>::get();
 
-			// If transaction version is bumped then spec version must also be bumped
-			// so it's safe to just check spec version.
+			// If the `transaction_version` is bumped, the `spec_version` must also be bumped.
+			// So we only need to check the `spec_version` here.
+			// https://paritytech.github.io/substrate/master/sp_version/struct.RuntimeVersion.html#structfield.transaction_version
 			if runtime_version.spec_version > spec_version {
 				PolkadotRuntimeVersion::<T>::put(RuntimeVersion {
 					spec_version: runtime_version.spec_version,

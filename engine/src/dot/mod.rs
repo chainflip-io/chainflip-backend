@@ -1,4 +1,5 @@
 pub mod rpc;
+pub mod runtime_version_updater;
 pub mod witnesser;
 
 use rpc::DotRpcApi;
