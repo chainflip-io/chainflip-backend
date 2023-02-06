@@ -6,10 +6,10 @@ use std::{
 };
 
 use anyhow::Context;
-use futures::{Future, FutureExt, TryStream};
+use futures::{Future, TryStream};
 use itertools::Itertools;
 
-use crate::task_scope::{task_scope, Scope};
+use crate::task_scope::Scope;
 
 /// Unwraps a result, logging the error and returning early with a provided error expression.
 /// This is particularly useful over `.map_err()` when inside a future, and we need to return
@@ -123,7 +123,7 @@ mod tests {
 /// despite the fact it has been restarted.
 pub async fn start_with_restart_on_failure<StaticState, TaskFut, TaskGenerator>(
 	scope: &Scope<'_, anyhow::Error>,
-	task: TaskGenerator,
+	task_generator: TaskGenerator,
 	mut static_state: StaticState,
 ) -> anyhow::Result<()>
 where
@@ -132,25 +132,23 @@ where
 	TaskGenerator: Fn(StaticState) -> TaskFut + Send + 'static,
 {
 	scope.spawn(async move {
-		task_scope(|scope| {
-			async move {
-				loop {
-					let task = task(static_state);
-					let task_handle = scope.spawn_with_handle(async move { Ok(task.await) });
+		loop {
+			// TODO: Use task_scope inside of this loop to avoid needing to pass static_state out of
+			// task in error case, by passing by-ref instead of by-val
 
-					// Spawn with handle and then wait for future to finish
-					static_state = match task_handle.await {
-						Ok(()) => break Ok(()),
-						Err(state) => state,
-					};
+			let task = task_generator(static_state);
 
-					// give it some time before the next restart
+			// Spawn with handle and then wait for future to finish
+			static_state = match task.await {
+				Ok(()) => return Ok(()),
+				Err(state) => {
+					// give it some time before the restart
 					tokio::time::sleep(Duration::from_secs(2)).await;
-				}
-			}
-			.boxed()
-		})
-		.await
+
+					state
+				},
+			};
+		}
 	});
 
 	Ok(())
