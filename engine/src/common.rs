@@ -6,10 +6,10 @@ use std::{
 };
 
 use anyhow::Context;
-use futures::{Future, TryStream};
+use futures::{Future, FutureExt, TryStream};
 use itertools::Itertools;
 
-use crate::task_scope::Scope;
+use crate::task_scope::{task_scope, Scope};
 
 /// Unwraps a result, logging the error and returning early with a provided error expression.
 /// This is particularly useful over `.map_err()` when inside a future, and we need to return
@@ -132,19 +132,25 @@ where
 	TaskGenerator: Fn(StaticState) -> TaskFut + Send + 'static,
 {
 	scope.spawn(async move {
-		loop {
-			// TODO: Use scope when it can accept any errors, not just anyhow errors
-			let current_task = tokio::spawn(task(static_state));
+		task_scope(|scope| {
+			async move {
+				loop {
+					let task = task(static_state);
+					let task_handle = scope.spawn_with_handle(async move { Ok(task.await) });
 
-			// Spawn with handle and then wait for future to finish
-			static_state = match current_task.await.unwrap() {
-				Ok(()) => break Ok(()),
-				Err(state) => state,
-			};
+					// Spawn with handle and then wait for future to finish
+					static_state = match task_handle.await {
+						Ok(()) => break Ok(()),
+						Err(state) => state,
+					};
 
-			// give it some time before the next restart
-			tokio::time::sleep(Duration::from_secs(2)).await;
-		}
+					// give it some time before the next restart
+					tokio::time::sleep(Duration::from_secs(2)).await;
+				}
+			}
+			.boxed()
+		})
+		.await
 	});
 
 	Ok(())

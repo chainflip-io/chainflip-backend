@@ -178,12 +178,14 @@ impl<'env, Error: Send + 'static> Scope<'env, Error> {
 				receiver: Some(receiver),
 				no_more_tasks: false,
 				tasks: match runtime_handle.runtime_flavor() {
-					tokio::runtime::RuntimeFlavor::CurrentThread => ScopedTasks::CurrentThread(Default::default()),
+					tokio::runtime::RuntimeFlavor::CurrentThread =>
+						ScopedTasks::CurrentThread(Default::default()),
 					tokio::runtime::RuntimeFlavor::MultiThread => ScopedTasks::MultiThread(
 						tokio::runtime::Handle::current(),
 						Default::default(),
 					),
-					flavor => unimplemented!("Unknown runtime flavor '{:?}' is not supported", flavor)
+					flavor =>
+						unimplemented!("Unknown runtime flavor '{:?}' is not supported", flavor),
 				},
 			},
 		)
@@ -302,7 +304,8 @@ impl<Error: Send + 'static> Stream for ScopeResultStream<Error> {
 		}
 
 		match ready!(match &mut self.tasks {
-			ScopedTasks::CurrentThread(tasks) => Pin::new(tasks).poll_next(cx).map(|option| option.map(Ok)),
+			ScopedTasks::CurrentThread(tasks) =>
+				Pin::new(tasks).poll_next(cx).map(|option| option.map(Ok)),
 			ScopedTasks::MultiThread(_, tasks) => Pin::new(tasks).poll_next(cx),
 		}) {
 			None =>
