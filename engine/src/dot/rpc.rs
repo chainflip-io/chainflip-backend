@@ -35,7 +35,7 @@ impl DotRpcClient {
 pub trait DotRpcApi: Send + Sync {
 	async fn block_hash(&self, block_number: PolkadotBlockNumber) -> Result<Option<PolkadotHash>>;
 
-	async fn block(&self, hash: PolkadotHash) -> Result<Option<ChainBlock<PolkadotConfig>>>;
+	async fn block(&self, block_hash: PolkadotHash) -> Result<Option<ChainBlock<PolkadotConfig>>>;
 
 	async fn events(&self, block_hash: PolkadotHash) -> Result<Events<PolkadotConfig>>;
 
@@ -70,9 +70,10 @@ impl DotRpcApi for DotRpcClient {
 	}
 
 	async fn block(&self, hash: PolkadotHash) -> Result<Option<ChainBlock<PolkadotConfig>>> {
+	async fn block(&self, block_hash: PolkadotHash) -> Result<Option<ChainBlock<PolkadotConfig>>> {
 		self.online_client
 			.rpc()
-			.block(Some(hash))
+			.block(Some(block_hash))
 			.await
 			.map(|r| r.map(|r| r.block))
 			.map_err(|e| anyhow!("Failed to query for block with error: {e}"))
