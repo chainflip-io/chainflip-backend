@@ -114,6 +114,8 @@ pub mod pallet {
 		InvalidCfeSettings,
 		/// Eth is not an Erc20 token, so its address can't be updated.
 		EthAddressNotUpdateable,
+		/// Polkadot runtime version is lower than the currently stored version.
+		InvalidPolkadotRuntimeVersion,
 	}
 
 	#[pallet::pallet]
@@ -369,18 +371,16 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
-			let RuntimeVersion { spec_version, .. } = PolkadotRuntimeVersion::<T>::get();
-
 			// If the `transaction_version` is bumped, the `spec_version` must also be bumped.
 			// So we only need to check the `spec_version` here.
 			// https://paritytech.github.io/substrate/master/sp_version/struct.RuntimeVersion.html#structfield.transaction_version
-			if runtime_version.spec_version > spec_version {
-				PolkadotRuntimeVersion::<T>::put(RuntimeVersion {
-					spec_version: runtime_version.spec_version,
-					transaction_version: runtime_version.transaction_version,
-				});
-				Self::deposit_event(Event::<T>::PolkadotRuntimeVersionUpdated { runtime_version });
-			}
+			ensure!(
+				runtime_version.spec_version > PolkadotRuntimeVersion::<T>::get().spec_version,
+				Error::<T>::InvalidPolkadotRuntimeVersion
+			);
+
+			PolkadotRuntimeVersion::<T>::put(runtime_version);
+			Self::deposit_event(Event::<T>::PolkadotRuntimeVersionUpdated { runtime_version });
 
 			Ok(().into())
 		}
