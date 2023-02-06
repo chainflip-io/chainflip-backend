@@ -120,11 +120,11 @@ jobs:
       - name: cargo ci-build
         run: |
           cargo ci-build --locked
-          # sccache --show-stats
+          sccache --show-stats
       - name: cargo ci-test --locked
         run: |
           cargo ci-test --locked
-          # sccache --show-stats
+          sccache --show-stats
       - name: Install cargo-deb
         run: cargo install cargo-deb
       - name: Get date
