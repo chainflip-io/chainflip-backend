@@ -66,6 +66,7 @@ pub trait Chain: Member + Parameter {
 		+ Parameter
 		+ MaxEncodedLen
 		+ BenchmarkValue
+		+ Debug
 		+ TryFrom<cf_primitives::ForeignChainAddress>
 		+ Into<cf_primitives::ForeignChainAddress>;
 

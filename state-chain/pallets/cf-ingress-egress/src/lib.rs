@@ -181,22 +181,27 @@ pub mod pallet {
 	pub(crate) type ActiveIntents<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
 		Twox64Concat,
-		ForeignChainAddress,
-		IntentAction<<T as frame_system::Config>::AccountId>,
+		TargetChainAccount<T, I>,
+		(TargetChainAsset<T, I>, IntentAction<<T as frame_system::Config>::AccountId>),
 	>;
 
 	/// Stores pools of addresses that are available for use.
 	#[pallet::storage]
-	pub(crate) type StaleIntents<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, ForeignChain, Vec<ForeignChainAddress>, ValueQuery>;
+	pub(crate) type StaleIntents<T: Config<I>, I: 'static = ()> = StorageMap<
+		_,
+		Twox64Concat,
+		TargetChainAsset<T, I>,
+		Vec<TargetChainAccount<T, I>>,
+		ValueQuery,
+	>;
 
 	#[pallet::storage]
 	pub(crate) type AddressStatus<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, ForeignChainAddress, DeploymentStatus, ValueQuery>;
+		StorageMap<_, Twox64Concat, TargetChainAccount<T, I>, DeploymentStatus, ValueQuery>;
 
 	#[pallet::storage]
 	pub(crate) type IntentExpiries<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, T::BlockNumber, (ForeignChain, Vec<ForeignChainAddress>)>;
+		StorageMap<_, Twox64Concat, T::BlockNumber, Vec<TargetChainAccount<T, I>>>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -267,23 +272,14 @@ pub mod pallet {
 		}
 
 		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
-			// Look up the addresses to be expired for this block and for each
-			// a) move from active to stale intents.
-			// b) emit an event StopWitnessing to signal to the CFE that it can stop monitoring the
-			// expired address.
-			if let Some(chains) = IntentExpiries::<T, I>::take(n) {
-				match chains.0 {
-					ForeignChain::Ethereum => {
-						let addresses = chains.1;
-						for address in addresses {
-							if let Some(_) = ActiveIntents::<T, I>::take(&address) {
-								StaleIntents::<T, I>::mutate(ForeignChain::Ethereum, |v| {
-									v.push(address);
-								});
-							}
-						}
-					},
-					ForeignChain::Polkadot => todo!(),
+			if let Some(expired) = IntentExpiries::<T, I>::take(n) {
+				for address in expired {
+					if let Some(asset) = ActiveIntents::<T, I>::take(&address) {
+						// Throw back the address into to the stale intents pool against the right
+						// asset.
+						StaleIntents::<T, I>::mutate(asset.0, |v| v.push(address.clone()));
+						Self::deposit_event(Event::StopWitnessing { ingress_address: address });
+					}
 				}
 			}
 			T::DbWeight::get().reads(1)
@@ -456,6 +452,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			.ok_or(Error::<T, I>::InvalidIntent)?;
 		ensure!(ingress.ingress_asset == asset, Error::<T, I>::IngressMismatchWithIntent);
 
+		if AddressStatus::<T, I>::get(ingress_address.clone()) == DeploymentStatus::Deployed {
+			// TODO: call fetch
+		} else {
+			// TODO: call deploy_and_fetch
+		}
+
 		// Ingress is called by witnessers, so asset/chain combination should always be valid.
 		ScheduledEgressRequests::<T, I>::append(FetchOrTransfer::<T::TargetChain>::Fetch {
 			intent_id: ingress.intent_id,
@@ -470,7 +472,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		// NB: Don't take here. We should continue witnessing this address
 		// even after an ingress to it has occurred.
 		// https://github.com/chainflip-io/chainflip-eth-contracts/pull/226
-		match IntentActions::<T, I>::get(&ingress_address).ok_or(Error::<T, I>::InvalidIntent)? {
+		match IntentActions::<T, I>::get(&ingress_address.clone())
+			.ok_or(Error::<T, I>::InvalidIntent)?
+		{
 			IntentAction::LiquidityProvision { lp_account } =>
 				T::LpProvisioning::provision_account(&lp_account, asset.into(), amount)?,
 			IntentAction::Swap {
@@ -494,38 +498,30 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 	/// Create a new intent address for the given asset and registers it with the given action.
 	fn ingress_intent_creation(
-		chain: ForeignChain,
 		asset: TargetChainAsset<T, I>,
 		intent_action: IntentAction<T::AccountId>,
-	) -> ForeignChainAddress {
+	) -> (IntentId, TargetChainAccount<T, I>) {
 		let next_intent_id = IntentIdCounter::<T, I>::get()
 			.checked_add(1)
 			.ok_or(Error::<T, I>::IntentIdsExhausted)
 			.unwrap();
 		let ttl = T::BlockNumber::from(3_u32);
-		// If and address is available use it
-		let intent_address = match chain {
-			ForeignChain::Ethereum => {
-				let mut a = StaleIntents::<T, I>::get(ForeignChain::Ethereum);
-				let address = if let Some(address) = a.pop() {
-					address
-				} else {
-					T::AddressDerivation::generate_address(asset, next_intent_id).unwrap().into()
-				};
-				IntentExpiries::<T, I>::mutate(ttl, |v| {
-					if let Some(v) = v {
-						v.0 = ForeignChain::Ethereum;
-						v.1.push(address);
-					} else {
-						*v = Some((ForeignChain::Ethereum, vec![address]));
-					}
-				});
-				address
-			},
-			ForeignChain::Polkadot => todo!(),
+		let address = if let Some(address) = StaleIntents::<T, I>::get(asset).pop() {
+			address
+		} else {
+			let new_address =
+				T::AddressDerivation::generate_address(asset, next_intent_id).unwrap();
+			new_address.try_into().unwrap()
 		};
-		ActiveIntents::<T, I>::insert(intent_address, intent_action);
-		intent_address
+		IntentExpiries::<T, I>::mutate(ttl, |v| {
+			if let Some(e) = v {
+				e.push(address.clone());
+			} else {
+				*v = Some(vec![address.clone()]);
+			}
+		});
+		ActiveIntents::<T, I>::insert(address.clone(), (asset, intent_action));
+		(next_intent_id, address)
 	}
 }
 
@@ -561,7 +557,10 @@ impl<T: Config<I>, I: 'static> IngressApi<T::TargetChain> for Pallet<T, I> {
 		lp_account: T::AccountId,
 		ingress_asset: TargetChainAsset<T, I>,
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
-		let (intent_id, ingress_address) = Self::generate_new_address(ingress_asset)?;
+		let (intent_id, ingress_address) = Self::ingress_intent_creation(
+			ingress_asset,
+			IntentAction::LiquidityProvision { lp_account: lp_account.clone() },
+		);
 
 		// Generated address guarantees the right address type is returned.
 		IntentIngressDetails::<T, I>::insert(
