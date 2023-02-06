@@ -1,5 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
+use anyhow::{bail, Result};
 use cf_primitives::EpochIndex;
 use serde::{Deserialize, Serialize};
 use tokio::task::JoinHandle;
@@ -22,12 +23,14 @@ async fn start_checkpointing_for(
 	chain_tag: ChainTag,
 	db: Arc<PersistentKeyDB>,
 	logger: &slog::Logger,
-) -> (WitnessedUntil, tokio::sync::watch::Sender<WitnessedUntil>, JoinHandle<()>) {
+) -> Result<(WitnessedUntil, tokio::sync::watch::Sender<WitnessedUntil>, JoinHandle<()>)> {
 	if let Err(e) =
 		migrations::run_migrations(chain_tag, db.clone(), &std::env::current_dir().unwrap(), logger)
 			.await
 	{
-		slog::error!(logger, "Failed to preform witnesser checkpointing migrations: {e}");
+		let error_message = format!("Failed to preform witnesser checkpointing migrations: {e}");
+		slog::error!(logger, "{error_message}");
+		bail!(error_message);
 	}
 
 	// Load the checkpoint or use the default if none is found
@@ -50,12 +53,9 @@ async fn start_checkpointing_for(
 			WitnessedUntil::default()
 		},
 		Err(e) => {
-			slog::error!(
-				logger,
-				"Failed to load {chain_tag} witnesser checkpoint, using default of {:?}: {e}",
-				WitnessedUntil::default()
-			);
-			WitnessedUntil::default()
+			let error_message = format!("Failed to load {chain_tag} witnesser checkpoint: {e}");
+			slog::error!(logger, "{error_message}");
+			bail!(error_message);
 		},
 	};
 
@@ -86,7 +86,7 @@ async fn start_checkpointing_for(
 	});
 
 	// Returning the join handle so the task can be awaited upon during unit tests
-	(witnessed_until, witnessed_until_sender, join_handle)
+	Ok((witnessed_until, witnessed_until_sender, join_handle))
 }
 
 pub enum StartCheckpointing<Chain: cf_chains::Chain> {
@@ -101,16 +101,16 @@ pub async fn get_witnesser_start_block_with_checkpointing<Chain: cf_chains::Chai
 	epoch_start: &EpochStart<Chain>,
 	db: Arc<PersistentKeyDB>,
 	logger: &slog::Logger,
-) -> StartCheckpointing<Chain>
+) -> Result<StartCheckpointing<Chain>>
 where
 	<<Chain as cf_chains::Chain>::ChainBlockNumber as TryFrom<u64>>::Error: std::fmt::Debug,
 {
 	let (witnessed_until, witnessed_until_sender, _checkpointing_join_handle) =
-		start_checkpointing_for(chain_tag, db, logger).await;
+		start_checkpointing_for(chain_tag, db, logger).await?;
 
 	// Don't witness epochs that we've already witnessed
 	if epoch_start.epoch_index < witnessed_until.epoch_index {
-		return StartCheckpointing::AlreadyWitnessedEpoch
+		return Ok(StartCheckpointing::AlreadyWitnessedEpoch)
 	}
 
 	// We do this because it's possible to witness ahead of the epoch start during the
@@ -127,7 +127,7 @@ where
 		epoch_start.block_number
 	};
 
-	StartCheckpointing::Started((from_block, witnessed_until_sender))
+	Ok(StartCheckpointing::Started((from_block, witnessed_until_sender)))
 }
 
 #[cfg(test)]
@@ -151,7 +151,9 @@ mod tests {
 			let db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, None, &logger).unwrap();
 
 			let (witnessed_until, witnessed_until_sender, checkpointing_join_handle) =
-				start_checkpointing_for(ChainTag::Ethereum, Arc::new(db), &logger).await;
+				start_checkpointing_for(ChainTag::Ethereum, Arc::new(db), &logger)
+					.await
+					.unwrap();
 			assert_eq!(witnessed_until, WitnessedUntil::default());
 
 			// Send an updated checkpoint to be saved to the db
@@ -169,7 +171,9 @@ mod tests {
 			// Start checkpointing again with the same db file
 			let db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, None, &logger).unwrap();
 			let (witnessed_until, _, _) =
-				start_checkpointing_for(ChainTag::Ethereum, Arc::new(db), &logger).await;
+				start_checkpointing_for(ChainTag::Ethereum, Arc::new(db), &logger)
+					.await
+					.unwrap();
 
 			// The checkpoint should be the updated value that was saved in the db
 			assert_eq!(witnessed_until, updated_witnessed_until);

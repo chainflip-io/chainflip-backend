@@ -42,14 +42,14 @@ async fn create_witnessers(
 	state_chain_client: &Arc<StateChainClient>,
 	eth_dual_rpc: &EthDualRpcClient,
 	latest_block_hash: sp_core::H256,
-	ingress_adddress_receivers: IngressAddressReceivers,
+	ingress_address_receivers: IngressAddressReceivers,
 	logger: &slog::Logger,
 ) -> anyhow::Result<AllWitnessers> {
 	let IngressAddressReceivers {
 		eth: eth_address_receiver,
 		flip: flip_address_receiver,
 		usdc: usdc_address_receiver,
-	} = ingress_adddress_receivers;
+	} = ingress_address_receivers;
 
 	let key_manager_witnesser = ContractWitnesser::new(
 		KeyManager::new(

@@ -292,7 +292,7 @@ where
 			let state_chain_client = state_chain_client.clone();
 			let db = db.clone();
 			async move {
-				let (from_block, witnessed_until_sender) = match get_witnesser_start_block_with_checkpointing(ChainTag::Polkadot, &epoch_start, db, &logger).await{
+				let (from_block, witnessed_until_sender) = match get_witnesser_start_block_with_checkpointing(ChainTag::Polkadot, &epoch_start, db, &logger).await?{
 					StartCheckpointing::Started((from_block, witnessed_until_sender)) => (from_block, witnessed_until_sender),
 					StartCheckpointing::AlreadyWitnessedEpoch => return Ok((monitored_ingress_addresses, ingress_address_receiver, monitored_signatures, signature_receiver)),
 				};
@@ -479,11 +479,10 @@ where
 					}
 
 					witnessed_until_sender
-					.send(WitnessedUntil {
-						epoch_index: epoch_start.epoch_index,
-						block_number: block_number as u64,
-					})
-					.unwrap();
+						.send(WitnessedUntil {
+							epoch_index: epoch_start.epoch_index,
+							block_number: block_number as u64,
+						})?;
 				}
 				Ok((monitored_ingress_addresses, ingress_address_receiver, monitored_signatures, signature_receiver))
 			}

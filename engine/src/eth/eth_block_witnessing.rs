@@ -48,43 +48,43 @@ pub async fn start(
 		move |_| true,
 		witnessers,
 		move |end_witnessing_signal, epoch, mut witnessers, logger| {
+			// We need to return the receivers so we can restart the process while ensuring
+			// we are still able to receive new ingress addresses to monitor.
+			//
+			// rustfmt chokes when formatting this macro.
+			// See: https://github.com/rust-lang/rustfmt/issues/5404
+			#[rustfmt::skip]
+			macro_rules! try_with_logging_receivers {
+				($exp:expr) => {
+					try_with_logging!(
+						$exp,
+						IngressAddressReceivers {
+							eth: witnessers.eth_ingress.take_ingress_receiver(),
+							flip: witnessers.flip_ingress.take_ingress_receiver(),
+							usdc: witnessers.usdc_ingress.take_ingress_receiver(),
+						},
+						&logger
+					)
+				};
+			}
+
 			let eth_rpc = eth_rpc.clone();
 			let db = db.clone();
 			async move {
-				let (from_block, witnessed_until_sender) =
-					match get_witnesser_start_block_with_checkpointing(
+				let (from_block, witnessed_until_sender) = match try_with_logging_receivers!(
+					get_witnesser_start_block_with_checkpointing(
 						ChainTag::Ethereum,
 						&epoch,
 						db,
 						&logger,
 					)
 					.await
-					{
-						StartCheckpointing::Started((from_block, witnessed_until_sender)) =>
-							(from_block, witnessed_until_sender),
-						StartCheckpointing::AlreadyWitnessedEpoch =>
-							return Result::<_, IngressAddressReceivers>::Ok(witnessers),
-					};
-
-				// We need to return the receivers so we can restart the process while ensuring
-				// we are still able to receive new ingress addresses to monitor.
-				//
-				// rustfmt chokes when formatting this macro.
-				// See: https://github.com/rust-lang/rustfmt/issues/5404
-				#[rustfmt::skip]
-				macro_rules! try_with_logging_receivers {
-					($exp:expr) => {
-						try_with_logging!(
-							$exp,
-							IngressAddressReceivers {
-								eth: witnessers.eth_ingress.take_ingress_receiver(),
-								flip: witnessers.flip_ingress.take_ingress_receiver(),
-								usdc: witnessers.usdc_ingress.take_ingress_receiver(),
-							},
-							&logger
-						)
-					};
-				}
+				) {
+					StartCheckpointing::Started((from_block, witnessed_until_sender)) =>
+						(from_block, witnessed_until_sender),
+					StartCheckpointing::AlreadyWitnessedEpoch =>
+						return Result::<_, IngressAddressReceivers>::Ok(witnessers),
+				};
 
 				let mut block_stream = try_with_logging_receivers!(
 					safe_dual_block_subscription_from(from_block, eth_rpc.clone(), &logger).await
@@ -119,12 +119,10 @@ pub async fn start(
 					.into_iter()
 					.collect::<anyhow::Result<Vec<()>>>());
 
-					witnessed_until_sender
-						.send(WitnessedUntil {
-							epoch_index: epoch.epoch_index,
-							block_number: block.block_number.as_u64(),
-						})
-						.unwrap();
+					try_with_logging_receivers!(witnessed_until_sender.send(WitnessedUntil {
+						epoch_index: epoch.epoch_index,
+						block_number: block.block_number.as_u64(),
+					}));
 				}
 
 				Ok(witnessers)
