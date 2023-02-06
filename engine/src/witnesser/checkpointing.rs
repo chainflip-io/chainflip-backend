@@ -10,7 +10,7 @@ use super::EpochStart;
 
 const UPDATE_INTERVAL: Duration = Duration::from_secs(4);
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default, Eq, PartialOrd, Ord)]
 pub struct WitnessedUntil {
 	pub epoch_index: EpochIndex,
 	pub block_number: u64,
@@ -61,15 +61,16 @@ fn start_checkpointing_for(
 			tokio::time::sleep(UPDATE_INTERVAL).await;
 			if let Ok(changed) = witnessed_until_receiver.has_changed() {
 				if changed {
-					let changed_witnessed_until = witnessed_until_receiver.borrow().clone();
+					let latest_witnessed_until = witnessed_until_receiver.borrow().clone();
 					assert!(
-						changed_witnessed_until.epoch_index > prev_witnessed_until.epoch_index ||
-							changed_witnessed_until.block_number >
-								prev_witnessed_until.block_number,
-						"Expected checkpoint to increment. Previous: {prev_witnessed_until:?} / Update: {changed_witnessed_until:?}",
+						latest_witnessed_until >= prev_witnessed_until,
+						"Expected checkpoint to increment or remain the same. Previous: {prev_witnessed_until:?} / Update: {latest_witnessed_until:?}",
 					);
-					db.update_checkpoint(chain_tag, &changed_witnessed_until);
-					prev_witnessed_until = changed_witnessed_until;
+					// Only incur the cost of a DB write if the value has changed.
+					if latest_witnessed_until > prev_witnessed_until {
+						db.update_checkpoint(chain_tag, &latest_witnessed_until);
+						prev_witnessed_until = latest_witnessed_until;
+					}
 				}
 			} else {
 				break
