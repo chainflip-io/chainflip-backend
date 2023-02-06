@@ -415,7 +415,7 @@ pub mod pallet {
 
 			PolkadotVaultAccountId::<T>::set(self.polkadot_vault_account_id.clone());
 
-			PolkadotRuntimeVersion::<T>::set(self.polkadot_runtime_version.clone());
+			PolkadotRuntimeVersion::<T>::set(self.polkadot_runtime_version);
 
 			PolkadotProxyAccountNonce::<T>::set(0);
 		}
