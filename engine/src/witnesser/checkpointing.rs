@@ -66,9 +66,7 @@ fn start_checkpointing_for(
 						changed_witnessed_until.epoch_index > prev_witnessed_until.epoch_index ||
 							changed_witnessed_until.block_number >
 								prev_witnessed_until.block_number,
-						"Expected checkpoint to increment. Previous: {:?} / Update: {:?}",
-						prev_witnessed_until,
-						changed_witnessed_until,
+						"Expected checkpoint to increment. Previous: {prev_witnessed_until:?} / Update: {changed_witnessed_until:?}",
 					);
 					db.update_checkpoint(chain_tag, &changed_witnessed_until);
 					prev_witnessed_until = changed_witnessed_until;
