@@ -30,4 +30,6 @@ EOT
 
 echo "Migration completed successfully"
 
+#DEBHELPER#
+
 exit 0
