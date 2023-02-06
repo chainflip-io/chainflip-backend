@@ -2,6 +2,11 @@
 
 set -e
 
+if [ "$1" != "upgrade" ]; then
+  echo "Fresh install detected, skipping migration"
+  exit 0
+fi
+
 echo "Beginning setup and migration of engine config"
 
 ENGINE_CONFIG_LOCATION=$(find / -name "Default.toml")
