@@ -136,6 +136,10 @@ pub mod pallet {
 		/// Governance origin to manage allowed assets
 		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
 
+		/// Time to live for every ingress address.
+		#[pallet::constant]
+		type TTL: Get<Self::BlockNumber>;
+
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;
 	}
@@ -438,11 +442,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			.ok_or(Error::<T, I>::InvalidIntent)?;
 		ensure!(ingress.ingress_asset == asset, Error::<T, I>::IngressMismatchWithIntent);
 
-		if AddressStatus::<T, I>::get(ingress_address.clone()) == DeploymentStatus::Deployed {
-			// TODO: call fetch
-		} else {
-			// TODO: call deploy_and_fetch
-		}
+		// Not relevant for now, because we continue to call the old api call.
+		// if AddressStatus::<T, I>::get(ingress_address.clone()) == DeploymentStatus::Deployed {
+		// 	// TODO: call fetch
+		// } else {
+		// 	// TODO: call deploy_and_fetch
+		// }
 
 		// Ingress is called by witnessers, so asset/chain combination should always be valid.
 		ScheduledEgressRequests::<T, I>::append(FetchOrTransfer::<T::TargetChain>::Fetch {
@@ -491,7 +496,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			.checked_add(1)
 			.ok_or(Error::<T, I>::IntentIdsExhausted)
 			.unwrap();
-		let ttl = T::BlockNumber::from(3_u32);
+		let ttl = T::TTL::get();
+		let expires_in = ttl.saturating_add(<frame_system::Pallet<T>>::block_number());
 		let address = if let Some(address) = StaleIntents::<T, I>::get(asset).pop() {
 			address
 		} else {
@@ -499,7 +505,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				T::AddressDerivation::generate_address(asset, next_intent_id).unwrap();
 			new_address.try_into().unwrap()
 		};
-		IntentExpiries::<T, I>::mutate(ttl, |v| {
+		IntentExpiries::<T, I>::mutate(expires_in, |v| {
 			if let Some(e) = v {
 				e.push(address.clone());
 			} else {
