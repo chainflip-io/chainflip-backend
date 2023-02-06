@@ -588,7 +588,15 @@ impl<T: Config<I>, I: 'static> IngressApi<T::TargetChain> for Pallet<T, I> {
 		relayer_commission_bps: u16,
 		relayer_id: T::AccountId,
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
-		let (intent_id, ingress_address) = Self::generate_new_address(ingress_asset)?;
+		let (intent_id, ingress_address) = Self::ingress_intent_creation(
+			ingress_asset,
+			IntentAction::Swap {
+				egress_address: egress_address.clone(),
+				egress_asset: egress_asset.clone(),
+				relayer_commission_bps: relayer_commission_bps.clone(),
+				relayer_id: relayer_id.clone(),
+			},
+		);
 
 		// Generated address guarantees the right address type is returned.
 		IntentIngressDetails::<T, I>::insert(
