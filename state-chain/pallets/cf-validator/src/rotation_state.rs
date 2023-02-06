@@ -71,20 +71,14 @@ impl<Id: Ord + Clone, Amount: AtLeast32BitUnsigned + Copy> RotationState<Id, Amo
 		self.primary_candidates.len() as u32
 	}
 
-	/// Ban all validators where `f` returns true.
-	pub fn ban_all_where(&mut self, f: impl Fn(&Id) -> bool) {
-		self.banned.extend(
-			self.primary_candidates
-				.clone()
-				.into_iter()
-				.filter(|validator_id| f(validator_id)),
-		);
-		self.banned.extend(
-			self.secondary_candidates
-				.clone()
-				.into_iter()
-				.filter(|validator_id| f(validator_id)),
-		);
+	/// Ban all candidates that don't meet the qualification criterion.
+	pub fn qualify_nodes<Q: QualifyNode<ValidatorId = Id>>(&mut self) {
+		for id in self.primary_candidates.iter().chain(&self.secondary_candidates) {
+			// Only incur the cost of the qualification check if the node is not already banned.
+			if !self.banned.contains(id) && !Q::is_qualified(id) {
+				self.banned.insert(id.clone());
+			}
+		}
 	}
 }
 
