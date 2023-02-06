@@ -1092,9 +1092,8 @@ impl<T: Config> Pallet<T> {
 			T::EpochInfo::current_authority_count(),
 			AuctionParameters::<T>::get(),
 		)
-		.and_then(|resolver| {
-			resolver.resolve_auction(T::BidderProvider::get_bidders().into_iter().collect())
-		}) {
+		.and_then(|resolver| resolver.resolve_auction(T::BidderProvider::get_bidders()))
+		{
 			Ok(auction_outcome) => {
 				Self::deposit_event(Event::AuctionCompleted(
 					auction_outcome.winners.clone(),
