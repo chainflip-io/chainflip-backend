@@ -1,5 +1,5 @@
 use crate::*;
-use cf_chains::dot::POLKADOT_METADATA;
+use cf_chains::dot::POLKADOT_RUNTIME_VERSION;
 use sp_std::marker::PhantomData;
 
 /// My first migration.
@@ -41,7 +41,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 
 		// Polkadot metadata is initialized with the config that is used in the persistent polkadot
 		// testnet
-		PolkadotNetworkMetadata::<T>::set(POLKADOT_METADATA);
+		PolkadotRuntimeVersion::<T>::set(POLKADOT_RUNTIME_VERSION);
 
 		Weight::zero()
 	}
@@ -60,7 +60,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 
 		//assert that the polkadot related storages do not exist
 		assert!(!PolkadotVaultAccountId::<T>::exists());
-		assert!(!PolkadotNetworkMetadata::<T>::exists());
+		assert!(!PolkadotRuntimeVersion::<T>::exists());
 		assert!(!PolkadotProxyAccountNonce::<T>::exists());
 
 		Ok(sp_std::vec::Vec::new())
@@ -87,7 +87,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 		assert!(EthereumKeyManagerAddress::<T>::exists());
 		assert!(EthereumVaultAddress::<T>::exists());
 		assert!(EthereumSignatureNonce::<T>::exists());
-		assert!(PolkadotNetworkMetadata::<T>::exists());
+		assert!(PolkadotRuntimeVersion::<T>::exists());
 
 		Ok(())
 	}

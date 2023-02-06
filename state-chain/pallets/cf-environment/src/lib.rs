@@ -3,9 +3,7 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use cf_chains::{
-	dot::{
-		api::CreatePolkadotVault, Polkadot, PolkadotAccountId, PolkadotIndex, PolkadotMetadata,
-	},
+	dot::{api::CreatePolkadotVault, Polkadot, PolkadotAccountId, PolkadotIndex},
 	ChainCrypto,
 };
 
@@ -100,6 +98,10 @@ pub mod pallet {
 		/// On new key witnessed handler for Polkadot
 
 		type PolkadotVaultKeyWitnessedHandler: VaultKeyWitnessedHandler<Polkadot>;
+
+		#[pallet::constant]
+		type PolkadotGenesisHash: Get<[u8; 32]>;
+
 		/// Weight information
 		type WeightInfo: WeightInfo;
 	}
@@ -174,9 +176,8 @@ pub mod pallet {
 	pub type PolkadotProxyAccountNonce<T> = StorageValue<_, PolkadotIndex, ValueQuery>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn polkadot_network_metadata)]
-	/// The Polkadot Network Metadata
-	pub type PolkadotNetworkMetadata<T> = StorageValue<_, PolkadotMetadata, ValueQuery>;
+	#[pallet::getter(fn polkadot_runtime_version)]
+	pub type PolkadotRuntimeVersion<T> = StorageValue<_, RuntimeVersion, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -193,9 +194,8 @@ pub mod pallet {
 		PolkadotVaultCreationCallInitiated { agg_key: <Polkadot as ChainCrypto>::AggKey },
 		/// Polkadot Vault Account is successfully set
 		PolkadotVaultAccountSet { polkadot_vault_account_id: PolkadotAccountId },
-		/// Polkadot Network Metadata is successfully set. The metadata is large, so we don't emit
-		/// it here.
-		PolkadotMetadataUpdated { spec_version: PolkadotSpecVersion },
+		/// The Polkadot Runtime Version stored on chain was updated.
+		PolkadotRuntimeVersionUpdated { runtime_version: RuntimeVersion },
 	}
 
 	#[pallet::hooks]
@@ -363,26 +363,23 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(0)]
-		pub fn update_polkadot_metadata(
+		pub fn update_polkadot_runtime_version(
 			origin: OriginFor<T>,
 			runtime_version: RuntimeVersion,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
-			let PolkadotMetadata { spec_version, genesis_hash, .. } =
-				PolkadotNetworkMetadata::<T>::get();
+			let RuntimeVersion { spec_version, .. } = PolkadotRuntimeVersion::<T>::get();
 
 			// If transaction version is bumped then spec version must also be bumped
 			// so it's safe to just check spec version.
 			if runtime_version.spec_version > spec_version {
-				PolkadotNetworkMetadata::<T>::put(PolkadotMetadata {
+				PolkadotRuntimeVersion::<T>::put(RuntimeVersion {
 					spec_version: runtime_version.spec_version,
 					transaction_version: runtime_version.transaction_version,
-					genesis_hash,
 				});
+				Self::deposit_event(Event::<T>::PolkadotRuntimeVersionUpdated { runtime_version });
 			}
-
-			Self::deposit_event(Event::<T>::PolkadotMetadataUpdated { spec_version });
 
 			Ok(().into())
 		}
@@ -398,10 +395,8 @@ pub mod pallet {
 		pub eth_vault_address: EthereumAddress,
 		pub ethereum_chain_id: u64,
 		pub cfe_settings: cfe::CfeSettings,
-
 		pub polkadot_vault_account_id: Option<PolkadotAccountId>,
-
-		pub polkadot_network_metadata: PolkadotMetadata,
+		pub polkadot_runtime_version: RuntimeVersion,
 	}
 
 	/// Sets the genesis config
@@ -419,7 +414,7 @@ pub mod pallet {
 
 			PolkadotVaultAccountId::<T>::set(self.polkadot_vault_account_id.clone());
 
-			PolkadotNetworkMetadata::<T>::set(self.polkadot_network_metadata.clone());
+			PolkadotRuntimeVersion::<T>::set(self.polkadot_runtime_version.clone());
 
 			PolkadotProxyAccountNonce::<T>::set(0);
 		}

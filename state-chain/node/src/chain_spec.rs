@@ -1,4 +1,4 @@
-use cf_chains::dot::{POLKADOT_METADATA, POLKADOT_VAULT_ACCOUNT};
+use cf_chains::dot::{POLKADOT_RUNTIME_VERSION, POLKADOT_VAULT_ACCOUNT};
 use cf_primitives::{AccountRole, AuthorityCount};
 
 use sc_service::{ChainType, Properties};
@@ -232,7 +232,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 
 					polkadot_vault_account_id: POLKADOT_VAULT_ACCOUNT,
 
-					polkadot_network_metadata: POLKADOT_METADATA,
+					polkadot_runtime_version: POLKADOT_RUNTIME_VERSION,
 				},
 				eth_init_agg_key,
 				ethereum_deployment_block,
@@ -359,7 +359,7 @@ macro_rules! network_spec {
 
 								polkadot_vault_account_id: POLKADOT_VAULT_ACCOUNT,
 
-								polkadot_network_metadata: POLKADOT_METADATA,
+								polkadot_runtime_version: POLKADOT_RUNTIME_VERSION,
 							},
 							eth_init_agg_key,
 							ethereum_deployment_block,

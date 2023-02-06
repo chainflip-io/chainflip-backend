@@ -187,12 +187,26 @@ impl pallet_cf_validator::Config for Runtime {
 	type ReputationResetter = Reputation;
 }
 
+parameter_types! {
+
+	// Polkadot
+	pub const PolkadotGenesisHash: [u8; 32] = hex_literal::hex!(
+		"5f551688012d25a98e729752169f509c6186af8079418c118844cc852b332bf5"
+	);
+
+	// Westend
+	// hex_literal::hex!(
+	// 	"e143f23803ac50e8f6f8e62695d1ce9e4e1d68aa36c1cd2cfd15340213f3423e"
+	// )
+}
+
 impl pallet_cf_environment::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type CreatePolkadotVault = PolkadotApi<DotEnvironment>;
 	type PolkadotBroadcaster = PolkadotBroadcaster;
 	type PolkadotVaultKeyWitnessedHandler = PolkadotVault;
+	type PolkadotGenesisHash = PolkadotGenesisHash;
 	type WeightInfo = pallet_cf_environment::weights::PalletWeight<Runtime>;
 }
 
