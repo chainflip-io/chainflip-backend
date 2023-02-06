@@ -10,17 +10,26 @@ use super::EpochStart;
 
 const UPDATE_INTERVAL: Duration = Duration::from_secs(4);
 
+mod migrations;
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default)]
 pub struct WitnessedUntil {
 	pub epoch_index: EpochIndex,
 	pub block_number: u64,
 }
 
-fn start_checkpointing_for(
+async fn start_checkpointing_for(
 	chain_tag: ChainTag,
 	db: Arc<PersistentKeyDB>,
 	logger: &slog::Logger,
 ) -> (WitnessedUntil, tokio::sync::watch::Sender<WitnessedUntil>, JoinHandle<()>) {
+	if let Err(e) =
+		migrations::run_migrations(chain_tag, db.clone(), &std::env::current_dir().unwrap(), logger)
+			.await
+	{
+		slog::error!(logger, "Failed to preform witnesser checkpointing migrations: {e}");
+	}
+
 	// Load the checkpoint or use the default if none is found
 	let witnessed_until = match db.load_checkpoint(chain_tag) {
 		Ok(Some(checkpoint)) => {
@@ -87,7 +96,7 @@ pub enum StartCheckpointing<Chain: cf_chains::Chain> {
 
 /// Loads the checkpoint from the db then starts checkpointing. Returns the block number at which to
 /// start witnessing unless the epoch has already been witnessed.
-pub fn get_witnesser_start_block_with_checkpointing<Chain: cf_chains::Chain>(
+pub async fn get_witnesser_start_block_with_checkpointing<Chain: cf_chains::Chain>(
 	chain_tag: ChainTag,
 	epoch_start: &EpochStart<Chain>,
 	db: Arc<PersistentKeyDB>,
@@ -97,7 +106,7 @@ where
 	<<Chain as cf_chains::Chain>::ChainBlockNumber as TryFrom<u64>>::Error: std::fmt::Debug,
 {
 	let (witnessed_until, witnessed_until_sender, _checkpointing_join_handle) =
-		start_checkpointing_for(chain_tag, db, logger);
+		start_checkpointing_for(chain_tag, db, logger).await;
 
 	// Don't witness epochs that we've already witnessed
 	if epoch_start.epoch_index < witnessed_until.epoch_index {
@@ -142,7 +151,7 @@ mod tests {
 			let db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, None, &logger).unwrap();
 
 			let (witnessed_until, witnessed_until_sender, checkpointing_join_handle) =
-				start_checkpointing_for(ChainTag::Ethereum, Arc::new(db), &logger);
+				start_checkpointing_for(ChainTag::Ethereum, Arc::new(db), &logger).await;
 			assert_eq!(witnessed_until, WitnessedUntil::default());
 
 			// Send an updated checkpoint to be saved to the db
@@ -160,7 +169,7 @@ mod tests {
 			// Start checkpointing again with the same db file
 			let db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, None, &logger).unwrap();
 			let (witnessed_until, _, _) =
-				start_checkpointing_for(ChainTag::Ethereum, Arc::new(db), &logger);
+				start_checkpointing_for(ChainTag::Ethereum, Arc::new(db), &logger).await;
 
 			// The checkpoint should be the updated value that was saved in the db
 			assert_eq!(witnessed_until, updated_witnessed_until);

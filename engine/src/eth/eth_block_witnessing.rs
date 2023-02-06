@@ -57,7 +57,9 @@ pub async fn start(
 						&epoch,
 						db,
 						&logger,
-					) {
+					)
+					.await
+					{
 						StartCheckpointing::Started((from_block, witnessed_until_sender)) =>
 							(from_block, witnessed_until_sender),
 						StartCheckpointing::AlreadyWitnessedEpoch =>
