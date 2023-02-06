@@ -39,6 +39,12 @@ pub type PolkadotCallHasher = BlakeTwo256;
 
 pub type PolkadotCallHash = <PolkadotCallHasher as Hash>::Output;
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub struct RuntimeVersion {
+	pub spec_version: PolkadotSpecVersion,
+	pub transaction_version: PolkadotTransactionVersion,
+}
+
 pub type PolkadotSpecVersion = u32;
 pub type PolkadotTransactionVersion = u32;
 

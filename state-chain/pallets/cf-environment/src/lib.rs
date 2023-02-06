@@ -3,7 +3,9 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use cf_chains::{
-	dot::{api::CreatePolkadotVault, Polkadot, PolkadotAccountId, PolkadotIndex, PolkadotMetadata},
+	dot::{
+		api::CreatePolkadotVault, Polkadot, PolkadotAccountId, PolkadotIndex, PolkadotMetadata,
+	},
 	ChainCrypto,
 };
 
@@ -74,7 +76,7 @@ pub mod cfe {
 #[frame_support::pallet]
 pub mod pallet {
 
-	use cf_chains::dot::PolkadotPublicKey;
+	use cf_chains::dot::{PolkadotPublicKey, RuntimeVersion};
 	use cf_primitives::{Asset, TxId};
 
 	use cf_traits::{Broadcaster, VaultKeyWitnessedHandler};
@@ -82,7 +84,8 @@ pub mod pallet {
 	use super::*;
 
 	#[pallet::config]
-	pub trait Config: frame_system::Config {
+	#[pallet::disable_frame_system_supertrait_check]
+	pub trait Config: cf_traits::Chainflip {
 		/// Because we want to emit events when there is a config change during
 		/// an runtime upgrade
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
@@ -190,6 +193,9 @@ pub mod pallet {
 		PolkadotVaultCreationCallInitiated { agg_key: <Polkadot as ChainCrypto>::AggKey },
 		/// Polkadot Vault Account is successfully set
 		PolkadotVaultAccountSet { polkadot_vault_account_id: PolkadotAccountId },
+		/// Polkadot Network Metadata is successfully set. The metadata is large, so we don't emit
+		/// it here.
+		PolkadotMetadataUpdated { spec_version: PolkadotSpecVersion },
 	}
 
 	#[pallet::hooks]
@@ -354,6 +360,31 @@ pub mod pallet {
 			)?;
 			Self::next_polkadot_proxy_account_nonce();
 			Ok(dispatch_result)
+		}
+
+		#[pallet::weight(0)]
+		pub fn update_polkadot_metadata(
+			origin: OriginFor<T>,
+			runtime_version: RuntimeVersion,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureWitnessed::ensure_origin(origin)?;
+
+			let PolkadotMetadata { spec_version, genesis_hash, .. } =
+				PolkadotNetworkMetadata::<T>::get();
+
+			// If transaction version is bumped then spec version must also be bumped
+			// so it's safe to just check spec version.
+			if runtime_version.spec_version > spec_version {
+				PolkadotNetworkMetadata::<T>::put(PolkadotMetadata {
+					spec_version: runtime_version.spec_version,
+					transaction_version: runtime_version.transaction_version,
+					genesis_hash,
+				});
+			}
+
+			Self::deposit_event(Event::<T>::PolkadotMetadataUpdated { spec_version });
+
+			Ok(().into())
 		}
 	}
 

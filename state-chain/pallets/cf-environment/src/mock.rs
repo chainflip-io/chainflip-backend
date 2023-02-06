@@ -4,9 +4,10 @@ use cf_chains::{
 	ApiCall, Chain, ChainCrypto, Polkadot,
 };
 
-use cf_primitives::BroadcastId;
+use cf_primitives::{AuthorityCount, BroadcastId};
 use cf_traits::{
-	mocks::ensure_origin_mock::NeverFailingOriginCheck, Broadcaster, VaultKeyWitnessedHandler,
+	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
+	Broadcaster, Chainflip, VaultKeyWitnessedHandler,
 };
 
 use frame_support::parameter_types;
@@ -110,6 +111,20 @@ impl VaultKeyWitnessedHandler<Polkadot> for MockPolkadotVaultKeyWitnessedHandler
 	) -> frame_support::pallet_prelude::DispatchResultWithPostInfo {
 		unimplemented!()
 	}
+}
+
+cf_traits::impl_mock_ensure_witnessed_for_origin!(RuntimeOrigin);
+cf_traits::impl_mock_epoch_info!(AccountId, u128, u32, AuthorityCount);
+
+impl Chainflip for Test {
+	type KeyId = Vec<u8>;
+	type ValidatorId = AccountId;
+	type Amount = u128;
+	type RuntimeCall = RuntimeCall;
+	type EnsureWitnessed = MockEnsureWitnessed;
+	type EnsureWitnessedAtCurrentEpoch = MockEnsureWitnessed;
+	type EpochInfo = MockEpochInfo;
+	type SystemState = MockSystemStateInfo;
 }
 
 impl pallet_cf_environment::Config for Test {
