@@ -23,7 +23,7 @@ pub enum StartCheckpointing<Chain: cf_chains::Chain> {
 pub fn get_witnesser_start_block_with_checkpointing<Chain: cf_chains::Chain>(
 	chain_tag: ChainTag,
 	epoch_start_index: EpochIndex,
-	epoch_start_block_number: <Chain as cf_chains::Chain>::ChainBlockNumber,
+	epoch_start_block_number: Chain::ChainBlockNumber,
 	db: Arc<PersistentKeyDB>,
 	logger: &slog::Logger,
 ) -> StartCheckpointing<Chain>
