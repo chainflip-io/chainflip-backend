@@ -18,7 +18,7 @@ fn generate_test_swaps() -> Vec<Swap> {
 			amount: 100,
 			egress_address: ForeignChainAddress::Eth([2; 20]),
 		},
-		// USDC -> asset 
+		// USDC -> asset
 		Swap {
 			swap_id: 2,
 			from: Asset::Eth,
