@@ -61,7 +61,7 @@ const ONE_IN_HUNDREDTH_BIPS: u32 = 1000000;
 
 pub const MAX_FEE_100TH_BIPS: u32 = ONE_IN_HUNDREDTH_BIPS / 2;
 
-#[derive(Copy, Clone, Debug, Default, TypeInfo, PartialEq, Eq, Encode, Decode, MaxEncodedLen)]
+#[derive(Copy, Clone, Debug, TypeInfo, PartialEq, Eq, Encode, Decode, MaxEncodedLen)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 struct Position {
 	liquidity: Liquidity,
@@ -191,7 +191,7 @@ impl SwapDirection for Asset0ToAsset1 {
 				liquidity_map
 					.range_mut(..=current_tick)
 					.next_back()
-					.expect("Liquidity must exist"),
+					.expect("MIN_TICK's TickInfo always exists."),
 			)
 		} else {
 			debug_assert_eq!(current_tick, Self::current_tick_after_crossing_target_tick(MIN_TICK));
@@ -246,7 +246,7 @@ impl SwapDirection for Asset1ToAsset0 {
 				liquidity_map
 					.range_mut(current_tick + 1..)
 					.next()
-					.expect("Liquidity must exist"),
+					.expect("MAX_TICK's TickInfo always exists."),
 			)
 		} else {
 			debug_assert_eq!(current_tick, Self::current_tick_after_crossing_target_tick(MAX_TICK));
@@ -431,7 +431,11 @@ impl PoolState {
 			.positions
 			.get(&(lp.clone(), lower_tick, upper_tick))
 			.cloned()
-			.unwrap_or_default();
+			.unwrap_or(
+				Position{
+					liquidity: 0,
+					last_fee_growth_inside: Default::default(),
+			});
 
 		let tick_info_with_updated_gross_liquidity = |tick| {
 			let mut tick_info = self.liquidity_map.get(&tick).cloned().unwrap_or_else(|| {
@@ -458,19 +462,17 @@ impl PoolState {
 		};
 
 		let mut lower_info = tick_info_with_updated_gross_liquidity(lower_tick)?;
-		// Cannot overflow as liquidity_delta.abs() is bounded to <=
-		// MAX_TICK_GROSS_LIQUIDITY
+
 		lower_info.liquidity_delta = lower_info
 			.liquidity_delta
 			.checked_add_unsigned(minted_liquidity)
-			.expect("Add liquidity should never overflow.");
+			.expect("Cannot overflow as liquidity_delta.abs() is bounded to <= MAX_TICK_GROSS_LIQUIDITY");
 		let mut upper_info = tick_info_with_updated_gross_liquidity(upper_tick)?;
-		// Cannot underflow as liquidity_delta.abs() is bounded to <=
-		// MAX_TICK_GROSS_LIQUIDITY
+		
 		upper_info.liquidity_delta = upper_info
 			.liquidity_delta
 			.checked_sub_unsigned(minted_liquidity)
-			.expect("Subtracting liquidity should never underflow.");
+			.expect("Cannot underflow as liquidity_delta.abs() is bounded to <= MAX_TICK_GROSS_LIQUIDITY");
 
 		let fees_returned = position.set_liquidity(
 			self,
@@ -514,14 +516,8 @@ impl PoolState {
 		{
 			debug_assert!(position.liquidity != 0);
 			if burnt_liquidity <= position.liquidity {
-				let mut lower_info = match self.liquidity_map.get(&lower_tick) {
-					Some(lower_info) => Ok(*lower_info),
-					None => Err(PositionError::PositionLacksLiquidity),
-				}?;
-				let mut upper_info = match self.liquidity_map.get(&upper_tick) {
-					Some(upper_info) => Ok(*upper_info),
-					None => Err(PositionError::PositionLacksLiquidity),
-				}?;
+				let mut lower_info = *self.liquidity_map.get(&lower_tick).expect("lower_tick is guaranteed to exist.");
+				let mut upper_info = *self.liquidity_map.get(&upper_tick).expect("upper_tick is guaranteed to exist.");
 
 				if lower_info.liquidity_gross < burnt_liquidity ||
 					upper_info.liquidity_gross < burnt_liquidity
@@ -534,14 +530,14 @@ impl PoolState {
 				lower_info.liquidity_delta = lower_info
 					.liquidity_delta
 					.checked_sub_unsigned(burnt_liquidity)
-					.expect("Subtracting liquidity should never underflow");
+					.expect("Cannot underflow as liquidity_delta.abs() is bounded to <= MAX_TICK_GROSS_LIQUIDITY");
 
 				upper_info.liquidity_gross =
 					upper_info.liquidity_gross.saturating_sub(burnt_liquidity);
 				upper_info.liquidity_delta = lower_info
 					.liquidity_delta
 					.checked_add_unsigned(burnt_liquidity)
-					.expect("Adding liquidity should never overflow");
+					.expect("Cannot overflow as liquidity_delta.abs() is bounded to <= MAX_TICK_GROSS_LIQUIDITY");
 
 				let fees_owed = position.set_liquidity(
 					self,
@@ -692,10 +688,10 @@ impl PoolState {
 				// next_sqrt_price_from_input_amount rounds so this maybe Ok(()) even though
 				// amount_minus_fees < amount_required_to_reach_target (TODO Prove)
 				if sqrt_ratio_next == sqrt_ratio_target {
-					// Will not overflow as fee_100th_bips <= ONE_IN_HUNDREDTH_BIPS / 2
 					let fees = mul_div_ceil(
 						amount_required_to_reach_target,
 						U256::from(self.fee_100th_bips),
+						// Will not overflow as fee_100th_bips <= ONE_IN_HUNDREDTH_BIPS / 2
 						U256::from(ONE_IN_HUNDREDTH_BIPS.saturating_sub(self.fee_100th_bips)),
 					);
 
@@ -727,18 +723,8 @@ impl PoolState {
 
 					total_fee_paid = total_fee_paid.saturating_add(fees);
 
-					// Since the liquidity value is used for the fee calculation, updating needs to
-					// be done at the end.
-					// Note conversion to i128 and addition don't overflow (See test
-					// `max_liquidity`)
 					let liquidity_delta = SD::liquidity_delta_on_crossing_tick(target_info);
-					if liquidity_delta >= 0 {
-						self.current_liquidity =
-							self.current_liquidity.saturating_add(liquidity_delta.unsigned_abs());
-					} else {
-						self.current_liquidity =
-							self.current_liquidity.saturating_sub(liquidity_delta.unsigned_abs());
-					}
+					self.current_liquidity = self.current_liquidity.checked_add_signed(liquidity_delta).expect("Addition is guaranteed to never overflow, see test `max_liquidity`");
 				} else {
 					let amount_in = SD::input_amount_delta_ceil(
 						self.current_sqrt_price,
@@ -1096,9 +1082,9 @@ impl PoolState {
 						// is the 129th bit set, all higher bits must be zero due to 127 right bit
 						// shift
 						log_2_q63f64 |= (1i128 << $bit);
-						(mantissa_sq >> 1u8).try_into().expect("mantissa calculation should never overflow")
+						(mantissa_sq >> 1u8).try_into().expect("Conversion to u128 is safe: top 128 bits are always zero")
 					} else {
-						mantissa_sq.try_into().expect("mantissa calculation should never overflow")
+						mantissa_sq.try_into().expect("Conversion to u128 is safe: top 128 bits are always zero")
 					}
 				};
 			}
@@ -1134,18 +1120,17 @@ impl PoolState {
 		)
 		.0;
 
-		let tick_low = (U256::overflowing_sub(
+		let tick_low: Tick = (U256::overflowing_sub(
 			log_sqrt10001_q127f128,
 			U256::from(3402992956809132418596140100660247210u128),
 		)
 		.0 >> 128u8)
-			.low_u128() as Tick;
-		let tick_high = (U256::overflowing_add(
+			.try_into().expect("Right shifts ensures the top bits are 0");
+		let tick_high: Tick = (U256::overflowing_add(
 			log_sqrt10001_q127f128,
 			U256::from(291339464771989622907027621153398088495u128),
 		)
-		.0 >> 128u8)
-			.low_u128() as Tick;
+		.0 >> 128u8).try_into().expect("Right shifts ensures the top bits are 0");
 
 		if tick_low == tick_high {
 			tick_low
@@ -1162,7 +1147,7 @@ fn mul_div_floor<C: Into<U512>>(a: U256, b: U256, c: C) -> U256 {
 	debug_assert!(!c.is_zero());
 	(U256::full_mul(a, b) / c)
 		.try_into()
-		.expect("Core AMM arithmetic should never divide by zero")
+		.expect("Core AMM arithmetic should never divide by zero, and cast to U256 must succeed")
 }
 
 fn mul_div_ceil<C: Into<U512>>(a: U256, b: U256, c: C) -> U256 {
@@ -1178,5 +1163,5 @@ fn mul_div_ceil<C: Into<U512>>(a: U256, b: U256, c: C) -> U256 {
 		d
 	}
 	.try_into()
-	.expect("Core AMM arithmetic should never overflow")
+	.expect("Core AMM arithmetic should never divide by zero, and cast to U256 must succeed")
 }
