@@ -123,11 +123,11 @@ fn test_update_polkadot_runtime_version() {
 	new_test_ext().execute_with(|| {
 		assert_eq!(Environment::polkadot_runtime_version(), POLKADOT_RUNTIME_VERSION);
 
-		// This should be a noop since the version is less than `POLKADOT_RUNTIME_VERSION`
+		// This should be a noop since the version is the same as the genesis version
 		assert_noop!(
 			Environment::update_polkadot_runtime_version(
 				RuntimeOrigin::root(),
-				RuntimeVersion { spec_version: 1, transaction_version: 1 },
+				POLKADOT_RUNTIME_VERSION,
 			),
 			Error::<Test>::InvalidPolkadotRuntimeVersion
 		);
