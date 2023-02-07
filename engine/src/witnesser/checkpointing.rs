@@ -111,6 +111,7 @@ where
 	let from_block = if witnessed_until.epoch_index == epoch_start.epoch_index {
 		witnessed_until
 			.block_number
+			.saturating_add(1)
 			.try_into()
 			.expect("Should convert block number from u64")
 	} else {
