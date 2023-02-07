@@ -18,7 +18,7 @@ use crate::{
 };
 use cf_chains::{
 	dot,
-	dot::api::PolkadotApi,
+	dot::{api::PolkadotApi, PolkadotHash},
 	eth,
 	eth::{api::EthereumApi, Ethereum},
 	Polkadot,
@@ -52,7 +52,7 @@ use pallet_session::historical as session_historical;
 pub use pallet_timestamp::Call as TimestampCall;
 use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
+use sp_core::{crypto::KeyTypeId, OpaqueMetadata, H256};
 use sp_runtime::traits::{
 	AccountIdLookup, BlakeTwo256, Block as BlockT, ConvertInto, IdentifyAccount, NumberFor, One,
 	OpaqueKeys, UniqueSaturatedInto, Verify,
@@ -190,9 +190,9 @@ impl pallet_cf_validator::Config for Runtime {
 parameter_types! {
 
 	// Polkadot
-	pub const PolkadotGenesisHash: [u8; 32] = hex_literal::hex!(
+	pub const PolkadotGenesisHash: PolkadotHash = H256(hex_literal::hex!(
 		"5f551688012d25a98e729752169f509c6186af8079418c118844cc852b332bf5"
-	);
+	));
 
 	// Westend
 	// hex_literal::hex!(

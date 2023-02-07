@@ -74,7 +74,7 @@ pub mod cfe {
 #[frame_support::pallet]
 pub mod pallet {
 
-	use cf_chains::dot::{PolkadotPublicKey, RuntimeVersion};
+	use cf_chains::dot::{PolkadotHash, PolkadotPublicKey, RuntimeVersion};
 	use cf_primitives::{Asset, TxId};
 
 	use cf_traits::{Broadcaster, VaultKeyWitnessedHandler};
@@ -100,7 +100,7 @@ pub mod pallet {
 		type PolkadotVaultKeyWitnessedHandler: VaultKeyWitnessedHandler<Polkadot>;
 
 		#[pallet::constant]
-		type PolkadotGenesisHash: Get<[u8; 32]>;
+		type PolkadotGenesisHash: Get<PolkadotHash>;
 
 		/// Weight information
 		type WeightInfo: WeightInfo;

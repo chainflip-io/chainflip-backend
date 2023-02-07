@@ -1,6 +1,6 @@
 use crate::{self as pallet_cf_environment, cfe};
 use cf_chains::{
-	dot::{api::CreatePolkadotVault, POLKADOT_RUNTIME_VERSION},
+	dot::{api::CreatePolkadotVault, PolkadotHash, POLKADOT_RUNTIME_VERSION},
 	ApiCall, Chain, ChainCrypto, Polkadot,
 };
 
@@ -128,7 +128,7 @@ impl Chainflip for Test {
 }
 
 parameter_types! {
-	pub const PolkadotGenesisHash: [u8; 32] = [0u8; 32];
+	pub const PolkadotGenesisHash: PolkadotHash = H256([0u8; 32]);
 }
 
 impl pallet_cf_environment::Config for Test {

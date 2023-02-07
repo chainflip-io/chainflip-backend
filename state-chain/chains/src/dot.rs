@@ -216,8 +216,8 @@ impl PolkadotExtrinsicBuilder {
 			(),
 			self.replay_protection.runtime_version.spec_version,
 			self.replay_protection.runtime_version.transaction_version,
-			H256::from_slice(&self.replay_protection.genesis_hash),
-			H256::from_slice(&self.replay_protection.genesis_hash),
+			self.replay_protection.genesis_hash,
+			self.replay_protection.genesis_hash,
 			(),
 			(),
 			(),
@@ -770,7 +770,7 @@ impl From<PolkadotPublicKey> for Vec<u8> {
 #[derive(Debug, Encode, Decode, TypeInfo, Eq, PartialEq, Clone)]
 pub struct PolkadotReplayProtection {
 	pub runtime_version: RuntimeVersion,
-	pub genesis_hash: [u8; 32],
+	pub genesis_hash: PolkadotHash,
 	pub nonce: PolkadotIndex,
 	pub tip: PolkadotBalance,
 }
@@ -780,7 +780,7 @@ impl PolkadotReplayProtection {
 		nonce: PolkadotIndex,
 		tip: PolkadotBalance,
 		runtime_version: RuntimeVersion,
-		genesis_hash: [u8; 32],
+		genesis_hash: PolkadotHash,
 	) -> Self {
 		Self { runtime_version, genesis_hash, nonce, tip }
 	}
