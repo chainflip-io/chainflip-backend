@@ -74,6 +74,8 @@ pub mod pallet {
 	pub(crate) type TargetChainAccount<T, I> =
 		<<T as Config<I>>::TargetChain as Chain>::ChainAccount;
 
+	pub(crate) type IntentPair<T, I> = (IntentId, TargetChainAccount<T, I>);
+
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	pub struct IngressWitness<C: Chain + ChainCrypto> {
 		pub ingress_address: C::ChainAccount,
@@ -181,23 +183,10 @@ pub mod pallet {
 	pub(crate) type DisabledEgressAssets<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, TargetChainAsset<T, I>, ()>;
 
-	#[pallet::storage]
-	pub(crate) type ActiveIntents<T: Config<I>, I: 'static = ()> = StorageMap<
-		_,
-		Twox64Concat,
-		TargetChainAccount<T, I>,
-		(TargetChainAsset<T, I>, IntentAction<<T as frame_system::Config>::AccountId>),
-	>;
-
 	/// Stores pools of addresses that are available for use.
 	#[pallet::storage]
-	pub(crate) type StaleIntents<T: Config<I>, I: 'static = ()> = StorageMap<
-		_,
-		Twox64Concat,
-		TargetChainAsset<T, I>,
-		Vec<TargetChainAccount<T, I>>,
-		ValueQuery,
-	>;
+	pub(crate) type StaleIntents<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, Vec<IntentPair<T, I>>, ValueQuery>;
 
 	#[pallet::storage]
 	pub(crate) type AddressStatus<T: Config<I>, I: 'static = ()> =
@@ -205,7 +194,7 @@ pub mod pallet {
 
 	#[pallet::storage]
 	pub(crate) type IntentExpiries<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, T::BlockNumber, Vec<TargetChainAccount<T, I>>>;
+		StorageMap<_, Twox64Concat, T::BlockNumber, Vec<IntentPair<T, I>>>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -278,12 +267,10 @@ pub mod pallet {
 		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
 			if let Some(expired) = IntentExpiries::<T, I>::take(n) {
 				for address in expired {
-					if let Some(asset) = ActiveIntents::<T, I>::take(&address) {
-						// Throw back the address into to the stale intents pool against the right
-						// asset.
-						StaleIntents::<T, I>::mutate(asset.0, |v| v.push(address.clone()));
-						Self::deposit_event(Event::StopWitnessing { ingress_address: address });
-					}
+					IntentIngressDetails::<T, I>::remove(&address.1);
+					IntentActions::<T, I>::remove(&address.1);
+					StaleIntents::<T, I>::append(address.clone());
+					Self::deposit_event(Event::StopWitnessing { ingress_address: address.1 });
 				}
 			}
 			T::DbWeight::get().reads(1)
@@ -492,29 +479,38 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		asset: TargetChainAsset<T, I>,
 		intent_action: IntentAction<T::AccountId>,
 	) -> (IntentId, TargetChainAccount<T, I>) {
-		let next_intent_id = IntentIdCounter::<T, I>::get()
-			.checked_add(1)
-			.ok_or(Error::<T, I>::IntentIdsExhausted)
-			.unwrap();
 		let ttl = T::TTL::get();
 		let expires_in = ttl.saturating_add(<frame_system::Pallet<T>>::block_number());
-		let address = if let Some(address) = StaleIntents::<T, I>::get(asset).pop() {
-			address
-		} else {
-			let new_address =
-				T::AddressDerivation::generate_address(asset, next_intent_id).unwrap();
-			new_address.try_into().unwrap()
-		};
+		let (intent_id, address) =
+			if let Some((intent_id, address)) = StaleIntents::<T, I>::get().pop() {
+				(intent_id, address)
+			} else {
+				let next_intent_id = IntentIdCounter::<T, I>::get()
+					.checked_add(1)
+					.ok_or(Error::<T, I>::IntentIdsExhausted)
+					.unwrap();
+				let new_address: TargetChainAccount<T, I> =
+					T::AddressDerivation::generate_address(asset, next_intent_id)
+						.unwrap()
+						.try_into()
+						.unwrap();
+				IntentIdCounter::<T, I>::put(next_intent_id);
+				(next_intent_id, new_address)
+			};
 		IntentExpiries::<T, I>::mutate(expires_in, |v| {
 			if let Some(e) = v {
-				e.push(address.clone());
+				e.push((intent_id, address.clone()));
 			} else {
-				*v = Some(vec![address.clone()]);
+				*v = Some(vec![(intent_id, address.clone())]);
 			}
 		});
-		ActiveIntents::<T, I>::insert(address.clone(), (asset, intent_action));
-		IntentIdCounter::<T, I>::put(next_intent_id);
-		(next_intent_id, address)
+		// Generated address guarantees the right address type is returned.
+		IntentIngressDetails::<T, I>::insert(
+			&address,
+			IngressDetails { intent_id, ingress_asset: asset },
+		);
+		IntentActions::<T, I>::insert(&address, intent_action);
+		(intent_id, address)
 	}
 }
 
@@ -555,16 +551,6 @@ impl<T: Config<I>, I: 'static> IngressApi<T::TargetChain> for Pallet<T, I> {
 			IntentAction::LiquidityProvision { lp_account: lp_account.clone() },
 		);
 
-		// Generated address guarantees the right address type is returned.
-		IntentIngressDetails::<T, I>::insert(
-			&ingress_address,
-			IngressDetails { intent_id, ingress_asset },
-		);
-		IntentActions::<T, I>::insert(
-			&ingress_address,
-			IntentAction::LiquidityProvision { lp_account },
-		);
-
 		Self::deposit_event(Event::StartWitnessing {
 			ingress_address: ingress_address.clone(),
 			ingress_asset,
@@ -589,16 +575,6 @@ impl<T: Config<I>, I: 'static> IngressApi<T::TargetChain> for Pallet<T, I> {
 				relayer_commission_bps: relayer_commission_bps.clone(),
 				relayer_id: relayer_id.clone(),
 			},
-		);
-
-		// Generated address guarantees the right address type is returned.
-		IntentIngressDetails::<T, I>::insert(
-			&ingress_address,
-			IngressDetails { intent_id, ingress_asset },
-		);
-		IntentActions::<T, I>::insert(
-			&ingress_address,
-			IntentAction::Swap { egress_address, egress_asset, relayer_commission_bps, relayer_id },
 		);
 
 		Self::deposit_event(Event::StartWitnessing {
