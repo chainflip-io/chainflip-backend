@@ -21,7 +21,7 @@ use cf_traits::{
 	liquidity::LpProvisioningApi, AddressDerivationApi, Broadcaster, EgressApi, IngressApi,
 	SwapIntentHandler,
 };
-use frame_support::{pallet_prelude::*, sp_runtime::DispatchError};
+use frame_support::{pallet_prelude::*, sp_runtime::DispatchError, traits::UnixTime};
 pub use pallet::*;
 use sp_runtime::{traits::Saturating, TransactionOutcome};
 pub use sp_std::{vec, vec::Vec};
@@ -138,9 +138,12 @@ pub mod pallet {
 		/// Governance origin to manage allowed assets
 		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
 
-		/// Time to live for every ingress address.
+		/// Something that provides the current time.
+		type TimeSource: UnixTime;
+
+		/// Time to life for an intent in seconds.
 		#[pallet::constant]
-		type TTL: Get<Self::BlockNumber>;
+		type TTL: Get<u64>;
 
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;
@@ -194,7 +197,7 @@ pub mod pallet {
 
 	#[pallet::storage]
 	pub(crate) type IntentExpiries<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, T::BlockNumber, Vec<IntentPair<T, I>>>;
+		StorageMap<_, Twox64Concat, u64, Vec<IntentPair<T, I>>>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -264,13 +267,18 @@ pub mod pallet {
 				.unwrap_or_else(|_| T::WeightInfo::egress_assets(0))
 		}
 
-		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
-			if let Some(expired) = IntentExpiries::<T, I>::take(n) {
-				for address in expired {
-					IntentIngressDetails::<T, I>::remove(&address.1);
-					IntentActions::<T, I>::remove(&address.1);
-					StaleIntents::<T, I>::append(address.clone());
-					Self::deposit_event(Event::StopWitnessing { ingress_address: address.1 });
+		fn on_initialize(_n: BlockNumberFor<T>) -> Weight {
+			let now = T::TimeSource::now().as_secs();
+			let expired: Vec<u64> =
+				IntentExpiries::<T, I>::iter_keys().filter(|x| x <= &now).collect();
+			for expiry in expired {
+				if let Some(addresses) = IntentExpiries::<T, I>::take(expiry) {
+					for address in addresses {
+						IntentIngressDetails::<T, I>::remove(&address.1);
+						IntentActions::<T, I>::remove(&address.1);
+						StaleIntents::<T, I>::append(address.clone());
+						Self::deposit_event(Event::StopWitnessing { ingress_address: address.1 });
+					}
 				}
 			}
 			T::DbWeight::get().reads(1)
@@ -450,9 +458,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		// NB: Don't take here. We should continue witnessing this address
 		// even after an ingress to it has occurred.
 		// https://github.com/chainflip-io/chainflip-eth-contracts/pull/226
-		match IntentActions::<T, I>::get(&ingress_address.clone())
-			.ok_or(Error::<T, I>::InvalidIntent)?
-		{
+		match IntentActions::<T, I>::get(&ingress_address).ok_or(Error::<T, I>::InvalidIntent)? {
 			IntentAction::LiquidityProvision { lp_account } =>
 				T::LpProvisioning::provision_account(&lp_account, asset.into(), amount)?,
 			IntentAction::Swap {
@@ -480,7 +486,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		intent_action: IntentAction<T::AccountId>,
 	) -> (IntentId, TargetChainAccount<T, I>) {
 		let ttl = T::TTL::get();
-		let expires_in = ttl.saturating_add(<frame_system::Pallet<T>>::block_number());
+		let expires_in = ttl.saturating_add(T::TimeSource::now().as_secs());
 		let (intent_id, address) =
 			if let Some((intent_id, address)) = StaleIntents::<T, I>::get().pop() {
 				(intent_id, address)
@@ -490,20 +496,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					.ok_or(Error::<T, I>::IntentIdsExhausted)
 					.unwrap();
 				let new_address: TargetChainAccount<T, I> =
-					T::AddressDerivation::generate_address(asset, next_intent_id)
-						.unwrap()
-						.try_into()
-						.unwrap();
+					T::AddressDerivation::generate_address(asset, next_intent_id).unwrap();
 				IntentIdCounter::<T, I>::put(next_intent_id);
 				(next_intent_id, new_address)
 			};
-		IntentExpiries::<T, I>::mutate(expires_in, |v| {
-			if let Some(e) = v {
-				e.push((intent_id, address.clone()));
-			} else {
-				*v = Some(vec![(intent_id, address.clone())]);
-			}
-		});
+
+		IntentExpiries::<T, I>::append(expires_in, (intent_id, address.clone()));
+
 		// Generated address guarantees the right address type is returned.
 		IntentIngressDetails::<T, I>::insert(
 			&address,
@@ -548,7 +547,7 @@ impl<T: Config<I>, I: 'static> IngressApi<T::TargetChain> for Pallet<T, I> {
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
 		let (intent_id, ingress_address) = Self::ingress_intent_creation(
 			ingress_asset,
-			IntentAction::LiquidityProvision { lp_account: lp_account.clone() },
+			IntentAction::LiquidityProvision { lp_account },
 		);
 
 		Self::deposit_event(Event::StartWitnessing {
@@ -569,12 +568,7 @@ impl<T: Config<I>, I: 'static> IngressApi<T::TargetChain> for Pallet<T, I> {
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
 		let (intent_id, ingress_address) = Self::ingress_intent_creation(
 			ingress_asset,
-			IntentAction::Swap {
-				egress_address: egress_address.clone(),
-				egress_asset: egress_asset.clone(),
-				relayer_commission_bps: relayer_commission_bps.clone(),
-				relayer_id: relayer_id.clone(),
-			},
+			IntentAction::Swap { egress_address, egress_asset, relayer_commission_bps, relayer_id },
 		);
 
 		Self::deposit_event(Event::StartWitnessing {
