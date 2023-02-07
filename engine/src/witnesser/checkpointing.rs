@@ -7,7 +7,7 @@ use crate::multisig::{ChainTag, PersistentKeyDB};
 
 const UPDATE_INTERVAL: Duration = Duration::from_secs(4);
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default)]
+#[derive(Clone, Debug, Serialize, Deserialize, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub struct WitnessedUntil {
 	pub epoch_index: EpochIndex,
 	pub block_number: u64,
@@ -77,9 +77,8 @@ where
 				if changed {
 					let changed_witnessed_until = witnessed_until_receiver.borrow().clone();
 					assert!(
-						changed_witnessed_until.epoch_index > prev_witnessed_until.epoch_index ||
-							changed_witnessed_until.block_number >
-								prev_witnessed_until.block_number
+						changed_witnessed_until > prev_witnessed_until,
+						"Expected {changed_witnessed_until:?} > {prev_witnessed_until:?}."
 					);
 					db.update_checkpoint(chain_tag, &changed_witnessed_until);
 					prev_witnessed_until = changed_witnessed_until;
