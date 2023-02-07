@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use anyhow::Context;
 use cf_chains::Polkadot;
 use futures::StreamExt;
 use sp_core::H256;
