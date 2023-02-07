@@ -1,0 +1,40 @@
+#!/bin/sh
+
+set -e
+
+if [ "$1" != "upgrade" ]; then
+  echo "Fresh install detected, skipping migration"
+  exit 0
+fi
+
+echo "Beginning setup and migration of engine config"
+
+ENGINE_CONFIG_LOCATION=$(find / -name "Default.toml")
+if [ -z "$ENGINE_CONFIG_LOCATION" ]; then
+  echo "No Default.toml file found. Exiting"
+  exit 0
+fi
+ENGINE_CONFIG_ROOT=$(dirname "$ENGINE_CONFIG_LOCATION")
+echo "Engine config found at: $ENGINE_CONFIG_LOCATION"
+
+echo "Renaming to Settings.toml"
+UPDATED_ENGINE_CONFIG_LOCATION="$ENGINE_CONFIG_ROOT/Settings.toml"
+mv "$ENGINE_CONFIG_LOCATION" "$UPDATED_ENGINE_CONFIG_LOCATION"
+
+if grep "\[dot\]" "$UPDATED_ENGINE_CONFIG_LOCATION" > /dev/null; then
+  echo "Dot config already present. Exiting"
+  exit 0
+fi
+
+echo "Updating $UPDATED_ENGINE_CONFIG_LOCATION to include Polkadot configuration"
+cat <<EOT >> "$UPDATED_ENGINE_CONFIG_LOCATION"
+
+[dot]
+ws_node_endpoint = "https://perseverance-polkadot.chainflip.io"
+EOT
+
+echo "Migration completed successfully"
+
+#DEBHELPER#
+
+exit 0
