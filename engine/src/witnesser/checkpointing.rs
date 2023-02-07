@@ -2,7 +2,6 @@ use std::{sync::Arc, time::Duration};
 
 use cf_primitives::EpochIndex;
 use serde::{Deserialize, Serialize};
-use tokio::task::JoinHandle;
 
 use crate::multisig::{ChainTag, PersistentKeyDB};
 
@@ -14,11 +13,23 @@ pub struct WitnessedUntil {
 	pub block_number: u64,
 }
 
-fn start_checkpointing_for(
+pub enum StartCheckpointing<Chain: cf_chains::Chain> {
+	Started((Chain::ChainBlockNumber, tokio::sync::watch::Sender<WitnessedUntil>)),
+	AlreadyWitnessedEpoch,
+}
+
+/// Loads the checkpoint from the db then starts checkpointing. Returns the block number at which to
+/// start witnessing unless the epoch has already been witnessed.
+pub fn get_witnesser_start_block_with_checkpointing<Chain: cf_chains::Chain>(
 	chain_tag: ChainTag,
+	epoch_start_index: EpochIndex,
+	epoch_start_block_number: <Chain as cf_chains::Chain>::ChainBlockNumber,
 	db: Arc<PersistentKeyDB>,
 	logger: &slog::Logger,
-) -> (WitnessedUntil, tokio::sync::watch::Sender<WitnessedUntil>, JoinHandle<()>) {
+) -> StartCheckpointing<Chain>
+where
+	<<Chain as cf_chains::Chain>::ChainBlockNumber as TryFrom<u64>>::Error: std::fmt::Debug,
+{
 	// Load the checkpoint or use the default if none is found
 	let witnessed_until = match db.load_checkpoint(chain_tag) {
 		Ok(Some(checkpoint)) => {
@@ -48,12 +59,17 @@ fn start_checkpointing_for(
 		},
 	};
 
+	// Don't witness epochs that we've already witnessed
+	if epoch_start_index < witnessed_until.epoch_index {
+		return StartCheckpointing::AlreadyWitnessedEpoch
+	}
+
 	let (witnessed_until_sender, witnessed_until_receiver) =
 		tokio::sync::watch::channel(witnessed_until.clone());
 
 	let mut prev_witnessed_until = witnessed_until.clone();
 
-	let join_handle = tokio::spawn(async move {
+	tokio::spawn(async move {
 		// Check every few seconds if the `witnessed_until` has changed and then update the database
 		loop {
 			tokio::time::sleep(UPDATE_INTERVAL).await;
@@ -73,35 +89,6 @@ fn start_checkpointing_for(
 			}
 		}
 	});
-
-	// Returning the join handle so the task can be awaited upon during unit tests
-	(witnessed_until, witnessed_until_sender, join_handle)
-}
-
-pub enum StartCheckpointing<Chain: cf_chains::Chain> {
-	Started((Chain::ChainBlockNumber, tokio::sync::watch::Sender<WitnessedUntil>)),
-	AlreadyWitnessedEpoch,
-}
-
-/// Loads the checkpoint from the db then starts checkpointing. Returns the block number at which to
-/// start witnessing unless the epoch has already been witnessed.
-pub fn get_witnesser_start_block_with_checkpointing<Chain: cf_chains::Chain>(
-	chain_tag: ChainTag,
-	epoch_start_index: EpochIndex,
-	epoch_start_block_number: <Chain as cf_chains::Chain>::ChainBlockNumber,
-	db: Arc<PersistentKeyDB>,
-	logger: &slog::Logger,
-) -> StartCheckpointing<Chain>
-where
-	<<Chain as cf_chains::Chain>::ChainBlockNumber as TryFrom<u64>>::Error: std::fmt::Debug,
-{
-	let (witnessed_until, witnessed_until_sender, _checkpointing_join_handle) =
-		start_checkpointing_for(chain_tag, db, logger);
-
-	// Don't witness epochs that we've already witnessed
-	if epoch_start_index < witnessed_until.epoch_index {
-		return StartCheckpointing::AlreadyWitnessedEpoch
-	}
 
 	// We do this because it's possible to witness ahead of the epoch start during the
 	// previous epoch. If we don't start witnessing from the epoch start, when we
