@@ -69,7 +69,7 @@ where
 						.await;
 				}
 
-				while let Some(res_runtime_version) = runtime_version_subscription.next().await {
+				while let Some(result_runtime_version) = runtime_version_subscription.next().await {
 					// TODO: Change end_witnessing_signal to a oneshot channel and tokio::select!
 					// the two futures. Currently this process will keep running, waiting on the
 					// above `.next()` call until a PolkadotRuntime upgrade is introduced. This is
@@ -79,7 +79,7 @@ where
 						break
 					}
 
-					match res_runtime_version {
+					match result_runtime_version {
 						Ok(new_runtime_version) => {
 							let _result = state_chain_client
 								.submit_signed_extrinsic(
