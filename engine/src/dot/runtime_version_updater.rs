@@ -63,14 +63,15 @@ where
 
 					match result_runtime_version {
 						Ok(new_runtime_version) => {
-							if new_runtime_version.spec_version >
-								last_version_witnessed.spec_version
-							{
-								assert!(
-									new_runtime_version.transaction_version >=
-										last_version_witnessed.transaction_version,
-									"Polkadot spec version must be bumped when the transaction version is bumped"
-								);
+							let spec_version_has_increased = new_runtime_version.spec_version >
+								last_version_witnessed.spec_version;
+							assert!(
+								spec_version_has_increased &&
+								new_runtime_version.transaction_version >=
+									last_version_witnessed.transaction_version,
+								"Polkadot spec version must be bumped when the transaction version is bumped"
+							);
+							if spec_version_has_increased {
 								let _result = state_chain_client
 									.submit_signed_extrinsic(
 										pallet_cf_witnesser::Call::witness_at_epoch {
