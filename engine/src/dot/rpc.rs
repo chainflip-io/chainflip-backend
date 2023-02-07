@@ -39,8 +39,6 @@ pub trait DotRpcApi: Send + Sync {
 
 	async fn events(&self, block_hash: PolkadotHash) -> Result<Events<PolkadotConfig>>;
 
-	async fn runtime_version(&self, block_hash: Option<PolkadotHash>) -> Result<RuntimeVersion>;
-
 	async fn subscribe_finalized_heads(
 		&self,
 	) -> Result<Pin<Box<dyn Stream<Item = Result<PolkadotHeader>> + Send>>>;
@@ -73,19 +71,6 @@ impl DotRpcApi for DotRpcClient {
 			.block_hash(Some(block_number.into()))
 			.await
 			.map_err(|e| anyhow!("Failed to query Polkadot block hash with error: {e}"))
-	}
-
-	async fn runtime_version(&self, block_hash: Option<PolkadotHash>) -> Result<RuntimeVersion> {
-		self.online_client
-			.rpc()
-			.runtime_version(block_hash)
-			.await
-			.map_err(|e| anyhow!("Failed to query Polkadot runtime version with error: {e}"))
-			.map(
-				|subxt::rpc::types::RuntimeVersion {
-				     spec_version, transaction_version, ..
-				 }| RuntimeVersion { spec_version, transaction_version },
-			)
 	}
 
 	async fn subscribe_runtime_version(
