@@ -299,15 +299,15 @@ pub struct BlockWithItems<BlockItem: Debug> {
 	pub block_items: Vec<BlockItem>,
 }
 
-/// Same as [`safe_dual_block_subscription`] but prepends the stream with
-/// historical blocks from a given block number.
-pub async fn safe_dual_block_subscription_from(
+pub async fn eth_block_head_stream_from<HeaderStream>(
 	from_block: u64,
+	safe_head_stream: HeaderStream,
 	eth_dual_rpc: EthDualRpcClient,
 	logger: &slog::Logger,
-) -> Result<Pin<Box<dyn Stream<Item = EthNumberBloom> + Send + 'static>>> {
-	let safe_head_stream = safe_dual_block_subscription(eth_dual_rpc.clone(), logger).await?;
-
+) -> Result<Pin<Box<dyn Stream<Item = EthNumberBloom> + Send + 'static>>>
+where
+	HeaderStream: Stream<Item = EthNumberBloom> + 'static + Send,
+{
 	block_head_stream_from(
 		from_block,
 		safe_head_stream,
@@ -327,26 +327,40 @@ pub async fn safe_dual_block_subscription_from(
 }
 
 /// Returns a safe stream of blocks from the latest block onward,
-/// using a dual (WS/HTTP) rpc subscription.
-async fn safe_dual_block_subscription(
+/// using a dual (WS/HTTP) rpc subscription. Prepends the current head of the 'subscription' streams
+/// with historical blocks from a given block number.
+pub async fn safe_dual_block_subscription_from(
+	from_block: u64,
 	eth_dual_rpc: EthDualRpcClient,
 	logger: &slog::Logger,
 ) -> Result<Pin<Box<dyn Stream<Item = EthNumberBloom> + Send + 'static>>>
 where
 {
-	let safe_ws_head_stream = safe_ws_head_stream(
-		eth_dual_rpc.ws_client.subscribe_new_heads().await?,
-		ETH_BLOCK_SAFETY_MARGIN,
-		logger,
-	);
-
-	let safe_http_head_stream = safe_polling_http_head_stream(
-		eth_dual_rpc.http_client.clone(),
-		HTTP_POLL_INTERVAL,
-		ETH_BLOCK_SAFETY_MARGIN,
+	let safe_ws_head_stream = eth_block_head_stream_from(
+		from_block,
+		safe_ws_head_stream(
+			eth_dual_rpc.ws_client.subscribe_new_heads().await?,
+			ETH_BLOCK_SAFETY_MARGIN,
+			logger,
+		),
+		eth_dual_rpc.clone(),
 		logger,
 	)
-	.await;
+	.await?;
+
+	let safe_http_head_stream = eth_block_head_stream_from(
+		from_block,
+		safe_polling_http_head_stream(
+			eth_dual_rpc.http_client.clone(),
+			HTTP_POLL_INTERVAL,
+			ETH_BLOCK_SAFETY_MARGIN,
+			logger,
+		)
+		.await,
+		eth_dual_rpc.clone(),
+		logger,
+	)
+	.await?;
 
 	merged_block_stream(safe_ws_head_stream, safe_http_head_stream, logger.clone()).await
 }
