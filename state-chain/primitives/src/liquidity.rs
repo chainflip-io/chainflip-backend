@@ -52,8 +52,8 @@ impl Not for PoolSide {
 #[derive(Copy, Clone, Default, Debug, TypeInfo, PartialEq, Eq, Encode, Decode, MaxEncodedLen)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct PoolAssetMap<Amount> {
-	asset_0: Amount,
-	asset_1: Amount,
+	pub asset_0: Amount,
+	pub asset_1: Amount,
 }
 
 impl<Amount: Copy> PoolAssetMap<Amount> {

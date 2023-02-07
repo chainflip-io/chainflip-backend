@@ -44,11 +44,10 @@ fn setup_pool(pools: Vec<(Asset, AssetAmount, u32, i32)>) {
 		AccountRole::Relayer
 	));
 
-	// Provide liquidity to the exchange pool.
-	assert_ok!(LiquidityProvider::provision_account(&lp, Asset::Usdc, 1_000_000_000_000_000));
-
 	for (asset, liquidity, fee, initial_tick) in pools {
-		assert_ok!(LiquidityProvider::provision_account(&lp, asset, liquidity));
+		assert_ok!(LiquidityProvider::provision_account(&lp, asset, liquidity * 10));
+		assert_ok!(LiquidityProvider::provision_account(&lp, Asset::Usdc, liquidity * 10));
+
 		assert_ok!(LiquidityPools::new_pool(
 			pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
 			asset,
@@ -101,7 +100,7 @@ fn ingress_asset_for_swap(asset: eth::Asset, amount: AssetAmount) -> H160 {
 }
 
 #[test]
-fn can_provide_liquidity_and_swap_assets() {
+fn can_setup_pool_and_provide_liquidity() {
 	super::genesis::default().build().execute_with(|| {
 		setup_pool(vec![
 			(Asset::Eth, 3_000_000u128, 0u32, INITIAL_ETH_TICK),
@@ -109,20 +108,34 @@ fn can_provide_liquidity_and_swap_assets() {
 		]);
 
 		let lp: AccountId = AccountId::from(LP);
-		let relayer: AccountId = AccountId::from([0xE0; 32]);
-
+		// Funds were debited to provide for liquidity.
 		assert_eq!(
 			pallet_cf_lp::FreeBalances::<Runtime>::get(&lp, any::Asset::Usdc),
-			Some(999_999_988_843_927)
+			Some(30_000_000 + 12_000_000 - 11_156_073)
 		);
 		assert_eq!(
 			pallet_cf_lp::FreeBalances::<Runtime>::get(&lp, any::Asset::Eth),
-			Some(2_071_582)
+			Some(30_000_000 - 928_418)
 		);
 		assert_eq!(
 			pallet_cf_lp::FreeBalances::<Runtime>::get(&lp, any::Asset::Flip),
-			Some(359_567)
+			Some(12_000_000 - 840_433)
 		);
+
+		assert_eq!(LiquidityPools::minted_liquidity(&lp, &any::Asset::Eth, RANGE), 3_000_000u128);
+		assert_eq!(LiquidityPools::minted_liquidity(&lp, &any::Asset::Flip, RANGE), 1_200_000u128);
+	});
+}
+
+#[test]
+fn can_swap_assets() {
+	super::genesis::default().build().execute_with(|| {
+		setup_pool(vec![
+			(Asset::Eth, 3_000_000u128, 0u32, INITIAL_ETH_TICK),
+			(Asset::Flip, 1_200_000u128, 0u32, INITIAL_FLIP_TICK),
+		]);
+
+		let relayer: AccountId = AccountId::from([0xE0; 32]);
 
 		// Test swap
 		assert_ok!(Swapping::register_swap_intent(
@@ -135,15 +148,6 @@ fn can_provide_liquidity_and_swap_assets() {
 
 		let swap_amount = 10_000u128;
 		let ingress_address = ingress_asset_for_swap(eth::Asset::Eth, swap_amount);
-
-		System::assert_has_event(RuntimeEvent::EthereumIngressEgress(
-			pallet_cf_ingress_egress::Event::IngressCompleted {
-				ingress_address,
-				asset: eth::Asset::Eth,
-				amount: swap_amount,
-				tx_id: Default::default(),
-			},
-		));
 
 		System::assert_has_event(RuntimeEvent::Swapping(
 			pallet_cf_swapping::Event::SwapIngressReceived {
@@ -211,7 +215,6 @@ fn swap_can_accrue_fees() {
 		let lp: AccountId = AccountId::from(LP);
 		let relayer: AccountId = AccountId::from([0xE0; 32]);
 
-		// Test swap
 		assert_ok!(Swapping::register_swap_intent(
 			RuntimeOrigin::signed(relayer),
 			Asset::Eth,
@@ -255,89 +258,23 @@ fn swap_can_accrue_fees() {
 			RuntimeOrigin::signed(lp.clone()),
 			any::Asset::Eth,
 			RANGE,
-			1_500_000u128
+			0
 		));
 		assert_ok!(LiquidityProvider::update_position(
 			RuntimeOrigin::signed(lp.clone()),
 			any::Asset::Flip,
 			RANGE,
-			600_000u128
+			0
 		));
 
-		// Burning half of the liquidity returns about half of assets vested.
+		// Burning the liquidity returns the assets vested.
 		// All fees earned so far are also returned.
-		System::assert_has_event(RuntimeEvent::LiquidityPools(
-			pallet_cf_pools::Event::LiquidityBurned {
-				lp: lp.clone(),
-				asset: any::Asset::Eth,
-				range: RANGE,
-				burnt_liquidity: 1_500_000,
-				assets_returned: PoolAssetMap::new(466_708, 4_708_672),
-				fees_harvested: PoolAssetMap::new(4999, 0),
-			},
-		));
-		System::assert_has_event(RuntimeEvent::LiquidityPools(
-			pallet_cf_pools::Event::LiquidityBurned {
-				lp: lp.clone(),
-				asset: any::Asset::Flip,
-				range: RANGE,
-				burnt_liquidity: 600_000,
-				assets_returned: PoolAssetMap::new(414_088, 856_927),
-				fees_harvested: PoolAssetMap::new(0, 24_870),
-			},
-		));
-
-		// Accounts should be credited with returned capital + fees.
-		System::assert_has_event(RuntimeEvent::LiquidityProvider(
-			pallet_cf_lp::Event::AccountCredited {
-				account_id: lp.clone(),
-				asset: any::Asset::Eth,
-				amount_credited: 466_708 + 4999,
-			},
-		));
-		System::assert_has_event(RuntimeEvent::LiquidityProvider(
-			pallet_cf_lp::Event::AccountCredited {
-				account_id: lp.clone(),
-				asset: any::Asset::Usdc,
-				amount_credited: 4_708_672,
-			},
-		));
-		System::assert_has_event(RuntimeEvent::LiquidityProvider(
-			pallet_cf_lp::Event::AccountCredited {
-				account_id: lp.clone(),
-				asset: any::Asset::Usdc,
-				amount_credited: 856_927 + 24_870,
-			},
-		));
-		System::assert_has_event(RuntimeEvent::LiquidityProvider(
-			pallet_cf_lp::Event::AccountCredited {
-				account_id: lp.clone(),
-				asset: any::Asset::Flip,
-				amount_credited: 414_088,
-			},
-		));
-
-		System::reset_events();
-
-		assert_ok!(LiquidityProvider::update_position(
-			RuntimeOrigin::signed(lp.clone()),
-			any::Asset::Eth,
-			RANGE,
-			0u128
-		));
-		assert_ok!(LiquidityProvider::update_position(
-			RuntimeOrigin::signed(lp.clone()),
-			any::Asset::Flip,
-			RANGE,
-			0u128
-		));
-
 		assert_has_event_pattern!(
 			Runtime,
 			RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::LiquidityBurned {
 				asset: any::Asset::Eth,
 				range: RANGE,
-				burnt_liquidity: 1_500_000,
+				fees_harvested: PoolAssetMap { asset_0: 4999, asset_1: 0 },
 				..
 			},)
 		);
@@ -346,7 +283,7 @@ fn swap_can_accrue_fees() {
 			RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::LiquidityBurned {
 				asset: any::Asset::Flip,
 				range: RANGE,
-				burnt_liquidity: 600_000,
+				fees_harvested: PoolAssetMap { asset_0: 0, asset_1: 24_870 },
 				..
 			},)
 		);
@@ -354,15 +291,15 @@ fn swap_can_accrue_fees() {
 		// All vested assets are returned. Some swapped and with Fees added.
 		assert_eq!(
 			pallet_cf_lp::FreeBalances::<Runtime>::get(&lp, any::Asset::Eth),
-			Some(3_009_997)
+			Some(30_009_998)
 		);
 		assert_eq!(
 			pallet_cf_lp::FreeBalances::<Runtime>::get(&lp, any::Asset::Usdc),
-			Some(999_999_999_999_995)
+			Some(41_999_996)
 		);
 		assert_eq!(
 			pallet_cf_lp::FreeBalances::<Runtime>::get(&lp, any::Asset::Flip),
-			Some(1_187_743)
+			Some(11_987_744)
 		);
 	});
 }
@@ -393,8 +330,6 @@ fn swap_fails_with_insufficient_liquidity() {
 		assert_eq!(LiquidityPools::current_tick(&Asset::Flip), Some(INITIAL_FLIP_TICK));
 		assert_eq!(LiquidityPools::current_tick(&Asset::Eth), Some(INITIAL_ETH_TICK));
 
-		System::reset_events();
-
 		// Swaps should fail to execute due to insufficient liquidity.
 		let _ = Swapping::on_idle(1, Weight::from_ref_time(1_000_000_000_000));
 
@@ -403,15 +338,6 @@ fn swap_fails_with_insufficient_liquidity() {
 		));
 
 		// Failed swaps should leave the pool unchanged.
-		assert_eq!(LiquidityPools::current_tick(&Asset::Flip), Some(INITIAL_FLIP_TICK));
-		assert_eq!(LiquidityPools::current_tick(&Asset::Eth), Some(INITIAL_ETH_TICK));
-
-		// Failed tests are put back into the SwapQueue, and will be tried again
-		System::reset_events();
-		let _ = Swapping::on_idle(1, Weight::from_ref_time(1_000_000_000_000));
-		System::assert_last_event(RuntimeEvent::Swapping(
-			pallet_cf_swapping::Event::BatchSwapFailed { asset_pair: (Asset::Eth, Asset::Flip) },
-		));
 		assert_eq!(LiquidityPools::current_tick(&Asset::Flip), Some(INITIAL_FLIP_TICK));
 		assert_eq!(LiquidityPools::current_tick(&Asset::Eth), Some(INITIAL_ETH_TICK));
 

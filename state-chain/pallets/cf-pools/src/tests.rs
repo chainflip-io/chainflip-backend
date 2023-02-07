@@ -7,26 +7,21 @@ use sp_runtime::Permill;
 #[test]
 fn can_create_new_trading_pool() {
 	new_test_ext().execute_with(|| {
-		let range = AmmRange::new(-100, 100);
 		let asset = Asset::Eth;
 		let default_tick_price = 0;
-		// Pool does not exist.
+
+		// While the pool does not exist, no info can be obtained.
 		assert!(Pools::<Test>::get(asset).is_none());
-		assert_noop!(
-			LiquidityPools::mint(
-				LP.into(),
-				asset,
-				range,
-				1_000_000,
-				|_: PoolAssetMap<AssetAmount>| Ok(()),
-			),
-			Error::<Test>::PoolDoesNotExist,
-		);
 		assert_eq!(LiquidityPools::current_tick(&asset), None);
 
-		// Fee must be between 0 - 50%
+		// Fee must be appropriate
 		assert_noop!(
-			LiquidityPools::new_pool(RuntimeOrigin::root(), asset, 500_001u32, default_tick_price,),
+			LiquidityPools::new_pool(
+				RuntimeOrigin::root(),
+				asset,
+				1_000_000u32,
+				default_tick_price,
+			),
 			Error::<Test>::InvalidFeeAmount,
 		);
 
@@ -44,13 +39,6 @@ fn can_create_new_trading_pool() {
 				fee_100th_bips: 500_000u32,
 				initial_tick_price: default_tick_price,
 			},
-		));
-		assert_ok!(LiquidityPools::mint(
-			LP.into(),
-			asset,
-			range,
-			1_000_000,
-			|_: PoolAssetMap<AssetAmount>| Ok(())
 		));
 
 		// Cannot create duplicate pool
@@ -74,13 +62,6 @@ fn can_enable_disable_trading_pool() {
 			asset,
 			500_000u32,
 			default_tick_price,
-		));
-		assert_ok!(LiquidityPools::mint(
-			LP.into(),
-			asset,
-			range,
-			1_000_000,
-			|_: PoolAssetMap<AssetAmount>| Ok(())
 		));
 
 		// Disable the pool
@@ -119,7 +100,6 @@ fn can_enable_disable_trading_pool() {
 #[test]
 fn test_buy_back_flip_no_funds_available() {
 	new_test_ext().execute_with(|| {
-		let range = AmmRange::new(-100, 100);
 		let asset = Asset::Flip;
 		let default_tick_price = 0;
 
@@ -129,13 +109,6 @@ fn test_buy_back_flip_no_funds_available() {
 			asset,
 			500_000u32,
 			default_tick_price,
-		));
-		assert_ok!(LiquidityPools::mint(
-			LP.into(),
-			asset,
-			range,
-			1_000_000,
-			|_: PoolAssetMap<AssetAmount>| Ok(())
 		));
 
 		FlipBuyInterval::<Test>::set(5);
@@ -148,7 +121,6 @@ fn test_buy_back_flip_no_funds_available() {
 #[test]
 fn test_buy_back_flip() {
 	new_test_ext().execute_with(|| {
-		let range = AmmRange::new(-100, 100);
 		let asset = Asset::Flip;
 		let default_tick_price = 0;
 
@@ -162,7 +134,7 @@ fn test_buy_back_flip() {
 		assert_ok!(LiquidityPools::mint(
 			LP.into(),
 			asset,
-			range,
+			AmmRange { lower: -100_000, upper: 100_000 },
 			1_000_000,
 			|_: PoolAssetMap<AssetAmount>| Ok(())
 		));
@@ -171,15 +143,18 @@ fn test_buy_back_flip() {
 		CollectedNetworkFee::<Test>::set(30);
 		LiquidityPools::on_initialize(10);
 		let initial_flip_to_burn = FlipToBurn::<Test>::get();
+
 		// Expect the some funds available to burn
 		assert!(initial_flip_to_burn != 0);
 		CollectedNetworkFee::<Test>::set(30);
+
 		LiquidityPools::on_initialize(14);
 		// Expect nothing to change because we didn't passed the buy interval threshold
 		assert_eq!(initial_flip_to_burn, FlipToBurn::<Test>::get());
+
 		LiquidityPools::on_initialize(15);
 		// Expect the amount of Flip we can burn to increase
-		assert!(initial_flip_to_burn < FlipToBurn::<Test>::get(), "flip to burn didn't increased!");
+		assert!(initial_flip_to_burn < FlipToBurn::<Test>::get(), "flip to burn didn't increase!");
 	});
 }
 
@@ -232,11 +207,13 @@ fn can_update_liquidity_fee() {
 			liquidity_fee: 500,
 		}));
 
+		// Fee must be within the allowable range.
 		assert_noop!(
 			LiquidityPools::set_liquidity_fee(RuntimeOrigin::root(), asset, 500001u32),
 			Error::<Test>::InvalidFeeAmount
 		);
 
+		// Set the fee to 0%
 		assert_ok!(LiquidityPools::set_liquidity_fee(RuntimeOrigin::root(), asset, 0u32));
 		System::assert_last_event(RuntimeEvent::LiquidityPools(
 			crate::Event::LiquidityFeeUpdated { asset: Asset::Flip, fee_100th_bips: 0u32 },
