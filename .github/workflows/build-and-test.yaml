@@ -4,6 +4,7 @@ on:
 
 env:
   SCCACHE_CACHE_SIZE: 32G
+  SCCACHE_VERSION: v0.4.0-pre.6
   SCCACHE_REDIS: ${{ secrets.SCCACHE_REDIS }}
   CF_RUNNER_SUDO_PASSWORD: ${{ secrets.CF_RUNNER_SUDO_PASSWORD }}
 
@@ -77,9 +78,9 @@ jobs:
         run: apt update
       - name: Setup sccache
         run: |
-          wget https://github.com/mozilla/sccache/releases/download/v0.4.0-pre.6/sccache-v0.4.0-pre.6-x86_64-unknown-linux-musl.tar.gz
-          tar -xvf sccache-v0.4.0-pre.6-x86_64-unknown-linux-musl.tar.gz
-          mv sccache-v0.4.0-pre.6-x86_64-unknown-linux-musl/sccache /usr/local/bin
+          wget https://github.com/mozilla/sccache/releases/download/${SCCACHE_VERSION}/sccache-${SCCACHE_VERSION}-x86_64-unknown-linux-musl.tar.gz
+          tar -xvf sccache-${SCCACHE_VERSION}-x86_64-unknown-linux-musl.tar.gz
+          mv sccache-${SCCACHE_VERSION}-x86_64-unknown-linux-musl/sccache /usr/local/bin
       - run: sccache --show-stats
       - name: Run cargo doc
         run: |
@@ -113,9 +114,9 @@ jobs:
         run: apt update
       - name: Setup sccache
         run: |
-          wget https://github.com/mozilla/sccache/releases/download/v0.4.0-pre.6/sccache-v0.4.0-pre.6-x86_64-unknown-linux-musl.tar.gz
-          tar -xvf sccache-v0.4.0-pre.6-x86_64-unknown-linux-musl.tar.gz
-          mv sccache-v0.4.0-pre.6-x86_64-unknown-linux-musl/sccache /usr/local/bin
+          wget https://github.com/mozilla/sccache/releases/download/${SCCACHE_VERSION}/sccache-${SCCACHE_VERSION}-x86_64-unknown-linux-musl.tar.gz
+          tar -xvf sccache-${SCCACHE_VERSION}-x86_64-unknown-linux-musl.tar.gz
+          mv sccache-${SCCACHE_VERSION}-x86_64-unknown-linux-musl/sccache /usr/local/bin
       - run: sccache --show-stats
       - name: cargo ci-build
         run: |
