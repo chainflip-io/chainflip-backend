@@ -4,7 +4,8 @@ on:
 
 env:
   SCCACHE_CACHE_SIZE: 32G
-  # SCCACHE_REDIS: ${{ secrets.SCCACHE_REDIS }}
+  SCCACHE_VERSION: v0.4.0-pre.6
+  SCCACHE_REDIS: ${{ secrets.SCCACHE_REDIS }}
   CF_RUNNER_SUDO_PASSWORD: ${{ secrets.CF_RUNNER_SUDO_PASSWORD }}
 
 jobs:
@@ -75,17 +76,16 @@ jobs:
         uses: actions/checkout@v3
       - name: Update APT
         run: apt update
-      # - name: Setup sccache
-      #   uses: hendrikmuhs/ccache-action@v1.2
-      #   with:
-      #     max-size: ${{ env.SCCACHE_CACHE_SIZE }}
-      #     variant: sccache
-      #     save: false
-      # - run: sccache --show-stats
+      - name: Setup sccache
+        run: |
+          wget https://github.com/mozilla/sccache/releases/download/${SCCACHE_VERSION}/sccache-${SCCACHE_VERSION}-x86_64-unknown-linux-musl.tar.gz
+          tar -xvf sccache-${SCCACHE_VERSION}-x86_64-unknown-linux-musl.tar.gz
+          mv sccache-${SCCACHE_VERSION}-x86_64-unknown-linux-musl/sccache /usr/local/bin
+      - run: sccache --show-stats
       - name: Run cargo doc
         run: |
           cargo doc --workspace --document-private-items --no-deps
-      # - run: sccache --show-stats
+      - run: sccache --show-stats
       - name: Upload artifacts
         uses: actions/upload-artifact@v3
         with:
@@ -112,21 +112,20 @@ jobs:
         uses: actions/checkout@v3
       - name: Update APT
         run: apt update
-      # - name: Setup sccache
-      #   uses: hendrikmuhs/ccache-action@v1.2
-      #   with:
-      #     max-size: ${{ env.SCCACHE_CACHE_SIZE }}
-      #     variant: sccache
-      #     save: false
-      # - run: sccache --show-stats
+      - name: Setup sccache
+        run: |
+          wget https://github.com/mozilla/sccache/releases/download/${SCCACHE_VERSION}/sccache-${SCCACHE_VERSION}-x86_64-unknown-linux-musl.tar.gz
+          tar -xvf sccache-${SCCACHE_VERSION}-x86_64-unknown-linux-musl.tar.gz
+          mv sccache-${SCCACHE_VERSION}-x86_64-unknown-linux-musl/sccache /usr/local/bin
+      - run: sccache --show-stats
       - name: cargo ci-build
         run: |
           cargo ci-build --locked
-          # sccache --show-stats
+          sccache --show-stats
       - name: cargo ci-test --locked
         run: |
           cargo ci-test --locked
-          # sccache --show-stats
+          sccache --show-stats
       - name: Install cargo-deb
         run: cargo install cargo-deb
       - name: Get date
