@@ -842,7 +842,7 @@ impl PoolState {
 		*/
 		mul_div_floor(
 			U256::from(liquidity) << 96u32,
-			to.saturating_sub(from),
+			to - from,
 			U256::full_mul(to, from),
 		)
 	}
@@ -863,7 +863,7 @@ impl PoolState {
 		*/
 		mul_div_ceil(
 			U256::from(liquidity) << 96u32,
-			to.saturating_sub(from),
+			to - from,
 			U256::full_mul(to, from),
 		)
 	}
@@ -885,7 +885,7 @@ impl PoolState {
 			Then (B - A) / (1<<96) <= u64::MAX (160 - 96 = 64)
 			Then L * ((B - A) / (1<<96)) <= u192::MAX < u256::MAX
 		*/
-		mul_div_floor(liquidity.into(), to.saturating_sub(from), U512::from(1) << 96u32)
+		mul_div_floor(liquidity.into(), to - from, U512::from(1) << 96u32)
 	}
 
 	fn asset_1_amount_delta_ceil(
@@ -905,7 +905,7 @@ impl PoolState {
 			Then (B - A) / (1<<96) <= u64::MAX (160 - 96 = 64)
 			Then L * ((B - A) / (1<<96)) <= u192::MAX < u256::MAX
 		*/
-		mul_div_ceil(liquidity.into(), to.saturating_sub(from), U512::from(1u32) << 96u32)
+		mul_div_ceil(liquidity.into(), to - from, U512::from(1u32) << 96u32)
 	}
 
 	fn next_sqrt_price_from_asset_0_input(
