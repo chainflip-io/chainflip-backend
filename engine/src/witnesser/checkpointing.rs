@@ -1,12 +1,10 @@
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use cf_primitives::EpochIndex;
 use serde::{Deserialize, Serialize};
 
 use crate::multisig::{ChainTag, PersistentKeyDB};
-
-const UPDATE_INTERVAL: Duration = Duration::from_secs(4);
 
 mod migrations;
 
@@ -18,7 +16,7 @@ pub struct WitnessedUntil {
 }
 
 pub enum StartCheckpointing<Chain: cf_chains::Chain> {
-	Started((Chain::ChainBlockNumber, tokio::sync::watch::Sender<WitnessedUntil>)),
+	Started((Chain::ChainBlockNumber, tokio::sync::mpsc::Sender<WitnessedUntil>)),
 	AlreadyWitnessedEpoch,
 }
 
@@ -75,28 +73,18 @@ where
 		return Ok(StartCheckpointing::AlreadyWitnessedEpoch)
 	}
 
-	let (witnessed_until_sender, witnessed_until_receiver) =
-		tokio::sync::watch::channel(witnessed_until.clone());
+	let (witnessed_until_sender, mut witnessed_until_receiver) = tokio::sync::mpsc::channel(10);
 
 	let mut prev_witnessed_until = witnessed_until.clone();
 
 	tokio::spawn(async move {
-		// Check every few seconds if the `witnessed_until` has changed and then update the database
-		loop {
-			tokio::time::sleep(UPDATE_INTERVAL).await;
-			if let Ok(changed) = witnessed_until_receiver.has_changed() {
-				if changed {
-					let changed_witnessed_until = witnessed_until_receiver.borrow().clone();
-					assert!(
-						changed_witnessed_until > prev_witnessed_until,
-						"Expected {changed_witnessed_until:?} > {prev_witnessed_until:?}."
-					);
-					db.update_checkpoint(chain_tag, &changed_witnessed_until);
-					prev_witnessed_until = changed_witnessed_until;
-				}
-			} else {
-				break
-			}
+		while let Some(new_witnessed_until) = witnessed_until_receiver.recv().await {
+			assert!(
+				new_witnessed_until > prev_witnessed_until,
+				"Expected {new_witnessed_until:?} > {prev_witnessed_until:?}."
+			);
+			db.update_checkpoint(chain_tag, &new_witnessed_until);
+			prev_witnessed_until = new_witnessed_until;
 		}
 	});
 
@@ -173,8 +161,7 @@ mod tests {
 
 					// Send the first witness at the block it told us to start at and then wait for
 					// the checkpointing to update
-					witnessed_until_sender.send(expected_witnesser_start.clone()).unwrap();
-					tokio::time::sleep(UPDATE_INTERVAL * 2).await;
+					witnessed_until_sender.send(expected_witnesser_start.clone()).await.unwrap();
 
 					// Check that the checkpointing task did not crash
 					assert!(!witnessed_until_sender.is_closed());
@@ -185,8 +172,11 @@ mod tests {
 							epoch_index: saved_witnessed_until.epoch_index,
 							block_number: start_witnessing_at,
 						})
+						.await
 						.unwrap();
-					tokio::time::sleep(UPDATE_INTERVAL * 2).await;
+
+					// Give the process time to panic
+					tokio::time::sleep(std::time::Duration::from_secs(4)).await;
 
 					// The checkpointing task should have panicked because we should never witness
 					// the same block twice
