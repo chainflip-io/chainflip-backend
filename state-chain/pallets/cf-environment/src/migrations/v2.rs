@@ -18,11 +18,24 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<sp_std::vec::Vec<u8>, &'static str> {
-		Ok(Default::default())
+		let before = super::v1::old::PolkadotNetworkMetadata::<T>::get();
+
+		Ok(before.encode())
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(_state: sp_std::vec::Vec<u8>) -> Result<(), &'static str> {
+	fn post_upgrade(state: sp_std::vec::Vec<u8>) -> Result<(), &'static str> {
+		let before_metadata = super::v1::old::PolkadotMetadata::decode(&mut &state[..]).unwrap();
+
+		let after_version = PolkadotRuntimeVersion::<T>::get();
+		assert_eq!(
+			before_metadata.spec_version, after_version.spec_version,
+			"Spec version mismatch"
+		);
+		assert_eq!(
+			before_metadata.transaction_version, after_version.transaction_version,
+			"Transaction version mismatch"
+		);
 		Ok(())
 	}
 }
