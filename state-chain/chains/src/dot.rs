@@ -39,26 +39,16 @@ pub type PolkadotCallHasher = BlakeTwo256;
 
 pub type PolkadotCallHash = <PolkadotCallHasher as Hash>::Output;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Default)]
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub struct RuntimeVersion {
 	pub spec_version: PolkadotSpecVersion,
 	pub transaction_version: PolkadotTransactionVersion,
 }
 
-impl Default for RuntimeVersion {
-	fn default() -> Self {
-		POLKADOT_RUNTIME_VERSION
-	}
-}
-
 // Westend testnet
 pub const WESTEND_RUNTIME_VERSION: RuntimeVersion =
 	RuntimeVersion { spec_version: 9340, transaction_version: 16 };
-
-// Polkadot mainnet
-pub const POLKADOT_RUNTIME_VERSION: RuntimeVersion =
-	RuntimeVersion { spec_version: 9320, transaction_version: 16 };
 
 pub type PolkadotSpecVersion = u32;
 pub type PolkadotTransactionVersion = u32;

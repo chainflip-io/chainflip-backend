@@ -1,5 +1,4 @@
 use crate::*;
-use cf_chains::dot::POLKADOT_RUNTIME_VERSION;
 use sp_std::marker::PhantomData;
 
 /// My first migration.
@@ -7,7 +6,16 @@ pub struct Migration<T: Config>(PhantomData<T>);
 
 mod old {
 
+	use cf_chains::dot::{PolkadotSpecVersion, PolkadotTransactionVersion};
+
 	use super::*;
+
+	#[derive(Debug, Encode, Decode, TypeInfo, Eq, PartialEq, Clone, Default)]
+	pub struct PolkadotMetadata {
+		pub spec_version: PolkadotSpecVersion,
+		pub transaction_version: PolkadotTransactionVersion,
+		pub genesis_hash: [u8; 32],
+	}
 
 	#[frame_support::storage_alias]
 	pub type SupportedEthAssets<T: Config> =
@@ -24,6 +32,10 @@ mod old {
 
 	#[frame_support::storage_alias]
 	pub type GlobalSignatureNonce<T: Config> = StorageValue<Pallet<T>, SignatureNonce, ValueQuery>;
+
+	#[frame_support::storage_alias]
+	pub type PolkadotNetworkMetadata<T: Config> =
+		StorageValue<Pallet<T>, PolkadotMetadata, ValueQuery>;
 }
 
 impl<T: Config> OnRuntimeUpgrade for Migration<T> {
@@ -41,7 +53,13 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 
 		// Polkadot metadata is initialized with the config that is used in the persistent polkadot
 		// testnet
-		PolkadotRuntimeVersion::<T>::set(POLKADOT_RUNTIME_VERSION);
+		old::PolkadotNetworkMetadata::<T>::put(old::PolkadotMetadata {
+			spec_version: 9320,
+			transaction_version: 16,
+			genesis_hash: hex_literal::hex!(
+				"5f551688012d25a98e729752169f509c6186af8079418c118844cc852b332bf5"
+			),
+		});
 
 		Weight::zero()
 	}
