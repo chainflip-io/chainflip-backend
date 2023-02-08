@@ -29,7 +29,7 @@ benchmarks! {
 	}
 	update_supported_eth_assets {
 		let origin = T::EnsureGovernance::successful_origin();
-		let asset = Asset::Eth;
+		let asset = Asset::Flip;
 		let address = [0; 20];
 		let call = Call::<T>::update_supported_eth_assets { asset, address };
 	}: { call.dispatch_bypass_filter(origin)? }
