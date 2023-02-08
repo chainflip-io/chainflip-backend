@@ -58,7 +58,10 @@ pub async fn start(
 						epoch.block_number,
 						db,
 						&logger,
-					) {
+					)
+					.await
+					.expect("Failed to start Dot witnesser checkpointing")
+					{
 						StartCheckpointing::Started((from_block, witnessed_until_sender)) =>
 							(from_block, witnessed_until_sender),
 						StartCheckpointing::AlreadyWitnessedEpoch =>
