@@ -4,17 +4,17 @@ use cf_primitives::{liquidity::AmmRange, AccountId, Asset, ForeignChainAddress, 
 use cf_traits::{mocks::system_state_info::MockSystemStateInfo, LiquidityPoolApi, SystemStateInfo};
 use frame_support::{assert_noop, assert_ok, error::BadOrigin};
 
-fn setup() -> (AmmRange, Asset) {
+fn provision_accounts() {
 	FreeBalances::<Test>::insert(AccountId::from(LP_ACCOUNT), Asset::Eth, 1_000_000);
 	FreeBalances::<Test>::insert(AccountId::from(LP_ACCOUNT), Asset::Usdc, 1_000_000);
-
-	(AmmRange::new(-100, 100), Asset::Eth)
 }
 
 #[test]
 fn only_liquidity_provider_can_manage_positions() {
 	new_test_ext().execute_with(|| {
-		let (range, asset) = setup();
+		provision_accounts();
+		let range = AmmRange::new(-100, 100);
+		let asset = Asset::Eth;
 
 		assert_noop!(
 			LiquidityProvider::update_position(
@@ -131,7 +131,9 @@ fn cannot_deposit_and_withdrawal_during_maintenance() {
 #[test]
 fn cannot_manage_positions_during_maintenance() {
 	new_test_ext().execute_with(|| {
-		let (range, asset) = setup();
+		provision_accounts();
+		let range = AmmRange::new(-100, 100);
+		let asset = Asset::Eth;
 
 		assert_ok!(LiquidityPools::new_pool(RuntimeOrigin::root(), asset, 0, 0,));
 
@@ -165,7 +167,9 @@ fn cannot_manage_positions_during_maintenance() {
 #[test]
 fn can_mint_liquidity() {
 	new_test_ext().execute_with(|| {
-		let (range, asset) = setup();
+		provision_accounts();
+		let range = AmmRange::new(-100, 100);
+		let asset = Asset::Eth;
 
 		assert_ok!(LiquidityPools::new_pool(RuntimeOrigin::root(), asset, 0, 0,));
 		System::reset_events();
@@ -256,7 +260,9 @@ fn can_mint_liquidity() {
 #[test]
 fn can_burn_liquidity() {
 	new_test_ext().execute_with(|| {
-		let (range, asset) = setup();
+		provision_accounts();
+		let range = AmmRange::new(-100, 100);
+		let asset = Asset::Eth;
 
 		assert_ok!(LiquidityPools::new_pool(RuntimeOrigin::root(), asset, 0, 0,));
 

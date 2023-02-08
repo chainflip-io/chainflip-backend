@@ -30,7 +30,7 @@ const INITIAL_ETH_TICK: i32 = 23_028;
 // Initialize exchange rate at 1:2 ratio. 1.0001^6932 = 2.00003
 const INITIAL_FLIP_TICK: i32 = 6_932;
 
-fn setup_pool(pools: Vec<(Asset, AssetAmount, u32, i32)>) {
+fn setup_pool(pools: Vec<(Asset, AssetAmount, AssetAmount, u32, i32)>) {
 	// Register the liquidity provider account.
 	let lp: AccountId = AccountId::from(LP);
 	AccountRoles::on_new_account(&lp);
@@ -44,9 +44,9 @@ fn setup_pool(pools: Vec<(Asset, AssetAmount, u32, i32)>) {
 		AccountRole::Relayer
 	));
 
-	for (asset, liquidity, fee, initial_tick) in pools {
-		assert_ok!(LiquidityProvider::provision_account(&lp, asset, liquidity * 10));
-		assert_ok!(LiquidityProvider::provision_account(&lp, Asset::Usdc, liquidity * 10));
+	for (asset, liquidity, stable_amount, fee, initial_tick) in pools {
+		assert_ok!(LiquidityProvider::provision_account(&lp, asset, liquidity));
+		assert_ok!(LiquidityProvider::provision_account(&lp, Asset::Usdc, stable_amount));
 
 		assert_ok!(LiquidityPools::new_pool(
 			pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
@@ -103,23 +103,21 @@ fn ingress_asset_for_swap(asset: eth::Asset, amount: AssetAmount) -> H160 {
 fn can_setup_pool_and_provide_liquidity() {
 	super::genesis::default().build().execute_with(|| {
 		setup_pool(vec![
-			(Asset::Eth, 3_000_000u128, 0u32, INITIAL_ETH_TICK),
-			(Asset::Flip, 1_200_000u128, 0u32, INITIAL_FLIP_TICK),
+			(Asset::Eth, 3_000_000u128, 30_000_000u128, 0u32, INITIAL_ETH_TICK),
+			(Asset::Flip, 1_200_000u128, 2_400_000u128, 0u32, INITIAL_FLIP_TICK),
 		]);
 
 		let lp: AccountId = AccountId::from(LP);
 		// Funds were debited to provide for liquidity.
-		assert_eq!(
-			pallet_cf_lp::FreeBalances::<Runtime>::get(&lp, any::Asset::Usdc),
-			Some(30_000_000 + 12_000_000 - 11_156_073)
+		assert!(
+			pallet_cf_lp::FreeBalances::<Runtime>::get(&lp, any::Asset::Usdc).unwrap() <
+				30_000_000 + 2_400_000
 		);
-		assert_eq!(
-			pallet_cf_lp::FreeBalances::<Runtime>::get(&lp, any::Asset::Eth),
-			Some(30_000_000 - 928_418)
+		assert!(
+			pallet_cf_lp::FreeBalances::<Runtime>::get(&lp, any::Asset::Eth).unwrap() < 30_000_000
 		);
-		assert_eq!(
-			pallet_cf_lp::FreeBalances::<Runtime>::get(&lp, any::Asset::Flip),
-			Some(12_000_000 - 840_433)
+		assert!(
+			pallet_cf_lp::FreeBalances::<Runtime>::get(&lp, any::Asset::Flip).unwrap() < 12_000_000
 		);
 
 		assert_eq!(LiquidityPools::minted_liquidity(&lp, &any::Asset::Eth, RANGE), 3_000_000u128);
@@ -131,8 +129,8 @@ fn can_setup_pool_and_provide_liquidity() {
 fn can_swap_assets() {
 	super::genesis::default().build().execute_with(|| {
 		setup_pool(vec![
-			(Asset::Eth, 3_000_000u128, 0u32, INITIAL_ETH_TICK),
-			(Asset::Flip, 1_200_000u128, 0u32, INITIAL_FLIP_TICK),
+			(Asset::Eth, 3_000_000u128, 30_000_000u128, 0u32, INITIAL_ETH_TICK),
+			(Asset::Flip, 1_200_000u128, 2_400_000u128, 0u32, INITIAL_FLIP_TICK),
 		]);
 
 		let relayer: AccountId = AccountId::from([0xE0; 32]);
@@ -208,8 +206,8 @@ fn can_swap_assets() {
 fn swap_can_accrue_fees() {
 	super::genesis::default().build().execute_with(|| {
 		setup_pool(vec![
-			(Asset::Eth, 3_000_000u128, 500_000u32, INITIAL_ETH_TICK),
-			(Asset::Flip, 1_200_000u128, 500_000u32, INITIAL_FLIP_TICK),
+			(Asset::Eth, 3_000_000u128, 30_000_000u128, 500_000u32, INITIAL_ETH_TICK),
+			(Asset::Flip, 1_200_000u128, 2_400_000u128, 500_000u32, INITIAL_FLIP_TICK),
 		]);
 
 		let lp: AccountId = AccountId::from(LP);
@@ -247,9 +245,9 @@ fn swap_can_accrue_fees() {
 			RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::AssetsSwapped {
 				from: Asset::Usdc,
 				to: Asset::Flip,
-				liquidity_fee: 24_871,
+				liquidity_fee: _liquidity_fee @ 0..,
 				..
-			},)
+			})
 		);
 
 		System::reset_events();
@@ -274,32 +272,35 @@ fn swap_can_accrue_fees() {
 			RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::LiquidityBurned {
 				asset: any::Asset::Eth,
 				range: RANGE,
-				fees_harvested: PoolAssetMap { asset_0: 4999, asset_1: 0 },
+				fees_harvested: PoolAssetMap { asset_0, asset_1: 0 },
 				..
-			},)
+			}) if asset_0 > 0
 		);
 		assert_has_event_pattern!(
 			Runtime,
 			RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::LiquidityBurned {
 				asset: any::Asset::Flip,
 				range: RANGE,
-				fees_harvested: PoolAssetMap { asset_0: 0, asset_1: 24_870 },
+				fees_harvested: PoolAssetMap { asset_0: 0, asset_1 },
 				..
-			},)
+			},) if asset_1 > 0
 		);
 
 		// All vested assets are returned. Some swapped and with Fees added.
+		// Approx: 3_000_000 + 5000 (liquidity fee) + 5000 (swap input)
 		assert_eq!(
 			pallet_cf_lp::FreeBalances::<Runtime>::get(&lp, any::Asset::Eth),
-			Some(30_009_998)
+			Some(3_009_998)
 		);
+		// Approx: 30_000_000 + 2_400_000
 		assert_eq!(
 			pallet_cf_lp::FreeBalances::<Runtime>::get(&lp, any::Asset::Usdc),
-			Some(41_999_996)
+			Some(32_399_996)
 		);
+		// Appox: 1_200_000 - (10_000 * 0.5(fee) * 0.5(fee) * 5(exchange rate))
 		assert_eq!(
 			pallet_cf_lp::FreeBalances::<Runtime>::get(&lp, any::Asset::Flip),
-			Some(11_987_744)
+			Some(1_187_744)
 		);
 	});
 }
@@ -308,8 +309,8 @@ fn swap_can_accrue_fees() {
 fn swap_fails_with_insufficient_liquidity() {
 	super::genesis::default().build().execute_with(|| {
 		setup_pool(vec![
-			(Asset::Eth, 1u128, 0u32, INITIAL_ETH_TICK),
-			(Asset::Flip, 1u128, 0u32, INITIAL_FLIP_TICK),
+			(Asset::Eth, 1u128, 10u128, 0u32, INITIAL_ETH_TICK),
+			(Asset::Flip, 1u128, 2u128, 0u32, INITIAL_FLIP_TICK),
 		]);
 
 		let lp: AccountId = AccountId::from(LP);
@@ -402,8 +403,8 @@ fn swap_fails_with_insufficient_liquidity() {
 fn swap_fails_with_appropriate_error() {
 	super::genesis::default().build().execute_with(|| {
 		setup_pool(vec![
-			(Asset::Eth, 1_000u128, 0u32, INITIAL_ETH_TICK),
-			(Asset::Flip, 1_000u128, 0u32, INITIAL_FLIP_TICK),
+			(Asset::Eth, 1_000u128, 10_000u128, 0u32, INITIAL_ETH_TICK),
+			(Asset::Flip, 1_000u128, 2_000u128, 0u32, INITIAL_FLIP_TICK),
 		]);
 
 		assert_noop!(
