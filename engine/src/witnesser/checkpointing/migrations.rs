@@ -150,7 +150,10 @@ mod tests {
 			.load_checkpoint(ChainTag::Ethereum)
 			.unwrap()
 			.expect("Migration should have saved to db");
-		assert_eq!(&witnessed_until, expected_witness_until_list.iter().nth(1).unwrap().1);
+		assert_eq!(
+			&witnessed_until,
+			expected_witness_until_list.get(LEGACY_FILE_NAMES[1]).unwrap()
+		);
 
 		// Check that the legacy files were deleted (with a small delay to allow for file delete)
 		std::thread::sleep(std::time::Duration::from_millis(50));
