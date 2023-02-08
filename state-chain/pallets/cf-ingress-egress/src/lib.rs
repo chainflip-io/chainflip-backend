@@ -482,9 +482,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 	/// Create a new intent address for the given asset and registers it with the given action.
 	fn ingress_intent_creation(
-		asset: TargetChainAsset<T, I>,
+		ingress_asset: TargetChainAsset<T, I>,
 		intent_action: IntentAction<T::AccountId>,
-	) -> (IntentId, TargetChainAccount<T, I>) {
+	) -> Result<(IntentId, TargetChainAccount<T, I>), DispatchError> {
 		let ttl = T::TTL::get();
 		let expires_in = ttl.saturating_add(T::TimeSource::now().as_secs());
 		let (intent_id, address) =
@@ -493,23 +493,18 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			} else {
 				let next_intent_id = IntentIdCounter::<T, I>::get()
 					.checked_add(1)
-					.ok_or(Error::<T, I>::IntentIdsExhausted)
-					.unwrap();
+					.ok_or(Error::<T, I>::IntentIdsExhausted)?;
 				let new_address: TargetChainAccount<T, I> =
-					T::AddressDerivation::generate_address(asset, next_intent_id).unwrap();
+					T::AddressDerivation::generate_address(ingress_asset, next_intent_id)?;
 				IntentIdCounter::<T, I>::put(next_intent_id);
 				(next_intent_id, new_address)
 			};
 
 		IntentExpiries::<T, I>::append(expires_in, (intent_id, address.clone()));
 
-		// Generated address guarantees the right address type is returned.
-		IntentIngressDetails::<T, I>::insert(
-			&address,
-			IngressDetails { intent_id, ingress_asset: asset },
-		);
+		IntentIngressDetails::<T, I>::insert(&address, IngressDetails { intent_id, ingress_asset });
 		IntentActions::<T, I>::insert(&address, intent_action);
-		(intent_id, address)
+		Ok((intent_id, address))
 	}
 }
 
@@ -548,7 +543,7 @@ impl<T: Config<I>, I: 'static> IngressApi<T::TargetChain> for Pallet<T, I> {
 		let (intent_id, ingress_address) = Self::ingress_intent_creation(
 			ingress_asset,
 			IntentAction::LiquidityProvision { lp_account },
-		);
+		)?;
 
 		Self::deposit_event(Event::StartWitnessing {
 			ingress_address: ingress_address.clone(),
@@ -569,7 +564,7 @@ impl<T: Config<I>, I: 'static> IngressApi<T::TargetChain> for Pallet<T, I> {
 		let (intent_id, ingress_address) = Self::ingress_intent_creation(
 			ingress_asset,
 			IntentAction::Swap { egress_address, egress_asset, relayer_commission_bps, relayer_id },
-		);
+		)?;
 
 		Self::deposit_event(Event::StartWitnessing {
 			ingress_address: ingress_address.clone(),
