@@ -1,5 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
+use anyhow::{Context, Result};
 use cf_primitives::EpochIndex;
 use serde::{Deserialize, Serialize};
 
@@ -29,20 +30,28 @@ pub async fn get_witnesser_start_block_with_checkpointing<Chain: cf_chains::Chai
 	epoch_start_block_number: Chain::ChainBlockNumber,
 	db: Arc<PersistentKeyDB>,
 	logger: &slog::Logger,
-) -> StartCheckpointing<Chain>
+) -> Result<StartCheckpointing<Chain>>
 where
 	<<Chain as cf_chains::Chain>::ChainBlockNumber as TryFrom<u64>>::Error: std::fmt::Debug,
 {
-	if let Err(e) =
-		migrations::run_migrations(chain_tag, db.clone(), &std::env::current_dir().unwrap(), logger)
-			.await
-	{
-		slog::error!(logger, "Failed to preform witnesser checkpointing migrations: {e}");
+	let loaded_checkpoint = db.load_checkpoint(chain_tag)?;
+
+	// Eth witnessers are the only ones that used the legacy checkpointing files.
+	// Only go ahead with the migration if no checkpoint is found in the db.
+	if matches!(chain_tag, ChainTag::Ethereum) && loaded_checkpoint.is_none() {
+		migrations::run_eth_migration(
+			chain_tag,
+			db.clone(),
+			&std::env::current_dir().unwrap(),
+			logger,
+		)
+		.await
+		.with_context(|| "Failed to perform Eth witnesser checkpointing migration")?
 	}
 
-	// Load the checkpoint or use the default if none is found
-	let witnessed_until = match db.load_checkpoint(chain_tag) {
-		Ok(Some(checkpoint)) => {
+	// Use the loaded checkpoint or the default if none was found
+	let witnessed_until = match loaded_checkpoint {
+		Some(checkpoint) => {
 			slog::info!(
 				logger,
 				"Previous {chain_tag} witnesser instance witnessed until epoch {}, block {}",
@@ -51,18 +60,10 @@ where
 			);
 			checkpoint
 		},
-		Ok(None) => {
+		None => {
 			slog::info!(
 				logger,
 				"No {chain_tag} witnesser checkpoint found, using default of {:?}",
-				WitnessedUntil::default()
-			);
-			WitnessedUntil::default()
-		},
-		Err(e) => {
-			slog::error!(
-				logger,
-				"Failed to load {chain_tag} witnesser checkpoint, using default of {:?}: {e}",
 				WitnessedUntil::default()
 			);
 			WitnessedUntil::default()
@@ -71,7 +72,7 @@ where
 
 	// Don't witness epochs that we've already witnessed
 	if epoch_start_index < witnessed_until.epoch_index {
-		return StartCheckpointing::AlreadyWitnessedEpoch
+		return Ok(StartCheckpointing::AlreadyWitnessedEpoch)
 	}
 
 	let (witnessed_until_sender, witnessed_until_receiver) =
@@ -114,7 +115,7 @@ where
 		epoch_start_block_number
 	};
 
-	StartCheckpointing::Started((start_witnessing_from_block, witnessed_until_sender))
+	Ok(StartCheckpointing::Started((start_witnessing_from_block, witnessed_until_sender)))
 }
 
 #[cfg(test)]
@@ -160,6 +161,7 @@ mod tests {
 				&logger,
 			)
 			.await
+			.unwrap()
 			{
 				StartCheckpointing::AlreadyWitnessedEpoch => panic!(
 					"Should not return `AlreadyWitnessedEpoch` if we start at the same epoch"
@@ -231,7 +233,8 @@ mod tests {
 				Arc::new(db),
 				&logger,
 			)
-			.await,
+			.await
+			.unwrap(),
 			StartCheckpointing::AlreadyWitnessedEpoch
 		));
 	}

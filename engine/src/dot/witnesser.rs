@@ -305,7 +305,9 @@ where
 					epoch_start.block_number,
 					db,
 					&logger
-				).await {
+				).await
+				.expect("Failed to start Eth witnesser checkpointing") 
+				{
 					StartCheckpointing::Started((from_block, witnessed_until_sender)) =>
 						(from_block, witnessed_until_sender),
 					StartCheckpointing::AlreadyWitnessedEpoch =>

@@ -12,41 +12,39 @@ use super::WitnessedUntil;
 
 const LEGACY_FILE_NAMES: [&str; 2] = ["StakeManager", "KeyManager"];
 
-/// Attempt to migrate from legacy witnesser checkpointing files to db if no checkpoint is found in
-/// the db
-pub async fn run_migrations(
+/// Migrate the legacy Eth witnesser checkpointing files to db
+pub async fn run_eth_migration(
 	chain_tag: ChainTag,
 	db: Arc<PersistentKeyDB>,
 	legacy_files_path: &Path,
 	logger: &slog::Logger,
 ) -> Result<()> {
 	// Eth witnessers are the only ones that used the legacy checkpointing files.
-	// Only go ahead with the migration if no checkpoint is found in the db.
-	if matches!(chain_tag, ChainTag::Ethereum) && db.load_checkpoint(chain_tag)?.is_none() {
-		// Check for a legacy checkpoint and save it to the db
-		if let Some(legacy_witness_until) =
-			futures::future::join_all(LEGACY_FILE_NAMES.iter().map(|name| {
-				Box::pin(load_from_legacy_checkpoint_file(legacy_files_path.join(name), logger))
-			}))
-			.await
-			.into_iter()
-			.collect::<Option<Vec<WitnessedUntil>>>()
-			.and_then(|checkpoints| {
-				checkpoints
-					.into_iter()
-					.sorted_by_key(|witnessed_until| witnessed_until.block_number)
-					.next()
-			}) {
-			slog::info!(
-				logger,
-				"Migrating legacy witnesser {chain_tag} checkpoint of {:?} to db",
-				legacy_witness_until
-			);
-			db.update_checkpoint(chain_tag, &legacy_witness_until);
+	assert!(matches!(chain_tag, ChainTag::Ethereum));
 
-			if let Err(e) = delete_legacy_checkpointing_files(legacy_files_path) {
-				slog::error!(logger, "Failed to delete legacy checkpointing files: {e}");
-			}
+	// Check for a legacy checkpoint and save it to the db
+	if let Some(legacy_witness_until) =
+		futures::future::join_all(LEGACY_FILE_NAMES.iter().map(|name| {
+			Box::pin(load_from_legacy_checkpoint_file(legacy_files_path.join(name), logger))
+		}))
+		.await
+		.into_iter()
+		.collect::<Option<Vec<WitnessedUntil>>>()
+		.and_then(|checkpoints| {
+			checkpoints
+				.into_iter()
+				.sorted_by_key(|witnessed_until| witnessed_until.block_number)
+				.next()
+		}) {
+		slog::info!(
+			logger,
+			"Migrating legacy witnesser {chain_tag} checkpoint of {:?} to db",
+			legacy_witness_until
+		);
+		db.update_checkpoint(chain_tag, &legacy_witness_until);
+
+		if let Err(e) = delete_legacy_checkpointing_files(legacy_files_path) {
+			slog::error!(logger, "Failed to delete legacy checkpointing files: {e}");
 		}
 	}
 
@@ -140,7 +138,9 @@ mod tests {
 		// Run the migration
 		{
 			let db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, None, &logger).unwrap();
-			assert_ok!(run_migrations(ChainTag::Ethereum, Arc::new(db), &temp_path, &logger).await);
+			assert_ok!(
+				run_eth_migration(ChainTag::Ethereum, Arc::new(db), &temp_path, &logger).await
+			);
 		}
 
 		// Load the checkpoint from the db and make sure it is the one with the lowest
@@ -150,8 +150,7 @@ mod tests {
 			.load_checkpoint(ChainTag::Ethereum)
 			.unwrap()
 			.expect("Migration should have saved to db");
-		assert_eq!(witnessed_until.block_number, 1);
-		assert_eq!(witnessed_until.epoch_index, 9);
+		assert_eq!(&witnessed_until, expected_witness_until_list.iter().nth(1).unwrap().1);
 
 		// Check that the legacy files were deleted (with a small delay to allow for file delete)
 		std::thread::sleep(std::time::Duration::from_millis(50));
