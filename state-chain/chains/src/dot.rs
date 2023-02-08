@@ -47,7 +47,7 @@ pub struct RuntimeVersion {
 }
 
 // Westend testnet
-pub const WESTEND_RUNTIME_VERSION: RuntimeVersion =
+pub const TEST_RUNTIME_VERSION: RuntimeVersion =
 	RuntimeVersion { spec_version: 9340, transaction_version: 16 };
 
 pub type PolkadotSpecVersion = u32;
@@ -808,7 +808,7 @@ mod test_polkadot_extrinsics {
 		println!("Encoded Call: 0x{}", hex::encode(test_runtime_call.encode()));
 
 		let mut extrinsic_handler = PolkadotExtrinsicBuilder::new_empty(
-			PolkadotReplayProtection::new(12, 0, WESTEND_RUNTIME_VERSION, Default::default()),
+			PolkadotReplayProtection::new(12, 0, TEST_RUNTIME_VERSION, Default::default()),
 			account_id_1,
 		);
 		extrinsic_handler.insert_extrinsic_call(test_runtime_call);

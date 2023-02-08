@@ -82,7 +82,7 @@ impl ApiCall<Polkadot> for CreateAnonymousVault {
 mod test_create_anonymous_vault {
 
 	use super::*;
-	use crate::dot::{sr25519::Pair, NONCE_2, RAW_SEED_2, WESTEND_RUNTIME_VERSION};
+	use crate::dot::{sr25519::Pair, NONCE_2, RAW_SEED_2, TEST_RUNTIME_VERSION};
 	use sp_core::{crypto::Pair as TraitPair, Hasher};
 	use sp_runtime::traits::BlakeTwo256;
 
@@ -92,7 +92,7 @@ mod test_create_anonymous_vault {
 		let keypair_proxy: Pair = <Pair as TraitPair>::from_seed(&RAW_SEED_2);
 
 		let create_anonymous_vault = CreateAnonymousVault::new_unsigned(
-			PolkadotReplayProtection::new(NONCE_2, 0, WESTEND_RUNTIME_VERSION, Default::default()),
+			PolkadotReplayProtection::new(NONCE_2, 0, TEST_RUNTIME_VERSION, Default::default()),
 			PolkadotPublicKey(keypair_proxy.public()),
 		);
 

@@ -1,6 +1,6 @@
 use crate::{self as pallet_cf_environment, cfe};
 use cf_chains::{
-	dot::{api::CreatePolkadotVault, PolkadotHash, WESTEND_RUNTIME_VERSION},
+	dot::{api::CreatePolkadotVault, PolkadotHash, TEST_RUNTIME_VERSION},
 	ApiCall, Chain, ChainCrypto, Polkadot,
 };
 
@@ -165,7 +165,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			flip_token_address: [0u8; 20],
 			eth_usdc_address: [0x2; 20],
 			polkadot_vault_account_id: None,
-			polkadot_runtime_version: WESTEND_RUNTIME_VERSION,
+			polkadot_runtime_version: TEST_RUNTIME_VERSION,
 		},
 	};
 
