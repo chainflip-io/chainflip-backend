@@ -9,6 +9,7 @@ const UPDATE_INTERVAL: Duration = Duration::from_secs(4);
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub struct WitnessedUntil {
+	// epoch_index must be the first element because of `Ord`
 	pub epoch_index: EpochIndex,
 	pub block_number: u64,
 }
@@ -221,5 +222,25 @@ mod tests {
 			),
 			StartCheckpointing::AlreadyWitnessedEpoch
 		));
+	}
+
+	#[test]
+	fn test_witnessed_until_ord() {
+		assert!(
+			WitnessedUntil { epoch_index: 2, block_number: 9 } >
+				WitnessedUntil { epoch_index: 1, block_number: 10 }
+		);
+		assert!(
+			WitnessedUntil { epoch_index: 2, block_number: 11 } >
+				WitnessedUntil { epoch_index: 2, block_number: 10 }
+		);
+		assert!(
+			WitnessedUntil { epoch_index: 2, block_number: 11 } >
+				WitnessedUntil { epoch_index: 1, block_number: 10 }
+		);
+		assert!(
+			WitnessedUntil { epoch_index: 1, block_number: 1 } ==
+				WitnessedUntil { epoch_index: 1, block_number: 1 }
+		);
 	}
 }
