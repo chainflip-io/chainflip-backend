@@ -1,10 +1,9 @@
 use crate::*;
 use sp_std::marker::PhantomData;
 
-/// My first migration.
 pub struct Migration<T: Config>(PhantomData<T>);
 
-mod old {
+pub mod old {
 
 	use cf_chains::dot::{PolkadotSpecVersion, PolkadotTransactionVersion};
 
