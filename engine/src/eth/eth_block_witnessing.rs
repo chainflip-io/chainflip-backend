@@ -126,6 +126,7 @@ pub async fn start(
 							epoch_index: epoch.epoch_index,
 							block_number: block.block_number.as_u64(),
 						})
+						.await
 						.unwrap();
 				}
 

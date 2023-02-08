@@ -401,6 +401,8 @@ where
 						break
 					}
 
+					slog::trace!(logger, "Checking block: {block_number}, with hash: {block_hash:?} for interesting events");
+
 					let (
 						interesting_indices,
 						ingress_witnesses,
@@ -509,6 +511,7 @@ where
 						epoch_index: epoch_start.epoch_index,
 						block_number: block_number as u64,
 					})
+					.await
 					.unwrap();
 				}
 				Ok((monitored_ingress_addresses, ingress_address_receiver, monitored_signatures, signature_receiver))
@@ -732,7 +735,7 @@ mod tests {
 	#[ignore = "This test is helpful for local testing. Requires connection to westend"]
 	#[tokio::test]
 	async fn start_witnessing() {
-		let url = "url";
+		let url = "ws://localhost:9944";
 
 		let logger = new_test_logger();
 
@@ -781,8 +784,8 @@ mod tests {
 		// proxy type governance
 		epoch_starts_sender
 			.broadcast(EpochStart {
-				epoch_index: 3,
-				block_number: 534,
+				epoch_index: 1,
+				block_number: 0,
 				current: true,
 				participant: true,
 				data: dot::EpochStartData {
