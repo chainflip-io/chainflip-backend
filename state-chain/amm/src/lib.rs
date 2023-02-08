@@ -431,11 +431,7 @@ impl PoolState {
 			.positions
 			.get(&(lp.clone(), lower_tick, upper_tick))
 			.cloned()
-			.unwrap_or(
-				Position{
-					liquidity: 0,
-					last_fee_growth_inside: Default::default(),
-			});
+			.unwrap_or(Position { liquidity: 0, last_fee_growth_inside: Default::default() });
 
 		let tick_info_with_updated_gross_liquidity = |tick| {
 			let mut tick_info = self.liquidity_map.get(&tick).cloned().unwrap_or_else(|| {
@@ -468,7 +464,7 @@ impl PoolState {
 			.checked_add_unsigned(minted_liquidity)
 			.expect("Cannot overflow as liquidity_delta.abs() is bounded to <= MAX_TICK_GROSS_LIQUIDITY");
 		let mut upper_info = tick_info_with_updated_gross_liquidity(upper_tick)?;
-		
+
 		upper_info.liquidity_delta = upper_info
 			.liquidity_delta
 			.checked_sub_unsigned(minted_liquidity)
@@ -516,8 +512,14 @@ impl PoolState {
 		{
 			debug_assert!(position.liquidity != 0);
 			if burnt_liquidity <= position.liquidity {
-				let mut lower_info = *self.liquidity_map.get(&lower_tick).expect("lower_tick is guaranteed to exist.");
-				let mut upper_info = *self.liquidity_map.get(&upper_tick).expect("upper_tick is guaranteed to exist.");
+				let mut lower_info = *self
+					.liquidity_map
+					.get(&lower_tick)
+					.expect("lower_tick is guaranteed to exist.");
+				let mut upper_info = *self
+					.liquidity_map
+					.get(&upper_tick)
+					.expect("upper_tick is guaranteed to exist.");
 
 				if lower_info.liquidity_gross < burnt_liquidity ||
 					upper_info.liquidity_gross < burnt_liquidity
@@ -724,7 +726,10 @@ impl PoolState {
 					total_fee_paid = total_fee_paid.saturating_add(fees);
 
 					let liquidity_delta = SD::liquidity_delta_on_crossing_tick(target_info);
-					self.current_liquidity = self.current_liquidity.checked_add_signed(liquidity_delta).expect("Addition is guaranteed to never overflow, see test `max_liquidity`");
+					self.current_liquidity =
+						self.current_liquidity.checked_add_signed(liquidity_delta).expect(
+							"Addition is guaranteed to never overflow, see test `max_liquidity`",
+						);
 				} else {
 					let amount_in = SD::input_amount_delta_ceil(
 						self.current_sqrt_price,
@@ -840,11 +845,7 @@ impl PoolState {
 			Then A * B >= B and B - A < B
 			Then A * B > B - A
 		*/
-		mul_div_floor(
-			U256::from(liquidity) << 96u32,
-			to - from,
-			U256::full_mul(to, from),
-		)
+		mul_div_floor(U256::from(liquidity) << 96u32, to - from, U256::full_mul(to, from))
 	}
 
 	fn asset_0_amount_delta_ceil(
@@ -861,11 +862,7 @@ impl PoolState {
 			Then A * B >= B and B - A < B
 			Then A * B > B - A
 		*/
-		mul_div_ceil(
-			U256::from(liquidity) << 96u32,
-			to - from,
-			U256::full_mul(to, from),
-		)
+		mul_div_ceil(U256::from(liquidity) << 96u32, to - from, U256::full_mul(to, from))
 	}
 
 	fn asset_1_amount_delta_floor(
@@ -1120,17 +1117,22 @@ impl PoolState {
 		)
 		.0;
 
-		let tick_low: Tick = (U256::overflowing_sub(
-			log_sqrt10001_q127f128,
-			U256::from(3402992956809132418596140100660247210u128),
+		let tick_low = u128::try_from(
+			U256::overflowing_sub(
+				log_sqrt10001_q127f128,
+				U256::from(3402992956809132418596140100660247210u128),
+			)
+			.0 >> 128u8,
 		)
-		.0 >> 128u8)
-			.try_into().expect("Right shifts ensures the top bits are 0");
-		let tick_high: Tick = (U256::overflowing_add(
-			log_sqrt10001_q127f128,
-			U256::from(291339464771989622907027621153398088495u128),
+		.expect("Right shifts ensures the top bits are 0") as Tick;
+		let tick_high = u128::try_from(
+			U256::overflowing_add(
+				log_sqrt10001_q127f128,
+				U256::from(291339464771989622907027621153398088495u128),
+			)
+			.0 >> 128u8,
 		)
-		.0 >> 128u8).try_into().expect("Right shifts ensures the top bits are 0");
+		.expect("Right shifts ensures the top bits are 0") as Tick;
 
 		if tick_low == tick_high {
 			tick_low
