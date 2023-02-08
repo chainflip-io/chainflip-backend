@@ -284,17 +284,37 @@ where
 		epoch_starts_receiver,
 		|_epoch_start| true,
 		(monitored_ingress_addresses, ingress_address_receiver, monitored_signatures, signature_receiver),
-		move |end_witnessing_signal,
-		    epoch_start,
-		    (mut monitored_ingress_addresses, mut ingress_address_receiver, mut monitored_signatures, mut signature_receiver),
-		    logger| {
+		move |
+			end_witnessing_signal,
+			epoch_start,
+			(
+				mut monitored_ingress_addresses,
+				mut ingress_address_receiver,
+				mut monitored_signatures,
+				mut signature_receiver
+			),
+			logger
+		| {
 			let dot_client = dot_client.clone();
 			let state_chain_client = state_chain_client.clone();
 			let db = db.clone();
 			async move {
-				let (from_block, witnessed_until_sender) = match get_witnesser_start_block_with_checkpointing(ChainTag::Polkadot, &epoch_start, db, &logger){
-					StartCheckpointing::Started((from_block, witnessed_until_sender)) => (from_block, witnessed_until_sender),
-					StartCheckpointing::AlreadyWitnessedEpoch => return Ok((monitored_ingress_addresses, ingress_address_receiver, monitored_signatures, signature_receiver)),
+				let (from_block, witnessed_until_sender) = match get_witnesser_start_block_with_checkpointing::<Polkadot>(
+					ChainTag::Polkadot,
+					epoch_start.epoch_index,
+					epoch_start.block_number,
+					db,
+					&logger
+				) {
+					StartCheckpointing::Started((from_block, witnessed_until_sender)) =>
+						(from_block, witnessed_until_sender),
+					StartCheckpointing::AlreadyWitnessedEpoch =>
+						return Ok((
+							monitored_ingress_addresses,
+							ingress_address_receiver,
+							monitored_signatures,
+							signature_receiver
+						)),
 				};
 
 				let safe_head_stream =
@@ -330,7 +350,11 @@ where
 							// the latest metadata and always uses it.
 							// https://github.com/chainflip-io/chainflip-backend/issues/2542
 							async move {
-								Result::<_, anyhow::Error>::Ok((mini_header.block_hash, mini_header.block_number, dot_client.events(mini_header.block_hash).await?))
+								Result::<_, anyhow::Error>::Ok((
+									mini_header.block_hash,
+									mini_header.block_number,
+									dot_client.events(mini_header.block_hash).await?
+								))
 							}
 						}),
 						&logger,

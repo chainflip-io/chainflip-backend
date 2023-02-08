@@ -52,9 +52,10 @@ pub async fn start(
 			let db = db.clone();
 			async move {
 				let (from_block, witnessed_until_sender) =
-					match get_witnesser_start_block_with_checkpointing(
+					match get_witnesser_start_block_with_checkpointing::<cf_chains::Ethereum>(
 						ChainTag::Ethereum,
-						&epoch,
+						epoch.epoch_index,
+						epoch.block_number,
 						db,
 						&logger,
 					) {
