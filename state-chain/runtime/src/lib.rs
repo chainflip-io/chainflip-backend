@@ -172,7 +172,7 @@ impl pallet_cf_validator::Config for Runtime {
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type MissedAuthorshipSlots = chainflip::MissedAuraSlots;
 	type BidderProvider = pallet_cf_staking::Pallet<Self>;
-	type AuctionQualification = (
+	type KeygenQualification = (
 		Reputation,
 		pallet_cf_validator::PeerMapping<Self>,
 		SessionKeysRegistered<
@@ -823,7 +823,7 @@ impl_runtime_apis! {
 			let is_online = Reputation::current_network_state().online.contains(&account_id);
 			let is_current_backup = pallet_cf_validator::Backups::<Runtime>::get().contains_key(&account_id);
 			let key_holder_epochs = pallet_cf_validator::HistoricalActiveEpochs::<Runtime>::get(&account_id);
-			let is_qualified = <<Runtime as pallet_cf_validator::Config>::AuctionQualification as QualifyNode>::is_qualified(&account_id);
+			let is_qualified = <<Runtime as pallet_cf_validator::Config>::KeygenQualification as QualifyNode>::is_qualified(&account_id);
 			let is_current_authority = pallet_cf_validator::CurrentAuthorities::<Runtime>::get().contains(&account_id);
 			let is_bidding = pallet_cf_staking::ActiveBidder::<Runtime>::get(&account_id);
 			RuntimeApiAccountInfoV2 {

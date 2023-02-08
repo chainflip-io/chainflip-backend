@@ -3,7 +3,7 @@ use std::{
 	sync::Arc,
 };
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use itertools::Itertools;
 
 use crate::multisig::{ChainTag, PersistentKeyDB};
@@ -65,7 +65,7 @@ async fn load_from_legacy_checkpoint_file(
 				std::fs::read_to_string(file_path)
 					.map_err(anyhow::Error::new)
 					.and_then(|string| {
-					serde_json::from_str::<WitnessedUntil>(&string).map_err(anyhow::Error::new)
+						serde_json::from_str::<WitnessedUntil>(&string).map_err(anyhow::Error::new)
 					})
 					.map_err(|e| {
 						slog::error!(
