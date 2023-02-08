@@ -38,6 +38,14 @@ for pallet in $pallets ; do
     --steps="$STEPS" \
     --repeat="$REPEAT" \
     --template="$TEMPLATE"
+
+    if [ $? -eq 0 ]
+    then
+        echo "Benchmark for $pallet_fmt was successful!"
+    else
+        echo "Benchmark for $pallet_fmt failed!"
+        exit 1
+    fi
 done
 
-echo "Benchmarking was successful!"
+echo "Benchmarking for all pallets was successful!"
