@@ -43,6 +43,13 @@ macro_rules! assert_has_event_pattern {
 	};
 }
 
-		assert!(System::events().iter().any(|record| matches!(record.event, $( $pattern )|+ $( if $guard )?)))
+#[macro_export]
+macro_rules! extract_from_event {
+	( $pattern:pat => $bind:expr ) => {
+		System::events()
+			.into_iter()
+			.filter_map(|record| if let $pattern = record.event { Some($bind) } else { None })
+			.next()
+			.expect(&format!("No event that matches {}", stringify!($pattern))[..])
 	};
 }
