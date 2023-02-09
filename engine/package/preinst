@@ -7,9 +7,20 @@ if [ "$1" != "upgrade" ]; then
   exit 0
 fi
 
+CF_BIN_ROOT=$(which chainflip-engine | xargs dirname)
+
+CF_VERSION=$(chainflip-engine --version)
+MAJOR=$(echo "$CF_VERSION" | awk -F. '{print $1}')
+MINOR=$(echo "$CF_VERSION" | awk -F. '{print $2}')
+
+VERSIONED_DIR="$CF_BIN_ROOT/${MAJOR}.${MINOR}.${PATCH}"
+mkdir $VERSIONED_DIR
+
+mv "$CF_BIN_ROOT/chainflip-engine" "$VERSIONED_DIR/chainflip-engine"
+
 echo "Beginning setup and migration of engine config"
 
-ENGINE_CONFIG_LOCATION=$(find / -name "Default.toml")
+ENGINE_CONFIG_LOCATION=$(grep -srl --include "Default.toml" "state_chain" /etc/* ~)
 if [ -z "$ENGINE_CONFIG_LOCATION" ]; then
   echo "No Default.toml file found. Exiting"
   exit 0
@@ -30,7 +41,7 @@ echo "Updating $UPDATED_ENGINE_CONFIG_LOCATION to include Polkadot configuration
 cat <<EOT >> "$UPDATED_ENGINE_CONFIG_LOCATION"
 
 [dot]
-ws_node_endpoint = "https://perseverance-polkadot.chainflip.io"
+ws_node_endpoint = "https://pdot.chainflip.io"
 EOT
 
 echo "Migration completed successfully"
