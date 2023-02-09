@@ -6,7 +6,7 @@ Restart=always
 RestartSec=30
 Type=simple
 
-ExecStart=/usr/bin/chainflip-engine \
+ExecStart=/etc/chainflip/start-engine.sh \
   --config-path /etc/chainflip/config/Default.toml
 
 StandardOutput=append:/var/log/chainflip-engine.log
