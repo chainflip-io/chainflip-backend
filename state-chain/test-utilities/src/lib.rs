@@ -33,8 +33,15 @@ macro_rules! assert_event_sequence {
 
 #[macro_export]
 macro_rules! assert_has_event_pattern {
-	($runtime:ty, $( $pattern:pat_param )|+ $( if $guard: expr )?) => {
-		let events = frame_system::Pallet::<$runtime>::events();
+	($( $pattern:pat_param )|+ $( if $guard: expr )? ) => {
+		assert!(
+			System::events().iter().any(|record| matches!(record.event, $( $pattern )|+ $( if $guard )?)),
+			"No event that matches {}. Available events: {:#?}",
+			stringify!($( $pattern )|+ $( if $guard )?),
+			System::events().into_iter().map(|record| record.event).collect::<Vec<_>>()
+		)
+	};
+}
 
 		assert!(System::events().iter().any(|record| matches!(record.event, $( $pattern )|+ $( if $guard )?)))
 	};
