@@ -121,6 +121,7 @@ impl CryptoScheme for PolkadotSigning {
 
 	fn build_response(
 		nonce: <Self::Point as super::ECPoint>::Scalar,
+		_nonce_commitment: Self::Point,
 		private_key: &<Self::Point as super::ECPoint>::Scalar,
 		challenge: <Self::Point as super::ECPoint>::Scalar,
 	) -> <Self::Point as super::ECPoint>::Scalar {
@@ -159,7 +160,7 @@ fn signature_should_be_valid() {
 
 		let challenge = PolkadotSigning::build_challenge(public_key, nonce_commitment, &payload);
 
-		let response = PolkadotSigning::build_response(nonce, &secret_key, challenge);
+		let response = PolkadotSigning::build_response(nonce, nonce_commitment, &secret_key, challenge);
 
 		PolkadotSigning::build_signature(response, nonce_commitment)
 	};

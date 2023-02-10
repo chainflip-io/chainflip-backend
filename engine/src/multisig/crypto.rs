@@ -4,6 +4,7 @@ mod curve25519;
 pub mod ed25519;
 pub mod eth;
 pub mod polkadot;
+pub mod bitcoin;
 pub mod secp256k1;
 #[cfg(test)]
 mod tests;
@@ -31,6 +32,7 @@ pub enum ChainTag {
 	Ethereum = 0x0000,
 	Polkadot = 0x0001,
 	Sui = 0x0002,
+	Bitcoin = 0x0003,
 }
 
 impl Display for ChainTag {
@@ -39,6 +41,7 @@ impl Display for ChainTag {
 			ChainTag::Ethereum => write!(f, "Ethereum"),
 			ChainTag::Polkadot => write!(f, "Polkadot"),
 			ChainTag::Sui => write!(f, "Sui"),
+			ChainTag::Bitcoin => write!(f, "Bitcoin"),
 		}
 	}
 }
@@ -124,6 +127,7 @@ pub trait CryptoScheme: 'static + Clone + Send + Sync + Debug + PartialEq {
 	/// Build challenge response using our key share
 	fn build_response(
 		nonce: <Self::Point as ECPoint>::Scalar,
+		nonce_commitment: Self::Point,
 		private_key: &<Self::Point as ECPoint>::Scalar,
 		challenge: <Self::Point as ECPoint>::Scalar,
 	) -> <Self::Point as ECPoint>::Scalar;
@@ -147,8 +151,8 @@ pub trait CryptoScheme: 'static + Clone + Send + Sync + Debug + PartialEq {
 
 	fn agg_key(pubkey: &Self::Point) -> Self::AggKey;
 
-	// Only relevant for ETH contract keys, which is the only
-	// implementation that is expected to overwrite this
+	// Only relevant for ETH and BTC keys, which are the only
+	// implementations that are expected to overwrite this
 	fn is_pubkey_compatible(_pubkey: &Self::Point) -> bool {
 		true
 	}

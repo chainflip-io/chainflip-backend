@@ -164,7 +164,7 @@ pub fn generate_schnorr_response<C: CryptoScheme>(
 ) -> <C::Point as ECPoint>::Scalar {
 	let challenge = C::build_challenge(pubkey, nonce_commitment, payload);
 
-	C::build_response(nonce, private_key, challenge)
+	C::build_response(nonce, nonce_commitment, private_key, challenge)
 }
 
 /// Combine local signatures received from all parties into the final
