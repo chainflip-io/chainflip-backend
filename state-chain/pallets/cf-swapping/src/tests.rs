@@ -10,6 +10,7 @@ use frame_support::traits::Hooks;
 // Returns some test data
 fn generate_test_swaps() -> Vec<Swap> {
 	vec![
+		// asset -> USDC
 		Swap {
 			swap_id: 1,
 			from: Asset::Flip,
@@ -17,36 +18,25 @@ fn generate_test_swaps() -> Vec<Swap> {
 			amount: 100,
 			egress_address: ForeignChainAddress::Eth([2; 20]),
 		},
+		// USDC -> asset
 		Swap {
 			swap_id: 2,
-			from: Asset::Flip,
-			to: Asset::Usdc,
-			amount: 200,
-			egress_address: ForeignChainAddress::Eth([4; 20]),
-		},
-		Swap {
-			swap_id: 3,
-			from: Asset::Flip,
-			to: Asset::Usdc,
-			amount: 300,
-			egress_address: ForeignChainAddress::Eth([7; 20]),
-		},
-		Swap {
-			swap_id: 4,
 			from: Asset::Eth,
 			to: Asset::Usdc,
 			amount: 40,
 			egress_address: ForeignChainAddress::Eth([9; 20]),
 		},
+		// Both assets are on the Eth chain
 		Swap {
-			swap_id: 5,
+			swap_id: 3,
 			from: Asset::Flip,
 			to: Asset::Eth,
 			amount: 500,
 			egress_address: ForeignChainAddress::Eth([2; 20]),
 		},
+		// Cross chain
 		Swap {
-			swap_id: 6,
+			swap_id: 4,
 			from: Asset::Flip,
 			to: Asset::Dot,
 			amount: 600,
@@ -120,7 +110,6 @@ fn number_of_swaps_processed_limited_by_weight() {
 fn expect_earned_fees_to_be_recorded() {
 	new_test_ext().execute_with(|| {
 		const ALICE: u64 = 2_u64;
-		const BOB: u64 = 3_u64;
 		<Pallet<Test> as SwapIntentHandler>::on_swap_ingress(
 			ForeignChainAddress::Eth([2; 20]),
 			Asset::Flip,
@@ -130,18 +119,8 @@ fn expect_earned_fees_to_be_recorded() {
 			ALICE,
 			200,
 		);
-		<Pallet<Test> as SwapIntentHandler>::on_swap_ingress(
-			ForeignChainAddress::Eth([2; 20]),
-			Asset::Flip,
-			Asset::Usdc,
-			500,
-			ForeignChainAddress::Eth([2; 20]),
-			BOB,
-			100,
-		);
 		Swapping::on_idle(1, Weight::from_ref_time(1000));
 		assert_eq!(EarnedRelayerFees::<Test>::get(ALICE, cf_primitives::Asset::Flip), 2);
-		assert_eq!(EarnedRelayerFees::<Test>::get(BOB, cf_primitives::Asset::Flip), 5);
 		<Pallet<Test> as SwapIntentHandler>::on_swap_ingress(
 			ForeignChainAddress::Eth([2; 20]),
 			Asset::Flip,
@@ -170,6 +149,7 @@ fn cannot_swap_with_incorrect_egress_address_type() {
 			ALICE,
 			2,
 		);
+		assert_eq!(SwapQueue::<Test>::get(), vec![]);
 	});
 }
 
@@ -236,7 +216,7 @@ fn withdraw_relayer_fees() {
 		));
 		let mut egresses = MockEgressHandler::<AnyChain>::get_scheduled_egresses();
 		assert!(egresses.len() == 1);
-		assert_eq!(egresses.pop().expect("to be exist").1, 200);
+		assert_eq!(egresses.pop().expect("must exist").1, 200);
 		System::assert_last_event(RuntimeEvent::Swapping(
 			crate::Event::<Test>::WithdrawalRequested {
 				egress_id: (ForeignChain::Ethereum, 1),
