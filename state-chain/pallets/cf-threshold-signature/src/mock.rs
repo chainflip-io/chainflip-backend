@@ -16,7 +16,7 @@ use cf_traits::{
 	AsyncResult, Chainflip, EpochKey, KeyState, ThresholdSigner,
 };
 use codec::{Decode, Encode};
-use frame_support::{
+pub use frame_support::{
 	instances::Instance1,
 	parameter_types,
 	traits::{EnsureOrigin, UnfilteredDispatchable},

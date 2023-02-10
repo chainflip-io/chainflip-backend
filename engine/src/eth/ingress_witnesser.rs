@@ -40,6 +40,10 @@ where
 			logger: logger.clone(),
 		}
 	}
+
+	pub fn take_ingress_receiver(self) -> tokio::sync::mpsc::UnboundedReceiver<H160> {
+		self.eth_monitor_ingress_receiver
+	}
 }
 
 #[async_trait]
@@ -60,7 +64,7 @@ where
 
 		// Before we process the transactions, check if
 		// we have any new addresses to monitor
-		while let Some(address) = self.eth_monitor_ingress_receiver.recv().await {
+		while let Ok(address) = self.eth_monitor_ingress_receiver.try_recv() {
 			self.monitored_addresses.insert(address);
 		}
 

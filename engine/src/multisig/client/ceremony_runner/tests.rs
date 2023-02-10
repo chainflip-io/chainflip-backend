@@ -1,5 +1,4 @@
 use crate::{
-	logging::test_utils::new_test_logger,
 	multisig::{
 		client::{
 			ceremony_manager::{prepare_signing_request, KeygenCeremony, SigningCeremony},
@@ -49,7 +48,6 @@ fn spawn_signing_ceremony_runner(
 		message_receiver,
 		request_receiver,
 		outcome_sender,
-		new_test_logger(),
 	));
 
 	(task_handle, (message_sender, request_sender, outcome_receiver))
@@ -67,7 +65,6 @@ async fn should_ignore_stage_data_with_incorrect_size() {
 		DEFAULT_CEREMONY_ID,
 		BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
 		rng,
-		new_test_logger(),
 	);
 
 	// Built a stage 2 message that has the incorrect number of elements
@@ -92,7 +89,7 @@ async fn should_ignore_non_stage_1_messages_while_unauthorised() {
 
 	// Create an unauthorised ceremony
 	let mut unauthorised_ceremony_runner: CeremonyRunner<KeygenCeremony<EthSigning>> =
-		CeremonyRunner::new_unauthorised(mpsc::unbounded_channel().0, new_test_logger());
+		CeremonyRunner::new_unauthorised(mpsc::unbounded_channel().0);
 
 	// Process a stage 2 message
 	assert_eq!(
@@ -116,7 +113,7 @@ async fn should_delay_stage_1_message_while_unauthorised() {
 
 	// Create an unauthorised ceremony
 	let mut ceremony_runner: CeremonyRunner<SigningCeremony<EthSigning>> =
-		CeremonyRunner::new_unauthorised(mpsc::unbounded_channel().0, new_test_logger());
+		CeremonyRunner::new_unauthorised(mpsc::unbounded_channel().0);
 
 	// Process a stage 1 message (It should get delayed)
 	assert_eq!(
@@ -137,7 +134,6 @@ async fn should_delay_stage_1_message_while_unauthorised() {
 		EthSigning::signing_payload_for_test(),
 		&outgoing_p2p_sender,
 		Rng::from_seed(DEFAULT_SIGNING_SEED),
-		&new_test_logger(),
 	)
 	.unwrap()
 	.initial_stage;
@@ -212,10 +208,8 @@ async fn gen_stage_1_signing_state(
 	participants: BTreeSet<AccountId>,
 ) -> (CeremonyRunner<SigningCeremony<EthSigning>>, UnboundedReceiver<OutgoingMultisigStageMessages>)
 {
-	let logger = new_test_logger();
-
 	let mut ceremony_runner =
-		CeremonyRunner::new_unauthorised(tokio::sync::mpsc::unbounded_channel().0, logger.clone());
+		CeremonyRunner::new_unauthorised(tokio::sync::mpsc::unbounded_channel().0);
 
 	let (outgoing_p2p_sender, outgoing_p2p_receiver) = tokio::sync::mpsc::unbounded_channel();
 	let initial_stage = prepare_signing_request(
@@ -226,7 +220,6 @@ async fn gen_stage_1_signing_state(
 		EthSigning::signing_payload_for_test(),
 		&outgoing_p2p_sender,
 		Rng::from_seed(DEFAULT_SIGNING_SEED),
-		&logger,
 	)
 	.unwrap()
 	.initial_stage;
@@ -338,7 +331,6 @@ async fn should_timeout_authorised_ceremony() {
 			EthSigning::signing_payload_for_test(),
 			&outgoing_p2p_sender,
 			Rng::from_seed(DEFAULT_SIGNING_SEED),
-			&new_test_logger(),
 		)
 		.unwrap(),
 	);

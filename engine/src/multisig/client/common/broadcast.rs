@@ -2,6 +2,7 @@ use std::{collections::BTreeMap, fmt::Display};
 
 use async_trait::async_trait;
 use cf_primitives::AuthorityCount;
+use tracing::warn;
 
 use crate::{
 	multisig::client::{ceremony_manager::CeremonyTrait, MultisigMessage},
@@ -141,33 +142,26 @@ where
 		let m: Stage::Message = match m.try_into() {
 			Ok(m) => m,
 			Err(incorrect_type) => {
-				slog::warn!(
-					self.common.logger,
-					"Ignoring unexpected message {} while in stage {}",
-					incorrect_type,
-					self;
-					"from_id" => self.common.validator_mapping.get_id(signer_idx).to_string(),
+				warn!(
+					from_id = self.common.validator_mapping.get_id(signer_idx).to_string(),
+					"Ignoring unexpected message {incorrect_type} while in stage {self}",
 				);
 				return ProcessMessageResult::NotReady
 			},
 		};
 
 		if self.messages.contains_key(&signer_idx) {
-			slog::warn!(
-				self.common.logger,
-				"Ignoring a redundant message for stage {}",
-				self;
-				"from_id" => self.common.validator_mapping.get_id(signer_idx).to_string(),
+			warn!(
+				from_id = self.common.validator_mapping.get_id(signer_idx).to_string(),
+				"Ignoring a redundant message for stage {self}",
 			);
 			return ProcessMessageResult::NotReady
 		}
 
 		if !self.common.all_idxs.contains(&signer_idx) {
-			slog::warn!(
-				self.common.logger,
-				"Ignoring a message from non-participant for stage {}",
-				self;
-				"from_id" => self.common.validator_mapping.get_id(signer_idx).to_string(),
+			warn!(
+				from_id = self.common.validator_mapping.get_id(signer_idx).to_string(),
+				"Ignoring a message from non-participant for stage {self}",
 			);
 			return ProcessMessageResult::NotReady
 		}

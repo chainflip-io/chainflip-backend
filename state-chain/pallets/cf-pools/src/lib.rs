@@ -15,6 +15,11 @@ use sp_std::vec;
 
 pub use pallet::*;
 
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
+pub mod weights;
+pub use weights::WeightInfo;
+
 #[cfg(test)]
 mod mock;
 
@@ -40,6 +45,9 @@ pub mod pallet {
 
 		/// Implementation of EnsureOrigin trait for governance
 		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
+
+		/// Benchmark weights
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::pallet]
@@ -192,16 +200,16 @@ pub mod pallet {
 		///
 		/// - [BadOrigin](frame_system::BadOrigin)
 		/// - [ZeroBuyIntervalNotAllowed](pallet_cf_pools::Error::ZeroBuyIntervalNotAllowed)
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::update_buy_interval())]
 		pub fn update_buy_interval(
 			origin: OriginFor<T>,
 			new_buy_interval: T::BlockNumber,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			ensure!(new_buy_interval != Zero::zero(), Error::<T>::ZeroBuyIntervalNotAllowed);
 			FlipBuyInterval::<T>::set(new_buy_interval);
 			Self::deposit_event(Event::<T>::UpdatedBuyInterval { buy_interval: new_buy_interval });
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Enable or disable an exchange pool.
@@ -215,7 +223,7 @@ pub mod pallet {
 		///
 		/// - [BadOrigin](frame_system::BadOrigin)
 		/// - [PoolDoesNotExist](pallet_cf_pools::Error::PoolDoesNotExist)
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::update_pool_enabled())]
 		pub fn update_pool_enabled(
 			origin: OriginFor<T>,
 			asset: any::Asset,
@@ -249,7 +257,7 @@ pub mod pallet {
 		/// - [InvalidTick](pallet_cf_pools::Error::InvalidTick)
 		/// - [InvalidInitialPrice](pallet_cf_pools::Error::InvalidInitialPrice)
 		/// - [PoolAlreadyExists](pallet_cf_pools::Error::PoolAlreadyExists)
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::new_pool())]
 		pub fn new_pool(
 			origin: OriginFor<T>,
 			asset: any::Asset,
@@ -299,7 +307,7 @@ pub mod pallet {
 		/// - [BadOrigin](frame_system::BadOrigin)
 		/// - [InvalidFeeAmount](pallet_cf_pools::Error::InvalidFeeAmount)
 		/// - [PoolDoesNotExist](pallet_cf_pools::Error::PoolDoesNotExist)
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::set_liquidity_fee())]
 		pub fn set_liquidity_fee(
 			origin: OriginFor<T>,
 			asset: any::Asset,
@@ -309,7 +317,7 @@ pub mod pallet {
 
 			Pools::<T>::try_mutate(asset, |maybe_pool| {
 				if let Some(pool) = maybe_pool.as_mut() {
-					pool.set_fees(fee_100th_bips).map_err(|_| Error::InvalidFeeAmount)
+					pool.set_liquidity_fees(fee_100th_bips).map_err(|_| Error::InvalidFeeAmount)
 				} else {
 					Err(Error::<T>::PoolDoesNotExist)
 				}
@@ -450,6 +458,11 @@ impl<T: Config> LiquidityPoolApi<AccountId> for Pallet<T> {
 
 	fn current_tick(asset: &any::Asset) -> Option<Tick> {
 		Pools::<T>::get(asset).map(|pool| pool.current_tick())
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn new_pool(asset: any::Asset) {
+		Pools::<T>::insert(asset, PoolState::new(0u32, PoolState::sqrt_price_at_tick(0)).unwrap());
 	}
 }
 

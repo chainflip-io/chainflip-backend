@@ -285,7 +285,7 @@ pub async fn force_rotation(state_chain_settings: &settings::StateChain) -> Resu
 	.await
 }
 
-pub async fn retire_account(state_chain_settings: &settings::StateChain) -> Result<()> {
+pub async fn stop_bidding(state_chain_settings: &settings::StateChain) -> Result<()> {
 	task_scope(|scope| {
 		async {
 			let logger = new_discard_logger();
@@ -298,10 +298,10 @@ pub async fn retire_account(state_chain_settings: &settings::StateChain) -> Resu
 			)
 			.await?;
 			let tx_hash = state_chain_client
-				.submit_signed_extrinsic(pallet_cf_staking::Call::retire_account {}, &logger)
+				.submit_signed_extrinsic(pallet_cf_staking::Call::stop_bidding {}, &logger)
 				.await
-				.expect("Could not retire account");
-			println!("Account retired at tx {tx_hash:#x}.");
+				.expect("Could not stop bidding");
+			println!("Account stopped bidding, in tx {tx_hash:#x}.");
 			Ok(())
 		}
 		.boxed()
@@ -309,7 +309,7 @@ pub async fn retire_account(state_chain_settings: &settings::StateChain) -> Resu
 	.await
 }
 
-pub async fn activate_account(state_chain_settings: &settings::StateChain) -> Result<()> {
+pub async fn start_bidding(state_chain_settings: &settings::StateChain) -> Result<()> {
 	task_scope(|scope| async {
 		let logger = new_discard_logger();
 		let (latest_block_hash, _, state_chain_client) =
@@ -326,17 +326,17 @@ pub async fn activate_account(state_chain_settings: &settings::StateChain) -> Re
 		{
 			AccountRole::Validator => {
 				let tx_hash = state_chain_client
-					.submit_signed_extrinsic(pallet_cf_staking::Call::activate_account {}, &logger)
+					.submit_signed_extrinsic(pallet_cf_staking::Call::start_bidding {}, &logger)
 					.await
-					.expect("Could not activate account");
-				println!("Account activated at tx {tx_hash:#x}.");
+					.expect("Could not start bidding");
+				println!("Account started bidding at tx {tx_hash:#x}.");
 			}
 			AccountRole::None => {
-				println!("You have not yet registered an account role. If you wish to activate your account to gain a chance at becoming an authority on the Chainflip network
+				println!("You have not yet registered an account role. If you wish to start bidding to gain a chance at becoming an authority on the Chainflip network
 				you must first register your account as the Validator role. Please see the `register-account-role` command on this CLI.")
 			}
 			_ => {
-				println!("You have already registered an account role for this account that is not the Validator role. You cannot activate your account for participation as an authority on the Chainflip network.")
+				println!("You have already registered an account role for this account that is not the Validator role. You cannot start bidding for participation as an authority on the Chainflip network.")
 			}
 		}
 

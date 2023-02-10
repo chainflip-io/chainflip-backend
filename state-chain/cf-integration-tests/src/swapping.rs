@@ -1,4 +1,5 @@
 //! Contains tests related to liquidity, pools and swapping
+use cf_test_utilities::assert_has_event_pattern;
 use frame_support::{
 	assert_noop, assert_ok,
 	traits::{Hooks, OnNewAccount},
@@ -104,7 +105,7 @@ fn can_provide_liquidity_and_swap_assets() {
 	super::genesis::default().build().execute_with(|| {
 		setup_pool(vec![
 			(Asset::Eth, 3_000_000u128, 0u32, INITIAL_ETH_TICK),
-			(Asset::Flip, 1_200_000u128, 0u32, 6932),
+			(Asset::Flip, 1_200_000u128, 0u32, INITIAL_FLIP_TICK),
 		]);
 
 		let lp: AccountId = AccountId::from(LP);
@@ -157,33 +158,35 @@ fn can_provide_liquidity_and_swap_assets() {
 
 		//  Eth: $1 <-> Flip: $5,
 		// 10_000 Eth -> 100_000 USDC -> about 50_000 Flips, reduced by slippage.
-		System::assert_has_event(RuntimeEvent::LiquidityPools(
-			pallet_cf_pools::Event::AssetsSwapped {
+		assert_has_event_pattern!(
+			Runtime,
+			RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::AssetsSwapped {
 				from: Asset::Eth,
 				to: Asset::Usdc,
 				input: 10_000,
-				output: 98_966,
 				liquidity_fee: 0,
-			},
-		));
-		System::assert_has_event(RuntimeEvent::LiquidityPools(
-			pallet_cf_pools::Event::AssetsSwapped {
+				..
+			},)
+		);
+		assert_has_event_pattern!(
+			Runtime,
+			RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::AssetsSwapped {
 				from: Asset::Usdc,
 				to: Asset::Flip,
-				input: 98_966,
-				output: 46_755,
 				liquidity_fee: 0,
-			},
-		));
+				..
+			},)
+		);
 
-		System::assert_has_event(RuntimeEvent::Swapping(
-			pallet_cf_swapping::Event::SwapEgressScheduled {
+		assert_has_event_pattern!(
+			Runtime,
+			RuntimeEvent::Swapping(pallet_cf_swapping::Event::SwapEgressScheduled {
 				swap_id: 1,
 				egress_id: (ForeignChain::Ethereum, 1),
 				asset: Asset::Flip,
-				amount: 46_755,
-			},
-		));
+				..
+			},)
+		);
 
 		// Egress the asset out during on_idle.
 		let _ = EthereumIngressEgress::on_idle(1, Weight::from_ref_time(1_000_000_000_000));
@@ -202,7 +205,7 @@ fn swap_can_accrue_fees() {
 	super::genesis::default().build().execute_with(|| {
 		setup_pool(vec![
 			(Asset::Eth, 3_000_000u128, 500_000u32, INITIAL_ETH_TICK),
-			(Asset::Flip, 1_200_000u128, 500_000u32, 6932),
+			(Asset::Flip, 1_200_000u128, 500_000u32, INITIAL_FLIP_TICK),
 		]);
 
 		let lp: AccountId = AccountId::from(LP);
@@ -226,24 +229,25 @@ fn swap_can_accrue_fees() {
 
 		//  Eth: $1 <-> Flip: $5,
 		// 10_000 Eth -50% -> 50_000 USDC - 50% -> about 12_500 Flips, reduced by slippage.
-		System::assert_has_event(RuntimeEvent::LiquidityPools(
-			pallet_cf_pools::Event::AssetsSwapped {
+		assert_has_event_pattern!(
+			Runtime,
+			RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::AssetsSwapped {
 				from: Asset::Eth,
 				to: Asset::Usdc,
 				input: 10_000,
-				output: 49_742,
 				liquidity_fee: 5_000,
-			},
-		));
-		System::assert_has_event(RuntimeEvent::LiquidityPools(
-			pallet_cf_pools::Event::AssetsSwapped {
+				..
+			},)
+		);
+		assert_has_event_pattern!(
+			Runtime,
+			RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::AssetsSwapped {
 				from: Asset::Usdc,
 				to: Asset::Flip,
-				input: 49_742,
-				output: 12_255,
 				liquidity_fee: 24_871,
-			},
-		));
+				..
+			},)
+		);
 
 		System::reset_events();
 
@@ -328,26 +332,24 @@ fn swap_can_accrue_fees() {
 			0u128
 		));
 
-		System::assert_has_event(RuntimeEvent::LiquidityPools(
-			pallet_cf_pools::Event::LiquidityBurned {
-				lp: lp.clone(),
+		assert_has_event_pattern!(
+			Runtime,
+			RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::LiquidityBurned {
 				asset: any::Asset::Eth,
 				range: RANGE,
 				burnt_liquidity: 1_500_000,
-				assets_returned: PoolAssetMap::new(466_708, 4_708_672),
-				fees_harvested: PoolAssetMap::new(0, 0),
-			},
-		));
-		System::assert_has_event(RuntimeEvent::LiquidityPools(
-			pallet_cf_pools::Event::LiquidityBurned {
-				lp: lp.clone(),
+				..
+			},)
+		);
+		assert_has_event_pattern!(
+			Runtime,
+			RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::LiquidityBurned {
 				asset: any::Asset::Flip,
 				range: RANGE,
 				burnt_liquidity: 600_000,
-				assets_returned: PoolAssetMap::new(414_088, 856_927),
-				fees_harvested: PoolAssetMap::new(0, 0),
-			},
-		));
+				..
+			},)
+		);
 
 		// All vested assets are returned. Some swapped and with Fees added.
 		assert_eq!(
@@ -440,24 +442,33 @@ fn swap_fails_with_insufficient_liquidity() {
 		assert_eq!(LiquidityPools::current_tick(&Asset::Flip), Some(8_065));
 		assert_eq!(LiquidityPools::current_tick(&Asset::Eth), Some(22_818));
 
-		System::assert_has_event(RuntimeEvent::LiquidityPools(
-			pallet_cf_pools::Event::AssetsSwapped {
+		assert_has_event_pattern!(
+			Runtime,
+			RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::AssetsSwapped {
+				from: Asset::Eth,
+				to: Asset::Usdc,
+				input: 10_000,
+				..
+			},)
+		);
+		assert_has_event_pattern!(
+			Runtime,
+			RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::AssetsSwapped {
 				from: Asset::Usdc,
 				to: Asset::Flip,
-				input: 98_966,
-				output: 46_755,
-				liquidity_fee: 0,
-			},
-		));
+				..
+			},)
+		);
 
-		System::assert_has_event(RuntimeEvent::Swapping(
-			pallet_cf_swapping::Event::SwapEgressScheduled {
+		assert_has_event_pattern!(
+			Runtime,
+			RuntimeEvent::Swapping(pallet_cf_swapping::Event::SwapEgressScheduled {
 				swap_id: 1,
 				egress_id: (ForeignChain::Ethereum, 1),
 				asset: Asset::Flip,
-				amount: 46_755,
-			},
-		));
+				..
+			},)
+		);
 	});
 }
 

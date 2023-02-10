@@ -1,13 +1,14 @@
 use crate::{self as pallet_cf_tokenholder_governance};
-use cf_chains::eth::Address;
+use cf_chains::{ChainCrypto, Ethereum, ForeignChain};
 use cf_traits::{
 	impl_mock_stake_transfer, impl_mock_waived_fees,
 	mocks::{
 		ensure_origin_mock::NeverFailingOriginCheck, epoch_info::MockEpochInfo,
 		system_state_info::MockSystemStateInfo,
 	},
-	BroadcastAnyChainGovKey, BroadcastComKey, Chainflip, StakeTransfer, WaivedFees,
+	BroadcastAnyChainGovKey, Chainflip, CommKeyBroadcaster, StakeTransfer, WaivedFees,
 };
+use codec::{Decode, Encode};
 use frame_support::{parameter_types, traits::HandleLifetime};
 use frame_system as system;
 use sp_core::H256;
@@ -97,22 +98,67 @@ parameter_types! {
 impl_mock_waived_fees!(AccountId, RuntimeCall);
 impl_mock_stake_transfer!(AccountId, u128);
 
-pub struct MockKeyBroadcaster;
+pub struct MockBroadcaster;
 
-impl BroadcastAnyChainGovKey for MockKeyBroadcaster {
-	fn broadcast(
-		_chain: cf_chains::ForeignChain,
-		_old_key: Option<Vec<u8>>,
-		_new_key: Vec<u8>,
-	) -> Result<(), ()> {
-		Ok(())
+impl MockBroadcaster {
+	pub fn set_behaviour(behaviour: MockBroadcasterBehaviour) {
+		MockBroadcasterStorage::put(behaviour);
+	}
+	pub fn broadcasted_gov_key() -> Option<(ForeignChain, Option<Vec<u8>>, Vec<u8>)> {
+		GovKeyBroadcasted::get()
+	}
+	fn is_govkey_compatible() -> bool {
+		MockBroadcasterStorage::get().unwrap_or_default().key_compatible
+	}
+	fn broadcast_success() -> bool {
+		MockBroadcasterStorage::get().unwrap_or_default().broadcast_success
 	}
 }
 
-impl BroadcastComKey for MockKeyBroadcaster {
-	type EthAddress = Address;
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
+pub struct MockBroadcasterBehaviour {
+	pub key_compatible: bool,
+	pub broadcast_success: bool,
+}
 
-	fn broadcast(_new_key: Self::EthAddress) {}
+impl Default for MockBroadcasterBehaviour {
+	fn default() -> Self {
+		Self { key_compatible: true, broadcast_success: true }
+	}
+}
+
+#[frame_support::storage_alias]
+type MockBroadcasterStorage = StorageValue<Mock, MockBroadcasterBehaviour>;
+
+#[frame_support::storage_alias]
+type GovKeyBroadcasted = StorageValue<Mock, (cf_chains::ForeignChain, Option<Vec<u8>>, Vec<u8>)>;
+
+#[frame_support::storage_alias]
+type CommKeyBroadcasted = StorageValue<Mock, <Ethereum as ChainCrypto>::GovKey>;
+
+impl BroadcastAnyChainGovKey for MockBroadcaster {
+	fn broadcast_gov_key(
+		chain: cf_chains::ForeignChain,
+		old_key: Option<Vec<u8>>,
+		new_key: Vec<u8>,
+	) -> Result<(), ()> {
+		if Self::broadcast_success() {
+			GovKeyBroadcasted::put((chain, old_key, new_key));
+			Ok(())
+		} else {
+			Err(())
+		}
+	}
+
+	fn is_govkey_compatible(_chain: cf_chains::ForeignChain, _key: &[u8]) -> bool {
+		Self::is_govkey_compatible()
+	}
+}
+
+impl CommKeyBroadcaster for MockBroadcaster {
+	fn broadcast(new_key: <Ethereum as cf_chains::ChainCrypto>::GovKey) {
+		CommKeyBroadcasted::put(new_key);
+	}
 }
 
 impl pallet_cf_flip::Config for Test {
@@ -130,8 +176,8 @@ impl pallet_cf_tokenholder_governance::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type FeePayment = Flip;
 	type StakingInfo = Flip;
-	type CommKeyBroadcaster = MockKeyBroadcaster;
-	type AnyChainGovKeyBroadcaster = MockKeyBroadcaster;
+	type CommKeyBroadcaster = MockBroadcaster;
+	type AnyChainGovKeyBroadcaster = MockBroadcaster;
 	type WeightInfo = ();
 	type VotingPeriod = VotingPeriod;
 	type EnactmentDelay = EnactmentDelay;

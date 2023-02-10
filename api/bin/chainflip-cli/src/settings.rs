@@ -49,7 +49,7 @@ impl Default for CLICommandLineOptions {
 			state_chain_opts: StateChainOptions::default(),
 			eth_opts: EthOptions::default(),
 			// an arbitrary simple command
-			cmd: CliCommand::Retire {},
+			cmd: CliCommand::StopBidding {},
 		}
 	}
 }
@@ -114,10 +114,10 @@ pub enum CliCommand {
 	},
 	#[clap(about = "Rotate your session keys")]
 	Rotate {},
-	#[clap(about = "Retire from Auction participation")]
-	Retire {},
-	#[clap(about = "Activates an account for all future Auctions")]
-	Activate {},
+	#[clap(about = "Stop bidding, thereby stop participating in auctions")]
+	StopBidding {},
+	#[clap(about = "The account starts bidding for all future auctions, until it stops bidding")]
+	StartBidding {},
 	#[clap(about = "Set a UTF-8 vanity name for your node (max length 64)")]
 	VanityName {
 		#[clap(help = "Name in UTF-8 (max length 64)")]

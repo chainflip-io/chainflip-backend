@@ -2,10 +2,7 @@ use std::{collections::BTreeSet, sync::Arc};
 
 use super::*;
 use crate::{
-	logging::{
-		test_utils::{new_test_logger, new_test_logger_with_tag_cache},
-		REQUEST_TO_SIGN_IGNORED,
-	},
+	logging::test_utils::new_test_logger,
 	multisig::{
 		client::{
 			self,
@@ -28,7 +25,6 @@ use utilities::{assert_err, assert_ok};
 #[tokio::test]
 async fn should_ignore_rts_for_unknown_key() {
 	let account_id = &ACCOUNT_IDS[0];
-	let (logger, tag_cache) = new_test_logger_with_tag_cache();
 	let (_dir, db_file) = new_temp_directory_with_nonexistent_file();
 
 	// Use any key id, as the key db will be empty
@@ -39,11 +35,10 @@ async fn should_ignore_rts_for_unknown_key() {
 	let client = MultisigClient::<EthSigning>::new(
 		account_id.clone(),
 		KeyStore::new(Arc::new(
-			PersistentKeyDB::new_and_migrate_to_latest(&db_file, None, &logger)
+			PersistentKeyDB::new_and_migrate_to_latest(&db_file, None, &new_test_logger())
 				.expect("Failed to open database"),
 		)),
 		ceremony_request_sender,
-		&logger,
 	);
 
 	// Send Sign Request
@@ -57,9 +52,6 @@ async fn should_ignore_rts_for_unknown_key() {
 	// Check sign request fails immediately with "unknown key" error
 	let (_, failure_reason) = assert_err!(assert_future_can_complete(signing_request_fut));
 	assert_eq!(failure_reason, SigningFailureReason::UnknownKey);
-
-	// Check that the signing failure reason is being logged
-	assert!(tag_cache.contains_tag(REQUEST_TO_SIGN_IGNORED));
 }
 
 #[tokio::test]
@@ -85,7 +77,6 @@ async fn should_save_key_after_keygen() {
 					.expect("Failed to open database"),
 			)),
 			ceremony_request_sender,
-			&logger,
 		);
 
 		// Send Keygen Request
@@ -149,7 +140,6 @@ async fn should_load_keys_on_creation() {
 				.expect("Failed to open database"),
 		)),
 		ceremony_request_sender,
-		&new_test_logger(),
 	);
 
 	// Check that the key was loaded during the creation of the client and it matches the original

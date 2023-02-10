@@ -125,7 +125,7 @@ benchmarks! {
 		assert!(!PendingClaims::<T>::contains_key(&caller));
 	}
 
-	retire_account {
+	stop_bidding {
 		let caller: T::AccountId = whitelisted_caller();
 		ActiveBidder::<T>::insert(caller.clone(), true);
 		T::AccountRoleRegistry::register_account(caller.clone(), AccountRole::Validator);
@@ -134,7 +134,7 @@ benchmarks! {
 		assert!(!ActiveBidder::<T>::get(caller));
 	}
 
-	activate_account {
+	start_bidding {
 		let caller: T::AccountId = whitelisted_caller();
 		ActiveBidder::<T>::insert(caller.clone(), false);
 		T::AccountRoleRegistry::register_account(caller.clone(), AccountRole::Validator);

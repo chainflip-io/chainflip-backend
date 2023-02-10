@@ -206,6 +206,17 @@ parameter_types! {
 pub type MockOffenceReporter =
 	cf_traits::mocks::offence_reporting::MockOffenceReporter<ValidatorId, PalletOffence>;
 
+pub struct MockSlasher;
+
+impl Slashing for MockSlasher {
+	type AccountId = ValidatorId;
+	type BlockNumber = u64;
+
+	fn slash(_validator_id: &Self::AccountId, _blocks: Self::BlockNumber) {}
+
+	fn slash_stake(_account_id: &Self::AccountId, _amount: sp_runtime::Percent) {}
+}
+
 impl pallet_cf_vaults::Config for MockRuntime {
 	type RuntimeEvent = RuntimeEvent;
 	type Offence = PalletOffence;
@@ -222,6 +233,7 @@ impl pallet_cf_vaults::Config for MockRuntime {
 	type WeightInfo = ();
 	type Broadcaster = MockBroadcaster;
 	type SystemStateManager = MockSystemStateManager;
+	type Slasher = MockSlasher;
 }
 
 pub const ALICE: <MockRuntime as frame_system::Config>::AccountId = 123u64;

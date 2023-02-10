@@ -8,6 +8,7 @@ mod mock;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
+mod migrations;
 
 pub mod weights;
 pub use weights::WeightInfo;
@@ -16,21 +17,20 @@ pub use weights::WeightInfo;
 mod tests;
 
 use cf_chains::RegisterClaim;
-use cf_traits::{Bid, BidderProvider, EpochInfo, StakeTransfer};
+use cf_traits::{Bid, BidderProvider, EpochInfo, StakeTransfer, SystemStateInfo};
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
-	traits::{EnsureOrigin, HandleLifetime, IsType, OnKilledAccount, UnixTime},
+	pallet_prelude::Weight,
+	traits::{
+		EnsureOrigin, HandleLifetime, IsType, OnKilledAccount, OnRuntimeUpgrade, StorageVersion,
+		UnixTime,
+	},
 };
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
-use sp_std::prelude::*;
-
-use cf_traits::SystemStateInfo;
-
 use sp_runtime::traits::{AtLeast32BitUnsigned, CheckedSub, Zero};
-
-use frame_support::pallet_prelude::Weight;
+use sp_std::prelude::*;
 
 /// This address is used by the Ethereum contracts to indicate that no withdrawal address was
 /// specified when staking.
@@ -40,9 +40,10 @@ use frame_support::pallet_prelude::Weight;
 /// only be withdrawn to the specified address.
 pub const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
 
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
+
 #[frame_support::pallet]
 pub mod pallet {
-
 	use super::*;
 	use cf_chains::eth::Ethereum;
 	use cf_primitives::BroadcastId;
@@ -123,6 +124,7 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
+	#[pallet::storage_version(PALLET_VERSION)]
 	#[pallet::without_storage_info]
 	#[pallet::generate_store(pub (super) trait Store)]
 	pub struct Pallet<T>(PhantomData<T>);
@@ -178,6 +180,20 @@ pub mod pallet {
 
 			Self::expire_pending_claims_at(T::TimeSource::now().as_secs())
 		}
+
+		fn on_runtime_upgrade() -> Weight {
+			migrations::PalletMigration::<T>::on_runtime_upgrade()
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+			migrations::PalletMigration::<T>::pre_upgrade()
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
+			migrations::PalletMigration::<T>::post_upgrade(state)
+		}
 	}
 
 	#[pallet::event]
@@ -205,11 +221,11 @@ pub mod pallet {
 		/// claimed_amount\]
 		ClaimSettled(AccountId<T>, FlipBalance<T>),
 
-		/// An account has retired and will no longer take part in auctions. \[account_id\]
-		AccountRetired(AccountId<T>),
+		/// An account has stopped bidding and will no longer take part in auctions.
+		StoppedBidding { account_id: AccountId<T> },
 
-		/// A previously retired account has been re-activated. \[account_id\]
-		AccountActivated(AccountId<T>),
+		/// A previously non-bidding account has started bidding.
+		StartedBidding { account_id: AccountId<T> },
 
 		/// A claim has expired without being executed.
 		ClaimExpired { account_id: AccountId<T> },
@@ -232,11 +248,11 @@ pub mod pallet {
 		/// The claimant tried to claim despite having a claim already pending.
 		PendingClaim,
 
-		/// Can't retire an account if it's already retired.
-		AlreadyRetired,
+		/// Can't stop bidding an account if it's already not bidding.
+		AlreadyNotBidding,
 
-		/// Can't activate an account unless it's in a retired state.
-		AlreadyActive,
+		/// Can only start bidding if not already bidding.
+		AlreadyBidding,
 
 		/// We are in the auction phase
 		AuctionPhase,
@@ -360,7 +376,7 @@ pub mod pallet {
 				Error::<T>::BelowMinimumStake
 			);
 
-			// Throw an error if the staker tries to claim too much. Otherwise decrement the stake
+			// Return an error if the staker tries to claim too much. Otherwise decrement the stake
 			// by the amount claimed.
 			T::Flip::try_initiate_claim(&account_id, amount)?;
 
@@ -448,7 +464,8 @@ pub mod pallet {
 		}
 
 		/// Signals a node's intent to withdraw their stake after the next auction and desist
-		/// from future auctions. Should only be called by accounts that are not already retired.
+		/// from future auctions. Should only be called by accounts that are not already not
+		/// bidding.
 		///
 		/// ## Events
 		///
@@ -456,30 +473,47 @@ pub mod pallet {
 		///
 		/// ## Errors
 		///
-		/// - [AlreadyRetired](Error::AlreadyRetired)
+		/// - [AlreadyNotBidding](Error::AlreadyNotBidding)
 		/// - [UnknownAccount](Error::UnknownAccount)
-		#[pallet::weight(T::WeightInfo::retire_account())]
-		pub fn retire_account(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
-			let who = T::AccountRoleRegistry::ensure_validator(origin)?;
-			Self::retire(&who)?;
+		#[pallet::weight(T::WeightInfo::stop_bidding())]
+		pub fn stop_bidding(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+			let account_id = T::AccountRoleRegistry::ensure_validator(origin)?;
+
+			ensure!(!T::EpochInfo::is_auction_phase(), Error::<T>::AuctionPhase);
+
+			ActiveBidder::<T>::try_mutate_exists(&account_id, |maybe_status| {
+				match maybe_status.as_mut() {
+					Some(active) => {
+						if !*active {
+							return Err(Error::<T>::AlreadyNotBidding)
+						}
+						*active = false;
+						Self::deposit_event(Event::StoppedBidding {
+							account_id: account_id.clone(),
+						});
+						Ok(())
+					},
+					None => Err(Error::UnknownAccount),
+				}
+			})?;
 			Ok(().into())
 		}
 
-		/// Signals a retired node's intent to re-activate their stake and participate in the
-		/// next auction. Should only be called if the account is in a retired state.
+		/// Signals a non-bidding node's intent to start bidding, and participate in the
+		/// next auction. Should only be called if the account is in a non-bidding state.
 		///
 		/// ## Events
 		///
-		/// - [AccountActivated](Event::AccountActivated)
+		/// - [StartedBidding](Event::StartedBidding)
 		///
 		/// ## Errors
 		///
-		/// - [AlreadyActive](Error::AlreadyActive)
+		/// - [AlreadyBidding](Error::AlreadyBidding)
 		/// - [UnknownAccount](Error::UnknownAccount)
-		#[pallet::weight(T::WeightInfo::activate_account())]
-		pub fn activate_account(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+		#[pallet::weight(T::WeightInfo::start_bidding())]
+		pub fn start_bidding(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let who = T::AccountRoleRegistry::ensure_validator(origin)?;
-			Self::activate(&who)?;
+			Self::activate_bidding(&who)?;
 			Ok(().into())
 		}
 
@@ -533,7 +567,7 @@ pub mod pallet {
 			ClaimDelayBufferSeconds::<T>::set(self.claim_delay_buffer_seconds);
 			for (staker, amount) in self.genesis_stakers.iter() {
 				Pallet::<T>::stake_account(staker, *amount);
-				Pallet::<T>::activate(staker)
+				Pallet::<T>::activate_bidding(staker)
 					.expect("The account was just created so this can't fail.");
 			}
 		}
@@ -612,8 +646,8 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	/// Add stake to an account, creating the account if it doesn't exist, an account is not
-	/// an implicit bidder and needs to be activated manually.
+	/// Add stake to an account, creating the account if it doesn't exist. An account is not
+	/// an implicit bidder and needs to start bidding explicitly.
 	fn stake_account(account_id: &AccountId<T>, amount: T::Balance) -> T::Balance {
 		if !frame_system::Pallet::<T>::account_exists(account_id) {
 			// Creates an account
@@ -624,43 +658,20 @@ impl<T: Config> Pallet<T> {
 		T::Flip::credit_stake(account_id, amount)
 	}
 
-	/// Sets the `active` flag associated with the account to false, signalling that the account no
-	/// longer wishes to participate in auctions.
-	///
-	/// Returns an error if the account has already been retired, if the account has no stake
-	/// associated, or if the epoch is currently in the auction phase.
-	fn retire(account_id: &AccountId<T>) -> Result<(), Error<T>> {
-		ensure!(!T::EpochInfo::is_auction_phase(), Error::<T>::AuctionPhase);
-
-		ActiveBidder::<T>::try_mutate_exists(account_id, |maybe_status| {
-			match maybe_status.as_mut() {
-				Some(active) => {
-					if !*active {
-						return Err(Error::AlreadyRetired)
-					}
-					*active = false;
-					Self::deposit_event(Event::AccountRetired(account_id.clone()));
-					Ok(())
-				},
-				None => Err(Error::UnknownAccount),
-			}
-		})
-	}
-
 	/// Sets the `active` flag associated with the account to true, signalling that the account
 	/// wishes to participate in auctions, to become a network authority.
 	///
-	/// Returns an error if the account is already active, or if the account has no stake
+	/// Returns an error if the account is already bidding, or if the account has no stake
 	/// associated.
-	fn activate(account_id: &AccountId<T>) -> Result<(), Error<T>> {
+	fn activate_bidding(account_id: &AccountId<T>) -> Result<(), Error<T>> {
 		ActiveBidder::<T>::try_mutate_exists(account_id, |maybe_status| {
 			match maybe_status.as_mut() {
 				Some(active) => {
 					if *active {
-						return Err(Error::AlreadyActive)
+						return Err(Error::AlreadyBidding)
 					}
 					*active = true;
-					Self::deposit_event(Event::AccountActivated(account_id.clone()));
+					Self::deposit_event(Event::StartedBidding { account_id: account_id.clone() });
 					Ok(())
 				},
 				None => Err(Error::UnknownAccount),

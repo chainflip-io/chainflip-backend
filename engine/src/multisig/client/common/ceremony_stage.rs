@@ -66,7 +66,6 @@ pub struct CeremonyCommon {
 	pub outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
 	pub validator_mapping: Arc<PartyIdxMapping>,
 	pub rng: Rng,
-	pub logger: slog::Logger,
 }
 
 impl CeremonyCommon {

@@ -10,8 +10,8 @@ use crate::{
 };
 
 use super::{
-	core_h160, eth_block_witnessing::BlockProcessor, event::Event, rpc::EthDualRpcClient,
-	BlockWithItems, DecodeLogClosure, EthContractWitnesser, EthNumberBloom,
+	core_h160, erc20_witnesser::Erc20Witnesser, eth_block_witnessing::BlockProcessor, event::Event,
+	rpc::EthDualRpcClient, BlockWithItems, DecodeLogClosure, EthContractWitnesser, EthNumberBloom,
 };
 
 pub struct ContractWitnesser<Contract, StateChainClient> {
@@ -20,6 +20,12 @@ pub struct ContractWitnesser<Contract, StateChainClient> {
 	state_chain_client: Arc<StateChainClient>,
 	should_witness_historical_epochs: bool,
 	logger: slog::Logger,
+}
+
+impl<StateChainClient> ContractWitnesser<Erc20Witnesser, StateChainClient> {
+	pub fn take_ingress_receiver(self) -> tokio::sync::mpsc::UnboundedReceiver<H160> {
+		self.contract.monitored_address_receiver
+	}
 }
 
 impl<Contract, StateChainClient> ContractWitnesser<Contract, StateChainClient>

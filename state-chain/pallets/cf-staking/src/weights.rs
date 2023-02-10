@@ -34,8 +34,8 @@ pub trait WeightInfo {
 	fn claim() -> Weight;
 	fn claim_all() -> Weight;
 	fn claimed() -> Weight;
-	fn retire_account() -> Weight;
-	fn activate_account() -> Weight;
+	fn stop_bidding() -> Weight;
+	fn start_bidding() -> Weight;
 	fn on_initialize_best_case() -> Weight;
 	fn expire_pending_claims_at(b: u32, ) -> Weight;
 	fn update_minimum_stake() -> Weight;
@@ -156,7 +156,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Validator BlocksPerEpoch (r:1 w:0)
 	// Storage: Validator ClaimPeriodAsPercentage (r:1 w:0)
 	// Storage: Staking ActiveBidder (r:1 w:1)
-	fn retire_account() -> Weight {
+	fn stop_bidding() -> Weight {
 		// Minimum execution time: 27_000 nanoseconds.
 		Weight::from_ref_time(28_000_000)
 			.saturating_add(T::DbWeight::get().reads(6))
@@ -164,7 +164,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	}
 	// Storage: AccountRoles AccountRoles (r:1 w:0)
 	// Storage: Staking ActiveBidder (r:1 w:1)
-	fn activate_account() -> Weight {
+	fn start_bidding() -> Weight {
 		// Minimum execution time: 21_000 nanoseconds.
 		Weight::from_ref_time(22_000_000)
 			.saturating_add(T::DbWeight::get().reads(2))
@@ -315,7 +315,7 @@ impl WeightInfo for () {
 	// Storage: Validator BlocksPerEpoch (r:1 w:0)
 	// Storage: Validator ClaimPeriodAsPercentage (r:1 w:0)
 	// Storage: Staking ActiveBidder (r:1 w:1)
-	fn retire_account() -> Weight {
+	fn stop_bidding() -> Weight {
 		// Minimum execution time: 27_000 nanoseconds.
 		Weight::from_ref_time(28_000_000)
 			.saturating_add(RocksDbWeight::get().reads(6))
@@ -323,7 +323,7 @@ impl WeightInfo for () {
 	}
 	// Storage: AccountRoles AccountRoles (r:1 w:0)
 	// Storage: Staking ActiveBidder (r:1 w:1)
-	fn activate_account() -> Weight {
+	fn start_bidding() -> Weight {
 		// Minimum execution time: 21_000 nanoseconds.
 		Weight::from_ref_time(22_000_000)
 			.saturating_add(RocksDbWeight::get().reads(2))

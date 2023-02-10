@@ -31,7 +31,7 @@ use frame_support::{
 use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, Bounded, MaybeSerializeDeserialize},
-	DispatchError, DispatchResult, FixedPointOperand, RuntimeDebug,
+	DispatchError, DispatchResult, FixedPointOperand, Percent, RuntimeDebug,
 };
 use sp_std::{iter::Sum, marker::PhantomData, prelude::*};
 
@@ -210,8 +210,7 @@ pub trait ReputationResetter {
 pub trait BidderProvider {
 	type ValidatorId;
 	type Amount;
-	/// Provide a list of bidders, those stakers that are not retired, with their bids which are
-	/// greater than zero
+	/// Provide a list of bidders. Those who are staked and their account is in the `bidding` state.
 	fn get_bidders() -> Vec<Bid<Self::ValidatorId, Self::Amount>>;
 }
 
@@ -335,6 +334,8 @@ pub trait Slashing {
 
 	/// Slashes a validator for the equivalent of some number of blocks offline.
 	fn slash(validator_id: &Self::AccountId, blocks_offline: Self::BlockNumber);
+
+	fn slash_stake(account_id: &Self::AccountId, amount: Percent);
 }
 
 /// Can nominate a single account.
@@ -735,6 +736,11 @@ pub trait AccountRoleRegistry<T: frame_system::Config> {
 	}
 	#[cfg(feature = "runtime-benchmarks")]
 	fn register_account(_account_id: T::AccountId, _role: AccountRole) {}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn get_account_role(_account_id: T::AccountId) -> AccountRole {
+		Default::default()
+	}
 }
 
 /// API that allows other pallets to Egress assets out of the State Chain.
@@ -787,13 +793,17 @@ pub trait VaultKeyWitnessedHandler<C: ChainAbi> {
 
 pub trait BroadcastAnyChainGovKey {
 	#[allow(clippy::result_unit_err)]
-	fn broadcast(chain: ForeignChain, old_key: Option<Vec<u8>>, new_key: Vec<u8>)
-		-> Result<(), ()>;
+	fn broadcast_gov_key(
+		chain: ForeignChain,
+		old_key: Option<Vec<u8>>,
+		new_key: Vec<u8>,
+	) -> Result<(), ()>;
+
+	fn is_govkey_compatible(chain: ForeignChain, key: &[u8]) -> bool;
 }
 
-pub trait BroadcastComKey {
-	type EthAddress;
-	fn broadcast(new_key: Self::EthAddress);
+pub trait CommKeyBroadcaster {
+	fn broadcast(new_key: <Ethereum as ChainCrypto>::GovKey);
 }
 
 /// Provides an interface to access the amount of Flip that is ready to be burned.

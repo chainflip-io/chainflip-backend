@@ -80,6 +80,9 @@ pub trait LiquidityPoolApi<AccountId> {
 
 	/// Gets the current price of the pool in Tick.
 	fn current_tick(asset: &Asset) -> Option<Tick>;
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn new_pool(_asset: Asset) {}
 }
 
 // TODO Remove these in favour of a real mocks.
