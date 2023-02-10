@@ -5,16 +5,7 @@ pub struct Migration<T: Config>(PhantomData<T>);
 
 pub mod old {
 
-	use cf_chains::dot::{PolkadotSpecVersion, PolkadotTransactionVersion};
-
 	use super::*;
-
-	#[derive(Debug, Encode, Decode, TypeInfo, Eq, PartialEq, Clone, Default)]
-	pub struct PolkadotMetadata {
-		pub spec_version: PolkadotSpecVersion,
-		pub transaction_version: PolkadotTransactionVersion,
-		pub genesis_hash: [u8; 32],
-	}
 
 	#[frame_support::storage_alias]
 	pub type SupportedEthAssets<T: Config> =
@@ -31,6 +22,22 @@ pub mod old {
 
 	#[frame_support::storage_alias]
 	pub type GlobalSignatureNonce<T: Config> = StorageValue<Pallet<T>, SignatureNonce, ValueQuery>;
+}
+
+// Types that are not old in the context of this migration,
+// but are old in the context of the pallet
+pub mod archived {
+
+	use super::*;
+
+	use cf_chains::dot::{PolkadotSpecVersion, PolkadotTransactionVersion};
+
+	#[derive(Debug, Encode, Decode, TypeInfo, Eq, PartialEq, Clone, Default)]
+	pub struct PolkadotMetadata {
+		pub spec_version: PolkadotSpecVersion,
+		pub transaction_version: PolkadotTransactionVersion,
+		pub genesis_hash: [u8; 32],
+	}
 
 	#[frame_support::storage_alias]
 	pub type PolkadotNetworkMetadata<T: Config> =
@@ -52,7 +59,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 
 		// Polkadot metadata is initialized with the config that is used in the persistent polkadot
 		// testnet
-		old::PolkadotNetworkMetadata::<T>::put(old::PolkadotMetadata {
+		archived::PolkadotNetworkMetadata::<T>::put(archived::PolkadotMetadata {
 			spec_version: 9320,
 			transaction_version: 16,
 			genesis_hash: hex_literal::hex!(

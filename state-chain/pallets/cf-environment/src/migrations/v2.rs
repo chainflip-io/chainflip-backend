@@ -6,7 +6,7 @@ pub struct Migration<T: Config>(PhantomData<T>);
 
 impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
-		let old_metadata = super::v1::old::PolkadotNetworkMetadata::<T>::take();
+		let old_metadata = super::v1::archived::PolkadotNetworkMetadata::<T>::take();
 
 		PolkadotRuntimeVersion::<T>::put(RuntimeVersion {
 			spec_version: old_metadata.spec_version,
@@ -18,14 +18,15 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<sp_std::vec::Vec<u8>, &'static str> {
-		let before = super::v1::old::PolkadotNetworkMetadata::<T>::get();
+		let before = super::v1::archived::PolkadotNetworkMetadata::<T>::get();
 
 		Ok(before.encode())
 	}
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(state: sp_std::vec::Vec<u8>) -> Result<(), &'static str> {
-		let before_metadata = super::v1::old::PolkadotMetadata::decode(&mut &state[..]).unwrap();
+		let before_metadata =
+			super::v1::archived::PolkadotMetadata::decode(&mut &state[..]).unwrap();
 
 		let after_version = PolkadotRuntimeVersion::<T>::get();
 		assert_eq!(
