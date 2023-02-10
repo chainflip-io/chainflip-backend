@@ -142,7 +142,7 @@ impl P2PMuxer {
 							slog::warn!(self.logger, "Sui chain tag is not supported yet")
 						},
 						ChainTag::Bitcoin => {
-							slog::warn!(self.logger, "Bitcoin chain to is not supported yet")
+							slog::warn!(self.logger, "Bitcoin chain tag is not supported yet")
 						},
 					},
 					Err(err) => {
