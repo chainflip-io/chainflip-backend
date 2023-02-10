@@ -9732,6 +9732,7 @@ dependencies = [
  "frame-system-rpc-runtime-api",
  "frame-try-runtime",
  "getrandom 0.2.8",
+ "hex-literal",
  "log",
  "nanorand",
  "pallet-aura",

@@ -1,11 +1,9 @@
 use crate::*;
-use cf_chains::dot::POLKADOT_METADATA;
 use sp_std::marker::PhantomData;
 
-/// My first migration.
 pub struct Migration<T: Config>(PhantomData<T>);
 
-mod old {
+pub mod old {
 
 	use super::*;
 
@@ -26,6 +24,26 @@ mod old {
 	pub type GlobalSignatureNonce<T: Config> = StorageValue<Pallet<T>, SignatureNonce, ValueQuery>;
 }
 
+// Types that are not old in the context of this migration,
+// but are old in the context of the pallet
+pub mod archived {
+
+	use super::*;
+
+	use cf_chains::dot::{PolkadotSpecVersion, PolkadotTransactionVersion};
+
+	#[derive(Debug, Encode, Decode, TypeInfo, Eq, PartialEq, Clone, Default)]
+	pub struct PolkadotMetadata {
+		pub spec_version: PolkadotSpecVersion,
+		pub transaction_version: PolkadotTransactionVersion,
+		pub genesis_hash: [u8; 32],
+	}
+
+	#[frame_support::storage_alias]
+	pub type PolkadotNetworkMetadata<T: Config> =
+		StorageValue<Pallet<T>, PolkadotMetadata, ValueQuery>;
+}
+
 impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
 		// migrate the renamed storage items (type not changed)
@@ -41,7 +59,13 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 
 		// Polkadot metadata is initialized with the config that is used in the persistent polkadot
 		// testnet
-		PolkadotNetworkMetadata::<T>::set(POLKADOT_METADATA);
+		archived::PolkadotNetworkMetadata::<T>::put(archived::PolkadotMetadata {
+			spec_version: 9320,
+			transaction_version: 16,
+			genesis_hash: hex_literal::hex!(
+				"5f551688012d25a98e729752169f509c6186af8079418c118844cc852b332bf5"
+			),
+		});
 
 		Weight::zero()
 	}
@@ -60,7 +84,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 
 		//assert that the polkadot related storages do not exist
 		assert!(!PolkadotVaultAccountId::<T>::exists());
-		assert!(!PolkadotNetworkMetadata::<T>::exists());
+		assert!(!PolkadotRuntimeVersion::<T>::exists());
 		assert!(!PolkadotProxyAccountNonce::<T>::exists());
 
 		Ok(sp_std::vec::Vec::new())
@@ -87,7 +111,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 		assert!(EthereumKeyManagerAddress::<T>::exists());
 		assert!(EthereumVaultAddress::<T>::exists());
 		assert!(EthereumSignatureNonce::<T>::exists());
-		assert!(PolkadotNetworkMetadata::<T>::exists());
+		assert!(PolkadotRuntimeVersion::<T>::exists());
 
 		Ok(())
 	}

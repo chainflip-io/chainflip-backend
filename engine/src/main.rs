@@ -4,7 +4,7 @@ use anyhow::Context;
 
 use cf_primitives::AccountRole;
 use chainflip_engine::{
-	dot::{rpc::DotRpcClient, witnesser as dot_witnesser, DotBroadcaster},
+	dot::{self, rpc::DotRpcClient, witnesser as dot_witnesser, DotBroadcaster},
 	eth::{
 		self, build_broadcast_channel, eth_block_witnessing::IngressAddressReceivers,
 		rpc::EthDualRpcClient, EthBroadcaster,
@@ -95,7 +95,8 @@ async fn main() -> anyhow::Result<()> {
 			let (epoch_start_sender, [epoch_start_receiver_1, epoch_start_receiver_2]) =
 				build_broadcast_channel(10);
 
-			let (dot_epoch_start_sender, [dot_epoch_start_receiver]) = build_broadcast_channel(10);
+			let (dot_epoch_start_sender, [dot_epoch_start_receiver_1, dot_epoch_start_receiver_2]) =
+				build_broadcast_channel(10);
 
 			let cfe_settings = state_chain_client
 				.storage_value::<pallet_cf_environment::CfeSettings<state_chain_runtime::Runtime>>(
@@ -229,8 +230,8 @@ async fn main() -> anyhow::Result<()> {
 
 			scope.spawn(
 				dot_witnesser::start(
-					dot_epoch_start_receiver,
-					dot_rpc_client,
+					dot_epoch_start_receiver_1,
+					dot_rpc_client.clone(),
 					dot_monitor_ingress_receiver,
 					state_chain_client
 						.storage_map::<pallet_cf_ingress_egress::IntentIngressDetails<
@@ -263,11 +264,22 @@ async fn main() -> anyhow::Result<()> {
 						.into_iter()
 						.map(|(signature, _)| signature.0)
 						.collect(),
-					state_chain_client,
+					state_chain_client.clone(),
 					db,
 					root_logger.clone(),
 				)
 				.map_err(|_r| anyhow::anyhow!("DOT witnesser failed")),
+			);
+
+			scope.spawn(
+				dot::runtime_version_updater::start(
+					dot_epoch_start_receiver_2,
+					dot_rpc_client,
+					state_chain_client,
+					latest_block_hash,
+					root_logger.clone(),
+				)
+				.map_err(|_| anyhow::anyhow!("DOT runtime version updater failed")),
 			);
 
 			Ok(())

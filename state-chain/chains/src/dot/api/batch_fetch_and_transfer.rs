@@ -121,7 +121,7 @@ impl ApiCall<Polkadot> for BatchFetchAndTransfer {
 mod test_batch_fetch {
 
 	use super::*;
-	use crate::dot::{sr25519::Pair, NONCE_1, RAW_SEED_1, RAW_SEED_2, WESTEND_METADATA};
+	use crate::dot::{sr25519::Pair, NONCE_1, RAW_SEED_1, RAW_SEED_2, TEST_RUNTIME_VERSION};
 	use cf_primitives::chains::assets;
 	use sp_core::{
 		crypto::{AccountId32, Pair as TraitPair},
@@ -168,7 +168,7 @@ mod test_batch_fetch {
 		];
 
 		let batch_fetch_api = BatchFetchAndTransfer::new_unsigned(
-			PolkadotReplayProtection::new(NONCE_1, 0, WESTEND_METADATA),
+			PolkadotReplayProtection::new(NONCE_1, 0, TEST_RUNTIME_VERSION, Default::default()),
 			dummy_fetch_params,
 			dummy_transfer_params,
 			account_id_proxy,

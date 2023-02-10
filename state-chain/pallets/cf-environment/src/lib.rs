@@ -3,7 +3,7 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use cf_chains::{
-	dot::{api::CreatePolkadotVault, Polkadot, PolkadotAccountId, PolkadotIndex, PolkadotMetadata},
+	dot::{api::CreatePolkadotVault, Polkadot, PolkadotAccountId, PolkadotIndex},
 	ChainCrypto,
 };
 
@@ -74,7 +74,7 @@ pub mod cfe {
 #[frame_support::pallet]
 pub mod pallet {
 
-	use cf_chains::dot::PolkadotPublicKey;
+	use cf_chains::dot::{PolkadotHash, PolkadotPublicKey, RuntimeVersion};
 	use cf_primitives::{Asset, TxId};
 
 	use cf_traits::{Broadcaster, VaultKeyWitnessedHandler};
@@ -82,7 +82,8 @@ pub mod pallet {
 	use super::*;
 
 	#[pallet::config]
-	pub trait Config: frame_system::Config {
+	#[pallet::disable_frame_system_supertrait_check]
+	pub trait Config: cf_traits::Chainflip {
 		/// Because we want to emit events when there is a config change during
 		/// an runtime upgrade
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
@@ -97,6 +98,10 @@ pub mod pallet {
 		/// On new key witnessed handler for Polkadot
 
 		type PolkadotVaultKeyWitnessedHandler: VaultKeyWitnessedHandler<Polkadot>;
+
+		#[pallet::constant]
+		type PolkadotGenesisHash: Get<PolkadotHash>;
+
 		/// Weight information
 		type WeightInfo: WeightInfo;
 	}
@@ -109,6 +114,8 @@ pub mod pallet {
 		InvalidCfeSettings,
 		/// Eth is not an Erc20 token, so its address can't be updated.
 		EthAddressNotUpdateable,
+		/// Polkadot runtime version is lower than the currently stored version.
+		InvalidPolkadotRuntimeVersion,
 	}
 
 	#[pallet::pallet]
@@ -171,9 +178,8 @@ pub mod pallet {
 	pub type PolkadotProxyAccountNonce<T> = StorageValue<_, PolkadotIndex, ValueQuery>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn polkadot_network_metadata)]
-	/// The Polkadot Network Metadata
-	pub type PolkadotNetworkMetadata<T> = StorageValue<_, PolkadotMetadata, ValueQuery>;
+	#[pallet::getter(fn polkadot_runtime_version)]
+	pub type PolkadotRuntimeVersion<T> = StorageValue<_, RuntimeVersion, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -190,6 +196,8 @@ pub mod pallet {
 		PolkadotVaultCreationCallInitiated { agg_key: <Polkadot as ChainCrypto>::AggKey },
 		/// Polkadot Vault Account is successfully set
 		PolkadotVaultAccountSet { polkadot_vault_account_id: PolkadotAccountId },
+		/// The Polkadot Runtime Version stored on chain was updated.
+		PolkadotRuntimeVersionUpdated { runtime_version: RuntimeVersion },
 	}
 
 	#[pallet::hooks]
@@ -355,6 +363,27 @@ pub mod pallet {
 			Self::next_polkadot_proxy_account_nonce();
 			Ok(dispatch_result)
 		}
+
+		#[pallet::weight(T::WeightInfo::update_polkadot_runtime_version())]
+		pub fn update_polkadot_runtime_version(
+			origin: OriginFor<T>,
+			runtime_version: RuntimeVersion,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureWitnessed::ensure_origin(origin)?;
+
+			// If the `transaction_version` is bumped, the `spec_version` must also be bumped.
+			// So we only need to check the `spec_version` here.
+			// https://paritytech.github.io/substrate/master/sp_version/struct.RuntimeVersion.html#structfield.transaction_version
+			ensure!(
+				runtime_version.spec_version > PolkadotRuntimeVersion::<T>::get().spec_version,
+				Error::<T>::InvalidPolkadotRuntimeVersion
+			);
+
+			PolkadotRuntimeVersion::<T>::put(runtime_version);
+			Self::deposit_event(Event::<T>::PolkadotRuntimeVersionUpdated { runtime_version });
+
+			Ok(().into())
+		}
 	}
 
 	#[pallet::genesis_config]
@@ -367,10 +396,8 @@ pub mod pallet {
 		pub eth_vault_address: EthereumAddress,
 		pub ethereum_chain_id: u64,
 		pub cfe_settings: cfe::CfeSettings,
-
 		pub polkadot_vault_account_id: Option<PolkadotAccountId>,
-
-		pub polkadot_network_metadata: PolkadotMetadata,
+		pub polkadot_runtime_version: RuntimeVersion,
 	}
 
 	/// Sets the genesis config
@@ -388,7 +415,7 @@ pub mod pallet {
 
 			PolkadotVaultAccountId::<T>::set(self.polkadot_vault_account_id.clone());
 
-			PolkadotNetworkMetadata::<T>::set(self.polkadot_network_metadata.clone());
+			PolkadotRuntimeVersion::<T>::set(self.polkadot_runtime_version);
 
 			PolkadotProxyAccountNonce::<T>::set(0);
 		}
@@ -458,10 +485,6 @@ impl<T: Config> Pallet<T> {
 			*nonce += 1;
 			*nonce - 1
 		})
-	}
-
-	pub fn get_polkadot_network_metadata() -> PolkadotMetadata {
-		PolkadotNetworkMetadata::<T>::get()
 	}
 
 	pub fn get_polkadot_vault_account() -> Option<PolkadotAccountId> {
