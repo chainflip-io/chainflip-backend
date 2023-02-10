@@ -120,7 +120,7 @@ impl CryptoScheme for BtcSigning {
 	}
 
 	fn agg_key(pubkey: &Self::Point) -> Self::AggKey {
-		pubkey.clone()
+		*pubkey
 	}
 	
 	fn is_pubkey_compatible(pubkey: &Self::Point) -> bool {
