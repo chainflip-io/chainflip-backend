@@ -4,9 +4,15 @@ use cf_primitives::{liquidity::AmmRange, AccountId, Asset, ForeignChainAddress, 
 use cf_traits::{mocks::system_state_info::MockSystemStateInfo, LiquidityPoolApi, SystemStateInfo};
 use frame_support::{assert_noop, assert_ok, error::BadOrigin};
 
+fn provision_accounts() {
+	FreeBalances::<Test>::insert(AccountId::from(LP_ACCOUNT), Asset::Eth, 1_000_000);
+	FreeBalances::<Test>::insert(AccountId::from(LP_ACCOUNT), Asset::Usdc, 1_000_000);
+}
+
 #[test]
 fn only_liquidity_provider_can_manage_positions() {
 	new_test_ext().execute_with(|| {
+		provision_accounts();
 		let range = AmmRange::new(-100, 100);
 		let asset = Asset::Eth;
 
@@ -34,15 +40,6 @@ fn egress_chain_and_asset_must_match() {
 			),
 			crate::Error::<Test>::InvalidEgressAddress
 		);
-		assert_noop!(
-			LiquidityProvider::withdraw_asset(
-				RuntimeOrigin::signed(LP_ACCOUNT.into()),
-				1,
-				Asset::Dot,
-				ForeignChainAddress::Eth([0x00; 20]),
-			),
-			crate::Error::<Test>::InvalidEgressAddress
-		);
 	});
 }
 
@@ -50,6 +47,7 @@ fn egress_chain_and_asset_must_match() {
 fn liquidity_providers_can_withdraw_asset() {
 	new_test_ext().execute_with(|| {
 		FreeBalances::<Test>::insert(AccountId::from(LP_ACCOUNT), Asset::Eth, 1_000);
+		FreeBalances::<Test>::insert(AccountId::from(NON_LP_ACCOUNT), Asset::Eth, 1_000);
 
 		assert_noop!(
 			LiquidityProvider::withdraw_asset(
@@ -59,6 +57,16 @@ fn liquidity_providers_can_withdraw_asset() {
 				ForeignChainAddress::Eth([0x00; 20]),
 			),
 			crate::Error::<Test>::InvalidEgressAddress
+		);
+
+		assert_noop!(
+			LiquidityProvider::withdraw_asset(
+				RuntimeOrigin::signed(NON_LP_ACCOUNT.into()),
+				100,
+				Asset::Eth,
+				ForeignChainAddress::Eth([0x00; 20]),
+			),
+			BadOrigin
 		);
 
 		assert_ok!(LiquidityProvider::withdraw_asset(
@@ -121,11 +129,9 @@ fn cannot_deposit_and_withdrawal_during_maintenance() {
 }
 
 #[test]
-fn cannot_manage_liquidity_during_maintenance() {
+fn cannot_manage_positions_during_maintenance() {
 	new_test_ext().execute_with(|| {
-		FreeBalances::<Test>::insert(AccountId::from(LP_ACCOUNT), Asset::Eth, 1_000_000);
-		FreeBalances::<Test>::insert(AccountId::from(LP_ACCOUNT), Asset::Usdc, 1_000_000);
-
+		provision_accounts();
 		let range = AmmRange::new(-100, 100);
 		let asset = Asset::Eth;
 
@@ -161,9 +167,7 @@ fn cannot_manage_liquidity_during_maintenance() {
 #[test]
 fn can_mint_liquidity() {
 	new_test_ext().execute_with(|| {
-		FreeBalances::<Test>::insert(AccountId::from(LP_ACCOUNT), Asset::Eth, 1_000_000);
-		FreeBalances::<Test>::insert(AccountId::from(LP_ACCOUNT), Asset::Usdc, 1_000_000);
-
+		provision_accounts();
 		let range = AmmRange::new(-100, 100);
 		let asset = Asset::Eth;
 
@@ -256,9 +260,7 @@ fn can_mint_liquidity() {
 #[test]
 fn can_burn_liquidity() {
 	new_test_ext().execute_with(|| {
-		FreeBalances::<Test>::insert(AccountId::from(LP_ACCOUNT), Asset::Eth, 1_000_000);
-		FreeBalances::<Test>::insert(AccountId::from(LP_ACCOUNT), Asset::Usdc, 1_000_000);
-
+		provision_accounts();
 		let range = AmmRange::new(-100, 100);
 		let asset = Asset::Eth;
 
@@ -364,7 +366,7 @@ fn mint_fails_with_insufficient_balance() {
 		assert_ok!(LiquidityPools::new_pool(RuntimeOrigin::root(), asset, 0, 0,));
 		System::reset_events();
 
-		// Can open a new position
+		// Cannot open a new position
 		assert_noop!(
 			LiquidityProvider::update_position(
 				RuntimeOrigin::signed(LP_ACCOUNT.into()),
