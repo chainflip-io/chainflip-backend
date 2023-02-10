@@ -1,5 +1,5 @@
 #![cfg(test)]
-
+#![feature(exclusive_range_pattern)]
 mod network;
 
 mod signer_nomination;
