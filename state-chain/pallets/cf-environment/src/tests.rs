@@ -1,3 +1,4 @@
+use cf_chains::dot::{RuntimeVersion, TEST_RUNTIME_VERSION};
 use cf_primitives::Asset;
 use cf_traits::SystemStateInfo;
 use frame_support::{assert_noop, assert_ok};
@@ -114,5 +115,28 @@ fn update_supported_eth_assets() {
 			Environment::update_supported_eth_assets(RuntimeOrigin::root(), Asset::Eth, [3; 20]),
 			<Error<Test>>::EthAddressNotUpdateable
 		);
+	});
+}
+
+#[test]
+fn test_update_polkadot_runtime_version() {
+	new_test_ext().execute_with(|| {
+		assert_eq!(Environment::polkadot_runtime_version(), TEST_RUNTIME_VERSION);
+
+		// This should be a noop since the version is the same as the genesis version
+		assert_noop!(
+			Environment::update_polkadot_runtime_version(
+				RuntimeOrigin::root(),
+				TEST_RUNTIME_VERSION,
+			),
+			Error::<Test>::InvalidPolkadotRuntimeVersion
+		);
+
+		let update_to = RuntimeVersion {
+			spec_version: TEST_RUNTIME_VERSION.spec_version + 1,
+			transaction_version: 1,
+		};
+		assert_ok!(Environment::update_polkadot_runtime_version(RuntimeOrigin::root(), update_to));
+		assert_eq!(Environment::polkadot_runtime_version(), update_to);
 	});
 }

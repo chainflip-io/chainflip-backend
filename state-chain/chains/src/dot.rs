@@ -39,6 +39,17 @@ pub type PolkadotCallHasher = BlakeTwo256;
 
 pub type PolkadotCallHash = <PolkadotCallHasher as Hash>::Output;
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Default)]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+pub struct RuntimeVersion {
+	pub spec_version: PolkadotSpecVersion,
+	pub transaction_version: PolkadotTransactionVersion,
+}
+
+// Westend testnet
+pub const TEST_RUNTIME_VERSION: RuntimeVersion =
+	RuntimeVersion { spec_version: 9340, transaction_version: 16 };
+
 pub type PolkadotSpecVersion = u32;
 pub type PolkadotIngressId = u64;
 pub type PolkadotTransactionVersion = u32;
@@ -47,26 +58,6 @@ pub type PolkadotUncheckedExtrinsic =
 	UncheckedExtrinsic<PolkadotAddress, PolkadotRuntimeCall, MultiSignature, PolkadotSignedExtra>;
 /// The payload being signed in transactions.
 pub type PolkadotPayload = SignedPayload<PolkadotRuntimeCall, PolkadotSignedExtra>;
-
-// Westend testnet
-pub const WESTEND_METADATA: PolkadotMetadata = PolkadotMetadata {
-	spec_version: 9340,
-	transaction_version: 16,
-	genesis_hash: hex_literal::hex!(
-		"e143f23803ac50e8f6f8e62695d1ce9e4e1d68aa36c1cd2cfd15340213f3423e"
-	),
-	block_hash_count: 4096,
-};
-
-// Polkadot mainnet
-pub const POLKADOT_METADATA: PolkadotMetadata = PolkadotMetadata {
-	spec_version: 9320,
-	transaction_version: 16,
-	genesis_hash: hex_literal::hex!(
-		"5f551688012d25a98e729752169f509c6186af8079418c118844cc852b332bf5"
-	),
-	block_hash_count: 4096,
-};
 
 // test westend account 1 (CHAINFLIP-TEST)
 // address: "5E2WfQFeafdktJ5AAF6ZGZ71Yj4fiJnHWRomVmeoStMNhoZe"
@@ -115,7 +106,7 @@ pub struct EpochStartData {
 impl Chain for Polkadot {
 	type ChainBlockNumber = PolkadotBlockNumber;
 	type ChainAmount = DotAmount;
-	type TrackedData = eth::TrackedData<Self>;
+	type TrackedData = ();
 	type ChainAccount = PolkadotAccountId;
 	type TransactionFee = Self::ChainAmount;
 	type ChainAsset = assets::dot::Asset;
@@ -215,10 +206,10 @@ impl PolkadotExtrinsicBuilder {
 		));
 		let additional_signed: <PolkadotSignedExtra as SignedExtension>::AdditionalSigned = (
 			(),
-			self.replay_protection.polkadot_config.spec_version,
-			self.replay_protection.polkadot_config.transaction_version,
-			H256::from_slice(&self.replay_protection.polkadot_config.genesis_hash),
-			H256::from_slice(&self.replay_protection.polkadot_config.genesis_hash),
+			self.replay_protection.runtime_version.spec_version,
+			self.replay_protection.runtime_version.transaction_version,
+			self.replay_protection.genesis_hash,
+			self.replay_protection.genesis_hash,
 			(),
 			(),
 			(),
@@ -769,23 +760,9 @@ impl From<PolkadotPublicKey> for Vec<u8> {
 }
 
 #[derive(Debug, Encode, Decode, TypeInfo, Eq, PartialEq, Clone)]
-#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-pub struct PolkadotMetadata {
-	pub spec_version: PolkadotSpecVersion,
-	pub transaction_version: PolkadotTransactionVersion,
-	pub genesis_hash: [u8; 32],
-	pub block_hash_count: PolkadotBlockNumber,
-}
-
-impl Default for PolkadotMetadata {
-	fn default() -> Self {
-		POLKADOT_METADATA
-	}
-}
-
-#[derive(Debug, Encode, Decode, TypeInfo, Eq, PartialEq, Clone)]
 pub struct PolkadotReplayProtection {
-	pub polkadot_config: PolkadotMetadata,
+	pub runtime_version: RuntimeVersion,
+	pub genesis_hash: PolkadotHash,
 	pub nonce: PolkadotIndex,
 	pub tip: PolkadotBalance,
 }
@@ -794,9 +771,10 @@ impl PolkadotReplayProtection {
 	pub fn new(
 		nonce: PolkadotIndex,
 		tip: PolkadotBalance,
-		polkadot_config: PolkadotMetadata,
+		runtime_version: RuntimeVersion,
+		genesis_hash: PolkadotHash,
 	) -> Self {
-		Self { polkadot_config, nonce, tip }
+		Self { runtime_version, genesis_hash, nonce, tip }
 	}
 }
 
@@ -850,7 +828,7 @@ mod test_polkadot_extrinsics {
 		println!("Encoded Call: 0x{}", hex::encode(test_runtime_call.encode()));
 
 		let mut extrinsic_handler = PolkadotExtrinsicBuilder::new_empty(
-			PolkadotReplayProtection::new(12, 0, WESTEND_METADATA),
+			PolkadotReplayProtection::new(12, 0, TEST_RUNTIME_VERSION, Default::default()),
 			account_id_1,
 		);
 		extrinsic_handler.insert_extrinsic_call(test_runtime_call);

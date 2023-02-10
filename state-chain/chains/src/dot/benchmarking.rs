@@ -91,7 +91,8 @@ impl<E> BenchmarkValue for PolkadotApi<E> {
 	fn benchmark_value() -> Self {
 		PolkadotApi::CreateAnonymousVault(CreateAnonymousVault::new_unsigned(
 			PolkadotReplayProtection {
-				polkadot_config: Default::default(),
+				runtime_version: Default::default(),
+				genesis_hash: Default::default(),
 				nonce: Default::default(),
 				tip: Default::default(),
 			},

@@ -240,11 +240,11 @@ impl ReplayProtectionProvider<Polkadot> for DotEnvironment {
 	fn replay_protection() -> PolkadotReplayProtection {
 		PolkadotReplayProtection::new(
 			Environment::next_polkadot_proxy_account_nonce(),
+			// TODO: Instead of 0, tip needs to be set here
 			0,
-			Environment::polkadot_network_metadata(),
-		) //Todo: Instead
-		 // of 0, tip needs
-		 // to be set here
+			Environment::polkadot_runtime_version(),
+			<Runtime as pallet_cf_environment::Config>::PolkadotGenesisHash::get(),
+		)
 	}
 }
 

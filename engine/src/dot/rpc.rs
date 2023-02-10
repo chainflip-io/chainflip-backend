@@ -1,9 +1,9 @@
 use std::pin::Pin;
 
 use async_trait::async_trait;
-use cf_chains::dot::PolkadotHash;
+use cf_chains::dot::{PolkadotHash, RuntimeVersion};
 use cf_primitives::PolkadotBlockNumber;
-use futures::{Stream, TryStreamExt};
+use futures::{Stream, StreamExt, TryStreamExt};
 use subxt::{
 	events::{Events, EventsClient},
 	rpc::types::{Bytes, ChainBlock},
@@ -35,13 +35,17 @@ impl DotRpcClient {
 pub trait DotRpcApi: Send + Sync {
 	async fn block_hash(&self, block_number: PolkadotBlockNumber) -> Result<Option<PolkadotHash>>;
 
-	async fn block(&self, hash: PolkadotHash) -> Result<Option<ChainBlock<PolkadotConfig>>>;
+	async fn block(&self, block_hash: PolkadotHash) -> Result<Option<ChainBlock<PolkadotConfig>>>;
 
 	async fn events(&self, block_hash: PolkadotHash) -> Result<Events<PolkadotConfig>>;
 
 	async fn subscribe_finalized_heads(
 		&self,
 	) -> Result<Pin<Box<dyn Stream<Item = Result<PolkadotHeader>> + Send>>>;
+
+	async fn subscribe_runtime_version(
+		&self,
+	) -> Result<Pin<Box<dyn Stream<Item = Result<RuntimeVersion>> + Send>>>;
 
 	async fn submit_raw_encoded_extrinsic(&self, encoded_bytes: Vec<u8>) -> Result<PolkadotHash>;
 }
@@ -69,10 +73,31 @@ impl DotRpcApi for DotRpcClient {
 			.map_err(|e| anyhow!("Failed to query Polkadot block hash with error: {e}"))
 	}
 
-	async fn block(&self, hash: PolkadotHash) -> Result<Option<ChainBlock<PolkadotConfig>>> {
+	async fn subscribe_runtime_version(
+		&self,
+	) -> Result<Pin<Box<dyn Stream<Item = Result<RuntimeVersion>> + Send>>> {
+		Ok(Box::pin(
+			self.online_client
+				.rpc()
+				.subscribe_runtime_version()
+				.await
+				.map_err(|e| anyhow!("Error initialising runtime version stream: {e}"))?
+				.map(|item| {
+					item.map_err(anyhow::Error::new).map(
+						|subxt::rpc::types::RuntimeVersion {
+						     spec_version,
+						     transaction_version,
+						     ..
+						 }| RuntimeVersion { spec_version, transaction_version },
+					)
+				}),
+		))
+	}
+
+	async fn block(&self, block_hash: PolkadotHash) -> Result<Option<ChainBlock<PolkadotConfig>>> {
 		self.online_client
 			.rpc()
-			.block(Some(hash))
+			.block(Some(block_hash))
 			.await
 			.map(|r| r.map(|r| r.block))
 			.map_err(|e| anyhow!("Failed to query for block with error: {e}"))

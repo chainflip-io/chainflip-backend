@@ -19,6 +19,7 @@ substrate-wasm-builder = { version = "5.0.0-dev", git = 'https://github.com/chai
 # See https://docs.rs/getrandom/#webassembly-support
 getrandom = { version = '0.2.3', features = ['js'], default-features = false }
 
+hex-literal = "0.3.1"
 log = { version = '0.4.16', default-features = false }
 nanorand = { version = '0.7', default-features = false, features = ['wyrand']}
 serde = { version = '1.0.126', optional = true, features = ['derive'] }

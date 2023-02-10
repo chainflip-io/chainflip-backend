@@ -1,4 +1,4 @@
-use cf_chains::dot::{POLKADOT_METADATA, POLKADOT_VAULT_ACCOUNT};
+use cf_chains::dot::{RuntimeVersion, POLKADOT_VAULT_ACCOUNT};
 use cf_primitives::{AccountRole, AuthorityCount};
 
 use sc_service::{ChainType, Properties};
@@ -14,6 +14,10 @@ use state_chain_runtime::{
 };
 
 use common::FLIPPERINOS_PER_FLIP;
+
+// Polkadot mainnet
+pub const POLKADOT_TEST_RUNTIME_VERSION: RuntimeVersion =
+	RuntimeVersion { spec_version: 9320, transaction_version: 16 };
 
 use std::{env, marker::PhantomData};
 use utilities::clean_eth_address;
@@ -229,10 +233,8 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 						max_ceremony_stage_duration,
 						eth_priority_fee_percentile: common::ETH_PRIORITY_FEE_PERCENTILE,
 					},
-
 					polkadot_vault_account_id: POLKADOT_VAULT_ACCOUNT,
-
-					polkadot_network_metadata: POLKADOT_METADATA,
+					polkadot_runtime_version: POLKADOT_TEST_RUNTIME_VERSION,
 				},
 				eth_init_agg_key,
 				ethereum_deployment_block,
@@ -359,7 +361,7 @@ macro_rules! network_spec {
 
 								polkadot_vault_account_id: POLKADOT_VAULT_ACCOUNT,
 
-								polkadot_network_metadata: POLKADOT_METADATA,
+								polkadot_runtime_version: POLKADOT_TEST_RUNTIME_VERSION,
 							},
 							eth_init_agg_key,
 							ethereum_deployment_block,
