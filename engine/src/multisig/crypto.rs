@@ -1,10 +1,10 @@
 #[macro_use]
 mod helpers;
+pub mod bitcoin;
 mod curve25519;
 pub mod ed25519;
 pub mod eth;
 pub mod polkadot;
-pub mod bitcoin;
 pub mod secp256k1;
 #[cfg(test)]
 mod tests;

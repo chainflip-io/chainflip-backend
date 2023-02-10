@@ -160,7 +160,8 @@ fn signature_should_be_valid() {
 
 		let challenge = PolkadotSigning::build_challenge(public_key, nonce_commitment, &payload);
 
-		let response = PolkadotSigning::build_response(nonce, nonce_commitment, &secret_key, challenge);
+		let response =
+			PolkadotSigning::build_response(nonce, nonce_commitment, &secret_key, challenge);
 
 		PolkadotSigning::build_signature(response, nonce_commitment)
 	};
