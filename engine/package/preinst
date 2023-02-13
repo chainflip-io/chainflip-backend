@@ -17,7 +17,9 @@ MAJOR=$(echo "$CF_VERSION" | awk -F. '{print $1}')
 MINOR=$(echo "$CF_VERSION" | awk -F. '{print $2}')
 
 # Create a directory for old versions of the binary and move the current version there.
-VERSIONED_DIR="$CF_BIN_ROOT/${MAJOR}.${MINOR}"
+# Migrate the binaries to run out of /usr/local/bin as creating directories in /usr/bin is
+# bad practise.
+VERSIONED_DIR="/usr/local/bin/chainflip/${MAJOR}.${MINOR}"
 mkdir -p "$VERSIONED_DIR"
 mv "$CF_BIN_ROOT/chainflip-engine" "$VERSIONED_DIR/chainflip-engine"
 

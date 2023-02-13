@@ -16,7 +16,7 @@ section = "rust"
 maintainer-scripts = "package/"
 systemd-units = { enable = false }
 pre-depends = ["curl (>=7.87.0)"]
-assets = [["target/release/chainflip-engine", "usr/bin/", "755"], ["start-engine.sh", "/etc/chainflip/", "100"]]
+assets = [["target/release/chainflip-engine", "usr/local/bin/", "755"], ["start-engine.sh", "etc/chainflip/", "755"]]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
