@@ -49,9 +49,9 @@ where
 			async move {
 				// NB: The first item of this stream is the current runtime version.
 				let mut runtime_version_subscription =
-					dot_client.subscribe_runtime_version().await?;
+					dot_client.subscribe_runtime_version(&logger).await?;
 
-				while let Some(result_runtime_version) = runtime_version_subscription.next().await {
+				while let Some(new_runtime_version) = runtime_version_subscription.next().await {
 					// TODO: Change end_witnessing_signal to a oneshot channel and tokio::select!
 					// the two futures. Currently this process will keep running, waiting on the
 					// above `.next()` call until a PolkadotRuntime upgrade is introduced. This is
@@ -61,18 +61,8 @@ where
 						break
 					}
 
-					match result_runtime_version {
-						Ok(new_runtime_version) => {
-							let spec_version_has_increased = new_runtime_version.spec_version >
-								last_version_witnessed.spec_version;
-							assert!(
-								spec_version_has_increased &&
-								new_runtime_version.transaction_version >=
-									last_version_witnessed.transaction_version,
-								"Polkadot spec version must be bumped when the transaction version is bumped"
-							);
-							if spec_version_has_increased {
-								let _result = state_chain_client
+					if new_runtime_version.spec_version > last_version_witnessed.spec_version {
+						let _result = state_chain_client
 									.submit_signed_extrinsic(
 										pallet_cf_witnesser::Call::witness_at_epoch {
 											call: Box::new(
@@ -86,17 +76,12 @@ where
 										&logger,
 									)
 									.await;
-								slog::info!(
-									logger,
-									"Polkadot runtime version update submitted, version witnessed: {:?}",
-									new_runtime_version
-								);
-								last_version_witnessed = new_runtime_version;
-							}
-						},
-						Err(e) => {
-							slog::error!(logger, "Error receiving runtime version update: {:?}", e);
-						},
+						slog::info!(
+							logger,
+							"Polkadot runtime version update submitted, version witnessed: {:?}",
+							new_runtime_version
+						);
+						last_version_witnessed = new_runtime_version;
 					}
 				}
 

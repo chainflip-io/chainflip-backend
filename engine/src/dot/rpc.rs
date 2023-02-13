@@ -1,5 +1,6 @@
 use std::pin::Pin;
 
+use crate::dot::safe_runtime_version_stream::safe_runtime_version_stream;
 use async_trait::async_trait;
 use cf_chains::dot::{PolkadotHash, RuntimeVersion};
 use cf_primitives::PolkadotBlockNumber;
@@ -39,13 +40,16 @@ pub trait DotRpcApi: Send + Sync {
 
 	async fn events(&self, block_hash: PolkadotHash) -> Result<Events<PolkadotConfig>>;
 
+	async fn current_runtime_version(&self) -> Result<RuntimeVersion>;
+
 	async fn subscribe_finalized_heads(
 		&self,
 	) -> Result<Pin<Box<dyn Stream<Item = Result<PolkadotHeader>> + Send>>>;
 
 	async fn subscribe_runtime_version(
 		&self,
-	) -> Result<Pin<Box<dyn Stream<Item = Result<RuntimeVersion>> + Send>>>;
+		logger: &slog::Logger,
+	) -> Result<Pin<Box<dyn Stream<Item = RuntimeVersion> + Send>>>;
 
 	async fn submit_raw_encoded_extrinsic(&self, encoded_bytes: Vec<u8>) -> Result<PolkadotHash>;
 }
@@ -73,10 +77,26 @@ impl DotRpcApi for DotRpcClient {
 			.map_err(|e| anyhow!("Failed to query Polkadot block hash with error: {e}"))
 	}
 
+	async fn current_runtime_version(&self) -> Result<RuntimeVersion> {
+		let runtime_version = self
+			.online_client
+			.rpc()
+			.runtime_version(None)
+			.await
+			.map_err(|e| anyhow!("Failed to query Polkadot runtime version with error: {e}"))?;
+
+		Ok(RuntimeVersion {
+			spec_version: runtime_version.spec_version,
+			transaction_version: runtime_version.transaction_version,
+		})
+	}
+
 	async fn subscribe_runtime_version(
 		&self,
-	) -> Result<Pin<Box<dyn Stream<Item = Result<RuntimeVersion>> + Send>>> {
-		Ok(Box::pin(
+		logger: &slog::Logger,
+	) -> Result<Pin<Box<dyn Stream<Item = RuntimeVersion> + Send>>> {
+		safe_runtime_version_stream(
+			self.current_runtime_version().await?,
 			self.online_client
 				.rpc()
 				.subscribe_runtime_version()
@@ -91,7 +111,10 @@ impl DotRpcApi for DotRpcClient {
 						 }| RuntimeVersion { spec_version, transaction_version },
 					)
 				}),
-		))
+			logger,
+		)
+		.await
+		.map_err(|e| anyhow!("Failed to subscribe to Polkadot runtime version with error: {e}"))
 	}
 
 	async fn block(&self, block_hash: PolkadotHash) -> Result<Option<ChainBlock<PolkadotConfig>>> {
