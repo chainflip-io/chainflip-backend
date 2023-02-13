@@ -15,6 +15,12 @@ use sp_runtime::RuntimeDebug;
 
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]
 pub(crate) struct EncodableFetchAssetParams {
+	pub contract_address: Address,
+	pub asset: Address,
+}
+
+#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]
+pub(crate) struct EncodableFetchDeployAssetParams {
 	pub intent_id: IntentId,
 	pub asset: Address,
 }
@@ -27,12 +33,17 @@ pub(crate) struct EncodableTransferAssetParams {
 	pub amount: AssetAmount,
 }
 
-impl Tokenizable for EncodableFetchAssetParams {
+impl Tokenizable for EncodableFetchDeployAssetParams {
 	fn tokenize(self) -> Token {
 		Token::Tuple(vec![
 			Token::FixedBytes(get_salt(self.intent_id).to_vec()),
 			Token::Address(self.asset),
 		])
+	}
+}
+impl Tokenizable for EncodableFetchAssetParams {
+	fn tokenize(self) -> Token {
+		Token::Tuple(vec![Token::Address(self.contract_address), Token::Address(self.asset)])
 	}
 }
 
@@ -58,7 +69,11 @@ impl Tokenizable for EncodableTransferAssetParams {
 pub struct AllBatch {
 	/// The signature data for validation and replay protection.
 	sig_data: SigData,
-	/// The list of all inbound deposits that are to be fetched in this batch call.
+	/// The list of all inbound deposits that are to be fetched that need to deploy new deposit
+	/// contracts.
+	fetch_deploy_params: Vec<EncodableFetchDeployAssetParams>,
+	/// The list of all inbound deposits that are to be fetched that reuse already deployed deposit
+	/// contracts.
 	fetch_params: Vec<EncodableFetchAssetParams>,
 	/// The list of all outbound transfers that need to be made to given addresses.
 	transfer_params: Vec<EncodableTransferAssetParams>,
@@ -67,11 +82,16 @@ pub struct AllBatch {
 impl AllBatch {
 	pub(crate) fn new_unsigned(
 		replay_protection: EthereumReplayProtection,
+		fetch_deploy_params: Vec<EncodableFetchDeployAssetParams>,
 		fetch_params: Vec<EncodableFetchAssetParams>,
 		transfer_params: Vec<EncodableTransferAssetParams>,
 	) -> Self {
-		let mut calldata =
-			Self { sig_data: SigData::new_empty(replay_protection), fetch_params, transfer_params };
+		let mut calldata = Self {
+			sig_data: SigData::new_empty(replay_protection),
+			fetch_deploy_params,
+			fetch_params,
+			transfer_params,
+		};
 		calldata.sig_data.insert_msg_hash_from(calldata.abi_encoded().as_slice());
 
 		calldata
@@ -93,9 +113,16 @@ impl AllBatch {
 					]),
 				),
 				ethabi_param(
-					"fetchParamsArray",
+					"deployFetchParamsArray",
 					ParamType::Array(Box::new(ParamType::Tuple(vec![
 						ParamType::FixedBytes(32),
+						ParamType::Address,
+					]))),
+				),
+				ethabi_param(
+					"fetchParamsArray",
+					ParamType::Array(Box::new(ParamType::Tuple(vec![
+						ParamType::Address,
 						ParamType::Address,
 					]))),
 				),
@@ -115,6 +142,7 @@ impl AllBatch {
 		self.get_function()
 			.encode_input(&[
 				self.sig_data.tokenize(),
+				self.fetch_deploy_params.clone().tokenize(),
 				self.fetch_params.clone().tokenize(),
 				self.transfer_params.clone().tokenize(),
 			])

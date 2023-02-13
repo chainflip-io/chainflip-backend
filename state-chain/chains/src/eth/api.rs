@@ -5,7 +5,9 @@ use sp_std::marker::PhantomData;
 
 use crate::*;
 
-use super::Ethereum;
+use self::all_batch::{EncodableFetchAssetParams, EncodableFetchDeployAssetParams};
+
+use super::{Ethereum, EthereumIngressId};
 
 pub mod all_batch;
 pub mod register_claim;
@@ -117,19 +119,39 @@ where
 		fetch_params: Vec<FetchAssetParams<Ethereum>>,
 		transfer_params: Vec<TransferAssetParams<Ethereum>>,
 	) -> Result<Self, ()> {
+		let mut fetch_only_params = vec![];
+		let mut fetch_deploy_params = vec![];
+		if fetch_params
+			.into_iter()
+			.map(|FetchAssetParams { ingress_id, asset }| {
+				let token_address = E::lookup(asset).ok_or(())?;
+				match ingress_id {
+					EthereumIngressId::Deployed(contract_address) => fetch_only_params
+						.push(EncodableFetchAssetParams { contract_address, asset: token_address }),
+					EthereumIngressId::UnDeployed(intent_id) => fetch_deploy_params
+						.push(EncodableFetchDeployAssetParams { intent_id, asset: token_address }),
+				};
+				Ok(())
+			})
+			.any(|result: Result<(), ()>| result.is_err())
+		{
+			return Err(())
+		}
+		//.collect::<Result<Vec<()>, ()>>()?;
 		Ok(Self::AllBatch(all_batch::AllBatch::new_unsigned(
 			E::replay_protection(),
-			fetch_params
-				.into_iter()
-				.map(|FetchAssetParams { intent_id, asset }| {
-					E::lookup(asset)
-						.map(|address| all_batch::EncodableFetchAssetParams {
-							intent_id,
-							asset: address,
-						})
-						.ok_or(())
-				})
-				.collect::<Result<Vec<_>, ()>>()?,
+			fetch_deploy_params,
+			// .into_iter()
+			// .map(|FetchAssetParams { ingress_id, asset }| {
+			// 	E::lookup(asset)
+			// 		.map(|address| all_batch::EncodableFetchAssetParams {
+			// 			contract_address: ingress_id,
+			// 			asset: address,
+			// 		})
+			// 		.ok_or(())
+			// })
+			// .collect::<Result<Vec<_>, ()>>()?,
+			fetch_only_params,
 			transfer_params
 				.into_iter()
 				.map(|TransferAssetParams { asset, to, amount }| {

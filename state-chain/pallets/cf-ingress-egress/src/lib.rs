@@ -343,7 +343,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		for request in batch_to_send {
 			match request {
 				FetchOrTransfer::<T::TargetChain>::Fetch { intent_id, asset } => {
-					fetch_params.push(FetchAssetParams { intent_id, asset });
+					fetch_params.push(FetchAssetParams { ingress_id, asset });
 				},
 				FetchOrTransfer::<T::TargetChain>::Transfer { asset, to, amount, egress_id } => {
 					egress_ids.push(egress_id);
