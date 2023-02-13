@@ -3,48 +3,53 @@
 set -e
 
 if [ "$1" != "upgrade" ]; then
-  echo "Fresh install detected, skipping migration"
+  echo "chainflip-engine: Fresh install detected, skipping migration"
   exit 0
 fi
 
+# Find and save to a var the location of the chainflip-engine binary.
 CF_BIN_ROOT=$(which chainflip-engine | xargs dirname)
 
-CF_VERSION=$(chainflip-engine --version)
+# Print the stdout (hiding stderr) and grep the version. This is rather ugly as the
+# --version does not yet exist, but the build information contains the version.
+CF_VERSION=$(chainflip-engine --version 2> /dev/null | grep -Po '(?<=v)[^\ (]+')
 MAJOR=$(echo "$CF_VERSION" | awk -F. '{print $1}')
 MINOR=$(echo "$CF_VERSION" | awk -F. '{print $2}')
 
-VERSIONED_DIR="$CF_BIN_ROOT/${MAJOR}.${MINOR}.${PATCH}"
-mkdir $VERSIONED_DIR
-
+# Create a directory for old versions of the binary and move the current version there.
+VERSIONED_DIR="$CF_BIN_ROOT/${MAJOR}.${MINOR}"
+mkdir -p "$VERSIONED_DIR"
 mv "$CF_BIN_ROOT/chainflip-engine" "$VERSIONED_DIR/chainflip-engine"
 
-echo "Beginning setup and migration of engine config"
+echo "chainflip-engine: Beginning setup and migration of engine config"
 
+# Find the engine config file. If missing, assume that the user has already set up the
+# node in the new way. Shouldn't happen.
 ENGINE_CONFIG_LOCATION=$(grep -srl --include "Default.toml" "state_chain" /etc/* ~)
 if [ -z "$ENGINE_CONFIG_LOCATION" ]; then
-  echo "No Default.toml file found. Exiting"
+  echo "chainflip-engine: No Default.toml file found. Exiting"
   exit 0
 fi
 ENGINE_CONFIG_ROOT=$(dirname "$ENGINE_CONFIG_LOCATION")
-echo "Engine config found at: $ENGINE_CONFIG_LOCATION"
 
-echo "Renaming to Settings.toml"
+# Rename the engine file to Settings.toml
 UPDATED_ENGINE_CONFIG_LOCATION="$ENGINE_CONFIG_ROOT/Settings.toml"
 mv "$ENGINE_CONFIG_LOCATION" "$UPDATED_ENGINE_CONFIG_LOCATION"
 
+# Find [dot] in the config file, exit if exists
 if grep "\[dot\]" "$UPDATED_ENGINE_CONFIG_LOCATION" > /dev/null; then
-  echo "Dot config already present. Exiting"
+  echo "chainflip-engine: Dot config already present. Exiting"
   exit 0
 fi
 
-echo "Updating $UPDATED_ENGINE_CONFIG_LOCATION to include Polkadot configuration"
+# Add the Polkadot config.
 cat <<EOT >> "$UPDATED_ENGINE_CONFIG_LOCATION"
 
 [dot]
 ws_node_endpoint = "https://pdot.chainflip.io"
 EOT
 
-echo "Migration completed successfully"
+echo "chainflip-engine: Migration completed successfully"
 
 #DEBHELPER#
 
