@@ -33,6 +33,9 @@ where
 		call: state_chain_runtime::RuntimeCall,
 		runtime_version: &RuntimeVersion,
 		genesis_hash: state_chain_runtime::Hash,
+		current_hash: state_chain_runtime::Hash,
+		current_block_number: state_chain_runtime::BlockNumber,
+		lifetime: state_chain_runtime::BlockNumber,
 		nonce: state_chain_runtime::Index,
 	) -> state_chain_runtime::UncheckedExtrinsic {
 		let extra: state_chain_runtime::SignedExtra = (
@@ -40,7 +43,7 @@ where
 			frame_system::CheckSpecVersion::new(),
 			frame_system::CheckTxVersion::new(),
 			frame_system::CheckGenesis::new(),
-			frame_system::CheckEra::from(Era::Immortal),
+			frame_system::CheckEra::from(Era::mortal(lifetime as u64, current_block_number as u64)),
 			frame_system::CheckNonce::from(nonce),
 			frame_system::CheckWeight::new(),
 			// This is the tx fee tip. Normally this determines transaction priority. We currently
@@ -52,7 +55,7 @@ where
 			runtime_version.spec_version,
 			runtime_version.transaction_version,
 			genesis_hash,
-			genesis_hash,
+			current_hash,
 			(),
 			(),
 			(),
