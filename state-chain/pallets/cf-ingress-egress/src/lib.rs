@@ -269,19 +269,22 @@ pub mod pallet {
 
 		fn on_initialize(_n: BlockNumberFor<T>) -> Weight {
 			let now = T::TimeSource::now().as_secs();
+			let mut total_weight: Weight = Weight::zero();
 			let expired: Vec<u64> =
 				IntentExpiries::<T, I>::iter_keys().filter(|x| x <= &now).collect();
 			for expiry in expired {
 				if let Some(addresses) = IntentExpiries::<T, I>::take(expiry) {
-					for address in addresses {
+					for address in addresses.clone() {
 						IntentIngressDetails::<T, I>::remove(&address.1);
 						IntentActions::<T, I>::remove(&address.1);
 						StaleIntents::<T, I>::append(address.clone());
 						Self::deposit_event(Event::StopWitnessing { ingress_address: address.1 });
 					}
+					total_weight = total_weight
+						.saturating_add(T::WeightInfo::on_initialize(addresses.len() as u32));
 				}
 			}
-			T::DbWeight::get().reads(1)
+			total_weight.saturating_add(T::WeightInfo::on_initialize_has_no_expired())
 		}
 
 		fn integrity_test() {

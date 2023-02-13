@@ -7,7 +7,28 @@ use cf_primitives::ForeignChain;
 use frame_benchmarking::{account, benchmarks_instance_pallet};
 use frame_support::traits::Hooks;
 
+fn setup_expired_intents<T: Config<I>, I: 'static>(time: u64, number_of_intents: u64) {
+	let mut intent_vec = vec![];
+	for i in 0..number_of_intents {
+		intent_vec.push((i, TargetChainAccount::<T, I>::benchmark_value()));
+	}
+	IntentExpiries::<T, I>::insert(time, intent_vec);
+}
+
 benchmarks_instance_pallet! {
+	on_initialize {
+		let n in 1u32 .. 254u32;
+		const EXECUTION_TIME: u64 = 0;
+		let origin = T::EnsureGovernance::successful_origin();
+		setup_expired_intents::<T, I>(EXECUTION_TIME, n.into());
+		assert!(!IntentExpiries::<T, I>::get(EXECUTION_TIME).expect("to be in the storage").is_empty());
+	} : { let _ = Pallet::<T, I>::on_initialize(T::BlockNumber::from(1_u32)); }
+	verify {
+		assert!(IntentExpiries::<T, I>::get(EXECUTION_TIME).is_none());
+	}
+	on_initialize_has_no_expired {
+		let origin = T::EnsureGovernance::successful_origin();
+	} : { let _ = Pallet::<T, I>::on_initialize(T::BlockNumber::from(1_u32)); }
 	egress_assets {
 		let n in 1u32 .. 254u32;
 		let mut batch = vec![];
