@@ -57,10 +57,11 @@ impl DotRpcApi for DotRpcClient {
 	) -> Result<Pin<Box<dyn Stream<Item = Result<PolkadotHeader>> + Send>>> {
 		Ok(Box::pin(
 			self.online_client
-				.rpc()
-				.subscribe_finalized_block_headers()
+				.blocks()
+				.subscribe_finalized()
 				.await
 				.map_err(|e| anyhow!("Error initialising finalised head stream: {e}"))?
+				.map(|block| block.map(|block| block.header().clone()))
 				.map_err(|e| anyhow!("Error in finalised head stream: {e}")),
 		))
 	}
