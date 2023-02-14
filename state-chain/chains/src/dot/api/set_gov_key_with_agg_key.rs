@@ -17,7 +17,7 @@ use crate::{
 /// to change the proxy.
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct ChangeGovKey {
-	pub extrinsic_handler: PolkadotExtrinsicBuilder,
+	pub extrinsic_builder: PolkadotExtrinsicBuilder,
 	/// The current proxy AccountId
 	pub old_key: Option<PolkadotPublicKey>,
 	/// The current proxy AccountId
@@ -35,7 +35,7 @@ impl ChangeGovKey {
 	) -> Self {
 		let the_vault_key: PolkadotPublicKey = PolkadotPublicKey::default();
 		let mut calldata = Self {
-			extrinsic_handler: PolkadotExtrinsicBuilder::new_empty(
+			extrinsic_builder: PolkadotExtrinsicBuilder::new_empty(
 				replay_protection,
 				MultiSigner::Sr25519(the_vault_key.0).into_account(),
 			),
@@ -46,10 +46,10 @@ impl ChangeGovKey {
 
 		// create and insert polkadot runtime call
 		calldata
-			.extrinsic_handler
+			.extrinsic_builder
 			.insert_extrinsic_call(calldata.extrinsic_call_polkadot());
 		// compute and insert the threshold signature payload
-		calldata.extrinsic_handler.insert_threshold_signature_payload().expect(
+		calldata.extrinsic_builder.insert_threshold_signature_payload().expect(
 			"This should not fail since SignedExtension of the SignedExtra type is implemented",
 		);
 
@@ -99,7 +99,7 @@ impl ChangeGovKey {
 impl ApiCall<Polkadot> for ChangeGovKey {
 	fn threshold_signature_payload(&self) -> <Polkadot as crate::ChainCrypto>::Payload {
 		self
-		.extrinsic_handler
+		.extrinsic_builder
 		.signature_payload
 		.clone()
 		.expect("This should never fail since the apicall created above with new_unsigned() ensures it exists")
@@ -109,16 +109,16 @@ impl ApiCall<Polkadot> for ChangeGovKey {
 		mut self,
 		threshold_signature: &<Polkadot as crate::ChainCrypto>::ThresholdSignature,
 	) -> Self {
-		self.extrinsic_handler
+		self.extrinsic_builder
 			.insert_signature_and_get_signed_unchecked_extrinsic(threshold_signature.clone());
 		self
 	}
 
 	fn chain_encoded(&self) -> Vec<u8> {
-		self.extrinsic_handler.signed_extrinsic.clone().unwrap().encode()
+		self.extrinsic_builder.signed_extrinsic.clone().unwrap().encode()
 	}
 
 	fn is_signed(&self) -> bool {
-		self.extrinsic_handler.is_signed().unwrap_or(false)
+		self.extrinsic_builder.is_signed().unwrap_or(false)
 	}
 }

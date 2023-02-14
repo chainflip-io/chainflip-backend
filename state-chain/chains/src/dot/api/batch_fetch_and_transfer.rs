@@ -16,7 +16,7 @@ use sp_runtime::RuntimeDebug;
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct BatchFetchAndTransfer {
 	/// The handler for creating and signing polkadot extrinsics
-	pub extrinsic_handler: PolkadotExtrinsicBuilder,
+	pub extrinsic_builder: PolkadotExtrinsicBuilder,
 	/// The list of all inbound deposits that are to be fetched in this batch call.
 	pub fetch_params: Vec<FetchAssetParams<Polkadot>>,
 	/// The list of all outbound transfers that are to be executed in this call.
@@ -34,7 +34,7 @@ impl BatchFetchAndTransfer {
 		vault_account: PolkadotAccountId,
 	) -> Self {
 		let mut calldata = Self {
-			extrinsic_handler: PolkadotExtrinsicBuilder::new_empty(
+			extrinsic_builder: PolkadotExtrinsicBuilder::new_empty(
 				replay_protection,
 				proxy_account,
 			),
@@ -44,10 +44,10 @@ impl BatchFetchAndTransfer {
 		};
 		// create and insert polkadot runtime call
 		calldata
-			.extrinsic_handler
+			.extrinsic_builder
 			.insert_extrinsic_call(calldata.extrinsic_call_polkadot());
 		// compute and insert the threshold signature payload
-		calldata.extrinsic_handler.insert_threshold_signature_payload().expect(
+		calldata.extrinsic_builder.insert_threshold_signature_payload().expect(
 			"This should not fail since SignedExtension of the SignedExtra type is implemented",
 		);
 
@@ -97,24 +97,24 @@ impl BatchFetchAndTransfer {
 impl ApiCall<Polkadot> for BatchFetchAndTransfer {
 	fn threshold_signature_payload(&self) -> <Polkadot as ChainCrypto>::Payload {
 		self
-		.extrinsic_handler
+		.extrinsic_builder
 		.signature_payload
 		.clone()
 		.expect("This should never fail since the apicall created above with new_unsigned() ensures it exists")
 	}
 
 	fn signed(mut self, signature: &<Polkadot as ChainCrypto>::ThresholdSignature) -> Self {
-		self.extrinsic_handler
+		self.extrinsic_builder
 			.insert_signature_and_get_signed_unchecked_extrinsic(signature.clone());
 		self
 	}
 
 	fn chain_encoded(&self) -> Vec<u8> {
-		self.extrinsic_handler.signed_extrinsic.clone().unwrap().encode()
+		self.extrinsic_builder.signed_extrinsic.clone().unwrap().encode()
 	}
 
 	fn is_signed(&self) -> bool {
-		self.extrinsic_handler.is_signed().unwrap_or(false)
+		self.extrinsic_builder.is_signed().unwrap_or(false)
 	}
 }
 
@@ -179,13 +179,13 @@ mod test_batch_fetch {
 		println!(
 			"CallHash: 0x{}",
 			batch_fetch_api
-				.extrinsic_handler
+				.extrinsic_builder
 				.extrinsic_call
 				.using_encoded(|encoded| hex::encode(BlakeTwo256::hash(encoded)))
 		);
 		println!(
 			"Encoded Call: 0x{}",
-			hex::encode(batch_fetch_api.extrinsic_handler.extrinsic_call.encode())
+			hex::encode(batch_fetch_api.extrinsic_builder.extrinsic_call.encode())
 		);
 
 		let batch_fetch_api = batch_fetch_api
