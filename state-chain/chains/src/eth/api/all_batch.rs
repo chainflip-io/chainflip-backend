@@ -220,7 +220,7 @@ mod test_all_batch {
 		const FAKE_SIG: [u8; 32] = asymmetrise([0xe1; 32]);
 
 		let eth_vault = ethabi::Contract::load(
-			std::include_bytes!("../../../../../engine/src/eth/abis/Vault.json").as_ref(),
+			std::include_bytes!("../../../../../engine/src/eth/abis/IVault.json").as_ref(),
 		)
 		.unwrap();
 
