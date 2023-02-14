@@ -108,6 +108,8 @@ impl crate::Config<Instance1> for Test {
 	type TimeSource = time_source::Mock;
 }
 
+pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
+
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig { system: Default::default() };

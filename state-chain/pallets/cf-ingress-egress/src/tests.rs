@@ -1,9 +1,13 @@
-use crate::{mock::*, DisabledEgressAssets, FetchOrTransfer, ScheduledEgressRequests, WeightInfo};
+use crate::{
+	mock::*, DisabledEgressAssets, FetchOrTransfer, IntentActions, IntentExpiries,
+	IntentIngressDetails, ScheduledEgressRequests, StaleIntents, WeightInfo,
+};
 
 use cf_primitives::{chains::assets::eth, ForeignChain};
-use cf_traits::{EgressApi, IngressApi};
+use cf_traits::{mocks::time_source, EgressApi, IngressApi};
 
 use frame_support::{assert_ok, instances::Instance1, traits::Hooks, weights::Weight};
+use std::time::Duration;
 const ALICE_ETH_ADDRESS: EthereumAddress = [100u8; 20];
 const BOB_ETH_ADDRESS: EthereumAddress = [101u8; 20];
 const ETH_ETH: eth::Asset = eth::Asset::Eth;
@@ -359,5 +363,32 @@ fn on_idle_does_nothing_if_nothing_to_send() {
 		);
 
 		assert_eq!(ScheduledEgressRequests::<Test, Instance1>::decode_len(), Some(4));
+	});
+}
+
+#[test]
+fn intent_expires() {
+	new_test_ext().execute_with(|| {
+		let expire_time = 5;
+		let _ = IngressEgress::register_liquidity_ingress_intent(ALICE, ETH_ETH);
+		time_source::Mock::tick(Duration::from_secs(expire_time));
+		assert!(StaleIntents::<Test, Instance1>::get().is_empty());
+		assert!(IntentExpiries::<Test, Instance1>::get(5).is_some());
+		let addresses =
+			IntentExpiries::<Test, Instance1>::get(expire_time).expect("intent expiry exists");
+		assert!(addresses.len() == 1);
+		let address = addresses.get(0).expect("to have ingress details for that address").1;
+		assert!(IntentIngressDetails::<Test, Instance1>::get(address,).is_some());
+		assert!(IntentActions::<Test, Instance1>::get(address).is_some());
+		IngressEgress::on_initialize(1);
+		assert!(IntentExpiries::<Test, Instance1>::get(expire_time).is_none());
+		assert!(!StaleIntents::<Test, Instance1>::get().is_empty());
+		assert_eq!(
+			StaleIntents::<Test, Instance1>::get().pop().expect("to have a stale intent").1,
+			address
+		);
+		System::assert_last_event(RuntimeEvent::IngressEgress(crate::Event::StopWitnessing {
+			ingress_address: address,
+		}));
 	});
 }
