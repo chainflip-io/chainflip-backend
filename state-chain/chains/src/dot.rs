@@ -807,21 +807,21 @@ mod test_polkadot_extrinsics {
 		);
 		println!("Encoded Call: 0x{}", hex::encode(test_runtime_call.encode()));
 
-		let mut extrinsic_handler = PolkadotExtrinsicBuilder::new_empty(
+		let mut extrinsic_builder = PolkadotExtrinsicBuilder::new_empty(
 			PolkadotReplayProtection::new(12, 0, TEST_RUNTIME_VERSION, Default::default()),
 			account_id_1,
 		);
-		extrinsic_handler.insert_extrinsic_call(test_runtime_call);
-		extrinsic_handler
+		extrinsic_builder.insert_extrinsic_call(test_runtime_call);
+		extrinsic_builder
 			.insert_threshold_signature_payload()
 			.expect("This shouldn't fail");
 
-		let signed_extrinsic: Option<PolkadotUncheckedExtrinsic> = extrinsic_handler
+		let signed_extrinsic: Option<PolkadotUncheckedExtrinsic> = extrinsic_builder
 			.insert_signature_and_get_signed_unchecked_extrinsic(keypair_1.sign(
-				&extrinsic_handler.signature_payload.clone().expect("This can't fail").0[..],
+				&extrinsic_builder.signature_payload.clone().expect("This can't fail").0[..],
 			));
 
-		assert!(extrinsic_handler.is_signed().unwrap_or(false));
+		assert!(extrinsic_builder.is_signed().unwrap_or(false));
 
 		println!("encoded extrinsic: {:?}", signed_extrinsic.unwrap().encode());
 	}

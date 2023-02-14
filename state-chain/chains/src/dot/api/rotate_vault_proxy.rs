@@ -18,7 +18,7 @@ use sp_runtime::{traits::IdentifyAccount, MultiSigner, RuntimeDebug};
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct RotateVaultProxy {
 	/// The handler for creating and signing polkadot extrinsics
-	pub extrinsic_handler: PolkadotExtrinsicBuilder,
+	pub extrinsic_builder: PolkadotExtrinsicBuilder,
 	/// The current proxy AccountId
 	pub old_proxy: PolkadotPublicKey,
 	/// The new proxy account public key
@@ -35,7 +35,7 @@ impl RotateVaultProxy {
 		vault_account: PolkadotAccountId,
 	) -> Self {
 		let mut calldata = Self {
-			extrinsic_handler: PolkadotExtrinsicBuilder::new_empty(
+			extrinsic_builder: PolkadotExtrinsicBuilder::new_empty(
 				replay_protection,
 				MultiSigner::Sr25519(old_proxy.0).into_account(),
 			),
@@ -45,10 +45,10 @@ impl RotateVaultProxy {
 		};
 		// create and insert polkadot runtime call
 		calldata
-			.extrinsic_handler
+			.extrinsic_builder
 			.insert_extrinsic_call(calldata.extrinsic_call_polkadot());
 		// compute and insert the threshold signature payload
-		calldata.extrinsic_handler.insert_threshold_signature_payload().expect(
+		calldata.extrinsic_builder.insert_threshold_signature_payload().expect(
 			"This should not fail since SignedExtension of the SignedExtra type is implemented",
 		);
 
@@ -94,24 +94,24 @@ impl RotateVaultProxy {
 impl ApiCall<Polkadot> for RotateVaultProxy {
 	fn threshold_signature_payload(&self) -> <Polkadot as ChainCrypto>::Payload {
 		self
-		.extrinsic_handler
+		.extrinsic_builder
 		.signature_payload
 		.clone()
 		.expect("This should never fail since the apicall created above with new_unsigned() ensures it exists")
 	}
 
 	fn signed(mut self, signature: &<Polkadot as ChainCrypto>::ThresholdSignature) -> Self {
-		self.extrinsic_handler
+		self.extrinsic_builder
 			.insert_signature_and_get_signed_unchecked_extrinsic(signature.clone());
 		self
 	}
 
 	fn chain_encoded(&self) -> Vec<u8> {
-		self.extrinsic_handler.signed_extrinsic.clone().unwrap().encode()
+		self.extrinsic_builder.signed_extrinsic.clone().unwrap().encode()
 	}
 
 	fn is_signed(&self) -> bool {
-		self.extrinsic_handler.is_signed().unwrap_or(false)
+		self.extrinsic_builder.is_signed().unwrap_or(false)
 	}
 }
 
@@ -158,7 +158,7 @@ mod test_rotate_vault_proxy {
 		println!(
 			"CallHash: 0x{}",
 			rotate_vault_proxy_api
-				.extrinsic_handler
+				.extrinsic_builder
 				.extrinsic_call
 				.clone()
 				.unwrap()
@@ -168,7 +168,7 @@ mod test_rotate_vault_proxy {
 			"Encoded Call: 0x{}",
 			hex::encode(
 				rotate_vault_proxy_api
-					.extrinsic_handler
+					.extrinsic_builder
 					.extrinsic_call
 					.clone()
 					.unwrap()
