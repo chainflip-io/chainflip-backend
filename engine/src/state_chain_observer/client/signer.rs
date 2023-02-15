@@ -38,6 +38,8 @@ where
 		lifetime: state_chain_runtime::BlockNumber,
 		nonce: state_chain_runtime::Index,
 	) -> state_chain_runtime::UncheckedExtrinsic {
+		assert!(lifetime <= state_chain_runtime::BlockHashCount::get());
+
 		let extra: state_chain_runtime::SignedExtra = (
 			frame_system::CheckNonZeroSender::new(),
 			frame_system::CheckSpecVersion::new(),
