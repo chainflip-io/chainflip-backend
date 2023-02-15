@@ -186,7 +186,7 @@ mod test_all_batch {
 	// It uses a different ethabi to the CFE, so we test separately
 	fn just_load_the_contract() {
 		assert_ok!(ethabi::Contract::load(
-			std::include_bytes!("../../../../../engine/src/eth/abis/Vault.json").as_ref(),
+			std::include_bytes!("../../../../../engine/src/eth/abis/IVault.json").as_ref(),
 		));
 	}
 
@@ -198,9 +198,26 @@ mod test_all_batch {
 		const CHAIN_ID: u64 = 1;
 		const NONCE: u64 = 9;
 
+		let dummy_fetch_deploy_asset_params = vec![
+			EncodableFetchDeployAssetParams {
+				intent_id: 1u64,
+				asset: Address::from_slice(&[3; 20]),
+			},
+			EncodableFetchDeployAssetParams {
+				intent_id: 2u64,
+				asset: Address::from_slice(&[4; 20]),
+			},
+		];
+
 		let dummy_fetch_asset_params = vec![
-			EncodableFetchAssetParams { intent_id: 1u64, asset: Address::from_slice(&[3; 20]) },
-			EncodableFetchAssetParams { intent_id: 2u64, asset: Address::from_slice(&[4; 20]) },
+			EncodableFetchAssetParams {
+				contract_address: Address::from_slice(&[5; 20]),
+				asset: Address::from_slice(&[3; 20]),
+			},
+			EncodableFetchAssetParams {
+				contract_address: Address::from_slice(&[6; 20]),
+				asset: Address::from_slice(&[4; 20]),
+			},
 		];
 
 		let dummy_transfer_asset_params = vec![
@@ -232,6 +249,7 @@ mod test_all_batch {
 				chain_id: CHAIN_ID,
 				nonce: NONCE,
 			},
+			dummy_fetch_deploy_asset_params.clone(),
 			dummy_fetch_asset_params.clone(),
 			dummy_transfer_asset_params.clone(),
 		);
@@ -265,6 +283,7 @@ mod test_all_batch {
 						Token::Uint(NONCE.into()),
 						Token::Address(FAKE_NONCE_TIMES_G_ADDR.into()),
 					]),
+					dummy_fetch_deploy_asset_params.tokenize(),
 					dummy_fetch_asset_params.tokenize(),
 					dummy_transfer_asset_params.tokenize(),
 				])

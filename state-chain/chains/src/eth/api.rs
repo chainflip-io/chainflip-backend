@@ -123,9 +123,9 @@ where
 		let mut fetch_deploy_params = vec![];
 		if fetch_params
 			.into_iter()
-			.map(|FetchAssetParams { ingress_id, asset }| {
+			.map(|FetchAssetParams { ingress_fetch_id, asset }| {
 				let token_address = E::lookup(asset).ok_or(())?;
-				match ingress_id {
+				match ingress_fetch_id {
 					EthereumIngressId::Deployed(contract_address) => fetch_only_params
 						.push(EncodableFetchAssetParams { contract_address, asset: token_address }),
 					EthereumIngressId::UnDeployed(intent_id) => fetch_deploy_params

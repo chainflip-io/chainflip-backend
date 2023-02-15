@@ -12,5 +12,5 @@ impl Chain for AnyChain {
 	type ChainAsset = assets::any::Asset;
 	type ChainAccount = ForeignChainAddress;
 	type EpochStartData = ();
-	type IngressId = ();
+	type IngressFetchId = ();
 }
