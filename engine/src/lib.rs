@@ -1,4 +1,5 @@
 #![feature(ip)]
+#![feature(result_flattening)]
 
 pub mod common;
 pub mod constants;

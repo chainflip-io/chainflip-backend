@@ -1,5 +1,11 @@
+use codec::Encode;
 use sp_core::Pair;
-use sp_runtime::traits::{IdentifyAccount, Verify};
+use sp_runtime::{
+	generic::Era,
+	traits::{IdentifyAccount, Verify},
+	MultiAddress,
+};
+use sp_version::RuntimeVersion;
 use state_chain_runtime::{AccountId, Signature};
 
 /// A wrapper around a substrate [`Pair`] that can be used for signing.
@@ -21,8 +27,49 @@ where
 		Self { account_id, signer }
 	}
 
-	/// Takes a signer payload for an extrinsic, and returns a signature based on it.
-	pub fn sign(&self, signer_payload: &[u8]) -> Signature {
-		self.signer.sign(signer_payload).into()
+	/// Returns a signed extrinsic that matches the provided call
+	pub fn new_signed_extrinsic(
+		&self,
+		call: state_chain_runtime::RuntimeCall,
+		runtime_version: &RuntimeVersion,
+		genesis_hash: state_chain_runtime::Hash,
+		nonce: state_chain_runtime::Index,
+	) -> state_chain_runtime::UncheckedExtrinsic {
+		let extra: state_chain_runtime::SignedExtra = (
+			frame_system::CheckNonZeroSender::new(),
+			frame_system::CheckSpecVersion::new(),
+			frame_system::CheckTxVersion::new(),
+			frame_system::CheckGenesis::new(),
+			frame_system::CheckEra::from(Era::Immortal),
+			frame_system::CheckNonce::from(nonce),
+			frame_system::CheckWeight::new(),
+			// This is the tx fee tip. Normally this determines transaction priority. We currently
+			// ignore this in the runtime but it needs to be set to some default value.
+			state_chain_runtime::ChargeTransactionPayment::from(0),
+		);
+		let additional_signed = (
+			(),
+			runtime_version.spec_version,
+			runtime_version.transaction_version,
+			genesis_hash,
+			genesis_hash,
+			(),
+			(),
+			(),
+		);
+
+		let signed_payload = state_chain_runtime::SignedPayload::from_raw(
+			call.clone(),
+			extra.clone(),
+			additional_signed,
+		);
+		let signature = signed_payload.using_encoded(|bytes| self.signer.sign(bytes).into());
+
+		state_chain_runtime::UncheckedExtrinsic::new_signed(
+			call,
+			MultiAddress::Id(self.account_id.clone()),
+			signature,
+			extra,
+		)
 	}
 }
