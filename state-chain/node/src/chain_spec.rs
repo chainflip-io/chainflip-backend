@@ -1,6 +1,7 @@
 use cf_chains::dot::{RuntimeVersion, POLKADOT_VAULT_ACCOUNT};
 use cf_primitives::{AccountRole, AuthorityCount};
 
+use frame_benchmarking::sp_std::collections::btree_set::BTreeSet;
 use sc_service::{ChainType, Properties};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::crypto::{set_default_ss58_version, Ss58AddressFormat, UncheckedInto};
@@ -493,7 +494,7 @@ fn testnet_genesis(
 		},
 		aura: AuraConfig { authorities: vec![] },
 		grandpa: GrandpaConfig { authorities: vec![] },
-		governance: GovernanceConfig { members: vec![root_key], expiry_span },
+		governance: GovernanceConfig { members: BTreeSet::from([root_key]), expiry_span },
 		reputation: ReputationConfig {
 			accrual_ratio,
 			penalties,

@@ -144,10 +144,10 @@ pub mod pallet {
 	#[pallet::getter(fn expiry_span)]
 	pub(super) type ExpiryTime<T> = StorageValue<_, Timestamp, ValueQuery>;
 
-	/// Array of accounts which are included in the current governance.
+	/// Accounts in the current governance set.
 	#[pallet::storage]
 	#[pallet::getter(fn members)]
-	pub(super) type Members<T> = StorageValue<_, Vec<AccountId<T>>, ValueQuery>;
+	pub(super) type Members<T> = StorageValue<_, BTreeSet<AccountId<T>>, ValueQuery>;
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
@@ -196,6 +196,8 @@ pub mod pallet {
 		ProposalNotFound,
 		/// Decode of call failed
 		DecodeOfCallFailed,
+		/// Decoding Members len failed.
+		DecodeMembersLenFailed,
 		/// A runtime upgrade has failed because the upgrade conditions were not satisfied
 		UpgradeConditionsNotMet,
 		/// The call hash was not whitelisted
@@ -219,9 +221,8 @@ pub mod pallet {
 			call: Box<<T as Config>::RuntimeCall>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			// Ensure origin is part of the governance
 			ensure!(Members::<T>::get().contains(&who), Error::<T>::NotMember);
-			// Push proposal
+
 			let id = Self::push_proposal(call);
 			Self::deposit_event(Event::Proposed(id));
 
@@ -249,10 +250,8 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			accounts: Vec<T::AccountId>,
 		) -> DispatchResultWithPostInfo {
-			// Ensure the extrinsic was executed by the governance
 			T::EnsureGovernance::ensure_origin(origin)?;
-			// Set the new members of the governance
-			Members::<T>::put(accounts);
+			Members::<T>::set(accounts.into_iter().collect());
 			Ok(().into())
 		}
 
@@ -272,13 +271,9 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			code: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
-			// Ensure the extrinsic was executed by the governance
 			T::EnsureGovernance::ensure_origin(origin)?;
-			// Ensure execution conditions
 			ensure!(T::UpgradeCondition::is_satisfied(), Error::<T>::UpgradeConditionsNotMet);
-			// Emit an additional event
 			Self::deposit_event(Event::UpgradeConditionsSatisfied);
-			// Do the runtime upgrade
 			T::RuntimeUpgrade::do_upgrade(code)
 		}
 
@@ -300,7 +295,6 @@ pub mod pallet {
 			approved_id: ProposalId,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			// Ensure origin is part of the governance
 			ensure!(Members::<T>::get().contains(&who), Error::<T>::NotMember);
 			Self::inner_approve(who, approved_id)?;
 			// Governance members don't pay transaction fees
@@ -395,7 +389,7 @@ pub mod pallet {
 	/// Genesis definition
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
-		pub members: Vec<AccountId<T>>,
+		pub members: BTreeSet<AccountId<T>>,
 		pub expiry_span: u64,
 	}
 
@@ -465,7 +459,9 @@ impl<T: Config> Pallet<T> {
 			Ok(proposal.clone())
 		})?;
 
-		if proposal.approved.len() > (Members::<T>::get().len() / 2) {
+		if proposal.approved.len() >
+			(Members::<T>::decode_len().ok_or(Error::<T>::DecodeMembersLenFailed)? / 2)
+		{
 			ExecutionPipeline::<T>::append((proposal.call, approved_id));
 			Proposals::<T>::remove(approved_id);
 			ActiveProposals::<T>::mutate(|proposals| {
