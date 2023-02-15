@@ -291,6 +291,7 @@ impl StateChainClient {
 															account_nonce,
 															rpc_err
 														);
+														account_nonce += 1;
 													},
 													// This occurs when the nonce has already been *consumed* i.e a transaction with
 													// that nonce is in a block
@@ -307,6 +308,7 @@ impl StateChainClient {
 															account_nonce,
 															rpc_err
 														);
+														account_nonce += 1;
 													},
 													jsonrpsee::core::Error::Call(jsonrpsee::types::error::CallError::Custom(ref obj))
 														if obj == &invalid_err_obj(InvalidTransaction::BadProof) =>
