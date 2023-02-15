@@ -170,19 +170,23 @@ impl<'env, Error: Send + 'static> Scope<'env, Error> {
 		// dropped, meaning the scope is exiting/aborting, and not when it is full
 		let (sender, receiver) = async_channel::unbounded();
 
+		let runtime_handle = tokio::runtime::Handle::current();
+
 		(
 			Scope { sender, _phantom: Default::default() },
 			ScopeResultStream {
 				receiver: Some(receiver),
 				no_more_tasks: false,
-				// Currently there is not a nice way to detect which tokio runtime flavor is being used. TODO: Once https://github.com/tokio-rs/tokio/pull/5138 is released we should use this function instead to determine this
-				#[cfg(test)]
-				tasks: ScopedTasks::CurrentThread(Default::default()),
-				#[cfg(not(test))]
-				tasks: ScopedTasks::MultiThread(
-					tokio::runtime::Handle::current(),
-					Default::default(),
-				),
+				tasks: match runtime_handle.runtime_flavor() {
+					tokio::runtime::RuntimeFlavor::CurrentThread =>
+						ScopedTasks::CurrentThread(Default::default()),
+					tokio::runtime::RuntimeFlavor::MultiThread => ScopedTasks::MultiThread(
+						tokio::runtime::Handle::current(),
+						Default::default(),
+					),
+					flavor =>
+						unimplemented!("Unknown runtime flavor '{:?}' is not supported", flavor),
+				},
 			},
 		)
 	}
@@ -267,10 +271,7 @@ impl<T> Future for ScopedJoinHandle<T> {
 }
 
 enum ScopedTasks<Error: Send + 'static> {
-	#[cfg(test)]
 	CurrentThread(FuturesUnordered<TaskFuture<Error>>),
-	// Will no longer be dead once https://github.com/tokio-rs/tokio/pull/5138 is available
-	#[allow(dead_code)]
 	MultiThread(
 		tokio::runtime::Handle,
 		FuturesUnordered<tokio::task::JoinHandle<Result<(), Error>>>,
@@ -291,7 +292,6 @@ impl<Error: Send + 'static> Stream for ScopeResultStream<Error> {
 				Poll::Ready(Some(future)) => {
 					let tasks = &mut self.tasks;
 					match tasks {
-						#[cfg(test)]
 						ScopedTasks::CurrentThread(tasks) => tasks.push(future),
 						ScopedTasks::MultiThread(runtime, tasks) =>
 							tasks.push(runtime.spawn(future)),
@@ -304,8 +304,8 @@ impl<Error: Send + 'static> Stream for ScopeResultStream<Error> {
 		}
 
 		match ready!(match &mut self.tasks {
-			#[cfg(test)]
-			ScopedTasks::CurrentThread(tasks) => Pin::new(tasks).poll_next(cx).map(|option| option.map(Ok)),
+			ScopedTasks::CurrentThread(tasks) =>
+				Pin::new(tasks).poll_next(cx).map(|option| option.map(Ok)),
 			ScopedTasks::MultiThread(_, tasks) => Pin::new(tasks).poll_next(cx),
 		}) {
 			None =>
@@ -320,7 +320,6 @@ impl<Error: Send + 'static> Stream for ScopeResultStream<Error> {
 
 	fn size_hint(&self) -> (usize, Option<usize>) {
 		match &self.tasks {
-			#[cfg(test)]
 			ScopedTasks::CurrentThread(tasks) => tasks.size_hint(),
 			ScopedTasks::MultiThread(_, tasks) => tasks.size_hint(),
 		}
@@ -330,7 +329,6 @@ impl<Error: Send + 'static> FusedStream for ScopeResultStream<Error> {
 	fn is_terminated(&self) -> bool {
 		self.receiver.as_ref().unwrap().is_terminated() &&
 			match &self.tasks {
-				#[cfg(test)]
 				ScopedTasks::CurrentThread(tasks) => tasks.is_terminated(),
 				ScopedTasks::MultiThread(_, tasks) => tasks.is_terminated(),
 			}
@@ -342,9 +340,8 @@ impl<Error: Send + 'static> Drop for ScopeResultStream<Error> {
 		self.receiver = None;
 		// cancel and wait for all scope's tasks to finish
 		match &mut self.tasks {
-			// Tokio has two flavors of internal runtime CurrentThread and MultiThread.
+			// Tokio has several flavors of internal runtime
 			// tokio::task::block_in_place doesn't work in a CurrentThread runtime.
-			#[cfg(test)]
 			ScopedTasks::CurrentThread(_) => {
 				// We don't need to wait for tasks to finish here as the tasks member contains all
 				// the futures, so once we drop `tasks` we know all the spawned futures are gone.

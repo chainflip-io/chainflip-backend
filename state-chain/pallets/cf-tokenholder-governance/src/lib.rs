@@ -1,37 +1,44 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use cf_chains::{eth::Address, ForeignChain};
+use cf_traits::{BroadcastAnyChainGovKey, Chainflip, CommKeyBroadcaster, FeePayment, StakingInfo};
 use codec::{Decode, Encode};
-use frame_support::{dispatch::Weight, pallet_prelude::*, RuntimeDebugNoBound};
+use frame_support::{
+	dispatch::Weight,
+	pallet_prelude::*,
+	traits::{OnRuntimeUpgrade, StorageVersion},
+	RuntimeDebugNoBound,
+};
 use sp_std::{cmp::PartialEq, vec, vec::Vec};
 
 pub use pallet::*;
+
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
+mod migrations;
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
 mod tests;
 
 pub mod weights;
-use cf_traits::BroadcastAnyChainGovKey;
 pub use weights::WeightInfo;
 
 #[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, RuntimeDebugNoBound)]
 #[scale_info(skip_type_params(T))]
 pub enum Proposal {
-	SetGovernanceKey((ForeignChain, Vec<u8>)),
+	SetGovernanceKey(ForeignChain, Vec<u8>),
 	SetCommunityKey(Address),
 }
+
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use crate::Event::{GovKeyUpdatedHasFailed, GovKeyUpdatedWasSuccessful};
-	use cf_traits::{BroadcastComKey, Chainflip, FeePayment, StakingInfo};
 
-	use crate::pallet::Proposal::{SetCommunityKey, SetGovernanceKey};
 	#[pallet::pallet]
 	#[pallet::without_storage_info]
+	#[pallet::storage_version(PALLET_VERSION)]
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
 
@@ -49,8 +56,8 @@ pub mod pallet {
 			AccountId = <Self as frame_system::Config>::AccountId,
 			Balance = Self::Amount,
 		>;
-		/// Broadcasts the comm key to Ethereum
-		type CommKeyBroadcaster: BroadcastComKey<EthAddress = Address>;
+		/// Broadcasts the community key.
+		type CommKeyBroadcaster: CommKeyBroadcaster;
 		/// Broadcasts the gov key to any supported chain.
 		type AnyChainGovKeyBroadcaster: BroadcastAnyChainGovKey;
 		/// Benchmarking weights.
@@ -90,7 +97,7 @@ pub mod pallet {
 	pub type CommKeyUpdateAwaitingEnactment<T> =
 		StorageValue<_, (BlockNumberFor<T>, Address), OptionQuery>;
 
-	/// The current Polkadot GOV key
+	/// Current Governance keys for foreign chains.
 	#[pallet::storage]
 	pub type GovKeys<T> = StorageMap<_, Twox64Concat, ForeignChain, Vec<u8>>;
 
@@ -117,6 +124,8 @@ pub mod pallet {
 		AlreadyBacked,
 		/// Proposal doesn't exist.
 		ProposalDoesntExist,
+		/// The proposed governance key is incompatible with the proposed chain.
+		IncompatibleGovkey,
 	}
 
 	#[pallet::hooks]
@@ -128,56 +137,60 @@ pub mod pallet {
 					Self::resolve_vote(proposal).try_into().unwrap(),
 				);
 			}
-			if let Some((enactment_block, (chain, key))) = GovKeyUpdateAwaitingEnactment::<T>::get()
+			if let Some((enactment_block, (chain, new_key))) =
+				GovKeyUpdateAwaitingEnactment::<T>::get()
 			{
 				if enactment_block == current_block {
-					match chain {
-						cf_chains::ForeignChain::Ethereum => {
-							// We can not fail for eth here.
-							let _ = T::AnyChainGovKeyBroadcaster::broadcast(
-								cf_chains::ForeignChain::Ethereum,
-								None,
-								key.clone(),
-							);
-						},
-						cf_chains::ForeignChain::Polkadot =>
-							if T::AnyChainGovKeyBroadcaster::broadcast(
-								cf_chains::ForeignChain::Polkadot,
-								GovKeys::<T>::get(ForeignChain::Polkadot),
-								key.clone(),
-							)
-							.is_ok()
-							{
-								GovKeys::<T>::insert(ForeignChain::Polkadot, key.clone());
-								Self::deposit_event(GovKeyUpdatedWasSuccessful {
-									chain: ForeignChain::Polkadot,
-									key: key.clone(),
-								});
-							} else {
-								Self::deposit_event(GovKeyUpdatedHasFailed {
-									chain: ForeignChain::Polkadot,
-									key: key.clone(),
-								});
-							},
-					};
+					if T::AnyChainGovKeyBroadcaster::broadcast_gov_key(
+						chain,
+						GovKeys::<T>::get(chain),
+						new_key.clone(),
+					)
+					.is_ok()
+					{
+						GovKeys::<T>::insert(chain, &new_key);
+						Self::deposit_event(Event::<T>::GovKeyUpdatedWasSuccessful {
+							chain,
+							key: new_key.clone(),
+						});
+					} else {
+						Self::deposit_event(Event::<T>::GovKeyUpdatedHasFailed {
+							chain,
+							key: new_key.clone(),
+						});
+					}
 					Self::deposit_event(Event::<T>::ProposalEnacted {
-						proposal: Proposal::SetGovernanceKey((chain, key)),
+						proposal: Proposal::SetGovernanceKey(chain, new_key),
 					});
 					GovKeyUpdateAwaitingEnactment::<T>::kill();
 					weight.saturating_accrue(T::WeightInfo::on_initialize_execute_proposal());
 				}
 			}
-			if let Some((enactment_block, key)) = CommKeyUpdateAwaitingEnactment::<T>::get() {
+			if let Some((enactment_block, new_key)) = CommKeyUpdateAwaitingEnactment::<T>::get() {
 				if enactment_block == current_block {
-					T::CommKeyBroadcaster::broadcast(key);
+					T::CommKeyBroadcaster::broadcast(new_key);
 					Self::deposit_event(Event::<T>::ProposalEnacted {
-						proposal: Proposal::SetCommunityKey(key),
+						proposal: Proposal::SetCommunityKey(new_key),
 					});
 					CommKeyUpdateAwaitingEnactment::<T>::kill();
 					weight.saturating_accrue(T::WeightInfo::on_initialize_execute_proposal());
 				}
 			}
 			weight
+		}
+
+		fn on_runtime_upgrade() -> Weight {
+			migrations::PalletMigration::<T>::on_runtime_upgrade()
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+			migrations::PalletMigration::<T>::pre_upgrade()
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
+			migrations::PalletMigration::<T>::post_upgrade(state)
 		}
 	}
 
@@ -200,6 +213,12 @@ pub mod pallet {
 			proposal: Proposal,
 		) -> DispatchResultWithPostInfo {
 			let proposer = ensure_signed(origin)?;
+			if let Proposal::SetGovernanceKey(chain, ref key) = proposal {
+				ensure!(
+					T::AnyChainGovKeyBroadcaster::is_govkey_compatible(chain, key),
+					Error::<T>::IncompatibleGovkey
+				);
+			}
 			T::FeePayment::try_burn_fee(&proposer, T::ProposalFee::get())?;
 			Proposals::<T>::insert(
 				<frame_system::Pallet<T>>::block_number() + T::VotingPeriod::get(),
@@ -246,13 +265,13 @@ pub mod pallet {
 					let enactment_block =
 						<frame_system::Pallet<T>>::block_number() + T::EnactmentDelay::get();
 					match proposal.clone() {
-						SetGovernanceKey((chain, key)) => {
+						Proposal::SetGovernanceKey(chain, key) => {
 							GovKeyUpdateAwaitingEnactment::<T>::put::<(
 								<T as frame_system::Config>::BlockNumber,
 								(cf_chains::ForeignChain, Vec<u8>),
 							)>((enactment_block, (chain, key)));
 						},
-						SetCommunityKey(key) => {
+						Proposal::SetCommunityKey(key) => {
 							CommKeyUpdateAwaitingEnactment::<T>::put((enactment_block, key));
 						},
 					}

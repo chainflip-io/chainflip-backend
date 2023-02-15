@@ -30,7 +30,7 @@ fn account_deletion_removes_relevant_storage_items() {
 		let (peer_id, _, _) = AccountPeerMapping::<Runtime>::get(&backup_node).unwrap();
 		assert!(MappedPeers::<Runtime>::contains_key(peer_id));
 
-		network::Cli::activate_account(&backup_node);
+		network::Cli::start_bidding(&backup_node);
 		Reputation::heartbeat(state_chain_runtime::RuntimeOrigin::signed(backup_node.clone()))
 			.unwrap();
 		assert!(Reputations::<Runtime>::get(backup_node.clone()).online_credits > 0);

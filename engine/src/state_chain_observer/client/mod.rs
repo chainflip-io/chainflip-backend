@@ -39,10 +39,12 @@ impl<BaseRpcClient> StateChainClient<BaseRpcClient> {
 	}
 }
 
+/// This resolves a compiler bug: https://github.com/rust-lang/rust/issues/102211#issuecomment-1372215393
+/// We should be able to remove this in future versions of the rustc
 fn assert_stream_send<'u, R>(
-	strm: impl 'u + Send + Stream<Item = R>,
+	stream: impl 'u + Send + Stream<Item = R>,
 ) -> impl 'u + Send + Stream<Item = R> {
-	strm
+	stream
 }
 
 impl StateChainClient {

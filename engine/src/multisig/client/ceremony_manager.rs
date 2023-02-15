@@ -10,6 +10,7 @@ use std::{
 	sync::Arc,
 };
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
+use tracing::{debug, info, info_span, trace, warn, Instrument};
 
 use crate::{
 	constants::CEREMONY_ID_WINDOW,
@@ -31,8 +32,6 @@ use state_chain_runtime::AccountId;
 use client::{ceremony_runner::CeremonyRunner, utils::PartyIdxMapping};
 
 use tokio::sync::oneshot;
-
-use crate::logging::{CEREMONY_ID_KEY, CEREMONY_TYPE_KEY};
 
 use client::common::{
 	broadcast::BroadcastStage, CeremonyCommon, CeremonyFailureReason, KeygenResultInfo,
@@ -108,7 +107,6 @@ pub struct CeremonyManager<C: CryptoScheme> {
 	signing_states: CeremonyStates<SigningCeremony<C>>,
 	keygen_states: CeremonyStates<KeygenCeremony<C>>,
 	latest_ceremony_id: CeremonyId,
-	logger: slog::Logger,
 }
 
 // A CeremonyStage for either keygen or signing
@@ -128,17 +126,14 @@ pub fn prepare_signing_request<Crypto: CryptoScheme>(
 	payload: Crypto::SigningPayload,
 	outgoing_p2p_message_sender: &UnboundedSender<OutgoingMultisigStageMessages>,
 	rng: Rng,
-	logger: &slog::Logger,
 ) -> Result<PreparedRequest<SigningCeremony<Crypto>>, SigningFailureReason> {
 	// Check that we have enough signers
 	let minimum_signers_needed = key_info.params.threshold + 1;
 	let signers_len: AuthorityCount = signers.len().try_into().expect("too many signers");
 	if signers_len < minimum_signers_needed {
-		slog::debug!(
-			logger,
-			"Request to sign invalid: not enough signers ({}/{})",
+		debug!(
+			"Request to sign invalid: not enough signers ({}/{minimum_signers_needed})",
 			signers.len(),
-			minimum_signers_needed
 		);
 
 		return Err(SigningFailureReason::NotEnoughSigners)
@@ -149,7 +144,7 @@ pub fn prepare_signing_request<Crypto: CryptoScheme>(
 		match map_ceremony_parties(own_account_id, &signers, &key_info.validator_mapping) {
 			Ok(result) => result,
 			Err(reason) => {
-				slog::debug!(logger, "Request to sign invalid: {}", reason);
+				debug!("Request to sign invalid: {reason}");
 				return Err(SigningFailureReason::InvalidParticipants)
 			},
 		};
@@ -164,7 +159,6 @@ pub fn prepare_signing_request<Crypto: CryptoScheme>(
 			validator_mapping: key_info.validator_mapping,
 			own_idx,
 			all_idxs: signer_idxs,
-			logger: logger.clone(),
 			rng,
 		};
 
@@ -186,7 +180,6 @@ pub fn prepare_keygen_request<Crypto: CryptoScheme>(
 	participants: BTreeSet<AccountId>,
 	outgoing_p2p_message_sender: &UnboundedSender<OutgoingMultisigStageMessages>,
 	rng: Rng,
-	logger: &slog::Logger,
 ) -> Result<PreparedRequest<KeygenCeremony<Crypto>>, KeygenFailureReason> {
 	let validator_mapping = Arc::new(PartyIdxMapping::from_participants(participants.clone()));
 
@@ -194,7 +187,7 @@ pub fn prepare_keygen_request<Crypto: CryptoScheme>(
 		match map_ceremony_parties(own_account_id, &participants, &validator_mapping) {
 			Ok(res) => res,
 			Err(reason) => {
-				slog::debug!(logger, "Keygen request invalid: {}", reason);
+				debug!("Keygen request invalid: {reason}");
 
 				return Err(KeygenFailureReason::InvalidParticipants)
 			},
@@ -207,7 +200,6 @@ pub fn prepare_keygen_request<Crypto: CryptoScheme>(
 			validator_mapping,
 			own_idx: our_idx,
 			all_idxs: signer_idxs,
-			logger: logger.clone(),
 			rng,
 		};
 
@@ -247,7 +239,6 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 		my_account_id: AccountId,
 		outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
 		latest_ceremony_id: CeremonyId,
-		logger: &slog::Logger,
 	) -> Self {
 		CeremonyManager {
 			my_account_id,
@@ -255,7 +246,6 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 			signing_states: CeremonyStates::new(),
 			keygen_states: CeremonyStates::new(),
 			latest_ceremony_id,
-			logger: logger.clone(),
 		}
 	}
 
@@ -288,11 +278,11 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 				// have been created by a bad p2p message.
 				if self.signing_states.cleanup_unauthorised_ceremony(&request.ceremony_id) {
 					SigningFailureReason::NotParticipatingInUnauthorisedCeremony
-						.log(&BTreeSet::default(), &self.logger);
+						.log(&BTreeSet::default());
 				}
 				if self.keygen_states.cleanup_unauthorised_ceremony(&request.ceremony_id) {
 					KeygenFailureReason::NotParticipatingInUnauthorisedCeremony
-						.log(&BTreeSet::default(), &self.logger);
+						.log(&BTreeSet::default());
 				}
 			},
 		}
@@ -317,7 +307,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 							match bincode::deserialize(&data) {
 								Ok(message) => self.process_p2p_message(sender_id, message, scope),
 								Err(_) => {
-									slog::warn!(self.logger, "Failed to deserialize message from: {}", sender_id);
+									warn!("Failed to deserialize message from: {sender_id}");
 								},
 							}
 						}
@@ -330,6 +320,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 					}
 				}
 			}
+			.instrument(info_span!("MultisigClient", chain = C::NAME))
 			.boxed()
 		})
 		.await
@@ -346,9 +337,10 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 	) {
 		assert!(!participants.is_empty(), "Keygen request has no participants");
 
-		let logger_with_ceremony_id = self.logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id));
+		let span = info_span!("Keygen Ceremony", ceremony_id = ceremony_id);
+		let _entered = span.enter();
 
-		slog::debug!(logger_with_ceremony_id, "Processing a keygen request");
+		debug!("Processing a keygen request");
 
 		if participants.len() == 1 {
 			let _result = result_sender.send(Ok(self.single_party_keygen(rng)));
@@ -361,7 +353,6 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 			participants,
 			&self.outgoing_p2p_message_sender,
 			rng,
-			&logger_with_ceremony_id,
 		) {
 			Ok(request) => request,
 			Err(failed_outcome) => {
@@ -377,8 +368,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 		};
 
 		let ceremony_handle =
-			self.keygen_states
-				.get_state_or_create_unauthorized(ceremony_id, scope, &self.logger);
+			self.keygen_states.get_state_or_create_unauthorized(ceremony_id, scope);
 
 		ceremony_handle
 			.on_request(request, result_sender)
@@ -399,9 +389,10 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 	) {
 		assert!(!signers.is_empty(), "Request to sign has no signers");
 
-		let logger_with_ceremony_id = self.logger.new(slog::o!(CEREMONY_ID_KEY => ceremony_id));
+		let span = info_span!("Signing Ceremony", ceremony_id = ceremony_id);
+		let _entered = span.enter();
 
-		slog::debug!(logger_with_ceremony_id, "Processing a request to sign");
+		debug!("Processing a request to sign");
 
 		if signers.len() == 1 {
 			let _result = result_sender.send(Ok(self.single_party_signing(payload, key_info, rng)));
@@ -416,7 +407,6 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 			payload,
 			&self.outgoing_p2p_message_sender,
 			rng,
-			&logger_with_ceremony_id,
 		) {
 			Ok(request) => request,
 			Err(failed_outcome) => {
@@ -433,8 +423,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 
 		// We have the key and have received a request to sign
 		let ceremony_handle =
-			self.signing_states
-				.get_state_or_create_unauthorized(ceremony_id, scope, &self.logger);
+			self.signing_states.get_state_or_create_unauthorized(ceremony_id, scope);
 
 		ceremony_handle
 			.on_request(request, result_sender)
@@ -450,28 +439,30 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 		scope: &Scope<'_, anyhow::Error>,
 	) {
 		match message {
-			MultisigMessage { ceremony_id, data: MultisigData::Keygen(data) } =>
+			MultisigMessage { ceremony_id, data: MultisigData::Keygen(data) } => {
+				let span = info_span!("Keygen Ceremony", ceremony_id = ceremony_id);
+				let _entered = span.enter();
+
 				self.keygen_states.process_data(
 					sender_id,
 					ceremony_id,
 					data,
 					self.latest_ceremony_id,
 					scope,
-					&self.logger.new(
-						slog::o!(CEREMONY_ID_KEY => ceremony_id, CEREMONY_TYPE_KEY => "keygen"),
-					),
-				),
-			MultisigMessage { ceremony_id, data: MultisigData::Signing(data) } =>
+				)
+			},
+			MultisigMessage { ceremony_id, data: MultisigData::Signing(data) } => {
+				let span = info_span!("Signing Ceremony", ceremony_id = ceremony_id);
+				let _entered = span.enter();
+
 				self.signing_states.process_data(
 					sender_id,
 					ceremony_id,
 					data,
 					self.latest_ceremony_id,
 					scope,
-					&self.logger.new(
-						slog::o!(CEREMONY_ID_KEY => ceremony_id, CEREMONY_TYPE_KEY => "signing"),
-					),
-				),
+				)
+			},
 		}
 	}
 
@@ -482,7 +473,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 	}
 
 	fn single_party_keygen(&self, mut rng: Rng) -> KeygenResultInfo<C> {
-		slog::info!(self.logger, "Performing solo keygen");
+		info!("Performing solo keygen");
 
 		let (_key_id, key_data) =
 			generate_key_data::<C>(BTreeSet::from_iter([self.my_account_id.clone()]), &mut rng);
@@ -495,7 +486,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 		keygen_result_info: KeygenResultInfo<C>,
 		mut rng: Rng,
 	) -> C::Signature {
-		slog::info!(self.logger, "Performing solo signing");
+		info!("Performing solo signing");
 
 		let key = &keygen_result_info.key.key_share;
 
@@ -544,11 +535,8 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
 		data: Ceremony::Data,
 		latest_ceremony_id: CeremonyId,
 		scope: &Scope<'_, anyhow::Error>,
-		logger: &slog::Logger,
 	) {
-		slog::debug!(logger, "Received data {} from [{}]", &data, sender_id;
-			CEREMONY_ID_KEY => ceremony_id
-		);
+		debug!("Received data {data} from [{sender_id}]");
 
 		// Get the existing ceremony or create an unauthorised one (with ceremony id tracking check)
 		let ceremony_handle = match self.ceremony_handles.entry(ceremony_id) {
@@ -556,21 +544,16 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
 				// Only a ceremony id that is within the ceremony id window can create unauthorised
 				// ceremonies
 				if ceremony_id > latest_ceremony_id + CEREMONY_ID_WINDOW {
-					slog::warn!(
-						logger,
-						"Ignoring data: unexpected future ceremony id {}",
-						ceremony_id
-					);
+					warn!("Ignoring data: unexpected future ceremony id {}", ceremony_id);
 					return
 				} else if ceremony_id < latest_ceremony_id {
-					slog::trace!(logger, "Ignoring data: old ceremony id {}", ceremony_id);
+					trace!("Ignoring data: old ceremony id {}", ceremony_id);
 					return
 				} else {
 					entry.insert(CeremonyHandle::spawn(
 						ceremony_id,
 						self.outcome_sender.clone(),
 						scope,
-						logger,
 					))
 				}
 			},
@@ -581,7 +564,7 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
 		// associated with it) and dropping the corresponding ceremony handle, which makes it
 		// possible for the following `send` to fail
 		if ceremony_handle.message_sender.send((sender_id, data)).is_err() {
-			slog::debug!(logger, "Ignoring data: ceremony runner has been dropped");
+			debug!("Ignoring data: ceremony runner has been dropped");
 		}
 	}
 
@@ -591,10 +574,9 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
 		&mut self,
 		ceremony_id: CeremonyId,
 		scope: &Scope<'_, anyhow::Error>,
-		logger: &slog::Logger,
 	) -> &mut CeremonyHandle<Ceremony> {
 		self.ceremony_handles.entry(ceremony_id).or_insert_with(|| {
-			CeremonyHandle::spawn(ceremony_id, self.outcome_sender.clone(), scope, logger)
+			CeremonyHandle::spawn(ceremony_id, self.outcome_sender.clone(), scope)
 		})
 	}
 
@@ -656,7 +638,6 @@ impl<Ceremony: CeremonyTrait> CeremonyHandle<Ceremony> {
 		ceremony_id: CeremonyId,
 		outcome_sender: UnboundedSender<(CeremonyId, CeremonyOutcome<Ceremony>)>,
 		scope: &Scope<'_, anyhow::Error>,
-		logger: &slog::Logger,
 	) -> Self {
 		let (message_sender, message_receiver) = mpsc::unbounded_channel();
 		let (request_sender, request_receiver) = oneshot::channel();
@@ -666,7 +647,6 @@ impl<Ceremony: CeremonyTrait> CeremonyHandle<Ceremony> {
 			message_receiver,
 			request_receiver,
 			outcome_sender,
-			logger.clone(),
 		));
 
 		CeremonyHandle {

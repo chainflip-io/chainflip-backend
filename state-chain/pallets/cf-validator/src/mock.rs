@@ -6,7 +6,7 @@ use cf_traits::{
 		qualify_node::QualifyAll, reputation_resetter::MockReputationResetter,
 		system_state_info::MockSystemStateInfo, vault_rotator::MockVaultRotatorA,
 	},
-	Bid, Chainflip, QualifyNode, RuntimeAuctionOutcome,
+	Bid, Chainflip, RuntimeAuctionOutcome,
 };
 use frame_support::{
 	construct_runtime, parameter_types,
@@ -93,14 +93,13 @@ impl pallet_session::Config for Test {
 	type NextSessionRotation = ();
 	type WeightInfo = ();
 }
-
-pub const AUCTION_WINNERS: [ValidatorId; 5] = [0, 1, 2, 3, 4];
-pub const WINNING_BIDS: [Amount; 5] = [120, 120, 110, 105, 100];
+pub const AUCTION_WINNERS: [ValidatorId; 4] = [0, 1, 2, 3];
+pub const WINNING_BIDS: [Amount; 4] = [120, 120, 110, 105];
 pub const AUCTION_LOSERS: [ValidatorId; 3] = [5, 6, 7];
 pub const UNQUALIFIED_NODE: ValidatorId = 8;
 pub const UNQUALIFIED_NODE_BID: Amount = 200;
 pub const LOSING_BIDS: [Amount; 3] = [99, 90, 74];
-pub const BOND: Amount = 100;
+pub const BOND: Amount = 105;
 
 thread_local! {
 	pub static NEXT_AUCTION_OUTCOME: RefCell<Result<RuntimeAuctionOutcome<Test>, &'static str>> = RefCell::new(Ok(
@@ -130,18 +129,8 @@ impl EpochTransitionHandler for TestEpochTransitionHandler {
 	}
 }
 
-pub struct MockQualifyValidator;
-impl QualifyNode for MockQualifyValidator {
-	type ValidatorId = ValidatorId;
-
-	fn is_qualified(_validator_id: &Self::ValidatorId) -> bool {
-		true
-	}
-}
-
 thread_local! {
 	pub static MISSED_SLOTS: RefCell<(u64, u64)> = RefCell::new(Default::default());
-
 	pub static BIDDERS: RefCell<Vec<Bid<ValidatorId, Amount>>> = RefCell::new(Default::default());
 }
 
@@ -239,7 +228,7 @@ impl Config for Test {
 	type EmergencyRotationPercentageRange = EmergencyRotationPercentageRange;
 	type Bonder = MockBonder;
 	type ReputationResetter = MockReputationResetter<Self>;
-	type AuctionQualification = QualifyAll<ValidatorId>;
+	type KeygenQualification = QualifyAll<ValidatorId>;
 }
 
 /// Session pallet requires a set of validators at genesis.
@@ -276,7 +265,7 @@ impl TestExternalitiesWithCheck {
 	pub fn execute_with<R>(&mut self, execute: impl FnOnce() -> R) -> R {
 		self.ext.execute_with(|| {
 			System::set_block_number(1);
-			QualifyAll::<u64>::except(UNQUALIFIED_NODE);
+			QualifyAll::<u64>::except([UNQUALIFIED_NODE]);
 			log::debug!("Pre-test invariant check.");
 			assert_invariants!();
 			log::debug!("Pre-test invariant check passed.");
@@ -290,7 +279,7 @@ impl TestExternalitiesWithCheck {
 	pub fn execute_with_unchecked_invariants<R>(&mut self, execute: impl FnOnce() -> R) -> R {
 		self.ext.execute_with(|| {
 			System::set_block_number(1);
-			QualifyAll::<u64>::except(UNQUALIFIED_NODE);
+			QualifyAll::<u64>::except([UNQUALIFIED_NODE]);
 			execute()
 		})
 	}

@@ -36,6 +36,13 @@ impl HasBlockNumber for EthNumberBloom {
 /// Merges two streams of blocks. The intent of this function is to create
 /// redundancy for HTTP and WS block item streams.
 ///
+/// Panics:
+/// - If the streams passed into the merged streams first elements are different this can panic. The
+///   assumption is that both streams passed in should be synced to the node at the start. This can
+///   be ensured by preprocessing a raw stream with something like `block_head_stream_from`.
+/// - If one of the input streams is not a contiguous stream. This can be ensured by preprocessing
+///   any raw stream. e.g. see [ws_safe_stream.rs]
+///
 /// For a particular ETH block, this will only return the block once, this includes
 /// blocks without items of interest. i.e. we always return a contiguous sequence of ETH block
 /// numbers.
@@ -50,12 +57,6 @@ impl HasBlockNumber for EthNumberBloom {
 /// - Logs when the merged stream yields
 /// - Logs when one stream is behind every [ETH_STILL_BEHIND_LOG_INTERVAL].
 /// - Trace logs every block yield from both streams
-///
-/// Panics:
-/// - If the streams passed into the merged streams first elements are different this can panic. The
-///   assumption is that both streams passed in should be synced to the node at the start.
-/// - If one of the input streams is not a contiguous stream. This can be ensured by preprocessing
-///   any raw stream. e.g. see [ws_safe_stream.rs]
 ///
 /// See the tests at the bottom of this file for some examples.
 ///

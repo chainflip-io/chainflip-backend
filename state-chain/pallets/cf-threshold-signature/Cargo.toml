@@ -16,6 +16,7 @@ targets = ['x86_64-unknown-linux-gnu']
 cf-traits = { path = '../../traits', default-features = false }
 cf-primitives = { path ='../../primitives', default-features = false }
 cf-chains = { path = '../../chains', default-features = false }
+cf-runtime-upgrade-utilities = { path = '../../runtime-upgrade-utilities', default-features = false }
 
 log = { version = '0.4.16', default-features = false }
 
@@ -44,6 +45,7 @@ std = [
   'cf-chains/std',
   'cf-traits/std',
   'cf-primitives/std',
+  'cf-runtime-upgrade-utilities/std',
   'codec/std',
   'scale-info/std',
   'frame-benchmarking?/std',
@@ -54,6 +56,7 @@ std = [
   'sp-runtime/std',
   # for the benchmark tests
   'pallet-cf-validator/std',
+  'pallet-cf-reputation/std',
 ]
 runtime-benchmarks = [
   'frame-benchmarking/runtime-benchmarks',
@@ -61,7 +64,10 @@ runtime-benchmarks = [
   'frame-system/runtime-benchmarks',
   'cf-traits/runtime-benchmarks',
   'cf-chains/runtime-benchmarks',
-  'pallet-cf-validator',
-  'pallet-cf-reputation',
+  'pallet-cf-validator/runtime-benchmarks',
+  'pallet-cf-reputation/runtime-benchmarks',
 ]
-try-runtime = ['frame-support/try-runtime']
+try-runtime = [
+  'frame-support/try-runtime',
+  'cf-runtime-upgrade-utilities/try-runtime'
+]

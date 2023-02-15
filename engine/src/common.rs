@@ -11,12 +11,12 @@ use itertools::Itertools;
 
 use crate::task_scope::Scope;
 
-/// Unrwaps a result, logging the error and returning early eith a provided error expression.
-/// This is particularly useful over `.map_err()` when inside a future, and need to return
+/// Unwraps a result, logging the error and returning early with a provided error expression.
+/// This is particularly useful over `.map_err()` when inside a future, and we need to return
 /// early with items from that future, due to the fact the future owns the values you want
 /// to return.
 #[macro_export]
-macro_rules! try_or_throw {
+macro_rules! try_with_logging {
 	($exp:expr, $err_expr:expr, $logger:expr) => {
 		match $exp {
 			Ok(ok) => ok,
@@ -123,7 +123,7 @@ mod tests {
 /// despite the fact it has been restarted.
 pub async fn start_with_restart_on_failure<StaticState, TaskFut, TaskGenerator>(
 	scope: &Scope<'_, anyhow::Error>,
-	task: TaskGenerator,
+	task_generator: TaskGenerator,
 	mut static_state: StaticState,
 ) -> anyhow::Result<()>
 where
@@ -133,17 +133,21 @@ where
 {
 	scope.spawn(async move {
 		loop {
-			// TODO: Use scope when it can accept any errors, not just anyhow errors
-			let current_task = tokio::spawn(task(static_state));
+			// TODO: We could pass the static_state by-ref to avoid needing to pass static_state out
+			// of task in error case
+
+			let task = task_generator(static_state);
 
 			// Spawn with handle and then wait for future to finish
-			static_state = match current_task.await.unwrap() {
-				Ok(()) => break Ok(()),
-				Err(state) => state,
-			};
+			static_state = match task.await {
+				Ok(()) => return Ok(()),
+				Err(state) => {
+					// give it some time before the restart
+					tokio::time::sleep(Duration::from_secs(2)).await;
 
-			// give it some time before the next restart
-			tokio::time::sleep(Duration::from_secs(2)).await;
+					state
+				},
+			};
 		}
 	});
 

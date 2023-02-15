@@ -23,7 +23,7 @@ fn cannot_claim_stake_out_of_claim_period() {
 			let (mut testnet, mut backup_nodes) = network::Network::create(0, &nodes);
 
 			for backup_node in backup_nodes.clone() {
-				network::Cli::activate_account(&backup_node);
+				network::Cli::start_bidding(&backup_node);
 			}
 
 			nodes.append(&mut backup_nodes);

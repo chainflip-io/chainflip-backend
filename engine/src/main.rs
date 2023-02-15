@@ -46,6 +46,9 @@ async fn main() -> anyhow::Result<()> {
 		settings.log.blacklist.clone(),
 	);
 
+	// Also init the tracing json logger because the multisig clients are now using tracing
+	logging::init_json_logger();
+
 	task_scope(|scope| {
 		async move {
 			if let Some(health_check_settings) = &settings.health_check {
@@ -145,7 +148,6 @@ async fn main() -> anyhow::Result<()> {
 					eth_incoming_receiver,
 					eth_outgoing_sender,
 					latest_ceremony_id,
-					&root_logger,
 				);
 
 			scope.spawn(eth_multisig_client_backend_future);
@@ -157,7 +159,6 @@ async fn main() -> anyhow::Result<()> {
 					dot_incoming_receiver,
 					dot_outgoing_sender,
 					latest_ceremony_id,
-					&root_logger,
 				);
 
 			scope.spawn(dot_multisig_client_backend_future);
@@ -263,6 +264,7 @@ async fn main() -> anyhow::Result<()> {
 						.map(|(signature, _)| signature.0)
 						.collect(),
 					state_chain_client,
+					db,
 					root_logger.clone(),
 				)
 				.map_err(|_r| anyhow::anyhow!("DOT witnesser failed")),

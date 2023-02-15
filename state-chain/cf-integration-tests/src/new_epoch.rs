@@ -145,12 +145,12 @@ fn epoch_rotates() {
 			for node in &backup_nodes {
 				network::Cli::register_as_validator(node);
 				network::setup_account_and_peer_mapping(node);
-				network::Cli::activate_account(node);
+				network::Cli::start_bidding(node);
 			}
 			for node in &keyless_nodes {
 				network::Cli::register_as_validator(node);
 				network::setup_peer_mapping(node);
-				network::Cli::activate_account(node);
+				network::Cli::start_bidding(node);
 			}
 
 			testnet.move_to_next_epoch();

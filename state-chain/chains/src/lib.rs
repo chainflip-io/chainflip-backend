@@ -71,6 +71,8 @@ pub trait Chain: Member + Parameter {
 		+ Into<cf_primitives::ForeignChainAddress>;
 
 	type EpochStartData: Member + Parameter + MaxEncodedLen;
+
+	type IngressFetchId: Member + Parameter + Copy;
 }
 
 /// Measures the age of items associated with the Chain.
@@ -161,7 +163,7 @@ where
 /// Contains all the parameters required to fetch incoming transactions on an external chain.
 #[derive(RuntimeDebug, Copy, Clone, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub struct FetchAssetParams<C: Chain> {
-	pub intent_id: IntentId,
+	pub ingress_fetch_id: <C as Chain>::IngressFetchId,
 	pub asset: <C as Chain>::ChainAsset,
 }
 
@@ -204,7 +206,10 @@ pub trait SetAggKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
 
 #[allow(clippy::result_unit_err)]
 pub trait SetGovKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
-	fn new_unsigned(maybe_old_key: Option<Vec<u8>>, new_key: Vec<u8>) -> Result<Self, ()>;
+	fn new_unsigned(
+		maybe_old_key: Option<<Abi as ChainCrypto>::GovKey>,
+		new_key: <Abi as ChainCrypto>::GovKey,
+	) -> Result<Self, ()>;
 }
 
 pub trait SetCommKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
@@ -264,6 +269,7 @@ pub mod mocks {
 		type ChainAccount = u64; // Currently, we don't care about this since we don't use them in tests
 		type ChainAsset = assets::eth::Asset;
 		type EpochStartData = ();
+		type IngressFetchId = ();
 	}
 
 	#[derive(
