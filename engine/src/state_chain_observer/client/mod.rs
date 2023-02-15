@@ -19,6 +19,7 @@ use tokio::sync::{mpsc, oneshot};
 
 use crate::{
 	common::{read_clean_and_decode_hex_str_file, EngineTryStreamExt},
+	constants::SIGNED_EXTRINSIC_LIFETIME,
 	logging::COMPONENT_KEY,
 	settings,
 	state_chain_observer::client::storage_api::StorageApi,
@@ -258,6 +259,9 @@ impl StateChainClient {
 				let mut runtime_version = base_rpc_client.runtime_version().await?;
 				let mut account_nonce = account_nonce;
 
+				let mut latest_block_number = latest_block_number;
+				let mut latest_block_hash = latest_block_hash;
+
 				async move {
 					loop {
 						tokio::select! {
@@ -273,6 +277,9 @@ impl StateChainClient {
 													call.clone(),
 													&runtime_version,
 													genesis_hash,
+													latest_block_hash,
+													latest_block_number,
+													SIGNED_EXTRINSIC_LIFETIME,
 													account_nonce,
 												))
 												.await
@@ -385,7 +392,10 @@ impl StateChainClient {
 								});
 							}
 							option_block_header = finalized_block_header_stream.next() => {
-								let _result = block_sender.broadcast(option_block_header.unwrap()?).await;
+								let current_block_header = option_block_header.unwrap()?;
+								latest_block_hash = current_block_header.hash();
+								latest_block_number = current_block_header.number;
+								let _result = block_sender.broadcast(current_block_header).await;
 							}
 						}
 					}

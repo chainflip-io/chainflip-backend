@@ -47,3 +47,6 @@ pub const NODE_P2P_PORT: &str = "NODE_P2P__PORT";
 /// Base path for all files
 pub const CONFIG_ROOT: &str = "CF_CONFIG_ROOT";
 pub const DEFAULT_CONFIG_ROOT: &str = "/etc/chainflip";
+
+/// Lifetime in blocks of submitted signed extrinsics
+pub const SIGNED_EXTRINSIC_LIFETIME: state_chain_runtime::BlockNumber = 128;
