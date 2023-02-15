@@ -303,26 +303,20 @@ pub async fn eth_block_head_stream_from<HeaderStream>(
 	from_block: u64,
 	safe_head_stream: HeaderStream,
 	eth_dual_rpc: EthDualRpcClient,
-	logger: &slog::Logger,
 ) -> Result<Pin<Box<dyn Stream<Item = EthNumberBloom> + Send + 'static>>>
 where
 	HeaderStream: Stream<Item = EthNumberBloom> + 'static + Send,
 {
-	block_head_stream_from(
-		from_block,
-		safe_head_stream,
-		move |block_number| {
-			let eth_rpc = eth_dual_rpc.clone();
-			Box::pin(async move {
-				eth_rpc.block(U64::from(block_number)).await.and_then(|block| {
-					let number_bloom: Result<EthNumberBloom> =
-						block.try_into().context("Failed to convert Block to EthNumberBloom");
-					number_bloom
-				})
+	block_head_stream_from(from_block, safe_head_stream, move |block_number| {
+		let eth_rpc = eth_dual_rpc.clone();
+		Box::pin(async move {
+			eth_rpc.block(U64::from(block_number)).await.and_then(|block| {
+				let number_bloom: Result<EthNumberBloom> =
+					block.try_into().context("Failed to convert Block to EthNumberBloom");
+				number_bloom
 			})
-		},
-		logger,
-	)
+		})
+	})
 	.await
 }
 
@@ -332,7 +326,6 @@ where
 pub async fn safe_dual_block_subscription_from(
 	from_block: u64,
 	eth_dual_rpc: EthDualRpcClient,
-	logger: &slog::Logger,
 ) -> Result<Pin<Box<dyn Stream<Item = EthNumberBloom> + Send + 'static>>>
 where
 {
@@ -341,10 +334,8 @@ where
 		safe_ws_head_stream(
 			eth_dual_rpc.ws_client.subscribe_new_heads().await?,
 			ETH_BLOCK_SAFETY_MARGIN,
-			logger,
 		),
 		eth_dual_rpc.clone(),
-		logger,
 	)
 	.await?;
 
@@ -354,15 +345,13 @@ where
 			eth_dual_rpc.http_client.clone(),
 			HTTP_POLL_INTERVAL,
 			ETH_BLOCK_SAFETY_MARGIN,
-			logger,
 		)
 		.await,
 		eth_dual_rpc.clone(),
-		logger,
 	)
 	.await?;
 
-	merged_block_stream(safe_ws_head_stream, safe_http_head_stream, logger.clone()).await
+	merged_block_stream(safe_ws_head_stream, safe_http_head_stream).await
 }
 
 #[async_trait]
@@ -380,7 +369,6 @@ pub trait EthContractWitnesser {
 		block: BlockWithItems<Event<Self::EventParameters>>,
 		state_chain_client: Arc<StateChainClient>,
 		eth_rpc: &EthRpcClient,
-		logger: &slog::Logger,
 	) -> anyhow::Result<()>
 	where
 		EthRpcClient: EthRpcApi + Sync + Send,

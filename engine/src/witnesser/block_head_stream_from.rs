@@ -1,6 +1,7 @@
 use std::{ops::RangeInclusive, pin::Pin};
 
 use futures::{stream, Future, Stream};
+use tracing::trace;
 
 use crate::witnesser::BlockNumberable;
 
@@ -27,7 +28,6 @@ pub async fn block_head_stream_from<
 	from_block: BlockNumber,
 	safe_head_stream: HeaderStream,
 	get_header_fn: GetHeaderClosure,
-	logger: &slog::Logger,
 ) -> Result<Pin<Box<dyn Stream<Item = Header> + Send + 'static>>>
 where
 	BlockNumber: PartialOrd + Display + Clone + Copy + Send + 'static,
@@ -42,11 +42,8 @@ where
 		let best_safe_block_number = best_safe_block_header.block_number();
 		// we only want to start witnessing once we reach the from_block specified
 		if best_safe_block_number < from_block {
-			slog::trace!(
-				logger,
-				"Not witnessing until block `{}` Received block `{}` from stream.",
-				from_block,
-				best_safe_block_number
+			trace!(
+				"Not witnessing until block `{from_block}` Received block `{best_safe_block_number}` from stream."
 			);
 		} else {
 			// our chain_head is above the from_block number
@@ -84,9 +81,6 @@ where
 
 #[cfg(test)]
 mod tests {
-
-	use crate::logging::test_utils::new_test_logger;
-
 	use super::*;
 
 	const FAILURE_BLOCK_NUMBER: u64 = 30;
@@ -106,7 +100,6 @@ mod tests {
 	async fn test_block_head_stream_from<HeaderStream>(
 		from_block: u64,
 		safe_head_stream: HeaderStream,
-		logger: &slog::Logger,
 	) -> Result<Pin<Box<dyn Stream<Item = MockHeader> + Send + 'static>>>
 	where
 		HeaderStream: Stream<Item = MockHeader> + 'static + Send,
@@ -124,7 +117,6 @@ mod tests {
 					}
 				})
 			},
-			logger,
 		)
 		.await
 	}
@@ -135,8 +127,6 @@ mod tests {
 
 	#[tokio::test]
 	async fn stream_does_not_begin_yielding_until_at_from_block() {
-		let logger = new_test_logger();
-
 		let inner_stream_starts_at = 10;
 		let from_block = 15;
 		let inner_stream_ends_at = 20;
@@ -145,9 +135,7 @@ mod tests {
 			stream::iter((inner_stream_starts_at..inner_stream_ends_at).map(mock_header));
 
 		let mut block_head_stream_from =
-			test_block_head_stream_from(from_block, safe_head_stream, &logger)
-				.await
-				.unwrap();
+			test_block_head_stream_from(from_block, safe_head_stream).await.unwrap();
 
 		// We should only be yielding from the `from_block`
 		for expected_block_number in from_block..inner_stream_ends_at {
@@ -162,8 +150,6 @@ mod tests {
 
 	#[tokio::test]
 	async fn stream_goes_back_if_inner_stream_starts_ahead_of_from_block() {
-		let logger = new_test_logger();
-
 		let from_block = 10;
 		let inner_stream_starts_at = 15;
 		let inner_stream_ends_at = 20;
@@ -172,9 +158,7 @@ mod tests {
 			stream::iter((inner_stream_starts_at..inner_stream_ends_at).map(mock_header));
 
 		let mut block_head_stream_from =
-			test_block_head_stream_from(from_block, safe_head_stream, &logger)
-				.await
-				.unwrap();
+			test_block_head_stream_from(from_block, safe_head_stream).await.unwrap();
 
 		for expected_block_number in from_block..inner_stream_ends_at {
 			assert_eq!(
@@ -187,8 +171,6 @@ mod tests {
 
 	#[tokio::test]
 	async fn stream_terminates_if_error_fetching_block_when_going_back() {
-		let logger = new_test_logger();
-
 		// choose blocks so we have to query back to block 30, which is explicitly set as a failure
 		// block in the mock.
 		let from_block = 27;
@@ -199,9 +181,7 @@ mod tests {
 			stream::iter((inner_stream_starts_at..inner_stream_ends_at).map(mock_header));
 
 		let mut block_head_stream_from =
-			test_block_head_stream_from(from_block, safe_head_stream, &logger)
-				.await
-				.unwrap();
+			test_block_head_stream_from(from_block, safe_head_stream).await.unwrap();
 
 		for expected_block_number in from_block..FAILURE_BLOCK_NUMBER {
 			assert_eq!(

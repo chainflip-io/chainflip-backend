@@ -1,11 +1,13 @@
 use crate::{
 	eth::{core_h160, core_h256, utils, EthRpcApi, EventParseError, SignatureAndEvent},
+	logging::utils::new_discard_logger,
 	state_chain_observer::client::extrinsic_api::ExtrinsicApi,
 };
 use cf_chains::eth::{SchnorrVerificationComponents, TransactionFee};
 use cf_primitives::EpochIndex;
 use state_chain_runtime::EthereumInstance;
 use std::sync::Arc;
+use tracing::{info, trace};
 use web3::{
 	contract::tokens::Tokenizable,
 	ethabi::{self, RawLog, Token},
@@ -199,14 +201,13 @@ impl EthContractWitnesser for KeyManager {
 		block: BlockWithItems<Event<Self::EventParameters>>,
 		state_chain_client: Arc<StateChainClient>,
 		eth_rpc: &EthRpcClient,
-		logger: &slog::Logger,
 	) -> anyhow::Result<()>
 	where
 		EthRpcClient: EthRpcApi + Sync + Send,
 		StateChainClient: ExtrinsicApi + Send + Sync,
 	{
 		for event in block.block_items {
-			slog::info!(logger, "Handling event: {}", event);
+			info!("Handling event: {event}");
 			match event.event_parameters {
 				KeyManagerEvent::AggKeySetByAggKey { new_agg_key, .. } => {
 					let _result = state_chain_client
@@ -225,7 +226,7 @@ impl EthContractWitnesser for KeyManager {
 								),
 								epoch_index,
 							},
-							logger,
+							&new_discard_logger(),
 						)
 						.await;
 				},
@@ -246,7 +247,7 @@ impl EthContractWitnesser for KeyManager {
 								),
 								epoch_index,
 							},
-							logger,
+							&new_discard_logger(),
 						)
 						.await;
 				},
@@ -274,7 +275,7 @@ impl EthContractWitnesser for KeyManager {
 								),
 								epoch_index,
 							},
-							logger,
+							&new_discard_logger(),
 						)
 						.await;
 				},
@@ -290,12 +291,12 @@ impl EthContractWitnesser for KeyManager {
 								),
 								epoch_index,
 							},
-							logger,
+							&new_discard_logger(),
 						)
 						.await;
 				},
 				_ => {
-					slog::trace!(logger, "Ignoring unused event: {}", event);
+					trace!("Ignoring unused event: {event}");
 				},
 			}
 		}

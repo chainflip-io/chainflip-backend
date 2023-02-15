@@ -1486,7 +1486,7 @@ async fn run_the_sc_observer() {
 			let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 				tokio::sync::mpsc::unbounded_channel();
 
-			let eth_ws_rpc_client = EthWsRpcClient::new(&settings.eth, &logger).await.unwrap();
+			let eth_ws_rpc_client = EthWsRpcClient::new(&settings.eth).await.unwrap();
 			let eth_broadcaster =
 				EthBroadcaster::new(&settings.eth, eth_ws_rpc_client.clone(), &logger).unwrap();
 

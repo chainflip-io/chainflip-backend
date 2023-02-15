@@ -7,6 +7,7 @@ use state_chain_runtime::EthereumInstance;
 
 use crate::{
 	eth::{core_h160, core_h256},
+	logging::utils::new_discard_logger,
 	state_chain_observer::client::extrinsic_api::ExtrinsicApi,
 	witnesser::EpochStart,
 };
@@ -18,7 +19,6 @@ pub struct IngressWitnesser<StateChainClient> {
 	state_chain_client: Arc<StateChainClient>,
 	monitored_addresses: BTreeSet<H160>,
 	eth_monitor_ingress_receiver: tokio::sync::mpsc::UnboundedReceiver<H160>,
-	logger: slog::Logger,
 }
 
 impl<StateChainClient> IngressWitnesser<StateChainClient>
@@ -30,15 +30,8 @@ where
 		rpc: EthDualRpcClient,
 		monitored_addresses: BTreeSet<H160>,
 		eth_monitor_ingress_receiver: tokio::sync::mpsc::UnboundedReceiver<H160>,
-		logger: &slog::Logger,
 	) -> Self {
-		Self {
-			rpc,
-			state_chain_client,
-			monitored_addresses,
-			eth_monitor_ingress_receiver,
-			logger: logger.clone(),
-		}
+		Self { rpc, state_chain_client, monitored_addresses, eth_monitor_ingress_receiver }
 	}
 
 	pub fn take_ingress_receiver(self) -> tokio::sync::mpsc::UnboundedReceiver<H160> {
@@ -102,7 +95,7 @@ where
 						),
 						epoch_index: epoch.epoch_index,
 					},
-					&self.logger,
+					&new_discard_logger(),
 				)
 				.await;
 		}

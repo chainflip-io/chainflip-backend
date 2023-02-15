@@ -42,14 +42,13 @@ async fn create_witnessers(
 	state_chain_client: &Arc<StateChainClient>,
 	eth_dual_rpc: &EthDualRpcClient,
 	latest_block_hash: sp_core::H256,
-	ingress_adddress_receivers: IngressAddressReceivers,
-	logger: &slog::Logger,
+	ingress_address_receivers: IngressAddressReceivers,
 ) -> anyhow::Result<AllWitnessers> {
 	let IngressAddressReceivers {
 		eth: eth_address_receiver,
 		flip: flip_address_receiver,
 		usdc: usdc_address_receiver,
-	} = ingress_adddress_receivers;
+	} = ingress_address_receivers;
 
 	let key_manager_witnesser = ContractWitnesser::new(
 		KeyManager::new(
@@ -64,7 +63,6 @@ async fn create_witnessers(
 		state_chain_client.clone(),
 		eth_dual_rpc.clone(),
 		false,
-		logger,
 	);
 
 	let stake_manager_witnesser = ContractWitnesser::new(
@@ -80,7 +78,6 @@ async fn create_witnessers(
 		state_chain_client.clone(),
 		eth_dual_rpc.clone(),
 		true,
-		logger,
 	);
 
 	let eth_chain_ingress_addresses = state_chain_client
@@ -129,7 +126,6 @@ async fn create_witnessers(
 		state_chain_client.clone(),
 		eth_dual_rpc.clone(),
 		false,
-		logger,
 	);
 
 	let usdc_contract_witnesser = ContractWitnesser::new(
@@ -153,7 +149,6 @@ async fn create_witnessers(
 		state_chain_client.clone(),
 		eth_dual_rpc.clone(),
 		false,
-		logger,
 	);
 
 	let ingress_witnesser = IngressWitnesser::new(
@@ -161,7 +156,6 @@ async fn create_witnessers(
 		eth_dual_rpc.clone(),
 		monitored_addresses_from_all_eth(&eth_chain_ingress_addresses, assets::eth::Asset::Eth),
 		eth_address_receiver,
-		logger,
 	);
 
 	Ok(AllWitnessers {
@@ -184,15 +178,13 @@ pub async fn start(
 	ingress_address_receivers: IngressAddressReceivers,
 	cfe_settings_update_receiver: tokio::sync::watch::Receiver<cfe::CfeSettings>,
 	db: Arc<PersistentKeyDB>,
-	logger: slog::Logger,
 ) -> anyhow::Result<()> {
 	scope.spawn(
 		chain_data_witnesser::start(
-			EthDualRpcClient::new(&eth_settings, expected_chain_id, &logger).await.unwrap(),
+			EthDualRpcClient::new(&eth_settings, expected_chain_id).await.unwrap(),
 			state_chain_client.clone(),
 			epoch_start_receiver_2,
 			cfe_settings_update_receiver,
-			logger.clone(),
 		)
 		.map_err(|_r| anyhow::anyhow!("eth::chain_data_witnesser::start failed")),
 	);
@@ -202,7 +194,6 @@ pub async fn start(
 		ingress_address_receivers,
 	)| {
 		let eth_settings = eth_settings.clone();
-		let logger = logger.clone();
 		let state_chain_client = state_chain_client.clone();
 		let db = db.clone();
 		async move {
@@ -210,9 +201,8 @@ pub async fn start(
 			// failure is that the WS connection has been dropped. This ensures that we create a
 			// new client, and therefore create a new connection.
 			let dual_rpc = try_with_logging!(
-				EthDualRpcClient::new(&eth_settings, expected_chain_id, &logger).await,
-				(epoch_start_receiver, ingress_address_receivers),
-				&logger
+				EthDualRpcClient::new(&eth_settings, expected_chain_id).await,
+				(epoch_start_receiver, ingress_address_receivers)
 			);
 			eth_block_witnessing::start(
 				epoch_start_receiver,
@@ -221,13 +211,11 @@ pub async fn start(
 					&dual_rpc,
 					latest_block_hash,
 					ingress_address_receivers,
-					&logger,
 				)
 				.await
 				.expect("If we failed here, we cannot connect to the StateChain, so allowing us to restart from here doesn't make much sense."),
 				dual_rpc,
 				db,
-				logger.clone(),
 			)
 			.await
 		}

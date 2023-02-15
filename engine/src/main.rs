@@ -184,7 +184,7 @@ async fn main() -> anyhow::Result<()> {
 				state_chain_block_stream,
 				EthBroadcaster::new(
 					&settings.eth,
-					EthDualRpcClient::new(&settings.eth, expected_chain_id, &root_logger)
+					EthDualRpcClient::new(&settings.eth, expected_chain_id)
 						.await
 						.context("Failed to create EthDualRpcClient")?,
 					&root_logger,
@@ -223,7 +223,6 @@ async fn main() -> anyhow::Result<()> {
 				},
 				cfe_settings_update_receiver,
 				db.clone(),
-				root_logger.clone(),
 			)
 			.await
 			.unwrap();
@@ -266,7 +265,6 @@ async fn main() -> anyhow::Result<()> {
 						.collect(),
 					state_chain_client.clone(),
 					db,
-					root_logger.clone(),
 				)
 				.map_err(|_r| anyhow::anyhow!("DOT witnesser failed")),
 			);
@@ -277,7 +275,6 @@ async fn main() -> anyhow::Result<()> {
 					dot_rpc_client,
 					state_chain_client,
 					latest_block_hash,
-					root_logger.clone(),
 				)
 				.map_err(|_| anyhow::anyhow!("DOT runtime version updater failed")),
 			);

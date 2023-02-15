@@ -8,7 +8,9 @@ use web3::{
 	types::H160,
 };
 
-use crate::state_chain_observer::client::extrinsic_api::ExtrinsicApi;
+use crate::{
+	logging::utils::new_discard_logger, state_chain_observer::client::extrinsic_api::ExtrinsicApi,
+};
 
 use super::{
 	core_h160, core_h256, event::Event, rpc::EthRpcApi, utils, BlockWithItems, DecodeLogClosure,
@@ -73,7 +75,6 @@ impl EthContractWitnesser for Erc20Witnesser {
 		block: BlockWithItems<Event<Self::EventParameters>>,
 		state_chain_client: Arc<StateChainClient>,
 		_eth_rpc: &EthRpcClient,
-		logger: &slog::Logger,
 	) -> Result<()>
 	where
 		EthRpcClient: EthRpcApi + Sync + Send,
@@ -111,7 +112,7 @@ impl EthContractWitnesser for Erc20Witnesser {
 						),
 						epoch_index: epoch,
 					},
-					logger,
+					&new_discard_logger(),
 				)
 				.await;
 		}

@@ -5,6 +5,7 @@ use std::{
 
 use anyhow::Result;
 use itertools::Itertools;
+use tracing::{error, info};
 
 use crate::multisig::{ChainTag, PersistentKeyDB};
 
@@ -17,48 +18,42 @@ pub async fn run_eth_migration(
 	chain_tag: ChainTag,
 	db: Arc<PersistentKeyDB>,
 	legacy_files_path: &Path,
-	logger: &slog::Logger,
 ) -> Result<()> {
 	// Eth witnessers are the only ones that used the legacy checkpointing files.
 	assert!(matches!(chain_tag, ChainTag::Ethereum));
 
 	// Check for a legacy checkpoint and save it to the db
-	if let Some(legacy_witness_until) =
-		futures::future::join_all(LEGACY_FILE_NAMES.iter().map(|name| {
-			Box::pin(load_from_legacy_checkpoint_file(legacy_files_path.join(name), logger))
-		}))
-		.await
-		.into_iter()
-		.collect::<Option<Vec<WitnessedUntil>>>()
-		.and_then(|checkpoints| {
-			checkpoints
-				.into_iter()
-				.sorted_by_key(|witnessed_until| witnessed_until.block_number)
-				.next()
-		}) {
-		slog::info!(
-			logger,
-			"Migrating legacy witnesser {chain_tag} checkpoint of {:?} to db",
-			legacy_witness_until
+	if let Some(legacy_witness_until) = futures::future::join_all(
+		LEGACY_FILE_NAMES
+			.iter()
+			.map(|name| Box::pin(load_from_legacy_checkpoint_file(legacy_files_path.join(name)))),
+	)
+	.await
+	.into_iter()
+	.collect::<Option<Vec<WitnessedUntil>>>()
+	.and_then(|checkpoints| {
+		checkpoints
+			.into_iter()
+			.sorted_by_key(|witnessed_until| witnessed_until.block_number)
+			.next()
+	}) {
+		info!(
+			"Migrating legacy witnesser {chain_tag} checkpoint of {legacy_witness_until:?} to db",
 		);
 		db.update_checkpoint(chain_tag, &legacy_witness_until);
 
 		if let Err(e) = delete_legacy_checkpointing_files(legacy_files_path) {
-			slog::error!(logger, "Failed to delete legacy checkpointing files: {e}");
+			error!("Failed to delete legacy checkpointing files: {e}");
 		}
 	}
 
 	Ok(())
 }
 
-async fn load_from_legacy_checkpoint_file(
-	file_path: PathBuf,
-	logger: &slog::Logger,
-) -> Option<WitnessedUntil> {
+async fn load_from_legacy_checkpoint_file(file_path: PathBuf) -> Option<WitnessedUntil> {
 	if file_path.exists() {
 		tokio::task::spawn_blocking({
 			let file_path = file_path.clone();
-			let logger = logger.clone();
 			move || {
 				std::fs::read_to_string(file_path)
 					.map_err(anyhow::Error::new)
@@ -66,10 +61,7 @@ async fn load_from_legacy_checkpoint_file(
 						serde_json::from_str::<WitnessedUntil>(&string).map_err(anyhow::Error::new)
 					})
 					.map_err(|e| {
-						slog::error!(
-							logger,
-							"Failed to read legacy witnesser checkpoint file: {e}"
-						);
+						error!("Failed to read legacy witnesser checkpoint file: {e}");
 						e
 					})
 					.ok()
@@ -138,9 +130,7 @@ mod tests {
 		// Run the migration
 		{
 			let db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, None, &logger).unwrap();
-			assert_ok!(
-				run_eth_migration(ChainTag::Ethereum, Arc::new(db), &temp_path, &logger).await
-			);
+			assert_ok!(run_eth_migration(ChainTag::Ethereum, Arc::new(db), &temp_path).await);
 		}
 
 		// Load the checkpoint from the db and make sure it is the one with the lowest

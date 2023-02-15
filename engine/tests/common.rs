@@ -59,7 +59,7 @@ where
 	);
 
 	let safe_header_stream =
-		safe_dual_block_subscription_from(from_block, eth_dual_rpc.clone(), logger).await?;
+		safe_dual_block_subscription_from(from_block, eth_dual_rpc.clone()).await?;
 
 	Ok(Box::pin(safe_header_stream.then({
 		move |block| {
@@ -93,7 +93,6 @@ where
 		)
 		.unwrap()
 		.eth,
-		&logger,
 	)
 	.await
 	.expect("Could not create EthDualRpcClient");

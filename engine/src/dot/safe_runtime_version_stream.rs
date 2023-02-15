@@ -4,6 +4,7 @@ use cf_chains::dot::RuntimeVersion;
 use futures::{stream::unfold, Stream, StreamExt};
 
 use anyhow::Result;
+use tracing::error;
 
 /// A stream that ensures the runtime version always produces the first item as the
 /// current runtime version, and that doesn't produce duplicate items.
@@ -12,7 +13,6 @@ use anyhow::Result;
 pub async fn safe_runtime_version_stream<RuntimeVersionStream>(
 	current_version: RuntimeVersion,
 	runtime_version_stream: RuntimeVersionStream,
-	logger: &slog::Logger,
 ) -> Result<Pin<Box<dyn Stream<Item = RuntimeVersion> + Send>>>
 where
 	RuntimeVersionStream: Stream<Item = Result<RuntimeVersion>> + Send + Unpin + 'static,
@@ -24,14 +24,12 @@ where
 		stream: RuntimeVersionStream,
 		version_to_yield: Option<RuntimeVersion>,
 		last_version_yielded: Option<RuntimeVersion>,
-		logger: slog::Logger,
 	}
 
 	let init_state = StreamState {
 		stream: runtime_version_stream,
 		version_to_yield: Some(current_version),
 		last_version_yielded: None,
-		logger: logger.clone(),
 	};
 
 	Ok(Box::pin(unfold(init_state, move |mut state| async move {
@@ -70,11 +68,7 @@ where
 					state.version_to_yield = Some(match version {
 						Ok(version) => version,
 						Err(e) => {
-							slog::error!(
-								state.logger,
-								"Error pulling version from inner stream, skipping. Error: {}",
-								e
-							);
+							error!("Error pulling version from inner stream, skipping. Error: {e}",);
 							continue
 						},
 					});
@@ -91,8 +85,6 @@ mod tests {
 	use futures::stream;
 	use utilities::assert_future_panics;
 
-	use crate::logging::test_utils::new_test_logger;
-
 	use super::*;
 
 	#[tokio::test]
@@ -100,9 +92,7 @@ mod tests {
 		let first_version = RuntimeVersion { spec_version: 12, transaction_version: 10 };
 
 		let mut runtime_version_stream =
-			safe_runtime_version_stream(first_version, stream::iter([]), &new_test_logger())
-				.await
-				.unwrap();
+			safe_runtime_version_stream(first_version, stream::iter([])).await.unwrap();
 
 		assert_eq!(runtime_version_stream.next().await, Some(first_version));
 		assert!(runtime_version_stream.next().await.is_none());
@@ -114,13 +104,10 @@ mod tests {
 	async fn deduplicates_first_version_if_at_head_of_stream() {
 		let first_version = RuntimeVersion { spec_version: 12, transaction_version: 10 };
 
-		let mut runtime_version_stream = safe_runtime_version_stream(
-			first_version,
-			stream::iter([Ok(first_version)]),
-			&new_test_logger(),
-		)
-		.await
-		.unwrap();
+		let mut runtime_version_stream =
+			safe_runtime_version_stream(first_version, stream::iter([Ok(first_version)]))
+				.await
+				.unwrap();
 
 		assert_eq!(runtime_version_stream.next().await, Some(first_version));
 		assert!(runtime_version_stream.next().await.is_none());
@@ -134,13 +121,10 @@ mod tests {
 			transaction_version: 10,
 		};
 
-		let mut runtime_version_stream = safe_runtime_version_stream(
-			first_version,
-			stream::iter([Ok(second_version)]),
-			&new_test_logger(),
-		)
-		.await
-		.unwrap();
+		let mut runtime_version_stream =
+			safe_runtime_version_stream(first_version, stream::iter([Ok(second_version)]))
+				.await
+				.unwrap();
 
 		assert_eq!(runtime_version_stream.next().await, Some(first_version));
 		assert_eq!(runtime_version_stream.next().await, Some(second_version));
@@ -162,7 +146,6 @@ mod tests {
 		let mut runtime_version_stream = safe_runtime_version_stream(
 			first_version,
 			stream::iter([Ok(second_version), Err(anyhow::anyhow!("error")), Ok(third_version)]),
-			&new_test_logger(),
 		)
 		.await
 		.unwrap();
@@ -193,7 +176,6 @@ mod tests {
 				Ok(second_version),
 				Ok(third_version),
 			]),
-			&new_test_logger(),
 		)
 		.await
 		.unwrap();
@@ -214,13 +196,10 @@ mod tests {
 			transaction_version: first_version.transaction_version + 1,
 		};
 
-		let mut runtime_version_stream = safe_runtime_version_stream(
-			first_version,
-			stream::iter([Ok(invalid_second_version)]),
-			&new_test_logger(),
-		)
-		.await
-		.unwrap();
+		let mut runtime_version_stream =
+			safe_runtime_version_stream(first_version, stream::iter([Ok(invalid_second_version)]))
+				.await
+				.unwrap();
 
 		assert_eq!(runtime_version_stream.next().await, Some(first_version));
 		assert_future_panics!(runtime_version_stream.next());

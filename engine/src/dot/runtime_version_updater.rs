@@ -3,8 +3,10 @@ use std::sync::Arc;
 use cf_chains::Polkadot;
 use futures::StreamExt;
 use sp_core::H256;
+use tracing::{info, info_span, Instrument};
 
 use crate::{
+	logging::utils::new_discard_logger,
 	state_chain_observer::client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi},
 	witnesser::{epoch_witnesser, EpochStart},
 };
@@ -15,7 +17,6 @@ pub async fn start<StateChainClient, DotRpc>(
 	dot_client: DotRpc,
 	state_chain_client: Arc<StateChainClient>,
 	latest_block_hash: H256,
-	logger: slog::Logger,
 ) -> Result<(), (async_broadcast::Receiver<EpochStart<Polkadot>>, anyhow::Error)>
 where
 	StateChainClient: ExtrinsicApi + StorageApi + 'static + Send + Sync,
@@ -39,17 +40,16 @@ where
 	};
 
 	epoch_witnesser::start(
-		"DOT-Runtime-Version".to_string(),
 		epoch_starts_receiver,
 		|epoch_start| epoch_start.current,
 		on_chain_runtime_version,
-		move |end_witnessing_signal, epoch_start, mut last_version_witnessed, logger| {
+		move |end_witnessing_signal, epoch_start, mut last_version_witnessed| {
 			let state_chain_client = state_chain_client.clone();
 			let dot_client = dot_client.clone();
 			async move {
 				// NB: The first item of this stream is the current runtime version.
 				let mut runtime_version_subscription =
-					dot_client.subscribe_runtime_version(&logger).await?;
+					dot_client.subscribe_runtime_version().await?;
 
 				while let Some(new_runtime_version) = runtime_version_subscription.next().await {
 					// TODO: Change end_witnessing_signal to a oneshot channel and tokio::select!
@@ -73,11 +73,10 @@ where
 											),
 											epoch_index: epoch_start.epoch_index,
 										},
-										&logger,
+										&new_discard_logger(),
 									)
 									.await;
-						slog::info!(
-							logger,
+						info!(
 							"Polkadot runtime version update submitted, version witnessed: {:?}",
 							new_runtime_version
 						);
@@ -88,7 +87,7 @@ where
 				Ok(last_version_witnessed)
 			}
 		},
-		&logger,
 	)
+	.instrument(info_span!("DOT-Runtime-Version"))
 	.await
 }

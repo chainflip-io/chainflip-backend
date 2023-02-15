@@ -1,6 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use crate::{
+	logging::utils::new_discard_logger,
 	state_chain_observer::client::extrinsic_api::ExtrinsicApi,
 	witnesser::{epoch_witnesser, EpochStart},
 };
@@ -11,6 +12,7 @@ use cf_chains::eth::{Ethereum, TrackedData};
 
 use state_chain_runtime::CfeSettings;
 use tokio::sync::watch;
+use tracing::{error, info_span, Instrument};
 use utilities::{context, make_periodic_tick};
 use web3::types::{BlockNumber, U256};
 
@@ -21,14 +23,12 @@ pub async fn start<StateChainClient, EthRpcClient>(
 	state_chain_client: Arc<StateChainClient>,
 	epoch_start_receiver: async_broadcast::Receiver<EpochStart<Ethereum>>,
 	cfe_settings_update_receiver: watch::Receiver<CfeSettings>,
-	logger: slog::Logger,
 ) -> anyhow::Result<(), (async_broadcast::Receiver<EpochStart<Ethereum>>, ())>
 where
 	EthRpcClient: 'static + EthRpcApi + Clone + Send + Sync,
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
 {
 	epoch_witnesser::start(
-        "ETH-Chain-Data".to_string(),
         epoch_start_receiver,
         |epoch_start| epoch_start.current,
         TrackedData::<Ethereum>::default(),
@@ -36,7 +36,6 @@ where
             end_witnessing_signal,
             epoch_start,
             mut last_witnessed_data,
-            logger
         | {
             let eth_rpc = eth_rpc.clone();
             let cfe_settings_update_receiver = cfe_settings_update_receiver.clone();
@@ -57,7 +56,7 @@ where
                         &eth_rpc,
                         priority_fee
                     ).await.map_err(|e| {
-						slog::error!(logger, "Failed to get tracked data: {:?}", e);
+						error!("Failed to get tracked data: {e:?}");
 					})?;
 
                     if latest_data.block_height > last_witnessed_data.block_height || latest_data.base_fee != last_witnessed_data.base_fee {
@@ -71,7 +70,7 @@ where
                                     )),
                                     epoch_index: epoch_start.epoch_index
                                 }),
-                                &logger,
+                                &new_discard_logger(),
                             )
                             .await;
 
@@ -86,8 +85,7 @@ where
                 Ok(last_witnessed_data)
             }
         },
-        &logger,
-    ).await
+    ).instrument(info_span!("ETH-Chain-Data-Witnesser")).await
 }
 
 /// Queries the rpc node for the fee history and builds the `TrackedData` for Ethereum at the latest
