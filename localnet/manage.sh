@@ -56,7 +56,7 @@ build() {
   source $LOCALNET_INIT_DIR/secrets/secrets.env
   echo
   echo "💻 Please provide the location to the binaries you would like to use."
-  read -p "(defaule: ./target/release/) " BINARIES_LOCATION
+  read -p "(default: ./target/release/) " BINARIES_LOCATION
   echo
   echo "🏗 Building network"
   BINARIES_LOCATION=${BINARIES_LOCATION:-"./target/release/"}
