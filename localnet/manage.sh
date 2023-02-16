@@ -2,7 +2,7 @@
 
 LOCALNET_INIT_DIR=localnet/init
 WORKFLOW=build
-BUILD_BINARIES="y"
+BINARIES_LOCATION="y"
 
 set -euo pipefail
 setup() {
@@ -46,31 +46,28 @@ setup() {
 }
 
 workflow() {
-  echo "❓ Would you like to build, recreate or destroy your Localnet? (Type 1, 2, 3, or 4)"
-  select WORKFLOW in build recreate destroy logs; do
+  echo "❓ Would you like to build, recreate or destroy your Localnet? (Type 1, 2, 3, 4 or 5)"
+  select WORKFLOW in build recreate destroy logs yeet; do
     echo "You have chosen $WORKFLOW"
     break
   done
 }
 
 build() {
-  BUILD_BINARIES="y"
+  BINARIES_LOCATION="./target/release/"
   source $LOCALNET_INIT_DIR/secrets/secrets.env
   echo
-  read -p "💻 Would you like to build binaries? (y/n) (default: y) " BUILD_BINARIES
-  echo
-  if [ $BUILD_BINARIES == "y" ]; then
-    cargo ci-build
-  fi
+  echo "💻 Please provide the location to the binaries you would like to use."
+  read -p "(defaule: ./target/release/) " BINARIES_LOCATION
   echo
   echo "🏗 Building network"
   docker-compose -f localnet/docker-compose.yml up -d
-  ./$LOCALNET_INIT_DIR/scripts/start-node.sh
+  ./$LOCALNET_INIT_DIR/scripts/start-node.sh $BINARIES_LOCATION
   while ! curl -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' 'http://localhost:9933' > /dev/null 2>&1 ; do
     echo "🚧 Waiting for node to start"
     sleep 3
   done
-  ./$LOCALNET_INIT_DIR/scripts/start-engine.sh
+  ./$LOCALNET_INIT_DIR/scripts/start-engine.sh $BINARIES_LOCATION
 
   echo
   echo "🚀 Network is live"
@@ -86,8 +83,12 @@ build() {
 destroy() {
   echo "💣 Destroying network"
   docker-compose -f localnet/docker-compose.yml down
-  docker system prune -af
   rm -rf /tmp/chainflip
+}
+
+yeet() {
+    destroy
+    docker system prune -af
 }
 
 logs() {
@@ -133,4 +134,6 @@ elif [ $WORKFLOW == "destroy" ]; then
   destroy
 elif [ $WORKFLOW == "logs" ]; then
   logs
+elif [ $WORKFLOW == "yeet" ]; then
+  yeet
 fi
