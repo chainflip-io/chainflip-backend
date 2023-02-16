@@ -491,7 +491,7 @@ impl<T: Config> Pallet<T> {
 	pub fn take_network_fee(input: AssetAmount) -> AssetAmount {
 		let fee = Self::calc_fee(T::NetworkFee::get(), input);
 		CollectedNetworkFee::<T>::mutate(|total| {
-			*total = total.saturating_add(fee);
+			total.saturating_accrue(fee);
 		});
 		Self::deposit_event(Event::<T>::NetworkFeeTaken { fee_amount: fee });
 		input.saturating_sub(fee)
