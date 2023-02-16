@@ -88,7 +88,7 @@ destroy() {
 yeet() {
     destroy
     read -p "🚨💣 WARNING 💣🚨 Do you want to delete all Docker images and containers on your machine? [Y/n] " YEET
-    YEET=${YEET:-"./target/release/"}
+    YEET=${YEET:-"n"}
     if [ $YEET == "Y" ]; then
       docker system prune -af
     fi
