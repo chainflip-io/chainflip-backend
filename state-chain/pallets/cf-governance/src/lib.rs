@@ -2,13 +2,15 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
+mod migrations;
+
 use codec::{Codec, Decode, Encode};
 use frame_support::{
 	dispatch::{GetDispatchInfo, UnfilteredDispatchable, Weight},
 	ensure,
 	pallet_prelude::DispatchResultWithPostInfo,
 	storage::with_transaction,
-	traits::{EnsureOrigin, Get, UnixTime},
+	traits::{EnsureOrigin, Get, OnRuntimeUpgrade, StorageVersion, UnixTime},
 };
 pub use pallet::*;
 use sp_runtime::{DispatchError, TransactionOutcome};
@@ -22,6 +24,8 @@ pub use weights::WeightInfo;
 
 /// Hash over (call, nonce, runtime_version)
 pub type GovCallHash = [u8; 32];
+
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
 #[cfg(test)]
 mod mock;
@@ -103,6 +107,7 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
+	#[pallet::storage_version(PALLET_VERSION)]
 	#[pallet::without_storage_info]
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
@@ -158,6 +163,20 @@ pub mod pallet {
 			let active_proposal_weight = Self::check_expiry();
 			let execution_weight = Self::execute_pending_proposals();
 			active_proposal_weight + execution_weight
+		}
+
+		fn on_runtime_upgrade() -> Weight {
+			migrations::PalletMigration::<T>::on_runtime_upgrade()
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+			migrations::PalletMigration::<T>::pre_upgrade()
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
+			migrations::PalletMigration::<T>::post_upgrade(state)
 		}
 	}
 
