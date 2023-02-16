@@ -80,14 +80,14 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
-			FlipBuyInterval::<T>::set(T::BlockNumber::from(1_u32));
+			FlipBuyInterval::<T>::set(self.flip_buy_interval);
 		}
 	}
 
 	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self { flip_buy_interval: T::BlockNumber::from(1_u32) }
+			Self { flip_buy_interval: T::BlockNumber::zero() }
 		}
 	}
 
