@@ -9,13 +9,13 @@ use frame_support::{
 	traits::{Get, OnInitialize},
 };
 use frame_system::RawOrigin;
-use sp_std::{boxed::Box, vec};
+use sp_std::{boxed::Box, collections::btree_set::BTreeSet, vec};
 
 benchmarks! {
 	propose_governance_extrinsic {
 		let caller: T::AccountId = whitelisted_caller();
 		let call = Box::new(frame_system::Call::remark{remark: vec![]}.into());
-		<Members<T>>::put(vec![caller.clone()]);
+		<Members<T>>::put(BTreeSet::from([caller.clone()]));
 	}: _(RawOrigin::Signed(caller.clone()), call)
 	verify {
 		assert_eq!(ProposalIdCounter::<T>::get(), 1);
@@ -23,7 +23,7 @@ benchmarks! {
 	approve {
 		let call: <T as Config>::RuntimeCall = frame_system::Call::remark{remark: vec![]}.into();
 		let caller: T::AccountId = whitelisted_caller();
-		<Members<T>>::put(vec![caller.clone()]);
+		<Members<T>>::put(BTreeSet::from([caller.clone()]));
 		Pallet::<T>::push_proposal(Box::new(call));
 	}: _(RawOrigin::Signed(caller.clone()), 1)
 	verify {
@@ -31,8 +31,8 @@ benchmarks! {
 	}
 	new_membership_set {
 		let caller: T::AccountId = whitelisted_caller();
-		let members = vec![caller];
-		let call = Call::<T>::new_membership_set{ accounts: members.clone() };
+		let members = BTreeSet::from([caller]);
+		let call = Call::<T>::new_membership_set{ accounts: members.clone().into_iter().collect() };
 		let origin = T::EnsureGovernance::successful_origin();
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
