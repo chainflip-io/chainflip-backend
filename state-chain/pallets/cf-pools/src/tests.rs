@@ -1,4 +1,6 @@
-use crate::{mock::*, CollectedNetworkFee, Error, FlipBuyInterval, FlipToBurn, Pools};
+use crate::{
+	mock::*, CollectedNetworkFee, Error, FlipBuyInterval, FlipToBurn, Pools, STABLE_ASSET,
+};
 use cf_primitives::{chains::assets::any::Asset, AmmRange, AssetAmount, PoolAssetMap};
 use cf_traits::{LiquidityPoolApi, SwappingApi};
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
@@ -121,40 +123,51 @@ fn test_buy_back_flip_no_funds_available() {
 #[test]
 fn test_buy_back_flip() {
 	new_test_ext().execute_with(|| {
-		let asset = Asset::Flip;
-		let default_tick_price = 0;
+		const COLLECTED_FEE: AssetAmount = 30;
+		const INTERVAL: <Test as frame_system::Config>::BlockNumber = 5;
+		const POSITION: AmmRange = AmmRange { lower: -100_000, upper: 100_000 };
+		const FLIP: Asset = Asset::Flip;
 
 		// Create a new pool.
 		assert_ok!(LiquidityPools::new_pool(
 			RuntimeOrigin::root(),
-			asset,
-			500_000u32,
-			default_tick_price,
+			FLIP,
+			Default::default(),
+			Default::default(),
 		));
-		assert_ok!(LiquidityPools::mint(
+		let _ = LiquidityPools::mint(
 			LP.into(),
-			asset,
-			AmmRange { lower: -100_000, upper: 100_000 },
+			FLIP,
+			POSITION,
 			1_000_000,
-			|_: PoolAssetMap<AssetAmount>| Ok(())
-		));
+			|_: PoolAssetMap<AssetAmount>| Ok(()),
+		)
+		.unwrap();
 
-		FlipBuyInterval::<Test>::set(5);
-		CollectedNetworkFee::<Test>::set(30);
-		LiquidityPools::on_initialize(10);
-		let initial_flip_to_burn = FlipToBurn::<Test>::get();
+		// Swapping should cause the network fee to be collected.
+		LiquidityPools::swap(FLIP, STABLE_ASSET, 1000).unwrap();
+		LiquidityPools::swap(STABLE_ASSET, FLIP, 1000).unwrap();
 
-		// Expect the some funds available to burn
-		assert!(initial_flip_to_burn != 0);
-		CollectedNetworkFee::<Test>::set(30);
+		assert!(CollectedNetworkFee::<Test>::get() > 0);
+		let collected_fee = CollectedNetworkFee::<Test>::get();
 
-		LiquidityPools::on_initialize(14);
-		// Expect nothing to change because we didn't passed the buy interval threshold
-		assert_eq!(initial_flip_to_burn, FlipToBurn::<Test>::get());
+		// The default buy interval is zero, and this means we don't buy back.
+		assert_eq!(FlipBuyInterval::<Test>::get(), 0);
+		LiquidityPools::on_initialize(1);
+		assert_eq!(FlipToBurn::<Test>::get(), 0);
 
-		LiquidityPools::on_initialize(15);
-		// Expect the amount of Flip we can burn to increase
-		assert!(initial_flip_to_burn < FlipToBurn::<Test>::get(), "flip to burn didn't increase!");
+		// A non-zero buy interval
+		FlipBuyInterval::<Test>::set(INTERVAL);
+
+		// Nothing is bought if we're not at the interval.
+		LiquidityPools::on_initialize(INTERVAL * 3 - 1);
+		assert_eq!(0, FlipToBurn::<Test>::get());
+		assert_eq!(collected_fee, CollectedNetworkFee::<Test>::get());
+
+		// If we're at an interval, we should buy flip.
+		LiquidityPools::on_initialize(INTERVAL * 3);
+		assert_eq!(0, CollectedNetworkFee::<Test>::get());
+		assert!(FlipToBurn::<Test>::get() > 0);
 	});
 }
 
