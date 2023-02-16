@@ -2,7 +2,6 @@
 
 LOCALNET_INIT_DIR=localnet/init
 WORKFLOW=build
-BINARIES_LOCATION="y"
 
 set -euo pipefail
 setup() {
@@ -54,13 +53,13 @@ workflow() {
 }
 
 build() {
-  BINARIES_LOCATION="./target/release/"
   source $LOCALNET_INIT_DIR/secrets/secrets.env
   echo
   echo "💻 Please provide the location to the binaries you would like to use."
   read -p "(defaule: ./target/release/) " BINARIES_LOCATION
   echo
   echo "🏗 Building network"
+  BINARIES_LOCATION=${BINARIES_LOCATION:-"./target/release/"}
   docker-compose -f localnet/docker-compose.yml up -d
   ./$LOCALNET_INIT_DIR/scripts/start-node.sh $BINARIES_LOCATION
   while ! curl -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' 'http://localhost:9933' > /dev/null 2>&1 ; do
