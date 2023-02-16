@@ -2,6 +2,7 @@
 
 LOCALNET_INIT_DIR=localnet/init
 WORKFLOW=build
+BUILD_BINARIES="y"
 
 set -euo pipefail
 setup() {
@@ -53,32 +54,23 @@ workflow() {
 }
 
 build() {
+  BUILD_BINARIES="y"
   source $LOCALNET_INIT_DIR/secrets/secrets.env
   echo
-  echo "💻 What commit # you'd like to use?"
-  echo "Use 'latest' to get the latest commit hash."
-  echo "Use 'same' to use the last commit hash you used."
-  read -p "Enter your choice: " COMMIT_HASH
+  read -p "💻 Would you like to build binaries? (y/n) (default: y) " BUILD_BINARIES
   echo
-  if [ $COMMIT_HASH == "latest" ]; then
-    COMMIT_HASH=$(git rev-parse HEAD | tr -d '\n')
+  if [ $BUILD_BINARIES == "y" ]; then
+    cargo ci-build
   fi
-  if [ $COMMIT_HASH == "same" ]; then
-    COMMIT_HASH_FILE="$LOCALNET_INIT_DIR/secrets/.hash"
-    if [ -f "$COMMIT_HASH_FILE" ]; then
-      COMMIT_HASH=$(cat $COMMIT_HASH_FILE | tr -d '\n')
-    else
-      echo "⚠️  No previous commit hash found. Using latest commit hash."
-      COMMIT_HASH=$(git rev-parse HEAD | tr -d '\n')
-    fi
-  fi
-  echo $COMMIT_HASH >$LOCALNET_INIT_DIR/secrets/.hash
-  APT_REPO="deb https://${APT_REPO_USERNAME}:${APT_REPO_PASSWORD}@apt.aws.chainflip.xyz/ci/${COMMIT_HASH}/ focal main"
   echo
   echo "🏗 Building network"
-
-  APT_REPO=$APT_REPO \
-    docker-compose -f localnet/docker-compose.yml up --build -d
+  docker-compose -f localnet/docker-compose.yml up -d
+  ./$LOCALNET_INIT_DIR/scripts/start-node.sh
+  while ! curl -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' 'http://localhost:9933' > /dev/null 2>&1 ; do
+    echo "🚧 Waiting for node to start"
+    sleep 3
+  done
+  ./$LOCALNET_INIT_DIR/scripts/start-engine.sh
 
   echo
   echo "🚀 Network is live"
@@ -94,15 +86,31 @@ build() {
 destroy() {
   echo "💣 Destroying network"
   docker-compose -f localnet/docker-compose.yml down
+  docker system prune -af
+  rm -rf /tmp/chainflip
 }
 
 logs() {
   echo "🤖 Which service would you like to tail?"
   select SERVICE in node engine relayer polkadot geth all; do
     if [ $SERVICE == "all" ]; then
-      docker-compose -f localnet/docker-compose.yml logs --follow
-    else
-      docker-compose -f localnet/docker-compose.yml logs --follow $SERVICE
+      docker-compose -f localnet/docker-compose.yml logs --follow &
+      tail -f /tmp/chainflip/chainflip-*.log
+    fi
+    if [ $SERVICE == "polkadot" ]; then
+      docker-compose -f localnet/docker-compose.yml logs --follow polkadot
+    fi
+    if [ $SERVICE == "geth" ]; then
+      docker-compose -f localnet/docker-compose.yml logs --follow geth
+    fi
+    if [ $SERVICE == "node" ]; then
+      tail -f /tmp/chainflip/chainflip-node.log
+    fi
+    if [ $SERVICE == "engine" ]; then
+      tail -f /tmp/chainflip/chainflip-engine.log
+    fi
+    if [ $SERVICE == "relayer" ]; then
+      tail -f /tmp/chainflip/chainflip-relayer.log
     fi
     break
   done
