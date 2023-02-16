@@ -94,22 +94,28 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
-			// Note: FlipBuyInterval is never zero!
-			if current_block % FlipBuyInterval::<T>::get() == Zero::zero() &&
-				CollectedNetworkFee::<T>::get() != 0
-			{
-				CollectedNetworkFee::<T>::mutate(|collected_fee| {
-					if let Ok(flip_to_burn) =
-						Pallet::<T>::swap(STABLE_ASSET, any::Asset::Flip, *collected_fee)
-					{
+			let mut weight_used: Weight = T::DbWeight::get().reads(1);
+			let interval = FlipBuyInterval::<T>::get();
+			if interval.is_zero() {
+				log::debug!("Flip buy interval is zero, skipping.")
+			} else {
+				weight_used.saturating_accrue(T::DbWeight::get().reads(1));
+				if (current_block % interval).is_zero() && CollectedNetworkFee::<T>::get() != 0 {
+					weight_used.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
+					if let Err(e) = CollectedNetworkFee::<T>::try_mutate(|collected_fee| {
+						let flip_to_burn =
+							Pallet::<T>::swap(STABLE_ASSET, any::Asset::Flip, *collected_fee)?;
 						FlipToBurn::<T>::mutate(|total| {
 							total.saturating_accrue(flip_to_burn);
 						});
-						*collected_fee = Default::default();
+						collected_fee.set_zero();
+						Ok::<_, DispatchError>(())
+					}) {
+						log::warn!("Unable to swap Network Fee to Flip: {e:?}");
 					}
-				});
+				}
 			}
-			Weight::from_ref_time(0)
+			weight_used
 		}
 	}
 
