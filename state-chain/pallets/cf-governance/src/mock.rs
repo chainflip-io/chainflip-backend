@@ -13,6 +13,7 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage,
 };
+use sp_std::collections::btree_set::BTreeSet;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -134,7 +135,10 @@ pub const MAX: <Test as frame_system::Config>::AccountId = 989u64;
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
 		system: Default::default(),
-		governance: GovernanceConfig { members: vec![ALICE, BOB, CHARLES], expiry_span: 50 },
+		governance: GovernanceConfig {
+			members: BTreeSet::from([ALICE, BOB, CHARLES]),
+			expiry_span: 50,
+		},
 	};
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
