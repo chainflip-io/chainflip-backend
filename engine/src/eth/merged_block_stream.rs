@@ -166,11 +166,12 @@ where
 		other_protocol_state: &ProtocolState,
 		block: Block,
 	) -> Option<Block> {
+		let block_number = block.block_number();
+		assert!(block_number != 0, "The ETH block number should never be 0. We assume we don't start Chainflip at Ethereum genesis.");
+
 		let next_block_to_yield = merged_stream_state.last_block_yielded + 1;
 		let merged_has_yielded = merged_stream_state.last_block_yielded != 0;
 		let has_pulled = protocol_state.last_block_pulled != 0;
-
-		let block_number = block.block_number();
 
 		assert!(!has_pulled
             || (block_number == protocol_state.last_block_pulled + 1), "ETH {} stream is expected to be a contiguous sequence of block items. Last pulled `{}`, got `{}`", protocol_state.protocol, protocol_state.last_block_pulled, block_number);
