@@ -100,12 +100,13 @@ for this.
 
 ### Creating a Localnet
 
-Localnets use packages built within the CI. To create a Localnet for your current branch, you will first need to push to
-kick off the build step. Once the `Publish Packages to APT repo` job is complete, you will be able to run the job.
+Localnets use binaries built locally. To create a Localnet for your current branch, you will first need to build.
+You can use either release or debug builds.
 
 From the repo root, run the following:
 
 ```shell
+cargo build # or cargo ci-build
 ./localnet/manage.sh
 ```
 
@@ -115,18 +116,18 @@ if you haven't done this yet.
 After set up completion, you will see the following:
 
 ```shell
-❓ Would you like to build, recreate or destroy your Localnet? (Type 1, 2, 3, or 4)
+❓ Would you like to build, recreate or destroy your Localnet? (Type 1, 2, 3, 4 or 5)
 1) build
 2) recreate
 3) destroy
 4) logs
-#? 
+5) yeet
 ```
+> **Note:** All chaindata and signing DBs will be under`/tmp/chainflip`
 
-* **build** - Create a new testnet from a given commit hash. You can choose `latest`, to pull the latest commit from
-  your
-  current branch.
-* **recreate** - This will simply run destroy, followed by build. You have the option to change the commit.
-* **destroy** - Destroy your current Localnet.
+* **build** - Create a new testnet using a path to the binaries you provide.
+* **recreate** - This will simply run destroy, followed by build. You have the option to change the path to the binaries.
+* **destroy** - Destroy your current Localnet and deletes chaindata.
 * **logs** - Tail the logs for your current Localnet.
+* **yeet** - Destroy your current Localnet, and remove all data including docker images. You should use this if you are getting some weird caching issues.
 
