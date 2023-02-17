@@ -9,7 +9,7 @@ runoldversion() {
 }
 
 runnewversion() {
-  chainflip-engine --config-root /etc/chainflip/
+  /usr/bin/chainflip-engine --config-root /etc/chainflip/
 }
 
 until getruntimeversion 2>/dev/null; do
