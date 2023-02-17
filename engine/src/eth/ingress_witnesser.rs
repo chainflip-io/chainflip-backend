@@ -7,7 +7,6 @@ use state_chain_runtime::EthereumInstance;
 
 use crate::{
 	eth::{core_h160, core_h256},
-	logging::utils::new_discard_logger,
 	state_chain_observer::client::extrinsic_api::ExtrinsicApi,
 	witnesser::EpochStart,
 };
@@ -85,18 +84,15 @@ where
 		if !ingress_witnesses.is_empty() {
 			let _result = self
 				.state_chain_client
-				.submit_signed_extrinsic(
-					pallet_cf_witnesser::Call::witness_at_epoch {
-						call: Box::new(
-							pallet_cf_ingress_egress::Call::<_, EthereumInstance>::do_ingress {
-								ingress_witnesses,
-							}
-							.into(),
-						),
-						epoch_index: epoch.epoch_index,
-					},
-					&new_discard_logger(),
-				)
+				.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
+					call: Box::new(
+						pallet_cf_ingress_egress::Call::<_, EthereumInstance>::do_ingress {
+							ingress_witnesses,
+						}
+						.into(),
+					),
+					epoch_index: epoch.epoch_index,
+				})
 				.await;
 		}
 

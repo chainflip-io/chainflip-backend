@@ -1,6 +1,5 @@
 use crate::{
 	eth::{core_h160, core_h256, utils, EthRpcApi, EventParseError, SignatureAndEvent},
-	logging::utils::new_discard_logger,
 	state_chain_observer::client::extrinsic_api::ExtrinsicApi,
 };
 use cf_chains::eth::{SchnorrVerificationComponents, TransactionFee};
@@ -211,23 +210,19 @@ impl EthContractWitnesser for KeyManager {
 			match event.event_parameters {
 				KeyManagerEvent::AggKeySetByAggKey { new_agg_key, .. } => {
 					let _result = state_chain_client
-						.submit_signed_extrinsic(
-							pallet_cf_witnesser::Call::witness_at_epoch {
-								call: Box::new(
-									pallet_cf_vaults::Call::<_, EthereumInstance>::vault_key_rotated {
-										new_public_key:
-											cf_chains::eth::AggKey::from_pubkey_compressed(
-												new_agg_key.serialize(),
-											),
-										block_number,
-										tx_id: core_h256(event.tx_hash),
-									}
-									.into(),
-								),
-								epoch_index,
-							},
-							&new_discard_logger(),
-						)
+						.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
+							call: Box::new(
+								pallet_cf_vaults::Call::<_, EthereumInstance>::vault_key_rotated {
+									new_public_key: cf_chains::eth::AggKey::from_pubkey_compressed(
+										new_agg_key.serialize(),
+									),
+									block_number,
+									tx_id: core_h256(event.tx_hash),
+								}
+								.into(),
+							),
+							epoch_index,
+						})
 						.await;
 				},
 				KeyManagerEvent::AggKeySetByGovKey { new_agg_key, .. } => {
@@ -247,7 +242,6 @@ impl EthContractWitnesser for KeyManager {
 								),
 								epoch_index,
 							},
-							&new_discard_logger(),
 						)
 						.await;
 				},
@@ -275,24 +269,20 @@ impl EthContractWitnesser for KeyManager {
 								),
 								epoch_index,
 							},
-							&new_discard_logger(),
 						)
 						.await;
 				},
 				KeyManagerEvent::GovernanceAction { message } => {
 					let _result = state_chain_client
-						.submit_signed_extrinsic(
-							pallet_cf_witnesser::Call::witness_at_epoch {
-								call: Box::new(
-									pallet_cf_governance::Call::set_whitelisted_call_hash {
-										call_hash: message,
-									}
-									.into(),
-								),
-								epoch_index,
-							},
-							&new_discard_logger(),
-						)
+						.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
+							call: Box::new(
+								pallet_cf_governance::Call::set_whitelisted_call_hash {
+									call_hash: message,
+								}
+								.into(),
+							),
+							epoch_index,
+						})
 						.await;
 				},
 				_ => {

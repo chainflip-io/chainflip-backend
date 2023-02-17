@@ -6,7 +6,6 @@ use sp_core::H256;
 use tracing::{info, info_span, Instrument};
 
 use crate::{
-	logging::utils::new_discard_logger,
 	state_chain_observer::client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi},
 	witnesser::{epoch_witnesser, EpochStart},
 };
@@ -63,19 +62,16 @@ where
 
 					if new_runtime_version.spec_version > last_version_witnessed.spec_version {
 						let _result = state_chain_client
-									.submit_signed_extrinsic(
-										pallet_cf_witnesser::Call::witness_at_epoch {
-											call: Box::new(
-												pallet_cf_environment::Call::update_polkadot_runtime_version {
-													runtime_version: new_runtime_version,
-												}
-												.into(),
-											),
-											epoch_index: epoch_start.epoch_index,
-										},
-										&new_discard_logger(),
-									)
-									.await;
+							.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
+								call: Box::new(
+									pallet_cf_environment::Call::update_polkadot_runtime_version {
+										runtime_version: new_runtime_version,
+									}
+									.into(),
+								),
+								epoch_index: epoch_start.epoch_index,
+							})
+							.await;
 						info!(
 							"Polkadot runtime version update submitted, version witnessed: {:?}",
 							new_runtime_version

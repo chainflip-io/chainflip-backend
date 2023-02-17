@@ -1,6 +1,4 @@
-use crate::{
-	logging::utils::new_discard_logger, state_chain_observer::client::extrinsic_api::ExtrinsicApi,
-};
+use crate::state_chain_observer::client::extrinsic_api::ExtrinsicApi;
 use std::sync::Arc;
 
 use crate::eth::{utils, EthRpcApi, SignatureAndEvent};
@@ -106,39 +104,33 @@ impl EthContractWitnesser for StakeManager {
 			match event.event_parameters {
 				StakeManagerEvent::Staked { account_id, amount, staker: _, return_addr } => {
 					let _result = state_chain_client
-						.submit_signed_extrinsic(
-							pallet_cf_witnesser::Call::witness_at_epoch {
-								call: Box::new(
-									pallet_cf_staking::Call::staked {
-										account_id,
-										amount,
-										withdrawal_address: return_addr.0,
-										tx_hash: event.tx_hash.into(),
-									}
-									.into(),
-								),
-								epoch_index: epoch,
-							},
-							&new_discard_logger(),
-						)
+						.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
+							call: Box::new(
+								pallet_cf_staking::Call::staked {
+									account_id,
+									amount,
+									withdrawal_address: return_addr.0,
+									tx_hash: event.tx_hash.into(),
+								}
+								.into(),
+							),
+							epoch_index: epoch,
+						})
 						.await;
 				},
 				StakeManagerEvent::ClaimExecuted { account_id, amount } => {
 					let _result = state_chain_client
-						.submit_signed_extrinsic(
-							pallet_cf_witnesser::Call::witness_at_epoch {
-								call: Box::new(
-									pallet_cf_staking::Call::claimed {
-										account_id,
-										claimed_amount: amount,
-										tx_hash: event.tx_hash.to_fixed_bytes(),
-									}
-									.into(),
-								),
-								epoch_index: epoch,
-							},
-							&new_discard_logger(),
-						)
+						.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
+							call: Box::new(
+								pallet_cf_staking::Call::claimed {
+									account_id,
+									claimed_amount: amount,
+									tx_hash: event.tx_hash.to_fixed_bytes(),
+								}
+								.into(),
+							),
+							epoch_index: epoch,
+						})
 						.await;
 				},
 				_ => {

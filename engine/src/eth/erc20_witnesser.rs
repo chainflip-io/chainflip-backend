@@ -8,9 +8,7 @@ use web3::{
 	types::H160,
 };
 
-use crate::{
-	logging::utils::new_discard_logger, state_chain_observer::client::extrinsic_api::ExtrinsicApi,
-};
+use crate::state_chain_observer::client::extrinsic_api::ExtrinsicApi;
 
 use super::{
 	core_h160, core_h256, event::Event, rpc::EthRpcApi, utils, BlockWithItems, DecodeLogClosure,
@@ -102,18 +100,15 @@ impl EthContractWitnesser for Erc20Witnesser {
 
 		if !ingress_witnesses.is_empty() {
 			let _result = state_chain_client
-				.submit_signed_extrinsic(
-					pallet_cf_witnesser::Call::witness_at_epoch {
-						call: Box::new(
-							pallet_cf_ingress_egress::Call::<_, EthereumInstance>::do_ingress {
-								ingress_witnesses,
-							}
-							.into(),
-						),
-						epoch_index: epoch,
-					},
-					&new_discard_logger(),
-				)
+				.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
+					call: Box::new(
+						pallet_cf_ingress_egress::Call::<_, EthereumInstance>::do_ingress {
+							ingress_witnesses,
+						}
+						.into(),
+					),
+					epoch_index: epoch,
+				})
 				.await;
 		}
 

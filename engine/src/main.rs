@@ -79,16 +79,13 @@ async fn main() -> anyhow::Result<()> {
 				.context("Failed to create Polkadot Client")?;
 
 			state_chain_client
-				.submit_signed_extrinsic(
-					pallet_cf_validator::Call::cfe_version {
-						new_version: SemVer {
-							major: env!("CARGO_PKG_VERSION_MAJOR").parse::<u8>().unwrap(),
-							minor: env!("CARGO_PKG_VERSION_MINOR").parse::<u8>().unwrap(),
-							patch: env!("CARGO_PKG_VERSION_PATCH").parse::<u8>().unwrap(),
-						},
+				.submit_signed_extrinsic(pallet_cf_validator::Call::cfe_version {
+					new_version: SemVer {
+						major: env!("CARGO_PKG_VERSION_MAJOR").parse::<u8>().unwrap(),
+						minor: env!("CARGO_PKG_VERSION_MINOR").parse::<u8>().unwrap(),
+						patch: env!("CARGO_PKG_VERSION_PATCH").parse::<u8>().unwrap(),
 					},
-					&root_logger,
-				)
+				})
 				.await
 				.context("Failed to submit version to state chain")?;
 

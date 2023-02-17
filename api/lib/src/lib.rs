@@ -89,8 +89,7 @@ where
 	Call: Into<state_chain_runtime::RuntimeCall> + Clone + std::fmt::Debug + Send + Sync + 'static,
 	BlockStream: Stream<Item = state_chain_runtime::Header> + Unpin + Send + 'static,
 {
-	let logger = new_discard_logger();
-	let tx_hash = client.submit_signed_extrinsic(call, &logger).await?;
+	let tx_hash = client.submit_signed_extrinsic(call).await?;
 
 	let events = client.watch_submitted_extrinsic(tx_hash, block_stream).await?;
 
@@ -194,10 +193,9 @@ pub async fn register_account_role(
 			.await?;
 
 			let tx_hash = state_chain_client
-				.submit_signed_extrinsic(
-					pallet_cf_account_roles::Call::register_account_role { role },
-					&logger,
-				)
+				.submit_signed_extrinsic(pallet_cf_account_roles::Call::register_account_role {
+					role,
+				})
 				.await
 				.expect("Could not set register account role for account");
 			println!("Account role set at tx {tx_hash:#x}.");
@@ -234,13 +232,10 @@ pub async fn rotate_keys(state_chain_settings: &settings::StateChain) -> Result<
 			};
 
 			let tx_hash = state_chain_client
-				.submit_signed_extrinsic(
-					pallet_cf_validator::Call::set_keys {
-						keys: new_session_key,
-						proof: [0; 1].to_vec(),
-					},
-					&logger,
-				)
+				.submit_signed_extrinsic(pallet_cf_validator::Call::set_keys {
+					keys: new_session_key,
+					proof: [0; 1].to_vec(),
+				})
 				.await
 				.expect("Failed to submit set_keys extrinsic");
 
@@ -267,12 +262,9 @@ pub async fn force_rotation(state_chain_settings: &settings::StateChain) -> Resu
 
 			println!("Submitting governance proposal for rotation.");
 			state_chain_client
-				.submit_signed_extrinsic(
-					pallet_cf_governance::Call::propose_governance_extrinsic {
-						call: Box::new(pallet_cf_validator::Call::force_rotation {}.into()),
-					},
-					&logger,
-				)
+				.submit_signed_extrinsic(pallet_cf_governance::Call::propose_governance_extrinsic {
+					call: Box::new(pallet_cf_validator::Call::force_rotation {}.into()),
+				})
 				.await
 				.expect("Should submit sudo governance proposal");
 
@@ -298,7 +290,7 @@ pub async fn stop_bidding(state_chain_settings: &settings::StateChain) -> Result
 			)
 			.await?;
 			let tx_hash = state_chain_client
-				.submit_signed_extrinsic(pallet_cf_staking::Call::stop_bidding {}, &logger)
+				.submit_signed_extrinsic(pallet_cf_staking::Call::stop_bidding {})
 				.await
 				.expect("Could not stop bidding");
 			println!("Account stopped bidding, in tx {tx_hash:#x}.");
@@ -326,7 +318,7 @@ pub async fn start_bidding(state_chain_settings: &settings::StateChain) -> Resul
 		{
 			AccountRole::Validator => {
 				let tx_hash = state_chain_client
-					.submit_signed_extrinsic(pallet_cf_staking::Call::start_bidding {}, &logger)
+					.submit_signed_extrinsic(pallet_cf_staking::Call::start_bidding {})
 					.await
 					.expect("Could not start bidding");
 				println!("Account started bidding at tx {tx_hash:#x}.");
@@ -364,10 +356,9 @@ pub async fn set_vanity_name(
 			)
 			.await?;
 			let tx_hash = state_chain_client
-				.submit_signed_extrinsic(
-					pallet_cf_validator::Call::set_vanity_name { name: name.as_bytes().to_vec() },
-					&logger,
-				)
+				.submit_signed_extrinsic(pallet_cf_validator::Call::set_vanity_name {
+					name: name.as_bytes().to_vec(),
+				})
 				.await
 				.expect("Could not set vanity name for your account");
 			println!("Vanity name set at tx {tx_hash:#x}.");

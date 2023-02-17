@@ -25,7 +25,6 @@ use subxt::{
 use tracing::{debug, error, info, info_span, trace, Instrument};
 
 use crate::{
-	logging::utils::new_discard_logger,
 	multisig::{ChainTag, PersistentKeyDB},
 	state_chain_observer::client::extrinsic_api::ExtrinsicApi,
 	witnesser::{
@@ -398,7 +397,6 @@ where
 										call,
 										epoch_index: epoch_start.epoch_index,
 									},
-									&new_discard_logger(),
 								)
 								.await;
 					}
@@ -442,7 +440,6 @@ where
 													),
 													epoch_index: epoch_start.epoch_index,
 												},
-										&new_discard_logger(),
 											)
 											.await;
 
@@ -474,7 +471,6 @@ where
 											),
 										epoch_index: epoch_start.epoch_index,
 									},
-									&new_discard_logger(),
 								)
 								.await;
 					}

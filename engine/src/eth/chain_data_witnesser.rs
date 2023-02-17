@@ -1,7 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
 use crate::{
-	logging::utils::new_discard_logger,
 	state_chain_observer::client::extrinsic_api::ExtrinsicApi,
 	witnesser::{epoch_witnesser, EpochStart},
 };
@@ -29,63 +28,59 @@ where
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
 {
 	epoch_witnesser::start(
-        epoch_start_receiver,
-        |epoch_start| epoch_start.current,
-        TrackedData::<Ethereum>::default(),
-        move |
-            end_witnessing_signal,
-            epoch_start,
-            mut last_witnessed_data,
-        | {
-            let eth_rpc = eth_rpc.clone();
-            let cfe_settings_update_receiver = cfe_settings_update_receiver.clone();
+		epoch_start_receiver,
+		|epoch_start| epoch_start.current,
+		TrackedData::<Ethereum>::default(),
+		move |end_witnessing_signal, epoch_start, mut last_witnessed_data| {
+			let eth_rpc = eth_rpc.clone();
+			let cfe_settings_update_receiver = cfe_settings_update_receiver.clone();
 
-            let state_chain_client = state_chain_client.clone();
-            async move {
-                let mut poll_interval = make_periodic_tick(ETH_CHAIN_TRACKING_POLL_INTERVAL, false);
+			let state_chain_client = state_chain_client.clone();
+			async move {
+				let mut poll_interval = make_periodic_tick(ETH_CHAIN_TRACKING_POLL_INTERVAL, false);
 
-                loop {
-                    if let Some(_end_block) = *end_witnessing_signal.lock().unwrap() {
-                        break;
-                    }
+				loop {
+					if let Some(_end_block) = *end_witnessing_signal.lock().unwrap() {
+						break
+					}
 
-                    let priority_fee = cfe_settings_update_receiver
-                            .borrow()
-                            .eth_priority_fee_percentile;
-                    let latest_data = get_tracked_data(
-                        &eth_rpc,
-                        priority_fee
-                    ).await.map_err(|e| {
-						error!("Failed to get tracked data: {e:?}");
-					})?;
+					let priority_fee =
+						cfe_settings_update_receiver.borrow().eth_priority_fee_percentile;
+					let latest_data =
+						get_tracked_data(&eth_rpc, priority_fee).await.map_err(|e| {
+							error!("Failed to get tracked data: {e:?}");
+						})?;
 
-                    if latest_data.block_height > last_witnessed_data.block_height || latest_data.base_fee != last_witnessed_data.base_fee {
-                        let _result = state_chain_client
-                            .submit_signed_extrinsic(
-                                state_chain_runtime::RuntimeCall::Witnesser(pallet_cf_witnesser::Call::witness_at_epoch {
-                                    call: Box::new(state_chain_runtime::RuntimeCall::EthereumChainTracking(
-                                        pallet_cf_chain_tracking::Call::update_chain_state {
-                                            state: latest_data,
-                                        },
-                                    )),
-                                    epoch_index: epoch_start.epoch_index
-                                }),
-                                &new_discard_logger(),
-                            )
-                            .await;
+					if latest_data.block_height > last_witnessed_data.block_height ||
+						latest_data.base_fee != last_witnessed_data.base_fee
+					{
+						let _result = state_chain_client
+							.submit_signed_extrinsic(state_chain_runtime::RuntimeCall::Witnesser(
+								pallet_cf_witnesser::Call::witness_at_epoch {
+									call: Box::new(
+										state_chain_runtime::RuntimeCall::EthereumChainTracking(
+											pallet_cf_chain_tracking::Call::update_chain_state {
+												state: latest_data,
+											},
+										),
+									),
+									epoch_index: epoch_start.epoch_index,
+								},
+							))
+							.await;
 
+						last_witnessed_data = latest_data;
+					}
 
-                        last_witnessed_data = latest_data;
+					poll_interval.tick().await;
+				}
 
-                    }
-
-                    poll_interval.tick().await;
-                }
-
-                Ok(last_witnessed_data)
-            }
-        },
-    ).instrument(info_span!("ETH-Chain-Data-Witnesser")).await
+				Ok(last_witnessed_data)
+			}
+		},
+	)
+	.instrument(info_span!("ETH-Chain-Data-Witnesser"))
+	.await
 }
 
 /// Queries the rpc node for the fee history and builds the `TrackedData` for Ethereum at the latest
