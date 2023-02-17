@@ -81,7 +81,7 @@ where
 	}
 	#[derive(Debug)]
 	struct MergedStreamState {
-		last_block_yielded: u64,
+		last_block_yielded: Option<u64>,
 		logger: slog::Logger,
 	}
 
@@ -106,7 +106,7 @@ where
 			protocol: TransportProtocol::Http,
 		},
 		http_stream: safe_http_block_items_stream,
-		merged_stream_state: MergedStreamState { last_block_yielded: 0, logger },
+		merged_stream_state: MergedStreamState { last_block_yielded: None, logger },
 	};
 
 	fn log_when_yielding(
@@ -137,7 +137,7 @@ where
 		}
 
 		// We may be one ahead of the previously yielded block
-		let blocks_behind = merged_stream_state.last_block_yielded + 1 -
+		let blocks_behind = merged_stream_state.last_block_yielded.unwrap_or_default() + 1 -
 			non_yielding_stream_state.last_block_pulled;
 
 		// before we have pulled on each stream, we can't know if the other stream is behind
@@ -167,10 +167,6 @@ where
 		block: Block,
 	) -> Option<Block> {
 		let block_number = block.block_number();
-		assert!(block_number != 0, "The ETH block number should never be 0. We assume we don't start Chainflip at Ethereum genesis.");
-
-		let next_block_to_yield = merged_stream_state.last_block_yielded + 1;
-		let merged_has_yielded = merged_stream_state.last_block_yielded != 0;
 		let has_pulled = protocol_state.last_block_pulled != 0;
 
 		assert!(!has_pulled
@@ -178,7 +174,10 @@ where
 
 		protocol_state.last_block_pulled = block_number;
 
-		let opt_block_header = if merged_has_yielded {
+		let opt_block_header = if let Some(last_block_yielded) =
+			merged_stream_state.last_block_yielded
+		{
+			let next_block_to_yield = last_block_yielded + 1;
 			if block_number == next_block_to_yield {
 				Some(block)
 			// if we're only one block behind we're not really "behind", we were just the
@@ -195,7 +194,7 @@ where
 				panic!("Input streams to merged stream started at different block numbers. This should not occur.");
 			}
 		} else {
-			// yield
+			// yield since we haven't yielded before
 			Some(block)
 		};
 
@@ -227,7 +226,7 @@ where
 				}
 				else => break None
 			} {
-				stream_state.merged_stream_state.last_block_yielded = block.block_number();
+				stream_state.merged_stream_state.last_block_yielded = Some(block.block_number());
 				break Some((block, stream_state))
 			}
 		}
@@ -358,6 +357,22 @@ mod merged_stream_tests {
 			.collect::<Vec<_>>()
 			.await,
 			&[10, 11, 12, 13]
+		);
+	}
+
+	#[tokio::test]
+	async fn merged_block_stream_starts_from_0_functions_as_expected() {
+		assert_eq!(
+			merged_block_stream(
+				Box::pin(stream::iter([0, 1, 2, 3])),
+				Box::pin(stream::iter([0, 1, 2, 3])),
+				new_test_logger(),
+			)
+			.await
+			.unwrap()
+			.collect::<Vec<_>>()
+			.await,
+			&[0, 1, 2, 3]
 		);
 	}
 
