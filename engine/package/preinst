@@ -51,6 +51,10 @@ cat <<EOT >> "$UPDATED_ENGINE_CONFIG_LOCATION"
 ws_node_endpoint = "https://pdot.chainflip.io"
 EOT
 
+rm /usr/bin/chainflip-node
+rm /usr/bin/chainflip-engine
+rm /usr/bin/chainflip-cli
+
 echo "chainflip-engine: Migration completed successfully"
 
 #DEBHELPER#
