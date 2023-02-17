@@ -75,7 +75,7 @@ where
 {
 	#[derive(Debug)]
 	struct ProtocolState {
-		last_block_pulled: u64,
+		last_block_pulled: Option<u64>,
 		log_ticker: tokio::time::Interval,
 		protocol: TransportProtocol,
 	}
@@ -95,13 +95,13 @@ where
 
 	let init_state = StreamState::<BlockHeaderStreamWs, BlockHeaderStreamHttp> {
 		ws_state: ProtocolState {
-			last_block_pulled: 0,
+			last_block_pulled: None,
 			log_ticker: make_periodic_tick(ETH_STILL_BEHIND_LOG_INTERVAL, false),
 			protocol: TransportProtocol::Ws,
 		},
 		ws_stream: safe_ws_block_items_stream,
 		http_state: ProtocolState {
-			last_block_pulled: 0,
+			last_block_pulled: None,
 			log_ticker: make_periodic_tick(ETH_STILL_BEHIND_LOG_INTERVAL, false),
 			protocol: TransportProtocol::Http,
 		},
@@ -136,25 +136,23 @@ where
 			},
 		}
 
-		// We may be one ahead of the previously yielded block
-		let blocks_behind = merged_stream_state.last_block_yielded.unwrap_or_default() + 1 -
-			non_yielding_stream_state.last_block_pulled;
+		if let Some(non_yielding_last_pulled) = non_yielding_stream_state.last_block_pulled {
+			let blocks_behind = yielding_block_number - non_yielding_last_pulled;
 
-		// before we have pulled on each stream, we can't know if the other stream is behind
-		if non_yielding_stream_state.last_block_pulled != 0 &&
-			((non_yielding_stream_state.last_block_pulled + ETH_FALLING_BEHIND_MARGIN_BLOCKS) <=
+			if ((non_yielding_last_pulled + ETH_FALLING_BEHIND_MARGIN_BLOCKS) <=
 				yielding_block_number) &&
-			(blocks_behind % ETH_LOG_BEHIND_REPORT_BLOCK_INTERVAL == 0)
-		{
-			slog::warn!(
-				merged_stream_state.logger,
-				#ETH_STREAM_BEHIND,
-				"ETH {} stream at block `{}` but {} stream at block `{}`",
-				yielding_stream_state.protocol,
-				yielding_block_number,
-				non_yielding_stream_state.protocol,
-				non_yielding_stream_state.last_block_pulled,
-			);
+				(blocks_behind % ETH_LOG_BEHIND_REPORT_BLOCK_INTERVAL == 0)
+			{
+				slog::warn!(
+					merged_stream_state.logger,
+					#ETH_STREAM_BEHIND,
+					"ETH {} stream at block `{}` but {} stream at block `{}`",
+					yielding_stream_state.protocol,
+					yielding_block_number,
+					non_yielding_stream_state.protocol,
+					non_yielding_last_pulled,
+				);
+			}
 		}
 	}
 
@@ -167,12 +165,18 @@ where
 		block: Block,
 	) -> Option<Block> {
 		let block_number = block.block_number();
-		let has_pulled = protocol_state.last_block_pulled != 0;
 
-		assert!(!has_pulled
-            || (block_number == protocol_state.last_block_pulled + 1), "ETH {} stream is expected to be a contiguous sequence of block items. Last pulled `{}`, got `{}`", protocol_state.protocol, protocol_state.last_block_pulled, block_number);
+		if let Some(last_pulled) = protocol_state.last_block_pulled {
+			assert_eq!(
+				block_number, last_pulled + 1,
+				"ETH {} stream is expected to be a contiguous sequence of block items. Last pulled `{}`, got `{}`",
+				protocol_state.protocol,
+				last_pulled,
+				block_number
+			);
+		}
 
-		protocol_state.last_block_pulled = block_number;
+		protocol_state.last_block_pulled = Some(block_number);
 
 		let opt_block_header = if let Some(last_block_yielded) =
 			merged_stream_state.last_block_yielded
@@ -199,7 +203,6 @@ where
 		};
 
 		if opt_block_header.is_some() {
-			// yield, if we are at high enough block number
 			log_when_yielding(
 				protocol_state,
 				other_protocol_state,
