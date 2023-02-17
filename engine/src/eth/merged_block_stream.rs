@@ -67,7 +67,7 @@ impl HasBlockNumber for EthNumberBloom {
 pub async fn merged_block_stream<'a, Block, BlockHeaderStreamWs, BlockHeaderStreamHttp>(
 	safe_ws_block_items_stream: BlockHeaderStreamWs,
 	safe_http_block_items_stream: BlockHeaderStreamHttp,
-) -> Result<Pin<Box<dyn Stream<Item = Block> + Send + 'a>>>
+) -> Result<Pin<Box<dyn Stream<Item = (Block, TransportProtocol)> + Send + 'a>>>
 where
 	Block: HasBlockNumber + Send + 'a,
 	BlockHeaderStreamWs: Stream<Item = Block> + Unpin + Send + 'a,
@@ -154,7 +154,7 @@ where
 		protocol_state: &mut ProtocolState,
 		other_protocol_state: &ProtocolState,
 		block: Block,
-	) -> Option<Block> {
+	) -> Option<(Block, TransportProtocol)> {
 		let block_number = block.block_number();
 
 		if let Some(last_pulled) = protocol_state.last_block_pulled {
@@ -172,7 +172,7 @@ where
 		{
 			let next_block_to_yield = last_block_yielded + 1;
 			if block_number == next_block_to_yield {
-				Some(block)
+				Some((block, protocol_state.protocol))
 			// if we're only one block behind we're not really "behind", we were just the
 			// second stream polled
 			} else if block_number + 1 < next_block_to_yield {
@@ -187,8 +187,8 @@ where
 				panic!("Input streams to merged stream started at different block numbers. This should not occur.");
 			}
 		} else {
-			// yield since we haven't yielded before
-			Some(block)
+			// yield
+			Some((block, protocol_state.protocol))
 		};
 
 		if opt_block_header.is_some() {
@@ -209,7 +209,7 @@ where
 		} = &mut stream_state;
 
 		loop {
-			if let Some(block) = tokio::select! {
+			if let Some((block, protocol)) = tokio::select! {
 				Some(block_header) = ws_stream.next() => {
 					on_block_for_protocol(merged_stream_state, ws_state, http_state, block_header).await
 				}
@@ -218,8 +218,8 @@ where
 				}
 				else => break None
 			} {
-				stream_state.merged_stream_state.last_block_yielded = Some(block.block_number());
-				break Some((block, stream_state))
+				stream_state.merged_stream_state.last_block_yielded = block.block_number();
+				break Some(((block, protocol), stream_state))
 			}
 		}
 	})))
@@ -236,14 +236,14 @@ mod merged_stream_tests {
 
 	async fn test_merged_stream_interleaving<Block: HasBlockNumber>(
 		interleaved_blocks: Vec<(Block, TransportProtocol)>,
-		_expected_blocks: &[(Block, TransportProtocol)],
+		expected_blocks: &[(Block, TransportProtocol)],
 	) {
 		// Generate a stream for each protocol, that, when selected upon, will return
 		// in the order the blocks are passed in
 		// This is useful to test more "real world" scenarios, as stream::iter will always
 		// immediately yield, therefore blocks will always be pealed off the streams
 		// alternatingly
-		let (_ws_stream, _http_stream) = {
+		let (ws_stream, http_stream) = {
 			assert!(!interleaved_blocks.is_empty(), "should have at least one item");
 
 			const DELAY_DURATION_MILLIS: u64 = 50;
@@ -288,32 +288,14 @@ mod merged_stream_tests {
 			(delayed_stream(ws_blocks), delayed_stream(http_blocks))
 		};
 
-		// TODO: Remove usage of tag cache in merged block streams unit tests #2862
-		// assert_eq!(
-		// 	merged_block_stream(ws_stream, http_stream)
-		// 		.await
-		// 		.unwrap()
-		// 		.map(move |x| {
-		// 			(x, {
-		// 				let protocol = if tag_cache.contains_tag(ETH_WS_STREAM_YIELDED) &&
-		// 					!tag_cache.contains_tag(ETH_HTTP_STREAM_YIELDED)
-		// 				{
-		// 					TransportProtocol::Ws
-		// 				} else if !tag_cache.contains_tag(ETH_WS_STREAM_YIELDED) &&
-		// 					tag_cache.contains_tag(ETH_HTTP_STREAM_YIELDED)
-		// 				{
-		// 					TransportProtocol::Http
-		// 				} else {
-		// 					panic!()
-		// 				};
-		// 				tag_cache.clear();
-		// 				protocol
-		// 			})
-		// 		})
-		// 		.collect::<Vec<_>>()
-		// 		.await,
-		// 	expected_blocks
-		// );
+		assert_eq!(
+			merged_block_stream(ws_stream, http_stream)
+				.await
+				.unwrap()
+				.collect::<Vec<_>>()
+				.await,
+			expected_blocks
+		);
 	}
 
 	#[tokio::test]
@@ -338,8 +320,9 @@ mod merged_stream_tests {
 			)
 			.await
 			.unwrap()
-			.collect::<Vec<_>>()
-			.await,
+			.collect::<(Vec<_>, Vec<_>)>()
+			.await
+			.0,
 			&[10, 11, 12, 13]
 		);
 	}
@@ -369,8 +352,9 @@ mod merged_stream_tests {
 			)
 			.await
 			.unwrap()
-			.collect::<Vec<_>>()
-			.await,
+			.collect::<(Vec<_>, Vec<_>)>()
+			.await
+			.0,
 			&[10, 11, 12, 13]
 		);
 	}
@@ -402,23 +386,6 @@ mod merged_stream_tests {
 			],
 		)
 		.await;
-	}
-
-	#[tokio::test]
-	async fn merged_stream_notifies_once_every_x_blocks_when_one_falls_behind() {
-		let ws_range = 10..54;
-
-		assert!(Iterator::eq(
-			merged_block_stream(stream::iter(ws_range.clone()), stream::iter([10]))
-				.await
-				.unwrap()
-				.collect::<Vec<_>>()
-				.await
-				.into_iter(),
-			ws_range
-		));
-		// TODO: Remove usage of tag cache in merged block streams unit tests #2862
-		//assert_eq!(tag_cache.get_tag_count(ETH_STREAM_BEHIND), 4);
 	}
 
 	#[tokio::test]

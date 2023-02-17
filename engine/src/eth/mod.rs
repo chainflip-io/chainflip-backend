@@ -326,7 +326,7 @@ where
 pub async fn safe_dual_block_subscription_from(
 	from_block: u64,
 	eth_dual_rpc: EthDualRpcClient,
-) -> Result<Pin<Box<dyn Stream<Item = EthNumberBloom> + Send + 'static>>>
+) -> Result<Pin<Box<dyn Stream<Item = (EthNumberBloom, TransportProtocol)> + Send + 'static>>>
 where
 {
 	let safe_ws_head_stream = eth_block_head_stream_from(

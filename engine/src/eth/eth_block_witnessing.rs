@@ -89,7 +89,7 @@ pub async fn start(
 					safe_dual_block_subscription_from(from_block, eth_rpc.clone()).await
 				);
 
-				while let Some(block) = block_stream.next().await {
+				while let Some((block, _)) = block_stream.next().await {
 					if let Some(end_block) = *end_witnessing_signal.lock().unwrap() {
 						if block.block_number.as_u64() >= end_block {
 							info!("Eth block witnessers unsubscribe at block {end_block}",);
