@@ -1,10 +1,8 @@
-use std::{fmt::Debug, pin::Pin};
+use std::fmt::Debug;
 
 use futures::{stream, FutureExt, Stream, StreamExt};
 use tracing::{debug, trace, warn};
 use utilities::make_periodic_tick;
-
-use anyhow::Result;
 
 use crate::{
 	constants::{
@@ -67,7 +65,7 @@ impl HasBlockNumber for EthNumberBloom {
 pub async fn merged_block_stream<'a, Block, BlockHeaderStreamWs, BlockHeaderStreamHttp>(
 	safe_ws_block_items_stream: BlockHeaderStreamWs,
 	safe_http_block_items_stream: BlockHeaderStreamHttp,
-) -> Result<Pin<Box<dyn Stream<Item = (Block, TransportProtocol)> + Send + 'a>>>
+) -> impl Stream<Item = (Block, TransportProtocol)> + Send + 'a
 where
 	Block: HasBlockNumber + Send + 'a,
 	BlockHeaderStreamWs: Stream<Item = Block> + Unpin + Send + 'a,
@@ -203,7 +201,7 @@ where
 		opt_block_header
 	}
 
-	Ok(Box::pin(stream::unfold(init_state, |mut stream_state| async move {
+	Box::pin(stream::unfold(init_state, |mut stream_state| async move {
 		let StreamState {
 			ws_state, ws_stream, http_state, http_stream, merged_stream_state, ..
 		} = &mut stream_state;
@@ -222,7 +220,7 @@ where
 				break Some(((block, protocol), stream_state))
 			}
 		}
-	})))
+	}))
 }
 
 #[cfg(test)]
@@ -289,11 +287,7 @@ mod merged_stream_tests {
 		};
 
 		assert_eq!(
-			merged_block_stream(ws_stream, http_stream)
-				.await
-				.unwrap()
-				.collect::<Vec<_>>()
-				.await,
+			merged_block_stream(ws_stream, http_stream).await.collect::<Vec<_>>().await,
 			expected_blocks
 		);
 	}
@@ -305,7 +299,6 @@ mod merged_stream_tests {
 			Box::pin(stream::empty::<u64>()),
 		)
 		.await
-		.unwrap()
 		.next()
 		.await
 		.is_none());
@@ -319,7 +312,6 @@ mod merged_stream_tests {
 				Box::pin(stream::iter([10, 11, 12, 13])),
 			)
 			.await
-			.unwrap()
 			.collect::<(Vec<_>, Vec<_>)>()
 			.await
 			.0,
@@ -351,7 +343,6 @@ mod merged_stream_tests {
 				Box::pin(stream::iter([10, 11, 12, 13])),
 			)
 			.await
-			.unwrap()
 			.collect::<(Vec<_>, Vec<_>)>()
 			.await
 			.0,
@@ -397,8 +388,7 @@ mod merged_stream_tests {
 			])),
 			Box::pin(stream::iter([12, 13, 14, 13, 15, 16])),
 		)
-		.await
-		.unwrap();
+		.await;
 
 		stream.next().await.unwrap();
 		stream.next().await.unwrap();

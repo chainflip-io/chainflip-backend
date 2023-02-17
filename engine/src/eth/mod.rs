@@ -37,6 +37,7 @@ use crate::{
 	witnesser::{block_head_stream_from::block_head_stream_from, BlockNumberable},
 };
 
+use futures::StreamExt;
 use slog::o;
 use std::{
 	fmt::{self, Debug},
@@ -326,7 +327,7 @@ where
 pub async fn safe_dual_block_subscription_from(
 	from_block: u64,
 	eth_dual_rpc: EthDualRpcClient,
-) -> Result<Pin<Box<dyn Stream<Item = (EthNumberBloom, TransportProtocol)> + Send + 'static>>>
+) -> Result<Pin<Box<dyn Stream<Item = EthNumberBloom> + Send + 'static>>>
 where
 {
 	let safe_ws_head_stream = eth_block_head_stream_from(
@@ -351,7 +352,11 @@ where
 	)
 	.await?;
 
-	merged_block_stream(safe_ws_head_stream, safe_http_head_stream).await
+	Ok(Box::pin(
+		merged_block_stream(safe_ws_head_stream, safe_http_head_stream)
+			.await
+			.map(|(number_bloom, _)| number_bloom),
+	))
 }
 
 #[async_trait]

@@ -62,7 +62,7 @@ where
 		safe_dual_block_subscription_from(from_block, eth_dual_rpc.clone()).await?;
 
 	Ok(Box::pin(safe_header_stream.then({
-		move |(block, _)| {
+		move |block| {
 			let rpc = eth_dual_rpc.clone();
 			let decode_log_closure = contract_witnesser.decode_log_closure().unwrap();
 			async move {
