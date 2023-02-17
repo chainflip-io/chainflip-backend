@@ -5,7 +5,7 @@ getruntimeversion() {
 }
 
 runoldversion() {
-  /usr/local/bin/chainflip/0.5/chainflip-engine --config-path /etc/chainflip/config/Default.toml
+  /usr/local/bin/chainflip/0.5/chainflip-engine --config-path /etc/chainflip/config/Settings.toml
 }
 
 runnewversion() {
