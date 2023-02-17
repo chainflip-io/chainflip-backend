@@ -202,6 +202,7 @@ pub fn aggregate_signature<C: CryptoScheme>(
 				&y_i,
 				&lambda_i,
 				&commitment_i,
+				&group_commitment,
 				&challenge,
 				&response.response,
 			)
@@ -271,6 +272,7 @@ mod tests {
 		assert!(EthSigning::is_party_response_valid(
 			&public_key,
 			&dummy_lambda,
+			&commitment,
 			&commitment,
 			&challenge,
 			&response,

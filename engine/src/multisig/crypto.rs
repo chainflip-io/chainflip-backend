@@ -139,6 +139,7 @@ pub trait CryptoScheme: 'static + Clone + Send + Sync + Debug + PartialEq {
 		y_i: &Self::Point,
 		lambda_i: &<Self::Point as ECPoint>::Scalar,
 		commitment: &Self::Point,
+		group_commitment: &Self::Point,
 		challenge: &<Self::Point as ECPoint>::Scalar,
 		signature_response: &<Self::Point as ECPoint>::Scalar,
 	) -> bool;

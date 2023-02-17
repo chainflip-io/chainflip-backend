@@ -94,10 +94,15 @@ impl CryptoScheme for BtcSigning {
 		y_i: &Self::Point,
 		lambda_i: &<Self::Point as ECPoint>::Scalar,
 		commitment: &Self::Point,
+		group_commitment: &Self::Point,
 		challenge: &<Self::Point as ECPoint>::Scalar,
 		signature_response: &<Self::Point as ECPoint>::Scalar,
 	) -> bool {
-		Point::from_scalar(signature_response) == *commitment + (*y_i) * challenge * lambda_i
+		if group_commitment.as_bytes()[0] == 3 {
+			Point::from_scalar(signature_response) == (*y_i) * challenge * lambda_i - *commitment
+		} else {
+			Point::from_scalar(signature_response) == (*y_i) * challenge * lambda_i + *commitment
+		}
 	}
 
 	fn verify_signature(
@@ -107,9 +112,9 @@ impl CryptoScheme for BtcSigning {
 	) -> anyhow::Result<()> {
 		let mut hasher = Sha256::new();
 		hasher.update(payload.0);
+		let hash = hasher.finalize();
 		let secp = secp256k1::Secp256k1::new();
 		let raw_sig = secp256k1::schnorrsig::Signature::from_slice(&signature.to_raw()).unwrap();
-		let hash = hasher.finalize();
 		let raw_msg = secp256k1::Message::from_slice(&hash).unwrap();
 		let raw_pubkey = secp256k1::schnorrsig::PublicKey::from_slice(&key_id.0[1..33]).unwrap();
 
@@ -134,6 +139,8 @@ impl CryptoScheme for BtcSigning {
 
 #[test]
 fn test_sig_verification() {
+	// These are some random values fed through a reference implementation for bitcoin signing
+	// to test that our verification works correctly
 	let r = Point::from_scalar(&Scalar::from_hex(
 		"8F78522655F02F46F55103BC6EE2242E04553DAA65BF18D0E329EC6B49FD3788",
 	));
@@ -148,7 +155,8 @@ fn test_sig_verification() {
 
 #[test]
 fn test_btcsig_to_raw() {
-	// case where the generated signature is valid as is
+	// These are some random values that we can use to see that the "sig.to_raw()" function
+	// works as expected
 	let s = Scalar::from_hex("626FC96FF3678D4FA2DE960B2C39D199747D3F47F01508FBBE24825C4D11B543");
 	let r = Point::from_scalar(&s);
 	let sig = BtcSigning::build_signature(s, r);
@@ -166,6 +174,8 @@ fn test_btcsig_to_raw() {
 
 #[test]
 fn test_challenge() {
+	// Again some random values that were used in a reference implementation
+	// so that we can be sure the build_challenge method works as expected
 	let public = Point::from_scalar(&Scalar::from_hex(
 		"626FC96FF3678D4FA2DE960B2C39D199747D3F47F01508FBBE24825C4D11B543",
 	));
