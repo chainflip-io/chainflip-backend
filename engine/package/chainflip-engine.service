@@ -1,5 +1,6 @@
 [Unit]
 Description=Chainflip Validator Engine
+After=chainflip-node.service
 
 [Service]
 Restart=always
