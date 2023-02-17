@@ -169,6 +169,11 @@ impl TransactionBuilder<Ethereum, EthereumApi<EthEnvironment>> for EthTransactio
 		}
 		// if we don't have ChainState, we leave it unmodified
 	}
+
+	fn is_valid_for_rebroadcast(_call: &EthereumApi<EthEnvironment>) -> bool {
+		// Nothing to validate for Ethereum
+		true
+	}
 }
 
 pub struct DotTransactionBuilder;
@@ -181,6 +186,12 @@ impl TransactionBuilder<Polkadot, PolkadotApi<DotEnvironment>> for DotTransactio
 
 	fn refresh_unsigned_transaction(_unsigned_tx: &mut <Polkadot as ChainAbi>::Transaction) {
 		// TODO: For now this is a noop until we actually have dot chain tracking
+	}
+
+	fn is_valid_for_rebroadcast(call: &PolkadotApi<DotEnvironment>) -> bool {
+		// If we know the Polkadot runtime has been upgraded then we know this transaction will
+		// fail.
+		call.runtime_version_used() == Environment::polkadot_runtime_version()
 	}
 }
 

@@ -3,7 +3,7 @@ pub mod create_anonymous_vault;
 pub mod rotate_vault_proxy;
 pub mod set_gov_key_with_agg_key;
 
-use super::PolkadotPublicKey;
+use super::{PolkadotPublicKey, RuntimeVersion};
 use crate::{dot::Polkadot, *};
 use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound};
 use sp_std::marker::PhantomData;
@@ -19,6 +19,18 @@ pub enum PolkadotApi<Environment: 'static> {
 	#[doc(hidden)]
 	#[codec(skip)]
 	_Phantom(PhantomData<Environment>, Never),
+}
+
+impl<E> PolkadotApi<E> {
+	pub fn runtime_version_used(&self) -> RuntimeVersion {
+		match self {
+			Self::BatchFetchAndTransfer(tx) => tx.extrinsic_builder.runtime_version(),
+			Self::RotateVaultProxy(tx) => tx.extrinsic_builder.runtime_version(),
+			Self::CreateAnonymousVault(tx) => tx.extrinsic_builder.runtime_version(),
+			Self::ChangeGovKey(tx) => tx.extrinsic_builder.runtime_version(),
+			Self::_Phantom(_, _) => unreachable!(),
+		}
+	}
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]

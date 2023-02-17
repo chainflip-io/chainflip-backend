@@ -155,6 +155,9 @@ where
 
 	/// Refresh any time-sensitive data e.g. gas price.
 	fn refresh_unsigned_transaction(unsigned_tx: &mut Abi::Transaction);
+
+	/// Checks if the transaction is still valid.
+	fn is_valid_for_rebroadcast(call: &Call) -> bool;
 }
 
 /// Contains all the parameters required to fetch incoming transactions on an external chain.
@@ -392,6 +395,10 @@ pub mod mocks {
 
 		fn refresh_unsigned_transaction(_unsigned_tx: &mut <Abi as ChainAbi>::Transaction) {
 			// refresh nothing
+		}
+
+		fn is_valid_for_rebroadcast(_call: &Call) -> bool {
+			true
 		}
 	}
 }
