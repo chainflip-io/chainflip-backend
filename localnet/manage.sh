@@ -1,7 +1,7 @@
 #!/bin/bash
 
 LOCALNET_INIT_DIR=localnet/init
-WORKFLOW=build
+WORKFLOW=build-localnet
 
 set -euo pipefail
 setup() {
@@ -46,13 +46,13 @@ setup() {
 
 workflow() {
   echo "❓ Would you like to build, recreate or destroy your Localnet? (Type 1, 2, 3, 4 or 5)"
-  select WORKFLOW in build recreate destroy logs yeet; do
+  select WORKFLOW in build-localnet recreate destroy logs yeet; do
     echo "You have chosen $WORKFLOW"
     break
   done
 }
 
-build() {
+build-localnet() {
   source $LOCALNET_INIT_DIR/secrets/secrets.env
   echo
   echo "💻 Please provide the location to the binaries you would like to use."
@@ -128,11 +128,11 @@ fi
 
 workflow
 
-if [ $WORKFLOW == "build" ]; then
-  build
+if [ $WORKFLOW == "build-localnet" ]; then
+  build-localnet
 elif [ $WORKFLOW == "recreate" ]; then
   destroy
-  build
+  build-localnet
 elif [ $WORKFLOW == "destroy" ]; then
   destroy
 elif [ $WORKFLOW == "logs" ]; then

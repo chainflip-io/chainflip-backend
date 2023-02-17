@@ -117,7 +117,7 @@ After set up completion, you will see the following:
 
 ```shell
 ❓ Would you like to build, recreate or destroy your Localnet? (Type 1, 2, 3, 4 or 5)
-1) build
+1) build-localnet
 2) recreate
 3) destroy
 4) logs
