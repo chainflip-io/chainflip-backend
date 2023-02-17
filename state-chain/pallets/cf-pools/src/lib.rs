@@ -100,7 +100,9 @@ pub mod pallet {
 				log::debug!("Flip buy interval is zero, skipping.")
 			} else {
 				weight_used.saturating_accrue(T::DbWeight::get().reads(1));
-				if (current_block % interval).is_zero() && CollectedNetworkFee::<T>::get() != 0 {
+				if (current_block % interval).is_zero() &&
+					!CollectedNetworkFee::<T>::get().is_zero()
+				{
 					weight_used.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
 					if let Err(e) = CollectedNetworkFee::<T>::try_mutate(|collected_fee| {
 						let flip_to_burn =

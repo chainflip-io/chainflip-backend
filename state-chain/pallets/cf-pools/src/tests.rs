@@ -135,21 +135,20 @@ fn test_buy_back_flip() {
 			Default::default(),
 			Default::default(),
 		));
-		let _ = LiquidityPools::mint(
+		assert_ok!(LiquidityPools::mint(
 			LP.into(),
 			FLIP,
 			POSITION,
 			1_000_000,
 			|_: PoolAssetMap<AssetAmount>| Ok(()),
-		)
-		.unwrap();
+		));
 
 		// Swapping should cause the network fee to be collected.
 		LiquidityPools::swap(FLIP, STABLE_ASSET, 1000).unwrap();
 		LiquidityPools::swap(STABLE_ASSET, FLIP, 1000).unwrap();
 
-		assert!(CollectedNetworkFee::<Test>::get() > 0);
 		let collected_fee = CollectedNetworkFee::<Test>::get();
+		assert!(collected_fee > 0);
 
 		// The default buy interval is zero, and this means we don't buy back.
 		assert_eq!(FlipBuyInterval::<Test>::get(), 0);
