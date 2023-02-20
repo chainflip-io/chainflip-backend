@@ -23,7 +23,7 @@ impl BtcSchnorrSignature {
 	// The first 32 are the x-component of R, the next 32 are used for s.
 	fn to_raw(&self) -> [u8; 64] {
 		let mut result: [u8; 64] = [0; 64];
-		result[..32].copy_from_slice(&self.r.as_bytes()[1..33]);
+		result[..32].copy_from_slice(&self.r.x_bytes());
 		result[32..].copy_from_slice(self.s.as_bytes());
 		result
 	}
@@ -71,8 +71,8 @@ impl CryptoScheme for BtcSigning {
 		let sighash = hasher.finalize_reset();
 		hasher.update(CHALLENGE_TAG);
 		hasher.update(CHALLENGE_TAG);
-		hasher.update(&nonce_commitment.as_bytes()[1..33]);
-		hasher.update(&pubkey.as_bytes()[1..33]);
+		hasher.update(nonce_commitment.x_bytes());
+		hasher.update(pubkey.x_bytes());
 		hasher.update(sighash);
 		ECScalar::from_bytes_mod_order(&hasher.finalize().into())
 	}
@@ -83,10 +83,10 @@ impl CryptoScheme for BtcSigning {
 		private_key: &<Self::Point as ECPoint>::Scalar,
 		challenge: <Self::Point as ECPoint>::Scalar,
 	) -> <Self::Point as ECPoint>::Scalar {
-		if nonce_commitment.as_bytes()[0] == 3 {
-			private_key * &challenge - nonce
-		} else {
+		if nonce_commitment.is_even_y() {
 			private_key * &challenge + nonce
+		} else {
+			private_key * &challenge - nonce
 		}
 	}
 
@@ -98,10 +98,10 @@ impl CryptoScheme for BtcSigning {
 		challenge: &<Self::Point as ECPoint>::Scalar,
 		signature_response: &<Self::Point as ECPoint>::Scalar,
 	) -> bool {
-		if group_commitment.as_bytes()[0] == 3 {
-			Point::from_scalar(signature_response) == (*y_i) * challenge * lambda_i - *commitment
-		} else {
+		if group_commitment.is_even_y() {
 			Point::from_scalar(signature_response) == (*y_i) * challenge * lambda_i + *commitment
+		} else {
+			Point::from_scalar(signature_response) == (*y_i) * challenge * lambda_i - *commitment
 		}
 	}
 
@@ -128,7 +128,7 @@ impl CryptoScheme for BtcSigning {
 	}
 
 	fn is_pubkey_compatible(pubkey: &Self::Point) -> bool {
-		pubkey.as_bytes()[0] == 2
+		pubkey.is_even_y()
 	}
 
 	#[cfg(test)]
