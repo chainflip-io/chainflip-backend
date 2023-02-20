@@ -109,7 +109,6 @@ where
 	fn log_when_yielding(
 		yielding_stream_state: &ProtocolState,
 		non_yielding_stream_state: &ProtocolState,
-		merged_stream_state: &MergedStreamState,
 		yielding_block_number: u64,
 	) {
 		match yielding_stream_state.protocol {
@@ -134,14 +133,15 @@ where
 
 			if ((non_yielding_last_pulled + ETH_FALLING_BEHIND_MARGIN_BLOCKS) <=
 				yielding_block_number) &&
-			(blocks_behind % ETH_LOG_BEHIND_REPORT_BLOCK_INTERVAL == 0)
-		{
-			warn!(
-				tag = ETH_STREAM_BEHIND,
-				"ETH {} stream at block `{yielding_block_number}` but {} stream at block `{non_yielding_last_pulled}`",
-				yielding_stream_state.protocol,
-				non_yielding_stream_state.protocol,
-			);
+				(blocks_behind % ETH_LOG_BEHIND_REPORT_BLOCK_INTERVAL == 0)
+			{
+				warn!(
+					tag = ETH_STREAM_BEHIND,
+					"ETH {} stream at block `{yielding_block_number}` but {} stream at block `{non_yielding_last_pulled}`",
+					yielding_stream_state.protocol,
+					non_yielding_stream_state.protocol,
+				);
+			}
 		}
 	}
 
@@ -190,12 +190,7 @@ where
 		}.map(|block| (block, protocol_state.protocol));
 
 		if opt_block_header.is_some() {
-			log_when_yielding(
-				protocol_state,
-				other_protocol_state,
-				merged_stream_state,
-				block_number,
-			);
+			log_when_yielding(protocol_state, other_protocol_state, block_number);
 		}
 
 		opt_block_header
@@ -216,7 +211,7 @@ where
 				}
 				else => break None
 			} {
-				stream_state.merged_stream_state.last_block_yielded = block.block_number();
+				stream_state.merged_stream_state.last_block_yielded = Some(block.block_number());
 				break Some(((block, protocol), stream_state))
 			}
 		}
@@ -325,12 +320,11 @@ mod merged_stream_tests {
 			merged_block_stream(
 				Box::pin(stream::iter([0, 1, 2, 3])),
 				Box::pin(stream::iter([0, 1, 2, 3])),
-				new_test_logger(),
 			)
 			.await
-			.unwrap()
-			.collect::<Vec<_>>()
-			.await,
+			.collect::<(Vec<_>, Vec<_>)>()
+			.await
+			.0,
 			&[0, 1, 2, 3]
 		);
 	}
