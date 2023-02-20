@@ -1270,7 +1270,6 @@ where
 		std::convert::From<pallet_cf_threshold_signature::Call<state_chain_runtime::Runtime, I>>,
 	<<state_chain_runtime::Runtime as pallet_cf_threshold_signature::Config<I>>::TargetChain as ChainCrypto>::ThresholdSignature: std::convert::From<<C as CryptoScheme>::Signature>,
 {
-	let logger = new_test_logger();
 	let first_ceremony_id = 1;
 	let key_id = crate::multisig::KeyId(vec![0u8; 32]);
 	let payload = C::signing_payload_for_test();
@@ -1286,7 +1285,7 @@ where
 	state_chain_client.
 expect_submit_signed_extrinsic::<pallet_cf_threshold_signature::Call<state_chain_runtime::Runtime,
 I>>() 		.once()
-		.return_once(|_, _| Ok(sp_core::H256::default()));
+		.return_once(|_| Ok(sp_core::H256::default()));
 	let state_chain_client = Arc::new(state_chain_client);
 
 	let mut multisig_client = MockMultisigClientApi::<C>::new();
@@ -1325,7 +1324,6 @@ I>>() 		.once()
 				key_id.clone(),
 				BTreeSet::from_iter([not_our_account_id.clone()]),
 				payload.clone(),
-				logger.clone(),
 			)
 			.await;
 
@@ -1338,7 +1336,6 @@ I>>() 		.once()
 				key_id,
 				BTreeSet::from_iter([our_account_id]),
 				payload,
-				logger,
 			)
 			.await;
 
@@ -1378,7 +1375,6 @@ where
 	state_chain_runtime::RuntimeCall:
 		std::convert::From<pallet_cf_vaults::Call<state_chain_runtime::Runtime, I>>,
 {
-	let logger = new_test_logger();
 	let first_ceremony_id = 1;
 	let our_account_id = AccountId32::new([0; 32]);
 	let not_our_account_id = AccountId32::new([1u8; 32]);
@@ -1392,7 +1388,7 @@ where
 	state_chain_client
 		.expect_submit_signed_extrinsic::<pallet_cf_vaults::Call<state_chain_runtime::Runtime, I>>()
 		.once()
-		.return_once(|_, _| Ok(H256::default()));
+		.return_once(|_| Ok(H256::default()));
 	let state_chain_client = Arc::new(state_chain_client);
 
 	let mut multisig_client = MockMultisigClientApi::<C>::new();
@@ -1426,7 +1422,6 @@ where
 				state_chain_client.clone(),
 				first_ceremony_id,
 				BTreeSet::from_iter([not_our_account_id.clone()]),
-				logger.clone(),
 			)
 			.await;
 
@@ -1437,7 +1432,6 @@ where
 				state_chain_client.clone(),
 				next_ceremony_id,
 				BTreeSet::from_iter([our_account_id]),
-				logger.clone(),
 			)
 			.await;
 			Ok(())
@@ -1486,7 +1480,7 @@ async fn run_the_sc_observer() {
 			let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 				tokio::sync::mpsc::unbounded_channel();
 
-			let eth_ws_rpc_client = EthWsRpcClient::new(&settings.eth, &logger).await.unwrap();
+			let eth_ws_rpc_client = EthWsRpcClient::new(&settings.eth).await.unwrap();
 			let eth_broadcaster =
 				EthBroadcaster::new(&settings.eth, eth_ws_rpc_client.clone(), &logger).unwrap();
 

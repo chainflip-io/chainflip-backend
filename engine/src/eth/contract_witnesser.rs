@@ -19,7 +19,6 @@ pub struct ContractWitnesser<Contract, StateChainClient> {
 	rpc: EthDualRpcClient,
 	state_chain_client: Arc<StateChainClient>,
 	should_witness_historical_epochs: bool,
-	logger: slog::Logger,
 }
 
 impl<StateChainClient> ContractWitnesser<Erc20Witnesser, StateChainClient> {
@@ -38,15 +37,8 @@ where
 		state_chain_client: Arc<StateChainClient>,
 		rpc: EthDualRpcClient,
 		should_witness_historical_epochs: bool,
-		logger: &slog::Logger,
 	) -> Self {
-		Self {
-			contract,
-			rpc,
-			state_chain_client,
-			should_witness_historical_epochs,
-			logger: logger.clone(),
-		}
+		Self { contract, rpc, state_chain_client, should_witness_historical_epochs }
 	}
 }
 
@@ -83,7 +75,6 @@ where
 				// Can't this just take a reference?
 				self.state_chain_client.clone(),
 				&self.rpc,
-				&self.logger,
 			)
 			.await?;
 

@@ -6,6 +6,7 @@ use sp_core::H256;
 use sp_runtime::traits::{BlakeTwo256, Hash};
 use state_chain_runtime::AccountId;
 use tokio::sync::{mpsc, oneshot};
+use tracing::{error, info};
 
 use super::storage_api::StorageApi;
 
@@ -14,11 +15,7 @@ use super::storage_api::StorageApi;
 pub trait ExtrinsicApi {
 	fn account_id(&self) -> AccountId;
 
-	async fn submit_signed_extrinsic<Call>(
-		&self,
-		call: Call,
-		logger: &slog::Logger,
-	) -> Result<H256>
+	async fn submit_signed_extrinsic<Call>(&self, call: Call) -> Result<H256>
 	where
 		Call: Into<state_chain_runtime::RuntimeCall>
 			+ Clone
@@ -27,11 +24,7 @@ pub trait ExtrinsicApi {
 			+ Sync
 			+ 'static;
 
-	async fn submit_unsigned_extrinsic<Call>(
-		&self,
-		call: Call,
-		logger: &slog::Logger,
-	) -> Result<H256>
+	async fn submit_unsigned_extrinsic<Call>(&self, call: Call) -> Result<H256>
 	where
 		Call: Into<state_chain_runtime::RuntimeCall>
 			+ Clone
@@ -58,7 +51,6 @@ impl<BaseRpcApi: super::base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 			oneshot::Sender<Result<H256, anyhow::Error>>,
 		)>,
 		call: Call,
-		logger: &slog::Logger,
 	) -> Result<H256, anyhow::Error>
 	where
 		Call: Into<state_chain_runtime::RuntimeCall> + Clone + std::fmt::Debug,
@@ -73,15 +65,10 @@ impl<BaseRpcApi: super::base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 
 		match &extrinsic_result {
 			Ok(tx_hash) => {
-				slog::info!(
-					logger,
-					"{:?} submission succeeded with tx_hash: {:#x}",
-					&call,
-					tx_hash
-				);
+				info!("{:?} submission succeeded with tx_hash: {tx_hash:#x}", &call);
 			},
-			Err(error) => {
-				slog::error!(logger, "{:?} submission failed with error: {}", &call, error);
+			Err(e) => {
+				error!("{:?} submission failed with error: {e}", &call);
 			},
 		}
 
@@ -99,7 +86,7 @@ impl<BaseRpcApi: super::base_rpc_api::BaseRpcApi + Send + Sync + 'static> Extrin
 
 	/// Sign and submit an extrinsic, retrying up to [MAX_EXTRINSIC_RETRY_ATTEMPTS] times if it
 	/// fails on an invalid nonce.
-	async fn submit_signed_extrinsic<Call>(&self, call: Call, logger: &slog::Logger) -> Result<H256>
+	async fn submit_signed_extrinsic<Call>(&self, call: Call) -> Result<H256>
 	where
 		Call: Into<state_chain_runtime::RuntimeCall>
 			+ Clone
@@ -108,15 +95,11 @@ impl<BaseRpcApi: super::base_rpc_api::BaseRpcApi + Send + Sync + 'static> Extrin
 			+ Sync
 			+ 'static,
 	{
-		Self::submit_extrinsic(&self.signed_extrinsic_request_sender, call, logger).await
+		Self::submit_extrinsic(&self.signed_extrinsic_request_sender, call).await
 	}
 
 	/// Submit an unsigned extrinsic.
-	async fn submit_unsigned_extrinsic<Call>(
-		&self,
-		call: Call,
-		logger: &slog::Logger,
-	) -> Result<H256>
+	async fn submit_unsigned_extrinsic<Call>(&self, call: Call) -> Result<H256>
 	where
 		Call: Into<state_chain_runtime::RuntimeCall>
 			+ std::fmt::Debug
@@ -125,7 +108,7 @@ impl<BaseRpcApi: super::base_rpc_api::BaseRpcApi + Send + Sync + 'static> Extrin
 			+ Sync
 			+ 'static,
 	{
-		Self::submit_extrinsic(&self.unsigned_extrinsic_request_sender, call, logger).await
+		Self::submit_extrinsic(&self.unsigned_extrinsic_request_sender, call).await
 	}
 
 	/// Watches *only* submitted extrinsics. I.e. Cannot watch for chain called extrinsics.

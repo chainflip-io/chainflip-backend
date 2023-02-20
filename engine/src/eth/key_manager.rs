@@ -6,6 +6,7 @@ use cf_chains::eth::{SchnorrVerificationComponents, TransactionFee};
 use cf_primitives::EpochIndex;
 use state_chain_runtime::EthereumInstance;
 use std::sync::Arc;
+use tracing::{info, trace};
 use web3::{
 	contract::tokens::Tokenizable,
 	ethabi::{self, RawLog, Token},
@@ -199,34 +200,29 @@ impl EthContractWitnesser for KeyManager {
 		block: BlockWithItems<Event<Self::EventParameters>>,
 		state_chain_client: Arc<StateChainClient>,
 		eth_rpc: &EthRpcClient,
-		logger: &slog::Logger,
 	) -> anyhow::Result<()>
 	where
 		EthRpcClient: EthRpcApi + Sync + Send,
 		StateChainClient: ExtrinsicApi + Send + Sync,
 	{
 		for event in block.block_items {
-			slog::info!(logger, "Handling event: {}", event);
+			info!("Handling event: {event}");
 			match event.event_parameters {
 				KeyManagerEvent::AggKeySetByAggKey { new_agg_key, .. } => {
 					let _result = state_chain_client
-						.submit_signed_extrinsic(
-							pallet_cf_witnesser::Call::witness_at_epoch {
-								call: Box::new(
-									pallet_cf_vaults::Call::<_, EthereumInstance>::vault_key_rotated {
-										new_public_key:
-											cf_chains::eth::AggKey::from_pubkey_compressed(
-												new_agg_key.serialize(),
-											),
-										block_number,
-										tx_id: core_h256(event.tx_hash),
-									}
-									.into(),
-								),
-								epoch_index,
-							},
-							logger,
-						)
+						.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
+							call: Box::new(
+								pallet_cf_vaults::Call::<_, EthereumInstance>::vault_key_rotated {
+									new_public_key: cf_chains::eth::AggKey::from_pubkey_compressed(
+										new_agg_key.serialize(),
+									),
+									block_number,
+									tx_id: core_h256(event.tx_hash),
+								}
+								.into(),
+							),
+							epoch_index,
+						})
 						.await;
 				},
 				KeyManagerEvent::AggKeySetByGovKey { new_agg_key, .. } => {
@@ -246,7 +242,6 @@ impl EthContractWitnesser for KeyManager {
 								),
 								epoch_index,
 							},
-							logger,
 						)
 						.await;
 				},
@@ -274,28 +269,24 @@ impl EthContractWitnesser for KeyManager {
 								),
 								epoch_index,
 							},
-							logger,
 						)
 						.await;
 				},
 				KeyManagerEvent::GovernanceAction { message } => {
 					let _result = state_chain_client
-						.submit_signed_extrinsic(
-							pallet_cf_witnesser::Call::witness_at_epoch {
-								call: Box::new(
-									pallet_cf_governance::Call::set_whitelisted_call_hash {
-										call_hash: message,
-									}
-									.into(),
-								),
-								epoch_index,
-							},
-							logger,
-						)
+						.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
+							call: Box::new(
+								pallet_cf_governance::Call::set_whitelisted_call_hash {
+									call_hash: message,
+								}
+								.into(),
+							),
+							epoch_index,
+						})
 						.await;
 				},
 				_ => {
-					slog::trace!(logger, "Ignoring unused event: {}", event);
+					trace!("Ignoring unused event: {event}");
 				},
 			}
 		}

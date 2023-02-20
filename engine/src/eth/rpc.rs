@@ -1,3 +1,4 @@
+use tracing::{debug, error, info, info_span, warn, Instrument};
 use utilities::{context, make_periodic_tick};
 use web3::{
 	api::SubscriptionStream,
@@ -21,7 +22,6 @@ use anyhow::{anyhow, bail, Context, Result};
 use crate::{
 	common::format_iterator,
 	constants::{ETH_DUAL_REQUEST_TIMEOUT, ETH_LOG_REQUEST_TIMEOUT, SYNC_POLL_INTERVAL},
-	logging::COMPONENT_KEY,
 	settings,
 };
 
@@ -44,20 +44,16 @@ impl<T: EthTransport> EthRpcClient<T> {
 	async fn inner_new<F: futures::Future<Output = Result<T>>>(
 		node_endpoint: &str,
 		f: F,
-		logger: &slog::Logger,
 	) -> Result<Self> {
-		slog::debug!(
-			logger,
+		debug!(
 			"Connecting new {} web3 client{}",
 			T::transport_protocol(),
 			match redact_secret_eth_node_endpoint(node_endpoint) {
 				Ok(redacted_node_endpoint) => format!(" to {redacted_node_endpoint}"),
 				Err(e) => {
-					slog::error!(
-						logger,
-						"Could not redact secret in {} ETH node endpoint: {}",
+					error!(
+						"Could not redact secret in {} ETH node endpoint: {e}",
 						T::transport_protocol(),
-						e
 					);
 					"".to_string()
 				},
@@ -259,14 +255,10 @@ where
 }
 
 impl EthWsRpcClient {
-	pub async fn new(eth_settings: &settings::Eth, logger: &slog::Logger) -> Result<Self> {
-		let client = Self::inner_new(
-			&eth_settings.ws_node_endpoint,
-			async {
-				context!(web3::transports::WebSocket::new(&eth_settings.ws_node_endpoint).await)
-			},
-			logger,
-		)
+	pub async fn new(eth_settings: &settings::Eth) -> Result<Self> {
+		let client = Self::inner_new(&eth_settings.ws_node_endpoint, async {
+			context!(web3::transports::WebSocket::new(&eth_settings.ws_node_endpoint).await)
+		})
 		.await?;
 
 		let mut poll_interval = make_periodic_tick(SYNC_POLL_INTERVAL, false);
@@ -278,15 +270,13 @@ impl EthWsRpcClient {
 			.await
 			.context("Failure while syncing EthRpcClient client")?
 		{
-			slog::info!(
-				logger,
-				"Waiting for ETH node to sync. Sync state is: {:?}. Checking again in {:?} ...",
-				info,
+			info!(
+				"Waiting for ETH node to sync. Sync state is: {info:?}. Checking again in {:?} ...",
 				poll_interval.period(),
 			);
 			poll_interval.tick().await;
 		}
-		slog::info!(logger, "ETH node is synced.");
+		info!("ETH node is synced.");
 
 		Ok(client)
 	}
@@ -313,13 +303,12 @@ impl EthWsRpcApi for EthWsRpcClient {
 }
 
 impl EthHttpRpcClient {
-	pub fn new(eth_settings: &settings::Eth, logger: &slog::Logger) -> Result<Self> {
+	pub fn new(eth_settings: &settings::Eth) -> Result<Self> {
 		Self::inner_new(
 			&eth_settings.http_node_endpoint,
 			std::future::ready({
 				context!(web3::transports::Http::new(&eth_settings.http_node_endpoint))
 			}),
-			logger,
 		)
 		.now_or_never()
 		.unwrap()
@@ -330,19 +319,14 @@ impl EthHttpRpcClient {
 pub struct EthDualRpcClient {
 	pub ws_client: EthWsRpcClient,
 	pub http_client: EthHttpRpcClient,
-	logger: slog::Logger,
 }
 
 impl EthDualRpcClient {
 	/// Create an Ethereum Rpc Client, containing a HTTP and a WS client.
 	/// Passing a value to expected_chain_id ensures the endpoints provided in settings are pointing
 	/// to nodes with the same `chain_id` as that provided.
-	pub async fn new(
-		eth_settings: &settings::Eth,
-		expected_chain_id: U256,
-		logger: &slog::Logger,
-	) -> Result<Self> {
-		let dual_rpc = Self::inner_new(eth_settings, logger).await?;
+	pub async fn new(eth_settings: &settings::Eth, expected_chain_id: U256) -> Result<Self> {
+		let dual_rpc = Self::inner_new(eth_settings).await?;
 
 		pub async fn validate_client_chain_id<T>(
 			client: &EthRpcClient<T>,
@@ -356,9 +340,7 @@ impl EthDualRpcClient {
 
 			if chain_id != expected_chain_id {
 				return Err(anyhow!(
-					"Expected ETH chain id {}, received {} through {}.",
-					expected_chain_id,
-					chain_id,
+					"Expected ETH chain id {expected_chain_id}, received {chain_id} through {}.",
 					T::transport_protocol()
 				))
 			}
@@ -383,21 +365,20 @@ impl EthDualRpcClient {
 
 	#[cfg(feature = "integration-test")]
 	/// For tests we assume we're pointing to the correct chain_id.
-	pub async fn new_test(eth_settings: &settings::Eth, logger: &slog::Logger) -> Result<Self> {
-		Self::inner_new(eth_settings, logger).await
+	pub async fn new_test(eth_settings: &settings::Eth) -> Result<Self> {
+		Self::inner_new(eth_settings).await
 	}
 
-	async fn inner_new(eth_settings: &settings::Eth, logger: &slog::Logger) -> Result<Self> {
-		let logger = logger.new(slog::o!(COMPONENT_KEY => "Eth-DualRpcClient"));
-
-		let ws_client = EthWsRpcClient::new(eth_settings, &logger)
+	async fn inner_new(eth_settings: &settings::Eth) -> Result<Self> {
+		let ws_client = EthWsRpcClient::new(eth_settings)
+			.instrument(info_span!("Eth-Ws-RPC-Client"))
 			.await
 			.context("Failed to create EthWsRpcClient")?;
 
-		let http_client = EthHttpRpcClient::new(eth_settings, &logger)
-			.context("Failed to create EthHttpRpcClient")?;
+		let http_client =
+			EthHttpRpcClient::new(eth_settings).context("Failed to create EthHttpRpcClient")?;
 
-		Ok(Self { ws_client, http_client, logger })
+		Ok(Self { ws_client, http_client })
 	}
 }
 
@@ -442,10 +423,8 @@ macro_rules! dual_call_rpc {
                             Either::Left(e) => (TransportProtocol::Ws, e),
                             Either::Right(e) => (TransportProtocol::Http, e),
                         };
-                        slog::warn!(
-                            $eth_dual.logger,
-                            "{:?} side of the ETH Dual RPC request failed (the other succeeded): {:?}",
-                            side, message,
+                        warn!(
+                            "{side:?} side of the ETH Dual RPC request failed (the other succeeded): {message:?}",
                         );
                     }
                     res

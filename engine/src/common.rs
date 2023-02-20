@@ -17,11 +17,11 @@ use crate::task_scope::Scope;
 /// to return.
 #[macro_export]
 macro_rules! try_with_logging {
-	($exp:expr, $err_expr:expr, $logger:expr) => {
+	($exp:expr, $err_expr:expr) => {
 		match $exp {
 			Ok(ok) => ok,
 			Err(e) => {
-				slog::error!($logger, "Error: {}", e);
+				tracing::error!("Error: {e}");
 				return Err($err_expr)
 			},
 		}
