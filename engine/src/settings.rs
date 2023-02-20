@@ -51,6 +51,16 @@ pub struct Eth {
 	pub private_key_file: PathBuf,
 }
 
+impl Eth {
+	pub fn validate_settings(&self) -> Result<(), ConfigError> {
+		validate_websocket_endpoint(&self.ws_node_endpoint)
+			.map_err(|e| ConfigError::Message(e.to_string()))?;
+		validate_http_endpoint(&self.http_node_endpoint)
+			.map_err(|e| ConfigError::Message(e.to_string()))?;
+		Ok(())
+	}
+}
+
 #[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
 pub struct Dot {
 	pub ws_node_endpoint: String,
@@ -59,16 +69,6 @@ pub struct Dot {
 impl Dot {
 	pub fn validate_settings(&self) -> Result<(), ConfigError> {
 		validate_websocket_endpoint(&self.ws_node_endpoint)
-			.map_err(|e| ConfigError::Message(e.to_string()))?;
-		Ok(())
-	}
-}
-
-impl Eth {
-	pub fn validate_settings(&self) -> Result<(), ConfigError> {
-		validate_websocket_endpoint(&self.ws_node_endpoint)
-			.map_err(|e| ConfigError::Message(e.to_string()))?;
-		validate_http_endpoint(&self.http_node_endpoint)
 			.map_err(|e| ConfigError::Message(e.to_string()))?;
 		Ok(())
 	}
