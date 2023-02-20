@@ -140,6 +140,7 @@ pub struct EthOptions {
 
 #[derive(Parser, Debug, Clone, Default)]
 pub struct DotOptions {
+	#[clap(long = "dot.ws_node_endpoint")]
 	pub dot_ws_node_endpoint: Option<String>,
 }
 
