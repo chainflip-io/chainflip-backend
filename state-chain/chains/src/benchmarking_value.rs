@@ -56,4 +56,5 @@ impl BenchmarkValue for ForeignChainAddress {
 }
 
 impl_default_benchmark_value!(());
+impl_default_benchmark_value!(u32);
 impl_default_benchmark_value!(u64);

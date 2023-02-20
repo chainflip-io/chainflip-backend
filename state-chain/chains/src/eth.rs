@@ -8,6 +8,7 @@ pub mod ingress_address;
 
 use crate::*;
 pub use cf_primitives::chains::{assets, Ethereum};
+
 use cf_primitives::KeyId;
 use codec::{Decode, Encode, MaxEncodedLen};
 pub use ethabi::{
