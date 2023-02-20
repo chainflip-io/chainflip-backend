@@ -4,7 +4,7 @@ use crate::{
 	PalletOffence, SignatureToBroadcastIdLookup, ThresholdSignatureData, TransactionFeeDeficit,
 	WeightInfo,
 };
-use cf_chains::FeeRefundCalculator;
+use cf_chains::{mocks::MockTransactionBuilder, FeeRefundCalculator};
 
 use cf_chains::mocks::{
 	MockApiCall, MockEthereum, MockThresholdSignature, MockTransaction, ETH_TX_FEE,
@@ -448,8 +448,27 @@ fn test_transmission_request_expiry() {
 	})
 }
 
+fn threshold_signature_rerequested(broadcast_attempt_id: BroadcastAttemptId) {
+	// Expect the original broadcast to be deleted
+	assert!(AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id).is_none());
+	// Verify storage has been deleted
+	assert!(
+		SignatureToBroadcastIdLookup::<Test, Instance1>::get(MockThresholdSignature::default())
+			.is_none()
+	);
+	assert_eq!(BroadcastAttemptCount::<Test, Instance1>::get(broadcast_attempt_id.broadcast_id), 0);
+	assert!(
+		ThresholdSignatureData::<Test, Instance1>::get(broadcast_attempt_id.broadcast_id).is_none()
+	);
+	// Verify that we have a new signature request in the pipeline
+	assert_eq!(
+		MockThresholdSigner::<MockEthereum, RuntimeCall>::signature_result(0),
+		AsyncResult::Pending
+	);
+}
+
 #[test]
-fn re_request_threshold_signature() {
+fn re_request_threshold_signature_on_invalid_sig() {
 	new_test_ext().execute_with(|| {
 		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
 		let broadcast_attempt_id = Broadcaster::start_broadcast(
@@ -471,23 +490,38 @@ fn re_request_threshold_signature() {
 		// Simualte a key rotation to invalidate the signature
 		MockKeyProvider::set_valid(false);
 		Broadcaster::on_initialize(BROADCAST_EXPIRY_BLOCKS + 1);
-		// Expect the broadcast to be deleted
-		assert!(AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id).is_none());
-		// Verify storage has been deleted
-		assert!(SignatureToBroadcastIdLookup::<Test, Instance1>::get(
-			MockThresholdSignature::default()
-		)
-		.is_none());
+		threshold_signature_rerequested(broadcast_attempt_id);
+	});
+}
+
+// One particular case where this occurs is if the Polkadot Runtime upgrade occurs after we've
+// already signed a tx. In this case we know it will continue to fail if we keep rebroadcasting so
+// we should stop and rethreshold sign using the new runtime version.
+#[test]
+fn re_request_threshold_signature_on_invalid_tx_params() {
+	new_test_ext().execute_with(|| {
+		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
+		let broadcast_attempt_id = Broadcaster::start_broadcast(
+			&MockThresholdSignature::default(),
+			MockTransaction,
+			MockApiCall::default(),
+			1,
+		);
+
+		assert_eq!(
+			MockThresholdSigner::<MockEthereum, RuntimeCall>::signature_result(0),
+			AsyncResult::Void
+		);
+		assert!(AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id).is_some());
 		assert_eq!(
 			BroadcastAttemptCount::<Test, Instance1>::get(broadcast_attempt_id.broadcast_id),
 			0
 		);
-		assert!(ThresholdSignatureData::<Test, Instance1>::get(broadcast_attempt_id.broadcast_id)
-			.is_none());
-		// Verify that we have a new signature request in the pipeline
-		assert_eq!(
-			MockThresholdSigner::<MockEthereum, RuntimeCall>::signature_result(0),
-			AsyncResult::Pending
-		);
+
+		MockTransactionBuilder::<MockEthereum, RuntimeCall>::set_invalid_for_rebroadcast();
+
+		// If invalid on retry then we should re-threshold sign
+		Broadcaster::on_initialize(BROADCAST_EXPIRY_BLOCKS + 1);
+		threshold_signature_rerequested(broadcast_attempt_id);
 	});
 }
