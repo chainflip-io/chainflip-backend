@@ -170,7 +170,7 @@ where
 		{
 			let next_block_to_yield = last_block_yielded + 1;
 			if block_number == next_block_to_yield {
-				Some((block, protocol_state.protocol))
+				Some(block)
 			// if we're only one block behind we're not really "behind", we were just the
 			// second stream polled
 			} else if block_number + 1 < next_block_to_yield {
@@ -186,8 +186,8 @@ where
 			}
 		} else {
 			// yield
-			Some((block, protocol_state.protocol))
-		};
+			Some(block)
+		}.map(|block| (block, protocol_state.protocol));
 
 		if opt_block_header.is_some() {
 			log_when_yielding(
