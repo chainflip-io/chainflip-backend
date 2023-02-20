@@ -56,16 +56,13 @@ where
 	};
 
 	state_chain_client
-		.submit_signed_extrinsic(
-			pallet_cf_validator::Call::register_peer_id {
-				peer_id,
-				port: cfe_port,
-				ip_address: ip_address.into(),
-				// We sign over our account id
-				signature: sp_core::ed25519::Signature::try_from(signature.as_ref()).unwrap(),
-			},
-			logger,
-		)
+		.submit_signed_extrinsic(pallet_cf_validator::Call::register_peer_id {
+			peer_id,
+			port: cfe_port,
+			ip_address: ip_address.into(),
+			// We sign over our account id
+			signature: sp_core::ed25519::Signature::try_from(signature.as_ref()).unwrap(),
+		})
 		.await?;
 
 	Ok(())

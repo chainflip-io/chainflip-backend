@@ -3,6 +3,7 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use cf_primitives::EpochIndex;
 use serde::{Deserialize, Serialize};
+use tracing::info;
 
 use crate::multisig::{ChainTag, PersistentKeyDB};
 
@@ -27,7 +28,6 @@ pub async fn get_witnesser_start_block_with_checkpointing<Chain: cf_chains::Chai
 	epoch_start_index: EpochIndex,
 	epoch_start_block_number: Chain::ChainBlockNumber,
 	db: Arc<PersistentKeyDB>,
-	logger: &slog::Logger,
 ) -> Result<StartCheckpointing<Chain>>
 where
 	<<Chain as cf_chains::Chain>::ChainBlockNumber as TryFrom<u64>>::Error: std::fmt::Debug,
@@ -37,30 +37,22 @@ where
 	// Eth witnessers are the only ones that used the legacy checkpointing files.
 	// Only go ahead with the migration if no checkpoint is found in the db.
 	if matches!(chain_tag, ChainTag::Ethereum) && loaded_checkpoint.is_none() {
-		migrations::run_eth_migration(
-			chain_tag,
-			db.clone(),
-			&std::env::current_dir().unwrap(),
-			logger,
-		)
-		.await
-		.with_context(|| "Failed to perform Eth witnesser checkpointing migration")?
+		migrations::run_eth_migration(chain_tag, db.clone(), &std::env::current_dir().unwrap())
+			.await
+			.with_context(|| "Failed to perform Eth witnesser checkpointing migration")?
 	}
 
 	// Use the loaded checkpoint or the default if none was found
 	let witnessed_until = match loaded_checkpoint {
 		Some(checkpoint) => {
-			slog::info!(
-				logger,
+			info!(
 				"Previous {chain_tag} witnesser instance witnessed until epoch {}, block {}",
-				checkpoint.epoch_index,
-				checkpoint.block_number
+				checkpoint.epoch_index, checkpoint.block_number
 			);
 			checkpoint
 		},
 		None => {
-			slog::info!(
-				logger,
+			info!(
 				"No {chain_tag} witnesser checkpoint found, using default of {:?}",
 				WitnessedUntil::default()
 			);
@@ -146,7 +138,6 @@ mod tests {
 					.checked_sub(1)
 					.expect("saved_witnessed_until block number must be larger than 0 for test"),
 				Arc::new(db),
-				&logger,
 			)
 			.await
 			.unwrap()
@@ -221,7 +212,6 @@ mod tests {
 					.expect("saved_witnessed_until epoch index must be larger than 0 for test"),
 				saved_witnessed_until.block_number,
 				Arc::new(db),
-				&logger,
 			)
 			.await
 			.unwrap(),

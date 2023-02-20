@@ -45,7 +45,6 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 	state_chain_client: Arc<StateChainClient>,
 	ceremony_id: CeremonyId,
 	keygen_participants: BTreeSet<AccountId32>,
-	logger: slog::Logger,
 ) where
 	MultisigClient: MultisigClientApi<C>,
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
@@ -59,19 +58,18 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 		let keygen_result_future =
 			multisig_client.initiate_keygen(ceremony_id, keygen_participants);
 		scope.spawn(async move {
-			let _result = state_chain_client
-				.submit_signed_extrinsic(
-					pallet_cf_vaults::Call::<state_chain_runtime::Runtime, I>::report_keygen_outcome {
+			let _result =
+				state_chain_client
+					.submit_signed_extrinsic(pallet_cf_vaults::Call::<
+						state_chain_runtime::Runtime,
+						I,
+					>::report_keygen_outcome {
 						ceremony_id,
 						reported_outcome: keygen_result_future
 							.await
-							.map_err(|(bad_account_ids, _reason)| {
-								bad_account_ids
-							}),
-					},
-					&logger,
-				)
-				.await;
+							.map_err(|(bad_account_ids, _reason)| bad_account_ids),
+					})
+					.await;
 			Ok(())
 		});
 	} else {
@@ -89,7 +87,6 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient, C, I>(
 	key_id: KeyId,
 	signers: BTreeSet<AccountId>,
 	payload: C::SigningPayload,
-	logger: slog::Logger,
 ) where
 	MultisigClient: MultisigClientApi<C>,
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
@@ -106,34 +103,26 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient, C, I>(
 		scope.spawn(async move {
 			match signing_result_future.await {
 				Ok(signature) => {
-					let _result =
-						state_chain_client
-							.submit_unsigned_extrinsic(
-								pallet_cf_threshold_signature::Call::<
-									state_chain_runtime::Runtime,
-									I,
-								>::signature_success {
-									ceremony_id,
-									signature: signature.into(),
-								},
-								&logger,
-							)
-							.await;
+					let _result = state_chain_client
+						.submit_unsigned_extrinsic(pallet_cf_threshold_signature::Call::<
+							state_chain_runtime::Runtime,
+							I,
+						>::signature_success {
+							ceremony_id,
+							signature: signature.into(),
+						})
+						.await;
 				},
 				Err((bad_account_ids, _reason)) => {
-					let _result =
-						state_chain_client
-							.submit_signed_extrinsic(
-								pallet_cf_threshold_signature::Call::<
-									state_chain_runtime::Runtime,
-									I,
-								>::report_signature_failed {
-									id: ceremony_id,
-									offenders: BTreeSet::from_iter(bad_account_ids),
-								},
-								&logger,
-							)
-							.await;
+					let _result = state_chain_client
+						.submit_signed_extrinsic(pallet_cf_threshold_signature::Call::<
+							state_chain_runtime::Runtime,
+							I,
+						>::report_signature_failed {
+							id: ceremony_id,
+							offenders: BTreeSet::from_iter(bad_account_ids),
+						})
+						.await;
 				},
 			}
 			Ok(())
@@ -291,13 +280,11 @@ where
         scope.spawn({
             let state_chain_client = state_chain_client.clone();
             let has_submitted_init_heartbeat = has_submitted_init_heartbeat.clone();
-            let logger = logger.clone();
             async move {
                 tokio::time::sleep(Duration::from_secs(60)).await;
                     state_chain_client
                     .submit_signed_extrinsic(
                         pallet_cf_reputation::Call::heartbeat {},
-                        &logger,
                     )
                     .await
                     .context("Failed to submit initial heartbeat")?;
@@ -384,7 +371,6 @@ where
                                             state_chain_client.clone(),
                                             ceremony_id,
                                             keygen_participants,
-                                            logger.clone()
                                         ).await;
                                     }
 
@@ -403,7 +389,6 @@ where
                                             state_chain_client.clone(),
                                             ceremony_id,
                                             keygen_participants,
-                                            logger.clone()
                                         ).await;
                                     }
                                     state_chain_runtime::RuntimeEvent::EthereumThresholdSigner(
@@ -426,7 +411,6 @@ where
                                             KeyId(key_id),
                                             signatories,
                                             crate::multisig::eth::SigningPayload(payload.0),
-                                            logger.clone(),
                                         ).await;
                                     }
 
@@ -451,7 +435,6 @@ where
                                             signatories,
                                             crate::multisig::polkadot::SigningPayload::new(payload.0)
                                                 .expect("Payload should be correct size"),
-                                            logger.clone(),
                                         ).await;
                                     }
                                     state_chain_runtime::RuntimeEvent::EthereumBroadcaster(
@@ -516,7 +499,6 @@ where
                                                             broadcast_attempt_id,
                                                         },
                                                     ),
-                                                    &logger,
                                                 ).await;
                                             }
                                         }
@@ -607,7 +589,6 @@ where
                         let _result = state_chain_client
                             .submit_signed_extrinsic(
                                 pallet_cf_reputation::Call::heartbeat {},
-                                &logger,
                             )
                             .await;
 

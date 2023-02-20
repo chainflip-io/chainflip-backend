@@ -48,7 +48,6 @@ pub trait DotRpcApi: Send + Sync {
 
 	async fn subscribe_runtime_version(
 		&self,
-		logger: &slog::Logger,
 	) -> Result<Pin<Box<dyn Stream<Item = RuntimeVersion> + Send>>>;
 
 	async fn submit_raw_encoded_extrinsic(&self, encoded_bytes: Vec<u8>) -> Result<PolkadotHash>;
@@ -94,7 +93,6 @@ impl DotRpcApi for DotRpcClient {
 
 	async fn subscribe_runtime_version(
 		&self,
-		logger: &slog::Logger,
 	) -> Result<Pin<Box<dyn Stream<Item = RuntimeVersion> + Send>>> {
 		safe_runtime_version_stream(
 			self.current_runtime_version().await?,
@@ -112,7 +110,6 @@ impl DotRpcApi for DotRpcClient {
 						 }| RuntimeVersion { spec_version, transaction_version },
 					)
 				}),
-			logger,
 		)
 		.await
 		.map_err(|e| anyhow!("Failed to subscribe to Polkadot runtime version with error: {e}"))
