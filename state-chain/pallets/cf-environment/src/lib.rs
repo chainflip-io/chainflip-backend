@@ -6,8 +6,7 @@ use cf_chains::{
 	dot::{api::CreatePolkadotVault, Polkadot, PolkadotAccountId, PolkadotIndex, PolkadotMetadata},
 	ChainCrypto,
 };
-
-use cf_primitives::{Asset, EthereumAddress};
+use cf_primitives::{Asset, BroadcastId, EthereumAddress};
 pub use cf_traits::EthEnvironmentProvider;
 use cf_traits::{SystemStateInfo, SystemStateManager};
 use frame_support::{
@@ -77,7 +76,7 @@ pub mod pallet {
 	use cf_chains::dot::PolkadotPublicKey;
 	use cf_primitives::{Asset, TxId};
 
-	use cf_traits::{Broadcaster, VaultKeyWitnessedHandler};
+	use cf_traits::{BroadcastCleanup, Broadcaster, VaultKeyWitnessedHandler};
 
 	use super::*;
 
@@ -89,13 +88,11 @@ pub mod pallet {
 		/// Governance origin to secure extrinsic
 		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
 		/// Polkadot Vault Creation Apicall
-
 		type CreatePolkadotVault: CreatePolkadotVault;
 		/// Polkadot broadcaster
-
-		type PolkadotBroadcaster: Broadcaster<Polkadot, ApiCall = Self::CreatePolkadotVault>;
+		type PolkadotBroadcaster: Broadcaster<Polkadot, ApiCall = Self::CreatePolkadotVault>
+			+ BroadcastCleanup<Polkadot>;
 		/// On new key witnessed handler for Polkadot
-
 		type PolkadotVaultKeyWitnessedHandler: VaultKeyWitnessedHandler<Polkadot>;
 		/// Weight information
 		type WeightInfo: WeightInfo;
@@ -335,6 +332,7 @@ pub mod pallet {
 			dot_pure_proxy_vault_key: PolkadotAccountId,
 			dot_witnessed_aggkey: PolkadotPublicKey,
 			tx_id: TxId,
+			broadcast_id: BroadcastId,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
@@ -352,6 +350,9 @@ pub mod pallet {
 				tx_id.block_number,
 				tx_id,
 			)?;
+			// Clean up the broadcast state.
+			T::PolkadotBroadcaster::clean_up_broadcast(broadcast_id)?;
+
 			Self::next_polkadot_proxy_account_nonce();
 			Ok(dispatch_result)
 		}

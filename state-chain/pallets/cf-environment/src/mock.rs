@@ -6,7 +6,8 @@ use cf_chains::{
 
 use cf_primitives::BroadcastId;
 use cf_traits::{
-	mocks::ensure_origin_mock::NeverFailingOriginCheck, Broadcaster, VaultKeyWitnessedHandler,
+	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
+	BroadcastCleanup, Broadcaster, Chainflip, VaultKeyWitnessedHandler,
 };
 
 use frame_support::parameter_types;
@@ -101,6 +102,12 @@ impl Broadcaster<Polkadot> for MockPolkadotBroadcaster {
 		unimplemented!()
 	}
 }
+impl BroadcastCleanup<Polkadot> for MockPolkadotBroadcaster {
+	fn clean_up_broadcast(_broadcast_id: BroadcastId) -> sp_runtime::DispatchResult {
+		unimplemented!()
+	}
+}
+
 pub struct MockPolkadotVaultKeyWitnessedHandler;
 impl VaultKeyWitnessedHandler<Polkadot> for MockPolkadotVaultKeyWitnessedHandler {
 	fn on_new_key_activated(
