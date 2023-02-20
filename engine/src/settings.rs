@@ -77,6 +77,8 @@ impl Dot {
 #[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
 pub struct Btc {
 	pub http_node_endpoint: String,
+	pub rpc_user: String,
+	pub rpc_password: String,
 }
 
 impl Btc {
@@ -146,7 +148,12 @@ pub struct DotOptions {
 
 #[derive(Parser, Debug, Clone, Default)]
 pub struct BtcOptions {
+	#[clap(long = "btc.http_node_endpoint")]
 	pub btc_http_node_endpoint: Option<String>,
+	#[clap(long = "btc.rpc_user")]
+	pub btc_rpc_user: Option<String>,
+	#[clap(long = "btc.rpc_password")]
+	pub btc_rpc_password: Option<String>,
 }
 
 #[derive(Parser, Debug, Clone, Default)]
@@ -399,11 +406,8 @@ impl Source for CommandLineOptions {
 			"dot.ws_node_endpoint",
 			&self.dot_opts.dot_ws_node_endpoint,
 		);
-		insert_command_line_option(
-			&mut map,
-			"btc.http_node_endpoint",
-			&self.btc_opts.btc_http_node_endpoint,
-		);
+
+		self.btc_opts.insert_all(&mut map);
 
 		insert_command_line_option(&mut map, "health_check.hostname", &self.health_check_hostname);
 		insert_command_line_option(&mut map, "health_check.port", &self.health_check_port);
@@ -473,6 +477,14 @@ impl P2POptions {
 		);
 		insert_command_line_option(map, NODE_P2P_PORT, &self.p2p_port);
 		insert_command_line_option(map, NODE_P2P_ALLOW_LOCAL_IP, &self.allow_local_ip);
+	}
+}
+
+impl BtcOptions {
+	pub fn insert_all(&self, map: &mut HashMap<String, Value>) {
+		insert_command_line_option(map, "btc.http_node_endpoint", &self.btc_http_node_endpoint);
+		insert_command_line_option(map, "btc.rpc_user", &self.btc_rpc_user);
+		insert_command_line_option(map, "btc.rpc_password", &self.btc_rpc_password);
 	}
 }
 
@@ -665,6 +677,8 @@ mod tests {
 			dot_opts: DotOptions { dot_ws_node_endpoint: Some("ws://endpoint:4321".to_owned()) },
 			btc_opts: BtcOptions {
 				btc_http_node_endpoint: Some("http://btc-endpoint:4321".to_owned()),
+				btc_rpc_user: Some("my_username".to_owned()),
+				btc_rpc_password: Some("my_password".to_owned()),
 			},
 			health_check_hostname: Some("health_check_hostname".to_owned()),
 			health_check_port: Some(1337),
@@ -695,13 +709,11 @@ mod tests {
 
 		assert_eq!(opts.dot_opts.dot_ws_node_endpoint.unwrap(), settings.dot.ws_node_endpoint);
 
-		assert_eq!(
-			opts.btc_opts.btc_http_node_endpoint.unwrap(),
-			settings
-				.btc
-				.expect("option provided in CLI settings, so should override")
-				.http_node_endpoint
-		);
+		let btc_settings =
+			settings.btc.expect("option provided in CLI settings, so should override");
+		assert_eq!(opts.btc_opts.btc_http_node_endpoint.unwrap(), btc_settings.http_node_endpoint);
+		assert_eq!(opts.btc_opts.btc_rpc_user.unwrap(), btc_settings.rpc_user);
+		assert_eq!(opts.btc_opts.btc_rpc_password.unwrap(), btc_settings.rpc_password);
 
 		assert_eq!(
 			opts.health_check_hostname.unwrap(),
