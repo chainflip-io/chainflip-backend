@@ -6,8 +6,8 @@ use cf_chains::{
 
 use cf_primitives::BroadcastId;
 use cf_traits::{
-	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
-	BroadcastCleanup, Broadcaster, Chainflip, VaultKeyWitnessedHandler,
+	mocks::ensure_origin_mock::NeverFailingOriginCheck, BroadcastCleanup, Broadcaster,
+	VaultKeyWitnessedHandler,
 };
 
 use frame_support::parameter_types;
