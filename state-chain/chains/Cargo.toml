@@ -17,6 +17,9 @@ ethereum-types = {default-features = false, version = '0.14.1'}
 ethereum = {default-features = false, version = '0.14'}
 rlp = {default-features = false, version = '0.5'}
 
+# Bitcoin
+bech32 = {default-features = false, version = '0.9.1'}
+
 # Other
 hex = {default-features = false, version = '0.4'}
 hex-literal = { version = '0.3', default-features = false }
