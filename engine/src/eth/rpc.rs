@@ -114,9 +114,6 @@ pub trait EthRpcApi: Send + Sync {
 		newest_block: BlockNumber,
 		reward_percentiles: Option<Vec<f64>>,
 	) -> Result<FeeHistory>;
-
-	/// Get the latest block number.
-	async fn block_number(&self) -> Result<U64>;
 }
 
 #[async_trait]
@@ -245,14 +242,6 @@ where
 				reward_percentiles,
 			))
 	}
-
-	async fn block_number(&self) -> Result<U64> {
-		self.web3
-			.eth()
-			.block_number()
-			.await
-			.context("Failed to fetch block number with HTTP client")
-	}
 }
 
 impl EthWsRpcClient {
@@ -304,8 +293,11 @@ where
 	type BlockNumber = U64;
 
 	async fn latest_block_number(&self) -> Result<Self::BlockNumber> {
-		// TODO: See if we should inline this
-		self.block_number().await
+		self.web3
+			.eth()
+			.block_number()
+			.await
+			.context("Failed to fetch block number with HTTP client")
 	}
 }
 
@@ -508,10 +500,6 @@ impl EthRpcApi for EthDualRpcClient {
 	) -> Result<FeeHistory> {
 		dual_call_rpc!(self, fee_history, block_count, newest_block, reward_percentiles)
 	}
-
-	async fn block_number(&self) -> Result<U64> {
-		dual_call_rpc!(self, block_number,)
-	}
 }
 
 #[cfg(test)]
@@ -519,7 +507,6 @@ pub mod mocks {
 	use super::*;
 
 	use mockall::mock;
-	// use web3::types::{Block, Bytes, Filter, Log, H256};
 
 	mock!(
 		// becomes MockEthHttpRpcClient
@@ -553,8 +540,6 @@ pub mod mocks {
 				newest_block: BlockNumber,
 				reward_percentiles: Option<Vec<f64>>,
 			) -> Result<FeeHistory>;
-
-			async fn block_number(&self) -> Result<U64>;
 		}
 
 		#[async_trait]
