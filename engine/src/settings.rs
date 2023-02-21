@@ -51,6 +51,16 @@ pub struct Eth {
 	pub private_key_file: PathBuf,
 }
 
+impl Eth {
+	pub fn validate_settings(&self) -> Result<(), ConfigError> {
+		validate_websocket_endpoint(&self.ws_node_endpoint)
+			.map_err(|e| ConfigError::Message(e.to_string()))?;
+		validate_http_endpoint(&self.http_node_endpoint)
+			.map_err(|e| ConfigError::Message(e.to_string()))?;
+		Ok(())
+	}
+}
+
 #[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
 pub struct Dot {
 	pub ws_node_endpoint: String,
@@ -64,10 +74,15 @@ impl Dot {
 	}
 }
 
-impl Eth {
+#[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
+pub struct Btc {
+	pub http_node_endpoint: String,
+	pub rpc_user: String,
+	pub rpc_password: String,
+}
+
+impl Btc {
 	pub fn validate_settings(&self) -> Result<(), ConfigError> {
-		validate_websocket_endpoint(&self.ws_node_endpoint)
-			.map_err(|e| ConfigError::Message(e.to_string()))?;
 		validate_http_endpoint(&self.http_node_endpoint)
 			.map_err(|e| ConfigError::Message(e.to_string()))?;
 		Ok(())
@@ -96,9 +111,11 @@ pub struct Log {
 pub struct Settings {
 	pub node_p2p: P2P,
 	pub state_chain: StateChain,
+	// External Chain settings
 	pub eth: Eth,
-
 	pub dot: Dot,
+	pub btc: Option<Btc>,
+
 	pub health_check: Option<HealthCheck>,
 	pub signing: Signing,
 	#[serde(default)]
@@ -125,7 +142,18 @@ pub struct EthOptions {
 
 #[derive(Parser, Debug, Clone, Default)]
 pub struct DotOptions {
+	#[clap(long = "dot.ws_node_endpoint")]
 	pub dot_ws_node_endpoint: Option<String>,
+}
+
+#[derive(Parser, Debug, Clone, Default)]
+pub struct BtcOptions {
+	#[clap(long = "btc.http_node_endpoint")]
+	pub btc_http_node_endpoint: Option<String>,
+	#[clap(long = "btc.rpc_user")]
+	pub btc_rpc_user: Option<String>,
+	#[clap(long = "btc.rpc_password")]
+	pub btc_rpc_password: Option<String>,
 }
 
 #[derive(Parser, Debug, Clone, Default)]
@@ -163,6 +191,9 @@ pub struct CommandLineOptions {
 	#[clap(flatten)]
 	dot_opts: DotOptions,
 
+	#[clap(flatten)]
+	btc_opts: BtcOptions,
+
 	// Health Check Settings
 	#[clap(long = "health_check.hostname")]
 	health_check_hostname: Option<String>,
@@ -183,8 +214,8 @@ impl Default for CommandLineOptions {
 			p2p_opts: P2POptions::default(),
 			state_chain_opts: StateChainOptions::default(),
 			eth_opts: EthOptions::default(),
-
 			dot_opts: DotOptions::default(),
+			btc_opts: BtcOptions::default(),
 			health_check_hostname: None,
 			health_check_port: None,
 			signing_db_file: None,
@@ -307,6 +338,10 @@ impl CfSettings for Settings {
 
 		self.dot.validate_settings()?;
 
+		if let Some(btc) = &self.btc {
+			btc.validate_settings()?;
+		}
+
 		self.state_chain.validate_settings()?;
 
 		is_valid_db_path(self.signing.db_file.as_path())
@@ -371,6 +406,8 @@ impl Source for CommandLineOptions {
 			"dot.ws_node_endpoint",
 			&self.dot_opts.dot_ws_node_endpoint,
 		);
+
+		self.btc_opts.insert_all(&mut map);
 
 		insert_command_line_option(&mut map, "health_check.hostname", &self.health_check_hostname);
 		insert_command_line_option(&mut map, "health_check.port", &self.health_check_port);
@@ -440,6 +477,14 @@ impl P2POptions {
 		);
 		insert_command_line_option(map, NODE_P2P_PORT, &self.p2p_port);
 		insert_command_line_option(map, NODE_P2P_ALLOW_LOCAL_IP, &self.allow_local_ip);
+	}
+}
+
+impl BtcOptions {
+	pub fn insert_all(&self, map: &mut HashMap<String, Value>) {
+		insert_command_line_option(map, "btc.http_node_endpoint", &self.btc_http_node_endpoint);
+		insert_command_line_option(map, "btc.rpc_user", &self.btc_rpc_user);
+		insert_command_line_option(map, "btc.rpc_password", &self.btc_rpc_password);
 	}
 }
 
@@ -629,8 +674,12 @@ mod tests {
 				eth_http_node_endpoint: Some("http://endpoint:4321".to_owned()),
 				eth_private_key_file: Some(PathBuf::from_str("eth_key_file").unwrap()),
 			},
-
 			dot_opts: DotOptions { dot_ws_node_endpoint: Some("ws://endpoint:4321".to_owned()) },
+			btc_opts: BtcOptions {
+				btc_http_node_endpoint: Some("http://btc-endpoint:4321".to_owned()),
+				btc_rpc_user: Some("my_username".to_owned()),
+				btc_rpc_password: Some("my_password".to_owned()),
+			},
 			health_check_hostname: Some("health_check_hostname".to_owned()),
 			health_check_port: Some(1337),
 			signing_db_file: Some(PathBuf::from_str("also/not/real.db").unwrap()),
@@ -659,6 +708,12 @@ mod tests {
 		assert_eq!(opts.eth_opts.eth_private_key_file.unwrap(), settings.eth.private_key_file);
 
 		assert_eq!(opts.dot_opts.dot_ws_node_endpoint.unwrap(), settings.dot.ws_node_endpoint);
+
+		let btc_settings =
+			settings.btc.expect("option provided in CLI settings, so should override");
+		assert_eq!(opts.btc_opts.btc_http_node_endpoint.unwrap(), btc_settings.http_node_endpoint);
+		assert_eq!(opts.btc_opts.btc_rpc_user.unwrap(), btc_settings.rpc_user);
+		assert_eq!(opts.btc_opts.btc_rpc_password.unwrap(), btc_settings.rpc_password);
 
 		assert_eq!(
 			opts.health_check_hostname.unwrap(),
