@@ -272,25 +272,13 @@ impl EthWsRpcClient {
 	}
 }
 
-// This trait is necessary because web3::types::U64 does not implement
-// std::convert::From<u64> and we need to convert U64 to u64.
-pub trait Tou64 {
-	fn to_u64(&self) -> u64;
-}
-
-impl Tou64 for U64 {
-	fn to_u64(&self) -> u64 {
-		self.as_u64()
-	}
-}
-
 #[async_trait]
 impl<T> LatestBlockNumber for EthRpcClient<T>
 where
 	T: Send + Sync + EthTransport,
 	T::Out: Send,
 {
-	type BlockNumber = U64;
+	type BlockNumber = u64;
 
 	async fn latest_block_number(&self) -> Result<Self::BlockNumber> {
 		self.web3
@@ -298,6 +286,7 @@ where
 			.block_number()
 			.await
 			.context("Failed to fetch block number with HTTP client")
+			.map(|n| n.as_u64())
 	}
 }
 
@@ -544,9 +533,9 @@ pub mod mocks {
 
 		#[async_trait]
 		impl LatestBlockNumber for EthHttpRpcClient {
-			type BlockNumber = U64;
+			type BlockNumber = u64;
 
-			async fn latest_block_number(&self) -> Result<U64>;
+			async fn latest_block_number(&self) -> Result<u64>;
 		}
 	);
 }

@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{ops::Add, time::Duration};
 
 use futures::{stream, Stream};
 use tokio::time::Interval;
@@ -9,9 +9,9 @@ pub const HTTP_POLL_INTERVAL: Duration = Duration::from_secs(4);
 
 use crate::witnesser::LatestBlockNumber;
 
-use futures::StreamExt;
+use num_traits::CheckedSub;
 
-use super::rpc::Tou64;
+use futures::StreamExt;
 
 use crate::retry_rpc_until_success;
 
@@ -22,10 +22,10 @@ use crate::retry_rpc_until_success;
 pub async fn safe_polling_http_head_stream<BlockNumber, HttpRpc>(
 	http_rpc: HttpRpc,
 	poll_interval: Duration,
-	safety_margin: u64,
-) -> impl Stream<Item = u64>
+	safety_margin: BlockNumber,
+) -> impl Stream<Item = BlockNumber>
 where
-	BlockNumber: Tou64,
+	BlockNumber: CheckedSub + Add<Output = BlockNumber> + PartialOrd + From<u64> + Clone + Copy,
 	HttpRpc: LatestBlockNumber<BlockNumber = BlockNumber> + Send + 'static,
 {
 	struct StreamState<HttpRpc, BlockNumber> {
@@ -55,10 +55,10 @@ where
 				let last_head_fetched = if let Some(last_head_fetched) = option_last_head_fetched {
 					last_head_fetched
 				} else {
-					option_last_head_fetched.insert(
-						retry_rpc_until_success!(http_rpc.latest_block_number(), poll_interval)
-							.to_u64(),
-					)
+					option_last_head_fetched.insert(retry_rpc_until_success!(
+						http_rpc.latest_block_number(),
+						poll_interval
+					))
 				};
 
 				// Only request the latest block number if we are out of blocks to yield
@@ -70,9 +70,8 @@ where
 					}
 				} {
 					poll_interval.tick().await;
-					let unsafe_block_number: u64 =
-						retry_rpc_until_success!(http_rpc.latest_block_number(), poll_interval)
-							.to_u64();
+					let unsafe_block_number =
+						retry_rpc_until_success!(http_rpc.latest_block_number(), poll_interval);
 
 					// Fetched unsafe_block_number is more than `safety_margin` blocks behind the
 					// last fetched ETH block number (last_head_fetched)
@@ -86,9 +85,9 @@ where
 				let next_block_to_yield =
 					if let Some(last_block_yielded) = option_last_block_yielded {
 						// the last block yielded was safe, so the next is +1
-						*last_block_yielded + 1
+						*last_block_yielded + 1.into()
 					} else {
-						last_head_fetched.checked_sub(safety_margin).unwrap()
+						last_head_fetched.checked_sub(&safety_margin).unwrap()
 					};
 
 				*option_last_block_yielded = Some(next_block_to_yield);
@@ -105,7 +104,6 @@ pub mod tests {
 
 	use futures::StreamExt;
 	use mockall::Sequence;
-	use web3::types::U64;
 
 	use super::*;
 
@@ -120,7 +118,7 @@ pub mod tests {
 	async fn returns_best_safe_block_immediately() {
 		let mut mock_http_rpc_client = MockEthHttpRpcClient::new();
 
-		let block_number = U64::from(10);
+		let block_number = 10;
 		mock_http_rpc_client
 			.expect_latest_block_number()
 			.times(1)
@@ -134,7 +132,7 @@ pub mod tests {
 			SAFETY_MARGIN,
 		)
 		.await;
-		let expected_returned_block_number = block_number.as_u64() - SAFETY_MARGIN;
+		let expected_returned_block_number = block_number - SAFETY_MARGIN;
 		assert_eq!(stream.next().await.unwrap(), expected_returned_block_number);
 	}
 
@@ -150,7 +148,7 @@ pub mod tests {
 				.expect_latest_block_number()
 				.times(1)
 				.in_sequence(&mut seq)
-				.returning(move || Ok(U64::from(n)));
+				.returning(move || Ok(n));
 		}
 
 		let mut stream = safe_polling_http_head_stream(
@@ -168,7 +166,7 @@ pub mod tests {
 
 		let mut seq = Sequence::new();
 
-		let first_block_number = U64::from(10);
+		let first_block_number = 10;
 		mock_http_rpc_client
 			.expect_latest_block_number()
 			.times(1)
@@ -184,7 +182,7 @@ pub mod tests {
 			.returning(move || Ok(first_block_number));
 
 		// the eth chain has progressed by 1...
-		let next_block_number = first_block_number + U64::from(1);
+		let next_block_number = first_block_number + 1;
 		mock_http_rpc_client
 			.expect_latest_block_number()
 			.times(1)
@@ -197,11 +195,9 @@ pub mod tests {
 			ETH_BLOCK_SAFETY_MARGIN,
 		)
 		.await;
-		let expected_first_returned_block_number =
-			first_block_number.as_u64() - ETH_BLOCK_SAFETY_MARGIN;
+		let expected_first_returned_block_number = first_block_number - ETH_BLOCK_SAFETY_MARGIN;
 		assert_eq!(stream.next().await.unwrap(), expected_first_returned_block_number);
-		let expected_next_returned_block_number =
-			next_block_number.as_u64() - ETH_BLOCK_SAFETY_MARGIN;
+		let expected_next_returned_block_number = next_block_number - ETH_BLOCK_SAFETY_MARGIN;
 		assert_eq!(stream.next().await.unwrap(), expected_next_returned_block_number);
 	}
 
@@ -211,7 +207,7 @@ pub mod tests {
 
 		let mut seq = Sequence::new();
 
-		let first_block_number = U64::from(10);
+		let first_block_number = 10;
 		mock_http_rpc_client
 			.expect_latest_block_number()
 			.times(1)
@@ -221,15 +217,14 @@ pub mod tests {
 		// if we skip blocks, we should catch up by fetching the logs from the blocks
 		// we skipped
 		let num_skipped_blocks = 4;
-		let next_block_number = first_block_number + U64::from(num_skipped_blocks);
+		let next_block_number = first_block_number + num_skipped_blocks;
 		mock_http_rpc_client
 			.expect_latest_block_number()
 			.times(1)
 			.in_sequence(&mut seq)
 			.returning(move || Ok(next_block_number));
 
-		let skipped_range =
-			(first_block_number.as_u64() + 1)..(first_block_number.as_u64() + num_skipped_blocks);
+		let skipped_range = (first_block_number + 1)..(first_block_number + num_skipped_blocks);
 
 		const SAFETY_MARGIN: u64 = 4u64;
 
@@ -240,7 +235,7 @@ pub mod tests {
 			SAFETY_MARGIN,
 		)
 		.await;
-		let expected_first_returned_block_number = first_block_number.as_u64() - SAFETY_MARGIN;
+		let expected_first_returned_block_number = first_block_number - SAFETY_MARGIN;
 		assert_eq!(stream.next().await.unwrap(), expected_first_returned_block_number);
 
 		// we should get all the skipped blocks next (that are within the safety margin)
@@ -258,29 +253,29 @@ pub mod tests {
 
 		const SAFETY_MARGIN: u64 = 4;
 
-		let first_block_number = U64::from(10);
+		let first_block_number = 10;
 		mock_http_rpc_client
 			.expect_latest_block_number()
 			.times(1)
 			.in_sequence(&mut seq)
 			.returning(move || Ok(first_block_number));
 
-		let first_safe_block_number = first_block_number - U64::from(SAFETY_MARGIN);
+		let first_safe_block_number = first_block_number - SAFETY_MARGIN;
 
-		let back_to_block_number = first_block_number - U64::from(2);
+		let back_to_block_number = first_block_number - 2;
 
 		// We want to return the one after the first one we have already returned
-		for n in back_to_block_number.as_u64()..=first_block_number.as_u64() + 1 {
+		for n in back_to_block_number..=first_block_number + 1 {
 			mock_http_rpc_client
 				.expect_latest_block_number()
 				.times(1)
 				.in_sequence(&mut seq)
-				.returning(move || Ok(U64::from(n)));
+				.returning(move || Ok(n));
 		}
 
 		// This is the next block that should be yielded. It shouldn't matter to the caller of
 		// .next() if the chain head has decreased due to sync / reorgs
-		let next_safe_block_number = first_safe_block_number + U64::from(1);
+		let next_safe_block_number = first_safe_block_number + 1;
 
 		// first block should come in as expected
 		let mut stream = safe_polling_http_head_stream(
@@ -289,11 +284,11 @@ pub mod tests {
 			SAFETY_MARGIN,
 		)
 		.await;
-		assert_eq!(stream.next().await.unwrap(), first_safe_block_number.as_u64());
+		assert_eq!(stream.next().await.unwrap(), first_safe_block_number);
 
 		// We do not want any repeat blocks, we will just wait until we can return the next safe
 		// block, after the one we've already returned
-		assert_eq!(stream.next().await.unwrap(), next_safe_block_number.as_u64());
+		assert_eq!(stream.next().await.unwrap(), next_safe_block_number);
 	}
 
 	#[tokio::test]
@@ -309,7 +304,7 @@ pub mod tests {
 				.expect_latest_block_number()
 				.times(1)
 				.in_sequence(&mut seq)
-				.returning(move || Ok(U64::from(block_number)));
+				.returning(move || Ok(block_number));
 		}
 
 		const SAFETY_MARGIN: u64 = 4;
@@ -342,7 +337,7 @@ pub mod tests {
 				.expect_latest_block_number()
 				.times(1)
 				.in_sequence(&mut seq)
-				.returning(move || Ok(U64::from(block_number)));
+				.returning(move || Ok(block_number));
 		}
 
 		mock_http_rpc_client
@@ -355,7 +350,7 @@ pub mod tests {
 			.expect_latest_block_number()
 			.times(1)
 			.in_sequence(&mut seq)
-			.returning(move || Ok(U64::from(end_of_successful_block_range)));
+			.returning(move || Ok(end_of_successful_block_range));
 
 		const SAFETY_MARGIN: u64 = 4;
 

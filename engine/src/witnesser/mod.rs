@@ -9,8 +9,6 @@ pub mod epoch_witnesser;
 
 use anyhow::Result;
 
-use crate::eth::rpc::Tou64;
-
 pub type ChainBlockNumber<Chain> = <Chain as cf_chains::Chain>::ChainBlockNumber;
 
 #[derive(Clone, Debug)]
@@ -32,7 +30,7 @@ pub trait BlockNumberable {
 /// General trait for getting the latest/height block number for a particular chain
 #[async_trait]
 pub trait LatestBlockNumber {
-	type BlockNumber: Tou64;
+	type BlockNumber;
 
 	async fn latest_block_number(&self) -> Result<Self::BlockNumber>;
 }
