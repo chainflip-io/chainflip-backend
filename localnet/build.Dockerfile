@@ -1,4 +1,4 @@
-FROM ghcr.io/chainflip-io/chainflip-backend/rust-base:nightly-2022-08-08
+FROM ghcr.io/chainflip-io/chainflip-backend/rust-base-arm:nightly-2022-12-16
 
 COPY . .
 
