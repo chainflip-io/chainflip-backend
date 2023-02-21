@@ -23,6 +23,7 @@ use crate::{
 	common::format_iterator,
 	constants::{ETH_DUAL_REQUEST_TIMEOUT, ETH_LOG_REQUEST_TIMEOUT, SYNC_POLL_INTERVAL},
 	settings,
+	witnesser::LatestBlockNumber,
 };
 
 use super::{redact_secret_eth_node_endpoint, TransportProtocol};
@@ -282,6 +283,32 @@ impl EthWsRpcClient {
 	}
 }
 
+// This trait is necessary because web3::types::U64 does not implement
+// std::convert::From<u64> and we need to convert U64 to u64.
+pub trait Tou64 {
+	fn to_u64(&self) -> u64;
+}
+
+impl Tou64 for U64 {
+	fn to_u64(&self) -> u64 {
+		self.as_u64()
+	}
+}
+
+#[async_trait]
+impl<T> LatestBlockNumber for EthRpcClient<T>
+where
+	T: Send + Sync + EthTransport,
+	T::Out: Send,
+{
+	type BlockNumber = U64;
+
+	async fn latest_block_number(&self) -> Result<Self::BlockNumber> {
+		// TODO: See if we should inline this
+		self.block_number().await
+	}
+}
+
 #[async_trait]
 pub trait EthWsRpcApi {
 	async fn subscribe_new_heads(
@@ -528,6 +555,13 @@ pub mod mocks {
 			) -> Result<FeeHistory>;
 
 			async fn block_number(&self) -> Result<U64>;
+		}
+
+		#[async_trait]
+		impl LatestBlockNumber for EthHttpRpcClient {
+			type BlockNumber = U64;
+
+			async fn latest_block_number(&self) -> Result<U64>;
 		}
 	);
 }
