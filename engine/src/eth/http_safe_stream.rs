@@ -15,6 +15,10 @@ use super::rpc::Tou64;
 
 use crate::retry_rpc_until_success;
 
+/// Uses a HTTP RPC to poll for the latest block number.
+/// It produces a continuous stream of blocks, starting from the latest block number
+/// minus the safety margin. The safety margin is the number of blocks that must occur after
+/// a particular block before it is considered "safe" from chain re-orgs.
 pub async fn safe_polling_http_head_stream<BlockNumber, HttpRpc>(
 	http_rpc: HttpRpc,
 	poll_interval: Duration,
