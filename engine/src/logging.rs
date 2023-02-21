@@ -422,6 +422,11 @@ where
 		event: &tracing::Event<'_>,
 		_ctx: tracing_subscriber::layer::Context<'_, S>,
 	) {
+		// Only log events from our code
+		if !event.metadata().target().contains("chainflip_engine") {
+			return
+		}
+
 		const KV_LIST_INDENT: &str = "    \x1b[0;34m|\x1b[0m";
 		const LOCATION_INDENT: &str = "    \x1b[0;34m-->\x1b[0m";
 
