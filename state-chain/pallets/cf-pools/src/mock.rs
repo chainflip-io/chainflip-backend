@@ -76,7 +76,8 @@ impl Chainflip for Test {
 }
 
 parameter_types! {
-	pub const NetworkFee: Permill = Permill::from_percent(0);
+	// 20 Basis Points
+	pub const NetworkFee: Permill = Permill::from_perthousand(2);
 }
 impl pallet_cf_pools::Config for Test {
 	type RuntimeEvent = RuntimeEvent;

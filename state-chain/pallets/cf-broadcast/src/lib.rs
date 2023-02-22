@@ -15,12 +15,13 @@ pub use weights::WeightInfo;
 
 use cf_chains::{ApiCall, Chain, ChainAbi, ChainCrypto, FeeRefundCalculator, TransactionBuilder};
 use cf_traits::{
-	offence_reporting::OffenceReporter, Broadcaster, Chainflip, EpochInfo, EpochKey,
-	SingleSignerNomination, ThresholdSigner,
+	offence_reporting::OffenceReporter, BroadcastCleanup, Broadcaster, Chainflip, EpochInfo,
+	EpochKey, SingleSignerNomination, ThresholdSigner,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
-	dispatch::DispatchResultWithPostInfo, sp_runtime::traits::Saturating, traits::Get, Twox64Concat,
+	dispatch::DispatchResultWithPostInfo, pallet_prelude::DispatchResult,
+	sp_runtime::traits::Saturating, traits::Get, Twox64Concat,
 };
 
 use cf_traits::KeyProvider;
@@ -638,5 +639,13 @@ impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 	type ApiCall = T::ApiCall;
 	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) -> BroadcastId {
 		Self::threshold_sign_and_broadcast(api_call)
+	}
+}
+
+impl<T: Config<I>, I: 'static> BroadcastCleanup<T::TargetChain> for Pallet<T, I> {
+	fn clean_up_broadcast(broadcast_id: BroadcastId) -> DispatchResult {
+		Self::clean_up_broadcast_storage(broadcast_id);
+		Self::deposit_event(Event::<T, I>::BroadcastSuccess { broadcast_id });
+		Ok(())
 	}
 }
