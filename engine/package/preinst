@@ -16,14 +16,14 @@ CF_VERSION=$(chainflip-engine --version 2> /dev/null | grep -Po '(?<=v)[^\ (]+')
 MAJOR=$(echo "$CF_VERSION" | awk -F. '{print $1}')
 MINOR=$(echo "$CF_VERSION" | awk -F. '{print $2}')
 
-# Create a directory for old versions of the binary and move the current version there.
+# Create a directory for old versions of the binary and copy the current version there.
 # Migrate the binaries to run out of /usr/local/bin as creating directories in /usr/bin is
 # bad practise.
 VERSIONED_DIR="/usr/local/bin/chainflip/${MAJOR}.${MINOR}"
 mkdir -p "$VERSIONED_DIR"
-mv "$CF_BIN_ROOT/chainflip-engine" "$VERSIONED_DIR/chainflip-engine"
-mv "$CF_BIN_ROOT/chainflip-node" "$VERSIONED_DIR/chainflip-node"
-mv "$CF_BIN_ROOT/chainflip-cli" "$VERSIONED_DIR/chainflip-cli"
+cp "$CF_BIN_ROOT/chainflip-engine" "$VERSIONED_DIR/chainflip-engine"
+cp "$CF_BIN_ROOT/chainflip-node" "$VERSIONED_DIR/chainflip-node"
+cp "$CF_BIN_ROOT/chainflip-cli" "$VERSIONED_DIR/chainflip-cli"
 
 echo "chainflip-engine: Beginning setup and migration of engine config"
 
