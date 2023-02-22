@@ -380,11 +380,19 @@ mod tests {
 
 // Tracing -----------------------------------------------------
 
-/// Install global collector using json formatting and the RUST_LOG env var
+use tracing::{metadata::LevelFilter, Level};
+use tracing_subscriber::{EnvFilter, Layer};
+
+/// Install global collector using json formatting and the RUST_LOG env var.
+/// If no env var is set, then it will default to INFO log level.
 pub fn init_json_logger() {
 	tracing_subscriber::fmt()
 		.json()
-		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+		.with_env_filter(
+			EnvFilter::builder()
+				.with_default_directive(LevelFilter::INFO.into())
+				.from_env_lossy(),
+		)
 		.init();
 }
 
@@ -401,8 +409,6 @@ pub fn init_test_logger() {
 	registry().with(TestLoggerLayer).try_init().expect("Failed to init the test logger, make you only run one test at a time with `init_test_logger`");
 }
 
-use tracing::Level;
-use tracing_subscriber::Layer;
 pub struct TestLoggerLayer;
 
 /// A custom layer for tracing that makes the logs more readable on a CLI. Adds color, formatting
