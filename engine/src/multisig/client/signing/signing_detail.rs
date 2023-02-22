@@ -164,7 +164,7 @@ pub fn generate_schnorr_response<C: CryptoScheme>(
 ) -> <C::Point as ECPoint>::Scalar {
 	let challenge = C::build_challenge(pubkey, nonce_commitment, payload);
 
-	C::build_response(nonce, private_key, challenge)
+	C::build_response(nonce, nonce_commitment, private_key, challenge)
 }
 
 /// Combine local signatures received from all parties into the final
@@ -202,6 +202,7 @@ pub fn aggregate_signature<C: CryptoScheme>(
 				&y_i,
 				&lambda_i,
 				&commitment_i,
+				&group_commitment,
 				&challenge,
 				&response.response,
 			)
@@ -271,6 +272,7 @@ mod tests {
 		assert!(EthSigning::is_party_response_valid(
 			&public_key,
 			&dummy_lambda,
+			&commitment,
 			&commitment,
 			&challenge,
 			&response,
