@@ -22,6 +22,8 @@ MINOR=$(echo "$CF_VERSION" | awk -F. '{print $2}')
 VERSIONED_DIR="/usr/local/bin/chainflip/${MAJOR}.${MINOR}"
 mkdir -p "$VERSIONED_DIR"
 mv "$CF_BIN_ROOT/chainflip-engine" "$VERSIONED_DIR/chainflip-engine"
+mv "$CF_BIN_ROOT/chainflip-node" "$VERSIONED_DIR/chainflip-node"
+mv "$CF_BIN_ROOT/chainflip-cli" "$VERSIONED_DIR/chainflip-cli"
 
 echo "chainflip-engine: Beginning setup and migration of engine config"
 
@@ -48,7 +50,7 @@ fi
 cat <<EOT >> "$UPDATED_ENGINE_CONFIG_LOCATION"
 
 [dot]
-ws_node_endpoint = "wss://pdot.chainflip.io:9944"
+ws_node_endpoint = "wss://pdot.chainflip.io:443"
 EOT
 
 echo "chainflip-engine: Migration completed successfully"
