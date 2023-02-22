@@ -46,6 +46,27 @@ fn get_tapleaf_hash(pubkey_x: [u8; 32], salt: u32) -> [u8; 32] {
 	sha2_256(&[TAPLEAF_HASH, TAPLEAF_HASH, &[0xC0_u8], &script.serialize()].concat())
 }
 
+fn to_varint(value: u64) -> Vec<u8> {
+	let mut result = Vec::default();
+	let len = match value {
+		0..=0xFC => 1,
+		0xFD..=0xFFFF => {
+			result.push(0xFD_u8);
+			2
+		},
+		0x010000..=0xFFFFFFFF => {
+			result.push(0xFE_u8);
+			4
+		},
+		_ => {
+			result.push(0xFF_u8);
+			8
+		},
+	};
+	result.append(&mut value.to_le_bytes()[..len].into());
+	result
+}
+
 pub fn scriptpubkey_from_address(address: String) -> Vec<u8> {
 	match bech32::decode(&address) {
 		Ok((_hrp, data, _variant)) => {
@@ -66,6 +87,59 @@ impl BitcoinTransaction {
 		}
 		self.signatures[index as usize] = signature;
 	}
+	pub fn finalize(&self) -> Vec<u8> {
+		let mut result = Vec::default();
+		let version = 2u32.to_le_bytes();
+		let segwit_marker = 0u8;
+		let segwit_flag = 1u8;
+		let locktime = [0u8, 0, 0, 0];
+		result.append(&mut version.to_vec());
+		result.append(&mut [segwit_marker].to_vec());
+		result.append(&mut [segwit_flag].to_vec());
+		result.append(&mut to_varint(self.inputs.len() as u64));
+		result.append(self.inputs.iter().fold(&mut Vec::<u8>::default(), |acc, x| {
+			let mut le_txid = x.txid.to_vec();
+			le_txid.reverse();
+			acc.append(&mut le_txid);
+			acc.append(&mut x.vout.to_le_bytes().to_vec());
+			acc.push(0);
+			acc.append(&mut (u32::MAX - 2).to_le_bytes().to_vec());
+			acc
+		}));
+		result.append(&mut to_varint(self.outputs.len() as u64));
+		result.append(self.outputs.iter().fold(&mut Vec::<u8>::default(), |acc, x| {
+			acc.append(&mut x.amount.to_le_bytes().to_vec());
+			let mut script = scriptpubkey_from_address(x.destination.clone());
+			acc.append(&mut to_varint(script.len() as u64));
+			acc.append(&mut script);
+			acc
+		}));
+		for i in 0..self.inputs.len() {
+			let num_witnesses = 3u8;
+			let len_signature = 64u8;
+			result.push(num_witnesses);
+			result.push(len_signature);
+			result.append(&mut self.signatures[i].to_vec());
+			let mut script = BitcoinScript::default();
+			script
+				.push_uint(self.inputs[i].salt)
+				.op_drop()
+				.push_bytes(self.inputs[i].pubkey_x.to_vec())
+				.op_checksig();
+			result.append(&mut script.serialize());
+			result.push(0x21u8);
+			let tweaked = tweaked_pubkey(self.inputs[i].pubkey_x, self.inputs[i].salt);
+			if tweaked.serialize_compressed()[0] == 2 {
+				result.push(0xC0_u8);
+			} else {
+				result.push(0xC1_u8);
+			}
+			result.append(&mut INTERNAL_PUBKEY[1..33].to_vec());
+		}
+		result.append(&mut locktime.to_vec());
+		result
+	}
+
 	pub fn get_signing_payload(&self, index: u32) -> [u8; 32] {
 		let prevouts = sha2_256(
 			self.inputs
@@ -94,7 +168,9 @@ impl BitcoinTransaction {
 				.fold(&mut Vec::<u8>::default(), |acc, x| {
 					let mut script = BitcoinScript::default();
 					script.push_uint(1);
-					script.push_bytes(tweaked_pubkey(x.pubkey_x, x.salt).to_vec());
+					script.push_bytes(
+						tweaked_pubkey(x.pubkey_x, x.salt).serialize_compressed()[1..33].to_vec(),
+					);
 					acc.append(&mut script.serialize());
 					acc
 				})
@@ -112,7 +188,7 @@ impl BitcoinTransaction {
 				.fold(&mut Vec::<u8>::default(), |acc, x| {
 					acc.append(&mut x.amount.to_le_bytes().to_vec());
 					let mut script = scriptpubkey_from_address(x.destination.clone());
-					acc.append(&mut BitcoinScript::to_varint(script.len() as u64));
+					acc.append(&mut to_varint(script.len() as u64));
 					acc.append(&mut script);
 					acc
 				})
@@ -155,27 +231,6 @@ impl BitcoinTransaction {
 struct BitcoinScript(Vec<u8>);
 
 impl BitcoinScript {
-	fn to_varint(value: u64) -> Vec<u8> {
-		let mut result = Vec::default();
-		let len = match value {
-			0..=0xFC => 1,
-			0xFD..=0xFFFF => {
-				result.push(0xFD_u8);
-				2
-			},
-			0x010000..=0xFFFFFFFF => {
-				result.push(0xFE_u8);
-				4
-			},
-			_ => {
-				result.push(0xFF_u8);
-				8
-			},
-		};
-		result.append(&mut value.to_le_bytes()[..len].into());
-		result
-	}
-
 	/// Adds an operation to the script that pushes an unsigned integer onto the stack
 	fn push_uint(&mut self, value: u32) -> &mut Self {
 		match value {
@@ -191,7 +246,7 @@ impl BitcoinScript {
 	}
 	/// Adds an operation to the script that pushes exactly the provided bytes of data to the stack
 	fn push_bytes(&mut self, mut data: Vec<u8>) -> &mut Self {
-		self.0.append(&mut Self::to_varint(data.len() as u64));
+		self.0.append(&mut to_varint(data.len() as u64));
 		self.0.append(&mut data);
 		self
 	}
@@ -209,7 +264,7 @@ impl BitcoinScript {
 	/// of the script and then the script itself
 	fn serialize(&self) -> Vec<u8> {
 		let mut result = Vec::default();
-		result.append(&mut Self::to_varint(self.0.len() as u64));
+		result.append(&mut to_varint(self.0.len() as u64));
 		result.append(&mut self.0.clone());
 		result
 	}
@@ -227,6 +282,30 @@ fn test_scriptpubkey_from_address() {
 		scriptpubkey_from_address("BC1QW508D6QEJXTDG4Y5R3ZARVARY0C5XW7KV8F3T4".to_string()),
 		hex_literal::hex!("0014751e76e8199196d454941c45d1b3a323f1433bd6")
 	);
+}
+
+#[test]
+fn test_finalize() {
+	let input = Utxo {
+		amount: 100010000,
+		vout: 1,
+		txid: hex_literal::hex!("b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c"),
+		pubkey_x: hex_literal::hex!(
+			"78C79A2B436DA5575A03CDE40197775C656FFF9F0F59FC1466E09C20A81A9CDB"
+		),
+		salt: 123,
+	};
+	let output = BitcoinOutput {
+		amount: 100000000,
+		destination: "bc1pgtj0f3u2rk8ex6khlskz7q50nwc48r8unfgfhxzsx9zhcdnczhqq60lzjt".to_string(),
+	};
+	let mut tx = BitcoinTransaction {
+		inputs: vec![input],
+		outputs: vec![output],
+		signatures: Default::default(),
+	};
+	tx.add_signature(0, [0u8; 64]);
+	assert_eq!(tx.finalize(), hex_literal::hex!("020000000001014C94E48A870B85F41228D33CF25213DFCC8DD796E7211ED6B1F9A014809DBBB50100000000FDFFFFFF0100E1F5050000000022512042E4F4C78A1D8F936AD7FC2C2F028F9BB1538CFC9A509B985031457C367815C003400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000025017B752078C79A2B436DA5575A03CDE40197775C656FFF9F0F59FC1466E09C20A81A9CDBAC21C0EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE00000000"));
 }
 
 #[test]

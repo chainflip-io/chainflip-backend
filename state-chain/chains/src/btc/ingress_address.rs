@@ -1,20 +1,20 @@
 use super::*;
 
-pub fn tweaked_pubkey(pubkey_x: [u8; 32], salt: u32) -> [u8; 32] {
+pub fn tweaked_pubkey(pubkey_x: [u8; 32], salt: u32) -> PublicKey {
 	let leafhash = get_tapleaf_hash(pubkey_x, salt);
 	let tweakhash =
 		sha2_256(&[TAPTWEAK_HASH, TAPTWEAK_HASH, &INTERNAL_PUBKEY[1..33], &leafhash].concat());
 	let mut tweaked = PublicKey::parse_compressed(INTERNAL_PUBKEY.try_into().unwrap()).unwrap();
 	_ = tweaked.tweak_add_assign(&SecretKey::parse(&tweakhash).unwrap());
-	tweaked.serialize_compressed()[1..33].try_into().unwrap()
+	tweaked
 }
 
 // Derives a taproot address from a validator public key and a salt
 pub fn derive_btc_ingress_address(pubkey_x: [u8; 32], salt: u32) -> String {
-	let tweaked = tweaked_pubkey(pubkey_x, salt);
+	let tweaked = tweaked_pubkey(pubkey_x, salt).serialize_compressed()[1..33].to_vec();
 	let segwit_version = u5::try_from_u8(1).unwrap();
 	let mut payload = vec![segwit_version];
-	payload.append(&mut tweaked.as_ref().to_base32());
+	payload.append(&mut tweaked.to_base32());
 	bech32::encode("bc", &mut payload, Variant::Bech32m).unwrap()
 }
 
