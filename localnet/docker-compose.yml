@@ -5,6 +5,7 @@ services:
     image: ghcr.io/chainflip-io/geth:perseverance-rc2
     pull_policy: always
     container_name: geth
+    platform: linux/amd64
     restart: unless-stopped
     env_file:
       - ./init/secrets/secrets.env
@@ -53,6 +54,7 @@ services:
 
   polkadot:
     container_name: polkadot
+    platform: linux/amd64
     image: parity/polkadot
     ports:
       # - 30333:30333 # p2p port
