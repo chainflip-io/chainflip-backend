@@ -82,6 +82,7 @@ impl CryptoScheme for Ed25519Signing {
 
 	fn build_response(
 		nonce: <Self::Point as super::ECPoint>::Scalar,
+		_nonce_commitment: Self::Point,
 		private_key: &<Self::Point as super::ECPoint>::Scalar,
 		challenge: <Self::Point as super::ECPoint>::Scalar,
 	) -> <Self::Point as super::ECPoint>::Scalar {
@@ -92,6 +93,7 @@ impl CryptoScheme for Ed25519Signing {
 		y_i: &Self::Point,
 		lambda_i: &<Self::Point as super::ECPoint>::Scalar,
 		commitment: &Self::Point,
+		_group_commitment: &Self::Point,
 		challenge: &<Self::Point as super::ECPoint>::Scalar,
 		signature_response: &<Self::Point as super::ECPoint>::Scalar,
 	) -> bool {

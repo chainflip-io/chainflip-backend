@@ -8,12 +8,11 @@ use crate::multisig::{
 		helpers::{
 			gen_invalid_local_sig, gen_invalid_signing_comm1, new_nodes, new_signing_ceremony,
 			run_stages, SigningCeremonyRunner, ACCOUNT_IDS, DEFAULT_SIGNING_CEREMONY_ID,
-			DEFAULT_SIGNING_SEED,
 		},
 		keygen::generate_key_data,
 		signing::signing_data,
 	},
-	crypto::polkadot::PolkadotSigning,
+	crypto::{bitcoin::BtcSigning, polkadot::PolkadotSigning},
 	eth::EthSigning,
 	CryptoScheme, Rng,
 };
@@ -101,32 +100,35 @@ async fn should_sign_with_all_parties<C: CryptoScheme>() {
 	// This seed ensures that the initially
 	// generated key is incompatible to increase
 	// test coverage
-	let seed = [0u8; 32];
+	for i in 0..10 {
+		let keyseed = [i; 32];
+		let nonceseed = [11 * i; 32];
+		let (key_id, key_data) = generate_key_data::<C>(
+			BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
+			&mut Rng::from_seed(keyseed),
+		);
 
-	let (key_id, key_data) = generate_key_data::<C>(
-		BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
-		&mut Rng::from_seed(seed),
-	);
+		let mut signing_ceremony = SigningCeremonyRunner::<C>::new_with_all_signers(
+			new_nodes(ACCOUNT_IDS.clone()),
+			DEFAULT_SIGNING_CEREMONY_ID,
+			key_id.clone(),
+			key_data,
+			C::signing_payload_for_test(),
+			Rng::from_seed(nonceseed),
+		);
 
-	let mut signing_ceremony = SigningCeremonyRunner::<C>::new_with_all_signers(
-		new_nodes(ACCOUNT_IDS.clone()),
-		DEFAULT_SIGNING_CEREMONY_ID,
-		key_id,
-		key_data,
-		C::signing_payload_for_test(),
-		Rng::from_seed(DEFAULT_SIGNING_SEED),
-	);
-
-	let messages = signing_ceremony.request().await;
-	let messages = run_stages!(
-		signing_ceremony,
-		messages,
-		signing_data::VerifyComm2<C::Point>,
-		signing_data::LocalSig3<C::Point>,
-		signing_data::VerifyLocalSig4<C::Point>
-	);
-	signing_ceremony.distribute_messages(messages).await;
-	signing_ceremony.complete().await;
+		let messages = signing_ceremony.request().await;
+		let messages = run_stages!(
+			signing_ceremony,
+			messages,
+			signing_data::VerifyComm2<C::Point>,
+			signing_data::LocalSig3<C::Point>,
+			signing_data::VerifyLocalSig4<C::Point>
+		);
+		signing_ceremony.distribute_messages(messages).await;
+		let signature = signing_ceremony.complete().await;
+		assert!(C::verify_signature(&signature, &key_id, &C::signing_payload_for_test()).is_ok());
+	}
 }
 
 #[tokio::test]
@@ -137,6 +139,11 @@ async fn should_sign_with_all_parties_eth() {
 #[tokio::test]
 async fn should_sign_with_all_parties_polkadot() {
 	should_sign_with_all_parties::<PolkadotSigning>().await;
+}
+
+#[tokio::test]
+async fn should_sign_with_all_parties_bitcoin() {
+	should_sign_with_all_parties::<BtcSigning>().await;
 }
 
 mod timeout {
