@@ -11,11 +11,15 @@ mod mock;
 #[cfg(test)]
 mod tests;
 pub mod weights;
+use cf_chains::DeploymentStatus;
 pub use weights::WeightInfo;
 
 use cf_primitives::{EgressCounter, EgressId, ForeignChain};
 
-use cf_chains::{AllBatch, Chain, ChainAbi, ChainCrypto, FetchAssetParams, TransferAssetParams};
+use cf_chains::{
+	AllBatch, Chain, ChainAbi, ChainCrypto, FetchAssetParams, IngressTypeGeneration,
+	TransferAssetParams,
+};
 use cf_primitives::{Asset, AssetAmount, ForeignChainAddress, IntentId};
 use cf_traits::{
 	liquidity::LpProvisioningApi, AddressDerivationApi, Broadcaster, EgressApi, IngressApi,
@@ -31,18 +35,6 @@ pub use sp_std::{vec, vec::Vec};
 pub enum FetchOrTransfer<C: Chain> {
 	Fetch { intent_id: IntentId, asset: C::ChainAsset },
 	Transfer { egress_id: EgressId, asset: C::ChainAsset, to: C::ChainAccount, amount: AssetAmount },
-}
-
-#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub enum DeploymentStatus {
-	Deployed,   // an address that has already been deployed
-	Undeployed, // an address that has not been deployed yet
-}
-
-impl Default for DeploymentStatus {
-	fn default() -> Self {
-		Self::Undeployed
-	}
 }
 
 impl<C: Chain> FetchOrTransfer<C> {
@@ -73,6 +65,9 @@ pub mod pallet {
 	pub(crate) type TargetChainAsset<T, I> = <<T as Config<I>>::TargetChain as Chain>::ChainAsset;
 	pub(crate) type TargetChainAccount<T, I> =
 		<<T as Config<I>>::TargetChain as Chain>::ChainAccount;
+
+	pub(crate) type IngressFetchIdOf<T, I> =
+		<<T as Config<I>>::TargetChain as Chain>::IngressFetchId;
 
 	pub(crate) type IntentPair<T, I> = (IntentId, TargetChainAccount<T, I>);
 
@@ -145,6 +140,11 @@ pub mod pallet {
 		#[pallet::constant]
 		type TTL: Get<u64>;
 
+		type IngressTypeGenerator: IngressTypeGeneration<
+			IngressType = IngressFetchIdOf<Self, I>,
+			Address = TargetChainAccount<Self, I>,
+		>;
+
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;
 	}
@@ -191,13 +191,20 @@ pub mod pallet {
 	pub(crate) type StaleIntents<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, Vec<IntentPair<T, I>>, ValueQuery>;
 
+	/// Stores the status of an address.
 	#[pallet::storage]
 	pub(crate) type AddressStatus<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, TargetChainAccount<T, I>, DeploymentStatus, ValueQuery>;
 
+	/// Stores a timestamp for when an intent will expire against the intent infos.
 	#[pallet::storage]
 	pub(crate) type IntentExpiries<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, u64, Vec<IntentPair<T, I>>>;
+
+	/// Map of intent id to the ingress id.
+	#[pallet::storage]
+	pub(crate) type IngressIds<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, u64, IngressFetchIdOf<T, I>>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -399,7 +406,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		for request in batch_to_send {
 			match request {
 				FetchOrTransfer::<T::TargetChain>::Fetch { intent_id, asset } => {
-					fetch_params.push(FetchAssetParams { ingress_fetch_id: intent_id, asset });
+					let ingress_id = IngressIds::<T, I>::get(intent_id);
+					fetch_params
+						.push(FetchAssetParams { ingress_fetch_id: ingress_id.unwrap(), asset });
 				},
 				FetchOrTransfer::<T::TargetChain>::Transfer { asset, to, amount, egress_id } => {
 					egress_ids.push(egress_id);
@@ -440,12 +449,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			.ok_or(Error::<T, I>::InvalidIntent)?;
 		ensure!(ingress.ingress_asset == asset, Error::<T, I>::IngressMismatchWithIntent);
 
-		// Not relevant for now, because we continue to call the old api call.
-		// if AddressStatus::<T, I>::get(ingress_address.clone()) == DeploymentStatus::Deployed {
-		// 	// TODO: call fetch
-		// } else {
-		// 	// TODO: call deploy_and_fetch
-		// }
+		StaleIntents::<T, I>::append((ingress.intent_id, ingress_address.clone()));
+		AddressStatus::<T, I>::insert(
+			ingress_address.clone(),
+			T::IngressTypeGenerator::deployment_status(true),
+		);
 
 		// Ingress is called by witnessers, so asset/chain combination should always be valid.
 		ScheduledEgressRequests::<T, I>::append(FetchOrTransfer::<T::TargetChain>::Fetch {
@@ -490,18 +498,35 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> Result<(IntentId, TargetChainAccount<T, I>), DispatchError> {
 		let ttl = T::TTL::get();
 		let expires_in = ttl.saturating_add(T::TimeSource::now().as_secs());
-		let (intent_id, address) =
-			if let Some((intent_id, address)) = StaleIntents::<T, I>::get().pop() {
-				(intent_id, address)
-			} else {
-				let next_intent_id = IntentIdCounter::<T, I>::get()
-					.checked_add(1)
-					.ok_or(Error::<T, I>::IntentIdsExhausted)?;
-				let new_address: TargetChainAccount<T, I> =
-					T::AddressDerivation::generate_address(ingress_asset, next_intent_id)?;
-				IntentIdCounter::<T, I>::put(next_intent_id);
-				(next_intent_id, new_address)
-			};
+		let (intent_id, address) = if let Some((intent_id, address)) =
+			StaleIntents::<T, I>::get().pop()
+		{
+			IngressIds::<T, I>::insert(
+				intent_id,
+				T::IngressTypeGenerator::generate_ingress_type(intent_id, address.clone(), true),
+			);
+			(intent_id, address)
+		} else {
+			let next_intent_id = IntentIdCounter::<T, I>::get()
+				.checked_add(1)
+				.ok_or(Error::<T, I>::IntentIdsExhausted)?;
+			let new_address: TargetChainAccount<T, I> =
+				T::AddressDerivation::generate_address(ingress_asset, next_intent_id)?;
+			IngressIds::<T, I>::insert(
+				next_intent_id,
+				T::IngressTypeGenerator::generate_ingress_type(
+					next_intent_id,
+					new_address.clone(),
+					false,
+				),
+			);
+			AddressStatus::<T, I>::insert(
+				new_address.clone(),
+				T::IngressTypeGenerator::deployment_status(false),
+			);
+			IntentIdCounter::<T, I>::put(next_intent_id);
+			(next_intent_id, new_address)
+		};
 
 		IntentExpiries::<T, I>::append(expires_in, (intent_id, address.clone()));
 

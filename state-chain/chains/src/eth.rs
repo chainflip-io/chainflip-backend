@@ -14,6 +14,7 @@ pub use ethabi::{
 	ethereum_types::{H256, U256},
 	Address, Hash as TxHash, Token, Uint, Word,
 };
+use ethereum_types::H160;
 use libsecp256k1::{curve::Scalar, PublicKey, SecretKey};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
@@ -685,6 +686,33 @@ impl From<H256> for TransactionHash {
 pub enum EthereumIngressId {
 	Deployed(Address),
 	UnDeployed(IntentId),
+}
+
+pub struct EthereumIngressIdGenerator;
+
+impl IngressTypeGeneration for EthereumIngressIdGenerator {
+	type IngressType = EthereumIngressId;
+	type Address = H160;
+
+	fn generate_ingress_type(
+		intent_id: u64,
+		address: Self::Address,
+		deployed: bool,
+	) -> Self::IngressType {
+		if deployed {
+			EthereumIngressId::Deployed(address)
+		} else {
+			EthereumIngressId::UnDeployed(intent_id)
+		}
+	}
+
+	fn deployment_status(is_deployed: bool) -> DeploymentStatus {
+		if is_deployed {
+			DeploymentStatus::Deployed
+		} else {
+			DeploymentStatus::Undeployed
+		}
+	}
 }
 
 #[cfg(test)]

@@ -250,6 +250,32 @@ pub trait FeeRefundCalculator<C: Chain> {
 	) -> <C as Chain>::ChainAmount;
 }
 
+#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub enum DeploymentStatus {
+	Deployed,   // an address that has already been deployed
+	Undeployed, // an address that has not been deployed yet
+}
+
+impl Default for DeploymentStatus {
+	fn default() -> Self {
+		Self::Undeployed
+	}
+}
+
+/// Helper trait to avoid matching over chains in the generic pallet.
+pub trait IngressTypeGeneration {
+	type IngressType;
+	type Address;
+	/// Constructs the ingress type for the given intent id, address and if it has been deployed.
+	fn generate_ingress_type(
+		intent_id: u64,
+		address: Self::Address,
+		deployed: bool,
+	) -> Self::IngressType;
+	/// Constructs the ingress type and if it has been deployed.
+	fn deployment_status(is_deployed: bool) -> DeploymentStatus;
+}
+
 pub mod mocks {
 	use crate::{
 		eth::{api::EthereumReplayProtection, TransactionFee},

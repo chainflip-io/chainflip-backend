@@ -12,7 +12,7 @@ use sp_core::{sr25519, H256};
 use sp_runtime::{
 	generic::{Era, SignedPayload, UncheckedExtrinsic},
 	traits::{BlakeTwo256, DispatchInfoOf, Hash, SignedExtension, StaticLookup},
-	MultiAddress, MultiSignature,
+	AccountId32, MultiAddress, MultiSignature,
 };
 
 use sp_runtime::{
@@ -40,6 +40,7 @@ pub type PolkadotCallHasher = BlakeTwo256;
 pub type PolkadotCallHash = <PolkadotCallHasher as Hash>::Output;
 
 pub type PolkadotSpecVersion = u32;
+pub type PolkadotIngressId = u64;
 pub type PolkadotTransactionVersion = u32;
 
 pub type PolkadotUncheckedExtrinsic =
@@ -796,6 +797,24 @@ impl PolkadotReplayProtection {
 		polkadot_config: PolkadotMetadata,
 	) -> Self {
 		Self { polkadot_config, nonce, tip }
+	}
+}
+
+pub struct PolkadotIngressIdGenerator;
+
+impl IngressTypeGeneration for PolkadotIngressIdGenerator {
+	type IngressType = PolkadotIngressId;
+	type Address = AccountId32;
+	fn generate_ingress_type(
+		intent_id: u64,
+		_address: Self::Address,
+		_deployed: bool,
+	) -> Self::IngressType {
+		intent_id
+	}
+
+	fn deployment_status(_is_deployed: bool) -> DeploymentStatus {
+		DeploymentStatus::Undeployed
 	}
 }
 
