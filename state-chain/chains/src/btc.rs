@@ -53,14 +53,20 @@ pub fn scriptpubkey_from_address(address: String) -> Vec<u8> {
 			let version = data[0].to_u8();
 			script.push_uint(version as u32);
 			script.push_bytes(Vec::<u8>::from_base32(&data[1..]).unwrap());
-			script.serialize()
+			script.0
 		},
 		_ => panic!("todo: figure out how to handle invalid egress addresses here..."),
 	}
 }
 
 impl BitcoinTransaction {
-	fn get_signing_payload(&self, index: u32) -> [u8; 32] {
+	pub fn add_signature(&mut self, index: u32, signature: [u8; 64]) {
+		if self.signatures.len() != self.inputs.len() {
+			self.signatures.resize(self.inputs.len(), [0u8; 64]);
+		}
+		self.signatures[index as usize] = signature;
+	}
+	pub fn get_signing_payload(&self, index: u32) -> [u8; 32] {
 		let prevouts = sha2_256(
 			self.inputs
 				.iter()
@@ -105,7 +111,9 @@ impl BitcoinTransaction {
 				.iter()
 				.fold(&mut Vec::<u8>::default(), |acc, x| {
 					acc.append(&mut x.amount.to_le_bytes().to_vec());
-					acc.append(&mut scriptpubkey_from_address(x.destination.clone()));
+					let mut script = scriptpubkey_from_address(x.destination.clone());
+					acc.append(&mut BitcoinScript::to_varint(script.len() as u64));
+					acc.append(&mut script);
 					acc
 				})
 				.as_slice(),
@@ -213,11 +221,11 @@ fn test_scriptpubkey_from_address() {
 		scriptpubkey_from_address(
 			"bc1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqzk5jj0".to_string()
 		),
-		hex_literal::hex!("22512079be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798")
+		hex_literal::hex!("512079be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798")
 	);
 	assert_eq!(
 		scriptpubkey_from_address("BC1QW508D6QEJXTDG4Y5R3ZARVARY0C5XW7KV8F3T4".to_string()),
-		hex_literal::hex!("160014751e76e8199196d454941c45d1b3a323f1433bd6")
+		hex_literal::hex!("0014751e76e8199196d454941c45d1b3a323f1433bd6")
 	);
 }
 
