@@ -43,10 +43,27 @@ setup() {
   done
   touch $LOCALNET_INIT_DIR/secrets/.setup_complete
 }
+check_node_ready() {
+  url="http://localhost:9933"
+  retry_count=5
+  retry_delay=3
+
+  for ((i=0; i<retry_count; i++)); do
+      if curl --head --silent --fail "$url" > /dev/null; then
+          echo "Node is available ✅"
+          exit 0  # success
+      else
+          echo "🚧 Waiting for node to start, retrying in $retry_delay seconds..."
+          sleep $retry_delay
+      fi
+  done
+  echo "❌ Connecting to node timed out after $retry_count retries. Check node logs for more details."
+  exit 1  # error
+}
 
 workflow() {
-  echo "❓ Would you like to build, recreate or destroy your Localnet? (Type 1, 2, 3, 4 or 5)"
-  select WORKFLOW in build-localnet recreate destroy logs yeet; do
+  echo "❓ Would you like to build, recreate or destroy your Localnet? (Type 1, 2, 3 or 4)"
+  select WORKFLOW in build-localnet recreate destroy logs; do
     echo "You have chosen $WORKFLOW"
     break
   done
@@ -58,15 +75,16 @@ build-localnet() {
   echo "💻 Please provide the location to the binaries you would like to use."
   read -p "(default: ./target/release/) " BINARIES_LOCATION
   echo
+  echo "🔍 Specify the log level you would like to use. [error, warn, info, debug, trace]"
+  read -p "(default: debug) " RUST_LOG_LEVEL
+  echo
   echo "🏗 Building network"
   BINARIES_LOCATION=${BINARIES_LOCATION:-"./target/release/"}
+  RUST_LOG_LEVEL=${RUST_LOG_LEVEL:-"debug"}
   docker-compose -f localnet/docker-compose.yml up -d
-  ./$LOCALNET_INIT_DIR/scripts/start-node.sh $BINARIES_LOCATION
-  while ! curl -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' 'http://localhost:9933' > /dev/null 2>&1 ; do
-    echo "🚧 Waiting for node to start"
-    sleep 3
-  done
-  ./$LOCALNET_INIT_DIR/scripts/start-engine.sh $BINARIES_LOCATION
+  ./$LOCALNET_INIT_DIR/scripts/start-node.sh $BINARIES_LOCATION $RUST_LOG_LEVEL
+  check_node_ready
+  ./$LOCALNET_INIT_DIR/scripts/start-engine.sh $BINARIES_LOCATION $RUST_LOG_LEVEL
 
   echo
   echo "🚀 Network is live"
@@ -137,6 +155,7 @@ elif [ $WORKFLOW == "destroy" ]; then
   destroy
 elif [ $WORKFLOW == "logs" ]; then
   logs
-elif [ $WORKFLOW == "yeet" ]; then
-  yeet
+# TODO: Remove yeet functionality.
+# elif [ $WORKFLOW == "yeet" ]; then # Commented out for safety. Will remove properly later.
+#   yeet
 fi
