@@ -45,20 +45,12 @@ setup() {
 }
 check_node_ready() {
   url="http://localhost:9933"
-  retry_count=5
-  retry_delay=3
 
-  for ((i=0; i<retry_count; i++)); do
-      if curl --silent --fail -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' "$url" > /dev/null; then
-          echo "Node is available ✅"
-          exit 0  # success
-      else
-          echo "🚧 Waiting for node to start, retrying in $retry_delay seconds..."
-          sleep $retry_delay
-      fi
-  done
-  echo "❌ Connecting to node timed out after $retry_count retries. Check node logs for more details."
-  exit 1  # error
+    if curl --retry 5 --retry-delay 3 --silent --fail -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' "$url" > /dev/null; then
+        echo "❌ Connecting to node timed out after 5 retries. Check node logs for more details."
+        exit 1  # error
+    fi
+    echo "Node is available ✅"
 }
 
 workflow() {
@@ -75,7 +67,7 @@ build-localnet() {
   echo "💻 Please provide the location to the binaries you would like to use."
   read -p "(default: ./target/release/) " BINARIES_LOCATION
   echo
-  echo "🔍 Specify the log level you would like to use. [error, warn, info, debug, trace]"
+  echo "🔍 Specify the log level you would like to use for chainflip-engine. [error, warn, info, debug, trace]"
   read -p "(default: debug) " RUST_LOG_LEVEL
   echo
   echo "🏗 Building network"
