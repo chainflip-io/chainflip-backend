@@ -1,9 +1,32 @@
 use crate::*;
-use cf_chains::dot::POLKADOT_METADATA;
 use sp_std::marker::PhantomData;
 
-/// My first migration.
 pub struct Migration<T: Config>(PhantomData<T>);
+
+const CHAINFLIP_GENESIS_PERSEVERANCE: &[u8] =
+	&hex_literal::hex!("2d00bb9c87a5cccdc67d7c49b6ff87e67a854798583f9a866384d7b7cebbc9b3");
+const POLKADOT_GENESIS_PERSEVERANCE: [u8; 32] =
+	hex_literal::hex!("bb5111c1747c9e9774c2e6bd229806fb4d7497af2829782f39b977724e490b5c");
+const POLKADOT_GENESIS_SISYPHOS: [u8; 32] =
+	hex_literal::hex!("1665348821496e14ed56718d4d078e7f85b163bf4e45fa9afbeb220b34ed475a");
+
+// Private polkadot network for sisyphos.
+fn polkadot_runtime_version<T: Config>() -> PolkadotMetadata {
+	PolkadotMetadata {
+		spec_version: 9360,
+		transaction_version: 19,
+		genesis_hash: match frame_system::Pallet::<T>::block_hash::<T::BlockNumber>(
+			Default::default(),
+		)
+		.as_ref()
+		{
+			CHAINFLIP_GENESIS_PERSEVERANCE => POLKADOT_GENESIS_PERSEVERANCE,
+			// Assume any other network is a sisyphos network
+			_ => POLKADOT_GENESIS_SISYPHOS,
+		},
+		block_hash_count: 4096,
+	}
+}
 
 mod old {
 
@@ -41,7 +64,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 
 		// Polkadot metadata is initialized with the config that is used in the persistent polkadot
 		// testnet
-		PolkadotNetworkMetadata::<T>::set(POLKADOT_METADATA);
+		PolkadotNetworkMetadata::<T>::set(polkadot_runtime_version::<T>());
 
 		Weight::zero()
 	}

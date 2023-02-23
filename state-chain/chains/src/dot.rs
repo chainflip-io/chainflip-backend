@@ -57,10 +57,9 @@ pub const WESTEND_METADATA: PolkadotMetadata = PolkadotMetadata {
 	block_hash_count: 4096,
 };
 
-// Polkadot mainnet
 pub const POLKADOT_METADATA: PolkadotMetadata = PolkadotMetadata {
-	spec_version: 9320,
-	transaction_version: 16,
+	spec_version: 9360,
+	transaction_version: 19,
 	genesis_hash: hex_literal::hex!(
 		"5f551688012d25a98e729752169f509c6186af8079418c118844cc852b332bf5"
 	),
