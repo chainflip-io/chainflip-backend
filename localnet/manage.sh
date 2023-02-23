@@ -49,7 +49,7 @@ check_node_ready() {
   retry_delay=3
 
   for ((i=0; i<retry_count; i++)); do
-      if curl --head --silent --fail "$url" > /dev/null; then
+      if curl --silent --fail -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' "$url" > /dev/null; then
           echo "Node is available ✅"
           exit 0  # success
       else

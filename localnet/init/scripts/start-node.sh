@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 binary_location=$1
-log_level=$12
+log_level=$2
 export RUST_LOG=$log_level
 
 source ./localnet/init/env/eth.env
