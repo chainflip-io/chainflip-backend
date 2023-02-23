@@ -267,9 +267,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 		debug!("{} is successful", Self::NAME);
 
 		// At this point we know everyone's commitments, which can already be
-		// used to derive the resulting aggregate public key. Before proceeding
-		// with the ceremony, we need to make sure that the key is compatible
-		// with the Key Manager contract, aborting if it isn't.
+		// used to derive the resulting aggregate public key.
 
 		let agg_pubkey = derive_aggregate_pubkey::<Crypto>(&commitments);
 		let processor = SecretSharesStage5 {
