@@ -55,7 +55,7 @@ services:
   polkadot:
     container_name: polkadot
     platform: linux/amd64
-    image: ghcr.io/chainflip-io/chainflip-private-polkadot/polkadot:v0.9.36
+    image: parity/polkadot
     ports:
       # - 30333:30333 # p2p port
       - 9934:9933 # rpc port
