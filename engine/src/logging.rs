@@ -384,7 +384,7 @@ use tracing::{metadata::LevelFilter, Level};
 use tracing_subscriber::{EnvFilter, Layer};
 
 /// Install global collector using json formatting and the RUST_LOG env var.
-/// If no env var is set, then it will default to INFO log level.
+/// If `RUST_LOG` is not set, then it will default to INFO log level.
 pub fn init_json_logger() {
 	tracing_subscriber::fmt()
 		.json()
