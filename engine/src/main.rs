@@ -210,7 +210,6 @@ async fn main() -> anyhow::Result<()> {
 				settings.eth,
 				state_chain_client.clone(),
 				expected_chain_id,
-				latest_block_hash,
 				epoch_start_receiver_1,
 				epoch_start_receiver_2,
 				IngressAddressReceivers {

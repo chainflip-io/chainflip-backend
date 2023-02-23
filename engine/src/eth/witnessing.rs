@@ -10,9 +10,14 @@ use pallet_cf_environment::cfe;
 use sp_core::H160;
 
 use crate::{
-	common::start_with_restart_on_failure, eth::ingress_witnesser::IngressWitnesser,
-	multisig::PersistentKeyDB, settings, state_chain_observer::client::StateChainClient,
-	task_scope::Scope, try_with_logging, witnesser::EpochStart,
+	common::start_with_restart_on_failure,
+	eth::ingress_witnesser::IngressWitnesser,
+	multisig::PersistentKeyDB,
+	settings,
+	state_chain_observer::client::{base_rpc_api::BaseRpcApi, StateChainClient},
+	task_scope::Scope,
+	try_with_logging,
+	witnesser::EpochStart,
 };
 
 use super::{
@@ -41,7 +46,6 @@ pub struct AllWitnessers {
 async fn create_witnessers(
 	state_chain_client: &Arc<StateChainClient>,
 	eth_dual_rpc: &EthDualRpcClient,
-	latest_block_hash: sp_core::H256,
 	ingress_address_receivers: IngressAddressReceivers,
 ) -> anyhow::Result<AllWitnessers> {
 	let IngressAddressReceivers {
@@ -49,6 +53,15 @@ async fn create_witnessers(
 		flip: flip_address_receiver,
 		usdc: usdc_address_receiver,
 	} = ingress_address_receivers;
+
+	// The storage queries here do not need to be in sync with the other queries.
+	// What matters is that the query is done after the subscription to the new ingress addresses
+	// is established. Which is the case because the SCO is started before this witnesser.
+	let latest_block_hash = state_chain_client
+		.base_rpc_client
+		.latest_finalized_block_hash()
+		.await
+		.context("Failed to get latest block hash from SC")?;
 
 	let key_manager_witnesser = ContractWitnesser::new(
 		KeyManager::new(
@@ -172,7 +185,6 @@ pub async fn start(
 	eth_settings: settings::Eth,
 	state_chain_client: Arc<StateChainClient>,
 	expected_chain_id: web3::types::U256,
-	latest_block_hash: sp_core::H256,
 	epoch_start_receiver: async_broadcast::Receiver<EpochStart<Ethereum>>,
 	epoch_start_receiver_2: async_broadcast::Receiver<EpochStart<Ethereum>>,
 	ingress_address_receivers: IngressAddressReceivers,
@@ -209,7 +221,6 @@ pub async fn start(
 				create_witnessers(
 					&state_chain_client,
 					&dual_rpc,
-					latest_block_hash,
 					ingress_address_receivers,
 				)
 				.await
