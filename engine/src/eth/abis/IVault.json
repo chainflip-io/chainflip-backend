@@ -1,2935 +1,872 @@
-{
-  "abi": [
-    {
-      "anonymous": false,
-      "inputs": [
-        {
-          "indexed": false,
-          "internalType": "bool",
-          "name": "communityGuardDisabled",
-          "type": "bool"
-        }
-      ],
-      "name": "CommunityGuardDisabled",
-      "type": "event"
-    },
-    {
-      "anonymous": false,
-      "inputs": [
-        {
-          "indexed": false,
-          "internalType": "bool",
-          "name": "suspended",
-          "type": "bool"
-        }
-      ],
-      "name": "Suspended",
-      "type": "event"
-    },
-    {
-      "anonymous": false,
-      "inputs": [
-        {
-          "indexed": false,
-          "internalType": "address",
-          "name": "keyManager",
-          "type": "address"
-        }
-      ],
-      "name": "UpdatedKeyManager",
-      "type": "event"
-    },
-    {
-      "inputs": [
-        {
-          "components": [
-            {
-              "internalType": "address",
-              "name": "keyManAddr",
-              "type": "address"
-            },
-            {
-              "internalType": "uint256",
-              "name": "chainID",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint256",
-              "name": "msgHash",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint256",
-              "name": "sig",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint256",
-              "name": "nonce",
-              "type": "uint256"
-            },
-            {
-              "internalType": "address",
-              "name": "kTimesGAddress",
-              "type": "address"
-            }
-          ],
-          "internalType": "struct IShared.SigData",
-          "name": "sigData",
-          "type": "tuple"
-        },
-        {
-          "components": [
-            {
-              "internalType": "bytes32",
-              "name": "swapID",
-              "type": "bytes32"
-            },
-            {
-              "internalType": "address",
-              "name": "token",
-              "type": "address"
-            }
-          ],
-          "internalType": "struct IShared.DeployFetchParams[]",
-          "name": "deployFetchParamsArray",
-          "type": "tuple[]"
-        },
-        {
-          "components": [
-            {
-              "internalType": "address payable",
-              "name": "fetchContract",
-              "type": "address"
-            },
-            {
-              "internalType": "address",
-              "name": "token",
-              "type": "address"
-            }
-          ],
-          "internalType": "struct IShared.FetchParams[]",
-          "name": "fetchParamsArray",
-          "type": "tuple[]"
-        },
-        {
-          "components": [
-            {
-              "internalType": "address",
-              "name": "token",
-              "type": "address"
-            },
-            {
-              "internalType": "address payable",
-              "name": "recipient",
-              "type": "address"
-            },
-            {
-              "internalType": "uint256",
-              "name": "amount",
-              "type": "uint256"
-            }
-          ],
-          "internalType": "struct IShared.TransferParams[]",
-          "name": "transferParamsArray",
-          "type": "tuple[]"
-        }
-      ],
-      "name": "allBatch",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "components": [
-            {
-              "internalType": "address",
-              "name": "keyManAddr",
-              "type": "address"
-            },
-            {
-              "internalType": "uint256",
-              "name": "chainID",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint256",
-              "name": "msgHash",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint256",
-              "name": "sig",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint256",
-              "name": "nonce",
-              "type": "uint256"
-            },
-            {
-              "internalType": "address",
-              "name": "kTimesGAddress",
-              "type": "address"
-            }
-          ],
-          "internalType": "struct IShared.SigData",
-          "name": "sigData",
-          "type": "tuple"
-        },
-        {
-          "components": [
-            {
-              "internalType": "bytes32",
-              "name": "swapID",
-              "type": "bytes32"
-            },
-            {
-              "internalType": "address",
-              "name": "token",
-              "type": "address"
-            }
-          ],
-          "internalType": "struct IShared.DeployFetchParams[]",
-          "name": "deployFetchParamsArray",
-          "type": "tuple[]"
-        }
-      ],
-      "name": "deployAndFetchBatch",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "disableCommunityGuard",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "disablexCalls",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "enableCommunityGuard",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "enablexCalls",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "components": [
-            {
-              "internalType": "address",
-              "name": "keyManAddr",
-              "type": "address"
-            },
-            {
-              "internalType": "uint256",
-              "name": "chainID",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint256",
-              "name": "msgHash",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint256",
-              "name": "sig",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint256",
-              "name": "nonce",
-              "type": "uint256"
-            },
-            {
-              "internalType": "address",
-              "name": "kTimesGAddress",
-              "type": "address"
-            }
-          ],
-          "internalType": "struct IShared.SigData",
-          "name": "sigData",
-          "type": "tuple"
-        },
-        {
-          "internalType": "address",
-          "name": "recipient",
-          "type": "address"
-        },
-        {
-          "internalType": "uint32",
-          "name": "srcChain",
-          "type": "uint32"
-        },
-        {
-          "internalType": "string",
-          "name": "srcAddress",
-          "type": "string"
-        },
-        {
-          "internalType": "bytes",
-          "name": "message",
-          "type": "bytes"
-        }
-      ],
-      "name": "executexCall",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "components": [
-            {
-              "internalType": "address",
-              "name": "keyManAddr",
-              "type": "address"
-            },
-            {
-              "internalType": "uint256",
-              "name": "chainID",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint256",
-              "name": "msgHash",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint256",
-              "name": "sig",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint256",
-              "name": "nonce",
-              "type": "uint256"
-            },
-            {
-              "internalType": "address",
-              "name": "kTimesGAddress",
-              "type": "address"
-            }
-          ],
-          "internalType": "struct IShared.SigData",
-          "name": "sigData",
-          "type": "tuple"
-        },
-        {
-          "components": [
-            {
-              "internalType": "address",
-              "name": "token",
-              "type": "address"
-            },
-            {
-              "internalType": "address payable",
-              "name": "recipient",
-              "type": "address"
-            },
-            {
-              "internalType": "uint256",
-              "name": "amount",
-              "type": "uint256"
-            }
-          ],
-          "internalType": "struct IShared.TransferParams",
-          "name": "transferParams",
-          "type": "tuple"
-        },
-        {
-          "internalType": "uint32",
-          "name": "srcChain",
-          "type": "uint32"
-        },
-        {
-          "internalType": "string",
-          "name": "srcAddress",
-          "type": "string"
-        },
-        {
-          "internalType": "bytes",
-          "name": "message",
-          "type": "bytes"
-        }
-      ],
-      "name": "executexSwapAndCall",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "components": [
-            {
-              "internalType": "address",
-              "name": "keyManAddr",
-              "type": "address"
-            },
-            {
-              "internalType": "uint256",
-              "name": "chainID",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint256",
-              "name": "msgHash",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint256",
-              "name": "sig",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint256",
-              "name": "nonce",
-              "type": "uint256"
-            },
-            {
-              "internalType": "address",
-              "name": "kTimesGAddress",
-              "type": "address"
-            }
-          ],
-          "internalType": "struct IShared.SigData",
-          "name": "sigData",
-          "type": "tuple"
-        },
-        {
-          "components": [
-            {
-              "internalType": "address payable",
-              "name": "fetchContract",
-              "type": "address"
-            },
-            {
-              "internalType": "address",
-              "name": "token",
-              "type": "address"
-            }
-          ],
-          "internalType": "struct IShared.FetchParams[]",
-          "name": "fetchParamsArray",
-          "type": "tuple[]"
-        }
-      ],
-      "name": "fetchBatch",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "getCommunityGuardDisabled",
-      "outputs": [
-        {
-          "internalType": "bool",
-          "name": "",
-          "type": "bool"
-        }
-      ],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "getCommunityKey",
-      "outputs": [
-        {
-          "internalType": "address",
-          "name": "",
-          "type": "address"
-        }
-      ],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "getGovernor",
-      "outputs": [
-        {
-          "internalType": "address",
-          "name": "",
-          "type": "address"
-        }
-      ],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "getKeyManager",
-      "outputs": [
-        {
-          "internalType": "contract IKeyManager",
-          "name": "",
-          "type": "address"
-        }
-      ],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "getSuspendedState",
-      "outputs": [
-        {
-          "internalType": "bool",
-          "name": "",
-          "type": "bool"
-        }
-      ],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "getxCallsEnabled",
-      "outputs": [
-        {
-          "internalType": "bool",
-          "name": "",
-          "type": "bool"
-        }
-      ],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "internalType": "address[]",
-          "name": "tokens",
-          "type": "address[]"
-        }
-      ],
-      "name": "govWithdraw",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "resume",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "suspend",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "components": [
-            {
-              "internalType": "address",
-              "name": "keyManAddr",
-              "type": "address"
-            },
-            {
-              "internalType": "uint256",
-              "name": "chainID",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint256",
-              "name": "msgHash",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint256",
-              "name": "sig",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint256",
-              "name": "nonce",
-              "type": "uint256"
-            },
-            {
-              "internalType": "address",
-              "name": "kTimesGAddress",
-              "type": "address"
-            }
-          ],
-          "internalType": "struct IShared.SigData",
-          "name": "sigData",
-          "type": "tuple"
-        },
-        {
-          "components": [
-            {
-              "internalType": "address",
-              "name": "token",
-              "type": "address"
-            },
-            {
-              "internalType": "address payable",
-              "name": "recipient",
-              "type": "address"
-            },
-            {
-              "internalType": "uint256",
-              "name": "amount",
-              "type": "uint256"
-            }
-          ],
-          "internalType": "struct IShared.TransferParams",
-          "name": "transferParams",
-          "type": "tuple"
-        }
-      ],
-      "name": "transfer",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "components": [
-            {
-              "internalType": "address",
-              "name": "keyManAddr",
-              "type": "address"
-            },
-            {
-              "internalType": "uint256",
-              "name": "chainID",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint256",
-              "name": "msgHash",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint256",
-              "name": "sig",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint256",
-              "name": "nonce",
-              "type": "uint256"
-            },
-            {
-              "internalType": "address",
-              "name": "kTimesGAddress",
-              "type": "address"
-            }
-          ],
-          "internalType": "struct IShared.SigData",
-          "name": "sigData",
-          "type": "tuple"
-        },
-        {
-          "components": [
-            {
-              "internalType": "address",
-              "name": "token",
-              "type": "address"
-            },
-            {
-              "internalType": "address payable",
-              "name": "recipient",
-              "type": "address"
-            },
-            {
-              "internalType": "uint256",
-              "name": "amount",
-              "type": "uint256"
-            }
-          ],
-          "internalType": "struct IShared.TransferParams[]",
-          "name": "transferParamsArray",
-          "type": "tuple[]"
-        }
-      ],
-      "name": "transferBatch",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "components": [
-            {
-              "internalType": "address",
-              "name": "keyManAddr",
-              "type": "address"
-            },
-            {
-              "internalType": "uint256",
-              "name": "chainID",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint256",
-              "name": "msgHash",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint256",
-              "name": "sig",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint256",
-              "name": "nonce",
-              "type": "uint256"
-            },
-            {
-              "internalType": "address",
-              "name": "kTimesGAddress",
-              "type": "address"
-            }
-          ],
-          "internalType": "struct IShared.SigData",
-          "name": "sigData",
-          "type": "tuple"
-        },
-        {
-          "internalType": "contract IKeyManager",
-          "name": "keyManager",
-          "type": "address"
-        }
-      ],
-      "name": "updateKeyManager",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "internalType": "uint32",
-          "name": "dstChain",
-          "type": "uint32"
-        },
-        {
-          "internalType": "string",
-          "name": "dstAddress",
-          "type": "string"
-        },
-        {
-          "internalType": "string",
-          "name": "swapIntent",
-          "type": "string"
-        },
-        {
-          "internalType": "bytes",
-          "name": "message",
-          "type": "bytes"
-        },
-        {
-          "internalType": "uint256",
-          "name": "dstNativeGas",
-          "type": "uint256"
-        },
-        {
-          "internalType": "address",
-          "name": "refundAddress",
-          "type": "address"
-        }
-      ],
-      "name": "xCallNative",
-      "outputs": [],
-      "stateMutability": "payable",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "internalType": "uint32",
-          "name": "dstChain",
-          "type": "uint32"
-        },
-        {
-          "internalType": "string",
-          "name": "dstAddress",
-          "type": "string"
-        },
-        {
-          "internalType": "string",
-          "name": "swapIntent",
-          "type": "string"
-        },
-        {
-          "internalType": "bytes",
-          "name": "message",
-          "type": "bytes"
-        },
-        {
-          "internalType": "uint256",
-          "name": "dstNativeGas",
-          "type": "uint256"
-        },
-        {
-          "internalType": "contract IERC20",
-          "name": "srcToken",
-          "type": "address"
-        },
-        {
-          "internalType": "uint256",
-          "name": "amount",
-          "type": "uint256"
-        },
-        {
-          "internalType": "address",
-          "name": "refundAddress",
-          "type": "address"
-        }
-      ],
-      "name": "xCallToken",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "internalType": "uint32",
-          "name": "dstChain",
-          "type": "uint32"
-        },
-        {
-          "internalType": "string",
-          "name": "dstAddress",
-          "type": "string"
-        },
-        {
-          "internalType": "string",
-          "name": "swapIntent",
-          "type": "string"
-        }
-      ],
-      "name": "xSwapNative",
-      "outputs": [],
-      "stateMutability": "payable",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "internalType": "uint32",
-          "name": "dstChain",
-          "type": "uint32"
-        },
-        {
-          "internalType": "string",
-          "name": "dstAddress",
-          "type": "string"
-        },
-        {
-          "internalType": "string",
-          "name": "swapIntent",
-          "type": "string"
-        },
-        {
-          "internalType": "contract IERC20",
-          "name": "srcToken",
-          "type": "address"
-        },
-        {
-          "internalType": "uint256",
-          "name": "amount",
-          "type": "uint256"
-        }
-      ],
-      "name": "xSwapToken",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    }
-  ],
-  "allSourcePaths": {
-    "2": "/home/albert/.brownie/packages/OpenZeppelin/openzeppelin-contracts@4.0.0/contracts/token/ERC20/IERC20.sol",
-    "24": "contracts/interfaces/IAggKeyNonceConsumer.sol",
-    "28": "contracts/interfaces/IGovernanceCommunityGuarded.sol",
-    "30": "contracts/interfaces/IShared.sol",
-    "32": "contracts/interfaces/IVault.sol"
-  },
-  "ast": {
-    "absolutePath": "contracts/interfaces/IVault.sol",
-    "exportedSymbols": {
-      "IAggKeyNonceConsumer": [
-        5669
-      ],
-      "IERC20": [
-        7969
-      ],
-      "IGovernanceCommunityGuarded": [
-        5812
-      ],
-      "IKeyManager": [
-        6003
-      ],
-      "IShared": [
-        6043
-      ],
-      "IVault": [
-        6352
-      ]
-    },
-    "id": 6353,
-    "nodeType": "SourceUnit",
-    "nodes": [
+[
+  {
+    "anonymous": false,
+    "inputs": [
       {
-        "id": 6183,
-        "literals": [
-          "solidity",
-          "^",
-          "0.8",
-          ".0"
-        ],
-        "nodeType": "PragmaDirective",
-        "src": "0:23:32"
-      },
-      {
-        "absolutePath": "contracts/interfaces/IAggKeyNonceConsumer.sol",
-        "file": "./IAggKeyNonceConsumer.sol",
-        "id": 6184,
-        "nameLocation": "-1:-1:-1",
-        "nodeType": "ImportDirective",
-        "scope": 6353,
-        "sourceUnit": 5670,
-        "src": "25:36:32",
-        "symbolAliases": [],
-        "unitAlias": ""
-      },
-      {
-        "absolutePath": "contracts/interfaces/IGovernanceCommunityGuarded.sol",
-        "file": "./IGovernanceCommunityGuarded.sol",
-        "id": 6185,
-        "nameLocation": "-1:-1:-1",
-        "nodeType": "ImportDirective",
-        "scope": 6353,
-        "sourceUnit": 5813,
-        "src": "62:43:32",
-        "symbolAliases": [],
-        "unitAlias": ""
-      },
-      {
-        "abstract": false,
-        "baseContracts": [
-          {
-            "baseName": {
-              "id": 6187,
-              "name": "IGovernanceCommunityGuarded",
-              "nodeType": "IdentifierPath",
-              "referencedDeclaration": 5812,
-              "src": "222:27:32"
-            },
-            "id": 6188,
-            "nodeType": "InheritanceSpecifier",
-            "src": "222:27:32"
-          },
-          {
-            "baseName": {
-              "id": 6189,
-              "name": "IAggKeyNonceConsumer",
-              "nodeType": "IdentifierPath",
-              "referencedDeclaration": 5669,
-              "src": "251:20:32"
-            },
-            "id": 6190,
-            "nodeType": "InheritanceSpecifier",
-            "src": "251:20:32"
-          }
-        ],
-        "contractDependencies": [],
-        "contractKind": "interface",
-        "documentation": {
-          "id": 6186,
-          "nodeType": "StructuredDocumentation",
-          "src": "107:94:32",
-          "text": " @title    Vault interface\n @notice   The interface for functions Vault implements"
-        },
-        "fullyImplemented": false,
-        "id": 6352,
-        "linearizedBaseContracts": [
-          6352,
-          5669,
-          5812,
-          6043
-        ],
-        "name": "IVault",
-        "nameLocation": "212:6:32",
-        "nodeType": "ContractDefinition",
-        "nodes": [
-          {
-            "functionSelector": "63e7334b",
-            "id": 6208,
-            "implemented": false,
-            "kind": "function",
-            "modifiers": [],
-            "name": "allBatch",
-            "nameLocation": "287:8:32",
-            "nodeType": "FunctionDefinition",
-            "parameters": {
-              "id": 6206,
-              "nodeType": "ParameterList",
-              "parameters": [
-                {
-                  "constant": false,
-                  "id": 6193,
-                  "mutability": "mutable",
-                  "name": "sigData",
-                  "nameLocation": "322:7:32",
-                  "nodeType": "VariableDeclaration",
-                  "scope": 6208,
-                  "src": "305:24:32",
-                  "stateVariable": false,
-                  "storageLocation": "calldata",
-                  "typeDescriptions": {
-                    "typeIdentifier": "t_struct$_SigData_$6025_calldata_ptr",
-                    "typeString": "struct IShared.SigData"
-                  },
-                  "typeName": {
-                    "id": 6192,
-                    "nodeType": "UserDefinedTypeName",
-                    "pathNode": {
-                      "id": 6191,
-                      "name": "SigData",
-                      "nodeType": "IdentifierPath",
-                      "referencedDeclaration": 6025,
-                      "src": "305:7:32"
-                    },
-                    "referencedDeclaration": 6025,
-                    "src": "305:7:32",
-                    "typeDescriptions": {
-                      "typeIdentifier": "t_struct$_SigData_$6025_storage_ptr",
-                      "typeString": "struct IShared.SigData"
-                    }
-                  },
-                  "visibility": "internal"
-                },
-                {
-                  "constant": false,
-                  "id": 6197,
-                  "mutability": "mutable",
-                  "name": "deployFetchParamsArray",
-                  "nameLocation": "368:22:32",
-                  "nodeType": "VariableDeclaration",
-                  "scope": 6208,
-                  "src": "339:51:32",
-                  "stateVariable": false,
-                  "storageLocation": "calldata",
-                  "typeDescriptions": {
-                    "typeIdentifier": "t_array$_t_struct$_DeployFetchParams_$6037_calldata_ptr_$dyn_calldata_ptr",
-                    "typeString": "struct IShared.DeployFetchParams[]"
-                  },
-                  "typeName": {
-                    "baseType": {
-                      "id": 6195,
-                      "nodeType": "UserDefinedTypeName",
-                      "pathNode": {
-                        "id": 6194,
-                        "name": "DeployFetchParams",
-                        "nodeType": "IdentifierPath",
-                        "referencedDeclaration": 6037,
-                        "src": "339:17:32"
-                      },
-                      "referencedDeclaration": 6037,
-                      "src": "339:17:32",
-                      "typeDescriptions": {
-                        "typeIdentifier": "t_struct$_DeployFetchParams_$6037_storage_ptr",
-                        "typeString": "struct IShared.DeployFetchParams"
-                      }
-                    },
-                    "id": 6196,
-                    "nodeType": "ArrayTypeName",
-                    "src": "339:19:32",
-                    "typeDescriptions": {
-                      "typeIdentifier": "t_array$_t_struct$_DeployFetchParams_$6037_storage_$dyn_storage_ptr",
-                      "typeString": "struct IShared.DeployFetchParams[]"
-                    }
-                  },
-                  "visibility": "internal"
-                },
-                {
-                  "constant": false,
-                  "id": 6201,
-                  "mutability": "mutable",
-                  "name": "fetchParamsArray",
-                  "nameLocation": "423:16:32",
-                  "nodeType": "VariableDeclaration",
-                  "scope": 6208,
-                  "src": "400:39:32",
-                  "stateVariable": false,
-                  "storageLocation": "calldata",
-                  "typeDescriptions": {
-                    "typeIdentifier": "t_array$_t_struct$_FetchParams_$6042_calldata_ptr_$dyn_calldata_ptr",
-                    "typeString": "struct IShared.FetchParams[]"
-                  },
-                  "typeName": {
-                    "baseType": {
-                      "id": 6199,
-                      "nodeType": "UserDefinedTypeName",
-                      "pathNode": {
-                        "id": 6198,
-                        "name": "FetchParams",
-                        "nodeType": "IdentifierPath",
-                        "referencedDeclaration": 6042,
-                        "src": "400:11:32"
-                      },
-                      "referencedDeclaration": 6042,
-                      "src": "400:11:32",
-                      "typeDescriptions": {
-                        "typeIdentifier": "t_struct$_FetchParams_$6042_storage_ptr",
-                        "typeString": "struct IShared.FetchParams"
-                      }
-                    },
-                    "id": 6200,
-                    "nodeType": "ArrayTypeName",
-                    "src": "400:13:32",
-                    "typeDescriptions": {
-                      "typeIdentifier": "t_array$_t_struct$_FetchParams_$6042_storage_$dyn_storage_ptr",
-                      "typeString": "struct IShared.FetchParams[]"
-                    }
-                  },
-                  "visibility": "internal"
-                },
-                {
-                  "constant": false,
-                  "id": 6205,
-                  "mutability": "mutable",
-                  "name": "transferParamsArray",
-                  "nameLocation": "475:19:32",
-                  "nodeType": "VariableDeclaration",
-                  "scope": 6208,
-                  "src": "449:45:32",
-                  "stateVariable": false,
-                  "storageLocation": "calldata",
-                  "typeDescriptions": {
-                    "typeIdentifier": "t_array$_t_struct$_TransferParams_$6032_calldata_ptr_$dyn_calldata_ptr",
-                    "typeString": "struct IShared.TransferParams[]"
-                  },
-                  "typeName": {
-                    "baseType": {
-                      "id": 6203,
-                      "nodeType": "UserDefinedTypeName",
-                      "pathNode": {
-                        "id": 6202,
-                        "name": "TransferParams",
-                        "nodeType": "IdentifierPath",
-                        "referencedDeclaration": 6032,
-                        "src": "449:14:32"
-                      },
-                      "referencedDeclaration": 6032,
-                      "src": "449:14:32",
-                      "typeDescriptions": {
-                        "typeIdentifier": "t_struct$_TransferParams_$6032_storage_ptr",
-                        "typeString": "struct IShared.TransferParams"
-                      }
-                    },
-                    "id": 6204,
-                    "nodeType": "ArrayTypeName",
-                    "src": "449:16:32",
-                    "typeDescriptions": {
-                      "typeIdentifier": "t_array$_t_struct$_TransferParams_$6032_storage_$dyn_storage_ptr",
-                      "typeString": "struct IShared.TransferParams[]"
-                    }
-                  },
-                  "visibility": "internal"
-                }
-              ],
-              "src": "295:205:32"
-            },
-            "returnParameters": {
-              "id": 6207,
-              "nodeType": "ParameterList",
-              "parameters": [],
-              "src": "509:0:32"
-            },
-            "scope": 6352,
-            "src": "278:232:32",
-            "stateMutability": "nonpayable",
-            "virtual": false,
-            "visibility": "external"
-          },
-          {
-            "functionSelector": "b03b6a57",
-            "id": 6217,
-            "implemented": false,
-            "kind": "function",
-            "modifiers": [],
-            "name": "transfer",
-            "nameLocation": "861:8:32",
-            "nodeType": "FunctionDefinition",
-            "parameters": {
-              "id": 6215,
-              "nodeType": "ParameterList",
-              "parameters": [
-                {
-                  "constant": false,
-                  "id": 6211,
-                  "mutability": "mutable",
-                  "name": "sigData",
-                  "nameLocation": "887:7:32",
-                  "nodeType": "VariableDeclaration",
-                  "scope": 6217,
-                  "src": "870:24:32",
-                  "stateVariable": false,
-                  "storageLocation": "calldata",
-                  "typeDescriptions": {
-                    "typeIdentifier": "t_struct$_SigData_$6025_calldata_ptr",
-                    "typeString": "struct IShared.SigData"
-                  },
-                  "typeName": {
-                    "id": 6210,
-                    "nodeType": "UserDefinedTypeName",
-                    "pathNode": {
-                      "id": 6209,
-                      "name": "SigData",
-                      "nodeType": "IdentifierPath",
-                      "referencedDeclaration": 6025,
-                      "src": "870:7:32"
-                    },
-                    "referencedDeclaration": 6025,
-                    "src": "870:7:32",
-                    "typeDescriptions": {
-                      "typeIdentifier": "t_struct$_SigData_$6025_storage_ptr",
-                      "typeString": "struct IShared.SigData"
-                    }
-                  },
-                  "visibility": "internal"
-                },
-                {
-                  "constant": false,
-                  "id": 6214,
-                  "mutability": "mutable",
-                  "name": "transferParams",
-                  "nameLocation": "920:14:32",
-                  "nodeType": "VariableDeclaration",
-                  "scope": 6217,
-                  "src": "896:38:32",
-                  "stateVariable": false,
-                  "storageLocation": "calldata",
-                  "typeDescriptions": {
-                    "typeIdentifier": "t_struct$_TransferParams_$6032_calldata_ptr",
-                    "typeString": "struct IShared.TransferParams"
-                  },
-                  "typeName": {
-                    "id": 6213,
-                    "nodeType": "UserDefinedTypeName",
-                    "pathNode": {
-                      "id": 6212,
-                      "name": "TransferParams",
-                      "nodeType": "IdentifierPath",
-                      "referencedDeclaration": 6032,
-                      "src": "896:14:32"
-                    },
-                    "referencedDeclaration": 6032,
-                    "src": "896:14:32",
-                    "typeDescriptions": {
-                      "typeIdentifier": "t_struct$_TransferParams_$6032_storage_ptr",
-                      "typeString": "struct IShared.TransferParams"
-                    }
-                  },
-                  "visibility": "internal"
-                }
-              ],
-              "src": "869:66:32"
-            },
-            "returnParameters": {
-              "id": 6216,
-              "nodeType": "ParameterList",
-              "parameters": [],
-              "src": "944:0:32"
-            },
-            "scope": 6352,
-            "src": "852:93:32",
-            "stateMutability": "nonpayable",
-            "virtual": false,
-            "visibility": "external"
-          },
-          {
-            "functionSelector": "e4d2f59b",
-            "id": 6227,
-            "implemented": false,
-            "kind": "function",
-            "modifiers": [],
-            "name": "transferBatch",
-            "nameLocation": "960:13:32",
-            "nodeType": "FunctionDefinition",
-            "parameters": {
-              "id": 6225,
-              "nodeType": "ParameterList",
-              "parameters": [
-                {
-                  "constant": false,
-                  "id": 6220,
-                  "mutability": "mutable",
-                  "name": "sigData",
-                  "nameLocation": "991:7:32",
-                  "nodeType": "VariableDeclaration",
-                  "scope": 6227,
-                  "src": "974:24:32",
-                  "stateVariable": false,
-                  "storageLocation": "calldata",
-                  "typeDescriptions": {
-                    "typeIdentifier": "t_struct$_SigData_$6025_calldata_ptr",
-                    "typeString": "struct IShared.SigData"
-                  },
-                  "typeName": {
-                    "id": 6219,
-                    "nodeType": "UserDefinedTypeName",
-                    "pathNode": {
-                      "id": 6218,
-                      "name": "SigData",
-                      "nodeType": "IdentifierPath",
-                      "referencedDeclaration": 6025,
-                      "src": "974:7:32"
-                    },
-                    "referencedDeclaration": 6025,
-                    "src": "974:7:32",
-                    "typeDescriptions": {
-                      "typeIdentifier": "t_struct$_SigData_$6025_storage_ptr",
-                      "typeString": "struct IShared.SigData"
-                    }
-                  },
-                  "visibility": "internal"
-                },
-                {
-                  "constant": false,
-                  "id": 6224,
-                  "mutability": "mutable",
-                  "name": "transferParamsArray",
-                  "nameLocation": "1026:19:32",
-                  "nodeType": "VariableDeclaration",
-                  "scope": 6227,
-                  "src": "1000:45:32",
-                  "stateVariable": false,
-                  "storageLocation": "calldata",
-                  "typeDescriptions": {
-                    "typeIdentifier": "t_array$_t_struct$_TransferParams_$6032_calldata_ptr_$dyn_calldata_ptr",
-                    "typeString": "struct IShared.TransferParams[]"
-                  },
-                  "typeName": {
-                    "baseType": {
-                      "id": 6222,
-                      "nodeType": "UserDefinedTypeName",
-                      "pathNode": {
-                        "id": 6221,
-                        "name": "TransferParams",
-                        "nodeType": "IdentifierPath",
-                        "referencedDeclaration": 6032,
-                        "src": "1000:14:32"
-                      },
-                      "referencedDeclaration": 6032,
-                      "src": "1000:14:32",
-                      "typeDescriptions": {
-                        "typeIdentifier": "t_struct$_TransferParams_$6032_storage_ptr",
-                        "typeString": "struct IShared.TransferParams"
-                      }
-                    },
-                    "id": 6223,
-                    "nodeType": "ArrayTypeName",
-                    "src": "1000:16:32",
-                    "typeDescriptions": {
-                      "typeIdentifier": "t_array$_t_struct$_TransferParams_$6032_storage_$dyn_storage_ptr",
-                      "typeString": "struct IShared.TransferParams[]"
-                    }
-                  },
-                  "visibility": "internal"
-                }
-              ],
-              "src": "973:73:32"
-            },
-            "returnParameters": {
-              "id": 6226,
-              "nodeType": "ParameterList",
-              "parameters": [],
-              "src": "1055:0:32"
-            },
-            "scope": 6352,
-            "src": "951:105:32",
-            "stateMutability": "nonpayable",
-            "virtual": false,
-            "visibility": "external"
-          },
-          {
-            "functionSelector": "59dc4a09",
-            "id": 6237,
-            "implemented": false,
-            "kind": "function",
-            "modifiers": [],
-            "name": "deployAndFetchBatch",
-            "nameLocation": "1407:19:32",
-            "nodeType": "FunctionDefinition",
-            "parameters": {
-              "id": 6235,
-              "nodeType": "ParameterList",
-              "parameters": [
-                {
-                  "constant": false,
-                  "id": 6230,
-                  "mutability": "mutable",
-                  "name": "sigData",
-                  "nameLocation": "1444:7:32",
-                  "nodeType": "VariableDeclaration",
-                  "scope": 6237,
-                  "src": "1427:24:32",
-                  "stateVariable": false,
-                  "storageLocation": "calldata",
-                  "typeDescriptions": {
-                    "typeIdentifier": "t_struct$_SigData_$6025_calldata_ptr",
-                    "typeString": "struct IShared.SigData"
-                  },
-                  "typeName": {
-                    "id": 6229,
-                    "nodeType": "UserDefinedTypeName",
-                    "pathNode": {
-                      "id": 6228,
-                      "name": "SigData",
-                      "nodeType": "IdentifierPath",
-                      "referencedDeclaration": 6025,
-                      "src": "1427:7:32"
-                    },
-                    "referencedDeclaration": 6025,
-                    "src": "1427:7:32",
-                    "typeDescriptions": {
-                      "typeIdentifier": "t_struct$_SigData_$6025_storage_ptr",
-                      "typeString": "struct IShared.SigData"
-                    }
-                  },
-                  "visibility": "internal"
-                },
-                {
-                  "constant": false,
-                  "id": 6234,
-                  "mutability": "mutable",
-                  "name": "deployFetchParamsArray",
-                  "nameLocation": "1482:22:32",
-                  "nodeType": "VariableDeclaration",
-                  "scope": 6237,
-                  "src": "1453:51:32",
-                  "stateVariable": false,
-                  "storageLocation": "calldata",
-                  "typeDescriptions": {
-                    "typeIdentifier": "t_array$_t_struct$_DeployFetchParams_$6037_calldata_ptr_$dyn_calldata_ptr",
-                    "typeString": "struct IShared.DeployFetchParams[]"
-                  },
-                  "typeName": {
-                    "baseType": {
-                      "id": 6232,
-                      "nodeType": "UserDefinedTypeName",
-                      "pathNode": {
-                        "id": 6231,
-                        "name": "DeployFetchParams",
-                        "nodeType": "IdentifierPath",
-                        "referencedDeclaration": 6037,
-                        "src": "1453:17:32"
-                      },
-                      "referencedDeclaration": 6037,
-                      "src": "1453:17:32",
-                      "typeDescriptions": {
-                        "typeIdentifier": "t_struct$_DeployFetchParams_$6037_storage_ptr",
-                        "typeString": "struct IShared.DeployFetchParams"
-                      }
-                    },
-                    "id": 6233,
-                    "nodeType": "ArrayTypeName",
-                    "src": "1453:19:32",
-                    "typeDescriptions": {
-                      "typeIdentifier": "t_array$_t_struct$_DeployFetchParams_$6037_storage_$dyn_storage_ptr",
-                      "typeString": "struct IShared.DeployFetchParams[]"
-                    }
-                  },
-                  "visibility": "internal"
-                }
-              ],
-              "src": "1426:79:32"
-            },
-            "returnParameters": {
-              "id": 6236,
-              "nodeType": "ParameterList",
-              "parameters": [],
-              "src": "1522:0:32"
-            },
-            "scope": 6352,
-            "src": "1398:125:32",
-            "stateMutability": "nonpayable",
-            "virtual": false,
-            "visibility": "external"
-          },
-          {
-            "functionSelector": "79c83ad7",
-            "id": 6247,
-            "implemented": false,
-            "kind": "function",
-            "modifiers": [],
-            "name": "fetchBatch",
-            "nameLocation": "1538:10:32",
-            "nodeType": "FunctionDefinition",
-            "parameters": {
-              "id": 6245,
-              "nodeType": "ParameterList",
-              "parameters": [
-                {
-                  "constant": false,
-                  "id": 6240,
-                  "mutability": "mutable",
-                  "name": "sigData",
-                  "nameLocation": "1566:7:32",
-                  "nodeType": "VariableDeclaration",
-                  "scope": 6247,
-                  "src": "1549:24:32",
-                  "stateVariable": false,
-                  "storageLocation": "calldata",
-                  "typeDescriptions": {
-                    "typeIdentifier": "t_struct$_SigData_$6025_calldata_ptr",
-                    "typeString": "struct IShared.SigData"
-                  },
-                  "typeName": {
-                    "id": 6239,
-                    "nodeType": "UserDefinedTypeName",
-                    "pathNode": {
-                      "id": 6238,
-                      "name": "SigData",
-                      "nodeType": "IdentifierPath",
-                      "referencedDeclaration": 6025,
-                      "src": "1549:7:32"
-                    },
-                    "referencedDeclaration": 6025,
-                    "src": "1549:7:32",
-                    "typeDescriptions": {
-                      "typeIdentifier": "t_struct$_SigData_$6025_storage_ptr",
-                      "typeString": "struct IShared.SigData"
-                    }
-                  },
-                  "visibility": "internal"
-                },
-                {
-                  "constant": false,
-                  "id": 6244,
-                  "mutability": "mutable",
-                  "name": "fetchParamsArray",
-                  "nameLocation": "1598:16:32",
-                  "nodeType": "VariableDeclaration",
-                  "scope": 6247,
-                  "src": "1575:39:32",
-                  "stateVariable": false,
-                  "storageLocation": "calldata",
-                  "typeDescriptions": {
-                    "typeIdentifier": "t_array$_t_struct$_FetchParams_$6042_calldata_ptr_$dyn_calldata_ptr",
-                    "typeString": "struct IShared.FetchParams[]"
-                  },
-                  "typeName": {
-                    "baseType": {
-                      "id": 6242,
-                      "nodeType": "UserDefinedTypeName",
-                      "pathNode": {
-                        "id": 6241,
-                        "name": "FetchParams",
-                        "nodeType": "IdentifierPath",
-                        "referencedDeclaration": 6042,
-                        "src": "1575:11:32"
-                      },
-                      "referencedDeclaration": 6042,
-                      "src": "1575:11:32",
-                      "typeDescriptions": {
-                        "typeIdentifier": "t_struct$_FetchParams_$6042_storage_ptr",
-                        "typeString": "struct IShared.FetchParams"
-                      }
-                    },
-                    "id": 6243,
-                    "nodeType": "ArrayTypeName",
-                    "src": "1575:13:32",
-                    "typeDescriptions": {
-                      "typeIdentifier": "t_array$_t_struct$_FetchParams_$6042_storage_$dyn_storage_ptr",
-                      "typeString": "struct IShared.FetchParams[]"
-                    }
-                  },
-                  "visibility": "internal"
-                }
-              ],
-              "src": "1548:67:32"
-            },
-            "returnParameters": {
-              "id": 6246,
-              "nodeType": "ParameterList",
-              "parameters": [],
-              "src": "1624:0:32"
-            },
-            "scope": 6352,
-            "src": "1529:96:32",
-            "stateMutability": "nonpayable",
-            "virtual": false,
-            "visibility": "external"
-          },
-          {
-            "functionSelector": "5942b3bc",
-            "id": 6261,
-            "implemented": false,
-            "kind": "function",
-            "modifiers": [],
-            "name": "xSwapToken",
-            "nameLocation": "1976:10:32",
-            "nodeType": "FunctionDefinition",
-            "parameters": {
-              "id": 6259,
-              "nodeType": "ParameterList",
-              "parameters": [
-                {
-                  "constant": false,
-                  "id": 6249,
-                  "mutability": "mutable",
-                  "name": "dstChain",
-                  "nameLocation": "2003:8:32",
-                  "nodeType": "VariableDeclaration",
-                  "scope": 6261,
-                  "src": "1996:15:32",
-                  "stateVariable": false,
-                  "storageLocation": "default",
-                  "typeDescriptions": {
-                    "typeIdentifier": "t_uint32",
-                    "typeString": "uint32"
-                  },
-                  "typeName": {
-                    "id": 6248,
-                    "name": "uint32",
-                    "nodeType": "ElementaryTypeName",
-                    "src": "1996:6:32",
-                    "typeDescriptions": {
-                      "typeIdentifier": "t_uint32",
-                      "typeString": "uint32"
-                    }
-                  },
-                  "visibility": "internal"
-                },
-                {
-                  "constant": false,
-                  "id": 6251,
-                  "mutability": "mutable",
-                  "name": "dstAddress",
-                  "nameLocation": "2035:10:32",
-                  "nodeType": "VariableDeclaration",
-                  "scope": 6261,
-                  "src": "2021:24:32",
-                  "stateVariable": false,
-                  "storageLocation": "memory",
-                  "typeDescriptions": {
-                    "typeIdentifier": "t_string_memory_ptr",
-                    "typeString": "string"
-                  },
-                  "typeName": {
-                    "id": 6250,
-                    "name": "string",
-                    "nodeType": "ElementaryTypeName",
-                    "src": "2021:6:32",
-                    "typeDescriptions": {
-                      "typeIdentifier": "t_string_storage_ptr",
-                      "typeString": "string"
-                    }
-                  },
-                  "visibility": "internal"
-                },
-                {
-                  "constant": false,
-                  "id": 6253,
-                  "mutability": "mutable",
-                  "name": "swapIntent",
-                  "nameLocation": "2069:10:32",
-                  "nodeType": "VariableDeclaration",
-                  "scope": 6261,
-                  "src": "2055:24:32",
-                  "stateVariable": false,
-                  "storageLocation": "memory",
-                  "typeDescriptions": {
-                    "typeIdentifier": "t_string_memory_ptr",
-                    "typeString": "string"
-                  },
-                  "typeName": {
-                    "id": 6252,
-                    "name": "string",
-                    "nodeType": "ElementaryTypeName",
-                    "src": "2055:6:32",
-                    "typeDescriptions": {
-                      "typeIdentifier": "t_string_storage_ptr",
-                      "typeString": "string"
-                    }
-                  },
-                  "visibility": "internal"
-                },
-                {
-                  "constant": false,
-                  "id": 6256,
-                  "mutability": "mutable",
-                  "name": "srcToken",
-                  "nameLocation": "2096:8:32",
-                  "nodeType": "VariableDeclaration",
-                  "scope": 6261,
-                  "src": "2089:15:32",
-                  "stateVariable": false,
-                  "storageLocation": "default",
-                  "typeDescriptions": {
-                    "typeIdentifier": "t_contract$_IERC20_$7969",
-                    "typeString": "contract IERC20"
-                  },
-                  "typeName": {
-                    "id": 6255,
-                    "nodeType": "UserDefinedTypeName",
-                    "pathNode": {
-                      "id": 6254,
-                      "name": "IERC20",
-                      "nodeType": "IdentifierPath",
-                      "referencedDeclaration": 7969,
-                      "src": "2089:6:32"
-                    },
-                    "referencedDeclaration": 7969,
-                    "src": "2089:6:32",
-                    "typeDescriptions": {
-                      "typeIdentifier": "t_contract$_IERC20_$7969",
-                      "typeString": "contract IERC20"
-                    }
-                  },
-                  "visibility": "internal"
-                },
-                {
-                  "constant": false,
-                  "id": 6258,
-                  "mutability": "mutable",
-                  "name": "amount",
-                  "nameLocation": "2122:6:32",
-                  "nodeType": "VariableDeclaration",
-                  "scope": 6261,
-                  "src": "2114:14:32",
-                  "stateVariable": false,
-                  "storageLocation": "default",
-                  "typeDescriptions": {
-                    "typeIdentifier": "t_uint256",
-                    "typeString": "uint256"
-                  },
-                  "typeName": {
-                    "id": 6257,
-                    "name": "uint256",
-                    "nodeType": "ElementaryTypeName",
-                    "src": "2114:7:32",
-                    "typeDescriptions": {
-                      "typeIdentifier": "t_uint256",
-                      "typeString": "uint256"
-                    }
-                  },
-                  "visibility": "internal"
-                }
-              ],
-              "src": "1986:148:32"
-            },
-            "returnParameters": {
-              "id": 6260,
-              "nodeType": "ParameterList",
-              "parameters": [],
-              "src": "2143:0:32"
-            },
-            "scope": 6352,
-            "src": "1967:177:32",
-            "stateMutability": "nonpayable",
-            "virtual": false,
-            "visibility": "external"
-          },
-          {
-            "functionSelector": "27610a60",
-            "id": 6270,
-            "implemented": false,
-            "kind": "function",
-            "modifiers": [],
-            "name": "xSwapNative",
-            "nameLocation": "2159:11:32",
-            "nodeType": "FunctionDefinition",
-            "parameters": {
-              "id": 6268,
-              "nodeType": "ParameterList",
-              "parameters": [
-                {
-                  "constant": false,
-                  "id": 6263,
-                  "mutability": "mutable",
-                  "name": "dstChain",
-                  "nameLocation": "2187:8:32",
-                  "nodeType": "VariableDeclaration",
-                  "scope": 6270,
-                  "src": "2180:15:32",
-                  "stateVariable": false,
-                  "storageLocation": "default",
-                  "typeDescriptions": {
-                    "typeIdentifier": "t_uint32",
-                    "typeString": "uint32"
-                  },
-                  "typeName": {
-                    "id": 6262,
-                    "name": "uint32",
-                    "nodeType": "ElementaryTypeName",
-                    "src": "2180:6:32",
-                    "typeDescriptions": {
-                      "typeIdentifier": "t_uint32",
-                      "typeString": "uint32"
-                    }
-                  },
-                  "visibility": "internal"
-                },
-                {
-                  "constant": false,
-                  "id": 6265,
-                  "mutability": "mutable",
-                  "name": "dstAddress",
-                  "nameLocation": "2219:10:32",
-                  "nodeType": "VariableDeclaration",
-                  "scope": 6270,
-                  "src": "2205:24:32",
-                  "stateVariable": false,
-                  "storageLocation": "memory",
-                  "typeDescriptions": {
-                    "typeIdentifier": "t_string_memory_ptr",
-                    "typeString": "string"
-                  },
-                  "typeName": {
-                    "id": 6264,
-                    "name": "string",
-                    "nodeType": "ElementaryTypeName",
-                    "src": "2205:6:32",
-                    "typeDescriptions": {
-                      "typeIdentifier": "t_string_storage_ptr",
-                      "typeString": "string"
-                    }
-                  },
-                  "visibility": "internal"
-                },
-                {
-                  "constant": false,
-                  "id": 6267,
-                  "mutability": "mutable",
-                  "name": "swapIntent",
-                  "nameLocation": "2253:10:32",
-                  "nodeType": "VariableDeclaration",
-                  "scope": 6270,
-                  "src": "2239:24:32",
-                  "stateVariable": false,
-                  "storageLocation": "memory",
-                  "typeDescriptions": {
-                    "typeIdentifier": "t_string_memory_ptr",
-                    "typeString": "string"
-                  },
-                  "typeName": {
-                    "id": 6266,
-                    "name": "string",
-                    "nodeType": "ElementaryTypeName",
-                    "src": "2239:6:32",
-                    "typeDescriptions": {
-                      "typeIdentifier": "t_string_storage_ptr",
-                      "typeString": "string"
-                    }
-                  },
-                  "visibility": "internal"
-                }
-              ],
-              "src": "2170:99:32"
-            },
-            "returnParameters": {
-              "id": 6269,
-              "nodeType": "ParameterList",
-              "parameters": [],
-              "src": "2286:0:32"
-            },
-            "scope": 6352,
-            "src": "2150:137:32",
-            "stateMutability": "payable",
-            "virtual": false,
-            "visibility": "external"
-          },
-          {
-            "functionSelector": "91495fbc",
-            "id": 6285,
-            "implemented": false,
-            "kind": "function",
-            "modifiers": [],
-            "name": "xCallNative",
-            "nameLocation": "2638:11:32",
-            "nodeType": "FunctionDefinition",
-            "parameters": {
-              "id": 6283,
-              "nodeType": "ParameterList",
-              "parameters": [
-                {
-                  "constant": false,
-                  "id": 6272,
-                  "mutability": "mutable",
-                  "name": "dstChain",
-                  "nameLocation": "2666:8:32",
-                  "nodeType": "VariableDeclaration",
-                  "scope": 6285,
-                  "src": "2659:15:32",
-                  "stateVariable": false,
-                  "storageLocation": "default",
-                  "typeDescriptions": {
-                    "typeIdentifier": "t_uint32",
-                    "typeString": "uint32"
-                  },
-                  "typeName": {
-                    "id": 6271,
-                    "name": "uint32",
-                    "nodeType": "ElementaryTypeName",
-                    "src": "2659:6:32",
-                    "typeDescriptions": {
-                      "typeIdentifier": "t_uint32",
-                      "typeString": "uint32"
-                    }
-                  },
-                  "visibility": "internal"
-                },
-                {
-                  "constant": false,
-                  "id": 6274,
-                  "mutability": "mutable",
-                  "name": "dstAddress",
-                  "nameLocation": "2698:10:32",
-                  "nodeType": "VariableDeclaration",
-                  "scope": 6285,
-                  "src": "2684:24:32",
-                  "stateVariable": false,
-                  "storageLocation": "memory",
-                  "typeDescriptions": {
-                    "typeIdentifier": "t_string_memory_ptr",
-                    "typeString": "string"
-                  },
-                  "typeName": {
-                    "id": 6273,
-                    "name": "string",
-                    "nodeType": "ElementaryTypeName",
-                    "src": "2684:6:32",
-                    "typeDescriptions": {
-                      "typeIdentifier": "t_string_storage_ptr",
-                      "typeString": "string"
-                    }
-                  },
-                  "visibility": "internal"
-                },
-                {
-                  "constant": false,
-                  "id": 6276,
-                  "mutability": "mutable",
-                  "name": "swapIntent",
-                  "nameLocation": "2732:10:32",
-                  "nodeType": "VariableDeclaration",
-                  "scope": 6285,
-                  "src": "2718:24:32",
-                  "stateVariable": false,
-                  "storageLocation": "memory",
-                  "typeDescriptions": {
-                    "typeIdentifier": "t_string_memory_ptr",
-                    "typeString": "string"
-                  },
-                  "typeName": {
-                    "id": 6275,
-                    "name": "string",
-                    "nodeType": "ElementaryTypeName",
-                    "src": "2718:6:32",
-                    "typeDescriptions": {
-                      "typeIdentifier": "t_string_storage_ptr",
-                      "typeString": "string"
-                    }
-                  },
-                  "visibility": "internal"
-                },
-                {
-                  "constant": false,
-                  "id": 6278,
-                  "mutability": "mutable",
-                  "name": "message",
-                  "nameLocation": "2767:7:32",
-                  "nodeType": "VariableDeclaration",
-                  "scope": 6285,
-                  "src": "2752:22:32",
-                  "stateVariable": false,
-                  "storageLocation": "calldata",
-                  "typeDescriptions": {
-                    "typeIdentifier": "t_bytes_calldata_ptr",
-                    "typeString": "bytes"
-                  },
-                  "typeName": {
-                    "id": 6277,
-                    "name": "bytes",
-                    "nodeType": "ElementaryTypeName",
-                    "src": "2752:5:32",
-                    "typeDescriptions": {
-                      "typeIdentifier": "t_bytes_storage_ptr",
-                      "typeString": "bytes"
-                    }
-                  },
-                  "visibility": "internal"
-                },
-                {
-                  "constant": false,
-                  "id": 6280,
-                  "mutability": "mutable",
-                  "name": "dstNativeGas",
-                  "nameLocation": "2792:12:32",
-                  "nodeType": "VariableDeclaration",
-                  "scope": 6285,
-                  "src": "2784:20:32",
-                  "stateVariable": false,
-                  "storageLocation": "default",
-                  "typeDescriptions": {
-                    "typeIdentifier": "t_uint256",
-                    "typeString": "uint256"
-                  },
-                  "typeName": {
-                    "id": 6279,
-                    "name": "uint256",
-                    "nodeType": "ElementaryTypeName",
-                    "src": "2784:7:32",
-                    "typeDescriptions": {
-                      "typeIdentifier": "t_uint256",
-                      "typeString": "uint256"
-                    }
-                  },
-                  "visibility": "internal"
-                },
-                {
-                  "constant": false,
-                  "id": 6282,
-                  "mutability": "mutable",
-                  "name": "refundAddress",
-                  "nameLocation": "2822:13:32",
-                  "nodeType": "VariableDeclaration",
-                  "scope": 6285,
-                  "src": "2814:21:32",
-                  "stateVariable": false,
-                  "storageLocation": "default",
-                  "typeDescriptions": {
-                    "typeIdentifier": "t_address",
-                    "typeString": "address"
-                  },
-                  "typeName": {
-                    "id": 6281,
-                    "name": "address",
-                    "nodeType": "ElementaryTypeName",
-                    "src": "2814:7:32",
-                    "stateMutability": "nonpayable",
-                    "typeDescriptions": {
-                      "typeIdentifier": "t_address",
-                      "typeString": "address"
-                    }
-                  },
-                  "visibility": "internal"
-                }
-              ],
-              "src": "2649:192:32"
-            },
-            "returnParameters": {
-              "id": 6284,
-              "nodeType": "ParameterList",
-              "parameters": [],
-              "src": "2858:0:32"
-            },
-            "scope": 6352,
-            "src": "2629:230:32",
-            "stateMutability": "payable",
-            "virtual": false,
-            "visibility": "external"
-          },
-          {
-            "functionSelector": "386e8fe5",
-            "id": 6305,
-            "implemented": false,
-            "kind": "function",
-            "modifiers": [],
-            "name": "xCallToken",
-            "nameLocation": "2874:10:32",
-            "nodeType": "FunctionDefinition",
-            "parameters": {
-              "id": 6303,
-              "nodeType": "ParameterList",
-              "parameters": [
-                {
-                  "constant": false,
-                  "id": 6287,
-                  "mutability": "mutable",
-                  "name": "dstChain",
-                  "nameLocation": "2901:8:32",
-                  "nodeType": "VariableDeclaration",
-                  "scope": 6305,
-                  "src": "2894:15:32",
-                  "stateVariable": false,
-                  "storageLocation": "default",
-                  "typeDescriptions": {
-                    "typeIdentifier": "t_uint32",
-                    "typeString": "uint32"
-                  },
-                  "typeName": {
-                    "id": 6286,
-                    "name": "uint32",
-                    "nodeType": "ElementaryTypeName",
-                    "src": "2894:6:32",
-                    "typeDescriptions": {
-                      "typeIdentifier": "t_uint32",
-                      "typeString": "uint32"
-                    }
-                  },
-                  "visibility": "internal"
-                },
-                {
-                  "constant": false,
-                  "id": 6289,
-                  "mutability": "mutable",
-                  "name": "dstAddress",
-                  "nameLocation": "2933:10:32",
-                  "nodeType": "VariableDeclaration",
-                  "scope": 6305,
-                  "src": "2919:24:32",
-                  "stateVariable": false,
-                  "storageLocation": "memory",
-                  "typeDescriptions": {
-                    "typeIdentifier": "t_string_memory_ptr",
-                    "typeString": "string"
-                  },
-                  "typeName": {
-                    "id": 6288,
-                    "name": "string",
-                    "nodeType": "ElementaryTypeName",
-                    "src": "2919:6:32",
-                    "typeDescriptions": {
-                      "typeIdentifier": "t_string_storage_ptr",
-                      "typeString": "string"
-                    }
-                  },
-                  "visibility": "internal"
-                },
-                {
-                  "constant": false,
-                  "id": 6291,
-                  "mutability": "mutable",
-                  "name": "swapIntent",
-                  "nameLocation": "2967:10:32",
-                  "nodeType": "VariableDeclaration",
-                  "scope": 6305,
-                  "src": "2953:24:32",
-                  "stateVariable": false,
-                  "storageLocation": "memory",
-                  "typeDescriptions": {
-                    "typeIdentifier": "t_string_memory_ptr",
-                    "typeString": "string"
-                  },
-                  "typeName": {
-                    "id": 6290,
-                    "name": "string",
-                    "nodeType": "ElementaryTypeName",
-                    "src": "2953:6:32",
-                    "typeDescriptions": {
-                      "typeIdentifier": "t_string_storage_ptr",
-                      "typeString": "string"
-                    }
-                  },
-                  "visibility": "internal"
-                },
-                {
-                  "constant": false,
-                  "id": 6293,
-                  "mutability": "mutable",
-                  "name": "message",
-                  "nameLocation": "3002:7:32",
-                  "nodeType": "VariableDeclaration",
-                  "scope": 6305,
-                  "src": "2987:22:32",
-                  "stateVariable": false,
-                  "storageLocation": "calldata",
-                  "typeDescriptions": {
-                    "typeIdentifier": "t_bytes_calldata_ptr",
-                    "typeString": "bytes"
-                  },
-                  "typeName": {
-                    "id": 6292,
-                    "name": "bytes",
-                    "nodeType": "ElementaryTypeName",
-                    "src": "2987:5:32",
-                    "typeDescriptions": {
-                      "typeIdentifier": "t_bytes_storage_ptr",
-                      "typeString": "bytes"
-                    }
-                  },
-                  "visibility": "internal"
-                },
-                {
-                  "constant": false,
-                  "id": 6295,
-                  "mutability": "mutable",
-                  "name": "dstNativeGas",
-                  "nameLocation": "3027:12:32",
-                  "nodeType": "VariableDeclaration",
-                  "scope": 6305,
-                  "src": "3019:20:32",
-                  "stateVariable": false,
-                  "storageLocation": "default",
-                  "typeDescriptions": {
-                    "typeIdentifier": "t_uint256",
-                    "typeString": "uint256"
-                  },
-                  "typeName": {
-                    "id": 6294,
-                    "name": "uint256",
-                    "nodeType": "ElementaryTypeName",
-                    "src": "3019:7:32",
-                    "typeDescriptions": {
-                      "typeIdentifier": "t_uint256",
-                      "typeString": "uint256"
-                    }
-                  },
-                  "visibility": "internal"
-                },
-                {
-                  "constant": false,
-                  "id": 6298,
-                  "mutability": "mutable",
-                  "name": "srcToken",
-                  "nameLocation": "3056:8:32",
-                  "nodeType": "VariableDeclaration",
-                  "scope": 6305,
-                  "src": "3049:15:32",
-                  "stateVariable": false,
-                  "storageLocation": "default",
-                  "typeDescriptions": {
-                    "typeIdentifier": "t_contract$_IERC20_$7969",
-                    "typeString": "contract IERC20"
-                  },
-                  "typeName": {
-                    "id": 6297,
-                    "nodeType": "UserDefinedTypeName",
-                    "pathNode": {
-                      "id": 6296,
-                      "name": "IERC20",
-                      "nodeType": "IdentifierPath",
-                      "referencedDeclaration": 7969,
-                      "src": "3049:6:32"
-                    },
-                    "referencedDeclaration": 7969,
-                    "src": "3049:6:32",
-                    "typeDescriptions": {
-                      "typeIdentifier": "t_contract$_IERC20_$7969",
-                      "typeString": "contract IERC20"
-                    }
-                  },
-                  "visibility": "internal"
-                },
-                {
-                  "constant": false,
-                  "id": 6300,
-                  "mutability": "mutable",
-                  "name": "amount",
-                  "nameLocation": "3082:6:32",
-                  "nodeType": "VariableDeclaration",
-                  "scope": 6305,
-                  "src": "3074:14:32",
-                  "stateVariable": false,
-                  "storageLocation": "default",
-                  "typeDescriptions": {
-                    "typeIdentifier": "t_uint256",
-                    "typeString": "uint256"
-                  },
-                  "typeName": {
-                    "id": 6299,
-                    "name": "uint256",
-                    "nodeType": "ElementaryTypeName",
-                    "src": "3074:7:32",
-                    "typeDescriptions": {
-                      "typeIdentifier": "t_uint256",
-                      "typeString": "uint256"
-                    }
-                  },
-                  "visibility": "internal"
-                },
-                {
-                  "constant": false,
-                  "id": 6302,
-                  "mutability": "mutable",
-                  "name": "refundAddress",
-                  "nameLocation": "3106:13:32",
-                  "nodeType": "VariableDeclaration",
-                  "scope": 6305,
-                  "src": "3098:21:32",
-                  "stateVariable": false,
-                  "storageLocation": "default",
-                  "typeDescriptions": {
-                    "typeIdentifier": "t_address",
-                    "typeString": "address"
-                  },
-                  "typeName": {
-                    "id": 6301,
-                    "name": "address",
-                    "nodeType": "ElementaryTypeName",
-                    "src": "3098:7:32",
-                    "stateMutability": "nonpayable",
-                    "typeDescriptions": {
-                      "typeIdentifier": "t_address",
-                      "typeString": "address"
-                    }
-                  },
-                  "visibility": "internal"
-                }
-              ],
-              "src": "2884:241:32"
-            },
-            "returnParameters": {
-              "id": 6304,
-              "nodeType": "ParameterList",
-              "parameters": [],
-              "src": "3134:0:32"
-            },
-            "scope": 6352,
-            "src": "2865:270:32",
-            "stateMutability": "nonpayable",
-            "virtual": false,
-            "visibility": "external"
-          },
-          {
-            "functionSelector": "774d6801",
-            "id": 6320,
-            "implemented": false,
-            "kind": "function",
-            "modifiers": [],
-            "name": "executexSwapAndCall",
-            "nameLocation": "3486:19:32",
-            "nodeType": "FunctionDefinition",
-            "parameters": {
-              "id": 6318,
-              "nodeType": "ParameterList",
-              "parameters": [
-                {
-                  "constant": false,
-                  "id": 6308,
-                  "mutability": "mutable",
-                  "name": "sigData",
-                  "nameLocation": "3532:7:32",
-                  "nodeType": "VariableDeclaration",
-                  "scope": 6320,
-                  "src": "3515:24:32",
-                  "stateVariable": false,
-                  "storageLocation": "calldata",
-                  "typeDescriptions": {
-                    "typeIdentifier": "t_struct$_SigData_$6025_calldata_ptr",
-                    "typeString": "struct IShared.SigData"
-                  },
-                  "typeName": {
-                    "id": 6307,
-                    "nodeType": "UserDefinedTypeName",
-                    "pathNode": {
-                      "id": 6306,
-                      "name": "SigData",
-                      "nodeType": "IdentifierPath",
-                      "referencedDeclaration": 6025,
-                      "src": "3515:7:32"
-                    },
-                    "referencedDeclaration": 6025,
-                    "src": "3515:7:32",
-                    "typeDescriptions": {
-                      "typeIdentifier": "t_struct$_SigData_$6025_storage_ptr",
-                      "typeString": "struct IShared.SigData"
-                    }
-                  },
-                  "visibility": "internal"
-                },
-                {
-                  "constant": false,
-                  "id": 6311,
-                  "mutability": "mutable",
-                  "name": "transferParams",
-                  "nameLocation": "3573:14:32",
-                  "nodeType": "VariableDeclaration",
-                  "scope": 6320,
-                  "src": "3549:38:32",
-                  "stateVariable": false,
-                  "storageLocation": "calldata",
-                  "typeDescriptions": {
-                    "typeIdentifier": "t_struct$_TransferParams_$6032_calldata_ptr",
-                    "typeString": "struct IShared.TransferParams"
-                  },
-                  "typeName": {
-                    "id": 6310,
-                    "nodeType": "UserDefinedTypeName",
-                    "pathNode": {
-                      "id": 6309,
-                      "name": "TransferParams",
-                      "nodeType": "IdentifierPath",
-                      "referencedDeclaration": 6032,
-                      "src": "3549:14:32"
-                    },
-                    "referencedDeclaration": 6032,
-                    "src": "3549:14:32",
-                    "typeDescriptions": {
-                      "typeIdentifier": "t_struct$_TransferParams_$6032_storage_ptr",
-                      "typeString": "struct IShared.TransferParams"
-                    }
-                  },
-                  "visibility": "internal"
-                },
-                {
-                  "constant": false,
-                  "id": 6313,
-                  "mutability": "mutable",
-                  "name": "srcChain",
-                  "nameLocation": "3604:8:32",
-                  "nodeType": "VariableDeclaration",
-                  "scope": 6320,
-                  "src": "3597:15:32",
-                  "stateVariable": false,
-                  "storageLocation": "default",
-                  "typeDescriptions": {
-                    "typeIdentifier": "t_uint32",
-                    "typeString": "uint32"
-                  },
-                  "typeName": {
-                    "id": 6312,
-                    "name": "uint32",
-                    "nodeType": "ElementaryTypeName",
-                    "src": "3597:6:32",
-                    "typeDescriptions": {
-                      "typeIdentifier": "t_uint32",
-                      "typeString": "uint32"
-                    }
-                  },
-                  "visibility": "internal"
-                },
-                {
-                  "constant": false,
-                  "id": 6315,
-                  "mutability": "mutable",
-                  "name": "srcAddress",
-                  "nameLocation": "3638:10:32",
-                  "nodeType": "VariableDeclaration",
-                  "scope": 6320,
-                  "src": "3622:26:32",
-                  "stateVariable": false,
-                  "storageLocation": "calldata",
-                  "typeDescriptions": {
-                    "typeIdentifier": "t_string_calldata_ptr",
-                    "typeString": "string"
-                  },
-                  "typeName": {
-                    "id": 6314,
-                    "name": "string",
-                    "nodeType": "ElementaryTypeName",
-                    "src": "3622:6:32",
-                    "typeDescriptions": {
-                      "typeIdentifier": "t_string_storage_ptr",
-                      "typeString": "string"
-                    }
-                  },
-                  "visibility": "internal"
-                },
-                {
-                  "constant": false,
-                  "id": 6317,
-                  "mutability": "mutable",
-                  "name": "message",
-                  "nameLocation": "3673:7:32",
-                  "nodeType": "VariableDeclaration",
-                  "scope": 6320,
-                  "src": "3658:22:32",
-                  "stateVariable": false,
-                  "storageLocation": "calldata",
-                  "typeDescriptions": {
-                    "typeIdentifier": "t_bytes_calldata_ptr",
-                    "typeString": "bytes"
-                  },
-                  "typeName": {
-                    "id": 6316,
-                    "name": "bytes",
-                    "nodeType": "ElementaryTypeName",
-                    "src": "3658:5:32",
-                    "typeDescriptions": {
-                      "typeIdentifier": "t_bytes_storage_ptr",
-                      "typeString": "bytes"
-                    }
-                  },
-                  "visibility": "internal"
-                }
-              ],
-              "src": "3505:181:32"
-            },
-            "returnParameters": {
-              "id": 6319,
-              "nodeType": "ParameterList",
-              "parameters": [],
-              "src": "3695:0:32"
-            },
-            "scope": 6352,
-            "src": "3477:219:32",
-            "stateMutability": "nonpayable",
-            "virtual": false,
-            "visibility": "external"
-          },
-          {
-            "functionSelector": "674bdfe2",
-            "id": 6334,
-            "implemented": false,
-            "kind": "function",
-            "modifiers": [],
-            "name": "executexCall",
-            "nameLocation": "4046:12:32",
-            "nodeType": "FunctionDefinition",
-            "parameters": {
-              "id": 6332,
-              "nodeType": "ParameterList",
-              "parameters": [
-                {
-                  "constant": false,
-                  "id": 6323,
-                  "mutability": "mutable",
-                  "name": "sigData",
-                  "nameLocation": "4085:7:32",
-                  "nodeType": "VariableDeclaration",
-                  "scope": 6334,
-                  "src": "4068:24:32",
-                  "stateVariable": false,
-                  "storageLocation": "calldata",
-                  "typeDescriptions": {
-                    "typeIdentifier": "t_struct$_SigData_$6025_calldata_ptr",
-                    "typeString": "struct IShared.SigData"
-                  },
-                  "typeName": {
-                    "id": 6322,
-                    "nodeType": "UserDefinedTypeName",
-                    "pathNode": {
-                      "id": 6321,
-                      "name": "SigData",
-                      "nodeType": "IdentifierPath",
-                      "referencedDeclaration": 6025,
-                      "src": "4068:7:32"
-                    },
-                    "referencedDeclaration": 6025,
-                    "src": "4068:7:32",
-                    "typeDescriptions": {
-                      "typeIdentifier": "t_struct$_SigData_$6025_storage_ptr",
-                      "typeString": "struct IShared.SigData"
-                    }
-                  },
-                  "visibility": "internal"
-                },
-                {
-                  "constant": false,
-                  "id": 6325,
-                  "mutability": "mutable",
-                  "name": "recipient",
-                  "nameLocation": "4110:9:32",
-                  "nodeType": "VariableDeclaration",
-                  "scope": 6334,
-                  "src": "4102:17:32",
-                  "stateVariable": false,
-                  "storageLocation": "default",
-                  "typeDescriptions": {
-                    "typeIdentifier": "t_address",
-                    "typeString": "address"
-                  },
-                  "typeName": {
-                    "id": 6324,
-                    "name": "address",
-                    "nodeType": "ElementaryTypeName",
-                    "src": "4102:7:32",
-                    "stateMutability": "nonpayable",
-                    "typeDescriptions": {
-                      "typeIdentifier": "t_address",
-                      "typeString": "address"
-                    }
-                  },
-                  "visibility": "internal"
-                },
-                {
-                  "constant": false,
-                  "id": 6327,
-                  "mutability": "mutable",
-                  "name": "srcChain",
-                  "nameLocation": "4136:8:32",
-                  "nodeType": "VariableDeclaration",
-                  "scope": 6334,
-                  "src": "4129:15:32",
-                  "stateVariable": false,
-                  "storageLocation": "default",
-                  "typeDescriptions": {
-                    "typeIdentifier": "t_uint32",
-                    "typeString": "uint32"
-                  },
-                  "typeName": {
-                    "id": 6326,
-                    "name": "uint32",
-                    "nodeType": "ElementaryTypeName",
-                    "src": "4129:6:32",
-                    "typeDescriptions": {
-                      "typeIdentifier": "t_uint32",
-                      "typeString": "uint32"
-                    }
-                  },
-                  "visibility": "internal"
-                },
-                {
-                  "constant": false,
-                  "id": 6329,
-                  "mutability": "mutable",
-                  "name": "srcAddress",
-                  "nameLocation": "4170:10:32",
-                  "nodeType": "VariableDeclaration",
-                  "scope": 6334,
-                  "src": "4154:26:32",
-                  "stateVariable": false,
-                  "storageLocation": "calldata",
-                  "typeDescriptions": {
-                    "typeIdentifier": "t_string_calldata_ptr",
-                    "typeString": "string"
-                  },
-                  "typeName": {
-                    "id": 6328,
-                    "name": "string",
-                    "nodeType": "ElementaryTypeName",
-                    "src": "4154:6:32",
-                    "typeDescriptions": {
-                      "typeIdentifier": "t_string_storage_ptr",
-                      "typeString": "string"
-                    }
-                  },
-                  "visibility": "internal"
-                },
-                {
-                  "constant": false,
-                  "id": 6331,
-                  "mutability": "mutable",
-                  "name": "message",
-                  "nameLocation": "4205:7:32",
-                  "nodeType": "VariableDeclaration",
-                  "scope": 6334,
-                  "src": "4190:22:32",
-                  "stateVariable": false,
-                  "storageLocation": "calldata",
-                  "typeDescriptions": {
-                    "typeIdentifier": "t_bytes_calldata_ptr",
-                    "typeString": "bytes"
-                  },
-                  "typeName": {
-                    "id": 6330,
-                    "name": "bytes",
-                    "nodeType": "ElementaryTypeName",
-                    "src": "4190:5:32",
-                    "typeDescriptions": {
-                      "typeIdentifier": "t_bytes_storage_ptr",
-                      "typeString": "bytes"
-                    }
-                  },
-                  "visibility": "internal"
-                }
-              ],
-              "src": "4058:160:32"
-            },
-            "returnParameters": {
-              "id": 6333,
-              "nodeType": "ParameterList",
-              "parameters": [],
-              "src": "4227:0:32"
-            },
-            "scope": 6352,
-            "src": "4037:191:32",
-            "stateMutability": "nonpayable",
-            "virtual": false,
-            "visibility": "external"
-          },
-          {
-            "functionSelector": "7484606f",
-            "id": 6340,
-            "implemented": false,
-            "kind": "function",
-            "modifiers": [],
-            "name": "govWithdraw",
-            "nameLocation": "4579:11:32",
-            "nodeType": "FunctionDefinition",
-            "parameters": {
-              "id": 6338,
-              "nodeType": "ParameterList",
-              "parameters": [
-                {
-                  "constant": false,
-                  "id": 6337,
-                  "mutability": "mutable",
-                  "name": "tokens",
-                  "nameLocation": "4610:6:32",
-                  "nodeType": "VariableDeclaration",
-                  "scope": 6340,
-                  "src": "4591:25:32",
-                  "stateVariable": false,
-                  "storageLocation": "calldata",
-                  "typeDescriptions": {
-                    "typeIdentifier": "t_array$_t_address_$dyn_calldata_ptr",
-                    "typeString": "address[]"
-                  },
-                  "typeName": {
-                    "baseType": {
-                      "id": 6335,
-                      "name": "address",
-                      "nodeType": "ElementaryTypeName",
-                      "src": "4591:7:32",
-                      "stateMutability": "nonpayable",
-                      "typeDescriptions": {
-                        "typeIdentifier": "t_address",
-                        "typeString": "address"
-                      }
-                    },
-                    "id": 6336,
-                    "nodeType": "ArrayTypeName",
-                    "src": "4591:9:32",
-                    "typeDescriptions": {
-                      "typeIdentifier": "t_array$_t_address_$dyn_storage_ptr",
-                      "typeString": "address[]"
-                    }
-                  },
-                  "visibility": "internal"
-                }
-              ],
-              "src": "4590:27:32"
-            },
-            "returnParameters": {
-              "id": 6339,
-              "nodeType": "ParameterList",
-              "parameters": [],
-              "src": "4626:0:32"
-            },
-            "scope": 6352,
-            "src": "4570:57:32",
-            "stateMutability": "nonpayable",
-            "virtual": false,
-            "visibility": "external"
-          },
-          {
-            "functionSelector": "0ebf1fe9",
-            "id": 6343,
-            "implemented": false,
-            "kind": "function",
-            "modifiers": [],
-            "name": "enablexCalls",
-            "nameLocation": "4642:12:32",
-            "nodeType": "FunctionDefinition",
-            "parameters": {
-              "id": 6341,
-              "nodeType": "ParameterList",
-              "parameters": [],
-              "src": "4654:2:32"
-            },
-            "returnParameters": {
-              "id": 6342,
-              "nodeType": "ParameterList",
-              "parameters": [],
-              "src": "4665:0:32"
-            },
-            "scope": 6352,
-            "src": "4633:33:32",
-            "stateMutability": "nonpayable",
-            "virtual": false,
-            "visibility": "external"
-          },
-          {
-            "functionSelector": "f545fab9",
-            "id": 6346,
-            "implemented": false,
-            "kind": "function",
-            "modifiers": [],
-            "name": "disablexCalls",
-            "nameLocation": "4681:13:32",
-            "nodeType": "FunctionDefinition",
-            "parameters": {
-              "id": 6344,
-              "nodeType": "ParameterList",
-              "parameters": [],
-              "src": "4694:2:32"
-            },
-            "returnParameters": {
-              "id": 6345,
-              "nodeType": "ParameterList",
-              "parameters": [],
-              "src": "4705:0:32"
-            },
-            "scope": 6352,
-            "src": "4672:34:32",
-            "stateMutability": "nonpayable",
-            "virtual": false,
-            "visibility": "external"
-          },
-          {
-            "functionSelector": "561dc4c8",
-            "id": 6351,
-            "implemented": false,
-            "kind": "function",
-            "modifiers": [],
-            "name": "getxCallsEnabled",
-            "nameLocation": "5057:16:32",
-            "nodeType": "FunctionDefinition",
-            "parameters": {
-              "id": 6347,
-              "nodeType": "ParameterList",
-              "parameters": [],
-              "src": "5073:2:32"
-            },
-            "returnParameters": {
-              "id": 6350,
-              "nodeType": "ParameterList",
-              "parameters": [
-                {
-                  "constant": false,
-                  "id": 6349,
-                  "mutability": "mutable",
-                  "name": "",
-                  "nameLocation": "-1:-1:-1",
-                  "nodeType": "VariableDeclaration",
-                  "scope": 6351,
-                  "src": "5099:4:32",
-                  "stateVariable": false,
-                  "storageLocation": "default",
-                  "typeDescriptions": {
-                    "typeIdentifier": "t_bool",
-                    "typeString": "bool"
-                  },
-                  "typeName": {
-                    "id": 6348,
-                    "name": "bool",
-                    "nodeType": "ElementaryTypeName",
-                    "src": "5099:4:32",
-                    "typeDescriptions": {
-                      "typeIdentifier": "t_bool",
-                      "typeString": "bool"
-                    }
-                  },
-                  "visibility": "internal"
-                }
-              ],
-              "src": "5098:6:32"
-            },
-            "scope": 6352,
-            "src": "5048:57:32",
-            "stateMutability": "view",
-            "virtual": false,
-            "visibility": "external"
-          }
-        ],
-        "scope": 6353,
-        "src": "202:4905:32",
-        "usedErrors": []
+        "indexed": false,
+        "internalType": "bool",
+        "name": "communityGuardDisabled",
+        "type": "bool"
       }
     ],
-    "src": "0:5108:32"
+    "name": "CommunityGuardDisabled",
+    "type": "event"
   },
-  "bytecode": "",
-  "bytecodeSha1": "da39a3ee5e6b4b0d3255bfef95601890afd80709",
-  "compiler": {
-    "evm_version": "london",
-    "optimizer": {
-      "enabled": true,
-      "runs": 1600
-    },
-    "version": "0.8.7+commit.e28d00a7"
-  },
-  "contractName": "IVault",
-  "coverageMap": {
-    "branches": {},
-    "statements": {}
-  },
-  "dependencies": [
-    "IAggKeyNonceConsumer",
-    "OpenZeppelin/openzeppelin-contracts@4.0.0/IERC20",
-    "IGovernanceCommunityGuarded",
-    "IShared"
-  ],
-  "deployedBytecode": "",
-  "deployedSourceMap": "",
-  "language": "Solidity",
-  "natspec": {
-    "kind": "dev",
-    "methods": {
-      "disableCommunityGuard()": {
-        "notice": "Disable Community Guard"
-      },
-      "enableCommunityGuard()": {
-        "notice": "Enable Community Guard"
-      },
-      "getCommunityGuardDisabled()": {
-        "notice": "Get the Community Guard state",
-        "returns": {
-          "_0": "The Community Guard state"
-        }
-      },
-      "getCommunityKey()": {
-        "notice": "Get the Community Key",
-        "returns": {
-          "_0": "The CommunityKey"
-        }
-      },
-      "getGovernor()": {
-        "notice": "Get governor address",
-        "returns": {
-          "_0": "The governor address"
-        }
-      },
-      "getKeyManager()": {
-        "notice": "Get the KeyManager address/interface that's used to validate sigs",
-        "returns": {
-          "_0": "The KeyManager (IKeyManager)"
-        }
-      },
-      "getSuspendedState()": {
-        "notice": "Get suspended state",
-        "returns": {
-          "_0": "The suspended state"
-        }
-      },
-      "resume()": {
-        "notice": "Resume contract execution"
-      },
-      "suspend()": {
-        "notice": "Can be used to suspend contract execution - only executable by          governance and only to be used in case of emergency."
-      },
-      "updateKeyManager((address,uint256,uint256,uint256,uint256,address),address)": {
-        "notice": "Update KeyManager reference. Used if KeyManager contract is updated",
-        "params": {
-          "keyManager": "New KeyManager's address",
-          "sigData": "The keccak256 hash over the msg (uint) (here that's normally                  a hash over the calldata to the function with an empty sigData) and                  sig over that hash (uint) from the aggregate key"
-        }
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "bool",
+        "name": "suspended",
+        "type": "bool"
       }
-    },
-    "notice": "The interface for functions Vault implements",
-    "title": "Vault interface",
-    "version": 1
+    ],
+    "name": "Suspended",
+    "type": "event"
   },
-  "offset": [
-    202,
-    5107
-  ],
-  "opcodes": "",
-  "pcMap": {},
-  "sha1": "5038a5e0717ad5c7ce66e3e2a6b81fa4ba024240",
-  "source": "pragma solidity ^0.8.0;\n\nimport \"./IAggKeyNonceConsumer.sol\";\nimport \"./IGovernanceCommunityGuarded.sol\";\n\n/**\n * @title    Vault interface\n * @notice   The interface for functions Vault implements\n */\ninterface IVault is IGovernanceCommunityGuarded, IAggKeyNonceConsumer {\n    function allBatch(\n        SigData calldata sigData,\n        DeployFetchParams[] calldata deployFetchParamsArray,\n        FetchParams[] calldata fetchParamsArray,\n        TransferParams[] calldata transferParamsArray\n    ) external;\n\n    //////////////////////////////////////////////////////////////\n    //                                                          //\n    //                          Transfers                       //\n    //                                                          //\n    //////////////////////////////////////////////////////////////\n\n    function transfer(SigData calldata sigData, TransferParams calldata transferParams) external;\n\n    function transferBatch(SigData calldata sigData, TransferParams[] calldata transferParamsArray) external;\n\n    //////////////////////////////////////////////////////////////\n    //                                                          //\n    //                        Fetch Deposits                    //\n    //                                                          //\n    //////////////////////////////////////////////////////////////\n\n    function deployAndFetchBatch(SigData calldata sigData, DeployFetchParams[] calldata deployFetchParamsArray)\n        external;\n\n    function fetchBatch(SigData calldata sigData, FetchParams[] calldata fetchParamsArray) external;\n\n    //////////////////////////////////////////////////////////////\n    //                                                          //\n    //         Initiate cross-chain swaps (source chain)        //\n    //                                                          //\n    //////////////////////////////////////////////////////////////\n\n    function xSwapToken(\n        uint32 dstChain,\n        string memory dstAddress,\n        string memory swapIntent,\n        IERC20 srcToken,\n        uint256 amount\n    ) external;\n\n    function xSwapNative(\n        uint32 dstChain,\n        string memory dstAddress,\n        string memory swapIntent\n    ) external payable;\n\n    //////////////////////////////////////////////////////////////\n    //                                                          //\n    //     Initiate cross-chain call and swap (source chain)    //\n    //                                                          //\n    //////////////////////////////////////////////////////////////\n\n    function xCallNative(\n        uint32 dstChain,\n        string memory dstAddress,\n        string memory swapIntent,\n        bytes calldata message,\n        uint256 dstNativeGas,\n        address refundAddress\n    ) external payable;\n\n    function xCallToken(\n        uint32 dstChain,\n        string memory dstAddress,\n        string memory swapIntent,\n        bytes calldata message,\n        uint256 dstNativeGas,\n        IERC20 srcToken,\n        uint256 amount,\n        address refundAddress\n    ) external;\n\n    //////////////////////////////////////////////////////////////\n    //                                                          //\n    //      Execute cross-chain call and swap (dest. chain)     //\n    //                                                          //\n    //////////////////////////////////////////////////////////////\n\n    function executexSwapAndCall(\n        SigData calldata sigData,\n        TransferParams calldata transferParams,\n        uint32 srcChain,\n        string calldata srcAddress,\n        bytes calldata message\n    ) external;\n\n    //////////////////////////////////////////////////////////////\n    //                                                          //\n    //          Execute cross-chain call (dest. chain)          //\n    //                                                          //\n    //////////////////////////////////////////////////////////////\n    function executexCall(\n        SigData calldata sigData,\n        address recipient,\n        uint32 srcChain,\n        string calldata srcAddress,\n        bytes calldata message\n    ) external;\n\n    //////////////////////////////////////////////////////////////\n    //                                                          //\n    //                        Governance                        //\n    //                                                          //\n    //////////////////////////////////////////////////////////////\n\n    function govWithdraw(address[] calldata tokens) external;\n\n    function enablexCalls() external;\n\n    function disablexCalls() external;\n\n    //////////////////////////////////////////////////////////////\n    //                                                          //\n    //                          Getters                         //\n    //                                                          //\n    //////////////////////////////////////////////////////////////\n\n    function getxCallsEnabled() external view returns (bool);\n}\n",
-  "sourceMap": "",
-  "sourcePath": "contracts/interfaces/IVault.sol",
-  "type": "interface"
-}
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "keyManager",
+        "type": "address"
+      }
+    ],
+    "name": "UpdatedKeyManager",
+    "type": "event"
+  },
+  {
+    "inputs": [
+      {
+        "components": [
+          {
+            "internalType": "address",
+            "name": "keyManAddr",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "chainID",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "msgHash",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "sig",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "nonce",
+            "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "kTimesGAddress",
+            "type": "address"
+          }
+        ],
+        "internalType": "struct IShared.SigData",
+        "name": "sigData",
+        "type": "tuple"
+      },
+      {
+        "components": [
+          {
+            "internalType": "bytes32",
+            "name": "swapID",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "address",
+            "name": "token",
+            "type": "address"
+          }
+        ],
+        "internalType": "struct IShared.DeployFetchParams[]",
+        "name": "deployFetchParamsArray",
+        "type": "tuple[]"
+      },
+      {
+        "components": [
+          {
+            "internalType": "address payable",
+            "name": "fetchContract",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "token",
+            "type": "address"
+          }
+        ],
+        "internalType": "struct IShared.FetchParams[]",
+        "name": "fetchParamsArray",
+        "type": "tuple[]"
+      },
+      {
+        "components": [
+          {
+            "internalType": "address",
+            "name": "token",
+            "type": "address"
+          },
+          {
+            "internalType": "address payable",
+            "name": "recipient",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "amount",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct IShared.TransferParams[]",
+        "name": "transferParamsArray",
+        "type": "tuple[]"
+      }
+    ],
+    "name": "allBatch",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "components": [
+          {
+            "internalType": "address",
+            "name": "keyManAddr",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "chainID",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "msgHash",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "sig",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "nonce",
+            "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "kTimesGAddress",
+            "type": "address"
+          }
+        ],
+        "internalType": "struct IShared.SigData",
+        "name": "sigData",
+        "type": "tuple"
+      },
+      {
+        "components": [
+          {
+            "internalType": "bytes32",
+            "name": "swapID",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "address",
+            "name": "token",
+            "type": "address"
+          }
+        ],
+        "internalType": "struct IShared.DeployFetchParams[]",
+        "name": "deployFetchParamsArray",
+        "type": "tuple[]"
+      }
+    ],
+    "name": "deployAndFetchBatch",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "disableCommunityGuard",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "disablexCalls",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "enableCommunityGuard",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "enablexCalls",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "components": [
+          {
+            "internalType": "address",
+            "name": "keyManAddr",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "chainID",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "msgHash",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "sig",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "nonce",
+            "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "kTimesGAddress",
+            "type": "address"
+          }
+        ],
+        "internalType": "struct IShared.SigData",
+        "name": "sigData",
+        "type": "tuple"
+      },
+      {
+        "internalType": "address",
+        "name": "recipient",
+        "type": "address"
+      },
+      {
+        "internalType": "uint32",
+        "name": "srcChain",
+        "type": "uint32"
+      },
+      {
+        "internalType": "string",
+        "name": "srcAddress",
+        "type": "string"
+      },
+      {
+        "internalType": "bytes",
+        "name": "message",
+        "type": "bytes"
+      }
+    ],
+    "name": "executexCall",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "components": [
+          {
+            "internalType": "address",
+            "name": "keyManAddr",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "chainID",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "msgHash",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "sig",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "nonce",
+            "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "kTimesGAddress",
+            "type": "address"
+          }
+        ],
+        "internalType": "struct IShared.SigData",
+        "name": "sigData",
+        "type": "tuple"
+      },
+      {
+        "components": [
+          {
+            "internalType": "address",
+            "name": "token",
+            "type": "address"
+          },
+          {
+            "internalType": "address payable",
+            "name": "recipient",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "amount",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct IShared.TransferParams",
+        "name": "transferParams",
+        "type": "tuple"
+      },
+      {
+        "internalType": "uint32",
+        "name": "srcChain",
+        "type": "uint32"
+      },
+      {
+        "internalType": "string",
+        "name": "srcAddress",
+        "type": "string"
+      },
+      {
+        "internalType": "bytes",
+        "name": "message",
+        "type": "bytes"
+      }
+    ],
+    "name": "executexSwapAndCall",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "components": [
+          {
+            "internalType": "address",
+            "name": "keyManAddr",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "chainID",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "msgHash",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "sig",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "nonce",
+            "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "kTimesGAddress",
+            "type": "address"
+          }
+        ],
+        "internalType": "struct IShared.SigData",
+        "name": "sigData",
+        "type": "tuple"
+      },
+      {
+        "components": [
+          {
+            "internalType": "address payable",
+            "name": "fetchContract",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "token",
+            "type": "address"
+          }
+        ],
+        "internalType": "struct IShared.FetchParams[]",
+        "name": "fetchParamsArray",
+        "type": "tuple[]"
+      }
+    ],
+    "name": "fetchBatch",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getCommunityGuardDisabled",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getCommunityKey",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getGovernor",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getKeyManager",
+    "outputs": [
+      {
+        "internalType": "contract IKeyManager",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getSuspendedState",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getxCallsEnabled",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address[]",
+        "name": "tokens",
+        "type": "address[]"
+      }
+    ],
+    "name": "govWithdraw",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "resume",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "suspend",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "components": [
+          {
+            "internalType": "address",
+            "name": "keyManAddr",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "chainID",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "msgHash",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "sig",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "nonce",
+            "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "kTimesGAddress",
+            "type": "address"
+          }
+        ],
+        "internalType": "struct IShared.SigData",
+        "name": "sigData",
+        "type": "tuple"
+      },
+      {
+        "components": [
+          {
+            "internalType": "address",
+            "name": "token",
+            "type": "address"
+          },
+          {
+            "internalType": "address payable",
+            "name": "recipient",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "amount",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct IShared.TransferParams",
+        "name": "transferParams",
+        "type": "tuple"
+      }
+    ],
+    "name": "transfer",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "components": [
+          {
+            "internalType": "address",
+            "name": "keyManAddr",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "chainID",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "msgHash",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "sig",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "nonce",
+            "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "kTimesGAddress",
+            "type": "address"
+          }
+        ],
+        "internalType": "struct IShared.SigData",
+        "name": "sigData",
+        "type": "tuple"
+      },
+      {
+        "components": [
+          {
+            "internalType": "address",
+            "name": "token",
+            "type": "address"
+          },
+          {
+            "internalType": "address payable",
+            "name": "recipient",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "amount",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct IShared.TransferParams[]",
+        "name": "transferParamsArray",
+        "type": "tuple[]"
+      }
+    ],
+    "name": "transferBatch",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "components": [
+          {
+            "internalType": "address",
+            "name": "keyManAddr",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "chainID",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "msgHash",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "sig",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "nonce",
+            "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "kTimesGAddress",
+            "type": "address"
+          }
+        ],
+        "internalType": "struct IShared.SigData",
+        "name": "sigData",
+        "type": "tuple"
+      },
+      {
+        "internalType": "contract IKeyManager",
+        "name": "keyManager",
+        "type": "address"
+      }
+    ],
+    "name": "updateKeyManager",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint32",
+        "name": "dstChain",
+        "type": "uint32"
+      },
+      {
+        "internalType": "string",
+        "name": "dstAddress",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "swapIntent",
+        "type": "string"
+      },
+      {
+        "internalType": "bytes",
+        "name": "message",
+        "type": "bytes"
+      },
+      {
+        "internalType": "uint256",
+        "name": "dstNativeGas",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "refundAddress",
+        "type": "address"
+      }
+    ],
+    "name": "xCallNative",
+    "outputs": [],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint32",
+        "name": "dstChain",
+        "type": "uint32"
+      },
+      {
+        "internalType": "string",
+        "name": "dstAddress",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "swapIntent",
+        "type": "string"
+      },
+      {
+        "internalType": "bytes",
+        "name": "message",
+        "type": "bytes"
+      },
+      {
+        "internalType": "uint256",
+        "name": "dstNativeGas",
+        "type": "uint256"
+      },
+      {
+        "internalType": "contract IERC20",
+        "name": "srcToken",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "refundAddress",
+        "type": "address"
+      }
+    ],
+    "name": "xCallToken",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint32",
+        "name": "dstChain",
+        "type": "uint32"
+      },
+      {
+        "internalType": "string",
+        "name": "dstAddress",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "swapIntent",
+        "type": "string"
+      }
+    ],
+    "name": "xSwapNative",
+    "outputs": [],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint32",
+        "name": "dstChain",
+        "type": "uint32"
+      },
+      {
+        "internalType": "string",
+        "name": "dstAddress",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "swapIntent",
+        "type": "string"
+      },
+      {
+        "internalType": "contract IERC20",
+        "name": "srcToken",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "xSwapToken",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  }
+]
