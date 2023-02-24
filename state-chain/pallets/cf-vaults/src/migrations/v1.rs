@@ -42,23 +42,14 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 	fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
 		// NB: No need to migrate PendingVaultRotation despite changes
 		// since in order for the migration to run, we must not be in a rotation.
-		// this means we have state `AwaitingRotation`, which has not changed between
-		// versions.
-		// We should still check this before and after
-		assert!(matches!(
-			PendingVaultRotation::<T, I>::get().unwrap(),
-			VaultRotationStatus::AwaitingRotation { .. }
-		));
+		assert!(PendingVaultRotation::<T, I>::get().is_none());
 
 		Ok(vec![])
 	}
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(_state: Vec<u8>) -> Result<(), &'static str> {
-		assert!(matches!(
-			PendingVaultRotation::<T, I>::get().unwrap(),
-			VaultRotationStatus::AwaitingRotation { .. }
-		));
+		assert!(PendingVaultRotation::<T, I>::get().is_none());
 
 		// Invert what runs in the migration step as a test
 		if CurrentVaultEpochAndState::<T, I>::get().key_state == KeyState::Active {
