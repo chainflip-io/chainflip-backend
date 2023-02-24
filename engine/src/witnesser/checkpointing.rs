@@ -32,7 +32,7 @@ pub async fn get_witnesser_start_block_with_checkpointing<Chain: cf_chains::Chai
 where
 	<<Chain as cf_chains::Chain>::ChainBlockNumber as TryFrom<u64>>::Error: std::fmt::Debug,
 {
-	let loaded_checkpoint = db.load_checkpoint(chain_tag)?;
+	let mut loaded_checkpoint = db.load_checkpoint(chain_tag)?;
 
 	// Eth witnessers are the only ones that used the legacy checkpointing files.
 	// Only go ahead with the migration if no checkpoint is found in the db.
@@ -44,7 +44,8 @@ where
 			logger,
 		)
 		.await
-		.with_context(|| "Failed to perform Eth witnesser checkpointing migration")?
+		.with_context(|| "Failed to perform Eth witnesser checkpointing migration")?;
+		loaded_checkpoint = db.load_checkpoint(chain_tag)?;
 	}
 
 	// Use the loaded checkpoint or the default if none was found
