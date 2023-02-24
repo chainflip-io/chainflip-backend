@@ -131,17 +131,18 @@ fn can_schedule_ingress_fetch() {
 		schedule_ingress(2u64, eth::Asset::Eth);
 		schedule_ingress(3u64, eth::Asset::Flip);
 
+		// Note: Since we are reuse addresses the intent_id staies the same
 		assert_eq!(
 			ScheduledEgressRequests::<Test, Instance1>::get(),
 			vec![
 				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 1u64, asset: ETH_ETH },
-				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 2u64, asset: ETH_ETH },
-				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 3u64, asset: ETH_FLIP },
+				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 1u64, asset: ETH_ETH },
+				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 1u64, asset: ETH_FLIP },
 			]
 		);
 
 		System::assert_has_event(RuntimeEvent::IngressEgress(
-			crate::Event::IngressFetchesScheduled { intent_id: 2, asset: eth::Asset::Eth },
+			crate::Event::IngressFetchesScheduled { intent_id: 1, asset: eth::Asset::Eth },
 		));
 
 		schedule_ingress(4u64, eth::Asset::Eth);
@@ -150,9 +151,9 @@ fn can_schedule_ingress_fetch() {
 			ScheduledEgressRequests::<Test, Instance1>::get(),
 			vec![
 				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 1u64, asset: ETH_ETH },
-				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 2u64, asset: ETH_ETH },
-				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 3u64, asset: ETH_FLIP },
-				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 4u64, asset: ETH_ETH },
+				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 1u64, asset: ETH_ETH },
+				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 1u64, asset: ETH_FLIP },
+				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 1u64, asset: ETH_ETH },
 			]
 		);
 	});
@@ -287,12 +288,12 @@ fn can_manually_send_batch_all() {
 fn on_idle_batch_size_is_limited_by_weight() {
 	new_test_ext().execute_with(|| {
 		IngressEgress::schedule_egress(ETH_ETH, 1_000, ALICE_ETH_ADDRESS.into());
-		IngressEgress::schedule_egress(ETH_ETH, 2_000, ALICE_ETH_ADDRESS.into());
+		IngressEgress::schedule_egress(ETH_ETH, 1_000, ALICE_ETH_ADDRESS.into());
 		schedule_ingress(1u64, eth::Asset::Eth);
 		schedule_ingress(2u64, eth::Asset::Eth);
-		IngressEgress::schedule_egress(ETH_FLIP, 3_000, ALICE_ETH_ADDRESS.into());
-		IngressEgress::schedule_egress(ETH_FLIP, 4_000, ALICE_ETH_ADDRESS.into());
-		IngressEgress::schedule_egress(ETH_FLIP, 5_000, ALICE_ETH_ADDRESS.into());
+		IngressEgress::schedule_egress(ETH_FLIP, 1_000, ALICE_ETH_ADDRESS.into());
+		IngressEgress::schedule_egress(ETH_FLIP, 1_000, ALICE_ETH_ADDRESS.into());
+		IngressEgress::schedule_egress(ETH_FLIP, 1_000, ALICE_ETH_ADDRESS.into());
 		schedule_ingress(3u64, eth::Asset::Flip);
 		schedule_ingress(4u64, eth::Asset::Flip);
 
@@ -329,12 +330,12 @@ fn on_idle_batch_size_is_limited_by_weight() {
 			vec![
 				FetchOrTransfer::<Ethereum>::Transfer {
 					asset: ETH_FLIP,
-					amount: 5_000,
+					amount: 1_000,
 					to: ALICE_ETH_ADDRESS.into(),
 					egress_id: (ForeignChain::Ethereum, 5),
 				},
-				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 3u64, asset: ETH_FLIP },
-				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 4u64, asset: ETH_FLIP },
+				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 1u64, asset: ETH_FLIP },
+				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 1u64, asset: ETH_FLIP },
 			]
 		);
 	});
