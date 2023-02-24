@@ -43,8 +43,6 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(_state: Vec<u8>) -> Result<(), &'static str> {
-		use sp_runtime::traits::Zero;
-
 		assert!(PendingVaultRotation::<T, I>::get().is_none());
 
 		// Invert what runs in the migration step as a test
