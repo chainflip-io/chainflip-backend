@@ -32,7 +32,7 @@ use frame_support::{
 use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
 pub use pallet::*;
 use sp_runtime::{
-	traits::{BlockNumberProvider, Saturating},
+	traits::{BlockNumberProvider, Saturating, Zero},
 	RuntimeDebug,
 };
 use sp_std::{
@@ -76,6 +76,8 @@ pub enum ThresholdCeremonyType {
 }
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
+
+const THRESHOLD_SIGNATURE_RESPONSE_TIMEOUT_DEFAULT: u32 = 10;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -304,7 +306,11 @@ pub mod pallet {
 	#[cfg(feature = "std")]
 	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
 		fn default() -> Self {
-			Self { threshold_signature_response_timeout: 10_u32.into(), _instance: PhantomData }
+			Self {
+				threshold_signature_response_timeout: THRESHOLD_SIGNATURE_RESPONSE_TIMEOUT_DEFAULT
+					.into(),
+				_instance: PhantomData,
+			}
 		}
 	}
 
@@ -452,6 +458,12 @@ pub mod pallet {
 		}
 
 		fn on_runtime_upgrade() -> Weight {
+			// For new pallet instances, this always needs to be set.
+			ThresholdSignatureResponseTimeout::<T, I>::mutate(|timeout| {
+				if timeout.is_zero() {
+					*timeout = THRESHOLD_SIGNATURE_RESPONSE_TIMEOUT_DEFAULT.into();
+				}
+			});
 			migrations::PalletMigration::<T, I>::on_runtime_upgrade()
 		}
 
