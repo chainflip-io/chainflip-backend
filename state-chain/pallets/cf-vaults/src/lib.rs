@@ -7,9 +7,9 @@ use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex, GENESIS_EPOCH};
 use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, Broadcaster, CeremonyIdProvider, Chainflip,
-	CurrentEpochIndex, EpochKey, EpochTransitionHandler, KeyProvider, KeyState, Slashing,
-	SystemStateManager, ThresholdSigner, VaultKeyWitnessedHandler, VaultRotator, VaultStatus,
-	VaultTransitionHandler,
+	CurrentEpochIndex, EpochInfo, EpochKey, EpochTransitionHandler, KeyProvider, KeyState,
+	Slashing, SystemStateManager, ThresholdSigner, VaultKeyWitnessedHandler, VaultRotator,
+	VaultStatus, VaultTransitionHandler,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -37,7 +37,6 @@ mod tests;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
-#[cfg(feature = "std")]
 const KEYGEN_CEREMONY_RESPONSE_TIMEOUT_DEFAULT: u32 = 10;
 
 pub type PayloadFor<T, I = ()> = <<T as Config<I>>::Chain as ChainCrypto>::Payload;
@@ -337,6 +336,17 @@ pub mod pallet {
 		}
 
 		fn on_runtime_upgrade() -> Weight {
+			// For new pallet instances, genesis items need to be set.
+			if !KeygenResponseTimeout::<T, I>::exists() {
+				KeygenResponseTimeout::<T, I>::set(KEYGEN_CEREMONY_RESPONSE_TIMEOUT_DEFAULT.into());
+			}
+			if !CurrentVaultEpochAndState::<T, I>::exists() {
+				CurrentVaultEpochAndState::<T, I>::put(VaultEpochAndState {
+					epoch_index: T::EpochInfo::epoch_index(),
+					key_state: KeyState::Unavailable,
+				});
+			}
+
 			migrations::PalletMigration::<T, I>::on_runtime_upgrade()
 		}
 

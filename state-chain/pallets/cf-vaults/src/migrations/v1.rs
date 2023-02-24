@@ -1,6 +1,6 @@
 use crate::*;
 use cf_traits::EpochInfo;
-use sp_runtime::{traits::Zero, AccountId32};
+use sp_runtime::AccountId32;
 use sp_std::marker::PhantomData;
 
 pub struct Migration<T: Config<I>, I: 'static>(PhantomData<(T, I)>);
@@ -29,12 +29,6 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 		// There should be nothing here anyway, but just in case
 		IncompatibleVoters::<T, I>::kill();
 
-		// For Polkadot, this will not exist, so we need to set it.
-		if KeygenResponseTimeout::<T, I>::get() == Zero::zero() {
-			// 90 is the default in the consts (but we can't import here due to circular deps)
-			KeygenResponseTimeout::<T, I>::put(<T::BlockNumber as From<u32>>::from(90));
-		}
-
 		Weight::zero()
 	}
 
@@ -42,23 +36,16 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 	fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
 		// NB: No need to migrate PendingVaultRotation despite changes
 		// since in order for the migration to run, we must not be in a rotation.
-		// this means we have state `AwaitingRotation`, which has not changed between
-		// versions.
-		// We should still check this before and after
-		assert!(matches!(
-			PendingVaultRotation::<T, I>::get().unwrap(),
-			VaultRotationStatus::AwaitingRotation { .. }
-		));
+		assert!(PendingVaultRotation::<T, I>::get().is_none());
 
 		Ok(vec![])
 	}
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(_state: Vec<u8>) -> Result<(), &'static str> {
-		assert!(matches!(
-			PendingVaultRotation::<T, I>::get().unwrap(),
-			VaultRotationStatus::AwaitingRotation { .. }
-		));
+		use sp_runtime::traits::Zero;
+
+		assert!(PendingVaultRotation::<T, I>::get().is_none());
 
 		// Invert what runs in the migration step as a test
 		if CurrentVaultEpochAndState::<T, I>::get().key_state == KeyState::Active {
@@ -67,7 +54,6 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 			assert!(Vaults::<T, I>::get(T::EpochInfo::epoch_index()).is_none());
 		}
 
-		// use frame_benchmarking::Zero;
 		assert!(KeygenResponseTimeout::<T, I>::get() > Zero::zero());
 
 		Ok(())
