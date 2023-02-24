@@ -1,6 +1,6 @@
 use crate::*;
 use cf_traits::EpochInfo;
-use sp_runtime::{traits::Zero, AccountId32};
+use sp_runtime::AccountId32;
 use sp_std::marker::PhantomData;
 
 pub struct Migration<T: Config<I>, I: 'static>(PhantomData<(T, I)>);
@@ -29,12 +29,6 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 		// There should be nothing here anyway, but just in case
 		IncompatibleVoters::<T, I>::kill();
 
-		// For Polkadot, this will not exist, so we need to set it.
-		if KeygenResponseTimeout::<T, I>::get() == Zero::zero() {
-			// 90 is the default in the consts (but we can't import here due to circular deps)
-			KeygenResponseTimeout::<T, I>::put(<T::BlockNumber as From<u32>>::from(90));
-		}
-
 		Weight::zero()
 	}
 
@@ -58,7 +52,6 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 			assert!(Vaults::<T, I>::get(T::EpochInfo::epoch_index()).is_none());
 		}
 
-		// use frame_benchmarking::Zero;
 		assert!(KeygenResponseTimeout::<T, I>::get() > Zero::zero());
 
 		Ok(())
