@@ -5,10 +5,13 @@ use sp_std::{vec, vec::Vec};
 extern crate alloc;
 use alloc::string::String;
 
+// SHA256("TapLeaf")
 const TAPLEAF_HASH: &[u8] =
 	&hex_literal::hex!("aeea8fdc4208983105734b58081d1e2638d35f1cb54008d4d357ca03be78e9ee");
+// SHA256("TapTweak")
 const TAPTWEAK_HASH: &[u8] =
 	&hex_literal::hex!("e80fe1639c9ca050e3af1b39c143c63e429cbceb15d940fbb5c5a1f4af57c5e9");
+// A public key that obviously doesn't have a known private key
 const INTERNAL_PUBKEY: &[u8] =
 	&hex_literal::hex!("02eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");
 
