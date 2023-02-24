@@ -330,7 +330,7 @@ fn on_idle_batch_size_is_limited_by_weight() {
 			vec![
 				FetchOrTransfer::<Ethereum>::Transfer {
 					asset: ETH_FLIP,
-					amount: 1_000,
+					amount: 5_000,
 					to: ALICE_ETH_ADDRESS.into(),
 					egress_id: (ForeignChain::Ethereum, 5),
 				},
