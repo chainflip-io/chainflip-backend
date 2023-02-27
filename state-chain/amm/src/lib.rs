@@ -344,7 +344,7 @@ impl PoolState {
 			current_tick: initial_tick,
 			current_liquidity: 0,
 			global_fee_growth: Default::default(),
-			//  Guarantee MIN_TICK and MAX_TICK are always in map to simplify swap logic
+			// Guarantee MIN_TICK and MAX_TICK are always in map to simplify swap logic
 			liquidity_map: [
 				(
 					MIN_TICK,
