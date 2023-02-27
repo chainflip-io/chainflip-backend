@@ -1,8 +1,9 @@
 use crate::{
-	mock::*, AddressPool, DisabledEgressAssets, FetchOrTransfer, IntentActions, IntentExpiries,
-	IntentIngressDetails, ScheduledEgressRequests, WeightInfo,
+	mock::*, AddressPool, AddressStatus, DisabledEgressAssets, FetchOrTransfer, IntentActions,
+	IntentExpiries, IntentIngressDetails, ScheduledEgressRequests, WeightInfo,
 };
 
+use cf_chains::DeploymentStatus;
 use cf_primitives::{chains::assets::eth, ForeignChain};
 use cf_traits::{mocks::time_source, EgressApi, IngressApi};
 
@@ -381,6 +382,7 @@ fn intent_expires() {
 		let address = addresses.get(0).expect("to have ingress details for that address");
 		assert!(IntentIngressDetails::<Test, Instance1>::get(address,).is_some());
 		assert!(IntentActions::<Test, Instance1>::get(address).is_some());
+		AddressStatus::<Test, Instance1>::insert(address, DeploymentStatus::Deployed);
 		IngressEgress::on_initialize(1);
 		assert!(IntentExpiries::<Test, Instance1>::get(expire_time).is_none());
 		assert!(!AddressPool::<Test, Instance1>::get().is_empty());

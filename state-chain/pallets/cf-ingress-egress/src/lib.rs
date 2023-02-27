@@ -201,8 +201,8 @@ pub mod pallet {
 
 	/// Map of intent id to the ingress id.
 	#[pallet::storage]
-	pub(crate) type IngressIds<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, IntentId, IngressFetchIdOf<T, I>>;
+	pub(crate) type FetchParamDetails<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, IntentId, (IngressFetchIdOf<T, I>, TargetChainAccount<T, I>)>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -282,7 +282,9 @@ pub mod pallet {
 					for address in addresses.clone() {
 						IntentIngressDetails::<T, I>::remove(&address);
 						IntentActions::<T, I>::remove(&address);
-						AddressPool::<T, I>::append(address.clone());
+						if AddressStatus::<T, I>::get(&address) == DeploymentStatus::Deployed {
+							AddressPool::<T, I>::append(address.clone());
+						}
 						Self::deposit_event(Event::StopWitnessing { ingress_address: address });
 					}
 					total_weight = total_weight
@@ -404,14 +406,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		for request in batch_to_send {
 			match request {
 				FetchOrTransfer::<T::TargetChain>::Fetch { intent_id, asset } => {
-					let ingress_id = IngressIds::<T, I>::get(intent_id);
-					fetch_params
-						.push(FetchAssetParams { ingress_fetch_id: ingress_id.unwrap(), asset });
-					// TODO: Figure out how to get the address here.
-					// AddressStatus::<T, I>::insert(
-					// 	ingress_address.clone(),
-					// 	T::IngressTypeGenerator::deployment_status(true),
-					// );
+					let (ingress_id, ingress_address) =
+						FetchParamDetails::<T, I>::get(intent_id).unwrap();
+					fetch_params.push(FetchAssetParams { ingress_fetch_id: ingress_id, asset });
+					AddressStatus::<T, I>::insert(
+						ingress_address.clone(),
+						T::IngressTypeGenerator::deployment_status(true),
+					);
 				},
 				FetchOrTransfer::<T::TargetChain>::Transfer { asset, to, amount, egress_id } => {
 					egress_ids.push(egress_id);
@@ -513,9 +514,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			new_address
 		};
 		AddressPool::<T, I>::put(pool);
-		IngressIds::<T, I>::insert(
+		FetchParamDetails::<T, I>::insert(
 			next_intent_id,
-			T::IngressTypeGenerator::generate_ingress_type(next_intent_id, address.clone(), true),
+			(
+				T::IngressTypeGenerator::generate_ingress_type(
+					next_intent_id,
+					address.clone(),
+					true,
+				),
+				address.clone(),
+			),
 		);
 		IntentExpiries::<T, I>::append(expires_in, address.clone());
 		IntentIdCounter::<T, I>::put(next_intent_id);
