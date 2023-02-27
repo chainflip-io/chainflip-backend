@@ -73,7 +73,7 @@ fn reconstruct_secret<P: ECPoint>(shares: &BTreeMap<AuthorityCount, ShamirShare<
 	let all_idxs: BTreeSet<AuthorityCount> = shares.keys().into_iter().cloned().collect();
 
 	shares.iter().fold(P::Scalar::zero(), |acc, (index, ShamirShare { value })| {
-		acc + signing::get_lagrange_coeff::<P>(*index, &all_idxs).unwrap() * value
+		acc + signing::get_lagrange_coeff::<P>(*index, &all_idxs) * value
 	})
 }
 

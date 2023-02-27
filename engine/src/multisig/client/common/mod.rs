@@ -106,7 +106,7 @@ impl<C: CryptoScheme> ResharingContext<C> {
 		let own_idx = key.validator_mapping.get_idx(own_id).unwrap();
 		let all_idxs: BTreeSet<_> = (1u32..=key.key.party_public_keys.len() as u32).collect();
 
-		let coeff = get_lagrange_coeff::<C::Point>(own_idx, &all_idxs).unwrap();
+		let coeff = get_lagrange_coeff::<C::Point>(own_idx, &all_idxs);
 
 		let secret_share = coeff * &key.key.key_share.x_i;
 
@@ -115,9 +115,8 @@ impl<C: CryptoScheme> ResharingContext<C> {
 			.get_all_ids()
 			.iter()
 			.map(|id| {
-				//
 				let idx = key.validator_mapping.get_idx(id).expect("id must be present");
-				let coeff = get_lagrange_coeff::<C::Point>(idx, &all_idxs).unwrap();
+				let coeff = get_lagrange_coeff::<C::Point>(idx, &all_idxs);
 				(id.clone(), key.key.party_public_keys[idx as usize - 1] * &coeff)
 			})
 			.collect();
