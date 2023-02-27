@@ -488,9 +488,9 @@ impl PoolState {
 				lower_info.liquidity_delta =
 					lower_info.liquidity_delta.checked_sub_unsigned(burnt_liquidity).unwrap();
 				let mut upper_info = self.liquidity_map.get(&upper_tick).unwrap().clone();
-				upper_info.liquidity_gross = lower_info.liquidity_gross - burnt_liquidity;
+				upper_info.liquidity_gross = upper_info.liquidity_gross - burnt_liquidity;
 				upper_info.liquidity_delta =
-					lower_info.liquidity_delta.checked_add_unsigned(burnt_liquidity).unwrap();
+					upper_info.liquidity_delta.checked_add_unsigned(burnt_liquidity).unwrap();
 
 				position.set_liquidity(
 					&self,
