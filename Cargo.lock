@@ -761,13 +761,8 @@ dependencies = [
 name = "cf-amm"
 version = "0.1.0"
 dependencies = [
- "cf-primitives",
- "parity-scale-codec",
- "scale-info",
- "serde",
- "serde_json",
- "sp-core 7.0.0",
- "sp-std 5.0.0",
+ "enum-map",
+ "primitive-types 0.11.1",
 ]
 
 [[package]]
@@ -2258,6 +2253,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c9720bba047d567ffc8a3cba48bf19126600e249ab7f128e9233e6376976a116"
 dependencies = [
  "heck",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "enum-map"
+version = "2.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "50c25992259941eb7e57b936157961b217a4fc8597829ddef0596d6c3cd86e1a"
+dependencies = [
+ "enum-map-derive",
+]
+
+[[package]]
+name = "enum-map-derive"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2a4da76b3b6116d758c7ba93f7ec6a35d2e2cf24feda76c6e38a375f4d5c59f2"
+dependencies = [
  "proc-macro2",
  "quote",
  "syn",

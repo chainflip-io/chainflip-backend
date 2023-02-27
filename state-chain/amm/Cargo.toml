@@ -6,27 +6,9 @@ edition = '2021'
 description = "Chainflip's AMM Logic"
 
 [dependencies]
-serde = { version = '1.0.126', default-features = false, features = ['derive'] }
-cf-primitives = { path = '../primitives', default-features = false }
-
-# Parity deps
-codec = { package = 'parity-scale-codec', version = '3.0.0', default-features = false, features = ['derive'] }
-scale-info = { version = '2.1.1', default-features = false, features = ['derive'] }
-
-sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2", default-features = false }
-sp-std = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2", default-features = false }
+primitive-types = "0.11.1"
+enum-map = "2.1.0"
 
 [features]
 default = ['std']
-std = [
-  'codec/std',
-  'scale-info/std',
-  'serde/std',
-  'cf-primitives/std',
-  'sp-core/std',
-  'sp-std/std',
-]
-
-[dev-dependencies]
-serde = { version = "1.0", features = ["derive"]}
-serde_json = "1.0"
+std = []
