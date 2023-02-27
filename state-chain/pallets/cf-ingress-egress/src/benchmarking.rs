@@ -9,8 +9,8 @@ use frame_support::traits::Hooks;
 
 fn setup_expired_intents<T: Config<I>, I: 'static>(time: u64, number_of_intents: u64) {
 	let mut intent_vec = vec![];
-	for i in 0..number_of_intents {
-		intent_vec.push((i, TargetChainAccount::<T, I>::benchmark_value()));
+	for _i in 0..number_of_intents {
+		intent_vec.push(TargetChainAccount::<T, I>::benchmark_value());
 	}
 	IntentExpiries::<T, I>::insert(time, intent_vec);
 }
