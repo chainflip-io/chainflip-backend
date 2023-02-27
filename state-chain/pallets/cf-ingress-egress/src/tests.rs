@@ -389,7 +389,7 @@ fn intent_expires() {
 			address.clone()
 		);
 		System::assert_last_event(RuntimeEvent::IngressEgress(crate::Event::StopWitnessing {
-			ingress_address: address.clone(),
+			ingress_address: *address,
 		}));
 	});
 }
