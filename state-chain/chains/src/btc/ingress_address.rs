@@ -20,47 +20,50 @@ struct BitcoinScript(Vec<u8>);
 
 impl BitcoinScript {
 	/// Adds an operation to the script that pushes an unsigned integer onto the stack
-	fn push_uint(&mut self, value: u32) -> &mut Self {
+	fn push_uint(mut self, value: u32) -> Self {
 		match value {
 			0 => self.0.push(0),
 			1..=16 => self.0.push(0x50 + value as u8),
 			_ => {
 				let num_bytes = (4 - value.leading_zeros() / 8) as usize;
 				self.0.push(num_bytes as u8);
-				self.0.append(&mut value.to_le_bytes()[..num_bytes].into());
+				self.0.extend(value.to_le_bytes().iter().take(num_bytes));
 			},
 		}
 		self
 	}
 	/// Adds an operation to the script that pushes exactly 32 bytes of data to the stack
-	fn push_32bytes(&mut self, hash: [u8; 32]) -> &mut Self {
+	fn push_32bytes(mut self, hash: [u8; 32]) -> Self {
 		self.0.push(0x20);
-		self.0.append(&mut hash.into());
+		self.0.extend(hash);
 		self
 	}
 	/// Adds an operation to the script that drops the topmost item from the stack
-	fn op_drop(&mut self) -> &mut Self {
+	fn op_drop(mut self) -> Self {
 		self.0.push(0x75);
 		self
 	}
 	/// Adds the CHECKSIG operation to the script
-	fn op_checksig(&mut self) -> &mut Self {
+	fn op_checksig(mut self) -> Self {
 		self.0.push(0xAC);
 		self
 	}
 	/// Serializes the script by returning a single byte for the length
 	/// of the script and then the script itself
-	fn serialize(&self) -> Vec<u8> {
+	fn serialize(mut self) -> Vec<u8> {
 		let mut result = vec![self.0.len() as u8];
-		result.append(&mut self.0.clone());
+		result.append(&mut self.0);
 		result
 	}
 }
 
 // Derives a taproot address from a validator public key and a salt
 pub fn derive_btc_ingress_address(pubkey_x: [u8; 32], salt: u32) -> String {
-	let mut script = BitcoinScript::default();
-	script.push_uint(salt).op_drop().push_32bytes(pubkey_x).op_checksig();
+	let script = BitcoinScript::default()
+		.push_uint(salt)
+		.op_drop()
+		.push_32bytes(pubkey_x)
+		.op_checksig();
 	let leafhash =
 		sha2_256(&[TAPLEAF_HASH, TAPLEAF_HASH, &[0xC0_u8], &script.serialize()].concat());
 	let tweakhash =
@@ -107,16 +110,15 @@ fn test_btc_derive_ingress_address() {
 
 #[test]
 fn test_build_script() {
-	let mut script = BitcoinScript::default();
-	script
-		.push_uint(0)
-		.op_drop()
-		.push_32bytes(hex_literal::hex!(
-			"2E897376020217C8E385A30B74B758293863049FA66A3FD177E012B076059105"
-		))
-		.op_checksig();
 	assert_eq!(
-		script.serialize(),
+		BitcoinScript::default()
+			.push_uint(0)
+			.op_drop()
+			.push_32bytes(hex_literal::hex!(
+				"2E897376020217C8E385A30B74B758293863049FA66A3FD177E012B076059105"
+			))
+			.op_checksig()
+			.serialize(),
 		hex_literal::hex!(
 			"240075202E897376020217C8E385A30B74B758293863049FA66A3FD177E012B076059105AC"
 		)
@@ -137,8 +139,6 @@ fn test_push_uint() {
 		(u32::MAX, vec![4, 255, 255, 255, 255]),
 	];
 	for x in test_data {
-		let mut script = BitcoinScript::default();
-		script.push_uint(x.0);
-		assert_eq!(script.0, x.1);
+		assert_eq!(BitcoinScript::default().push_uint(x.0).0, x.1);
 	}
 }
