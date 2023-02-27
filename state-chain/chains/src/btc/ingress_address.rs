@@ -14,7 +14,7 @@ pub fn derive_btc_ingress_address(pubkey_x: [u8; 32], salt: u32) -> String {
 	let tweaked = tweaked_pubkey(pubkey_x, salt).serialize_compressed()[1..33].to_vec();
 	let segwit_version = u5::try_from_u8(1).unwrap();
 	let mut payload = vec![segwit_version];
-	payload.append(&mut tweaked.to_base32());
+	payload.extend(tweaked.to_base32());
 	bech32::encode("bc", &mut payload, Variant::Bech32m).unwrap()
 }
 

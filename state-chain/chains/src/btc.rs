@@ -41,9 +41,13 @@ pub struct BitcoinTransaction {
 }
 
 fn get_tapleaf_hash(pubkey_x: [u8; 32], salt: u32) -> [u8; 32] {
-	let mut script = BitcoinScript::default();
-	script.push_uint(salt).op_drop().push_bytes(pubkey_x.to_vec()).op_checksig();
-	sha2_256(&[TAPLEAF_HASH, TAPLEAF_HASH, &[0xC0_u8], &script.serialize()].concat())
+	let script = BitcoinScript::default()
+		.push_uint(salt)
+		.op_drop()
+		.push_bytes(&pubkey_x.to_vec())
+		.op_checksig()
+		.serialize();
+	sha2_256(&[TAPLEAF_HASH, TAPLEAF_HASH, &[0xC0_u8], &script].concat())
 }
 
 fn to_varint(value: u64) -> Vec<u8> {
@@ -63,55 +67,56 @@ fn to_varint(value: u64) -> Vec<u8> {
 			8
 		},
 	};
-	result.append(&mut value.to_le_bytes()[..len].into());
+	result.extend(value.to_le_bytes().iter().take(len));
 	result
 }
 
 pub fn scriptpubkey_from_address(address: String) -> Vec<u8> {
 	match bech32::decode(&address) {
 		Ok((_hrp, data, _variant)) => {
-			let mut script = BitcoinScript::default();
 			let version = data[0].to_u8();
-			script.push_uint(version as u32);
-			script.push_bytes(Vec::<u8>::from_base32(&data[1..]).unwrap());
-			script.0
+			BitcoinScript::default()
+				.push_uint(version as u32)
+				.push_bytes(&Vec::<u8>::from_base32(&data[1..]).unwrap())
+				.0
 		},
 		_ => panic!("todo: figure out how to handle invalid egress addresses here..."),
 	}
 }
 
 impl BitcoinTransaction {
-	pub fn add_signature(&mut self, index: u32, signature: [u8; 64]) {
+	pub fn add_signature(mut self, index: u32, signature: [u8; 64]) -> Self {
 		if self.signatures.len() != self.inputs.len() {
 			self.signatures.resize(self.inputs.len(), [0u8; 64]);
 		}
 		self.signatures[index as usize] = signature;
+		self
 	}
-	pub fn finalize(&self) -> Vec<u8> {
+	pub fn finalize(self) -> Vec<u8> {
 		let mut result = Vec::default();
 		let version = 2u32.to_le_bytes();
 		let segwit_marker = 0u8;
 		let segwit_flag = 1u8;
 		let locktime = [0u8, 0, 0, 0];
-		result.append(&mut version.to_vec());
-		result.append(&mut [segwit_marker].to_vec());
-		result.append(&mut [segwit_flag].to_vec());
-		result.append(&mut to_varint(self.inputs.len() as u64));
-		result.append(self.inputs.iter().fold(&mut Vec::<u8>::default(), |acc, x| {
+		result.extend(version);
+		result.push(segwit_marker);
+		result.push(segwit_flag);
+		result.extend(to_varint(self.inputs.len() as u64));
+		result.extend(self.inputs.iter().fold(Vec::<u8>::default(), |mut acc, x| {
 			let mut le_txid = x.txid.to_vec();
 			le_txid.reverse();
-			acc.append(&mut le_txid);
-			acc.append(&mut x.vout.to_le_bytes().to_vec());
+			acc.extend(le_txid);
+			acc.extend(x.vout.to_le_bytes());
 			acc.push(0);
-			acc.append(&mut (u32::MAX - 2).to_le_bytes().to_vec());
+			acc.extend((u32::MAX - 2).to_le_bytes().iter());
 			acc
 		}));
-		result.append(&mut to_varint(self.outputs.len() as u64));
-		result.append(self.outputs.iter().fold(&mut Vec::<u8>::default(), |acc, x| {
-			acc.append(&mut x.amount.to_le_bytes().to_vec());
-			let mut script = scriptpubkey_from_address(x.destination.clone());
-			acc.append(&mut to_varint(script.len() as u64));
-			acc.append(&mut script);
+		result.extend(to_varint(self.outputs.len() as u64));
+		result.extend(self.outputs.iter().fold(Vec::<u8>::default(), |mut acc, x| {
+			acc.extend(x.amount.to_le_bytes());
+			let script = scriptpubkey_from_address(x.destination.clone());
+			acc.extend(to_varint(script.len() as u64));
+			acc.extend(script);
 			acc
 		}));
 		for i in 0..self.inputs.len() {
@@ -119,14 +124,14 @@ impl BitcoinTransaction {
 			let len_signature = 64u8;
 			result.push(num_witnesses);
 			result.push(len_signature);
-			result.append(&mut self.signatures[i].to_vec());
-			let mut script = BitcoinScript::default();
-			script
+			result.extend(self.signatures[i]);
+			let script = BitcoinScript::default()
 				.push_uint(self.inputs[i].salt)
 				.op_drop()
-				.push_bytes(self.inputs[i].pubkey_x.to_vec())
-				.op_checksig();
-			result.append(&mut script.serialize());
+				.push_bytes(&self.inputs[i].pubkey_x.to_vec())
+				.op_checksig()
+				.serialize();
+			result.extend(script);
 			result.push(0x21u8);
 			let tweaked = tweaked_pubkey(self.inputs[i].pubkey_x, self.inputs[i].salt);
 			if tweaked.serialize_compressed()[0] == 2 {
@@ -134,21 +139,21 @@ impl BitcoinTransaction {
 			} else {
 				result.push(0xC1_u8);
 			}
-			result.append(&mut INTERNAL_PUBKEY[1..33].to_vec());
+			result.extend(INTERNAL_PUBKEY[1..33].iter());
 		}
-		result.append(&mut locktime.to_vec());
+		result.extend(locktime);
 		result
 	}
 
-	pub fn get_signing_payload(&self, index: u32) -> [u8; 32] {
+	pub fn get_signing_payload(self, index: u32) -> [u8; 32] {
 		let prevouts = sha2_256(
 			self.inputs
 				.iter()
-				.fold(&mut Vec::<u8>::default(), |acc, x| {
+				.fold(Vec::<u8>::default(), |mut acc, x| {
 					let mut le_txid = x.txid.to_vec();
 					le_txid.reverse();
-					acc.append(&mut le_txid);
-					acc.append(&mut x.vout.to_le_bytes().to_vec());
+					acc.extend(le_txid);
+					acc.extend(x.vout.to_le_bytes().iter());
 					acc
 				})
 				.as_slice(),
@@ -156,8 +161,8 @@ impl BitcoinTransaction {
 		let amounts = sha2_256(
 			self.inputs
 				.iter()
-				.fold(&mut Vec::<u8>::default(), |acc, x| {
-					acc.append(&mut x.amount.to_le_bytes().to_vec());
+				.fold(Vec::<u8>::default(), |mut acc, x| {
+					acc.extend(x.amount.to_le_bytes().iter());
 					acc
 				})
 				.as_slice(),
@@ -165,13 +170,15 @@ impl BitcoinTransaction {
 		let scriptpubkeys = sha2_256(
 			self.inputs
 				.iter()
-				.fold(&mut Vec::<u8>::default(), |acc, x| {
-					let mut script = BitcoinScript::default();
-					script.push_uint(1);
-					script.push_bytes(
-						tweaked_pubkey(x.pubkey_x, x.salt).serialize_compressed()[1..33].to_vec(),
-					);
-					acc.append(&mut script.serialize());
+				.fold(Vec::<u8>::default(), |mut acc, x| {
+					let script = BitcoinScript::default()
+						.push_uint(1)
+						.push_bytes(
+							&tweaked_pubkey(x.pubkey_x, x.salt).serialize_compressed()[1..33]
+								.to_vec(),
+						)
+						.serialize();
+					acc.extend(script);
 					acc
 				})
 				.as_slice(),
@@ -185,11 +192,11 @@ impl BitcoinTransaction {
 		let outputs = sha2_256(
 			self.outputs
 				.iter()
-				.fold(&mut Vec::<u8>::default(), |acc, x| {
-					acc.append(&mut x.amount.to_le_bytes().to_vec());
-					let mut script = scriptpubkey_from_address(x.destination.clone());
-					acc.append(&mut to_varint(script.len() as u64));
-					acc.append(&mut script);
+				.fold(Vec::<u8>::default(), |mut acc, x| {
+					acc.extend(x.amount.to_le_bytes().iter());
+					let script = scriptpubkey_from_address(x.destination.clone());
+					acc.extend(to_varint(script.len() as u64));
+					acc.extend(script);
 					acc
 				})
 				.as_slice(),
@@ -232,40 +239,40 @@ struct BitcoinScript(Vec<u8>);
 
 impl BitcoinScript {
 	/// Adds an operation to the script that pushes an unsigned integer onto the stack
-	fn push_uint(&mut self, value: u32) -> &mut Self {
+	fn push_uint(mut self, value: u32) -> Self {
 		match value {
 			0 => self.0.push(0),
 			1..=16 => self.0.push(0x50 + value as u8),
 			_ => {
 				let num_bytes = (4 - value.leading_zeros() / 8) as usize;
 				self.0.push(num_bytes as u8);
-				self.0.append(&mut value.to_le_bytes()[..num_bytes].into());
+				self.0.extend(value.to_le_bytes().iter().take(num_bytes));
 			},
 		}
 		self
 	}
 	/// Adds an operation to the script that pushes exactly the provided bytes of data to the stack
-	fn push_bytes(&mut self, mut data: Vec<u8>) -> &mut Self {
-		self.0.append(&mut to_varint(data.len() as u64));
-		self.0.append(&mut data);
+	fn push_bytes(mut self, data: &Vec<u8>) -> Self {
+		self.0.extend(to_varint(data.len() as u64));
+		self.0.extend(data);
 		self
 	}
 	/// Adds an operation to the script that drops the topmost item from the stack
-	fn op_drop(&mut self) -> &mut Self {
+	fn op_drop(mut self) -> Self {
 		self.0.push(0x75);
 		self
 	}
 	/// Adds the CHECKSIG operation to the script
-	fn op_checksig(&mut self) -> &mut Self {
+	fn op_checksig(mut self) -> Self {
 		self.0.push(0xAC);
 		self
 	}
 	/// Serializes the script by returning a single byte for the length
 	/// of the script and then the script itself
-	fn serialize(&self) -> Vec<u8> {
+	fn serialize(mut self) -> Vec<u8> {
 		let mut result = Vec::default();
-		result.append(&mut to_varint(self.0.len() as u64));
-		result.append(&mut self.0.clone());
+		result.extend(to_varint(self.0.len() as u64));
+		result.append(&mut self.0);
 		result
 	}
 }
@@ -299,12 +306,12 @@ fn test_finalize() {
 		amount: 100000000,
 		destination: "bc1pgtj0f3u2rk8ex6khlskz7q50nwc48r8unfgfhxzsx9zhcdnczhqq60lzjt".to_string(),
 	};
-	let mut tx = BitcoinTransaction {
+	let tx = BitcoinTransaction {
 		inputs: vec![input],
 		outputs: vec![output],
 		signatures: Default::default(),
-	};
-	tx.add_signature(0, [0u8; 64]);
+	}
+	.add_signature(0, [0u8; 64]);
 	assert_eq!(tx.finalize(), hex_literal::hex!("020000000001014C94E48A870B85F41228D33CF25213DFCC8DD796E7211ED6B1F9A014809DBBB50100000000FDFFFFFF0100E1F5050000000022512042E4F4C78A1D8F936AD7FC2C2F028F9BB1538CFC9A509B985031457C367815C003400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000025017B752078C79A2B436DA5575A03CDE40197775C656FFF9F0F59FC1466E09C20A81A9CDBAC21C0EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE00000000"));
 }
 
@@ -336,17 +343,16 @@ fn test_payload() {
 
 #[test]
 fn test_build_script() {
-	let mut script = BitcoinScript::default();
-	script
-		.push_uint(0)
-		.op_drop()
-		.push_bytes(
-			hex::decode("2E897376020217C8E385A30B74B758293863049FA66A3FD177E012B076059105")
-				.unwrap(),
-		)
-		.op_checksig();
 	assert_eq!(
-		script.serialize(),
+		BitcoinScript::default()
+			.push_uint(0)
+			.op_drop()
+			.push_bytes(
+				&hex::decode("2E897376020217C8E385A30B74B758293863049FA66A3FD177E012B076059105")
+					.unwrap(),
+			)
+			.op_checksig()
+			.serialize(),
 		hex_literal::hex!(
 			"240075202E897376020217C8E385A30B74B758293863049FA66A3FD177E012B076059105AC"
 		)
@@ -367,8 +373,6 @@ fn test_push_uint() {
 		(u32::MAX, vec![4, 255, 255, 255, 255]),
 	];
 	for x in test_data {
-		let mut script = BitcoinScript::default();
-		script.push_uint(x.0);
-		assert_eq!(script.0, x.1);
+		assert_eq!(BitcoinScript::default().push_uint(x.0).0, x.1);
 	}
 }
