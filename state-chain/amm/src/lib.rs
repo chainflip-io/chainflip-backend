@@ -437,7 +437,7 @@ impl PoolState {
 					upper_info.liquidity_delta.checked_sub_unsigned(minted_liquidity).unwrap();
 
 				position.set_liquidity(
-					&self,
+					self,
 					// Cannot overflow due to * MAX_TICK_GROSS_LIQUIDITY
 					position.liquidity + minted_liquidity,
 					lower_tick,
@@ -470,6 +470,7 @@ impl PoolState {
 	/// This function never panics
 	///
 	/// If this function returns an `Err(_)` no state changes have occurred
+	#[allow(clippy::type_complexity)]
 	pub fn burn(
 		&mut self,
 		lp: LiquidityProvider,
@@ -484,16 +485,16 @@ impl PoolState {
 			assert!(position.liquidity != 0);
 			if burnt_liquidity <= position.liquidity {
 				let mut lower_info = self.liquidity_map.get(&lower_tick).unwrap().clone();
-				lower_info.liquidity_gross = lower_info.liquidity_gross - burnt_liquidity;
+				lower_info.liquidity_gross -= burnt_liquidity;
 				lower_info.liquidity_delta =
 					lower_info.liquidity_delta.checked_sub_unsigned(burnt_liquidity).unwrap();
 				let mut upper_info = self.liquidity_map.get(&upper_tick).unwrap().clone();
-				upper_info.liquidity_gross = upper_info.liquidity_gross - burnt_liquidity;
+				upper_info.liquidity_gross -= burnt_liquidity;
 				upper_info.liquidity_delta =
 					upper_info.liquidity_delta.checked_add_unsigned(burnt_liquidity).unwrap();
 
 				position.set_liquidity(
-					&self,
+					self,
 					position.liquidity - burnt_liquidity,
 					lower_tick,
 					&lower_info,
@@ -560,7 +561,7 @@ impl PoolState {
 			let lower_info = self.liquidity_map.get(&lower_tick).unwrap();
 			let upper_info = self.liquidity_map.get(&upper_tick).unwrap();
 
-			position.update_fees_owed(&self, lower_tick, &lower_info, upper_tick, &upper_info);
+			position.update_fees_owed(self, lower_tick, lower_info, upper_tick, upper_info);
 
 			let fees_owed = std::mem::take(&mut position.fees_owed);
 
@@ -851,9 +852,9 @@ impl PoolState {
 	}
 
 	fn sqrt_price_at_tick(tick: Tick) -> SqrtPriceQ64F96 {
-		assert!(MIN_TICK <= tick && tick <= MAX_TICK);
+		assert!((MIN_TICK..=MAX_TICK).contains(&tick));
 
-		let abs_tick = tick.abs() as u32;
+		let abs_tick = tick.unsigned_abs();
 
 		let mut r = if abs_tick & 0x1u32 != 0 {
 			U256::from(0xfffcb933bd6fad37aa2d162d1a594001u128)
@@ -918,7 +919,7 @@ impl PoolState {
 		// Note the price can never actually reach MAX_SQRT_PRICE
 		assert!(sqrt_price < MAX_SQRT_PRICE);
 
-		let sqrt_price_q64f128 = U256::from(sqrt_price) << 32u128;
+		let sqrt_price_q64f128 = sqrt_price << 32u128;
 
 		let (integer_log_2, mantissa) = {
 			let mut _bits_remaining = sqrt_price_q64f128;
@@ -930,8 +931,8 @@ impl PoolState {
 			macro_rules! add_integer_bit {
 				($bit:literal, $lower_bits_mask:literal) => {
 					if _bits_remaining > U256::from($lower_bits_mask) {
-						most_signifcant_bit = most_signifcant_bit | $bit;
-						_bits_remaining = _bits_remaining >> $bit;
+						most_signifcant_bit |= $bit;
+						_bits_remaining >>= $bit;
 					}
 				};
 			}
@@ -977,7 +978,7 @@ impl PoolState {
 					_mantissa = if mantissa_sq.bit(128) {
 						// is the 129th bit set, all higher bits must be zero due to 127 right bit
 						// shift
-						log_2_q63f64 = log_2_q63f64 | (1i128 << $bit);
+						log_2_q63f64 |= 1i128 << $bit;
 						(mantissa_sq >> 1u8).as_u128()
 					} else {
 						mantissa_sq.as_u128()
@@ -1031,12 +1032,10 @@ impl PoolState {
 
 		if tick_low == tick_high {
 			tick_low
+		} else if Self::sqrt_price_at_tick(tick_high) <= sqrt_price {
+			tick_high
 		} else {
-			if Self::sqrt_price_at_tick(tick_high) <= sqrt_price {
-				tick_high
-			} else {
-				tick_low
-			}
+			tick_low
 		}
 	}
 }
