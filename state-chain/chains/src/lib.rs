@@ -270,14 +270,14 @@ impl Default for DeploymentStatus {
 
 /// Helper trait to avoid matching over chains in the generic pallet.
 pub trait IngressTypeGeneration {
-	type IngressType;
+	type IngressId;
 	type Address;
 	/// Constructs the ingress type for the given intent id, address and if it has been deployed.
 	fn generate_ingress_type(
 		intent_id: u64,
 		address: Self::Address,
 		deployed: bool,
-	) -> Self::IngressType;
+	) -> Self::IngressId;
 	/// Constructs the ingress type and if it has been deployed.
 	fn deployment_status(is_deployed: bool) -> DeploymentStatus;
 }

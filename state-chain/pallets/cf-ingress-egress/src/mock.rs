@@ -46,15 +46,15 @@ frame_support::construct_runtime!(
 pub struct MockIngressTypeGenerator;
 
 impl IngressTypeGeneration for MockIngressTypeGenerator {
-	type IngressType = EthereumIngressId;
+	type IngressId = EthereumIngressId;
 	type Address = H160;
 
 	fn generate_ingress_type(
 		intent_id: u64,
 		_address: Self::Address,
 		_deployed: bool,
-	) -> Self::IngressType {
-		Self::IngressType::UnDeployed(intent_id)
+	) -> Self::IngressId {
+		Self::IngressId::UnDeployed(intent_id)
 	}
 
 	fn deployment_status(is_deployed: bool) -> cf_chains::DeploymentStatus {

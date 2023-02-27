@@ -785,13 +785,13 @@ impl PolkadotReplayProtection {
 pub struct PolkadotIngressIdGenerator;
 
 impl IngressTypeGeneration for PolkadotIngressIdGenerator {
-	type IngressType = PolkadotIngressId;
+	type IngressId = PolkadotIngressId;
 	type Address = AccountId32;
 	fn generate_ingress_type(
 		intent_id: u64,
 		_address: Self::Address,
 		_deployed: bool,
-	) -> Self::IngressType {
+	) -> Self::IngressId {
 		intent_id
 	}
 

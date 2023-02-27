@@ -139,7 +139,7 @@ pub mod pallet {
 		type TTL: Get<u64>;
 
 		type IngressTypeGenerator: IngressTypeGeneration<
-			IngressType = IngressFetchIdOf<Self, I>,
+			IngressId = IngressFetchIdOf<Self, I>,
 			Address = TargetChainAccount<Self, I>,
 		>;
 
@@ -202,7 +202,7 @@ pub mod pallet {
 	/// Map of intent id to the ingress id.
 	#[pallet::storage]
 	pub(crate) type IngressIds<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, u64, IngressFetchIdOf<T, I>>;
+		StorageMap<_, Twox64Concat, IntentId, IngressFetchIdOf<T, I>>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -407,6 +407,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					let ingress_id = IngressIds::<T, I>::get(intent_id);
 					fetch_params
 						.push(FetchAssetParams { ingress_fetch_id: ingress_id.unwrap(), asset });
+					// TODO: Figure out how to get the address here.
+					// AddressStatus::<T, I>::insert(
+					// 	ingress_address.clone(),
+					// 	T::IngressTypeGenerator::deployment_status(true),
+					// );
 				},
 				FetchOrTransfer::<T::TargetChain>::Transfer { asset, to, amount, egress_id } => {
 					egress_ids.push(egress_id);
@@ -448,10 +453,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ensure!(ingress.ingress_asset == asset, Error::<T, I>::IngressMismatchWithIntent);
 
 		AddressPool::<T, I>::append(ingress_address.clone());
-		AddressStatus::<T, I>::insert(
-			ingress_address.clone(),
-			T::IngressTypeGenerator::deployment_status(true),
-		);
 
 		// Ingress is called by witnessers, so asset/chain combination should always be valid.
 		ScheduledEgressRequests::<T, I>::append(FetchOrTransfer::<T::TargetChain>::Fetch {
@@ -490,7 +491,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 	/// Create a new intent address for the given asset and registers it with the given action.
-	fn ingress_intent_creation(
+	fn register_ingress_intent(
 		ingress_asset: TargetChainAsset<T, I>,
 		intent_action: IntentAction<T::AccountId>,
 	) -> Result<(IntentId, TargetChainAccount<T, I>), DispatchError> {
@@ -559,7 +560,7 @@ impl<T: Config<I>, I: 'static> IngressApi<T::TargetChain> for Pallet<T, I> {
 		lp_account: T::AccountId,
 		ingress_asset: TargetChainAsset<T, I>,
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
-		let (intent_id, ingress_address) = Self::ingress_intent_creation(
+		let (intent_id, ingress_address) = Self::register_ingress_intent(
 			ingress_asset,
 			IntentAction::LiquidityProvision { lp_account },
 		)?;
@@ -580,7 +581,7 @@ impl<T: Config<I>, I: 'static> IngressApi<T::TargetChain> for Pallet<T, I> {
 		relayer_commission_bps: u16,
 		relayer_id: T::AccountId,
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
-		let (intent_id, ingress_address) = Self::ingress_intent_creation(
+		let (intent_id, ingress_address) = Self::register_ingress_intent(
 			ingress_asset,
 			IntentAction::Swap { egress_address, egress_asset, relayer_commission_bps, relayer_id },
 		)?;

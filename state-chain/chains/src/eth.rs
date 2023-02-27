@@ -692,14 +692,14 @@ pub enum EthereumIngressId {
 pub struct EthereumIngressIdGenerator;
 
 impl IngressTypeGeneration for EthereumIngressIdGenerator {
-	type IngressType = EthereumIngressId;
+	type IngressId = EthereumIngressId;
 	type Address = H160;
 
 	fn generate_ingress_type(
 		intent_id: u64,
 		address: Self::Address,
 		deployed: bool,
-	) -> Self::IngressType {
+	) -> Self::IngressId {
 		if deployed {
 			EthereumIngressId::Deployed(address)
 		} else {
