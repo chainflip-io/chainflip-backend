@@ -53,6 +53,7 @@ use mockall::automock;
 
 use self::{
 	ceremony_manager::{CeremonyResultSender, KeygenCeremony, SigningCeremony},
+	common::ResharingContext,
 	key_store::KeyStore,
 	signing::SigningData,
 };
@@ -148,6 +149,9 @@ pub struct KeygenRequestDetails<C: CryptoScheme> {
 	pub participants: BTreeSet<AccountId>,
 	pub rng: Rng,
 	pub result_sender: CeremonyResultSender<KeygenCeremony<C>>,
+	/// If not `None`, the participant will use an existing key share
+	/// in an attempt to re-share an existing key
+	pub resharing_context: Option<ResharingContext<C>>,
 }
 
 pub struct SigningRequestDetails<C>
@@ -213,6 +217,7 @@ impl<C: CryptoScheme> MultisigClientApi<C> for MultisigClient<C> {
 					participants,
 					rng,
 					result_sender,
+					resharing_context: None,
 				})),
 			})
 			.ok()

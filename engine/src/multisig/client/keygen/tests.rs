@@ -1,19 +1,20 @@
 use cf_primitives::{AccountId, AuthorityCount};
-use rand_legacy::FromEntropy;
+use rand_legacy::{FromEntropy, SeedableRng};
 use std::collections::BTreeSet;
 
 use crate::multisig::{
 	client::{
-		common::{BroadcastFailureReason, KeygenFailureReason, KeygenStageName},
+		common::{BroadcastFailureReason, KeygenFailureReason, KeygenStageName, ResharingContext},
 		helpers::{
 			gen_invalid_keygen_comm1, get_invalid_hash_comm, new_nodes, run_keygen, run_stages,
 			standard_signing, KeygenCeremonyRunner, SigningCeremonyRunner, ACCOUNT_IDS,
-			DEFAULT_KEYGEN_CEREMONY_ID, DEFAULT_SIGNING_CEREMONY_ID,
+			DEFAULT_KEYGEN_CEREMONY_ID, DEFAULT_KEYGEN_SEED, DEFAULT_SIGNING_CEREMONY_ID,
 		},
 		keygen::{self, Complaints6, VerifyComplaints7, VerifyHashComm2},
 		utils::PartyIdxMapping,
 	},
 	crypto::Rng,
+	eth::EthSigning,
 	CryptoScheme,
 };
 
@@ -910,3 +911,49 @@ async fn initially_incompatible_keys_can_sign() {
 		);
 	standard_signing(&mut signing_ceremony).await;
 }
+
+#[tokio::test]
+async fn key_resharing_happy_path() {
+	// First perform a regular keygen to generate keys
+
+	let (initial_key, mut key_infos) = keygen::generate_key_data::<EthSigning>(
+		ACCOUNT_IDS.clone().into_iter().collect(),
+		&mut Rng::from_seed(DEFAULT_KEYGEN_SEED),
+	);
+
+	// Then perform a key resharing ceremony and check that
+	// we get the same key as the result
+
+	let mut ceremony = KeygenCeremonyRunner::new_with_default();
+
+	let ceremony_details = ceremony.keygen_ceremony_details();
+	for (id, node) in &mut ceremony.nodes {
+		let key_info = key_infos.remove(id).unwrap();
+		node.request_keygen(
+			ceremony_details.clone(),
+			Some(ResharingContext::from_key(&key_info, id)),
+		)
+		.await;
+	}
+
+	let messages = ceremony.gather_outgoing_messages::<keygen::HashComm1, _>().await;
+
+	let messages = run_stages!(
+		ceremony,
+		messages,
+		keygen::VerifyHashComm2,
+		CoeffComm3,
+		VerifyCoeffComm4,
+		SecretShare5,
+		Complaints6,
+		VerifyComplaints7
+	);
+
+	ceremony.distribute_messages(messages).await;
+	let (new_key, _new_shares) = ceremony.complete().await;
+
+	assert_eq!(new_key, initial_key);
+}
+
+// TODO: test that a party who doesn't perform re-sharing correctly
+// (commits to an unexpected secret) gets reported

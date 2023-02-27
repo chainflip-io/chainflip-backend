@@ -9,11 +9,15 @@ pub use ceremony_stage::{
 
 pub use broadcast_verification::BroadcastVerificationMessage;
 
+use cf_primitives::AccountId;
 pub use failure_reason::{
 	BroadcastFailureReason, CeremonyFailureReason, KeygenFailureReason, SigningFailureReason,
 };
 
-use std::sync::Arc;
+use std::{
+	collections::{BTreeMap, BTreeSet},
+	sync::Arc,
+};
 
 use serde::{Deserialize, Serialize};
 
@@ -24,7 +28,7 @@ use crate::multisig::{
 	CryptoScheme,
 };
 
-use super::{utils::PartyIdxMapping, ThresholdParameters};
+use super::{signing::get_lagrange_coeff, utils::PartyIdxMapping, ThresholdParameters};
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct KeygenResult<C: CryptoScheme> {
@@ -88,6 +92,37 @@ pub struct KeygenResultInfo<C: CryptoScheme> {
 	pub key: Arc<KeygenResult<C>>,
 	pub validator_mapping: Arc<PartyIdxMapping>,
 	pub params: ThresholdParameters,
+}
+
+/// Our own secret share and the public keys of all other participants
+/// scaled by corresponding lagrange coefficients.
+pub struct ResharingContext<C: CryptoScheme> {
+	pub secret_share: <C::Point as ECPoint>::Scalar,
+	pub party_public_keys: BTreeMap<AccountId, C::Point>,
+}
+
+impl<C: CryptoScheme> ResharingContext<C> {
+	pub fn from_key(key: &KeygenResultInfo<C>, own_id: &AccountId) -> Self {
+		let own_idx = key.validator_mapping.get_idx(own_id).unwrap();
+		let all_idxs: BTreeSet<_> = (1u32..=key.key.party_public_keys.len() as u32).collect();
+
+		let coeff = get_lagrange_coeff::<C::Point>(own_idx, &all_idxs).unwrap();
+
+		let secret_share = coeff * &key.key.key_share.x_i;
+
+		let party_public_keys = key
+			.validator_mapping
+			.get_all_ids()
+			.iter()
+			.map(|id| {
+				//
+				let idx = key.validator_mapping.get_idx(id).expect("id must be present");
+				let coeff = get_lagrange_coeff::<C::Point>(idx, &all_idxs).unwrap();
+				(id.clone(), key.key.party_public_keys[idx as usize - 1] * &coeff)
+			})
+			.collect();
+		Self { secret_share, party_public_keys }
+	}
 }
 
 #[derive(Error, Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]

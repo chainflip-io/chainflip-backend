@@ -44,6 +44,10 @@ impl PartyIdxMapping {
 		idxs.iter().map(|idx| self.get_id(*idx).clone()).collect()
 	}
 
+	pub fn get_all_ids(&self) -> &BTreeSet<AccountId> {
+		&self.account_ids
+	}
+
 	pub fn from_participants(participants: BTreeSet<AccountId>) -> Self {
 		assert!(participants.len() <= AuthorityCount::MAX as usize);
 
