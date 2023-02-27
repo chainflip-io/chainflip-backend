@@ -69,8 +69,6 @@ pub mod pallet {
 	pub(crate) type IngressFetchIdOf<T, I> =
 		<<T as Config<I>>::TargetChain as Chain>::IngressFetchId;
 
-	pub(crate) type IntentPair<T, I> = (IntentId, TargetChainAccount<T, I>);
-
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	pub struct IngressWitness<C: Chain + ChainCrypto> {
 		pub ingress_address: C::ChainAccount,
@@ -186,10 +184,10 @@ pub mod pallet {
 	pub(crate) type DisabledEgressAssets<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, TargetChainAsset<T, I>, ()>;
 
-	/// Stores pools of addresses that are available for use.
+	/// Stores a pool of addresses that is available for use.
 	#[pallet::storage]
-	pub(crate) type StaleIntents<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, Vec<IntentPair<T, I>>, ValueQuery>;
+	pub(crate) type AddressPool<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, Vec<TargetChainAccount<T, I>>, ValueQuery>;
 
 	/// Stores the status of an address.
 	#[pallet::storage]
@@ -199,7 +197,7 @@ pub mod pallet {
 	/// Stores a timestamp for when an intent will expire against the intent infos.
 	#[pallet::storage]
 	pub(crate) type IntentExpiries<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, u64, Vec<IntentPair<T, I>>>;
+		StorageMap<_, Twox64Concat, u64, Vec<TargetChainAccount<T, I>>>;
 
 	/// Map of intent id to the ingress id.
 	#[pallet::storage]
@@ -282,10 +280,10 @@ pub mod pallet {
 			for expiry in expired {
 				if let Some(addresses) = IntentExpiries::<T, I>::take(expiry) {
 					for address in addresses.clone() {
-						IntentIngressDetails::<T, I>::remove(&address.1);
-						IntentActions::<T, I>::remove(&address.1);
-						StaleIntents::<T, I>::append(address.clone());
-						Self::deposit_event(Event::StopWitnessing { ingress_address: address.1 });
+						IntentIngressDetails::<T, I>::remove(&address);
+						IntentActions::<T, I>::remove(&address);
+						AddressPool::<T, I>::append(address.clone());
+						Self::deposit_event(Event::StopWitnessing { ingress_address: address });
 					}
 					total_weight = total_weight
 						.saturating_add(T::WeightInfo::on_initialize(addresses.len() as u32));
@@ -449,7 +447,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			.ok_or(Error::<T, I>::InvalidIntent)?;
 		ensure!(ingress.ingress_asset == asset, Error::<T, I>::IngressMismatchWithIntent);
 
-		StaleIntents::<T, I>::append((ingress.intent_id, ingress_address.clone()));
+		AddressPool::<T, I>::append(ingress_address.clone());
 		AddressStatus::<T, I>::insert(
 			ingress_address.clone(),
 			T::IngressTypeGenerator::deployment_status(true),
@@ -498,41 +496,34 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> Result<(IntentId, TargetChainAccount<T, I>), DispatchError> {
 		let ttl = T::TTL::get();
 		let expires_in = ttl.saturating_add(T::TimeSource::now().as_secs());
-		let (intent_id, address) = if let Some((intent_id, address)) =
-			StaleIntents::<T, I>::get().pop()
-		{
-			IngressIds::<T, I>::insert(
-				intent_id,
-				T::IngressTypeGenerator::generate_ingress_type(intent_id, address.clone(), true),
-			);
-			(intent_id, address)
+		let next_intent_id = IntentIdCounter::<T, I>::get()
+			.checked_add(1)
+			.ok_or(Error::<T, I>::IntentIdsExhausted)?;
+		let mut pool = AddressPool::<T, I>::take();
+		let address = if let Some(address) = pool.pop() {
+			address
 		} else {
-			let next_intent_id = IntentIdCounter::<T, I>::get()
-				.checked_add(1)
-				.ok_or(Error::<T, I>::IntentIdsExhausted)?;
 			let new_address: TargetChainAccount<T, I> =
 				T::AddressDerivation::generate_address(ingress_asset, next_intent_id)?;
-			IngressIds::<T, I>::insert(
-				next_intent_id,
-				T::IngressTypeGenerator::generate_ingress_type(
-					next_intent_id,
-					new_address.clone(),
-					false,
-				),
-			);
 			AddressStatus::<T, I>::insert(
 				new_address.clone(),
 				T::IngressTypeGenerator::deployment_status(false),
 			);
-			IntentIdCounter::<T, I>::put(next_intent_id);
-			(next_intent_id, new_address)
+			new_address
 		};
-
-		IntentExpiries::<T, I>::append(expires_in, (intent_id, address.clone()));
-
-		IntentIngressDetails::<T, I>::insert(&address, IngressDetails { intent_id, ingress_asset });
+		AddressPool::<T, I>::put(pool);
+		IngressIds::<T, I>::insert(
+			next_intent_id,
+			T::IngressTypeGenerator::generate_ingress_type(next_intent_id, address.clone(), true),
+		);
+		IntentExpiries::<T, I>::append(expires_in, address.clone());
+		IntentIdCounter::<T, I>::put(next_intent_id);
+		IntentIngressDetails::<T, I>::insert(
+			&address,
+			IngressDetails { intent_id: next_intent_id, ingress_asset },
+		);
 		IntentActions::<T, I>::insert(&address, intent_action);
-		Ok((intent_id, address))
+		Ok((next_intent_id, address))
 	}
 }
 

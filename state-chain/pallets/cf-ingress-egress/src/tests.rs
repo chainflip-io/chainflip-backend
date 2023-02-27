@@ -1,6 +1,6 @@
 use crate::{
-	mock::*, DisabledEgressAssets, FetchOrTransfer, IntentActions, IntentExpiries,
-	IntentIngressDetails, ScheduledEgressRequests, StaleIntents, WeightInfo,
+	mock::*, AddressPool, DisabledEgressAssets, FetchOrTransfer, IntentActions, IntentExpiries,
+	IntentIngressDetails, ScheduledEgressRequests, WeightInfo,
 };
 
 use cf_primitives::{chains::assets::eth, ForeignChain};
@@ -136,8 +136,8 @@ fn can_schedule_ingress_fetch() {
 			ScheduledEgressRequests::<Test, Instance1>::get(),
 			vec![
 				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 1u64, asset: ETH_ETH },
-				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 1u64, asset: ETH_ETH },
-				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 1u64, asset: ETH_FLIP },
+				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 2u64, asset: ETH_ETH },
+				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 3u64, asset: ETH_FLIP },
 			]
 		);
 
@@ -151,9 +151,9 @@ fn can_schedule_ingress_fetch() {
 			ScheduledEgressRequests::<Test, Instance1>::get(),
 			vec![
 				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 1u64, asset: ETH_ETH },
-				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 1u64, asset: ETH_ETH },
-				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 1u64, asset: ETH_FLIP },
-				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 1u64, asset: ETH_ETH },
+				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 2u64, asset: ETH_ETH },
+				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 3u64, asset: ETH_FLIP },
+				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 4u64, asset: ETH_ETH },
 			]
 		);
 	});
@@ -335,7 +335,7 @@ fn on_idle_batch_size_is_limited_by_weight() {
 					egress_id: (ForeignChain::Ethereum, 5),
 				},
 				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 1u64, asset: ETH_FLIP },
-				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 1u64, asset: ETH_FLIP },
+				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 2u64, asset: ETH_FLIP },
 			]
 		);
 	});
@@ -373,23 +373,23 @@ fn intent_expires() {
 		let expire_time = 5;
 		let _ = IngressEgress::register_liquidity_ingress_intent(ALICE, ETH_ETH);
 		time_source::Mock::tick(Duration::from_secs(expire_time));
-		assert!(StaleIntents::<Test, Instance1>::get().is_empty());
+		assert!(AddressPool::<Test, Instance1>::get().is_empty());
 		assert!(IntentExpiries::<Test, Instance1>::get(5).is_some());
 		let addresses =
 			IntentExpiries::<Test, Instance1>::get(expire_time).expect("intent expiry exists");
 		assert!(addresses.len() == 1);
-		let address = addresses.get(0).expect("to have ingress details for that address").1;
+		let address = addresses.get(0).expect("to have ingress details for that address");
 		assert!(IntentIngressDetails::<Test, Instance1>::get(address,).is_some());
 		assert!(IntentActions::<Test, Instance1>::get(address).is_some());
 		IngressEgress::on_initialize(1);
 		assert!(IntentExpiries::<Test, Instance1>::get(expire_time).is_none());
-		assert!(!StaleIntents::<Test, Instance1>::get().is_empty());
+		assert!(!AddressPool::<Test, Instance1>::get().is_empty());
 		assert_eq!(
-			StaleIntents::<Test, Instance1>::get().pop().expect("to have a stale intent").1,
-			address
+			AddressPool::<Test, Instance1>::get().pop().expect("to have a stale intent"),
+			address.clone()
 		);
 		System::assert_last_event(RuntimeEvent::IngressEgress(crate::Event::StopWitnessing {
-			ingress_address: address,
+			ingress_address: address.clone(),
 		}));
 	});
 }
