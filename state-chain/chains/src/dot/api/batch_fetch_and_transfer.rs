@@ -64,9 +64,8 @@ impl BatchFetchAndTransfer {
 						.iter()
 						.map(|fetch_param| {
 							PolkadotRuntimeCall::Utility(UtilityCall::as_derivative {
-								index: fetch_param.ingress_fetch_id as u16, /* todo: THIS IS TO
-								                                             * BE
-								                                             * REVISITED LATER */
+								index: fetch_param.ingress_fetch_id as u16, /* todo: refer to
+								                                             * issue #2354 */
 								call: Box::new(PolkadotRuntimeCall::Balances(
 									BalancesCall::transfer_all {
 										dest: PolkadotAccountIdLookup::from(
