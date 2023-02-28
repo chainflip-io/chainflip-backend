@@ -960,5 +960,50 @@ async fn key_resharing_happy_path() {
 	assert_eq!(new_key, initial_key);
 }
 
-// TODO: test that a party who doesn't perform re-sharing correctly
+// Test that a party who doesn't perform re-sharing correctly
 // (commits to an unexpected secret) gets reported
+#[tokio::test]
+async fn key_resharing_with_incorrect_commitment() {
+	use crate::multisig::eth::Scalar;
+	// Perform a regular keygen to generate initial keys:
+	let (_initial_key, mut key_infos) = keygen::generate_key_data::<EthSigning>(
+		ACCOUNT_IDS.clone().into_iter().collect(),
+		&mut Rng::from_seed(DEFAULT_KEYGEN_SEED),
+	);
+
+	// Now perform a key re-sharing ceremony where one of the participants
+	// commits to an unexpected secret
+
+	let mut ceremony = KeygenCeremonyRunner::new_with_default();
+
+	let ceremony_details = ceremony.keygen_ceremony_details();
+
+	let participants: BTreeSet<AccountId> = ACCOUNT_IDS.clone().into_iter().skip(1).collect();
+
+	// This account id will commit to an unexpected secret
+	let bad_account_id = participants.iter().next().unwrap().clone();
+
+	for (id, node) in &mut ceremony.nodes {
+		let key_info = key_infos.remove(id).unwrap();
+
+		let mut context = ResharingContext::from_key(&key_info, id, &participants);
+
+		if id == &bad_account_id {
+			// Adding a small tweak to the share to make it incorrect
+			context.secret_share = context.secret_share + Scalar::from(1);
+		}
+
+		node.request_keygen(ceremony_details.clone(), Some(context)).await;
+	}
+
+	let messages = ceremony.gather_outgoing_messages::<keygen::HashComm1, _>().await;
+
+	let messages =
+		run_stages!(ceremony, messages, keygen::VerifyHashComm2, CoeffComm3, VerifyCoeffComm4);
+
+	ceremony.distribute_messages(messages).await;
+
+	ceremony
+		.complete_with_error(&[bad_account_id], KeygenFailureReason::InvalidCommitment)
+		.await;
+}
