@@ -74,13 +74,10 @@ pub fn get_lagrange_coeff<P: ECPoint>(
 		den = den * (j - signer_index);
 	}
 
-	let lagrange_coeff = num *
-		den.invert().expect(
-			"Should not be possible to get a zero scalar
+	num * den.invert().expect(
+		"Should not be possible to get a zero scalar
 			because all indices are unique due to the BTreeSet",
-		);
-
-	lagrange_coeff
+	)
 }
 
 /// Generate a "binding value" for party `index`. See "Signing Protocol" in Section 5.2 (page 14)
