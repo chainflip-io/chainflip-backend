@@ -102,22 +102,50 @@ pub struct ResharingContext<C: CryptoScheme> {
 }
 
 impl<C: CryptoScheme> ResharingContext<C> {
-	pub fn from_key(key: &KeygenResultInfo<C>, own_id: &AccountId) -> Self {
-		let own_idx = key.validator_mapping.get_idx(own_id).unwrap();
-		let all_idxs: BTreeSet<_> = (1u32..=key.key.party_public_keys.len() as u32).collect();
+	/// `participants` are a subset of the holders of the original key
+	/// that are sufficient to reconstruct or, in this case, create
+	/// new shares for the key.
+	pub fn from_key(
+		key: &KeygenResultInfo<C>,
+		own_id: &AccountId,
+		participants: &BTreeSet<AccountId>,
+	) -> Self {
+		use crate::multisig::crypto::ECScalar;
+		let own_idx = key.validator_mapping.get_idx(own_id).expect("our own id must be present");
 
-		let coeff = get_lagrange_coeff::<C::Point>(own_idx, &all_idxs);
+		let all_idxs: BTreeSet<_> = participants
+			.iter()
+			.map(|id| {
+				key.validator_mapping
+					.get_idx(id)
+					.expect("participant must be a known key share holder")
+			})
+			.collect();
 
-		let secret_share = coeff * &key.key.key_share.x_i;
+		// If we are not a participant, we simply set our secret to 0, otherwise
+		// we use our key share scaled by the lagrange coefficient:
+		let secret_share = if participants.contains(own_id) {
+			get_lagrange_coeff::<C::Point>(own_idx, &all_idxs) * &key.key.key_share.x_i
+		} else {
+			<C::Point as ECPoint>::Scalar::zero()
+		};
 
 		let party_public_keys = key
 			.validator_mapping
 			.get_all_ids()
 			.iter()
 			.map(|id| {
-				let idx = key.validator_mapping.get_idx(id).expect("id must be present");
-				let coeff = get_lagrange_coeff::<C::Point>(idx, &all_idxs);
-				(id.clone(), key.key.party_public_keys[idx as usize - 1] * &coeff)
+				// Parties that don't "participate", are expected to set their secret to 0,
+				// and thus their public key share should be a point at infinity:
+				let expected_pubkey_share = if participants.contains(&id) {
+					let idx = key.validator_mapping.get_idx(id).expect("id must be present");
+					let coeff = get_lagrange_coeff::<C::Point>(idx, &all_idxs);
+					key.key.party_public_keys[idx as usize - 1] * &coeff
+				} else {
+					C::Point::point_at_infinity()
+				};
+
+				(id.clone(), expected_pubkey_share)
 			})
 			.collect();
 		Self { secret_share, party_public_keys }

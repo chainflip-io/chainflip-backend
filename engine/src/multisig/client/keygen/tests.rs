@@ -914,24 +914,29 @@ async fn initially_incompatible_keys_can_sign() {
 
 #[tokio::test]
 async fn key_resharing_happy_path() {
-	// First perform a regular keygen to generate keys
+	// First perform a regular keygen to generate initial keys:
 
 	let (initial_key, mut key_infos) = keygen::generate_key_data::<EthSigning>(
 		ACCOUNT_IDS.clone().into_iter().collect(),
 		&mut Rng::from_seed(DEFAULT_KEYGEN_SEED),
 	);
 
-	// Then perform a key resharing ceremony and check that
-	// we get the same key as the result
+	// Now perform a key re-sharing ceremony and check that
+	// we get the same key in the end:
 
 	let mut ceremony = KeygenCeremonyRunner::new_with_default();
 
 	let ceremony_details = ceremony.keygen_ceremony_details();
+
+	// Note that we remove one participant to show that we can
+	// reconstruct the key with only a subset of key share holders
+	let participants: BTreeSet<AccountId> = ACCOUNT_IDS.clone().into_iter().skip(1).collect();
+
 	for (id, node) in &mut ceremony.nodes {
 		let key_info = key_infos.remove(id).unwrap();
 		node.request_keygen(
 			ceremony_details.clone(),
-			Some(ResharingContext::from_key(&key_info, id)),
+			Some(ResharingContext::from_key(&key_info, id, &participants)),
 		)
 		.await;
 	}
