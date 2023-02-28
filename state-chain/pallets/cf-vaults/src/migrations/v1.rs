@@ -1,6 +1,6 @@
 use crate::*;
 use cf_traits::EpochInfo;
-use sp_runtime::AccountId32;
+use sp_runtime::{traits::Zero, AccountId32};
 use sp_std::marker::PhantomData;
 
 pub struct Migration<T: Config<I>, I: 'static>(PhantomData<(T, I)>);
