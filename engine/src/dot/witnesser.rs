@@ -445,11 +445,12 @@ where
 
 										monitored_signatures.remove(&sig.0);
 									}
-								} else {
-									error!("Signature not Sr25519. Got {signature:?} instead.");
 								}
 							} else {
-								error!("Failed to decode UncheckedExtrinsic {unchecked:?}");
+								// We expect this to occur when attempting to decode
+								// a transaction that was not sent by us.
+								// We can safely ignore it, but we log it in case.
+								debug!("Failed to decode UncheckedExtrinsic {unchecked:?}");
 							}
 						}
 					}
