@@ -121,12 +121,11 @@ mod tests {
 /// The `StaticState` is used to allow for state to be shared between restarts.
 /// Such as a Receiver a task might need to continue to receive data from some other task,
 /// despite the fact it has been restarted.
-pub async fn start_with_restart_on_failure<StaticState, TaskFut, TaskGenerator>(
+pub fn start_with_restart_on_failure<StaticState, TaskFut, TaskGenerator>(
 	scope: &Scope<'_, anyhow::Error>,
 	task_generator: TaskGenerator,
 	mut static_state: StaticState,
-) -> anyhow::Result<()>
-where
+) where
 	TaskFut: Future<Output = Result<(), StaticState>> + Send + 'static,
 	StaticState: Send + 'static,
 	TaskGenerator: Fn(StaticState) -> TaskFut + Send + 'static,
@@ -150,8 +149,6 @@ where
 			};
 		}
 	});
-
-	Ok(())
 }
 
 #[cfg(test)]
@@ -182,7 +179,11 @@ mod test_restart_on_failure {
 
 		task_scope(|scope| {
 			let value = 0;
-			start_with_restart_on_failure(scope, start_up_some_loop, value).boxed()
+			async move {
+				start_with_restart_on_failure(scope, start_up_some_loop, value);
+				Ok(())
+			}
+			.boxed()
 		})
 		.await
 		.unwrap();

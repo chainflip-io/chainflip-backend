@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::BTreeSet, sync::Arc};
 
 use async_trait::async_trait;
 use cf_chains::eth::Ethereum;
@@ -22,8 +22,10 @@ pub struct ContractWitnesser<Contract, StateChainClient> {
 }
 
 impl<StateChainClient> ContractWitnesser<Erc20Witnesser, StateChainClient> {
-	pub fn take_ingress_receiver(self) -> tokio::sync::mpsc::UnboundedReceiver<H160> {
-		self.contract.monitored_address_receiver
+	pub fn take_ingress_receiver_pair(
+		self,
+	) -> (tokio::sync::mpsc::UnboundedReceiver<H160>, BTreeSet<H160>) {
+		(self.contract.monitored_address_receiver, self.contract.monitored_addresses)
 	}
 }
 
