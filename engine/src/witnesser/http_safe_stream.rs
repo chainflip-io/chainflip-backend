@@ -93,7 +93,7 @@ where
 				*option_last_block_yielded = Some(next_block_to_yield);
 				Some((next_block_to_yield, state))
 			}
-			.instrument(info_span!("ETH_HTTPSafeStream"))
+			.instrument(info_span!("HTTPSafeStream"))
 		})
 		.fuse(),
 	)
