@@ -1,10 +1,13 @@
 //! Common Witnesser functionality
 
+use async_trait::async_trait;
 use cf_primitives::EpochIndex;
 
 pub mod block_head_stream_from;
 pub mod checkpointing;
 pub mod epoch_witnesser;
+
+use anyhow::Result;
 
 pub type ChainBlockNumber<Chain> = <Chain as cf_chains::Chain>::ChainBlockNumber;
 
@@ -22,4 +25,12 @@ pub trait BlockNumberable {
 	type BlockNumber;
 
 	fn block_number(&self) -> Self::BlockNumber;
+}
+
+/// General trait for getting the latest/height block number for a particular chain
+#[async_trait]
+pub trait LatestBlockNumber {
+	type BlockNumber;
+
+	async fn latest_block_number(&self) -> Result<Self::BlockNumber>;
 }
