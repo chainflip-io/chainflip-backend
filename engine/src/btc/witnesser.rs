@@ -18,7 +18,7 @@ use crate::{
 };
 
 use super::{
-	rpc::{filter_relevant_utxos, BtcRpcApi, BtcRpcClient},
+	rpc::{filter_interesting_utxos, BtcRpcApi, BtcRpcClient},
 	ScriptPubKey,
 };
 
@@ -88,7 +88,7 @@ pub async fn start(
 					trace!("Checking BTC block: {block_number} for interesting UTXOs");
 
 					let interesting_utxos =
-						filter_relevant_utxos(block.txdata, &monitored_script_pubkeys);
+						filter_interesting_utxos(block.txdata, &monitored_script_pubkeys);
 
 					for utxo in interesting_utxos {
 						info!("Witnessing BTC ingress UTXO: {:?}", utxo);
