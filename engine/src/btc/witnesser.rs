@@ -24,10 +24,6 @@ use super::{
 
 const INGRESS_SAFETY_MARGIN: BlockNumber = 3;
 
-// TODO: Make an RPC query at the very beginning for height of the chain, to check the RPC
-// connection. Otherwise it will just keep retrying - which is ok if we know it once worked, but at
-// the start it  makes it harder to debug as it looks like it initially succeeds, but then is stuck.
-
 pub async fn start(
 	epoch_starts_receiver: async_broadcast::Receiver<EpochStart<Bitcoin>>,
 	btc_rpc: BtcRpcClient,

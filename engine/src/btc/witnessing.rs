@@ -1,10 +1,15 @@
 use std::{collections::BTreeSet, sync::Arc};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use cf_chains::Bitcoin;
 use futures::TryFutureExt;
 
-use crate::{multisig::PersistentKeyDB, settings, task_scope::Scope, witnesser::EpochStart};
+use crate::{
+	multisig::PersistentKeyDB,
+	settings,
+	task_scope::Scope,
+	witnesser::{EpochStart, LatestBlockNumber},
+};
 
 use super::{rpc::BtcRpcClient, ScriptPubKey};
 
@@ -16,12 +21,22 @@ pub async fn start(
 ) -> Result<tokio::sync::mpsc::UnboundedSender<ScriptPubKey>> {
 	let (script_pubkeys_sender, script_pubkeys_receiver) = tokio::sync::mpsc::unbounded_channel();
 
-	// TODO: query state chain for the script pubkeys to monitor
+	let btc_rpc = BtcRpcClient::new(&btc_settings)?;
+
+	// We do a simple initial query here to test the connection. Else it's possible the connection
+	// is bad but then we enter the witnesser loop which will retry until success.
+	// Failing here means we will stop the engine.
+	btc_rpc
+		.latest_block_number()
+		.await
+		.context("Initial query for BTC latest block number")?;
+
+	// TODO: query state chain for the script pubkeys to monitor and pass them into the witnesser
 
 	scope.spawn(
 		super::witnesser::start(
 			epoch_start_receiver,
-			BtcRpcClient::new(&btc_settings)?,
+			btc_rpc,
 			script_pubkeys_receiver,
 			BTreeSet::default(),
 			db,
