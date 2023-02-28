@@ -207,8 +207,7 @@ pub async fn start(
 		}
 	};
 
-	start_with_restart_on_failure(
-		scope,
+	scope.spawn(start_with_restart_on_failure(
 		create_and_run_witnesser_futures,
 		(
 			epoch_start_receiver,
@@ -218,7 +217,7 @@ pub async fn start(
 				usdc: (usdc_ingress_receiver, usdc_addresses),
 			},
 		),
-	);
+	));
 
 	Ok(EthAddressToMonitorSender {
 		eth: eth_ingress_sender,
