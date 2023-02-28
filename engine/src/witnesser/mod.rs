@@ -28,6 +28,14 @@ pub trait BlockNumberable {
 	fn block_number(&self) -> Self::BlockNumber;
 }
 
+impl BlockNumberable for u64 {
+	type BlockNumber = Self;
+
+	fn block_number(&self) -> Self::BlockNumber {
+		*self
+	}
+}
+
 /// General trait for getting the latest/height block number for a particular chain
 #[async_trait]
 pub trait LatestBlockNumber {

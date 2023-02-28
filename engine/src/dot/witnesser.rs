@@ -282,7 +282,7 @@ where
 							block_number: header.number,
 							block_hash: header.hash(),
 						});
-				
+
 				let dot_client_c = dot_client.clone();
 				let block_head_stream_from = block_head_stream_from(from_block, safe_head_stream, move |block_number| {
 					let dot_client = dot_client_c.clone();
