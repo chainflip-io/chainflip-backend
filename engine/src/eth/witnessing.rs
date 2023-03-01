@@ -78,6 +78,24 @@ pub async fn start(
 		.await
 		.context("Failed to get KeyManager address from SC")?;
 
+	let usdc_address = state_chain_client
+		.storage_map_entry::<pallet_cf_environment::EthereumSupportedAssets<state_chain_runtime::Runtime>>(
+			initial_block_hash,
+			&Asset::Usdc,
+		)
+		.await
+		.context("Failed to get USDC address from SC")?
+		.expect("USDC address must exist at genesis");
+
+	let flip_contract_address = state_chain_client
+		.storage_map_entry::<pallet_cf_environment::EthereumSupportedAssets<state_chain_runtime::Runtime>>(
+			initial_block_hash,
+			&Asset::Flip,
+		)
+		.await
+		.context("Failed to get FLIP address from SC")?
+		.expect("FLIP address must exist at genesis");
+
 	let eth_chain_ingress_addresses = state_chain_client
 		.storage_map::<pallet_cf_ingress_egress::IntentIngressDetails<
 			state_chain_runtime::Runtime,
@@ -103,29 +121,11 @@ pub async fn start(
 		.collect()
 	}
 
-	let usdc_address = state_chain_client
-		.storage_map_entry::<pallet_cf_environment::EthereumSupportedAssets<state_chain_runtime::Runtime>>(
-			initial_block_hash,
-			&Asset::Usdc,
-		)
-		.await
-		.context("Failed to get USDC address from SC")?
-		.expect("USDC address must exist at genesis");
-
 	let eth_addresses =
 		monitored_addresses_from_all_eth(&eth_chain_ingress_addresses, assets::eth::Asset::Eth);
 
 	let usdc_addresses =
 		monitored_addresses_from_all_eth(&eth_chain_ingress_addresses, assets::eth::Asset::Usdc);
-
-	let flip_contract_address = state_chain_client
-		.storage_map_entry::<pallet_cf_environment::EthereumSupportedAssets<state_chain_runtime::Runtime>>(
-			initial_block_hash,
-			&Asset::Flip,
-		)
-		.await
-		.context("Failed to get FLIP address from SC")?
-		.expect("FLIP address must exist at genesis");
 
 	let flip_addresses =
 		monitored_addresses_from_all_eth(&eth_chain_ingress_addresses, assets::eth::Asset::Flip);
