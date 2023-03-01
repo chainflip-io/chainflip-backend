@@ -74,7 +74,7 @@ where
 						retry_rpc_until_success!(http_rpc.latest_block_number(), poll_interval);
 
 					// Fetched unsafe_block_number is more than `safety_margin` blocks behind the
-					// last fetched ETH block number (last_head_fetched)
+					// last fetched block number (last_head_fetched)
 					if unsafe_block_number + safety_margin < *last_head_fetched {
 						return None
 					}
