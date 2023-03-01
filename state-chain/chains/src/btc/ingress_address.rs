@@ -7,6 +7,27 @@ use alloc::string::String;
 use itertools;
 use sp_std::iter;
 
+fn to_varint(value: u64) -> Vec<u8> {
+	let mut result = Vec::default();
+	let len = match value {
+		0..=0xFC => 1,
+		0xFD..=0xFFFF => {
+			result.push(0xFD_u8);
+			2
+		},
+		0x010000..=0xFFFFFFFF => {
+			result.push(0xFE_u8);
+			4
+		},
+		_ => {
+			result.push(0xFF_u8);
+			8
+		},
+	};
+	result.extend(value.to_le_bytes().iter().take(len));
+	result
+}
+
 #[derive(Default)]
 struct BitcoinScript(Vec<u8>);
 
@@ -19,16 +40,15 @@ impl BitcoinScript {
 			_ => {
 				let num_bytes =
 					sp_std::mem::size_of::<u32>() - (value.leading_zeros() / 8) as usize;
-				self.0.push(num_bytes as u8);
-				self.0.extend(value.to_le_bytes().iter().take(num_bytes));
+				self = self.push_bytes(&value.to_le_bytes().into_iter().take(num_bytes).collect());
 			},
 		}
 		self
 	}
-	/// Adds an operation to the script that pushes exactly 32 bytes of data to the stack
-	fn push_32bytes(mut self, hash: [u8; 32]) -> Self {
-		self.0.push(0x20);
-		self.0.extend(hash);
+	/// Adds an operation to the script that pushes exactly the provided bytes of data to the stack
+	fn push_bytes(mut self, data: &Vec<u8>) -> Self {
+		self.0.extend(to_varint(data.len() as u64));
+		self.0.extend(data);
 		self
 	}
 	/// Adds an operation to the script that drops the topmost item from the stack
@@ -63,7 +83,7 @@ pub fn derive_btc_ingress_address(pubkey_x: [u8; 32], salt: u32) -> String {
 	let script = BitcoinScript::default()
 		.push_uint(salt)
 		.op_drop()
-		.push_32bytes(pubkey_x)
+		.push_bytes(&pubkey_x.to_vec())
 		.op_checksig();
 	let leafhash =
 		sha2_256(&[tapleaf_hash, tapleaf_hash, &[leaf_version], &script.serialize()].concat());
@@ -118,9 +138,12 @@ fn test_build_script() {
 		BitcoinScript::default()
 			.push_uint(0)
 			.op_drop()
-			.push_32bytes(hex_literal::hex!(
-				"2E897376020217C8E385A30B74B758293863049FA66A3FD177E012B076059105"
-			))
+			.push_bytes(
+				&hex_literal::hex!(
+					"2E897376020217C8E385A30B74B758293863049FA66A3FD177E012B076059105"
+				)
+				.to_vec()
+			)
 			.op_checksig()
 			.serialize(),
 		hex_literal::hex!(
@@ -144,5 +167,28 @@ fn test_push_uint() {
 	];
 	for x in test_data {
 		assert_eq!(BitcoinScript::default().push_uint(x.0).0, x.1);
+	}
+}
+
+#[test]
+fn test_varint() {
+	let test_data = [
+		(0_u64, vec![0x00]),
+		(1, vec![0x01]),
+		(252, vec![0xFC]),
+		(253, vec![0xFD, 0xFD, 0x00]),
+		(254, vec![0xFD, 0xFE, 0x00]),
+		(255, vec![0xFD, 0xFF, 0x00]),
+		(65534, vec![0xFD, 0xFE, 0xFF]),
+		(65535, vec![0xFD, 0xFF, 0xFF]),
+		(65536, vec![0xFE, 0x00, 0x00, 0x01, 0x00]),
+		(65537, vec![0xFE, 0x01, 0x00, 0x01, 0x00]),
+		(4294967295, vec![0xFE, 0xFF, 0xFF, 0xFF, 0xFF]),
+		(4294967296, vec![0xFF, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00]),
+		(4294967297, vec![0xFF, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00]),
+		(9007199254740991, vec![0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x1F, 0x00]),
+	];
+	for x in test_data {
+		assert_eq!(to_varint(x.0), x.1);
 	}
 }
