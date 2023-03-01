@@ -154,6 +154,16 @@ mod point_impls {
 			// is negligible)
 			self.0.expect("unexpected point at infinity")
 		}
+
+		pub fn x_bytes(&self) -> [u8; 32] {
+			let mut result: [u8; 32] = Default::default();
+			result.copy_from_slice(self.as_bytes()[1..33].as_ref());
+			result
+		}
+
+		pub fn is_even_y(&self) -> bool {
+			self.as_bytes()[0] == 2
+		}
 	}
 
 	#[cfg(test)]

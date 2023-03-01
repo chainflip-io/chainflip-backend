@@ -442,7 +442,6 @@ pub mod mocks {
 			async fn submit_signed_extrinsic<Call>(
 				&self,
 				call: Call,
-				logger: &slog::Logger,
 			) -> Result<H256>
 			where
 				Call: Into<state_chain_runtime::RuntimeCall> + Clone + std::fmt::Debug + Send + Sync + 'static;
@@ -450,7 +449,6 @@ pub mod mocks {
 			async fn submit_unsigned_extrinsic<Call>(
 				&self,
 				call: Call,
-				logger: &slog::Logger,
 			) -> Result<H256>
 			where
 				Call: Into<state_chain_runtime::RuntimeCall> + Clone + std::fmt::Debug + Send + Sync + 'static;

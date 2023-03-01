@@ -1,107 +1,14 @@
 version: "3.8"
 
 services:
-  polkadot:
-    container_name: polkadot
-    image: parity/polkadot
-    ports:
-      - 30333:30333 # p2p port
-      - 9934:9933 # rpc port
-      - 9945:9944 # ws port
-    volumes:
-      - ./init/polkadot/chainspec.json:/chainspec.json
-    command:
-      [
-        "--name=PolkaDocker",
-        "--rpc-methods=unsafe",
-        "--ws-external",
-        "--rpc-external",
-        "--rpc-cors=all",
-        "--chain=/chainspec.json",
-        "--validator",
-        "--force-authoring",
-        "--alice",
-        "--state-pruning=archive",
-        "--blocks-pruning=archive"
-      ]
-  node:
-    container_name: chainflip-node
-    healthcheck:
-      test: ["CMD-SHELL", "netcat -z localhost 9615"]
-      retries: 10
-      interval: 5s
-      timeout: 5s
-    build:
-      dockerfile: validator.Dockerfile
-      context: .
-      args:
-        - APT_REPO
-    platform: linux/amd64
-    ports:
-      - "9944:9944"
-    env_file:
-      - init/env/eth.env
-      - init/secrets/secrets.env
-    volumes:
-      - ./init/secrets:/etc/chainflip/keys
-      - ./init/scripts/start.sh:/start.sh
-    command:
-      - /start.sh
-  engine:
-    container_name: chainflip-engine
-    env_file:
-      - init/secrets/secrets.env
-    build:
-      dockerfile: validator.Dockerfile
-      context: .
-      args:
-        - APT_REPO
-    platform: linux/amd64
-    restart: unless-stopped
-    depends_on:
-      node:
-        condition: service_healthy
-      geth:
-        condition: service_healthy
-      polkadot:
-        condition: service_started
-    volumes:
-      - ./init/secrets:/etc/chainflip/keys
-      - ./init/config:/etc/chainflip/config
-    command:
-      - chainflip-engine
-      - --config-root=/etc/chainflip/
-  relayer:
-    container_name: chainflip-relayer
-    env_file:
-      - init/secrets/secrets.env
-    build:
-      dockerfile: validator.Dockerfile
-      context: .
-      args:
-        - APT_REPO
-    platform: linux/amd64
-    restart: unless-stopped
-    depends_on:
-      node:
-        condition: service_healthy
-      geth:
-        condition: service_healthy
-    volumes:
-      - ./init/testkeys:/etc/chainflip/keys
-    command:
-      - chainflip-relayer
-      - --state_chain.signing_key_file=/etc/chainflip/keys/RELAYER_1
-      - --state_chain.ws_endpoint=ws://chainflip-node:9944
-    ports:
-      - 9950:80
   geth:
     image: ghcr.io/chainflip-io/geth:perseverance-rc2
     pull_policy: always
     container_name: geth
+    platform: linux/amd64
     restart: unless-stopped
     env_file:
-      - init/secrets/secrets.env
+      - ./init/secrets/secrets.env
     ports:
       - 30303:30303
       - 30303:30303/udp
@@ -144,3 +51,28 @@ services:
       - --ws.api=web3,eth,debug
       - --ws.origins=*
       - --ws.port=8546
+
+  polkadot:
+    container_name: polkadot
+    platform: linux/amd64
+    image: parity/polkadot
+    ports:
+      # - 30333:30333 # p2p port
+      - 9934:9933 # rpc port
+      - 9945:9944 # ws port
+    volumes:
+      - ./init/polkadot/chainspec.json:/chainspec.json
+    command:
+      [
+        "--name=PolkaDocker",
+        "--rpc-methods=unsafe",
+        "--ws-external",
+        "--rpc-external",
+        "--rpc-cors=all",
+        "--chain=/chainspec.json",
+        "--validator",
+        "--force-authoring",
+        "--alice",
+        "--state-pruning=archive",
+        "--blocks-pruning=archive"
+      ]

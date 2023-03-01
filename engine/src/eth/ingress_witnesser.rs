@@ -18,7 +18,6 @@ pub struct IngressWitnesser<StateChainClient> {
 	state_chain_client: Arc<StateChainClient>,
 	monitored_addresses: BTreeSet<H160>,
 	eth_monitor_ingress_receiver: tokio::sync::mpsc::UnboundedReceiver<H160>,
-	logger: slog::Logger,
 }
 
 impl<StateChainClient> IngressWitnesser<StateChainClient>
@@ -30,19 +29,14 @@ where
 		rpc: EthDualRpcClient,
 		monitored_addresses: BTreeSet<H160>,
 		eth_monitor_ingress_receiver: tokio::sync::mpsc::UnboundedReceiver<H160>,
-		logger: &slog::Logger,
 	) -> Self {
-		Self {
-			rpc,
-			state_chain_client,
-			monitored_addresses,
-			eth_monitor_ingress_receiver,
-			logger: logger.clone(),
-		}
+		Self { rpc, state_chain_client, monitored_addresses, eth_monitor_ingress_receiver }
 	}
 
-	pub fn take_ingress_receiver(self) -> tokio::sync::mpsc::UnboundedReceiver<H160> {
-		self.eth_monitor_ingress_receiver
+	pub fn take_ingress_receiver_pair(
+		self,
+	) -> (tokio::sync::mpsc::UnboundedReceiver<H160>, BTreeSet<H160>) {
+		(self.eth_monitor_ingress_receiver, self.monitored_addresses)
 	}
 }
 
@@ -92,18 +86,15 @@ where
 		if !ingress_witnesses.is_empty() {
 			let _result = self
 				.state_chain_client
-				.submit_signed_extrinsic(
-					pallet_cf_witnesser::Call::witness_at_epoch {
-						call: Box::new(
-							pallet_cf_ingress_egress::Call::<_, EthereumInstance>::do_ingress {
-								ingress_witnesses,
-							}
-							.into(),
-						),
-						epoch_index: epoch.epoch_index,
-					},
-					&self.logger,
-				)
+				.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
+					call: Box::new(
+						pallet_cf_ingress_egress::Call::<_, EthereumInstance>::do_ingress {
+							ingress_witnesses,
+						}
+						.into(),
+					),
+					epoch_index: epoch.epoch_index,
+				})
 				.await;
 		}
 

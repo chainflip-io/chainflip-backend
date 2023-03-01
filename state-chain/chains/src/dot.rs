@@ -247,6 +247,10 @@ impl PolkadotExtrinsicBuilder {
 			None => Some(false),
 		}
 	}
+
+	pub fn runtime_version(&self) -> RuntimeVersion {
+		self.replay_protection.runtime_version
+	}
 }
 
 // The Polkadot Runtime type that is expected by the polkadot runtime

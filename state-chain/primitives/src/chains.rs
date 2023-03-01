@@ -39,17 +39,20 @@ pub struct AnyChain;
 
 chains! {
 	Ethereum,
-	Polkadot
+	Polkadot,
+	Bitcoin
 }
 
 #[test]
 fn test_chains() {
 	assert_eq!(Ethereum.as_ref(), &ForeignChain::Ethereum);
 	assert_eq!(Polkadot.as_ref(), &ForeignChain::Polkadot);
+	assert_eq!(Bitcoin.as_ref(), &ForeignChain::Bitcoin);
 }
 
 #[test]
 fn test_get_chain_identifier() {
 	assert_eq!(Ethereum::get(), ForeignChain::Ethereum);
 	assert_eq!(Polkadot::get(), ForeignChain::Polkadot);
+	assert_eq!(Bitcoin::get(), ForeignChain::Bitcoin);
 }

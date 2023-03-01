@@ -169,6 +169,11 @@ impl TransactionBuilder<Ethereum, EthereumApi<EthEnvironment>> for EthTransactio
 		}
 		// if we don't have ChainState, we leave it unmodified
 	}
+
+	fn is_valid_for_rebroadcast(_call: &EthereumApi<EthEnvironment>) -> bool {
+		// Nothing to validate for Ethereum
+		true
+	}
 }
 
 pub struct DotTransactionBuilder;
@@ -181,6 +186,12 @@ impl TransactionBuilder<Polkadot, PolkadotApi<DotEnvironment>> for DotTransactio
 
 	fn refresh_unsigned_transaction(_unsigned_tx: &mut <Polkadot as ChainAbi>::Transaction) {
 		// TODO: For now this is a noop until we actually have dot chain tracking
+	}
+
+	fn is_valid_for_rebroadcast(call: &PolkadotApi<DotEnvironment>) -> bool {
+		// If we know the Polkadot runtime has been upgraded then we know this transaction will
+		// fail.
+		call.runtime_version_used() == Environment::polkadot_runtime_version()
 	}
 }
 
@@ -300,6 +311,7 @@ impl EgressApi<AnyChain> for AnyChainIngressEgressHandler {
 					.try_into()
 					.expect("Caller must ensure for account is of the compatible type."),
 			),
+			ForeignChain::Bitcoin => todo!("Bitcoin egress"),
 		}
 	}
 }
@@ -342,6 +354,7 @@ impl BroadcastAnyChainGovKey for TokenholderGovernanceBroadcaster {
 				Self::broadcast_gov_key::<Ethereum, EthereumBroadcaster>(maybe_old_key, new_key),
 			ForeignChain::Polkadot =>
 				Self::broadcast_gov_key::<Polkadot, PolkadotBroadcaster>(maybe_old_key, new_key),
+			ForeignChain::Bitcoin => todo!("Bitcoin govkey broadcast"),
 		}
 	}
 
@@ -349,6 +362,7 @@ impl BroadcastAnyChainGovKey for TokenholderGovernanceBroadcaster {
 		match chain {
 			ForeignChain::Ethereum => Self::is_govkey_compatible::<Ethereum>(key),
 			ForeignChain::Polkadot => Self::is_govkey_compatible::<Polkadot>(key),
+			ForeignChain::Bitcoin => todo!("Bitcoin govkey compatibility"),
 		}
 	}
 }
@@ -379,6 +393,7 @@ impl IngressApi<AnyChain> for AnyChainIngressEgressHandler {
 					lp_account,
 					ingress_asset.try_into().unwrap(),
 				),
+			ForeignChain::Bitcoin => todo!("Cannot register liquidity ingress intent for Bitcoin"),
 		}
 	}
 
@@ -404,6 +419,7 @@ impl IngressApi<AnyChain> for AnyChainIngressEgressHandler {
 				relayer_commission_bps,
 				relayer_id,
 			),
+			ForeignChain::Bitcoin => todo!("Cannot register swap intent for Bitcoin"),
 		}
 	}
 }

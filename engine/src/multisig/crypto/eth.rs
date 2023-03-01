@@ -76,6 +76,7 @@ impl CryptoScheme for EthSigning {
 
 	fn build_response(
 		nonce: <Self::Point as ECPoint>::Scalar,
+		_nonce_commitment: Self::Point,
 		private_key: &<Self::Point as ECPoint>::Scalar,
 		challenge: <Self::Point as ECPoint>::Scalar,
 	) -> <Self::Point as ECPoint>::Scalar {
@@ -86,6 +87,7 @@ impl CryptoScheme for EthSigning {
 		y_i: &Self::Point,
 		lambda_i: &<Self::Point as ECPoint>::Scalar,
 		commitment: &Self::Point,
+		_group_commitment: &Self::Point,
 		challenge: &<Self::Point as ECPoint>::Scalar,
 		signature_response: &<Self::Point as ECPoint>::Scalar,
 	) -> bool {
@@ -100,6 +102,10 @@ impl CryptoScheme for EthSigning {
 		// Get the aggkey
 		let pk_ser: &[u8; 33] = key_id.0[..].try_into().unwrap();
 		let agg_key = cf_chains::eth::AggKey::from_pubkey_compressed(*pk_ser);
+
+		let x = BigUint::from_bytes_be(&agg_key.pub_key_x);
+		let half_order = BigUint::from_bytes_be(&CURVE_ORDER) / 2u32 + 1u32;
+		assert!(x < half_order);
 
 		// Verify the signature with the aggkey
 		agg_key

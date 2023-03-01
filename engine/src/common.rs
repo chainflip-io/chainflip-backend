@@ -9,19 +9,17 @@ use anyhow::Context;
 use futures::{Future, TryStream};
 use itertools::Itertools;
 
-use crate::task_scope::Scope;
-
 /// Unwraps a result, logging the error and returning early with a provided error expression.
 /// This is particularly useful over `.map_err()` when inside a future, and we need to return
 /// early with items from that future, due to the fact the future owns the values you want
 /// to return.
 #[macro_export]
 macro_rules! try_with_logging {
-	($exp:expr, $err_expr:expr, $logger:expr) => {
+	($exp:expr, $err_expr:expr) => {
 		match $exp {
 			Ok(ok) => ok,
 			Err(e) => {
-				slog::error!($logger, "Error: {}", e);
+				tracing::error!("Error: {e}");
 				return Err($err_expr)
 			},
 		}
@@ -122,43 +120,33 @@ mod tests {
 /// Such as a Receiver a task might need to continue to receive data from some other task,
 /// despite the fact it has been restarted.
 pub async fn start_with_restart_on_failure<StaticState, TaskFut, TaskGenerator>(
-	scope: &Scope<'_, anyhow::Error>,
 	task_generator: TaskGenerator,
 	mut static_state: StaticState,
-) -> anyhow::Result<()>
-where
+) where
 	TaskFut: Future<Output = Result<(), StaticState>> + Send + 'static,
-	StaticState: Send + 'static,
-	TaskGenerator: Fn(StaticState) -> TaskFut + Send + 'static,
+	TaskGenerator: Fn(StaticState) -> TaskFut,
 {
-	scope.spawn(async move {
-		loop {
-			// TODO: We could pass the static_state by-ref to avoid needing to pass static_state out
-			// of task in error case
+	loop {
+		// TODO: We could pass the static_state by-ref to avoid needing to pass static_state out
+		// of task in error case
 
-			let task = task_generator(static_state);
+		let task = task_generator(static_state);
 
-			// Spawn with handle and then wait for future to finish
-			static_state = match task.await {
-				Ok(()) => return Ok(()),
-				Err(state) => {
-					// give it some time before the restart
-					tokio::time::sleep(Duration::from_secs(2)).await;
+		// Spawn with handle and then wait for future to finish
+		static_state = match task.await {
+			Ok(()) => return,
+			Err(state) => {
+				// give it some time before the restart
+				tokio::time::sleep(Duration::from_secs(2)).await;
 
-					state
-				},
-			};
-		}
-	});
-
-	Ok(())
+				state
+			},
+		};
+	}
 }
 
 #[cfg(test)]
 mod test_restart_on_failure {
-	use futures::FutureExt;
-
-	use crate::task_scope::task_scope;
 
 	use super::*;
 
@@ -179,13 +167,7 @@ mod test_restart_on_failure {
 
 			panic!("Should not reach here");
 		}
-
-		task_scope(|scope| {
-			let value = 0;
-			start_with_restart_on_failure(scope, start_up_some_loop, value).boxed()
-		})
-		.await
-		.unwrap();
+		start_with_restart_on_failure(start_up_some_loop, 0).await;
 	}
 }
 

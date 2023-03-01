@@ -4,11 +4,9 @@ use anyhow::Context;
 
 use cf_primitives::AccountRole;
 use chainflip_engine::{
+	btc,
 	dot::{self, rpc::DotRpcClient, witnesser as dot_witnesser, DotBroadcaster},
-	eth::{
-		self, build_broadcast_channel, eth_block_witnessing::IngressAddressReceivers,
-		rpc::EthDualRpcClient, EthBroadcaster,
-	},
+	eth::{self, build_broadcast_channel, rpc::EthDualRpcClient, EthBroadcaster},
 	health::HealthChecker,
 	logging,
 	multisig::{
@@ -20,7 +18,6 @@ use chainflip_engine::{
 	state_chain_observer::{
 		self,
 		client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi},
-		EthAddressToMonitorSender,
 	},
 	task_scope::task_scope,
 };
@@ -79,16 +76,13 @@ async fn main() -> anyhow::Result<()> {
 				.context("Failed to create Polkadot Client")?;
 
 			state_chain_client
-				.submit_signed_extrinsic(
-					pallet_cf_validator::Call::cfe_version {
-						new_version: SemVer {
-							major: env!("CARGO_PKG_VERSION_MAJOR").parse::<u8>().unwrap(),
-							minor: env!("CARGO_PKG_VERSION_MINOR").parse::<u8>().unwrap(),
-							patch: env!("CARGO_PKG_VERSION_PATCH").parse::<u8>().unwrap(),
-						},
+				.submit_signed_extrinsic(pallet_cf_validator::Call::cfe_version {
+					new_version: SemVer {
+						major: env!("CARGO_PKG_VERSION_MAJOR").parse::<u8>().unwrap(),
+						minor: env!("CARGO_PKG_VERSION_MINOR").parse::<u8>().unwrap(),
+						patch: env!("CARGO_PKG_VERSION_PATCH").parse::<u8>().unwrap(),
 					},
-					&root_logger,
-				)
+				})
 				.await
 				.context("Failed to submit version to state chain")?;
 
@@ -97,6 +91,9 @@ async fn main() -> anyhow::Result<()> {
 
 			let (dot_epoch_start_sender, [dot_epoch_start_receiver_1, dot_epoch_start_receiver_2]) =
 				build_broadcast_channel(10);
+
+			// TODO: Link this up to the SC
+			let (_btc_epoch_start_sender, [btc_epoch_start_receiver]) = build_broadcast_channel(10);
 
 			let cfe_settings = state_chain_client
 				.storage_value::<pallet_cf_environment::CfeSettings<state_chain_runtime::Runtime>>(
@@ -164,27 +161,32 @@ async fn main() -> anyhow::Result<()> {
 
 			scope.spawn(dot_multisig_client_backend_future);
 
-			let (eth_monitor_ingress_sender, eth_monitor_ingress_receiver) =
-				tokio::sync::mpsc::unbounded_channel();
-
-			let (flip_monitor_ingress_sender, flip_monitor_ingress_receiver) =
-				tokio::sync::mpsc::unbounded_channel();
-
-			let (usdc_monitor_ingress_sender, usdc_monitor_ingress_receiver) =
-				tokio::sync::mpsc::unbounded_channel();
-
 			let (dot_monitor_ingress_sender, dot_monitor_ingress_receiver) =
 				tokio::sync::mpsc::unbounded_channel();
 
 			let (dot_monitor_signature_sender, dot_monitor_signature_receiver) =
 				tokio::sync::mpsc::unbounded_channel();
 
+			let eth_address_to_monitor = eth::witnessing::start(
+				scope,
+				&settings.eth,
+				state_chain_client.clone(),
+				expected_chain_id,
+				latest_block_hash,
+				epoch_start_receiver_1,
+				epoch_start_receiver_2,
+				cfe_settings_update_receiver,
+				db.clone(),
+			)
+			.await
+			.unwrap();
+
 			scope.spawn(state_chain_observer::start(
 				state_chain_client.clone(),
 				state_chain_block_stream,
 				EthBroadcaster::new(
 					&settings.eth,
-					EthDualRpcClient::new(&settings.eth, expected_chain_id, &root_logger)
+					EthDualRpcClient::new(&settings.eth, expected_chain_id)
 						.await
 						.context("Failed to create EthDualRpcClient")?,
 					&root_logger,
@@ -195,11 +197,7 @@ async fn main() -> anyhow::Result<()> {
 				dot_multisig_client,
 				peer_update_sender,
 				epoch_start_sender,
-				EthAddressToMonitorSender {
-					eth: eth_monitor_ingress_sender,
-					flip: flip_monitor_ingress_sender,
-					usdc: usdc_monitor_ingress_sender,
-				},
+				eth_address_to_monitor,
 				dot_epoch_start_sender,
 				dot_monitor_ingress_sender,
 				dot_monitor_signature_sender,
@@ -207,26 +205,6 @@ async fn main() -> anyhow::Result<()> {
 				latest_block_hash,
 				root_logger.clone(),
 			));
-
-			eth::witnessing::start(
-				scope,
-				settings.eth,
-				state_chain_client.clone(),
-				expected_chain_id,
-				latest_block_hash,
-				epoch_start_receiver_1,
-				epoch_start_receiver_2,
-				IngressAddressReceivers {
-					eth: eth_monitor_ingress_receiver,
-					flip: flip_monitor_ingress_receiver,
-					usdc: usdc_monitor_ingress_receiver,
-				},
-				cfe_settings_update_receiver,
-				db.clone(),
-				root_logger.clone(),
-			)
-			.await
-			.unwrap();
 
 			scope.spawn(
 				dot_witnesser::start(
@@ -265,8 +243,7 @@ async fn main() -> anyhow::Result<()> {
 						.map(|(signature, _)| signature.0)
 						.collect(),
 					state_chain_client.clone(),
-					db,
-					root_logger.clone(),
+					db.clone(),
 				)
 				.map_err(|_r| anyhow::anyhow!("DOT witnesser failed")),
 			);
@@ -277,10 +254,15 @@ async fn main() -> anyhow::Result<()> {
 					dot_rpc_client,
 					state_chain_client,
 					latest_block_hash,
-					root_logger.clone(),
 				)
 				.map_err(|_| anyhow::anyhow!("DOT runtime version updater failed")),
 			);
+
+			if let Some(btc_settings) = settings.btc {
+				btc::witnessing::start(scope, btc_settings, btc_epoch_start_receiver, db)
+					.await
+					.unwrap();
+			}
 
 			Ok(())
 		}

@@ -35,7 +35,7 @@ pub struct Erc20Witnesser {
 	pub deployed_address: H160,
 	asset: eth::Asset,
 	contract: ethabi::Contract,
-	monitored_addresses: BTreeSet<sp_core::H160>,
+	pub monitored_addresses: BTreeSet<sp_core::H160>,
 	pub monitored_address_receiver: tokio::sync::mpsc::UnboundedReceiver<sp_core::H160>,
 }
 
@@ -73,7 +73,6 @@ impl EthContractWitnesser for Erc20Witnesser {
 		block: BlockWithItems<Event<Self::EventParameters>>,
 		state_chain_client: Arc<StateChainClient>,
 		_eth_rpc: &EthRpcClient,
-		logger: &slog::Logger,
 	) -> Result<()>
 	where
 		EthRpcClient: EthRpcApi + Sync + Send,
@@ -101,18 +100,15 @@ impl EthContractWitnesser for Erc20Witnesser {
 
 		if !ingress_witnesses.is_empty() {
 			let _result = state_chain_client
-				.submit_signed_extrinsic(
-					pallet_cf_witnesser::Call::witness_at_epoch {
-						call: Box::new(
-							pallet_cf_ingress_egress::Call::<_, EthereumInstance>::do_ingress {
-								ingress_witnesses,
-							}
-							.into(),
-						),
-						epoch_index: epoch,
-					},
-					logger,
-				)
+				.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
+					call: Box::new(
+						pallet_cf_ingress_egress::Call::<_, EthereumInstance>::do_ingress {
+							ingress_witnesses,
+						}
+						.into(),
+					),
+					epoch_index: epoch,
+				})
 				.await;
 		}
 

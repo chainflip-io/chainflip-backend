@@ -1,6 +1,5 @@
 use std::{
 	collections::{BTreeSet, HashMap},
-	pin::Pin,
 	sync::Arc,
 };
 
@@ -22,6 +21,7 @@ use subxt::{
 	config::Header,
 	events::{Phase, StaticEvent},
 };
+use tracing::{debug, error, info, info_span, trace, Instrument};
 
 use crate::{
 	multisig::{ChainTag, PersistentKeyDB},
@@ -103,40 +103,9 @@ enum EventWrapper {
 	TransactionFeePaid(TransactionFeePaid),
 }
 
-pub async fn dot_block_head_stream_from<BlockHeaderStream, DotRpc>(
-	from_block: PolkadotBlockNumber,
-	safe_head_stream: BlockHeaderStream,
-	dot_client: DotRpc,
-	logger: &slog::Logger,
-) -> Result<Pin<Box<dyn Stream<Item = MiniHeader> + Send + 'static>>>
-where
-	BlockHeaderStream: Stream<Item = MiniHeader> + 'static + Send,
-	DotRpc: DotRpcApi + 'static + Send + Clone,
-{
-	block_head_stream_from(
-		from_block,
-		safe_head_stream,
-		move |block_number| {
-			let dot_client = dot_client.clone();
-			Box::pin(async move {
-				let block_hash = dot_client
-					.block_hash(block_number)
-					.await?
-					.expect("Called on a finalised stream, so the block will exist");
-				Ok(MiniHeader { block_number, block_hash })
-			})
-		},
-		logger,
-	)
-	.await
-}
-
 /// Takes a stream of Results and terminates when it hits an error, logging the error before
 /// terminating.
-fn take_while_ok<InStream, T, E>(
-	inner_stream: InStream,
-	logger: &slog::Logger,
-) -> impl Stream<Item = T>
+fn take_while_ok<InStream, T, E>(inner_stream: InStream) -> impl Stream<Item = T>
 where
 	InStream: Stream<Item = std::result::Result<T, E>> + Send,
 	E: std::fmt::Debug,
@@ -146,16 +115,15 @@ where
 		FromStream: Stream<Item = std::result::Result<T, E>>,
 	{
 		stream: FromStream,
-		logger: slog::Logger,
 	}
 
-	let init_state = StreamState { stream: Box::pin(inner_stream), logger: logger.clone() };
+	let init_state = StreamState { stream: Box::pin(inner_stream) };
 
 	stream::unfold(init_state, move |mut state| async move {
 		match state.stream.next().await {
 			Some(Ok(item)) => Some((item, state)),
-			Some(Err(err)) => {
-				slog::error!(&state.logger, "Error on stream: {:?}", err);
+			Some(Err(e)) => {
+				error!("Error on stream: {e:?}");
 				None
 			},
 			None => None,
@@ -170,7 +138,6 @@ fn check_for_interesting_events_in_block(
 	our_vault: &PolkadotAccountId,
 	ingress_address_receiver: &mut tokio::sync::mpsc::UnboundedReceiver<PolkadotAccountId>,
 	monitored_ingress_addresses: &mut BTreeSet<PolkadotAccountId>,
-	logger: &slog::Logger,
 ) -> (
 	Vec<(PolkadotExtrinsicIndex, PolkadotBalance)>,
 	Vec<IngressWitness<Polkadot>>,
@@ -199,10 +166,7 @@ fn check_for_interesting_events_in_block(
 
 					let new_public_key =
 						PolkadotPublicKey::from(*AsRef::<[u8; 32]>::as_ref(&delegatee));
-					slog::info!(
-						logger,
-						"Witnessing ProxyAdded. new public key: {new_public_key:?} at block number {block_number} and extrinsic_index; {extrinsic_index}"
-					);
+					info!("Witnessing ProxyAdded. new public key: {new_public_key:?} at block number {block_number} and extrinsic_index; {extrinsic_index}");
 
 					vault_key_rotated_calls.push(Box::new(
 						pallet_cf_vaults::Call::<_, PolkadotInstance>::vault_key_rotated {
@@ -221,10 +185,7 @@ fn check_for_interesting_events_in_block(
 					}
 
 					if monitored_ingress_addresses.contains(to) {
-						slog::info!(
-							logger,
-							"Witnessing DOT Ingress {{ amount: {amount:?}, to: {to:?} }}"
-						);
+						info!("Witnessing DOT Ingress {{ amount: {amount:?}, to: {to:?} }}");
 						ingress_witnesses.push(IngressWitness {
 							ingress_address: to.clone(),
 							asset: assets::dot::Asset::Dot,
@@ -236,7 +197,7 @@ fn check_for_interesting_events_in_block(
 					// if `from` is our_vault then we're doing an egress
 					// if `to` is our_vault then we're doing an "ingress fetch"
 					if from == our_vault || to == our_vault {
-						slog::info!(logger, "Transfer from or to our_vault at block: {block_number}, extrinsic index: {extrinsic_index}");
+						info!("Transfer from or to our_vault at block: {block_number}, extrinsic index: {extrinsic_index}");
 						interesting_indices.push(extrinsic_index);
 					}
 				},
@@ -273,14 +234,12 @@ pub async fn start<StateChainClient, DotRpc>(
 	monitored_signatures: BTreeSet<[u8; 64]>,
 	state_chain_client: Arc<StateChainClient>,
 	db: Arc<PersistentKeyDB>,
-	logger: slog::Logger,
 ) -> std::result::Result<(), (async_broadcast::Receiver<EpochStart<Polkadot>>, anyhow::Error)>
 where
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
 	DotRpc: DotRpcApi + 'static + Send + Sync + Clone,
 {
 	epoch_witnesser::start(
-		"DOT".to_string(),
 		epoch_starts_receiver,
 		|_epoch_start| true,
 		(monitored_ingress_addresses, ingress_address_receiver, monitored_signatures, signature_receiver),
@@ -293,7 +252,6 @@ where
 				mut monitored_signatures,
 				mut signature_receiver
 			),
-			logger
 		| {
 			let dot_client = dot_client.clone();
 			let state_chain_client = state_chain_client.clone();
@@ -304,9 +262,8 @@ where
 					epoch_start.epoch_index,
 					epoch_start.block_number,
 					db,
-					&logger
 				).await
-				.expect("Failed to start Eth witnesser checkpointing") 
+				.expect("Failed to start Dot witnesser checkpointing")
 				{
 					StartCheckpointing::Started((from_block, witnessed_until_sender)) =>
 						(from_block, witnessed_until_sender),
@@ -320,18 +277,23 @@ where
 				};
 
 				let safe_head_stream =
-					take_while_ok(dot_client.subscribe_finalized_heads().await?, &logger)
+					take_while_ok(dot_client.subscribe_finalized_heads().await?)
 						.map(|header| MiniHeader {
 							block_number: header.number,
 							block_hash: header.hash(),
 						});
 
-				let block_head_stream_from = dot_block_head_stream_from(
-					from_block,
-					safe_head_stream,
-					dot_client.clone(),
-					&logger,
-				)
+				let dot_client_c = dot_client.clone();
+				let block_head_stream_from = block_head_stream_from(from_block, safe_head_stream, move |block_number| {
+					let dot_client = dot_client_c.clone();
+					Box::pin(async move {
+						let block_hash = dot_client
+							.block_hash(block_number)
+							.await?
+							.expect("Called on a finalised stream, so the block will exist");
+						Ok(MiniHeader { block_number, block_hash })
+					})
+				})
 				.await?;
 
 				let our_vault = epoch_start.data.vault_account;
@@ -342,8 +304,7 @@ where
 					take_while_ok(
 						block_head_stream_from.then(|mini_header| {
 							let dot_client = dot_client.clone();
-							slog::debug!(
-								&logger,
+							debug!(
 								"Fetching Polkadot events for block: {}",
 								mini_header.block_number
 							);
@@ -359,7 +320,6 @@ where
 								))
 							}
 						}),
-						&logger,
 					)
 					.map(|(block_hash, block_number, events)| {
 						(block_hash, block_number, events.iter().filter_map(|event_details| {
@@ -379,8 +339,7 @@ where
 									}.map(|event| (event_details.phase(), event))
 								}
 								Err(err) => {
-									slog::error!(
-										&logger,
+									error!(
 										"Error while parsing event: {:?}", err
 									);
 									None
@@ -396,12 +355,11 @@ where
 					if should_end_witnessing::<Polkadot>(
 						end_witnessing_signal.clone(),
 						block_number,
-						&logger,
 					) {
 						break
 					}
 
-					slog::trace!(logger, "Checking block: {block_number}, with hash: {block_hash:?} for interesting events");
+					trace!( "Checking block: {block_number}, with hash: {block_hash:?} for interesting events");
 
 					let (
 						interesting_indices,
@@ -413,7 +371,7 @@ where
 							&our_vault,
 							&mut ingress_address_receiver,
 							&mut monitored_ingress_addresses,
-							&logger);
+							);
 
 					for call in vault_key_rotated_calls {
 						let _result = state_chain_client
@@ -422,13 +380,12 @@ where
 										call,
 										epoch_index: epoch_start.epoch_index,
 									},
-									&logger,
 								)
 								.await;
 					}
 
 					if !interesting_indices.is_empty() {
-						slog::info!(logger, "We got an interesting block at block: {block_number}, hash: {block_hash:?}");
+						info!("We got an interesting block at block: {block_number}, hash: {block_hash:?}");
 
 						let block = dot_client
 						.block(block_hash)
@@ -451,10 +408,7 @@ where
 								let signature = unchecked.signature.unwrap().1;
 								if let MultiSignature::Sr25519(sig) = signature {
 									if monitored_signatures.contains(&sig.0) {
-										slog::info!(
-											logger,
-											"Witnessing signature_accepted. signature: {sig:?}"
-										);
+										info!("Witnessing signature_accepted. signature: {sig:?}");
 
 										let _result = state_chain_client
 											.submit_signed_extrinsic(
@@ -469,17 +423,17 @@ where
 													),
 													epoch_index: epoch_start.epoch_index,
 												},
-												&logger,
 											)
 											.await;
 
 										monitored_signatures.remove(&sig.0);
 									}
-								} else {
-									slog::error!(logger, "Signature not Sr25519. Got {:?} instead.", signature);
 								}
 							} else {
-								slog::error!(logger, "Failed to decode UncheckedExtrinsic {:?}", unchecked);
+								// We expect this to occur when attempting to decode
+								// a transaction that was not sent by us.
+								// We can safely ignore it, but we log it in case.
+								debug!("Failed to decode UncheckedExtrinsic {unchecked:?}");
 							}
 						}
 					}
@@ -501,7 +455,6 @@ where
 											),
 										epoch_index: epoch_start.epoch_index,
 									},
-									&logger,
 								)
 								.await;
 					}
@@ -517,8 +470,7 @@ where
 				Ok((monitored_ingress_addresses, ingress_address_receiver, monitored_signatures, signature_receiver))
 			}
 		},
-		&logger,
-	)
+	).instrument(info_span!("DOT-Witnesser"))
 	.await
 }
 
@@ -599,7 +551,6 @@ mod tests {
 				&our_vault,
 				&mut monitor_ingress_receiver,
 				&mut Default::default(),
-				&new_test_logger(),
 			);
 
 		assert_eq!(vault_key_rotated_calls.len(), 1);
@@ -661,7 +612,6 @@ mod tests {
 				&PolkadotAccountId::from([0xda; 32]),
 				&mut monitor_ingress_receiver,
 				&mut BTreeSet::from([transfer_1_ingress_addr]),
-				&new_test_logger(),
 			);
 
 		assert_eq!(ingress_witnesses.len(), 2);
@@ -720,7 +670,6 @@ mod tests {
 				&our_vault,
 				&mut monitor_ingress_receiver,
 				&mut BTreeSet::default(),
-				&new_test_logger(),
 			);
 
 		assert!(
@@ -810,7 +759,6 @@ mod tests {
 			BTreeSet::default(),
 			state_chain_client,
 			Arc::new(db),
-			logger,
 		)
 		.await
 		.unwrap();

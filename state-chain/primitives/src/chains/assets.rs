@@ -47,6 +47,7 @@ pub mod any {
 		Flip,
 		Usdc,
 		Dot,
+		Btc,
 	}
 
 	impl From<Asset> for ForeignChain {
@@ -56,6 +57,7 @@ pub mod any {
 				Asset::Flip => Self::Ethereum,
 				Asset::Usdc => Self::Ethereum,
 				Asset::Dot => Self::Polkadot,
+				Asset::Btc => Self::Bitcoin,
 			}
 		}
 	}
@@ -69,6 +71,7 @@ pub mod any {
 				"flip" => Ok(Asset::Flip),
 				"usdc" => Ok(Asset::Usdc),
 				"dot" => Ok(Asset::Dot),
+				"btc" => Ok(Asset::Btc),
 				_ => Err("Unrecognized asset"),
 			}
 		}
@@ -159,6 +162,7 @@ macro_rules! chain_assets {
 // Must be consistent with the mapping defined in any::Asset
 chain_assets!(eth, Ethereum, Eth, Flip, Usdc);
 chain_assets!(dot, Polkadot, Dot);
+chain_assets!(btc, Bitcoin, Btc);
 
 #[cfg(test)]
 mod test_assets {
@@ -180,13 +184,15 @@ mod test_assets {
 	#[test]
 	fn test_conversion() {
 		assert_conversion!(eth, Eth);
-		// assert_conversion!(eth, Flip);
+		assert_conversion!(eth, Flip);
 		assert_conversion!(eth, Usdc);
 		assert_conversion!(dot, Dot);
+		assert_conversion!(btc, Btc);
 
 		assert_incompatible!(eth, Dot);
 		assert_incompatible!(dot, Eth);
 		assert_incompatible!(dot, Flip);
 		assert_incompatible!(dot, Usdc);
+		assert_incompatible!(btc, Usdc);
 	}
 }

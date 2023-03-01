@@ -1,9 +1,10 @@
-use std::sync::Arc;
+use std::{collections::BTreeSet, sync::Arc};
 
 use async_trait::async_trait;
 use cf_chains::Ethereum;
 use futures::StreamExt;
 use sp_core::H160;
+use tracing::{info, info_span, trace, Instrument};
 
 use super::{
 	rpc::EthDualRpcClient, safe_dual_block_subscription_from, witnessing::AllWitnessers,
@@ -20,10 +21,10 @@ use crate::{
 	},
 };
 
-pub struct IngressAddressReceivers {
-	pub eth: tokio::sync::mpsc::UnboundedReceiver<H160>,
-	pub flip: tokio::sync::mpsc::UnboundedReceiver<H160>,
-	pub usdc: tokio::sync::mpsc::UnboundedReceiver<H160>,
+pub struct IngressAddressReceiverPairs {
+	pub eth: (tokio::sync::mpsc::UnboundedReceiver<H160>, BTreeSet<H160>),
+	pub flip: (tokio::sync::mpsc::UnboundedReceiver<H160>, BTreeSet<H160>),
+	pub usdc: (tokio::sync::mpsc::UnboundedReceiver<H160>, BTreeSet<H160>),
 }
 
 #[async_trait]
@@ -40,14 +41,12 @@ pub async fn start(
 	witnessers: AllWitnessers,
 	eth_rpc: EthDualRpcClient,
 	db: Arc<PersistentKeyDB>,
-	logger: slog::Logger,
-) -> Result<(), (async_broadcast::Receiver<EpochStart<Ethereum>>, IngressAddressReceivers)> {
+) -> Result<(), (async_broadcast::Receiver<EpochStart<Ethereum>>, IngressAddressReceiverPairs)> {
 	epoch_witnesser::start(
-		"Block_Head".to_string(),
 		epoch_start_receiver,
 		move |_| true,
 		witnessers,
-		move |end_witnessing_signal, epoch, mut witnessers, logger| {
+		move |end_witnessing_signal, epoch, mut witnessers| {
 			let eth_rpc = eth_rpc.clone();
 			let db = db.clone();
 			async move {
@@ -57,15 +56,14 @@ pub async fn start(
 						epoch.epoch_index,
 						epoch.block_number,
 						db,
-						&logger,
 					)
 					.await
-					.expect("Failed to start Dot witnesser checkpointing")
+					.expect("Failed to start Eth witnesser checkpointing")
 					{
 						StartCheckpointing::Started((from_block, witnessed_until_sender)) =>
 							(from_block, witnessed_until_sender),
 						StartCheckpointing::AlreadyWitnessedEpoch =>
-							return Result::<_, IngressAddressReceivers>::Ok(witnessers),
+							return Result::<_, IngressAddressReceiverPairs>::Ok(witnessers),
 					};
 
 				// We need to return the receivers so we can restart the process while ensuring
@@ -78,37 +76,28 @@ pub async fn start(
 					($exp:expr) => {
 						try_with_logging!(
 							$exp,
-							IngressAddressReceivers {
-								eth: witnessers.eth_ingress.take_ingress_receiver(),
-								flip: witnessers.flip_ingress.take_ingress_receiver(),
-								usdc: witnessers.usdc_ingress.take_ingress_receiver(),
-							},
-							&logger
+							IngressAddressReceiverPairs {
+								eth: witnessers.eth_ingress.take_ingress_receiver_pair(),
+								flip: witnessers.flip_ingress.take_ingress_receiver_pair(),
+								usdc: witnessers.usdc_ingress.take_ingress_receiver_pair(),
+							}
 						)
 					};
 				}
 
 				let mut block_stream = try_with_logging_receivers!(
-					safe_dual_block_subscription_from(from_block, eth_rpc.clone(), &logger).await
+					safe_dual_block_subscription_from(from_block, eth_rpc.clone()).await
 				);
 
 				while let Some(block) = block_stream.next().await {
 					if let Some(end_block) = *end_witnessing_signal.lock().unwrap() {
 						if block.block_number.as_u64() >= end_block {
-							slog::info!(
-								logger,
-								"Eth block witnessers unsubscribe at block {}",
-								end_block
-							);
+							info!("Eth block witnessers unsubscribe at block {end_block}",);
 							break
 						}
 					}
 
-					slog::trace!(
-						logger,
-						"Eth block witnessers are processing block {:?}",
-						block.block_number
-					);
+					trace!("Eth block witnessers are processing block {:?}", block.block_number);
 
 					try_with_logging_receivers!(futures::future::join_all([
 						witnessers.key_manager.process_block(&epoch, &block),
@@ -133,7 +122,7 @@ pub async fn start(
 				Ok(witnessers)
 			}
 		},
-		&logger,
 	)
+	.instrument(info_span!("Eth-Block-Head-Witnesser"))
 	.await
 }
