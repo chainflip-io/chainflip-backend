@@ -13,10 +13,9 @@ type Amount = u128;
 impl Chain for Bitcoin {
 	type ChainBlockNumber = BlockNumber;
 
-	type ChainAmount = u128;
+	type ChainAmount = Amount;
 
-	// Or number of bytes??
-	type TransactionFee = Amount;
+	type TransactionFee = Self::ChainAmount;
 
 	type TrackedData = ();
 
