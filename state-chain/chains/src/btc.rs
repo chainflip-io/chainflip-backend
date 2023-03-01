@@ -45,7 +45,7 @@ pub struct BitcoinTransaction {
 
 fn get_tapleaf_hash(pubkey_x: [u8; 32], salt: u32) -> [u8; 32] {
 	// SHA256("TapLeaf")
-	let tapleaf_hash: &[u8] =
+	const TAPLEAF_HASH: &[u8] =
 		&hex_literal::hex!("aeea8fdc4208983105734b58081d1e2638d35f1cb54008d4d357ca03be78e9ee");
 	let leaf_version = 0xC0_u8;
 	let script = BitcoinScript::default()
@@ -54,9 +54,10 @@ fn get_tapleaf_hash(pubkey_x: [u8; 32], salt: u32) -> [u8; 32] {
 		.push_bytes(&pubkey_x.to_vec())
 		.op_checksig()
 		.serialize();
-	sha2_256(&[tapleaf_hash, tapleaf_hash, &[leaf_version], &script].concat())
+	sha2_256(&[TAPLEAF_HASH, TAPLEAF_HASH, &[leaf_version], &script].concat())
 }
 
+/// For reference see https://developer.bitcoin.org/reference/transactions.html#compactsize-unsigned-integers
 fn to_varint(value: u64) -> Vec<u8> {
 	let mut result = Vec::default();
 	let len = match value {
@@ -130,6 +131,7 @@ impl BitcoinTransaction {
 		let segwit_marker = 0u8;
 		let segwit_flag = 1u8;
 		let locktime = [0u8, 0, 0, 0];
+		let sequence_number = (u32::MAX - 2).to_le_bytes();
 		result.extend(version);
 		result.push(segwit_marker);
 		result.push(segwit_flag);
@@ -140,7 +142,7 @@ impl BitcoinTransaction {
 			acc.extend(le_txid);
 			acc.extend(x.vout.to_le_bytes());
 			acc.push(0);
-			acc.extend((u32::MAX - 2).to_le_bytes().iter());
+			acc.extend(sequence_number);
 			acc
 		}));
 		result.extend(to_varint(self.outputs.len() as u64));
@@ -164,7 +166,7 @@ impl BitcoinTransaction {
 				.op_checksig()
 				.serialize();
 			result.extend(script);
-			result.push(0x21u8);
+			result.push(0x21u8); // Length of tweaked pubkey + leaf version
 			let tweaked = tweaked_pubkey(self.inputs[i].pubkey_x, self.inputs[i].salt);
 			// push correct leaf version depending on evenness of public key
 			if tweaked.serialize_compressed()[0] == 2 {
@@ -180,7 +182,7 @@ impl BitcoinTransaction {
 
 	pub fn get_signing_payload(self, index: u32) -> Result<[u8; 32], BitcoinTransactionError> {
 		// SHA256("TapSighash")
-		let tapsig_hash: &[u8] =
+		const TAPSIG_HASH: &[u8] =
 			&hex_literal::hex!("f40a48df4b2a70c8b4924bf2654661ed3d95fd66a313eb87237597c628e4a031");
 		let prevouts = sha2_256(
 			self.inputs
@@ -246,8 +248,8 @@ impl BitcoinTransaction {
 		let codeseparator = u32::MAX.to_le_bytes();
 		Ok(sha2_256(
 			&[
-				tapsig_hash,
-				tapsig_hash,
+				TAPSIG_HASH,
+				TAPSIG_HASH,
 				&[epoch, hashtype],
 				&version,
 				&locktime,
@@ -273,6 +275,7 @@ impl BitcoinTransaction {
 #[derive(Default)]
 struct BitcoinScript(Vec<u8>);
 
+/// For reference see https://en.bitcoin.it/wiki/Script
 impl BitcoinScript {
 	/// Adds an operation to the script that pushes an unsigned integer onto the stack
 	fn push_uint(mut self, value: u32) -> Self {
