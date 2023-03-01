@@ -5,16 +5,6 @@ use sp_std::{vec, vec::Vec};
 extern crate alloc;
 use alloc::string::String;
 
-// SHA256("TapLeaf")
-const TAPLEAF_HASH: &[u8] =
-	&hex_literal::hex!("aeea8fdc4208983105734b58081d1e2638d35f1cb54008d4d357ca03be78e9ee");
-// SHA256("TapTweak")
-const TAPTWEAK_HASH: &[u8] =
-	&hex_literal::hex!("e80fe1639c9ca050e3af1b39c143c63e429cbceb15d940fbb5c5a1f4af57c5e9");
-// A public key that obviously doesn't have a known private key
-const INTERNAL_PUBKEY: &[u8] =
-	&hex_literal::hex!("02eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");
-
 #[derive(Default)]
 struct BitcoinScript(Vec<u8>);
 
@@ -25,7 +15,7 @@ impl BitcoinScript {
 			0 => self.0.push(0),
 			1..=16 => self.0.push(0x50 + value as u8),
 			_ => {
-				let num_bytes = (4 - value.leading_zeros() / 8) as usize;
+				let num_bytes = sp_std::mem::size_of::<u32>() - (value.leading_zeros() / 8) as usize;
 				self.0.push(num_bytes as u8);
 				self.0.extend(value.to_le_bytes().iter().take(num_bytes));
 			},
@@ -59,21 +49,31 @@ impl BitcoinScript {
 
 // Derives a taproot address from a validator public key and a salt
 pub fn derive_btc_ingress_address(pubkey_x: [u8; 32], salt: u32) -> String {
+	// SHA256("TapLeaf")
+	let tapleaf_hash: &[u8] =
+		&hex_literal::hex!("aeea8fdc4208983105734b58081d1e2638d35f1cb54008d4d357ca03be78e9ee");
+	// SHA256("TapTweak")
+	let taptweak_hash: &[u8] =
+		&hex_literal::hex!("e80fe1639c9ca050e3af1b39c143c63e429cbceb15d940fbb5c5a1f4af57c5e9");
+	// A public key that obviously doesn't have a known private key
+	let internal_pubkey: &[u8] =
+		&hex_literal::hex!("02eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");
+	let leaf_version = 0xC0_u8;
 	let script = BitcoinScript::default()
 		.push_uint(salt)
 		.op_drop()
 		.push_32bytes(pubkey_x)
 		.op_checksig();
 	let leafhash =
-		sha2_256(&[TAPLEAF_HASH, TAPLEAF_HASH, &[0xC0_u8], &script.serialize()].concat());
+		sha2_256(&[tapleaf_hash, tapleaf_hash, &[leaf_version], &script.serialize()].concat());
 	let tweakhash =
-		sha2_256(&[TAPTWEAK_HASH, TAPTWEAK_HASH, &INTERNAL_PUBKEY[1..33], &leafhash].concat());
-	let mut tweaked = PublicKey::parse_compressed(INTERNAL_PUBKEY.try_into().unwrap()).unwrap();
-	_ = tweaked.tweak_add_assign(&SecretKey::parse(&tweakhash).unwrap());
+		sha2_256(&[taptweak_hash, taptweak_hash, &internal_pubkey[1..33], &leafhash].concat());
+	let mut tweaked = PublicKey::parse_compressed(internal_pubkey.try_into().unwrap()).unwrap();
+	let _result = tweaked.tweak_add_assign(&SecretKey::parse(&tweakhash).unwrap());
 	let segwit_version = u5::try_from_u8(1).unwrap();
 	let mut payload = vec![segwit_version];
 	payload.append(&mut tweaked.serialize_compressed()[1..33].as_ref().to_base32());
-	bech32::encode("bc", &mut payload, Variant::Bech32m).unwrap()
+	bech32::encode("bc", payload, Variant::Bech32m).unwrap()
 }
 
 #[test]
