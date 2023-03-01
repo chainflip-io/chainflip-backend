@@ -15,7 +15,8 @@ impl BitcoinScript {
 			0 => self.0.push(0),
 			1..=16 => self.0.push(0x50 + value as u8),
 			_ => {
-				let num_bytes = sp_std::mem::size_of::<u32>() - (value.leading_zeros() / 8) as usize;
+				let num_bytes =
+					sp_std::mem::size_of::<u32>() - (value.leading_zeros() / 8) as usize;
 				self.0.push(num_bytes as u8);
 				self.0.extend(value.to_le_bytes().iter().take(num_bytes));
 			},
