@@ -207,17 +207,21 @@ pub async fn start(
 		}
 	};
 
-	scope.spawn(start_with_restart_on_failure(
-		create_and_run_witnesser_futures,
-		(
-			epoch_start_receiver,
-			IngressAddressReceiverPairs {
-				eth: (eth_ingress_receiver, eth_addresses),
-				flip: (flip_ingress_receiver, flip_addresses),
-				usdc: (usdc_ingress_receiver, usdc_addresses),
-			},
-		),
-	));
+	scope.spawn(async move {
+		start_with_restart_on_failure(
+			create_and_run_witnesser_futures,
+			(
+				epoch_start_receiver,
+				IngressAddressReceiverPairs {
+					eth: (eth_ingress_receiver, eth_addresses),
+					flip: (flip_ingress_receiver, flip_addresses),
+					usdc: (usdc_ingress_receiver, usdc_addresses),
+				},
+			),
+		)
+		.await;
+		Ok(())
+	});
 
 	Ok(EthAddressToMonitorSender {
 		eth: eth_ingress_sender,

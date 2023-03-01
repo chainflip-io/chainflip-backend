@@ -122,11 +122,9 @@ mod tests {
 pub async fn start_with_restart_on_failure<StaticState, TaskFut, TaskGenerator>(
 	task_generator: TaskGenerator,
 	mut static_state: StaticState,
-) -> anyhow::Result<()>
-where
+) where
 	TaskFut: Future<Output = Result<(), StaticState>> + Send + 'static,
-	StaticState: Send + 'static,
-	TaskGenerator: Fn(StaticState) -> TaskFut + Send + 'static,
+	TaskGenerator: Fn(StaticState) -> TaskFut,
 {
 	loop {
 		// TODO: We could pass the static_state by-ref to avoid needing to pass static_state out
@@ -136,7 +134,7 @@ where
 
 		// Spawn with handle and then wait for future to finish
 		static_state = match task.await {
-			Ok(()) => return Ok(()),
+			Ok(()) => return,
 			Err(state) => {
 				// give it some time before the restart
 				tokio::time::sleep(Duration::from_secs(2)).await;
@@ -169,7 +167,7 @@ mod test_restart_on_failure {
 
 			panic!("Should not reach here");
 		}
-		start_with_restart_on_failure(start_up_some_loop, 0).await.unwrap();
+		start_with_restart_on_failure(start_up_some_loop, 0).await;
 	}
 }
 
