@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, sync::Arc};
 
 use bitcoincore_rpc::{
 	bitcoin::{Block, BlockHash, Transaction, TxOut},
@@ -12,28 +12,19 @@ use crate::{settings, witnesser::LatestBlockNumber};
 
 use super::ScriptPubKey;
 
+#[derive(Clone)]
 pub struct BtcRpcClient {
-	settings: settings::Btc,
-	client: Client,
-}
-
-impl Clone for BtcRpcClient {
-	fn clone(&self) -> Self {
-		Self {
-			settings: self.settings.clone(),
-			client: client_from_settings(&self.settings).unwrap(),
-		}
-	}
-}
-
-fn client_from_settings(btc_settings: &settings::Btc) -> Result<Client> {
-	let auth = Auth::UserPass(btc_settings.rpc_user.clone(), btc_settings.rpc_password.clone());
-	Ok(Client::new(&btc_settings.http_node_endpoint, auth)?)
+	client: Arc<Client>,
 }
 
 impl BtcRpcClient {
 	pub fn new(btc_settings: &settings::Btc) -> Result<Self> {
-		Ok(Self { settings: btc_settings.clone(), client: client_from_settings(btc_settings)? })
+		Ok(Self {
+			client: Arc::new(Client::new(
+				&btc_settings.http_node_endpoint,
+				Auth::UserPass(btc_settings.rpc_user.clone(), btc_settings.rpc_password.clone()),
+			)?),
+		})
 	}
 }
 
