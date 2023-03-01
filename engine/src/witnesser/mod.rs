@@ -6,6 +6,7 @@ use cf_primitives::EpochIndex;
 pub mod block_head_stream_from;
 pub mod checkpointing;
 pub mod epoch_witnesser;
+pub mod http_safe_stream;
 
 use anyhow::Result;
 
@@ -25,6 +26,14 @@ pub trait BlockNumberable {
 	type BlockNumber;
 
 	fn block_number(&self) -> Self::BlockNumber;
+}
+
+impl BlockNumberable for u64 {
+	type BlockNumber = Self;
+
+	fn block_number(&self) -> Self::BlockNumber {
+		*self
+	}
 }
 
 /// General trait for getting the latest/height block number for a particular chain

@@ -1,6 +1,5 @@
 use std::{
 	collections::{BTreeSet, HashMap},
-	pin::Pin,
 	sync::Arc,
 };
 
@@ -102,28 +101,6 @@ enum EventWrapper {
 	ProxyAdded(ProxyAdded),
 	Transfer(Transfer),
 	TransactionFeePaid(TransactionFeePaid),
-}
-
-pub async fn dot_block_head_stream_from<BlockHeaderStream, DotRpc>(
-	from_block: PolkadotBlockNumber,
-	safe_head_stream: BlockHeaderStream,
-	dot_client: DotRpc,
-) -> Result<Pin<Box<dyn Stream<Item = MiniHeader> + Send + 'static>>>
-where
-	BlockHeaderStream: Stream<Item = MiniHeader> + 'static + Send,
-	DotRpc: DotRpcApi + 'static + Send + Clone,
-{
-	block_head_stream_from(from_block, safe_head_stream, move |block_number| {
-		let dot_client = dot_client.clone();
-		Box::pin(async move {
-			let block_hash = dot_client
-				.block_hash(block_number)
-				.await?
-				.expect("Called on a finalised stream, so the block will exist");
-			Ok(MiniHeader { block_number, block_hash })
-		})
-	})
-	.await
 }
 
 /// Takes a stream of Results and terminates when it hits an error, logging the error before
@@ -286,7 +263,7 @@ where
 					epoch_start.block_number,
 					db,
 				).await
-				.expect("Failed to start Eth witnesser checkpointing") 
+				.expect("Failed to start Dot witnesser checkpointing")
 				{
 					StartCheckpointing::Started((from_block, witnessed_until_sender)) =>
 						(from_block, witnessed_until_sender),
@@ -306,11 +283,17 @@ where
 							block_hash: header.hash(),
 						});
 
-				let block_head_stream_from = dot_block_head_stream_from(
-					from_block,
-					safe_head_stream,
-					dot_client.clone(),
-				)
+				let dot_client_c = dot_client.clone();
+				let block_head_stream_from = block_head_stream_from(from_block, safe_head_stream, move |block_number| {
+					let dot_client = dot_client_c.clone();
+					Box::pin(async move {
+						let block_hash = dot_client
+							.block_hash(block_number)
+							.await?
+							.expect("Called on a finalised stream, so the block will exist");
+						Ok(MiniHeader { block_number, block_hash })
+					})
+				})
 				.await?;
 
 				let our_vault = epoch_start.data.vault_account;

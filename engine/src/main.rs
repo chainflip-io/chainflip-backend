@@ -4,6 +4,7 @@ use anyhow::Context;
 
 use cf_primitives::AccountRole;
 use chainflip_engine::{
+	btc,
 	dot::{self, rpc::DotRpcClient, witnesser as dot_witnesser, DotBroadcaster},
 	eth::{self, build_broadcast_channel, rpc::EthDualRpcClient, EthBroadcaster},
 	health::HealthChecker,
@@ -90,6 +91,9 @@ async fn main() -> anyhow::Result<()> {
 
 			let (dot_epoch_start_sender, [dot_epoch_start_receiver_1, dot_epoch_start_receiver_2]) =
 				build_broadcast_channel(10);
+
+			// TODO: Link this up to the SC
+			let (_btc_epoch_start_sender, [btc_epoch_start_receiver]) = build_broadcast_channel(10);
 
 			let cfe_settings = state_chain_client
 				.storage_value::<pallet_cf_environment::CfeSettings<state_chain_runtime::Runtime>>(
@@ -239,7 +243,7 @@ async fn main() -> anyhow::Result<()> {
 						.map(|(signature, _)| signature.0)
 						.collect(),
 					state_chain_client.clone(),
-					db,
+					db.clone(),
 				)
 				.map_err(|_r| anyhow::anyhow!("DOT witnesser failed")),
 			);
@@ -253,6 +257,12 @@ async fn main() -> anyhow::Result<()> {
 				)
 				.map_err(|_| anyhow::anyhow!("DOT runtime version updater failed")),
 			);
+
+			if let Some(btc_settings) = settings.btc {
+				btc::witnessing::start(scope, btc_settings, btc_epoch_start_receiver, db)
+					.await
+					.unwrap();
+			}
 
 			Ok(())
 		}

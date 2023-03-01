@@ -74,7 +74,7 @@ where
 						retry_rpc_until_success!(http_rpc.latest_block_number(), poll_interval);
 
 					// Fetched unsafe_block_number is more than `safety_margin` blocks behind the
-					// last fetched ETH block number (last_head_fetched)
+					// last fetched block number (last_head_fetched)
 					if unsafe_block_number + safety_margin < *last_head_fetched {
 						return None
 					}
@@ -93,7 +93,7 @@ where
 				*option_last_block_yielded = Some(next_block_to_yield);
 				Some((next_block_to_yield, state))
 			}
-			.instrument(info_span!("ETH_HTTPSafeStream"))
+			.instrument(info_span!("HTTPSafeStream"))
 		})
 		.fuse(),
 	)

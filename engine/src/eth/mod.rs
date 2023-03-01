@@ -2,7 +2,6 @@ pub mod chain_data_witnesser;
 pub mod contract_witnesser;
 pub mod erc20_witnesser;
 pub mod eth_block_witnessing;
-mod http_safe_stream;
 pub mod ingress_witnesser;
 pub mod key_manager;
 mod merged_block_stream;
@@ -27,7 +26,6 @@ use crate::{
 	common::read_clean_and_decode_hex_str_file,
 	constants::ETH_BLOCK_SAFETY_MARGIN,
 	eth::{
-		http_safe_stream::{safe_polling_http_head_stream, HTTP_POLL_INTERVAL},
 		merged_block_stream::merged_block_stream,
 		rpc::{EthDualRpcClient, EthRpcApi, EthWsRpcApi},
 		ws_safe_stream::safe_ws_head_stream,
@@ -35,7 +33,11 @@ use crate::{
 	logging::COMPONENT_KEY,
 	settings,
 	state_chain_observer::client::extrinsic_api::ExtrinsicApi,
-	witnesser::{block_head_stream_from::block_head_stream_from, BlockNumberable},
+	witnesser::{
+		block_head_stream_from::block_head_stream_from,
+		http_safe_stream::{safe_polling_http_head_stream, HTTP_POLL_INTERVAL},
+		BlockNumberable,
+	},
 };
 
 use futures::StreamExt;

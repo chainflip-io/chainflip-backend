@@ -109,4 +109,11 @@ pub mod common {
 		/// Number of blocks to wait until we deem the block to be safe.
 		pub const BLOCK_SAFETY_MARGIN: <Ethereum as Chain>::ChainBlockNumber = 4;
 	}
+
+	pub mod btc {
+		use cf_chains::{btc::Bitcoin, Chain};
+
+		/// Number of blocks to wait for until we deem a BTC ingress to be safe.
+		pub const INGRESS_BLOCK_SAFETY_MARGIN: <Bitcoin as Chain>::ChainBlockNumber = 3;
+	}
 }

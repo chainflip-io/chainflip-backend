@@ -1,6 +1,6 @@
 #[cfg(feature = "runtime-benchmarks")]
 use cf_primitives::{
-	chains::assets::{dot, eth},
+	chains::assets::{btc, dot, eth},
 	Asset, ForeignChainAddress,
 };
 
@@ -45,6 +45,14 @@ impl BenchmarkValue for eth::Asset {
 impl BenchmarkValue for dot::Asset {
 	fn benchmark_value() -> Self {
 		dot::Asset::Dot
+	}
+}
+
+// TODO: Look at deduplicating this by including it in the macro
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue for btc::Asset {
+	fn benchmark_value() -> Self {
+		btc::Asset::Btc
 	}
 }
 

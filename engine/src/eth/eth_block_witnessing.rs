@@ -58,7 +58,7 @@ pub async fn start(
 						db,
 					)
 					.await
-					.expect("Failed to start Dot witnesser checkpointing")
+					.expect("Failed to start Eth witnesser checkpointing")
 					{
 						StartCheckpointing::Started((from_block, witnessed_until_sender)) =>
 							(from_block, witnessed_until_sender),
