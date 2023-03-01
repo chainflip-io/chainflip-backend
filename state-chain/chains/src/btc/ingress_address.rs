@@ -1,9 +1,14 @@
 use super::*;
+use itertools;
+use sp_std::iter;
 
 pub fn tweaked_pubkey(pubkey_x: [u8; 32], salt: u32) -> PublicKey {
+	// SHA256("TapTweak")
+	let taptweak_hash: &[u8] =
+		&hex_literal::hex!("e80fe1639c9ca050e3af1b39c143c63e429cbceb15d940fbb5c5a1f4af57c5e9");
 	let leafhash = get_tapleaf_hash(pubkey_x, salt);
 	let tweakhash =
-		sha2_256(&[TAPTWEAK_HASH, TAPTWEAK_HASH, &INTERNAL_PUBKEY[1..33], &leafhash].concat());
+		sha2_256(&[taptweak_hash, taptweak_hash, &INTERNAL_PUBKEY[1..33], &leafhash].concat());
 	let mut tweaked = PublicKey::parse_compressed(INTERNAL_PUBKEY.try_into().unwrap()).unwrap();
 	_ = tweaked.tweak_add_assign(&SecretKey::parse(&tweakhash).unwrap());
 	tweaked
@@ -15,7 +20,11 @@ pub fn derive_btc_ingress_address(pubkey_x: [u8; 32], salt: u32) -> String {
 	let segwit_version = u5::try_from_u8(1).unwrap();
 	let mut payload = vec![segwit_version];
 	payload.extend(tweaked.to_base32());
-	bech32::encode("bc", &mut payload, Variant::Bech32m).unwrap()
+	let payload = itertools::chain!(
+		iter::once(segwit_version),
+		tweaked.to_base32()
+	).collect::<Vec<_>>();
+	bech32::encode("bc", payload, Variant::Bech32m).unwrap()
 }
 
 #[test]

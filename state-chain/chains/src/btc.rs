@@ -12,15 +12,6 @@ use alloc::string::String;
 
 use self::ingress_address::tweaked_pubkey;
 
-/// SHA256("TapLeaf")
-const TAPLEAF_HASH: &[u8] =
-	&hex_literal::hex!("aeea8fdc4208983105734b58081d1e2638d35f1cb54008d4d357ca03be78e9ee");
-/// SHA256("TapTweak")
-const TAPTWEAK_HASH: &[u8] =
-	&hex_literal::hex!("e80fe1639c9ca050e3af1b39c143c63e429cbceb15d940fbb5c5a1f4af57c5e9");
-/// SHA256("TapSighash")
-const TAPSIGHASH_HASH: &[u8] =
-	&hex_literal::hex!("f40a48df4b2a70c8b4924bf2654661ed3d95fd66a313eb87237597c628e4a031");
 const INTERNAL_PUBKEY: &[u8] =
 	&hex_literal::hex!("02eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");
 
@@ -52,13 +43,17 @@ pub struct BitcoinTransaction {
 }
 
 fn get_tapleaf_hash(pubkey_x: [u8; 32], salt: u32) -> [u8; 32] {
+	// SHA256("TapLeaf")
+	let tapleaf_hash: &[u8] =
+		&hex_literal::hex!("aeea8fdc4208983105734b58081d1e2638d35f1cb54008d4d357ca03be78e9ee");
+	let leaf_version = 0xC0_u8;
 	let script = BitcoinScript::default()
 		.push_uint(salt)
 		.op_drop()
 		.push_bytes(&pubkey_x.to_vec())
 		.op_checksig()
 		.serialize();
-	sha2_256(&[TAPLEAF_HASH, TAPLEAF_HASH, &[0xC0_u8], &script].concat())
+	sha2_256(&[tapleaf_hash, tapleaf_hash, &[leaf_version], &script].concat())
 }
 
 fn to_varint(value: u64) -> Vec<u8> {
@@ -170,6 +165,7 @@ impl BitcoinTransaction {
 			result.extend(script);
 			result.push(0x21u8);
 			let tweaked = tweaked_pubkey(self.inputs[i].pubkey_x, self.inputs[i].salt);
+			// push correct leaf version depending on evenness of public key
 			if tweaked.serialize_compressed()[0] == 2 {
 				result.push(0xC0_u8);
 			} else {
@@ -182,6 +178,9 @@ impl BitcoinTransaction {
 	}
 
 	pub fn get_signing_payload(self, index: u32) -> Result<[u8; 32], BitcoinTransactionError> {
+		/// SHA256("TapSighash")
+		let tapsig_hash: &[u8] =
+		&hex_literal::hex!("f40a48df4b2a70c8b4924bf2654661ed3d95fd66a313eb87237597c628e4a031");
 		let prevouts = sha2_256(
 			self.inputs
 				.iter()
@@ -246,8 +245,8 @@ impl BitcoinTransaction {
 		let codeseparator = u32::MAX.to_le_bytes();
 		Ok(sha2_256(
 			&[
-				TAPSIGHASH_HASH,
-				TAPSIGHASH_HASH,
+				tapsig_hash,
+				tapsig_hash,
 				&[epoch, hashtype],
 				&version,
 				&locktime,
@@ -280,9 +279,9 @@ impl BitcoinScript {
 			0 => self.0.push(0),
 			1..=16 => self.0.push(0x50 + value as u8),
 			_ => {
-				let num_bytes = (4 - value.leading_zeros() / 8) as usize;
-				self.0.push(num_bytes as u8);
-				self.0.extend(value.to_le_bytes().iter().take(num_bytes));
+				let num_bytes =
+					sp_std::mem::size_of::<u32>() - (value.leading_zeros() / 8) as usize;
+				self = self.push_bytes(&value.to_le_bytes().into_iter().take(num_bytes).collect());
 			},
 		}
 		self
