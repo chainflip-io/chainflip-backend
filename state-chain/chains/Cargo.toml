@@ -19,6 +19,7 @@ rlp = {default-features = false, version = '0.5'}
 
 # Bitcoin
 bech32 = {default-features = false, version = '0.9.1'}
+base58 = '0.2.0'
 
 # Other
 hex = {default-features = false, version = '0.4'}
