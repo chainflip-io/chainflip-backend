@@ -1,9 +1,11 @@
 use bech32::{self, u5, ToBase32, Variant};
 use frame_support::sp_io::hashing::sha2_256;
 use libsecp256k1::{PublicKey, SecretKey};
-use sp_std::{vec, vec::Vec};
+use sp_std::vec::Vec;
 extern crate alloc;
 use alloc::string::String;
+use itertools;
+use sp_std::iter;
 
 #[derive(Default)]
 struct BitcoinScript(Vec<u8>);
@@ -41,10 +43,8 @@ impl BitcoinScript {
 	}
 	/// Serializes the script by returning a single byte for the length
 	/// of the script and then the script itself
-	fn serialize(mut self) -> Vec<u8> {
-		let mut result = vec![self.0.len() as u8];
-		result.append(&mut self.0);
-		result
+	fn serialize(self) -> Vec<u8> {
+		itertools::chain!(iter::once(self.0.len() as u8), self.0).collect()
 	}
 }
 
@@ -72,8 +72,11 @@ pub fn derive_btc_ingress_address(pubkey_x: [u8; 32], salt: u32) -> String {
 	let mut tweaked = PublicKey::parse_compressed(internal_pubkey.try_into().unwrap()).unwrap();
 	let _result = tweaked.tweak_add_assign(&SecretKey::parse(&tweakhash).unwrap());
 	let segwit_version = u5::try_from_u8(1).unwrap();
-	let mut payload = vec![segwit_version];
-	payload.append(&mut tweaked.serialize_compressed()[1..33].as_ref().to_base32());
+	let payload = itertools::chain!(
+		iter::once(segwit_version),
+		tweaked.serialize_compressed()[1..33].as_ref().to_base32()
+	)
+	.collect::<Vec<_>>();
 	bech32::encode("bc", payload, Variant::Bech32m).unwrap()
 }
 

@@ -742,6 +742,7 @@ dependencies = [
  "frame-system",
  "hex",
  "hex-literal",
+ "itertools",
  "libsecp256k1",
  "log",
  "parity-scale-codec",
