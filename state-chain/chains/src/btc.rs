@@ -1,4 +1,6 @@
-use cf_primitives::chains::{assets, Bitcoin};
+use cf_primitives::chains::assets;
+
+pub use cf_primitives::chains::Bitcoin;
 
 use crate::Chain;
 

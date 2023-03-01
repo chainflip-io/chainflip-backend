@@ -1,6 +1,7 @@
 use std::{collections::BTreeSet, sync::Arc};
 
-use cf_chains::{btc::BlockNumber, Bitcoin};
+use crate::constants::BTC_INGRESS_BLOCK_SAFETY_MARGIN;
+use cf_chains::Bitcoin;
 use futures::StreamExt;
 use tracing::{info, info_span, trace, Instrument};
 
@@ -21,8 +22,6 @@ use super::{
 	rpc::{filter_interesting_utxos, BtcRpcApi, BtcRpcClient},
 	ScriptPubKey,
 };
-
-const INGRESS_SAFETY_MARGIN: BlockNumber = 3;
 
 pub async fn start(
 	epoch_starts_receiver: async_broadcast::Receiver<EpochStart<Bitcoin>>,
@@ -66,7 +65,7 @@ pub async fn start(
 					safe_polling_http_head_stream(
 						btc_rpc.clone(),
 						HTTP_POLL_INTERVAL,
-						INGRESS_SAFETY_MARGIN,
+						BTC_INGRESS_BLOCK_SAFETY_MARGIN,
 					)
 					.await,
 					move |block_number| futures::future::ready(Ok(block_number)),
