@@ -1,3 +1,4 @@
+pub mod ingress_address;
 use cf_primitives::chains::assets;
 
 pub use cf_primitives::chains::Bitcoin;

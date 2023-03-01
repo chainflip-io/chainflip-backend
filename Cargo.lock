@@ -786,6 +786,7 @@ dependencies = [
 name = "cf-chains"
 version = "0.1.0"
 dependencies = [
+ "bech32",
  "cf-primitives",
  "cf-test-utilities",
  "ethabi 18.0.0",
@@ -795,6 +796,7 @@ dependencies = [
  "frame-system",
  "hex",
  "hex-literal",
+ "itertools",
  "libsecp256k1",
  "log",
  "parity-scale-codec",
