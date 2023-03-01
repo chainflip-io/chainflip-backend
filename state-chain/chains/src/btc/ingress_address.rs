@@ -1,5 +1,4 @@
 use super::*;
-use itertools;
 use sp_std::iter;
 
 pub fn tweaked_pubkey(pubkey_x: [u8; 32], salt: u32) -> PublicKey {
@@ -10,7 +9,7 @@ pub fn tweaked_pubkey(pubkey_x: [u8; 32], salt: u32) -> PublicKey {
 	let tweakhash =
 		sha2_256(&[taptweak_hash, taptweak_hash, &INTERNAL_PUBKEY[1..33], &leafhash].concat());
 	let mut tweaked = PublicKey::parse_compressed(INTERNAL_PUBKEY.try_into().unwrap()).unwrap();
-	_ = tweaked.tweak_add_assign(&SecretKey::parse(&tweakhash).unwrap());
+	let _result = tweaked.tweak_add_assign(&SecretKey::parse(&tweakhash).unwrap());
 	tweaked
 }
 
@@ -20,10 +19,8 @@ pub fn derive_btc_ingress_address(pubkey_x: [u8; 32], salt: u32) -> String {
 	let segwit_version = u5::try_from_u8(1).unwrap();
 	let mut payload = vec![segwit_version];
 	payload.extend(tweaked.to_base32());
-	let payload = itertools::chain!(
-		iter::once(segwit_version),
-		tweaked.to_base32()
-	).collect::<Vec<_>>();
+	let payload =
+		itertools::chain!(iter::once(segwit_version), tweaked.to_base32()).collect::<Vec<_>>();
 	bech32::encode("bc", payload, Variant::Bech32m).unwrap()
 }
 

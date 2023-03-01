@@ -9,6 +9,7 @@ use scale_info::TypeInfo;
 use sp_std::{vec, vec::Vec};
 extern crate alloc;
 use alloc::string::String;
+use itertools;
 
 use self::ingress_address::tweaked_pubkey;
 
@@ -178,9 +179,9 @@ impl BitcoinTransaction {
 	}
 
 	pub fn get_signing_payload(self, index: u32) -> Result<[u8; 32], BitcoinTransactionError> {
-		/// SHA256("TapSighash")
+		// SHA256("TapSighash")
 		let tapsig_hash: &[u8] =
-		&hex_literal::hex!("f40a48df4b2a70c8b4924bf2654661ed3d95fd66a313eb87237597c628e4a031");
+			&hex_literal::hex!("f40a48df4b2a70c8b4924bf2654661ed3d95fd66a313eb87237597c628e4a031");
 		let prevouts = sha2_256(
 			self.inputs
 				.iter()
@@ -324,11 +325,8 @@ impl BitcoinScript {
 	}
 	/// Serializes the script by returning a single byte for the length
 	/// of the script and then the script itself
-	fn serialize(mut self) -> Vec<u8> {
-		let mut result = Vec::default();
-		result.extend(to_varint(self.0.len() as u64));
-		result.append(&mut self.0);
-		result
+	fn serialize(self) -> Vec<u8> {
+		itertools::chain!(to_varint(self.0.len() as u64), self.0).collect()
 	}
 }
 
