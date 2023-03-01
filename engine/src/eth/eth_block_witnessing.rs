@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::BTreeSet, sync::Arc};
 
 use async_trait::async_trait;
 use cf_chains::Ethereum;
@@ -21,10 +21,10 @@ use crate::{
 	},
 };
 
-pub struct IngressAddressReceivers {
-	pub eth: tokio::sync::mpsc::UnboundedReceiver<H160>,
-	pub flip: tokio::sync::mpsc::UnboundedReceiver<H160>,
-	pub usdc: tokio::sync::mpsc::UnboundedReceiver<H160>,
+pub struct IngressAddressReceiverPairs {
+	pub eth: (tokio::sync::mpsc::UnboundedReceiver<H160>, BTreeSet<H160>),
+	pub flip: (tokio::sync::mpsc::UnboundedReceiver<H160>, BTreeSet<H160>),
+	pub usdc: (tokio::sync::mpsc::UnboundedReceiver<H160>, BTreeSet<H160>),
 }
 
 #[async_trait]
@@ -41,7 +41,7 @@ pub async fn start(
 	witnessers: AllWitnessers,
 	eth_rpc: EthDualRpcClient,
 	db: Arc<PersistentKeyDB>,
-) -> Result<(), (async_broadcast::Receiver<EpochStart<Ethereum>>, IngressAddressReceivers)> {
+) -> Result<(), (async_broadcast::Receiver<EpochStart<Ethereum>>, IngressAddressReceiverPairs)> {
 	epoch_witnesser::start(
 		epoch_start_receiver,
 		move |_| true,
@@ -63,7 +63,7 @@ pub async fn start(
 						StartCheckpointing::Started((from_block, witnessed_until_sender)) =>
 							(from_block, witnessed_until_sender),
 						StartCheckpointing::AlreadyWitnessedEpoch =>
-							return Result::<_, IngressAddressReceivers>::Ok(witnessers),
+							return Result::<_, IngressAddressReceiverPairs>::Ok(witnessers),
 					};
 
 				// We need to return the receivers so we can restart the process while ensuring
@@ -76,10 +76,10 @@ pub async fn start(
 					($exp:expr) => {
 						try_with_logging!(
 							$exp,
-							IngressAddressReceivers {
-								eth: witnessers.eth_ingress.take_ingress_receiver(),
-								flip: witnessers.flip_ingress.take_ingress_receiver(),
-								usdc: witnessers.usdc_ingress.take_ingress_receiver(),
+							IngressAddressReceiverPairs {
+								eth: witnessers.eth_ingress.take_ingress_receiver_pair(),
+								flip: witnessers.flip_ingress.take_ingress_receiver_pair(),
+								usdc: witnessers.usdc_ingress.take_ingress_receiver_pair(),
 							}
 						)
 					};

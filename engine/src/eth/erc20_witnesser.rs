@@ -35,7 +35,7 @@ pub struct Erc20Witnesser {
 	pub deployed_address: H160,
 	asset: eth::Asset,
 	contract: ethabi::Contract,
-	monitored_addresses: BTreeSet<sp_core::H160>,
+	pub monitored_addresses: BTreeSet<sp_core::H160>,
 	pub monitored_address_receiver: tokio::sync::mpsc::UnboundedReceiver<sp_core::H160>,
 }
 
