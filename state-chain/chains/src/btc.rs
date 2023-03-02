@@ -5,7 +5,7 @@ pub struct UTXO {
 	pub amount: u64,
 }
 
-#[allow(clippy::dead_code)]
+#[allow(dead_code)]
 fn select_utxos_from_pool(
 	mut available_utxos: Vec<UTXO>,
 	fee_per_utxo: u64,
