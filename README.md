@@ -10,6 +10,22 @@ The project is organised using rust workspaces. See the `Cargo.toml` in this dir
 workspaces. Each workspace should have its own `README` with instructions on how to get started. If not, please raise an
 issue!
 
+## Compile and run tests
+
+To compile the code run:
+
+```bash
+cargo build --release
+```
+
+To run the test suit:
+
+```bash
+cargo ci-test
+```
+
+> **_NOTE:_**  ci-test is an alias for cargo test with additional flags.
+
 ## Contributing
 
 ### Code style
@@ -131,3 +147,6 @@ After set up completion, you will see the following:
 * **logs** - Tail the logs for your current Localnet.
 * **yeet** - Destroy your current Localnet, and remove all data including docker images. You should use this if you are getting some weird caching issues.
 
+## Testnet
+
+To launch a testnet use the [chainflip-testnet-tools](https://github.com/chainflip-io/chainflip-testnet-tools).
