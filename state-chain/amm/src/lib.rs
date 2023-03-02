@@ -519,16 +519,16 @@ impl PoolState {
 					Default::default()
 				};
 
-				if lower_info.liquidity_gross == 0 && lower_tick != MIN_TICK
-				// Guarantee MIN_TICK is always in map to simplify swap logic
+				if lower_info.liquidity_gross == 0 &&
+					/*Guarantee MIN_TICK is always in map to simplify swap logic*/ lower_tick != MIN_TICK
 				{
 					assert_eq!(position.liquidity, 0);
 					self.liquidity_map.remove(&lower_tick);
 				} else {
 					*self.liquidity_map.get_mut(&lower_tick).unwrap() = lower_info;
 				}
-				if upper_info.liquidity_gross == 0 && upper_tick != MAX_TICK
-				// Guarantee MAX_TICK is always in map to simplify swap logic
+				if upper_info.liquidity_gross == 0 &&
+					/*Guarantee MAX_TICK is always in map to simplify swap logic*/ upper_tick != MAX_TICK
 				{
 					assert_eq!(position.liquidity, 0);
 					self.liquidity_map.remove(&upper_tick);
