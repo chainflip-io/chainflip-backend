@@ -22,9 +22,9 @@ pub use cf_primitives::chains::*;
 pub mod benchmarking_value;
 
 pub mod any;
-pub mod btc;
 pub mod dot;
 pub mod eth;
+pub mod utxo_selection;
 
 #[cfg(feature = "std")]
 pub mod mocks;
