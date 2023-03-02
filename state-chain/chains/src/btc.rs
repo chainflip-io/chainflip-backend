@@ -181,7 +181,7 @@ impl BitcoinTransaction {
 	}
 
 	pub fn get_signing_payload(
-		self,
+		&self,
 		input_index: u32,
 	) -> Result<[u8; 32], BitcoinTransactionError> {
 		// SHA256("TapSighash")
