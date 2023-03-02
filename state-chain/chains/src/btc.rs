@@ -1,5 +1,7 @@
 pub mod ingress_address;
 
+use core::{borrow::Borrow, iter};
+
 use base58::FromBase58;
 use bech32::{self, u5, FromBase32, ToBase32, Variant};
 use codec::{Decode, Encode};
@@ -53,7 +55,7 @@ fn get_tapleaf_hash(pubkey_x: [u8; 32], salt: u32) -> [u8; 32] {
 	let script = BitcoinScript::default()
 		.push_uint(salt)
 		.op_drop()
-		.push_bytes(&pubkey_x.to_vec())
+		.push_bytes(pubkey_x)
 		.op_checksig()
 		.serialize();
 	sha2_256(&[TAPLEAF_HASH, TAPLEAF_HASH, &[leaf_version], &script].concat())
@@ -94,14 +96,14 @@ pub fn scriptpubkey_from_address(
 				return Ok(BitcoinScript::default()
 					.op_dup()
 					.op_hash160()
-					.push_bytes(&data[1..data.len() - 4].to_vec())
+					.push_bytes(&data[1..data.len() - 4])
 					.op_equalverify()
 					.op_checksig())
 			} else if version == 5 {
 				// P2SH
 				return Ok(BitcoinScript::default()
 					.op_hash160()
-					.push_bytes(&data[1..data.len() - 4].to_vec())
+					.push_bytes(&data[1..data.len() - 4])
 					.op_equal())
 			}
 		} else {
@@ -113,7 +115,7 @@ pub fn scriptpubkey_from_address(
 		let version = data[0].to_u8();
 		return Ok(BitcoinScript::default()
 			.push_uint(version as u32)
-			.push_bytes(&Vec::<u8>::from_base32(&data[1..]).unwrap()))
+			.push_bytes(Vec::<u8>::from_base32(&data[1..]).unwrap()))
 	}
 	Err(BitcoinTransactionError::InvalidEgressAddress)
 }
@@ -164,7 +166,7 @@ impl BitcoinTransaction {
 			let script = BitcoinScript::default()
 				.push_uint(self.inputs[i].salt)
 				.op_drop()
-				.push_bytes(&self.inputs[i].pubkey_x.to_vec())
+				.push_bytes(self.inputs[i].pubkey_x)
 				.op_checksig()
 				.serialize();
 			result.extend(script);
@@ -217,8 +219,7 @@ impl BitcoinTransaction {
 					let script = BitcoinScript::default()
 						.push_uint(SEGWIT_VERSION as u32)
 						.push_bytes(
-							&tweaked_pubkey(x.pubkey_x, x.salt).serialize_compressed()[1..33]
-								.to_vec(),
+							&tweaked_pubkey(x.pubkey_x, x.salt).serialize_compressed()[1..33],
 						)
 						.serialize();
 					acc.extend(script);
@@ -296,17 +297,46 @@ impl BitcoinScript {
 			_ => {
 				let num_bytes =
 					sp_std::mem::size_of::<u32>() - (value.leading_zeros() / 8) as usize;
-				self = self.push_bytes(&value.to_le_bytes().into_iter().take(num_bytes).collect());
+				self = self.push_bytes(value.to_le_bytes().into_iter().take(num_bytes));
 			},
 		}
 		self
 	}
 	/// Adds an operation to the script that pushes exactly the provided bytes of data to the stack
-	fn push_bytes(mut self, data: &Vec<u8>) -> Self {
-		self.data.extend(to_varint(data.len() as u64));
-		self.data.extend(data);
+	fn push_bytes<
+		Bytes: IntoIterator<Item = Item, IntoIter = Iter>,
+		Iter: ExactSizeIterator<Item = Item>,
+		Item: Borrow<u8>,
+	>(
+		mut self,
+		bytes: Bytes,
+	) -> Self {
+		let bytes = bytes.into_iter().map(|byte| *byte.borrow());
+		let num_bytes = bytes.len();
+		assert!(num_bytes <= u32::MAX as usize);
+		let num_bytes = num_bytes as u32;
+		match num_bytes {
+			0x0 => self.data.extend(iter::once(0x0)),
+			0x1..=0x4B => self.data.extend(itertools::chain!(iter::once(num_bytes as u8), bytes)),
+			0x4C..=0xFF => self.data.extend(itertools::chain!(
+				iter::once(0x4c),
+				(num_bytes as u8).to_le_bytes(),
+				bytes
+			)),
+			0x100..=0xFFFF => self.data.extend(itertools::chain!(
+				iter::once(0x4d),
+				(num_bytes as u16).to_le_bytes(),
+				bytes
+			)),
+			_ => self.data.extend(itertools::chain!(
+				iter::once(0x4e),
+				num_bytes.to_le_bytes(),
+				bytes
+			)),
+		}
 		self
 	}
+
 	/// Adds an operation to the script that drops the topmost item from the stack
 	fn op_drop(mut self) -> Self {
 		self.data.push(0x75);
@@ -463,7 +493,7 @@ fn test_build_script() {
 			.push_uint(0)
 			.op_drop()
 			.push_bytes(
-				&hex::decode("2E897376020217C8E385A30B74B758293863049FA66A3FD177E012B076059105")
+				hex::decode("2E897376020217C8E385A30B74B758293863049FA66A3FD177E012B076059105")
 					.unwrap(),
 			)
 			.op_checksig()
