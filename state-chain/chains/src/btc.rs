@@ -259,7 +259,7 @@ impl BitcoinTransaction {
 			self.inputs
 				.iter()
 				.fold(Vec::<u8>::default(), |mut acc, x| {
-					acc.extend(x.amount.to_le_bytes().iter());
+					acc.extend(x.amount.to_le_bytes());
 					acc
 				})
 				.as_slice(),
@@ -289,7 +289,7 @@ impl BitcoinTransaction {
 			self.outputs
 				.iter()
 				.try_fold(Vec::<u8>::default(), |mut acc, x| {
-					acc.extend(x.amount.to_le_bytes().iter());
+					acc.extend(x.amount.to_le_bytes());
 					let script = scriptpubkey_from_address(&x.destination, self.btc_net)?;
 					acc.extend(script.serialize());
 					Ok(acc)
