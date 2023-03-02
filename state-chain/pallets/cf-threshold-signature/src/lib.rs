@@ -484,10 +484,7 @@ pub mod pallet {
 	pub struct Origin<T: Config<I>, I: 'static = ()>(pub(super) PhantomData<(T, I)>);
 
 	#[pallet::validate_unsigned]
-	impl<T: Config<I>, I: 'static> ValidateUnsigned for Pallet<T, I>
-	where
-		<T as Chainflip>::KeyId: TryInto<<<T as Config<I>>::TargetChain as ChainCrypto>::AggKey>,
-	{
+	impl<T: Config<I>, I: 'static> ValidateUnsigned for Pallet<T, I> {
 		type Call = Call<T, I>;
 
 		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
@@ -495,7 +492,9 @@ pub mod pallet {
 				let CeremonyContext { key_id, request_context, .. } =
 					PendingCeremonies::<T, I>::get(ceremony_id).ok_or(InvalidTransaction::Stale)?;
 
-				let key = key_id.try_into().map_err(|_| InvalidTransaction::BadProof)?;
+				let key = <T::TargetChain as ChainCrypto>::key_id_to_agg_key(key_id)
+					.map_err(|_| InvalidTransaction::BadProof)?;
+
 				if <T::TargetChain as ChainCrypto>::verify_threshold_signature(
 					&key,
 					&request_context.payload,
@@ -691,7 +690,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 									(ceremony_id, attempt_count),
 									epoch_index,
 								) {
-								Ok((key.into(), nominees))
+								Ok((T::TargetChain::agg_key_to_key_id(key, epoch_index), nominees))
 							} else {
 								Err(Event::<T, I>::SignersUnavailable { request_id, ceremony_id })
 							},
@@ -809,7 +808,6 @@ where
 impl<T, I: 'static> cf_traits::ThresholdSigner<T::TargetChain> for Pallet<T, I>
 where
 	T: Config<I>,
-	<T as Chainflip>::KeyId: TryInto<<<T as Config<I>>::TargetChain as ChainCrypto>::AggKey>,
 {
 	type RequestId = RequestId;
 	type Error = Error<T, I>;

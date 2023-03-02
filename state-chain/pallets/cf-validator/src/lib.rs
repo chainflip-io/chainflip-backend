@@ -1135,9 +1135,8 @@ impl<T: Config> Pallet<T> {
 			);
 			Self::set_rotation_phase(RotationPhase::Idle);
 		} else {
-			// Set rotation phase before kicking off keygen (for correct event ordering)
 			Self::set_rotation_phase(RotationPhase::KeygensInProgress(rotation_state));
-			T::VaultRotator::keygen(candidates);
+			T::VaultRotator::keygen(candidates, T::EpochInfo::epoch_index() + 1);
 			log::info!(target: "cf-validator", "Vault rotation initiated.");
 		}
 	}

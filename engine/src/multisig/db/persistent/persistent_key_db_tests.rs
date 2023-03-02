@@ -16,10 +16,11 @@ use crate::{
 			LATEST_SCHEMA_VERSION,
 		},
 		eth::EthSigning,
-		KeyId, PersistentKeyDB,
+		PersistentKeyDB,
 	},
 	testing::new_temp_directory_with_nonexistent_file,
 };
+use cf_primitives::{KeyId, GENESIS_EPOCH};
 use rocksdb::{Options, DB};
 use sp_runtime::AccountId32;
 use tempfile::TempDir;
@@ -139,7 +140,7 @@ fn can_load_keys_with_current_keygen_info() {
 
 	let logger = new_test_logger();
 
-	let key_id = KeyId(TEST_KEY.into());
+	let key_id = KeyId { epoch_index: GENESIS_EPOCH, public_key_bytes: TEST_KEY.into() };
 	let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
 	{
 		let p_db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, None, &logger).unwrap();
@@ -162,7 +163,7 @@ fn can_update_key() {
 
 	let logger = new_test_logger();
 	let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
-	let key_id = KeyId(vec![0; 33]);
+	let key_id = KeyId { epoch_index: GENESIS_EPOCH, public_key_bytes: vec![0; 33] };
 
 	let p_db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, None, &logger).unwrap();
 
@@ -226,7 +227,7 @@ fn can_load_key_from_backup() {
 
 	let logger = new_test_logger();
 	let (directory, db_path) = new_temp_directory_with_nonexistent_file();
-	let key_id = KeyId(vec![0; 33]);
+	let key_id = KeyId { epoch_index: GENESIS_EPOCH, public_key_bytes: vec![0; 33] };
 
 	// Create a normal db and save a key in it
 	{
@@ -259,8 +260,8 @@ fn can_use_multiple_crypto_schemes() {
 
 	let logger = new_test_logger();
 	let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
-	let scheme_1_key_id = KeyId(vec![0; 33]);
-	let scheme_2_key_id = KeyId(vec![1; 33]);
+	let scheme_1_key_id = KeyId { epoch_index: GENESIS_EPOCH, public_key_bytes: vec![0; 33] };
+	let scheme_2_key_id = KeyId { epoch_index: GENESIS_EPOCH, public_key_bytes: vec![1; 33] };
 
 	// Create a normal db and save multiple keys to it of different crypto schemes
 	{

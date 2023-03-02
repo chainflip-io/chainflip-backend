@@ -8,6 +8,8 @@ mod old {
 
 	use super::*;
 
+	pub type KeyId = Vec<u8>;
+
 	#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 	pub enum RetryPolicy {
 		Always,
@@ -19,7 +21,7 @@ mod old {
 		pub request_id: RequestId,
 		pub attempt_count: AttemptCount,
 		pub payload: PayloadFor<T, I>,
-		pub key_id: Option<T::KeyId>,
+		pub key_id: Option<KeyId>,
 		pub retry_policy: RetryPolicy,
 	}
 
@@ -29,7 +31,7 @@ mod old {
 		pub remaining_respondents: BTreeSet<T::ValidatorId>,
 		pub blame_counts: BTreeMap<T::ValidatorId, u32>,
 		pub participant_count: u32,
-		pub key_id: T::KeyId,
+		pub key_id: KeyId,
 		pub _phantom: PhantomData<I>,
 	}
 
@@ -46,13 +48,40 @@ mod old {
 		StorageMap<Pallet<T, I>, Twox64Concat, RequestId, (CeremonyId, AttemptCount)>;
 }
 
+// Types that are not old in the context of this migration,
+// but are old in the context of the pallet
+mod archived {
+
+	use super::*;
+
+	// We migrate to the old key id. The next migration migrates to the new key.
+	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+	pub struct CeremonyContext<T: Config<I>, I: 'static> {
+		pub request_context: RequestContext<T, I>,
+		/// The respondents that have yet to reply.
+		pub remaining_respondents: BTreeSet<T::ValidatorId>,
+		/// The number of blame votes (accusations) each authority has received.
+		pub blame_counts: BTreeMap<T::ValidatorId, AuthorityCount>,
+		/// The total number of signing participants (ie. the threshold set size).
+		pub participant_count: AuthorityCount,
+		/// The key id being used for verification of this ceremony.
+		pub key_id: old::KeyId,
+		/// Determines how/if we deal with ceremony failure.
+		pub threshold_ceremony_type: ThresholdCeremonyType,
+	}
+
+	#[frame_support::storage_alias]
+	pub type PendingCeremonies<T: Config<I>, I: 'static> =
+		StorageMap<Pallet<T, I>, Twox64Concat, CeremonyId, CeremonyContext<T, I>>;
+}
+
 impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 	fn on_runtime_upgrade() -> Weight {
 		for (k, v) in old::RetryQueues::<T, I>::drain().collect::<Vec<_>>() {
 			CeremonyRetryQueues::<T, I>::insert(k, v);
 		}
 
-		PendingCeremonies::<T, I>::translate_values::<old::CeremonyContext<T, I>, _>(
+		archived::PendingCeremonies::<T, I>::translate_values::<old::CeremonyContext<T, I>, _>(
 			|old::CeremonyContext {
 			     request_context:
 			         old::RequestContext { request_id, attempt_count, payload, key_id: _, retry_policy },
@@ -62,7 +91,7 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 			     key_id,
 			     _phantom,
 			 }| {
-				Some(CeremonyContext {
+				Some(archived::CeremonyContext {
 					request_context: RequestContext { request_id, attempt_count, payload },
 					remaining_respondents,
 					blame_counts,
@@ -191,8 +220,9 @@ mod migration_tests {
 			);
 
 			assert_eq!(
-				PendingCeremonies::<mock::Test, mock::Instance1>::get(CEREMONY_ID).unwrap(),
-				CeremonyContext {
+				archived::PendingCeremonies::<mock::Test, mock::Instance1>::get(CEREMONY_ID)
+					.unwrap(),
+				archived::CeremonyContext {
 					request_context: RequestContext {
 						request_id: REQUEST_ID,
 						attempt_count: ATTEMPT_COUNT,

@@ -2,6 +2,7 @@ use crate::{
 	eth::{api::EthereumReplayProtection, TransactionFee},
 	*,
 };
+use cf_primitives::KeyId;
 use sp_std::marker::PhantomData;
 use std::cell::RefCell;
 
@@ -63,7 +64,7 @@ pub struct MockThresholdSignature<K, P> {
 }
 
 impl ChainCrypto for MockEthereum {
-	type KeyId = Vec<u8>;
+	type KeyId = KeyId;
 	type AggKey = [u8; 4];
 	type Payload = [u8; 4];
 	type ThresholdSignature = MockThresholdSignature<Self::AggKey, Self::Payload>;
@@ -80,6 +81,14 @@ impl ChainCrypto for MockEthereum {
 
 	fn agg_key_to_payload(agg_key: Self::AggKey) -> Self::Payload {
 		agg_key
+	}
+
+	fn agg_key_to_key_id(agg_key: Self::AggKey, epoch_index: EpochIndex) -> Self::KeyId {
+		KeyId { epoch_index, public_key_bytes: agg_key.to_vec() }
+	}
+
+	fn key_id_to_agg_key(key_id: Self::KeyId) -> Result<Self::AggKey, &'static str> {
+		key_id.public_key_bytes.try_into().map_err(|_| "Invalid key id")
 	}
 }
 

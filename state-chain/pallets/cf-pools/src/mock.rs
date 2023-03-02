@@ -1,5 +1,5 @@
 use crate::{self as pallet_cf_pools};
-use cf_primitives::{AccountId, AuthorityCount};
+use cf_primitives::{AccountId, AuthorityCount, KeyId};
 use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
 	Chainflip,
@@ -65,7 +65,7 @@ impl system::Config for Test {
 }
 
 impl Chainflip for Test {
-	type KeyId = Vec<u8>;
+	type KeyId = KeyId;
 	type ValidatorId = AccountId;
 	type Amount = u128;
 	type RuntimeCall = RuntimeCall;

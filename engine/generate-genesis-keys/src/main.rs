@@ -1,3 +1,5 @@
+use cf_primitives::{KeyId, GENESIS_EPOCH};
+
 use chainflip_engine::{
 	logging::utils::new_discard_logger,
 	multisig::{
@@ -79,10 +81,12 @@ fn main() {
 	println!("{}", serde_json::to_string_pretty(&agg_keys).expect("Should prettify json"));
 }
 
+// We just return the PublicKeyBytes (as hex) here. The chain_spec only needs to read this. At
+// genesis it knows that the starting epoch index is the Genesis index.
 fn generate_and_save_keys<Crypto: CryptoScheme>(
 	node_id_to_name_map: &HashMap<AccountId, String>,
 ) -> String {
-	let (key_id, key_shares) = generate_key_data::<Crypto>(
+	let (public_key_bytes, key_shares) = generate_key_data::<Crypto>(
 		BTreeSet::from_iter(node_id_to_name_map.keys().cloned()),
 		&mut Rng::from_entropy(),
 	);
@@ -102,10 +106,13 @@ fn generate_and_save_keys<Crypto: CryptoScheme>(
 			&new_discard_logger(),
 		)
 		.expect("Should create database at latest version")
-		.update_key::<Crypto>(&key_id, &key_share);
+		.update_key::<Crypto>(
+			&KeyId { epoch_index: GENESIS_EPOCH, public_key_bytes: public_key_bytes.clone() },
+			&key_share,
+		);
 	}
 
-	key_id.to_string()
+	hex::encode(&public_key_bytes)
 }
 
 #[cfg(test)]

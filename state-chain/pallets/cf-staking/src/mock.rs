@@ -1,6 +1,6 @@
 use crate as pallet_cf_staking;
 use cf_chains::{ApiCall, Chain, ChainCrypto, Ethereum};
-use cf_primitives::AuthorityCount;
+use cf_primitives::{AuthorityCount, KeyId};
 use cf_traits::{
 	impl_mock_waived_fees,
 	mocks::{
@@ -85,7 +85,7 @@ impl frame_system::Config for Test {
 }
 
 impl Chainflip for Test {
-	type KeyId = Vec<u8>;
+	type KeyId = KeyId;
 	type ValidatorId = AccountId;
 	type Amount = Balance;
 	type RuntimeCall = RuntimeCall;

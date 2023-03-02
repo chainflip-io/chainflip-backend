@@ -4,7 +4,7 @@ use cf_chains::{
 	eth::{Ethereum, Transaction},
 	ChainCrypto,
 };
-use cf_primitives::{AccountRole, PolkadotAccountId};
+use cf_primitives::{AccountRole, KeyId, PolkadotAccountId, GENESIS_EPOCH};
 use frame_system::Phase;
 use futures::{FutureExt, StreamExt};
 use mockall::predicate::{self, eq};
@@ -1271,7 +1271,7 @@ where
 	<<state_chain_runtime::Runtime as pallet_cf_threshold_signature::Config<I>>::TargetChain as ChainCrypto>::ThresholdSignature: std::convert::From<<C as CryptoScheme>::Signature>,
 {
 	let first_ceremony_id = 1;
-	let key_id = crate::multisig::KeyId(vec![0u8; 32]);
+	let key_id = KeyId { epoch_index: 1, public_key_bytes: vec![0u8; 32] };
 	let payload = C::signing_payload_for_test();
 	let our_account_id = AccountId32::new([0; 32]);
 	let not_our_account_id = AccountId32::new([1u8; 32]);
@@ -1405,10 +1405,11 @@ where
 		.expect_initiate_keygen()
 		.with(
 			predicate::eq(next_ceremony_id),
+			predicate::eq(GENESIS_EPOCH),
 			predicate::eq(BTreeSet::from_iter([our_account_id.clone()])),
 		)
 		.once()
-		.return_once(|_, _| {
+		.return_once(|_, _, _| {
 			futures::future::ready(Err((BTreeSet::new(), KeygenFailureReason::InvalidParticipants)))
 				.boxed()
 		});
@@ -1421,6 +1422,7 @@ where
 				&multisig_client,
 				state_chain_client.clone(),
 				first_ceremony_id,
+				GENESIS_EPOCH,
 				BTreeSet::from_iter([not_our_account_id.clone()]),
 			)
 			.await;
@@ -1431,6 +1433,7 @@ where
 				&multisig_client,
 				state_chain_client.clone(),
 				next_ceremony_id,
+				GENESIS_EPOCH,
 				BTreeSet::from_iter([our_account_id]),
 			)
 			.await;

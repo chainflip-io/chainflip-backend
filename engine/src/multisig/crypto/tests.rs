@@ -1,7 +1,7 @@
 use crate::multisig::{
 	client::KeygenResult,
 	crypto::{generate_single_party_signature, ECPoint, ECScalar, KeyShare},
-	CryptoScheme, KeyId, Rng,
+	CryptoScheme, Rng,
 };
 use rand_legacy::SeedableRng;
 
@@ -29,8 +29,7 @@ fn test_signing_for_scheme<C: CryptoScheme>() {
 
 		// Verification is typically delegated to third-party libraries whose
 		// behaviour we are attempting to replicate with FROST.
-		assert!(C::verify_signature(&signature, &KeyId(public_key.as_bytes().to_vec()), &payload)
-			.is_ok());
+		assert!(C::verify_signature(&signature, &public_key.as_bytes().to_vec(), &payload).is_ok());
 	}
 }
 

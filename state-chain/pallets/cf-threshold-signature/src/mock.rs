@@ -8,6 +8,7 @@ use cf_chains::{
 	mocks::{MockEthereum, MockThresholdSignature},
 	ChainCrypto,
 };
+use cf_primitives::KeyId;
 use cf_traits::{
 	mocks::{
 		ceremony_id_provider::MockCeremonyIdProvider, signer_nomination::MockNominator,
@@ -80,7 +81,7 @@ impl frame_system::Config for Test {
 use cf_traits::mocks::{ensure_origin_mock::NeverFailingOriginCheck, epoch_info::MockEpochInfo};
 
 impl Chainflip for Test {
-	type KeyId = Vec<u8>;
+	type KeyId = KeyId;
 	type ValidatorId = u64;
 	type Amount = u128;
 	type RuntimeCall = RuntimeCall;
@@ -96,7 +97,6 @@ thread_local! {
 	pub static CALL_DISPATCHED: std::cell::RefCell<Option<RequestId>> = Default::default();
 	pub static TIMES_CALLED: std::cell::RefCell<u8> = Default::default();
 }
-
 #[derive(Debug, Clone, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct MockCallback<C: ChainCrypto>(RequestId, PhantomData<C>);
 

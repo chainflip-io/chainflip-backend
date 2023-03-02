@@ -25,7 +25,7 @@ use state_chain_runtime::{
 	Runtime, RuntimeOrigin, Staking, System, Validator, Witnesser,
 };
 
-use cf_primitives::{AuthorityCount, BlockNumber, EpochIndex, FlipBalance};
+use cf_primitives::{AuthorityCount, BlockNumber, FlipBalance};
 use cf_traits::EpochInfo;
 use pallet_cf_staking::{EthTransactionHash, EthereumAddress};
 use sp_runtime::AccountId32;
@@ -43,8 +43,6 @@ pub const BOB: [u8; 32] = [0xbb; 32];
 pub const CHARLIE: [u8; 32] = [0xcc; 32];
 // Root and Gov member
 pub const ERIN: [u8; 32] = [0xee; 32];
-
-const GENESIS_EPOCH: EpochIndex = 1;
 
 pub fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {
 	TPublic::Pair::from_string(&format!("//{seed}"), None)

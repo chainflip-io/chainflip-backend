@@ -1,6 +1,6 @@
 use crate::{self as pallet_cf_swapping, WeightInfo};
 use cf_chains::AnyChain;
-use cf_primitives::{Asset, AssetAmount};
+use cf_primitives::{Asset, AssetAmount, KeyId};
 use cf_traits::{
 	mocks::{
 		egress_handler::MockEgressHandler, ensure_origin_mock::NeverFailingOriginCheck,
@@ -78,7 +78,7 @@ impl SwappingApi for MockSwappingApi {
 }
 
 impl Chainflip for Test {
-	type KeyId = Vec<u8>;
+	type KeyId = KeyId;
 	type ValidatorId = u64;
 	type Amount = u128;
 	type RuntimeCall = RuntimeCall;

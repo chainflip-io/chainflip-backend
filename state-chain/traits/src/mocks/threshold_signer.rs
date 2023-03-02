@@ -2,6 +2,7 @@ use crate::{AsyncResult, CeremonyId};
 
 use super::{MockPallet, MockPalletStorage};
 use cf_chains::ChainCrypto;
+use cf_primitives::KeyId;
 use codec::{Decode, Encode};
 use frame_support::{dispatch::UnfilteredDispatchable, traits::OriginTrait};
 use sp_std::collections::btree_set::BTreeSet;
@@ -67,7 +68,7 @@ where
 	type RequestId = u32;
 	type Error = &'static str;
 	type Callback = Call;
-	type KeyId = Vec<u8>;
+	type KeyId = KeyId;
 
 	type ValidatorId = MockValidatorId;
 

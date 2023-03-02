@@ -3,7 +3,7 @@ mod tests;
 
 use anyhow::{anyhow, Context};
 use cf_chains::{dot, eth::Ethereum, ChainCrypto, Polkadot};
-use cf_primitives::{BlockNumber, CeremonyId, PolkadotAccountId};
+use cf_primitives::{BlockNumber, CeremonyId, EpochIndex, KeyId, PolkadotAccountId};
 use futures::{FutureExt, Stream, StreamExt};
 use slog::o;
 use sp_core::{Hasher, H160, H256};
@@ -24,7 +24,7 @@ use crate::{
 	eth::{rpc::EthRpcApi, EthBroadcaster},
 	logging::COMPONENT_KEY,
 	multisig::{
-		client::MultisigClientApi, eth::EthSigning, polkadot::PolkadotSigning, CryptoScheme, KeyId,
+		client::MultisigClientApi, eth::EthSigning, polkadot::PolkadotSigning, CryptoScheme,
 	},
 	p2p::{PeerInfo, PeerUpdate},
 	state_chain_observer::client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi},
@@ -44,6 +44,7 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 	multisig_client: &'a MultisigClient,
 	state_chain_client: Arc<StateChainClient>,
 	ceremony_id: CeremonyId,
+    epoch_index: EpochIndex,
 	keygen_participants: BTreeSet<AccountId32>,
 ) where
 	MultisigClient: MultisigClientApi<C>,
@@ -56,7 +57,7 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 	if keygen_participants.contains(&state_chain_client.account_id()) {
 		// We initiate keygen outside of the spawn to avoid requesting ceremonies out of order
 		let keygen_result_future =
-			multisig_client.initiate_keygen(ceremony_id, keygen_participants);
+			multisig_client.initiate_keygen(ceremony_id, epoch_index, keygen_participants);
 		scope.spawn(async move {
 			let _result =
 				state_chain_client
@@ -357,10 +358,11 @@ where
                                             .unwrap();
                                     }
                                     state_chain_runtime::RuntimeEvent::EthereumVault(
-                                        pallet_cf_vaults::Event::KeygenRequest(
+                                        pallet_cf_vaults::Event::KeygenRequest {
                                             ceremony_id,
-                                            keygen_participants,
-                                        ),
+                                            participants,
+                                            epoch_index
+                                        }
                                     ) => {
                                         // Ceremony id tracking is global, so update all other clients
                                         dot_multisig_client.update_latest_ceremony_id(ceremony_id);
@@ -370,15 +372,17 @@ where
                                             &eth_multisig_client,
                                             state_chain_client.clone(),
                                             ceremony_id,
-                                            keygen_participants,
+                                            epoch_index,
+                                            participants,
                                         ).await;
                                     }
 
                                     state_chain_runtime::RuntimeEvent::PolkadotVault(
-                                        pallet_cf_vaults::Event::KeygenRequest(
+                                        pallet_cf_vaults::Event::KeygenRequest {
                                             ceremony_id,
-                                            keygen_participants,
-                                        ),
+                                            participants,
+                                            epoch_index
+                                        }
                                     ) => {
                                         // Ceremony id tracking is global, so update all other clients
                                         eth_multisig_client.update_latest_ceremony_id(ceremony_id);
@@ -388,7 +392,8 @@ where
                                             &dot_multisig_client,
                                             state_chain_client.clone(),
                                             ceremony_id,
-                                            keygen_participants,
+                                            epoch_index,
+                                            participants,
                                         ).await;
                                     }
                                     state_chain_runtime::RuntimeEvent::EthereumThresholdSigner(
@@ -408,7 +413,7 @@ where
                                                 &eth_multisig_client,
                                             state_chain_client.clone(),
                                             ceremony_id,
-                                            KeyId(key_id),
+                                            key_id,
                                             signatories,
                                             crate::multisig::eth::SigningPayload(payload.0),
                                         ).await;
@@ -431,7 +436,7 @@ where
                                                 &dot_multisig_client,
                                             state_chain_client.clone(),
                                             ceremony_id,
-                                            KeyId(key_id),
+                                            key_id,
                                             signatories,
                                             crate::multisig::polkadot::SigningPayload::new(payload.0)
                                                 .expect("Payload should be correct size"),

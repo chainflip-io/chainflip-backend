@@ -2,6 +2,7 @@ use std::cell::RefCell;
 
 use crate::{self as pallet_cf_chain_tracking, Config};
 use cf_chains::mocks::MockEthereum;
+use cf_primitives::KeyId;
 use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
 	Chainflip,
@@ -66,7 +67,7 @@ impl frame_system::Config for Test {
 }
 
 impl Chainflip for Test {
-	type KeyId = Vec<u8>;
+	type KeyId = KeyId;
 	type ValidatorId = u64;
 	type Amount = u128;
 	type RuntimeCall = RuntimeCall;

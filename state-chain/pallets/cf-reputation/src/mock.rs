@@ -1,5 +1,6 @@
 use super::*;
 use crate as pallet_cf_reputation;
+use cf_primitives::KeyId;
 use frame_support::{construct_runtime, parameter_types};
 use serde::{Deserialize, Serialize};
 use sp_core::H256;
@@ -116,7 +117,7 @@ pub const ALICE: <Test as frame_system::Config>::AccountId = 100u64;
 pub const BOB: <Test as frame_system::Config>::AccountId = 200u64;
 
 impl Chainflip for Test {
-	type KeyId = Vec<u8>;
+	type KeyId = KeyId;
 	type ValidatorId = ValidatorId;
 	type Amount = u128;
 	type RuntimeCall = RuntimeCall;

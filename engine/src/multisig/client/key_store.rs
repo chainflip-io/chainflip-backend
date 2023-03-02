@@ -1,6 +1,8 @@
 use std::{collections::HashMap, sync::Arc};
 
-use crate::multisig::{crypto::CryptoScheme, db::persistent::PersistentKeyDB, KeyId};
+use cf_primitives::KeyId;
+
+use crate::multisig::{crypto::CryptoScheme, db::persistent::PersistentKeyDB};
 
 use super::KeygenResultInfo;
 

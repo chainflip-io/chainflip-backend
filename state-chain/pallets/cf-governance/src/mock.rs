@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 
 use crate::{self as pallet_cf_governance};
+use cf_primitives::KeyId;
 use cf_traits::{
 	mocks::{epoch_info::MockEpochInfo, system_state_info::MockSystemStateInfo, time_source},
 	Chainflip, ExecutionCondition, RuntimeUpgrade,
@@ -103,7 +104,7 @@ impl RuntimeUpgradeMock {
 cf_traits::impl_mock_ensure_witnessed_for_origin!(RuntimeOrigin);
 
 impl Chainflip for Test {
-	type KeyId = Vec<u8>;
+	type KeyId = KeyId;
 	type ValidatorId = u64;
 	type Amount = u128;
 	type RuntimeCall = RuntimeCall;

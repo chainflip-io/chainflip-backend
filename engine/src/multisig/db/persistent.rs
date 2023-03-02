@@ -3,6 +3,7 @@ mod persistent_key_db_tests;
 
 use std::{cmp::Ordering, collections::HashMap, fs, mem::size_of, path::Path};
 
+use cf_primitives::KeyId;
 use rocksdb::{ColumnFamily, ColumnFamilyDescriptor, Options, WriteBatch, DB};
 use slog::o;
 
@@ -11,7 +12,7 @@ use crate::{
 	multisig::{
 		client::KeygenResultInfo,
 		crypto::{CryptoScheme, CHAIN_TAG_SIZE},
-		ChainTag, KeyId,
+		ChainTag,
 	},
 	witnesser::checkpointing::WitnessedUntil,
 };
@@ -147,7 +148,7 @@ impl PersistentKeyDB {
 		keygen_result_info: &KeygenResultInfo<C>,
 	) {
 		let key_id_with_prefix =
-			[get_keygen_data_prefix::<C>().as_slice(), &key_id.0.clone()[..]].concat();
+			[get_keygen_data_prefix::<C>().as_slice(), &key_id.to_bytes()[..]].concat();
 
 		self.db
 			.put_cf(
@@ -170,11 +171,9 @@ impl PersistentKeyDB {
 					None
 				},
 			})
-			.filter_map(|(key_id, key_info)| {
-				// Strip the prefix off the key_id
-				let key_id: KeyId = KeyId(key_id[PREFIX_SIZE..].into());
+			.filter_map(|(key_id_with_prefix, key_info)| {
+				let key_id = KeyId::from_bytes(&key_id_with_prefix[PREFIX_SIZE..]);
 
-				// deserialize the `KeygenResultInfo`
 				match bincode::deserialize::<KeygenResultInfo<C>>(&key_info) {
 					Ok(keygen_result_info) => Some((key_id, keygen_result_info)),
 					Err(err) => {
