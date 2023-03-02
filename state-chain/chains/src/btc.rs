@@ -79,7 +79,9 @@ fn to_varint(value: u64) -> Vec<u8> {
 	result
 }
 
-pub fn scriptpubkey_from_address(address: String) -> Result<Vec<u8>, BitcoinTransactionError> {
+pub fn scriptpubkey_from_address(
+	address: String,
+) -> Result<BitcoinScript, BitcoinTransactionError> {
 	let content = address.from_base58();
 	if let Ok(data) = content {
 		let version = data[0];
@@ -92,15 +94,13 @@ pub fn scriptpubkey_from_address(address: String) -> Result<Vec<u8>, BitcoinTran
 					.op_hash160()
 					.push_bytes(&data[1..data.len() - 4].to_vec())
 					.op_equalverify()
-					.op_checksig()
-					.0)
+					.op_checksig())
 			} else if version == 5 {
 				// P2SH
 				return Ok(BitcoinScript::default()
 					.op_hash160()
 					.push_bytes(&data[1..data.len() - 4].to_vec())
-					.op_equal()
-					.0)
+					.op_equal())
 			}
 		} else {
 			return Err(BitcoinTransactionError::InvalidEgressAddress)
@@ -111,8 +111,7 @@ pub fn scriptpubkey_from_address(address: String) -> Result<Vec<u8>, BitcoinTran
 		let version = data[0].to_u8();
 		return Ok(BitcoinScript::default()
 			.push_uint(version as u32)
-			.push_bytes(&Vec::<u8>::from_base32(&data[1..]).unwrap())
-			.0)
+			.push_bytes(&Vec::<u8>::from_base32(&data[1..]).unwrap()))
 	}
 	Err(BitcoinTransactionError::InvalidEgressAddress)
 }
@@ -130,7 +129,9 @@ impl BitcoinTransaction {
 		let version = 2u32.to_le_bytes();
 		let segwit_marker = 0u8;
 		let segwit_flag = 1u8;
-		let locktime = [0u8, 0, 0, 0];
+		let locktime = 0u32.to_le_bytes();
+		// signal to allow replacing this transaction by setting sequence number according to BIP
+		// 125
 		let sequence_number = (u32::MAX - 2).to_le_bytes();
 		result.extend(version);
 		result.push(segwit_marker);
@@ -149,8 +150,7 @@ impl BitcoinTransaction {
 		result.extend(self.outputs.iter().try_fold(Vec::<u8>::default(), |mut acc, x| {
 			acc.extend(x.amount.to_le_bytes());
 			let script = scriptpubkey_from_address(x.destination.clone())?;
-			acc.extend(to_varint(script.len() as u64));
-			acc.extend(script);
+			acc.extend(script.serialize());
 			Ok(acc)
 		})?);
 		for i in 0..self.inputs.len() {
@@ -180,7 +180,10 @@ impl BitcoinTransaction {
 		Ok(result)
 	}
 
-	pub fn get_signing_payload(self, index: u32) -> Result<[u8; 32], BitcoinTransactionError> {
+	pub fn get_signing_payload(
+		self,
+		input_index: u32,
+	) -> Result<[u8; 32], BitcoinTransactionError> {
 		// SHA256("TapSighash")
 		const TAPSIG_HASH: &[u8] =
 			&hex_literal::hex!("f40a48df4b2a70c8b4924bf2654661ed3d95fd66a313eb87237597c628e4a031");
@@ -209,8 +212,9 @@ impl BitcoinTransaction {
 			self.inputs
 				.iter()
 				.fold(Vec::<u8>::default(), |mut acc, x| {
+					const SEGWIT_VERSION: u32 = 1;
 					let script = BitcoinScript::default()
-						.push_uint(1)
+						.push_uint(SEGWIT_VERSION)
 						.push_bytes(
 							&tweaked_pubkey(x.pubkey_x, x.salt).serialize_compressed()[1..33]
 								.to_vec(),
@@ -233,8 +237,7 @@ impl BitcoinTransaction {
 				.try_fold(Vec::<u8>::default(), |mut acc, x| {
 					acc.extend(x.amount.to_le_bytes().iter());
 					let script = scriptpubkey_from_address(x.destination.clone())?;
-					acc.extend(to_varint(script.len() as u64));
-					acc.extend(script);
+					acc.extend(script.serialize());
 					Ok(acc)
 				})?
 				.as_slice(),
@@ -248,9 +251,13 @@ impl BitcoinTransaction {
 		let codeseparator = u32::MAX.to_le_bytes();
 		Ok(sha2_256(
 			&[
+				// Tagged Hash according to BIP 340
 				TAPSIG_HASH,
 				TAPSIG_HASH,
-				&[epoch, hashtype],
+				// Epoch according to footnote 20 in BIP 341
+				&[epoch],
+				// "Common signature message" according to BIP 341
+				&[hashtype],
 				&version,
 				&locktime,
 				&prevouts,
@@ -259,10 +266,11 @@ impl BitcoinTransaction {
 				&sequences,
 				&outputs,
 				&[spendtype],
-				&index.to_le_bytes(),
+				&input_index.to_le_bytes(),
+				// "Common signature message extension" according to BIP 342
 				&get_tapleaf_hash(
-					self.inputs[index as usize].pubkey_x,
-					self.inputs[index as usize].salt,
+					self.inputs[input_index as usize].pubkey_x,
+					self.inputs[input_index as usize].salt,
 				),
 				&[keyversion],
 				&codeseparator,
@@ -273,15 +281,17 @@ impl BitcoinTransaction {
 }
 
 #[derive(Default)]
-struct BitcoinScript(Vec<u8>);
+pub struct BitcoinScript {
+	data: Vec<u8>,
+}
 
 /// For reference see https://en.bitcoin.it/wiki/Script
 impl BitcoinScript {
 	/// Adds an operation to the script that pushes an unsigned integer onto the stack
 	fn push_uint(mut self, value: u32) -> Self {
 		match value {
-			0 => self.0.push(0),
-			1..=16 => self.0.push(0x50 + value as u8),
+			0 => self.data.push(0),
+			1..=16 => self.data.push(0x50 + value as u8),
 			_ => {
 				let num_bytes =
 					sp_std::mem::size_of::<u32>() - (value.leading_zeros() / 8) as usize;
@@ -292,44 +302,44 @@ impl BitcoinScript {
 	}
 	/// Adds an operation to the script that pushes exactly the provided bytes of data to the stack
 	fn push_bytes(mut self, data: &Vec<u8>) -> Self {
-		self.0.extend(to_varint(data.len() as u64));
-		self.0.extend(data);
+		self.data.extend(to_varint(data.len() as u64));
+		self.data.extend(data);
 		self
 	}
 	/// Adds an operation to the script that drops the topmost item from the stack
 	fn op_drop(mut self) -> Self {
-		self.0.push(0x75);
+		self.data.push(0x75);
 		self
 	}
 	/// Adds the CHECKSIG operation to the script
 	fn op_checksig(mut self) -> Self {
-		self.0.push(0xAC);
+		self.data.push(0xAC);
 		self
 	}
 	/// Adds the DUP operation to the script
 	fn op_dup(mut self) -> Self {
-		self.0.push(0x76);
+		self.data.push(0x76);
 		self
 	}
 	/// Adds the HASH160 operation to the script
 	fn op_hash160(mut self) -> Self {
-		self.0.push(0xA9);
+		self.data.push(0xA9);
 		self
 	}
 	/// Adds the EQUALVERIFY operation to the script
 	fn op_equalverify(mut self) -> Self {
-		self.0.push(0x88);
+		self.data.push(0x88);
 		self
 	}
 	/// Adds the EQUAL operation to the script
 	fn op_equal(mut self) -> Self {
-		self.0.push(0x87);
+		self.data.push(0x87);
 		self
 	}
 	/// Serializes the script by returning a single byte for the length
 	/// of the script and then the script itself
 	fn serialize(self) -> Vec<u8> {
-		itertools::chain!(to_varint(self.0.len() as u64), self.0).collect()
+		itertools::chain!(to_varint(self.data.len() as u64), self.data).collect()
 	}
 }
 
@@ -339,7 +349,8 @@ fn test_scriptpubkey_from_address() {
 		scriptpubkey_from_address(
 			"bc1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqzk5jj0".to_string()
 		)
-		.unwrap(),
+		.unwrap()
+		.data,
 		hex_literal::hex!("512079be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798")
 	);
 	assert_eq!(
@@ -347,7 +358,8 @@ fn test_scriptpubkey_from_address() {
 			"bc1pw508d6qejxtdg4y5r3zarvary0c5xw7kw508d6qejxtdg4y5r3zarvary0c5xw7k7grplx"
 				.to_string()
 		)
-		.unwrap(),
+		.unwrap()
+		.data,
 		hex_literal::hex!(
 			"5128751e76e8199196d454941c45d1b3a323f1433bd6751e76e8199196d454941c45d1b3a323f1433bd6"
 		)
@@ -357,30 +369,38 @@ fn test_scriptpubkey_from_address() {
 			"bc1pw508d6qejxtdg4y5r3zarvary0c5xw7kw508d6qejxtdg4y5r3zarvary0c5xw7kt5nd6y"
 				.to_string()
 		)
-		.unwrap(),
+		.unwrap()
+		.data,
 		hex_literal::hex!(
 			"5128751e76e8199196d454941c45d1b3a323f1433bd6751e76e8199196d454941c45d1b3a323f1433bd6"
 		)
 	);
 	assert_eq!(
-		scriptpubkey_from_address("BC1SW50QA3JX3S".to_string()).unwrap(),
+		scriptpubkey_from_address("BC1SW50QA3JX3S".to_string()).unwrap().data,
 		hex_literal::hex!("6002751e")
 	);
 	assert_eq!(
-		scriptpubkey_from_address("bc1zw508d6qejxtdg4y5r3zarvaryvg6kdaj".to_string()).unwrap(),
+		scriptpubkey_from_address("bc1zw508d6qejxtdg4y5r3zarvaryvg6kdaj".to_string())
+			.unwrap()
+			.data,
 		hex_literal::hex!("5210751e76e8199196d454941c45d1b3a323")
 	);
 	assert_eq!(
 		scriptpubkey_from_address("BC1QW508D6QEJXTDG4Y5R3ZARVARY0C5XW7KV8F3T4".to_string())
-			.unwrap(),
+			.unwrap()
+			.data,
 		hex_literal::hex!("0014751e76e8199196d454941c45d1b3a323f1433bd6")
 	);
 	assert_eq!(
-		scriptpubkey_from_address("132F25rTsvBdp9JzLLBHP5mvGY66i1xdiM".to_string()).unwrap(),
+		scriptpubkey_from_address("132F25rTsvBdp9JzLLBHP5mvGY66i1xdiM".to_string())
+			.unwrap()
+			.data,
 		hex_literal::hex!("76a914162c5ea71c0b23f5b9022ef047c4a86470a5b07088ac")
 	);
 	assert_eq!(
-		scriptpubkey_from_address("3QJmV3qfvL9SuYo34YihAf3sRCW3qSinyC".to_string()).unwrap(),
+		scriptpubkey_from_address("3QJmV3qfvL9SuYo34YihAf3sRCW3qSinyC".to_string())
+			.unwrap()
+			.data,
 		hex_literal::hex!("a914f815b036d9bbbce5e9f2a00abd1bf3dc91e9551087")
 	);
 }
@@ -467,7 +487,7 @@ fn test_push_uint() {
 		(u32::MAX, vec![4, 255, 255, 255, 255]),
 	];
 	for x in test_data {
-		assert_eq!(BitcoinScript::default().push_uint(x.0).0, x.1);
+		assert_eq!(BitcoinScript::default().push_uint(x.0).data, x.1);
 	}
 }
 
