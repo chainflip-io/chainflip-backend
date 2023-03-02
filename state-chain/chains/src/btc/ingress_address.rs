@@ -16,8 +16,7 @@ pub fn tweaked_pubkey(pubkey_x: [u8; 32], salt: u32) -> PublicKey {
 // Derives a taproot address from a validator public key and a salt
 pub fn derive_btc_ingress_address(pubkey_x: [u8; 32], salt: u32) -> String {
 	let tweaked = tweaked_pubkey(pubkey_x, salt).serialize_compressed()[1..33].to_vec();
-	let segwit_version = u5::try_from_u8(1).unwrap();
-	let mut payload = vec![segwit_version];
+	let mut payload = vec![u5::try_from_u8(SEGWIT_VERSION).unwrap()];
 	payload.extend(tweaked.to_base32());
 	let payload =
 		itertools::chain!(iter::once(segwit_version), tweaked.to_base32()).collect::<Vec<_>>();

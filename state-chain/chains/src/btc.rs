@@ -16,6 +16,8 @@ use self::ingress_address::tweaked_pubkey;
 const INTERNAL_PUBKEY: &[u8] =
 	&hex_literal::hex!("02eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");
 
+const SEGWIT_VERSION: u8 = 1;
+
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub enum BitcoinTransactionError {
 	/// The transaction's chain id is invalid.
@@ -212,9 +214,8 @@ impl BitcoinTransaction {
 			self.inputs
 				.iter()
 				.fold(Vec::<u8>::default(), |mut acc, x| {
-					const SEGWIT_VERSION: u32 = 1;
 					let script = BitcoinScript::default()
-						.push_uint(SEGWIT_VERSION)
+						.push_uint(SEGWIT_VERSION as u32)
 						.push_bytes(
 							&tweaked_pubkey(x.pubkey_x, x.salt).serialize_compressed()[1..33]
 								.to_vec(),
