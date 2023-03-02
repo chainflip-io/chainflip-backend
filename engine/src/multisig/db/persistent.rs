@@ -12,6 +12,7 @@ use crate::{
 	multisig::{
 		client::KeygenResultInfo,
 		crypto::{CryptoScheme, CHAIN_TAG_SIZE},
+		eth::EthSigning,
 		ChainTag,
 	},
 	witnesser::checkpointing::WitnessedUntil,
@@ -22,7 +23,7 @@ use anyhow::{anyhow, bail, Context, Result};
 /// This is the version of the data on this current branch
 /// This version *must* be bumped, and appropriate migrations
 /// written on any changes to the persistent application data format
-pub const LATEST_SCHEMA_VERSION: u32 = 0;
+pub const LATEST_SCHEMA_VERSION: u32 = 1;
 
 /// Key used to store the `LATEST_SCHEMA_VERSION` value in the `METADATA_COLUMN`
 pub const DB_SCHEMA_VERSION_KEY: &[u8; 17] = b"db_schema_version";
@@ -54,10 +55,13 @@ pub struct PersistentKeyDB {
 	db: DB,
 	logger: slog::Logger,
 }
+
+fn write_schema_version_to_batch(db: &DB, batch: &mut WriteBatch, version: u32) {
+	batch.put_cf(get_metadata_column_handle(&db), DB_SCHEMA_VERSION_KEY, &version.to_be_bytes());
+}
+
 impl PersistentKeyDB {
-	/// Create a new persistent key database. If the database exists and the schema version
-	/// is below the latest, it will attempt to migrate the data to the latest version.
-	pub fn new_and_migrate_to_latest(
+	fn new_version_0(
 		db_path: &Path,
 		genesis_hash: Option<state_chain_runtime::Hash>,
 		logger: &slog::Logger,
@@ -76,6 +80,7 @@ impl PersistentKeyDB {
 			(DATA_COLUMN.to_string(), ColumnFamilyDescriptor::new(DATA_COLUMN, cfopts_for_prefix)),
 		]);
 
+		// TODO: I don't think this is needed anymore, so let's remove it?
 		let is_existing_db = db_path.exists();
 		if is_existing_db {
 			// Add the column families found in the existing db, they might be needed for migration.
@@ -110,31 +115,30 @@ impl PersistentKeyDB {
 				.map_err(anyhow::Error::msg)
 				.context(format!("Failed to open database at: {}", db_path.display()))?;
 
-		let p_kdb = if is_existing_db {
-			// An existing db, so perform migrations and update the metadata
-			migrate_db_to_latest(db, db_path, genesis_hash,logger)
-                    .with_context(|| format!("Failed to migrate database at {}. Manual restoration of a backup or purging of the file is required.", db_path.display()))?
-		} else {
-			// It's a new db, so create a new `PersistentKeyDB` with the latest schema version and
-			// genesis hash
-			let mut batch = WriteBatch::default();
+		let mut batch = WriteBatch::default();
 
-			batch.put_cf(
-				get_metadata_column_handle(&db),
-				DB_SCHEMA_VERSION_KEY,
-				LATEST_SCHEMA_VERSION.to_be_bytes(),
-			);
+		write_schema_version_to_batch(&db, &mut batch, 0);
 
-			if let Some(genesis_hash) = genesis_hash {
-				batch.put_cf(get_metadata_column_handle(&db), GENESIS_HASH_KEY, genesis_hash);
-			}
+		if let Some(genesis_hash) = genesis_hash {
+			batch.put_cf(get_metadata_column_handle(&db), GENESIS_HASH_KEY, genesis_hash);
+		}
 
-			db.write(batch).context("Failed to write metadata to new db")?;
+		db.write(batch).context("Failed to write metadata to new db")?;
 
-			PersistentKeyDB::new_from_db(db, logger)
-		};
+		Ok(PersistentKeyDB::new_from_db(db, logger))
+	}
+	/// Create a new persistent key database. If the database exists and the schema version
+	/// is below the latest, it will attempt to migrate the data to the latest version.
+	pub fn new_and_migrate_to_latest(
+		db_path: &Path,
+		genesis_hash: Option<state_chain_runtime::Hash>,
+		logger: &slog::Logger,
+	) -> Result<Self> {
+		let db = PersistentKeyDB::new_version_0(db_path, genesis_hash, logger)?;
 
-		Ok(p_kdb)
+		// An existing db, so perform migrations and update the metadata
+		migrate_db_to_latest(db.db, db_path, genesis_hash, logger)
+                    .with_context(|| format!("Failed to migrate database at {}. Manual restoration of a backup or purging of the file is required.", db_path.display()))
 	}
 
 	fn new_from_db(db: DB, logger: &slog::Logger) -> Self {
@@ -361,12 +365,14 @@ fn migrate_db_to_latest(
 		check_or_set_genesis_hash(&db, expected_genesis_hash)?;
 	}
 
+	let db = PersistentKeyDB::new_from_db(db, logger);
+
 	// Check if the db version is up-to-date or we need to do migrations
 	match version.cmp(&LATEST_SCHEMA_VERSION) {
 		Ordering::Equal => {
 			// The db is at the latest version, no action needed
 			slog::info!(logger, "Database already at latest version of: {}", LATEST_SCHEMA_VERSION);
-			Ok(PersistentKeyDB::new_from_db(db, logger))
+			Ok(db)
 		},
 		Ordering::Greater => {
 			// We do not support backwards migrations
@@ -376,13 +382,6 @@ fn migrate_db_to_latest(
                 )
 		},
 		Ordering::Less => {
-			slog::info!(
-				logger,
-				"Database is migrating from version {} to {}",
-				version,
-				LATEST_SCHEMA_VERSION
-			);
-
 			// Backup the database before migrating it
 			slog::info!(
 				logger,
@@ -392,10 +391,105 @@ fn migrate_db_to_latest(
 					.context("Failed to create database backup before migration")?
 			);
 
-			// Future migrations can be added here
+			for version in version..LATEST_SCHEMA_VERSION {
+				slog::info!(
+					logger,
+					"Database is migrating from version {} to {}",
+					version,
+					version + 1
+				);
 
-			// No migrations exist yet so just panic
-			panic!("Invalid migration from schema version {version}");
+				match version {
+					0 => {
+						migrate_0_to_1(&db);
+					},
+					_ => {
+						panic!("Unexpected migration from version {}", version);
+					},
+				}
+			}
+
+			Ok(db)
 		},
 	}
+}
+
+fn migrate_0_to_1_for_scheme<C: CryptoScheme>(db: &DB, batch: &mut WriteBatch) {
+	// We will need to do this for every crypto scheme!
+	for (legacy_key_id_with_prefix, key_info_bytes) in db
+		.prefix_iterator_cf(get_data_column_handle(db), get_keygen_data_prefix::<C>())
+		.map(|result| result.expect("should successfully read all items"))
+	{
+		let new_key_id = KeyId {
+			epoch_index: 0,
+			public_key_bytes: legacy_key_id_with_prefix[PREFIX_SIZE..].to_vec(),
+		};
+		let key_id_with_prefix =
+			[get_keygen_data_prefix::<C>().as_slice(), &new_key_id.to_bytes()].concat();
+		batch.put_cf(get_data_column_handle(db), key_id_with_prefix, key_info_bytes);
+
+		batch.delete_cf(get_data_column_handle(db), legacy_key_id_with_prefix);
+	}
+}
+
+fn migrate_0_to_1(db: &PersistentKeyDB) {
+	let db = &db.db;
+
+	let mut batch = WriteBatch::default();
+
+	migrate_0_to_1_for_scheme::<EthSigning>(db, &mut batch);
+
+	write_schema_version_to_batch(db, &mut batch, 1);
+
+	db.write(batch).unwrap();
+}
+
+#[test]
+fn test_migration_to_v1() {
+	use crate::multisig::{client::keygen, Rng};
+	use cf_primitives::AccountId;
+	use rand_legacy::FromEntropy;
+	use std::collections::BTreeSet;
+
+	let (_dir, db_file) = crate::testing::new_temp_directory_with_nonexistent_file();
+	let logger = crate::logging::test_utils::new_test_logger();
+
+	// create db with version 0
+	let db = PersistentKeyDB::new_version_0(&db_file, None, &logger).unwrap();
+
+	let account_ids: BTreeSet<_> = [1, 2, 3].iter().map(|i| AccountId::new([*i; 32])).collect();
+
+	let (key_id, key_data) =
+		keygen::generate_key_data::<EthSigning>(account_ids.clone(), &mut Rng::from_entropy());
+
+	let key_info = key_data.values().next().unwrap();
+
+	assert_eq!(key_id.len(), 33);
+
+	// Insert the key manually, so it matches the way it was done in db version 0:
+	{
+		let key_id_with_prefix =
+			[get_keygen_data_prefix::<EthSigning>().as_slice(), &key_id].concat();
+
+		db.db
+			.put_cf(
+				get_data_column_handle(&db.db),
+				key_id_with_prefix,
+				bincode::serialize(key_info).expect("Couldn't serialize keygen result info"),
+			)
+			.unwrap();
+	}
+
+	// After migration, the we should be able to load the key using the new code
+	migrate_0_to_1(&db);
+
+	let keys = db.load_keys::<EthSigning>();
+
+	assert_eq!(keys.len(), 1);
+
+	let (key_id_loaded, key_info_loaded) = keys.into_iter().next().unwrap();
+
+	assert_eq!(key_id_loaded.epoch_index, 0);
+	assert_eq!(key_id_loaded.public_key_bytes, key_id);
+	assert_eq!(key_info, &key_info_loaded);
 }
