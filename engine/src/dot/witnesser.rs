@@ -438,17 +438,17 @@ where
 													)
 													.await;
 
-										monitored_signatures.remove(&sig.0);
+											monitored_signatures.remove(&sig.0);
+											}
+										}
+									} else {
+										// We expect this to occur when attempting to decode
+										// a transaction that was not sent by us.
+										// We can safely ignore it, but we log it in case.
+										debug!("Failed to decode UncheckedExtrinsic {unchecked:?}");
 									}
 								}
-							} else {
-								// We expect this to occur when attempting to decode
-								// a transaction that was not sent by us.
-								// We can safely ignore it, but we log it in case.
-								debug!("Failed to decode UncheckedExtrinsic {unchecked:?}");
 							}
-						}
-					}
 
 							if !ingress_witnesses.is_empty() {
 								let _result =
