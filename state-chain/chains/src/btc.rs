@@ -22,8 +22,6 @@ const SEGWIT_VERSION: u8 = 1;
 
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub enum BitcoinTransactionError {
-	/// The transaction's chain id is invalid.
-	InvalidChainId,
 	/// The egress address is invalid
 	InvalidEgressAddress,
 }
