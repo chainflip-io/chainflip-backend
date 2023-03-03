@@ -24,14 +24,14 @@ use anyhow::{anyhow, bail, Context, Result};
 /// This is the version of the data on this current branch
 /// This version *must* be bumped, and appropriate migrations
 /// written on any changes to the persistent application data format
-pub const LATEST_SCHEMA_VERSION: u32 = 1;
+const LATEST_SCHEMA_VERSION: u32 = 1;
 
 /// Key used to store the `LATEST_SCHEMA_VERSION` value in the `METADATA_COLUMN`
-pub const DB_SCHEMA_VERSION_KEY: &[u8; 17] = b"db_schema_version";
-pub const GENESIS_HASH_KEY: &[u8; 12] = b"genesis_hash";
+const DB_SCHEMA_VERSION_KEY: &[u8; 17] = b"db_schema_version";
+const GENESIS_HASH_KEY: &[u8; 12] = b"genesis_hash";
 
 /// A static length prefix is used on the `DATA_COLUMN`
-pub const PREFIX_SIZE: usize = 10;
+const PREFIX_SIZE: usize = 10;
 const PARTIAL_PREFIX_SIZE: usize = PREFIX_SIZE - CHAIN_TAG_SIZE;
 /// Keygen data uses a prefix that is a combination of a keygen data prefix and the chain tag
 const KEYGEN_DATA_PARTIAL_PREFIX: &[u8; PARTIAL_PREFIX_SIZE] = b"key_____";
@@ -41,11 +41,11 @@ const WITNESSER_CHECKPOINT_PARTIAL_PREFIX: &[u8; PARTIAL_PREFIX_SIZE] = b"check_
 
 /// Column family names
 // All data is stored in `DATA_COLUMN` with a prefix for key spaces
-pub const DATA_COLUMN: &str = "data";
+const DATA_COLUMN: &str = "data";
 // This column is just for schema version info. No prefix is used.
-pub const METADATA_COLUMN: &str = "metadata";
+const METADATA_COLUMN: &str = "metadata";
 // The default column that rust_rocksdb uses (we ignore)
-pub const DEFAULT_COLUMN_NAME: &str = "default";
+const DEFAULT_COLUMN_NAME: &str = "default";
 
 /// Name of the directory that the backups will go into (only created before migrations)
 const BACKUPS_DIRECTORY: &str = "backups";
@@ -266,7 +266,7 @@ fn get_metadata_column_handle(db: &DB) -> &ColumnFamily {
 	get_column_handle(db, METADATA_COLUMN)
 }
 
-pub fn get_data_column_handle(db: &DB) -> &ColumnFamily {
+fn get_data_column_handle(db: &DB) -> &ColumnFamily {
 	get_column_handle(db, DATA_COLUMN)
 }
 
