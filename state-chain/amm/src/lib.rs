@@ -834,12 +834,11 @@ impl PoolState {
 		to: SqrtPriceQ64F96,
 		liquidity: Liquidity,
 	) -> Amount {
-		assert!(SqrtPriceQ64F96::zero() < from);
-		assert!(from < to);
+		assert!(from <= to);
 
 		/*
 			Proof that `mul_div` does not overflow:
-			If A ∈ u160, B ∈ u160, A < B, L ∈ u128
+			If A ∈ u160, B ∈ u160, A <= B, L ∈ u128
 			Then B - A ∈ u160
 			Then (B - A) / (1<<96) <= u64::MAX (160 - 96 = 64)
 			Then L * ((B - A) / (1<<96)) <= u192::MAX < u256::MAX
@@ -852,12 +851,11 @@ impl PoolState {
 		to: SqrtPriceQ64F96,
 		liquidity: Liquidity,
 	) -> Amount {
-		assert!(SqrtPriceQ64F96::zero() < from);
-		assert!(from < to);
+		assert!(from <= to);
 
 		/*
 			Proof that `mul_div` does not overflow:
-			If A ∈ u160, B ∈ u160, A < B, L ∈ u128
+			If A ∈ u160, B ∈ u160, A <= B, L ∈ u128
 			Then B - A ∈ u160
 			Then (B - A) / (1<<96) <= u64::MAX (160 - 96 = 64)
 			Then L * ((B - A) / (1<<96)) <= u192::MAX < u256::MAX
@@ -967,9 +965,8 @@ impl PoolState {
 
 	/// Calculates the greatest tick value such that `sqrt_price_at_tick(tick) <= sqrt_price`
 	fn tick_at_sqrt_price(sqrt_price: SqrtPriceQ64F96) -> Tick {
-		assert!(sqrt_price >= MIN_SQRT_PRICE);
 		// Note the price can never actually reach MAX_SQRT_PRICE
-		assert!(sqrt_price < MAX_SQRT_PRICE);
+		assert!((MIN_SQRT_PRICE..MAX_SQRT_PRICE).contains(&sqrt_price));
 
 		let sqrt_price_q64f128 = sqrt_price << 32u128;
 
