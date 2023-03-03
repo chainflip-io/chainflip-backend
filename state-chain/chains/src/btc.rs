@@ -40,7 +40,7 @@ pub struct BitcoinOutput {
 }
 
 pub struct BitcoinTransaction {
-	btc_net: BitcoinNetwork,
+	network: BitcoinNetwork,
 	inputs: Vec<Utxo>,
 	outputs: Vec<BitcoinOutput>,
 	signatures: Vec<[u8; 64]>,
@@ -104,7 +104,7 @@ impl BitcoinNetwork {
 		}
 	}
 
-	fn bech32_pkh_address_prefix(&self) -> &'static str {
+	fn bech32_and_bech32m_address_prefix(&self) -> &'static str {
 		match self {
 			BitcoinNetwork::Mainnet => "bc",
 			BitcoinNetwork::Testnet => "tb",
@@ -115,7 +115,7 @@ impl BitcoinNetwork {
 
 pub fn scriptpubkey_from_address(
 	address: &str,
-	btc_net: BitcoinNetwork,
+	network: BitcoinNetwork,
 ) -> Result<BitcoinScript, BitcoinTransactionError> {
 	let try_decode_as_base58 = || {
 		const CHECKSUM_LENGTH: usize = 4;
@@ -125,18 +125,23 @@ pub fn scriptpubkey_from_address(
 		let (data, checksum) = data.split_at(data.len() - CHECKSUM_LENGTH);
 
 		if &sha2_256(&sha2_256(data))[..CHECKSUM_LENGTH] == checksum {
-			let (&version, payload) = data.split_first().unwrap();
-			if version == btc_net.p2pkh_address_version() {
+			let (&version, hash) = data.split_first().unwrap();
+			if version == network.p2pkh_address_version() {
 				Some(
 					BitcoinScript::default()
 						.op_dup()
 						.op_hash160()
-						.push_bytes(payload)
+						.push_bytes(hash /* pubkey hash */)
 						.op_equalverify()
 						.op_checksig(),
 				)
-			} else if version == btc_net.p2sh_address_version() {
-				Some(BitcoinScript::default().op_hash160().push_bytes(payload).op_equal())
+			} else if version == network.p2sh_address_version() {
+				Some(
+					BitcoinScript::default()
+						.op_hash160()
+						.push_bytes(hash /* script hash */)
+						.op_equal(),
+				)
 			} else {
 				None
 			}
@@ -148,7 +153,7 @@ pub fn scriptpubkey_from_address(
 	// See https://en.bitcoin.it/wiki/BIP_0350
 	let try_decode_as_bech32_or_bech32m = || {
 		let (hrp, data, variant) = bech32::decode(address).ok()?;
-		if hrp == btc_net.bech32_pkh_address_prefix() {
+		if hrp == network.bech32_and_bech32m_address_prefix() {
 			let version = data.get(0)?.to_u8();
 			let program = {
 				let program = Vec::from_base32(&data[1..]).ok()?;
@@ -206,7 +211,7 @@ impl BitcoinTransaction {
 		result.extend(to_varint(self.outputs.len() as u64));
 		result.extend(self.outputs.iter().try_fold(Vec::<u8>::default(), |mut acc, x| {
 			acc.extend(x.amount.to_le_bytes());
-			let script = scriptpubkey_from_address(&x.destination, self.btc_net)?;
+			let script = scriptpubkey_from_address(&x.destination, self.network)?;
 			acc.extend(script.serialize());
 			Ok(acc)
 		})?);
@@ -289,7 +294,7 @@ impl BitcoinTransaction {
 				.iter()
 				.try_fold(Vec::<u8>::default(), |mut acc, x| {
 					acc.extend(x.amount.to_le_bytes());
-					let script = scriptpubkey_from_address(&x.destination, self.btc_net)?;
+					let script = scriptpubkey_from_address(&x.destination, self.network)?;
 					acc.extend(script.serialize());
 					Ok(acc)
 				})?
@@ -569,7 +574,7 @@ mod test {
 				.to_string(),
 		};
 		let tx = BitcoinTransaction {
-			btc_net: BitcoinNetwork::Mainnet,
+			network: BitcoinNetwork::Mainnet,
 			inputs: vec![input],
 			outputs: vec![output],
 			signatures: Default::default(),
@@ -597,7 +602,7 @@ mod test {
 				.to_string(),
 		};
 		let tx = BitcoinTransaction {
-			btc_net: BitcoinNetwork::Mainnet,
+			network: BitcoinNetwork::Mainnet,
 			inputs: vec![input],
 			outputs: vec![output],
 			signatures: Default::default(),

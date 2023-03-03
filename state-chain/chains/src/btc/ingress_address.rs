@@ -17,10 +17,10 @@ pub fn tweaked_pubkey(pubkey_x: [u8; 32], salt: u32) -> PublicKey {
 pub fn derive_btc_ingress_address(
 	pubkey_x: [u8; 32],
 	salt: u32,
-	btc_net: BitcoinNetwork,
+	network: BitcoinNetwork,
 ) -> String {
 	bech32::encode(
-		btc_net.bech32_pkh_address_prefix(),
+		network.bech32_and_bech32m_address_prefix(),
 		itertools::chain!(
 			iter::once(u5::try_from_u8(SEGWIT_VERSION).unwrap()),
 			(&tweaked_pubkey(pubkey_x, salt).serialize_compressed()[1..33]).to_base32()
