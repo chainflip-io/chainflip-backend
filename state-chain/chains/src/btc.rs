@@ -425,181 +425,245 @@ impl BitcoinScript {
 	}
 }
 
-#[test]
-fn test_scriptpubkey_from_address() {
-	assert_eq!(
-		scriptpubkey_from_address(
-			"bc1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqzk5jj0",
-			BitcoinNetwork::Mainnet,
-		)
-		.unwrap()
-		.data,
-		hex_literal::hex!("512079be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798")
-	);
-	assert_eq!(
-		scriptpubkey_from_address(
-			"bc1pw508d6qejxtdg4y5r3zarvary0c5xw7kw508d6qejxtdg4y5r3zarvary0c5xw7k7grplx",
-			BitcoinNetwork::Mainnet,
-		)
-		.unwrap()
-		.data,
-		hex_literal::hex!(
-			"5128751e76e8199196d454941c45d1b3a323f1433bd6751e76e8199196d454941c45d1b3a323f1433bd6"
-		)
-	);
-	assert_eq!(
-		scriptpubkey_from_address(
-			"bc1pw508d6qejxtdg4y5r3zarvary0c5xw7kw508d6qejxtdg4y5r3zarvary0c5xw7kt5nd6y",
-			BitcoinNetwork::Mainnet,
-		)
-		.unwrap()
-		.data,
-		hex_literal::hex!(
-			"5128751e76e8199196d454941c45d1b3a323f1433bd6751e76e8199196d454941c45d1b3a323f1433bd6"
-		)
-	);
-	assert_eq!(
-		scriptpubkey_from_address("BC1SW50QA3JX3S", BitcoinNetwork::Mainnet)
-			.unwrap()
-			.data,
-		hex_literal::hex!("6002751e")
-	);
-	assert_eq!(
-		scriptpubkey_from_address("bc1zw508d6qejxtdg4y5r3zarvaryvg6kdaj", BitcoinNetwork::Mainnet)
-			.unwrap()
-			.data,
-		hex_literal::hex!("5210751e76e8199196d454941c45d1b3a323")
-	);
-	assert_eq!(
-		scriptpubkey_from_address(
-			"BC1QW508D6QEJXTDG4Y5R3ZARVARY0C5XW7KV8F3T4",
-			BitcoinNetwork::Mainnet
-		)
-		.unwrap()
-		.data,
-		hex_literal::hex!("0014751e76e8199196d454941c45d1b3a323f1433bd6")
-	);
-	assert_eq!(
-		scriptpubkey_from_address("132F25rTsvBdp9JzLLBHP5mvGY66i1xdiM", BitcoinNetwork::Mainnet)
-			.unwrap()
-			.data,
-		hex_literal::hex!("76a914162c5ea71c0b23f5b9022ef047c4a86470a5b07088ac")
-	);
-	assert_eq!(
-		scriptpubkey_from_address("3QJmV3qfvL9SuYo34YihAf3sRCW3qSinyC", BitcoinNetwork::Mainnet)
-			.unwrap()
-			.data,
-		hex_literal::hex!("a914f815b036d9bbbce5e9f2a00abd1bf3dc91e9551087")
-	);
-}
+#[cfg(test)]
+mod test {
+	use super::*;
 
-#[test]
-fn test_finalize() {
-	let input = Utxo {
-		amount: 100010000,
-		vout: 1,
-		txid: hex_literal::hex!("b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c"),
-		pubkey_x: hex_literal::hex!(
-			"78C79A2B436DA5575A03CDE40197775C656FFF9F0F59FC1466E09C20A81A9CDB"
-		),
-		salt: 123,
-	};
-	let output = BitcoinOutput {
-		amount: 100000000,
-		destination: "bc1pgtj0f3u2rk8ex6khlskz7q50nwc48r8unfgfhxzsx9zhcdnczhqq60lzjt".to_string(),
-	};
-	let tx = BitcoinTransaction {
-		btc_net: BitcoinNetwork::Mainnet,
-		inputs: vec![input],
-		outputs: vec![output],
-		signatures: Default::default(),
+	#[test]
+	fn test_scriptpubkey_from_address() {
+		// Test cases from: https://github.com/bitcoin/bips/blob/master/bip-0350.mediawiki
+
+		let valid_addresses = [
+			("BC1QW508D6QEJXTDG4Y5R3ZARVARY0C5XW7KV8F3T4", BitcoinNetwork::Mainnet, &hex_literal::hex!("0014751e76e8199196d454941c45d1b3a323f1433bd6")[..]),
+			("tb1qrp33g0q5c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3q0sl5k7", BitcoinNetwork::Testnet, &hex_literal::hex!("00201863143c14c5166804bd19203356da136c985678cd4d27a1b8c6329604903262")[..]),
+			("bc1pw508d6qejxtdg4y5r3zarvary0c5xw7kw508d6qejxtdg4y5r3zarvary0c5xw7kt5nd6y", BitcoinNetwork::Mainnet, &hex_literal::hex!("5128751e76e8199196d454941c45d1b3a323f1433bd6751e76e8199196d454941c45d1b3a323f1433bd6")[..]),
+			("BC1SW50QGDZ25J", BitcoinNetwork::Mainnet, &hex_literal::hex!("6002751e")[..]),
+			("bc1zw508d6qejxtdg4y5r3zarvaryvaxxpcs", BitcoinNetwork::Mainnet, &hex_literal::hex!("5210751e76e8199196d454941c45d1b3a323")[..]),
+			("tb1qqqqqp399et2xygdj5xreqhjjvcmzhxw4aywxecjdzew6hylgvsesrxh6hy", BitcoinNetwork::Testnet, &hex_literal::hex!("0020000000c4a5cad46221b2a187905e5266362b99d5e91c6ce24d165dab93e86433")[..]),
+			("tb1pqqqqp399et2xygdj5xreqhjjvcmzhxw4aywxecjdzew6hylgvsesf3hn0c", BitcoinNetwork::Testnet, &hex_literal::hex!("5120000000c4a5cad46221b2a187905e5266362b99d5e91c6ce24d165dab93e86433")[..]),
+			("bc1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqzk5jj0", BitcoinNetwork::Mainnet, &hex_literal::hex!("512079be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798")[..]),
+		];
+
+		for (valid_address, intended_btc_net, expected_scriptpubkey) in valid_addresses {
+			assert_eq!(
+				scriptpubkey_from_address(valid_address, intended_btc_net,).unwrap().data,
+				expected_scriptpubkey
+			);
+		}
+
+		let invalid_addresses = [
+			(
+				"tc1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vq5zuyut",
+				BitcoinNetwork::Mainnet,
+			),
+			(
+				"bc1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqh2y7hd",
+				BitcoinNetwork::Mainnet,
+			),
+			(
+				"tb1z0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqglt7rf",
+				BitcoinNetwork::Testnet,
+			),
+			(
+				"BC1S0XLXVLHEMJA6C4DQV22UAPCTQUPFHLXM9H8Z3K2E72Q4K9HCZ7VQ54WELL",
+				BitcoinNetwork::Mainnet,
+			),
+			("bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kemeawh", BitcoinNetwork::Mainnet),
+			(
+				"tb1q0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vq24jc47",
+				BitcoinNetwork::Testnet,
+			),
+			(
+				"bc1p38j9r5y49hruaue7wxjce0updqjuyyx0kh56v8s25huc6995vvpql3jow4",
+				BitcoinNetwork::Mainnet,
+			),
+			(
+				"BC130XLXVLHEMJA6C4DQV22UAPCTQUPFHLXM9H8Z3K2E72Q4K9HCZ7VQ7ZWS8R",
+				BitcoinNetwork::Mainnet,
+			),
+			("bc1pw5dgrnzv", BitcoinNetwork::Mainnet),
+			(
+				"bc1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7v8n0nx0muaewav253zgeav",
+				BitcoinNetwork::Mainnet,
+			),
+			("BC1QR508D6QEJXTDG4Y5R3ZARVARYV98GJ9P", BitcoinNetwork::Mainnet),
+			(
+				"tb1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vq47Zagq",
+				BitcoinNetwork::Testnet,
+			),
+			(
+				"bc1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7v07qwwzcrf",
+				BitcoinNetwork::Mainnet,
+			),
+			(
+				"tb1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vpggkg4j",
+				BitcoinNetwork::Testnet,
+			),
+			("bc1gmk9yu", BitcoinNetwork::Mainnet),
+		];
+
+		for (invalid_address, intended_btc_net) in invalid_addresses {
+			assert!(matches!(
+				scriptpubkey_from_address(invalid_address, intended_btc_net,),
+				Err(BitcoinTransactionError::InvalidEgressAddress)
+			));
+		}
+
+		// Test cases from: https://rosettacode.org/wiki/Bitcoin/address_validation
+
+		let test_addresses = [
+			("1AGNa15ZQXAZUgFiqJ2i7Z2DPU2J6hW62i", true),
+			("1Q1pE5vPGEEMqRcVRMbtBK842Y6Pzo6nK9", true),
+			("1AGNa15ZQXAZUgFiqJ2i7Z2DPU2J6hW62X", false),
+			("1ANNa15ZQXAZUgFiqJ2i7Z2DPU2J6hW62i", false),
+			("1A Na15ZQXAZUgFiqJ2i7Z2DPU2J6hW62i", false),
+			("1Q1pE5vPGEEMqRcVRMbtBK842Y6Pzo6nJ9", false),
+			("1AGNa15ZQXAZUgFiqJ2i7Z2DPU2J6hW62I", false),
+			("1AGNa15ZQXAZUgFiqJ2i7Z2DPU2J6hW62j", false),
+			("1AGNa15ZQXAZUgFiqJ2i7Z2DPU2J6hW62!", false),
+			("1AGNa15ZQXAZUgFiqJ2i7Z2DPU2J6hW62iz", false),
+			("1AGNa15ZQXAZUgFiqJ2i7Z2DPU2J6hW62izz", false),
+			("1BNGaR29FmfAqidXmD9HLwsGv9p5WVvvhq", true),
+			("1BNGaR29FmfAqidXmD9HLws", false),
+			("1NAGa15ZQXAZUgFiqJ2i7Z2DPU2J6hW62i", false),
+			("0AGNa15ZQXAZUgFiqJ2i7Z2DPU2J6hW62i", false),
+			("1AGNa15ZQXAZUgFlqJ2i7Z2DPU2J6hW62i", false),
+			("1ANa55215ZQXAZUgFiqJ2i7Z2DPU2J6hW62i", false),
+			("i55j", false),
+			("BZbvjr", false),
+			("3yQ", false),
+			("1AGNa15ZQXAZUgFiqJ2i7Z2DPU2J6hW62ix", false),
+			("1AGNa15ZQXAZUgFiqJ2i7Z2DPU2J6hW62ixx", false),
+			("17NdbrSGoUotzeGCcMMCqnFkEvLymoou9j", true),
+			("1badbadbadbadbadbadbadbadbadbadbad", false),
+			("16UwLL9Risc3QfPqBUvKofHmBQ7wMtjvM", true),
+			("1111111111111111111114oLvT2", true),
+			("1BGNa15ZQXAZUgFiqJ2i7Z2DPU2J6hW62i", false),
+			("1AGNa15ZQXAZUgFiqJ3i7Z2DPU2J6hW62i", false),
+		];
+
+		for (address, validity) in test_addresses {
+			assert_eq!(
+				scriptpubkey_from_address(address, BitcoinNetwork::Mainnet,).is_ok(),
+				validity
+			);
+		}
 	}
-	.add_signature(0, [0u8; 64]);
-	assert_eq!(tx.finalize().unwrap(), hex_literal::hex!("020000000001014C94E48A870B85F41228D33CF25213DFCC8DD796E7211ED6B1F9A014809DBBB50100000000FDFFFFFF0100E1F5050000000022512042E4F4C78A1D8F936AD7FC2C2F028F9BB1538CFC9A509B985031457C367815C003400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000025017B752078C79A2B436DA5575A03CDE40197775C656FFF9F0F59FC1466E09C20A81A9CDBAC21C0EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE00000000"));
-}
 
-#[test]
-fn test_payload() {
-	let input = Utxo {
-		amount: 100010000,
-		vout: 1,
-		txid: hex_literal::hex!("b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c"),
-		pubkey_x: hex_literal::hex!(
-			"78C79A2B436DA5575A03CDE40197775C656FFF9F0F59FC1466E09C20A81A9CDB"
-		),
-		salt: 123,
-	};
-	let output = BitcoinOutput {
-		amount: 100000000,
-		destination: "bc1pgtj0f3u2rk8ex6khlskz7q50nwc48r8unfgfhxzsx9zhcdnczhqq60lzjt".to_string(),
-	};
-	let tx = BitcoinTransaction {
-		btc_net: BitcoinNetwork::Mainnet,
-		inputs: vec![input],
-		outputs: vec![output],
-		signatures: Default::default(),
-	};
-	assert_eq!(
-		tx.get_signing_payload(0).unwrap(),
-		hex_literal::hex!("E16117C6CD69142E41736CE2882F0E697FF4369A2CBCEE9D92FC0346C6774FB4")
-	);
-}
+	#[test]
+	fn test_finalize() {
+		let input = Utxo {
+			amount: 100010000,
+			vout: 1,
+			txid: hex_literal::hex!(
+				"b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c"
+			),
+			pubkey_x: hex_literal::hex!(
+				"78C79A2B436DA5575A03CDE40197775C656FFF9F0F59FC1466E09C20A81A9CDB"
+			),
+			salt: 123,
+		};
+		let output = BitcoinOutput {
+			amount: 100000000,
+			destination: "bc1pgtj0f3u2rk8ex6khlskz7q50nwc48r8unfgfhxzsx9zhcdnczhqq60lzjt"
+				.to_string(),
+		};
+		let tx = BitcoinTransaction {
+			btc_net: BitcoinNetwork::Mainnet,
+			inputs: vec![input],
+			outputs: vec![output],
+			signatures: Default::default(),
+		}
+		.add_signature(0, [0u8; 64]);
+		assert_eq!(tx.finalize().unwrap(), hex_literal::hex!("020000000001014C94E48A870B85F41228D33CF25213DFCC8DD796E7211ED6B1F9A014809DBBB50100000000FDFFFFFF0100E1F5050000000022512042E4F4C78A1D8F936AD7FC2C2F028F9BB1538CFC9A509B985031457C367815C003400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000025017B752078C79A2B436DA5575A03CDE40197775C656FFF9F0F59FC1466E09C20A81A9CDBAC21C0EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE00000000"));
+	}
 
-#[test]
-fn test_build_script() {
-	assert_eq!(
-		BitcoinScript::default()
-			.push_uint(0)
-			.op_drop()
-			.push_bytes(
-				hex::decode("2E897376020217C8E385A30B74B758293863049FA66A3FD177E012B076059105")
-					.unwrap(),
+	#[test]
+	fn test_payload() {
+		let input = Utxo {
+			amount: 100010000,
+			vout: 1,
+			txid: hex_literal::hex!(
+				"b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c"
+			),
+			pubkey_x: hex_literal::hex!(
+				"78C79A2B436DA5575A03CDE40197775C656FFF9F0F59FC1466E09C20A81A9CDB"
+			),
+			salt: 123,
+		};
+		let output = BitcoinOutput {
+			amount: 100000000,
+			destination: "bc1pgtj0f3u2rk8ex6khlskz7q50nwc48r8unfgfhxzsx9zhcdnczhqq60lzjt"
+				.to_string(),
+		};
+		let tx = BitcoinTransaction {
+			btc_net: BitcoinNetwork::Mainnet,
+			inputs: vec![input],
+			outputs: vec![output],
+			signatures: Default::default(),
+		};
+		assert_eq!(
+			tx.get_signing_payload(0).unwrap(),
+			hex_literal::hex!("E16117C6CD69142E41736CE2882F0E697FF4369A2CBCEE9D92FC0346C6774FB4")
+		);
+	}
+
+	#[test]
+	fn test_build_script() {
+		assert_eq!(
+			BitcoinScript::default()
+				.push_uint(0)
+				.op_drop()
+				.push_bytes(
+					hex::decode("2E897376020217C8E385A30B74B758293863049FA66A3FD177E012B076059105")
+						.unwrap(),
+				)
+				.op_checksig()
+				.serialize(),
+			hex_literal::hex!(
+				"240075202E897376020217C8E385A30B74B758293863049FA66A3FD177E012B076059105AC"
 			)
-			.op_checksig()
-			.serialize(),
-		hex_literal::hex!(
-			"240075202E897376020217C8E385A30B74B758293863049FA66A3FD177E012B076059105AC"
-		)
-	);
-}
-
-#[test]
-fn test_push_uint() {
-	let test_data = [
-		(0, vec![0]),
-		(1, vec![81]),
-		(2, vec![82]),
-		(16, vec![96]),
-		(17, vec![1, 17]),
-		(255, vec![1, 255]),
-		(256, vec![2, 0, 1]),
-		(11394560, vec![3, 0, 0xDE, 0xAD]),
-		(u32::MAX, vec![4, 255, 255, 255, 255]),
-	];
-	for x in test_data {
-		assert_eq!(BitcoinScript::default().push_uint(x.0).data, x.1);
+		);
 	}
-}
 
-#[test]
-fn test_varint() {
-	let test_data = [
-		(0_u64, vec![0x00]),
-		(1, vec![0x01]),
-		(252, vec![0xFC]),
-		(253, vec![0xFD, 0xFD, 0x00]),
-		(254, vec![0xFD, 0xFE, 0x00]),
-		(255, vec![0xFD, 0xFF, 0x00]),
-		(65534, vec![0xFD, 0xFE, 0xFF]),
-		(65535, vec![0xFD, 0xFF, 0xFF]),
-		(65536, vec![0xFE, 0x00, 0x00, 0x01, 0x00]),
-		(65537, vec![0xFE, 0x01, 0x00, 0x01, 0x00]),
-		(4294967295, vec![0xFE, 0xFF, 0xFF, 0xFF, 0xFF]),
-		(4294967296, vec![0xFF, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00]),
-		(4294967297, vec![0xFF, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00]),
-		(9007199254740991, vec![0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x1F, 0x00]),
-	];
-	for x in test_data {
-		assert_eq!(to_varint(x.0), x.1);
+	#[test]
+	fn test_push_uint() {
+		let test_data = [
+			(0, vec![0]),
+			(1, vec![81]),
+			(2, vec![82]),
+			(16, vec![96]),
+			(17, vec![1, 17]),
+			(255, vec![1, 255]),
+			(256, vec![2, 0, 1]),
+			(11394560, vec![3, 0, 0xDE, 0xAD]),
+			(u32::MAX, vec![4, 255, 255, 255, 255]),
+		];
+		for x in test_data {
+			assert_eq!(BitcoinScript::default().push_uint(x.0).data, x.1);
+		}
+	}
+
+	#[test]
+	fn test_varint() {
+		let test_data = [
+			(0_u64, vec![0x00]),
+			(1, vec![0x01]),
+			(252, vec![0xFC]),
+			(253, vec![0xFD, 0xFD, 0x00]),
+			(254, vec![0xFD, 0xFE, 0x00]),
+			(255, vec![0xFD, 0xFF, 0x00]),
+			(65534, vec![0xFD, 0xFE, 0xFF]),
+			(65535, vec![0xFD, 0xFF, 0xFF]),
+			(65536, vec![0xFE, 0x00, 0x00, 0x01, 0x00]),
+			(65537, vec![0xFE, 0x01, 0x00, 0x01, 0x00]),
+			(4294967295, vec![0xFE, 0xFF, 0xFF, 0xFF, 0xFF]),
+			(4294967296, vec![0xFF, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00]),
+			(4294967297, vec![0xFF, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00]),
+			(9007199254740991, vec![0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x1F, 0x00]),
+		];
+		for x in test_data {
+			assert_eq!(to_varint(x.0), x.1);
+		}
 	}
 }
