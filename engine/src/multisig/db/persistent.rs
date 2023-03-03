@@ -57,7 +57,7 @@ pub struct PersistentKeyDB {
 	logger: slog::Logger,
 }
 
-fn write_schema_version_to_batch(db: &DB, batch: &mut WriteBatch, version: u32) {
+fn put_schema_version_to_batch(db: &DB, batch: &mut WriteBatch, version: u32) {
 	batch.put_cf(get_metadata_column_handle(db), DB_SCHEMA_VERSION_KEY, version.to_be_bytes());
 }
 
@@ -93,7 +93,7 @@ impl PersistentKeyDB {
 
 		let mut batch = WriteBatch::default();
 
-		write_schema_version_to_batch(&db, &mut batch, 0);
+		put_schema_version_to_batch(&db, &mut batch, 0);
 
 		if let Some(genesis_hash) = genesis_hash {
 			batch.put_cf(get_metadata_column_handle(&db), GENESIS_HASH_KEY, genesis_hash);
@@ -103,6 +103,7 @@ impl PersistentKeyDB {
 
 		Ok(PersistentKeyDB::new_from_db(db, logger))
 	}
+
 	/// Create a new persistent key database. If the database exists and the schema version
 	/// is below the latest, it will attempt to migrate the data to the latest version.
 	pub fn new_and_migrate_to_latest(
@@ -112,9 +113,9 @@ impl PersistentKeyDB {
 	) -> Result<Self> {
 		let db = PersistentKeyDB::new_version_0(db_path, genesis_hash, logger)?;
 
-		// An existing db, so perform migrations and update the metadata
-		migrate_db_to_latest(db.db, db_path, genesis_hash, logger)
-                    .with_context(|| format!("Failed to migrate database at {}. Manual restoration of a backup or purging of the file is required.", db_path.display()))
+		migrate_db_to_latest(&db.db, db_path, genesis_hash, logger)
+                    .with_context(|| format!("Failed to migrate database at {}. Manual restoration of a backup or purging of the file is required.", db_path.display()))?;
+		Ok(db)
 	}
 
 	fn new_from_db(db: DB, logger: &slog::Logger) -> Self {
@@ -329,26 +330,24 @@ fn check_or_set_genesis_hash(db: &DB, genesis_hash: state_chain_runtime::Hash) -
 
 /// Reads the schema version and migrates the db to the latest schema version if required
 fn migrate_db_to_latest(
-	db: DB,
+	db: &DB,
 	path: &Path,
 	genesis_hash: Option<state_chain_runtime::Hash>,
 	logger: &slog::Logger,
-) -> Result<PersistentKeyDB, anyhow::Error> {
+) -> Result<(), anyhow::Error> {
 	let version = read_schema_version(&db, logger)
 		.context("Failed to read schema version from existing db")?;
 
 	if let Some(expected_genesis_hash) = genesis_hash {
-		check_or_set_genesis_hash(&db, expected_genesis_hash)?;
+		check_or_set_genesis_hash(db, expected_genesis_hash)?;
 	}
-
-	let db = PersistentKeyDB::new_from_db(db, logger);
 
 	// Check if the db version is up-to-date or we need to do migrations
 	match version.cmp(&LATEST_SCHEMA_VERSION) {
 		Ordering::Equal => {
 			// The db is at the latest version, no action needed
 			slog::info!(logger, "Database already at latest version of: {}", LATEST_SCHEMA_VERSION);
-			Ok(db)
+			Ok(())
 		},
 		Ordering::Greater => {
 			// We do not support backwards migrations
@@ -385,7 +384,7 @@ fn migrate_db_to_latest(
 				}
 			}
 
-			Ok(db)
+			Ok(())
 		},
 	}
 }
@@ -408,15 +407,13 @@ fn migrate_0_to_1_for_scheme<C: CryptoScheme>(db: &DB, batch: &mut WriteBatch) {
 	}
 }
 
-fn migrate_0_to_1(db: &PersistentKeyDB) {
-	let db = &db.db;
-
+fn migrate_0_to_1(db: &DB) {
 	let mut batch = WriteBatch::default();
 
 	migrate_0_to_1_for_scheme::<EthSigning>(db, &mut batch);
 	migrate_0_to_1_for_scheme::<PolkadotSigning>(db, &mut batch);
 
-	write_schema_version_to_batch(db, &mut batch, 1);
+	put_schema_version_to_batch(db, &mut batch, 1);
 
 	db.write(batch).unwrap();
 }
@@ -458,7 +455,7 @@ fn test_migration_to_v1() {
 	}
 
 	// After migration, the we should be able to load the key using the new code
-	migrate_0_to_1(&db);
+	migrate_0_to_1(&db.db);
 
 	let keys = db.load_keys::<EthSigning>();
 

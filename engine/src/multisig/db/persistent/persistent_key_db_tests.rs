@@ -130,7 +130,7 @@ fn should_not_migrate_backwards() {
 	{
 		let db = DB::open_cf(&Options::default(), &db_path, COLUMN_FAMILIES)
 			.expect("Should open db file");
-		assert!(migrate_db_to_latest(db, &db_path, None, &new_test_logger()).is_err());
+		assert!(migrate_db_to_latest(&db, &db_path, None, &new_test_logger()).is_err());
 	}
 }
 
