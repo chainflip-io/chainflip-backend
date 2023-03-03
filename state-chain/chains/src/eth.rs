@@ -8,12 +8,14 @@ pub mod ingress_address;
 
 use crate::*;
 pub use cf_primitives::chains::{assets, Ethereum};
+
 use cf_primitives::KeyId;
 use codec::{Decode, Encode, MaxEncodedLen};
 pub use ethabi::{
 	ethereum_types::{H256, U256},
 	Address, Hash as TxHash, Token, Uint, Word,
 };
+use ethereum_types::H160;
 use libsecp256k1::{curve::Scalar, PublicKey, SecretKey};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
@@ -44,6 +46,7 @@ impl Chain for Ethereum {
 	type ChainAccount = eth::Address;
 	type ChainAsset = assets::eth::Asset;
 	type EpochStartData = ();
+	type IngressFetchId = EthereumIngressId;
 }
 
 impl ChainCrypto for Ethereum {
@@ -689,6 +692,23 @@ impl core::fmt::Debug for TransactionHash {
 impl From<H256> for TransactionHash {
 	fn from(x: H256) -> Self {
 		Self(x)
+	}
+}
+#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
+pub enum EthereumIngressId {
+	Deployed(Address),
+	UnDeployed(IntentId),
+}
+
+impl IngressIdConstructor for EthereumIngressId {
+	type Address = H160;
+
+	fn deployed(_intent_id: u64, address: Self::Address) -> Self {
+		Self::Deployed(address)
+	}
+
+	fn undeployed(intent_id: u64, _address: Self::Address) -> Self {
+		Self::UnDeployed(intent_id)
 	}
 }
 

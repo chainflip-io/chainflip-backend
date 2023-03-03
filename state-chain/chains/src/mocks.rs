@@ -9,15 +9,30 @@ use std::cell::RefCell;
 #[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct MockEthereum;
 
+pub type MockEthereumIngressId = u128;
+
 // Chain implementation used for testing.
 impl Chain for MockEthereum {
+	type IngressFetchId = MockEthereumIngressId;
 	type ChainBlockNumber = u64;
 	type ChainAmount = EthAmount;
 	type TrackedData = MockTrackedData;
 	type TransactionFee = TransactionFee;
-	type ChainAccount = u64; // Currently, we don't care about this since we don't use them in tests
+	type ChainAccount = u64;
 	type ChainAsset = assets::eth::Asset;
 	type EpochStartData = ();
+}
+
+impl IngressIdConstructor for MockEthereumIngressId {
+	type Address = u64;
+
+	fn deployed(_intent_id: u64, _address: Self::Address) -> Self {
+		unimplemented!()
+	}
+
+	fn undeployed(_intent_id: u64, _address: Self::Address) -> Self {
+		unimplemented!()
+	}
 }
 
 #[derive(

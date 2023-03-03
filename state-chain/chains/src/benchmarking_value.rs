@@ -4,6 +4,9 @@ use cf_primitives::{
 	Asset, ForeignChainAddress, KeyId,
 };
 
+#[cfg(feature = "runtime-benchmarks")]
+use crate::eth::EthereumIngressId;
+
 /// Ensure type specifies a value to be used for benchmarking purposes.
 pub trait BenchmarkValue {
 	/// Returns a value suitable for running against benchmarks.
@@ -70,6 +73,13 @@ impl BenchmarkValue for btc::Asset {
 impl BenchmarkValue for ForeignChainAddress {
 	fn benchmark_value() -> Self {
 		ForeignChainAddress::Eth(Default::default())
+	}
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue for EthereumIngressId {
+	fn benchmark_value() -> Self {
+		Self::UnDeployed(1)
 	}
 }
 

@@ -73,10 +73,17 @@ pub trait Chain: Member + Parameter {
 		+ Parameter
 		+ MaxEncodedLen
 		+ BenchmarkValue
+		+ Debug
 		+ TryFrom<cf_primitives::ForeignChainAddress>
 		+ Into<cf_primitives::ForeignChainAddress>;
 
 	type EpochStartData: Member + Parameter + MaxEncodedLen;
+
+	type IngressFetchId: Member
+		+ Parameter
+		+ Copy
+		+ BenchmarkValue
+		+ IngressIdConstructor<Address = Self::ChainAccount>;
 }
 
 /// Measures the age of items associated with the Chain.
@@ -172,7 +179,7 @@ where
 /// Contains all the parameters required to fetch incoming transactions on an external chain.
 #[derive(RuntimeDebug, Copy, Clone, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub struct FetchAssetParams<C: Chain> {
-	pub intent_id: IntentId,
+	pub ingress_fetch_id: <C as Chain>::IngressFetchId,
 	pub asset: <C as Chain>::ChainAsset,
 }
 
@@ -257,4 +264,13 @@ pub trait FeeRefundCalculator<C: Chain> {
 		&self,
 		fee_paid: <C as Chain>::TransactionFee,
 	) -> <C as Chain>::ChainAmount;
+}
+
+/// Helper trait to avoid matching over chains in the generic pallet.
+pub trait IngressIdConstructor {
+	type Address;
+	/// Constructs the IngressId for the deployed case.
+	fn deployed(intent_id: u64, address: Self::Address) -> Self;
+	/// Constructs the IngressId for the undeployed case.
+	fn undeployed(intent_id: u64, address: Self::Address) -> Self;
 }

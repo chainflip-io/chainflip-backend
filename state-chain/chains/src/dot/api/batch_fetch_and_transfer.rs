@@ -64,8 +64,8 @@ impl BatchFetchAndTransfer {
 						.iter()
 						.map(|fetch_param| {
 							PolkadotRuntimeCall::Utility(UtilityCall::as_derivative {
-								index: fetch_param.intent_id as u16, /* todo: THIS IS TO BE
-								                                      * REVISITED LATER */
+								index: fetch_param.ingress_fetch_id as u16, /* todo: refer to
+								                                             * issue #2354 */
 								call: Box::new(PolkadotRuntimeCall::Balances(
 									BalancesCall::transfer_all {
 										dest: PolkadotAccountIdLookup::from(
@@ -144,9 +144,9 @@ mod test_batch_fetch {
 			MultiSigner::Sr25519(keypair_proxy.public()).into_account();
 
 		let dummy_fetch_params: Vec<FetchAssetParams<Polkadot>> = vec![
-			FetchAssetParams::<Polkadot> { intent_id: 1, asset: assets::dot::Asset::Dot },
-			FetchAssetParams::<Polkadot> { intent_id: 2, asset: assets::dot::Asset::Dot },
-			FetchAssetParams::<Polkadot> { intent_id: 3, asset: assets::dot::Asset::Dot },
+			FetchAssetParams::<Polkadot> { ingress_fetch_id: 1, asset: assets::dot::Asset::Dot },
+			FetchAssetParams::<Polkadot> { ingress_fetch_id: 2, asset: assets::dot::Asset::Dot },
+			FetchAssetParams::<Polkadot> { ingress_fetch_id: 3, asset: assets::dot::Asset::Dot },
 		];
 
 		let dummy_transfer_params: Vec<TransferAssetParams<Polkadot>> = vec![

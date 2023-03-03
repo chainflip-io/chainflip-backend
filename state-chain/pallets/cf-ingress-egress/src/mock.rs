@@ -14,7 +14,7 @@ pub use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
 	Broadcaster,
 };
-use frame_support::{instances::Instance1, parameter_types};
+use frame_support::{instances::Instance1, parameter_types, traits::ConstU64};
 use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{
@@ -100,7 +100,10 @@ impl crate::Config<Instance1> for Test {
 	type Broadcaster = MockBroadcast;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type WeightInfo = ();
+	type TTL = ConstU64<5_u64>;
 }
+
+pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {

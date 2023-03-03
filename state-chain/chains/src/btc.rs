@@ -9,13 +9,19 @@ use libsecp256k1::{PublicKey, SecretKey};
 use scale_info::TypeInfo;
 use sp_std::vec::Vec;
 extern crate alloc;
-use crate::Chain;
+use crate::{Chain, IngressIdConstructor};
 use alloc::string::String;
 use cf_primitives::chains::assets;
 pub use cf_primitives::chains::Bitcoin;
 use itertools;
 
+#[cfg(feature = "runtime-benchmarks")]
+use crate::benchmarking_value::BenchmarkValue;
+
 pub type BlockNumber = u64;
+
+#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, Copy)]
+pub struct BitcoinFetchId(u64);
 
 // TODO: Come back to this. in BTC u64 works, but the trait has from u128 required, so we do this
 // for now
@@ -36,6 +42,27 @@ impl Chain for Bitcoin {
 	type ChainAccount = u64;
 
 	type EpochStartData = ();
+
+	type IngressFetchId = BitcoinFetchId;
+}
+
+impl IngressIdConstructor for BitcoinFetchId {
+	type Address = u64;
+
+	fn deployed(_intent_id: u64, _address: Self::Address) -> Self {
+		todo!()
+	}
+
+	fn undeployed(_intent_id: u64, _address: Self::Address) -> Self {
+		todo!()
+	}
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue for BitcoinFetchId {
+	fn benchmark_value() -> Self {
+		Self(1)
+	}
 }
 
 use self::ingress_address::tweaked_pubkey;
@@ -46,6 +73,7 @@ const INTERNAL_PUBKEY: &[u8] =
 const SEGWIT_VERSION: u8 = 1;
 
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+
 pub enum Error {
 	/// The address is invalid
 	InvalidAddress,

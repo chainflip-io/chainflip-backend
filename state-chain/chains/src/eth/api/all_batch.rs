@@ -15,6 +15,12 @@ use sp_runtime::RuntimeDebug;
 
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]
 pub(crate) struct EncodableFetchAssetParams {
+	pub contract_address: Address,
+	pub asset: Address,
+}
+
+#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]
+pub(crate) struct EncodableFetchDeployAssetParams {
 	pub intent_id: IntentId,
 	pub asset: Address,
 }
@@ -27,12 +33,17 @@ pub(crate) struct EncodableTransferAssetParams {
 	pub amount: AssetAmount,
 }
 
-impl Tokenizable for EncodableFetchAssetParams {
+impl Tokenizable for EncodableFetchDeployAssetParams {
 	fn tokenize(self) -> Token {
 		Token::Tuple(vec![
 			Token::FixedBytes(get_salt(self.intent_id).to_vec()),
 			Token::Address(self.asset),
 		])
+	}
+}
+impl Tokenizable for EncodableFetchAssetParams {
+	fn tokenize(self) -> Token {
+		Token::Tuple(vec![Token::Address(self.contract_address), Token::Address(self.asset)])
 	}
 }
 
@@ -58,7 +69,11 @@ impl Tokenizable for EncodableTransferAssetParams {
 pub struct AllBatch {
 	/// The signature data for validation and replay protection.
 	sig_data: SigData,
-	/// The list of all inbound deposits that are to be fetched in this batch call.
+	/// The list of all inbound deposits that are to be fetched that need to deploy new deposit
+	/// contracts.
+	fetch_deploy_params: Vec<EncodableFetchDeployAssetParams>,
+	/// The list of all inbound deposits that are to be fetched that reuse already deployed deposit
+	/// contracts.
 	fetch_params: Vec<EncodableFetchAssetParams>,
 	/// The list of all outbound transfers that need to be made to given addresses.
 	transfer_params: Vec<EncodableTransferAssetParams>,
@@ -67,11 +82,16 @@ pub struct AllBatch {
 impl AllBatch {
 	pub(crate) fn new_unsigned(
 		replay_protection: EthereumReplayProtection,
+		fetch_deploy_params: Vec<EncodableFetchDeployAssetParams>,
 		fetch_params: Vec<EncodableFetchAssetParams>,
 		transfer_params: Vec<EncodableTransferAssetParams>,
 	) -> Self {
-		let mut calldata =
-			Self { sig_data: SigData::new_empty(replay_protection), fetch_params, transfer_params };
+		let mut calldata = Self {
+			sig_data: SigData::new_empty(replay_protection),
+			fetch_deploy_params,
+			fetch_params,
+			transfer_params,
+		};
 		calldata.sig_data.insert_msg_hash_from(calldata.abi_encoded().as_slice());
 
 		calldata
@@ -93,9 +113,16 @@ impl AllBatch {
 					]),
 				),
 				ethabi_param(
-					"fetchParamsArray",
+					"deployFetchParamsArray",
 					ParamType::Array(Box::new(ParamType::Tuple(vec![
 						ParamType::FixedBytes(32),
+						ParamType::Address,
+					]))),
+				),
+				ethabi_param(
+					"fetchParamsArray",
+					ParamType::Array(Box::new(ParamType::Tuple(vec![
+						ParamType::Address,
 						ParamType::Address,
 					]))),
 				),
@@ -115,6 +142,7 @@ impl AllBatch {
 		self.get_function()
 			.encode_input(&[
 				self.sig_data.tokenize(),
+				self.fetch_deploy_params.clone().tokenize(),
 				self.fetch_params.clone().tokenize(),
 				self.transfer_params.clone().tokenize(),
 			])
@@ -158,7 +186,7 @@ mod test_all_batch {
 	// It uses a different ethabi to the CFE, so we test separately
 	fn just_load_the_contract() {
 		assert_ok!(ethabi::Contract::load(
-			std::include_bytes!("../../../../../engine/src/eth/abis/Vault.json").as_ref(),
+			std::include_bytes!("../../../../../engine/src/eth/abis/IVault.json").as_ref(),
 		));
 	}
 
@@ -170,9 +198,26 @@ mod test_all_batch {
 		const CHAIN_ID: u64 = 1;
 		const NONCE: u64 = 9;
 
+		let dummy_fetch_deploy_asset_params = vec![
+			EncodableFetchDeployAssetParams {
+				intent_id: 1u64,
+				asset: Address::from_slice(&[3; 20]),
+			},
+			EncodableFetchDeployAssetParams {
+				intent_id: 2u64,
+				asset: Address::from_slice(&[4; 20]),
+			},
+		];
+
 		let dummy_fetch_asset_params = vec![
-			EncodableFetchAssetParams { intent_id: 1u64, asset: Address::from_slice(&[3; 20]) },
-			EncodableFetchAssetParams { intent_id: 2u64, asset: Address::from_slice(&[4; 20]) },
+			EncodableFetchAssetParams {
+				contract_address: Address::from_slice(&[5; 20]),
+				asset: Address::from_slice(&[3; 20]),
+			},
+			EncodableFetchAssetParams {
+				contract_address: Address::from_slice(&[6; 20]),
+				asset: Address::from_slice(&[4; 20]),
+			},
 		];
 
 		let dummy_transfer_asset_params = vec![
@@ -192,7 +237,7 @@ mod test_all_batch {
 		const FAKE_SIG: [u8; 32] = asymmetrise([0xe1; 32]);
 
 		let eth_vault = ethabi::Contract::load(
-			std::include_bytes!("../../../../../engine/src/eth/abis/Vault.json").as_ref(),
+			std::include_bytes!("../../../../../engine/src/eth/abis/IVault.json").as_ref(),
 		)
 		.unwrap();
 
@@ -204,6 +249,7 @@ mod test_all_batch {
 				chain_id: CHAIN_ID,
 				nonce: NONCE,
 			},
+			dummy_fetch_deploy_asset_params.clone(),
 			dummy_fetch_asset_params.clone(),
 			dummy_transfer_asset_params.clone(),
 		);
@@ -237,6 +283,7 @@ mod test_all_batch {
 						Token::Uint(NONCE.into()),
 						Token::Address(FAKE_NONCE_TIMES_G_ADDR.into()),
 					]),
+					dummy_fetch_deploy_asset_params.tokenize(),
 					dummy_fetch_asset_params.tokenize(),
 					dummy_transfer_asset_params.tokenize(),
 				])

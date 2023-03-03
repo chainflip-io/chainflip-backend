@@ -12,7 +12,7 @@ use sp_core::{sr25519, H256};
 use sp_runtime::{
 	generic::{Era, SignedPayload, UncheckedExtrinsic},
 	traits::{BlakeTwo256, DispatchInfoOf, Hash, SignedExtension, StaticLookup},
-	MultiAddress, MultiSignature,
+	AccountId32, MultiAddress, MultiSignature,
 };
 
 use sp_runtime::{
@@ -51,6 +51,7 @@ pub const TEST_RUNTIME_VERSION: RuntimeVersion =
 	RuntimeVersion { spec_version: 9340, transaction_version: 16 };
 
 pub type PolkadotSpecVersion = u32;
+pub type PolkadotIngressId = u64;
 pub type PolkadotTransactionVersion = u32;
 
 pub type PolkadotUncheckedExtrinsic =
@@ -110,6 +111,7 @@ impl Chain for Polkadot {
 	type TransactionFee = Self::ChainAmount;
 	type ChainAsset = assets::dot::Asset;
 	type EpochStartData = EpochStartData;
+	type IngressFetchId = PolkadotIngressId;
 }
 
 impl ChainCrypto for Polkadot {
@@ -788,6 +790,18 @@ impl PolkadotReplayProtection {
 		genesis_hash: PolkadotHash,
 	) -> Self {
 		Self { runtime_version, genesis_hash, nonce, tip }
+	}
+}
+
+impl IngressIdConstructor for PolkadotIngressId {
+	type Address = AccountId32;
+
+	fn deployed(intent_id: u64, _address: Self::Address) -> Self {
+		intent_id
+	}
+
+	fn undeployed(intent_id: u64, _address: Self::Address) -> Self {
+		intent_id
 	}
 }
 
