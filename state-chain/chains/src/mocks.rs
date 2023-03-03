@@ -63,8 +63,51 @@ pub struct MockThresholdSignature<K, P> {
 	pub signed_payload: P,
 }
 
+#[derive(
+	Copy,
+	Clone,
+	Debug,
+	PartialEq,
+	Eq,
+	Default,
+	MaxEncodedLen,
+	Encode,
+	Decode,
+	TypeInfo,
+	Ord,
+	PartialOrd,
+)]
+pub struct MockAggKey(pub [u8; 4]);
+
+impl TryFrom<PublicKeyBytes> for MockAggKey {
+	type Error = ();
+
+	fn try_from(public_key_bytes: PublicKeyBytes) -> Result<Self, Self::Error> {
+		if public_key_bytes.len() != 4 {
+			return Err(())
+		}
+		let mut key = [0u8; 4];
+		key.copy_from_slice(&public_key_bytes);
+		Ok(MockAggKey(key))
+	}
+}
+
+impl Into<PublicKeyBytes> for MockAggKey {
+	fn into(self) -> PublicKeyBytes {
+		self.0.to_vec()
+	}
+}
+
+impl TryFrom<KeyId> for MockAggKey {
+	type Error = ();
+
+	fn try_from(key_id: KeyId) -> Result<Self, Self::Error> {
+		Ok(MockAggKey(key_id.public_key_bytes.try_into().map_err(|_| ())?))
+	}
+}
+
 impl ChainCrypto for MockEthereum {
-	type AggKey = [u8; 4];
+	type AggKey = MockAggKey;
 	type Payload = [u8; 4];
 	type ThresholdSignature = MockThresholdSignature<Self::AggKey, Self::Payload>;
 	type TransactionId = [u8; 4];
@@ -79,20 +122,17 @@ impl ChainCrypto for MockEthereum {
 	}
 
 	fn agg_key_to_payload(agg_key: Self::AggKey) -> Self::Payload {
-		agg_key
+		agg_key.0
 	}
 
 	fn agg_key_to_key_id(agg_key: Self::AggKey, epoch_index: EpochIndex) -> KeyId {
-		KeyId { epoch_index, public_key_bytes: agg_key.to_vec() }
-	}
-
-	fn key_id_to_agg_key(key_id: KeyId) -> Result<Self::AggKey, &'static str> {
-		key_id.public_key_bytes.try_into().map_err(|_| "Invalid key id")
+		KeyId { epoch_index, public_key_bytes: agg_key.0.to_vec() }
 	}
 }
 
+impl_default_benchmark_value!(MockAggKey);
 impl_default_benchmark_value!([u8; 4]);
-impl_default_benchmark_value!(MockThresholdSignature<[u8; 4], [u8; 4]>);
+impl_default_benchmark_value!(MockThresholdSignature<MockAggKey, [u8; 4]>);
 impl_default_benchmark_value!(MockTransaction);
 
 pub const ETH_TX_HASH: <MockEthereum as ChainCrypto>::TransactionId = [0xbc; 4];

@@ -72,7 +72,7 @@ impl MockCfe {
 					payload,
 				},
 			) => {
-				assert_eq!(key_id.public_key_bytes, &MOCK_AGG_KEY);
+				assert_eq!(key_id.public_key_bytes, &MOCK_AGG_KEY.0);
 				assert_eq!(signatories, MockNominator::get_nominees().unwrap());
 
 				match &self.behaviour {
@@ -256,7 +256,7 @@ fn keygen_verification_ceremony_calls_callback_on_failure() {
 				MockKeyProvider::current_epoch_key();
 			let (request_id, _) = EthereumThresholdSigner::request_keygen_verification_signature(
 				*PAYLOAD,
-				KeyId { epoch_index, public_key_bytes: public_key_bytes.to_vec() },
+				KeyId { epoch_index, public_key_bytes: public_key_bytes.0.to_vec() },
 				NOMINEES.into_iter().collect(),
 			);
 			assert_ok!(EthereumThresholdSigner::register_callback(
@@ -446,7 +446,7 @@ fn test_not_enough_signers_for_threshold_schedules_retry() {
 mod unsigned_validation {
 	use super::*;
 	use crate::{Call as PalletCall, CeremonyRetryQueues, PendingCeremonies};
-	use cf_chains::ChainCrypto;
+	use cf_chains::{mocks::MockAggKey, ChainCrypto};
 	use cf_primitives::KeyId;
 	use cf_traits::{KeyProvider, ThresholdSigner};
 	use frame_support::{pallet_prelude::InvalidTransaction, unsigned::TransactionSource};
@@ -456,14 +456,14 @@ mod unsigned_validation {
 	fn start_custom_signing_ceremony() {
 		new_test_ext().execute_with(|| {
 			const PAYLOAD: <MockEthereum as ChainCrypto>::Payload = *b"OHAI";
-			const CUSTOM_AGG_KEY: <MockEthereum as ChainCrypto>::AggKey = *b"AKEY";
+			const CUSTOM_AGG_KEY: <MockEthereum as ChainCrypto>::AggKey = MockAggKey(*b"AKEY");
 
 			let participants: BTreeSet<u64> = BTreeSet::from_iter([1, 2, 3, 4, 5, 6]);
 			let (_request_id, ceremony_id) =
 				EthereumThresholdSigner::request_keygen_verification_signature(
 					PAYLOAD,
 					KeyId {
-						public_key_bytes: CUSTOM_AGG_KEY.to_vec(),
+						public_key_bytes: CUSTOM_AGG_KEY.0.to_vec(),
 						epoch_index: <Test as Chainflip>::EpochInfo::epoch_index() + 1,
 					},
 					participants,
@@ -580,12 +580,11 @@ mod failure_reporting {
 	) -> CeremonyContext<Test, Instance1> {
 		const PAYLOAD: <MockEthereum as ChainCrypto>::Payload = *b"OHAI";
 		MockEpochInfo::set_authorities(Vec::from_iter(validator_set));
-		let EpochKey { key: public_key_bytes, epoch_index, .. } =
-			MockKeyProvider::current_epoch_key();
+		let EpochKey { key: agg_key, epoch_index, .. } = MockKeyProvider::current_epoch_key();
 		CeremonyContext::<Test, Instance1> {
 			request_context: RequestContext { request_id: 1, attempt_count: 0, payload: PAYLOAD },
 			threshold_ceremony_type: ThresholdCeremonyType::Standard,
-			key_id: KeyId { public_key_bytes: public_key_bytes.to_vec(), epoch_index },
+			key_id: KeyId { public_key_bytes: agg_key.0.to_vec(), epoch_index },
 			remaining_respondents: BTreeSet::from_iter(validator_set),
 			blame_counts: Default::default(),
 			participant_count: 5,

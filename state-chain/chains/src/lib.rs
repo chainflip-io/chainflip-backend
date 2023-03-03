@@ -97,6 +97,7 @@ pub trait ChainCrypto: Chain {
 	/// TODO: Consider if Encode / Decode bounds are sufficient rather than To/From Vec<u8>
 	type AggKey: TryFrom<PublicKeyBytes>
 		+ Into<PublicKeyBytes>
+		+ TryFrom<KeyId>
 		+ Member
 		+ Parameter
 		+ Copy
@@ -121,8 +122,6 @@ pub trait ChainCrypto: Chain {
 	fn agg_key_to_payload(agg_key: Self::AggKey) -> Self::Payload;
 
 	fn agg_key_to_key_id(agg_key: Self::AggKey, epoch_index: EpochIndex) -> KeyId;
-
-	fn key_id_to_agg_key(key_id: KeyId) -> Result<Self::AggKey, &'static str>;
 }
 
 /// Common abi-related types and operations for some external chain.

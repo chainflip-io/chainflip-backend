@@ -190,7 +190,7 @@ mod migration_tests {
 				remaining_respondents: BTreeSet::default(),
 				blame_counts: BTreeMap::from(BLAME_COUNTS),
 				participant_count: PARTICIPANT_COUNT,
-				key_id: key_id.to_vec(),
+				key_id: key_id.0.to_vec(),
 				_phantom: PhantomData,
 			};
 
@@ -231,7 +231,7 @@ mod migration_tests {
 					remaining_respondents: BTreeSet::default(),
 					blame_counts: BTreeMap::from(BLAME_COUNTS),
 					participant_count: PARTICIPANT_COUNT,
-					key_id: key_id.to_vec(),
+					key_id: key_id.0.to_vec(),
 					threshold_ceremony_type: ThresholdCeremonyType::Standard,
 				}
 			);

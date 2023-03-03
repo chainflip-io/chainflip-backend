@@ -14,7 +14,11 @@ use sp_runtime::{
 use crate as pallet_cf_vaults;
 
 use super::*;
-use cf_chains::{eth, mocks::MockEthereum, ApiCall, ChainCrypto, ReplayProtectionProvider};
+use cf_chains::{
+	eth,
+	mocks::{MockAggKey, MockEthereum},
+	ApiCall, ChainCrypto, ReplayProtectionProvider,
+};
 use cf_traits::{
 	mocks::{
 		ceremony_id_provider::MockCeremonyIdProvider, ensure_origin_mock::NeverFailingOriginCheck,
@@ -238,8 +242,8 @@ impl pallet_cf_vaults::Config for MockRuntime {
 pub const ALICE: <MockRuntime as frame_system::Config>::AccountId = 123u64;
 pub const BOB: <MockRuntime as frame_system::Config>::AccountId = 456u64;
 pub const CHARLIE: <MockRuntime as frame_system::Config>::AccountId = 789u64;
-pub const GENESIS_AGG_PUB_KEY: [u8; 4] = *b"genk";
-pub const NEW_AGG_PUB_KEY: [u8; 4] = *b"next";
+pub const GENESIS_AGG_PUB_KEY: MockAggKey = MockAggKey(*b"genk");
+pub const NEW_AGG_PUB_KEY: MockAggKey = MockAggKey(*b"next");
 
 pub const MOCK_KEYGEN_RESPONSE_TIMEOUT: u64 = 25;
 
@@ -268,7 +272,7 @@ fn test_ext_inner(key: Option<Vec<u8>>) -> sp_io::TestExternalities {
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
-	test_ext_inner(Some(GENESIS_AGG_PUB_KEY.to_vec()))
+	test_ext_inner(Some(GENESIS_AGG_PUB_KEY.0.to_vec()))
 }
 
 pub(crate) fn new_test_ext_no_key() -> sp_io::TestExternalities {

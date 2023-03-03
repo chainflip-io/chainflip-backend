@@ -492,8 +492,7 @@ pub mod pallet {
 				let CeremonyContext { key_id, request_context, .. } =
 					PendingCeremonies::<T, I>::get(ceremony_id).ok_or(InvalidTransaction::Stale)?;
 
-				let key = <T::TargetChain as ChainCrypto>::key_id_to_agg_key(key_id)
-					.map_err(|_| InvalidTransaction::BadProof)?;
+				let key = key_id.try_into().map_err(|_| InvalidTransaction::BadProof)?;
 
 				if <T::TargetChain as ChainCrypto>::verify_threshold_signature(
 					&key,

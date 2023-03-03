@@ -674,6 +674,7 @@ fn set_keygen_response_timeout_works() {
 mod keygen_reporting {
 	use super::*;
 	use crate::{AggKeyFor, KeygenOutcomeFor, KeygenResponseStatus};
+	use cf_chains::mocks::MockAggKey;
 	use sp_std::collections::btree_set::BTreeSet;
 
 	macro_rules! assert_failure_outcome {
@@ -806,7 +807,7 @@ mod keygen_reporting {
 					status.add_success_vote(&id, NEW_AGG_PUB_KEY);
 				},
 				ReportedOutcome::BadKey => {
-					status.add_success_vote(&id, *b"bad!");
+					status.add_success_vote(&id, MockAggKey(*b"bad!"));
 				},
 				ReportedOutcome::Failure => {
 					status.add_failure_vote(&id, BTreeSet::from_iter(report_gen(id)));

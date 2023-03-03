@@ -134,8 +134,12 @@ impl ChainCrypto for Polkadot {
 	fn agg_key_to_key_id(agg_key: Self::AggKey, epoch_index: EpochIndex) -> KeyId {
 		KeyId { epoch_index, public_key_bytes: agg_key.into() }
 	}
+}
 
-	fn key_id_to_agg_key(key_id: KeyId) -> Result<Self::AggKey, &'static str> {
+impl TryFrom<KeyId> for PolkadotPublicKey {
+	type Error = &'static str;
+
+	fn try_from(key_id: KeyId) -> Result<Self, Self::Error> {
 		key_id.public_key_bytes.try_into().map_err(|_| "Invalid public key bytes")
 	}
 }
