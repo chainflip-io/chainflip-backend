@@ -46,9 +46,9 @@ const INTERNAL_PUBKEY: &[u8] =
 const SEGWIT_VERSION: u8 = 1;
 
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
-pub enum BitcoinTransactionError {
-	/// The egress address is invalid
-	InvalidEgressAddress,
+pub enum Error {
+	/// The address is invalid
+	InvalidAddress,
 }
 
 pub struct Utxo {
@@ -140,7 +140,7 @@ impl BitcoinNetwork {
 pub fn scriptpubkey_from_address(
 	address: &str,
 	network: BitcoinNetwork,
-) -> Result<BitcoinScript, BitcoinTransactionError> {
+) -> Result<BitcoinScript, Error> {
 	// See https://en.bitcoin.it/wiki/Base58Check_encoding
 	let try_decode_as_base58 = || {
 		const CHECKSUM_LENGTH: usize = 4;
@@ -201,7 +201,7 @@ pub fn scriptpubkey_from_address(
 	} else if let Some(script) = try_decode_as_bech32_or_bech32m() {
 		Ok(script)
 	} else {
-		Err(BitcoinTransactionError::InvalidEgressAddress)
+		Err(Error::InvalidAddress)
 	}
 }
 
@@ -269,10 +269,7 @@ impl BitcoinTransaction {
 		Ok(transaction_bytes)
 	}
 
-	pub fn get_signing_payload(
-		&self,
-		input_index: u32,
-	) -> Result<[u8; 32], BitcoinTransactionError> {
+	pub fn get_signing_payload(&self, input_index: u32) -> Result<[u8; 32], Error> {
 		// SHA256("TapSighash")
 		const TAPSIG_HASH: &[u8] =
 			&hex_literal::hex!("f40a48df4b2a70c8b4924bf2654661ed3d95fd66a313eb87237597c628e4a031");
@@ -536,7 +533,7 @@ mod test {
 		for (invalid_address, intended_btc_net) in invalid_addresses {
 			assert!(matches!(
 				scriptpubkey_from_address(invalid_address, intended_btc_net,),
-				Err(BitcoinTransactionError::InvalidEgressAddress)
+				Err(Error::InvalidAddress)
 			));
 		}
 
