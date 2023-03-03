@@ -1,6 +1,6 @@
 use crate::*;
 use cf_traits::EpochInfo;
-use sp_runtime::{traits::Zero, AccountId32};
+use sp_runtime::AccountId32;
 use sp_std::marker::PhantomData;
 
 pub struct Migration<T: Config<I>, I: 'static>(PhantomData<(T, I)>);
@@ -9,7 +9,6 @@ pub struct Migration<T: Config<I>, I: 'static>(PhantomData<(T, I)>);
 pub type IncompatibleVoters<T: Config<I>, I: 'static> =
 	StorageValue<Pallet<T, I>, Vec<AccountId32>, ValueQuery>;
 
-// Call into each impl for each Chain
 impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
 		let current_epoch = T::EpochInfo::epoch_index();
@@ -43,6 +42,8 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(_state: Vec<u8>) -> Result<(), &'static str> {
+		use sp_runtime::traits::Zero;
+
 		assert!(PendingVaultRotation::<T, I>::get().is_none());
 
 		// Invert what runs in the migration step as a test
