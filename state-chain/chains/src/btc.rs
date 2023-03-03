@@ -8,7 +8,7 @@ use codec::{Decode, Encode};
 use frame_support::{sp_io::hashing::sha2_256, RuntimeDebug};
 use libsecp256k1::{PublicKey, SecretKey};
 use scale_info::TypeInfo;
-use sp_std::{vec, vec::Vec};
+use sp_std::vec::Vec;
 extern crate alloc;
 use alloc::string::String;
 use itertools;
