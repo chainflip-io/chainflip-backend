@@ -97,7 +97,7 @@ fn new_db_is_created_with_correct_metadata() {
 
 		// Check the schema version is at the latest
 		assert_eq!(
-			read_schema_version(&db, &logger).expect("Should read schema version"),
+			read_schema_version(&db).expect("Should read schema version"),
 			LATEST_SCHEMA_VERSION
 		);
 

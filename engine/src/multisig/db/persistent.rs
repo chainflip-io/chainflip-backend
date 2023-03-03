@@ -276,13 +276,12 @@ fn get_column_handle<'a>(db: &'a DB, column_name: &str) -> &'a ColumnFamily {
 }
 
 /// Get the schema version from the metadata column in the db.
-fn read_schema_version(db: &DB, logger: &slog::Logger) -> Result<u32> {
+fn read_schema_version(db: &DB) -> Result<u32> {
 	db.get_cf(get_metadata_column_handle(db), DB_SCHEMA_VERSION_KEY)
 		.context("Failed to get metadata column")?
 		.map(|version| {
 			let version: [u8; 4] = version.try_into().expect("Version should be a u32");
 			let version = u32::from_be_bytes(version);
-			slog::info!(logger, "Found db_schema_version of {version}");
 			version
 		})
 		.ok_or_else(|| anyhow!("Could not find db schema version"))
@@ -335,8 +334,10 @@ fn migrate_db_to_latest(
 	genesis_hash: Option<state_chain_runtime::Hash>,
 	logger: &slog::Logger,
 ) -> Result<(), anyhow::Error> {
-	let version = read_schema_version(&db, logger)
-		.context("Failed to read schema version from existing db")?;
+	let version =
+		read_schema_version(&db).context("Failed to read schema version from existing db")?;
+
+	slog::info!(logger, "Found db_schema_version of {version}");
 
 	if let Some(expected_genesis_hash) = genesis_hash {
 		check_or_set_genesis_hash(db, expected_genesis_hash)?;
@@ -425,11 +426,11 @@ fn test_migration_to_latest() {
 
 	let db = PersistentKeyDB::new_version_0(&db_file, None, &logger).unwrap();
 
-	assert_eq!(read_schema_version(&db.db, &logger).unwrap(), 0);
+	assert_eq!(read_schema_version(&db.db).unwrap(), 0);
 
 	migrate_db_to_latest(&db.db, &db_file, None, &logger).unwrap();
 
-	assert_eq!(read_schema_version(&db.db, &logger).unwrap(), LATEST_SCHEMA_VERSION);
+	assert_eq!(read_schema_version(&db.db).unwrap(), LATEST_SCHEMA_VERSION);
 }
 
 #[test]
