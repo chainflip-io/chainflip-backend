@@ -439,6 +439,7 @@ fn migrate_0_to_1(db: &PersistentKeyDB) {
 	let mut batch = WriteBatch::default();
 
 	migrate_0_to_1_for_scheme::<EthSigning>(db, &mut batch);
+	migrate_0_to_1_for_scheme::<PolkadotSigning>(db, &mut batch);
 
 	write_schema_version_to_batch(db, &mut batch, 1);
 
