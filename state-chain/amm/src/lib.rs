@@ -641,14 +641,6 @@ impl PoolState {
 			// next_sqrt_price_from_input_amount rounds so this maybe true even though
 			// amount_minus_fees < amount_required_to_reach_target (TODO Prove)
 			if sqrt_ratio_next == sqrt_ratio_target {
-				// Note conversion to i128 and addition don't overflow (See test `max_liquidity`)
-				self.current_liquidity = i128::try_from(self.current_liquidity)
-					.unwrap()
-					.checked_add(SD::liquidity_delta_on_crossing_tick(target_info))
-					.unwrap()
-					.try_into()
-					.unwrap();
-
 				// Will not overflow as fee_pips <= ONE_IN_PIPS / 2
 				let fees = mul_div_ceil(
 					amount_required_to_reach_target,
@@ -656,23 +648,35 @@ impl PoolState {
 					U256::from(ONE_IN_PIPS - self.fee_pips),
 				);
 
+				// TODO: Prove these don't underflow
+				amount -= amount_required_to_reach_target;
+				amount -= fees;
+
 				// DIFF: This behaviour is different to Uniswap's, we saturate instead of
 				// overflowing/bricking the pool. This means we just stop giving LPs fees, but this
 				// is exceptionally unlikely to occur due to the how large the maximum
 				// global_fee_growth value is. We also do this to avoid needing to consider the
 				// case of reverting an extrinsic's mutations which is expensive in Substrate based
 				// chains.
-				self.global_fee_growth[SD::INPUT_TICKER] =
-					self.global_fee_growth[SD::INPUT_TICKER].saturating_add(fees);
+				self.global_fee_growth[SD::INPUT_TICKER] = self.global_fee_growth[SD::INPUT_TICKER]
+					.saturating_add(mul_div_floor(
+						fees,
+						U256::from(1) << 128u32,
+						self.current_liquidity,
+					));
 				target_info.fee_growth_outside = enum_map::EnumMap::default().map(|ticker, ()| {
 					self.global_fee_growth[ticker] - target_info.fee_growth_outside[ticker]
 				});
 				self.current_sqrt_price = sqrt_ratio_target;
 				self.current_tick = SD::current_tick_after_crossing_target_tick(*target_tick);
 
-				// TODO: Prove these don't underflow
-				amount -= amount_required_to_reach_target;
-				amount -= fees;
+				// Note conversion to i128 and addition don't overflow (See test `max_liquidity`)
+				self.current_liquidity = i128::try_from(self.current_liquidity)
+					.unwrap()
+					.checked_add(SD::liquidity_delta_on_crossing_tick(target_info))
+					.unwrap()
+					.try_into()
+					.unwrap();
 			} else {
 				let amount_in = SD::input_amount_delta_ceil(
 					self.current_sqrt_price,
@@ -689,8 +693,12 @@ impl PoolState {
 				// the maximum global_fee_growth value is. We also do this to avoid needing to
 				// consider the case of reverting an extrinsic's mutations which is expensive in
 				// Substrate based chains.
-				self.global_fee_growth[SD::INPUT_TICKER] =
-					self.global_fee_growth[SD::INPUT_TICKER].saturating_add(fees);
+				self.global_fee_growth[SD::INPUT_TICKER] = self.global_fee_growth[SD::INPUT_TICKER]
+					.saturating_add(mul_div_floor(
+						fees,
+						U256::from(1) << 128u32,
+						self.current_liquidity,
+					));
 				self.current_sqrt_price = sqrt_ratio_next;
 				self.current_tick = Self::tick_at_sqrt_price(self.current_sqrt_price);
 
