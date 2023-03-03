@@ -126,7 +126,7 @@ pub trait ChainCrypto: Chain {
 
 /// Common abi-related types and operations for some external chain.
 pub trait ChainAbi: ChainCrypto {
-	type Transaction: Member + Parameter + Default + BenchmarkValue + FeeRefundCalculator<Self>;
+	type Transaction: Member + Parameter + BenchmarkValue + FeeRefundCalculator<Self>;
 	type ReplayProtection: Member + Parameter;
 }
 

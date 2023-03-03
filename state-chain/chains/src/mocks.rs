@@ -197,11 +197,11 @@ impl<Abi, Call> MockTransactionBuilder<Abi, Call> {
 	}
 }
 
-impl<Abi: ChainAbi, Call: ApiCall<Abi>> TransactionBuilder<Abi, Call>
+impl<Abi: ChainAbi<Transaction = MockTransaction>, Call: ApiCall<Abi>> TransactionBuilder<Abi, Call>
 	for MockTransactionBuilder<Abi, Call>
 {
 	fn build_transaction(_signed_call: &Call) -> <Abi as ChainAbi>::Transaction {
-		Default::default()
+		MockTransaction {}
 	}
 
 	fn refresh_unsigned_transaction(_unsigned_tx: &mut <Abi as ChainAbi>::Transaction) {
