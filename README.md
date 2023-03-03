@@ -18,7 +18,7 @@ To compile the code execute:
 cargo build --release
 ```
 
-To run the test suit execute:
+To run the test suite execute:
 
 ```bash
 cargo ci-test
