@@ -14,6 +14,10 @@
 //!
 //! Note: There are a few yet to be proved safe maths operations, there are marked below with `TODO:
 //! Prove`. We should resolve these issues before using this code in release.
+//!
+//! Some of the `proofs` assume the values of SqrtPriceQ64F96 are <= U160::MAX, but as that type
+//! doesn't exist we use U256 of SqrtPriceQ64F96. It is relatively simply to verify that all
+//! instances of SqrtPriceQ64F96 are <=U160::MAX.
 
 use std::{collections::BTreeMap, u128};
 
@@ -343,12 +347,13 @@ impl PoolState {
 	/// liquidity, it must be added using the `PoolState::mint` function.
 	///
 	/// This function never panics
-	pub fn new(fee_pips: u32, initial_sqrt_price: SqrtPriceQ64F96) -> Result<Self, NewError> {
+	pub fn new(fee_pips: u32, initial_sqrt_price: U256) -> Result<Self, NewError> {
 		(fee_pips <= ONE_IN_PIPS / 2).then_some(()).ok_or(NewError::InvalidFeeAmount)?;
 		(MIN_SQRT_PRICE..MAX_SQRT_PRICE)
 			.contains(&initial_sqrt_price)
 			.then_some(())
 			.ok_or(NewError::InvalidInitialPrice)?;
+		let initial_sqrt_price: SqrtPriceQ64F96 = initial_sqrt_price;
 
 		let initial_tick = Self::tick_at_sqrt_price(initial_sqrt_price);
 		Ok(Self {
