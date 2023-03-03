@@ -214,7 +214,7 @@ impl BitcoinTransaction {
 		self
 	}
 	pub fn finalize(self) -> Result<Vec<u8>, BitcoinTransactionError> {
-		let mut result = Vec::default();
+		let mut transaction_bytes = Vec::default();
 		let version = 2u32.to_le_bytes();
 		let segwit_marker = 0u8;
 		let segwit_flag = 1u8;
@@ -222,48 +222,51 @@ impl BitcoinTransaction {
 		// signal to allow replacing this transaction by setting sequence number according to BIP
 		// 125
 		let sequence_number = (u32::MAX - 2).to_le_bytes();
-		result.extend(version);
-		result.push(segwit_marker);
-		result.push(segwit_flag);
-		result.extend(to_varint(self.inputs.len() as u64));
-		result.extend(self.inputs.iter().fold(Vec::<u8>::default(), |mut acc, x| {
+		transaction_bytes.extend(version);
+		transaction_bytes.push(segwit_marker);
+		transaction_bytes.push(segwit_flag);
+		transaction_bytes.extend(to_varint(self.inputs.len() as u64));
+		transaction_bytes.extend(self.inputs.iter().fold(Vec::<u8>::default(), |mut acc, x| {
 			acc.extend(x.txid.iter().rev());
 			acc.extend(x.vout.to_le_bytes());
 			acc.push(0);
 			acc.extend(sequence_number);
 			acc
 		}));
-		result.extend(to_varint(self.outputs.len() as u64));
-		result.extend(self.outputs.iter().try_fold(Vec::<u8>::default(), |mut acc, x| {
-			acc.extend(x.amount.to_le_bytes());
-			acc.extend(x.script_pubkey.clone().serialize());
-			Ok(acc)
-		})?);
+		transaction_bytes.extend(to_varint(self.outputs.len() as u64));
+		transaction_bytes.extend(self.outputs.iter().try_fold(
+			Vec::<u8>::default(),
+			|mut acc, x| {
+				acc.extend(x.amount.to_le_bytes());
+				acc.extend(x.script_pubkey.clone().serialize());
+				Ok(acc)
+			},
+		)?);
 		for i in 0..self.inputs.len() {
 			let num_witnesses = 3u8;
 			let len_signature = 64u8;
-			result.push(num_witnesses);
-			result.push(len_signature);
-			result.extend(self.signatures[i]);
+			transaction_bytes.push(num_witnesses);
+			transaction_bytes.push(len_signature);
+			transaction_bytes.extend(self.signatures[i]);
 			let script = BitcoinScript::default()
 				.push_uint(self.inputs[i].salt)
 				.op_drop()
 				.push_bytes(self.inputs[i].pubkey_x)
 				.op_checksig()
 				.serialize();
-			result.extend(script);
-			result.push(0x21u8); // Length of tweaked pubkey + leaf version
+			transaction_bytes.extend(script);
+			transaction_bytes.push(0x21u8); // Length of tweaked pubkey + leaf version
 			let tweaked = tweaked_pubkey(self.inputs[i].pubkey_x, self.inputs[i].salt);
 			// push correct leaf version depending on evenness of public key
 			if tweaked.serialize_compressed()[0] == 2 {
-				result.push(0xC0_u8);
+				transaction_bytes.push(0xC0_u8);
 			} else {
-				result.push(0xC1_u8);
+				transaction_bytes.push(0xC1_u8);
 			}
-			result.extend(INTERNAL_PUBKEY[1..33].iter());
+			transaction_bytes.extend(INTERNAL_PUBKEY[1..33].iter());
 		}
-		result.extend(locktime);
-		Ok(result)
+		transaction_bytes.extend(locktime);
+		Ok(transaction_bytes)
 	}
 
 	pub fn get_signing_payload(
