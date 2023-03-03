@@ -309,11 +309,13 @@ impl SwapDirection for PairToBase {
 	}
 }
 
-pub enum MintError {
+pub enum MintError<E> {
 	/// Invalid Tick range
 	InvalidTickRange,
 	/// One of the start/end ticks of the range reached its maximm gross liquidity
 	MaximumGrossLiquidity,
+	/// Callback failed
+	CallbackFailed(E),
 }
 
 pub enum PositionError<T> {
@@ -368,28 +370,26 @@ impl PoolState {
 		}
 	}
 
-	/// Tries to add `minted_liquidity` to/create the specified position, if `minted_liqudity == 0`
-	/// no position will be created or have liquidity added, the callback will not be called, and
-	/// the function will return `Ok(())`. Otherwise if the minting is possible the callback `f`
-	/// will be passed the Amounts required to add the specified `minted_liquidity` to the specified
-	/// position. The callback should return a boolean specifying if the liquidity minting should
-	/// occur. If `false` is returned the position will not be created. If 'true' is returned the
-	/// position will be created if it didn't already exist, and `minted_liquidity` will be added to
-	/// it. Then the function will return `Ok(())`. Otherwise if the minting is not possible the
-	/// callback will not be called, no state will be affected, and the function will return Err(_),
-	/// with appropiate Error variant.
+	/// Tries to add `minted_liquidity` to/create the specified position. If the specified position
+	/// is not valid, returns Err(_). Otherwise if `minted_liqudity == 0` no position will be
+	/// created or have liquidity added, the callback will not be called, and the function will
+	/// return `Ok(())`. Otherwise the callback `try_debit` will be passed the Amounts required to
+	/// add the specified `minted_liquidity` to the specified position. If the callback returns
+	/// `Ok(())` the position will be created if it didn't already exist, `minted_liquidity` will be
+	/// added to it, and `Ok(())` will be returned. If `Err()` is returned the position will not be
+	/// created, and `Err(_)`will be returned.
 	///
 	/// This function never panics
 	///
 	/// If this function returns an `Err(_)` no state changes have occurred
-	pub fn mint<F: FnOnce(enum_map::EnumMap<Ticker, Amount>) -> bool>(
+	pub fn mint<TryDebit: FnOnce(enum_map::EnumMap<Ticker, Amount>) -> Result<(), E>, E>(
 		&mut self,
 		lp: LiquidityProvider,
 		lower_tick: Tick,
 		upper_tick: Tick,
 		minted_liquidity: Liquidity,
-		f: F,
-	) -> Result<(), MintError> {
+		try_debit: TryDebit,
+	) -> Result<(), MintError<E>> {
 		if lower_tick < upper_tick && MIN_TICK <= lower_tick && upper_tick <= MAX_TICK {
 			if minted_liquidity > 0 {
 				let mut position =
@@ -449,12 +449,12 @@ impl PoolState {
 				let (amounts_required, current_liquidity_delta) =
 					self.liquidity_to_amounts::<true>(minted_liquidity, lower_tick, upper_tick);
 
-				if f(amounts_required) {
-					self.current_liquidity += current_liquidity_delta;
-					self.positions.insert((lp, lower_tick, upper_tick), position);
-					self.liquidity_map.insert(lower_tick, lower_info);
-					self.liquidity_map.insert(upper_tick, upper_info);
-				}
+				try_debit(amounts_required).map_err(MintError::CallbackFailed)?;
+
+				self.current_liquidity += current_liquidity_delta;
+				self.positions.insert((lp, lower_tick, upper_tick), position);
+				self.liquidity_map.insert(lower_tick, lower_info);
+				self.liquidity_map.insert(upper_tick, upper_info);
 			}
 
 			Ok(())
