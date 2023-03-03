@@ -61,11 +61,10 @@ pub struct Utxo {
 
 pub struct BitcoinOutput {
 	amount: u64,
-	destination: String,
+	script_pubkey: BitcoinScript,
 }
 
 pub struct BitcoinTransaction {
-	network: BitcoinNetwork,
 	inputs: Vec<Utxo>,
 	outputs: Vec<BitcoinOutput>,
 	signatures: Vec<[u8; 64]>,
@@ -237,8 +236,7 @@ impl BitcoinTransaction {
 		result.extend(to_varint(self.outputs.len() as u64));
 		result.extend(self.outputs.iter().try_fold(Vec::<u8>::default(), |mut acc, x| {
 			acc.extend(x.amount.to_le_bytes());
-			let script = scriptpubkey_from_address(&x.destination, self.network)?;
-			acc.extend(script.serialize());
+			acc.extend(x.script_pubkey.clone().serialize());
 			Ok(acc)
 		})?);
 		for i in 0..self.inputs.len() {
@@ -320,8 +318,7 @@ impl BitcoinTransaction {
 				.iter()
 				.try_fold(Vec::<u8>::default(), |mut acc, x| {
 					acc.extend(x.amount.to_le_bytes());
-					let script = scriptpubkey_from_address(&x.destination, self.network)?;
-					acc.extend(script.serialize());
+					acc.extend(x.script_pubkey.clone().serialize());
 					Ok(acc)
 				})?
 				.as_slice(),
@@ -364,7 +361,7 @@ impl BitcoinTransaction {
 	}
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct BitcoinScript {
 	data: Vec<u8>,
 }
@@ -596,11 +593,13 @@ mod test {
 		};
 		let output = BitcoinOutput {
 			amount: 100000000,
-			destination: "bc1pgtj0f3u2rk8ex6khlskz7q50nwc48r8unfgfhxzsx9zhcdnczhqq60lzjt"
-				.to_string(),
+			script_pubkey: scriptpubkey_from_address(
+				"bc1pgtj0f3u2rk8ex6khlskz7q50nwc48r8unfgfhxzsx9zhcdnczhqq60lzjt",
+				BitcoinNetwork::Mainnet,
+			)
+			.unwrap(),
 		};
 		let tx = BitcoinTransaction {
-			network: BitcoinNetwork::Mainnet,
 			inputs: vec![input],
 			outputs: vec![output],
 			signatures: Default::default(),
@@ -624,11 +623,13 @@ mod test {
 		};
 		let output = BitcoinOutput {
 			amount: 100000000,
-			destination: "bc1pgtj0f3u2rk8ex6khlskz7q50nwc48r8unfgfhxzsx9zhcdnczhqq60lzjt"
-				.to_string(),
+			script_pubkey: scriptpubkey_from_address(
+				"bc1pgtj0f3u2rk8ex6khlskz7q50nwc48r8unfgfhxzsx9zhcdnczhqq60lzjt",
+				BitcoinNetwork::Mainnet,
+			)
+			.unwrap(),
 		};
 		let tx = BitcoinTransaction {
-			network: BitcoinNetwork::Mainnet,
 			inputs: vec![input],
 			outputs: vec![output],
 			signatures: Default::default(),
