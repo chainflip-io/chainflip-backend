@@ -24,12 +24,6 @@ const PUBLIC_KEY: [u8; 32] = [4u8; 32];
 const NONCE: u32 = 5;
 const ENCODED_EXTRINSIC: [u8; 100] = [3u8; 100];
 
-impl BenchmarkValue for Option<PolkadotUncheckedExtrinsic> {
-	fn benchmark_value() -> Self {
-		Some(<PolkadotUncheckedExtrinsic as BenchmarkValue>::benchmark_value())
-	}
-}
-
 impl BenchmarkValue for PolkadotUncheckedExtrinsic {
 	fn benchmark_value() -> Self {
 		PolkadotUncheckedExtrinsic::new_signed(
