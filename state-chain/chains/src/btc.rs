@@ -73,9 +73,10 @@ const INTERNAL_PUBKEY: &[u8] =
 const SEGWIT_VERSION: u8 = 1;
 
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
-pub enum BitcoinTransactionError {
-	/// The egress address is invalid
-	InvalidEgressAddress,
+
+pub enum Error {
+	/// The address is invalid
+	InvalidAddress,
 }
 
 pub struct Utxo {
@@ -88,11 +89,10 @@ pub struct Utxo {
 
 pub struct BitcoinOutput {
 	amount: u64,
-	destination: String,
+	script_pubkey: BitcoinScript,
 }
 
 pub struct BitcoinTransaction {
-	network: BitcoinNetwork,
 	inputs: Vec<Utxo>,
 	outputs: Vec<BitcoinOutput>,
 	signatures: Vec<[u8; 64]>,
@@ -168,7 +168,7 @@ impl BitcoinNetwork {
 pub fn scriptpubkey_from_address(
 	address: &str,
 	network: BitcoinNetwork,
-) -> Result<BitcoinScript, BitcoinTransactionError> {
+) -> Result<BitcoinScript, Error> {
 	// See https://en.bitcoin.it/wiki/Base58Check_encoding
 	let try_decode_as_base58 = || {
 		const CHECKSUM_LENGTH: usize = 4;
@@ -229,7 +229,7 @@ pub fn scriptpubkey_from_address(
 	} else if let Some(script) = try_decode_as_bech32_or_bech32m() {
 		Ok(script)
 	} else {
-		Err(BitcoinTransactionError::InvalidEgressAddress)
+		Err(Error::InvalidAddress)
 	}
 }
 
@@ -241,8 +241,8 @@ impl BitcoinTransaction {
 		self.signatures[index as usize] = signature;
 		self
 	}
-	pub fn finalize(self) -> Result<Vec<u8>, BitcoinTransactionError> {
-		let mut result = Vec::default();
+	pub fn finalize(self) -> Vec<u8> {
+		let mut transaction_bytes = Vec::default();
 		let version = 2u32.to_le_bytes();
 		let segwit_marker = 0u8;
 		let segwit_flag = 1u8;
@@ -250,55 +250,51 @@ impl BitcoinTransaction {
 		// signal to allow replacing this transaction by setting sequence number according to BIP
 		// 125
 		let sequence_number = (u32::MAX - 2).to_le_bytes();
-		result.extend(version);
-		result.push(segwit_marker);
-		result.push(segwit_flag);
-		result.extend(to_varint(self.inputs.len() as u64));
-		result.extend(self.inputs.iter().fold(Vec::<u8>::default(), |mut acc, x| {
+		transaction_bytes.extend(version);
+		transaction_bytes.push(segwit_marker);
+		transaction_bytes.push(segwit_flag);
+		transaction_bytes.extend(to_varint(self.inputs.len() as u64));
+		transaction_bytes.extend(self.inputs.iter().fold(Vec::<u8>::default(), |mut acc, x| {
 			acc.extend(x.txid.iter().rev());
 			acc.extend(x.vout.to_le_bytes());
 			acc.push(0);
 			acc.extend(sequence_number);
 			acc
 		}));
-		result.extend(to_varint(self.outputs.len() as u64));
-		result.extend(self.outputs.iter().try_fold(Vec::<u8>::default(), |mut acc, x| {
+		transaction_bytes.extend(to_varint(self.outputs.len() as u64));
+		transaction_bytes.extend(self.outputs.iter().fold(Vec::<u8>::default(), |mut acc, x| {
 			acc.extend(x.amount.to_le_bytes());
-			let script = scriptpubkey_from_address(&x.destination, self.network)?;
-			acc.extend(script.serialize());
-			Ok(acc)
-		})?);
+			acc.extend(x.script_pubkey.serialize());
+			acc
+		}));
 		for i in 0..self.inputs.len() {
 			let num_witnesses = 3u8;
 			let len_signature = 64u8;
-			result.push(num_witnesses);
-			result.push(len_signature);
-			result.extend(self.signatures[i]);
+			transaction_bytes.push(num_witnesses);
+			transaction_bytes.push(len_signature);
+			transaction_bytes.extend(self.signatures[i]);
 			let script = BitcoinScript::default()
 				.push_uint(self.inputs[i].salt)
 				.op_drop()
 				.push_bytes(self.inputs[i].pubkey_x)
 				.op_checksig()
 				.serialize();
-			result.extend(script);
-			result.push(0x21u8); // Length of tweaked pubkey + leaf version
+			transaction_bytes.extend(script);
+			transaction_bytes.push(0x21u8); // Length of tweaked pubkey + leaf version
 			let tweaked = tweaked_pubkey(self.inputs[i].pubkey_x, self.inputs[i].salt);
 			// push correct leaf version depending on evenness of public key
 			if tweaked.serialize_compressed()[0] == 2 {
-				result.push(0xC0_u8);
+				transaction_bytes.push(0xC0_u8);
 			} else {
-				result.push(0xC1_u8);
+				transaction_bytes.push(0xC1_u8);
 			}
-			result.extend(INTERNAL_PUBKEY[1..33].iter());
+			transaction_bytes.extend(INTERNAL_PUBKEY[1..33].iter());
 		}
-		result.extend(locktime);
-		Ok(result)
+		transaction_bytes.extend(locktime);
+		transaction_bytes
 	}
 
-	pub fn get_signing_payload(
-		&self,
-		input_index: u32,
-	) -> Result<[u8; 32], BitcoinTransactionError> {
+	pub fn get_signing_payload(&self, input_index: u32) -> [u8; 32] {
 		// SHA256("TapSighash")
 		const TAPSIG_HASH: &[u8] =
 			&hex_literal::hex!("f40a48df4b2a70c8b4924bf2654661ed3d95fd66a313eb87237597c628e4a031");
@@ -345,12 +341,11 @@ impl BitcoinTransaction {
 		let outputs = sha2_256(
 			self.outputs
 				.iter()
-				.try_fold(Vec::<u8>::default(), |mut acc, x| {
+				.fold(Vec::<u8>::default(), |mut acc, x| {
 					acc.extend(x.amount.to_le_bytes());
-					let script = scriptpubkey_from_address(&x.destination, self.network)?;
-					acc.extend(script.serialize());
-					Ok(acc)
-				})?
+					acc.extend(x.script_pubkey.serialize());
+					acc
+				})
 				.as_slice(),
 		);
 		let epoch = 0u8;
@@ -360,7 +355,7 @@ impl BitcoinTransaction {
 		let spendtype = 2u8;
 		let keyversion = 0u8;
 		let codeseparator = u32::MAX.to_le_bytes();
-		Ok(sha2_256(
+		sha2_256(
 			&[
 				// Tagged Hash according to BIP 340
 				TAPSIG_HASH,
@@ -387,7 +382,7 @@ impl BitcoinTransaction {
 				&codeseparator,
 			]
 			.concat(),
-		))
+		)
 	}
 }
 
@@ -478,8 +473,8 @@ impl BitcoinScript {
 	}
 	/// Serializes the script by returning a single byte for the length
 	/// of the script and then the script itself
-	fn serialize(self) -> Vec<u8> {
-		itertools::chain!(to_varint(self.data.len() as u64), self.data).collect()
+	fn serialize(&self) -> Vec<u8> {
+		itertools::chain!(to_varint(self.data.len() as u64), self.data.iter().cloned()).collect()
 	}
 }
 
@@ -563,7 +558,7 @@ mod test {
 		for (invalid_address, intended_btc_net) in invalid_addresses {
 			assert!(matches!(
 				scriptpubkey_from_address(invalid_address, intended_btc_net,),
-				Err(BitcoinTransactionError::InvalidEgressAddress)
+				Err(Error::InvalidAddress)
 			));
 		}
 
@@ -623,17 +618,19 @@ mod test {
 		};
 		let output = BitcoinOutput {
 			amount: 100000000,
-			destination: "bc1pgtj0f3u2rk8ex6khlskz7q50nwc48r8unfgfhxzsx9zhcdnczhqq60lzjt"
-				.to_string(),
+			script_pubkey: scriptpubkey_from_address(
+				"bc1pgtj0f3u2rk8ex6khlskz7q50nwc48r8unfgfhxzsx9zhcdnczhqq60lzjt",
+				BitcoinNetwork::Mainnet,
+			)
+			.unwrap(),
 		};
 		let tx = BitcoinTransaction {
-			network: BitcoinNetwork::Mainnet,
 			inputs: vec![input],
 			outputs: vec![output],
 			signatures: Default::default(),
 		}
 		.add_signature(0, [0u8; 64]);
-		assert_eq!(tx.finalize().unwrap(), hex_literal::hex!("020000000001014C94E48A870B85F41228D33CF25213DFCC8DD796E7211ED6B1F9A014809DBBB50100000000FDFFFFFF0100E1F5050000000022512042E4F4C78A1D8F936AD7FC2C2F028F9BB1538CFC9A509B985031457C367815C003400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000025017B752078C79A2B436DA5575A03CDE40197775C656FFF9F0F59FC1466E09C20A81A9CDBAC21C0EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE00000000"));
+		assert_eq!(tx.finalize(), hex_literal::hex!("020000000001014C94E48A870B85F41228D33CF25213DFCC8DD796E7211ED6B1F9A014809DBBB50100000000FDFFFFFF0100E1F5050000000022512042E4F4C78A1D8F936AD7FC2C2F028F9BB1538CFC9A509B985031457C367815C003400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000025017B752078C79A2B436DA5575A03CDE40197775C656FFF9F0F59FC1466E09C20A81A9CDBAC21C0EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE00000000"));
 	}
 
 	#[test]
@@ -651,17 +648,19 @@ mod test {
 		};
 		let output = BitcoinOutput {
 			amount: 100000000,
-			destination: "bc1pgtj0f3u2rk8ex6khlskz7q50nwc48r8unfgfhxzsx9zhcdnczhqq60lzjt"
-				.to_string(),
+			script_pubkey: scriptpubkey_from_address(
+				"bc1pgtj0f3u2rk8ex6khlskz7q50nwc48r8unfgfhxzsx9zhcdnczhqq60lzjt",
+				BitcoinNetwork::Mainnet,
+			)
+			.unwrap(),
 		};
 		let tx = BitcoinTransaction {
-			network: BitcoinNetwork::Mainnet,
 			inputs: vec![input],
 			outputs: vec![output],
 			signatures: Default::default(),
 		};
 		assert_eq!(
-			tx.get_signing_payload(0).unwrap(),
+			tx.get_signing_payload(0),
 			hex_literal::hex!("E16117C6CD69142E41736CE2882F0E697FF4369A2CBCEE9D92FC0346C6774FB4")
 		);
 	}
