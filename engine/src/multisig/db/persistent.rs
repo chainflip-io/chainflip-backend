@@ -44,8 +44,6 @@ const WITNESSER_CHECKPOINT_PARTIAL_PREFIX: &[u8; PARTIAL_PREFIX_SIZE] = b"check_
 const DATA_COLUMN: &str = "data";
 // This column is just for schema version info. No prefix is used.
 const METADATA_COLUMN: &str = "metadata";
-// The default column that rust_rocksdb uses (we ignore)
-const DEFAULT_COLUMN_NAME: &str = "default";
 
 /// Name of the directory that the backups will go into (only created before migrations)
 const BACKUPS_DIRECTORY: &str = "backups";
@@ -73,7 +71,7 @@ impl PersistentKeyDB {
 			.set_prefix_extractor(rocksdb::SliceTransform::create_fixed_prefix(PREFIX_SIZE));
 
 		// Build a list of column families with descriptors
-		let mut cfs: HashMap<String, ColumnFamilyDescriptor> = HashMap::from_iter([
+		let cfs: HashMap<String, ColumnFamilyDescriptor> = HashMap::from_iter([
 			(
 				METADATA_COLUMN.to_string(),
 				ColumnFamilyDescriptor::new(METADATA_COLUMN, Options::default()),
@@ -281,8 +279,7 @@ fn read_schema_version(db: &DB) -> Result<u32> {
 		.context("Failed to get metadata column")?
 		.map(|version| {
 			let version: [u8; 4] = version.try_into().expect("Version should be a u32");
-			let version = u32::from_be_bytes(version);
-			version
+			u32::from_be_bytes(version)
 		})
 		.ok_or_else(|| anyhow!("Could not find db schema version"))
 }
@@ -335,7 +332,7 @@ fn migrate_db_to_latest(
 	logger: &slog::Logger,
 ) -> Result<(), anyhow::Error> {
 	let version =
-		read_schema_version(&db).context("Failed to read schema version from existing db")?;
+		read_schema_version(db).context("Failed to read schema version from existing db")?;
 
 	slog::info!(logger, "Found db_schema_version of {version}");
 
@@ -377,7 +374,7 @@ fn migrate_db_to_latest(
 
 				match version {
 					0 => {
-						migrate_0_to_1(&db);
+						migrate_0_to_1(db);
 					},
 					_ => {
 						panic!("Unexpected migration from version {version}");
