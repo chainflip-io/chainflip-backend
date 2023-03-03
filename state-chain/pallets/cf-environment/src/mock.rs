@@ -4,7 +4,7 @@ use cf_chains::{
 	ApiCall, Chain, ChainCrypto, Polkadot,
 };
 
-use cf_primitives::{AuthorityCount, BroadcastId, KeyId};
+use cf_primitives::{AuthorityCount, BroadcastId};
 use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
 	BroadcastCleanup, Broadcaster, Chainflip, VaultKeyWitnessedHandler,
@@ -123,7 +123,6 @@ cf_traits::impl_mock_ensure_witnessed_for_origin!(RuntimeOrigin);
 cf_traits::impl_mock_epoch_info!(AccountId, u128, u32, AuthorityCount);
 
 impl Chainflip for Test {
-	type KeyId = KeyId;
 	type ValidatorId = AccountId;
 	type Amount = u128;
 	type RuntimeCall = RuntimeCall;

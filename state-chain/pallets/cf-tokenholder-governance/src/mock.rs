@@ -1,6 +1,5 @@
 use crate::{self as pallet_cf_tokenholder_governance};
 use cf_chains::{ChainCrypto, Ethereum, ForeignChain};
-use cf_primitives::KeyId;
 use cf_traits::{
 	impl_mock_stake_transfer, impl_mock_waived_fees,
 	mocks::{
@@ -77,7 +76,6 @@ impl system::Config for Test {
 cf_traits::impl_mock_ensure_witnessed_for_origin!(RuntimeOrigin);
 
 impl Chainflip for Test {
-	type KeyId = KeyId;
 	type ValidatorId = u64;
 	type Amount = u128;
 	type RuntimeCall = RuntimeCall;

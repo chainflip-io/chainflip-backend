@@ -28,7 +28,7 @@ use cf_traits::{
 	Broadcaster, FlipBurnInfo, Issuance, WaivedFees,
 };
 
-use cf_primitives::{BroadcastId, FlipBalance, KeyId};
+use cf_primitives::{BroadcastId, FlipBalance};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -93,7 +93,6 @@ impl system::Config for Test {
 }
 
 impl Chainflip for Test {
-	type KeyId = KeyId;
 	type ValidatorId = AccountId;
 	type Amount = u128;
 	type RuntimeCall = RuntimeCall;

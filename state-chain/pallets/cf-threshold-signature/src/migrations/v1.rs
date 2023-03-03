@@ -4,7 +4,7 @@ use sp_std::marker::PhantomData;
 
 pub struct Migration<T: Config<I>, I: 'static>(PhantomData<(T, I)>);
 
-mod old {
+pub mod old {
 
 	use super::*;
 
@@ -50,7 +50,7 @@ mod old {
 
 // Types that are not old in the context of this migration,
 // but are old in the context of the pallet
-mod archived {
+pub mod archived {
 
 	use super::*;
 

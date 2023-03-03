@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 
-use cf_primitives::{BroadcastId, KeyId};
+use cf_primitives::BroadcastId;
 use frame_support::{
 	construct_runtime, parameter_types, traits::UnfilteredDispatchable, StorageHasher,
 };
@@ -112,7 +112,6 @@ impl frame_system::Config for MockRuntime {
 parameter_types! {}
 
 impl Chainflip for MockRuntime {
-	type KeyId = KeyId;
 	type ValidatorId = ValidatorId;
 	type Amount = u128;
 	type RuntimeCall = RuntimeCall;

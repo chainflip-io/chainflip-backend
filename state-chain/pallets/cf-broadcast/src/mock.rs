@@ -6,7 +6,6 @@ use cf_chains::{
 	mocks::{MockApiCall, MockEthereum, MockTransactionBuilder},
 	ChainCrypto,
 };
-use cf_primitives::KeyId;
 use cf_traits::{
 	mocks::{
 		ensure_origin_mock::NeverFailingOriginCheck, epoch_info::MockEpochInfo,
@@ -74,7 +73,6 @@ impl frame_system::Config for Test {
 }
 
 impl Chainflip for Test {
-	type KeyId = KeyId;
 	type ValidatorId = u64;
 	type Amount = u128;
 	type RuntimeCall = RuntimeCall;

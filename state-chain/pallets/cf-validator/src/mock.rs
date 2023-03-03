@@ -1,6 +1,5 @@
 use super::*;
 use crate as pallet_cf_validator;
-use cf_primitives::KeyId;
 use cf_traits::{
 	mocks::{
 		ensure_origin_mock::NeverFailingOriginCheck, epoch_info::MockEpochInfo,
@@ -163,7 +162,6 @@ parameter_types! {
 }
 
 impl Chainflip for Test {
-	type KeyId = KeyId;
 	type ValidatorId = ValidatorId;
 	type Amount = Amount;
 	type RuntimeCall = RuntimeCall;

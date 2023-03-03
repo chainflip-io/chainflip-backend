@@ -113,7 +113,6 @@ impl Chain for Polkadot {
 }
 
 impl ChainCrypto for Polkadot {
-	type KeyId = KeyId;
 	type AggKey = PolkadotPublicKey;
 	type Payload = EncodedPolkadotPayload;
 	type ThresholdSignature = PolkadotSignature;
@@ -132,11 +131,11 @@ impl ChainCrypto for Polkadot {
 		EncodedPolkadotPayload(Blake2_256::hash(&agg_key.0).to_vec())
 	}
 
-	fn agg_key_to_key_id(agg_key: Self::AggKey, epoch_index: EpochIndex) -> Self::KeyId {
+	fn agg_key_to_key_id(agg_key: Self::AggKey, epoch_index: EpochIndex) -> KeyId {
 		KeyId { epoch_index, public_key_bytes: agg_key.into() }
 	}
 
-	fn key_id_to_agg_key(key_id: Self::KeyId) -> Result<Self::AggKey, &'static str> {
+	fn key_id_to_agg_key(key_id: KeyId) -> Result<Self::AggKey, &'static str> {
 		key_id.public_key_bytes.try_into().map_err(|_| "Invalid public key bytes")
 	}
 }

@@ -1,6 +1,6 @@
 use crate as pallet_cf_lp;
 use cf_chains::{eth::assets, AnyChain, Chain, Ethereum};
-use cf_primitives::{AccountId, AccountRole, AuthorityCount, IntentId, KeyId};
+use cf_primitives::{AccountId, AccountRole, AuthorityCount, IntentId};
 use cf_traits::{
 	mocks::{
 		bid_info::MockBidInfo, egress_handler::MockEgressHandler,
@@ -83,7 +83,6 @@ impl system::Config for Test {
 }
 
 impl cf_traits::Chainflip for Test {
-	type KeyId = KeyId;
 	type ValidatorId = AccountId;
 	type Amount = u128;
 	type RuntimeCall = RuntimeCall;

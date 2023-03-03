@@ -18,7 +18,7 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
 use cf_chains::ChainCrypto;
-use cf_primitives::{AuthorityCount, CeremonyId};
+use cf_primitives::{AuthorityCount, CeremonyId, KeyId};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, CeremonyIdProvider, Chainflip, EpochInfo,
 	EpochKey, KeyProvider, KeyState, ThresholdSignerNomination,
@@ -58,7 +58,7 @@ pub enum PalletOffence {
 }
 
 #[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub enum RequestType<KeyId, Participants> {
+pub enum RequestType<Participants> {
 	/// Will use the current key and current authority set.
 	/// This signing request will be retried until success.
 	Standard,
@@ -75,7 +75,7 @@ pub enum ThresholdCeremonyType {
 	KeygenVerification,
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
 
 const THRESHOLD_SIGNATURE_RESPONSE_TIMEOUT_DEFAULT: u32 = 10;
 
@@ -102,7 +102,7 @@ pub mod pallet {
 		/// The total number of signing participants (ie. the threshold set size).
 		pub participant_count: AuthorityCount,
 		/// The key id being used for verification of this ceremony.
-		pub key_id: T::KeyId,
+		pub key_id: KeyId,
 		/// Determines how/if we deal with ceremony failure.
 		pub threshold_ceremony_type: ThresholdCeremonyType,
 	}
@@ -123,7 +123,7 @@ pub mod pallet {
 	#[scale_info(skip_type_params(T, I))]
 	pub struct RequestInstruction<T: Config<I>, I: 'static> {
 		pub request_context: RequestContext<T, I>,
-		pub request_type: RequestType<<T as Chainflip>::KeyId, BTreeSet<T::ValidatorId>>,
+		pub request_type: RequestType<BTreeSet<T::ValidatorId>>,
 	}
 
 	impl<T: Config<I>, I: 'static> RequestInstruction<T, I> {
@@ -131,7 +131,7 @@ pub mod pallet {
 			request_id: RequestId,
 			attempt_count: AttemptCount,
 			payload: PayloadFor<T, I>,
-			request_type: RequestType<<T as Chainflip>::KeyId, BTreeSet<T::ValidatorId>>,
+			request_type: RequestType<BTreeSet<T::ValidatorId>>,
 		) -> Self {
 			Self {
 				request_context: RequestContext { request_id, attempt_count, payload },
@@ -218,7 +218,7 @@ pub mod pallet {
 			+ UnfilteredDispatchable<RuntimeOrigin = <Self as Config<I>>::RuntimeOrigin>;
 
 		/// A marker trait identifying the chain that we are signing for.
-		type TargetChain: ChainCrypto<KeyId = <Self as Chainflip>::KeyId>;
+		type TargetChain: ChainCrypto;
 
 		/// Signer nomination.
 		type ThresholdSignerNomination: ThresholdSignerNomination<SignerId = Self::ValidatorId>;
@@ -329,14 +329,14 @@ pub mod pallet {
 		ThresholdSignatureRequest {
 			request_id: RequestId,
 			ceremony_id: CeremonyId,
-			key_id: T::KeyId,
+			key_id: KeyId,
 			signatories: BTreeSet<T::ValidatorId>,
 			payload: PayloadFor<T, I>,
 		},
 		ThresholdSignatureFailed {
 			request_id: RequestId,
 			ceremony_id: CeremonyId,
-			key_id: T::KeyId,
+			key_id: KeyId,
 			offenders: Vec<T::ValidatorId>,
 		},
 		/// The threshold signature posted back to the chain was verified.
@@ -645,7 +645,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Initiate a new signature request, returning the request id.
 	fn inner_request_signature(
 		payload: PayloadFor<T, I>,
-		request_type: RequestType<<T as Chainflip>::KeyId, BTreeSet<T::ValidatorId>>,
+		request_type: RequestType<BTreeSet<T::ValidatorId>>,
 	) -> (RequestId, CeremonyId) {
 		// Get a new request id.
 		let request_id = ThresholdSignatureRequestIdCounter::<T, I>::mutate(|id| {
@@ -812,7 +812,6 @@ where
 	type RequestId = RequestId;
 	type Error = Error<T, I>;
 	type Callback = <T as Config<I>>::ThresholdCallable;
-	type KeyId = T::KeyId;
 	type ValidatorId = T::ValidatorId;
 
 	fn request_signature(payload: PayloadFor<T, I>) -> (Self::RequestId, CeremonyId) {
@@ -821,7 +820,7 @@ where
 
 	fn request_keygen_verification_signature(
 		payload: <T::TargetChain as ChainCrypto>::Payload,
-		key_id: Self::KeyId,
+		key_id: KeyId,
 		participants: BTreeSet<Self::ValidatorId>,
 	) -> (Self::RequestId, CeremonyId) {
 		Self::inner_request_signature(

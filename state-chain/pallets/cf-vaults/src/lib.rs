@@ -231,7 +231,7 @@ pub mod pallet {
 		type Offence: From<PalletOffence>;
 
 		/// The chain that is managed by this vault must implement the api types.
-		type Chain: ChainAbi<KeyId = Self::KeyId>;
+		type Chain: ChainAbi;
 
 		/// The supported api calls for the chain.
 		type SetAggKeyWithAggKey: SetAggKeyWithAggKey<Self::Chain>;
@@ -245,7 +245,6 @@ pub mod pallet {
 			Self::Chain,
 			Callback = <Self as Config<I>>::RuntimeCall,
 			ValidatorId = Self::ValidatorId,
-			KeyId = <Self as Chainflip>::KeyId,
 		>;
 
 		/// A broadcaster for the target chain.

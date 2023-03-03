@@ -18,7 +18,7 @@ use cf_chains::{
 
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BroadcastId, CeremonyId,
-	EgressId, EpochIndex, EthereumAddress, ForeignChain, ForeignChainAddress, IntentId,
+	EgressId, EpochIndex, EthereumAddress, ForeignChain, ForeignChainAddress, IntentId, KeyId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -60,8 +60,6 @@ pub trait Chainflip: frame_system::Config {
 		+ IsType<<Self as frame_system::Config>::AccountId>
 		+ MaybeSerializeDeserialize;
 
-	/// An id type for keys used in threshold signature ceremonies.
-	type KeyId: Member + Parameter + BenchmarkValue;
 	/// The overarching call type.
 	type RuntimeCall: Member
 		+ Parameter
@@ -399,7 +397,6 @@ where
 	type RequestId: Member + Parameter + Copy + BenchmarkValue;
 	type Error: Into<DispatchError>;
 	type Callback: UnfilteredDispatchable;
-	type KeyId;
 	type ValidatorId: Debug;
 
 	/// Initiate a signing request and return the request id and ceremony id.
@@ -407,7 +404,7 @@ where
 
 	fn request_keygen_verification_signature(
 		payload: C::Payload,
-		key_id: Self::KeyId,
+		key_id: KeyId,
 		participants: BTreeSet<Self::ValidatorId>,
 	) -> (Self::RequestId, CeremonyId);
 

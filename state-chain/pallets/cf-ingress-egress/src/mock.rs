@@ -3,11 +3,11 @@ pub use cf_chains::{
 	eth::api::{EthereumApi, EthereumReplayProtection},
 	Chain, ChainAbi, ChainEnvironment,
 };
+use cf_primitives::BroadcastId;
 pub use cf_primitives::{
 	chains::{assets, Ethereum},
 	Asset, AssetAmount, EthereumAddress, ExchangeRate, ETHEREUM_ETH_ADDRESS,
 };
-use cf_primitives::{BroadcastId, KeyId};
 
 use cf_traits::mocks::all_batch::{MockAllBatch, MockEthEnvironment};
 pub use cf_traits::{
@@ -72,7 +72,6 @@ impl system::Config for Test {
 }
 
 impl cf_traits::Chainflip for Test {
-	type KeyId = KeyId;
 	type ValidatorId = u64;
 	type Amount = u128;
 	type RuntimeCall = RuntimeCall;

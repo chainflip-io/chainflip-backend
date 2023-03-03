@@ -1,5 +1,4 @@
 use crate::{self as pallet_cf_account_roles, Config};
-use cf_primitives::KeyId;
 use cf_traits::{
 	mocks::{
 		bid_info::MockBidInfo, ensure_origin_mock::NeverFailingOriginCheck,
@@ -60,7 +59,6 @@ impl frame_system::Config for Test {
 }
 
 impl Chainflip for Test {
-	type KeyId = KeyId;
 	type ValidatorId = AccountId;
 	type Amount = Balance;
 	type RuntimeCall = RuntimeCall;
