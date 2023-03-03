@@ -358,7 +358,7 @@ impl BitcoinTransaction {
 	}
 }
 
-#[derive(Default, Clone)]
+#[derive(Default)]
 pub struct BitcoinScript {
 	data: Vec<u8>,
 }
