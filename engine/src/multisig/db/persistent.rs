@@ -81,31 +81,6 @@ impl PersistentKeyDB {
 			(DATA_COLUMN.to_string(), ColumnFamilyDescriptor::new(DATA_COLUMN, cfopts_for_prefix)),
 		]);
 
-		// TODO: I don't think this is needed anymore, so let's remove it?
-		let is_existing_db = db_path.exists();
-		if is_existing_db {
-			// Add the column families found in the existing db, they might be needed for migration.
-			DB::list_cf(&Options::default(), db_path)
-				.map_err(anyhow::Error::msg)
-				.with_context(|| {
-					format!(
-						"Failed to read column families from existing database {}",
-						db_path.display()
-					)
-				})?
-				.into_iter()
-				.for_each(|cf_name| {
-					// Filter out the `default` column because we don't use it
-					// and if we already have the cf, we don't want to add it again
-					if !(cf_name == DEFAULT_COLUMN_NAME || cfs.contains_key(&cf_name)) {
-						cfs.insert(
-							cf_name.clone(),
-							ColumnFamilyDescriptor::new(cf_name, Options::default()),
-						);
-					}
-				});
-		}
-
 		let mut create_missing_db_and_cols_opts = Options::default();
 		create_missing_db_and_cols_opts.create_missing_column_families(true);
 		create_missing_db_and_cols_opts.create_if_missing(true);
