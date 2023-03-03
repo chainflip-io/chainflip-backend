@@ -2,6 +2,7 @@ use std::collections::BTreeSet;
 
 use super::*;
 use crate::{genesis::GENESIS_BALANCE, network::Network};
+use cf_primitives::GENESIS_EPOCH;
 use cf_traits::EpochInfo;
 use frame_support::traits::Hooks;
 use pallet_cf_validator::RotationPhase;

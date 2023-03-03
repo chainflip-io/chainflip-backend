@@ -66,7 +66,6 @@ impl frame_system::Config for Test {
 }
 
 impl Chainflip for Test {
-	type KeyId = Vec<u8>;
 	type ValidatorId = u64;
 	type Amount = u128;
 	type RuntimeCall = RuntimeCall;

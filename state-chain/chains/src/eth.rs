@@ -47,7 +47,6 @@ impl Chain for Ethereum {
 }
 
 impl ChainCrypto for Ethereum {
-	type KeyId = KeyId;
 	type AggKey = eth::AggKey;
 	type Payload = eth::H256;
 	type ThresholdSignature = SchnorrVerificationComponents;
@@ -67,6 +66,18 @@ impl ChainCrypto for Ethereum {
 
 	fn agg_key_to_payload(agg_key: Self::AggKey) -> Self::Payload {
 		H256(Blake2_256::hash(&agg_key.to_pubkey_compressed()))
+	}
+
+	fn agg_key_to_key_id(agg_key: Self::AggKey, epoch_index: EpochIndex) -> KeyId {
+		KeyId { epoch_index, public_key_bytes: agg_key.into() }
+	}
+}
+
+impl TryFrom<KeyId> for eth::AggKey {
+	type Error = &'static str;
+
+	fn try_from(key_id: KeyId) -> Result<Self, Self::Error> {
+		key_id.public_key_bytes.try_into()
 	}
 }
 

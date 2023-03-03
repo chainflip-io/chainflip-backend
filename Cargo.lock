@@ -3049,6 +3049,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bincode",
+ "cf-primitives",
  "chainflip-engine",
  "chainflip-node",
  "csv",
@@ -5501,6 +5502,7 @@ name = "pallet-cf-chain-tracking"
 version = "0.1.0"
 dependencies = [
  "cf-chains",
+ "cf-primitives",
  "cf-runtime-upgrade-utilities",
  "cf-traits",
  "frame-benchmarking",
@@ -5583,6 +5585,7 @@ dependencies = [
 name = "pallet-cf-governance"
 version = "0.1.0"
 dependencies = [
+ "cf-primitives",
  "cf-runtime-upgrade-utilities",
  "cf-test-utilities",
  "cf-traits",

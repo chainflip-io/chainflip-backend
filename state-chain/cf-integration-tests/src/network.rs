@@ -6,7 +6,7 @@ use crate::threshold_signing::{
 };
 use cf_chains::{dot::PolkadotSignature, eth::SchnorrVerificationComponents, ChainCrypto};
 
-use cf_primitives::{AccountRole, CeremonyId, EpochIndex, FlipBalance, TxId};
+use cf_primitives::{AccountRole, CeremonyId, EpochIndex, FlipBalance, TxId, GENESIS_EPOCH};
 
 use cf_traits::{AccountRoleRegistry, EpochInfo};
 use codec::Encode;
@@ -185,16 +185,15 @@ impl Engine {
 	// Handle events coming in from the state chain
 	// TODO have this abstracted out
 	fn handle_state_chain_events(&mut self, events: &[RuntimeEvent]) {
-		// If active handle events
 		if self.live {
 			// Being a CurrentAuthority we would respond to certain events
 			if self.state() == ChainflipAccountState::CurrentAuthority {
 				on_events!(
 					events,
 					RuntimeEvent::Validator(
-						// A new epoch
 						pallet_cf_validator::Event::NewEpoch(_epoch_index)) => {
 							self.eth_threshold_signer.borrow_mut().use_proposed_key();
+							self.dot_threshold_signer.borrow_mut().use_proposed_key();
 					}
 					RuntimeEvent::EthereumThresholdSigner(
 						// A signature request
@@ -295,12 +294,12 @@ impl Engine {
 			on_events!(
 				events,
 				RuntimeEvent::EthereumVault(
-					pallet_cf_vaults::Event::KeygenRequest(ceremony_id, participants)) => {
+					pallet_cf_vaults::Event::KeygenRequest {ceremony_id, participants, epoch_index: _ }) => {
 						report_keygen_outcome_for_chain::<EthKeyComponents, SchnorrVerificationComponents, state_chain_runtime::Runtime, EthereumInstance>(*ceremony_id, participants, self.eth_threshold_signer.clone(), self.node_id.clone());
 				}
 
 				RuntimeEvent::PolkadotVault(
-					pallet_cf_vaults::Event::KeygenRequest(ceremony_id, participants)) => {
+					pallet_cf_vaults::Event::KeygenRequest {ceremony_id, participants, epoch_index: _ }) => {
 						report_keygen_outcome_for_chain::<DotKeyComponents, PolkadotSignature, state_chain_runtime::Runtime, PolkadotInstance>(*ceremony_id, participants, self.dot_threshold_signer.clone(), self.node_id.clone());
 				}
 			);

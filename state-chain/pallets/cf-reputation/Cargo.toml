@@ -14,6 +14,7 @@ targets = ['x86_64-unknown-linux-gnu']
 [dependencies]
 cf-traits = { path = '../../traits', default-features = false }
 cf-runtime-upgrade-utilities = { path = '../../runtime-upgrade-utilities', default-features = false }
+cf-primitives = { path = '../../primitives', default-features = false }
 
 log = { version = '0.4.16', default-features = false }
 
@@ -29,10 +30,6 @@ sp-std = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainfl
 sp-staking = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2", default-features = false }
 
 
-# Benchmark deps
-cf-primitives = { path = '../../primitives', default-features = false, optional = true }
-
-
 [dev-dependencies]
 serde = { version = '1.0.126', features = ['derive'] }
 sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2" }
@@ -44,6 +41,7 @@ default = ['std']
 std = [
   'cf-traits/std',
   'cf-runtime-upgrade-utilities/std',
+  'cf-primitives/std',
   'codec/std',
   'scale-info/std',
   'frame-benchmarking?/std',
@@ -59,7 +57,6 @@ runtime-benchmarks = [
   'frame-benchmarking/runtime-benchmarks',
   'frame-support/runtime-benchmarks',
   'frame-system/runtime-benchmarks',
-  'cf-primitives',
 ]
 try-runtime = [
   'frame-support/try-runtime',

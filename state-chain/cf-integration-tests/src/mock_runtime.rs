@@ -32,7 +32,7 @@ use crate::{
 	threshold_signing::{EthKeyComponents, KeyUtils},
 	GENESIS_KEY_SEED,
 };
-use cf_primitives::{AccountRole, AuthorityCount, BlockNumber, FlipBalance};
+use cf_primitives::{AccountRole, AuthorityCount, BlockNumber, FlipBalance, GENESIS_EPOCH};
 
 pub struct ExtBuilder {
 	pub accounts: Vec<(AccountId, FlipBalance)>,
@@ -85,7 +85,7 @@ impl ExtBuilder {
 		let mut storage =
 			frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 
-		let key_components = EthKeyComponents::generate(GENESIS_KEY_SEED);
+		let key_components = EthKeyComponents::generate(GENESIS_KEY_SEED, GENESIS_EPOCH);
 		let ethereum_vault_key = key_components.key_id();
 
 		state_chain_runtime::GenesisConfig {
@@ -134,7 +134,7 @@ impl ExtBuilder {
 				max_expansion: self.max_authorities,
 			},
 			ethereum_vault: EthereumVaultConfig {
-				vault_key: Some(ethereum_vault_key),
+				vault_key: Some(ethereum_vault_key.public_key_bytes),
 				deployment_block: 0,
 				keygen_response_timeout: 4,
 			},

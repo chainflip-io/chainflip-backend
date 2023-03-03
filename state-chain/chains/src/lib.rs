@@ -2,7 +2,9 @@
 use core::fmt::Display;
 
 use crate::benchmarking_value::BenchmarkValue;
-use cf_primitives::{chains::assets, AssetAmount, EthAmount, IntentId};
+use cf_primitives::{
+	chains::assets, AssetAmount, EpochIndex, EthAmount, IntentId, KeyId, PublicKeyBytes,
+};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
@@ -91,11 +93,11 @@ impl<C: Chain> Age<C> for () {
 
 /// Common crypto-related types and operations for some external chain.
 pub trait ChainCrypto: Chain {
-	type KeyId: Member + Parameter;
 	/// The chain's `AggKey` format. The AggKey is the threshold key that controls the vault.
 	/// TODO: Consider if Encode / Decode bounds are sufficient rather than To/From Vec<u8>
-	type AggKey: TryFrom<Vec<u8>>
-		+ Into<Self::KeyId>
+	type AggKey: TryFrom<PublicKeyBytes>
+		+ Into<PublicKeyBytes>
+		+ TryFrom<KeyId>
 		+ Member
 		+ Parameter
 		+ Copy
@@ -118,6 +120,8 @@ pub trait ChainCrypto: Chain {
 
 	/// We use the AggKey as the payload for keygen verification ceremonies.
 	fn agg_key_to_payload(agg_key: Self::AggKey) -> Self::Payload;
+
+	fn agg_key_to_key_id(agg_key: Self::AggKey, epoch_index: EpochIndex) -> KeyId;
 }
 
 /// Common abi-related types and operations for some external chain.

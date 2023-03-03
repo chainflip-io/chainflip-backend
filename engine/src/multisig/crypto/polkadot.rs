@@ -1,4 +1,5 @@
 use anyhow::Result;
+use cf_primitives::PublicKeyBytes;
 
 use super::{curve25519::ristretto::Point, ChainTag, CryptoScheme, ECPoint};
 use cf_chains::dot::PolkadotPublicKey;
@@ -102,10 +103,11 @@ impl CryptoScheme for PolkadotSigning {
 
 	fn verify_signature(
 		signature: &Self::Signature,
-		key_id: &crate::multisig::KeyId,
+		public_key_bytes: &PublicKeyBytes,
 		payload: &Self::SigningPayload,
 	) -> anyhow::Result<()> {
-		let public_key = schnorrkel::PublicKey::from_bytes(&key_id.0).expect("invalid public key");
+		let public_key =
+			schnorrkel::PublicKey::from_bytes(public_key_bytes).expect("invalid public key");
 
 		let context = schnorrkel::signing_context(SIGNING_CTX);
 

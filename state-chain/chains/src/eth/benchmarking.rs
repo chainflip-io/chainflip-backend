@@ -5,7 +5,7 @@ use crate::{
 		to_ethereum_address, Address, AggKey, EthereumReplayProtection,
 		SchnorrVerificationComponents, TrackedData, Transaction, H256, U256,
 	},
-	ApiCall, Vec,
+	ApiCall,
 };
 
 const SIG_NONCE: [u8; 32] = [1u8; 32];
@@ -44,12 +44,6 @@ impl BenchmarkValue for Address {
 impl BenchmarkValue for H256 {
 	fn benchmark_value() -> Self {
 		EthereumApi::<()>::benchmark_value().threshold_signature_payload()
-	}
-}
-
-impl BenchmarkValue for Vec<u8> {
-	fn benchmark_value() -> Self {
-		hex_literal::hex!("02f87a827a6980843b9aca00843b9aca0082520894cfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcf808e646f5f736f6d657468696e672829c080a0b796e0276d89b0e02634d2f0cd5820e4af4bc0fcb76ecfcc4a3842e90d4b1651a07ab40be70e801fcd1e33460bfe34f03b8f390911658d49e58b0356a77b9432c0").to_vec()
 	}
 }
 

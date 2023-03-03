@@ -10,9 +10,8 @@ pub mod db;
 pub use crypto::{eth, polkadot, ChainTag, CryptoScheme, Rng};
 
 use anyhow::Result;
-use cf_primitives::CeremonyId;
+use cf_primitives::{CeremonyId, PublicKeyBytes};
 
-use serde::{Deserialize, Serialize};
 use tracing::{info, info_span, Instrument};
 
 use crate::p2p::{MultisigMessageReceiver, MultisigMessageSender};
@@ -23,16 +22,6 @@ pub use client::{MultisigClient, MultisigMessage};
 pub use db::PersistentKeyDB;
 
 use self::client::key_store::KeyStore;
-
-/// Public key compressed
-#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone)]
-pub struct KeyId(pub Vec<u8>);
-
-impl std::fmt::Display for KeyId {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{}", hex::encode(&self.0))
-	}
-}
 
 /// Start the multisig client, which listens for p2p messages and requests from the SC
 pub fn start_client<C>(

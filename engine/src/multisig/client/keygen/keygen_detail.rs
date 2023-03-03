@@ -503,7 +503,7 @@ pub mod genesis {
 	use std::collections::HashMap;
 
 	use super::*;
-	use crate::multisig::{client::PartyIdxMapping, eth::EthSigning, KeyId};
+	use crate::multisig::{client::PartyIdxMapping, eth::EthSigning, PublicKeyBytes};
 	use state_chain_runtime::AccountId;
 
 	/// Generate keys for all participants in a centralised manner.
@@ -512,7 +512,7 @@ pub mod genesis {
 		signers: BTreeSet<AccountId>,
 		initial_key_must_be_incompatible: bool,
 		rng: &mut Rng,
-	) -> (KeyId, HashMap<AccountId, KeygenResultInfo<C>>) {
+	) -> (PublicKeyBytes, HashMap<AccountId, KeygenResultInfo<C>>) {
 		let params = ThresholdParameters::from_share_count(signers.len() as AuthorityCount);
 		let n = params.share_count;
 		let t = params.threshold;
@@ -560,23 +560,23 @@ pub mod genesis {
 			})
 			.collect();
 
-		let aggregate_pubkey =
-			keygen_result_infos.values().next().unwrap().key.get_public_key_bytes();
-
-		(KeyId(aggregate_pubkey), keygen_result_infos)
+		(
+			keygen_result_infos.values().next().unwrap().key.get_public_key_bytes(),
+			keygen_result_infos,
+		)
 	}
 
 	pub fn generate_key_data<C: CryptoScheme>(
 		signers: BTreeSet<AccountId>,
 		rng: &mut Rng,
-	) -> (KeyId, HashMap<AccountId, KeygenResultInfo<C>>) {
+	) -> (PublicKeyBytes, HashMap<AccountId, KeygenResultInfo<C>>) {
 		generate_key_data_detail(signers, false, rng)
 	}
 
 	pub fn generate_key_data_with_initial_incompatibility(
 		signers: BTreeSet<AccountId>,
 		rng: &mut Rng,
-	) -> (KeyId, HashMap<AccountId, KeygenResultInfo<EthSigning>>) {
+	) -> (PublicKeyBytes, HashMap<AccountId, KeygenResultInfo<EthSigning>>) {
 		generate_key_data_detail(signers, true, rng)
 	}
 }

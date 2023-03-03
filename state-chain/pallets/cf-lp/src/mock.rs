@@ -83,7 +83,6 @@ impl system::Config for Test {
 }
 
 impl cf_traits::Chainflip for Test {
-	type KeyId = Vec<u8>;
 	type ValidatorId = AccountId;
 	type Amount = u128;
 	type RuntimeCall = RuntimeCall;

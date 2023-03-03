@@ -65,7 +65,6 @@ impl system::Config for Test {
 }
 
 impl Chainflip for Test {
-	type KeyId = Vec<u8>;
 	type ValidatorId = AccountId;
 	type Amount = u128;
 	type RuntimeCall = RuntimeCall;

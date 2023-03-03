@@ -44,7 +44,6 @@ benchmarks_instance_pallet! {
 			T: frame_system::Config
 			+ pallet_cf_validator::Config
 			+ pallet_cf_reputation::Config,
-			<T::TargetChain as ChainCrypto>::AggKey: TryFrom<<T as Chainflip>::KeyId>,
 	}
 
 	// Note: this benchmark does not include the cost of the dispatched extrinsic.

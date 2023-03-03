@@ -28,7 +28,7 @@ use cf_chains::{
 	ReplayProtectionProvider, SetCommKeyWithAggKey, SetGovKeyWithAggKey, TransactionBuilder,
 };
 use cf_primitives::{
-	chains::assets, liquidity::U256, Asset, AssetAmount, ForeignChainAddress, IntentId, KeyId,
+	chains::assets, liquidity::U256, Asset, AssetAmount, ForeignChainAddress, IntentId,
 	ETHEREUM_ETH_ADDRESS,
 };
 use cf_traits::{
@@ -57,7 +57,6 @@ impl Chainflip for Runtime {
 	type RuntimeCall = RuntimeCall;
 	type Amount = FlipBalance;
 	type ValidatorId = <Self as frame_system::Config>::AccountId;
-	type KeyId = KeyId;
 	type EnsureWitnessed = pallet_cf_witnesser::EnsureWitnessed;
 	type EnsureWitnessedAtCurrentEpoch = pallet_cf_witnesser::EnsureWitnessedAtCurrentEpoch;
 	type EpochInfo = Validator;

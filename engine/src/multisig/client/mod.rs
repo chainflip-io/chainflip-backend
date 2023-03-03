@@ -16,9 +16,9 @@ pub mod ceremony_manager;
 
 use std::collections::BTreeSet;
 
-use crate::{common::format_iterator, multisig::KeyId};
+use crate::common::format_iterator;
 
-use cf_primitives::{AuthorityCount, CeremonyId};
+use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex, KeyId};
 use futures::{future::BoxFuture, FutureExt};
 use state_chain_runtime::AccountId;
 
@@ -117,6 +117,7 @@ pub trait MultisigClientApi<C: CryptoScheme> {
 	fn initiate_keygen(
 		&self,
 		ceremony_id: CeremonyId,
+		epoch_index: EpochIndex,
 		participants: BTreeSet<AccountId>,
 	) -> BoxFuture<'_, Result<C::AggKey, (BTreeSet<AccountId>, KeygenFailureReason)>>;
 
@@ -195,6 +196,8 @@ impl<C: CryptoScheme> MultisigClientApi<C> for MultisigClient<C> {
 	fn initiate_keygen(
 		&self,
 		ceremony_id: CeremonyId,
+		// The epoch the key will be associated with if successful.
+		epoch_index: EpochIndex,
 		participants: BTreeSet<AccountId>,
 	) -> BoxFuture<'_, Result<C::AggKey, (BTreeSet<AccountId>, KeygenFailureReason)>> {
 		assert!(participants.contains(&self.my_account_id));
@@ -224,16 +227,18 @@ impl<C: CryptoScheme> MultisigClientApi<C> for MultisigClient<C> {
 			.expect("Should send keygen request");
 
 		async move {
-			// Wait for the request to return a result, then log and return the result
-			let result = result_receiver
+			match result_receiver
 				.await
-				.expect("Keygen result channel dropped before receiving a result");
-
-			match result {
+				.expect("Keygen result channel dropped before receiving a result")
+			{
 				Ok(keygen_result_info) => {
-					let key_id = KeyId(keygen_result_info.key.get_public_key_bytes());
-
-					self.key_store.lock().unwrap().set_key(key_id, keygen_result_info.clone());
+					self.key_store.lock().unwrap().set_key(
+						KeyId {
+							epoch_index,
+							public_key_bytes: keygen_result_info.key.get_public_key_bytes(),
+						},
+						keygen_result_info.clone(),
+					);
 
 					Ok(C::agg_key(&keygen_result_info.key.get_public_key()))
 				},

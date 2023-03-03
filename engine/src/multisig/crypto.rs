@@ -9,6 +9,7 @@ pub mod secp256k1;
 #[cfg(test)]
 mod tests;
 
+use cf_primitives::PublicKeyBytes;
 use generic_array::{typenum::Unsigned, ArrayLength};
 
 use num_derive::FromPrimitive;
@@ -19,7 +20,7 @@ use std::fmt::{Debug, Display};
 use generic_array::GenericArray;
 use serde::{Deserialize, Serialize};
 
-use super::{client::signing::generate_schnorr_response, KeyId};
+use super::client::signing::generate_schnorr_response;
 
 /// The db uses a static length prefix, that must include the keygen data prefix and the chain tag
 pub const CHAIN_TAG_SIZE: usize = std::mem::size_of::<ChainTag>();
@@ -146,7 +147,7 @@ pub trait CryptoScheme: 'static + Clone + Send + Sync + Debug + PartialEq {
 
 	fn verify_signature(
 		signature: &Self::Signature,
-		key_id: &KeyId,
+		key_id: &PublicKeyBytes,
 		payload: &Self::SigningPayload,
 	) -> anyhow::Result<()>;
 

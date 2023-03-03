@@ -162,7 +162,6 @@ parameter_types! {
 }
 
 impl Chainflip for Test {
-	type KeyId = Vec<u8>;
 	type ValidatorId = ValidatorId;
 	type Amount = Amount;
 	type RuntimeCall = RuntimeCall;
