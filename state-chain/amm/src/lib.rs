@@ -158,7 +158,7 @@ fn mul_div_ceil<C: Into<U512>>(a: U256, b: U256, c: C) -> U256 {
 	let (d, m) = U512::div_mod(U256::full_mul(a, b), c);
 
 	if m > U512::from(0) {
-		// cannot overflow as for m > 0, c must be > 1, and as (a*b) <= U512::MAX, therefore a*b/c <
+		// cannot overflow as for m > 0, c must be > 1, and as (a*b) < U512::MAX, therefore a*b/c <
 		// U512::MAX
 		d + 1
 	} else {
