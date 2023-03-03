@@ -104,7 +104,7 @@ impl BitcoinNetwork {
 		}
 	}
 
-	fn bech32_and_bech32m_address_prefix(&self) -> &'static str {
+	fn bech32_and_bech32m_address_hrp(&self) -> &'static str {
 		match self {
 			BitcoinNetwork::Mainnet => "bc",
 			BitcoinNetwork::Testnet => "tb",
@@ -153,7 +153,7 @@ pub fn scriptpubkey_from_address(
 	// See https://en.bitcoin.it/wiki/BIP_0350
 	let try_decode_as_bech32_or_bech32m = || {
 		let (hrp, data, variant) = bech32::decode(address).ok()?;
-		if hrp == network.bech32_and_bech32m_address_prefix() {
+		if hrp == network.bech32_and_bech32m_address_hrp() {
 			let version = data.get(0)?.to_u8();
 			let program = {
 				let program = Vec::from_base32(&data[1..]).ok()?;

@@ -20,7 +20,7 @@ pub fn derive_btc_ingress_address(
 	network: BitcoinNetwork,
 ) -> String {
 	bech32::encode(
-		network.bech32_and_bech32m_address_prefix(),
+		network.bech32_and_bech32m_address_hrp(),
 		itertools::chain!(
 			iter::once(u5::try_from_u8(SEGWIT_VERSION).unwrap()),
 			(&tweaked_pubkey(pubkey_x, salt).serialize_compressed()[1..33]).to_base32()
