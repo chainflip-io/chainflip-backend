@@ -12,7 +12,7 @@ issue!
 
 ## Compile and run tests
 
-To compile the code run:
+To compile the code:
 
 ```bash
 cargo build --release
