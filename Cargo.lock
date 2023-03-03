@@ -786,6 +786,7 @@ dependencies = [
 name = "cf-chains"
 version = "0.1.0"
 dependencies = [
+ "base58",
  "bech32",
  "cf-primitives",
  "cf-test-utilities",
