@@ -128,7 +128,7 @@ mod tests {
 
 			old_storage::PendingRequestInstructions::<mock::Test, mock::Instance1>::insert(
 				REQUEST_ID,
-				old_request_instruction.clone(),
+				old_request_instruction,
 			);
 
 			let ceremony_key_id = vec![5, 6, 7];
@@ -144,7 +144,7 @@ mod tests {
 
 			v1::archived::PendingCeremonies::<mock::Test, mock::Instance1>::insert(
 				CEREMONY_ID,
-				old_ceremony_context.clone(),
+				old_ceremony_context,
 			);
 
 			Migration::<mock::Test, mock::Instance1>::on_runtime_upgrade();
