@@ -236,7 +236,7 @@ impl BitcoinTransaction {
 		transaction_bytes.extend(to_varint(self.outputs.len() as u64));
 		transaction_bytes.extend(self.outputs.iter().fold(Vec::<u8>::default(), |mut acc, x| {
 			acc.extend(x.amount.to_le_bytes());
-			acc.extend(x.script_pubkey.clone().serialize());
+			acc.extend(x.script_pubkey.serialize());
 			acc
 		}));
 		for i in 0..self.inputs.len() {
@@ -315,7 +315,7 @@ impl BitcoinTransaction {
 				.iter()
 				.fold(Vec::<u8>::default(), |mut acc, x| {
 					acc.extend(x.amount.to_le_bytes());
-					acc.extend(x.script_pubkey.clone().serialize());
+					acc.extend(x.script_pubkey.serialize());
 					acc
 				})
 				.as_slice(),
@@ -445,8 +445,8 @@ impl BitcoinScript {
 	}
 	/// Serializes the script by returning a single byte for the length
 	/// of the script and then the script itself
-	fn serialize(self) -> Vec<u8> {
-		itertools::chain!(to_varint(self.data.len() as u64), self.data).collect()
+	fn serialize(&self) -> Vec<u8> {
+		itertools::chain!(to_varint(self.data.len() as u64), self.data.iter().cloned()).collect()
 	}
 }
 
