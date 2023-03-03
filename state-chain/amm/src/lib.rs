@@ -309,6 +309,13 @@ impl SwapDirection for OneToZero {
 	}
 }
 
+pub enum NewError {
+	/// Fee must be between 0 - 50%
+	InvalidFeeAmount,
+	/// The initial price is outside the allowed range.
+	InvalidInitialPrice,
+}
+
 pub enum MintError<E> {
 	/// Invalid Tick range
 	InvalidTickRange,
@@ -335,12 +342,16 @@ impl PoolState {
 	/// Creates a new pool with the specified fee and initial price. The pool is created with no
 	/// liquidity, it must be added using the `PoolState::mint` function.
 	///
-	/// This function will panic if fee_pips or initial_sqrt_price are outside the allowed bounds
-	pub fn new(fee_pips: u32, initial_sqrt_price: SqrtPriceQ64F96) -> Self {
-		assert!(fee_pips <= ONE_IN_PIPS / 2);
-		assert!(MIN_SQRT_PRICE <= initial_sqrt_price && initial_sqrt_price < MAX_SQRT_PRICE);
+	/// This function never panics
+	pub fn new(fee_pips: u32, initial_sqrt_price: SqrtPriceQ64F96) -> Result<Self, NewError> {
+		(fee_pips <= ONE_IN_PIPS / 2).then_some(()).ok_or(NewError::InvalidFeeAmount)?;
+		(MIN_SQRT_PRICE..MAX_SQRT_PRICE)
+			.contains(&initial_sqrt_price)
+			.then_some(())
+			.ok_or(NewError::InvalidInitialPrice)?;
+
 		let initial_tick = Self::tick_at_sqrt_price(initial_sqrt_price);
-		Self {
+		Ok(Self {
 			fee_pips,
 			current_sqrt_price: initial_sqrt_price,
 			current_tick: initial_tick,
@@ -367,7 +378,7 @@ impl PoolState {
 			]
 			.into(),
 			positions: Default::default(),
-		}
+		})
 	}
 
 	/// Tries to add `minted_liquidity` to/create the specified position. If the specified position
