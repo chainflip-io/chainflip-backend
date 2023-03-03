@@ -92,9 +92,9 @@ impl TryFrom<PublicKeyBytes> for MockAggKey {
 	}
 }
 
-impl Into<PublicKeyBytes> for MockAggKey {
-	fn into(self) -> PublicKeyBytes {
-		self.0.to_vec()
+impl From<MockAggKey> for PublicKeyBytes {
+	fn from(val: MockAggKey) -> Self {
+		val.0.to_vec()
 	}
 }
 
