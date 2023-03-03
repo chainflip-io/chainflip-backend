@@ -21,11 +21,12 @@ pub fn derive_btc_ingress_address(
 ) -> String {
 	let tweaked = tweaked_pubkey(pubkey_x, salt).serialize_compressed()[1..33].to_vec();
 	let segwit_version = u5::try_from_u8(SEGWIT_VERSION).unwrap();
-	let mut payload = vec![segwit_version];
-	payload.extend(tweaked.to_base32());
-	let payload =
-		itertools::chain!(iter::once(segwit_version), tweaked.to_base32()).collect::<Vec<_>>();
-	bech32::encode(btc_net.bech32_pkh_address_prefix(), payload, Variant::Bech32m).unwrap()
+	bech32::encode(
+		btc_net.bech32_pkh_address_prefix(),
+		itertools::chain!(iter::once(segwit_version), tweaked.to_base32()).collect::<Vec<_>>(),
+		Variant::Bech32m,
+	)
+	.unwrap()
 }
 
 #[test]
