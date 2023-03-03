@@ -12,13 +12,13 @@ issue!
 
 ## Compile and run tests
 
-To compile the code:
+To compile the code execute:
 
 ```bash
 cargo build --release
 ```
 
-To run the test suit:
+To run the test suit execute:
 
 ```bash
 cargo ci-test
@@ -149,4 +149,4 @@ After set up completion, you will see the following:
 
 ## Testnet
 
-To launch a testnet use the [chainflip-testnet-tools](https://github.com/chainflip-io/chainflip-testnet-tools).
+To start a multi node testnet you can use the [chainflip-testnet-tools](https://github.com/chainflip-io/chainflip-testnet-tools). A multi-node testnet can be useful to test more complex test scenarios under more realistic conditions.
