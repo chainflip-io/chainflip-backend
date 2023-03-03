@@ -198,9 +198,7 @@ impl BitcoinTransaction {
 		result.push(segwit_flag);
 		result.extend(to_varint(self.inputs.len() as u64));
 		result.extend(self.inputs.iter().fold(Vec::<u8>::default(), |mut acc, x| {
-			let mut le_txid = x.txid.to_vec();
-			le_txid.reverse();
-			acc.extend(le_txid);
+			acc.extend(x.txid.iter().rev());
 			acc.extend(x.vout.to_le_bytes());
 			acc.push(0);
 			acc.extend(sequence_number);
@@ -251,10 +249,8 @@ impl BitcoinTransaction {
 			self.inputs
 				.iter()
 				.fold(Vec::<u8>::default(), |mut acc, x| {
-					let mut le_txid = x.txid.to_vec();
-					le_txid.reverse();
-					acc.extend(le_txid);
-					acc.extend(x.vout.to_le_bytes().iter());
+					acc.extend(x.txid.iter().rev());
+					acc.extend(x.vout.to_le_bytes());
 					acc
 				})
 				.as_slice(),
