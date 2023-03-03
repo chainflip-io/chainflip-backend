@@ -118,15 +118,14 @@ pub fn scriptpubkey_from_address(
 	btc_net: BitcoinNetwork,
 ) -> Result<BitcoinScript, BitcoinTransactionError> {
 	let try_decode_as_base58 = || {
-		let data: [u8; 25] = address.from_base58().ok()?.try_into().ok()?;
+		const CHECKSUM_LENGTH: usize = 4;
 
-		let checksum = &data[data.len() - 4..];
-		let data = &data[..data.len() - 4];
+		let data: [u8; 1 + 20 + CHECKSUM_LENGTH] = address.from_base58().ok()?.try_into().ok()?;
 
-		if &sha2_256(&sha2_256(data))[..4] == checksum {
-			let version = data[0];
-			let address = &data[1..];
+		let (data, checksum) = data.split_at(data.len() - CHECKSUM_LENGTH);
 
+		if &sha2_256(&sha2_256(data))[..CHECKSUM_LENGTH] == checksum {
+			let (&version, address) = data.split_first().unwrap();
 			if version == btc_net.p2pkh_address_version() {
 				Some(
 					BitcoinScript::default()
@@ -146,15 +145,17 @@ pub fn scriptpubkey_from_address(
 		}
 	};
 
-	let try_decode_as_bech32 = || {
-		let (hrp, data, _variant) = bech32::decode(address).ok()?;
+	// See https://en.bitcoin.it/wiki/BIP_0350
+	let try_decode_as_bech32_or_bech32m = || {
+		let (hrp, data, variant) = bech32::decode(address).ok()?;
 		if hrp == btc_net.bech32_pkh_address_prefix() {
 			let version = data.get(0)?.to_u8();
 			let program = {
 				let program = Vec::from_base32(&data[1..]).ok()?;
-				match version {
-					0 if [20, 32].contains(&program.len()) => Some(program),
-					1..=16 if (2..=40).contains(&program.len()) => Some(program),
+				match (version, variant) {
+					(0, Variant::Bech32) if [20, 32].contains(&program.len()) => Some(program),
+					(1..=16, Variant::Bech32m) if (2..=40).contains(&program.len()) =>
+						Some(program),
 					_ => None,
 				}
 			}?;
@@ -167,7 +168,7 @@ pub fn scriptpubkey_from_address(
 
 	if let Some(script) = try_decode_as_base58() {
 		Ok(script)
-	} else if let Some(script) = try_decode_as_bech32() {
+	} else if let Some(script) = try_decode_as_bech32_or_bech32m() {
 		Ok(script)
 	} else {
 		Err(BitcoinTransactionError::InvalidEgressAddress)
