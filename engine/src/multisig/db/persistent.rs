@@ -13,6 +13,7 @@ use crate::{
 		client::KeygenResultInfo,
 		crypto::{CryptoScheme, CHAIN_TAG_SIZE},
 		eth::EthSigning,
+		polkadot::PolkadotSigning,
 		ChainTag,
 	},
 	witnesser::checkpointing::WitnessedUntil,
@@ -57,7 +58,7 @@ pub struct PersistentKeyDB {
 }
 
 fn write_schema_version_to_batch(db: &DB, batch: &mut WriteBatch, version: u32) {
-	batch.put_cf(get_metadata_column_handle(&db), DB_SCHEMA_VERSION_KEY, &version.to_be_bytes());
+	batch.put_cf(get_metadata_column_handle(db), DB_SCHEMA_VERSION_KEY, version.to_be_bytes());
 }
 
 impl PersistentKeyDB {
@@ -404,7 +405,7 @@ fn migrate_db_to_latest(
 						migrate_0_to_1(&db);
 					},
 					_ => {
-						panic!("Unexpected migration from version {}", version);
+						panic!("Unexpected migration from version {version}");
 					},
 				}
 			}
@@ -460,7 +461,7 @@ fn test_migration_to_v1() {
 	let account_ids: BTreeSet<_> = [1, 2, 3].iter().map(|i| AccountId::new([*i; 32])).collect();
 
 	let (key_id, key_data) =
-		keygen::generate_key_data::<EthSigning>(account_ids.clone(), &mut Rng::from_entropy());
+		keygen::generate_key_data::<EthSigning>(account_ids, &mut Rng::from_entropy());
 
 	let key_info = key_data.values().next().unwrap();
 
