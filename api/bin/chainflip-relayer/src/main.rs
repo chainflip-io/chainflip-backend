@@ -57,6 +57,7 @@ impl RpcServer for RpcServerImpl {
 			ForeignChain::Polkadot => ForeignChainAddress::Dot(
 				utilities::clean_dot_address(&egress_address).map_err(|e| anyhow!(e))?,
 			),
+			ForeignChain::Bitcoin => todo!("Bitcoin address cleaning not implemented yet."),
 		};
 		Ok(chainflip_api::register_swap_intent(
 			&self.state_chain_settings,

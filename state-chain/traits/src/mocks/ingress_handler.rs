@@ -56,6 +56,7 @@ impl<C: Chain, T: Chainflip> MockIngressHandler<C, T> {
 			match asset.into() {
 				ForeignChain::Ethereum => ForeignChainAddress::Eth([intent_id as u8; 20]),
 				ForeignChain::Polkadot => ForeignChainAddress::Dot([intent_id as u8; 32]),
+				ForeignChain::Bitcoin => todo!("Bitcoin address"),
 			},
 		)
 	}

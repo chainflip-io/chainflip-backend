@@ -26,7 +26,7 @@ hex = {default-features = false, version = '0.4'}
 hex-literal = { version = '0.3', default-features = false }
 serde = { optional = true, version = '1.0.126', features = ['derive'], default-features = false }
 log = { version = '0.4.16', default-features = false }
-itertools = { version = "0.10", default-features = false }
+itertools = { version = '0.10.0', default-features = false }
 
 # Substrate packages
 codec = { package = 'parity-scale-codec', version = '3.0.0', default-features = false, features = ['derive'] }

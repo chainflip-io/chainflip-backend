@@ -31,17 +31,44 @@ pub mod archived {
 	use super::*;
 
 	use cf_chains::dot::{PolkadotSpecVersion, PolkadotTransactionVersion};
+	use cf_primitives::PolkadotBlockNumber;
 
 	#[derive(Debug, Encode, Decode, TypeInfo, Eq, PartialEq, Clone, Default)]
 	pub struct PolkadotMetadata {
 		pub spec_version: PolkadotSpecVersion,
 		pub transaction_version: PolkadotTransactionVersion,
 		pub genesis_hash: [u8; 32],
+		pub block_hash_count: PolkadotBlockNumber,
 	}
 
 	#[frame_support::storage_alias]
 	pub type PolkadotNetworkMetadata<T: Config> =
 		StorageValue<Pallet<T>, PolkadotMetadata, ValueQuery>;
+}
+
+const CHAINFLIP_GENESIS_PERSEVERANCE: &[u8] =
+	&hex_literal::hex!("2d00bb9c87a5cccdc67d7c49b6ff87e67a854798583f9a866384d7b7cebbc9b3");
+const POLKADOT_GENESIS_PERSEVERANCE: [u8; 32] =
+	hex_literal::hex!("bb5111c1747c9e9774c2e6bd229806fb4d7497af2829782f39b977724e490b5c");
+const POLKADOT_GENESIS_SISYPHOS: [u8; 32] =
+	hex_literal::hex!("1665348821496e14ed56718d4d078e7f85b163bf4e45fa9afbeb220b34ed475a");
+
+// Private polkadot network for sisyphos.
+fn polkadot_runtime_version<T: Config>() -> archived::PolkadotMetadata {
+	archived::PolkadotMetadata {
+		spec_version: 9360,
+		transaction_version: 19,
+		genesis_hash: match frame_system::Pallet::<T>::block_hash::<T::BlockNumber>(
+			Default::default(),
+		)
+		.as_ref()
+		{
+			CHAINFLIP_GENESIS_PERSEVERANCE => POLKADOT_GENESIS_PERSEVERANCE,
+			// Assume any other network is a sisyphos network
+			_ => POLKADOT_GENESIS_SISYPHOS,
+		},
+		block_hash_count: 4096,
+	}
 }
 
 impl<T: Config> OnRuntimeUpgrade for Migration<T> {
@@ -59,13 +86,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 
 		// Polkadot metadata is initialized with the config that is used in the persistent polkadot
 		// testnet
-		archived::PolkadotNetworkMetadata::<T>::put(archived::PolkadotMetadata {
-			spec_version: 9320,
-			transaction_version: 16,
-			genesis_hash: hex_literal::hex!(
-				"5f551688012d25a98e729752169f509c6186af8079418c118844cc852b332bf5"
-			),
-		});
+		archived::PolkadotNetworkMetadata::<T>::set(polkadot_runtime_version::<T>());
 
 		Weight::zero()
 	}
@@ -111,7 +132,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 		assert!(EthereumKeyManagerAddress::<T>::exists());
 		assert!(EthereumVaultAddress::<T>::exists());
 		assert!(EthereumSignatureNonce::<T>::exists());
-		assert!(PolkadotRuntimeVersion::<T>::exists());
+		assert!(archived::PolkadotNetworkMetadata::<T>::exists());
 
 		Ok(())
 	}

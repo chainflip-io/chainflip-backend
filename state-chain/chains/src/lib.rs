@@ -25,6 +25,7 @@ pub mod any;
 pub mod btc;
 pub mod dot;
 pub mod eth;
+pub mod utxo_selection;
 
 #[cfg(feature = "std")]
 pub mod mocks;

@@ -2,7 +2,6 @@ pub mod chain_data_witnesser;
 pub mod contract_witnesser;
 pub mod erc20_witnesser;
 pub mod eth_block_witnessing;
-mod http_safe_stream;
 pub mod ingress_witnesser;
 pub mod key_manager;
 mod merged_block_stream;
@@ -21,12 +20,12 @@ use anyhow::{anyhow, Context, Result};
 
 use cf_primitives::EpochIndex;
 use regex::Regex;
+use utilities::make_periodic_tick;
 
 use crate::{
 	common::read_clean_and_decode_hex_str_file,
 	constants::ETH_BLOCK_SAFETY_MARGIN,
 	eth::{
-		http_safe_stream::{safe_polling_http_head_stream, HTTP_POLL_INTERVAL},
 		merged_block_stream::merged_block_stream,
 		rpc::{EthDualRpcClient, EthRpcApi, EthWsRpcApi},
 		ws_safe_stream::safe_ws_head_stream,
@@ -34,7 +33,11 @@ use crate::{
 	logging::COMPONENT_KEY,
 	settings,
 	state_chain_observer::client::extrinsic_api::ExtrinsicApi,
-	witnesser::{block_head_stream_from::block_head_stream_from, BlockNumberable},
+	witnesser::{
+		block_head_stream_from::block_head_stream_from,
+		http_safe_stream::{safe_polling_http_head_stream, HTTP_POLL_INTERVAL},
+		BlockNumberable,
+	},
 };
 
 use futures::StreamExt;
@@ -321,6 +324,21 @@ where
 	.await
 }
 
+#[macro_export]
+macro_rules! retry_rpc_until_success {
+	($eth_rpc_call:expr, $poll_interval:expr) => {{
+		loop {
+			match $eth_rpc_call.await {
+				Ok(item) => break item,
+				Err(e) => {
+					tracing::error!("Error fetching {}. {e}", stringify!($eth_rpc_call));
+					$poll_interval.tick().await;
+				},
+			}
+		}
+	}};
+}
+
 /// Returns a safe stream of blocks from the latest block onward,
 /// using a dual (WS/HTTP) rpc subscription. Prepends the current head of the 'subscription' streams
 /// with historical blocks from a given block number.
@@ -340,14 +358,26 @@ where
 	)
 	.await?;
 
+	let http_client = eth_dual_rpc.http_client.clone();
 	let safe_http_head_stream = eth_block_head_stream_from(
 		from_block,
 		safe_polling_http_head_stream(
-			eth_dual_rpc.http_client.clone(),
+			http_client.clone(),
 			HTTP_POLL_INTERVAL,
 			ETH_BLOCK_SAFETY_MARGIN,
 		)
-		.await,
+		.await
+		.then(move |block_number| {
+			let http_client = http_client.clone();
+			async move {
+				let mut interval = make_periodic_tick(HTTP_POLL_INTERVAL, false);
+				EthNumberBloom::try_from(retry_rpc_until_success!(
+					http_client.block(block_number.into()),
+					interval
+				))
+				.expect("A block should contain relevant details")
+			}
+		}),
 		eth_dual_rpc.clone(),
 	)
 	.await?;
