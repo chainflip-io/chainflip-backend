@@ -213,7 +213,7 @@ impl BitcoinTransaction {
 		self.signatures[index as usize] = signature;
 		self
 	}
-	pub fn finalize(self) -> Result<Vec<u8>, BitcoinTransactionError> {
+	pub fn finalize(self) -> Vec<u8> {
 		let mut transaction_bytes = Vec::default();
 		let version = 2u32.to_le_bytes();
 		let segwit_marker = 0u8;
@@ -234,14 +234,11 @@ impl BitcoinTransaction {
 			acc
 		}));
 		transaction_bytes.extend(to_varint(self.outputs.len() as u64));
-		transaction_bytes.extend(self.outputs.iter().try_fold(
-			Vec::<u8>::default(),
-			|mut acc, x| {
-				acc.extend(x.amount.to_le_bytes());
-				acc.extend(x.script_pubkey.clone().serialize());
-				Ok(acc)
-			},
-		)?);
+		transaction_bytes.extend(self.outputs.iter().fold(Vec::<u8>::default(), |mut acc, x| {
+			acc.extend(x.amount.to_le_bytes());
+			acc.extend(x.script_pubkey.clone().serialize());
+			acc
+		}));
 		for i in 0..self.inputs.len() {
 			let num_witnesses = 3u8;
 			let len_signature = 64u8;
@@ -266,10 +263,10 @@ impl BitcoinTransaction {
 			transaction_bytes.extend(INTERNAL_PUBKEY[1..33].iter());
 		}
 		transaction_bytes.extend(locktime);
-		Ok(transaction_bytes)
+		transaction_bytes
 	}
 
-	pub fn get_signing_payload(&self, input_index: u32) -> Result<[u8; 32], Error> {
+	pub fn get_signing_payload(&self, input_index: u32) -> [u8; 32] {
 		// SHA256("TapSighash")
 		const TAPSIG_HASH: &[u8] =
 			&hex_literal::hex!("f40a48df4b2a70c8b4924bf2654661ed3d95fd66a313eb87237597c628e4a031");
@@ -316,11 +313,11 @@ impl BitcoinTransaction {
 		let outputs = sha2_256(
 			self.outputs
 				.iter()
-				.try_fold(Vec::<u8>::default(), |mut acc, x| {
+				.fold(Vec::<u8>::default(), |mut acc, x| {
 					acc.extend(x.amount.to_le_bytes());
 					acc.extend(x.script_pubkey.clone().serialize());
-					Ok(acc)
-				})?
+					acc
+				})
 				.as_slice(),
 		);
 		let epoch = 0u8;
@@ -330,7 +327,7 @@ impl BitcoinTransaction {
 		let spendtype = 2u8;
 		let keyversion = 0u8;
 		let codeseparator = u32::MAX.to_le_bytes();
-		Ok(sha2_256(
+		sha2_256(
 			&[
 				// Tagged Hash according to BIP 340
 				TAPSIG_HASH,
@@ -357,7 +354,7 @@ impl BitcoinTransaction {
 				&codeseparator,
 			]
 			.concat(),
-		))
+		)
 	}
 }
 
@@ -605,7 +602,7 @@ mod test {
 			signatures: Default::default(),
 		}
 		.add_signature(0, [0u8; 64]);
-		assert_eq!(tx.finalize().unwrap(), hex_literal::hex!("020000000001014C94E48A870B85F41228D33CF25213DFCC8DD796E7211ED6B1F9A014809DBBB50100000000FDFFFFFF0100E1F5050000000022512042E4F4C78A1D8F936AD7FC2C2F028F9BB1538CFC9A509B985031457C367815C003400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000025017B752078C79A2B436DA5575A03CDE40197775C656FFF9F0F59FC1466E09C20A81A9CDBAC21C0EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE00000000"));
+		assert_eq!(tx.finalize(), hex_literal::hex!("020000000001014C94E48A870B85F41228D33CF25213DFCC8DD796E7211ED6B1F9A014809DBBB50100000000FDFFFFFF0100E1F5050000000022512042E4F4C78A1D8F936AD7FC2C2F028F9BB1538CFC9A509B985031457C367815C003400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000025017B752078C79A2B436DA5575A03CDE40197775C656FFF9F0F59FC1466E09C20A81A9CDBAC21C0EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE00000000"));
 	}
 
 	#[test]
@@ -635,7 +632,7 @@ mod test {
 			signatures: Default::default(),
 		};
 		assert_eq!(
-			tx.get_signing_payload(0).unwrap(),
+			tx.get_signing_payload(0),
 			hex_literal::hex!("E16117C6CD69142E41736CE2882F0E697FF4369A2CBCEE9D92FC0346C6774FB4")
 		);
 	}
