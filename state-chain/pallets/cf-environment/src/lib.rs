@@ -120,8 +120,7 @@ pub mod pallet {
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
 
-	//              CHAINFLIP RELATED ENVIRONMENT ITEMS
-
+	// CHAINFLIP RELATED ENVIRONMENT ITEMS
 	#[pallet::storage]
 	#[pallet::getter(fn cfe_settings)]
 	/// The settings used by the CFE
@@ -132,8 +131,7 @@ pub mod pallet {
 	/// The current state the system is in (normal, maintenance).
 	pub type CurrentSystemState<T> = StorageValue<_, SystemState, ValueQuery>;
 
-	//              ETHEREUM CHAIN RELATED ENVIRONMENT ITEMS
-
+	// ETHEREUM CHAIN RELATED ENVIRONMENT ITEMS
 	#[pallet::storage]
 	#[pallet::getter(fn supported_eth_assets)]
 	/// Map of supported assets for ETH
@@ -163,8 +161,7 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type EthereumSignatureNonce<T> = StorageValue<_, SignatureNonce, ValueQuery>;
 
-	//              POLKADOT CHAIN RELATED ENVIRONMENT ITEMS
-
+	// POLKADOT CHAIN RELATED ENVIRONMENT ITEMS
 	#[pallet::storage]
 	#[pallet::getter(fn polkadot_vault_account_id)]
 	/// The Polkadot Vault Anonymous Account
