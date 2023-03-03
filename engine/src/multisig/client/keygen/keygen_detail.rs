@@ -11,8 +11,8 @@ use zeroize::Zeroize;
 
 use crate::multisig::{
 	client::{
-		common::KeygenFailureReason, KeygenResult, KeygenResultInfo, PartyIdxMapping,
-		ThresholdParameters,
+		common::{KeygenFailureReason, ResharingContext},
+		KeygenResult, KeygenResultInfo, PartyIdxMapping, ThresholdParameters,
 	},
 	crypto::{ECPoint, ECScalar, KeyShare, Rng},
 	CryptoScheme,
@@ -73,7 +73,7 @@ fn reconstruct_secret<P: ECPoint>(shares: &BTreeMap<AuthorityCount, ShamirShare<
 	let all_idxs: BTreeSet<AuthorityCount> = shares.keys().into_iter().cloned().collect();
 
 	shares.iter().fold(P::Scalar::zero(), |acc, (index, ShamirShare { value })| {
-		acc + signing::get_lagrange_coeff::<P>(*index, &all_idxs).unwrap() * value
+		acc + signing::get_lagrange_coeff::<P>(*index, &all_idxs) * value
 	})
 }
 
@@ -137,9 +137,10 @@ pub fn generate_shares_and_commitment<P: ECPoint>(
 	context: &HashContext,
 	index: AuthorityCount,
 	params: ThresholdParameters,
+	existing_secret: Option<&P::Scalar>,
 ) -> (OutgoingShares<P>, DKGUnverifiedCommitment<P>) {
 	let (secret, commitments, shares) =
-		generate_secret_and_shares(rng, params.share_count, params.threshold);
+		generate_secret_and_shares(rng, params.share_count, params.threshold, existing_secret);
 
 	// Zero-knowledge proof of `secret`
 	let zkp = generate_zkp_of_secret(rng, secret, context, index);
@@ -154,9 +155,10 @@ fn generate_secret_and_shares<P: ECPoint>(
 	rng: &mut Rng,
 	n: AuthorityCount,
 	t: AuthorityCount,
+	existing_secret: Option<&P::Scalar>,
 ) -> (P::Scalar, CoefficientCommitments<P>, BTreeMap<AuthorityCount, ShamirShare<P>>) {
 	// Our secret contribution to the aggregate key
-	let secret = P::Scalar::random(rng);
+	let secret = existing_secret.cloned().unwrap_or_else(|| P::Scalar::random(rng));
 
 	// Coefficients for the sharing polynomial used to share `secret` via the Shamir Secret Sharing
 	// scheme (Figure 1: Round 1, Step 1)
@@ -243,18 +245,35 @@ fn is_valid_hash_commitment<P: ECPoint>(
 }
 
 // (Figure 1: Round 1, Step 5)
-pub fn validate_commitments<P: ECPoint>(
-	public_coefficients: BTreeMap<AuthorityCount, DKGUnverifiedCommitment<P>>,
+pub fn validate_commitments<C: CryptoScheme>(
+	public_coefficients: BTreeMap<AuthorityCount, DKGUnverifiedCommitment<C::Point>>,
 	hash_commitments: BTreeMap<AuthorityCount, HashComm1>,
+	resharing_context: Option<&ResharingContext<C>>,
 	context: &HashContext,
 	validator_mapping: Arc<PartyIdxMapping>,
 ) -> Result<
-	BTreeMap<AuthorityCount, DKGCommitment<P>>,
+	BTreeMap<AuthorityCount, DKGCommitment<C::Point>>,
 	(BTreeSet<AuthorityCount>, KeygenFailureReason),
 > {
 	let invalid_idxs: BTreeSet<_> = public_coefficients
 		.iter()
 		.filter_map(|(idx, c)| {
+			if let Some(context) = resharing_context {
+				// If we are re-sharing, check that the commitment to the
+				// first coefficient corresponds to the party's original
+				// pubkey share (scaled by lagrange coefficient)
+
+				let first_commitment = c.commitments.0[0];
+
+				let id = validator_mapping.get_id(*idx);
+				let expected_pubkey = context.party_public_keys.get(id).unwrap();
+
+				if expected_pubkey != &first_commitment {
+					warn!(from_id = id.to_string(), "Invalid first commitment");
+					return Some(*idx)
+				}
+			}
+
 			let challenge = generate_dkg_challenge(*idx, context, c.commitments.0[0], c.zkp.r);
 
 			let hash_commitment = hash_commitments
@@ -395,6 +414,8 @@ mod tests {
 
 	use utilities::assert_ok;
 
+	use crate::multisig::eth::EthSigning;
+
 	use super::*;
 
 	#[test]
@@ -408,7 +429,7 @@ mod tests {
 		let mut rng = Rng::from_seed([0; 32]);
 
 		let (secret, _commitments, shares) =
-			generate_secret_and_shares::<Point>(&mut rng, n, threshold);
+			generate_secret_and_shares::<Point>(&mut rng, n, threshold, None);
 
 		assert_eq!(secret, reconstruct_secret(&shares));
 	}
@@ -431,7 +452,8 @@ mod tests {
 			BTreeMap<_, _>,
 			BTreeMap<_, _>,
 		) = itertools::multiunzip((1..=n).map(|idx| {
-			let (secret, shares_commitments, shares) = generate_secret_and_shares(&mut rng, n, t);
+			let (secret, shares_commitments, shares) =
+				generate_secret_and_shares(&mut rng, n, t, None);
 			// Zero-knowledge proof of `secret`
 			let zkp = generate_zkp_of_secret(&mut rng, secret, &context, idx);
 
@@ -442,9 +464,10 @@ mod tests {
 			((idx, dkg_commitment), (idx, HashComm1(hash_commitment)), (idx, shares))
 		}));
 
-		let coeff_commitments = assert_ok!(validate_commitments(
+		let coeff_commitments = assert_ok!(validate_commitments::<EthSigning>(
 			commitments,
 			hash_commitments,
+			None,
 			&context,
 			Arc::new(PartyIdxMapping::from_participants(BTreeSet::from_iter(
 				(1..=n as u8).map(|i| AccountId::new([i; 32]))
@@ -480,7 +503,7 @@ pub mod genesis {
 	use std::collections::HashMap;
 
 	use super::*;
-	use crate::multisig::{client::PartyIdxMapping, eth::EthSigning, KeyId};
+	use crate::multisig::{client::PartyIdxMapping, eth::EthSigning, PublicKeyBytes};
 	use state_chain_runtime::AccountId;
 
 	/// Generate keys for all participants in a centralised manner.
@@ -489,7 +512,7 @@ pub mod genesis {
 		signers: BTreeSet<AccountId>,
 		initial_key_must_be_incompatible: bool,
 		rng: &mut Rng,
-	) -> (KeyId, HashMap<AccountId, KeygenResultInfo<C>>) {
+	) -> (PublicKeyBytes, HashMap<AccountId, KeygenResultInfo<C>>) {
 		let params = ThresholdParameters::from_share_count(signers.len() as AuthorityCount);
 		let n = params.share_count;
 		let t = params.threshold;
@@ -498,7 +521,7 @@ pub mod genesis {
 			let (commitments, outgoing_secret_shares): (BTreeMap<_, _>, BTreeMap<_, _>) = (1..=n)
 				.map(|idx| {
 					let (_secret, commitments, shares) =
-						generate_secret_and_shares::<C::Point>(rng, n, t);
+						generate_secret_and_shares::<C::Point>(rng, n, t, None);
 					((idx, DKGCommitment { commitments }), (idx, shares))
 				})
 				.unzip();
@@ -537,23 +560,23 @@ pub mod genesis {
 			})
 			.collect();
 
-		let aggregate_pubkey =
-			keygen_result_infos.values().next().unwrap().key.get_public_key_bytes();
-
-		(KeyId(aggregate_pubkey), keygen_result_infos)
+		(
+			keygen_result_infos.values().next().unwrap().key.get_public_key_bytes(),
+			keygen_result_infos,
+		)
 	}
 
 	pub fn generate_key_data<C: CryptoScheme>(
 		signers: BTreeSet<AccountId>,
 		rng: &mut Rng,
-	) -> (KeyId, HashMap<AccountId, KeygenResultInfo<C>>) {
+	) -> (PublicKeyBytes, HashMap<AccountId, KeygenResultInfo<C>>) {
 		generate_key_data_detail(signers, false, rng)
 	}
 
 	pub fn generate_key_data_with_initial_incompatibility(
 		signers: BTreeSet<AccountId>,
 		rng: &mut Rng,
-	) -> (KeyId, HashMap<AccountId, KeygenResultInfo<EthSigning>>) {
+	) -> (PublicKeyBytes, HashMap<AccountId, KeygenResultInfo<EthSigning>>) {
 		generate_key_data_detail(signers, true, rng)
 	}
 }

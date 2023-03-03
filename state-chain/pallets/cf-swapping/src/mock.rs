@@ -78,7 +78,6 @@ impl SwappingApi for MockSwappingApi {
 }
 
 impl Chainflip for Test {
-	type KeyId = Vec<u8>;
 	type ValidatorId = u64;
 	type Amount = u128;
 	type RuntimeCall = RuntimeCall;

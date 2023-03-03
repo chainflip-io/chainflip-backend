@@ -2,6 +2,7 @@ use crate::{AsyncResult, CeremonyId};
 
 use super::{MockPallet, MockPalletStorage};
 use cf_chains::ChainCrypto;
+use cf_primitives::KeyId;
 use codec::{Decode, Encode};
 use frame_support::{dispatch::UnfilteredDispatchable, traits::OriginTrait};
 use sp_std::collections::btree_set::BTreeSet;
@@ -67,7 +68,6 @@ where
 	type RequestId = u32;
 	type Error = &'static str;
 	type Callback = Call;
-	type KeyId = Vec<u8>;
 
 	type ValidatorId = MockValidatorId;
 
@@ -88,7 +88,7 @@ where
 
 	fn request_keygen_verification_signature(
 		payload: <C as ChainCrypto>::Payload,
-		_key_id: Self::KeyId,
+		_key_id: KeyId,
 		_participants: BTreeSet<Self::ValidatorId>,
 	) -> (Self::RequestId, CeremonyId) {
 		Self::request_signature(payload)

@@ -7,9 +7,9 @@ use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex, GENESIS_EPOCH};
 use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, Broadcaster, CeremonyIdProvider, Chainflip,
-	CurrentEpochIndex, EpochKey, EpochTransitionHandler, KeyProvider, KeyState, Slashing,
-	SystemStateManager, ThresholdSigner, VaultKeyWitnessedHandler, VaultRotator, VaultStatus,
-	VaultTransitionHandler,
+	CurrentEpochIndex, EpochInfo, EpochKey, EpochTransitionHandler, KeyProvider, KeyState,
+	Slashing, SystemStateManager, ThresholdSigner, VaultKeyWitnessedHandler, VaultRotator,
+	VaultStatus, VaultTransitionHandler,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -37,7 +37,6 @@ mod tests;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
-#[cfg(feature = "std")]
 const KEYGEN_CEREMONY_RESPONSE_TIMEOUT_DEFAULT: u32 = 10;
 
 pub type PayloadFor<T, I = ()> = <<T as Config<I>>::Chain as ChainCrypto>::Payload;
@@ -156,6 +155,7 @@ pub enum VaultRotationStatus<T: Config<I>, I: 'static = ()> {
 	AwaitingKeygen {
 		keygen_ceremony_id: CeremonyId,
 		keygen_participants: BTreeSet<T::ValidatorId>,
+		epoch_index: EpochIndex,
 		response_status: KeygenResponseStatus<T, I>,
 	},
 	/// We are waiting for the nodes who generated the new key to complete a signing ceremony to
@@ -231,7 +231,7 @@ pub mod pallet {
 		type Offence: From<PalletOffence>;
 
 		/// The chain that is managed by this vault must implement the api types.
-		type Chain: ChainAbi<KeyId = Self::KeyId>;
+		type Chain: ChainAbi;
 
 		/// The supported api calls for the chain.
 		type SetAggKeyWithAggKey: SetAggKeyWithAggKey<Self::Chain>;
@@ -245,7 +245,6 @@ pub mod pallet {
 			Self::Chain,
 			Callback = <Self as Config<I>>::RuntimeCall,
 			ValidatorId = Self::ValidatorId,
-			KeyId = <Self as Chainflip>::KeyId,
 		>;
 
 		/// A broadcaster for the target chain.
@@ -284,6 +283,7 @@ pub mod pallet {
 			if let Some(VaultRotationStatus::<T, I>::AwaitingKeygen {
 				keygen_ceremony_id,
 				keygen_participants,
+				epoch_index,
 				response_status,
 			}) = PendingVaultRotation::<T, I>::get()
 			{
@@ -313,6 +313,7 @@ pub mod pallet {
 						Self::trigger_keygen_verification(
 							keygen_ceremony_id,
 							new_public_key,
+							epoch_index,
 							keygen_participants,
 						);
 					},
@@ -337,6 +338,17 @@ pub mod pallet {
 		}
 
 		fn on_runtime_upgrade() -> Weight {
+			// For new pallet instances, genesis items need to be set.
+			if !KeygenResponseTimeout::<T, I>::exists() {
+				KeygenResponseTimeout::<T, I>::set(KEYGEN_CEREMONY_RESPONSE_TIMEOUT_DEFAULT.into());
+			}
+			if !CurrentVaultEpochAndState::<T, I>::exists() {
+				CurrentVaultEpochAndState::<T, I>::put(VaultEpochAndState {
+					epoch_index: T::EpochInfo::epoch_index(),
+					key_state: KeyState::Unavailable,
+				});
+			}
+
 			migrations::PalletMigration::<T, I>::on_runtime_upgrade()
 		}
 
@@ -399,8 +411,13 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
-		/// Request a key generation \[ceremony_id, participants\]
-		KeygenRequest(CeremonyId, BTreeSet<T::ValidatorId>),
+		/// Request a key generation
+		KeygenRequest {
+			ceremony_id: CeremonyId,
+			participants: BTreeSet<T::ValidatorId>,
+			/// The epoch index for which the key is being generated.
+			epoch_index: EpochIndex,
+		},
 		/// The vault for the request has rotated
 		VaultRotationCompleted,
 		/// The vault's key has been rotated externally \[new_public_key\]
@@ -481,7 +498,7 @@ pub mod pallet {
 			// Keygen is in progress, pull out the details.
 			let (pending_ceremony_id, keygen_status) = ensure_variant!(
 				VaultRotationStatus::<T, I>::AwaitingKeygen {
-					keygen_ceremony_id, keygen_participants: _, ref mut response_status,
+					keygen_ceremony_id, ref mut response_status, ..
 				} => (keygen_ceremony_id, response_status),
 				rotation,
 				Error::<T, I>::InvalidRotationStatus,
@@ -745,12 +762,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn trigger_keygen_verification(
 		keygen_ceremony_id: CeremonyId,
 		new_public_key: AggKeyFor<T, I>,
+		epoch_index: EpochIndex,
 		participants: BTreeSet<T::ValidatorId>,
 	) -> (<T::ThresholdSigner as ThresholdSigner<T::Chain>>::RequestId, CeremonyId) {
 		let (request_id, signing_ceremony_id) =
 			T::ThresholdSigner::request_keygen_verification_signature(
 				T::Chain::agg_key_to_payload(new_public_key),
-				new_public_key.into(),
+				T::Chain::agg_key_to_key_id(new_public_key, epoch_index),
 				participants,
 			);
 		T::ThresholdSigner::register_callback(request_id, {
@@ -794,7 +812,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 	/// # Panics
 	/// - If an empty BTreeSet of candidates is provided
 	/// - If a vault rotation outcome is already Pending (i.e. there's one already in progress)
-	fn keygen(candidates: BTreeSet<Self::ValidatorId>) {
+	fn keygen(candidates: BTreeSet<Self::ValidatorId>, epoch_index: EpochIndex) {
 		assert!(!candidates.is_empty());
 
 		assert_ne!(Self::status(), AsyncResult::Pending);
@@ -804,6 +822,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 		PendingVaultRotation::<T, I>::put(VaultRotationStatus::AwaitingKeygen {
 			keygen_ceremony_id: ceremony_id,
 			keygen_participants: candidates.clone(),
+			epoch_index,
 			response_status: KeygenResponseStatus::new(candidates.clone()),
 		});
 
@@ -811,7 +830,11 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 		// block
 		KeygenResolutionPendingSince::<T, I>::put(frame_system::Pallet::<T>::current_block_number());
 
-		Pallet::<T, I>::deposit_event(Event::KeygenRequest(ceremony_id, candidates));
+		Pallet::<T, I>::deposit_event(Event::KeygenRequest {
+			ceremony_id,
+			participants: candidates,
+			epoch_index,
+		});
 	}
 
 	/// Get the status of the current key generation
@@ -887,6 +910,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 				PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingKeygen {
 					keygen_ceremony_id: Default::default(),
 					keygen_participants: Default::default(),
+					epoch_index: GENESIS_EPOCH,
 					response_status: KeygenResponseStatus::new(Default::default()),
 				});
 			},

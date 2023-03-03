@@ -7,6 +7,7 @@ use super::{ChainTag, CryptoScheme, ECPoint};
 // TODO: we probably want to change the "clients" to
 // solely use "CryptoScheme" as generic parameter instead.
 pub use super::secp256k1::{Point, Scalar};
+use cf_primitives::PublicKeyBytes;
 use num_bigint::BigUint;
 use secp256k1::constants::CURVE_ORDER;
 use serde::{Deserialize, Serialize};
@@ -96,18 +97,16 @@ impl CryptoScheme for EthSigning {
 
 	fn verify_signature(
 		signature: &Self::Signature,
-		key_id: &crate::multisig::KeyId,
+		public_key_bytes: &PublicKeyBytes,
 		payload: &Self::SigningPayload,
 	) -> anyhow::Result<()> {
-		// Get the aggkey
-		let pk_ser: &[u8; 33] = key_id.0[..].try_into().unwrap();
+		let pk_ser: &[u8; 33] = public_key_bytes[..].try_into().unwrap();
 		let agg_key = cf_chains::eth::AggKey::from_pubkey_compressed(*pk_ser);
 
 		let x = BigUint::from_bytes_be(&agg_key.pub_key_x);
 		let half_order = BigUint::from_bytes_be(&CURVE_ORDER) / 2u32 + 1u32;
 		assert!(x < half_order);
 
-		// Verify the signature with the aggkey
 		agg_key
 			.verify(&payload.0, &signature.clone().into())
 			.map_err(|e| anyhow::anyhow!("Failed to verify signature: {:?}", e))?;

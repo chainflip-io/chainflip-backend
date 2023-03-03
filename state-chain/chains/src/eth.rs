@@ -50,7 +50,6 @@ impl Chain for Ethereum {
 }
 
 impl ChainCrypto for Ethereum {
-	type KeyId = KeyId;
 	type AggKey = eth::AggKey;
 	type Payload = eth::H256;
 	type ThresholdSignature = SchnorrVerificationComponents;
@@ -70,6 +69,18 @@ impl ChainCrypto for Ethereum {
 
 	fn agg_key_to_payload(agg_key: Self::AggKey) -> Self::Payload {
 		H256(Blake2_256::hash(&agg_key.to_pubkey_compressed()))
+	}
+
+	fn agg_key_to_key_id(agg_key: Self::AggKey, epoch_index: EpochIndex) -> KeyId {
+		KeyId { epoch_index, public_key_bytes: agg_key.into() }
+	}
+}
+
+impl TryFrom<KeyId> for eth::AggKey {
+	type Error = &'static str;
+
+	fn try_from(key_id: KeyId) -> Result<Self, Self::Error> {
+		key_id.public_key_bytes.try_into()
 	}
 }
 
@@ -689,30 +700,15 @@ pub enum EthereumIngressId {
 	UnDeployed(IntentId),
 }
 
-pub struct EthereumIngressIdGenerator;
-
-impl IngressTypeGeneration for EthereumIngressIdGenerator {
-	type IngressId = EthereumIngressId;
+impl IngressIdConstructor for EthereumIngressId {
 	type Address = H160;
 
-	fn generate_ingress_type(
-		intent_id: u64,
-		address: Self::Address,
-		deployed: bool,
-	) -> Self::IngressId {
-		if deployed {
-			EthereumIngressId::Deployed(address)
-		} else {
-			EthereumIngressId::UnDeployed(intent_id)
-		}
+	fn deployed(_intent_id: u64, address: Self::Address) -> Self {
+		Self::Deployed(address)
 	}
 
-	fn deployment_status(is_deployed: bool) -> DeploymentStatus {
-		if is_deployed {
-			DeploymentStatus::Deployed
-		} else {
-			DeploymentStatus::Undeployed
-		}
+	fn undeployed(intent_id: u64, _address: Self::Address) -> Self {
+		Self::UnDeployed(intent_id)
 	}
 }
 

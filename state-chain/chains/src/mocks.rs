@@ -1,23 +1,38 @@
 use crate::{
-	eth::{api::EthereumReplayProtection, EthereumIngressId, TransactionFee},
+	eth::{api::EthereumReplayProtection, TransactionFee},
 	*,
 };
+use cf_primitives::KeyId;
 use sp_std::marker::PhantomData;
 use std::cell::RefCell;
 
 #[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct MockEthereum;
 
+pub type MockEthereumIngressId = u128;
+
 // Chain implementation used for testing.
 impl Chain for MockEthereum {
-	type IngressFetchId = EthereumIngressId;
+	type IngressFetchId = MockEthereumIngressId;
 	type ChainBlockNumber = u64;
 	type ChainAmount = EthAmount;
 	type TrackedData = MockTrackedData;
 	type TransactionFee = TransactionFee;
-	type ChainAccount = u64; // Currently, we don't care about this since we don't use them in tests
+	type ChainAccount = u64;
 	type ChainAsset = assets::eth::Asset;
 	type EpochStartData = ();
+}
+
+impl IngressIdConstructor for MockEthereumIngressId {
+	type Address = u64;
+
+	fn deployed(_intent_id: u64, _address: Self::Address) -> Self {
+		unimplemented!()
+	}
+
+	fn undeployed(_intent_id: u64, _address: Self::Address) -> Self {
+		unimplemented!()
+	}
 }
 
 #[derive(
@@ -63,9 +78,51 @@ pub struct MockThresholdSignature<K, P> {
 	pub signed_payload: P,
 }
 
+#[derive(
+	Copy,
+	Clone,
+	Debug,
+	PartialEq,
+	Eq,
+	Default,
+	MaxEncodedLen,
+	Encode,
+	Decode,
+	TypeInfo,
+	Ord,
+	PartialOrd,
+)]
+pub struct MockAggKey(pub [u8; 4]);
+
+impl TryFrom<PublicKeyBytes> for MockAggKey {
+	type Error = ();
+
+	fn try_from(public_key_bytes: PublicKeyBytes) -> Result<Self, Self::Error> {
+		if public_key_bytes.len() != 4 {
+			return Err(())
+		}
+		let mut key = [0u8; 4];
+		key.copy_from_slice(&public_key_bytes);
+		Ok(MockAggKey(key))
+	}
+}
+
+impl From<MockAggKey> for PublicKeyBytes {
+	fn from(val: MockAggKey) -> Self {
+		val.0.to_vec()
+	}
+}
+
+impl TryFrom<KeyId> for MockAggKey {
+	type Error = ();
+
+	fn try_from(key_id: KeyId) -> Result<Self, Self::Error> {
+		Ok(MockAggKey(key_id.public_key_bytes.try_into().map_err(|_| ())?))
+	}
+}
+
 impl ChainCrypto for MockEthereum {
-	type KeyId = Vec<u8>;
-	type AggKey = [u8; 4];
+	type AggKey = MockAggKey;
 	type Payload = [u8; 4];
 	type ThresholdSignature = MockThresholdSignature<Self::AggKey, Self::Payload>;
 	type TransactionId = [u8; 4];
@@ -80,12 +137,17 @@ impl ChainCrypto for MockEthereum {
 	}
 
 	fn agg_key_to_payload(agg_key: Self::AggKey) -> Self::Payload {
-		agg_key
+		agg_key.0
+	}
+
+	fn agg_key_to_key_id(agg_key: Self::AggKey, epoch_index: EpochIndex) -> KeyId {
+		KeyId { epoch_index, public_key_bytes: agg_key.0.to_vec() }
 	}
 }
 
+impl_default_benchmark_value!(MockAggKey);
 impl_default_benchmark_value!([u8; 4]);
-impl_default_benchmark_value!(MockThresholdSignature<[u8; 4], [u8; 4]>);
+impl_default_benchmark_value!(MockThresholdSignature<MockAggKey, [u8; 4]>);
 impl_default_benchmark_value!(MockTransaction);
 
 pub const ETH_TX_HASH: <MockEthereum as ChainCrypto>::TransactionId = [0xbc; 4];
@@ -150,11 +212,11 @@ impl<Abi, Call> MockTransactionBuilder<Abi, Call> {
 	}
 }
 
-impl<Abi: ChainAbi, Call: ApiCall<Abi>> TransactionBuilder<Abi, Call>
+impl<Abi: ChainAbi<Transaction = MockTransaction>, Call: ApiCall<Abi>> TransactionBuilder<Abi, Call>
 	for MockTransactionBuilder<Abi, Call>
 {
 	fn build_transaction(_signed_call: &Call) -> <Abi as ChainAbi>::Transaction {
-		Default::default()
+		MockTransaction {}
 	}
 
 	fn refresh_unsigned_transaction(_unsigned_tx: &mut <Abi as ChainAbi>::Transaction) {

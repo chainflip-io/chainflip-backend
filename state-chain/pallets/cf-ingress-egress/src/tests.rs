@@ -1,18 +1,17 @@
 use crate::{
-	mock::*, AddressPool, AddressStatus, DisabledEgressAssets, FetchOrTransfer, IntentActions,
-	IntentExpiries, IntentIngressDetails, ScheduledEgressRequests, WeightInfo,
+	mock::*, AddressPool, AddressStatus, DeploymentStatus, DisabledEgressAssets, FetchOrTransfer,
+	IntentActions, IntentExpiries, IntentIngressDetails, ScheduledEgressRequests, WeightInfo,
 };
 
-use cf_chains::DeploymentStatus;
 use cf_primitives::{chains::assets::eth, ForeignChain};
-use cf_traits::{mocks::time_source, EgressApi, IngressApi};
+use cf_traits::{EgressApi, IngressApi};
 
 use frame_support::{assert_ok, instances::Instance1, traits::Hooks, weights::Weight};
-use std::time::Duration;
 const ALICE_ETH_ADDRESS: EthereumAddress = [100u8; 20];
 const BOB_ETH_ADDRESS: EthereumAddress = [101u8; 20];
 const ETH_ETH: eth::Asset = eth::Asset::Eth;
 const ETH_FLIP: eth::Asset = eth::Asset::Flip;
+const EXPIRY_BLOCK: u64 = 5;
 
 #[test]
 fn disallowed_asset_will_not_be_batch_sent() {
@@ -132,7 +131,6 @@ fn can_schedule_ingress_fetch() {
 		schedule_ingress(2u64, eth::Asset::Eth);
 		schedule_ingress(3u64, eth::Asset::Flip);
 
-		// Note: Since we are reuse addresses the intent_id staies the same
 		assert_eq!(
 			ScheduledEgressRequests::<Test, Instance1>::get(),
 			vec![
@@ -289,12 +287,12 @@ fn can_manually_send_batch_all() {
 fn on_idle_batch_size_is_limited_by_weight() {
 	new_test_ext().execute_with(|| {
 		IngressEgress::schedule_egress(ETH_ETH, 1_000, ALICE_ETH_ADDRESS.into());
-		IngressEgress::schedule_egress(ETH_ETH, 1_000, ALICE_ETH_ADDRESS.into());
+		IngressEgress::schedule_egress(ETH_ETH, 2_000, ALICE_ETH_ADDRESS.into());
 		schedule_ingress(1u64, eth::Asset::Eth);
 		schedule_ingress(2u64, eth::Asset::Eth);
-		IngressEgress::schedule_egress(ETH_FLIP, 1_000, ALICE_ETH_ADDRESS.into());
-		IngressEgress::schedule_egress(ETH_FLIP, 1_000, ALICE_ETH_ADDRESS.into());
-		IngressEgress::schedule_egress(ETH_FLIP, 1_000, ALICE_ETH_ADDRESS.into());
+		IngressEgress::schedule_egress(ETH_FLIP, 3_000, ALICE_ETH_ADDRESS.into());
+		IngressEgress::schedule_egress(ETH_FLIP, 4_000, ALICE_ETH_ADDRESS.into());
+		IngressEgress::schedule_egress(ETH_FLIP, 5_000, ALICE_ETH_ADDRESS.into());
 		schedule_ingress(3u64, eth::Asset::Flip);
 		schedule_ingress(4u64, eth::Asset::Flip);
 
@@ -335,8 +333,8 @@ fn on_idle_batch_size_is_limited_by_weight() {
 					to: ALICE_ETH_ADDRESS.into(),
 					egress_id: (ForeignChain::Ethereum, 5),
 				},
-				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 1u64, asset: ETH_FLIP },
-				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 2u64, asset: ETH_FLIP },
+				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 3u64, asset: ETH_FLIP },
+				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 4u64, asset: ETH_FLIP },
 			]
 		);
 	});
@@ -371,20 +369,18 @@ fn on_idle_does_nothing_if_nothing_to_send() {
 #[test]
 fn intent_expires() {
 	new_test_ext().execute_with(|| {
-		let expire_time = 5;
 		let _ = IngressEgress::register_liquidity_ingress_intent(ALICE, ETH_ETH);
-		time_source::Mock::tick(Duration::from_secs(expire_time));
 		assert!(AddressPool::<Test, Instance1>::get().is_empty());
 		assert!(IntentExpiries::<Test, Instance1>::get(5).is_some());
 		let addresses =
-			IntentExpiries::<Test, Instance1>::get(expire_time).expect("intent expiry exists");
+			IntentExpiries::<Test, Instance1>::get(EXPIRY_BLOCK).expect("intent expiry exists");
 		assert!(addresses.len() == 1);
 		let address = addresses.get(0).expect("to have ingress details for that address");
 		assert!(IntentIngressDetails::<Test, Instance1>::get(address,).is_some());
 		assert!(IntentActions::<Test, Instance1>::get(address).is_some());
 		AddressStatus::<Test, Instance1>::insert(address, DeploymentStatus::Deployed);
-		IngressEgress::on_initialize(1);
-		assert!(IntentExpiries::<Test, Instance1>::get(expire_time).is_none());
+		IngressEgress::on_initialize(EXPIRY_BLOCK);
+		assert!(IntentExpiries::<Test, Instance1>::get(EXPIRY_BLOCK).is_none());
 		assert!(!AddressPool::<Test, Instance1>::get().is_empty());
 		assert_eq!(
 			AddressPool::<Test, Instance1>::get().pop().expect("to have a stale intent"),
@@ -393,5 +389,57 @@ fn intent_expires() {
 		System::assert_last_event(RuntimeEvent::IngressEgress(crate::Event::StopWitnessing {
 			ingress_address: *address,
 		}));
+	});
+}
+
+#[test]
+fn addresses_are_getting_reused() {
+	new_test_ext().execute_with(|| {
+		schedule_ingress(1u64, eth::Asset::Eth);
+		IngressEgress::on_idle(
+			1,
+			<Test as crate::Config<Instance1>>::WeightInfo::egress_assets(1) +
+				Weight::from_ref_time(1),
+		);
+		IngressEgress::on_initialize(EXPIRY_BLOCK);
+		assert!(!AddressPool::<Test, Instance1>::get().is_empty());
+		assert_eq!(
+			AddressStatus::<Test, Instance1>::get(
+				AddressPool::<Test, Instance1>::get().pop().expect("to have an address")
+			),
+			DeploymentStatus::Deployed
+		);
+		schedule_ingress(2u64, eth::Asset::Eth);
+		IngressEgress::on_idle(
+			1,
+			<Test as crate::Config<Instance1>>::WeightInfo::egress_assets(1) +
+				Weight::from_ref_time(1),
+		);
+		IngressEgress::on_initialize(EXPIRY_BLOCK);
+		assert_eq!(AddressPool::<Test, Instance1>::get().len(), 1);
+	});
+}
+
+#[test]
+fn create_new_address_while_pool_is_empty() {
+	new_test_ext().execute_with(|| {
+		schedule_ingress(1u64, eth::Asset::Eth);
+		schedule_ingress(2u64, eth::Asset::Eth);
+		IngressEgress::on_idle(
+			1,
+			<Test as crate::Config<Instance1>>::WeightInfo::egress_assets(3) +
+				Weight::from_ref_time(1),
+		);
+		IngressEgress::on_initialize(EXPIRY_BLOCK);
+		assert_eq!(AddressPool::<Test, Instance1>::get().len(), 2);
+		schedule_ingress(3u64, eth::Asset::Eth);
+		assert_eq!(AddressPool::<Test, Instance1>::get().len(), 1);
+		IngressEgress::on_idle(
+			1,
+			<Test as crate::Config<Instance1>>::WeightInfo::egress_assets(2) +
+				Weight::from_ref_time(1),
+		);
+		IngressEgress::on_initialize(EXPIRY_BLOCK);
+		assert_eq!(AddressPool::<Test, Instance1>::get().len(), 2);
 	});
 }

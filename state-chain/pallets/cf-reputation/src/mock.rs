@@ -116,7 +116,6 @@ pub const ALICE: <Test as frame_system::Config>::AccountId = 100u64;
 pub const BOB: <Test as frame_system::Config>::AccountId = 200u64;
 
 impl Chainflip for Test {
-	type KeyId = Vec<u8>;
 	type ValidatorId = ValidatorId;
 	type Amount = u128;
 	type RuntimeCall = RuntimeCall;

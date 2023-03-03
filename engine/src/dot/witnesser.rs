@@ -1,6 +1,5 @@
 use std::{
 	collections::{BTreeSet, HashMap},
-	pin::Pin,
 	sync::Arc,
 };
 
@@ -22,6 +21,7 @@ use subxt::{
 	config::Header,
 	events::{Phase, StaticEvent},
 };
+use tokio::select;
 use tracing::{debug, error, info, info_span, trace, Instrument};
 
 use crate::{
@@ -32,7 +32,7 @@ use crate::{
 		checkpointing::{
 			get_witnesser_start_block_with_checkpointing, StartCheckpointing, WitnessedUntil,
 		},
-		epoch_witnesser::{self, should_end_witnessing},
+		epoch_witnesser::{self},
 		BlockNumberable, EpochStart,
 	},
 };
@@ -102,28 +102,6 @@ enum EventWrapper {
 	ProxyAdded(ProxyAdded),
 	Transfer(Transfer),
 	TransactionFeePaid(TransactionFeePaid),
-}
-
-pub async fn dot_block_head_stream_from<BlockHeaderStream, DotRpc>(
-	from_block: PolkadotBlockNumber,
-	safe_head_stream: BlockHeaderStream,
-	dot_client: DotRpc,
-) -> Result<Pin<Box<dyn Stream<Item = MiniHeader> + Send + 'static>>>
-where
-	BlockHeaderStream: Stream<Item = MiniHeader> + 'static + Send,
-	DotRpc: DotRpcApi + 'static + Send + Clone,
-{
-	block_head_stream_from(from_block, safe_head_stream, move |block_number| {
-		let dot_client = dot_client.clone();
-		Box::pin(async move {
-			let block_hash = dot_client
-				.block_hash(block_number)
-				.await?
-				.expect("Called on a finalised stream, so the block will exist");
-			Ok(MiniHeader { block_number, block_hash })
-		})
-	})
-	.await
 }
 
 /// Takes a stream of Results and terminates when it hits an error, logging the error before
@@ -267,7 +245,7 @@ where
 		|_epoch_start| true,
 		(monitored_ingress_addresses, ingress_address_receiver, monitored_signatures, signature_receiver),
 		move |
-			end_witnessing_signal,
+		mut end_witnessing_receiver,
 			epoch_start,
 			(
 				mut monitored_ingress_addresses,
@@ -286,7 +264,7 @@ where
 					epoch_start.block_number,
 					db,
 				).await
-				.expect("Failed to start Eth witnesser checkpointing") 
+				.expect("Failed to start Dot witnesser checkpointing")
 				{
 					StartCheckpointing::Started((from_block, witnessed_until_sender)) =>
 						(from_block, witnessed_until_sender),
@@ -306,11 +284,17 @@ where
 							block_hash: header.hash(),
 						});
 
-				let block_head_stream_from = dot_block_head_stream_from(
-					from_block,
-					safe_head_stream,
-					dot_client.clone(),
-				)
+				let dot_client_c = dot_client.clone();
+				let block_head_stream_from = block_head_stream_from(from_block, safe_head_stream, move |block_number| {
+					let dot_client = dot_client_c.clone();
+					Box::pin(async move {
+						let block_hash = dot_client
+							.block_hash(block_number)
+							.await?
+							.expect("Called on a finalised stream, so the block will exist");
+						Ok(MiniHeader { block_number, block_hash })
+					})
+				})
 				.await?;
 
 				let our_vault = epoch_start.data.vault_account;
@@ -366,127 +350,141 @@ where
 					}),
 				);
 
-				while let Some((block_hash, block_number, block_event_details)) =
-					block_events_stream.next().await
-				{
-					if should_end_witnessing::<Polkadot>(
-						end_witnessing_signal.clone(),
-						block_number,
-					) {
-						break
-					}
+				let mut end_at_block = None;
+				let mut current_block = from_block;
 
-					trace!( "Checking block: {block_number}, with hash: {block_hash:?} for interesting events");
-
-					let (
-						interesting_indices,
-						ingress_witnesses,
-						vault_key_rotated_calls,
-					) = check_for_interesting_events_in_block(
-							block_event_details,
-							block_number,
-							&our_vault,
-							&mut ingress_address_receiver,
-							&mut monitored_ingress_addresses,
-							);
-
-					for call in vault_key_rotated_calls {
-						let _result = state_chain_client
-								.submit_signed_extrinsic(
-									pallet_cf_witnesser::Call::witness_at_epoch {
-										call,
-										epoch_index: epoch_start.epoch_index,
-									},
-								)
-								.await;
-					}
-
-					if !interesting_indices.is_empty() {
-						info!("We got an interesting block at block: {block_number}, hash: {block_hash:?}");
-
-						let block = dot_client
-						.block(block_hash)
-						.await
-						.context("Failed fetching block from DOT RPC")?
-						.context(format!(
-							"Polkadot block does not exist for block hash: {block_hash:?}",
-						))?;
-
-						while let Ok(sig) = signature_receiver.try_recv()
-						{
-							monitored_signatures.insert(sig);
+				loop {
+					let block_details = select! {
+						end_block = &mut end_witnessing_receiver => {
+							end_at_block = Some(end_block.expect("end witnessing channel was dropped unexpectedly"));
+							None
 						}
-						for (extrinsic_index, tx_fee) in interesting_indices {
-							let xt = block.extrinsics.get(extrinsic_index as usize).expect("We know this exists since we got this index from the event, from the block we are querying.");
-							let xt_encoded = xt.0.encode();
-							let mut xt_bytes = xt_encoded.as_slice();
-							let unchecked = PolkadotUncheckedExtrinsic::decode(&mut xt_bytes);
-							if let Ok(unchecked) = unchecked {
-								let signature = unchecked.signature.unwrap().1;
-								if let MultiSignature::Sr25519(sig) = signature {
-									if monitored_signatures.contains(&sig.0) {
-										info!("Witnessing signature_accepted. signature: {sig:?}");
+						Some((block_hash, block_number, block_event_details)) =	block_events_stream.next() => {
+							current_block = block_number;
+							Some((block_hash, block_number, block_event_details))
+						}
+					};
 
-										let _result = state_chain_client
-											.submit_signed_extrinsic(
-												pallet_cf_witnesser::Call::witness_at_epoch {
-													call: Box::new(
-														pallet_cf_broadcast::Call::<_, PolkadotInstance>::signature_accepted {
-															signature: sig.clone(),
-															signer_id: our_vault.clone(),
-															tx_fee
+					if let Some(end_block) = end_at_block {
+						if current_block >= end_block {
+									info!("Polkadot block witnessers unsubscribe at block {end_block}");
+									break
+								}
+							}
+
+					if let Some((block_hash, block_number, block_event_details)) = block_details {
+							trace!( "Checking block: {block_number}, with hash: {block_hash:?} for interesting events");
+							let (
+								interesting_indices,
+								ingress_witnesses,
+								vault_key_rotated_calls,
+							) = check_for_interesting_events_in_block(
+									block_event_details,
+									block_number,
+									&our_vault,
+									&mut ingress_address_receiver,
+									&mut monitored_ingress_addresses,
+									);
+
+							for call in vault_key_rotated_calls {
+								let _result = state_chain_client
+										.submit_signed_extrinsic(
+											pallet_cf_witnesser::Call::witness_at_epoch {
+												call,
+												epoch_index: epoch_start.epoch_index,
+											},
+										)
+										.await;
+							}
+
+							if !interesting_indices.is_empty() {
+								info!("We got an interesting block at block: {block_number}, hash: {block_hash:?}");
+
+								let block = dot_client
+								.block(block_hash)
+								.await
+								.context("Failed fetching block from DOT RPC")?
+								.context(format!(
+									"Polkadot block does not exist for block hash: {block_hash:?}",
+								))?;
+
+								while let Ok(sig) = signature_receiver.try_recv()
+								{
+									monitored_signatures.insert(sig);
+								}
+								for (extrinsic_index, tx_fee) in interesting_indices {
+									let xt = block.extrinsics.get(extrinsic_index as usize).expect("We know this exists since we got this index from the event, from the block we are querying.");
+									let xt_encoded = xt.0.encode();
+									let mut xt_bytes = xt_encoded.as_slice();
+									let unchecked = PolkadotUncheckedExtrinsic::decode(&mut xt_bytes);
+									if let Ok(unchecked) = unchecked {
+										let signature = unchecked.signature.unwrap().1;
+										if let MultiSignature::Sr25519(sig) = signature {
+											if monitored_signatures.contains(&sig.0) {
+												info!("Witnessing signature_accepted. signature: {sig:?}");
+
+												let _result = state_chain_client
+													.submit_signed_extrinsic(
+														pallet_cf_witnesser::Call::witness_at_epoch {
+															call: Box::new(
+																pallet_cf_broadcast::Call::<_, PolkadotInstance>::signature_accepted {
+																	signature: sig.clone(),
+																	signer_id: our_vault.clone(),
+																	tx_fee
+																}
+																.into(),
+															),
+															epoch_index: epoch_start.epoch_index,
+														},
+													)
+													.await;
+
+											monitored_signatures.remove(&sig.0);
+											}
+										}
+									} else {
+										// We expect this to occur when attempting to decode
+										// a transaction that was not sent by us.
+										// We can safely ignore it, but we log it in case.
+										debug!("Failed to decode UncheckedExtrinsic {unchecked:?}");
+									}
+								}
+							}
+
+							if !ingress_witnesses.is_empty() {
+								let _result =
+									state_chain_client
+										.submit_signed_extrinsic(
+											pallet_cf_witnesser::Call::witness_at_epoch {
+												call:
+													Box::new(
+														pallet_cf_ingress_egress::Call::<
+															_,
+															PolkadotInstance,
+														>::do_ingress {
+															ingress_witnesses,
 														}
 														.into(),
 													),
-													epoch_index: epoch_start.epoch_index,
-												},
-											)
-											.await;
-
-										monitored_signatures.remove(&sig.0);
-									}
-								} else {
-									error!("Signature not Sr25519. Got {signature:?} instead.");
-								}
-							} else {
-								error!("Failed to decode UncheckedExtrinsic {unchecked:?}");
+												epoch_index: epoch_start.epoch_index,
+											},
+										)
+										.await;
 							}
-						}
-					}
 
-					if !ingress_witnesses.is_empty() {
-						let _result =
-							state_chain_client
-								.submit_signed_extrinsic(
-									pallet_cf_witnesser::Call::witness_at_epoch {
-										call:
-											Box::new(
-												pallet_cf_ingress_egress::Call::<
-													_,
-													PolkadotInstance,
-												>::do_ingress {
-													ingress_witnesses,
-												}
-												.into(),
-											),
-										epoch_index: epoch_start.epoch_index,
-									},
-								)
-								.await;
+							witnessed_until_sender
+							.send(WitnessedUntil {
+								epoch_index: epoch_start.epoch_index,
+								block_number: block_number as u64,
+							})
+							.await
+							.unwrap();
 					}
-
-					witnessed_until_sender
-					.send(WitnessedUntil {
-						epoch_index: epoch_start.epoch_index,
-						block_number: block_number as u64,
-					})
-					.await
-					.unwrap();
 				}
 				Ok((monitored_ingress_addresses, ingress_address_receiver, monitored_signatures, signature_receiver))
 			}
 		},
-	).instrument(info_span!("DOT-Witnesser"))
+	).instrument(info_span!("Dot-Witnesser"))
 	.await
 }
 

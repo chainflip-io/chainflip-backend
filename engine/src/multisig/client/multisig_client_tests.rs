@@ -14,11 +14,12 @@ use crate::{
 			CeremonyRequestDetails,
 		},
 		eth::EthSigning,
-		KeyId, PersistentKeyDB,
+		PersistentKeyDB,
 	},
 	testing::{assert_future_can_complete, new_temp_directory_with_nonexistent_file},
 };
 
+use cf_primitives::{KeyId, GENESIS_EPOCH};
 use client::MultisigClient;
 use utilities::{assert_err, assert_ok};
 
@@ -28,7 +29,7 @@ async fn should_ignore_rts_for_unknown_key() {
 	let (_dir, db_file) = new_temp_directory_with_nonexistent_file();
 
 	// Use any key id, as the key db will be empty
-	let key_id = KeyId(Vec::from([0u8; 32]));
+	let key_id = KeyId { epoch_index: GENESIS_EPOCH, public_key_bytes: Vec::from([0u8; 32]) };
 
 	// Create a client
 	let (ceremony_request_sender, _) = tokio::sync::mpsc::unbounded_channel();
@@ -60,10 +61,10 @@ async fn should_save_key_after_keygen() {
 	let (_dir, db_file) = new_temp_directory_with_nonexistent_file();
 
 	// Generate a key to use in this test
-	let (key_id, keygen_result_info) = {
-		let (key_id, key_data) =
+	let (public_key_bytes, keygen_result_info) = {
+		let (public_key_bytes, key_data) =
 			helpers::run_keygen(new_nodes(ACCOUNT_IDS.clone()), DEFAULT_KEYGEN_CEREMONY_ID).await;
-		(key_id, key_data.into_iter().next().unwrap().1)
+		(public_key_bytes, key_data.into_iter().next().unwrap().1)
 	};
 
 	{
@@ -82,6 +83,7 @@ async fn should_save_key_after_keygen() {
 		// Send Keygen Request
 		let keygen_request_fut = client.initiate_keygen(
 			DEFAULT_KEYGEN_CEREMONY_ID,
+			GENESIS_EPOCH,
 			BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
 		);
 
@@ -106,20 +108,27 @@ async fn should_save_key_after_keygen() {
 		PersistentKeyDB::new_and_migrate_to_latest(&db_file, None, &logger)
 			.expect("Failed to open database"),
 	));
-	assert!(key_store.get_key(&key_id).is_some(), "Key not found in db");
+	assert!(
+		key_store
+			.get_key(&KeyId { epoch_index: GENESIS_EPOCH, public_key_bytes })
+			.is_some(),
+		"Key not found in db"
+	);
 }
 
 #[tokio::test]
 async fn should_load_keys_on_creation() {
 	// Generate a key to use in this test
-	let (key_id, stored_keygen_result_info) = {
-		let (key_id, key_data) =
+	let (public_key_bytes, stored_keygen_result_info) = {
+		let (public_key_bytes, key_data) =
 			helpers::run_keygen(new_nodes(ACCOUNT_IDS.clone()), DEFAULT_KEYGEN_CEREMONY_ID).await;
-		(key_id, key_data.into_iter().next().unwrap().1)
+		(public_key_bytes, key_data.into_iter().next().unwrap().1)
 	};
 
 	// A temp directory to store the key db for this test
 	let (_dir, db_file) = new_temp_directory_with_nonexistent_file();
+
+	let key_id = KeyId { epoch_index: GENESIS_EPOCH, public_key_bytes };
 
 	// Create a new db and store the key in it
 	let logger = new_test_logger();

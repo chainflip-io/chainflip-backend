@@ -1,6 +1,7 @@
 //! Contains tests related to Accounts in the runtime
 
-use crate::{network, GENESIS_EPOCH};
+use crate::network;
+use cf_primitives::GENESIS_EPOCH;
 use cf_traits::EpochInfo;
 use pallet_cf_reputation::Reputations;
 use pallet_cf_staking::{ClaimAmount, MinimumStake};

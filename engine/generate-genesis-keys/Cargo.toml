@@ -22,6 +22,7 @@ csv = "1.1.6"
 serde_json = "1.0"
 serde = {version = "1.0", features = ["derive"]}
 state-chain-runtime = {path = "../../state-chain/runtime"}
+cf-primitives = {path = "../../state-chain/primitives"}
 chainflip-node = {path = "../../state-chain/node"}
 # have to use the older version until secp256k1 updates its dependency (https://github.com/rust-bitcoin/rust-secp256k1/issues/328)
 rand_legacy = { package = "rand", version = "0.6" }

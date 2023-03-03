@@ -5,7 +5,7 @@ use crate::{
 	PalletOffence, PendingCeremonies, RequestId,
 };
 use cf_chains::{
-	mocks::{MockEthereum, MockThresholdSignature},
+	mocks::{MockAggKey, MockEthereum, MockThresholdSignature},
 	ChainCrypto,
 };
 use cf_traits::{
@@ -80,7 +80,6 @@ impl frame_system::Config for Test {
 use cf_traits::mocks::{ensure_origin_mock::NeverFailingOriginCheck, epoch_info::MockEpochInfo};
 
 impl Chainflip for Test {
-	type KeyId = Vec<u8>;
 	type ValidatorId = u64;
 	type Amount = u128;
 	type RuntimeCall = RuntimeCall;
@@ -96,7 +95,6 @@ thread_local! {
 	pub static CALL_DISPATCHED: std::cell::RefCell<Option<RequestId>> = Default::default();
 	pub static TIMES_CALLED: std::cell::RefCell<u8> = Default::default();
 }
-
 #[derive(Debug, Clone, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct MockCallback<C: ChainCrypto>(RequestId, PhantomData<C>);
 
@@ -136,8 +134,7 @@ impl UnfilteredDispatchable for MockCallback<MockEthereum> {
 	}
 }
 
-// Mock KeyProvider
-pub const MOCK_AGG_KEY: [u8; 4] = *b"AKEY";
+pub const MOCK_AGG_KEY: MockAggKey = MockAggKey(*b"AKEY");
 
 pub struct MockKeyProvider;
 
@@ -157,7 +154,7 @@ pub fn sign(
 }
 
 pub const INVALID_SIGNATURE: <MockEthereum as ChainCrypto>::ThresholdSignature =
-	MockThresholdSignature::<_, _> { signing_key: *b"BAD!", signed_payload: *b"BAD!" };
+	MockThresholdSignature::<_, _> { signing_key: MockAggKey(*b"BAD!"), signed_payload: *b"BAD!" };
 
 parameter_types! {
 	pub const CeremonyRetryDelay: <Test as frame_system::Config>::BlockNumber = 4;

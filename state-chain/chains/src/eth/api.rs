@@ -121,36 +121,21 @@ where
 	) -> Result<Self, ()> {
 		let mut fetch_only_params = vec![];
 		let mut fetch_deploy_params = vec![];
-		if fetch_params
-			.into_iter()
-			.map(|FetchAssetParams { ingress_fetch_id, asset }| {
-				let token_address = E::lookup(asset).ok_or(())?;
+		for FetchAssetParams { ingress_fetch_id, asset } in fetch_params {
+			if let Some(token_address) = E::lookup(asset) {
 				match ingress_fetch_id {
 					EthereumIngressId::Deployed(contract_address) => fetch_only_params
 						.push(EncodableFetchAssetParams { contract_address, asset: token_address }),
 					EthereumIngressId::UnDeployed(intent_id) => fetch_deploy_params
 						.push(EncodableFetchDeployAssetParams { intent_id, asset: token_address }),
 				};
-				Ok(())
-			})
-			.any(|result: Result<(), ()>| result.is_err())
-		{
-			return Err(())
+			} else {
+				return Err(())
+			}
 		}
-		//.collect::<Result<Vec<()>, ()>>()?;
 		Ok(Self::AllBatch(all_batch::AllBatch::new_unsigned(
 			E::replay_protection(),
 			fetch_deploy_params,
-			// .into_iter()
-			// .map(|FetchAssetParams { ingress_id, asset }| {
-			// 	E::lookup(asset)
-			// 		.map(|address| all_batch::EncodableFetchAssetParams {
-			// 			contract_address: ingress_id,
-			// 			asset: address,
-			// 		})
-			// 		.ok_or(())
-			// })
-			// .collect::<Result<Vec<_>, ()>>()?,
 			fetch_only_params,
 			transfer_params
 				.into_iter()

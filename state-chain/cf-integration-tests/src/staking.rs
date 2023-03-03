@@ -4,6 +4,7 @@ use crate::{
 };
 
 use super::{genesis, network, *};
+use cf_primitives::GENESIS_EPOCH;
 use cf_traits::EpochInfo;
 use pallet_cf_staking::pallet::Error;
 use pallet_cf_validator::Backups;

@@ -2,6 +2,7 @@ use crate::multisig::crypto::ECScalar;
 
 pub use super::secp256k1::{Point, Scalar};
 use super::{ChainTag, CryptoScheme, ECPoint};
+use cf_primitives::PublicKeyBytes;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -107,7 +108,7 @@ impl CryptoScheme for BtcSigning {
 
 	fn verify_signature(
 		signature: &Self::Signature,
-		key_id: &crate::multisig::KeyId,
+		public_key_bytes: &PublicKeyBytes,
 		payload: &Self::SigningPayload,
 	) -> anyhow::Result<()> {
 		let mut hasher = Sha256::new();
@@ -116,7 +117,8 @@ impl CryptoScheme for BtcSigning {
 		let secp = secp256k1::Secp256k1::new();
 		let raw_sig = secp256k1::schnorrsig::Signature::from_slice(&signature.to_raw()).unwrap();
 		let raw_msg = secp256k1::Message::from_slice(&hash).unwrap();
-		let raw_pubkey = secp256k1::schnorrsig::PublicKey::from_slice(&key_id.0[1..33]).unwrap();
+		let raw_pubkey =
+			secp256k1::schnorrsig::PublicKey::from_slice(&public_key_bytes[1..33]).unwrap();
 
 		secp.schnorrsig_verify(&raw_sig, &raw_msg, &raw_pubkey)
 			.map_err(|e| anyhow::anyhow!("Failed to verify signature: {:?}", e))?;
@@ -146,11 +148,10 @@ fn test_sig_verification() {
 	));
 	let s = Scalar::from_hex("ED7A468DBE45823D91CC1276F9E9F1DD3A1DB8E4C9EFE8F5DBA43B63E4C02FAD");
 	let signature = BtcSigning::build_signature(s, r);
-	let key = crate::multisig::KeyId(
-		hex::decode("0259B2B46FB182A6D4B39FFB7A29D0B67851DDE2433683BE6D46623A7960D2799E").unwrap(),
-	);
+	let public_key_bytes =
+		hex::decode("0259B2B46FB182A6D4B39FFB7A29D0B67851DDE2433683BE6D46623A7960D2799E").unwrap();
 	let payload = BtcSigning::signing_payload_for_test();
-	assert!(BtcSigning::verify_signature(&signature, &key, &payload).is_ok());
+	assert!(BtcSigning::verify_signature(&signature, &public_key_bytes, &payload).is_ok());
 }
 
 #[test]

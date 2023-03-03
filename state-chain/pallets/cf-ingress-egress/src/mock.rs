@@ -3,24 +3,20 @@ pub use cf_chains::{
 	eth::api::{EthereumApi, EthereumReplayProtection},
 	Chain, ChainAbi, ChainEnvironment,
 };
-use cf_chains::{eth::EthereumIngressId, IngressTypeGeneration};
 use cf_primitives::BroadcastId;
 pub use cf_primitives::{
 	chains::{assets, Ethereum},
 	Asset, AssetAmount, EthereumAddress, ExchangeRate, ETHEREUM_ETH_ADDRESS,
 };
 
-use cf_traits::mocks::{
-	all_batch::{MockAllBatch, MockEthEnvironment},
-	time_source,
-};
+use cf_traits::mocks::all_batch::{MockAllBatch, MockEthEnvironment};
 pub use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
 	Broadcaster,
 };
 use frame_support::{instances::Instance1, parameter_types, traits::ConstU64};
 use frame_system as system;
-use sp_core::{H160, H256};
+use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
@@ -42,29 +38,6 @@ frame_support::construct_runtime!(
 		IngressEgress: pallet_cf_ingress_egress::<Instance1>,
 	}
 );
-
-pub struct MockIngressTypeGenerator;
-
-impl IngressTypeGeneration for MockIngressTypeGenerator {
-	type IngressId = EthereumIngressId;
-	type Address = H160;
-
-	fn generate_ingress_type(
-		intent_id: u64,
-		_address: Self::Address,
-		_deployed: bool,
-	) -> Self::IngressId {
-		Self::IngressId::UnDeployed(intent_id)
-	}
-
-	fn deployment_status(is_deployed: bool) -> cf_chains::DeploymentStatus {
-		if is_deployed {
-			cf_chains::DeploymentStatus::Deployed
-		} else {
-			cf_chains::DeploymentStatus::Undeployed
-		}
-	}
-}
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
@@ -99,7 +72,6 @@ impl system::Config for Test {
 }
 
 impl cf_traits::Chainflip for Test {
-	type KeyId = Vec<u8>;
 	type ValidatorId = u64;
 	type Amount = u128;
 	type RuntimeCall = RuntimeCall;
@@ -129,8 +101,6 @@ impl crate::Config<Instance1> for Test {
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type WeightInfo = ();
 	type TTL = ConstU64<5_u64>;
-	type TimeSource = time_source::Mock;
-	type IngressTypeGenerator = MockIngressTypeGenerator;
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;

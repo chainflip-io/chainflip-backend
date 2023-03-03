@@ -2,7 +2,9 @@
 use core::fmt::Display;
 
 use crate::benchmarking_value::BenchmarkValue;
-use cf_primitives::{chains::assets, AssetAmount, EthAmount, IntentId};
+use cf_primitives::{
+	chains::assets, AssetAmount, EpochIndex, EthAmount, IntentId, KeyId, PublicKeyBytes,
+};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
@@ -22,8 +24,10 @@ pub use cf_primitives::chains::*;
 pub mod benchmarking_value;
 
 pub mod any;
+pub mod btc;
 pub mod dot;
 pub mod eth;
+pub mod utxo_selection;
 
 #[cfg(feature = "std")]
 pub mod mocks;
@@ -75,7 +79,11 @@ pub trait Chain: Member + Parameter {
 
 	type EpochStartData: Member + Parameter + MaxEncodedLen;
 
-	type IngressFetchId: Member + Parameter + Copy;
+	type IngressFetchId: Member
+		+ Parameter
+		+ Copy
+		+ BenchmarkValue
+		+ IngressIdConstructor<Address = Self::ChainAccount>;
 }
 
 /// Measures the age of items associated with the Chain.
@@ -92,11 +100,11 @@ impl<C: Chain> Age<C> for () {
 
 /// Common crypto-related types and operations for some external chain.
 pub trait ChainCrypto: Chain {
-	type KeyId: Member + Parameter;
 	/// The chain's `AggKey` format. The AggKey is the threshold key that controls the vault.
 	/// TODO: Consider if Encode / Decode bounds are sufficient rather than To/From Vec<u8>
-	type AggKey: TryFrom<Vec<u8>>
-		+ Into<Self::KeyId>
+	type AggKey: TryFrom<PublicKeyBytes>
+		+ Into<PublicKeyBytes>
+		+ TryFrom<KeyId>
 		+ Member
 		+ Parameter
 		+ Copy
@@ -119,11 +127,13 @@ pub trait ChainCrypto: Chain {
 
 	/// We use the AggKey as the payload for keygen verification ceremonies.
 	fn agg_key_to_payload(agg_key: Self::AggKey) -> Self::Payload;
+
+	fn agg_key_to_key_id(agg_key: Self::AggKey, epoch_index: EpochIndex) -> KeyId;
 }
 
 /// Common abi-related types and operations for some external chain.
 pub trait ChainAbi: ChainCrypto {
-	type Transaction: Member + Parameter + Default + BenchmarkValue + FeeRefundCalculator<Self>;
+	type Transaction: Member + Parameter + BenchmarkValue + FeeRefundCalculator<Self>;
 	type ReplayProtection: Member + Parameter;
 }
 
@@ -256,28 +266,11 @@ pub trait FeeRefundCalculator<C: Chain> {
 	) -> <C as Chain>::ChainAmount;
 }
 
-#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub enum DeploymentStatus {
-	Deployed,   // an address that has already been deployed
-	Undeployed, // an address that has not been deployed yet
-}
-
-impl Default for DeploymentStatus {
-	fn default() -> Self {
-		Self::Undeployed
-	}
-}
-
 /// Helper trait to avoid matching over chains in the generic pallet.
-pub trait IngressTypeGeneration {
-	type IngressId;
+pub trait IngressIdConstructor {
 	type Address;
-	/// Constructs the ingress type for the given intent id, address and if it has been deployed.
-	fn generate_ingress_type(
-		intent_id: u64,
-		address: Self::Address,
-		deployed: bool,
-	) -> Self::IngressId;
-	/// Constructs the ingress type and if it has been deployed.
-	fn deployment_status(is_deployed: bool) -> DeploymentStatus;
+	/// Constructs the IngressId for the deployed case.
+	fn deployed(intent_id: u64, address: Self::Address) -> Self;
+	/// Constructs the IngressId for the undeployed case.
+	fn undeployed(intent_id: u64, address: Self::Address) -> Self;
 }

@@ -111,11 +111,10 @@ impl Chain for Polkadot {
 	type TransactionFee = Self::ChainAmount;
 	type ChainAsset = assets::dot::Asset;
 	type EpochStartData = EpochStartData;
-	type IngressFetchId = u64;
+	type IngressFetchId = PolkadotIngressId;
 }
 
 impl ChainCrypto for Polkadot {
-	type KeyId = KeyId;
 	type AggKey = PolkadotPublicKey;
 	type Payload = EncodedPolkadotPayload;
 	type ThresholdSignature = PolkadotSignature;
@@ -132,6 +131,18 @@ impl ChainCrypto for Polkadot {
 
 	fn agg_key_to_payload(agg_key: Self::AggKey) -> Self::Payload {
 		EncodedPolkadotPayload(Blake2_256::hash(&agg_key.0).to_vec())
+	}
+
+	fn agg_key_to_key_id(agg_key: Self::AggKey, epoch_index: EpochIndex) -> KeyId {
+		KeyId { epoch_index, public_key_bytes: agg_key.into() }
+	}
+}
+
+impl TryFrom<KeyId> for PolkadotPublicKey {
+	type Error = &'static str;
+
+	fn try_from(key_id: KeyId) -> Result<Self, Self::Error> {
+		key_id.public_key_bytes.try_into().map_err(|_| "Invalid public key bytes")
 	}
 }
 
@@ -782,21 +793,15 @@ impl PolkadotReplayProtection {
 	}
 }
 
-pub struct PolkadotIngressIdGenerator;
-
-impl IngressTypeGeneration for PolkadotIngressIdGenerator {
-	type IngressId = PolkadotIngressId;
+impl IngressIdConstructor for PolkadotIngressId {
 	type Address = AccountId32;
-	fn generate_ingress_type(
-		intent_id: u64,
-		_address: Self::Address,
-		_deployed: bool,
-	) -> Self::IngressId {
+
+	fn deployed(intent_id: u64, _address: Self::Address) -> Self {
 		intent_id
 	}
 
-	fn deployment_status(_is_deployed: bool) -> DeploymentStatus {
-		DeploymentStatus::Undeployed
+	fn undeployed(intent_id: u64, _address: Self::Address) -> Self {
+		intent_id
 	}
 }
 

@@ -33,8 +33,10 @@ where
 		Self { rpc, state_chain_client, monitored_addresses, eth_monitor_ingress_receiver }
 	}
 
-	pub fn take_ingress_receiver(self) -> tokio::sync::mpsc::UnboundedReceiver<H160> {
-		self.eth_monitor_ingress_receiver
+	pub fn take_ingress_receiver_pair(
+		self,
+	) -> (tokio::sync::mpsc::UnboundedReceiver<H160>, BTreeSet<H160>) {
+		(self.eth_monitor_ingress_receiver, self.monitored_addresses)
 	}
 }
 

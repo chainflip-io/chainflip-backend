@@ -1,4 +1,5 @@
 use super::{curve25519::edwards::Point, ChainTag, CryptoScheme, ECPoint};
+use cf_primitives::PublicKeyBytes;
 use ed25519_consensus::VerificationKeyBytes;
 use serde::{Deserialize, Serialize};
 
@@ -102,17 +103,16 @@ impl CryptoScheme for Ed25519Signing {
 
 	fn verify_signature(
 		signature: &Self::Signature,
-		key_id: &crate::multisig::KeyId,
+		public_key_bytes: &PublicKeyBytes,
 		payload: &Self::SigningPayload,
 	) -> anyhow::Result<()> {
 		use anyhow::anyhow;
 		use ed25519_consensus::VerificationKey;
 
-		let key_bytes: [u8; 32] = key_id
-			.0
+		let key_bytes: [u8; 32] = public_key_bytes
 			.clone()
 			.try_into()
-			.map_err(|_| anyhow!("Invalid Key length: {}", key_id.0.len()))?;
+			.map_err(|_| anyhow!("Invalid Key length: {}", public_key_bytes.len()))?;
 
 		let key = VerificationKey::try_from(key_bytes)
 			.map_err(|_| anyhow::anyhow!("Invalid key encoding"))?;

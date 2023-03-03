@@ -5,7 +5,6 @@ pub mod chainflip;
 pub mod constants;
 pub mod runtime_apis;
 mod weights;
-use cf_chains::{dot::PolkadotIngressIdGenerator, eth::EthereumIngressIdGenerator};
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
 use pallet_transaction_payment::ConstFeeMultiplier;
@@ -271,10 +270,8 @@ impl pallet_cf_ingress_egress::Config<EthereumInstance> for Runtime {
 	type AllBatch = eth::api::EthereumApi<EthEnvironment>;
 	type Broadcaster = EthereumBroadcaster;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+	type TTL = ConstU32<100>;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
-	type TTL = ConstU64<100>;
-	type IngressTypeGenerator = EthereumIngressIdGenerator;
-	type TimeSource = pallet_timestamp::Pallet<Self>;
 }
 
 impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
@@ -287,9 +284,7 @@ impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
 	type Broadcaster = PolkadotBroadcaster;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
-	type TTL = ConstU64<100>;
-	type IngressTypeGenerator = PolkadotIngressIdGenerator;
-	type TimeSource = pallet_timestamp::Pallet<Self>;
+	type TTL = ConstU32<100>;
 }
 
 parameter_types! {

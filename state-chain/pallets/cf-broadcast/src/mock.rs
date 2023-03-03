@@ -3,7 +3,7 @@ use std::cell::RefCell;
 use crate::{self as pallet_cf_broadcast, Instance1, PalletOffence};
 use cf_chains::{
 	eth::Ethereum,
-	mocks::{MockApiCall, MockEthereum, MockTransactionBuilder},
+	mocks::{MockAggKey, MockApiCall, MockEthereum, MockTransactionBuilder},
 	ChainCrypto,
 };
 use cf_traits::{
@@ -73,7 +73,6 @@ impl frame_system::Config for Test {
 }
 
 impl Chainflip for Test {
-	type KeyId = Vec<u8>;
 	type ValidatorId = u64;
 	type Amount = u128;
 	type RuntimeCall = RuntimeCall;
@@ -92,10 +91,9 @@ parameter_types! {
 pub type MockOffenceReporter =
 	cf_traits::mocks::offence_reporting::MockOffenceReporter<u64, PalletOffence>;
 
-// Mock KeyProvider
-pub const VALID_AGG_KEY: [u8; 4] = [0, 0, 0, 0];
+pub const VALID_AGG_KEY: MockAggKey = MockAggKey([0, 0, 0, 0]);
 
-pub const INVALID_AGG_KEY: [u8; 4] = [1, 1, 1, 1];
+pub const INVALID_AGG_KEY: MockAggKey = MockAggKey([1, 1, 1, 1]);
 
 thread_local! {
 	pub static SIGNATURE_REQUESTS: RefCell<Vec<<Ethereum as ChainCrypto>::Payload>> = RefCell::new(vec![]);

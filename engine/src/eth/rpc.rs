@@ -23,6 +23,7 @@ use crate::{
 	common::format_iterator,
 	constants::{ETH_DUAL_REQUEST_TIMEOUT, ETH_LOG_REQUEST_TIMEOUT, SYNC_POLL_INTERVAL},
 	settings,
+	witnesser::LatestBlockNumber,
 };
 
 use super::{redact_secret_eth_node_endpoint, TransportProtocol};
@@ -113,9 +114,6 @@ pub trait EthRpcApi: Send + Sync {
 		newest_block: BlockNumber,
 		reward_percentiles: Option<Vec<f64>>,
 	) -> Result<FeeHistory>;
-
-	/// Get the latest block number.
-	async fn block_number(&self) -> Result<U64>;
 }
 
 #[async_trait]
@@ -244,14 +242,6 @@ where
 				reward_percentiles,
 			))
 	}
-
-	async fn block_number(&self) -> Result<U64> {
-		self.web3
-			.eth()
-			.block_number()
-			.await
-			.context("Failed to fetch block number with HTTP client")
-	}
 }
 
 impl EthWsRpcClient {
@@ -279,6 +269,24 @@ impl EthWsRpcClient {
 		info!("ETH node is synced.");
 
 		Ok(client)
+	}
+}
+
+#[async_trait]
+impl<T> LatestBlockNumber for EthRpcClient<T>
+where
+	T: Send + Sync + EthTransport,
+	T::Out: Send,
+{
+	type BlockNumber = u64;
+
+	async fn latest_block_number(&self) -> Result<Self::BlockNumber> {
+		self.web3
+			.eth()
+			.block_number()
+			.await
+			.context("Failed to fetch block number with HTTP client")
+			.map(|n| n.as_u64())
 	}
 }
 
@@ -481,10 +489,6 @@ impl EthRpcApi for EthDualRpcClient {
 	) -> Result<FeeHistory> {
 		dual_call_rpc!(self, fee_history, block_count, newest_block, reward_percentiles)
 	}
-
-	async fn block_number(&self) -> Result<U64> {
-		dual_call_rpc!(self, block_number,)
-	}
 }
 
 #[cfg(test)]
@@ -492,7 +496,6 @@ pub mod mocks {
 	use super::*;
 
 	use mockall::mock;
-	// use web3::types::{Block, Bytes, Filter, Log, H256};
 
 	mock!(
 		// becomes MockEthHttpRpcClient
@@ -526,8 +529,13 @@ pub mod mocks {
 				newest_block: BlockNumber,
 				reward_percentiles: Option<Vec<f64>>,
 			) -> Result<FeeHistory>;
+		}
 
-			async fn block_number(&self) -> Result<U64>;
+		#[async_trait]
+		impl LatestBlockNumber for EthHttpRpcClient {
+			type BlockNumber = u64;
+
+			async fn latest_block_number(&self) -> Result<u64>;
 		}
 	);
 }

@@ -1,4 +1,5 @@
 use crate::{mocks::MockPalletStorage, AsyncResult, VaultRotator, VaultStatus};
+use cf_primitives::EpochIndex;
 
 use sp_std::collections::btree_set::BTreeSet;
 
@@ -46,7 +47,7 @@ macro_rules! mock_vault_rotator {
 		impl VaultRotator for $rotator_name {
 			type ValidatorId = u64;
 
-			fn keygen(_candidates: BTreeSet<Self::ValidatorId>) {
+			fn keygen(_candidates: BTreeSet<Self::ValidatorId>, _epoch_index: EpochIndex) {
 				Self::put_value(ROTATION_OUTCOME, AsyncResult::<VaultStatus<u64>>::Pending);
 			}
 

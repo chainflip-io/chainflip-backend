@@ -6,7 +6,7 @@ use std::{
 };
 
 use anyhow::Result;
-use cf_primitives::{AuthorityCount, CeremonyId};
+use cf_primitives::{AuthorityCount, CeremonyId, PublicKeyBytes};
 use futures::{stream, StreamExt};
 use itertools::{Either, Itertools};
 
@@ -32,15 +32,10 @@ use crate::{
 			signing, KeygenResultInfo, PartyIdxMapping, ThresholdParameters,
 		},
 		crypto::{ECPoint, Rng},
-		CryptoScheme, KeyId,
+		CryptoScheme,
 	},
 	p2p::OutgoingMultisigStageMessages,
 };
-
-use signing::{LocalSig3, SigningCommitment};
-
-use keygen::{generate_shares_and_commitment, DKGUnverifiedCommitment};
-
 use crate::{
 	multisig::{
 		client::{keygen, MultisigMessage},
@@ -50,6 +45,10 @@ use crate::{
 	},
 	testing::expect_recv_with_timeout,
 };
+
+use signing::{LocalSig3, SigningCommitment};
+
+use keygen::{generate_shares_and_commitment, DKGUnverifiedCommitment};
 
 use state_chain_runtime::{constants::common::MAX_STAGE_DURATION_SECONDS, AccountId};
 
@@ -118,6 +117,7 @@ pub struct SigningCeremonyDetails<C: CryptoScheme> {
 	pub keygen_result_info: KeygenResultInfo<C>,
 }
 
+#[derive(Clone)]
 pub struct KeygenCeremonyDetails {
 	pub rng: Rng,
 	pub ceremony_id: CeremonyId,
@@ -177,7 +177,11 @@ impl<C: CryptoScheme> Node<SigningCeremony<C>> {
 }
 
 impl Node<KeygenCeremonyEth> {
-	pub async fn request_keygen(&mut self, keygen_ceremony_details: KeygenCeremonyDetails) {
+	pub async fn request_keygen(
+		&mut self,
+		keygen_ceremony_details: KeygenCeremonyDetails,
+		resharing_context: Option<ResharingContext<EthSigning>>,
+	) {
 		let KeygenCeremonyDetails { ceremony_id, rng, signers } = keygen_ceremony_details;
 
 		let request = prepare_keygen_request::<EthSigning>(
@@ -185,6 +189,7 @@ impl Node<KeygenCeremonyEth> {
 			&self.own_account_id,
 			signers,
 			&self.outgoing_p2p_message_sender,
+			resharing_context,
 			rng,
 		)
 		.expect("invalid request");
@@ -541,12 +546,15 @@ macro_rules! run_stages {
 }
 pub(crate) use run_stages;
 
+use super::common::ResharingContext;
+
 pub type KeygenCeremonyRunner = CeremonyTestRunner<(), KeygenCeremony<EthSigning>>;
 
 #[async_trait]
 impl CeremonyRunnerStrategy for KeygenCeremonyRunner {
 	type CeremonyType = KeygenCeremony<EthSigning>;
-	type CheckedOutput = (KeyId, HashMap<AccountId, <Self::CeremonyType as CeremonyTrait>::Output>);
+	type CheckedOutput =
+		(PublicKeyBytes, HashMap<AccountId, <Self::CeremonyType as CeremonyTrait>::Output>);
 	type InitialStageData = keygen::HashComm1;
 
 	fn post_successful_complete_check(
@@ -558,7 +566,7 @@ impl CeremonyRunnerStrategy for KeygenCeremonyRunner {
 		}))
 		.expect("Generated keys don't match");
 
-		(KeyId(public_key.serialize().into()), outputs)
+		(public_key.serialize().into(), outputs)
 	}
 
 	async fn request_ceremony(&mut self, node_id: &AccountId) {
@@ -567,7 +575,7 @@ impl CeremonyRunnerStrategy for KeygenCeremonyRunner {
 		self.nodes
 			.get_mut(node_id)
 			.unwrap()
-			.request_keygen(keygen_ceremony_details)
+			.request_keygen(keygen_ceremony_details, None)
 			.await;
 	}
 }
@@ -601,7 +609,7 @@ impl KeygenCeremonyRunner {
 }
 
 pub struct SigningCeremonyRunnerData<C: CryptoScheme> {
-	pub key_id: KeyId,
+	pub public_key_bytes: PublicKeyBytes,
 	pub key_data: HashMap<AccountId, KeygenResultInfo<C>>,
 	pub payload: C::SigningPayload,
 }
@@ -622,7 +630,7 @@ impl<C: CryptoScheme> CeremonyRunnerStrategy for SigningCeremonyRunner<C> {
 
 		C::verify_signature(
 			&signature,
-			&self.ceremony_runner_data.key_id,
+			&self.ceremony_runner_data.public_key_bytes,
 			&C::signing_payload_for_test(),
 		)
 		.expect("Should be valid signature");
@@ -645,7 +653,7 @@ impl<C: CryptoScheme> SigningCeremonyRunner<C> {
 	pub fn new_with_all_signers(
 		nodes: HashMap<AccountId, Node<SigningCeremony<C>>>,
 		ceremony_id: CeremonyId,
-		key_id: KeyId,
+		public_key_bytes: PublicKeyBytes,
 		key_data: HashMap<AccountId, KeygenResultInfo<C>>,
 		payload: C::SigningPayload,
 		rng: Rng,
@@ -653,7 +661,7 @@ impl<C: CryptoScheme> SigningCeremonyRunner<C> {
 		Self::inner_new(
 			nodes,
 			ceremony_id,
-			SigningCeremonyRunnerData { key_id, key_data, payload },
+			SigningCeremonyRunnerData { public_key_bytes, key_data, payload },
 			rng,
 		)
 	}
@@ -661,7 +669,7 @@ impl<C: CryptoScheme> SigningCeremonyRunner<C> {
 	pub fn new_with_threshold_subset_of_signers(
 		nodes: HashMap<AccountId, Node<SigningCeremony<C>>>,
 		ceremony_id: CeremonyId,
-		key_id: KeyId,
+		public_key_bytes: PublicKeyBytes,
 		key_data: HashMap<AccountId, KeygenResultInfo<C>>,
 		payload: C::SigningPayload,
 		rng: Rng,
@@ -673,7 +681,14 @@ impl<C: CryptoScheme> SigningCeremonyRunner<C> {
 		);
 
 		(
-			Self::new_with_all_signers(signers, ceremony_id, key_id, key_data, payload, rng),
+			Self::new_with_all_signers(
+				signers,
+				ceremony_id,
+				public_key_bytes,
+				key_data,
+				payload,
+				rng,
+			),
 			non_signers,
 		)
 	}
@@ -726,9 +741,12 @@ pub async fn standard_signing<C: CryptoScheme>(
 	signing_ceremony.complete().await
 }
 
-pub async fn standard_keygen(
-	mut keygen_ceremony: KeygenCeremonyRunner,
-) -> (KeyId, HashMap<AccountId, KeygenResultInfo<EthSigning>>) {
+pub async fn run_keygen(
+	nodes: HashMap<AccountId, Node<KeygenCeremonyEth>>,
+	ceremony_id: CeremonyId,
+) -> (PublicKeyBytes, HashMap<AccountId, KeygenResultInfo<EthSigning>>) {
+	let mut keygen_ceremony =
+		KeygenCeremonyRunner::new(nodes, ceremony_id, Rng::from_seed(DEFAULT_KEYGEN_SEED));
 	let stage_1_messages = keygen_ceremony.request().await;
 	let messages = run_stages!(
 		keygen_ceremony,
@@ -742,15 +760,6 @@ pub async fn standard_keygen(
 	);
 	keygen_ceremony.distribute_messages(messages).await;
 	keygen_ceremony.complete().await
-}
-
-pub async fn run_keygen(
-	nodes: HashMap<AccountId, Node<KeygenCeremonyEth>>,
-	ceremony_id: CeremonyId,
-) -> (KeyId, HashMap<AccountId, KeygenResultInfo<EthSigning>>) {
-	let keygen_ceremony =
-		KeygenCeremonyRunner::new(nodes, ceremony_id, Rng::from_seed(DEFAULT_KEYGEN_SEED));
-	standard_keygen(keygen_ceremony).await
 }
 
 /// Generate an invalid local sig for stage3
@@ -783,6 +792,7 @@ pub fn gen_invalid_keygen_comm1<P: ECPoint>(
 			share_count,
 			threshold: threshold_from_share_count(share_count) as AuthorityCount,
 		},
+		None,
 	);
 	fake_comm1
 }

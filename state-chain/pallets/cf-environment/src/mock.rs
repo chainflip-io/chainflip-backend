@@ -123,7 +123,6 @@ cf_traits::impl_mock_ensure_witnessed_for_origin!(RuntimeOrigin);
 cf_traits::impl_mock_epoch_info!(AccountId, u128, u32, AuthorityCount);
 
 impl Chainflip for Test {
-	type KeyId = Vec<u8>;
 	type ValidatorId = AccountId;
 	type Amount = u128;
 	type RuntimeCall = RuntimeCall;

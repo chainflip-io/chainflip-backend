@@ -7,7 +7,7 @@ use cf_primitives::ForeignChain;
 use frame_benchmarking::{account, benchmarks_instance_pallet};
 use frame_support::traits::Hooks;
 
-fn setup_expired_intents<T: Config<I>, I: 'static>(time: u64, number_of_intents: u64) {
+fn setup_expired_intents<T: Config<I>, I: 'static>(time: T::BlockNumber, number_of_intents: u64) {
 	let mut intent_vec = vec![];
 	for _i in 0..number_of_intents {
 		intent_vec.push(TargetChainAccount::<T, I>::benchmark_value());
@@ -18,13 +18,12 @@ fn setup_expired_intents<T: Config<I>, I: 'static>(time: u64, number_of_intents:
 benchmarks_instance_pallet! {
 	on_initialize {
 		let n in 1u32 .. 254u32;
-		const EXECUTION_TIME: u64 = 0;
 		let origin = T::EnsureGovernance::successful_origin();
-		setup_expired_intents::<T, I>(EXECUTION_TIME, n.into());
-		assert!(!IntentExpiries::<T, I>::get(EXECUTION_TIME).expect("to be in the storage").is_empty());
+		setup_expired_intents::<T, I>(T::BlockNumber::from(1_u32), n.into());
+		assert!(!IntentExpiries::<T, I>::get(T::BlockNumber::from(1_u32)).expect("to be in the storage").is_empty());
 	} : { let _ = Pallet::<T, I>::on_initialize(T::BlockNumber::from(1_u32)); }
 	verify {
-		assert!(IntentExpiries::<T, I>::get(EXECUTION_TIME).is_none());
+		assert!(IntentExpiries::<T, I>::get(T::BlockNumber::from(1_u32)).is_none());
 	}
 	on_initialize_has_no_expired {
 		let origin = T::EnsureGovernance::successful_origin();
@@ -35,10 +34,12 @@ benchmarks_instance_pallet! {
 
 		let egress_address: <<T as Config<I>>::TargetChain as Chain>::ChainAccount = BenchmarkValue::benchmark_value();
 		let egress_asset: <<T as Config<I>>::TargetChain as Chain>::ChainAsset = BenchmarkValue::benchmark_value();
+		let ingress_fetch_id: <<T as Config<I>>::TargetChain as Chain>::IngressFetchId = BenchmarkValue::benchmark_value();
 
 		// We combine fetch and egress into a single variable, assuming the weight cost is similar.
 		for i in 0..n {
 			if i % 2 == 0 {
+				FetchParamDetails::<T, I>::insert(1, (ingress_fetch_id, egress_address.clone()));
 				batch.push(FetchOrTransfer::Fetch {
 					intent_id: 1,
 					asset: egress_asset,

@@ -59,7 +59,6 @@ impl frame_system::Config for Test {
 }
 
 impl Chainflip for Test {
-	type KeyId = Vec<u8>;
 	type ValidatorId = AccountId;
 	type Amount = Balance;
 	type RuntimeCall = RuntimeCall;

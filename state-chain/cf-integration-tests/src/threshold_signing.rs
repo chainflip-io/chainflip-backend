@@ -4,7 +4,7 @@ use cf_chains::{
 	dot::{PolkadotPublicKey, PolkadotSignature},
 	eth::{to_ethereum_address, AggKey, SchnorrVerificationComponents},
 };
-use cf_primitives::KeyId;
+use cf_primitives::{EpochIndex, KeyId, GENESIS_EPOCH};
 use libsecp256k1::{PublicKey, SecretKey};
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use sp_core::{
@@ -19,6 +19,7 @@ pub struct KeyComponents<SecretKey, AggKey> {
 	seed: u64,
 	secret: SecretKey,
 	agg_key: AggKey,
+	epoch_index: EpochIndex,
 }
 
 pub type EthKeyComponents = KeyComponents<SecretKey, AggKey>;
@@ -31,7 +32,7 @@ pub trait KeyUtils {
 
 	fn key_id(&self) -> KeyId;
 
-	fn generate(seed: u64) -> Self;
+	fn generate(seed: u64, epoch_index: EpochIndex) -> Self;
 
 	fn generate_next(&self) -> Self;
 
@@ -56,10 +57,13 @@ impl KeyUtils for EthKeyComponents {
 	}
 
 	fn key_id(&self) -> KeyId {
-		self.agg_key.to_pubkey_compressed().to_vec()
+		KeyId {
+			epoch_index: self.epoch_index,
+			public_key_bytes: self.agg_key.to_pubkey_compressed().to_vec(),
+		}
 	}
 
-	fn generate(seed: u64) -> Self {
+	fn generate(seed: u64, epoch_index: EpochIndex) -> Self {
 		let agg_key_priv: [u8; 32] = StdRng::seed_from_u64(seed).gen();
 		let secret = SecretKey::parse(&agg_key_priv).unwrap();
 		KeyComponents {
@@ -68,12 +72,12 @@ impl KeyUtils for EthKeyComponents {
 			agg_key: AggKey::from_pubkey_compressed(
 				PublicKey::from_secret_key(&secret).serialize_compressed(),
 			),
+			epoch_index,
 		}
 	}
 
 	fn generate_next(&self) -> Self {
-		let next_seed = self.seed + 1;
-		Self::generate(next_seed)
+		Self::generate(self.seed + 1, self.epoch_index + 1)
 	}
 
 	fn agg_key(&self) -> Self::AggKey {
@@ -133,7 +137,7 @@ pub type EthThresholdSigner = ThresholdSigner<EthKeyComponents, SchnorrVerificat
 impl Default for EthThresholdSigner {
 	fn default() -> Self {
 		ThresholdSigner {
-			key_components: EthKeyComponents::generate(GENESIS_KEY_SEED),
+			key_components: EthKeyComponents::generate(GENESIS_KEY_SEED, GENESIS_EPOCH),
 			proposed_key_components: None,
 			_phantom: PhantomData,
 		}
@@ -147,7 +151,7 @@ pub type DotThresholdSigner = ThresholdSigner<DotKeyComponents, PolkadotSignatur
 impl Default for DotThresholdSigner {
 	fn default() -> Self {
 		Self {
-			key_components: DotKeyComponents::generate(GENESIS_KEY_SEED),
+			key_components: DotKeyComponents::generate(GENESIS_KEY_SEED, GENESIS_EPOCH),
 			proposed_key_components: None,
 			_phantom: PhantomData,
 		}
@@ -164,20 +168,19 @@ impl KeyUtils for DotKeyComponents {
 	}
 
 	fn key_id(&self) -> KeyId {
-		self.agg_key().0.to_vec()
+		KeyId { epoch_index: self.epoch_index, public_key_bytes: self.agg_key().0.to_vec() }
 	}
 
-	fn generate(seed: u64) -> Self {
+	fn generate(seed: u64, epoch_index: EpochIndex) -> Self {
 		let priv_seed: [u8; 32] = StdRng::seed_from_u64(seed).gen();
 		let keypair: Pair = <Pair as TraitPair>::from_seed(&priv_seed);
 		let agg_key = keypair.public();
 
-		KeyComponents { seed, secret: keypair, agg_key }
+		KeyComponents { seed, secret: keypair, agg_key, epoch_index }
 	}
 
 	fn generate_next(&self) -> Self {
-		let next_seed = self.seed + 1;
-		Self::generate(next_seed)
+		Self::generate(self.seed + 1, self.epoch_index + 1)
 	}
 
 	fn agg_key(&self) -> Self::AggKey {
