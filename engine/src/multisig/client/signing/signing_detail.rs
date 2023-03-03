@@ -59,9 +59,7 @@ fn gen_group_commitment<P: ECPoint>(
 pub fn get_lagrange_coeff<P: ECPoint>(
 	signer_index: AuthorityCount,
 	all_signer_indices: &BTreeSet<AuthorityCount>,
-) -> anyhow::Result<P::Scalar> {
-	use anyhow::Context;
-
+) -> P::Scalar {
 	let mut num = P::Scalar::from(1);
 	let mut den = P::Scalar::from(1);
 
@@ -76,11 +74,10 @@ pub fn get_lagrange_coeff<P: ECPoint>(
 		den = den * (j - signer_index);
 	}
 
-	let lagrange_coeff = num *
-		den.invert()
-			.context("Can't invert a zero scalar. Processing duplicate shares?")?;
-
-	Ok(lagrange_coeff)
+	num * den.invert().expect(
+		"Should not be possible to get a zero scalar
+			because all indices are unique due to the BTreeSet",
+	)
 }
 
 /// Generate a "binding value" for party `index`. See "Signing Protocol" in Section 5.2 (page 14)
@@ -141,7 +138,7 @@ pub fn generate_local_sig<C: CryptoScheme>(
 
 	let SecretNoncePair { d, e, .. } = nonces;
 
-	let lambda_i = get_lagrange_coeff::<C::Point>(own_idx, all_idxs).expect("lagrange coeff");
+	let lambda_i = get_lagrange_coeff::<C::Point>(own_idx, all_idxs);
 
 	let rho_i = bindings[&own_idx].clone();
 
@@ -189,7 +186,7 @@ pub fn aggregate_signature<C: CryptoScheme>(
 		.copied()
 		.filter(|signer_idx| {
 			let rho_i = bindings[signer_idx].clone();
-			let lambda_i = get_lagrange_coeff::<C::Point>(*signer_idx, signer_idxs).unwrap();
+			let lambda_i = get_lagrange_coeff::<C::Point>(*signer_idx, signer_idxs);
 
 			let commitment = &commitments[signer_idx];
 			let commitment_i = commitment.d + (commitment.e * rho_i);

@@ -1,19 +1,20 @@
 use cf_primitives::{AccountId, AuthorityCount};
-use rand_legacy::FromEntropy;
+use rand_legacy::{FromEntropy, SeedableRng};
 use std::collections::BTreeSet;
 
 use crate::multisig::{
 	client::{
-		common::{BroadcastFailureReason, KeygenFailureReason, KeygenStageName},
+		common::{BroadcastFailureReason, KeygenFailureReason, KeygenStageName, ResharingContext},
 		helpers::{
 			gen_invalid_keygen_comm1, get_invalid_hash_comm, new_nodes, run_keygen, run_stages,
 			standard_signing, KeygenCeremonyRunner, SigningCeremonyRunner, ACCOUNT_IDS,
-			DEFAULT_KEYGEN_CEREMONY_ID, DEFAULT_SIGNING_CEREMONY_ID,
+			DEFAULT_KEYGEN_CEREMONY_ID, DEFAULT_KEYGEN_SEED, DEFAULT_SIGNING_CEREMONY_ID,
 		},
 		keygen::{self, Complaints6, VerifyComplaints7, VerifyHashComm2},
 		utils::PartyIdxMapping,
 	},
 	crypto::Rng,
+	eth::EthSigning,
 	CryptoScheme,
 };
 
@@ -909,4 +910,100 @@ async fn initially_incompatible_keys_can_sign() {
 			Rng::from_entropy(),
 		);
 	standard_signing(&mut signing_ceremony).await;
+}
+
+#[tokio::test]
+async fn key_resharing_happy_path() {
+	// First perform a regular keygen to generate initial keys:
+
+	let (initial_key, mut key_infos) = keygen::generate_key_data::<EthSigning>(
+		ACCOUNT_IDS.clone().into_iter().collect(),
+		&mut Rng::from_seed(DEFAULT_KEYGEN_SEED),
+	);
+
+	// Now perform a key re-sharing ceremony and check that
+	// we get the same key in the end:
+
+	let mut ceremony = KeygenCeremonyRunner::new_with_default();
+
+	let ceremony_details = ceremony.keygen_ceremony_details();
+
+	// Note that we remove one participant to show that we can
+	// reconstruct the key with only a subset of key share holders
+	let participants: BTreeSet<AccountId> = ACCOUNT_IDS.clone().into_iter().skip(1).collect();
+
+	for (id, node) in &mut ceremony.nodes {
+		let key_info = key_infos.remove(id).unwrap();
+		node.request_keygen(
+			ceremony_details.clone(),
+			Some(ResharingContext::from_key(&key_info, id, &participants)),
+		)
+		.await;
+	}
+
+	let messages = ceremony.gather_outgoing_messages::<keygen::HashComm1, _>().await;
+
+	let messages = run_stages!(
+		ceremony,
+		messages,
+		keygen::VerifyHashComm2,
+		CoeffComm3,
+		VerifyCoeffComm4,
+		SecretShare5,
+		Complaints6,
+		VerifyComplaints7
+	);
+
+	ceremony.distribute_messages(messages).await;
+	let (new_key, _new_shares) = ceremony.complete().await;
+
+	assert_eq!(new_key, initial_key);
+}
+
+// Test that a party who doesn't perform re-sharing correctly
+// (commits to an unexpected secret) gets reported
+#[tokio::test]
+async fn key_resharing_with_incorrect_commitment() {
+	use crate::multisig::eth::Scalar;
+	// Perform a regular keygen to generate initial keys:
+	let (_initial_key, mut key_infos) = keygen::generate_key_data::<EthSigning>(
+		ACCOUNT_IDS.clone().into_iter().collect(),
+		&mut Rng::from_seed(DEFAULT_KEYGEN_SEED),
+	);
+
+	// Now perform a key re-sharing ceremony where one of the participants
+	// commits to an unexpected secret
+
+	let mut ceremony = KeygenCeremonyRunner::new_with_default();
+
+	let ceremony_details = ceremony.keygen_ceremony_details();
+
+	let participants: BTreeSet<AccountId> = ACCOUNT_IDS.clone().into_iter().skip(1).collect();
+
+	// This account id will commit to an unexpected secret
+	let bad_account_id = participants.iter().next().unwrap().clone();
+
+	for (id, node) in &mut ceremony.nodes {
+		let key_info = key_infos.remove(id).unwrap();
+
+		let mut context = ResharingContext::from_key(&key_info, id, &participants);
+
+		if id == &bad_account_id {
+			// Adding a small tweak to the share to make it incorrect
+			context.secret_share = context.secret_share + Scalar::from(1);
+		}
+
+		node.request_keygen(ceremony_details.clone(), Some(context)).await;
+	}
+
+	let messages = ceremony.gather_outgoing_messages::<keygen::HashComm1, _>().await;
+
+	let messages =
+		run_stages!(ceremony, messages, keygen::VerifyHashComm2, CoeffComm3, VerifyCoeffComm4);
+
+	ceremony.distribute_messages(messages).await;
+
+	ceremony
+		.complete_with_error(&[bad_account_id], KeygenFailureReason::InvalidCommitment)
+		.await;
 }

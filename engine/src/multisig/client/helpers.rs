@@ -118,6 +118,7 @@ pub struct SigningCeremonyDetails<C: CryptoScheme> {
 	pub keygen_result_info: KeygenResultInfo<C>,
 }
 
+#[derive(Clone)]
 pub struct KeygenCeremonyDetails {
 	pub rng: Rng,
 	pub ceremony_id: CeremonyId,
@@ -177,7 +178,11 @@ impl<C: CryptoScheme> Node<SigningCeremony<C>> {
 }
 
 impl Node<KeygenCeremonyEth> {
-	pub async fn request_keygen(&mut self, keygen_ceremony_details: KeygenCeremonyDetails) {
+	pub async fn request_keygen(
+		&mut self,
+		keygen_ceremony_details: KeygenCeremonyDetails,
+		resharing_context: Option<ResharingContext<EthSigning>>,
+	) {
 		let KeygenCeremonyDetails { ceremony_id, rng, signers } = keygen_ceremony_details;
 
 		let request = prepare_keygen_request::<EthSigning>(
@@ -185,6 +190,7 @@ impl Node<KeygenCeremonyEth> {
 			&self.own_account_id,
 			signers,
 			&self.outgoing_p2p_message_sender,
+			resharing_context,
 			rng,
 		)
 		.expect("invalid request");
@@ -541,6 +547,8 @@ macro_rules! run_stages {
 }
 pub(crate) use run_stages;
 
+use super::common::ResharingContext;
+
 pub type KeygenCeremonyRunner = CeremonyTestRunner<(), KeygenCeremony<EthSigning>>;
 
 #[async_trait]
@@ -567,7 +575,7 @@ impl CeremonyRunnerStrategy for KeygenCeremonyRunner {
 		self.nodes
 			.get_mut(node_id)
 			.unwrap()
-			.request_keygen(keygen_ceremony_details)
+			.request_keygen(keygen_ceremony_details, None)
 			.await;
 	}
 }
@@ -783,6 +791,7 @@ pub fn gen_invalid_keygen_comm1<P: ECPoint>(
 			share_count,
 			threshold: threshold_from_share_count(share_count) as AuthorityCount,
 		},
+		None,
 	);
 	fake_comm1
 }

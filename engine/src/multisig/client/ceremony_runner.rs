@@ -37,6 +37,7 @@ type OptionalCeremonyReturn<C> = Option<
 >;
 
 pub struct CeremonyRunner<Ceremony: CeremonyTrait> {
+	// `None` means that the ceremony is not yet authorised (but may start delaying messages)
 	stage: Option<DynStage<Ceremony>>,
 	// Note that because we use a map here, the number of messages
 	// that can be delayed from any one party is limited to one per stage.

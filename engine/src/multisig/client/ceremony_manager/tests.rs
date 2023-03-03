@@ -417,6 +417,7 @@ async fn should_route_p2p_message() {
 			rng: Rng::from_seed(DEFAULT_KEYGEN_SEED),
 			participants,
 			result_sender,
+			resharing_context: None,
 		})),
 	};
 
