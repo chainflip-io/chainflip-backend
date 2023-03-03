@@ -510,7 +510,8 @@ impl PoolState {
 
 				let fees_owed = if position.liquidity == 0 {
 					// DIFF: This behaviour is different than Uniswap's to ensure if a position
-					// exists its ticks also exist in the liquidity_map
+					// exists its ticks also exist in the liquidity_map, by removing zero liquidity
+					// positions
 					self.positions.remove(&(lp, lower_tick, upper_tick));
 
 					position.fees_owed
@@ -535,6 +536,8 @@ impl PoolState {
 					*self.liquidity_map.get_mut(&upper_tick).unwrap() = upper_info;
 				}
 
+				// DIFF: This behaviour is different than Uniswap's. We don't accumulated tokens
+				// owed in the position, instead it is returned here.
 				Ok((amounts_owed, fees_owed))
 			} else {
 				Err(PositionError::Other(BurnError::PositionLacksLiquidity))
