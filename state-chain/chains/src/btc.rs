@@ -125,18 +125,18 @@ pub fn scriptpubkey_from_address(
 		let (data, checksum) = data.split_at(data.len() - CHECKSUM_LENGTH);
 
 		if &sha2_256(&sha2_256(data))[..CHECKSUM_LENGTH] == checksum {
-			let (&version, address) = data.split_first().unwrap();
+			let (&version, payload) = data.split_first().unwrap();
 			if version == btc_net.p2pkh_address_version() {
 				Some(
 					BitcoinScript::default()
 						.op_dup()
 						.op_hash160()
-						.push_bytes(address)
+						.push_bytes(payload)
 						.op_equalverify()
 						.op_checksig(),
 				)
 			} else if version == btc_net.p2sh_address_version() {
-				Some(BitcoinScript::default().op_hash160().push_bytes(address).op_equal())
+				Some(BitcoinScript::default().op_hash160().push_bytes(payload).op_equal())
 			} else {
 				None
 			}
