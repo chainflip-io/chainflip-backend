@@ -48,7 +48,7 @@ const MAX_SQRT_PRICE: SqrtPriceQ64F96 =
 
 const MAX_TICK_GROSS_LIQUIDITY: Liquidity = Liquidity::MAX / ((1 + MAX_TICK - MIN_TICK) as u128);
 
-const ONE_IN_PIPS: u32 = 100000;
+const ONE_IN_PIPS: u32 = 1000000;
 
 #[derive(Clone)]
 struct Position {
