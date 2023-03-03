@@ -42,6 +42,7 @@ pub struct BitcoinOutput {
 }
 
 pub struct BitcoinTransaction {
+	btc_net: BitcoinNetwork,
 	inputs: Vec<Utxo>,
 	outputs: Vec<BitcoinOutput>,
 	signatures: Vec<[u8; 64]>,
@@ -83,41 +84,96 @@ fn to_varint(value: u64) -> Vec<u8> {
 	result
 }
 
-pub fn scriptpubkey_from_address(
-	address: String,
-) -> Result<BitcoinScript, BitcoinTransactionError> {
-	let content = address.from_base58();
-	if let Ok(data) = content {
-		let version = data[0];
-		let checksum = data.rchunks(4).next().unwrap();
-		if &sha2_256(&sha2_256(&data[..data.len() - 4]))[..4] == checksum {
-			if version == 0 {
-				// P2PKH
-				return Ok(BitcoinScript::default()
-					.op_dup()
-					.op_hash160()
-					.push_bytes(&data[1..data.len() - 4])
-					.op_equalverify()
-					.op_checksig())
-			} else if version == 5 {
-				// P2SH
-				return Ok(BitcoinScript::default()
-					.op_hash160()
-					.push_bytes(&data[1..data.len() - 4])
-					.op_equal())
-			}
-		} else {
-			return Err(BitcoinTransactionError::InvalidEgressAddress)
+#[derive(Clone, Copy, Debug)]
+pub enum BitcoinNetwork {
+	Mainnet,
+	Testnet,
+	Regtest,
+}
+
+impl BitcoinNetwork {
+	fn p2pkh_address_version(&self) -> u8 {
+		match self {
+			BitcoinNetwork::Mainnet => 0,
+			BitcoinNetwork::Testnet | BitcoinNetwork::Regtest => 111,
 		}
 	}
-	let content = bech32::decode(&address);
-	if let Ok((_hrp, data, _variant)) = content {
-		let version = data[0].to_u8();
-		return Ok(BitcoinScript::default()
-			.push_uint(version as u32)
-			.push_bytes(Vec::<u8>::from_base32(&data[1..]).unwrap()))
+
+	fn p2sh_address_version(&self) -> u8 {
+		match self {
+			BitcoinNetwork::Mainnet => 5,
+			BitcoinNetwork::Testnet | BitcoinNetwork::Regtest => 196,
+		}
 	}
-	Err(BitcoinTransactionError::InvalidEgressAddress)
+
+	fn bech32_pkh_address_prefix(&self) -> &'static str {
+		match self {
+			BitcoinNetwork::Mainnet => "bc",
+			BitcoinNetwork::Testnet => "tb",
+			BitcoinNetwork::Regtest => "bcrt",
+		}
+	}
+}
+
+pub fn scriptpubkey_from_address(
+	address: &str,
+	btc_net: BitcoinNetwork,
+) -> Result<BitcoinScript, BitcoinTransactionError> {
+	let try_decode_as_base58 = || {
+		let data: [u8; 25] = address.from_base58().ok()?.try_into().ok()?;
+
+		let checksum = &data[data.len() - 4..];
+		let data = &data[..data.len() - 4];
+
+		if &sha2_256(&sha2_256(data))[..4] == checksum {
+			let version = data[0];
+			let address = &data[1..];
+
+			if version == btc_net.p2pkh_address_version() {
+				Some(
+					BitcoinScript::default()
+						.op_dup()
+						.op_hash160()
+						.push_bytes(address)
+						.op_equalverify()
+						.op_checksig(),
+				)
+			} else if version == btc_net.p2sh_address_version() {
+				Some(BitcoinScript::default().op_hash160().push_bytes(address).op_equal())
+			} else {
+				None
+			}
+		} else {
+			None
+		}
+	};
+
+	let try_decode_as_bech32 = || {
+		let (hrp, data, _variant) = bech32::decode(address).ok()?;
+		if hrp == btc_net.bech32_pkh_address_prefix() {
+			let version = data.get(0)?.to_u8();
+			let program = {
+				let program = Vec::from_base32(&data[1..]).ok()?;
+				match version {
+					0 if [20, 32].contains(&program.len()) => Some(program),
+					1..=16 if (2..=40).contains(&program.len()) => Some(program),
+					_ => None,
+				}
+			}?;
+
+			Some(BitcoinScript::default().push_uint(version as u32).push_bytes(program))
+		} else {
+			None
+		}
+	};
+
+	if let Some(script) = try_decode_as_base58() {
+		Ok(script)
+	} else if let Some(script) = try_decode_as_bech32() {
+		Ok(script)
+	} else {
+		Err(BitcoinTransactionError::InvalidEgressAddress)
+	}
 }
 
 impl BitcoinTransaction {
@@ -153,7 +209,7 @@ impl BitcoinTransaction {
 		result.extend(to_varint(self.outputs.len() as u64));
 		result.extend(self.outputs.iter().try_fold(Vec::<u8>::default(), |mut acc, x| {
 			acc.extend(x.amount.to_le_bytes());
-			let script = scriptpubkey_from_address(x.destination.clone())?;
+			let script = scriptpubkey_from_address(&x.destination, self.btc_net)?;
 			acc.extend(script.serialize());
 			Ok(acc)
 		})?);
@@ -238,7 +294,7 @@ impl BitcoinTransaction {
 				.iter()
 				.try_fold(Vec::<u8>::default(), |mut acc, x| {
 					acc.extend(x.amount.to_le_bytes().iter());
-					let script = scriptpubkey_from_address(x.destination.clone())?;
+					let script = scriptpubkey_from_address(&x.destination, self.btc_net)?;
 					acc.extend(script.serialize());
 					Ok(acc)
 				})?
@@ -378,7 +434,8 @@ impl BitcoinScript {
 fn test_scriptpubkey_from_address() {
 	assert_eq!(
 		scriptpubkey_from_address(
-			"bc1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqzk5jj0".to_string()
+			"bc1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqzk5jj0",
+			BitcoinNetwork::Mainnet,
 		)
 		.unwrap()
 		.data,
@@ -386,8 +443,8 @@ fn test_scriptpubkey_from_address() {
 	);
 	assert_eq!(
 		scriptpubkey_from_address(
-			"bc1pw508d6qejxtdg4y5r3zarvary0c5xw7kw508d6qejxtdg4y5r3zarvary0c5xw7k7grplx"
-				.to_string()
+			"bc1pw508d6qejxtdg4y5r3zarvary0c5xw7kw508d6qejxtdg4y5r3zarvary0c5xw7k7grplx",
+			BitcoinNetwork::Mainnet,
 		)
 		.unwrap()
 		.data,
@@ -397,8 +454,8 @@ fn test_scriptpubkey_from_address() {
 	);
 	assert_eq!(
 		scriptpubkey_from_address(
-			"bc1pw508d6qejxtdg4y5r3zarvary0c5xw7kw508d6qejxtdg4y5r3zarvary0c5xw7kt5nd6y"
-				.to_string()
+			"bc1pw508d6qejxtdg4y5r3zarvary0c5xw7kw508d6qejxtdg4y5r3zarvary0c5xw7kt5nd6y",
+			BitcoinNetwork::Mainnet,
 		)
 		.unwrap()
 		.data,
@@ -407,29 +464,34 @@ fn test_scriptpubkey_from_address() {
 		)
 	);
 	assert_eq!(
-		scriptpubkey_from_address("BC1SW50QA3JX3S".to_string()).unwrap().data,
+		scriptpubkey_from_address("BC1SW50QA3JX3S", BitcoinNetwork::Mainnet)
+			.unwrap()
+			.data,
 		hex_literal::hex!("6002751e")
 	);
 	assert_eq!(
-		scriptpubkey_from_address("bc1zw508d6qejxtdg4y5r3zarvaryvg6kdaj".to_string())
+		scriptpubkey_from_address("bc1zw508d6qejxtdg4y5r3zarvaryvg6kdaj", BitcoinNetwork::Mainnet)
 			.unwrap()
 			.data,
 		hex_literal::hex!("5210751e76e8199196d454941c45d1b3a323")
 	);
 	assert_eq!(
-		scriptpubkey_from_address("BC1QW508D6QEJXTDG4Y5R3ZARVARY0C5XW7KV8F3T4".to_string())
-			.unwrap()
-			.data,
+		scriptpubkey_from_address(
+			"BC1QW508D6QEJXTDG4Y5R3ZARVARY0C5XW7KV8F3T4",
+			BitcoinNetwork::Mainnet
+		)
+		.unwrap()
+		.data,
 		hex_literal::hex!("0014751e76e8199196d454941c45d1b3a323f1433bd6")
 	);
 	assert_eq!(
-		scriptpubkey_from_address("132F25rTsvBdp9JzLLBHP5mvGY66i1xdiM".to_string())
+		scriptpubkey_from_address("132F25rTsvBdp9JzLLBHP5mvGY66i1xdiM", BitcoinNetwork::Mainnet)
 			.unwrap()
 			.data,
 		hex_literal::hex!("76a914162c5ea71c0b23f5b9022ef047c4a86470a5b07088ac")
 	);
 	assert_eq!(
-		scriptpubkey_from_address("3QJmV3qfvL9SuYo34YihAf3sRCW3qSinyC".to_string())
+		scriptpubkey_from_address("3QJmV3qfvL9SuYo34YihAf3sRCW3qSinyC", BitcoinNetwork::Mainnet)
 			.unwrap()
 			.data,
 		hex_literal::hex!("a914f815b036d9bbbce5e9f2a00abd1bf3dc91e9551087")
@@ -452,6 +514,7 @@ fn test_finalize() {
 		destination: "bc1pgtj0f3u2rk8ex6khlskz7q50nwc48r8unfgfhxzsx9zhcdnczhqq60lzjt".to_string(),
 	};
 	let tx = BitcoinTransaction {
+		btc_net: BitcoinNetwork::Mainnet,
 		inputs: vec![input],
 		outputs: vec![output],
 		signatures: Default::default(),
@@ -476,6 +539,7 @@ fn test_payload() {
 		destination: "bc1pgtj0f3u2rk8ex6khlskz7q50nwc48r8unfgfhxzsx9zhcdnczhqq60lzjt".to_string(),
 	};
 	let tx = BitcoinTransaction {
+		btc_net: BitcoinNetwork::Mainnet,
 		inputs: vec![input],
 		outputs: vec![output],
 		signatures: Default::default(),
