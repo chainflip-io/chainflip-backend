@@ -117,15 +117,16 @@ pub fn scriptpubkey_from_address(
 	address: &str,
 	network: BitcoinNetwork,
 ) -> Result<BitcoinScript, BitcoinTransactionError> {
+	// See https://en.bitcoin.it/wiki/Base58Check_encoding
 	let try_decode_as_base58 = || {
 		const CHECKSUM_LENGTH: usize = 4;
 
 		let data: [u8; 1 + 20 + CHECKSUM_LENGTH] = address.from_base58().ok()?.try_into().ok()?;
 
-		let (data, checksum) = data.split_at(data.len() - CHECKSUM_LENGTH);
+		let (payload, checksum) = data.split_at(data.len() - CHECKSUM_LENGTH);
 
-		if &sha2_256(&sha2_256(data))[..CHECKSUM_LENGTH] == checksum {
-			let (&version, hash) = data.split_first().unwrap();
+		if &sha2_256(&sha2_256(payload))[..CHECKSUM_LENGTH] == checksum {
+			let (&version, hash) = payload.split_first().unwrap();
 			if version == network.p2pkh_address_version() {
 				Some(
 					BitcoinScript::default()
