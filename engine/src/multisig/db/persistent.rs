@@ -419,6 +419,20 @@ fn migrate_0_to_1(db: &DB) {
 }
 
 #[test]
+fn test_migration_to_latest() {
+	let (_dir, db_file) = crate::testing::new_temp_directory_with_nonexistent_file();
+	let logger = crate::logging::test_utils::new_test_logger();
+
+	let db = PersistentKeyDB::new_version_0(&db_file, None, &logger).unwrap();
+
+	assert_eq!(read_schema_version(&db.db, &logger).unwrap(), 0);
+
+	migrate_db_to_latest(&db.db, &db_file, None, &logger).unwrap();
+
+	assert_eq!(read_schema_version(&db.db, &logger).unwrap(), LATEST_SCHEMA_VERSION);
+}
+
+#[test]
 fn test_migration_to_v1() {
 	use crate::multisig::{client::keygen, Rng};
 	use cf_primitives::AccountId;
