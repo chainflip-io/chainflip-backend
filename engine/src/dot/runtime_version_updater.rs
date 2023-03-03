@@ -3,6 +3,7 @@ use std::sync::Arc;
 use cf_chains::Polkadot;
 use futures::StreamExt;
 use sp_core::H256;
+use tokio::select;
 use tracing::{info, info_span, Instrument};
 
 use crate::{
@@ -42,7 +43,7 @@ where
 		epoch_starts_receiver,
 		|epoch_start| epoch_start.current,
 		on_chain_runtime_version,
-		move |end_witnessing_signal, epoch_start, mut last_version_witnessed| {
+		move |mut end_witnessing_receiver, epoch_start, mut last_version_witnessed| {
 			let state_chain_client = state_chain_client.clone();
 			let dot_client = dot_client.clone();
 			async move {
@@ -50,36 +51,30 @@ where
 				let mut runtime_version_subscription =
 					dot_client.subscribe_runtime_version().await?;
 
-				while let Some(new_runtime_version) = runtime_version_subscription.next().await {
-					// TODO: Change end_witnessing_signal to a oneshot channel and tokio::select!
-					// the two futures. Currently this process will keep running, waiting on the
-					// above `.next()` call until a PolkadotRuntime upgrade is introduced. This is
-					// not a problem, but it is not ideal.
-					// https://github.com/chainflip-io/chainflip-backend/issues/2825
-					if let Some(_end_block) = *end_witnessing_signal.lock().unwrap() {
-						break
-					}
-
-					if new_runtime_version.spec_version > last_version_witnessed.spec_version {
-						let _result = state_chain_client
-							.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
-								call: Box::new(
-									pallet_cf_environment::Call::update_polkadot_runtime_version {
-										runtime_version: new_runtime_version,
-									}
-									.into(),
-								),
-								epoch_index: epoch_start.epoch_index,
-							})
-							.await;
-						info!(
-							"Polkadot runtime version update submitted, version witnessed: {:?}",
-							new_runtime_version
-						);
-						last_version_witnessed = new_runtime_version;
+				loop {
+					select! {
+						_end_block = &mut end_witnessing_receiver => {
+							break;
+						}
+						Some(new_runtime_version) = runtime_version_subscription.next() => {
+							if new_runtime_version.spec_version > last_version_witnessed.spec_version {
+								let _result = state_chain_client
+									.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
+										call: Box::new(
+											pallet_cf_environment::Call::update_polkadot_runtime_version {
+												runtime_version: new_runtime_version,
+											}
+											.into(),
+										),
+										epoch_index: epoch_start.epoch_index,
+									})
+									.await;
+								info!("Polkadot runtime version update submitted, version witnessed: {new_runtime_version:?}");
+								last_version_witnessed = new_runtime_version;
+							}
+						}
 					}
 				}
-
 				Ok(last_version_witnessed)
 			}
 		},

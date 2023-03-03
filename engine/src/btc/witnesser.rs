@@ -3,6 +3,7 @@ use std::{collections::BTreeSet, sync::Arc};
 use crate::constants::BTC_INGRESS_BLOCK_SAFETY_MARGIN;
 use cf_chains::Bitcoin;
 use futures::StreamExt;
+use tokio::select;
 use tracing::{info, info_span, trace, Instrument};
 
 use crate::{
@@ -12,7 +13,7 @@ use crate::{
 		checkpointing::{
 			get_witnesser_start_block_with_checkpointing, StartCheckpointing, WitnessedUntil,
 		},
-		epoch_witnesser::{self, should_end_witnessing},
+		epoch_witnesser::{self},
 		http_safe_stream::{safe_polling_http_head_stream, HTTP_POLL_INTERVAL},
 		EpochStart,
 	},
@@ -34,7 +35,7 @@ pub async fn start(
 		epoch_starts_receiver,
 		|_epoch_start| true,
 		(script_pubkeys_receiver, monitored_script_pubkeys),
-		move |end_witnessing_signal,
+		move |mut end_witnessing_receiver,
 		      epoch_start,
 		      (mut script_pubkeys_receiver, mut monitored_script_pubkeys)| {
 			let db = db.clone();
@@ -72,32 +73,53 @@ pub async fn start(
 				)
 				.await?;
 
-				while let Some(block_number) = block_number_stream_from.next().await {
-					if should_end_witnessing::<Bitcoin>(end_witnessing_signal.clone(), block_number)
-					{
-						break
+				let mut end_at_block = None;
+				let mut current_block = from_block;
+
+				loop {
+					let block_number = select! {
+						end_block = &mut end_witnessing_receiver => {
+							end_at_block = Some(end_block.expect("end witnessing channel was dropped unexpectedly"));
+							None
+						}
+						Some(block_number) = block_number_stream_from.next()  => {
+							current_block = block_number;
+							Some(block_number)
+						}
+					};
+
+					if let Some(end_block) = end_at_block {
+						if current_block >= end_block {
+							info!("Btc block witnessers unsubscribe at block {end_block}");
+							break
+						}
 					}
 
-					let block = btc_rpc.block(btc_rpc.block_hash(block_number)?)?;
+					if let Some(block_number) = block_number {
+						let block = btc_rpc.block(btc_rpc.block_hash(block_number)?)?;
 
-					while let Ok(script_pubkey) = script_pubkeys_receiver.try_recv() {
-						monitored_script_pubkeys.insert(script_pubkey);
+						while let Ok(script_pubkey) = script_pubkeys_receiver.try_recv() {
+							monitored_script_pubkeys.insert(script_pubkey);
+						}
+
+						trace!("Checking BTC block: {block_number} for interesting UTXOs");
+
+						let interesting_utxos =
+							filter_interesting_utxos(block.txdata, &monitored_script_pubkeys);
+
+						for utxo in interesting_utxos {
+							info!("Witnessing BTC ingress UTXO: {:?}", utxo);
+							todo!("Witness BTC utxo to SC: {:?}", utxo);
+						}
+
+						witnessed_until_sender
+							.send(WitnessedUntil {
+								epoch_index: epoch_start.epoch_index,
+								block_number,
+							})
+							.await
+							.unwrap();
 					}
-
-					trace!("Checking BTC block: {block_number} for interesting UTXOs");
-
-					let interesting_utxos =
-						filter_interesting_utxos(block.txdata, &monitored_script_pubkeys);
-
-					for utxo in interesting_utxos {
-						info!("Witnessing BTC ingress UTXO: {:?}", utxo);
-						todo!("Witness BTC utxo to SC: {:?}", utxo);
-					}
-
-					witnessed_until_sender
-						.send(WitnessedUntil { epoch_index: epoch_start.epoch_index, block_number })
-						.await
-						.unwrap();
 				}
 
 				Ok((script_pubkeys_receiver, monitored_script_pubkeys))
