@@ -1,19 +1,19 @@
 pub mod ingress_address;
 
-use core::{borrow::Borrow, iter};
 use base58::FromBase58;
 use bech32::{self, u5, FromBase32, ToBase32, Variant};
 use codec::{Decode, Encode};
+use core::{borrow::Borrow, iter};
 use frame_support::{sp_io::hashing::sha2_256, RuntimeDebug};
 use libsecp256k1::{PublicKey, SecretKey};
 use scale_info::TypeInfo;
 use sp_std::vec::Vec;
 extern crate alloc;
+use crate::Chain;
 use alloc::string::String;
-use itertools;
 use cf_primitives::chains::assets;
 pub use cf_primitives::chains::Bitcoin;
-use crate::Chain;
+use itertools;
 
 pub type BlockNumber = u64;
 
