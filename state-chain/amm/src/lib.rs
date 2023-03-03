@@ -695,7 +695,7 @@ impl PoolState {
 				self.current_tick = Self::tick_at_sqrt_price(self.current_sqrt_price);
 
 				break
-			};
+			}
 		}
 
 		total_amount_out
