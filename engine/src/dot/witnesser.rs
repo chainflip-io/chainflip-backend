@@ -351,28 +351,29 @@ where
 				);
 
 				let mut end_at_block = None;
-				let mut prev_block = from_block;
+				let mut current_block = from_block;
 
 				loop {
-					select! {
+					let block_details = select! {
 						end_block = &mut end_witnessing_receiver => {
-							let end_block = end_block.expect("end witnessing channel was dropped unexpectedly");
-							if prev_block >= end_block {
-								info!("Polkadot block witnessers unsubscribe at block {end_block}");
-								break
-							}
-							end_at_block = Some(end_block);
+							end_at_block = Some(end_block.expect("end witnessing channel was dropped unexpectedly"));
+							None
 						}
 						Some((block_hash, block_number, block_event_details)) =	block_events_stream.next() => {
-							if let Some(end_block) = end_at_block{
-								if block_number >= end_block {
+							current_block = block_number;
+							Some((block_hash, block_number, block_event_details))
+						}
+					};
+
+					if let Some(end_block) = end_at_block {
+						if current_block >= end_block {
 									info!("Polkadot block witnessers unsubscribe at block {end_block}");
 									break
 								}
 							}
 
+					if let Some((block_hash, block_number, block_event_details)) = block_details {
 							trace!( "Checking block: {block_number}, with hash: {block_hash:?} for interesting events");
-
 							let (
 								interesting_indices,
 								ingress_witnesses,
@@ -478,9 +479,6 @@ where
 							})
 							.await
 							.unwrap();
-
-							prev_block = block_number;
-						}
 					}
 				}
 				Ok((monitored_ingress_addresses, ingress_address_receiver, monitored_signatures, signature_receiver))
