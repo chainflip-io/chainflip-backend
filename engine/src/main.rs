@@ -189,7 +189,6 @@ async fn main() -> anyhow::Result<()> {
 					EthDualRpcClient::new(&settings.eth, expected_chain_id)
 						.await
 						.context("Failed to create EthDualRpcClient")?,
-					&root_logger,
 				)
 				.context("Failed to create ETH broadcaster")?,
 				DotBroadcaster::new(dot_rpc_client.clone()),

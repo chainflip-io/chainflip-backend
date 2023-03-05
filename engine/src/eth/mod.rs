@@ -20,6 +20,7 @@ use anyhow::{anyhow, Context, Result};
 
 use cf_primitives::EpochIndex;
 use regex::Regex;
+use tracing::debug;
 use utilities::make_periodic_tick;
 
 use crate::{
@@ -30,7 +31,6 @@ use crate::{
 		rpc::{EthDualRpcClient, EthRpcApi, EthWsRpcApi},
 		ws_safe_stream::safe_ws_head_stream,
 	},
-	logging::COMPONENT_KEY,
 	settings,
 	state_chain_observer::client::extrinsic_api::ExtrinsicApi,
 	witnesser::{
@@ -41,7 +41,6 @@ use crate::{
 };
 
 use futures::StreamExt;
-use slog::o;
 use std::{
 	fmt::{self, Debug},
 	pin::Pin,
@@ -152,43 +151,28 @@ where
 	eth_rpc: EthRpc,
 	secret_key: SecretKey,
 	pub address: Address,
-	logger: slog::Logger,
 }
 
 impl<EthRpc> EthBroadcaster<EthRpc>
 where
 	EthRpc: EthRpcApi,
 {
-	pub fn new(
-		eth_settings: &settings::Eth,
-		eth_rpc: EthRpc,
-		logger: &slog::Logger,
-	) -> Result<Self> {
+	pub fn new(eth_settings: &settings::Eth, eth_rpc: EthRpc) -> Result<Self> {
 		let secret_key = read_clean_and_decode_hex_str_file(
 			&eth_settings.private_key_file,
 			"Ethereum Private Key",
 			|key| SecretKey::from_str(key).map_err(anyhow::Error::new),
 		)?;
-		Ok(Self {
-			eth_rpc,
-			secret_key,
-			address: SecretKeyRef::new(&secret_key).address(),
-			logger: logger.new(o!(COMPONENT_KEY => "EthBroadcaster")),
-		})
+		Ok(Self { eth_rpc, secret_key, address: SecretKeyRef::new(&secret_key).address() })
 	}
 
 	#[cfg(test)]
-	pub fn new_test(eth_rpc: EthRpc, logger: &slog::Logger) -> Self {
+	pub fn new_test(eth_rpc: EthRpc) -> Self {
 		// just a fake key
 		let secret_key =
 			SecretKey::from_str("000000000000000000000000000000000000000000000000000000000000aaaa")
 				.unwrap();
-		Self {
-			eth_rpc,
-			secret_key,
-			address: SecretKeyRef::new(&secret_key).address(),
-			logger: logger.new(o!(COMPONENT_KEY => "EthBroadcaster")),
-		}
+		Self { eth_rpc, secret_key, address: SecretKeyRef::new(&secret_key).address() }
 	}
 
 	/// Encode and sign a transaction.
@@ -240,13 +224,7 @@ where
 					.checked_div(U256::from(2u64))
 					.unwrap();
 
-				slog::debug!(
-					self.logger,
-					"Gas estimate for unsigned tx: {:?} is {}. Setting 50% higher at: {}",
-					unsigned_tx,
-					gas_estimate,
-					gas
-				);
+				debug!("Gas estimate for unsigned tx: {unsigned_tx:?} is {gas_estimate}. Setting 50% higher at: {gas}");
 
 				gas
 			},
@@ -455,14 +433,12 @@ fn redact_secret_eth_node_endpoint(endpoint: &str) -> Result<String> {
 
 #[cfg(test)]
 mod tests {
-	use crate::logging::test_utils::new_test_logger;
-
 	use super::{rpc::MockEthRpcApi, *};
+
 	#[test]
 	fn cfg_test_create_eth_broadcaster_works() {
 		let eth_rpc_api_mock = MockEthRpcApi::new();
-		let logger = new_test_logger();
-		EthBroadcaster::new_test(eth_rpc_api_mock, &logger);
+		EthBroadcaster::new_test(eth_rpc_api_mock);
 	}
 
 	#[test]
