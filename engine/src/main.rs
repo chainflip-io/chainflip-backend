@@ -49,7 +49,7 @@ async fn main() -> anyhow::Result<()> {
 	task_scope(|scope| {
 		async move {
 			if let Some(health_check_settings) = &settings.health_check {
-				scope.spawn(HealthChecker::new(health_check_settings, &root_logger).await?.run());
+				scope.spawn(HealthChecker::start(health_check_settings).await?);
 			}
 
 			let (latest_block_hash, state_chain_block_stream, state_chain_client) =
