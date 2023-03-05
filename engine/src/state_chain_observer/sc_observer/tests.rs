@@ -159,7 +159,6 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		dot_monitor_signature_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
-		logger,
 	)
 	.await
 	.unwrap_err();
@@ -329,7 +328,6 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		dot_monitor_signature_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
-		logger,
 	)
 	.await
 	.unwrap_err();
@@ -463,7 +461,6 @@ async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
 		dot_monitor_signature_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
-		logger,
 	)
 	.await
 	.unwrap_err();
@@ -658,7 +655,6 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		dot_monitor_signature_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
-		logger,
 	)
 	.await
 	.unwrap_err();
@@ -857,7 +853,6 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		dot_monitor_signature_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
-		logger,
 	)
 	.await
 	.unwrap_err();
@@ -1057,7 +1052,6 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		dot_monitor_signature_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
-		logger,
 	)
 	.await
 	.unwrap_err();
@@ -1252,7 +1246,6 @@ async fn only_encodes_and_signs_when_specified() {
 		dot_monitor_signature_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
-		logger,
 	)
 	.await
 	.unwrap_err();
@@ -1532,7 +1525,6 @@ async fn run_the_sc_observer() {
 				dot_monitor_signature_sender,
 				cfe_settings_update_sender,
 				initial_block_hash,
-				logger,
 			)
 			.await
 			.unwrap_err();

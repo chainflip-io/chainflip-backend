@@ -203,7 +203,6 @@ async fn main() -> anyhow::Result<()> {
 				dot_monitor_signature_sender,
 				cfe_settings_update_sender,
 				latest_block_hash,
-				root_logger.clone(),
 			));
 
 			scope.spawn(
