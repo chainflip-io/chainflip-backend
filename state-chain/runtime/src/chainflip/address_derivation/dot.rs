@@ -24,6 +24,12 @@ impl AddressDerivationApi<Polkadot> for AddressDerivation {
 		let master_account = Environment::get_polkadot_vault_account()
 			.ok_or(DispatchError::Other("Vault Account does not exist."))?;
 
+		if intent_id > u16::MAX.into() {
+			return Err(DispatchError::Other(
+				"Intent ID too large. Polkadot can only support up to u16 addresses",
+			))
+		}
+
 		let mut payload = Vec::with_capacity(PAYLOAD_LENGTH);
 		// Fill the first slots with the derivation prefix.
 		payload.extend(PREFIX);
