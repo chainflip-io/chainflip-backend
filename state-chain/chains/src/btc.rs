@@ -16,7 +16,7 @@ extern crate alloc;
 use crate::{Chain, ChainAbi, ChainCrypto, FeeRefundCalculator, IngressIdConstructor};
 use alloc::string::String;
 pub use cf_primitives::chains::Bitcoin;
-use cf_primitives::{chains::assets, KeyId, PublicKeyBytes};
+use cf_primitives::{chains::assets, EpochIndex, KeyId, PublicKeyBytes};
 use itertools;
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -142,11 +142,8 @@ impl ChainCrypto for Bitcoin {
 		agg_key.0
 	}
 
-	fn agg_key_to_key_id(
-		_agg_key: Self::AggKey,
-		_epoch_index: cf_primitives::EpochIndex,
-	) -> cf_primitives::KeyId {
-		todo!()
+	fn agg_key_to_key_id(agg_key: Self::AggKey, epoch_index: EpochIndex) -> KeyId {
+		KeyId { epoch_index, public_key_bytes: agg_key.into() }
 	}
 }
 
