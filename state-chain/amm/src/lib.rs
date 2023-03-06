@@ -393,12 +393,14 @@ impl PoolState {
 		})
 	}
 
-	/// Tries to add `minted_liquidity` to/create the specified position. If the specified position
-	/// is not valid, returns Err(_). Otherwise the callback `try_debit` will be passed the Amounts
-	/// required to add the specified `minted_liquidity` to the specified position. If the callback
-	/// returns `Ok(t)` the position will be created if it didn't already exist, `minted_liquidity`
-	/// will be added to it, and `Ok((t, collected_fees))` will be returned. If `Err(_)` is returned
-	/// the position will not be created, and `Err(_)`will be returned.
+	/// Calculates the fees owed to the specified position, resets the fees owed for that position
+	/// to zero, calls `try_debit` passing the Amounts required to add the `minted_liquidity` to the
+	/// position. If `try_debit` returns `Ok(t)` the position will be created if it didn't already
+	/// exist, `minted_liquidity` will be added to it, and `Ok((t, collected_fees))` will be
+	/// returned. If `Err(_)` is returned the position will not be created, and `Err(_)`will be
+	/// returned. If the minting would result in either the lower or upper tick having more
+	/// liquidity than `MAX_TICK_GROSS_LIQUIDITY` associated with it, this function will return
+	/// `Err(MintError::MaximumGrossLiquidity)`.
 	///
 	/// This function never panics
 	///
@@ -481,9 +483,11 @@ impl PoolState {
 		}
 	}
 
-	/// Tries to remove liquidity from the specified range-order, and returns the value of the burnt
-	/// liquidity in `Amounts` with the fees collected by the position. If all the position's liquidity
-	/// is burned then it is destroyed.
+	/// Calculates the fees owed to the specified position, resets the fees owed for that
+	/// position to zero, removes liquidity from the specified range-order, and returns the value of
+	/// the burnt liquidity in `Amounts` with the calculated amount of owed fees. If all the
+	/// position's liquidity is burned then it is destroyed. If the position does not exist returns
+	/// `Err(_)`
 	///
 	/// This function never panics
 	///
@@ -563,8 +567,8 @@ impl PoolState {
 		}
 	}
 
-	/// Tries to calculates the fees owed to the specified position, resets the fees owed for that
-	/// position to zero, and returns the calculated amount of fees owed
+	/// Calculates the fees owed to the specified position, resets the fees owed for that
+	/// position to zero, and returns the calculated amount of owed fees
 	///
 	/// This function never panics
 	///
