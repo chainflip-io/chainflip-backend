@@ -3,6 +3,7 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use cf_chains::{
+	btc::BitcoinNetwork,
 	dot::{api::CreatePolkadotVault, Polkadot, PolkadotAccountId, PolkadotIndex},
 	ChainCrypto,
 };
@@ -99,6 +100,9 @@ pub mod pallet {
 		#[pallet::constant]
 		type PolkadotGenesisHash: Get<PolkadotHash>;
 
+		#[pallet::constant]
+		type BitcoinNetwork: Get<BitcoinNetwork>;
+
 		/// Weight information
 		type WeightInfo: WeightInfo;
 	}
@@ -174,6 +178,8 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn polkadot_runtime_version)]
 	pub type PolkadotRuntimeVersion<T> = StorageValue<_, RuntimeVersion, ValueQuery>;
+
+	// BITCOIN CHAIN RELATED ENVIRONMENT ITEMS
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]

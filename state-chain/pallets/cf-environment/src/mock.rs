@@ -1,5 +1,6 @@
 use crate::{self as pallet_cf_environment, cfe};
 use cf_chains::{
+	btc::BitcoinNetwork,
 	dot::{api::CreatePolkadotVault, PolkadotHash, TEST_RUNTIME_VERSION},
 	ApiCall, Chain, ChainCrypto, Polkadot,
 };
@@ -134,6 +135,7 @@ impl Chainflip for Test {
 
 parameter_types! {
 	pub const PolkadotGenesisHash: PolkadotHash = H256([0u8; 32]);
+	pub const BitcoinNetworkParam: BitcoinNetwork = BitcoinNetwork::Testnet;
 }
 
 impl pallet_cf_environment::Config for Test {
@@ -142,6 +144,7 @@ impl pallet_cf_environment::Config for Test {
 	type CreatePolkadotVault = MockCreatePolkadotVault;
 	type PolkadotBroadcaster = MockPolkadotBroadcaster;
 	type PolkadotGenesisHash = PolkadotGenesisHash;
+	type BitcoinNetwork = BitcoinNetworkParam;
 	type PolkadotVaultKeyWitnessedHandler = MockPolkadotVaultKeyWitnessedHandler;
 	type WeightInfo = ();
 }
