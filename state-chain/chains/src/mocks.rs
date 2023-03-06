@@ -47,13 +47,6 @@ impl Age<MockEthereum> for MockTrackedData {
 }
 
 #[cfg(feature = "runtime-benchmarks")]
-impl BenchmarkValue for [u8; 32] {
-	fn benchmark_value() -> Self {
-		[1u8; 32]
-	}
-}
-
-#[cfg(feature = "runtime-benchmarks")]
 impl BenchmarkValue for MockTrackedData {
 	fn benchmark_value() -> Self {
 		Self(1_000)

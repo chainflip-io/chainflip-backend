@@ -14,10 +14,16 @@ impl PalletInstanceAlias for cf_chains::eth::Ethereum {
 	type Instance = Instance1;
 }
 
+pub type EthereumInstance = <cf_chains::eth::Ethereum as PalletInstanceAlias>::Instance;
+
 impl PalletInstanceAlias for cf_chains::dot::Polkadot {
 	type Instance = Instance2;
 }
 
-pub type EthereumInstance = <cf_chains::eth::Ethereum as PalletInstanceAlias>::Instance;
-
 pub type PolkadotInstance = <cf_chains::dot::Polkadot as PalletInstanceAlias>::Instance;
+
+impl PalletInstanceAlias for cf_chains::btc::Bitcoin {
+	type Instance = Instance3;
+}
+
+pub type BitcoinInstance = <cf_chains::btc::Bitcoin as PalletInstanceAlias>::Instance;
