@@ -2,17 +2,21 @@ pub mod ingress_address;
 
 use base58::FromBase58;
 use bech32::{self, u5, FromBase32, ToBase32, Variant};
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 use core::{borrow::Borrow, iter};
 use frame_support::{sp_io::hashing::sha2_256, RuntimeDebug};
 use libsecp256k1::{PublicKey, SecretKey};
 use scale_info::TypeInfo;
 use sp_std::vec::Vec;
+
+#[cfg(feature = "runtime-benchmarks")]
+use sp_std::vec;
+
 extern crate alloc;
-use crate::{Chain, IngressIdConstructor};
+use crate::{Chain, ChainAbi, ChainCrypto, FeeRefundCalculator, IngressIdConstructor};
 use alloc::string::String;
-use cf_primitives::chains::assets;
 pub use cf_primitives::chains::Bitcoin;
+use cf_primitives::{chains::assets, KeyId, PublicKeyBytes};
 use itertools;
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -27,6 +31,76 @@ pub struct BitcoinFetchId(u64);
 // for now
 type Amount = u128;
 
+pub type SigningPayload = [u8; 32];
+
+pub type Address = [u8; 32];
+
+#[derive(
+	Copy,
+	Clone,
+	RuntimeDebug,
+	Default,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	MaxEncodedLen,
+	TypeInfo,
+	Ord,
+	PartialOrd,
+)]
+pub struct AggKey(pub [u8; 32]);
+
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue for AggKey {
+	fn benchmark_value() -> Self {
+		AggKey([1u8; 32])
+	}
+}
+
+impl From<KeyId> for AggKey {
+	fn from(key_id: KeyId) -> Self {
+		AggKey(key_id.public_key_bytes.try_into().unwrap())
+	}
+}
+
+impl From<AggKey> for PublicKeyBytes {
+	fn from(agg_key: AggKey) -> Self {
+		agg_key.0.to_vec()
+	}
+}
+
+impl From<PublicKeyBytes> for AggKey {
+	fn from(public_key_bytes: PublicKeyBytes) -> Self {
+		AggKey(public_key_bytes.try_into().unwrap())
+	}
+}
+
+#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]
+pub struct BitcoinTransactionData {
+	pub encoded_transaction: Vec<u8>,
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue for BitcoinTransactionData {
+	fn benchmark_value() -> Self {
+		Self { encoded_transaction: vec![1u8; 100] }
+	}
+}
+
+// TODO: Implement this
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Default)]
+pub struct BitcoinReplayProtection;
+
+impl FeeRefundCalculator<Bitcoin> for BitcoinTransactionData {
+	fn return_fee_refund(
+		&self,
+		fee_paid: <Bitcoin as Chain>::TransactionFee,
+	) -> <Bitcoin as Chain>::ChainAmount {
+		fee_paid
+	}
+}
+
 impl Chain for Bitcoin {
 	type ChainBlockNumber = BlockNumber;
 
@@ -38,16 +112,68 @@ impl Chain for Bitcoin {
 
 	type ChainAsset = assets::btc::Asset;
 
-	// TODO: Provide an actual value for this
-	type ChainAccount = u64;
+	type ChainAccount = Address;
 
 	type EpochStartData = ();
 
 	type IngressFetchId = BitcoinFetchId;
 }
 
+impl ChainCrypto for Bitcoin {
+	type AggKey = AggKey;
+
+	type Payload = SigningPayload;
+
+	type ThresholdSignature = [u8; 64];
+
+	type TransactionId = [u8; 32];
+
+	type GovKey = Self::AggKey;
+
+	fn verify_threshold_signature(
+		_agg_key: &Self::AggKey,
+		_payload: &Self::Payload,
+		_signature: &Self::ThresholdSignature,
+	) -> bool {
+		todo!()
+	}
+
+	fn agg_key_to_payload(_agg_key: Self::AggKey) -> Self::Payload {
+		todo!()
+	}
+
+	fn agg_key_to_key_id(
+		_agg_key: Self::AggKey,
+		_epoch_index: cf_primitives::EpochIndex,
+	) -> cf_primitives::KeyId {
+		todo!()
+	}
+}
+
+// Bitcoin threshold signature
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue for [u8; 64] {
+	fn benchmark_value() -> Self {
+		[0xau8; 64]
+	}
+}
+
+// Bitcoin address
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue for Address {
+	fn benchmark_value() -> Self {
+		[1u8; 32]
+	}
+}
+
+impl ChainAbi for Bitcoin {
+	type Transaction = BitcoinTransactionData;
+
+	type ReplayProtection = BitcoinReplayProtection;
+}
+
 impl IngressIdConstructor for BitcoinFetchId {
-	type Address = u64;
+	type Address = Address;
 
 	fn deployed(_intent_id: u64, _address: Self::Address) -> Self {
 		todo!()
@@ -294,7 +420,7 @@ impl BitcoinTransaction {
 		transaction_bytes
 	}
 
-	pub fn get_signing_payload(&self, input_index: u32) -> [u8; 32] {
+	pub fn get_signing_payload(&self, input_index: u32) -> SigningPayload {
 		// SHA256("TapSighash")
 		const TAPSIG_HASH: &[u8] =
 			&hex_literal::hex!("f40a48df4b2a70c8b4924bf2654661ed3d95fd66a313eb87237597c628e4a031");
