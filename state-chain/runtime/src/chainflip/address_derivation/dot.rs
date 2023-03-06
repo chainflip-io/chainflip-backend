@@ -37,7 +37,7 @@ impl AddressDerivationApi<Polkadot> for AddressDerivation {
 		// Then add the 32-byte public key.
 		payload.extend(master_account.as_slice());
 		// Finally, add the index to the end of the payload.
-		payload.extend(&(intent_id as u16).to_le_bytes());
+		payload.extend(&(<u16>::try_from(intent_id).unwrap()).to_le_bytes());
 
 		// Hash the whole thing
 		let payload_hash = BlakeTwo256::hash(&payload);
