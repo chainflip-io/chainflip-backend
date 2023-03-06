@@ -28,6 +28,7 @@ pub type Tick = i32;
 pub type Liquidity = u128;
 pub type LiquidityProvider = H256;
 pub type Amount = U256;
+pub type Fee = u128;
 type SqrtPriceQ64F96 = U256;
 type FeeGrowthQ128F128 = U256;
 
@@ -54,17 +55,16 @@ const ONE_IN_PIPS: u32 = 1000000;
 struct Position {
 	liquidity: Liquidity,
 	last_fee_growth_inside: enum_map::EnumMap<Side, FeeGrowthQ128F128>,
-	fees_owed: enum_map::EnumMap<Side, u128>,
 }
 impl Position {
-	fn update_fees_owed(
+	fn collect_fees_owed(
 		&mut self,
 		pool_state: &PoolState,
 		lower_tick: Tick,
 		lower_info: &TickInfo,
 		upper_tick: Tick,
 		upper_info: &TickInfo,
-	) {
+	) -> enum_map::EnumMap<Side, Fee> {
 		let fee_growth_inside = enum_map::EnumMap::default().map(|side, ()| {
 			let fee_growth_below = if pool_state.current_tick < lower_tick {
 				pool_state.global_fee_growth[side] - lower_info.fee_growth_outside[side]
@@ -80,9 +80,9 @@ impl Position {
 
 			pool_state.global_fee_growth[side] - fee_growth_below - fee_growth_above
 		});
-		self.fees_owed = enum_map::EnumMap::default().map(|side, ()| {
+		let fees_owed = enum_map::EnumMap::default().map(|side, ()| {
 			// DIFF: This behaviour is different than Uniswap's. We saturate fees_owed instead of
-			// overflowing
+			// overflowing. It is on LPs to withdraw fees before you hit Fee::MAX fees
 
 			/*
 				Proof that `mul_div` does not overflow:
@@ -97,10 +97,10 @@ impl Position {
 			.try_into()
 			.unwrap_or(u128::MAX);
 
-			// saturating is acceptable, it is on LPs to withdraw fees before you hit u128::MAX fees
-			self.fees_owed[side].saturating_add(fees_owed)
+			fees_owed
 		});
 		self.last_fee_growth_inside = fee_growth_inside;
+		fees_owed
 	}
 
 	fn set_liquidity(
@@ -111,9 +111,11 @@ impl Position {
 		lower_info: &TickInfo,
 		upper_tick: Tick,
 		upper_info: &TickInfo,
-	) {
-		self.update_fees_owed(pool_state, lower_tick, lower_info, upper_tick, upper_info);
+	) -> enum_map::EnumMap<Side, Fee> {
+		let fees_owed =
+			self.collect_fees_owed(pool_state, lower_tick, lower_info, upper_tick, upper_info);
 		self.liquidity = new_liquidity;
+		fees_owed
 	}
 }
 
@@ -395,28 +397,28 @@ impl PoolState {
 	/// is not valid, returns Err(_). Otherwise the callback `try_debit` will be passed the Amounts
 	/// required to add the specified `minted_liquidity` to the specified position. If the callback
 	/// returns `Ok(t)` the position will be created if it didn't already exist, `minted_liquidity`
-	/// will be added to it, and `Ok(t)` will be returned. If `Err(_)` is returned the position will
-	/// not be created, and `Err(_)`will be returned.
+	/// will be added to it, and `Ok((t, collected_fees))` will be returned. If `Err(_)` is returned
+	/// the position will not be created, and `Err(_)`will be returned.
 	///
 	/// This function never panics
 	///
 	/// If this function returns an `Err(_)` no state changes have occurred
-	pub fn mint<T, E, TryDebit: FnOnce(enum_map::EnumMap<Side, Amount>) -> Result<T, E>>(
+	pub fn collect_and_mint<
+		T,
+		E,
+		TryDebit: FnOnce(enum_map::EnumMap<Side, Amount>) -> Result<T, E>,
+	>(
 		&mut self,
 		lp: LiquidityProvider,
 		lower_tick: Tick,
 		upper_tick: Tick,
 		minted_liquidity: Liquidity,
 		try_debit: TryDebit,
-	) -> Result<T, MintError<E>> {
+	) -> Result<(T, enum_map::EnumMap<Side, Fee>), MintError<E>> {
 		if lower_tick < upper_tick && MIN_TICK <= lower_tick && upper_tick <= MAX_TICK {
 			let mut position =
 				self.positions.get(&(lp, lower_tick, upper_tick)).cloned().unwrap_or_else(|| {
-					Position {
-						liquidity: 0,
-						last_fee_growth_inside: Default::default(),
-						fees_owed: Default::default(),
-					}
+					Position { liquidity: 0, last_fee_growth_inside: Default::default() }
 				});
 			let tick_info_with_updated_gross_liquidity = |tick| {
 				let mut tick_info = self.liquidity_map.get(&tick).cloned().unwrap_or_else(|| {
@@ -453,7 +455,7 @@ impl PoolState {
 			upper_info.liquidity_delta =
 				upper_info.liquidity_delta.checked_sub_unsigned(minted_liquidity).unwrap();
 
-			position.set_liquidity(
+			let fees_owed = position.set_liquidity(
 				self,
 				// Cannot overflow due to * MAX_TICK_GROSS_LIQUIDITY
 				position.liquidity + minted_liquidity,
@@ -473,28 +475,28 @@ impl PoolState {
 			self.liquidity_map.insert(lower_tick, lower_info);
 			self.liquidity_map.insert(upper_tick, upper_info);
 
-			Ok(t)
+			Ok((t, fees_owed))
 		} else {
 			Err(MintError::InvalidTickRange)
 		}
 	}
 
-	/// Tries to remove liquidity from the specified range-order, and convert the liqudity into
-	/// Amounts owed to the LP. Also if the position no longer has any liquidity then it is
-	/// destroyed and any fees earned by that position are also returned
+	/// Tries to remove liquidity from the specified range-order, and returns the value of the burnt
+	/// liquidity in `Amounts` with the fees collected by the position. If all the position's liquidity
+	/// is burned then it is destroyed.
 	///
 	/// This function never panics
 	///
 	/// If this function returns an `Err(_)` no state changes have occurred
 	#[allow(clippy::type_complexity)]
-	pub fn burn(
+	pub fn collect_and_burn(
 		&mut self,
 		lp: LiquidityProvider,
 		lower_tick: Tick,
 		upper_tick: Tick,
 		burnt_liquidity: Liquidity,
 	) -> Result<
-		(enum_map::EnumMap<Side, Amount>, enum_map::EnumMap<Side, u128>),
+		(enum_map::EnumMap<Side, Amount>, enum_map::EnumMap<Side, Fee>),
 		PositionError<BurnError>,
 	> {
 		if let Some(mut position) = self.positions.get(&(lp, lower_tick, upper_tick)).cloned() {
@@ -509,7 +511,7 @@ impl PoolState {
 				upper_info.liquidity_delta =
 					upper_info.liquidity_delta.checked_add_unsigned(burnt_liquidity).unwrap();
 
-				position.set_liquidity(
+				let fees_owed = position.set_liquidity(
 					self,
 					position.liquidity - burnt_liquidity,
 					lower_tick,
@@ -541,18 +543,14 @@ impl PoolState {
 					*self.liquidity_map.get_mut(&upper_tick).unwrap() = upper_info;
 				}
 
-				let fees_owed = if position.liquidity == 0 {
+				if position.liquidity == 0 {
 					// DIFF: This behaviour is different than Uniswap's to ensure if a position
 					// exists its ticks also exist in the liquidity_map, by removing zero liquidity
 					// positions
 					self.positions.remove(&(lp, lower_tick, upper_tick));
-
-					position.fees_owed
 				} else {
 					*self.positions.get_mut(&(lp, lower_tick, upper_tick)).unwrap() = position;
-
-					Default::default()
-				};
+				}
 
 				// DIFF: This behaviour is different than Uniswap's. We don't accumulated tokens
 				// owed in the position, instead it is returned here.
@@ -576,15 +574,14 @@ impl PoolState {
 		lp: LiquidityProvider,
 		lower_tick: Tick,
 		upper_tick: Tick,
-	) -> Result<enum_map::EnumMap<Side, u128>, PositionError<CollectError>> {
+	) -> Result<enum_map::EnumMap<Side, Fee>, PositionError<CollectError>> {
 		if let Some(mut position) = self.positions.get(&(lp, lower_tick, upper_tick)).cloned() {
 			assert!(position.liquidity != 0);
 			let lower_info = self.liquidity_map.get(&lower_tick).unwrap();
 			let upper_info = self.liquidity_map.get(&upper_tick).unwrap();
 
-			position.update_fees_owed(self, lower_tick, lower_info, upper_tick, upper_info);
-
-			let fees_owed = std::mem::take(&mut position.fees_owed);
+			let fees_owed =
+				position.collect_fees_owed(self, lower_tick, lower_info, upper_tick, upper_info);
 
 			self.positions.insert((lp, lower_tick, upper_tick), position);
 
