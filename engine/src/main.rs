@@ -58,7 +58,6 @@ async fn main() -> anyhow::Result<()> {
 					&settings.state_chain,
 					AccountRole::Validator,
 					true,
-					&root_logger,
 				)
 				.await?;
 

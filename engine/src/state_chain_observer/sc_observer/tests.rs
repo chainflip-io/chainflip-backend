@@ -23,7 +23,6 @@ use crate::{
 		rpc::{EthWsRpcClient, MockEthRpcApi},
 		EthBroadcaster,
 	},
-	logging::test_utils::new_test_logger,
 	multisig::{
 		client::{KeygenFailureReason, MockMultisigClientApi, SigningFailureReason},
 		eth::EthSigning,
@@ -1453,7 +1452,6 @@ async fn run_the_sc_observer() {
 					&settings.state_chain,
 					AccountRole::None,
 					false,
-					&new_test_logger(),
 				)
 				.await
 				.unwrap();
