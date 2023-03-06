@@ -12,7 +12,7 @@ use crate::{
 		client::get_key_data_for_test,
 		crypto::polkadot::PolkadotSigning,
 		db::persistent::{
-			create_backup, create_backup_with_directory_name, migrate_db_to_latest,
+			create_backup, create_backup_with_directory_name, migrate_db_to_version,
 			LATEST_SCHEMA_VERSION,
 		},
 		eth::EthSigning,
@@ -130,7 +130,14 @@ fn should_not_migrate_backwards() {
 	{
 		let db = DB::open_cf(&Options::default(), &db_path, COLUMN_FAMILIES)
 			.expect("Should open db file");
-		assert!(migrate_db_to_latest(&db, &db_path, None, &new_test_logger()).is_err());
+		assert!(migrate_db_to_version(
+			&db,
+			BackupOption::NoBackup,
+			None,
+			LATEST_SCHEMA_VERSION,
+			&new_test_logger()
+		)
+		.is_err());
 	}
 }
 
@@ -377,11 +384,13 @@ fn test_migration_to_latest() {
 	let (_dir, db_file) = crate::testing::new_temp_directory_with_nonexistent_file();
 	let logger = crate::logging::test_utils::new_test_logger();
 
-	let db = PersistentKeyDB::new_version_0(&db_file, None, &logger).unwrap();
+	{
+		let db = PersistentKeyDB::new_and_migrate_to_version(&db_file, None, 0, &logger).unwrap();
 
-	assert_eq!(read_schema_version(&db.db).unwrap(), 0);
+		assert_eq!(read_schema_version(&db.db).unwrap(), 0);
+	}
 
-	migrate_db_to_latest(&db.db, &db_file, None, &logger).unwrap();
+	let db = PersistentKeyDB::new_and_migrate_to_latest(&db_file, None, &logger).unwrap();
 
 	assert_eq!(read_schema_version(&db.db).unwrap(), LATEST_SCHEMA_VERSION);
 }
@@ -397,7 +406,7 @@ fn test_migration_to_v1() {
 	let logger = crate::logging::test_utils::new_test_logger();
 
 	// create db with version 0
-	let db = PersistentKeyDB::new_version_0(&db_file, None, &logger).unwrap();
+	let db = PersistentKeyDB::new_and_migrate_to_version(&db_file, None, 0, &logger).unwrap();
 
 	let account_ids: BTreeSet<_> = [1, 2, 3].iter().map(|i| AccountId::new([*i; 32])).collect();
 

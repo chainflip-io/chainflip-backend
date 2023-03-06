@@ -60,11 +60,27 @@ fn put_schema_version_to_batch(db: &DB, batch: &mut WriteBatch, version: u32) {
 }
 
 impl PersistentKeyDB {
-	fn new_version_0(
+	/// Create a new persistent key database. If the database exists and the schema version
+	/// is below the latest, it will attempt to migrate the data to the latest version.
+	// TODO: rename to `open_and_migrate_to_latest`
+	pub fn new_and_migrate_to_latest(
 		db_path: &Path,
 		genesis_hash: Option<state_chain_runtime::Hash>,
 		logger: &slog::Logger,
 	) -> Result<Self> {
+		Self::new_and_migrate_to_version(db_path, genesis_hash, LATEST_SCHEMA_VERSION, logger)
+	}
+
+	/// As `new_and_migrate_to_latest`, but allows specifying a specific version to migrate to
+	/// (useful for testing migrations)
+	fn new_and_migrate_to_version(
+		db_path: &Path,
+		genesis_hash: Option<state_chain_runtime::Hash>,
+		version: u32,
+		logger: &slog::Logger,
+	) -> Result<Self> {
+		let is_existing_db = db_path.exists();
+
 		// Use a prefix extractor on the data column
 		let mut cfopts_for_prefix = Options::default();
 		cfopts_for_prefix
@@ -89,31 +105,30 @@ impl PersistentKeyDB {
 				.map_err(anyhow::Error::msg)
 				.context(format!("Failed to open database at: {}", db_path.display()))?;
 
-		let mut batch = WriteBatch::default();
+		if !is_existing_db {
+			let mut batch = WriteBatch::default();
 
-		put_schema_version_to_batch(&db, &mut batch, 0);
+			put_schema_version_to_batch(&db, &mut batch, 0);
 
-		if let Some(genesis_hash) = genesis_hash {
-			batch.put_cf(get_metadata_column_handle(&db), GENESIS_HASH_KEY, genesis_hash);
+			if let Some(genesis_hash) = genesis_hash {
+				batch.put_cf(get_metadata_column_handle(&db), GENESIS_HASH_KEY, genesis_hash);
+			}
+
+			db.write(batch).context("Failed to write metadata to new db")?;
 		}
 
-		db.write(batch).context("Failed to write metadata to new db")?;
+		// Only create a backup if there is an existing db that we don't
+		// want to accidentally corrupt
+		let backup_option = if is_existing_db {
+			BackupOption::CreateBackup(db_path)
+		} else {
+			BackupOption::NoBackup
+		};
+
+		migrate_db_to_version(&db, backup_option, genesis_hash, version, logger)
+                    .with_context(|| format!("Failed to migrate database at {}. Manual restoration of a backup or purging of the file is required.", db_path.display()))?;
 
 		Ok(PersistentKeyDB::new_from_db(db, logger))
-	}
-
-	/// Create a new persistent key database. If the database exists and the schema version
-	/// is below the latest, it will attempt to migrate the data to the latest version.
-	pub fn new_and_migrate_to_latest(
-		db_path: &Path,
-		genesis_hash: Option<state_chain_runtime::Hash>,
-		logger: &slog::Logger,
-	) -> Result<Self> {
-		let db = PersistentKeyDB::new_version_0(db_path, genesis_hash, logger)?;
-
-		migrate_db_to_latest(&db.db, db_path, genesis_hash, logger)
-                    .with_context(|| format!("Failed to migrate database at {}. Manual restoration of a backup or purging of the file is required.", db_path.display()))?;
-		Ok(db)
 	}
 
 	fn new_from_db(db: DB, logger: &slog::Logger) -> Self {
@@ -324,47 +339,56 @@ fn check_or_set_genesis_hash(db: &DB, genesis_hash: state_chain_runtime::Hash) -
 	}
 }
 
+/// Used to specify whether a backup should be created, and if so,
+/// the provided path is used to derive the name of the backup
+enum BackupOption<'a> {
+	NoBackup,
+	CreateBackup(&'a Path),
+}
+
 /// Reads the schema version and migrates the db to the latest schema version if required
-fn migrate_db_to_latest(
+fn migrate_db_to_version(
 	db: &DB,
-	path: &Path,
+	backup_option: BackupOption,
 	genesis_hash: Option<state_chain_runtime::Hash>,
+	target_version: u32,
 	logger: &slog::Logger,
 ) -> Result<(), anyhow::Error> {
-	let version =
+	let current_version =
 		read_schema_version(db).context("Failed to read schema version from existing db")?;
 
-	slog::info!(logger, "Found db_schema_version of {version}");
+	slog::info!(logger, "Found db_schema_version of {current_version}");
 
 	if let Some(expected_genesis_hash) = genesis_hash {
 		check_or_set_genesis_hash(db, expected_genesis_hash)?;
 	}
 
 	// Check if the db version is up-to-date or we need to do migrations
-	match version.cmp(&LATEST_SCHEMA_VERSION) {
+	match current_version.cmp(&target_version) {
 		Ordering::Equal => {
-			// The db is at the latest version, no action needed
-			slog::info!(logger, "Database already at latest version of: {}", LATEST_SCHEMA_VERSION);
+			slog::info!(logger, "Database already at target version of: {}", target_version);
 			Ok(())
 		},
 		Ordering::Greater => {
 			// We do not support backwards migrations
 			Err(anyhow!("Database schema version {} is ahead of the current schema version {}. Is your Chainflip Engine up to date?",
-                    version,
-                    LATEST_SCHEMA_VERSION)
+                    current_version,
+                    target_version)
                 )
 		},
 		Ordering::Less => {
-			// Backup the database before migrating it
-			slog::info!(
-				logger,
-				"Database backup created at {}",
-				create_backup(path, version)
-					.map_err(anyhow::Error::msg)
-					.context("Failed to create database backup before migration")?
-			);
+			// If requested, backup the database before migrating it
+			if let BackupOption::CreateBackup(path) = backup_option {
+				slog::info!(
+					logger,
+					"Database backup created at {}",
+					create_backup(path, current_version)
+						.map_err(anyhow::Error::msg)
+						.context("Failed to create database backup before migration")?
+				);
+			}
 
-			for version in version..LATEST_SCHEMA_VERSION {
+			for version in current_version..target_version {
 				slog::info!(
 					logger,
 					"Database is migrating from version {} to {}",
