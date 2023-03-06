@@ -62,18 +62,17 @@ fn put_schema_version_to_batch(db: &DB, batch: &mut WriteBatch, version: u32) {
 impl PersistentKeyDB {
 	/// Create a new persistent key database. If the database exists and the schema version
 	/// is below the latest, it will attempt to migrate the data to the latest version.
-	// TODO: rename to `open_and_migrate_to_latest`
-	pub fn new_and_migrate_to_latest(
+	pub fn open_and_migrate_to_latest(
 		db_path: &Path,
 		genesis_hash: Option<state_chain_runtime::Hash>,
 		logger: &slog::Logger,
 	) -> Result<Self> {
-		Self::new_and_migrate_to_version(db_path, genesis_hash, LATEST_SCHEMA_VERSION, logger)
+		Self::open_and_migrate_to_version(db_path, genesis_hash, LATEST_SCHEMA_VERSION, logger)
 	}
 
-	/// As `new_and_migrate_to_latest`, but allows specifying a specific version to migrate to
-	/// (useful for testing migrations)
-	fn new_and_migrate_to_version(
+	/// As [Self::open_and_migrate_to_latest], but allows specifying a specific version
+	/// to migrate to (useful for testing migrations)
+	fn open_and_migrate_to_version(
 		db_path: &Path,
 		genesis_hash: Option<state_chain_runtime::Hash>,
 		version: u32,

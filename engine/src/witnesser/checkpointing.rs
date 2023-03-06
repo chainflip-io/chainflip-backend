@@ -122,12 +122,12 @@ mod tests {
 
 		{
 			// Write the starting checkpoint to the db
-			let db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, None, &logger).unwrap();
+			let db = PersistentKeyDB::open_and_migrate_to_latest(&db_path, None, &logger).unwrap();
 			db.update_checkpoint(ChainTag::Ethereum, &saved_witnessed_until)
 		}
 
 		{
-			let db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, None, &logger).unwrap();
+			let db = PersistentKeyDB::open_and_migrate_to_latest(&db_path, None, &logger).unwrap();
 
 			// Start checkpointing at the same epoch but smaller block number
 			match get_witnesser_start_block_with_checkpointing::<cf_chains::Ethereum>(
@@ -177,7 +177,7 @@ mod tests {
 		}
 
 		{
-			let db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, None, &logger).unwrap();
+			let db = PersistentKeyDB::open_and_migrate_to_latest(&db_path, None, &logger).unwrap();
 
 			// The checkpoint in the db should be updated to the expected_witnesser_start
 			assert_eq!(
@@ -196,11 +196,11 @@ mod tests {
 
 		{
 			// Write the starting checkpoint to the db
-			let db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, None, &logger).unwrap();
+			let db = PersistentKeyDB::open_and_migrate_to_latest(&db_path, None, &logger).unwrap();
 			db.update_checkpoint(ChainTag::Ethereum, &saved_witnessed_until)
 		}
 
-		let db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, None, &logger).unwrap();
+		let db = PersistentKeyDB::open_and_migrate_to_latest(&db_path, None, &logger).unwrap();
 
 		// Start checkpointing at a smaller epoch and check that it returns `AlreadyWitnessedEpoch`
 		assert!(matches!(

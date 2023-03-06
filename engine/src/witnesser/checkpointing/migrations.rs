@@ -129,13 +129,13 @@ mod tests {
 
 		// Run the migration
 		{
-			let db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, None, &logger).unwrap();
+			let db = PersistentKeyDB::open_and_migrate_to_latest(&db_path, None, &logger).unwrap();
 			assert_ok!(run_eth_migration(ChainTag::Ethereum, Arc::new(db), &temp_path).await);
 		}
 
 		// Load the checkpoint from the db and make sure it is the one with the lowest
 		// block number
-		let db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, None, &logger).unwrap();
+		let db = PersistentKeyDB::open_and_migrate_to_latest(&db_path, None, &logger).unwrap();
 		let witnessed_until = db
 			.load_checkpoint(ChainTag::Ethereum)
 			.unwrap()

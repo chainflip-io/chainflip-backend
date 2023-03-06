@@ -72,7 +72,7 @@ const TEST_KEY: [u8; 33] = [
 fn can_create_new_database() {
 	let logger = new_test_logger();
 	let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
-	assert_ok!(PersistentKeyDB::new_and_migrate_to_latest(&db_path, None, &logger));
+	assert_ok!(PersistentKeyDB::open_and_migrate_to_latest(&db_path, None, &logger));
 	assert!(db_path.exists());
 }
 
@@ -83,7 +83,7 @@ fn new_db_is_created_with_correct_metadata() {
 	let starting_genesis_hash: state_chain_runtime::Hash = sp_core::H256::random();
 
 	// Create a fresh db. This will write the schema version and genesis hash
-	assert_ok!(PersistentKeyDB::new_and_migrate_to_latest(
+	assert_ok!(PersistentKeyDB::open_and_migrate_to_latest(
 		&db_path,
 		Some(starting_genesis_hash),
 		&logger
@@ -115,7 +115,7 @@ fn new_db_is_created_with_correct_metadata() {
 fn new_db_returns_db_when_db_data_version_is_latest() {
 	let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
 	open_db_and_write_version_data(&db_path, LATEST_SCHEMA_VERSION);
-	assert_ok!(PersistentKeyDB::new_and_migrate_to_latest(&db_path, None, &new_test_logger()));
+	assert_ok!(PersistentKeyDB::open_and_migrate_to_latest(&db_path, None, &new_test_logger()));
 }
 
 #[test]
@@ -150,13 +150,13 @@ fn can_load_keys_with_current_keygen_info() {
 	let key_id = KeyId { epoch_index: GENESIS_EPOCH, public_key_bytes: TEST_KEY.into() };
 	let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
 	{
-		let p_db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, None, &logger).unwrap();
+		let p_db = PersistentKeyDB::open_and_migrate_to_latest(&db_path, None, &logger).unwrap();
 
 		p_db.update_key::<Scheme>(&key_id, &get_single_key_data::<Scheme>());
 	}
 
 	{
-		let p_db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, None, &logger).unwrap();
+		let p_db = PersistentKeyDB::open_and_migrate_to_latest(&db_path, None, &logger).unwrap();
 		let keys = p_db.load_keys::<Scheme>();
 		let key = keys.get(&key_id).expect("Should have an entry for key");
 		// single party keygen has a threshold of 0
@@ -172,7 +172,7 @@ fn can_update_key() {
 	let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
 	let key_id = KeyId { epoch_index: GENESIS_EPOCH, public_key_bytes: vec![0; 33] };
 
-	let p_db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, None, &logger).unwrap();
+	let p_db = PersistentKeyDB::open_and_migrate_to_latest(&db_path, None, &logger).unwrap();
 
 	let keys_before = p_db.load_keys::<Scheme>();
 	// there should be no key [0; 33] yet
@@ -189,7 +189,7 @@ fn backup_should_fail_if_already_exists() {
 	let logger = new_test_logger();
 	let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
 	// Create a normal db
-	assert_ok!(PersistentKeyDB::new_and_migrate_to_latest(&db_path, None, &logger));
+	assert_ok!(PersistentKeyDB::open_and_migrate_to_latest(&db_path, None, &logger));
 
 	// Backup up the db to a specified directory.
 	// We cannot use the normal backup directory because it has a timestamp in it.
@@ -209,7 +209,7 @@ fn backup_should_fail_if_cant_copy_files() {
 	let (directory, db_path) = new_temp_directory_with_nonexistent_file();
 
 	// Create a normal db
-	assert_ok!(PersistentKeyDB::new_and_migrate_to_latest(&db_path, None, &logger));
+	assert_ok!(PersistentKeyDB::open_and_migrate_to_latest(&db_path, None, &logger));
 	// Do a backup of the db,
 	assert_ok!(create_backup(&db_path, LATEST_SCHEMA_VERSION));
 
@@ -238,7 +238,7 @@ fn can_load_key_from_backup() {
 
 	// Create a normal db and save a key in it
 	{
-		let p_db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, None, &logger).unwrap();
+		let p_db = PersistentKeyDB::open_and_migrate_to_latest(&db_path, None, &logger).unwrap();
 
 		p_db.update_key::<Scheme>(&key_id, &get_single_key_data::<Scheme>());
 	}
@@ -253,7 +253,7 @@ fn can_load_key_from_backup() {
 
 		// Should be able to open the backup and load the key
 		let p_db =
-			PersistentKeyDB::new_and_migrate_to_latest(backups.first().unwrap(), None, &logger)
+			PersistentKeyDB::open_and_migrate_to_latest(backups.first().unwrap(), None, &logger)
 				.unwrap();
 
 		assert!(p_db.load_keys::<Scheme>().get(&key_id).is_some());
@@ -272,7 +272,7 @@ fn can_use_multiple_crypto_schemes() {
 
 	// Create a normal db and save multiple keys to it of different crypto schemes
 	{
-		let p_db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, None, &logger).unwrap();
+		let p_db = PersistentKeyDB::open_and_migrate_to_latest(&db_path, None, &logger).unwrap();
 
 		p_db.update_key::<Scheme1>(&scheme_1_key_id, &get_single_key_data::<Scheme1>());
 		p_db.update_key::<Scheme2>(&scheme_2_key_id, &get_single_key_data::<Scheme2>());
@@ -280,7 +280,7 @@ fn can_use_multiple_crypto_schemes() {
 
 	// Open the db and load the keys of both types
 	{
-		let p_db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, None, &logger).unwrap();
+		let p_db = PersistentKeyDB::open_and_migrate_to_latest(&db_path, None, &logger).unwrap();
 
 		let scheme_1_keys = p_db.load_keys::<Scheme1>();
 		assert_eq!(scheme_1_keys.len(), 1, "Incorrect number of keys loaded");
@@ -303,7 +303,7 @@ fn should_add_genesis_hash_if_missing() {
 
 	// Open the db normally, so the genesis hash will be added
 	{
-		assert_ok!(PersistentKeyDB::new_and_migrate_to_latest(
+		assert_ok!(PersistentKeyDB::open_and_migrate_to_latest(
 			&db_path,
 			Some(genesis_hash_added_later),
 			&logger
@@ -336,7 +336,7 @@ fn should_error_if_genesis_hash_is_different() {
 
 	// Open the db, so hash 1 is written
 	{
-		assert_ok!(PersistentKeyDB::new_and_migrate_to_latest(
+		assert_ok!(PersistentKeyDB::open_and_migrate_to_latest(
 			&db_path,
 			Some(genesis_hash_1),
 			&logger
@@ -345,7 +345,7 @@ fn should_error_if_genesis_hash_is_different() {
 
 	// Open the db again, but with hash 2, so it should compare them and return an error
 	{
-		assert!(PersistentKeyDB::new_and_migrate_to_latest(
+		assert!(PersistentKeyDB::open_and_migrate_to_latest(
 			&db_path,
 			Some(genesis_hash_2),
 			&logger
@@ -364,7 +364,7 @@ fn should_save_and_load_checkpoint() {
 	let chain = ChainTag::Ethereum;
 	// Open a fresh db and write the checkpoint to it
 	{
-		let db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, None, &logger).unwrap();
+		let db = PersistentKeyDB::open_and_migrate_to_latest(&db_path, None, &logger).unwrap();
 
 		assert!(db.load_checkpoint(chain).unwrap().is_none());
 
@@ -373,7 +373,7 @@ fn should_save_and_load_checkpoint() {
 
 	// Open the db file again and load the checkpoint
 	{
-		let db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, None, &logger).unwrap();
+		let db = PersistentKeyDB::open_and_migrate_to_latest(&db_path, None, &logger).unwrap();
 
 		assert_eq!(db.load_checkpoint(chain).unwrap(), Some(test_checkpoint));
 	}
@@ -385,12 +385,12 @@ fn test_migration_to_latest() {
 	let logger = crate::logging::test_utils::new_test_logger();
 
 	{
-		let db = PersistentKeyDB::new_and_migrate_to_version(&db_file, None, 0, &logger).unwrap();
+		let db = PersistentKeyDB::open_and_migrate_to_version(&db_file, None, 0, &logger).unwrap();
 
 		assert_eq!(read_schema_version(&db.db).unwrap(), 0);
 	}
 
-	let db = PersistentKeyDB::new_and_migrate_to_latest(&db_file, None, &logger).unwrap();
+	let db = PersistentKeyDB::open_and_migrate_to_latest(&db_file, None, &logger).unwrap();
 
 	assert_eq!(read_schema_version(&db.db).unwrap(), LATEST_SCHEMA_VERSION);
 }
@@ -406,7 +406,7 @@ fn test_migration_to_v1() {
 	let logger = crate::logging::test_utils::new_test_logger();
 
 	// create db with version 0
-	let db = PersistentKeyDB::new_and_migrate_to_version(&db_file, None, 0, &logger).unwrap();
+	let db = PersistentKeyDB::open_and_migrate_to_version(&db_file, None, 0, &logger).unwrap();
 
 	let account_ids: BTreeSet<_> = [1, 2, 3].iter().map(|i| AccountId::new([*i; 32])).collect();
 

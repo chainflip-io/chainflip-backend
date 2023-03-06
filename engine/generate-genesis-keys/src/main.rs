@@ -93,7 +93,7 @@ fn generate_and_save_keys<Crypto: CryptoScheme>(
 
 	// Create a db for each key share, giving the db the name of the node it is for.
 	for (node_id, key_share) in key_shares {
-		PersistentKeyDB::new_and_migrate_to_latest(
+		PersistentKeyDB::open_and_migrate_to_latest(
 			&Path::new(
 				node_id_to_name_map
 					.get(&node_id)
@@ -129,7 +129,7 @@ fn should_generate_and_save_all_keys() {
 	generate_and_save_keys::<PolkadotSigning>(&node_id_to_name_map);
 
 	// Open the db and check the keys
-	let db = PersistentKeyDB::new_and_migrate_to_latest(
+	let db = PersistentKeyDB::open_and_migrate_to_latest(
 		&db_path.with_extension(DB_EXTENSION),
 		None,
 		&new_discard_logger(),
