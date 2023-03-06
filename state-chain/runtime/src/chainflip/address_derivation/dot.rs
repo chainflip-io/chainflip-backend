@@ -19,7 +19,8 @@ impl AddressDerivationApi<Polkadot> for AddressDerivation {
 		intent_id: IntentId,
 	) -> Result<<Polkadot as Chain>::ChainAccount, DispatchError> {
 		const PREFIX: &[u8; 16] = b"modlpy/utilisuba";
-		const PAYLOAD_LENGTH: usize = PREFIX.len() + 32 + size_of::<u16>();
+		const RAW_PUBLIC_KEY_SIZE: usize = 32;
+		const PAYLOAD_LENGTH: usize = PREFIX.len() + RAW_PUBLIC_KEY_SIZE + size_of::<u16>();
 
 		let master_account = Environment::get_polkadot_vault_account()
 			.ok_or(DispatchError::Other("Vault Account does not exist."))?;
