@@ -696,13 +696,10 @@ impl PoolState {
 					self.current_sqrt_price = sqrt_ratio_target;
 					self.current_tick = SD::current_tick_after_crossing_target_tick(*target_tick);
 
-					// Note conversion to i128 and addition don't overflow (See test
-					// `max_liquidity`)
-					self.current_liquidity = i128::try_from(self.current_liquidity)
-						.unwrap()
-						.checked_add(SD::liquidity_delta_on_crossing_tick(target_info))
-						.unwrap()
-						.try_into()
+					// Addition is guaranteed to never overflow, see test `max_liquidity`
+					self.current_liquidity = self
+						.current_liquidity
+						.checked_add_signed(SD::liquidity_delta_on_crossing_tick(target_info))
 						.unwrap();
 				} else {
 					let amount_in = SD::input_amount_delta_ceil(
@@ -742,12 +739,10 @@ impl PoolState {
 				self.current_sqrt_price = sqrt_ratio_target;
 				self.current_tick = SD::current_tick_after_crossing_target_tick(*target_tick);
 
-				// Note conversion to i128 and addition don't overflow (See test `max_liquidity`)
-				self.current_liquidity = i128::try_from(self.current_liquidity)
-					.unwrap()
-					.checked_add(SD::liquidity_delta_on_crossing_tick(target_info))
-					.unwrap()
-					.try_into()
+				// Addition is guaranteed to never overflow, see test `max_liquidity`
+				self.current_liquidity = self
+					.current_liquidity
+					.checked_add_signed(SD::liquidity_delta_on_crossing_tick(target_info))
 					.unwrap();
 			}
 		}
