@@ -325,8 +325,6 @@ pub enum NewError {
 
 #[derive(Debug)]
 pub enum MintError<E> {
-	/// Invalid Tick range
-	InvalidTickRange,
 	/// One of the start/end ticks of the range reached its maximm gross liquidity
 	MaximumGrossLiquidity,
 	/// Callback failed
@@ -335,6 +333,8 @@ pub enum MintError<E> {
 
 #[derive(Debug)]
 pub enum PositionError<T> {
+	/// Invalid Tick range
+	InvalidTickRange,
 	/// Position referenced does not exist
 	NonExistent,
 	Other(T),
@@ -416,71 +416,69 @@ impl PoolState {
 		upper_tick: Tick,
 		minted_liquidity: Liquidity,
 		try_debit: TryDebit,
-	) -> Result<(T, enum_map::EnumMap<Side, Fee>), MintError<E>> {
-		if lower_tick < upper_tick && MIN_TICK <= lower_tick && upper_tick <= MAX_TICK {
-			let mut position =
-				self.positions.get(&(lp, lower_tick, upper_tick)).cloned().unwrap_or_else(|| {
-					Position { liquidity: 0, last_fee_growth_inside: Default::default() }
-				});
-			let tick_info_with_updated_gross_liquidity = |tick| {
-				let mut tick_info = self.liquidity_map.get(&tick).cloned().unwrap_or_else(|| {
-					TickInfo {
-						liquidity_delta: 0,
-						liquidity_gross: 0,
-						fee_growth_outside: if tick <= self.current_tick {
-							// by convention, we assume that all growth before a tick was
-							// initialized happened _below_ the tick
-							self.global_fee_growth
-						} else {
-							Default::default()
-						},
-					}
-				});
-
-				tick_info.liquidity_gross =
-					u128::saturating_add(tick_info.liquidity_gross, minted_liquidity);
-				if tick_info.liquidity_gross > MAX_TICK_GROSS_LIQUIDITY {
-					Err(MintError::MaximumGrossLiquidity)
-				} else {
-					Ok(tick_info)
+	) -> Result<(T, enum_map::EnumMap<Side, Fee>), PositionError<MintError<E>>> {
+		Self::validate_position_range(lower_tick, upper_tick)?;
+		let mut position =
+			self.positions.get(&(lp, lower_tick, upper_tick)).cloned().unwrap_or_else(|| {
+				Position { liquidity: 0, last_fee_growth_inside: Default::default() }
+			});
+		let tick_info_with_updated_gross_liquidity = |tick| {
+			let mut tick_info = self.liquidity_map.get(&tick).cloned().unwrap_or_else(|| {
+				TickInfo {
+					liquidity_delta: 0,
+					liquidity_gross: 0,
+					fee_growth_outside: if tick <= self.current_tick {
+						// by convention, we assume that all growth before a tick was
+						// initialized happened _below_ the tick
+						self.global_fee_growth
+					} else {
+						Default::default()
+					},
 				}
-			};
+			});
 
-			let mut lower_info = tick_info_with_updated_gross_liquidity(lower_tick)?;
-			// Cannot overflow as liquidity_delta.abs() is bounded to <=
-			// MAX_TICK_GROSS_LIQUIDITY
-			lower_info.liquidity_delta =
-				lower_info.liquidity_delta.checked_add_unsigned(minted_liquidity).unwrap();
-			let mut upper_info = tick_info_with_updated_gross_liquidity(upper_tick)?;
-			// Cannot underflow as liquidity_delta.abs() is bounded to <=
-			// MAX_TICK_GROSS_LIQUIDITY
-			upper_info.liquidity_delta =
-				upper_info.liquidity_delta.checked_sub_unsigned(minted_liquidity).unwrap();
+			tick_info.liquidity_gross =
+				u128::saturating_add(tick_info.liquidity_gross, minted_liquidity);
+			if tick_info.liquidity_gross > MAX_TICK_GROSS_LIQUIDITY {
+				Err(PositionError::Other(MintError::MaximumGrossLiquidity))
+			} else {
+				Ok(tick_info)
+			}
+		};
 
-			let fees_owed = position.set_liquidity(
-				self,
-				// Cannot overflow due to * MAX_TICK_GROSS_LIQUIDITY
-				position.liquidity + minted_liquidity,
-				lower_tick,
-				&lower_info,
-				upper_tick,
-				&upper_info,
-			);
+		let mut lower_info = tick_info_with_updated_gross_liquidity(lower_tick)?;
+		// Cannot overflow as liquidity_delta.abs() is bounded to <=
+		// MAX_TICK_GROSS_LIQUIDITY
+		lower_info.liquidity_delta =
+			lower_info.liquidity_delta.checked_add_unsigned(minted_liquidity).unwrap();
+		let mut upper_info = tick_info_with_updated_gross_liquidity(upper_tick)?;
+		// Cannot underflow as liquidity_delta.abs() is bounded to <=
+		// MAX_TICK_GROSS_LIQUIDITY
+		upper_info.liquidity_delta =
+			upper_info.liquidity_delta.checked_sub_unsigned(minted_liquidity).unwrap();
 
-			let (amounts_required, current_liquidity_delta) =
-				self.liquidity_to_amounts::<true>(minted_liquidity, lower_tick, upper_tick);
+		let fees_owed = position.set_liquidity(
+			self,
+			// Cannot overflow due to * MAX_TICK_GROSS_LIQUIDITY
+			position.liquidity + minted_liquidity,
+			lower_tick,
+			&lower_info,
+			upper_tick,
+			&upper_info,
+		);
 
-			let t = try_debit(amounts_required).map_err(MintError::CallbackFailed)?;
+		let (amounts_required, current_liquidity_delta) =
+			self.liquidity_to_amounts::<true>(minted_liquidity, lower_tick, upper_tick);
 
-			self.current_liquidity += current_liquidity_delta;
-			self.positions.insert((lp, lower_tick, upper_tick), position);
-			self.liquidity_map.insert(lower_tick, lower_info);
-			self.liquidity_map.insert(upper_tick, upper_info);
+		let t = try_debit(amounts_required)
+			.map_err(|err| PositionError::Other(MintError::CallbackFailed(err)))?;
 
-			Ok((t, fees_owed))
-		} else {
-			Err(MintError::InvalidTickRange)
-		}
+		self.current_liquidity += current_liquidity_delta;
+		self.positions.insert((lp, lower_tick, upper_tick), position);
+		self.liquidity_map.insert(lower_tick, lower_info);
+		self.liquidity_map.insert(upper_tick, upper_info);
+
+		Ok((t, fees_owed))
 	}
 
 	/// Calculates the fees owed to the specified position, resets the fees owed for that
@@ -503,6 +501,7 @@ impl PoolState {
 		(enum_map::EnumMap<Side, Amount>, enum_map::EnumMap<Side, Fee>),
 		PositionError<BurnError>,
 	> {
+		Self::validate_position_range(lower_tick, upper_tick)?;
 		if let Some(mut position) = self.positions.get(&(lp, lower_tick, upper_tick)).cloned() {
 			assert!(position.liquidity != 0);
 			if burnt_liquidity <= position.liquidity {
@@ -579,6 +578,7 @@ impl PoolState {
 		lower_tick: Tick,
 		upper_tick: Tick,
 	) -> Result<enum_map::EnumMap<Side, Fee>, PositionError<CollectError>> {
+		Self::validate_position_range(lower_tick, upper_tick)?;
 		if let Some(mut position) = self.positions.get(&(lp, lower_tick, upper_tick)).cloned() {
 			assert!(position.liquidity != 0);
 			let lower_info = self.liquidity_map.get(&lower_tick).unwrap();
@@ -745,6 +745,15 @@ impl PoolState {
 		}
 
 		total_amount_out
+	}
+
+	fn validate_position_range<T>(
+		lower_tick: Tick,
+		upper_tick: Tick,
+	) -> Result<(), PositionError<T>> {
+		(lower_tick < upper_tick && MIN_TICK <= lower_tick && upper_tick <= MAX_TICK)
+			.then_some(())
+			.ok_or(PositionError::InvalidTickRange)
 	}
 
 	fn liquidity_to_amounts<const ROUND_UP: bool>(
