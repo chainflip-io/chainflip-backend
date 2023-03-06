@@ -43,3 +43,34 @@ where
 		self.keys.insert(key_id, key);
 	}
 }
+
+#[test]
+fn should_return_key_due_to_fallback() {
+	use super::keygen::generate_key_data;
+	use crate::multisig::{client::helpers::ACCOUNT_IDS, eth::EthSigning, Rng};
+	use rand_legacy::FromEntropy;
+
+	// Create a database just so we can pass it to the key store
+	let (_dir, db_file) = crate::testing::new_temp_directory_with_nonexistent_file();
+	let logger = crate::logging::test_utils::new_test_logger();
+	let db = PersistentKeyDB::open_and_migrate_to_latest(&db_file, None, &logger).unwrap();
+
+	let mut key_store = KeyStore::<EthSigning>::new(Arc::new(db));
+
+	// Generate a key and save it under epoch 0 (which is what migration
+	// code does for old keys)
+
+	let (key_bytes, key_data) = generate_key_data::<EthSigning>(
+		ACCOUNT_IDS.iter().cloned().collect(),
+		&mut Rng::from_entropy(),
+	);
+
+	let key_id = KeyId { epoch_index: 0, public_key_bytes: key_bytes };
+
+	let key_info = key_data.values().next().unwrap();
+
+	key_store.set_key(key_id.clone(), key_info.clone());
+
+	// Check that we are able to retrieve it using the "correct" epoch
+	assert_eq!(key_store.get_key(&KeyId { epoch_index: 10, ..key_id }), Some(key_info));
+}
