@@ -418,67 +418,75 @@ impl PoolState {
 		try_debit: TryDebit,
 	) -> Result<(T, enum_map::EnumMap<Side, Fee>), PositionError<MintError<E>>> {
 		Self::validate_position_range(lower_tick, upper_tick)?;
-		let mut position =
-			self.positions.get(&(lp, lower_tick, upper_tick)).cloned().unwrap_or_else(|| {
-				Position { liquidity: 0, last_fee_growth_inside: Default::default() }
+		let option_position = self.positions.get(&(lp, lower_tick, upper_tick));
+		if option_position.is_some() || minted_liquidity != 0 {
+			let mut position = option_position.cloned().unwrap_or_else(|| Position {
+				liquidity: 0,
+				last_fee_growth_inside: Default::default(),
 			});
-		let tick_info_with_updated_gross_liquidity = |tick| {
-			let mut tick_info = self.liquidity_map.get(&tick).cloned().unwrap_or_else(|| {
-				TickInfo {
-					liquidity_delta: 0,
-					liquidity_gross: 0,
-					fee_growth_outside: if tick <= self.current_tick {
-						// by convention, we assume that all growth before a tick was
-						// initialized happened _below_ the tick
-						self.global_fee_growth
-					} else {
-						Default::default()
-					},
+
+			let tick_info_with_updated_gross_liquidity = |tick| {
+				let mut tick_info = self.liquidity_map.get(&tick).cloned().unwrap_or_else(|| {
+					TickInfo {
+						liquidity_delta: 0,
+						liquidity_gross: 0,
+						fee_growth_outside: if tick <= self.current_tick {
+							// by convention, we assume that all growth before a tick was
+							// initialized happened _below_ the tick
+							self.global_fee_growth
+						} else {
+							Default::default()
+						},
+					}
+				});
+
+				tick_info.liquidity_gross =
+					u128::saturating_add(tick_info.liquidity_gross, minted_liquidity);
+				if tick_info.liquidity_gross > MAX_TICK_GROSS_LIQUIDITY {
+					Err(PositionError::Other(MintError::MaximumGrossLiquidity))
+				} else {
+					Ok(tick_info)
 				}
-			});
+			};
 
-			tick_info.liquidity_gross =
-				u128::saturating_add(tick_info.liquidity_gross, minted_liquidity);
-			if tick_info.liquidity_gross > MAX_TICK_GROSS_LIQUIDITY {
-				Err(PositionError::Other(MintError::MaximumGrossLiquidity))
-			} else {
-				Ok(tick_info)
-			}
-		};
+			let mut lower_info = tick_info_with_updated_gross_liquidity(lower_tick)?;
+			// Cannot overflow as due to liquidity_gross's MAX_TICK_GROSS_LIQUIDITY bound
+			lower_info.liquidity_delta =
+				lower_info.liquidity_delta.checked_add_unsigned(minted_liquidity).unwrap();
+			let mut upper_info = tick_info_with_updated_gross_liquidity(upper_tick)?;
+			// Cannot overflow as due to liquidity_gross's MAX_TICK_GROSS_LIQUIDITY bound
+			upper_info.liquidity_delta =
+				upper_info.liquidity_delta.checked_sub_unsigned(minted_liquidity).unwrap();
 
-		let mut lower_info = tick_info_with_updated_gross_liquidity(lower_tick)?;
-		// Cannot overflow as liquidity_delta.abs() is bounded to <=
-		// MAX_TICK_GROSS_LIQUIDITY
-		lower_info.liquidity_delta =
-			lower_info.liquidity_delta.checked_add_unsigned(minted_liquidity).unwrap();
-		let mut upper_info = tick_info_with_updated_gross_liquidity(upper_tick)?;
-		// Cannot underflow as liquidity_delta.abs() is bounded to <=
-		// MAX_TICK_GROSS_LIQUIDITY
-		upper_info.liquidity_delta =
-			upper_info.liquidity_delta.checked_sub_unsigned(minted_liquidity).unwrap();
+			let fees_owed = position.set_liquidity(
+				self,
+				// Cannot overflow due to MAX_TICK_GROSS_LIQUIDITY
+				position.liquidity + minted_liquidity,
+				lower_tick,
+				&lower_info,
+				upper_tick,
+				&upper_info,
+			);
 
-		let fees_owed = position.set_liquidity(
-			self,
-			// Cannot overflow due to * MAX_TICK_GROSS_LIQUIDITY
-			position.liquidity + minted_liquidity,
-			lower_tick,
-			&lower_info,
-			upper_tick,
-			&upper_info,
-		);
+			let (amounts_required, current_liquidity_delta) =
+				self.liquidity_to_amounts::<true>(minted_liquidity, lower_tick, upper_tick);
 
-		let (amounts_required, current_liquidity_delta) =
-			self.liquidity_to_amounts::<true>(minted_liquidity, lower_tick, upper_tick);
+			let t = try_debit(amounts_required)
+				.map_err(|err| PositionError::Other(MintError::CallbackFailed(err)))?;
 
-		let t = try_debit(amounts_required)
-			.map_err(|err| PositionError::Other(MintError::CallbackFailed(err)))?;
+			self.current_liquidity += current_liquidity_delta;
+			self.positions.insert((lp, lower_tick, upper_tick), position);
+			self.liquidity_map.insert(lower_tick, lower_info);
+			self.liquidity_map.insert(upper_tick, upper_info);
 
-		self.current_liquidity += current_liquidity_delta;
-		self.positions.insert((lp, lower_tick, upper_tick), position);
-		self.liquidity_map.insert(lower_tick, lower_info);
-		self.liquidity_map.insert(upper_tick, upper_info);
-
-		Ok((t, fees_owed))
+			Ok((t, fees_owed))
+		} else {
+			Ok((
+				try_debit(Default::default())
+					.map_err(|err| PositionError::Other(MintError::CallbackFailed(err)))?,
+				Default::default(),
+			))
+		}
 	}
 
 	/// Calculates the fees owed to the specified position, resets the fees owed for that
