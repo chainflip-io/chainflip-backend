@@ -24,13 +24,20 @@ impl AddressDerivationApi<Polkadot> for AddressDerivation {
 		let master_account = Environment::get_polkadot_vault_account()
 			.ok_or(DispatchError::Other("Vault Account does not exist."))?;
 
+		// Because we re-use addresses, we don't expect to hit this case in the wild.
+		if intent_id > u16::MAX.into() {
+			return Err(DispatchError::Other(
+				"Intent ID too large. Polkadot can only support up to u16 addresses",
+			))
+		}
+
 		let mut payload = Vec::with_capacity(PAYLOAD_LENGTH);
 		// Fill the first slots with the derivation prefix.
 		payload.extend(PREFIX);
 		// Then add the 32-byte public key.
 		payload.extend(master_account.as_slice());
 		// Finally, add the index to the end of the payload.
-		payload.extend(&(intent_id as u16).to_le_bytes());
+		payload.extend(&(<u16>::try_from(intent_id).unwrap()).to_le_bytes());
 
 		// Hash the whole thing
 		let payload_hash = BlakeTwo256::hash(&payload);
