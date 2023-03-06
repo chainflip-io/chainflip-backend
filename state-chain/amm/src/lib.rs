@@ -134,7 +134,7 @@ pub struct PoolState {
 	positions: BTreeMap<(LiquidityProvider, Tick, Tick), Position>,
 }
 
-#[derive(Enum, Clone, Copy)]
+#[derive(Debug, Enum, Clone, Copy)]
 pub enum Side {
 	Zero,
 	One,
@@ -313,6 +313,7 @@ impl SwapDirection for OneToZero {
 	}
 }
 
+#[derive(Debug)]
 pub enum NewError {
 	/// Fee must be between 0 - 50%
 	InvalidFeeAmount,
@@ -320,6 +321,7 @@ pub enum NewError {
 	InvalidInitialPrice,
 }
 
+#[derive(Debug)]
 pub enum MintError<E> {
 	/// Invalid Tick range
 	InvalidTickRange,
@@ -329,17 +331,20 @@ pub enum MintError<E> {
 	CallbackFailed(E),
 }
 
+#[derive(Debug)]
 pub enum PositionError<T> {
 	/// Position referenced does not exist
 	NonExistent,
 	Other(T),
 }
 
+#[derive(Debug)]
 pub enum BurnError {
 	/// Position referenced does not contain the requested liquidity
 	PositionLacksLiquidity,
 }
 
+#[derive(Debug)]
 pub enum CollectError {}
 
 impl PoolState {
