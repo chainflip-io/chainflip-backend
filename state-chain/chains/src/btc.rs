@@ -138,8 +138,8 @@ impl ChainCrypto for Bitcoin {
 		todo!()
 	}
 
-	fn agg_key_to_payload(_agg_key: Self::AggKey) -> Self::Payload {
-		todo!()
+	fn agg_key_to_payload(agg_key: Self::AggKey) -> Self::Payload {
+		agg_key.0
 	}
 
 	fn agg_key_to_key_id(
