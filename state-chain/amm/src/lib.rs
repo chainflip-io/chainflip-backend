@@ -699,8 +699,12 @@ impl PoolState {
 						U256::from(1) << 128u32,
 						self.current_liquidity,
 					));
-				self.current_sqrt_price = sqrt_ratio_next;
-				self.current_tick = Self::tick_at_sqrt_price(self.current_sqrt_price);
+
+				// Recompute current_tick unless the price hasn't moved
+				if self.current_sqrt_price != sqrt_ratio_next {
+					self.current_sqrt_price = sqrt_ratio_next;
+					self.current_tick = Self::tick_at_sqrt_price(self.current_sqrt_price);
+				}
 
 				break
 			}
