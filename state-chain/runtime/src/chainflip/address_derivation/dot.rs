@@ -24,6 +24,7 @@ impl AddressDerivationApi<Polkadot> for AddressDerivation {
 		let master_account = Environment::get_polkadot_vault_account()
 			.ok_or(DispatchError::Other("Vault Account does not exist."))?;
 
+		// Because we re-use addresses, we don't expect to hit this case in the wild.
 		if intent_id > u16::MAX.into() {
 			return Err(DispatchError::Other(
 				"Intent ID too large. Polkadot can only support up to u16 addresses",
