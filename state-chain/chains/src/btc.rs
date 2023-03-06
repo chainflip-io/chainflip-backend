@@ -257,7 +257,7 @@ fn to_varint(value: u64) -> Vec<u8> {
 	result
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, TypeInfo, Encode, Decode)]
 pub enum BitcoinNetwork {
 	Mainnet,
 	Testnet,
