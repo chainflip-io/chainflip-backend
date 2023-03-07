@@ -968,6 +968,19 @@ impl PoolState {
 		handle_tick_bit!(19, 0x48a170391f7dc42444e8fa2u128);
 		// Note due to MIN_TICK and MAX_TICK bounds, past the 20th bit abs_tick is all zeros
 
+		/* Proof that r is never zero (therefore avoiding the divide by zero case here):
+			We can think of an application of the `handle_tick_bit` macro as increasing the index I of r's MSB/`r.ilog2()` (mul by constant), and then decreasing it by 128 (the right shift).
+
+			Note the increase in I caused by the constant mul will be atleast constant.ilog2().
+
+			Also note each application of `handle_tick_bit` decreases (if the if branch is entered) or else maintains r's value as all the constants are less than 2^128.
+
+			Therefore the largest decrease would be caused if all the macros application's if branches where entered.
+
+			So we assuming all if branches are entered, after all the applications `I` would be atleast I_initial + bigsum(constant.ilog2()) - 19*128.
+
+			The test `r_non_zero` checks with value is >= 0, therefore imply the smallest value r could have is more than 0.
+		*/
 		let sqrt_price_q32f128 = if tick > 0 { U256::MAX / r } else { r };
 
 		// we round up in the division so tick_at_sqrt_price of the output price is always
@@ -1120,6 +1133,34 @@ mod test {
 			MAX_TICK_GROSS_LIQUIDITY
 				.checked_mul((1 + MAX_TICK - MIN_TICK) as u128 / 2)
 				.unwrap() < i128::MAX as u128
+		);
+	}
+
+	#[test]
+	fn r_non_zero() {
+		let smallest_initial_r = 0xfffcb933bd6fad37aa2d162d1a594001u128;
+		assert!(
+			(smallest_initial_r.ilog2() as i32 +
+				(0xfff97272373d413259a46990580e213au128.ilog2() +
+					0xfff2e50f5f656932ef12357cf3c7fdccu128.ilog2() +
+					0xffe5caca7e10e4e61c3624eaa0941cd0u128.ilog2() +
+					0xffcb9843d60f6159c9db58835c926644u128.ilog2() +
+					0xff973b41fa98c081472e6896dfb254c0u128.ilog2() +
+					0xff2ea16466c96a3843ec78b326b52861u128.ilog2() +
+					0xfe5dee046a99a2a811c461f1969c3053u128.ilog2() +
+					0xfcbe86c7900a88aedcffc83b479aa3a4u128.ilog2() +
+					0xf987a7253ac413176f2b074cf7815e54u128.ilog2() +
+					0xf3392b0822b70005940c7a398e4b70f3u128.ilog2() +
+					0xe7159475a2c29b7443b29c7fa6e889d9u128.ilog2() +
+					0xd097f3bdfd2022b8845ad8f792aa5825u128.ilog2() +
+					0xa9f746462d870fdf8a65dc1f90e061e5u128.ilog2() +
+					0x70d869a156d2a1b890bb3df62baf32f7u128.ilog2() +
+					0x31be135f97d08fd981231505542fcfa6u128.ilog2() +
+					0x9aa508b5b7a84e1c677de54f3e99bc9u128.ilog2() +
+					0x5d6af8dedb81196699c329225ee604u128.ilog2() +
+					0x2216e584f5fa1ea926041bedfe98u128.ilog2() +
+					0x48a170391f7dc42444e8fa2u128.ilog2()) as i32 -
+				(128 * 19)) > 0
 		);
 	}
 
