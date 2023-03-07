@@ -388,12 +388,6 @@ pub fn scriptpubkey_from_address(
 	}
 }
 
-pub struct BitcoinTransaction {
-	inputs: Vec<Utxo>,
-	outputs: Vec<BitcoinOutput>,
-	signatures: Vec<[u8; 64]>,
-}
-
 impl BitcoinTransaction {
 	pub fn add_signature(mut self, index: u32, signature: Signature) -> Self {
 		if self.signatures.len() != self.inputs.len() {
