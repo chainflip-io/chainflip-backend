@@ -399,7 +399,7 @@ impl BitcoinTransaction {
 	pub fn is_signed(&self) -> bool {
 		if self.signatures.len() == self.inputs.len() &&
 			self.signatures.last().is_some() &&
-			self.signatures.last().unwrap() != [0u8; 64]
+			self.signatures.last().unwrap() != &[0u8; 64]
 		{
 			true
 		} else {
