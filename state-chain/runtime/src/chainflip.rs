@@ -278,6 +278,12 @@ impl ChainEnvironment<cf_chains::dot::api::SystemAccounts, PolkadotAccountId> fo
 		}
 	}
 }
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub struct BtcEnvironment;
+
+impl ChainEnvironment<Vec<cf_chains::btc::Bitcoin::IngressFetchId>, Vec<Utxo>> for BtcEnvironment {
+	fn lookup(s: Vec<cf_chains::btc::Bitcoin::IngressFetchId>) -> Option<Vec<Utxo>> {}
+}
 
 pub struct EthVaultTransitionHandler;
 impl VaultTransitionHandler<Ethereum> for EthVaultTransitionHandler {}
