@@ -60,8 +60,8 @@ fn put_schema_version_to_batch(db: &DB, batch: &mut WriteBatch, version: u32) {
 }
 
 impl PersistentKeyDB {
-	/// Create a new persistent key database. If the database exists and the schema version
-	/// is below the latest, it will attempt to migrate the data to the latest version.
+	/// Open a key database or create one if it doesn't exist. If the schema version of the
+	/// existing database is below the latest, it will attempt to migrate to the latest version.
 	pub fn open_and_migrate_to_latest(
 		db_path: &Path,
 		genesis_hash: Option<state_chain_runtime::Hash>,
@@ -104,7 +104,11 @@ impl PersistentKeyDB {
 				.map_err(anyhow::Error::msg)
 				.context(format!("Failed to open database at: {}", db_path.display()))?;
 
-		if !is_existing_db {
+		// Only create a backup if there is an existing db that we don't
+		// want to accidentally corrupt
+		let backup_option = if is_existing_db {
+			BackupOption::CreateBackup(db_path)
+		} else {
 			let mut batch = WriteBatch::default();
 
 			put_schema_version_to_batch(&db, &mut batch, 0);
@@ -114,24 +118,13 @@ impl PersistentKeyDB {
 			}
 
 			db.write(batch).context("Failed to write metadata to new db")?;
-		}
-
-		// Only create a backup if there is an existing db that we don't
-		// want to accidentally corrupt
-		let backup_option = if is_existing_db {
-			BackupOption::CreateBackup(db_path)
-		} else {
 			BackupOption::NoBackup
 		};
 
 		migrate_db_to_version(&db, backup_option, genesis_hash, version, logger)
                     .with_context(|| format!("Failed to migrate database at {}. Manual restoration of a backup or purging of the file is required.", db_path.display()))?;
 
-		Ok(PersistentKeyDB::new_from_db(db, logger))
-	}
-
-	fn new_from_db(db: DB, logger: &slog::Logger) -> Self {
-		PersistentKeyDB { db, logger: logger.new(o!(COMPONENT_KEY => "PersistentKeyDB")) }
+		Ok(PersistentKeyDB { db, logger: logger.new(o!(COMPONENT_KEY => "PersistentKeyDB")) })
 	}
 
 	/// Write the keyshare to the db, indexed by the key id
@@ -411,7 +404,6 @@ fn migrate_db_to_version(
 }
 
 fn migrate_0_to_1_for_scheme<C: CryptoScheme>(db: &DB, batch: &mut WriteBatch) {
-	// We will need to do this for every crypto scheme!
 	for (legacy_key_id_with_prefix, key_info_bytes) in db
 		.prefix_iterator_cf(get_data_column_handle(db), get_keygen_data_prefix::<C>())
 		.map(|result| result.expect("should successfully read all items"))
@@ -431,6 +423,8 @@ fn migrate_0_to_1_for_scheme<C: CryptoScheme>(db: &DB, batch: &mut WriteBatch) {
 fn migrate_0_to_1(db: &DB) {
 	let mut batch = WriteBatch::default();
 
+	// Do the migration for every scheme that we supported
+	// until schema version 1:
 	migrate_0_to_1_for_scheme::<EthSigning>(db, &mut batch);
 	migrate_0_to_1_for_scheme::<PolkadotSigning>(db, &mut batch);
 

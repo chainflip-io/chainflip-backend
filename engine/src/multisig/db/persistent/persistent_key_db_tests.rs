@@ -380,7 +380,7 @@ fn should_save_and_load_checkpoint() {
 }
 
 #[test]
-fn test_migration_to_latest() {
+fn test_migration_to_latest_from_0() {
 	let (_dir, db_file) = crate::testing::new_temp_directory_with_nonexistent_file();
 	let logger = crate::logging::test_utils::new_test_logger();
 
@@ -410,17 +410,18 @@ fn test_migration_to_v1() {
 
 	let account_ids: BTreeSet<_> = [1, 2, 3].iter().map(|i| AccountId::new([*i; 32])).collect();
 
-	let (key_id, key_data) =
+	let (public_key_bytes, key_data) =
 		keygen::generate_key_data::<EthSigning>(account_ids, &mut Rng::from_entropy());
 
 	let key_info = key_data.values().next().unwrap();
 
-	assert_eq!(key_id.len(), 33);
+	// Sanity check: the key should not include the epoch index
+	assert_eq!(public_key_bytes.len(), 33);
 
 	// Insert the key manually, so it matches the way it was done in db version 0:
 	{
 		let key_id_with_prefix =
-			[get_keygen_data_prefix::<EthSigning>().as_slice(), &key_id].concat();
+			[get_keygen_data_prefix::<EthSigning>().as_slice(), &public_key_bytes].concat();
 
 		db.db
 			.put_cf(
@@ -441,6 +442,6 @@ fn test_migration_to_v1() {
 	let (key_id_loaded, key_info_loaded) = keys.into_iter().next().unwrap();
 
 	assert_eq!(key_id_loaded.epoch_index, 0);
-	assert_eq!(key_id_loaded.public_key_bytes, key_id);
+	assert_eq!(key_id_loaded.public_key_bytes, public_key_bytes);
 	assert_eq!(key_info, &key_info_loaded);
 }
