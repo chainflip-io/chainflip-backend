@@ -9,7 +9,7 @@ use std::{
 };
 
 use cf_primitives::AccountId;
-use tracing::{info, trace, warn};
+use tracing::{info, info_span, trace, warn};
 
 use super::{socket::DO_NOT_LINGER, PeerInfo};
 
@@ -77,6 +77,9 @@ impl Authenticator {
 	}
 
 	pub fn run(self: Arc<Self>, socket: zmq::Socket) {
+		let span = info_span!("p2p");
+		let _entered = span.enter();
+
 		info!("Started authentication thread!");
 		// TODO: ensure that the rest of the program terminates
 		// if this thread panics (which is unlikely)

@@ -11,7 +11,7 @@
 use serde::{Deserialize, Serialize};
 use state_chain_runtime::AccountId;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
-use tracing::{info, trace, warn};
+use tracing::{info, info_span, trace, warn};
 
 use super::socket::DO_NOT_LINGER;
 
@@ -119,6 +119,9 @@ pub fn start_monitoring_thread(
 		create_delayed_reconnect_channel(std::time::Duration::from_secs(1));
 
 	std::thread::spawn(move || {
+		let span = info_span!("p2p");
+		let _entered = span.enter();
+
 		let peer_receiver = context.socket(zmq::PULL).unwrap();
 		peer_receiver.bind(PEER_INFO_ENDPOINT).unwrap();
 

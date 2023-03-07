@@ -20,7 +20,7 @@ use anyhow::{anyhow, Context, Result};
 
 use cf_primitives::EpochIndex;
 use regex::Regex;
-use tracing::debug;
+use tracing::{debug, info_span, Instrument};
 use utilities::make_periodic_tick;
 
 use crate::{
@@ -180,69 +180,72 @@ where
 		&self,
 		unsigned_tx: cf_chains::eth::Transaction,
 	) -> Result<Bytes> {
-		let tx_params = TransactionParameters {
-			to: Some(web3_h160(unsigned_tx.contract)),
-			data: unsigned_tx.data.clone().into(),
-			chain_id: Some(unsigned_tx.chain_id),
-			value: web3_u256(unsigned_tx.value),
-			max_fee_per_gas: unsigned_tx.max_fee_per_gas.map(web3_u256),
-			max_priority_fee_per_gas: unsigned_tx.max_priority_fee_per_gas.map(web3_u256),
-			transaction_type: Some(web3::types::U64::from(EIP1559_TX_ID)),
-			gas: {
-				let gas_estimate = match unsigned_tx.gas_limit {
-					None => {
-						// query for the gas estimate if the SC didn't provide it
-						let zero = Some(U256::from(0u64));
-						let call_request = CallRequest {
-							from: None,
-							to: Some(web3_h160(unsigned_tx.contract)),
-							// Set the gas really high (~half gas in a block) for the estimate,
-							// since the estimation call requires you to input at least as much gas
-							// as the estimate will return
-							gas: Some(U256::from(15_000_000u64)),
-							gas_price: None,
-							value: Some(web3_u256(unsigned_tx.value)),
-							data: Some(unsigned_tx.data.clone().into()),
-							transaction_type: Some(web3::types::U64::from(EIP1559_TX_ID)),
-							// Set the gas prices to zero for the estimate, so we don't get
-							// rejected for not having enough ETH
-							max_fee_per_gas: zero,
-							max_priority_fee_per_gas: zero,
-							..Default::default()
-						};
+		async move {
+			let tx_params = TransactionParameters {
+				to: Some(web3_h160(unsigned_tx.contract)),
+				data: unsigned_tx.data.clone().into(),
+				chain_id: Some(unsigned_tx.chain_id),
+				value: web3_u256(unsigned_tx.value),
+				max_fee_per_gas: unsigned_tx.max_fee_per_gas.map(web3_u256),
+				max_priority_fee_per_gas: unsigned_tx.max_priority_fee_per_gas.map(web3_u256),
+				transaction_type: Some(web3::types::U64::from(EIP1559_TX_ID)),
+				gas: {
+					let gas_estimate = match unsigned_tx.gas_limit {
+						None => {
+							// query for the gas estimate if the SC didn't provide it
+							let zero = Some(U256::from(0u64));
+							let call_request = CallRequest {
+								from: None,
+								to: Some(web3_h160(unsigned_tx.contract)),
+								// Set the gas really high (~half gas in a block) for the estimate,
+								// since the estimation call requires you to input at least as much gas
+								// as the estimate will return
+								gas: Some(U256::from(15_000_000u64)),
+								gas_price: None,
+								value: Some(web3_u256(unsigned_tx.value)),
+								data: Some(unsigned_tx.data.clone().into()),
+								transaction_type: Some(web3::types::U64::from(EIP1559_TX_ID)),
+								// Set the gas prices to zero for the estimate, so we don't get
+								// rejected for not having enough ETH
+								max_fee_per_gas: zero,
+								max_priority_fee_per_gas: zero,
+								..Default::default()
+							};
 
-						self.eth_rpc
-							.estimate_gas(call_request)
-							.await
-							.context("Failed to estimate gas")?
-					},
-					Some(gas_limit) => web3_u256(gas_limit),
-				};
-				// increase the estimate by 50%
-				let gas = gas_estimate
-					.saturating_mul(U256::from(3u64))
-					.checked_div(U256::from(2u64))
-					.unwrap();
+							self.eth_rpc
+								.estimate_gas(call_request)
+								.await
+								.context("Failed to estimate gas")?
+						},
+						Some(gas_limit) => web3_u256(gas_limit),
+					};
+					// increase the estimate by 50%
+					let gas = gas_estimate
+						.saturating_mul(U256::from(3u64))
+						.checked_div(U256::from(2u64))
+						.unwrap();
 
-				debug!("Gas estimate for unsigned tx: {unsigned_tx:?} is {gas_estimate}. Setting 50% higher at: {gas}");
+					debug!("Gas estimate for unsigned tx: {unsigned_tx:?} is {gas_estimate}. Setting 50% higher at: {gas}");
 
-				gas
-			},
-			..Default::default()
-		};
+					gas
+				},
+				..Default::default()
+			};
 
-		Ok(self
-			.eth_rpc
-			.sign_transaction(tx_params, &self.secret_key)
-			.await
-			.context("Failed to sign ETH transaction")?
-			.raw_transaction)
+			Ok(self
+				.eth_rpc
+				.sign_transaction(tx_params, &self.secret_key)
+				.await
+				.context("Failed to sign ETH transaction")?
+				.raw_transaction)
+		}.instrument(info_span!("EthBroadcaster")).await
 	}
 
 	/// Broadcast a transaction to the network
 	pub async fn send(&self, raw_signed_tx: Vec<u8>) -> Result<H256> {
 		self.eth_rpc
 			.send_raw_transaction(raw_signed_tx.into())
+			.instrument(info_span!("EthBroadcaster"))
 			.await
 			.context("Failed to broadcast ETH transaction to network")
 	}
