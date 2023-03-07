@@ -89,3 +89,103 @@ fn check_threshold_calculation() {
 	assert_eq!(failure_threshold_from_share_count(3), 2);
 	assert_eq!(failure_threshold_from_share_count(4), 2);
 }
+
+use core::mem::MaybeUninit;
+struct PartialArray<T, const N: usize> {
+	initialized_length: usize,
+	array: [MaybeUninit<T>; N],
+}
+impl<T, const N: usize> PartialArray<T, N> {
+	fn new() -> Self {
+		Self {
+			initialized_length: 0,
+			array: unsafe { MaybeUninit::<[MaybeUninit<T>; N]>::uninit().assume_init() },
+		}
+	}
+
+	fn initialize(&mut self, t: T) {
+		assert!(self.initialized_length < N);
+		self.array[self.initialized_length] = MaybeUninit::new(t);
+		self.initialized_length += 1;
+	}
+
+	fn into_array(self) -> [T; N] {
+		assert_eq!(N, self.initialized_length);
+		assert_eq!(core::mem::size_of::<[T; N]>(), core::mem::size_of::<[MaybeUninit<T>; N]>());
+		unsafe { core::mem::transmute_copy::<_, [T; N]>(&self.array) }
+	}
+}
+impl<T, const N: usize> Drop for PartialArray<T, N> {
+	fn drop(&mut self) {
+		for i in 0..self.initialized_length {
+			unsafe {
+				self.array[i].assume_init_drop();
+			}
+		}
+	}
+}
+
+pub trait ArrayCollect {
+	type Item: Copy;
+
+	fn collect_array<const L: usize>(self) -> [Self::Item; L];
+}
+
+impl<It: Iterator<Item = Item>, Item: Copy> ArrayCollect for It {
+	type Item = It::Item;
+
+	fn collect_array<const L: usize>(self) -> [Self::Item; L] {
+		let mut partial_array = PartialArray::<Self::Item, L>::new();
+
+		for item in self {
+			partial_array.initialize(item);
+		}
+
+		partial_array.into_array()
+	}
+}
+
+pub trait SliceToArray {
+	type Item: Copy;
+
+	fn as_array<const L: usize>(&self) -> [Self::Item; L];
+}
+
+impl<Item: Copy> SliceToArray for [Item] {
+	type Item = Item;
+
+	fn as_array<const L: usize>(&self) -> [Self::Item; L] {
+		self.iter().copied().collect_array::<L>()
+	}
+}
+
+#[test]
+fn test_collect_array() {
+	let v = vec![1, 2, 3, 4];
+
+	let a = v.into_iter().take(3).collect_array::<3>();
+
+	assert_eq!(a, [1, 2, 3]);
+}
+
+#[test]
+fn test_collect_array_panics_on_invalid_length() {
+	let v = vec![1, 2, 3, 4];
+
+	assert_panics!(v.into_iter().collect_array::<3>());
+}
+
+#[test]
+fn test_as_array() {
+	let a = [1, 2, 3, 4];
+
+	assert_eq!(a[1..3].as_array::<2>(), [2, 3]);
+}
+
+#[test]
+fn test_as_array_panics_on_invalid_length() {
+	let a = [1, 2, 3, 4];
+
+	assert_panics!(a[1..3].as_array::<5>());
+	assert_panics!(a[1..3].as_array::<1>());
+}
