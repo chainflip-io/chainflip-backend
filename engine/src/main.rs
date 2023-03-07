@@ -113,7 +113,7 @@ async fn main() -> anyhow::Result<()> {
 				.context("Failed to get CeremonyIdCounter from SC")?;
 
 			let db = Arc::new(
-				PersistentKeyDB::new_and_migrate_to_latest(
+				PersistentKeyDB::open_and_migrate_to_latest(
 					settings.signing.db_file.as_path(),
 					Some(state_chain_client.get_genesis_hash()),
 					&root_logger,

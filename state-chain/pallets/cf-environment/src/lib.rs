@@ -3,7 +3,7 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use cf_chains::{
-	btc::Utxo,
+	btc::{Utxo, BitcoinNetwork},
 	dot::{api::CreatePolkadotVault, Polkadot, PolkadotAccountId, PolkadotIndex},
 	ChainCrypto,
 };
@@ -103,6 +103,9 @@ pub mod pallet {
 
 		#[pallet::constant]
 		type PolkadotGenesisHash: Get<PolkadotHash>;
+
+		#[pallet::constant]
+		type BitcoinNetwork: Get<BitcoinNetwork>;
 
 		/// Weight information
 		type WeightInfo: WeightInfo;
