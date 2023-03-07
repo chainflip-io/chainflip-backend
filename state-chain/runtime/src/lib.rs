@@ -79,8 +79,8 @@ pub use cf_traits::{EpochInfo, EthEnvironmentProvider, QualifyNode, SessionKeysR
 
 pub use chainflip::chain_instances::*;
 use chainflip::{
-	epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat, EthEnvironment,
-	EthVaultTransitionHandler, TokenholderGovernanceBroadcaster,
+	epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat, DotIngressHandler,
+	EthEnvironment, EthIngressHandler, EthVaultTransitionHandler, TokenholderGovernanceBroadcaster,
 };
 
 use chainflip::{all_vaults_rotator::AllVaultRotator, DotEnvironment, DotVaultTransitionHandler};
@@ -275,6 +275,7 @@ impl pallet_cf_ingress_egress::Config<EthereumInstance> for Runtime {
 	type Broadcaster = EthereumBroadcaster;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type TTL = ConstU32<100>;
+	type IngressHandler = EthIngressHandler;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 }
 
@@ -289,6 +290,7 @@ impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 	type TTL = ConstU32<100>;
+	type IngressHandler = DotIngressHandler;
 }
 
 parameter_types! {

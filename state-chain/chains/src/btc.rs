@@ -14,7 +14,7 @@ extern crate alloc;
 use crate::{Chain, ChainAbi, ChainCrypto, FeeRefundCalculator, IngressIdConstructor};
 use alloc::string::String;
 pub use cf_primitives::chains::Bitcoin;
-use cf_primitives::{chains::assets, EpochIndex, KeyId, PublicKeyBytes};
+use cf_primitives::{chains::assets, EpochIndex, IntentId, KeyId, PublicKeyBytes};
 use itertools;
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -136,7 +136,7 @@ impl ChainCrypto for Bitcoin {
 	// is multiple signatures
 	type ThresholdSignature = Vec<Signature>;
 
-	type TransactionId = [u8; 32];
+	type TransactionId = UtxoId;
 
 	type GovKey = Self::AggKey;
 
@@ -157,6 +157,27 @@ impl ChainCrypto for Bitcoin {
 	}
 }
 
+#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+pub struct UtxoId {
+	// Tx hash of the transaction this utxo was a part of
+	pub tx_hash: [u8; 32],
+	// The index of the output for this utxo
+	pub vout_index: u32,
+	// The public key of the account that can spend this utxo
+	pub pubkey_x: [u8; 32],
+	// Salt used to generate an address from the public key. In our case its the intent id of the
+	// swap
+	pub salt: IntentId,
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue for UtxoId {
+	fn benchmark_value() -> Self {
+		UtxoId { tx_hash: [1u8; 32], vout_index: 1, pubkey_x: [2u8; 32], salt: 0 }
+	}
+}
+
+// Bitcoin threshold signature
 #[cfg(feature = "runtime-benchmarks")]
 impl BenchmarkValue for Signature {
 	fn benchmark_value() -> Self {
@@ -210,24 +231,18 @@ pub enum Error {
 	/// The address is invalid
 	InvalidAddress,
 }
-
+#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct Utxo {
-	amount: u64,
-	txid: [u8; 32],
-	vout: u32,
-	pubkey_x: [u8; 32],
-	salt: u32,
+	pub amount: u64,
+	pub txid: [u8; 32],
+	pub vout: u32,
+	pub pubkey_x: [u8; 32],
+	pub salt: u32,
 }
 
 pub struct BitcoinOutput {
 	amount: u64,
 	script_pubkey: BitcoinScript,
-}
-
-pub struct BitcoinTransaction {
-	inputs: Vec<Utxo>,
-	outputs: Vec<BitcoinOutput>,
-	signatures: Vec<Signature>,
 }
 
 fn get_tapleaf_hash(pubkey_x: [u8; 32], salt: u32) -> [u8; 32] {
@@ -363,6 +378,12 @@ pub fn scriptpubkey_from_address(
 	} else {
 		Err(Error::InvalidAddress)
 	}
+}
+
+pub struct BitcoinTransaction {
+	inputs: Vec<Utxo>,
+	outputs: Vec<BitcoinOutput>,
+	signatures: Vec<[u8; 64]>,
 }
 
 impl BitcoinTransaction {

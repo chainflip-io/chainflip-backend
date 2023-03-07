@@ -9,7 +9,10 @@ pub use cf_primitives::{
 	Asset, AssetAmount, EthereumAddress, ExchangeRate, ETHEREUM_ETH_ADDRESS,
 };
 
-use cf_traits::mocks::all_batch::{MockAllBatch, MockEthEnvironment};
+use cf_traits::{
+	mocks::all_batch::{MockAllBatch, MockEthEnvironment},
+	IngressHandler,
+};
 pub use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
 	Broadcaster,
@@ -90,6 +93,9 @@ impl Broadcaster<Ethereum> for MockBroadcast {
 	}
 }
 
+pub struct MockIngressHandler;
+impl IngressHandler<Ethereum> for MockIngressHandler {}
+
 impl crate::Config<Instance1> for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type TargetChain = Ethereum;
@@ -101,6 +107,7 @@ impl crate::Config<Instance1> for Test {
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type WeightInfo = ();
 	type TTL = ConstU64<5_u64>;
+	type IngressHandler = MockIngressHandler;
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
