@@ -7,10 +7,8 @@ use core::{borrow::Borrow, iter};
 use frame_support::{sp_io::hashing::sha2_256, RuntimeDebug};
 use libsecp256k1::{PublicKey, SecretKey};
 use scale_info::TypeInfo;
-use sp_std::vec::Vec;
-
-#[cfg(feature = "runtime-benchmarks")]
-use sp_std::vec;
+use sp_std::{vec, vec::Vec};
+// #[cfg(feature = "runtime-benchmarks")]
 
 extern crate alloc;
 use crate::{Chain, ChainAbi, ChainCrypto, FeeRefundCalculator, IngressIdConstructor};
@@ -32,6 +30,8 @@ pub struct BitcoinFetchId(u64);
 type Amount = u128;
 
 pub type SigningPayload = [u8; 32];
+
+pub type Signature = [u8; 64];
 
 pub type Address = [u8; 32];
 
@@ -88,6 +88,13 @@ impl BenchmarkValue for BitcoinTransactionData {
 	}
 }
 
+#[cfg(feature = "runtime-benchmarks")]
+impl<T: BenchmarkValue> BenchmarkValue for Vec<T> {
+	fn benchmark_value() -> Self {
+		vec![T::benchmark_value()]
+	}
+}
+
 // TODO: Implement this
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Default)]
 pub struct BitcoinReplayProtection;
@@ -122,9 +129,12 @@ impl Chain for Bitcoin {
 impl ChainCrypto for Bitcoin {
 	type AggKey = AggKey;
 
-	type Payload = SigningPayload;
+	// A single transaction can sign over multiple UTXOs
+	type Payload = Vec<SigningPayload>;
 
-	type ThresholdSignature = [u8; 64];
+	// The response from a threshold signing ceremony over multiple payloads
+	// is multiple signatures
+	type ThresholdSignature = Vec<Signature>;
 
 	type TransactionId = [u8; 32];
 
@@ -139,7 +149,7 @@ impl ChainCrypto for Bitcoin {
 	}
 
 	fn agg_key_to_payload(agg_key: Self::AggKey) -> Self::Payload {
-		agg_key.0
+		vec![agg_key.0]
 	}
 
 	fn agg_key_to_key_id(agg_key: Self::AggKey, epoch_index: EpochIndex) -> KeyId {
@@ -147,9 +157,8 @@ impl ChainCrypto for Bitcoin {
 	}
 }
 
-// Bitcoin threshold signature
 #[cfg(feature = "runtime-benchmarks")]
-impl BenchmarkValue for [u8; 64] {
+impl BenchmarkValue for Signature {
 	fn benchmark_value() -> Self {
 		[0xau8; 64]
 	}
@@ -218,7 +227,7 @@ pub struct BitcoinOutput {
 pub struct BitcoinTransaction {
 	inputs: Vec<Utxo>,
 	outputs: Vec<BitcoinOutput>,
-	signatures: Vec<[u8; 64]>,
+	signatures: Vec<Signature>,
 }
 
 fn get_tapleaf_hash(pubkey_x: [u8; 32], salt: u32) -> [u8; 32] {
@@ -357,7 +366,7 @@ pub fn scriptpubkey_from_address(
 }
 
 impl BitcoinTransaction {
-	pub fn add_signature(mut self, index: u32, signature: [u8; 64]) -> Self {
+	pub fn add_signature(mut self, index: u32, signature: Signature) -> Self {
 		if self.signatures.len() != self.inputs.len() {
 			self.signatures.resize(self.inputs.len(), [0u8; 64]);
 		}
