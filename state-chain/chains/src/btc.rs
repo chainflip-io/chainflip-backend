@@ -383,16 +383,28 @@ pub fn scriptpubkey_from_address(
 pub struct BitcoinTransaction {
 	inputs: Vec<Utxo>,
 	outputs: Vec<BitcoinOutput>,
-	signatures: Vec<[u8; 64]>,
+	signatures: Vec<Signature>,
 }
 
 impl BitcoinTransaction {
-	pub fn add_signature(mut self, index: u32, signature: Signature) -> Self {
+	pub fn create_new_unsigned(inputs: Vec<Utxo>, outputs: Vec<BitcoinOutput>) -> Self {
+		Self { inputs, outputs, signatures: vec![] }
+	}
+	pub fn add_signature(mut self, index: u32, signature: Signature) {
 		if self.signatures.len() != self.inputs.len() {
 			self.signatures.resize(self.inputs.len(), [0u8; 64]);
 		}
 		self.signatures[index as usize] = signature;
-		self
+	}
+	pub fn is_signed(&self) -> bool {
+		if self.signatures.len() == self.inputs.len() &&
+			self.signatures.last().is_some() &&
+			self.signatures.last().unwrap() != [0u8; 64]
+		{
+			true
+		} else {
+			false
+		}
 	}
 	pub fn finalize(self) -> Vec<u8> {
 		let mut transaction_bytes = Vec::default();
