@@ -18,7 +18,7 @@ use tokio::sync::watch;
 use web3::types::{Bytes, SignedTransaction};
 
 use crate::{
-	dot::{rpc::MockDotRpcApi, DotBroadcaster},
+	dot::{rpc::MockDotRpcApi, witnessing::DotMonitorSenders, DotBroadcaster},
 	eth::{
 		rpc::{EthWsRpcClient, MockEthRpcApi},
 		EthBroadcaster,
@@ -35,7 +35,7 @@ use crate::{
 	witnesser::EpochStart,
 };
 
-use super::EthAddressToMonitorSender;
+use super::EthAddressToMonitorSenders;
 
 fn test_header(number: u32) -> Header {
 	Header {
@@ -149,14 +149,16 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		dot_multisig_client,
 		account_peer_mapping_change_sender,
 		epoch_start_sender,
-		EthAddressToMonitorSender {
+		EthAddressToMonitorSenders {
 			eth: eth_monitor_ingress_sender,
 			flip: eth_monitor_flip_ingress_sender,
 			usdc: eth_monitor_usdc_ingress_sender,
 		},
 		dot_epoch_start_sender,
-		dot_monitor_ingress_sender,
-		dot_monitor_signature_sender,
+		DotMonitorSenders {
+			ingress: dot_monitor_ingress_sender,
+			signature: dot_monitor_signature_sender,
+		},
 		cfe_settings_update_sender,
 		initial_block_hash,
 		logger,
@@ -319,14 +321,16 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		dot_multisig_client,
 		account_peer_mapping_change_sender,
 		epoch_start_sender,
-		EthAddressToMonitorSender {
+		EthAddressToMonitorSenders {
 			eth: eth_monitor_ingress_sender,
 			flip: eth_monitor_flip_ingress_sender,
 			usdc: eth_monitor_usdc_ingress_sender,
 		},
 		dot_epoch_start_sender,
-		dot_monitor_ingress_sender,
-		dot_monitor_signature_sender,
+		DotMonitorSenders {
+			ingress: dot_monitor_ingress_sender,
+			signature: dot_monitor_signature_sender,
+		},
 		cfe_settings_update_sender,
 		initial_block_hash,
 		logger,
@@ -453,14 +457,16 @@ async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
 		dot_multisig_client,
 		account_peer_mapping_change_sender,
 		epoch_start_sender,
-		EthAddressToMonitorSender {
+		EthAddressToMonitorSenders {
 			eth: eth_monitor_ingress_sender,
 			flip: eth_monitor_flip_ingress_sender,
 			usdc: eth_monitor_usdc_ingress_sender,
 		},
 		dot_epoch_start_sender,
-		dot_monitor_ingress_sender,
-		dot_monitor_signature_sender,
+		DotMonitorSenders {
+			ingress: dot_monitor_ingress_sender,
+			signature: dot_monitor_signature_sender,
+		},
 		cfe_settings_update_sender,
 		initial_block_hash,
 		logger,
@@ -648,14 +654,16 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		dot_multisig_client,
 		account_peer_mapping_change_sender,
 		epoch_start_sender,
-		EthAddressToMonitorSender {
+		EthAddressToMonitorSenders {
 			eth: eth_monitor_ingress_sender,
 			flip: eth_monitor_flip_ingress_sender,
 			usdc: eth_monitor_usdc_ingress_sender,
 		},
 		dot_epoch_start_sender,
-		dot_monitor_ingress_sender,
-		dot_monitor_signature_sender,
+		DotMonitorSenders {
+			ingress: dot_monitor_ingress_sender,
+			signature: dot_monitor_signature_sender,
+		},
 		cfe_settings_update_sender,
 		initial_block_hash,
 		logger,
@@ -847,14 +855,16 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		dot_multisig_client,
 		account_peer_mapping_change_sender,
 		epoch_start_sender,
-		EthAddressToMonitorSender {
+		EthAddressToMonitorSenders {
 			eth: eth_monitor_ingress_sender,
 			flip: eth_monitor_flip_ingress_sender,
 			usdc: eth_monitor_usdc_ingress_sender,
 		},
 		dot_epoch_start_sender,
-		dot_monitor_ingress_sender,
-		dot_monitor_signature_sender,
+		DotMonitorSenders {
+			ingress: dot_monitor_ingress_sender,
+			signature: dot_monitor_signature_sender,
+		},
 		cfe_settings_update_sender,
 		initial_block_hash,
 		logger,
@@ -1047,14 +1057,16 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		dot_multisig_client,
 		account_peer_mapping_change_sender,
 		epoch_start_sender,
-		EthAddressToMonitorSender {
+		EthAddressToMonitorSenders {
 			eth: eth_monitor_ingress_sender,
 			flip: eth_monitor_flip_ingress_sender,
 			usdc: eth_monitor_usdc_ingress_sender,
 		},
 		dot_epoch_start_sender,
-		dot_monitor_ingress_sender,
-		dot_monitor_signature_sender,
+		DotMonitorSenders {
+			ingress: dot_monitor_ingress_sender,
+			signature: dot_monitor_signature_sender,
+		},
 		cfe_settings_update_sender,
 		initial_block_hash,
 		logger,
@@ -1242,14 +1254,16 @@ async fn only_encodes_and_signs_when_specified() {
 		dot_multisig_client,
 		account_peer_mapping_change_sender,
 		epoch_start_sender,
-		EthAddressToMonitorSender {
+		EthAddressToMonitorSenders {
 			eth: eth_monitor_ingress_sender,
 			flip: eth_monitor_flip_ingress_sender,
 			usdc: eth_monitor_usdc_ingress_sender,
 		},
 		dot_epoch_start_sender,
-		dot_monitor_ingress_sender,
-		dot_monitor_signature_sender,
+		DotMonitorSenders {
+			ingress: dot_monitor_ingress_sender,
+			signature: dot_monitor_signature_sender,
+		},
 		cfe_settings_update_sender,
 		initial_block_hash,
 		logger,
@@ -1522,14 +1536,16 @@ async fn run_the_sc_observer() {
 				dot_multisig_client,
 				account_peer_mapping_change_sender,
 				epoch_start_sender,
-				EthAddressToMonitorSender {
+				EthAddressToMonitorSenders {
 					eth: eth_monitor_ingress_sender,
 					flip: eth_monitor_flip_ingress_sender,
 					usdc: eth_monitor_usdc_ingress_sender,
 				},
 				dot_epoch_start_sender,
-				dot_monitor_ingress_sender,
-				dot_monitor_signature_sender,
+				DotMonitorSenders {
+					ingress: dot_monitor_ingress_sender,
+					signature: dot_monitor_signature_sender,
+				},
 				cfe_settings_update_sender,
 				initial_block_hash,
 				logger,

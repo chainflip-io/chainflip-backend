@@ -3,7 +3,7 @@ mod tests;
 
 use anyhow::{anyhow, Context};
 use cf_chains::{dot, eth::Ethereum, ChainCrypto, Polkadot};
-use cf_primitives::{BlockNumber, CeremonyId, EpochIndex, KeyId, PolkadotAccountId};
+use cf_primitives::{BlockNumber, CeremonyId, EpochIndex, KeyId};
 use futures::{FutureExt, Stream, StreamExt};
 use slog::o;
 use sp_core::{Hasher, H160, H256};
@@ -20,7 +20,7 @@ use std::{
 use tokio::sync::{mpsc::UnboundedSender, watch};
 
 use crate::{
-	dot::{rpc::DotRpcApi, DotBroadcaster},
+	dot::{rpc::DotRpcApi, witnessing::DotMonitorSenders, DotBroadcaster},
 	eth::{rpc::EthRpcApi, EthBroadcaster},
 	logging::COMPONENT_KEY,
 	multisig::{
@@ -32,7 +32,7 @@ use crate::{
 	witnesser::EpochStart,
 };
 
-pub struct EthAddressToMonitorSender {
+pub struct EthAddressToMonitorSenders {
 	pub eth: UnboundedSender<H160>,
 	pub flip: UnboundedSender<H160>,
 	pub usdc: UnboundedSender<H160>,
@@ -182,10 +182,9 @@ pub async fn start<
 	dot_multisig_client: PolkadotMultisigClient,
 	peer_update_sender: UnboundedSender<PeerUpdate>,
 	eth_epoch_start_sender: async_broadcast::Sender<EpochStart<Ethereum>>,
-	eth_address_to_monitor_sender: EthAddressToMonitorSender,
+	eth_senders: EthAddressToMonitorSenders,
 	dot_epoch_start_sender: async_broadcast::Sender<EpochStart<Polkadot>>,
-	dot_monitor_ingress_sender: tokio::sync::mpsc::UnboundedSender<PolkadotAccountId>,
-	dot_monitor_signature_sender: tokio::sync::mpsc::UnboundedSender<[u8; 64]>,
+	dot_senders: DotMonitorSenders,
 	cfe_settings_update_sender: watch::Sender<CfeSettings>,
 	initial_block_hash: H256,
 	logger: slog::Logger,
@@ -524,7 +523,7 @@ where
                                             .expect("If we are broadcasting this tx, the signature must exist");
 
                                         // get the threhsold signature, and we want the raw bytes inside the signature
-                                        dot_monitor_signature_sender.send(signature.0).unwrap();
+                                        dot_senders.signature.send(signature.0).unwrap();
                                         if nominee == account_id {
                                             let _result = dot_broadcaster.send(unsigned_tx.encoded_extrinsic).await
                                             .map(|_| slog::info!(logger, "Polkadot transmission successful: {broadcast_attempt_id}"))
@@ -549,13 +548,13 @@ where
                                         use cf_primitives::chains::assets::eth;
                                         match ingress_asset {
                                             eth::Asset::Eth => {
-                                                eth_address_to_monitor_sender.eth.send(ingress_address).unwrap();
+                                                eth_senders.eth.send(ingress_address).unwrap();
                                             }
                                             eth::Asset::Flip => {
-                                                eth_address_to_monitor_sender.flip.send(ingress_address).unwrap();
+                                                eth_senders.flip.send(ingress_address).unwrap();
                                             }
                                             eth::Asset::Usdc => {
-                                                eth_address_to_monitor_sender.usdc.send(ingress_address).unwrap();
+                                                eth_senders.usdc.send(ingress_address).unwrap();
                                             }
                                         }
                                     }
@@ -567,7 +566,7 @@ where
                                         }
                                     ) => {
                                         assert_eq!(ingress_asset, cf_primitives::chains::assets::dot::Asset::Dot);
-                                        dot_monitor_ingress_sender.send(ingress_address).unwrap();
+                                        dot_senders.ingress.send(ingress_address).unwrap();
                                     }
                                 }}}}
                                 Err(error) => {

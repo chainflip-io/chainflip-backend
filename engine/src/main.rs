@@ -5,7 +5,7 @@ use anyhow::Context;
 use cf_primitives::AccountRole;
 use chainflip_engine::{
 	btc,
-	dot::{self, rpc::DotRpcClient, witnesser as dot_witnesser, DotBroadcaster},
+	dot::{self, rpc::DotRpcClient, DotBroadcaster},
 	eth::{self, build_broadcast_channel, rpc::EthDualRpcClient, EthBroadcaster},
 	health::HealthChecker,
 	logging,
@@ -24,7 +24,7 @@ use chainflip_engine::{
 
 use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use clap::Parser;
-use futures::{FutureExt, TryFutureExt};
+use futures::FutureExt;
 use pallet_cf_validator::SemVer;
 use web3::types::U256;
 
@@ -161,13 +161,7 @@ async fn main() -> anyhow::Result<()> {
 
 			scope.spawn(dot_multisig_client_backend_future);
 
-			let (dot_monitor_ingress_sender, dot_monitor_ingress_receiver) =
-				tokio::sync::mpsc::unbounded_channel();
-
-			let (dot_monitor_signature_sender, dot_monitor_signature_receiver) =
-				tokio::sync::mpsc::unbounded_channel();
-
-			let eth_address_to_monitor = eth::witnessing::start(
+			let eth_senders = eth::witnessing::start(
 				scope,
 				&settings.eth,
 				state_chain_client.clone(),
@@ -176,6 +170,18 @@ async fn main() -> anyhow::Result<()> {
 				epoch_start_receiver_1,
 				epoch_start_receiver_2,
 				cfe_settings_update_receiver,
+				db.clone(),
+			)
+			.await
+			.unwrap();
+
+			let dot_senders = dot::witnessing::start(
+				scope,
+				settings.dot,
+				state_chain_client.clone(),
+				latest_block_hash,
+				dot_epoch_start_receiver_1,
+				dot_epoch_start_receiver_2,
 				db.clone(),
 			)
 			.await
@@ -197,66 +203,13 @@ async fn main() -> anyhow::Result<()> {
 				dot_multisig_client,
 				peer_update_sender,
 				epoch_start_sender,
-				eth_address_to_monitor,
+				eth_senders,
 				dot_epoch_start_sender,
-				dot_monitor_ingress_sender,
-				dot_monitor_signature_sender,
+				dot_senders,
 				cfe_settings_update_sender,
 				latest_block_hash,
 				root_logger.clone(),
 			));
-
-			scope.spawn(
-				dot_witnesser::start(
-					dot_epoch_start_receiver_1,
-					dot_rpc_client.clone(),
-					dot_monitor_ingress_receiver,
-					state_chain_client
-						.storage_map::<pallet_cf_ingress_egress::IntentIngressDetails<
-							state_chain_runtime::Runtime,
-							state_chain_runtime::PolkadotInstance,
-						>>(latest_block_hash)
-						.await
-						.context("Failed to get initial ingress details")?
-						.into_iter()
-						.filter_map(|(address, intent)| {
-							if intent.ingress_asset ==
-								cf_primitives::chains::assets::dot::Asset::Dot
-							{
-								Some(address)
-							} else {
-								None
-							}
-						})
-						.collect(),
-					dot_monitor_signature_receiver,
-					// NB: We don't need to monitor Ethereum signatures because we already monitor
-					// signature accepted events from the KeyManager contract on Ethereum.
-					state_chain_client
-						.storage_map::<pallet_cf_broadcast::SignatureToBroadcastIdLookup<
-							state_chain_runtime::Runtime,
-							state_chain_runtime::PolkadotInstance,
-						>>(latest_block_hash)
-						.await
-						.context("Failed to get initial DOT signatures to monitor")?
-						.into_iter()
-						.map(|(signature, _)| signature.0)
-						.collect(),
-					state_chain_client.clone(),
-					db.clone(),
-				)
-				.map_err(|_r| anyhow::anyhow!("DOT witnesser failed")),
-			);
-
-			scope.spawn(
-				dot::runtime_version_updater::start(
-					dot_epoch_start_receiver_2,
-					dot_rpc_client,
-					state_chain_client,
-					latest_block_hash,
-				)
-				.map_err(|_| anyhow::anyhow!("DOT runtime version updater failed")),
-			);
 
 			if let Some(btc_settings) = settings.btc {
 				btc::witnessing::start(scope, btc_settings, btc_epoch_start_receiver, db)

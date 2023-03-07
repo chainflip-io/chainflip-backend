@@ -14,7 +14,7 @@ use crate::{
 	eth::ingress_witnesser::IngressWitnesser,
 	multisig::PersistentKeyDB,
 	settings,
-	state_chain_observer::{client::StateChainClient, EthAddressToMonitorSender},
+	state_chain_observer::{client::StateChainClient, EthAddressToMonitorSenders},
 	task_scope::Scope,
 	try_with_logging,
 	witnesser::EpochStart,
@@ -53,7 +53,7 @@ pub async fn start(
 	epoch_start_receiver_2: async_broadcast::Receiver<EpochStart<Ethereum>>,
 	cfe_settings_update_receiver: tokio::sync::watch::Receiver<cfe::CfeSettings>,
 	db: Arc<PersistentKeyDB>,
-) -> anyhow::Result<EthAddressToMonitorSender> {
+) -> anyhow::Result<EthAddressToMonitorSenders> {
 	scope.spawn(
 		chain_data_witnesser::start(
 			EthDualRpcClient::new(eth_settings, expected_chain_id).await.unwrap(),
@@ -223,7 +223,7 @@ pub async fn start(
 		Ok(())
 	});
 
-	Ok(EthAddressToMonitorSender {
+	Ok(EthAddressToMonitorSenders {
 		eth: eth_ingress_sender,
 		flip: flip_ingress_sender,
 		usdc: usdc_ingress_sender,

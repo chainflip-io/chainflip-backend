@@ -1,13 +1,13 @@
 use std::sync::Arc;
 
-use cf_chains::Polkadot;
+use cf_chains::{dot::RuntimeVersion, Polkadot};
 use futures::StreamExt;
-use sp_core::H256;
 use tokio::select;
 use tracing::{info, info_span, Instrument};
 
 use crate::{
 	state_chain_observer::client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi},
+	try_with_logging,
 	witnesser::{epoch_witnesser, EpochStart},
 };
 
@@ -15,41 +15,26 @@ use super::rpc::DotRpcApi;
 pub async fn start<StateChainClient, DotRpc>(
 	epoch_starts_receiver: async_broadcast::Receiver<EpochStart<Polkadot>>,
 	dot_client: DotRpc,
+	last_version_witnessed: RuntimeVersion,
 	state_chain_client: Arc<StateChainClient>,
-	latest_block_hash: H256,
-) -> Result<(), (async_broadcast::Receiver<EpochStart<Polkadot>>, anyhow::Error)>
+) -> Result<(), (async_broadcast::Receiver<EpochStart<Polkadot>>, RuntimeVersion)>
 where
 	StateChainClient: ExtrinsicApi + StorageApi + 'static + Send + Sync,
 	DotRpc: DotRpcApi + 'static + Send + Sync + Clone,
 {
-	// When this witnesser starts up, we should check that the runtime version is up to
-	// date with the chain. This is in case we missed a Polkadot runtime upgrade when
-	// we were down.
-	let on_chain_runtime_version = match state_chain_client
-		.storage_value::<pallet_cf_environment::PolkadotRuntimeVersion<state_chain_runtime::Runtime>>(
-			latest_block_hash,
-		)
-		.await
-	{
-		Ok(version) => version,
-		Err(e) =>
-			return Err((
-				epoch_starts_receiver,
-				anyhow::anyhow!("Failed to get PolkadotRuntimeVersion from SC: {:?}", e),
-			)),
-	};
-
 	epoch_witnesser::start(
 		epoch_starts_receiver,
 		|epoch_start| epoch_start.current,
-		on_chain_runtime_version,
+		last_version_witnessed,
 		move |mut end_witnessing_receiver, epoch_start, mut last_version_witnessed| {
 			let state_chain_client = state_chain_client.clone();
 			let dot_client = dot_client.clone();
 			async move {
 				// NB: The first item of this stream is the current runtime version.
-				let mut runtime_version_subscription =
-					dot_client.subscribe_runtime_version().await?;
+				let mut runtime_version_subscription = try_with_logging!(
+					dot_client.subscribe_runtime_version().await,
+					last_version_witnessed
+				);
 
 				loop {
 					select! {
