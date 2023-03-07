@@ -1,7 +1,7 @@
 use std::{collections::BTreeSet, sync::Arc};
 
 use bitcoincore_rpc::{
-	bitcoin::{Block, BlockHash, Transaction, TxOut},
+	bitcoin::{Block, BlockHash, Transaction, TxOut, Txid},
 	Auth, Client, RpcApi,
 };
 
@@ -34,6 +34,8 @@ pub trait BtcRpcApi: Send + Sync {
 	fn block(&self, block_hash: BlockHash) -> Result<Block>;
 
 	fn block_hash(&self, block_number: BlockNumber) -> Result<BlockHash>;
+
+	fn send_raw_transaction(&self, transaction_bytes: Vec<u8>) -> Result<Txid>;
 }
 
 impl BtcRpcApi for BtcRpcClient {
@@ -47,6 +49,10 @@ impl BtcRpcApi for BtcRpcClient {
 
 	fn block_hash(&self, block_number: BlockNumber) -> Result<BlockHash> {
 		Ok(self.client.get_block_hash(block_number)?)
+	}
+
+	fn send_raw_transaction(&self, transaction_bytes: Vec<u8>) -> Result<Txid> {
+		Ok(self.client.send_raw_transaction(&transaction_bytes)?)
 	}
 }
 
