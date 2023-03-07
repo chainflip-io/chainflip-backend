@@ -5,10 +5,9 @@ use std::{cmp::Ordering, collections::HashMap, fs, mem::size_of, path::Path};
 
 use cf_primitives::KeyId;
 use rocksdb::{ColumnFamily, ColumnFamilyDescriptor, Options, WriteBatch, DB};
-use slog::o;
+use tracing::{debug, error, info};
 
 use crate::{
-	logging::COMPONENT_KEY,
 	multisig::{
 		client::KeygenResultInfo,
 		crypto::{CryptoScheme, CHAIN_TAG_SIZE},
@@ -52,7 +51,6 @@ const BACKUPS_DIRECTORY: &str = "backups";
 pub struct PersistentKeyDB {
 	/// Rocksdb database instance
 	db: DB,
-	logger: slog::Logger,
 }
 
 fn put_schema_version_to_batch(db: &DB, batch: &mut WriteBatch, version: u32) {
@@ -65,9 +63,8 @@ impl PersistentKeyDB {
 	pub fn open_and_migrate_to_latest(
 		db_path: &Path,
 		genesis_hash: Option<state_chain_runtime::Hash>,
-		logger: &slog::Logger,
 	) -> Result<Self> {
-		Self::open_and_migrate_to_version(db_path, genesis_hash, LATEST_SCHEMA_VERSION, logger)
+		Self::open_and_migrate_to_version(db_path, genesis_hash, LATEST_SCHEMA_VERSION)
 	}
 
 	/// As [Self::open_and_migrate_to_latest], but allows specifying a specific version
@@ -76,7 +73,6 @@ impl PersistentKeyDB {
 		db_path: &Path,
 		genesis_hash: Option<state_chain_runtime::Hash>,
 		version: u32,
-		logger: &slog::Logger,
 	) -> Result<Self> {
 		let is_existing_db = db_path.exists();
 
@@ -121,10 +117,10 @@ impl PersistentKeyDB {
 			BackupOption::NoBackup
 		};
 
-		migrate_db_to_version(&db, backup_option, genesis_hash, version, logger)
+		migrate_db_to_version(&db, backup_option, genesis_hash, version)
                     .with_context(|| format!("Failed to migrate database at {}. Manual restoration of a backup or purging of the file is required.", db_path.display()))?;
 
-		Ok(PersistentKeyDB { db, logger: logger.new(o!(COMPONENT_KEY => "PersistentKeyDB")) })
+		Ok(PersistentKeyDB { db })
 	}
 
 	/// Write the keyshare to the db, indexed by the key id
@@ -152,8 +148,8 @@ impl PersistentKeyDB {
 			.prefix_iterator_cf(get_data_column_handle(&self.db), get_keygen_data_prefix::<C>())
 			.filter_map(|result| match result {
 				Ok(key) => Some(key),
-				Err(err) => {
-					slog::error!(self.logger, "Error getting prefix iterator: {err}");
+				Err(e) => {
+					error!("Error getting prefix iterator: {e}");
 					None
 				},
 			})
@@ -162,13 +158,11 @@ impl PersistentKeyDB {
 
 				match bincode::deserialize::<KeygenResultInfo<C>>(&key_info) {
 					Ok(keygen_result_info) => Some((key_id, keygen_result_info)),
-					Err(err) => {
-						slog::error!(
-							self.logger,
-							"Could not deserialize {} key from database: {}",
+					Err(e) => {
+						error!(
+							key_id = key_id.to_string(),
+							"Could not deserialize {} key from database: {e}",
 							C::NAME,
-							err;
-							"key_id" => key_id.to_string()
 						);
 						None
 					},
@@ -176,7 +170,7 @@ impl PersistentKeyDB {
 			})
 			.collect();
 		if !keys.is_empty() {
-			slog::debug!(self.logger, "Loaded {} {} keys from the database", keys.len(), C::NAME,);
+			debug!("Loaded {} {} keys from the database", keys.len(), C::NAME);
 		}
 		keys
 	}
@@ -344,12 +338,11 @@ fn migrate_db_to_version(
 	backup_option: BackupOption,
 	genesis_hash: Option<state_chain_runtime::Hash>,
 	target_version: u32,
-	logger: &slog::Logger,
 ) -> Result<(), anyhow::Error> {
 	let current_version =
 		read_schema_version(db).context("Failed to read schema version from existing db")?;
 
-	slog::info!(logger, "Found db_schema_version of {current_version}");
+	info!("Found db_schema_version of {current_version}");
 
 	if let Some(expected_genesis_hash) = genesis_hash {
 		check_or_set_genesis_hash(db, expected_genesis_hash)?;
@@ -358,7 +351,7 @@ fn migrate_db_to_version(
 	// Check if the db version is up-to-date or we need to do migrations
 	match current_version.cmp(&target_version) {
 		Ordering::Equal => {
-			slog::info!(logger, "Database already at target version of: {}", target_version);
+			info!("Database already at target version of: {target_version}");
 			Ok(())
 		},
 		Ordering::Greater => {
@@ -371,8 +364,7 @@ fn migrate_db_to_version(
 		Ordering::Less => {
 			// If requested, backup the database before migrating it
 			if let BackupOption::CreateBackup(path) = backup_option {
-				slog::info!(
-					logger,
+				info!(
 					"Database backup created at {}",
 					create_backup(path, current_version)
 						.map_err(anyhow::Error::msg)
@@ -381,12 +373,7 @@ fn migrate_db_to_version(
 			}
 
 			for version in current_version..target_version {
-				slog::info!(
-					logger,
-					"Database is migrating from version {} to {}",
-					version,
-					version + 1
-				);
+				info!("Database is migrating from version {version} to {}", version + 1);
 
 				match version {
 					0 => {

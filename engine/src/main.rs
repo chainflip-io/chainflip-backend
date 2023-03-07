@@ -38,12 +38,6 @@ async fn main() -> anyhow::Result<()> {
 	// like `--version`), so we execute it only after the settings have been parsed.
 	utilities::print_starting!();
 
-	let root_logger = logging::utils::new_json_logger_with_tag_filter(
-		settings.log.whitelist.clone(),
-		settings.log.blacklist.clone(),
-	);
-
-	// Also init the tracing json logger because the multisig clients are now using tracing
 	logging::init_json_logger();
 
 	task_scope(|scope| {
@@ -115,7 +109,6 @@ async fn main() -> anyhow::Result<()> {
 				PersistentKeyDB::open_and_migrate_to_latest(
 					settings.signing.db_file.as_path(),
 					Some(state_chain_client.get_genesis_hash()),
-					&root_logger,
 				)
 				.context("Failed to open database")?,
 			);

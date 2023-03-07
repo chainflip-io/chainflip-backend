@@ -132,17 +132,14 @@ pub async fn start(
 
 #[cfg(test)]
 mod tests {
-	use crate::{
-		logging::{self, test_utils::new_test_logger},
-		settings,
-	};
+	use crate::settings;
 
 	use super::*;
 
 	#[ignore = "Requires a running BTC node"]
 	#[tokio::test]
 	async fn test_btc_witnesser() {
-		logging::init_json_logger();
+		crate::logging::init_json_logger();
 
 		let rpc = BtcRpcClient::new(&settings::Btc {
 			http_node_endpoint: "http://127.0.0.1:18443".to_string(),
@@ -157,8 +154,7 @@ mod tests {
 		let (epoch_starts_sender, epoch_starts_receiver) = async_broadcast::broadcast(1);
 
 		let (_dir, db_path) = crate::testing::new_temp_directory_with_nonexistent_file();
-		let db = PersistentKeyDB::open_and_migrate_to_latest(&db_path, None, &new_test_logger())
-			.unwrap();
+		let db = PersistentKeyDB::open_and_migrate_to_latest(&db_path, None).unwrap();
 
 		epoch_starts_sender
 			.broadcast(EpochStart {
