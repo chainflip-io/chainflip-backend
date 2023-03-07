@@ -1125,7 +1125,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.9.9",
- "slog",
  "slog-async",
  "slog-json",
  "sp-core 7.0.0",

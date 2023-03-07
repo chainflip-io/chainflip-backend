@@ -101,12 +101,6 @@ pub struct Signing {
 	pub db_file: PathBuf,
 }
 
-#[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
-pub struct Log {
-	pub whitelist: Vec<String>,
-	pub blacklist: Vec<String>,
-}
-
 #[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
 pub struct Settings {
 	pub node_p2p: P2P,
@@ -118,8 +112,6 @@ pub struct Settings {
 
 	pub health_check: Option<HealthCheck>,
 	pub signing: Signing,
-	#[serde(default)]
-	pub log: Log,
 }
 
 #[derive(Parser, Debug, Clone, Default)]
@@ -174,10 +166,6 @@ pub struct CommandLineOptions {
 	// Misc Options
 	#[clap(short = 'c', long = "config-root", env = CONFIG_ROOT, default_value = DEFAULT_CONFIG_ROOT)]
 	config_root: String,
-	#[clap(short = 'w', long = "log-whitelist")]
-	log_whitelist: Option<Vec<String>>,
-	#[clap(short = 'b', long = "log-blacklist")]
-	log_blacklist: Option<Vec<String>>,
 
 	#[clap(flatten)]
 	p2p_opts: P2POptions,
@@ -209,8 +197,6 @@ impl Default for CommandLineOptions {
 	fn default() -> Self {
 		Self {
 			config_root: DEFAULT_CONFIG_ROOT.to_owned(),
-			log_whitelist: None,
-			log_blacklist: None,
 			p2p_opts: P2POptions::default(),
 			state_chain_opts: StateChainOptions::default(),
 			eth_opts: EthOptions::default(),
@@ -412,8 +398,6 @@ impl Source for CommandLineOptions {
 		insert_command_line_option(&mut map, "health_check.hostname", &self.health_check_hostname);
 		insert_command_line_option(&mut map, "health_check.port", &self.health_check_port);
 		insert_command_line_option_path(&mut map, SIGNING_DB_FILE, &self.signing_db_file);
-		insert_command_line_option(&mut map, "log.whitelist", &self.log_whitelist);
-		insert_command_line_option(&mut map, "log.blacklist", &self.log_blacklist);
 
 		Ok(map)
 	}
@@ -657,8 +641,6 @@ mod tests {
 		// for the test to work. The `config_root` option is covered in a separate test.
 		let opts = CommandLineOptions {
 			config_root: CommandLineOptions::default().config_root,
-			log_whitelist: Some(vec!["test1".to_owned()]),
-			log_blacklist: Some(vec!["test2".to_owned()]),
 			p2p_opts: P2POptions {
 				node_key_file: Some(PathBuf::from_str("node_key_file").unwrap()),
 				ip_address: Some("1.1.1.1".parse().unwrap()),
@@ -722,8 +704,5 @@ mod tests {
 		assert_eq!(opts.health_check_port.unwrap(), settings.health_check.as_ref().unwrap().port);
 
 		assert_eq!(opts.signing_db_file.unwrap(), settings.signing.db_file);
-
-		assert_eq!(opts.log_whitelist.unwrap(), settings.log.whitelist);
-		assert_eq!(opts.log_blacklist.unwrap(), settings.log.blacklist);
 	}
 }

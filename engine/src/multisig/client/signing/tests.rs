@@ -194,6 +194,7 @@ mod timeout {
 
 		#[tokio::test]
 		async fn should_recover_if_party_appears_offline_to_minority_stage3() {
+			crate::logging::init_test_logger();
 			let (mut signing_ceremony, _) = new_signing_ceremony::<EthSigning>().await;
 
 			let messages = signing_ceremony.request().await;
