@@ -3,7 +3,7 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use cf_chains::{
-	btc::{Utxo, BitcoinNetwork},
+	btc::{BitcoinNetwork, Utxo},
 	dot::{api::CreatePolkadotVault, Polkadot, PolkadotAccountId, PolkadotIndex},
 	ChainCrypto,
 };
