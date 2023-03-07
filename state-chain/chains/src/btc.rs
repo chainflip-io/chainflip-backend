@@ -35,6 +35,8 @@ pub type Signature = [u8; 64];
 
 pub type Address = [u8; 32];
 
+pub type Hash = [u8; 32];
+
 #[derive(
 	Copy,
 	Clone,
@@ -234,7 +236,7 @@ pub enum Error {
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct Utxo {
 	pub amount: u64,
-	pub txid: [u8; 32],
+	pub txid: Hash,
 	pub vout: u32,
 	pub pubkey_x: [u8; 32],
 	pub salt: u32,
@@ -245,7 +247,13 @@ pub struct BitcoinOutput {
 	script_pubkey: BitcoinScript,
 }
 
-fn get_tapleaf_hash(pubkey_x: [u8; 32], salt: u32) -> [u8; 32] {
+pub struct BitcoinTransaction {
+	inputs: Vec<Utxo>,
+	outputs: Vec<BitcoinOutput>,
+	signatures: Vec<Signature>,
+}
+
+fn get_tapleaf_hash(pubkey_x: [u8; 32], salt: u32) -> Hash {
 	// SHA256("TapLeaf")
 	const TAPLEAF_HASH: &[u8] =
 		&hex_literal::hex!("aeea8fdc4208983105734b58081d1e2638d35f1cb54008d4d357ca03be78e9ee");
@@ -378,12 +386,6 @@ pub fn scriptpubkey_from_address(
 	} else {
 		Err(Error::InvalidAddress)
 	}
-}
-
-pub struct BitcoinTransaction {
-	inputs: Vec<Utxo>,
-	outputs: Vec<BitcoinOutput>,
-	signatures: Vec<[u8; 64]>,
 }
 
 impl BitcoinTransaction {
