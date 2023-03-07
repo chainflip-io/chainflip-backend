@@ -7,10 +7,8 @@ use core::{borrow::Borrow, iter};
 use frame_support::{sp_io::hashing::sha2_256, RuntimeDebug};
 use libsecp256k1::{PublicKey, SecretKey};
 use scale_info::TypeInfo;
-use sp_std::vec::Vec;
-
-#[cfg(feature = "runtime-benchmarks")]
-use sp_std::vec;
+use sp_std::{vec, vec::Vec};
+// #[cfg(feature = "runtime-benchmarks")]
 
 extern crate alloc;
 use crate::{Chain, ChainAbi, ChainCrypto, FeeRefundCalculator, IngressIdConstructor};
@@ -90,6 +88,7 @@ impl BenchmarkValue for BitcoinTransactionData {
 	}
 }
 
+#[cfg(feature = "runtime-benchmarks")]
 impl<T: BenchmarkValue> BenchmarkValue for Vec<T> {
 	fn benchmark_value() -> Self {
 		vec![T::benchmark_value()]
