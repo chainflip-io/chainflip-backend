@@ -189,7 +189,7 @@ pub mod pallet {
 	/// Stores a pool of addresses that is available for use.
 	#[pallet::storage]
 	pub(crate) type AddressPool<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, Vec<TargetChainAccount<T, I>>, ValueQuery>;
+		StorageValue<_, Vec<(IntentId, TargetChainAccount<T, I>)>, ValueQuery>;
 
 	/// Stores the status of an address.
 	#[pallet::storage]
@@ -199,7 +199,7 @@ pub mod pallet {
 	/// Stores a timestamp for when an intent will expire against the intent infos.
 	#[pallet::storage]
 	pub(crate) type IntentExpiries<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, T::BlockNumber, Vec<TargetChainAccount<T, I>>>;
+		StorageMap<_, Twox64Concat, T::BlockNumber, Vec<(IntentId, TargetChainAccount<T, I>)>>;
 
 	/// Map of intent id to the ingress id.
 	#[pallet::storage]
@@ -277,11 +277,11 @@ pub mod pallet {
 		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
 			let mut total_weight: Weight = Weight::zero();
 			if let Some(expired) = IntentExpiries::<T, I>::take(n) {
-				for address in expired.clone() {
+				for (salt, address) in expired.clone() {
 					IntentIngressDetails::<T, I>::remove(&address);
 					IntentActions::<T, I>::remove(&address);
 					if AddressStatus::<T, I>::get(&address) == DeploymentStatus::Deployed {
-						AddressPool::<T, I>::append(address.clone());
+						AddressPool::<T, I>::append((salt, address.clone()));
 					}
 					Self::deposit_event(Event::StopWitnessing { ingress_address: address });
 					total_weight = total_weight
@@ -496,14 +496,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			.ok_or(Error::<T, I>::IntentIdsExhausted)?;
 		let address = AddressPool::<T, I>::mutate(
 			|pool| -> Result<TargetChainAccount<T, I>, DispatchError> {
-				if let Some(address) = pool.pop() {
+				if let Some((salt, address)) = pool.pop() {
 					FetchParamDetails::<T, I>::insert(
 						next_intent_id,
 						(
-							IngressFetchIdOf::<T, I>::deployed(next_intent_id, address.clone()),
+							IngressFetchIdOf::<T, I>::deployed(salt, address.clone()),
 							address.clone(),
 						),
 					);
+					IntentExpiries::<T, I>::append(T::TTL::get(), (salt, address.clone()));
 					Ok(address)
 				} else {
 					let new_address: TargetChainAccount<T, I> =
@@ -522,11 +523,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							new_address.clone(),
 						),
 					);
+					IntentExpiries::<T, I>::append(
+						T::TTL::get(),
+						(next_intent_id, new_address.clone()),
+					);
 					Ok(new_address)
 				}
 			},
 		)?;
-		IntentExpiries::<T, I>::append(T::TTL::get(), address.clone());
 		IntentIdCounter::<T, I>::put(next_intent_id);
 		IntentIngressDetails::<T, I>::insert(
 			&address,
