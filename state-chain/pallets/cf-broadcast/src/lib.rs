@@ -179,6 +179,12 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type BroadcastIdCounter<T, I = ()> = StorageValue<_, BroadcastId, ValueQuery>;
 
+	/// Callbacks to be dispatched when a request is fulfilled.
+	#[pallet::storage]
+	#[pallet::getter(fn request_callback)]
+	pub type RequestCallback<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, BroadcastId, <T as Config<I>>::RuntimeCall>;
+
 	/// The last attempt number for a particular broadcast.
 	#[pallet::storage]
 	pub type BroadcastAttemptCount<T, I = ()> =
@@ -514,11 +520,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	/// Request a threshold signature, providing [Call::on_signature_ready] as the callback.
-	pub fn threshold_sign_and_broadcast(api_call: <T as Config<I>>::ApiCall) -> BroadcastId {
+	pub fn threshold_sign_and_broadcast(
+		api_call: <T as Config<I>>::ApiCall,
+		callback: Option<impl FnOnce(BroadcastId) -> sp_runtime::DispatchResult>,
+	) -> BroadcastId {
 		let broadcast_id = BroadcastIdCounter::<T, I>::mutate(|id| {
 			*id += 1;
 			*id
 		});
+		// TODO: Put the callback into storage so that it can be called later.
 		T::ThresholdSigner::request_signature_with_callback(
 			api_call.threshold_signature_payload(),
 			|id| {
@@ -584,7 +594,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			// to retry from the threshold signing stage.
 			else {
 				Self::clean_up_broadcast_storage(broadcast_id);
-				Self::threshold_sign_and_broadcast(api_call);
+				// TODO: If there is a callback, we have to put it out of storage and pass it here.
+				Self::threshold_sign_and_broadcast(api_call, None);
 				log::info!(
 					"Signature is invalid -> rescheduled threshold signature for broadcast id {}.",
 					broadcast_id
@@ -640,7 +651,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 	type ApiCall = T::ApiCall;
 	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) -> BroadcastId {
-		Self::threshold_sign_and_broadcast(api_call)
+		Self::threshold_sign_and_broadcast(api_call, None::<T>)
+	}
+
+	fn threshold_sign_and_broadcast_with_callback(
+		api_call: Self::ApiCall,
+		callback: impl FnOnce(BroadcastId) -> sp_runtime::DispatchResult,
+	) -> BroadcastId {
+		todo!()
 	}
 }
 
