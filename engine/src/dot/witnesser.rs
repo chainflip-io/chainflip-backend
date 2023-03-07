@@ -762,7 +762,7 @@ mod tests {
 			.unwrap();
 
 		let (_dir, db_path) = crate::testing::new_temp_directory_with_nonexistent_file();
-		let db = PersistentKeyDB::new_and_migrate_to_latest(&db_path, None, &logger).unwrap();
+		let db = PersistentKeyDB::open_and_migrate_to_latest(&db_path, None, &logger).unwrap();
 
 		start(
 			epoch_starts_receiver,

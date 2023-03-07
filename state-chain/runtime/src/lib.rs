@@ -17,6 +17,7 @@ use crate::{
 	},
 };
 use cf_chains::{
+	btc::BitcoinNetwork,
 	dot,
 	dot::{api::PolkadotApi, PolkadotHash},
 	eth,
@@ -198,6 +199,8 @@ parameter_types! {
 	// hex_literal::hex!(
 	// 	"e143f23803ac50e8f6f8e62695d1ce9e4e1d68aa36c1cd2cfd15340213f3423e"
 	// )
+
+	pub const BitcoinNetworkParam: BitcoinNetwork = BitcoinNetwork::Testnet;
 }
 
 impl pallet_cf_environment::Config for Runtime {
@@ -207,6 +210,7 @@ impl pallet_cf_environment::Config for Runtime {
 	type PolkadotBroadcaster = PolkadotBroadcaster;
 	type PolkadotVaultKeyWitnessedHandler = PolkadotVault;
 	type PolkadotGenesisHash = PolkadotGenesisHash;
+	type BitcoinNetwork = BitcoinNetworkParam;
 	type WeightInfo = pallet_cf_environment::weights::PalletWeight<Runtime>;
 }
 
