@@ -161,7 +161,7 @@ impl ChainCrypto for Bitcoin {
 pub struct UtxoId {
 	// Tx hash of the transaction this utxo was a part of
 	pub tx_hash: [u8; 32],
-	// the index of the output for this utxo
+	// The index of the output for this utxo
 	pub vout_index: u32,
 	// The public key of the account that can spend this utxo
 	pub pubkey_x: [u8; 32],
