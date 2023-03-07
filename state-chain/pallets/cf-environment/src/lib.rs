@@ -507,8 +507,6 @@ impl<T: Config> Pallet<T> {
 	}
 
 	pub fn add_bitcoin_utxo_to_list(utxo: Utxo) {
-		BitcoinAvailableUtxos::<T>::mutate(|utxos| {
-			utxos.push(utxo);
-		});
+		BitcoinAvailableUtxos::<T>::append(utxo);
 	}
 }
