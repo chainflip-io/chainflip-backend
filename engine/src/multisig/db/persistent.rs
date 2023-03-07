@@ -12,6 +12,8 @@ use crate::{
 	multisig::{
 		client::KeygenResultInfo,
 		crypto::{CryptoScheme, CHAIN_TAG_SIZE},
+		eth::EthSigning,
+		polkadot::PolkadotSigning,
 		ChainTag,
 	},
 	witnesser::checkpointing::WitnessedUntil,
@@ -22,14 +24,14 @@ use anyhow::{anyhow, bail, Context, Result};
 /// This is the version of the data on this current branch
 /// This version *must* be bumped, and appropriate migrations
 /// written on any changes to the persistent application data format
-pub const LATEST_SCHEMA_VERSION: u32 = 0;
+const LATEST_SCHEMA_VERSION: u32 = 1;
 
 /// Key used to store the `LATEST_SCHEMA_VERSION` value in the `METADATA_COLUMN`
-pub const DB_SCHEMA_VERSION_KEY: &[u8; 17] = b"db_schema_version";
-pub const GENESIS_HASH_KEY: &[u8; 12] = b"genesis_hash";
+const DB_SCHEMA_VERSION_KEY: &[u8; 17] = b"db_schema_version";
+const GENESIS_HASH_KEY: &[u8; 12] = b"genesis_hash";
 
 /// A static length prefix is used on the `DATA_COLUMN`
-pub const PREFIX_SIZE: usize = 10;
+const PREFIX_SIZE: usize = 10;
 const PARTIAL_PREFIX_SIZE: usize = PREFIX_SIZE - CHAIN_TAG_SIZE;
 /// Keygen data uses a prefix that is a combination of a keygen data prefix and the chain tag
 const KEYGEN_DATA_PARTIAL_PREFIX: &[u8; PARTIAL_PREFIX_SIZE] = b"key_____";
@@ -39,11 +41,9 @@ const WITNESSER_CHECKPOINT_PARTIAL_PREFIX: &[u8; PARTIAL_PREFIX_SIZE] = b"check_
 
 /// Column family names
 // All data is stored in `DATA_COLUMN` with a prefix for key spaces
-pub const DATA_COLUMN: &str = "data";
+const DATA_COLUMN: &str = "data";
 // This column is just for schema version info. No prefix is used.
-pub const METADATA_COLUMN: &str = "metadata";
-// The default column that rust_rocksdb uses (we ignore)
-pub const DEFAULT_COLUMN_NAME: &str = "default";
+const METADATA_COLUMN: &str = "metadata";
 
 /// Name of the directory that the backups will go into (only created before migrations)
 const BACKUPS_DIRECTORY: &str = "backups";
@@ -54,51 +54,45 @@ pub struct PersistentKeyDB {
 	db: DB,
 	logger: slog::Logger,
 }
+
+fn put_schema_version_to_batch(db: &DB, batch: &mut WriteBatch, version: u32) {
+	batch.put_cf(get_metadata_column_handle(db), DB_SCHEMA_VERSION_KEY, version.to_be_bytes());
+}
+
 impl PersistentKeyDB {
-	/// Create a new persistent key database. If the database exists and the schema version
-	/// is below the latest, it will attempt to migrate the data to the latest version.
-	pub fn new_and_migrate_to_latest(
+	/// Open a key database or create one if it doesn't exist. If the schema version of the
+	/// existing database is below the latest, it will attempt to migrate to the latest version.
+	pub fn open_and_migrate_to_latest(
 		db_path: &Path,
 		genesis_hash: Option<state_chain_runtime::Hash>,
 		logger: &slog::Logger,
 	) -> Result<Self> {
+		Self::open_and_migrate_to_version(db_path, genesis_hash, LATEST_SCHEMA_VERSION, logger)
+	}
+
+	/// As [Self::open_and_migrate_to_latest], but allows specifying a specific version
+	/// to migrate to (useful for testing migrations)
+	fn open_and_migrate_to_version(
+		db_path: &Path,
+		genesis_hash: Option<state_chain_runtime::Hash>,
+		version: u32,
+		logger: &slog::Logger,
+	) -> Result<Self> {
+		let is_existing_db = db_path.exists();
+
 		// Use a prefix extractor on the data column
 		let mut cfopts_for_prefix = Options::default();
 		cfopts_for_prefix
 			.set_prefix_extractor(rocksdb::SliceTransform::create_fixed_prefix(PREFIX_SIZE));
 
 		// Build a list of column families with descriptors
-		let mut cfs: HashMap<String, ColumnFamilyDescriptor> = HashMap::from_iter([
+		let cfs: HashMap<String, ColumnFamilyDescriptor> = HashMap::from_iter([
 			(
 				METADATA_COLUMN.to_string(),
 				ColumnFamilyDescriptor::new(METADATA_COLUMN, Options::default()),
 			),
 			(DATA_COLUMN.to_string(), ColumnFamilyDescriptor::new(DATA_COLUMN, cfopts_for_prefix)),
 		]);
-
-		let is_existing_db = db_path.exists();
-		if is_existing_db {
-			// Add the column families found in the existing db, they might be needed for migration.
-			DB::list_cf(&Options::default(), db_path)
-				.map_err(anyhow::Error::msg)
-				.with_context(|| {
-					format!(
-						"Failed to read column families from existing database {}",
-						db_path.display()
-					)
-				})?
-				.into_iter()
-				.for_each(|cf_name| {
-					// Filter out the `default` column because we don't use it
-					// and if we already have the cf, we don't want to add it again
-					if !(cf_name == DEFAULT_COLUMN_NAME || cfs.contains_key(&cf_name)) {
-						cfs.insert(
-							cf_name.clone(),
-							ColumnFamilyDescriptor::new(cf_name, Options::default()),
-						);
-					}
-				});
-		}
 
 		let mut create_missing_db_and_cols_opts = Options::default();
 		create_missing_db_and_cols_opts.create_missing_column_families(true);
@@ -110,35 +104,27 @@ impl PersistentKeyDB {
 				.map_err(anyhow::Error::msg)
 				.context(format!("Failed to open database at: {}", db_path.display()))?;
 
-		let p_kdb = if is_existing_db {
-			// An existing db, so perform migrations and update the metadata
-			migrate_db_to_latest(db, db_path, genesis_hash,logger)
-                    .with_context(|| format!("Failed to migrate database at {}. Manual restoration of a backup or purging of the file is required.", db_path.display()))?
+		// Only create a backup if there is an existing db that we don't
+		// want to accidentally corrupt
+		let backup_option = if is_existing_db {
+			BackupOption::CreateBackup(db_path)
 		} else {
-			// It's a new db, so create a new `PersistentKeyDB` with the latest schema version and
-			// genesis hash
 			let mut batch = WriteBatch::default();
 
-			batch.put_cf(
-				get_metadata_column_handle(&db),
-				DB_SCHEMA_VERSION_KEY,
-				LATEST_SCHEMA_VERSION.to_be_bytes(),
-			);
+			put_schema_version_to_batch(&db, &mut batch, 0);
 
 			if let Some(genesis_hash) = genesis_hash {
 				batch.put_cf(get_metadata_column_handle(&db), GENESIS_HASH_KEY, genesis_hash);
 			}
 
 			db.write(batch).context("Failed to write metadata to new db")?;
-
-			PersistentKeyDB::new_from_db(db, logger)
+			BackupOption::NoBackup
 		};
 
-		Ok(p_kdb)
-	}
+		migrate_db_to_version(&db, backup_option, genesis_hash, version, logger)
+                    .with_context(|| format!("Failed to migrate database at {}. Manual restoration of a backup or purging of the file is required.", db_path.display()))?;
 
-	fn new_from_db(db: DB, logger: &slog::Logger) -> Self {
-		PersistentKeyDB { db, logger: logger.new(o!(COMPONENT_KEY => "PersistentKeyDB")) }
+		Ok(PersistentKeyDB { db, logger: logger.new(o!(COMPONENT_KEY => "PersistentKeyDB")) })
 	}
 
 	/// Write the keyshare to the db, indexed by the key id
@@ -285,7 +271,7 @@ fn get_metadata_column_handle(db: &DB) -> &ColumnFamily {
 	get_column_handle(db, METADATA_COLUMN)
 }
 
-pub fn get_data_column_handle(db: &DB) -> &ColumnFamily {
+fn get_data_column_handle(db: &DB) -> &ColumnFamily {
 	get_column_handle(db, DATA_COLUMN)
 }
 
@@ -295,14 +281,12 @@ fn get_column_handle<'a>(db: &'a DB, column_name: &str) -> &'a ColumnFamily {
 }
 
 /// Get the schema version from the metadata column in the db.
-fn read_schema_version(db: &DB, logger: &slog::Logger) -> Result<u32> {
+fn read_schema_version(db: &DB) -> Result<u32> {
 	db.get_cf(get_metadata_column_handle(db), DB_SCHEMA_VERSION_KEY)
 		.context("Failed to get metadata column")?
 		.map(|version| {
 			let version: [u8; 4] = version.try_into().expect("Version should be a u32");
-			let version = u32::from_be_bytes(version);
-			slog::info!(logger, "Found db_schema_version of {version}");
-			version
+			u32::from_be_bytes(version)
 		})
 		.ok_or_else(|| anyhow!("Could not find db schema version"))
 }
@@ -347,55 +331,104 @@ fn check_or_set_genesis_hash(db: &DB, genesis_hash: state_chain_runtime::Hash) -
 	}
 }
 
+/// Used to specify whether a backup should be created, and if so,
+/// the provided path is used to derive the name of the backup
+enum BackupOption<'a> {
+	NoBackup,
+	CreateBackup(&'a Path),
+}
+
 /// Reads the schema version and migrates the db to the latest schema version if required
-fn migrate_db_to_latest(
-	db: DB,
-	path: &Path,
+fn migrate_db_to_version(
+	db: &DB,
+	backup_option: BackupOption,
 	genesis_hash: Option<state_chain_runtime::Hash>,
+	target_version: u32,
 	logger: &slog::Logger,
-) -> Result<PersistentKeyDB, anyhow::Error> {
-	let version = read_schema_version(&db, logger)
-		.context("Failed to read schema version from existing db")?;
+) -> Result<(), anyhow::Error> {
+	let current_version =
+		read_schema_version(db).context("Failed to read schema version from existing db")?;
+
+	slog::info!(logger, "Found db_schema_version of {current_version}");
 
 	if let Some(expected_genesis_hash) = genesis_hash {
-		check_or_set_genesis_hash(&db, expected_genesis_hash)?;
+		check_or_set_genesis_hash(db, expected_genesis_hash)?;
 	}
 
 	// Check if the db version is up-to-date or we need to do migrations
-	match version.cmp(&LATEST_SCHEMA_VERSION) {
+	match current_version.cmp(&target_version) {
 		Ordering::Equal => {
-			// The db is at the latest version, no action needed
-			slog::info!(logger, "Database already at latest version of: {}", LATEST_SCHEMA_VERSION);
-			Ok(PersistentKeyDB::new_from_db(db, logger))
+			slog::info!(logger, "Database already at target version of: {}", target_version);
+			Ok(())
 		},
 		Ordering::Greater => {
 			// We do not support backwards migrations
 			Err(anyhow!("Database schema version {} is ahead of the current schema version {}. Is your Chainflip Engine up to date?",
-                    version,
-                    LATEST_SCHEMA_VERSION)
+                    current_version,
+                    target_version)
                 )
 		},
 		Ordering::Less => {
-			slog::info!(
-				logger,
-				"Database is migrating from version {} to {}",
-				version,
-				LATEST_SCHEMA_VERSION
-			);
+			// If requested, backup the database before migrating it
+			if let BackupOption::CreateBackup(path) = backup_option {
+				slog::info!(
+					logger,
+					"Database backup created at {}",
+					create_backup(path, current_version)
+						.map_err(anyhow::Error::msg)
+						.context("Failed to create database backup before migration")?
+				);
+			}
 
-			// Backup the database before migrating it
-			slog::info!(
-				logger,
-				"Database backup created at {}",
-				create_backup(path, version)
-					.map_err(anyhow::Error::msg)
-					.context("Failed to create database backup before migration")?
-			);
+			for version in current_version..target_version {
+				slog::info!(
+					logger,
+					"Database is migrating from version {} to {}",
+					version,
+					version + 1
+				);
 
-			// Future migrations can be added here
+				match version {
+					0 => {
+						migrate_0_to_1(db);
+					},
+					_ => {
+						panic!("Unexpected migration from version {version}");
+					},
+				}
+			}
 
-			// No migrations exist yet so just panic
-			panic!("Invalid migration from schema version {version}");
+			Ok(())
 		},
 	}
+}
+
+fn migrate_0_to_1_for_scheme<C: CryptoScheme>(db: &DB, batch: &mut WriteBatch) {
+	for (legacy_key_id_with_prefix, key_info_bytes) in db
+		.prefix_iterator_cf(get_data_column_handle(db), get_keygen_data_prefix::<C>())
+		.map(|result| result.expect("should successfully read all items"))
+	{
+		let new_key_id = KeyId {
+			epoch_index: 0,
+			public_key_bytes: legacy_key_id_with_prefix[PREFIX_SIZE..].to_vec(),
+		};
+		let key_id_with_prefix =
+			[get_keygen_data_prefix::<C>().as_slice(), &new_key_id.to_bytes()].concat();
+		batch.put_cf(get_data_column_handle(db), key_id_with_prefix, key_info_bytes);
+
+		batch.delete_cf(get_data_column_handle(db), legacy_key_id_with_prefix);
+	}
+}
+
+fn migrate_0_to_1(db: &DB) {
+	let mut batch = WriteBatch::default();
+
+	// Do the migration for every scheme that we supported
+	// until schema version 1:
+	migrate_0_to_1_for_scheme::<EthSigning>(db, &mut batch);
+	migrate_0_to_1_for_scheme::<PolkadotSigning>(db, &mut batch);
+
+	put_schema_version_to_batch(db, &mut batch, 1);
+
+	db.write(batch).unwrap();
 }
