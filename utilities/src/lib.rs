@@ -91,6 +91,7 @@ fn check_threshold_calculation() {
 }
 
 use core::mem::MaybeUninit;
+
 struct PartialArray<T, const N: usize> {
 	initialized_length: usize,
 	array: [MaybeUninit<T>; N],
@@ -99,19 +100,23 @@ impl<T, const N: usize> PartialArray<T, N> {
 	fn new() -> Self {
 		Self {
 			initialized_length: 0,
+			// See: https://doc.rust-lang.org/nomicon/unchecked-uninit.html
 			array: unsafe { MaybeUninit::<[MaybeUninit<T>; N]>::uninit().assume_init() },
 		}
 	}
 
 	fn initialize(&mut self, t: T) {
 		assert!(self.initialized_length < N);
+		// This doesn't cause the previous T element to be dropped as if it was initialized, as the
+		// assigment of MaybeUninit<T>'s instead of T's
 		self.array[self.initialized_length] = MaybeUninit::new(t);
 		self.initialized_length += 1;
 	}
 
-	fn into_array(self) -> [T; N] {
+	fn into_array(mut self) -> [T; N] {
 		assert_eq!(N, self.initialized_length);
 		assert_eq!(core::mem::size_of::<[T; N]>(), core::mem::size_of::<[MaybeUninit<T>; N]>());
+		self.initialized_length = 0;
 		unsafe { core::mem::transmute_copy::<_, [T; N]>(&self.array) }
 	}
 }
@@ -126,12 +131,12 @@ impl<T, const N: usize> Drop for PartialArray<T, N> {
 }
 
 pub trait ArrayCollect {
-	type Item: Copy;
+	type Item;
 
 	fn collect_array<const L: usize>(self) -> [Self::Item; L];
 }
 
-impl<It: Iterator<Item = Item>, Item: Copy> ArrayCollect for It {
+impl<It: Iterator<Item = Item>, Item> ArrayCollect for It {
 	type Item = It::Item;
 
 	fn collect_array<const L: usize>(self) -> [Self::Item; L] {
@@ -159,11 +164,49 @@ impl<Item: Copy> SliceToArray for [Item] {
 	}
 }
 
+/// Tests that `collect_array` doesn't drop any of the iterator's items. For example it is important
+/// to not copy an item, and then drop the copied instance.
+#[test]
+fn test_collect_array_dropping() {
+	use std::sync::atomic::{AtomicUsize, Ordering};
+
+	let instance_count = AtomicUsize::new(0);
+
+	struct InstanceCounter<'a> {
+		instance_count: &'a AtomicUsize,
+	}
+	impl<'a> InstanceCounter<'a> {
+		fn new(instance_count: &'a AtomicUsize) -> Self {
+			instance_count.fetch_add(1, Ordering::Relaxed);
+			Self { instance_count }
+		}
+	}
+	impl<'a> Drop for InstanceCounter<'a> {
+		fn drop(&mut self) {
+			self.instance_count.fetch_sub(1, Ordering::Relaxed);
+		}
+	}
+
+	const INSTANCE_COUNT: usize = 6;
+
+	let instances = std::iter::repeat_with(|| InstanceCounter::new(&instance_count))
+		.take(INSTANCE_COUNT)
+		.collect_array::<INSTANCE_COUNT>();
+
+	assert_eq!(instance_count.load(Ordering::Relaxed), INSTANCE_COUNT);
+
+	drop(instances);
+
+	assert_eq!(instance_count.load(Ordering::Relaxed), 0);
+}
+
 #[test]
 fn test_collect_array() {
 	let v = vec![1, 2, 3, 4];
 
-	let a = v.into_iter().take(3).collect_array::<3>();
+	const SIZE: usize = 3;
+
+	let a = v.into_iter().take(SIZE).collect_array::<SIZE>();
 
 	assert_eq!(a, [1, 2, 3]);
 }
