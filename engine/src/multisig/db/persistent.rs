@@ -5,7 +5,7 @@ use std::{cmp::Ordering, collections::HashMap, fs, mem::size_of, path::Path};
 
 use cf_primitives::KeyId;
 use rocksdb::{ColumnFamily, ColumnFamilyDescriptor, Options, WriteBatch, DB};
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, info_span};
 
 use crate::{
 	multisig::{
@@ -64,6 +64,9 @@ impl PersistentKeyDB {
 		db_path: &Path,
 		genesis_hash: Option<state_chain_runtime::Hash>,
 	) -> Result<Self> {
+		let span = info_span!("PersistentKeyDB");
+		let _entered = span.enter();
+
 		Self::open_and_migrate_to_version(db_path, genesis_hash, LATEST_SCHEMA_VERSION)
 	}
 
@@ -143,6 +146,9 @@ impl PersistentKeyDB {
 	}
 
 	pub fn load_keys<C: CryptoScheme>(&self) -> HashMap<KeyId, KeygenResultInfo<C>> {
+		let span = info_span!("PersistentKeyDB");
+		let _entered = span.enter();
+
 		let keys: HashMap<KeyId, KeygenResultInfo<C>> = self
 			.db
 			.prefix_iterator_cf(get_data_column_handle(&self.db), get_keygen_data_prefix::<C>())
