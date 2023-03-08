@@ -90,9 +90,7 @@ mod tests {
 
 	use utilities::assert_ok;
 
-	use crate::{
-		logging::test_utils::new_test_logger, testing::new_temp_directory_with_nonexistent_file,
-	};
+	use crate::testing::new_temp_directory_with_nonexistent_file;
 
 	use super::*;
 
@@ -110,7 +108,6 @@ mod tests {
 
 	#[tokio::test]
 	async fn should_migrate_legacy_checkpoint_to_db() {
-		let logger = new_test_logger();
 		let (temp_dir, db_path) = new_temp_directory_with_nonexistent_file();
 		let temp_path = temp_dir.path().to_owned();
 
@@ -129,13 +126,13 @@ mod tests {
 
 		// Run the migration
 		{
-			let db = PersistentKeyDB::open_and_migrate_to_latest(&db_path, None, &logger).unwrap();
+			let db = PersistentKeyDB::open_and_migrate_to_latest(&db_path, None).unwrap();
 			assert_ok!(run_eth_migration(ChainTag::Ethereum, Arc::new(db), &temp_path).await);
 		}
 
 		// Load the checkpoint from the db and make sure it is the one with the lowest
 		// block number
-		let db = PersistentKeyDB::open_and_migrate_to_latest(&db_path, None, &logger).unwrap();
+		let db = PersistentKeyDB::open_and_migrate_to_latest(&db_path, None).unwrap();
 		let witnessed_until = db
 			.load_checkpoint(ChainTag::Ethereum)
 			.unwrap()

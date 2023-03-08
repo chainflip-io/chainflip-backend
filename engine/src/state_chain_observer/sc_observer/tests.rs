@@ -23,7 +23,6 @@ use crate::{
 		rpc::{EthWsRpcClient, MockEthRpcApi},
 		EthBroadcaster,
 	},
-	logging::test_utils::new_test_logger,
 	multisig::{
 		client::{KeygenFailureReason, MockMultisigClientApi, SigningFailureReason},
 		eth::EthSigning,
@@ -110,11 +109,9 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 	// No blocks in the stream
 	let sc_block_stream = tokio_stream::iter(vec![]);
 
-	let logger = new_test_logger();
-
 	let eth_rpc_mock = MockEthRpcApi::new();
 
-	let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
+	let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock);
 
 	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
@@ -159,7 +156,6 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		dot_monitor_signature_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
-		logger,
 	)
 	.await
 	.unwrap_err();
@@ -278,10 +274,8 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 	// No blocks in the stream
 	let sc_block_stream = tokio_stream::iter(vec![]);
 
-	let logger = new_test_logger();
-
 	let eth_rpc_mock = MockEthRpcApi::new();
-	let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
+	let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock);
 
 	let eth_multisig_client = MockMultisigClientApi::new();
 	let dot_multisig_client = MockMultisigClientApi::new();
@@ -329,7 +323,6 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		dot_monitor_signature_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
-		logger,
 	)
 	.await
 	.unwrap_err();
@@ -413,10 +406,8 @@ async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
 
 	let sc_block_stream = tokio_stream::iter(vec![]);
 
-	let logger = new_test_logger();
-
 	let eth_rpc_mock = MockEthRpcApi::new();
-	let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
+	let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock);
 
 	let eth_multisig_client = MockMultisigClientApi::new();
 	let dot_multisig_client = MockMultisigClientApi::new();
@@ -463,7 +454,6 @@ async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
 		dot_monitor_signature_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
-		logger,
 	)
 	.await
 	.unwrap_err();
@@ -608,9 +598,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		.once()
 		.return_once(move |_, _, _| Ok(Some(1)));
 
-	let logger = new_test_logger();
-
-	let eth_broadcaster = EthBroadcaster::new_test(MockEthRpcApi::new(), &logger);
+	let eth_broadcaster = EthBroadcaster::new_test(MockEthRpcApi::new());
 
 	let eth_multisig_client = MockMultisigClientApi::new();
 	let dot_multisig_client = MockMultisigClientApi::new();
@@ -658,7 +646,6 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		dot_monitor_signature_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
-		logger,
 	)
 	.await
 	.unwrap_err();
@@ -805,11 +792,9 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		.once()
 		.return_once(move |_, _, _| Ok(Some(1)));
 
-	let logger = new_test_logger();
-
 	let eth_rpc_mock = MockEthRpcApi::new();
 
-	let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
+	let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock);
 
 	let eth_multisig_client = MockMultisigClientApi::new();
 	let dot_multisig_client = MockMultisigClientApi::new();
@@ -857,7 +842,6 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		dot_monitor_signature_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
-		logger,
 	)
 	.await
 	.unwrap_err();
@@ -1005,11 +989,9 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		.once()
 		.return_once(move |_, _, _| Ok(None));
 
-	let logger = new_test_logger();
-
 	let eth_rpc_mock = MockEthRpcApi::new();
 
-	let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
+	let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock);
 
 	let eth_multisig_client = MockMultisigClientApi::new();
 	let dot_multisig_client = MockMultisigClientApi::new();
@@ -1057,7 +1039,6 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		dot_monitor_signature_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
-		logger,
 	)
 	.await
 	.unwrap_err();
@@ -1202,9 +1183,7 @@ async fn only_encodes_and_signs_when_specified() {
 			])
 		});
 
-	let logger = new_test_logger();
-
-	let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock, &logger);
+	let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock);
 
 	let eth_multisig_client = MockMultisigClientApi::new();
 	let dot_multisig_client = MockMultisigClientApi::new();
@@ -1252,7 +1231,6 @@ async fn only_encodes_and_signs_when_specified() {
 		dot_monitor_signature_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
-		logger,
 	)
 	.await
 	.unwrap_err();
@@ -1467,7 +1445,6 @@ async fn run_the_sc_observer() {
 	task_scope(|scope| {
 		async {
 			let settings = Settings::new_test().unwrap();
-			let logger = new_test_logger();
 
 			let (initial_block_hash, sc_block_stream, state_chain_client) =
 				crate::state_chain_observer::client::StateChainClient::new(
@@ -1475,7 +1452,6 @@ async fn run_the_sc_observer() {
 					&settings.state_chain,
 					AccountRole::None,
 					false,
-					&logger,
 				)
 				.await
 				.unwrap();
@@ -1485,7 +1461,7 @@ async fn run_the_sc_observer() {
 
 			let eth_ws_rpc_client = EthWsRpcClient::new(&settings.eth).await.unwrap();
 			let eth_broadcaster =
-				EthBroadcaster::new(&settings.eth, eth_ws_rpc_client.clone(), &logger).unwrap();
+				EthBroadcaster::new(&settings.eth, eth_ws_rpc_client.clone()).unwrap();
 
 			let eth_multisig_client = MockMultisigClientApi::new();
 			let dot_multisig_client = MockMultisigClientApi::new();
@@ -1532,7 +1508,6 @@ async fn run_the_sc_observer() {
 				dot_monitor_signature_sender,
 				cfe_settings_update_sender,
 				initial_block_hash,
-				logger,
 			)
 			.await
 			.unwrap_err();

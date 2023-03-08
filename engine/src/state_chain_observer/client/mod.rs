@@ -10,17 +10,16 @@ use cf_primitives::AccountRole;
 use frame_support::pallet_prelude::InvalidTransaction;
 use futures::{Stream, StreamExt, TryStreamExt};
 
-use slog::o;
 use sp_core::{Pair, H256};
 use sp_runtime::traits::Hash;
 use state_chain_runtime::AccountId;
 use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
+use tracing::{error, info, info_span, trace, warn, Instrument};
 
 use crate::{
 	common::{read_clean_and_decode_hex_str_file, EngineTryStreamExt},
 	constants::SIGNED_EXTRINSIC_LIFETIME,
-	logging::COMPONENT_KEY,
 	settings,
 	state_chain_observer::client::storage_api::StorageApi,
 	task_scope::{Scope, ScopedJoinHandle},
@@ -71,9 +70,9 @@ impl StateChainClient {
 		state_chain_settings: &settings::StateChain,
 		required_role: AccountRole,
 		wait_for_required_role: bool,
-		logger: &slog::Logger,
 	) -> Result<(H256, impl Stream<Item = state_chain_runtime::Header>, Arc<StateChainClient>)> {
-		Self::inner_new(scope, state_chain_settings, required_role, wait_for_required_role, logger)
+		Self::inner_new(scope, state_chain_settings, required_role, wait_for_required_role)
+			.instrument(info_span!("StateChainClient"))
 			.await
 			.context("Failed to initialize StateChainClient")
 	}
@@ -83,9 +82,7 @@ impl StateChainClient {
 		state_chain_settings: &settings::StateChain,
 		required_role: AccountRole,
 		wait_for_required_role: bool,
-		logger: &slog::Logger,
 	) -> Result<(H256, impl Stream<Item = state_chain_runtime::Header>, Arc<StateChainClient>)> {
-		let logger = logger.new(o!(COMPONENT_KEY => "StateChainClient"));
 		let signer = signer::PairSigner::<sp_core::sr25519::Pair>::new(
 			sp_core::sr25519::Pair::from_seed(&read_clean_and_decode_hex_str_file(
 				&state_chain_settings.signing_key_file,
@@ -208,13 +205,13 @@ impl StateChainClient {
 						if required_role == AccountRole::None || required_role == role {
 							break
 						} else if wait_for_required_role && role == AccountRole::None {
-							slog::warn!(logger, "Your Chainflip account {} does not have an assigned account role. WAITING for the account role to be set to '{:?}' at block: {}", signer.account_id, required_role, latest_block_number);
+							warn!("Your Chainflip account {} does not have an assigned account role. WAITING for the account role to be set to '{required_role:?}' at block: {latest_block_number}", signer.account_id);
 						} else {
-							bail!("Your Chainflip account {} has the wrong account role '{:?}'. The '{:?}' account role is required", signer.account_id, role, required_role);
+							bail!("Your Chainflip account {} has the wrong account role '{role:?}'. The '{required_role:?}' account role is required", signer.account_id);
 						},
 					None =>
 						if wait_for_required_role {
-							slog::warn!(logger, "Your Chainflip account {} is not staked. Note, if you have already staked, it may take some time for your stake to be detected. WAITING for your account to be staked at block: {}", signer.account_id, latest_block_number);
+							warn!("Your Chainflip account {} is not staked. Note, if you have already staked, it may take some time for your stake to be detected. WAITING for your account to be staked at block: {latest_block_number}", signer.account_id);
 						} else {
 							bail!("Your Chainflip account {} is not staked", signer.account_id);
 						},
@@ -254,7 +251,6 @@ impl StateChainClient {
 			signed_extrinsic_request_sender,
 			unsigned_extrinsic_request_sender,
 			_task_handle: scope.spawn_with_handle({
-				let logger = logger.clone();
 				let base_rpc_client = base_rpc_client.clone();
 				let mut runtime_version = base_rpc_client.runtime_version().await?;
 				let mut account_nonce = account_nonce;
@@ -292,12 +288,7 @@ impl StateChainClient {
 													// This occurs when a transaction with the same nonce is in the transaction pool
 													// (and the priority is <= priority of that existing tx)
 													jsonrpsee::core::Error::Call(jsonrpsee::types::error::CallError::Custom(ref obj)) if obj.code() == 1014 => {
-														slog::warn!(
-															logger,
-															"Extrinsic submission failed with nonce: {}. Error: {:?}. Transaction with same nonce found in transaction pool.",
-															account_nonce,
-															rpc_err
-														);
+														warn!("Extrinsic submission failed with nonce: {account_nonce}. Error: {rpc_err:?}. Transaction with same nonce found in transaction pool.");
 														account_nonce += 1;
 													},
 													// This occurs when the nonce has already been *consumed* i.e a transaction with
@@ -309,26 +300,17 @@ impl StateChainClient {
 														// nonce from finalised. If the tx we submitted is not yet finalised, we
 														// will fetch a nonce that will be too low. Which would cause this warning
 														// on startup at submission of first (possibly couple) of extrinsics.
-														slog::warn!(
-															logger,
-															"Extrinsic submission failed with nonce: {}. Error: {:?}. Transaction stale.",
-															account_nonce,
-															rpc_err
-														);
+														warn!("Extrinsic submission failed with nonce: {account_nonce}. Error: {rpc_err:?}. Transaction stale.");
 														account_nonce += 1;
 													},
 													jsonrpsee::core::Error::Call(jsonrpsee::types::error::CallError::Custom(ref obj))
 														if obj == &invalid_err_obj(InvalidTransaction::BadProof) =>
 													{
-														slog::warn!(
-															logger,
-															"Extrinsic submission failed with nonce: {}. Error: {:?}. Refetching the runtime version.",
-															account_nonce,
-															rpc_err
-														);
+														warn!("Extrinsic submission failed with nonce: {account_nonce}. Error: {rpc_err:?}. Refetching the runtime version.");
+
 														let new_runtime_version = base_rpc_client.runtime_version().await?;
 														if new_runtime_version == runtime_version {
-															slog::warn!(logger, "Fetched RuntimeVersion of {:?} is the same as the previous RuntimeVersion. This is not expected.", &runtime_version);
+															warn!("Fetched RuntimeVersion of {:?} is the same as the previous RuntimeVersion. This is not expected.", &runtime_version);
 															// break, as the error is now very unlikely to be solved by fetching
 															// again
 															break Err(anyhow!("Fetched RuntimeVersion of {:?} is the same as the previous RuntimeVersion. This is not expected.", &runtime_version))
@@ -349,12 +331,7 @@ impl StateChainClient {
 									let expected_hash = sp_runtime::traits::BlakeTwo256::hash_of(&extrinsic);
 									match base_rpc_client.submit_extrinsic(extrinsic).await {
 										Ok(tx_hash) => {
-											slog::info!(
-												logger,
-												"Unsigned extrinsic {:?} submitted successfully with tx_hash: {:#x}",
-												&call,
-												tx_hash
-											);
+											info!("Unsigned extrinsic {:?} submitted successfully with tx_hash: {tx_hash:#x}", &call);
 											assert_eq!(
 												tx_hash, expected_hash,
 												"tx_hash returned from RPC does not match expected hash"
@@ -369,21 +346,11 @@ impl StateChainClient {
 												// in pool" "error" we know that this particular extrinsic has already been
 												// submitted. And so we can ignore the error and return the transaction hash
 												jsonrpsee::core::Error::Call(jsonrpsee::types::error::CallError::Custom(ref obj)) if obj.code() == 1013 => {
-													slog::trace!(
-														logger,
-														"Unsigned extrinsic {:?} with tx_hash {:#x} already in pool.",
-														&call,
-														expected_hash
-													);
+													trace!("Unsigned extrinsic {:?} with tx_hash {expected_hash:#x} already in pool.", &call);
 													Ok(expected_hash)
 												},
 												_ => {
-													slog::error!(
-														logger,
-														"Unsigned extrinsic failed with error: {}. Extrinsic: {:?}",
-														rpc_err,
-														&call
-													);
+													error!("Unsigned extrinsic failed with error: {rpc_err}. Extrinsic: {:?}", &call);
 													Err(rpc_err.into())
 												},
 											}
@@ -399,17 +366,12 @@ impl StateChainClient {
 							}
 						}
 					}
-				}
+				}.instrument(info_span!("StateChainClient"))
 			}),
 			base_rpc_client,
 		});
 
-		slog::info!(
-			logger,
-			"Initialised StateChainClient at block `{}`; block hash: `{:#x}`",
-			latest_block_number,
-			latest_block_hash
-		);
+		info!("Initialised StateChainClient at block `{latest_block_number}`; block hash: `{latest_block_hash:#x}`");
 
 		Ok((latest_block_hash, block_receiver, state_chain_client))
 	}

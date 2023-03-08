@@ -15,11 +15,11 @@ use async_trait::async_trait;
 use rand_legacy::{RngCore, SeedableRng};
 
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tracing::{debug, debug_span, Instrument};
 use utilities::{assert_ok, success_threshold_from_share_count, threshold_from_share_count};
 
 use crate::{
 	common::{all_same, split_at},
-	logging::test_utils::new_test_logger,
 	multisig::{
 		client::{
 			ceremony_manager::{
@@ -87,12 +87,9 @@ pub struct Node<C: CeremonyTrait> {
 	/// If any of the methods we called on the ceremony runner returned the outcome,
 	/// it will be stored here
 	outcome: Option<CeremonyOutcome<C>>,
-	logger: slog::Logger,
 }
 
 fn new_node<C: CeremonyTrait>(account_id: AccountId) -> Node<C> {
-	let logger = new_test_logger().new(slog::o!("account_id" => account_id.to_string()));
-
 	let (outgoing_p2p_message_sender, outgoing_p2p_message_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
@@ -104,7 +101,6 @@ fn new_node<C: CeremonyTrait>(account_id: AccountId) -> Node<C> {
 		ceremony_runner,
 		outgoing_p2p_message_receiver,
 		outcome: None,
-		logger,
 	}
 }
 
@@ -126,9 +122,12 @@ pub struct KeygenCeremonyDetails {
 
 impl<C: CeremonyTrait> Node<C> {
 	fn on_ceremony_outcome(&mut self, outcome: CeremonyOutcome<C>) {
+		let span = debug_span!("Node", account_id = self.own_account_id.to_string());
+		let _entered = span.enter();
+
 		match &outcome {
 			Ok(_) => {
-				slog::debug!(self.logger, "Node got successful outcome");
+				debug!("Node got successful outcome");
 			},
 			Err((reported_parties, failure_reason)) => {
 				failure_reason.log(reported_parties);
@@ -142,7 +141,12 @@ impl<C: CeremonyTrait> Node<C> {
 	}
 
 	pub async fn force_stage_timeout(&mut self) {
-		if let Some(outcome) = self.ceremony_runner.force_timeout().await {
+		if let Some(outcome) = self
+			.ceremony_runner
+			.force_timeout()
+			.instrument(debug_span!("Node", account_id = self.own_account_id.to_string()))
+			.await
+		{
 			self.on_ceremony_outcome(outcome);
 		}
 	}
@@ -169,7 +173,11 @@ impl<C: CryptoScheme> Node<SigningCeremony<C>> {
 		)
 		.expect("invalid request");
 
-		if let Some(outcome) = self.ceremony_runner.on_ceremony_request(request.initial_stage).await
+		if let Some(outcome) = self
+			.ceremony_runner
+			.on_ceremony_request(request.initial_stage)
+			.instrument(debug_span!("Node", account_id = self.own_account_id.to_string()))
+			.await
 		{
 			self.on_ceremony_outcome(outcome);
 		}
@@ -194,7 +202,11 @@ impl Node<KeygenCeremonyEth> {
 		)
 		.expect("invalid request");
 
-		if let Some(outcome) = self.ceremony_runner.on_ceremony_request(request.initial_stage).await
+		if let Some(outcome) = self
+			.ceremony_runner
+			.on_ceremony_request(request.initial_stage)
+			.instrument(debug_span!("Node", account_id = self.own_account_id.to_string()))
+			.await
 		{
 			self.on_ceremony_outcome(outcome)
 		}

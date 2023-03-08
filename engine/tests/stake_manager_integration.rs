@@ -3,10 +3,7 @@
 //! This tests integration with the StakeManager contract
 //! For instruction on how to run this test, see `engine/tests/README.md`
 
-use chainflip_engine::{
-	eth::stake_manager::{StakeManager, StakeManagerEvent},
-	logging::utils,
-};
+use chainflip_engine::eth::stake_manager::{StakeManager, StakeManagerEvent};
 
 use sp_runtime::AccountId32;
 use std::str::FromStr;
@@ -17,14 +14,11 @@ use crate::common::IntegrationTestConfig;
 
 #[tokio::test]
 pub async fn test_all_stake_manager_events() {
-	let root_logger = utils::new_cli_logger();
-
 	let integration_test_config = IntegrationTestConfig::from_file("tests/config.toml").unwrap();
 
-	let sm_events = common::get_contract_events(
-		StakeManager::new(integration_test_config.eth.stake_manager_address),
-		root_logger,
-	)
+	let sm_events = common::get_contract_events(StakeManager::new(
+		integration_test_config.eth.stake_manager_address,
+	))
 	.await;
 
 	// The following event details correspond to the events in

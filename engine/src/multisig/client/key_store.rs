@@ -52,8 +52,7 @@ fn should_return_key_due_to_fallback() {
 
 	// Create a database just so we can pass it to the key store
 	let (_dir, db_file) = crate::testing::new_temp_directory_with_nonexistent_file();
-	let logger = crate::logging::test_utils::new_test_logger();
-	let db = PersistentKeyDB::open_and_migrate_to_latest(&db_file, None, &logger).unwrap();
+	let db = PersistentKeyDB::open_and_migrate_to_latest(&db_file, None).unwrap();
 
 	let mut key_store = KeyStore::<EthSigning>::new(Arc::new(db));
 

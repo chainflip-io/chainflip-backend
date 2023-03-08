@@ -5,15 +5,14 @@ use std::{
 };
 
 use anyhow::Result;
-use slog::o;
 use sp_core::H256;
 use tokio::sync::mpsc::UnboundedReceiver;
 
 use codec::Encode;
+use tracing::{debug, info};
 use utilities::{make_periodic_tick, Port};
 
 use crate::{
-	logging::COMPONENT_KEY,
 	p2p::PeerInfo,
 	state_chain_observer::client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi},
 };
@@ -24,7 +23,6 @@ async fn update_registered_peer_id<StateChainClient>(
 	previous_registered_peer_info: &Option<PeerInfo>,
 	ip_address: Ipv6Addr,
 	cfe_port: Port,
-	logger: &slog::Logger,
 ) -> Result<()>
 where
 	StateChainClient: ExtrinsicApi,
@@ -39,12 +37,8 @@ where
 		None => String::from("Node previously did not have a registered address"),
 	};
 
-	slog::info!(
-		logger,
-		"Registering node's ip address, and port number [{}]:{}. {}.",
-		ip_address,
-		cfe_port,
-		extra_info,
+	info!(
+		"Registering node's ip address, and port number [{ip_address}]:{cfe_port}. {extra_info}.",
 	);
 
 	let peer_id = sp_core::ed25519::Public(node_key.public.to_bytes());
@@ -75,13 +69,10 @@ pub async fn start<StateChainClient>(
 	cfe_port: Port,
 	mut previous_registered_peer_info: Option<PeerInfo>,
 	mut own_peer_info_receiver: UnboundedReceiver<PeerInfo>,
-	logger: slog::Logger,
 ) -> Result<()>
 where
 	StateChainClient: StorageApi + ExtrinsicApi + Send + Sync,
 {
-	let logger = logger.new(o!(COMPONENT_KEY => "P2PClient"));
-
 	let ip_address = match ip_address {
 		IpAddr::V4(ipv4) => ipv4.to_ipv6_mapped(),
 		IpAddr::V6(ipv6) => ipv6,
@@ -107,11 +98,10 @@ where
 						&previous_registered_peer_info,
 						ip_address,
 						cfe_port,
-						&logger,
 					)
 					.await?;
 				} else {
-					slog::debug!(logger, "Our peer info registration is up to date");
+					debug!("Our peer info registration is up to date");
 					break;
 				}
 			}

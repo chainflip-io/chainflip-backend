@@ -16,10 +16,11 @@ use serde::{Deserialize, Serialize};
 use sp_core::ed25519;
 use state_chain_runtime::AccountId;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tracing::{debug, error, info, info_span, trace, warn, Instrument};
 use utilities::Port;
 use x25519_dalek::StaticSecret;
 
-use crate::{logging::COMPONENT_KEY, p2p::OutgoingMultisigStageMessages};
+use crate::p2p::OutgoingMultisigStageMessages;
 use socket::OutgoingSocket;
 
 use self::socket::ConnectedOutgoingSocket;
@@ -140,7 +141,6 @@ struct P2PContext {
 	/// NOTE: zmq context is intentionally declared at the bottom of the struct
 	/// to ensure its destructor is called after that of any zmq sockets
 	zmq_context: zmq::Context,
-	logger: slog::Logger,
 }
 
 pub fn start(
@@ -148,7 +148,6 @@ pub fn start(
 	port: Port,
 	current_peers: Vec<PeerInfo>,
 	our_account_id: AccountId,
-	logger: &slog::Logger,
 ) -> (
 	UnboundedSender<OutgoingMultisigStageMessages>,
 	UnboundedSender<PeerUpdate>,
@@ -160,7 +159,7 @@ pub fn start(
 		let secret_key = ed25519_secret_key_to_x25519_secret_key(&node_key.secret);
 
 		let public_key: x25519_dalek::PublicKey = (&secret_key).into();
-		slog::debug!(logger, "Our derived x25519 pubkey: {:?}", to_string(&public_key));
+		debug!("Our derived x25519 pubkey: {:?}", to_string(&public_key));
 
 		KeyPair { public_key, secret_key }
 	};
@@ -173,15 +172,13 @@ pub fn start(
 	// socket connection and disconnecting inactive peers (see proxy_expire_idle_peers
 	// in OxenMQ)
 
-	let logger = logger.new(slog::o!(COMPONENT_KEY => "p2p"));
-
-	let authenticator = auth::start_authentication_thread(zmq_context.clone(), &logger);
+	let authenticator = auth::start_authentication_thread(zmq_context.clone());
 
 	let (incoming_message_sender, incoming_message_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
 	let (monitor_handle, reconnect_receiver) =
-		monitor::start_monitoring_thread(zmq_context.clone(), &logger);
+		monitor::start_monitoring_thread(zmq_context.clone());
 
 	// A channel used to notify whenever our own peer info changes on SC
 	let (own_peer_info_sender, own_peer_info_receiver) = tokio::sync::mpsc::unbounded_channel();
@@ -197,10 +194,9 @@ pub fn start(
 		own_peer_info_sender,
 		our_account_id,
 		status: RegistrationStatus::Pending(vec![]),
-		logger,
 	};
 
-	slog::debug!(context.logger, "Registering peer info for {} peers", current_peers.len());
+	debug!("Registering peer info for {} peers", current_peers.len());
 	for peer_info in current_peers {
 		context.handle_peer_update(peer_info);
 	}
@@ -210,12 +206,14 @@ pub fn start(
 	let (out_msg_sender, out_msg_receiver) = tokio::sync::mpsc::unbounded_channel();
 	let (peer_update_sender, peer_update_receiver) = tokio::sync::mpsc::unbounded_channel();
 
-	let fut = context.control_loop(
-		out_msg_receiver,
-		incoming_message_receiver_ed25519,
-		peer_update_receiver,
-		reconnect_receiver,
-	);
+	let fut = context
+		.control_loop(
+			out_msg_receiver,
+			incoming_message_receiver_ed25519,
+			peer_update_receiver,
+			reconnect_receiver,
+		)
+		.instrument(info_span!("p2p"));
 
 	(out_msg_sender, peer_update_sender, incoming_message_receiver, own_peer_info_receiver, fut)
 }
@@ -251,21 +249,13 @@ impl P2PContext {
 	fn send_messages(&self, messages: OutgoingMultisigStageMessages) {
 		match messages {
 			OutgoingMultisigStageMessages::Broadcast(account_ids, payload) => {
-				slog::trace!(
-					self.logger,
-					"Broadcasting a message to all {} peers",
-					account_ids.len()
-				);
+				trace!("Broadcasting a message to all {} peers", account_ids.len());
 				for acc_id in account_ids {
 					self.send_message(acc_id, payload.clone());
 				}
 			},
 			OutgoingMultisigStageMessages::Private(messages) => {
-				slog::trace!(
-					self.logger,
-					"Sending private messages to all {} peers",
-					messages.len()
-				);
+				trace!("Sending private messages to all {} peers", messages.len());
 				for (acc_id, payload) in messages {
 					self.send_message(acc_id, payload);
 				}
@@ -279,11 +269,7 @@ impl P2PContext {
 				socket.send(payload);
 			},
 			None => {
-				slog::warn!(
-					self.logger,
-					"Failed to send message. Peer not registered: {}",
-					account_id
-				)
+				warn!("Failed to send message. Peer not registered: {account_id}")
 			},
 		}
 	}
@@ -297,14 +283,10 @@ impl P2PContext {
 
 	fn forward_incoming_message(&mut self, pubkey: XPublicKey, payload: Vec<u8>) {
 		if let Some(acc_id) = self.x25519_to_account_id.get(&pubkey) {
-			slog::trace!(self.logger, "Received a message from {}", acc_id);
+			trace!("Received a message from {acc_id}");
 			self.incoming_message_sender.send((acc_id.clone(), payload)).unwrap();
 		} else {
-			slog::warn!(
-				self.logger,
-				"Received a message for an unknown x25519 key: {}",
-				to_string(&pubkey)
-			);
+			warn!("Received a message for an unknown x25519 key: {}", to_string(&pubkey));
 		}
 	}
 
@@ -330,13 +312,13 @@ impl P2PContext {
 		if let Some(existing_socket) = self.active_connections.remove(&account_id) {
 			self.remove_peer_and_disconnect_socket(existing_socket);
 		} else {
-			slog::error!(self.logger, "Failed remove unknown peer: {}", account_id);
+			error!("Failed remove unknown peer: {account_id}");
 		}
 	}
 
 	/// Reconnect to peer assuming that its peer info hasn't changed
 	fn reconnect_to_peer(&mut self, account_id: AccountId) {
-		slog::info!(self.logger, "Reconnecting to peer: {}", account_id);
+		info!("Reconnecting to peer: {account_id}");
 
 		let existing_socket = self
 			.active_connections
@@ -353,16 +335,13 @@ impl P2PContext {
 
 		self.monitor_handle.start_monitoring_for(&socket, &peer);
 
-		let connected_socket = socket.connect(peer, &self.logger);
+		let connected_socket = socket.connect(peer);
 
 		assert!(self.active_connections.insert(account_id, connected_socket).is_none());
 	}
 
 	fn handle_own_registration(&mut self, own_info: PeerInfo) {
-		slog::debug!(
-			self.logger,
-			"Received own node's registration. Starting to connect to peers."
-		);
+		debug!("Received own node's registration. Starting to connect to peers.");
 
 		self.own_peer_info_sender.send(own_info).unwrap();
 
@@ -378,20 +357,18 @@ impl P2PContext {
 
 	fn add_or_update_peer(&mut self, peer: PeerInfo) {
 		if let Some(existing_socket) = self.active_connections.remove(&peer.account_id) {
-			slog::debug!(
-				self.logger,
+			debug!(
+				peer_info = peer.to_string(),
 				"Received info for known peer with account id {}, updating info and reconnecting",
-				&peer.account_id;
-				"peer_info" => peer.to_string()
+				&peer.account_id
 			);
 
 			self.remove_peer_and_disconnect_socket(existing_socket);
 		} else {
-			slog::debug!(
-				self.logger,
+			debug!(
+				peer_info = peer.to_string(),
 				"Received info for new peer with account id {}, adding to allowed peers and id mapping",
-				&peer.account_id;
-				"peer_info" => peer.to_string()
+				&peer.account_id
 			);
 		}
 
@@ -402,7 +379,7 @@ impl P2PContext {
 		match &mut self.status {
 			RegistrationStatus::Pending(peers) => {
 				// Not ready to start connecting to peers yet
-				slog::info!(self.logger, "Delaying connecting to {}", peer.account_id);
+				info!("Delaying connecting to {}", peer.account_id);
 				peers.push(peer);
 			},
 			RegistrationStatus::Registered => {
@@ -430,14 +407,12 @@ impl P2PContext {
 
 		// Listen on all interfaces
 		let endpoint = format!("tcp://0.0.0.0:{port}");
-		slog::info!(self.logger, "Started listening for incoming p2p connections on: {endpoint}");
+		info!("Started listening for incoming p2p connections on: {endpoint}");
 
 		socket.bind(&endpoint).expect("invalid endpoint");
 
 		let (incoming_message_sender, incoming_message_receiver) =
 			tokio::sync::mpsc::unbounded_channel();
-
-		let logger = self.logger.clone();
 
 		// This OS thread is for incoming messages
 		// TODO: combine this with the authentication thread?
@@ -462,8 +437,7 @@ impl P2PContext {
 
 				incoming_message_sender.send((pubkey, msg.to_vec())).unwrap();
 			} else {
-				slog::warn!(
-					logger,
+				warn!(
 					"Ignoring a multipart message with unexpected number of parts ({})",
 					parts.len()
 				)

@@ -5,7 +5,6 @@ use anyhow::{anyhow, Context};
 use cf_chains::{dot, eth::Ethereum, ChainCrypto, Polkadot};
 use cf_primitives::{BlockNumber, CeremonyId, EpochIndex, KeyId, PolkadotAccountId};
 use futures::{FutureExt, Stream, StreamExt};
-use slog::o;
 use sp_core::{Hasher, H160, H256};
 use sp_runtime::{traits::Keccak256, AccountId32};
 use state_chain_runtime::{AccountId, CfeSettings, EthereumInstance, PolkadotInstance};
@@ -18,11 +17,11 @@ use std::{
 	time::Duration,
 };
 use tokio::sync::{mpsc::UnboundedSender, watch};
+use tracing::{debug, error, info, info_span, trace, Instrument};
 
 use crate::{
 	dot::{rpc::DotRpcApi, DotBroadcaster},
 	eth::{rpc::EthRpcApi, EthBroadcaster},
-	logging::COMPONENT_KEY,
 	multisig::{
 		client::MultisigClientApi, eth::EthSigning, polkadot::PolkadotSigning, CryptoScheme,
 	},
@@ -138,7 +137,7 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient, C, I>(
 // Wrap the match so we add a log message before executing the processing of the event
 // if we are processing. Else, ignore it.
 macro_rules! match_event {
-    ($event:expr, $logger:ident { $($(#[$cfg_param:meta])? $bind:pat $(if $condition:expr)? => $block:expr)+ }) => {{
+    ($event:expr, { $($(#[$cfg_param:meta])? $bind:pat $(if $condition:expr)? => $block:expr)+ }) => {{
         let event = $event;
         let formatted_event = format!("{:?}", event);
         match event {
@@ -146,17 +145,9 @@ macro_rules! match_event {
                 $(#[$cfg_param])?
                 $bind => {
                     $(if !$condition {
-                        slog::trace!(
-                            $logger,
-                            "Ignoring event {}",
-                            formatted_event
-                        );
+                        trace!("Ignoring event {formatted_event}");
                     } else )? {
-                        slog::debug!(
-                            $logger,
-                            "Handling event {}",
-                            formatted_event
-                        );
+                        debug!("Handling event {formatted_event}");
                         $block
                     }
                 }
@@ -188,7 +179,6 @@ pub async fn start<
 	dot_monitor_signature_sender: tokio::sync::mpsc::UnboundedSender<[u8; 64]>,
 	cfe_settings_update_sender: watch::Sender<CfeSettings>,
 	initial_block_hash: H256,
-	logger: slog::Logger,
 ) -> Result<(), anyhow::Error>
 where
 	BlockStream: Stream<Item = state_chain_runtime::Header> + Send + 'static,
@@ -198,8 +188,6 @@ where
 	StateChainClient: StorageApi + ExtrinsicApi + 'static + Send + Sync,
 {
 	task_scope(|scope| async {
-        let logger = logger.new(o!(COMPONENT_KEY => "SCObserver"));
-
         let account_id = state_chain_client.account_id();
 
         let heartbeat_block_interval = {
@@ -301,28 +289,19 @@ where
         const HEARTBEAT_SAFETY_MARGIN: BlockNumber = 10;
         let blocks_per_heartbeat =  heartbeat_block_interval - HEARTBEAT_SAFETY_MARGIN;
 
-        slog::info!(
-            logger,
-            "Sending heartbeat every {} blocks",
-            blocks_per_heartbeat
-        );
+        info!("Sending heartbeat every {blocks_per_heartbeat} blocks");
 
         let mut sc_block_stream = Box::pin(sc_block_stream);
         loop {
             match sc_block_stream.next().await {
                 Some(current_block_header) => {
                     let current_block_hash = current_block_header.hash();
-                    slog::debug!(
-                        logger,
-                        "Processing SC block {} with block hash: {:#x}",
-                        current_block_header.number,
-                        current_block_hash
-                    );
+                    debug!("Processing SC block {} with block hash: {current_block_hash:#x}", current_block_header.number);
 
                     match state_chain_client.storage_value::<frame_system::Events::<state_chain_runtime::Runtime>>(current_block_hash).await {
                         Ok(events) => {
                             for event_record in events {
-                                match_event! {event_record.event, logger {
+                                match_event! {event_record.event, {
                                     state_chain_runtime::RuntimeEvent::Validator(
                                         pallet_cf_validator::Event::NewEpoch(new_epoch),
                                     ) => {
@@ -449,12 +428,7 @@ where
                                             unsigned_tx,
                                         },
                                     ) if nominee == account_id => {
-                                        slog::debug!(
-                                            logger,
-                                            "Received signing request with broadcast_attempt_id {} for transaction: {:?}",
-                                            broadcast_attempt_id,
-                                            unsigned_tx,
-                                        );
+                                        debug!("Received signing request with broadcast_attempt_id {broadcast_attempt_id} for transaction: {unsigned_tx:?}");
                                         match eth_broadcaster.encode_and_sign_tx(unsigned_tx).await {
                                             Ok(raw_signed_tx) => {
                                                 // We want to transmit here to decrease the delay between getting a gas price estimate
@@ -462,24 +436,14 @@ where
                                                 let expected_broadcast_tx_hash = Keccak256::hash(&raw_signed_tx.0[..]);
                                                 match eth_broadcaster.send(raw_signed_tx.0).await {
                                                     Ok(tx_hash) => {
-                                                        slog::debug!(
-                                                            logger,
-                                                            "Successful TransmissionRequest broadcast_attempt_id {}, tx_hash: {:#x}",
-                                                            broadcast_attempt_id,
-                                                            tx_hash
-                                                        );
+                                                        debug!("Successful TransmissionRequest broadcast_attempt_id {broadcast_attempt_id}, tx_hash: {tx_hash:#x}");
                                                         assert_eq!(
                                                             tx_hash.0, expected_broadcast_tx_hash.0,
                                                             "tx_hash returned from `send` does not match expected hash"
                                                         );
                                                     },
                                                     Err(e) => {
-                                                        slog::info!(
-                                                            logger,
-                                                            "TransmissionRequest broadcast_attempt_id {} failed: {:?}",
-                                                            broadcast_attempt_id,
-                                                            e
-                                                        );
+                                                        info!("TransmissionRequest broadcast_attempt_id {broadcast_attempt_id} failed: {e:?}");
                                                     },
                                                 }
                                             }
@@ -491,12 +455,7 @@ where
                                                 // chain and the above eth_broadcaster.sign_tx method can be made
                                                 // infallible.
 
-                                                slog::error!(
-                                                    logger,
-                                                    "TransactionSigningRequest attempt_id {} failed: {:?}",
-                                                    broadcast_attempt_id,
-                                                    e
-                                                );
+                                                error!("TransactionSigningRequest attempt_id {broadcast_attempt_id} failed: {e:?}");
 
                                                 let _result = state_chain_client.submit_signed_extrinsic(
                                                     state_chain_runtime::RuntimeCall::EthereumBroadcaster(
@@ -527,9 +486,9 @@ where
                                         dot_monitor_signature_sender.send(signature.0).unwrap();
                                         if nominee == account_id {
                                             let _result = dot_broadcaster.send(unsigned_tx.encoded_extrinsic).await
-                                            .map(|_| slog::info!(logger, "Polkadot transmission successful: {broadcast_attempt_id}"))
+                                            .map(|_| info!("Polkadot transmission successful: {broadcast_attempt_id}"))
                                             .map_err(|error| {
-                                                slog::error!(logger, "Error: {:?}", error);
+                                                error!("Error: {error:?}");
                                             });
                                         }
                                     }
@@ -571,12 +530,7 @@ where
                                     }
                                 }}}}
                                 Err(error) => {
-                                    slog::error!(
-                                        logger,
-                                        "Failed to decode events at block {}. {}",
-                                current_block_header.number,
-                                error,
-                            );
+                                    error!("Failed to decode events at block {}. {error}", current_block_header.number);
                         }
                     }
 
@@ -586,11 +540,7 @@ where
                         // Submitting earlier than one minute in may falsely indicate liveness.
                         ) && has_submitted_init_heartbeat.load(Ordering::Relaxed)
                     {
-                        slog::info!(
-                            logger,
-                            "Sending heartbeat at block: {}",
-                            current_block_header.number
-                        );
+                        info!("Sending heartbeat at block: {}", current_block_header.number);
                         let _result = state_chain_client
                             .submit_signed_extrinsic(
                                 pallet_cf_reputation::Call::heartbeat {},
@@ -601,11 +551,11 @@ where
                     }
                 }
                 None => {
-                    slog::error!(logger, "Exiting as State Chain block stream ended");
+                    error!("Exiting as State Chain block stream ended");
                     break;
                 }
             }
         }
         Err(anyhow!("State Chain block stream ended"))
-    }.boxed()).await
+    }.instrument(info_span!("SCObserver")).boxed()).await
 }

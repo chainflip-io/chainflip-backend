@@ -1,11 +1,8 @@
 use cf_primitives::{KeyId, GENESIS_EPOCH};
 
-use chainflip_engine::{
-	logging::utils::new_discard_logger,
-	multisig::{
-		client::keygen::generate_key_data, eth::EthSigning, polkadot::PolkadotSigning,
-		CryptoScheme, PersistentKeyDB, Rng,
-	},
+use chainflip_engine::multisig::{
+	client::keygen::generate_key_data, eth::EthSigning, polkadot::PolkadotSigning, CryptoScheme,
+	PersistentKeyDB, Rng,
 };
 use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use rand_legacy::FromEntropy;
@@ -103,7 +100,6 @@ fn generate_and_save_keys<Crypto: CryptoScheme>(
 			// The genesis hash is unknown at this time, it will be written when the node runs for
 			// the first time.
 			None,
-			&new_discard_logger(),
 		)
 		.expect("Should create database at latest version")
 		.update_key::<Crypto>(
@@ -129,12 +125,9 @@ fn should_generate_and_save_all_keys() {
 	generate_and_save_keys::<PolkadotSigning>(&node_id_to_name_map);
 
 	// Open the db and check the keys
-	let db = PersistentKeyDB::open_and_migrate_to_latest(
-		&db_path.with_extension(DB_EXTENSION),
-		None,
-		&new_discard_logger(),
-	)
-	.unwrap();
+	let db =
+		PersistentKeyDB::open_and_migrate_to_latest(&db_path.with_extension(DB_EXTENSION), None)
+			.unwrap();
 
 	assert_eq!(db.load_keys::<EthSigning>().len(), 1);
 	assert_eq!(db.load_keys::<PolkadotSigning>().len(), 1);

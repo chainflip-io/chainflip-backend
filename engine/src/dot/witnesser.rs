@@ -499,8 +499,7 @@ mod tests {
 	use cf_primitives::PolkadotAccountId;
 
 	use crate::{
-		dot::rpc::DotRpcClient, logging::test_utils::new_test_logger,
-		state_chain_observer::client::mocks::MockStateChainClient,
+		dot::rpc::DotRpcClient, state_chain_observer::client::mocks::MockStateChainClient,
 	};
 
 	fn mock_proxy_added(
@@ -700,8 +699,6 @@ mod tests {
 	async fn start_witnessing() {
 		let url = "ws://localhost:9944";
 
-		let logger = new_test_logger();
-
 		println!("Connecting to: {url}");
 		let dot_rpc_client = DotRpcClient::new(url).await.unwrap();
 
@@ -762,7 +759,7 @@ mod tests {
 			.unwrap();
 
 		let (_dir, db_path) = crate::testing::new_temp_directory_with_nonexistent_file();
-		let db = PersistentKeyDB::open_and_migrate_to_latest(&db_path, None, &logger).unwrap();
+		let db = PersistentKeyDB::open_and_migrate_to_latest(&db_path, None).unwrap();
 
 		start(
 			epoch_starts_receiver,
