@@ -116,6 +116,7 @@ impl<T, const N: usize> PartialArray<T, N> {
 	fn into_array(mut self) -> [T; N] {
 		assert_eq!(N, self.initialized_length);
 		assert_eq!(core::mem::size_of::<[T; N]>(), core::mem::size_of::<[MaybeUninit<T>; N]>());
+        // Don't drop the copied elements when PartialArray is dropped
 		self.initialized_length = 0;
 		unsafe { core::mem::transmute_copy::<_, [T; N]>(&self.array) }
 	}
