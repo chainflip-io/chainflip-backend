@@ -1,3 +1,4 @@
+pub mod api;
 pub mod ingress_address;
 pub mod utxo_selection;
 
@@ -163,6 +164,11 @@ impl ChainCrypto for Bitcoin {
 	}
 }
 
+impl ChainAbi for Bitcoin {
+	type Transaction = BitcoinTransactionData;
+
+	type ReplayProtection = BitcoinReplayProtection;
+}
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct UtxoId {
 	// Tx hash of the transaction this utxo was a part of
@@ -208,12 +214,6 @@ impl BenchmarkValue for BtcAddress {
 	}
 }
 
-impl ChainAbi for Bitcoin {
-	type Transaction = BitcoinTransactionData;
-
-	type ReplayProtection = BitcoinReplayProtection;
-}
-
 impl IngressIdConstructor for BitcoinFetchId {
 	type Address = BtcAddress;
 
@@ -255,15 +255,10 @@ pub struct Utxo {
 	pub salt: u32,
 }
 
+#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct BitcoinOutput {
 	amount: u64,
 	script_pubkey: BitcoinScript,
-}
-
-pub struct BitcoinTransaction {
-	inputs: Vec<Utxo>,
-	outputs: Vec<BitcoinOutput>,
-	signatures: Vec<Signature>,
 }
 
 fn get_tapleaf_hash(pubkey_x: [u8; 32], salt: u32) -> Hash {
@@ -408,6 +403,7 @@ pub fn scriptpubkey_from_address(
 	}
 }
 
+#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct BitcoinTransaction {
 	inputs: Vec<Utxo>,
 	outputs: Vec<BitcoinOutput>,
@@ -574,7 +570,7 @@ impl BitcoinTransaction {
 	}
 }
 
-#[derive(Default)]
+#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, Default)]
 pub struct BitcoinScript {
 	data: Vec<u8>,
 }

@@ -1,3 +1,10 @@
+pub mod batch_fetch_and_transfer;
+
+use super::{scriptpubkey_from_address, Bitcoin, BitcoinNetwork, BitcoinOutput, BtcAmount, Utxo};
+use crate::*;
+use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound};
+use sp_std::marker::PhantomData;
+
 #[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, EqNoBound, Encode, Decode, TypeInfo)]
 #[scale_info(skip_type_params(Environment))]
 pub enum BitcoinApi<Environment: 'static> {
@@ -12,29 +19,29 @@ pub enum BitcoinApi<Environment: 'static> {
 
 impl<E> AllBatch<Bitcoin> for BitcoinApi<E>
 where
-	E: ChainEnvironment<<Bitcoin as Chain>::Amount, Vec<Utxo>>
+	E: ChainEnvironment<<Bitcoin as Chain>::ChainAmount, Vec<Utxo>>
 		+ ChainEnvironment<(), BitcoinNetwork>,
 {
 	fn new_unsigned(
-		fetch_params: Vec<FetchAssetParams<Bitcoin>>,
+		_fetch_params: Vec<FetchAssetParams<Bitcoin>>,
 		transfer_params: Vec<TransferAssetParams<Bitcoin>>,
 	) -> Result<Self, ()> {
-		let bitcoin_network = <E as ChainEnvironment<(), BitcoinNetwork>>::lookup()
+		let bitcoin_network = <E as ChainEnvironment<(), BitcoinNetwork>>::lookup(())
 			.expect("Since the lookup function always returns a some");
-		let total_output_amount = 0;
-		let btc_outputs = vec![];
+		let mut total_output_amount = 0;
+		let mut btc_outputs = vec![];
 		for transfer_param in transfer_params {
 			btc_outputs.push(BitcoinOutput {
-				amount: transfer_param.clone().amount,
+				amount: transfer_param.clone().amount.try_into().expect("Since this output comes from the AMM and if AMM math works correctly, this should be a valid bitcoin amount which should be less than u64::max"),
 				script_pubkey: scriptpubkey_from_address(
-					&std::str::from_utf8(&transfer_param.to[..]).map_err(|_| ())?,
-					bitcoin_network,
-				)?,
+					sp_std::str::from_utf8(&transfer_param.to[..]).map_err(|_| ())?,
+					bitcoin_network.clone(),
+				).map_err(|_|())?,
 			});
 			total_output_amount += transfer_param.amount;
 		}
 		let selected_input_utxos =
-			<E as ChainEnvironment<Amount, Vec<Utxo>>>::lookup(total_output_amount).ok_or(())?;
+			<E as ChainEnvironment<BtcAmount, Vec<Utxo>>>::lookup(total_output_amount).ok_or(())?;
 
 		Ok(Self::BatchFetchAndTransfer(
 			batch_fetch_and_transfer::BatchFetchAndTransfer::new_unsigned(
@@ -51,8 +58,8 @@ impl<E> From<batch_fetch_and_transfer::BatchFetchAndTransfer> for BitcoinApi<E> 
 	}
 }
 
-impl<E> ApiCall<Polkadot> for BitcoinApi<E> {
-	fn threshold_signature_payload(&self) -> <Polkadot as ChainCrypto>::Payload {
+impl<E> ApiCall<Bitcoin> for BitcoinApi<E> {
+	fn threshold_signature_payload(&self) -> <Bitcoin as ChainCrypto>::Payload {
 		match self {
 			BitcoinApi::BatchFetchAndTransfer(tx) => tx.threshold_signature_payload(),
 
@@ -60,7 +67,7 @@ impl<E> ApiCall<Polkadot> for BitcoinApi<E> {
 		}
 	}
 
-	fn signed(self, threshold_signature: &<Polkadot as ChainCrypto>::ThresholdSignature) -> Self {
+	fn signed(self, threshold_signature: &<Bitcoin as ChainCrypto>::ThresholdSignature) -> Self {
 		match self {
 			BitcoinApi::BatchFetchAndTransfer(call) => call.signed(threshold_signature).into(),
 

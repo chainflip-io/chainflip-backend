@@ -1,13 +1,10 @@
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
-use sp_std::{boxed::Box, vec::Vec};
+use sp_std::{vec, vec::Vec};
 
-use crate::btc::{
-	BalancesCall, Bitcoin, BitcoinReplayProtection, PolkadotAccountId, PolkadotAccountIdLookup,
-	PolkadotExtrinsicBuilder, PolkadotProxyType, PolkadotRuntimeCall, ProxyCall, UtilityCall,
-};
+use crate::btc::{Bitcoin, BitcoinOutput, BitcoinTransaction, Utxo};
 
-use crate::{ApiCall, ChainCrypto, FetchAssetParams, TransferAssetParams};
+use crate::{ApiCall, ChainCrypto};
 
 use sp_runtime::RuntimeDebug;
 
@@ -26,7 +23,10 @@ pub struct BatchFetchAndTransfer {
 impl BatchFetchAndTransfer {
 	pub fn new_unsigned(input_utxos: Vec<Utxo>, outputs: Vec<BitcoinOutput>) -> Self {
 		Self {
-			bitcoin_transaction: BitcoinTransaction::create_new_unsigned(input_utxos, outputs),
+			bitcoin_transaction: BitcoinTransaction::create_new_unsigned(
+				input_utxos.clone(),
+				outputs.clone(),
+			),
 			input_utxos,
 			outputs,
 		}
@@ -35,21 +35,22 @@ impl BatchFetchAndTransfer {
 
 impl ApiCall<Bitcoin> for BatchFetchAndTransfer {
 	fn threshold_signature_payload(&self) -> <Bitcoin as ChainCrypto>::Payload {
-		let payloads = vec![];
+		let mut payloads = vec![];
 		for i in 0..self.input_utxos.len() {
-			payloads.push(self.bitcoin_transaction.get_signing_payload(i))
+			payloads.push(self.bitcoin_transaction.get_signing_payload(i as u32))
 		}
+		payloads
 	}
 
-	fn signed(mut self, signature: &<Bitcoin as ChainCrypto>::ThresholdSignature) -> Self {
-		for i in 0..self.input_utxos.len() {
-			self.bitcoin_transaction.add_signature(signature[i]);
+	fn signed(mut self, signatures: &<Bitcoin as ChainCrypto>::ThresholdSignature) -> Self {
+		for (i, signature) in signatures.iter().enumerate() {
+			self.bitcoin_transaction.add_signature(i as u32, *signature);
 		}
 		self
 	}
 
 	fn chain_encoded(&self) -> Vec<u8> {
-		self.bitcoin_transaction.finalize()
+		self.bitcoin_transaction.clone().finalize()
 	}
 
 	fn is_signed(&self) -> bool {

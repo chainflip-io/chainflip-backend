@@ -15,7 +15,7 @@ use crate::{
 	Runtime, RuntimeCall, System, Validator,
 };
 use cf_chains::{
-	btc::Utxo,
+	btc::{api::BitcoinApi, Bitcoin, BitcoinNetwork, BitcoinTransactionData, BtcAmount, Utxo},
 	dot::{
 		api::PolkadotApi, Polkadot, PolkadotAccountId, PolkadotReplayProtection,
 		PolkadotTransactionData,
@@ -25,7 +25,7 @@ use cf_chains::{
 		api::{EthereumApi, EthereumReplayProtection},
 		Ethereum,
 	},
-	AnyChain, ApiCall, Bitcoin, Chain, ChainAbi, ChainCrypto, ChainEnvironment, ForeignChain,
+	AnyChain, ApiCall, Chain, ChainAbi, ChainCrypto, ChainEnvironment, ForeignChain,
 	ReplayProtectionProvider, SetCommKeyWithAggKey, SetGovKeyWithAggKey, TransactionBuilder,
 };
 use cf_primitives::{
@@ -196,6 +196,26 @@ impl TransactionBuilder<Polkadot, PolkadotApi<DotEnvironment>> for DotTransactio
 	}
 }
 
+pub struct BtcTransactionBuilder;
+impl TransactionBuilder<Bitcoin, BitcoinApi<BtcEnvironment>> for BtcTransactionBuilder {
+	fn build_transaction(
+		signed_call: &BitcoinApi<BtcEnvironment>,
+	) -> <Bitcoin as ChainAbi>::Transaction {
+		BitcoinTransactionData { encoded_transaction: signed_call.chain_encoded() }
+	}
+
+	fn refresh_unsigned_transaction(_unsigned_tx: &mut <Bitcoin as ChainAbi>::Transaction) {
+		// We might need to restructure the tx depending on the current fee per utxo. no-op until we
+		// have chain tracking
+	}
+
+	fn is_valid_for_rebroadcast(_call: &BitcoinApi<BtcEnvironment>) -> bool {
+		// The transaction wont be valid for rebroadcast as soon as we transition to new epoch sinse
+		// the input utxo set will change and the whole apicall would be invalid
+		todo!()
+	}
+}
+
 pub struct BlockAuthorRewardDistribution;
 
 impl RewardsDistribution for BlockAuthorRewardDistribution {
@@ -281,14 +301,14 @@ impl ChainEnvironment<cf_chains::dot::api::SystemAccounts, PolkadotAccountId> fo
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct BtcEnvironment;
 
-impl ChainEnvironment<cf_chains::btc::BtcAmount, Vec<Utxo>> for BtcEnvironment {
-	fn lookup(output_amount: cf_chains::btc::BtcAmount) -> Option<Vec<Utxo>> {
+impl ChainEnvironment<BtcAmount, Vec<Utxo>> for BtcEnvironment {
+	fn lookup(output_amount: BtcAmount) -> Option<Vec<Utxo>> {
 		Some(Environment::get_modify_btc_utxos_for_transaction(output_amount))
 	}
 }
 
-impl ChainEnvironment<(), cf_chains::btc::BitcoinNetwork> for BtcEnvironment {
-	fn lookup(_: ()) -> Option<cf_chains::btc::BitcoinNetwork> {
+impl ChainEnvironment<(), BitcoinNetwork> for BtcEnvironment {
+	fn lookup(_: ()) -> Option<BitcoinNetwork> {
 		Some(Environment::get_bitcoin_network())
 	}
 }
