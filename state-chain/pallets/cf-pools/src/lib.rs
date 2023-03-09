@@ -11,7 +11,7 @@ use frame_support::{pallet_prelude::*, transactional};
 use frame_system::pallet_prelude::OriginFor;
 use sp_arithmetic::traits::Zero;
 use sp_runtime::{Permill, Saturating};
-use sp_std::vec;
+use sp_std::vec::Vec;
 
 pub use pallet::*;
 
@@ -459,6 +459,14 @@ impl<T: Config> LiquidityPoolApi<AccountId> for Pallet<T> {
 	fn minted_liquidity(lp: &AccountId, asset: &any::Asset, range: AmmRange) -> Liquidity {
 		if let Some(pool) = Pools::<T>::get(asset) {
 			pool.minted_liquidity(lp.clone(), range)
+		} else {
+			Default::default()
+		}
+	}
+
+	fn minted_positions(lp: &AccountId, asset: &any::Asset) -> Vec<(Tick, Tick, Liquidity)> {
+		if let Some(pool) = Pools::<T>::get(asset) {
+			pool.minted_positions(lp.clone())
 		} else {
 			Default::default()
 		}

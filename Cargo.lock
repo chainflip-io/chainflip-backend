@@ -5665,6 +5665,8 @@ version = "0.1.0"
 dependencies = [
  "cf-primitives",
  "sp-api",
+ "sp-runtime 7.0.0",
+ "sp-std 5.0.0",
 ]
 
 [[package]]
