@@ -14,6 +14,7 @@ pub mod weights;
 pub use weights::WeightInfo;
 
 use cf_primitives::{EgressCounter, EgressId, ForeignChain};
+use sp_runtime::traits::BlockNumberProvider;
 
 use cf_chains::IngressIdConstructor;
 
@@ -502,7 +503,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let next_intent_id = IntentIdCounter::<T, I>::get()
 			.checked_add(1)
 			.ok_or(Error::<T, I>::IntentIdsExhausted)?;
-		let intent_ttl = <frame_system::Pallet<T>>::block_number() + T::IntentTTL::get();
+		let intent_ttl = frame_system::Pallet::<T>::current_block_number() + T::IntentTTL::get();
 		let address = AddressPool::<T, I>::mutate(
 			|pool| -> Result<TargetChainAccount<T, I>, DispatchError> {
 				if let Some((salt, address)) = pool.pop() {
