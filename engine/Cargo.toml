@@ -3,7 +3,7 @@ authors = ["Chainflip team <https://github.com/chainflip-io>"]
 edition = '2021'
 build = 'build.rs'
 name = "chainflip-engine"
-version = "0.5.0"
+version = '0.7.0'
 
 [package.metadata.deb]
 depends = "$auto, systemd"
@@ -15,7 +15,8 @@ priority = "required"
 section = "rust"
 maintainer-scripts = "package/"
 systemd-units = { enable = false }
-assets = [["target/release/chainflip-engine", "usr/bin/", "755"]]
+pre-depends = "curl"
+assets = [["target/release/chainflip-engine", "usr/bin/", "755"], ["start-engine.sh", "etc/chainflip/", "755"]]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
@@ -59,10 +60,6 @@ secp256k1 = { version = "0.20", features = [
 serde = { version = "1.0", features = ["derive", "rc"] }
 serde_json = "1.0"
 sha2 = "0.9.5"
-slog = { version = "2.7.0", features = [
-  "max_level_trace",
-  "release_max_level_trace",
-] }
 slog-async = { version = "2.6.0" }
 slog-json = { version = "2.3.0" }
 # TODO: Can use 0.26.0 when it's released

@@ -1,5 +1,7 @@
 use std::time::Duration;
 
+use tracing::{debug, warn};
+
 use super::{KeyPair, PeerInfo};
 
 /// Wait this long until attempting to reconnect
@@ -57,16 +59,16 @@ impl OutgoingSocket {
 		self.socket.monitor(monitor_endpoint, flags as i32).unwrap();
 	}
 
-	pub fn connect(self, peer: PeerInfo, logger: &slog::Logger) -> ConnectedOutgoingSocket {
+	pub fn connect(self, peer: PeerInfo) -> ConnectedOutgoingSocket {
 		let socket = self.socket;
 		socket.set_curve_serverkey(peer.pubkey.as_bytes()).unwrap();
 
 		let endpoint = peer.zmq_endpoint();
 		socket.connect(&endpoint).unwrap();
 
-		slog::debug!(logger, "Connecting to peer {} at {}", peer.account_id, &endpoint,);
+		debug!("Connecting to peer {} at {}", peer.account_id, &endpoint);
 
-		ConnectedOutgoingSocket { socket, peer, logger: logger.clone() }
+		ConnectedOutgoingSocket { socket, peer }
 	}
 }
 
@@ -78,7 +80,6 @@ pub struct ConnectedOutgoingSocket {
 	// when disconnecting (even though we only connect to one
 	// peer with "client" sockets). We store the endpoint here
 	// for this reason.
-	logger: slog::Logger,
 }
 
 impl ConnectedOutgoingSocket {
@@ -88,13 +89,8 @@ impl ConnectedOutgoingSocket {
 		// peer is full rather than blocking the thread (this should
 		// rarely even happen, and it would usually indicate that the
 		// peer has been offline for a long time)
-		if let Err(err) = self.socket.send(payload, zmq::DONTWAIT) {
-			slog::warn!(
-				self.logger,
-				"Failed to send a message to {}: {}",
-				self.peer.account_id,
-				err
-			);
+		if let Err(e) = self.socket.send(payload, zmq::DONTWAIT) {
+			warn!("Failed to send a message to {}: {e}", self.peer.account_id,);
 		}
 	}
 

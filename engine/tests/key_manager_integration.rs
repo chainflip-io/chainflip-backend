@@ -3,10 +3,7 @@
 //! This tests integration with the KeyManager contract
 //! For instruction on how to run this test, see `engine/tests/README.md`
 
-use chainflip_engine::{
-	eth::key_manager::{ChainflipKey, KeyManager, KeyManagerEvent},
-	logging::utils,
-};
+use chainflip_engine::eth::key_manager::{ChainflipKey, KeyManager, KeyManagerEvent};
 
 use std::str::FromStr;
 use web3::types::{H160, H256, U256};
@@ -17,14 +14,11 @@ use crate::common::IntegrationTestConfig;
 #[cfg(feature = "integration-test")]
 #[tokio::test]
 pub async fn test_all_key_manager_events() {
-	let root_logger = utils::new_cli_logger();
-
 	let integration_test_config = IntegrationTestConfig::from_file("tests/config.toml").unwrap();
 
-	let km_events = common::get_contract_events(
-		KeyManager::new(integration_test_config.eth.key_manager_address),
-		root_logger,
-	)
+	let km_events = common::get_contract_events(KeyManager::new(
+		integration_test_config.eth.key_manager_address,
+	))
 	.await;
 
 	// The following event details correspond to the events in

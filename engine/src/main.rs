@@ -38,18 +38,12 @@ async fn main() -> anyhow::Result<()> {
 	// like `--version`), so we execute it only after the settings have been parsed.
 	utilities::print_starting!();
 
-	let root_logger = logging::utils::new_json_logger_with_tag_filter(
-		settings.log.whitelist.clone(),
-		settings.log.blacklist.clone(),
-	);
-
-	// Also init the tracing json logger because the multisig clients are now using tracing
 	logging::init_json_logger();
 
 	task_scope(|scope| {
 		async move {
 			if let Some(health_check_settings) = &settings.health_check {
-				scope.spawn(HealthChecker::new(health_check_settings, &root_logger).await?.run());
+				scope.spawn(HealthChecker::start(health_check_settings).await?);
 			}
 
 			let (latest_block_hash, state_chain_block_stream, state_chain_client) =
@@ -58,7 +52,6 @@ async fn main() -> anyhow::Result<()> {
 					&settings.state_chain,
 					AccountRole::Validator,
 					true,
-					&root_logger,
 				)
 				.await?;
 
@@ -116,7 +109,6 @@ async fn main() -> anyhow::Result<()> {
 				PersistentKeyDB::open_and_migrate_to_latest(
 					settings.signing.db_file.as_path(),
 					Some(state_chain_client.get_genesis_hash()),
-					&root_logger,
 				)
 				.context("Failed to open database")?,
 			);
@@ -128,14 +120,9 @@ async fn main() -> anyhow::Result<()> {
 				dot_incoming_receiver,
 				peer_update_sender,
 				p2p_fut,
-			) = p2p::start(
-				state_chain_client.clone(),
-				settings.node_p2p,
-				latest_block_hash,
-				&root_logger,
-			)
-			.await
-			.context("Failed to start p2p module")?;
+			) = p2p::start(state_chain_client.clone(), settings.node_p2p, latest_block_hash)
+				.await
+				.context("Failed to start p2p module")?;
 
 			scope.spawn(p2p_fut);
 
@@ -189,7 +176,6 @@ async fn main() -> anyhow::Result<()> {
 					EthDualRpcClient::new(&settings.eth, expected_chain_id)
 						.await
 						.context("Failed to create EthDualRpcClient")?,
-					&root_logger,
 				)
 				.context("Failed to create ETH broadcaster")?,
 				DotBroadcaster::new(dot_rpc_client.clone()),
@@ -203,7 +189,6 @@ async fn main() -> anyhow::Result<()> {
 				dot_monitor_signature_sender,
 				cfe_settings_update_sender,
 				latest_block_hash,
-				root_logger.clone(),
 			));
 
 			scope.spawn(

@@ -10,7 +10,7 @@ use crate::{
 		ETH_STILL_BEHIND_LOG_INTERVAL,
 	},
 	eth::TransportProtocol,
-	logging::{ETH_HTTP_STREAM_YIELDED, ETH_STREAM_BEHIND, ETH_WS_STREAM_YIELDED},
+	logging::ETH_STREAM_BEHIND,
 };
 
 use super::EthNumberBloom;
@@ -114,14 +114,12 @@ where
 		match yielding_stream_state.protocol {
 			TransportProtocol::Http => {
 				debug!(
-					tag = ETH_HTTP_STREAM_YIELDED,
 					"ETH block {yielding_block_number} returning from {} stream",
 					yielding_stream_state.protocol
 				);
 			},
 			TransportProtocol::Ws => {
 				debug!(
-					tag = ETH_WS_STREAM_YIELDED,
 					"ETH block {yielding_block_number} returning from {} stream",
 					yielding_stream_state.protocol
 				);

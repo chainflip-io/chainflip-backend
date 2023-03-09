@@ -3,43 +3,43 @@
 //! Returns a HTTP 200 response to any request on {hostname}:{port}/health
 //! Method returns a Sender, allowing graceful termination of the infinite loop
 
-use anyhow::Context;
-use slog::o;
+use anyhow::{Context, Result};
+use futures::Future;
 use tokio::{
 	io::{AsyncReadExt, AsyncWriteExt},
 	net::TcpListener,
 };
+use tracing::{error, info, info_span, warn, Instrument};
 
-use crate::{logging::COMPONENT_KEY, settings};
+use crate::settings;
 
 pub struct HealthChecker {
-	logger: slog::Logger,
 	listener: TcpListener,
 }
 
-// Split running of health checker into new and run so we can ensure TcpListener is active before
+// Returns the health checker run future so we can make sure TcpListener is active before
 // proceeding in tests
 impl HealthChecker {
-	pub async fn new(
+	pub async fn start(
 		health_check_settings: &settings::HealthCheck,
-		logger: &slog::Logger,
-	) -> anyhow::Result<Self> {
+	) -> Result<impl Future<Output = Result<(), anyhow::Error>>> {
 		let bind_address =
 			format!("{}:{}", health_check_settings.hostname, health_check_settings.port);
-		let logger =
-			logger.new(o!(COMPONENT_KEY => "health-check", "bind-address" => bind_address.clone()));
 
-		slog::info!(logger, "Starting");
+		info!("Starting health-checker");
 
-		Ok(Self {
+		let health_checker = Self {
 			listener: TcpListener::bind(&bind_address)
 				.await
 				.with_context(|| format!("Could not bind TCP listener to {bind_address}"))?,
-			logger,
-		})
+		};
+
+		Ok(health_checker
+			.run()
+			.instrument(info_span!("health-check", bind_address = bind_address)))
 	}
 
-	pub async fn run(self) -> anyhow::Result<()> {
+	async fn run(self) -> Result<()> {
 		loop {
 			match self.listener.accept().await {
 				Ok((mut stream, _address)) => {
@@ -61,24 +61,16 @@ impl HealthChecker {
                                     .await
                                     .context("Could not flush health check TCP stream")?;
                             } else {
-                                slog::warn!(self.logger, "Requested health at invalid path: {:?}", request.path);
+                                warn!("Requested health at invalid path: {:?}", request.path);
                             }
                         },
-                        Err(error) => {
-                            slog::warn!(
-                                self.logger,
-                                "Invalid health check request, could not parse: {}",
-                                error,
-                            );
+                        Err(e) => {
+                            warn!("Invalid health check request, could not parse: {e}");
                         }
                     }
 				},
-				Err(error) => {
-					slog::error!(
-						self.logger,
-						"Could not open CFE health check TCP stream: {}",
-						error
-					);
+				Err(e) => {
+					error!("Could not open CFE health check TCP stream: {e}");
 				},
 			}
 		}
@@ -88,16 +80,15 @@ impl HealthChecker {
 #[cfg(test)]
 mod tests {
 
-	use crate::{logging, settings::Settings};
+	use crate::settings::Settings;
 
 	use super::*;
 
 	#[tokio::test]
 	async fn health_check_test() {
 		let health_check = Settings::new_test().unwrap().health_check.unwrap();
-		let logger = logging::test_utils::new_test_logger();
 
-		tokio::spawn(HealthChecker::new(&health_check, &logger).await.unwrap().run());
+		tokio::spawn(HealthChecker::start(&health_check).await.unwrap());
 
 		let request_test = |path: &'static str, expected_status: Option<reqwest::StatusCode>| {
 			let health_check = health_check.clone();

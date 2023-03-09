@@ -5,10 +5,10 @@ use std::{cmp::Ordering, collections::HashMap, fs, mem::size_of, path::Path};
 
 use cf_primitives::KeyId;
 use rocksdb::{ColumnFamily, ColumnFamilyDescriptor, Options, WriteBatch, DB};
-use slog::o;
+use serde::{de::DeserializeOwned, Serialize};
+use tracing::{debug, info, info_span};
 
 use crate::{
-	logging::COMPONENT_KEY,
 	multisig::{
 		client::KeygenResultInfo,
 		crypto::{CryptoScheme, CHAIN_TAG_SIZE},
@@ -52,7 +52,6 @@ const BACKUPS_DIRECTORY: &str = "backups";
 pub struct PersistentKeyDB {
 	/// Rocksdb database instance
 	db: DB,
-	logger: slog::Logger,
 }
 
 fn put_schema_version_to_batch(db: &DB, batch: &mut WriteBatch, version: u32) {
@@ -65,9 +64,11 @@ impl PersistentKeyDB {
 	pub fn open_and_migrate_to_latest(
 		db_path: &Path,
 		genesis_hash: Option<state_chain_runtime::Hash>,
-		logger: &slog::Logger,
 	) -> Result<Self> {
-		Self::open_and_migrate_to_version(db_path, genesis_hash, LATEST_SCHEMA_VERSION, logger)
+		let span = info_span!("PersistentKeyDB");
+		let _entered = span.enter();
+
+		Self::open_and_migrate_to_version(db_path, genesis_hash, LATEST_SCHEMA_VERSION)
 	}
 
 	/// As [Self::open_and_migrate_to_latest], but allows specifying a specific version
@@ -76,7 +77,6 @@ impl PersistentKeyDB {
 		db_path: &Path,
 		genesis_hash: Option<state_chain_runtime::Hash>,
 		version: u32,
-		logger: &slog::Logger,
 	) -> Result<Self> {
 		let is_existing_db = db_path.exists();
 
@@ -121,10 +121,50 @@ impl PersistentKeyDB {
 			BackupOption::NoBackup
 		};
 
-		migrate_db_to_version(&db, backup_option, genesis_hash, version, logger)
+		migrate_db_to_version(&db, backup_option, genesis_hash, version)
                     .with_context(|| format!("Failed to migrate database at {}. Manual restoration of a backup or purging of the file is required.", db_path.display()))?;
 
-		Ok(PersistentKeyDB { db, logger: logger.new(o!(COMPONENT_KEY => "PersistentKeyDB")) })
+		Ok(PersistentKeyDB { db })
+	}
+
+	fn put_data<T: Serialize>(&self, prefix: &[u8], key: &[u8], value: &T) -> Result<()> {
+		let key_with_prefix = [prefix, key].concat();
+		self.db
+			.put_cf(
+				get_data_column_handle(&self.db),
+				key_with_prefix,
+				bincode::serialize(value).expect("Serialization is not expected to fail"),
+			)
+			.map_err(|e| {
+				anyhow::anyhow!("Failed to write data to database. Error: {}", e.to_string())
+			})
+	}
+
+	fn get_data<T: DeserializeOwned>(&self, prefix: &[u8], key: &[u8]) -> Result<Option<T>> {
+		let key_with_prefix = [prefix, key].concat();
+
+		self.db
+			.get_cf(get_data_column_handle(&self.db), key_with_prefix)?
+			.map(|data| {
+				bincode::deserialize(&data).map_err(|e| anyhow!("Deserialization failure: {}", e))
+			})
+			.transpose()
+	}
+
+	fn get_data_for_prefix<'a, T: DeserializeOwned>(
+		&'a self,
+		prefix: &[u8],
+	) -> impl Iterator<Item = (Vec<u8>, Result<T>)> + 'a {
+		self.db
+			.prefix_iterator_cf(get_data_column_handle(&self.db), prefix)
+			.map(|result| result.expect("prefix iterator should not fail"))
+			.map(|(key, value)| {
+				(
+					Vec::from(&key[PREFIX_SIZE..]),
+					bincode::deserialize(&value)
+						.map_err(|e| anyhow!("Deserialization failure: {}", e)),
+				)
+			})
 	}
 
 	/// Write the keyshare to the db, indexed by the key id
@@ -133,76 +173,42 @@ impl PersistentKeyDB {
 		key_id: &KeyId,
 		keygen_result_info: &KeygenResultInfo<C>,
 	) {
-		let key_id_with_prefix =
-			[get_keygen_data_prefix::<C>().as_slice(), &key_id.to_bytes()[..]].concat();
-
-		self.db
-			.put_cf(
-				get_data_column_handle(&self.db),
-				key_id_with_prefix,
-				bincode::serialize(keygen_result_info)
-					.expect("Couldn't serialize keygen result info"),
-			)
+		self.put_data(&get_keygen_data_prefix::<C>(), &key_id.to_bytes(), &keygen_result_info)
 			.unwrap_or_else(|e| panic!("Failed to update key {}. Error: {}", &key_id, e));
 	}
 
 	pub fn load_keys<C: CryptoScheme>(&self) -> HashMap<KeyId, KeygenResultInfo<C>> {
-		let keys: HashMap<KeyId, KeygenResultInfo<C>> = self
-			.db
-			.prefix_iterator_cf(get_data_column_handle(&self.db), get_keygen_data_prefix::<C>())
-			.filter_map(|result| match result {
-				Ok(key) => Some(key),
-				Err(err) => {
-					slog::error!(self.logger, "Error getting prefix iterator: {err}");
-					None
-				},
-			})
-			.filter_map(|(key_id_with_prefix, key_info)| {
-				let key_id = KeyId::from_bytes(&key_id_with_prefix[PREFIX_SIZE..]);
+		let span = info_span!("PersistentKeyDB");
+		let _entered = span.enter();
 
-				match bincode::deserialize::<KeygenResultInfo<C>>(&key_info) {
-					Ok(keygen_result_info) => Some((key_id, keygen_result_info)),
-					Err(err) => {
-						slog::error!(
-							self.logger,
-							"Could not deserialize {} key from database: {}",
-							C::NAME,
-							err;
-							"key_id" => key_id.to_string()
-						);
-						None
-					},
-				}
+		let keys: HashMap<_, _> = self
+			.get_data_for_prefix::<KeygenResultInfo<C>>(&get_keygen_data_prefix::<C>())
+			.map(|(key_id, key_info_result)| {
+				(
+					KeyId::from_bytes(&key_id),
+					key_info_result.unwrap_or_else(|e| {
+						panic!("Failed to deserialize {} key from database: {}", C::NAME, e)
+					}),
+				)
 			})
 			.collect();
 		if !keys.is_empty() {
-			slog::debug!(self.logger, "Loaded {} {} keys from the database", keys.len(), C::NAME,);
+			debug!("Loaded {} {} keys from the database", keys.len(), C::NAME);
 		}
 		keys
 	}
 
 	/// Write the witnesser checkpoint to the db
 	pub fn update_checkpoint(&self, chain_tag: ChainTag, checkpoint: &WitnessedUntil) {
-		self.db
-			.put_cf(
-				get_data_column_handle(&self.db),
-				get_checkpoint_prefix(chain_tag),
-				bincode::serialize(checkpoint).expect("Should serialize WitnessedUntil checkpoint"),
-			)
+		self.put_data(&get_checkpoint_prefix(chain_tag), &[], checkpoint)
 			.unwrap_or_else(|e| {
 				panic!("Failed to update {chain_tag} witnesser checkpoint. Error: {e}")
 			});
 	}
 
 	pub fn load_checkpoint(&self, chain_tag: ChainTag) -> Result<Option<WitnessedUntil>> {
-		self.db
-			.get_cf(get_data_column_handle(&self.db), get_checkpoint_prefix(chain_tag))?
-			.map(|data| {
-				bincode::deserialize::<WitnessedUntil>(&data).map_err(|e| {
-					anyhow!("Could not deserialize {chain_tag} WitnessedUntil checkpoint: {e}")
-				})
-			})
-			.transpose()
+		self.get_data(&get_checkpoint_prefix(chain_tag), &[])
+			.context("Failed to load {chain_tag} checkpoint")
 	}
 }
 
@@ -344,12 +350,11 @@ fn migrate_db_to_version(
 	backup_option: BackupOption,
 	genesis_hash: Option<state_chain_runtime::Hash>,
 	target_version: u32,
-	logger: &slog::Logger,
 ) -> Result<(), anyhow::Error> {
 	let current_version =
 		read_schema_version(db).context("Failed to read schema version from existing db")?;
 
-	slog::info!(logger, "Found db_schema_version of {current_version}");
+	info!("Found db_schema_version of {current_version}");
 
 	if let Some(expected_genesis_hash) = genesis_hash {
 		check_or_set_genesis_hash(db, expected_genesis_hash)?;
@@ -358,7 +363,7 @@ fn migrate_db_to_version(
 	// Check if the db version is up-to-date or we need to do migrations
 	match current_version.cmp(&target_version) {
 		Ordering::Equal => {
-			slog::info!(logger, "Database already at target version of: {}", target_version);
+			info!("Database already at target version of: {target_version}");
 			Ok(())
 		},
 		Ordering::Greater => {
@@ -371,8 +376,7 @@ fn migrate_db_to_version(
 		Ordering::Less => {
 			// If requested, backup the database before migrating it
 			if let BackupOption::CreateBackup(path) = backup_option {
-				slog::info!(
-					logger,
+				info!(
 					"Database backup created at {}",
 					create_backup(path, current_version)
 						.map_err(anyhow::Error::msg)
@@ -381,12 +385,7 @@ fn migrate_db_to_version(
 			}
 
 			for version in current_version..target_version {
-				slog::info!(
-					logger,
-					"Database is migrating from version {} to {}",
-					version,
-					version + 1
-				);
+				info!("Database is migrating from version {version} to {}", version + 1);
 
 				match version {
 					0 => {

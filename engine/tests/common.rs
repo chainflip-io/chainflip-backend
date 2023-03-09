@@ -2,6 +2,7 @@
 
 use anyhow::Result;
 use std::{fmt::Debug, pin::Pin};
+use tracing::info;
 
 use chainflip_engine::{
 	eth::{
@@ -42,7 +43,6 @@ async fn block_events_stream_for_contract_from<EventParameters, ContractWitnesse
 	from_block: u64,
 	contract_witnesser: ContractWitnesser,
 	eth_dual_rpc: EthDualRpcClient,
-	logger: &slog::Logger,
 ) -> Result<
 	Pin<Box<dyn Stream<Item = BlockWithProcessedItems<Event<EventParameters>>> + Send + 'static>>,
 >
@@ -52,8 +52,7 @@ where
 		EthContractWitnesser<EventParameters = EventParameters> + Send + Sync + 'static,
 {
 	let contract_address = contract_witnesser.contract_address();
-	slog::info!(
-		logger,
+	info!(
 		"Subscribing to ETH events from contract at address: {:?}",
 		hex::encode(contract_address)
 	);
@@ -81,7 +80,6 @@ where
 
 pub async fn get_contract_events<ContractWitnesser>(
 	contract_witnesser: ContractWitnesser,
-	logger: slog::Logger,
 ) -> Vec<Event<<ContractWitnesser as EthContractWitnesser>::EventParameters>>
 where
 	ContractWitnesser: EthContractWitnesser + std::marker::Sync + Send + 'static,
@@ -105,7 +103,6 @@ where
             0,
             contract_witnesser,
             eth_dual_rpc.clone(),
-            &logger,
         ),
     )
     .await

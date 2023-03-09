@@ -1,13 +1,13 @@
 [Unit]
 Description=Chainflip Validator Engine
+After=chainflip-node.service
 
 [Service]
 Restart=always
 RestartSec=30
 Type=simple
 
-ExecStart=/usr/bin/chainflip-engine \
-  --config-path /etc/chainflip/config/Default.toml
+ExecStart=/etc/chainflip/start-engine.sh
 
 StandardOutput=append:/var/log/chainflip-engine.log
 StandardError=append:/var/log/chainflip-engine.log
