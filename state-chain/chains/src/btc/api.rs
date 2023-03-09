@@ -1,6 +1,8 @@
 pub mod batch_fetch_and_transfer;
 
-use super::{scriptpubkey_from_address, Bitcoin, BitcoinNetwork, BitcoinOutput, BtcAmount, Utxo};
+use super::{
+	scriptpubkey_from_address, Bitcoin, BitcoinNetwork, BitcoinOutput, BtcAddress, BtcAmount, Utxo,
+};
 use crate::*;
 use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound};
 use sp_std::marker::PhantomData;
@@ -19,16 +21,17 @@ pub enum BitcoinApi<Environment: 'static> {
 
 impl<E> AllBatch<Bitcoin> for BitcoinApi<E>
 where
-	E: ChainEnvironment<<Bitcoin as Chain>::ChainAmount, Vec<Utxo>>
-		+ ChainEnvironment<(), BitcoinNetwork>,
+	E: ChainEnvironment<<Bitcoin as Chain>::ChainAmount, (Vec<Utxo>, u64)>
+		+ ChainEnvironment<(), (BitcoinNetwork, BtcAddress)>,
 {
 	fn new_unsigned(
 		_fetch_params: Vec<FetchAssetParams<Bitcoin>>,
 		transfer_params: Vec<TransferAssetParams<Bitcoin>>,
 	) -> Result<Self, ()> {
-		let bitcoin_network = <E as ChainEnvironment<(), BitcoinNetwork>>::lookup(())
-			.expect("Since the lookup function always returns a some");
-		let mut total_output_amount = 0;
+		let (bitcoin_network, bitcoin_return_address) =
+			<E as ChainEnvironment<(), (BitcoinNetwork, BtcAddress)>>::lookup(())
+				.expect("Since the lookup function always returns a some");
+		let mut total_output_amount: u64 = 0;
 		let mut btc_outputs = vec![];
 		for transfer_param in transfer_params {
 			btc_outputs.push(BitcoinOutput {
@@ -38,11 +41,23 @@ where
 					bitcoin_network.clone(),
 				).map_err(|_|())?,
 			});
-			total_output_amount += transfer_param.amount;
+			total_output_amount += <u128 as TryInto<u64>>::try_into(transfer_param.amount)
+				.expect("BTC amounts are never more than u64 max");
 		}
-		let selected_input_utxos =
-			<E as ChainEnvironment<BtcAmount, Vec<Utxo>>>::lookup(total_output_amount).ok_or(())?;
+		let (selected_input_utxos, total_input_amount_available) =
+			<E as ChainEnvironment<BtcAmount, (Vec<Utxo>, u64)>>::lookup(
+				total_output_amount.into(),
+			)
+			.ok_or(())?;
 
+		btc_outputs.push(BitcoinOutput {
+			amount: total_input_amount_available - total_output_amount,
+			script_pubkey: scriptpubkey_from_address(
+				sp_std::str::from_utf8(&bitcoin_return_address[..]).map_err(|_| ())?,
+				bitcoin_network,
+			)
+			.map_err(|_| ())?,
+		});
 		Ok(Self::BatchFetchAndTransfer(
 			batch_fetch_and_transfer::BatchFetchAndTransfer::new_unsigned(
 				selected_input_utxos,

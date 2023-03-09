@@ -2,7 +2,7 @@ use cf_chains::{
 	btc::BitcoinNetwork,
 	dot::{RuntimeVersion, POLKADOT_VAULT_ACCOUNT},
 };
-use cf_primitives::{AccountRole, AuthorityCount};
+use cf_primitives::{AccountRole, AuthorityCount, MaxBtcAddressLength};
 
 use frame_benchmarking::sp_std::collections::btree_set::BTreeSet;
 use sc_service::{ChainType, Properties};
@@ -27,7 +27,10 @@ use std::{env, marker::PhantomData};
 use utilities::clean_eth_address;
 
 use sp_core::{sr25519, Pair, Public};
-use sp_runtime::traits::{IdentifyAccount, Verify};
+use sp_runtime::{
+	traits::{IdentifyAccount, Verify},
+	BoundedVec,
+};
 
 pub mod common;
 pub mod perseverance;
@@ -64,6 +67,7 @@ const ETH_INIT_AGG_KEY_DEFAULT: &str =
 	"02e61afd677cdfbec838c6f309deff0b2c6056f8a27f2c783b68bba6b30f667be6";
 
 const BITCOIN_FEE_PER_UTXO: u64 = 1000; // Todo: what value to put here?
+const BITCOIN_CHANGE_ADDRESS: [u8; 50] = [5u8; 50]; // Todo: revisit later
 
 /// generate session keys from Aura and Grandpa keys
 pub fn session_keys(aura: AuraId, grandpa: GrandpaId) -> SessionKeys {
@@ -243,6 +247,10 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 					polkadot_runtime_version: POLKADOT_TEST_RUNTIME_VERSION,
 					bitcoin_network: BitcoinNetwork::Regtest,
 					bitcoin_fee_per_utxo: BITCOIN_FEE_PER_UTXO,
+					bitcoin_change_address: BoundedVec::<u8, MaxBtcAddressLength>::try_from(
+						BITCOIN_CHANGE_ADDRESS.to_vec(),
+					)
+					.expect("length is less than max of bounded vec"),
 				},
 				eth_init_agg_key,
 				ethereum_deployment_block,
@@ -372,6 +380,11 @@ macro_rules! network_spec {
 								polkadot_runtime_version: POLKADOT_TEST_RUNTIME_VERSION,
 								bitcoin_network: BitcoinNetwork::Regtest,
 								bitcoin_fee_per_utxo: BITCOIN_FEE_PER_UTXO,
+								bitcoin_change_address:
+									BoundedVec::<u8, MaxBtcAddressLength>::try_from(
+										BITCOIN_CHANGE_ADDRESS.to_vec(),
+									)
+									.expect("length is less than max of bounded vec"),
 							},
 							eth_init_agg_key,
 							ethereum_deployment_block,

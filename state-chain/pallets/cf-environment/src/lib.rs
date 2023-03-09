@@ -3,7 +3,7 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use cf_chains::{
-	btc::{utxo_selection::select_utxos_from_pool, BitcoinNetwork, Utxo},
+	btc::{utxo_selection::select_utxos_from_pool, BitcoinNetwork, BtcAddress, Utxo},
 	dot::{api::CreatePolkadotVault, Polkadot, PolkadotAccountId, PolkadotIndex},
 	ChainCrypto,
 };
@@ -76,7 +76,7 @@ pub mod cfe {
 pub mod pallet {
 
 	use cf_chains::{
-		btc::Utxo,
+		btc::{BtcAddress, Utxo},
 		dot::{PolkadotHash, PolkadotPublicKey, RuntimeVersion},
 	};
 	use cf_primitives::{Asset, TxId};
@@ -196,6 +196,10 @@ pub mod pallet {
 	#[pallet::storage]
 	/// The amount of fee we want to pay per utxo.
 	pub type BitcoinFeePerUtxo<T> = StorageValue<_, u64, ValueQuery>;
+
+	#[pallet::storage]
+	/// The address where we want to send the remaining btc amount after creating required outputs
+	pub type BitcoinChangeAddress<T> = StorageValue<_, BtcAddress, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -420,6 +424,7 @@ pub mod pallet {
 		pub polkadot_runtime_version: RuntimeVersion,
 		pub bitcoin_network: BitcoinNetwork,
 		pub bitcoin_fee_per_utxo: u64,
+		pub bitcoin_change_address: BtcAddress,
 	}
 
 	/// Sets the genesis config
@@ -444,6 +449,7 @@ pub mod pallet {
 			BitcoinAvailableUtxos::<T>::set(vec![]);
 			BitcoinNetworkSelection::<T>::set(self.bitcoin_network.clone());
 			BitcoinFeePerUtxo::<T>::set(self.bitcoin_fee_per_utxo);
+			BitcoinChangeAddress::<T>::set(self.bitcoin_change_address.clone());
 		}
 	}
 }
@@ -529,9 +535,13 @@ impl<T: Config> Pallet<T> {
 		BitcoinNetworkSelection::<T>::get()
 	}
 
+	pub fn get_btc_return_address() -> BtcAddress {
+		BitcoinChangeAddress::<T>::get()
+	}
+
 	pub fn get_modify_btc_utxos_for_transaction(
 		total_output_amount: cf_chains::btc::BtcAmount,
-	) -> Vec<Utxo> {
+	) -> (Vec<Utxo>, u64) {
 		BitcoinAvailableUtxos::<T>::mutate(|available_utxos| {
 			// Calculate the selection of utxos, return them and remove them from the list
 			select_utxos_from_pool(

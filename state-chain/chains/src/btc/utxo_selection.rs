@@ -17,9 +17,9 @@ pub fn select_utxos_from_pool<UTXO: GetUtxoAmount>(
 	available_utxos: &mut Vec<UTXO>,
 	fee_per_utxo: u64,
 	amount_to_be_egressed: u64,
-) -> Vec<UTXO> {
+) -> (Vec<UTXO>, u64) {
 	if amount_to_be_egressed == 0 {
-		return vec![]
+		return (vec![], 0)
 	}
 
 	// Sort the utxos by the amounts they hold, in descending order
@@ -43,10 +43,11 @@ pub fn select_utxos_from_pool<UTXO: GetUtxoAmount>(
 	// Select one more utxo that is next in line (smallest) among the remaining unselected utxos.
 	// Dont select any the utxo in case there is none remianing.
 	if let Some(utxo) = available_utxos.pop() {
+		cumulative_amount += utxo.amount() - fee_per_utxo;
 		selected_utxos.push(utxo);
 	}
 
-	selected_utxos
+	(selected_utxos, cumulative_amount)
 }
 
 #[test]
@@ -80,50 +81,59 @@ fn test_utxo_selection() {
 	];
 
 	// empty list is output for 0 egress
-	assert_eq!(select_utxos_from_pool(&mut available_utxos.clone(), FEEPERUTXO, 0), vec![]);
+	assert_eq!(select_utxos_from_pool(&mut available_utxos.clone(), FEEPERUTXO, 0), (vec![], 0));
 	assert_eq!(
 		select_utxos_from_pool(&mut available_utxos.clone(), FEEPERUTXO, 1),
-		vec![UTXO { amount: 7 }, UTXO { amount: 15 }]
+		(vec![UTXO { amount: 7 }, UTXO { amount: 15 }], 18)
 	);
 	assert_eq!(
 		select_utxos_from_pool(&mut available_utxos.clone(), FEEPERUTXO, 18),
-		vec![UTXO { amount: 7 }, UTXO { amount: 15 }, UTXO { amount: 19 }]
+		(vec![UTXO { amount: 7 }, UTXO { amount: 15 }, UTXO { amount: 19 }], 35)
 	);
 	assert_eq!(
 		select_utxos_from_pool(&mut available_utxos.clone(), FEEPERUTXO, 19),
-		vec![UTXO { amount: 7 }, UTXO { amount: 15 }, UTXO { amount: 19 }, UTXO { amount: 20 }]
+		(
+			vec![UTXO { amount: 7 }, UTXO { amount: 15 }, UTXO { amount: 19 }, UTXO { amount: 20 }],
+			53
+		)
 	);
 	// The amount that will cause all utxos to be selected
 	assert_eq!(
 		select_utxos_from_pool(&mut available_utxos.clone(), FEEPERUTXO, 2000),
-		vec![
-			UTXO { amount: 7 },
-			UTXO { amount: 15 },
-			UTXO { amount: 19 },
-			UTXO { amount: 20 },
-			UTXO { amount: 25 },
-			UTXO { amount: 41 },
-			UTXO { amount: 110 },
-			UTXO { amount: 500 },
-			UTXO { amount: 768 },
-			UTXO { amount: 1000 },
-		]
+		(
+			vec![
+				UTXO { amount: 7 },
+				UTXO { amount: 15 },
+				UTXO { amount: 19 },
+				UTXO { amount: 20 },
+				UTXO { amount: 25 },
+				UTXO { amount: 41 },
+				UTXO { amount: 110 },
+				UTXO { amount: 500 },
+				UTXO { amount: 768 },
+				UTXO { amount: 1000 },
+			],
+			2485
+		)
 	);
 	// max amount that can be spent with the given utxos. entering the amount greater than this will
 	// cause the function to panic (see the expect statement above)
 	assert_eq!(
 		select_utxos_from_pool(&mut available_utxos, FEEPERUTXO, 2485),
-		vec![
-			UTXO { amount: 7 },
-			UTXO { amount: 15 },
-			UTXO { amount: 19 },
-			UTXO { amount: 20 },
-			UTXO { amount: 25 },
-			UTXO { amount: 41 },
-			UTXO { amount: 110 },
-			UTXO { amount: 500 },
-			UTXO { amount: 768 },
-			UTXO { amount: 1000 },
-		]
+		(
+			vec![
+				UTXO { amount: 7 },
+				UTXO { amount: 15 },
+				UTXO { amount: 19 },
+				UTXO { amount: 20 },
+				UTXO { amount: 25 },
+				UTXO { amount: 41 },
+				UTXO { amount: 110 },
+				UTXO { amount: 500 },
+				UTXO { amount: 768 },
+				UTXO { amount: 1000 },
+			],
+			2485
+		)
 	);
 }

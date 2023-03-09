@@ -15,7 +15,10 @@ use crate::{
 	Runtime, RuntimeCall, System, Validator,
 };
 use cf_chains::{
-	btc::{api::BitcoinApi, Bitcoin, BitcoinNetwork, BitcoinTransactionData, BtcAmount, Utxo},
+	btc::{
+		api::BitcoinApi, Bitcoin, BitcoinNetwork, BitcoinTransactionData, BtcAddress, BtcAmount,
+		Utxo,
+	},
 	dot::{
 		api::PolkadotApi, Polkadot, PolkadotAccountId, PolkadotReplayProtection,
 		PolkadotTransactionData,
@@ -301,15 +304,15 @@ impl ChainEnvironment<cf_chains::dot::api::SystemAccounts, PolkadotAccountId> fo
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct BtcEnvironment;
 
-impl ChainEnvironment<BtcAmount, Vec<Utxo>> for BtcEnvironment {
-	fn lookup(output_amount: BtcAmount) -> Option<Vec<Utxo>> {
+impl ChainEnvironment<BtcAmount, (Vec<Utxo>, u64)> for BtcEnvironment {
+	fn lookup(output_amount: BtcAmount) -> Option<(Vec<Utxo>, u64)> {
 		Some(Environment::get_modify_btc_utxos_for_transaction(output_amount))
 	}
 }
 
-impl ChainEnvironment<(), BitcoinNetwork> for BtcEnvironment {
-	fn lookup(_: ()) -> Option<BitcoinNetwork> {
-		Some(Environment::get_bitcoin_network())
+impl ChainEnvironment<(), (BitcoinNetwork, BtcAddress)> for BtcEnvironment {
+	fn lookup(_: ()) -> Option<(BitcoinNetwork, BtcAddress)> {
+		Some((Environment::get_bitcoin_network(), Environment::get_btc_return_address()))
 	}
 }
 
