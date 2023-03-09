@@ -11,7 +11,7 @@ const ALICE_ETH_ADDRESS: EthereumAddress = [100u8; 20];
 const BOB_ETH_ADDRESS: EthereumAddress = [101u8; 20];
 const ETH_ETH: eth::Asset = eth::Asset::Eth;
 const ETH_FLIP: eth::Asset = eth::Asset::Flip;
-const EXPIRY_BLOCK: u64 = 5;
+const EXPIRY_BLOCK: u64 = 6;
 
 #[test]
 fn disallowed_asset_will_not_be_batch_sent() {
@@ -371,7 +371,7 @@ fn intent_expires() {
 	new_test_ext().execute_with(|| {
 		let _ = IngressEgress::register_liquidity_ingress_intent(ALICE, ETH_ETH);
 		assert!(AddressPool::<Test, Instance1>::get().is_empty());
-		assert!(IntentExpiries::<Test, Instance1>::get(5).is_some());
+		assert!(IntentExpiries::<Test, Instance1>::get(EXPIRY_BLOCK).is_some());
 		let addresses =
 			IntentExpiries::<Test, Instance1>::get(EXPIRY_BLOCK).expect("intent expiry exists");
 		assert!(addresses.len() == 1);

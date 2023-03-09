@@ -143,7 +143,7 @@ pub mod pallet {
 
 		/// Time to life for an intent in seconds.
 		#[pallet::constant]
-		type TTL: Get<Self::BlockNumber>;
+		type IntentTTL: Get<Self::BlockNumber>;
 
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;
@@ -494,6 +494,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let next_intent_id = IntentIdCounter::<T, I>::get()
 			.checked_add(1)
 			.ok_or(Error::<T, I>::IntentIdsExhausted)?;
+		let intent_ttl = <frame_system::Pallet<T>>::block_number() + T::IntentTTL::get();
 		let address = AddressPool::<T, I>::mutate(
 			|pool| -> Result<TargetChainAccount<T, I>, DispatchError> {
 				if let Some((salt, address)) = pool.pop() {
@@ -504,7 +505,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							address.clone(),
 						),
 					);
-					IntentExpiries::<T, I>::append(T::TTL::get(), (salt, address.clone()));
+					IntentExpiries::<T, I>::append(intent_ttl, (salt, address.clone()));
 					Ok(address)
 				} else {
 					let new_address: TargetChainAccount<T, I> =
@@ -524,7 +525,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						),
 					);
 					IntentExpiries::<T, I>::append(
-						T::TTL::get(),
+						intent_ttl,
 						(next_intent_id, new_address.clone()),
 					);
 					Ok(new_address)

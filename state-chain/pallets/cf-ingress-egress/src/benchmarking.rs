@@ -7,19 +7,11 @@ use cf_primitives::ForeignChain;
 use frame_benchmarking::{account, benchmarks_instance_pallet};
 use frame_support::traits::Hooks;
 
-fn setup_expired_intents<T: Config<I>, I: 'static>(time: T::BlockNumber, number_of_intents: u64) {
-	let mut intent_vec = vec![];
-	for i in 0..number_of_intents {
-		intent_vec.push((i, TargetChainAccount::<T, I>::benchmark_value()));
-	}
-	IntentExpiries::<T, I>::insert(time, intent_vec);
-}
-
 benchmarks_instance_pallet! {
 	on_initialize {
 		let n in 1u32 .. 254u32;
 		let origin = T::EnsureGovernance::successful_origin();
-		setup_expired_intents::<T, I>(T::BlockNumber::from(1_u32), n.into());
+		IntentExpiries::<T, I>::insert(T::BlockNumber::from(1_u32), (0..n as u64).map(|i| (i, TargetChainAccount::<T, I>::benchmark_value())).collect::<Vec<_>>());
 		assert!(!IntentExpiries::<T, I>::get(T::BlockNumber::from(1_u32)).expect("to be in the storage").is_empty());
 	} : { let _ = Pallet::<T, I>::on_initialize(T::BlockNumber::from(1_u32)); }
 	verify {
