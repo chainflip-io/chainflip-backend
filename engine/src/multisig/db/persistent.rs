@@ -5,7 +5,8 @@ use std::{cmp::Ordering, collections::HashMap, fs, mem::size_of, path::Path};
 
 use cf_primitives::KeyId;
 use rocksdb::{ColumnFamily, ColumnFamilyDescriptor, Options, WriteBatch, DB};
-use tracing::{debug, error, info, info_span};
+use serde::{de::DeserializeOwned, Serialize};
+use tracing::{debug, info, info_span};
 
 use crate::{
 	multisig::{
@@ -126,22 +127,53 @@ impl PersistentKeyDB {
 		Ok(PersistentKeyDB { db })
 	}
 
+	fn put_data<T: Serialize>(&self, prefix: &[u8], key: &[u8], value: &T) -> Result<()> {
+		let key_with_prefix = [prefix, key].concat();
+		self.db
+			.put_cf(
+				get_data_column_handle(&self.db),
+				key_with_prefix,
+				bincode::serialize(value).expect("Serialization is not expected to fail"),
+			)
+			.map_err(|e| {
+				anyhow::anyhow!("Failed to write data to database. Error: {}", e.to_string())
+			})
+	}
+
+	fn get_data<T: DeserializeOwned>(&self, prefix: &[u8], key: &[u8]) -> Result<Option<T>> {
+		let key_with_prefix = [prefix, key].concat();
+
+		self.db
+			.get_cf(get_data_column_handle(&self.db), key_with_prefix)?
+			.map(|data| {
+				bincode::deserialize(&data).map_err(|e| anyhow!("Deserialization failure: {}", e))
+			})
+			.transpose()
+	}
+
+	fn get_data_for_prefix<'a, T: DeserializeOwned>(
+		&'a self,
+		prefix: &[u8],
+	) -> impl Iterator<Item = (Vec<u8>, Result<T>)> + 'a {
+		self.db
+			.prefix_iterator_cf(get_data_column_handle(&self.db), prefix)
+			.map(|result| result.expect("prefix iterator should not fail"))
+			.map(|(key, value)| {
+				(
+					Vec::from(&key[PREFIX_SIZE..]),
+					bincode::deserialize(&value)
+						.map_err(|e| anyhow!("Deserialization failure: {}", e)),
+				)
+			})
+	}
+
 	/// Write the keyshare to the db, indexed by the key id
 	pub fn update_key<C: CryptoScheme>(
 		&self,
 		key_id: &KeyId,
 		keygen_result_info: &KeygenResultInfo<C>,
 	) {
-		let key_id_with_prefix =
-			[get_keygen_data_prefix::<C>().as_slice(), &key_id.to_bytes()[..]].concat();
-
-		self.db
-			.put_cf(
-				get_data_column_handle(&self.db),
-				key_id_with_prefix,
-				bincode::serialize(keygen_result_info)
-					.expect("Couldn't serialize keygen result info"),
-			)
+		self.put_data(&get_keygen_data_prefix::<C>(), &key_id.to_bytes(), &keygen_result_info)
 			.unwrap_or_else(|e| panic!("Failed to update key {}. Error: {}", &key_id, e));
 	}
 
@@ -149,30 +181,15 @@ impl PersistentKeyDB {
 		let span = info_span!("PersistentKeyDB");
 		let _entered = span.enter();
 
-		let keys: HashMap<KeyId, KeygenResultInfo<C>> = self
-			.db
-			.prefix_iterator_cf(get_data_column_handle(&self.db), get_keygen_data_prefix::<C>())
-			.filter_map(|result| match result {
-				Ok(key) => Some(key),
-				Err(e) => {
-					error!("Error getting prefix iterator: {e}");
-					None
-				},
-			})
-			.filter_map(|(key_id_with_prefix, key_info)| {
-				let key_id = KeyId::from_bytes(&key_id_with_prefix[PREFIX_SIZE..]);
-
-				match bincode::deserialize::<KeygenResultInfo<C>>(&key_info) {
-					Ok(keygen_result_info) => Some((key_id, keygen_result_info)),
-					Err(e) => {
-						error!(
-							key_id = key_id.to_string(),
-							"Could not deserialize {} key from database: {e}",
-							C::NAME,
-						);
-						None
-					},
-				}
+		let keys: HashMap<_, _> = self
+			.get_data_for_prefix::<KeygenResultInfo<C>>(&get_keygen_data_prefix::<C>())
+			.map(|(key_id, key_info_result)| {
+				(
+					KeyId::from_bytes(&key_id),
+					key_info_result.unwrap_or_else(|e| {
+						panic!("Failed to deserialize {} key from database: {}", C::NAME, e)
+					}),
+				)
 			})
 			.collect();
 		if !keys.is_empty() {
@@ -183,26 +200,15 @@ impl PersistentKeyDB {
 
 	/// Write the witnesser checkpoint to the db
 	pub fn update_checkpoint(&self, chain_tag: ChainTag, checkpoint: &WitnessedUntil) {
-		self.db
-			.put_cf(
-				get_data_column_handle(&self.db),
-				get_checkpoint_prefix(chain_tag),
-				bincode::serialize(checkpoint).expect("Should serialize WitnessedUntil checkpoint"),
-			)
+		self.put_data(&get_checkpoint_prefix(chain_tag), &[], checkpoint)
 			.unwrap_or_else(|e| {
 				panic!("Failed to update {chain_tag} witnesser checkpoint. Error: {e}")
 			});
 	}
 
 	pub fn load_checkpoint(&self, chain_tag: ChainTag) -> Result<Option<WitnessedUntil>> {
-		self.db
-			.get_cf(get_data_column_handle(&self.db), get_checkpoint_prefix(chain_tag))?
-			.map(|data| {
-				bincode::deserialize::<WitnessedUntil>(&data).map_err(|e| {
-					anyhow!("Could not deserialize {chain_tag} WitnessedUntil checkpoint: {e}")
-				})
-			})
-			.transpose()
+		self.get_data(&get_checkpoint_prefix(chain_tag), &[])
+			.context("Failed to load {chain_tag} checkpoint")
 	}
 }
 
