@@ -85,7 +85,7 @@ impl<C: Chain, T: Chainflip> IngressApi<C> for MockIngressHandler<C, T> {
 		let (intent_id, ingress_address) = Self::get_new_intent(SwapOrLp::Lp, ingress_asset);
 		<Self as MockPalletStorage>::mutate_value(b"LP_INGRESS_INTENTS", |storage| {
 			storage.as_mut().unwrap_or(&mut vec![]).push(LpIntent::<C, T> {
-				ingress_address,
+				ingress_address: ingress_address.clone(),
 				ingress_asset,
 				lp_account,
 			});
@@ -106,7 +106,7 @@ impl<C: Chain, T: Chainflip> IngressApi<C> for MockIngressHandler<C, T> {
 		let (intent_id, ingress_address) = Self::get_new_intent(SwapOrLp::Swap, ingress_asset);
 		<Self as MockPalletStorage>::mutate_value(b"SWAP_INGRESS_INTENTS", |storage| {
 			storage.as_mut().unwrap_or(&mut vec![]).push(SwapIntent::<C, T> {
-				ingress_address,
+				ingress_address: ingress_address.clone(),
 				ingress_asset,
 				egress_asset,
 				egress_address,

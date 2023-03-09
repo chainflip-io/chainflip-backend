@@ -4,7 +4,7 @@ use base58::FromBase58;
 use bech32::{self, u5, FromBase32, ToBase32, Variant};
 use codec::{Decode, Encode, MaxEncodedLen};
 use core::{borrow::Borrow, iter};
-use frame_support::{sp_io::hashing::sha2_256, RuntimeDebug};
+use frame_support::{sp_io::hashing::sha2_256, BoundedVec, RuntimeDebug};
 use libsecp256k1::{PublicKey, SecretKey};
 use scale_info::TypeInfo;
 use sp_std::{vec, vec::Vec};
@@ -14,7 +14,10 @@ extern crate alloc;
 use crate::{Chain, ChainAbi, ChainCrypto, FeeRefundCalculator, IngressIdConstructor};
 use alloc::string::String;
 pub use cf_primitives::chains::Bitcoin;
-use cf_primitives::{chains::assets, EpochIndex, IntentId, KeyId, PublicKeyBytes};
+use cf_primitives::{
+	chains::assets, EpochIndex, IntentId, KeyId, MaxBtcAddressLength, PublicKeyBytes,
+	MAX_BTC_ADDRESS_LENGTH,
+};
 use itertools;
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -27,13 +30,13 @@ pub struct BitcoinFetchId(u64);
 
 // TODO: Come back to this. in BTC u64 works, but the trait has from u128 required, so we do this
 // for now
-type Amount = u128;
+pub type BtcAmount = u128;
 
 pub type SigningPayload = [u8; 32];
 
 pub type Signature = [u8; 64];
 
-pub type Address = [u8; 32];
+pub type BtcAddress = BoundedVec<u8, MaxBtcAddressLength>;
 
 #[derive(
 	Copy,
@@ -111,7 +114,7 @@ impl FeeRefundCalculator<Bitcoin> for BitcoinTransactionData {
 impl Chain for Bitcoin {
 	type ChainBlockNumber = BlockNumber;
 
-	type ChainAmount = Amount;
+	type ChainAmount = BtcAmount;
 
 	type TransactionFee = Self::ChainAmount;
 
@@ -119,7 +122,7 @@ impl Chain for Bitcoin {
 
 	type ChainAsset = assets::btc::Asset;
 
-	type ChainAccount = Address;
+	type ChainAccount = BtcAddress;
 
 	type EpochStartData = ();
 
@@ -185,11 +188,20 @@ impl BenchmarkValue for Signature {
 	}
 }
 
-// Bitcoin address
+// Bitcoin payload
 #[cfg(feature = "runtime-benchmarks")]
-impl BenchmarkValue for Address {
+impl BenchmarkValue for SigningPayload {
 	fn benchmark_value() -> Self {
 		[1u8; 32]
+	}
+}
+
+// Bitcoin address
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue for BtcAddress {
+	fn benchmark_value() -> Self {
+		BoundedVec::try_from([1u8; MAX_BTC_ADDRESS_LENGTH].to_vec())
+			.expect("we created a vec that is in the bounds of bounded vec")
 	}
 }
 
@@ -200,7 +212,7 @@ impl ChainAbi for Bitcoin {
 }
 
 impl IngressIdConstructor for BitcoinFetchId {
-	type Address = Address;
+	type Address = BtcAddress;
 
 	fn deployed(_intent_id: u64, _address: Self::Address) -> Self {
 		todo!()
@@ -281,11 +293,18 @@ fn to_varint(value: u64) -> Vec<u8> {
 	result
 }
 
-#[derive(Clone, Copy, Debug, TypeInfo, Encode, Decode)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, PartialOrd, Ord)]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub enum BitcoinNetwork {
 	Mainnet,
 	Testnet,
 	Regtest,
+}
+
+impl Default for BitcoinNetwork {
+	fn default() -> Self {
+		BitcoinNetwork::Mainnet
+	}
 }
 
 impl BitcoinNetwork {
@@ -390,21 +409,16 @@ impl BitcoinTransaction {
 	pub fn create_new_unsigned(inputs: Vec<Utxo>, outputs: Vec<BitcoinOutput>) -> Self {
 		Self { inputs, outputs, signatures: vec![] }
 	}
-	pub fn add_signature(mut self, index: u32, signature: Signature) {
+	pub fn add_signature(&mut self, index: u32, signature: Signature) {
 		if self.signatures.len() != self.inputs.len() {
 			self.signatures.resize(self.inputs.len(), [0u8; 64]);
 		}
 		self.signatures[index as usize] = signature;
 	}
 	pub fn is_signed(&self) -> bool {
-		if self.signatures.len() == self.inputs.len() &&
+		self.signatures.len() == self.inputs.len() &&
 			self.signatures.last().is_some() &&
 			self.signatures.last().unwrap() != &[0u8; 64]
-		{
-			true
-		} else {
-			false
-		}
 	}
 	pub fn finalize(self) -> Vec<u8> {
 		let mut transaction_bytes = Vec::default();
@@ -789,12 +803,12 @@ mod test {
 			)
 			.unwrap(),
 		};
-		let tx = BitcoinTransaction {
+		let mut tx = BitcoinTransaction {
 			inputs: vec![input],
 			outputs: vec![output],
 			signatures: Default::default(),
-		}
-		.add_signature(0, [0u8; 64]);
+		};
+		tx.add_signature(0, [0u8; 64]);
 		assert_eq!(tx.finalize(), hex_literal::hex!("020000000001014C94E48A870B85F41228D33CF25213DFCC8DD796E7211ED6B1F9A014809DBBB50100000000FDFFFFFF0100E1F5050000000022512042E4F4C78A1D8F936AD7FC2C2F028F9BB1538CFC9A509B985031457C367815C003400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000025017B752078C79A2B436DA5575A03CDE40197775C656FFF9F0F59FC1466E09C20A81A9CDBAC21C0EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE00000000"));
 	}
 

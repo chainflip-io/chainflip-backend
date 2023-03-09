@@ -136,14 +136,15 @@ pub mod pallet {
 
 				// Check validity of Chain and Asset
 				ensure!(
-					ForeignChain::from(egress_address) == ForeignChain::from(asset),
+					ForeignChain::from(egress_address.clone()) == ForeignChain::from(asset),
 					Error::<T>::InvalidEgressAddress
 				);
 
 				// Debit the asset from the account.
 				Self::try_debit(&account_id, asset, amount)?;
 
-				let egress_id = T::EgressHandler::schedule_egress(asset, amount, egress_address);
+				let egress_id =
+					T::EgressHandler::schedule_egress(asset, amount, egress_address.clone());
 
 				Self::deposit_event(Event::<T>::WithdrawalEgressScheduled {
 					egress_id,

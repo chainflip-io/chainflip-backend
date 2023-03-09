@@ -174,6 +174,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			eth_usdc_address: [0x2; 20],
 			polkadot_vault_account_id: None,
 			polkadot_runtime_version: TEST_RUNTIME_VERSION,
+			bitcoin_network: Default::default(),
 		},
 	};
 

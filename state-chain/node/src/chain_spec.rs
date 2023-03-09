@@ -1,4 +1,7 @@
-use cf_chains::dot::{RuntimeVersion, POLKADOT_VAULT_ACCOUNT};
+use cf_chains::{
+	btc::BitcoinNetwork,
+	dot::{RuntimeVersion, POLKADOT_VAULT_ACCOUNT},
+};
 use cf_primitives::{AccountRole, AuthorityCount};
 
 use frame_benchmarking::sp_std::collections::btree_set::BTreeSet;
@@ -236,6 +239,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 					},
 					polkadot_vault_account_id: POLKADOT_VAULT_ACCOUNT,
 					polkadot_runtime_version: POLKADOT_TEST_RUNTIME_VERSION,
+					bitcoin_network: BitcoinNetwork::Regtest,
 				},
 				eth_init_agg_key,
 				ethereum_deployment_block,
@@ -363,6 +367,7 @@ macro_rules! network_spec {
 								polkadot_vault_account_id: POLKADOT_VAULT_ACCOUNT,
 
 								polkadot_runtime_version: POLKADOT_TEST_RUNTIME_VERSION,
+								bitcoin_network: BitcoinNetwork::Regtest,
 							},
 							eth_init_agg_key,
 							ethereum_deployment_block,

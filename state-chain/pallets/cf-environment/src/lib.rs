@@ -188,6 +188,11 @@ pub mod pallet {
 	/// The set of available UTXOs available in our Bitcoin Vault
 	pub type BitcoinAvailableUtxos<T> = StorageValue<_, Vec<Utxo>, ValueQuery>;
 
+	#[pallet::storage]
+	/// Selection of the bitcoin network (mainnet, testnet or regtest) that the state chain
+	/// currently supports
+	pub type BitcoinNetworkSelection<T> = StorageValue<_, BitcoinNetwork, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -409,6 +414,8 @@ pub mod pallet {
 		pub cfe_settings: cfe::CfeSettings,
 		pub polkadot_vault_account_id: Option<PolkadotAccountId>,
 		pub polkadot_runtime_version: RuntimeVersion,
+		//pub bitcoin_available_utxos: Vec<Utxo>,
+		pub bitcoin_network: BitcoinNetwork,
 	}
 
 	/// Sets the genesis config
@@ -429,6 +436,9 @@ pub mod pallet {
 			PolkadotRuntimeVersion::<T>::set(self.polkadot_runtime_version);
 
 			PolkadotProxyAccountNonce::<T>::set(0);
+
+			BitcoinAvailableUtxos::<T>::set(vec![]);
+			BitcoinNetworkSelection::<T>::set(self.bitcoin_network.clone());
 		}
 	}
 }
@@ -508,5 +518,13 @@ impl<T: Config> Pallet<T> {
 
 	pub fn add_bitcoin_utxo_to_list(utxo: Utxo) {
 		BitcoinAvailableUtxos::<T>::append(utxo);
+	}
+
+	pub fn get_bitcoin_network() -> BitcoinNetwork {
+		BitcoinNetworkSelection::<T>::get()
+	}
+
+	pub fn get_modify_btc_utxos_for_transaction(_amount: cf_chains::btc::BtcAmount) -> Vec<Utxo> {
+		todo!()
 	}
 }

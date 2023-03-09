@@ -397,7 +397,7 @@ pub async fn register_swap_intent(
 			)
 		)
 	}) {
-		Ok(*ingress_address)
+		Ok((*ingress_address).clone())
 	} else {
 		panic!("NewSwapIntent must have been generated");
 	}
@@ -423,7 +423,7 @@ pub async fn liquidity_deposit(
 			)
 		)
 	}) {
-		Ok(*ingress_address)
+		Ok((*ingress_address).clone())
 	} else {
 		panic!("DepositAddressReady must have been generated");
 	}

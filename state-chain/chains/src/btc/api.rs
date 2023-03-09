@@ -10,153 +10,77 @@ pub enum BitcoinApi<Environment: 'static> {
 	_Phantom(PhantomData<Environment>, Never),
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub enum SystemAccounts {
-	Proxy,
-	Vault,
-}
-
 impl<E> AllBatch<Bitcoin> for BitcoinApi<E>
 where
-	E: ChainEnvironment<SystemAccounts, <Bitcoin as Chain>::ChainAccount>
-		+ ReplayProtectionProvider<Bitcoin>,
+	E: ChainEnvironment<<Bitcoin as Chain>::Amount, Vec<Utxo>>
+		+ ChainEnvironment<(), BitcoinNetwork>,
 {
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<Bitcoin>>,
 		transfer_params: Vec<TransferAssetParams<Bitcoin>>,
 	) -> Result<Self, ()> {
-		let vault = E::lookup(SystemAccounts::Vault).ok_or(())?;
-		let proxy = E::lookup(SystemAccounts::Proxy).ok_or(())?;
+		let bitcoin_network = <E as ChainEnvironment<(), BitcoinNetwork>>::lookup()
+			.expect("Since the lookup function always returns a some");
+		let total_output_amount = 0;
+		let btc_outputs = vec![];
+		for transfer_param in transfer_params {
+			btc_outputs.push(BitcoinOutput {
+				amount: transfer_param.clone().amount,
+				script_pubkey: scriptpubkey_from_address(
+					&std::str::from_utf8(&transfer_param.to[..]).map_err(|_| ())?,
+					bitcoin_network,
+				)?,
+			});
+			total_output_amount += transfer_param.amount;
+		}
+		let selected_input_utxos =
+			<E as ChainEnvironment<Amount, Vec<Utxo>>>::lookup(total_output_amount).ok_or(())?;
+
 		Ok(Self::BatchFetchAndTransfer(
 			batch_fetch_and_transfer::BatchFetchAndTransfer::new_unsigned(
-				E::replay_protection(),
-				fetch_params,
-				transfer_params,
-				proxy,
-				vault,
+				selected_input_utxos,
+				btc_outputs,
 			),
 		))
 	}
 }
 
-impl<E> SetGovKeyWithAggKey<Polkadot> for PolkadotApi<E>
-where
-	E: ChainEnvironment<SystemAccounts, <Polkadot as Chain>::ChainAccount>
-		+ ReplayProtectionProvider<Polkadot>,
-{
-	fn new_unsigned(
-		maybe_old_key: Option<PolkadotPublicKey>,
-		new_key: PolkadotPublicKey,
-	) -> Result<Self, ()> {
-		let vault = E::lookup(SystemAccounts::Vault).ok_or(())?;
-
-		Ok(Self::ChangeGovKey(set_gov_key_with_agg_key::ChangeGovKey::new_unsigned(
-			E::replay_protection(),
-			maybe_old_key,
-			new_key,
-			vault,
-		)))
-	}
-}
-
-impl<E> SetAggKeyWithAggKey<Polkadot> for PolkadotApi<E>
-where
-	E: ChainEnvironment<SystemAccounts, <Polkadot as Chain>::ChainAccount>
-		+ ReplayProtectionProvider<Polkadot>,
-{
-	fn new_unsigned(
-		old_key: Option<PolkadotPublicKey>,
-		new_key: PolkadotPublicKey,
-	) -> Result<Self, ()> {
-		let vault = E::lookup(SystemAccounts::Vault).ok_or(())?;
-
-		Ok(Self::RotateVaultProxy(rotate_vault_proxy::RotateVaultProxy::new_unsigned(
-			E::replay_protection(),
-			old_key.ok_or(())?,
-			new_key,
-			vault,
-		)))
-	}
-}
-
-impl<E> CreatePolkadotVault for PolkadotApi<E>
-where
-	E: ReplayProtectionProvider<Polkadot>,
-{
-	fn new_unsigned(proxy_key: PolkadotPublicKey) -> Self {
-		Self::CreateAnonymousVault(create_anonymous_vault::CreateAnonymousVault::new_unsigned(
-			E::replay_protection(),
-			proxy_key,
-		))
-	}
-}
-
-impl<E> From<batch_fetch_and_transfer::BatchFetchAndTransfer> for PolkadotApi<E> {
+impl<E> From<batch_fetch_and_transfer::BatchFetchAndTransfer> for BitcoinApi<E> {
 	fn from(tx: batch_fetch_and_transfer::BatchFetchAndTransfer) -> Self {
 		Self::BatchFetchAndTransfer(tx)
 	}
 }
 
-impl<E> From<rotate_vault_proxy::RotateVaultProxy> for PolkadotApi<E> {
-	fn from(tx: rotate_vault_proxy::RotateVaultProxy) -> Self {
-		Self::RotateVaultProxy(tx)
-	}
-}
-
-impl<E> From<create_anonymous_vault::CreateAnonymousVault> for PolkadotApi<E> {
-	fn from(tx: create_anonymous_vault::CreateAnonymousVault) -> Self {
-		Self::CreateAnonymousVault(tx)
-	}
-}
-
-impl<E> From<set_gov_key_with_agg_key::ChangeGovKey> for PolkadotApi<E> {
-	fn from(tx: set_gov_key_with_agg_key::ChangeGovKey) -> Self {
-		Self::ChangeGovKey(tx)
-	}
-}
-
-impl<E> ApiCall<Polkadot> for PolkadotApi<E> {
+impl<E> ApiCall<Polkadot> for BitcoinApi<E> {
 	fn threshold_signature_payload(&self) -> <Polkadot as ChainCrypto>::Payload {
 		match self {
-			PolkadotApi::BatchFetchAndTransfer(tx) => tx.threshold_signature_payload(),
-			PolkadotApi::RotateVaultProxy(tx) => tx.threshold_signature_payload(),
-			PolkadotApi::CreateAnonymousVault(tx) => tx.threshold_signature_payload(),
-			PolkadotApi::ChangeGovKey(tx) => tx.threshold_signature_payload(),
-			PolkadotApi::_Phantom(..) => unreachable!(),
+			BitcoinApi::BatchFetchAndTransfer(tx) => tx.threshold_signature_payload(),
+
+			BitcoinApi::_Phantom(..) => unreachable!(),
 		}
 	}
 
 	fn signed(self, threshold_signature: &<Polkadot as ChainCrypto>::ThresholdSignature) -> Self {
 		match self {
-			PolkadotApi::BatchFetchAndTransfer(call) => call.signed(threshold_signature).into(),
-			PolkadotApi::RotateVaultProxy(call) => call.signed(threshold_signature).into(),
-			PolkadotApi::CreateAnonymousVault(call) => call.signed(threshold_signature).into(),
-			PolkadotApi::ChangeGovKey(call) => call.signed(threshold_signature).into(),
-			PolkadotApi::_Phantom(..) => unreachable!(),
+			BitcoinApi::BatchFetchAndTransfer(call) => call.signed(threshold_signature).into(),
+
+			BitcoinApi::_Phantom(..) => unreachable!(),
 		}
 	}
 
 	fn chain_encoded(&self) -> Vec<u8> {
 		match self {
-			PolkadotApi::BatchFetchAndTransfer(call) => call.chain_encoded(),
-			PolkadotApi::RotateVaultProxy(call) => call.chain_encoded(),
-			PolkadotApi::CreateAnonymousVault(call) => call.chain_encoded(),
-			PolkadotApi::ChangeGovKey(call) => call.chain_encoded(),
-			PolkadotApi::_Phantom(..) => unreachable!(),
+			BitcoinApi::BatchFetchAndTransfer(call) => call.chain_encoded(),
+
+			BitcoinApi::_Phantom(..) => unreachable!(),
 		}
 	}
 
 	fn is_signed(&self) -> bool {
 		match self {
-			PolkadotApi::BatchFetchAndTransfer(call) => call.is_signed(),
-			PolkadotApi::RotateVaultProxy(call) => call.is_signed(),
-			PolkadotApi::CreateAnonymousVault(call) => call.is_signed(),
-			PolkadotApi::ChangeGovKey(call) => call.is_signed(),
-			PolkadotApi::_Phantom(..) => unreachable!(),
+			BitcoinApi::BatchFetchAndTransfer(call) => call.is_signed(),
+
+			BitcoinApi::_Phantom(..) => unreachable!(),
 		}
 	}
-}
-
-pub trait CreatePolkadotVault: ApiCall<Polkadot> {
-	fn new_unsigned(proxy_key: PolkadotPublicKey) -> Self;
 }

@@ -281,8 +281,16 @@ impl ChainEnvironment<cf_chains::dot::api::SystemAccounts, PolkadotAccountId> fo
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct BtcEnvironment;
 
-impl ChainEnvironment<Vec<cf_chains::btc::Bitcoin::IngressFetchId>, Vec<Utxo>> for BtcEnvironment {
-	fn lookup(s: Vec<cf_chains::btc::Bitcoin::IngressFetchId>) -> Option<Vec<Utxo>> {}
+impl ChainEnvironment<cf_chains::btc::BtcAmount, Vec<Utxo>> for BtcEnvironment {
+	fn lookup(output_amount: cf_chains::btc::BtcAmount) -> Option<Vec<Utxo>> {
+		Some(Environment::get_modify_btc_utxos_for_transaction(output_amount))
+	}
+}
+
+impl ChainEnvironment<(), cf_chains::btc::BitcoinNetwork> for BtcEnvironment {
+	fn lookup(_: ()) -> Option<cf_chains::btc::BitcoinNetwork> {
+		Some(Environment::get_bitcoin_network())
+	}
 }
 
 pub struct EthVaultTransitionHandler;
