@@ -3,7 +3,7 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use cf_chains::{
-	btc::{BitcoinNetwork, Utxo},
+	btc::{utxo_selection::select_utxos_from_pool, BitcoinNetwork, Utxo},
 	dot::{api::CreatePolkadotVault, Polkadot, PolkadotAccountId, PolkadotIndex},
 	ChainCrypto,
 };
@@ -192,6 +192,10 @@ pub mod pallet {
 	/// Selection of the bitcoin network (mainnet, testnet or regtest) that the state chain
 	/// currently supports
 	pub type BitcoinNetworkSelection<T> = StorageValue<_, BitcoinNetwork, ValueQuery>;
+
+	#[pallet::storage]
+	/// The amount of fee we want to pay per utxo.
+	pub type BitcoinFeePerUtxo<T> = StorageValue<_, u64, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -414,8 +418,8 @@ pub mod pallet {
 		pub cfe_settings: cfe::CfeSettings,
 		pub polkadot_vault_account_id: Option<PolkadotAccountId>,
 		pub polkadot_runtime_version: RuntimeVersion,
-		//pub bitcoin_available_utxos: Vec<Utxo>,
 		pub bitcoin_network: BitcoinNetwork,
+		pub bitcoin_fee_per_utxo: u64,
 	}
 
 	/// Sets the genesis config
@@ -439,6 +443,7 @@ pub mod pallet {
 
 			BitcoinAvailableUtxos::<T>::set(vec![]);
 			BitcoinNetworkSelection::<T>::set(self.bitcoin_network.clone());
+			BitcoinFeePerUtxo::<T>::set(self.bitcoin_fee_per_utxo);
 		}
 	}
 }
@@ -524,7 +529,16 @@ impl<T: Config> Pallet<T> {
 		BitcoinNetworkSelection::<T>::get()
 	}
 
-	pub fn get_modify_btc_utxos_for_transaction(_amount: cf_chains::btc::BtcAmount) -> Vec<Utxo> {
-		todo!()
+	pub fn get_modify_btc_utxos_for_transaction(
+		total_output_amount: cf_chains::btc::BtcAmount,
+	) -> Vec<Utxo> {
+		BitcoinAvailableUtxos::<T>::mutate(|available_utxos| {
+			// Calculate the selection of utxos, return them and remove them from the list
+			select_utxos_from_pool(
+				available_utxos,
+				BitcoinFeePerUtxo::<T>::get(),
+				total_output_amount.try_into().expect("Btc amounts never exceed u64 max, this is made shure elsewhere by the AMM when it calculates how much amounts to output"),
+			)
+		})
 	}
 }

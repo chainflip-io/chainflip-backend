@@ -9,16 +9,12 @@
 // choose all available utxos for the transaction but then the fragmentation doesnt matter anyways
 // since we in any case have to use all utxos (because the output amount is high enough).
 
-use crate::{vec, Vec};
+use sp_std::{vec, vec::Vec};
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct UTXO {
-	pub amount: u64,
-}
+use super::GetUtxoAmount;
 
-#[allow(dead_code)]
-fn select_utxos_from_pool(
-	mut available_utxos: Vec<UTXO>,
+pub fn select_utxos_from_pool<UTXO: GetUtxoAmount>(
+	available_utxos: &mut Vec<UTXO>,
 	fee_per_utxo: u64,
 	amount_to_be_egressed: u64,
 ) -> Vec<UTXO> {
@@ -27,7 +23,7 @@ fn select_utxos_from_pool(
 	}
 
 	// Sort the utxos by the amounts they hold, in descending order
-	available_utxos.sort_by_key(|utxo| utxo.clone().amount);
+	available_utxos.sort_by_key(|utxo| utxo.amount());
 	available_utxos.reverse();
 
 	let mut selected_utxos: Vec<UTXO> = vec![];
@@ -40,7 +36,7 @@ fn select_utxos_from_pool(
 	// utxo would reduce the cummulative amount below the required amount).
 	while cumulative_amount < amount_to_be_egressed {
 		let current_smallest_utxo = available_utxos.pop().expect("The funds in vault should be greater than the amount requested to be egressed. This is made sure elsewhere and should be expected here");
-		cumulative_amount += current_smallest_utxo.clone().amount - fee_per_utxo;
+		cumulative_amount += current_smallest_utxo.amount() - fee_per_utxo;
 		selected_utxos.push(current_smallest_utxo);
 	}
 
@@ -55,11 +51,22 @@ fn select_utxos_from_pool(
 
 #[test]
 fn test_utxo_selection() {
-	use super::*;
+	use super::GetUtxoAmount;
+
+	#[allow(clippy::upper_case_acronyms)]
+	#[derive(Clone, Debug, PartialEq, Eq)]
+	pub struct UTXO {
+		pub amount: u64,
+	}
+	impl GetUtxoAmount for UTXO {
+		fn amount(&self) -> u64 {
+			self.amount
+		}
+	}
 
 	const FEEPERUTXO: u64 = 2;
 
-	let available_utxos = vec![
+	let mut available_utxos = vec![
 		UTXO { amount: 110 },
 		UTXO { amount: 25 },
 		UTXO { amount: 500 },
@@ -73,22 +80,22 @@ fn test_utxo_selection() {
 	];
 
 	// empty list is output for 0 egress
-	assert_eq!(select_utxos_from_pool(available_utxos.clone(), FEEPERUTXO, 0), vec![]);
+	assert_eq!(select_utxos_from_pool(&mut available_utxos.clone(), FEEPERUTXO, 0), vec![]);
 	assert_eq!(
-		select_utxos_from_pool(available_utxos.clone(), FEEPERUTXO, 1),
+		select_utxos_from_pool(&mut available_utxos.clone(), FEEPERUTXO, 1),
 		vec![UTXO { amount: 7 }, UTXO { amount: 15 }]
 	);
 	assert_eq!(
-		select_utxos_from_pool(available_utxos.clone(), FEEPERUTXO, 18),
+		select_utxos_from_pool(&mut available_utxos.clone(), FEEPERUTXO, 18),
 		vec![UTXO { amount: 7 }, UTXO { amount: 15 }, UTXO { amount: 19 }]
 	);
 	assert_eq!(
-		select_utxos_from_pool(available_utxos.clone(), FEEPERUTXO, 19),
+		select_utxos_from_pool(&mut available_utxos.clone(), FEEPERUTXO, 19),
 		vec![UTXO { amount: 7 }, UTXO { amount: 15 }, UTXO { amount: 19 }, UTXO { amount: 20 }]
 	);
 	// The amount that will cause all utxos to be selected
 	assert_eq!(
-		select_utxos_from_pool(available_utxos.clone(), FEEPERUTXO, 2000),
+		select_utxos_from_pool(&mut available_utxos.clone(), FEEPERUTXO, 2000),
 		vec![
 			UTXO { amount: 7 },
 			UTXO { amount: 15 },
@@ -105,7 +112,7 @@ fn test_utxo_selection() {
 	// max amount that can be spent with the given utxos. entering the amount greater than this will
 	// cause the function to panic (see the expect statement above)
 	assert_eq!(
-		select_utxos_from_pool(available_utxos, FEEPERUTXO, 2485),
+		select_utxos_from_pool(&mut available_utxos, FEEPERUTXO, 2485),
 		vec![
 			UTXO { amount: 7 },
 			UTXO { amount: 15 },

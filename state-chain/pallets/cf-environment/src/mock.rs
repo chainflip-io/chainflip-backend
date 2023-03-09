@@ -153,6 +153,7 @@ pub const STAKE_MANAGER_ADDRESS: [u8; 20] = [0u8; 20];
 pub const KEY_MANAGER_ADDRESS: [u8; 20] = [1u8; 20];
 pub const VAULT_ADDRESS: [u8; 20] = [2u8; 20];
 pub const ETH_CHAIN_ID: u64 = 1;
+pub const MOCK_FEE_PER_UTXO: u64 = 10;
 
 pub const CFE_SETTINGS: cfe::CfeSettings = cfe::CfeSettings {
 	eth_block_safety_margin: 1,
@@ -175,6 +176,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			polkadot_vault_account_id: None,
 			polkadot_runtime_version: TEST_RUNTIME_VERSION,
 			bitcoin_network: Default::default(),
+			bitcoin_fee_per_utxo: MOCK_FEE_PER_UTXO,
 		},
 	};
 

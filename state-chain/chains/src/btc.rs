@@ -254,6 +254,14 @@ pub struct Utxo {
 	pub pubkey_x: [u8; 32],
 	pub salt: u32,
 }
+pub trait GetUtxoAmount {
+	fn amount(&self) -> u64;
+}
+impl GetUtxoAmount for Utxo {
+	fn amount(&self) -> u64 {
+		self.amount
+	}
+}
 
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct BitcoinOutput {

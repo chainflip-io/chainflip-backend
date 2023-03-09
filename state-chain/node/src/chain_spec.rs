@@ -63,6 +63,8 @@ const ETHEREUM_CHAIN_ID_DEFAULT: u64 = cf_chains::eth::CHAIN_ID_GOERLI;
 const ETH_INIT_AGG_KEY_DEFAULT: &str =
 	"02e61afd677cdfbec838c6f309deff0b2c6056f8a27f2c783b68bba6b30f667be6";
 
+const BITCOIN_FEE_PER_UTXO: u64 = 1000; // Todo: what value to put here?
+
 /// generate session keys from Aura and Grandpa keys
 pub fn session_keys(aura: AuraId, grandpa: GrandpaId) -> SessionKeys {
 	SessionKeys { aura, grandpa }
@@ -240,6 +242,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 					polkadot_vault_account_id: POLKADOT_VAULT_ACCOUNT,
 					polkadot_runtime_version: POLKADOT_TEST_RUNTIME_VERSION,
 					bitcoin_network: BitcoinNetwork::Regtest,
+					bitcoin_fee_per_utxo: BITCOIN_FEE_PER_UTXO,
 				},
 				eth_init_agg_key,
 				ethereum_deployment_block,
@@ -368,6 +371,7 @@ macro_rules! network_spec {
 
 								polkadot_runtime_version: POLKADOT_TEST_RUNTIME_VERSION,
 								bitcoin_network: BitcoinNetwork::Regtest,
+								bitcoin_fee_per_utxo: BITCOIN_FEE_PER_UTXO,
 							},
 							eth_init_agg_key,
 							ethereum_deployment_block,
