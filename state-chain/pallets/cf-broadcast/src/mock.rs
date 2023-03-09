@@ -1,3 +1,4 @@
+use core::marker::PhantomData;
 use std::cell::RefCell;
 
 use crate::{self as pallet_cf_broadcast, Instance1, PalletOffence};
@@ -14,7 +15,9 @@ use cf_traits::{
 	},
 	Chainflip, EpochKey, KeyState,
 };
-use frame_support::parameter_types;
+use codec::{Decode, Encode};
+use frame_support::{parameter_types, traits::UnfilteredDispatchable};
+use scale_info::TypeInfo;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -111,6 +114,20 @@ impl cf_traits::KeyProvider<MockEthereum> for MockKeyProvider {
 	}
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub struct MockCallback<C: ChainCrypto>(u64, PhantomData<C>);
+
+impl UnfilteredDispatchable for MockCallback<MockEthereum> {
+	type RuntimeOrigin = RuntimeOrigin;
+
+	fn dispatch_bypass_filter(
+		self,
+		origin: Self::RuntimeOrigin,
+	) -> frame_support::dispatch::DispatchResultWithPostInfo {
+		Ok(().into())
+	}
+}
+
 impl MockKeyProvider {
 	pub fn set_valid(valid: bool) {
 		VALIDKEY.with(|cell| *cell.borrow_mut() = valid);
@@ -132,6 +149,8 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type BroadcastTimeout = BroadcastTimeout;
 	type WeightInfo = ();
 	type KeyProvider = MockKeyProvider;
+	type RuntimeOrigin = RuntimeOrigin;
+	type BroadcastCallable = MockCallback<MockEthereum>;
 }
 
 // Build genesis storage according to the mock runtime.
