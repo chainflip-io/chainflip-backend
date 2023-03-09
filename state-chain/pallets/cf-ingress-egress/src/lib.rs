@@ -188,7 +188,7 @@ pub mod pallet {
 	pub(crate) type DisabledEgressAssets<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, TargetChainAsset<T, I>, ()>;
 
-	/// Stores a pool of addresses that is available for use.
+	/// Stores a pool of addresses that is available for use together with the intent id.
 	#[pallet::storage]
 	pub(crate) type AddressPool<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, Vec<(IntentId, TargetChainAccount<T, I>)>, ValueQuery>;
