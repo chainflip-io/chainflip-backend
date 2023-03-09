@@ -198,7 +198,7 @@ pub mod pallet {
 	pub(crate) type AddressStatus<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Blake2_128Concat, TargetChainAccount<T, I>, DeploymentStatus, ValueQuery>;
 
-	/// Stores a timestamp for when an intent will expire against the intent infos.
+	/// Stores a block for when an intent will expire against the intent infos.
 	#[pallet::storage]
 	pub(crate) type IntentExpiries<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, T::BlockNumber, Vec<(IntentId, TargetChainAccount<T, I>)>>;
