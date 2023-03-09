@@ -2,9 +2,9 @@ use anyhow::{anyhow, Result};
 use futures::Future;
 use state_chain_runtime::AccountId;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tracing::{info_span, trace, warn, Instrument};
 
 use crate::{
-	logging::COMPONENT_KEY,
 	multisig::{eth::EthSigning, polkadot::PolkadotSigning, ChainTag},
 	p2p::{MultisigMessageReceiver, MultisigMessageSender, OutgoingMultisigStageMessages},
 };
@@ -16,7 +16,6 @@ pub struct P2PMuxer {
 	eth_outgoing_receiver: UnboundedReceiver<OutgoingMultisigStageMessages>,
 	dot_incoming_sender: UnboundedSender<(AccountId, Vec<u8>)>,
 	dot_outgoing_receiver: UnboundedReceiver<OutgoingMultisigStageMessages>,
-	logger: slog::Logger,
 }
 
 /// Top-level protocol message, encapsulates all others
@@ -87,7 +86,6 @@ impl P2PMuxer {
 	pub fn start(
 		all_incoming_receiver: UnboundedReceiver<(AccountId, Vec<u8>)>,
 		all_outgoing_sender: UnboundedSender<OutgoingMultisigStageMessages>,
-		logger: &slog::Logger,
 	) -> (
 		MultisigMessageSender<EthSigning>,
 		MultisigMessageReceiver<EthSigning>,
@@ -108,10 +106,9 @@ impl P2PMuxer {
 			eth_incoming_sender,
 			dot_outgoing_receiver,
 			dot_incoming_sender,
-			logger: logger.new(slog::o!(COMPONENT_KEY => "P2PMuxer")),
 		};
 
-		let muxer_fut = muxer.run();
+		let muxer_fut = muxer.run().instrument(info_span!("P2PMuxer"));
 
 		(
 			MultisigMessageSender::<EthSigning>::new(eth_outgoing_sender),
@@ -139,26 +136,18 @@ impl P2PMuxer {
 								.expect("polkadot receiver dropped");
 						},
 						ChainTag::Sui => {
-							slog::warn!(self.logger, "Sui chain tag is not supported yet")
+							warn!("Sui chain tag is not supported yet")
 						},
 						ChainTag::Bitcoin => {
-							slog::warn!(self.logger, "Bitcoin chain tag is not supported yet")
+							warn!("Bitcoin chain tag is not supported yet")
 						},
 					},
-					Err(err) => {
-						slog::trace!(
-							self.logger,
-							"Could not deserialize tagged p2p message: {:?}",
-							err
-						);
+					Err(e) => {
+						trace!("Could not deserialize tagged p2p message: {e:?}",);
 					},
 				}
 			} else {
-				slog::trace!(
-					self.logger,
-					"ignoring p2p message with unexpected version: {}",
-					version
-				);
+				trace!("ignoring p2p message with unexpected version: {version}",);
 			}
 		}
 	}
@@ -216,14 +205,12 @@ mod tests {
 
 	#[tokio::test]
 	async fn correctly_prepends_chain_tag_broadcast() {
-		let logger = crate::logging::test_utils::new_test_logger();
-
 		let (p2p_outgoing_sender, mut p2p_outgoing_receiver) =
 			tokio::sync::mpsc::unbounded_channel();
 		let (_, p2p_incoming_receiver) = tokio::sync::mpsc::unbounded_channel();
 
 		let (eth_outgoing_sender, _, _, _, muxer_future) =
-			P2PMuxer::start(p2p_incoming_receiver, p2p_outgoing_sender, &logger);
+			P2PMuxer::start(p2p_incoming_receiver, p2p_outgoing_sender);
 
 		let _jh = tokio::task::spawn(muxer_future);
 
@@ -244,14 +231,12 @@ mod tests {
 
 	#[tokio::test]
 	async fn correctly_prepends_chain_tag_private() {
-		let logger = crate::logging::test_utils::new_test_logger();
-
 		let (p2p_outgoing_sender, mut p2p_outgoing_receiver) =
 			tokio::sync::mpsc::unbounded_channel();
 		let (_, p2p_incoming_receiver) = tokio::sync::mpsc::unbounded_channel();
 
 		let (eth_outgoing_sender, _, _, _, muxer_future) =
-			P2PMuxer::start(p2p_incoming_receiver, p2p_outgoing_sender, &logger);
+			P2PMuxer::start(p2p_incoming_receiver, p2p_outgoing_sender);
 
 		let _jh = tokio::task::spawn(muxer_future);
 
@@ -286,13 +271,11 @@ mod tests {
 
 	#[tokio::test]
 	async fn should_parse_and_remove_headers() {
-		let logger = crate::logging::test_utils::new_test_logger();
-
 		let (p2p_outgoing_sender, _p2p_outgoing_receiver) = tokio::sync::mpsc::unbounded_channel();
 		let (p2p_incoming_sender, p2p_incoming_receiver) = tokio::sync::mpsc::unbounded_channel();
 
 		let (_eth_outgoing_sender, mut eth_incoming_receiver, _, _, muxer_future) =
-			P2PMuxer::start(p2p_incoming_receiver, p2p_outgoing_sender, &logger);
+			P2PMuxer::start(p2p_incoming_receiver, p2p_outgoing_sender);
 
 		tokio::spawn(muxer_future);
 

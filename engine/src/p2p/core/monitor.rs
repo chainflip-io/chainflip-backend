@@ -11,6 +11,7 @@
 use serde::{Deserialize, Serialize};
 use state_chain_runtime::AccountId;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tracing::{info, info_span, trace, warn};
 
 use super::socket::DO_NOT_LINGER;
 
@@ -89,11 +90,7 @@ fn create_delayed_reconnect_channel(
 	(reconnect_sender, delayed_reconnect_receiver)
 }
 
-fn stop_monitoring_for_peer(
-	sockets_to_poll: &mut Vec<(zmq::Socket, SocketType)>,
-	idx: usize,
-	logger: &slog::Logger,
-) {
+fn stop_monitoring_for_peer(sockets_to_poll: &mut Vec<(zmq::Socket, SocketType)>, idx: usize) {
 	let account_id = match sockets_to_poll.remove(idx).1 {
 		SocketType::PeerReceiver => {
 			panic!("Peer receiver should never be removed");
@@ -101,7 +98,7 @@ fn stop_monitoring_for_peer(
 		SocketType::PeerMonitor(account_id) => account_id,
 	};
 
-	slog::trace!(logger, "No longer monitoring peer: {}", account_id);
+	trace!("No longer monitoring peer: {account_id}");
 }
 
 /// Returns a socket (used by p2p control loop to send new
@@ -109,10 +106,7 @@ fn stop_monitoring_for_peer(
 /// by p2p control loop to receive commands to reconnect to the peer)
 pub fn start_monitoring_thread(
 	context: zmq::Context,
-	logger: &slog::Logger,
 ) -> (MonitorHandle, UnboundedReceiver<AccountId>) {
-	let logger = logger.clone();
-
 	// This essentially opens a (ZMQ) channel that the monitor thread
 	// uses to receive new peer sockets to monitor
 	const PEER_INFO_ENDPOINT: &str = "inproc://peer_info_for_monitoring";
@@ -125,6 +119,9 @@ pub fn start_monitoring_thread(
 		create_delayed_reconnect_channel(std::time::Duration::from_secs(1));
 
 	std::thread::spawn(move || {
+		let span = info_span!("p2p");
+		let _entered = span.enter();
+
 		let peer_receiver = context.socket(zmq::PULL).unwrap();
 		peer_receiver.bind(PEER_INFO_ENDPOINT).unwrap();
 
@@ -141,7 +138,7 @@ pub fn start_monitoring_thread(
 				.map(|socket| socket.0.as_poll_item(zmq::POLLIN))
 				.collect();
 
-			slog::trace!(logger, "Items to monitor total: {}", poll_items.len());
+			trace!("Items to monitor total: {}", poll_items.len());
 
 			// Block until one or more sockets are "readable"
 			let _count = zmq::poll(&mut poll_items, -1);
@@ -166,7 +163,7 @@ pub fn start_monitoring_thread(
 						let SocketToMonitor { account_id, endpoint } =
 							bincode::deserialize(&message[0].to_vec()).unwrap();
 
-						slog::info!(logger, "Start monitoring peer {}", &account_id);
+						info!("Start monitoring peer {}", &account_id);
 
 						// Create a monitoring socket for the new peer
 						let monitor_socket = context.socket(zmq::PAIR).unwrap();
@@ -181,11 +178,7 @@ pub fn start_monitoring_thread(
 						let event_id = u16::from_le_bytes(message[0][0..2].try_into().unwrap());
 						match zmq::SocketEvent::from_raw(event_id) {
 							zmq::SocketEvent::HANDSHAKE_FAILED_AUTH => {
-								slog::warn!(
-									logger,
-									"Socket event: authentication failed with {}",
-									account_id
-								);
+								warn!("Socket event: authentication failed with {account_id}");
 								reconnect_sender.send(account_id.clone()).unwrap();
 							},
 							zmq::SocketEvent::MONITOR_STOPPED => {
@@ -196,7 +189,7 @@ pub fn start_monitoring_thread(
 								// (with a new socket) or if we were told by SC to remove the
 								// peer, so there is no danger that we won't connect because
 								// the monitoring stopped.
-								stop_monitoring_for_peer(&mut sockets_to_poll, *idx, &logger);
+								stop_monitoring_for_peer(&mut sockets_to_poll, *idx);
 							},
 							zmq::SocketEvent::HANDSHAKE_SUCCEEDED => {
 								// It is important that we continue monitoring the socket because
@@ -206,10 +199,7 @@ pub fn start_monitoring_thread(
 								// Also, if we stop reading monitor events, the sending side of
 								// the monitor socket can block, which in turn can block ZMQ's
 								// internal event loop, seemingly blocking all other sockets.
-								slog::trace!(
-									logger,
-									"Socket event: authentication success with {account_id}",
-								);
+								trace!("Socket event: authentication success with {account_id}");
 							},
 							unknown_event => panic!(
 								"P2P AUTH MONITOR: unexpected socket event: {unknown_event:?}",

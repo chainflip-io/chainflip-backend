@@ -20,8 +20,8 @@ use cf_chains::IngressIdConstructor;
 use cf_chains::{AllBatch, Chain, ChainAbi, ChainCrypto, FetchAssetParams, TransferAssetParams};
 use cf_primitives::{Asset, AssetAmount, ForeignChainAddress, IntentId};
 use cf_traits::{
-	liquidity::LpProvisioningApi, AddressDerivationApi, Broadcaster, EgressApi, IngressApi,
-	SwapIntentHandler,
+	liquidity::LpProvisioningApi, AddressDerivationApi, Broadcaster, Chainflip, EgressApi,
+	IngressApi, IngressHandler, SwapIntentHandler,
 };
 use frame_support::{pallet_prelude::*, sp_runtime::DispatchError};
 pub use pallet::*;
@@ -62,8 +62,6 @@ pub mod pallet {
 	use cf_primitives::BroadcastId;
 	use core::marker::PhantomData;
 	use sp_std::vec::Vec;
-
-	use cf_traits::{Chainflip, SwapIntentHandler};
 
 	use frame_support::{
 		pallet_prelude::{OptionQuery, ValueQuery},
@@ -144,6 +142,9 @@ pub mod pallet {
 		/// Time to life for an intent in seconds.
 		#[pallet::constant]
 		type IntentTTL: Get<Self::BlockNumber>;
+
+		/// Ingress Handler for performing action items on ingress needed elsewhere
+		type IngressHandler: IngressHandler<Self::TargetChain>;
 
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;
@@ -482,6 +483,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				relayer_commission_bps,
 			),
 		};
+
+		T::IngressHandler::handle_ingress(
+			tx_id.clone(),
+			amount.into(),
+			ingress_address.clone(),
+			asset,
+		);
 
 		Self::deposit_event(Event::IngressCompleted { ingress_address, asset, amount, tx_id });
 		Ok(())

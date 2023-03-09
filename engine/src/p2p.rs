@@ -22,6 +22,7 @@ use futures::{Future, FutureExt};
 use muxer::P2PMuxer;
 use sp_core::H256;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tracing::{info_span, Instrument};
 use zeroize::Zeroizing;
 
 use crate::task_scope::task_scope;
@@ -59,7 +60,6 @@ pub async fn start<StateChainClient>(
 	state_chain_client: Arc<StateChainClient>,
 	settings: P2PSettings,
 	latest_block_hash: H256,
-	logger: &slog::Logger,
 ) -> anyhow::Result<(
 	MultisigMessageSender<EthSigning>,
 	MultisigMessageReceiver<EthSigning>,
@@ -106,7 +106,7 @@ where
 		incoming_message_receiver,
 		own_peer_info_receiver,
 		p2p_fut,
-	) = core::start(&node_key, settings.port, current_peers, our_account_id, logger);
+	) = core::start(&node_key, settings.port, current_peers, our_account_id);
 
 	let (
 		eth_outgoing_sender,
@@ -114,9 +114,7 @@ where
 		dot_outgoing_sender,
 		dot_incoming_receiver,
 		muxer_future,
-	) = P2PMuxer::start(incoming_message_receiver, outgoing_message_sender, logger);
-
-	let logger = logger.clone();
+	) = P2PMuxer::start(incoming_message_receiver, outgoing_message_sender);
 
 	let fut = task_scope(move |scope| {
 		async move {
@@ -125,15 +123,17 @@ where
 				Ok(())
 			});
 
-			scope.spawn(peer_info_submitter::start(
-				node_key,
-				state_chain_client,
-				settings.ip_address,
-				settings.port,
-				own_peer_info,
-				own_peer_info_receiver,
-				logger,
-			));
+			scope.spawn(
+				peer_info_submitter::start(
+					node_key,
+					state_chain_client,
+					settings.ip_address,
+					settings.port,
+					own_peer_info,
+					own_peer_info_receiver,
+				)
+				.instrument(info_span!("P2PClient")),
+			);
 
 			scope.spawn(async move {
 				muxer_future.await;

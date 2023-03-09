@@ -101,7 +101,6 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::logging::test_utils::new_test_logger;
 
 	/// This test covers:
 	/// - loading a checkpoint from the db
@@ -111,7 +110,6 @@ mod tests {
 	/// - The checkpointing task panics if send a witness of the same block twice
 	#[tokio::test(start_paused = true)]
 	async fn test_checkpointing() {
-		let logger = new_test_logger();
 		let (_dir, db_path) = crate::testing::new_temp_directory_with_nonexistent_file();
 
 		let saved_witnessed_until = WitnessedUntil { epoch_index: 1, block_number: 2 };
@@ -122,12 +120,12 @@ mod tests {
 
 		{
 			// Write the starting checkpoint to the db
-			let db = PersistentKeyDB::open_and_migrate_to_latest(&db_path, None, &logger).unwrap();
+			let db = PersistentKeyDB::open_and_migrate_to_latest(&db_path, None).unwrap();
 			db.update_checkpoint(ChainTag::Ethereum, &saved_witnessed_until)
 		}
 
 		{
-			let db = PersistentKeyDB::open_and_migrate_to_latest(&db_path, None, &logger).unwrap();
+			let db = PersistentKeyDB::open_and_migrate_to_latest(&db_path, None).unwrap();
 
 			// Start checkpointing at the same epoch but smaller block number
 			match get_witnesser_start_block_with_checkpointing::<cf_chains::Ethereum>(
@@ -177,7 +175,7 @@ mod tests {
 		}
 
 		{
-			let db = PersistentKeyDB::open_and_migrate_to_latest(&db_path, None, &logger).unwrap();
+			let db = PersistentKeyDB::open_and_migrate_to_latest(&db_path, None).unwrap();
 
 			// The checkpoint in the db should be updated to the expected_witnesser_start
 			assert_eq!(
@@ -189,18 +187,17 @@ mod tests {
 
 	#[tokio::test]
 	async fn should_return_already_witnessed() {
-		let logger = new_test_logger();
 		let (_dir, db_path) = crate::testing::new_temp_directory_with_nonexistent_file();
 
 		let saved_witnessed_until = WitnessedUntil { epoch_index: 2, block_number: 2 };
 
 		{
 			// Write the starting checkpoint to the db
-			let db = PersistentKeyDB::open_and_migrate_to_latest(&db_path, None, &logger).unwrap();
+			let db = PersistentKeyDB::open_and_migrate_to_latest(&db_path, None).unwrap();
 			db.update_checkpoint(ChainTag::Ethereum, &saved_witnessed_until)
 		}
 
-		let db = PersistentKeyDB::open_and_migrate_to_latest(&db_path, None, &logger).unwrap();
+		let db = PersistentKeyDB::open_and_migrate_to_latest(&db_path, None).unwrap();
 
 		// Start checkpointing at a smaller epoch and check that it returns `AlreadyWitnessedEpoch`
 		assert!(matches!(

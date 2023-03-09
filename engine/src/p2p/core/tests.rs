@@ -5,6 +5,7 @@ use crate::p2p::OutgoingMultisigStageMessages;
 use sp_core::ed25519::Public;
 use state_chain_runtime::AccountId;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tracing::{info_span, Instrument};
 use utilities::Port;
 
 fn create_node_info(id: AccountId, node_key: &ed25519_dalek::Keypair, port: Port) -> PeerInfo {
@@ -25,18 +26,12 @@ fn spawn_node(
 	idx: usize,
 	our_peer_info: PeerInfo,
 	peer_infos: &[PeerInfo],
-	logger: &slog::Logger,
 ) -> Node {
 	let account_id = AccountId::new([idx as u8 + 1; 32]);
-	let (msg_sender, peer_update_sender, msg_receiver, _, fut) = super::start(
-		key,
-		our_peer_info.port,
-		peer_infos.to_vec(),
-		account_id,
-		&logger.new(slog::o!("node" => idx)),
-	);
+	let (msg_sender, peer_update_sender, msg_receiver, _, fut) =
+		super::start(key, our_peer_info.port, peer_infos.to_vec(), account_id);
 
-	tokio::spawn(fut);
+	tokio::spawn(fut.instrument(info_span!("node", idx = idx)));
 
 	Node { msg_sender, peer_update_sender, msg_receiver }
 }
@@ -58,9 +53,6 @@ fn create_keypair() -> ed25519_dalek::Keypair {
 // TODO: consider breaking this into more granular tests
 #[tokio::test]
 async fn connect_two_nodes() {
-	use crate::logging::test_utils::new_test_logger;
-	let logger = new_test_logger();
-
 	let node_key1 = create_keypair();
 	let node_key2 = create_keypair();
 
@@ -70,7 +62,7 @@ async fn connect_two_nodes() {
 	let pi2 = create_node_info(AccountId::new([2; 32]), &node_key2, 8088);
 
 	// Node 1 knows about node 2 from the startup
-	let node1 = spawn_node(&node_key1, 0, pi1.clone(), &[pi1.clone(), pi2.clone()], &logger);
+	let node1 = spawn_node(&node_key1, 0, pi1.clone(), &[pi1.clone(), pi2.clone()]);
 	// ----------------------------------------------------------------
 	// At this point node 1 may already attempt to connect to node 2,
 	// but fail due to node 2 possibly being offline. The reconnection
@@ -79,7 +71,7 @@ async fn connect_two_nodes() {
 	// ----------------------------------------------------------------
 
 	// Node 2 only knows about itself from the startup
-	let mut node2 = spawn_node(&node_key2, 1, pi2.clone(), &[pi2.clone()], &logger);
+	let mut node2 = spawn_node(&node_key2, 1, pi2.clone(), &[pi2.clone()]);
 
 	// ----------------------------------------------------------------
 	// Node 2 should start around this time, and receive a connection

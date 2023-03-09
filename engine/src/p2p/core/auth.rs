@@ -9,6 +9,7 @@ use std::{
 };
 
 use cf_primitives::AccountId;
+use tracing::{info, info_span, trace, warn};
 
 use super::{socket::DO_NOT_LINGER, PeerInfo};
 
@@ -30,17 +31,15 @@ pub struct Authenticator {
 
 	// We don't use BTreeSet because XPublicKey doesn't implement Ord
 	allowed_pubkeys: RwLock<HashMap<XPublicKey, AccountId>>,
-	logger: slog::Logger,
 }
 
 impl Authenticator {
-	fn new(logger: &slog::Logger) -> Self {
-		Authenticator { allowed_pubkeys: Default::default(), logger: logger.clone() }
+	fn new() -> Self {
+		Authenticator { allowed_pubkeys: Default::default() }
 	}
 
 	pub fn add_peer(&self, peer: &PeerInfo) {
-		slog::trace!(
-			self.logger,
+		trace!(
 			"Adding to the list of allowed peers: {} (public key: {})",
 			peer.account_id,
 			to_string(&peer.pubkey)
@@ -53,10 +52,8 @@ impl Authenticator {
 
 	pub fn remove_peer(&self, peer_pubkey: &XPublicKey) {
 		if let Some(account_id) = self.allowed_pubkeys.write().unwrap().remove(peer_pubkey) {
-			slog::trace!(
-				self.logger,
-				"Removed from the list of allowed peers: {} (public key: {})",
-				account_id,
+			trace!(
+				"Removed from the list of allowed peers: {account_id} (public key: {})",
 				to_string(peer_pubkey)
 			);
 		}
@@ -68,15 +65,10 @@ impl Authenticator {
 		let req = parse_request(socket);
 
 		if let Some(account_id) = self.allowed_pubkeys.read().unwrap().get(&req.pubkey) {
-			slog::trace!(
-				self.logger,
-				"Allowing an incoming connection for account id: {}",
-				account_id
-			);
+			trace!("Allowing an incoming connection for account id: {account_id}");
 			send_auth_response(socket, &req.request_id, ZAP_AUTH_SUCCESS, &req.pubkey)
 		} else {
-			slog::warn!(
-				self.logger,
+			warn!(
 				"Declining an incoming connection for an unknown pubkey: {}",
 				to_string(&req.pubkey)
 			);
@@ -85,7 +77,10 @@ impl Authenticator {
 	}
 
 	pub fn run(self: Arc<Self>, socket: zmq::Socket) {
-		slog::info!(self.logger, "Started authentication thread!");
+		let span = info_span!("p2p");
+		let _entered = span.enter();
+
+		info!("Started authentication thread!");
 		// TODO: ensure that the rest of the program terminates
 		// if this thread panics (which is unlikely)
 		loop {
@@ -102,11 +97,8 @@ struct AuthRequest {
 	pubkey: XPublicKey,
 }
 
-pub fn start_authentication_thread(
-	context: zmq::Context,
-	logger: &slog::Logger,
-) -> Arc<Authenticator> {
-	let authenticator = Arc::new(Authenticator::new(logger));
+pub fn start_authentication_thread(context: zmq::Context) -> Arc<Authenticator> {
+	let authenticator = Arc::new(Authenticator::new());
 
 	// Note ZMQ implements the REQ side of this socket
 	// internally.
