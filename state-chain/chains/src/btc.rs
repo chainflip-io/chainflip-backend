@@ -1,4 +1,5 @@
 pub mod ingress_address;
+pub mod utxo_selection;
 
 use base58::FromBase58;
 use bech32::{self, u5, FromBase32, ToBase32, Variant};
