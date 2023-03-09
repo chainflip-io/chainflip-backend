@@ -140,7 +140,7 @@ pub mod pallet {
 		/// Governance origin to manage allowed assets
 		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
 
-		/// Time to life for an intent in seconds.
+		/// Time to life for an intent in blocks.
 		#[pallet::constant]
 		type IntentTTL: Get<Self::BlockNumber>;
 
