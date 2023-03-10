@@ -79,8 +79,9 @@ pub use cf_traits::{EpochInfo, EthEnvironmentProvider, QualifyNode, SessionKeysR
 
 pub use chainflip::chain_instances::*;
 use chainflip::{
-	epoch_transition::ChainflipEpochTransitions, BtcVaultTransitionHandler, ChainflipHeartbeat,
-	EthEnvironment, EthVaultTransitionHandler, TokenholderGovernanceBroadcaster,
+	epoch_transition::ChainflipEpochTransitions, BtcEnvironment, BtcVaultTransitionHandler,
+	ChainflipHeartbeat, EthEnvironment, EthVaultTransitionHandler,
+	TokenholderGovernanceBroadcaster,
 };
 
 use chainflip::{all_vaults_rotator::AllVaultRotator, DotEnvironment, DotVaultTransitionHandler};
@@ -273,8 +274,7 @@ impl pallet_cf_vaults::Config<BitcoinInstance> for Runtime {
 	type ThresholdSigner = BitcoinThresholdSigner;
 	type Offence = chainflip::Offence;
 	type Chain = Bitcoin;
-	// TODO: Use the Bitcoin API
-	type SetAggKeyWithAggKey = dot::api::PolkadotApi<DotEnvironment>;
+	type SetAggKeyWithAggKey = cf_chains::btc::api::BitcoinApi<BtcEnvironment>;
 	type VaultTransitionHandler = BtcVaultTransitionHandler;
 	type Broadcaster = BitcoinBroadcaster;
 	type OffenceReporter = Reputation;
@@ -296,7 +296,7 @@ impl pallet_cf_ingress_egress::Config<EthereumInstance> for Runtime {
 	type Broadcaster = EthereumBroadcaster;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type TTL = ConstU32<100>;
-	type IngressHandler = EthIngressHandler;
+	type IngressHandler = chainflip::EthIngressHandler;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 }
 
@@ -311,7 +311,7 @@ impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 	type TTL = ConstU32<100>;
-	type IngressHandler = DotIngressHandler;
+	type IngressHandler = chainflip::DotIngressHandler;
 }
 
 impl pallet_cf_ingress_egress::Config<BitcoinInstance> for Runtime {
@@ -320,11 +320,12 @@ impl pallet_cf_ingress_egress::Config<BitcoinInstance> for Runtime {
 	type AddressDerivation = AddressDerivation;
 	type LpProvisioning = LiquidityProvider;
 	type SwapIntentHandler = Swapping;
-	// TODO: Use Bitcoin API
-	type AllBatch = dot::api::PolkadotApi<chainflip::DotEnvironment>;
+	type AllBatch = cf_chains::btc::api::BitcoinApi<chainflip::BtcEnvironment>;
 	type Broadcaster = BitcoinBroadcaster;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
+	type TTL = ConstU32<100>;
+	type IngressHandler = chainflip::BtcIngressHandler;
 }
 
 parameter_types! {
@@ -713,10 +714,9 @@ impl pallet_cf_broadcast::Config<BitcoinInstance> for Runtime {
 	type Offence = chainflip::Offence;
 	type AccountRoleRegistry = AccountRoles;
 	type TargetChain = Bitcoin;
-	// TODO: Use Bitcoin API
-	type ApiCall = dot::api::PolkadotApi<DotEnvironment>;
+	type ApiCall = cf_chains::btc::api::BitcoinApi<BtcEnvironment>;
 	type ThresholdSigner = BitcoinThresholdSigner;
-	type TransactionBuilder = chainflip::DotTransactionBuilder;
+	type TransactionBuilder = chainflip::BtcTransactionBuilder;
 	type BroadcastSignerNomination = chainflip::RandomSignerNomination;
 	type OffenceReporter = Reputation;
 	type EnsureThresholdSigned =
@@ -746,7 +746,7 @@ impl pallet_cf_chain_tracking::Config<BitcoinInstance> for Runtime {
 	type TargetChain = Bitcoin;
 	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
 	// TODO: Set good limit
-	type AgeLimit = ConstU32<1>;
+	type AgeLimit = ConstU64<1>;
 }
 
 construct_runtime!(
