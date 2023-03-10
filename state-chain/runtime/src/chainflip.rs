@@ -306,7 +306,7 @@ pub struct BtcEnvironment;
 
 impl ChainEnvironment<BtcAmount, (Vec<Utxo>, u64)> for BtcEnvironment {
 	fn lookup(output_amount: BtcAmount) -> Option<(Vec<Utxo>, u64)> {
-		Some(Environment::get_modify_btc_utxos_for_transaction(output_amount))
+		Environment::get_modify_btc_utxos_for_transaction(output_amount)
 	}
 }
 
