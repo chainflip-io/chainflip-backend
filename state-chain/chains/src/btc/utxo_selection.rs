@@ -33,11 +33,15 @@ pub fn select_utxos_from_pool<UTXO: GetUtxoAmount>(
 	// Start selecting the utxos from the smallest amount and keep on selecting the utxos until the
 	// cummulative amount of all selected utxos (plus the fees that need to be paid on spending
 	// them) just exceeds the total amount that needs to be spent (such that not selecting the last
-	// utxo would reduce the cummulative amount below the required amount).
+	// utxo would reduce the cummulative amount below the required amount). If all available utxos
+	// have been selected and the egress amount is still not met, select all utxos and return.
 	while cumulative_amount < amount_to_be_egressed {
-		let current_smallest_utxo = available_utxos.pop().expect("The funds in vault should be greater than the amount requested to be egressed. This is made sure elsewhere and should be expected here");
-		cumulative_amount += current_smallest_utxo.amount() - fee_per_utxo;
-		selected_utxos.push(current_smallest_utxo);
+		if let Some(current_smallest_utxo) = available_utxos.pop() {
+			cumulative_amount += current_smallest_utxo.amount() - fee_per_utxo;
+			selected_utxos.push(current_smallest_utxo);
+		} else {
+			break
+		}
 	}
 
 	// Select one more utxo that is next in line (smallest) among the remaining unselected utxos.
@@ -116,10 +120,29 @@ fn test_utxo_selection() {
 			2485
 		)
 	);
-	// max amount that can be spent with the given utxos. entering the amount greater than this will
-	// cause the function to panic (see the expect statement above)
+	// max amount that can be spent with the given utxos.
 	assert_eq!(
-		select_utxos_from_pool(&mut available_utxos, FEEPERUTXO, 2485),
+		select_utxos_from_pool(&mut available_utxos.clone(), FEEPERUTXO, 2485),
+		(
+			vec![
+				UTXO { amount: 7 },
+				UTXO { amount: 15 },
+				UTXO { amount: 19 },
+				UTXO { amount: 20 },
+				UTXO { amount: 25 },
+				UTXO { amount: 41 },
+				UTXO { amount: 110 },
+				UTXO { amount: 500 },
+				UTXO { amount: 768 },
+				UTXO { amount: 1000 },
+			],
+			2485
+		)
+	);
+	// entering the amount greater than the max spendable amount will
+	// cause the function to select all available utxos
+	assert_eq!(
+		select_utxos_from_pool(&mut available_utxos, FEEPERUTXO, 100000),
 		(
 			vec![
 				UTXO { amount: 7 },

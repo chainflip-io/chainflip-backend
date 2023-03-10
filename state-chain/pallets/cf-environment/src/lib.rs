@@ -543,7 +543,9 @@ impl<T: Config> Pallet<T> {
 		total_output_amount: cf_chains::btc::BtcAmount,
 	) -> (Vec<Utxo>, u64) {
 		BitcoinAvailableUtxos::<T>::mutate(|available_utxos| {
-			// Calculate the selection of utxos, return them and remove them from the list
+			// Calculate the selection of utxos, return them and remove them from the list. If the
+			// total output amount exceeds the total spendable amount of all utxos, the function
+			// selects all utxos
 			select_utxos_from_pool(
 				available_utxos,
 				BitcoinFeePerUtxo::<T>::get(),

@@ -1,7 +1,8 @@
 pub mod batch_fetch_and_transfer;
 
 use super::{
-	scriptpubkey_from_address, Bitcoin, BitcoinNetwork, BitcoinOutput, BtcAddress, BtcAmount, Utxo,
+	ingress_address::derive_btc_ingress_address, scriptpubkey_from_address, Bitcoin,
+	BitcoinNetwork, BitcoinOutput, BtcAddress, BtcAmount, Utxo,
 };
 use crate::*;
 use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound};
@@ -62,6 +63,44 @@ where
 			batch_fetch_and_transfer::BatchFetchAndTransfer::new_unsigned(
 				selected_input_utxos,
 				btc_outputs,
+			),
+		))
+	}
+}
+
+impl<E> SetAggKeyWithAggKey<Bitcoin> for BitcoinApi<E>
+where
+	E: ChainEnvironment<<Bitcoin as Chain>::ChainAmount, (Vec<Utxo>, u64)>
+		+ ChainEnvironment<(), (BitcoinNetwork, BtcAddress)>,
+{
+	fn new_unsigned(
+		_maybe_old_key: Option<<Bitcoin as ChainCrypto>::AggKey>,
+		new_key: <Bitcoin as ChainCrypto>::AggKey,
+	) -> Result<Self, ()> {
+		let (bitcoin_network, _bitcoin_return_address) =
+			<E as ChainEnvironment<(), (BitcoinNetwork, BtcAddress)>>::lookup(())
+				.expect("Since the lookup function always returns a some");
+
+		// We will use the bitcoin address derived with the salt of 0 as the vault address where we
+		// collect unspent amounts in btc transactions and consolidate funds when rotating epoch.
+		let new_vault_return_address =
+			derive_btc_ingress_address(new_key.0, 0, bitcoin_network.clone());
+
+		let (all_input_utxos, total_spendable_amount_in_vault) =
+			<E as ChainEnvironment<BtcAmount, (Vec<Utxo>, u64)>>::lookup(u64::MAX.into()) //max possible btc value to get all available utxos
+				.ok_or(())?;
+
+		Ok(Self::BatchFetchAndTransfer(
+			batch_fetch_and_transfer::BatchFetchAndTransfer::new_unsigned(
+				all_input_utxos,
+				vec![BitcoinOutput {
+					amount: total_spendable_amount_in_vault,
+					script_pubkey: scriptpubkey_from_address(
+						&new_vault_return_address,
+						bitcoin_network,
+					)
+					.map_err(|_| ())?,
+				}],
 			),
 		))
 	}
