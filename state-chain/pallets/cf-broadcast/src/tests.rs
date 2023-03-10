@@ -525,3 +525,8 @@ fn re_request_threshold_signature_on_invalid_tx_params() {
 		threshold_signature_rerequested(broadcast_attempt_id);
 	});
 }
+
+#[test]
+fn threshold_sign_and_broadcast_with_callback() {
+	new_test_ext().execute_with(|| todo!());
+}

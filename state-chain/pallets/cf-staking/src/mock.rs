@@ -2,7 +2,7 @@ use crate as pallet_cf_staking;
 use cf_chains::{ApiCall, Chain, ChainCrypto, Ethereum};
 use cf_primitives::AuthorityCount;
 use cf_traits::{
-	impl_mock_waived_fees,
+	impl_mock_callback, impl_mock_waived_fees,
 	mocks::{
 		bid_info::MockBidInfo, staking_info::MockStakingInfo,
 		system_state_info::MockSystemStateInfo,
@@ -10,7 +10,7 @@ use cf_traits::{
 	Broadcaster, WaivedFees,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
-use frame_support::parameter_types;
+use frame_support::{parameter_types, traits::UnfilteredDispatchable};
 use scale_info::TypeInfo;
 use sp_runtime::{
 	testing::Header,
@@ -169,14 +169,24 @@ impl MockBroadcaster {
 	}
 }
 
+impl_mock_callback!(RuntimeOrigin);
+
 impl Broadcaster<Ethereum> for MockBroadcaster {
 	type ApiCall = MockRegisterClaim;
+	type Callback = MockCallback;
 
 	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) -> cf_primitives::BroadcastId {
 		CLAIM_BROADCAST_REQUESTS.with(|cell| {
 			cell.borrow_mut().push(api_call.amount);
 		});
 		0
+	}
+
+	fn threshold_sign_and_broadcast_with_callback(
+		_api_call: Self::ApiCall,
+		_callback: Option<Self::Callback>,
+	) -> cf_primitives::BroadcastId {
+		todo!()
 	}
 }
 

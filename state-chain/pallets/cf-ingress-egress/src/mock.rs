@@ -9,7 +9,12 @@ pub use cf_primitives::{
 	Asset, AssetAmount, EthereumAddress, ExchangeRate, ETHEREUM_ETH_ADDRESS,
 };
 
-use cf_traits::mocks::all_batch::{MockAllBatch, MockEthEnvironment};
+use frame_support::traits::UnfilteredDispatchable;
+
+use cf_traits::{
+	impl_mock_callback,
+	mocks::all_batch::{MockAllBatch, MockEthEnvironment},
+};
 pub use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
 	Broadcaster,
@@ -81,12 +86,23 @@ impl cf_traits::Chainflip for Test {
 	type SystemState = MockSystemStateInfo;
 }
 
+impl_mock_callback!(RuntimeOrigin);
+
 pub struct MockBroadcast;
 impl Broadcaster<Ethereum> for MockBroadcast {
 	type ApiCall = MockAllBatch<MockEthEnvironment>;
 
 	fn threshold_sign_and_broadcast(_api_call: Self::ApiCall) -> BroadcastId {
 		1
+	}
+
+	type Callback = MockCallback;
+
+	fn threshold_sign_and_broadcast_with_callback(
+		_api_call: Self::ApiCall,
+		_callback: Option<Self::Callback>,
+	) -> BroadcastId {
+		todo!()
 	}
 }
 

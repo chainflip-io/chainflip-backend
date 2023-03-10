@@ -122,7 +122,7 @@ impl UnfilteredDispatchable for MockCallback<MockEthereum> {
 
 	fn dispatch_bypass_filter(
 		self,
-		origin: Self::RuntimeOrigin,
+		_origin: Self::RuntimeOrigin,
 	) -> frame_support::dispatch::DispatchResultWithPostInfo {
 		Ok(().into())
 	}

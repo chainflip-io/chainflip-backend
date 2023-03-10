@@ -7,11 +7,12 @@ use cf_chains::{
 
 use cf_primitives::{AuthorityCount, BroadcastId};
 use cf_traits::{
+	impl_mock_callback,
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
 	BroadcastCleanup, Broadcaster, Chainflip, VaultKeyWitnessedHandler,
 };
 
-use frame_support::parameter_types;
+use frame_support::{parameter_types, traits::UnfilteredDispatchable};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -95,12 +96,23 @@ impl ApiCall<Polkadot> for MockCreatePolkadotVault {
 		unimplemented!()
 	}
 }
+
+impl_mock_callback!(RuntimeOrigin);
+
 pub struct MockPolkadotBroadcaster;
 impl Broadcaster<Polkadot> for MockPolkadotBroadcaster {
 	type ApiCall = MockCreatePolkadotVault;
+	type Callback = MockCallback;
 
 	fn threshold_sign_and_broadcast(_api_call: Self::ApiCall) -> BroadcastId {
 		unimplemented!()
+	}
+
+	fn threshold_sign_and_broadcast_with_callback(
+		_api_call: Self::ApiCall,
+		_callback: Option<Self::Callback>,
+	) -> BroadcastId {
+		todo!()
 	}
 }
 impl BroadcastCleanup<Polkadot> for MockPolkadotBroadcaster {

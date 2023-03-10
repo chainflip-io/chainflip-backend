@@ -626,13 +626,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			// to retry from the threshold signing stage.
 			else {
 				Self::clean_up_broadcast_storage(broadcast_id);
-				let maybe_callback =
-					if let Some(callback) = RequestCallbacks::<T, I>::take(broadcast_id) {
-						Some(callback)
-					} else {
-						None
-					};
-				Self::threshold_sign_and_broadcast(api_call, maybe_callback);
+				Self::threshold_sign_and_broadcast(
+					api_call,
+					RequestCallbacks::<T, I>::take(broadcast_id),
+				);
 				log::info!(
 					"Signature is invalid -> rescheduled threshold signature for broadcast id {}.",
 					broadcast_id
