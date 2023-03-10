@@ -544,7 +544,7 @@ impl<T: Config> Pallet<T> {
 	// selects all utxos. The fee required to spend the utxos are accounted for while selection.
 	pub fn select_and_take_bitcoin_utxos(
 		total_output_amount: cf_chains::btc::BtcAmount,
-	) -> (Vec<Utxo>, u64) {
+	) -> Option<(Vec<Utxo>, u64)> {
 		BitcoinAvailableUtxos::<T>::mutate(|available_utxos| {
 			select_utxos_from_pool(
 				available_utxos,
