@@ -273,6 +273,8 @@ pub mod pallet {
 		BroadcastSuccess { broadcast_id: BroadcastId },
 		/// A broadcast's threshold signature is invalid, we will attempt to re-sign it.
 		ThresholdSignatureInvalid { broadcast_id: BroadcastId },
+		/// A signature accepted event on the target chain has been witnessed.
+		SignatureAcceptedCallbackExecuted { broadcast_id: BroadcastId, result: DispatchResult },
 	}
 
 	#[pallet::error]
@@ -488,18 +490,23 @@ pub mod pallet {
 			}
 
 			Self::clean_up_broadcast_storage(broadcast_id);
+
 			if let Some(callback) = RequestCallbacks::<T, I>::take(broadcast_id) {
-				let _ = callback
-					.dispatch_bypass_filter(Origin(Default::default()).into())
-					.map(|_| ())
-					.map_err(|e| {
-						log::error!(
-							"Callback execution has failed for broadcast {}.",
-							broadcast_id
-						);
-						e.error
-					});
+				Self::deposit_event(Event::<T, I>::SignatureAcceptedCallbackExecuted {
+					broadcast_id: broadcast_id.clone(),
+					result: callback
+						.dispatch_bypass_filter(Origin(Default::default()).into())
+						.map(|_| ())
+						.map_err(|e| {
+							log::error!(
+								"Callback execution has failed for broadcast {}.",
+								broadcast_id
+							);
+							e.error
+						}),
+				});
 			}
+
 			Self::deposit_event(Event::<T, I>::BroadcastSuccess { broadcast_id });
 			Ok(().into())
 		}

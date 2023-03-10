@@ -99,6 +99,7 @@ impl MockCfe {
 				},
 				BroadcastEvent::__Ignore(_, _) => unreachable!(),
 				BroadcastEvent::ThresholdSignatureInvalid { .. } => {},
+				BroadcastEvent::SignatureAcceptedCallbackExecuted { .. } => {},
 			},
 			_ => panic!("Unexpected event"),
 		};
@@ -528,5 +529,5 @@ fn re_request_threshold_signature_on_invalid_tx_params() {
 
 #[test]
 fn threshold_sign_and_broadcast_with_callback() {
-	new_test_ext().execute_with(|| todo!());
+	new_test_ext().execute_with(|| todo!("Test threshold_sign_and_broadcast_with_callback"));
 }
