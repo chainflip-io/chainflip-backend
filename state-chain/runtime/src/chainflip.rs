@@ -28,7 +28,7 @@ use cf_chains::{
 		api::{EthereumApi, EthereumReplayProtection},
 		Ethereum,
 	},
-	AnyChain, ApiCall, Chain, ChainAbi, ChainCrypto, ChainEnvironment, ForeignChain,
+	AnyChain, ApiCall, Bitcoin, Chain, ChainAbi, ChainCrypto, ChainEnvironment, ForeignChain,
 	ReplayProtectionProvider, SetCommKeyWithAggKey, SetGovKeyWithAggKey, TransactionBuilder,
 };
 use cf_primitives::{
@@ -325,6 +325,8 @@ impl VaultTransitionHandler<Polkadot> for DotVaultTransitionHandler {
 		Environment::reset_polkadot_proxy_account_nonce();
 	}
 }
+pub struct BtcVaultTransitionHandler;
+impl VaultTransitionHandler<Bitcoin> for BtcVaultTransitionHandler {}
 
 pub struct AnyChainIngressEgressHandler;
 
