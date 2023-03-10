@@ -238,7 +238,6 @@ const INTERNAL_PUBKEY: &[u8] =
 const SEGWIT_VERSION: u8 = 1;
 
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
-
 pub enum Error {
 	/// The address is invalid
 	InvalidAddress,
@@ -261,6 +260,7 @@ impl GetUtxoAmount for Utxo {
 }
 
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+
 pub struct BitcoinOutput {
 	amount: u64,
 	script_pubkey: BitcoinScript,
@@ -576,6 +576,7 @@ impl BitcoinTransaction {
 }
 
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, Default)]
+
 pub struct BitcoinScript {
 	data: Vec<u8>,
 }
