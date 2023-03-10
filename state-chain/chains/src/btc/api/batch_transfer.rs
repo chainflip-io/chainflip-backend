@@ -11,7 +11,7 @@ use sp_runtime::RuntimeDebug;
 /// Represents all the arguments required to build the call to fetch assets for all given intent
 /// ids.
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
-pub struct BatchFetchAndTransfer {
+pub struct BatchTransfer {
 	/// The handler for creating and signing polkadot extrinsics
 	pub bitcoin_transaction: BitcoinTransaction,
 	/// The list of all inbound deposits that are to be fetched in this batch call.
@@ -20,7 +20,7 @@ pub struct BatchFetchAndTransfer {
 	pub outputs: Vec<BitcoinOutput>,
 }
 
-impl BatchFetchAndTransfer {
+impl BatchTransfer {
 	pub fn new_unsigned(input_utxos: Vec<Utxo>, outputs: Vec<BitcoinOutput>) -> Self {
 		Self {
 			bitcoin_transaction: BitcoinTransaction::create_new_unsigned(
@@ -33,7 +33,7 @@ impl BatchFetchAndTransfer {
 	}
 }
 
-impl ApiCall<Bitcoin> for BatchFetchAndTransfer {
+impl ApiCall<Bitcoin> for BatchTransfer {
 	fn threshold_signature_payload(&self) -> <Bitcoin as ChainCrypto>::Payload {
 		let mut payloads = vec![];
 		for i in 0..self.input_utxos.len() {
@@ -108,7 +108,7 @@ impl ApiCall<Bitcoin> for BatchFetchAndTransfer {
 // 			},
 // 		];
 
-// 		let batch_fetch_api = BatchFetchAndTransfer::new_unsigned(
+// 		let batch_fetch_api = BatchTransfer::new_unsigned(
 // 			PolkadotReplayProtection::new(NONCE_1, 0, TEST_RUNTIME_VERSION, Default::default()),
 // 			dummy_fetch_params,
 // 			dummy_transfer_params,

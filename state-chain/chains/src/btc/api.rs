@@ -1,4 +1,4 @@
-pub mod batch_fetch_and_transfer;
+pub mod batch_transfer;
 
 use super::{
 	ingress_address::derive_btc_ingress_address, scriptpubkey_from_address, Bitcoin,
@@ -11,7 +11,7 @@ use sp_std::marker::PhantomData;
 #[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, EqNoBound, Encode, Decode, TypeInfo)]
 #[scale_info(skip_type_params(Environment))]
 pub enum BitcoinApi<Environment: 'static> {
-	BatchFetchAndTransfer(batch_fetch_and_transfer::BatchFetchAndTransfer),
+	BatchTransfer(batch_transfer::BatchTransfer),
 	//RotateVaultProxy(rotate_vault_proxy::RotateVaultProxy),
 	//CreateAnonymousVault(create_anonymous_vault::CreateAnonymousVault),
 	//ChangeGovKey(set_gov_key_with_agg_key::ChangeGovKey),
@@ -59,12 +59,10 @@ where
 			)
 			.map_err(|_| ())?,
 		});
-		Ok(Self::BatchFetchAndTransfer(
-			batch_fetch_and_transfer::BatchFetchAndTransfer::new_unsigned(
-				selected_input_utxos,
-				btc_outputs,
-			),
-		))
+		Ok(Self::BatchTransfer(batch_transfer::BatchTransfer::new_unsigned(
+			selected_input_utxos,
+			btc_outputs,
+		)))
 	}
 }
 
@@ -90,32 +88,30 @@ where
 			<E as ChainEnvironment<BtcAmount, (Vec<Utxo>, u64)>>::lookup(u64::MAX.into()) //max possible btc value to get all available utxos
 				.ok_or(())?;
 
-		Ok(Self::BatchFetchAndTransfer(
-			batch_fetch_and_transfer::BatchFetchAndTransfer::new_unsigned(
-				all_input_utxos,
-				vec![BitcoinOutput {
-					amount: total_spendable_amount_in_vault,
-					script_pubkey: scriptpubkey_from_address(
-						&new_vault_return_address,
-						bitcoin_network,
-					)
-					.map_err(|_| ())?,
-				}],
-			),
-		))
+		Ok(Self::BatchTransfer(batch_transfer::BatchTransfer::new_unsigned(
+			all_input_utxos,
+			vec![BitcoinOutput {
+				amount: total_spendable_amount_in_vault,
+				script_pubkey: scriptpubkey_from_address(
+					&new_vault_return_address,
+					bitcoin_network,
+				)
+				.map_err(|_| ())?,
+			}],
+		)))
 	}
 }
 
-impl<E> From<batch_fetch_and_transfer::BatchFetchAndTransfer> for BitcoinApi<E> {
-	fn from(tx: batch_fetch_and_transfer::BatchFetchAndTransfer) -> Self {
-		Self::BatchFetchAndTransfer(tx)
+impl<E> From<batch_transfer::BatchTransfer> for BitcoinApi<E> {
+	fn from(tx: batch_transfer::BatchTransfer) -> Self {
+		Self::BatchTransfer(tx)
 	}
 }
 
 impl<E> ApiCall<Bitcoin> for BitcoinApi<E> {
 	fn threshold_signature_payload(&self) -> <Bitcoin as ChainCrypto>::Payload {
 		match self {
-			BitcoinApi::BatchFetchAndTransfer(tx) => tx.threshold_signature_payload(),
+			BitcoinApi::BatchTransfer(tx) => tx.threshold_signature_payload(),
 
 			BitcoinApi::_Phantom(..) => unreachable!(),
 		}
@@ -123,7 +119,7 @@ impl<E> ApiCall<Bitcoin> for BitcoinApi<E> {
 
 	fn signed(self, threshold_signature: &<Bitcoin as ChainCrypto>::ThresholdSignature) -> Self {
 		match self {
-			BitcoinApi::BatchFetchAndTransfer(call) => call.signed(threshold_signature).into(),
+			BitcoinApi::BatchTransfer(call) => call.signed(threshold_signature).into(),
 
 			BitcoinApi::_Phantom(..) => unreachable!(),
 		}
@@ -131,7 +127,7 @@ impl<E> ApiCall<Bitcoin> for BitcoinApi<E> {
 
 	fn chain_encoded(&self) -> Vec<u8> {
 		match self {
-			BitcoinApi::BatchFetchAndTransfer(call) => call.chain_encoded(),
+			BitcoinApi::BatchTransfer(call) => call.chain_encoded(),
 
 			BitcoinApi::_Phantom(..) => unreachable!(),
 		}
@@ -139,7 +135,7 @@ impl<E> ApiCall<Bitcoin> for BitcoinApi<E> {
 
 	fn is_signed(&self) -> bool {
 		match self {
-			BitcoinApi::BatchFetchAndTransfer(call) => call.is_signed(),
+			BitcoinApi::BatchTransfer(call) => call.is_signed(),
 
 			BitcoinApi::_Phantom(..) => unreachable!(),
 		}
