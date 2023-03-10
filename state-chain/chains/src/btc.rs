@@ -1,4 +1,6 @@
 pub mod api;
+#[cfg(feature = "runtime-benchmarks")]
+pub mod benchmarking;
 pub mod ingress_address;
 pub mod utxo_selection;
 
@@ -10,7 +12,6 @@ use frame_support::{sp_io::hashing::sha2_256, BoundedVec, RuntimeDebug};
 use libsecp256k1::{PublicKey, SecretKey};
 use scale_info::TypeInfo;
 use sp_std::{vec, vec::Vec};
-// #[cfg(feature = "runtime-benchmarks")]
 
 extern crate alloc;
 use crate::{Chain, ChainAbi, ChainCrypto, FeeRefundCalculator, IngressIdConstructor};
@@ -18,12 +19,8 @@ use alloc::string::String;
 pub use cf_primitives::chains::Bitcoin;
 use cf_primitives::{
 	chains::assets, EpochIndex, IntentId, KeyId, MaxBtcAddressLength, PublicKeyBytes,
-	MAX_BTC_ADDRESS_LENGTH,
 };
 use itertools;
-
-#[cfg(feature = "runtime-benchmarks")]
-use crate::benchmarking_value::BenchmarkValue;
 
 pub type BlockNumber = u64;
 
@@ -58,13 +55,6 @@ pub type Hash = [u8; 32];
 )]
 pub struct AggKey(pub [u8; 32]);
 
-#[cfg(feature = "runtime-benchmarks")]
-impl BenchmarkValue for AggKey {
-	fn benchmark_value() -> Self {
-		AggKey([1u8; 32])
-	}
-}
-
 impl From<KeyId> for AggKey {
 	fn from(key_id: KeyId) -> Self {
 		AggKey(key_id.public_key_bytes.try_into().unwrap())
@@ -86,20 +76,6 @@ impl From<PublicKeyBytes> for AggKey {
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]
 pub struct BitcoinTransactionData {
 	pub encoded_transaction: Vec<u8>,
-}
-
-#[cfg(feature = "runtime-benchmarks")]
-impl BenchmarkValue for BitcoinTransactionData {
-	fn benchmark_value() -> Self {
-		Self { encoded_transaction: vec![1u8; 100] }
-	}
-}
-
-#[cfg(feature = "runtime-benchmarks")]
-impl<T: BenchmarkValue> BenchmarkValue for Vec<T> {
-	fn benchmark_value() -> Self {
-		vec![T::benchmark_value()]
-	}
 }
 
 // TODO: Implement this
@@ -182,38 +158,6 @@ pub struct UtxoId {
 	pub salt: IntentId,
 }
 
-#[cfg(feature = "runtime-benchmarks")]
-impl BenchmarkValue for UtxoId {
-	fn benchmark_value() -> Self {
-		UtxoId { tx_hash: [1u8; 32], vout_index: 1, pubkey_x: [2u8; 32], salt: 0 }
-	}
-}
-
-// Bitcoin threshold signature
-#[cfg(feature = "runtime-benchmarks")]
-impl BenchmarkValue for Signature {
-	fn benchmark_value() -> Self {
-		[0xau8; 64]
-	}
-}
-
-// Bitcoin payload
-#[cfg(feature = "runtime-benchmarks")]
-impl BenchmarkValue for SigningPayload {
-	fn benchmark_value() -> Self {
-		[1u8; 32]
-	}
-}
-
-// Bitcoin address
-#[cfg(feature = "runtime-benchmarks")]
-impl BenchmarkValue for BtcAddress {
-	fn benchmark_value() -> Self {
-		BoundedVec::try_from([1u8; MAX_BTC_ADDRESS_LENGTH].to_vec())
-			.expect("we created a vec that is in the bounds of bounded vec")
-	}
-}
-
 impl IngressIdConstructor for BitcoinFetchId {
 	type Address = BtcAddress;
 
@@ -223,13 +167,6 @@ impl IngressIdConstructor for BitcoinFetchId {
 
 	fn undeployed(_intent_id: u64, _address: Self::Address) -> Self {
 		todo!()
-	}
-}
-
-#[cfg(feature = "runtime-benchmarks")]
-impl BenchmarkValue for BitcoinFetchId {
-	fn benchmark_value() -> Self {
-		Self(1)
 	}
 }
 
@@ -263,7 +200,6 @@ impl GetUtxoAmount for Utxo {
 }
 
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
-
 pub struct BitcoinOutput {
 	amount: u64,
 	script_pubkey: BitcoinScript,
@@ -579,7 +515,6 @@ impl BitcoinTransaction {
 }
 
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, Default)]
-
 pub struct BitcoinScript {
 	data: Vec<u8>,
 }

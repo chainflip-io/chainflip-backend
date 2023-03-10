@@ -11,10 +11,11 @@ use sp_core::crypto::{set_default_ss58_version, Ss58AddressFormat, UncheckedInto
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use state_chain_runtime::{
 	chainflip::Offence, opaque::SessionKeys, AccountId, AccountRolesConfig, AuraConfig,
-	BlockNumber, CfeSettings, EmissionsConfig, EnvironmentConfig, EthereumThresholdSignerConfig,
-	EthereumVaultConfig, FlipBalance, FlipConfig, GenesisConfig, GovernanceConfig, GrandpaConfig,
-	PolkadotThresholdSignerConfig, PolkadotVaultConfig, ReputationConfig, SessionConfig, Signature,
-	StakingConfig, SystemConfig, ValidatorConfig, WASM_BINARY,
+	BitcoinThresholdSignerConfig, BitcoinVaultConfig, BlockNumber, CfeSettings, EmissionsConfig,
+	EnvironmentConfig, EthereumThresholdSignerConfig, EthereumVaultConfig, FlipBalance, FlipConfig,
+	GenesisConfig, GovernanceConfig, GrandpaConfig, PolkadotThresholdSignerConfig,
+	PolkadotVaultConfig, ReputationConfig, SessionConfig, Signature, StakingConfig, SystemConfig,
+	ValidatorConfig, WASM_BINARY,
 };
 
 use common::FLIPPERINOS_PER_FLIP;
@@ -546,12 +547,21 @@ fn testnet_genesis(
 			deployment_block: 0,
 			keygen_response_timeout: keygen_ceremony_timeout_blocks,
 		},
+		bitcoin_vault: BitcoinVaultConfig {
+			vault_key: None,
+			deployment_block: 0,
+			keygen_response_timeout: keygen_ceremony_timeout_blocks,
+		},
 		ethereum_threshold_signer: EthereumThresholdSignerConfig {
 			threshold_signature_response_timeout: threshold_signature_ceremony_timeout_blocks,
 			_instance: PhantomData,
 		},
 
 		polkadot_threshold_signer: PolkadotThresholdSignerConfig {
+			threshold_signature_response_timeout: threshold_signature_ceremony_timeout_blocks,
+			_instance: PhantomData,
+		},
+		bitcoin_threshold_signer: BitcoinThresholdSignerConfig {
 			threshold_signature_response_timeout: threshold_signature_ceremony_timeout_blocks,
 			_instance: PhantomData,
 		},
