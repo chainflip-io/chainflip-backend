@@ -559,14 +559,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Request a threshold signature, providing [Call::on_signature_ready] as the callback.
 	pub fn threshold_sign_and_broadcast(
 		api_call: <T as Config<I>>::ApiCall,
-		callback: Option<<T as Config<I>>::BroadcastCallable>,
+		maybe_callback: Option<<T as Config<I>>::BroadcastCallable>,
 	) -> BroadcastId {
 		let broadcast_id = BroadcastIdCounter::<T, I>::mutate(|id| {
 			*id += 1;
 			*id
 		});
-		if let Some(maybe_callback) = callback {
-			RequestCallbacks::<T, I>::insert(broadcast_id, maybe_callback);
+		if let Some(callback) = maybe_callback {
+			RequestCallbacks::<T, I>::insert(broadcast_id, callback);
 		}
 		T::ThresholdSigner::request_signature_with_callback(
 			api_call.threshold_signature_payload(),
