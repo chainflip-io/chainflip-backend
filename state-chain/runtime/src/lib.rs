@@ -274,7 +274,7 @@ impl pallet_cf_ingress_egress::Config<EthereumInstance> for Runtime {
 	type AllBatch = eth::api::EthereumApi<EthEnvironment>;
 	type Broadcaster = EthereumBroadcaster;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
-	type TTL = ConstU32<100>;
+	type IntentTTL = ConstU32<1200>;
 	type IngressHandler = EthIngressHandler;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 }
@@ -288,9 +288,9 @@ impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
 	type AllBatch = dot::api::PolkadotApi<chainflip::DotEnvironment>;
 	type Broadcaster = PolkadotBroadcaster;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
-	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
-	type TTL = ConstU32<100>;
+	type IntentTTL = ConstU32<1200>;
 	type IngressHandler = DotIngressHandler;
+	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 }
 
 parameter_types! {

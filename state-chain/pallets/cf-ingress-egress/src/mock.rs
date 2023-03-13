@@ -105,9 +105,9 @@ impl crate::Config<Instance1> for Test {
 	type AllBatch = MockAllBatch<MockEthEnvironment>;
 	type Broadcaster = MockBroadcast;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
-	type WeightInfo = ();
-	type TTL = ConstU64<5_u64>;
+	type IntentTTL = ConstU64<5_u64>;
 	type IngressHandler = MockIngressHandler;
+	type WeightInfo = ();
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
