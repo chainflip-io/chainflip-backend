@@ -2,7 +2,7 @@ use crate::{self as pallet_cf_environment, cfe};
 use cf_chains::{
 	btc::BitcoinNetwork,
 	dot::{api::CreatePolkadotVault, PolkadotHash, TEST_RUNTIME_VERSION},
-	ApiCall, Chain, ChainCrypto, Polkadot,
+	ApiCall, Bitcoin, Chain, ChainCrypto, Polkadot,
 };
 
 use cf_primitives::{AuthorityCount, BroadcastId, MaxBitcoinAddressLength};
@@ -119,6 +119,16 @@ impl VaultKeyWitnessedHandler<Polkadot> for MockPolkadotVaultKeyWitnessedHandler
 		unimplemented!()
 	}
 }
+pub struct MockBitcoinVaultKeyWitnessedHandler;
+impl VaultKeyWitnessedHandler<Bitcoin> for MockBitcoinVaultKeyWitnessedHandler {
+	fn on_new_key_activated(
+		_new_public_key: <Bitcoin as ChainCrypto>::AggKey,
+		_block_number: <Bitcoin as Chain>::ChainBlockNumber,
+		_tx_id: <Bitcoin as ChainCrypto>::TransactionId,
+	) -> frame_support::pallet_prelude::DispatchResultWithPostInfo {
+		unimplemented!()
+	}
+}
 
 cf_traits::impl_mock_ensure_witnessed_for_origin!(RuntimeOrigin);
 cf_traits::impl_mock_epoch_info!(AccountId, u128, u32, AuthorityCount);
@@ -146,6 +156,7 @@ impl pallet_cf_environment::Config for Test {
 	type PolkadotGenesisHash = PolkadotGenesisHash;
 	type BitcoinNetwork = BitcoinNetworkParam;
 	type PolkadotVaultKeyWitnessedHandler = MockPolkadotVaultKeyWitnessedHandler;
+	type BitcoinVaultKeyWitnessedHandler = MockBitcoinVaultKeyWitnessedHandler;
 	type WeightInfo = ();
 }
 

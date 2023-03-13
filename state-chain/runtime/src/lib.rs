@@ -210,6 +210,7 @@ impl pallet_cf_environment::Config for Runtime {
 	type CreatePolkadotVault = PolkadotApi<DotEnvironment>;
 	type PolkadotBroadcaster = PolkadotBroadcaster;
 	type PolkadotVaultKeyWitnessedHandler = PolkadotVault;
+	type BitcoinVaultKeyWitnessedHandler = BitcoinVault;
 	type PolkadotGenesisHash = PolkadotGenesisHash;
 	type BitcoinNetwork = BitcoinNetworkParam;
 	type WeightInfo = pallet_cf_environment::weights::PalletWeight<Runtime>;
