@@ -1,8 +1,8 @@
 use crate::{
 	mock::*, AwaitingBroadcast, BroadcastAttemptCount, BroadcastAttemptId, BroadcastId,
 	BroadcastRetryQueue, Error, Event as BroadcastEvent, FailedBroadcasters, Instance1,
-	PalletOffence, SignatureToBroadcastIdLookup, ThresholdSignatureData, TransactionFeeDeficit,
-	WeightInfo,
+	PalletOffence, RequestCallbacks, SignatureToBroadcastIdLookup, ThresholdSignatureData,
+	TransactionFeeDeficit, WeightInfo,
 };
 use cf_chains::{mocks::MockTransactionBuilder, FeeRefundCalculator};
 
@@ -529,5 +529,36 @@ fn re_request_threshold_signature_on_invalid_tx_params() {
 
 #[test]
 fn threshold_sign_and_broadcast_with_callback() {
-	new_test_ext().execute_with(|| todo!("Test threshold_sign_and_broadcast_with_callback"));
+	new_test_ext().execute_with(|| {
+		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
+		Broadcaster::threshold_sign_and_broadcast(MockApiCall::default(), Some(MockCallback));
+		let broadcast_attempt_id = Broadcaster::start_broadcast(
+			&MockThresholdSignature::default(),
+			MockTransaction,
+			MockApiCall::default(),
+			1,
+		);
+		assert_eq!(RequestCallbacks::<Test, Instance1>::get(1), Some(MockCallback));
+		assert_ok!(Broadcaster::signature_accepted(
+			RuntimeOrigin::root(),
+			MockThresholdSignature::default(),
+			Default::default(),
+			ETH_TX_FEE,
+		));
+		assert!(RequestCallbacks::<Test, Instance1>::get(1).is_none());
+		let mut events = System::events();
+		assert_eq!(
+			events.pop().expect("an event").event,
+			RuntimeEvent::Broadcaster(crate::Event::BroadcastSuccess {
+				broadcast_id: broadcast_attempt_id.broadcast_id
+			})
+		);
+		assert_eq!(
+			events.pop().expect("an event").event,
+			RuntimeEvent::Broadcaster(crate::Event::SignatureAcceptedCallbackExecuted {
+				broadcast_id: broadcast_attempt_id.broadcast_id,
+				result: Ok(())
+			})
+		);
+	});
 }

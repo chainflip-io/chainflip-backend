@@ -493,7 +493,7 @@ pub mod pallet {
 
 			if let Some(callback) = RequestCallbacks::<T, I>::take(broadcast_id) {
 				Self::deposit_event(Event::<T, I>::SignatureAcceptedCallbackExecuted {
-					broadcast_id: broadcast_id.clone(),
+					broadcast_id,
 					result: callback
 						.dispatch_bypass_filter(Origin(Default::default()).into())
 						.map(|_| ())
@@ -567,7 +567,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		if let Some(maybe_callback) = callback {
 			RequestCallbacks::<T, I>::insert(broadcast_id, maybe_callback);
 		}
-		// TODO: Put the callback into storage so that it can be called later.
 		T::ThresholdSigner::request_signature_with_callback(
 			api_call.threshold_signature_payload(),
 			|id| {

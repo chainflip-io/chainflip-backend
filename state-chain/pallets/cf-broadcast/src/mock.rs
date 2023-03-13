@@ -1,4 +1,3 @@
-use core::marker::PhantomData;
 use std::cell::RefCell;
 
 use crate::{self as pallet_cf_broadcast, Instance1, PalletOffence};
@@ -115,15 +114,15 @@ impl cf_traits::KeyProvider<MockEthereum> for MockKeyProvider {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub struct MockCallback<C: ChainCrypto>(u64, PhantomData<C>);
+pub struct MockCallback;
 
-impl UnfilteredDispatchable for MockCallback<MockEthereum> {
+impl UnfilteredDispatchable for MockCallback {
 	type RuntimeOrigin = RuntimeOrigin;
 
 	fn dispatch_bypass_filter(
 		self,
 		_origin: Self::RuntimeOrigin,
-	) -> frame_support::dispatch::DispatchResultWithPostInfo {
+	) -> frame_support::pallet_prelude::DispatchResultWithPostInfo {
 		Ok(().into())
 	}
 }
@@ -150,7 +149,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type WeightInfo = ();
 	type KeyProvider = MockKeyProvider;
 	type RuntimeOrigin = RuntimeOrigin;
-	type BroadcastCallable = MockCallback<MockEthereum>;
+	type BroadcastCallable = MockCallback;
 }
 
 // Build genesis storage according to the mock runtime.
