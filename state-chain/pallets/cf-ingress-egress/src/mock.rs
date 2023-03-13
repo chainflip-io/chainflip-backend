@@ -91,18 +91,17 @@ impl_mock_callback!(RuntimeOrigin);
 pub struct MockBroadcast;
 impl Broadcaster<Ethereum> for MockBroadcast {
 	type ApiCall = MockAllBatch<MockEthEnvironment>;
+	type Callback = MockCallback;
 
 	fn threshold_sign_and_broadcast(_api_call: Self::ApiCall) -> BroadcastId {
 		1
 	}
 
-	type Callback = MockCallback;
-
 	fn threshold_sign_and_broadcast_with_callback(
 		_api_call: Self::ApiCall,
-		_callback: Option<Self::Callback>,
+		_callback: Self::Callback,
 	) -> BroadcastId {
-		todo!()
+		unimplemented!()
 	}
 }
 

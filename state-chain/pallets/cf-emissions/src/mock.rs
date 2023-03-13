@@ -221,9 +221,9 @@ impl Broadcaster<MockEthereum> for MockBroadcast {
 
 	fn threshold_sign_and_broadcast_with_callback(
 		_api_call: Self::ApiCall,
-		_callback: Option<Self::Callback>,
+		_callback: Self::Callback,
 	) -> BroadcastId {
-		todo!()
+		unimplemented!()
 	}
 }
 

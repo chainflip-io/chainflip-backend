@@ -133,6 +133,7 @@ pub mod pallet {
 			+ IsType<<Self as frame_system::Config>::RuntimeOrigin>
 			+ Into<Result<Origin<Self, I>, <Self as Config<I>>::RuntimeOrigin>>;
 
+		/// The call type that is used to dispatch a broadcast callback.
 		type BroadcastCallable: Member
 			+ Parameter
 			+ UnfilteredDispatchable<RuntimeOrigin = <Self as Config<I>>::RuntimeOrigin>;
@@ -196,7 +197,7 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type BroadcastIdCounter<T, I = ()> = StorageValue<_, BroadcastId, ValueQuery>;
 
-	/// Callbacks to be dispatched when a request is fulfilled.
+	/// Callbacks to be dispatched when the SignatureAccepted event has been witnessed.
 	#[pallet::storage]
 	#[pallet::getter(fn request_callback)]
 	pub type RequestCallbacks<T: Config<I>, I: 'static = ()> =
@@ -697,9 +698,9 @@ impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 
 	fn threshold_sign_and_broadcast_with_callback(
 		api_call: Self::ApiCall,
-		callback: Option<Self::Callback>,
+		callback: Self::Callback,
 	) -> BroadcastId {
-		Self::threshold_sign_and_broadcast(api_call, callback)
+		Self::threshold_sign_and_broadcast(api_call, Some(callback))
 	}
 }
 

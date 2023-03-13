@@ -463,7 +463,7 @@ pub trait Broadcaster<Api: ChainAbi> {
 	/// signature accepted event has been witnessed.
 	fn threshold_sign_and_broadcast_with_callback(
 		api_call: Self::ApiCall,
-		callback: Option<Self::Callback>,
+		callback: Self::Callback,
 	) -> BroadcastId;
 }
 

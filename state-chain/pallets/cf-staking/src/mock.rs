@@ -184,9 +184,9 @@ impl Broadcaster<Ethereum> for MockBroadcaster {
 
 	fn threshold_sign_and_broadcast_with_callback(
 		_api_call: Self::ApiCall,
-		_callback: Option<Self::Callback>,
+		_callback: Self::Callback,
 	) -> cf_primitives::BroadcastId {
-		todo!()
+		unimplemented!()
 	}
 }
 
