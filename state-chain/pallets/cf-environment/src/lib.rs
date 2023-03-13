@@ -3,7 +3,7 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use cf_chains::{
-	btc::{utxo_selection::select_utxos_from_pool, BitcoinNetwork, BtcAddress, Utxo},
+	btc::{utxo_selection::select_utxos_from_pool, Bitcoin, BitcoinNetwork, BtcAddress, Utxo},
 	dot::{api::CreatePolkadotVault, Polkadot, PolkadotAccountId, PolkadotIndex},
 	ChainCrypto,
 };
@@ -76,7 +76,7 @@ pub mod cfe {
 pub mod pallet {
 
 	use cf_chains::{
-		btc::{BtcAddress, Utxo},
+		btc::{BtcAddress, Utxo, UtxoId},
 		dot::{PolkadotHash, PolkadotPublicKey, RuntimeVersion},
 	};
 	use cf_primitives::{Asset, TxId};
@@ -100,6 +100,8 @@ pub mod pallet {
 			+ BroadcastCleanup<Polkadot>;
 		/// On new key witnessed handler for Polkadot
 		type PolkadotVaultKeyWitnessedHandler: VaultKeyWitnessedHandler<Polkadot>;
+		/// On new key witnessed handler for Bitcoin
+		type BitcoinVaultKeyWitnessedHandler: VaultKeyWitnessedHandler<Bitcoin>;
 
 		#[pallet::constant]
 		type PolkadotGenesisHash: Get<PolkadotHash>;
@@ -205,19 +207,33 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// The system state has been updated
-		SystemStateUpdated { new_system_state: SystemState },
+		SystemStateUpdated {
+			new_system_state: SystemState,
+		},
 		/// The on-chain CFE settings have been updated
-		CfeSettingsUpdated { new_cfe_settings: cfe::CfeSettings },
+		CfeSettingsUpdated {
+			new_cfe_settings: cfe::CfeSettings,
+		},
 		/// A new supported ETH asset was added
 		AddedNewEthAsset(Asset, EthereumAddress),
 		/// The address of an supported ETH asset was updated
 		UpdatedEthAsset(Asset, EthereumAddress),
 		/// Polkadot Vault Creation Call was initiated
-		PolkadotVaultCreationCallInitiated { agg_key: <Polkadot as ChainCrypto>::AggKey },
+		PolkadotVaultCreationCallInitiated {
+			agg_key: <Polkadot as ChainCrypto>::AggKey,
+		},
 		/// Polkadot Vault Account is successfully set
-		PolkadotVaultAccountSet { polkadot_vault_account_id: PolkadotAccountId },
+		PolkadotVaultAccountSet {
+			polkadot_vault_account_id: PolkadotAccountId,
+		},
 		/// The Polkadot Runtime Version stored on chain was updated.
-		PolkadotRuntimeVersionUpdated { runtime_version: RuntimeVersion },
+		PolkadotRuntimeVersionUpdated {
+			runtime_version: RuntimeVersion,
+		},
+		// The block number for set for new Bitcoin vault
+		BitcoinBlockNumberSetForVault {
+			block_number: cf_chains::btc::BlockNumber,
+		},
 	}
 
 	#[pallet::hooks]
@@ -385,6 +401,44 @@ pub mod pallet {
 			T::PolkadotBroadcaster::clean_up_broadcast(broadcast_id)?;
 
 			Self::next_polkadot_proxy_account_nonce();
+			Ok(dispatch_result)
+		}
+
+		/// Manually witnesses the current Bitcoin block number to complete the pending vault
+		/// rotation.
+		///
+		/// ## Events
+		///
+		/// - [BitcoinBlockNumberSetForVault](Event::BitcoinBlockNumberSetForVault)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_support::error::BadOrigin)
+		#[allow(unused_variables)]
+		#[pallet::weight(0)]
+		pub fn witness_current_bitcoin_block_number_for_key(
+			origin: OriginFor<T>,
+			block_number: cf_chains::btc::BlockNumber,
+			new_public_key: cf_chains::btc::AggKey,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			use cf_traits::VaultKeyWitnessedHandler;
+
+			// Witness the agg_key rotation manually in the vaults pallet for bitcoin
+			let dispatch_result = T::BitcoinVaultKeyWitnessedHandler::on_new_key_activated(
+				new_public_key,
+				block_number,
+				UtxoId {
+					tx_hash: Default::default(),
+					vout_index: Default::default(),
+					pubkey_x: Default::default(),
+					salt: Default::default(),
+				},
+			)?;
+
+			Self::deposit_event(Event::<T>::BitcoinBlockNumberSetForVault { block_number });
+
 			Ok(dispatch_result)
 		}
 
