@@ -1,8 +1,8 @@
 pub mod batch_transfer;
 
 use super::{
-	ingress_address::derive_btc_ingress_address, scriptpubkey_from_address, Bitcoin,
-	BitcoinAddress, BitcoinNetwork, BitcoinOutput, BtcAmount, Utxo,
+	ingress_address::derive_btc_ingress_address, scriptpubkey_from_address, AggKey, Bitcoin,
+	BitcoinNetwork, BitcoinOutput, BtcAmount, Utxo,
 };
 use crate::*;
 use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound};
@@ -20,15 +20,20 @@ pub enum BitcoinApi<Environment: 'static> {
 impl<E> AllBatch<Bitcoin> for BitcoinApi<E>
 where
 	E: ChainEnvironment<<Bitcoin as Chain>::ChainAmount, (Vec<Utxo>, u64)>
-		+ ChainEnvironment<(), (BitcoinNetwork, BitcoinAddress)>,
+		+ ChainEnvironment<(), BitcoinNetwork>
+		+ ChainEnvironment<(), AggKey>,
 {
 	fn new_unsigned(
 		_fetch_params: Vec<FetchAssetParams<Bitcoin>>,
 		transfer_params: Vec<TransferAssetParams<Bitcoin>>,
 	) -> Result<Self, ()> {
-		let (bitcoin_network, bitcoin_return_address) =
-			<E as ChainEnvironment<(), (BitcoinNetwork, BitcoinAddress)>>::lookup(())
-				.expect("Since the lookup function always returns a some");
+		let bitcoin_network = <E as ChainEnvironment<(), BitcoinNetwork>>::lookup(())
+			.expect("Since the lookup function always returns a some");
+		let bitcoin_return_address = derive_btc_ingress_address(
+			<E as ChainEnvironment<(), AggKey>>::lookup(()).ok_or(())?.0,
+			0,
+			bitcoin_network.clone(),
+		);
 		let mut total_output_amount: u64 = 0;
 		let mut btc_outputs = vec![];
 		for transfer_param in transfer_params {
@@ -53,7 +58,7 @@ where
 		btc_outputs.push(BitcoinOutput {
 			amount: total_input_amount_available.checked_sub(total_output_amount).expect("This should never overflow because the total input available was calculated from the total output amount and the algorithm ensures that the total input amount is greater than the total output amount"),
 			script_pubkey: scriptpubkey_from_address(
-				sp_std::str::from_utf8(&bitcoin_return_address[..]).map_err(|_| ())?,
+				&bitcoin_return_address[..],
 				bitcoin_network,
 			)
 			.map_err(|_| ())?,
@@ -68,15 +73,14 @@ where
 impl<E> SetAggKeyWithAggKey<Bitcoin> for BitcoinApi<E>
 where
 	E: ChainEnvironment<<Bitcoin as Chain>::ChainAmount, (Vec<Utxo>, u64)>
-		+ ChainEnvironment<(), (BitcoinNetwork, BitcoinAddress)>,
+		+ ChainEnvironment<(), BitcoinNetwork>,
 {
 	fn new_unsigned(
 		_maybe_old_key: Option<<Bitcoin as ChainCrypto>::AggKey>,
 		new_key: <Bitcoin as ChainCrypto>::AggKey,
 	) -> Result<Self, ()> {
-		let (bitcoin_network, _bitcoin_return_address) =
-			<E as ChainEnvironment<(), (BitcoinNetwork, BitcoinAddress)>>::lookup(())
-				.expect("Since the lookup function always returns a some");
+		let bitcoin_network = <E as ChainEnvironment<(), BitcoinNetwork>>::lookup(())
+			.expect("Since the lookup function always returns a some");
 
 		// We will use the bitcoin address derived with the salt of 0 as the vault address where we
 		// collect unspent amounts in btc transactions and consolidate funds when rotating epoch.
