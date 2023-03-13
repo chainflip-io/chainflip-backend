@@ -14,11 +14,9 @@ use crate::{
 	EthereumBroadcaster, EthereumInstance, Flip, FlipBalance, PolkadotBroadcaster, Reputation,
 	Runtime, RuntimeCall, System, Validator,
 };
+
 use cf_chains::{
-	btc::{
-		api::BitcoinApi, Bitcoin, BitcoinNetwork, BitcoinTransactionData, BtcAddress, BtcAmount,
-		Utxo,
-	},
+	btc::{api::BitcoinApi, Bitcoin, BitcoinNetwork, BitcoinTransactionData, BtcAmount, Utxo},
 	dot::{
 		api::PolkadotApi, Polkadot, PolkadotAccountId, PolkadotReplayProtection,
 		PolkadotTransactionData,
@@ -38,8 +36,8 @@ use cf_primitives::{
 use cf_traits::{
 	BlockEmissions, BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster, EgressApi,
 	EmergencyRotation, EpochInfo, EpochKey, EthEnvironmentProvider, Heartbeat, IngressApi,
-	IngressHandler, Issuance, NetworkState, RewardsDistribution, RuntimeUpgrade,
-	VaultTransitionHandler,
+	IngressHandler, Issuance, KeyProvider, KeyState, NetworkState, RewardsDistribution,
+	RuntimeUpgrade, VaultTransitionHandler,
 };
 use codec::{Decode, Encode};
 use ethabi::Address as EthAbiAddress;
@@ -286,7 +284,6 @@ impl ReplayProtectionProvider<Polkadot> for DotEnvironment {
 impl ChainEnvironment<cf_chains::dot::api::SystemAccounts, PolkadotAccountId> for DotEnvironment {
 	fn lookup(query: cf_chains::dot::api::SystemAccounts) -> Option<PolkadotAccountId> {
 		use crate::PolkadotVault;
-		use cf_traits::{KeyProvider, KeyState};
 		use sp_runtime::{traits::IdentifyAccount, MultiSigner};
 		match query {
 			cf_chains::dot::api::SystemAccounts::Proxy => {
@@ -310,9 +307,18 @@ impl ChainEnvironment<BtcAmount, (Vec<Utxo>, u64)> for BtcEnvironment {
 	}
 }
 
-impl ChainEnvironment<(), (BitcoinNetwork, BtcAddress)> for BtcEnvironment {
-	fn lookup(_: ()) -> Option<(BitcoinNetwork, BtcAddress)> {
-		Some((Environment::get_bitcoin_network(), Environment::get_btc_return_address()))
+impl ChainEnvironment<(), BitcoinNetwork> for BtcEnvironment {
+	fn lookup(_: ()) -> Option<BitcoinNetwork> {
+		Some(Environment::get_bitcoin_network())
+	}
+}
+impl ChainEnvironment<(), cf_chains::btc::AggKey> for BtcEnvironment {
+	fn lookup(_: ()) -> Option<cf_chains::btc::AggKey> {
+		use crate::BitcoinVault;
+		match <BitcoinVault as KeyProvider<Bitcoin>>::current_epoch_key() {
+			EpochKey { key, key_state, .. } if key_state == KeyState::Active => Some(key),
+			_ => None,
+		}
 	}
 }
 

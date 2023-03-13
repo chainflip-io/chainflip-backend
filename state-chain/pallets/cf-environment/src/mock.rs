@@ -5,13 +5,13 @@ use cf_chains::{
 	ApiCall, Bitcoin, Chain, ChainCrypto, Polkadot,
 };
 
-use cf_primitives::{AuthorityCount, BroadcastId, MaxBtcAddressLength};
+use cf_primitives::{AuthorityCount, BroadcastId};
 use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
 	BroadcastCleanup, Broadcaster, Chainflip, VaultKeyWitnessedHandler,
 };
 
-use frame_support::{parameter_types, BoundedVec};
+use frame_support::parameter_types;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -165,7 +165,6 @@ pub const KEY_MANAGER_ADDRESS: [u8; 20] = [1u8; 20];
 pub const VAULT_ADDRESS: [u8; 20] = [2u8; 20];
 pub const ETH_CHAIN_ID: u64 = 1;
 pub const MOCK_FEE_PER_UTXO: u64 = 10;
-pub const MOCK_BTC_CHANGE_ADDRESS: [u8; 50] = [3u8; 50];
 
 pub const CFE_SETTINGS: cfe::CfeSettings = cfe::CfeSettings {
 	eth_block_safety_margin: 1,
@@ -189,10 +188,6 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			polkadot_runtime_version: TEST_RUNTIME_VERSION,
 			bitcoin_network: Default::default(),
 			bitcoin_fee_per_utxo: MOCK_FEE_PER_UTXO,
-			bitcoin_change_address: BoundedVec::<u8, MaxBtcAddressLength>::try_from(
-				MOCK_BTC_CHANGE_ADDRESS.to_vec(),
-			)
-			.expect("length is less than max of bounded vec"),
 		},
 	};
 
