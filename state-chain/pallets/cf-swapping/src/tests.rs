@@ -20,7 +20,7 @@ fn generate_test_swaps() -> Vec<Swap> {
 			to: Asset::Usdc,
 			amount: 100,
 			egress_address: ForeignChainAddress::Eth([2; 20]),
-			message: vec![0u1],
+			message: vec![0u8],
 		},
 		// USDC -> asset
 		Swap {
@@ -29,7 +29,7 @@ fn generate_test_swaps() -> Vec<Swap> {
 			to: Asset::Usdc,
 			amount: 40,
 			egress_address: ForeignChainAddress::Eth([9; 20]),
-			message: vec![0u1],
+			message: vec![0u8],
 		},
 		// Both assets are on the Eth chain
 		Swap {
@@ -38,7 +38,7 @@ fn generate_test_swaps() -> Vec<Swap> {
 			to: Asset::Eth,
 			amount: 500,
 			egress_address: ForeignChainAddress::Eth([2; 20]),
-			message: vec![0u1],
+			message: vec![0u8],
 		},
 		// Cross chain
 		Swap {
@@ -47,7 +47,7 @@ fn generate_test_swaps() -> Vec<Swap> {
 			to: Asset::Dot,
 			amount: 600,
 			egress_address: ForeignChainAddress::Dot([4; 32]),
-			message: vec![0u1],
+			message: vec![0u8],
 		},
 	]
 }
