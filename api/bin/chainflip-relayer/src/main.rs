@@ -24,6 +24,7 @@ pub trait Rpc {
 		egress_asset: Asset,
 		egress_address: String,
 		relayer_commission_bps: BasisPoints,
+		message: Vec<u8>,
 	) -> Result<String, Error>;
 }
 
@@ -49,6 +50,7 @@ impl RpcServer for RpcServerImpl {
 		egress_asset: Asset,
 		egress_address: String,
 		relayer_commission_bps: BasisPoints,
+		message: Vec<u8>,
 	) -> Result<String, Error> {
 		let clean_egress_address = match ForeignChain::from(egress_asset) {
 			ForeignChain::Ethereum => ForeignChainAddress::Eth(
@@ -65,6 +67,7 @@ impl RpcServer for RpcServerImpl {
 			egress_asset,
 			clean_egress_address,
 			relayer_commission_bps,
+			message,
 		)
 		.await
 		.map(|address| ["0x", &hex::encode(address.as_ref())].concat())

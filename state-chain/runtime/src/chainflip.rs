@@ -296,6 +296,7 @@ impl EgressApi<AnyChain> for AnyChainIngressEgressHandler {
 		asset: Asset,
 		amount: AssetAmount,
 		egress_address: <AnyChain as Chain>::ChainAccount,
+		message: Vec<u8>,
 	) -> cf_primitives::EgressId {
 		match asset.into() {
 			ForeignChain::Ethereum => crate::EthereumIngressEgress::schedule_egress(
@@ -304,6 +305,7 @@ impl EgressApi<AnyChain> for AnyChainIngressEgressHandler {
 				egress_address
 					.try_into()
 					.expect("Caller must ensure for account is of the compatible type."),
+				message,
 			),
 			ForeignChain::Polkadot => crate::PolkadotIngressEgress::schedule_egress(
 				asset.try_into().expect("Checked for asset compatibility"),
@@ -311,6 +313,7 @@ impl EgressApi<AnyChain> for AnyChainIngressEgressHandler {
 				egress_address
 					.try_into()
 					.expect("Caller must ensure for account is of the compatible type."),
+				message,
 			),
 			ForeignChain::Bitcoin => todo!("Bitcoin egress"),
 		}
@@ -404,6 +407,7 @@ impl IngressApi<AnyChain> for AnyChainIngressEgressHandler {
 		egress_address: ForeignChainAddress,
 		relayer_commission_bps: u16,
 		relayer_id: Self::AccountId,
+		message: Vec<u8>,
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
 		match ingress_asset.into() {
 			ForeignChain::Ethereum => crate::EthereumIngressEgress::register_swap_intent(
@@ -412,6 +416,7 @@ impl IngressApi<AnyChain> for AnyChainIngressEgressHandler {
 				egress_address,
 				relayer_commission_bps,
 				relayer_id,
+				message,
 			),
 			ForeignChain::Polkadot => crate::PolkadotIngressEgress::register_swap_intent(
 				ingress_asset.try_into().unwrap(),
@@ -419,6 +424,7 @@ impl IngressApi<AnyChain> for AnyChainIngressEgressHandler {
 				egress_address,
 				relayer_commission_bps,
 				relayer_id,
+				message,
 			),
 			ForeignChain::Bitcoin => todo!("Cannot register swap intent for Bitcoin"),
 		}

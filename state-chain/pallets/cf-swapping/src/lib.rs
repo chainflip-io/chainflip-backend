@@ -24,13 +24,14 @@ pub use weights::WeightInfo;
 
 const BASIS_POINTS_PER_MILLION: u32 = 100;
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct Swap {
 	pub swap_id: u64,
 	pub from: Asset,
 	pub to: Asset,
 	pub amount: AssetAmount,
 	pub egress_address: ForeignChainAddress,
+	pub message: Vec<u8>,
 }
 
 #[frame_support::pallet]
@@ -92,6 +93,7 @@ pub mod pallet {
 			swap_id: u64,
 			ingress_address: ForeignChainAddress,
 			ingress_amount: AssetAmount,
+			message: Vec<u8>,
 		},
 		SwapScheduledByWitnesser {
 			swap_id: u64,
@@ -108,6 +110,7 @@ pub mod pallet {
 			egress_id: EgressId,
 			asset: Asset,
 			amount: AssetAmount,
+			message: Vec<u8>,
 		},
 		/// A withdrawal was requested.
 		WithdrawalRequested {
@@ -178,6 +181,7 @@ pub mod pallet {
 			egress_asset: Asset,
 			egress_address: ForeignChainAddress,
 			relayer_commission_bps: BasisPoints,
+			message: Vec<u8>,
 		) -> DispatchResult {
 			let relayer = T::AccountRoleRegistry::ensure_relayer(origin)?;
 
@@ -192,6 +196,7 @@ pub mod pallet {
 				egress_address,
 				relayer_commission_bps,
 				relayer,
+				message,
 			)?;
 
 			Self::deposit_event(Event::<T>::NewSwapIntent { ingress_address });
@@ -224,7 +229,12 @@ pub mod pallet {
 			Self::deposit_event(Event::<T>::WithdrawalRequested {
 				amount,
 				address: egress_address,
-				egress_id: T::EgressHandler::schedule_egress(asset, amount, egress_address),
+				egress_id: T::EgressHandler::schedule_egress(
+					asset,
+					amount,
+					egress_address,
+					Default::default(),
+				),
 			});
 
 			Ok(())
@@ -243,10 +253,11 @@ pub mod pallet {
 			to: Asset,
 			ingress_amount: AssetAmount,
 			egress_address: ForeignChainAddress,
+			message: Vec<u8>,
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
-			let swap_id = Self::schedule_swap(from, to, ingress_amount, egress_address);
+			let swap_id = Self::schedule_swap(from, to, ingress_amount, egress_address, message);
 
 			Self::deposit_event(Event::<T>::SwapScheduledByWitnesser {
 				swap_id,
@@ -291,6 +302,7 @@ pub mod pallet {
 						swap.to,
 						swap_output,
 						swap.egress_address,
+						swap.message.clone(),
 					);
 
 					Self::deposit_event(Event::<T>::SwapEgressScheduled {
@@ -298,6 +310,7 @@ pub mod pallet {
 						egress_id,
 						asset: to,
 						amount: swap_output,
+						message: swap.message.clone(),
 					});
 				} else {
 					// This is unlikely but theoretically possible if, for example, the initial swap
@@ -325,6 +338,7 @@ pub mod pallet {
 			to: Asset,
 			amount: AssetAmount,
 			egress_address: ForeignChainAddress,
+			message: Vec<u8>,
 		) -> u64 {
 			// The caller should ensure that the egress details are consistent.
 			debug_assert_eq!(ForeignChain::from(egress_address), ForeignChain::from(to));
@@ -334,7 +348,7 @@ pub mod pallet {
 				*id
 			});
 
-			SwapQueue::<T>::append(Swap { swap_id, from, to, amount, egress_address });
+			SwapQueue::<T>::append(Swap { swap_id, from, to, amount, egress_address, message });
 
 			swap_id
 		}
@@ -352,6 +366,7 @@ pub mod pallet {
 			egress_address: ForeignChainAddress,
 			relayer_id: Self::AccountId,
 			relayer_commission_bps: BasisPoints,
+			message: Vec<u8>,
 		) {
 			let fee = Permill::from_parts(relayer_commission_bps as u32 * BASIS_POINTS_PER_MILLION) *
 				amount;
@@ -360,12 +375,19 @@ pub mod pallet {
 				earned_fees.saturating_accrue(fee)
 			});
 
-			let swap_id = Self::schedule_swap(from, to, amount.saturating_sub(fee), egress_address);
+			let swap_id = Self::schedule_swap(
+				from,
+				to,
+				amount.saturating_sub(fee),
+				egress_address,
+				message.clone(),
+			);
 
 			Self::deposit_event(Event::<T>::SwapIngressReceived {
 				swap_id,
 				ingress_address,
 				ingress_amount: amount,
+				message,
 			});
 		}
 	}

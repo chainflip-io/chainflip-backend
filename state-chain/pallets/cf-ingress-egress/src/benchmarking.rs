@@ -50,6 +50,7 @@ benchmarks_instance_pallet! {
 					asset: egress_asset,
 					to: egress_address.clone(),
 					amount: 1_000,
+					message: vec![0u0],
 				});
 			}
 		}

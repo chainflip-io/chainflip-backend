@@ -86,6 +86,7 @@ pub async fn swap_intent(
 		params.egress_asset,
 		egress_address,
 		params.relayer_commission,
+		params.message,
 	)
 	.await?;
 	println!("Ingress address: {address}");

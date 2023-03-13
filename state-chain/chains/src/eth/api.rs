@@ -139,12 +139,13 @@ where
 			fetch_only_params,
 			transfer_params
 				.into_iter()
-				.map(|TransferAssetParams { asset, to, amount }| {
+				.map(|TransferAssetParams { asset, to, amount, message }| {
 					E::lookup(asset)
 						.map(|address| all_batch::EncodableTransferAssetParams {
 							to,
 							amount,
 							asset: address,
+							message,
 						})
 						.ok_or(())
 				})

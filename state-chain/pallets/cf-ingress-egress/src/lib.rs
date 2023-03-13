@@ -29,10 +29,19 @@ use sp_runtime::{traits::Saturating, TransactionOutcome};
 pub use sp_std::{vec, vec::Vec};
 
 /// Enum wrapper for fetch and egress requests.
-#[derive(RuntimeDebug, Eq, PartialEq, Copy, Clone, Encode, Decode, MaxEncodedLen, TypeInfo)]
+#[derive(RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode, TypeInfo)]
 pub enum FetchOrTransfer<C: Chain> {
-	Fetch { intent_id: IntentId, asset: C::ChainAsset },
-	Transfer { egress_id: EgressId, asset: C::ChainAsset, to: C::ChainAccount, amount: AssetAmount },
+	Fetch {
+		intent_id: IntentId,
+		asset: C::ChainAsset,
+	},
+	Transfer {
+		egress_id: EgressId,
+		asset: C::ChainAsset,
+		to: C::ChainAccount,
+		amount: AssetAmount,
+		message: Vec<u8>,
+	},
 }
 
 impl<C: Chain> FetchOrTransfer<C> {
@@ -100,6 +109,7 @@ pub mod pallet {
 			egress_address: ForeignChainAddress,
 			relayer_id: AccountId,
 			relayer_commission_bps: u16,
+			message: Vec<u8>,
 		},
 		LiquidityProvision {
 			lp_account: AccountId,
@@ -229,6 +239,7 @@ pub mod pallet {
 			asset: TargetChainAsset<T, I>,
 			amount: AssetAmount,
 			egress_address: TargetChainAccount<T, I>,
+			message: Vec<u8>,
 		},
 		IngressFetchesScheduled {
 			intent_id: IntentId,
@@ -412,9 +423,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						DeploymentStatus::Deployed,
 					);
 				},
-				FetchOrTransfer::<T::TargetChain>::Transfer { asset, to, amount, egress_id } => {
+				FetchOrTransfer::<T::TargetChain>::Transfer {
+					asset,
+					to,
+					amount,
+					egress_id,
+					message,
+				} => {
 					egress_ids.push(egress_id);
-					egress_params.push(TransferAssetParams { asset, to, amount });
+					egress_params.push(TransferAssetParams { asset, to, amount, message });
 				},
 			}
 		}
@@ -473,6 +490,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				egress_asset,
 				relayer_id,
 				relayer_commission_bps,
+				message,
 			} => T::SwapIntentHandler::on_swap_ingress(
 				ingress_address.clone().into(),
 				asset.into(),
@@ -481,6 +499,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				egress_address,
 				relayer_id,
 				relayer_commission_bps,
+				message,
 			),
 		};
 
@@ -550,6 +569,7 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 		asset: TargetChainAsset<T, I>,
 		amount: AssetAmount,
 		egress_address: TargetChainAccount<T, I>,
+		message: Vec<u8>,
 	) -> EgressId {
 		let egress_counter = EgressIdCounter::<T, I>::get().saturating_add(1);
 		let egress_id = (<T as Config<I>>::TargetChain::get(), egress_counter);
@@ -558,6 +578,7 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 			to: egress_address.clone(),
 			amount,
 			egress_id,
+			message: message.clone(),
 		});
 		EgressIdCounter::<T, I>::put(egress_counter);
 		Self::deposit_event(Event::<T, I>::EgressScheduled {
@@ -565,6 +586,7 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 			asset,
 			amount,
 			egress_address,
+			message,
 		});
 		egress_id
 	}
@@ -597,10 +619,17 @@ impl<T: Config<I>, I: 'static> IngressApi<T::TargetChain> for Pallet<T, I> {
 		egress_address: ForeignChainAddress,
 		relayer_commission_bps: u16,
 		relayer_id: T::AccountId,
+		message: Vec<u8>,
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
 		let (intent_id, ingress_address) = Self::register_ingress_intent(
 			ingress_asset,
-			IntentAction::Swap { egress_address, egress_asset, relayer_commission_bps, relayer_id },
+			IntentAction::Swap {
+				egress_address,
+				egress_asset,
+				relayer_commission_bps,
+				relayer_id,
+				message,
+			},
 		)?;
 
 		Self::deposit_event(Event::StartWitnessing {

@@ -26,6 +26,7 @@ pub struct SwapIntent<C: Chain, T: Chainflip> {
 	egress_address: ForeignChainAddress,
 	relayer_commission_bps: u16,
 	relayer_id: <T as frame_system::Config>::AccountId,
+	message: Vec<u8>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -99,6 +100,7 @@ impl<C: Chain, T: Chainflip> IngressApi<C> for MockIngressHandler<C, T> {
 		egress_address: cf_primitives::ForeignChainAddress,
 		relayer_commission_bps: u16,
 		relayer_id: Self::AccountId,
+		message: Vec<u8>,
 	) -> Result<
 		(cf_primitives::IntentId, cf_primitives::ForeignChainAddress),
 		sp_runtime::DispatchError,
@@ -112,6 +114,7 @@ impl<C: Chain, T: Chainflip> IngressApi<C> for MockIngressHandler<C, T> {
 				egress_address,
 				relayer_commission_bps,
 				relayer_id,
+				message,
 			})
 		});
 		Ok((intent_id, ingress_address))

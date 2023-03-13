@@ -639,6 +639,7 @@ pub trait IngressApi<C: Chain> {
 		egress_address: ForeignChainAddress,
 		relayer_commission_bps: u16,
 		relayer_id: Self::AccountId,
+		message: Vec<u8>,
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError>;
 }
 
@@ -656,6 +657,7 @@ impl<T: frame_system::Config> IngressApi<Ethereum> for T {
 		_egress_address: ForeignChainAddress,
 		_relayer_commission_bps: u16,
 		_relayer_id: T::AccountId,
+		_message: Vec<u8>,
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
 		Ok((0, ForeignChainAddress::Eth([0u8; 20])))
 	}
@@ -675,6 +677,7 @@ impl<T: frame_system::Config> IngressApi<Polkadot> for T {
 		_egress_address: ForeignChainAddress,
 		_relayer_commission_bps: u16,
 		_relayer_id: T::AccountId,
+		_message: Vec<u8>,
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
 		Ok((0, ForeignChainAddress::Dot([0u8; 32])))
 	}
@@ -752,6 +755,7 @@ pub trait EgressApi<C: Chain> {
 		foreign_asset: C::ChainAsset,
 		amount: AssetAmount,
 		egress_address: C::ChainAccount,
+		message: Vec<u8>,
 	) -> EgressId;
 }
 
@@ -760,6 +764,7 @@ impl<T: frame_system::Config> EgressApi<Ethereum> for T {
 		_foreign_asset: assets::eth::Asset,
 		_amount: AssetAmount,
 		_egress_address: <Ethereum as Chain>::ChainAccount,
+		_message: Vec<u8>,
 	) -> EgressId {
 		(ForeignChain::Ethereum, 0)
 	}
@@ -770,6 +775,7 @@ impl<T: frame_system::Config> EgressApi<Polkadot> for T {
 		_foreign_asset: assets::dot::Asset,
 		_amount: AssetAmount,
 		_egress_address: <Polkadot as Chain>::ChainAccount,
+		_message: Vec<u8>,
 	) -> EgressId {
 		(ForeignChain::Ethereum, 0)
 	}

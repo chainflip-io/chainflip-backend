@@ -31,6 +31,7 @@ pub(crate) struct EncodableTransferAssetParams {
 	pub asset: Address,
 	pub to: Address,
 	pub amount: AssetAmount,
+	pub message: Vec<u8>,
 }
 
 impl Tokenizable for EncodableFetchDeployAssetParams {
@@ -59,6 +60,7 @@ impl Tokenizable for EncodableTransferAssetParams {
 			Token::Address(self.asset),
 			Token::Address(self.to),
 			Token::Uint(Uint::from(self.amount)),
+			Token::Bytes(self.message),
 		])
 	}
 }
@@ -132,6 +134,7 @@ impl AllBatch {
 						ParamType::Address,
 						ParamType::Address,
 						ParamType::Uint(256),
+						ParamType::Bytes,
 					]))),
 				),
 			],
@@ -225,11 +228,13 @@ mod test_all_batch {
 				asset: Address::from_slice(&[5; 20]),
 				to: Address::from_slice(&[7; 20]),
 				amount: 10,
+				message: vec![0u8, 1u8],
 			},
 			EncodableTransferAssetParams {
 				asset: Address::from_slice(&[6; 20]),
 				to: Address::from_slice(&[8; 20]),
 				amount: 20,
+				message: vec![0u8, 1u8],
 			},
 		];
 

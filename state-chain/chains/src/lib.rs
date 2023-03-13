@@ -17,6 +17,7 @@ use sp_std::{
 	fmt::Debug,
 	prelude::*,
 	vec,
+	vec::Vec,
 };
 
 pub use cf_primitives::chains::*;
@@ -184,11 +185,12 @@ pub struct FetchAssetParams<C: Chain> {
 }
 
 /// Contains all the parameters required for transferring an asset on an external chain.
-#[derive(RuntimeDebug, Clone, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
+#[derive(RuntimeDebug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct TransferAssetParams<C: Chain> {
 	pub asset: <C as Chain>::ChainAsset,
 	pub to: <C as Chain>::ChainAccount,
 	pub amount: AssetAmount,
+	pub message: Vec<u8>,
 }
 
 pub trait IngressAddress {
