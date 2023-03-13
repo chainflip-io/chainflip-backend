@@ -21,7 +21,6 @@ pub use chainflip_engine::settings;
 pub use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 
 use chainflip_engine::{
-	logging::utils::new_discard_logger,
 	state_chain_observer::client::{
 		base_rpc_api::{BaseRpcApi, BaseRpcClient, RawRpcApi},
 		extrinsic_api::ExtrinsicApi,
@@ -114,15 +113,9 @@ where
 {
 	task_scope(|scope| {
 		async {
-			let logger = new_discard_logger();
-			let (_, block_stream, state_chain_client) = StateChainClient::new(
-				scope,
-				state_chain_settings,
-				AccountRole::None,
-				false,
-				&logger,
-			)
-			.await?;
+			let (_, block_stream, state_chain_client) =
+				StateChainClient::new(scope, state_chain_settings, AccountRole::None, false)
+					.await?;
 
 			let mut block_stream = Box::new(block_stream);
 
@@ -143,15 +136,9 @@ pub async fn request_claim(
 ) -> Result<H256> {
 	task_scope(|scope| {
 		async {
-			let logger = new_discard_logger();
-			let (_, block_stream, state_chain_client) = StateChainClient::new(
-				scope,
-				state_chain_settings,
-				AccountRole::None,
-				false,
-				&logger,
-			)
-			.await?;
+			let (_, block_stream, state_chain_client) =
+				StateChainClient::new(scope, state_chain_settings, AccountRole::None, false)
+					.await?;
 
 			// Are we in a current auction phase
 			if state_chain_client.is_auction_phase().await? {
@@ -182,15 +169,9 @@ pub async fn register_account_role(
 ) -> Result<()> {
 	task_scope(|scope| {
 		async {
-			let logger = new_discard_logger();
-			let (_, _, state_chain_client) = StateChainClient::new(
-				scope,
-				state_chain_settings,
-				AccountRole::None,
-				false,
-				&logger,
-			)
-			.await?;
+			let (_, _, state_chain_client) =
+				StateChainClient::new(scope, state_chain_settings, AccountRole::None, false)
+					.await?;
 
 			let tx_hash = state_chain_client
 				.submit_signed_extrinsic(pallet_cf_account_roles::Call::register_account_role {
@@ -209,15 +190,9 @@ pub async fn register_account_role(
 pub async fn rotate_keys(state_chain_settings: &settings::StateChain) -> Result<H256> {
 	task_scope(|scope| {
 		async {
-			let logger = new_discard_logger();
-			let (_, _, state_chain_client) = StateChainClient::new(
-				scope,
-				state_chain_settings,
-				AccountRole::None,
-				false,
-				&logger,
-			)
-			.await?;
+			let (_, _, state_chain_client) =
+				StateChainClient::new(scope, state_chain_settings, AccountRole::None, false)
+					.await?;
 			let seed = state_chain_client
 				.rotate_session_keys()
 				.await
@@ -250,15 +225,9 @@ pub async fn rotate_keys(state_chain_settings: &settings::StateChain) -> Result<
 pub async fn force_rotation(state_chain_settings: &settings::StateChain) -> Result<()> {
 	task_scope(|scope| {
 		async {
-			let logger = new_discard_logger();
-			let (_, _, state_chain_client) = StateChainClient::new(
-				scope,
-				state_chain_settings,
-				AccountRole::None,
-				false,
-				&logger,
-			)
-			.await?;
+			let (_, _, state_chain_client) =
+				StateChainClient::new(scope, state_chain_settings, AccountRole::None, false)
+					.await?;
 
 			println!("Submitting governance proposal for rotation.");
 			state_chain_client
@@ -280,15 +249,9 @@ pub async fn force_rotation(state_chain_settings: &settings::StateChain) -> Resu
 pub async fn stop_bidding(state_chain_settings: &settings::StateChain) -> Result<()> {
 	task_scope(|scope| {
 		async {
-			let logger = new_discard_logger();
-			let (_, _, state_chain_client) = StateChainClient::new(
-				scope,
-				state_chain_settings,
-				AccountRole::None,
-				false,
-				&logger,
-			)
-			.await?;
+			let (_, _, state_chain_client) =
+				StateChainClient::new(scope, state_chain_settings, AccountRole::None, false)
+					.await?;
 			let tx_hash = state_chain_client
 				.submit_signed_extrinsic(pallet_cf_staking::Call::stop_bidding {})
 				.await
@@ -303,9 +266,8 @@ pub async fn stop_bidding(state_chain_settings: &settings::StateChain) -> Result
 
 pub async fn start_bidding(state_chain_settings: &settings::StateChain) -> Result<()> {
 	task_scope(|scope| async {
-		let logger = new_discard_logger();
 		let (latest_block_hash, _, state_chain_client) =
-			StateChainClient::new(scope, state_chain_settings, AccountRole::None, false, &logger).await?;
+			StateChainClient::new(scope, state_chain_settings, AccountRole::None, false).await?;
 
 		match state_chain_client
 			.storage_map_entry::<pallet_cf_account_roles::AccountRoles<state_chain_runtime::Runtime>>(
@@ -342,19 +304,13 @@ pub async fn set_vanity_name(
 ) -> Result<()> {
 	task_scope(|scope| {
 		async {
-			let logger = new_discard_logger();
 			if name.len() > MAX_LENGTH_FOR_VANITY_NAME {
 				bail!("Name too long. Max length is {} characters.", MAX_LENGTH_FOR_VANITY_NAME,);
 			}
 
-			let (_, _, state_chain_client) = StateChainClient::new(
-				scope,
-				state_chain_settings,
-				AccountRole::None,
-				false,
-				&logger,
-			)
-			.await?;
+			let (_, _, state_chain_client) =
+				StateChainClient::new(scope, state_chain_settings, AccountRole::None, false)
+					.await?;
 			let tx_hash = state_chain_client
 				.submit_signed_extrinsic(pallet_cf_validator::Call::set_vanity_name {
 					name: name.as_bytes().to_vec(),

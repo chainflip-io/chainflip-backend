@@ -15,6 +15,7 @@ use crate::{
 	Runtime, RuntimeCall, System, Validator,
 };
 use cf_chains::{
+	btc::Utxo,
 	dot::{
 		api::PolkadotApi, Polkadot, PolkadotAccountId, PolkadotReplayProtection,
 		PolkadotTransactionData,
@@ -24,7 +25,7 @@ use cf_chains::{
 		api::{EthereumApi, EthereumReplayProtection},
 		Ethereum,
 	},
-	AnyChain, ApiCall, Chain, ChainAbi, ChainCrypto, ChainEnvironment, ForeignChain,
+	AnyChain, ApiCall, Bitcoin, Chain, ChainAbi, ChainCrypto, ChainEnvironment, ForeignChain,
 	ReplayProtectionProvider, SetCommKeyWithAggKey, SetGovKeyWithAggKey, TransactionBuilder,
 };
 use cf_primitives::{
@@ -34,7 +35,8 @@ use cf_primitives::{
 use cf_traits::{
 	BlockEmissions, BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster, EgressApi,
 	EmergencyRotation, EpochInfo, EpochKey, EthEnvironmentProvider, Heartbeat, IngressApi,
-	Issuance, NetworkState, RewardsDistribution, RuntimeUpgrade, VaultTransitionHandler,
+	IngressHandler, Issuance, NetworkState, RewardsDistribution, RuntimeUpgrade,
+	VaultTransitionHandler,
 };
 use codec::{Decode, Encode};
 use ethabi::Address as EthAbiAddress;
@@ -421,5 +423,38 @@ impl IngressApi<AnyChain> for AnyChainIngressEgressHandler {
 			),
 			ForeignChain::Bitcoin => todo!("Cannot register swap intent for Bitcoin"),
 		}
+	}
+}
+
+pub struct EthIngressHandler;
+impl IngressHandler<Ethereum> for EthIngressHandler {}
+
+pub struct DotIngressHandler;
+impl IngressHandler<Polkadot> for DotIngressHandler {}
+
+pub struct BtcIngressHandler;
+impl IngressHandler<Bitcoin> for BtcIngressHandler {
+	fn handle_ingress(
+		utxo_id: <Bitcoin as ChainCrypto>::TransactionId,
+		amount: <Bitcoin as Chain>::ChainAmount,
+		_address: <Bitcoin as Chain>::ChainAccount,
+		_asset: <Bitcoin as Chain>::ChainAsset,
+	) {
+		Environment::add_bitcoin_utxo_to_list(Utxo {
+			amount: amount
+				.try_into()
+				.expect("the amount witnessed should not exceed u64 max for btc"),
+			txid: utxo_id.tx_hash,
+			vout: utxo_id.vout_index,
+			pubkey_x: utxo_id.pubkey_x,
+			salt: utxo_id
+				.salt
+				.try_into()
+				.expect("The salt/intent_id is not expected to exceed u32 max"), /* Todo: Confirm
+			                                                                   * this assumption.
+			                                                                   * Consider this in
+			                                                                   * conjunction with
+			                                                                   * #2354 */
+		})
 	}
 }

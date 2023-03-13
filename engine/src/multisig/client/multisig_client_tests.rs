@@ -2,7 +2,6 @@ use std::{collections::BTreeSet, sync::Arc};
 
 use super::*;
 use crate::{
-	logging::test_utils::new_test_logger,
 	multisig::{
 		client::{
 			self,
@@ -36,7 +35,7 @@ async fn should_ignore_rts_for_unknown_key() {
 	let client = MultisigClient::<EthSigning>::new(
 		account_id.clone(),
 		KeyStore::new(Arc::new(
-			PersistentKeyDB::new_and_migrate_to_latest(&db_file, None, &new_test_logger())
+			PersistentKeyDB::open_and_migrate_to_latest(&db_file, None)
 				.expect("Failed to open database"),
 		)),
 		ceremony_request_sender,
@@ -57,7 +56,6 @@ async fn should_ignore_rts_for_unknown_key() {
 
 #[tokio::test]
 async fn should_save_key_after_keygen() {
-	let logger = new_test_logger();
 	let (_dir, db_file) = new_temp_directory_with_nonexistent_file();
 
 	// Generate a key to use in this test
@@ -74,7 +72,7 @@ async fn should_save_key_after_keygen() {
 		let client = MultisigClient::<EthSigning>::new(
 			ACCOUNT_IDS[0].clone(),
 			KeyStore::new(Arc::new(
-				PersistentKeyDB::new_and_migrate_to_latest(&db_file, None, &logger)
+				PersistentKeyDB::open_and_migrate_to_latest(&db_file, None)
 					.expect("Failed to open database"),
 			)),
 			ceremony_request_sender,
@@ -105,7 +103,7 @@ async fn should_save_key_after_keygen() {
 
 	// Check that the key was saved by Loading it from the same db file
 	let key_store = KeyStore::<EthSigning>::new(Arc::new(
-		PersistentKeyDB::new_and_migrate_to_latest(&db_file, None, &logger)
+		PersistentKeyDB::open_and_migrate_to_latest(&db_file, None)
 			.expect("Failed to open database"),
 	));
 	assert!(
@@ -131,10 +129,9 @@ async fn should_load_keys_on_creation() {
 	let key_id = KeyId { epoch_index: GENESIS_EPOCH, public_key_bytes };
 
 	// Create a new db and store the key in it
-	let logger = new_test_logger();
 	{
 		let mut key_store = KeyStore::<EthSigning>::new(Arc::new(
-			PersistentKeyDB::new_and_migrate_to_latest(&db_file, None, &logger)
+			PersistentKeyDB::open_and_migrate_to_latest(&db_file, None)
 				.expect("Failed to open database"),
 		));
 		key_store.set_key(key_id.clone(), stored_keygen_result_info.clone());
@@ -145,7 +142,7 @@ async fn should_load_keys_on_creation() {
 	let client = MultisigClient::<EthSigning>::new(
 		ACCOUNT_IDS[0].clone(),
 		KeyStore::new(Arc::new(
-			PersistentKeyDB::new_and_migrate_to_latest(&db_file, None, &logger)
+			PersistentKeyDB::open_and_migrate_to_latest(&db_file, None)
 				.expect("Failed to open database"),
 		)),
 		ceremony_request_sender,

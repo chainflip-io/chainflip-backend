@@ -1,7 +1,7 @@
 [package]
 authors = ["Chainflip team <https://github.com/chainflip-io>"]
 name = "chainflip-relayer"
-version = "0.1.0"
+version = "0.7.0"
 edition = "2021"
 
 [package.metadata.deb]

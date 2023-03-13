@@ -824,3 +824,13 @@ pub trait FlipBurnInfo {
 	/// Takes the available Flip and returns it.
 	fn take_flip_to_burn() -> AssetAmount;
 }
+
+pub trait IngressHandler<C: ChainCrypto> {
+	fn handle_ingress(
+		_tx_id: <C as ChainCrypto>::TransactionId,
+		_amount: <C as Chain>::ChainAmount,
+		_address: <C as Chain>::ChainAccount,
+		_asset: <C as Chain>::ChainAsset,
+	) {
+	}
+}

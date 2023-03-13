@@ -3,7 +3,7 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use cf_chains::{
-	btc::BitcoinNetwork,
+	btc::{BitcoinNetwork, Utxo},
 	dot::{api::CreatePolkadotVault, Polkadot, PolkadotAccountId, PolkadotIndex},
 	ChainCrypto,
 };
@@ -16,6 +16,7 @@ use frame_support::{
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
+use sp_std::vec::Vec;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
@@ -74,7 +75,10 @@ pub mod cfe {
 #[frame_support::pallet]
 pub mod pallet {
 
-	use cf_chains::dot::{PolkadotHash, PolkadotPublicKey, RuntimeVersion};
+	use cf_chains::{
+		btc::Utxo,
+		dot::{PolkadotHash, PolkadotPublicKey, RuntimeVersion},
+	};
 	use cf_primitives::{Asset, TxId};
 
 	use cf_traits::{BroadcastCleanup, Broadcaster, VaultKeyWitnessedHandler};
@@ -180,6 +184,9 @@ pub mod pallet {
 	pub type PolkadotRuntimeVersion<T> = StorageValue<_, RuntimeVersion, ValueQuery>;
 
 	// BITCOIN CHAIN RELATED ENVIRONMENT ITEMS
+	#[pallet::storage]
+	/// The set of available UTXOs available in our Bitcoin Vault
+	pub type BitcoinAvailableUtxos<T> = StorageValue<_, Vec<Utxo>, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -497,5 +504,11 @@ impl<T: Config> Pallet<T> {
 
 	pub fn reset_polkadot_proxy_account_nonce() {
 		PolkadotProxyAccountNonce::<T>::set(0);
+	}
+
+	pub fn add_bitcoin_utxo_to_list(utxo: Utxo) {
+		BitcoinAvailableUtxos::<T>::mutate(|utxos| {
+			utxos.push(utxo);
+		});
 	}
 }
