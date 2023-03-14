@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use cf_chains::Ethereum;
 use futures::StreamExt;
 use sp_core::H160;
-use tokio::select;
+use tokio::{select, sync::Mutex};
 use tracing::{info, info_span, trace, Instrument};
 
 use super::{
@@ -38,11 +38,11 @@ pub trait BlockProcessor: Send {
 }
 
 pub async fn start(
-	epoch_start_receiver: async_broadcast::Receiver<EpochStart<Ethereum>>,
+	epoch_start_receiver: Arc<Mutex<async_broadcast::Receiver<EpochStart<Ethereum>>>>,
 	witnessers: AllWitnessers,
 	eth_rpc: EthDualRpcClient,
 	db: Arc<PersistentKeyDB>,
-) -> Result<(), (async_broadcast::Receiver<EpochStart<Ethereum>>, IngressAddressReceiverPairs)> {
+) -> Result<(), IngressAddressReceiverPairs> {
 	epoch_witnesser::start(
 		epoch_start_receiver,
 		move |_| true,

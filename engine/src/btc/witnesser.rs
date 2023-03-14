@@ -4,7 +4,7 @@ use crate::constants::BTC_INGRESS_BLOCK_SAFETY_MARGIN;
 use bitcoincore_rpc::bitcoin::{Transaction, TxOut};
 use cf_chains::Bitcoin;
 use futures::StreamExt;
-use tokio::select;
+use tokio::{select, sync::Mutex};
 use tracing::{info, info_span, trace, Instrument};
 
 use crate::{
@@ -51,9 +51,9 @@ pub async fn start(
 	script_pubkeys_receiver: tokio::sync::mpsc::UnboundedReceiver<ScriptPubKey>,
 	monitored_script_pubkeys: BTreeSet<ScriptPubKey>,
 	db: Arc<PersistentKeyDB>,
-) -> Result<(), (async_broadcast::Receiver<EpochStart<Bitcoin>>, anyhow::Error)> {
+) -> Result<(), anyhow::Error> {
 	epoch_witnesser::start(
-		epoch_starts_receiver,
+		Arc::new(Mutex::new(epoch_starts_receiver)),
 		|_epoch_start| true,
 		(script_pubkeys_receiver, monitored_script_pubkeys),
 		move |mut end_witnessing_receiver,

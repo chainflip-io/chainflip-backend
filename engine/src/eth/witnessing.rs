@@ -8,6 +8,7 @@ use cf_primitives::Asset;
 use futures::TryFutureExt;
 use pallet_cf_environment::cfe;
 use sp_core::{H160, H256};
+use tokio::sync::Mutex;
 
 use crate::{
 	common::start_with_restart_on_failure,
@@ -136,18 +137,21 @@ pub async fn start(
 
 	let (usdc_ingress_sender, usdc_ingress_receiver) = tokio::sync::mpsc::unbounded_channel();
 
+	let epoch_start_receiver = Arc::new(Mutex::new(epoch_start_receiver));
+
 	let eth_settings = eth_settings.clone();
-	let create_and_run_witnesser_futures = move |(epoch_start_receiver, ingress_receiver_pairs)| {
+	let create_and_run_witnesser_futures = move |ingress_receiver_pairs| {
 		let eth_settings = eth_settings.clone();
 		let state_chain_client = state_chain_client.clone();
 		let db = db.clone();
+		let epoch_start_receiver = epoch_start_receiver.clone();
 		async move {
 			// We create a new RPC on each call to the future, since one common reason for
 			// failure is that the WS connection has been dropped. This ensures that we create a
 			// new client, and therefore create a new connection.
 			let dual_rpc = try_with_logging!(
 				EthDualRpcClient::new(&eth_settings, expected_chain_id).await,
-				(epoch_start_receiver, ingress_receiver_pairs)
+				ingress_receiver_pairs
 			);
 
 			let IngressAddressReceiverPairs {
@@ -210,14 +214,11 @@ pub async fn start(
 	scope.spawn(async move {
 		start_with_restart_on_failure(
 			create_and_run_witnesser_futures,
-			(
-				epoch_start_receiver,
-				IngressAddressReceiverPairs {
-					eth: (eth_ingress_receiver, eth_addresses),
-					flip: (flip_ingress_receiver, flip_addresses),
-					usdc: (usdc_ingress_receiver, usdc_addresses),
-				},
-			),
+			IngressAddressReceiverPairs {
+				eth: (eth_ingress_receiver, eth_addresses),
+				flip: (flip_ingress_receiver, flip_addresses),
+				usdc: (usdc_ingress_receiver, usdc_addresses),
+			},
 		)
 		.await;
 		Ok(())
