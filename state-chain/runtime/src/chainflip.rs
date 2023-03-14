@@ -16,8 +16,8 @@ use crate::{
 };
 use cf_chains::{
 	btc::{
-		api::BitcoinApi, Bitcoin, BitcoinNetwork, BitcoinTransactionData, BtcAddress, BtcAmount,
-		Utxo,
+		api::BitcoinApi, Bitcoin, BitcoinAddress, BitcoinNetwork, BitcoinTransactionData,
+		BtcAmount, Utxo,
 	},
 	dot::{
 		api::PolkadotApi, Polkadot, PolkadotAccountId, PolkadotReplayProtection,
@@ -213,7 +213,7 @@ impl TransactionBuilder<Bitcoin, BitcoinApi<BtcEnvironment>> for BtcTransactionB
 	}
 
 	fn is_valid_for_rebroadcast(_call: &BitcoinApi<BtcEnvironment>) -> bool {
-		// The transaction wont be valid for rebroadcast as soon as we transition to new epoch sinse
+		// The transaction wont be valid for rebroadcast as soon as we transition to new epoch since
 		// the input utxo set will change and the whole apicall would be invalid
 		todo!()
 	}
@@ -306,12 +306,12 @@ pub struct BtcEnvironment;
 
 impl ChainEnvironment<BtcAmount, (Vec<Utxo>, u64)> for BtcEnvironment {
 	fn lookup(output_amount: BtcAmount) -> Option<(Vec<Utxo>, u64)> {
-		Some(Environment::get_modify_btc_utxos_for_transaction(output_amount))
+		Some(Environment::select_and_take_bitcoin_utxos(output_amount))
 	}
 }
 
-impl ChainEnvironment<(), (BitcoinNetwork, BtcAddress)> for BtcEnvironment {
-	fn lookup(_: ()) -> Option<(BitcoinNetwork, BtcAddress)> {
+impl ChainEnvironment<(), (BitcoinNetwork, BitcoinAddress)> for BtcEnvironment {
+	fn lookup(_: ()) -> Option<(BitcoinNetwork, BitcoinAddress)> {
 		Some((Environment::get_bitcoin_network(), Environment::get_btc_return_address()))
 	}
 }

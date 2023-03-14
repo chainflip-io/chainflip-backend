@@ -52,7 +52,7 @@ fn insert_swaps(swaps: &[Swap]) {
 			swap.from,
 			swap.to,
 			swap.amount,
-			swap.clone().egress_address,
+			swap.egress_address.clone(),
 			relayer_id as u64,
 			2,
 		);

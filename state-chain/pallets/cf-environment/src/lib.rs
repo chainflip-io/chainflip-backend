@@ -3,7 +3,7 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use cf_chains::{
-	btc::{utxo_selection::select_utxos_from_pool, BitcoinNetwork, BtcAddress, Utxo},
+	btc::{utxo_selection::select_utxos_from_pool, BitcoinAddress, BitcoinNetwork, Utxo},
 	dot::{api::CreatePolkadotVault, Polkadot, PolkadotAccountId, PolkadotIndex},
 	ChainCrypto,
 };
@@ -76,7 +76,7 @@ pub mod cfe {
 pub mod pallet {
 
 	use cf_chains::{
-		btc::{BtcAddress, Utxo},
+		btc::{BitcoinAddress, Utxo},
 		dot::{PolkadotHash, PolkadotPublicKey, RuntimeVersion},
 	};
 	use cf_primitives::{Asset, TxId};
@@ -199,7 +199,7 @@ pub mod pallet {
 
 	#[pallet::storage]
 	/// The address where we want to send the remaining btc amount after creating required outputs
-	pub type BitcoinChangeAddress<T> = StorageValue<_, BtcAddress, ValueQuery>;
+	pub type BitcoinChangeAddress<T> = StorageValue<_, BitcoinAddress, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -424,7 +424,7 @@ pub mod pallet {
 		pub polkadot_runtime_version: RuntimeVersion,
 		pub bitcoin_network: BitcoinNetwork,
 		pub bitcoin_fee_per_utxo: u64,
-		pub bitcoin_change_address: BtcAddress,
+		pub bitcoin_change_address: BitcoinAddress,
 	}
 
 	/// Sets the genesis config
@@ -535,17 +535,17 @@ impl<T: Config> Pallet<T> {
 		BitcoinNetworkSelection::<T>::get()
 	}
 
-	pub fn get_btc_return_address() -> BtcAddress {
+	pub fn get_btc_return_address() -> BitcoinAddress {
 		BitcoinChangeAddress::<T>::get()
 	}
 
-	pub fn get_modify_btc_utxos_for_transaction(
+	// Calculate the selection of utxos, return them and remove them from the list. If the
+	// total output amount exceeds the total spendable amount of all utxos, the function
+	// selects all utxos. The fee required to spend the utxos are accounted for while selection.
+	pub fn select_and_take_bitcoin_utxos(
 		total_output_amount: cf_chains::btc::BtcAmount,
 	) -> (Vec<Utxo>, u64) {
 		BitcoinAvailableUtxos::<T>::mutate(|available_utxos| {
-			// Calculate the selection of utxos, return them and remove them from the list. If the
-			// total output amount exceeds the total spendable amount of all utxos, the function
-			// selects all utxos
 			select_utxos_from_pool(
 				available_utxos,
 				BitcoinFeePerUtxo::<T>::get(),

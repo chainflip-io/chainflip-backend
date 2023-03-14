@@ -72,7 +72,8 @@ pub const ETHEREUM_ETH_ADDRESS: EthereumAddress = [0xEE; 20];
 /// The very first epoch number
 pub const GENESIS_EPOCH: u32 = 1;
 
-// Maximum possible length for a btc address that is expected by the runtime
+//Addresses can have all kinds of different lengths in bitcoin but we would support upto 100 since
+// we dont expect addresses higher than 100
 pub const MAX_BTC_ADDRESS_LENGTH: usize = 100;
 
 /// Alias to 512-bit hash when used in the context of a transaction signature on the chain.
@@ -199,8 +200,8 @@ fn test_key_id_to_and_from_bytes() {
 }
 
 #[derive(Clone, Copy)]
-pub struct MaxBtcAddressLength;
-impl Get<u32> for MaxBtcAddressLength {
+pub struct MaxBitcoinAddressLength;
+impl Get<u32> for MaxBitcoinAddressLength {
 	fn get() -> u32 {
 		MAX_BTC_ADDRESS_LENGTH as u32
 	}
@@ -211,7 +212,7 @@ impl Get<u32> for MaxBtcAddressLength {
 pub enum ForeignChainAddress {
 	Eth(EthereumAddress),
 	Dot([u8; 32]),
-	Btc(BoundedVec<u8, MaxBtcAddressLength>),
+	Btc(BoundedVec<u8, MaxBitcoinAddressLength>),
 }
 
 #[cfg(feature = "std")]
@@ -289,7 +290,7 @@ impl TryFrom<ForeignChainAddress> for PolkadotAccountId {
 	}
 }
 
-impl TryFrom<ForeignChainAddress> for BoundedVec<u8, MaxBtcAddressLength> {
+impl TryFrom<ForeignChainAddress> for BoundedVec<u8, MaxBitcoinAddressLength> {
 	type Error = AddressError;
 
 	fn try_from(address: ForeignChainAddress) -> Result<Self, Self::Error> {
@@ -341,8 +342,8 @@ impl From<PolkadotAccountId> for ForeignChainAddress {
 	}
 }
 
-impl From<BoundedVec<u8, MaxBtcAddressLength>> for ForeignChainAddress {
-	fn from(address: BoundedVec<u8, MaxBtcAddressLength>) -> ForeignChainAddress {
+impl From<BoundedVec<u8, MaxBitcoinAddressLength>> for ForeignChainAddress {
+	fn from(address: BoundedVec<u8, MaxBitcoinAddressLength>) -> ForeignChainAddress {
 		ForeignChainAddress::Btc(address)
 	}
 }

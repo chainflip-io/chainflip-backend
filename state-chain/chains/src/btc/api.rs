@@ -2,7 +2,7 @@ pub mod batch_transfer;
 
 use super::{
 	ingress_address::derive_btc_ingress_address, scriptpubkey_from_address, Bitcoin,
-	BitcoinNetwork, BitcoinOutput, BtcAddress, BtcAmount, Utxo,
+	BitcoinAddress, BitcoinNetwork, BitcoinOutput, BtcAmount, Utxo,
 };
 use crate::*;
 use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound};
@@ -12,9 +12,6 @@ use sp_std::marker::PhantomData;
 #[scale_info(skip_type_params(Environment))]
 pub enum BitcoinApi<Environment: 'static> {
 	BatchTransfer(batch_transfer::BatchTransfer),
-	//RotateVaultProxy(rotate_vault_proxy::RotateVaultProxy),
-	//CreateAnonymousVault(create_anonymous_vault::CreateAnonymousVault),
-	//ChangeGovKey(set_gov_key_with_agg_key::ChangeGovKey),
 	#[doc(hidden)]
 	#[codec(skip)]
 	_Phantom(PhantomData<Environment>, Never),
@@ -23,14 +20,14 @@ pub enum BitcoinApi<Environment: 'static> {
 impl<E> AllBatch<Bitcoin> for BitcoinApi<E>
 where
 	E: ChainEnvironment<<Bitcoin as Chain>::ChainAmount, (Vec<Utxo>, u64)>
-		+ ChainEnvironment<(), (BitcoinNetwork, BtcAddress)>,
+		+ ChainEnvironment<(), (BitcoinNetwork, BitcoinAddress)>,
 {
 	fn new_unsigned(
 		_fetch_params: Vec<FetchAssetParams<Bitcoin>>,
 		transfer_params: Vec<TransferAssetParams<Bitcoin>>,
 	) -> Result<Self, ()> {
 		let (bitcoin_network, bitcoin_return_address) =
-			<E as ChainEnvironment<(), (BitcoinNetwork, BtcAddress)>>::lookup(())
+			<E as ChainEnvironment<(), (BitcoinNetwork, BitcoinAddress)>>::lookup(())
 				.expect("Since the lookup function always returns a some");
 		let mut total_output_amount: u64 = 0;
 		let mut btc_outputs = vec![];
@@ -45,6 +42,8 @@ where
 			total_output_amount += <u128 as TryInto<u64>>::try_into(transfer_param.amount)
 				.expect("BTC amounts are never more than u64 max");
 		}
+		// Looks up all available Utxos and selects and takes them for the transaction depending on
+		// the amount that needs to be output.
 		let (selected_input_utxos, total_input_amount_available) =
 			<E as ChainEnvironment<BtcAmount, (Vec<Utxo>, u64)>>::lookup(
 				total_output_amount.into(),
@@ -69,14 +68,14 @@ where
 impl<E> SetAggKeyWithAggKey<Bitcoin> for BitcoinApi<E>
 where
 	E: ChainEnvironment<<Bitcoin as Chain>::ChainAmount, (Vec<Utxo>, u64)>
-		+ ChainEnvironment<(), (BitcoinNetwork, BtcAddress)>,
+		+ ChainEnvironment<(), (BitcoinNetwork, BitcoinAddress)>,
 {
 	fn new_unsigned(
 		_maybe_old_key: Option<<Bitcoin as ChainCrypto>::AggKey>,
 		new_key: <Bitcoin as ChainCrypto>::AggKey,
 	) -> Result<Self, ()> {
 		let (bitcoin_network, _bitcoin_return_address) =
-			<E as ChainEnvironment<(), (BitcoinNetwork, BtcAddress)>>::lookup(())
+			<E as ChainEnvironment<(), (BitcoinNetwork, BitcoinAddress)>>::lookup(())
 				.expect("Since the lookup function always returns a some");
 
 		// We will use the bitcoin address derived with the salt of 0 as the vault address where we
@@ -84,8 +83,9 @@ where
 		let new_vault_return_address =
 			derive_btc_ingress_address(new_key.0, 0, bitcoin_network.clone());
 
+		//max possible btc value to get all available utxos
 		let (all_input_utxos, total_spendable_amount_in_vault) =
-			<E as ChainEnvironment<BtcAmount, (Vec<Utxo>, u64)>>::lookup(u64::MAX.into()) //max possible btc value to get all available utxos
+			<E as ChainEnvironment<BtcAmount, (Vec<Utxo>, u64)>>::lookup(u64::MAX.into())
 				.ok_or(())?;
 
 		Ok(Self::BatchTransfer(batch_transfer::BatchTransfer::new_unsigned(

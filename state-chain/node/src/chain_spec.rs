@@ -2,7 +2,7 @@ use cf_chains::{
 	btc::BitcoinNetwork,
 	dot::{RuntimeVersion, POLKADOT_VAULT_ACCOUNT},
 };
-use cf_primitives::{AccountRole, AuthorityCount, MaxBtcAddressLength};
+use cf_primitives::{AccountRole, AuthorityCount, MaxBitcoinAddressLength};
 
 use frame_benchmarking::sp_std::collections::btree_set::BTreeSet;
 use sc_service::{ChainType, Properties};
@@ -247,7 +247,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 					polkadot_runtime_version: POLKADOT_TEST_RUNTIME_VERSION,
 					bitcoin_network: BitcoinNetwork::Regtest,
 					bitcoin_fee_per_utxo: BITCOIN_FEE_PER_UTXO,
-					bitcoin_change_address: BoundedVec::<u8, MaxBtcAddressLength>::try_from(
+					bitcoin_change_address: BoundedVec::<u8, MaxBitcoinAddressLength>::try_from(
 						BITCOIN_CHANGE_ADDRESS.to_vec(),
 					)
 					.expect("length is less than max of bounded vec"),
@@ -381,7 +381,7 @@ macro_rules! network_spec {
 								bitcoin_network: BitcoinNetwork::Regtest,
 								bitcoin_fee_per_utxo: BITCOIN_FEE_PER_UTXO,
 								bitcoin_change_address:
-									BoundedVec::<u8, MaxBtcAddressLength>::try_from(
+									BoundedVec::<u8, MaxBitcoinAddressLength>::try_from(
 										BITCOIN_CHANGE_ADDRESS.to_vec(),
 									)
 									.expect("length is less than max of bounded vec"),

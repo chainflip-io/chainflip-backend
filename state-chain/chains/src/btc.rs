@@ -10,14 +10,13 @@ use frame_support::{sp_io::hashing::sha2_256, BoundedVec, RuntimeDebug};
 use libsecp256k1::{PublicKey, SecretKey};
 use scale_info::TypeInfo;
 use sp_std::{vec, vec::Vec};
-// #[cfg(feature = "runtime-benchmarks")]
 
 extern crate alloc;
 use crate::{Chain, ChainAbi, ChainCrypto, FeeRefundCalculator, IngressIdConstructor};
 use alloc::string::String;
 pub use cf_primitives::chains::Bitcoin;
 use cf_primitives::{
-	chains::assets, EpochIndex, IntentId, KeyId, MaxBtcAddressLength, PublicKeyBytes,
+	chains::assets, EpochIndex, IntentId, KeyId, MaxBitcoinAddressLength, PublicKeyBytes,
 	MAX_BTC_ADDRESS_LENGTH,
 };
 use itertools;
@@ -38,7 +37,7 @@ pub type SigningPayload = [u8; 32];
 
 pub type Signature = [u8; 64];
 
-pub type BtcAddress = BoundedVec<u8, MaxBtcAddressLength>;
+pub type BitcoinAddress = BoundedVec<u8, MaxBitcoinAddressLength>;
 
 pub type Hash = [u8; 32];
 
@@ -102,10 +101,6 @@ impl<T: BenchmarkValue> BenchmarkValue for Vec<T> {
 	}
 }
 
-// TODO: Implement this
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Default)]
-pub struct BitcoinReplayProtection;
-
 impl FeeRefundCalculator<Bitcoin> for BitcoinTransactionData {
 	fn return_fee_refund(
 		&self,
@@ -126,7 +121,7 @@ impl Chain for Bitcoin {
 
 	type ChainAsset = assets::btc::Asset;
 
-	type ChainAccount = BtcAddress;
+	type ChainAccount = BitcoinAddress;
 
 	type EpochStartData = ();
 
@@ -167,7 +162,7 @@ impl ChainCrypto for Bitcoin {
 impl ChainAbi for Bitcoin {
 	type Transaction = BitcoinTransactionData;
 
-	type ReplayProtection = BitcoinReplayProtection;
+	type ReplayProtection = ();
 }
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct UtxoId {
@@ -207,7 +202,7 @@ impl BenchmarkValue for SigningPayload {
 
 // Bitcoin address
 #[cfg(feature = "runtime-benchmarks")]
-impl BenchmarkValue for BtcAddress {
+impl BenchmarkValue for BitcoinAddress {
 	fn benchmark_value() -> Self {
 		BoundedVec::try_from([1u8; MAX_BTC_ADDRESS_LENGTH].to_vec())
 			.expect("we created a vec that is in the bounds of bounded vec")
@@ -215,7 +210,7 @@ impl BenchmarkValue for BtcAddress {
 }
 
 impl IngressIdConstructor for BitcoinFetchId {
-	type Address = BtcAddress;
+	type Address = BitcoinAddress;
 
 	fn deployed(_intent_id: u64, _address: Self::Address) -> Self {
 		todo!()

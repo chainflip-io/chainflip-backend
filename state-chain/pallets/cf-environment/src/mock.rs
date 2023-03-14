@@ -5,7 +5,7 @@ use cf_chains::{
 	ApiCall, Chain, ChainCrypto, Polkadot,
 };
 
-use cf_primitives::{AuthorityCount, BroadcastId, MaxBtcAddressLength};
+use cf_primitives::{AuthorityCount, BroadcastId, MaxBitcoinAddressLength};
 use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
 	BroadcastCleanup, Broadcaster, Chainflip, VaultKeyWitnessedHandler,
@@ -178,7 +178,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			polkadot_runtime_version: TEST_RUNTIME_VERSION,
 			bitcoin_network: Default::default(),
 			bitcoin_fee_per_utxo: MOCK_FEE_PER_UTXO,
-			bitcoin_change_address: BoundedVec::<u8, MaxBtcAddressLength>::try_from(
+			bitcoin_change_address: BoundedVec::<u8, MaxBitcoinAddressLength>::try_from(
 				MOCK_BTC_CHANGE_ADDRESS.to_vec(),
 			)
 			.expect("length is less than max of bounded vec"),
