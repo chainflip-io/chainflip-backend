@@ -31,8 +31,16 @@ pub use sp_std::{vec, vec::Vec};
 /// Enum wrapper for fetch and egress requests.
 #[derive(RuntimeDebug, Eq, PartialEq, Copy, Clone, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub enum FetchOrTransfer<C: Chain> {
-	Fetch { intent_id: IntentId, asset: C::ChainAsset },
-	Transfer { egress_id: EgressId, asset: C::ChainAsset, to: C::ChainAccount, amount: AssetAmount },
+	Fetch {
+		intent_id: IntentId,
+		asset: C::ChainAsset,
+	},
+	Transfer {
+		egress_id: EgressId,
+		asset: C::ChainAsset,
+		to: C::ChainAccount,
+		amount: C::ChainAmount,
+	},
 }
 
 impl<C: Chain> FetchOrTransfer<C> {
@@ -556,7 +564,7 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 		ScheduledEgressRequests::<T, I>::append(FetchOrTransfer::<T::TargetChain>::Transfer {
 			asset,
 			to: egress_address.clone(),
-			amount,
+			amount: amount.into(),
 			egress_id,
 		});
 		EgressIdCounter::<T, I>::put(egress_counter);

@@ -49,7 +49,7 @@ benchmarks_instance_pallet! {
 					egress_id: (ForeignChain::Ethereum, 1),
 					asset: egress_asset,
 					to: egress_address.clone(),
-					amount: 1_000,
+					amount: 1_000.into(),
 				});
 			}
 		}

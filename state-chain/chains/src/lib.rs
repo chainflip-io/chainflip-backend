@@ -2,9 +2,7 @@
 use core::fmt::Display;
 
 use crate::benchmarking_value::BenchmarkValue;
-use cf_primitives::{
-	chains::assets, AssetAmount, EpochIndex, EthAmount, IntentId, KeyId, PublicKeyBytes,
-};
+use cf_primitives::{chains::assets, EpochIndex, EthAmount, IntentId, KeyId, PublicKeyBytes};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
@@ -185,9 +183,9 @@ pub struct FetchAssetParams<C: Chain> {
 /// Contains all the parameters required for transferring an asset on an external chain.
 #[derive(RuntimeDebug, Clone, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub struct TransferAssetParams<C: Chain> {
-	pub asset: <C as Chain>::ChainAsset,
-	pub to: <C as Chain>::ChainAccount,
-	pub amount: AssetAmount,
+	pub asset: C::ChainAsset,
+	pub to: C::ChainAccount,
+	pub amount: C::ChainAmount,
 }
 
 pub trait IngressAddress {
