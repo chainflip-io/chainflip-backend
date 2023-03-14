@@ -34,16 +34,23 @@ where
 				.expect("Since the lookup function always returns a some");
 		let mut total_output_amount: u64 = 0;
 		let mut btc_outputs = vec![];
+
+		let bitcoin_output =
+			|amount, address: <Bitcoin as Chain>::ChainAccount| -> Result<BitcoinOutput, ()> {
+				Ok(BitcoinOutput {
+					amount,
+					script_pubkey: scriptpubkey_from_address(
+						sp_std::str::from_utf8(&address[..]).map_err(|_| ())?,
+						bitcoin_network.clone(),
+					)
+					.map_err(|_| ())?,
+				})
+			};
+
 		for transfer_param in transfer_params {
-			btc_outputs.push(BitcoinOutput {
-				amount: transfer_param.clone().amount.try_into().expect("Since this output comes from the AMM and if AMM math works correctly, this should be a valid bitcoin amount which should be less than u64::max"),
-				script_pubkey: scriptpubkey_from_address(
-					sp_std::str::from_utf8(&transfer_param.to[..]).map_err(|_| ())?,
-					bitcoin_network.clone(),
-				).map_err(|_|())?,
-			});
-			total_output_amount += <u128 as TryInto<u64>>::try_into(transfer_param.amount)
-				.expect("BTC amounts are never more than u64 max");
+			let amount: u64 = transfer_param.clone().amount.try_into().expect("Since this output comes from the AMM and if AMM math works correctly, this should be a valid bitcoin amount which should be less than u64::max");
+			btc_outputs.push(bitcoin_output(amount, transfer_param.to)?);
+			total_output_amount += amount;
 		}
 		let (selected_input_utxos, total_input_amount_available) =
 			<E as ChainEnvironment<BtcAmount, (Vec<Utxo>, u64)>>::lookup(
@@ -51,14 +58,10 @@ where
 			)
 			.ok_or(())?;
 
-		btc_outputs.push(BitcoinOutput {
-			amount: total_input_amount_available - total_output_amount,
-			script_pubkey: scriptpubkey_from_address(
-				sp_std::str::from_utf8(&bitcoin_return_address[..]).map_err(|_| ())?,
-				bitcoin_network,
-			)
-			.map_err(|_| ())?,
-		});
+		btc_outputs.push(bitcoin_output(
+			total_input_amount_available - total_output_amount,
+			bitcoin_return_address,
+		)?);
 		Ok(Self::BatchTransfer(batch_transfer::BatchTransfer::new_unsigned(
 			selected_input_utxos,
 			btc_outputs,
