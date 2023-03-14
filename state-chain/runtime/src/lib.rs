@@ -73,9 +73,12 @@ use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
 pub use cf_primitives::{
-	Asset, AssetAmount, BlockNumber, ExchangeRate, FlipBalance, ForeignChainAddress, Tick,
+	Asset, AssetAmount, BlockNumber, ExchangeRate, FlipBalance, ForeignChainAddress, Liquidity,
+	Tick,
 };
-pub use cf_traits::{EpochInfo, EthEnvironmentProvider, QualifyNode, SessionKeysRegistered};
+pub use cf_traits::{
+	EpochInfo, EthEnvironmentProvider, LiquidityPoolApi, QualifyNode, SessionKeysRegistered,
+};
 
 pub use chainflip::chain_instances::*;
 use chainflip::{
@@ -274,7 +277,7 @@ impl pallet_cf_ingress_egress::Config<EthereumInstance> for Runtime {
 	type AllBatch = eth::api::EthereumApi<EthEnvironment>;
 	type Broadcaster = EthereumBroadcaster;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
-	type TTL = ConstU32<100>;
+	type IntentTTL = ConstU32<1200>;
 	type IngressHandler = EthIngressHandler;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 }
@@ -288,9 +291,9 @@ impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
 	type AllBatch = dot::api::PolkadotApi<chainflip::DotEnvironment>;
 	type Broadcaster = PolkadotBroadcaster;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
-	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
-	type TTL = ConstU32<100>;
+	type IntentTTL = ConstU32<1200>;
 	type IngressHandler = DotIngressHandler;
+	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 }
 
 parameter_types! {
@@ -943,6 +946,10 @@ impl_runtime_apis! {
 		) -> Option<Tick> {
 			use cf_traits::LiquidityPoolApi;
 			LiquidityPools::current_tick(&asset)
+		}
+
+		fn cf_pool_minted_positions(lp: AccountId, asset: Asset) -> Vec<(Tick, Tick, Liquidity)> {
+			LiquidityPools::minted_positions(&lp, &asset)
 		}
 	}
 

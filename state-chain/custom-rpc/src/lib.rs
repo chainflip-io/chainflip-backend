@@ -16,7 +16,7 @@ use std::{marker::PhantomData, sync::Arc};
 #[allow(unused)]
 use state_chain_runtime::{Asset, AssetAmount, ExchangeRate};
 
-use cf_primitives::Tick;
+use cf_primitives::{Liquidity, Tick};
 
 #[derive(Serialize, Deserialize)]
 pub struct RpcAccountInfo {
@@ -194,28 +194,25 @@ where
 			.map_err(to_rpc_error)
 	}
 	fn cf_eth_flip_token_address(&self, at: Option<<B as BlockT>::Hash>) -> RpcResult<String> {
-		let eth_flip_token_address = self
-			.client
+		self.client
 			.runtime_api()
 			.cf_eth_flip_token_address(&self.query_block_id(at))
-			.map_err(to_rpc_error)?;
-		Ok(hex::encode(eth_flip_token_address))
+			.map_err(to_rpc_error)
+			.map(hex::encode)
 	}
 	fn cf_eth_stake_manager_address(&self, at: Option<<B as BlockT>::Hash>) -> RpcResult<String> {
-		let eth_stake_manager_address = self
-			.client
+		self.client
 			.runtime_api()
 			.cf_eth_stake_manager_address(&self.query_block_id(at))
-			.map_err(to_rpc_error)?;
-		Ok(hex::encode(eth_stake_manager_address))
+			.map_err(to_rpc_error)
+			.map(hex::encode)
 	}
 	fn cf_eth_key_manager_address(&self, at: Option<<B as BlockT>::Hash>) -> RpcResult<String> {
-		let eth_key_manager_address = self
-			.client
+		self.client
 			.runtime_api()
 			.cf_eth_key_manager_address(&self.query_block_id(at))
-			.map_err(to_rpc_error)?;
-		Ok(hex::encode(eth_key_manager_address))
+			.map_err(to_rpc_error)
+			.map(hex::encode)
 	}
 	fn cf_eth_chain_id(&self, at: Option<<B as BlockT>::Hash>) -> RpcResult<u64> {
 		self.client
@@ -241,12 +238,11 @@ where
 			.map_err(to_rpc_error)
 	}
 	fn cf_min_stake(&self, at: Option<<B as BlockT>::Hash>) -> RpcResult<NumberOrHex> {
-		let min_stake = self
-			.client
+		self.client
 			.runtime_api()
 			.cf_min_stake(&self.query_block_id(at))
-			.map_err(to_rpc_error)?;
-		Ok(min_stake.into())
+			.map_err(to_rpc_error)
+			.map(Into::into)
 	}
 	fn cf_current_epoch(&self, at: Option<<B as BlockT>::Hash>) -> RpcResult<u32> {
 		self.client
@@ -270,34 +266,31 @@ where
 		&self,
 		at: Option<<B as BlockT>::Hash>,
 	) -> RpcResult<NumberOrHex> {
-		let authority_emission_per_block = self
-			.client
+		self.client
 			.runtime_api()
 			.cf_authority_emission_per_block(&self.query_block_id(at))
-			.map_err(to_rpc_error)?;
-		Ok(authority_emission_per_block.into())
+			.map_err(to_rpc_error)
+			.map(Into::into)
 	}
 	fn cf_backup_emission_per_block(
 		&self,
 		at: Option<<B as BlockT>::Hash>,
 	) -> RpcResult<NumberOrHex> {
-		let backup_emission_per_block = self
-			.client
+		self.client
 			.runtime_api()
 			.cf_backup_emission_per_block(&self.query_block_id(at))
-			.map_err(to_rpc_error)?;
-		Ok(backup_emission_per_block.into())
+			.map_err(to_rpc_error)
+			.map(Into::into)
 	}
 	fn cf_flip_supply(
 		&self,
 		at: Option<<B as BlockT>::Hash>,
 	) -> RpcResult<(NumberOrHex, NumberOrHex)> {
-		let (issuance, offchain) = self
-			.client
+		self.client
 			.runtime_api()
 			.cf_flip_supply(&self.query_block_id(at))
-			.map_err(to_rpc_error)?;
-		Ok((issuance.into(), offchain.into()))
+			.map_err(to_rpc_error)
+			.map(|(issuance, offchain)| (issuance.into(), offchain.into()))
 	}
 	fn cf_accounts(
 		&self,
@@ -447,6 +440,14 @@ pub trait PoolsApi {
 		asset: Asset,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Option<Tick>>;
+
+	#[method(name = "pool_minted_positions")]
+	fn cf_pool_minted_positions(
+		&self,
+		lp: AccountId32,
+		asset: Asset,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<(Tick, Tick, Liquidity)>>;
 }
 
 impl<C, B> PoolsApiServer for PoolsRpc<C, B>
@@ -463,6 +464,18 @@ where
 		self.client
 			.runtime_api()
 			.cf_pool_tick_price(&self.query_block_id(at), asset)
+			.map_err(to_rpc_error)
+	}
+
+	fn cf_pool_minted_positions(
+		&self,
+		lp: AccountId32,
+		asset: Asset,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<(Tick, Tick, Liquidity)>> {
+		self.client
+			.runtime_api()
+			.cf_pool_minted_positions(&self.query_block_id(at), lp, asset)
 			.map_err(to_rpc_error)
 	}
 }
