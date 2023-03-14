@@ -474,6 +474,10 @@ pub mod pallet {
 			ensure_root(origin)?;
 
 			let payload = PayloadFor::<T, I>::decode(&mut &[0xcf; 32][..])
+				.or_else(|_| {
+					let encoded = vec![0xcf; 32].encode();
+					PayloadFor::<T, I>::decode(&mut &encoded[..])
+				})
 				.map_err(|_| Error::<T, I>::InvalidPayload)?;
 			for _ in 0..how_many {
 				T::ThresholdSigner::request_signature(payload.clone());
