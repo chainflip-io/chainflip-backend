@@ -237,7 +237,9 @@ fn to_varint(value: u64) -> Vec<u8> {
 	result
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, PartialOrd, Ord)]
+#[derive(
+	Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, PartialOrd, Ord,
+)]
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub enum BitcoinNetwork {
 	Mainnet,
