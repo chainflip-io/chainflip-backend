@@ -1,9 +1,8 @@
-use std::{collections::BTreeSet, sync::Arc};
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use cf_chains::Ethereum;
 use futures::StreamExt;
-use sp_core::H160;
 use tokio::{select, sync::Mutex};
 use tracing::{info, info_span, trace, Instrument};
 
@@ -22,12 +21,6 @@ use crate::{
 	},
 };
 
-pub struct IngressAddressReceiverPairs {
-	pub eth: (tokio::sync::mpsc::UnboundedReceiver<H160>, BTreeSet<H160>),
-	pub flip: (tokio::sync::mpsc::UnboundedReceiver<H160>, BTreeSet<H160>),
-	pub usdc: (tokio::sync::mpsc::UnboundedReceiver<H160>, BTreeSet<H160>),
-}
-
 #[async_trait]
 pub trait BlockProcessor: Send {
 	async fn process_block(
@@ -42,7 +35,7 @@ pub async fn start(
 	witnessers: AllWitnessers,
 	eth_rpc: EthDualRpcClient,
 	db: Arc<PersistentKeyDB>,
-) -> Result<(), IngressAddressReceiverPairs> {
+) -> Result<(), ()> {
 	epoch_witnesser::start(
 		epoch_start_receiver,
 		move |_| true,
@@ -63,31 +56,12 @@ pub async fn start(
 					{
 						StartCheckpointing::Started((from_block, witnessed_until_sender)) =>
 							(from_block, witnessed_until_sender),
-						StartCheckpointing::AlreadyWitnessedEpoch =>
-							return Result::<_, IngressAddressReceiverPairs>::Ok(witnessers),
+						StartCheckpointing::AlreadyWitnessedEpoch => return Ok(witnessers),
 					};
 
-				// We need to return the receivers so we can restart the process while ensuring
-				// we are still able to receive new ingress addresses to monitor.
-				//
-				// rustfmt chokes when formatting this macro.
-				// See: https://github.com/rust-lang/rustfmt/issues/5404
-				#[rustfmt::skip]
-				macro_rules! try_with_logging_receivers {
-					($exp:expr) => {
-						try_with_logging!(
-							$exp,
-							IngressAddressReceiverPairs {
-								eth: witnessers.eth_ingress.take_ingress_receiver_pair(),
-								flip: witnessers.flip_ingress.take_ingress_receiver_pair(),
-								usdc: witnessers.usdc_ingress.take_ingress_receiver_pair(),
-							}
-						)
-					};
-				}
-
-				let mut block_stream = try_with_logging_receivers!(
-					safe_dual_block_subscription_from(from_block, eth_rpc.clone()).await
+				let mut block_stream = try_with_logging!(
+					safe_dual_block_subscription_from(from_block, eth_rpc.clone()).await,
+					()
 				);
 
 				let mut end_at_block = None;
@@ -116,16 +90,19 @@ pub async fn start(
 						let block_number = block.block_number.as_u64();
 						trace!("Eth block witnessers are processing block {block_number}");
 
-						try_with_logging_receivers!(futures::future::join_all([
-							witnessers.key_manager.process_block(&epoch, &block),
-							witnessers.stake_manager.process_block(&epoch, &block),
-							witnessers.eth_ingress.process_block(&epoch, &block),
-							witnessers.flip_ingress.process_block(&epoch, &block),
-							witnessers.usdc_ingress.process_block(&epoch, &block),
-						])
-						.await
-						.into_iter()
-						.collect::<anyhow::Result<Vec<()>>>());
+						try_with_logging!(
+							futures::future::join_all([
+								witnessers.key_manager.process_block(&epoch, &block),
+								witnessers.stake_manager.process_block(&epoch, &block),
+								witnessers.eth_ingress.process_block(&epoch, &block),
+								witnessers.flip_ingress.process_block(&epoch, &block),
+								witnessers.usdc_ingress.process_block(&epoch, &block),
+							])
+							.await
+							.into_iter()
+							.collect::<anyhow::Result<Vec<()>>>(),
+							()
+						);
 
 						witnessed_until_sender
 							.send(WitnessedUntil { epoch_index: epoch.epoch_index, block_number })

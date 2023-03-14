@@ -25,7 +25,7 @@ use super::{
 	chain_data_witnesser,
 	contract_witnesser::ContractWitnesser,
 	erc20_witnesser::Erc20Witnesser,
-	eth_block_witnessing::{self, IngressAddressReceiverPairs},
+	eth_block_witnessing::{self},
 	key_manager::KeyManager,
 	rpc::EthDualRpcClient,
 	stake_manager::StakeManager,
@@ -42,6 +42,20 @@ pub struct AllWitnessers {
 	pub eth_ingress: IngressWitnesser<StateChainClient>,
 	pub flip_ingress: ContractWitnesser<Erc20Witnesser, StateChainClient>,
 	pub usdc_ingress: ContractWitnesser<Erc20Witnesser, StateChainClient>,
+}
+
+pub struct AddressMonitor {
+	pub addresses: BTreeSet<H160>,
+	pub address_receiver: tokio::sync::mpsc::UnboundedReceiver<H160>,
+}
+
+impl AddressMonitor {
+	pub fn new(
+		addresses: BTreeSet<H160>,
+		address_receiver: tokio::sync::mpsc::UnboundedReceiver<H160>,
+	) -> Self {
+		Self { addresses, address_receiver }
+	}
 }
 
 pub async fn start(
@@ -138,27 +152,33 @@ pub async fn start(
 	let (usdc_ingress_sender, usdc_ingress_receiver) = tokio::sync::mpsc::unbounded_channel();
 
 	let epoch_start_receiver = Arc::new(Mutex::new(epoch_start_receiver));
+	let eth_address_monitor =
+		Arc::new(Mutex::new(AddressMonitor::new(eth_addresses, eth_ingress_receiver)));
+	let flip_address_monitor =
+		Arc::new(Mutex::new(AddressMonitor::new(flip_addresses, flip_ingress_receiver)));
+	let usdc_address_monitor =
+		Arc::new(Mutex::new(AddressMonitor::new(usdc_addresses, usdc_ingress_receiver)));
 
 	let eth_settings = eth_settings.clone();
-	let create_and_run_witnesser_futures = move |ingress_receiver_pairs| {
+
+	let create_and_run_witnesser_futures = move |_| {
 		let eth_settings = eth_settings.clone();
 		let state_chain_client = state_chain_client.clone();
 		let db = db.clone();
 		let epoch_start_receiver = epoch_start_receiver.clone();
+
+		let flip_address_monitor = flip_address_monitor.clone();
+		let usdc_address_monitor = usdc_address_monitor.clone();
+		let eth_address_monitor = eth_address_monitor.clone();
+
 		async move {
 			// We create a new RPC on each call to the future, since one common reason for
 			// failure is that the WS connection has been dropped. This ensures that we create a
 			// new client, and therefore create a new connection.
 			let dual_rpc = try_with_logging!(
 				EthDualRpcClient::new(&eth_settings, expected_chain_id).await,
-				ingress_receiver_pairs
+				()
 			);
-
-			let IngressAddressReceiverPairs {
-				eth: (eth_ingress_receiver, eth_addresses),
-				flip: (flip_ingress_receiver, flip_addresses),
-				usdc: (usdc_ingress_receiver, usdc_addresses),
-			} = ingress_receiver_pairs;
 
 			eth_block_witnessing::start(
 				epoch_start_receiver,
@@ -178,15 +198,13 @@ pub async fn start(
 					eth_ingress: IngressWitnesser::new(
 						state_chain_client.clone(),
 						dual_rpc.clone(),
-						eth_addresses,
-						eth_ingress_receiver,
+						eth_address_monitor,
 					),
 					flip_ingress: ContractWitnesser::new(
 						Erc20Witnesser::new(
 							flip_contract_address.into(),
 							assets::eth::Asset::Flip,
-							flip_addresses,
-							flip_ingress_receiver,
+							flip_address_monitor,
 						),
 						state_chain_client.clone(),
 						dual_rpc.clone(),
@@ -196,8 +214,7 @@ pub async fn start(
 						Erc20Witnesser::new(
 							usdc_address.into(),
 							assets::eth::Asset::Usdc,
-							usdc_addresses,
-							usdc_ingress_receiver,
+							usdc_address_monitor,
 						),
 						state_chain_client.clone(),
 						dual_rpc.clone(),
@@ -212,15 +229,7 @@ pub async fn start(
 	};
 
 	scope.spawn(async move {
-		start_with_restart_on_failure(
-			create_and_run_witnesser_futures,
-			IngressAddressReceiverPairs {
-				eth: (eth_ingress_receiver, eth_addresses),
-				flip: (flip_ingress_receiver, flip_addresses),
-				usdc: (usdc_ingress_receiver, usdc_addresses),
-			},
-		)
-		.await;
+		start_with_restart_on_failure(create_and_run_witnesser_futures, ()).await;
 		Ok(())
 	});
 

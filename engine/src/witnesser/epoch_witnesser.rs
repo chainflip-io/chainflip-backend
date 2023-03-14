@@ -35,9 +35,10 @@ where
 					ScopedJoinHandle<State>,
 				)> = None;
 
+				let mut epoch_start_receiver = epoch_start_receiver.lock().await;
+
 				loop {
-					let epoch_start =
-						epoch_start_receiver.lock().await.recv().await.expect("Sender closed");
+					let epoch_start = epoch_start_receiver.recv().await.expect("Sender closed");
 					let (end_witnessing_sender, end_witnessing_receiver) = oneshot::channel();
 
 					// Send a signal to the previous epoch to stop at the starting block of the new
