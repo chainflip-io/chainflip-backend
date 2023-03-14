@@ -244,3 +244,46 @@ fn can_update_liquidity_fee() {
 		}));
 	});
 }
+
+#[test]
+fn can_get_liquidity_and_positions() {
+	new_test_ext().execute_with(|| {
+		let range_1 = AmmRange::new(-100, 100);
+		let range_2 = AmmRange::new(-50, 200);
+		let asset = Asset::Flip;
+		let default_tick_price = 0;
+
+		// Create a new pool.
+		assert_ok!(LiquidityPools::new_pool(
+			RuntimeOrigin::root(),
+			asset,
+			500_000u32,
+			default_tick_price,
+		));
+
+		assert_ok!(LiquidityPools::mint(
+			LP.into(),
+			asset,
+			range_1,
+			1_000,
+			|_: PoolAssetMap<AssetAmount>| Ok(())
+		));
+		assert_ok!(LiquidityPools::mint(
+			LP.into(),
+			asset,
+			range_2,
+			2_000,
+			|_: PoolAssetMap<AssetAmount>| Ok(())
+		));
+
+		assert_eq!(LiquidityPools::minted_liquidity(&LP.into(), &asset, range_1), 1_000);
+		assert_eq!(LiquidityPools::minted_liquidity(&LP.into(), &asset, range_2), 2_000);
+		assert_eq!(LiquidityPools::minted_liquidity(&LP.into(), &asset, AmmRange::new(0, 100)), 0);
+
+		assert_eq!(
+			LiquidityPools::minted_positions(&LP.into(), &asset),
+			vec![(range_1.lower, range_1.upper, 1_000), (range_2.lower, range_2.upper, 2_000),]
+		);
+		assert_eq!(LiquidityPools::minted_positions(&[1u8; 32].into(), &asset), vec![]);
+	});
+}

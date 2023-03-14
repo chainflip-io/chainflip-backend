@@ -457,19 +457,13 @@ impl<T: Config> LiquidityPoolApi<AccountId> for Pallet<T> {
 	}
 
 	fn minted_liquidity(lp: &AccountId, asset: &any::Asset, range: AmmRange) -> Liquidity {
-		if let Some(pool) = Pools::<T>::get(asset) {
-			pool.minted_liquidity(lp.clone(), range)
-		} else {
-			Default::default()
-		}
+		Pools::<T>::get(asset)
+			.map_or_else(Default::default, |pool| pool.minted_liquidity(lp.clone(), range))
 	}
 
 	fn minted_positions(lp: &AccountId, asset: &any::Asset) -> Vec<(Tick, Tick, Liquidity)> {
-		if let Some(pool) = Pools::<T>::get(asset) {
-			pool.minted_positions(lp.clone())
-		} else {
-			Default::default()
-		}
+		Pools::<T>::get(asset)
+			.map_or_else(Default::default, |pool| pool.minted_positions(lp.clone()))
 	}
 
 	fn current_tick(asset: &any::Asset) -> Option<Tick> {
