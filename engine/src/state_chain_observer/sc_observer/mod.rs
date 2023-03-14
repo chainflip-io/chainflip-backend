@@ -543,6 +543,11 @@ where
                                             .map(|_| slog::info!(logger, "Polkadot transmission successful: {broadcast_attempt_id}"))
                                             .map_err(|error| {
                                                 slog::error!(logger, "Error: {:?}", error);
+                                                // TODO: replace this with something more graceful.
+                                                // The string `restart required` indicates that the underlying websocket connection is dead.
+                                                if error.to_string().contains("restart required") {
+                                                    panic!("Polkadot websocket connection requires restart.")
+                                                }
                                             });
                                         }
                                     }
