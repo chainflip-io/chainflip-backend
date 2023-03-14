@@ -203,33 +203,21 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// The system state has been updated
-		SystemStateUpdated {
-			new_system_state: SystemState,
-		},
+		SystemStateUpdated { new_system_state: SystemState },
 		/// The on-chain CFE settings have been updated
-		CfeSettingsUpdated {
-			new_cfe_settings: cfe::CfeSettings,
-		},
+		CfeSettingsUpdated { new_cfe_settings: cfe::CfeSettings },
 		/// A new supported ETH asset was added
 		AddedNewEthAsset(Asset, EthereumAddress),
 		/// The address of an supported ETH asset was updated
 		UpdatedEthAsset(Asset, EthereumAddress),
 		/// Polkadot Vault Creation Call was initiated
-		PolkadotVaultCreationCallInitiated {
-			agg_key: <Polkadot as ChainCrypto>::AggKey,
-		},
+		PolkadotVaultCreationCallInitiated { agg_key: <Polkadot as ChainCrypto>::AggKey },
 		/// Polkadot Vault Account is successfully set
-		PolkadotVaultAccountSet {
-			polkadot_vault_account_id: PolkadotAccountId,
-		},
+		PolkadotVaultAccountSet { polkadot_vault_account_id: PolkadotAccountId },
 		/// The Polkadot Runtime Version stored on chain was updated.
-		PolkadotRuntimeVersionUpdated {
-			runtime_version: RuntimeVersion,
-		},
-		// The block number for set for new Bitcoin vault
-		BitcoinBlockNumberSetForVault {
-			block_number: cf_chains::btc::BlockNumber,
-		},
+		PolkadotRuntimeVersionUpdated { runtime_version: RuntimeVersion },
+		/// The block number for set for new Bitcoin vault
+		BitcoinBlockNumberSetForVault { block_number: cf_chains::btc::BlockNumber },
 	}
 
 	#[pallet::hooks]
@@ -496,7 +484,7 @@ pub mod pallet {
 			PolkadotProxyAccountNonce::<T>::set(0);
 
 			BitcoinAvailableUtxos::<T>::set(vec![]);
-			BitcoinNetworkSelection::<T>::set(self.bitcoin_network.clone());
+			BitcoinNetworkSelection::<T>::set(self.bitcoin_network);
 			BitcoinFeePerUtxo::<T>::set(self.bitcoin_fee_per_utxo);
 		}
 	}
