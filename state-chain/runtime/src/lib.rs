@@ -73,9 +73,12 @@ use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
 pub use cf_primitives::{
-	Asset, AssetAmount, BlockNumber, ExchangeRate, FlipBalance, ForeignChainAddress, Tick,
+	Asset, AssetAmount, BlockNumber, ExchangeRate, FlipBalance, ForeignChainAddress, Liquidity,
+	Tick,
 };
-pub use cf_traits::{EpochInfo, EthEnvironmentProvider, QualifyNode, SessionKeysRegistered};
+pub use cf_traits::{
+	EpochInfo, EthEnvironmentProvider, LiquidityPoolApi, QualifyNode, SessionKeysRegistered,
+};
 
 pub use chainflip::chain_instances::*;
 use chainflip::{
@@ -937,6 +940,10 @@ impl_runtime_apis! {
 		) -> Option<Tick> {
 			use cf_traits::LiquidityPoolApi;
 			LiquidityPools::current_tick(&asset)
+		}
+
+		fn cf_pool_minted_positions(lp: AccountId, asset: Asset) -> Vec<(Tick, Tick, Liquidity)> {
+			LiquidityPools::minted_positions(&lp, &asset)
 		}
 	}
 

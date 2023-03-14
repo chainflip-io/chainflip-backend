@@ -3,6 +3,7 @@ use cf_primitives::{
 };
 use frame_support::dispatch::DispatchError;
 use sp_runtime::DispatchResult;
+use sp_std::vec::Vec;
 
 pub trait SwapIntentHandler {
 	type AccountId;
@@ -77,6 +78,9 @@ pub trait LiquidityPoolApi<AccountId> {
 
 	/// Returns the LP's minted liquidity for a specific position in a pool.
 	fn minted_liquidity(lp: &AccountId, asset: &Asset, range: AmmRange) -> Liquidity;
+
+	/// Returns all the minted position of given user and asset pool.
+	fn minted_positions(lp: &AccountId, asset: &Asset) -> Vec<(Tick, Tick, Liquidity)>;
 
 	/// Gets the current price of the pool in Tick.
 	fn current_tick(asset: &Asset) -> Option<Tick>;
