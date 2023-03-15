@@ -44,14 +44,14 @@ impl Erc20Witnesser {
 	pub fn new(
 		deployed_address: H160,
 		asset: eth::Asset,
-		monitored_addresses: Arc<Mutex<AddressMonitor>>,
+		address_monitor: Arc<Mutex<AddressMonitor>>,
 	) -> Self {
 		Self {
 			deployed_address,
 			asset,
 			contract: ethabi::Contract::load(std::include_bytes!("abis/ERC20.json").as_ref())
 				.unwrap(),
-			address_monitor: monitored_addresses,
+			address_monitor,
 		}
 	}
 }
