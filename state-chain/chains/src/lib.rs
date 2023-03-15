@@ -3,7 +3,8 @@ use core::fmt::Display;
 
 use crate::benchmarking_value::BenchmarkValue;
 use cf_primitives::{
-	chains::assets, AssetAmount, EpochIndex, EthAmount, IntentId, KeyId, PublicKeyBytes,
+	chains::assets, AssetAmount, EpochIndex, EthAmount, ForeignChainAddress, IntentId, KeyId,
+	PublicKeyBytes,
 };
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
@@ -190,7 +191,6 @@ pub struct TransferAssetParams<C: Chain> {
 	pub asset: <C as Chain>::ChainAsset,
 	pub to: <C as Chain>::ChainAccount,
 	pub amount: AssetAmount,
-	pub message: Vec<u8>,
 }
 
 pub trait IngressAddress {
@@ -255,6 +255,14 @@ pub trait AllBatch<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<Abi>>,
 		transfer_params: Vec<TransferAssetParams<Abi>>,
+	) -> Result<Self, ()>;
+}
+
+pub trait ExecutexSwapAndCall<Abi: ChainAbi>: ApiCall<Abi> {
+	fn new_unsigned(
+		transfer_param: TransferAssetParams<Abi>,
+		form: ForeignChainAddress,
+		message: Vec<u8>,
 	) -> Result<Self, ()>;
 }
 

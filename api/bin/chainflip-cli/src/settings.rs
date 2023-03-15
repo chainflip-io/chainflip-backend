@@ -67,7 +67,8 @@ pub struct SwapIntentParams {
 	pub egress_address: String,
 	/// Commission to the relayer in base points
 	pub relayer_commission: u16,
-	pub message: Vec<u8>,
+	/// Optional: Any additional data to be executed after swap egress.
+	pub message: Option<Vec<u8>>,
 }
 
 #[derive(clap::Subcommand, Clone, Debug)]

@@ -66,6 +66,10 @@ pub struct TxId {
 	pub extrinsic_index: u32,
 }
 
+pub const ETHEREUM_CHAIN_ID: u8 = 1u8;
+pub const POLKADOT_CHAIN_ID: u8 = 2u8;
+pub const BITCOIN_CHAIN_ID: u8 = 3u8;
+
 pub const ETHEREUM_ETH_ADDRESS: EthereumAddress = [0xEE; 20];
 
 /// The very first epoch number

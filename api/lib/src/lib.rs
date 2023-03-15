@@ -331,7 +331,7 @@ pub async fn register_swap_intent(
 	egress_asset: Asset,
 	egress_address: ForeignChainAddress,
 	relayer_commission_bps: u16,
-	message: Vec<u8>,
+	message: Option<Vec<u8>>,
 ) -> Result<ForeignChainAddress> {
 	let events = connect_submit_and_get_events(
 		state_chain_settings,
@@ -340,7 +340,7 @@ pub async fn register_swap_intent(
 			egress_asset,
 			egress_address,
 			relayer_commission_bps,
-			message,
+			message: message.unwrap_or_default(),
 		},
 	)
 	.await?;
