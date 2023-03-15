@@ -560,10 +560,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let broadcast_id = broadcast_attempt.broadcast_attempt_id.broadcast_id;
 		if let Some((api_call, signature)) = ThresholdSignatureData::<T, I>::get(broadcast_id) {
 			let EpochKey { key, .. } = T::KeyProvider::current_epoch_key();
+			let prev_key = T::KeyProvider::previous_epoch_key();
 
 			if T::TransactionBuilder::is_valid_for_rebroadcast(&api_call) &&
 				<T::TargetChain as ChainCrypto>::verify_threshold_signature(
 					&key,
+					prev_key.as_ref(),
 					&api_call.threshold_signature_payload(),
 					&signature,
 				) {

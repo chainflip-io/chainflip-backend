@@ -209,7 +209,7 @@ impl Engine {
 						let _result = state_chain_runtime::EthereumThresholdSigner::signature_success(
 							RuntimeOrigin::none(),
 							*ceremony_id,
-							self.eth_threshold_signer.borrow().sign_with_key(key_id.clone(), payload.as_fixed_bytes()),
+							self.eth_threshold_signer.borrow().sign_with_key(key_id.0.clone(), payload.as_fixed_bytes()),
 						);
 					}
 
@@ -223,7 +223,7 @@ impl Engine {
 								let _result = state_chain_runtime::PolkadotThresholdSigner::signature_success(
 									RuntimeOrigin::none(),
 									*ceremony_id,
-									self.dot_threshold_signer.borrow().sign_with_key(key_id.clone(), &(payload.clone().0)),
+									self.dot_threshold_signer.borrow().sign_with_key(key_id.0.clone(), &(payload.clone().0)),
 								);
 					}
 					RuntimeEvent::Validator(

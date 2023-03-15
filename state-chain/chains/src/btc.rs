@@ -125,6 +125,7 @@ impl ChainCrypto for Bitcoin {
 
 	fn verify_threshold_signature(
 		_agg_key: &Self::AggKey,
+		_prev_agg_key: Option<&Self::AggKey>,
 		_payload: &Self::Payload,
 		_signature: &Self::ThresholdSignature,
 	) -> bool {

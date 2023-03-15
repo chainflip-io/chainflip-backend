@@ -383,6 +383,9 @@ pub trait KeyProvider<C: ChainCrypto> {
 	/// key.
 	fn current_epoch_key() -> EpochKey<C::AggKey>;
 
+	/// Get the Aggkey for previous epoch
+	fn previous_epoch_key() -> Option<C::AggKey>;
+
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_key(_key: C::AggKey) {
 		unimplemented!()

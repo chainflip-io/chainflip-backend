@@ -58,6 +58,7 @@ impl ChainCrypto for Ethereum {
 
 	fn verify_threshold_signature(
 		agg_key: &Self::AggKey,
+		_prev_agg_key: Option<&Self::AggKey>,
 		payload: &Self::Payload,
 		signature: &Self::ThresholdSignature,
 	) -> bool {

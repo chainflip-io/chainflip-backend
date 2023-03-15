@@ -120,6 +120,7 @@ pub trait ChainCrypto: Chain {
 
 	fn verify_threshold_signature(
 		agg_key: &Self::AggKey,
+		prev_agg_key: Option<&Self::AggKey>,
 		payload: &Self::Payload,
 		signature: &Self::ThresholdSignature,
 	) -> bool;

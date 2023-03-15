@@ -109,6 +109,9 @@ impl cf_traits::KeyProvider<MockEthereum> for MockKeyProvider {
 			key_state: KeyState::Active,
 		}
 	}
+	fn previous_epoch_key() -> Option<<MockEthereum as ChainCrypto>::AggKey> {
+		None
+	}
 }
 
 impl MockKeyProvider {

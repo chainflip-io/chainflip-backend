@@ -142,6 +142,9 @@ impl cf_traits::KeyProvider<MockEthereum> for MockKeyProvider {
 	fn current_epoch_key() -> EpochKey<<MockEthereum as ChainCrypto>::AggKey> {
 		EpochKey { key: MOCK_AGG_KEY, epoch_index: Default::default(), key_state: KeyState::Active }
 	}
+	fn previous_epoch_key() -> Option<<MockEthereum as ChainCrypto>::AggKey> {
+		None
+	}
 }
 
 pub fn sign(

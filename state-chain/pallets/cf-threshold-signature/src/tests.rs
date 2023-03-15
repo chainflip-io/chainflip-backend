@@ -72,7 +72,7 @@ impl MockCfe {
 					payload,
 				},
 			) => {
-				assert_eq!(key_id.public_key_bytes, &MOCK_AGG_KEY.0);
+				assert_eq!(key_id.0.public_key_bytes, &MOCK_AGG_KEY.0);
 				assert_eq!(signatories, MockNominator::get_nominees().unwrap());
 
 				match &self.behaviour {
@@ -584,7 +584,7 @@ mod failure_reporting {
 		CeremonyContext::<Test, Instance1> {
 			request_context: RequestContext { request_id: 1, attempt_count: 0, payload: PAYLOAD },
 			threshold_ceremony_type: ThresholdCeremonyType::Standard,
-			key_id: KeyId { public_key_bytes: agg_key.0.to_vec(), epoch_index },
+			key_id: (KeyId { public_key_bytes: agg_key.0.to_vec(), epoch_index }, None),
 			remaining_respondents: BTreeSet::from_iter(validator_set),
 			blame_counts: Default::default(),
 			participant_count: 5,

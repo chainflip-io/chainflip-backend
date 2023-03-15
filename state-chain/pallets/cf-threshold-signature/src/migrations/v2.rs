@@ -49,12 +49,15 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 					remaining_respondents,
 					blame_counts,
 					participant_count,
-					key_id: KeyId {
-						// Assumption is that there will be no requests
-						// for previous epoch keys, which is currently true all the time.
-						epoch_index,
-						public_key_bytes: key_id,
-					},
+					key_id: (
+						KeyId {
+							// Assumption is that there will be no requests
+							// for previous epoch keys, which is currently true all the time.
+							epoch_index,
+							public_key_bytes: key_id,
+						},
+						None,
+					),
 					threshold_ceremony_type,
 				})
 			},
@@ -164,8 +167,8 @@ mod tests {
 				PendingCeremonies::<mock::Test, mock::Instance1>::get(CEREMONY_ID).unwrap();
 
 			assert_eq!(new_ceremony_context.request_context, request_context);
-			assert_eq!(new_ceremony_context.key_id.epoch_index, epoch_index);
-			assert_eq!(new_ceremony_context.key_id.public_key_bytes, ceremony_key_id);
+			assert_eq!(new_ceremony_context.key_id.0.epoch_index, epoch_index);
+			assert_eq!(new_ceremony_context.key_id.0.public_key_bytes, ceremony_key_id);
 		});
 	}
 }

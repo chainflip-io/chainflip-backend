@@ -392,7 +392,7 @@ where
                                                 &eth_multisig_client,
                                             state_chain_client.clone(),
                                             ceremony_id,
-                                            key_id,
+                                            key_id.0,
                                             signatories,
                                             crate::multisig::eth::SigningPayload(payload.0),
                                         ).await;
@@ -415,7 +415,7 @@ where
                                                 &dot_multisig_client,
                                             state_chain_client.clone(),
                                             ceremony_id,
-                                            key_id,
+                                            key_id.0,
                                             signatories,
                                             crate::multisig::polkadot::SigningPayload::new(payload.0)
                                                 .expect("Payload should be correct size"),

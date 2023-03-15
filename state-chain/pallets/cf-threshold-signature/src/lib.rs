@@ -102,7 +102,7 @@ pub mod pallet {
 		/// The total number of signing participants (ie. the threshold set size).
 		pub participant_count: AuthorityCount,
 		/// The key id being used for verification of this ceremony.
-		pub key_id: KeyId,
+		pub key_id: (KeyId, Option<KeyId>),
 		/// Determines how/if we deal with ceremony failure.
 		pub threshold_ceremony_type: ThresholdCeremonyType,
 	}
@@ -329,14 +329,14 @@ pub mod pallet {
 		ThresholdSignatureRequest {
 			request_id: RequestId,
 			ceremony_id: CeremonyId,
-			key_id: KeyId,
+			key_id: (KeyId, Option<KeyId>),
 			signatories: BTreeSet<T::ValidatorId>,
 			payload: PayloadFor<T, I>,
 		},
 		ThresholdSignatureFailed {
 			request_id: RequestId,
 			ceremony_id: CeremonyId,
-			key_id: KeyId,
+			key_id: (KeyId, Option<KeyId>),
 			offenders: Vec<T::ValidatorId>,
 		},
 		/// The threshold signature posted back to the chain was verified.
@@ -492,10 +492,17 @@ pub mod pallet {
 				let CeremonyContext { key_id, request_context, .. } =
 					PendingCeremonies::<T, I>::get(ceremony_id).ok_or(InvalidTransaction::Stale)?;
 
-				let key = key_id.try_into().map_err(|_| InvalidTransaction::BadProof)?;
+				let key = key_id.0.try_into().map_err(|_| InvalidTransaction::BadProof)?;
+				let prev_key: Option<<T::TargetChain as ChainCrypto>::AggKey> = key_id
+					.1
+					.map(|prev_key_id| {
+						prev_key_id.try_into().map_err(|_| InvalidTransaction::BadProof)
+					})
+					.transpose()?;
 
 				if <T::TargetChain as ChainCrypto>::verify_threshold_signature(
 					&key,
+					prev_key.as_ref(),
 					&request_context.payload,
 					signature,
 				) {
@@ -676,7 +683,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				request_instruction.request_type
 			{
 				(
-					Ok((key_id.clone(), participants.clone())),
+					Ok(((key_id.clone(), None), participants.clone())),
 					ThresholdCeremonyType::KeygenVerification,
 				)
 			} else {
@@ -689,7 +696,20 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 									(ceremony_id, attempt_count),
 									epoch_index,
 								) {
-								Ok((T::TargetChain::agg_key_to_key_id(key, epoch_index), nominees))
+								Ok((
+									(
+										T::TargetChain::agg_key_to_key_id(key, epoch_index),
+										T::KeyProvider::previous_epoch_key().map(|previous_key| {
+											T::TargetChain::agg_key_to_key_id(
+												previous_key,
+												epoch_index
+													.checked_sub(1)
+													.expect("Can be minimum 0, which is ok"),
+											)
+										}),
+									),
+									nominees,
+								))
 							} else {
 								Err(Event::<T, I>::SignersUnavailable { request_id, ceremony_id })
 							},

@@ -9,4 +9,7 @@ impl<C: cf_chains::ChainCrypto> crate::KeyProvider<C> for MockKeyProvider<C> {
 	fn current_epoch_key() -> EpochKey<C::AggKey> {
 		EpochKey::default()
 	}
+	fn previous_epoch_key() -> Option<<C as cf_chains::ChainCrypto>::AggKey> {
+		None
+	}
 }
