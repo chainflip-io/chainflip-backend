@@ -68,7 +68,7 @@ impl AddressMonitor {
 	}
 
 	/// Ensure the list of interesting addresses is up to date
-	pub async fn fetch_addresses(&mut self) {
+	pub fn fetch_addresses(&mut self) {
 		while let Ok(address) = self.address_receiver.try_recv() {
 			self.addresses.insert(address);
 		}

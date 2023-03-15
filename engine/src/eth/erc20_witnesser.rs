@@ -79,7 +79,7 @@ impl EthContractWitnesser for Erc20Witnesser {
 		let mut address_monitor =
 			self.address_monitor.try_lock().expect("should have exclusive ownership");
 
-		address_monitor.fetch_addresses().await;
+		address_monitor.fetch_addresses();
 
 		let ingress_witnesses: Vec<_> = block
 			.block_items

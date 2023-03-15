@@ -56,7 +56,7 @@ where
 
 		// Before we process the transactions, check if
 		// we have any new addresses to monitor
-		address_monitor.fetch_addresses().await;
+		address_monitor.fetch_addresses();
 
 		let ingress_witnesses = txs
 			.iter()
