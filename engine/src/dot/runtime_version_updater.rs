@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use anyhow::bail;
 use cf_chains::Polkadot;
 use futures::StreamExt;
 use sp_core::H256;
@@ -32,8 +33,7 @@ where
 		.await
 	{
 		Ok(version) => version,
-		Err(e) =>
-			return Err(anyhow::anyhow!("Failed to get PolkadotRuntimeVersion from SC: {:?}", e)),
+		Err(e) => bail!("Failed to get PolkadotRuntimeVersion from SC: {:?}", e),
 	};
 
 	epoch_witnesser::start(
