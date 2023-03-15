@@ -9,23 +9,6 @@ use anyhow::Context;
 use futures::{Future, TryStream};
 use itertools::Itertools;
 
-/// Unwraps a result, logging the error and returning early with a provided error expression.
-/// This is particularly useful over `.map_err()` when inside a future, and we need to return
-/// early with items from that future, due to the fact the future owns the values you want
-/// to return.
-#[macro_export]
-macro_rules! try_with_logging {
-	($exp:expr, $err_expr:expr) => {
-		match $exp {
-			Ok(ok) => ok,
-			Err(e) => {
-				tracing::error!("Error: {e}");
-				return Err($err_expr)
-			},
-		}
-	};
-}
-
 struct MutexStateAndPoisonFlag<T> {
 	poisoned: bool,
 	state: T,
@@ -125,7 +108,7 @@ where
 	TaskGenerator: Fn() -> TaskFut,
 {
 	// Spawn with handle and then wait for future to finish
-	while let Err(_) = task_generator().await {
+	while task_generator().await.is_err() {
 		// give it some time before the restart
 		tokio::time::sleep(Duration::from_secs(2)).await;
 	}

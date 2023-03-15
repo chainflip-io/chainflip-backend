@@ -17,7 +17,6 @@ use crate::{
 	settings,
 	state_chain_observer::{client::StateChainClient, EthAddressToMonitorSender},
 	task_scope::Scope,
-	try_with_logging,
 	witnesser::EpochStart,
 };
 
@@ -185,10 +184,10 @@ pub async fn start(
 			// We create a new RPC on each call to the future, since one common reason for
 			// failure is that the WS connection has been dropped. This ensures that we create a
 			// new client, and therefore create a new connection.
-			let dual_rpc = try_with_logging!(
-				EthDualRpcClient::new(&eth_settings, expected_chain_id).await,
-				()
-			);
+			let dual_rpc =
+				EthDualRpcClient::new(&eth_settings, expected_chain_id).await.map_err(|err| {
+					tracing::error!("Failed to create EthDualRpcClient: {:?}", err);
+				})?;
 
 			eth_block_witnessing::start(
 				epoch_start_receiver,

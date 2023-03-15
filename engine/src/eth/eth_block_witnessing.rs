@@ -12,7 +12,6 @@ use super::{
 };
 use crate::{
 	multisig::{ChainTag, PersistentKeyDB},
-	try_with_logging,
 	witnesser::{
 		checkpointing::{
 			get_witnesser_start_block_with_checkpointing, StartCheckpointing, WitnessedUntil,
@@ -59,10 +58,12 @@ pub async fn start(
 						StartCheckpointing::AlreadyWitnessedEpoch => return Ok(witnessers),
 					};
 
-				let mut block_stream = try_with_logging!(
-					safe_dual_block_subscription_from(from_block, eth_rpc.clone()).await,
-					()
-				);
+				let mut block_stream =
+					safe_dual_block_subscription_from(from_block, eth_rpc.clone()).await.map_err(
+						|err| {
+							tracing::error!("Subscription error: {err}");
+						},
+					)?;
 
 				let mut end_at_block = None;
 				let mut current_block = from_block;
@@ -90,19 +91,19 @@ pub async fn start(
 						let block_number = block.block_number.as_u64();
 						trace!("Eth block witnessers are processing block {block_number}");
 
-						try_with_logging!(
-							futures::future::join_all([
-								witnessers.key_manager.process_block(&epoch, &block),
-								witnessers.stake_manager.process_block(&epoch, &block),
-								witnessers.eth_ingress.process_block(&epoch, &block),
-								witnessers.flip_ingress.process_block(&epoch, &block),
-								witnessers.usdc_ingress.process_block(&epoch, &block),
-							])
-							.await
-							.into_iter()
-							.collect::<anyhow::Result<Vec<()>>>(),
-							()
-						);
+						futures::future::join_all([
+							witnessers.key_manager.process_block(&epoch, &block),
+							witnessers.stake_manager.process_block(&epoch, &block),
+							witnessers.eth_ingress.process_block(&epoch, &block),
+							witnessers.flip_ingress.process_block(&epoch, &block),
+							witnessers.usdc_ingress.process_block(&epoch, &block),
+						])
+						.await
+						.into_iter()
+						.collect::<anyhow::Result<Vec<()>>>()
+						.map_err(|err| {
+							tracing::error!("Witnesser failed to process block: {err}");
+						})?;
 
 						witnessed_until_sender
 							.send(WitnessedUntil { epoch_index: epoch.epoch_index, block_number })

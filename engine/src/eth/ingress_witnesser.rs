@@ -1,8 +1,7 @@
-use std::{collections::BTreeSet, sync::Arc};
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use cf_chains::eth::Ethereum;
-use sp_core::H160;
 use state_chain_runtime::EthereumInstance;
 use tokio::sync::Mutex;
 
