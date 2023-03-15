@@ -1,7 +1,7 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
-use cf_chains::benchmarking_value::BenchmarkValue;
+use cf_chains::BenchmarkValue;
 use cf_primitives::{AccountRole, Asset};
 use cf_traits::{AccountRoleRegistry, LiquidityPoolApi};
 use frame_benchmarking::{benchmarks, whitelisted_caller};

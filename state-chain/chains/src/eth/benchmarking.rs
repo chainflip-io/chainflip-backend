@@ -1,11 +1,10 @@
 use crate::{
-	benchmarking_value::BenchmarkValue,
 	eth::{
 		api::{update_flip_supply::UpdateFlipSupply, EthereumApi},
 		to_ethereum_address, Address, AggKey, EthereumReplayProtection,
 		SchnorrVerificationComponents, TrackedData, Transaction, H256, U256,
 	},
-	ApiCall,
+	ApiCall, BenchmarkValue,
 };
 
 const SIG_NONCE: [u8; 32] = [1u8; 32];

@@ -66,7 +66,7 @@ pub enum PalletOffence {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_chains::benchmarking_value::BenchmarkValue;
+	use cf_chains::BenchmarkValue;
 	use cf_traits::{AccountRoleRegistry, KeyProvider, SingleSignerNomination};
 	use frame_support::{ensure, pallet_prelude::*, traits::EnsureOrigin};
 	use frame_system::pallet_prelude::*;

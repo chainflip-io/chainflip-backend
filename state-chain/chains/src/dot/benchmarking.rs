@@ -1,5 +1,4 @@
 use crate::{
-	benchmarking_value::BenchmarkValue,
 	dot::{
 		BalancesCall, Polkadot, PolkadotAccountIdLookup, PolkadotAddress,
 		PolkadotChargeTransactionPayment, PolkadotCheckMortality, PolkadotCheckNonce,
@@ -7,6 +6,7 @@ use crate::{
 		PolkadotTransactionData, PolkadotUncheckedExtrinsic,
 	},
 	eth::TrackedData,
+	BenchmarkValue,
 };
 
 use sp_core::{crypto::AccountId32, sr25519};

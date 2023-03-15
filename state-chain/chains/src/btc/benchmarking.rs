@@ -2,7 +2,7 @@ use cf_primitives::MAX_BTC_ADDRESS_LENGTH;
 use frame_support::BoundedVec;
 use sp_std::{vec, vec::Vec};
 
-use crate::benchmarking_value::BenchmarkValue;
+use crate::BenchmarkValue;
 
 use super::{
 	api::{batch_transfer::BatchTransfer, BitcoinApi},

@@ -1,7 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use core::fmt::Display;
 
-use crate::benchmarking_value::BenchmarkValue;
 use cf_primitives::{
 	chains::assets, AssetAmount, EpochIndex, EthAmount, IntentId, KeyId, PublicKeyBytes,
 };
@@ -31,6 +30,13 @@ pub mod eth;
 
 #[cfg(feature = "std")]
 pub mod mocks;
+
+/// Ensure type specifies a value to be used for benchmarking purposes.
+pub trait BenchmarkValue {
+	/// Returns a value suitable for running against benchmarks.
+
+	fn benchmark_value() -> Self;
+}
 
 /// A trait representing all the types and constants that need to be implemented for supported
 /// blockchains.
