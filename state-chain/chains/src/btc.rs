@@ -113,7 +113,7 @@ impl ChainCrypto for Bitcoin {
 	type AggKey = AggKey;
 
 	// A single transaction can sign over multiple UTXOs
-	type Payload = Vec<SigningPayload>;
+	type Payload = Vec<BitcoinPayload>;
 
 	// The response from a threshold signing ceremony over multiple payloads
 	// is multiple signatures
@@ -133,7 +133,7 @@ impl ChainCrypto for Bitcoin {
 	}
 
 	fn agg_key_to_payload(agg_key: Self::AggKey) -> Self::Payload {
-		vec![agg_key.0]
+		vec![BitcoinPayload { payload: agg_key.0, key_to_be_signed_with: agg_key }]
 	}
 
 	fn agg_key_to_key_id(agg_key: Self::AggKey, epoch_index: EpochIndex) -> KeyId {
@@ -145,6 +145,12 @@ impl ChainAbi for Bitcoin {
 	type Transaction = BitcoinTransactionData;
 
 	type ReplayProtection = BitcoinReplayProtection;
+}
+
+#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+pub struct BitcoinPayload {
+	pub payload: SigningPayload,
+	pub key_to_be_signed_with: AggKey,
 }
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct UtxoId {

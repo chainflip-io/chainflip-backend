@@ -6,8 +6,8 @@ use crate::benchmarking_value::BenchmarkValue;
 
 use super::{
 	api::{batch_transfer::BatchTransfer, BitcoinApi},
-	AggKey, BitcoinFetchId, BitcoinOutput, BitcoinTransactionData, BtcAddress, Signature,
-	SigningPayload, Utxo, UtxoId,
+	AggKey, BitcoinFetchId, BitcoinOutput, BitcoinPayload, BitcoinTransactionData, BtcAddress,
+	Signature, Utxo, UtxoId,
 };
 
 impl BenchmarkValue for AggKey {
@@ -42,9 +42,11 @@ impl BenchmarkValue for Signature {
 }
 
 // Bitcoin payload
-impl BenchmarkValue for SigningPayload {
+impl BenchmarkValue for BitcoinPayload {
 	fn benchmark_value() -> Self {
-		[1u8; 32]
+		Self { payload: [1u8; 32], key_to_be_signed_with: AggKey([2u8; 32]) } // revisit this later, this
+		                                                              // may not be
+		                                                              // correct
 	}
 }
 

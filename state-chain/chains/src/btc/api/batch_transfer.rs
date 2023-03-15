@@ -2,7 +2,7 @@ use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 use sp_std::{vec, vec::Vec};
 
-use crate::btc::{Bitcoin, BitcoinOutput, BitcoinTransaction, Utxo};
+use crate::btc::{AggKey, Bitcoin, BitcoinOutput, BitcoinPayload, BitcoinTransaction, Utxo};
 
 use crate::{ApiCall, ChainCrypto};
 
@@ -37,7 +37,10 @@ impl ApiCall<Bitcoin> for BatchTransfer {
 	fn threshold_signature_payload(&self) -> <Bitcoin as ChainCrypto>::Payload {
 		let mut payloads = vec![];
 		for i in 0..self.input_utxos.len() {
-			payloads.push(self.bitcoin_transaction.get_signing_payload(i as u32))
+			payloads.push(BitcoinPayload {
+				payload: self.bitcoin_transaction.get_signing_payload(i as u32),
+				key_to_be_signed_with: AggKey(self.input_utxos[i].pubkey_x),
+			})
 		}
 		payloads
 	}

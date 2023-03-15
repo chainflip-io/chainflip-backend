@@ -21,6 +21,7 @@ use sp_std::{
 
 pub use cf_primitives::chains::*;
 
+#[cfg(feature = "runtime-benchmarks")]
 pub mod benchmarking_value;
 
 pub mod any;
