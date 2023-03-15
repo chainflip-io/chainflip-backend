@@ -1,9 +1,9 @@
-use std::{collections::BTreeSet, sync::Arc};
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use cf_chains::eth::Ethereum;
-use sp_core::H160;
 use state_chain_runtime::EthereumInstance;
+use tokio::sync::Mutex;
 
 use crate::{
 	eth::{core_h160, core_h256},
@@ -11,13 +11,15 @@ use crate::{
 	witnesser::EpochStart,
 };
 
-use super::{eth_block_witnessing::BlockProcessor, rpc::EthDualRpcClient, EthNumberBloom};
+use super::{
+	eth_block_witnessing::BlockProcessor, rpc::EthDualRpcClient, witnessing::AddressMonitor,
+	EthNumberBloom,
+};
 
 pub struct IngressWitnesser<StateChainClient> {
 	rpc: EthDualRpcClient,
 	state_chain_client: Arc<StateChainClient>,
-	monitored_addresses: BTreeSet<H160>,
-	eth_monitor_ingress_receiver: tokio::sync::mpsc::UnboundedReceiver<H160>,
+	address_monitor: Arc<Mutex<AddressMonitor>>,
 }
 
 impl<StateChainClient> IngressWitnesser<StateChainClient>
@@ -27,16 +29,9 @@ where
 	pub fn new(
 		state_chain_client: Arc<StateChainClient>,
 		rpc: EthDualRpcClient,
-		monitored_addresses: BTreeSet<H160>,
-		eth_monitor_ingress_receiver: tokio::sync::mpsc::UnboundedReceiver<H160>,
+		address_pair: Arc<Mutex<AddressMonitor>>,
 	) -> Self {
-		Self { rpc, state_chain_client, monitored_addresses, eth_monitor_ingress_receiver }
-	}
-
-	pub fn take_ingress_receiver_pair(
-		self,
-	) -> (tokio::sync::mpsc::UnboundedReceiver<H160>, BTreeSet<H160>) {
-		(self.eth_monitor_ingress_receiver, self.monitored_addresses)
+		Self { rpc, state_chain_client, address_monitor: address_pair }
 	}
 }
 
@@ -56,17 +51,18 @@ where
 
 		let txs = self.rpc.block_with_txs(block.block_number).await?.transactions;
 
+		let mut address_monitor =
+			self.address_monitor.try_lock().expect("should have exclusive ownership");
+
 		// Before we process the transactions, check if
 		// we have any new addresses to monitor
-		while let Ok(address) = self.eth_monitor_ingress_receiver.try_recv() {
-			self.monitored_addresses.insert(address);
-		}
+		address_monitor.fetch_addresses();
 
 		let ingress_witnesses = txs
 			.iter()
 			.filter_map(|tx| {
 				let to_addr = core_h160(tx.to?);
-				if self.monitored_addresses.contains(&to_addr) {
+				if address_monitor.contains(&to_addr) {
 					Some((tx, to_addr))
 				} else {
 					None

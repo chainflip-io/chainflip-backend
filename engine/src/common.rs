@@ -9,23 +9,6 @@ use anyhow::Context;
 use futures::{Future, TryStream};
 use itertools::Itertools;
 
-/// Unwraps a result, logging the error and returning early with a provided error expression.
-/// This is particularly useful over `.map_err()` when inside a future, and we need to return
-/// early with items from that future, due to the fact the future owns the values you want
-/// to return.
-#[macro_export]
-macro_rules! try_with_logging {
-	($exp:expr, $err_expr:expr) => {
-		match $exp {
-			Ok(ok) => ok,
-			Err(e) => {
-				tracing::error!("Error: {e}");
-				return Err($err_expr)
-			},
-		}
-	};
-}
-
 struct MutexStateAndPoisonFlag<T> {
 	poisoned: bool,
 	state: T,
@@ -119,29 +102,15 @@ mod tests {
 /// The `StaticState` is used to allow for state to be shared between restarts.
 /// Such as a Receiver a task might need to continue to receive data from some other task,
 /// despite the fact it has been restarted.
-pub async fn start_with_restart_on_failure<StaticState, TaskFut, TaskGenerator>(
-	task_generator: TaskGenerator,
-	mut static_state: StaticState,
-) where
-	TaskFut: Future<Output = Result<(), StaticState>> + Send + 'static,
-	TaskGenerator: Fn(StaticState) -> TaskFut,
+pub async fn start_with_restart_on_failure<TaskFut, TaskGenerator>(task_generator: TaskGenerator)
+where
+	TaskFut: Future<Output = Result<(), ()>> + Send + 'static,
+	TaskGenerator: Fn() -> TaskFut,
 {
-	loop {
-		// TODO: We could pass the static_state by-ref to avoid needing to pass static_state out
-		// of task in error case
-
-		let task = task_generator(static_state);
-
-		// Spawn with handle and then wait for future to finish
-		static_state = match task.await {
-			Ok(()) => return,
-			Err(state) => {
-				// give it some time before the restart
-				tokio::time::sleep(Duration::from_secs(2)).await;
-
-				state
-			},
-		};
+	// Spawn with handle and then wait for future to finish
+	while task_generator().await.is_err() {
+		// give it some time before the restart
+		tokio::time::sleep(Duration::from_secs(2)).await;
 	}
 }
 
@@ -152,22 +121,35 @@ mod test_restart_on_failure {
 
 	#[tokio::test(start_paused = true)]
 	async fn test_restart_on_failure() {
-		async fn start_up_some_loop(mut restart_count: u32) -> Result<(), u32> {
-			restart_count += 1;
+		use std::sync::{Arc, Mutex};
+		let restart_count = Arc::new(Mutex::new(0));
+		let restart_count_to_move = restart_count.clone();
 
-			if restart_count == 6 {
-				return Ok(())
-			}
+		const TARGET: usize = 6;
 
-			for i in 0..10 {
-				if i == 4 {
-					return Err(restart_count)
+		let start_up_some_loop = move || {
+			let restart_count = restart_count_to_move.clone();
+			async move {
+				let mut restart_count = restart_count.lock().unwrap();
+				*restart_count += 1;
+
+				if *restart_count == TARGET {
+					return Ok(())
 				}
-			}
 
-			panic!("Should not reach here");
-		}
-		start_with_restart_on_failure(start_up_some_loop, 0).await;
+				for i in 0..10 {
+					if i == 4 {
+						return Err(())
+					}
+				}
+
+				panic!("Should not reach here");
+			}
+		};
+
+		start_with_restart_on_failure(start_up_some_loop).await;
+
+		assert_eq!(*restart_count.lock().unwrap(), TARGET);
 	}
 }
 
