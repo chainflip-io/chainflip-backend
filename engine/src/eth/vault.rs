@@ -248,3 +248,13 @@ impl EthContractWitnesser for Vault {
 		self.deployed_address
 	}
 }
+
+impl Vault {
+	pub fn new(deployed_address: H160) -> Self {
+		Self {
+			deployed_address,
+			contract: ethabi::Contract::load(std::include_bytes!("abis/Vault.json").as_ref())
+				.unwrap(),
+		}
+	}
+}
