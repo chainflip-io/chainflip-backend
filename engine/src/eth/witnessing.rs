@@ -171,7 +171,7 @@ pub async fn start(
 
 	let eth_settings = eth_settings.clone();
 
-	let create_and_run_witnesser_futures = move |_| {
+	let create_and_run_witnesser_futures = move || {
 		let eth_settings = eth_settings.clone();
 		let state_chain_client = state_chain_client.clone();
 		let db = db.clone();
@@ -239,7 +239,7 @@ pub async fn start(
 	};
 
 	scope.spawn(async move {
-		start_with_restart_on_failure(create_and_run_witnesser_futures, ()).await;
+		start_with_restart_on_failure(create_and_run_witnesser_futures).await;
 		Ok(())
 	});
 
