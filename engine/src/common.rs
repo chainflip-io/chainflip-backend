@@ -123,14 +123,17 @@ mod test_restart_on_failure {
 	async fn test_restart_on_failure() {
 		use std::sync::{Arc, Mutex};
 		let restart_count = Arc::new(Mutex::new(0));
+		let restart_count_to_move = restart_count.clone();
+
+		const TARGET: usize = 6;
 
 		let start_up_some_loop = move || {
-			let restart_count = restart_count.clone();
+			let restart_count = restart_count_to_move.clone();
 			async move {
 				let mut restart_count = restart_count.lock().unwrap();
 				*restart_count += 1;
 
-				if *restart_count == 6 {
+				if *restart_count == TARGET {
 					return Ok(())
 				}
 
@@ -145,6 +148,8 @@ mod test_restart_on_failure {
 		};
 
 		start_with_restart_on_failure(start_up_some_loop).await;
+
+		assert_eq!(*restart_count.lock().unwrap(), TARGET);
 	}
 }
 
