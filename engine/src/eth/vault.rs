@@ -22,7 +22,7 @@ pub struct Vault {
 
 // The following events need to reflect the events emitted in the staking contract:
 // https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/Vault.sol
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum VaultEvent {
 	CommunityGuardDisabled {
 		community_guard_disabled: bool,
