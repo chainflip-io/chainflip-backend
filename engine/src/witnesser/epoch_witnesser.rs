@@ -35,7 +35,8 @@ where
 					ScopedJoinHandle<State>,
 				)> = None;
 
-				let mut epoch_start_receiver = epoch_start_receiver.lock().await;
+				let mut epoch_start_receiver =
+					epoch_start_receiver.try_lock().expect("should have exclusive ownership");
 
 				loop {
 					let epoch_start = epoch_start_receiver.recv().await.expect("Sender closed");

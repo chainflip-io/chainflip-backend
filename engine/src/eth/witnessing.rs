@@ -45,8 +45,8 @@ pub struct AllWitnessers {
 }
 
 pub struct AddressMonitor {
-	pub addresses: BTreeSet<H160>,
-	pub address_receiver: tokio::sync::mpsc::UnboundedReceiver<H160>,
+	addresses: BTreeSet<H160>,
+	address_receiver: tokio::sync::mpsc::UnboundedReceiver<H160>,
 }
 
 impl AddressMonitor {
@@ -55,6 +55,16 @@ impl AddressMonitor {
 		address_receiver: tokio::sync::mpsc::UnboundedReceiver<H160>,
 	) -> Self {
 		Self { addresses, address_receiver }
+	}
+
+	pub fn contains(&self, address: &H160) -> bool {
+		self.addresses.contains(address)
+	}
+
+	pub async fn fetch_addresses(&mut self) {
+		while let Ok(address) = self.address_receiver.try_recv() {
+			self.addresses.insert(address);
+		}
 	}
 }
 

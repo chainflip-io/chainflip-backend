@@ -76,18 +76,17 @@ impl EthContractWitnesser for Erc20Witnesser {
 		EthRpcClient: EthRpcApi + Sync + Send,
 		StateChainClient: ExtrinsicApi + Send + Sync,
 	{
-		let mut address_monitor = self.address_monitor.lock().await;
+		let mut address_monitor =
+			self.address_monitor.try_lock().expect("should have exclusive ownership");
 
-		while let Ok(address) = address_monitor.address_receiver.try_recv() {
-			address_monitor.addresses.insert(address);
-		}
+		address_monitor.fetch_addresses().await;
 
 		let ingress_witnesses: Vec<_> = block
 			.block_items
 			.into_iter()
 			.filter_map(|event| match event.event_parameters {
 				Erc20Event::Transfer { to, value, from: _ }
-					if address_monitor.addresses.contains(&core_h160(to)) =>
+					if address_monitor.contains(&core_h160(to)) =>
 					Some(IngressWitness {
 						ingress_address: core_h160(to),
 						amount: value,

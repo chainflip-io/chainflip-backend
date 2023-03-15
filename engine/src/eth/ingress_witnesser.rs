@@ -52,19 +52,18 @@ where
 
 		let txs = self.rpc.block_with_txs(block.block_number).await?.transactions;
 
-		let mut address_monitor = self.address_monitor.lock().await;
+		let mut address_monitor =
+			self.address_monitor.try_lock().expect("should have exclusive ownership");
 
 		// Before we process the transactions, check if
 		// we have any new addresses to monitor
-		while let Ok(address) = address_monitor.address_receiver.try_recv() {
-			address_monitor.addresses.insert(address);
-		}
+		address_monitor.fetch_addresses().await;
 
 		let ingress_witnesses = txs
 			.iter()
 			.filter_map(|tx| {
 				let to_addr = core_h160(tx.to?);
-				if address_monitor.addresses.contains(&to_addr) {
+				if address_monitor.contains(&to_addr) {
 					Some((tx, to_addr))
 				} else {
 					None
