@@ -13,7 +13,8 @@ pub use async_result::AsyncResult;
 use sp_std::collections::btree_set::BTreeSet;
 
 use cf_chains::{
-	benchmarking_value::BenchmarkValue, ApiCall, Chain, ChainAbi, ChainCrypto, Ethereum, Polkadot,
+	benchmarking_value::BenchmarkValue, eth::H256, ApiCall, Chain, ChainAbi, ChainCrypto, Ethereum,
+	Polkadot,
 };
 
 use cf_primitives::{
@@ -690,19 +691,19 @@ pub trait AddressDerivationApi<C: Chain> {
 
 impl AddressDerivationApi<Ethereum> for () {
 	fn generate_address(
-		_ingress_asset: <Ethereum as Chain>::ChainAsset,
-		_intent_id: IntentId,
+		ingress_asset: <Ethereum as Chain>::ChainAsset,
+		intent_id: IntentId,
 	) -> Result<<Ethereum as Chain>::ChainAccount, DispatchError> {
-		Ok(Default::default())
+		Ok(H256((ingress_asset, intent_id).encode().blake2_256()).into())
 	}
 }
 
 impl AddressDerivationApi<Polkadot> for () {
 	fn generate_address(
-		_ingress_asset: <Polkadot as Chain>::ChainAsset,
-		_intent_id: IntentId,
+		ingress_asset: <Polkadot as Chain>::ChainAsset,
+		intent_id: IntentId,
 	) -> Result<<Polkadot as Chain>::ChainAccount, DispatchError> {
-		Ok([0u8; 32].into())
+		Ok((ingress_asset, intent_id).encode().blake2_256().into())
 	}
 }
 
