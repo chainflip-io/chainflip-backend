@@ -5495,6 +5495,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-cf-ccm"
+version = "0.1.0"
+dependencies = [
+ "cf-chains",
+ "cf-primitives",
+ "cf-traits",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core 7.0.0",
+ "sp-io 7.0.0",
+ "sp-runtime 7.0.0",
+ "sp-std 5.0.0",
+]
+
+[[package]]
 name = "pallet-cf-chain-tracking"
 version = "0.1.0"
 dependencies = [

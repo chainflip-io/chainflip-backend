@@ -284,3 +284,43 @@ pub trait IngressIdConstructor {
 	/// Constructs the IngressId for the undeployed case.
 	fn undeployed(intent_id: u64, address: Self::Address) -> Self;
 }
+
+#[derive(
+	Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo,
+)]
+#[codec(mel_bound())]
+pub struct TrackedData<C: Chain> {
+	pub block_height: C::ChainBlockNumber,
+	pub base_fee: C::ChainAmount,
+	pub priority_fee: C::ChainAmount,
+}
+
+impl<C: Chain> Age<C> for TrackedData<C> {
+	fn birth_block(&self) -> <C as Chain>::ChainBlockNumber {
+		self.block_height
+	}
+}
+
+// Trait for basic chain information.
+pub trait BaseChainData<C: Chain> {
+	fn block_height(&self) -> C::ChainBlockNumber;
+	fn base_fee(&self) -> C::ChainAmount;
+	fn priority_fee(&self) -> C::ChainAmount;
+	fn gas_fee(&self) -> C::ChainAmount {
+		self.base_fee().saturating_add(self.priority_fee())
+	}
+}
+
+impl<C: Chain> BaseChainData<C> for TrackedData<C> {
+    fn block_height(&self) -> <C as Chain>::ChainBlockNumber {
+        self.block_height
+    }
+
+    fn base_fee(&self) -> <C as Chain>::ChainAmount {
+        self.base_fee
+    }
+
+    fn priority_fee(&self) -> <C as Chain>::ChainAmount {
+        self.priority_fee
+    }
+}

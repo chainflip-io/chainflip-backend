@@ -1,0 +1,52 @@
+[package]
+name = 'pallet-cf-ccm'
+version = '0.1.0'
+description = 'Chainflip Cross-chain-messaging pallet'
+authors = ['Chainflip Team <https://github.com/chainflip-io>']
+homepage = 'https://chainflip.io'
+edition = '2021'
+license = '<TODO>'
+publish = false
+repository = 'https://github.com/chainflip-io/chainflip-backend'
+
+
+[dependencies]
+cf-traits = {path = '../../traits', default-features = false}
+cf-primitives = {path = '../../primitives', default-features = false}
+cf-chains = { path ='../../chains', default-features = false }
+
+# ==== Parity deps ====
+codec = { package = 'parity-scale-codec', version = '3.0.0', default-features = false, features = ['derive'] }
+scale-info = { version = '2.1.1', default-features = false, features = ['derive'] }
+
+frame-benchmarking = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2", optional = true, default-features = false }
+frame-support = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2", default-features = false }
+frame-system = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2", default-features = false }
+sp-runtime = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2", default-features = false }
+sp-std = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2", default-features = false }
+
+[dev-dependencies]
+sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2" }
+sp-io = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2" }
+
+[features]
+default = ['std']
+std = [
+  'cf-primitives/std',
+  'cf-traits/std',
+  'cf-chains/std',
+  'codec/std',
+  'frame-benchmarking?/std',
+  'frame-support/std',
+  'frame-system/std',
+  'scale-info/std',
+  'sp-std/std',
+  'sp-runtime/std',
+]
+runtime-benchmarks = [
+  'cf-traits/runtime-benchmarks',
+  'frame-benchmarking/runtime-benchmarks',
+  'frame-support/runtime-benchmarks',
+  'frame-system/runtime-benchmarks',
+]
+try-runtime = ['frame-support/try-runtime']

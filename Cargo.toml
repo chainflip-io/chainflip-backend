@@ -9,6 +9,7 @@ members = [
   'state-chain/pallets/cf-account-roles',
   'state-chain/pallets/cf-broadcast',
   'state-chain/pallets/cf-chain-tracking',
+  'state-chain/pallets/cf-ccm',
   'state-chain/pallets/cf-emissions',
   'state-chain/pallets/cf-environment',
   'state-chain/pallets/cf-flip',

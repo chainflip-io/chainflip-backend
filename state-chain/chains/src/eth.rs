@@ -42,7 +42,7 @@ impl Chain for Ethereum {
 	type ChainBlockNumber = u64;
 	type ChainAmount = EthAmount;
 	type TransactionFee = eth::TransactionFee;
-	type TrackedData = eth::TrackedData<Self>;
+	type TrackedData = TrackedData<Self>;
 	type ChainAccount = eth::Address;
 	type ChainAsset = assets::eth::Asset;
 	type EpochStartData = ();
@@ -87,22 +87,6 @@ impl TryFrom<KeyId> for eth::AggKey {
 //--------------------------//
 pub trait Tokenizable {
 	fn tokenize(self) -> Token;
-}
-
-#[derive(
-	Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo,
-)]
-#[codec(mel_bound())]
-pub struct TrackedData<C: Chain> {
-	pub block_height: C::ChainBlockNumber,
-	pub base_fee: C::ChainAmount,
-	pub priority_fee: C::ChainAmount,
-}
-
-impl<C: Chain> Age<C> for TrackedData<C> {
-	fn birth_block(&self) -> <C as Chain>::ChainBlockNumber {
-		self.block_height
-	}
 }
 
 /// The `SigData` struct used for threshold signatures in the smart contracts.

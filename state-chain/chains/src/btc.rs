@@ -117,7 +117,7 @@ impl Chain for Bitcoin {
 
 	type TransactionFee = Self::ChainAmount;
 
-	type TrackedData = ();
+	type TrackedData = TrackedData<Self>;
 
 	type ChainAsset = assets::btc::Asset;
 
