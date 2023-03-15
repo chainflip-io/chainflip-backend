@@ -50,7 +50,7 @@ fi
 cat <<EOT >> "$UPDATED_ENGINE_CONFIG_LOCATION"
 
 [dot]
-ws_node_endpoint = "wss://pdot.chainflip.io:443"
+ws_node_endpoint = "wss://sisydot.chainflip.xyz:443"
 EOT
 
 echo "chainflip-engine: Migration completed successfully"
