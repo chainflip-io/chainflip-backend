@@ -95,8 +95,7 @@ where
 				script_pubkey: scriptpubkey_from_address(
 					&new_vault_return_address,
 					bitcoin_network,
-				)
-				.map_err(|_| ())?,
+				).expect("This shouldn't error because we generate this address ourselves above, and should be valid"),
 			}],
 		)))
 	}

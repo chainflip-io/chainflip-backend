@@ -23,8 +23,7 @@ pub fn select_utxos_from_pool<UTXO: GetUtxoAmount>(
 	}
 
 	// Sort the utxos by the amounts they hold, in descending order
-	available_utxos.sort_by_key(|utxo| utxo.amount());
-	available_utxos.reverse();
+	available_utxos.sort_by_key(|utxo| sp_std::cmp::Reverse(utxo.amount()));
 
 	let mut selected_utxos: Vec<UTXO> = vec![];
 
