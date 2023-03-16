@@ -17,7 +17,6 @@ use alloc::string::String;
 pub use cf_primitives::chains::Bitcoin;
 use cf_primitives::{
 	chains::assets, EpochIndex, IntentId, KeyId, MaxBitcoinAddressLength, PublicKeyBytes,
-	MAX_BTC_ADDRESS_LENGTH,
 };
 use itertools;
 
@@ -199,6 +198,9 @@ impl BenchmarkValue for SigningPayload {
 		[1u8; 32]
 	}
 }
+
+#[cfg(feature = "runtime-benchmarks")]
+use cf_primitives::MAX_BTC_ADDRESS_LENGTH;
 
 // Bitcoin address
 #[cfg(feature = "runtime-benchmarks")]
