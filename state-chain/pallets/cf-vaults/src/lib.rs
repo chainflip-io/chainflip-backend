@@ -426,7 +426,7 @@ pub mod pallet {
 		/// Verification of the new key has failed.
 		KeygenVerificationFailure {
 			keygen_ceremony_id: CeremonyId,
-			failed_signing_ceremony_id: CeremonyId,
+			failed_signing_ceremony_id: Option<CeremonyId>,
 		},
 		/// Keygen has failed \[ceremony_id\]
 		KeygenFailure(CeremonyId),
@@ -537,7 +537,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			keygen_ceremony_id: CeremonyId,
 			threshold_request_id: <T::ThresholdSigner as ThresholdSigner<T::Chain>>::RequestId,
-			signing_ceremony_id: CeremonyId,
+			maybe_signing_ceremony_id: Option<CeremonyId>,
 			new_public_key: AggKeyFor<T, I>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureThresholdSigned::ensure_origin(origin)?;
@@ -567,7 +567,7 @@ pub mod pallet {
 					&offenders[..],
 					Event::KeygenVerificationFailure {
 						keygen_ceremony_id,
-						failed_signing_ceremony_id: signing_ceremony_id,
+						failed_signing_ceremony_id: maybe_signing_ceremony_id,
 					},
 				),
 			};
@@ -756,18 +756,19 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		keygen_ceremony_id: CeremonyId,
 		new_public_key: AggKeyFor<T, I>,
 		participants: BTreeSet<T::ValidatorId>,
-	) -> (<T::ThresholdSigner as ThresholdSigner<T::Chain>>::RequestId, CeremonyId) {
-		let (request_id, signing_ceremony_id) =
+	) -> (<T::ThresholdSigner as ThresholdSigner<T::Chain>>::RequestId, Option<CeremonyId>) {
+		let (request_id, maybe_signing_ceremony_id) =
 			T::ThresholdSigner::request_keygen_verification_signature(
 				T::Chain::agg_key_to_payload(new_public_key),
 				new_public_key.into(),
 				participants,
 			);
+
 		T::ThresholdSigner::register_callback(request_id, {
 			Call::on_keygen_verification_result {
 				keygen_ceremony_id,
 				threshold_request_id: request_id,
-				signing_ceremony_id,
+				maybe_signing_ceremony_id,
 				new_public_key,
 			}
 			.into()
@@ -783,7 +784,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			VaultRotationStatus::<T, I>::AwaitingKeygenVerification { new_public_key },
 		);
 
-		(request_id, signing_ceremony_id)
+		(request_id, maybe_signing_ceremony_id)
 	}
 
 	fn terminate_keygen_procedure(offenders: &[T::ValidatorId], event: Event<T, I>) {

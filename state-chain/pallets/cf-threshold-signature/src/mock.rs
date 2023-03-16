@@ -212,10 +212,11 @@ impl ExtBuilder {
 	pub fn with_request(mut self, message: &<MockEthereum as ChainCrypto>::Payload) -> Self {
 		self.ext.execute_with(|| {
 			// Initiate request
-			let (request_id, ceremony_id) =
+			let (request_id, maybe_ceremony_id) =
 				<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(*message);
 
-			let maybe_pending_ceremony = EthereumThresholdSigner::pending_ceremonies(ceremony_id);
+			let maybe_pending_ceremony =
+				maybe_ceremony_id.and_then(EthereumThresholdSigner::pending_ceremonies);
 			assert!(
 				maybe_pending_ceremony.is_some() !=
 					EthereumThresholdSigner::pending_requests(request_id).is_some(),
@@ -240,8 +241,9 @@ impl ExtBuilder {
 	) -> Self {
 		self.ext.execute_with(|| {
 			// Initiate request
-			let (request_id, ceremony_id) =
+			let (request_id, maybe_ceremony_id) =
 				EthereumThresholdSigner::request_signature_with_callback(*message, callback_gen);
+			let ceremony_id = maybe_ceremony_id.unwrap();
 			let pending = EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
 			assert_eq!(
 				pending.remaining_respondents,

@@ -401,14 +401,15 @@ where
 	type KeyId: TryInto<C::AggKey> + From<Vec<u8>>;
 	type ValidatorId: Debug;
 
-	/// Initiate a signing request and return the request id and ceremony id.
-	fn request_signature(payload: C::Payload) -> (Self::RequestId, CeremonyId);
+	/// Initiate a signing request and return the request id and, if the request was successful, the
+	/// ceremony id.
+	fn request_signature(payload: C::Payload) -> (Self::RequestId, Option<CeremonyId>);
 
 	fn request_keygen_verification_signature(
 		payload: C::Payload,
 		key_id: Self::KeyId,
 		participants: BTreeSet<Self::ValidatorId>,
-	) -> (Self::RequestId, CeremonyId);
+	) -> (Self::RequestId, Option<CeremonyId>);
 
 	/// Register a callback to be dispatched when the signature is available. Can fail if the
 	/// provided request_id does not exist.
@@ -431,15 +432,15 @@ where
 	fn request_signature_with_callback(
 		payload: C::Payload,
 		callback_generator: impl FnOnce(Self::RequestId) -> Self::Callback,
-	) -> (Self::RequestId, CeremonyId) {
-		let (request_id, ceremony_id) = Self::request_signature(payload);
+	) -> (Self::RequestId, Option<CeremonyId>) {
+		let (request_id, maybe_ceremony_id) = Self::request_signature(payload);
 		Self::register_callback(request_id, callback_generator(request_id)).unwrap_or_else(|e| {
 			log::error!(
 				"Unable to register threshold signature callback. This should not be possible. Error: '{:?}'",
 				e.into()
 			);
 		});
-		(request_id, ceremony_id)
+		(request_id, maybe_ceremony_id)
 	}
 
 	/// Helper function to enable benchmarking of the broadcast pallet
