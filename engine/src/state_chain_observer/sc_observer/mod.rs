@@ -2,12 +2,14 @@
 mod tests;
 
 use anyhow::{anyhow, Context};
-use cf_chains::{dot, eth::Ethereum, ChainCrypto, Polkadot};
+use cf_chains::{dot, eth::Ethereum, Bitcoin, ChainCrypto, Polkadot};
 use cf_primitives::{BlockNumber, CeremonyId, EpochIndex, KeyId, PolkadotAccountId};
-use futures::{FutureExt, Stream, StreamExt};
+use futures::{future::BoxFuture, FutureExt, Stream, StreamExt};
 use sp_core::{Hasher, H160, H256};
 use sp_runtime::{traits::Keccak256, AccountId32};
-use state_chain_runtime::{AccountId, CfeSettings, EthereumInstance, PolkadotInstance};
+use state_chain_runtime::{
+	AccountId, BitcoinInstance, CfeSettings, EthereumInstance, PolkadotInstance,
+};
 use std::{
 	collections::BTreeSet,
 	sync::{
@@ -20,10 +22,12 @@ use tokio::sync::{mpsc::UnboundedSender, watch};
 use tracing::{debug, error, info, info_span, trace, Instrument};
 
 use crate::{
+	btc::{rpc::BtcRpcApi, BtcBroadcaster},
 	dot::{rpc::DotRpcApi, DotBroadcaster},
 	eth::{rpc::EthRpcApi, EthBroadcaster},
 	multisig::{
-		client::MultisigClientApi, eth::EthSigning, polkadot::PolkadotSigning, CryptoScheme,
+		bitcoin::BtcSigning, client::MultisigClientApi, eth::EthSigning, polkadot::PolkadotSigning,
+		CryptoScheme,
 	},
 	p2p::{PeerInfo, PeerUpdate},
 	state_chain_observer::client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi},
@@ -43,13 +47,14 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 	multisig_client: &'a MultisigClient,
 	state_chain_client: Arc<StateChainClient>,
 	ceremony_id: CeremonyId,
-    epoch_index: EpochIndex,
+	epoch_index: EpochIndex,
 	keygen_participants: BTreeSet<AccountId32>,
 ) where
 	MultisigClient: MultisigClientApi<C>,
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
-    state_chain_runtime::Runtime: pallet_cf_vaults::Config<I>,
-	C: CryptoScheme<AggKey = <<state_chain_runtime::Runtime as pallet_cf_vaults::Config<I>>::Chain as ChainCrypto>::AggKey>,
+	state_chain_runtime::Runtime: pallet_cf_vaults::Config<I>,
+	C: CryptoScheme,
+	C::AggKey: Into<<<state_chain_runtime::Runtime as pallet_cf_vaults::Config<I>>::Chain as ChainCrypto>::AggKey> + Send,
 	I: 'static + Sync + Send,
 	state_chain_runtime::RuntimeCall: std::convert::From<pallet_cf_vaults::Call<state_chain_runtime::Runtime, I>>,
 {
@@ -67,6 +72,7 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 						ceremony_id,
 						reported_outcome: keygen_result_future
 							.await
+							.map(Into::into)
 							.map_err(|(bad_account_ids, _reason)| bad_account_ids),
 					})
 					.await;
@@ -162,21 +168,26 @@ pub async fn start<
 	BlockStream,
 	EthRpc,
 	DotRpc: DotRpcApi + Send + Sync + 'static,
+	BtcRpc: BtcRpcApi + Send + Sync + 'static,
 	EthMultisigClient,
 	PolkadotMultisigClient,
+	BitcoinMultisigClient,
 >(
 	state_chain_client: Arc<StateChainClient>,
 	sc_block_stream: BlockStream,
 	eth_broadcaster: EthBroadcaster<EthRpc>,
 	dot_broadcaster: DotBroadcaster<DotRpc>,
+	btc_broadcaster: BtcBroadcaster<BtcRpc>,
 	eth_multisig_client: EthMultisigClient,
 	dot_multisig_client: PolkadotMultisigClient,
+	btc_multisig_client: BitcoinMultisigClient,
 	peer_update_sender: UnboundedSender<PeerUpdate>,
 	eth_epoch_start_sender: async_broadcast::Sender<EpochStart<Ethereum>>,
 	eth_address_to_monitor_sender: EthAddressToMonitorSender,
 	dot_epoch_start_sender: async_broadcast::Sender<EpochStart<Polkadot>>,
 	dot_monitor_ingress_sender: tokio::sync::mpsc::UnboundedSender<PolkadotAccountId>,
 	dot_monitor_signature_sender: tokio::sync::mpsc::UnboundedSender<[u8; 64]>,
+	btc_epoch_start_sender: async_broadcast::Sender<EpochStart<Bitcoin>>,
 	cfe_settings_update_sender: watch::Sender<CfeSettings>,
 	initial_block_hash: H256,
 ) -> Result<(), anyhow::Error>
@@ -185,6 +196,7 @@ where
 	EthRpc: EthRpcApi + Send + Sync + 'static,
 	EthMultisigClient: MultisigClientApi<EthSigning> + Send + Sync + 'static,
 	PolkadotMultisigClient: MultisigClientApi<PolkadotSigning> + Send + Sync + 'static,
+	BitcoinMultisigClient: MultisigClientApi<BtcSigning> + Send + Sync + 'static,
 	StateChainClient: StorageApi + ExtrinsicApi + 'static + Send + Sync,
 {
 	task_scope(|scope| async {
@@ -197,8 +209,8 @@ where
 
         let start_epoch = |block_hash: H256, index: u32, current: bool, participant: bool| {
             let eth_epoch_start_sender = &eth_epoch_start_sender;
-
             let dot_epoch_start_sender = &dot_epoch_start_sender;
+            let btc_epoch_start_sender = &btc_epoch_start_sender;
             let state_chain_client = &state_chain_client;
 
             async move {
@@ -224,7 +236,7 @@ where
                 if let Some(vault) = state_chain_client
                 .storage_map_entry::<pallet_cf_vaults::Vaults<
                     state_chain_runtime::Runtime,
-                    state_chain_runtime::PolkadotInstance,
+                    PolkadotInstance,
                 >>(block_hash, &index)
                 .await
                 .unwrap() {
@@ -236,6 +248,25 @@ where
                         data: dot::EpochStartData {
                             vault_account: state_chain_client.storage_value::<pallet_cf_environment::PolkadotVaultAccountId<state_chain_runtime::Runtime>>(block_hash).await.unwrap().unwrap()
                         }
+                    }).await.unwrap();
+                }
+
+                // It is possible for there not to be a Bitcoin vault.
+                // At genesis there is no Bitcoin vault, so we want to check that the vault exists
+                // before we start witnessing.
+                if let Some(vault) = state_chain_client
+                .storage_map_entry::<pallet_cf_vaults::Vaults<
+                    state_chain_runtime::Runtime,
+                    BitcoinInstance,
+                >>(block_hash, &index)
+                .await
+                .unwrap() {
+                    btc_epoch_start_sender.broadcast(EpochStart::<Bitcoin> {
+                        epoch_index: index,
+                        block_number: vault.active_from_block,
+                        current,
+                        participant,
+                        data: (),
                     }).await.unwrap();
                 }
             }
@@ -375,6 +406,27 @@ where
                                             participants,
                                         ).await;
                                     }
+
+                                    state_chain_runtime::RuntimeEvent::BitcoinVault(
+                                        pallet_cf_vaults::Event::KeygenRequest {
+                                            ceremony_id,
+                                            participants,
+                                            epoch_index
+                                        }
+                                    ) => {
+                                        // Ceremony id tracking is global, so update all other clients
+                                        btc_multisig_client.update_latest_ceremony_id(ceremony_id);
+
+                                        handle_keygen_request::<_, _, _, BitcoinInstance>(
+                                            scope,
+                                            &btc_multisig_client,
+                                            state_chain_client.clone(),
+                                            ceremony_id,
+                                            epoch_index,
+                                            participants,
+                                        ).await;
+                                    }
+
                                     state_chain_runtime::RuntimeEvent::EthereumThresholdSigner(
                                         pallet_cf_threshold_signature::Event::ThresholdSignatureRequest{
                                             request_id: _,
@@ -408,7 +460,7 @@ where
                                         },
                                     ) => {
                                         // Ceremony id tracking is global, so update all other clients
-                                        eth_multisig_client.update_latest_ceremony_id(ceremony_id);
+                                        dot_multisig_client.update_latest_ceremony_id(ceremony_id);
 
                                         handle_signing_request::<_, _, PolkadotSigning, PolkadotInstance>(
                                                 scope,
@@ -421,6 +473,31 @@ where
                                                 .expect("Payload should be correct size"),
                                         ).await;
                                     }
+
+                                    state_chain_runtime::RuntimeEvent::BitcoinThresholdSigner(
+                                        pallet_cf_threshold_signature::Event::ThresholdSignatureRequest{
+                                            request_id: _,
+                                            ceremony_id,
+                                            key_id,
+                                            signatories,
+                                            payload,
+                                        },
+                                    ) => {
+                                        // Ceremony id tracking is global, so update all other clients
+                                        btc_multisig_client.update_latest_ceremony_id(ceremony_id);
+
+                                        handle_signing_request::<_, _, _, BitcoinInstance>(
+                                                scope,
+                                                &btc_multisig_client,
+                                            state_chain_client.clone(),
+                                            ceremony_id,
+                                            key_id.0,
+                                            signatories,
+                                            crate::multisig::bitcoin::SigningPayload(payload.0)
+                                                .expect("Payload should be correct size"),
+                                        ).await;
+                                    }
+
                                     state_chain_runtime::RuntimeEvent::EthereumBroadcaster(
                                         pallet_cf_broadcast::Event::TransactionBroadcastRequest {
                                             broadcast_attempt_id,
@@ -492,6 +569,24 @@ where
                                             });
                                         }
                                     }
+
+                                    state_chain_runtime::RuntimeEvent::BitcoinBroadcaster(
+                                        pallet_cf_broadcast::Event::TransactionBroadcastRequest {
+                                            broadcast_attempt_id,
+                                            nominee,
+                                            unsigned_tx,
+                                        },
+                                    ) => {
+                                        // TODO: monitor for broadcast completion?
+                                        if nominee == account_id {
+                                            let _result = btc_broadcaster.send(unsigned_tx.encoded_transaction).await
+                                            .map(|_| info!("Bitcoin transmission successful: {broadcast_attempt_id}"))
+                                            .map_err(|error| {
+                                                error!("Error: {error:?}");
+                                            });
+                                        }
+                                    }
+
                                     state_chain_runtime::RuntimeEvent::Environment(
                                         pallet_cf_environment::Event::CfeSettingsUpdated {
                                             new_cfe_settings

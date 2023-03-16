@@ -129,7 +129,8 @@ impl ChainCrypto for Bitcoin {
 		_payload: &Self::Payload,
 		_signature: &Self::ThresholdSignature,
 	) -> bool {
-		todo!()
+		// TODO: actually verify the signature on-chain.
+		true
 	}
 
 	fn agg_key_to_payload(agg_key: Self::AggKey) -> Self::Payload {

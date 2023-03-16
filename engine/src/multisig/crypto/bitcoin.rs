@@ -49,6 +49,12 @@ impl AsRef<[u8]> for SigningPayload {
 	}
 }
 
+impl From<Point> for cf_chains::btc::AggKey {
+	fn from(p: Point) -> Self {
+		Self(p.x_bytes())
+	}
+}
+
 impl CryptoScheme for BtcSigning {
 	type Point = Point;
 	type Signature = BtcSchnorrSignature;

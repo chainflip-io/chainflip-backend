@@ -108,7 +108,7 @@ pub struct Settings {
 	// External Chain settings
 	pub eth: Eth,
 	pub dot: Dot,
-	pub btc: Option<Btc>,
+	pub btc: Btc,
 
 	pub health_check: Option<HealthCheck>,
 	pub signing: Signing,
@@ -324,9 +324,7 @@ impl CfSettings for Settings {
 
 		self.dot.validate_settings()?;
 
-		if let Some(btc) = &self.btc {
-			btc.validate_settings()?;
-		}
+		self.btc.validate_settings()?;
 
 		self.state_chain.validate_settings()?;
 
@@ -691,11 +689,9 @@ mod tests {
 
 		assert_eq!(opts.dot_opts.dot_ws_node_endpoint.unwrap(), settings.dot.ws_node_endpoint);
 
-		let btc_settings =
-			settings.btc.expect("option provided in CLI settings, so should override");
-		assert_eq!(opts.btc_opts.btc_http_node_endpoint.unwrap(), btc_settings.http_node_endpoint);
-		assert_eq!(opts.btc_opts.btc_rpc_user.unwrap(), btc_settings.rpc_user);
-		assert_eq!(opts.btc_opts.btc_rpc_password.unwrap(), btc_settings.rpc_password);
+		assert_eq!(opts.btc_opts.btc_http_node_endpoint.unwrap(), settings.btc.http_node_endpoint);
+		assert_eq!(opts.btc_opts.btc_rpc_user.unwrap(), settings.btc.rpc_user);
+		assert_eq!(opts.btc_opts.btc_rpc_password.unwrap(), settings.btc.rpc_password);
 
 		assert_eq!(
 			opts.health_check_hostname.unwrap(),

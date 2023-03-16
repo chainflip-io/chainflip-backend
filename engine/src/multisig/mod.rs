@@ -7,7 +7,7 @@ mod crypto;
 /// Storage for the keys
 pub mod db;
 
-pub use crypto::{eth, polkadot, ChainTag, CryptoScheme, Rng};
+pub use crypto::{bitcoin, eth, polkadot, ChainTag, CryptoScheme, Rng};
 
 use anyhow::Result;
 use cf_primitives::{CeremonyId, PublicKeyBytes};
