@@ -214,6 +214,12 @@ trait SwapDirection {
 
 	/// The current tick is always the closest tick less than the current_sqrt_price
 	fn current_tick_after_crossing_tick(tick: Tick) -> Tick;
+
+	/// Determines if a given sqrt_price is more than another
+	fn sqrt_price_op_more_than(
+		sqrt_price: SqrtPriceQ64F96,
+		sqrt_price_other: SqrtPriceQ64F96,
+	) -> bool;
 }
 
 pub struct ZeroToOne {}
@@ -264,6 +270,13 @@ impl SwapDirection for ZeroToOne {
 	fn current_tick_after_crossing_tick(tick: Tick) -> Tick {
 		tick - 1
 	}
+
+	fn sqrt_price_op_more_than(
+		sqrt_price: SqrtPriceQ64F96,
+		sqrt_price_other: SqrtPriceQ64F96,
+	) -> bool {
+		sqrt_price < sqrt_price_other
+	}
 }
 
 pub struct OneToZero {}
@@ -313,6 +326,13 @@ impl SwapDirection for OneToZero {
 
 	fn current_tick_after_crossing_tick(tick: Tick) -> Tick {
 		tick
+	}
+
+	fn sqrt_price_op_more_than(
+		sqrt_price: SqrtPriceQ64F96,
+		sqrt_price_other: SqrtPriceQ64F96,
+	) -> bool {
+		sqrt_price > sqrt_price_other
 	}
 }
 
@@ -604,35 +624,61 @@ impl PoolState {
 		}
 	}
 
-	/// Swaps the specified Amount of Zero into One, and returns the One Amount and the Remaining
-	/// input Zero Amount.
+	/// Swaps the specified Amount of Zero into One until sqrt_price_limit is reached (If Some), and
+	/// returns the One Amount and the Remaining input Zero Amount.
 	///
 	/// This function never panics
-	pub fn swap_from_zero_to_one(&mut self, amount: Amount) -> (Amount, Amount) {
-		self.swap::<ZeroToOne>(amount)
+	pub fn swap_from_zero_to_one(
+		&mut self,
+		amount: Amount,
+		sqrt_price_limit: Option<U256>,
+	) -> (Amount, Amount) {
+		self.swap::<ZeroToOne>(amount, sqrt_price_limit)
 	}
 
-	/// Swaps the specified Amount of One into Zero, and returns the Zero Amount and the Remaining
-	/// input One Amount.
+	/// Swaps the specified Amount of One into Zero until sqrt_price_limit is reached (If Some), and
+	/// returns the Zero Amount and the Remaining input One Amount.
 	///
 	/// This function never panics
-	pub fn swap_from_one_to_zero(&mut self, amount: Amount) -> (Amount, Amount) {
-		self.swap::<OneToZero>(amount)
+	pub fn swap_from_one_to_zero(
+		&mut self,
+		amount: Amount,
+		sqrt_price_limit: Option<U256>,
+	) -> (Amount, Amount) {
+		self.swap::<OneToZero>(amount, sqrt_price_limit)
 	}
 
-	/// Swaps the specified Amount into the other currency, and returns the resulting Amount and the
-	/// remaining input Amount. The direction of the swap is controlled by the generic type
-	/// parameter `SD`, by setting it to `ZeroToOne` or `OneToZero`.
+	/// Swaps the specified Amount into the other currency until sqrt_price_limit is reached (If
+	/// Some), and returns the resulting Amount and the remaining input Amount. The direction of the
+	/// swap is controlled by the generic type parameter `SD`, by setting it to `ZeroToOne` or
+	/// `OneToZero`.
 	///
 	/// This function never panics
-	fn swap<SD: SwapDirection>(&mut self, mut amount: Amount) -> (Amount, Amount) {
+	fn swap<SD: SwapDirection>(
+		&mut self,
+		mut amount: Amount,
+		sqrt_price_limit: Option<U256>,
+	) -> (Amount, Amount) {
 		let mut total_amount_out = Amount::zero();
 
-		while let Some((tick, delta)) = (Amount::zero() != amount)
-			.then_some(())
-			.and_then(|()| SD::next_liquidity_delta(self.current_tick, &mut self.liquidity_map))
+		while let Some((tick_at_delta, delta)) = (Amount::zero() != amount &&
+			sqrt_price_limit.map_or(true, |sqrt_price_limit| {
+				SD::sqrt_price_op_more_than(sqrt_price_limit, self.current_sqrt_price)
+			}))
+		.then_some(())
+		.and_then(|()| SD::next_liquidity_delta(self.current_tick, &mut self.liquidity_map))
 		{
-			let sqrt_price_target = Self::sqrt_price_at_tick(*tick);
+			let sqrt_price_at_delta = Self::sqrt_price_at_tick(*tick_at_delta);
+
+			let sqrt_price_target = if let Some(sqrt_price_limit) = sqrt_price_limit {
+				if SD::sqrt_price_op_more_than(sqrt_price_at_delta, sqrt_price_limit) {
+					sqrt_price_limit
+				} else {
+					sqrt_price_at_delta
+				}
+			} else {
+				sqrt_price_at_delta
+			};
 
 			let sqrt_price_next = if self.current_liquidity == 0 {
 				sqrt_price_target
@@ -714,11 +760,11 @@ impl PoolState {
 				sqrt_price_next
 			};
 
-			if sqrt_price_next == sqrt_price_target {
+			if sqrt_price_next == sqrt_price_at_delta {
 				delta.fee_growth_outside = enum_map::EnumMap::default()
 					.map(|side, ()| self.global_fee_growth[side] - delta.fee_growth_outside[side]);
 				self.current_sqrt_price = sqrt_price_next;
-				self.current_tick = SD::current_tick_after_crossing_tick(*tick);
+				self.current_tick = SD::current_tick_after_crossing_tick(*tick_at_delta);
 
 				// Addition is guaranteed to never overflow, see test `max_liquidity`
 				self.current_liquidity = self
