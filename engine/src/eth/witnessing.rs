@@ -28,6 +28,7 @@ use super::{
 	key_manager::KeyManager,
 	rpc::EthDualRpcClient,
 	stake_manager::StakeManager,
+	vault::Vault,
 };
 use itertools::Itertools;
 
@@ -38,6 +39,7 @@ use anyhow::Context;
 pub struct AllWitnessers {
 	pub key_manager: ContractWitnesser<KeyManager, StateChainClient>,
 	pub stake_manager: ContractWitnesser<StakeManager, StateChainClient>,
+	pub vault: ContractWitnesser<Vault, StateChainClient>,
 	pub eth_ingress: IngressWitnesser<StateChainClient>,
 	pub flip_ingress: ContractWitnesser<Erc20Witnesser, StateChainClient>,
 	pub usdc_ingress: ContractWitnesser<Erc20Witnesser, StateChainClient>,
@@ -105,6 +107,13 @@ pub async fn start(
 
 	let key_manager_address = state_chain_client
 		.storage_value::<pallet_cf_environment::EthereumKeyManagerAddress<state_chain_runtime::Runtime>>(
+			initial_block_hash,
+		)
+		.await
+		.context("Failed to get KeyManager address from SC")?;
+
+	let vault_address = state_chain_client
+		.storage_value::<pallet_cf_environment::EthereumVaultAddress<state_chain_runtime::Runtime>>(
 			initial_block_hash,
 		)
 		.await
@@ -208,6 +217,12 @@ pub async fn start(
 					),
 					stake_manager: ContractWitnesser::new(
 						StakeManager::new(stake_manager_address.into()),
+						state_chain_client.clone(),
+						dual_rpc.clone(),
+						true,
+					),
+					vault: ContractWitnesser::new(
+						Vault::new(vault_address.into()),
 						state_chain_client.clone(),
 						dual_rpc.clone(),
 						true,
