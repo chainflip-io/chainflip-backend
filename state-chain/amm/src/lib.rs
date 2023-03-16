@@ -634,7 +634,9 @@ impl PoolState {
 		{
 			let sqrt_price_target = Self::sqrt_price_at_tick(*target_tick);
 
-			if self.current_liquidity != 0 {
+			let sqrt_price_next = if self.current_liquidity == 0 {
+				sqrt_price_target
+			} else {
 				let amount_minus_fees = mul_div_floor(
 					amount,
 					U256::from(ONE_IN_PIPS - self.fee_pips),
@@ -668,75 +670,51 @@ impl PoolState {
 
 				// next_sqrt_price_from_input_amount rounds so this maybe true even though
 				// amount_minus_fees < amount_required_to_reach_target (TODO Prove)
-				if sqrt_price_next == sqrt_price_target {
-					// Will not overflow as fee_pips <= ONE_IN_PIPS / 2
-					let fees = mul_div_ceil(
+				let (amount_swapped, fees) = if sqrt_price_next == sqrt_price_target {
+					(
 						amount_required_to_reach_target,
-						U256::from(self.fee_pips),
-						U256::from(ONE_IN_PIPS - self.fee_pips),
-					);
-
-					// TODO: Prove these don't underflow
-					amount -= amount_required_to_reach_target;
-					amount -= fees;
-
-					// DIFF: This behaviour is different to Uniswap's, we saturate instead of
-					// overflowing/bricking the pool. This means we just stop giving LPs fees, but
-					// this is exceptionally unlikely to occur due to the how large the maximum
-					// global_fee_growth value is. We also do this to avoid needing to consider the
-					// case of reverting an extrinsic's mutations which is expensive in Substrate
-					// based chains.
-					self.global_fee_growth[SD::INPUT_SIDE] = self.global_fee_growth[SD::INPUT_SIDE]
-						.saturating_add(mul_div_floor(
-							fees,
-							U256::from(1) << 128u32,
-							self.current_liquidity,
-						));
-					target_delta.fee_growth_outside =
-						enum_map::EnumMap::default().map(|side, ()| {
-							self.global_fee_growth[side] - target_delta.fee_growth_outside[side]
-						});
-					self.current_sqrt_price = sqrt_price_target;
-					self.current_tick = SD::current_tick_after_crossing_target_tick(*target_tick);
-
-					// Addition is guaranteed to never overflow, see test `max_liquidity`
-					self.current_liquidity = self
-						.current_liquidity
-						.checked_add_signed(SD::liquidity_delta_on_crossing_tick(target_delta))
-						.unwrap();
+						/* Will not overflow as fee_pips <= ONE_IN_PIPS / 2 */
+						mul_div_ceil(
+							amount_required_to_reach_target,
+							U256::from(self.fee_pips),
+							U256::from(ONE_IN_PIPS - self.fee_pips),
+						),
+					)
 				} else {
-					let amount_in = SD::input_amount_delta_ceil(
+					let amount_swapped = SD::input_amount_delta_ceil(
 						self.current_sqrt_price,
 						sqrt_price_next,
 						self.current_liquidity,
 					);
-					// Will not underflow due to rounding in flavor of the pool of both
-					// sqrt_price_next and amount_in. (TODO: Prove)
-					let fees = amount - amount_in;
-					amount = Amount::zero();
 
-					// DIFF: This behaviour is different to Uniswap's,
-					// we saturate instead of overflowing/bricking the pool. This means we just stop
-					// giving LPs fees, but this is exceptionally unlikely to occur due to the how
-					// large the maximum global_fee_growth value is. We also do this to avoid
-					// needing to consider the case of reverting an extrinsic's mutations which is
-					// expensive in Substrate based chains.
-					self.global_fee_growth[SD::INPUT_SIDE] = self.global_fee_growth[SD::INPUT_SIDE]
-						.saturating_add(mul_div_floor(
-							fees,
-							U256::from(1) << 128u32,
-							self.current_liquidity,
-						));
-
-					// Recompute current_tick unless the price hasn't moved
-					if self.current_sqrt_price != sqrt_price_next {
-						self.current_sqrt_price = sqrt_price_next;
-						self.current_tick = Self::tick_at_sqrt_price(self.current_sqrt_price);
-					}
-
-					break
+					(
+						amount_swapped,
+						/* Will not underflow due to rounding in flavor of the pool of
+						 * sqrt_price_next. (TODO: Prove) */
+						amount - amount_swapped,
+					)
 				};
-			} else {
+
+				// TODO: Prove this does not underflow
+				amount -= amount_swapped + fees;
+
+				// DIFF: This behaviour is different to Uniswap's, we saturate instead of
+				// overflowing/bricking the pool. This means we just stop giving LPs fees, but
+				// this is exceptionally unlikely to occur due to the how large the maximum
+				// global_fee_growth value is. We also do this to avoid needing to consider the
+				// case of reverting an extrinsic's mutations which is expensive in Substrate
+				// based chains.
+				self.global_fee_growth[SD::INPUT_SIDE] = self.global_fee_growth[SD::INPUT_SIDE]
+					.saturating_add(mul_div_floor(
+						fees,
+						U256::from(1) << 128u32,
+						self.current_liquidity,
+					));
+
+				sqrt_price_next
+			};
+
+			if sqrt_price_next == sqrt_price_target {
 				target_delta.fee_growth_outside = enum_map::EnumMap::default().map(|side, ()| {
 					self.global_fee_growth[side] - target_delta.fee_growth_outside[side]
 				});
@@ -748,6 +726,10 @@ impl PoolState {
 					.current_liquidity
 					.checked_add_signed(SD::liquidity_delta_on_crossing_tick(target_delta))
 					.unwrap();
+			} else if self.current_sqrt_price != sqrt_price_next {
+				// Recompute current_tick unless the price hasn't moved
+				self.current_sqrt_price = sqrt_price_next;
+				self.current_tick = Self::tick_at_sqrt_price(self.current_sqrt_price);
 			}
 		}
 
