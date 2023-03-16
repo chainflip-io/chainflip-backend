@@ -357,7 +357,13 @@ impl EgressApi<AnyChain> for AnyChainIngressEgressHandler {
 					.try_into()
 					.expect("Caller must ensure for account is of the compatible type."),
 			),
-			ForeignChain::Bitcoin => todo!("Bitcoin egress"),
+			ForeignChain::Bitcoin => crate::BitcoinIngressEgress::schedule_egress(
+				asset.try_into().expect("Checked for asset compatibility"),
+				amount,
+				egress_address
+					.try_into()
+					.expect("Caller must ensure for account is of the compatible type."),
+			),
 		}
 	}
 }
@@ -439,7 +445,11 @@ impl IngressApi<AnyChain> for AnyChainIngressEgressHandler {
 					lp_account,
 					ingress_asset.try_into().unwrap(),
 				),
-			ForeignChain::Bitcoin => todo!("Cannot register liquidity ingress intent for Bitcoin"),
+			ForeignChain::Bitcoin =>
+				crate::BitcoinIngressEgress::register_liquidity_ingress_intent(
+					lp_account,
+					ingress_asset.try_into().unwrap(),
+				),
 		}
 	}
 
@@ -465,7 +475,13 @@ impl IngressApi<AnyChain> for AnyChainIngressEgressHandler {
 				relayer_commission_bps,
 				relayer_id,
 			),
-			ForeignChain::Bitcoin => todo!("Cannot register swap intent for Bitcoin"),
+			ForeignChain::Bitcoin => crate::BitcoinIngressEgress::register_swap_intent(
+				ingress_asset.try_into().unwrap(),
+				egress_asset,
+				egress_address,
+				relayer_commission_bps,
+				relayer_id,
+			),
 		}
 	}
 }
