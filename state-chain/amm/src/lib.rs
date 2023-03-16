@@ -181,7 +181,7 @@ trait SwapDirection {
 	/// The xy=k maths only works while the liquidity is constant, so this function returns the
 	/// closest (to the current) next tick/price where liquidity possibly changes. Note the
 	/// direction of `next` is implied by the swapping direction.
-	fn target_tick(
+	fn next_liquidity_delta(
 		tick: Tick,
 		liquidity_map: &mut BTreeMap<Tick, TickDelta>,
 	) -> Option<(&Tick, &mut TickDelta)>;
@@ -220,7 +220,7 @@ pub struct ZeroToOne {}
 impl SwapDirection for ZeroToOne {
 	const INPUT_SIDE: Side = Side::Zero;
 
-	fn target_tick(
+	fn next_liquidity_delta(
 		current_tick: Tick,
 		liquidity_map: &mut BTreeMap<Tick, TickDelta>,
 	) -> Option<(&Tick, &mut TickDelta)> {
@@ -270,7 +270,7 @@ pub struct OneToZero {}
 impl SwapDirection for OneToZero {
 	const INPUT_SIDE: Side = Side::One;
 
-	fn target_tick(
+	fn next_liquidity_delta(
 		current_tick: Tick,
 		liquidity_map: &mut BTreeMap<Tick, TickDelta>,
 	) -> Option<(&Tick, &mut TickDelta)> {
@@ -628,11 +628,11 @@ impl PoolState {
 	fn swap<SD: SwapDirection>(&mut self, mut amount: Amount) -> (Amount, Amount) {
 		let mut total_amount_out = Amount::zero();
 
-		while let Some((target_tick, target_delta)) = (Amount::zero() != amount)
+		while let Some((tick, delta)) = (Amount::zero() != amount)
 			.then_some(())
-			.and_then(|()| SD::target_tick(self.current_tick, &mut self.liquidity_map))
+			.and_then(|()| SD::next_liquidity_delta(self.current_tick, &mut self.liquidity_map))
 		{
-			let sqrt_price_target = Self::sqrt_price_at_tick(*target_tick);
+			let sqrt_price_target = Self::sqrt_price_at_tick(*tick);
 
 			let sqrt_price_next = if self.current_liquidity == 0 {
 				sqrt_price_target
@@ -715,16 +715,15 @@ impl PoolState {
 			};
 
 			if sqrt_price_next == sqrt_price_target {
-				target_delta.fee_growth_outside = enum_map::EnumMap::default().map(|side, ()| {
-					self.global_fee_growth[side] - target_delta.fee_growth_outside[side]
-				});
+				delta.fee_growth_outside = enum_map::EnumMap::default()
+					.map(|side, ()| self.global_fee_growth[side] - delta.fee_growth_outside[side]);
 				self.current_sqrt_price = sqrt_price_target;
-				self.current_tick = SD::current_tick_after_crossing_tick(*target_tick);
+				self.current_tick = SD::current_tick_after_crossing_tick(*tick);
 
 				// Addition is guaranteed to never overflow, see test `max_liquidity`
 				self.current_liquidity = self
 					.current_liquidity
-					.checked_add_signed(SD::liquidity_delta_on_crossing_tick(target_delta))
+					.checked_add_signed(SD::liquidity_delta_on_crossing_tick(delta))
 					.unwrap();
 			} else if self.current_sqrt_price != sqrt_price_next {
 				// Recompute current_tick unless the price hasn't moved
