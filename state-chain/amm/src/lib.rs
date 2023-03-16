@@ -213,7 +213,7 @@ trait SwapDirection {
 	fn liquidity_delta_on_crossing_tick(tick_liquidity: &TickDelta) -> i128;
 
 	/// The current tick is always the closest tick less than the current_sqrt_price
-	fn current_tick_after_crossing_target_tick(target_tick: Tick) -> Tick;
+	fn current_tick_after_crossing_tick(tick: Tick) -> Tick;
 }
 
 pub struct ZeroToOne {}
@@ -228,7 +228,7 @@ impl SwapDirection for ZeroToOne {
 		if current_tick >= MIN_TICK {
 			Some(liquidity_map.range_mut(..=current_tick).next_back().unwrap())
 		} else {
-			assert_eq!(current_tick, Self::current_tick_after_crossing_target_tick(MIN_TICK));
+			assert_eq!(current_tick, Self::current_tick_after_crossing_tick(MIN_TICK));
 			None
 		}
 	}
@@ -261,8 +261,8 @@ impl SwapDirection for ZeroToOne {
 		-tick_liquidity.liquidity_delta
 	}
 
-	fn current_tick_after_crossing_target_tick(target_tick: Tick) -> Tick {
-		target_tick - 1
+	fn current_tick_after_crossing_tick(tick: Tick) -> Tick {
+		tick - 1
 	}
 }
 
@@ -278,7 +278,7 @@ impl SwapDirection for OneToZero {
 		if current_tick < MAX_TICK {
 			Some(liquidity_map.range_mut(current_tick + 1..).next().unwrap())
 		} else {
-			assert_eq!(current_tick, Self::current_tick_after_crossing_target_tick(MAX_TICK));
+			assert_eq!(current_tick, Self::current_tick_after_crossing_tick(MAX_TICK));
 			None
 		}
 	}
@@ -311,8 +311,8 @@ impl SwapDirection for OneToZero {
 		tick_liquidity.liquidity_delta
 	}
 
-	fn current_tick_after_crossing_target_tick(target_tick: Tick) -> Tick {
-		target_tick
+	fn current_tick_after_crossing_tick(tick: Tick) -> Tick {
+		tick
 	}
 }
 
@@ -719,7 +719,7 @@ impl PoolState {
 					self.global_fee_growth[side] - target_delta.fee_growth_outside[side]
 				});
 				self.current_sqrt_price = sqrt_price_target;
-				self.current_tick = SD::current_tick_after_crossing_target_tick(*target_tick);
+				self.current_tick = SD::current_tick_after_crossing_tick(*target_tick);
 
 				// Addition is guaranteed to never overflow, see test `max_liquidity`
 				self.current_liquidity = self
