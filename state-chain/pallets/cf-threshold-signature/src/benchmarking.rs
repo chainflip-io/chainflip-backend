@@ -3,7 +3,7 @@
 
 use super::*;
 
-use cf_chains::{BenchmarkValue, ChainCrypto};
+use cf_chains::{benchmarking_value::BenchmarkValue, ChainCrypto};
 use cf_primitives::AccountRole;
 use cf_traits::{AccountRoleRegistry, Chainflip, ThresholdSigner};
 use frame_benchmarking::{account, benchmarks_instance_pallet, whitelist_account};

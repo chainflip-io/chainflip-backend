@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::{DisabledEgressAssets, FetchOrTransfer, ScheduledEgressRequests};
-use cf_chains::BenchmarkValue;
+use cf_chains::benchmarking_value::BenchmarkValue;
 use cf_primitives::ForeignChain;
 use frame_benchmarking::{account, benchmarks_instance_pallet};
 use frame_support::traits::Hooks;

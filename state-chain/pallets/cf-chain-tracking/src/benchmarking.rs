@@ -1,6 +1,6 @@
 use super::*;
 
-use cf_chains::BenchmarkValue;
+use cf_chains::benchmarking_value::BenchmarkValue;
 use frame_benchmarking::benchmarks_instance_pallet;
 use frame_support::{assert_ok, dispatch::UnfilteredDispatchable, traits::EnsureOrigin};
 

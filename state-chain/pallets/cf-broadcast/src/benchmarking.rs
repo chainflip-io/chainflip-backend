@@ -14,7 +14,7 @@ use frame_system::RawOrigin;
 use cf_primitives::AccountRole;
 use cf_traits::AccountRoleRegistry;
 
-use cf_chains::BenchmarkValue;
+use cf_chains::benchmarking_value::BenchmarkValue;
 
 fn insert_transaction_broadcast_attempt<T: pallet::Config<I>, I: 'static>(
 	nominee: <T as Chainflip>::ValidatorId,

@@ -903,7 +903,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_status(outcome: AsyncResult<VaultStatus<Self::ValidatorId>>) {
-		use cf_chains::BenchmarkValue;
+		use cf_chains::benchmarking_value::BenchmarkValue;
 
 		match outcome {
 			AsyncResult::Pending => {

@@ -4,7 +4,7 @@
 use super::*;
 
 use crate::Pallet;
-use cf_chains::BenchmarkValue;
+use cf_chains::benchmarking_value::BenchmarkValue;
 use cf_traits::EpochInfo;
 use codec::Decode;
 use frame_benchmarking::{account, benchmarks_instance_pallet, whitelisted_caller};

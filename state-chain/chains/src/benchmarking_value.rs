@@ -1,11 +1,18 @@
+#[cfg(feature = "runtime-benchmarks")]
 use cf_primitives::{
 	chains::assets::{btc, dot, eth},
 	Asset, ForeignChainAddress, KeyId,
 };
 
-use crate::BenchmarkValue;
-
+#[cfg(feature = "runtime-benchmarks")]
 use crate::eth::EthereumIngressId;
+
+/// Ensure type specifies a value to be used for benchmarking purposes.
+pub trait BenchmarkValue {
+	/// Returns a value suitable for running against benchmarks.
+	#[cfg(feature = "runtime-benchmarks")]
+	fn benchmark_value() -> Self;
+}
 
 #[cfg(not(feature = "runtime-benchmarks"))]
 impl<T> BenchmarkValue for T {}
@@ -13,8 +20,9 @@ impl<T> BenchmarkValue for T {}
 #[macro_export]
 macro_rules! impl_default_benchmark_value {
 	($element:ty) => {
+		#[cfg(feature = "runtime-benchmarks")]
 		impl BenchmarkValue for $element {
-			//
+			// #[cfg(feature = "runtime-benchmarks")]
 			fn benchmark_value() -> Self {
 				<$element>::default()
 			}
@@ -22,6 +30,7 @@ macro_rules! impl_default_benchmark_value {
 	};
 }
 
+#[cfg(feature = "runtime-benchmarks")]
 impl BenchmarkValue for KeyId {
 	fn benchmark_value() -> Self {
 		Self {
@@ -31,18 +40,21 @@ impl BenchmarkValue for KeyId {
 	}
 }
 
+#[cfg(feature = "runtime-benchmarks")]
 impl BenchmarkValue for Asset {
 	fn benchmark_value() -> Self {
 		Self::Eth
 	}
 }
 
+#[cfg(feature = "runtime-benchmarks")]
 impl BenchmarkValue for eth::Asset {
 	fn benchmark_value() -> Self {
 		eth::Asset::Eth
 	}
 }
 
+#[cfg(feature = "runtime-benchmarks")]
 impl BenchmarkValue for dot::Asset {
 	fn benchmark_value() -> Self {
 		dot::Asset::Dot
@@ -50,25 +62,28 @@ impl BenchmarkValue for dot::Asset {
 }
 
 // TODO: Look at deduplicating this by including it in the macro
-
+#[cfg(feature = "runtime-benchmarks")]
 impl BenchmarkValue for btc::Asset {
 	fn benchmark_value() -> Self {
 		btc::Asset::Btc
 	}
 }
 
+#[cfg(feature = "runtime-benchmarks")]
 impl BenchmarkValue for ForeignChainAddress {
 	fn benchmark_value() -> Self {
 		ForeignChainAddress::Eth(Default::default())
 	}
 }
 
+#[cfg(feature = "runtime-benchmarks")]
 impl BenchmarkValue for EthereumIngressId {
 	fn benchmark_value() -> Self {
 		Self::UnDeployed(1)
 	}
 }
 
+#[cfg(feature = "runtime-benchmarks")]
 impl BenchmarkValue for [u8; 32] {
 	fn benchmark_value() -> Self {
 		[1u8; 32]
