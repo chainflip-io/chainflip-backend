@@ -185,12 +185,12 @@ pub mod pallet {
 
 	// BITCOIN CHAIN RELATED ENVIRONMENT ITEMS
 	#[pallet::storage]
-	/// The set of available UTXOs available in our Bitcoin Vault
+	/// The set of available UTXOs available in our Bitcoin Vault.
 	pub type BitcoinAvailableUtxos<T> = StorageValue<_, Vec<Utxo>, ValueQuery>;
 
 	#[pallet::storage]
 	/// Selection of the bitcoin network (mainnet, testnet or regtest) that the state chain
-	/// currently supports
+	/// currently supports.
 	pub type BitcoinNetworkSelection<T> = StorageValue<_, BitcoinNetwork, ValueQuery>;
 
 	#[pallet::storage]
@@ -198,7 +198,7 @@ pub mod pallet {
 	pub type BitcoinFeePerUtxo<T> = StorageValue<_, u64, ValueQuery>;
 
 	#[pallet::storage]
-	/// The address where we want to send the remaining btc amount after creating required outputs
+	/// The address where we want to send the remaining btc amount after creating required outputs.
 	pub type BitcoinChangeAddress<T> = StorageValue<_, BitcoinAddress, ValueQuery>;
 
 	#[pallet::event]

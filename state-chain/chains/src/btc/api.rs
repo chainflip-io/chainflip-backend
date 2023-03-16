@@ -51,7 +51,7 @@ where
 			.ok_or(())?;
 
 		btc_outputs.push(BitcoinOutput {
-			amount: total_input_amount_available - total_output_amount,
+			amount: total_input_amount_available.checked_sub(total_output_amount).expect("This should never overflow because the total input available was calculated from the total output amount and the algorithm ensures that the total input amount is greater than the total output amount"),
 			script_pubkey: scriptpubkey_from_address(
 				sp_std::str::from_utf8(&bitcoin_return_address[..]).map_err(|_| ())?,
 				bitcoin_network,

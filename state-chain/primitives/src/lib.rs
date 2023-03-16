@@ -207,12 +207,14 @@ impl Get<u32> for MaxBitcoinAddressLength {
 	}
 }
 
+pub type BitcoinAddress = BoundedVec<u8, MaxBitcoinAddressLength>;
+
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, PartialOrd, Ord)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum ForeignChainAddress {
 	Eth(EthereumAddress),
 	Dot([u8; 32]),
-	Btc(BoundedVec<u8, MaxBitcoinAddressLength>),
+	Btc(BitcoinAddress),
 }
 
 #[cfg(feature = "std")]
@@ -290,7 +292,7 @@ impl TryFrom<ForeignChainAddress> for PolkadotAccountId {
 	}
 }
 
-impl TryFrom<ForeignChainAddress> for BoundedVec<u8, MaxBitcoinAddressLength> {
+impl TryFrom<ForeignChainAddress> for BitcoinAddress {
 	type Error = AddressError;
 
 	fn try_from(address: ForeignChainAddress) -> Result<Self, Self::Error> {
@@ -342,8 +344,8 @@ impl From<PolkadotAccountId> for ForeignChainAddress {
 	}
 }
 
-impl From<BoundedVec<u8, MaxBitcoinAddressLength>> for ForeignChainAddress {
-	fn from(address: BoundedVec<u8, MaxBitcoinAddressLength>) -> ForeignChainAddress {
+impl From<BitcoinAddress> for ForeignChainAddress {
+	fn from(address: BitcoinAddress) -> ForeignChainAddress {
 		ForeignChainAddress::Btc(address)
 	}
 }
