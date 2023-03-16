@@ -717,7 +717,7 @@ impl PoolState {
 			if sqrt_price_next == sqrt_price_target {
 				delta.fee_growth_outside = enum_map::EnumMap::default()
 					.map(|side, ()| self.global_fee_growth[side] - delta.fee_growth_outside[side]);
-				self.current_sqrt_price = sqrt_price_target;
+				self.current_sqrt_price = sqrt_price_next;
 				self.current_tick = SD::current_tick_after_crossing_tick(*tick);
 
 				// Addition is guaranteed to never overflow, see test `max_liquidity`
@@ -726,9 +726,8 @@ impl PoolState {
 					.checked_add_signed(SD::liquidity_delta_on_crossing_tick(delta))
 					.unwrap();
 			} else if self.current_sqrt_price != sqrt_price_next {
-				// Recompute current_tick unless the price hasn't moved
 				self.current_sqrt_price = sqrt_price_next;
-				self.current_tick = Self::tick_at_sqrt_price(self.current_sqrt_price);
+				self.current_tick = Self::tick_at_sqrt_price(sqrt_price_next);
 			}
 		}
 
