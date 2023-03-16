@@ -204,7 +204,7 @@ trait SwapDirection {
 	/// Calculates where the current price will be after a swap of amount given the current price
 	/// and a specific amount of liquidity
 	fn next_sqrt_price_from_input_amount(
-		sqrt_ratio_current: SqrtPriceQ64F96,
+		sqrt_price_current: SqrtPriceQ64F96,
 		liquidity: Liquidity,
 		amount: Amount,
 	) -> SqrtPriceQ64F96;
@@ -250,11 +250,11 @@ impl SwapDirection for ZeroToOne {
 	}
 
 	fn next_sqrt_price_from_input_amount(
-		sqrt_ratio_current: SqrtPriceQ64F96,
+		sqrt_price_current: SqrtPriceQ64F96,
 		liquidity: Liquidity,
 		amount: Amount,
 	) -> SqrtPriceQ64F96 {
-		PoolState::next_sqrt_price_from_zero_input(sqrt_ratio_current, liquidity, amount)
+		PoolState::next_sqrt_price_from_zero_input(sqrt_price_current, liquidity, amount)
 	}
 
 	fn liquidity_delta_on_crossing_tick(tick_liquidity: &TickInfo) -> i128 {
@@ -300,11 +300,11 @@ impl SwapDirection for OneToZero {
 	}
 
 	fn next_sqrt_price_from_input_amount(
-		sqrt_ratio_current: SqrtPriceQ64F96,
+		sqrt_price_current: SqrtPriceQ64F96,
 		liquidity: Liquidity,
 		amount: Amount,
 	) -> SqrtPriceQ64F96 {
-		PoolState::next_sqrt_price_from_one_input(sqrt_ratio_current, liquidity, amount)
+		PoolState::next_sqrt_price_from_one_input(sqrt_price_current, liquidity, amount)
 	}
 
 	fn liquidity_delta_on_crossing_tick(tick_liquidity: &TickInfo) -> i128 {
@@ -632,7 +632,7 @@ impl PoolState {
 			.then_some(())
 			.and_then(|()| SD::target_tick(self.current_tick, &mut self.liquidity_map))
 		{
-			let sqrt_ratio_target = Self::sqrt_price_at_tick(*target_tick);
+			let sqrt_price_target = Self::sqrt_price_at_tick(*target_tick);
 
 			if self.current_liquidity != 0 {
 				let amount_minus_fees = mul_div_floor(
@@ -643,12 +643,12 @@ impl PoolState {
 
 				let amount_required_to_reach_target = SD::input_amount_delta_ceil(
 					self.current_sqrt_price,
-					sqrt_ratio_target,
+					sqrt_price_target,
 					self.current_liquidity,
 				);
 
-				let sqrt_ratio_next = if amount_minus_fees >= amount_required_to_reach_target {
-					sqrt_ratio_target
+				let sqrt_price_next = if amount_minus_fees >= amount_required_to_reach_target {
+					sqrt_price_target
 				} else {
 					SD::next_sqrt_price_from_input_amount(
 						self.current_sqrt_price,
@@ -662,13 +662,13 @@ impl PoolState {
 				// still be below U256::MAX (See test `output_amounts_bounded`)
 				total_amount_out += SD::output_amount_delta_floor(
 					self.current_sqrt_price,
-					sqrt_ratio_next,
+					sqrt_price_next,
 					self.current_liquidity,
 				);
 
 				// next_sqrt_price_from_input_amount rounds so this maybe true even though
 				// amount_minus_fees < amount_required_to_reach_target (TODO Prove)
-				if sqrt_ratio_next == sqrt_ratio_target {
+				if sqrt_price_next == sqrt_price_target {
 					// Will not overflow as fee_pips <= ONE_IN_PIPS / 2
 					let fees = mul_div_ceil(
 						amount_required_to_reach_target,
@@ -696,7 +696,7 @@ impl PoolState {
 						enum_map::EnumMap::default().map(|side, ()| {
 							self.global_fee_growth[side] - target_info.fee_growth_outside[side]
 						});
-					self.current_sqrt_price = sqrt_ratio_target;
+					self.current_sqrt_price = sqrt_price_target;
 					self.current_tick = SD::current_tick_after_crossing_target_tick(*target_tick);
 
 					// Addition is guaranteed to never overflow, see test `max_liquidity`
@@ -707,11 +707,11 @@ impl PoolState {
 				} else {
 					let amount_in = SD::input_amount_delta_ceil(
 						self.current_sqrt_price,
-						sqrt_ratio_next,
+						sqrt_price_next,
 						self.current_liquidity,
 					);
 					// Will not underflow due to rounding in flavor of the pool of both
-					// sqrt_ratio_next and amount_in. (TODO: Prove)
+					// sqrt_price_next and amount_in. (TODO: Prove)
 					let fees = amount - amount_in;
 					amount = Amount::zero();
 
@@ -729,8 +729,8 @@ impl PoolState {
 						));
 
 					// Recompute current_tick unless the price hasn't moved
-					if self.current_sqrt_price != sqrt_ratio_next {
-						self.current_sqrt_price = sqrt_ratio_next;
+					if self.current_sqrt_price != sqrt_price_next {
+						self.current_sqrt_price = sqrt_price_next;
 						self.current_tick = Self::tick_at_sqrt_price(self.current_sqrt_price);
 					}
 
@@ -740,7 +740,7 @@ impl PoolState {
 				target_info.fee_growth_outside = enum_map::EnumMap::default().map(|side, ()| {
 					self.global_fee_growth[side] - target_info.fee_growth_outside[side]
 				});
-				self.current_sqrt_price = sqrt_ratio_target;
+				self.current_sqrt_price = sqrt_price_target;
 				self.current_tick = SD::current_tick_after_crossing_target_tick(*target_tick);
 
 				// Addition is guaranteed to never overflow, see test `max_liquidity`
@@ -881,12 +881,12 @@ impl PoolState {
 	}
 
 	fn next_sqrt_price_from_zero_input(
-		sqrt_ratio_current: SqrtPriceQ64F96,
+		sqrt_price_current: SqrtPriceQ64F96,
 		liquidity: Liquidity,
 		amount: Amount,
 	) -> SqrtPriceQ64F96 {
 		assert!(0 < liquidity);
-		assert!(SqrtPriceQ64F96::zero() < sqrt_ratio_current);
+		assert!(SqrtPriceQ64F96::zero() < sqrt_price_current);
 
 		let liquidity = U256::from(liquidity) << 96u32;
 
@@ -899,15 +899,15 @@ impl PoolState {
 		*/
 		mul_div_ceil(
 			liquidity,
-			sqrt_ratio_current,
+			sqrt_price_current,
 			// Addition will not overflow as function is not called if amount >=
 			// amount_required_to_reach_target
-			U512::from(liquidity) + U256::full_mul(amount, sqrt_ratio_current),
+			U512::from(liquidity) + U256::full_mul(amount, sqrt_price_current),
 		)
 	}
 
 	fn next_sqrt_price_from_one_input(
-		sqrt_ratio_current: SqrtPriceQ64F96,
+		sqrt_price_current: SqrtPriceQ64F96,
 		liquidity: Liquidity,
 		amount: Amount,
 	) -> SqrtPriceQ64F96 {
@@ -915,7 +915,7 @@ impl PoolState {
 
 		// Will not overflow as function is not called if amount >= amount_required_to_reach_target,
 		// therefore bounding the function output to approximately <= MAX_SQRT_PRICE
-		sqrt_ratio_current + mul_div_floor(amount, U256::one() << 96u32, liquidity)
+		sqrt_price_current + mul_div_floor(amount, U256::one() << 96u32, liquidity)
 	}
 
 	fn sqrt_price_at_tick(tick: Tick) -> SqrtPriceQ64F96 {
