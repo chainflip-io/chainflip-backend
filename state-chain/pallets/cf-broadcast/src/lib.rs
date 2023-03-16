@@ -203,6 +203,11 @@ pub mod pallet {
 	pub type RequestCallbacks<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, BroadcastId, <T as Config<I>>::BroadcastCallable>;
 
+	#[pallet::storage]
+	#[pallet::getter(fn request_callback_2)]
+	pub type RequestCallbacksTwo<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, BroadcastId, Vec<u8>>;
+
 	/// The last attempt number for a particular broadcast.
 	#[pallet::storage]
 	pub type BroadcastAttemptCount<T, I = ()> =

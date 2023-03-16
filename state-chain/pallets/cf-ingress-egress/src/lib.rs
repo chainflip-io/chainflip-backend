@@ -119,6 +119,9 @@ pub mod pallet {
 		type RuntimeEvent: From<Event<Self, I>>
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
+		/// The pallet dispatches calls, so it depends on the runtime's aggregated Call type.
+		type RuntimeCall: From<Call<Self, I>> + IsType<<Self as frame_system::Config>::RuntimeCall>;
+
 		/// Marks which chain this pallet is interacting with.
 		type TargetChain: ChainAbi + Get<ForeignChain>;
 
@@ -135,7 +138,11 @@ pub mod pallet {
 		type AllBatch: AllBatch<Self::TargetChain>;
 
 		/// A broadcaster instance.
-		type Broadcaster: Broadcaster<Self::TargetChain, ApiCall = Self::AllBatch>;
+		type Broadcaster: Broadcaster<
+			Self::TargetChain,
+			ApiCall = Self::AllBatch,
+			Callback = <Self as Config<I>>::RuntimeCall,
+		>;
 
 		/// Governance origin to manage allowed assets
 		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
@@ -302,6 +309,11 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
+		/// Callback for when a signature is accepted by the chain.
+		#[pallet::weight(10000)]
+		pub fn on_signature_accepted(_origin: OriginFor<T>) -> DispatchResult {
+			Ok(())
+		}
 		/// Sets if an asset is not allowed to be sent out of the chain via Egress.
 		/// Requires Governance
 		///
@@ -426,7 +438,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		#[allow(clippy::unit_arg)]
 		match T::AllBatch::new_unsigned(fetch_params, egress_params) {
 			Ok(egress_transaction) => {
-				let broadcast_id = T::Broadcaster::threshold_sign_and_broadcast(egress_transaction);
+				let broadcast_id = T::Broadcaster::threshold_sign_and_broadcast_with_callback(
+					egress_transaction,
+					Call::on_signature_accepted {}.into(),
+				);
 				Self::deposit_event(Event::<T, I>::BatchBroadcastRequested {
 					broadcast_id,
 					egress_ids,

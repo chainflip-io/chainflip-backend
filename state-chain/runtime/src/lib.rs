@@ -270,6 +270,7 @@ use chainflip::address_derivation::AddressDerivation;
 
 impl pallet_cf_ingress_egress::Config<EthereumInstance> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
 	type TargetChain = Ethereum;
 	type AddressDerivation = AddressDerivation;
 	type LpProvisioning = LiquidityProvider;
@@ -284,6 +285,7 @@ impl pallet_cf_ingress_egress::Config<EthereumInstance> for Runtime {
 
 impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
 	type TargetChain = Polkadot;
 	type AddressDerivation = AddressDerivation;
 	type LpProvisioning = LiquidityProvider;
