@@ -61,21 +61,21 @@ impl Position {
 		&mut self,
 		pool_state: &PoolState,
 		lower_tick: Tick,
-		lower_info: &TickInfo,
+		lower_delta: &TickDelta,
 		upper_tick: Tick,
-		upper_info: &TickInfo,
+		upper_delta: &TickDelta,
 	) -> enum_map::EnumMap<Side, Fee> {
 		let fee_growth_inside = enum_map::EnumMap::default().map(|side, ()| {
 			let fee_growth_below = if pool_state.current_tick < lower_tick {
-				pool_state.global_fee_growth[side] - lower_info.fee_growth_outside[side]
+				pool_state.global_fee_growth[side] - lower_delta.fee_growth_outside[side]
 			} else {
-				lower_info.fee_growth_outside[side]
+				lower_delta.fee_growth_outside[side]
 			};
 
 			let fee_growth_above = if pool_state.current_tick < upper_tick {
-				upper_info.fee_growth_outside[side]
+				upper_delta.fee_growth_outside[side]
 			} else {
-				pool_state.global_fee_growth[side] - upper_info.fee_growth_outside[side]
+				pool_state.global_fee_growth[side] - upper_delta.fee_growth_outside[side]
 			};
 
 			pool_state.global_fee_growth[side] - fee_growth_below - fee_growth_above
@@ -108,19 +108,19 @@ impl Position {
 		pool_state: &PoolState,
 		new_liquidity: Liquidity,
 		lower_tick: Tick,
-		lower_info: &TickInfo,
+		lower_delta: &TickDelta,
 		upper_tick: Tick,
-		upper_info: &TickInfo,
+		upper_delta: &TickDelta,
 	) -> enum_map::EnumMap<Side, Fee> {
 		let fees_owed =
-			self.collect_fees_owed(pool_state, lower_tick, lower_info, upper_tick, upper_info);
+			self.collect_fees_owed(pool_state, lower_tick, lower_delta, upper_tick, upper_delta);
 		self.liquidity = new_liquidity;
 		fees_owed
 	}
 }
 
 #[derive(Clone, Debug)]
-struct TickInfo {
+struct TickDelta {
 	liquidity_delta: i128,
 	liquidity_gross: u128,
 	fee_growth_outside: enum_map::EnumMap<Side, FeeGrowthQ128F128>,
@@ -133,7 +133,7 @@ pub struct PoolState {
 	current_tick: Tick,
 	current_liquidity: Liquidity,
 	global_fee_growth: enum_map::EnumMap<Side, FeeGrowthQ128F128>,
-	liquidity_map: BTreeMap<Tick, TickInfo>,
+	liquidity_map: BTreeMap<Tick, TickDelta>,
 	positions: BTreeMap<(LiquidityProvider, Tick, Tick), Position>,
 }
 
@@ -183,8 +183,8 @@ trait SwapDirection {
 	/// direction of `next` is implied by the swapping direction.
 	fn target_tick(
 		tick: Tick,
-		liquidity_map: &mut BTreeMap<Tick, TickInfo>,
-	) -> Option<(&Tick, &mut TickInfo)>;
+		liquidity_map: &mut BTreeMap<Tick, TickDelta>,
+	) -> Option<(&Tick, &mut TickDelta)>;
 
 	/// Calculates the swap input amount needed to move the current price given the specified amount
 	/// of liquidity
@@ -210,7 +210,7 @@ trait SwapDirection {
 	) -> SqrtPriceQ64F96;
 
 	/// For a given tick calculates the change in current liquidity when that tick is crossed
-	fn liquidity_delta_on_crossing_tick(tick_liquidity: &TickInfo) -> i128;
+	fn liquidity_delta_on_crossing_tick(tick_liquidity: &TickDelta) -> i128;
 
 	/// The current tick is always the closest tick less than the current_sqrt_price
 	fn current_tick_after_crossing_target_tick(target_tick: Tick) -> Tick;
@@ -222,8 +222,8 @@ impl SwapDirection for ZeroToOne {
 
 	fn target_tick(
 		current_tick: Tick,
-		liquidity_map: &mut BTreeMap<Tick, TickInfo>,
-	) -> Option<(&Tick, &mut TickInfo)> {
+		liquidity_map: &mut BTreeMap<Tick, TickDelta>,
+	) -> Option<(&Tick, &mut TickDelta)> {
 		assert!(liquidity_map.contains_key(&MIN_TICK));
 		if current_tick >= MIN_TICK {
 			Some(liquidity_map.range_mut(..=current_tick).next_back().unwrap())
@@ -257,7 +257,7 @@ impl SwapDirection for ZeroToOne {
 		PoolState::next_sqrt_price_from_zero_input(sqrt_price_current, liquidity, amount)
 	}
 
-	fn liquidity_delta_on_crossing_tick(tick_liquidity: &TickInfo) -> i128 {
+	fn liquidity_delta_on_crossing_tick(tick_liquidity: &TickDelta) -> i128 {
 		-tick_liquidity.liquidity_delta
 	}
 
@@ -272,8 +272,8 @@ impl SwapDirection for OneToZero {
 
 	fn target_tick(
 		current_tick: Tick,
-		liquidity_map: &mut BTreeMap<Tick, TickInfo>,
-	) -> Option<(&Tick, &mut TickInfo)> {
+		liquidity_map: &mut BTreeMap<Tick, TickDelta>,
+	) -> Option<(&Tick, &mut TickDelta)> {
 		assert!(liquidity_map.contains_key(&MAX_TICK));
 		if current_tick < MAX_TICK {
 			Some(liquidity_map.range_mut(current_tick + 1..).next().unwrap())
@@ -307,7 +307,7 @@ impl SwapDirection for OneToZero {
 		PoolState::next_sqrt_price_from_one_input(sqrt_price_current, liquidity, amount)
 	}
 
-	fn liquidity_delta_on_crossing_tick(tick_liquidity: &TickInfo) -> i128 {
+	fn liquidity_delta_on_crossing_tick(tick_liquidity: &TickDelta) -> i128 {
 		tick_liquidity.liquidity_delta
 	}
 
@@ -374,7 +374,7 @@ impl PoolState {
 			liquidity_map: [
 				(
 					MIN_TICK,
-					TickInfo {
+					TickDelta {
 						liquidity_delta: 0,
 						liquidity_gross: 0,
 						fee_growth_outside: Default::default(),
@@ -382,7 +382,7 @@ impl PoolState {
 				),
 				(
 					MAX_TICK,
-					TickInfo {
+					TickDelta {
 						liquidity_delta: 0,
 						liquidity_gross: 0,
 						fee_growth_outside: Default::default(),
@@ -426,9 +426,9 @@ impl PoolState {
 				last_fee_growth_inside: Default::default(),
 			});
 
-			let tick_info_with_updated_gross_liquidity = |tick| {
-				let mut tick_info = self.liquidity_map.get(&tick).cloned().unwrap_or_else(|| {
-					TickInfo {
+			let tick_delta_with_updated_gross_liquidity = |tick| {
+				let mut tick_delta = self.liquidity_map.get(&tick).cloned().unwrap_or_else(|| {
+					TickDelta {
 						liquidity_delta: 0,
 						liquidity_gross: 0,
 						fee_growth_outside: if tick <= self.current_tick {
@@ -441,32 +441,32 @@ impl PoolState {
 					}
 				});
 
-				tick_info.liquidity_gross =
-					u128::saturating_add(tick_info.liquidity_gross, minted_liquidity);
-				if tick_info.liquidity_gross > MAX_TICK_GROSS_LIQUIDITY {
+				tick_delta.liquidity_gross =
+					u128::saturating_add(tick_delta.liquidity_gross, minted_liquidity);
+				if tick_delta.liquidity_gross > MAX_TICK_GROSS_LIQUIDITY {
 					Err(PositionError::Other(MintError::MaximumGrossLiquidity))
 				} else {
-					Ok(tick_info)
+					Ok(tick_delta)
 				}
 			};
 
-			let mut lower_info = tick_info_with_updated_gross_liquidity(lower_tick)?;
+			let mut lower_delta = tick_delta_with_updated_gross_liquidity(lower_tick)?;
 			// Cannot overflow as due to liquidity_gross's MAX_TICK_GROSS_LIQUIDITY bound
-			lower_info.liquidity_delta =
-				lower_info.liquidity_delta.checked_add_unsigned(minted_liquidity).unwrap();
-			let mut upper_info = tick_info_with_updated_gross_liquidity(upper_tick)?;
+			lower_delta.liquidity_delta =
+				lower_delta.liquidity_delta.checked_add_unsigned(minted_liquidity).unwrap();
+			let mut upper_delta = tick_delta_with_updated_gross_liquidity(upper_tick)?;
 			// Cannot overflow as due to liquidity_gross's MAX_TICK_GROSS_LIQUIDITY bound
-			upper_info.liquidity_delta =
-				upper_info.liquidity_delta.checked_sub_unsigned(minted_liquidity).unwrap();
+			upper_delta.liquidity_delta =
+				upper_delta.liquidity_delta.checked_sub_unsigned(minted_liquidity).unwrap();
 
 			let fees_owed = position.set_liquidity(
 				self,
 				// Cannot overflow due to MAX_TICK_GROSS_LIQUIDITY
 				position.liquidity + minted_liquidity,
 				lower_tick,
-				&lower_info,
+				&lower_delta,
 				upper_tick,
-				&upper_info,
+				&upper_delta,
 			);
 
 			let (amounts_required, current_liquidity_delta) =
@@ -477,8 +477,8 @@ impl PoolState {
 
 			self.current_liquidity += current_liquidity_delta;
 			self.positions.insert((lp, lower_tick, upper_tick), position);
-			self.liquidity_map.insert(lower_tick, lower_info);
-			self.liquidity_map.insert(upper_tick, upper_info);
+			self.liquidity_map.insert(lower_tick, lower_delta);
+			self.liquidity_map.insert(upper_tick, upper_delta);
 
 			Ok((t, fees_owed))
 		} else {
@@ -514,22 +514,22 @@ impl PoolState {
 		if let Some(mut position) = self.positions.get(&(lp, lower_tick, upper_tick)).cloned() {
 			assert!(position.liquidity != 0);
 			if burnt_liquidity <= position.liquidity {
-				let mut lower_info = self.liquidity_map.get(&lower_tick).unwrap().clone();
-				lower_info.liquidity_gross -= burnt_liquidity;
-				lower_info.liquidity_delta =
-					lower_info.liquidity_delta.checked_sub_unsigned(burnt_liquidity).unwrap();
-				let mut upper_info = self.liquidity_map.get(&upper_tick).unwrap().clone();
-				upper_info.liquidity_gross -= burnt_liquidity;
-				upper_info.liquidity_delta =
-					upper_info.liquidity_delta.checked_add_unsigned(burnt_liquidity).unwrap();
+				let mut lower_delta = self.liquidity_map.get(&lower_tick).unwrap().clone();
+				lower_delta.liquidity_gross -= burnt_liquidity;
+				lower_delta.liquidity_delta =
+					lower_delta.liquidity_delta.checked_sub_unsigned(burnt_liquidity).unwrap();
+				let mut upper_delta = self.liquidity_map.get(&upper_tick).unwrap().clone();
+				upper_delta.liquidity_gross -= burnt_liquidity;
+				upper_delta.liquidity_delta =
+					upper_delta.liquidity_delta.checked_add_unsigned(burnt_liquidity).unwrap();
 
 				let fees_owed = position.set_liquidity(
 					self,
 					position.liquidity - burnt_liquidity,
 					lower_tick,
-					&lower_info,
+					&lower_delta,
 					upper_tick,
-					&upper_info,
+					&upper_delta,
 				);
 
 				let (amounts_owed, current_liquidity_delta) =
@@ -538,21 +538,21 @@ impl PoolState {
 				// current_liquidity for it to need to be substrated now
 				self.current_liquidity -= current_liquidity_delta;
 
-				if lower_info.liquidity_gross == 0 &&
+				if lower_delta.liquidity_gross == 0 &&
 					/*Guarantee MIN_TICK is always in map to simplify swap logic*/ lower_tick != MIN_TICK
 				{
 					assert_eq!(position.liquidity, 0);
 					self.liquidity_map.remove(&lower_tick);
 				} else {
-					*self.liquidity_map.get_mut(&lower_tick).unwrap() = lower_info;
+					*self.liquidity_map.get_mut(&lower_tick).unwrap() = lower_delta;
 				}
-				if upper_info.liquidity_gross == 0 &&
+				if upper_delta.liquidity_gross == 0 &&
 					/*Guarantee MAX_TICK is always in map to simplify swap logic*/ upper_tick != MAX_TICK
 				{
 					assert_eq!(position.liquidity, 0);
 					self.liquidity_map.remove(&upper_tick);
 				} else {
-					*self.liquidity_map.get_mut(&upper_tick).unwrap() = upper_info;
+					*self.liquidity_map.get_mut(&upper_tick).unwrap() = upper_delta;
 				}
 
 				if position.liquidity == 0 {
@@ -590,11 +590,11 @@ impl PoolState {
 		Self::validate_position_range(lower_tick, upper_tick)?;
 		if let Some(mut position) = self.positions.get(&(lp, lower_tick, upper_tick)).cloned() {
 			assert!(position.liquidity != 0);
-			let lower_info = self.liquidity_map.get(&lower_tick).unwrap();
-			let upper_info = self.liquidity_map.get(&upper_tick).unwrap();
+			let lower_delta = self.liquidity_map.get(&lower_tick).unwrap();
+			let upper_delta = self.liquidity_map.get(&upper_tick).unwrap();
 
 			let fees_owed =
-				position.collect_fees_owed(self, lower_tick, lower_info, upper_tick, upper_info);
+				position.collect_fees_owed(self, lower_tick, lower_delta, upper_tick, upper_delta);
 
 			self.positions.insert((lp, lower_tick, upper_tick), position);
 
@@ -628,7 +628,7 @@ impl PoolState {
 	fn swap<SD: SwapDirection>(&mut self, mut amount: Amount) -> (Amount, Amount) {
 		let mut total_amount_out = Amount::zero();
 
-		while let Some((target_tick, target_info)) = (Amount::zero() != amount)
+		while let Some((target_tick, target_delta)) = (Amount::zero() != amount)
 			.then_some(())
 			.and_then(|()| SD::target_tick(self.current_tick, &mut self.liquidity_map))
 		{
@@ -692,9 +692,9 @@ impl PoolState {
 							U256::from(1) << 128u32,
 							self.current_liquidity,
 						));
-					target_info.fee_growth_outside =
+					target_delta.fee_growth_outside =
 						enum_map::EnumMap::default().map(|side, ()| {
-							self.global_fee_growth[side] - target_info.fee_growth_outside[side]
+							self.global_fee_growth[side] - target_delta.fee_growth_outside[side]
 						});
 					self.current_sqrt_price = sqrt_price_target;
 					self.current_tick = SD::current_tick_after_crossing_target_tick(*target_tick);
@@ -702,7 +702,7 @@ impl PoolState {
 					// Addition is guaranteed to never overflow, see test `max_liquidity`
 					self.current_liquidity = self
 						.current_liquidity
-						.checked_add_signed(SD::liquidity_delta_on_crossing_tick(target_info))
+						.checked_add_signed(SD::liquidity_delta_on_crossing_tick(target_delta))
 						.unwrap();
 				} else {
 					let amount_in = SD::input_amount_delta_ceil(
@@ -737,8 +737,8 @@ impl PoolState {
 					break
 				};
 			} else {
-				target_info.fee_growth_outside = enum_map::EnumMap::default().map(|side, ()| {
-					self.global_fee_growth[side] - target_info.fee_growth_outside[side]
+				target_delta.fee_growth_outside = enum_map::EnumMap::default().map(|side, ()| {
+					self.global_fee_growth[side] - target_delta.fee_growth_outside[side]
 				});
 				self.current_sqrt_price = sqrt_price_target;
 				self.current_tick = SD::current_tick_after_crossing_target_tick(*target_tick);
@@ -746,7 +746,7 @@ impl PoolState {
 				// Addition is guaranteed to never overflow, see test `max_liquidity`
 				self.current_liquidity = self
 					.current_liquidity
-					.checked_add_signed(SD::liquidity_delta_on_crossing_tick(target_info))
+					.checked_add_signed(SD::liquidity_delta_on_crossing_tick(target_delta))
 					.unwrap();
 			}
 		}
