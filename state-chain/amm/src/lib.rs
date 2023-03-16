@@ -604,26 +604,28 @@ impl PoolState {
 		}
 	}
 
-	/// Swaps the specified Amount of Zero into One, and returns the One Amount.
+	/// Swaps the specified Amount of Zero into One, and returns the One Amount and the Remaining
+	/// input Zero Amount.
 	///
 	/// This function never panics
-	pub fn swap_from_zero_to_one(&mut self, amount: Amount) -> Amount {
+	pub fn swap_from_zero_to_one(&mut self, amount: Amount) -> (Amount, Amount) {
 		self.swap::<ZeroToOne>(amount)
 	}
 
-	/// Swaps the specified Amount of One into Zero, and returns the Zero Amount.
+	/// Swaps the specified Amount of One into Zero, and returns the Zero Amount and the Remaining
+	/// input One Amount.
 	///
 	/// This function never panics
-	pub fn swap_from_one_to_zero(&mut self, amount: Amount) -> Amount {
+	pub fn swap_from_one_to_zero(&mut self, amount: Amount) -> (Amount, Amount) {
 		self.swap::<OneToZero>(amount)
 	}
 
-	/// Swaps the specified Amount into the other currency, and returns the Amount. The direction of
-	/// the swap is controlled by the generic type parameter `SD`, by setting it to `ZeroToOne` or
-	/// `OneToZero`.
+	/// Swaps the specified Amount into the other currency, and returns the resulting Amount and the
+	/// remaining input Amount. The direction of the swap is controlled by the generic type
+	/// parameter `SD`, by setting it to `ZeroToOne` or `OneToZero`.
 	///
 	/// This function never panics
-	fn swap<SD: SwapDirection>(&mut self, mut amount: Amount) -> Amount {
+	fn swap<SD: SwapDirection>(&mut self, mut amount: Amount) -> (Amount, Amount) {
 		let mut total_amount_out = Amount::zero();
 
 		while let Some((target_tick, target_info)) = (Amount::zero() != amount)
@@ -711,6 +713,7 @@ impl PoolState {
 					// Will not underflow due to rounding in flavor of the pool of both
 					// sqrt_ratio_next and amount_in. (TODO: Prove)
 					let fees = amount - amount_in;
+					amount = Amount::zero();
 
 					// DIFF: This behaviour is different to Uniswap's,
 					// we saturate instead of overflowing/bricking the pool. This means we just stop
@@ -748,7 +751,7 @@ impl PoolState {
 			}
 		}
 
-		total_amount_out
+		(total_amount_out, amount)
 	}
 
 	fn validate_position_range<T>(
