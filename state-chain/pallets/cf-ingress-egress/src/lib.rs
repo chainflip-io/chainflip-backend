@@ -279,11 +279,11 @@ pub mod pallet {
 		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
 			let mut total_weight: Weight = Weight::zero();
 			if let Some(expired) = IntentExpiries::<T, I>::take(n) {
-				for (salt, address) in expired.clone() {
+				for (intent_id, address) in expired.clone() {
 					IntentIngressDetails::<T, I>::remove(&address);
 					IntentActions::<T, I>::remove(&address);
 					if AddressStatus::<T, I>::get(&address) == DeploymentStatus::Deployed {
-						AddressPool::<T, I>::append((salt, address.clone()));
+						AddressPool::<T, I>::append((intent_id, address.clone()));
 					}
 					Self::deposit_event(Event::StopWitnessing { ingress_address: address });
 					total_weight = total_weight
