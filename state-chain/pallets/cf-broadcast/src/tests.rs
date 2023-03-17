@@ -99,7 +99,7 @@ impl MockCfe {
 				},
 				BroadcastEvent::__Ignore(_, _) => unreachable!(),
 				BroadcastEvent::ThresholdSignatureInvalid { .. } => {},
-				BroadcastEvent::SignatureAcceptedCallbackExecuted { .. } => {},
+				BroadcastEvent::BroadcastCallbackExecuted { .. } => {},
 			},
 			_ => panic!("Unexpected event"),
 		};
@@ -555,7 +555,7 @@ fn threshold_sign_and_broadcast_with_callback() {
 		);
 		assert_eq!(
 			events.pop().expect("an event").event,
-			RuntimeEvent::Broadcaster(crate::Event::SignatureAcceptedCallbackExecuted {
+			RuntimeEvent::Broadcaster(crate::Event::BroadcastCallbackExecuted {
 				broadcast_id: broadcast_attempt_id.broadcast_id,
 				result: Ok(())
 			})
