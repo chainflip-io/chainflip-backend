@@ -136,7 +136,7 @@ pub mod pallet {
 		/// The call type that is used to dispatch a broadcast callback.
 		type BroadcastCallable: Member
 			+ Parameter
-			+ UnfilteredDispatchable<RuntimeOrigin = <Self as Config<I>>::RuntimeOrigin>;
+			+ UnfilteredDispatchable<RuntimeOrigin = <Self as frame_system::Config>::RuntimeOrigin>;
 
 		/// For registering and verifying the account role.
 		type AccountRoleRegistry: AccountRoleRegistry<Self>;
@@ -274,8 +274,9 @@ pub mod pallet {
 		BroadcastSuccess { broadcast_id: BroadcastId },
 		/// A broadcast's threshold signature is invalid, we will attempt to re-sign it.
 		ThresholdSignatureInvalid { broadcast_id: BroadcastId },
-		/// A signature accepted event on the target chain has been witnessed.
-		SignatureAcceptedCallbackExecuted { broadcast_id: BroadcastId, result: DispatchResult },
+		/// A signature accepted event on the target chain has been witnessed and the callback was
+		/// executed.
+		BroadcastCallbackExecuted { broadcast_id: BroadcastId, result: DispatchResult },
 	}
 
 	#[pallet::error]
@@ -465,7 +466,7 @@ pub mod pallet {
 			signer_id: SignerIdFor<T, I>,
 			tx_fee: TransactionFeeFor<T, I>,
 		) -> DispatchResultWithPostInfo {
-			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
+			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin.clone())?;
 			let broadcast_id = SignatureToBroadcastIdLookup::<T, I>::take(signature)
 				.ok_or(Error::<T, I>::InvalidPayload)?;
 
@@ -490,23 +491,17 @@ pub mod pallet {
 				);
 			}
 
-			Self::clean_up_broadcast_storage(broadcast_id);
-
 			if let Some(callback) = RequestCallbacks::<T, I>::take(broadcast_id) {
-				Self::deposit_event(Event::<T, I>::SignatureAcceptedCallbackExecuted {
+				Self::deposit_event(Event::<T, I>::BroadcastCallbackExecuted {
 					broadcast_id,
-					result: callback
-						.dispatch_bypass_filter(Origin(Default::default()).into())
-						.map(|_| ())
-						.map_err(|e| {
-							log::error!(
-								"Callback execution has failed for broadcast {}.",
-								broadcast_id
-							);
-							e.error
-						}),
+					result: callback.dispatch_bypass_filter(origin).map(|_| ()).map_err(|e| {
+						log::warn!("Callback execution has failed for broadcast {}.", broadcast_id);
+						e.error
+					}),
 				});
 			}
+
+			Self::clean_up_broadcast_storage(broadcast_id);
 
 			Self::deposit_event(Event::<T, I>::BroadcastSuccess { broadcast_id });
 			Ok(().into())
