@@ -659,7 +659,7 @@ impl PoolState {
 		mut amount: Amount,
 		sqrt_price_limit: Option<U256>,
 	) -> (Amount, Amount) {
-		let mut total_amount_out = Amount::zero();
+		let mut total_output_amount = Amount::zero();
 
 		while let Some((tick_at_delta, delta)) = (Amount::zero() != amount &&
 			sqrt_price_limit.map_or(true, |sqrt_price_limit| {
@@ -706,9 +706,9 @@ impl PoolState {
 				};
 
 				// Cannot overflow as if the swap traversed all ticks (MIN_TICK to MAX_TICK
-				// (inclusive)), assuming the maximum possible liquidity, total_amount_out would
+				// (inclusive)), assuming the maximum possible liquidity, total_output_amount would
 				// still be below U256::MAX (See test `output_amounts_bounded`)
-				total_amount_out += SD::output_amount_delta_floor(
+				total_output_amount += SD::output_amount_delta_floor(
 					self.current_sqrt_price,
 					sqrt_price_next,
 					self.current_liquidity,
@@ -777,7 +777,7 @@ impl PoolState {
 			}
 		}
 
-		(total_amount_out, amount)
+		(total_output_amount, amount)
 	}
 
 	fn validate_position_range<T>(
