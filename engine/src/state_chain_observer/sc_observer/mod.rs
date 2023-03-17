@@ -4,7 +4,7 @@ mod tests;
 use anyhow::{anyhow, Context};
 use cf_chains::{dot, eth::Ethereum, Bitcoin, ChainCrypto, Polkadot};
 use cf_primitives::{BlockNumber, CeremonyId, EpochIndex, KeyId, PolkadotAccountId};
-use futures::{future::BoxFuture, FutureExt, Stream, StreamExt};
+use futures::{FutureExt, Stream, StreamExt};
 use sp_core::{Hasher, H160, H256};
 use sp_runtime::{traits::Keccak256, AccountId32};
 use state_chain_runtime::{
@@ -499,8 +499,7 @@ where
                                             ceremony_id,
                                             key_id.0,
                                             signatories,
-                                            crate::multisig::bitcoin::SigningPayload(payload.0)
-                                                .expect("Payload should be correct size"),
+                                            crate::multisig::bitcoin::SigningPayload(payload.payload),
                                         ).await;
                                     }
 
