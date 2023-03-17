@@ -119,6 +119,9 @@ pub mod pallet {
 		type RuntimeEvent: From<Event<Self, I>>
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
+		/// The pallet dispatches calls, so it depends on the runtime's aggregated Call type.
+		type RuntimeCall: From<Call<Self, I>> + IsType<<Self as frame_system::Config>::RuntimeCall>;
+
 		/// Marks which chain this pallet is interacting with.
 		type TargetChain: ChainAbi + Get<ForeignChain>;
 
@@ -135,7 +138,11 @@ pub mod pallet {
 		type AllBatch: AllBatch<Self::TargetChain>;
 
 		/// A broadcaster instance.
-		type Broadcaster: Broadcaster<Self::TargetChain, ApiCall = Self::AllBatch>;
+		type Broadcaster: Broadcaster<
+			Self::TargetChain,
+			ApiCall = Self::AllBatch,
+			Callback = <Self as Config<I>>::RuntimeCall,
+		>;
 
 		/// Governance origin to manage allowed assets
 		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;

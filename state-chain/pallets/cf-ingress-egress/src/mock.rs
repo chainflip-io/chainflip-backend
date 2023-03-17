@@ -93,7 +93,7 @@ impl_mock_callback!(RuntimeOrigin);
 pub struct MockBroadcast;
 impl Broadcaster<Ethereum> for MockBroadcast {
 	type ApiCall = MockAllBatch<MockEthEnvironment>;
-	type Callback = MockCallback;
+	type Callback = RuntimeCall;
 
 	fn threshold_sign_and_broadcast(_api_call: Self::ApiCall) -> BroadcastId {
 		1
@@ -112,6 +112,7 @@ impl IngressHandler<Ethereum> for MockIngressHandler {}
 
 impl crate::Config<Instance1> for Test {
 	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
 	type TargetChain = Ethereum;
 	type AddressDerivation = ();
 	type LpProvisioning = Self;
