@@ -126,7 +126,7 @@ benchmarks_instance_pallet! {
 		let caller: T::AccountId = whitelisted_caller();
 		let agg_key = AggKeyFor::<T, I>::benchmark_value();
 		let keygen_participants = generate_authority_set::<T, I>(150, caller.into());
-		let (request_id, signing_ceremony_id) = Pallet::<T, I>::trigger_keygen_verification(CEREMONY_ID, agg_key, keygen_participants.into_iter().collect());
+		let (request_id, maybe_signing_ceremony_id) = Pallet::<T, I>::trigger_keygen_verification(CEREMONY_ID, agg_key, keygen_participants.into_iter().collect());
 		T::ThresholdSigner::insert_signature(
 			request_id,
 			ThresholdSignatureFor::<T, I>::benchmark_value(),
@@ -134,7 +134,7 @@ benchmarks_instance_pallet! {
 		let call = Call::<T, I>::on_keygen_verification_result {
 			keygen_ceremony_id: CEREMONY_ID,
 			threshold_request_id: request_id,
-			signing_ceremony_id,
+			maybe_signing_ceremony_id,
 			new_public_key: agg_key,
 		};
 		let origin = T::EnsureThresholdSigned::successful_origin();

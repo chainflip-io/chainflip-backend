@@ -454,7 +454,7 @@ mod unsigned_validation {
 			const PAYLOAD: <MockEthereum as ChainCrypto>::Payload = *b"OHAI";
 			const CUSTOM_AGG_KEY: <MockEthereum as ChainCrypto>::AggKey = *b"AKEY";
 			let participants: BTreeSet<u64> = BTreeSet::from_iter([1, 2, 3, 4, 5, 6]);
-			let (_request_id, ceremony_id) =
+			let (_request_id, maybe_ceremony_id) =
 				EthereumThresholdSigner::request_keygen_verification_signature(
 					PAYLOAD,
 					CUSTOM_AGG_KEY.into(),
@@ -467,7 +467,9 @@ mod unsigned_validation {
 			// Process retries.
 			<EthereumThresholdSigner as Hooks<BlockNumberFor<Test>>>::on_initialize(retry_block);
 			assert!(CeremonyRetryQueues::<Test, Instance1>::take(retry_block).is_empty());
-			assert!(PendingCeremonies::<Test, Instance1>::take(ceremony_id).is_none());
+			assert!(
+				PendingCeremonies::<Test, Instance1>::take(maybe_ceremony_id.unwrap()).is_none()
+			);
 		});
 	}
 
@@ -482,15 +484,18 @@ mod unsigned_validation {
 			.execute_with(|| {
 				const PAYLOAD: <MockEthereum as ChainCrypto>::Payload = *b"OHAI";
 
-				let (_request_id, ceremony_id) =
+				let (_request_id, maybe_ceremony_id) =
 					<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(PAYLOAD);
 				let EpochKey { key: current_key, .. } = MockKeyProvider::current_epoch_key();
 
 				assert!(
 					Test::validate_unsigned(
 						TransactionSource::External,
-						&PalletCall::signature_success { ceremony_id, signature: sign(PAYLOAD) }
-							.into(),
+						&PalletCall::signature_success {
+							ceremony_id: maybe_ceremony_id.unwrap(),
+							signature: sign(PAYLOAD)
+						}
+						.into(),
 					)
 					.is_ok(),
 					"Validation Failed: {:?} / {:?}",
@@ -527,13 +532,13 @@ mod unsigned_validation {
 			.execute_with(|| {
 				const PAYLOAD: <MockEthereum as ChainCrypto>::Payload = *b"OHAI";
 				// Initiate request
-				let (_request_id, ceremony_id) =
+				let (_request_id, maybe_ceremony_id) =
 					<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(PAYLOAD);
 				assert_eq!(
 					Test::validate_unsigned(
 						TransactionSource::External,
 						&PalletCall::signature_success {
-							ceremony_id,
+							ceremony_id: maybe_ceremony_id.unwrap(),
 							signature: INVALID_SIGNATURE
 						}
 						.into()
