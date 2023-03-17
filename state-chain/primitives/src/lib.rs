@@ -66,10 +66,6 @@ pub struct TxId {
 	pub extrinsic_index: u32,
 }
 
-pub const ETHEREUM_CHAIN_ID: u8 = 1u8;
-pub const POLKADOT_CHAIN_ID: u8 = 2u8;
-pub const BITCOIN_CHAIN_ID: u8 = 3u8;
-
 pub const ETHEREUM_ETH_ADDRESS: EthereumAddress = [0xEE; 20];
 
 /// The very first epoch number
@@ -330,3 +326,21 @@ impl From<ForeignChainAddress> for ForeignChain {
 }
 
 pub type EgressBatch<Amount, EgressAddress> = Vec<(Amount, EgressAddress)>;
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct CcmIngressMetadata {
+	pub message: Vec<u8>,
+	pub gas_budget: AssetAmount,
+	pub caller_address: ForeignChainAddress,
+}
+
+impl CcmIngressMetadata {
+	pub fn new(
+		message: Vec<u8>,
+		gas_budget: AssetAmount,
+		caller_address: ForeignChainAddress,
+	) -> Self {
+		Self { message, gas_budget, caller_address }
+	}
+}

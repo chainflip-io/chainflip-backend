@@ -17,8 +17,9 @@ use cf_chains::{
 };
 
 use cf_primitives::{
-	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BroadcastId, CeremonyId,
-	EgressId, EpochIndex, EthereumAddress, ForeignChain, ForeignChainAddress, IntentId, KeyId,
+	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BroadcastId,
+	CcmIngressMetadata, CeremonyId, EgressId, EpochIndex, EthereumAddress, ForeignChain,
+	ForeignChainAddress, IntentId, KeyId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -639,7 +640,7 @@ pub trait IngressApi<C: Chain> {
 		egress_address: ForeignChainAddress,
 		relayer_commission_bps: u16,
 		relayer_id: Self::AccountId,
-		message: Vec<u8>,
+		message_metadata: Option<CcmIngressMetadata>,
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError>;
 }
 
@@ -657,7 +658,7 @@ impl<T: frame_system::Config> IngressApi<Ethereum> for T {
 		_egress_address: ForeignChainAddress,
 		_relayer_commission_bps: u16,
 		_relayer_id: T::AccountId,
-		_message: Vec<u8>,
+		_message_metadata: Option<CcmIngressMetadata>,
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
 		Ok((0, ForeignChainAddress::Eth([0u8; 20])))
 	}
@@ -677,7 +678,7 @@ impl<T: frame_system::Config> IngressApi<Polkadot> for T {
 		_egress_address: ForeignChainAddress,
 		_relayer_commission_bps: u16,
 		_relayer_id: T::AccountId,
-		_message: Vec<u8>,
+		_message_metadata: Option<CcmIngressMetadata>,
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
 		Ok((0, ForeignChainAddress::Dot([0u8; 32])))
 	}
@@ -751,33 +752,58 @@ pub trait AccountRoleRegistry<T: frame_system::Config> {
 
 /// API that allows other pallets to Egress assets out of the State Chain.
 pub trait EgressApi<C: Chain> {
-	fn schedule_egress(
-		foreign_asset: C::ChainAsset,
+	fn schedule_egress_swap(
+		asset: C::ChainAsset,
 		amount: AssetAmount,
 		egress_address: C::ChainAccount,
+	) -> EgressId;
+
+	fn schedule_egress_ccm(
+		asset: C::ChainAsset,
+		amount: C::ChainAmount,
+		egress_address: C::ChainAccount,
 		message: Vec<u8>,
+		caller_address: ForeignChainAddress,
 	) -> EgressId;
 }
 
 impl<T: frame_system::Config> EgressApi<Ethereum> for T {
-	fn schedule_egress(
-		_foreign_asset: assets::eth::Asset,
+	fn schedule_egress_swap(
+		_asset: assets::eth::Asset,
+		_amount: AssetAmount,
+		_egress_address: <Ethereum as Chain>::ChainAccount,
+	) -> EgressId {
+		(ForeignChain::Ethereum, 0)
+	}
+
+	fn schedule_egress_ccm(
+		_asset: assets::eth::Asset,
 		_amount: AssetAmount,
 		_egress_address: <Ethereum as Chain>::ChainAccount,
 		_message: Vec<u8>,
+		_caller_address: ForeignChainAddress,
 	) -> EgressId {
 		(ForeignChain::Ethereum, 0)
 	}
 }
 
 impl<T: frame_system::Config> EgressApi<Polkadot> for T {
-	fn schedule_egress(
-		_foreign_asset: assets::dot::Asset,
+	fn schedule_egress_swap(
+		_asset: assets::dot::Asset,
+		_amount: AssetAmount,
+		_egress_address: <Polkadot as Chain>::ChainAccount,
+	) -> EgressId {
+		(ForeignChain::Polkadot, 0)
+	}
+
+	fn schedule_egress_ccm(
+		_asset: assets::dot::Asset,
 		_amount: AssetAmount,
 		_egress_address: <Polkadot as Chain>::ChainAccount,
 		_message: Vec<u8>,
+		_caller_address: ForeignChainAddress,
 	) -> EgressId {
-		(ForeignChain::Ethereum, 0)
+		(ForeignChain::Polkadot, 0)
 	}
 }
 
@@ -828,5 +854,27 @@ pub trait IngressHandler<C: ChainCrypto> {
 		_address: <C as Chain>::ChainAccount,
 		_asset: <C as Chain>::ChainAsset,
 	) {
+	}
+}
+
+pub trait CcmHandler {
+	fn on_ccm_ingress(
+		ingress_asset: Asset,
+		ingress_amount: AssetAmount,
+		egress_asset: Asset,
+		egress_address: ForeignChainAddress,
+		message_metadata: CcmIngressMetadata,
+	) -> DispatchResult;
+}
+
+impl CcmHandler for () {
+	fn on_ccm_ingress(
+		_ingress_asset: Asset,
+		_ingress_amount: AssetAmount,
+		_egress_asset: Asset,
+		_egress_address: ForeignChainAddress,
+		_message_metadata: CcmIngressMetadata,
+	) -> DispatchResult {
+		Ok(())
 	}
 }

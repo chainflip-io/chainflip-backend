@@ -1,4 +1,4 @@
-use cf_primitives::{ForeignChainAddress, ETHEREUM_CHAIN_ID, POLKADOT_CHAIN_ID};
+use cf_primitives::{EgressId, ForeignChain, ForeignChainAddress};
 use codec::{Decode, Encode};
 use ethabi::{ParamType, Token};
 use scale_info::TypeInfo;
@@ -19,13 +19,23 @@ impl Tokenizable for Vec<u8> {
 	}
 }
 
+impl Tokenizable for ForeignChain {
+	fn tokenize(self) -> Token {
+		match self {
+			ForeignChain::Ethereum => Token::Uint(1.into()),
+			ForeignChain::Polkadot => Token::Uint(2.into()),
+			ForeignChain::Bitcoin => Token::Uint(3.into()),
+		}
+	}
+}
+
 impl Tokenizable for ForeignChainAddress {
 	fn tokenize(self) -> Token {
 		match self {
 			ForeignChainAddress::Eth(addr) =>
-				Token::Tuple(vec![Token::Uint(ETHEREUM_CHAIN_ID.into()), addr.to_vec().tokenize()]),
+				Token::Tuple(vec![ForeignChain::Ethereum.tokenize(), addr.to_vec().tokenize()]),
 			ForeignChainAddress::Dot(addr) =>
-				Token::Tuple(vec![Token::Uint(POLKADOT_CHAIN_ID.into()), addr.to_vec().tokenize()]),
+				Token::Tuple(vec![ForeignChain::Polkadot.tokenize(), addr.to_vec().tokenize()]),
 		}
 	}
 }
@@ -36,6 +46,8 @@ impl Tokenizable for ForeignChainAddress {
 pub struct ExecutexSwapAndCall {
 	/// The signature data for validation and replay protection.
 	sig_data: SigData,
+	/// The egress Id. Used to query Gas budge stored in the Ccm Pallet.
+	egress_id: EgressId,
 	/// A single transfer that need to be made to given addresses.
 	transfer_param: EncodableTransferAssetParams,
 	/// The source of the transfer
@@ -47,15 +59,25 @@ pub struct ExecutexSwapAndCall {
 impl ExecutexSwapAndCall {
 	pub(crate) fn new_unsigned(
 		replay_protection: EthereumReplayProtection,
+		egress_id: EgressId,
 		transfer_param: EncodableTransferAssetParams,
 		from: ForeignChainAddress,
 		message: Vec<u8>,
 	) -> Self {
-		let mut calldata =
-			Self { sig_data: SigData::new_empty(replay_protection), transfer_param, from, message };
+		let mut calldata = Self {
+			sig_data: SigData::new_empty(replay_protection),
+			egress_id,
+			transfer_param,
+			from,
+			message,
+		};
 		calldata.sig_data.insert_msg_hash_from(calldata.abi_encoded().as_slice());
 
 		calldata
+	}
+
+	pub fn egress_id(&self) -> EgressId {
+		self.egress_id
 	}
 
 	fn get_function(&self) -> ethabi::Function {
@@ -90,7 +112,7 @@ impl ExecutexSwapAndCall {
 
 	fn abi_encoded(&self) -> Vec<u8> {
 		let tokenized_address =
-			self.from.clone().tokenize().into_tuple().expect(
+			self.from.tokenize().into_tuple().expect(
 				"The ForeignChainAddress should always return a Tuple(vec![Chain, Address])",
 			);
 
@@ -184,9 +206,10 @@ mod test_execute_x_swap_and_execute {
 				chain_id: CHAIN_ID,
 				nonce: NONCE,
 			},
+			(ForeignChain::Ethereum, 0),
 			dummy_transfer_asset_param.clone(),
 			dummy_src_address,
-			dummy_message,
+			dummy_message.clone(),
 		);
 
 		let expected_msg_hash = function_runtime.sig_data.msg_hash;

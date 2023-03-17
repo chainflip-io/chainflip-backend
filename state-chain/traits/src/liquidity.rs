@@ -3,12 +3,10 @@ use cf_primitives::{
 };
 use frame_support::dispatch::DispatchError;
 use sp_runtime::DispatchResult;
-use sp_std::vec::Vec;
 
 pub trait SwapIntentHandler {
 	type AccountId;
 
-	#[allow(clippy::too_many_arguments)]
 	fn on_swap_ingress(
 		ingress_address: ForeignChainAddress,
 		from: Asset,
@@ -17,7 +15,6 @@ pub trait SwapIntentHandler {
 		egress_address: ForeignChainAddress,
 		relayer_id: Self::AccountId,
 		relayer_commission_bps: u16,
-		message: Vec<u8>,
 	);
 }
 
@@ -101,7 +98,6 @@ impl<T: frame_system::Config> SwapIntentHandler for T {
 		_egress_address: ForeignChainAddress,
 		_relayer_id: Self::AccountId,
 		_relayer_commission_bps: u16,
-		_message: Vec<u8>,
 	) {
 	}
 }

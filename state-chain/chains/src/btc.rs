@@ -11,7 +11,7 @@ use sp_std::{vec, vec::Vec};
 // #[cfg(feature = "runtime-benchmarks")]
 
 extern crate alloc;
-use crate::{Chain, ChainAbi, ChainCrypto, FeeRefundCalculator, IngressIdConstructor};
+use crate::{Chain, ChainAbi, ChainCrypto, FeeRefundCalculator, IngressIdConstructor, TrackedData};
 use alloc::string::String;
 pub use cf_primitives::chains::Bitcoin;
 use cf_primitives::{chains::assets, EpochIndex, IntentId, KeyId, PublicKeyBytes};
@@ -217,6 +217,13 @@ impl IngressIdConstructor for BitcoinFetchId {
 impl BenchmarkValue for BitcoinFetchId {
 	fn benchmark_value() -> Self {
 		Self(1)
+	}
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue for TrackedData<Bitcoin> {
+	fn benchmark_value() -> Self {
+		Self { block_height: 1000, base_fee: 10_000_000_000, priority_fee: 2_000_000_000 }
 	}
 }
 

@@ -6,7 +6,7 @@ use crate::{
 		PolkadotPublicKey, PolkadotRuntimeCall, PolkadotSignature, PolkadotSignedExtra,
 		PolkadotTransactionData, PolkadotUncheckedExtrinsic,
 	},
-	eth::TrackedData,
+	TrackedData,
 };
 
 use sp_core::{crypto::AccountId32, sr25519};

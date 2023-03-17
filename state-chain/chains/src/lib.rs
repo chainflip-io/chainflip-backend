@@ -3,8 +3,8 @@ use core::fmt::Display;
 
 use crate::benchmarking_value::BenchmarkValue;
 use cf_primitives::{
-	chains::assets, AssetAmount, EpochIndex, EthAmount, ForeignChainAddress, IntentId, KeyId,
-	PublicKeyBytes,
+	chains::assets, AssetAmount, EgressId, EpochIndex, EthAmount, ForeignChainAddress, IntentId,
+	KeyId, PublicKeyBytes,
 };
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
@@ -258,10 +258,12 @@ pub trait AllBatch<Abi: ChainAbi>: ApiCall<Abi> {
 	) -> Result<Self, ()>;
 }
 
+#[allow(clippy::result_unit_err)]
 pub trait ExecutexSwapAndCall<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
+		egress_id: EgressId,
 		transfer_param: TransferAssetParams<Abi>,
-		form: ForeignChainAddress,
+		from: ForeignChainAddress,
 		message: Vec<u8>,
 	) -> Result<Self, ()>;
 }
@@ -312,15 +314,15 @@ pub trait BaseChainData<C: Chain> {
 }
 
 impl<C: Chain> BaseChainData<C> for TrackedData<C> {
-    fn block_height(&self) -> <C as Chain>::ChainBlockNumber {
-        self.block_height
-    }
+	fn block_height(&self) -> <C as Chain>::ChainBlockNumber {
+		self.block_height
+	}
 
-    fn base_fee(&self) -> <C as Chain>::ChainAmount {
-        self.base_fee
-    }
+	fn base_fee(&self) -> <C as Chain>::ChainAmount {
+		self.base_fee
+	}
 
-    fn priority_fee(&self) -> <C as Chain>::ChainAmount {
-        self.priority_fee
-    }
+	fn priority_fee(&self) -> <C as Chain>::ChainAmount {
+		self.priority_fee
+	}
 }

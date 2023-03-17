@@ -672,6 +672,12 @@ impl pallet_cf_chain_tracking::Config<PolkadotInstance> for Runtime {
 	type AgeLimit = ConstU32<1>;
 }
 
+impl pallet_cf_ccm::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type AccountRoleRegistry = AccountRoles;
+	type SwappingApi = Swapping;
+}
+
 construct_runtime!(
 	pub struct Runtime
 	where
@@ -712,6 +718,7 @@ construct_runtime!(
 		EthereumIngressEgress: pallet_cf_ingress_egress::<Instance1>,
 		PolkadotIngressEgress: pallet_cf_ingress_egress::<Instance2>,
 		LiquidityPools: pallet_cf_pools,
+		CrossChainMessaging: pallet_cf_ccm,
 	}
 );
 

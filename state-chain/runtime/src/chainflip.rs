@@ -29,7 +29,7 @@ use cf_chains::{
 	ReplayProtectionProvider, SetCommKeyWithAggKey, SetGovKeyWithAggKey, TransactionBuilder,
 };
 use cf_primitives::{
-	chains::assets, liquidity::U256, Asset, AssetAmount, ForeignChainAddress, IntentId,
+	chains::assets, liquidity::U256, Asset, AssetAmount, EgressId, ForeignChainAddress, IntentId,
 	ETHEREUM_ETH_ADDRESS,
 };
 use cf_traits::{
@@ -152,6 +152,7 @@ impl TransactionBuilder<Ethereum, EthereumApi<EthEnvironment>> for EthTransactio
 				EthereumApi::SetGovKeyWithAggKey(_) => Environment::key_manager_address().into(),
 				EthereumApi::SetCommKeyWithAggKey(_) => Environment::key_manager_address().into(),
 				EthereumApi::AllBatch(_) => Environment::eth_vault_address().into(),
+				EthereumApi::ExecutexSwapAndCall(_) => Environment::eth_vault_address.into(),
 				EthereumApi::_Phantom(..) => unreachable!(),
 			},
 			data: signed_call.chain_encoded(),
@@ -292,28 +293,55 @@ impl VaultTransitionHandler<Polkadot> for DotVaultTransitionHandler {
 pub struct AnyChainIngressEgressHandler;
 
 impl EgressApi<AnyChain> for AnyChainIngressEgressHandler {
-	fn schedule_egress(
+	fn schedule_egress_swap(
+		asset: Asset,
+		amount: AssetAmount,
+		egress_address: <AnyChain as Chain>::ChainAccount,
+	) -> EgressId {
+		match asset.into() {
+			ForeignChain::Ethereum => crate::EthereumIngressEgress::schedule_egress_swap(
+				asset.try_into().expect("Checked for asset compatibility"),
+				amount,
+				egress_address
+					.try_into()
+					.expect("Caller must ensure for account is of the compatible type."),
+			),
+			ForeignChain::Polkadot => crate::PolkadotIngressEgress::schedule_egress_swap(
+				asset.try_into().expect("Checked for asset compatibility"),
+				amount,
+				egress_address
+					.try_into()
+					.expect("Caller must ensure for account is of the compatible type."),
+			),
+			ForeignChain::Bitcoin => todo!("Bitcoin egress"),
+		}
+	}
+
+	fn schedule_egress_ccm(
 		asset: Asset,
 		amount: AssetAmount,
 		egress_address: <AnyChain as Chain>::ChainAccount,
 		message: Vec<u8>,
-	) -> cf_primitives::EgressId {
+		caller_address: ForeignChainAddress,
+	) -> EgressId {
 		match asset.into() {
-			ForeignChain::Ethereum => crate::EthereumIngressEgress::schedule_egress(
+			ForeignChain::Ethereum => crate::EthereumIngressEgress::schedule_egress_ccm(
 				asset.try_into().expect("Checked for asset compatibility"),
 				amount,
 				egress_address
 					.try_into()
 					.expect("Caller must ensure for account is of the compatible type."),
 				message,
+				caller_address,
 			),
-			ForeignChain::Polkadot => crate::PolkadotIngressEgress::schedule_egress(
+			ForeignChain::Polkadot => crate::PolkadotIngressEgress::schedule_egress_swap(
 				asset.try_into().expect("Checked for asset compatibility"),
 				amount,
 				egress_address
 					.try_into()
 					.expect("Caller must ensure for account is of the compatible type."),
 				message,
+				caller_address,
 			),
 			ForeignChain::Bitcoin => todo!("Bitcoin egress"),
 		}

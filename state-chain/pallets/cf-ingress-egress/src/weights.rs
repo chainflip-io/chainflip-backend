@@ -33,6 +33,7 @@ pub trait WeightInfo {
 	fn on_initialize(n: u32, ) -> Weight;
 	fn on_initialize_has_no_expired() -> Weight;
 	fn egress_assets(n: u32, ) -> Weight;
+	fn egress_single_ccm() -> Weight;
 	fn disable_asset_egress() -> Weight;
 	fn on_idle_with_nothing_to_send() -> Weight;
 	fn do_single_ingress() -> Weight;
@@ -88,6 +89,9 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(Weight::from_ref_time(2_414_212).saturating_mul(n.into()))
 			.saturating_add(T::DbWeight::get().reads(17))
 			.saturating_add(T::DbWeight::get().writes(9))
+	}
+	fn egress_single_ccm() -> Weight {
+		Weight::from_ref_time(1_000_000)
 	}
 	// Storage: EthereumIngressEgress DisabledEgressAssets (r:0 w:1)
 	fn disable_asset_egress() -> Weight {
@@ -162,6 +166,9 @@ impl WeightInfo for () {
 			.saturating_add(Weight::from_ref_time(2_414_212).saturating_mul(n.into()))
 			.saturating_add(RocksDbWeight::get().reads(17))
 			.saturating_add(RocksDbWeight::get().writes(9))
+	}
+	fn egress_single_ccm() -> Weight {
+		Weight::from_ref_time(1_000_000)
 	}
 	// Storage: EthereumIngressEgress DisabledEgressAssets (r:0 w:1)
 	fn disable_asset_egress() -> Weight {

@@ -154,19 +154,16 @@ mod test_batch_fetch {
 				to: MultiSigner::Sr25519(sr25519::Public([7u8; 32])).into_account(),
 				amount: 4,
 				asset: assets::dot::Asset::Dot,
-				message: vec![],
 			},
 			TransferAssetParams::<Polkadot> {
 				to: MultiSigner::Sr25519(sr25519::Public([8u8; 32])).into_account(),
 				amount: 5,
 				asset: assets::dot::Asset::Dot,
-				message: vec![],
 			},
 			TransferAssetParams::<Polkadot> {
 				to: MultiSigner::Sr25519(sr25519::Public([9u8; 32])).into_account(),
 				amount: 6,
 				asset: assets::dot::Asset::Dot,
-				message: vec![],
 			},
 		];
 

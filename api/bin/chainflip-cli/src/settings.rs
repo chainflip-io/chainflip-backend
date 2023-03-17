@@ -1,4 +1,4 @@
-use chainflip_api::primitives::{AccountRole, Asset, Hash};
+use chainflip_api::primitives::{AccountRole, Asset, CcmIngressMetadata, Hash};
 pub use chainflip_engine::settings::StateChain;
 use chainflip_engine::{
 	constants::{CONFIG_ROOT, DEFAULT_CONFIG_ROOT},
@@ -67,8 +67,8 @@ pub struct SwapIntentParams {
 	pub egress_address: String,
 	/// Commission to the relayer in base points
 	pub relayer_commission: u16,
-	/// Optional: Any additional data to be executed after swap egress.
-	pub message: Option<Vec<u8>>,
+	/// Optional: Any additional cross-chain message to be executed after swap egress.
+	pub message_metadata: Option<CcmIngressMetadata>,
 }
 
 #[derive(clap::Subcommand, Clone, Debug)]

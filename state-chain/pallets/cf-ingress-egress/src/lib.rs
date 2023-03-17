@@ -13,15 +13,18 @@ mod tests;
 pub mod weights;
 pub use weights::WeightInfo;
 
-use cf_primitives::{EgressCounter, EgressId, ForeignChain};
+use cf_primitives::{CcmIngressMetadata, EgressCounter, EgressId, ForeignChain};
 
 use cf_chains::IngressIdConstructor;
 
-use cf_chains::{AllBatch, Chain, ChainAbi, ChainCrypto, FetchAssetParams, TransferAssetParams};
+use cf_chains::{
+	AllBatch, Chain, ChainAbi, ChainCrypto, ExecutexSwapAndCall, FetchAssetParams,
+	TransferAssetParams,
+};
 use cf_primitives::{Asset, AssetAmount, ForeignChainAddress, IntentId};
 use cf_traits::{
-	liquidity::LpProvisioningApi, AddressDerivationApi, Broadcaster, Chainflip, EgressApi,
-	IngressApi, IngressHandler, SwapIntentHandler,
+	liquidity::LpProvisioningApi, AddressDerivationApi, Broadcaster, CcmHandler, Chainflip,
+	EgressApi, IngressApi, IngressHandler, SwapIntentHandler,
 };
 use frame_support::{pallet_prelude::*, sp_runtime::DispatchError};
 pub use pallet::*;
@@ -30,7 +33,7 @@ pub use sp_std::{vec, vec::Vec};
 
 /// Enum wrapper for fetch and egress requests.
 #[derive(RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode, TypeInfo)]
-pub enum FetchOrTransfer<C: Chain> {
+pub enum EgressParameter<C: Chain> {
 	Fetch {
 		intent_id: IntentId,
 		asset: C::ChainAsset,
@@ -38,17 +41,25 @@ pub enum FetchOrTransfer<C: Chain> {
 	Transfer {
 		egress_id: EgressId,
 		asset: C::ChainAsset,
-		to: C::ChainAccount,
+		egress_address: C::ChainAccount,
 		amount: AssetAmount,
+	},
+	Ccm {
+		egress_id: EgressId,
+		asset: C::ChainAsset,
+		amount: C::ChainAmount,
+		egress_address: C::ChainAccount,
 		message: Vec<u8>,
+		caller_address: ForeignChainAddress,
 	},
 }
 
-impl<C: Chain> FetchOrTransfer<C> {
+impl<C: Chain> EgressParameter<C> {
 	fn asset(&self) -> &C::ChainAsset {
 		match self {
-			FetchOrTransfer::Fetch { asset, .. } => asset,
-			FetchOrTransfer::Transfer { asset, .. } => asset,
+			EgressParameter::Fetch { asset, .. } => asset,
+			EgressParameter::Transfer { asset, .. } => asset,
+			EgressParameter::Ccm { asset, .. } => asset,
 		}
 	}
 }
@@ -68,6 +79,7 @@ impl Default for DeploymentStatus {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use cf_chains::ExecutexSwapAndCall;
 	use cf_primitives::BroadcastId;
 	use core::marker::PhantomData;
 	use sp_std::vec::Vec;
@@ -109,10 +121,15 @@ pub mod pallet {
 			egress_address: ForeignChainAddress,
 			relayer_id: AccountId,
 			relayer_commission_bps: u16,
-			message: Vec<u8>,
 		},
 		LiquidityProvision {
 			lp_account: AccountId,
+		},
+		CcmTransfer {
+			egress_asset: Asset,
+			egress_address: ForeignChainAddress,
+			relayer_id: AccountId,
+			message_metadata: CcmIngressMetadata,
 		},
 	}
 
@@ -140,8 +157,14 @@ pub mod pallet {
 		/// For scheduling swaps.
 		type SwapIntentHandler: SwapIntentHandler<AccountId = Self::AccountId>;
 
-		/// The type of the chain-native transaction.
+		/// Handler for Cross Chain Messages.
+		type CcmHandler: CcmHandler;
+
+		/// The egress transaction used to send Transfer and Fetch requests.
 		type AllBatch: AllBatch<Self::TargetChain>;
+
+		/// The egress transaction used to send Cross chain messages.
+		type ExecutexSwapAndCall: ExecutexSwapAndCall<Self::TargetChain>;
 
 		/// A broadcaster instance.
 		type Broadcaster: Broadcaster<Self::TargetChain, ApiCall = Self::AllBatch>;
@@ -190,7 +213,7 @@ pub mod pallet {
 	/// Scheduled fetch and egress for the Ethereum chain.
 	#[pallet::storage]
 	pub(crate) type ScheduledEgressRequests<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, Vec<FetchOrTransfer<T::TargetChain>>, ValueQuery>;
+		StorageValue<_, Vec<EgressParameter<T::TargetChain>>, ValueQuery>;
 
 	/// Stores the list of assets that are not allowed to be egressed.
 	#[pallet::storage]
@@ -239,7 +262,6 @@ pub mod pallet {
 			asset: TargetChainAsset<T, I>,
 			amount: AssetAmount,
 			egress_address: TargetChainAccount<T, I>,
-			message: Vec<u8>,
 		},
 		IngressFetchesScheduled {
 			intent_id: IntentId,
@@ -248,6 +270,10 @@ pub mod pallet {
 		BatchBroadcastRequested {
 			broadcast_id: BroadcastId,
 			egress_ids: Vec<EgressId>,
+		},
+		CcmBroadcastRequested {
+			broadcast_id: BroadcastId,
+			egress_id: EgressId,
 		},
 		StopWitnessing {
 			ingress_address: TargetChainAccount<T, I>,
@@ -274,15 +300,7 @@ pub mod pallet {
 				return T::WeightInfo::on_idle_with_nothing_to_send()
 			}
 
-			// Calculate the number of requests that the weight allows.
-			let single_request_cost = T::WeightInfo::egress_assets(1u32)
-				.saturating_sub(T::WeightInfo::egress_assets(0u32));
-			let request_count = remaining_weight
-				.saturating_sub(T::WeightInfo::egress_assets(0u32))
-				.ref_time()
-				.saturating_div(single_request_cost.ref_time()) as u32;
-
-			with_transaction(|| Self::egress_scheduled_assets(Some(request_count)))
+			with_transaction(|| Self::egress_scheduled_assets_by_weight(Some(remaining_weight)))
 				.unwrap_or_else(|_| T::WeightInfo::egress_assets(0))
 		}
 
@@ -372,28 +390,39 @@ pub mod pallet {
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
-	/// Take up to `maybe_size` number of scheduled requests for the Ethereum chain and send them
-	/// out in an `AllBatch` call. If `maybe_size` is `None`, send all scheduled transactions.
+	/// Use up to `maybe_max_weight` to send as many scheduled egress requests as possible to the
+	/// target chain. If `maybe_max_weight` is `None`, send all scheduled transactions.
 	///
-	/// Returns the actual number of transactions sent.
+	/// Returns the actual weight used in this call.
 	///
 	/// Egress transactions with Blacklisted assets are not sent, and kept in storage.
 	#[allow(clippy::type_complexity)]
-	fn egress_scheduled_assets(
-		maybe_size: Option<u32>,
+	fn egress_scheduled_assets_by_weight(
+		maybe_max_weight: Option<Weight>,
 	) -> TransactionOutcome<Result<Weight, DispatchError>> {
-		let batch_to_send: Vec<_> =
-			ScheduledEgressRequests::<T, I>::mutate(|requests: &mut Vec<_>| {
-				// Take up to batch_size requests to be sent
-				let mut available_batch_size = maybe_size.unwrap_or(requests.len() as u32);
+		let mut batch_size = 0u32;
+		let mut ccm_count = 0u32;
 
-				// Filter out disabled assets
+		// Helper function to ensure there are sufficient weight to send these transactions.
+		let has_enough_weight = |(batches, ccms)| -> bool {
+			maybe_max_weight
+				.map_or_else(true, |max_weight| max_weight >= Self::calculate_weight(batches, ccms))
+		};
+
+		let requests_to_send: Vec<_> =
+			ScheduledEgressRequests::<T, I>::mutate(|requests: &mut Vec<_>| {
+				// Filter out disabled assets and take requests as max_weight allows.
 				requests
 					.drain_filter(|request| {
-						if available_batch_size > 0 &&
-							!DisabledEgressAssets::<T, I>::contains_key(request.asset())
+						if has_enough_weight(match request {
+							EgressParameter::Ccm { .. } => (batch_size, ccm_count + 1),
+							_ => (batch_size + 1, ccm_acount),
+						}) && !DisabledEgressAssets::<T, I>::contains_key(request.asset())
 						{
-							available_batch_size.saturating_reduce(1);
+							match request {
+								EgressParameter::Ccm { .. } => ccm_count += 1,
+								_ => batch_size += 1,
+							};
 							true
 						} else {
 							false
@@ -408,13 +437,21 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			)))
 		}
 
+		Self::do_egress(requests_to_send)
+	}
+
+	/// Send all the given egress requests to the target chain.
+	fn do_egress(
+		requests: EgressParameter<T::TargetChain>,
+	) -> TransactionOutcome<Result<Weight, DispatchError>> {
 		let mut fetch_params = vec![];
 		let mut egress_params = vec![];
-		let mut egress_ids = vec![];
+		let mut batch_egress_ids = vec![];
+		let mut cmms = vec![];
 
-		for request in batch_to_send {
+		for request in requests {
 			match request {
-				FetchOrTransfer::<T::TargetChain>::Fetch { intent_id, asset } => {
+				EgressParameter::<T::TargetChain>::Fetch { intent_id, asset } => {
 					let (ingress_id, ingress_address) = FetchParamDetails::<T, I>::get(intent_id)
 						.expect("to have fetch param details available");
 					fetch_params.push(FetchAssetParams { ingress_fetch_id: ingress_id, asset });
@@ -423,36 +460,54 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						DeploymentStatus::Deployed,
 					);
 				},
-				FetchOrTransfer::<T::TargetChain>::Transfer {
-					asset,
-					to,
-					amount,
+				EgressParameter::<T::TargetChain>::Transfer {
 					egress_id,
-					message,
+					asset,
+					amount,
+					egress_address,
 				} => {
 					egress_ids.push(egress_id);
-					egress_params.push(TransferAssetParams { asset, to, amount, message });
+					egress_params.push(TransferAssetParams { asset, to: egress_address, amount });
 				},
+				EgressParameter::<T::TargetChain>::Ccm {
+					egress_id,
+					asset,
+					amount,
+					egress_address,
+					message,
+					caller_address,
+				} => cmms.push(T::ExecutexSwapAndCall::new_unsigned(
+					egress_id,
+					TransferAssetParams { asset, to: egress_address, amount },
+					caller_address,
+					message,
+				)),
 			}
 		}
-		let fetch_batch_size = fetch_params.len() as u32;
-		let egress_batch_size = egress_params.len() as u32;
 
-		// Construct and send the transaction.
-		#[allow(clippy::unit_arg)]
-		match T::AllBatch::new_unsigned(fetch_params, egress_params) {
-			Ok(egress_transaction) => {
-				let broadcast_id = T::Broadcaster::threshold_sign_and_broadcast(egress_transaction);
+		// Send All the egress transactions
+		match {
+			if !batch_size.is_empty() {
+				let batch_all = T::AllBatch::new_unsigned(fetch_params, egress_params)?;
+				let broadcast_id = T::Broadcaster::threshold_sign_and_broadcast(batch_all);
 				Self::deposit_event(Event::<T, I>::BatchBroadcastRequested {
 					broadcast_id,
-					egress_ids,
+					egress_ids: batch_egress_ids,
 				});
-				TransactionOutcome::Commit(Ok(T::WeightInfo::egress_assets(
-					fetch_batch_size.saturating_add(egress_batch_size),
-				)))
-			},
+			}
+
+			cmms.iter().for_each(|maybe_ccm| {
+				let ccm = maybe_ccm?;
+				let broadcast_id = T::Broadcaster::threshold_sign_and_broadcast(ccm);
+				Self::deposit_event(Event::<T, I>::CcmBroadcastRequested {
+					broadcast_id,
+					egress_id: ccm.egress_id,
+				});
+			});
+		} {
+			Ok(()) => TransactionOutcome::Commit(Ok(calculate_weight(batch_size, ccm_count))),
 			Err(_) => TransactionOutcome::Rollback(Err(DispatchError::Other(
-				"AllBatch Apicall creation failed, rolled back storage",
+				"Apicall creations failed, rolled back storage",
 			))),
 		}
 	}
@@ -469,7 +524,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ensure!(ingress.ingress_asset == asset, Error::<T, I>::IngressMismatchWithIntent);
 
 		// Ingress is called by witnessers, so asset/chain combination should always be valid.
-		ScheduledEgressRequests::<T, I>::append(FetchOrTransfer::<T::TargetChain>::Fetch {
+		ScheduledEgressRequests::<T, I>::append(EgressParameter::<T::TargetChain>::Fetch {
 			intent_id: ingress.intent_id,
 			asset,
 		});
@@ -490,7 +545,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				egress_asset,
 				relayer_id,
 				relayer_commission_bps,
-				message,
 			} => T::SwapIntentHandler::on_swap_ingress(
 				ingress_address.clone().into(),
 				asset.into(),
@@ -499,7 +553,18 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				egress_address,
 				relayer_id,
 				relayer_commission_bps,
-				message,
+			),
+			IntentAction::CcmTransfer {
+				egress_asset,
+				egress_address,
+				relayer_id,
+				message_metadata,
+			} => T::CcmHandler::on_ccm_ingress(
+				asset,
+				amount,
+				egress_asset,
+				egress_address,
+				message_metadata,
 			),
 		};
 
@@ -513,6 +578,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Self::deposit_event(Event::IngressCompleted { ingress_address, asset, amount, tx_id });
 		Ok(())
 	}
+
 	/// Create a new intent address for the given asset and registers it with the given action.
 	fn register_ingress_intent(
 		ingress_asset: TargetChainAsset<T, I>,
@@ -562,23 +628,26 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		IntentActions::<T, I>::insert(&address, intent_action);
 		Ok((next_intent_id, address))
 	}
+
+	fn calculate_weight(batches: u32, ccms: u32) {
+		T::WeightInfo::egress_assets(batches)
+			.saturating_add(ccms.saturating_mul(T::WeightInfo::egress_single_ccm()));
+	}
 }
 
 impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
-	fn schedule_egress(
+	fn schedule_egress_swap(
 		asset: TargetChainAsset<T, I>,
 		amount: AssetAmount,
 		egress_address: TargetChainAccount<T, I>,
-		message: Vec<u8>,
 	) -> EgressId {
 		let egress_counter = EgressIdCounter::<T, I>::get().saturating_add(1);
 		let egress_id = (<T as Config<I>>::TargetChain::get(), egress_counter);
-		ScheduledEgressRequests::<T, I>::append(FetchOrTransfer::<T::TargetChain>::Transfer {
+		ScheduledEgressRequests::<T, I>::append(EgressParameter::<T::TargetChain>::Transfer {
 			asset,
-			to: egress_address.clone(),
+			egress_address: egress_address.clone(),
 			amount,
 			egress_id,
-			message: message.clone(),
 		});
 		EgressIdCounter::<T, I>::put(egress_counter);
 		Self::deposit_event(Event::<T, I>::EgressScheduled {
@@ -586,8 +655,36 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 			asset,
 			amount,
 			egress_address,
-			message,
 		});
+
+		egress_id
+	}
+
+	fn schedule_egress_ccm(
+		asset: C::ChainAsset,
+		amount: C::ChainAmount,
+		egress_address: C::ChainAccount,
+		message: Vec<u8>,
+		caller_address: ForeignChainAddress,
+	) -> EgressId {
+		let egress_counter = EgressIdCounter::<T, I>::get().saturating_add(1);
+		let egress_id = (<T as Config<I>>::TargetChain::get(), egress_counter);
+		ScheduledEgressRequests::<T, I>::append(EgressParameter::<T::TargetChain>::Ccm {
+			egress_id,
+			asset,
+			amount,
+			egress_address,
+			message,
+			caller_address,
+		});
+		EgressIdCounter::<T, I>::put(egress_counter);
+		Self::deposit_event(Event::<T, I>::EgressScheduled {
+			id: egress_id,
+			asset,
+			amount,
+			egress_address,
+		});
+
 		egress_id
 	}
 }
@@ -619,16 +716,23 @@ impl<T: Config<I>, I: 'static> IngressApi<T::TargetChain> for Pallet<T, I> {
 		egress_address: ForeignChainAddress,
 		relayer_commission_bps: u16,
 		relayer_id: T::AccountId,
-		message: Vec<u8>,
+		message_metadata: Option<CcmIngressMetadata>,
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
 		let (intent_id, ingress_address) = Self::register_ingress_intent(
 			ingress_asset,
-			IntentAction::Swap {
-				egress_address,
-				egress_asset,
-				relayer_commission_bps,
-				relayer_id,
-				message,
+			match message_metadata {
+				Some(msg) => IntentAction::CcmTransfer {
+					egress_asset,
+					egress_address,
+					relayer_id,
+					message_metadata: msg,
+				},
+				None => IntentAction::Swap {
+					egress_asset,
+					egress_address,
+					relayer_commission_bps,
+					relayer_id,
+				},
 			},
 		)?;
 

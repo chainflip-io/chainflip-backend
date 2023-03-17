@@ -1,7 +1,7 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
-use crate::{DisabledEgressAssets, FetchOrTransfer, ScheduledEgressRequests};
+use crate::{DisabledEgressAssets, EgressParameter, ScheduledEgressRequests};
 use cf_chains::benchmarking_value::BenchmarkValue;
 use cf_primitives::ForeignChain;
 use frame_benchmarking::{account, benchmarks_instance_pallet};
@@ -40,22 +40,39 @@ benchmarks_instance_pallet! {
 		for i in 0..n {
 			if i % 2 == 0 {
 				FetchParamDetails::<T, I>::insert(1, (ingress_fetch_id, egress_address.clone()));
-				batch.push(FetchOrTransfer::Fetch {
+				batch.push(EgressParameter::Fetch {
 					intent_id: 1,
 					asset: egress_asset,
 				});
 			} else {
-				batch.push(FetchOrTransfer::Transfer {
+				batch.push(EgressParameter::Transfer {
 					egress_id: (ForeignChain::Ethereum, 1),
 					asset: egress_asset,
-					to: egress_address.clone(),
 					amount: 1_000,
+					egress_address: egress_address.clone(),
 					message: vec![0u8],
 				});
 			}
 		}
 
 		ScheduledEgressRequests::<T, I>::put(batch);
+	} : { let _ = Pallet::<T, I>::on_idle(Default::default(), Weight::from_ref_time(1_000_000_000_000_000)); }
+	verify {
+		assert!(ScheduledEgressRequests::<T, I>::get().is_empty());
+	}
+
+	egress_single_ccm {
+		let egress_address: <<T as Config<I>>::TargetChain as Chain>::ChainAccount = BenchmarkValue::benchmark_value();
+		let egress_asset: <<T as Config<I>>::TargetChain as Chain>::ChainAsset = BenchmarkValue::benchmark_value();
+
+		ScheduledEgressRequests::<T, I>::put(vec![EgressParameter::Ccm{
+			egress_id: (ForeignChain::Ethereum, 1),
+				asset: egress_asset,
+				amount: 1_000,
+				egress_address,
+				message: vec![0x00, 0x01, 0x02, 0x03],
+				caller_address: ForeignChainAddress::Eth(Default::default()),
+		}]);
 	} : { let _ = Pallet::<T, I>::on_idle(Default::default(), Weight::from_ref_time(1_000_000_000_000_000)); }
 	verify {
 		assert!(ScheduledEgressRequests::<T, I>::get().is_empty());

@@ -16,8 +16,8 @@ use cf_primitives::{
 		assets::{any, eth},
 		Ethereum,
 	},
-	AccountId, AccountRole, AmmRange, Asset, AssetAmount, ForeignChain, ForeignChainAddress,
-	PoolAssetMap,
+	AccountId, AccountRole, AmmRange, Asset, AssetAmount, CcmIngressMetadata, ForeignChain,
+	ForeignChainAddress, PoolAssetMap,
 };
 use cf_traits::{AddressDerivationApi, LiquidityPoolApi, LpProvisioningApi, SwappingApi};
 use pallet_cf_ingress_egress::IngressWitness;
@@ -134,7 +134,6 @@ fn can_swap_assets() {
 		]);
 
 		let relayer: AccountId = AccountId::from([0xE0; 32]);
-		let message = vec![0u8, 1u8, 2u8];
 		// Test swap
 		assert_ok!(Swapping::register_swap_intent(
 			RuntimeOrigin::signed(relayer),
@@ -142,7 +141,7 @@ fn can_swap_assets() {
 			Asset::Flip,
 			ForeignChainAddress::Eth(EGRESS_ADDRESS),
 			0u16,
-			message,
+			None,
 		));
 
 		const SWAP_AMOUNT: u128 = 10_000;
@@ -224,7 +223,7 @@ fn swap_can_accrue_fees() {
 			Asset::Flip,
 			ForeignChainAddress::Eth(EGRESS_ADDRESS),
 			0u16,
-			vec![],
+			None,
 		));
 
 		const SWAP_AMOUNT: u128 = 10_000u128;
@@ -329,7 +328,7 @@ fn swap_fails_with_insufficient_liquidity() {
 			Asset::Flip,
 			ForeignChainAddress::Eth(EGRESS_ADDRESS),
 			0u16,
-			vec![],
+			None,
 		));
 
 		let swap_amount = 10_000u128;
