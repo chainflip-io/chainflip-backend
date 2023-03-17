@@ -3,7 +3,9 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use cf_chains::{Chain, ChainAbi, ChainCrypto, SetAggKeyWithAggKey};
-use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex, GENESIS_EPOCH};
+use cf_primitives::{
+	AuthorityCount, CeremonyId, EpochIndex, ThresholdSignatureRequestId, GENESIS_EPOCH,
+};
 use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, Broadcaster, CeremonyIdProvider, Chainflip,
@@ -536,7 +538,7 @@ pub mod pallet {
 		pub fn on_keygen_verification_result(
 			origin: OriginFor<T>,
 			keygen_ceremony_id: CeremonyId,
-			threshold_request_id: <T::ThresholdSigner as ThresholdSigner<T::Chain>>::RequestId,
+			threshold_request_id: ThresholdSignatureRequestId,
 			maybe_signing_ceremony_id: Option<CeremonyId>,
 			new_public_key: AggKeyFor<T, I>,
 		) -> DispatchResultWithPostInfo {
@@ -756,7 +758,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		keygen_ceremony_id: CeremonyId,
 		new_public_key: AggKeyFor<T, I>,
 		participants: BTreeSet<T::ValidatorId>,
-	) -> (<T::ThresholdSigner as ThresholdSigner<T::Chain>>::RequestId, Option<CeremonyId>) {
+	) -> (ThresholdSignatureRequestId, Option<CeremonyId>) {
 		let (request_id, maybe_signing_ceremony_id) =
 			T::ThresholdSigner::request_keygen_verification_signature(
 				T::Chain::agg_key_to_payload(new_public_key),
@@ -859,11 +861,12 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 				new_public_key,
 			) {
 				Ok(rotate_tx) => {
-					T::Broadcaster::threshold_sign_and_broadcast(rotate_tx);
+					let (_, threshold_request_id) =
+						T::Broadcaster::threshold_sign_and_broadcast(rotate_tx);
 					if KeyState::Active == current_vault_epoch_and_state.key_state {
 						CurrentVaultEpochAndState::<T, I>::put(VaultEpochAndState {
 							epoch_index: current_vault_epoch_and_state.epoch_index,
-							key_state: KeyState::Unavailable,
+							key_state: KeyState::Locked(threshold_request_id),
 						})
 					}
 				},

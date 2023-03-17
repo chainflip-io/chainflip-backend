@@ -173,11 +173,13 @@ impl MockBroadcaster {
 impl Broadcaster<Ethereum> for MockBroadcaster {
 	type ApiCall = MockRegisterClaim;
 
-	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) -> cf_primitives::BroadcastId {
+	fn threshold_sign_and_broadcast(
+		api_call: Self::ApiCall,
+	) -> (cf_primitives::BroadcastId, cf_primitives::ThresholdSignatureRequestId) {
 		CLAIM_BROADCAST_REQUESTS.with(|cell| {
 			cell.borrow_mut().push(api_call.amount);
 		});
-		0
+		(0, 1)
 	}
 }
 

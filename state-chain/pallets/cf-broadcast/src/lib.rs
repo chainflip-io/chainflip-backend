@@ -10,7 +10,7 @@ mod mock;
 mod tests;
 
 pub mod weights;
-use cf_primitives::BroadcastId;
+use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
 pub use weights::WeightInfo;
 
 use cf_chains::{ApiCall, Chain, ChainAbi, ChainCrypto, FeeRefundCalculator, TransactionBuilder};
@@ -392,7 +392,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::on_signature_ready())]
 		pub fn on_signature_ready(
 			origin: OriginFor<T>,
-			threshold_request_id: <T::ThresholdSigner as ThresholdSigner<T::TargetChain>>::RequestId,
+			threshold_request_id: ThresholdSignatureRequestId,
 			api_call: Box<<T as Config<I>>::ApiCall>,
 			broadcast_id: BroadcastId,
 		) -> DispatchResultWithPostInfo {
@@ -518,12 +518,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	/// Request a threshold signature, providing [Call::on_signature_ready] as the callback.
-	pub fn threshold_sign_and_broadcast(api_call: <T as Config<I>>::ApiCall) -> BroadcastId {
+	pub fn threshold_sign_and_broadcast(
+		api_call: <T as Config<I>>::ApiCall,
+	) -> (BroadcastId, ThresholdSignatureRequestId) {
 		let broadcast_id = BroadcastIdCounter::<T, I>::mutate(|id| {
 			*id += 1;
 			*id
 		});
-		T::ThresholdSigner::request_signature_with_callback(
+		let (signature_request_id, _) = T::ThresholdSigner::request_signature_with_callback(
 			api_call.threshold_signature_payload(),
 			|id| {
 				Call::on_signature_ready {
@@ -534,7 +536,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				.into()
 			},
 		);
-		broadcast_id
+		(signature_request_id, broadcast_id)
 	}
 
 	/// Begin the process of broadcasting a transaction.
@@ -641,7 +643,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 	type ApiCall = T::ApiCall;
-	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) -> BroadcastId {
+	fn threshold_sign_and_broadcast(
+		api_call: Self::ApiCall,
+	) -> (BroadcastId, ThresholdSignatureRequestId) {
 		Self::threshold_sign_and_broadcast(api_call)
 	}
 }

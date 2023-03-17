@@ -358,7 +358,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		#[allow(clippy::unit_arg)]
 		match T::AllBatch::new_unsigned(fetch_params, egress_params) {
 			Ok(egress_transaction) => {
-				let broadcast_id = T::Broadcaster::threshold_sign_and_broadcast(egress_transaction);
+				let (broadcast_id, _) =
+					T::Broadcaster::threshold_sign_and_broadcast(egress_transaction);
 				Self::deposit_event(Event::<T, I>::BatchBroadcastRequested {
 					broadcast_id,
 					egress_ids,
