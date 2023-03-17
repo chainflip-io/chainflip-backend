@@ -401,7 +401,7 @@ fn addresses_are_getting_reused() {
 			<Test as crate::Config<Instance1>>::WeightInfo::egress_assets(1) +
 				Weight::from_ref_time(1),
 		);
-		IngressEgress::on_initialize(EXPIRY_BLOCK);
+		// IngressEgress::on_initialize(EXPIRY_BLOCK);
 		assert!(!AddressPool::<Test, Instance1>::get().is_empty());
 		assert_eq!(
 			AddressStatus::<Test, Instance1>::get(
@@ -409,13 +409,14 @@ fn addresses_are_getting_reused() {
 			),
 			DeploymentStatus::Deployed
 		);
+		assert_eq!(AddressPool::<Test, Instance1>::get().len(), 1);
 		schedule_ingress(2u64, eth::Asset::Eth);
 		IngressEgress::on_idle(
 			1,
 			<Test as crate::Config<Instance1>>::WeightInfo::egress_assets(1) +
 				Weight::from_ref_time(1),
 		);
-		IngressEgress::on_initialize(EXPIRY_BLOCK);
+		// IngressEgress::on_initialize(EXPIRY_BLOCK);
 		assert_eq!(AddressPool::<Test, Instance1>::get().len(), 1);
 	});
 }
@@ -430,7 +431,7 @@ fn create_new_address_while_pool_is_empty() {
 			<Test as crate::Config<Instance1>>::WeightInfo::egress_assets(3) +
 				Weight::from_ref_time(1),
 		);
-		IngressEgress::on_initialize(EXPIRY_BLOCK);
+		// IngressEgress::on_initialize(EXPIRY_BLOCK);
 		assert_eq!(AddressPool::<Test, Instance1>::get().len(), 2);
 		schedule_ingress(3u64, eth::Asset::Eth);
 		assert_eq!(AddressPool::<Test, Instance1>::get().len(), 1);
@@ -439,7 +440,7 @@ fn create_new_address_while_pool_is_empty() {
 			<Test as crate::Config<Instance1>>::WeightInfo::egress_assets(2) +
 				Weight::from_ref_time(1),
 		);
-		IngressEgress::on_initialize(EXPIRY_BLOCK);
+		// IngressEgress::on_initialize(EXPIRY_BLOCK);
 		assert_eq!(AddressPool::<Test, Instance1>::get().len(), 2);
 	});
 }

@@ -310,8 +310,19 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Callback for when a signature is accepted by the chain.
-		#[pallet::weight(10000)]
-		pub fn on_signature_accepted(_origin: OriginFor<T>) -> DispatchResult {
+		#[pallet::weight(10_000)]
+		pub fn on_signature_accepted(
+			origin: OriginFor<T>,
+			addresses: Vec<(IntentId, TargetChainAccount<T, I>)>,
+		) -> DispatchResult {
+			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
+			for (intent_id, address) in addresses {
+				IntentIngressDetails::<T, I>::remove(&address);
+				IntentActions::<T, I>::remove(&address);
+				AddressPool::<T, I>::append((intent_id, address.clone()));
+				AddressStatus::<T, I>::insert(address.clone(), DeploymentStatus::Deployed);
+				Self::deposit_event(Event::StopWitnessing { ingress_address: address });
+			}
 			Ok(())
 		}
 		/// Sets if an asset is not allowed to be sent out of the chain via Egress.
@@ -338,7 +349,6 @@ pub mod pallet {
 
 			Ok(())
 		}
-
 		/// Send up to `maybe_size` number of scheduled transactions out for a specific chain.
 		/// If None is set for `maybe_size`, send all scheduled transactions.
 		/// Requires governance
@@ -355,7 +365,6 @@ pub mod pallet {
 			with_transaction(|| Self::egress_scheduled_assets(maybe_size))?;
 			Ok(())
 		}
-
 		/// Complete an ingress request. Called when funds have been deposited into the given
 		/// address. Requires `EnsureWitnessed` origin.
 		#[pallet::weight(T::WeightInfo::do_single_ingress().saturating_mul(ingress_witnesses.len() as u64))]
@@ -413,6 +422,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let mut fetch_params = vec![];
 		let mut egress_params = vec![];
 		let mut egress_ids = vec![];
+		let mut addresses = vec![];
 
 		for request in batch_to_send {
 			match request {
@@ -420,10 +430,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					let (ingress_id, ingress_address) = FetchParamDetails::<T, I>::get(intent_id)
 						.expect("to have fetch param details available");
 					fetch_params.push(FetchAssetParams { ingress_fetch_id: ingress_id, asset });
-					AddressStatus::<T, I>::insert(
-						ingress_address.clone(),
-						DeploymentStatus::Deployed,
-					);
+					addresses.push((intent_id, ingress_address.clone()));
 				},
 				FetchOrTransfer::<T::TargetChain>::Transfer { asset, to, amount, egress_id } => {
 					egress_ids.push(egress_id);
@@ -440,7 +447,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Ok(egress_transaction) => {
 				let broadcast_id = T::Broadcaster::threshold_sign_and_broadcast_with_callback(
 					egress_transaction,
-					Call::on_signature_accepted {}.into(),
+					Call::on_signature_accepted { addresses }.into(),
 				);
 				Self::deposit_event(Event::<T, I>::BatchBroadcastRequested {
 					broadcast_id,
