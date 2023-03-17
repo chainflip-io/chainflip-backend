@@ -376,6 +376,7 @@ where
                                     ) => {
                                         // Ceremony id tracking is global, so update all other clients
                                         dot_multisig_client.update_latest_ceremony_id(ceremony_id);
+                                        btc_multisig_client.update_latest_ceremony_id(ceremony_id);
 
                                         handle_keygen_request::<_, _, _, EthereumInstance>(
                                             scope,
@@ -396,6 +397,7 @@ where
                                     ) => {
                                         // Ceremony id tracking is global, so update all other clients
                                         eth_multisig_client.update_latest_ceremony_id(ceremony_id);
+                                        btc_multisig_client.update_latest_ceremony_id(ceremony_id);
 
                                         handle_keygen_request::<_, _, _, PolkadotInstance>(
                                             scope,
@@ -415,7 +417,8 @@ where
                                         }
                                     ) => {
                                         // Ceremony id tracking is global, so update all other clients
-                                        btc_multisig_client.update_latest_ceremony_id(ceremony_id);
+                                        eth_multisig_client.update_latest_ceremony_id(ceremony_id);
+                                        dot_multisig_client.update_latest_ceremony_id(ceremony_id);
 
                                         handle_keygen_request::<_, _, _, BitcoinInstance>(
                                             scope,
@@ -438,6 +441,7 @@ where
                                     ) => {
                                         // Ceremony id tracking is global, so update all other clients
                                         dot_multisig_client.update_latest_ceremony_id(ceremony_id);
+                                        btc_multisig_client.update_latest_ceremony_id(ceremony_id);
 
                                         handle_signing_request::<_, _, _, EthereumInstance>(
                                                 scope,
@@ -460,7 +464,8 @@ where
                                         },
                                     ) => {
                                         // Ceremony id tracking is global, so update all other clients
-                                        dot_multisig_client.update_latest_ceremony_id(ceremony_id);
+                                        eth_multisig_client.update_latest_ceremony_id(ceremony_id);
+                                        btc_multisig_client.update_latest_ceremony_id(ceremony_id);
 
                                         handle_signing_request::<_, _, PolkadotSigning, PolkadotInstance>(
                                                 scope,
@@ -484,7 +489,8 @@ where
                                         },
                                     ) => {
                                         // Ceremony id tracking is global, so update all other clients
-                                        btc_multisig_client.update_latest_ceremony_id(ceremony_id);
+                                        eth_multisig_client.update_latest_ceremony_id(ceremony_id);
+                                        dot_multisig_client.update_latest_ceremony_id(ceremony_id);
 
                                         handle_signing_request::<_, _, _, BitcoinInstance>(
                                                 scope,
