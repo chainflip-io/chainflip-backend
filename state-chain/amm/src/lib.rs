@@ -51,7 +51,7 @@ const MAX_TICK_GROSS_LIQUIDITY: Liquidity = Liquidity::MAX / ((1 + MAX_TICK - MI
 
 const ONE_IN_PIPS: u32 = 1000000;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct Position {
 	liquidity: Liquidity,
 	last_fee_growth_inside: enum_map::EnumMap<Side, FeeGrowthQ128F128>,
@@ -119,13 +119,14 @@ impl Position {
 	}
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct TickInfo {
 	liquidity_delta: i128,
 	liquidity_gross: u128,
 	fee_growth_outside: enum_map::EnumMap<Side, FeeGrowthQ128F128>,
 }
 
+#[derive(Clone, Debug)]
 pub struct PoolState {
 	fee_pips: u32,
 	current_sqrt_price: SqrtPriceQ64F96,
