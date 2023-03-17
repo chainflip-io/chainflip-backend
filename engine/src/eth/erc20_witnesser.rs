@@ -1,8 +1,9 @@
-use std::{collections::BTreeSet, sync::Arc};
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use cf_primitives::{chains::assets::eth, EpochIndex, EthAmount};
 use state_chain_runtime::EthereumInstance;
+use tokio::sync::Mutex;
 use web3::{
 	ethabi::{self, RawLog},
 	types::H160,
@@ -11,8 +12,8 @@ use web3::{
 use crate::state_chain_observer::client::extrinsic_api::ExtrinsicApi;
 
 use super::{
-	core_h160, core_h256, event::Event, rpc::EthRpcApi, utils, BlockWithItems, DecodeLogClosure,
-	EthContractWitnesser, SignatureAndEvent,
+	core_h160, core_h256, event::Event, rpc::EthRpcApi, utils, witnessing::AddressMonitor,
+	BlockWithItems, DecodeLogClosure, EthContractWitnesser, SignatureAndEvent,
 };
 use pallet_cf_ingress_egress::IngressWitness;
 
@@ -35,8 +36,7 @@ pub struct Erc20Witnesser {
 	pub deployed_address: H160,
 	asset: eth::Asset,
 	contract: ethabi::Contract,
-	pub monitored_addresses: BTreeSet<sp_core::H160>,
-	pub monitored_address_receiver: tokio::sync::mpsc::UnboundedReceiver<sp_core::H160>,
+	address_monitor: Arc<Mutex<AddressMonitor>>,
 }
 
 impl Erc20Witnesser {
@@ -44,16 +44,14 @@ impl Erc20Witnesser {
 	pub fn new(
 		deployed_address: H160,
 		asset: eth::Asset,
-		monitored_addresses: BTreeSet<sp_core::H160>,
-		monitored_address_receiver: tokio::sync::mpsc::UnboundedReceiver<sp_core::H160>,
+		address_monitor: Arc<Mutex<AddressMonitor>>,
 	) -> Self {
 		Self {
 			deployed_address,
 			asset,
 			contract: ethabi::Contract::load(std::include_bytes!("abis/ERC20.json").as_ref())
 				.unwrap(),
-			monitored_addresses,
-			monitored_address_receiver,
+			address_monitor,
 		}
 	}
 }
@@ -78,16 +76,17 @@ impl EthContractWitnesser for Erc20Witnesser {
 		EthRpcClient: EthRpcApi + Sync + Send,
 		StateChainClient: ExtrinsicApi + Send + Sync,
 	{
-		while let Ok(address) = self.monitored_address_receiver.try_recv() {
-			self.monitored_addresses.insert(address);
-		}
+		let mut address_monitor =
+			self.address_monitor.try_lock().expect("should have exclusive ownership");
+
+		address_monitor.fetch_addresses();
 
 		let ingress_witnesses: Vec<_> = block
 			.block_items
 			.into_iter()
 			.filter_map(|event| match event.event_parameters {
 				Erc20Event::Transfer { to, value, from: _ }
-					if self.monitored_addresses.contains(&core_h160(to)) =>
+					if address_monitor.contains(&core_h160(to)) =>
 					Some(IngressWitness {
 						ingress_address: core_h160(to),
 						amount: value,
@@ -173,8 +172,10 @@ mod tests {
 		let contract = Erc20Witnesser::new(
 			H160::default(),
 			eth::Asset::Flip,
-			Default::default(),
-			eth_monitor_erc20_ingress_receiver,
+			Arc::new(Mutex::new(AddressMonitor::new(
+				Default::default(),
+				eth_monitor_erc20_ingress_receiver,
+			))),
 		)
 		.contract;
 
@@ -191,8 +192,10 @@ mod tests {
 		Erc20Witnesser::new(
 			H160::default(),
 			eth::Asset::Flip,
-			Default::default(),
-			eth_monitor_erc20_ingress_receiver,
+			Arc::new(Mutex::new(AddressMonitor::new(
+				Default::default(),
+				eth_monitor_erc20_ingress_receiver,
+			))),
 		);
 	}
 
@@ -203,8 +206,10 @@ mod tests {
 		let erc20_witnesser = Erc20Witnesser::new(
 			H160::default(),
 			eth::Asset::Flip,
-			Default::default(),
-			eth_monitor_erc20_ingress_receiver,
+			Arc::new(Mutex::new(AddressMonitor::new(
+				Default::default(),
+				eth_monitor_erc20_ingress_receiver,
+			))),
 		);
 		let decode_log = erc20_witnesser.decode_log_closure().unwrap();
 
@@ -261,8 +266,10 @@ mod tests {
 		let erc20_witnesser = Erc20Witnesser::new(
 			H160::default(),
 			eth::Asset::Flip,
-			Default::default(),
-			eth_monitor_erc20_ingress_receiver,
+			Arc::new(Mutex::new(AddressMonitor::new(
+				Default::default(),
+				eth_monitor_erc20_ingress_receiver,
+			))),
 		);
 		let decode_log = erc20_witnesser.decode_log_closure().unwrap();
 

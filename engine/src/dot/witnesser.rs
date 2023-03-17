@@ -21,7 +21,7 @@ use subxt::{
 	config::Header,
 	events::{Phase, StaticEvent},
 };
-use tokio::select;
+use tokio::{select, sync::Mutex};
 use tracing::{debug, error, info, info_span, trace, Instrument};
 
 use crate::{
@@ -235,13 +235,13 @@ pub async fn start<StateChainClient, DotRpc>(
 	monitored_signatures: BTreeSet<[u8; 64]>,
 	state_chain_client: Arc<StateChainClient>,
 	db: Arc<PersistentKeyDB>,
-) -> std::result::Result<(), (async_broadcast::Receiver<EpochStart<Polkadot>>, anyhow::Error)>
+) -> std::result::Result<(), anyhow::Error>
 where
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
 	DotRpc: DotRpcApi + 'static + Send + Sync + Clone,
 {
 	epoch_witnesser::start(
-		epoch_starts_receiver,
+		Arc::new(Mutex::new(epoch_starts_receiver)),
 		|_epoch_start| true,
 		(monitored_ingress_addresses, ingress_address_receiver, monitored_signatures, signature_receiver),
 		move |
