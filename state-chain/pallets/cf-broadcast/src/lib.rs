@@ -490,8 +490,6 @@ pub mod pallet {
 				);
 			}
 
-			Self::clean_up_broadcast_storage(broadcast_id);
-
 			if let Some(callback) = RequestCallbacks::<T, I>::take(broadcast_id) {
 				Self::deposit_event(Event::<T, I>::SignatureAcceptedCallbackExecuted {
 					broadcast_id,
@@ -499,7 +497,7 @@ pub mod pallet {
 						.dispatch_bypass_filter(Origin(Default::default()).into())
 						.map(|_| ())
 						.map_err(|e| {
-							log::error!(
+							log::warn!(
 								"Callback execution has failed for broadcast {}.",
 								broadcast_id
 							);
@@ -507,6 +505,8 @@ pub mod pallet {
 						}),
 				});
 			}
+
+			Self::clean_up_broadcast_storage(broadcast_id);
 
 			Self::deposit_event(Event::<T, I>::BroadcastSuccess { broadcast_id });
 			Ok(().into())
