@@ -97,7 +97,7 @@ impl<C: CryptoScheme> CeremonyTrait for SigningCeremony<C> {
 	type Crypto = C;
 	type Data = SigningData<<C as CryptoScheme>::Point>;
 	type Request = CeremonyRequest<C>;
-	type Output = <C as CryptoScheme>::Signature;
+	type Output = Vec<<C as CryptoScheme>::Signature>;
 	type FailureReason = SigningFailureReason;
 	type CeremonyStageName = SigningStageName;
 }
@@ -126,7 +126,7 @@ pub fn prepare_signing_request<Crypto: CryptoScheme>(
 	own_account_id: &AccountId,
 	signers: BTreeSet<AccountId>,
 	key_info: KeygenResultInfo<Crypto>,
-	payload: Crypto::SigningPayload,
+	payloads: Vec<Crypto::SigningPayload>,
 	outgoing_p2p_message_sender: &UnboundedSender<OutgoingMultisigStageMessages>,
 	rng: Rng,
 ) -> Result<PreparedRequest<SigningCeremony<Crypto>>, SigningFailureReason> {
@@ -167,7 +167,7 @@ pub fn prepare_signing_request<Crypto: CryptoScheme>(
 
 		let processor = AwaitCommitments1::<Crypto>::new(
 			common.clone(),
-			SigningStateCommonInfo { payload, key: key_info.key },
+			SigningStateCommonInfo { payloads, key: key_info.key },
 		);
 
 		Box::new(BroadcastStage::new(processor, common))
@@ -388,7 +388,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 		&mut self,
 		ceremony_id: CeremonyId,
 		signers: BTreeSet<AccountId>,
-		payload: C::SigningPayload,
+		payloads: Vec<C::SigningPayload>,
 		key_info: KeygenResultInfo<C>,
 		rng: Rng,
 		result_sender: CeremonyResultSender<SigningCeremony<C>>,
@@ -402,7 +402,8 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 		debug!("Processing a request to sign");
 
 		if signers.len() == 1 {
-			let _result = result_sender.send(Ok(self.single_party_signing(payload, key_info, rng)));
+			let _result =
+				result_sender.send(Ok(self.single_party_signing(payloads, key_info, rng)));
 			return
 		}
 
@@ -411,7 +412,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 			&self.my_account_id,
 			signers,
 			key_info,
-			payload,
+			payloads,
 			&self.outgoing_p2p_message_sender,
 			rng,
 		) {
@@ -489,15 +490,18 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 
 	fn single_party_signing(
 		&self,
-		payload: C::SigningPayload,
+		payloads: Vec<C::SigningPayload>,
 		keygen_result_info: KeygenResultInfo<C>,
 		mut rng: Rng,
-	) -> C::Signature {
+	) -> Vec<C::Signature> {
 		info!("Performing solo signing");
 
 		let key = &keygen_result_info.key.key_share;
 
-		generate_single_party_signature::<C>(&key.x_i, &payload, &mut rng)
+		payloads
+			.iter()
+			.map(|payload| generate_single_party_signature::<C>(&key.x_i, payload, &mut rng))
+			.collect()
 	}
 }
 

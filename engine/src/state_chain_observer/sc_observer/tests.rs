@@ -1280,7 +1280,7 @@ I>>() 		.once()
 			predicate::eq(next_ceremony_id),
 			predicate::eq(key_id.clone()),
 			predicate::eq(BTreeSet::from_iter([our_account_id.clone()])),
-			predicate::eq(payload.clone()),
+			predicate::eq(vec![payload.clone()]),
 		)
 		.once()
 		.return_once(|_, _, _, _| {

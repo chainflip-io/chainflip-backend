@@ -29,6 +29,8 @@ pub enum SigningFailureReason {
 	NotEnoughSigners,
 	#[error("Unknown Key")]
 	UnknownKey,
+	#[error("Invalid Number of Payloads")]
+	InvalidNumberOfPayloads,
 }
 
 #[derive(Error, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -91,6 +93,9 @@ impl CeremonyFailureReason for SigningFailureReason {
 			SigningFailureReason::NotEnoughSigners |
 			SigningFailureReason::UnknownKey => {
 				warn!(tag = REQUEST_TO_SIGN_IGNORED, "{REQUEST_TO_SIGN_IGNORED_PREFIX}: {self}",);
+			},
+			SigningFailureReason::InvalidNumberOfPayloads => {
+				warn!(reported_parties = reported_parties, "{self}");
 			},
 		}
 	}

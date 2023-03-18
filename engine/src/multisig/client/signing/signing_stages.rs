@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::multisig::{
 	client::{
@@ -20,9 +20,12 @@ use client::common::{
 use signing::signing_detail::{self, SecretNoncePair};
 
 use signing::SigningStateCommonInfo;
-use tracing::debug;
+use tracing::{debug, warn};
 
-use super::signing_data::{Comm1, LocalSig3, VerifyComm2, VerifyLocalSig4};
+use super::{
+	signing_data::{Comm1, LocalSig3, VerifyComm2, VerifyLocalSig4},
+	SigningCommitment,
+};
 
 type SigningStageResult<Crypto> = StageResult<SigningCeremony<Crypto>>;
 
@@ -33,12 +36,17 @@ type SigningStageResult<Crypto> = StageResult<SigningCeremony<Crypto>>;
 pub struct AwaitCommitments1<Crypto: CryptoScheme> {
 	common: CeremonyCommon,
 	signing_common: SigningStateCommonInfo<Crypto>,
-	nonces: Box<SecretNoncePair<Crypto::Point>>,
+	// TODO: The reason to keep nonces in a Box was to
+	// ensure they are allocated on the heap. We can probably
+	// remove `Box` now that the items are stored in Vec
+	nonces: Vec<Box<SecretNoncePair<Crypto::Point>>>,
 }
 
 impl<Crypto: CryptoScheme> AwaitCommitments1<Crypto> {
 	pub fn new(mut common: CeremonyCommon, signing_common: SigningStateCommonInfo<Crypto>) -> Self {
-		let nonces = SecretNoncePair::sample_random(&mut common.rng);
+		let nonces = (0..signing_common.payloads.len())
+			.map(|_| SecretNoncePair::sample_random(&mut common.rng))
+			.collect();
 
 		AwaitCommitments1 { common, signing_common, nonces }
 	}
@@ -54,7 +62,12 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 	const NAME: SigningStageName = SigningStageName::AwaitCommitments1;
 
 	fn init(&mut self) -> DataToSend<Self::Message> {
-		DataToSend::Broadcast(Comm1 { d: self.nonces.d_pub, e: self.nonces.e_pub })
+		let comm1 = self
+			.nonces
+			.iter()
+			.map(|nonce| SigningCommitment { d: nonce.d_pub, e: nonce.e_pub })
+			.collect();
+		DataToSend::Broadcast(Comm1(comm1))
 	}
 
 	async fn process(
@@ -83,7 +96,7 @@ struct VerifyCommitmentsBroadcast2<Crypto: CryptoScheme> {
 	common: CeremonyCommon,
 	signing_common: SigningStateCommonInfo<Crypto>,
 	// Our nonce pair generated in the previous stage
-	nonces: Box<SecretNoncePair<Crypto::Point>>,
+	nonces: Vec<Box<SecretNoncePair<Crypto::Point>>>,
 	// Public nonce commitments collected in the previous stage
 	commitments: BTreeMap<AuthorityCount, Option<Comm1<Crypto::Point>>>,
 }
@@ -119,6 +132,32 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 				),
 		};
 
+		// Check that the number of commitments matches
+		// the number of payloads
+		let bad_parties: BTreeSet<_> = verified_commitments
+			.iter()
+			.filter_map(|(party_idx, Comm1(commitments))| {
+				if commitments.len() != self.signing_common.payloads.len() {
+					warn!(
+						"Unexpected number of commitments from party {}: {} (expected: {})",
+						party_idx,
+						commitments.len(),
+						self.signing_common.payloads.len(),
+					);
+					Some(*party_idx)
+				} else {
+					None
+				}
+			})
+			.collect();
+
+		if bad_parties.len() > 0 {
+			return SigningStageResult::Error(
+				bad_parties,
+				SigningFailureReason::InvalidNumberOfPayloads,
+			)
+		}
+
 		debug!("{} is successful", Self::NAME);
 
 		let processor = LocalSigStage3::<Crypto> {
@@ -139,7 +178,7 @@ struct LocalSigStage3<Crypto: CryptoScheme> {
 	common: CeremonyCommon,
 	signing_common: SigningStateCommonInfo<Crypto>,
 	// Our nonce pair generated in the previous stage
-	nonces: Box<SecretNoncePair<Crypto::Point>>,
+	nonces: Vec<Box<SecretNoncePair<Crypto::Point>>>,
 	// Public nonce commitments (verified)
 	commitments: BTreeMap<AuthorityCount, Comm1<Crypto::Point>>,
 }
@@ -156,20 +195,36 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 	/// With all nonce commitments verified, we can generate the group commitment
 	/// and our share of signature response, which we broadcast to other parties.
 	fn init(&mut self) -> DataToSend<Self::Message> {
-		let data = DataToSend::Broadcast(signing_detail::generate_local_sig::<Crypto>(
-			&self.signing_common.payload,
-			&self.signing_common.key.key_share,
-			&self.nonces,
-			&self.commitments,
-			self.common.own_idx,
-			&self.common.all_idxs,
-		));
+		let responses = (0..self.signing_common.payloads.len())
+			.map(|i| {
+				// Extract commitments for a specific payload (there is some room
+				// for optimisation here)
+				let commitments = self
+					.commitments
+					.iter()
+					.map(|(party_idx, c)| (*party_idx, c.0[i].clone()))
+					.collect();
+
+				signing_detail::generate_local_sig::<Crypto>(
+					&self.signing_common.payloads[i],
+					&self.signing_common.key.key_share,
+					&self.nonces[i],
+					&commitments,
+					self.common.own_idx,
+					&self.common.all_idxs,
+				)
+			})
+			.collect();
+
+		let data = DataToSend::Broadcast(LocalSig3 { responses });
 
 		use zeroize::Zeroize;
 
 		// Secret nonces are deleted here (according to
 		// step 6, Figure 3 in https://eprint.iacr.org/2020/852.pdf).
-		self.nonces.zeroize();
+		for nonce in &mut self.nonces {
+			nonce.zeroize();
+		}
 
 		data
 	}
@@ -234,6 +289,32 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 				),
 		};
 
+		// Check that the number of local signature matches
+		// the number of payloads
+		let bad_parties: BTreeSet<_> = local_sigs
+			.iter()
+			.filter_map(|(party_idx, LocalSig3 { responses })| {
+				if responses.len() != self.signing_common.payloads.len() {
+					warn!(
+						"Unexpected number of local signatures from party {}: {} (expected: {})",
+						party_idx,
+						responses.len(),
+						self.signing_common.payloads.len(),
+					);
+					Some(*party_idx)
+				} else {
+					None
+				}
+			})
+			.collect();
+
+		if bad_parties.len() > 0 {
+			return SigningStageResult::Error(
+				bad_parties,
+				SigningFailureReason::InvalidNumberOfPayloads,
+			)
+		}
+
 		debug!("{} is successful", Self::NAME);
 
 		let all_idxs = &self.common.all_idxs;
@@ -243,15 +324,38 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 			.map(|idx| (*idx, self.signing_common.key.party_public_keys[*idx as usize - 1]))
 			.collect();
 
-		match signing_detail::aggregate_signature::<Crypto>(
-			&self.signing_common.payload,
-			all_idxs,
-			self.signing_common.key.get_public_key(),
-			&pubkeys,
-			&self.commitments,
-			&local_sigs,
-		) {
-			Ok(sig) => StageResult::Done(sig),
+		let signatures_result = (0..self.signing_common.payloads.len())
+			.map(|i| {
+				// Extract commitments for a specific payload (there is some room
+				// for optimisation here)
+				let commitments = self
+					.commitments
+					.iter()
+					.map(|(party_idx, commitments)| (*party_idx, commitments.0[i].clone()))
+					.collect();
+
+				// Extract local signatures for a specific payload (there is some
+				// room for optimization here)
+				let local_sigs = local_sigs
+					.iter()
+					.map(|(party_idx, local_signatures)| {
+						(*party_idx, local_signatures.responses[i].clone())
+					})
+					.collect();
+
+				signing_detail::aggregate_signature::<Crypto>(
+					&self.signing_common.payloads[i],
+					all_idxs,
+					self.signing_common.key.get_public_key(),
+					&pubkeys,
+					&commitments,
+					&local_sigs,
+				)
+			})
+			.collect::<Result<Vec<_>, _>>();
+
+		match signatures_result {
+			Ok(signatures) => StageResult::Done(signatures),
 			Err(failed_idxs) =>
 				StageResult::Error(failed_idxs, SigningFailureReason::InvalidSigShare),
 		}

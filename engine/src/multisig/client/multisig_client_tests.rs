@@ -46,7 +46,7 @@ async fn should_ignore_rts_for_unknown_key() {
 		DEFAULT_SIGNING_CEREMONY_ID,
 		key_id,
 		BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
-		EthSigning::signing_payload_for_test(),
+		vec![EthSigning::signing_payload_for_test()],
 	);
 
 	// Check sign request fails immediately with "unknown key" error

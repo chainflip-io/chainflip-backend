@@ -96,6 +96,47 @@ async fn should_report_on_inconsistent_broadcast_local_sig3() {
 		.await;
 }
 
+#[tokio::test]
+async fn should_sign_multiple_payloads() {
+	use crate::multisig::eth::SigningPayload;
+	type Point = <EthSigning as CryptoScheme>::Point;
+
+	let mut rng = Rng::from_seed([0; 32]);
+	let (key_id, key_data) =
+		generate_key_data::<EthSigning>(BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()), &mut rng);
+
+	let payloads: [SigningPayload; 2] = [
+		SigningPayload("Chainflip:Chainflip:Chainflip:01".as_bytes().try_into().unwrap()),
+		SigningPayload("Chainflip:Chainflip:Chainflip:02".as_bytes().try_into().unwrap()),
+	];
+
+	let mut signing_ceremony = SigningCeremonyRunner::<EthSigning>::new_with_all_signers(
+		new_nodes(ACCOUNT_IDS.clone()),
+		DEFAULT_SIGNING_CEREMONY_ID,
+		key_id.clone(),
+		key_data,
+		payloads.to_vec(),
+		rng,
+	);
+
+	let messages = signing_ceremony.request().await;
+	let messages = run_stages!(
+		signing_ceremony,
+		messages,
+		signing_data::VerifyComm2<Point>,
+		signing_data::LocalSig3<Point>,
+		signing_data::VerifyLocalSig4<Point>
+	);
+	signing_ceremony.distribute_messages(messages).await;
+	let signature = signing_ceremony
+		.complete()
+		.await
+		.into_iter()
+		.next()
+		.expect("should have exactly one signature");
+	assert!(EthSigning::verify_signature(&signature, &key_id, &payloads[0]).is_ok());
+}
+
 async fn should_sign_with_all_parties<C: CryptoScheme>() {
 	// This seed ensures that the initially
 	// generated key is incompatible to increase
@@ -113,7 +154,7 @@ async fn should_sign_with_all_parties<C: CryptoScheme>() {
 			DEFAULT_SIGNING_CEREMONY_ID,
 			key_id.clone(),
 			key_data,
-			C::signing_payload_for_test(),
+			vec![C::signing_payload_for_test()],
 			Rng::from_seed(nonceseed),
 		);
 
@@ -126,7 +167,12 @@ async fn should_sign_with_all_parties<C: CryptoScheme>() {
 			signing_data::VerifyLocalSig4<C::Point>
 		);
 		signing_ceremony.distribute_messages(messages).await;
-		let signature = signing_ceremony.complete().await;
+		let signature = signing_ceremony
+			.complete()
+			.await
+			.into_iter()
+			.next()
+			.expect("should have exactly one signature");
 		assert!(C::verify_signature(&signature, &key_id, &C::signing_payload_for_test()).is_ok());
 	}
 }

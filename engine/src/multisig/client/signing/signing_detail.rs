@@ -12,7 +12,7 @@ use crate::multisig::crypto::{CryptoScheme, ECPoint, ECScalar, KeyShare, Rng};
 
 use sha2::{Digest, Sha256};
 
-use super::{signing_data::SigningCommitment, LocalSig3};
+use super::signing_data::SigningCommitment;
 
 /// A pair of secret single-use nonces (and their
 /// corresponding public commitments). Correspond to (d,e)
@@ -108,7 +108,7 @@ fn gen_rho_i<P: ECPoint>(
 	P::Scalar::from_bytes_mod_order(&x)
 }
 
-type SigningResponse<P> = LocalSig3<P>;
+type SigningResponse<P> = <P as ECPoint>::Scalar;
 
 /// Generate binding values for each party given their previously broadcast commitments
 fn generate_bindings<C: CryptoScheme>(
@@ -146,10 +146,7 @@ pub fn generate_local_sig<C: CryptoScheme>(
 
 	let key_share = lambda_i * &key.x_i;
 
-	let response =
-		generate_schnorr_response::<C>(&key_share, key.y, group_commitment, nonce_share, payload);
-
-	SigningResponse { response }
+	generate_schnorr_response::<C>(&key_share, key.y, group_commitment, nonce_share, payload)
 }
 
 pub fn generate_schnorr_response<C: CryptoScheme>(
@@ -201,7 +198,7 @@ pub fn aggregate_signature<C: CryptoScheme>(
 				&commitment_i,
 				&group_commitment,
 				&challenge,
-				&response.response,
+				&response,
 			)
 		})
 		.collect();
@@ -210,7 +207,7 @@ pub fn aggregate_signature<C: CryptoScheme>(
 		// Response shares/shards are additive, so we simply need to
 		// add them together (see step 7.c in Figure 3, page 15).
 		let z: <C::Point as ECPoint>::Scalar =
-			responses.iter().map(|(_idx, sig)| sig.response.clone()).sum();
+			responses.iter().map(|(_idx, sig)| sig.clone()).sum();
 
 		Ok(C::build_signature(z, group_commitment))
 	} else {

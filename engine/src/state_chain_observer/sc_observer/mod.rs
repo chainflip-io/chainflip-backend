@@ -99,7 +99,7 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient, C, I>(
 	if signers.contains(&state_chain_client.account_id()) {
 		// We initiate signing outside of the spawn to avoid requesting ceremonies out of order
 		let signing_result_future =
-			multisig_client.initiate_signing(ceremony_id, key_id, signers, payload);
+			multisig_client.initiate_signing(ceremony_id, key_id, signers, vec![payload]);
 		scope.spawn(async move {
 			match signing_result_future.await {
 				Ok(signature) => {
