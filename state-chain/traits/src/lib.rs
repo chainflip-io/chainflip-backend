@@ -569,8 +569,8 @@ pub trait Bonding {
 pub trait CeremonyIdProvider {
 	type CeremonyId;
 
-	/// Get the next ceremony id in the sequence.
-	fn next_ceremony_id() -> Self::CeremonyId;
+	/// Increment the ceremony id, returning the new one.
+	fn increment_ceremony_id() -> Self::CeremonyId;
 }
 
 /// Something that is able to provide block authorship slots that were missed.

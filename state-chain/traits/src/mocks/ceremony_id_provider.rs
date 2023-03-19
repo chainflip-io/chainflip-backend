@@ -28,7 +28,7 @@ where
 {
 	type CeremonyId = Id;
 
-	fn next_ceremony_id() -> Self::CeremonyId {
+	fn increment_ceremony_id() -> Self::CeremonyId {
 		let mut id = Self::get();
 		id += One::one();
 		Self::set(id);

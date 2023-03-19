@@ -665,7 +665,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Initiates a new ceremony request.
 	fn new_ceremony_attempt(request_instruction: RequestInstruction<T, I>) -> CeremonyId {
-		let ceremony_id = T::CeremonyIdProvider::next_ceremony_id();
+		let ceremony_id = T::CeremonyIdProvider::increment_ceremony_id();
 
 		let request_id = request_instruction.request_context.request_id;
 		let attempt_count = request_instruction.request_context.attempt_count;
