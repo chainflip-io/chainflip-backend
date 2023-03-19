@@ -370,6 +370,7 @@ pub enum KeyState {
 	// We are currently transitioning to a new key or the key doesn't yet exist.
 	#[default]
 	Unavailable,
+	/// Key is only available to sign this request id.
 	Locked(ThresholdSignatureRequestId),
 }
 
