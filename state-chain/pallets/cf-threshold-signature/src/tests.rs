@@ -612,7 +612,7 @@ mod failure_reporting {
 	use super::*;
 	use crate::{CeremonyContext, RequestContext, ThresholdCeremonyType};
 	use cf_chains::ChainCrypto;
-	use cf_traits::{mocks::epoch_info::MockEpochInfo, KeyProvider};
+	use cf_traits::mocks::epoch_info::MockEpochInfo;
 
 	fn init_context(
 		validator_set: impl IntoIterator<Item = <Test as Chainflip>::ValidatorId> + Copy,
