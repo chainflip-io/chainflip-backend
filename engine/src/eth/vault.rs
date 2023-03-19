@@ -20,7 +20,7 @@ pub struct Vault {
 	contract: ethabi::Contract,
 }
 
-// The following events need to reflect the events emitted in the staking contract:
+// The following events need to reflect the events emitted in the Vault contract:
 // https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/Vault.sol
 #[derive(Debug, PartialEq, Eq)]
 pub enum VaultEvent {
