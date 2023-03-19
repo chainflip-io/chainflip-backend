@@ -8,17 +8,6 @@ use frame_support::{storage, StorageHasher, Twox64Concat};
 use crate::CeremonyIdProvider;
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub struct ConstCeremonyIdProvider<const ID: u64>();
-
-impl<const ID: u64> CeremonyIdProvider for ConstCeremonyIdProvider<ID> {
-	type CeremonyId = u64;
-
-	fn next_ceremony_id() -> u64 {
-		ID
-	}
-}
-
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct MockCeremonyIdProvider<Id>(PhantomData<Id>);
 
 impl<Id: Encode + Decode + Default> MockCeremonyIdProvider<Id> {
