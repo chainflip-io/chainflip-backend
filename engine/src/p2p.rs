@@ -15,7 +15,10 @@ use crate::{
 	state_chain_observer::client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi},
 };
 
-pub use self::core::{PeerInfo, PeerUpdate};
+pub use self::{
+	core::{PeerInfo, PeerUpdate},
+	muxer::VersionedCeremonyMessage,
+};
 use anyhow::Context;
 use cf_primitives::AccountId;
 use futures::{Future, FutureExt};
@@ -46,12 +49,12 @@ impl<C: CryptoScheme> MultisigMessageSender<C> {
 	}
 }
 pub struct MultisigMessageReceiver<C: CryptoScheme>(
-	pub UnboundedReceiver<(AccountId, Vec<u8>)>,
+	pub UnboundedReceiver<(AccountId, VersionedCeremonyMessage)>,
 	PhantomData<C>,
 );
 
 impl<C: CryptoScheme> MultisigMessageReceiver<C> {
-	pub fn new(receiver: UnboundedReceiver<(AccountId, Vec<u8>)>) -> Self {
+	pub fn new(receiver: UnboundedReceiver<(AccountId, VersionedCeremonyMessage)>) -> Self {
 		MultisigMessageReceiver(receiver, PhantomData)
 	}
 }

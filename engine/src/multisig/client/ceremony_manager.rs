@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use futures::FutureExt;
 use std::{
 	collections::{hash_map, BTreeSet, HashMap},
@@ -23,7 +23,7 @@ use crate::{
 		},
 		crypto::{generate_single_party_signature, CryptoScheme, Rng},
 	},
-	p2p::OutgoingMultisigStageMessages,
+	p2p::{OutgoingMultisigStageMessages, VersionedCeremonyMessage},
 	task_scope::{task_scope, Scope, ScopedJoinHandle},
 };
 use cf_primitives::{AuthorityCount, CeremonyId};
@@ -43,6 +43,7 @@ use super::{
 		SigningStageName,
 	},
 	keygen::{HashCommitments1, HashContext, KeygenData},
+	legacy::MultisigMessageV1,
 	signing::SigningData,
 	CeremonyRequest, MultisigData, MultisigMessage,
 };
@@ -239,6 +240,28 @@ fn map_ceremony_parties(
 	Ok((our_idx, signer_idxs))
 }
 
+fn deserialize_for_version<C: CryptoScheme>(
+	message: VersionedCeremonyMessage,
+) -> Result<MultisigMessage<C::Point>> {
+	match message.version {
+		1 => {
+			// NOTE: version 1 did not expect signing over multiple payloads,
+			// so we need to parse them using the old format and transform to the new
+			// format:
+			let message: MultisigMessageV1<C::Point> = bincode::deserialize(&message.payload)
+				.map_err(|e| {
+					anyhow!("Failed to deserialize message (version: {}): {:?}", message.version, e)
+				})?;
+
+			Ok(MultisigMessage { ceremony_id: message.ceremony_id, data: message.data.into() })
+		},
+		2 => bincode::deserialize::<'_, MultisigMessage<C::Point>>(&message.payload).map_err(|e| {
+			anyhow!("Failed to deserialize message (version: {}): {:?}", message.version, e)
+		}),
+		_ => Err(anyhow!("Unsupported message version: {}", message.version)),
+	}
+}
+
 impl<C: CryptoScheme> CeremonyManager<C> {
 	pub fn new(
 		my_account_id: AccountId,
@@ -296,7 +319,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 	pub async fn run(
 		mut self,
 		mut ceremony_request_receiver: UnboundedReceiver<CeremonyRequest<C>>,
-		mut incoming_p2p_message_receiver: UnboundedReceiver<(AccountId, Vec<u8>)>,
+		mut incoming_p2p_message_receiver: UnboundedReceiver<(AccountId, VersionedCeremonyMessage)>,
 	) -> Result<()> {
 		task_scope(|scope| {
 			async {
@@ -309,7 +332,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 
 							// At this point we know the messages to be for the
 							// appropriate curve (as defined by `C`)
-							match bincode::deserialize(&data) {
+							match deserialize_for_version::<C>(data) {
 								Ok(message) => self.process_p2p_message(sender_id, message, scope),
 								Err(_) => {
 									warn!("Failed to deserialize message from: {sender_id}");

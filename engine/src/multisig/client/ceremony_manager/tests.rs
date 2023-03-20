@@ -22,7 +22,7 @@ use crate::{
 		crypto::{CryptoScheme, Rng},
 		eth::{EthSchnorrSignature, EthSigning},
 	},
-	p2p::OutgoingMultisigStageMessages,
+	p2p::{OutgoingMultisigStageMessages, VersionedCeremonyMessage},
 	task_scope::task_scope,
 };
 use anyhow::Result;
@@ -109,7 +109,7 @@ fn spawn_ceremony_manager(
 	latest_ceremony_id: CeremonyId,
 ) -> (
 	mpsc::UnboundedSender<CeremonyRequest<EthSigning>>,
-	mpsc::UnboundedSender<(AccountId32, Vec<u8>)>,
+	mpsc::UnboundedSender<(AccountId32, VersionedCeremonyMessage)>,
 	mpsc::UnboundedReceiver<OutgoingMultisigStageMessages>,
 ) {
 	let (ceremony_request_sender, ceremony_request_receiver) = mpsc::unbounded_channel();
@@ -430,13 +430,15 @@ async fn should_route_p2p_message() {
 	let _stage_1_broadcast = outgoing_p2p_receiver.try_recv().unwrap();
 
 	// Send a stage 1 p2p message
-	let message = bincode::serialize(&MultisigMessage {
+	let payload = bincode::serialize(&MultisigMessage {
 		ceremony_id,
 		data: MultisigData::Keygen(gen_keygen_data_hash_comm1()),
 	})
 	.unwrap();
 
-	incoming_p2p_sender.send((sender_account_id, message)).unwrap();
+	incoming_p2p_sender
+		.send((sender_account_id, VersionedCeremonyMessage { version: 1, payload }))
+		.unwrap();
 
 	// Small delay to let the ceremony manager process the message
 	tokio::time::sleep(Duration::from_millis(50)).await;

@@ -9,12 +9,18 @@ use crate::{
 	p2p::{MultisigMessageReceiver, MultisigMessageSender, OutgoingMultisigStageMessages},
 };
 
+#[derive(Debug)]
+pub struct VersionedCeremonyMessage {
+	pub version: u16,
+	pub payload: Vec<u8>,
+}
+
 pub struct P2PMuxer {
 	all_incoming_receiver: UnboundedReceiver<(AccountId, Vec<u8>)>,
 	all_outgoing_sender: UnboundedSender<OutgoingMultisigStageMessages>,
-	eth_incoming_sender: UnboundedSender<(AccountId, Vec<u8>)>,
+	eth_incoming_sender: UnboundedSender<(AccountId, VersionedCeremonyMessage)>,
 	eth_outgoing_receiver: UnboundedReceiver<OutgoingMultisigStageMessages>,
-	dot_incoming_sender: UnboundedSender<(AccountId, Vec<u8>)>,
+	dot_incoming_sender: UnboundedSender<(AccountId, VersionedCeremonyMessage)>,
 	dot_outgoing_receiver: UnboundedReceiver<OutgoingMultisigStageMessages>,
 }
 
@@ -74,7 +80,7 @@ impl<'a> TagPlusMessage<'a> {
 }
 
 /// The most recent (current) wire protocol version
-const PROTOCOL_VERSION: u16 = 1;
+const PROTOCOL_VERSION: u16 = 2;
 
 fn add_tag_and_current_version(data: &[u8], tag: ChainTag) -> Vec<u8> {
 	let with_tag = TagPlusMessage { tag, payload: data }.serialize();
@@ -124,23 +130,27 @@ impl P2PMuxer {
 			// only version 1 is expected/supported
 			if version == PROTOCOL_VERSION {
 				match TagPlusMessage::deserialize(payload) {
-					Ok(TagPlusMessage { tag, payload }) => match tag {
-						ChainTag::Ethereum => {
-							self.eth_incoming_sender
-								.send((account_id, payload.to_owned()))
-								.expect("eth receiver dropped");
-						},
-						ChainTag::Polkadot => {
-							self.dot_incoming_sender
-								.send((account_id, payload.to_owned()))
-								.expect("polkadot receiver dropped");
-						},
-						ChainTag::Sui => {
-							warn!("Sui chain tag is not supported yet")
-						},
-						ChainTag::Bitcoin => {
-							warn!("Bitcoin chain tag is not supported yet")
-						},
+					Ok(TagPlusMessage { tag, payload }) => {
+						let message =
+							VersionedCeremonyMessage { version, payload: payload.to_vec() };
+						match tag {
+							ChainTag::Ethereum => {
+								self.eth_incoming_sender
+									.send((account_id, message))
+									.expect("eth receiver dropped");
+							},
+							ChainTag::Polkadot => {
+								self.dot_incoming_sender
+									.send((account_id, message))
+									.expect("polkadot receiver dropped");
+							},
+							ChainTag::Sui => {
+								warn!("Sui chain tag is not supported yet")
+							},
+							ChainTag::Bitcoin => {
+								warn!("Bitcoin chain tag is not supported yet")
+							},
+						}
 					},
 					Err(e) => {
 						trace!("Could not deserialize tagged p2p message: {e:?}",);
@@ -285,6 +295,7 @@ mod tests {
 
 		let received = expect_recv_with_timeout(&mut eth_incoming_receiver.0).await;
 
-		assert_eq!(received, (ACC_1, DATA_1.to_vec()));
+		assert_eq!(received.0, ACC_1);
+		assert_eq!(received.1.payload, DATA_1.to_vec());
 	}
 }
