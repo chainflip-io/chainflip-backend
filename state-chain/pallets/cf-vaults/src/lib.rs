@@ -863,12 +863,14 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 				Ok(rotate_tx) => {
 					let (_, threshold_request_id) =
 						T::Broadcaster::threshold_sign_and_broadcast(rotate_tx);
-					if KeyState::Active == current_vault_epoch_and_state.key_state {
-						CurrentVaultEpochAndState::<T, I>::put(VaultEpochAndState {
-							epoch_index: current_vault_epoch_and_state.epoch_index,
-							key_state: KeyState::Locked(threshold_request_id),
-						})
-					}
+					debug_assert!(
+						matches!(current_vault_epoch_and_state.key_state, KeyState::Active),
+						"Current epoch key must be active to activate next key."
+					);
+					CurrentVaultEpochAndState::<T, I>::put(VaultEpochAndState {
+						epoch_index: current_vault_epoch_and_state.epoch_index,
+						key_state: KeyState::Locked(threshold_request_id),
+					})
 				},
 				Err(_) => {
 					// The block number value 1, which the vault is being set with is a dummy value
@@ -975,6 +977,17 @@ impl<T: Config<I>, I: 'static> VaultKeyWitnessedHandler<T::Chain> for Pallet<T, 
 		debug_assert_eq!(new_public_key, expected_new_key);
 
 		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Complete { tx_id });
+
+		// Unlock the key that was used to authorise the activation.
+		// TODO: use broadcast callbacks for this.
+		let _ = CurrentVaultEpochAndState::<T, I>::try_mutate(|state: &mut VaultEpochAndState| {
+			if let KeyState::Locked(_) = state.key_state {
+				state.key_state = KeyState::Active;
+				Ok(())
+			} else {
+				Err(())
+			}
+		});
 
 		Self::set_next_vault(new_public_key, block_number);
 
