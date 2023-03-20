@@ -114,6 +114,18 @@ where
 	}
 }
 
+// TODO: Implement transfer / transfer and call for Polkadot.
+impl<E: ReplayProtectionProvider<Polkadot>> ExecutexSwapAndCall<Polkadot> for PolkadotApi<E> {
+	fn new_unsigned(
+		_egress_id: EgressId,
+		_transfer_param: TransferAssetParams<Polkadot>,
+		_from: ForeignChainAddress,
+		_message: Vec<u8>,
+	) -> Result<Self, DispatchError> {
+		Err(DispatchError::Other("Polkadot's ExecutexSwapAndCall is not supported."))
+	}
+}
+
 impl<E> From<batch_fetch_and_transfer::BatchFetchAndTransfer> for PolkadotApi<E> {
 	fn from(tx: batch_fetch_and_transfer::BatchFetchAndTransfer) -> Self {
 		Self::BatchFetchAndTransfer(tx)

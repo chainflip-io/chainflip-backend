@@ -3,7 +3,7 @@
 
 use super::*;
 
-use cf_primitives::*;
+use cf_primitives::AccountRole;
 use cf_traits::AccountRoleRegistry;
 use frame_benchmarking::{benchmarks, whitelisted_caller};
 use frame_system::RawOrigin;
@@ -17,7 +17,6 @@ fn generate_swaps<T: Config>(amount: u32, from: Asset, to: Asset) -> Vec<Swap> {
 			to,
 			amount: 3,
 			egress_address: ForeignChainAddress::Eth(Default::default()),
-			message: vec![0u8],
 		});
 	}
 	swaps
@@ -33,7 +32,7 @@ benchmarks! {
 		Asset::Usdc,
 		ForeignChainAddress::Eth(Default::default()),
 		0,
-		vec![0u8]
+		None
 	)
 	on_idle {}: {
 		Pallet::<T>::on_idle(T::BlockNumber::from(1u32), Weight::from_ref_time(1));

@@ -10,7 +10,7 @@ pub use cf_primitives::{
 };
 
 use cf_traits::{
-	mocks::all_batch::{MockAllBatch, MockEthEnvironment},
+	mocks::api_call::{MockEthEnvironment, MockEthereumApiCall},
 	IngressHandler,
 };
 pub use cf_traits::{
@@ -86,7 +86,7 @@ impl cf_traits::Chainflip for Test {
 
 pub struct MockBroadcast;
 impl Broadcaster<Ethereum> for MockBroadcast {
-	type ApiCall = MockAllBatch<MockEthEnvironment>;
+	type ApiCall = MockEthereumApiCall<MockEthEnvironment>;
 
 	fn threshold_sign_and_broadcast(_api_call: Self::ApiCall) -> BroadcastId {
 		1
@@ -102,12 +102,13 @@ impl crate::Config<Instance1> for Test {
 	type AddressDerivation = ();
 	type LpProvisioning = Self;
 	type SwapIntentHandler = Self;
-	type AllBatch = MockAllBatch<MockEthEnvironment>;
+	type ChainApiCall = MockEthereumApiCall<MockEthEnvironment>;
 	type Broadcaster = MockBroadcast;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type WeightInfo = ();
 	type TTL = ConstU64<5_u64>;
 	type IngressHandler = MockIngressHandler;
+	type CcmHandler = ();
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;

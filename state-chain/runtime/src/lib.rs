@@ -271,11 +271,12 @@ impl pallet_cf_ingress_egress::Config<EthereumInstance> for Runtime {
 	type AddressDerivation = AddressDerivation;
 	type LpProvisioning = LiquidityProvider;
 	type SwapIntentHandler = Swapping;
-	type AllBatch = eth::api::EthereumApi<EthEnvironment>;
+	type ChainApiCall = eth::api::EthereumApi<EthEnvironment>;
 	type Broadcaster = EthereumBroadcaster;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type TTL = ConstU32<100>;
 	type IngressHandler = EthIngressHandler;
+	type CcmHandler = CrossChainMessaging;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 }
 
@@ -285,12 +286,13 @@ impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
 	type AddressDerivation = AddressDerivation;
 	type LpProvisioning = LiquidityProvider;
 	type SwapIntentHandler = Swapping;
-	type AllBatch = dot::api::PolkadotApi<chainflip::DotEnvironment>;
+	type ChainApiCall = dot::api::PolkadotApi<chainflip::DotEnvironment>;
 	type Broadcaster = PolkadotBroadcaster;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 	type TTL = ConstU32<100>;
 	type IngressHandler = DotIngressHandler;
+	type CcmHandler = CrossChainMessaging;
 }
 
 parameter_types! {
@@ -674,8 +676,8 @@ impl pallet_cf_chain_tracking::Config<PolkadotInstance> for Runtime {
 
 impl pallet_cf_ccm::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type AccountRoleRegistry = AccountRoles;
-	type SwappingApi = Swapping;
+	type SwappingApi = LiquidityPools;
+	type EgressHandler = chainflip::AnyChainIngressEgressHandler;
 }
 
 construct_runtime!(

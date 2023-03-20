@@ -33,7 +33,7 @@ pub trait WeightInfo {
 	fn on_initialize(n: u32, ) -> Weight;
 	fn on_initialize_has_no_expired() -> Weight;
 	fn egress_assets(n: u32, ) -> Weight;
-	fn egress_single_ccm() -> Weight;
+	fn egress_ccm(n: u32, ) -> Weight;
 	fn disable_asset_egress() -> Weight;
 	fn on_idle_with_nothing_to_send() -> Weight;
 	fn do_single_ingress() -> Weight;
@@ -63,7 +63,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		Weight::from_ref_time(10_000_000)
 			.saturating_add(T::DbWeight::get().reads(2))
 	}
-	// Storage: EthereumIngressEgress ScheduledEgressRequests (r:1 w:1)
+	// Storage: EthereumIngressEgress ScheduledEgressFetchOrTransfer (r:1 w:1)
 	// Storage: EthereumIngressEgress DisabledEgressAssets (r:1 w:0)
 	// Storage: Environment EthereumKeyManagerAddress (r:1 w:0)
 	// Storage: Environment EthereumChainId (r:1 w:0)
@@ -90,8 +90,13 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(17))
 			.saturating_add(T::DbWeight::get().writes(9))
 	}
-	fn egress_single_ccm() -> Weight {
-		Weight::from_ref_time(1_000_000)
+	fn egress_ccm(n: u32, ) -> Weight {
+		// Minimum execution time: 130_000 nanoseconds.
+		Weight::from_ref_time(136_939_289)
+			// Standard Error: 14_791
+			.saturating_add(Weight::from_ref_time(2_414_212).saturating_mul(n.into()))
+			.saturating_add(T::DbWeight::get().reads(17))
+			.saturating_add(T::DbWeight::get().writes(9))
 	}
 	// Storage: EthereumIngressEgress DisabledEgressAssets (r:0 w:1)
 	fn disable_asset_egress() -> Weight {
@@ -99,14 +104,14 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		Weight::from_ref_time(23_000_000)
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
-	// Storage: EthereumIngressEgress ScheduledEgressRequests (r:1 w:0)
+	// Storage: EthereumIngressEgress ScheduledEgressFetchOrTransfer (r:1 w:0)
 	fn on_idle_with_nothing_to_send() -> Weight {
 		// Minimum execution time: 13_000 nanoseconds.
 		Weight::from_ref_time(13_000_000)
 			.saturating_add(T::DbWeight::get().reads(1))
 	}
 	// Storage: EthereumIngressEgress IntentIngressDetails (r:1 w:0)
-	// Storage: EthereumIngressEgress ScheduledEgressRequests (r:1 w:1)
+	// Storage: EthereumIngressEgress ScheduledEgressFetchOrTransfer (r:1 w:1)
 	// Storage: EthereumIngressEgress IntentActions (r:1 w:0)
 	// Storage: LiquidityProvider FreeBalances (r:1 w:1)
 	fn do_single_ingress() -> Weight {
@@ -140,7 +145,7 @@ impl WeightInfo for () {
 		Weight::from_ref_time(10_000_000)
 			.saturating_add(RocksDbWeight::get().reads(2))
 	}
-	// Storage: EthereumIngressEgress ScheduledEgressRequests (r:1 w:1)
+	// Storage: EthereumIngressEgress ScheduledEgressFetchOrTransfer (r:1 w:1)
 	// Storage: EthereumIngressEgress DisabledEgressAssets (r:1 w:0)
 	// Storage: Environment EthereumKeyManagerAddress (r:1 w:0)
 	// Storage: Environment EthereumChainId (r:1 w:0)
@@ -167,8 +172,12 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(17))
 			.saturating_add(RocksDbWeight::get().writes(9))
 	}
-	fn egress_single_ccm() -> Weight {
-		Weight::from_ref_time(1_000_000)
+	fn egress_ccm(n: u32, ) -> Weight {
+		Weight::from_ref_time(136_939_289)
+			// Standard Error: 14_791
+			.saturating_add(Weight::from_ref_time(2_414_212).saturating_mul(n.into()))
+			.saturating_add(RocksDbWeight::get().reads(17))
+			.saturating_add(RocksDbWeight::get().writes(9))
 	}
 	// Storage: EthereumIngressEgress DisabledEgressAssets (r:0 w:1)
 	fn disable_asset_egress() -> Weight {
@@ -176,14 +185,14 @@ impl WeightInfo for () {
 		Weight::from_ref_time(23_000_000)
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}
-	// Storage: EthereumIngressEgress ScheduledEgressRequests (r:1 w:0)
+	// Storage: EthereumIngressEgress ScheduledEgressFetchOrTransfer (r:1 w:0)
 	fn on_idle_with_nothing_to_send() -> Weight {
 		// Minimum execution time: 13_000 nanoseconds.
 		Weight::from_ref_time(13_000_000)
 			.saturating_add(RocksDbWeight::get().reads(1))
 	}
 	// Storage: EthereumIngressEgress IntentIngressDetails (r:1 w:0)
-	// Storage: EthereumIngressEgress ScheduledEgressRequests (r:1 w:1)
+	// Storage: EthereumIngressEgress ScheduledEgressFetchOrTransfer (r:1 w:1)
 	// Storage: EthereumIngressEgress IntentActions (r:1 w:0)
 	// Storage: LiquidityProvider FreeBalances (r:1 w:1)
 	fn do_single_ingress() -> Weight {

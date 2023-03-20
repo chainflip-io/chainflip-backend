@@ -760,7 +760,7 @@ pub trait EgressApi<C: Chain> {
 
 	fn schedule_egress_ccm(
 		asset: C::ChainAsset,
-		amount: C::ChainAmount,
+		amount: AssetAmount,
 		egress_address: C::ChainAccount,
 		message: Vec<u8>,
 		caller_address: ForeignChainAddress,

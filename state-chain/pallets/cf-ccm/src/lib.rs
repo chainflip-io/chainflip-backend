@@ -6,7 +6,7 @@
 use cf_primitives::{
 	chains::AnyChain, Asset, AssetAmount, CcmIngressMetadata, ForeignChain, ForeignChainAddress,
 };
-use cf_traits::{CcmHandler, EgressApi, SwappingApi};
+use cf_traits::{CcmHandler, SwappingApi};
 use frame_support::pallet_prelude::*;
 pub use pallet::*;
 
@@ -111,36 +111,37 @@ pub mod pallet {
 			// Swap all funds into egress chain's native currency.
 			let swapped_output = T::SwappingApi::swap(ingress_asset, egress_asset, ingress_amount)?;
 
-			// Extract gas from the swap output.
 			let output_gas_asset = ForeignChain::from(egress_asset).gas_asset();
+			// Calculate expected amount of gas from target chain's current gas price.
+			// TODO: Add gas query from chian-tracking trait/pallet
+			let expected_output_gas = message_metadata.gas_budget;
 
 			// schedule egress that contains the message and refund address
 			let (egress_amount, output_gas_amount) = if egress_asset != output_gas_asset {
 				// Gas asset is different from the egress asset. Another swap is required.
-
 				// Calculate input required for the gas amount
+				// TODO add interface to estimate input required for an output amount
 
-				// perform the swap
-
-				Ok((0, 0))
+				// TODO: perform the swap
+				(0, 0)
 			} else {
 				// Split the gas amount from the egress amount.
-				let remaining = swapped_output
-					.checked_sub(egress_gas_amount)
-					.ok_or(Error::<T>::InsufficientBalanceForGas)?;
-				Ok((remaining, egress_gas_amount))
-			}?;
-
-			// Store swapped gas with message ID.
+				let remaining = swapped_output.saturating_sub(expected_output_gas);
+				(remaining, expected_output_gas)
+			};
 
 			// Send CCM via egress
-			let egress_id = T::EgressHandler::schedule_egress_ccm(
+			let _egress_id = T::EgressHandler::schedule_egress_ccm(
 				egress_asset,
 				egress_amount,
 				egress_address,
-				message_metadata.clone(),
+				message_metadata.message.clone(),
+				message_metadata.caller_address,
 			);
 
+			// TODO: Store swapped gas with a generated EgressId.
+
+			// Deposit event
 			Self::deposit_event(Event::<T>::CcmEgressScheduled {
 				ingress_asset,
 				ingress_amount,

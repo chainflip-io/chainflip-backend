@@ -151,6 +151,6 @@ fn burn_flip() {
 		);
 		let egresses = MockEgressHandler::<AnyChain>::get_scheduled_egresses();
 		assert!(egresses.len() == 1);
-		assert_eq!(egresses.first().expect("should exist").amount, FLIP_TO_BURN);
+		assert_eq!(egresses.first().expect("should exist").amount(), FLIP_TO_BURN);
 	});
 }

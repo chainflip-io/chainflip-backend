@@ -1,6 +1,6 @@
 use ethabi::Address;
 use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound};
-use sp_runtime::traits::UniqueSaturatedInto;
+use sp_runtime::{traits::UniqueSaturatedInto, DispatchError};
 use sp_std::marker::PhantomData;
 
 use crate::*;
@@ -167,9 +167,9 @@ where
 		transfer_param: TransferAssetParams<Ethereum>,
 		from: ForeignChainAddress,
 		message: Vec<u8>,
-	) -> Result<Self, ()> {
+	) -> Result<Self, DispatchError> {
 		let transfer_param = EncodableTransferAssetParams {
-			asset: E::lookup(transfer_param.asset).ok_or(())?,
+			asset: E::lookup(transfer_param.asset).ok_or(DispatchError::CannotLookup)?,
 			to: transfer_param.to,
 			amount: transfer_param.amount,
 		};

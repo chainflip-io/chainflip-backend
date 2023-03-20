@@ -73,7 +73,7 @@ impl<C: Chain> EgressApi<C> for MockEgressHandler<C> {
 
 	fn schedule_egress_ccm(
 		asset: C::ChainAsset,
-		amount: C::ChainAmount,
+		amount: AssetAmount,
 		egress_address: C::ChainAccount,
 		message: Vec<u8>,
 		caller_address: ForeignChainAddress,
@@ -85,7 +85,7 @@ impl<C: Chain> EgressApi<C> for MockEgressHandler<C> {
 			storage.as_mut().map(|v| {
 				v.push(MockEgressParameter::<C>::Ccm {
 					asset,
-					amount: amount.into(),
+					amount,
 					egress_address,
 					message,
 					caller_address,

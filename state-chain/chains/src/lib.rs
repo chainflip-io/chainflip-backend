@@ -12,7 +12,10 @@ use frame_support::{
 	Blake2_256, Parameter, RuntimeDebug, StorageHasher,
 };
 use scale_info::TypeInfo;
-use sp_runtime::traits::{AtLeast32BitUnsigned, Saturating};
+use sp_runtime::{
+	traits::{AtLeast32BitUnsigned, Saturating},
+	DispatchError,
+};
 use sp_std::{
 	convert::{Into, TryFrom},
 	fmt::Debug,
@@ -189,8 +192,8 @@ pub struct FetchAssetParams<C: Chain> {
 #[derive(RuntimeDebug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct TransferAssetParams<C: Chain> {
 	pub asset: <C as Chain>::ChainAsset,
-	pub to: <C as Chain>::ChainAccount,
 	pub amount: AssetAmount,
+	pub to: <C as Chain>::ChainAccount,
 }
 
 pub trait IngressAddress {
@@ -265,7 +268,7 @@ pub trait ExecutexSwapAndCall<Abi: ChainAbi>: ApiCall<Abi> {
 		transfer_param: TransferAssetParams<Abi>,
 		from: ForeignChainAddress,
 		message: Vec<u8>,
-	) -> Result<Self, ()>;
+	) -> Result<Self, DispatchError>;
 }
 
 pub trait FeeRefundCalculator<C: Chain> {

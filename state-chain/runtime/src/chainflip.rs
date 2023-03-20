@@ -29,8 +29,8 @@ use cf_chains::{
 	ReplayProtectionProvider, SetCommKeyWithAggKey, SetGovKeyWithAggKey, TransactionBuilder,
 };
 use cf_primitives::{
-	chains::assets, liquidity::U256, Asset, AssetAmount, EgressId, ForeignChainAddress, IntentId,
-	ETHEREUM_ETH_ADDRESS,
+	chains::assets, liquidity::U256, Asset, AssetAmount, CcmIngressMetadata, EgressId,
+	ForeignChainAddress, IntentId, ETHEREUM_ETH_ADDRESS,
 };
 use cf_traits::{
 	BlockEmissions, BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster, EgressApi,
@@ -152,7 +152,7 @@ impl TransactionBuilder<Ethereum, EthereumApi<EthEnvironment>> for EthTransactio
 				EthereumApi::SetGovKeyWithAggKey(_) => Environment::key_manager_address().into(),
 				EthereumApi::SetCommKeyWithAggKey(_) => Environment::key_manager_address().into(),
 				EthereumApi::AllBatch(_) => Environment::eth_vault_address().into(),
-				EthereumApi::ExecutexSwapAndCall(_) => Environment::eth_vault_address.into(),
+				EthereumApi::ExecutexSwapAndCall(_) => Environment::eth_vault_address().into(),
 				EthereumApi::_Phantom(..) => unreachable!(),
 			},
 			data: signed_call.chain_encoded(),
@@ -334,7 +334,7 @@ impl EgressApi<AnyChain> for AnyChainIngressEgressHandler {
 				message,
 				caller_address,
 			),
-			ForeignChain::Polkadot => crate::PolkadotIngressEgress::schedule_egress_swap(
+			ForeignChain::Polkadot => crate::PolkadotIngressEgress::schedule_egress_ccm(
 				asset.try_into().expect("Checked for asset compatibility"),
 				amount,
 				egress_address
@@ -435,7 +435,7 @@ impl IngressApi<AnyChain> for AnyChainIngressEgressHandler {
 		egress_address: ForeignChainAddress,
 		relayer_commission_bps: u16,
 		relayer_id: Self::AccountId,
-		message: Vec<u8>,
+		message_metadata: Option<CcmIngressMetadata>,
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
 		match ingress_asset.into() {
 			ForeignChain::Ethereum => crate::EthereumIngressEgress::register_swap_intent(
@@ -444,7 +444,7 @@ impl IngressApi<AnyChain> for AnyChainIngressEgressHandler {
 				egress_address,
 				relayer_commission_bps,
 				relayer_id,
-				message,
+				message_metadata,
 			),
 			ForeignChain::Polkadot => crate::PolkadotIngressEgress::register_swap_intent(
 				ingress_asset.try_into().unwrap(),
@@ -452,7 +452,7 @@ impl IngressApi<AnyChain> for AnyChainIngressEgressHandler {
 				egress_address,
 				relayer_commission_bps,
 				relayer_id,
-				message,
+				message_metadata,
 			),
 			ForeignChain::Bitcoin => todo!("Cannot register swap intent for Bitcoin"),
 		}
