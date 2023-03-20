@@ -5,9 +5,11 @@
 
 use std::collections::BTreeMap;
 
+use anyhow::bail;
+
 use super::{
 	common::BroadcastVerificationMessage,
-	signing::{Comm1, LocalSig3, SigningCommitment},
+	signing::{Comm1, LocalSig3, SigningCommitment, VerifyComm2, VerifyLocalSig4},
 	*,
 };
 
@@ -92,5 +94,101 @@ impl<P: ECPoint> From<Comm1V1<P>> for Comm1<P> {
 impl<P: ECPoint> From<LocalSig3V1<P>> for LocalSig3<P> {
 	fn from(value: LocalSig3V1<P>) -> Self {
 		LocalSig3 { responses: vec![value.response] }
+	}
+}
+
+impl<P: ECPoint> TryFrom<MultisigMessage<P>> for MultisigMessageV1<P> {
+	type Error = anyhow::Error;
+
+	fn try_from(value: MultisigMessage<P>) -> Result<Self, Self::Error> {
+		Ok(MultisigMessageV1 { ceremony_id: value.ceremony_id, data: value.data.try_into()? })
+	}
+}
+
+impl<P: ECPoint> TryFrom<MultisigData<P>> for MultisigDataV1<P> {
+	type Error = anyhow::Error;
+
+	fn try_from(value: MultisigData<P>) -> Result<Self, Self::Error> {
+		Ok(match value {
+			MultisigData::Keygen(data) => MultisigDataV1::Keygen(data),
+			MultisigData::Signing(data) => MultisigDataV1::Signing(data.try_into()?),
+		})
+	}
+}
+
+impl<P: ECPoint> TryFrom<SigningData<P>> for SigningDataV1<P> {
+	type Error = anyhow::Error;
+
+	fn try_from(value: SigningData<P>) -> Result<Self, Self::Error> {
+		match value {
+			SigningData::CommStage1(x) => Ok(SigningDataV1::CommStage1(x.try_into()?)),
+			SigningData::BroadcastVerificationStage2(x) =>
+				Ok(SigningDataV1::BroadcastVerificationStage2(x.try_into()?)),
+			SigningData::LocalSigStage3(x) => Ok(SigningDataV1::LocalSigStage3(x.try_into()?)),
+			SigningData::VerifyLocalSigsStage4(x) =>
+				Ok(SigningDataV1::VerifyLocalSigsStage4(x.try_into()?)),
+		}
+	}
+}
+
+impl<P: ECPoint> TryFrom<Comm1<P>> for Comm1V1<P> {
+	type Error = anyhow::Error;
+
+	fn try_from(value: Comm1<P>) -> Result<Self, Self::Error> {
+		if value.0.len() != 1 {
+			bail!("Comm1 must have exactly one element");
+		}
+		Ok(value.0[0].clone())
+	}
+}
+
+impl<P: ECPoint> TryFrom<VerifyComm2<P>> for VerifyComm2V1<P> {
+	type Error = anyhow::Error;
+
+	fn try_from(value: VerifyComm2<P>) -> Result<Self, Self::Error> {
+		let data: Result<_, _> = value
+			.data
+			.into_iter()
+			.map(|(party_idx, x)| {
+				let x: Option<Result<Comm1V1<P>, _>> = x.map(|x| x.try_into());
+				match x {
+					Some(Ok(x)) => Ok((party_idx, Some(x))),
+					Some(Err(e)) => Err(e),
+					None => Ok((party_idx, None)),
+				}
+			})
+			.collect();
+		Ok(VerifyComm2V1 { data: data? })
+	}
+}
+
+impl<P: ECPoint> TryFrom<LocalSig3<P>> for LocalSig3V1<P> {
+	type Error = anyhow::Error;
+
+	fn try_from(value: LocalSig3<P>) -> Result<Self, Self::Error> {
+		if value.responses.len() != 1 {
+			bail!("LocalSig3 must have exactly one element");
+		}
+		Ok(LocalSig3V1 { response: value.responses.into_iter().next().unwrap() })
+	}
+}
+
+impl<P: ECPoint> TryFrom<VerifyLocalSig4<P>> for VerifyLocalSig4V1<P> {
+	type Error = anyhow::Error;
+
+	fn try_from(value: VerifyLocalSig4<P>) -> Result<Self, Self::Error> {
+		let data: Result<_, _> = value
+			.data
+			.into_iter()
+			.map(|(party_idx, x)| {
+				let x: Option<Result<LocalSig3V1<P>, _>> = x.map(|x| x.try_into());
+				match x {
+					Some(Ok(x)) => Ok((party_idx, Some(x))),
+					Some(Err(e)) => Err(e),
+					None => Ok((party_idx, None)),
+				}
+			})
+			.collect();
+		Ok(VerifyLocalSig4V1 { data: data? })
 	}
 }

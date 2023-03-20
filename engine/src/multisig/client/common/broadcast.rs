@@ -5,7 +5,10 @@ use cf_primitives::AuthorityCount;
 use tracing::warn;
 
 use crate::{
-	multisig::client::{ceremony_manager::CeremonyTrait, MultisigMessage},
+	multisig::{
+		client::{ceremony_manager::CeremonyTrait, legacy::MultisigMessageV1, MultisigMessage},
+		CryptoScheme,
+	},
 	p2p::OutgoingMultisigStageMessages,
 };
 
@@ -91,6 +94,12 @@ where
 		let (own_message, outgoing_messages) = match self.processor.init() {
 			DataToSend::Broadcast(stage_data) => {
 				let ceremony_data: C::Data = stage_data.clone().into();
+				// NOTE: For compatibility we convert to MultisigMessageV1 first
+				// (will remove this after all nodes support multiple payloads)
+				let m =
+					MultisigMessage { ceremony_id: common.ceremony_id, data: ceremony_data.into() };
+				let m: MultisigMessageV1<<C::Crypto as CryptoScheme>::Point> =
+					m.try_into().expect("should be compatible as long as we sign single payload");
 				(
 					stage_data,
 					OutgoingMultisigStageMessages::Broadcast(
@@ -100,11 +109,7 @@ where
 							.filter(|idx| **idx != common.own_idx)
 							.map(idx_to_id)
 							.collect(),
-						bincode::serialize(&MultisigMessage {
-							ceremony_id: common.ceremony_id,
-							data: ceremony_data.into(),
-						})
-						.unwrap(),
+						bincode::serialize(&m).unwrap(),
 					),
 				)
 			},
@@ -115,14 +120,16 @@ where
 						.into_iter()
 						.map(|(idx, stage_data)| {
 							let ceremony_data: C::Data = stage_data.into();
-							(
-								idx_to_id(&idx),
-								bincode::serialize(&MultisigMessage {
-									ceremony_id: common.ceremony_id,
-									data: ceremony_data.into(),
-								})
-								.unwrap(),
-							)
+							// NOTE: For compatibility we convert to MultisigMessageV1 first
+							// (will remove this after all nodes support multiple payloads)
+							let m = MultisigMessage {
+								ceremony_id: common.ceremony_id,
+								data: ceremony_data.into(),
+							};
+							let m: MultisigMessageV1<<C::Crypto as CryptoScheme>::Point> = m
+								.try_into()
+								.expect("should be compatible as long as we sign single payload");
+							(idx_to_id(&idx), bincode::serialize(&m).unwrap())
 						})
 						.collect(),
 				),

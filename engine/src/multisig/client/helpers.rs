@@ -368,6 +368,7 @@ where
 					// transforms
 					match expect_recv_with_timeout(&mut node.outgoing_p2p_message_receiver).await {
 						OutgoingMultisigStageMessages::Broadcast(receiver_ids, message) => {
+							// TODO: figure out why this is broken
 							let next_data =
 								message_to_next_stage_data(bincode::deserialize(&message).unwrap());
 							receiver_ids

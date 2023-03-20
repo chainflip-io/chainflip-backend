@@ -80,7 +80,7 @@ impl<'a> TagPlusMessage<'a> {
 }
 
 /// The most recent (current) wire protocol version
-const PROTOCOL_VERSION: u16 = 2;
+const PROTOCOL_VERSION: u16 = 1;
 
 fn add_tag_and_current_version(data: &[u8], tag: ChainTag) -> Vec<u8> {
 	let with_tag = TagPlusMessage { tag, payload: data }.serialize();
