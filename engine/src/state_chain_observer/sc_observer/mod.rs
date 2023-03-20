@@ -168,7 +168,7 @@ pub async fn start<
 	state_chain_client: Arc<StateChainClient>,
 	sc_block_stream: BlockStream,
 	eth_broadcaster: EthBroadcaster<EthRpc>,
-	dot_broadcaster: DotBroadcaster<DotRpc>,
+	mut dot_broadcaster: DotBroadcaster<DotRpc>,
 	eth_multisig_client: EthMultisigClient,
 	dot_multisig_client: PolkadotMultisigClient,
 	peer_update_sender: UnboundedSender<PeerUpdate>,

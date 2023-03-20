@@ -254,7 +254,7 @@ where
 				mut signature_receiver
 			),
 		| {
-			let dot_client = dot_client.clone();
+			let mut dot_client = dot_client.clone();
 			let state_chain_client = state_chain_client.clone();
 			let db = db.clone();
 			async move {
@@ -286,7 +286,7 @@ where
 
 				let dot_client_c = dot_client.clone();
 				let block_head_stream_from = block_head_stream_from(from_block, safe_head_stream, move |block_number| {
-					let dot_client = dot_client_c.clone();
+					let mut dot_client = dot_client_c.clone();
 					Box::pin(async move {
 						let block_hash = dot_client
 							.block_hash(block_number)
@@ -301,10 +301,11 @@ where
 
 				// Stream of Events objects. Each `Events` contains the events for a particular
 				// block
+				let dot_client_c = dot_client.clone();
 				let mut block_events_stream = Box::pin(
 					take_while_ok(
 						block_head_stream_from.then(|mini_header| {
-							let dot_client = dot_client.clone();
+							let mut dot_client = dot_client_c.clone();
 							debug!(
 								"Fetching Polkadot events for block: {}",
 								mini_header.block_number
