@@ -28,6 +28,10 @@ where
 {
 	type CeremonyId = Id;
 
+	fn ceremony_id() -> Self::CeremonyId {
+		Self::get()
+	}
+
 	fn increment_ceremony_id() -> Self::CeremonyId {
 		let mut id = Self::get();
 		id += One::one();

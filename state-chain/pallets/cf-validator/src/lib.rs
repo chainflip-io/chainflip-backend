@@ -91,6 +91,10 @@ pub struct CeremonyIdProvider<T>(PhantomData<T>);
 impl<T: Config> cf_traits::CeremonyIdProvider for CeremonyIdProvider<T> {
 	type CeremonyId = CeremonyId;
 
+	fn ceremony_id() -> Self::CeremonyId {
+		CeremonyIdCounter::<T>::get()
+	}
+
 	fn increment_ceremony_id() -> Self::CeremonyId {
 		CeremonyIdCounter::<T>::mutate(|id| {
 			*id += 1;

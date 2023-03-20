@@ -18,8 +18,8 @@ use cf_chains::{
 };
 
 use cf_primitives::{
-	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BroadcastId, CeremonyId,
-	EgressId, EpochIndex, EthereumAddress, ForeignChain, ForeignChainAddress, IntentId, KeyId,
+	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BroadcastId, EgressId,
+	EpochIndex, EthereumAddress, ForeignChain, ForeignChainAddress, IntentId, KeyId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -401,13 +401,13 @@ where
 	type ValidatorId: Debug;
 
 	/// Initiate a signing request and return the request id and ceremony id.
-	fn request_signature(payload: C::Payload) -> (Self::RequestId, CeremonyId);
+	fn request_signature(payload: C::Payload) -> Self::RequestId;
 
 	fn request_keygen_verification_signature(
 		payload: C::Payload,
 		key_id: KeyId,
 		participants: BTreeSet<Self::ValidatorId>,
-	) -> (Self::RequestId, CeremonyId);
+	) -> Self::RequestId;
 
 	/// Register a callback to be dispatched when the signature is available. Can fail if the
 	/// provided request_id does not exist.
@@ -430,15 +430,15 @@ where
 	fn request_signature_with_callback(
 		payload: C::Payload,
 		callback_generator: impl FnOnce(Self::RequestId) -> Self::Callback,
-	) -> (Self::RequestId, CeremonyId) {
-		let (request_id, ceremony_id) = Self::request_signature(payload);
+	) -> Self::RequestId {
+		let request_id = Self::request_signature(payload);
 		Self::register_callback(request_id, callback_generator(request_id)).unwrap_or_else(|e| {
 			log::error!(
 				"Unable to register threshold signature callback. This should not be possible. Error: '{:?}'",
 				e.into()
 			);
 		});
-		(request_id, ceremony_id)
+		request_id
 	}
 
 	/// Helper function to enable benchmarking of the broadcast pallet
@@ -568,6 +568,8 @@ pub trait Bonding {
 }
 pub trait CeremonyIdProvider {
 	type CeremonyId;
+
+	fn ceremony_id() -> Self::CeremonyId;
 
 	/// Increment the ceremony id, returning the new one.
 	fn increment_ceremony_id() -> Self::CeremonyId;

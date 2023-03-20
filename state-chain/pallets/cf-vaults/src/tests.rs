@@ -161,7 +161,7 @@ fn keygen_verification_failure() {
 
 		let next_epoch = <MockRuntime as Chainflip>::EpochInfo::epoch_index() + 1;
 
-		let (request_id, _) = VaultsPallet::trigger_keygen_verification(
+		let request_id = VaultsPallet::trigger_keygen_verification(
 			keygen_ceremony_id,
 			NEW_AGG_PUB_KEY,
 			next_epoch,
