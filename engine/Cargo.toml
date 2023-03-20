@@ -3,7 +3,7 @@ authors = ["Chainflip team <https://github.com/chainflip-io>"]
 edition = '2021'
 build = 'build.rs'
 name = "chainflip-engine"
-version = '0.7.1'
+version = '0.7.2'
 
 [package.metadata.deb]
 depends = "$auto, systemd"
@@ -16,7 +16,18 @@ section = "rust"
 maintainer-scripts = "package/"
 systemd-units = { enable = false }
 pre-depends = "curl"
-assets = [["target/release/chainflip-engine", "usr/bin/", "755"], ["start-engine.sh", "etc/chainflip/", "755"]]
+assets = [
+  [
+    "target/release/chainflip-engine",
+    "usr/bin/",
+    "755",
+  ],
+  [
+    "start-engine.sh",
+    "etc/chainflip/",
+    "755",
+  ],
+]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
@@ -66,7 +77,7 @@ slog = { version = "2.7.0", features = [
 slog-async = { version = "2.6.0" }
 slog-json = { version = "2.3.0" }
 # TODO: Can use 0.26.0 when it's released
-subxt = {git = 'https://github.com/paritytech/subxt.git', rev = '4155850' }
+subxt = { git = 'https://github.com/paritytech/subxt.git', rev = '4155850' }
 thiserror = "1.0.26"
 tokio = { version = "1.22", features = ["full", "test-util"] }
 tokio-stream = { version = "0.1.5", features = ["sync"] }
@@ -104,7 +115,7 @@ x25519-dalek = { version = "1.1", features = ["serde"] }
 rand = "0.8.4"
 ed25519-consensus = "2.0"
 tracing = "0.1"
-tracing-subscriber = {version = "0.3", features = ["json", "env-filter"]}
+tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
 
 # Local deps
 cf-chains = { path = "../state-chain/chains" }

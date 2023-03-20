@@ -2,6 +2,7 @@ use crate::{AsyncResult, CeremonyId};
 
 use super::{MockPallet, MockPalletStorage};
 use cf_chains::ChainCrypto;
+use cf_primitives::ThresholdSignatureRequestId;
 use codec::{Decode, Encode};
 use frame_support::{dispatch::UnfilteredDispatchable, traits::OriginTrait};
 use sp_std::collections::btree_set::BTreeSet;
@@ -64,14 +65,15 @@ where
 	O: OriginTrait,
 	Call: UnfilteredDispatchable<RuntimeOrigin = O> + Encode + Decode,
 {
-	type RequestId = u32;
 	type Error = &'static str;
 	type Callback = Call;
 	type KeyId = Vec<u8>;
 
 	type ValidatorId = MockValidatorId;
 
-	fn request_signature(payload: <C as ChainCrypto>::Payload) -> (Self::RequestId, CeremonyId) {
+	fn request_signature(
+		payload: <C as ChainCrypto>::Payload,
+	) -> (ThresholdSignatureRequestId, Option<CeremonyId>) {
 		let req_id = {
 			let payload = payload.clone();
 			payload.using_encoded(|bytes| bytes[0]) as u32
@@ -83,19 +85,19 @@ where
 		);
 		Self::put_storage(REQUEST, req_id, payload);
 		Self::put_value(LAST_REQ_ID, req_id);
-		(req_id, 1)
+		(req_id, Some(1))
 	}
 
 	fn request_keygen_verification_signature(
 		payload: <C as ChainCrypto>::Payload,
 		_key_id: Self::KeyId,
 		_participants: BTreeSet<Self::ValidatorId>,
-	) -> (Self::RequestId, CeremonyId) {
+	) -> (ThresholdSignatureRequestId, Option<CeremonyId>) {
 		Self::request_signature(payload)
 	}
 
 	fn register_callback(
-		request_id: Self::RequestId,
+		request_id: ThresholdSignatureRequestId,
 		on_signature_ready: Self::Callback,
 	) -> Result<(), Self::Error> {
 		Self::put_storage(CALLBACK, request_id, on_signature_ready);
@@ -103,14 +105,14 @@ where
 	}
 
 	fn signature_result(
-		request_id: Self::RequestId,
+		request_id: ThresholdSignatureRequestId,
 	) -> crate::AsyncResult<Result<<C as ChainCrypto>::ThresholdSignature, Vec<Self::ValidatorId>>>
 	{
 		Self::take_storage::<_, AsyncResult<_>>(SIGNATURE, request_id).unwrap_or(AsyncResult::Void)
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn insert_signature(request_id: Self::RequestId, signature: C::ThresholdSignature) {
+	fn insert_signature(request_id: ThresholdSignatureRequestId, signature: C::ThresholdSignature) {
 		Self::set_signature_ready(request_id, Ok(signature))
 	}
 }

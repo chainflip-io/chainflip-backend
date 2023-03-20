@@ -4,7 +4,7 @@ use cf_chains::{
 	ApiCall, Chain, ChainCrypto, Polkadot,
 };
 
-use cf_primitives::BroadcastId;
+use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
 use cf_traits::{
 	mocks::ensure_origin_mock::NeverFailingOriginCheck, BroadcastCleanup, Broadcaster,
 	VaultKeyWitnessedHandler,
@@ -98,7 +98,9 @@ pub struct MockPolkadotBroadcaster;
 impl Broadcaster<Polkadot> for MockPolkadotBroadcaster {
 	type ApiCall = MockCreatePolkadotVault;
 
-	fn threshold_sign_and_broadcast(_api_call: Self::ApiCall) -> BroadcastId {
+	fn threshold_sign_and_broadcast(
+		_api_call: Self::ApiCall,
+	) -> (BroadcastId, ThresholdSignatureRequestId) {
 		unimplemented!()
 	}
 }
