@@ -367,7 +367,7 @@ pub trait ThresholdSignerNomination {
 #[derive(Default, Debug, TypeInfo, Decode, Encode, Clone, Copy, PartialEq, Eq)]
 pub enum KeyState {
 	Active,
-	/// The either hasn't been initialised, or is expired.
+	/// The key either hasn't been initialised, or is expired.
 	#[default]
 	Inactive,
 	/// Key is only available to sign this request id.
