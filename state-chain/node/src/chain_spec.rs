@@ -19,10 +19,6 @@ use state_chain_runtime::{
 
 use common::FLIPPERINOS_PER_FLIP;
 
-// Polkadot mainnet
-pub const POLKADOT_TEST_RUNTIME_VERSION: RuntimeVersion =
-	RuntimeVersion { spec_version: 9320, transaction_version: 16 };
-
 use std::{env, marker::PhantomData};
 use utilities::clean_eth_address;
 
@@ -65,6 +61,10 @@ const ETH_INIT_AGG_KEY_DEFAULT: &str =
 
 const DOT_GENESIS_HASH: PolkadotHash =
 	H256(hex_literal::hex!("5f551688012d25a98e729752169f509c6186af8079418c118844cc852b332bf5"));
+const DOT_SPEC_VERSION: u32 = 9320;
+const DOT_TRANSACTION_VERSION: u32 = 16;
+pub const DOT_TEST_RUNTIME_VERSION: RuntimeVersion =
+	RuntimeVersion { spec_version: DOT_SPEC_VERSION, transaction_version: DOT_TRANSACTION_VERSION };
 
 /// generate session keys from Aura and Grandpa keys
 pub fn session_keys(aura: AuraId, grandpa: GrandpaId) -> SessionKeys {
@@ -88,6 +88,7 @@ pub struct StateChainEnvironment {
 
 	dot_genesis_hash: PolkadotHash,
 	dot_vault_account_id: Option<PolkadotAccountId>,
+	dot_runtime_version: RuntimeVersion,
 }
 
 /// Get the values from the State Chain's environment variables. Else set them via the defaults
@@ -161,6 +162,21 @@ pub fn get_environment() -> StateChainEnvironment {
 		})
 		.ok();
 
+	// dot runtime version
+	let dot_runtime_version = {
+		let spec_version: u32 = env::var("DOT_SPEC_VERSION")
+			.unwrap_or_else(|_| DOT_SPEC_VERSION.to_string())
+			.parse::<u32>()
+			.expect("DOT_SPEC_VERSION env var could not be parsed to u32");
+
+		let transaction_version: u32 = env::var("DOT_TRANSACTION_VERSION")
+			.unwrap_or_else(|_| DOT_TRANSACTION_VERSION.to_string())
+			.parse::<u32>()
+			.expect("DOT_TRANSACTION_VERSION env var could not be parsed to u32");
+
+		RuntimeVersion { spec_version, transaction_version }
+	};
+
 	StateChainEnvironment {
 		flip_token_address,
 		eth_usdc_address,
@@ -176,6 +192,7 @@ pub fn get_environment() -> StateChainEnvironment {
 		min_stake,
 		dot_genesis_hash,
 		dot_vault_account_id,
+		dot_runtime_version,
 	}
 }
 
@@ -203,6 +220,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 		min_stake,
 		dot_genesis_hash,
 		dot_vault_account_id,
+		dot_runtime_version,
 	} = get_environment();
 	Ok(ChainSpec::from_genesis(
 		"CF Develop",
@@ -262,7 +280,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 					},
 					polkadot_genesis_hash: dot_genesis_hash,
 					polkadot_vault_account_id: dot_vault_account_id.clone(),
-					polkadot_runtime_version: POLKADOT_TEST_RUNTIME_VERSION,
+					polkadot_runtime_version: dot_runtime_version,
 				},
 				eth_init_agg_key,
 				ethereum_deployment_block,
@@ -323,6 +341,7 @@ macro_rules! network_spec {
 					min_stake,
 					dot_genesis_hash,
 					dot_vault_account_id,
+					dot_runtime_version,
 				} = env_override.unwrap_or(ENV);
 				Ok(ChainSpec::from_genesis(
 					NETWORK_NAME,
@@ -390,7 +409,7 @@ macro_rules! network_spec {
 								},
 								polkadot_genesis_hash: dot_genesis_hash,
 								polkadot_vault_account_id: dot_vault_account_id.clone(),
-								polkadot_runtime_version: POLKADOT_TEST_RUNTIME_VERSION,
+								polkadot_runtime_version: dot_runtime_version,
 							},
 							eth_init_agg_key,
 							ethereum_deployment_block,

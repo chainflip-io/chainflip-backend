@@ -25,6 +25,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	max_ceremony_stage_duration: 300,
 	dot_genesis_hash: super::DOT_GENESIS_HASH,
 	dot_vault_account_id: None,
+	dot_runtime_version: super::DOT_TEST_RUNTIME_VERSION,
 };
 
 pub const BASHFUL_SR25519: [u8; 32] =
