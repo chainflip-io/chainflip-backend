@@ -3,7 +3,9 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use cf_chains::{Chain, ChainAbi, ChainCrypto, SetAggKeyWithAggKey};
-use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex, GENESIS_EPOCH};
+use cf_primitives::{
+	AuthorityCount, CeremonyId, EpochIndex, ThresholdSignatureRequestId, GENESIS_EPOCH,
+};
 use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, Broadcaster, CeremonyIdProvider, Chainflip,
@@ -193,7 +195,7 @@ pub struct VaultEpochAndState {
 
 impl Default for VaultEpochAndState {
 	fn default() -> Self {
-		Self { epoch_index: GENESIS_EPOCH, key_state: KeyState::Unavailable }
+		Self { epoch_index: GENESIS_EPOCH, key_state: KeyState::Inactive }
 	}
 }
 
@@ -345,7 +347,7 @@ pub mod pallet {
 			if !CurrentVaultEpochAndState::<T, I>::exists() {
 				CurrentVaultEpochAndState::<T, I>::put(VaultEpochAndState {
 					epoch_index: T::EpochInfo::epoch_index(),
-					key_state: KeyState::Unavailable,
+					key_state: KeyState::Inactive,
 				});
 			}
 
@@ -540,7 +542,7 @@ pub mod pallet {
 		pub fn on_keygen_verification_result(
 			origin: OriginFor<T>,
 			keygen_ceremony_id: CeremonyId,
-			threshold_request_id: <T::ThresholdSigner as ThresholdSigner<T::Chain>>::RequestId,
+			threshold_request_id: ThresholdSignatureRequestId,
 			new_public_key: AggKeyFor<T, I>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureThresholdSigned::ensure_origin(origin)?;
@@ -706,7 +708,7 @@ pub mod pallet {
 			} else {
 				CurrentVaultEpochAndState::<T, I>::put(VaultEpochAndState {
 					epoch_index: GENESIS_EPOCH,
-					key_state: KeyState::Unavailable,
+					key_state: KeyState::Inactive,
 				});
 			}
 
@@ -757,7 +759,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		new_public_key: AggKeyFor<T, I>,
 		epoch_index: EpochIndex,
 		participants: BTreeSet<T::ValidatorId>,
-	) -> <T::ThresholdSigner as ThresholdSigner<T::Chain>>::RequestId {
+	) -> ThresholdSignatureRequestId {
 		let request_id = T::ThresholdSigner::request_keygen_verification_signature(
 			T::Chain::agg_key_to_payload(new_public_key),
 			T::Chain::agg_key_to_key_id(new_public_key, epoch_index),
@@ -862,13 +864,16 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 				new_public_key,
 			) {
 				Ok(rotate_tx) => {
-					T::Broadcaster::threshold_sign_and_broadcast(rotate_tx);
-					if KeyState::Active == current_vault_epoch_and_state.key_state {
-						CurrentVaultEpochAndState::<T, I>::put(VaultEpochAndState {
-							epoch_index: current_vault_epoch_and_state.epoch_index,
-							key_state: KeyState::Unavailable,
-						});
-					}
+					let (_, threshold_request_id) =
+						T::Broadcaster::threshold_sign_and_broadcast(rotate_tx);
+					debug_assert!(
+						matches!(current_vault_epoch_and_state.key_state, KeyState::Active),
+						"Current epoch key must be active to activate next key."
+					);
+					CurrentVaultEpochAndState::<T, I>::put(VaultEpochAndState {
+						epoch_index: current_vault_epoch_and_state.epoch_index,
+						key_state: KeyState::Locked(threshold_request_id),
+					});
 				},
 				Err(_) => {
 					// The block number value 1, which the vault is being set with is a dummy value
@@ -976,6 +981,17 @@ impl<T: Config<I>, I: 'static> VaultKeyWitnessedHandler<T::Chain> for Pallet<T, 
 		debug_assert_eq!(new_public_key, expected_new_key);
 
 		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Complete { tx_id });
+
+		// Unlock the key that was used to authorise the activation.
+		// TODO: use broadcast callbacks for this.
+		let _ = CurrentVaultEpochAndState::<T, I>::try_mutate(|state: &mut VaultEpochAndState| {
+			if let KeyState::Locked(_) = state.key_state {
+				state.key_state = KeyState::Active;
+				Ok(())
+			} else {
+				Err(())
+			}
+		});
 
 		Self::set_next_vault(new_public_key, block_number);
 
