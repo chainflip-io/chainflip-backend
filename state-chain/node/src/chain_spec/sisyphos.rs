@@ -2,6 +2,7 @@ pub use super::common::*;
 use super::StateChainEnvironment;
 use cf_chains::eth::CHAIN_ID_GOERLI;
 use sc_service::ChainType;
+use sp_core::H256;
 
 pub struct Config;
 
@@ -23,8 +24,10 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	min_stake: MIN_STAKE,
 	eth_block_safety_margin: eth::BLOCK_SAFETY_MARGIN as u32,
 	max_ceremony_stage_duration: 300,
-	// NB: These did not exist on persevance.
-	dot_genesis_hash: super::DOT_GENESIS_HASH,
+	// NB: These did not exist on sisyphos at genesis.
+	dot_genesis_hash: H256(hex_literal::hex!(
+		"5f551688012d25a98e729752169f509c6186af8079418c118844cc852b332bf5"
+	)),
 	dot_vault_account_id: None,
 	dot_runtime_version: super::DOT_TEST_RUNTIME_VERSION,
 };

@@ -4,10 +4,7 @@ use cf_primitives::{AccountRole, AuthorityCount, PolkadotAccountId};
 use frame_benchmarking::sp_std::collections::btree_set::BTreeSet;
 use sc_service::{ChainType, Properties};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use sp_core::{
-	crypto::{set_default_ss58_version, Ss58AddressFormat, UncheckedInto},
-	H256,
-};
+use sp_core::crypto::{set_default_ss58_version, Ss58AddressFormat, UncheckedInto};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use state_chain_runtime::{
 	chainflip::Offence, opaque::SessionKeys, AccountId, AccountRolesConfig, AuraConfig,
@@ -59,8 +56,7 @@ const ETHEREUM_CHAIN_ID_DEFAULT: u64 = cf_chains::eth::CHAIN_ID_GOERLI;
 const ETH_INIT_AGG_KEY_DEFAULT: &str =
 	"02e61afd677cdfbec838c6f309deff0b2c6056f8a27f2c783b68bba6b30f667be6";
 
-const DOT_GENESIS_HASH: PolkadotHash =
-	H256(hex_literal::hex!("5f551688012d25a98e729752169f509c6186af8079418c118844cc852b332bf5"));
+const DOT_GENESIS_HASH: &str = "5f551688012d25a98e729752169f509c6186af8079418c118844cc852b332bf5";
 const DOT_SPEC_VERSION: u32 = 9320;
 const DOT_TRANSACTION_VERSION: u32 = 16;
 pub const DOT_TEST_RUNTIME_VERSION: RuntimeVersion =
