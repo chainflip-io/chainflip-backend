@@ -4,7 +4,7 @@ use crate::{
 	self as pallet_cf_threshold_signature, mock::*, AttemptCount, CeremonyContext, CeremonyId,
 	Error, PalletOffence, RequestContext, RequestId,
 };
-use cf_chains::{mocks::MockEthereum, ChainCrypto};
+use cf_chains::mocks::MockEthereum;
 use cf_primitives::KeyId;
 use cf_traits::{
 	mocks::signer_nomination::MockNominator, AsyncResult, Chainflip, EpochInfo, EpochKey,
@@ -442,31 +442,6 @@ fn test_not_enough_signers_for_threshold_schedules_retry() {
 		});
 }
 
-#[test]
-fn test_no_ceremony_id_increase_if_no_threshold_request() {
-	const AUTHORITIES: [u64; 5] = [1, 2, 3, 4, 5];
-	ExtBuilder::new()
-		.with_authorities(AUTHORITIES)
-		.with_nominees([])
-		.build()
-		.execute_with(|| {
-			const PAYLOAD: <MockEthereum as ChainCrypto>::Payload = *b"OHAI";
-
-			let ceremony_id_before = current_ceremony_id();
-
-			<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(PAYLOAD);
-
-			let ceremony_id_no_increment = current_ceremony_id();
-			assert_eq!(ceremony_id_before, ceremony_id_no_increment);
-
-			MockNominator::set_nominees(Some(BTreeSet::from([1, 2, 3, 4, 5])));
-
-			<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(PAYLOAD);
-
-			assert_eq!(current_ceremony_id(), ceremony_id_no_increment + 1);
-		});
-}
-
 #[cfg(test)]
 mod unsigned_validation {
 	use super::*;
@@ -474,8 +449,7 @@ mod unsigned_validation {
 	use cf_chains::{mocks::MockAggKey, ChainCrypto};
 	use cf_primitives::KeyId;
 	use cf_traits::{
-		mocks::ceremony_id_provider::MockCeremonyIdProvider, CeremonyIdProvider, KeyProvider,
-		ThresholdSigner,
+		mocks::ceremony_id_provider::MockCeremonyIdProvider, KeyProvider, ThresholdSigner,
 	};
 	use frame_support::{pallet_prelude::InvalidTransaction, unsigned::TransactionSource};
 	use sp_runtime::traits::ValidateUnsigned;

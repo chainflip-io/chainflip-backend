@@ -208,6 +208,7 @@ impl ExtBuilder {
 
 	pub fn with_request(mut self, message: &<MockEthereum as ChainCrypto>::Payload) -> Self {
 		self.ext.execute_with(|| {
+			let initial_ceremony_id = MockCeremonyIdProvider::get();
 			// Initiate request
 			let request_id =
 				<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(*message);
@@ -224,6 +225,9 @@ impl ExtBuilder {
 					pending_ceremony.remaining_respondents,
 					BTreeSet::from_iter(MockNominator::get_nominees().unwrap_or_default())
 				);
+				assert_eq!(MockCeremonyIdProvider::get(), initial_ceremony_id + 1);
+			} else {
+				assert_eq!(MockCeremonyIdProvider::get(), initial_ceremony_id);
 			}
 
 			assert!(matches!(EthereumThresholdSigner::signature(request_id), AsyncResult::Pending));
