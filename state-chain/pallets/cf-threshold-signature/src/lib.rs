@@ -366,10 +366,12 @@ pub mod pallet {
 		/// Not enough signers were available to reach threshold.
 		SignersUnavailable {
 			request_id: RequestId,
+			attempt_count: AttemptCount,
 		},
 		/// We cannot sign because the key is unavailable.
 		CurrentKeyUnavailable {
 			request_id: RequestId,
+			attempt_count: AttemptCount,
 		},
 		/// The threshold signature response timeout has been updated
 		ThresholdSignatureResponseTimeoutUpdated {
@@ -686,10 +688,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 								) {
 								Ok((T::TargetChain::agg_key_to_key_id(key, epoch_index), nominees))
 							} else {
-								Err(Event::<T, I>::SignersUnavailable { request_id })
+								Err(Event::<T, I>::SignersUnavailable { request_id, attempt_count })
 							},
 						KeyState::Unavailable =>
-							Err(Event::<T, I>::CurrentKeyUnavailable { request_id }),
+							Err(Event::<T, I>::CurrentKeyUnavailable { request_id, attempt_count }),
 					},
 					ThresholdCeremonyType::Standard,
 				)
