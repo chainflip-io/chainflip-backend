@@ -104,8 +104,7 @@ impl Broadcaster<Ethereum> for MockBroadcast {
 		callback: Self::Callback,
 	) -> BroadcastId {
 		// TODO: Call the callback.
-		let result = callback.dispatch_bypass_filter(frame_system::RawOrigin::Root.into());
-		let f = 0;
+		let _ = callback.dispatch_bypass_filter(frame_system::RawOrigin::Root.into());
 		1
 	}
 }

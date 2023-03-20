@@ -198,7 +198,7 @@ pub mod pallet {
 	/// Stores a pool of addresses that is available for use together with the intent id.
 	#[pallet::storage]
 	pub(crate) type AddressPool<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, Vec<(IntentId, TargetChainAccount<T, I>)>, ValueQuery>;
+		StorageMap<_, Blake2_128Concat, IntentId, TargetChainAccount<T, I>>;
 
 	/// Stores the status of an address.
 	#[pallet::storage]
@@ -290,7 +290,7 @@ pub mod pallet {
 					IntentIngressDetails::<T, I>::remove(&address);
 					IntentActions::<T, I>::remove(&address);
 					if AddressStatus::<T, I>::get(&address) == DeploymentStatus::Deployed {
-						AddressPool::<T, I>::append((intent_id, address.clone()));
+						AddressPool::<T, I>::insert(intent_id, address.clone());
 					}
 					Self::deposit_event(Event::StopWitnessing { ingress_address: address });
 					total_weight = total_weight
@@ -319,7 +319,7 @@ pub mod pallet {
 			for (intent_id, address) in addresses {
 				IntentIngressDetails::<T, I>::remove(&address);
 				IntentActions::<T, I>::remove(&address);
-				AddressPool::<T, I>::append((intent_id, address.clone()));
+				AddressPool::<T, I>::insert(intent_id, address.clone());
 				AddressStatus::<T, I>::insert(address.clone(), DeploymentStatus::Deployed);
 				Self::deposit_event(Event::StopWitnessing { ingress_address: address });
 			}
@@ -523,47 +523,37 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		intent_action: IntentAction<T::AccountId>,
 	) -> Result<(IntentId, TargetChainAccount<T, I>), DispatchError> {
 		let intent_ttl = frame_system::Pallet::<T>::current_block_number() + T::IntentTTL::get();
-		let (address, intent_id) = AddressPool::<T, I>::mutate(
-			|pool| -> Result<(TargetChainAccount<T, I>, IntentId), DispatchError> {
-				if let Some((intent_id, address)) = pool.pop() {
-					FetchParamDetails::<T, I>::insert(
-						intent_id,
-						(
-							IngressFetchIdOf::<T, I>::deployed(intent_id, address.clone()),
-							address.clone(),
-						),
-					);
-					IntentExpiries::<T, I>::append(intent_ttl, (intent_id, address.clone()));
-					Ok((address, intent_id))
-				} else {
-					let next_intent_id = IntentIdCounter::<T, I>::get()
-						.checked_add(1)
-						.ok_or(Error::<T, I>::IntentIdsExhausted)?;
-					let new_address: TargetChainAccount<T, I> =
-						T::AddressDerivation::generate_address(ingress_asset, next_intent_id)?;
-					AddressStatus::<T, I>::insert(
-						new_address.clone(),
-						DeploymentStatus::Undeployed,
-					);
-					FetchParamDetails::<T, I>::insert(
-						next_intent_id,
-						(
-							IngressFetchIdOf::<T, I>::undeployed(
-								next_intent_id,
-								new_address.clone(),
-							),
-							new_address.clone(),
-						),
-					);
-					IntentExpiries::<T, I>::append(
-						intent_ttl,
-						(next_intent_id, new_address.clone()),
-					);
-					IntentIdCounter::<T, I>::put(next_intent_id);
-					Ok((new_address, next_intent_id))
-				}
-			},
-		)?;
+		// We have an address available, so we can just use it.
+		let (address, intent_id) = if let Some(intent_id) =
+			AddressPool::<T, I>::iter_keys().into_iter().last()
+		{
+			let address =
+				AddressPool::<T, I>::take(intent_id).expect("to have the address in the pool");
+			FetchParamDetails::<T, I>::insert(
+				intent_id,
+				(IngressFetchIdOf::<T, I>::deployed(intent_id, address.clone()), address.clone()),
+			);
+			IntentExpiries::<T, I>::append(intent_ttl, (intent_id, address.clone()));
+			(address, intent_id)
+		// We have to generate a new address.
+		} else {
+			let next_intent_id = IntentIdCounter::<T, I>::get()
+				.checked_add(1)
+				.ok_or(Error::<T, I>::IntentIdsExhausted)?;
+			let new_address: TargetChainAccount<T, I> =
+				T::AddressDerivation::generate_address(ingress_asset, next_intent_id)?;
+			AddressStatus::<T, I>::insert(new_address.clone(), DeploymentStatus::Undeployed);
+			FetchParamDetails::<T, I>::insert(
+				next_intent_id,
+				(
+					IngressFetchIdOf::<T, I>::undeployed(next_intent_id, new_address.clone()),
+					new_address.clone(),
+				),
+			);
+			IntentExpiries::<T, I>::append(intent_ttl, (next_intent_id, new_address.clone()));
+			IntentIdCounter::<T, I>::put(next_intent_id);
+			(new_address, next_intent_id)
+		};
 		IntentIngressDetails::<T, I>::insert(&address, IngressDetails { intent_id, ingress_asset });
 		IntentActions::<T, I>::insert(&address, intent_action);
 		Ok((intent_id, address))
