@@ -147,7 +147,9 @@ impl EthContractWitnesser for Erc20Witnesser {
 						spender: utils::decode_log_param(&log, "spender")?,
 						value: utils::decode_log_param::<ethabi::Uint>(&log, "value")?
 							.try_into()
-							.expect("Approval value should fit u128"),
+							// Approvals can fail to fit in a u128 - it's common to approve
+							// `U256::MAX`. If parsing fails, we saturate.
+							.unwrap_or(u128::MAX),
 					}
 				} else {
 					Erc20Event::Other(raw_log)
