@@ -367,9 +367,9 @@ pub trait ThresholdSignerNomination {
 #[derive(Default, Debug, TypeInfo, Decode, Encode, Clone, Copy, PartialEq, Eq)]
 pub enum KeyState {
 	Active,
-	// We are currently transitioning to a new key or the key doesn't yet exist.
+	/// The either hasn't been initialised, or is expired.
 	#[default]
-	Unavailable,
+	Inactive,
 	/// Key is only available to sign this request id.
 	Locked(ThresholdSignatureRequestId),
 }
@@ -378,7 +378,7 @@ impl KeyState {
 	pub fn is_available_for_request(&self, request_id: ThresholdSignatureRequestId) -> bool {
 		match self {
 			KeyState::Active => true,
-			KeyState::Unavailable => false,
+			KeyState::Inactive => false,
 			KeyState::Locked(locked_request_id) => request_id == *locked_request_id,
 		}
 	}

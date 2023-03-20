@@ -18,7 +18,7 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 		let key_state = if Vaults::<T, I>::get(current_epoch).is_some() {
 			KeyState::Active
 		} else {
-			KeyState::Unavailable
+			KeyState::Inactive
 		};
 
 		CurrentVaultEpochAndState::<T, I>::put(VaultEpochAndState {

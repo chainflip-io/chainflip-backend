@@ -194,7 +194,7 @@ pub struct VaultEpochAndState {
 
 impl Default for VaultEpochAndState {
 	fn default() -> Self {
-		Self { epoch_index: GENESIS_EPOCH, key_state: KeyState::Unavailable }
+		Self { epoch_index: GENESIS_EPOCH, key_state: KeyState::Inactive }
 	}
 }
 
@@ -345,7 +345,7 @@ pub mod pallet {
 			if !CurrentVaultEpochAndState::<T, I>::exists() {
 				CurrentVaultEpochAndState::<T, I>::put(VaultEpochAndState {
 					epoch_index: T::EpochInfo::epoch_index(),
-					key_state: KeyState::Unavailable,
+					key_state: KeyState::Inactive,
 				});
 			}
 
@@ -708,7 +708,7 @@ pub mod pallet {
 			} else {
 				CurrentVaultEpochAndState::<T, I>::put(VaultEpochAndState {
 					epoch_index: GENESIS_EPOCH,
-					key_state: KeyState::Unavailable,
+					key_state: KeyState::Inactive,
 				});
 			}
 
