@@ -25,7 +25,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	eth_block_safety_margin: eth::BLOCK_SAFETY_MARGIN as u32,
 	max_ceremony_stage_duration: 300,
 	dot_genesis_hash: H256(hex_literal::hex!(
-		"5f551688012d25a98e729752169f509c6186af8079418c118844cc852b332bf5"
+		"1eb7cacaa47d19edbd35c578523b2278f9b4d49a4a25318f3fe3a21bf30d769a"
 	)),
 	dot_vault_account_id: None,
 	dot_runtime_version: super::DOT_TEST_RUNTIME_VERSION,

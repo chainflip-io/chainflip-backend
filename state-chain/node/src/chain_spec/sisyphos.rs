@@ -24,9 +24,8 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	min_stake: MIN_STAKE,
 	eth_block_safety_margin: eth::BLOCK_SAFETY_MARGIN as u32,
 	max_ceremony_stage_duration: 300,
-	// NB: These did not exist on sisyphos at genesis.
 	dot_genesis_hash: H256(hex_literal::hex!(
-		"5f551688012d25a98e729752169f509c6186af8079418c118844cc852b332bf5"
+		"1665348821496e14ed56718d4d078e7f85b163bf4e45fa9afbeb220b34ed475a"
 	)),
 	dot_vault_account_id: None,
 	dot_runtime_version: super::DOT_TEST_RUNTIME_VERSION,
