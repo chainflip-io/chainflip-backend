@@ -198,7 +198,7 @@ pub fn aggregate_signature<C: CryptoScheme>(
 				&commitment_i,
 				&group_commitment,
 				&challenge,
-				&response,
+				response,
 			)
 		})
 		.collect();

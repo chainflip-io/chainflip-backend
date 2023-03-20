@@ -151,7 +151,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 			})
 			.collect();
 
-		if bad_parties.len() > 0 {
+		if !bad_parties.is_empty() {
 			return SigningStageResult::Error(
 				bad_parties,
 				SigningFailureReason::InvalidNumberOfPayloads,
@@ -308,7 +308,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 			})
 			.collect();
 
-		if bad_parties.len() > 0 {
+		if !bad_parties.is_empty() {
 			return SigningStageResult::Error(
 				bad_parties,
 				SigningFailureReason::InvalidNumberOfPayloads,
