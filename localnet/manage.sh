@@ -44,7 +44,7 @@ setup() {
   touch $LOCALNET_INIT_DIR/secrets/.setup_complete
 }
 
-workflow() {
+get-workflow() {
   echo "❓ Would you like to build, recreate or destroy your Localnet? (Type 1, 2, 3, 4 or 5)"
   select WORKFLOW in build-localnet recreate destroy logs yeet; do
     echo "You have chosen $WORKFLOW"
@@ -64,14 +64,18 @@ build-localnet() {
   docker-compose -f localnet/docker-compose.yml up -d
   ./$LOCALNET_INIT_DIR/scripts/start-node.sh $BINARIES_LOCATION
   while ! curl -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' 'http://localhost:9933' > /dev/null 2>&1 ; do
-    echo "🚧 Waiting for node to start"
+    echo "🚧 Waiting for chainflip-node to start"
+    sleep 3
+  done
+  while ! curl -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' 'http://localhost:9945' > /dev/null 2>&1 ; do
+    echo "🚦 Waiting for polkadot node to start"
     sleep 3
   done
   ./$LOCALNET_INIT_DIR/scripts/start-engine.sh $BINARIES_LOCATION
 
   echo
   echo "🚀 Network is live"
-  echo "🪵 To get logs run: ./localnet/manage"
+  echo "🪵 To get logs run: ./localnet/manage.sh"
   echo "👆 Then select logs (4)"
   echo
   echo "💚 Head to https://polkadot.js.org/apps/?rpc=ws%3A%2F%2F127.0.0.1%3A9944#/explorer to access PolkadotJS of Chainflip Network"
@@ -127,12 +131,13 @@ else
   echo "✅ Set up already complete"
 fi
 
-workflow
+get-workflow
 
 if [ $WORKFLOW == "build-localnet" ]; then
   build-localnet
 elif [ $WORKFLOW == "recreate" ]; then
   destroy
+  sleep 5
   build-localnet
 elif [ $WORKFLOW == "destroy" ]; then
   destroy

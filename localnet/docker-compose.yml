@@ -3,7 +3,7 @@ version: "3.8"
 services:
   geth:
     image: ghcr.io/chainflip-io/geth:perseverance-rc2
-    pull_policy: always
+    pull_policy: if_not_present
     container_name: geth
     platform: linux/amd64
     restart: unless-stopped
@@ -55,7 +55,8 @@ services:
   polkadot:
     container_name: polkadot
     platform: linux/amd64
-    image: parity/polkadot
+    image: parity/polkadot:v0.9.36
+    pull_policy: if_not_present
     ports:
       # - 30333:30333 # p2p port
       - 9934:9933 # rpc port
