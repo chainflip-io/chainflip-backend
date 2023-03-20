@@ -259,7 +259,7 @@ pub mod pallet {
 		type Slasher: Slashing<AccountId = Self::ValidatorId, BlockNumber = Self::BlockNumber>;
 
 		/// Ceremony Id source for keygen ceremonies.
-		type CeremonyIdProvider: CeremonyIdProvider<CeremonyId = CeremonyId>;
+		type CeremonyIdProvider: CeremonyIdProvider;
 
 		// A trait which allows us to put the chain into maintenance mode.
 		type SystemStateManager: SystemStateManager;

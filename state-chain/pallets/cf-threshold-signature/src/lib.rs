@@ -233,7 +233,7 @@ pub mod pallet {
 		>;
 
 		/// CeremonyId source.
-		type CeremonyIdProvider: CeremonyIdProvider<CeremonyId = CeremonyId>;
+		type CeremonyIdProvider: CeremonyIdProvider;
 
 		/// In case not enough live nodes were available to begin a threshold signing ceremony: The
 		/// number of blocks to wait before retrying with a new set.

@@ -1,7 +1,7 @@
 use std::{collections::BTreeSet, marker::PhantomData};
 
 use crate::{
-	self as pallet_cf_threshold_signature, CeremonyId, CeremonyRetryQueues, EnsureThresholdSigned,
+	self as pallet_cf_threshold_signature, CeremonyRetryQueues, EnsureThresholdSigned,
 	PalletOffence, PendingCeremonies, RequestId,
 };
 use cf_chains::{
@@ -174,7 +174,7 @@ impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 	type KeyProvider = MockKeyProvider;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type OffenceReporter = MockOffenceReporter;
-	type CeremonyIdProvider = MockCeremonyIdProvider<CeremonyId>;
+	type CeremonyIdProvider = MockCeremonyIdProvider;
 	type CeremonyRetryDelay = CeremonyRetryDelay;
 	type Weights = ();
 }
@@ -211,7 +211,7 @@ impl ExtBuilder {
 			// Initiate request
 			let request_id =
 				<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(*message);
-			let ceremony_id = MockCeremonyIdProvider::<CeremonyId>::ceremony_id();
+			let ceremony_id = MockCeremonyIdProvider::ceremony_id();
 
 			let maybe_pending_ceremony = EthereumThresholdSigner::pending_ceremonies(ceremony_id);
 			assert!(
@@ -240,7 +240,7 @@ impl ExtBuilder {
 			// Initiate request
 			let request_id =
 				EthereumThresholdSigner::request_signature_with_callback(*message, callback_gen);
-			let ceremony_id = MockCeremonyIdProvider::<CeremonyId>::ceremony_id();
+			let ceremony_id = MockCeremonyIdProvider::ceremony_id();
 			let pending = EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
 			assert_eq!(
 				pending.remaining_respondents,

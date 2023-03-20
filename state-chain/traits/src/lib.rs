@@ -18,8 +18,8 @@ use cf_chains::{
 };
 
 use cf_primitives::{
-	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BroadcastId, EgressId,
-	EpochIndex, EthereumAddress, ForeignChain, ForeignChainAddress, IntentId, KeyId,
+	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BroadcastId, CeremonyId,
+	EgressId, EpochIndex, EthereumAddress, ForeignChain, ForeignChainAddress, IntentId, KeyId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -566,13 +566,12 @@ pub trait Bonding {
 	/// Update the bond of an authority
 	fn update_bond(authority: &Self::ValidatorId, bond: Self::Amount);
 }
-pub trait CeremonyIdProvider {
-	type CeremonyId;
 
-	fn ceremony_id() -> Self::CeremonyId;
+pub trait CeremonyIdProvider {
+	fn ceremony_id() -> CeremonyId;
 
 	/// Increment the ceremony id, returning the new one.
-	fn increment_ceremony_id() -> Self::CeremonyId;
+	fn increment_ceremony_id() -> CeremonyId;
 }
 
 /// Something that is able to provide block authorship slots that were missed.

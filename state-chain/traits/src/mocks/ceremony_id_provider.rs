@@ -1,40 +1,34 @@
+use cf_primitives::CeremonyId;
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
-use sp_runtime::traits::One;
-use sp_std::{marker::PhantomData, ops::AddAssign};
 
 use frame_support::{storage, StorageHasher, Twox64Concat};
 
 use crate::CeremonyIdProvider;
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub struct MockCeremonyIdProvider<Id>(PhantomData<Id>);
+pub struct MockCeremonyIdProvider;
 
-impl<Id: Encode + Decode + Default> MockCeremonyIdProvider<Id> {
+impl MockCeremonyIdProvider {
 	const STORAGE_KEY: &'static [u8] = b"MockCeremonyIdProvider::Counter";
 
-	pub fn set(id: Id) {
+	pub fn set(id: CeremonyId) {
 		storage::hashed::put(&<Twox64Concat as StorageHasher>::hash, Self::STORAGE_KEY, &id)
 	}
 
-	pub fn get() -> Id {
+	pub fn get() -> CeremonyId {
 		storage::hashed::get_or_default(&<Twox64Concat as StorageHasher>::hash, Self::STORAGE_KEY)
 	}
 }
 
-impl<Id> CeremonyIdProvider for MockCeremonyIdProvider<Id>
-where
-	Id: Encode + Decode + Default + Copy + One + AddAssign,
-{
-	type CeremonyId = Id;
-
-	fn ceremony_id() -> Self::CeremonyId {
+impl CeremonyIdProvider for MockCeremonyIdProvider {
+	fn ceremony_id() -> CeremonyId {
 		Self::get()
 	}
 
-	fn increment_ceremony_id() -> Self::CeremonyId {
+	fn increment_ceremony_id() -> CeremonyId {
 		let mut id = Self::get();
-		id += One::one();
+		id += 1;
 		Self::set(id);
 		id
 	}
