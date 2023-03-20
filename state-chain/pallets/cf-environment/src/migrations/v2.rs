@@ -12,6 +12,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 			spec_version: old_metadata.spec_version,
 			transaction_version: old_metadata.transaction_version,
 		});
+		PolkadotGenesisHash::<T>::set(old_metadata.genesis_hash.into());
 
 		Weight::zero()
 	}
@@ -37,6 +38,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 			before_metadata.transaction_version, after_version.transaction_version,
 			"Transaction version mismatch"
 		);
+		assert_eq!(before_metadata.genesis_hash.into(), PolkadotGenesisHash::<T>::get());
 		Ok(())
 	}
 }
