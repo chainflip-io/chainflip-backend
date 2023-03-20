@@ -1,5 +1,5 @@
-use cf_chains::dot::{PolkadotHash, RuntimeVersion, POLKADOT_VAULT_ACCOUNT};
-use cf_primitives::{AccountRole, AuthorityCount};
+use cf_chains::dot::{PolkadotHash, RuntimeVersion};
+use cf_primitives::{AccountRole, AuthorityCount, PolkadotAccountId};
 
 use frame_benchmarking::sp_std::collections::btree_set::BTreeSet;
 use sc_service::{ChainType, Properties};
@@ -87,7 +87,9 @@ pub struct StateChainEnvironment {
 	max_ceremony_stage_duration: u32,
 
 	dot_genesis_hash: PolkadotHash,
+	dot_vault_account_id: Option<PolkadotAccountId>,
 }
+
 /// Get the values from the State Chain's environment variables. Else set them via the defaults
 pub fn get_environment() -> StateChainEnvironment {
 	let flip_token_address: [u8; 20] = clean_eth_address(
@@ -152,6 +154,13 @@ pub fn get_environment() -> StateChainEnvironment {
 		.parse::<PolkadotHash>()
 		.expect("DOT_GENESIS_HASH env var could not be parsed to PolkadotHash");
 
+	let dot_vault_account_id: Option<PolkadotAccountId> = env::var("DOT_VAULT_ACCOUNT_ID")
+		.map(|s| {
+			s.parse::<PolkadotAccountId>()
+				.expect("DOT_VAULT_ACCOUNT_ID env var could not be parsed to PolkadotAccountId")
+		})
+		.ok();
+
 	StateChainEnvironment {
 		flip_token_address,
 		eth_usdc_address,
@@ -166,6 +175,7 @@ pub fn get_environment() -> StateChainEnvironment {
 		max_ceremony_stage_duration,
 		min_stake,
 		dot_genesis_hash,
+		dot_vault_account_id,
 	}
 }
 
@@ -192,6 +202,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 		max_ceremony_stage_duration,
 		min_stake,
 		dot_genesis_hash,
+		dot_vault_account_id,
 	} = get_environment();
 	Ok(ChainSpec::from_genesis(
 		"CF Develop",
@@ -250,7 +261,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 						eth_priority_fee_percentile: common::ETH_PRIORITY_FEE_PERCENTILE,
 					},
 					polkadot_genesis_hash: dot_genesis_hash,
-					polkadot_vault_account_id: POLKADOT_VAULT_ACCOUNT,
+					polkadot_vault_account_id: dot_vault_account_id.clone(),
 					polkadot_runtime_version: POLKADOT_TEST_RUNTIME_VERSION,
 				},
 				eth_init_agg_key,
@@ -311,6 +322,7 @@ macro_rules! network_spec {
 					max_ceremony_stage_duration,
 					min_stake,
 					dot_genesis_hash,
+					dot_vault_account_id,
 				} = env_override.unwrap_or(ENV);
 				Ok(ChainSpec::from_genesis(
 					NETWORK_NAME,
@@ -377,7 +389,7 @@ macro_rules! network_spec {
 									eth_priority_fee_percentile: ETH_PRIORITY_FEE_PERCENTILE,
 								},
 								polkadot_genesis_hash: dot_genesis_hash,
-								polkadot_vault_account_id: POLKADOT_VAULT_ACCOUNT,
+								polkadot_vault_account_id: dot_vault_account_id.clone(),
 								polkadot_runtime_version: POLKADOT_TEST_RUNTIME_VERSION,
 							},
 							eth_init_agg_key,
