@@ -568,8 +568,6 @@ pub trait Bonding {
 }
 
 pub trait CeremonyIdProvider {
-	fn ceremony_id() -> CeremonyId;
-
 	/// Increment the ceremony id, returning the new one.
 	fn increment_ceremony_id() -> CeremonyId;
 }

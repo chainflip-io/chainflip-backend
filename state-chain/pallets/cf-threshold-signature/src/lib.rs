@@ -681,10 +681,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						KeyState::Active =>
 							if let Some(nominees) =
 								T::ThresholdSignerNomination::threshold_nomination_with_seed(
-									// Seed with the *next* ceremony id. But we don't want to
-									// increment it until we know that the ceremony is actually
-									// going to start.
-									(T::CeremonyIdProvider::ceremony_id() + 1, attempt_count),
+									(request_id, attempt_count),
 									epoch_index,
 								) {
 								Ok((T::TargetChain::agg_key_to_key_id(key, epoch_index), nominees))

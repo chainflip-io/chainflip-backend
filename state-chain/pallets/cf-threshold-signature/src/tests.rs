@@ -495,7 +495,7 @@ mod unsigned_validation {
 				},
 				participants,
 			);
-			let ceremony_id = MockCeremonyIdProvider::ceremony_id();
+			let ceremony_id = MockCeremonyIdProvider::get();
 
 			let retry_block = frame_system::Pallet::<Test>::current_block_number() +
 				EthereumThresholdSigner::threshold_signature_response_timeout();
@@ -519,7 +519,7 @@ mod unsigned_validation {
 				const PAYLOAD: <MockEthereum as ChainCrypto>::Payload = *b"OHAI";
 
 				<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(PAYLOAD);
-				let ceremony_id = MockCeremonyIdProvider::ceremony_id();
+				let ceremony_id = MockCeremonyIdProvider::get();
 				let EpochKey { key: current_key, .. } = MockKeyProvider::current_epoch_key();
 
 				assert!(
@@ -563,7 +563,7 @@ mod unsigned_validation {
 			.execute_with(|| {
 				const PAYLOAD: <MockEthereum as ChainCrypto>::Payload = *b"OHAI";
 				<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(PAYLOAD);
-				let ceremony_id = MockCeremonyIdProvider::ceremony_id();
+				let ceremony_id = MockCeremonyIdProvider::get();
 				assert_eq!(
 					Test::validate_unsigned(
 						TransactionSource::External,

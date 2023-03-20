@@ -22,10 +22,6 @@ impl MockCeremonyIdProvider {
 }
 
 impl CeremonyIdProvider for MockCeremonyIdProvider {
-	fn ceremony_id() -> CeremonyId {
-		Self::get()
-	}
-
 	fn increment_ceremony_id() -> CeremonyId {
 		let mut id = Self::get();
 		id += 1;

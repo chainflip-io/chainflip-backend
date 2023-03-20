@@ -89,10 +89,6 @@ impl<T: Config> Default for RotationPhase<T> {
 pub struct CeremonyIdProvider<T>(PhantomData<T>);
 
 impl<T: Config> cf_traits::CeremonyIdProvider for CeremonyIdProvider<T> {
-	fn ceremony_id() -> CeremonyId {
-		CeremonyIdCounter::<T>::get()
-	}
-
 	fn increment_ceremony_id() -> CeremonyId {
 		CeremonyIdCounter::<T>::mutate(|id| {
 			*id += 1;
