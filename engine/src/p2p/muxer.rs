@@ -273,7 +273,7 @@ mod tests {
 	async fn check_tag_and_version_serialization() {
 		let res = add_tag_and_current_version(DATA_1, ChainTag::Ethereum);
 
-		let version_bytes = [0x00, 0x02];
+		let version_bytes = [0x00, 0x01];
 		let tag_bytes = [0x00, 0x00];
 
 		assert_eq!(res, [&version_bytes, &tag_bytes, DATA_1].concat());

@@ -96,6 +96,7 @@ async fn should_report_on_inconsistent_broadcast_local_sig3() {
 		.await;
 }
 
+#[ignore = "Only works if V2 is enabled"]
 #[tokio::test]
 async fn should_sign_multiple_payloads() {
 	use crate::multisig::eth::SigningPayload;

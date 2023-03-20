@@ -368,9 +368,13 @@ where
 					// transforms
 					match expect_recv_with_timeout(&mut node.outgoing_p2p_message_receiver).await {
 						OutgoingMultisigStageMessages::Broadcast(receiver_ids, message) => {
-							// TODO: figure out why this is broken
-							let next_data =
-								message_to_next_stage_data(bincode::deserialize(&message).unwrap());
+							// Because (for now) messages are serialized for V1, we need to
+							// deserialize them from v1
+							let message =
+								super::ceremony_manager::deserialize_from_v1::<C::Crypto>(&message)
+									.unwrap();
+
+							let next_data = message_to_next_stage_data(message);
 							receiver_ids
 								.into_iter()
 								.map(move |receiver_id| (receiver_id, next_data.clone()))
@@ -379,12 +383,16 @@ where
 						OutgoingMultisigStageMessages::Private(messages) => messages
 							.into_iter()
 							.map(|(receiver_id, message)| {
-								(
-									receiver_id,
-									message_to_next_stage_data(
-										bincode::deserialize(&message).unwrap(),
-									),
-								)
+								(receiver_id, {
+									// Because (for now) messages are serialized for V1, we need to
+									// deserialize them from v1
+									let message = super::ceremony_manager::deserialize_from_v1::<
+										C::Crypto,
+									>(&message)
+									.unwrap();
+
+									message_to_next_stage_data(message)
+								})
 							})
 							.collect(),
 					}

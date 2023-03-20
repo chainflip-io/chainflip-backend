@@ -240,6 +240,12 @@ fn map_ceremony_parties(
 	Ok((our_idx, signer_idxs))
 }
 
+pub fn deserialize_from_v1<C: CryptoScheme>(payload: &[u8]) -> Result<MultisigMessage<C::Point>> {
+	let message: MultisigMessageV1<C::Point> = bincode::deserialize(payload)
+		.map_err(|e| anyhow!("Failed to deserialize message (version: 1): {:?}", e))?;
+	Ok(MultisigMessage { ceremony_id: message.ceremony_id, data: message.data.into() })
+}
+
 fn deserialize_for_version<C: CryptoScheme>(
 	message: VersionedCeremonyMessage,
 ) -> Result<MultisigMessage<C::Point>> {
@@ -248,12 +254,7 @@ fn deserialize_for_version<C: CryptoScheme>(
 			// NOTE: version 1 did not expect signing over multiple payloads,
 			// so we need to parse them using the old format and transform to the new
 			// format:
-			let message: MultisigMessageV1<C::Point> = bincode::deserialize(&message.payload)
-				.map_err(|e| {
-					anyhow!("Failed to deserialize message (version: {}): {:?}", message.version, e)
-				})?;
-
-			Ok(MultisigMessage { ceremony_id: message.ceremony_id, data: message.data.into() })
+			deserialize_from_v1::<C>(&message.payload)
 		},
 		2 => bincode::deserialize::<'_, MultisigMessage<C::Point>>(&message.payload).map_err(|e| {
 			anyhow!("Failed to deserialize message (version: {}): {:?}", message.version, e)
