@@ -4,7 +4,7 @@
 
 use cf_chains::{
 	btc::{BitcoinNetwork, Utxo},
-	dot::{api::CreatePolkadotVault, Polkadot, PolkadotAccountId, PolkadotIndex},
+	dot::{api::CreatePolkadotVault, Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
 	ChainCrypto,
 };
 use cf_primitives::{Asset, BroadcastId, EthereumAddress};
@@ -77,7 +77,7 @@ pub mod pallet {
 
 	use cf_chains::{
 		btc::Utxo,
-		dot::{PolkadotHash, PolkadotPublicKey, RuntimeVersion},
+		dot::{PolkadotPublicKey, RuntimeVersion},
 	};
 	use cf_primitives::{Asset, TxId};
 
@@ -100,9 +100,6 @@ pub mod pallet {
 			+ BroadcastCleanup<Polkadot>;
 		/// On new key witnessed handler for Polkadot
 		type PolkadotVaultKeyWitnessedHandler: VaultKeyWitnessedHandler<Polkadot>;
-
-		#[pallet::constant]
-		type PolkadotGenesisHash: Get<PolkadotHash>;
 
 		#[pallet::constant]
 		type BitcoinNetwork: Get<BitcoinNetwork>;
@@ -170,6 +167,11 @@ pub mod pallet {
 	pub type EthereumSignatureNonce<T> = StorageValue<_, SignatureNonce, ValueQuery>;
 
 	// POLKADOT CHAIN RELATED ENVIRONMENT ITEMS
+
+	#[pallet::storage]
+	#[pallet::getter(fn polkadot_genesis_hash)]
+	pub type PolkadotGenesisHash<T> = StorageValue<_, PolkadotHash, ValueQuery>;
+
 	#[pallet::storage]
 	#[pallet::getter(fn polkadot_vault_account_id)]
 	/// The Polkadot Vault Anonymous Account
@@ -407,6 +409,7 @@ pub mod pallet {
 		pub eth_vault_address: EthereumAddress,
 		pub ethereum_chain_id: u64,
 		pub cfe_settings: cfe::CfeSettings,
+		pub polkadot_genesis_hash: PolkadotHash,
 		pub polkadot_vault_account_id: Option<PolkadotAccountId>,
 		pub polkadot_runtime_version: RuntimeVersion,
 	}
@@ -424,10 +427,9 @@ pub mod pallet {
 			EthereumSupportedAssets::<T>::insert(Asset::Flip, self.flip_token_address);
 			EthereumSupportedAssets::<T>::insert(Asset::Usdc, self.eth_usdc_address);
 
+			PolkadotGenesisHash::<T>::set(self.polkadot_genesis_hash);
 			PolkadotVaultAccountId::<T>::set(self.polkadot_vault_account_id.clone());
-
 			PolkadotRuntimeVersion::<T>::set(self.polkadot_runtime_version);
-
 			PolkadotProxyAccountNonce::<T>::set(0);
 		}
 	}

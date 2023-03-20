@@ -23,6 +23,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	min_stake: MIN_STAKE,
 	eth_block_safety_margin: eth::BLOCK_SAFETY_MARGIN as u32,
 	max_ceremony_stage_duration: 300,
+	dot_genesis_hash: super::DOT_GENESIS_HASH,
 };
 
 pub const BASHFUL_SR25519: [u8; 32] =
