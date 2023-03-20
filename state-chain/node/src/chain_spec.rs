@@ -23,7 +23,6 @@ use sp_core::{sr25519, Pair, Public};
 use sp_runtime::traits::{IdentifyAccount, Verify};
 
 pub mod common;
-pub mod perseverance;
 pub mod sisyphos;
 pub mod testnet;
 
@@ -445,7 +444,6 @@ macro_rules! network_spec {
 }
 
 network_spec!(testnet);
-network_spec!(perseverance);
 network_spec!(sisyphos);
 
 /// Configure initial storage state for FRAME modules.
