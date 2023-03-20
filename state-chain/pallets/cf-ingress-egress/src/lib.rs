@@ -423,6 +423,24 @@ pub mod pallet {
 			}
 			Ok(())
 		}
+
+		/// Send up to `maybe_size` number of scheduled Cross chain messages out.
+		/// If None is set for `maybe_size`, send all scheduled CCMs.
+		/// Requires governance
+		///
+		/// ## Events
+		///
+		/// - [on_sucessful_ccm](Event::CcmBroadcastRequested)
+		/// - [on_failed_ccm](Event::CcmEgressInvalid)
+		#[pallet::weight(0)]
+		pub fn egress_scheduled_ccms(
+			origin: OriginFor<T>,
+			maybe_size: Option<u32>,
+		) -> DispatchResult {
+			let _ok = T::EnsureGovernance::ensure_origin(origin)?;
+			let _ = Self::do_egress_scheduled_ccm(maybe_size);
+			Ok(())
+		}
 	}
 }
 

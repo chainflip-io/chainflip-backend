@@ -57,10 +57,7 @@ impl WitnessDataExtraction for RuntimeCall {
 mod tests {
 	use super::*;
 	use crate::{RuntimeOrigin, Validator, Witnesser};
-	use cf_chains::{
-		eth::{Ethereum, TrackedData},
-		Chain,
-	};
+	use cf_chains::{eth::Ethereum, Chain, TrackedData};
 	use cf_primitives::AccountRole;
 	use cf_traits::EpochInfo;
 	use frame_support::{assert_ok, Hashable};
