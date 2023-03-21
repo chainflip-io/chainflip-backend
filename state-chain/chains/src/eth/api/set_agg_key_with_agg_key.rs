@@ -2,7 +2,7 @@
 
 use crate::{
 	eth::{AggKey, Ethereum, SigData, Tokenizable},
-	ApiCall, ChainCrypto, impl_api_call_eth,
+	impl_api_call_eth, ApiCall, ChainCrypto,
 };
 
 use codec::{Decode, Encode, MaxEncodedLen};

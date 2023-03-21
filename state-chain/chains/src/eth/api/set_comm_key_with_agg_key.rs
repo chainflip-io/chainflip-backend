@@ -1,6 +1,6 @@
 use crate::{
 	eth::{self, Ethereum, Tokenizable},
-	ApiCall, ChainCrypto, impl_api_call_eth,
+	impl_api_call_eth, ApiCall, ChainCrypto,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use ethabi::{ParamType, Token};
