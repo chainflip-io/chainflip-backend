@@ -22,7 +22,7 @@ use crate::{
 		crypto::{CryptoScheme, Rng},
 		eth::{EthSchnorrSignature, EthSigning},
 	},
-	p2p::{OutgoingMultisigStageMessages, VersionedCeremonyMessage},
+	p2p::{OutgoingMultisigStageMessages, VersionedCeremonyMessage, CURRENT_PROTOCOL_VERSION},
 	task_scope::task_scope,
 };
 use anyhow::Result;
@@ -437,7 +437,10 @@ async fn should_route_p2p_message() {
 	.unwrap();
 
 	incoming_p2p_sender
-		.send((sender_account_id, VersionedCeremonyMessage { version: 1, payload }))
+		.send((
+			sender_account_id,
+			VersionedCeremonyMessage { version: CURRENT_PROTOCOL_VERSION, payload },
+		))
 		.unwrap();
 
 	// Small delay to let the ceremony manager process the message

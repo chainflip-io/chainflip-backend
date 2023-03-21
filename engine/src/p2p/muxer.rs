@@ -9,7 +9,7 @@ use crate::{
 	p2p::{MultisigMessageReceiver, MultisigMessageSender, OutgoingMultisigStageMessages},
 };
 
-type ProtocolVersion = u16;
+pub type ProtocolVersion = u16;
 
 #[derive(Debug)]
 pub struct VersionedCeremonyMessage {
@@ -81,13 +81,13 @@ impl<'a> TagPlusMessage<'a> {
 	}
 }
 
-/// The most recent (current) wire protocol version
-const PROTOCOL_VERSION: ProtocolVersion = 1;
+/// Currently active wire protocol version
+pub const CURRENT_PROTOCOL_VERSION: ProtocolVersion = 1;
 
 fn add_tag_and_current_version(data: &[u8], tag: ChainTag) -> Vec<u8> {
 	let with_tag = TagPlusMessage { tag, payload: data }.serialize();
 
-	VersionedMessage { version: PROTOCOL_VERSION, payload: &with_tag }.serialize()
+	VersionedMessage { version: CURRENT_PROTOCOL_VERSION, payload: &with_tag }.serialize()
 }
 
 impl P2PMuxer {
@@ -130,7 +130,7 @@ impl P2PMuxer {
 	async fn process_incoming(&mut self, account_id: AccountId, data: Vec<u8>) {
 		if let Ok(VersionedMessage { version, payload }) = VersionedMessage::deserialize(&data) {
 			// only version 1 is expected/supported
-			if version == PROTOCOL_VERSION {
+			if version == CURRENT_PROTOCOL_VERSION {
 				match TagPlusMessage::deserialize(payload) {
 					Ok(TagPlusMessage { tag, payload }) => {
 						let message =
@@ -213,7 +213,7 @@ mod tests {
 	const DATA_2: &[u8] = &[3, 4, 5];
 
 	const ETH_TAG_PREFIX: &[u8] = &ChainTag::Ethereum.to_bytes();
-	const VERSION_PREFIX: &[u8] = &PROTOCOL_VERSION.to_be_bytes();
+	const VERSION_PREFIX: &[u8] = &CURRENT_PROTOCOL_VERSION.to_be_bytes();
 
 	#[tokio::test]
 	async fn correctly_prepends_chain_tag_broadcast() {
@@ -275,7 +275,7 @@ mod tests {
 	async fn check_tag_and_version_serialization() {
 		let res = add_tag_and_current_version(DATA_1, ChainTag::Ethereum);
 
-		let version_bytes = [0x00, 0x01];
+		let version_bytes: [u8; 2] = CURRENT_PROTOCOL_VERSION.to_be_bytes();
 		let tag_bytes = [0x00, 0x00];
 
 		assert_eq!(res, [&version_bytes, &tag_bytes, DATA_1].concat());

@@ -17,7 +17,7 @@ use crate::{
 
 pub use self::{
 	core::{PeerInfo, PeerUpdate},
-	muxer::VersionedCeremonyMessage,
+	muxer::{ProtocolVersion, VersionedCeremonyMessage, CURRENT_PROTOCOL_VERSION},
 };
 use anyhow::Context;
 use cf_primitives::AccountId;

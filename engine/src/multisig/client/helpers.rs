@@ -34,7 +34,7 @@ use crate::{
 		crypto::{ECPoint, Rng},
 		CryptoScheme,
 	},
-	p2p::OutgoingMultisigStageMessages,
+	p2p::{OutgoingMultisigStageMessages, VersionedCeremonyMessage, CURRENT_PROTOCOL_VERSION},
 };
 use crate::{
 	multisig::{
@@ -368,11 +368,12 @@ where
 					// transforms
 					match expect_recv_with_timeout(&mut node.outgoing_p2p_message_receiver).await {
 						OutgoingMultisigStageMessages::Broadcast(receiver_ids, message) => {
-							// Because (for now) messages are serialized for V1, we need to
-							// deserialize them from v1
 							let message =
-								super::ceremony_manager::deserialize_from_v1::<C::Crypto>(&message)
-									.unwrap();
+								deserialize_for_version::<C::Crypto>(VersionedCeremonyMessage {
+									version: CURRENT_PROTOCOL_VERSION,
+									payload: message,
+								})
+								.unwrap();
 
 							let next_data = message_to_next_stage_data(message);
 							receiver_ids
@@ -562,7 +563,7 @@ macro_rules! run_stages {
 }
 pub(crate) use run_stages;
 
-use super::{common::ResharingContext, signing::Comm1};
+use super::{ceremony_manager::deserialize_for_version, common::ResharingContext, signing::Comm1};
 
 pub type KeygenCeremonyRunner = CeremonyTestRunner<(), KeygenCeremony<EthSigning>>;
 

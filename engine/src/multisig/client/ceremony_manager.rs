@@ -246,7 +246,7 @@ pub fn deserialize_from_v1<C: CryptoScheme>(payload: &[u8]) -> Result<MultisigMe
 	Ok(MultisigMessage { ceremony_id: message.ceremony_id, data: message.data.into() })
 }
 
-fn deserialize_for_version<C: CryptoScheme>(
+pub fn deserialize_for_version<C: CryptoScheme>(
 	message: VersionedCeremonyMessage,
 ) -> Result<MultisigMessage<C::Point>> {
 	match message.version {
