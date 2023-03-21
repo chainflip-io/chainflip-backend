@@ -135,6 +135,8 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 
 		// Check that the number of commitments matches
 		// the number of payloads
+		// TODO: see if there is a way to deduplicate this
+		// (that doesn't add too much complexity)
 		let bad_parties: BTreeSet<_> = verified_commitments
 			.iter()
 			.filter_map(|(party_idx, Comm1(commitments))| {
