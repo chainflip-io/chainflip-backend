@@ -1,6 +1,6 @@
 use crate::{
 	eth::{self, Ethereum, Tokenizable},
-	ApiCall, ChainCrypto,
+	ApiCall, ChainCrypto, impl_api_call_eth,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use ethabi::{ParamType, Token};
@@ -61,24 +61,7 @@ impl SetCommKeyWithAggKey {
 	}
 }
 
-impl ApiCall<Ethereum> for SetCommKeyWithAggKey {
-	fn threshold_signature_payload(&self) -> <Ethereum as ChainCrypto>::Payload {
-		self.sig_data.msg_hash
-	}
-
-	fn signed(mut self, signature: &<Ethereum as ChainCrypto>::ThresholdSignature) -> Self {
-		self.sig_data.insert_signature(signature);
-		self
-	}
-
-	fn chain_encoded(&self) -> Vec<u8> {
-		self.abi_encoded()
-	}
-
-	fn is_signed(&self) -> bool {
-		self.sig_data.is_signed()
-	}
-}
+impl_api_call_eth!(SetCommKeyWithAggKey);
 
 #[cfg(test)]
 mod test_set_comm_key_with_agg_key {

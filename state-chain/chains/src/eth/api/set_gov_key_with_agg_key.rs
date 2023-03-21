@@ -1,6 +1,6 @@
 use crate::{
 	eth::{Ethereum, Tokenizable},
-	ApiCall, ChainCrypto,
+	ApiCall, ChainCrypto, impl_api_call_eth,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use ethabi::{Address, ParamType, Token};
@@ -58,24 +58,7 @@ impl SetGovKeyWithAggKey {
 	}
 }
 
-impl ApiCall<Ethereum> for SetGovKeyWithAggKey {
-	fn threshold_signature_payload(&self) -> <Ethereum as ChainCrypto>::Payload {
-		self.sig_data.msg_hash
-	}
-
-	fn signed(mut self, signature: &<Ethereum as ChainCrypto>::ThresholdSignature) -> Self {
-		self.sig_data.insert_signature(signature);
-		self
-	}
-
-	fn chain_encoded(&self) -> Vec<u8> {
-		self.abi_encoded()
-	}
-
-	fn is_signed(&self) -> bool {
-		self.sig_data.is_signed()
-	}
-}
+impl_api_call_eth!(SetGovKeyWithAggKey);
 
 #[cfg(test)]
 mod test_set_gov_key_with_agg_key {
