@@ -10,7 +10,7 @@ use crate::{
 		PolkadotAccountIdLookup, PolkadotExtrinsicBuilder, PolkadotProxyType, PolkadotPublicKey,
 		PolkadotReplayProtection, PolkadotRuntimeCall, ProxyCall, UtilityCall,
 	},
-	ApiCall,
+	impl_api_call_dot, ApiCall, ChainCrypto,
 };
 
 /// The controller of the Polkadot vault account is executing this extrinsic and able
@@ -96,29 +96,4 @@ impl ChangeGovKey {
 	}
 }
 
-impl ApiCall<Polkadot> for ChangeGovKey {
-	fn threshold_signature_payload(&self) -> <Polkadot as crate::ChainCrypto>::Payload {
-		self
-		.extrinsic_builder
-		.signature_payload
-		.clone()
-		.expect("This should never fail since the apicall created above with new_unsigned() ensures it exists")
-	}
-
-	fn signed(
-		mut self,
-		threshold_signature: &<Polkadot as crate::ChainCrypto>::ThresholdSignature,
-	) -> Self {
-		self.extrinsic_builder
-			.insert_signature_and_get_signed_unchecked_extrinsic(threshold_signature.clone());
-		self
-	}
-
-	fn chain_encoded(&self) -> Vec<u8> {
-		self.extrinsic_builder.signed_extrinsic.clone().unwrap().encode()
-	}
-
-	fn is_signed(&self) -> bool {
-		self.extrinsic_builder.is_signed().unwrap_or(false)
-	}
-}
+impl_api_call_dot!(ChangeGovKey);

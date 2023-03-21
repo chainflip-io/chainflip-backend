@@ -6,7 +6,7 @@ use sp_std::{boxed::Box, vec, vec::Vec};
 
 use crate::{
 	eth::{ingress_address::get_salt, Ethereum, SigData, Tokenizable},
-	ApiCall, ChainCrypto,
+	impl_api_call_eth, ApiCall, ChainCrypto,
 };
 
 use super::{ethabi_function, ethabi_param, EthereumReplayProtection};
@@ -155,24 +155,7 @@ impl AllBatch {
 	}
 }
 
-impl ApiCall<Ethereum> for AllBatch {
-	fn threshold_signature_payload(&self) -> <Ethereum as ChainCrypto>::Payload {
-		self.sig_data.msg_hash
-	}
-
-	fn signed(mut self, signature: &<Ethereum as ChainCrypto>::ThresholdSignature) -> Self {
-		self.sig_data.insert_signature(signature);
-		self
-	}
-
-	fn chain_encoded(&self) -> Vec<u8> {
-		self.abi_encoded()
-	}
-
-	fn is_signed(&self) -> bool {
-		self.sig_data.is_signed()
-	}
-}
+impl_api_call_eth!(AllBatch);
 
 #[cfg(test)]
 mod test_all_batch {
