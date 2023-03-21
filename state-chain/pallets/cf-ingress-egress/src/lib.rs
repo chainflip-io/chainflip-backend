@@ -500,7 +500,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ingress_asset: TargetChainAsset<T, I>,
 		intent_action: IntentAction<T::AccountId>,
 	) -> Result<(IntentId, TargetChainAccount<T, I>), DispatchError> {
-		let intent_ttl = frame_system::Pallet::<T>::current_block_number() + T::IntentTTL::get();
 		let (address, intent_id) = AddressPool::<T, I>::mutate(
 			|pool| -> Result<(TargetChainAccount<T, I>, IntentId), DispatchError> {
 				if let Some((intent_id, address)) = pool.pop() {
@@ -511,7 +510,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							address.clone(),
 						),
 					);
-					IntentExpiries::<T, I>::append(intent_ttl, (intent_id, address.clone()));
 					Ok((address, intent_id))
 				} else {
 					let next_intent_id = IntentIdCounter::<T, I>::get()
@@ -533,15 +531,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							new_address.clone(),
 						),
 					);
-					IntentExpiries::<T, I>::append(
-						intent_ttl,
-						(next_intent_id, new_address.clone()),
-					);
 					IntentIdCounter::<T, I>::put(next_intent_id);
 					Ok((new_address, next_intent_id))
 				}
 			},
 		)?;
+		IntentExpiries::<T, I>::append(
+			frame_system::Pallet::<T>::current_block_number() + T::IntentTTL::get(),
+			(intent_id, address.clone()),
+		);
 		IntentIngressDetails::<T, I>::insert(&address, IngressDetails { intent_id, ingress_asset });
 		IntentActions::<T, I>::insert(&address, intent_action);
 		Ok((intent_id, address))
