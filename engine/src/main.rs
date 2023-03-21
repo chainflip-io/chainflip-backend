@@ -66,10 +66,10 @@ async fn main() -> anyhow::Result<()> {
 
 			let dot_rpc_client = DotRpcClient::new(&settings.dot.ws_node_endpoint)
 				.await
-				.context("Failed to create Bitcoin Client")?;
+				.context("Failed to create Polkadot Client")?;
 
 			let btc_rpc_client =
-				BtcRpcClient::new(&settings.btc).context("Failed to create Polkadot Client")?;
+				BtcRpcClient::new(&settings.btc).context("Failed to create Bitcoin Client")?;
 
 			state_chain_client
 				.submit_signed_extrinsic(pallet_cf_validator::Call::cfe_version {
