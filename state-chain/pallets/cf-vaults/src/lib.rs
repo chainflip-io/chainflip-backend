@@ -259,7 +259,7 @@ pub mod pallet {
 		type Slasher: Slashing<AccountId = Self::ValidatorId, BlockNumber = Self::BlockNumber>;
 
 		/// Ceremony Id source for keygen ceremonies.
-		type CeremonyIdProvider: CeremonyIdProvider<CeremonyId = CeremonyId>;
+		type CeremonyIdProvider: CeremonyIdProvider;
 
 		// A trait which allows us to put the chain into maintenance mode.
 		type SystemStateManager: SystemStateManager;
@@ -431,10 +431,7 @@ pub mod pallet {
 		/// The new key was successfully used to sign.
 		KeygenVerificationSuccess { agg_key: <T::Chain as ChainCrypto>::AggKey },
 		/// Verification of the new key has failed.
-		KeygenVerificationFailure {
-			keygen_ceremony_id: CeremonyId,
-			failed_signing_ceremony_id: CeremonyId,
-		},
+		KeygenVerificationFailure { keygen_ceremony_id: CeremonyId },
 		/// Keygen has failed \[ceremony_id\]
 		KeygenFailure(CeremonyId),
 		/// Keygen response timeout has occurred \[ceremony_id\]
@@ -544,7 +541,6 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			keygen_ceremony_id: CeremonyId,
 			threshold_request_id: <T::ThresholdSigner as ThresholdSigner<T::Chain>>::RequestId,
-			signing_ceremony_id: CeremonyId,
 			new_public_key: AggKeyFor<T, I>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureThresholdSigned::ensure_origin(origin)?;
@@ -572,10 +568,7 @@ pub mod pallet {
 				},
 				Err(offenders) => Self::terminate_keygen_procedure(
 					&offenders[..],
-					Event::KeygenVerificationFailure {
-						keygen_ceremony_id,
-						failed_signing_ceremony_id: signing_ceremony_id,
-					},
+					Event::KeygenVerificationFailure { keygen_ceremony_id },
 				),
 			};
 			Ok(().into())
@@ -764,18 +757,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		new_public_key: AggKeyFor<T, I>,
 		epoch_index: EpochIndex,
 		participants: BTreeSet<T::ValidatorId>,
-	) -> (<T::ThresholdSigner as ThresholdSigner<T::Chain>>::RequestId, CeremonyId) {
-		let (request_id, signing_ceremony_id) =
-			T::ThresholdSigner::request_keygen_verification_signature(
-				T::Chain::agg_key_to_payload(new_public_key),
-				T::Chain::agg_key_to_key_id(new_public_key, epoch_index),
-				participants,
-			);
+	) -> <T::ThresholdSigner as ThresholdSigner<T::Chain>>::RequestId {
+		let request_id = T::ThresholdSigner::request_keygen_verification_signature(
+			T::Chain::agg_key_to_payload(new_public_key),
+			T::Chain::agg_key_to_key_id(new_public_key, epoch_index),
+			participants,
+		);
 		T::ThresholdSigner::register_callback(request_id, {
 			Call::on_keygen_verification_result {
 				keygen_ceremony_id,
 				threshold_request_id: request_id,
-				signing_ceremony_id,
 				new_public_key,
 			}
 			.into()
@@ -791,7 +782,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			VaultRotationStatus::<T, I>::AwaitingKeygenVerification { new_public_key },
 		);
 
-		(request_id, signing_ceremony_id)
+		request_id
 	}
 
 	fn terminate_keygen_procedure(offenders: &[T::ValidatorId], event: Event<T, I>) {
@@ -817,7 +808,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 
 		assert_ne!(Self::status(), AsyncResult::Pending);
 
-		let ceremony_id = T::CeremonyIdProvider::next_ceremony_id();
+		let ceremony_id = T::CeremonyIdProvider::increment_ceremony_id();
 
 		PendingVaultRotation::<T, I>::put(VaultRotationStatus::AwaitingKeygen {
 			keygen_ceremony_id: ceremony_id,
