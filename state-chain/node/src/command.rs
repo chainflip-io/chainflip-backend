@@ -40,11 +40,7 @@ impl SubstrateCli for Cli {
 			"test" => Box::new(chain_spec::testnet::Config::build_spec(Some(
 				chain_spec::get_environment(),
 			))?),
-			"perseverance-new" => Box::new(chain_spec::perseverance::Config::build_spec(None)?),
 			"sisyphos-new" => Box::new(chain_spec::sisyphos::Config::build_spec(None)?),
-			"perseverance" => Box::new(chain_spec::ChainSpec::from_json_bytes(
-				include_bytes!("../chainspecs/perseverance.chainspec.raw.json").as_slice(),
-			)?),
 			"sisyphos" => Box::new(chain_spec::ChainSpec::from_json_bytes(
 				include_bytes!("../chainspecs/sisyphos.chainspec.raw.json").as_slice(),
 			)?),

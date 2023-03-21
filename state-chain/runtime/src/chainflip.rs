@@ -255,7 +255,7 @@ impl ReplayProtectionProvider<Polkadot> for DotEnvironment {
 			// TODO: Instead of 0, tip needs to be set here
 			0,
 			Environment::polkadot_runtime_version(),
-			<Runtime as pallet_cf_environment::Config>::PolkadotGenesisHash::get(),
+			Environment::polkadot_genesis_hash(),
 		)
 	}
 }
