@@ -28,7 +28,7 @@ macro_rules! refresh_connection_on_error {
     ($self:expr, $namespace:ident, $method:ident $(, $arg:expr)*) => {{
 		match $self.online_client.$namespace().$method($($arg,)*).await {
 			Err(e) => {
-				tracing::error!(
+				tracing::warn!(
 					"Initial {} query failed with error: {e}, refreshing client and retrying", stringify!($method)
 				);
 				$self.refresh_client()
