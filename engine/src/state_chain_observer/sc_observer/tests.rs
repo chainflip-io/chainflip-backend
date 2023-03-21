@@ -1301,7 +1301,7 @@ I>>() 		.once()
 				first_ceremony_id,
 				key_id.clone(),
 				BTreeSet::from_iter([not_our_account_id.clone()]),
-				payload.clone(),
+				vec![payload.clone()],
 			)
 			.await;
 
@@ -1313,7 +1313,7 @@ I>>() 		.once()
 				next_ceremony_id,
 				key_id,
 				BTreeSet::from_iter([our_account_id]),
-				payload,
+				vec![payload],
 			)
 			.await;
 
