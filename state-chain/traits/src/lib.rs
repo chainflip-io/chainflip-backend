@@ -13,7 +13,8 @@ pub use async_result::AsyncResult;
 use sp_std::collections::btree_set::BTreeSet;
 
 use cf_chains::{
-	benchmarking_value::BenchmarkValue, ApiCall, Chain, ChainAbi, ChainCrypto, Ethereum, Polkadot,
+	benchmarking_value::BenchmarkValue, eth::H256, ApiCall, Chain, ChainAbi, ChainCrypto, Ethereum,
+	Polkadot,
 };
 
 use cf_primitives::{
@@ -400,13 +401,13 @@ where
 	type ValidatorId: Debug;
 
 	/// Initiate a signing request and return the request id and ceremony id.
-	fn request_signature(payload: C::Payload) -> (Self::RequestId, CeremonyId);
+	fn request_signature(payload: C::Payload) -> Self::RequestId;
 
 	fn request_keygen_verification_signature(
 		payload: C::Payload,
 		key_id: KeyId,
 		participants: BTreeSet<Self::ValidatorId>,
-	) -> (Self::RequestId, CeremonyId);
+	) -> Self::RequestId;
 
 	/// Register a callback to be dispatched when the signature is available. Can fail if the
 	/// provided request_id does not exist.
@@ -429,15 +430,15 @@ where
 	fn request_signature_with_callback(
 		payload: C::Payload,
 		callback_generator: impl FnOnce(Self::RequestId) -> Self::Callback,
-	) -> (Self::RequestId, CeremonyId) {
-		let (request_id, ceremony_id) = Self::request_signature(payload);
+	) -> Self::RequestId {
+		let request_id = Self::request_signature(payload);
 		Self::register_callback(request_id, callback_generator(request_id)).unwrap_or_else(|e| {
 			log::error!(
 				"Unable to register threshold signature callback. This should not be possible. Error: '{:?}'",
 				e.into()
 			);
 		});
-		(request_id, ceremony_id)
+		request_id
 	}
 
 	/// Helper function to enable benchmarking of the broadcast pallet
@@ -453,8 +454,18 @@ pub trait Broadcaster<Api: ChainAbi> {
 	/// Supported api calls for this chain.
 	type ApiCall: ApiCall<Api>;
 
+	/// The callback that gets executed when the signature is accepted.
+	type Callback: UnfilteredDispatchable;
+
 	/// Request a threshold signature and then build and broadcast the outbound api call.
 	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) -> BroadcastId;
+
+	/// Like `threshold_sign_and_broadcast` but also registers a callback to be dispatched when the
+	/// signature accepted event has been witnessed.
+	fn threshold_sign_and_broadcast_with_callback(
+		api_call: Self::ApiCall,
+		callback: Self::Callback,
+	) -> BroadcastId;
 }
 
 pub trait BroadcastCleanup<C: Chain> {
@@ -565,11 +576,10 @@ pub trait Bonding {
 	/// Update the bond of an authority
 	fn update_bond(authority: &Self::ValidatorId, bond: Self::Amount);
 }
-pub trait CeremonyIdProvider {
-	type CeremonyId;
 
-	/// Get the next ceremony id in the sequence.
-	fn next_ceremony_id() -> Self::CeremonyId;
+pub trait CeremonyIdProvider {
+	/// Increment the ceremony id, returning the new one.
+	fn increment_ceremony_id() -> CeremonyId;
 }
 
 /// Something that is able to provide block authorship slots that were missed.
@@ -690,19 +700,19 @@ pub trait AddressDerivationApi<C: Chain> {
 
 impl AddressDerivationApi<Ethereum> for () {
 	fn generate_address(
-		_ingress_asset: <Ethereum as Chain>::ChainAsset,
-		_intent_id: IntentId,
+		ingress_asset: <Ethereum as Chain>::ChainAsset,
+		intent_id: IntentId,
 	) -> Result<<Ethereum as Chain>::ChainAccount, DispatchError> {
-		Ok(Default::default())
+		Ok(H256((ingress_asset, intent_id).encode().blake2_256()).into())
 	}
 }
 
 impl AddressDerivationApi<Polkadot> for () {
 	fn generate_address(
-		_ingress_asset: <Polkadot as Chain>::ChainAsset,
-		_intent_id: IntentId,
+		ingress_asset: <Polkadot as Chain>::ChainAsset,
+		intent_id: IntentId,
 	) -> Result<<Polkadot as Chain>::ChainAccount, DispatchError> {
-		Ok([0u8; 32].into())
+		Ok((ingress_asset, intent_id).encode().blake2_256().into())
 	}
 }
 

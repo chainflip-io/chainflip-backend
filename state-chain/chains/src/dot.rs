@@ -77,8 +77,6 @@ pub const RAW_SEED_3: [u8; 32] =
 	hex_literal::hex!("ce7fec0dd410141c04e246a91f7ac909aa9707b56a8ecd33e794a49f1b5d70e6");
 pub const NONCE_3: u32 = 0; //correct nonce has to be provided for this account (see/track onchain)
 
-pub const POLKADOT_VAULT_ACCOUNT: Option<PolkadotAccountId> = None;
-
 // FROM: https://github.com/paritytech/polkadot/blob/v0.9.33/runtime/polkadot/src/lib.rs
 #[allow(clippy::unnecessary_cast)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]

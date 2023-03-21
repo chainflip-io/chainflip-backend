@@ -2,6 +2,7 @@ pub use super::common::*;
 use super::StateChainEnvironment;
 use cf_chains::eth::CHAIN_ID_GOERLI;
 use sc_service::ChainType;
+use sp_core::H256;
 
 pub struct Config;
 
@@ -23,6 +24,11 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	min_stake: MIN_STAKE,
 	eth_block_safety_margin: eth::BLOCK_SAFETY_MARGIN as u32,
 	max_ceremony_stage_duration: 300,
+	dot_genesis_hash: H256(hex_literal::hex!(
+		"1665348821496e14ed56718d4d078e7f85b163bf4e45fa9afbeb220b34ed475a"
+	)),
+	dot_vault_account_id: None,
+	dot_runtime_version: super::DOT_TEST_RUNTIME_VERSION,
 };
 
 pub const BASHFUL_SR25519: [u8; 32] =

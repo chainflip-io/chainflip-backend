@@ -14,10 +14,11 @@ use crate::{
 	EthereumBroadcaster, EthereumInstance, Flip, FlipBalance, PolkadotBroadcaster, Reputation,
 	Runtime, RuntimeCall, System, Validator,
 };
+
 use cf_chains::{
 	btc::{
-		api::BitcoinApi, Bitcoin, BitcoinAddress, BitcoinNetwork, BitcoinTransactionData,
-		BtcAmount, Utxo,
+		api::{BitcoinApi, SelectedUtxos},
+		Bitcoin, BitcoinNetwork, BitcoinTransactionData, BtcAmount, Utxo,
 	},
 	dot::{
 		api::PolkadotApi, Polkadot, PolkadotAccountId, PolkadotReplayProtection,
@@ -38,8 +39,8 @@ use cf_primitives::{
 use cf_traits::{
 	BlockEmissions, BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster, EgressApi,
 	EmergencyRotation, EpochInfo, EpochKey, EthEnvironmentProvider, Heartbeat, IngressApi,
-	IngressHandler, Issuance, NetworkState, RewardsDistribution, RuntimeUpgrade,
-	VaultTransitionHandler,
+	IngressHandler, Issuance, KeyProvider, KeyState, NetworkState, RewardsDistribution,
+	RuntimeUpgrade, VaultTransitionHandler,
 };
 use codec::{Decode, Encode};
 use ethabi::Address as EthAbiAddress;
@@ -213,9 +214,10 @@ impl TransactionBuilder<Bitcoin, BitcoinApi<BtcEnvironment>> for BtcTransactionB
 	}
 
 	fn is_valid_for_rebroadcast(_call: &BitcoinApi<BtcEnvironment>) -> bool {
-		// The transaction wont be valid for rebroadcast as soon as we transition to new epoch since
-		// the input utxo set will change and the whole apicall would be invalid
-		todo!()
+		// Todo: The transaction wont be valid for rebroadcast as soon as we transition to new epoch
+		// since the input utxo set will change and the whole apicall would be invalid. This case
+		// will be handled later
+		true
 	}
 }
 
@@ -278,7 +280,7 @@ impl ReplayProtectionProvider<Polkadot> for DotEnvironment {
 			// TODO: Instead of 0, tip needs to be set here
 			0,
 			Environment::polkadot_runtime_version(),
-			<Runtime as pallet_cf_environment::Config>::PolkadotGenesisHash::get(),
+			Environment::polkadot_genesis_hash(),
 		)
 	}
 }
@@ -286,7 +288,6 @@ impl ReplayProtectionProvider<Polkadot> for DotEnvironment {
 impl ChainEnvironment<cf_chains::dot::api::SystemAccounts, PolkadotAccountId> for DotEnvironment {
 	fn lookup(query: cf_chains::dot::api::SystemAccounts) -> Option<PolkadotAccountId> {
 		use crate::PolkadotVault;
-		use cf_traits::{KeyProvider, KeyState};
 		use sp_runtime::{traits::IdentifyAccount, MultiSigner};
 		match query {
 			cf_chains::dot::api::SystemAccounts::Proxy => {
@@ -304,15 +305,24 @@ impl ChainEnvironment<cf_chains::dot::api::SystemAccounts, PolkadotAccountId> fo
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct BtcEnvironment;
 
-impl ChainEnvironment<BtcAmount, (Vec<Utxo>, u64)> for BtcEnvironment {
-	fn lookup(output_amount: BtcAmount) -> Option<(Vec<Utxo>, u64)> {
-		Some(Environment::select_and_take_bitcoin_utxos(output_amount))
+impl ChainEnvironment<BtcAmount, SelectedUtxos> for BtcEnvironment {
+	fn lookup(output_amount: BtcAmount) -> Option<SelectedUtxos> {
+		Environment::select_and_take_bitcoin_utxos(output_amount)
 	}
 }
 
-impl ChainEnvironment<(), (BitcoinNetwork, BitcoinAddress)> for BtcEnvironment {
-	fn lookup(_: ()) -> Option<(BitcoinNetwork, BitcoinAddress)> {
-		Some((Environment::get_bitcoin_network(), Environment::get_btc_return_address()))
+impl ChainEnvironment<(), BitcoinNetwork> for BtcEnvironment {
+	fn lookup(_: ()) -> Option<BitcoinNetwork> {
+		Some(Environment::get_bitcoin_network())
+	}
+}
+impl ChainEnvironment<(), cf_chains::btc::AggKey> for BtcEnvironment {
+	fn lookup(_: ()) -> Option<cf_chains::btc::AggKey> {
+		use crate::BitcoinVault;
+		match <BitcoinVault as KeyProvider<Bitcoin>>::current_epoch_key() {
+			EpochKey { key, key_state, .. } if key_state == KeyState::Active => Some(key),
+			_ => None,
+		}
 	}
 }
 
@@ -325,6 +335,8 @@ impl VaultTransitionHandler<Polkadot> for DotVaultTransitionHandler {
 		Environment::reset_polkadot_proxy_account_nonce();
 	}
 }
+pub struct BtcVaultTransitionHandler;
+impl VaultTransitionHandler<Bitcoin> for BtcVaultTransitionHandler {}
 
 pub struct AnyChainIngressEgressHandler;
 
@@ -349,7 +361,13 @@ impl EgressApi<AnyChain> for AnyChainIngressEgressHandler {
 					.try_into()
 					.expect("Caller must ensure for account is of the compatible type."),
 			),
-			ForeignChain::Bitcoin => todo!("Bitcoin egress"),
+			ForeignChain::Bitcoin => crate::BitcoinIngressEgress::schedule_egress(
+				asset.try_into().expect("Checked for asset compatibility"),
+				amount,
+				egress_address
+					.try_into()
+					.expect("Caller must ensure for account is of the compatible type."),
+			),
 		}
 	}
 }
@@ -409,6 +427,7 @@ impl CommKeyBroadcaster for TokenholderGovernanceBroadcaster {
 	fn broadcast(new_key: <Ethereum as ChainCrypto>::GovKey) {
 		EthereumBroadcaster::threshold_sign_and_broadcast(
 			SetCommKeyWithAggKey::<Ethereum>::new_unsigned(new_key),
+			None::<RuntimeCall>,
 		);
 	}
 }
@@ -431,7 +450,11 @@ impl IngressApi<AnyChain> for AnyChainIngressEgressHandler {
 					lp_account,
 					ingress_asset.try_into().unwrap(),
 				),
-			ForeignChain::Bitcoin => todo!("Cannot register liquidity ingress intent for Bitcoin"),
+			ForeignChain::Bitcoin =>
+				crate::BitcoinIngressEgress::register_liquidity_ingress_intent(
+					lp_account,
+					ingress_asset.try_into().unwrap(),
+				),
 		}
 	}
 
@@ -457,7 +480,13 @@ impl IngressApi<AnyChain> for AnyChainIngressEgressHandler {
 				relayer_commission_bps,
 				relayer_id,
 			),
-			ForeignChain::Bitcoin => todo!("Cannot register swap intent for Bitcoin"),
+			ForeignChain::Bitcoin => crate::BitcoinIngressEgress::register_swap_intent(
+				ingress_asset.try_into().unwrap(),
+				egress_asset,
+				egress_address,
+				relayer_commission_bps,
+				relayer_id,
+			),
 		}
 	}
 }

@@ -3,8 +3,10 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use cf_chains::{
-	btc::{utxo_selection::select_utxos_from_pool, BitcoinAddress, BitcoinNetwork, Utxo},
-	dot::{api::CreatePolkadotVault, Polkadot, PolkadotAccountId, PolkadotIndex},
+	btc::{
+		api::SelectedUtxos, utxo_selection::select_utxos_from_pool, Bitcoin, BitcoinNetwork, Utxo,
+	},
+	dot::{api::CreatePolkadotVault, Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
 	ChainCrypto,
 };
 use cf_primitives::{Asset, BroadcastId, EthereumAddress};
@@ -76,8 +78,8 @@ pub mod cfe {
 pub mod pallet {
 
 	use cf_chains::{
-		btc::{BitcoinAddress, Utxo},
-		dot::{PolkadotHash, PolkadotPublicKey, RuntimeVersion},
+		btc::{Utxo, UtxoId},
+		dot::{PolkadotPublicKey, RuntimeVersion},
 	};
 	use cf_primitives::{Asset, TxId};
 
@@ -100,9 +102,8 @@ pub mod pallet {
 			+ BroadcastCleanup<Polkadot>;
 		/// On new key witnessed handler for Polkadot
 		type PolkadotVaultKeyWitnessedHandler: VaultKeyWitnessedHandler<Polkadot>;
-
-		#[pallet::constant]
-		type PolkadotGenesisHash: Get<PolkadotHash>;
+		/// On new key witnessed handler for Bitcoin
+		type BitcoinVaultKeyWitnessedHandler: VaultKeyWitnessedHandler<Bitcoin>;
 
 		#[pallet::constant]
 		type BitcoinNetwork: Get<BitcoinNetwork>;
@@ -170,6 +171,11 @@ pub mod pallet {
 	pub type EthereumSignatureNonce<T> = StorageValue<_, SignatureNonce, ValueQuery>;
 
 	// POLKADOT CHAIN RELATED ENVIRONMENT ITEMS
+
+	#[pallet::storage]
+	#[pallet::getter(fn polkadot_genesis_hash)]
+	pub type PolkadotGenesisHash<T> = StorageValue<_, PolkadotHash, ValueQuery>;
+
 	#[pallet::storage]
 	#[pallet::getter(fn polkadot_vault_account_id)]
 	/// The Polkadot Vault Anonymous Account
@@ -197,10 +203,6 @@ pub mod pallet {
 	/// The amount of fee we want to pay per utxo.
 	pub type BitcoinFeePerUtxo<T> = StorageValue<_, u64, ValueQuery>;
 
-	#[pallet::storage]
-	/// The address where we want to send the remaining btc amount after creating required outputs.
-	pub type BitcoinChangeAddress<T> = StorageValue<_, BitcoinAddress, ValueQuery>;
-
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -218,6 +220,8 @@ pub mod pallet {
 		PolkadotVaultAccountSet { polkadot_vault_account_id: PolkadotAccountId },
 		/// The Polkadot Runtime Version stored on chain was updated.
 		PolkadotRuntimeVersionUpdated { runtime_version: RuntimeVersion },
+		/// The block number for set for new Bitcoin vault
+		BitcoinBlockNumberSetForVault { block_number: cf_chains::btc::BlockNumber },
 	}
 
 	#[pallet::hooks]
@@ -388,6 +392,44 @@ pub mod pallet {
 			Ok(dispatch_result)
 		}
 
+		/// Manually witnesses the current Bitcoin block number to complete the pending vault
+		/// rotation.
+		///
+		/// ## Events
+		///
+		/// - [BitcoinBlockNumberSetForVault](Event::BitcoinBlockNumberSetForVault)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_support::error::BadOrigin)
+		#[allow(unused_variables)]
+		#[pallet::weight(0)]
+		pub fn witness_current_bitcoin_block_number_for_key(
+			origin: OriginFor<T>,
+			block_number: cf_chains::btc::BlockNumber,
+			new_public_key: cf_chains::btc::AggKey,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			use cf_traits::VaultKeyWitnessedHandler;
+
+			// Witness the agg_key rotation manually in the vaults pallet for bitcoin
+			let dispatch_result = T::BitcoinVaultKeyWitnessedHandler::on_new_key_activated(
+				new_public_key,
+				block_number,
+				UtxoId {
+					tx_hash: Default::default(),
+					vout_index: Default::default(),
+					pubkey_x: Default::default(),
+					salt: Default::default(),
+				},
+			)?;
+
+			Self::deposit_event(Event::<T>::BitcoinBlockNumberSetForVault { block_number });
+
+			Ok(dispatch_result)
+		}
+
 		#[pallet::weight(T::WeightInfo::update_polkadot_runtime_version())]
 		pub fn update_polkadot_runtime_version(
 			origin: OriginFor<T>,
@@ -420,11 +462,11 @@ pub mod pallet {
 		pub eth_vault_address: EthereumAddress,
 		pub ethereum_chain_id: u64,
 		pub cfe_settings: cfe::CfeSettings,
+		pub polkadot_genesis_hash: PolkadotHash,
 		pub polkadot_vault_account_id: Option<PolkadotAccountId>,
 		pub polkadot_runtime_version: RuntimeVersion,
 		pub bitcoin_network: BitcoinNetwork,
 		pub bitcoin_fee_per_utxo: u64,
-		pub bitcoin_change_address: BitcoinAddress,
 	}
 
 	/// Sets the genesis config
@@ -440,16 +482,14 @@ pub mod pallet {
 			EthereumSupportedAssets::<T>::insert(Asset::Flip, self.flip_token_address);
 			EthereumSupportedAssets::<T>::insert(Asset::Usdc, self.eth_usdc_address);
 
+			PolkadotGenesisHash::<T>::set(self.polkadot_genesis_hash);
 			PolkadotVaultAccountId::<T>::set(self.polkadot_vault_account_id.clone());
-
 			PolkadotRuntimeVersion::<T>::set(self.polkadot_runtime_version);
-
 			PolkadotProxyAccountNonce::<T>::set(0);
 
 			BitcoinAvailableUtxos::<T>::set(vec![]);
-			BitcoinNetworkSelection::<T>::set(self.bitcoin_network.clone());
+			BitcoinNetworkSelection::<T>::set(self.bitcoin_network);
 			BitcoinFeePerUtxo::<T>::set(self.bitcoin_fee_per_utxo);
-			BitcoinChangeAddress::<T>::set(self.bitcoin_change_address.clone());
 		}
 	}
 }
@@ -535,16 +575,12 @@ impl<T: Config> Pallet<T> {
 		BitcoinNetworkSelection::<T>::get()
 	}
 
-	pub fn get_btc_return_address() -> BitcoinAddress {
-		BitcoinChangeAddress::<T>::get()
-	}
-
 	// Calculate the selection of utxos, return them and remove them from the list. If the
 	// total output amount exceeds the total spendable amount of all utxos, the function
 	// selects all utxos. The fee required to spend the utxos are accounted for while selection.
 	pub fn select_and_take_bitcoin_utxos(
 		total_output_amount: cf_chains::btc::BtcAmount,
-	) -> (Vec<Utxo>, u64) {
+	) -> Option<SelectedUtxos> {
 		BitcoinAvailableUtxos::<T>::mutate(|available_utxos| {
 			select_utxos_from_pool(
 				available_utxos,

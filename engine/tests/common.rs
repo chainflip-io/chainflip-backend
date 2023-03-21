@@ -26,6 +26,7 @@ pub struct IntegrationTestConfig {
 pub struct Eth {
 	pub key_manager_address: H160,
 	pub stake_manager_address: H160,
+	pub vault_address: H160,
 }
 
 impl IntegrationTestConfig {

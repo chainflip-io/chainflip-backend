@@ -2,9 +2,13 @@ use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 use sp_std::{boxed::Box, vec::Vec};
 
-use crate::dot::{
-	BalancesCall, Polkadot, PolkadotAccountId, PolkadotAccountIdLookup, PolkadotExtrinsicBuilder,
-	PolkadotProxyType, PolkadotReplayProtection, PolkadotRuntimeCall, ProxyCall, UtilityCall,
+use crate::{
+	dot::{
+		BalancesCall, Polkadot, PolkadotAccountId, PolkadotAccountIdLookup,
+		PolkadotExtrinsicBuilder, PolkadotProxyType, PolkadotReplayProtection, PolkadotRuntimeCall,
+		ProxyCall, UtilityCall,
+	},
+	impl_api_call_dot,
 };
 
 use crate::{ApiCall, ChainCrypto, FetchAssetParams, TransferAssetParams};
@@ -93,29 +97,7 @@ impl BatchFetchAndTransfer {
 	}
 }
 
-impl ApiCall<Polkadot> for BatchFetchAndTransfer {
-	fn threshold_signature_payload(&self) -> <Polkadot as ChainCrypto>::Payload {
-		self
-		.extrinsic_builder
-		.signature_payload
-		.clone()
-		.expect("This should never fail since the apicall created above with new_unsigned() ensures it exists")
-	}
-
-	fn signed(mut self, signature: &<Polkadot as ChainCrypto>::ThresholdSignature) -> Self {
-		self.extrinsic_builder
-			.insert_signature_and_get_signed_unchecked_extrinsic(signature.clone());
-		self
-	}
-
-	fn chain_encoded(&self) -> Vec<u8> {
-		self.extrinsic_builder.signed_extrinsic.clone().unwrap().encode()
-	}
-
-	fn is_signed(&self) -> bool {
-		self.extrinsic_builder.is_signed().unwrap_or(false)
-	}
-}
+impl_api_call_dot!(BatchFetchAndTransfer);
 
 #[cfg(test)]
 mod test_batch_fetch {

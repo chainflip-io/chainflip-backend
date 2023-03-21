@@ -1,7 +1,7 @@
 use std::{collections::BTreeSet, marker::PhantomData};
 
 use crate::{
-	self as pallet_cf_threshold_signature, CeremonyId, CeremonyRetryQueues, EnsureThresholdSigned,
+	self as pallet_cf_threshold_signature, CeremonyRetryQueues, EnsureThresholdSigned,
 	PalletOffence, PendingCeremonies, RequestId,
 };
 use cf_chains::{
@@ -174,7 +174,7 @@ impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 	type KeyProvider = MockKeyProvider;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type OffenceReporter = MockOffenceReporter;
-	type CeremonyIdProvider = MockCeremonyIdProvider<CeremonyId>;
+	type CeremonyIdProvider = MockCeremonyIdProvider;
 	type CeremonyRetryDelay = CeremonyRetryDelay;
 	type Weights = ();
 }
@@ -208,9 +208,11 @@ impl ExtBuilder {
 
 	pub fn with_request(mut self, message: &<MockEthereum as ChainCrypto>::Payload) -> Self {
 		self.ext.execute_with(|| {
+			let initial_ceremony_id = MockCeremonyIdProvider::get();
 			// Initiate request
-			let (request_id, ceremony_id) =
+			let request_id =
 				<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(*message);
+			let ceremony_id = MockCeremonyIdProvider::get();
 
 			let maybe_pending_ceremony = EthereumThresholdSigner::pending_ceremonies(ceremony_id);
 			assert!(
@@ -223,6 +225,9 @@ impl ExtBuilder {
 					pending_ceremony.remaining_respondents,
 					BTreeSet::from_iter(MockNominator::get_nominees().unwrap_or_default())
 				);
+				assert_eq!(MockCeremonyIdProvider::get(), initial_ceremony_id + 1);
+			} else {
+				assert_eq!(MockCeremonyIdProvider::get(), initial_ceremony_id);
 			}
 
 			assert!(matches!(EthereumThresholdSigner::signature(request_id), AsyncResult::Pending));
@@ -237,8 +242,9 @@ impl ExtBuilder {
 	) -> Self {
 		self.ext.execute_with(|| {
 			// Initiate request
-			let (request_id, ceremony_id) =
+			let request_id =
 				EthereumThresholdSigner::request_signature_with_callback(*message, callback_gen);
+			let ceremony_id = MockCeremonyIdProvider::get();
 			let pending = EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
 			assert_eq!(
 				pending.remaining_respondents,

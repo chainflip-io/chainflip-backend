@@ -19,7 +19,7 @@
 #[cfg(test)]
 mod tests;
 
-use sp_std::collections::btree_map::BTreeMap;
+use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
@@ -572,6 +572,22 @@ impl PoolState {
 			Some(position) => position.liquidity,
 			None => Default::default(),
 		}
+	}
+
+	/// Returns all liquidity positions held by a user.
+	pub fn minted_positions(&self, lp: AccountId) -> Vec<(Tick, Tick, Liquidity)> {
+		self.positions
+			.iter()
+			.filter_map(
+				|((user, lower, upper), position)| {
+					if *user == lp {
+						Some((*lower, *upper, position.liquidity))
+					} else {
+						None
+					}
+				},
+			)
+			.collect()
 	}
 
 	pub fn set_liquidity_fees(&mut self, fee_100th_bips: u32) -> Result<(), CreatePoolError> {

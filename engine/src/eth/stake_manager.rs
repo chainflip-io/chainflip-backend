@@ -16,7 +16,7 @@ use std::fmt::Debug;
 
 use async_trait::async_trait;
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 
 use super::{
 	event::Event, BlockWithItems, DecodeLogClosure, EthContractWitnesser, EventParseError,
@@ -237,7 +237,7 @@ impl EthContractWitnesser for StakeManager {
 						key_manager: utils::decode_log_param(&log, "keyManager")?,
 					}
 				} else {
-					return Err(anyhow!(EventParseError::UnexpectedEvent(event_signature)))
+					bail!(EventParseError::UnexpectedEvent(event_signature))
 				})
 			},
 		))
