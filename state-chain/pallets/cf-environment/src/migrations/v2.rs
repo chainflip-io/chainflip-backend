@@ -26,6 +26,8 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(state: sp_std::vec::Vec<u8>) -> Result<(), &'static str> {
+		use sp_core::H256;
+
 		let before_metadata =
 			super::v1::archived::PolkadotMetadata::decode(&mut &state[..]).unwrap();
 
@@ -38,7 +40,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 			before_metadata.transaction_version, after_version.transaction_version,
 			"Transaction version mismatch"
 		);
-		assert_eq!(before_metadata.genesis_hash.into(), PolkadotGenesisHash::<T>::get());
+		assert_eq!(H256(before_metadata.genesis_hash), PolkadotGenesisHash::<T>::get());
 		Ok(())
 	}
 }
