@@ -20,6 +20,7 @@ use chainflip_engine::{
 		client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi},
 	},
 	task_scope::task_scope,
+	witnesser::AddressMonitor,
 };
 
 use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
@@ -195,25 +196,27 @@ async fn main() -> anyhow::Result<()> {
 				dot_witnesser::start(
 					dot_epoch_start_receiver_1,
 					dot_rpc_client.clone(),
-					dot_monitor_ingress_receiver,
-					state_chain_client
-						.storage_map::<pallet_cf_ingress_egress::IntentIngressDetails<
-							state_chain_runtime::Runtime,
-							state_chain_runtime::PolkadotInstance,
-						>>(latest_block_hash)
-						.await
-						.context("Failed to get initial ingress details")?
-						.into_iter()
-						.filter_map(|(address, intent)| {
-							if intent.ingress_asset ==
-								cf_primitives::chains::assets::dot::Asset::Dot
-							{
-								Some(address)
-							} else {
-								None
-							}
-						})
-						.collect(),
+					AddressMonitor::new(
+						state_chain_client
+							.storage_map::<pallet_cf_ingress_egress::IntentIngressDetails<
+								state_chain_runtime::Runtime,
+								state_chain_runtime::PolkadotInstance,
+							>>(latest_block_hash)
+							.await
+							.context("Failed to get initial ingress details")?
+							.into_iter()
+							.filter_map(|(address, intent)| {
+								if intent.ingress_asset ==
+									cf_primitives::chains::assets::dot::Asset::Dot
+								{
+									Some(address)
+								} else {
+									None
+								}
+							})
+							.collect(),
+						dot_monitor_ingress_receiver,
+					),
 					dot_monitor_signature_receiver,
 					// NB: We don't need to monitor Ethereum signatures because we already monitor
 					// signature accepted events from the KeyManager contract on Ethereum.

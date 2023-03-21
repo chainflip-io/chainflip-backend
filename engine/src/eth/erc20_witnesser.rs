@@ -9,11 +9,11 @@ use web3::{
 	types::H160,
 };
 
-use crate::state_chain_observer::client::extrinsic_api::ExtrinsicApi;
+use crate::{state_chain_observer::client::extrinsic_api::ExtrinsicApi, witnesser::AddressMonitor};
 
 use super::{
-	core_h160, core_h256, event::Event, rpc::EthRpcApi, utils, witnessing::AddressMonitor,
-	BlockWithItems, DecodeLogClosure, EthContractWitnesser, SignatureAndEvent,
+	core_h160, core_h256, event::Event, rpc::EthRpcApi, utils, BlockWithItems, DecodeLogClosure,
+	EthContractWitnesser, SignatureAndEvent,
 };
 use pallet_cf_ingress_egress::IngressWitness;
 
@@ -36,7 +36,7 @@ pub struct Erc20Witnesser {
 	pub deployed_address: H160,
 	asset: eth::Asset,
 	contract: ethabi::Contract,
-	address_monitor: Arc<Mutex<AddressMonitor>>,
+	address_monitor: Arc<Mutex<AddressMonitor<sp_core::H160>>>,
 }
 
 impl Erc20Witnesser {
@@ -44,7 +44,7 @@ impl Erc20Witnesser {
 	pub fn new(
 		deployed_address: H160,
 		asset: eth::Asset,
-		address_monitor: Arc<Mutex<AddressMonitor>>,
+		address_monitor: Arc<Mutex<AddressMonitor<sp_core::H160>>>,
 	) -> Self {
 		Self {
 			deployed_address,

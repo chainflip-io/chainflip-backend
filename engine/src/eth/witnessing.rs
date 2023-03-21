@@ -17,7 +17,7 @@ use crate::{
 	settings,
 	state_chain_observer::{client::StateChainClient, EthAddressToMonitorSender},
 	task_scope::Scope,
-	witnesser::EpochStart,
+	witnesser::{AddressMonitor, EpochStart},
 };
 
 use super::{
@@ -41,38 +41,6 @@ pub struct AllWitnessers {
 	pub eth_ingress: IngressWitnesser<StateChainClient>,
 	pub flip_ingress: ContractWitnesser<Erc20Witnesser, StateChainClient>,
 	pub usdc_ingress: ContractWitnesser<Erc20Witnesser, StateChainClient>,
-}
-
-/// This stores addresses we are interested in. New addresses
-/// come through a channel which can be polled by calling
-/// [AddressMonitor::fetch_addresses].
-pub struct AddressMonitor {
-	addresses: BTreeSet<H160>,
-	address_receiver: tokio::sync::mpsc::UnboundedReceiver<H160>,
-}
-
-impl AddressMonitor {
-	pub fn new(
-		addresses: BTreeSet<H160>,
-		address_receiver: tokio::sync::mpsc::UnboundedReceiver<H160>,
-	) -> Self {
-		Self { addresses, address_receiver }
-	}
-
-	/// Check if we are interested in the address. [AddressMonitor::fetch_addresses]
-	/// should be called first to ensure we check against recently added addresses.
-	/// (We keep it as a separate function to make it possible to check multiple
-	/// addresses in a tight loop without having to fetch addresses on every item)
-	pub fn contains(&self, address: &H160) -> bool {
-		self.addresses.contains(address)
-	}
-
-	/// Ensure the list of interesting addresses is up to date
-	pub fn fetch_addresses(&mut self) {
-		while let Ok(address) = self.address_receiver.try_recv() {
-			self.addresses.insert(address);
-		}
-	}
 }
 
 pub async fn start(
