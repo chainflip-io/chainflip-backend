@@ -9,9 +9,11 @@ use crate::{
 	p2p::{MultisigMessageReceiver, MultisigMessageSender, OutgoingMultisigStageMessages},
 };
 
+type ProtocolVersion = u16;
+
 #[derive(Debug)]
 pub struct VersionedCeremonyMessage {
-	pub version: u16,
+	pub version: ProtocolVersion,
 	pub payload: Vec<u8>,
 }
 
@@ -26,7 +28,7 @@ pub struct P2PMuxer {
 
 /// Top-level protocol message, encapsulates all others
 struct VersionedMessage<'a> {
-	version: u16,
+	version: ProtocolVersion,
 	payload: &'a [u8],
 }
 
@@ -46,11 +48,11 @@ impl<'a> VersionedMessage<'a> {
 	}
 
 	fn deserialize(bytes: &'a [u8]) -> Result<Self> {
-		const VERSION_LEN: usize = std::mem::size_of::<u16>();
+		const VERSION_LEN: usize = std::mem::size_of::<ProtocolVersion>();
 
 		let (version, payload) = split_header::<VERSION_LEN>(bytes)?;
 
-		Ok(VersionedMessage { version: u16::from_be_bytes(*version), payload })
+		Ok(VersionedMessage { version: ProtocolVersion::from_be_bytes(*version), payload })
 	}
 }
 
@@ -80,7 +82,7 @@ impl<'a> TagPlusMessage<'a> {
 }
 
 /// The most recent (current) wire protocol version
-const PROTOCOL_VERSION: u16 = 1;
+const PROTOCOL_VERSION: ProtocolVersion = 1;
 
 fn add_tag_and_current_version(data: &[u8], tag: ChainTag) -> Vec<u8> {
 	let with_tag = TagPlusMessage { tag, payload: data }.serialize();
