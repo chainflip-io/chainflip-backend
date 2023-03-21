@@ -310,7 +310,7 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Callback for when a signature is accepted by the chain.
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::on_signature_accepted(addresses.len() as u32))]
 		pub fn on_signature_accepted(
 			origin: OriginFor<T>,
 			addresses: Vec<(IntentId, TargetChainAccount<T, I>)>,

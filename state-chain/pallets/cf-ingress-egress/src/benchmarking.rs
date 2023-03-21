@@ -78,4 +78,20 @@ benchmarks_instance_pallet! {
 	}: {
 		Pallet::<T, I>::do_single_ingress(ingress_address, ingress_asset, 100, BenchmarkValue::benchmark_value()).unwrap()
 	}
+
+	on_signature_accepted {
+		let origin = T::EnsureWitnessedAtCurrentEpoch::successful_origin();
+		let address = TargetChainAccount::<T, I>::benchmark_value();
+		let addresses = vec![(1, TargetChainAccount::<T, I>::benchmark_value())];
+		let a in 1 .. 100;
+		for i in 0..a {
+			IntentIngressDetails::<T, I>::insert(address.clone(), IngressDetails {
+				intent_id: 1,
+				ingress_asset: BenchmarkValue::benchmark_value(),
+			});
+			IntentActions::<T, I>::insert(address.clone(), IntentAction::<T::AccountId>::LiquidityProvision {
+				lp_account: account("doogle", 0, 0)
+			});
+		}
+	} : { let _ = Pallet::<T, I>::on_signature_accepted(origin, addresses);  }
 }
