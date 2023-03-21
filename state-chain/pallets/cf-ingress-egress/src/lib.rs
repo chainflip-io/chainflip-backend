@@ -215,6 +215,10 @@ pub mod pallet {
 			ingress_address: TargetChainAccount<T, I>,
 			ingress_asset: TargetChainAsset<T, I>,
 		},
+		StopWitnessing {
+			ingress_address: TargetChainAccount<T, I>,
+			ingress_asset: TargetChainAsset<T, I>,
+		},
 		IngressCompleted {
 			ingress_address: TargetChainAccount<T, I>,
 			asset: TargetChainAsset<T, I>,
@@ -238,9 +242,6 @@ pub mod pallet {
 		BatchBroadcastRequested {
 			broadcast_id: BroadcastId,
 			egress_ids: Vec<EgressId>,
-		},
-		StopWitnessing {
-			ingress_address: TargetChainAccount<T, I>,
 		},
 	}
 
@@ -280,12 +281,19 @@ pub mod pallet {
 			let mut total_weight: Weight = Weight::zero();
 			if let Some(expired) = IntentExpiries::<T, I>::take(n) {
 				for (intent_id, address) in expired.clone() {
-					IntentIngressDetails::<T, I>::remove(&address);
 					IntentActions::<T, I>::remove(&address);
 					if AddressStatus::<T, I>::get(&address) == DeploymentStatus::Deployed {
 						AddressPool::<T, I>::append((intent_id, address.clone()));
 					}
-					Self::deposit_event(Event::StopWitnessing { ingress_address: address });
+					if let Some(intent_ingress_details) =
+						IntentIngressDetails::<T, I>::take(&address)
+					{
+						Self::deposit_event(Event::<T, I>::StopWitnessing {
+							ingress_address: address.clone(),
+							ingress_asset: intent_ingress_details.ingress_asset,
+						});
+					}
+
 					total_weight = total_weight
 						.saturating_add(T::WeightInfo::on_initialize(expired.len() as u32));
 				}
