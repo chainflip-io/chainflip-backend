@@ -128,7 +128,7 @@ pub trait MultisigClientApi<C: CryptoScheme> {
 		key_id: KeyId,
 		signers: BTreeSet<AccountId>,
 		payload: Vec<C::SigningPayload>,
-	) -> BoxFuture<'_, Result<C::Signature, (BTreeSet<AccountId>, SigningFailureReason)>>;
+	) -> BoxFuture<'_, Result<Vec<C::Signature>, (BTreeSet<AccountId>, SigningFailureReason)>>;
 
 	fn update_latest_ceremony_id(&self, ceremony_id: CeremonyId);
 }
@@ -260,7 +260,7 @@ impl<C: CryptoScheme> MultisigClientApi<C> for MultisigClient<C> {
 		key_id: KeyId,
 		signers: BTreeSet<AccountId>,
 		payload: Vec<C::SigningPayload>,
-	) -> BoxFuture<'_, Result<C::Signature, (BTreeSet<AccountId>, SigningFailureReason)>> {
+	) -> BoxFuture<'_, Result<Vec<C::Signature>, (BTreeSet<AccountId>, SigningFailureReason)>> {
 		let span = info_span!("Signing Ceremony", ceremony_id = ceremony_id);
 		let _entered = span.enter();
 
@@ -307,17 +307,11 @@ impl<C: CryptoScheme> MultisigClientApi<C> for MultisigClient<C> {
 					.await
 					.expect("Signing result oneshot channel dropped before receiving a result");
 
-				result
-					.map(|signatures| {
-						// TODO: Change this to return all signatures when supported by the State
-						// Chain
-						signatures.into_iter().next().expect("must have at least one signature")
-					})
-					.map_err(|(reported_parties, failure_reason)| {
-						failure_reason.log(&reported_parties);
+				result.map_err(|(reported_parties, failure_reason)| {
+					failure_reason.log(&reported_parties);
 
-						(reported_parties, failure_reason)
-					})
+					(reported_parties, failure_reason)
+				})
 			} else {
 				// No key was found for the given key_id
 				let reported_parties = BTreeSet::new();

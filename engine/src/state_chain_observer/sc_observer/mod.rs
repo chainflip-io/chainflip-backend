@@ -102,14 +102,18 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient, C, I>(
 			multisig_client.initiate_signing(ceremony_id, key_id, signers, payloads);
 		scope.spawn(async move {
 			match signing_result_future.await {
-				Ok(signature) => {
+				Ok(signatures) => {
 					let _result = state_chain_client
 						.submit_unsigned_extrinsic(pallet_cf_threshold_signature::Call::<
 							state_chain_runtime::Runtime,
 							I,
 						>::signature_success {
 							ceremony_id,
-							signature: signature.into(),
+							signature: signatures
+								.into_iter()
+								.next()
+								.expect("must have at least one signature")
+								.into(),
 						})
 						.await;
 				},
