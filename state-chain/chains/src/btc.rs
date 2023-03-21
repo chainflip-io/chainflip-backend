@@ -1,24 +1,26 @@
+pub mod api;
+#[cfg(feature = "runtime-benchmarks")]
+pub mod benchmarking;
 pub mod ingress_address;
+pub mod utxo_selection;
 
 use base58::FromBase58;
 use bech32::{self, u5, FromBase32, ToBase32, Variant};
 use codec::{Decode, Encode, MaxEncodedLen};
 use core::{borrow::Borrow, iter};
-use frame_support::{sp_io::hashing::sha2_256, RuntimeDebug};
+use frame_support::{sp_io::hashing::sha2_256, BoundedVec, RuntimeDebug};
 use libsecp256k1::{PublicKey, SecretKey};
 use scale_info::TypeInfo;
 use sp_std::{vec, vec::Vec};
-// #[cfg(feature = "runtime-benchmarks")]
 
 extern crate alloc;
 use crate::{Chain, ChainAbi, ChainCrypto, FeeRefundCalculator, IngressIdConstructor};
 use alloc::string::String;
 pub use cf_primitives::chains::Bitcoin;
-use cf_primitives::{chains::assets, EpochIndex, IntentId, KeyId, PublicKeyBytes};
+use cf_primitives::{
+	chains::assets, EpochIndex, IntentId, KeyId, MaxBitcoinAddressLength, PublicKeyBytes,
+};
 use itertools;
-
-#[cfg(feature = "runtime-benchmarks")]
-use crate::benchmarking_value::BenchmarkValue;
 
 pub type BlockNumber = u64;
 
@@ -27,13 +29,13 @@ pub struct BitcoinFetchId(u64);
 
 // TODO: Come back to this. in BTC u64 works, but the trait has from u128 required, so we do this
 // for now
-type Amount = u128;
+pub type BtcAmount = u128;
 
 pub type SigningPayload = [u8; 32];
 
 pub type Signature = [u8; 64];
 
-pub type Address = [u8; 32];
+pub type BitcoinAddress = BoundedVec<u8, MaxBitcoinAddressLength>;
 
 pub type Hash = [u8; 32];
 
@@ -52,13 +54,6 @@ pub type Hash = [u8; 32];
 	PartialOrd,
 )]
 pub struct AggKey(pub [u8; 32]);
-
-#[cfg(feature = "runtime-benchmarks")]
-impl BenchmarkValue for AggKey {
-	fn benchmark_value() -> Self {
-		AggKey([1u8; 32])
-	}
-}
 
 impl From<KeyId> for AggKey {
 	fn from(key_id: KeyId) -> Self {
@@ -83,24 +78,6 @@ pub struct BitcoinTransactionData {
 	pub encoded_transaction: Vec<u8>,
 }
 
-#[cfg(feature = "runtime-benchmarks")]
-impl BenchmarkValue for BitcoinTransactionData {
-	fn benchmark_value() -> Self {
-		Self { encoded_transaction: vec![1u8; 100] }
-	}
-}
-
-#[cfg(feature = "runtime-benchmarks")]
-impl<T: BenchmarkValue> BenchmarkValue for Vec<T> {
-	fn benchmark_value() -> Self {
-		vec![T::benchmark_value()]
-	}
-}
-
-// TODO: Implement this
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Default)]
-pub struct BitcoinReplayProtection;
-
 impl FeeRefundCalculator<Bitcoin> for BitcoinTransactionData {
 	fn return_fee_refund(
 		&self,
@@ -113,7 +90,7 @@ impl FeeRefundCalculator<Bitcoin> for BitcoinTransactionData {
 impl Chain for Bitcoin {
 	type ChainBlockNumber = BlockNumber;
 
-	type ChainAmount = Amount;
+	type ChainAmount = BtcAmount;
 
 	type TransactionFee = Self::ChainAmount;
 
@@ -121,7 +98,7 @@ impl Chain for Bitcoin {
 
 	type ChainAsset = assets::btc::Asset;
 
-	type ChainAccount = Address;
+	type ChainAccount = BitcoinAddress;
 
 	type EpochStartData = ();
 
@@ -159,6 +136,11 @@ impl ChainCrypto for Bitcoin {
 	}
 }
 
+impl ChainAbi for Bitcoin {
+	type Transaction = BitcoinTransactionData;
+
+	type ReplayProtection = ();
+}
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct UtxoId {
 	// Tx hash of the transaction this utxo was a part of
@@ -172,37 +154,8 @@ pub struct UtxoId {
 	pub salt: IntentId,
 }
 
-#[cfg(feature = "runtime-benchmarks")]
-impl BenchmarkValue for UtxoId {
-	fn benchmark_value() -> Self {
-		UtxoId { tx_hash: [1u8; 32], vout_index: 1, pubkey_x: [2u8; 32], salt: 0 }
-	}
-}
-
-// Bitcoin threshold signature
-#[cfg(feature = "runtime-benchmarks")]
-impl BenchmarkValue for Signature {
-	fn benchmark_value() -> Self {
-		[0xau8; 64]
-	}
-}
-
-// Bitcoin address
-#[cfg(feature = "runtime-benchmarks")]
-impl BenchmarkValue for Address {
-	fn benchmark_value() -> Self {
-		[1u8; 32]
-	}
-}
-
-impl ChainAbi for Bitcoin {
-	type Transaction = BitcoinTransactionData;
-
-	type ReplayProtection = BitcoinReplayProtection;
-}
-
 impl IngressIdConstructor for BitcoinFetchId {
-	type Address = Address;
+	type Address = BitcoinAddress;
 
 	fn deployed(_intent_id: u64, _address: Self::Address) -> Self {
 		todo!()
@@ -210,13 +163,6 @@ impl IngressIdConstructor for BitcoinFetchId {
 
 	fn undeployed(_intent_id: u64, _address: Self::Address) -> Self {
 		todo!()
-	}
-}
-
-#[cfg(feature = "runtime-benchmarks")]
-impl BenchmarkValue for BitcoinFetchId {
-	fn benchmark_value() -> Self {
-		Self(1)
 	}
 }
 
@@ -228,7 +174,6 @@ const INTERNAL_PUBKEY: &[u8] =
 const SEGWIT_VERSION: u8 = 1;
 
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
-
 pub enum Error {
 	/// The address is invalid
 	InvalidAddress,
@@ -241,16 +186,19 @@ pub struct Utxo {
 	pub pubkey_x: [u8; 32],
 	pub salt: u32,
 }
+pub trait GetUtxoAmount {
+	fn amount(&self) -> u64;
+}
+impl GetUtxoAmount for Utxo {
+	fn amount(&self) -> u64 {
+		self.amount
+	}
+}
 
+#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct BitcoinOutput {
 	amount: u64,
 	script_pubkey: BitcoinScript,
-}
-
-pub struct BitcoinTransaction {
-	inputs: Vec<Utxo>,
-	outputs: Vec<BitcoinOutput>,
-	signatures: Vec<Signature>,
 }
 
 fn get_tapleaf_hash(pubkey_x: [u8; 32], salt: u32) -> Hash {
@@ -289,11 +237,20 @@ fn to_varint(value: u64) -> Vec<u8> {
 	result
 }
 
-#[derive(Clone, Copy, Debug, TypeInfo, Encode, Decode)]
+#[derive(
+	Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, PartialOrd, Ord,
+)]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub enum BitcoinNetwork {
 	Mainnet,
 	Testnet,
 	Regtest,
+}
+
+impl Default for BitcoinNetwork {
+	fn default() -> Self {
+		BitcoinNetwork::Mainnet
+	}
 }
 
 impl BitcoinNetwork {
@@ -388,13 +345,26 @@ pub fn scriptpubkey_from_address(
 	}
 }
 
+#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+pub struct BitcoinTransaction {
+	inputs: Vec<Utxo>,
+	outputs: Vec<BitcoinOutput>,
+	signatures: Vec<Signature>,
+}
+
 impl BitcoinTransaction {
-	pub fn add_signature(mut self, index: u32, signature: Signature) -> Self {
+	pub fn create_new_unsigned(inputs: Vec<Utxo>, outputs: Vec<BitcoinOutput>) -> Self {
+		Self { inputs, outputs, signatures: vec![] }
+	}
+	pub fn add_signature(&mut self, index: u32, signature: Signature) {
 		if self.signatures.len() != self.inputs.len() {
 			self.signatures.resize(self.inputs.len(), [0u8; 64]);
 		}
 		self.signatures[index as usize] = signature;
-		self
+	}
+	pub fn is_signed(&self) -> bool {
+		self.signatures.len() == self.inputs.len() &&
+			!self.signatures.iter().any(|signature| signature == &[0u8; 64])
 	}
 	pub fn finalize(self) -> Vec<u8> {
 		let mut transaction_bytes = Vec::default();
@@ -541,7 +511,7 @@ impl BitcoinTransaction {
 	}
 }
 
-#[derive(Default)]
+#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, Default)]
 pub struct BitcoinScript {
 	data: Vec<u8>,
 }
@@ -779,12 +749,12 @@ mod test {
 			)
 			.unwrap(),
 		};
-		let tx = BitcoinTransaction {
+		let mut tx = BitcoinTransaction {
 			inputs: vec![input],
 			outputs: vec![output],
 			signatures: Default::default(),
-		}
-		.add_signature(0, [0u8; 64]);
+		};
+		tx.add_signature(0, [0u8; 64]);
 		assert_eq!(tx.finalize(), hex_literal::hex!("020000000001014C94E48A870B85F41228D33CF25213DFCC8DD796E7211ED6B1F9A014809DBBB50100000000FDFFFFFF0100E1F5050000000022512042E4F4C78A1D8F936AD7FC2C2F028F9BB1538CFC9A509B985031457C367815C003400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000025017B752078C79A2B436DA5575A03CDE40197775C656FFF9F0F59FC1466E09C20A81A9CDBAC21C0EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE00000000"));
 	}
 
