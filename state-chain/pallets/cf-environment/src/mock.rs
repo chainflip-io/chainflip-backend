@@ -1,7 +1,7 @@
 use crate::{self as pallet_cf_environment, cfe};
 use cf_chains::{
 	btc::BitcoinNetwork,
-	dot::{api::CreatePolkadotVault, PolkadotHash, TEST_RUNTIME_VERSION},
+	dot::{api::CreatePolkadotVault, TEST_RUNTIME_VERSION},
 	ApiCall, Chain, ChainCrypto, Polkadot,
 };
 
@@ -146,7 +146,6 @@ impl Chainflip for Test {
 }
 
 parameter_types! {
-	pub const PolkadotGenesisHash: PolkadotHash = H256([0u8; 32]);
 	pub const BitcoinNetworkParam: BitcoinNetwork = BitcoinNetwork::Testnet;
 }
 
@@ -155,7 +154,6 @@ impl pallet_cf_environment::Config for Test {
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type CreatePolkadotVault = MockCreatePolkadotVault;
 	type PolkadotBroadcaster = MockPolkadotBroadcaster;
-	type PolkadotGenesisHash = PolkadotGenesisHash;
 	type BitcoinNetwork = BitcoinNetworkParam;
 	type PolkadotVaultKeyWitnessedHandler = MockPolkadotVaultKeyWitnessedHandler;
 	type WeightInfo = ();
@@ -184,6 +182,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			cfe_settings: CFE_SETTINGS,
 			flip_token_address: [0u8; 20],
 			eth_usdc_address: [0x2; 20],
+			polkadot_genesis_hash: H256([0u8; 32]),
 			polkadot_vault_account_id: None,
 			polkadot_runtime_version: TEST_RUNTIME_VERSION,
 		},

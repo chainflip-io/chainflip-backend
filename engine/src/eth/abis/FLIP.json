@@ -22,6 +22,11 @@
         "type": "address"
       },
       {
+        "internalType": "address",
+        "name": "receiverGenesisFlip",
+        "type": "address"
+      },
+      {
         "internalType": "contract IKeyManager",
         "name": "keyManager",
         "type": "address"
@@ -103,6 +108,19 @@
       }
     ],
     "name": "Transfer",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "keyManager",
+        "type": "address"
+      }
+    ],
+    "name": "UpdatedKeyManager",
     "type": "event"
   },
   {
@@ -382,7 +400,7 @@
           },
           {
             "internalType": "address",
-            "name": "kTimesGAddr",
+            "name": "kTimesGAddress",
             "type": "address"
           }
         ],
@@ -442,7 +460,7 @@
           },
           {
             "internalType": "address",
-            "name": "kTimesGAddr",
+            "name": "kTimesGAddress",
             "type": "address"
           }
         ],

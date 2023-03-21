@@ -6,7 +6,7 @@ use sp_std::{boxed::Box, vec, vec::Vec};
 
 use crate::{
 	eth::{ingress_address::get_salt, Ethereum, SigData, Tokenizable},
-	ApiCall, ChainCrypto,
+	impl_api_call_eth, ApiCall, ChainCrypto,
 };
 
 use super::{ethabi_function, ethabi_param, EthereumReplayProtection};
@@ -155,24 +155,7 @@ impl AllBatch {
 	}
 }
 
-impl ApiCall<Ethereum> for AllBatch {
-	fn threshold_signature_payload(&self) -> <Ethereum as ChainCrypto>::Payload {
-		self.sig_data.msg_hash
-	}
-
-	fn signed(mut self, signature: &<Ethereum as ChainCrypto>::ThresholdSignature) -> Self {
-		self.sig_data.insert_signature(signature);
-		self
-	}
-
-	fn chain_encoded(&self) -> Vec<u8> {
-		self.abi_encoded()
-	}
-
-	fn is_signed(&self) -> bool {
-		self.sig_data.is_signed()
-	}
-}
+impl_api_call_eth!(AllBatch);
 
 #[cfg(test)]
 mod test_all_batch {
@@ -186,7 +169,7 @@ mod test_all_batch {
 	// It uses a different ethabi to the CFE, so we test separately
 	fn just_load_the_contract() {
 		assert_ok!(ethabi::Contract::load(
-			std::include_bytes!("../../../../../engine/src/eth/abis/IVault.json").as_ref(),
+			std::include_bytes!("../../../../../engine/src/eth/abis/Vault.json").as_ref(),
 		));
 	}
 
@@ -237,7 +220,7 @@ mod test_all_batch {
 		const FAKE_SIG: [u8; 32] = asymmetrise([0xe1; 32]);
 
 		let eth_vault = ethabi::Contract::load(
-			std::include_bytes!("../../../../../engine/src/eth/abis/IVault.json").as_ref(),
+			std::include_bytes!("../../../../../engine/src/eth/abis/Vault.json").as_ref(),
 		)
 		.unwrap();
 

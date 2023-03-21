@@ -7,7 +7,7 @@ set -ex
 #
 # =============================================================
 
-readonly CONTRACT_VERSION_TAG=sandstorm-rc4
+readonly CONTRACT_VERSION_TAG="v0.5.0"
 
 if ! which poetry; then
   curl -sSL https://install.python-poetry.org | python3 -

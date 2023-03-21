@@ -230,7 +230,7 @@ impl pallet_cf_vaults::Config for MockRuntime {
 	type OffenceReporter = MockOffenceReporter;
 	type SetAggKeyWithAggKey = MockSetAggKeyWithAggKey;
 	type VaultTransitionHandler = MockVaultTransitionHandler;
-	type CeremonyIdProvider = MockCeremonyIdProvider<CeremonyId>;
+	type CeremonyIdProvider = MockCeremonyIdProvider;
 	type WeightInfo = ();
 	type Broadcaster = MockBroadcaster;
 	type SystemStateManager = MockSystemStateManager;

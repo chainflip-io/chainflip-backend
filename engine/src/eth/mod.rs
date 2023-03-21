@@ -6,6 +6,7 @@ pub mod ingress_witnesser;
 pub mod key_manager;
 mod merged_block_stream;
 pub mod stake_manager;
+pub mod vault;
 
 pub mod event;
 

@@ -1,4 +1,4 @@
-use crate::{AsyncResult, CeremonyId};
+use crate::AsyncResult;
 
 use super::{MockPallet, MockPalletStorage};
 use cf_chains::ChainCrypto;
@@ -71,7 +71,7 @@ where
 
 	type ValidatorId = MockValidatorId;
 
-	fn request_signature(payload: <C as ChainCrypto>::Payload) -> (Self::RequestId, CeremonyId) {
+	fn request_signature(payload: <C as ChainCrypto>::Payload) -> Self::RequestId {
 		let req_id = {
 			let payload = payload.clone();
 			payload.using_encoded(|bytes| bytes[0]) as u32
@@ -83,14 +83,14 @@ where
 		);
 		Self::put_storage(REQUEST, req_id, payload);
 		Self::put_value(LAST_REQ_ID, req_id);
-		(req_id, 1)
+		req_id
 	}
 
 	fn request_keygen_verification_signature(
 		payload: <C as ChainCrypto>::Payload,
 		_key_id: KeyId,
 		_participants: BTreeSet<Self::ValidatorId>,
-	) -> (Self::RequestId, CeremonyId) {
+	) -> Self::RequestId {
 		Self::request_signature(payload)
 	}
 

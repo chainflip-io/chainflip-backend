@@ -233,7 +233,7 @@ pub mod pallet {
 		>;
 
 		/// CeremonyId source.
-		type CeremonyIdProvider: CeremonyIdProvider<CeremonyId = CeremonyId>;
+		type CeremonyIdProvider: CeremonyIdProvider;
 
 		/// In case not enough live nodes were available to begin a threshold signing ceremony: The
 		/// number of blocks to wait before retrying with a new set.
@@ -363,14 +363,15 @@ pub mod pallet {
 			ceremony_id: CeremonyId,
 			reporter_id: T::ValidatorId,
 		},
-		/// Not enough signers were available to reach threshold. Ceremony will be retried.
+		/// Not enough signers were available to reach threshold.
 		SignersUnavailable {
 			request_id: RequestId,
-			ceremony_id: CeremonyId,
+			attempt_count: AttemptCount,
 		},
 		/// We cannot sign because the key is unavailable.
 		CurrentKeyUnavailable {
 			request_id: RequestId,
+			attempt_count: AttemptCount,
 		},
 		/// The threshold signature response timeout has been updated
 		ThresholdSignatureResponseTimeoutUpdated {
@@ -645,28 +646,24 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn inner_request_signature(
 		payload: PayloadFor<T, I>,
 		request_type: RequestType<BTreeSet<T::ValidatorId>>,
-	) -> (RequestId, CeremonyId) {
-		// Get a new request id.
+	) -> RequestId {
 		let request_id = ThresholdSignatureRequestIdCounter::<T, I>::mutate(|id| {
 			*id += 1;
 			*id
 		});
 
-		// Start a ceremony.
-		let ceremony_id = Self::new_ceremony_attempt(RequestInstruction {
+		Self::new_ceremony_attempt(RequestInstruction {
 			request_context: RequestContext { request_id, payload, attempt_count: 0 },
 			request_type,
 		});
 
 		Signature::<T, I>::insert(request_id, AsyncResult::Pending);
 
-		(request_id, ceremony_id)
+		request_id
 	}
 
-	/// Initiates a new ceremony request.
-	fn new_ceremony_attempt(request_instruction: RequestInstruction<T, I>) -> CeremonyId {
-		let ceremony_id = T::CeremonyIdProvider::next_ceremony_id();
-
+	/// Initiates a new ceremony request. Can return None if no ceremony was started.
+	fn new_ceremony_attempt(request_instruction: RequestInstruction<T, I>) {
 		let request_id = request_instruction.request_context.request_id;
 		let attempt_count = request_instruction.request_context.attempt_count;
 		let payload = request_instruction.request_context.payload.clone();
@@ -686,15 +683,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						KeyState::Active =>
 							if let Some(nominees) =
 								T::ThresholdSignerNomination::threshold_nomination_with_seed(
-									(ceremony_id, attempt_count),
+									(request_id, attempt_count),
 									epoch_index,
 								) {
 								Ok((T::TargetChain::agg_key_to_key_id(key, epoch_index), nominees))
 							} else {
-								Err(Event::<T, I>::SignersUnavailable { request_id, ceremony_id })
+								Err(Event::<T, I>::SignersUnavailable { request_id, attempt_count })
 							},
 						KeyState::Unavailable =>
-							Err(Event::<T, I>::CurrentKeyUnavailable { request_id }),
+							Err(Event::<T, I>::CurrentKeyUnavailable { request_id, attempt_count }),
 					},
 					ThresholdCeremonyType::Standard,
 				)
@@ -702,6 +699,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		Self::deposit_event(match maybe_key_id_participants {
 			Ok((key_id, participants)) => {
+				let ceremony_id = T::CeremonyIdProvider::increment_ceremony_id();
 				PendingCeremonies::<T, I>::insert(ceremony_id, {
 					let remaining_respondents: BTreeSet<_> =
 						participants.clone().into_iter().collect();
@@ -748,12 +746,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					target: "threshold-signing",
 					"Scheduling retry: {:?}", event
 				);
-
 				event
 			},
 		});
-
-		ceremony_id
 	}
 
 	// We've kicked off a ceremony, now we start a timeout, where it'll retry after that point.
@@ -813,7 +808,7 @@ where
 	type Callback = <T as Config<I>>::ThresholdCallable;
 	type ValidatorId = T::ValidatorId;
 
-	fn request_signature(payload: PayloadFor<T, I>) -> (Self::RequestId, CeremonyId) {
+	fn request_signature(payload: PayloadFor<T, I>) -> Self::RequestId {
 		Self::inner_request_signature(payload, RequestType::Standard)
 	}
 
@@ -821,7 +816,7 @@ where
 		payload: <T::TargetChain as ChainCrypto>::Payload,
 		key_id: KeyId,
 		participants: BTreeSet<Self::ValidatorId>,
-	) -> (Self::RequestId, CeremonyId) {
+	) -> Self::RequestId {
 		Self::inner_request_signature(
 			payload,
 			RequestType::KeygenVerification { key_id, participants },
