@@ -37,7 +37,8 @@ pub struct AwaitCommitments1<Crypto: CryptoScheme> {
 	common: CeremonyCommon,
 	signing_common: SigningStateCommonInfo<Crypto>,
 	// TODO: The reason to keep nonces in a Box was to
-	// ensure they are allocated on the heap. We can probably
+	// ensure they are allocated on the heap to avoid leaving
+	// copies on the stack when the data is moved. We can probably
 	// remove `Box` now that the items are stored in Vec
 	nonces: Vec<Box<SecretNoncePair<Crypto::Point>>>,
 }

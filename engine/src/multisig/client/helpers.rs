@@ -646,6 +646,7 @@ impl<C: CryptoScheme> CeremonyRunnerStrategy for SigningCeremonyRunner<C> {
 
 		assert_eq!(signatures.len(), self.ceremony_runner_data.payloads.len());
 
+		// TODO: use batch verification here?
 		for (i, signature) in signatures.iter().enumerate() {
 			C::verify_signature(
 				signature,
