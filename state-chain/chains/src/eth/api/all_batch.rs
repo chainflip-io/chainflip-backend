@@ -169,7 +169,7 @@ mod test_all_batch {
 	// It uses a different ethabi to the CFE, so we test separately
 	fn just_load_the_contract() {
 		assert_ok!(ethabi::Contract::load(
-			std::include_bytes!("../../../../../engine/src/eth/abis/IVault.json").as_ref(),
+			std::include_bytes!("../../../../../engine/src/eth/abis/Vault.json").as_ref(),
 		));
 	}
 
@@ -220,7 +220,7 @@ mod test_all_batch {
 		const FAKE_SIG: [u8; 32] = asymmetrise([0xe1; 32]);
 
 		let eth_vault = ethabi::Contract::load(
-			std::include_bytes!("../../../../../engine/src/eth/abis/IVault.json").as_ref(),
+			std::include_bytes!("../../../../../engine/src/eth/abis/Vault.json").as_ref(),
 		)
 		.unwrap();
 
