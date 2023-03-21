@@ -9,10 +9,14 @@ pub use cf_primitives::{
 	Asset, AssetAmount, EthereumAddress, ExchangeRate, ETHEREUM_ETH_ADDRESS,
 };
 
+use frame_support::traits::UnfilteredDispatchable;
+
 use cf_traits::{
+	impl_mock_callback,
 	mocks::all_batch::{MockAllBatch, MockEthEnvironment},
 	IngressHandler,
 };
+
 pub use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
 	Broadcaster,
@@ -84,12 +88,22 @@ impl cf_traits::Chainflip for Test {
 	type SystemState = MockSystemStateInfo;
 }
 
+impl_mock_callback!(RuntimeOrigin);
+
 pub struct MockBroadcast;
 impl Broadcaster<Ethereum> for MockBroadcast {
 	type ApiCall = MockAllBatch<MockEthEnvironment>;
+	type Callback = RuntimeCall;
 
 	fn threshold_sign_and_broadcast(_api_call: Self::ApiCall) -> BroadcastId {
 		1
+	}
+
+	fn threshold_sign_and_broadcast_with_callback(
+		_api_call: Self::ApiCall,
+		_callback: Self::Callback,
+	) -> BroadcastId {
+		unimplemented!()
 	}
 }
 
@@ -98,6 +112,7 @@ impl IngressHandler<Ethereum> for MockIngressHandler {}
 
 impl crate::Config<Instance1> for Test {
 	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
 	type TargetChain = Ethereum;
 	type AddressDerivation = ();
 	type LpProvisioning = Self;

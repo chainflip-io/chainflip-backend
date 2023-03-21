@@ -20,8 +20,11 @@ use cf_traits::{
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
-	dispatch::DispatchResultWithPostInfo, pallet_prelude::DispatchResult,
-	sp_runtime::traits::Saturating, traits::Get, Twox64Concat,
+	dispatch::DispatchResultWithPostInfo,
+	pallet_prelude::DispatchResult,
+	sp_runtime::traits::Saturating,
+	traits::{Get, UnfilteredDispatchable},
+	Twox64Concat,
 };
 
 use cf_traits::KeyProvider;
@@ -125,6 +128,16 @@ pub mod pallet {
 		/// The pallet dispatches calls, so it depends on the runtime's aggregated Call type.
 		type RuntimeCall: From<Call<Self, I>> + IsType<<Self as frame_system::Config>::RuntimeCall>;
 
+		/// The top-level origin type of the runtime.
+		type RuntimeOrigin: From<Origin<Self, I>>
+			+ IsType<<Self as frame_system::Config>::RuntimeOrigin>
+			+ Into<Result<Origin<Self, I>, <Self as Config<I>>::RuntimeOrigin>>;
+
+		/// The call type that is used to dispatch a broadcast callback.
+		type BroadcastCallable: Member
+			+ Parameter
+			+ UnfilteredDispatchable<RuntimeOrigin = <Self as frame_system::Config>::RuntimeOrigin>;
+
 		/// For registering and verifying the account role.
 		type AccountRoleRegistry: AccountRoleRegistry<Self>;
 
@@ -157,7 +170,7 @@ pub mod pallet {
 		>;
 
 		/// Ensure that only threshold signature consensus can trigger a broadcast.
-		type EnsureThresholdSigned: EnsureOrigin<Self::RuntimeOrigin>;
+		type EnsureThresholdSigned: EnsureOrigin<<Self as frame_system::Config>::RuntimeOrigin>;
 
 		/// The timeout duration for the broadcast, measured in number of blocks.
 		#[pallet::constant]
@@ -170,6 +183,11 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 	}
 
+	#[pallet::origin]
+	#[derive(PartialEq, Eq, Copy, Clone, RuntimeDebug, Encode, Decode, TypeInfo, MaxEncodedLen)]
+	#[scale_info(skip_type_params(T, I))]
+	pub struct Origin<T: Config<I>, I: 'static = ()>(pub(super) PhantomData<(T, I)>);
+
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
 	#[pallet::without_storage_info]
@@ -178,6 +196,12 @@ pub mod pallet {
 	/// A counter for incrementing the broadcast id.
 	#[pallet::storage]
 	pub type BroadcastIdCounter<T, I = ()> = StorageValue<_, BroadcastId, ValueQuery>;
+
+	/// Callbacks to be dispatched when the SignatureAccepted event has been witnessed.
+	#[pallet::storage]
+	#[pallet::getter(fn request_callback)]
+	pub type RequestCallbacks<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, BroadcastId, <T as Config<I>>::BroadcastCallable>;
 
 	/// The last attempt number for a particular broadcast.
 	#[pallet::storage]
@@ -250,6 +274,9 @@ pub mod pallet {
 		BroadcastSuccess { broadcast_id: BroadcastId },
 		/// A broadcast's threshold signature is invalid, we will attempt to re-sign it.
 		ThresholdSignatureInvalid { broadcast_id: BroadcastId },
+		/// A signature accepted event on the target chain has been witnessed and the callback was
+		/// executed.
+		BroadcastCallbackExecuted { broadcast_id: BroadcastId, result: DispatchResult },
 	}
 
 	#[pallet::error]
@@ -439,7 +466,7 @@ pub mod pallet {
 			signer_id: SignerIdFor<T, I>,
 			tx_fee: TransactionFeeFor<T, I>,
 		) -> DispatchResultWithPostInfo {
-			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
+			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin.clone())?;
 			let broadcast_id = SignatureToBroadcastIdLookup::<T, I>::take(signature)
 				.ok_or(Error::<T, I>::InvalidPayload)?;
 
@@ -464,7 +491,18 @@ pub mod pallet {
 				);
 			}
 
+			if let Some(callback) = RequestCallbacks::<T, I>::get(broadcast_id) {
+				Self::deposit_event(Event::<T, I>::BroadcastCallbackExecuted {
+					broadcast_id,
+					result: callback.dispatch_bypass_filter(origin).map(|_| ()).map_err(|e| {
+						log::warn!("Callback execution has failed for broadcast {}.", broadcast_id);
+						e.error
+					}),
+				});
+			}
+
 			Self::clean_up_broadcast_storage(broadcast_id);
+
 			Self::deposit_event(Event::<T, I>::BroadcastSuccess { broadcast_id });
 			Ok(().into())
 		}
@@ -492,6 +530,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			AwaitingBroadcast::<T, I>::remove(BroadcastAttemptId { broadcast_id, attempt_count });
 		}
 		FailedBroadcasters::<T, I>::remove(broadcast_id);
+		RequestCallbacks::<T, I>::remove(broadcast_id);
 
 		if let Some((_, signature)) = ThresholdSignatureData::<T, I>::take(broadcast_id) {
 			SignatureToBroadcastIdLookup::<T, I>::remove(signature);
@@ -514,11 +553,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	/// Request a threshold signature, providing [Call::on_signature_ready] as the callback.
-	pub fn threshold_sign_and_broadcast(api_call: <T as Config<I>>::ApiCall) -> BroadcastId {
+	pub fn threshold_sign_and_broadcast(
+		api_call: <T as Config<I>>::ApiCall,
+		maybe_callback: Option<<T as Config<I>>::BroadcastCallable>,
+	) -> BroadcastId {
 		let broadcast_id = BroadcastIdCounter::<T, I>::mutate(|id| {
 			*id += 1;
 			*id
 		});
+		if let Some(callback) = maybe_callback {
+			RequestCallbacks::<T, I>::insert(broadcast_id, callback);
+		}
 		T::ThresholdSigner::request_signature_with_callback(
 			api_call.threshold_signature_payload(),
 			|id| {
@@ -583,8 +628,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			// If the signature verification fails, we want
 			// to retry from the threshold signing stage.
 			else {
+				let callback = RequestCallbacks::<T, I>::get(broadcast_id);
 				Self::clean_up_broadcast_storage(broadcast_id);
-				Self::threshold_sign_and_broadcast(api_call);
+				Self::threshold_sign_and_broadcast(api_call, callback);
 				log::info!(
 					"Signature is invalid -> rescheduled threshold signature for broadcast id {}.",
 					broadcast_id
@@ -639,8 +685,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 	type ApiCall = T::ApiCall;
+	type Callback = <T as Config<I>>::BroadcastCallable;
 	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) -> BroadcastId {
-		Self::threshold_sign_and_broadcast(api_call)
+		Self::threshold_sign_and_broadcast(api_call, None)
+	}
+
+	fn threshold_sign_and_broadcast_with_callback(
+		api_call: Self::ApiCall,
+		callback: Self::Callback,
+	) -> BroadcastId {
+		Self::threshold_sign_and_broadcast(api_call, Some(callback))
 	}
 }
 

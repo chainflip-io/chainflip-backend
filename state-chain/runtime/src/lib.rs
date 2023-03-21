@@ -269,6 +269,7 @@ use chainflip::address_derivation::AddressDerivation;
 
 impl pallet_cf_ingress_egress::Config<EthereumInstance> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
 	type TargetChain = Ethereum;
 	type AddressDerivation = AddressDerivation;
 	type LpProvisioning = LiquidityProvider;
@@ -283,6 +284,7 @@ impl pallet_cf_ingress_egress::Config<EthereumInstance> for Runtime {
 
 impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
 	type TargetChain = Polkadot;
 	type AddressDerivation = AddressDerivation;
 	type LpProvisioning = LiquidityProvider;
@@ -608,6 +610,7 @@ impl pallet_cf_threshold_signature::Config<EthereumInstance> for Runtime {
 	type CeremonyRetryDelay = ConstU32<1>;
 	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
 }
+
 impl pallet_cf_threshold_signature::Config<PolkadotInstance> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Offence = chainflip::Offence;
@@ -627,6 +630,8 @@ impl pallet_cf_threshold_signature::Config<PolkadotInstance> for Runtime {
 impl pallet_cf_broadcast::Config<EthereumInstance> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
+	type RuntimeOrigin = RuntimeOrigin;
+	type BroadcastCallable = RuntimeCall;
 	type Offence = chainflip::Offence;
 	type AccountRoleRegistry = AccountRoles;
 	type TargetChain = Ethereum;
@@ -641,9 +646,12 @@ impl pallet_cf_broadcast::Config<EthereumInstance> for Runtime {
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type KeyProvider = EthereumVault;
 }
+
 impl pallet_cf_broadcast::Config<PolkadotInstance> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
+	type RuntimeOrigin = RuntimeOrigin;
+	type BroadcastCallable = RuntimeCall;
 	type Offence = chainflip::Offence;
 	type AccountRoleRegistry = AccountRoles;
 	type TargetChain = Polkadot;

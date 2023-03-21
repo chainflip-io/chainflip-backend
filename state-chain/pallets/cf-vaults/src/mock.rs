@@ -20,6 +20,7 @@ use cf_chains::{
 	ApiCall, ChainCrypto, ReplayProtectionProvider,
 };
 use cf_traits::{
+	impl_mock_callback,
 	mocks::{
 		ceremony_id_provider::MockCeremonyIdProvider, ensure_origin_mock::NeverFailingOriginCheck,
 		epoch_info::MockEpochInfo, eth_replay_protection_provider::MockEthReplayProtectionProvider,
@@ -126,18 +127,7 @@ impl Chainflip for MockRuntime {
 	type SystemState = MockSystemStateInfo;
 }
 
-pub struct MockCallback;
-
-impl UnfilteredDispatchable for MockCallback {
-	type RuntimeOrigin = RuntimeOrigin;
-
-	fn dispatch_bypass_filter(
-		self,
-		_origin: Self::RuntimeOrigin,
-	) -> frame_support::dispatch::DispatchResultWithPostInfo {
-		Ok(().into())
-	}
-}
+impl_mock_callback!(RuntimeOrigin);
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct MockSetAggKeyWithAggKey {
@@ -195,10 +185,18 @@ impl MockBroadcaster {
 
 impl Broadcaster<MockEthereum> for MockBroadcaster {
 	type ApiCall = MockSetAggKeyWithAggKey;
+	type Callback = MockCallback;
 
 	fn threshold_sign_and_broadcast(_api_call: Self::ApiCall) -> BroadcastId {
 		Self::send_broadcast();
 		1
+	}
+
+	fn threshold_sign_and_broadcast_with_callback(
+		_api_call: Self::ApiCall,
+		_callback: Self::Callback,
+	) -> BroadcastId {
+		unimplemented!()
 	}
 }
 
