@@ -491,7 +491,7 @@ pub mod pallet {
 				);
 			}
 
-			if let Some(callback) = RequestCallbacks::<T, I>::take(broadcast_id) {
+			if let Some(callback) = RequestCallbacks::<T, I>::get(broadcast_id) {
 				Self::deposit_event(Event::<T, I>::BroadcastCallbackExecuted {
 					broadcast_id,
 					result: callback.dispatch_bypass_filter(origin).map(|_| ()).map_err(|e| {
@@ -530,6 +530,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			AwaitingBroadcast::<T, I>::remove(BroadcastAttemptId { broadcast_id, attempt_count });
 		}
 		FailedBroadcasters::<T, I>::remove(broadcast_id);
+		RequestCallbacks::<T, I>::remove(broadcast_id);
 
 		if let Some((_, signature)) = ThresholdSignatureData::<T, I>::take(broadcast_id) {
 			SignatureToBroadcastIdLookup::<T, I>::remove(signature);
@@ -627,11 +628,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			// If the signature verification fails, we want
 			// to retry from the threshold signing stage.
 			else {
+				let callback = RequestCallbacks::<T, I>::get(broadcast_id);
 				Self::clean_up_broadcast_storage(broadcast_id);
-				Self::threshold_sign_and_broadcast(
-					api_call,
-					RequestCallbacks::<T, I>::take(broadcast_id),
-				);
+				Self::threshold_sign_and_broadcast(api_call, callback);
 				log::info!(
 					"Signature is invalid -> rescheduled threshold signature for broadcast id {}.",
 					broadcast_id
