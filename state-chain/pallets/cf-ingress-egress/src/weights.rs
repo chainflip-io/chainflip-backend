@@ -49,9 +49,9 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	/// The range of component `n` is `[1, 254]`.
 	fn on_initialize(n: u32, ) -> Weight {
 		// Minimum execution time: 29_000 nanoseconds.
-		Weight::from_ref_time(22_792_720)
-			// Standard Error: 9_696
-			.saturating_add(Weight::from_ref_time(10_639_175).saturating_mul(n.into()))
+		Weight::from_ref_time(23_268_310)
+			// Standard Error: 3_646
+			.saturating_add(Weight::from_ref_time(10_588_679).saturating_mul(n.into()))
 			.saturating_add(T::DbWeight::get().reads(2))
 			.saturating_add(T::DbWeight::get().writes(3))
 	}
@@ -83,10 +83,10 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumBroadcaster RequestCallbacks (r:0 w:1)
 	/// The range of component `n` is `[1, 254]`.
 	fn egress_assets(n: u32, ) -> Weight {
-		// Minimum execution time: 139_000 nanoseconds.
-		Weight::from_ref_time(143_230_713)
-			// Standard Error: 4_302
-			.saturating_add(Weight::from_ref_time(4_980_868).saturating_mul(n.into()))
+		// Minimum execution time: 144_000 nanoseconds.
+		Weight::from_ref_time(144_463_065)
+			// Standard Error: 3_057
+			.saturating_add(Weight::from_ref_time(4_825_162).saturating_mul(n.into()))
 			.saturating_add(T::DbWeight::get().reads(17))
 			.saturating_add(T::DbWeight::get().writes(10))
 	}
@@ -108,7 +108,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: LiquidityProvider FreeBalances (r:1 w:1)
 	fn do_single_ingress() -> Weight {
 		// Minimum execution time: 106_000 nanoseconds.
-		Weight::from_ref_time(109_000_000)
+		Weight::from_ref_time(108_000_000)
 			.saturating_add(T::DbWeight::get().reads(4))
 			.saturating_add(T::DbWeight::get().writes(2))
 	}
@@ -117,10 +117,13 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumIngressEgress AddressStatus (r:0 w:1)
 	// Storage: EthereumIngressEgress IntentIngressDetails (r:0 w:1)
 	/// The range of component `a` is `[1, 100]`.
-	fn on_signature_accepted(_a: u32, ) -> Weight {
-		// Minimum execution time: 29_000 nanoseconds.
-		Weight::from_ref_time(30_939_150)
-			.saturating_add(T::DbWeight::get().writes(4))
+	fn on_signature_accepted(a: u32, ) -> Weight {
+		// Minimum execution time: 30_000 nanoseconds.
+		Weight::from_ref_time(19_742_299)
+			// Standard Error: 9_938
+			.saturating_add(Weight::from_ref_time(13_335_018).saturating_mul(a.into()))
+			.saturating_add(T::DbWeight::get().writes(3))
+			.saturating_add(T::DbWeight::get().writes((1_u64).saturating_mul(a.into())))
 	}
 }
 
@@ -133,9 +136,9 @@ impl WeightInfo for () {
 	/// The range of component `n` is `[1, 254]`.
 	fn on_initialize(n: u32, ) -> Weight {
 		// Minimum execution time: 29_000 nanoseconds.
-		Weight::from_ref_time(22_792_720)
-			// Standard Error: 9_696
-			.saturating_add(Weight::from_ref_time(10_639_175).saturating_mul(n.into()))
+		Weight::from_ref_time(23_268_310)
+			// Standard Error: 3_646
+			.saturating_add(Weight::from_ref_time(10_588_679).saturating_mul(n.into()))
 			.saturating_add(RocksDbWeight::get().reads(2))
 			.saturating_add(RocksDbWeight::get().writes(3))
 	}
@@ -167,10 +170,10 @@ impl WeightInfo for () {
 	// Storage: EthereumBroadcaster RequestCallbacks (r:0 w:1)
 	/// The range of component `n` is `[1, 254]`.
 	fn egress_assets(n: u32, ) -> Weight {
-		// Minimum execution time: 139_000 nanoseconds.
-		Weight::from_ref_time(143_230_713)
-			// Standard Error: 4_302
-			.saturating_add(Weight::from_ref_time(4_980_868).saturating_mul(n.into()))
+		// Minimum execution time: 144_000 nanoseconds.
+		Weight::from_ref_time(144_463_065)
+			// Standard Error: 3_057
+			.saturating_add(Weight::from_ref_time(4_825_162).saturating_mul(n.into()))
 			.saturating_add(RocksDbWeight::get().reads(17))
 			.saturating_add(RocksDbWeight::get().writes(10))
 	}
@@ -192,7 +195,7 @@ impl WeightInfo for () {
 	// Storage: LiquidityProvider FreeBalances (r:1 w:1)
 	fn do_single_ingress() -> Weight {
 		// Minimum execution time: 106_000 nanoseconds.
-		Weight::from_ref_time(109_000_000)
+		Weight::from_ref_time(108_000_000)
 			.saturating_add(RocksDbWeight::get().reads(4))
 			.saturating_add(RocksDbWeight::get().writes(2))
 	}
@@ -201,9 +204,12 @@ impl WeightInfo for () {
 	// Storage: EthereumIngressEgress AddressStatus (r:0 w:1)
 	// Storage: EthereumIngressEgress IntentIngressDetails (r:0 w:1)
 	/// The range of component `a` is `[1, 100]`.
-	fn on_signature_accepted(_a: u32, ) -> Weight {
-		// Minimum execution time: 29_000 nanoseconds.
-		Weight::from_ref_time(30_939_150)
-			.saturating_add(RocksDbWeight::get().writes(4))
+	fn on_signature_accepted(a: u32, ) -> Weight {
+		// Minimum execution time: 30_000 nanoseconds.
+		Weight::from_ref_time(19_742_299)
+			// Standard Error: 9_938
+			.saturating_add(Weight::from_ref_time(13_335_018).saturating_mul(a.into()))
+			.saturating_add(RocksDbWeight::get().writes(3))
+			.saturating_add(RocksDbWeight::get().writes((1_u64).saturating_mul(a.into())))
 	}
 }

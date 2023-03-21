@@ -80,10 +80,10 @@ benchmarks_instance_pallet! {
 	}
 
 	on_signature_accepted {
+		let a in 1 .. 100;
 		let origin = T::EnsureWitnessedAtCurrentEpoch::successful_origin();
 		let address = TargetChainAccount::<T, I>::benchmark_value();
-		let addresses = vec![(1, TargetChainAccount::<T, I>::benchmark_value())];
-		let a in 1 .. 100;
+		let mut addresses = vec![];
 		for i in 0..a {
 			IntentIngressDetails::<T, I>::insert(address.clone(), IngressDetails {
 				intent_id: 1,
@@ -92,6 +92,7 @@ benchmarks_instance_pallet! {
 			IntentActions::<T, I>::insert(address.clone(), IntentAction::<T::AccountId>::LiquidityProvision {
 				lp_account: account("doogle", 0, 0)
 			});
+			addresses.push((i as u64, address.clone()));
 		}
 	} : { let _ = Pallet::<T, I>::on_signature_accepted(origin, addresses);  }
 }
