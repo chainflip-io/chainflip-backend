@@ -18,9 +18,7 @@ extern crate alloc;
 use crate::{Chain, ChainAbi, ChainCrypto, FeeRefundCalculator, IngressIdConstructor};
 use alloc::string::String;
 pub use cf_primitives::chains::Bitcoin;
-use cf_primitives::{
-	chains::assets, EpochIndex, IntentId, KeyId, MaxBitcoinAddressLength, PublicKeyBytes,
-};
+use cf_primitives::{chains::assets, BitcoinAddress, EpochIndex, IntentId, KeyId, PublicKeyBytes};
 use itertools;
 
 pub type BlockNumber = u64;
@@ -35,8 +33,6 @@ pub type BtcAmount = u128;
 pub type SigningPayload = [u8; 32];
 
 pub type Signature = [u8; 64];
-
-pub type BitcoinAddress = BoundedVec<u8, MaxBitcoinAddressLength>;
 
 pub type Hash = [u8; 32];
 
