@@ -180,7 +180,7 @@ fn check_for_interesting_events_in_block(
 				EventWrapper::Transfer(Transfer { to, amount, from }) => {
 					// When we get a transfer event, we want to check that we have
 					// pulled the latest addresses to monitor from the chain first
-					address_monitor.fetch_addresses();
+					address_monitor.sync_addresses();
 
 					if address_monitor.contains(to) {
 						info!("Witnessing DOT Ingress {{ amount: {amount:?}, to: {to:?} }}");

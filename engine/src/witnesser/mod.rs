@@ -54,7 +54,7 @@ pub enum WitnessAddress<Address> {
 
 /// This stores addresses we are interested in. New addresses
 /// come through a channel which can be polled by calling
-/// [AddressMonitor::fetch_addresses].
+/// [AddressMonitor::sync_addresses].
 pub struct AddressMonitor<A> {
 	addresses: BTreeSet<A>,
 	address_receiver: tokio::sync::mpsc::UnboundedReceiver<WitnessAddress<A>>,
@@ -68,7 +68,7 @@ impl<A: std::cmp::Ord> AddressMonitor<A> {
 		Self { addresses, address_receiver }
 	}
 
-	/// Check if we are interested in the address. [AddressMonitor::fetch_addresses]
+	/// Check if we are interested in the address. [AddressMonitor::sync_addresses]
 	/// should be called first to ensure we check against recently added addresses.
 	/// (We keep it as a separate function to make it possible to check multiple
 	/// addresses in a tight loop without having to fetch addresses on every item)
@@ -77,7 +77,7 @@ impl<A: std::cmp::Ord> AddressMonitor<A> {
 	}
 
 	/// Ensure the list of interesting addresses is up to date
-	pub fn fetch_addresses(&mut self) {
+	pub fn sync_addresses(&mut self) {
 		while let Ok(address) = self.address_receiver.try_recv() {
 			match address {
 				WitnessAddress::Start(address) => {
