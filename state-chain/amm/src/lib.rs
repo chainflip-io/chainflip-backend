@@ -293,7 +293,7 @@ pub enum PositionError {
 	PositionLacksLiquidity,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum MintError<E> {
 	/// Invalid Tick range
 	InvalidTickRange,
